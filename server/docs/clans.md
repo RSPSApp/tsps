@@ -33,7 +33,7 @@ scripts and the Wiki, with these filled in by us:
 - The invite prompts ("Help X form a clan?", "Join X?") and every message from the plugin.
 - Founders other than the creator start at rank 0. A former owner becomes Deputy Owner.
 - Name rule beyond uniqueness: up to 20 letters, numbers, spaces, `_` and `-`.
-- The hub's extent, and the Recruit option's slot (6).
+- The hub's extent. Recruit is on slot 5, the same "Recruit" the bots already show on every player, because every other slot is taken: so the option shows everywhere and refuses away from the hub, where live only shows it there.
 - The Clerk's Items option hands over a cloak and vexillum: the transcript names an interface we
   don't have.
 - Hours are counted from when this ships: tsps has no saved playtime, so existing accounts start at zero.
@@ -130,8 +130,8 @@ Built:
 
 - Broadcasts, in the words of rsprox's `MessageClanChannelSystem` lines, sent as type 43 to channel
   members at each Notifications rank: level-ups (with the 10s, 5s and 1s thresholds), quests, combat
-  tasks, new collection log items, drops over the value threshold, joining and leaving. PK wording
-  is ours; the recordings' PK line names loot we don't have.
+  tasks, new collection log items, drops over the value threshold, joining and leaving. A PK is
+  told only when the death lost items worth the PK value row or more, at the items' store value.
 - Clan Hall: the hub portal (41724) into the cache's own map at 1728-1791, 5440-5503, as a private
   area per clan with Enter, Enter-member, Enter-guest and the rank check, and the exit (41617). Arrival
   tiles are ours.

@@ -7,6 +7,7 @@ import {
     encodeClanSettingsFull,
     encodeClanVar,
 } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
+import { ClientBinaryEncoder } from "../network/packet/ClientBinaryEncoder";
 import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
 import { applyClanChannelDelta, applyClanSettingsDelta } from "../common/social/Clans";
 import { registerClanOps } from "../rs/cs2/handlers/ClanOps";
@@ -146,3 +147,6 @@ assert.equal(profile(), 0);
 assert.equal(profile(new Map([[3, 0]])), 1);
 
 console.log("clan-packets: ok");
+
+// A channel op names its target, so a slot shifting under an open menu can't hit someone else.
+assert.deepEqual([...new ClientBinaryEncoder().encodeClanChannelAction("mute", "Bob", 1)], [181, 6, 2, 1, 66, 111, 98, 0]);

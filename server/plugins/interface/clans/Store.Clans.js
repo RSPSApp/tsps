@@ -15,16 +15,19 @@ function file() {
 
 function load() {
   if (clans) return clans;
-  clans = new Map();
+  const loaded = new Map();
   let saved;
   try {
     saved = JSON.parse(fs.readFileSync(file(), "utf8"));
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
+    clans = loaded;
     return clans;
   }
+  for (const clan of saved.clans) loaded.set(clan.key, clan);
+  // Only once it has all been read: a file that can't be keeps throwing, so save() can't replace it.
+  clans = loaded;
   nextKey = saved.nextKey;
-  for (const clan of saved.clans) clans.set(clan.key, clan);
   return clans;
 }
 

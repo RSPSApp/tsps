@@ -22,6 +22,12 @@ function getSettings(ctx: { clanSettings?: ClanSettings | null }): ClanSettings 
 /**
  * Helper to safely get clan channel, returning null if not available.
  */
+/** The server acts on the name: a slot can shift under an open menu as people leave. */
+function sendChannelAction(ctx: { clanChannel?: ClanChannel | null }, action: "kick" | "ban" | "mute", slot: number, value = 0): void {
+    const name = getChannel(ctx)?.userNames[slot];
+    if (name) sendClanChannelAction(action, name, value);
+}
+
 function getChannel(ctx: { clanChannel?: ClanChannel | null }): ClanChannel | null {
     return ctx.clanChannel ?? null;
 }
@@ -216,7 +222,7 @@ export function registerClanOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.AFFINEDCLANSETTINGS_ADDBANNED_FROMCHANNEL, (ctx) => {
         ctx.intStackSize -= 2;
         const slot = ctx.intStack[ctx.intStackSize];
-        sendClanChannelAction("ban", slot);
+        sendChannelAction(ctx, "ban", slot);
     });
 
     // Get affined member join date (runeday)
@@ -238,7 +244,7 @@ export function registerClanOps(handlers: HandlerMap): void {
         ctx.intStackSize -= 3;
         const slot = ctx.intStack[ctx.intStackSize];
         const muted = ctx.intStack[ctx.intStackSize + 1];
-        sendClanChannelAction("mute", slot, muted);
+        sendChannelAction(ctx, "mute", slot, muted);
     });
 
     // Get affined member muted status
@@ -343,7 +349,7 @@ export function registerClanOps(handlers: HandlerMap): void {
     // Pops: userSlot
     handlers.set(Opcodes.ACTIVECLANCHANNEL_KICKUSER, (ctx) => {
         const slot = ctx.intStack[--ctx.intStackSize];
-        sendClanChannelAction("kick", slot);
+        sendChannelAction(ctx, "kick", slot);
     });
 
     // Find online user slot by name

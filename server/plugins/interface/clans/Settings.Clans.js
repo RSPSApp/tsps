@@ -121,7 +121,15 @@ function confirm(player, title, onYes) {
   ));
 }
 
+function isOwner(player, clan) {
+  return Core.memberOf(clan, Core.accountOf(player))?.rank === Core.RANK_OWNER;
+}
+
 function clickResign(player, clan) {
+  if (!isOwner(player, clan)) {
+    player.sendMessage("Only the clan's owner can do that.");
+    return;
+  }
   if (clan.resignDueAt) {
     clan.resignDueAt = 0;
     Core.refreshClan(clan);
@@ -130,6 +138,7 @@ function clickResign(player, clan) {
     return;
   }
   confirm(player, "Resign as clan owner?", () => {
+    if (!isOwner(player, clan)) return;
     clan.resignDueAt = Date.now() + Core.RESIGN_MS;
     Core.refreshClan(clan);
     player.sendMessage(clan.members.length > 1
@@ -139,11 +148,13 @@ function clickResign(player, clan) {
 }
 
 function clickLeave(player, clan) {
-  if (Core.memberOf(clan, Core.accountOf(player))?.rank === Core.RANK_OWNER) {
+  if (isOwner(player, clan)) {
     player.sendMessage("You must resign as clan owner before you can leave.");
     return;
   }
   confirm(player, `Leave ${clan.name}?`, () => {
+    // They may have been expelled, or made the owner, while this was up.
+    if (Core.clanOf(player) !== clan || isOwner(player, clan)) return;
     Core.removeMember(clan, Core.accountOf(player));
     player.sendMessage(`You have left ${clan.name}.`);
   });
@@ -187,11 +198,7 @@ function hasPermissionAccess(player, clan) {
 
 function clickTalkRow(player, clan) {
   if (!hasPermissionAccess(player, clan)) return;
-  const own = Core.memberOf(clan, Core.accountOf(player));
-  Management.showRankPopup(player, "Talk in chat:", clan.talkRank, -1, own.rank, false, uid(POPUP), (rank) => {
-    Core.setRowRank(clan, Core.rowByStruct(STRUCT_TALK), rank);
-    draw(player, clan);
-  });
+  Management.askRowRank(player, clan, Core.rowByStruct(STRUCT_TALK), "Talk in chat:", uid(POPUP), () => draw(player, clan));
 }
 
 function clickGuestsRow(player, clan) {

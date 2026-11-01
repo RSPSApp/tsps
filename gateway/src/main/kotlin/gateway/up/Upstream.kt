@@ -134,9 +134,9 @@ class Upstream(
                     else ->
                         PUBLIC_CHAT_KINDS[message.type]?.let { send(TspsClientPacket.chat(it, message.message, publicChatStyle(message))) } ?: DropCounter.up(message)
                 }
-            is ClanChannelKickUser -> clanChannelAction(message, message.clanId, KICK_USER, message.memberIndex)
-            is AffinedClanSettingsAddBannedFromChannel -> clanChannelAction(message, message.clanId, BAN_USER, message.memberIndex)
-            is AffinedClanSettingsSetMutedFromChannel -> clanChannelAction(message, message.clanId, MUTE_USER, message.memberIndex, if (message.muted) 1 else 0)
+            is ClanChannelKickUser -> clanChannelAction(message, message.clanId, KICK_USER, message.name)
+            is AffinedClanSettingsAddBannedFromChannel -> clanChannelAction(message, message.clanId, BAN_USER, message.name)
+            is AffinedClanSettingsSetMutedFromChannel -> clanChannelAction(message, message.clanId, MUTE_USER, message.name, if (message.muted) 1 else 0)
             // Autocomplete is the client asking for suggestions as you type; tsps has none.
             is ClientCheat -> if (!message.autocomplete) send(TspsClientPacket.command(message.command))
             is MessagePrivate -> send(TspsWriter().string(message.name).string(message.message).varByte(PRIVATE_MESSAGE))
@@ -206,8 +206,8 @@ class Upstream(
         send(TspsWriter().u8(action).string(name).u8(rank).varByte(FRIENDS_CHAT_ACTION))
 
     /** tsps only takes these ops in the player's own clan channel, whichever the client means. */
-    private fun clanChannelAction(message: IncomingGameMessage, clanId: Int, action: Int, slot: Int, value: Int = 0) =
-        if (clanId == OWN_CLAN) send(TspsClientPacket.clanChannelAction(action, slot, value)) else DropCounter.up(message)
+    private fun clanChannelAction(message: IncomingGameMessage, clanId: Int, action: Int, name: String, value: Int = 0) =
+        if (clanId == OWN_CLAN) send(TspsClientPacket.clanChannelAction(action, name, value)) else DropCounter.up(message)
 
     private fun button(message: If3Button) {
         if (interceptButton(message.combinedId, message.sub, message.obj, message.op)) return

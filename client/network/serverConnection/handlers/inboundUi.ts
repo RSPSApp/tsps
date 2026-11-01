@@ -347,6 +347,8 @@ function applyClanMessage(msg: any): void {
     if (msg.type === "clan_settings") {
         if (msg.payload.settings) settings.set(clanType, msg.payload.settings);
         else settings.delete(clanType);
+        // %varclan is the player's own clan's: leaving takes it with them.
+        if (clanType === 0 && !msg.payload.settings) state.clans.vars.clear();
     } else if (msg.type === "clan_settings_delta") {
         const held = settings.get(clanType);
         if (held) settings.set(clanType, applyClanSettingsDelta(held, msg.payload.updates));

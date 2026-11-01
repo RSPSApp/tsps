@@ -238,6 +238,10 @@ function openApplicants(player, clan) {
 function settleApplicant(player, clan, accept) {
   const chosen = selectedApplicant.get(player);
   if (!chosen || !(clan.applicants ?? []).includes(chosen)) return;
+  if (accept && clan.members.length >= Core.MAX_MEMBERS) {
+    player.sendMessage("Your clan is full.");
+    return;
+  }
   clan.applicants = clan.applicants.filter((entry) => entry !== chosen);
   selectedApplicant.delete(player);
   const online = Core.onlinePlayer(chosen.account);
@@ -249,7 +253,7 @@ function settleApplicant(player, clan, accept) {
     discard(online);
     Core.addMember(clan, online);
     player.sendMessage(`You have accepted ${chosen.name} into ${clan.name}.`);
-  } else if (!online && !Store.byMember(chosen.account) && clan.members.length < Core.MAX_MEMBERS) {
+  } else if (!online && !Store.byMember(chosen.account)) {
     Core.addOfflineMember(clan, chosen.account, chosen.name);
     player.sendMessage(`You have accepted ${chosen.name} into ${clan.name}.`);
   } else {

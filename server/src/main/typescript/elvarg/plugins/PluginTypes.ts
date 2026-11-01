@@ -40,7 +40,7 @@ export type PluginSocialPacketEvent = {
   handled: boolean;
   packet:
     | { type: "clan_chat"; clanType: number; text: string }
-    | { type: "clan_channel_action"; action: "kick" | "ban" | "mute"; slot: number; value: number }
+    | { type: "clan_channel_action"; action: "kick" | "ban" | "mute"; name: string; value: number }
     | { type: "friends_chat_action"; action: FriendsChatAction }
     | { type: "private_message"; recipient: string; text: string }
     | { type: "chat_filter"; publicMode: number; privateMode: number; tradeMode: number }

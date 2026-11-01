@@ -32,6 +32,8 @@ export function handleAuthTickMessage(msg: any): boolean {
             clearHintArrow();
             clearAttackTimer();
             loadItemPrices();
+            // A relog in the same tab may be another account's clan.
+            state.clans.vars.clear();
         }
         for (const cb of state.loginResponseListeners) {
             try {

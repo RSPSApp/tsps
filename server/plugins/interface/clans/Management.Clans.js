@@ -5,6 +5,7 @@
  */
 
 const Core = require("./Core.Clans");
+const Hall = require("./Hall.Clans");
 const PERMISSIONS = require("./data/permissions.json");
 
 const MODAL_UID = (161 << 16) | 16;
@@ -64,6 +65,8 @@ const TITLE_VARPS = [
 
 /** Enum 3795's ranks that can be assigned, lowest first. */
 const ASSIGNABLE_RANKS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 110, 115, 120, 124, 125];
+/** What a permission can ask for: those, anyone, and the owner. Not 127 or 128, the enum's others. */
+const PERMISSION_RANKS = new Set([-1, ...ASSIGNABLE_RANKS, Core.RANK_OWNER]);
 
 let openSettings = null;
 
@@ -179,6 +182,29 @@ function openPermissions(player) {
   sender.sendInterfaceFlagsRange(permissions(PERMISSION_LIST), 0, PERMISSIONS.length - 1, OP1_FLAG);
 }
 
+/** The lowest a row can be set to: its own minimum, or the row it must be at least. */
+function rowFloor(clan, row) {
+  const atLeast = row.atLeast === null ? -1 : Core.rowRank(clan, Core.rowByStruct(row.atLeast));
+  return Math.max(atLeast, row.minRank ?? -1);
+}
+
+/** The popup's answer comes from the client, so it's checked here as well as offered there. */
+function askRowRank(player, clan, row, title, popupUid, afterSet = () => {}) {
+  const own = memberFor(clan, player);
+  if (!own) return;
+  const current = Core.rowRank(clan, row);
+  if (current > own.rank) {
+    player.sendMessage("You cannot change a permission that is above your own rank.");
+    return;
+  }
+  showRankPopup(player, title, current, rowFloor(clan, row), own.rank, false, popupUid, (rank) => {
+    const now = memberFor(clan, player);
+    if (!now || !PERMISSION_RANKS.has(rank) || rank < rowFloor(clan, row) || rank > now.rank) return;
+    Core.setRowRank(clan, row, rank);
+    afterSet();
+  });
+}
+
 function clickPermission(player, clan, index) {
   const row = PERMISSIONS[index];
   const own = memberFor(clan, player);
@@ -191,16 +217,7 @@ function clickPermission(player, clan, index) {
     clickSpecialRow(player, clan, row);
     return;
   }
-  const current = Core.rowRank(clan, row);
-  if (current > own.rank) {
-    player.sendMessage("You cannot change a permission that is above your own rank.");
-    return;
-  }
-  const floor = row.atLeast === null ? (row.minRank ?? -1) : Core.rowRank(clan, Core.rowByStruct(row.atLeast));
-  showRankPopup(player, `${row.label}:`, current, Math.max(floor, row.minRank ?? -1), own.rank, false,
-    permissions(PERMISSION_POPUP), (rank) => {
-      if (rank >= floor && rank <= own.rank) Core.setRowRank(clan, row, rank);
-    });
+  askRowRank(player, clan, row, `${row.label}:`, permissions(PERMISSION_POPUP));
 }
 
 /** Rows holding a value, not a rank; their settings are clan_permissions_buttonresynch's. */
@@ -256,12 +273,21 @@ function unban(player, clan, name) {
   Core.setBanned(clan, (clan.banned ?? []).filter((banned) => banned.toLowerCase() !== name.toLowerCase()));
 }
 
-function ban(player, clan, rawName) {
-  listenForUnban(player, clan);
-  const name = rawName.trim();
-  if (!name || !canBan(player, clan)) return;
+/** A banned guest goes at once: from the channel, and from the hall if they're in it. */
+function removeBannedGuest(clan, name) {
+  const guest = Core.onlinePlayer(name.toLowerCase());
+  if (!guest) return;
+  if (Core.guestChannelOf(guest)?.clan === clan) Core.removeFromGuestChannel(guest);
+  Hall.sendOut(guest, clan);
+}
+
+/** Every ban comes through here, from the Bans screen or a channel user's menu. */
+function addBan(player, clan, name) {
   const banned = clan.banned ?? [];
-  if (banned.some((entry) => entry.toLowerCase() === name.toLowerCase())) return;
+  if (banned.some((entry) => entry.toLowerCase() === name.toLowerCase())) {
+    removeBannedGuest(clan, name);
+    return;
+  }
   if (banned.length >= MAX_BANS) {
     player.sendMessage(`The ban list can't hold more than ${MAX_BANS} names.`);
     return;
@@ -271,6 +297,13 @@ function ban(player, clan, rawName) {
     return;
   }
   Core.setBanned(clan, [...banned, name]);
+  removeBannedGuest(clan, name);
+}
+
+function ban(player, clan, rawName) {
+  listenForUnban(player, clan);
+  const name = rawName.trim();
+  if (name && canBan(player, clan)) addBan(player, clan, name);
 }
 
 function askBan(player, clan) {
@@ -341,4 +374,4 @@ function click(event) {
   if (clan) handler(player, clan, event);
 }
 
-module.exports = { click, init, openBans, openMembers, openPermissions, openTitles, showRankPopup, varpTransmitted };
+module.exports = { addBan, askRowRank, canBan, click, init, openBans, openMembers, openPermissions, openTitles, showRankPopup, varpTransmitted };

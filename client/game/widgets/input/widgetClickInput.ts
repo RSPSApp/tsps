@@ -171,8 +171,10 @@ export function processWidgetClickInput(
                     const clickChildId = (w.fileId ?? w.uid & 0xffff) | 0;
                     const isSpellbookWidget = clickGroupId === 218 && clickChildId > 0;
                     // Any other static button with a verb and targets, such as clan creation's Invite.
+                    // One with an op1 keeps that as its left-click, as OSRS does.
                     const isTargetButton =
                         (w.childIndex ?? -1) < 0 &&
+                        !w.actions?.[0] &&
                         !!w.targetVerb &&
                         deps.getSpellSelection().getWidgetTargetMask(w) > 0;
 

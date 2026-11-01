@@ -32,11 +32,12 @@ const BUTTON_TIMEOUT_TICKS = 5;
 
 const CLAN_HUB_CLERK = 10759;
 /**
- * Slots 5 and 7 are the bots' Recruit and the house kick; 6 is Forfeit, only inside a duel. The hub's
- * extent is ours: the Wiki only places it at the Grand Exchange's south-east corner, and the Clerk
- * stands at its middle.
+ * Every other slot belongs to something: 1-3 Attack, Trade, Follow; 4 and 6 the duel's; 7 the house
+ * kick; 8 Report. Slot 5 is already "Recruit" on every player, for the bots (RegisterBotStatusInteractions),
+ * so this is the same option on a real player. The hub's extent is ours: the Wiki only places it at the
+ * Grand Exchange's south-east corner, and the Clerk stands at its middle.
  */
-const RECRUIT_OPTION_SLOT = 6;
+const RECRUIT_OPTION_SLOT = 5;
 const CLAN_HUB = { minX: 3170, maxX: 3192, minY: 3460, maxY: 3482 };
 
 let core = null;
@@ -59,7 +60,7 @@ function later(ticks, action) {
 /** Live's order at login: settings, status, then the channel with its intro line (rsprox 3886, 763). */
 function login({ player }) {
   Formation.startSession(player);
-  refreshRecruitOption(player);
+  showRecruitOption(player);
   let clan = Core.clanOf(player);
   if (clan) {
     Core.settleOwnership(clan);
@@ -88,7 +89,7 @@ function login({ player }) {
 
 function logout({ player }) {
   Formation.endSession(player);
-  Contents.closeChest(player);
+  Contents.playerGone(player);
   Core.removeGuestViewer(player);
   Core.removeFromChannel(player);
   const clan = Core.clanOf(player);
@@ -132,14 +133,15 @@ function clickYourClan(event) {
   event.handled = true;
 }
 
-/** A channel user's right-click ops (clan_sidepanel_op), by their channel slot. */
+/** A channel user's right-click ops (clan_sidepanel_op), by name: slots shift as people leave. */
 function channelAction(event) {
   const { player, packet } = event;
   if (packet.type !== "clan_channel_action") return;
   event.handled = true;
   const channel = Core.channelOf(player);
   const own = channel && Core.memberOf(channel.clan, Core.accountOf(player));
-  const target = channel?.users[packet.slot];
+  const wanted = packet.name.toLowerCase();
+  const target = channel?.users.find((user) => user.name.toLowerCase() === wanted);
   if (!own || !target || target.player === player) return;
   const { clan } = channel;
   if (packet.action === "kick") {
@@ -166,12 +168,11 @@ function channelAction(event) {
     player.sendMessage("That player must be expelled from the clan before they can be banned.");
     return;
   }
-  if (own.rank < Core.permissionRank(clan, Core.SETTING_BAN)) {
+  if (!Management.canBan(player, clan)) {
     player.sendMessage("You are not a high enough rank to ban players.");
     return;
   }
-  Core.setBanned(clan, [...(clan.banned ?? []), target.name]);
-  Core.removeFromGuestChannel(target.player);
+  Management.addBan(player, clan, target.name);
 }
 
 function chat(event) {
@@ -264,29 +265,13 @@ function inClanHub(player) {
     && location.getY() >= CLAN_HUB.minY && location.getY() <= CLAN_HUB.maxY;
 }
 
-/** The option's reach is the hub's map square, so walking only costs a check per square crossed. */
-function refreshRecruitOption(player) {
-  if (player.isPlayerBot?.() === true) return;
-  const location = player.getLocation();
-  const inHubSquare = location.getX() >> 6 === CLAN_HUB.minX >> 6 && location.getY() >> 6 === CLAN_HUB.minY >> 6;
-  const shown = inHubSquare || wearsVexillum(player);
-  player.getPacketSender().sendPlayerOption(RECRUIT_OPTION_SLOT, shown ? "Recruit" : "", false);
-}
-
-function mapSquareChanged({ player }) {
-  refreshRecruitOption(player);
+/** Always shown, as the bots' is on the same slot; recruitClanMember says where it works. */
+function showRecruitOption(player) {
+  if (player.isPlayerBot?.() !== true) player.getPacketSender().sendPlayerOption(RECRUIT_OPTION_SLOT, "Recruit", false);
 }
 
 function wearsVexillum(player) {
   return player.getEquipment().getItems?.().some((item) => Screens.isVexillum(item?.getId?.())) ?? false;
-}
-
-/** These hooks ask before the change, so look again on the next tick. */
-function vexillumChanging({ player, item }) {
-  if (!Screens.isVexillum(item?.getId?.())) return;
-  later(1, () => {
-    if (Core.isOnline(player)) refreshRecruitOption(player);
-  });
 }
 
 /** Live: at the hub, or anywhere with a vexillum on for a clan that is recruiting (Wiki: Clan). */
@@ -431,7 +416,8 @@ module.exports = {
     api.onInterfaceActionClick(Contents.clickChest);
     api.onInterfaceActionClick(Contents.clickPiano);
     api.onCustomEvent("player:varp-transmit", Contents.varpTransmitted);
-    api.onCustomEvent("interface:close", Contents.interfaceClosed);
+    api.onCustomEvent("interface:closed", Contents.interfaceClosed);
+    api.onCustomEvent("interface:opened", Contents.interfaceOpened);
     api.onInterfaceActionClick(Hall.clickCoffer);
     api.onInterfaceActionClick(Screens.clickInterests);
     api.onInterfaceActionClick(Screens.clickEvents);
@@ -439,10 +425,10 @@ module.exports = {
     api.onInterfaceActionClick(Screens.clickHall);
     api.onCustomEvent("player:varp-transmit", Screens.varpTransmitted);
     api.onPlayerLevelUp(Broadcasts.levelUp);
-    api.onPlayerDefeated(Broadcasts.defeated);
+    api.onPlayerDeathDrops(Broadcasts.deathDrops);
     api.onCustomEvent("quest:completed", Broadcasts.questCompleted);
     api.onCustomEvent("combat-achievements:completed", Broadcasts.combatTask);
-    api.onCustomEvent("collection-log:obtain", Broadcasts.collectionLog);
+    api.onCustomEvent("collection-log:new-item", Broadcasts.collectionLog);
     api.onCustomEvent("npc-drops:roll", Broadcasts.drops);
     api.onExperienceGained(Broadcasts.experience);
     api.onCustomEvent("boss:personal-best", Broadcasts.personalBest);
@@ -451,9 +437,6 @@ module.exports = {
     api.onCustomEvent("loot-keys:opened", Broadcasts.lootKey);
     api.onCustomEvent("player:varp-transmit", Management.varpTransmitted);
     api.onPlayerOption(recruit);
-    api.onPlayerMapSquareChange(mapSquareChanged);
-    api.onCanEquip(vexillumChanging);
-    api.onCanUnequip(vexillumChanging);
     api.onCustomEvent("magic:spell-on-player", Formation.inviteByTarget);
     api.onCustomEvent("agent:advance-time", Formation.advanceTime);
     api.onNpcInteraction("Clerk", { "Talk-to": talkToClerk, Items: clerkItems });

@@ -495,6 +495,7 @@ function addOfflineMember(clan, account, name) {
 /** The member's channel and clan go, whether they are online or not. */
 function removeMember(clan, account) {
   const index = clan.members.findIndex((member) => member.account === account);
+  if (index < 0) return;
   const [removed] = clan.members.splice(index, 1);
   const player = onlinePlayer(account);
   if (player) {
@@ -543,7 +544,7 @@ function settleOwnership(clan, now = Date.now()) {
     deleteClan(clan);
     return;
   }
-  if (!successor || (!absent && !resigned)) return;
+  if (!owner || !successor || (!absent && !resigned)) return;
   owner.rank = RANK_DEPUTY_OWNER;
   successor.rank = RANK_OWNER;
   clan.resignDueAt = 0;

@@ -86,6 +86,8 @@ let formatRuneDate = null;
 /** What a player is part way through: Hall settings' varp, the Events form. */
 const hallEdits = new WeakMap();
 const eventForms = new WeakMap();
+/** The events each row last showed this player, so a click means what they saw. */
+const listedEvents = new WeakMap();
 
 function init(apiCore, reopenSettings, readEnum, rankPopup, runeDateText) {
   core = apiCore;
@@ -254,8 +256,11 @@ function listEvents(player, clan) {
   const sender = player.getPacketSender();
   const list = clan.events ?? [];
   const ownRank = Core.memberOf(clan, Core.accountOf(player))?.rank ?? -1;
+  const listed = [];
+  listedEvents.set(player, listed);
   for (let slot = 0; slot < MAX_EVENTS; slot++) {
     const event = list[slot] && ownRank >= list[slot].rank ? list[slot] : null;
+    listed[slot] = event;
     sender.sendClientScript(EVENTS_ROW_SCRIPT, slot, event ? 1 : 0, event?.rank ?? 0, 0, event ? eventFields(event) : "");
   }
 }
@@ -280,14 +285,13 @@ function sendForm(player, form) {
     .sendVarbit(FIELD_VARBITS.rankPlusOne, form.rank + 1);
 }
 
-function openForm(player, clan, slot) {
-  const editing = clan.events?.[slot];
+function openForm(player, clan, editing = null) {
   const form = editing
     ? { ...editing }
     : { world: 1, type: 0, activity: 0, subtype: 0, date: Core.runeDay(), duration: 1, time: 720, rank: -1 };
-  eventForms.set(player, { form, slot: editing ? slot : -1 });
+  eventForms.set(player, { form, editing });
   const sender = player.getPacketSender();
-  sender.sendVarbit(EDIT_SLOT_VARBIT, editing ? slot + 1 : 0);
+  sender.sendVarbit(EDIT_SLOT_VARBIT, editing ? clan.events.indexOf(editing) + 1 : 0);
   sendForm(player, form);
   sender.sendSubInterface(MODAL_UID, CREATE_GROUP, 0);
 }
@@ -396,14 +400,24 @@ function clickForm(event) {
   else if (childId === CREATE_DELETE) deleteEvent(player, clan, state);
 }
 
-function saveForm(player, clan, { form, slot }) {
+/** Another organiser can edit or delete what this player is looking at. */
+function eventGone(player, clan, event) {
+  if (!event || (clan.events ?? []).includes(event)) return false;
+  player.sendMessage("Another organiser has changed that event.");
+  eventForms.delete(player);
+  openEvents(player, clan);
+  return true;
+}
+
+function saveForm(player, clan, { form, editing }) {
+  if (eventGone(player, clan, editing)) return;
   const list = [...(clan.events ?? [])];
-  if (slot < 0 && list.length >= MAX_EVENTS) {
+  if (!editing && list.length >= MAX_EVENTS) {
     player.sendMessage("The clan already has as many events as it can list.");
     return;
   }
-  const saved = { ...form, creator: list[slot]?.creator ?? player.getUsername() };
-  if (slot >= 0) list[slot] = saved;
+  const saved = { ...form, creator: editing?.creator ?? player.getUsername() };
+  if (editing) list[list.indexOf(editing)] = saved;
   else list.push(saved);
   clan.events = list;
   Store.save();
@@ -411,9 +425,9 @@ function saveForm(player, clan, { form, slot }) {
   openEvents(player, clan);
 }
 
-function deleteEvent(player, clan, { slot }) {
-  if (slot < 0) return;
-  clan.events = (clan.events ?? []).filter((_, index) => index !== slot);
+function deleteEvent(player, clan, { editing }) {
+  if (!editing || eventGone(player, clan, editing)) return;
+  clan.events = clan.events.filter((event) => event !== editing);
   Store.save();
   eventForms.delete(player);
   openEvents(player, clan);
@@ -427,13 +441,16 @@ function clickEvents(event) {
   if (!clan) return;
   if (childId === EVENTS_EXIT) openSettings(player);
   else if (!canOrganise(player, clan)) player.sendMessage("You are not a high enough rank to organise events.");
-  else if (childId === EVENTS_CREATE) openForm(player, clan, -1);
+  else if (childId === EVENTS_CREATE) openForm(player, clan);
   else if (childId === EVENTS_EDIT) {
     const editing = player.getAttribute("clans:editing-events") !== true;
     player.setAttribute("clans:editing-events", editing);
     player.getPacketSender().sendVarbit(EDITING_PERMITTED_VARBIT, editing ? 1 : 0);
     openEvents(player, clan);
-  } else if (childId === EVENTS_LIST) openForm(player, clan, slot);
+  } else if (childId === EVENTS_LIST) {
+    const chosen = listedEvents.get(player)?.[slot] ?? null;
+    if (!eventGone(player, clan, chosen)) openForm(player, clan, chosen);
+  }
 }
 
 // ---------------------------------------------------------------- Hall settings

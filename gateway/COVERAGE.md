@@ -92,7 +92,7 @@ sessions, so the browser wire format doesn't change.
 | OPWORLDENTITY1–5 | 220–224 | mapped | 9 | (boats aren't drawn yet, see 142/143) |
 | OPWORLDENTITY6 | — | dropped | 9 | 241 sends a type id, tsps reads an index |
 | MESSAGE_PUBLIC / CLIENT_CHEAT | 190 CHAT | mapped | 2–3 | public (0), autotyper (1 → autochat) and friends chat (2); colour, effect and pattern are appended for tsps. Clan chat: type 3 with clan type 0 → kind 4 clan 0, type 4 (guest) → kind 4 clan -1, without colour or effect, which tsps's clan chat has no field for; other clan types dropped. CLIENT_CHEAT: `::cmd`, autocomplete requests dropped |
-| CLANCHANNEL_KICKUSER, AFFINEDCLANSETTINGS_ADDBANNED_FROMCHANNEL, AFFINEDCLANSETTINGS_SETMUTED_FROMCHANNEL | 181 CLAN_CHANNEL_ACTION | mapped | — | action 0 kick, 1 ban, 2 mute, by channel slot. Only for clan id 0: tsps's packet means the player's own channel, so other clan ids are dropped rather than acting on the wrong one |
+| CLANCHANNEL_KICKUSER, AFFINEDCLANSETTINGS_ADDBANNED_FROMCHANNEL, AFFINEDCLANSETTINGS_SETMUTED_FROMCHANNEL | 181 CLAN_CHANNEL_ACTION | mapped | — | action 0 kick, 1 ban, 2 mute, by the name rsprot decodes; the slot isn't passed on, since it can shift under an open menu. Only for clan id 0: tsps's packet means the player's own channel, so other clan ids are dropped rather than acting on the wrong one |
 | MESSAGE_PRIVATE | 197 | mapped | 6 | |
 | FRIENDLIST / IGNORELIST ADD / DEL, FRIENDCHAT_* | 196 FRIENDS_CHAT_ACTION | mapped | 6 | join, leave, kick, rank and the list edits share one tsps packet |
 | CHAT_SETFILTER | 198 | mapped | 6 | |

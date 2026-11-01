@@ -16,6 +16,7 @@ const CHEST_INV = 916 + 32768; // clan_hall_partychest, which the screen reads w
 const OFFER_INV = 92; // partyroom_tempinv
 const CHEST_SIZE = 216; // Wiki: Clan Hall
 const OFFER_SIZE = 8;
+const MAX_STACK = 2147483647;
 const LAST_INV_SLOT = 27;
 const MAIN_MODAL = (161 << 16) | 16;
 const SIDE_MODAL = (161 << 16) | 74;
@@ -124,12 +125,15 @@ function openChest({ player, objectId }) {
     player.sendMessage("You are not a high enough rank to deposit in this chest.");
     return true;
   }
+  closeChest(player);
   openChests.set(player, { hall, clan, items: [] });
   // Before the mount: partydrop_main_init sizes its rows from the inventories' capacity.
   sendChest(player, hall);
   sendOffer(player);
   const sender = player.getPacketSender();
-  sender.sendSubInterface(MAIN_MODAL, CHEST_GROUP, 0).sendSubInterface(SIDE_MODAL, CHEST_SIDE_GROUP, 3);
+  // As the main interface, so "interface:closed" tells of it going by any route, walking away included.
+  sender.sendInterface(CHEST_GROUP);
+  sender.sendSubInterface(SIDE_MODAL, CHEST_SIDE_GROUP, 3);
   sender.sendInterfaceFlagsRange((CHEST_SIDE_GROUP << 16), 0, LAST_INV_SLOT, OPS_1_TO_5);
   sender.sendInterfaceFlagsRange((CHEST_GROUP << 16) | OFFER_LIST, 0, OFFER_FLAGS_RANGE, OPS_1_TO_5);
   player.sendMessage("Whatever you confirm stays in the chest until the balloons take it.");
@@ -171,8 +175,9 @@ function offer(player, slot, op) {
   }
   const held = inventory.getAmount(id);
   amountFor(player, op, held, (amount) => {
-    const moved = Math.min(amount, inventory.getAmount(id));
+    if (offerOf(player) !== state) return;
     const stack = state.items.find((entry) => entry.id === id);
+    const moved = Math.min(amount, inventory.getAmount(id), MAX_STACK - (stack?.amount ?? 0));
     if (moved <= 0 || (!stack && state.items.length >= OFFER_SIZE)) return;
     inventory.delete(id, moved);
     if (stack) stack.amount += moved;
@@ -187,12 +192,17 @@ function takeBack(player, slot, op) {
   if (!stack) return;
   amountFor(player, op, stack.amount, (amount) => {
     const moved = Math.min(amount, stack.amount);
-    if (moved <= 0 || !state.items.includes(stack)) return;
-    player.getInventory().adds(stack.id, moved);
+    if (moved <= 0 || offerOf(player) !== state || !state.items.includes(stack)) return;
+    giveBack(player, stack.id, moved);
     stack.amount -= moved;
     if (stack.amount === 0) state.items = state.items.filter((entry) => entry !== stack);
     sendOffer(player);
   });
+}
+
+/** Never lost: what doesn't fit in the inventory lands at the player's feet. */
+function giveBack(player, id, amount) {
+  player.getInventory().forceAdd(player, new core.Item(id, amount));
 }
 
 function confirm(player) {
@@ -203,6 +213,11 @@ function confirm(player) {
   for (const { id } of state.items) stacks.add(id);
   if (stacks.size > CHEST_SIZE) {
     player.sendMessage("The chest can't hold that many different items.");
+    return;
+  }
+  const held = (id) => hall.chest.find((entry) => entry.id === id)?.amount ?? 0;
+  if (state.items.some(({ id, amount }) => held(id) + amount > MAX_STACK)) {
+    player.sendMessage("The chest can't hold any more of that.");
     return;
   }
   for (const { id, amount } of state.items) {
@@ -219,22 +234,39 @@ function confirm(player) {
 function closeChest(player) {
   const state = offerOf(player);
   if (!state) return;
-  for (const { id, amount } of state.items) player.getInventory().adds(id, amount);
   openChests.delete(player);
+  for (const { id, amount } of state.items) giveBack(player, id, amount);
 }
 
-function interfaceClosed({ player }) {
+/** The screens are main interfaces, so this hears them close by any route. */
+function interfaceClosed({ player, interfaceId }) {
+  if (interfaceId === CHEST_GROUP) closeChest(player);
+  else if (interfaceId === PIANO_GROUP) pianists.delete(player);
+}
+
+/** A plugin can mount over the main modal without closing it. */
+function interfaceOpened({ player, targetUid, groupId }) {
+  if (targetUid !== MAIN_MODAL) return;
+  if (groupId !== CHEST_GROUP) closeChest(player);
+  if (groupId !== PIANO_GROUP) pianists.delete(player);
+}
+
+function playerGone(player) {
   closeChest(player);
   pianists.delete(player);
 }
 
 function clickChest(event) {
   const { player, groupId, childId, slot, action } = event;
+  if (groupId !== CHEST_SIDE_GROUP && groupId !== CHEST_GROUP) return;
+  event.handled = true;
+  if (!player.getPacketSender().isSubInterfaceOpen(CHEST_GROUP)) {
+    closeChest(player);
+    return;
+  }
   if (groupId === CHEST_SIDE_GROUP) {
-    event.handled = true;
     offer(player, slot, action);
-  } else if (groupId === CHEST_GROUP) {
-    event.handled = true;
+  } else {
     if (childId === OFFER_LIST) takeBack(player, slot, action);
     else if (childId === CONFIRM) confirm(player);
   }
@@ -349,7 +381,7 @@ function noteFor(uid) {
 function openPiano(player, heardByAll) {
   pianists.set(player, heardByAll);
   const sender = player.getPacketSender();
-  sender.sendSubInterface(MAIN_MODAL, PIANO_GROUP, 0);
+  sender.sendInterface(PIANO_GROUP);
   sender.sendClientScript(PIANO_INIT_SCRIPT);
 }
 
@@ -376,7 +408,7 @@ function clickPiano(event) {
   if (event.groupId !== PIANO_GROUP) return;
   event.handled = true;
   const { player, groupId, childId } = event;
-  if (pianists.get(player) !== true) return;
+  if (pianists.get(player) !== true || !player.getPacketSender().isSubInterfaceOpen(PIANO_GROUP)) return;
   const note = noteFor((groupId << 16) | childId);
   const found = hallOf(player);
   if (!note || !found) return;
@@ -424,7 +456,9 @@ module.exports = {
   hitDummy,
   init,
   interfaceClosed,
+  interfaceOpened,
   openChest,
+  playerGone,
   playQuietly,
   pullLever,
   reset,

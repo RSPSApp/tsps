@@ -213,8 +213,8 @@ object TspsClientPacket {
     /** Clan chat: [clanType] 0 the player's clan, -1 the guest clan (`encodeClanChat`). */
     fun clanChat(clanType: Int, text: String): ByteArray = TspsWriter().u8(CHAT_KIND_CLAN).u8(clanType and 0xFF).string(text).varByte(CHAT)
 
-    /** A channel user's op, by channel slot: action 0 kick, 1 ban, 2 mute (`value` 1 mutes). */
-    fun clanChannelAction(action: Int, slot: Int, value: Int): ByteArray = TspsWriter().u8(action).u16(slot).u8(value).fixed(CLAN_CHANNEL_ACTION)
+    /** A channel user's op, by name: action 0 kick, 1 ban, 2 mute (`value` 1 mutes). */
+    fun clanChannelAction(action: Int, name: String, value: Int): ByteArray = TspsWriter().u8(action).u8(value).string(name).varByte(CLAN_CHANNEL_ACTION)
 
     /** A `::` command; tsps reads commands from public chat. */
     fun command(command: String): ByteArray = TspsWriter().u8(CHAT_KIND_PUBLIC).string("::$command").varByte(CHAT)

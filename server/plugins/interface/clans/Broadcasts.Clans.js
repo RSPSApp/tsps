@@ -28,6 +28,7 @@ const LEVEL_TENS_FROM = 66;
 const LEVEL_FIVES_FROM = 67;
 const LEVEL_ONES_FROM = 68;
 const LOOT_MINIMUM_VALUE = 31;
+const PK_MINIMUM_VALUE = 65;
 const TASK_THRESHOLD = 101;
 
 const TIERS = ["easy", "medium", "hard", "elite", "master", "grandmaster"];
@@ -122,7 +123,9 @@ function questCompleted({ player, quest }) {
   if (clan) tell(clan, QUEST_SETTING, `${player.getUsername()} has completed a quest: ${quest?.name ?? quest?.title ?? "a quest"}`);
 }
 
-function combatTask({ player, task }) {
+function combatTask({ player, task, silent }) {
+  // Tasks caught up at login were done long ago.
+  if (silent) return;
   const clan = clanFor(player);
   if (!clan) return;
   const tier = TIERS[(task.tier ?? 1) - 1] ?? "";
@@ -130,12 +133,11 @@ function combatTask({ player, task }) {
   tell(clan, COMBAT_TASK_SETTING, `CA_ID:${task.id}|${player.getUsername()} has completed ${tier === "elite" ? "an" : tier === "easy" ? "an" : "a"} ${tier} combat task: ${task.name}.`);
 }
 
-function collectionLog(request) {
-  if (request?.added !== true) return;
-  const clan = clanFor(request.player);
+function collectionLog({ player, itemId }) {
+  const clan = clanFor(player);
   if (!clan) return;
-  const name = core.ItemDefinition?.forId?.(Number(request.itemId))?.getName?.() ?? "an item";
-  tell(clan, COLLECTION_LOG_SETTING, `${request.player.getUsername()} received a new collection log item: ${name}`);
+  const name = core.ItemDefinition?.forId?.(Number(itemId))?.getName?.() ?? "an item";
+  tell(clan, COLLECTION_LOG_SETTING, `${player.getUsername()} received a new collection log item: ${name}`);
 }
 
 function dropId(item) {
@@ -153,23 +155,29 @@ function dropLine(player, item, source, value) {
   return `${player.getUsername()} received a drop: ${amount}${name} (${value.toLocaleString("en-GB")} coins)${from}.`;
 }
 
-/** What "npc-drops:roll" reports (CollectionLog.plugin.js reads the same request). */
+/** What "npc-drops:roll" reports, read as CollectionLog.plugin.js does: once its handlers have edited it. */
 function drops(request) {
   const { player } = request ?? {};
   if (!player) return;
-  const clan = clanFor(player);
-  if (!clan) return;
-  const minimum = Core.settingValue(clan, LOOT_MINIMUM_VALUE);
-  for (const item of request.drops ?? []) {
-    const value = lootValue(item);
-    if (value >= minimum) tell(clan, LOOT_SETTING, dropLine(player, item, request.npc?.getDefinition?.()?.getName?.(), value));
-  }
+  queueMicrotask(() => {
+    const clan = clanFor(player);
+    if (!clan) return;
+    const minimum = Core.settingValue(clan, LOOT_MINIMUM_VALUE);
+    for (const item of request.drops ?? []) {
+      const value = lootValue(item);
+      if (value >= minimum) tell(clan, LOOT_SETTING, dropLine(player, item, request.npc?.getDefinition?.()?.getName?.(), value));
+    }
+  });
 }
 
-function defeated({ killer, victim }) {
-  if (!killer?.getUsername || !victim?.getUsername) return;
+/** Heard only when a death loses items: duels, Castle Wars and LMS answer that they don't, so never get here. */
+function deathDrops({ player, killer, items }) {
+  if (!killer?.getUsername || killer === player) return;
   const clan = clanFor(killer);
-  if (clan) tell(clan, PK_SETTING, `${killer.getUsername()} has defeated ${victim.getUsername()}.`);
+  if (!clan) return;
+  const value = items.reduce((sum, item) => sum + (core.ItemDefinition?.forId?.(item.getId())?.getValue?.() ?? 0) * item.getAmount(), 0);
+  if (value < Core.settingValue(clan, PK_MINIMUM_VALUE)) return;
+  tell(clan, PK_SETTING, `${killer.getUsername()} has defeated ${player.getUsername()} and received (${value.toLocaleString("en-GB")} coins) worth of loot!`);
 }
 
 function joined(clan, name) {
@@ -183,7 +191,7 @@ function left(clan, name) {
 module.exports = {
   collectionLog,
   combatTask,
-  defeated,
+  deathDrops,
   diaryTier,
   drops,
   experience,

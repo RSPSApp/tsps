@@ -266,7 +266,7 @@ export type ClientMessage =
   | { type: "world_entity_option"; index: number; clickType: number }
   | { type: "chat"; text: string; messageType: "public" | "game" | "friends_chat"; autoChat?: boolean; style?: ChatStyle }
   | { type: "clan_chat"; clanType: number; text: string }
-  | { type: "clan_channel_action"; action: "kick" | "ban" | "mute"; slot: number; value: number }
+  | { type: "clan_channel_action"; action: "kick" | "ban" | "mute"; name: string; value: number }
   | { type: "friends_chat_action"; action: FriendsChatAction }
   | { type: "private_message"; recipient: string; text: string }
   | { type: "chat_filter"; publicMode: number; privateMode: number; tradeMode: number }
@@ -805,9 +805,10 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
         : { type: "chat", messageType, text, ...(style && { style }) };
     }
     case HighClientPacket.CLAN_CHANNEL_ACTION: {
-      const action = (["kick", "ban", "mute"] as const)[reader.byte()] ?? "kick";
-      const slot = reader.short();
-      return { type: "clan_channel_action", action, slot, value: reader.byte() };
+      const action = (["kick", "ban", "mute"] as const)[reader.byte()];
+      const value = reader.byte();
+      const name = reader.string();
+      return action ? { type: "clan_channel_action", action, name, value } : { type: "raw", opcode, payload: frame.subarray(frame.length - length) };
     }
     case HighClientPacket.FRIENDS_CHAT_ACTION: {
       const actionCode = reader.byte();

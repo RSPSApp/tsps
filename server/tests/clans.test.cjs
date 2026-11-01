@@ -59,6 +59,9 @@ function player(name) {
         if (item) item.amount += amount;
         else self.bag.push(carried(id, amount));
       },
+      forceAdd(owner, item) {
+        this.adds(item.id, item.amount);
+      },
       setItem(slot, item) {
         self.bag[slot] = carried(item.id, item.amount);
       },
@@ -108,6 +111,11 @@ function player(name) {
         self.mounted.push(group);
         return this;
       },
+      sendInterface(group) {
+        self.mounted.push(group);
+        return this;
+      },
+      isSubInterfaceOpen: (group) => self.mounted.includes(group),
       sendInterfaceFlagsRange(uid, start, end, flags) {
         self.flags = [uid, flags];
         return this;
@@ -318,9 +326,6 @@ beforeEach(() => {
     onSocialPacket: (handler) => (hooks.social = hooks.social ?? []).push(handler),
     onInterfaceActionClick: (handler) => hooks.clicks.push(handler),
     onPlayerOption: (handler) => (hooks.playerOption = handler),
-    onPlayerMapSquareChange: (handler) => (hooks.mapSquare = handler),
-    onCanEquip: (handler) => (hooks.canEquip = handler),
-    onCanUnequip: (handler) => (hooks.canUnequip = handler),
     onNpcInteraction: (name, actions) => (hooks.npc[name] = actions),
     onObjectInteraction: (name, actions) => ((hooks.objects ??= {})[name] = actions),
     onPlayerLevelUp: (handler) => (hooks.levelUp = handler),
@@ -331,7 +336,7 @@ beforeEach(() => {
       return npc;
     },
     removeNpc: (npc) => hooks.removed.push(npc),
-    onPlayerDefeated: (handler) => (hooks.defeated = handler),
+    onPlayerDeathDrops: (handler) => (hooks.deathDrops = handler),
     persistAttribute: () => {},
     emitCustomEvent: (name, payload) => {
       hooks.emitted.push([name, payload]);
@@ -619,7 +624,7 @@ test('the invite button ignores spells, and Recruit also invites while forming',
   hooks.custom.get('magic:spell-on-player')(spell);
   assert.equal(spell.handled, undefined);
   assert.equal(other.dialogue, undefined);
-  hooks.playerOption({ player: founder, target: other, option: 6 });
+  hooks.playerOption({ player: founder, target: other, option: 5 });
   assert.match(other.dialogue.title, /form a clan/);
 });
 
@@ -630,44 +635,39 @@ test('Recruit needs a rank, a place, and a target accepting aid, then adds them 
   const recruit = player('Recruit');
   const later = player('Later');
   login(owner);
-  assert.deepEqual(owner.option, [6, 'Recruit']);
+  assert.deepEqual(owner.option, [5, 'Recruit']);
   createClan(owner);
   recruit.setAttribute('accept-aid', false);
-  hooks.playerOption({ player: owner, target: recruit, option: 6 });
+  hooks.playerOption({ player: owner, target: recruit, option: 5 });
   assert.equal(owner.messages.at(-1), 'Recruit is not accepting aid.');
   recruit.setAttribute('accept-aid', true);
   owner.location = { getX: () => 3200, getY: () => 3200, getZ: () => 0 };
-  hooks.playerOption({ player: owner, target: recruit, option: 6 });
+  hooks.playerOption({ player: owner, target: recruit, option: 5 });
   assert.match(owner.messages.at(-1), /Clan Hub, or with a clan vexillum/);
   owner.equipment = [25721];
-  hooks.playerOption({ player: owner, target: recruit, option: 6 });
+  hooks.playerOption({ player: owner, target: recruit, option: 5 });
   assert.equal(recruit.dialogue.title, 'Join Blur?');
   answer(recruit, 1);
   assert.equal(recruit.varbits.get(933), 3);
-  hooks.playerOption({ player: recruit, target: later, option: 6 });
+  hooks.playerOption({ player: recruit, target: later, option: 5 });
   assert.equal(recruit.messages.at(-1), 'You are not a high enough rank to recruit.');
 });
 
-test('the Recruit option shows only around the hub or with a vexillum on', () => {
-  const self = player('Solo');
-  login(self);
-  assert.deepEqual(self.option, [6, 'Recruit']);
-  self.location = { getX: () => 3200, getY: () => 3200, getZ: () => 0 };
-  hooks.mapSquare({ player: self });
-  assert.deepEqual(self.option, [6, '']);
-  self.equipment = [25721];
-  hooks.canEquip({ player: self, item: { getId: () => 25721 } });
-  runTicks(1);
-  assert.deepEqual(self.option, [6, 'Recruit']);
-  self.equipment = [];
-  hooks.canUnequip({ player: self, item: { getId: () => 25721 } });
-  runTicks(1);
-  assert.deepEqual(self.option, [6, '']);
+test('Recruit leaves the duel\'s Forfeit alone: slot 6 is neither taken nor written', () => {
+  const owner = player('Owner');
+  const rival = player('Rival');
+  login(owner);
+  createClan(owner);
+  const forfeit = { player: owner, target: rival, option: 6 };
+  hooks.playerOption(forfeit);
+  assert.equal(forfeit.handled, undefined);
+  assert.deepEqual(owner.messages, []);
+  assert.deepEqual(owner.option, [5, 'Recruit'], 'the only option clans ever sends');
 });
 
 test('Recruit leaves bots to the bots plugin', () => {
   const owner = player('Owner');
-  const event = { player: owner, target: { isPlayerBot: () => true }, option: 6 };
+  const event = { player: owner, target: { isPlayerBot: () => true }, option: 5 };
   hooks.playerOption(event);
   assert.equal(event.handled, undefined);
 });
@@ -955,10 +955,10 @@ test('talk and kick permissions change what the channel carries, and talk is enf
 
 test('kick needs the rank; a kicked member is out of the channel but still in the clan', () => {
   const { owner, member, other, clan } = clanOfThree();
-  const kick = (who, slot) => hooks.social[1]({ player: who, packet: { type: 'clan_channel_action', action: 'kick', slot, value: 0 }, handled: false });
-  kick(member, 0);
+  const kick = (who, name) => hooks.social[1]({ player: who, packet: { type: 'clan_channel_action', action: 'kick', name, value: 0 }, handled: false });
+  kick(member, 'Owner');
   assert.match(member.messages.at(-1), /high enough rank/);
-  kick(owner, 1);
+  kick(owner, 'member');
   assert.deepEqual(member.notices.at(-1), [43, 'You have been kicked from the channel.']);
   assert.deepEqual(sent(member, CLAN_CHANNEL_FULL).at(-1), protocol.encodeClanChannelFull(0, null));
   assert.equal(CoreClans().memberOf(clan, 'member').rank, 0);
@@ -967,15 +967,72 @@ test('kick needs the rank; a kicked member is out of the channel but still in th
 
 test('mute silences a member, and members can\'t be banned from the channel', () => {
   const { owner, member, clan } = clanOfThree();
-  const act = (who, action, slot, value = 0) => hooks.social[1]({ player: who, packet: { type: 'clan_channel_action', action, slot, value }, handled: false });
-  act(owner, 'mute', 1, 1);
+  const act = (who, action, name, value = 0) => hooks.social[1]({ player: who, packet: { type: 'clan_channel_action', action, name, value }, handled: false });
+  act(owner, 'mute', 'Member', 1);
   assert.equal(CoreClans().memberOf(clan, 'member').muted, true);
   say(member, 'hello');
   assert.deepEqual(member.notices.at(-1), [43, "You are muted in this clan's channel."]);
-  act(owner, 'mute', 1, 0);
+  act(owner, 'mute', 'Member', 0);
   assert.equal(CoreClans().memberOf(clan, 'member').muted, false);
-  act(owner, 'ban', 1);
+  act(owner, 'ban', 'Member');
   assert.match(owner.messages.at(-1), /must be expelled/);
+});
+
+test('a channel op whose target has left does nothing to anyone else', () => {
+  const { owner, member, other, clan } = clanOfThree();
+  CoreClans().removeMember(clan, 'member');
+  hooks.social[1]({ player: owner, packet: { type: 'clan_channel_action', action: 'kick', name: 'Member', value: 0 }, handled: false });
+  assert.equal(CoreClans().channelOf(other).users.some((user) => user.player === other), true);
+  hooks.social[1]({ player: owner, packet: { type: 'clan_channel_action', action: 'mute', name: 'Member', value: 1 }, handled: false });
+  assert.equal(CoreClans().memberOf(clan, 'other').muted, false);
+  assert.equal(member.varbits.get(933), 1);
+});
+
+test('channel action packets carry the name, and an unknown action is no kick', () => {
+  const frame = (action) => Buffer.from([181, 6, action, 1, ...Buffer.from('Bob'), 0]);
+  assert.deepEqual(protocol.decodeClientPacket(frame(2)), { type: 'clan_channel_action', action: 'mute', name: 'Bob', value: 1 });
+  assert.equal(protocol.decodeClientPacket(frame(9)).type, 'raw');
+});
+
+test('a channel ban keeps to the cap and adds a name once', () => {
+  const { owner, clan } = clanOfThree();
+  const guest = () => {
+    const self = player('Guest');
+    seek(self, 'Blur');
+    clickGroup(self, 702, 8);
+    runTicks(3);
+    return self;
+  };
+  const self = guest();
+  const ban = () => hooks.social[1]({ player: owner, packet: { type: 'clan_channel_action', action: 'ban', name: 'Guest', value: 0 }, handled: false });
+  ban();
+  assert.deepEqual(clan.banned, ['Guest']);
+  assert.equal(CoreClans().guestChannelOf(self), undefined);
+  CoreClans().joinGuestChannel(self, clan);
+  ban();
+  assert.deepEqual(clan.banned, ['Guest'], 'not twice');
+  assert.equal(CoreClans().guestChannelOf(self), undefined);
+  clan.banned = Array.from({ length: 100 }, (_, i) => `Name${i}`);
+  CoreClans().joinGuestChannel(self, clan);
+  ban();
+  assert.equal(clan.banned.length, 100);
+  assert.match(owner.messages.at(-1), /can't hold more than 100/);
+});
+
+test('a ban from the screen removes a guest from the channel and the hall', () => {
+  const { owner, clan } = clanOfThree();
+  const self = player('Guest');
+  seek(self, 'Blur');
+  clickGroup(self, 702, 8);
+  runTicks(3);
+  hooks.objects['Clan hall portal']['Enter-guest']({ player: self });
+  assert.ok(self.area);
+  clickGroup(owner, 690, 25);
+  clickGroup(owner, 689, 14);
+  owner.syntaxAction.execute('Guest');
+  assert.deepEqual(clan.banned, ['Guest']);
+  assert.equal(CoreClans().guestChannelOf(self), undefined);
+  assert.deepEqual([self.movedTo.x, self.movedTo.y], [3185, 3470]);
 });
 
 test('the ban list adds and removes names, holds only outsiders, and blocks Recruit', () => {
@@ -989,7 +1046,7 @@ test('the ban list adds and removes names, holds only outsiders, and blocks Recr
   owner.syntaxAction.execute('Stranger');
   assert.deepEqual(clan.banned, ['Stranger']);
   const stranger = player('Stranger');
-  hooks.playerOption({ player: owner, target: stranger, option: 6 });
+  hooks.playerOption({ player: owner, target: stranger, option: 5 });
   assert.equal(owner.messages.at(-1), 'Stranger is banned from your clan.');
   owner.syntaxAction.execute('stranger');
   assert.deepEqual(clan.banned, [], 'unban through resume_stringdialog');
@@ -1145,7 +1202,7 @@ test('a clan change reaches who views it, and kick and ban work on guests', () =
   runTicks(3);
   CoreClans().setMemberRank(clan, clan.members[1], 10);
   assert.equal(sent(self, CLAN_SETTINGS_DELTA).at(-1)[3], 255);
-  const act = (action) => hooks.social[1]({ player: owner, packet: { type: 'clan_channel_action', action, slot: 3, value: 0 }, handled: false });
+  const act = (action) => hooks.social[1]({ player: owner, packet: { type: 'clan_channel_action', action, name: 'Guest', value: 0 }, handled: false });
   act('kick');
   assert.deepEqual(self.notices.at(-1), [46, 'You have been kicked from the channel.']);
   clickGroup(self, 702, 8);
@@ -1300,22 +1357,47 @@ test('level-ups are told in live\'s words at the thresholds, to those at the ran
   assert.deepEqual(owner.notices.at(-1), [43, 'Owner has reached Cooking level 80.']);
 });
 
-test('quests, tasks, log items, drops and PKs are told', () => {
+test('quests, tasks, log items, drops and PKs are told', async () => {
   const { owner, member } = clanOfThree();
   hooks.custom.get('quest:completed')({ player: owner, quest: { name: 'Below Ice Mountain' } });
   assert.deepEqual(member.notices.at(-1), [43, 'Owner has completed a quest: Below Ice Mountain']);
   hooks.custom.get('combat-achievements:completed')({ player: owner, task: { id: 598, name: 'It takes too long', tier: 2 } });
   assert.deepEqual(member.notices.at(-1), [43, 'CA_ID:598|Owner has completed a medium combat task: It takes too long.']);
-  hooks.custom.get('collection-log:obtain')({ player: owner, itemId: 7, added: true });
+  hooks.custom.get('collection-log:new-item')({ player: owner, itemId: 7 });
   assert.deepEqual(member.notices.at(-1), [43, 'Owner received a new collection log item: Item 7']);
-  const notices = member.notices.length;
-  hooks.custom.get('collection-log:obtain')({ player: owner, itemId: 7, added: false });
-  assert.equal(member.notices.length, notices);
   const npc = { getDefinition: () => ({ getName: () => 'Artio' }) };
   hooks.custom.get('npc-drops:roll')({ player: owner, npc, drops: [{ itemId: 200000, amount: 2 }, { itemId: 5, amount: 1 }] });
+  await null;
   assert.deepEqual(member.notices.at(-1), [43, 'Owner received a drop: 2 x Item 200000 (400,000 coins) from Artio.']);
-  hooks.defeated({ killer: owner, victim: player('Rival') });
-  assert.deepEqual(member.notices.at(-1), [43, 'Owner has defeated Rival.']);
+  const lost = (id) => [{ getId: () => id, getAmount: () => 1 }];
+  hooks.deathDrops({ killer: owner, player: player('Rival'), items: lost(200000), untradeables: [] });
+  assert.deepEqual(member.notices.at(-1), [43, 'Owner has defeated Rival and received (200,000 coins) worth of loot!']);
+});
+
+test('drops a handler edits away are never told', async () => {
+  const { owner, member } = clanOfThree();
+  const heard = member.notices.length;
+  const roll = { player: owner, drops: [{ itemId: 200000, amount: 1 }] };
+  hooks.custom.get('npc-drops:roll')(roll);
+  roll.drops.length = 0; // as modes/FreeToPlay and Soul Wars' Tutorial do, after this listener
+  await null;
+  assert.equal(member.notices.length, heard);
+});
+
+test('a task caught up at login is not told, and a PK under the value row is not either', () => {
+  const { owner, member, clan } = clanOfThree();
+  const heard = member.notices.length;
+  hooks.custom.get('combat-achievements:completed')({ player: owner, silent: true, task: { id: 598, name: 'It takes too long', tier: 2 } });
+  assert.equal(member.notices.length, heard);
+  const lost = (id) => [{ getId: () => id, getAmount: () => 1 }];
+  hooks.deathDrops({ killer: owner, player: player('Rival'), items: lost(99999), untradeables: [] });
+  assert.equal(member.notices.length, heard, 'under the 100,000 default');
+  CoreClans().setSettingValue(clan, 65, 50);
+  hooks.deathDrops({ killer: owner, player: player('Rival2'), items: lost(50), untradeables: [] });
+  assert.match(member.notices.at(-1)[1], /defeated Rival2/);
+  const told = member.notices.length;
+  hooks.deathDrops({ killer: { getId: () => 1 }, player: owner, items: lost(200000), untradeables: [] });
+  assert.equal(member.notices.length, told, 'an npc kill is no PK');
 });
 
 test('joining and leaving are told to those in the channel', () => {
@@ -1380,6 +1462,7 @@ test('the coffer moves coins by rank, and every member hears the new total throu
   const { owner, member, clan } = clanOfThree();
   const coffer = hooks.objects['Clan Coffer'].Use;
   const held = pocket(owner, 5000);
+  inHall(owner, member);
   coffer({ player: owner });
   assert.deepEqual(owner.mounted.slice(-2), [696, 697]);
   clickGroup(owner, 697, 9);
@@ -1397,12 +1480,184 @@ test('the coffer moves coins by rank, and every member hears the new total throu
   assert.equal(owner.messages.at(-1), 'The coffer is empty.');
   pocket(member, 10);
   clan.coffer = 500;
+  coffer({ player: member });
   clickGroup(member, 696, 7);
   assert.match(member.messages.at(-1), /high enough rank to withdraw/);
   assert.equal(JSON.parse(fs.readFileSync(process.env.TSPS_CLANS_FILE, 'utf8')).clans[0].coffer !== undefined, true);
   const outsider = player('Outsider');
   coffer({ player: outsider });
   assert.match(outsider.messages.at(-1), /Only members/);
+});
+
+test('coffer buttons do nothing away from the hall, or with the screen shut', () => {
+  const { owner, clan } = clanOfThree();
+  const held = pocket(owner, 5000);
+  clan.coffer = 1000;
+  clickGroup(owner, 697, 6);
+  clickGroup(owner, 696, 8);
+  assert.equal(held.coins, 5000, 'a crafted click, anywhere in the world');
+  inHall(owner);
+  clickGroup(owner, 696, 8);
+  assert.equal(held.coins, 5000, 'in the hall, screen never opened');
+  hooks.objects['Clan Coffer'].Use({ player: owner });
+  clickGroup(owner, 696, 11);
+  const prompt = owner.amountAction;
+  owner.mounted = [];
+  prompt.execute(10);
+  assert.equal(held.coins, 5000, 'answering after it shut');
+});
+
+test('standing in another clan\'s hall gets no use of either clan\'s coffer', () => {
+  const { owner, clan } = clanOfThree();
+  const rival = player('Rival');
+  createClan(rival, 'Rivals');
+  const rivals = StoreClans().byName('Rivals');
+  rivals.coffer = 500;
+  clan.coffer = 500;
+  const held = pocket(rival, 0);
+  seek(rival, 'Blur');
+  hooks.objects['Clan hall portal']['Enter-guest']({ player: rival });
+  hooks.objects['Clan Coffer'].Use({ player: rival });
+  assert.match(rival.messages.at(-1), /Only members/);
+  rival.mounted.push(696);
+  clickGroup(rival, 696, 12);
+  assert.equal(held.coins, 0);
+  assert.equal(clan.coffer, 500);
+  assert.equal(rivals.coffer, 500);
+  assert.ok(owner);
+});
+
+test('an Ironman can\'t withdraw either', () => {
+  const { owner, clan } = clanOfThree();
+  const held = pocket(owner, 0);
+  clan.coffer = 1000;
+  inHall(owner);
+  hooks.objects['Clan Coffer'].Use({ player: owner });
+  owner.ironman = 'ultimate';
+  clickGroup(owner, 696, 12);
+  assert.match(owner.messages.at(-1), /Ironmen can't withdraw/);
+  assert.equal(clan.coffer, 1000);
+  assert.equal(held.coins, 0);
+});
+
+test('a clans file that can\'t be read is kept, and throws rather than reads as empty', () => {
+  const { clan } = clanOfThree();
+  assert.ok(clan);
+  const file = process.env.TSPS_CLANS_FILE;
+  const store = StoreClans();
+  fs.writeFileSync(file, '{"nextKey": 2, "clans": [{"key"');
+  store.reset();
+  assert.throws(() => store.all(), SyntaxError);
+  assert.throws(() => store.all(), SyntaxError, 'not an empty map the second time');
+  assert.throws(() => store.save(), SyntaxError);
+  assert.equal(fs.readFileSync(file, 'utf8'), '{"nextKey": 2, "clans": [{"key"');
+  fs.writeFileSync(file, '{"nextKey": 2}');
+  store.reset();
+  assert.throws(() => store.all(), TypeError, 'nor when it parses without clans');
+  fs.rmSync(file);
+  store.reset();
+});
+
+test('removing someone not in the clan removes nobody', () => {
+  const { owner, member, clan } = clanOfThree();
+  const before = clan.members.length;
+  const heard = owner.notices.length;
+  CoreClans().removeMember(clan, 'nobody');
+  assert.equal(clan.members.length, before);
+  assert.equal(owner.notices.length, heard);
+  clickGroup(member, 690, 26);
+  const leaving = member.dialogue;
+  CoreClans().removeMember(clan, 'member');
+  member.dialogue = leaving;
+  answer(member, 1);
+  assert.equal(clan.members.length, before - 1, 'expelled under the Leave? prompt, and nobody else goes');
+  assert.ok(CoreClans().ownerOf(clan));
+  assert.equal(member.messages.some((text) => /You have left/.test(text)), false);
+});
+
+test('only the owner can start or cancel a resignation', () => {
+  const { owner, member, clan } = clanOfThree();
+  clickGroup(member, 690, 13);
+  assert.match(member.messages.at(-1), /Only the clan's owner/);
+  assert.equal(member.dialogue, undefined);
+  clickGroup(owner, 690, 13);
+  answer(owner, 1);
+  assert.ok(clan.resignDueAt > 0);
+  clickGroup(member, 690, 13);
+  assert.ok(clan.resignDueAt > 0, 'nor stop it');
+  clickGroup(owner, 690, 13);
+  assert.equal(clan.resignDueAt, 0);
+});
+
+test('a rank popup\'s answer is checked: range, the row\'s minimum, and real ranks', () => {
+  const { owner, clan } = clanOfThree();
+  clickGroup(owner, 690, 15);
+  owner.amountAction.execute(201); // rank 200
+  assert.equal(clan.talkRank, -1, 'above their own rank would mute even the owner');
+  clickGroup(owner, 690, 15);
+  owner.amountAction.execute(8); // rank 7, which isn't one
+  assert.equal(clan.talkRank, -1);
+  clickGroup(owner, 690, 15);
+  owner.amountAction.execute(11); // rank 10
+  assert.equal(clan.talkRank, 10);
+  const PERMISSIONS = require('../plugins/interface/clans/data/permissions.json');
+  const row = PERMISSIONS.find((entry) => entry.minRank === 100 && entry.setting !== null && !entry.special);
+  const permission = () => hooks.clicks.forEach((handler) => handler({ player: owner, groupId: 706, childId: 12, slot: PERMISSIONS.indexOf(row) }));
+  permission();
+  owner.amountAction.execute(51); // rank 50, under the row's minimum
+  assert.equal(CoreClans().permissionRank(clan, row.setting), 100);
+  permission();
+  owner.amountAction.execute(102); // rank 101, the minimum or over
+  assert.equal(CoreClans().permissionRank(clan, row.setting), 101);
+});
+
+test('an online applicant isn\'t accepted past the member cap, and stays an applicant', () => {
+  const { owner, clan } = clanOfThree();
+  const Guests = require('../plugins/interface/clans/Guests.Clans');
+  const hopeful = player('Hopeful');
+  clan.inviting = true;
+  seek(hopeful, 'Blur');
+  Guests.toggleApplication(hopeful, clan);
+  clan.members.push(...Array.from({ length: 500 - clan.members.length }, (_, i) => ({ account: `m${i}`, name: `M${i}`, rank: 0 })));
+  clickGroup(owner, 690, 21);
+  for (const handler of hooks.clicks) handler({ player: owner, groupId: 699, childId: 11, action: 0 });
+  for (const handler of hooks.clicks) handler({ player: owner, groupId: 699, childId: 1, action: 3 });
+  assert.equal(owner.messages.at(-1), 'Your clan is full.');
+  assert.equal(clan.members.length, 500);
+  assert.equal(clan.applicants.length, 1);
+});
+
+test('a hall that refuses its visitor spawns nothing', () => {
+  const { owner, clan } = clanOfThree();
+  clan.hall = { locked: true, players: 10, theme: 0 };
+  inHall(owner);
+  assert.match(owner.messages.at(-1), /locked/);
+  assert.equal(hooks.spawned.length, 0);
+});
+
+test('an event is edited and deleted as listed, whatever another organiser did since', () => {
+  const { owner, member, clan } = clanOfThree();
+  const event = (creator) => ({ world: 1, type: 0, activity: 0, subtype: 0, date: 9000, duration: 1, time: 720, rank: -1, creator });
+  clan.events = [event('First'), event('Second'), event('Third')];
+  clan.permissions = { ...clan.permissions, 21: 0 };
+  const row = (self, slot) => hooks.clicks.forEach((handler) => handler({ player: self, groupId: 703, childId: 9, slot }));
+  clickGroup(owner, 690, 19);
+  clickGroup(member, 690, 19);
+  row(member, 2); // Third, on member's list
+  clickGroup(owner, 703, 9);
+  row(owner, 0);
+  clickGroup(owner, 704, 24); // owner deletes First: Third is at slot 1 now
+  assert.deepEqual(clan.events.map((each) => each.creator), ['Second', 'Third']);
+  clickGroup(member, 704, 24);
+  assert.deepEqual(clan.events.map((each) => each.creator), ['Second'], 'Third, as they chose, not by its old slot');
+  clan.events = [event('A'), event('B')];
+  clickGroup(owner, 690, 19);
+  clickGroup(member, 690, 19);
+  row(owner, 1);
+  clickGroup(owner, 704, 24);
+  row(member, 1); // B has gone from under their list
+  assert.match(member.messages.at(-1), /Another organiser/);
+  assert.deepEqual(clan.events.map((each) => each.creator), ['A']);
 });
 
 // ---------------------------------------------------------------- the last screens
@@ -1555,6 +1810,7 @@ test('all eight title settings are sent, and ranks 96-124 save', () => {
 test('an Ironman can\'t deposit, and no transaction moves over 50m', () => {
   const { owner, clan } = clanOfThree();
   const held = pocket(owner, 60000000);
+  inHall(owner);
   hooks.objects['Clan Coffer'].Use({ player: owner });
   owner.ironman = 'ironman';
   clickGroup(owner, 697, 10);
@@ -1663,13 +1919,13 @@ test('the Clerk hands out the clan\'s colour, and a new motif or a login changes
   assert.deepEqual(owner.equipment, [25720]);
 });
 
-test('any colour of vexillum recruits and shows the option', () => {
+test('any colour of vexillum recruits away from the hub', () => {
   const { owner } = clanOfThree();
   owner.location = { getX: () => 3000, getY: () => 3000, getZ: () => 0 };
   owner.equipment = [25725];
-  hooks.canEquip({ player: owner, item: { getId: () => 25725 } });
-  runTicks(1);
-  assert.equal(owner.option?.[1], 'Recruit');
+  const target = player('Target');
+  hooks.playerOption({ player: owner, target, option: 5 });
+  assert.equal(target.dialogue.title, 'Join Blur?');
 });
 
 // ---------------------------------------------------------------- Clan Hall contents
@@ -1708,9 +1964,76 @@ test('the party chest offers on 266 and 783, and only Confirm commits', () => {
   assert.deepEqual(owner.invs[CHEST_INV][0], { id: 995, amount: 100 });
   assert.equal(owner.invs[92][0], null);
   op(owner, 266, 0, 1, 2);
-  hooks.custom.get('interface:close')({ player: owner });
+  hooks.custom.get('interface:closed')({ player: owner, interfaceId: 783 });
   assert.equal(owner.area.chest.length, 1, 'unconfirmed stays out of the chest');
   assert.equal(owner.bag.some((item) => item.getId() === 4151), true, 'and back in the pack');
+});
+
+test('an offer always comes back: reopening, another screen over it, leaving, a full pack', () => {
+  const { owner } = clanOfThree();
+  inHall(owner);
+  const has = () => owner.bag.some((item) => item.getId() === 4151);
+  const offerWhip = () => {
+    openChest(owner);
+    op(owner, 266, 0, owner.bag.findIndex((item) => item.getId() === 4151), 2);
+    assert.equal(has(), false);
+  };
+  owner.bag.push(carried(4151, 1));
+  offerWhip();
+  openChest(owner);
+  assert.equal(has(), true, 'the chest clicked again');
+  offerWhip();
+  hooks.custom.get('interface:opened')({ player: owner, targetUid: (161 << 16) | 16, groupId: 12 });
+  assert.equal(has(), true, 'another modal mounted over it');
+  offerWhip();
+  owner.area.postLeave(owner, false);
+  assert.equal(has(), true, 'teleported out of the hall');
+  inHall(owner);
+  offerWhip();
+  hooks.logout({ player: owner });
+  assert.equal(has(), true, 'logged out');
+});
+
+test('offer and confirm packets do nothing once the screen has gone', () => {
+  const { owner } = clanOfThree();
+  inHall(owner);
+  owner.bag.push(carried(995, 100), carried(4151, 1));
+  openChest(owner);
+  op(owner, 266, 0, 0, 2);
+  owner.mounted = [];
+  op(owner, 783, 17);
+  assert.equal(owner.area.chest.length, 0, 'confirm');
+  assert.equal(owner.bag.find((item) => item.getId() === 995).getAmount(), 100, 'and the offer went back');
+  op(owner, 266, 0, 0, 2);
+  assert.equal(owner.bag.find((item) => item.getId() === 995).getAmount(), 100, 'offer');
+});
+
+test('the chest holds a stack up to the most a stack can be, and refuses past it', () => {
+  const { owner, member } = clanOfThree();
+  inHall(owner, member);
+  owner.area.chest.push({ id: 995, amount: 2147483000 });
+  member.bag.push(carried(995, 1000));
+  openChest(member);
+  hooks.custom.get('player:varp-transmit')({ player: member, varpId: 675, value: 2 << 14 });
+  op(member, 266, 0, 0, 1);
+  op(member, 783, 17);
+  assert.match(member.messages.at(-1), /can't hold any more/);
+  assert.equal(owner.area.chest[0].amount, 2147483000);
+});
+
+test('the piano forgets a player who has gone', () => {
+  const { owner, member } = clanOfThree();
+  inHall(owner, member);
+  hooks.objects.Piano.Entertain({ player: owner });
+  op(owner, 698, 9);
+  assert.equal(member.sounds.length, 1);
+  hooks.logout({ player: owner });
+  op(owner, 698, 9);
+  assert.equal(member.sounds.length, 1, 'logout');
+  hooks.objects.Piano.Entertain({ player: owner });
+  hooks.custom.get('interface:closed')({ player: owner, interfaceId: 698 });
+  op(owner, 698, 9);
+  assert.equal(member.sounds.length, 1, 'closed by walking off');
 });
 
 test('the chest is refused below its rank, and elsewhere is not ours', () => {

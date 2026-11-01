@@ -45,17 +45,17 @@ class UpstreamClanTest {
     }
 
     @Test
-    fun `channel ops become CLAN_CHANNEL_ACTION by channel slot`() {
+    fun `channel ops become CLAN_CHANNEL_ACTION by name`() {
         upstream.handle(ClanChannelKickUser("Bob", 0, 3))
         upstream.handle(AffinedClanSettingsAddBannedFromChannel("Bob", 0, 4))
         upstream.handle(AffinedClanSettingsSetMutedFromChannel("Bob", 0, 5, true))
         upstream.handle(AffinedClanSettingsSetMutedFromChannel("Bob", 0, 5, false))
         val expected =
             listOf(
-                byteArrayOf(CLAN_CHANNEL_ACTION, 0, 0, 3, 0),
-                byteArrayOf(CLAN_CHANNEL_ACTION, 1, 0, 4, 0),
-                byteArrayOf(CLAN_CHANNEL_ACTION, 2, 0, 5, 1),
-                byteArrayOf(CLAN_CHANNEL_ACTION, 2, 0, 5, 0),
+                TspsWriter().u8(0).u8(0).string("Bob").varByte(CLAN_CHANNEL_ACTION),
+                TspsWriter().u8(1).u8(0).string("Bob").varByte(CLAN_CHANNEL_ACTION),
+                TspsWriter().u8(2).u8(1).string("Bob").varByte(CLAN_CHANNEL_ACTION),
+                TspsWriter().u8(2).u8(0).string("Bob").varByte(CLAN_CHANNEL_ACTION),
             )
         expected.forEachIndexed { index, bytes -> assertArrayEquals(bytes, sent[index]) }
     }
@@ -71,6 +71,6 @@ class UpstreamClanTest {
 
     private companion object {
         const val CHAT = 190
-        const val CLAN_CHANNEL_ACTION: Byte = -75 // 181
+        const val CLAN_CHANNEL_ACTION = 181
     }
 }

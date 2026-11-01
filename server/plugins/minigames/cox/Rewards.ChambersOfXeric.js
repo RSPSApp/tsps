@@ -176,7 +176,7 @@ function recordBest(player, raid, time) {
   if (bests[key] == null || raid.duration < bests[key]) {
     bests[key] = raid.duration;
     player.setAttribute(ATTR_BEST, bests);
-    Shared.api().emitCustomEvent("boss:personal-best", { player, boss: `${RAID_NAME}${raid.challenge ? " Challenge Mode" : ""}`, ticks: raid.duration });
+    Shared.api().emitCustomEvent("boss:personal-best", { player, boss: `${RAID_NAME}${raid.challenge ? " Challenge Mode" : ""} (Team Size: ${raid.scale})`, ticks: raid.duration });
     player.sendMessage(`New personal best: <col=ff0000>${time}</col>`);
   }
 }

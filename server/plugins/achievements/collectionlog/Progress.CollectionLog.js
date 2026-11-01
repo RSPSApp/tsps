@@ -145,6 +145,7 @@ function obtain(player, itemId, amount = 1, { ensure = false, silent = false } =
   const total = uniqueCount(player);
   player.getPacketSender().sendConfig(VARP.UNSYNCED, total);
   if (!silent) announce(player, itemId);
+  if (!silent && !ensure) pluginApi.emitCustomEvent("collection-log:new-item", { player, itemId });
   const list = recent(player);
   list.unshift([itemId, today()]);
   player.setAttribute(RECENT_ATTRIBUTE, list.slice(0, RECENT_SIZE));

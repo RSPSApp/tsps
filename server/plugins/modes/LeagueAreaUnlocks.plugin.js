@@ -20,5 +20,6 @@ module.exports = {
     require("./leagueareas/Enforcement.LeagueAreaUnlocks")(api);
     require("./leagueareas/Commands.LeagueAreaUnlocks")(api);
     require("./leagueareas/HomeTeleport.LeagueAreaUnlocks")(api);
+    require("./leagueareas/YamaExit.LeagueAreaUnlocks")(api);
   },
 };

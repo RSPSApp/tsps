@@ -492,6 +492,7 @@ test("Demonic Pacts: Varlamore to start, Misthalin shut but Zanaris and the Abys
   const pacts = character("pactsareas");
   worldLeague = 4;
   assert.deepEqual(pacts.getAttribute("league:areas"), [VARLAMORE], "Varlamore, the only default");
+  assert.ok(pacts.getLocation().equals(at(1503, 5602)), "a new character begins in Yama's Lair, as recorded");
   assert.deepEqual(SELECTION.map((varbit) => pacts.sent.varbits.get(varbit)), [VARLAMORE, 0, 0, 0, 0, 0]);
   const open = (x, y) => query("league:area-at", { x, y, player: pacts });
   assert.equal(open(3222, 3218).area, MISTHALIN, "Lumbridge is Misthalin's");
@@ -539,6 +540,27 @@ test("Demonic Pacts: Varlamore to start, Misthalin shut but Zanaris and the Abys
   core.TaskManager.process();
   assert.ok(!pacts.getLocation().equals(from), "landed at +23");
   pacts.setRegistered(false);
+});
+
+test("Yama's Lair's Glowing portal leads to Civitas through the recorded fade", () => {
+  worldLeague = 6;
+  const leaver = character("pactsleaver");
+  worldLeague = 4;
+  leaver.setRegistered(true);
+  const YamaExit = require("../plugins/modes/leagueareas/YamaExit.LeagueAreaUnlocks");
+  const portal = { getId: () => core.CacheDefinitions.getLocId("league_6_yama_exit") };
+  assert.equal(YamaExit.leave({ player: leaver, object: { getId: () => portal.getId() + 1 } }), false, "another loc of the name is not ours");
+  assert.equal(YamaExit.leave({ player: leaver, object: portal }), true);
+  assert.equal(leaver.getAnimation()?.getId(), core.CacheDefinitions.getSeqId("mahjarrat_human_disappear_01_noheld_quick"));
+  assert.equal(leaver.sent.varbits.get(12393), 1, "busy");
+  for (let tick = 0; tick < 3; tick++) core.TaskManager.process();
+  const there = leaver.getLocation();
+  assert.ok(Math.abs(there.getX() - 1666) <= 1 && Math.abs(there.getY() - 3136) <= 1, `Civitas at +3: ${there.getX()}, ${there.getY()}`);
+  for (let tick = 3; tick < 6; tick++) core.TaskManager.process();
+  assert.equal(leaver.sent.varbits.get(12393), 0, "busy cleared at +6");
+  const echoes = character("echoesleaver");
+  assert.equal(YamaExit.leave({ player: echoes, object: portal }), false, "only a Demonic Pacts character's");
+  leaver.setRegistered(false);
 });
 
 test("Demonic Pacts' League Home Teleport: Civitas with the league's cast and its map graphics, Yama's Lair through the portal", () => {

@@ -184,6 +184,22 @@ test("View Demonic Pacts opens the tree as captured; a bought node pays, sets it
   assert.equal(Common.pacts(pacts).length, 1);
 });
 
+test("Apply Changes buys every selected pact in order, one linked to the next, with one unlock", () => {
+  const pacts = character("pactapply");
+  pacts.setAttribute(Common.POINTS_ATTRIBUTE, 5);
+  const second = Common.nodes[0].links[0];
+  const third = Common.nodes[second].links.find((link) => link !== 0 && !Common.nodes[0].links.includes(link));
+  openTree(pacts);
+  pacts.sent.sounds.length = 0;
+  hooks[`button:${uid(TREE, 11)}`]({ player: pacts, scriptTrigger: true, argsData: trigger(3, 0, second * 2, third * 2) });
+  assert.deepEqual(Common.pacts(pacts), [0, second, third], "the central pact, then one linked to it, then one linked to that");
+  assert.equal(pacts.sent.varps.get(varp("talent_points_spent")), 3);
+  assert.equal(pacts.sent.sounds.length, 4, "one unlock's sounds for the selection");
+  assert.equal(pacts.sent.varbits.get(varbit("busy")), 1, "busy until the tree is back, as recorded");
+  ticks(5);
+  assert.equal(pacts.sent.varbits.get(varbit("busy")), 0);
+});
+
 test("the tree comes back after a buy only if it was up and nothing else opened since", () => {
   const pacts = character("pactreopen");
   const shown = () => pacts.sent.order.filter(([kind, , group]) => kind === "sub" && group === TREE).length;

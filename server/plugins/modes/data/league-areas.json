@@ -88,6 +88,14 @@
     },
     "6": {
       "_comment": "Demonic Pacts (Wiki Demonic_Pacts_League/Areas): every character starts in Varlamore (the Stranglewood counts as Varlamore); Misthalin is never open, but Zanaris and the Abyssal Area are open from everywhere. The first unlock, at 80 tasks, is Karamja (Wiki: 'will unlock Karamja for free when they achieve their first region unlock'; recording 237/01098 picks it through the confirm, league_area_selection_1 0 -> 2); then three picks at 200, 300 and 450 from the other eight, the cache's own thresholds (enum 5677's structs 5971-5975, param 1010: 0, 80, 200, 300, 450). The unlock played Raging Echoes' spotanims (237/01098 league_5_area_unlock_emote_spotanim_karamja), though this cache has league_6 ones. The area teleport and the league home teleport's Civitas as captured (237: 1098, 1102, 1104): leagues_6_home_teleport_player_01..08 at +1, +4, +7, +10, +13, +16, +19 and +22, each with leagues_6_home_teleport_spotanim_01..08 as a map_anim on the caster's tile (3755-3762), landing at +23.",
+      "_start": "Where a new character begins: Yama's Lair, by its exit to Civitas illa Fortis (Wiki 'Players began in Yama's Lair'; recording 237/01098 moves the new character there, to 1503, 5602, before its tutorial starts). A locked square or a respawn still goes to the starting area's hub.",
+      "start": { "x": 1503, "y": 5602, "z": 0 },
+      "_exit": "Yama's Lair's Glowing portal (league_6_yama_exit), Leave, as recorded (237/01098): on arrival busy, mahjarrat_human_disappear_01_noheld_quick with vfx_mahjarrat_human_teleport_shadow_quick and the fade out (overlay 174, script 948 [0, 255, 0, 0, 50]); +2 minimap_state 2; +3 to Civitas illa Fortis (1665-1667, 3136-3137); +6 minimap back, busy cleared and the fade in ([0, 0, 0, 255, 50]).",
+      "exit": {
+        "loc": "league_6_yama_exit", "to": { "x": 1666, "y": 3136, "spread": 1 },
+        "animation": "mahjarrat_human_disappear_01_noheld_quick", "graphic": "vfx_mahjarrat_human_teleport_shadow_quick",
+        "minimapTick": 2, "moveTick": 3, "endTick": 6
+      },
       "defaults": [21],
       "thresholds": [80, 200, 300, 450],
       "firstPick": 2,

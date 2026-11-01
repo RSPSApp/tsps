@@ -9,6 +9,7 @@
 const Common = require("./Common.LeaguePacts");
 const { triggerInts } = require("../../interface/widgetGroup");
 
+const BUSY_VARBIT = 12393;
 /** if_setevents bits: OP1, and IF_SCRIPT_TRIGGER (bit 23, as RSProx names it). */
 const FLAG_OP1 = 1 << 1;
 const FLAG_SCRIPT_TRIGGER = 1 << 23;
@@ -72,16 +73,37 @@ function refusal(player, index) {
   return linked ? null : "notLinked";
 }
 
-/** Buys node `index`: the varps and its effect, the captured unlock, the tree again five ticks on. */
+/** Buys node `index` (see buyAll). */
 function buy(player, index) {
-  const why = refusal(player, index);
-  if (why) {
-    player.sendMessage(Common.message(why, { cap: Common.data.spendCap }));
-    return false;
+  return buyAll(player, [index]);
+}
+
+/**
+ * Buys the nodes Apply Changes sent, in the order selected, each through the usual checks (a later
+ * node may link to an earlier one of the same selection): for each, as recorded (238: payload
+ * [2, 88, 94]), the spent varp, its unlock bit and its effect; then, once, the unlock, the tree
+ * closed and back five ticks on. A node refused stops the rest, with its reason.
+ */
+function buyAll(player, indices) {
+  const bought = [];
+  for (const index of indices) {
+    const why = refusal(player, index);
+    if (why) {
+      player.sendMessage(Common.message(why, { cap: Common.data.spendCap }));
+      break;
+    }
+    applyNode(player, index);
+    bought.push(index);
   }
+  if (!bought.length) return false;
+  present(player, bought);
+  return true;
+}
+
+/** One node held: saved, then the spent varp, its unlock bit and its effect's varbit. */
+function applyNode(player, index) {
   const owned = [...Common.pacts(player), index];
   Common.save(player, owned);
-  const { core } = Common;
   const sender = player.getPacketSender();
   const node = Common.nodes[index];
   const ids = Common.ids;
@@ -89,7 +111,14 @@ function buy(player, index) {
   const slot = Math.floor(index / 32);
   sender.sendConfig(ids.unlocked[slot], Common.unlockBits(owned)[slot]);
   sender.sendVarbit(Common.effectVarbits.get(node.varbit), Common.effect(player, node.varbit));
+}
+
+/** The unlock, once for a selection: busy, the emote and graphic, the tree closed, the sounds, the tree back. */
+function present(player, bought) {
+  const { core } = Common;
+  const sender = player.getPacketSender();
   const { buyAnimation, buyGraphic, buyGraphicHeight, buySounds, scripts, reopenTicks } = ui();
+  sender.sendVarbit(BUSY_VARBIT, 1);
   player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId(buyAnimation)));
   player.performGraphic(new core.Graphic(core.CacheDefinitions.getSpotanimId(buyGraphic), 0, buyGraphicHeight));
   sender.sendInterfaceScript(scripts.combatLevel, [player.getSkillManager().getCombatLevel()]);
@@ -97,12 +126,12 @@ function buy(player, index) {
   if (open.has(player)) reopening.add(player);
   close(player);
   for (const [sound, delay] of buySounds) sender.sendSound(sound, 1, delay);
-  Common.api.emitCustomEvent("league:pact-unlocked", { player, node: index, effect: node.varbit });
+  for (const index of bought) Common.api.emitCustomEvent("league:pact-unlocked", { player, node: index, effect: Common.nodes[index].varbit });
   later(player, reopenTicks, () => {
+    sender.sendVarbit(BUSY_VARBIT, 0);
     if (!reopening.delete(player)) return;
     if (Common.isPacts(player) && !open.has(player) && !(player.getInterfaceId?.() > 0)) show(player);
   });
-  return true;
 }
 
 function later(player, ticks, action) {
@@ -122,9 +151,11 @@ function later(player, ticks, action) {
 function dataLayerTriggered(event) {
   const { player } = event;
   if (!event.scriptTrigger || !open.has(player) || !Common.isPacts(player)) return false;
-  const [action, component] = triggerInts(event.argsData);
-  if (action !== ui().buyAction || !Number.isInteger(component) || component % 2 !== 0) return true;
-  buy(player, component / 2);
+  // Apply Changes: the count, then each selected node's component (two per node).
+  const [count, ...components] = triggerInts(event.argsData);
+  const picked = components.slice(0, Math.max(0, count | 0));
+  if (!picked.length || picked.some((component) => !Number.isInteger(component) || component < 0 || component % 2 !== 0)) return true;
+  buyAll(player, picked.map((component) => component / 2));
   return true;
 }
 
@@ -199,4 +230,4 @@ module.exports = function attach(api) {
   api.onPlayerLogout(logout);
 };
 
-Object.assign(module.exports, { buy, reset, refusal, openTree, triggerInts });
+Object.assign(module.exports, { buy, buyAll, reset, refusal, openTree, triggerInts });

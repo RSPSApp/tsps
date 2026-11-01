@@ -29,6 +29,8 @@ function login({ player, league }) {
   if (!rules) return;
   if (Common.unlocked(player).length === 0) {
     player.setAttribute(Common.AREAS_ATTRIBUTE, [...rules.defaults]);
+    // A new character begins where the league starts it (Demonic Pacts: Yama's Lair).
+    if (rules.start) player.moveTo(new Common.core.Location(rules.start.x, rules.start.y, rules.start.z ?? 0));
   }
   // Every unlocked area's content once: the defaults' on a new character, and any a character made
   // before it existed (or saved before an unlock's fourteen ticks ran) has not had yet.

@@ -1265,8 +1265,10 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   perm_floating_panel_content 647:20 OP1 + IF_SCRIPT_TRIGGER), then `talent_tree_init` (7892) [1]
   and script 9397. A second click while it is open: "The Demonic Pacts interface is already open."
   The frame's slot 11 closes it.
-- **A buy** is the data layer's script trigger, payload [1, component]: two components per node,
-  so the node is component / 2 (237/01098: 126 set bit 63). The first pact must be the central one
+- **A buy** is Apply Changes, the data layer's script trigger: the count of nodes selected, then
+  each one's component, two per node, so a node is component / 2 (237/01098: [1, 126] set bit 63;
+  238: [2, 88, 94] bought two). Each is checked in the order selected (a later one may link to an
+  earlier one), and each sends its own varps and effect; the unlock below plays once. The first pact must be the central one
   (node 0); later ones must link to one held, with a point left and fewer than 40 spent. Then, in
   the recorded order: `talent_points_spent`, the unlock bit, the effect varbit, human_relic_unlock
   with `leagues_6_mastery_unlock` at height 92, `pvp_icons_comlevelrange` (5224) with the combat

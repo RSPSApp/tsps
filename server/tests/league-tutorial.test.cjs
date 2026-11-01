@@ -253,7 +253,11 @@ test("a new Raging Echoes character runs the whole tutorial as recorded", async 
   click(league, CONTINUE, 9);
   click(league, PREVIOUS, 9);
   assert.equal(league.sent.varbits.get(10308), 0, "Previous goes back a step");
-  await walkThrough(league, 6);
+  await walkThrough(league, 5);
+  // Finish: the button's script (3420) resumes the pause button, and this client sends only that.
+  assert.equal(click(league, uid(HIGHLIGHT, 9)), true, "the resume finishes the walkthrough");
+  await settle();
+  assert.equal(click(league, CONTINUE, 9), false, "a Continue click after it (live sent both) has nothing to step");
   assert.ok(league.sent.closed.includes(FLOATER), "the task list closes after its walkthrough");
   assertPage(league, 7);
   assert.deepEqual(lastScript(league, 3185), [uid(656, 39)], "the areas button pulses");

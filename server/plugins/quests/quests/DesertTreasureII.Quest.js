@@ -5021,7 +5021,8 @@ module.exports = function registerDesertTreasureII(api) {
   }
   function searchGolem(p, input) {
     const term = String(input ?? "").trim().toLowerCase();
-    const record = GOLEM_RECORDS[term];
+    // Own keys only: inherited names such as constructor/__proto__ are not records.
+    const record = Object.hasOwn(GOLEM_RECORDS, term) ? GOLEM_RECORDS[term] : null;
     const searched = Number(p.getAttribute(SEARCHED_NAMES)) || 0;
     const denied = term === "frostenhorn" && (searched !== 15 || !p.getAttribute(BANIKAN_LEFT));
     if (!record || denied) {

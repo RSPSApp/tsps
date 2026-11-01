@@ -6784,6 +6784,14 @@ test('Desert Treasure II requires and solves the real eight-cell golem grid', ()
     assert.ok(player.syntaxAction, 'the transcript prompt asks for a search term');
     player.syntaxAction.execute('zaros');
     assert.deepEqual(lastLines(), ['Checking...', 'Error: No data found.', 'Please specify another search term.']);
+    for (const term of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      runLastAction();
+      player.syntaxAction.execute(term);
+      assert.deepEqual(lastLines(), ['Checking...', 'Error: No data found.', 'Please specify another search term.'], `${term} is not a golem record`);
+      runLastAction();
+      assert.equal(quest.getStage(player), 6, `${term} must not advance the quest`);
+      assert.equal(attrs.get('desert-treasure-ii:golem-record-open') ?? null, null, `${term} must not open a record`);
+    }
     const previousTranscripts = searches.length;
     for (const term of ['Vardorvis', 'Perseriya', 'Sucellus', 'Whisperer']) {
       runLastAction();

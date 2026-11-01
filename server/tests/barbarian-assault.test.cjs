@@ -7,34 +7,34 @@ const path = require("node:path");
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
 
-const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
+const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PlayerStatus } = require("../dist/game/model/PlayerStatus");
 const { Trading, TradeState } = require("../dist/game/content/Trading");
 const { PluginManager } = require("../dist/plugins/PluginManager");
+const { Inventory } = require("../dist/game/model/container/impl/Inventory");
+const { Equipment } = require("../dist/game/model/container/impl/Equipment");
+const { Item } = require("../dist/game/model/Item");
+const { UpdateFlag } = require("../dist/game/model/UpdateFlag");
+const { EquipPacketListener } = require("../dist/net/packet/impl/EquipPacketListener");
+const { BonusManager } = require("../dist/game/model/equipment/BonusManager");
 
 const core = PluginManager.getCoreApi();
 const data = require("../plugins/minigames/barbarianassault/Data.BarbarianAssault");
 const Items = require("../plugins/minigames/barbarianassault/Items.BarbarianAssault");
 const Match = require("../plugins/minigames/barbarianassault/Match.BarbarianAssault");
 const Shop = require("../plugins/minigames/barbarianassault/Shop.BarbarianAssault");
+const BarbarianAssault = require("../plugins/minigames/BarbarianAssault.plugin");
 
-const RUNES = [554, 555, 556, 557, 558, 560, 562, 565, 21880];
-const STACKABLE = new Set(RUNES);
+const { Ammunition } = require("../dist/game/content/combat/ranged/RangedData");
+const { RangedWeapon } = require("../dist/game/content/combat/ranged/RangedData");
+const { CombatFactory } = require("../dist/game/content/combat/CombatFactory");
+const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
 
-// Item definitions normally come from the cache; stub the few this test uses.
-ItemDefinition.forId = (id) => ({
-  getId: () => id,
-  getName: () => `item ${id}`,
-  getExamine: () => "",
-  isStackable: () => STACKABLE.has(id),
-  isNoted: () => false,
-  unNote: () => id,
-  getNoteId: () => -1,
-  getValue: () => 1,
-  isTradeable: () => true,
-  isSellable: () => true,
-});
+const SHORTBOW = 841;
+const BRONZE_ARROW = 882;
+const SURFACE = data.SURFACE_RETURN;
 
+let registeredAmmoHandler = null;
 let nextIndex = 1;
 
 function createPlayer(name) {
@@ -75,32 +75,76 @@ function createPlayer(name) {
     setPoisonDamage: () => {},
     setRunEnergy: () => {},
     getRunEnergy: () => 100,
-    getLocation: () => new core.Location(1889, 5458, 0),
+    getLocation: () => player.location,
     getArea: () => player.area,
     setArea: (area) => { player.area = area; },
-    moveTo: () => {},
+    moveTo: (location) => { player.location = location; },
     isPlayer: () => true,
     getAsPlayer: () => player,
-    getCombat: () => ({ reset() {}, getHitQueue: () => ({ addPendingDamage() {} }) }),
-    getEquipment: () => ({ get: () => null }),
+    isSpecialActivated: () => false,
+    getCombat: () => player.combat,
+    getEquipment: () => player.equipment,
+    getWeapon: () => undefined,
+    getUpdateFlag: () => player.updateFlag,
+    getNpcTransformationId: () => -1,
+    onEquipmentChanged() {},
+    setSpecialActivated() {},
     getFightType: () => ({ getStyle: () => 0 }),
-    getSkillManager: () => ({ getMaxLevel: () => 99 }),
+    getSkillManager: () => ({
+      getMaxLevel: () => 99,
+      getCombatLevel: () => 126,
+      stopSkillable() {},
+    }),
     hitpoints: 99,
     area: null,
     index: nextIndex++,
   };
-  player.inventory = new core.Inventory(player);
+  player.location = new core.Location(1889, 5458, 0);
+  player.inventory = new Inventory(player);
   player.inventory.resetItems();
   player.getInventory = () => player.inventory;
+  player.equipment = new Equipment(player);
+  player.equipment.resetItems();
+  player.updateFlag = new UpdateFlag();
+  player.combat = {
+    ammunition: null,
+    rangedWeapon: null,
+    getAmmunition() { return this.ammunition; },
+    setAmmunition(ammunition) { this.ammunition = ammunition; },
+    getRangedWeapon() { return this.rangedWeapon; },
+    setRangedWeapon(weapon) { this.rangedWeapon = weapon; },
+    getCastSpell() { return null; },
+    getAutocastSpell() { return null; },
+    getSelectedSpell() { return null; },
+    getHitQueue: () => ({ addPendingDamage() {} }),
+    reset() {},
+  };
   player.trading = new Trading(player);
   player.getTrading = () => player.trading;
   return player;
 }
 
+/** Puts `itemId` on the player and wields/wears it through the real equip listener. */
+function equipFromInventory(player, itemId, amount = 1) {
+  if (!player.getInventory().contains(itemId)) player.getInventory().adds(itemId, amount);
+  const slot = player.getInventory().getSlotForItemId(itemId);
+  EquipPacketListener.equip(player, itemId, slot, Inventory.INTERFACE_ID);
+  return player.getEquipment().get(Equipment.AMMUNITION_SLOT).getId() === itemId
+    || player.getEquipment().get(Equipment.WEAPON_SLOT).getId() === itemId;
+}
+
 const api = {
   core,
-  emitCustomEvent() {},
+  persistAttribute() {},
+  registerShopCurrency() {},
+  registerDefinitionSource() {},
+  sendMultiChatboxPrompt() {},
   registerNpcCombatMethodProvider() {},
+  registerRangedAmmoHandler(handler) {
+    registeredAmmoHandler = handler;
+  },
+  onCustomEvent() {},
+  emitCustomEvent() {},
 };
 
 function createMatch(roles) {
@@ -116,9 +160,17 @@ function offer(player, itemId, amount) {
   player.getTrading().handleItem(itemId, amount, slot, inventory, player.getTrading().getContainer());
 }
 
-before(() => {
-  Items.init(api);
-  Match.attachCombat(api);
+before(async () => {
+  await CachePipeline.initialize(process.cwd());
+  // The engine side of wielding (weapon tab, bonuses) is not under test here.
+  core.WeaponInterfaceManager.assign = () => {};
+  BonusManager.update = () => {};
+  BarbarianAssault.register(api);
+  // Core dispatches to the plugin handlers it registered; this suite installs only BA's.
+  PluginManager.checkRangedAmmo = (player, amountRequired, silent) =>
+    registeredAmmoHandler.checkAmmo(player, amountRequired, silent);
+  PluginManager.decrementRangedAmmo = (player, pos, amount, delayTicks) =>
+    registeredAmmoHandler.decrementAmmo(player, pos, amount, delayTicks);
 });
 
 test("the reward shop stock comes from the plugin source, not shops.json", () => {
@@ -255,4 +307,90 @@ test("the Queen egg chain passes each egg to the next role and fires an omega sh
   assert.ok(queen.hitpoints < 250, "the omega egg damages the Queen");
 
   match.finish(false);
+});
+
+test("every supplied arrow resolves as bow ammunition and the shot consumes it", () => {
+  assert.ok(registeredAmmoHandler, "the plugin registered its ranged ammunition handler");
+  const { match, players } = createMatch([data.ROLE.ATTACKER, data.ROLE.COLLECTOR]);
+  const [attacker] = players;
+
+  assert.equal(equipFromInventory(attacker, SHORTBOW), true, "the attacker wields a shortbow");
+
+  // Nothing may reach the floor untagged: a dropped arena item loses its arena meta.
+  const drops = [];
+  const registerLocation = ItemOnGroundManager.registerLocation;
+  ItemOnGroundManager.registerLocation = (...args) => { drops.push(args); };
+
+  const expected = [
+    [data.ITEM.BULLET_ARROW, data.CALL.CONTROLLED],
+    [data.ITEM.FIELD_ARROW, data.CALL.ACCURATE],
+    [data.ITEM.BLUNT_ARROW, data.CALL.AGGRESSIVE],
+    [data.ITEM.BARBED_ARROW, data.CALL.DEFENSIVE],
+  ];
+  for (const [arrowId, call] of expected) {
+    assert.equal(Items.give(attacker, arrowId, 5), true);
+    assert.equal(equipFromInventory(attacker, arrowId, 5), true, `arrow ${arrowId} equips`);
+    const held = attacker.getEquipment().get(Equipment.AMMUNITION_SLOT);
+    assert.equal(held.getId(), arrowId);
+    assert.equal(held.getMetaValue(Items.ARENA_ITEM_META), true, "the worn copy stays arena-owned");
+
+    const ammo = Ammunition.getFor(attacker);
+    assert.ok(ammo, `Ammunition.getFor resolves ${arrowId}`);
+    assert.equal(ammo.getItemId(), arrowId);
+    assert.equal(ammo.getProjectileId(), Ammunition.BRONZE_ARROW.getProjectileId(), "fires a real arrow projectile");
+    assert.ok(ammo.getStartGraphic(), "the launch graphic is set");
+
+    assert.equal(CombatFactory.getMethod(attacker), CombatFactory.RANGED_COMBAT);
+    assert.equal(attacker.getCombat().getAmmunition().getItemId(), arrowId, "combat holds the BA ammunition");
+    assert.equal(CombatFactory.checkAmmo(attacker, 1), true, `checkAmmo accepts ${arrowId}`);
+    assert.equal(CombatFactory.RANGED_COMBAT.shouldRenew(attacker), true, `renew keeps firing ${arrowId}`);
+    assert.equal(Items.attackStyle(attacker), call, `arrow ${arrowId} satisfies ${call}`);
+
+    CombatFactory.decrementAmmo(attacker, null, 1);
+    assert.equal(attacker.getEquipment().get(Equipment.AMMUNITION_SLOT).getAmount(), 4, "the shot consumes one arrow");
+  }
+  assert.equal(drops.length, 0, "arena arrows are consumed, never left on the floor");
+
+  CombatFactory.decrementAmmo(attacker, null, 4);
+  assert.equal(attacker.getEquipment().get(Equipment.AMMUNITION_SLOT).getId(), -1, "the quiver empties");
+  assert.ok(attacker.messages.includes("You have run out of ammunition!"));
+  ItemOnGroundManager.registerLocation = registerLocation;
+  match.finish(false);
+});
+
+test("equipped arena arrows are cleaned up on finish and reconnect", () => {
+  const { match, players } = createMatch([data.ROLE.ATTACKER, data.ROLE.COLLECTOR]);
+  const [attacker] = players;
+
+  attacker.getInventory().adds(BRONZE_ARROW, 5); // the player's own stack
+  assert.equal(equipFromInventory(attacker, SHORTBOW), true);
+  assert.equal(Items.give(attacker, data.ITEM.BARBED_ARROW, 100), true);
+  assert.equal(equipFromInventory(attacker, data.ITEM.BARBED_ARROW, 100), true);
+  assert.equal(attacker.getEquipment().get(Equipment.AMMUNITION_SLOT).getAmount(), 100);
+
+  match.finish(false);
+
+  assert.equal(attacker.getEquipment().get(Equipment.AMMUNITION_SLOT).getId(), -1, "worn arena arrows are removed");
+  assert.equal(attacker.getEquipment().get(Equipment.WEAPON_SLOT).getId(), SHORTBOW, "the player's own bow stays worn");
+  assert.equal(attacker.getInventory().getAmount(BRONZE_ARROW), 5, "the player's own arrows are untouched");
+  assert.equal(attacker.getInventory().getAmount(data.ITEM.BARBED_ARROW), 0);
+  assert.deepEqual(
+    [attacker.location.getX(), attacker.location.getY(), attacker.location.getZ()],
+    [SURFACE.x, SURFACE.y, SURFACE.z],
+    "the player returns to the outpost",
+  );
+
+  // Reconnect cleanup has no match object, so it scans for the arena marker directly.
+  const { match: reconnect, players: [returning] } = createMatch([data.ROLE.ATTACKER, data.ROLE.COLLECTOR]);
+  returning.getInventory().adds(BRONZE_ARROW, 7);
+  assert.equal(equipFromInventory(returning, SHORTBOW), true);
+  assert.equal(Items.give(returning, data.ITEM.BULLET_ARROW, 50), true);
+  assert.equal(equipFromInventory(returning, data.ITEM.BULLET_ARROW, 50), true);
+
+  Items.stripRoleItems(returning);
+
+  assert.equal(returning.getEquipment().get(Equipment.AMMUNITION_SLOT).getId(), -1, "reconnect cleanup empties the ammo slot");
+  assert.equal(returning.getEquipment().get(Equipment.WEAPON_SLOT).getId(), SHORTBOW);
+  assert.equal(returning.getInventory().getAmount(BRONZE_ARROW), 7);
+  reconnect.finish(false);
 });

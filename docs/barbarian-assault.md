@@ -87,9 +87,17 @@ binding, so reimporting the canonical data cannot erase the minigame shop.
 Everything the arena hands out carries the untradeable and `barbarian-assault:arena`
 item meta. A match area refuses player trades (and a global trade guard covers a
 member outside the area), arena drops are refused, and cleanup removes only the
-arena-marked copies, so a player's own runes or penance gear are never taken.
-Reconnect cleanup uses the same marker, so it also removes arena runes that the
-old role-item id list missed.
+arena-marked copies in the inventory *and* the equipment slots, so a player's own
+runes, arrows or penance gear are never taken. Reconnect cleanup uses the same
+marker, so it also removes arena runes that the old role-item id list missed and
+supplies that were equipped before the disconnect.
+
+The four attacker arrows are registered with the combat engine as ordinary bow
+ammunition (`Items.rangedAmmoHandler`): a bow resolves them, `checkAmmo` accepts
+them only for an attacker in a live match, and the shot consumes the worn stack.
+The cache carries no launch spotanim for these items, so they fly with the ordinary
+arrow graphic and projectile. Arena arrows are consumed, never dropped, because a
+floor drop would leave an untracked copy behind.
 
 ## Mechanics
 

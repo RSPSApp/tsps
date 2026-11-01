@@ -219,6 +219,7 @@ function attach(pluginApi) {
   pluginApi.onPlayerDisconnect?.(handleLogout);
   pluginApi.onCanTeleport?.(handleCanTeleport);
   pluginApi.onCanTrade?.(handleCanTrade);
+  pluginApi.registerRangedAmmoHandler?.(Items.rangedAmmoHandler);
 }
 
 module.exports = {

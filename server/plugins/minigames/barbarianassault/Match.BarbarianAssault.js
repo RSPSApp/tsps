@@ -955,7 +955,7 @@ class BarbarianAssaultMatch {
     const options = object.getDefinition?.().getActions?.() ?? [];
     const option = options[clickType - 1] ?? "";
     if (option === "Take-Arrows") {
-      for (const arrow of [data.ITEM.BULLET_ARROW, data.ITEM.FIELD_ARROW, data.ITEM.BLUNT_ARROW, data.ITEM.BARBED_ARROW]) Items.give(player, arrow, 100);
+      for (const arrow of data.ARROWS) Items.give(player, arrow, 100);
       player.sendMessage("You take some arrows.");
       return true;
     }

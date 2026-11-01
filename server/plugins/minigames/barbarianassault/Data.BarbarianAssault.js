@@ -93,6 +93,9 @@ const ITEM = Object.freeze({
 
 const HEALING_VIALS = Object.freeze([ITEM.HEALING_VIAL_4, ITEM.HEALING_VIAL_3, ITEM.HEALING_VIAL_2, ITEM.HEALING_VIAL_1]);
 
+/** The four attacker arrows, in call order (Controlled/Accurate/Aggressive/Defensive). */
+const ARROWS = Object.freeze([ITEM.BULLET_ARROW, ITEM.FIELD_ARROW, ITEM.BLUNT_ARROW, ITEM.BARBED_ARROW]);
+
 /**
  * Everything the arena hands out. Cleanup removes only the copies it gave, so a
  * player's own penance armour or arrows are never touched.
@@ -390,7 +393,7 @@ const SHOP_STOCK = Object.freeze([
 
 module.exports = {
   ROLE, ROLES, ROLE_LABEL, PARTNER, ROLE_INTERFACE, ROLE_TEXT,
-  HORN_ITEMS, COLLECTION_BAGS, ITEM, HEALING_VIALS, ROLE_ITEM_IDS,
+  HORN_ITEMS, COLLECTION_BAGS, ITEM, HEALING_VIALS, ARROWS, ROLE_ITEM_IDS,
   CALL, CALL_OPTIONS, CALL_LABEL, HORN_ACTION_CALL, STYLE_CALL, ARROW_CALL,
   EGG_ITEM, EGG_CALL, EGG_TRANSFER, EGG_LABEL, POISON_ITEM, POISON_CALL, BAIT_ITEM, BAIT_CALL,
   NPC, PENANCE_IDS, WAVES, ROLE_CAPACITY, TEAM_SIZE,

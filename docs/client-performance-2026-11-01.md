@@ -36,17 +36,12 @@ on one Windows PC in headless Chrome; CPU throttling is a stress case, not a pho
 
 Production builds of `main` (`d2080687c`) and this branch, each served by
 `client/scripts/serve-build.mjs` against the same worktree game server, the same account and
-the same spawn position, run back to back. The driver is the new
-`client/tests/mobile-frame-profile.browser.cjs`: headless Chrome, Android user agent, touch and
-DPR 3 at 844×390 (desktop: no emulation, DPR 1, 1280×800), WebGPU, the default plugin set with
-Ground Items on, 10 seconds of settling, then an idle window and a camera-drag window (512 yaw
-units/s) of 8 seconds each, with a 200 µs sampling profile and timers around the render call,
-the HUD draw and the actor/overlay/UI updates. The 4× case uses Chrome's CPU throttle.
-
-```sh
-node tests/mobile-frame-profile.browser.cjs --url http://127.0.0.1:3207 --user <account> --pass <pw> --mobile 1 --cpu 4 --dpr 3 --viewport 844x390 --out before.json
-node tests/mobile-frame-profile.browser.cjs --url http://127.0.0.1:3206 --user <account> --pass <pw> --mobile 1 --cpu 4 --dpr 3 --viewport 844x390 --out after.json
-```
+the same spawn position, run back to back. The driver was a local script, not kept in the repo:
+headless Chrome, Android user agent, touch and DPR 3 at 844×390 (desktop: no emulation, DPR 1,
+1280×800), WebGPU, the default plugin set with Ground Items on, 10 seconds of settling, then an
+idle window and a camera-drag window (512 yaw units/s) of 8 seconds each, with a 200 µs sampling
+profile and timers around the render call, the HUD draw and the actor/overlay/UI updates. The 4×
+case uses Chrome's CPU throttle.
 
 Render CPU is the synchronous main-thread time of one frame's render call; GPU time is not
 measured. The machine was not quiet for every capture (see limits), so the pairs below are the

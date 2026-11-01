@@ -67,7 +67,6 @@ definitions are selected uniformly after filtering; teleporting events are exclu
 PvP Wilderness, and transformed players are ineligible. Ignored events expire after
 one minute; an event's dismissal or completion does not reset its timer. A due event
 stalled by a busy action remains pending and is attempted when that action clears. The
-18-second attention reminder has no published interval and remains an implementation detail.
 
 Combat is not a blanket scheduler veto. This interprets the Wiki's
 [Trivia](https://oldschool.runescape.wiki/w/Random_events#Trivia), which describes the
@@ -213,13 +212,9 @@ their food/weapon/armour/tool/jewellery categories, and the historical
 [presentation-item list](https://runescape.wiki/w/Hex_edit_detected) identifies
 fish, sword, battleaxe, helmet, shield, shears, spade, ring and necklace.
 Both fish models have the same answer; one is used to keep nine distinct choices.
-The question stays fixed when reopened; incorrect answers end the event without
-reward, and expiry/dismissal/lifecycle cleanup close an owned open interface.
-Both Certer and Sandwich selectors have cache flags2 and use option1;
-opening either interface enables that option with flags2 on the exact selectors.
-The dump script now reads cache 237's four-byte model ID, matching the client;
-its old two-byte decoder shifted the actions/flags and incorrectly suggested option2.
-Other packet options are rejected by the handlers.
+A second click on the NPC re-rolls the question (rsprox 552 ticks 20007-20008). Incorrect
+answers end the event without reward. The selectors use option1 through their cache flags;
+live sends no IF_SETEVENTS for 184 or the tray, so neither does the plugin.
 The Certer brothers share one event weight.
 
 Tests cover all fourteen herb exchanges, F2P exclusion/key replacement, correct
@@ -331,43 +326,17 @@ and cache data; each module spawns only its dynamic pieces (signs are the map's
 own posts, swapped between the four exercise ids; balloons, Leo, Molly, Flippa,
 the beekeeper and the event NPCs are owner-scoped).
 
-Where the cache ships the real interface and its components transmit, that
-interface is used: Capt' Arnav's combination lock (26, varbit-free model swaps
-and arrow/confirm ops), the Beekeeper hive (420, part slots drawn with the
-example's raw models and the Confirm button), the Mime emote buttons (188,
-enabled with flags because the cache's onLoad builds their ops), the Pillory
-lock (27, key models, the three key buttons and the lock/flash components), the
-Surprise Exam pattern (103) and cards (559) interfaces, the Prison Pete lever
-panel (273), and the Evil twin claw controls (277). The Maze's reward HUD is
-varp 531, as the cache's script 956 reads. Quiz Master's cache interface (191)
-has no item components, so the three items of "Odd One Out" are shown on a
-server-defined interface (`registerCustomInterface`, group 30012) whose model
-components are set with the macro quiz items 6189-6198; clicks are ordinary
-widget ops. Each question follows the wiki's "Each question has two of one item type
-and one of another": both items of one category (RuneLite's MACRO_QUIZ_FOOD/WEAPON/
-ARMOUR/TOOL/JEWEL 1 and 2) and one item of another. The quiz set is on plane 1: the
-Quiz Master stands at 1952, 4768, 1 (the world's spawn), and the cache map walls a
-single tile in front of him, 1952, 4764, 1, with four invisible walls (loc 38848);
-the player is placed there, so the quiz area is the one destination on plane 1.
+Interfaces are the cache's and are driven the way the captures drive them; each one's
+evidence is in the audit section at the end of this page. Quiz Master is chatbox 191 filled
+by script 3799 (its components are created by that script, so a dump shows none); Capt'
+Arnav is 26 on varp 531; Beekeeper is 420 with real `IF_BUTTOND` drags and varbits
+10601-10608; the Evil twin claw is a per-player LocDel/LocAdd of 20811/20812 with the camera
+following; Surprise Exam is 103/559 through scripts 51/52. The Maze HUD is overlay 209
+reading varp 531.
 
-Rewards follow each wiki page: outfit pieces are granted in the page's order and
-skipped when `Teleports.owns` finds them in inventory, equipment or bank; once
-the set is complete the event pays the fallback (flax/coins for the beekeeper,
-lamps elsewhere). After the outfit, Drill Demon unlocks its four exercise emotes with
-the lamp, and the Mime and Gravedigger unlock one of their emotes per completion in
-the emote tab's order, before lamps; the unlocks go through `emotes:unlock` and the
-unlock messages are ours. Coins use the genuine item, the Prison Pete/maze/pillory gem
-and rune rewards use the noted cert ids so they stack. Lamps and the Book of
-Knowledge share the existing xpreward interface (10 x and 15 x level). Mystery
-boxes roll 1/256 stale baguette, then the F2P or members prize table; the
-members clue-scroll and rare-drop slots are represented by their common
-outcomes. Deliberate deviations, all noted here: Count Check passes because this
-server has no bank PIN feature and every account is effectively a Jagex account;
-Beekeeper placement is driven from the chatbox options while interface 420
-mirrors the parts, because the client cannot transmit the cache's drag; Mime
-counts four correct copies without resetting on a mistake, as the wiki does not
-describe a reset; the Evil twin claw position is reported in chat rather than by
-a moving claw model; the King's return from Frogland uses a spawned royal.
+Rewards follow each wiki page and capture: Coins use the genuine item and bulk rewards use
+noted ids. Lamps and the Book of Knowledge share the xpreward interface (10 x and 15 x
+level). Count Check assumes every account is a Jagex account; his Bank PIN check is real.
 
 `::randevt [id]` now lists all 24 events on members worlds and 22 on F2P (Dr
 Jekyll and the Strange Plant are members-only). The zero-based order is: 0 Genie, 1 Sandwich Lady,
@@ -380,13 +349,8 @@ index 5. The command still bypasses the cooldown and enabled flag but requires t
 player to be outside restricted actions and areas, including private instances and
 Tutorial Island.
 
-Verify after build: `node --test tests/random-events.test.cjs`. The 54 tests
-cover every new event's registration, dialogues, interfaces, mechanisms, reward
-progression, owner checks, wrong-answer paths, expiry and cleanup, plus the
-Mystery box and Book of Knowledge reward paths. From `client/`, `yarn tsx
-tests/widget-loader.test.ts` still checks the first batch's selectors against
-the current cache. Live-client appearance of the new interfaces remains to be
-checked visually.
+Verify after build: `node --test tests/random-events.test.cjs`.
+
 
 Drill Demon placement: [RSProx archive submission
 1846](https://rsprox.net/download/1846) (revision 227, 8 December 2024) is the
@@ -398,3 +362,46 @@ origin, which is the player's tile, is 3163,4820 on arrival and
 1x2 mat (its sign is at 4821) and faces the sign, so a mat click must walk the
 player onto that tile rather than play the emote from the gap between mats.
 The map's two halves of each mat are 1x1 type-22 locs at 4819 and 4820.
+
+
+## Audit against RSProx and the Wiki (November 2026)
+
+Every event was compared with captures (revisions 224-238, ids checked against the 241 cache)
+and its Wiki page and transcript. Captures outrank the Wiki where they differ: Drill Demon
+takes five exercises in both recordings (1846, 1852), though the Wiki says four.
+
+| Event | Recordings |
+| --- | --- |
+| Shared follower timeline (greeting +1, a line every 10 ticks, goodbye +100, gone +103) | 127, 555, 1102, 3275, 1105 |
+| Certers, Sandwich lady | 552, 1858, 1704, 1105; 3057, 4222, 1695, 549 |
+| Genie, Dwarf, Rick, Old Man, Jekyll, Count Check | 1102, 127; 1104, 1885; 1102; 1862, 3276; 560, 4056, 3273; 3275 |
+| Quiz Master, Mystery box | 4156, 558, 1158, 579, 1858, 86, 941 |
+| Capt' Arnav, Pillory | 1108, 91; 1108, 1840, 559 |
+| Drill Demon, Freaky Forester, Gravedigger, Pinball | 1846, 1852; 3998, 554, 1757; 550; 1844, 1098 |
+| Evil Bob, Prison Pete, Evil twin, Maze | 73, 1718; 4067, 555; 1104, 1105, 75; 1764 |
+| Mime, Surprise Exam, Beekeeper, Kiss the frog | 1855, 1104, 1885, 1098, 127, 75; 4051, 571, 1104, 1843, 553, 91; 1875; 1702, 1723 |
+
+Not settled by any recording, so Wiki text or nothing is used:
+
+- Wrong answers and failures: Quiz, Capt' Arnav, Pillory keys, Drill exercises, Pinball posts,
+  Certers, Surprise Exam, Beekeeper builds. Their sounds are unknown and not played.
+- Mime: whether a mistake resets the count, and the odds between outfit pieces and emotes.
+- Kiss the frog: the touch, polite and Frogland routes and the Thessalia exchange.
+- Surprise Exam's pool holds only the 16 questions seen; live has more on the server.
+- Gravedigger coffin 7587's contents are by elimination, on 7588's layout.
+- Varrock and Seers' pillory cage tiles are inferred; all three recordings are Yanille.
+- Maze chests: no recording, so no dialogue text and no timer pause while one is open.
+
+Known differences from live, needing engine work:
+
+- Gravedigger, Pinball, Evil twin, Beekeeper and Maze are instanced live (RebuildRegion, and
+  the Maze rotates). Here they use the shared map with owner-scoped NPCs and per-player
+  glows; Gravedigger's graves are shared world objects, so two players at once interfere.
+- Forester's Kill is scripted, not a real attack; pheasants have no combat data.
+- Modal 566 ("Do you need to collect any dropped items?") is not sent; its conditions are unknown.
+- Chat wraps at 53 characters, live by font width, so a few pages break differently.
+- Wiki no-event zones and bank exceptions without coordinates are not enforced.
+
+Checked on a live server through the agent MCP: all 24 events spawn and talk, every teleporting
+event reaches its captured arrival tile, relogging returns the player, Freaky Forester start to
+finish, decline and dismiss. Not checked in a real client: rendering of any interface.

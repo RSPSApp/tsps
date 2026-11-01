@@ -338,11 +338,8 @@ export const TRANSMIT_VARPS: ReadonlySet<number> = new Set([
     VARP_SIDE_JOURNAL_STATE, // Side journal tab selection (drives IF_OPENSUB swap for 629:43)
     ...ADVENTURE_PATHS_TRANSMIT_VARPS,
     ...XPDROPS_TRANSMIT_VARPS, // XP drops setup/tracker persistence
-    // Sound/music settings - transmit so server can persist them
-    VARP_MUSIC_VOLUME, // Music volume (0-100)
-    VARP_SOUND_EFFECTS_VOLUME, // Sound effects volume (0-100)
-    VARP_AREA_SOUNDS_VOLUME, // Area sounds volume (0-100)
-    VARP_MASTER_VOLUME, // Master volume (0-100)
+    // Volume sliders persist through script triggers; mute buttons toggle on the server.
+    // Transmitting their local varp changes first would make the server toggle them back.
     VARP_MUSICPLAY, // Music play mode (0=Area, 1=Shuffle, 2=Single)
     // Attack option settings - transmit so server can persist them
     VARP_OPTION_ATTACK_PRIORITY_PLAYER, // Player attack options (0-4)

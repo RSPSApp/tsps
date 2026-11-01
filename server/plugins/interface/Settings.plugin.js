@@ -148,6 +148,16 @@ const pendingQuestColours = new WeakMap();
 // Rows and dropdown options that may reach us (0..512). Search
 // results number rows across every category, so they run far past one category's length.
 const ALL_SETTINGS_LAST_SLOT = 511;
+// The settings list's rows, as live enables them (RSProx captures); a search lists more than 512.
+const ALL_SETTINGS_LAST_ROW = 538;
+// The All Settings window's volume sliders (scripts 9260, 9266, 9272, 9278) trigger the list's
+// row with the setting and the new volume; live gives the list the transmit-trigger event for it.
+const ALL_SETTINGS_VOLUME_VARPS = new Map([
+  [319, 3796], // master
+  [30, 168], // music
+  [31, 169], // sound effects
+  [32, 872], // area sounds
+]);
 
 const KEYBINDINGS_INTERFACE_ID = 121;
 const KEYBINDINGS_RESTORE_DEFAULTS = (KEYBINDINGS_INTERFACE_ID << 16) | 104;
@@ -352,7 +362,8 @@ function restoreSettings({ player }) {
  * is shown behind them; a toggle then flips. Other plugins own their settings first:
  * "settings:setting-clicked" { player, settingId, handled }.
  */
-function clickSetting({ player, slot }) {
+function clickSetting({ player, slot, argsData, scriptTrigger }) {
+  if (scriptTrigger === true) return releaseAllSettingsVolume(player, argsData);
   const settingId = Number.isInteger(slot) ? settingForRow(player, slot) : -1;
   if (settingId < 0) return false;
   selectSetting(player, settingId);
@@ -505,7 +516,7 @@ function openAllSettings(player) {
   // The settings/controls are dynamic children created client-side; without
   // these transmit flags their ops never reach us. Op1 over the used slot range.
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_CATEGORIES_CLICKZONE, 0, 15, TRANSMIT_OP1);
-  sender.sendInterfaceFlagsRange(ALL_SETTINGS_SETTINGS_CLICKZONE, 0, ALL_SETTINGS_LAST_SLOT, TRANSMIT_OP1);
+  sender.sendInterfaceFlagsRange(ALL_SETTINGS_SETTINGS_CLICKZONE, 0, ALL_SETTINGS_LAST_ROW, TRANSMIT_OP1 | TRANSMIT_TRIGGER);
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_DROPDOWN_BUTTONS, 0, ALL_SETTINGS_LAST_SLOT, TRANSMIT_OP1);
   // It opens on the category shown last; live sends nothing for it.
   player.setAttribute("settings-view", sender.getVarbit(SETTINGS_CATEGORY_VARBIT));
@@ -577,17 +588,30 @@ function syncXpDrops({ player }) {
   player.getPacketSender().sendVarbit(XPDROPS_ENABLED_VARBIT, player.getAttribute(XPDROPS_ENABLED_ATTRIBUTE) === true ? 1 : 0);
 }
 
-/** The first script-trigger argument: an int as a zigzag varint. */
-function readIntArg(argsData) {
-  if (!argsData?.length) return undefined;
+/** Script-trigger arguments: ints, each a zigzag varint. */
+function readIntArgs(argsData) {
+  const values = [];
   let value = 0;
   let shift = 0;
-  for (const byte of argsData) {
+  for (const byte of argsData ?? []) {
     value |= (byte & 0x7f) << shift;
-    if ((byte & 0x80) === 0) return (value >>> 1) ^ -(value & 1);
     shift += 7;
+    if ((byte & 0x80) === 0) {
+      values.push((value >>> 1) ^ -(value & 1));
+      value = 0;
+      shift = 0;
+    }
   }
-  return undefined;
+  return values;
+}
+
+/** An All Settings volume slider released: its setting and the new volume. */
+function releaseAllSettingsVolume(player, argsData) {
+  const [settingId, volume] = readIntArgs(argsData);
+  const varpId = ALL_SETTINGS_VOLUME_VARPS.get(settingId);
+  if (varpId === undefined || volume === undefined) return false;
+  player.applyAudioSettingFromClient?.(varpId, volume);
+  return true;
 }
 
 function enableVolumeSliders(player) {
@@ -606,7 +630,7 @@ function enableVolumeSlidersOnTab({ player, group }) {
 
 function releaseVolumeSlider({ player, buttonId, argsData, scriptTrigger }) {
   if (scriptTrigger !== true) return false;
-  const volume = readIntArg(argsData);
+  const [volume] = readIntArgs(argsData);
   if (volume === undefined) return false;
   player.applyAudioSettingFromClient?.(VOLUME_SLIDER_VARPS.get(buttonId), volume);
   return true;

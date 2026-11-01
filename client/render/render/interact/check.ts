@@ -1393,6 +1393,12 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
             !leftClickInUIRegion &&
             !hasUIClickTarget
         ) {
+            // Main and side modals close when the click lands on the world outside
+            // them (OSRS sends IF_CLOSE for it). The click still runs its world
+            // action, so a bank can be closed and a tile walked to in one click.
+            if (host.osrsClient.hasCloseOnOutsideClickModal()) {
+                host.osrsClient.closeModalInterface();
+            }
             const clicked = host.computeTileAt(inputManager.leftClickX, inputManager.leftClickY);
             if (clicked) {
                 host.osrsClient.menuTile = clicked;

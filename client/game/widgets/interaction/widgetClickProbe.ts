@@ -44,7 +44,31 @@ export function getWorldClickBlockingWidgetAtPoint(
     if (hits.length === 0) {
         return null;
     }
-    return findBlockingWidgetInHits(hits, {
+    // A main or side modal is mounted into a pane that can be much larger than the
+    // interface itself (the standard mainmodal is the whole 512x334 viewport), and
+    // the mounted group's own root is usually an empty stretch container. The pane
+    // must not swallow a world click that landed outside the group's visible content:
+    // that click closes the modal and still reaches the world. A hit on a content
+    // widget keeps the pane blocking, as does a hit on an ordinary child of it.
+    const hostsWithoutContent = new Set<number>();
+    for (const widget of hits) {
+        const parent = widgetManager.interfaceParents.get((widget?.uid ?? 0) | 0);
+        if (!parent?.closeOnOutsideClick) continue;
+        const group = parent.group | 0;
+        const rootUid = group << 16;
+        const hasContent = hits.some(
+            (hit) => hit !== widget && hit?.uid !== rootUid &&
+                (((hit?.uid ?? 0) >>> 16) & 0xffff) === group,
+        );
+        if (!hasContent) hostsWithoutContent.add((widget.uid ?? 0) | 0);
+    }
+    const blockingHits = hostsWithoutContent.size === 0
+        ? hits
+        : hits.filter((widget) => !hostsWithoutContent.has((widget?.uid ?? 0) | 0));
+    if (blockingHits.length === 0) {
+        return null;
+    }
+    return findBlockingWidgetInHits(blockingHits, {
         isInputCaptureWidget: (uid) => isInputCaptureWidget(widgetManager, uid),
         getWidgetFlags: (widget) => widgetManager?.getWidgetFlags(widget) ?? 0,
         getWidgetByUid: (uid) => widgetManager?.getWidgetByUid(uid),

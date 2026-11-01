@@ -855,7 +855,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   }
 
   function suppressQuestLoot(event) {
-    if (event.npc?.getArea?.() instanceof BullArena && quest.getStage(event.player) < STAGE_COMPLETE) event.drops.length = 0;
+    if (event.npc?.getArea?.() instanceof BullArena && quest.getStage(event.killer) < STAGE_COMPLETE) event.handled = true;
   }
 
   function handleLogin({ player }) {
@@ -907,7 +907,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   api.onCustomEvent("npc-dialogue:condition", handleConditionStep);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("door:toggle", claimBullGate);
-  api.onCustomEvent("npc-drops:generated", suppressQuestLoot);
+  api.onCustomEvent("npc-drops:claim", suppressQuestLoot);
   api.onCustomEvent("ides-of-milk:cowbell-ring", ringForBull);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemAction(handleItemAction);

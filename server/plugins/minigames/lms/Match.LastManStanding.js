@@ -209,6 +209,8 @@ class Game {
     Common.varbit(player, "br_active_map_player", this.map.id);
     Common.varbit(player, "br_active_build_player", this.build);
     Common.varbit(player, "pvp_area_client", 1);
+    // The game's bypass replaces the earned prayer unlocks, so re-send what the client may use.
+    Common.api.emitCustomEvent("prayer:sync-unlocks", { player });
     player.sendMessage(Common.message("mode", { build: Loadouts.buildName(this.build) }));
     this.area.enter(player);
     player.moveTo(tile);
@@ -353,6 +355,8 @@ class Game {
     player.getMovementQueue().setBlockMovement(false);
     Common.core.PrayerHandler.deactivatePrayers(player);
     Stash.restore(player);
+    // Back to their own unlocks, whatever they had earned before the game.
+    Common.api.emitCustomEvent("prayer:sync-unlocks", { player });
     if (how !== "logout") {
       if (player.getArea() === this.area) this.area.leave(player, false);
       player.moveTo(lobbyTile());
@@ -479,6 +483,11 @@ function prayerDisabled(event) {
   event.message = Common.message("prayerDisabled", { prayer: event.prayer.getPrayerName() ?? "That prayer" });
 }
 
+/** Wiki: every prayer the build qualifies for can be used, whatever the account unlocked. */
+function bypassPrayerUnlocks(event) {
+  if (gameOf(event.player)) event.bypass = true;
+}
+
 /** Wiki: run energy never runs out in a game. */
 function noDrain(entity, amount) {
   return gameOf(Common.asPlayer(entity)) ? 0 : amount;
@@ -522,6 +531,7 @@ function attachMatch(api) {
   api.onShouldDropItemsOnDeath(keepItems);
   api.onCanGainExperience(noExperience);
   api.onPrayerDisabled(prayerDisabled);
+  api.onCustomEvent("prayer:unlocks-bypass", bypassPrayerUnlocks);
   api.registerRunEnergyDrainModifier(noDrain);
 }
 

@@ -46,6 +46,11 @@ function openPresetsAfterDeath({ victim }) {
   TaskManager.submit(new OpenPresetsAfterDeath(victim));
 }
 
+/** Presets assume the unlocked prayers, so PvP mode keeps handing them out without the quests. */
+function bypassPrayerUnlocks(event) {
+  event.bypass = true;
+}
+
 module.exports = {
   name: "PvpMode",
   register(api) {
@@ -53,5 +58,6 @@ module.exports = {
     Presets.register(api);
     api.registerCommand("presets", openPresets, undefined, "Open the presets interface");
     api.onPlayerDefeated(openPresetsAfterDeath);
+    api.onCustomEvent("prayer:unlocks-bypass", bypassPrayerUnlocks);
   },
 };

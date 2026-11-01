@@ -70,6 +70,17 @@ test('locked prayers report their own name and exact Prayer requirement', (t) =>
   }
 });
 
+test('Chivalry also needs 65 Defence, not the 60 the old check used', (t) => {
+  t.mock.method(PluginManager, 'emitPrayerDisabled', () => null);
+  const f = fixture(t);
+  f.player.getSkillManager().setMaxLevel(Skill.PRAYER, 60);
+  f.player.getSkillManager().setMaxLevel(Skill.DEFENCE, 64);
+  assert.equal(PrayerHandler.canUse(f.player, PrayerData.CHIVALRY, true), false);
+  assert.equal(f.messages.at(-1), 'You need a Defence level of at least 65 to use Chivalry.');
+  f.player.getSkillManager().setMaxLevel(Skill.DEFENCE, 65);
+  assert.equal(PrayerHandler.canUse(f.player, PrayerData.CHIVALRY, true), true);
+});
+
 test('a prayer costs a point every 60 / drain effect ticks at 0 prayer bonus', (t) => {
   for (const [prayer, ticksPerPoint] of [['PROTECT_FROM_MELEE', 5], ['THICK_SKIN', 60], ['PIETY', 2.5], ['SMITE', 10 / 3]]) {
     const f = fixture(t, { points: 99 });

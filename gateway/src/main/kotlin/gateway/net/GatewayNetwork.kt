@@ -24,8 +24,12 @@ import java.util.logging.Logger
 
 private val log: Logger = Logger.getLogger(GatewayNetwork::class.java.name)
 
-/** rsprot's network service on GATEWAY_PORT: JS5, login, ISAAC and the revision-241 codecs. */
+/**
+ * rsprot's network service on GATEWAY_PORT: JS5, login, ISAAC and the revision-241 codecs. It
+ * listens on [bindHost] (GATEWAY_BIND_HOST, loopback unless set).
+ */
 class GatewayNetwork(
+    private val bindHost: String,
     private val port: Int,
     private val rsa: RsaKeyPair,
     private val huffman: HuffmanCodecProvider,
@@ -33,7 +37,7 @@ class GatewayNetwork(
     private val connections: GameConnectionHandler<GatewaySession>,
 ) : AbstractNetworkServiceFactory<GatewaySession>() {
     override val allocator: ByteBufAllocator get() = ByteBufAllocator.DEFAULT
-    override val host: String get() = "127.0.0.1"
+    override val host: String get() = bindHost
     override val ports: List<Int> get() = listOf(port)
     override val supportedClientTypes: List<OldSchoolClientType> get() = listOf(OldSchoolClientType.DESKTOP)
 

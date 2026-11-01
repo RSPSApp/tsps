@@ -397,8 +397,7 @@ league worlds (osrs-captures 227/00100, 02120, 237/01098).
 
 The Wiki pools every league's points. This server knows one league per account, the one its league
 character played. On this server's NPC spawns only `::leagueshop` reaches the shop: the one Leagues
-Tutor spawned (315, Lumbridge) has neither Trade nor Rewards, and `npc-interactions.json` binds its
-Talk-to to a custom shop, so its conversation never runs.
+Tutor spawned (315, Lumbridge) has neither Trade nor Rewards.
 
 ## Shattered Relics
 

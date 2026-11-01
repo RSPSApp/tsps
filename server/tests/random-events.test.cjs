@@ -40,7 +40,8 @@ class FakeGameObject {
 }
 
 const ITEM_NAMES = { [I.LAMP]: 'Lamp', [I.BEER]: 'Beer', [I.KEBAB]: 'Kebab', [I.COINS]: 'Coins',
-  [I.MEAT_PIE]: 'Meat pie', [I.STRANGE_FRUIT]: 'Strange fruit', [I.CAMO_TOP]: 'Camo top' };
+  [I.MEAT_PIE]: 'Meat pie', [I.STRANGE_FRUIT]: 'Strange fruit', [I.CAMO_TOP]: 'Camo top',
+  [I.SAPPHIRE_2]: 'Sapphire', [I.EMERALD_2]: 'Emerald', [I.RUBY_2]: 'Ruby', [I.DIAMOND_2]: 'Diamond' };
 const UNTRADEABLE = new Set([I.CAMO_TOP]);
 // Coins plus the runes, feathers and arrows the Maze pays: rewards that stack live.
 const STACKABLE = new Set([I.COINS, I.FEATHER, I.IRON_ARROW, I.STEEL_ARROW, I.DEATH_RUNE,
@@ -95,12 +96,15 @@ function harness(t, members = true) {
     getTaskManager: () => ({ submit(task) { task.setRunning(true); tasks.push(task); } }),
     registerCustomInterface(definition) { interfaces.push(definition); },
     spawnNpc(definition) {
-      const npc = { definition, owner: definition.owner, location: new Location(definition.x, definition.y, definition.z),
-        getOwner() { return this.owner; }, getId() { return definition.id; },
+      const npc = { definition, owner: definition.owner, ownerOnly: definition.ownerOnly,
+        location: new Location(definition.x, definition.y, definition.z),
+        getOwner() { return this.owner; }, getId() { return definition.id; }, isOwnerOnly() { return !!this.ownerOnly; },
         getDefinition() { return { getId: () => definition.id }; }, getLocation() { return this.location; },
         setFollowing(p) { this.following = p; }, setMobileInteraction(p) { this.interaction = p; },
+        setFace(face) { this.face = face; }, getFace() { return this.face; },
         forceChat(text) { this.chat = text; }, performAnimation(animation) { this.animation = animation.getId(); },
         setHitpoints(hp) { this.hitpoints = hp; }, setNpcTransformationId() {} };
+      if (Number.isFinite(definition.face)) npc.setFace(definition.face);
       npcs.push(npc); return npc;
     },
     removeNpc(npc) { npc.removed = true; },
@@ -125,6 +129,7 @@ function harness(t, members = true) {
     onItemAction(name, actions) { hooks[name] = actions; },
     onItemOnObject(handler) { (hooks.itemOnObject ??= []).push(handler); },
     onItemOnNpc(handler) { (hooks.itemOnNpc ??= []).push(handler); },
+    onObjectRoute(handler) { (hooks.objectRoute ??= []).push(handler); },
     onObjectInteraction(a, b) {
       if (typeof a !== 'string') { (hooks.objectRaw ??= []).push(a); return; }
       const merged = { ...(hooks[`object:${a}`] ?? {}) };
@@ -165,6 +170,7 @@ function harness(t, members = true) {
       sendMessage: text => messages.push(text), forceChat(text) { p.chat = text; },
       setNpcTransformationId(id) { p.transformation = id; },
       performAnimation(animation) { p.animation = animation.getId(); },
+      setPositionToFace(location) { p.face = location; },
       moveTo(location) { p.location = location; }, setLocation(location) { p.location = location; },
       getEquipment: () => ({ containsNumber: () => false }),
       getBank: () => ({ containsNumber: () => false }),
@@ -204,6 +210,7 @@ function harness(t, members = true) {
         sendInterfaceScript() {}, sendChatboxInterface(id) { p.chatboxGroupId = id; }, sendClientScript() {},
         isChatboxInterface(id) { return p.chatboxGroupId === id; },
         sendInterfaceAnimation() {},
+        sendObjectAnimation(object, animation) { (p.objectAnimations ??= []).push([object, animation.getId()]); },
         sendInterfaceFlagsRange(uid, from, to, flags) { (p.flags ??= []).push([uid, from, to, flags]); } }),
     };
     return p;
@@ -1187,16 +1194,35 @@ test('Drill Demon accepts four matching exercises in a row for the camo top', t 
   choose(h, p, 0);
   const session = Teleports.sessionOf(p);
   assert.equal(p.location.getX(), 3163, 'drill arrival x');
-  assert.equal(p.location.getY(), 4819, 'drill arrival y');
+  assert.equal(p.location.getY(), 4820, 'drill arrival y');
   for (let i = 0; i < 4; i++) {
     const entry = [...session.data.matExercise.entries()].find(([, exercise]) => exercise === session.data.order);
     assert.ok(entry, 'a mat matches the order');
+    p.location = new Location(entry[0], 4820, 0);
     h.hooks['object:Exercise mat'].Use({ player: p, handled: false,
       object: { getLocation: () => new Location(entry[0], 4820, 0), getId: () => 1 } });
+    assert.ok(p.face.equals(new Location(entry[0], 4821, 0)), 'the exercise faces the sign');
   }
   assert.ok(p.rewards.includes(I.LAMP));
   assert.ok(p.rewards.includes(6654), 'camo top');
   assert.equal(Teleports.sessionOf(p), undefined);
+});
+
+test('Drill Demon walks onto the mat tile under the sign from either half of a mat', t => {
+  const h = harness(t);
+  assert.equal(h.hooks.objectRoute?.length, 1, 'the drill plugin registers the mat route');
+  for (const [x, y, id] of [[3160, 4819, 20810], [3160, 4820, 20810], [3162, 4819, 16508],
+    [3164, 4819, 9313], [3166, 4819, 20801]]) {
+    const route = { clickType: 1, objectId: id, object: { getLocation: () => new Location(x, y, 0) } };
+    for (const handler of h.hooks.objectRoute) handler(route);
+    assert.deepEqual(route.destination, { x, y: 4820, z: 0 }, `${x},${y}: walks onto the north tile`);
+  }
+  const other = { clickType: 1, objectId: 9315, object: { getLocation: () => new Location(3165, 4820, 0) } };
+  for (const handler of h.hooks.objectRoute) handler(other);
+  assert.equal(other.destination, undefined, 'sign posts keep the core route');
+  const look = { clickType: 2, objectId: 20810, object: { getLocation: () => new Location(3160, 4820, 0) } };
+  for (const handler of h.hooks.objectRoute) handler(look);
+  assert.equal(look.destination, undefined, 'only Use walks to the mat');
 });
 
 test('Drill Demon breaks the streak on a wrong mat', t => {
@@ -1205,6 +1231,7 @@ test('Drill Demon breaks the streak on a wrong mat', t => {
   choose(h, p, 0);
   const session = Teleports.sessionOf(p);
   const wrong = [...session.data.matExercise.entries()].find(([, exercise]) => exercise !== session.data.order);
+  p.location = new Location(wrong[0], 4820, 0);
   h.hooks['object:Exercise mat'].Use({ player: p, handled: false,
     object: { getLocation: () => new Location(wrong[0], 4820, 0), getId: () => 1 } });
   assert.equal(session.data.streak, 0);
@@ -1273,7 +1300,8 @@ test('Pinball inviter supports the cache Talk-to and Dismiss actions through rea
   choose(h, p, 1);
   assert.equal(Teleports.hasSession(p), false, 'declining keeps the invitation');
   assert.equal(npc.removed, undefined);
-  assert.equal(operate(1), true, 'the invitation can be reopened');
+  assert.equal(operate(1), true, 'talking again after declining is handled');
+  assert.match(npcLines(p).join('\n'), /Going away now\./);
   assert.equal(definition.getActions()[4], 'Dismiss', 'the client exposes Dismiss');
   assert.equal(operate(5), true);
   assert.equal(npc.removed, true);
@@ -1283,10 +1311,11 @@ test('Pinball inviter supports the cache Talk-to and Dismiss actions through rea
 
 test('Pinball awards noted gems with the Wiki 3/3/3/1 weights at roll boundaries', t => {
   const h = harness(t);
-  const cases = [[0, 1608, 5], [0.299999, 1608, 5], [0.3, 1606, 5],
-    [0.599999, 1606, 5], [0.6, 1604, 5], [0.899999, 1604, 5],
-    [0.9, 1602, 2], [0.999999, 1602, 2]];
-  for (const [roll, id, amount] of cases) {
+  const cases = [[0, 1608, 5, 'Sapphire', 'five sapphires'], [0.299999, 1608, 5, 'Sapphire', 'five sapphires'],
+    [0.3, 1606, 5, 'Emerald', 'five emeralds'], [0.599999, 1606, 5, 'Emerald', 'five emeralds'],
+    [0.6, 1604, 5, 'Ruby', 'five rubies'], [0.899999, 1604, 5, 'Ruby', 'five rubies'],
+    [0.9, 1602, 2, 'Diamond', 'two diamonds'], [0.999999, 1602, 2, 'Diamond', 'two diamonds']];
+  for (const [roll, id, amount, name, awarded] of cases) {
     const p = h.player(), origin = p.location.clone(), npc = h.spawn(p, 15);
     h.hooks.Flippa['Talk-to']({ player: p, npc, handled: false });
     choose(h, p, 0);
@@ -1296,9 +1325,102 @@ test('Pinball awards noted gems with the Wiki 3/3/3/1 weights at roll boundaries
     h.hooks['object:Cave Exit'].Use({ player: p, handled: false,
       object: { getId: () => 9293, getLocation: () => new Location(1971, 5036, 0) } });
     assert.deepEqual(p.rewardItems.map(item => [item.getId(), item.getAmount()]), [[id, amount]], `roll ${roll}`);
+    assert.deepEqual(p.messages, [`You were awarded ${awarded}!`, REWARD(amount, name)], `roll ${roll}`);
     assert.ok(p.location.equals(origin));
     assert.equal(Teleports.hasSession(p), false);
   }
+});
+
+test('Pinball spawns the room Flippa and Tilt and Tilt explains the game', t => {
+  const h = harness(t), p = h.player(), npc = h.spawn(p, 15);
+  h.hooks.Flippa['Talk-to']({ player: p, npc, handled: false });
+  choose(h, p, 0);
+  const session = Teleports.sessionOf(p);
+  assert.equal(session.flippa.getId(), N.FLIPPA);
+  assert.deepEqual([session.flippa.location.getX(), session.flippa.location.getY()], [1973, 5041]);
+  assert.equal(session.flippa.getFace(), 3, 'Flippa faces west');
+  assert.equal(session.flippa.isOwnerOnly(), true, 'each player has their own room NPCs');
+  assert.equal(session.tilt.getId(), N.TILT);
+  assert.deepEqual([session.tilt.location.getX(), session.tilt.location.getY()], [1971, 5041]);
+  assert.equal(session.tilt.getFace(), 4, 'Tilt faces east');
+  assert.match(npcLines(p).join('\n'), /You poke 10 flashing pillars/);
+  Teleports.finish(session);
+});
+
+test('Pinball Flippa and Tilt repeat the live instructions and farewell', t => {
+  const h = harness(t), p = h.player(), npc = h.spawn(p, 15);
+  h.hooks.Flippa['Talk-to']({ player: p, npc, handled: false });
+  choose(h, p, 0);
+  const session = Teleports.sessionOf(p);
+  h.hooks.Tilt['Talk-To']({ player: p, npc: session.tilt, handled: false });
+  assert.deepEqual(npcLines(p), ['Err...what am I supposed to do here again?', 'You gotta poke dem pillars.',
+    'What? All of them?', "No, no. If you poke dem ones dat don't have a dem flashin' rings, den dats bad.",
+    'So I have to poke the pillars that are flashing?', 'Yer. You do dat ten times, you get prize.']);
+  session.data.done = true;
+  h.hooks.Flippa['Talk-To']({ player: p, npc: session.flippa, handled: false });
+  assert.deepEqual(npcLines(p), ["So...I'm free to go now, right?", 'Yer, get going. We get break now.',
+    'Ok. Err...have a nice break.']);
+  const invitation = { player: p, npc: { getId: () => N.FLIPPA_2 }, handled: false };
+  h.hooks.Flippa['Talk-to'](invitation);
+  assert.equal(invitation.handled, false, 'the invitation NPC keeps its own handler in the room');
+  Teleports.finish(session);
+});
+
+test('Pinball glows the post with its animation and never swaps object ids', t => {
+  const h = harness(t), p = h.player(), npc = h.spawn(p, 15);
+  const posts = Pinball._test.POSTS.map(([tile, inactive]) => {
+    const object = new FakeGameObject(inactive, new Location(tile[0], tile[1], 0), 10, 0);
+    h.api.core.ObjectManager.register(object);
+    return object;
+  });
+  h.hooks.Flippa['Talk-to']({ player: p, npc, handled: false });
+  choose(h, p, 0);
+  const session = Teleports.sessionOf(p);
+  assert.ok(p.objectAnimations.some(([, animation]) => animation === Pinball._test.GLOW_ON),
+    'one post starts glowing');
+  p.objectAnimations.length = 0;
+  Pinball._test.room.glow = 0;
+  h.hooks['object:Pinball Post'].Tag({ player: p, object: posts[0], handled: false });
+  assert.equal(posts[0].getId(), 8982, 'the map object is not replaced');
+  assert.ok(p.objectAnimations.some(([object, animation]) => object === posts[0] &&
+    animation === Pinball._test.GLOW_OFF), 'the tagged post stops glowing');
+  assert.ok(p.objectAnimations.some(([object, animation]) => object !== posts[0] &&
+    animation === Pinball._test.GLOW_ON), 'another post starts glowing');
+  Teleports.finish(session);
+});
+
+test('Pinball moves the glowing post for every player in the shared room', t => {
+  const h = harness(t), p = h.player(), q = h.player();
+  const posts = Pinball._test.POSTS.map(([tile, inactive]) => {
+    const object = new FakeGameObject(inactive, new Location(tile[0], tile[1], 0), 10, 0);
+    h.api.core.ObjectManager.register(object);
+    return object;
+  });
+  for (const player of [p, q]) {
+    const npc = h.spawn(player, 15);
+    h.hooks.Flippa['Talk-to']({ player, npc, handled: false });
+    choose(h, player, 0);
+  }
+  const pSession = Teleports.sessionOf(p), qSession = Teleports.sessionOf(q);
+  Pinball._test.room.glow = 1;
+  p.objectAnimations = [];
+  q.objectAnimations = [];
+  h.hooks['object:Pinball Post'].Tag({ player: p, object: posts[1], handled: false });
+  assert.equal(Pinball._test.room.glow, 2, 'the shared target moves on from post2');
+  for (const player of [p, q]) {
+    const animations = player.objectAnimations ?? [];
+    assert.equal(animations.length, Pinball._test.POSTS.length, 'every post is updated for each player');
+    assert.ok(animations.some(([object, animation]) => object === posts[1] &&
+      animation === Pinball._test.GLOW_OFF), 'the old target stops glowing for both players');
+    assert.ok(animations.some(([object, animation]) => object === posts[2] &&
+      animation === Pinball._test.GLOW_ON), 'the new target glows for both players');
+  }
+  assert.equal(pSession.data.score, 1);
+  h.random(0.7);
+  h.hooks['object:Pinball Post'].Tag({ player: q, object: posts[2], handled: false });
+  assert.equal(qSession.data.score, 1, 'the other player scores on the post they can see glowing');
+  Teleports.finish(pSession);
+  Teleports.finish(qSession);
 });
 
 test('Pinball scores the glowing post, resets on others and pays at the cave exit', t => {
@@ -1312,6 +1434,7 @@ test('Pinball scores the glowing post, resets on others and pays at the cave exi
   session.data.score = 9;
   h.hooks['object:Pinball Post'].Tag({ player: p, object: fake, handled: false });
   assert.equal(session.data.done, true);
+  assert.deepEqual(p.messages, ['Congratulations, you have won!', 'You may now leave the game area.']);
   h.hooks['object:Cave Exit'].Use({ player: p, handled: false,
     object: { getId: () => 9293, getLocation: () => new Location(1971, 5036, 0) } });
   assert.equal(p.rewardItems.length, 1);
@@ -1349,7 +1472,7 @@ test('Evil Bob island fishing, uncooking and feeding pays 650 Fishing XP', t => 
 function apiSkillMagic(h) { return h.api.core.Skill.MAGIC; }
 function apiSkillFishing(h) { return h.api.core.Skill.FISHING; }
 
-test('Prison Pete pays out after three correct balloon keys', t => {
+test('Prison Pete takes each key on Talk-to and pays out after three correct ones', t => {
   const h = harness(t), p = h.player(), npc = h.spawn(p, 17);
   h.hooks['Evil Bob']['Talk-to']({ player: p, npc, handled: false });
   choose(h, p, 0);
@@ -1357,21 +1480,46 @@ test('Prison Pete pays out after three correct balloon keys', t => {
   for (let round = 0; round < 3; round++) {
     assert.equal(fireRaw(h, 'objectRaw', { player: p,
       object: { getId: () => 24296, getLocation: () => new Location(2094, 4464, 0) } }), true);
+    const needed = session.data.required;
+    // The cache's prisonpete interface puts the animal model on 273:4 (273:3 is its layer).
+    assert.equal(p.models.get((273 << 16) | 4), needed.model, 'the lever shows the required shape');
     h.ticks(6);
     assert.equal(p.interfaceId, 273, 'lever preview remains visible for six ticks');
     h.ticks(1);
     assert.equal(p.interfaceId, -1, 'session timer still closes the lever preview at seven ticks');
-    const needed = session.data.required;
     const balloon = session.data.balloons.find(entry => entry.shape === needed.shape);
     assert.equal(fireNpcClick(h, balloon.id, 1, { player: p, npc: balloon.npc, npcId: balloon.id }), true);
     assert.equal(session.data.keyCorrect, true);
     p.slots[0] = new Item(6966, 1);
-    assert.equal(fireRaw(h, 'itemOnNpc', { player: p, itemId: 6966, npcId: N.PRISON_PETE }), true);
+    // Live: Talk-to Pete while carrying the key, no item-on-NPC action (rsprox 4067, 555).
+    const promptsBefore = h.prompts.length;
+    h.hooks['Prison Pete']['Talk-to']({ player: p, npc: { getId: () => N.PRISON_PETE }, handled: false });
+    assert.equal(p.getInventory().containsNumber(6966), false, 'Pete takes the key');
+    assert.equal(session.data.required, null, 'the spent shape cannot be popped again before the lever');
+    assert.equal(h.prompts.length, promptsBefore, 'carrying a key talks Pete into taking it, not the intro options');
   }
   assert.equal(session.data.correct, 3);
-  h.hooks['Prison Pete']['Talk-to']({ player: p, npc: { getId: () => N.PRISON_PETE }, handled: false });
+  h.ticks(3);
   assert.notEqual(p.rewards.at(-1), 6966, 'the key was handed over, not kept');
   assert.ok(p.rewards.length >= 1);
+  assert.equal(Teleports.sessionOf(p), undefined);
+  assert.ok(p.location.equals(new Location(3222, 3222, 0)), 'the pair escape to the return tile');
+});
+
+test('leaving the prison removes the event key', t => {
+  const h = harness(t), p = h.player(), npc = h.spawn(p, 17);
+  h.hooks['Evil Bob']['Talk-to']({ player: p, npc, handled: false });
+  choose(h, p, 0);
+  const session = Teleports.sessionOf(p);
+  assert.equal(fireRaw(h, 'objectRaw', { player: p,
+    object: { getId: () => 24296, getLocation: () => new Location(2094, 4464, 0) } }), true);
+  const needed = session.data.required;
+  const balloon = session.data.balloons.find(entry => entry.shape === needed.shape);
+  fireNpcClick(h, balloon.id, 1, { player: p, npc: balloon.npc, npcId: balloon.id });
+  p.slots[0] = new Item(6966, 1);
+  assert.equal(p.getInventory().containsNumber(6966), true);
+  Teleports.finish(session, { message: 'You leave the prison.' });
+  assert.equal(p.getInventory().containsNumber(6966), false, 'the temporary key did not survive the event');
   assert.equal(Teleports.sessionOf(p), undefined);
 });
 

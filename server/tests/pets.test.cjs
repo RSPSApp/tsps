@@ -599,9 +599,8 @@ test("no shop sells pet items", () => {
   const shops = require("../data/definitions/custom-shops.json");
   const petItems = new Set(Pets.__internals.PETS.map((pet) => pet.itemId));
   for (const shop of shops) {
-    const items = Array.isArray(shop.items) ? shop.items : [];
-    for (const itemId of items) {
-      assert.ok(!petItems.has(itemId), `${shop.name} still sells pet item ${itemId}`);
+    for (const { id } of shop.originalStock) {
+      assert.ok(!petItems.has(id), `${shop.name} still sells pet item ${id}`);
     }
   }
 });

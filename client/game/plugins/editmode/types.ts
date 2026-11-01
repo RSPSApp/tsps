@@ -34,31 +34,6 @@ export interface EditModeOverlaySwatch {
     name?: string;
 }
 
-export interface EditModeShopStock {
-    id: number;
-    amount: number;
-    [key: string]: unknown;
-}
-
-/** Server shop row; extra fields preserve restock and price settings on save. */
-export interface EditModeShop {
-    id: number;
-    name: string;
-    currency?: string;
-    originalStock: EditModeShopStock[];
-    [key: string]: unknown;
-}
-
-export interface EditModeNpcMenuOption {
-    option: string;
-    actionIndex: number;
-    opcode: number;
-    isAttack: boolean;
-}
-
-/** The on-disk npc-interactions.json object, keyed by NPC type id. */
-export type EditModeNpcInteractions = Record<string, Record<string, unknown>>;
-
 export type EditModeWorldZoneTag = string;
 
 export interface EditModeBoundedWorldZone {
@@ -273,11 +248,8 @@ export interface EditModeHost {
     /** Name/id search over the cache; the index is built on first use. */
     search(kind: EditModeSearchKind, query: string): Promise<EditModeSearchResult[]>;
     describeDefinition?(kind: EditModeSearchKind, id: number): EditModeDefinitionSummary | undefined;
-    loadShops?(): Promise<EditModeShop[]>;
-    loadNpcInteractions?(): Promise<EditModeNpcInteractions>;
     /** Saved npc-spawns-custom.json records, converted to editor edits. */
     loadPersistedNpcSpawnEdits?(): Promise<EditModeEdit[]>;
-    getNpcMenuOptions?(npcTypeId: number): readonly EditModeNpcMenuOption[];
     /** Cache-backed overlay colours and textures for the terrain palette. */
     isWaterOverlay?(id: number): boolean;
     getOverlaySwatches?(): readonly EditModeOverlaySwatch[];

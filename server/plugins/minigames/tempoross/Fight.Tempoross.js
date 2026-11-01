@@ -10,7 +10,9 @@
  *   to full in 77 ticks (solo: 35 a tick). Fishing the pools drains essence; 0 essence wins.
  *   Full energy surfaces it again, and after the third time it is enraged: the storm races and
  *   the fight is soon lost.
- * - Tempoross surfaces with `fsb_spawn` and submerges with `fsb_ready_to_whirl`.
+ * - Tempoross surfaces with `fsb_spawn` (8897) on the first rise and `fsb_whirl_to_ready`
+ *   (8901) after a submerge, and submerges with `fsb_ready_to_whirl` (8900). The first enrage
+ *   plays `fsb_enraged_transition` (8906), then 10575 with `fsb_enraged_spawn` (8908).
  * Energy and essence are ten times the Wiki's numbers, as the HUD script takes them.
  */
 
@@ -146,20 +148,37 @@ class Fight {
   // ------------------------------------------------------------------ phases
 
   surface(first) {
-    if (!first) {
-      if (this.submerges >= F.maxSurfacings) {
-        this.enraged = true;
-        this.cove.message(`<col=${Shared.RED}>Tempoross has gathered too much energy. The storm is out of control!</col>`);
-        this.hostsSay("Tempoross has gathered too much energy!");
-      }
+    // Captures: the ready form plays 8897 on the first surfacing and 8901 (whirl to ready) when
+    // it rises after a submerge. The first enrage plays 8906 on the ready form, then turns into
+    // 10575 with 8908 five ticks later; later enraged surfacings are 10575 + 8908 directly.
+    const enragedSurface = !first && this.submerges >= F.maxSurfacings;
+    if (enragedSurface) {
+      this.enraged = true;
+      this.cove.message(`<col=${Shared.RED}>Tempoross has gathered too much energy. The storm is out of control!</col>`);
+      this.hostsSay("Tempoross has gathered too much energy!");
     }
     this.phase = "surfaced";
     this.surfacedAt = this.ticks;
     if (first) this.firstSurfaceTick = this.ticks;
     this.energy = this.maxEnergy;
     this.storm = 0;
-    this.setBoss(this.enraged ? NPC.BOSS_ENRAGED : NPC.BOSS);
-    Shared.animate(this.boss, ANIM.BOSS_SPAWN);
+    if (!first && this.enraged) {
+      if (this.submerges === F.maxSurfacings) {
+        this.setBoss(NPC.BOSS);
+        Shared.animate(this.boss, ANIM.BOSS_ENRAGED_TRANSITION);
+        Shared.later(this, 5, () => {
+          if (this.stopped || this.phase !== "surfaced" || !this.enraged) return;
+          this.setBoss(NPC.BOSS_ENRAGED);
+          Shared.animate(this.boss, ANIM.BOSS_ENRAGED_SPAWN);
+        });
+      } else {
+        this.setBoss(NPC.BOSS_ENRAGED);
+        Shared.animate(this.boss, ANIM.BOSS_ENRAGED_SPAWN);
+      }
+    } else {
+      this.setBoss(NPC.BOSS);
+      Shared.animate(this.boss, first ? ANIM.BOSS_SPAWN : ANIM.BOSS_WHIRL_TO_READY);
+    }
     this.spots.onSurface();
     this.attacks.onSurface();
     if (!this.enraged) this.hostsSay("Tempoross has surfaced, keep those cannons firing!");

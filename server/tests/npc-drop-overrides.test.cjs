@@ -73,3 +73,32 @@ test("drops the Wiki marks noted come noted, without a hand-made list", () => {
   for (const tables of _test.tablesByNpc.values()) for (const table of tables) noted += (table.entries || []).filter((entry) => entry.noted).length;
   assert.ok(noted > 2000, `${noted} noted entries`);
 });
+
+test("npc-drops-custom.json re-rates and removes dump rows and adds rows, ahead of the overrides", () => {
+  const { __internals } = require("../plugins/npcs/NpcDrops.plugin");
+  const row = (item_id, weight) => ({ item_id, name: `Item ${item_id}`, quantity: [1, 1], weight, out_of: 128 });
+  const edited = { tables: { goblin: { main_max_roll: 128, entries: [row(1, 10), row(2, 5)], tertiary: [] } }, npcs: {} };
+  __internals.applyCustomDrops(edited, {
+    tables: {
+      goblin: {
+        removeEntries: [{ field: "entries", index: 1 }],
+        setEntries: { "entries:0": { weight: 1.28 } },
+        addEntries: [row(4, 2)],
+      },
+      missing: { addEntries: [row(9, 1)] },
+    },
+  });
+  __internals.applyOverrides(edited, {}, { tables: { goblin: { addEntries: [row(3, 1), row(4, 9)] } } });
+  const { entries } = edited.tables.goblin;
+  assert.deepEqual(entries.map((entry) => entry.item_id), [1, 4, 3], "an item already on the table is not added twice");
+  assert.equal(entries[0].weight, 1.28);
+  assert.equal(entries[0].rarity, 1.28 / 128);
+  assert.equal(entries[1].weight, 2, "the world's own row wins");
+});
+
+test("a fractional main weight stays on the main table", (t) => {
+  const { __internals } = require("../plugins/npcs/NpcDrops.plugin");
+  t.mock.method(Math, "random", () => 0);
+  const table = { main_max_roll: 128, entries: [{ item_id: 995, name: "Coins", quantity: [1, 1], weight: 1.28, out_of: 128 }], tertiary: [] };
+  assert.deepEqual(__internals.rollOnce(table, table.entries, null).map((drop) => drop.itemId ?? drop.id), [995]);
+});

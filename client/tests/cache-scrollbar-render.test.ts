@@ -45,6 +45,20 @@ async function main() {
     assert.ok(render(100).drawn.includes(5), "overflow scrollbar still renders its down arrow");
     assert.equal(render(0, true).drawn.length, 0, "explicit cache hide still hides descendants");
     assert.equal(render(0, false, false).drawn.length, 0, "explicit visibility override still hides descendants");
-    console.log("cache scrollbar render: zero range, overflow, cache hide and visibility override passed");
+    const scrollUid = (642 << 16) | 40;
+    const staleChild: any = { uid: scrollUid + 1, id: scrollUid + 1, parentUid: scrollUid, type: 5,
+        isIf3: true, x: 0, y: 0, width: 32, height: 32, itemId: 101, _absY: 0 };
+    const scrolledParent: any = { uid: scrollUid, id: scrollUid, type: 0, isIf3: true,
+        x: 0, y: 0, width: 100, height: 100, scrollY: 300, scrollHeight: 500, children: [staleChild] };
+    const scrollManager: any = new Proxy({
+        getWidgetFlags: () => 0, getWidgetFlagsVersion: () => 0,
+        getStaticChildrenByParentUid: () => [], getDynamicChildrenByParent: (w: any) => w.children ?? [],
+        interfaceParents: new Map(), groups: new Map(),
+    }, { get: (obj, key) => (obj as any)[key] ?? noop });
+    const scrollRenderer: any = new Proxy({ canvas, gl: new Proxy({}, { get: () => noop }), width: 800, height: 600 }, { get: (obj, key) => (obj as any)[key] ?? noop });
+    renderWidgetTreeGL(scrollRenderer, scrolledParent, { widgetManager: scrollManager, spriteIndex: {} as any,
+        fontLoader: () => undefined, visible: new Map(), debug: false, hostW: 800, hostH: 600, skipTooltip: true });
+    assert.equal(staleChild._absY, -300, "scroll traversal refreshes a culled child's absolute position before culling it");
+    console.log("cache scrollbar render: visibility, clipping and pre-cull bounds passed");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

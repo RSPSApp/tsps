@@ -7,9 +7,16 @@
       "hat": "magictraining_pizazz_hat",
       "alchemyGuardian": "magictraining_guard_alchem",
       "graveyardGuardian": "magictraining_guard_grave",
-      "rewardsGuardian": "magictraining_guard_rewards"
+      "rewardsGuardian": "magictraining_guard_rewards",
+      "telekineticGuardian": "magictraining_guard_tele",
+      "mazeGuardian": "magictraining_guard_maze_incomplete",
+      "mazeGuardianMoving": "magictraining_guard_maze_moving",
+      "mazeGuardianComplete": "magictraining_guard_maze_complete"
     },
     "locs": {
+      "telekineticPortal": "magictraining_teledoor",
+      "telekineticWalls": "magictraining_miniwall",
+      "telekineticFinish": "magictraining_mini_statue_pitfall",
       "enchantPortal": "magictraining_enchantdoor",
       "exit": "magictraining_returndoor",
       "hole": "magictraining_encha_hole",
@@ -63,6 +70,7 @@
       "water": "waterrune",
       "earth": "earthrune",
       "nature": "naturerune",
+      "law": "lawrune",
       "peachSpell": "magictraining_peachspell",
       "runePouch": "bh_rune_pouch",
       "runePouchLocked": "bh_rune_pouch_trouver",
@@ -120,6 +128,35 @@
     "arrive": [3363, 9644, 0],
     "level": 7
   },
+  "telekinetic": {
+    "_bounds": "the ten maze rooms on planes 0-2 and the waiting area between them",
+    "bounds": [3330, 3390, 9664, 9727],
+    "levels": [0, 1, 2],
+    "_interface": "interface 198 has no gameval name; components 6 and 11 are the points and streak labels",
+    "interface": 198,
+    "pointsComponent": 6,
+    "streakComponent": 11,
+    "level": 33,
+    "mazePoints": 2,
+    "mazeXp": 250,
+    "bonusEvery": 5,
+    "bonusPoints": 8,
+    "bonusXp": 1000,
+    "bonusRunes": 10,
+    "_mazes": "walls = the maze's wall bounding box; start/goal = the statue's first and final tiles; arrive = where the player lands from the lobby (capture 1757 and the Wiki's ten solution maps)",
+    "mazes": [
+      { "walls": [3337, 3348, 9674, 9685], "start": [3343, 9680, 0], "goal": [3342, 9684, 0], "arrive": [3354, 9690, 0] },
+      { "walls": [3337, 3348, 9704, 9715], "start": [3343, 9705, 0], "goal": [3347, 9714, 0], "arrive": [3336, 9717, 0] },
+      { "walls": [3365, 3376, 9710, 9721], "start": [3368, 9712, 0], "goal": [3367, 9720, 0], "arrive": [3379, 9716, 0] },
+      { "walls": [3368, 3379, 9672, 9683], "start": [3373, 9678, 0], "goal": [3375, 9682, 0], "arrive": [3374, 9696, 0] },
+      { "walls": [3340, 3351, 9707, 9718], "start": [3350, 9717, 1], "goal": [3341, 9708, 1], "arrive": [3364, 9713, 1] },
+      { "walls": [3345, 3356, 9679, 9690], "start": [3351, 9684, 1], "goal": [3353, 9680, 1], "arrive": [3356, 9692, 1] },
+      { "walls": [3373, 3384, 9712, 9723], "start": [3374, 9713, 1], "goal": [3383, 9713, 1], "arrive": [3378, 9706, 1] },
+      { "walls": [3375, 3386, 9676, 9687], "start": [3376, 9686, 1], "goal": [3385, 9686, 1], "arrive": [3382, 9698, 1] },
+      { "walls": [3338, 3349, 9673, 9684], "start": [3348, 9674, 2], "goal": [3339, 9683, 2], "arrive": [3368, 9680, 2] },
+      { "walls": [3342, 3353, 9708, 9719], "start": [3346, 9718, 2], "goal": [3345, 9718, 2], "arrive": [3359, 9701, 2] }
+    ]
+  },
   "points": {
     "_caps": "doubled on 8 May 2024 (Wiki: Pizazz_points)",
     "caps": {
@@ -155,6 +192,9 @@
   "messages": {
     "_unverified": "the Wiki gives no capture for these except the guardian's bonus lines",
     "level": "You need a Magic level of {level} to enter the {room}.",
+    "telekineticEntered": "You've entered the Telekinetic Theatre.",
+    "mazeComplete": "Congratulations! You have received {points} Telekinetic Pizazz Points!",
+    "mazeBonus": "Congratulations on solving five mazes in a row, have {points} bonus points, {runes} law runes and extra magic XP!",
     "bonusShape": "The bonus shape has changed to the {shape}.",
     "inventoryFull": "You don't have enough inventory space.",
     "pointsCapped": "You can't hold any more {type} Pizazz Points.",

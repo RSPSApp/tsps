@@ -528,11 +528,17 @@ export class Player extends Mobile {
         if (rapidRestoreDue) this.rapidRestoreDue = cycle + Player.STAT_RESTORE_TICKS;
 
         if (restoreDue || rapidRestoreDue) {
-            const points = (restoreDue ? 1 : 0) + (rapidRestoreDue ? 1 : 0);
-            for (const skill of Skill.values()) {
-                if (skill === Skill.HITPOINTS || skill === Skill.PRAYER) continue;
-                const max = skills.getMaxLevel(skill);
-                if (skills.getCurrentLevel(skill) < max) skills.increaseCurrentLevel(skill, points, max);
+            // An area can pause non-Hitpoints restoration (Rogues' Den holds a drained Agility/
+            // Thieving level for the whole maze). Hitpoints still regenerate below.
+            const request = { player: this, allowed: true };
+            PluginManager.emitCustomEvent("stats:natural-restore", request);
+            if (request.allowed) {
+                const points = (restoreDue ? 1 : 0) + (rapidRestoreDue ? 1 : 0);
+                for (const skill of Skill.values()) {
+                    if (skill === Skill.HITPOINTS || skill === Skill.PRAYER) continue;
+                    const max = skills.getMaxLevel(skill);
+                    if (skills.getCurrentLevel(skill) < max) skills.increaseCurrentLevel(skill, points, max);
+                }
             }
         }
 

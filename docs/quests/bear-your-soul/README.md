@@ -35,6 +35,25 @@ library, Soul Altar, crypt and Taverley) has been done.
 
 ## Findings
 
+- **fixed** Completion used the generic quest scroll/jingle/chat line. Live only
+  sends sound 1595 and the repair item box, so the repair now calls
+  `quest.complete(player, { scroll: false, announce: false })`.
+- **fixed** The shelf search used an invented chat message. It now plays
+  `human_pickuptable` (832), then sends the inventory add and item box 19637
+  together on the next tick with the live "You find:" text.
+- **fixed** Reading advanced the stage and sent a chat message as the book
+  opened. It now plays `human_readbook` (1350), advances 0 -> 1 and shows item
+  box 19637 only when the book is closed.
+- **fixed** The book had 8 uncoloured spreads. It now has the live 9 spreads
+  (pages 1-18), with `<col=7f0000>` headings and the capture's `if_settext`
+  pagination.
+- **fixed** Digging sent a chat line. It now plays `human_dig` (830), sound 1470
+  and item box 19636 ("You have found the soul bearer.").
+- **fixed** Aretha's directions branch was only offered at stage 1. It is now
+  also offered at stage 2 until the bearer is dug up, and the stage changes 1 ->
+  2 on the "Now, we buried the artefact..." line rather than on "Yes please.".
+- **fixed** Full inventory now uses the server's standard
+  "Not enough space in your inventory." message.
 - **approximation** OSRS pins the book to one random Arceuus Library shelf. The
   server has no library-shelf rotation, so any shelf in the library finds it
   while it is unread.
@@ -43,9 +62,38 @@ library, Soul Altar, crypt and Taverley) has been done.
 - **not checked live** Taverley Dungeon and Cerberus' Lair access are provided by
   existing world content, not this plugin.
 - **out of scope** The reward's Fill/charge/Uncharge actions are not implemented
-  by this miniquest change; only the quest reward item is granted.
+  by this miniquest change; only the reward item is granted.
 
 ## Runs
+
+### 2026-10-31 - capture 1702 review fixes (source, focused test, live handlers)
+
+Recording 1702 (revision 226) was used as the live reference. The stage order
+(0 -> 1 on book close, 1 -> 2 during Aretha, 2 -> 3 at the repair) and the
+Aretha/Key Master words matched. The book pagination is the recording's exact
+`if_settext` lines for pages 1-18; the Wiki's live interface screenshots were
+used only to confirm the heading colours.
+
+Two timing differences were found in the review and fixed:
+
+- Spread 2 (pages 3-4) now wraps as the capture sends it: `fetters of its
+  flesh-temple, and` / `from the constraints of the` / `material world, the soul
+  is at` / `last free.`
+- The shelf now plays 832 on tick N and sends the inventory add and item box
+  together on N+1, instead of adding the book on the search tick.
+
+A live handler run on slot 25 confirmed the corrected behaviour:
+
+- Bookshelf `Search` showed item box 19637 with `You find: / The Journey of
+  Souls, by Aretha. / You take a copy.`; the quest stayed at stage 0.
+- `Read` stayed at stage 0 while the book was open; closing it moved to stage 1
+  and showed item box 19637 with the artefact hint.
+- Aretha's dialogue stayed at stage 1 through `Yes please.` and moved to stage 2
+  on the `Now, we buried the artefact...` line. Returning at stage 2 without the
+  bearer still offered `I've been reading your book...`.
+- Crypt `Dig` showed item box 19636 (`You have found the soul bearer.`).
+- The Key Master repair showed item box 19634, advanced to stage 3, and produced
+  no completion jingle, scroll or `Congratulations` chat line (`messages: []`).
 
 ### 2026-10-31 — focused live handler checks (not a full playthrough)
 
@@ -59,6 +107,8 @@ used `::tele`; this is handler evidence, not a natural route.
 - **Aretha:** nearest-spawn NPC 7042 at the Soul Altar. The menu offered
   "I've been reading your book..."; choosing it and then "Yes please." played
   the generated transcript and moved the quest to stage 2 (varbit 5078 = 2).
+  *Pre-review timing; the capture-fix run above moved the stage on the following
+  crypt-directions line.*
 - **Crypt:** spade `Dig` at (1699, 3794, 0) added item 19636 (Damaged soul
   bearer); the helper's next step became "Go to Taverley Dungeon...".
 - **Key Master:** NPC 12599 at (1311, 1251). `Talk-to` played

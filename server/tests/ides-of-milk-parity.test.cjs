@@ -27,7 +27,8 @@ function harness() {
     core: { ...core, PrivateArea, TaskManager: {
       submit: task => { task.setRunning(true); tasks.push(task); },
       cancelTasks: key => tasks.filter(task => task.key === key).forEach(task => task.stop()),
-    }, ObjectManager: { register: object => objects.push(object) } },
+    }, ObjectManager: { register: object => objects.push(object) },
+      MapObjects: { get: (id, location) => new core.GameObject(id, location, 0, id === O.GATE_319 || id === O.GATE_322 ? 1 : 0, null) } },
     persistAttribute: noop,
     onCustomEvent: (name, handler) => (events[name] ??= []).push(handler),
     emitCustomEvent: (name, event) => (events[name] ?? []).forEach(handler => handler(event)),
@@ -56,17 +57,18 @@ function harness() {
 }
 
 function player() {
-  const attributes = new Map(), items = new Map(), varbits = new Map(), strings = new Map(), animations = [], damage = [], messages = [], graphics = [];
+  const attributes = new Map(), items = new Map(), varbits = new Map(), strings = new Map(), animations = [], damage = [], messages = [], graphics = [], objectsSent = [];
   let area = null, location = new core.Location(3254, 3274, 0);
   const packet = new Proxy({ sendVarbit: (id, value) => { varbits.set(id, value); return packet; },
     sendString: (text, id) => { strings.set(id, text); return packet; },
+    sendObject: object => { objectsSent.push(object); return packet; },
     sendGraphic: (graphic, at) => { graphics.push([at.getX(), at.getY()]); return packet; } }, { get: (target, key) => target[key] ?? (() => packet) });
   const inventory = { getAmount: id => items.get(id) ?? 0, getFreeSlots: () => p.full ? 0 : 28,
     isFull: () => Boolean(p.full), adds: (id, amount) => items.set(id, (items.get(id) ?? 0) + amount),
     deleteNumber: (id, amount) => { assert.ok((items.get(id) ?? 0) >= amount); items.set(id, items.get(id) - amount); },
     get: () => p.lamp, deleteAtSlot: () => { p.lamp = null; } };
   const p = { attributes, items, varbits, strings, animations, damage, messages,
-    graphics, getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
+    graphics, objectsSent, getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => inventory, getPacketSender: () => packet,
     getDialogueManager: () => ({ startDialogues: noop, reset: noop }),
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; } }), setUntargetable: noop,
@@ -143,6 +145,24 @@ test('bull release is private, uses the captured bull and cleans up pending or a
   h.hooks.onPlayerLogout[0]({ player: p }); assert.equal(p.getArea(), null); assert.equal(h.npcs[0].removed, true);
   const pending = player(); h.quest.setStage(pending, 18); h.action(pending, N.BULL, 'mKQNRL');
   h.hooks.onPlayerLogout[0]({ player: pending }); h.tick(4); assert.equal(h.npcs.length, 1);
+});
+
+test('leaving a post-quest fight restores the cow-field gates so Brutus can be released again', () => {
+  const h = harness(), p = player(); h.quest.setStage(p, 22);
+  h.action(p, N.BULL, 'mKQNRL'); h.tick(4);
+  h.hooks.onObjectInteraction[0]({ player: p, objectId: O.GATE_323 });
+  assert.equal(p.getArea(), null, 'the exit gate ends the private field');
+  assert.deepEqual(p.objectsSent.map(object => [object.getId(), object.getLocation().getX(), object.getLocation().getY(), object.getFace()])
+    .sort((a, b) => a[0] - b[0]),
+  [[O.GATE_18, 3253, 3266, 0], [O.GATE_20, 3253, 3267, 0], [O.GATE_319, 3263, 3294, 1], [O.GATE_322, 3262, 3294, 1]],
+  'each actionless private leaf is replaced by the map gate it hid, so "Release" is back');
+});
+
+test('killing Brutus during the quest restores the gates before the field tears down', () => {
+  const h = harness(), p = player(); h.quest.setStage(p, 18); h.action(p, N.BULL, 'mKQNRL'); h.tick(2);
+  h.hooks.onNpcDeath[0]({ killer: p, npc: h.npcs[0], npcId: N.BRUTUS });
+  assert.equal(h.quest.getStage(p), 20);
+  assert.deepEqual(p.objectsSent.map(object => object.getId()).sort((a, b) => a - b), [O.GATE_18, O.GATE_20, O.GATE_319, O.GATE_322]);
 });
 
 test('the bull tag has one game message and one continued message box', () => {

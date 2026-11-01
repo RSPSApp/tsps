@@ -6,7 +6,6 @@ import {
 } from "./hostProtocol/regionPackMessage";
 import { browserHostOrigin, browserHostWindow } from "./hostProtocol/origin";
 import type { EditModePlugin } from "./EditModePlugin";
-import type { WebGLOsrsRenderer } from "../../../render/WebGLOsrsRenderer";
 import { EditorPalette, type PaletteMode } from "./EditorPalette";
 import {
     createCameraIcon,
@@ -30,22 +29,16 @@ import {
     createNpcIcon,
     createObjectIcon,
     createSaveIcon,
-    createShopIcon,
     createSpawnIcon,
     createTrashIcon,
     createWorldMapIcon,
 } from "./EditorToolbar";
 import { WORLD_DEFINITION_MESSAGE } from "./hostProtocol/worldDefinitionMessage";
 import { CUSTOM_NPC_SPAWNS_MESSAGE, formatCustomNpcSpawns } from "./hostProtocol/npcSpawnMessage";
-import { SHOP_DEFINITIONS_MESSAGE } from "./hostProtocol/shopsMessage";
-import { NPC_INTERACTIONS_MESSAGE } from "./hostProtocol/npcInteractionsMessage";
-import { MenuOpcode } from "../../../ui/menu/MenuState";
 import type {
     EditModeDefinitionSummary,
     EditModeOverlaySwatch,
     EditModeSearchKind,
-    EditModeNpcInteractions,
-    EditModeShop,
 } from "./types";
 import { BUILDING_SHAPES, BUILDING_STYLES, type BuildingShape, type BuildingStyle } from "./BuildingGenerator";
 
@@ -80,19 +73,6 @@ const TOP_BAR_HEIGHT = EDITOR_TOP_BAR_HEIGHT;
 const TOP_BAR_CLEARANCE = EDITOR_TOP_BAR_CLEARANCE;
 /** The saved spawn patch only needs importing once per page, not per UI mount. */
 let persistedNpcSpawnsRequested = false;
-
-function npcClickKey(opcode: number): "first_click" | "second_click" | "third_click" | "fourth_click" | undefined {
-    switch (opcode) {
-        case MenuOpcode.NpcFirstOption: return "first_click";
-        case MenuOpcode.NpcSecondOption: return "second_click";
-        case MenuOpcode.NpcThirdOption: return "third_click";
-        case MenuOpcode.NpcFourthOption: return "fourth_click";
-    }
-}
-
-function camelNpcClickKey(key: string): string {
-    return key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
-}
 
 function stopClientInput(element: HTMLElement): void {
     for (const eventName of ["mousedown", "click", "keydown", "keyup"] as const) {
@@ -200,29 +180,10 @@ class EditorChrome {
     private readonly previousCanvasTop: string;
     private detailPanel?: HTMLElement;
     private overlayPalette?: HTMLElement;
-    private shopBrowser?: HTMLElement;
-    private shopBrowserResults?: HTMLElement;
-    private shopEditor?: HTMLElement;
-    private activeShop?: EditModeShop;
-    private shops: EditModeShop[] = [];
-    private shopsLoaded = false;
-    private shopsLoading = false;
-    private shopsDirty = false;
     private saveButton?: HTMLButtonElement;
     private saveTooltip?: HTMLDivElement;
     /** Custom NPC spawns stay in the edit list after saving, so compare against the last save. */
     private savedNpcSpawnsKey = "";
-    private npcInteractions: EditModeNpcInteractions = {};
-    private npcInteractionsLoaded = false;
-    private npcInteractionsLoading = false;
-    private npcInteractionsDirty = false;
-    private npcInteractionError?: string;
-    private npcShopPickTarget?: { npcId: number; clickKey: "first_click" | "second_click" | "third_click" | "fourth_click" };
-    private shopError?: string;
-    private shopSearchToken = 0;
-    private shopIconRetryTimer?: number;
-    private shopIconRetryCount = 0;
-    private shopPreviewScrollTop = 0;
     private overlaySwatches: readonly EditModeOverlaySwatch[] = [];
     private selectionImage?: { key: string; dataUrl: string; loading: boolean };
     private buildingStyle: BuildingStyle = "Varrock";
@@ -260,12 +221,6 @@ class EditorChrome {
                 action: () => this.toggleOverlayPalette(),
             },
             { id: "path", label: "Draw path", icon: createPathIcon },
-            {
-                id: "shops",
-                label: "Browse shops",
-                icon: createShopIcon,
-                action: () => this.toggleShopBrowser(),
-            },
             {
                 id: "world-map",
                 label: "World map",
@@ -524,8 +479,6 @@ class EditorChrome {
         requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
         this.detailPanel?.remove();
         this.overlayPalette?.remove();
-        this.closeShopBrowser();
-        this.closeShopEditor();
     }
 
     private currentSearchMode(): EditModeSearchKind {
@@ -683,8 +636,7 @@ class EditorChrome {
 
     /** Cheap check run on every editor update; the save itself builds the exports. */
     private hasUnsavedChanges(): boolean {
-        return this.shopsDirty || this.npcInteractionsDirty ||
-            this.plugin.getWorldDefinitionForSave() !== undefined ||
+        return             this.plugin.getWorldDefinitionForSave() !== undefined ||
             this.plugin.getConfig().edits.some((edit) =>
                 edit.kind !== "npc" && edit.kind !== "npcDelete" && edit.kind !== "npcWander") ||
             this.npcSpawnsKey() !== this.savedNpcSpawnsKey;
@@ -704,7 +656,6 @@ class EditorChrome {
     private sync(): void {
         this.syncSaveButton();
         const state = this.plugin.getState();
-        this.toolbar.setDisabled("shops", !state.world.definition);
         this.pvpZonesInput.disabled = !state.world.definition;
         this.safeZonesInput.disabled = !state.world.definition;
         this.duelZonesInput.checked = state.config.showDuelZones;
@@ -974,41 +925,7 @@ class EditorChrome {
             row.append(label, input, hint);
             this.selectionDetails.append(source, row);
         }
-        if (definition && selection.kind === "npc") {
-            const menu = document.createElement("table");
-            Object.assign(menu.style, {
-                width: "100%", marginTop: "6px", borderCollapse: "collapse", color: "#fff",
-                background: "#5d5447", font: "bold 12px Arial, Helvetica, sans-serif", textShadow: "1px 1px #000",
-            });
-            for (const option of this.plugin.getNpcMenuOptions(selection.locId)) {
-                const clickKey = !option.isAttack ? npcClickKey(option.opcode) : undefined;
-                if (!clickKey) continue;
-                const row = menu.insertRow();
-                const action = row.insertCell();
-                action.textContent = option.option;
-                Object.assign(action.style, { padding: "2px 4px", color: "#ffff00" });
-                const binding = this.npcInteractions[String(selection.locId)] ?? {};
-                const bindingKey = Object.hasOwn(binding, camelNpcClickKey(clickKey)) ? camelNpcClickKey(clickKey) : clickKey;
-                const current = binding[bindingKey] as Record<string, unknown> | undefined;
-                const shopId = current?.method === "core.shops.open" ? Number((current.args as Record<string, unknown> | undefined)?.shopId) : undefined;
-                const shop = row.insertCell();
-                shop.textContent = Number.isInteger(shopId) ? `Shop ${shopId}` : "No shop";
-                Object.assign(shop.style, { padding: "2px 4px", color: Number.isInteger(shopId) ? "#00ffff" : "#d6d3d1" });
-                const pick = row.insertCell();
-                const button = document.createElement("button");
-                button.type = "button";
-                button.textContent = "Select shop";
-                button.disabled = !this.plugin.getState().world.definition;
-                button.title = this.plugin.getState().world.definition ? `Assign a shop to ${option.option}` : "Load a world definition to edit shop actions";
-                Object.assign(button.style, { padding: "2px 5px", border: "1px solid rgba(255,255,255,0.18)", borderRadius: "3px", color: "#fff", background: "rgba(0,0,0,0.22)", cursor: button.disabled ? "not-allowed" : "pointer", font: "inherit" });
-                button.addEventListener("click", () => this.openNpcShopPicker(selection.locId, clickKey));
-                pick.appendChild(button);
-            }
-            if (menu.rows.length) this.selectionDetails.appendChild(menu);
-            if (this.plugin.getState().world.definition && !this.npcInteractionsLoaded && !this.npcInteractionsLoading) {
-                void this.loadNpcInteractions();
-            }
-        } else if (definition) {
+        if (definition) {
             const menuActions = gameActions && gameActions !== "—" ? gameActions.split(", ") : [];
             menuActions.push("Examine");
             const menu = document.createElement("table");
@@ -1103,8 +1020,6 @@ class EditorChrome {
             return;
         }
         this.palette.setVisible(false);
-        this.closeShopBrowser();
-        this.closeShopEditor();
         const panel = createPanel("settings", "340px");
         this.settingsDrawer = panel;
         panel.append(createHeader("Settings", () => this.closeSettings()), this.settingsContent);
@@ -1114,295 +1029,6 @@ class EditorChrome {
     private closeSettings(): void {
         this.settingsDrawer?.remove();
         this.settingsDrawer = undefined;
-    }
-
-    private toggleShopBrowser(): void {
-        this.closeSettings();
-        if (this.shopBrowser) {
-            this.closeShopBrowser();
-            return;
-        }
-        this.palette.setVisible(false);
-        const panel = createPanel("shop-browser");
-        this.shopBrowser = panel;
-        panel.appendChild(createHeader(this.npcShopPickTarget ? "Select shop" : "Shops", () => this.closeShopBrowser()));
-        const input = document.createElement("input");
-        input.type = "search";
-        input.placeholder = "Search shop name or ID";
-        input.setAttribute("aria-label", "Search shops");
-        Object.assign(input.style, INPUT_STYLE);
-        const results = document.createElement("div");
-        Object.assign(results.style, {
-            display: "flex",
-            flexDirection: "column",
-            gap: "2px",
-            maxHeight: "390px",
-            marginTop: "8px",
-            overflowY: "auto",
-        });
-        input.addEventListener("input", () => this.renderShopBrowser(input.value));
-        panel.append(input, results);
-        this.shopBrowserResults = results;
-        this.renderShopBrowser(input.value);
-        void this.loadShops().then(() => this.renderShopBrowser(input.value));
-        input.focus();
-    }
-
-    private closeShopBrowser(): void {
-        this.shopBrowser?.remove();
-        this.shopBrowser = undefined;
-        this.shopBrowserResults = undefined;
-        this.npcShopPickTarget = undefined;
-    }
-
-    private closeShopEditor(): void {
-        if (this.shopIconRetryTimer !== undefined) window.clearTimeout(this.shopIconRetryTimer);
-        this.shopIconRetryTimer = undefined;
-        this.shopEditor?.remove();
-        this.shopEditor = undefined;
-        this.activeShop = undefined;
-    }
-
-    private async loadShops(): Promise<void> {
-        if (this.shopsLoaded || this.shopsLoading) return;
-        this.shopsLoading = true;
-        this.shopError = undefined;
-        try {
-            this.shops = await this.plugin.loadShops();
-            this.shopsLoaded = true;
-        } catch (error) {
-            this.shopError = error instanceof Error ? error.message : String(error);
-        } finally {
-            this.shopsLoading = false;
-        }
-    }
-
-    private renderShopBrowser(query: string): void {
-        const results = this.shopBrowserResults;
-        if (!results) return;
-        results.replaceChildren();
-        if (this.shopsLoading) {
-            results.textContent = "Loading shops…";
-            return;
-        }
-        if (this.shopError) {
-            results.textContent = `Could not load shops: ${this.shopError}`;
-            return;
-        }
-        const needle = query.trim().toLowerCase();
-        const shops = this.shops
-            .filter((shop) => !needle || String(shop.id).startsWith(needle) || shop.name.toLowerCase().includes(needle))
-            .sort((left, right) => left.id - right.id);
-        for (const shop of shops) {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.textContent = `${shop.id} · ${shop.name} (${shop.originalStock.length} item${shop.originalStock.length === 1 ? "" : "s"})`;
-            Object.assign(button.style, {
-                minHeight: "38px", padding: "6px 8px", border: "1px solid transparent", borderRadius: "4px",
-                color: "#e5e7eb", background: "transparent", cursor: "pointer", font: "13px sans-serif", textAlign: "left",
-            });
-            button.addEventListener("mouseenter", () => { button.style.background = "rgba(59,130,246,0.22)"; });
-            button.addEventListener("mouseleave", () => { button.style.background = "transparent"; });
-            button.addEventListener("click", () => {
-                const target = this.npcShopPickTarget;
-                if (target) {
-                    this.setNpcShop(target.npcId, target.clickKey, shop.id);
-                    this.closeShopBrowser();
-                    this.renderSelection();
-                } else this.openShopEditor(shop);
-            });
-            results.appendChild(button);
-        }
-        if (!shops.length) results.textContent = this.shopsLoaded ? "No matching shops." : "No shop definitions were loaded.";
-    }
-
-    private openShopEditor(shop: EditModeShop): void {
-        this.closeShopEditor();
-        this.activeShop = shop;
-        this.shopIconRetryCount = 0;
-        this.shopPreviewScrollTop = 0;
-        const panel = createPanel("shop-editor", "560px");
-        Object.assign(panel.style, {
-            right: "12px", top: TOP_BAR_CLEARANCE, left: "auto", maxWidth: "calc(100vw - 32px)",
-            maxHeight: "calc(100vh - 24px)", overflowY: "auto", zIndex: "10005",
-        });
-        this.shopEditor = panel;
-        this.renderShopEditor();
-    }
-
-    private openNpcShopPicker(npcId: number, clickKey: "first_click" | "second_click" | "third_click" | "fourth_click"): void {
-        this.npcShopPickTarget = { npcId, clickKey };
-        if (!this.shopBrowser) this.toggleShopBrowser();
-    }
-
-    private async loadNpcInteractions(): Promise<void> {
-        this.npcInteractionsLoading = true;
-        this.npcInteractionError = undefined;
-        try {
-            this.npcInteractions = await this.plugin.loadNpcInteractions();
-            this.npcInteractionsLoaded = true;
-        } catch (error) {
-            this.npcInteractionError = error instanceof Error ? error.message : String(error);
-        } finally {
-            this.npcInteractionsLoading = false;
-            this.renderSelection();
-        }
-    }
-
-    private setNpcShop(npcId: number, clickKey: "first_click" | "second_click" | "third_click" | "fourth_click", shopId: number): void {
-        const bindings = this.npcInteractions[String(npcId)] ?? (this.npcInteractions[String(npcId)] = {});
-        const key = Object.hasOwn(bindings, camelNpcClickKey(clickKey)) ? camelNpcClickKey(clickKey) : clickKey;
-        bindings[key] = { method: "core.shops.open", args: { shopId } };
-        this.npcInteractionsDirty = true;
-        this.syncSaveButton();
-    }
-
-    private itemName(id: number): string {
-        return this.plugin.describeDefinition("item", id)?.name ?? `Item ${id}`;
-    }
-
-    private itemIcon(id: number, amount: number): HTMLCanvasElement | undefined {
-        const renderer = window.osrsClient?.renderer as WebGLOsrsRenderer | undefined;
-        return renderer?.itemIconRenderer?.renderToCanvas(id, amount, {
-            outline: 1,
-            quantityMode: 2,
-        });
-    }
-
-    private retryShopIcons(): void {
-        if (this.shopIconRetryTimer !== undefined || this.shopIconRetryCount >= 30) return;
-        this.shopIconRetryTimer = window.setTimeout(() => {
-            this.shopIconRetryTimer = undefined;
-            this.shopIconRetryCount++;
-            this.renderShopEditor(false);
-        }, 100);
-    }
-
-    private renderShopEditor(focusSearch = true): void {
-        const panel = this.shopEditor;
-        const shop = this.activeShop;
-        if (!panel || !shop) return;
-        panel.replaceChildren();
-        panel.appendChild(createHeader(`${shop.name} · ${shop.id}`, () => this.closeShopEditor()));
-        const metadata = document.createElement("div");
-        metadata.textContent = `Currency: ${shop.currency || "COINS"}`;
-        Object.assign(metadata.style, { marginBottom: "8px", color: "#94a3b8", fontSize: "12px" });
-        const preview = document.createElement("div");
-        preview.setAttribute("aria-label", "Shop preview");
-        Object.assign(preview.style, {
-            display: "grid", gridTemplateColumns: "repeat(8, 40px)", columnGap: "9px", rowGap: "6px", padding: "8px",
-            marginBottom: "10px", maxHeight: "220px", overflowY: "auto", overflowX: "hidden", scrollbarGutter: "stable",
-            border: "0", background: "#494034",
-        });
-        preview.scrollTop = this.shopPreviewScrollTop;
-        preview.addEventListener("scroll", () => { this.shopPreviewScrollTop = preview.scrollTop; });
-        let missingIcon = false;
-        for (let slot = 0; slot < Math.max(40, shop.originalStock.length); slot++) {
-            const entry = shop.originalStock[slot];
-            const cell = document.createElement("div");
-            cell.title = entry ? `${this.itemName(entry.id)} · ${entry.amount}` : "Empty slot";
-            Object.assign(cell.style, {
-                width: "40px", height: "36px", display: "grid", placeItems: "center", overflow: "hidden",
-            });
-            if (entry) {
-                const icon = this.itemIcon(entry.id, entry.amount);
-                if (icon) {
-                    icon.style.imageRendering = "pixelated";
-                    cell.appendChild(icon);
-                } else missingIcon = true;
-            }
-            preview.appendChild(cell);
-        }
-        if (missingIcon) this.retryShopIcons();
-        const searchLabel = document.createElement("strong");
-        searchLabel.textContent = "Add item";
-        const input = document.createElement("input");
-        input.type = "search";
-        input.placeholder = "Search current-cache item name or ID";
-        input.setAttribute("aria-label", `Search items to add to ${shop.name}`);
-        Object.assign(input.style, INPUT_STYLE, { marginTop: "5px" });
-        const matches = document.createElement("div");
-        Object.assign(matches.style, { display: "grid", gap: "2px", maxHeight: "130px", marginTop: "4px", overflowY: "auto" });
-        input.addEventListener("input", () => {
-            const token = ++this.shopSearchToken;
-            const query = input.value.trim();
-            matches.replaceChildren();
-            if (!query) return;
-            void this.plugin.searchItems(query).then((items) => {
-                if (token !== this.shopSearchToken || !this.shopEditor) return;
-                for (const item of items.slice(0, 25)) {
-                    const button = document.createElement("button");
-                    button.type = "button";
-                    button.textContent = `${item.id} · ${item.name}`;
-                    Object.assign(button.style, {
-                        padding: "4px 6px", border: "0", borderRadius: "3px", color: "#cbd5e1", background: "rgba(255,255,255,0.06)",
-                        cursor: "pointer", font: "12px sans-serif", textAlign: "left",
-                    });
-                    button.addEventListener("click", () => this.addShopItem(item.id));
-                    matches.appendChild(button);
-                }
-                if (!items.length) matches.textContent = "No matching items.";
-            });
-        });
-        const divider = document.createElement("hr");
-        Object.assign(divider.style, { margin: "10px 0 6px", border: "0", borderTop: "1px solid rgba(255,255,255,0.12)" });
-        const stock = document.createElement("div");
-        Object.assign(stock.style, { display: "grid", gap: "3px" });
-        for (const entry of shop.originalStock) {
-            const row = document.createElement("div");
-            Object.assign(row.style, { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 88px 28px", gap: "6px", alignItems: "center" });
-            const name = document.createElement("span");
-            name.textContent = `${entry.id} · ${this.itemName(entry.id)}`;
-            name.title = name.textContent;
-            Object.assign(name.style, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-            const amount = document.createElement("input");
-            amount.type = "number";
-            amount.min = "1";
-            amount.max = String(0x7fffffff);
-            amount.value = String(entry.amount);
-            amount.setAttribute("aria-label", `Amount of ${this.itemName(entry.id)}`);
-            Object.assign(amount.style, INPUT_STYLE, { height: "28px", padding: "3px 5px" });
-            amount.addEventListener("change", () => this.setShopItemAmount(entry, Number(amount.value)));
-            const remove = document.createElement("button");
-            remove.type = "button";
-            remove.textContent = "×";
-            remove.title = `Remove ${this.itemName(entry.id)}`;
-            Object.assign(remove.style, { height: "28px", border: "0", borderRadius: "3px", color: "#fecaca", background: "rgba(239,68,68,0.18)", cursor: "pointer", fontSize: "18px" });
-            remove.addEventListener("click", () => this.removeShopItem(entry));
-            row.append(name, amount, remove);
-            stock.appendChild(row);
-        }
-        if (!shop.originalStock.length) stock.textContent = "No stock. Add an item above.";
-        panel.append(metadata, preview, searchLabel, input, matches, divider, stock);
-        if (focusSearch) input.focus();
-    }
-
-    private addShopItem(id: number): void {
-        const shop = this.activeShop;
-        if (!shop) return;
-        const existing = shop.originalStock.find((entry) => entry.id === id);
-        if (existing) existing.amount = Math.min(0x7fffffff, existing.amount + 1);
-        else shop.originalStock.push({ id, amount: 1 });
-        this.shopsDirty = true;
-        this.syncSaveButton();
-        this.renderShopEditor();
-    }
-
-    private setShopItemAmount(entry: EditModeShop["originalStock"][number], amount: number): void {
-        if (!Number.isInteger(amount) || amount < 1 || amount > 0x7fffffff) return;
-        entry.amount = amount;
-        this.shopsDirty = true;
-        this.syncSaveButton();
-        this.renderShopEditor();
-    }
-
-    private removeShopItem(entry: EditModeShop["originalStock"][number]): void {
-        const shop = this.activeShop;
-        if (!shop) return;
-        shop.originalStock.splice(shop.originalStock.indexOf(entry), 1);
-        this.shopsDirty = true;
-        this.syncSaveButton();
-        this.renderShopEditor();
     }
 
     /**
@@ -1432,8 +1058,6 @@ class EditorChrome {
             const objectSpawns = this.plugin.exportObjectSpawns();
             const exported = this.plugin.exportModifiedRegionPacks();
             const world = this.plugin.getWorldDefinitionForSave();
-            const shopsDirty = this.shopsDirty;
-            const npcInteractionsDirty = this.npcInteractionsDirty;
             const customNpcs = this.plugin.getConfig().edits
                 .filter((edit) => edit.kind === "npc" || edit.kind === "npcDelete" || edit.kind === "npcWander")
                 .map((edit) => ({
@@ -1448,7 +1072,7 @@ class EditorChrome {
                     ...(edit.kind === "npcDelete" ? { remove: true } : {}),
                 }));
             const npcSpawnsDirty = this.npcSpawnsKey() !== this.savedNpcSpawnsKey;
-            if (objectSpawns === undefined && exported.length === 0 && !world && !npcSpawnsDirty && !shopsDirty && !npcInteractionsDirty) {
+            if (objectSpawns === undefined && exported.length === 0 && !world && !npcSpawnsDirty) {
                 this.toast("No world or map edits to save");
                 return;
             }
@@ -1474,27 +1098,11 @@ class EditorChrome {
                 if (npcSpawnsDirty || customNpcs.length) {
                     host.postMessage({ type: CUSTOM_NPC_SPAWNS_MESSAGE, spawns: customNpcs }, hostOrigin);
                 }
-                if (shopsDirty) {
-                    host.postMessage(
-                        { type: SHOP_DEFINITIONS_MESSAGE, contents: JSON.stringify(this.shops, null, 2) + "\n" },
-                        hostOrigin,
-                    );
-                    this.shopsDirty = false;
-                }
-                if (npcInteractionsDirty) {
-                    host.postMessage(
-                        { type: NPC_INTERACTIONS_MESSAGE, contents: JSON.stringify(this.npcInteractions, null, 2) + "\n" },
-                        hostOrigin,
-                    );
-                    this.npcInteractionsDirty = false;
-                }
                 const saved = [
                     objectSpawns !== undefined ? "object additions/deletions" : "",
                     exported.length ? `${exported.length} edited region pack${exported.length === 1 ? "" : "s"}` : "",
                     world ? "world spawn" : "",
                     customNpcs.length || npcSpawnsDirty ? "NPC spawn edits" : "",
-                    shopsDirty ? "shops" : "",
-                    npcInteractionsDirty ? "NPC shop actions" : "",
                 ].filter(Boolean).join(" and ");
                 this.savedNpcSpawnsKey = this.npcSpawnsKey();
                 this.plugin.markMapEditsSaved(exported, objectSpawns);
@@ -1503,14 +1111,6 @@ class EditorChrome {
             }
             if (objectSpawns !== undefined) {
                 FileSaver.saveAs(new Blob([formatObjectSpawns(objectSpawns)], { type: "application/json" }), "object-spawns.json");
-            }
-            if (shopsDirty) {
-                FileSaver.saveAs(new Blob([JSON.stringify(this.shops, null, 2) + "\n"], { type: "application/json" }), "shops.json");
-                this.shopsDirty = false;
-            }
-            if (npcInteractionsDirty) {
-                FileSaver.saveAs(new Blob([JSON.stringify(this.npcInteractions, null, 2) + "\n"], { type: "application/json" }), "npc-interactions.json");
-                this.npcInteractionsDirty = false;
             }
             for (const pack of exported) {
                 const blob = new Blob([pack.data.slice().buffer], {

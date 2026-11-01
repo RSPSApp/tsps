@@ -452,7 +452,7 @@ function registerQuestWidgets(api) {
 
   api.onInterfaceActionButton([BOOK_CLOSE, BOOK_PREVIOUS, BOOK_NEXT], turnBookPage);
   api.onCustomEvent("interface:closed", ({ player, interfaceId }) => {
-    if (interfaceId === BOOK_GROUP) openBooks.delete(player);
+    if (interfaceId === BOOK_GROUP) closeBook(player);
   });
 
   // "Read journal:" on a quest list row.
@@ -491,12 +491,24 @@ function registerQuestWidgets(api) {
   api.onCustomEvent("player:bootstrap-complete", ({ player }) => sendQuestVarps({ player }));
 }
 
-/** The cache's two-page book (392), using the captured text lines for each spread. */
-function openBook(player, title, pages) {
+/**
+ * The cache's two-page book (392), using the captured text lines for each spread.
+ * `onClose` runs once when the reader closes the book (X, close button, or the
+ * interface being removed), so quests can advance only after it has been read.
+ */
+function openBook(player, title, pages, onClose) {
   if (!pages.length) return;
   player.getPacketSender().sendInterface(BOOK_GROUP);
-  openBooks.set(player, { title, pages, page: 0 });
+  openBooks.set(player, { title, pages, page: 0, onClose });
   showBookPage(player);
+}
+
+/** Closes an open book and runs its reader callback, if it has one. */
+function closeBook(player) {
+  const book = openBooks.get(player);
+  if (!book) return;
+  openBooks.delete(player);
+  if (typeof book.onClose === "function") book.onClose();
 }
 
 function showBookPage(player) {
@@ -522,8 +534,10 @@ function turnBookPage(event) {
   if (!book) return false;
   event.handled = true;
   if (buttonId === BOOK_CLOSE) {
-    openBooks.delete(player);
+    // Close the book first, then run its reader callback: the callback may open
+    // an item box, which the removal packet must not wipe.
     player.getPacketSender().sendInterfaceRemoval();
+    closeBook(player);
     return;
   }
   const page = book.page + (buttonId === BOOK_NEXT ? 1 : -1);
@@ -616,7 +630,8 @@ function registerQuest(api, def) {
      * `options` for a completion the quest wasn't played through (Shattered Relics' quest packs):
      * `experience: false` asks onReward (its third argument) to hold back experience it would hand
      * out later, such as a prompt a tick on, and is saved for the quest's post-quest claims
-     * (`experienceWithheld`); `scroll: false` skips the jingle and the scroll.
+     * (`experienceWithheld`); `scroll: false` skips the jingle and the scroll; `announce: false`
+     * skips the "Congratulations, you've completed a quest" chat line.
      */
     complete(player, options = {}) {
       if (quest.isComplete(player)) return false;
@@ -637,7 +652,9 @@ function registerQuest(api, def) {
         else inventory.adds(def.rewardItemId, 1);
       }
       if (options.scroll !== false) player.getPacketSender().sendJingle(def.completionJingleId ?? QUEST_COMPLETE_JINGLE, 0);
-      player.sendMessage(`Congratulations, you've completed a quest: <col=081190>${def.name}</col>`);
+      if (options.announce !== false) {
+        player.sendMessage(`Congratulations, you've completed a quest: <col=081190>${def.name}</col>`);
+      }
       if (options.scroll !== false) showCompletedScroll(player, quest, points | 0);
       api.emitCustomEvent?.("quest:completed", { player, key: def.key, quest });
       return true;

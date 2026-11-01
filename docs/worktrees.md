@@ -22,7 +22,7 @@ Each worktree gets a slot from 1 to 99, written into a marked block in its root 
 
 - **The client** connects to its own slot's server by default, under the branch's name on the
   login screen. Each port is its own browser origin, so each tab remembers its own login.
-- **The gateway** ([gateway/README.md](../gateway/README.md)) listens on `GATEWAY_PORT` for the
+- **The gateway** ([gateway/README.md](https://github.com/RSPSApp/tsps/blob/main/gateway/README.md)) listens on `GATEWAY_PORT` for the
   official client through RSProx. 43900 + N stays clear of RSProx's own 43600 + N.
 - **Voice** signalling uses the authenticated game connection, so it needs no separate port.
 - **`BROWSER=none`** stops `yarn start` opening a tab per worktree.

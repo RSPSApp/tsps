@@ -435,15 +435,6 @@ export class EditModePlugin {
         return this.host?.describeDefinition?.(kind, id);
     }
 
-    loadShops() {
-        return this.host?.loadShops?.() ?? Promise.reject(new Error("Shop data is unavailable"));
-    }
-
-    loadNpcInteractions() {
-        return this.host?.loadNpcInteractions?.() ?? Promise.reject(new Error("NPC interaction data is unavailable"));
-    }
-
-    /** The saved npc-spawns-custom.json patch as editor edits, for a fresh profile. */
     loadPersistedNpcSpawnEdits(): Promise<EditModeEdit[]> {
         return this.host?.loadPersistedNpcSpawnEdits?.() ?? Promise.resolve([]);
     }
@@ -460,14 +451,6 @@ export class EditModePlugin {
         if (fresh.length === 0) return false;
         this.commitEdits(fresh);
         return true;
-    }
-
-    getNpcMenuOptions(npcTypeId: number) {
-        return this.host?.getNpcMenuOptions?.(npcTypeId) ?? [];
-    }
-
-    searchItems(query: string) {
-        return this.host?.search("item", query) ?? Promise.resolve([]);
     }
 
     /** Detaches or reattaches the camera from the player. */

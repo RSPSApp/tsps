@@ -378,6 +378,10 @@ function timedEffectSkillIndexes(player) {
  * (Player.processStatRestoration).
  */
 function processBoostDecay(player) {
+  // An area can hold temporary boosts indefinitely (Rogues' Den); the cycle resumes on leaving.
+  const pause = { player, allowed: true };
+  pluginApi.emitCustomEvent("stats:boost-decay", pause);
+  if (!pause.allowed) return;
   const now = Date.now();
   const nextDecayAt = Number(player.getAttribute(ATTR_BOOST_CYCLE));
   if (!Number.isFinite(nextDecayAt) || nextDecayAt <= 0) {

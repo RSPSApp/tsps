@@ -23,21 +23,31 @@ let nextIndex = 1;
 const noop = () => {};
 before(async () => { await CachePipeline.initialize(path.resolve(__dirname, '..')); new NpcDefinitionLoader().load(); });
 
+/** The tests' Enter the Abyss prerequisite (that quest isn't loaded in the harness). */
+function abyssDone(h) {
+  h.api.onCustomEvent('quest:is-complete', event => { if (event.key === 'enter_the_abyss') event.complete = true; });
+}
+
 function harness(name) {
+  const itemOnObjectNamed = new Map();
   const hooks = {}, events = {}, tasks = [], areas = [], npcs = [], removed = [], objects = [], ground = [], clicks = new Map(), buttons = new Map(), namedNpcs = new Map(), namedObjects = new Map(), persisted = new Map();
   const objectManager = { register: object => objects.push(object), deregister: object => { const i = objects.indexOf(object); if (i >= 0) objects.splice(i, 1); } };
-  const api = new Proxy({ core: { ...core, ObjectManager: objectManager, World: { ...core.World, getNpcsNear: () => npcs }, TaskManager: {
+  const api = new Proxy({ core: { ...core, PathFinder: { calculateWalkRoute: noop }, ObjectManager: objectManager, World: { ...core.World, getNpcsNear: () => npcs }, TaskManager: {
     submit(task) { task.setRunning(true); tasks.push(task); },
     cancelTasks(key) { tasks.filter(task => task.key === key).forEach(task => task.stop()); },
   } },
     registerArea: area => areas.push(area),
     getObjectManager: () => objectManager,
-    getItemOnGroundManager: () => ({ registerLocation: (...args) => ground.push(args) }),
+    getItemOnGroundManager: () => ({ registerLocation: (...args) => ground.push(args), getGroundItem: () => null }),
     onInterfaceActionButton: (ids, fn) => [].concat(ids).forEach(id => { const callbacks = buttons.get(id) ?? []; callbacks.push(fn); buttons.set(id, callbacks); }),
     onObjectClick: (ids, click, fn) => [].concat(ids).forEach(id => clicks.set(id, fn)),
     onNpcInteraction: (name, actions) => namedNpcs.set(name, actions),
     onObjectInteraction: (name, actions) => { if (typeof name === 'function') (hooks.onObjectInteraction ??= []).push(name); else namedObjects.set(name, actions); },
     onObjectFirstClick: (ids, fn) => [].concat(ids).forEach(id => clicks.set(id, fn)),
+    onItemOnObject: (...args) => {
+      if (typeof args[0] === 'function') (hooks.onItemOnObject ??= []).push(args[0]);
+      else itemOnObjectNamed.set(`${args[0]}|${args[1]}`, args[2]);
+    },
     persistAttribute: (key, value) => persisted.set(key, value),
     onCustomEvent: (key, fn) => (events[key] ??= []).push(fn),
     emitCustomEvent: (key, event) => (events[key] ?? []).forEach(fn => fn(event)),
@@ -66,7 +76,7 @@ function harness(name) {
     for (const fn of hooks.onNpcDialogueCondition ?? []) { const answer = fn(event); if (answer !== null && answer !== undefined) return answer; }
     return null;
   };
-  const h = { api, hooks, events, tasks, areas, npcs, removed, objects, ground, clicks, buttons, namedNpcs, namedObjects, persisted, quest: runtime.getRegisteredQuests().at(-1),
+  const h = { itemOnObjectNamed, api, hooks, events, tasks, areas, npcs, removed, objects, ground, clicks, buttons, namedNpcs, namedObjects, persisted, quest: runtime.getRegisteredQuests().at(-1),
     emit: (name, event) => (events[name] ?? []).forEach(fn => fn(event)),
     variant(p, npcId) { return (hooks.onNpcDialogueVariant ?? []).map(fn => fn({ player: p, npcId })).find(Boolean); },
     talk(p, npcId, npc = null) { p.prompt = null; const choice = h.variant(p, npcId); assert.ok(choice, `no variant for ${npcId}`); runtime.startTranscript(api, p, npcId, typeof choice === 'string' ? h.quest.name : choice.page, typeof choice === 'string' ? choice : choice.variant, undefined, npc); },
@@ -82,6 +92,7 @@ function harness(name) {
       for (const fn of hooks.onItemOnObject ?? []) fn(event);
       return event;
     },
+    useTalisman(p, objectId, location) { return h.itemOnObjectNamed.get('Portal talisman (water)|Guardian of Water')({ player: p, objectId, location: new core.Location(location.x, location.y, location.z) }); },
     itemOnNpc(p, itemId, npcId) { const event = { player: p, itemId, npcId }; for (const fn of hooks.onItemOnNpc ?? []) fn(event); return event; },
     itemOnItem(p, usedItemId, usedWithItemId) { const event = { player: p, usedItemId, usedWithItemId }; for (const fn of hooks.onItemOnItem ?? []) fn(event); return event; },
     itemAction(p, itemId, option) { const event = { player: p, itemId, option }; for (const fn of (hooks.onItemAction ?? []).filter(fn => typeof fn === 'function')) fn(event); return event; },
@@ -115,12 +126,13 @@ function player() {
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: damage => { p.damage = damage; } }) }),
     getUsername: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
-    performAnimation: a => p.animations.push(a.getId()), sendMessage: text => p.messages.push(text),
+    performAnimation: a => p.animations.push(a.getId()), performGraphic: noop, sendMessage: text => p.messages.push(text),
   }; p.manager = new DialogueManager(p); return p;
 }
 
 test('Temple of the Eye accepts, declines and recovers; real stage scale and amulet hand-over', () => {
   const h = harness('TempleOfTheEye'), p = player();
+  abyssDone(h);
   p.level = 99; p.attrs.set('quest.rune_mysteries.stage', 6);
   h.talk(p, N.WIZARD_PERSTEN);
   h.continueUntil(p, () => Boolean(p.prompt));
@@ -177,29 +189,26 @@ test('Temple of the Eye stage-90 chant binds the captured owner-only scene cast'
   assert.equal(unrelatedLine.actors, undefined, 'the group binding is limited to the captured line');
 });
 
-test('the captured chant opens an owner-only portal, restores it on relog and consumes it on entry', () => {
+test('the captured chant opens an owner-only portal for the scene only, and never hides the Enter portal', () => {
   const h = harness('TempleOfTheEye');
   const p = player();
   const other = player();
   assert.equal(h.persisted.get('temple-of-the-eye:basement-portal-open'), false);
-  h.quest.setStage(p, 90);
-  h.quest.setStage(other, 90);
-  for (const fn of h.hooks.onPlayerLogin ?? []) fn({ player: p });
-  for (const fn of h.hooks.onPlayerLogin ?? []) fn({ player: other });
+  for (const who of [p, other]) {
+    h.quest.setStage(who, 85);
+    h.action(who, N.ARCHMAGE_SEDRIDOR_2, 'DLPFdT');
+    assert.equal(h.quest.getStage(who), 90);
+  }
   assert.equal(h.objects.some(object => object.getId?.() === O.PORTAL_106), false, 'stage 90 alone does not open the portal');
 
   const line = h.line(p, N.APPRENTICE_TAMARA_2, 'Saris! Val! Curak! Belito!', {
     speaker: 'Persten and co.', presentation: 'overhead',
   });
-  assert.equal(Boolean(p.attrs.get('temple-of-the-eye:basement-portal-open')), false,
-    'the queued overhead line does not grant the portal');
   assert.equal(line.actors.length, 4);
   line.before();
-  for (const actor of h.npcs.filter(npc => npc.owner === p && [11441, 11447, 11444, 11449, 11450, 11438].includes(npc.id))) {
+  for (const actor of h.npcs.filter(npc => npc.owner === p && !npc.removed && [11441, 11447, 11444, 11449, 11450, 11438].includes(npc.id))) {
     assert.deepEqual([actor.facing?.getX(), actor.facing?.getY(), actor.facing?.getZ()], [3104, 9574, 0]);
   }
-  assert.equal(h.objects.some(object => object.getId?.() === O.PORTAL_106), false,
-    'the portal appears only when the canonical action is executed');
   const missingCastActor = h.npcs.find(npc => npc.owner === other && npc.id === 11441 && !npc.removed);
   h.api.removeNpc(missingCastActor);
   h.action(other, N.WIZARD_PERSTEN_2, 'Dj2PaV');
@@ -212,24 +221,29 @@ test('the captured chant opens an owner-only portal, restores it on relog and co
   assert.equal(portal.getFace(), 2);
   assert.equal(portal.getOwner(), p);
 
-  for (const fn of h.hooks.onPlayerLogout ?? []) fn({ player: p });
-  assert.equal(h.objects.includes(portal), false, 'logout removes the owner-only object');
-  for (const fn of h.hooks.onPlayerLogin ?? []) fn({ player: p });
-  const restored = h.objects.find(object => object.getId?.() === O.PORTAL_106);
-  assert.ok(restored, 'saved earned state rebuilds the portal on login');
-  assert.equal(restored.getOwner(), p);
-  assert.equal(h.objects.some(object => object.getId?.() === O.PORTAL_106 && object.getOwner() === other), false,
-    'another player at stage 90 does not see a portal they have not earned');
-
-  const entered = h.object(p, O.PORTAL_106, { x: 3104, y: 9574, z: 0 });
-  assert.equal(entered.handled, true);
+  // 43767 has no ops: if it outlived the scene it would cover the basement's Enter portal (43765).
+  h.action(p, N.WIZARD_PERSTEN_2, 'I_aoEy');
   assert.equal(h.quest.getStage(p), 95);
   assert.equal(p.attrs.get('temple-of-the-eye:basement-portal-open'), false);
-  assert.equal(h.objects.includes(restored), false, 'using the portal removes this player\'s copy');
+  assert.equal(h.objects.includes(portal), false, 'the scene takes its portal with it');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2399, 5651], 'the arrival stands on the template the camera points at');
+
+  // A save from before the fix: flag still set, quest already past the scene.
+  const stale = player();
+  stale.attrs.set('temple-of-the-eye:basement-portal-open', true);
+  h.quest.setStage(stale, 130);
+  for (const fn of h.hooks.onPlayerLogin ?? []) fn({ player: stale });
+  assert.equal(h.objects.some(object => object.getId?.() === O.PORTAL_106 && object.getOwner() === stale), false);
+  assert.equal(Boolean(stale.attrs.get('temple-of-the-eye:basement-portal-open')), false);
+  const entered = h.object(stale, 43841, { x: 3104, y: 9574, z: 0 }, 1, ['Enter']);
+  assert.equal(entered.handled, true, 'the Enter portal takes a finished player to the minigame');
+  assert.deepEqual([stale.getLocation().getX(), stale.getLocation().getY()], [3615, 9470]);
 });
 
 test('Temple of the Eye follows varbit stages 5..125 through dialogue, items, altars and the tutorial', () => {
   const h = harness('TempleOfTheEye'), p = player();
+  abyssDone(h);
+  h.api.onCustomEvent('mining:best-pickaxe', event => { event.pickaxe = { animation: new core.Animation(625), attemptIntervalTicks: 3 }; });
   p.getLocalNpcs = () => h.npcs;
   p.level = 99; p.attrs.set('quest.rune_mysteries.stage', 6);
   const stage = () => h.quest.getStage(p);
@@ -308,7 +322,20 @@ test('Temple of the Eye follows varbit stages 5..125 through dialogue, items, al
   h.action(p, N.APPRENTICE_FELIX_2, 't_zXOj'); h.tick(1);
   assert.ok(p.log.some(row => row[0] === 'text' && row[1] === ((291 << 16) | 8) && row[2].startsWith('Water is six')), 'repeat riddle reopens interface 291');
   assert.equal(stage(), 80, `stage before traiborn ${stage()}`);
-  finishTo(N.WIZARD_TRAIBORN, "I think I know what a thingummywut is!");
+  const answer = (number) => {
+    h.talk(p, N.WIZARD_TRAIBORN);
+    h.continueUntil(p, () => Boolean(p.prompt));
+    h.choose(p, 'I think I know what a thingummywut is!');
+    h.continueUntil(p, () => Boolean(p.amountAction));
+    assert.ok(p.log.some(row => row[0] === 'sendEnterAmountPrompt' && row[1] === 'What is a thingummywut?'), 'the answer is typed (capture 1693)');
+    const action = p.amountAction;
+    p.amountAction = null;
+    action.execute(number);
+    h.finish(p);
+  };
+  answer(5);
+  assert.equal(stage(), 80, 'a wrong number stays on the riddle');
+  answer(11);
   assert.equal(stage(), 85);
   h.talk(p, N.ARCHMAGE_SEDRIDOR);
   h.continueUntil(p, () => Boolean(p.prompt));
@@ -350,56 +377,128 @@ test('Temple of the Eye follows varbit stages 5..125 through dialogue, items, al
   assert.ok(p.log.some(row => row[0] === 'sendCameraShake' && row[1] === 0 && row[2] === 5), 'rift shake sequence');
   assert.ok(p.log.some(row => row[0] === 'sendCameraMoveTo' && row[1] === 2386 && row[2] === 5663), 'Great Guardian camera');
 
+  const tut = () => p.attrs.get('temple-of-the-eye:tutorial');
+  const at = (x, y) => ({ x, y, z: 0 });
+  const mineRound = () => {
+    h.object(p, O.GUARDIAN_REMAINS, at(2449, 5714), 1, ['Mine']);
+    h.tick(20);
+    assert.equal(p.items.get(I.GUARDIAN_FRAGMENTS), 5, 'the pick swings by itself until five are held');
+    h.finish(p);
+    h.object(p, O.WORKBENCH_21, at(2459, 5710), 1, ['Work-at']);
+    h.tick(8);
+    assert.equal(p.items.get(I.GUARDIAN_FRAGMENTS), 0);
+    assert.equal(p.items.get(I.GUARDIAN_ESSENCE), 5, 'a fragment a tick');
+    assert.ok(p.messages.includes('You have no more guardian fragments to combine.'));
+  };
+  const weakCell = () => h.object(p, O.WEAK_CELLS, at(2466, 5710), 1, ['Take', 'Take-chisel']);
+  const uncharged = () => h.object(p, O.UNCHARGED_CELLS, at(2466, 5712), 1, ['Take']);
+  const powerUp = () => { h.namedNpcs.get('The Great Guardian')['Power-up']({ player: p, npcId: N.THE_GREAT_GUARDIAN_3 }); h.tick(2); };
+
   finishTo(N.APPRENTICE_FELIX_4);
-  assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 5);
-  h.object(p, O.WEAK_CELLS, { x: 3614, y: 9499, z: 0 }, 1, ['Take-from']);
-  assert.equal(p.items.get(I.WEAK_CELL), 1);
+  assert.equal(tut(), 5);
+  weakCell(); weakCell();
+  assert.equal(p.items.get(I.WEAK_CELL), 1, 'Felix: not more than one');
   finishTo(N.APPRENTICE_TAMARA_3);
-  assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 10);
-  h.object(p, O.INACTIVE_CELL_TILE, { x: 3610, y: 9509, z: 0 }, 1, ['Place']);
-  assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 15);
-  h.object(p, O.FLOOR_CHISEL_OBJECT_ID ?? O.COL_FF9040_CHISEL_COL, { x: 3621, y: 9485, z: 0 }, 1, ['Take']);
-  for (const id of [I.WEAK_CELL, I.WEAK_CELL]) h.object(p, O.WEAK_CELLS, { x: 3614, y: 9499, z: 0 }, 1, ['Take-from']);
-  assert.equal(p.items.get(I.CHISEL), 1);
-  h.object(p, O.ESSENCE_PILE_ELEMENTAL_, { x: 3613, y: 9510, z: 0 }, 1, ['Assemble']);
-  h.object(p, O.ESSENCE_PILE_CATALYTIC_, { x: 3618, y: 9510, z: 0 }, 1, ['Assemble']);
-  assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 25);
+  assert.equal(tut(), 10);
+  assert.ok(h.objects.some(object => object.getId?.() === 43739 && object.getOwner() === p), 'Tamara points out the tile');
+  h.object(p, 43739, at(2463, 5734), 1, ['Place-cell']);
+  assert.equal(tut(), 15);
+  assert.ok(h.objects.some(object => object.getId?.() === 43740), 'the tile takes the weak cell');
+  assert.ok(h.objects.some(object => object.getId?.() === 43745), 'the barrier stands');
+  assert.ok(h.npcs.some(npc => npc.id === 11419 && !npc.removed && npc.owner === p), 'with its NPC');
+  h.finish(p);
+  finishTo(N.APPRENTICE_FELIX_4);
+  assert.ok(h.ground.some(([, item, tile]) => item.getId() === I.CHISEL && tile.getX() === 2465 && tile.getY() === 5708), 'the chisel lies by the tables');
+  assert.ok(h.ground.some(([, item, tile]) => item.getId() === I.BRONZE_PICKAXE && tile.getX() === 2461 && tile.getY() === 5708), 'and the pickaxe');
+  p.items.set(I.CHISEL, 1);
   p.items.set(I.BRONZE_PICKAXE, 1);
-  for (let i = 0; i < 5; i++) h.object(p, O.GUARDIAN_PARTS, { x: 3620, y: 9490, z: 0 }, 1, ['Mine']);
-  assert.equal(p.items.get(I.GUARDIAN_FRAGMENTS), 5);
-  h.object(p, O.WORKBENCH_21, { x: 3615, y: 9505, z: 0 }, 1, ['Work-at']);
-  assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 30);
-  h.object(p, O.UNCHARGED_CELLS, { x: 3611, y: 9500, z: 0 }, 1, ['Take-from']);
-  h.object(p, O.GUARDIAN_OF_MIND, { x: 3613, y: 9498, z: 0 }, 1, ['Enter']);
-  h.object(p, O.ALTAR_34, { x: 2793, y: 4827, z: 0 }, 1, ['Craft-rune']);
-  assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 35);
-  h.object(p, O.PORTAL_40, { x: 2793, y: 4830, z: 0 }, 1, ['Exit']);
-  h.object(p, O.INACTIVE_CELL_TILE, { x: 3610, y: 9509, z: 0 }, 1, ['Place']);
-  assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 40);
-  for (const fn of h.hooks.onNpcInteraction?.get?.('The Great Guardian') ? [] : []);
-  h.namedNpcs.get('The Great Guardian')['Power-up']({ player: p, npcId: N.THE_GREAT_GUARDIAN_3 });
-  assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 45);
-  h.object(p, O.UNCHARGED_CELLS, { x: 3611, y: 9500, z: 0 }, 1, ['Take-from']);
-  h.object(p, O.GUARDIAN_OF_WATER, { x: 3613, y: 9498, z: 0 }, 1, ['Enter']);
-  h.object(p, O.ALTAR_35, { x: 2720, y: 4831, z: 0 }, 1, ['Craft-rune']);
-  assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 50);
-  h.object(p, O.PORTAL_41, { x: 2720, y: 4835, z: 0 }, 1, ['Exit']);
-  h.namedNpcs.get('The Great Guardian')['Power-up']({ player: p, npcId: N.THE_GREAT_GUARDIAN_3 });
-  assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 55);
-  h.object(p, O.ESSENCE_PILE_ELEMENTAL_, { x: 3613, y: 9510, z: 0 }, 1, ['Assemble']);
-  assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 60);
-  h.object(p, O.UNCHARGED_CELLS, { x: 3611, y: 9500, z: 0 }, 1, ['Take-from']);
-  h.itemOnObject(p, I.PORTAL_TALISMAN_WATER_, O.GUARDIAN_OF_WATER, { x: 3613, y: 9498, z: 0 });
-  h.object(p, O.ALTAR_35, { x: 2720, y: 4831, z: 0 }, 1, ['Craft-rune']);
-  assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 65);
-  h.object(p, O.PORTAL_41, { x: 2720, y: 4835, z: 0 }, 1, ['Exit']);
-  h.object(p, O.INACTIVE_CELL_TILE, { x: 3610, y: 9509, z: 0 }, 1, ['Place']);
-  assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 70);
-  h.namedNpcs.get('The Great Guardian')['Power-up']({ player: p, npcId: N.THE_GREAT_GUARDIAN_3 });
+  weakCell();
+  h.object(p, O.ESSENCE_PILE_ELEMENTAL_, at(2466, 5714), 1, ['Assemble']);
+  h.tick(6);
+  assert.ok(h.npcs.some(npc => npc.id === 11414 && !npc.removed && npc.animations.includes(9380)), 'the guardian rises');
+  h.finish(p);
+  weakCell();
+  h.object(p, O.ESSENCE_PILE_ELEMENTAL_, at(2466, 5714), 1, ['Assemble']);
+  h.tick(6);
+  assert.equal(tut(), 20, 'the second guardian needs the other pile');
+  h.object(p, O.ESSENCE_PILE_CATALYTIC_, at(2459, 5714), 1, ['Assemble']);
+  h.tick(6);
+  h.finish(p);
+  assert.equal(tut(), 25);
+  finishTo(N.APPRENTICE_TAMARA_3);
+  mineRound();
+  assert.equal(tut(), 30);
+  finishTo(N.APPRENTICE_TAMARA_3);
+  uncharged();
+  h.object(p, 43822, at(2460, 5718), 1, ['Enter']);
+  h.tick(3);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2793, 4828]);
+  h.object(p, O.ALTAR_34, at(2786, 4840), 1, ['Craft-rune']);
+  assert.equal(tut(), 35);
+  assert.equal(p.items.get(I.GUARDIAN_ESSENCE), 0, 'every essence at once');
+  assert.equal(p.items.get(I.CATALYTIC_GUARDIAN_STONE), 5, 'a stone an essence');
+  assert.equal(p.items.get(I.WEAK_CELL), 1);
+  assert.ok(p.messages.includes('Your cell absorbs a small amount of excess energy.'));
+  h.object(p, O.PORTAL_40, at(2793, 4827), 1, ['Use']);
+  h.tick(3);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2461, 5720]);
+  finishTo(N.APPRENTICE_TAMARA_3);
+  h.object(p, 43740, at(2463, 5734), 1, ['Place-cell']);
+  assert.equal(tut(), 40);
+  powerUp();
+  assert.equal(tut(), 45);
+  assert.equal(p.items.get(I.CATALYTIC_GUARDIAN_STONE), 0);
+  h.finish(p);
+  finishTo(N.APPRENTICE_TAMARA_3);
+  mineRound();
+  uncharged();
+  assert.ok(h.objects.some(object => object.getId?.() === 43821), 'Tamara has opened the Water Altar');
+  h.object(p, 43821, at(2471, 5724), 1, ['Enter']);
+  h.tick(3);
+  h.object(p, O.ALTAR_35, at(2716, 4836), 1, ['Craft-rune']);
+  assert.equal(tut(), 50);
+  assert.equal(p.items.get(I.PORTAL_TALISMAN_WATER_), 1, 'the first craft finds the talisman');
+  h.object(p, O.PORTAL_41, at(2727, 4832), 1, ['Use']);
+  h.tick(3);
+  powerUp();
+  assert.equal(tut(), 55);
+  h.finish(p);
+  finishTo(N.APPRENTICE_TAMARA_3);
+  assert.equal(p.items.get(I.PORTAL_TALISMAN_WATER_), 0, 'Tamara studies it');
+  h.object(p, O.ESSENCE_PILE_ELEMENTAL_, at(2466, 5714), 1, ['Assemble']);
+  h.tick(6);
+  h.finish(p);
+  assert.equal(tut(), 60);
+  assert.equal(h.objects.some(object => object.getId?.() === 43821), false, 'the Water Altar has closed');
+  finishTo(N.APPRENTICE_TAMARA_3);
+  assert.equal(p.items.get(I.PORTAL_TALISMAN_WATER_), 1);
+  mineRound();
+  uncharged();
+  h.useTalisman(p, 43810, at(2471, 5724));
+  h.tick(3);
+  assert.equal(p.items.get(I.PORTAL_TALISMAN_WATER_), 0, 'presenting it uses it up');
+  h.object(p, O.ALTAR_35, at(2716, 4836), 1, ['Craft-rune']);
+  assert.equal(tut(), 65);
+  assert.equal(p.items.get(I.PORTAL_TALISMAN_WATER_), 0, 'no second talisman');
+  h.object(p, O.PORTAL_41, at(2727, 4832), 1, ['Use']);
+  h.tick(3);
+  finishTo(N.APPRENTICE_TAMARA_3);
+  h.object(p, 43740, at(2463, 5734), 1, ['Place-cell']);
+  assert.equal(tut(), 70);
+  assert.ok(h.objects.some(object => object.getId?.() === 43741), 'the medium tile');
+  assert.ok(h.objects.some(object => object.getId?.() === 43747), 'the medium barrier');
+  h.finish(p);
+  powerUp();
+  assert.equal(stage(), 120, 'the third power-up moves the quest, as captured');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2398, 5669]);
   assert.ok(p.log.some(row => row[0] === 'sendCameraMoveTo' && row[1] === 2386 && row[2] === 5663), 'final rift camera');
   h.finish(p);
   assert.ok(p.log.some(row => row[0] === 'sendCameraMoveTo' && row[1] === 2399 && row[2] === 5667 && row[3] === 820), 'rift close camera');
   assert.ok(p.log.some(row => row[0] === 'sendCameraReset'), 'final rift camera reset');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3104, 9573]);
+  for (const item of [I.GUARDIAN_FRAGMENTS, I.GUARDIAN_ESSENCE, I.ELEMENTAL_GUARDIAN_STONE, I.CATALYTIC_GUARDIAN_STONE, I.UNCHARGED_CELL, I.WEAK_CELL, I.MEDIUM_CELL, I.PORTAL_TALISMAN_WATER_]) {
+    assert.ok(!p.items.get(item), `item ${item} stays in the temple`);
+  }
   assert.equal(stage(), 130);
   assert.equal(p.varbits.get(13738), 130);
   assert.equal(p.varbits.get(13759), 115);
@@ -557,10 +656,10 @@ test('Temple of the Eye objectives reject out-of-order transcript actions', () =
   assert.equal(stage(), 115);
   p.attrs.set('temple-of-the-eye:tutorial', 70);
   act(N.ARCHMAGE_SEDRIDOR, 'wd6dSZ');
-  assert.equal(stage(), 120);
+  assert.equal(stage(), 115, 'the third power-up moves the quest, not the return line');
+  h.quest.setStage(p, 120);
   act(N.ARCHMAGE_SEDRIDOR, '9-Wilv');
   assert.equal(stage(), 120);
-  h.quest.setStage(p, 120);
   act(N.ARCHMAGE_SEDRIDOR, '_nVw7q');
   assert.equal(stage(), 125);
   h.quest.setStage(p, 125);
@@ -1096,6 +1195,7 @@ test('shipped NpcDialogues resolves both Wizard Persten intro paths and decline/
   assert.equal(core.NpcDefinition.forId(11491)?.getName?.(), 'Menaphite Akh');
 
   const h = harness('TempleOfTheEye');
+  abyssDone(h);
   const dialogueHooks = [];
   const api2 = new Proxy({}, { get: (_, key) => key === 'onAnyNpcInteraction'
     ? actions => dialogueHooks.push(actions) : h.api[key] });

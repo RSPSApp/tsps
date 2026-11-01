@@ -83,7 +83,7 @@ import { encodeWidgetRunScript } from "../../server/src/main/typescript/elvarg/n
             'Default remains selected: the last animation and locked cosmetics cannot be toggled');
     }
 
-    // The native Castle Wars area packets must drive the cache's own barricade text.
+    // Native Castle Wars area packets must drive the cache's own HUD for both teams.
     const serverRoot = require('node:path').resolve(__dirname, '../../server');
     const clientRoot = process.cwd();
     process.chdir(serverRoot);
@@ -123,7 +123,14 @@ import { encodeWidgetRunScript } from "../../server/src/main/typescript/elvarg/n
     }, write() {} });
     player.getInventory().add(new core.Item(core.ItemIdentifiers.BARRICADE, 3));
     const { SARADOMIN, ZAMORAK } = game.TEAM;
-    const checkBarricades = (team: string, count: number) => {
+    const castleStates = {
+        [SARADOMIN]: [75, 1, 1, 0, 1],
+        [ZAMORAK]: [40, 0, 0, 1, 0],
+    };
+    for (const team of [SARADOMIN, ZAMORAK]) {
+        Object.values(game.TEAM_VARBIT).forEach((varbit, i) => game.setTeamVar(team, varbit, castleStates[team][i]));
+    }
+    const checkCastleHud = (team: string, count: number) => {
         game.setTeamId(player, team);
         game.gameArea.process(player);
         const group = team === SARADOMIN ? 58 : 59;
@@ -133,29 +140,38 @@ import { encodeWidgetRunScript } from "../../server/src/main/typescript/elvarg/n
         assert.equal(cacheVm.lastError, null);
         assert.equal(wm.getWidgetByUid((group << 16) | 15).text, `${count}/10 Barricades`,
             `${team} sees its live count through native cache script ${group === 58 ? 887 : 888}`);
+        const [health, unlocked, northSouth, eastWest, broken] = castleStates[team];
+        assert.deepEqual([5, 7, 9, 11, 13].map(child => wm.getWidgetByUid((group << 16) | child).text), [
+            `Health ${health}%`, unlocked ? '<col=ff0000>Unlocked</col>' : 'Locked',
+            northSouth ? '<col=ff0000>Cleared</col>' : 'Collapsed',
+            eastWest ? '<col=ff0000>Cleared</col>' : 'Collapsed',
+            broken ? '<col=ff0000>Destroyed</col>' : 'Operational',
+        ], `${team} sees its own doors, tunnels and catapult`);
     };
-    checkBarricades(SARADOMIN, 0);
+    checkCastleHud(SARADOMIN, 0);
     setUp!({ player, slot: 0 });
     const first = [...World.getNpcs()].find((npc: any) => game.isBarricade(npc));
     assert.ok(first, 'the real inventory action placed a barricade');
-    checkBarricades(SARADOMIN, 1);
+    checkCastleHud(SARADOMIN, 1);
     const unchanged = received.length;
-    checkBarricades(SARADOMIN, 1);
+    checkCastleHud(SARADOMIN, 1);
     assert.equal(received.length, unchanged, 'unchanged area ticks do not resend HUD packets');
-    checkBarricades(ZAMORAK, 0);
+    checkCastleHud(ZAMORAK, 0);
     player.moveTo(new core.Location(2423, 3076, 1));
     setUp!({ player, slot: 0 });
-    checkBarricades(ZAMORAK, 1);
+    checkCastleHud(ZAMORAK, 1);
     game.removeBarricade(first);
     World.getNpcs().remove(first);
-    checkBarricades(SARADOMIN, 0);
-    checkBarricades(ZAMORAK, 1);
+    checkCastleHud(SARADOMIN, 0);
+    checkCastleHud(ZAMORAK, 1);
     const remaining = [...World.getNpcs()].filter((npc: any) => game.isBarricade(npc));
     game.resetMatchState();
+    castleStates[SARADOMIN] = castleStates[ZAMORAK] = [100, 0, 0, 0, 0];
     for (const npc of remaining) World.getNpcs().remove(npc);
     World.getRemoveNPCQueue().splice(0);
-    checkBarricades(ZAMORAK, 0);
+    checkCastleHud(ZAMORAK, 0);
+    checkCastleHud(SARADOMIN, 0);
     process.chdir(clientRoot);
 }
 
-console.log("Cache panel scripts retain dynamic inventory items and 64-bit prices");
+console.log("Cache panel scripts retain inventory items, 64-bit prices and native Castle Wars HUD state");

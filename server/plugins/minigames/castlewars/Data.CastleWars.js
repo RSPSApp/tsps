@@ -49,6 +49,10 @@ function buildData(core) {
     STANDARD_WORLD_VARBIT: 16207, // castlewars_world_client: shared cap, rather than inside/outside
     // Each team's own castle status (main door, side door, tunnels, catapult), read by the same scripts.
     TEAM_VARBIT,
+    TEAM_HUD_VARBIT: {
+      [TEAM.SARADOMIN]: TEAM_VARBIT,
+      [TEAM.ZAMORAK]: { DOOR_HEALTH: 146, DOOR_UNLOCKED: 147, TUNNEL_NS_CLEAR: 148, TUNNEL_EW_CLEAR: 149, CATAPULT_BROKEN: 150 },
+    },
     TEAM_VARBIT_DEFAULTS: { [TEAM_VARBIT.DOOR_HEALTH]: 100 },
 
     LOBBY_BOUNDS: [box(2435, 2446, 3081, 3098, 0)],

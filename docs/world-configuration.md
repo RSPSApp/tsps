@@ -34,6 +34,18 @@ Amascut) and other reward chests are not affected.
 }
 ```
 
+## Welcome screen message
+
+`pluginConfig` `"WelcomeScreen:messageOfTheWeek"` is the text on the scroll at the bottom of
+the welcome screen. It defaults to `Welcome to Old School RuneScape!`. The text can use the game's
+`<col=rrggbb>` and `<br>` tags. League worlds show their own league message instead.
+
+```json
+{
+  "pluginConfig": { "WelcomeScreen:messageOfTheWeek": "Double XP this weekend!<br>Have fun." }
+}
+```
+
 ## Spawn point
 
 `spawn` sets the world tile where players start when they connect. The same location is used

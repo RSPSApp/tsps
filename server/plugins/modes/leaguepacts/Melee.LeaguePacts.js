@@ -18,7 +18,10 @@
  *   talent_overheal_consumption_boost (5 overhealed hitpoints spent for +5 min hit) and 70
  *   talent_percentage_melee_maxhit_distance (+N% max hit, +N% more per 3 tiles) change the roll's
  *   range on the core's `combat:hit-rolled` and roll it again in it; so they act on landed rolls
- *   only, and the overheal is spent only by a hit that passed its accuracy roll (approximation).
+ *   only (a miss stays 0), and the overheal is spent only by a hit that passed its accuracy roll.
+ *   A raised minimum above the max hit is the hit: 237/01098, with only this pact, landed 3 at
+ *   Strength 1 (unarmed, max hit 1; the target left alive, tracking_damage_dealt_to_npcs +3) and
+ *   missed for 0; later hits ranged 3 up to the rising max.
  * - 20 talent_melee_range_multiplier (two-handed melee range times the value) and 69
  *   talent_melee_range_conditional_boost (range 4+ becomes 7) on `onCombatAttackDistance`; 69's
  *   halberds slower than 5 ticks and 65 talent_light_weapon_faster (a tick faster under 1kg) on
@@ -243,7 +246,8 @@ function rolled(event) {
   minimumBonus += spendOverheal(attacker);
   if (!percent && !minimumBonus) return;
   const maximum = Math.floor((event.maximum * (100 + percent)) / 100);
-  const minimum = Math.min(maximum, event.minimum + minimumBonus);
+  // Not capped by the max hit (237/01098: Strength 1, unarmed, max hit 1, a landed hit of 3).
+  const minimum = event.minimum + minimumBonus;
   const top = Math.max(maximum, minimum);
   event.damage = event.damage >= event.maximum && event.maximum > 0 ? top : core.Misc.randomInclusive(minimum, top);
   event.minimum = minimum;

@@ -1351,7 +1351,9 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   pacts do not.
 - **Readings of ours** (the units' heads list every one): off-hands are shield-slot items that are
   not shields, and shields go by name (the cache's category 18 agrees but for the crystal shield,
-  and plugins cannot read it); min-hit pacts act only on hits past accuracy; the fire burn bounce
+  and plugins cannot read it); min-hit pacts act only on hits past accuracy (a miss stays 0, as
+  237/01098 shows; a landed hit is at least the minimum even above the max hit, as it shows too: 3
+  at Strength 1); the fire burn bounce
   uses Burning claws' burn; a Regenerate proc saves the whole cast's runes; the crossbow pact's
   echo chance is a roll of its own; which three unique-echo-boss tasks give a reset; PvP beyond
   what the Wiki names (it says stat boosts, attack speed and melee range apply and Thorns, Echoes

@@ -227,6 +227,11 @@ test("melee min hit +3 and +3 per tile past the first; max hit +4% and +4% per 3
   assert.equal(hitRolled(min.holder, giant(1), 5, 30), 3, "adjacent: 3");
   assert.equal(hitRolled(min.holder, giant(3), 5, 30), 9, "three tiles: 3 + 3 + 3");
   for (const other of min.others) assert.equal(hitRolled(other, giant(3), 5, 30), 5);
+  // 237/01098: Strength 1, unarmed (max hit 1) with only this pact: a landed hit of 3, not 1.
+  core.Misc.randomInclusive = (low, high) => (low > high ? Number.NaN : high);
+  assert.equal(hitRolled(min.holder, giant(1), 1, 1), 3, "above the max hit of 1: the minimum, 3");
+  assert.equal(hitRolled(min.holder, giant(1), 0, 1), 3, "any landed roll, a 0 too");
+  for (const other of min.others) assert.equal(hitRolled(other, giant(1), 1, 1), 1, "nobody else: the max of 1");
 
   const max = cast("pact-maxhit", { [effect("percentage_melee_maxhit_distance")]: 1 });
   core.Misc.randomInclusive = (low, high) => high;

@@ -1722,8 +1722,11 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   `combat-achievements:summary` { player } -> completed, speed, monsters, checked on
   `combat-achievements:completed` and at login. "Within the areas you have unlocked" is not
   checked.
-- **Not mapped yet:** kills with any other place or a condition, equipment sets the description
-  does not list, obtaining items, minigames, diaries, travel, emotes and the Leagues tutorial task.
+- **Not mapped yet:** kills and deeds with a condition (a time, a streak, the weapon or spell used),
+  places with no sourced bounds (open towns, regions), open groups ("any Dragon weapon"), items
+  obtained (drops, rewards), transport without an arrival signal, and the minigame steps and
+  interactions (talking, petting, banking, house building) whose plugins emit no event; the Leagues
+  tutorial's tasks are completed by the tutorial itself.
 
 ## Developer commands
 

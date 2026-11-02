@@ -1,4 +1,6 @@
 // OSRS Wiki: https://oldschool.runescape.wiki/w/Warped_sceptre
+const { definePoweredStaff } = require("./PoweredStaff");
+
 const MAX_CHARGES = 20000;
 const CHAOS_RUNES_PER_CHARGE = 2;
 const EARTH_RUNES_PER_CHARGE = 5;
@@ -19,8 +21,7 @@ let ItemIdentifiers = null;
 let chargedIds = new Set();
 let unchargedByCharged = new Map();
 let chargedByUncharged = new Map();
-let SceptreCombatMethod = null;
-const spells = new WeakMap();
+let staff = null;
 const chargingInterfaces = new WeakSet();
 const chargeInputs = new WeakMap();
 
@@ -55,47 +56,43 @@ function baseMaxHit(player) {
   return Math.floor((8 * magic + 96) / 37);
 }
 
-function spellFor(player) {
-  let spell = spells.get(player);
-  if (spell) return spell;
-  const { Animation, CombatNormalSpell, Graphic, GraphicHeight, Projectile } = core;
-  spell = new CombatNormalSpell({
-    spellId: () => core.ItemIdentifiers.WARPED_SCEPTRE,
-    maximumHit: () => baseMaxHit(player),
+function look({ Animation, Graphic, GraphicHeight, Projectile }) {
+  return {
     castAnimation: () => new Animation(CAST_ANIMATION),
     startGraphic: () => new Graphic(CAST_START_GRAPHIC, GraphicHeight.HIGH),
     castProjectile: (cast, castOn) =>
       Projectile.createProjectile(cast, castOn, CAST_PROJECTILE_GRAPHIC, 0, 20, 43, 31),
     endGraphic: () => new Graphic(CAST_IMPACT_GRAPHIC),
-    baseExperience: () => 0,
-    levelRequired: () => MAGIC_LEVEL_REQUIRED,
-  });
-  spells.set(player, spell);
-  return spell;
+  };
 }
 
-function useCharge(player, item) {
-  // Content may spare the charge (a league relic): the question every powered staff asks.
-  const consume = { player, itemId: item.getId(), skip: false };
-  pluginApi.emitCustomEvent("combat:consume-charge", consume);
-  if (consume.skip) return;
-  const left = charges(item) - 1;
-  if (left < 0) return;
-  if (left > 0) {
-    item.setMetaValue(CHARGES_META_KEY, left);
-    syncWornCharges(player);
-    return;
-  }
-  // No charges left, revert to uncharged form.
-  const unchargedId = unchargedByCharged.get(item.getId());
-  if (unchargedId !== undefined) {
-    item.setId(unchargedId);
-  }
-  item.setMetaValue(CHARGES_META_KEY, undefined);
-  refresh(player);
-  player.getUpdateFlag()?.flag?.(core.Flag.APPEARANCE);
-  syncWornCharges(player);
-  player.sendMessage("<col=ff3045>Your warped sceptre has run out of charges!</col>");
+function defineSceptre() {
+  return definePoweredStaff(pluginApi, {
+    name: "Warped sceptre",
+    chargesKey: CHARGES_META_KEY,
+    maxCharges: MAX_CHARGES,
+    pairs: [...unchargedByCharged],
+    maxHit: baseMaxHit,
+    attackSpeed: ATTACK_SPEED,
+    range: ATTACK_RANGE,
+    levelRequired: MAGIC_LEVEL_REQUIRED,
+    spell: look,
+    // Its charge goes with the cast itself, not the attack check.
+    useChargeAt: "start",
+    chargeUsed: (player) => syncWornCharges(player),
+    emptied: (player) => {
+      refresh(player);
+      syncWornCharges(player);
+    },
+    noChargesMessage: "Your warped sceptre has no charges! You need to charge it with chaos runes and earth runes.",
+    ranOutMessage: "<col=ff3045>Your warped sceptre has run out of charges!</col>",
+    methodFlags: { warpedSceptreBuiltInSpell: true },
+  });
+}
+
+/** Spends a charge from the worn sceptre. */
+function useCharge(player) {
+  staff.useCharge(player);
 }
 
 function format(amount) {
@@ -261,74 +258,11 @@ function initialize(coreApi) {
     [I.WARPED_SCEPTRE_UNCHARGED_, I.WARPED_SCEPTRE],
     [I.WARPED_SCEPTRE_UNCHARGED__2, I.WARPED_SCEPTRE_2],
   ]);
-}
-
-function sceptreMethod() {
-  if (SceptreCombatMethod) return SceptreCombatMethod;
-  const { MagicCombatMethod, PendingHit } = core;
-  SceptreCombatMethod = new (class extends MagicCombatMethod {
-    constructor() {
-      super();
-      this.warpedSceptreBuiltInSpell = true;
-    }
-
-    canAttack(character, target) {
-      const player = character.getAsPlayer();
-      const staff = weaponOf(player);
-      if (!chargedIds.has(staff?.getId?.()) || charges(staff) <= 0) {
-        player.sendMessage("Your warped sceptre has no charges! You need to charge it with chaos runes and earth runes.");
-        player.getCombat().reset();
-        return false;
-      }
-      player.getCombat().setCastSpell(spellFor(player));
-      return true;
-    }
-
-    start(character, target) {
-      const player = character.getAsPlayer();
-      useCharge(player, weaponOf(player));
-      super.start(character, target);
-    }
-
-    canPursue(character) {
-      const player = character.getAsPlayer();
-      return wieldsSceptre(player, true) && charges(weaponOf(player)) > 0;
-    }
-
-    hits(character, target) {
-      const spell = spellFor(character.getAsPlayer());
-      const hit = new PendingHit(
-        character,
-        target,
-        this,
-        MagicCombatMethod.hitDelay(character, target, spell),
-      );
-      spell.onHitCalc(hit);
-      return [hit];
-    }
-
-    attackSpeed() {
-      return ATTACK_SPEED;
-    }
-
-    attackDistance(character) {
-      const { FightStyle } = core;
-      return ATTACK_RANGE +
-        (character.getFightType?.()?.getStyle?.() === FightStyle.DEFENSIVE ? 2 : 0);
-    }
-
-    finished(character) {
-      const combat = character.getCombat();
-      combat.setPreviousCast(spellFor(character.getAsPlayer()));
-      combat.setCastSpell(null);
-    }
-  })();
-  return SceptreCombatMethod;
+  staff = defineSceptre();
 }
 
 function resolveSceptre(attacker) {
-  if (!attacker?.isPlayer?.()) return null;
-  return wieldsSceptre(attacker.getAsPlayer()) ? sceptreMethod() : null;
+  return staff?.resolver.resolve(attacker) ?? null;
 }
 
 module.exports = {

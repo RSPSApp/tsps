@@ -426,11 +426,13 @@ test("the customs officer's Charm free passage needs the Ring of Charos(a) worn"
   const answer = (text) => q.hooks.get('onNpcDialogueCondition')[0]({
     player: p, npcId: core.NpcIdentifiers.CUSTOMS_OFFICER, text,
   });
+  const wearRing = (id) => {
+    p.getEquipment = () => ({ get: () => ({ getId: () => id }), getItems: () => [], refreshItems() {} });
+  };
   assert.equal(answer('If the player has the Ring of Charos(a) equipped:'), false);
-  p.getEquipment = () => ({
-    get: () => ({ getId: () => core.ItemIdentifiers.RING_OF_CHAROS_A_ }),
-    getItems: () => [], refreshItems() {},
-  });
+  wearRing(core.ItemIdentifiers.RING_OF_CHAROS);
+  assert.equal(answer('If the player has the Ring of Charos(a) equipped:'), false, 'the unactivated ring does not charm');
+  wearRing(core.ItemIdentifiers.RING_OF_CHAROS_A_);
   assert.equal(answer('If the player has the Ring of Charos(a) equipped:'), true);
   p.items.set(995, 0);
   const charm = { player: p, npcId: core.NpcIdentifiers.CUSTOMS_OFFICER, stepId: 'upG45P' };

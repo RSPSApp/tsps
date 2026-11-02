@@ -9,6 +9,7 @@ import { MagicSpellbook } from "../../../model/MagicSpellbook";
 import { Skill } from "../../../model/Skill";
 import { TeleportHandler } from "../../../model/teleportation/TeleportHandler";
 import { TeleportType } from "../../../model/teleportation/TeleportType";
+import { Sounds } from "../../../Sounds";
 import { Task } from "../../../task/Task";
 import { TaskManager } from "../../../task/TaskManager";
 import { Spell } from "./Spell";
@@ -19,8 +20,8 @@ import { DialogueOption } from "../../../model/dialogues/DialogueOption";
 import { PluginManager } from "../../../../plugins/PluginManager";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
 
-/** A cast's animation and graphic on the caster (cache ids). */
-type CastVisuals = { animation: number; graphic?: number };
+/** A cast's animation, graphic and sound on the caster (cache ids); `areaSound` is heard nearby. */
+type CastVisuals = { animation: number; graphic?: number; sound?: number; areaSound?: number };
 /**
  * Each spell's level and runes are the cache's (its spell obj's params); `experience` is the
  * Wiki's. `cast` is what the caster plays, as in rsprox captures of live OSRS; null for a
@@ -35,12 +36,16 @@ const UNCAPTURED: CastVisuals = { animation: 4413, graphic: 747 };
 const CASTS = {
     // lunar_human_magic_summon2, quest_lunar_bakepie_spotanim
     "bake pie": { animation: 4413, graphic: 746 },
-    // dream_player_humidify_spell, dream_humidify_spell_spotanim
-    "humidify": { animation: 6294, graphic: 1061 },
-    // dream_player_hunter_box_spell, dream_hunter_spell_spotanim
-    "hunter kit": { animation: 6303, graphic: 1074 },
-    // dream_player_make_plank_spell, dream_plank_make_spell_spotanim
-    "plank make": { animation: 6298, graphic: 1063 },
+    // dream_player_humidify_spell, dream_humidify_spell_spotanim; area sound 3614 (rsprox 547)
+    "humidify": { animation: 6294, graphic: 1061, areaSound: 3614 },
+    // dream_player_hunter_box_spell, dream_hunter_spell_spotanim; sound 3615 (rsprox 75)
+    "hunter kit": { animation: 6303, graphic: 1074, sound: 3615 },
+    // dream_player_make_plank_spell, dream_plank_make_spell_spotanim; sound 3617 (rsprox 3461)
+    "plank make": { animation: 6298, graphic: 1063, sound: 3617 },
+    // dream_player_monsterexam_statspy, dream_spell_monsterexam_statspy_spotanim; sound 3620 (rsprox 3235)
+    "monster examine": { animation: 6293, graphic: 1059, sound: 3620 },
+    // lunar_human_magic_summon2, quest_lunar_magic_flax_strim; sound 3618 (rsprox 4045)
+    "astral contact": { animation: 4413, graphic: 728, sound: 3618 },
     // dream_player_spellbook_swap, dream_spellbook_spotanim
     "spellbook swap": { animation: 6299, graphic: 1062 },
     // lunar_human_magic_summon1, quest_lunar_spellbook_string_jewelery_spot_anim
@@ -77,10 +82,19 @@ const PLANKS = new Map<number, [number, number]>([
 const HUNTER_KIT = 11159;
 /** Hunter kit's contents; a player holding all of them is refused (Wiki: Hunter Kit). */
 const HUNTER_KIT_CONTENTS = [10150, 10010, 10006, 10031, 10029, 596, 11260, 10008, 34631];
-/** Repeat spacing in ticks (Wiki): String Jewellery every 3, Bake Pie every 3, Plank Make every 6. */
+/**
+ * Repeat spacing in ticks: String Jewellery and Bake Pie every 3 (Wiki; rsprox 3236, 435 show
+ * other players at 3); Plank Make 5 ticks after the click, then every 6 (rsprox 3461).
+ */
 const STRING_TICKS = 3;
 const BAKE_TICKS = 3;
 const PLANK_TICKS = 6;
+const PLANK_FIRST_REPEAT_TICKS = 5;
+/** Monster Examine's stats replace the spellbook in the magic tab (rsprox 3235); 522:17 closes them. */
+const MONSTER_STATS_INTERFACE = 522;
+const MONSTER_STATS_CLOSE = 17;
+const MONSTER_STATS_SCRIPT = 1179;
+const ELEMENTS = ["Air", "Water", "Earth", "Fire"];
 /** Magic Imbue lasts 21 ticks (12.6 s), its cooldown as long (Wiki). */
 const MAGIC_IMBUE_TICKS = 21;
 /** Heal Group's cooldown: 90 s (Wiki). Heal Other's isn't settled on the Wiki, so it has none. */
@@ -117,6 +131,11 @@ class LunarSpell extends Spell {
         if (cast) {
             player.performAnimation(new Animation(cast.animation));
             if (cast.graphic !== undefined) player.performGraphic(new Graphic(cast.graphic));
+            if (cast.sound !== undefined) player.getPacketSender().sendSoundEffect(cast.sound, 1, 0, 255);
+            if (cast.areaSound !== undefined) {
+                const at = player.getLocation();
+                Sounds.playAreaSound({ soundId: cast.areaSound, x: at.getX(), y: at.getY(), level: at.getZ(), radius: 5 });
+            }
         }
         return true;
     }
@@ -154,7 +173,7 @@ export class LunarSpells {
         ["humidify", spell("humidify", 65, castOf("humidify"))],
         ["hunter kit", spell("hunter kit", 70, castOf("hunter kit"))],
         ["magic imbue", spell("magic imbue", 86)],
-        ["astral contact", spell("astral contact", 63)],
+        ["astral contact", spell("astral contact", 63, castOf("astral contact"))],
         ["string jewellery", spell("string jewellery", 83, castOf("string jewellery"))],
     ]);
     /** Spells cast on a player, an NPC or an inventory item. */
@@ -162,7 +181,7 @@ export class LunarSpells {
         ["energy transfer", spell("energy transfer", 100)],
         ["heal other", spell("heal other", 101)],
         ["stat spy", spell("stat spy", 76)],
-        ["monster examine", spell("monster examine", 61)],
+        ["monster examine", spell("monster examine", 61, castOf("monster examine"))],
         ["plank make", spell("plank make", 90, castOf("plank make"))],
         ["stat restore pot share", spell("stat restore pot share", 84)],
         ["boost potion share", spell("boost potion share", 88)],
@@ -170,25 +189,30 @@ export class LunarSpells {
     private static readonly VENGEANCE_OTHER = new LunarSpell("vengeance other",
         { experience: 108, cast: castOf("vengeance other"), spellId: EffectSpells.VENGEANCE_OTHER.spellId() });
 
+    /**
+     * Landing tiles: rsprox captures for Moonclan (75, 86: 2114,3914-3916) and Waterbirth (3433,
+     * 1851); the rest are the Wiki's map markers, Catherby's and Tele Group Moonclan's the middle
+     * of the Wiki's landing area.
+     */
     private static readonly TELEPORTS = new Map<string, LunarTeleport>([
-        ["moonclan teleport", teleport("moonclan teleport", 66, 2113, 3917)],
-        ["ourania teleport", teleport("ourania teleport", 69, 2468, 3248)],
-        ["waterbirth teleport", teleport("waterbirth teleport", 71, 2548, 3758)],
-        ["barbarian teleport", teleport("barbarian teleport", 76, 2544, 3569)],
-        ["khazard teleport", teleport("khazard teleport", 80, 2637, 3166)],
-        ["fishing guild teleport", teleport("fishing guild teleport", 89, 2611, 3390)],
-        ["catherby teleport", teleport("catherby teleport", 92, 2804, 3434)],
-        ["ice plateau teleport", teleport("ice plateau teleport", 96, 2974, 3873)],
+        ["moonclan teleport", teleport("moonclan teleport", 66, 2114, 3915)],
+        ["ourania teleport", teleport("ourania teleport", 69, 2468, 3246)],
+        ["waterbirth teleport", teleport("waterbirth teleport", 71, 2546, 3754)],
+        ["barbarian teleport", teleport("barbarian teleport", 76, 2543, 3569)],
+        ["khazard teleport", teleport("khazard teleport", 80, 2636, 3167)],
+        ["fishing guild teleport", teleport("fishing guild teleport", 89, 2613, 3391)],
+        ["catherby teleport", teleport("catherby teleport", 92, 2802, 3449)],
+        ["ice plateau teleport", teleport("ice plateau teleport", 96, 2975, 3938)],
     ]);
 
     private static readonly GROUP_TELEPORTS = new Map<string, LunarTeleport>([
-        ["tele group moonclan", teleport("tele group moonclan", 67, 2113, 3917)],
-        ["tele group waterbirth", teleport("tele group waterbirth", 72, 2548, 3758)],
-        ["tele group barbarian", teleport("tele group barbarian", 77, 2544, 3569)],
-        ["tele group khazard", teleport("tele group khazard", 81, 2637, 3166)],
-        ["tele group fishing guild", teleport("tele group fishing guild", 90, 2611, 3390)],
-        ["tele group catherby", teleport("tele group catherby", 93, 2804, 3434)],
-        ["tele group ice plateau", teleport("tele group ice plateau", 99, 2974, 3873)],
+        ["tele group moonclan", teleport("tele group moonclan", 67, 2110, 3915)],
+        ["tele group waterbirth", teleport("tele group waterbirth", 72, 2546, 3754)],
+        ["tele group barbarian", teleport("tele group barbarian", 77, 2543, 3569)],
+        ["tele group khazard", teleport("tele group khazard", 81, 2636, 3167)],
+        ["tele group fishing guild", teleport("tele group fishing guild", 90, 2613, 3391)],
+        ["tele group catherby", teleport("tele group catherby", 93, 2802, 3449)],
+        ["tele group ice plateau", teleport("tele group ice plateau", 99, 2975, 3938)],
     ]);
 
     public static getTeleportDestinations() {
@@ -237,11 +261,13 @@ export class LunarSpells {
     /**
      * Repeats `step` every `ticks` until it returns false or the player acts: a player-keyed task,
      * so walking, interacting, combat or another Lunar cast stops it. `onStop` runs once either way.
+     * The first repeat comes after `first` ticks.
      */
-    private static repeat(player: Player, ticks: number, step: () => boolean, onStop?: () => void): void {
+    private static repeat(player: Player, ticks: number, step: () => boolean, onStop?: () => void, first = ticks): void {
         TaskManager.submit(new class extends Task {
-            constructor() { super(ticks, player.getIndex(), false); }
+            constructor() { super(first, player.getIndex(), false); }
             execute(): void {
+                this.setDelay(ticks);
                 if (!player.isRegistered() || !step()) this.stop();
             }
             stop(): void {
@@ -483,12 +509,58 @@ export class LunarSpells {
             !player.getLocation().isWithinDistance(target.getLocation(), 10)) return false;
         this.interrupt(player);
         return this.SPELLS.get("monster examine")!.cast(player, () => {
-            const definition = target.getCurrentDefinition?.();
-            const name = definition?.getName?.() ?? "This creature";
-            const level = definition?.getCombatLevel?.() ?? 0;
-            const hitpoints = target.getHitpoints?.() ?? 0;
-            player.sendMessage(`${name}: combat level ${level}, ${hitpoints} hitpoints remaining.`);
+            player.setPositionToFace(target.getLocation());
+            // The NPC's own graphic lands as the caster's ends (rsprox 3235: spotanim 736, delay 76).
+            target.performGraphic(new Graphic(736, 76, GraphicHeight.MIDDLE));
+            player.getPacketSender()
+                .sendMagicTabInterface(MONSTER_STATS_INTERFACE)
+                .sendClientScript(MONSTER_STATS_SCRIPT, this.monsterStats(target));
         });
+    }
+
+    /**
+     * Interface 522's text, as live sends it to script 1179: four `|`-separated sections and the
+     * NPC's name; bonuses of 0 are left out of Aggressive Stats (rsprox 3235, 3377, 2224, 4127).
+     */
+    private static monsterStats(npc: any): string {
+        const definition = npc.getCurrentDefinition();
+        const stats: number[] = definition.getStats();
+        const style = definition.getAttackStyle() || "crush";
+        const styleName = style === "ranged" ? "Range" : style.charAt(0).toUpperCase() + style.slice(1);
+        const heading = (title: string) => `<col=ffb000>${title}</col>`;
+        const section = (title: string, lines: string[]) => [heading(title), ...lines].join("<br>");
+        const aggressive = [`Attack speed: ${definition.getAttackSpeed()}`];
+        const bonus = (label: string, value: number | undefined) => { if (value) aggressive.push(`${label}: ${value}`); };
+        bonus(style === "ranged" || style === "magic" ? "Melee bonus" : `${styleName} bonus`, stats[5]);
+        bonus("Magic bonus", stats[7]);
+        bonus("Ranged bonus", stats[9]);
+        const attributes = [definition.getSlayerLevel() > 0 ? "- Is a slayer monster." : "- Is not a slayer monster."];
+        if (definition.isPoisonImmune()) attributes.push("- Poison Resistance: 100%.");
+        const weakness = definition.getElementalWeakness();
+        if (weakness) attributes.push(`- ${weakness.percent}% ${ELEMENTS[weakness.type - 1]} weakness.`);
+        return [
+            section("Stats", [
+                `Combat level: ${definition.getCombatLevel()}`, `Hitpoints: ${npc.getHitpoints()}`,
+                `Attack: ${stats[0]}`, `Defence: ${stats[2]}`, `Strength: ${stats[1]}`, `Magic: ${stats[4]}`,
+                `Ranged: ${stats[3]}`, `Max standard hit: ${definition.getMaxHit()}`, `Main attack style: ${styleName}`,
+            ]),
+            section("Aggressive Stats", aggressive),
+            section("Defensive Stats", [
+                `Stab: ${stats[10] ?? 0}`, `Slash: ${stats[11] ?? 0}`, `Crush: ${stats[12] ?? 0}`, `Magic: ${stats[13] ?? 0}`,
+                `Light Ranged: ${definition.getRangedDefenceBonus("light")}`,
+                `Standard Ranged: ${definition.getRangedDefenceBonus("standard")}`,
+                `Heavy Ranged: ${definition.getRangedDefenceBonus("heavy")}`,
+            ]),
+            section("Other Attributes", attributes),
+            definition.getName(),
+        ].join("|");
+    }
+
+    /** Interface 522's close button puts the spellbook back in the magic tab (rsprox 3235). */
+    public static handleWidgetAction(player: Player, groupId: number, childId: number): boolean {
+        if (groupId !== MONSTER_STATS_INTERFACE || childId !== MONSTER_STATS_CLOSE) return false;
+        player.getPacketSender().sendTabInterface(6, player.getSpellbook().getInterfaceId());
+        return true;
     }
 
     /** Spells cast on an inventory item: Plank Make on a log, the potion shares on a potion. */
@@ -529,7 +601,7 @@ export class LunarSpells {
             player.getSkillManager().addExperiences(Skill.MAGIC, spell.baseExperience());
             return inventory.contains(logId);
         };
-        if (make()) this.repeat(player, PLANK_TICKS, make);
+        if (make()) this.repeat(player, PLANK_TICKS, make, undefined, PLANK_FIRST_REPEAT_TICKS);
         return true;
     }
 
@@ -596,6 +668,7 @@ export class LunarSpells {
     private static swapTo(player: Player, book: MagicSpellbook): void {
         player.setAttribute("lunar:spellbook-swap", { expiresAt: World.getProcessCycle() + 200 });
         MagicSpellbook.changeSpellbook(player, book, true);
+        player.sendMessage("You have 2 minutes before your spellbook changes back!");
     }
 
     private static openSpellbookSwap(player: Player): void {

@@ -780,6 +780,8 @@ export class ClientConnection {
               this.player, actionPacket.groupId, actionPacket.childId, actionPacket.slot
             )) {
               // Cache-native combat autocast controls reuse the existing spell state.
+            } else if (LunarSpells.handleWidgetAction(this.player, actionPacket.groupId, actionPacket.childId)) {
+              // Monster Examine's stats (522) close back to the spellbook.
             } else if (this.emitSpellCast(actionPacket)) {
               // Plugins own the self-cast spells they register for, by cache spell name.
             } else if (SpellTeleports.handleSelf(

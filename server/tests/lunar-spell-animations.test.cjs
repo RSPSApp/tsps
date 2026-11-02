@@ -62,6 +62,8 @@ test("each captured Lunar spell names its cache animation and graphic", () => {
     "bake pie": ["lunar_human_magic_summon2", "quest_lunar_bakepie_spotanim"],
     humidify: ["dream_player_humidify_spell", "dream_humidify_spell_spotanim"],
     "hunter kit": ["dream_player_hunter_box_spell", "dream_hunter_spell_spotanim"],
+    "monster examine": ["dream_player_monsterexam_statspy", "dream_spell_monsterexam_statspy_spotanim"],
+    "astral contact": ["lunar_human_magic_summon2", "quest_lunar_magic_flax_strim"],
     "plank make": ["dream_player_make_plank_spell", "dream_plank_make_spell_spotanim"],
     "spellbook swap": ["dream_player_spellbook_swap", "dream_spellbook_spotanim"],
     "string jewellery": ["lunar_human_magic_summon1", "quest_lunar_spellbook_string_jewelery_spot_anim"],

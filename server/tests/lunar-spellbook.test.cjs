@@ -33,6 +33,7 @@ function caster(slots) {
   return {
     items, experience, messages: [],
     getIndex: () => 1,
+    getPacketSender: () => ({ sendSoundEffect() {} }),
     isRegistered: () => true,
     performAnimation() {}, performGraphic() {},
     getSkillManager: () => ({
@@ -137,4 +138,32 @@ test("Energy Transfer costs 10 Hitpoints and gives a full special bar and full r
   const weak = fighter({ hp: 10 });
   castable(() => LunarSpells.handlePlayerTarget(weak, fighter(), "Energy Transfer"));
   assert.deepEqual(weak.messages, ["You need more hitpoints to cast this spell."]);
+});
+
+test("Monster Examine sends interface 522 the text live sends script 1179", () => {
+  // rsprox 3235 tick 89, an Outlaw. Live also lists "Strength bonus: -21"; this server keeps no
+  // NPC strength bonuses, so that line is the one difference.
+  const live = "<col=ffb000>Stats</col><br>Combat level: 32<br>Hitpoints: 20<br>Attack: 35<br>Defence: 25<br>" +
+    "Strength: 30<br>Magic: 1<br>Ranged: 1<br>Max standard hit: 3<br>Main attack style: Crush|" +
+    "<col=ffb000>Aggressive Stats</col><br>Attack speed: 4<br>Strength bonus: -21|" +
+    "<col=ffb000>Defensive Stats</col><br>Stab: 0<br>Slash: 0<br>Crush: 0<br>Magic: 0<br>Light Ranged: 0<br>" +
+    "Standard Ranged: 0<br>Heavy Ranged: 0|<col=ffb000>Other Attributes</col><br>- Is not a slayer monster.|Outlaw";
+  const definition = {
+    getStats: () => [35, 30, 25, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    getAttackStyle: () => "crush", getAttackSpeed: () => 4, getSlayerLevel: () => 0, isPoisonImmune: () => false,
+    getElementalWeakness: () => null, getCombatLevel: () => 32, getMaxHit: () => 3, getName: () => "Outlaw",
+    getRangedDefenceBonus: () => 0,
+  };
+  const npc = { getCurrentDefinition: () => definition, getHitpoints: () => 20, getLocation: () => ({}), performGraphic() {} };
+  const sent = [];
+  const sender = {
+    sendMagicTabInterface(id) { sent.push(["mount", id]); return sender; },
+    sendClientScript(id, text) { sent.push(["script", id, text]); return sender; },
+    sendSoundEffect() { return sender; },
+  };
+  const player = Object.assign(caster([]), {
+    getPacketSender: () => sender, setPositionToFace() {}, getLocation: () => ({ isWithinDistance: () => true }),
+  });
+  castable(() => LunarSpells.handleNpcTarget(player, npc, "Monster Examine"));
+  assert.deepEqual(sent, [["mount", 522], ["script", 1179, live.replace("<br>Strength bonus: -21", "")]]);
 });

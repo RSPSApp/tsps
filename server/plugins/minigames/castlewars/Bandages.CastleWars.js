@@ -25,8 +25,8 @@ function bandage(healer, patient) {
   patient.setPoisonDamage(0);
 }
 
-function healSelf({ player }) {
-  if (!game.isPlaying(player)) {
+function healSelf({ player, itemId }) {
+  if (itemId !== core.ItemIdentifiers.BANDAGES || !game.isPlaying(player)) {
     return false;
   }
   bandage(player, player);

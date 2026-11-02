@@ -7,6 +7,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { before, after, test } = require('node:test');
+const savesDir = fs.mkdtempSync(path.join(os.tmpdir(), 'clans-saves-'));
+process.env.PLAYER_SAVE_DATABASE_PATH = path.join(savesDir, 'players.sqlite');
+process.env.PLAYER_SAVE_IMPORT_LEGACY_JSON = '0';
 require('../dist/Server').Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { PluginManager: PM } = require('../dist/plugins/PluginManager');
@@ -15,6 +18,8 @@ const { PlayerSession } = require('../dist/net/PlayerSession');
 const Core = require('../plugins/interface/clans/Core.Clans');
 const Hall = require('../plugins/interface/clans/Hall.Clans');
 const Store = require('../plugins/interface/clans/Store.Clans');
+
+const { DatabaseSync } = require('node:sqlite');
 
 const COINS = 995;
 const COFFER_SIDE = 697;
@@ -41,6 +46,14 @@ after(() => {
   PM.emitServerShutdown({});
   delete process.env.TSPS_CLANS_FILE;
   fs.rmSync(dir, { recursive: true, force: true });
+  // The backend keeps its database open until exit, and Windows won't delete it before then.
+  process.once('exit', () => {
+    try {
+      fs.rmSync(savesDir, { recursive: true, force: true });
+    } catch {
+      // Left in the temp directory.
+    }
+  });
 });
 
 function newPlayer(name) {
@@ -78,6 +91,24 @@ function crash(playerSave, name, clanName) {
 }
 
 const coinsOf = (player) => player.getInventory().getAmount(COINS);
+const onDisk = (clanName) => JSON.parse(fs.readFileSync(process.env.TSPS_CLANS_FILE, 'utf8')).clans.find((clan) => clan.name === clanName);
+const settled = () => new Promise((resolve) => setImmediate(resolve));
+
+/** What the row in SQLite holds, ignoring anything still waiting for the writer. */
+function freshBackend() {
+  const { SqlitePlayerPersistence } = require('../plugins/persistence/SqlitePlayerPersistence.plugin');
+  return new SqlitePlayerPersistence();
+}
+
+/** Holds SQLite's write lock, so the writer can't commit until release. */
+function holdWrites() {
+  const lock = new DatabaseSync(process.env.PLAYER_SAVE_DATABASE_PATH);
+  lock.exec('BEGIN IMMEDIATE');
+  return () => {
+    lock.exec('ROLLBACK');
+    lock.close();
+  };
+}
 
 test('a deposit lost from the player save comes back out of the coffer, so nothing is duplicated', () => {
   const { player, name, clanName } = atCoffer(1000000);
@@ -90,13 +121,117 @@ test('a deposit lost from the player save comes back out of the coffer, so nothi
   assert.deepEqual(clan.cofferJournal, []);
 });
 
-test('a deposit the player save has stays deposited, so nothing is destroyed', () => {
+test('a deposit the player save has stays deposited, so nothing is destroyed', async () => {
   const { player, name, clanName } = atCoffer(1000000);
   click(player, COFFER_SIDE, DEPOSIT_ALL);
   const { restarted, clan } = crash(PlayerSave.fromPlayer(player), name, clanName);
   assert.equal(coinsOf(restarted), 0);
   assert.equal(clan.coffer, 1000000);
+  await core.GameConstants.PLAYER_PERSISTENCE.flush();
+  await settled();
   assert.deepEqual(clan.cofferJournal, [], 'settled');
+});
+
+test('a logout save still waiting for SQLite keeps its entry, so a crash then still reconciles', async () => {
+  const backend = core.GameConstants.PLAYER_PERSISTENCE;
+  const { player, name, clanName } = atCoffer(1000000);
+  backend.save(player, 'start');
+  await backend.flush();
+  const release = holdWrites();
+  try {
+    click(player, COFFER_SIDE, DEPOSIT_ALL);
+    await settled();
+    backend.save(player, 'logout');
+    const relogged = newPlayer(name);
+    backend.load(name).applyToPlayer(relogged);
+    assert.equal(coinsOf(relogged), 0, 'the load sees the unwritten save');
+    Hall.recoverCoffer(relogged);
+    await settled();
+    assert.equal(onDisk(clanName).cofferJournal.length, 1, 'so the entry stays');
+    assert.equal(onDisk(clanName).coffer, 1000000);
+
+    // The crash: only the row and the clan file are left.
+    const durable = freshBackend();
+    Store.reset();
+    const restarted = newPlayer(name);
+    durable.load(name).applyToPlayer(restarted);
+    assert.equal(coinsOf(restarted), 1000000, 'the row never got the deposit');
+    Hall.recoverCoffer(restarted);
+    assert.equal(coinsOf(restarted), 1000000);
+    assert.equal(onDisk(clanName).coffer, 0, 'one million in total, not two');
+    assert.deepEqual(onDisk(clanName).cofferJournal, []);
+    durable.database.close();
+  } finally {
+    release();
+  }
+  await backend.flush();
+});
+
+test('once the writer commits the save, the entry goes', async () => {
+  const backend = core.GameConstants.PLAYER_PERSISTENCE;
+  const { player, name, clanName } = atCoffer(1000000);
+  backend.save(player, 'start');
+  await backend.flush();
+  const release = holdWrites();
+  click(player, COFFER_SIDE, DEPOSIT_ALL);
+  await settled();
+  backend.save(player, 'logout');
+  const relogged = newPlayer(name);
+  backend.load(name).applyToPlayer(relogged);
+  Hall.recoverCoffer(relogged);
+  await settled();
+  assert.equal(onDisk(clanName).cofferJournal.length, 1);
+  release();
+  await backend.flush();
+  await settled();
+  assert.deepEqual(onDisk(clanName).cofferJournal, []);
+  assert.equal(onDisk(clanName).coffer, 1000000);
+});
+
+test('another character of the same name leaves the entry alone', async () => {
+  const backend = core.GameConstants.PLAYER_PERSISTENCE;
+  const { player, name, clanName } = atCoffer(1000000);
+  click(player, COFFER_SIDE, DEPOSIT_ALL);
+  backend.save(player, 'logout');
+  await backend.flush();
+  await settled();
+
+  const league = newPlayer(name);
+  league.setProfile('league');
+  Hall.recoverCoffer(league);
+  await backend.flush();
+  await settled();
+  assert.equal(onDisk(clanName).coffer, 1000000, 'the main character\'s deposit stands');
+  assert.equal(onDisk(clanName).cofferJournal.length, 1);
+  assert.equal(onDisk(clanName).cofferJournal[0].profile, 'main');
+
+  const main = newPlayer(name);
+  backend.load(name).applyToPlayer(main);
+  Hall.recoverCoffer(main);
+  await backend.flush();
+  await settled();
+  assert.equal(onDisk(clanName).coffer, 1000000);
+  assert.deepEqual(onDisk(clanName).cofferJournal, [], 'its own login settles it');
+});
+
+test('a league character\'s lost transfer undoes only that character\'s', async () => {
+  const backend = core.GameConstants.PLAYER_PERSISTENCE;
+  const { player: league, name, clanName } = atCoffer(1000);
+  league.setProfile('league');
+  const lastSave = PlayerSave.fromPlayer(league);
+  click(league, COFFER_SIDE, DEPOSIT_ALL);
+  await settled();
+  const main = newPlayer(name);
+  Hall.recoverCoffer(main);
+  assert.equal(onDisk(clanName).coffer, 1000, 'the main character\'s login changes nothing');
+  Store.reset();
+  const restarted = newPlayer(name);
+  restarted.setProfile('league');
+  lastSave.applyToPlayer(restarted);
+  Hall.recoverCoffer(restarted);
+  assert.equal(coinsOf(restarted), 1000);
+  assert.equal(onDisk(clanName).coffer, 0);
+  await backend.flush();
 });
 
 test('a withdrawal lost from the player save goes back into the coffer, and one saved stays out', () => {

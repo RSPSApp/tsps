@@ -240,6 +240,7 @@ beforeEach(() => {
       ...protocol,
       Task,
       TaskManager,
+      GameConstants: { PLAYER_PERSISTENCE: { flush: async () => {} } },
       PlayerRights,
       ItemIdentifiers: require('../dist/util/ItemIdentifiers').ItemIdentifiers,
       NpcIdentifiers: require('../dist/util/NpcIdentifiers').NpcIdentifiers,

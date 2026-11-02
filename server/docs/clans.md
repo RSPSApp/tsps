@@ -178,8 +178,9 @@ Wiki's:
   whole stack dropping, and that they fill the main room.
 - Coffer: the side panel 697 for deposits; Ironmen can't deposit, 50m a transaction, and a withdrawal tells
   members. **Ours:** the wording. clans.json and the player's save commit separately, so each transfer is
-  journalled in the clan under a number the player's save carries with its inventory. At login, a number
-  above the saved one is undone: a crash loses the transfer rather than duplicating or destroying coins.
+  journalled in the clan, per character, under a number the player's save carries with its inventory. At
+  login, a number above the saved one is undone: a crash loses the transfer rather than duplicating or
+  destroying coins. Entries the save covers stay until `flush()` says that save has been committed.
 - Piano: 698 and script 4321. Entertain sends each clicked note, from enum 3799, to the hall; Play-quietly
   doesn't; Background-music unlocks Rhapsody. **Keyboard keys play only for the player**: they stay in the
   client's script and send nothing.

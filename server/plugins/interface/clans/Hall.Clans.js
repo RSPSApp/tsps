@@ -35,7 +35,8 @@ const MAX_COINS = 2147483647;
  * The last coffer transfer this player's save includes. clans.json and the player's save commit
  * separately, so each transfer is journalled in the clan under the player's next number, and the
  * number moves in the same snapshot as the inventory. At login a journalled number above the saved
- * one means the player's save never got the transfer, so the coffer gives it back.
+ * one means the player's save never got the transfer, so the coffer gives it back. Entries are per
+ * character: a league character has its own save and its own number under the same name.
  */
 const COFFER_SEQUENCE_ATTRIBUTE = "clans:coffer-sequence";
 
@@ -169,6 +170,14 @@ function sendCofferToAll(clan) {
   }
 }
 
+function characterOf(player) {
+  return { account: Core.accountOf(player), profile: player.getProfile?.() ?? "main" };
+}
+
+function isCharacter(entry, { account, profile }) {
+  return entry.account === account && entry.profile === profile;
+}
+
 /**
  * Writes the coffer and its journal entry before anything of the player's changes, so a failed
  * write moves nothing. The caller moves the coins straight after, with no chance of a save between.
@@ -177,7 +186,7 @@ function commitTransfer(player, clan, delta) {
   const { coffer, cofferJournal } = clan;
   const sequence = (player.getAttribute(COFFER_SEQUENCE_ATTRIBUTE) ?? 0) + 1;
   clan.coffer = coins(clan) + delta;
-  clan.cofferJournal = [...(cofferJournal ?? []), { account: Core.accountOf(player), sequence, delta }];
+  clan.cofferJournal = [...(cofferJournal ?? []), { ...characterOf(player), sequence, delta }];
   try {
     Store.save();
   } catch (error) {
@@ -214,21 +223,37 @@ function undoTransfer(player, clan, delta) {
   }
 }
 
-/** At login: anything journalled that the save holds is settled, and anything it doesn't is undone. */
+/**
+ * A load can return a save still waiting for the writer, so an entry it covers isn't safe to forget
+ * yet: a crash now would leave the older row with nothing to reconcile it. flush() resolves once the
+ * writer has committed everything sent so far, which includes that save.
+ */
+function forgetOnceDurable(clan, character, saved) {
+  core.GameConstants.PLAYER_PERSISTENCE.flush()
+    .then(() => {
+      if (Store.byName(clan.name) !== clan) return;
+      clan.cofferJournal = (clan.cofferJournal ?? []).filter((entry) => !isCharacter(entry, character) || entry.sequence > saved);
+      Store.save();
+    })
+    .catch((error) => console.error("[clans] Keeping coffer journal entries: the player save isn't durable yet", error));
+}
+
+/** At login: anything journalled that the save doesn't hold is undone, and the rest is let go once it's durable. */
 function recoverCoffer(player) {
-  const account = Core.accountOf(player);
+  const character = characterOf(player);
   const saved = player.getAttribute(COFFER_SEQUENCE_ATTRIBUTE) ?? 0;
   for (const clan of Store.all()) {
     const journal = clan.cofferJournal ?? [];
-    const mine = journal.filter((entry) => entry.account === account);
-    if (mine.length === 0) continue;
-    clan.cofferJournal = journal.filter((entry) => entry.account !== account);
+    const mine = journal.filter((entry) => isCharacter(entry, character));
     const lost = mine.filter((entry) => entry.sequence > saved);
-    for (const { delta } of lost.reverse()) undoTransfer(player, clan, delta);
-    Store.save();
-    if (lost.length === 0) continue;
-    sendCofferToAll(clan);
-    player.sendMessage("The server restarted before your coffer transfer was saved, so it was undone.");
+    if (lost.length > 0) {
+      clan.cofferJournal = journal.filter((entry) => !lost.includes(entry));
+      for (const { delta } of lost.reverse()) undoTransfer(player, clan, delta);
+      Store.save();
+      sendCofferToAll(clan);
+      player.sendMessage("The server restarted before your coffer transfer was saved, so it was undone.");
+    }
+    if (mine.length > lost.length) forgetOnceDurable(clan, character, saved);
   }
 }
 

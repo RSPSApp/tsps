@@ -342,7 +342,8 @@ const PLACE = /\b(in|on|at|inside|near|from|outside|under|beneath|with)\b (?:the
 /** The cache item a task names, trying the forms a task's wording takes ("Oak Logs", "Shrimp" -> "Shrimps"). */
 function itemNamed(text: string, items: Map<string, string>, prefixes: string[] = [""]): string | null {
   const base = text.replace(/,/g, "").trim();
-  const forms = [...new Set([...singulars(base), `${base}s`, `${base}es`])];
+  // The name as written first ("Raw anchovies" is an item), then its singulars and plurals.
+  const forms = [...new Set([base, ...singulars(base), `${base}s`, `${base}es`])];
   for (const prefix of prefixes) {
     for (const form of forms) {
       const item = items.get(`${prefix}${form}`.toLowerCase());
@@ -991,9 +992,10 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
       if (lowerVerb === "snare" && /^birds?$/i.test(made)) return {};
       if (lowerVerb === "catch" || lowerVerb === "snare") {
         // A fish is caught raw; anything else caught is a creature hunted ("Catch 500 Chinchompas").
-        const fish = itemNamed(made, items, ["Raw "]);
+        const fish = itemNamed(made, items, ["Raw "]) ?? (/^Raw /i.test(made) ? itemNamed(made, items) : null);
         if (fish) return withArea({ kind: "produce", items: [fish], count });
-        const creature = npcNamed(made.replace(/ \(Hunter\)$/i, ""), npcs);
+        // "Red chinchompa (Hunter)s": the link's target, plural after it.
+        const creature = npcNamed(made.replace(/ \(Hunter\)s?$/i, ""), npcs);
         if (creature) return withArea({ kind: "hunt", npcs: [creature], count });
         continue;
       }

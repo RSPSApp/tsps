@@ -503,6 +503,7 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   // a potion has no dose, the description names the herb, a tree chopped is its logs, a trailing
   // league region is the task's area.
   assert.deepEqual(trigger("catch-a-herring"), { kind: "produce", items: ["Raw herring"], count: 1 });
+  assert.deepEqual(trigger("catch-an-anchovy").items, ["Raw anchovies"], "the description's raw fish as written");
   assert.deepEqual(trigger("craft-a-fire-rune"), { kind: "produce", items: ["Fire rune"], count: 1 });
   assert.deepEqual(trigger("make-30-prayer-potions"), { kind: "produce", items: ["Prayer potion"], count: 30 });
   assert.deepEqual(trigger("clean-a-grimy-guam"), { kind: "produce", items: ["Guam leaf"], count: 1 });

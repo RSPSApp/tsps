@@ -121,6 +121,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const MEZAN_FIGHTER_ID = NpcIdentifiers.KNIGHT_OF_VARLAMORE_23; // 12916
   const MEZAN_DONE_ID = NpcIdentifiers.KNIGHT_OF_VARLAMORE_24; // 12917
   const GUARD_ACTOR_ID = NpcIdentifiers.GUARD_229; // 12928
+  const AFTERMATH_SPEAKER_IDS = { Guard: GUARD_ACTOR_ID, "Prince Itzla Arkan": ITZLA_ACTOR_ID };
   const KNIGHT_ACTORS = [12903, 12905, 12907, 12909, 12911, 12915]; // vmq2_knight_1..6_cutscene
   const VELAM_ACTOR_ID = 12909;
 
@@ -576,6 +577,10 @@ module.exports = function registerTwilightPromiseQuest(api) {
   /** Line events fire as a run of lines is queued, so a change made as a line shows goes in `before`. */
   function handleLine(event) {
     const { player, npcId } = event;
+    if (Scenes.get(player)?.name === "aftermath" && event.pages?.some(({ page }) => page === PAGE)) {
+      const speakerId = AFTERMATH_SPEAKER_IDS[event.step?.speaker];
+      if (speakerId !== undefined) event.speakerId = speakerId;
+    }
     const text = event.step?.text ?? event.step?.player ?? event.step?.npc ?? event.text;
     // The stage is read as the line shows: a run of lines is queued before its first one plays.
     const at = (line, minStage, maxStage, action) => {
@@ -1139,6 +1144,10 @@ module.exports = function registerTwilightPromiseQuest(api) {
       scene.ennius = Scenes.actor(scene, ENNIUS_ACTOR_ID, [1682, 3156], [1684, 3156]);
       Scenes.later(scene, 1, () => Scenes.camera(player, [1684, 3161, 420], [1671, 3156, 220]));
       Scenes.later(scene, 2, () => Scenes.fade(player, false));
+      Scenes.later(scene, 3, () => {
+        scene.ennius?.setPositionToFace(null);
+        scene.ennius?.getMovementQueue().addSteps(new Location(1679, 3156, 0));
+      });
       Scenes.later(scene, 6, () => scene.ennius && Scenes.face(scene.ennius, [1676, 3158]));
       Scenes.later(scene, 7, () => play(player, ENNIUS_NPC_ID, V.TWINS_LETTER, after("yqVhSV")));
     });
@@ -1157,15 +1166,17 @@ module.exports = function registerTwilightPromiseQuest(api) {
     }
     Scenes.hold(player);
     if (stepId === STEP.VELAM_STEPS) {
+      scene.ennius?.setPositionToFace(null);
+      scene.ennius?.getMovementQueue().addSteps(new Location(1679, 3158, 0));
       scene.velam?.getMovementQueue().addSteps(new Location(1679, 3159, 0));
       Scenes.later(scene, 2, () => scene.velam && Scenes.face(scene.velam, [1679, 3149]));
       Scenes.later(scene, 3, () => play(player, ENNIUS_NPC_ID, V.TWINS_LETTER, after(STEP.VELAM_STEPS)));
       return;
     }
     if (stepId === STEP.VELAM_KILLED) {
-      scene.ennius?.performAnimation(new Animation(ENNIUS_STRIKE_ANIMATION));
+      scene.ennius?.performAnimation(new Animation(ENNIUS_STRIKE_ANIMATION, 5));
       Scenes.later(scene, 1, () => {
-        scene.velam?.performAnimation(new Animation(VELAM_FALL_ANIMATION));
+        scene.velam?.performAnimation(new Animation(VELAM_FALL_ANIMATION, 20));
         scene.velam?.showHitsplat?.(VELAM_DAMAGE, { mine: 17, others: 17 }, { current: 0, max: VELAM_DAMAGE });
       });
       Scenes.later(scene, 4, () => scene.velam && Scenes.removeActor(scene, scene.velam));

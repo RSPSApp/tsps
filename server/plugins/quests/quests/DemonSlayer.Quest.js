@@ -47,6 +47,8 @@ module.exports = function registerDemonSlayerQuest(api) {
   const ROVIN_KEY_ITEM_ID = ItemIdentifiers.SILVERLIGHT_KEY_2;
   const PRYSIN_KEY_ITEM_ID = ItemIdentifiers.SILVERLIGHT_KEY_3;
   const SILVERLIGHT_ITEM_ID = ItemIdentifiers.SILVERLIGHT;
+  /** Shadow of the Storm dyes the sword (6745) and turns it into Darklight (6746): still the sword. */
+  const SILVERLIGHT_FORMS = [SILVERLIGHT_ITEM_ID, ItemIdentifiers.SILVERLIGHT_2, ItemIdentifiers.DARKLIGHT];
   const BONES_ITEM_ID = ItemIdentifiers.BONES;
   const COINS_ITEM_ID = ItemIdentifiers.COINS;
   const BUCKET_OF_WATER_ITEM_ID = ItemIdentifiers.BUCKET_OF_WATER;
@@ -191,6 +193,9 @@ module.exports = function registerDemonSlayerQuest(api) {
 
   const bankHasItem = (player, itemId) =>
     player.getBanks?.()?.some((bank) => bank && bank.getAmount(itemId) > 0) === true;
+
+  /** Sir Prysin replaces Silverlight only when the player has it in no form. */
+  const ownsSilverlight = (player) => SILVERLIGHT_FORMS.some((itemId) => ownsItem(player, itemId));
 
   function incantationOrder(player) {
     let order = player.getAttribute(INCANTATION_ATTRIBUTE);
@@ -432,8 +437,8 @@ module.exports = function registerDemonSlayerQuest(api) {
       if (value.includes("key from captain rovin")) return hasItem(player, ROVIN_KEY_ITEM_ID);
       if (value.includes("key from wizard traiborn")) return hasItem(player, TRAIBORN_KEY_ITEM_ID);
       if (value.includes("key from the drain")) return hasItem(player, PRYSIN_KEY_ITEM_ID);
-      if (value.includes("does not have silverlight")) return !ownsItem(player, SILVERLIGHT_ITEM_ID);
-      if (value.includes("has silverlight")) return ownsItem(player, SILVERLIGHT_ITEM_ID);
+      if (value.includes("does not have silverlight")) return !ownsSilverlight(player);
+      if (value.includes("has silverlight")) return ownsSilverlight(player);
       if (value.includes("does not have at least 500 coins")) {
         return inventory.getAmount(COINS_ITEM_ID) < 500;
       }
@@ -670,7 +675,7 @@ module.exports = function registerDemonSlayerQuest(api) {
 
     if (PRYSIN_NPC_IDS.has(npcId)) {
       if (stepId === SILVERLIGHT_MESSAGE_ID) {
-        if (!ownsItem(player, SILVERLIGHT_ITEM_ID) && hasAllKeys(player)) {
+        if (!ownsSilverlight(player) && hasAllKeys(player)) {
           player.getInventory().deleteNumber(TRAIBORN_KEY_ITEM_ID, 1);
           player.getInventory().deleteNumber(ROVIN_KEY_ITEM_ID, 1);
           player.getInventory().deleteNumber(PRYSIN_KEY_ITEM_ID, 1);
@@ -686,7 +691,7 @@ module.exports = function registerDemonSlayerQuest(api) {
       if (stepId === PRYSIN_SELL_SILVERLIGHT_ACTION_ID) {
         if (
           player.getInventory().getAmount(COINS_ITEM_ID) >= 500 &&
-          !ownsItem(player, SILVERLIGHT_ITEM_ID) &&
+          !ownsSilverlight(player) &&
           !player.getInventory().isFull()
         ) {
           player.getInventory().deleteNumber(COINS_ITEM_ID, 500);
@@ -722,7 +727,7 @@ module.exports = function registerDemonSlayerQuest(api) {
   // The lost-Silverlight branch of the pre-fight dialogue gives it back.
   function restoreSilverlightCondition({ player, npcId, stepId }) {
     if (!PRYSIN_NPC_IDS.has(npcId) || stepId !== PRYSIN_LOST_SILVERLIGHT_CONDITION_ID) return;
-    if (ownsItem(player, SILVERLIGHT_ITEM_ID) || player.getInventory().isFull()) return;
+    if (ownsSilverlight(player) || player.getInventory().isFull()) return;
     player.getInventory().adds(SILVERLIGHT_ITEM_ID, 1);
     if (quest.getStage(player) < STAGE_SILVERLIGHT) quest.setStage(player, STAGE_SILVERLIGHT);
     player.sendMessage("Sir Prysin returns Silverlight.");

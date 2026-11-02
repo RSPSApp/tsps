@@ -12,13 +12,10 @@ The machine-readable results are next to this file:
   every style (with the cache's gameval name), and any finding.
 - [`weapon-census-findings.csv`](weapon-census-findings.csv) - the 111 rows with a finding.
 
-Reproduce either with:
-
-```bash
-cd server
-TS_NODE_COMPILER_OPTIONS='{"target":"es2020"}' node node_modules/ts-node/dist/bin.js \
-  scripts/audit-weapons.ts --out ../docs/audits/weapon-census.csv
-```
+Both files are the output of a read-only audit run: cache definitions read through the server's own
+`ItemDefinition`/`CacheDefinitions` and `WeaponProfiles`, joined to the two committed dumps below.
+The runner was a local one-off and is not part of this branch, so the CSVs cannot be regenerated
+from the repository alone - [Method](#method) records exactly what each check does.
 
 The audit reads two dumps from [RSPSApp/osrsreboxed-db](https://github.com/RSPSApp/osrsreboxed-db),
 imported into `server/data/definitions/` and never edited here:

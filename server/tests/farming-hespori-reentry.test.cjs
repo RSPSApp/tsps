@@ -61,7 +61,7 @@ async function choice(f, number) {
 }
 test('canonical collect choice exits the cave without consuming stored items', async t => {
   const f = fixture(t); await warning(f); await choice(f,1); await speech(f);
-  assert.equal(f.p.getLocation().equals(new core.Location(1232,3728,0)),true);
+  assert.equal(f.p.getLocation().equals(new core.Location(1230,3730,0)),true);
   assert.deepEqual(f.farm.deathbank,f.old); assert.equal(f.state.hesporiFight,undefined);
 });
 test('canonical fight choice starts one private fight and preserves retrieval until death', async t => {

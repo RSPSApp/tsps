@@ -114,7 +114,7 @@ function startPottery(player, station, recipe, amount, firing) {
   const { Task, ItemIds } = Shared.getCore();
   const input = firing ? recipe.unfiredId : ItemIds.SOFT_CLAY;
   const origin = player.getLocation().clone();
-  const interval = firing ? 7 : 3;
+  const interval = Shared.actionInterval(player, "pottery", firing ? 7 : 3);
   const delay = interval - 1;
   const has = () => player.getInventory().contains(input) && (firing || canShape(player, recipe));
   if (!has()) {

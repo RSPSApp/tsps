@@ -6,7 +6,8 @@
  * Tasks.Slayer.js) spawns the monster's superior where it died, 1 time in 200, attacking the
  * player. A superior gives ten times its hitpoints in Slayer XP, on task or not (on task through
  * the task's kill, so Mortimer's XP modifier counts it), and rolls the superior unique tables
- * (Mortimer's superior unique modifier raises their chance).
+ * (Mortimer's superior unique modifier raises their chance). A slain superior brings another
+ * only when content gives it a chance ("slayer:superior-again").
  */
 const DATA = require("../data/slayer-superiors.json");
 const Data = require("./Data.Slayer");
@@ -136,14 +137,30 @@ function taskKill({ player, npc }, random = Math.random) {
   if (!rule.unlocked) return null;
   const id = resolve().get(npcName(npc).toLowerCase());
   if (id == null || Math.floor(random() * rule.chance) !== 0) return null;
+  return spawnWhereDied(player, npc, id, npc.getId?.());
+}
+
+/** Superior `id` where `npc` died, attacking the player; `fromId` is the monster whose table it rolls. */
+function spawnWhereDied(player, npc, id, fromId) {
   const at = npc.getLocation();
   const superior = api.spawnNpc({ id, x: at.getX(), y: at.getY(), z: at.getZ(), owner: player });
   if (!superior) return null;
-  if (Number.isInteger(npc.getId?.())) spawnedFrom.set(superior, npc.getId());
+  if (Number.isInteger(fromId)) spawnedFrom.set(superior, fromId);
   player.sendMessage(DATA.message);
   superior.getCombat?.()?.attack?.(player);
   api.emitCustomEvent("slayer:superior-spawned", { player, npc, superior });
   return superior;
+}
+
+/**
+ * A slain superior may bring another of itself where it died: never unless content gives it a
+ * chance ("slayer:superior-again" { player, npc, chance }, a league relic's 50%).
+ */
+function superiorAgain(player, npc, random = Math.random) {
+  const rule = { player, npc, chance: 0 };
+  api.emitCustomEvent("slayer:superior-again", rule);
+  if (!(rule.chance > 0) || random() >= rule.chance || !Number.isInteger(npc.getId?.())) return null;
+  return spawnWhereDied(player, npc, npc.getId(), spawnedFrom.get(npc) ?? normalIdOf(npc));
 }
 
 /** The normal monster a superior is the superior of (its first attackable NPC id), or null. */
@@ -156,7 +173,11 @@ function normalIdOf(superior) {
 
 /** A superior's Slayer XP off task (on task, the task's kill gave it). */
 function npcKilled({ killer, npc }) {
-  if (!killer?.isPlayer?.() || !isSuperior(npc) || onTaskKills.has(npc)) return;
+  if (!killer?.isPlayer?.() || !isSuperior(npc)) return;
+  // "slayer:superior-killed" { player, npc }: a superior killed, on task or off (a league's "Defeat 25 Superior slayer monsters").
+  api.emitCustomEvent("slayer:superior-killed", { player: killer, npc });
+  superiorAgain(killer, npc);
+  if (onTaskKills.has(npc)) return;
   const hitpoints = (npc.getCurrentDefinition?.() ?? npc.getDefinition()).getHitpoints();
   killer.getSkillManager().addExperiences(core.Skill.SLAYER, hitpoints * DATA.xpPerHitpoint);
 }
@@ -217,4 +238,4 @@ function attach(pluginApi) {
   pluginApi.onNpcDeath(npcKilled);
 }
 
-module.exports = { init, attach, taskKill, npcKilled, rollUniques, uniqueChance, isSuperior, resolve, superiorForTask, spawnForTask, normalIdOf, addUniques };
+module.exports = { init, attach, taskKill, npcKilled, superiorAgain, rollUniques, uniqueChance, isSuperior, resolve, superiorForTask, spawnForTask, normalIdOf, addUniques };

@@ -33,6 +33,7 @@ before(() => {
     registerArea() {},
     onPlayerLogout() {},
     onPlayerLogin() {},
+    onGroundItemPickup() {},
     onNpcInteraction() {},
     onCustomEvent() {},
     emitCustomEvent() {},

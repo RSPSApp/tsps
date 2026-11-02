@@ -59,6 +59,7 @@ import { PluginManager } from "../../../../plugins/PluginManager";
 import { ServerPerf } from "../../../../util/ServerPerf";
 import { getSequencePriority } from "../../../cache/NpcAnimationScanner";
 import { LOGIN_TOKENS_ATTRIBUTE } from "../../../../net/login/LoginTokens";
+import { CacheDefinitions } from "../../../cache/CacheDefinitions";
 
 const ATTR_SKIP_PERSISTENCE = "bot-skip-persistence";
 const DEFAULT_AUDIO_SETTINGS: Readonly<Record<number, number>> = {
@@ -420,6 +421,14 @@ export class Player extends Mobile {
         this.getPacketSender().sendConfig(CombatPoisonEffect.ORB_VARP, value);
     }
 
+    private static mapClockVarp: number | null | undefined = undefined;
+
+    /** Sends the varp map_clock as the world's tick count, once a tick. */
+    private sendMapClock(): void {
+        if (Player.mapClockVarp === undefined) Player.mapClockVarp = CacheDefinitions.getVarpId("map_clock");
+        if (Player.mapClockVarp !== null) this.getPacketSender().sendConfig(Player.mapClockVarp, World.getProcessCycle());
+    }
+
     public process() {
         const isBot = this.isPlayerBot();
         const timed = <T>(phase: string, fn: () => T): T =>
@@ -427,6 +436,9 @@ export class Player extends Mobile {
 
         // Client input first: packets received since the last turn act now, on the tick.
         timed("client_input", () => this.getSession()?.processPackets());
+        // The tick count, every tick, as live sends it (varp map_clock): the client's timers
+        // (buff bar cooldowns, script4678 and script5940) count against it.
+        if (!isBot) this.sendMapClock();
         // Queued impacts land before this player acts, matching LostCity's
         // processQueues-then-processInteraction order. A hit that kills them here
         // stops the rest of this turn via the isDying/hitpoints guards below.
@@ -536,7 +548,8 @@ export class Player extends Mobile {
                 const points = (restoreDue ? 1 : 0) + (rapidRestoreDue ? 1 : 0);
                 for (const skill of Skill.values()) {
                     if (skill === Skill.HITPOINTS || skill === Skill.PRAYER) continue;
-                    const max = skills.getMaxLevel(skill);
+                    // Up to the resting level: the base, or above it with a permanent boost.
+                    const max = skills.getRestingLevel(skill);
                     if (skills.getCurrentLevel(skill) < max) skills.increaseCurrentLevel(skill, points, max);
                 }
             }
@@ -614,16 +627,20 @@ export class Player extends Mobile {
     }
 
     /**
-     
-    Requests a logout by sending the logout packet to the client. This leads to
-    the connection being closed, which then adds the player to the remove
-    characters queue.
-    */
+     * Logs the player out from the server's side (content's "log out" buttons, a newer login of
+     * the same account): queued for removal, and a connected client told as an accepted logout
+     * button tells it (the logout response, then the socket closes), so the browser and the
+     * official client through the gateway both return to the login screen. (The old packet 109
+     * reached no client: legacy packets are no-ops.)
+     */
     requestLogout() {
         if (!World.getRemovePlayerQueue().includes(this)) {
             World.getRemovePlayerQueue().push(this);
         }
-        this.getPacketSender().sendLogout();
+        if (World.isPlayerSessionConnected(this)) {
+            this.setDisconnectSource("logout");
+            this.getSession().logout();
+        }
     }
 
     onLogout() {

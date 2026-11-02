@@ -80,7 +80,46 @@ function createWidgetGroup(groupId) {
   return { groupId, widgets, uid, add };
 }
 
+/** if_triggeroplocal (a script trigger's) arguments as the client packs them: ints as zigzag varints. */
+function triggerInts(argsData) {
+  const ints = [];
+  let value = 0;
+  let shift = 0;
+  for (const byte of argsData ?? []) {
+    value |= (byte & 0x7f) << shift;
+    shift += 7;
+    if ((byte & 0x80) !== 0) continue;
+    ints.push((value >>> 1) ^ -(value & 1));
+    value = 0;
+    shift = 0;
+  }
+  return ints;
+}
+
+/**
+ * A script trigger's arguments as plain unsigned varints (7 bits a byte, low first): how the real
+ * client writes an int array argument ("*"), its length and then each element, as the pact tree's
+ * Apply Changes sends it (RuneLite through the gateway: [1, 126] is one node, component 126;
+ * recordings 237/238: [2, 88, 94], [1, -44, 1] = 212).
+ */
+function triggerVarints(argsData) {
+  const ints = [];
+  let value = 0;
+  let shift = 0;
+  for (const byte of argsData ?? []) {
+    value |= (byte & 0x7f) << shift;
+    shift += 7;
+    if ((byte & 0x80) !== 0) continue;
+    ints.push(value >>> 0);
+    value = 0;
+    shift = 0;
+  }
+  return ints;
+}
+
 module.exports = {
+  triggerInts,
+  triggerVarints,
   FLAG_OP1,
   FLAG_OP2,
   FLAG_OP3,

@@ -18,6 +18,7 @@
  */
 
 const Shared = require("./Shared.Wintertodt");
+const SkillActions = require("../../skills/SkillActions");
 const Round = require("./Round.Wintertodt");
 const Corners = require("./Corners.Wintertodt");
 const CombatAchievements = require("./CombatAchievements.Wintertodt");
@@ -114,8 +115,10 @@ function light(event) {
     player.sendMessage("You need a tinderbox or bruma torch to light that brazier.");
     return true;
   }
+  // Content may pace the lighting ("skills:action-interval", a league relic's 2 ticks).
+  const lightTicks = SkillActions.actionInterval(Shared.api(), player, Shared.core().Skill.FIREMAKING, "brazier", LIGHT_TICKS);
   Shared.startAction(player, "light", (ticks) => {
-    if (ticks < LIGHT_TICKS) return true;
+    if (ticks < lightTicks) return true;
     finishLighting(player, index);
     return false;
   });

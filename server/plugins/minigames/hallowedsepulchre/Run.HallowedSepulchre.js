@@ -281,6 +281,8 @@ class Run {
     completions[number] = (completions[number] ?? 0) + 1;
     player.setAttribute(Common.data.attributes.completions, completions);
     player.sendMessage(Common.message("completed", { floor: number, count: completions[number] }));
+    // "hallowed-sepulchre:floor-completed" { player, floor }: a floor done (a league's "Complete floor 3").
+    Common.api?.emitCustomEvent?.("hallowed-sepulchre:floor-completed", { player, floor: number });
     if (timed) {
       const pbs = Common.record(player, "pbs");
       const time = this.floorSpent;

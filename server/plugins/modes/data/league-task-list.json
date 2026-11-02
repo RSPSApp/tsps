@@ -14,14 +14,20 @@
     "rows": 18,
     "menuFrame": 6,
     "menuFrameSlots": [10, 18],
-    "close": 3
+    "close": 3,
+    "_search": "Leagues VI recordings (rev 237/238: 1098, 1102, 1104, 1105): a click on searchbar_image (657:45) sets league_tasks_is_searching and league_tasks_search_listen_for_keyboard to 1 and runs chatdefault_stopinput; the typing that follows is the client's, nothing reaches the server. Closing the list while searching resets both, closes the floater, runs chatdefault_restoreinput, then script 9431; otherwise the close and script 9431 only.",
+    "search": { "component": 45, "searchingVarbit": 17310, "keyboardVarbit": 17311 },
+    "_scripts": "Ids for the captured scripts' names (RSProx's script index; the rev 241 cache keeps the ids): league_task_override_task_wipe 9404 after the open's events, chatdefault_stopinput 2157, chatdefault_restoreinput 2158, and 9431, unnamed, on every close.",
+    "scripts": { "taskWipe": 9404, "stopInput": 2157, "restoreInput": 2158, "close": 9431 }
   },
+  "_filters": "In the order the Leagues VI open sends their events (rev 237/238): tier, completed, mastery, type, area, skill. The mastery dropdown (657:41, enum 5944, league_task_filter_mastery_point) is Demonic Pacts' pact-task filter, built by the filter row 657:33's script 3207 and read by the list's filter script 3699.",
   "filters": {
     "tier": { "varbit": 10033, "component": 37, "slots": [1, 7], "source": "captured on rev 227's component: slot 3 -> 2, slot 5 -> 4, slot 1 -> 0; enum 2676 (Tier)" },
+    "completed": { "varbit": 10034, "component": 42, "slots": [1, 4], "source": "captured on rev 237: slot 2 -> 1; enum 2677 (All/Incomplete/Complete)" },
+    "mastery": { "varbit": 20357, "component": 41, "slots": [1, 4], "source": "enum 5944 (pact tasks) and the captured if_setevents range (rev 237)" },
     "type": { "varbit": 11689, "component": 38, "slots": [1, 8], "source": "captured on rev 227's component: slot 2 -> 1; enum 3413 (Type)" },
     "area": { "varbit": 11692, "component": 39, "slots": [1, 15], "source": "enum 3414 (Area; 13 is Unlocked) and the captured if_setevents range" },
-    "skill": { "varbit": 13340, "component": 40, "slots": [1, 7], "source": "enum 4105 (Skill) and the captured if_setevents range" },
-    "completed": { "varbit": 10034, "component": 42, "slots": [1, 4], "source": "enum 2677 (All/Incomplete/Complete) and the captured if_setevents range" }
+    "skill": { "varbit": 13340, "component": 40, "slots": [1, 7], "source": "enum 4105 (Skill) and the captured if_setevents range" }
   },
   "messages": {
     "completed": { "text": "Congratulations, you've completed {article} {tier} task: <col={colour}>{name}</col>.", "source": "capture 227/00070: \"Congratulations, you've completed an easy task: <col=20C2FE>Fletch an Oak Shortbow</col>.\"" },

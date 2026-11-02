@@ -4,7 +4,7 @@
  * League Points, three relics a tier, chosen for good, through the cache's relic interface. The
  * catalog (data/league-relics.json) reaches the client as structs and enums through LeagueMode's
  * `league:content-rows`, since the cache only carries the current league's (Demonic Pacts, which is
- * read from it instead). Other plugins ask `league:has-relic` { player, relic } and
+ * read from it instead, https://oldschool.runescape.wiki/w/Demonic_Pacts_League/Relics). Other plugins ask `league:has-relic` { player, relic } and
  * apply a relic's effect themselves (docs/leagues.md).
  */
 const Common = require("./leaguerelics/Common.LeagueRelics");
@@ -30,6 +30,9 @@ module.exports = {
     require("./leaguerelics/Specialist.LeagueRelics")(api);
     require("./leaguerelics/LastStand.LeagueRelics")(api);
     require("./leaguerelics/Equilibrium.LeagueRelics")(api);
+    require("./leaguerelics/Toggles.LeagueRelics")(api);
+    require("./leaguerelics/Hotfoot.LeagueRelics")(api);
+    require("./leaguerelics/Woodsman.LeagueRelics")(api);
     require("./leaguerelics/EndlessHarvest.LeagueRelics")(api);
     require("./leaguerelics/Trickster.LeagueRelics")(api);
     require("./leaguerelics/PowerMiner.LeagueRelics")(api);
@@ -57,5 +60,21 @@ module.exports = {
     require("./leaguerelics/Grimoire.LeagueRelics")(api);
     require("./leaguerelics/BankHeist.LeagueRelics")(api);
     require("./leaguerelics/ArcaneGrimoire.LeagueRelics")(api);
+    require("./leaguerelics/BarbarianGathering.LeagueRelics")(api);
+    require("./leaguerelics/Abundance.LeagueRelics")(api);
+    require("./leaguerelics/ConnivingClues.LeagueRelics")(api);
+    require("./leaguerelics/NaturesAccord.LeagueRelics")(api);
+    require("./leaguerelics/Larcenist.LeagueRelics")(api);
+    require("./leaguerelics/SoulHarvest.LeagueRelics")(api);
+    require("./leaguerelics/EternalSustenance.LeagueRelics")(api);
+    require("./leaguerelics/CullingSpree.LeagueRelics")(api);
+    require("./leaguerelics/FlowState.LeagueRelics")(api);
+    require("./leaguerelics/FlaskOfFervour.LeagueRelics")(api);
+    require("./leaguerelics/Transmute.LeagueRelics")(api);
+    require("./leaguerelics/ButlersBell.LeagueRelics")(api);
+    require("./leaguerelics/Minion.LeagueRelics")(api);
+    require("./leaguerelics/EvilEye.LeagueRelics")(api);
+    require("./leaguerelics/MapOfAlacrity.LeagueRelics")(api);
+    require("./leaguerelics/Hotfoot.LeagueRelics").late(api);
   },
 };

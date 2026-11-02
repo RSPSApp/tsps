@@ -217,6 +217,8 @@ function fill(event) {
   state.type = kind.type;
   decay(player, pouch, state, moved);
   save(player, pouch, state);
+  // "runecrafting:pouch-filled" { player, itemId, amount }: essence put into the pouch.
+  if (moved > 0) pluginApi.emitCustomEvent("runecrafting:pouch-filled", { player, itemId: event.itemId, amount: moved });
   return true;
 }
 

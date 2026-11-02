@@ -17,10 +17,23 @@ function sendSelections(player) {
   sender.sendVarbit(Common.data.lastViewedVarbit, 0);
 }
 
-/** The items a relic hands out, by id (names the cache no longer has are skipped; the data says which). */
+/** The items a relic hands out, by id: a name (names the cache no longer has are skipped; the data says which) or a cache id. */
 function grantedItems(relic) {
   const { ItemIdentifiers } = Common.core;
-  return (relic.grants ?? []).map((name) => ItemIdentifiers[name]).filter((id) => Number.isInteger(id));
+  return (relic.grants ?? []).map((name) => (Number.isInteger(name) ? name : ItemIdentifiers[name])).filter((id) => Number.isInteger(id));
+}
+
+/**
+ * Where an item relic may be unlocked: in a bank, or (a cache-read league with a `tutor`, Demonic
+ * Pacts) near its Leagues Tutor, as live says (237/01102); `reach` tiles is ours.
+ */
+function mayReceiveItems(player, type, bankOpen) {
+  if (bankOpen) return true;
+  const tutor = Common.cacheLeague(type)?.tutor;
+  if (!tutor) return false;
+  const here = player.getLocation();
+  return (player.getLocalNpcs?.() ?? []).some((npc) => npc.getDefinition?.()?.getName?.() === tutor.name
+    && npc.getLocation().getZ() === here.getZ() && npc.getLocation().isWithinDistance(here, tutor.reach));
 }
 
 /** The bank tabs that hold items (the search tab holds none). */
@@ -89,7 +102,7 @@ function refusal(player, type, tier, slot, bankOpen) {
   if (!relic) return "noSuchRelic";
   if (Common.chosen(player)[tier] !== undefined) return "alreadyChosen";
   if (Common.points(player) < Common.catalog(type).tiers[tier].cost) return "notEnoughPoints";
-  if (relic.requiresBank && grantedItems(relic).length > 0 && !bankOpen) return "needsBank";
+  if (relic.requiresBank && grantedItems(relic).length > 0 && !mayReceiveItems(player, type, bankOpen)) return "needsBank";
   if (!canDeliver(player, relic)) return "noRoom";
   return null;
 }
@@ -100,6 +113,26 @@ function grant(player, relic) {
     if (tab < 0) player.getInventory().add(item, true);
     else player.getBank(tab).add(item, true);
   }
+}
+
+/**
+ * What a cache-read league says after an unlock, as captured (237/01098): "Congratulations, you've
+ * unlocked a new Relic: ..." and, for each item it gave, the item box "You receive an Evil eye.".
+ */
+function announce(player, type, relic) {
+  const own = Common.cacheLeague(type)?.messages;
+  if (!own?.unlocked) return;
+  player.sendMessage(Common.message("unlocked", { relic: relic.name }, type));
+  const { ItemStatementDialogue, DialogueChainBuilder, ItemDefinition } = Common.core;
+  const items = grantedItems(relic);
+  if (items.length === 0 || !ItemStatementDialogue || !DialogueChainBuilder) return;
+  const chain = new DialogueChainBuilder();
+  items.forEach((id, index) => {
+    const name = ItemDefinition.forId(id)?.getName?.() ?? "";
+    const item = `${/^[aeiou]/i.test(name) ? "an" : "a"} ${name}`;
+    chain.add(new ItemStatementDialogue(index, id, Common.message("received", { item }, type)));
+  });
+  player.getDialogueManager?.()?.startDialogues?.(chain);
 }
 
 /** The captured unlock: the tier's selection varbit, the animation, the league's graphic, the modal closed, four sounds. */
@@ -130,11 +163,11 @@ function reloadedRefusal(player, type, tier, slot, bankOpen) {
   const picks = Common.chosen(player);
   if (!effect || ![].concat(effect.league).includes(type) || picks[tier] === undefined) return null;
   const holds = Common.catalog(type).tiers.some((entry, index) => entry.relics[picks[index] - 1]?.key === effect.key);
-  if (!holds || !effect.tiers.includes(tier) || player.getAttribute(Common.RELOADED_ATTRIBUTE)) return null;
+  if (!holds || !Common.reloadedTiers(effect, type).includes(tier) || player.getAttribute(Common.RELOADED_ATTRIBUTE)) return null;
   const relic = Common.relic(type, tier, slot);
   if (!relic) return "noSuchRelic";
   if (picks[tier] === slot) return "alreadyChosen";
-  if (relic.requiresBank && grantedItems(relic).length > 0 && !bankOpen) return "needsBank";
+  if (relic.requiresBank && grantedItems(relic).length > 0 && !mayReceiveItems(player, type, bankOpen)) return "needsBank";
   if (!canDeliver(player, relic)) return "noRoom";
   return "";
 }
@@ -144,26 +177,28 @@ function unlock(player, tier, slot, { bankOpen = Common.core.Bank.isOpen(player)
   const reloaded = reloadedRefusal(player, type, tier, slot, bankOpen);
   if (reloaded !== null) {
     if (reloaded) {
-      player.sendMessage(Common.message(reloaded));
+      player.sendMessage(Common.message(reloaded, {}, type));
       return false;
     }
     const extra = Common.relic(type, tier, slot);
     player.setAttribute(Common.RELOADED_ATTRIBUTE, { tier, slot });
     present(player, type, tier);
     grant(player, extra);
-    player.sendMessage(Common.message("reloadedChosen", { relic: extra.name }));
+    player.sendMessage(Common.message("reloadedChosen", { relic: extra.name }, type));
+    announce(player, type, extra);
     Common.api.emitCustomEvent("league:relic-unlocked", { player, league: type, tier, slot, relic: extra.key, reloaded: true });
     return true;
   }
   const why = refusal(player, type, tier, slot, bankOpen);
   if (why) {
-    player.sendMessage(Common.message(why));
+    player.sendMessage(Common.message(why, {}, type));
     return false;
   }
   const relic = Common.relic(type, tier, slot);
   player.setAttribute(Common.RELICS_ATTRIBUTE, { ...Common.chosen(player), [tier]: slot });
   present(player, type, tier);
   grant(player, relic);
+  announce(player, type, relic);
   Common.api.emitCustomEvent("league:relic-unlocked", { player, league: type, tier, slot, relic: relic.key });
   return true;
 }
@@ -224,4 +259,5 @@ module.exports = function attach(api) {
 
 module.exports.unlock = unlock;
 module.exports.refusal = refusal;
+module.exports.reloadedRefusal = reloadedRefusal;
 module.exports.uid = uid;

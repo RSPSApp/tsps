@@ -17,7 +17,10 @@
  * arguments may be given as "group:child". As captured: 664 opens in the host with OP1 on Continue
  * (664:31) and Previous (664:32) slot 9, script 3408 shows it, and the varbits hnt_selected_hint
  * (10307), hnt_hint_step (10308) and hnt_hint_max_step (10309) follow the walkthrough. The pause
- * button live also arms (664:9) is not: its resume packet reaches this server as a dialogue continue.
+ * button 664:9 takes PAUSEBUTTON (-1 to -1) too, as captured: on the last step ("Finish") the
+ * button's script (3420) resumes it, and this client then sends only that resume, no Continue
+ * click (live sent both), so the resume counts as the Continue. It ends the walkthrough, so a
+ * Continue click following it finds nothing left to step.
  */
 const { FLAG_OP1 } = require("./widgetGroup");
 
@@ -25,6 +28,10 @@ const HIGHLIGHT_GROUP = 664;
 const CONTINUE = 31;
 const PREVIOUS = 32;
 const BUTTON_SLOT = 9;
+/** screenhighlight:pausebutton, which the last step's Finish resumes. */
+const PAUSE_BUTTON = 9;
+/** if_setevents PAUSEBUTTON (bit 0, as RSProx names it). */
+const FLAG_PAUSE_BUTTON = 1 << 0;
 const OVERLAY = 1;
 const SCRIPT_START = 3408;
 const SCRIPT_HIDE = 3412;
@@ -76,6 +83,7 @@ function show(request) {
   sender.sendSubInterface(host, HIGHLIGHT_GROUP, OVERLAY);
   sender.sendInterfaceFlagsRange(uid(HIGHLIGHT_GROUP, CONTINUE), BUTTON_SLOT, BUTTON_SLOT, FLAG_OP1);
   sender.sendInterfaceFlagsRange(uid(HIGHLIGHT_GROUP, PREVIOUS), BUTTON_SLOT, BUTTON_SLOT, FLAG_OP1);
+  sender.sendInterfaceFlagsRange(uid(HIGHLIGHT_GROUP, PAUSE_BUTTON), -1, -1, FLAG_PAUSE_BUTTON);
   sender.sendVarbit(VARBIT_SELECTED_HINT, request.hint | 0);
   sender.sendVarbit(VARBIT_HINT_MAX_STEP, request.steps.length);
   sender.sendInterfaceScript(SCRIPT_START, [host]);
@@ -94,6 +102,13 @@ function next({ player, slot }) {
   close({ player });
   pluginApi.emitCustomEvent("screen-highlight:finished", { player, key: state.key });
   return true;
+}
+
+/** The pause button's resume (the last step's Finish): the Continue. */
+function resumed(event) {
+  const state = active.get(event.player);
+  if (!state || state.step + 1 < state.steps.length) return false;
+  return next({ player: event.player, slot: BUTTON_SLOT });
 }
 
 function previous({ player, slot }) {
@@ -125,6 +140,7 @@ module.exports = {
     api.onCustomEvent("interface:closed", hostClosed);
     api.onInterfaceActionButton(uid(HIGHLIGHT_GROUP, CONTINUE), next);
     api.onInterfaceActionButton(uid(HIGHLIGHT_GROUP, PREVIOUS), previous);
+    api.onInterfaceActionButton(uid(HIGHLIGHT_GROUP, PAUSE_BUTTON), resumed);
   },
   _test: { active },
 };

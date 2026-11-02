@@ -71,6 +71,8 @@ function unlock(chest, player) {
   for (const { itemId, amount } of drops) api.emitCustomEvent("collection-log:obtain", { player, itemId, amount });
   if (chest.count) player.setAttribute(OPENED_ATTRIBUTES[chest.key], opened(chest, player) + 1);
   if (chest.diaryTask) api.emitCustomEvent("diary:task", { player, ...chest.diaryTask });
+  // "chests:opened" { player, chest }: a key chest opened, by its name (a league's "Open the Crystal Chest").
+  api.emitCustomEvent("chests:opened", { player, chest: chest.name });
   return true;
 }
 

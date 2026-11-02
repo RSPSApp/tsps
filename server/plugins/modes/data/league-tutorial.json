@@ -539,6 +539,9 @@
       },
       "areasNeedUnlock": false,
       "walkthroughs": {
+        "_pacts": "The pact tree's walkthrough as recorded (237/01098, talent_tree:tutorial_highlight 647:14, highlight_screen 3409 and highlight_textbox 3413): three steps, the third waiting for the central pact to be bought; the tree comes back with the last two (pactsAfter), then the next page.",
+        "pacts": [{"focus": {"script": 3409, "args": [0, 0, 0, 0, 0, 2, 100, true]}, "text": {"script": 3413, "text": "This is the <col=ffffff>Demonic Pacts menu</col>. When you gain <col=ffffff>Demonic Pact points</col> you can spend them here to unlock new abilities and increase your power.", "final": false}}, {"focus": {"script": 3409, "args": [0, 0, 0, 0, 0, 2, 100, true]}, "text": {"script": 3413, "text": "You can see which tasks will reward you with <col=ffffff>Demonic Pacts points</col> by using the filters in the <col=ffffff>League Task menu</col>.", "final": false}}, {"focus": {"script": 3409, "args": [0, 0, 0, 0, 0, 2, 100, true]}, "text": {"script": 3413, "text": "To get you started, you have <col=ffffff>1 free pact point</col>. Spend this point to <col=ffffff>unlock the central pact</col> now.", "final": true}}],
+        "pactsAfter": [{"focus": {"script": 3409, "args": [0, 0, 0, 0, 0, 2, 100, true]}, "text": {"script": 3413, "text": "After this tutorial you will receive another <col=ffffff>1 free pact point</col> to spend.<br><col=ffffff>We strongly recommend spending it in a style specific pact, linked to the central pact.", "final": false}}, {"focus": {"script": 3409, "args": [0, 0, 0, 0, 0, 2, 100, true]}, "text": {"script": 3413, "text": "You can spend pact points whenever you like, so take some time to explore the options available - and choose wisely!", "final": true}}],
         "tasks": [
           {
             "focus": {

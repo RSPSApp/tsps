@@ -151,7 +151,7 @@ function give(player, item) {
  * against an empty inventory, so many rewards in a row are never lost to a full one; then the
  * inventory comes back and the rewards go into it, or the bank where they don't fit.
  */
-function completeQuest(player, quest) {
+function completeQuest(player, quest, { items = true } = {}) {
   const inventory = player.getInventory();
   const carried = inventory.getCopiedItems();
   const banked = bankedExperienceItems(player);
@@ -173,7 +173,8 @@ function completeQuest(player, quest) {
         extra -= taken;
       }
     }
-    for (const item of rewards) {
+    // Without `items`, the rewards are dropped: a league's start quests hand none (237/01098).
+    for (const item of items ? rewards : []) {
       if (!isExperienceItem(item.getId())) give(player, item);
     }
     inventory.refreshItems();
@@ -186,6 +187,27 @@ function completeQuests(player, name) {
   try {
     for (const quest of packQuests(name)) {
       if (!quest.isComplete(player)) completeQuest(player, quest);
+    }
+  } finally {
+    completing.delete(player);
+  }
+}
+
+/**
+ * `league:complete-quests` { player, quests: [names], items? }: completes the named quests the way a
+ * pack does (no experience, the final rewards kept; with `items: false` no item rewards either), in
+ * reverse list order, so a list written as the
+ * Wiki nests a quest's requirements under it completes the requirements first (Demonic Pacts'
+ * areas). Names this server registers no quest for are left out.
+ */
+function completeNamedQuests(request) {
+  const { player } = request ?? {};
+  if (!player || !Array.isArray(request.quests)) return;
+  const quests = [...new Set(request.quests)].reverse().map((name) => QuestRuntime.questNamed(name)).filter(Boolean);
+  completing.add(player);
+  try {
+    for (const quest of quests) {
+      if (!quest.isComplete(player)) completeQuest(player, quest, { items: request.items !== false });
     }
   } finally {
     completing.delete(player);
@@ -350,11 +372,18 @@ function skillLocked(player, statId) {
   return !unlocked(player).skills.includes(statId);
 }
 
-/** onCanGainExperience: no XP in a locked skill, nor from a bought pack's quests (Wiki /Unlocks). */
+/**
+ * onCanGainExperience: no XP from quests completed for the character, any league's (a bought pack,
+ * Demonic Pacts' automatic quests: live's new character has none of Perilous Moons' or Twilight's
+ * Promise's, 237/01098), nor in a Shattered Relics locked skill (Wiki /Unlocks).
+ */
 function lockedSkillExperience(event) {
   const { player, skill } = event;
-  if (!isShattered(player)) return;
-  if (completing.has(player) || skillLocked(player, Number(skill?.getClientId?.()))) event.allow = false;
+  if (completing.has(player)) {
+    event.allow = false;
+    return;
+  }
+  if (isShattered(player) && skillLocked(player, Number(skill?.getClientId?.()))) event.allow = false;
 }
 
 /** NPC name -> the boss unlock (its NPC id) that covers it, read once from the data. */
@@ -442,6 +471,7 @@ module.exports = function attach(api) {
   api.onCanGainExperience(lockedSkillExperience);
   api.onCanAttack(lockedBossAttack);
   api.onCustomEvent("league:boss-locked", bossLockedQuery);
+  api.onCustomEvent("league:complete-quests", completeNamedQuests);
   api.onInterfaceActionButton(buttonIds.tabs, pickTab);
   api.onInterfaceActionButton(buttonIds.list, pickEntry);
   api.onInterfaceActionButton(buttonIds.accept, accept);
@@ -449,4 +479,4 @@ module.exports = function attach(api) {
 };
 
 module.exports.unlocked = unlocked;
-module.exports._test = { questPrice, packQuests, completeQuests, entries, unlocked, skillLocked, bossOf, UNLOCKS_ATTRIBUTE };
+module.exports._test = { questPrice, packQuests, completeQuests, completeNamedQuests, entries, unlocked, skillLocked, bossOf, UNLOCKS_ATTRIBUTE };

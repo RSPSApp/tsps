@@ -1,6 +1,6 @@
 /**
  * The area interface (trailblazer_areas, 512), as captured: the side panel's View Areas opens it
- * as the main modal with the click events on its menu frame; a shield, a name or the name header
+ * as the main modal (busy and script 2524 first, rev 237) with the click events on its menu frame; a shield, a name or the name header
  * records the area viewed (varbit league_area_last_viewed) and runs the client's details script
  * with the area's state; the details' button teleports to an unlocked area; confirm unlocks the
  * viewed one. Clicks count only after View Areas opened the interface.
@@ -24,7 +24,9 @@ function open({ player }) {
   if (type === null) return false;
   const { group, menuFrame, menuFrameSlots } = ui();
   Common.api.emitCustomEvent("league:send-content", { player });
+  Common.api.emitCustomEvent("league:modal-opening", { player, group });
   const sender = player.getPacketSender();
+  sender.sendInterfaceScript(ui().modalSize[0], ui().modalSize[1]);
   sender.sendInterface(group);
   sender.sendInterfaceFlagsRange(Common.uid(group, menuFrame), menuFrameSlots[0], menuFrameSlots[1], FLAGS_OP1);
   viewing.set(player, -1);
@@ -35,7 +37,7 @@ function open({ player }) {
 function view(player, type, area) {
   const { group, viewScript, viewScriptComponentsBefore, viewScriptComponentsAfter, states } = ui();
   const state = Unlock.state(player, type, area.id);
-  const text = state === states.message ? Common.message("notInLeague") : "";
+  const text = state === states.message ? Common.message(Unlock.refusal(player, type, area.id) ?? "notInLeague") : "";
   const sender = player.getPacketSender();
   viewing.set(player, area.id);
   sender.sendVarbit(Common.data.varbits.lastViewed, area.id);
@@ -103,6 +105,7 @@ module.exports = function attach(api) {
   api.onInterfaceActionButton(Common.uid(group, nameHeader), headerClicked);
   api.onInterfaceActionButton(Common.uid(group, teleportButton), teleportClicked);
   api.onInterfaceActionButton(Common.uid(group, confirm), confirmClicked);
+  api.onCustomEvent("league:teleport-cast", Teleport.answerTeleportCast);
 };
 
 Object.assign(module.exports, { open });

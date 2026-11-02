@@ -11703,6 +11703,27 @@ test('Surok Fire Surge damage lands with its projectile, not at the cast', () =>
  }
 });
 
+test('a Fire Surge still in flight when Surok falls, or the player leaves, never lands', () => {
+ for (const ending of ['defeat', 'leave']) {
+  const {api,handlers}=mockApi(),damage=[];
+  const surge={castAnimation:()=>null,castProjectile:()=>({sendProjectile(){}})};
+  api.core={...api.core,CombatSpells:Object.assign(Object.create(api.core.CombatSpells),{FIRE_SURGE:surge})};
+  api.spawnNpc=()=>{const n={setMaxHitpoints:()=>n,setHitpoints:()=>n,setScriptedMovement(){},getMovementQueue:()=>({setBlockMovement(){}}),forceChat(){},getCombat:()=>({getLastAttack:()=>({reset(){}})})};return n;};
+  const f=require('../plugins/quests/wgs/Surok.WhileGuthixSleeps')({api,advance(){}});
+  const p={getHitpoints:()=>20,getSize:()=>1,getPrayerActive:()=>[],getLocation:()=>new api.core.Location(4145,4855,2),sendMessage(){},setArea(){},
+   getCombat:()=>({getHitQueue:()=>({addPendingDamage:hits=>damage.push(...hits)})})};
+  const a=new f.SurokArea(p);a.enter=()=>{};
+  const boss={getOwner:()=>p,getHitpoints:()=>450,getSize:()=>1,performAnimation(){},getLocation:()=>new api.core.Location(4145,4850,2)};
+  a.boss=boss;a.started=true;f.fights.set(p,a);
+  for(let tick=1;tick<=5;tick++)a.process(p);
+  assert.equal(a.incoming.length,1,'cast on tick 5 from 5 tiles: lands on tick 8');
+  if(ending==='defeat')for(const h of handlers.npcDeath)h({npc:boss});
+  else a.postLeave(p,false);
+  for(let tick=6;tick<=10;tick++)a.process(p);
+  assert.equal(damage.length,0,`after the ${ending}, the surge in flight deals nothing`);
+ }
+});
+
 test('Surok explosive can only be alchemised after telegrab at its actual position', () => {
   const { api } = mockApi(), f = require('../plugins/quests/wgs/Surok.WhileGuthixSleeps')({api});
   const player={sendMessage(){}},position=new api.core.Location(4143,4850,2),fight={explosive:{position,grabbed:false}};

@@ -48,9 +48,10 @@ module.exports=function registerSurok({api,stage,advance,held,give,play}){
    land(this,Projectile.ticksToLand(Projectile.arrivalCycles(b,p,Projectile.LEGACY_MAGIC_END_BASE)),p.getPrayerActive()[api.core.PrayerHandler.PROTECT_FROM_MAGIC]?random(0,10):random(0,42));
    if(++this.attacks>=this.specialAt){this.attacks=0;this.specialAt=random(7,8);special(this);}
   }
-  postLeave(m,logout){if(m===this.player){for(const n of [...this.enemies])remove(this,n);clearExplosive(this);fights.delete(m);if(logout)m.moveTo(loc(4142,4854,1));}super.postLeave(m,logout);}
+  postLeave(m,logout){if(m===this.player){for(const n of [...this.enemies])remove(this,n);clearExplosive(this);this.incoming=[];fights.delete(m);if(logout)m.moveTo(loc(4142,4854,1));}super.postLeave(m,logout);}
  }
  // Damage queued now shows next tick; `ticks` out, it waits in the area until the tick before.
+ // Surok's defeat and leaving the area drop what is still in flight.
  function land(f,ticks,n){if(ticks<=1)damage(f.player,n);else f.incoming.push({at:f.ticks+ticks-1,n});}
  function clearExplosive(f){if(!f.explosive)return;if(f.explosive.ground)ItemOnGroundManager.deregister(f.explosive.ground);f.player.getInventory().deleteNumber(LIT_EXPLOSIVE,1);f.explosive=null;}
  function explode(f){clearExplosive(f);damage(f.player,random(45,55));f.player.sendMessage('The lit explosive detonates!');}
@@ -120,7 +121,7 @@ module.exports=function registerSurok({api,stage,advance,held,give,play}){
  function alchemised({player,itemId}){const f=fights.get(player);if(itemId===LIT_EXPLOSIVE&&f?.explosive?.grabbed){f.explosive=null;player.sendMessage('The lit explosive is safely neutralised.');}}
  function death({npc}){
   const p=npc.getOwner(),f=p&&fights.get(p);if(!f)return;
-  if(npc===f.boss){for(const n of [...f.enemies])remove(f,n);clearExplosive(f);f.boss=null;f.started=false;advance(p,597);f.fallen=spawn(f,FALLEN,4145,4850,1);f.fallen.forceChat('Ugh!');p.sendMessage('Surok collapses. Plant the teleorb on him.');}
+  if(npc===f.boss){for(const n of [...f.enemies])remove(f,n);clearExplosive(f);f.incoming=[];f.boss=null;f.started=false;advance(p,597);f.fallen=spawn(f,FALLEN,4145,4850,1);f.fallen.forceChat('Ugh!');p.sendMessage('Surok collapses. Plant the teleorb on him.');}
   else if(targets.has(npc))remove(f,npc);
  }
  function plant(e){

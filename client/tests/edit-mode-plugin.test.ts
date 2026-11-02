@@ -843,11 +843,11 @@ assert.ok(
     "joining a path rounds its outside corner",
 );
 
-// Undo removes the last painted tile and clears its override.
+// Undo takes back the whole last path segment, not one tile of it.
 pathCalls.length = 0;
 const paintedCount = pathPlugin.getConfig().edits.length;
 assert.equal(pathPlugin.undo(), true);
-assert.equal(pathPlugin.getConfig().edits.length, paintedCount - 1);
+assert.ok(pathPlugin.getConfig().edits.length < paintedCount - 1, "the segment goes as one step");
 assert.equal(pathCalls[0][0], "clearTerrain");
 
 // Leaving edit mode hands the camera back to the player.

@@ -9,6 +9,7 @@
  * - `gravestones:expire` { player }: the grave collapses now (Death collecting it early).
  * - `gravestones:pay-fee` { player, amount, office } -> source ("coffer", "inventory", "bank" or
  *   null), message: the death-fee payment, Coffer first.
+ * - `gravestones:fee` { player, items } -> fee: what a grave of these { id, amount } would cost.
  * - `gravestones:office-take` { player, slot, count } -> taken: moves up to `count` of an office
  *   stack into the inventory, as far as it fits.
  * - `gravestones:coffer-adjust` { player, amount } -> ok: credits (or with a negative amount,
@@ -92,8 +93,13 @@ function tutorialEnd({ player }) {
   Timer.startCountdown(player);
 }
 
+function feeFor(request) {
+  request.fee = Fees.graveFee(request.items ?? [], Common.ironmanMode(request.player) != null);
+}
+
 function attach(api) {
   Common.bind(api);
+  api.onCustomEvent("gravestones:fee", feeFor);
   api.onCustomEvent("gravestones:state", state);
   api.onCustomEvent("gravestones:expire", expire);
   api.onCustomEvent("gravestones:pay-fee", payFee);

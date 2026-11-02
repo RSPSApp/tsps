@@ -131,6 +131,7 @@ export class NPC extends Mobile {
     private combatOverrideViews: Map<NpcDefinition, NpcDefinition> | null = null;
     /** Multiplies this NPC's attack and defence rolls (raid scaling); 1 leaves them alone. */
     private rollFactor = 1;
+    private defenceRollFactor: number | null = null;
     private spawnPosition: Location;
     private headIcon = -1;
     private defenceBonusOverrides: Array<number | null> | null = null;
@@ -394,6 +395,16 @@ export class NPC extends Mobile {
 
     public setRollFactor(factor: number): NPC {
         this.rollFactor = Number.isFinite(factor) && factor > 0 ? factor : 1;
+        return this;
+    }
+
+    /** The defence roll's own factor, where it differs from the attack's. */
+    public getDefenceRollFactor(): number {
+        return this.defenceRollFactor ?? this.rollFactor;
+    }
+
+    public setDefenceRollFactor(factor: number): NPC {
+        this.defenceRollFactor = factor;
         return this;
     }
 

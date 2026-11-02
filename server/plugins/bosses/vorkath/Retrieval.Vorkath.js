@@ -125,6 +125,7 @@ function sendContents(player, lot) {
 
 function open(player) {
   const lot = held(player);
+  player.__retrievalOpen = ATTR;
   const sender = player.getPacketSender();
   sender.sendInterfaceRemoval();
   sender.sendConfig(VARP.if2, 0);
@@ -177,17 +178,18 @@ function takeAll(player, lot) {
   finishTaking(player, lot);
 }
 
+/** Others' retrieval chests share this interface: a click that isn't for Torfinn's lot passes on. */
 function button({ player }) {
-  if (!isOpen(player)) return;
+  if (!isOpen(player)) return false;
   const lot = held(player);
-  if (!lot) return;
+  if (!lot || player.__retrievalOpen !== ATTR) return false;
   if (!lot.paid) pay(player, lot);
   else takeAll(player, lot);
 }
 
 function clickItem(event) {
   const { player } = event;
-  if (!isOpen(player)) return;
+  if (!isOpen(player) || player.__retrievalOpen !== ATTR) return false;
   const lot = held(player);
   const entry = lot?.items[Number.isInteger(event.slot) ? event.slot : -1];
   if (!entry) return;

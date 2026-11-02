@@ -2,7 +2,10 @@
 
 /**
  * The tombs' own consumables, usable only inside a raid.
- * Wiki: https://oldschool.runescape.wiki/w/Tombs_of_Amascut#Supplies
+ * Wiki: https://oldschool.runescape.wiki/w/Tombs_of_Amascut#Consumables gives every formula.
+ * Captured: the messages (223/00014, 227/00553), and TOA_MIDRAIDLOOT_STATS_TIMER counting the salts
+ * down from 32 in 25-tick steps (223/00014 ticks 1894-2669).
+ * Our wording, no capture: the silk dressing's, the scarab's and the honey locust's lines.
  */
 
 const Shared = require("./Shared.TombsOfAmascut");
@@ -21,6 +24,7 @@ const SILK_INTERVAL = 5;
 const SILK_HEAL = 5;
 const ADRENALINE_DURATION = 250;
 const HONEY_LOCUST_HEAL = 20;
+const SALTS_RUN_ENERGY = 25;
 
 function skills() {
   const { Skill } = Shared.core();
@@ -34,7 +38,7 @@ function skills() {
 function effectsOf(player) {
   let effects = player.getAttribute(ATTR_EFFECTS);
   if (!effects) {
-    effects = { salts: 0, scarab: 0, silk: 0, adrenaline: 0, lastSpecial: null };
+    effects = { salts: 0, scarab: 0, silk: 0, adrenaline: 0 };
     player.setAttribute(ATTR_EFFECTS, effects);
   }
   return effects;
@@ -44,12 +48,6 @@ function boost(player, skill, percent, flat) {
   const manager = player.getSkillManager();
   const max = manager.getMaxLevel(skill);
   manager.setCurrentLevels(skill, Math.max(manager.getCurrentLevel(skill), max + Math.floor(max * percent) + flat));
-}
-
-function drain(player, skill, percent, flat) {
-  const manager = player.getSkillManager();
-  const max = manager.getMaxLevel(skill);
-  manager.decreaseCurrentLevel(skill, Math.floor(max * percent) + flat, 0);
 }
 
 function restore(player, skill, percent, flat) {
@@ -67,29 +65,33 @@ function heal(player, amount, overheal) {
   if (current < cap) player.setHitpoints(Math.min(cap, current + amount));
 }
 
-/** Nectar: heals 15% + 3 past full, at the cost of 5% + 5 of each combat stat. */
+/** Nectar: heals 15% + 3 past full, at the cost of a twentieth of each combat stat as it stands, + 5. */
 function nectar(player) {
   const { combat, Skill } = skills();
-  const max = player.getSkillManager().getMaxLevel(Skill.HITPOINTS);
-  const amount = Math.floor(max * 0.15) + 3;
+  const manager = player.getSkillManager();
+  const amount = Math.floor(manager.getMaxLevel(Skill.HITPOINTS) * 0.15) + 3;
   heal(player, amount, amount);
-  for (const skill of combat) drain(player, skill, 0.05, 5);
+  for (const skill of combat) manager.decreaseCurrentLevel(skill, Math.floor(manager.getCurrentLevel(skill) / 20 + 5), 0);
   player.sendMessage("You drink some of the nectar. It hurts! This was not made for mortals.");
 }
 
-/** Tears: restores stats and prayer, and some prayer to anyone standing next to you. */
+/**
+ * Tears: restores stats and prayer, and those of party members within the 3x3 too (Wiki), who read
+ * "<name> has restored your prayer and combat stats." (227/01852).
+ */
 function tears(player) {
   const { all, Skill } = skills();
   for (const skill of all) restore(player, skill, 0.25, 3);
   const prayerMax = player.getSkillManager().getMaxLevel(Skill.PRAYER);
   restoreAbove(player, Skill.PRAYER, Math.floor(prayerMax / 4) + 10);
+  player.sendMessage("You drink some of the tears.");
   const raid = Raid.raidOf(player);
   for (const other of raid?.players ?? []) {
     if (other === player || raid.member(other).ghost || other.getLocation().getDistance(player.getLocation()) > 1) continue;
+    for (const skill of all) restore(other, skill, 0.25, 3);
     const otherMax = other.getSkillManager().getMaxLevel(Skill.PRAYER);
-    if (other.getSkillManager().getCurrentLevel(Skill.PRAYER) >= otherMax) continue;
     restoreAbove(other, Skill.PRAYER, Math.floor(otherMax / 10) + 10);
-    other.sendMessage(`${Shared.displayName(player)} has restored some of your prayer points.`);
+    other.sendMessage(`${Shared.displayName(player)} has restored your prayer and combat stats.`);
   }
 }
 
@@ -122,7 +124,15 @@ function applySalts(player) {
 function salts(player) {
   effectsOf(player).salts = SALTS_DURATION;
   applySalts(player);
+  player.setRunEnergy(Math.min(100, player.getRunEnergy() + SALTS_RUN_ENERGY));
+  player.getPacketSender().sendRunEnergy?.();
+  sendSaltsTimer(player);
   player.sendMessage("You crush the salts. Your heart rate increases.");
+}
+
+function sendSaltsTimer(player) {
+  const left = effectsOf(player).salts;
+  player.getPacketSender().sendVarbit(Shared.VARBIT.SALTS_TIMER, Math.ceil(left / SALTS_REFRESH));
 }
 
 function scarab(player) {
@@ -131,10 +141,14 @@ function scarab(player) {
 }
 
 function adrenaline(player) {
-  const effects = effectsOf(player);
-  effects.adrenaline = ADRENALINE_DURATION;
-  effects.lastSpecial = player.getSpecialPercentage();
+  effectsOf(player).adrenaline = ADRENALINE_DURATION;
+  player.getPacketSender().sendVarbit(Shared.VARBIT.ADRENALINE_ACTIVE, 1);
   player.sendMessage("You drink some of the potion, reducing the energy cost of your special attacks.");
+}
+
+/** Whether liquid adrenaline is halving this player's specials (Raid's combat-special:cost). */
+function hasAdrenaline(player) {
+  return (player.getAttribute(ATTR_EFFECTS)?.adrenaline ?? 0) > 0;
 }
 
 function silkDressing(player) {
@@ -142,8 +156,11 @@ function silkDressing(player) {
   player.sendMessage("You consume the silk dressing.");
 }
 
+/** Wiki: heals 20 past full, and restores a quarter of the Prayer level + 7. */
 function honeyLocust(player) {
+  const { Skill } = Shared.core();
   heal(player, HONEY_LOCUST_HEAL, HONEY_LOCUST_HEAL);
+  restoreAbove(player, Skill.PRAYER, Math.floor(player.getSkillManager().getMaxLevel(Skill.PRAYER) / 4) + 7);
   player.sendMessage("It heals some health.");
 }
 
@@ -195,6 +212,9 @@ function consume(event) {
   player.getInventory().refreshItems();
   player.performAnimation(new Animation(CONSUME_ANIMATION));
   supply.effect(player);
+  // 223/00014: "You have 3 doses left." after each, once there are any left to count.
+  const left = supply.next === -1 ? 0 : supply.chain.length - supply.chain.indexOf(supply.next);
+  if (left > 0) player.sendMessage(`You have ${left} dose${left === 1 ? "" : "s"} left.`);
   return true;
 }
 
@@ -211,8 +231,10 @@ function tickEffects({ player }) {
         player.getSkillManager().setCurrentLevels(skill, player.getSkillManager().getMaxLevel(skill));
       }
       player.sendMessage("<col=ff3045>The boost from the smelling salts has worn off!</col>");
+      player.getPacketSender().sendVarbit(Shared.VARBIT.SALTS_TIMER, 0);
     } else if (effects.salts % SALTS_REFRESH === 0) {
       applySalts(player);
+      sendSaltsTimer(player);
     }
   }
   if (effects.scarab > 0) {
@@ -225,14 +247,9 @@ function tickEffects({ player }) {
   }
   if (effects.adrenaline > 0) {
     effects.adrenaline--;
-    // Half of every special attack's energy comes back while the adrenaline lasts.
-    const now = player.getSpecialPercentage();
-    if (effects.lastSpecial !== null && now < effects.lastSpecial) {
-      player.setSpecialPercentage(Math.min(100, now + Math.floor((effects.lastSpecial - now) / 2)));
-    }
-    effects.lastSpecial = player.getSpecialPercentage();
     if (effects.adrenaline === 0) {
       player.sendMessage("<col=ff3045>The energy cost of your special attacks has returned to normal.</col>");
+      player.getPacketSender().sendVarbit(Shared.VARBIT.ADRENALINE_ACTIVE, 0);
     }
   }
   if (!effects.salts && !effects.scarab && !effects.silk && !effects.adrenaline) player.setAttribute(ATTR_EFFECTS, null);
@@ -245,6 +262,8 @@ function clearEffects({ player }) {
   if (effects.salts > 0) {
     for (const skill of skills().combat) player.getSkillManager().setCurrentLevels(skill, player.getSkillManager().getMaxLevel(skill));
   }
+  player.getPacketSender().sendVarbit(Shared.VARBIT.SALTS_TIMER, 0);
+  player.getPacketSender().sendVarbit(Shared.VARBIT.ADRENALINE_ACTIVE, 0);
   player.setAttribute(ATTR_EFFECTS, null);
 }
 
@@ -262,3 +281,4 @@ module.exports = function registerTombsSupplies(api) {
   Raid.onRaidArea("leave", clearEffects);
 };
 module.exports.doses = doses;
+module.exports.hasAdrenaline = hasAdrenaline;

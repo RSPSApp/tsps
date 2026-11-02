@@ -15,7 +15,7 @@ Combat Achievements live in `server/plugins/achievements/combatachievements/`. T
 | Gauntlet / Corrupted | counts, speed, 3-2-1, Perfect Hunllef, Defence Doesn't Matter, Egniol Diet, Wolf Puncher, perfected armour |
 | Fight Caves | count, speed, Facing Jad Head-on, No Time for a Drink, the Tz-Kih, Yt-MejKot and Yt-HurKot tasks, A Near Miss! |
 | Inferno | count, speed, Half-Way There, The Floor Is Lava, Nibblers Begone!, Wasn't Even Close, Budget Setup, Nibbler Chaser, Facing Jad Head-on II, Jad? What Are You Doing Here?, No Luck Required, Playing with Jads |
-| Tombs of Amascut | counts per mode and Entry-or-above, raid level, deathless raid level, Hardcore Raiders/Tombs, Resourceful Raider, the three speed runners |
+| Tombs of Amascut | all 51 tasks wired, failure lines as captured where a capture has them (`CombatAchievements.TombsOfAmascut.js`). Seen failing in play: Perfect Crondis, Zebak, Het, Scabaras, Ba-Ba and Akkha, Chompington, All Praise Zebak. No completion was checked in play; the unit tests cover the modes, the composites and the speed tasks |
 | Doom of Mokhaiotl | depth (3, 8, 16), Doom Crawler, Doom Chaser, Doom Racer; count = delves completed |
 | Fortis Colosseum | count, speed (total of every wave), One-off, Reinforcements |
 | Barrows | chest count, Pray for Success, Faithless Crypt Run, Can't Touch Me |

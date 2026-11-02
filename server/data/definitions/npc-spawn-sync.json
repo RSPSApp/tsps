@@ -95,6 +95,7 @@
   "boxes": [
     {"box": "2624,2560,2687,2623,0", "label": "Spawned by a plugin", "skip": true, "why": "Pest Control's game island: PestControl.plugin.js spawns the Void Knight and the squire there."},
     {"box": "3136,4224,3391,4479", "label": "Spawned by a plugin", "skip": true, "why": "The Theatre of Blood: TheatreOfBlood.plugin.js spawns each room's boss and Nylocas in the raid's instance."},
+    {"box": "3520,5120,3967,5439", "label": "Spawned by a plugin", "skip": true, "why": "The Tombs of Amascut: TombsOfAmascut.plugin.js spawns every room's NPCs in the raid's private area."},
     {"box": "3289,9858,3308,9877,0", "label": "Spawned by a plugin", "skip": true, "why": "Scurrius' lair: Scurrius.plugin.js spawns the public Scurrius, each private instance's, and their giant rats."},
     {"box": "3072,3008,3135,3071,0", "label": "Group Ironman island", "skip": true, "why": "The Node, where Group Ironman accounts start; its tutors and fake players aren't for other accounts."},
     {"box": "2816,4224,2879,4287", "label": "Spawned by a plugin", "skip": true, "why": "The Phantom Muspah's lair: PhantomMuspah.plugin.js spawns the boss in each player's instance, and Secrets of the North its creature."}

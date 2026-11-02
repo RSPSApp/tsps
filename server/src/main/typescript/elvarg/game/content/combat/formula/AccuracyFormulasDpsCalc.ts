@@ -270,7 +270,7 @@ export class AccuracyFormulasDpsCalc {
             attRoll = Math.floor(attRoll * entity.getAsNpc().getRollFactor());
         }
         if (enemy.isNpc()) {
-            defRoll = Math.floor(defRoll * enemy.getAsNpc().getRollFactor());
+            defRoll = Math.floor(defRoll * enemy.getAsNpc().getDefenceRollFactor());
         }
 
         attRoll = Math.floor(attRoll * AccuracyFormulasDpsCalc.scopedAccuracyScale);

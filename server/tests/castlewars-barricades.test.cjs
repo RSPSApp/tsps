@@ -37,7 +37,7 @@ before(() => {
   const api = {
     core,
     getAreaManager: () => ({}),
-    getBonusManager: () => ({}),
+    getBonusManager: () => ({ update() {} }),
     getObjectManager: () => ({ register() {}, deregister() {} }),
     getRegionManager: () => RegionManager,
     getTaskManager: () => ({ submit() {} }),
@@ -298,6 +298,64 @@ test('solid tunnel rocks and stepping stones refuse barricades', (t) => {
     assert.match(p.messages.at(-1), /can't set up a barricade here/);
     assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.BARRICADE), amount);
   }
+});
+
+test('issue 1929: mined-away tunnel rock tiles still refuse barricades; the tile beside them does not', (t) => {
+  t.mock.method(RegionManager, 'blocked', () => false);
+  // Every tile of all four 2x2 patches, as a player stands there once the rocks are cleared.
+  for (const [x, y] of [[2401, 9494], [2409, 9503], [2400, 9512], [2391, 9501]]) {
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      const p = playerAt(t, x + dx, y + dy, 0);
+      setup({ player: p, slot: 0 });
+      assert.match(p.messages.at(-1) ?? '', /can't set up a barricade here/, `${x + dx},${y + dy}`);
+      assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.BARRICADE), 3);
+    }
+  }
+  deployed(t, playerAt(t, 2401, 9493, 0));
+});
+
+test('issue 1929: a player cannot cut diagonally past a barricade', (t) => {
+  const walker = playerAt(t, 2405, 3110, 0);
+  const north = deployed(t, playerAt(t, 2405, 3111, 0));
+  const east = deployed(t, playerAt(t, 2406, 3110, 0));
+  const step = (dx, dy) => walker.getMovementQueue().canWalkTo(walker.getLocation().transform(dx, dy), walker.getLocation());
+  assert.equal(step(1, 1), false, 'between the north and east barricades');
+  assert.equal(step(-1, 1), false, 'past the north barricade');
+  assert.equal(step(1, -1), false, 'past the east barricade');
+  assert.equal(step(-1, -1), true, 'no barricade beside the south-west step');
+  game.releaseBarricade(north);
+  assert.equal(step(1, 1), false, 'one barricade beside the step is enough');
+  assert.equal(step(-1, 1), true);
+  game.releaseBarricade(east);
+  assert.equal(step(1, 1), true);
+});
+
+test('issue 1929: a standard never ends up inside tunnel rocks', (t) => {
+  const { SARADOMIN } = data.TEAM;
+  // Rocks 4437 stand at 2391,9501 (2x2, an east-west tunnel) in the cache map.
+  const carrier = playerAt(t, 2392, 9502, 0);
+  game.carryFlag(carrier, SARADOMIN);
+  game.dropCarriedFlag(carrier);
+  const dropped = game.getDroppedFlagObject(SARADOMIN);
+  assert.equal(game.flagStatus[SARADOMIN], 2);
+  assert.deepEqual([dropped.getLocation().getX(), dropped.getLocation().getY()], [2393, 9502], 'a crushed carrier drops it on the open tile beside the rocks');
+  t.after(() => game.restoreFlagToBase(SARADOMIN));
+
+  // Mined away, the tile is open floor and the standard drops where the carrier stands.
+  t.mock.method(core.MapObjects, 'get', () => null);
+  assert.equal(game.unburiedTiles(new core.Location(2392, 9502, 0)), null);
+  const buried = new core.Location(2391, 9501, 0);
+  game.moveDroppedFlag(SARADOMIN, [buried]);
+  assert.ok(game.getDroppedFlagObject(SARADOMIN).getLocation().equals(buried));
+
+  // Then the tunnel collapses on it: it comes out on the nearest open tile.
+  const wall = new core.GameObject(core.ObjectIdentifiers.CAVE_WALL, new core.Location(2390, 9500, 0), 0, 0, null);
+  const p = playerAt(t, 2389, 9501, 0);
+  p.getInventory().add(new core.Item(core.ItemIdentifiers.EXPLOSIVE_POTION));
+  blastWall({ player: p, object: wall, itemSlot: p.getInventory().getSlotForItemId(core.ItemIdentifiers.EXPLOSIVE_POTION) });
+  assert.match(p.messages.at(-1), /collapsed the tunnel/);
+  const moved = game.getDroppedFlagObject(SARADOMIN).getLocation();
+  assert.deepEqual([moved.getX(), moved.getY()], [2390, 9501]);
 });
 
 test('lighting your own tile steps sideways; right-click Burn never consumes supplies', (t) => {

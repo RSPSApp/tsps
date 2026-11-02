@@ -9,6 +9,10 @@
  * (OSRS Wiki: Explosive potion, Castle Wars). The owning team's overlay shows each pair of
  * tunnels as clear or blocked (varbits 138/139).
  *
+ * Nothing may end up inside the rocks: barricades can't be set up on a patch, and a standard
+ * dropped there (a crushed carrier, or rocks falling on a dropped one) comes out on the nearest
+ * open tunnel tile, so it stays in play (issue 1929).
+ *
  * Cache locs: rocks at the four patches below, cave walls 4448 on the corners of each patch.
  * RSPS-only (Near-Reality): which team owns which patch and the clear/collapse messages.
  */
@@ -154,12 +158,50 @@ function isBlocked(patch) {
   return [O.ROCKS_21, O.ROCKS_22].some((id) => core.MapObjects.get(id, at, null) != null);
 }
 
-function crushedBy(patch, player) {
-  const location = player.getLocation();
+function inPatch(patch, location) {
   const [x, y] = patch.rocks;
   return location.getZ() === 0
     && location.getX() >= x && location.getX() < x + PATCH_SIZE
     && location.getY() >= y && location.getY() < y + PATCH_SIZE;
+}
+
+function crushedBy(patch, player) {
+  return inPatch(patch, player.getLocation());
+}
+
+/** Whether a tile lies where a tunnel's rocks stand, or fall when it collapses. */
+function isRockTile(location) {
+  return patches().some((patch) => inPatch(patch, location));
+}
+
+/** The open tunnel tiles touching a patch, nearest to `from` first. */
+function tilesBeside(patch, from) {
+  const [x, y] = patch.rocks;
+  const tiles = [];
+  for (let dx = -1; dx <= PATCH_SIZE; dx++) {
+    for (let dy = -1; dy <= PATCH_SIZE; dy++) {
+      const tile = new core.Location(x + dx, y + dy, 0);
+      if (!inPatch(patch, tile) && !core.RegionManager.blocked(tile, null)) tiles.push(tile);
+    }
+  }
+  const distance = (tile) => Math.abs(tile.getX() - from.getX()) + Math.abs(tile.getY() - from.getY());
+  return tiles.sort((a, b) => distance(a) - distance(b));
+}
+
+/** Where to put something dropped on `location` instead, when rocks bury that tile; else null. */
+function unburiedTiles(location) {
+  const patch = patches().find((candidate) => inPatch(candidate, location));
+  return patch && isBlocked(patch) ? tilesBeside(patch, location) : null;
+}
+
+/** Rocks falling on a dropped standard push it out to the tunnel beside them. */
+function unburyStandards(patch) {
+  for (const teamId of Object.values(game.TEAM)) {
+    const dropped = game.getDroppedFlagObject(teamId);
+    if (dropped && inPatch(patch, dropped.getLocation())) {
+      game.moveDroppedFlag(teamId, tilesBeside(patch, dropped.getLocation()));
+    }
+  }
 }
 
 function collapseTunnel(player, patch, slot) {
@@ -171,6 +213,7 @@ function collapseTunnel(player, patch, slot) {
   const [x, y, face] = patch.rocks;
   game.swapObject(null, new core.GameObject(core.ObjectIdentifiers.ROCKS_21, new core.Location(x, y, 0), 10, face, null));
   game.setTeamVar(patch.team, patch.varbit, 0);
+  unburyStandards(patch);
   player.sendMessage("You've collapsed the tunnel!");
   for (const victim of game.gameArea.getPlayers().filter((other) => crushedBy(patch, other))) {
     victim.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(victim.getHitpoints(), core.HitMask.RED)]);
@@ -197,6 +240,8 @@ module.exports = function attachCastleWarsTunnels(pluginApi, castleWars) {
   api = pluginApi;
   game = castleWars;
   core = api.core;
+  game.isTunnelRockTile = isRockTile;
+  game.unburiedTiles = unburiedTiles;
   api.onObjectInteraction("Rocks", { Mine: mineRocks });
   api.onObjectInteraction("Cave wall", { Collapse: collapseWall });
   api.onItemOnObject("Explosive potion", "Rocks", blastRocks);

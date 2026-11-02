@@ -248,10 +248,17 @@ function clearCastleWarsItems(player, ids = data.CLEANUP_ITEM_IDS) {
   refreshPlayerAppearance(player, weaponChanged);
 }
 
-/** A worn Castle wars bracelet spends a charge as the game starts, and is active for that game. */
+/**
+ * A worn Castle wars bracelet spends a charge as the game starts, and is active for that game.
+ * The player is told it worked (issue 1929). RSPS-only wording: no rsprox recording covers a
+ * Castle Wars game and the Wiki quotes no message.
+ */
 function chargeBracelet(player) {
-  if (game.spendStoredBraceletCharge?.(player)) {
+  const stored = game.spendStoredBraceletCharge?.(player);
+  if (stored) {
     braceletEffect.add(player);
+    player.sendMessage(BRACELET_ACTIVE_MESSAGE);
+    player.sendMessage(`Lanthus used one of your stored bracelet charges. ${chargesLeft(stored.remaining)}`);
     return;
   }
   const { HANDS_SLOT } = core.Equipment;
@@ -262,6 +269,18 @@ function chargeBracelet(player) {
   player.getEquipment().setItem(HANDS_SLOT, new core.Item(next, next === -1 ? 0 : 1));
   braceletEffect.add(player);
   refreshPlayerAppearance(player);
+  player.sendMessage(BRACELET_ACTIVE_MESSAGE);
+  // BRACELET_NEXT runs (3) -> (2) -> (1) -> gone, so a bracelet's place in it gives its charges.
+  const braceletIds = Object.keys(data.BRACELET_NEXT).map(Number);
+  player.sendMessage(next === -1
+    ? "Your Castle wars bracelet crumbles to dust."
+    : `Your Castle wars bracelet has ${chargesLeft(braceletIds.length - braceletIds.indexOf(next))}`);
+}
+
+const BRACELET_ACTIVE_MESSAGE = "Your Castle wars bracelet is active for this game: you deal 20% more damage to whoever carries your team's standard.";
+
+function chargesLeft(count) {
+  return `${count} ${count === 1 ? "charge" : "charges"} left.`;
 }
 
 function hasBraceletEffect(player) {
@@ -344,16 +363,19 @@ function carriedTeamOf(player) {
   return null;
 }
 
-/** Put the dropped standard on the floor where the player stands. */
+/** Put the dropped standard on the floor where the player stands, or beside the rocks burying it. */
 function placeDroppedFlag(flagTeam, player) {
   // One standard per team: remove whatever drop a previous life left behind, so repeated
   // deaths in the same spot cannot stack flag objects.
   removeDroppedFlagObject(flagTeam);
+  // A carrier crushed by a collapsing tunnel dies inside the rocks; the standard comes out
+  // beside them rather than out of everyone's reach (issue 1929).
+  const location = game.unburiedTiles?.(player.getLocation())?.[0] ?? player.getLocation();
   const otherTeam = opposingTeam(flagTeam);
   const otherDrop = droppedFlagObjects[otherTeam];
   // The client has one scenery slot per tile. Returning the dropper's own standard
   // keeps the enemy standard available instead of hiding one beneath the other.
-  if (otherDrop?.getLocation().equals(player.getLocation())) {
+  if (otherDrop?.getLocation().equals(location)) {
     const ownTeam = getTeamId(player);
     restoreFlagToBase(ownTeam, "overlap");
     if (flagTeam === ownTeam) return;
@@ -361,18 +383,28 @@ function placeDroppedFlag(flagTeam, player) {
   flagStatus[flagTeam] = 2;
   flagCarriers[flagTeam] = null;
   if (process.env.CW_BOT_DEBUG === "1") {
-    const tile = getLocationTile(player);
+    const tile = getLocationTile(location);
     console.log(`[cw_flag] drop ${flagTeam} by ${player.getUsername?.()} at ${tile.x},${tile.y},${tile.z}`);
   }
-  const dropped = new core.GameObject(
-    getTeamData(flagTeam).droppedFlagObjectId,
-    player.getLocation().clone(),
-    10,
-    0,
-    player.getPrivateArea()
-  );
+  registerDroppedFlag(flagTeam, location, player.getPrivateArea());
+}
+
+function registerDroppedFlag(flagTeam, location, privateArea) {
+  const dropped = new core.GameObject(getTeamData(flagTeam).droppedFlagObjectId, location.clone(), 10, 0, privateArea);
   droppedFlagObjects[flagTeam] = dropped;
   ObjectManager.register(dropped, true);
+}
+
+/** Moves a dropped standard to the first of `tiles` the other team's standard does not hold. */
+function moveDroppedFlag(flagTeam, tiles) {
+  const dropped = droppedFlagObjects[flagTeam];
+  const otherDrop = droppedFlagObjects[opposingTeam(flagTeam)];
+  const tile = tiles.find((candidate) => !otherDrop?.getLocation().equals(candidate));
+  if (!dropped || !tile) {
+    return;
+  }
+  removeDroppedFlagObject(flagTeam);
+  registerDroppedFlag(flagTeam, tile, dropped.getPrivateArea());
 }
 
 /**
@@ -881,6 +913,9 @@ module.exports = function createCastleWarsGame(registry) {
     isInsideCastle,
     getDroppedFlagObject: (flagTeam) => droppedFlagObjects[flagTeam] ?? null,
     removeDroppedFlagObject,
+    moveDroppedFlag,
+    // Filled in by Tunnels.CastleWars.js: open tiles beside the rocks when a tile is buried.
+    unburiedTiles: null,
     updateFlagStand,
     restoreFlagToBase,
     carryFlag,

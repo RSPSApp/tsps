@@ -26,11 +26,12 @@ function boostAgainstFlagCarrier(attacker, maxHit) {
   return Math.floor(maxHit * FLAG_CARRIER_DAMAGE_MULTIPLIER);
 }
 
+/** Spends one stored charge; returns the charges left, or null when none was spent. */
 function spendStoredCharge(player) {
   const charges = player.getAttribute(STORED_CHARGES_ATTRIBUTE) ?? 0;
-  if (charges <= 0 || player.getAttribute(AUTO_CHARGE_ATTRIBUTE) === false) return false;
+  if (charges <= 0 || player.getAttribute(AUTO_CHARGE_ATTRIBUTE) === false) return null;
   player.setAttribute(STORED_CHARGES_ATTRIBUTE, charges - 1);
-  return true;
+  return { remaining: charges - 1 };
 }
 
 function showCharges(player) {

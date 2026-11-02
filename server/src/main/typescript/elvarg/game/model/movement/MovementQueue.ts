@@ -618,6 +618,19 @@ export class MovementQueue {
         if (this.isDynamicallyOccupied(next)) {
             return false;
         }
+        // The "full" flag is collision like a wall's: a diagonal step needs both tiles it
+        // cuts past free as well, so a player can't slip between two Castle Wars barricades
+        // (issue 1929). The NPC flag stays destination-only for NPCs.
+        const dx = next.getX() - source.getX();
+        const dy = next.getY() - source.getY();
+        if (this.character.isPlayer() && dx !== 0 && dy !== 0) {
+            const size = this.character.getSize();
+            const privateArea = this.character.getPrivateArea();
+            if (World.isPlayerBlockingNpcOnTile(source.transform(dx, 0), size, privateArea)
+                || World.isPlayerBlockingNpcOnTile(source.transform(0, dy), size, privateArea)) {
+                return false;
+            }
+        }
         return true;
     }
 

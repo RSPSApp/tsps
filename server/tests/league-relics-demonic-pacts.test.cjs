@@ -43,6 +43,7 @@ const EXECUTIONER = { 7: 1 };
 const FLASK_OF_FERVOUR = { 7: 3 };
 const TRANSMUTE = { 3: 1 };
 const BUTLERS_BELL = { 3: 3 };
+const MINION = { 7: 2 };
 
 let core;
 let I;
@@ -1485,4 +1486,110 @@ test("Butler's Bell: Talk-to, as the transcript: a new job from the cache's five
   assert.equal(banked(player, I.RAW_SHARK), 3);
   assert.equal(Butler().talk({ player: cases(BUTLERS_BELL).without, npc }), false, "not their butler");
   Butler().butlers.delete(player);
+});
+
+const Minion = () => require("../plugins/modes/leaguerelics/Minion.LeagueRelics");
+
+test("Minion: each unique Zamorak item used on the whistle raises the max hit by 2, up to five; not twice, not noted, not without the relic", () => {
+  const who = cases(MINION);
+  const player = who.relic;
+  player.setAttribute(Minion().ITEMS_ATTRIBUTE, null);
+  assert.equal(Minion().maxHit(player), 10);
+  const inventory = player.getInventory();
+  const feed = (itemId) => {
+    inventory.resetItems();
+    inventory.adds(I.MINION_WHISTLE, 1);
+    inventory.adds(itemId, 1);
+    const event = { player, usedItemId: itemId, usedItemSlot: 1, usedWithItemId: I.MINION_WHISTLE, usedWithItemSlot: 0, handled: false };
+    hooks.onItemOnItem(event);
+    return { event, kept: inventory.getAmount(itemId) };
+  };
+  assert.deepEqual([feed(I.ZAMORAK_CAPE).event.handled, feed(I.ZAMORAK_CAPE).kept], [true, 1], "taken once, then kept");
+  assert.equal(Minion().maxHit(player), 12);
+  assert.equal(feed(Common.noted(I.ZAMORAK_PLATEBODY)).event.handled, false, "noted is not the item");
+  for (const id of [I.ZAMORAK_PLATEBODY, I.ZAMORAK_FULL_HELM, I.ZAMORAK_PLATELEGS, I.ZAMORAK_KITESHIELD]) assert.equal(feed(id).kept, 0);
+  assert.equal(Minion().maxHit(player), 20);
+  assert.equal(feed(I.ZAMORAK_STAFF).kept, 1, "five at most");
+  assert.equal(Minion().maxHit(player), 20);
+  assert.equal(feed(I.RUNE_SCIMITAR).event.handled, false, "the plain scimitar is not the Zamorak one");
+  for (const other of others(who)) {
+    const event = { player: other, usedItemId: I.ZAMORAK_CAPE, usedItemSlot: 1, usedWithItemId: I.MINION_WHISTLE, usedWithItemSlot: 0, handled: false };
+    hooks.onItemOnItem(event);
+    assert.equal(event.handled, false);
+  }
+});
+
+test("Minion: the style the target is weakest to, and OSRS's hit chance for its 45,000 attack roll", (t) => {
+  const formulas = core.AccuracyFormulasDpsCalc;
+  const rolls = { melee: 9000, ranged: 4000, magic: 6000 };
+  t.mock.method(formulas, "defenseMeleeRoll", () => rolls.melee);
+  t.mock.method(formulas, "defenseRangedRoll", () => rolls.ranged);
+  t.mock.method(formulas, "defenseMagicRoll", () => rolls.magic);
+  assert.equal(Minion().weakestStyle({}), "ranged");
+  rolls.ranged = 12000;
+  assert.equal(Minion().weakestStyle({}), "magic");
+  assert.equal(Minion().hitChance(45000, 45000), 45000 / 90002);
+  assert.equal(Minion().hitChance(45000, 10000), 1 - 10002 / 90002);
+});
+
+test("Minion: fights its owner's NPC every 3 ticks for 3 to its max, in the target's weakest style's look; never Yama; gone after 30 minutes", (t) => {
+  const player = cases(MINION).relic;
+  player.setAttribute(Minion().ITEMS_ATTRIBUTE, null);
+  const formulas = core.AccuracyFormulasDpsCalc;
+  t.mock.method(formulas, "defenseMeleeRoll", () => 9000);
+  t.mock.method(formulas, "defenseRangedRoll", () => 9000);
+  t.mock.method(formulas, "defenseMagicRoll", () => 1000);
+  t.mock.method(core.CombatRange, "overlapsEntities", () => false);
+  const shots = [];
+  t.mock.method(core.Projectile, "createProjectile", (...args) => ({ withAngle() { return this; }, sendProjectile: () => shots.push(args) }));
+  const hits = [];
+  let name = "Goblin";
+  const target = {
+    isNpc: () => true, isRegistered: () => true, isUntargetable: () => false, getHitpoints: () => 50,
+    getDefinition: () => ({ getName: () => name }),
+    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: ([hit]) => hits.push(hit) }), addDamage() {} }),
+  };
+  t.mock.method(player, "getCombat", () => ({ getTarget: () => target }));
+  const shown = { models: null, animations: [], graphics: [] };
+  const npc = {
+    isRegistered: () => true, getFollowing: () => null, setFollowing() {}, getInteractingMobile: () => target, setMobileInteraction() {},
+    calculateDistance: () => 3, getAttribute: () => null, setAttribute() {}, getMovementQueue: () => ({ reset() {} }),
+    setModelCustomisation: (models) => (shown.models = models), setBaseAnimations() {},
+    performAnimation: (animation) => shown.animations.push(animation.getId()), performGraphic: (graphic) => shown.graphics.push(graphic.getId()),
+  };
+  const minion = { npc, ticksLeft: 3000, style: "melee", attackIn: 0 };
+  Minion().minions.set(player, minion);
+  Math.random = () => 0;
+  assert.equal(Minion().tick(player, minion), true);
+  assert.equal(minion.style, "magic");
+  assert.deepEqual(shown.models, [{ slot: 5, modelId: 60353 }, { slot: 6, modelId: 60352 }]);
+  assert.deepEqual(shown.graphics, [core.CacheDefinitions.getSpotanimId("leagues_6_thrall_imp_magic_transition_vfx_spotanim")]);
+  assert.deepEqual(shown.animations, [core.CacheDefinitions.getSeqId("leagues_6_thrall_imp_magic_attack_02")]);
+  assert.equal(shots.length, 1, "the magic projectile");
+  assert.equal(shots[0][2], core.CacheDefinitions.getSpotanimId("leagues_6_thrall_imp_magic_attack_vfx_projanim"));
+  Minion().tick(player, minion);
+  Minion().tick(player, minion);
+  assert.equal(shown.animations.length, 1, "not before 3 ticks");
+  Minion().tick(player, minion);
+  assert.equal(shown.animations.length, 2);
+  for (let tick = 0; tick < 4; tick++) core.TaskManager.process();
+  assert.ok(hits.length >= 1);
+  assert.ok(hits.every((hit) => hit.getDamage() === 3), "a sure hit's lowest roll is the min hit");
+  name = "Yama";
+  for (let tick = 0; tick < 6; tick++) Minion().tick(player, minion);
+  assert.equal(shown.animations.length, 2, "never Yama");
+  minion.ticksLeft = 1;
+  assert.equal(Minion().tick(player, minion), false, "time is up");
+  assert.equal(Minion().minions.has(player), false);
+});
+
+test("Minion: the whistle does nothing for a character without the relic, another league's or a main character", () => {
+  const whistle = itemActions.get("Minion whistle");
+  for (const player of others(cases(MINION))) {
+    for (const option of ["Blow", "Banish"]) {
+      const event = { player, handled: false };
+      assert.equal(whistle[option](event), false);
+      assert.equal(event.handled, false);
+    }
+  }
 });

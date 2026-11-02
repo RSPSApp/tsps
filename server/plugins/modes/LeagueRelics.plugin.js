@@ -72,6 +72,7 @@ module.exports = {
     require("./leaguerelics/FlaskOfFervour.LeagueRelics")(api);
     require("./leaguerelics/Transmute.LeagueRelics")(api);
     require("./leaguerelics/ButlersBell.LeagueRelics")(api);
+    require("./leaguerelics/Minion.LeagueRelics")(api);
     require("./leaguerelics/EvilEye.LeagueRelics")(api);
     require("./leaguerelics/MapOfAlacrity.LeagueRelics")(api);
     require("./leaguerelics/Hotfoot.LeagueRelics").late(api);

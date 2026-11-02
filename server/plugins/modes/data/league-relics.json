@@ -362,6 +362,10 @@
       "league": 6, "key": "butler-s-bell",
       "_data": "plugins/modes/data/league-butlers-bell.json: the jobs' weighted tables and the transcript's lines (leaguerelics/ButlersBell.LeagueRelics.js)."
     },
+    "minion": {
+      "league": 6, "key": "minion",
+      "_data": "plugins/modes/data/league-minion.json: the Wiki's numbers and Zamorak items, each style's recorded looks (leaguerelics/Minion.LeagueRelics.js)."
+    },
     "arcaneGrimoire": {
       "item": "Arcane grimoire",
       "options": { "change": "Change Spellbook", "previous": "Previous Spellbook", "check": "Check Previous" },

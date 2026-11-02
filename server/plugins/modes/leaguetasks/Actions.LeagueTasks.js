@@ -46,7 +46,7 @@
  *   (`pyramid-plunder:chest-searched`), `sepulchre-floor { floor, count }`
  *   (`hallowed-sepulchre:floor-completed`), `rumours { count }` (`hunter:rumour-completed`),
  *   `random-event { events, count }` (`random-events:completed`, by the event's kind),
- *   `totem { woods, count }` (`vale-totems:decorated`).
+ *   `totem { woods, count }` (`vale-totems:decorated`), `dummy { count }` (`dummies:hit`).
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -335,6 +335,7 @@ const EVENT_KINDS = new Map([
   ["rumours", () => true],
   ["random-event", (trigger, event) => trigger.events.includes(event.event)],
   ["totem", (trigger, event) => trigger.woods.includes(String(event.wood).toLowerCase())],
+  ["dummy", () => true],
   ["foundry", (trigger, event) => Number(event.quality) > 0 && (!(trigger.quality > 0) || Number(event.quality) >= trigger.quality)],
 ]);
 
@@ -394,6 +395,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("hunter:rumour-completed", onEvent("rumours"));
   api.onCustomEvent("random-events:completed", onEvent("random-event"));
   api.onCustomEvent("vale-totems:decorated", onEvent("totem"));
+  api.onCustomEvent("dummies:hit", onEvent("dummy"));
   api.onCustomEvent("farming:check-health", checkedHealth);
   api.onCustomEvent("collection-log:new-item", logged);
   api.onCustomEvent("world:picked", picked);

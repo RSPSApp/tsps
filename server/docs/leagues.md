@@ -1581,7 +1581,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   from Hunter's `hunter:rumour-completed`, `random-event { events, count }` from the random
   events' `random-events:completed` (an event ended with its reward; a task whose name and Wiki
   description disagree, "Postie Pete" described as the Evil twin, is left out), `totem { woods,
-  count }` from Vale Totems' `vale-totems:decorated` (a totem's final decoration),
+  count }` from Vale Totems' `vale-totems:decorated` (a totem's final decoration), `dummy { count }`
+  from the attack dummies' `dummies:hit`,
   `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what

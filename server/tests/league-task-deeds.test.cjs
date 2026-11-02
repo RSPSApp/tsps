@@ -513,3 +513,14 @@ test("random-event: an event ended with its reward by the real random events plu
   Teleports.finish(pillory, { message: "You leave.", back: false });
   assert.ok(!done(f, "complete-the-pillory-random-event"), "left without its reward");
 });
+
+test("dummy: a dummy hit through the real attack dummies plugin (Attack a dummy)", async (t) => {
+  const f = pactsCharacter(t);
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const dummy = new core.GameObject(52645, new core.Location(1667, 3136, 0), 10, 0, null);
+  core.ObjectManager.register(dummy, true);
+  t.after(() => core.ObjectManager.deregister(dummy, true));
+  await send(f, { type: "object_option", id: 52645, x: 1667, y: 3136, action: "Attack" }, 4);
+  assert.ok(f.messages.includes("You hit the dummy."), `hit: ${f.messages}`);
+  assert.ok(done(f, "attack-a-dummy"));
+});

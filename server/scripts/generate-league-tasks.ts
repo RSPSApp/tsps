@@ -632,6 +632,8 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   if ((match = /^Fully decorate an? ([A-Za-z]+) totem in (?:the Vale Totems|the Auburn Valley)\.?$/i.exec(description))) {
     return { trigger: { kind: "totem", woods: [match[1].toLowerCase()], count: 1 } };
   }
+  // "Attack a dummy": any dummy hit (the attack dummies plugin's).
+  if (/^Attack a dummy\.?$/i.test(description)) return { trigger: { kind: "dummy", count: 1 } };
   // A random event completed (the random events plugin's `random-events:completed`).
   // The task's own name must be that event's too: the Wiki's row for "Complete the Postie Pete random
   // event" describes the Evil twin.

@@ -13,6 +13,7 @@ const lastHit = new WeakMap();
 const VIEW_DISTANCE = 15;
 
 let core = null;
+let pluginApi = null;
 
 function hit({ player, object, objectId }) {
   const dummy = data.dummies[String(objectId)];
@@ -28,6 +29,8 @@ function hit({ player, object, objectId }) {
   player.performAnimation(new Animation(player.getAttackAnim()));
   player.getPacketSender().sendSoundEffect(data.sound, 1, 0);
   player.sendMessage(data.messages.hit);
+  // "dummies:hit" { player, objectId }: a dummy hit (a league's "Attack a dummy").
+  pluginApi?.emitCustomEvent?.("dummies:hit", { player, objectId });
   const defend = new Animation(CacheDefinitions.getSeqId(data.dummyAnimation));
   const at = object.getLocation();
   World.getPlayers().forEach((viewer) => {
@@ -50,6 +53,7 @@ module.exports = {
   name: "AttackDummies",
   register(api) {
     core = api.core;
+    pluginApi = api;
     api.onObjectInteraction("Dummy", { Attack: hit });
   },
 };

@@ -159,6 +159,21 @@ test("bird-nest: a nest falls from a tree being chopped (Obtain a Bird Nest)", a
   assert.ok(done(f, "obtain-a-bird-nest"), `the real Woodcutting drops a nest: ${f.messages}`);
 });
 
+test("buy: an item bought from the shop named (Purchase an Onyx in Mor Ul Rek)", (t) => {
+  const f = pactsCharacter(t);
+  const { ShopManager } = require("../dist/game/model/container/shop/ShopManager");
+  const { ShopDefinitionLoader } = require("../dist/game/definition/loader/impl/ShopDefinitionLoader");
+  assert.equal(new ShopDefinitionLoader().load(), true, "the server's shops");
+  ShopManager.initialize();
+  const shopId = 1468; // TzHaar-Hur-Lek's Ore and Gem Store (Default)
+  f.player.getInventory().add(new core.Item(item("Tokkul"), 1000000), true);
+  ShopManager.open(f.player, shopId);
+  const slot = ShopManager.displayEntries(ShopManager.shopsById.get(shopId)).findIndex(({ itemId }) => itemId === item("Uncut onyx"));
+  ShopManager.handleWidgetAction(f.player, { groupId: ShopManager.MAIN_INTERFACE_ID, childId: 16, buttonNum: 0, option: "Buy 1", slot: slot + 1, itemId: item("Uncut onyx") });
+  assert.equal(f.player.getInventory().getAmount(item("Uncut onyx")), 1, `the real shop sells it: ${f.messages}`);
+  assert.ok(done(f, "purchase-an-onyx-in-mor-ul-rek"));
+});
+
 /** A real NPC of the cache's name dying to the player through the engine's death task. */
 function kill(f, name) {
   const { NPC } = require("../dist/game/entity/impl/npc/NPC");

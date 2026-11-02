@@ -1637,6 +1637,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   scroll is its tier's scroll or scroll box, as the pocket hands either),
   `bird-nest { count }` from Woodcutting's `woodcutting:nest-drop` ("Obtain a bird nest whilst
   cutting down trees"),
+  `buy { items, shops, count }` from ShopManager's `shop:purchase` (that item bought from a shop of
+  that name in `shops.json`, every variant of it: "Purchase an Uncut onyx from TzHaar-Hur-Lek's Ore
+  and Gem Store"; an item's uncharged form is the one sold),
   `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what

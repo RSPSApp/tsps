@@ -455,6 +455,21 @@ const CONDITION_IN = (text: string) => /\b(?:in less than|in under|or less|witho
 /** The emotes plugin's locked emotes by slot (plugins/interface/data/emotes.json): their names. */
 const EMOTE_LOCKS: Record<string, { name?: string }> = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../plugins/interface/data/emotes.json"), "utf8")).locks;
 
+/** The server's shops (data/definitions/shops.json): name and the names of what they stock. */
+let shopList: Array<{ name: string; stock: string[] }> | null = null;
+/** An item a shop of that name sells ("TzHaar-Hur-Lek's Ore and Gem Store" is each of its variants): the item and the shops' names. */
+function shopItemOf(itemText: string, shopText: string, items: Map<string, string>): { item: string; shops: string[] } | null {
+  shopList ??= JSON.parse(fs.readFileSync(path.resolve(__dirname, "../data/definitions/shops.json"), "utf8")).map((shop: any) => ({
+    name: String(shop.name), stock: (shop.originalStock ?? []).map((entry: any) => CacheDefinitions.getItem(Number(entry.id))?.name).filter(Boolean),
+  }));
+  const base = (name: string) => name.replace(/\s*\([^)]*\)$/, "").replace(/\.$/, "").toLowerCase();
+  const shops = shopList!.filter((shop) => base(shop.name) === shopText.toLowerCase());
+  const wanted = itemNamed(itemText, items);
+  if (!shops.length || !wanted) return null;
+  const sold = [wanted, `${wanted} (uncharged)`].find((each) => shops.every((shop) => shop.stock.some((stocked) => stocked.toLowerCase() === each.toLowerCase())));
+  return sold ? { item: shops[0].stock.find((stocked) => stocked.toLowerCase() === sold.toLowerCase())!, shops: shops.map((shop) => shop.name) } : null;
+}
+
 /** The server's prayers by plain name ("protect from melee"), from PrayerHandler's PrayerData keys. */
 const PRAYER_NAMES: Map<string, string> = (() => {
   const source = fs.readFileSync(path.resolve(__dirname, "../src/main/typescript/elvarg/game/content/PrayerHandler.ts"), "utf8");
@@ -1002,6 +1017,13 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
   // "Fully decorate a Maple totem in the Vale Totems" (the Redwood one's place is the Auburn Valley, where they stand).
   if ((match = /^Fully decorate an? ([A-Za-z]+) totem in (?:the Vale Totems|the Auburn Valley)\.?$/i.exec(description))) {
     return { trigger: { kind: "totem", woods: [match[1].toLowerCase()], count: 1 } };
+  }
+  // "Purchase a Celestial ring from Dusuri's Star Shop", "Purchase an Uncut onyx from TzHaar-Hur-Lek's
+  // Ore and Gem Store": that item bought from that shop (ShopManager's shop:purchase), the shop and
+  // its stock as data/definitions/shops.json has them (an item's uncharged form is the one sold).
+  if (/^(?:Purchase|Buy) /i.test(name) && (match = /^(?:Purchase|Buy) (?:an? |the |some )?(.+?) from (?:an? |the )?(.+?)(?: in (?:the )?[A-Z][^.]*)?\.?$/i.exec(description))) {
+    const bought = shopItemOf(match[1], match[2], items);
+    if (bought) return { trigger: { kind: "buy", items: [bought.item], shops: bought.shops, count: 1 } };
   }
   // "Obtain a bird nest whilst cutting down trees": a nest from a tree (Woodcutting's
   // woodcutting:nest-drop).

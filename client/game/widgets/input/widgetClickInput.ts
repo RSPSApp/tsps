@@ -110,6 +110,7 @@ export function processWidgetClickInput(
                     targetMask > 0 &&
                     !!sanitizeText((w as any).spellActionName ?? (w as any).targetVerb);
                 const isDynamicWidget = ((w as any).fileId | 0) === -1;
+                const canDrag = widgetInteraction.isWidgetDraggable(w);
                 const hasHandlers = !!(
                     w.eventHandlers?.onClick ||
                     w.eventHandlers?.onClickRepeat ||
@@ -124,9 +125,7 @@ export function processWidgetClickInput(
                     hasActions ||
                     hasInventoryItem ||
                     // OSRS: any widget can be a drag source if it has drag listener or implicit drag
-                    w.eventHandlers?.onDrag ||
-                    w.onDrag ||
-                    w.isDraggable ||
+                    canDrag ||
                     isPauseButtonWidget ||
                     // IF_SETEVENTS transmit bits can make otherwise-empty STATIC widgets
                     // clickable (e.g., server-authoritative tab controls). For dynamic children,
@@ -139,7 +138,7 @@ export function processWidgetClickInput(
                 // the gravestone window's corner handle lies over its Close button.
                 const dragOnly =
                     hasHandlers &&
-                    !!(w.isDraggable || w.eventHandlers?.onDrag || w.onDrag) &&
+                    canDrag &&
                     !hasActions &&
                     !hasOnOpHandler &&
                     !hasInventoryItem &&

@@ -159,6 +159,17 @@ test('a one-step jump to completed (the island skip) saves and sends the final t
   assert.equal(p.jingles.length, 1);
 });
 
+test('the completed journal is the captured Tutorial Island narrative', () => {
+  const p = makePlayer(T.STEP.COMPLETED);
+  login(harness, p.player);
+  const lines = harness.quest.buildJournal(p.player, harness.quest);
+  assert.equal(lines.length, 39);
+  assert.equal(lines[0], '<str>I arrived on Tutorial Island and met the Gielinor Guide, who</str>');
+  assert.equal(lines[35], '');
+  assert.equal(lines[36], '<col=ff0000>QUEST COMPLETE!</col>');
+  assert.equal(lines.at(-1), '<str>mode, or use my Home Teleport to travel to the mainland.</str>');
+});
+
 test('login replay quietly completes a legacy tutorial save exactly once', () => {
   const p = makePlayer(T.STEP.COMPLETED);
   login(harness, p.player);

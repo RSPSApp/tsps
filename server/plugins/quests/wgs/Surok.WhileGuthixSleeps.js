@@ -5,7 +5,8 @@ module.exports=function registerSurok({api,stage,advance,held,give,play}){
  const STRONG=13484,AGILE=13483,SURGES=[13505,13506,13507,13508],OPPOSITES=['wind','fire','water','earth'];
  const LIT_EXPLOSIVE=29573,TELEORB=29536,ROBES=[29566,29568,29570];
  const BLOOD=[CombatSpells.BLOOD_RUSH,CombatSpells.BLOOD_BURST,CombatSpells.BLOOD_BLITZ,CombatSpells.BLOOD_BARRAGE];
- const POWERED=[CombatSpells.TRIDENT_OF_THE_SEAS,CombatSpells.TRIDENT_OF_THE_SWAMP].filter(Boolean);
+ // Every powered staff's built-in spell carries this flag (plugins/items/PoweredStaff.js).
+ const powered=s=>s?.poweredStaffSpell===true;
  const WEAKEN=[CombatSpells.WEAKEN,CombatSpells.ENFEEBLE],BIND=[CombatSpells.BIND,CombatSpells.SNARE,CombatSpells.ENTANGLE];
  const ELEMENTS=['WIND','WATER','EARTH','FIRE'].map(element=>['STRIKE','BOLT','BLAST','WAVE','SURGE'].map(tier=>CombatSpells[element+'_'+tier]).filter(Boolean));
  const fights=new WeakMap(),targets=new WeakMap(),climbing=new WeakSet();
@@ -100,7 +101,7 @@ module.exports=function registerSurok({api,stage,advance,held,give,play}){
  function hit({npc,hit}){
   const p=hit.getAttacker(),f=fights.get(p);if(!f||!f.enemies.has(npc))return;
   const s=hit.getSpell?.(),t=targets.get(npc),magic=hit.getCombatType()===CombatType.MAGIC;
-  if(npc===f.boss){if(!magic||!s||POWERED.includes(s)){hit.setTotalDamage(0);npc.forceChat('Powered staves are no match for my magic!');}return;}
+  if(npc===f.boss){if(!magic||!s||powered(s)){hit.setTotalDamage(0);npc.forceChat('Powered staves are no match for my magic!');}return;}
   if(!t){hit.setTotalDamage(0);return;}
   if(!t.surge){if(!t.weak)hit.setTotalDamage(0);return;}
   const element=['wind','water','earth','fire'][ELEMENTS.findIndex(spells=>spells.includes(s))];

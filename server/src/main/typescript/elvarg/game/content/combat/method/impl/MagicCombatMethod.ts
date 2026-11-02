@@ -99,7 +99,10 @@ export class MagicCombatMethod extends CombatMethod {
     public hits(character: Mobile, target: Mobile): PendingHit[] {
         let spell = character.getCombat().getSelectedSpell();
         const context = Spell.getCastContext(character, spell);
-        let hits: PendingHit[] = [new PendingHit(character, target, this, MagicCombatMethod.hitDelay(character, target, spell), true, context).setSpell(spell)];
+        // A spell cast is never a special attack: a special armed meanwhile (Soul Rend, Condemn)
+        // keeps its energy and must not lend the spell its accuracy or damage (ordinary).
+        let hits: PendingHit[] = [new PendingHit(character, target, this,
+            { delay: MagicCombatMethod.hitDelay(character, target, spell), handleAfterHitEffects: true, ordinary: true }, undefined, context).setSpell(spell)];
 
 
         if (!spell) {
@@ -135,7 +138,8 @@ export class MagicCombatMethod extends CombatMethod {
                 if (!CombatFactory.canAttackSecondaryTarget(character, target, next, spellRadius)) {
                     continue;
                 }
-                let pendingHit: PendingHit = new PendingHit(character, next, this, MagicCombatMethod.hitDelay(character, next, spell), false, context).setSpell(spell);
+                let pendingHit: PendingHit = new PendingHit(character, next, this,
+                    { delay: MagicCombatMethod.hitDelay(character, next, spell), handleAfterHitEffects: false, ordinary: true }, undefined, context).setSpell(spell);
                 multiCombatHits.push(pendingHit);
                 spell.onHitCalc(pendingHit);
             }

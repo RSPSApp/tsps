@@ -524,6 +524,55 @@ test("Culling Spree: free Slayer rewards, and 1-3 elite clues from every superio
   }
 });
 
+test("Culling Spree: a slain superior brings another half the time (slayer:superior-again)", () => {
+  const Superiors = require("../plugins/skills/slayer/Superiors.Slayer");
+  const spawned = [];
+  Superiors.init({ core, emitCustomEvent: emit, spawnNpc: (definition) => (spawned.push(definition), { getCombat: () => ({ attack() {} }) }) });
+  const superiorId = Superiors.resolve().get("bloodveld");
+  const superior = {
+    getId: () => superiorId,
+    getLocation: () => new Location(3420, 3560, 0),
+    getCurrentDefinition: () => ({ getName: () => core.CacheDefinitions.getNpc(superiorId).name }),
+  };
+  const who = cases(CULLING_SPREE);
+  assert.ok(Superiors.superiorAgain(who.relic, superior, () => 0.49));
+  assert.equal(Superiors.superiorAgain(who.relic, superior, () => 0.5), null, "50%");
+  assert.deepEqual(spawned.map(({ id, x, y, owner }) => [id, x, y, owner]), [[superiorId, 3420, 3560, who.relic]], "the same superior where it died");
+  for (const player of others(who)) assert.equal(Superiors.superiorAgain(player, superior, () => 0), null);
+  assert.equal(spawned.length, 1);
+});
+
+test("Culling Spree: the Slayer helmet (i)'s boosts and protection without one (slayer:helmet)", () => {
+  const modifiers = {};
+  const register = (key) => (fn) => (modifiers[key] = fn);
+  const answers = (name, request) => {
+    if (name === "slayer:on-task") request.onTask = true;
+    emit(name, request);
+  };
+  require("../plugins/items/SlayerHelmet.plugin").register(new Proxy({
+    core,
+    emitCustomEvent: answers,
+    registerMeleeHitModifier: register("melee"),
+    registerRangedHitModifier: register("ranged"),
+    registerMagicHitModifier: register("magic"),
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  const Equipment = require("../plugins/skills/slayer/Equipment.Slayer");
+  Equipment.init({ core, emitCustomEvent: emit });
+  const banshee = Equipment.GEAR.monsters.find((monster) => monster.names.includes("Banshee"));
+  const basilisk = Equipment.GEAR.monsters.find((monster) => monster.names.includes("Basilisk"));
+  const who = cases(CULLING_SPREE);
+  const target = { isNpc: () => true, getAsNpc: () => ({}) };
+  const fighting = (player) => Object.assign(player, { getCombat: () => ({ getTarget: () => target }) });
+  const entity = (player) => ({ isPlayer: () => true, getAsPlayer: () => fighting(player) });
+  assert.deepEqual([modifiers.melee(entity(who.relic), 60), modifiers.ranged(entity(who.relic), 40), modifiers.magic(entity(who.relic), 40)], [70, 46, 46]);
+  assert.equal(Equipment.protectedFrom(who.relic, banshee), true, "the helmet covers earmuffs");
+  assert.equal(Equipment.protectedFrom(who.relic, basilisk), false, "not a mirror shield");
+  for (const player of others(who)) {
+    assert.deepEqual([modifiers.melee(entity(player), 60), modifiers.magic(entity(player), 40)], [60, 40]);
+    assert.equal(Equipment.protectedFrom(player, banshee), false);
+  }
+});
+
 test("Flow State: catches roll every 2 ticks", () => {
   const who = cases(FLOW_STATE);
   assert.equal(emit("fishing:interval", { player: who.relic, ticks: 5 }).ticks, 2);

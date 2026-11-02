@@ -186,6 +186,8 @@ relics are the first askers; nothing changes when nobody answers):
 | `treasure-trails:casket-opened` | Treasure Trails' caskets | `{ player, tier }` after a casket's rewards are handed over (not the Mimic's) |
 | `treasure-trails:requirement-waived` | Treasure Trails | `{ player, kind, waived }`: `kind` "emote" (what to wear), "falo" (the item to show) or "charlie" (the item to bring) |
 | `slayer:always-on-task` | Slayer, for a Slayer monster the task does not cover | `{ player, npc, npcId, name, onTask }`: counted as on task everywhere `slayer:on-task` is asked, and a kill gives its Slayer XP and superior chance without counting down the task (`offTask` on `slayer:task-kill`; no keys) |
+| `slayer:superior-again` | Slayer's superiors, as one dies | `{ player, npc, chance }`: the chance (0 to 1, 0 unless answered) of another of the same superior where it died |
+| `slayer:helmet` | SlayerHelmet, Slayer's protective equipment, when no mask or helmet is worn | `{ player, worn }`: set `worn` to `imbued` or `plain` for that helmet's on-task boosts and protection |
 | `slayer:superior-spawned`, `slayer:superior-rewards` | Slayer's superiors | `{ player, npc, superior }`; `{ player, npc, normalId, drops, uniqueBoost, extraRolls }` as a superior drops: more rolls on the normal monster's table, a higher unique chance, drops of its own |
 | `slayer:reward-cost` | Slayer's reward shop | `{ player, kind, cost, bit?, itemId? }` for an unlock, extension, cancel, block or purchase; never below 0 |
 | `fairy-rings:destinations`, `spirit-trees:destinations` | FairyRings, SpiritTrees | `{ list }` -> `{ code, name, location }` for every ring with a destination; `{ player, list }` -> `{ name, location }` for the trees the player could travel to now |
@@ -728,7 +730,7 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | 5 | Soul Harvest | partial: shards from bones, ashes (our 0.8 x XP; the Wiki gives none), crops and health checks (`farming:check-health`), bound as pure essence (`runecrafting:essence`); not the libation bowl (not on the server), nor the Ourania, combination or minigame altars |
 | 6 | Grimoire | done (every prayer as well) |
 | 6 | Eternal Sustenance | done |
-| 6 | Culling Spree | partial: free perks, elite clues per superior; not the three-task choice, the second superior or the helmet's effects |
+| 6 | Culling Spree | partial: free perks, elite clues per superior, a 50% second superior (`slayer:superior-again`), the Slayer helmet (i)'s boosts and protection unworn (`slayer:helmet`); not the three-task choice with a chosen count (no capture), nor the helmet uses that read the worn item (Nex's gas, the equipment screen) |
 | 7 | Flow State | partial: a 2-tick pace for Fishing, Mining, Woodcutting, Cooking, Firemaking (lighting, campfire tending), bone offering, Fletching, smelting, Crafting, Farming (raking, harvesting), alchemy, Superheat Item and enchanting (`skills:action-interval`), with a fletching knife's tick off after it (1 tick); not the minigames (Wintertodt, Tempoross, stealing valuables), nor diabolic worms (no Fishing spot uses them here) |
 | 7 | Reloaded | done (a pick from tiers 1 to 6) |
 | 8 | Executioner | done but for the 6-tile range (the axe's weapon profile is every league's) |

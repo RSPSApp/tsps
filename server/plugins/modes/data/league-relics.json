@@ -299,7 +299,8 @@
     "eternalSustenance": { "league": 6, "key": "eternal-sustenance" },
     "cullingSpree": {
       "league": 6, "key": "culling-spree", "freeKinds": ["unlock", "extend", "cancel", "block"], "freeItems": ["RUNE_POUCH", "HERB_SACK", "LOOTING_BAG"],
-      "superiorClues": [1, 3], "superiorClue": "SCROLL_BOX_ELITE_", "_superiorClue": "The elite clues come as scroll boxes, as the tier-1 passive drops every clue (ours)."
+      "superiorClues": [1, 3], "superiorClue": "SCROLL_BOX_ELITE_", "_superiorClue": "The elite clues come as scroll boxes, as the tier-1 passive drops every clue (ours).",
+      "superiorAgainChance": 0.5, "helmet": "imbued"
     },
     "flowState": {
       "league": 6, "key": "flow-state", "ticks": 2,

@@ -334,7 +334,7 @@ test('diary tasks follow successful native gameplay actions', async t => {
     assert.equal(PluginManager.emitObjectInteraction({ player, object, objectId: object.getId(), location: { x: 3269, y: 3410, z: 0 }, clickType: 2, handled: false }), true);
     assert.equal(completed(player, 'varrock', TEA), false);
     advance();
-    assert.equal(player.getInventory().contains(core.ItemIdentifiers.CUP_OF_TEA), true, 'real stall producer awarded tea');
+    assert.equal(player.getInventory().contains(core.ItemIdentifiers.CUP_OF_TEA_2), true, 'real stall producer awarded tea');
     assert.equal(observed.at(-1).kind, 'stall');
     assert.equal(completed(player, 'varrock', TEA), true);
     assert.equal(player.getPacketSender().getVarbit(6319), 1);
@@ -393,7 +393,7 @@ test('diary tasks follow successful native gameplay actions', async t => {
       PluginManager.emitObjectInteraction({ player, object, objectId: object.getId(), location: { x, y, z: 0 }, clickType: 2, handled: false });
       if (fillDuringAttempt) for (let slot = 0; slot < 28; slot++) player.getInventory().setItem(slot, new core.Item(core.ItemIdentifiers.CABBAGE));
       advance();
-      assert.equal(player.getInventory().contains(core.ItemIdentifiers.CUP_OF_TEA), !fillDuringAttempt);
+      assert.equal(player.getInventory().contains(core.ItemIdentifiers.CUP_OF_TEA_2), !fillDuringAttempt);
       assert.equal(completed(player, 'varrock', TEA), false);
     }
   });

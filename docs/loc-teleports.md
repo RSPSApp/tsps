@@ -7,6 +7,14 @@ Ladders, stairs, caves, holes and tunnels that did nothing in tsps (or went the 
 - **Plugin:** `server/plugins/world/LocTeleports.plugin.js` plays the entries.
 - **Sync:** `server/scripts/sync-loc-teleports.cjs` writes the data from the captures. Its rules are in `server/scripts/loc-teleport-matching.cjs`, and its lasting decisions in `server/plugins/world/data/loc-teleport-sync.json`.
 
+After the move completes, the plugin emits `loc-teleports:arrived` with `{ player, objectId, location: { x, y, z } }`; `location` is the clicked loc's placement. Blocked or cancelled travel does not emit it. Achievement diaries uses this completed-entry event for entering the H.A.M. Hideout, rather than awarding the task when the entrance is clicked.
+
+### H.A.M. entrance limitation (#1852)
+
+Entering through the existing route now completes the [Lumbridge & Draynor easy task](https://oldschool.runescape.wiki/w/Lumbridge_%26_Draynor_Diary#Easy). The lock-picking bug remains: option 5 is unhandled, and the existing option 1 route still enters directly. This diary correction preserves that behavior and does not implement an unverified lock-picking formula.
+
+The current cache places multiloc `ham_multi_trapdoor` (5492) at (3166, 3252, 0). Varbit 235 selects closed 5490 (`Open`, `Pick-Lock`) or open 5491 (`Climb-down`, `Close`). Normal-world [capture 3199](https://rsprox.net/download/3199), revision 232, shows animation 537 while picking, 536 on success, varbit 235 opening, and a separate option 1 climb to (3149, 9652, 0) that resets the trapdoor. Leagues V [capture 1723](https://rsprox.net/download/1723), revision 227, also shows automatic retries seven ticks apart, 0.5 base XP on failure, 3.8 on success, occasional numb-finger level drain, and the diary message after entry. Its boosted XP does not establish normal-world success or numb-finger probabilities. The published [H.A.M. jail-door rates](https://oldschool.runescape.wiki/w/Door_%28H.A.M._Hideout_Jail%29) describe object 5501, not this entrance, so they are not used as its formula.
+
 ## The captures
 
 The capture index lists every loc option that moved the player, per loc and clicked tile:

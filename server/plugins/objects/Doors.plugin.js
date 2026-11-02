@@ -50,7 +50,6 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   GUIDOR_GATE_RIGHT_OPEN: 2053, // guidorgateropen
 });
 
-
 let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
 let DOUBLE_DOOR_ID_FAMILIES, DOUBLE_DOOR_FAMILY_IDS_BY_ID, DORGESH_CITY_DOOR_IDS;
 let SPECIAL_DOUBLE_DOOR_PAIRS, SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID, SPECIAL_DOUBLE_DOOR_OPEN_IDS_BY_CLOSED_ID;
@@ -1233,6 +1232,14 @@ function swapLocs(remove, add) {
   for (const leaf of add) core.ObjectManager.register(wallLoc(leaf), true);
 }
 
+/** The player crosses on the clicked row, from whichever side they stand on. */
+function stepThroughGate(player, gate, y, z) {
+  const toX = player.getLocation().getX() < gate.crossX ? gate.crossX : gate.crossX - 1;
+  const queue = player.getMovementQueue();
+  queue.reset();
+  queue.addSteps(cloneLocation(toX, y, z));
+}
+
 /** Opens a pass-through gate, steps the player across it and shuts it again (see PASS_THROUGH_GATES). */
 function handlePassThroughGate(player, objectId, location) {
   const x = location?.getX?.() ?? location?.x;
@@ -1241,18 +1248,17 @@ function handlePassThroughGate(player, objectId, location) {
   const gate = passThroughGateAt(objectId, x, y, z);
   if (!gate) return false;
   const anchorKey = `pass-through:${gate.closed[0].slice(1).join(",")}`;
-  if (OPEN_PASS_THROUGH_GATES.has(anchorKey)) return true;
+  // Someone else's opening: step through it while it stands open.
+  if (OPEN_PASS_THROUGH_GATES.has(anchorKey)) {
+    stepThroughGate(player, gate, y, z);
+    return true;
+  }
 
   swapLocs(gate.closed, gate.opened);
   OPEN_PASS_THROUGH_GATES.add(anchorKey);
+  // Captured: the opening sound only; the gate shuts silently (1636, 1663, 3220).
   core.Sounds.sendSound(player, core.Sound.GATE_OPEN);
-
-  // The player crosses on the clicked row, from whichever side they stand on.
-  const from = player.getLocation();
-  const toX = from.getX() < gate.crossX ? gate.crossX : gate.crossX - 1;
-  const queue = player.getMovementQueue();
-  queue.reset();
-  queue.addSteps(cloneLocation(toX, y, z));
+  stepThroughGate(player, gate, y, z);
 
   const task = new core.Task(gate.closeTicks, anchorKey);
   task.execute = () => {

@@ -105,6 +105,7 @@ module.exports = function attach(api) {
   api.onInterfaceActionButton(Common.uid(group, nameHeader), headerClicked);
   api.onInterfaceActionButton(Common.uid(group, teleportButton), teleportClicked);
   api.onInterfaceActionButton(Common.uid(group, confirm), confirmClicked);
+  api.onCustomEvent("league:teleport-cast", Teleport.answerTeleportCast);
 };
 
 Object.assign(module.exports, { open });

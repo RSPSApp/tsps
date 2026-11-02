@@ -37,6 +37,7 @@ const ETERNAL_SUSTENANCE = { 5: 2 };
 const CULLING_SPREE = { 5: 3 };
 const FLOW_STATE = { 6: 1 };
 const RELOADED = { 6: 2 };
+const EVIL_EYE = { 2: 2 };
 const EXECUTIONER = { 7: 1 };
 const FLASK_OF_FERVOUR = { 7: 3 };
 
@@ -47,6 +48,8 @@ let Unlock;
 const hooks = {};
 const custom = {};
 const itemActions = new Map();
+/** Chatbox menus sent: { player, title, entries: [[label, action], ...] }. */
+const prompts = [];
 const realRandom = Math.random;
 
 before(async () => {
@@ -78,6 +81,11 @@ before(async () => {
     registerWeaponProfile() {},
     registerRangedAmmoHandler() {},
     onItemAction: (name, actions) => itemActions.set(name, { ...itemActions.get(name), ...actions }),
+    sendMultiChatboxPrompt: (player, title, ...flat) => {
+      const entries = [];
+      for (let index = 0; index < flat.length; index += 2) entries.push([flat[index], flat[index + 1]]);
+      prompts.push({ player, title, entries });
+    },
     onInterfaceActionButton: (ids, handler) => {
       for (const id of [].concat(ids)) on(`button:${id}`)(handler);
     },
@@ -1001,4 +1009,179 @@ test("Woodsman: a quetzal whistle keeps its charge (quetzals:whistle-charge)", (
   const kept = (player) => emit("quetzals:whistle-charge", { player, itemId: I.BASIC_QUETZAL_WHISTLE, kept: false }).kept;
   assert.equal(kept(who.relic), true);
   for (const player of others(who)) assert.equal(kept(player), false);
+});
+
+// ---- Evil Eye: destinations by area (data/league-evil-eye.json) ----
+
+const EVIL_EYE_DATA = require("../plugins/modes/data/league-evil-eye.json");
+const DP_CAST = require("../plugins/modes/data/league-areas.json").leagues[DP].teleportCast;
+
+/** The league's answers the relics ask (`league:areas`, `league:area-at`, `league:teleport-cast`), set for one test. */
+function withLeague({ unlocked = null, areaAt = () => null } = {}, fn) {
+  const saved = ["league:areas", "league:area-at", "league:teleport-cast", "quest:is-complete"].map((name) => [name, custom[name]]);
+  custom["league:areas"] = [(query) => { query.unlocked = unlocked; }];
+  custom["league:area-at"] = [(query) => { query.area = areaAt(query.x, query.y); }];
+  custom["league:teleport-cast"] = [(query) => { query.cast = DP_CAST; }];
+  try {
+    return fn();
+  } finally {
+    for (const [name, handlers] of saved) {
+      if (handlers === undefined) delete custom[name];
+      else custom[name] = handlers;
+    }
+  }
+}
+
+/** An item option clicked: carried (inventory slot 0), or worn when `worn` (its equipment slot). */
+function click(player, itemId, option, { subOp = null, worn = false } = {}) {
+  const name = core.ItemDefinition.forId(itemId).getName();
+  const item = new core.Item(itemId, 1);
+  const event = worn
+    ? { player, interfaceId: core.Equipment.INVENTORY_INTERFACE_ID, item, itemId, slot: core.Equipment.AMULET_SLOT, clickType: 2, handled: false }
+    : { player, interfaceId: (149 << 16), item, itemId, slot: 0, clickType: 1, handled: false };
+  if (subOp !== null) event.subOpId = subOp + 1;
+  const result = itemActions.get(name)?.[option]?.(event);
+  return { event, handled: result !== false && event.handled === true };
+}
+
+/** The player's latest menu, paged through ("More...") until `label` is on it, then picked. */
+function pick(player, label) {
+  for (let page = 0; page < 20; page++) {
+    const menu = prompts.filter((prompt) => prompt.player === player).at(-1);
+    assert.ok(menu, `a menu with ${label}`);
+    const entry = menu.entries.find(([text]) => text === label);
+    if (entry) return entry[1]();
+    const more = menu.entries.find(([text]) => text === "More...");
+    assert.ok(more, `${label} on the menu "${menu.title}"`);
+    more[1]();
+  }
+  assert.fail(`${label} never listed`);
+}
+
+/** Runs the game's ticks until the player stands on (x, y, z), at most `limit`; the ticks taken. */
+function ticksTo(player, { x, y, z = 0 }, limit = 40) {
+  for (let tick = 1; tick <= limit; tick++) {
+    core.TaskManager.process();
+    const at = player.getLocation();
+    if (at.getX() === x && at.getY() === y && at.getZ() === z) {
+      player.setNeedsPlacement(false);
+      return tick;
+    }
+  }
+  return -1;
+}
+
+/** Puts the player on a tile as the next tick's sync would leave it (placed). */
+function relocate(player, location) {
+  player.setLocation(location);
+  player.setNeedsPlacement(false);
+}
+
+function area(data, name) {
+  return data.areas.find((entry) => entry.name === name);
+}
+
+test("Evil Eye: the data's areas are the item's submenus, every destination a real tile, named once", () => {
+  const areaIds = require("../plugins/modes/data/league-areas.json").leagues[DP].areas;
+  for (const [itemId, data] of [[I.EVIL_EYE, EVIL_EYE_DATA]]) {
+    const definition = core.CacheDefinitions.getItem(itemId);
+    assert.deepEqual(data.areas.map((entry) => entry.name), definition.subops[0].filter(Boolean), "the cache's subops, in order");
+    const names = new Set();
+    for (const entry of data.areas) {
+      assert.ok(areaIds.includes(entry.area), `${entry.name}: a Demonic Pacts area id`);
+      assert.ok(entry.destinations.length > 0, `${entry.name} has destinations`);
+      for (const destination of entry.destinations) {
+        assert.ok(!names.has(destination.name), `${destination.name} named once`);
+        names.add(destination.name);
+        assert.ok(Number.isInteger(destination.x) && destination.x > 1000 && destination.x < 4200, `${destination.name} x`);
+        assert.ok(Number.isInteger(destination.y) && destination.y > 1000 && destination.y < 13000, `${destination.name} y`);
+        assert.ok([0, 1, 2, 3].includes(destination.z ?? 0), `${destination.name} plane`);
+      }
+    }
+  }
+  const relics = Common.catalog(DP).tiers[2].relics;
+  assert.equal(relics[1].key, Common.data.effects.evilEye.key);
+});
+
+test("Evil Eye: Teleport's area submenu, carried or worn, lists its destinations; a pick casts the league's teleport to the tile, and Last-destination goes back", () => {
+  const who = cases(EVIL_EYE);
+  const player = who.relic;
+  const varlamore = area(EVIL_EYE_DATA, "Varlamore");
+  const target = varlamore.destinations.at(-1);
+  withLeague({}, () => {
+    assert.equal(click(player, I.EVIL_EYE, "Teleport", { subOp: EVIL_EYE_DATA.areas.indexOf(varlamore) }).handled, true);
+    assert.equal(prompts.at(-1).title, "Varlamore");
+    pick(player, target.name);
+    core.TaskManager.process();
+    core.TaskManager.process();
+    assert.equal(player.getAnimation()?.getId(), DP_CAST.steps[0].animation, "the league's area-teleport cast");
+    assert.ok(ticksTo(player, target) > 0, `landed on ${target.name}`);
+
+    relocate(player, new Location(3200, 3200, 0));
+    assert.equal(click(player, I.EVIL_EYE, "Last-destination").handled, true);
+    assert.ok(ticksTo(player, target) > 0, "Last-destination goes back");
+
+    // Worn: the same submenu from the equipment tab (the item's params), and a plain click lists the areas.
+    relocate(player, new Location(3200, 3200, 0));
+    assert.equal(click(player, I.EVIL_EYE, "Teleport", { subOp: EVIL_EYE_DATA.areas.indexOf(varlamore), worn: true }).handled, true);
+    assert.equal(prompts.at(-1).title, "Varlamore");
+    click(player, I.EVIL_EYE, "Teleport");
+    assert.equal(prompts.at(-1).title, Common.message("evilEyeTitle"));
+    pick(player, "Varlamore");
+    assert.equal(prompts.at(-1).title, "Varlamore");
+  });
+  const fresh = character("fresh-eye", "league", EVIL_EYE);
+  assert.equal(click(fresh, I.EVIL_EYE, "Last-destination").handled, true);
+  assert.equal(fresh.sent.messages.at(-1), Common.message("noLastDestination"));
+});
+
+test("Evil Eye: a destination in an area not unlocked is refused, from the menu and Last-destination", () => {
+  const player = character("locked-eye", "league", EVIL_EYE);
+  const varlamore = area(EVIL_EYE_DATA, "Varlamore");
+  const asgarnia = area(EVIL_EYE_DATA, "Asgarnia");
+  withLeague({ unlocked: [varlamore.area] }, () => {
+    click(player, I.EVIL_EYE, "Teleport", { subOp: EVIL_EYE_DATA.areas.indexOf(asgarnia) });
+    assert.equal(player.sent.messages.at(-1), Common.message("areaLocked"));
+    player.setAttribute("league:last-destination:evil-eye", { label: asgarnia.destinations[0].name, x: 0, y: 0, z: 0 });
+    const before = player.getLocation().clone();
+    click(player, I.EVIL_EYE, "Last-destination");
+    assert.equal(player.sent.messages.at(-1), Common.message("areaLocked"));
+    for (let tick = 0; tick < 30; tick++) core.TaskManager.process();
+    assert.ok(player.getLocation().equals(before), "stayed");
+  });
+  // A tile in a locked area of its own (the area unlocks' squares) is refused too.
+  withLeague({ unlocked: [varlamore.area], areaAt: () => 999 }, () => {
+    click(player, I.EVIL_EYE, "Teleport", { subOp: EVIL_EYE_DATA.areas.indexOf(varlamore) });
+    pick(player, varlamore.destinations[0].name);
+    assert.equal(player.sent.messages.at(-1), Common.message("areaLocked"));
+  });
+});
+
+test("Evil Eye: from above level 20 of the Wilderness, where a standard teleport is refused", () => {
+  for (const [picks, itemId, option, data] of [[EVIL_EYE, I.EVIL_EYE, "Teleport", EVIL_EYE_DATA]]) {
+    const player = character(`deep-${itemId}`, "league", picks);
+    player.getSkillManager().setCurrentLevel(Skill.AGILITY, 99).setMaxLevel(Skill.AGILITY, 99);
+    const wilderness = area(data, "Wilderness");
+    const target = wilderness.destinations[0];
+    relocate(player, new Location(3100, 3900, 0));
+    player.setWildernessLevel(47);
+    assert.equal(core.TeleportHandler.checkReqs(player, new Location(3200, 3200, 0)), false, "the usual level-20 limit");
+    withLeague({}, () => {
+      click(player, itemId, option, { subOp: data.areas.indexOf(wilderness) });
+      pick(player, target.name);
+      assert.ok(ticksTo(player, target) > 0, `landed on ${target.name}`);
+    });
+  }
+});
+
+test("Evil Eye: nothing for a character without the relic, another league's or a main character", () => {
+  for (const [picks, itemId, option] of [[EVIL_EYE, I.EVIL_EYE, "Teleport"]]) {
+    const who = cases(picks);
+    for (const player of others(who)) {
+      const count = prompts.length;
+      assert.equal(click(player, itemId, option, { subOp: 0 }).handled, false, "on to the game's own");
+      assert.equal(click(player, itemId, "Last-destination").handled, false);
+      assert.equal(prompts.length, count, "no menu");
+    }
+  }
 });

@@ -71,6 +71,9 @@
     "areaLocked": { "text": "You haven't unlocked the area that leads to.", "source": "ours" },
     "noLastDestination": { "text": "You haven't teleported anywhere with it yet.", "source": "ours" },
     "noDestinations": { "text": "There is nowhere to teleport to.", "source": "ours" },
+    "agilityTooLow": { "text": "You need an Agility level of {level} to teleport to that shortcut.", "source": "ours" },
+    "questNeeded": { "text": "You need to complete {quest} to teleport there.", "source": "ours" },
+    "evilEyeTitle": { "text": "Which area's bosses?", "source": "ours" },
     "fairyMushroomTitle": { "text": "Where would you like to go?", "source": "ours" },
     "fairyRingsTitle": { "text": "Which fairy ring?", "source": "ours" },
     "spiritTreesTitle": { "text": "Which spirit tree?", "source": "ours" },
@@ -310,6 +313,10 @@
         "MINING": true, "WOODCUTTING": true, "COOKING": true, "FIREMAKING": true, "PRAYER": true, "FLETCHING": true,
         "SMITHING": ["smelt"], "CRAFTING": true, "FARMING": true, "MAGIC": true
       }
+    },
+    "evilEye": {
+      "league": 6, "key": "evil-eye", "toolName": "Evil eye",
+      "_destinations": "plugins/modes/data/league-evil-eye.json: the Wiki's bosses and raids by area, each on a tile the server's own data gives (leaguerelics/EvilEye.LeagueRelics.js)."
     },
     "flaskOfFervour": {
       "league": 6, "key": "flask-of-fervour", "toolName": "Flask of fervour", "tool": "FLASK_OF_FERVOUR",

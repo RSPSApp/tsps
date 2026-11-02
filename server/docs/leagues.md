@@ -111,6 +111,7 @@ colours and screens here but no relic, area or task catalogs yet.
 | `welcome-screen:shown` | `{ player }` when the welcome screen is up | Tutorial, Welcome listen |
 | `league:areas` | `{ player } -> { league, unlocked: [area ids], next: { slot, tasks } \| null, available }` | LeagueAreaUnlocks |
 | `league:area-at` | `{ x, y, player \| league } -> { area: id \| null, name }` | LeagueAreaUnlocks |
+| `league:teleport-cast` | `{ player } -> { cast: { steps, lockTick, landTick } \| null }` (the league's area-teleport cast, `teleportCast`) | LeagueAreaUnlocks |
 | `league:relic-triggered` | `{ player, relic }` when a once-in-a-while relic fires (Undying Retribution, Last Stand) | LeagueRelics emits |
 | `ironman:set-mode` | `{ player, mode } -> { handled }` (the Ironman plugin's) | LeagueMode emits at a league login |
 | `ironman:change-mode` | `{ player, from, to, allowed, reason }` (the Ironman plugin asks before a setup choice) | LeagueMode refuses for a league character |
@@ -721,7 +722,8 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | 2 | Friendly Forager | done (Raging Echoes' unit, plus Herblore at once; the recorded lines) |
 | 2 | Woodsman | partial: Fletching batches, log burning, Hunter catches, impling loot doubled and noted (`hunter:impling-loot`), double rumour XP and sack loot rolls (`hunter:rumour-reward`, `hunter:sack-rolls`), whistles that keep their charges (`quetzals:whistle-charge`); not the trap's herb or tree seed (the Wiki gives no list or chances) |
 | 3 | Bank Heist | done |
-| 3 | Evil Eye, Map of Alacrity | the item only (their destinations' coordinates are not in the cache) |
+| 3 | Evil Eye | done: the Wiki's 60 bosses and raids by area, each on the entrance tile the server's own data gives (`league-evil-eye.json`), with the league's area-teleport cast (no recording of the eye in use) |
+| 3 | Map of Alacrity | the item only |
 | 4 | Transmute | its toggles and item only, no spells |
 | 4 | Conniving Clues | done |
 | 4 | Butler's Bell | the item only |
@@ -1046,7 +1048,8 @@ Animal Wrangler's Hunter and cooking ones) do not.
 
 ### The item and teleport relics
 
-Their teleports share the standard animation, their item's Wilderness limit, and the league's
+Their teleports share the standard animation (Demonic Pacts' Evil eye: the
+league's area-teleport cast, `league:teleport-cast`), their item's Wilderness limit, and the league's
 areas: a destination in an area the character has not unlocked is refused (`league:area-at`
 and `league:areas`, answered by the league's area unlocks; with nobody answering, everywhere is
 open). Each item remembers its last destination. The menus' grouping and wording are ours.
@@ -1086,6 +1089,13 @@ open). Each item remembers its last destination. The menus' grouping and wording
   every area as Other), else in alphabetical runs. Not here: the Wiki's quest gates on some banks
   (Sophanem, Keldagrim and others): the league's areas decide; banks in raid, minigame and
   instanced map areas are listed as the map has them.
+- **Evil Eye** (Demonic Pacts tier 3): the Evil eye's Teleport (an area submenu in the cache,
+  carried or worn) lists an area's bosses and raids, Last-destination repeats the last; to the
+  entrance of each (Barrows' chest or its surface, each Moon of Peril), from any Wilderness level,
+  only in unlocked areas (the submenu's area and the tile's own). The Wiki's pins often mark a
+  dungeon's surface: `plugins/modes/data/league-evil-eye.json` takes each tile from the server's
+  own lair, raid or teleport data (its `source`), checked open on the cache's map. A boss's own
+  requirements (kill counts, keys, tasks) are met or refused at its entrance.
 - **Total Recall** (Raging Echoes tier 6): the Crystal of Echoes' Save-memory keeps the place,
   Hitpoints (up to 127, as live), Prayer and special attack energy; Teleport-back returns there
   from any Wilderness level and sets the three back; Check-memories says what is kept (ours). Not

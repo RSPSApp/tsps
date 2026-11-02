@@ -70,6 +70,7 @@ module.exports = {
     require("./leaguerelics/CullingSpree.LeagueRelics")(api);
     require("./leaguerelics/FlowState.LeagueRelics")(api);
     require("./leaguerelics/FlaskOfFervour.LeagueRelics")(api);
+    require("./leaguerelics/EvilEye.LeagueRelics")(api);
     require("./leaguerelics/Hotfoot.LeagueRelics").late(api);
   },
 };

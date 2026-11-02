@@ -59,6 +59,7 @@ import { PluginManager } from "../../../../plugins/PluginManager";
 import { ServerPerf } from "../../../../util/ServerPerf";
 import { getSequencePriority } from "../../../cache/NpcAnimationScanner";
 import { LOGIN_TOKENS_ATTRIBUTE } from "../../../../net/login/LoginTokens";
+import { CacheDefinitions } from "../../../cache/CacheDefinitions";
 
 const ATTR_SKIP_PERSISTENCE = "bot-skip-persistence";
 const DEFAULT_AUDIO_SETTINGS: Readonly<Record<number, number>> = {
@@ -420,6 +421,14 @@ export class Player extends Mobile {
         this.getPacketSender().sendConfig(CombatPoisonEffect.ORB_VARP, value);
     }
 
+    private static mapClockVarp: number | null | undefined = undefined;
+
+    /** Sends the varp map_clock as the world's tick count, once a tick. */
+    private sendMapClock(): void {
+        if (Player.mapClockVarp === undefined) Player.mapClockVarp = CacheDefinitions.getVarpId("map_clock");
+        if (Player.mapClockVarp !== null) this.getPacketSender().sendConfig(Player.mapClockVarp, World.getProcessCycle());
+    }
+
     public process() {
         const isBot = this.isPlayerBot();
         const timed = <T>(phase: string, fn: () => T): T =>
@@ -427,6 +436,9 @@ export class Player extends Mobile {
 
         // Client input first: packets received since the last turn act now, on the tick.
         timed("client_input", () => this.getSession()?.processPackets());
+        // The tick count, every tick, as live sends it (varp map_clock): the client's timers
+        // (buff bar cooldowns, script4678 and script5940) count against it.
+        if (!isBot) this.sendMapClock();
         // Queued impacts land before this player acts, matching LostCity's
         // processQueues-then-processInteraction order. A hit that kills them here
         // stops the rest of this turn via the isDying/hitpoints guards below.

@@ -546,6 +546,13 @@ class WardensRoom extends WardenRoomBase {
     this.stoned.delete(player);
   }
 
+  /** Leaving while entombed: the stone goes with the room, or they reach the lobby unable to walk. */
+  onPlayerLeave(player) {
+    if (!this.stoned.delete(player)) return;
+    player.getMovementQueue().setBlockMovement(false);
+    player.performAnimation(new (Shared.core().Animation)(-1));
+  }
+
   isStoned(player) {
     return (this.stoned.get(player) ?? -1) > Shared.cycle();
   }

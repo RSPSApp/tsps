@@ -453,6 +453,17 @@ function resupply({ player }) {
   return true;
 }
 
+/**
+ * The raid's own items never reach a bank (the deposit pot is a deposit box): leaving takes them
+ * from the inventory only, so a banked Nectar would have come out again for another raid. The
+ * refusal's wording is the one other minigames' items get; no capture banks a ToA supply.
+ */
+function refuseRaidItems(event) {
+  if (!Raid.isRaidItem(event.item?.getId?.())) return;
+  event.allow = false;
+  event.player.sendMessage("A magical force prevents you from banking this item!");
+}
+
 /** Wiki (Deposit pot): beside the spirit, as a bank deposit box. */
 function usePot({ player }) {
   if (!nexusOf(player)) return false;
@@ -480,6 +491,7 @@ module.exports = function registerTombsNexus(api) {
   Shared.onObject(api, PATHS.map((path) => `Path of ${path.name}`), usePathEntrance);
   Shared.onObject(api, "Entry", useWardensEntry);
   Shared.onObject(api, "Deposit pot", usePot);
+  api.onCanBankItem(refuseRaidItems);
   api.onNpcInteraction("Helpful Spirit", { Claim: claimSupplies });
   api.onItemAction("Supplies", { Open: openSupplyBag, "Withdraw 1": withdrawOne, "Withdraw All": withdrawAll, Resupply: resupply });
   api.onItemOnItem(storeSupply);

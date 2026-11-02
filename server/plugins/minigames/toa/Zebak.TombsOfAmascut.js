@@ -593,6 +593,11 @@ class ZebakRoom extends Raid.Room {
 
   // -------------------------------------------------------------- water
 
+  /** Leaving from the pool: swimming's walk and its blocked run go with the room. */
+  onPlayerLeave(player) {
+    this.stopSwimming(player);
+  }
+
   isSwimming(player) {
     return this.swimmers.has(player);
   }

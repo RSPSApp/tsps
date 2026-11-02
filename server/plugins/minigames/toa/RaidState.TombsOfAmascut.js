@@ -33,6 +33,10 @@ function registerRaidItems(...ids) {
   }
 }
 
+function isRaidItem(id) {
+  return raidItems.has(id);
+}
+
 // Raid-scoped rules and per-tick work from the unit files. The raid's area runs them, so
 // nobody outside a raid pays for them. canAttack/canTeleport handlers take the old hook event
 // ({ attacker, target, allow } / { player, allow }) and the first to set `allow` decides.
@@ -195,6 +199,9 @@ class Room {
 
   /** Called when a player steps from one tile onto `to` while in this room. */
   onStep(_player, _from, _to) {}
+
+  /** Called as a player leaves the raid from this room (a crystal, a teleport, a logout): undo what the room holds on them. */
+  onPlayerLeave(_player) {}
 
   /** Shows the boss health bar (the BossHud plugin) to everyone in the room. */
   openBossHud(npc) {
@@ -1007,6 +1014,7 @@ class Raid {
   /** Takes a player out of the raid; with `teleport` they are faded back to the lobby. */
   leave(player, { teleport = true, logout = false, arrived = null } = {}) {
     if (!this.players.includes(player)) return;
+    this.roomFor(player)?.onPlayerLeave(player);
     this.departedPoints += this.lootPoints(player);
     this.departed.push({ name: Shared.displayName(player), member: this.member(player) });
     this.players = this.players.filter((member) => member !== player);
@@ -1518,6 +1526,7 @@ module.exports = {
   MAX_TEAM_SIZE,
   removeRaidItems,
   registerRaidItems,
+  isRaidItem,
   styleMethod,
   walkThrough,
   START_POINTS,

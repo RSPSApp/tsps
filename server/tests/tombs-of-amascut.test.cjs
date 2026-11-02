@@ -563,3 +563,95 @@ test("the escape crystal is the raids' one (tob_teleport), not the Gauntlet's", 
   // Played over the MCP: with 25961 (gauntlet_escape_crystal, only "Activate") none of these fired.
   assert.deepEqual(crystal.inventoryActions.slice(0, 4), ['Teleport', 'Wear', 'Auto-afk', 'Configure']);
 });
+
+/** Registers a unit against a recording api: every hook call is kept by name. */
+function recordingApi() {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const calls = [];
+  const core = PluginManager.getCoreApi();
+  const api = new Proxy({}, {
+    get: (_, name) => (name === 'core' ? core : (...args) => { calls.push({ name, args }); }),
+  });
+  return { api, calls };
+}
+
+test("the escape crystal fires on every damage, direct hits included, and its Auto-afk check doesn't throw", () => {
+  const Shared = toaApi();
+  const Crystal = require('../plugins/minigames/toa/EscapeCrystal.TombsOfAmascut');
+  const { api, calls } = recordingApi();
+  Crystal(api);
+  // Shared.damage queues raw HitDamage and never reaches the hit-modify hook (Zebak's blood barrage).
+  assert.ok(calls.some((call) => call.name === 'onCustomEvent' && call.args[0] === 'combat:damage-apply'));
+  assert.ok(!calls.some((call) => call.name === 'onPlayerHitModify'));
+  assert.ok(!calls.some((call) => call.name === 'onItemAction' && call.args[1]?.Configure), "Configure is the crystal's own (the Theatre's unit)");
+  toaApi();
+  const player = playerStub('afk');
+  const armed = { afk: true, delay: 30, ring: false, teammates: false };
+  player.getInventory = () => ({ contains: (id) => id === Shared.escapeCrystalId() });
+  // MovementQueue's isMoving is a boolean; isMovings() is the method.
+  player.getMovementQueue = () => ({ isMoving: false, isMovings: () => false });
+  player.__toaLoginCycle = Shared.cycle();
+  assert.equal(Crystal.afkFires(player, armed), true, 'just logged in: fires at once');
+  assert.equal(Crystal.afkFires(player, { ...armed, afk: false }), false, 'not armed');
+  player.getMovementQueue = () => ({ isMoving: true, isMovings: () => true });
+  assert.equal(Crystal.afkFires(player, armed), false, 'never while moving');
+});
+
+test("one crystal configuration serves both raids, and the Theatre's unit leaves the tombs' uses alone", () => {
+  const TobCrystal = require('../plugins/minigames/tob/EscapeCrystal.TheatreOfBlood');
+  const player = playerStub('both');
+  player.getLocation = () => ({ getX: () => 3550, getY: () => 5161, getZ: () => 0 });
+  player.setAttribute(TobCrystal.ATTR.AFK, true);
+  player.setAttribute(TobCrystal.ATTR.DELAY, 2);
+  player.setAttribute(TobCrystal.ATTR.TEAMMATES, true);
+  const request = { player, afk: false, delay: 30, ring: false, teammates: false };
+  TobCrystal.settingsOf(request);
+  assert.deepEqual([request.afk, request.delay, request.ring, request.teammates], [true, 2, false, true]);
+  // Played over the MCP after main's Theatre crystal arrived: Auto-afk armed at 2 seconds there was
+  // invisible here, and its crystal-on-player claimed every use with "...in the Theatre of Blood".
+  const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
+  const event = { player, target: playerStub('mate'), itemId: ItemIdentifiers.ESCAPE_CRYSTAL_2 };
+  TobCrystal.useOnPlayer(event);
+  assert.notEqual(event.handled, true);
+  assert.deepEqual(player.messages, []);
+});
+
+test('leaving the raid mid-entomb lets the player walk again', () => {
+  toaApi();
+  const Raid = require('../plugins/minigames/toa/RaidState.TombsOfAmascut');
+  const rooms = new Map();
+  const register = Raid.registerRoom;
+  Raid.registerRoom = (key, RoomClass) => rooms.set(key, RoomClass);
+  try {
+    require('../plugins/minigames/toa/Wardens.TombsOfAmascut')(recordingApi().api);
+  } finally {
+    Raid.registerRoom = register;
+  }
+  toaApi();
+  let blocked = true;
+  const player = { getMovementQueue: () => ({ setBlockMovement: (value) => { blocked = value; } }), performAnimation: () => {} };
+  const room = { stoned: new Map([[player, 999999]]) };
+  rooms.get('WARDENS_P1').prototype.onPlayerLeave.call(room, player);
+  assert.equal(blocked, false);
+  assert.equal(room.stoned.size, 0);
+  assert.equal(typeof Raid.Room.prototype.onPlayerLeave, 'function', 'every room has the hook Raid.leave calls');
+});
+
+test("the raid's supplies can't be banked, through the deposit pot or anywhere", () => {
+  toaApi();
+  const Nexus = require('../plugins/minigames/toa/Nexus.TombsOfAmascut');
+  const { api, calls } = recordingApi();
+  Nexus(api);
+  toaApi();
+  const refuse = calls.find((call) => call.name === 'onCanBankItem').args[0];
+  const { ItemIdentifiers: I } = require('../dist/util/ItemIdentifiers');
+  const ask = (id) => {
+    const event = { player: playerStub('bank'), item: { getId: () => id }, allow: null };
+    refuse(event);
+    return event;
+  };
+  const nectar = ask(I.NECTAR_4_);
+  assert.equal(nectar.allow, false);
+  assert.deepEqual(nectar.player.messages, ['A magical force prevents you from banking this item!']);
+  assert.equal(ask(I.COINS).allow, null, 'everything else banks as normal');
+});

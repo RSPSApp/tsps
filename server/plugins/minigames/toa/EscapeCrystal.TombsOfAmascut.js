@@ -14,34 +14,32 @@
  * Cache: varbits teleport_crystal_afk_mode (14838), teleport_crystal_afk_delay (14849),
  * teleport_crystal_rol (14857). The client shows the armed state from them.
  * No capture opens Configure or fires the crystal: its menu's words and messages are the Theatre's.
- * Elsewhere the crystal is left to those activities' own plugins: every handler returns false
- * outside the tombs.
+ * Configure and Auto-afk set the crystal up wherever it is, and the Theatre of Blood's unit already
+ * answers them for every crystal: its settings are read from there (`escape-crystal:settings`), so
+ * one configuration serves both raids. Teleport, use on a teammate, firing and logging out are
+ * this unit's inside the tombs; elsewhere every handler here returns false.
  */
 
 const Shared = require("./Shared.TombsOfAmascut");
 const Raid = require("./RaidState.TombsOfAmascut");
 
-const VARBIT = { AFK_MODE: 14838, AFK_DELAY: 14849, RING_OF_LIFE: 14857 };
-const ATTR = { AFK: "escape-crystal:afk", DELAY: "escape-crystal:delay", RING: "escape-crystal:ring", TEAMMATES: "escape-crystal:teammates" };
-const DELAY = { MIN: 2, MAX: 300, DEFAULT: 30 };
+const DEFAULT_DELAY = 30;
 const SECONDS_PER_TICK = 0.6;
 /** Wiki: "just logged in" fires at once; how long that lasts is an estimate. */
 const LOGIN_GRACE_TICKS = 10;
 const RING_OF_LIFE_FRACTION = 0.1;
 
 const crystalId = () => Shared.escapeCrystalId();
-const delayOf = (player) => Number(player.getAttribute(ATTR.DELAY)) || DELAY.DEFAULT;
 
-function sendState(player) {
-  const sender = player.getPacketSender();
-  sender.sendVarbit(VARBIT.AFK_MODE, player.getAttribute(ATTR.AFK) ? 1 : 0);
-  sender.sendVarbit(VARBIT.AFK_DELAY, delayOf(player));
-  sender.sendVarbit(VARBIT.RING_OF_LIFE, player.getAttribute(ATTR.RING) ? 1 : 0);
+/** Auto-afk, its delay, ring of life and use on teammates, as Configure left them. */
+function settingsOf(player) {
+  const request = { player, afk: false, delay: DEFAULT_DELAY, ring: false, teammates: false };
+  Shared.api().emitCustomEvent("escape-crystal:settings", request);
+  return request;
 }
 
 function loggedIn({ player }) {
   player.__toaLoginCycle = Shared.cycle();
-  sendState(player);
 }
 
 function wears(player) {
@@ -89,41 +87,6 @@ function teleport(event) {
   return true;
 }
 
-function toggleAfk({ player }) {
-  const armed = !player.getAttribute(ATTR.AFK);
-  player.setAttribute(ATTR.AFK, armed);
-  sendState(player);
-  player.sendMessage(armed ? `Your crystal is now active. It will teleport you after ${delayOf(player)} seconds of inactivity.` : "Your crystal is no longer active.");
-  return true;
-}
-
-function configure({ player }) {
-  const teammates = !!player.getAttribute(ATTR.TEAMMATES);
-  const ring = !!player.getAttribute(ATTR.RING);
-  Shared.options(player, "Configure your escape crystal.",
-    `${teammates ? "Disable" : "Enable"} use on party members.`, () => {
-      player.setAttribute(ATTR.TEAMMATES, !teammates);
-      player.sendMessage(teammates ? "Your crystal can no longer be used on party members." : "Your crystal can now be used on party members.");
-    },
-    `Set the inactivity timer. (Currently ${delayOf(player)} seconds)`, () => {
-      player.setEnteredAmountAction({
-        execute: (value) => {
-          player.setAttribute(ATTR.DELAY, Math.max(DELAY.MIN, Math.min(DELAY.MAX, value | 0)));
-          sendState(player);
-          player.sendMessage(`Your crystal's inactivity timer is now ${delayOf(player)} seconds.`);
-        },
-      });
-      player.getPacketSender().sendEnterAmountPrompt(`Seconds of inactivity (${DELAY.MIN}-${DELAY.MAX}):`);
-    },
-    `${ring ? "Disable" : "Enable"} acting as a ring of life when worn.`, () => {
-      player.setAttribute(ATTR.RING, !ring);
-      sendState(player);
-      player.sendMessage(ring ? "Your crystal will no longer act as a ring of life." : "Your crystal will now act as a ring of life when worn.");
-    },
-    "Cancel.", () => {});
-  return true;
-}
-
 /** A crystal on a party member: needs their crystal too, and uses up both. */
 function useOnPlayer(event) {
   const { player, target, itemId } = event;
@@ -135,7 +98,7 @@ function useOnPlayer(event) {
     player.sendMessage("You can only use this on a member of your party in the Tombs of Amascut.");
     return;
   }
-  if (!player.getAttribute(ATTR.TEAMMATES)) {
+  if (!settingsOf(player).teammates) {
     player.sendMessage("Your crystal isn't configured to be used on party members.");
     return;
   }
@@ -149,35 +112,45 @@ function useOnPlayer(event) {
   player.sendMessage(`You teleport ${Shared.displayName(target)} to safety.`);
 }
 
-function afkFires(player) {
-  if (!player.getAttribute(ATTR.AFK) || (!player.getInventory().contains(crystalId()) && !wears(player))) return false;
-  if (player.getMovementQueue().hasNext?.() || player.getMovementQueue().isMoving?.()) return false;
+function afkFires(player, settings = settingsOf(player)) {
+  if (!settings.afk || (!player.getInventory().contains(crystalId()) && !wears(player))) return false;
+  if (player.getMovementQueue().isMovings()) return false;
   const now = Shared.cycle();
   if (now - (player.__toaLoginCycle ?? -LOGIN_GRACE_TICKS - 1) <= LOGIN_GRACE_TICKS) return true;
-  return (now - (player.lastInputCycle ?? 0)) * SECONDS_PER_TICK >= delayOf(player);
+  return (now - (player.lastInputCycle ?? 0)) * SECONDS_PER_TICK >= settings.delay;
 }
 
-function ringFires(player, hit) {
-  if (!player.getAttribute(ATTR.RING) || !wears(player)) return false;
+function ringFires(player, damage, settings = settingsOf(player)) {
+  if (!settings.ring || !wears(player)) return false;
   const { Skill } = Shared.core();
   const max = player.getSkillManager().getMaxLevel(Skill.HITPOINTS);
-  const after = player.getHitpoints() - (hit?.getTotalDamage?.() ?? 0);
+  const after = player.getHitpoints() - damage;
   return after > 0 && after <= max * RING_OF_LIFE_FRACTION;
 }
 
-function hitTaken({ player, hit }) {
+/**
+ * Every damage as it's applied ("combat:damage-apply" { target, hit: HitDamage }): ordinary hits
+ * and the rooms' direct ones alike (Zebak's blood barrage, the Wardens' orbs go through
+ * Shared.damage, which never reaches the hit-modify hook). Once a crystal fires, the rest of the
+ * tick's hits don't use another.
+ */
+function damageApplied({ target, hit }) {
+  if (!target?.isPlayer?.()) return;
+  const player = target.getAsPlayer?.() ?? target;
+  if (player.__toaEscapedCycle === Shared.cycle()) return;
   const raid = raidIn(player);
   if (!raid || raid.member(player).ghost || !raid.players.includes(player)) return;
-  if (afkFires(player) || ringFires(player, hit)) escape(player, raid);
+  const damage = Math.max(0, hit?.getDamage?.() ?? 0);
+  const settings = settingsOf(player);
+  if ((afkFires(player, settings) || ringFires(player, damage, settings)) && escape(player, raid)) player.__toaEscapedCycle = Shared.cycle();
 }
 
 module.exports = function registerTombsEscapeCrystal(api) {
   Shared.bind(api);
-  for (const attribute of Object.values(ATTR)) api.persistAttribute(attribute);
   api.onPlayerLogin(loggedIn);
-  api.onItemAction("Escape crystal", { Teleport: teleport, "Auto-afk": toggleAfk, Configure: configure });
+  api.onItemAction("Escape crystal", { Teleport: teleport });
   api.onItemOnPlayer(useOnPlayer);
-  api.onPlayerHitModify(hitTaken);
+  api.onCustomEvent("combat:damage-apply", damageApplied);
 };
 
-Object.assign(module.exports, { ATTR, teleport, toggleAfk, configure, useOnPlayer, hitTaken, afkFires, ringFires, wears, usesUp, delayOf });
+Object.assign(module.exports, { teleport, useOnPlayer, damageApplied, settingsOf, afkFires, ringFires, wears, usesUp });

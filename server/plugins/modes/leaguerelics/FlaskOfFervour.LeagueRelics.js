@@ -111,8 +111,12 @@ function impacts(player) {
   }
 }
 
+/** One explosion's hit: the health it takes is the owner's damage, so a kill is theirs (its loot, its kill count). */
 function strike(player, victim, damage) {
-  if (damage > 0) victim.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED).setSource(player)]);
+  if (damage <= 0) return;
+  const hit = new core.HitDamage(damage, core.HitMask.RED).setSource(player)
+    .onApplied((dealt) => victim.getCombat().addDamage(player, dealt));
+  victim.getCombat().getHitQueue().addPendingDamage([hit]);
 }
 
 function explode(player) {

@@ -174,6 +174,9 @@ const SOUND = {
   FIX: 930,
   PICK: 2581,
   DRINK: 2401,
+  /** Area sounds on the brazier's tile, range 2, the tick it goes out or breaks. */
+  BRAZIER_OUT: 2300,
+  BRAZIER_BREAK: 2299,
 };
 
 const GFX = {

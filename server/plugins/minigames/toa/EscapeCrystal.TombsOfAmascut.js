@@ -7,7 +7,8 @@
  *   are used up as the target is teleported out ("Using the escape crystal on another player in
  *   the raid no longer consumes two crystals" is about the user's own: one each).
  * - Auto-afk arms it: on taking any hit (zeros too) after the configured inactivity (2-300 seconds),
- *   or right after logging in, it teleports the player out. It never fires while moving.
+ *   or right after logging in, it teleports the player out. It never fires while moving. Ours: not
+ *   on a hit that kills (that's a safe raid death), and nothing lands during the teleport.
  * - Worn and configured for it, it acts as a ring of life.
  * - Logging out in the raid with one in the inventory uses it up, and the player comes back
  *   outside the raid (Raid.onLogout).
@@ -70,7 +71,23 @@ function raidIn(player) {
 /** Out of the tombs to the lobby; ghosts wait for the room to end. */
 function escape(player, raid) {
   if (raid.member(player).ghost || !usesUp(player)) return false;
-  raid.leave(player, { teleport: true });
+  player.__toaEscaping = true;
+  raid.leave(player, { teleport: true, arrived: () => { player.__toaEscaping = false; } });
+  return true;
+}
+
+/**
+ * Between the crystal firing and the move out (the fade), the player is no longer in the raid, so a
+ * death there would be an ordinary, dangerous one: nothing lands until they're out of the tombs.
+ * No capture shows a hit during the crystal's teleport. Returns whether this hit was stopped.
+ */
+function shielded(player, hit) {
+  if (!player.__toaEscaping) return false;
+  if (!Shared.inTombs(player.getLocation())) {
+    player.__toaEscaping = false;
+    return false;
+  }
+  hit?.setDamage?.(0);
   return true;
 }
 
@@ -137,10 +154,13 @@ function ringFires(player, damage, settings = settingsOf(player)) {
 function damageApplied({ target, hit }) {
   if (!target?.isPlayer?.()) return;
   const player = target.getAsPlayer?.() ?? target;
-  if (player.__toaEscapedCycle === Shared.cycle()) return;
+  if (shielded(player, hit) || player.__toaEscapedCycle === Shared.cycle()) return;
   const raid = raidIn(player);
   if (!raid || raid.member(player).ghost || !raid.players.includes(player)) return;
   const damage = Math.max(0, hit?.getDamage?.() ?? 0);
+  // A killing hit is a raid death, safe as any other: firing first would take the player out of
+  // the raid's protection before this hit lands (the crystal used, the items lost).
+  if (damage >= player.getHitpoints()) return;
   const settings = settingsOf(player);
   if ((afkFires(player, settings) || ringFires(player, damage, settings)) && escape(player, raid)) player.__toaEscapedCycle = Shared.cycle();
 }
@@ -153,4 +173,4 @@ module.exports = function registerTombsEscapeCrystal(api) {
   api.onCustomEvent("combat:damage-apply", damageApplied);
 };
 
-Object.assign(module.exports, { teleport, useOnPlayer, damageApplied, settingsOf, afkFires, ringFires, wears, usesUp });
+Object.assign(module.exports, { teleport, useOnPlayer, damageApplied, shielded, settingsOf, afkFires, ringFires, wears, usesUp });

@@ -655,3 +655,61 @@ test("the raid's supplies can't be banked, through the deposit pot or anywhere",
   assert.deepEqual(nectar.player.messages, ['A magical force prevents you from banking this item!']);
   assert.equal(ask(I.COINS).allow, null, 'everything else banks as normal');
 });
+
+test('the escape crystal never fires on a killing hit, and nothing lands between firing and the move out', () => {
+  const Shared = toaApi();
+  const Raid = require('../plugins/minigames/toa/RaidState.TombsOfAmascut');
+  const Crystal = require('../plugins/minigames/toa/EscapeCrystal.TombsOfAmascut');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { Mobile } = require('../dist/game/entity/impl/Mobile');
+  const { HitDamage } = require('../dist/game/content/combat/hit/HitDamage');
+  const { HitMask } = require('../dist/game/content/combat/hit/HitMask');
+  const { Location } = require('../dist/game/model/Location');
+  const { Item } = PluginManager.getCoreApi();
+  // The settings request goes through the real dispatcher here, as on the server.
+  Shared.bind({ core: PluginManager.getCoreApi(), emitCustomEvent: (name, event) => PluginManager.emitCustomEvent(name, event) });
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel), new Location(3550, 5161, 0)); // the Nexus, in the tombs
+  player.setUsername('toacrystal');
+  player.getInventory().setItem(0, new Item(Shared.escapeCrystalId(), 1));
+  player.lastInputCycle = Shared.cycle() - 100; // idle a minute, past the 2 seconds
+  const left = [];
+  const raid = { member: () => ({ ghost: false }), players: [player], leave: (who, options) => left.push(options) };
+  const raidOf = Raid.raidOf;
+  Raid.raidOf = (who) => (who === player && left.length === 0 ? raid : null);
+  PluginManager.customEventHooks.delete('combat:damage-apply');
+  PluginManager.customEventHooks.delete('escape-crystal:settings');
+  const api = PluginManager.createApi('ToaCrystalTest');
+  api.onCustomEvent('combat:damage-apply', Crystal.damageApplied);
+  api.onCustomEvent('escape-crystal:settings', (request) => Object.assign(request, { afk: true, delay: 2 }));
+  try {
+    // 5 HP and a 10: the hit kills in the raid, safely; the crystal stays and the player stays a member.
+    player.setHitpoints(5);
+    const lethal = new HitDamage(10, HitMask.RED);
+    Mobile.prototype.decrementHealth.call(player, lethal);
+    assert.equal(left.length, 0, 'no escape on the killing hit');
+    assert.equal(player.getInventory().contains(Shared.escapeCrystalId()), true, 'the crystal kept');
+    assert.equal(player.getHitpoints(), 0, 'the raid death goes ahead (overkill clamped to 5)');
+    // A survivable hit fires it; a hit queued behind it, before the move out, lands as nothing.
+    player.isDying = false;
+    player.setHitpoints(50);
+    Mobile.prototype.decrementHealth.call(player, new HitDamage(3, HitMask.RED));
+    assert.equal(left.length, 1, 'escaped');
+    assert.equal(player.getInventory().contains(Shared.escapeCrystalId()), false, 'crystal used');
+    player.__toaEscapedCycle = -1; // as on a later tick: the same-tick guard isn't what stops it
+    const queued = new HitDamage(60, HitMask.RED);
+    Mobile.prototype.decrementHealth.call(player, queued);
+    assert.equal(queued.getDamage(), 0, 'nothing lands during the teleport');
+    assert.equal(player.getHitpoints(), 47);
+    left[0].arrived();
+    const outside = new HitDamage(4, HitMask.RED);
+    Mobile.prototype.decrementHealth.call(player, outside);
+    assert.equal(outside.getDamage(), 4, 'out of the tombs, hits land again');
+  } finally {
+    Raid.raidOf = raidOf;
+    PluginManager.customEventHooks.delete('combat:damage-apply');
+    PluginManager.customEventHooks.delete('escape-crystal:settings');
+  }
+});

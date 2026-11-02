@@ -281,7 +281,8 @@ function guardCombat(api) {
         .withAngle(flight.angle)
         .withProgress(flight.progress)
         .sendProjectile();
-      const lands = Math.max(1, Math.floor(flight.end / 30));
+      // On the tick the projectile lands, not the one before (#1862).
+      const lands = Projectile.ticksToLand(flight.end);
       const style = mage ? "magic" : "ranged";
       const options = { prayerMultiplier: 1 / 3 };
       if (player.__coxCrossing) {

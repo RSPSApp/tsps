@@ -61,18 +61,19 @@ export class MagicCombatMethod extends CombatMethod {
         return CombatType.MAGIC;
     }
 
-    /** NPC casters keep their old fixed delay; their attacks are tuned around it. */
-    private static readonly NPC_HIT_DELAY = 3;
-
     /**
      * Wiki (Hit delay): a player's magic lands 1 + (1 + distance) / 3 ticks after the cast, the
      * distance measured edge to edge (to the target's nearest tile); barrage spells measure to
      * its south-west tile. A spell with a fixed delay of its own keeps it.
+     *
+     * An NPC's cast lands when its projectile does (the legacy magic shape, 46 + 10 cycles a
+     * tile). A fixed 3 ticks hit a player a tick before a spell from 10 tiles arrived, and a
+     * tick after one from the next tile had landed (#1862).
      */
     public static hitDelay(attacker: Mobile, target: Mobile, spell?: any): number {
         const own = spell?.hitDelay?.();
         if (typeof own === "number") return own;
-        if (!attacker.isPlayer()) return MagicCombatMethod.NPC_HIT_DELAY;
+        if (!attacker.isPlayer()) return Projectile.arrivalTicks(attacker, target, Projectile.LEGACY_MAGIC_END_BASE);
         const distance = MagicCombatMethod.isBarrage(spell)
             ? CombatPosition.distance(attacker, target)
             : MagicCombatMethod.edgeDistance(attacker, target);

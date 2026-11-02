@@ -25,7 +25,7 @@ const real = PluginManager.getCoreApi();
 const core = {
   ...real,
   PendingHit: FakeHit,
-  Projectile: { createProjectile: (...args) => ({ sendProjectile: () => sent.push(args) }) },
+  Projectile: { createProjectile: (...args) => ({ sendProjectile: () => sent.push(args) }), ticksToLand: real.Projectile.ticksToLand },
 };
 const providers = [];
 const Wyrms = require("../plugins/npcs/Wyrms.plugin");
@@ -89,6 +89,19 @@ test("a wyrm casts from a distance (Wiki), without walking in, and melees when b
   const [meleeHit] = melee.hits(wyrm, close);
   assert.equal(meleeHit.delay, 1);
   assert.equal(meleeHit.damage, 10, "the 13 roll scaled to melee's 10");
+});
+
+test("a wyrm's magic hits as its projectile lands, at each range (#1862)", () => {
+  const Method = providerFor(8611);
+  const wyrm = mobile(8611, 10, 10, 3);
+  for (const [x, end, ticks] of [[14, 86, 3], [20, 146, 5]]) {
+    const target = mobile(0, x, 10);
+    const method = new Method();
+    sent.length = 0;
+    method.start(wyrm, target);
+    assert.equal(sent[0][4], end, "launched at 51, landing 46 + 10 a tile");
+    assert.equal(method.hits(wyrm, target)[0].delay, ticks, `${x - 10} tiles out: the tick it lands`);
+  }
 });
 
 test("a wyrmling only melees, up to 5", () => {

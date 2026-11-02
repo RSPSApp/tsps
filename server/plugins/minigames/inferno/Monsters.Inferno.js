@@ -219,7 +219,9 @@ module.exports = function registerInfernoMonsters(api, hooks) {
         target.delayedGraphic(JAD_ROCK_GRAPHIC, JAD_IMPACT_TICKS - 1);
       } else {
         jad.performAnimation(new Animation(7592));
-        Projectile.createProjectile(jad, target, JAD_FIREBALL, 25, Projectile.arrivalCycles(jad, target), 110, 33)
+        // Lands as the impact rolls (3 ticks, 90 cycles), wherever the target stands: 10 cycles a
+        // tile reached it after the hit from beyond 5 tiles (#1862).
+        Projectile.createProjectile(jad, target, JAD_FIREBALL, 25, JAD_IMPACT_TICKS * 30 - 1, 110, 33)
           .sendProjectile();
       }
     }

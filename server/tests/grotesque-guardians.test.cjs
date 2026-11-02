@@ -763,3 +763,31 @@ test('the kill gives the fight duration from the bell and the personal best', ()
   assert.equal(Common.formatTicks(100), '1:00.0');
   tasks = [];
 });
+
+test('Dawn\'s and enraged Dusk\'s ranged hits land with well-formed projectiles (#1862)', t => {
+  t.mock.method(AccuracyFormulasDpsCalc, 'rollAccuracy', () => true);
+  // Enraged Dusk keeps throwing: he picks melee at random when the player is beside him.
+  t.mock.method(Math, 'random', () => 0.99);
+  const sent = [];
+  t.mock.method(core.Projectile.prototype, 'sendProjectile', function () { sent.push(this); });
+  const { player, dusk, dawn, fight } = realCombat();
+  const { DuskCombat, DawnCombat } = Combat.methods();
+  for (const [phase, npc, Method, xs] of [[1, dawn, DawnCombat, [1699, 1695, 1692]], [4, dusk, DuskCombat, [1694, 1695, 1701]]]) {
+    fight.phase = phase;
+    if (phase === 4) dusk.setNpcTransformationId(Common.ids.npcs.duskPhase4);
+    for (const x of xs) {
+      fight.attacks.dawn = 0;
+      fight.attacks.dusk = 0;
+      player.moveTo(loc(x, 4575));
+      const method = new Method();
+      method.start(npc, player);
+      const shot = sent.at(-1);
+      assert.ok(shot.speed > shot.delay + 1, `phase ${phase} from ${x} is drawn as a flight`);
+      const hits = method.hits(npc, player);
+      assert.equal(hits.length, 2);
+      for (const hit of hits) assert.equal(hit.getDelay(), Math.ceil(shot.speed / 30), `phase ${phase} from ${x}`);
+    }
+  }
+  assert.equal(Combat.flightEnd('ranged', 2), 45);
+  assert.equal(Combat.flightEnd('ranged', 3), 60);
+});

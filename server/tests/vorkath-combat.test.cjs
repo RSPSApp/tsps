@@ -120,8 +120,14 @@ test("her shots leave her head and land 70 + 5 cycles a tile later", () => {
   const head = Shared.headTile(core, npc, south);
   assert.deepEqual([head.getX() - 2269, head.getY() - 4062], [3, 1], "captured: (3, 1) for a target to the south");
   assert.equal(Shared.SHOT.base + Shared.SHOT.perTile * head.getDistance(south.getLocation()), 95, "5 tiles: 95, as captured");
-  assert.equal(Shared.shotHitDelay(80), 2);
-  assert.equal(Shared.shotHitDelay(115), 3);
+  // The hit splats on the first tick at or after the shot lands (#1862).
+  for (const tiles of [2, 5, 9]) {
+    const end = Shared.SHOT.base + Shared.SHOT.perTile * tiles;
+    assert.equal(Shared.shotHitDelay(end), Projectile.ticksToLand(end), `${tiles} tiles`);
+    assert.ok(Shared.shotHitDelay(end) * 30 >= end, `${tiles} tiles: no splat before the shot lands`);
+  }
+  assert.equal(Shared.shotHitDelay(80), 3);
+  assert.equal(Shared.shotHitDelay(115), 4);
 });
 
 test("dragonfire caps follow the shield/prayer/potion pipeline", () => {

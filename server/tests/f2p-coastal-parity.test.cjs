@@ -364,6 +364,23 @@ test('Corsair Ithoi uses captured spells on five ticks and Curse deals no direct
   } finally { core.MagicCombatMethod.prototype.start=start;core.MagicCombatMethod.prototype.hits=hits;Math.random=random; }
 });
 
+test('Corsair Ithoi strikes land with their projectile at every range (#1862)', () => {
+  const q=register('CorsairCurse','the_corsair_curse'),Provider=q.hooks.get('registerNpcCombatMethodProvider')[0], method=new Provider();
+  const start=core.MagicCombatMethod.prototype.start,create=core.Projectile.createProjectile,random=Math.random;
+  let selected; const sent=[];
+  const mobile=(x)=>({getLocation:()=>new core.Location(x,2839,1),getSize:()=>1,isPlayer:()=>x!==2529});
+  const npc={...mobile(2529),getCombat:()=>({setCastSpell:value=>{selected=value},getSelectedSpell:()=>selected}),forceChat(){}};
+  core.MagicCombatMethod.prototype.start=()=>{}; core.Projectile.createProjectile=(_s,_t,id,delay,end)=>({id,delay,end});
+  try {
+    Math.random=()=>0;method.start(npc,{});
+    for(const tiles of [1,4,8]){
+      const target=mobile(2529+tiles),flight=selected.castProjectile(npc,target);
+      assert.deepEqual([flight.delay,flight.end],[51,46+10*tiles],`${tiles} tiles: 46 + 10 a tile`);
+      assert.equal(core.MagicCombatMethod.hitDelay(npc,target,selected),core.Projectile.ticksToLand(flight.end),`${tiles} tiles: hit as it lands`);
+    }
+  } finally { core.MagicCombatMethod.prototype.start=start;core.Projectile.createProjectile=create;Math.random=random; }
+});
+
 test('Ned sells captured quest rope for 15 coins or four wool, refusing missing payment and full inventory', () => {
   const q = register('PrinceAliRescue', 'prince_ali_rescue'), p = player(); q.quest.setStage(p, 20);
   const page = require('../data/definitions/npc-dialogues.json')['Prince Ali Rescue'];

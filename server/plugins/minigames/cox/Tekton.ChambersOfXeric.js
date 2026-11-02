@@ -372,7 +372,8 @@ class TektonRoom extends Raid.Room {
       .withProgress(0)
       .sendProjectile();
     Shared.areaSound(this.raiders(), SOUND.SPARK, from, { delay: start, range: 8 });
-    const landsIn = Math.floor(end / 30);
+    // The spark burns on the tick it lands, not the one before (#1862).
+    const landsIn = Projectile.ticksToLand(end);
     const delay = Shared.random(0, 5);
     Shared.later(this.raid, landsIn, () => {
       if (!this.alive()) return;

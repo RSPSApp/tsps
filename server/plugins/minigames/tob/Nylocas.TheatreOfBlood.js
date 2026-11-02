@@ -705,7 +705,8 @@ function combatMethods({ CombatMethod, CombatType }) {
       const { Animation } = Shared.core();
       npc.performAnimation(new Animation(ANIMATION.attack[state.style]));
       let delay = 0;
-      if (state.style !== "melee") delay = Math.max(1, Shared.projectile(room.area, npc, target, PROJECTILE[state.style][state.size], FLIGHT[state.style]) - 1);
+      // The hit lands on the tick the projectile does (Shared.projectile's ticks; #1862).
+      if (state.style !== "melee") delay = Shared.projectile(room.area, npc, target, PROJECTILE[state.style][state.size], FLIGHT[state.style]);
       const max = (NYLO_HITS[room.raid.mode] ?? NYLO_HITS.normal)[state.size].max;
       return [room.styledHit(npc, target, state.style, max, delay)];
     }
@@ -740,7 +741,8 @@ function combatMethods({ CombatMethod, CombatType }) {
       npc.performAnimation(new Animation(ANIMATION.attack[style]));
       const options = { prayerMultiplier: style === "melee" ? 0 : BOSS.prayerMultiplier };
       const hardVasilias = room.raid.isHard && !boss.prinkipas;
-      const launch = (player) => (style === "melee" ? 0 : Math.max(1, Shared.projectile(room.area, npc, player, PROJECTILE[style].boss, FLIGHT[style]) - 1));
+      // Each hit lands on the tick its projectile does (Shared.projectile's ticks; #1862).
+      const launch = (player) => (style === "melee" ? 0 : Shared.projectile(room.area, npc, player, PROJECTILE[style].boss, FLIGHT[style]));
       // Everyone within 2 squares of the target takes a shot of their own (captured: one projectile each).
       if (hardVasilias && style === "ranged") {
         for (const other of room.fighters()) {

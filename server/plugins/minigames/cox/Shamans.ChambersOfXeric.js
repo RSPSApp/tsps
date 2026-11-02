@@ -315,7 +315,8 @@ function spit(area, npc, to, id, angle, endHeight, endAt) {
     .withAngle(angle)
     .withProgress(128)
     .sendProjectile();
-  return Math.max(1, Math.floor(end / 30));
+  // On the tick it lands, not the one before (#1862); the acid's 150 and 180 are whole ticks either way.
+  return Projectile.ticksToLand(end);
 }
 
 function shamanCombat(api) {

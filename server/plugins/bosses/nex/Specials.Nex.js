@@ -673,6 +673,11 @@ function interrupt(fight) {
   fight.effects.clear();
 }
 
+const REAVER_BLITZ = { id: 372, start: 42, angle: 4, startHeight: 0, endHeight: 3 };
+
+/** Where a reaver's Blood Blitz lands (launch 42 + 10 a tile), shared by its projectile and hit. */
+const reaverBlitzEnd = (npc, target) => Common.core.Projectile.arrivalCycles(npc, target, REAVER_BLITZ.start);
+
 /** The reavers: Blood Blitz at a player, as captured (seq 9194, projectile 372, impact 373). */
 function reaverClass() {
   const { CombatMethod, CombatType, PendingHit, CombatFactory } = Common.core;
@@ -691,11 +696,12 @@ function reaverClass() {
 
     start(npc, target) {
       npc.performAnimation(Common.animation(9194));
-      Common.projectile(npc, target, { id: 372, start: 42, angle: 4, startHeight: 0, endHeight: 3 });
+      Common.projectile(npc, target, { ...REAVER_BLITZ, end: reaverBlitzEnd(npc, target) });
     }
 
     hits(npc, target) {
-      const hit = new PendingHit(npc, target, this, 2);
+      // The hit lands with the blitz, not a flat 2 ticks out.
+      const hit = new PendingHit(npc, target, this, Common.landsIn(reaverBlitzEnd(npc, target)));
       CombatFactory.applyStyleDamage(hit, 20, {});
       return [hit];
     }

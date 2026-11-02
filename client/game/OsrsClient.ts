@@ -8501,9 +8501,10 @@ export class OsrsClient {
             console.warn("[OsrsClient] Renderer clearMaps error:", err);
         }
 
-        // Clear projectiles
+        // Clear projectiles. Through the getter: the WebGPU renderer keeps its manager elsewhere,
+        // and one left holding the old client clock froze every projectile after a relog (#1862).
         try {
-            (this.renderer as any)?.projectileManager?.clear?.();
+            this.renderer?.getProjectileManager()?.clear();
         } catch (err) {
             console.warn("[OsrsClient] ProjectileManager clear error:", err);
         }

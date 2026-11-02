@@ -64,7 +64,7 @@ function combatClass(api) {
       if (this.attack === Attack.SPECIAL_ATTACK) {
         return null;
       }
-      return [new PendingHit(character, target, this, 2)];
+      return [new PendingHit(character, target, this, this.landing ?? 2)];
     }
 
     start(character, target) {
@@ -78,11 +78,15 @@ function combatClass(api) {
       }
       character.forceChat(QUOTES[Misc.getRandom(QUOTES.length - 1)]);
       if (this.attack === Attack.DEFAULT_MAGIC_ATTACK) {
-        const projectile = Projectile.createProjectile(character, target, 554, 62, 80, 31, 43);
+        // 10 cycles a tile over his 8-tile reach instead of a flat 80; the hit and the
+        // impact land on the tick the blast does (#1862).
+        const end = Projectile.arrivalCycles(character, target, 67, 10);
+        this.landing = Projectile.ticksToLand(end);
+        const projectile = Projectile.createProjectile(character, target, 554, 62, end, 31, 43);
         projectile.sendProjectile();
         if (Misc.getRandom(1) === 0) {
           TaskManager.submit(
-            new ChaosTask(3, () => target.performGraphic(ATTACK_END_GFX), target, false)
+            new ChaosTask(this.landing, () => target.performGraphic(ATTACK_END_GFX), target, false)
           );
         }
       } else if (this.attack === Attack.SPECIAL_ATTACK) {

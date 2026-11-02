@@ -376,3 +376,27 @@ test('direct pending damage cannot bypass the pre-enrage death guard', (t) => {
   fight.tick([]);
   assert.equal(fight.enraged, true, 'the rescued hitpoint still lets the final phase begin');
 });
+
+test('basic attacks are well-formed flights whose hits land with them (#1862)', (t) => {
+  const Combat = require('../plugins/bosses/alchemicalhydra/Combat.AlchemicalHydra');
+  const sent = [];
+  t.mock.method(core.Projectile.prototype, 'sendProjectile', function () { sent.push(this); });
+  for (const style of ['magic', 'ranged']) {
+    for (const x of [1363, 1361, 1356]) {
+      const npc = fakeHydra();
+      npc.getAsNpc = () => npc;
+      npc.getPrivateArea = () => null;
+      npc.__hydraFight = { stopped: false, phase: 0, transitioning: () => false, nextAttack: () => style, counted: () => {} };
+      const player = { getLocation: () => loc(x, 10265), getSize: () => 1, isPlayer: () => true, getIndex: () => 1 };
+      const method = new (Combat.combatClass())();
+      method.start(npc, player);
+      const shot = sent.at(-1);
+      assert.ok(shot.speed > shot.delay + 1, `${style} from ${x} is drawn as a flight`);
+      assert.equal(method.delay, Math.ceil(shot.speed / 30), `${style} from ${x}`);
+    }
+  }
+  // Within a tile the 1-tick hit's 30-cycle end is replaced by 35 + 10 (magic) / 5 (ranged) a tile.
+  assert.equal(Combat.flightEnd('magic', 1), 45);
+  assert.equal(Combat.flightEnd('ranged', 2), 45);
+  assert.equal(Combat.flightEnd('magic', 4), 60);
+});

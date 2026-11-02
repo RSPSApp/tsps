@@ -128,3 +128,14 @@ for (const [adjacent, roll, expected] of [
     method.finished(f.queen, f.player);
   }
 });
+
+for (const type of ['RANGED', 'MAGIC']) test(`${type.toLowerCase()} hits land with the projectile, not before it (#1862)`, t => {
+  const f = scene(t);
+  const sent = [];
+  t.mock.method(core.Projectile.prototype, 'sendProjectile', function () { sent.push(this); });
+  f.method.attackType = core.CombatType[type];
+  const [hit] = f.method.hits(f.queen, f.player);
+  assert.equal(sent.length, 1);
+  assert.equal(hit.getDelay(), Math.ceil(sent[0].speed / 30));
+  assert.equal(hit.getDelay(), 3);
+});

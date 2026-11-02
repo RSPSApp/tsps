@@ -12,6 +12,18 @@ function hitDelay(distance) {
   return 1 + Math.floor((3 + distance) / 6);
 }
 
+/** Cycles before the ranged projectile shows. */
+const LAUNCH = 30;
+
+/**
+ * Where its ranged projectile ends: on the hit's tick (30 cycles a tick), except that a 1-tick
+ * hit would end at its own launch (drawn for a cycle on the gryphon), so those fly 5 + 5 a tile (#1862).
+ */
+function flightEnd(distance) {
+  const end = hitDelay(distance) * 30;
+  return end > LAUNCH + 1 ? end : LAUNCH + 5 + 5 * distance;
+}
+
 function methods() {
   const { CombatMethod, CombatType, PendingHit, Animation, Projectile } = Common.core;
   const { combat } = Common.data;
@@ -34,8 +46,10 @@ function methods() {
       if (ranged) {
         this.style = "ranged";
         npc.performAnimation(new Animation(ids.seqs.ranged));
-        const delay = hitDelay(distance);
-        new Projectile(Projectile.centreOf(npc), player.getLocation(), player, ids.spotanims.rangedProjectile, 30, delay * 30, 60, 31, npc.getPrivateArea?.() ?? null).sendProjectile();
+        // The hit lands with the projectile.
+        const end = flightEnd(distance);
+        const delay = Projectile.ticksToLand(end);
+        new Projectile(Projectile.centreOf(npc), player.getLocation(), player, ids.spotanims.rangedProjectile, LAUNCH, end, 60, 31, npc.getPrivateArea?.() ?? null).sendProjectile();
         this.plan = { delay, typeless: false };
         return;
       }
@@ -86,4 +100,4 @@ function attach(api) {
   api.registerNpcCombatMethodProvider([Common.ids.npcs.boss], GryphonCombat, { singleton: false });
 }
 
-module.exports = { attach, methods, hitDelay, hitRoll };
+module.exports = { attach, methods, hitDelay, flightEnd, hitRoll };

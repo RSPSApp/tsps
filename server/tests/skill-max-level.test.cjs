@@ -1111,7 +1111,8 @@ test("native autocast indicators clear on staff removal while remembering the de
     const p = { getCombat: () => ({ getAutocastSpell: () => selected, setAutocastSpell: s => { selected = s; } }),
       getEquipment: () => ({ hasStaffEquipped: () => staff, getWeapon: () => new Item(staff ? ItemIdentifiers.STAFF_OF_AIR : -1, 1), getItems: () => new Array(14).fill(new Item(-1, 0)) }),
       getPacketSender: () => sender, getFightType: () => fightType, setFightType: type => { fightType = type; },
-      setWeapon() {}, autoRetaliateReturn: () => false, sendMessage() {} };
+      setWeapon(weapon) { this.weapon = weapon; }, getWeapon() { return this.weapon; }, autoRetaliateReturn: () => false, sendMessage() {},
+      attrs: new Map(), getAttribute(key) { return this.attrs.get(key); }, setAttribute(key, value) { this.attrs.set(key, value); } };
     Autocasting.setAutocast(p, CombatSpells.WIND_STRIKE);
     assert.equal(varbits.get(275), 1); assert.equal(varbits.get(276), 1);
     staff = false; WeaponInterfaceManager.assign(p);
@@ -1144,7 +1145,7 @@ test("choosing a style while autocasting turns autocast off, and autocast shows 
       getEquipment: () => ({ hasStaffEquipped: () => true, getWeapon: () => new Item(ItemIdentifiers.STAFF_OF_AIR, 1) }),
       getWeapon: () => WeaponInterfaces.STAFF,
       getPacketSender: () => sender, getFightType: () => fightType, setFightType: type => { fightType = type; },
-      sendMessage() {} };
+      sendMessage() {}, attrs: new Map(), getAttribute(key) { return this.attrs.get(key); }, setAttribute(key, value) { this.attrs.set(key, value); } };
 
     Autocasting.setAutocast(p, CombatSpells.FIRE_STRIKE);
     assert.equal(varps.get(43), 4, "autocasting is com_mode 4, so any style click is a change");
@@ -1285,7 +1286,7 @@ test("the cache Shrine of Ralos Bask action restores Prayer without reducing boo
   }
 });
 
-test("Defence threshold changes update native prayer-unlock varbits", () => {
+test("Defence threshold changes leave the prayer-unlock varbits to PrayerUnlocks", () => {
   const { PluginManager } = require("../dist/plugins/PluginManager");
   const p = feedbackPlayer(PluginManager.getCoreApi());
   p.skills.setMaxLevel(Skill.PRAYER, 99, false);
@@ -1293,9 +1294,7 @@ test("Defence threshold changes update native prayer-unlock varbits", () => {
     p.sent.length = 0;
     p.skills.setMaxLevel(Skill.DEFENCE, level);
     const bits = new Map(p.sent.filter(([type]) => type === "sendVarbit").map(([, id, n]) => [id, n]));
-    assert.equal(bits.get(3909), level >= 60 ? 8 : 0);
-    assert.equal(bits.get(5451), level >= 70 ? 1 : 0);
-    assert.equal(bits.get(5452), level >= 70 ? 1 : 0);
+    for (const id of [3909, 5451, 5452, 5453]) assert.equal(bits.has(id), false, `varbit ${id}, Defence ${level}`);
   }
 });
 

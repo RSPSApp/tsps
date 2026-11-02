@@ -3,9 +3,14 @@ import { test } from "node:test";
 import { LocAnimated } from "../render/loc/LocAnimated";
 import { LocAnimationUpdater, type LocAnimationGeometry } from "../render/loc/LocAnimationUpdater";
 import { newDrawRange } from "../render/DrawRange";
+import { createCacheVm } from "../scripts/cache/cs2-sweep";
+import { getCacheLoaderFactory } from "../rs/cache/loader/CacheLoaderFactory";
+import { LocModelLoader } from "../rs/config/loctype/LocModelLoader";
 
 (globalThis as any).self = globalThis;
 const { WebGLMapSquare } = require("../render/WebGLMapSquare");
+const { addLocEntities } = require("../render/loader/SdMapDataLoader");
+const { SceneRaycaster } = require("../game/scene/SceneRaycaster");
 
 function sequence(skeletal: boolean) {
     return { id: 1, frameIds: [10, 11, 12], frameLengths: [6, 6, 6], frameStep: 2,
@@ -30,6 +35,47 @@ function geometry(): LocAnimationGeometry {
     };
     return { drawCall: batch(), drawCallAlpha: batch(), drawCallLod: batch(), drawCallLodAlpha: batch() };
 }
+
+test("native Bloom plants keep their grown base model after growth ends, with and without smoothing", () => {
+    const { info, cache } = createCacheVm();
+    const factory = getCacheLoaderFactory(info, cache);
+    const loader = new LocModelLoader(factory.getLocTypeLoader(), factory.getModelLoader(), factory.getTextureLoader(),
+        factory.getSeqTypeLoader(), factory.getSeqFrameLoader(), factory.getSkeletalSeqLoader());
+    for (const id of [3509, 3511, 3513]) for (const smooth of [false, true]) {
+        const type = loader.locTypeLoader.load(id);
+        const seq = loader.seqTypeLoader.load(type.seqId);
+        const baked: any[] = [];
+        const scene = { levels: 1, isInside: () => false, tileHeights: [Array.from({length: 4}, () => new Int32Array(4))],
+            tiles: [Array.from({length: 4}, () => Array(4))] };
+        const buffer = { addModelAnimFrame(model: any) {
+            baked.push(model);
+            return newDrawRange(baked.length * 3, 3);
+        }};
+        const [group] = [...addLocEntities(false, loader, {} as any, scene as any, [], [], buffer as any,
+            [{entity: {id, type: 10, rotation: 0, tileX: 1, tileY: 1, level: 0, seqId: type.seqId}, level: 0}] as any, smooth)];
+        assert.ok(group.anim.baseFrame !== undefined, `${id} has an unanimated fallback`);
+        const animated = new LocAnimated(0, 0, 0, 0, -1, -1, -1, -1,
+            group.anim, seq, 0, false, id, 1, 1, 0, 0);
+        const lastCycle = seq.frameLengths.reduce((a: number, b: number) => a + b, 0);
+        animated.update(loader.seqFrameLoader, lastCycle - 1);
+        assert.ok(animated.seqType, "the last held growth frame is still active");
+        assert.ok(animated.drawFrame() < group.anim.baseFrame!, "smoothing cannot select the fallback early");
+        animated.update(loader.seqFrameLoader, lastCycle + 1);
+        assert.equal(animated.seqType, undefined);
+        assert.equal(animated.drawFrame(), group.anim.baseFrame, "finished growth draws its grown model, not frame zero");
+        const base = loader.getModelAnimated(type, 10, 0, -1, 0)!;
+        const grown = baked[group.anim.baseFrame! * 2];
+        assert.deepEqual(grown.verticesY, base.verticesY);
+        const picker = new SceneRaycaster({}, {});
+        picker.getInteractLocModelLoader = () => loader;
+        assert.deepEqual(picker.getLocModelMesh(type, 10, 0, animated).verticesY, base.verticesY,
+            "the grown plant's click mesh follows its submitted base pose");
+        const batches = geometry();
+        new LocAnimationUpdater().update([animated], batches, loader.seqFrameLoader, lastCycle + 2);
+        assert.deepEqual(batches.drawCall!.drawRanges[0].slice(), group.anim.frames[group.anim.baseFrame!].slice(),
+            "the grown pose reaches the actual submitted draw ranges");
+    }
+});
 
 test("WebGL shares opaque/alpha/full/far poses across 240 FPS, HD and sunken passes", () => {
     const animated = loc();

@@ -638,7 +638,7 @@ test("Sweep hits a large target twice instead of sweeping, and the second hit ro
   const realDefence = AccuracyFormulasDpsCalc.defenseMeleeRoll;
   AccuracyFormulasDpsCalc.attackMeleeRoll = () => 1000;
   AccuracyFormulasDpsCalc.defenseMeleeRoll = () => 500;
-  const entity = { isPlayer: () => false, isNpc: () => true, getAsNpc: () => ({ getRollFactor: () => 1 }) };
+  const entity = { isPlayer: () => false, isNpc: () => true, getAsNpc: () => ({ getRollFactor: () => 1, getDefenceRollFactor: () => 1 }) };
   try {
     rolls.push(AccuracyFormulasDpsCalc.specialRolls(entity, entity, CombatType.MELEE).attack);
     rolls.push(AccuracyFormulasDpsCalc.withAccuracyScale(sweep.largeTargetExtraHit.accuracyMultiplier,

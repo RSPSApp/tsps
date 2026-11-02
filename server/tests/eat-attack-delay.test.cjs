@@ -59,7 +59,7 @@ function buildPlayer() {
         setHitpoints: () => {},
         sendMessage: () => {},
     };
-    const give = (slot, id) => { items[slot] = { getId: () => id }; };
+    const give = (slot, id) => { items[slot] = { getId: () => id, getMeta: () => null }; };
     return { player, combat, timers, give };
 }
 

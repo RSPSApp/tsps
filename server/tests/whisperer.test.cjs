@@ -837,7 +837,8 @@ test('ordinary postquest rope and activated teleporter reach the cathedral witho
     vars.set(15090,1);Site.travel({...portal,option:'use'});
     const menu=menus.at(-1), index=menu.findIndex(choice=>choice==='Cathedral');
     assert.ok(index>=0);menu[index+1]();
-    assert.equal(f.player.getLocation().getX(),2653);assert.equal(f.player.getLocation().getY(),6405,'the teleporter tile is blocked; arrive beside it');
+    // The teleporter tile is solid; the tile south of it has only a wall edge, so it is the landing.
+    assert.equal(f.player.getLocation().getX(),2652);assert.equal(f.player.getLocation().getY(),6404,'the teleporter tile is blocked; arrive beside it');
     const exit={player:f.player,objectId:48198,option:'climb-up',location:{x:2587,y:6436,z:0},handled:false};
     Site.travel(exit);assert.equal(exit.handled,true);
     assert.equal(f.player.getLocation().getX(),2922);assert.equal(f.player.getLocation().getY(),5826);

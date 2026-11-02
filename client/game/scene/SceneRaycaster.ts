@@ -1052,7 +1052,7 @@ export class SceneRaycaster {
         animated?: LocAnimated,
     ): LocModelMesh | undefined {
         const seqType = animated?.seqType;
-        const seqId = seqType ? seqType.id : locType.seqId;
+        const seqId = animated ? seqType?.id ?? -1 : locType.seqId;
         const seqFrame =
             seqId === -1 ? -1 : seqType && !seqType.isSkeletalSeq() ? animated!.frame | 0 : 0;
         const key = `${locType.id | 0}|${modelType | 0}|${modelRotation | 0}|${seqId}|${seqFrame}`;

@@ -406,12 +406,15 @@ export class Combat {
         if (!movement.getMobility().canMove()) {
             this.trace(`bail=immobile:${movement.getMobility().constructor.name}`, target);
             state.mobilityBlocked = true;
-            // A frozen player's attack on a target out of reach ends there, as live answers it.
+            // A frozen player's attack on a target out of reach ends there, as live answers it,
+            // still turned to the target for that tick (rsprox 2238 OpPlayer, 3391 OpNpc).
             if (this.character.isPlayer() && this.character.getTimers().has(TimerKey.FREEZE)) {
                 if (this.character.getAsPlayer().isPlayerBot?.() !== true) {
                     this.character.getAsPlayer().sendMessage("I can't reach that!");
                 }
+                const current = this.target === target && this.generation === state.generation;
                 this.cancelIfCurrent(target, state.generation);
+                if (current) this.character.faceMobileBriefly(target);
             }
             return;
         }

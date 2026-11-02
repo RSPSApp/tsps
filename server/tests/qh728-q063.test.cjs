@@ -99,6 +99,8 @@ function harness() {
       custom.set(name, handlers);
     },
     emitCustomEvent(name, event) {
+      // Druidic Ritual is the start requirement.
+      if (name === 'quest:is-complete' && event.key === 'druidic_ritual') event.complete = true;
       for (const handler of actions(name)) handler(event);
     },
   }, { get(target, key) { return key in target ? target[key] : () => {}; } });

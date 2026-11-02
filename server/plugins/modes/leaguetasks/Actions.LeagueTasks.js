@@ -29,7 +29,7 @@
  * - `pick { plants, count }`: a field's crop picked (by the plant: Wheat for its grain),
  *   `world:picked` { plant }; `pick-each { plants: { plant: count } }`: each of them that many.
  * - `collection-log { category, count }`: that many of the category's slots filled, asked of the
- *   log (`collection-log:slots`) when one fills (`collection-log:new-item`) and at login.
+ *   log (`collection-log:slots`) when one fills (`collection-log:slot-filled`) and at login.
  * - `check-health { types | crops, count }`: a grown crop's health checked, by the farming
  *   plugin's crop type (FRUIT_TREE, TREE, CALQUAT...) or crop (CACTUS), `farming:check-health`.
  * - `slayer-tasks { count }` (`slayer:task-completed`), `superior-kills { count }`
@@ -502,7 +502,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("woodcutting:success", (event) => gatheredWith({ ...event, gatherSkill: "woodcutting", toolId: event.axeId, itemId: event.logId }));
   api.onCustomEvent("mining:success", (event) => gatheredWith({ ...event, gatherSkill: "mining", toolId: event.pickaxeId }));
   api.onCustomEvent("farming:check-health", checkedHealth);
-  api.onCustomEvent("collection-log:new-item", logged);
+  api.onCustomEvent("collection-log:slot-filled", logged);
   api.onCustomEvent("world:picked", picked);
   api.onCustomEvent("magic:cast-committed", cast);
   api.onCustomEvent("magic:item-spell-cast", cast);

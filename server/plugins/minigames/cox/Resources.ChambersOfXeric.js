@@ -5,31 +5,40 @@
  * gourds and the geysers, saplings for kindling, the tools, the weeds and the energy well.
  *
  * Wiki (Chambers of Xeric, Resources):
+ * - Bats and fish tier by the team (not said how exactly: bats below use the raid's best Hunter
+ *   level; fish the fisher's own level, as the Bubbles page lists a level per fish).
  * - Fish need a fishing rod and cave worms; one of a room's three spots holds a cave snake that
  *   bites and steals food; that spot moves now and then. Fish: Fishing 1/15/30/45/60/75/90 for
- *   20/23/26/29/32/35/38 XP. Bats need a butterfly net: Hunter 1/15/.../90 for 5/9/.../29 XP.
+ *   20/23/26/29/32/35/38 XP. Bats need a butterfly net, or 99 Hunter to catch barehanded: Hunter
+ *   1/15/.../90 for 5/9/.../29 XP; two to three bats in a room.
  * - Herbs grow from golpar (Farming 27), buchu (39) and noxifer (55) seeds raked from weeds, in
- *   herb patches, with a seed dibber; picked herbs are grimy.
+ *   herb patches, with a seed dibber, fully grown in 30 seconds; picked herbs are grimy.
+ * - Weeds (Weeds, Chambers of Xeric): raking goes on until cancelled, each pass 1-3 seeds of any
+ *   of the three, one chance in three each.
  * - Gourds come from the gourd tree (Pick, Pick-lots) and are filled with water at a geyser.
- * Not on the Wiki (to check against a capture):
+ * Cache: bubbles (all on plane 0, so room A), geysers, gourd trees, tools, patches and the
+ * well are map locs; FISHING_SPOTS are exactly those bubbles.
+ * No capture fishes, catches a bat, plants, picks, rakes or picks a gourd: these stay unchecked:
  * - Resource room A has fishing (the snake spot one of three per version, moving every 50 ticks
  *   or after 10 snake rises; catch chance min(round((level - req) x 0.6) + 30, 70)%, every 4
- *   ticks); room B has 2 + raiders/8 bats (at most 6) of one type among the three best the
- *   raid's top Hunter level allows, and a caught bat comes back 2 ticks later. Catch chance
- *   (floor(306 x (level - 1) / 98) - 78) / 255; anims 6606 caught, 6605 missed.
+ *   ticks); room B has 2 + raiders/8 bats (at most the Wiki's 3) of one type among the three best
+ *   the raid's top Hunter level allows, and a caught bat comes back 2 ticks later. Catch chance
+ *   (floor(306 x (level - 1) / 98) - 78) / 255, at least 10% so that the low levels the Wiki allows
+ *   can catch at all (derived); anims 6606 caught, 6605 missed.
  * - The cave snake (7594) rises (anim 7333), bites 3 ticks later for 3-6 everyone within a
  *   tile of the spot and takes one food each, and dives (anim 4039) at 5.
  * - Herb patches grow a stage every 12 ticks to stage 4 (object id + 3 a stage); planting
  *   anim 2291, picking 2282 every 2 ticks with a 65% + (level - req)/250 chance (at most 95%)
  *   of keeping each of the patch's 3 lives; clearing with a spade (anim 830). XP planting /
  *   picking: golpar 4/10, buchu 6/15, noxifer 12/30.
- * - Raking weeds (anim 2273) gives 1-3 of a seed type five times, never the same type twice.
+ * - Raking weeds: anim 2273, every 3 ticks.
  * - Saplings give kindling (at most 28) with any axe.
  * Wiki (Ice demon; Mod Ash): a sapling falls at 1 in max(3, 2 x raiders), five times rarer in
  *   the Ice Demon's room.
  * rsprox captures (sapling chopping in all five recordings): "You swing your axe...", kindling
  *   every 5 ticks of chopping without fail (sound 2070, no message), the fallen sapling's sound
- *   2734, and its growing back 54-64 ticks later.
+ *   2734, and its growing back 54-64 ticks later. Taking a tool (hammer 3389:65087, tinderbox
+ *   3285:238750): anim 827 on arriving, the item and sound 2582 the next tick.
  */
 
 const Shared = require("./Shared.ChambersOfXeric");
@@ -68,6 +77,8 @@ const SEEDS = HERBS.map((herb) => herb.seed);
 const GROWING_PATCHES = { FIRST: 29997, LAST: 30011 };
 const PATCH_IDS = [OBJECT.EMPTY_PATCH];
 for (let id = GROWING_PATCHES.FIRST; id <= GROWING_PATCHES.LAST; id++) PATCH_IDS.push(id);
+const BAREHANDED_HUNTER = 99;
+const MIN_BAT_CHANCE = 0.1;
 const GROWN_STAGE = 4;
 const STAGE_TICKS = 12;
 const PATCH_LIVES = 3;
@@ -123,7 +134,7 @@ class ResourcesRoom extends Raid.Room {
     const allowed = BATS.filter((bat) => bat.level <= hunter).slice(-3);
     const type = allowed[Math.floor(Math.random() * allowed.length)] ?? BATS[0];
     const spots = BAT_SPOTS[this.record.variant];
-    const count = Math.min(6, 2 + (this.raid.scale >> 3));
+    const count = Math.min(3, 2 + (this.raid.scale >> 3));
     for (let i = 0; i < count; i++) {
       const spot = spots[Math.floor(Math.random() * spots.length)];
       const bat = this.spawnNpc(type.npc, spot, { wanderRadius: 3 });
@@ -260,7 +271,7 @@ function catchBat(event) {
   const { player, npc } = event;
   const type = npc?.__coxBat ?? BATS.find((bat) => bat.npc === npc?.getId());
   if (!type || !Raid.raidOf(player)) return false;
-  if (!Shared.wielding(player, ITEM.NET)) {
+  if (!Shared.wielding(player, ITEM.NET) && Shared.baseLevel(player, "HUNTER") < BAREHANDED_HUNTER) {
     Shared.statement(player, "You need a butterfly net to catch these bats.");
     return true;
   }
@@ -273,7 +284,7 @@ function catchBat(event) {
     player.sendMessage("You need some free inventory space to catch the bat.");
     return true;
   }
-  const chance = (Math.floor((306 * (level - 1)) / 98) - 78) / 255;
+  const chance = Math.max(MIN_BAT_CHANCE, (Math.floor((306 * (level - 1)) / 98) - 78) / 255);
   const caught = Math.random() < chance;
   const name = npc.getDefinition?.()?.getName?.()?.toLowerCase() ?? "bat";
   Shared.animate(player, caught ? 6606 : 6605);
@@ -460,7 +471,7 @@ function itemOnPatch(event) {
   return plant(player, object, itemId);
 }
 
-/** Five rakes, each 1-3 seeds of a type other than the last one's. */
+/** Raking goes on until cancelled or out of room, each pass 1-3 seeds of any type. */
 function rakeWeeds(event) {
   const { player } = event;
   if (!Raid.raidOf(player)) return false;
@@ -473,8 +484,6 @@ function rakeWeeds(event) {
     player.sendMessage("You need some free inventory space to do this.");
     return true;
   }
-  let left = 5;
-  let last = -1;
   Shared.animate(player, 2273);
   Shared.sound(player, 2442);
   Shared.action(player, {
@@ -485,11 +494,8 @@ function rakeWeeds(event) {
         player.sendMessage("You need some free inventory space to do this.");
         return false;
       }
-      const choices = SEEDS.filter((seed) => seed !== last);
-      last = choices[Math.floor(Math.random() * choices.length)];
-      Shared.give(player, last, randomInt(1, 3));
+      Shared.give(player, SEEDS[Math.floor(Math.random() * SEEDS.length)], randomInt(1, 3));
       Shared.animate(player, 2273);
-      if (--left <= 0) return false;
       Shared.sound(player, 2442);
       return true;
     },
@@ -672,8 +678,10 @@ function pickUpTool(id, name, { one = false } = {}) {
       return true;
     }
     Shared.animate(player, 827);
-    Shared.sound(player, 2582);
-    Shared.give(player, id);
+    Shared.later(player, 1, () => {
+      Shared.sound(player, 2582);
+      Shared.give(player, id);
+    });
     return true;
   };
 }

@@ -1354,7 +1354,8 @@ function handlePotionDrink(player, itemId, slot) {
   player.performAnimation(entry.potion.drink?.animation ? new Animation(entry.potion.drink.animation) : DRINK_ANIMATION);
   Sounds.sendSound(player, Sound.DRINK);
 
-  inventory.setItem(slot, new Item(entry.replacementId, entry.replacementId === NO_EMPTY_ITEM ? 0 : 1)).refreshItems();
+  const meta = inventory.getItems()[slot]?.getMeta();
+  inventory.setItem(slot, new Item(entry.replacementId, entry.replacementId === NO_EMPTY_ITEM ? 0 : 1, meta)).refreshItems();
   entry.potion.effect(player);
 
   const share = player.getAttribute("lunar:potion-share");
@@ -1374,7 +1375,7 @@ function handlePotionDrink(player, itemId, slot) {
       ? "You have finished your potion. The gourd vial disintegrates."
       : "You have finished your potion.");
   }
-  pluginApi.emitCustomEvent("potions:drunk", { player, itemId, name: entry.potion.name });
+  pluginApi.emitCustomEvent("potions:drunk", { player, itemId, name: entry.potion.name, meta });
 
   return true;
 }

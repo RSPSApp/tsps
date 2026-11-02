@@ -337,7 +337,7 @@
     "7577": {"name": "Jewelled Crab", "anims": {"attack": 2368, "block": 1313, "death": -1}},
     "7578": {"name": "Jewelled Crab", "anims": {"attack": 2368, "block": 1313, "death": -1}},
     "7579": {"name": "Jewelled Crab", "anims": {"attack": 2368, "block": 1313, "death": -1}},
-    "7585": {"name": "Ice demon", "anims": {"attack": 69, "block": 65, "death": 67}},
+    "7585": {"name": "Ice demon", "anims": {"attack": 69, "block": 65, "death": 67}, "deathTicks": 5},
     "7586": {"name": "Icefiend", "anims": {"attack": 1582, "block": -1, "death": 1580}},
     "7604": {"name": "Skeletal Mystic", "anims": {"attack": 5528, "block": 5489, "death": 5491}},
     "7605": {"name": "Skeletal Mystic", "anims": {"attack": 5528, "block": 5489, "death": 5491}},

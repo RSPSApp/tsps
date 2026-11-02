@@ -21,10 +21,12 @@
  * - Unclaimed loot is placed on the ground on leaving.
  * - Capes by Challenge Mode completions: Xeric's guard 100, warrior 500, sentinel 1,000,
  *   general 1,500, champion 2,000.
- * Not on the Wiki (to check against a capture): the reward interface (539: component 5 the items, 6 Bank-all, 8 Take-all, 10
- *   Discard-all; inventory 581), the chest light varbit 5456 (1 white, 2 purple), the messages
- *   ("Congratulations - your raid is complete! Duration: ", the completion counts, "Special
- *   loot:", the target time), the raid counts on the attributes.
+ * rsprox captures: the reward interface (539: component 5 the items; inventory 581), the
+ *   completion, count, "Special loot:" and target time messages word for word, jingle 152, and
+ *   varbit 5456 (raids_client_rewardindicator): 2 for a unique's finder (820, 843, 3282, 3285,
+ *   3389), 1 for common loot (the two CM runs).
+ * Not on the Wiki or in a capture: components 6 Bank-all, 8 Take-all, 10 Discard-all, the raid
+ *   counts on the attributes.
  * Wiki-derived: a common amount is the table's maximum x points / 131,071 (at least 1).
  */
 
@@ -33,8 +35,10 @@ const Raid = require("./RaidState.ChambersOfXeric");
 
 const INTERFACE = { REWARDS: 539, ITEMS: 5, BANK_ALL: 6, TAKE_ALL: 8, DISCARD_ALL: 10 };
 const INVENTORY = 581;
-const VARBIT = { LIGHT: 5456 };
+/** rsprox captures: 2 for a unique's finder (820, 843, 3282, 3285, 3389), 1 for common loot (the CM runs). */
 const LIGHT = { NONE: 0, WHITE: 1, PURPLE: 2 };
+/** rsprox captures: played with the completion message. */
+const COMPLETE_JINGLE = 152;
 const POINTS = { PER_PERCENT: 8676, CAP: 570000, COMMON_CAP: 131071, TARGET_BONUS: 5000 };
 const ITEM = { DARK_JOURNAL: 20899, OLMLET: 20851, KIT: 24670, DUST: 22386, TABLET: 21046, ELITE_CLUE: 12073 };
 const ATTR_TABLET = "cox:ancient-tablet";
@@ -153,14 +157,16 @@ function completed(raid) {
   const raiders = [...raid.players];
   const size = raid.scale;
   const inTime = raid.challenge && raid.duration <= targetTicks(size);
-  const time = Shared.formatTicks(raid.duration);
   for (const player of raiders) {
     if (inTime) {
-      player.sendMessage("Your team beat the challenge target time and you earned an extra 5,000 points.");
+      player.sendMessage("Your team beat the challenge target time and you earned an extra 5000 points.");
       raid.addPoints(player, POINTS.TARGET_BONUS);
     }
-    Shared.raidMessage(player, `Congratulations - your raid is complete! Team size: ${size} Duration: <col=ff0000>${time}</col>`);
-    recordBest(player, raid, time);
+    player.getPacketSender().sendJingle(COMPLETE_JINGLE, 0);
+    // rsprox captures 843, 3389, 820 (a new best) and the two CM runs (not), word for word, closing tags included.
+    const previous = recordBest(player, raid);
+    const best = previous == null ? " (new personal best)</col>" : ` Personal best: </col><col=ff0000>${Shared.formatTicks(previous, player)}</col>`;
+    Shared.raidNotice(player, `<col=ef20ff>Congratulations - your raid is complete!</col><br>Team size: <col=ff0000>${teamSize(size)}</col> Duration:</col> <col=ff0000>${Shared.formatTicks(raid.duration, player)}</col>${best}`);
     const attribute = raid.challenge ? Shared.ATTR.CHALLENGE_KILLS : Shared.ATTR.KILLS;
     const count = (Number(player.getAttribute(attribute)) || 0) + 1;
     player.setAttribute(attribute, count);
@@ -169,16 +175,45 @@ function completed(raid) {
   generate(raid, inTime);
 }
 
-/** Personal bests by mode and team size. */
-function recordBest(player, raid, time) {
-  const bests = { ...(player.getAttribute(ATTR_BEST) ?? {}) };
-  const key = `${raid.challenge ? "cm" : "normal"}:${raid.scale}`;
-  if (bests[key] == null || raid.duration < bests[key]) {
-    bests[key] = raid.duration;
-    player.setAttribute(ATTR_BEST, bests);
-    Shared.api().emitCustomEvent("boss:personal-best", { player, boss: `${RAID_NAME}${raid.challenge ? " Challenge Mode" : ""} (Team Size: ${raid.scale})`, ticks: raid.duration });
-    player.sendMessage(`New personal best: <col=ff0000>${time}</col>`);
+/** Team size as the completion message has it: "Solo", "24+ players" (captures); the rest by the Wiki's target-time bands. */
+function teamSize(size) {
+  if (size === 1) return "Solo";
+  if (size <= 10) return `${size} players`;
+  if (size <= 15) return "11-15 players";
+  if (size <= 23) return "16-23 players";
+  return "24+ players";
+}
+
+/**
+ * Bests saved before team-size names were used ("cm:3") move to theirs ("cm:3 players"),
+ * keeping the faster where two land on one name.
+ */
+function migrateBests(bests) {
+  const migrated = {};
+  for (const [key, ticks] of Object.entries(bests)) {
+    const old = /^(cm|normal):(\d+)$/.exec(key);
+    const name = old ? `${old[1]}:${teamSize(Number(old[2]))}` : key;
+    if (migrated[name] == null || ticks < migrated[name]) migrated[name] = ticks;
   }
+  return migrated;
+}
+
+/**
+ * Personal bests by mode and team size: the previous best in ticks, or null when this run is a
+ * new one. rsprox (Chambers of Xeric (Team Size: 3 players)): the clan broadcast names the size
+ * as the completion message does.
+ */
+function recordBest(player, raid) {
+  const bests = migrateBests(player.getAttribute(ATTR_BEST) ?? {});
+  const size = teamSize(raid.scale);
+  const key = `${raid.challenge ? "cm" : "normal"}:${size}`;
+  const previous = bests[key];
+  if (previous == null || raid.duration < previous) {
+    bests[key] = raid.duration;
+    Shared.api().emitCustomEvent("boss:personal-best", { player, boss: `${RAID_NAME}${raid.challenge ? " Challenge Mode" : ""} (Team Size: ${size})`, ticks: raid.duration });
+  }
+  player.setAttribute(ATTR_BEST, bests);
+  return previous == null || raid.duration < previous ? null : previous;
 }
 
 function generate(raid, inTime) {
@@ -220,12 +255,12 @@ function generate(raid, inTime) {
         special.push([name, ITEM.DUST]);
       }
     }
-    player.getPacketSender().sendVarbit(VARBIT.LIGHT, uniques.has(name) ? LIGHT.PURPLE : LIGHT.WHITE);
+    player.getPacketSender().sendVarbit(Shared.VARBIT.REWARD_LIGHT, uniques.has(name) ? LIGHT.PURPLE : LIGHT.WHITE);
   }
   if (special.length) {
     for (const player of raiders) {
       Shared.raidMessage(player, "Special loot:");
-      for (const [name, id] of special) player.sendMessage(`${Shared.displayName(named.get(name))} - <col=ff0000>${itemName(id)}</col>`);
+      for (const [name, id] of special) Shared.raidNotice(player, `<col=ef20ff>${Shared.displayName(named.get(name))} -</col> <col=ff0000>${itemName(id)}</col>`);
     }
   }
 }
@@ -273,7 +308,7 @@ function refreshChest(player, raid) {
   const items = rewardsOf(raid).get(player.getUsername()) ?? [];
   player.getPacketSender().sendInventory(INVENTORY, Math.max(items.length, 9), items);
   player.getInventory().refreshItems();
-  if (items.length === 0) player.getPacketSender().sendVarbit(VARBIT.LIGHT, LIGHT.NONE);
+  if (items.length === 0) player.getPacketSender().sendVarbit(Shared.VARBIT.REWARD_LIGHT, LIGHT.NONE);
 }
 
 function takeItem(player, raid, index) {
@@ -409,4 +444,4 @@ module.exports = function registerCoxRewards(api) {
   api.onNpcInteraction("Captain Rimor", { "Claim-cape": claimCape });
 };
 
-Object.assign(module.exports, { uniqueRolls, commonLoot, targetTicks, generate, completed, UNIQUES, COMMONS });
+Object.assign(module.exports, { uniqueRolls, commonLoot, targetTicks, teamSize, generate, completed, UNIQUES, COMMONS });

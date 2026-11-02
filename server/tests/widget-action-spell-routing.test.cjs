@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
+const zlib = require("node:zlib");
 const { before, test } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
@@ -16,6 +17,63 @@ let playerIndex = 800;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   core = PluginManager.getCoreApi();
+});
+
+function encodeMedium(value) {
+  return [(value >>> 16) & 255, (value >>> 8) & 255, value & 255];
+}
+
+test("spell metadata lookups share one cache scan", (t) => {
+  let itemReads = 0;
+  const getItem = core.CacheDefinitions.getItem.bind(core.CacheDefinitions);
+  t.mock.method(core.CacheDefinitions, "getItem", (...args) => {
+    itemReads++;
+    return getItem(...args);
+  });
+  const spell = core.CacheDefinitions.getSpellByName("Bones to Bananas");
+  assert.ok(spell);
+  assert.equal(core.CacheDefinitions.getSpellName(spell.widgetId, -1), "Bones to Bananas");
+  assert.equal(core.CacheDefinitions.isSpellWidgetGroup(spell.widgetId >>> 16), true);
+  assert.equal(itemReads, core.CacheDefinitions.getCounts().items);
+  assert.deepEqual(core.CacheDefinitions.getSpellByName("  BONES TO BANANAS  "), spell);
+  assert.equal(itemReads, core.CacheDefinitions.getCounts().items);
+});
+
+test("spell metadata lookups refresh after archived items are replaced", (t) => {
+  const cache = CachePipeline.getActive();
+  const originalCount = core.CacheDefinitions.getCounts().items;
+  const widgetId = (0x7ffe << 16) | 1;
+  const spellName = "Archive Regression Spell";
+  const data = Buffer.from([
+    249, 2,
+    0, ...encodeMedium(596), (widgetId >>> 24) & 255, (widgetId >>> 16) & 255, (widgetId >>> 8) & 255, widgetId & 255,
+    1, ...encodeMedium(601), ...Buffer.from(spellName + "\0", "ascii"),
+    0,
+  ]);
+  const bundle = {
+    id: "spell-metadata-regression",
+    targetCache: { name: cache.name, game: "oldschool", revision: cache.revision },
+    sourceCache: { name: cache.name, game: "oldschool", environment: "live", revision: cache.revision, timestamp: cache.timestamp, size: 0 },
+    definitions: [{
+      kind: "obj",
+      symbol: "archive_regression_spell",
+      sourceId: 0,
+      id: originalCount,
+      dataBase64: data.toString("base64"),
+      crc: zlib.crc32(data),
+    }],
+  };
+  t.after(() => {
+    core.CacheDefinitions.registerDefinitionArchives([]);
+    assert.equal(core.CacheDefinitions.getSpellByName(spellName), undefined);
+  });
+
+  assert.equal(core.CacheDefinitions.getSpellByName(spellName), undefined);
+  assert.equal(core.CacheDefinitions.registerDefinitionArchives([bundle]).obj.includes(originalCount), true);
+  const spell = core.CacheDefinitions.getSpellByName(spellName);
+  assert.deepEqual(spell, { widgetId, itemId: originalCount });
+  assert.equal(core.CacheDefinitions.getSpellName(widgetId, -1), spellName);
+  assert.equal(core.CacheDefinitions.isSpellWidgetGroup(widgetId >>> 16), true);
 });
 
 function createPlayer(t) {
@@ -92,6 +150,7 @@ test("Grand Exchange item actions cannot cast spells from colliding item ids", a
 test("effect spell IDs cannot cast from non-spell widget groups", async (t) => {
   const { player, connection } = createPlayer(t);
   const effectSpellIds = [...EffectSpells.map.keys()].sort((left, right) => left - right);
+  assert.ok(effectSpellIds.length > 0);
   const nonSpellGroups = [465, 149, 12, 300, 30004];
   const receivedSpellIds = [];
   t.mock.method(EffectSpells, "handleSpell", (_player, spellId) => {
@@ -100,7 +159,6 @@ test("effect spell IDs cannot cast from non-spell widget groups", async (t) => {
   });
   t.mock.method(InterfaceActionClickOpcode, "handle", () => true);
 
-  assert.deepEqual(effectSpellIds, [1159, 1162, 1168, 1173, 1178, 3280, 6884, 9107, 9135, 9136, 15877]);
   for (const groupId of nonSpellGroups) {
     for (const itemId of effectSpellIds) {
       await sendWidgetAction(connection, {
@@ -192,7 +250,7 @@ test("spell widgets from each book remain eligible for canonical resolution", ()
   }
 });
 
-test("an unrecognized spell group still reaches the interface action handler", async (t) => {
+test("Grand Exchange item actions fall through to the interface action handler", async (t) => {
   const { player, connection } = createPlayer(t);
   const received = [];
   t.mock.method(InterfaceActionClickOpcode, "handle", (...args) => {

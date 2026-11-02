@@ -45,6 +45,7 @@ function harness({ npcDrops = false } = {}) {
       let area, at = new core.Location(definition.x, definition.y, definition.z);
       const npc = { ...definition, getId: () => definition.id, getArea: () => area, setArea: value => { area = value; },
         getSize: () => 3, isPlayer: () => false,
+        getMovementQueue: () => ({ reset() { return this; }, setBlockMovement: noop }),
         getHitpoints: () => 58, getLocation: () => at, moveTo: value => { at = value; },
         getCombat: () => ({ reset: noop, getTarget: () => area?.player }), getDefinition: () => ({ getRespawn: () => 36 }),
         setCombatXpMultiplier: value => { npc.xpMultiplier = value; }, setPositionToFace: noop, performAnimation: noop, performGraphic: noop, forceChat: noop };
@@ -336,6 +337,37 @@ test('a charge can pass through the field plant while distant blocked charges re
   blocked.npc.moveTo(new core.Location(3261, 3287, 0)); blocked.p.moveTo(new core.Location(3265, 3288, 0));
   assert.equal(blocked.method.nextAttack(blocked.npc, blocked.p), null);
   assert.equal(blocked.method.attackDistance(blocked.npc), 1, 'the normal combat cycle must pursue instead of attacking from sixteen tiles');
+});
+
+test('a valid sidestep cannot pull Brutus out of his charge windup', () => {
+  const { MovementQueue } = require('../dist/game/model/movement/MovementQueue');
+  const { CombatRange } = require('../dist/game/content/combat/CombatRange');
+  const { PathFinder } = require('../dist/game/model/movement/path/PathFinder');
+  const { h, p, npc, arena, method } = fight();
+  Object.assign(npc, {
+    isNpc: () => true, getPrivateArea: () => arena, getAsNpc: () => npc,
+    getMovementSteps: () => 1, getTimers: () => ({ has: () => false }),
+    isNeedsPlacement: () => false, getFollowing: () => null,
+    setLocation: npc.moveTo, setWalkingDirection: noop, setRunningDirection: noop,
+    hasFlag: () => false, canWalkThroughNPCs: () => false,
+  });
+  Object.assign(p, { isPlayer: () => true, isNpc: () => false,
+    getSize: () => 1, getPrivateArea: () => arena });
+  const movement = new MovementQueue(npc);
+  npc.getMovementQueue = () => movement;
+  npc.moveTo(new core.Location(3261, 3287, 0)); p.moveTo(new core.Location(3262, 3286, 0));
+  arena.meleeRemaining = 0; arena.nextSpecial = 'charge';
+  assert.equal(method.nextAttack(npc, p), 'charge');
+  method.start(npc, p);
+  assert.equal(core.RegionManager.canMove(3262, 3286, 3264, 3286, 0, 1, 1, arena), true);
+  p.moveTo(new core.Location(3264, 3286, 0));
+  assert.equal(CombatRange.canReach(npc, method, p), false, 'the sidestep would request pursuit');
+  movement.setPursuitCheckpoint(PathFinder.naiveEntityDestination(npc, p));
+  movement.process();
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [3261, 3287], 'hold the telegraphed origin');
+  h.tick(4);
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [3261, 3283], 'land at the original charge endpoint');
+  assert.equal(movement.getMobility().canMove(), true, 'ordinary pursuit resumes after the charge');
 });
 
 test('postquest kills preserve the private field and Ring restarts respawn without spawning duplicates', () => {

@@ -232,6 +232,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
       const charge = arena.special === "charge";
       const aimed = player.getLocation().clone();
       const end = charge ? chargeDestination(npc, aimed) : null;
+      if (charge) npc.getMovementQueue().reset().setBlockMovement(true);
       if (!charge && arena.stompsRemaining === 0) {
         arena.stompTiles = stompTiles(at, aimed);
         arena.stompsRemaining = quest.isComplete(player) ? 3 : 1 + Math.floor(Math.random() * 3);
@@ -247,6 +248,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
       npc.forceChat(charge ? "*growls*" : "*snorts*");
       npc.performAnimation(new Animation(charge ? ANIMATION.charge : ANIMATION.stomp, charge ? 60 : 30));
       later(arena, charge && quest.isComplete(player) ? 3 : 4, () => {
+        if (charge) npc.getMovementQueue().setBlockMovement(false);
         if (arena.isDestroyed() || npc.getHitpoints() <= 0 || player.getArea() !== arena) return;
         const current = player.getLocation();
         const underBull = current.getX() >= at.getX() && current.getX() <= at.getX() + 2 &&

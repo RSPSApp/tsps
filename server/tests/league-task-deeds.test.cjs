@@ -164,6 +164,33 @@ test("kill: a boss in its own lair counts its kills (Defeat Sarachnis in the For
   assert.equal((f.player.getAttribute("league:task-kills") ?? {})["defeat-sarachnis-50-times"], 1, JSON.stringify(f.player.getAttribute("league:task-kills")));
 });
 
+test("enter: inside a named place's bounds, by its zones (Enter the Crafting Guild)", (t) => {
+  const f = pactsCharacter(t);
+  f.player.setAttribute("league:areas", [21, 2, 3]); // Varlamore, Karamja and Asgarnia unlocked
+  f.player.moveTo(new core.Location(2933, 3290, 0));
+  PM.emitPlayerProcess({ player: f.player });
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [2933, 3290], "in Asgarnia");
+  assert.ok(!done(f, "enter-the-crafting-guild"), "outside its door");
+  f.player.moveTo(new core.Location(2933, 3285, 0));
+  PM.emitPlayerProcess({ player: f.player });
+  assert.ok(done(f, "enter-the-crafting-guild"), "inside its walls");
+});
+
+test("kill with a place: a death inside its bounds counts, elsewhere not (Defeat a Runite Golem in the Resource Area)", (t) => {
+  const at = (x, y) => {
+    const f = pactsCharacter(t);
+    f.player.setAttribute("league:areas", [21, 2, 11]); // Varlamore, Karamja and the Wilderness unlocked
+    f.player.moveTo(new core.Location(x, y, 0));
+    return f;
+  };
+  const away = at(3185, 3950);
+  kill(away, "Runite Golem");
+  assert.ok(!done(away, "defeat-a-runite-golem"), "north of its fence");
+  const there = at(3185, 3934);
+  kill(there, "Runite Golem");
+  assert.ok(done(there, "defeat-a-runite-golem"));
+});
+
 /** An inventory item's option, as the client clicks it. */
 async function inventoryOption(f, name, option, optionIndex = 1, count = 4) {
   const id = item(name);

@@ -1646,6 +1646,20 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   alternatives; "N <tier> Clue Scroll(s)". A description naming a group ("any kind of logs"), a
   place or a condition leaves the task unmapped; so does a parenthesis remark, while one without a
   space is part of a name ("(c)", "(u)").
+- **Named places** (the catalog's `places`, by key: a guild, a dungeon, an island, each `{ name,
+  page, source, rects }`, boxes of tiles on any plane): a task's place that is no league area
+  ("Enter the Crafting Guild", "Defeat a runite golem inside the Wilderness Resource Area") is a
+  `place` on its trigger when the generator's place table knows its bounds, each from one source
+  checked against another: the Wiki page's own outline (`{{Map|mtype=polygon}}`, the tiles whose
+  centre it holds), the server's Slayer areas (`slayer-areas.json`, less any other area's box that
+  overlaps), or the tiles the cache's walls, fences and shores enclose around the page's map point
+  (with what they surround; an island in open sea its box); every place must hold one of its page's
+  map points, or every spawn of the NPCs it lists. The pages are saved as
+  `<dir>/places/<page>.wikitext`, and a place is at most 64 boxes. A trigger with a `place` counts
+  only deeds done, and kills made, inside it. `enter { place }`: the player inside it, each of its
+  boxes a zone (`onZoneEnter`, so a step, a teleport or a login there counts): "Enter the X" or
+  "Visit X" whose description names the same place ("in the Kebos Lowlands", where it lies, says
+  nothing more). A place without such bounds stays unmapped.
 - **Kills in a league area**: a kill task whose place is a league area ("Defeat a Snake in
   Karamja", "on Karamja", "within Morytania", "in the Fremennik Province", "in Varlamore
   underground") gets `area`, the areas plugin's id (`league-areas.json`; the task list's own enum

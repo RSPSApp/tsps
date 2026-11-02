@@ -51,7 +51,10 @@
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
- * A trigger with an `area` counts only deeds done there (`league:area-at`, the player's tile).
+ * - `enter { place }`: the player inside one of the catalog's named places (its boxes, zones).
+ *
+ * A trigger with an `area` counts only deeds done there (`league:area-at`, the player's tile), one
+ * with a `place` only inside that place's bounds.
  *
  * Counts toward a task are kept per task in `league:task-progress` (task id -> count) until it
  * completes; a deed no open task accepts is not kept.
@@ -74,10 +77,11 @@ function add(map, name, task) {
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [], collectionLog: [], checkHealth: new Map(), events: new Map(), prayer: new Map() };
+  const entry = { enter: new Map(), equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [], collectionLog: [], checkHealth: new Map(), events: new Map(), prayer: new Map() };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
-    if (trigger?.kind === "equip" || trigger?.kind === "equip-all" || trigger?.kind === "equip-any-set") entry.equip.push(task);
+    if (trigger?.kind === "enter") entry.enter.set(trigger.place, (entry.enter.get(trigger.place) ?? []).concat(task));
+    else if (trigger?.kind === "equip" || trigger?.kind === "equip-all" || trigger?.kind === "equip-any-set") entry.equip.push(task);
     else if (trigger?.kind === "produce") for (const item of trigger.items ?? []) add(entry.produce, item, task);
     else if (trigger?.kind === "hunt") for (const npc of trigger.npcs ?? []) add(entry.hunt, npc, task);
     else if (trigger?.kind === "pickpocket") for (const npc of trigger.npcs ?? []) add(entry.pickpocket, npc, task);
@@ -138,12 +142,15 @@ function countTasks(player, type, tasks, amount = 1) {
 
 /**
  * A task with an `area` (the areas plugin's id: "Chop 100 Maples in Tirannwn") counts only deeds
- * done on its map there, where the player stands (`league:area-at`, as kill tasks).
+ * done on its map there, where the player stands (`league:area-at`, as kill tasks); one with a
+ * `place` only deeds done inside the place's bounds.
  */
 function inArea(player, type, task) {
-  if (task.trigger.area === undefined) return true;
+  if (task.trigger.area === undefined && task.trigger.place === undefined) return true;
   const at = player.getLocation?.();
   if (!at) return false;
+  if (task.trigger.place !== undefined && !Common.inPlace(task.trigger.place, at.getX(), at.getY())) return false;
+  if (task.trigger.area === undefined) return true;
   const query = { x: at.getX(), y: at.getY(), league: type, area: null };
   Common.api.emitCustomEvent("league:area-at", query);
   return query.area === task.trigger.area;
@@ -353,6 +360,26 @@ function onEvent(kind) {
   };
 }
 
+/**
+ * `enter { place }`: the player inside the place (a guild, a dungeon, an island). Each of its boxes is
+ * a zone (`onZoneEnter`), so a step, a teleport or a login inside it counts.
+ */
+function entered(player, place) {
+  const type = player ? Common.leagueOf(player) : null;
+  if (type === null) return;
+  const done = new Set(Common.completedIds(player));
+  for (const task of indexOf(type).enter.get(place) ?? []) if (!done.has(task.id)) Complete.complete(player, task.id, type);
+}
+
+/** The places some league's enter task names: each box of each a zone. */
+function watchPlaces(api) {
+  const named = new Set();
+  for (const type of Common.types()) for (const task of Common.catalog(type).tasks) if (task.trigger?.kind === "enter") named.add(task.trigger.place);
+  for (const place of named) {
+    for (const [minX, minY, maxX, maxY] of Common.places[place]?.rects ?? []) api.onZoneEnter({ minX, maxX, minY, maxY }, ({ player }) => entered(player, place));
+  }
+}
+
 function prayed({ player, prayerId }) {
   const name = Common.core.PrayerData?.prayerData?.get?.(prayerId)?.name;
   if (player && name) count(player, "prayer", name);
@@ -414,6 +441,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("prayer:buried", buried);
   api.onCustomEvent("potions:drunk", drank);
   api.onCustomEvent("league:login", login);
+  watchPlaces(api);
 };
 
 module.exports.PROGRESS_ATTRIBUTE = PROGRESS_ATTRIBUTE;

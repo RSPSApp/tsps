@@ -239,10 +239,15 @@ function tileOf(entity) {
   return location ? { x: location.getX(), y: location.getY() } : null;
 }
 
-/** A kill task with an `area` (the areas plugin's id) counts only kills on its map there. */
+/**
+ * A kill task with an `area` (the areas plugin's id) counts only kills on its map there; one with a
+ * `place` (a guild, a dungeon: the catalog's `places`) only kills inside its bounds.
+ */
 function inArea(task, type, tile) {
-  if (task.trigger.area === undefined) return true;
+  if (task.trigger.area === undefined && task.trigger.place === undefined) return true;
   if (!tile) return false;
+  if (task.trigger.place !== undefined && !Common.inPlace(task.trigger.place, tile.x, tile.y)) return false;
+  if (task.trigger.area === undefined) return true;
   const query = { x: tile.x, y: tile.y, league: type, area: null };
   Common.api.emitCustomEvent("league:area-at", query);
   return query.area === task.trigger.area;

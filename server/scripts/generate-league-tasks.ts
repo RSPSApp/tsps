@@ -546,6 +546,250 @@ function leagueAreaOf(text: string): { area: number | null; text: string } {
   return { area: null, text };
 }
 
+// ---- named places ---------------------------------------------------------------------------------
+
+/** Tiles [minX, minY, maxX, maxY], inclusive, on every plane. */
+type Rect = [number, number, number, number];
+/**
+ * A place a task names that is no league area: a city, dungeon, guild or island. Its bounds come
+ * from one source, each checked against another:
+ * - `wikiPolygon`: the Wiki page's own `{{Map|mtype=polygon|...}}` outline;
+ * - `slayerArea`: the server's Slayer areas (plugins/skills/data/slayer-areas.json, by name: the
+ *   Wiki's location pages, checked against the task monsters' spawns);
+ * - `server`: a boundary the server's own content already keeps for it (a plugin's area), restated;
+ * - `flood`: the tiles the cache's walls, fences and shores enclose around the Wiki page's map point
+ *   (`centre`: the middle of its pins, where they mark the corners; `from` when the point is itself a
+ *   wall), its doors and gates shut: a guild's rooms; for an island in open sea (`bbox`) the box
+ *   around it, the sea between being no ground;
+ *   a fill that reaches `cap` tiles has leaked out and fails the run.
+ * Every place must hold one of its page's map points ({{Map}} pins and centres), or, for a page
+ * whose points are its entrance only (a dungeon), every spawn of `spawns` (npc-spawns.json,
+ * "Name#id").
+ */
+interface PlaceDef {
+  key: string; names: string[]; page: string;
+  wikiPolygon?: true; slayerArea?: string; server?: { rects: Rect[]; from: string }; flood?: { from?: [number, number, number]; centre?: true; cap: number; bbox?: true };
+  spawns?: string[];
+}
+interface Place { name: string; page: string; source: string; rects: Rect[] }
+/** A place is at most this many boxes: each is a zone the runtime watches every tick (docs/leagues.md, Tasks). */
+const MAX_PLACE_RECTS = 64;
+
+const PLACE_DEFS: PlaceDef[] = [
+  // The Wiki's own outlines.
+  // The Resource Area's pins are its fence's corners.
+  { key: "resource-area", names: ["Wilderness Resource Area", "Resource Area"], page: "Resource_Area", flood: { centre: true, cap: 600 } },
+  { key: "ranging-guild", names: ["Ranging Guild"], page: "Ranging_Guild", wikiPolygon: true },
+  { key: "wizards-guild", names: ["Wizards' Guild"], page: "Wizards'_Guild", wikiPolygon: true },
+  { key: "woodcutting-guild", names: ["Woodcutting Guild"], page: "Woodcutting_Guild", wikiPolygon: true },
+  { key: "warriors-guild", names: ["Warriors' Guild", "Warriors Guild"], page: "Warriors'_Guild", wikiPolygon: true },
+  { key: "hardwood-grove", names: ["Tai Bwo Wannai Hardwood Grove", "Hardwood Grove in Tai Bwo Wannai", "Hardwood Grove"], page: "Hardwood_Grove", wikiPolygon: true },
+  // The server's Slayer areas.
+  { key: "taverley-dungeon", names: ["Taverley Dungeon"], page: "Taverley_Dungeon", slayerArea: "Taverley Dungeon" },
+  { key: "brimhaven-dungeon", names: ["Brimhaven Dungeon"], page: "Brimhaven_Dungeon", slayerArea: "Brimhaven Dungeon", spawns: ["Wild dog#112", "Steel dragon#275"] },
+  { key: "darkmeyer", names: ["Darkmeyer"], page: "Darkmeyer", slayerArea: "Darkmeyer" },
+  // The cache's walls around the Wiki's point.
+  { key: "crafting-guild", names: ["Crafting Guild"], page: "Crafting_Guild", flood: { cap: 400 } },
+];
+
+/** The places' saved Wiki pages (`--from <dir>/places`, `--save`), read before the triggers are derived. */
+const placePages = new Map<string, string>();
+/** The places' bounds by key, filled by `resolvePlaces`; only the places a trigger names are written. */
+const places = new Map<string, Place>();
+
+/** Every {{Map}} point on a page: its pins ("x,y" and "x:y" arguments) and its centre (x=, y=; "x:3008,y:3150"). */
+function mapPoints(wikitext: string): Array<[number, number]> {
+  const points: Array<[number, number]> = [];
+  for (const [call] of wikitext.matchAll(/\{\{Map\|[^{}]*\}\}/g)) {
+    const args = call.slice(6, -2).split("|").map((arg) => arg.trim());
+    const x = args.find((arg) => /^x\s*=/.test(arg)), y = args.find((arg) => /^y\s*=/.test(arg));
+    if (x && y) points.push([Math.floor(Number(x.split("=")[1])), Math.floor(Number(y.split("=")[1]))]);
+    for (const arg of args) {
+      const pair = /^(?:x:)?(\d{3,5})(?:\.\d+)?\s*[,:]\s*(?:y:)?(\d{3,5})(?:\.\d+)?$/.exec(arg);
+      if (pair) points.push([Number(pair[1]), Number(pair[2])]);
+    }
+  }
+  return points;
+}
+
+/** The page's polygon outline (`{{Map|...|mtype=polygon|x,y|...}}`), its vertices in order. */
+function mapPolygon(wikitext: string): Array<[number, number]> | null {
+  for (const [call] of wikitext.matchAll(/\{\{Map\|[^{}]*\}\}/g)) {
+    if (!/mtype\s*=\s*polygon/.test(call)) continue;
+    const vertices = call.slice(6, -2).split("|").map((arg) => /^(\d{3,5}),(\d{3,5})$/.exec(arg.trim())).filter(Boolean).map((m) => [Number(m![1]), Number(m![2])] as [number, number]);
+    if (vertices.length >= 3) return vertices;
+  }
+  return null;
+}
+
+/** A tile in a place: in one of its boxes. */
+function placeHolds(place: Place, x: number, y: number): boolean {
+  return place.rects.some(([minX, minY, maxX, maxY]) => x >= minX && x <= maxX && y >= minY && y <= maxY);
+}
+
+/** A box less another: up to four boxes. */
+function withoutRect(rect: Rect, other: Rect): Rect[] {
+  const [minX, minY, maxX, maxY] = rect, [oMinX, oMinY, oMaxX, oMaxY] = other;
+  if (oMinX > maxX || oMaxX < minX || oMinY > maxY || oMaxY < minY) return [rect];
+  const parts: Rect[] = [];
+  if (oMinY > minY) parts.push([minX, minY, maxX, oMinY - 1]);
+  if (oMaxY < maxY) parts.push([minX, oMaxY + 1, maxX, maxY]);
+  const [midMinY, midMaxY] = [Math.max(minY, oMinY), Math.min(maxY, oMaxY)];
+  if (oMinX > minX) parts.push([minX, midMinY, oMinX - 1, midMaxY]);
+  if (oMaxX < maxX) parts.push([oMaxX + 1, midMinY, maxX, midMaxY]);
+  return parts;
+}
+
+/** The tiles whose centre an outline holds, as row runs merged into boxes. */
+function polygonRects(polygon: Array<[number, number]>): Rect[] {
+  const inside = (x: number, y: number) => {
+    let odd = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const [xi, yi] = polygon[i], [xj, yj] = polygon[j];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) odd = !odd;
+    }
+    return odd;
+  };
+  const xs = polygon.map(([x]) => x), ys = polygon.map(([, y]) => y);
+  const tiles: number[] = [];
+  for (let y = Math.min(...ys); y <= Math.max(...ys); y++) for (let x = Math.min(...xs); x <= Math.max(...xs); x++) if (inside(x + 0.5, y + 0.5)) tiles.push(x * 65536 + y);
+  return tileRects(tiles);
+}
+
+/** Tiles (x * 65536 + y) as row runs, each merged with the run of the same span below it. */
+function tileRects(tiles: Iterable<number>): Rect[] {
+  const rows = new Map<number, number[]>();
+  for (const tile of tiles) { const x = Math.floor(tile / 65536), y = tile % 65536; (rows.get(y) ?? rows.set(y, []).get(y)!).push(x); }
+  const rects: Rect[] = [];
+  for (const [y, xs] of [...rows.entries()].sort((a, b) => a[0] - b[0])) {
+    xs.sort((a, b) => a - b);
+    for (let i = 0; i < xs.length;) {
+      let j = i;
+      while (j + 1 < xs.length && xs[j + 1] === xs[j] + 1) j++;
+      const above = rects.find((rect) => rect[0] === xs[i] && rect[2] === xs[j] && rect[3] === y - 1);
+      if (above) above[3] = y; else rects.push([xs[i], y, xs[j], y]);
+      i = j + 1;
+    }
+  }
+  return rects;
+}
+
+let collisionReady = false;
+/** The tiles the cache's collision encloses around a start tile, as row runs merged into boxes. */
+function floodRects(start: [number, number, number], cap: number, key: string, bbox = false): Rect[] {
+  // Loaded here: the collision map is only needed for a flood-filled place.
+  const { RegionManager } = require("../src/main/typescript/elvarg/game/collision/RegionManager");
+  if (!collisionReady) { RegionManager.init(); collisionReady = true; }
+  const loaded = new Set<number>();
+  const load = (x: number, y: number) => { const square = (x >> 6) * 256 + (y >> 6); if (!loaded.has(square)) { loaded.add(square); RegionManager.loadMapFiles(x, y); } };
+  const [x0, y0, z] = start;
+  const seen = new Set<number>([x0 * 65536 + y0]);
+  const queue: Array<[number, number]> = [[x0, y0]];
+  for (let head = 0; head < queue.length; head++) {
+    const [x, y] = queue[head];
+    for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
+      const nx = x + dx, ny = y + dy;
+      if (seen.has(nx * 65536 + ny)) continue;
+      load(x, y); load(nx, ny);
+      if (!RegionManager.canMove(x, y, nx, ny, z, 1, 1, null)) continue;
+      seen.add(nx * 65536 + ny);
+      queue.push([nx, ny]);
+      if (seen.size > cap) throw new Error(`place ${key}: the flood from ${start.join(",")} passed ${cap} tiles; it is not enclosed`);
+    }
+  }
+  if (seen.size < 2) throw new Error(`place ${key}: the flood start ${start.join(",")} is a wall`);
+  const xs = [...seen].map((tile) => Math.floor(tile / 65536)), ys = [...seen].map((tile) => tile % 65536);
+  const [minX, minY, maxX, maxY] = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  if (bbox) return [[minX, minY, maxX, maxY]];
+  // With what the fill surrounds (a table, a tree, a rock: tiles no one stands on, inside all the
+  // same): every tile of the box no path from outside it reaches without crossing the fill.
+  const outside = new Set<number>();
+  const edge: Array<[number, number]> = [];
+  for (let x = minX - 1; x <= maxX + 1; x++) edge.push([x, minY - 1], [x, maxY + 1]);
+  for (let y = minY; y <= maxY; y++) edge.push([minX - 1, y], [maxX + 1, y]);
+  for (const [x, y] of edge) outside.add(x * 65536 + y);
+  for (let head = 0; head < edge.length; head++) {
+    const [x, y] = edge[head];
+    for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
+      const nx = x + dx, ny = y + dy, tile = nx * 65536 + ny;
+      if (nx < minX || nx > maxX || ny < minY || ny > maxY || outside.has(tile) || seen.has(tile)) continue;
+      outside.add(tile);
+      edge.push([nx, ny]);
+    }
+  }
+  const enclosed: number[] = [];
+  for (let x = minX; x <= maxX; x++) for (let y = minY; y <= maxY; y++) if (!outside.has(x * 65536 + y)) enclosed.push(x * 65536 + y);
+  return tileRects(enclosed);
+}
+
+/** The spawns (npc-spawns.json) of "Name#id": [x, y]. */
+let spawnList: Array<{ name: string; id: number; x: number; y: number }> | null = null;
+function spawnsOf(spec: string): Array<[number, number]> {
+  spawnList ??= JSON.parse(fs.readFileSync(path.resolve(__dirname, "../data/definitions/npc-spawns.json"), "utf8"));
+  const [name, id] = spec.split("#");
+  return spawnList!.filter((spawn) => spawn.name === name && spawn.id === Number(id)).map((spawn) => [spawn.x, spawn.y]);
+}
+
+/** Every place's bounds from its source, each checked against its page's map points or its spawns. */
+function resolvePlaces() {
+  const slayerAreas = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../plugins/skills/data/slayer-areas.json"), "utf8")).areas;
+  for (const def of PLACE_DEFS) {
+    const wikitext = placePages.get(def.page);
+    if (wikitext === undefined) throw new Error(`place ${def.key}: no page ${def.page}`);
+    const points = mapPoints(wikitext);
+    const place: Place = { name: def.names[0], page: def.page, source: "", rects: [] };
+    if (def.wikiPolygon) {
+      const polygon = mapPolygon(wikitext);
+      if (!polygon) throw new Error(`place ${def.key}: ${def.page} has no polygon`);
+      Object.assign(place, { rects: polygonRects(polygon), source: "the Wiki's outline" });
+    } else if (def.slayerArea) {
+      const area = Object.values(slayerAreas).find((each: any) => each.name === def.slayerArea) as { boxes: number[][] } | undefined;
+      if (!area?.boxes?.length) throw new Error(`place ${def.key}: no Slayer area ${def.slayerArea}`);
+      // Less any other area's box that overlaps it (the Ogre Enclave's east edge in the Brimhaven
+      // Dungeon's box): no tile is two places.
+      const others = Object.values(slayerAreas).filter((each: any) => each !== area).flatMap((each: any) => each.boxes ?? []) as Rect[];
+      const rects = others.reduce((kept: Rect[], other) => kept.flatMap((rect) => withoutRect(rect, other)), area.boxes.map(([minX, minY, maxX, maxY]) => [minX, minY, maxX, maxY] as Rect));
+      Object.assign(place, { rects, source: `Slayer area ${def.slayerArea}` });
+    } else if (def.server) {
+      Object.assign(place, { rects: def.server.rects, source: def.server.from });
+    } else if (def.flood) {
+      const middle = (axis: 0 | 1) => Math.floor(points.reduce((sum, point) => sum + point[axis], 0) / points.length);
+      const from = def.flood.from ?? (!points.length ? null : def.flood.centre ? [middle(0), middle(1), 0] as [number, number, number] : [points[0][0], points[0][1], 0] as [number, number, number]);
+      if (!from) throw new Error(`place ${def.key}: no map point to flood from`);
+      Object.assign(place, { rects: floodRects(from, def.flood.cap, def.key, def.flood.bbox), source: def.flood.bbox ? `the shores around ${from.join(",")}` : `the cache's walls around ${from.join(",")}` });
+    }
+    if (def.spawns) {
+      for (const spec of def.spawns) {
+        const tiles = spawnsOf(spec);
+        if (!tiles.length) throw new Error(`place ${def.key}: no spawns of ${spec}`);
+        const out = tiles.find(([x, y]) => !placeHolds(place, x, y));
+        if (out) throw new Error(`place ${def.key}: ${spec} spawns at ${out.join(",")}, outside it`);
+      }
+    } else if (!points.some(([x, y]) => placeHolds(place, x, y))) {
+      throw new Error(`place ${def.key}: none of ${def.page}'s map points (${points.map((p) => p.join(",")).join(" ") || "none"}) is inside it`);
+    }
+    if (!place.rects.length || place.rects.length > MAX_PLACE_RECTS) throw new Error(`place ${def.key}: ${place.rects.length} boxes (1 to ${MAX_PLACE_RECTS})`);
+    places.set(def.key, place);
+  }
+}
+
+/** A trailing place ("... in the Karuulm Slayer Dungeon", "at the Slayer Tower"): its key and the text without it. */
+function placeOf(text: string): { place: string | null; text: string } {
+  for (const def of PLACE_DEFS) {
+    for (const name of def.names) {
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const match = new RegExp(`\\s+(?:in|at|inside|within|on|from|around) (?:the )?${escaped}(?: \\(location\\))?(?=(?: \\d+ times)?\\.?$)`, "i").exec(text);
+      if (match) return { place: def.key, text: text.slice(0, match.index) + text.slice(match.index + match[0].length) };
+    }
+  }
+  return { place: null, text };
+}
+
+/** The place a whole name is ("the Crafting Guild", "Ferox Enclave"), or null. */
+function placeNamed(text: string): string | null {
+  const plainText = text.trim().replace(/^the /i, "").replace(/ \(location\)$/i, "").toLowerCase();
+  return PLACE_DEFS.find((each) => each.names.some((name) => name.toLowerCase() === plainText))?.key ?? null;
+}
 
 /**
  * What a description says that is only the deed itself, not a condition: "whilst fishing" after a
@@ -691,6 +935,13 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   if ((match = /^Defeat (an?|\d+) Superior slayer monsters?\.?$/i.exec(description))) {
     return { trigger: { kind: "superior-kills", count: /^an?$/i.test(match[1]) ? 1 : Number(match[1]) } };
   }
+  // "Enter the Crafting Guild", "Visit Ferox Enclave": the player inside a place the server knows
+  // the bounds of (where its guild, dungeon or island lies, "in the Kebos Lowlands", says nothing more).
+  if ((match = /^(?:Enter|Visit) (.+)$/.exec(name))) {
+    const said = /^(?:Enter|Visit) (.+?)(?: in (?:the )?[A-Z][A-Za-z' ]+)?\.?$/.exec(description);
+    const place = placeNamed(match[1]);
+    return place && said && placeNamed(said[1]) === place ? { trigger: { kind: "enter", place } } : {};
+  }
   if ((match = /^(?:Defeat|Kill) (\d+) (.+)$/.exec(name)) || (match = /^(?:Defeat|Kill) (?:a |an |the |some )?(.+?)(?: (\d+) [Tt]imes?)?$/.exec(name))) {
     const [, first, second] = match;
     const [named, count] = /^\d+$/.test(first) ? [second, Number(first)] : [first, second ? Number(second) : 1];
@@ -713,6 +964,9 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     // A monster the Wiki has in that one place only ("Defeat a Drake in the Karuulm Slayer Dungeon":
     // every location line of its page is the dungeon) is killed there whatever the task adds.
     description = withoutOnlyHome(description, homes);
+    // A named place the server knows the bounds of ("in the Warriors' Guild"): a kill there.
+    const spot = placeOf(description);
+    if (spot.place) description = spot.text;
     // A condition in the description (where, how, how fast) is not a plain kill count: a place
     // ("in the Fremennik Province", "on Ungael") needs the area unlocks, which do not exist yet.
     // "(must be of one difficulty, normal and awakened together do not count)" is one too.
@@ -726,7 +980,9 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     if (accepted.some((npc) => npc === null)) return { unmapped: name };
     const names = [...new Set([primary, ...accepted].filter((npc): npc is string => npc !== null))];
     if (!names.length) return { unmapped: name };
-    return { trigger: area === null ? { kind: "kill", npcs: names, count } : { kind: "kill", npcs: names, count, area } };
+    const trigger: Trigger = area === null ? { kind: "kill", npcs: names, count } : { kind: "kill", npcs: names, count, area };
+    if (spot.place) trigger.place = spot.place;
+    return { trigger };
   }
   if ((match = /^Complete (?:the )?(.+)$/.exec(name))) {
     // "Complete the Observatory Quest" is the quest "Observatory Quest"; "Complete Gertrude's Cat quest" is "Gertrude's Cat";
@@ -1211,17 +1467,35 @@ async function wikiPageOf(kind: string, page: string, options: { from?: string; 
   return text;
 }
 
+/** A place's Wiki page, saved as <dir>/places/<page>.wikitext like the task pages. */
+async function placePageOf(page: string, options: { from?: string; save?: string }): Promise<string> {
+  if (options.from) return fs.readFileSync(path.join(options.from, "places", `${page}.wikitext`), "utf8");
+  const url = `https://oldschool.runescape.wiki/w/${encodeURIComponent(page).replace(/%2F/g, "/")}?action=raw`;
+  const response = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(60_000) });
+  if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+  const text = await response.text();
+  if (options.save) {
+    fs.mkdirSync(path.join(options.save, "places"), { recursive: true });
+    fs.writeFileSync(path.join(options.save, "places", `${page}.wikitext`), text);
+  }
+  return text;
+}
+
 function serialise(output: Record<string, unknown>): string {
   // Each task on its own line, so the file diffs by task.
   const leagues = output.leagues as Record<string, { tasks: Task[]; [key: string]: unknown }>;
-  const header = JSON.stringify({ ...output, leagues: undefined }, null, 2).replace(/\n}$/, "");
+  const placesOut = (output.places ?? {}) as Record<string, unknown>;
+  const header = JSON.stringify({ ...output, places: undefined, leagues: undefined }, null, 2).replace(/\n}$/, "");
+  // Each place on its own line too.
+  const placeLines = Object.entries(placesOut).map(([key, place]) => `    ${JSON.stringify(key)}: ${JSON.stringify(place)}`);
+  const placesPart = placeLines.length ? `,\n  "places": {\n${placeLines.join(",\n")}\n  }` : "";
   const parts: string[] = [];
   for (const [type, league] of Object.entries(leagues)) {
     const { tasks, ...rest } = league;
     const fields = JSON.stringify(rest, null, 4).replace(/^\{\n|\n\}$/g, "").split("\n").map((line) => `  ${line}`).join("\n");
     parts.push(`    "${type}": {\n${fields},\n      "tasks": [\n${tasks.map((task) => `        ${JSON.stringify(task)}`).join(",\n")}\n      ]\n    }`);
   }
-  return `${header},\n  "leagues": {\n${parts.join(",\n")}\n  }\n}\n`;
+  return `${header}${placesPart},\n  "leagues": {\n${parts.join(",\n")}\n  }\n}\n`;
 }
 
 async function main() {
@@ -1244,9 +1518,11 @@ async function main() {
     rows.set(league, templateCalls(wikitext, league.template).map(parseRow));
   }
   const areas = areaIds(cache, rows);
+  for (const page of new Set(PLACE_DEFS.map((def) => def.page))) placePages.set(page, await placePageOf(page, options));
   // The homes of the monsters the kill tasks name before a place, by lower-cased page title.
   const homePages = [...new Set(LEAGUES.flatMap((league) => homePagesOf(rawPages.get(league)!)))].sort();
   for (const page of homePages) names.homes!.set(page.toLowerCase(), homesOf(await wikiPageOf("npcs", page, options)));
+  resolvePlaces();
 
   const output: Record<string, unknown> = {
     $comment: "Generated by server/scripts/generate-league-tasks.ts (yarn generate:league-tasks) from the OSRS Wiki's Trailblazer_Reloaded_League/Tasks, Raging_Echoes_League/Tasks and Demonic_Pacts_League/Tasks pages and the rev 241 cache; never edit by hand (docs/leagues.md, Tasks). A task's position in its league's list is its completion bit for the client (script 9470): its `position` where the league is `fromCache` (Demonic Pacts, whose list is the cache's own, in the cache's order; `pactTask` marks the tasks that award a pact point), else its index; saves hold the string ids. `category` is the cache's where the current league's task table (118) has the task by name, else a rule in the generator (`categorySource`). `points` are the league's tier points; `areas` the client's area enum (3412) ids by the Wiki's region names. `trigger` is a derived, verified award trigger (docs/leagues.md lists the kinds); tasks without one await a mapping in league-task-triggers.json.",
@@ -1310,6 +1586,9 @@ async function main() {
     summarise(league, tasks, duplicateWikiIds, unmapped, report);
   }
 
+  // The places the triggers name, by key: their bounds and where those come from (docs/leagues.md, Tasks).
+  const named = new Set(Object.values(output.leagues as Record<string, { tasks: Task[] }>).flatMap((league) => league.tasks.map((task) => task.trigger?.place)).filter((key): key is string => typeof key === "string"));
+  output.places = Object.fromEntries([...named].sort().map((key) => [key, places.get(key)]));
   if (options.unmapped) fs.writeFileSync(options.unmapped, unmappedRows.join("\n") + "\n");
   const text = serialise(output);
   if (options.check) {

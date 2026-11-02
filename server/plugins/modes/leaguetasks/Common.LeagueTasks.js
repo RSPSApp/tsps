@@ -19,6 +19,8 @@ let data = null;
 let leagues = null;
 /** League type -> { key, fromCache, tasks, slots (list positions), byId }. */
 const catalogs = new Map();
+/** The named places triggers give (a guild, a dungeon, an island): key -> { name, rects: [minX, minY, maxX, maxY] }. */
+let places = {};
 
 function init(pluginApi) {
   api = pluginApi;
@@ -30,6 +32,7 @@ function init(pluginApi) {
   const catalog = read("league-tasks.json");
   const overlay = read("league-task-triggers.json");
   data.tiers = catalog.tiers;
+  places = catalog.places ?? {};
   for (const [type, league] of Object.entries(catalog.leagues)) {
     // A task's completion bit: its place in the list, which is the cache's own position for the
     // league the cache carries (`fromCache`; its list skips the rows not in that league).
@@ -48,6 +51,11 @@ function leagueOf(player) {
   api.emitCustomEvent("league:profile", query);
   const type = Number(query.league);
   return query.league !== null && catalogs.has(type) && leagues[type] ? type : null;
+}
+
+/** Every league type with a catalog. */
+function types() {
+  return [...catalogs.keys()];
 }
 
 function catalog(type) {
@@ -69,6 +77,11 @@ function completedIds(player) {
   return Array.isArray(query.ids) ? query.ids : [];
 }
 
+/** A tile in a named place: in one of its boxes, on any plane (docs/leagues.md, Tasks). */
+function inPlace(key, x, y) {
+  return (places[key]?.rects ?? []).some(([minX, minY, maxX, maxY]) => x >= minX && x <= maxX && y >= minY && y <= maxY);
+}
+
 /** The DB row id the client reads a task from. */
 function rowId(type, index) {
   return data.virtualRowBase + Number(type) * 10000 + index;
@@ -88,9 +101,10 @@ function message(key, values = {}) {
 }
 
 module.exports = {
-  init, leagueOf, catalog, task, league, completedIds, rowId, tierName, colourOf, message,
+  init, leagueOf, types, catalog, task, league, completedIds, rowId, tierName, colourOf, message, inPlace,
   FILTERS_ATTRIBUTE, KILLS_ATTRIBUTE,
   get data() { return data; },
   get api() { return api; },
   get core() { return core; },
+  get places() { return places; },
 };

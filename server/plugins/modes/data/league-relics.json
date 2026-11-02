@@ -330,6 +330,7 @@
       "_explosionTicks": "237/01158: the impacts land 1, 3 and 5 ticks after the Activate tick.",
       "impactDelays": [20, 30, 40], "_impactDelays": "237/01158: each explosion's impact map_anims, on the 8 lines out from the player's tile, at 1, 2 and 3 tiles with these client-cycle delays.",
       "animation": "vengeance_spell_anim_nostalling", "graphic": "leagues_6_sigil_of_life", "impact": "leagues_6_sigil_of_life_impact", "sound": 165,
+      "cooldownVarp": "league_relic_flask_of_fervour_cooldown", "cooldownVarpOffset": 1, "_cooldownVarp": "237/01158 (Activate at map_clock 43048 and 44028: 43349 and 44329, the clock + 301; each cut lowers it by the ticks taken off).",
       "messages": {
         "used": "<col=FE206A>Your Flask of fervour unleashes its power. The Sigil has lost power for 3 minutes.",
         "cooldown": "<col=FE206A>The Flask of fervour is on cooldown for another {seconds} seconds!",

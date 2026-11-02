@@ -10,9 +10,9 @@
  * of cooldown, a tick (0.6 seconds) shorter for every 10 damage one of the player's hits deals;
  * Activate or Check meanwhile says how long is left ("on cooldown for another N seconds!",
  * 237/01164), and its end says the flask is ready.
- * Not here: the cooldown varp (league_relic_flask_of_fervour_cooldown, the buff bar's): live sends
- * it as the map_clock varp's tick it ends on, and this server never sends map_clock, so the bar
- * would read the raw tick.
+ * The buff bar's cooldown (varp league_relic_flask_of_fervour_cooldown, read against map_clock by
+ * script4678) is the tick it ends on, as recorded (237/01158): the tick's map_clock + 301 on
+ * Activate, each cut sent as it lands, and at login the current end (0 when ready).
  */
 const Common = require("./Common.LeagueRelics");
 
@@ -49,6 +49,17 @@ function coolingDown(player) {
   if (left <= 0) return false;
   player.sendMessage(text("cooldown", { seconds: Math.ceil(left / 1000) }));
   return true;
+}
+
+/** The cooldown varp: the map_clock tick the cooldown ends on (live: the tick's clock + 301 on Activate), or 0 when ready. */
+function sendCooldown(player) {
+  const left = readyAt(player) - Date.now();
+  const ends = left > 0 ? core.World.getProcessCycle() + Math.ceil(left / TICK_MS) + effect.cooldownVarpOffset : 0;
+  player.getPacketSender().sendConfig(core.CacheDefinitions.getVarpId(effect.cooldownVarp), ends);
+}
+
+function login({ player }) {
+  if (active(player)) sendCooldown(player);
 }
 
 function scheduleReady(player) {
@@ -133,6 +144,7 @@ function activate(event) {
     else core.TaskManager.submit(new core.CountdownTask(player, delay, () => explode(player)));
   }
   player.setAttribute(READY_AT_ATTRIBUTE, now + effect.cooldownTicks * TICK_MS);
+  sendCooldown(player);
   scheduleReady(player);
   api.emitCustomEvent("league:relic-triggered", { player, relic: effect.key });
   return true;
@@ -165,6 +177,7 @@ function dealtDamage({ player, hit }) {
       const cut = Math.floor((Number(taken) || 0) / 10) * effect.cooldownCutPerTenDamage * TICK_MS;
       if (cut <= 0 || readyAt(player) <= Date.now()) return;
       player.setAttribute(READY_AT_ATTRIBUTE, Math.max(Date.now(), readyAt(player) - cut));
+      sendCooldown(player);
       scheduleReady(player);
     });
   }
@@ -178,6 +191,7 @@ module.exports = function attach(pluginApi) {
   api.onItemAction(effect.toolName, { Activate: activate, Check: check });
   api.onCustomEvent("combat:damage-apply", damageApply);
   api.onPlayerDealtDamage(dealtDamage);
+  api.onCustomEvent("league:login", login);
 };
 
 module.exports.READY_AT_ATTRIBUTE = READY_AT_ATTRIBUTE;

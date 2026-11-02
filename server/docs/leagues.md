@@ -737,7 +737,7 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | 7 | Reloaded | done (a pick from tiers 1 to 6) |
 | 8 | Executioner | done: the execute (never Yama) and the axe's 6 tiles of reach for its owner (`onCombatAttackDistance`; Trailblazer Reloaded's stays 5) |
 | 8 | Minion | partial: Blow summons the minion (league_guardian) for 30 minutes with the recorded melee spawn and the client's buff timer (league_guardian_active, map_clock), Banish; it follows and fights its owner's NPC (never a player, Yama or the Gemstone Crab) every 3 ticks in the target's weakest style with that style's recorded looks, attack roll 45,000, 3 to 10 +2 a unique Zamorak item fed to the whistle (up to five, the Wiki's list by id); a thrall's pursuit and reach (ours). Not the AoE (no source gives its reach), the auto-loot and its settings (the whistle's Rules and Check are unrecorded), or any message (no Demonic Pacts recording of the whistle) |
-| 8 | Flask of Fervour | done but for its cooldown varp (the buff bar reads it against the map_clock varp, which the server never sends): explosions 1, 3 and 5 ticks on with the recorded impacts (237/01158), 30% to players the area lets the owner fight |
+| 8 | Flask of Fervour | done: explosions 1, 3 and 5 ticks on with the recorded impacts (237/01158), 30% to players the area lets the owner fight; the buff bar's cooldown varp as the map_clock tick it ends on (the clock + 301 on Activate, each cut, at login), now that core sends map_clock every tick |
 
 ### Not in this cache
 

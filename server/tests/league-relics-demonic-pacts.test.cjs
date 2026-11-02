@@ -1593,3 +1593,30 @@ test("Minion: the whistle does nothing for a character without the relic, anothe
     }
   }
 });
+
+test("Flask of Fervour: the cooldown varp is the map_clock tick it ends on (the clock + 301 on Activate), cut with the cooldown, and sent at login", (t) => {
+  t.mock.method(core.World, "getProcessCycle", () => 43048);
+  const who = cases(FLASK_OF_FERVOUR);
+  const varp = core.CacheDefinitions.getVarpId("league_relic_flask_of_fervour_cooldown");
+  itemActions.get("Flask of fervour").Activate({ player: who.relic, handled: false });
+  assert.equal(who.relic.sent.configs.get(varp), 43349, "as 237/01158");
+  let applied;
+  hooks.onPlayerDealtDamage({ player: who.relic, target: null, hit: {
+    getHits: () => [{ onApplied: (fn) => (applied = fn) }],
+    getCombatType: () => core.CombatType.MELEE, isAccurate: () => true, getTotalDamage: () => 35,
+    getCombatMethod: () => core.CombatFactory.MELEE_COMBAT, getTarget: () => null,
+  } });
+  applied(35);
+  assert.equal(who.relic.sent.configs.get(varp), 43346, "three ticks off");
+  who.relic.sent.configs.clear();
+  emit("league:login", { player: who.relic });
+  assert.equal(who.relic.sent.configs.get(varp), 43346);
+  who.relic.setAttribute(require("../plugins/modes/leaguerelics/FlaskOfFervour.LeagueRelics").READY_AT_ATTRIBUTE, 0);
+  emit("league:login", { player: who.relic });
+  assert.equal(who.relic.sent.configs.get(varp), 0, "ready");
+  for (const player of [who.without, who.main]) {
+    player.sent.configs.clear();
+    emit("league:login", { player });
+    assert.equal(player.sent.configs.has(varp), false);
+  }
+});

@@ -137,6 +137,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
   const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
     .flatMap((file) => [...require("fs").readFileSync(path.join(courseDir, file), "utf8").matchAll(/^\s*key: "([^"]+)"/gm)].map((match) => match[1]))]);
   const npcNames = new Set();
+  const creditedNames = new Set();
   // The cache's own list (enum 5950's rows): a task it has by name takes its category.
   const cacheRows = new Map();
   const cacheByPosition = new Map();
@@ -178,7 +179,8 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
         for (const course of task.trigger.courses ?? []) assert.ok(courseKeys.has(course), `${task.id}: course ${course}`);
         if (task.trigger.kind === "kill") {
           assert.ok(Array.isArray(task.trigger.npcs) && task.trigger.npcs.length > 0, task.id);
-          for (const npc of task.trigger.npcs) npcNames.add(npc);
+          // A credited completion is a name a plugin credits through combat-achievements:kill, not an NPC's.
+          for (const npc of task.trigger.npcs) (task.trigger.credited ? creditedNames : npcNames).add(npc);
         }
         if (task.trigger.kind === "level") assert.ok(Skill[task.trigger.skill] instanceof Skill, task.id);
       }
@@ -189,6 +191,10 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     try { cacheNames.add(CacheDefinitions.getNpc(id)?.name); } catch { break; }
   }
   for (const name of npcNames) assert.ok(cacheNames.has(name), `a cache NPC is called "${name}"`);
+  const crediting = require("fs").readdirSync(path.join(__dirname, "../plugins/minigames"), { recursive: true })
+    .filter((file) => String(file).endsWith(".js")).map((file) => require("fs").readFileSync(path.join(__dirname, "../plugins/minigames", String(file)), "utf8"))
+    .filter((text) => text.includes("combat-achievements:kill")).join("\n");
+  for (const name of creditedNames) assert.ok(crediting.includes(`"${name}"`), `a minigame credits "${name}"`);
 });
 
 test("login sends the league's catalog as enum and DB row overrides, the completion varps and the saved filters", () => {

@@ -1313,6 +1313,37 @@ test('a clan change reaches who views it, and kick and ban work on guests', () =
   assert.deepEqual(sent(self, CLAN_CHANNEL_FULL).at(-1), protocol.encodeClanChannelFull(-1, null));
 });
 
+test('a guest banned during the join delay stays out, and can neither read nor speak', () => {
+  const { owner, clan } = clanOfThree();
+  const self = player('Guest');
+  seek(self, 'Blur');
+  clickGroup(self, 702, 8);
+  runTicks(1);
+  clickGroup(owner, 690, 25);
+  clickGroup(owner, 689, 14);
+  owner.syntaxAction.execute('Guest');
+  assert.deepEqual(clan.banned, ['Guest']);
+  runTicks(3);
+  assert.equal(CoreClans().guestChannelOf(self), undefined);
+  assert.equal(self.messages.at(-1), "You are banned from this clan's channel.");
+  const heard = sent(self, CHAT_MESSAGE).length;
+  say(owner, 'hello');
+  assert.equal(sent(self, CHAT_MESSAGE).length, heard, 'hears nothing');
+  say(self, 'hello', -1);
+  assert.deepEqual(self.notices.at(-1), [46, 'You are not currently in a guest clan channel.']);
+});
+
+test('guest rules changed during the join delay apply too', () => {
+  const { clan } = clanOfThree();
+  const self = player('Guest');
+  seek(self, 'Blur');
+  clickGroup(self, 702, 8);
+  clan.allowGuests = false;
+  runTicks(3);
+  assert.equal(CoreClans().guestChannelOf(self), undefined);
+  assert.match(self.messages.at(-1), /does not allow guests/);
+});
+
 test('a deleted clan leaves its viewers with nothing', () => {
   const { clan } = clanOfThree();
   const self = player('Guest');

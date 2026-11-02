@@ -162,7 +162,11 @@ function toggleGuestChannel(player) {
   }
   greyGuestButton(player);
   later(JOIN_DELAY_TICKS, () => {
-    if (Core.isOnline(player) && Core.guestClanOf(player) === clan) Core.joinGuestChannel(player, clan);
+    if (!Core.isOnline(player) || Core.guestClanOf(player) !== clan) return;
+    // A ban or a new rule can come during the delay.
+    const refusedNow = guestRefusal(player, clan);
+    if (refusedNow) player.sendMessage(refusedNow);
+    else Core.joinGuestChannel(player, clan);
   });
 }
 

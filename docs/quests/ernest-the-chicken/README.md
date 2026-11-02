@@ -1,7 +1,7 @@
 ---
 quest: Ernest the Chicken
 key: ernest_the_chicken
-status: passed
+status: passed-with-issues
 tested: 2026-11-02
 tester: agent
 model: DeepSeek V4.1 Flash

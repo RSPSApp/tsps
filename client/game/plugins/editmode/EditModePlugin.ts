@@ -483,8 +483,7 @@ export class EditModePlugin {
                 this.freeCamera = true;
             }
             if (!this.config.active) {
-                // Arm the tools so Esc leaves the preview, which is the only way
-                // back to the login screen when entering from its button.
+                // The preview needs the editor's tools and camera input.
                 this.setConfig({ active: true });
                 return;
             }
@@ -1505,6 +1504,8 @@ export class EditModePlugin {
                 this.rotate();
             }
         } else if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
             if (this.movingSelection) {
                 this.setConfig({ tool: "select" });
                 return;
@@ -1516,7 +1517,7 @@ export class EditModePlugin {
                 this.commit();
                 return;
             }
-            this.setConfig({ active: false });
+            this.setConfig({ tool: "select" });
         }
     };
 

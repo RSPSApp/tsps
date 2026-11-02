@@ -385,3 +385,14 @@ test("a group encounter as its plugin credits it: a Wintertodt round subdued", (
   assert.ok(done(f, "defeat-the-wintertodt-1-time"));
   assert.equal(f.player.getAttribute("league:task-kills")["defeat-the-wintertodt-10-times"], 1);
 });
+
+test("prayer: a prayer switched on by the real PrayerHandler (Use the Protect from Melee prayer)", (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.PRAYER, 99);
+  skills.setCurrentLevel(core.Skill.PRAYER, 99);
+  core.PrayerHandler.activatePrayerPrayerId(f.player, core.PrayerHandler.PROTECT_FROM_MELEE);
+  assert.ok(core.PrayerHandler.isActivated(f.player, core.PrayerHandler.PROTECT_FROM_MELEE), `on: ${f.messages}`);
+  assert.ok(done(f, "use-the-protect-from-melee-prayer"));
+  assert.ok(!done(f, "use-the-piety-prayer"));
+});

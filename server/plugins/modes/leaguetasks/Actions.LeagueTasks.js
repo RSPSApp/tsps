@@ -35,6 +35,8 @@
  * - `slayer-tasks { count }` (`slayer:task-completed`), `superior-kills { count }`
  *   (`slayer:superior-killed`), `temple-trek { difficulty, count }` (`temple-trekking:completed`),
  *   `pest-control { boats, count }` (`pest-control:won`).
+ * - `prayer { prayers, count }`: a prayer switched on, `prayer:activated` { prayerId }, named as
+ *   PrayerHandler's PrayerData names it ("Protect from Melee").
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -61,7 +63,7 @@ function add(map, name, task) {
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [], collectionLog: [], checkHealth: new Map(), events: new Map() };
+  const entry = { equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [], collectionLog: [], checkHealth: new Map(), events: new Map(), prayer: new Map() };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (trigger?.kind === "equip" || trigger?.kind === "equip-all" || trigger?.kind === "equip-any-set") entry.equip.push(task);
@@ -80,6 +82,7 @@ function indexOf(type) {
     else if (trigger?.kind === "pick-each") entry.pickEach.push(task);
     else if (trigger?.kind === "collection-log") entry.collectionLog.push(task);
     else if (EVENT_KINDS.has(trigger?.kind)) add(entry.events, trigger.kind, task);
+    else if (trigger?.kind === "prayer") for (const prayer of trigger.prayers ?? []) add(entry.prayer, prayer, task);
     else if (trigger?.kind === "check-health") {
       for (const cropType of trigger.types ?? []) add(entry.checkHealth, `type:${cropType}`, task);
       for (const crop of trigger.crops ?? []) add(entry.checkHealth, `crop:${crop}`, task);
@@ -322,6 +325,11 @@ function onEvent(kind) {
   };
 }
 
+function prayed({ player, prayerId }) {
+  const name = Common.core.PrayerData?.prayerData?.get?.(prayerId)?.name;
+  if (player && name) count(player, "prayer", name);
+}
+
 function lapped({ player, course, count: laps }) {
   if (player) count(player, "laps", course, Number(laps ?? 1) || 1);
 }
@@ -345,6 +353,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("treasure-trails:casket-opened", casket);
   api.onCustomEvent("agility:lap", lapped);
   api.onCustomEvent("food:eaten", ate);
+  api.onCustomEvent("prayer:activated", prayed);
   api.onCustomEvent("slayer:task-completed", onEvent("slayer-tasks"));
   api.onCustomEvent("slayer:superior-killed", onEvent("superior-kills"));
   api.onCustomEvent("temple-trekking:completed", onEvent("temple-trek"));

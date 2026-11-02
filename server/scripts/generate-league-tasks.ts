@@ -415,6 +415,17 @@ const MINIGAME_COMPLETIONS: Array<[RegExp, string[]]> = [
 ];
 const CONDITION_IN = (text: string) => /\b(?:in less than|in under|or less|without|solo)\b/i.test(text);
 
+/** The server's prayers by plain name ("protect from melee"), from PrayerHandler's PrayerData keys. */
+const PRAYER_NAMES: Map<string, string> = (() => {
+  const source = fs.readFileSync(path.resolve(__dirname, "../src/main/typescript/elvarg/game/content/PrayerHandler.ts"), "utf8");
+  const names = new Map<string, string>();
+  for (const [, key] of source.matchAll(/public static readonly ([A-Z_]+) = new PrayerData/g)) {
+    const name = key.toLowerCase().replace(/_/g, " ");
+    names.set(name, name.replace(/\b[a-z]/g, (letter) => letter.toUpperCase()).replace(/ Of /g, " of ").replace(/ From /g, " from "));
+  }
+  return names;
+})();
+
 /** A stall by a cache loc's name ("Bakery stall"), or null. */
 let stallNames: Map<string, string> | null = null;
 function stallNamed(text: string): string | null {
@@ -712,6 +723,12 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     const boats = ["novice", "intermediate", "veteran"];
     const from = boats.indexOf(match[1].toLowerCase());
     return { trigger: { kind: "pest-control", boats: match[2] ? boats.slice(from) : [boats[from]], count: 1 } };
+  }
+  // "Use the Protect from Melee prayer", "Activate Smite in your prayer book": that prayer switched on.
+  // A prayer this server lacks (Deadeye, Mystic Vigour) or one with a place is left out.
+  if ((match = /^(?:Use|Activate) (?:the )?(.+?)(?: [Pp]rayer| in your prayer book)\.?$/.exec(description))) {
+    const prayer = PRAYER_NAMES.get(match[1].toLowerCase());
+    return prayer ? { trigger: { kind: "prayer", prayers: [prayer], count: 1 } } : {};
   }
   // "1 Easy Clue Scroll", "25 Elite Clue Scrolls": a reward casket of that tier opened.
   if ((match = /^(\d+) (Beginner|Easy|Medium|Hard|Elite|Master) Clue Scrolls?$/i.exec(name))) {

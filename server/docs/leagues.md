@@ -1685,6 +1685,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   and Gem Store"; an item's uncharged form is the one sold),
   `alch { coins, count }` from `magic:alchemy-completed`'s new `coins` (what the cast paid: "convert
   an item into 500 coins or more"),
+  `bank { place, count }` from the bank's `bank:opened` (opened inside the place: "Use the Bank in
+  Nardah" inside the Nardah bank page's square, "Bank at Mount Quidamortem" inside its bank's outline,
+  "Use the Bank on Lunar Isle" anywhere on the island, which has one bank),
   `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what
@@ -1726,8 +1729,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   page, source, rects }`, boxes of tiles on any plane): a task's place that is no league area
   ("Enter the Crafting Guild", "Defeat a runite golem inside the Wilderness Resource Area") is a
   `place` on its trigger when the generator's place table knows its bounds, each from one source
-  checked against another: the Wiki page's own outline (`{{Map|mtype=polygon}}`, the tiles whose
-  centre it holds), the server's Slayer areas (`slayer-areas.json`, less any other area's box that
+  checked against another: the Wiki page's own outline (`{{Map|mtype=polygon}}`, or its
+  `square` or `rectangle` as Module:Map draws them; the tiles whose centre it holds), the server's Slayer areas (`slayer-areas.json`, less any other area's box that
   overlaps), or the tiles the cache's walls, fences and shores enclose around the page's map point
   (with what they surround; an island in open sea its box); every place must hold one of its page's
   map points, or every spawn of the NPCs it lists. The pages are saved as

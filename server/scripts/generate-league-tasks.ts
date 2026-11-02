@@ -588,7 +588,7 @@ type Rect = [number, number, number, number];
 /**
  * A place a task names that is no league area: a city, dungeon, guild or island. Its bounds come
  * from one source, each checked against another:
- * - `wikiPolygon`: the Wiki page's own `{{Map|mtype=polygon|...}}` outline;
+ * - `wikiPolygon`: the Wiki page's own `{{Map|mtype=polygon|...}}` outline, or its square or rectangle;
  * - `slayerArea`: the server's Slayer areas (plugins/skills/data/slayer-areas.json, by name: the
  *   Wiki's location pages, checked against the task monsters' spawns);
  * - `server`: a boundary the server's own content already keeps for it (a plugin's area), restated;
@@ -619,6 +619,12 @@ const PLACE_DEFS: PlaceDef[] = [
   { key: "woodcutting-guild", names: ["Woodcutting Guild"], page: "Woodcutting_Guild", wikiPolygon: true },
   { key: "warriors-guild", names: ["Warriors' Guild", "Warriors Guild"], page: "Warriors'_Guild", wikiPolygon: true },
   { key: "hardwood-grove", names: ["Tai Bwo Wannai Hardwood Grove", "Hardwood Grove in Tai Bwo Wannai", "Hardwood Grove"], page: "Hardwood_Grove", wikiPolygon: true },
+  // A town's bank, its own page's outline, square or rectangle (Nardah bank's booths and the tiles before them).
+  { key: "mount-quidamortem-bank", names: ["Mount Quidamortem bank"], page: "Mount_Quidamortem_bank", wikiPolygon: true },
+  { key: "jatizso-bank", names: ["Jatizso bank"], page: "Jatizso_bank", wikiPolygon: true },
+  { key: "nardah-bank", names: ["Nardah bank"], page: "Nardah_bank", wikiPolygon: true },
+  { key: "lletya-bank", names: ["Lletya bank"], page: "Lletya_bank", wikiPolygon: true },
+  { key: "neitiznot-bank", names: ["Neitiznot bank"], page: "Neitiznot_bank", wikiPolygon: true },
   // The server's Slayer areas.
   { key: "taverley-dungeon", names: ["Taverley Dungeon"], page: "Taverley_Dungeon", slayerArea: "Taverley Dungeon" },
   { key: "brimhaven-dungeon", names: ["Brimhaven Dungeon"], page: "Brimhaven_Dungeon", slayerArea: "Brimhaven Dungeon", spawns: ["Wild dog#112", "Steel dragon#275"] },
@@ -666,9 +672,26 @@ function mapPoints(wikitext: string): Array<[number, number]> {
 /** The page's polygon outline (`{{Map|...|mtype=polygon|x,y|...}}`), its vertices in order. */
 function mapPolygon(wikitext: string): Array<[number, number]> | null {
   for (const [call] of wikitext.matchAll(/\{\{Map\|[^{}]*\}\}/g)) {
-    if (!/mtype\s*=\s*polygon/.test(call)) continue;
-    const vertices = call.slice(6, -2).split("|").map((arg) => /^(\d{3,5}),(\d{3,5})$/.exec(arg.trim())).filter(Boolean).map((m) => [Number(m![1]), Number(m![2])] as [number, number]);
-    if (vertices.length >= 3) return vertices;
+    const args = call.slice(6, -2).split("|").map((arg) => arg.trim());
+    if (/mtype\s*=\s*polygon/.test(call)) {
+      const vertices = args.map((arg) => /^(\d{3,5}),(\d{3,5})$/.exec(arg)).filter(Boolean).map((m) => [Number(m![1]), Number(m![2])] as [number, number]);
+      if (vertices.length >= 3) return vertices;
+    }
+    // A square ("mtype=square|r=5", around x=, y=) or rectangle ("mtype=rectangle|rectX=6|rectY=4|2337,3807"):
+    // its corners as Module:Map draws them, half the side each way of the point (an odd side one more
+    // to the east or north).
+    const shape = /mtype\s*=\s*(square|rectangle)\b/.exec(call)?.[1];
+    if (shape) {
+      const value = (name: string) => args.find((arg) => new RegExp(`^${name}\\s*=`).test(arg))?.split("=")[1].trim();
+      const point = args.map((arg) => /^(\d{3,5}),(\d{3,5})$/.exec(arg)).find(Boolean);
+      const [x, y] = point ? [Number(point[1]), Number(point[2])] : [Number(value("x")), Number(value("y"))];
+      const r = value("r") === undefined ? undefined : Number(value("r"));
+      const [rectX, rectY] = [Number(value("rectX") ?? 20), Number(value("rectY") ?? 20)];
+      if (!Number.isInteger(x) || !Number.isInteger(y) || (r !== undefined && !Number.isInteger(r))) continue;
+      const [halfX, halfY] = r !== undefined ? [r, r] : [Math.floor(rectX / 2), Math.floor(rectY / 2)];
+      const [east, north] = [x + halfX + (r === undefined && rectX % 2 > 0 ? 1 : 0), y + halfY + (r === undefined && rectY % 2 > 0 ? 1 : 0)];
+      return [[x - halfX, y - halfY], [x - halfX, north], [east, north], [east, y - halfY]];
+    }
   }
   return null;
 }
@@ -1029,6 +1052,16 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
   if (/^(?:Purchase|Buy) /i.test(name) && (match = /^(?:Purchase|Buy) (?:an? |the |some )?(.+?) from (?:an? |the )?(.+?)(?: in (?:the )?[A-Z][^.]*)?\.?$/i.exec(description))) {
     const bought = shopItemOf(match[1], match[2], items);
     if (bought) return { trigger: { kind: "buy", items: [bought.item], shops: bought.shops, count: 1 } };
+  }
+  // "Use the Bank in Nardah", "Bank at Mount Quidamortem" ("Open your Bank using the Bank at Mount
+  // Quidamortem"): the bank opened (bank:opened) inside that town's bank (its own page's bounds), or
+  // inside the place itself where that holds one bank only ("on Lunar Isle"). Name and description must
+  // name the same place.
+  if ((match = /^(?:Use the )?Bank (?:at|in|on|inside) (?:the )?(.+)$/i.exec(name))) {
+    const said = /^(?:Open your Bank using the Bank|Use the Bank) (?:at|in|on|inside) (?:the )?(.+?)\.?$/i.exec(description);
+    if (!said || said[1].toLowerCase() !== match[1].toLowerCase()) return {};
+    const place = placeNamed(`${match[1]} bank`) ?? placeNamed(match[1]);
+    return place ? { trigger: { kind: "bank", place, count: 1 } } : {};
   }
   // "Obtain a bird nest whilst cutting down trees": a nest from a tree (Woodcutting's
   // woodcutting:nest-drop).

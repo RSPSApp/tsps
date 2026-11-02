@@ -174,6 +174,27 @@ test("buy: an item bought from the shop named (Purchase an Onyx in Mor Ul Rek)",
   assert.ok(done(f, "purchase-an-onyx-in-mor-ul-rek"));
 });
 
+test("bank: a bank opened inside the town's bank (Use the Bank in Nardah), not elsewhere", async (t) => {
+  // A character with the town's area unlocked, standing before its bank's counter or booth.
+  const at = (x, y, areas) => {
+    core.RegionManager.loadMapFiles(x, y);
+    const f = pactsCharacter(t);
+    f.player.setAttribute("league:areas", areas);
+    f.player.moveTo(new core.Location(x, y, 0));
+    f.player.needsPlacement = false;
+    return f;
+  };
+  const lletya = at(2351, 3164, [21, 7]); // Varlamore and Tirannwn
+  await send(lletya, { type: "object_option", id: 20127, x: 2351, y: 3165, action: "Bank" }, 4);
+  assert.ok(core.Bank.isOpen(lletya.player), `the real counter opens the bank: ${lletya.messages}`);
+  assert.ok(done(lletya, "use-the-bank-in-lletya") && !done(lletya, "use-the-bank-in-nardah"), "Lletya's bank, not Nardah's");
+  // Nardah bank's booths stand at x 3426, the player before them.
+  const nardah = at(3427, 2891, [21, 6]); // and the Kharidian Desert
+  await send(nardah, { type: "object_option", id: 10517, x: 3426, y: 2891, action: "Bank" }, 4);
+  assert.ok(core.Bank.isOpen(nardah.player), `the real booth opens the bank: ${nardah.messages}`);
+  assert.ok(done(nardah, "use-the-bank-in-nardah"));
+});
+
 /** A real NPC of the cache's name dying to the player through the engine's death task. */
 function kill(f, name) {
   const { NPC } = require("../dist/game/entity/impl/npc/NPC");

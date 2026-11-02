@@ -81,16 +81,32 @@ function harness(name) {
       const npc = { ...definition, animations: [], graphics: [], getId: () => definition.id, getIndex: () => npc.index,
         index: nextIndex++, setForceMovement: movement => {p.forceMovement=movement;}, getLocation: () => location, moveTo: to => { location = to; },
         getArea: () => area, setArea: value => { area = value; }, isNpc: () => true, isPlayer: () => false, getAsNpc: () => npc,
-        isRegistered: () => !npc.removed, setPositionToFace: noop, forceChat: text => { npc.said = text; },
+        isRegistered: () => !npc.removed, setPositionToFace: target => { npc.faceTo = target; }, forceChat: text => { npc.said = text; },
         setScriptedMovement: value => { npc.scriptedMovement = value; },
         performAnimation: animation => npc.animations.push(animation.getId()), performGraphic: graphic => npc.graphics.push(graphic.id),
         getMovementQueue: () => queue,
         exactMove: (to, options) => { npc.exact = options; location = to; },
         setFollowing: target => { npc.following = target; }, setMobileInteraction: noop, setNpcTransformationId: id => { npc.transformed = id; },
-        hitpoints: 100, getHitpoints: () => npc.hitpoints, heal: amount => { npc.hitpoints += amount; },
+        hitpoints: 100, maxHitpoints: 100, getHitpoints: () => npc.hitpoints, getMaxHitpoints: () => npc.maxHitpoints,
+        setHitpoints: value => { npc.hitpoints = value; }, heal: amount => { npc.hitpoints += amount; },
         setPet: noop, setOwner: noop, getOwner: () => definition.owner,
         setCombatXpMultiplier: value => { npc.multiplier = value; },
-        getCombat: () => ({ attack: player => { npc.target = player; }, reset: () => { npc.target = null; } }),
+        getCombat: () => ({
+          attack: player => { npc.target = player; }, reset: () => { npc.target = null; },
+          getHitQueue: () => ({
+            addPendingDamage(hits) {
+              const total = hits.reduce((sum, hit) => sum + hit.getDamage(), 0);
+              npc.damage = (npc.damage ?? 0) + total;
+              npc.hitpoints = Math.max(0, npc.hitpoints - total);
+              if (npc.hitpoints > 0 || npc.removed) return;
+              const death = { npc, npcId: npc.getId(), preventDeath: false };
+              for (const fn of hooks.onNpcBeforeDeath ?? []) fn(death);
+              if (death.preventDeath) return;
+              npc.removed = true; removed.push(npc);
+              for (const fn of hooks.onNpcDeath ?? []) fn({ npc, npcId: npc.getId(), killer: null });
+            },
+          }),
+        }),
       }; npcs.push(npc); return npc;
     }, removeNpc: npc => { npc.removed = true; removed.push(npc); },
   }, { get: (target, key) => target[key] ?? ((...args) => (hooks[key] ??= []).push(args.find(x => typeof x === 'function'))) });
@@ -750,8 +766,14 @@ test('TP pub: Azali follows (9834=2) and the fountain scene sobers her (pub 2, 9
   const actors = h.npcs.filter(npc => !npc.removed).map(npc => npc.id);
   assert.ok(actors.includes(12913) && actors.includes(12930));
   h.tick(1); assert.ok(p.log.some(row => row[0] === 'sendCameraMoveTo' && row[1] === 1760 && row[2] === 3060 && row[3] === 650));
-  h.tick(6); assert.ok(h.npcs.find(npc => npc.id === 12930).animations.includes(10942));
-  h.tick(8); assert.equal(p.varbits.get(9831), 2); assert.equal(p.varbits.get(9834), 3);
+  const bather = h.npcs.find(npc => npc.id === 12913);
+  h.tick(4);
+  assert.deepEqual([bather.getLocation().getX(), bather.getLocation().getY()], [1756, 3068],
+    'Azali walks the last two tiles instead of teleporting into the fountain');
+  h.tick(3);
+  assert.deepEqual([bather.getLocation().getX(), bather.getLocation().getY()], [1757, 3068], 'the walk reaches the fountain tile before the splash');
+  h.tick(1); assert.ok(h.npcs.find(npc => npc.id === 12930).animations.includes(10942));
+  h.tick(6); assert.equal(p.varbits.get(9831), 2); assert.equal(p.varbits.get(9834), 3);
   h.tick(6); assert.equal(p.text, 'Oh boy...');
   h.continueUntil(p, () => p.text.startsWith('This day is the worst')); assert.equal(p.varbits.get(9831), 3); assert.equal(h.quest.getStage(p), 16);
 });
@@ -837,8 +859,27 @@ test('TP Teomat: Itzla (40, 42), Metzli and the attack (44), eight cultists (46)
   h.continueUntil(p, () => p.text === "I guess I'd better..."); assert.equal(h.quest.getStage(p), 44);
   h.continueUntil(p, () => /I need you outside, now!/.test(p.text)); p.manager.advance(); h.tick(2);
   const cultists = h.npcs.filter(npc => !npc.removed && npc.id >= 12918 && npc.id <= 12923);
+  const guards = h.npcs.filter(npc => !npc.removed && npc.id >= 12924 && npc.id <= 12927);
   assert.equal(cultists.length, 8); h.tick(1); assert.equal(cultists.find(npc => npc.id === 12918).target, p);
-  for (const npc of cultists) h.hooks.onNpcDeath.forEach(fn => fn({ npc, npcId: npc.id, killer: p }));
+  // Every pair with an ally closes to melee range and trades real hits.
+  const doomed = cultists.find(npc => npc.id === 12923); doomed.hitpoints = 2;
+  h.tick(7);
+  for (let i = 0; i < 4 && cultists.some(npc => !npc.removed && npc.__tpPartner && npc.getLocation().getDistance(npc.__tpPartner.getLocation()) > 1); i++) h.tick(1);
+  for (const cultist of cultists) {
+    if (!cultist.__tpPartner || cultist.removed) continue;
+    assert.ok(cultist.getLocation().getDistance(cultist.__tpPartner.getLocation()) <= 1, `cultist ${cultist.getId()} closes to melee range`);
+    assert.ok(cultist.__tpPartner.animations.length > 0, `ally paired with cultist ${cultist.getId()} fights`);
+  }
+  assert.deepEqual([cultists[6].faceTo.getX(), cultists[6].faceTo.getY()], [1444, 3176], 'the cultist turns to the guard it fights');
+  assert.ok(guards.some(npc => (npc.damage ?? 0) > 0), 'the cultists take hitpoints off the guards');
+  assert.ok(cultists.some(npc => (npc.damage ?? 0) > 0), 'the guards take hitpoints off the cultists');
+  const guard = guards[0]; guard.hitpoints = 0;
+  const allyDeath = { npc: guard, preventDeath: false }; h.hooks.onNpcBeforeDeath.forEach(fn => fn(allyDeath));
+  assert.equal(allyDeath.preventDeath, true, 'a scene guard is not killed by the cultists');
+  for (let i = 0; i < 8 && (guard.hitpoints === 0 || !doomed.removed); i++) h.tick(1);
+  assert.ok(!guard.removed); assert.ok(guard.hitpoints > 0, 'the guard recovers and stays in the scene');
+  assert.ok(doomed.removed, 'an allied kill removes the cultist'); assert.equal(p.messages.at(-1), 'Enemies Defeated: 1/8');
+  for (const npc of cultists.filter(n => !n.removed)) h.hooks.onNpcDeath.forEach(fn => fn({ npc, npcId: npc.id, killer: p }));
   assert.equal(p.messages.at(-1), 'Enemies Defeated: 8/8');
   h.tick(3); assert.equal(h.quest.getStage(p), 46); assert.equal(p.varbits.get(11123), 2);
   h.tick(8); assert.equal(p.text, 'What happened?!');

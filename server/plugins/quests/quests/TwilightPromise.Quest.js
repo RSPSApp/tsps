@@ -33,6 +33,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Animation,
     DialogueChainBuilder,
     GameObject,
+    HitDamage,
+    HitMask,
     ItemIdentifiers,
     Location,
     NpcIdentifiers,
@@ -164,6 +166,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const VELAM_DAMAGE = 50;
   const SPAR_ATTACKS = { guard: 401, guardBlock: 403, cultist: 386, cultistBlock: 388, itzla: 390, itzlaBlock: 388 };
   const SPAR_TICKS = 4;
+  // The capture gives attacks and blocks but no max hits (the two sides are level 81 and level 34).
+  const SPAR_DAMAGE = { min: 1, max: 4 };
 
   // Azali's escort.
   const FOLLOW_STRAY_DISTANCE = 10;
@@ -183,7 +187,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const TEOMAT_BOUNDS = [[1425, 1465, 3140, 3205, 0]];
   const COLOSSEUM_LOBBY_TILE = [1803, 9521, 0];
   const BATTLE_CULTISTS = [
-    { id: 12921, tile: [1434, 3167], face: [1440, 3172] },
+    { id: 12921, tile: [1434, 3167], face: [1440, 3172], partner: 1 },
     { id: 12923, tile: [1438, 3172], face: [1440, 3172], partner: 1 },
     { id: 12922, tile: [1445, 3166], face: [1445, 3168], partner: 0 },
     { id: 12920, tile: [1444, 3172], face: [1444, 3174], partner: "itzla" },
@@ -981,8 +985,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
         Scenes.fade(player, false);
         azali?.getMovementQueue().addSteps(new Location(1755, 3068, 0));
       });
-      Scenes.later(scene, 5, () => azali?.moveTo(new Location(1757, 3068, 0)));
-      Scenes.later(scene, 7, () => {
+      Scenes.later(scene, 5, () => azali?.getMovementQueue().addSteps(new Location(1757, 3068, 0)));
+      Scenes.later(scene, 9, () => {
         fountain?.performAnimation(new Animation(FOUNTAIN_SPLASH_ANIMATION));
         if (azali) Scenes.removeActor(scene, azali);
       });
@@ -1319,6 +1323,24 @@ module.exports = function registerTwilightPromiseQuest(api) {
     return true;
   }
 
+  /**
+   * The Teomat's guards and Itzla are quest actors, so the cultists' blows may drop their health
+   * bar but never take them out of the scene: they recover and rejoin the fight.
+   */
+  function keepBattleAllyStanding(event) {
+    const npc = event.npc;
+    const player = npc?.__questSceneOwner;
+    const scene = player ? Scenes.get(player) : null;
+    if (!scene || scene.name !== "battle" || !scene.allies?.includes(npc)) return;
+    event.preventDeath = true;
+    npc.getCombat().reset?.();
+    const max = npc.getMaxHitpoints?.() ?? npc.getHitpoints?.() ?? 1;
+    Scenes.later(scene, 2, () => {
+      if (Scenes.get(player) !== scene || !npc.isRegistered?.()) return;
+      npc.setHitpoints?.(max);
+    });
+  }
+
   // ==========================================================================
   // The cultist attack
   // ==========================================================================
@@ -1336,6 +1358,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
       Scenes.face(player, [1441, 3178]);
       scene.guards = BATTLE_GUARDS.map(({ id, tile, face }) => Scenes.actor(scene, id, tile, face));
       scene.itzla = Scenes.actor(scene, ITZLA_FIGHTER_ID, [1444, 3174], [1444, 3172]);
+      scene.allies = [...scene.guards, scene.itzla].filter(Boolean);
       Scenes.actor(scene, SERVIUS_BATTLE_ID, [1453, 3172], [1453, 3177]);
       Scenes.actor(scene, METZLI_BATTLE_ID, [1449, 3195], [1449, 3194]);
       scene.cultists = BATTLE_CULTISTS.map((entry) => {
@@ -1352,8 +1375,11 @@ module.exports = function registerTwilightPromiseQuest(api) {
         Scenes.fade(player, false);
         Scenes.controls(player, false);
       });
-      Scenes.later(scene, 4, () => Scenes.closeFade(player));
-      spar(player, scene, 0);
+      Scenes.later(scene, 4, () => {
+        Scenes.closeFade(player);
+        for (const cultist of scene.cultists) engage(cultist);
+        spar(player, scene, 0);
+      });
     });
   }
 
@@ -1365,23 +1391,57 @@ module.exports = function registerTwilightPromiseQuest(api) {
     return scene.cultists.includes(npc) ? true : false;
   }
 
-  // shortcut: allied sparring is cosmetic; add allied kills when this scene has captured NPC combat rules.
+  /** The tile beside `partner` on the side the cultist came from: the capture's pairs stand two apart. */
+  function meleeTile(cultist, partner) {
+    const from = cultist.getLocation(), at = partner.getLocation();
+    return new Location(at.getX() + Math.sign(from.getX() - at.getX()), at.getY() + Math.sign(from.getY() - at.getY()), at.getZ());
+  }
+
+  /** Sends an idle cultist into reach of its ally, facing it. */
+  function engage(cultist) {
+    const partner = cultist?.__tpPartner;
+    if (!cultist?.isRegistered?.() || !partner?.isRegistered?.()) return;
+    const at = partner.getLocation(), from = cultist.getLocation();
+    Scenes.face(cultist, [at.getX(), at.getY()]);
+    const tile = meleeTile(cultist, partner);
+    if (from.getX() !== tile.getX() || from.getY() !== tile.getY()) cultist.getMovementQueue().addSteps(tile);
+  }
+
+  /** One exchange: the attacker swings, the defender blocks, and the blow takes real hitpoints. */
+  function sparHit(attacker, defender, swing, block) {
+    const at = attacker.getLocation(), to = defender.getLocation();
+    Scenes.face(attacker, [to.getX(), to.getY()]);
+    Scenes.face(defender, [at.getX(), at.getY()]);
+    attacker.performAnimation(new Animation(swing));
+    defender.performAnimation(new Animation(block));
+    const damage = SPAR_DAMAGE.min + Math.floor(Math.random() * (SPAR_DAMAGE.max - SPAR_DAMAGE.min + 1));
+    defender.getCombat()?.getHitQueue?.().addPendingDamage([new HitDamage(damage, HitMask.RED)]);
+  }
+
+  /**
+   * The guards and Itzla fight the cultists for real: the pairs close to melee range, then trade
+   * swings until one side falls. Cultist deaths count however they are earned, so the allies can
+   * finish the eight, as the Wiki says they can.
+   */
   function spar(player, scene, beat) {
     Scenes.later(scene, SPAR_TICKS / 2, () => {
       if (Scenes.get(player) !== scene) return;
-      for (const cultist of scene.cultists) {
+      scene.cultists.forEach((cultist, index) => {
         const partner = cultist?.__tpPartner;
-        if (!cultist?.isRegistered?.() || (cultist.getHitpoints?.() ?? 1) <= 0 || !partner?.isRegistered?.()) continue;
-        if (cultist.getCombat().getTarget?.()) continue;
+        if (!cultist?.isRegistered?.() || (cultist.getHitpoints?.() ?? 1) <= 0) return;
+        if (!partner?.isRegistered?.() || (partner.getHitpoints?.() ?? 1) <= 0) return;
+        if (cultist.getLocation().getDistance(partner.getLocation()) > 1) {
+          if (!cultist.getMovementQueue().hasPendingWork?.()) engage(cultist);
+          return;
+        }
         const itzla = partner === scene.itzla;
-        const [hitter, hit, swing, block] = beat % 2 === 0
-          ? [partner, cultist, itzla ? SPAR_ATTACKS.itzla : SPAR_ATTACKS.guard, SPAR_ATTACKS.cultistBlock]
-          : [cultist, partner, SPAR_ATTACKS.cultist, itzla ? SPAR_ATTACKS.itzlaBlock : SPAR_ATTACKS.guardBlock];
-        hitter.performAnimation(new Animation(swing));
-        hit.performAnimation(new Animation(block));
-        Scenes.face(hitter, [hit.getLocation().getX(), hit.getLocation().getY()]);
-        hit.showHitsplat?.(Math.floor(Math.random() * 5), { mine: 17, others: 17 });
-      }
+        // Stagger the pairs so the whole line does not swing on the same tick.
+        if ((beat + index) % 2 === 0) {
+          sparHit(partner, cultist, itzla ? SPAR_ATTACKS.itzla : SPAR_ATTACKS.guard, SPAR_ATTACKS.cultistBlock);
+        } else {
+          sparHit(cultist, partner, SPAR_ATTACKS.cultist, itzla ? SPAR_ATTACKS.itzlaBlock : SPAR_ATTACKS.guardBlock);
+        }
+      });
       spar(player, scene, beat + 1);
     });
   }
@@ -1566,6 +1626,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
   api.onPlayerDealtDamage(countMezanAttack);
   api.onNpcHitModify(blockMezanHit);
   api.onNpcBeforeDeath(keepMezanStanding);
+  api.onNpcBeforeDeath(keepBattleAllyStanding);
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerProcess(handleProcess);
   api.onPlayerLogin(handleLogin);

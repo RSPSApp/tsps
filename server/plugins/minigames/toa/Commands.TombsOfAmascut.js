@@ -3,6 +3,13 @@
 const Shared = require("./Shared.TombsOfAmascut");
 const Raid = require("./RaidState.TombsOfAmascut");
 
+/** A skip earns no Combat Achievements: a room's own end would call them perfect. */
+function completeUntasked(raid, room) {
+  raid.tasksOff = true;
+  room.complete();
+  raid.tasksOff = false;
+}
+
 function skipPuzzle({ player }) {
   const raid = Raid.raidOf(player);
   const room = raid?.roomFor(player);
@@ -15,7 +22,7 @@ function skipPuzzle({ player }) {
     return true;
   }
   if (!room.isStarted()) room.start();
-  room.complete();
+  completeUntasked(raid, room);
   // Normal completion follows killing the enemies; a developer skip must remove them.
   for (const npc of [...room.npcs]) room.despawn(npc);
   raid.broadcast(`${Shared.displayName(player)} skipped the puzzle for testing. Use the exit to proceed to the boss.`);
@@ -42,7 +49,7 @@ function skipBoss({ player }) {
   }
   // Snapshot before completion: it spawns Osmumten and other progression NPCs.
   const enemies = [...room.npcs];
-  room.complete();
+  completeUntasked(raid, room);
   for (const npc of enemies) {
     if (room.npcs.has(npc)) room.despawn(npc);
   }

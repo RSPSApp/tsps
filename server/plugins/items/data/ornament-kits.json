@@ -675,6 +675,24 @@
    "name": "Echo ahrim's ornament kit"
   },
   {
+   "kit": 27248,
+   "base": 26219,
+   "result": 27246,
+   "name": "Cursed phalanx"
+  },
+  {
+   "kit": 27255,
+   "base": 27251,
+   "result": 27253,
+   "name": "Menaphite ornament kit"
+  },
+  {
+   "kit": 27372,
+   "base": 22109,
+   "result": 27374,
+   "name": "Masori crafting kit"
+  },
+  {
    "kit": 25742,
    "base": 22324,
    "result": 25734,

@@ -3,7 +3,13 @@
 /**
  * Tombs of Amascut reward items: fortifying Masori with Armadylean plates (and chiselling
  * Armadyl armour into them), the arcane sigil on Elidinis' ward, the Thread of Elidinis on a
- * rune pouch and the keris partisan's jewels. Tumeken's shadow is plugins/items/TumekensShadow.plugin.js.
+ * rune pouch, the keris partisan's jewels and the pet's remnants. Tumeken's shadow is
+ * plugins/items/TumekensShadow.plugin.js; the ornament kits are data in items/data/ornament-kits.json.
+ * Wiki: the plate counts, levels and experience (Armadylean plate; Masori mask (f), body, chaps),
+ * the ward (10,000 soul runes, 260 experience in each skill; it dismantles, the runes aren't returned),
+ * the thread (75 Crafting, a needle or costume needle). Captured: a remnant on the pet (227/01753
+ * tick 2724): OpNpcT with the item, TOA_UNLOCKED_PET_MORPH_*, and the message.
+ * Not built: Metamorphosis into a remnant's forms (npcs/Pets.plugin.js knows only 11812 and 11813).
  */
 
 const Shared = require("./Shared.TombsOfAmascut");
@@ -33,7 +39,7 @@ function plural(amount, word) {
 
 // ------------------------------------------------------------------ Masori and Armadyl
 
-/** Plates per piece and the Crafting experience for fortifying it (NR ArmadyleanPlateOnMasori). */
+/** Plates per piece and the Crafting experience for fortifying it (Wiki's recipes). */
 function masoriPieces() {
   const I = ids();
   return [
@@ -149,7 +155,7 @@ function threadRunePouch({ player }) {
     player.sendMessage("You need a Crafting level of at least 75 to augment your rune pouch.");
     return true;
   }
-  if (!inventory.contains(I.NEEDLE)) {
+  if (!inventory.contains(I.NEEDLE) && !inventory.contains(I.COSTUME_NEEDLE)) {
     player.sendMessage("You need a needle to work with the Thread of Elidinis.");
     return true;
   }
@@ -173,6 +179,7 @@ function kerisJewels() {
     { name: "Eye of the Corruptor", id: I.EYE_OF_THE_CORRUPTOR, partisan: I.KERIS_PARTISAN_OF_CORRUPTION },
     { name: "Breach of the Scarab", id: I.BREACH_OF_THE_SCARAB, partisan: I.KERIS_PARTISAN_OF_BREACHING },
     { name: "Jewel of the Sun", id: I.JEWEL_OF_THE_SUN, partisan: I.KERIS_PARTISAN_OF_THE_SUN },
+    { name: "Jewel of Amascut", id: I.JEWEL_OF_AMASCUT, partisan: I.KERIS_PARTISAN_OF_AMASCUT },
   ];
 }
 
@@ -185,6 +192,54 @@ function attachJewel(player, jewel) {
   inventory.deleteNumber(I.KERIS_PARTISAN, 1);
   inventory.addItem(new Item(jewel.partisan, 1));
   player.sendMessage(`You attach the ${jewel.name.toLowerCase()} to your keris partisan.`);
+}
+
+/** Wiki: the fortified ward comes apart again; the soul runes don't come back. */
+function dismantleWard({ player, slot }) {
+  const { Item } = Shared.core();
+  const I = ids();
+  const inventory = player.getInventory();
+  if (inventory.getFreeSlots() < 1) {
+    player.sendMessage("You don't have enough inventory space.");
+    return true;
+  }
+  inventory.deleteAtSlot(slot, 1, false);
+  inventory.addItem(new Item(I.ELIDINIS_WARD, 1));
+  inventory.addItem(new Item(I.ARCANE_SIGIL, 1));
+  inventory.refreshItems();
+  return true;
+}
+
+// ------------------------------------------------------------------ the pet's remnants
+
+/** TOA_UNLOCKED_PET_MORPH_*: the ancient remnant unlocks both damaged guardians. */
+const REMNANTS = {
+  "Remnant of Akkha": [14498], "Remnant of Ba-Ba": [14499], "Remnant of Kephri": [14500], "Remnant of Zebak": [14501],
+  "Ancient remnant": [14502, 14503],
+};
+const GUARDIAN_NPCS = new Set([11812, 11813]);
+const ATTR_UNLOCKED = "toa:pet-morphs";
+
+function sendUnlocks({ player }) {
+  for (const varbit of player.getAttribute(ATTR_UNLOCKED) ?? []) player.getPacketSender().sendVarbit(varbit, 1);
+}
+
+function remnantOnPet(event) {
+  const { player, npc, itemId, slot } = event;
+  const varbits = REMNANTS[Shared.core().ItemDefinition.forId(itemId)?.getName?.()];
+  if (!varbits || !GUARDIAN_NPCS.has(npc?.getId?.())) return;
+  event.handled = true;
+  const unlocked = player.getAttribute(ATTR_UNLOCKED) ?? [];
+  if (varbits.every((varbit) => unlocked.includes(varbit))) {
+    player.sendMessage("Your pet can already do that.");
+    return;
+  }
+  player.getInventory().deleteAtSlot(slot, 1);
+  player.setAttribute(ATTR_UNLOCKED, [...new Set([...unlocked, ...varbits])]);
+  sendUnlocks({ player });
+  const line = "Congratulations! You've unlocked a new metamorphosis option for your pet.";
+  player.sendMessage(line);
+  Shared.statement(player, line);
 }
 
 // ------------------------------------------------------------------ named wrappers
@@ -216,5 +271,9 @@ module.exports = function registerTombsItems(api) {
   for (const name of ["Armadyl helmet", "Armadyl chestplate", "Armadyl chainskirt"]) api.onItemOnItem("Chisel", name, useChisel);
   api.onItemOnItem("Arcane sigil", "Elidinis' ward", fortifyWard);
   api.onItemOnItem("Thread of Elidinis", "Rune pouch", threadRunePouch);
-  for (const name of ["Eye of the Corruptor", "Breach of the Scarab", "Jewel of the Sun"]) api.onItemOnItem("Keris partisan", name, useKerisJewel);
+  for (const name of ["Eye of the Corruptor", "Breach of the Scarab", "Jewel of the Sun", "Jewel of Amascut"]) api.onItemOnItem("Keris partisan", name, useKerisJewel);
+  api.onItemAction("Elidinis' ward (f)", { Dismantle: dismantleWard });
+  api.onItemOnNpc(remnantOnPet);
+  api.onPlayerLogin(sendUnlocks);
+  api.persistAttribute(ATTR_UNLOCKED);
 };

@@ -11,19 +11,49 @@
  * A wave that pushes someone off the edge washes them into the water. Swimmers can't attack or
  * run, the crocodiles there bite them, and they climb back out by the rock steps.
  *
- * Checked against OpenRune-Server #274 (built against a live capture), Wiki first:
- * - Wiki: each roar wave hits each rock for 50 (150 HP); blood clouds lose 2 for each tile they
- *   move; his Defence drains at most 20; a barrage heals him twice the damage it deals; a
- *   special still queued when he enrages is dropped.
- * - OpenRune (the Wiki gives no figures): acid 6-10 and barrage 3-5 before scaling, the bite
- *   landing 2 ticks after it with Protect from Melee blocking half, his first attack after 10
- *   ticks, autos carrying on through the specials, the specials' timings, jugs rolling 8 tiles,
- *   only the first roar wave chipping jugs, the rock area and the camera shakes.
- * - The volley as OSRS draws it: the burst rides a helper NPC (SPOTANIM_ZEBAK_RANGED01_NPC) so it
- *   plays at height 750 where the rising projectile peaks (a tile graphic's height is a byte),
- *   and the rising projectile and fragments arc at 30 and 127.
- * - Enraged he becomes TOA_ZEBAK_ENRAGED, with the enraged attack animations and projectiles
- *   (named so in RuneLite's gameval; OpenRune uses the enraged melee only).
+ * Captured (ticks are offsets from the attack "T"; 44 fights, revs 223-235):
+ * - First attack 10 after the start (44 of 44). Speed 7 at path 0-1, 6 at 2-3, 5 at 4+; enraged 4,
+ *   3, 2 (gaps in 44 fights: 223/00014, 227/00554 tick 12290 path 5, 227/01757 tick 24326 path 4).
+ * - Volley: launch at T with 5823/5819 and 5878/5896 delayed 120; burst at T+4 on the helper
+ *   (11744, 3 ticks, height 750) with 5884 delayed 90; fragments 90 cycles; the hit at T+8 (223/00014
+ *   ticks 361-369, 234/03280, 235/03431).
+ * - Enraged: seq 9626/9627 and rising 2177/2179 (227 on; 223/00014 still shows 9624/2178).
+ * - Bite: 9620/9621, the hit at T+1 (227/01838 tick 420 and three more).
+ * - Acid: the hitsplat is poison's (65), "You have been poisoned!" with it. It ramps: 5-16 at first,
+ *   up to 29 in a few ticks at the damage cap, 6, 4, 7 at raid level 310 (227/00553 tick 10020).
+ * - Tidal waves (223/00014 T=390): seq 9624 alone at T, throws at T+1 with 5908, tail slam T+5, jugs
+ *   and pools T+6, rock falls with shake, pillars, sounds T+7, rows T+14/21/28 of 21 tiles at 1 a tick,
+ *   25 ticks each, next attack T+15. Always south first (35 of 35). The gap: 3 tiles at path 0-1, 2 at
+ *   2-3, 1 at 4+ (all 44; 227/01757 tick 24326), rolled for each row. A hit pushes 3 tiles (18 samples),
+ *   or from the edge into the water, always landing on y 5420 / 5396 (227/01852 tick 22050).
+ * - Great Roar (223/00014 T=437): throws at T+1, first rock T+5, the rest with jugs and pools T+6,
+ *   autos at T+10, 9628/9629 with 5860 at T+33, dust at T+36/38/40, hits a tick later: rocks 50, and
+ *   the first breaks every jug; rocks go at T+42 (7717) and T+45 (2191).
+ * - Jugs and pools land on fixed tiles for each iteration (ROAR_FIRST etc: 37, 7, 35 and 5 specials),
+ *   with 2 or 3 rocks in the first roar's chain (x 3927-3929, y 5405-5411, north by 1, wrapping) and
+ *   the second's (x 3932-3934, y 5403-5413, south by 1-2). A pushed jug rolls 11 tiles (45 rolls).
+ *   A broken jug throws 2193 over its whole area from a helper (11745) and clears a tick later.
+ * - Blood: 377 on two tiles at S, the barrage or clouds at S+3, its hit S+4 and his heal at S+3. S first
+ *   comes at about 77 (77-89, path 3), then every 45 (39-45), enraged 8 attacks.
+ * - Clouds spawn around (3933, 5415) or (3933, 5401) on the sides (14 tiles over 13 raids).
+ * - Water crocodiles' spawns (227/01759 tick 510). Death: 9634, shake at +2, then dead forms and
+ *   "Challenge complete" at +4 (235/03431 ticks 195-199).
+ * Wiki (numbers):
+ * - Max hits 38 melee, 16 magic and ranged, 6-10 a wave, all scaled. Rock 150 HP, 50 a roar wave; jug 5x5
+ *   (3x3 Upset Stomach), acid 3x3 (5x5); Defence drains at most 20; a queued special is dropped on enrage.
+ * - Clouds lose 2 for each tile moved, drain 2 a tick. Three with Blood Thinners.
+ * - Barrage 8-11, always hits unless prayed against. He heals ~66% of it (invocations table), 2x with
+ *   Arterial Spray (strategies; captures show 12 -> 23, 10 -> 19, 7 -> 13).
+ * Estimates:
+ * - The acid's ramp: 2-6 on the first tick, 2-11.7 after, remembered for 30 ticks without a hit (fit:
+ *   about 130 hits at raid levels 500-555; 8 at lower levels agree; gaps of 2-20 ticks keep it high,
+ *   40+ don't).
+ * - Blood timing is a fit from 13 raids, Arterial's radius 2 and its 2x reading a guess at two Wiki lines.
+ * - The size 2 cloud's spawn: no capture has Not Just a Head without Blood Thinners.
+ * - Failure wording for waves, clouds and jugs in Perfect Zebak: no capture.
+ * - How a wave's "smarter" pushback (June 2025) differs: no recording in current revs has a push.
+ * Still only from OpenRune: the bite's half through prayer, bleeding (1 in 4; 5-10; 1-8 a tick moving;
+ * 10 ticks), the scream's hit, and the water crocodiles' bites (max 8, every 2 ticks).
  */
 
 const Shared = require("./Shared.TombsOfAmascut");
@@ -33,34 +63,43 @@ const SPAWN = { x: 3918, y: 5404, z: 0 };
 const TAIL_SPAWN = { x: 3909, y: 5403, z: 0 };
 const GROUND_MIN = { x: 3926, y: 5398 };
 const GROUND_MAX = { x: 3942, y: 5418 };
-const BOULDER_MIN = { x: 3925, y: 5401 };
-const BOULDER_MAX = { x: 3935, y: 5415 };
 const MIDDLE = { x: 3926, y: 5408 };
 const PROJECTILE_START = { x: 3925, y: 5408 };
 const PROJECTILE_SPLIT = { x: 3933, y: 5408 };
 const WAVE_SOUTH = { x: 3923, y: 5397 };
 const WAVE_NORTH = { x: 3923, y: 5419 };
 const BLOOD_SPELL_TILES = [{ x: 3924, y: 5406 }, { x: 3925, y: 5410 }];
-const BLOOD_CLOUD_TILES = [{ x: 3931, y: 5413 }, { x: 3934, y: 5401 }];
-/** The volley's burst rides this 7x7 helper, centred on the split point (OSRS; OpenRune). */
+/** Blood clouds spawn around these on either side (three random tiles of the 3x3; 13 raids). */
+const BLOOD_CLOUD_CENTRES = [{ x: 3933, y: 5415 }, { x: 3933, y: 5401 }];
+const ZEBAK_HIT_SOUND_TILE = { x: 3922, y: 5408 };
+const JUG_SOUND_TILE = { x: 3927, y: 5408 };
+/** The volley's burst rides this 7x7 helper, centred on the split point (223/00014 tick 365). */
 const SPLIT_HELPER = { id: 11744, tile: { x: 3930, y: 5405 }, ticks: 3 };
+
+/** A jug's break plays on this helper, a tile south-west of it, for 2 ticks (223/00014 tick 111). */
+const JUG_BREAK_HELPER = { id: 11745, ticks: 2 };
+const PILLARS = [{ x: 3907, y: 5406, face: 2, back: 8 }, { x: 3907, y: 5410, face: 0, back: 6 }];
+const PILLAR = { STILL: 45530, SHAKING: 45531 };
+const ROCK_GONE = { CRUMBLE: 42, CLEARED: 45, SEQ: 7717 };
 
 const POISON = 45570; // 45570..45575
 const BOULDER_BLOCK = 43876;
 const BLOOD_FLOOR = 652; // 652..654
 const ROCK_STEPS = "Rock steps";
 
-// The water crocodiles' spawns (OpenRune). In the cache they're bubbles (swampbubs) with
-// attack 250 and strength 70: a max hit of 8 before scaling. They bite every 2 ticks.
+// The water crocodiles' spawns (227/01759 tick 510). In the cache they're bubbles (swampbubs) with
+// attack 250 and strength 70: a max hit of 8 before scaling. They bite every 2 ticks (OpenRune).
 const WATER_CROC_TILES = [
-  { x: 3948, y: 5408 }, { x: 3948, y: 5408 }, { x: 3935, y: 5422 }, { x: 3934, y: 5420 },
-  { x: 3921, y: 5418 }, { x: 3937, y: 5396 }, { x: 3937, y: 5395 }, { x: 3919, y: 5403 },
+  { x: 3948, y: 5408 }, { x: 3948, y: 5408 }, { x: 3936, y: 5422 }, { x: 3941, y: 5420 },
+  { x: 3921, y: 5418 }, { x: 3936, y: 5395 }, { x: 3938, y: 5395 }, { x: 3919, y: 5403 },
 ];
 const CROC_MAX_HIT = 8;
 const CROC_BITE_TICKS = 2;
 const CROC_HUNT_RANGE = 16;
-// A wave that runs out of floor throws the player this many tiles on, into the water (OpenRune).
-const WATER_JUMP = 5;
+/** A wave that runs out of floor throws the player into the water, on these rows (227/01852 tick 22050, 227/01759 tick 637). */
+const WATER_ROW = { NORTH: 5420, SOUTH: 5396 };
+const WAVE_PUSH_TILES = 3;
+const WAVE_LIFE_TICKS = 25;
 
 const ANIMATION = {
   SHOOT: 9624, TAIL_SHOOT: 9625, MELEE: 9620, TAIL_MELEE: 9621, DEATH: 9634, TAIL_DEATH: 9635,
@@ -71,40 +110,81 @@ const ANIMATION = {
 // Stand, turn, walk, turn around, turn right, turn left, run: human_swim_ready / human_swim.
 const SWIM_ANIMATIONS = [773, 772, 772, 772, 772, 772, 772];
 const PROJECTILE = {
-  POISON: 1555, BOULDER: 2172, JUG: 2173, POISON_BOULDER: 2194, MAGIC: 2176, MAGIC_SPLIT: 2181,
+  POISON: [1555, 2194], BOULDER: 2172, JUG: 2173, MAGIC: 2176, MAGIC_SPLIT: 2181,
   RANGED: 2178, RANGED_SPLIT: 2187, POISON_SPREAD: 2194, JUG_SPREAD: 2193,
   MAGIC_ENRAGED: 2177, RANGED_ENRAGED: 2179,
 };
+/** Everything he spits (223/00014 tick 391): t30-150 at angle 35; one rock lands a tick sooner. */
+const THROW = { delay: 30, duration: 120, perTile: 0, startHeight: 62, angle: 35 };
+const THROW_FAST = { ...THROW, duration: 90 };
+const POOL_SPREAD_THROW = { duration: 30, perTile: 0, startHeight: 0, angle: 20 };
+const JUG_WATER_THROW = { delay: 10, duration: 10, perTile: 0, startHeight: 7, angle: 20 };
 const GRAPHIC = {
   MAGIC_BURST: 2186, RANGED_BURST: 2185, // ZEBAK_MAGE_SPLIT, ZEBAK_RANGED_SPLIT
   MAGIC_IMPACT: 131, RANGED_IMPACT: 1103, BLOOD: 377, ROCKS: 2195, SPLASH: 68, ROAR: 2184, JUG_BREAK: 2192, POISON_GONE: 95,
+  DUST: 2174, ROCK_BREAK: 2191,
 };
-const SOUND = { MAGIC: 5823, RANGED: 5819, FINAL_PHASE: 3405, BARRAGE: 102, JUGS: 5908, POISON_LAND: 5909, BOULDER_LAND: 5913, PUSHED: 5888, RUMBLING: 1678, WAVE_HIT: 5868 };
+const SOUND = {
+  MAGIC: 5823, RANGED: 5819, MAGIC_SPLIT: 5878, RANGED_SPLIT: 5896, IMPACT: 5884, FINAL_PHASE: 3405, BARRAGE: 102, JUGS: 5908,
+  POISON_LAND: 5909, BOULDER_LAND: 5913, ROAR: 5860, PUSHED: 5888, RUMBLING: 1678, WAVE_HIT: 5868, ZEBAK_HIT: 6590,
+};
+const SOUND_DELAY = { SPLIT: 120, IMPACT: 90, ROAR: 16, PUSHED: 1, POISON_LAND: 1 };
+const SOUND_RADIUS = { ZEBAK_HIT: 14, JUGS: 15, BOULDER_LAND: 5, POISON_LAND: 15 };
+/** The falling rocks' sounds [id, delay] (223/00014 tick 397). */
+const WAVE_ROCK_SOUNDS = [[1678, 0], [5882, 0], [5843, 200], [5852, 200], [5852, 530], [5852, 920]];
+
+// Where each iteration's jugs and pools land: fixed tiles, plus some pools at random (37, 7, 35 and 5 specials).
+const ROAR_JUG_COUNT = [6, 8];
+const ROAR_FIRST = {
+  jugs: [[3940, 5409], [3939, 5407], [3929, 5403], [3931, 5402], [3938, 5414], [3936, 5406], [3939, 5413], [3939, 5402], [3929, 5414], [3940, 5408]],
+  pools: [[3929, 5406], [3929, 5409], [3929, 5412], [3931, 5405], [3931, 5408], [3931, 5411]],
+  rocks: { minX: 3927, maxX: 3929, minY: 5405, maxY: 5411 },
+};
+const ROAR_SECOND = {
+  jugs: [[3940, 5406], [3932, 5414], [3940, 5409], [3936, 5414], [3931, 5412], [3937, 5402], [3935, 5401], [3931, 5407]],
+  pools: [[3934, 5404], [3934, 5410], [3936, 5403], [3936, 5406], [3936, 5409], [3936, 5412], [3934, 5407], [3934, 5413]],
+  rocks: { minX: 3932, maxX: 3934, minY: 5403, maxY: 5413 },
+};
+const ROAR_EXTRA_POOLS = [2, 10];
+const WAVE_JUGS = [[3930, 5408], [3934, 5401], [3931, 5408], [3935, 5402], [3937, 5414]];
+const WAVE_POOLS = [
+  [[3929, 5404], [3929, 5417], [3935, 5408], [3937, 5405], [3938, 5411], [3939, 5402], [3941, 5413], [3931, 5414], [3932, 5406], [3933, 5411]],
+  [[3928, 5403], [3928, 5406], [3928, 5410], [3928, 5416], [3931, 5404], [3937, 5399], [3937, 5402], [3937, 5414], [3937, 5417], [3940, 5404], [3942, 5404]],
+];
+const WAVE_EXTRA_POOLS = [3, 10];
 
 // Wiki: max hits 38 melee, 16 magic and ranged; a wave hits for 6-10, all scaled by raid level.
 const MAX_HIT = { BITE: 38, VOLLEY: 16, SCREAM: 20, WAVE: 10 };
 const WAVE_MIN_HIT = 6;
-/** Acid 6-10 a tick and the barrage 3-5, before scaling (OpenRune). */
-const ACID = { MIN: 6, MAX: 10 };
-const BARRAGE = { MIN: 3, SPREAD: 2, HEAL_PER_DAMAGE: 2 };
-/** The bite lands 2 ticks after it, and Protect from Melee lets half through (OpenRune). */
-const BITE = { HIT_TICKS: 2, THROUGH_PRAYER: 0.5 };
-const VOLLEY = { SPLIT_TICKS: 4, BURST_HEIGHT: 750, FRAGMENT_CYCLES: 90, HIT_TICKS: 3, RISE_ANGLE: 30, FRAGMENT_ANGLE: 127 };
+/** The acid before scaling, by hits in the last while (fit, see the header). */
+const ACID = { MIN: 2, FIRST_MAX: 6, MAX: 11.7, MEMORY_TICKS: 30 };
+/** Wiki: 8-11, healing ~66% of it, or twice it with Arterial Spray. */
+const BARRAGE = { MIN: 8, MAX: 11, HEAL: 0.66, HEAL_ARTERIAL: 2, RADIUS: 1, RADIUS_ARTERIAL: 2, EFFECT_TICKS: 3, HIT_TICKS: 1 };
+/** Blood spells: the first, then between them, then enraged as attacks at his speed (fit from 13 raids). */
+const BLOOD_TIMING = { FIRST: 77, NORMAL: 45, ENRAGED_ATTACKS: 8 };
+/** The bite lands the tick after it (4 of 4); Protect from Melee lets half through (OpenRune). */
+const BITE = { HIT_TICKS: 1, THROUGH_PRAYER: 0.5 };
+const VOLLEY = { SPLIT_TICKS: 4, BURST_HEIGHT: 750, FRAGMENT_CYCLES: 90, HIT_TICKS: 4, RISE_ANGLE: 30, FRAGMENT_ANGLE: 127 };
 /** Wiki: each roar wave hits each rock for 50, and a rock has 150. */
 const ROCK = { HITPOINTS: 150, ROAR_DAMAGE: 50 };
 /** Wiki: his Defence drains by at most 20 (to 50). */
 const MAX_DEFENCE_DRAIN = 20;
 const FIRST_ATTACK_TICKS = 10;
-const JUG_ROLL_TILES = 8;
-/** OpenRune's camera shakes: [slot, random amplitude] (slot 0 left-right, 1 up-down, 2 forwards). */
+const JUG_ROLL_TILES = 11;
+/** Camera shakes: [slot, random amplitude]; 223/00014 ticks 397 and 503; 235/03431 tick 197. */
 const SHAKE = {
-  DEATH: { delay: 2, axes: [[0, 5], [1, 5], [2, 2]], resetAfter: 4 },
-  WAVES: { axes: [[0, [5, 7]], [1, [7, 8]], [2, [6, 6]]], resetAfter: 2 },
+  DEATH: { delay: 2, axes: [[0, [3, 5]], [1, [3, 5]], [2, [2, 4]]], resetAfter: 1 },
+  WAVES: { axes: [[0, [5, 7]], [1, [5, 7]], [2, [5, 8]]], resetAfter: 2 },
 };
+const DEATH_FORM_TICKS = 4;
 // A bite bleeds 1 time in 4 instead of hitting: 5-10 at once, then 1-8 each tick spent
 // moving for 10 ticks (OpenRune; the Wiki only says moving makes it worse).
 const BLEED = { CHANCE: 4, TICKS: 10, APPLY_MIN: 5, APPLY_MAX: 10, MOVING_MIN: 1, MOVING_MAX: 8 };
 const ZEBAK_POINTS = 1.5;
+const INVOCATIONS = ["NOT_JUST_A_HEAD", "ARTERIAL_SPRAY", "BLOOD_THINNERS", "UPSET_STOMACH"];
+const TASK = { PERFECT: "Perfect Zebak", MELEE_ONLY: "Chompington", ROCKIN: "Rockin' around the croc", PRAISE: "All Praise Zebak" };
+const ROCKIN_PATH_LEVEL = 4;
+const PERFECT_JUG_PUSHES = 2;
 
 class ZebakRoom extends Raid.Room {
   build() {
@@ -120,11 +200,18 @@ class ZebakRoom extends Raid.Room {
     this.useMagic = Shared.random(0, 1) === 0;
     this.barrageNext = Shared.random(0, 1) === 0;
     this.cloudsSouth = Shared.random(0, 1) === 0;
-    this.wavesSouth = Shared.random(0, 1) === 0;
-    this.bloodTicks = this.settings.isActive("NOT_JUST_A_HEAD") ? this.attackSpeed * 6 - 1 : -1;
+    this.wavesSouth = true;
+    this.roarsDone = 0;
+    this.wavesDone = 0;
+    this.jugPushes = 0;
+    this.dying = false;
+    this.acidRamp = new Map();
+    this.prayerSeen = new Map();
+    this.bloodTicks = this.settings.isActive("NOT_JUST_A_HEAD") ? BLOOD_TIMING.FIRST : -1;
     this.spreadBarrage = this.settings.isActive("ARTERIAL_SPRAY");
     this.multipleClouds = this.settings.isActive("BLOOD_THINNERS");
     this.upsetStomach = this.settings.isActive("UPSET_STOMACH");
+    this.arterialSpray = this.spreadBarrage;
     this.poison = new Map();
     this.activePoison = new Set();
     this.jugs = new Set();
@@ -160,6 +247,26 @@ class ZebakRoom extends Raid.Room {
 
   onComplete() {
     this.clearAll();
+    const survivors = this.deathlessPlayers();
+    this.raid.completeTask(TASK.MELEE_ONLY, survivors);
+    if (!INVOCATIONS.every((key) => this.settings.isActive(key))) return;
+    this.raid.completeTask(TASK.PERFECT);
+    if (this.pathLevel() < ROCKIN_PATH_LEVEL) return;
+    this.raid.completeTask(TASK.ROCKIN, survivors);
+    this.raid.completeTask(TASK.PRAISE, survivors);
+  }
+
+  /** For Perfect Zebak: `${name} was hit by ...` the tick after, as 227/00553 tick 10021. */
+  failPerfect(player, what) {
+    this.later(1, () => this.raid.failTask(TASK.PERFECT, `${Shared.displayName(player)} ${what}`));
+  }
+
+  soundAll(id, delay = 0) {
+    for (const player of this.challengePlayers()) Shared.sound(player, id, delay);
+  }
+
+  areaSound(id, tile, delay, radius) {
+    for (const player of this.roomPlayers()) player.getPacketSender().sendAreaSound(id, tile.x, tile.y, 0, 1, delay, radius);
   }
 
   onReset() {
@@ -181,6 +288,10 @@ class ZebakRoom extends Raid.Room {
     this.crocodiles = [];
     for (const player of [...this.swimmers.keys()]) this.stopSwimming(player);
     this.bleeding.clear();
+    if (this.pillarsShaken) {
+      for (const pillar of PILLARS) this.setObject(PILLAR.STILL, { x: pillar.x, y: pillar.y, z: 0 }, 10, pillar.face);
+      this.pillarsShaken = false;
+    }
   }
 
   // -------------------------------------------------------------- health phases
@@ -208,14 +319,14 @@ class ZebakRoom extends Raid.Room {
       this.queued = [];
       this.attackSpeed = Math.max(2, this.attackSpeed - 3);
       zebak.setNpcTransformationId(NpcIdentifiers.ZEBAK_3);
-      for (const player of this.challengePlayers()) Shared.sound(player, SOUND.FINAL_PHASE);
+      this.soundAll(SOUND.FINAL_PHASE);
     }
   }
 
   // -------------------------------------------------------------- tick
 
   tick() {
-    if (!this.isStarted() || !this.zebak || this.zebak.getHitpoints() <= 0) return;
+    if (!this.isStarted() || !this.zebak || this.zebak.getHitpoints() <= 0 || this.dying) return;
     const players = this.challengePlayers();
     for (const player of [...this.swimmers.keys()]) {
       if (!players.includes(player)) this.stopSwimming(player);
@@ -228,12 +339,12 @@ class ZebakRoom extends Raid.Room {
     this.tickClouds(players);
     if (players.length === 0) return;
     if (!this.busy && this.bloodTicks !== -1 && --this.bloodTicks === 0) {
-      this.bloodTicks = this.attackSpeed * (this.lastPhase ? 8 : 6) - 1;
+      this.bloodTicks = this.lastPhase ? this.attackSpeed * BLOOD_TIMING.ENRAGED_ATTACKS : BLOOD_TIMING.NORMAL;
       this.bloodSpell();
     }
     if (--this.attackTicks > 0) return;
     this.attackTicks = this.attackSpeed;
-    // A special takes his attack's turn; his autos carry on while it plays out (OpenRune).
+    // A special takes his attack's turn; his autos carry on while it plays out (223/00014: T+10, T+15).
     if (!this.lastPhase && !this.busy && this.queued.length > 0) {
       const special = this.queued.shift();
       if (special === "jugs") this.boulderSpecial();
@@ -256,7 +367,7 @@ class ZebakRoom extends Raid.Room {
         for (const player of inReach) {
           if (player.getHitpoints() <= 0 || !this.inChallenge(player)) continue;
           if (Shared.random(1, BLEED.CHANCE) === 1) this.bleed(player);
-          else this.strike(this.zebak, player, null, "melee", MAX_HIT.BITE, 0, { prayerMultiplier: BITE.THROUGH_PRAYER });
+          else this.basicHit(player, "melee", MAX_HIT.BITE, { prayerMultiplier: BITE.THROUGH_PRAYER });
         }
       });
       return;
@@ -264,7 +375,8 @@ class ZebakRoom extends Raid.Room {
     const magic = this.useMagic;
     this.zebak.performAnimation(new Animation(enraged ? ANIMATION.SHOOT_ENRAGED : ANIMATION.SHOOT));
     this.tail.performAnimation(new Animation(enraged ? ANIMATION.TAIL_SHOOT_ENRAGED : ANIMATION.TAIL_SHOOT));
-    for (const player of players) Shared.sound(player, magic ? SOUND.MAGIC : SOUND.RANGED);
+    this.soundAll(magic ? SOUND.MAGIC : SOUND.RANGED);
+    this.soundAll(magic ? SOUND.MAGIC_SPLIT : SOUND.RANGED_SPLIT, SOUND_DELAY.SPLIT);
     // The volley rises for 120 client cycles whatever the distance and bursts where it peaks,
     // four ticks in; its fragments take 90 cycles to land, so the hit comes three ticks after.
     const rising = enraged ? (magic ? PROJECTILE.MAGIC_ENRAGED : PROJECTILE.RANGED_ENRAGED) : (magic ? PROJECTILE.MAGIC : PROJECTILE.RANGED);
@@ -272,6 +384,7 @@ class ZebakRoom extends Raid.Room {
       { delay: 60, duration: 60, perTile: 0, startHeight: 50, endHeight: 175, angle: VOLLEY.RISE_ANGLE });
     this.later(VOLLEY.SPLIT_TICKS, () => {
       this.burst(magic ? GRAPHIC.MAGIC_BURST : GRAPHIC.RANGED_BURST);
+      this.soundAll(SOUND.IMPACT, SOUND_DELAY.IMPACT);
       for (const player of this.challengePlayers()) {
         Shared.tileProjectile(this.area, Shared.loc(PROJECTILE_SPLIT), player, magic ? PROJECTILE.MAGIC_SPLIT : PROJECTILE.RANGED_SPLIT,
           { duration: VOLLEY.FRAGMENT_CYCLES, perTile: 0, startHeight: 175, endHeight: 22, angle: VOLLEY.FRAGMENT_ANGLE });
@@ -279,11 +392,17 @@ class ZebakRoom extends Raid.Room {
       }
       this.later(VOLLEY.HIT_TICKS, () => {
         const style = magic ? "magic" : "ranged";
-        for (const player of this.challengePlayers()) this.strike(this.zebak, player, null, style, MAX_HIT.VOLLEY, 0);
+        for (const player of this.challengePlayers()) this.basicHit(player, style, MAX_HIT.VOLLEY);
       });
     });
   }
 
+  /** A basic attack lands; one that goes through off-prayer costs Perfect Zebak. */
+  basicHit(player, style, maxHit, options) {
+    const hit = this.strike(this.zebak, player, null, style, maxHit, 0, options);
+    if (hit.getTotalDamage() > 0 && !Shared.isProtected(player, style)) this.failPerfect(player, `didn't pray against a ${style} attack.`);
+    return hit;
+  }
 
   /** The volley's burst, played on a helper NPC so it can sit at the projectile's peak. */
   burst(graphicId) {
@@ -300,7 +419,7 @@ class ZebakRoom extends Raid.Room {
 
   bloodSpell() {
     for (const tile of BLOOD_SPELL_TILES) this.graphic(GRAPHIC.BLOOD, tile);
-    this.later(2, () => {
+    this.later(BARRAGE.EFFECT_TICKS, () => {
       const players = this.challengePlayers();
       if (players.length === 0) return;
       if (this.barrageNext) this.bloodBarrage(players);
@@ -309,31 +428,38 @@ class ZebakRoom extends Raid.Room {
     });
   }
 
-  /** Blood barrage on everyone (and those next to them); he heals twice what it deals (Wiki). */
+  /**
+   * Blood barrage on everyone (and those next to them, a hit for each neighbour). It always hits
+   * unless prayed against (Wiki); he heals as it goes out and the hit lands the tick after.
+   */
   bloodBarrage(players) {
     let heal = 0;
-    const base = Math.floor(BARRAGE.MIN * this.raid.damageFactor(0));
+    const radius = this.arterialSpray ? BARRAGE.RADIUS_ARTERIAL : BARRAGE.RADIUS;
+    const healRate = this.arterialSpray ? BARRAGE.HEAL_ARTERIAL : BARRAGE.HEAL;
+    const hits = [];
     for (const player of players) {
-      const damage = Shared.random(base, base + BARRAGE.SPREAD);
+      const damage = Shared.random(BARRAGE.MIN, BARRAGE.MAX);
       for (const victim of players) {
-        const near = victim === player || victim.getLocation().getDistance(player.getLocation()) <= (this.spreadBarrage ? 2 : 1);
-        if (!near) continue;
+        if (victim !== player && victim.getLocation().getDistance(player.getLocation()) > radius) continue;
         if (Shared.isProtected(victim, "magic")) continue;
-        heal += damage * BARRAGE.HEAL_PER_DAMAGE;
-        Shared.damage(victim, damage);
+        heal += damage * healRate;
+        hits.push([victim, damage]);
       }
       player.performGraphic(Shared.gfx(GRAPHIC.BLOOD));
       Shared.sound(player, SOUND.BARRAGE);
     }
-    if (heal > 0) this.zebak.setHitpoints(Math.min(this.zebak.getMaxHitpoints(), this.zebak.getHitpoints() + heal));
+    if (heal > 0) this.zebak.setHitpoints(Math.min(this.zebak.getMaxHitpoints(), this.zebak.getHitpoints() + Math.floor(heal)));
+    this.later(BARRAGE.HIT_TICKS, () => hits.forEach(([victim, damage]) => Shared.damage(victim, damage)));
   }
 
   bloodClouds() {
     const { NpcIdentifiers } = Shared.core();
-    const base = BLOOD_CLOUD_TILES[this.cloudsSouth ? 1 : 0];
+    const centre = BLOOD_CLOUD_CENTRES[this.cloudsSouth ? 1 : 0];
     const count = this.multipleClouds ? 3 : 1;
     for (let i = 0; i < count; i++) {
-      const tile = { x: base.x + i, y: base.y + (this.cloudsSouth ? Math.floor(i / 2) : -Math.floor(i / 2)), z: 0 };
+      const tile = this.multipleClouds
+        ? { x: centre.x + Shared.random(-1, 1), y: centre.y + Shared.random(-1, 1), z: 0 }
+        : { ...centre, z: 0 };
       const cloud = this.spawn(this.multipleClouds ? NpcIdentifiers.BLOOD_CLOUD_2 : NpcIdentifiers.BLOOD_CLOUD, tile, { scale: false, points: 0 });
       if (!cloud) continue;
       cloud.__toaScripted = true;
@@ -371,6 +497,7 @@ class ZebakRoom extends Raid.Room {
       for (const player of players) {
         if (!withinReach(cloud, player)) continue;
         Shared.damage(player, 2);
+        this.failPerfect(player, "was hit by a blood spawn.");
         cloud.setHitpoints(Math.min(cloud.getMaxHitpoints(), cloud.getHitpoints() + 2));
       }
     }
@@ -378,38 +505,49 @@ class ZebakRoom extends Raid.Room {
 
   // -------------------------------------------------------------- poison
 
-  /** Pools of poison: standing in one hurts and poisons. */
+  /**
+   * Pools of poison: standing in one hurts, more the longer you've been at it, and poisons. Its
+   * hitsplat is poison's, not a hit's (227/00553 ticks 10020-10022).
+   */
   tickPoison(players) {
-    const { CombatFactory } = Shared.core();
+    const { CombatFactory, HitDamage, HitMask } = Shared.core();
+    const now = Shared.cycle();
     for (const player of players) {
       const location = player.getLocation();
       if (!this.activePoison.has(key(location.getX(), location.getY()))) continue;
-      Shared.damage(player, this.maxHit(Shared.random(ACID.MIN, ACID.MAX)));
+      const ramp = this.acidRamp.get(player);
+      const hits = ramp && now - ramp.last <= ACID.MEMORY_TICKS ? ramp.hits : 0;
+      this.acidRamp.set(player, { hits: hits + 1, last: now });
+      const top = hits === 0 ? ACID.FIRST_MAX : ACID.MAX;
+      const damage = Shared.random(this.maxHit(ACID.MIN), Math.floor(top * this.damageFactor()));
+      player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, HitMask.GREEN)]);
       CombatFactory.poisonEntity(player, 2);
+      this.failPerfect(player, "was hit by vomit damage.");
     }
     // Pools placed last tick become harmful this tick.
     for (const tile of this.poison.keys()) this.activePoison.add(tile);
   }
 
-  addPoison(tile, spread, guaranteed) {
+  addPoison(tile, spread) {
     const tileKey = key(tile.x, tile.y);
     if (this.poison.has(tileKey)) return;
     this.poison.set(tileKey, tile);
     this.setObject(POISON + Shared.random(0, 5), { ...tile, z: 0 }, 10, Shared.random(0, 3));
     if (!spread) return;
+    this.areaSound(SOUND.POISON_LAND, tile, SOUND_DELAY.POISON_LAND, SOUND_RADIUS.POISON_LAND);
     const range = this.upsetStomach ? 2 : 1;
     const spreads = [];
     for (let dx = -range; dx <= range; dx++) {
       for (let dy = -range; dy <= range; dy++) {
         if (dx === 0 && dy === 0) continue;
-        if ((!guaranteed || dy !== 0) && Shared.random(0, 2) !== 0) continue;
+        if (Shared.random(0, 2) !== 0) continue;
         const next = { x: tile.x + dx, y: tile.y + dy };
         if (this.objectAt({ ...next, z: 0 }, 10) || !Shared.floorFree(this.area, Shared.loc(next, 0)) || this.activePoison.has(key(next.x, next.y))) continue;
-        Shared.tileProjectile(this.area, Shared.loc(tile, 0), Shared.loc(next, 0), PROJECTILE.POISON_SPREAD, { duration: 30, perTile: 10, startHeight: 0 });
+        Shared.tileProjectile(this.area, Shared.loc(tile, 0), Shared.loc(next, 0), PROJECTILE.POISON_SPREAD, POOL_SPREAD_THROW);
         spreads.push(next);
       }
     }
-    if (spreads.length > 0) this.later(1, () => spreads.forEach((next) => this.addPoison(next, false, false)));
+    if (spreads.length > 0) this.later(1, () => spreads.forEach((next) => this.addPoison(next, false)));
   }
 
   removePoison(tileKey) {
@@ -455,6 +593,11 @@ class ZebakRoom extends Raid.Room {
 
   // -------------------------------------------------------------- water
 
+  /** Leaving from the pool: swimming's walk and its blocked run go with the room. */
+  onPlayerLeave(player) {
+    this.stopSwimming(player);
+  }
+
   isSwimming(player) {
     return this.swimmers.has(player);
   }
@@ -479,11 +622,24 @@ class ZebakRoom extends Raid.Room {
     }
   }
 
-  /** Swimmers can only walk. */
+  /** Swimmers can only walk, and the raid summary counts their time in the pool. */
   tickPlayer(player) {
-    if (!this.swimmers.has(player) || !player.isRunningReturn()) return;
+    this.watchPrayer(player);
+    if (!this.swimmers.has(player)) return;
+    this.raid.tally(player, "swimTicks");
+    if (!player.isRunningReturn()) return;
     player.setRunning(false);
     player.getPacketSender().sendRunStatus();
+  }
+
+  /** All Praise Zebak: not one prayer point lost, by whatever means (227/00553 tick 5664). */
+  watchPrayer(player) {
+    if (!this.isStarted()) return;
+    const { Skill } = Shared.core();
+    const level = player.getSkillManager().getCurrentLevel(Skill.PRAYER);
+    const seen = this.prayerSeen.get(player);
+    if (seen !== undefined && level < seen) this.raid.failTask(TASK.PRAISE, "You lost a prayer point.", player);
+    this.prayerSeen.set(player, level);
   }
 
   climbOut(player, rock) {
@@ -572,14 +728,13 @@ class ZebakRoom extends Raid.Room {
 
   /**
    * Boulders and jugs rain down, then he screams three times; only those behind a boulder stay
-   * put. His next attack comes 10 ticks on and then as usual; the scream holds it 11 (OpenRune).
+   * put. His next attack comes 10 ticks on and then as usual; the scream holds it 11 (223/00014).
    */
   boulderSpecial() {
     const { Animation } = Shared.core();
     this.busy = true;
     this.attackTicks = 10;
     this.zebak.performAnimation(new Animation(ANIMATION.SHOOT));
-    this.tail.performAnimation(new Animation(ANIMATION.TAIL_SHOOT));
     this.roaring = false;
     this.later(1, () => {
       this.roaring = this.throwBoulders();
@@ -589,76 +744,103 @@ class ZebakRoom extends Raid.Room {
       if (!this.roaring) return;
       this.zebak.performAnimation(new Animation(ANIMATION.SCREAM));
       this.tail.performAnimation(new Animation(ANIMATION.TAIL_SCREAM));
+      this.soundAll(SOUND.ROAR, SOUND_DELAY.ROAR);
       this.attackTicks = Math.max(this.attackTicks, 11);
     });
-    [36, 38, 40].forEach((tick, index) => this.later(tick, () => {
-      if (this.roaring) this.scream(index === 0);
-    }));
+    [36, 38, 40].forEach((tick, index) => {
+      this.later(tick, () => {
+        if (this.roaring) this.screamDust();
+      });
+      this.later(tick + 1, () => {
+        if (this.roaring) this.scream(index === 0);
+      });
+    });
+    this.later(40, () => {
+      if (this.roaring) this.soundAll(SOUND.PUSHED, SOUND_DELAY.PUSHED);
+    });
+    this.later(ROCK_GONE.CRUMBLE, () => {
+      if (!this.roaring) return;
+      for (const boulder of this.boulders) boulder.performAnimation(new Animation(ROCK_GONE.SEQ));
+    });
+    this.later(ROCK_GONE.CLEARED, () => {
+      if (!this.roaring) return;
+      for (const boulder of this.boulders) {
+        const location = boulder.getLocation();
+        this.graphic(GRAPHIC.ROCK_BREAK, { x: location.getX(), y: location.getY() });
+        this.removeBoulder(boulder);
+      }
+      this.boulders = [];
+    });
     this.later(58, () => {
       if (!this.roaring) return;
       this.roaring = false;
-      for (const boulder of this.boulders) this.removeBoulder(boulder);
-      this.boulders = [];
       this.busy = false;
     });
   }
 
-  /** Throws the rocks, jugs and acid; false when there's no room for the rocks. */
+  /** Throws the rocks, jugs and acid onto this roar's tiles. */
   throwBoulders() {
     const { NpcIdentifiers } = Shared.core();
-    const boulders = this.pickBoulders();
+    const plan = this.roarsDone++ === 0 ? ROAR_FIRST : ROAR_SECOND;
+    const boulders = this.pickBoulders(plan);
     if (!boulders) return false;
-    const jugs = this.pickJugs(boulders);
-    const pools = this.freeTiles(GROUND_MIN, GROUND_MAX, boulders).slice(0, 6);
-    const boulderPools = boulders.map((tile) => ({ x: tile.x + 2, y: tile.y })).filter((tile) => !pools.some((pool) => pool.x === tile.x && pool.y === tile.y));
+    const jugs = Shared.shuffle(plan.jugs).slice(0, Shared.random(ROAR_JUG_COUNT[0], ROAR_JUG_COUNT[1])).map(asTile);
+    const pools = this.pickPools(plan.pools, ROAR_EXTRA_POOLS, [...jugs, ...boulders]);
     const from = Shared.loc(PROJECTILE_START);
-    for (const player of this.challengePlayers()) Shared.sound(player, SOUND.JUGS);
-    for (const tile of pools) Shared.tileProjectile(this.area, from, Shared.loc(tile, 0), PROJECTILE.POISON, { delay: 30, duration: 120, startHeight: 62 });
-    for (const tile of boulderPools) Shared.tileProjectile(this.area, from, Shared.loc(tile, 0), PROJECTILE.POISON_BOULDER, { delay: 30, duration: 120, startHeight: 62 });
-    for (const tile of boulders) Shared.tileProjectile(this.area, from, Shared.loc(tile, 0), PROJECTILE.BOULDER, { delay: 30, duration: 120, startHeight: 62 });
-    for (const tile of jugs) Shared.tileProjectile(this.area, from, Shared.loc(tile, 0), PROJECTILE.JUG, { delay: 30, duration: 120, startHeight: 62 });
-    this.later(5, () => {
-      for (const tile of boulders) {
-        const boulder = this.spawn(NpcIdentifiers.COL_00FFFF_BOULDER_COL_4, { ...tile, z: 0 }, { scale: false, points: 0 });
-        if (!boulder) continue;
-        boulder.__toaScripted = true;
-        boulder.__toaRock = true;
-        boulder.setUntargetable(true);
-        boulder.getMovementQueue().setBlockMovement(true);
-        boulder.setMaxHitpoints(ROCK.HITPOINTS);
-        boulder.setHitpoints(ROCK.HITPOINTS);
-        this.removePoison(key(tile.x, tile.y));
-        this.setObject(BOULDER_BLOCK, { ...tile, z: 0 }, 10, 0);
-        this.boulders.push(boulder);
-        for (const player of this.challengePlayers()) {
-          if (player.getLocation().getX() === tile.x && player.getLocation().getY() === tile.y) {
-            Shared.damage(player, Shared.random(2, 5));
-            this.nudgeOff(player);
-          }
+    this.areaSound(SOUND.JUGS, JUG_SOUND_TILE, 0, SOUND_RADIUS.JUGS);
+    for (const tile of pools) Shared.tileProjectile(this.area, from, Shared.loc(tile, 0), Shared.randomOf(PROJECTILE.POISON), THROW);
+    for (const tile of jugs) Shared.tileProjectile(this.area, from, Shared.loc(tile, 0), PROJECTILE.JUG, THROW);
+    boulders.forEach((tile, index) => Shared.tileProjectile(this.area, from, Shared.loc(tile, 0), PROJECTILE.BOULDER, index === 0 ? THROW_FAST : THROW));
+    const placeRock = (tile) => {
+      const boulder = this.spawn(NpcIdentifiers.COL_00FFFF_BOULDER_COL_4, { ...tile, z: 0 }, { scale: false, points: 0 });
+      if (!boulder) return;
+      boulder.__toaScripted = true;
+      boulder.__toaRock = true;
+      boulder.setUntargetable(true);
+      boulder.getMovementQueue().setBlockMovement(true);
+      boulder.setMaxHitpoints(ROCK.HITPOINTS);
+      boulder.setHitpoints(ROCK.HITPOINTS);
+      this.removePoison(key(tile.x, tile.y));
+      this.setObject(BOULDER_BLOCK, { ...tile, z: 0 }, 10, 0);
+      this.boulders.push(boulder);
+      this.graphic(GRAPHIC.ROAR, tile);
+      this.areaSound(SOUND.BOULDER_LAND, tile, 0, SOUND_RADIUS.BOULDER_LAND);
+      for (const player of this.challengePlayers()) {
+        if (player.getLocation().getX() === tile.x && player.getLocation().getY() === tile.y) {
+          Shared.damage(player, Shared.random(2, 5));
+          this.nudgeOff(player);
         }
       }
-      for (const tile of boulderPools) this.addPoison(tile, true, true);
-      for (const tile of pools) this.addPoison(tile, true, false);
+    };
+    // Sent at T+1: the first rock lands 4 ticks on, all else 5.
+    this.later(4, () => placeRock(boulders[0]));
+    this.later(5, () => {
+      boulders.slice(1).forEach(placeRock);
+      for (const tile of pools) this.addPoison(tile, true);
       this.spawnJugs(jugs);
     });
     return true;
   }
 
-  /** One roar wave: those not sheltered are pushed, each rock takes 50, the first chips the jugs. */
-  scream(first) {
+  /** A roar wave's dust, over every tile the rocks don't shelter, the tick before it lands. */
+  screamDust() {
     for (let x = GROUND_MIN.x; x <= GROUND_MAX.x; x++) {
       for (let y = GROUND_MIN.y; y <= GROUND_MAX.y; y++) {
         if (this.sheltered(x, y) || this.objectAt({ x, y, z: 0 }, 10)) continue;
         this.graphic(GRAPHIC.ROAR, { x, y }, { delay: 1 + Math.max(Math.abs(x - MIDDLE.x), Math.abs(y - MIDDLE.y)) });
       }
     }
+  }
+
+  /** One roar wave lands: those not sheltered are pushed, each rock takes 50, the first breaks the jugs. */
+  scream(first) {
     for (const player of this.challengePlayers()) {
       const location = player.getLocation();
       if (this.isSwimming(player) || this.sheltered(location.getX(), location.getY())) continue;
       this.push(player, 1, 0, 2, MAX_HIT.SCREAM);
     }
     for (const boulder of [...this.boulders]) Shared.damage(boulder, ROCK.ROAR_DAMAGE);
-    if (first) for (const jug of this.jugs) jug.setHitpoints(Math.max(0, jug.getHitpoints() - 5));
+    if (first) for (const jug of [...this.jugs]) this.later(1, () => this.breakJug(jug));
   }
 
   /** The three tiles east of a boulder are out of the scream. */
@@ -675,45 +857,25 @@ class ZebakRoom extends Raid.Room {
     this.despawn(boulder);
   }
 
-  pickBoulders() {
-    const free = this.freeTiles(BOULDER_MIN, BOULDER_MAX);
-    if (free.length === 0) return null;
-    const base = free[0];
-    const has = (x, y) => free.some((tile) => tile.x === x && tile.y === y);
+  /** Two or three rocks in a chain: the first roar's north by one, wrapping; the second's south by 1-2. */
+  pickBoulders(plan) {
+    const count = Shared.random(2, 3);
+    const { minX, maxX, minY, maxY } = plan.rocks;
+    const span = maxY - minY + 1;
     const picks = [];
-    for (let dy = -6; dy <= 6; dy++) {
-      const row = [];
-      for (let dx = -3; dx <= 3; dx++) {
-        const x = base.x + dx;
-        const y = base.y + dy;
-        if (has(x, y) && has(x + 1, y)) row.push({ x, y });
-      }
-      if (row.length > 0) picks.push(Shared.randomOf(row));
+    let y = Shared.random(minY, maxY);
+    for (let i = 0; i < count; i++) {
+      const tile = { x: Shared.random(minX, maxX), y };
+      if (Shared.floorFree(this.area, Shared.loc(tile, 0))) picks.push(tile);
+      y = plan === ROAR_FIRST ? minY + ((y - minY + 1) % span) : Math.max(minY, y - Shared.random(1, 2));
     }
-    if (picks.length === 0) return null;
-    return Shared.shuffle(picks).slice(0, this.teamSize > 1 ? 2 : 3);
+    return picks.length > 0 ? picks : null;
   }
 
-  /** Jugs that can be pushed into a boulder (one per boulder), padded with a few random ones. */
-  /** Jugs that can be pushed into a rock, then as many decoys at most, never on the floor's edge (OpenRune). */
-  pickJugs(boulders) {
-    const free = this.freeTiles(GROUND_MIN, GROUND_MAX, boulders)
-      .filter((tile) => tile.x !== GROUND_MIN.x && tile.x !== GROUND_MAX.x && tile.y !== GROUND_MIN.y && tile.y !== GROUND_MAX.y);
-    const useful = [];
-    const others = [];
-    for (const tile of free) {
-      const lines = boulders.some((boulder) => {
-        const dx = boulder.x - tile.x;
-        const dy = boulder.y - tile.y;
-        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) return false;
-        if ((dx === 0 || dx > 0) && dy === 0) return false;
-        if (Math.abs(dy) < 2 && dx > -4 && dx < 0) return false;
-        return Math.abs(Math.abs(dy) - Math.abs(dx)) < 2 || (dx >= -2 && dx <= 0) || Math.abs(dy) <= 1;
-      });
-      (lines ? useful : others).push(tile);
-    }
-    const jugs = useful.slice(0, boulders.length);
-    return jugs.concat(others.slice(0, Math.min(jugs.length, Math.max(0, Shared.random(6, 8) - jugs.length))));
+  /** The iteration's fixed pools and some at random, off jugs and rocks. */
+  pickPools(fixed, extra, exclude) {
+    const pools = fixed.map(asTile).filter((tile) => !exclude.some((other) => other.x === tile.x && other.y === tile.y));
+    return pools.concat(this.freeTiles(GROUND_MIN, GROUND_MAX, [...exclude, ...pools]).slice(0, Shared.random(extra[0], extra[1])));
   }
 
   spawnJugs(tiles) {
@@ -726,6 +888,7 @@ class ZebakRoom extends Raid.Room {
       jug.canWalkThroughNPCs = () => true;
       this.jugs.add(jug);
       this.graphic(GRAPHIC.ROAR, tile);
+      this.areaSound(SOUND.BOULDER_LAND, tile, 0, SOUND_RADIUS.BOULDER_LAND);
       for (const player of this.challengePlayers()) {
         if (player.getLocation().getX() === tile.x && player.getLocation().getY() === tile.y) Shared.damage(player, Shared.random(2, 5));
       }
@@ -744,6 +907,8 @@ class ZebakRoom extends Raid.Room {
     if (dx === 0 && dy === 0) return;
     state.direction = [dx, dy];
     state.left = JUG_ROLL_TILES;
+    // Perfect Zebak allows two pushes on the roar attack; stationary jugs may still be broken.
+    if (this.roaring && ++this.jugPushes > PERFECT_JUG_PUSHES) this.raid.failTask(TASK.PERFECT, `${Shared.displayName(player)} pushed too many jugs.`);
     jug.setNpcTransformationId(NpcIdentifiers.COL_00FFFF_JUG_COL_2);
     player.performAnimation(new Animation(ANIMATION.JUG_MOVE));
   }
@@ -785,16 +950,24 @@ class ZebakRoom extends Raid.Room {
     if (!this.jugs.has(jug)) return;
     this.jugs.delete(jug);
     const location = jug.getLocation();
-    this.graphic(GRAPHIC.JUG_BREAK, { x: location.getX(), y: location.getY() });
+    const helper = this.spawn(JUG_BREAK_HELPER.id, { x: location.getX() - 1, y: location.getY() - 1, z: 0 }, { scale: false, points: 0, inert: true });
+    if (helper) {
+      helper.__toaScripted = true;
+      helper.setUntargetable(true);
+      helper.getMovementQueue().setBlockMovement(true);
+      helper.performGraphic(Shared.gfx(GRAPHIC.JUG_BREAK));
+      this.later(JUG_BREAK_HELPER.ticks, () => this.despawn(helper));
+    }
     const range = this.upsetStomach ? 1 : 2;
     for (let dx = -range; dx <= range; dx++) {
       for (let dy = -range; dy <= range; dy++) {
-        const tileKey = key(location.getX() + dx, location.getY() + dy);
+        const tile = { x: location.getX() + dx, y: location.getY() + dy };
+        Shared.tileProjectile(this.area, location, Shared.loc(tile, 0), PROJECTILE.JUG_SPREAD, JUG_WATER_THROW);
+        const tileKey = key(tile.x, tile.y);
         if (!this.poison.has(tileKey)) continue;
-        Shared.tileProjectile(this.area, location, Shared.loc({ x: location.getX() + dx, y: location.getY() + dy }, 0), PROJECTILE.JUG_SPREAD, { duration: 10, startHeight: 7 });
         this.later(1, () => {
           this.removePoison(tileKey);
-          this.graphic(GRAPHIC.POISON_GONE, { x: location.getX() + dx, y: location.getY() + dy });
+          this.graphic(GRAPHIC.POISON_GONE, tile);
         });
       }
     }
@@ -803,23 +976,24 @@ class ZebakRoom extends Raid.Room {
 
   // -------------------------------------------------------------- waves
 
-  /** Three waves sweep the arena from one side, each with a gap or two to stand in. */
   /**
-   * Waves: jugs and acid at tick 1, the tail slam at 5, rocks falling (and the camera shaking)
-   * at 7, rows at 14, 21 and 28, done at 45. His next attack comes 15 ticks on (OpenRune).
+   * Waves: seq 9624 at T, jugs and acid thrown at T+1, the tail slam at T+5, landing at T+6, rocks
+   * falling (camera, pillars) at T+7, rows at T+14, T+21 and T+28, done at T+45. His next attack
+   * comes at T+15 (223/00014 T=390).
    */
   waveSpecial() {
     const { Animation } = Shared.core();
     this.busy = true;
     this.attackTicks = 15;
     this.zebak.performAnimation(new Animation(ANIMATION.SHOOT));
-    this.tail.performAnimation(new Animation(ANIMATION.TAIL_SHOOT));
-    const jugs = this.freeTiles(GROUND_MIN, GROUND_MAX).slice(0, Shared.random(6, 8));
-    const pools = this.freeTiles(GROUND_MIN, GROUND_MAX, jugs).slice(0, 16);
+    const jugs = WAVE_JUGS.map(asTile);
+    const pools = this.pickPools(WAVE_POOLS[Math.min(this.wavesDone, WAVE_POOLS.length - 1)], WAVE_EXTRA_POOLS, jugs);
+    this.wavesDone++;
     const from = Shared.loc(PROJECTILE_START);
     this.later(1, () => {
-      for (const tile of pools) Shared.tileProjectile(this.area, from, Shared.loc(tile, 0), PROJECTILE.POISON, { delay: 30, duration: 120, startHeight: 62 });
-      for (const tile of jugs) Shared.tileProjectile(this.area, from, Shared.loc(tile, 0), PROJECTILE.JUG, { delay: 30, duration: 120, startHeight: 62 });
+      this.areaSound(SOUND.JUGS, JUG_SOUND_TILE, 0, SOUND_RADIUS.JUGS);
+      for (const tile of pools) Shared.tileProjectile(this.area, from, Shared.loc(tile, 0), Shared.randomOf(PROJECTILE.POISON), THROW);
+      for (const tile of jugs) Shared.tileProjectile(this.area, from, Shared.loc(tile, 0), PROJECTILE.JUG, THROW);
     });
     const south = this.wavesSouth;
     this.later(5, () => {
@@ -827,7 +1001,7 @@ class ZebakRoom extends Raid.Room {
       this.tail.performAnimation(new Animation(ANIMATION.TAIL_CALL_WAVE));
     });
     this.later(6, () => {
-      for (const tile of pools) this.addPoison(tile, true, false);
+      for (const tile of pools) this.addPoison(tile, true);
       this.spawnJugs(jugs);
     });
     this.later(7, () => {
@@ -836,17 +1010,19 @@ class ZebakRoom extends Raid.Room {
         this.graphic(GRAPHIC.SPLASH, { x: base.x + x * 3, y: base.y }, { delay: 200 });
         this.graphic(GRAPHIC.ROCKS, { x: base.x + x * 3, y: base.y });
       }
-      for (const player of this.challengePlayers()) Shared.sound(player, SOUND.RUMBLING);
+      for (const [id, delay] of WAVE_ROCK_SOUNDS) this.soundAll(id, delay);
       this.shakeCameras(SHAKE.WAVES);
+      this.pillarsShaken = true;
+      for (const pillar of PILLARS) {
+        const tile = { x: pillar.x, y: pillar.y, z: 0 };
+        this.setObject(PILLAR.SHAKING, tile, 10, pillar.face);
+        this.graphic(GRAPHIC.DUST, { x: pillar.x + 1, y: pillar.y }, { height: 30 });
+        this.later(pillar.back, () => this.setObject(PILLAR.STILL, tile, 10, pillar.face));
+      }
     });
-    let skip = -1;
     const holes = 3 - Math.min(2, Math.floor(this.pathLevel() / 2));
     for (const tick of [14, 21, 28]) {
-      this.later(tick, () => {
-        const gap = skip === -1 ? Shared.random(0, 12) : 12 - skip;
-        this.spawnWave(south, gap, holes);
-        skip = skip === -1 ? gap : -1;
-      });
+      this.later(tick, () => this.spawnWave(south, Shared.random(0, 12 - holes), holes));
     }
     this.later(45, () => {
       this.busy = false;
@@ -858,17 +1034,11 @@ class ZebakRoom extends Raid.Room {
     const { NpcIdentifiers } = Shared.core();
     const base = south ? WAVE_SOUTH : WAVE_NORTH;
     for (let x = 0; x < 21; x++) {
-      if (x >= 4) {
-        let open = false;
-        for (let hole = 0; hole < holes; hole++) {
-          if (x - 4 === gap + (gap < 6 ? hole : -hole)) open = true;
-        }
-        if (open) continue;
-      }
+      if (x - 4 >= gap && x - 4 < gap + holes) continue;
       const wave = this.spawn(NpcIdentifiers.COL_00FFFF_WAVE_COL, { x: base.x + x, y: base.y, z: 0 }, { scale: false, points: 0 });
       if (!wave) continue;
       wave.__toaScripted = true;
-      wave.__toaWave = { north: south, tiles: 23 };
+      wave.__toaWave = { north: south, tiles: WAVE_LIFE_TICKS };
       wave.setUntargetable(true);
       wave.canWalkThroughNPCs = () => true;
       this.waves.add(wave);
@@ -888,7 +1058,9 @@ class ZebakRoom extends Raid.Room {
       const location = wave.getLocation();
       const step = state.north ? 1 : -1;
       for (const player of players) {
-        if (player.getLocation().equals(location) && !this.isSwimming(player)) this.push(player, 0, step, 4, MAX_HIT.WAVE);
+        if (!player.getLocation().equals(location) || this.isSwimming(player)) continue;
+        this.push(player, 0, step, WAVE_PUSH_TILES, MAX_HIT.WAVE);
+        this.failPerfect(player, "was hit by a wave.");
       }
       for (const jug of this.jugs) {
         if (jug.getLocation().getX() === location.getX() && jug.getLocation().getY() === location.getY() + step * 2 && !jug.__toaJug.direction) {
@@ -899,6 +1071,8 @@ class ZebakRoom extends Raid.Room {
       }
       const here = key(location.getX(), location.getY());
       if (this.poison.has(here) && Shared.random(0, 3) === 0) this.removePoison(here);
+      // Wiki: a wave turns bloody on a bleeding player's splatters.
+      if (this.objectAt({ x: location.getX(), y: location.getY(), z: 0 }, 22)) wave.setNpcTransformationId(NpcIdentifiers.COL_00FFFF_BLOODY_WAVE_COL);
       for (const cloud of [...this.clouds]) {
         if (!cloud.getLocation().equals(location)) continue;
         this.clouds.delete(cloud);
@@ -915,12 +1089,13 @@ class ZebakRoom extends Raid.Room {
     const location = player.getLocation();
     let moved = 0;
     while (moved < distance && Shared.floorFree(this.area, location.transform(dx * (moved + 1), dy * (moved + 1)))) moved++;
-    // A wave that runs out of floor throws the player over the edge into the water.
+    // A wave that runs out of floor throws the player over the edge, onto the water's row.
     let intoWater = false;
     if (baseDamage === MAX_HIT.WAVE && moved < distance) {
-      const water = location.transform(dx * WATER_JUMP, dy * WATER_JUMP);
+      const row = dy > 0 ? WATER_ROW.NORTH : WATER_ROW.SOUTH;
+      const water = Shared.loc({ x: location.getX(), y: row }, location.getZ());
       if (isWater(water) && Shared.floorFree(this.area, water)) {
-        moved = WATER_JUMP;
+        moved = Math.abs(row - location.getY());
         intoWater = true;
       }
     }
@@ -954,12 +1129,13 @@ class ZebakRoom extends Raid.Room {
     this.zebak.setUntargetable(true);
     this.zebak.performAnimation(new Animation(ANIMATION.DEATH));
     this.tail.performAnimation(new Animation(ANIMATION.TAIL_DEATH));
-    this.complete();
-    Shared.later(this.taskKey, SHAKE.DEATH.delay, () => this.shakeCameras(SHAKE.DEATH));
-    Shared.later(this.taskKey, 3, () => {
-      if (this.destroyed) return;
+    this.dying = true;
+    this.later(SHAKE.DEATH.delay, () => this.shakeCameras(SHAKE.DEATH));
+    // "Challenge complete" comes as he settles (235/03431 ticks 195-199).
+    this.later(DEATH_FORM_TICKS, () => {
       this.zebak.setNpcTransformationId(NpcIdentifiers.ZEBAK_4);
       this.tail.setNpcTransformationId(NpcIdentifiers.ZEBAKS_TAIL_2);
+      this.complete();
     });
   }
 
@@ -979,6 +1155,10 @@ class ZebakRoom extends Raid.Room {
     const viewer = this.roomPlayers()[0];
     if (viewer) Shared.graphicAt(viewer, id, Shared.loc({ x: tile.x, y: tile.y, z: 0 }), options);
   }
+}
+
+function asTile([x, y]) {
+  return { x, y };
 }
 
 function key(x, y) {
@@ -1008,7 +1188,13 @@ function zebakRoom(npc) {
 
 function afterZebakHit(event) {
   const room = zebakRoom(event.target);
-  if (room && event.target.__toaZebak) room.checkPhases();
+  if (!room || !event.target.__toaZebak) return;
+  room.checkPhases();
+  room.areaSound(SOUND.ZEBAK_HIT, ZEBAK_HIT_SOUND_TILE, 0, SOUND_RADIUS.ZEBAK_HIT);
+  const { CombatType } = Shared.core();
+  if (event.hit.getTotalDamage() > 0 && event.hit.getCombatMethod().type() !== CombatType.MELEE) {
+    room.raid.failTask(TASK.MELEE_ONLY, "You damaged Zebak with an attack style other than melee.", event.player);
+  }
 }
 
 function zebakDowned(event) {
@@ -1035,7 +1221,7 @@ function jugStruck(event) {
   if (event.hit.getAttacker?.()?.isPlayer?.()) {
     for (const hit of event.hit.getHits()) hit.setDamage(0);
     event.hit.updateTotalDamage();
-    // It shatters the tick after the blow (OpenRune).
+    // It shatters the tick after the blow (223/00014 ticks 461-462).
     event.npc.__toaJug.direction = null;
     room.later(1, () => room.breakJug(event.npc));
   }

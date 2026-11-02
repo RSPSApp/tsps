@@ -1,11 +1,64 @@
 "use strict";
 
 /**
- * Path of Apmeken, Test of Companionship: eleven waves of baboons while one player at a time
- * holds Apmeken's Sight. The sighted player sees which vents are about to erupt or which
- * roof supports are failing; the rest of the party fixes them with neutralising potions and
- * hammers from the supply crates, or the whole room pays for it.
- * Wiki: https://oldschool.runescape.wiki/w/Path_of_Apmeken#Puzzle_room
+ * Path of Apmeken, Test of Companionship: eight waves of baboons while one player at a time holds
+ * Apmeken's Sight. The sighted player sees which vents will erupt, which roof supports are failing
+ * or who is being corrupted; the party fixes it with neutralising potions and hammers from the
+ * crates, or the whole room pays for it.
+ *
+ * Where the numbers come from. Captures are rsprox <rev>/<rec>, ticks as recorded. 234-235 (3280,
+ * 844, 3429, 3431) are after the 25 June 2025 changes; 227 (1852, 1845, 1838, 1759, 1753, 581) are
+ * before them, with ten waves, and are used for what parties do.
+ *
+ * Wiki (Strategies, the Baboon pages, Changes):
+ * - Eight waves (June 2025 removed two; 234/00844 and 235/03429 show eight, 227/00553 ten). The
+ *   table below. An extra combat baboon in any party.
+ * - Baboon hitpoints don't scale (May 2024): 25/30, 30/35, 20/25, shaman 40, cursed 20, volatile 8.
+ *   Each dies at exactly that much damage in 3280, 844, 3429 and 3431 (131 kills).
+ * - A guaranteed max hit from the opposing style: brawler magic, thrower melee, mage ranged, and
+ *   ranged on shamans, cursed and volatile baboons (June 2025).
+ * - One fix per player in the party, up to the four there are; corruption only in parties, cured by
+ *   the sighted player's potion or a potion used on the player; each missed fix hurts everyone; a
+ *   needless fix hurts whoever made it; a hammer or a dragon warhammer repairs. Volatile baboons
+ *   pick a random player and kill baboons beside them. Poison or venom stops a shaman summoning.
+ *   Thralls per shaman at once: 4 or 5. Venom pools last 20 seconds and do 6-8 a tick.
+ *
+ * Captures:
+ * - Hazards: warned 30 ticks in, judged 20 later, then the next warning 30, 26, 24, 22 ticks after
+ *   each judgement (all of 234/03280, 227/00101, 227/01757). In a party Sight passes 22 ticks after
+ *   the second judgement and the warning is 10 ticks after that (227/01852, 227/01759, every party room).
+ * - Sight is first granted 2 ticks in. Messages and colours: 234/03280 ticks 5963-6061, 227/01759
+ *   ticks 6906-6936, 227/00581 tick 2554 ("overwhelmed"). The warnings' graphics are sent to the
+ *   sighted player alone: 234/03280 ticks 5991 and 6041.
+ * - A failed vent shows gas on each vent left and a failed roof shakes each support left: 4 when solo
+ *   whatever the fix needed, 2 for one missed of three, 1 for one missed of four (1757 tick 30500,
+ *   581 ticks 2452 and 2502, 1852 tick 23846). The supports settle 4 ticks later.
+ * - Corruption: the sighted player sees spot 2137 on each other player, and a tint (227/01759 tick
+ *   6916); the others see nothing until it clears (227/01852 tick 12047). Everyone within a tile of
+ *   the sighted player is cured by one pour, each with sound 6576: 227/01845 tick 2150 (4 players,
+ *   same tile), 227/01759 tick 6928 (2 players, next tile), 227/01753 tick 6720.
+ * - Waves: the first 16 ticks in, then checked every 2 ticks (every gap in every recording is even).
+ *   No timer: 223/00014 waits 114 ticks. The room ends 3 ticks after the last baboon falls
+ *   (234/03280 ticks 6154, 6157).
+ * - Baboon animations, projectiles and sounds: 234/03280 ticks 5987-5997. Volatile: seq 9756, the blast
+ *   2 ticks later (234/03280 ticks 6054, 6056).
+ *
+ * Estimates (fits, and what they rest on):
+ * - Baboons alive when the next wave comes: solo 2, 2, 2, 2, 2, 2, 3 for waves 1-7, up to 4 in the
+ *   largest parties, the largest number seen alive across 41 rooms. Least gap between waves: 8.
+ * - Damage of a missed fix before the raid's factor, shared out by what was missed: vents 20 (20 at
+ *   level 0, 50 at the cap; 12 and 17 for one of four and three: fits exactly, 6 samples), roof 22 (55
+ *   at the cap, solo, 1 sample; for one and two of three this gives 18 and 36 against 15 and 35,
+ *   3 samples), corruption 13 (32 for all of two, 7 for one of five, 2 samples).
+ * - Volatile blast 17-21 before the factor: 41-52 near the cap, 11 hits.
+ * - Thrall hitpoints: 2 x raid level factor x party share (solo 2, 6, 8 at raid levels 0, 500, 750;
+ *   9, 15, 24, 27, 33 for 2, 3, 5, 6, 8 players; 137 kills; 4 and 7 players interpolated).
+ * - Who holds Sight after the second holder: one more switch is captured nowhere; every third hazard.
+ *
+ * Not captured, kept as they were: damage for a needless fix and its messages, thralls' prayer drain
+ * of 2, and how much a cursed baboon's pool hurts after the factor (the Wiki's 6-8 is scaled here).
+ * Perfect Apmeken's failure lines: no recording has one, so they are written in the style of Perfect
+ * Het's.
  */
 
 const Shared = require("./Shared.TombsOfAmascut");
@@ -16,24 +69,62 @@ const VENTS = [{ x: 3800, y: 5284 }, { x: 3816, y: 5284 }, { x: 3816, y: 5276 },
 const ROOF_SKULLS = [{ x: 3804, y: 5288 }, { x: 3812, y: 5288 }, { x: 3812, y: 5272 }, { x: 3804, y: 5272 }];
 const ROOFS = [{ x: 3803, y: 5289 }, { x: 3811, y: 5289 }, { x: 3811, y: 5269 }, { x: 3803, y: 5269 }];
 const BARRIER_BASE = { x: 3820, y: 5279 };
+const ROOM = { minX: 3798, maxX: 3818, minY: 5270, maxY: 5290 };
 
 const ROOF = 45494;
 const ROOF_DAMAGED = 45495;
 const VENOM_POOL = 45493;
 const HAMMER_CRATE = 45497;
 const POTION_CRATE = 45498;
-const BARRIER = 45135;
+const ROOF_ROTATION = 3;
 
-const GRAPHIC = { SIGHT_GRANTED: 2132, SIGHT_LOST: 2133, SENSE_NORTH: 2134, SENSE_SOUTH: 2135, VENT: 2138, ROOF: 2139, THRALL: 2017, EXPLODE_BODY: 2249, EXPLODE_FIRE: 131 };
+const GRAPHIC = { SIGHT_GRANTED: 2132, SIGHT_LOST: 2133, SENSE_NORTH: 2134, SENSE_SOUTH: 2135, CORRUPTED: 2137, VENT: 2138, ROOF: 2139, THRALL: 2017, EXPLODE_BODY: 2249, EXPLODE_FIRE: 131 };
+const GRAPHIC_HEIGHT = { SIGHT: 180, CORRUPTED: 180, VENT_SENSE: 46, ROOF_SENSE: 96 };
 const ANIMATION = { REPAIR: 3676, POUR: 2295, TAKE: 827, MELEE: 9742, RANGED: 9745, MAGIC: 9746, SUMMON: 9747, EXPLODE: 9756 };
 const PROJECTILE = { RANGED: 2242, MAGIC: 2247 };
-const SOUND = { CYCLE: 6574, DONE: 2655, REPAIR: 938, VENT: 6569, POUR: 2401, TAKE: 2582, THRALL: 100, EXPLODE: 156 };
+const SOUND = { CYCLE: 6574, DONE: 2655, REPAIR: 938, VENT: 6569, ROOF: 6573, POUR: 2401, NEUTRALISED: 6577, CURED: 6576, CORRUPTED: 2843, TAKE: 2582, THRALL_SUMMON: 100, THRALL_BORN: 6579, EXPLODE: 156, POOL: 3308 };
+const SOUND_RADIUS = { THRALL: 6, POOL: 4, EXPLODE: 6 };
+const COLOUR = { SENSE: "a53fff", SIGHT: "3366ff", FIXED: "229628", FAILED: "ff3045" };
 
-const WAVE_COUNT = 11;
-const PUNISHMENT = 22;
-const VENOM_DAMAGE = 6;
-const VENOM_POOL_TICKS = 29;
+const SIGHT_DELAY = 2;
+const FIRST_WARNING = 30;
+const HAZARD_JUDGED_AFTER = 20;
+/** Ticks from a judgement to the next warning. */
+const WARNING_GAPS = [30, 26, 24, 22];
+const SIGHT_PASSES_AFTER = 22;
+const WARNING_AFTER_SIGHT = 10;
+const FIRST_SIGHT_HAZARDS = 2;
+const LATER_SIGHT_HAZARDS = 3;
+const ROOF_SETTLES = 4;
+const MAX_FIXES = 4;
+const CORRUPTED_REFRESH = 2;
+const CURE_RADIUS = 1;
+
+const FIRST_WAVE = 16;
+const WAVE_CHECK_INTERVAL = 2;
+const WAVE_MIN_GAP = 8;
+const END_DELAY = 3;
+/** Baboons (not thralls) that may be alive for wave n + 1 to come, by party size. */
+const WAVE_THRESHOLDS = { SOLO: [2, 2, 2, 2, 2, 2, 3], SMALL: [2, 2, 2, 2, 2, 3, 3], LARGE: [3, 2, 2, 2, 3, 4, 4] };
+const LARGE_PARTY = 5;
+
+const VENT_DAMAGE = 20;
+const ROOF_DAMAGE = 22;
+const CORRUPTION_DAMAGE = 13;
+const VENOM_DAMAGE = [6, 8];
+const VENOM_POOL_TICKS = 33; // Wiki: 20 seconds. Captured: 30.
+const BLAST_DAMAGE = [17, 21];
+const BLAST_TICKS = 2;
+const BLAST_RADIUS = 1;
 const BABOON_POINTS = 1.2;
+const THRALL_BASE_HITPOINTS = 2;
+const THRALL_PARTY_SHARE = [1, 1.5, 2.4, 3.2, 3.9, 4.4, 5, 5.5];
+const THRALL_DRAIN = 2;
+const THRALLS_AT_ONCE = [4, 5];
+const PERFECT_TICKS = 300;
+const TASK = "Perfect Apmeken";
+
+const HAZARD = { VENTS: "vents", ROOF: "roof", CORRUPTION: "corruption" };
 
 function waves(I) {
   const MELEE = I.BABOON_BRAWLER;
@@ -47,37 +138,58 @@ function waves(I) {
   const CURSED = I.CURSED_BABOON;
   return {
     special: [SHAMAN, VOLATILE, CURSED],
+    // -1 is any of the special three. Wiki's table; 3280, 844, 3429 and 3431 agree in every wave.
     waves: [
-      [MELEE, MELEE], [RANGED, MAGE], [MELEE, MELEE, SHAMAN], [MELEE, MELEE, -1], [RANGED, RANGED, VOLATILE],
-      [MAGE, MAGE, CURSED], [RANGED2, RANGED2, -1, -1, -1], [MAGE2, MAGE2, -1, -1, -1], [MELEE2, MELEE2, -1, -1, -1],
-      [MELEE2, RANGED2, -1, -1, -1], [SHAMAN, SHAMAN, VOLATILE, VOLATILE, VOLATILE],
+      [MELEE, MELEE, SHAMAN], [RANGED, RANGED, VOLATILE], [MAGE, MAGE, CURSED], [RANGED2, RANGED2, -1, -1, -1],
+      [MAGE2, MAGE2, SHAMAN, -1, -1], [MELEE2, MELEE2, SHAMAN, -1, -1], [MELEE2, RANGED2, SHAMAN, CURSED, CURSED], [SHAMAN, VOLATILE, VOLATILE, -1, -1],
     ],
-    extra: [MELEE, MAGE, MELEE, MAGE, MELEE, RANGED, MELEE2, MAGE2, RANGED2, MAGE2, CURSED],
+    // A party's extra baboon, wave by wave (227/01852, 01759, 01845, 01838: the same for 2 to 8 players).
+    extra: [MELEE, RANGED, MAGE, RANGED2, MAGE2, MELEE2, SHAMAN, -1],
   };
 }
 
 class ApmekenPuzzleRoom extends Raid.Room {
   build() {
     this.wave = 0;
-    this.waveDelay = 6;
-    this.critical = 0;
+    this.nextWaveCheck = 0;
+    this.lastWave = 0;
+    this.ending = false;
     this.baboons = new Set();
     this.sight = null;
-    this.cycleTicks = 2;
-    this.cycles = 0;
-    this.specialTicks = 50;
-    this.special = Shared.random(0, 1);
+    this.sightDue = 0;
+    this.nextEvent = 0;
+    this.hazard = null;
+    this.hazards = 0;
+    this.sightHazards = 0;
+    this.sightHazardLimit = FIRST_SIGHT_HAZARDS;
     this.required = 0;
-    this.active = false;
-    this.switchSight = false;
     this.done = [false, false, false, false];
+    this.corrupted = new Set();
+    this.corruptedAtStart = 0;
     this.pools = new Map();
     this.roofTicks = 0;
+    this.perfectDue = 0;
+    this.nextCorruptedGlow = 0;
+    this.passDue = false;
+    this.needless = false;
+  }
+
+  onStart() {
+    const now = Shared.cycle();
+    this.sightDue = now + SIGHT_DELAY;
+    this.nextEvent = now + FIRST_WARNING;
+    this.nextWaveCheck = now + FIRST_WAVE;
+    this.perfectDue = now + PERFECT_TICKS;
+  }
+
+  onPlayerArrive(player) {
+    this.sendSight(player);
   }
 
   onComplete() {
     for (const player of this.challengePlayers()) player.setVenomed?.(false);
     this.clearPools();
+    this.resetRoofs();
     for (let y = 0; y < 2; y++) this.setObject(-1, { x: BARRIER_BASE.x, y: BARRIER_BASE.y + y, z: 0 }, 10);
     const { ItemIdentifiers } = Shared.core();
     for (const player of this.roomPlayers()) {
@@ -85,6 +197,7 @@ class ApmekenPuzzleRoom extends Raid.Room {
       player.getInventory().delete(ItemIdentifiers.HAMMER, 28);
     }
     this.setSight(null);
+    if (this.teamSize >= 2 && Shared.cycle() - this.startCycle < PERFECT_TICKS) this.raid.completeTask(TASK);
   }
 
   onReset() {
@@ -101,7 +214,7 @@ class ApmekenPuzzleRoom extends Raid.Room {
   }
 
   resetRoofs() {
-    for (const tile of ROOFS) this.setObject(ROOF, { ...tile, z: 0 }, 10, 3);
+    for (const tile of ROOFS) this.setObject(ROOF, { ...tile, z: 0 }, 10, ROOF_ROTATION);
   }
 
   setSight(player) {
@@ -109,12 +222,18 @@ class ApmekenPuzzleRoom extends Raid.Room {
     this.sight = player;
     if (player) player.__toaSight = true;
     this.raid.refreshHudStates();
-    for (const member of this.raid.players) {
-      const index = this.raid.players.indexOf(member);
-      for (const viewer of this.raid.players) {
-        viewer.getPacketSender().sendVarbit(Shared.VARBIT.HUD_PLAYER_SIGHT_BASE + index, member === player ? 1 : 0);
-      }
-    }
+    for (const viewer of this.raid.players) this.sendSight(viewer);
+  }
+
+  sendSight(viewer) {
+    this.raid.players.forEach((member, index) => {
+      viewer.getPacketSender().sendVarbit(Shared.VARBIT.HUD_PLAYER_SIGHT_BASE + index, member === this.sight ? 1 : 0);
+    });
+  }
+
+  /** The party's chance at the task goes; a solo player has none to lose. */
+  failPerfect(reason) {
+    if (this.teamSize >= 2) this.raid.failTask(TASK, reason);
   }
 
   // -------------------------------------------------------------- tick
@@ -122,82 +241,108 @@ class ApmekenPuzzleRoom extends Raid.Room {
   tick() {
     if (!this.isStarted()) return;
     const players = this.challengePlayers();
-    if (this.waveDelay > 0 && --this.waveDelay <= 0) this.spawnWave();
-    if (this.cycleTicks > 0 && --this.cycleTicks === 0) this.cycle(players);
+    const now = Shared.cycle();
+    if (now >= this.perfectDue) {
+      this.perfectDue = Infinity;
+      this.failPerfect("The room wasn't completed fast enough.");
+    }
+    if (this.sightDue && now >= this.sightDue && players.length > 0) {
+      this.sightDue = 0;
+      this.passSight();
+    }
+    if (now >= this.nextWaveCheck) {
+      this.nextWaveCheck = now + WAVE_CHECK_INTERVAL;
+      this.checkWave(now);
+    }
+    if (now >= this.nextEvent) this.nextHazardEvent(now, players);
+    if (this.corrupted.size > 0 && now >= this.nextCorruptedGlow) this.glowCorrupted(now);
     for (const pool of this.pools.values()) {
       for (const player of players) {
         if (player.getLocation().getX() !== pool.x || player.getLocation().getY() !== pool.y) continue;
-        Shared.damage(player, Math.floor(this.raid.damageFactor(0) * VENOM_DAMAGE) + Shared.random(0, 1));
+        this.hurt(player, Shared.random(VENOM_DAMAGE[0], VENOM_DAMAGE[1]));
         player.setVenomed?.(true);
+        this.failPerfect(`${Shared.displayName(player)} stood in venom.`);
       }
     }
     if (this.roofTicks > 0 && --this.roofTicks <= 0) this.resetRoofs();
     this.tickBaboons(players);
   }
 
-  /** Sight passes on, a hazard is sensed, then the hazard is judged. */
-  cycle(players) {
-    const sightGone = !this.sight || this.sight.getHitpoints() <= 0 || !this.inChallenge(this.sight);
-    if (!this.active && (sightGone || (players.length > 1 && this.switchSight))) {
+  /** Warnings and judgements alternate; Sight passes between them, on its own timer. */
+  nextHazardEvent(now, players) {
+    if (this.hazard) {
+      this.judge(now, players);
+      return;
+    }
+    if (this.passDue) {
+      this.passDue = false;
       this.passSight();
+      this.nextEvent = now + WARNING_AFTER_SIGHT;
       return;
     }
-    if (!this.active) {
-      for (const player of players) {
-        Shared.sound(player, SOUND.CYCLE);
-        if (player !== this.sight) player.sendMessage("<col=0000b2>You sense an issue somewhere in the room.");
-      }
-      this.required = Math.min(4, players.length);
-      this.done.fill(false);
-      if (this.special === 0) {
-        this.sight.sendMessage("<col=6800bf>You sense some strange fumes coming from holes in the floor.");
-        VENTS.forEach((tile, index) => this.sightGraphic(index < 2 ? GRAPHIC.SENSE_NORTH : GRAPHIC.SENSE_SOUTH, tile, 46));
-      } else {
-        this.sight.sendMessage("<col=6800bf>You sense an issue with the roof supports.");
-        ROOF_SKULLS.forEach((tile, index) => this.sightGraphic(index < 2 ? GRAPHIC.SENSE_NORTH : GRAPHIC.SENSE_SOUTH, tile, 96));
-      }
-      this.cycleTicks = 30;
-      this.active = true;
-      return;
-    }
-    const fixed = this.done.filter(Boolean).length >= this.required;
-    if (this.special === 0) {
-      if (fixed) this.announce(players, "<col=0000b2>Apmeken's Sight guides you into neutralising some dangerous fumes.");
-      else this.erupt([0, 1, 2, 3], players);
-    } else if (fixed) {
-      this.announce(players, "<col=0000b2>Apmeken's Sight guides you into repairing the roof supports.");
-    } else {
-      this.collapse([0, 1, 2, 3], players);
-    }
-    if (++this.cycles === (players.length === 2 ? 3 : 2)) {
-      this.switchSight = true;
-      this.cycleTicks = 30;
-    } else {
-      this.specialTicks = Math.max(30, this.specialTicks - 1);
-      this.cycleTicks = this.specialTicks;
-    }
-    this.special = Shared.random(0, 1);
-    this.active = false;
+    this.warn(now, players);
   }
+
+  // -------------------------------------------------------------- Sight
 
   passSight() {
     const previous = this.sight;
     if (previous && previous.getHitpoints() > 0 && this.inChallenge(previous)) {
-      Shared.sound(previous, SOUND.CYCLE);
-      previous.sendMessage("<col=3366ff>You no longer have Apmeken's Sight.");
-      previous.performGraphic(Shared.gfx(GRAPHIC.SIGHT_LOST, { height: 180 }));
+      previous.sendMessage(`<col=${COLOUR.SIGHT}>You no longer have Apmeken's Sight.`);
+      previous.performGraphic(Shared.gfx(GRAPHIC.SIGHT_LOST, { height: GRAPHIC_HEIGHT.SIGHT }));
     }
     const candidates = this.challengePlayers((player) => player !== previous);
-    const next = candidates.length > 0 ? Shared.randomOf(candidates) : previous;
+    // Wiki: the first in gets it first; afterwards it goes to someone at random.
+    const next = previous ? (candidates.length > 0 ? Shared.randomOf(candidates) : previous) : candidates[0] ?? null;
     this.setSight(next);
-    if (next) next.performGraphic(Shared.gfx(GRAPHIC.SIGHT_GRANTED, { height: 180 }));
+    if (next) next.performGraphic(Shared.gfx(GRAPHIC.SIGHT_GRANTED, { height: GRAPHIC_HEIGHT.SIGHT }));
     for (const player of this.challengePlayers()) {
       Shared.sound(player, SOUND.CYCLE);
-      if (next) player.sendMessage(`<col=3366ff>${player === next ? "You have" : `${Shared.displayName(next)} has`} been granted Apmeken's Sight.`);
+      if (next) player.sendMessage(`<col=${COLOUR.SIGHT}>${player === next ? "You have" : `${Shared.displayName(next)} has`} been granted Apmeken's Sight.`);
     }
-    this.cycles = 0;
-    this.cycleTicks = 30;
-    this.switchSight = false;
+    this.sightHazards = 0;
+  }
+
+  /** A hazard begins: only the sighted player is told which. */
+  warn(now, players) {
+    if (!this.sight || this.sight.getHitpoints() <= 0 || !this.inChallenge(this.sight)) this.passSight();
+    if (!this.sight) {
+      this.nextEvent = now + 1;
+      return;
+    }
+    const party = players.length > 1;
+    this.hazard = Shared.randomOf(party ? [HAZARD.VENTS, HAZARD.ROOF, HAZARD.CORRUPTION] : [HAZARD.VENTS, HAZARD.ROOF]);
+    this.required = Math.min(MAX_FIXES, players.length);
+    this.done.fill(false);
+    for (const player of players) {
+      Shared.sound(player, SOUND.CYCLE);
+      if (player !== this.sight) player.sendMessage(`<col=${COLOUR.SENSE}>You sense an issue somewhere in the room.`);
+    }
+    if (this.hazard === HAZARD.VENTS) {
+      this.sight.sendMessage(`<col=${COLOUR.SENSE}>You sense some strange fumes coming from holes in the floor.`);
+      VENTS.forEach((tile, index) => this.sightGraphic(index < 2 ? GRAPHIC.SENSE_NORTH : GRAPHIC.SENSE_SOUTH, tile, GRAPHIC_HEIGHT.VENT_SENSE));
+    } else if (this.hazard === HAZARD.ROOF) {
+      this.sight.sendMessage(`<col=${COLOUR.SENSE}>You sense an issue with the roof supports.`);
+      ROOF_SKULLS.forEach((tile, index) => this.sightGraphic(index < 2 ? GRAPHIC.SENSE_NORTH : GRAPHIC.SENSE_SOUTH, tile, GRAPHIC_HEIGHT.ROOF_SENSE));
+    } else {
+      this.sight.sendMessage(`<col=${COLOUR.SENSE}>You sense Amascut's corruption beginning to take hold.`);
+      this.corrupted = new Set(players.filter((player) => player !== this.sight));
+      this.corruptedAtStart = this.corrupted.size;
+      Shared.sound(this.sight, SOUND.CORRUPTED, 20);
+      this.glowCorrupted(now);
+    }
+    this.nextEvent = now + HAZARD_JUDGED_AFTER;
+  }
+
+  /**
+   * The sighted player alone sees who is corrupted. OSRS draws it on the player (spot 2137 and a
+   * tint, for that viewer only); PacketSender has neither, so it is a tile graphic that keeps up.
+   */
+  glowCorrupted(now) {
+    this.nextCorruptedGlow = now + CORRUPTED_REFRESH;
+    for (const player of this.corrupted) {
+      this.sight?.getPacketSender().sendGraphic(Shared.gfx(GRAPHIC.CORRUPTED, { height: GRAPHIC_HEIGHT.CORRUPTED }), player.getLocation());
+    }
   }
 
   /** Only the sighted player sees the warning skulls. */
@@ -205,50 +350,108 @@ class ApmekenPuzzleRoom extends Raid.Room {
     this.sight?.getPacketSender().sendGraphic(Shared.gfx(id, { height }), Shared.loc(tile, 0));
   }
 
-  announce(players, message) {
-    for (const player of players) player.sendMessage(message);
-    if (this.sight) Shared.sound(this.sight, SOUND.DONE);
+  /** The hazard's time is up: fixed, or everyone is hurt by the share that was missed. */
+  judge(now, players) {
+    const hazard = this.hazard;
+    this.hazard = null;
+    const missed = hazard === HAZARD.CORRUPTION
+      ? [...this.corrupted].filter((player) => players.includes(player)).length
+      : Math.max(0, this.required - this.done.filter(Boolean).length);
+    if (missed === 0) this.hazardFixed(hazard, players);
+    else this.hazardFailed(hazard, missed, players);
+    this.corrupted.clear();
+    this.hazards++;
+    this.sightHazards++;
+    this.done.fill(false);
+    if (players.length > 1 && this.sightHazards >= this.sightHazardLimit) {
+      this.sightHazardLimit = LATER_SIGHT_HAZARDS;
+      this.passDue = true;
+      this.nextEvent = now + SIGHT_PASSES_AFTER;
+    } else {
+      this.nextEvent = now + WARNING_GAPS[Math.min(this.hazards - 1, WARNING_GAPS.length - 1)];
+    }
   }
 
-  erupt(indices, players) {
+  hazardFixed(hazard, players) {
+    const who = players.length > 1 ? "your group" : "you";
+    const done = { [HAZARD.VENTS]: "neutralising some dangerous fumes", [HAZARD.ROOF]: "repairing the roof supports", [HAZARD.CORRUPTION]: "overcoming Amascut's corruption" }[hazard];
+    for (const player of players) {
+      player.sendMessage(`<col=${COLOUR.SIGHT}>Apmeken's Sight guides ${who} into ${done}.`);
+      Shared.sound(player, SOUND.DONE);
+    }
+  }
+
+  hazardFailed(hazard, missed, players) {
+    if (hazard === HAZARD.VENTS) {
+      this.erupt(this.undone(), players, this.shareOf(VENT_DAMAGE, missed, this.required));
+    } else if (hazard === HAZARD.ROOF) {
+      this.collapse(this.undone(), players, this.shareOf(ROOF_DAMAGE, missed, this.required));
+    } else {
+      const amount = this.shareOf(CORRUPTION_DAMAGE, missed, this.corruptedAtStart);
+      for (const player of players) {
+        player.sendMessage(`<col=${COLOUR.FAILED}>Your group is overwhelmed by Amascut's corruption!`);
+        Shared.damage(player, amount);
+      }
+    }
+    this.failPerfect("A danger was allowed to trigger.");
+  }
+
+  undone() {
+    return [0, 1, 2, 3].filter((index) => !this.done[index]);
+  }
+
+  /** The scaled damage, by the part of the fixes that were missed. */
+  shareOf(base, missed, of) {
+    return Math.ceil(this.maxHit(base) * missed / Math.max(1, of) - 0.5);
+  }
+
+  erupt(indices, players, amount) {
     for (const player of players) {
       Shared.sound(player, SOUND.VENT);
-      player.sendMessage(indices.length === 1
-        ? "<col=ff3045>Some toxic fumes errupt out of the hole! There was clearly nothing to neutralise."
-        : "<col=ff3045>The fumes filling the room suddenly ignite!");
-      Shared.damage(player, Math.floor(this.raid.damageFactor(0) * PUNISHMENT));
+      player.sendMessage(this.needless
+        ? `<col=${COLOUR.FAILED}>Some toxic fumes errupt out of the hole! There was clearly nothing to neutralise.`
+        : `<col=${COLOUR.FAILED}>The fumes filling the room suddenly ignite!`);
+      Shared.damage(player, amount);
     }
-    this.roofTicks = 4;
-    for (const index of indices) this.graphic(GRAPHIC.VENT, VENTS[index], { delay: 5 });
+    for (const index of indices) this.graphic(GRAPHIC.VENT, VENTS[index]);
   }
 
-  collapse(indices, players) {
+  collapse(indices, players, amount) {
     for (const player of players) {
-      player.performGraphic(Shared.gfx(GRAPHIC.ROOF));
-      player.sendMessage(indices.length === 1
-        ? "<col=ff3045>Some debris falls on you! The roof support clearly didn't need repairing."
-        : "<col=ff3045>Damaged roof supports cause some debris to fall on you!");
-      Shared.damage(player, Math.floor(this.raid.damageFactor(0) * PUNISHMENT));
+      Shared.sound(player, SOUND.ROOF);
+      this.graphic(GRAPHIC.ROOF, player.getLocation());
+      player.sendMessage(this.needless
+        ? `<col=${COLOUR.FAILED}>Some debris falls on you! The roof support clearly didn't need repairing.`
+        : `<col=${COLOUR.FAILED}>Damaged roof supports cause some debris to fall on you!`);
+      Shared.damage(player, amount);
     }
-    this.roofTicks = 4;
-    for (const index of indices) this.setObject(ROOF_DAMAGED, { ...ROOFS[index], z: 0 }, 10, 3);
+    this.roofTicks = ROOF_SETTLES;
+    for (const index of indices) this.setObject(ROOF_DAMAGED, { ...ROOFS[index], z: 0 }, 10, ROOF_ROTATION);
   }
 
   // -------------------------------------------------------------- fixing
+
+  /** A fix nobody needed: whoever made it pays alone. */
+  needlessFix(hurtBy) {
+    this.needless = true;
+    hurtBy();
+    this.needless = false;
+  }
 
   repairRoof(player, object) {
     const location = object.getLocation();
     const index = ROOFS.findIndex((tile) => tile.x === location.getX() && tile.y === location.getY());
     if (index === -1) return;
-    const { ItemIdentifiers, Animation } = Shared.core();
-    if (!player.getInventory().contains(ItemIdentifiers.HAMMER)) {
+    const { Animation } = Shared.core();
+    if (!hasHammer(player)) {
       player.sendMessage("You need a hammer to repair this roof support.");
-    } else if (!this.active || this.special !== 1) {
-      this.collapse([index], [player]);
+    } else if (this.hazard !== HAZARD.ROOF) {
+      this.needlessFix(() => this.collapse([index], [player], this.maxHit(ROOF_DAMAGE)));
+      this.failPerfect(`${Shared.displayName(player)} repaired a roof support needlessly.`);
     } else if (this.done[index]) {
       player.sendMessage("This roof support has already been repaired.");
     } else {
-      player.sendMessage("<col=229628>You repair the damaged roof support.");
+      player.sendMessage(`<col=${COLOUR.FIXED}>You repair the damaged roof support.`);
       player.performAnimation(new Animation(ANIMATION.REPAIR));
       Shared.sound(player, SOUND.REPAIR);
       this.done[index] = true;
@@ -262,41 +465,91 @@ class ApmekenPuzzleRoom extends Raid.Room {
     player.performAnimation(new Animation(ANIMATION.POUR));
     Shared.sound(player, SOUND.POUR);
     player.getInventory().delete(ItemIdentifiers.NEUTRALISING_POTION, 1);
+    if (this.hazard === HAZARD.CORRUPTION && player === this.sight) {
+      const cured = [...this.corrupted].filter((other) => player.getLocation().getDistance(other.getLocation()) <= CURE_RADIUS);
+      if (cured.length > 0) {
+        for (const other of cured) this.cure(player, other);
+        return;
+      }
+    }
     if (index === -1) {
       player.sendMessage("You pour the potion on the floor, but nothing happens.");
-    } else if (!this.active || this.special !== 0) {
-      this.erupt([index], [player]);
+    } else if (this.hazard !== HAZARD.VENTS) {
+      this.needlessFix(() => this.erupt([index], [player], this.maxHit(VENT_DAMAGE)));
+      this.failPerfect(`${Shared.displayName(player)} poured a potion needlessly.`);
     } else if (this.done[index]) {
-      player.sendMessage("This vent has already been neutralised.");
+      player.sendMessage("The fumes from this hole have already been neutralised.");
     } else {
-      player.sendMessage("<col=06600c>You neutralise the fumes coming from the hole.");
+      player.sendMessage(`<col=${COLOUR.FIXED}>You neutralise the fumes coming from the hole.`);
+      Shared.sound(player, SOUND.NEUTRALISED);
       this.done[index] = true;
     }
   }
 
-  // -------------------------------------------------------------- baboons
+  cure(healer, player) {
+    this.corrupted.delete(player);
+    healer.sendMessage(`<col=${COLOUR.FIXED}>You neutralise ${Shared.displayName(player)}'s corruption.`);
+    player.sendMessage(`<col=${COLOUR.FIXED}>${Shared.displayName(healer)} neutralises your corruption.`);
+    Shared.sound(healer, SOUND.CURED);
+    Shared.sound(player, SOUND.CURED);
+  }
 
-  spawnWave() {
-    if (this.wave >= WAVE_COUNT) {
-      this.complete();
+  /** Wiki: instead of gathering, the sighted player can use the potion on someone. */
+  potionOnPlayer(player, target) {
+    const { ItemIdentifiers, Animation } = Shared.core();
+    if (player !== this.sight || this.hazard !== HAZARD.CORRUPTION || !this.corrupted.has(target)) {
+      player.sendMessage("Nothing interesting happens.");
       return;
     }
+    player.performAnimation(new Animation(ANIMATION.POUR));
+    Shared.sound(player, SOUND.POUR);
+    player.getInventory().delete(ItemIdentifiers.NEUTRALISING_POTION, 1);
+    this.cure(player, target);
+  }
+
+  // -------------------------------------------------------------- baboons
+
+  /** A new wave once few enough of the last are left; the room ends with the last wave's end. */
+  checkWave(now) {
+    const alive = [...this.baboons].filter((baboon) => baboon.__toaBaboon.kind !== "thrall").length;
     const table = waves(Shared.core().NpcIdentifiers);
+    if (this.wave >= table.waves.length) {
+      if (this.baboons.size === 0 && !this.ending) {
+        this.ending = true;
+        this.later(END_DELAY, () => this.complete());
+      }
+      return;
+    }
+    if (this.wave > 0) {
+      if (now - this.lastWave < WAVE_MIN_GAP) return;
+      if (alive > waveThreshold(this.teamSize)[this.wave - 1]) return;
+    }
+    this.lastWave = now;
+    this.spawnWave(table);
+  }
+
+  spawnWave(table) {
     const order = Shared.shuffle(SPAWNS.map((_, index) => index));
     const ids = [...table.waves[this.wave]];
     if (this.teamSize > 1) ids.push(table.extra[this.wave]);
     ids.forEach((id, index) => {
       const spawnIndex = order[index % order.length];
       const npcId = id === -1 ? Shared.randomOf(table.special) : id;
-      const baboon = this.spawn(npcId, { ...SPAWNS[spawnIndex], z: 0 }, { points: BABOON_POINTS, face: spawnIndex < 3 ? 6 : 1 });
+      const baboon = this.spawnBaboon(npcId, { ...SPAWNS[spawnIndex], z: 0 }, spawnIndex < 3 ? 6 : 1);
       if (!baboon) return;
-      baboon.__toaBaboon = { kind: kindOf(npcId), thralls: Shared.random(6, 8), thrallTicks: 0, explodeTicks: 0, critical: true };
+      baboon.__toaBaboon = { kind: kindOf(npcId), thrallCap: Shared.random(THRALLS_AT_ONCE[0], THRALLS_AT_ONCE[1]), blastTicks: 0 };
       if (baboon.__toaBaboon.kind === "cursed") baboon.__toaScripted = true;
       this.baboons.add(baboon);
-      this.critical++;
       this.engage(baboon);
     });
     this.wave++;
+  }
+
+  /** Baboons' hitpoints don't scale; the raid's accuracy and defence do. */
+  spawnBaboon(id, tile, face) {
+    const baboon = this.spawn(id, tile, { points: BABOON_POINTS, scale: false, face });
+    baboon?.setRollFactor(1 + this.settings.raidLevel / 250);
+    return baboon;
   }
 
   engage(baboon) {
@@ -306,56 +559,47 @@ class ApmekenPuzzleRoom extends Raid.Room {
   }
 
   baboonDied(baboon) {
-    if (!this.baboons.delete(baboon)) return;
-    const required = this.wave <= 3 ? 0 : this.wave <= 9 ? 1 : 2;
-    if (baboon.__toaBaboon?.critical && this.wave < WAVE_COUNT && --this.critical === required) this.waveDelay = 4;
-    if (this.wave >= WAVE_COUNT && this.baboons.size === 0) this.waveDelay = 4;
+    this.baboons.delete(baboon);
   }
 
-  /** Shamans summon thralls, volatile baboons explode, cursed ones wander leaving venom. */
+  /** Volatile baboons blow up; cursed ones wander leaving venom; the rest find someone to fight. */
   tickBaboons(players) {
-    const { NpcIdentifiers, PathFinder, Animation } = Shared.core();
     for (const baboon of [...this.baboons]) {
       const state = baboon.__toaBaboon;
       if (baboon.getHitpoints() <= 0 || baboon.isRegistered?.() === false) continue;
-      if (state.kind !== "cursed" && !baboon.getCombat().getTarget?.() && state.explodeTicks === 0) this.engage(baboon);
-      if (state.thrallTicks > 0 && --state.thrallTicks === 0) {
-        const tile = this.freeTileAround(baboon.getLocation());
-        if (tile) {
-          const thrall = this.spawn(NpcIdentifiers.BABOON_THRALL, { x: tile.getX(), y: tile.getY(), z: 0 }, { points: BABOON_POINTS });
-          if (thrall) {
-            thrall.__toaBaboon = { kind: "thrall", critical: false, explodeTicks: 0, thrallTicks: 0 };
-            thrall.performGraphic(Shared.gfx(GRAPHIC.THRALL));
-            this.baboons.add(thrall);
-            const target = baboon.getCombat().getTarget?.() ?? Shared.randomOf(players);
-            if (target) thrall.getCombat().attack(target);
-          }
-        }
-        state.thralls--;
-      }
-      if (state.explodeTicks > 0) {
-        if (--state.explodeTicks === 3) {
-          baboon.performAnimation(new Animation(ANIMATION.EXPLODE));
-        } else if (state.explodeTicks === 1) {
-          this.graphic(GRAPHIC.EXPLODE_FIRE, baboon.getLocation());
-          this.graphic(GRAPHIC.EXPLODE_BODY, baboon.getLocation());
-          for (const player of players) {
-            if (player.getLocation().getDistance(baboon.getLocation()) <= 1) Shared.damage(player, this.maxHit(14) + Shared.random(0, 2));
-          }
-        } else if (state.explodeTicks <= 0) {
-          this.baboonDied(baboon);
-          this.despawn(baboon);
-        }
-      }
-      if (state.kind === "cursed") {
-        const location = baboon.getLocation();
-        if (!VENTS.some((tile) => tile.x === location.getX() && tile.y === location.getY())) this.placePool(location);
-        if (baboon.getMovementQueue().size() === 0) {
-          const spawn = baboon.getSpawnPosition();
-          PathFinder.calculateWalkRoute(baboon, spawn.getX() + Shared.random(-8, 8), spawn.getY() + Shared.random(-8, 8));
-        }
-      }
+      if (state.kind !== "cursed" && !baboon.getCombat().getTarget?.() && state.blastTicks === 0) this.engage(baboon);
+      if (state.blastTicks > 0 && --state.blastTicks === 0) this.blast(baboon, players);
+      if (state.kind === "cursed") this.wander(baboon);
     }
+  }
+
+  /** Hurts anyone within a tile and kills any baboon there, whatever its health. */
+  blast(baboon, players) {
+    const location = baboon.getLocation();
+    this.graphic(GRAPHIC.EXPLODE_FIRE, location);
+    this.graphic(GRAPHIC.EXPLODE_BODY, location);
+    this.areaSound(SOUND.EXPLODE, location, SOUND_RADIUS.EXPLODE);
+    for (const player of players) {
+      if (player.getLocation().getDistance(location) > BLAST_RADIUS) continue;
+      this.hurt(player, Shared.random(BLAST_DAMAGE[0], BLAST_DAMAGE[1]));
+      this.failPerfect(`${Shared.displayName(player)} was hit by a volatile baboon.`);
+    }
+    for (const other of this.baboons) {
+      if (other !== baboon && other.getLocation().getDistance(location) <= BLAST_RADIUS) Shared.kill(other);
+    }
+    this.baboonDied(baboon);
+    this.despawn(baboon);
+  }
+
+  /** Wiki: never over a vent or the tile in front of a pillar, venom on the rest of its way. */
+  wander(baboon) {
+    const { PathFinder } = Shared.core();
+    const location = baboon.getLocation();
+    if (!isKeptClear(location.getX(), location.getY())) this.placePool(location);
+    if (baboon.getMovementQueue().size() !== 0) return;
+    const x = Shared.random(ROOM.minX, ROOM.maxX);
+    const y = Shared.random(ROOM.minY, ROOM.maxY);
+    if (!isKeptClear(x, y)) PathFinder.calculateWalkRoute(baboon, x, y);
   }
 
   placePool(location) {
@@ -364,10 +608,18 @@ class ApmekenPuzzleRoom extends Raid.Room {
     const tile = { x: location.getX(), y: location.getY(), z: 0 };
     this.pools.set(tileKey, tile);
     this.setObject(VENOM_POOL, tile, 10, Shared.random(0, 3));
+    this.areaSound(SOUND.POOL, location, SOUND_RADIUS.POOL);
     this.later(VENOM_POOL_TICKS, () => {
+      if (this.pools.get(tileKey) !== tile) return;
       this.pools.delete(tileKey);
       this.setObject(-1, tile, 10);
     });
+  }
+
+  areaSound(id, location, radius) {
+    for (const player of this.roomPlayers()) {
+      if (player.getLocation().getDistance(location) <= radius) Shared.sound(player, id);
+    }
   }
 
   freeTileAround(location) {
@@ -375,50 +627,71 @@ class ApmekenPuzzleRoom extends Raid.Room {
     for (let dx = -2; dx <= 2; dx++) {
       for (let dy = -2; dy <= 2; dy++) {
         const tile = location.transform(dx, dy);
-        if (Shared.floorFree(this.area, tile)) tiles.push(tile);
+        // The barriers are walls, not blocked floor: a thrall in one's doorway can't be reached.
+        if (Shared.floorFree(this.area, tile) && Shared.inBox(tile, ROOM)) tiles.push(tile);
       }
     }
     return Shared.randomOf(tiles);
   }
 
+  /** One thrall, up beside its shaman a tick after the summoning. */
+  summonThrall(shaman, target) {
+    const { NpcIdentifiers } = Shared.core();
+    const tile = this.freeTileAround(shaman.getLocation());
+    if (!tile) return;
+    const thrall = this.spawnBaboon(NpcIdentifiers.BABOON_THRALL, { x: tile.getX(), y: tile.getY(), z: 0 });
+    if (!thrall) return;
+    const hitpoints = Math.round(THRALL_BASE_HITPOINTS * (1 + 0.004 * this.settings.raidLevel) * THRALL_PARTY_SHARE[Math.min(this.teamSize, THRALL_PARTY_SHARE.length) - 1]);
+    thrall.setMaxHitpoints(hitpoints);
+    thrall.setHitpoints(hitpoints);
+    thrall.__toaBaboon = { kind: "thrall", shaman, blastTicks: 0 };
+    thrall.performGraphic(Shared.gfx(GRAPHIC.THRALL));
+    this.areaSound(SOUND.THRALL_BORN, tile, SOUND_RADIUS.THRALL);
+    this.baboons.add(thrall);
+    if (target) thrall.getCombat().attack(target);
+  }
+
+  thrallsOf(shaman) {
+    return [...this.baboons].filter((baboon) => baboon.__toaBaboon.shaman === shaman).length;
+  }
+
   /** One baboon swing, by kind. Returns the hits for the combat engine. */
   baboonAttack(npc, target, method) {
-    const { Animation } = Shared.core();
+    const { Animation, Skill } = Shared.core();
     const state = npc.__toaBaboon;
     const base = npc.getDefinition()?.getMaxHit?.() ?? 4;
     if (state.kind === "volatile") {
+      if (state.blastTicks > 0) return [];
       npc.getCombat().reset();
       npc.setUntargetable(true);
       npc.getMovementQueue().setBlockMovement(true);
-      state.explodeTicks = 4;
+      npc.performAnimation(new Animation(ANIMATION.EXPLODE));
+      state.blastTicks = BLAST_TICKS;
       return [];
     }
-    if (state.kind === "shaman" && state.thralls > 0) {
+    if (state.kind === "shaman" && !npc.isPoisoned?.() && !npc.isVenomed?.() && this.thrallsOf(npc) < state.thrallCap) {
       npc.performAnimation(new Animation(ANIMATION.SUMMON));
-      state.thrallTicks = 1;
+      this.areaSound(SOUND.THRALL_SUMMON, npc.getLocation(), SOUND_RADIUS.THRALL);
+      this.later(1, () => {
+        if (npc.getHitpoints() > 0 && this.baboons.has(npc)) this.summonThrall(npc, target);
+      });
       return [];
     }
     if (state.kind === "melee" || state.kind === "thrall") {
       npc.performAnimation(new Animation(ANIMATION.MELEE));
       const hit = this.styledHit(npc, target, method, "melee", base, 0);
-      if (state.kind === "thrall" && hit.isAccurate()) {
-        const { Skill } = Shared.core();
-        target.getSkillManager().decreaseCurrentLevel(Skill.PRAYER, 2, 0);
-      }
+      if (state.kind === "thrall" && hit.isAccurate()) target.getSkillManager().decreaseCurrentLevel(Skill.PRAYER, THRALL_DRAIN, 0);
       return [hit];
     }
     if (state.kind === "ranged") {
       npc.performAnimation(new Animation(ANIMATION.RANGED));
-      const ticks = Shared.tileProjectile(this.area, npc, target, PROJECTILE.RANGED, { delay: 67, duration: 20, perTile: 4, startHeight: 17, endHeight: 36 });
+      const ticks = Shared.tileProjectile(this.area, npc, target, PROJECTILE.RANGED, { delay: 67, duration: 20, perTile: 4, startHeight: 17, endHeight: 36, angle: 14 });
       return [this.styledHit(npc, target, method, "ranged", base, ticks)];
     }
     npc.performAnimation(new Animation(ANIMATION.MAGIC));
     const ticks = Shared.tileProjectile(this.area, npc, target, PROJECTILE.MAGIC, { delay: 30, duration: 20, perTile: 4, startHeight: 20, endHeight: 34 });
     const hit = this.styledHit(npc, target, method, "magic", base, ticks);
-    if (state.kind === "shaman") {
-      const { Skill } = Shared.core();
-      target.getSkillManager().decreaseCurrentLevel(Skill.PRAYER, hit.getTotalDamage(), 0);
-    }
+    if (state.kind === "shaman") target.getSkillManager().decreaseCurrentLevel(Skill.PRAYER, hit.getTotalDamage(), 0);
     return [hit];
   }
 
@@ -428,6 +701,21 @@ class ApmekenPuzzleRoom extends Raid.Room {
     const location = tile.getX ? tile : Shared.loc({ x: tile.x, y: tile.y, z: 0 });
     Shared.graphicAt(viewer, id, location, options);
   }
+}
+
+function waveThreshold(teamSize) {
+  if (teamSize <= 1) return WAVE_THRESHOLDS.SOLO;
+  return teamSize < LARGE_PARTY ? WAVE_THRESHOLDS.SMALL : WAVE_THRESHOLDS.LARGE;
+}
+
+function isKeptClear(x, y) {
+  return VENTS.some((tile) => tile.x === x && tile.y === y) || ROOF_SKULLS.some((tile) => tile.x === x && tile.y === y);
+}
+
+function hasHammer(player) {
+  const { ItemIdentifiers, Equipment } = Shared.core();
+  if (player.getInventory().contains(ItemIdentifiers.HAMMER) || player.getInventory().contains(ItemIdentifiers.DRAGON_WARHAMMER)) return true;
+  return player.getEquipment().getItems()[Equipment.WEAPON_SLOT]?.getId?.() === ItemIdentifiers.DRAGON_WARHAMMER;
 }
 
 function kindOf(id) {
@@ -480,9 +768,30 @@ function pourPotion({ player }) {
   return true;
 }
 
+function potionOnPlayer(event) {
+  const { ItemIdentifiers } = Shared.core();
+  if (event.itemId !== ItemIdentifiers.NEUTRALISING_POTION) return;
+  const room = apmekenRoom(event.player);
+  if (!room) return;
+  event.handled = true;
+  room.potionOnPlayer(event.player, event.target);
+}
+
 function baboonDowned(event) {
   const room = event.npc?.__toaRoom;
   if (room instanceof ApmekenPuzzleRoom && event.npc.__toaBaboon) room.baboonDied(event.npc);
+}
+
+/** Wiki: the opposing style always lands the attacker's max hit, thralls excepted. */
+function baboonWeakness(event) {
+  const kind = event.target?.__toaBaboon?.kind;
+  if (!kind || !event.attacker?.isPlayer?.()) return;
+  const { CombatType } = Shared.core();
+  const weakTo = { melee: CombatType.MAGIC, ranged: CombatType.MELEE, magic: CombatType.RANGED, shaman: CombatType.RANGED, cursed: CombatType.RANGED, volatile: CombatType.RANGED }[kind];
+  if (weakTo !== undefined && event.combatType === weakTo) {
+    event.forceAccurate = true;
+    event.forceMaxHit = true;
+  }
 }
 
 module.exports = function registerApmekenPuzzle(api) {
@@ -492,7 +801,9 @@ module.exports = function registerApmekenPuzzle(api) {
   api.onObjectClick([HAMMER_CRATE, POTION_CRATE], 1, takeSupplies);
   api.onObjectClick(ROOF, 1, repairRoof);
   api.onItemAction("Neutralising potion", { Pour: pourPotion });
+  api.onItemOnPlayer(potionOnPlayer);
   api.onNpcBeforeDeath(baboonDowned);
+  api.onCombatHitRoll(baboonWeakness);
   registerBaboonCombat(api);
 };
 

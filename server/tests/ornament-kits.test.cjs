@@ -62,7 +62,13 @@ function createPlayer(items) {
 
 test("the ornament table maps every cosmetic variant to its base", () => {
   const kits = OrnamentKits._test.loadKits();
-  assert.equal(kits.length, 108);
+  assert.equal(kits.length, 111);
+  // The Tombs of Amascut's challenge rewards (cache: osmumtens_fang_ornament_kit,
+  // elidinis_ward_ornament_kit, avas_assembler_ornament_kit).
+  const toa = (kit) => kits.find((entry) => entry.kit === kit);
+  assert.deepEqual([toa(27248).base, toa(27248).result], [26219, 27246]);
+  assert.deepEqual([toa(27255).base, toa(27255).result], [27251, 27253]);
+  assert.deepEqual([toa(27372).base, toa(27372).result], [22109, 27374]);
   const holyScythe = kits.find((entry) => entry.name === "Holy ornament kit" && entry.base === 22325);
   assert.deepEqual([holyScythe.kit, holyScythe.result, holyScythe.refund], [25742, 25736, true]);
   const runeDefender = kits.find((entry) => entry.name === "Rune defender ornament kit");

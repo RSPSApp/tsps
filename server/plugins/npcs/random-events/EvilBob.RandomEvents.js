@@ -172,7 +172,7 @@ module.exports = function attach(api, Events) {
       const magic = session.player.getSkillManager().getMaxLevel(api.core.Skill.MAGIC);
       const skill = magic >= 51 && Math.random() < 0.5 ? api.core.Skill.MAGIC : api.core.Skill.FISHING;
       session.player.getSkillManager().addExperience(skill, 650, false);
-      Teleports.finish(session, { message: `You feel somehow that you've become better at ${skill.getName()}.` });
+      Teleports.finish(session, { message: `You feel somehow that you've become better at ${skill.getName()}.`, completed: true });
       return true;
     }
     if (session.kind === "prison" && event.object.getId() === PORTAL) return false;

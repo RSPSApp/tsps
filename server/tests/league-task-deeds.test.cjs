@@ -502,3 +502,14 @@ test("rumours: a Hunter rumour handed in to the real guild hunter (Complete a Hu
   assert.ok(done(f, "complete-a-hunter-rumour"));
   assert.equal(f.player.getAttribute("league:task-progress")["complete-10-hunter-rumours"], 1);
 });
+
+test("random-event: an event ended with its reward by the real random events plugin (the Maze)", (t) => {
+  const f = pactsCharacter(t);
+  const Teleports = require("../plugins/npcs/random-events/Teleports.RandomEvents");
+  const session = { player: f.player, kind: "maze", data: {}, cleanup: [], finishing: false, returnLocation: f.player.getLocation().clone() };
+  Teleports.finish(session, { reward: [{ id: item("Coins"), amount: 10 }], back: false });
+  assert.ok(done(f, "complete-the-maze-random-event"));
+  const pillory = { player: f.player, kind: "pillory", data: {}, cleanup: [], finishing: false, returnLocation: f.player.getLocation().clone() };
+  Teleports.finish(pillory, { message: "You leave.", back: false });
+  assert.ok(!done(f, "complete-the-pillory-random-event"), "left without its reward");
+});

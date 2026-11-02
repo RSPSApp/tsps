@@ -413,6 +413,14 @@ const KEY_CHESTS: Array<[RegExp, string[]]> = [
 const FARMING_CROPS: Set<string> = new Set([...fs.readFileSync(path.resolve(__dirname, "../plugins/skills/farming/Data.Farming.js"), "utf8")
   .matchAll(/^\s*\["([A-Z_]+)", "[^"]*seed"/gm)].map((row) => row[1]));
 
+/** Random events as tasks name them -> the random events plugin's kinds. */
+const RANDOM_EVENTS: Array<[RegExp, string]> = [
+  [/^Complete the Evil Bob random event$/i, "evilbob"], [/^Complete the Maze random event$/i, "maze"],
+  [/^Complete the Pillory random event$/i, "pillory"], [/^Complete the Pinball random event$/i, "pinball"],
+  [/^Complete the Prison Pete random event$/i, "prison"], [/^Complete the Surprise Exam random event$/i, "exam"],
+  [/^Complete the Evil twin$/i, "eviltwin"],
+];
+
 /** Minigame completions and the monster their plugin credits for each (combat-achievements:kill). */
 const MINIGAME_COMPLETIONS: Array<[RegExp, string[]]> = [
   [/^Complete The Gauntlet in Prifddinas(?: \d+ times)?$/i, ["Crystalline Hunllef"]],
@@ -618,6 +626,14 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   if ((match = /^Hand in (\d+) successful swords to Kovac\.?$/i.exec(description))) return { trigger: { kind: "foundry", count: Number(match[1]) } };
   if ((match = /^Hand in a sword with at least (\d+) quality in Giants' Foundry\.?$/i.exec(description))) {
     return { trigger: { kind: "foundry", quality: Number(match[1]), count: 1 } };
+  }
+  // A random event completed (the random events plugin's `random-events:completed`).
+  // The task's own name must be that event's too: the Wiki's row for "Complete the Postie Pete random
+  // event" describes the Evil twin.
+  const randomEvent = RANDOM_EVENTS.find(([pattern]) => pattern.test(description.replace(/\.$/, "")));
+  if (randomEvent) {
+    const words = randomEvent[0].source.replace(/^\^Complete the /, "").replace(/(?: random event)?\$$/, "");
+    return new RegExp(words, "i").test(name) ? { trigger: { kind: "random-event", events: [randomEvent[1]], count: 1 } } : {};
   }
   // "Complete a Hunter Rumour", "Complete 25 Hunter Rumours" ("Hunters' Rumours"): rumours handed in.
   if ((match = /^Complete (an?|\d+) Hunter(?:'?s'?)? Rumours?\.?$/i.exec(description))) {

@@ -25,10 +25,13 @@ module.exports = function registerDemonSlayerQuest(api) {
   const DENATH_NPC_ID = NpcIdentifiers.DENATH_4;
   const WALLY_NPC_ID = NpcIdentifiers.WALLY;
   const NPC_DIALOGUE_CONTINUE_UID = (231 << 16) | 5;
+  /** [id, x, y, the table tile it faces while chanting] (capture 1843). */
   const SUMMONERS = [
-    [NpcIdentifiers.DARK_WIZARD_7, 3226, 3371], [NpcIdentifiers.DARK_WIZARD_8, 3229, 3371],
-    [NpcIdentifiers.DARK_WIZARD_9, 3226, 3368], [DENATH_NPC_ID, 3229, 3368],
+    [NpcIdentifiers.DARK_WIZARD_7, 3226, 3371, 3228, 3369], [NpcIdentifiers.DARK_WIZARD_8, 3229, 3371, 3227, 3369],
+    [NpcIdentifiers.DARK_WIZARD_9, 3226, 3368, 3228, 3370], [DENATH_NPC_ID, 3229, 3368, 3227, 3370],
   ];
+  /** Where Delrith stands once he has walked off the altar. */
+  const DELRITH_RISEN_TILE = [3227, 3367];
   const SUMMONER_CHATHEADS = Object.freeze({
     "Dark wizards": { npcId: NpcIdentifiers.DARK_WIZARD_8, expression: 567 }, // chathap1
     "Dark wizard": { npcId: NpcIdentifiers.DARK_WIZARD_7, expression: 571 }, // chatshock1
@@ -546,6 +549,22 @@ module.exports = function registerDemonSlayerQuest(api) {
       event.expression = summonerHead.expression;
     }
     const fight = demonEncounters.get(event.player);
+    // Capture 1843: all four summoners chant the group line overhead too; on Denath's laugh they
+    // stop chanting and turn to Delrith, and on "Who's that?" the young wizards turn to the player.
+    if (fight?.summoning && text === "Arise, Delrith!") {
+      event.before = () => fight.actors.forEach((actor) => actor.forceChat?.(text));
+    }
+    if (fight?.summoning && text.startsWith("Ha ha ha! At last you are free")) {
+      event.before = () => fight.actors.forEach((actor) => {
+        actor.performAnimation(new Animation(-1));
+        actor.setPositionToFace?.(new Location(...DELRITH_RISEN_TILE, 0));
+      });
+    }
+    if (fight?.summoning && text === "Who's that?") {
+      event.before = () => fight.actors
+        .filter((actor) => actor.getId?.() !== DENATH_NPC_ID)
+        .forEach((actor) => actor.setPositionToFace?.(event.player.getLocation().clone()));
+    }
     if (fight?.summoning && text.startsWith("I've got to get out of here")) {
       event.before = () => event.player.getPacketSender().sendCameraMoveTo(3226, 3383, 1000, { rate: 1, rate2: 1 });
       event.after = () => {
@@ -831,9 +850,13 @@ module.exports = function registerDemonSlayerQuest(api) {
     const fight = { arena, actors: [], summoning: true };
     demonEncounters.set(player, fight);
     setSceneControls(player, true);
-    for (const [id, x, y] of SUMMONERS) {
+    for (const [id, x, y, faceX, faceY] of SUMMONERS) {
       const actor = api.spawnNpc({ id, x, y, z: 0, wanderRadius: 0, owner: player, ownerOnly: true });
-      if (actor) { arena.enter(actor); actor.performAnimation(new Animation(ANIMATION.chant)); fight.actors.push(actor); }
+      if (!actor) continue;
+      arena.enter(actor);
+      actor.setPositionToFace?.(new Location(faceX, faceY, 0));
+      actor.performAnimation(new Animation(ANIMATION.chant));
+      fight.actors.push(actor);
     }
     player.getPacketSender().sendCameraMoveTo(3224, 3376, 475, { rate: 232, rate2: 232 });
     player.getPacketSender().sendCameraLookAt(3227, 3369, 300, { rate: 232, rate2: 232 });
@@ -973,9 +996,24 @@ module.exports = function registerDemonSlayerQuest(api) {
     }
     const options = [];
     for (const word of INCANTATION_WORDS) {
-      options.push(word, () => promptIncantation(player, npc, [...selected, word]));
+      options.push(word, () => sayIncantationWord(player, npc, [...selected, word]));
     }
     api.sendMultiChatboxPrompt(player, "Select a word", ...options);
+  }
+
+  /**
+   * Capture 1843: the player says each word picked overhead a tick later ("Gabindo...", the last
+   * with "!"); the next "Select a word" comes three ticks after that, and the vortex two.
+   */
+  function sayIncantationWord(player, npc, selected) {
+    const tracked = demonEncounters.get(player);
+    if (!tracked || tracked.weakened !== npc) return;
+    const last = selected.length === INCANTATION_WORDS.length;
+    player.getPacketSender().sendInterfaceRemoval();
+    later(tracked, 1, () => {
+      player.forceChat(`${selected.at(-1)}${last ? "!" : "..."}`);
+      later(tracked, last ? 2 : 3, () => promptIncantation(player, npc, selected));
+    });
   }
 
   class DelrithArea extends Area {

@@ -135,9 +135,15 @@ test('Delrith needs five word choices; failure resets him and the learned order 
   assert.equal(q.spawned.at(-1).getId(), core.NpcIdentifiers.DELRITH, 'the demon remains visible without Silverlight equipped');
   const weaken = () => q.call('onNpcBeforeDeath', { npc: q.spawned.at(-1), preventDeath: false });
   const banish = () => q.namedNpc.get('Weakened Delrith:Banish')({ player: p, npc: q.spawned.at(-1) });
-  weaken(); banish(); for (let i = 0; i < 5; i++) choose(q.prompts.at(-1), 'Carlem');
+  // Capture 1843: each word is said overhead a tick after it is picked; the next menu follows.
+  const said = [];
+  p.forceChat = (text) => said.push(text);
+  const pick = (word) => { choose(q.prompts.at(-1), word); q.tick(4); };
+  weaken(); banish(); for (let i = 0; i < 5; i++) pick('Carlem');
   assert.equal(q.quest.getStage(p), 29); assert.equal(q.spawned.at(-1).getId(), core.NpcIdentifiers.DELRITH);
-  weaken(); banish(); for (const word of ['Gabindo', 'Camerinthum', 'Aber', 'Purchai', 'Carlem']) choose(q.prompts.at(-1), word);
+  said.length = 0;
+  weaken(); banish(); for (const word of ['Gabindo', 'Camerinthum', 'Aber', 'Purchai', 'Carlem']) pick(word);
+  assert.deepEqual(said, ['Gabindo...', 'Camerinthum...', 'Aber...', 'Purchai...', 'Carlem!']);
   q.tick(10);
   assert.equal(q.quest.getStage(p), 30); assert.equal(q.quest.varbitValue(30, p), 3); assert.equal(p.attributes.get('quest.points'), 3);
   assert.equal(q.hooks.has('onPlayerProcess'), false);

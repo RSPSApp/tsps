@@ -429,6 +429,30 @@ test("deed: the heart invigorated, darts loaded, the looting bag opened, a praye
   assert.ok(done(f, "activate-an-arcane-or-dexterous-prayer-scroll"));
 });
 
+test("deed: the Lunar spellbook switched to at an altar, the run turned off from the orb", async (t) => {
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.DEFENCE, 40);
+  skills.setCurrentLevel(core.Skill.DEFENCE, 40);
+  const altar = new core.GameObject(core.ObjectIdentifiers.ALTAR_OF_THE_OCCULT, new core.Location(1667, 3136, 0), 10, 0, null);
+  core.ObjectManager.register(altar, true);
+  t.after(() => core.ObjectManager.deregister(altar, true));
+  await send(f, { type: "object_option", id: altar.getId(), x: 1667, y: 3136, action: "Ancient" }, 4);
+  assert.ok(!done(f, "switch-to-the-lunar-spellbook"), `the Ancient book is no Lunar one: ${f.messages}`);
+  await send(f, { type: "object_option", id: altar.getId(), x: 1667, y: 3136, action: "Lunar" }, 4);
+  assert.equal(f.player.getSpellbook(), core.MagicSpellbook.LUNAR, `the real altar switches the book: ${f.messages}`);
+  assert.ok(done(f, "switch-to-the-lunar-spellbook"));
+
+  f.player.setRunning(false);
+  f.player.setRunEnergy?.(10000);
+  await send(f, { type: "varp_transmit", varpId: 173, value: 1 }, 1);
+  assert.ok(f.player.isRunningReturn() && !done(f, "turn-off-your-run"), "turned on is no turning off");
+  await send(f, { type: "varp_transmit", varpId: 173, value: 0 }, 1);
+  assert.ok(!f.player.isRunningReturn(), "the real toggle turns it off");
+  assert.ok(done(f, "turn-off-your-run"));
+});
+
 /** A cache NPC of the name with the option, beside the player; the option's click. */
 function npcBeside(t, f, name, option) {
   const id = [...Array(20000).keys()].find((each) => core.CacheDefinitions.getNpc(each)?.name === name && (core.CacheDefinitions.getNpc(each).actions ?? []).some((action) => action?.toLowerCase() === option));

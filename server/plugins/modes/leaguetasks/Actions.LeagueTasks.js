@@ -61,9 +61,9 @@
  *   (`npc:operated`, a menu option, "talk-to" or "pet", that something answered on an NPC of the name),
  *   `shortcut { shortcuts, count }` (`agility:obstacle`'s `shortcut`, an agility shortcut crossed, by
  *   its name in agility-shortcuts.json).
- * - `deed { event, items?, count }`: a content plugin's own event of the deed (the generator's table
- *   names it: `ectofuntus:worshipped`, `runecrafting:pouch-filled`), its `itemId` one of the items if
- *   the trigger names them.
+ * - `deed { event, items?, where?, count }`: a content plugin's own event of the deed (the generator's
+ *   table names it: `ectofuntus:worshipped`, `runecrafting:pouch-filled`), its `itemId` one of the items
+ *   if the trigger names them, its other fields the `where` values.
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -402,14 +402,16 @@ function entered(player, place) {
 }
 
 /**
- * `deed { event, items?, count }`: a content plugin's own event of the deed (`ectofuntus:worshipped`,
- * `runecrafting:pouch-filled`), its `itemId` one of the items if they are named.
+ * `deed { event, items?, where?, count }`: a content plugin's own event of the deed (`ectofuntus:worshipped`,
+ * `runecrafting:pouch-filled`), its `itemId` one of the items if they are named, its other fields the
+ * `where` values (`magic:spellbook-changed`'s spellbook "lunar").
  */
 function didDeed(name, event) {
   const player = event?.player;
   const type = player ? Common.leagueOf(player) : null;
   if (type === null) return;
-  const tasks = (indexOf(type).deeds.get(name) ?? []).filter((task) => !task.trigger.items || task.trigger.items.some((each) => key(each) === key(itemName(event.itemId))));
+  const tasks = (indexOf(type).deeds.get(name) ?? []).filter((task) => (!task.trigger.items || task.trigger.items.some((each) => key(each) === key(itemName(event.itemId))))
+    && Object.entries(task.trigger.where ?? {}).every(([field, value]) => String(event[field]).toLowerCase() === String(value).toLowerCase()));
   countTasks(player, type, tasks);
 }
 

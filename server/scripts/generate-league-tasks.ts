@@ -452,10 +452,10 @@ const MINIGAME_COMPLETIONS: Array<[RegExp, string[]]> = [
 ];
 /**
  * Deeds a content plugin emits an event of its own for, the task's name and description both
- * matching (`deed { event, items?, count }`): the event, and the item the event's `itemId` must be
- * (its cache name, from the match), the count the description's "N times" or the name's number.
+ * matching (`deed { event, items?, where?, count }`): the event, the item the event's `itemId` must be
+ * (its cache name, from the match) and the values its other fields must have (`where`).
  */
-const DEEDS: Array<{ name: RegExp; description: RegExp; event: string; items?: (match: RegExpExecArray) => string[] }> = [
+const DEEDS: Array<{ name: RegExp; description: RegExp; event: string; items?: (match: RegExpExecArray) => string[]; where?: Record<string, string | number | boolean> }> = [
   // Worship.Ectofuntus: a worship made (the slime and bonemeal put in).
   { name: /^Worship the Ectofuntus$/i, description: /^Worship the Ectofuntus\.?$/i, event: "ectofuntus:worshipped" },
   // Pouches.Runecrafting: essence put into that pouch.
@@ -465,6 +465,10 @@ const DEEDS: Array<{ name: RegExp; description: RegExp; event: string; items?: (
   // ToxicBlowpipe: those darts loaded into it ("a Blowpipe" is the toxic one, the only one darts load into).
   { name: /^Load a blowpipe with (Rune|Dragon) Darts$/i, description: /^Load an? (?:Toxic )?Blowpipe with (Rune|Dragon) Darts?s?\.?$/i, event: "toxic-blowpipe:darts-loaded", items: (match) => [`${match[1]} dart`] },
   // LootingBag: the bag's Open.
+  // MagicSpellbook.changeSpellbook (an altar, a spell, a relic): the book switched to.
+  { name: /^Switch to the Lunar Spellbook$/i, description: /^Switch to the Lunar Spellbook\.?$/i, event: "magic:spellbook-changed", where: { spellbook: "lunar" } },
+  // The run toggle ("Turn off your [[Energy|run]]").
+  { name: /^Turn off your run$/i, description: /^Turn off your (?:run|Energy)\.?$/i, event: "player:run-toggled", where: { running: false } },
   { name: /^Open a Looting Bag$/i, description: /^Open a Looting Bag\.?$/i, event: "looting-bag:opened" },
   // PrayerUnlocks: either scroll read, its prayer learnt.
   { name: /^Activate an Arcane or Dexterous Prayer Scroll$/i, description: /^Activate an Arcane prayer scroll or Dexterous prayer scroll(?: Prayer scroll)?\.?$/i, event: "prayer:scroll-read", items: () => ["Arcane prayer scroll", "Dexterous prayer scroll"] },
@@ -1042,6 +1046,7 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
       if (listed.some((each) => !each)) return {};
       trigger.items = listed;
     }
+    if (deed.where) trigger.where = deed.where;
     return { trigger };
   }
   // "Help the Spirit Anglers defeat Tempoross": Tempoross subdued (the minigame's tempoross:subdued;

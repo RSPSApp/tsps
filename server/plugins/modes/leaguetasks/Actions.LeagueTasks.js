@@ -42,7 +42,8 @@
  *   key chest opened, by its name, `chests:opened`.
  * - `plant { crops | patches, count }` (`farming:planted`), `harvest { crops, count }`
  *   (`farming:harvest`, a patch emptied), `foundry { quality?, count }`
- *   (`giants-foundry:sword-handed-in`).
+ *   (`giants-foundry:sword-handed-in`), `plunder-chest { room, count }`
+ *   (`pyramid-plunder:chest-searched`).
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -326,6 +327,7 @@ const EVENT_KINDS = new Map([
   ["plant", (trigger, event) => (!trigger.crops || trigger.crops.includes(event.crop)) && (!trigger.patches || trigger.patches.includes(event.patch?.type))],
   ["harvest", (trigger, event) => trigger.crops.includes(event.crop)],
   // A successful sword: a ruined one (quality 0) counts for neither.
+  ["plunder-chest", (trigger, event) => Number(event.room) === trigger.room],
   ["foundry", (trigger, event) => Number(event.quality) > 0 && (!(trigger.quality > 0) || Number(event.quality) >= trigger.quality)],
 ]);
 
@@ -380,6 +382,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("farming:planted", onEvent("plant"));
   api.onCustomEvent("farming:harvest", onEvent("harvest"));
   api.onCustomEvent("giants-foundry:sword-handed-in", onEvent("foundry"));
+  api.onCustomEvent("pyramid-plunder:chest-searched", onEvent("plunder-chest"));
   api.onCustomEvent("farming:check-health", checkedHealth);
   api.onCustomEvent("collection-log:new-item", logged);
   api.onCustomEvent("world:picked", picked);

@@ -1576,6 +1576,7 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   `farming:planted`, `harvest { crops, count }` from `farming:harvest` (a patch emptied, so a
   count of a crop is no harvest count), `foundry { quality?, count }` from
   `giants-foundry:sword-handed-in` (a successful sword: a ruined one, quality 0, is none),
+  `plunder-chest { room, count }` from Pyramid Plunder's `pyramid-plunder:chest-searched`,
   `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what

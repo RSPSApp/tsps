@@ -619,6 +619,10 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   if ((match = /^Hand in a sword with at least (\d+) quality in Giants' Foundry\.?$/i.exec(description))) {
     return { trigger: { kind: "foundry", quality: Number(match[1]), count: 1 } };
   }
+  // "Search the Golden Chest in Room 8 of Pyramid Plunder in Sophanem [25 times]": that room's chest.
+  if ((match = /^Search the Golden Chest in Room (\d) of Pyramid Plunder in Sophanem(?: (\d+) times)?\.?$/i.exec(description))) {
+    return { trigger: { kind: "plunder-chest", room: Number(match[1]), count: match[2] ? Number(match[2]) : 1 } };
+  }
   // "Defeat 25 Superior slayer monsters", "Defeat a Superior slayer monster": superiors killed.
   if ((match = /^Defeat (an?|\d+) Superior slayer monsters?\.?$/i.exec(description))) {
     return { trigger: { kind: "superior-kills", count: /^an?$/i.test(match[1]) ? 1 : Number(match[1]) } };

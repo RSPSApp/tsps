@@ -458,3 +458,21 @@ test("plant: seeds dibbed in an allotment through the real Farming (Plant some s
   assert.ok(f.player.getInventory().getAmount(seed) < 3, `the real Farming plants them: ${f.messages}`);
   assert.ok(done(f, "plant-seeds-in-an-allotment-patch"));
 });
+
+test("plunder-chest: a room's Grand Gold Chest searched in a real Pyramid Plunder run", (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.THIEVING, 99);
+  skills.setCurrentLevel(core.Skill.THIEVING, 99);
+  const C = require("../plugins/minigames/pyramidplunder/Common.PyramidPlunder");
+  const Entrance = require("../plugins/minigames/pyramidplunder/Entrance.PyramidPlunder");
+  const Containers = require("../plugins/minigames/pyramidplunder/Containers.PyramidPlunder");
+  require("../plugins/quests/QuestRuntime").questNamed("Icthlarin's Little Helper").setStage(f.player, 1);
+  Entrance._test.tryStart(f.player, () => 0);
+  t.after(() => C.endRun(f.player));
+  const b = C.roomData(1).bounds;
+  Containers._test.searchChest({ player: f.player, objectId: C.ids().chest, location: { x: b.minX + 2, y: b.minY + 2, z: 0 } }, () => 0.5);
+  for (let i = 0; i < 3; i++) core.TaskManager.process();
+  assert.ok(done(f, "room-1-of-pyramid-plunder"), `the room 1 chest: ${f.messages}`);
+  assert.ok(!done(f, "room-2-of-pyramid-plunder"));
+});

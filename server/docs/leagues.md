@@ -1803,9 +1803,11 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   checked.
 - **Not mapped yet:** kills and deeds with a condition (a time, a streak, the weapon or spell used),
   places with no sourced bounds (open towns, regions), open groups ("any Dragon weapon"), items
-  obtained (drops, rewards), transport without an arrival signal, and the minigame steps and
-  interactions (talking, petting, banking, house building) whose plugins emit no event; the Leagues
-  tutorial's tasks are completed by the tutorial itself.
+  obtained (drops, rewards), transport without an arrival signal, the minigame steps and
+  interactions whose plugins emit no event (a dialogue's trade or service, a quest-only step, house
+  building), deeds whose content is not built here (most animals' Pet, the grubby, muddy and moon
+  chests, STASH units, sacred eel dissection), and names the cache gives several things (every Chompy
+  bird hat rank's); the Leagues tutorial's tasks are completed by the tutorial itself.
 
 ## Developer commands
 

@@ -1268,6 +1268,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
 
   function selectTamaraTempleVariant(player) {
     const progress = tutorialProgress(player);
+    replaceLostAltarItems(player, progress);
     if (progress === TUTORIAL_START) return "enter-the-gate-talking-to-apprentice-tamara-again";
     if (progress === TUTORIAL_FELIX) {
       if (!has(player, WEAK_CELL_ITEM_ID)) {
@@ -2102,6 +2103,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     const weak = has(player, WEAK_CELL_ITEM_ID);
     const uncharged = has(player, UNCHARGED_CELL_ITEM_ID);
     const medium = has(player, MEDIUM_CELL_ITEM_ID);
+    const lost = lostAltarItems(player, progress).length > 0;
     switch (progress) {
       case TUTORIAL_START: return npc("felix-tutorial");
       case TUTORIAL_FELIX: return weak ? npc("tamara-tutorial") : tile(WEAK_CELLS_TILE);
@@ -2114,17 +2116,18 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
         if (fragments >= FRAGMENTS_A_ROUND) return npc("felix-tutorial");
         return tile(REMAINS_TILE);
       case TUTORIAL_ESSENCE:
+        if (essence === 0 && fragments < FRAGMENTS_A_ROUND) return tile(REMAINS_TILE);
         if (fragments > 0) return tile(WORKBENCH_TILE);
         if (!flag(player, MIND_BRIEFED_ATTRIBUTE)) return npc("tamara-tutorial");
         return uncharged ? tile(MIND_GUARDIAN_LOC) : tile(UNCHARGED_CELLS_TILE);
       case TUTORIAL_MIND_STONES: return weak ? tile(CELL_TILE, 32) : npc("tamara-tutorial");
-      case TUTORIAL_REPOWERED: return npc("great-guardian");
+      case TUTORIAL_REPOWERED: return lost ? npc("tamara-tutorial") : npc("great-guardian");
       case TUTORIAL_POWERED_ONE:
         if (fragments > 0 && fragments < FRAGMENTS_A_ROUND) return tile(REMAINS_TILE);
         if (fragments >= FRAGMENTS_A_ROUND) return tile(WORKBENCH_TILE);
         if (essence === 0) return tile(REMAINS_TILE);
         return uncharged ? tile(WATER_GUARDIAN_LOC) : tile(UNCHARGED_CELLS_TILE);
-      case TUTORIAL_WATER_STONES: return npc("great-guardian");
+      case TUTORIAL_WATER_STONES: return lost ? npc("tamara-tutorial") : npc("great-guardian");
       case TUTORIAL_POWERED_TWO: return medium ? tile(ELEMENTAL_PILE_TILE, 64) : npc("tamara-tutorial");
       case TUTORIAL_MEDIUM_GUARDIAN:
         if (!has(player, PORTAL_TALISMAN_WATER_ITEM_ID)) return npc("tamara-tutorial");
@@ -2132,8 +2135,8 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
         if (fragments >= FRAGMENTS_A_ROUND) return tile(WORKBENCH_TILE);
         if (essence === 0) return tile(REMAINS_TILE);
         return uncharged ? tile(WATER_GUARDIAN_LOC) : tile(UNCHARGED_CELLS_TILE);
-      case TUTORIAL_WATER_STONES_TWO: return medium ? tile(CELL_TILE, 32) : npc("tamara-tutorial");
-      case TUTORIAL_MEDIUM_CELL: return npc("great-guardian");
+      case TUTORIAL_WATER_STONES_TWO: return lost ? npc("tamara-tutorial") : tile(CELL_TILE, 32);
+      case TUTORIAL_MEDIUM_CELL: return lost ? npc("tamara-tutorial") : npc("great-guardian");
       default: return undefined;
     }
   }
@@ -2233,7 +2236,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       event.handled = true;
       return true;
     }
-    return false;
+    return pointToTamara(event);
   }
 
   /** A guardian rising from a pile (capture 1693): scrape, carve, then the cell's power. */
@@ -2302,17 +2305,23 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       });
       return true;
     }
-    return false;
+    return pointToTamara(event);
   }
 
-  function benchRoundOpen(progress) {
+  /** The Mind altar's step reopens the rock for a player who has lost their essence. */
+  function miningOpen(player, progress) {
+    if (progress === TUTORIAL_ESSENCE) return !has(player, GUARDIAN_ESSENCE_ITEM_ID);
     return progress === TUTORIAL_PILES || progress === TUTORIAL_POWERED_ONE || progress === TUTORIAL_MEDIUM_GUARDIAN;
+  }
+
+  function benchOpen(player, progress) {
+    return miningOpen(player, progress) || (progress === TUTORIAL_ESSENCE && has(player, GUARDIAN_FRAGMENTS_ITEM_ID));
   }
 
   /** Capture 1693: a fragment a tick, with the chisel animation, sound and Crafting XP. */
   function workAtBench(event) {
     const { player } = event;
-    if (!inTutorial(player) || !benchRoundOpen(tutorialProgress(player))) return false;
+    if (!inTutorial(player) || !benchOpen(player, tutorialProgress(player))) return false;
     event.handled = true;
     if (!has(player, GUARDIAN_FRAGMENTS_ITEM_ID)) {
       player.sendMessage("You'll need at least one guardian fragment to craft guardian essence.");
@@ -2353,7 +2362,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     const { player } = event;
     if (!inTutorial(player)) return false;
     const progress = tutorialProgress(player);
-    if (!benchRoundOpen(progress)) return false;
+    if (!miningOpen(player, progress)) return false;
     event.handled = true;
     const pickaxe = bestPickaxe(player);
     if (!pickaxe) {
@@ -2463,6 +2472,39 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     }
   }
 
+  /**
+   * What this step still needs from an altar trip that has already been made. The trip can't be
+   * redone, so stones or a medium cell that were dropped (or a cell never charged) would end the quest.
+   */
+  function lostAltarItems(player, progress) {
+    const needed = {
+      [TUTORIAL_MIND_STONES]: [CATALYTIC_GUARDIAN_STONE_ITEM_ID],
+      [TUTORIAL_REPOWERED]: [CATALYTIC_GUARDIAN_STONE_ITEM_ID],
+      [TUTORIAL_WATER_STONES]: [ELEMENTAL_GUARDIAN_STONE_ITEM_ID],
+      [TUTORIAL_POWERED_TWO]: [MEDIUM_CELL_ITEM_ID],
+      [TUTORIAL_WATER_STONES_TWO]: [ELEMENTAL_GUARDIAN_STONE_ITEM_ID, MEDIUM_CELL_ITEM_ID],
+      [TUTORIAL_MEDIUM_CELL]: [ELEMENTAL_GUARDIAN_STONE_ITEM_ID],
+    }[progress] ?? [];
+    return needed.filter((itemId) => !has(player, itemId));
+  }
+
+  /** No capture covers this, so the wording is ours. The XP is on the step, so it can't be farmed. */
+  function replaceLostAltarItems(player, progress) {
+    const replaced = lostAltarItems(player, progress).filter((itemId) => giveQuestItem(player, itemId));
+    if (replaced.length === 0) return;
+    player.sendMessage("Tamara hands you a replacement for what you've lost.");
+    tutorialHint(player);
+  }
+
+  function pointToTamara(event) {
+    const { player } = event;
+    if (lostAltarItems(player, tutorialProgress(player)).length === 0) return false;
+    player.sendMessage("You've lost something you made at the altar. Apprentice Tamara can replace it.");
+    tutorialHint(player);
+    event.handled = true;
+    return true;
+  }
+
   /** Every guardian essence becomes runes and a guardian stone at once; one cell charges. */
   function craftGuardianEssence(event) {
     const { player, objectId } = event;
@@ -2552,7 +2594,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       powerUp(player, ELEMENTAL_GUARDIAN_STONE_ITEM_ID, 1650, () => startClosingScene(player));
       return true;
     }
-    return false;
+    return pointToTamara(event);
   }
 
   /** The third power-up: tote 120, the untouched temple's map and the rift's end. */

@@ -941,6 +941,61 @@ test('Temple of the Eye tutorial progress survives relog and lost cells/chisel a
   assert.equal(p.items.get(I.CHISEL), 1);
 });
 
+test('Temple of the Eye: essence lost after the first workbench round can be made again', () => {
+  const h = harness('TempleOfTheEye'), p = player();
+  h.api.onCustomEvent('mining:best-pickaxe', event => { event.pickaxe = { animation: new core.Animation(625), attemptIntervalTicks: 3 }; });
+  const at = (x, y) => ({ x, y, z: 0 });
+  h.quest.setStage(p, 115);
+  p.attrs.set('temple-of-the-eye:stage-schema', 2);
+  p.attrs.set('temple-of-the-eye:tutorial', 25);
+  p.items.set(I.BRONZE_PICKAXE, 1);
+  const mine = () => { h.object(p, O.GUARDIAN_REMAINS, at(2449, 5714), 1, ['Mine']); h.tick(20); h.finish(p); };
+  const bench = () => { h.object(p, O.WORKBENCH_21, at(2459, 5710), 1, ['Work-at']); h.tick(8); };
+  mine(); bench();
+  assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 30);
+  assert.equal(p.items.get(I.GUARDIAN_ESSENCE), 5);
+
+  mine();
+  assert.ok(!p.items.get(I.GUARDIAN_FRAGMENTS), 'the rock stays shut while essence is held');
+
+  p.items.set(I.GUARDIAN_ESSENCE, 0); // all five dropped, and gone from the ground
+  mine();
+  assert.equal(p.items.get(I.GUARDIAN_FRAGMENTS), 5, 'the rock reopens');
+  bench();
+  assert.equal(p.items.get(I.GUARDIAN_ESSENCE), 5, 'and the workbench makes replacements');
+  assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 30, 'without moving the step on');
+});
+
+test('Temple of the Eye: Tamara replaces altar items that cannot be made again', () => {
+  const steps = [
+    [40, I.CATALYTIC_GUARDIAN_STONE], // dropped before the first power-up
+    [50, I.ELEMENTAL_GUARDIAN_STONE], // dropped before the second
+    [55, I.MEDIUM_CELL], // no uncharged cell taken to the Water altar
+    [65, I.MEDIUM_CELL], // same, on the second trip
+    [70, I.ELEMENTAL_GUARDIAN_STONE], // dropped before the third
+  ];
+  for (const [progress, itemId] of steps) {
+    const h = harness('TempleOfTheEye'), p = player();
+    h.quest.setStage(p, 115);
+    p.attrs.set('temple-of-the-eye:stage-schema', 2);
+    p.attrs.set('temple-of-the-eye:tutorial', progress);
+    h.talk(p, N.APPRENTICE_TAMARA_3);
+    assert.equal(p.items.get(itemId), 1, `step ${progress}`);
+    assert.ok(p.messages.includes("Tamara hands you a replacement for what you've lost."));
+    h.finish(p);
+    assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), progress, 'the step stays put');
+  }
+
+  const h = harness('TempleOfTheEye'), p = player();
+  h.quest.setStage(p, 115);
+  p.attrs.set('temple-of-the-eye:stage-schema', 2);
+  p.attrs.set('temple-of-the-eye:tutorial', 40);
+  h.namedNpcs.get('The Great Guardian')['Power-up']({ player: p, npcId: N.THE_GREAT_GUARDIAN_3 });
+  h.tick(2);
+  assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 40, 'no stones, no power-up');
+  assert.ok(p.messages.some(text => /Tamara can replace/.test(text)));
+});
+
 test('Perilous Moons entrance scene tasks are cancelled on logout without losing progress', () => {
   const h = harness('PerilousMoons'), p = player();
   h.quest.setStage(p, 7);

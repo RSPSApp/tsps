@@ -799,12 +799,12 @@ export class ClientConnection {
               this.player,
               EffectSpells.forSpellName(this.resolveSpellName(
                 actionPacket.widgetId, actionPacket.groupId, actionPacket.childId, actionPacket.itemId,
-              ))?.spellId() ?? actionPacket.itemId ?? -1,
+              ))?.spellId() ?? -1,
             )) {
               // Utility and self-cast spells are represented by their cache item id.
             } else if (ArceuusSpells.handleSpell(
               this.player,
-              CacheDefinitions.getSpellName(actionPacket.widgetId, actionPacket.itemId ?? -1),
+              this.resolveSpellName(actionPacket.widgetId, actionPacket.groupId, actionPacket.childId, actionPacket.itemId),
             )) {
               // Arceuus self-cast spells are identified by their cache spell name.
             } else if (actionPacket.groupId === MAIN_INVENTORY_GROUP_ID && actionPacket.itemId != null && actionPacket.slot != null &&
@@ -1366,6 +1366,7 @@ export class ClientConnection {
   }
 
   private resolveSpellName(widgetId: number, groupId: number, childId: number, itemId?: number): string | undefined {
+    if (!CacheDefinitions.isSpellWidgetGroup(groupId)) return undefined;
     const packed = (groupId << 16) | (childId & 0xffff);
     return CacheDefinitions.getSpellName(widgetId, itemId ?? -1) ??
       CacheDefinitions.getSpellName(packed, itemId ?? -1) ??

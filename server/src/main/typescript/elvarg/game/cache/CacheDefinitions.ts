@@ -39,6 +39,7 @@ export class CacheDefinitions {
     private static readonly SPELL_NAME_PARAM_ID = 601;
     private static spellNamesByWidget?: Map<number, string>;
     private static spellsByName?: Map<string, { widgetId: number; itemId: number }>;
+    private static spellWidgetGroups?: Set<number>;
     private static state?: {
         npcs: ArchivedTypeLoader<NpcType>;
         varbits: ArchiveVarBitTypeLoader;
@@ -549,6 +550,21 @@ export class CacheDefinitions {
             }
         }
         return this.spellNamesByWidget.get(widgetId);
+    }
+
+    static isSpellWidgetGroup(groupId: number): boolean {
+        if (!this.spellWidgetGroups) {
+            this.spellWidgetGroups = new Set();
+            for (let id = 0; id < this.getState().items.getCount(); id++) {
+                const params = this.getItem(id).params;
+                const widget = params?.get(this.SPELL_WIDGET_PARAM_ID);
+                const name = params?.get(this.SPELL_NAME_PARAM_ID);
+                if (typeof widget === "number" && typeof name === "string") {
+                    this.spellWidgetGroups.add(widget >>> 16);
+                }
+            }
+        }
+        return this.spellWidgetGroups.has(groupId);
     }
 
     /** The spellbook widget and spell item a client sends for the spell with this name. */

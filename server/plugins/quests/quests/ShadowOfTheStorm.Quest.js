@@ -247,12 +247,12 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   const SECOND_RITUAL_VARIANT = "summoning-agrith-naar-in-position";
 
   const SKILL_BY_OPTION = new Map([
-    ["Strength *", Skill.STRENGTH],
-    ["Attack *", Skill.ATTACK],
-    ["Defence *", Skill.DEFENCE],
-    ["Hitpoints *", Skill.HITPOINTS],
-    ["Magic *", Skill.MAGIC],
-    ["Ranged *", Skill.RANGED],
+    ["* Strength *", Skill.STRENGTH],
+    ["* Attack *", Skill.ATTACK],
+    ["* Defence *", Skill.DEFENCE],
+    ["* Hitpoints *", Skill.HITPOINTS],
+    ["* Magic *", Skill.MAGIC],
+    ["* Ranged *", Skill.RANGED],
   ]);
   const SKILL_BY_INDEX = new Map(
     [...SKILL_BY_OPTION.values()].map((skill) => [skill.getIndex(), skill])

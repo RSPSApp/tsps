@@ -17,7 +17,7 @@ A fresh account played the quest from Aris to Silverlight and the banishment, wi
 
 ## Findings
 
-- **open** Menus differ from 1723 and 1843. Pre-start menus always show 4 options where live drops the one just picked. Titles read "Select an Option" vs "Select an option" and "What would you like to say?". Rovin's first menu has 5 options (live 3), his second is demon|Goodbye (live demon|Erm|ale), and "Aris said" should be "Fortune-teller Aris said". Shared dialogue code or generated data.
+- **open** Menus differ from 1723 and 1843. Pre-start menus always show 4 options where live drops the one just picked. Aris's post-start menus should be titled "What would you like to say?". Rovin's first menu has 5 options (live 3), his second is demon|Goodbye (live demon|Erm|ale), and "Aris said" should be "Fortune-teller Aris said". Shared dialogue code or generated data.
 - **open** Boxes don't send the chat mirror the captures show: combat warning, key and sword hand-overs, "The wizards cast...", "Delrith is sucked...", "...back into the dark dimension...". Shared dialogue code.
 - **open** Completion's quest link in chat is always `081190`; the captures have `0ab0ff`. Shared code.
 - **open** The vision and the fight run in private areas on the real map, where live builds an instance. Side tabs stay open during scenes (1843 tick 10110).

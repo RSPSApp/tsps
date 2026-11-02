@@ -687,7 +687,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     if (cancelled) return;
     const { step, rest, record } = menu;
     context.currentMenu = menu;
-    const notice = { player, npcId, definition, prompt: step.prompt || "Select an Option", warning: null };
+    const notice = { player, npcId, definition, prompt: step.prompt || "Select an option", warning: null };
     api.emitCustomEvent("npc-dialogue:menu", notice);
     const warned = context.warnedMenus ??= new WeakSet();
     if (notice.warning && !warned.has(step)) {
@@ -734,7 +734,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     if (!pairs.length) return run(rest, record);
     playedAny = true;
     manager.reset();
-    if (!presentOwned(() => api.sendMultiChatboxPrompt(player, formatPlayerText(step.prompt || "Select an Option", player), ...pairs))) {
+    if (!presentOwned(() => api.sendMultiChatboxPrompt(player, formatPlayerText(step.prompt || "Select an option", player), ...pairs))) {
       unavailable();
     }
   }

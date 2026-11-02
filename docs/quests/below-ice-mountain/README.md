@@ -13,17 +13,17 @@ travel: travel_to
 
 # Below Ice Mountain
 
-A fresh account played the quest to completion with `travel_to` after placement, and its stage values match rsprox 1636 at each step. Conversation text matches except for the generated-data differences listed below, and repeat talk and relog hold. Mining the pillars was only partly played, and Charlie wasn't exercised.
+A fresh account played the quest to completion with `travel_to` after placement, and its stage values match rsprox 1636 at each step. Conversation text and menu titles now match, with gendered placeholders kept where the capture shows only one form, and repeat talk and relog hold on the run below. Mining the pillars was only partly played, and Charlie wasn't exercised.
 
 ## Findings
 
-- **open** Generated dialogue differs from rsprox 1636: leading asterisks dropped ("Sighs*", "Whispers*", "Shrugs*", "hic* Woops"), "me sir"/"me, sir", "right there sir"/", sir", "Sorry sir"/"Sorry, pal", "help a man"/"help anyone", "ma'am"/"madam", "Well Ramarno"/"Well, Ramarno", and a literal `{{fact}}` in a Checkal line. Needs the dumper in osrsreboxed-db; npc-dialogues.json isn't hand-edited.
-- **open** Menu titles read "Select an Option" where 1636 has "Start the Below Ice Mountain quest?", "Would you like to start your training session?", "What would you like to say?" and "Head into the ruins?". Generated data lacks the prompts, and `npc-dialogue:menu` ignores a changed prompt.
+- **open** Kaylee's "What can you tell me about dwarves and ale?" option is in 1636 but no source has what follows it, so it isn't added.
 - **open** Message boxes don't send the type 115 chat mirror 1636 shows. Shared dialogue code.
 - **open** "Ramarno departs for his workshop." shows once with Continue; 1636 shows it without Continue at 2283, then again with Continue at 2286.
 - **open** Timing: recruit varbits move on continuing, about 3 ticks before 1636. No fade-out when leaving the workout (1636 tick 563), and no rocks 41549/41550 (2261) or music 147 (2253). Player lines in 2059-2100 don't hold their Continue, because `PlayerDialogue` has no `sendHeld`.
 - **open** Off-quest: stepping stone 16513 and Broken Raft 17069 did nothing on `travel_to` at 99 Agility. Not investigated.
 - **open** Community report: training and other scenes can glitch, and a relog was needed to search the backpack. Not reproduced in the run below. [#1257](https://github.com/RSPSApp/tsps/issues/1257)
+- **fixed** Generated dialogue from rsprox 1636, in osrsreboxed-db: leading asterisks ("*Sighs*", "*Whispers*", "*Shrugs*", "*hic* Woops"), the literal `{{fact}}`, Checkal's and Marley's wording, and the three quest menu prompts. "Sorry, pal" is the only wording left ungendered on a single capture's evidence.
 - **fixed** Against rsprox 1636: completion scroll rows (the capture overrides the Wiki's reward list), drink and bag item boxes, recruit fades, Marley's bites, overheads and sounds in rock-paper-scissors, the entrance's explosion and rubble scene, Marley's trap, Burntof's asides, the bag scene, Ramarno's varbit 12068 at the barronite line, chat-head animations.
 
 ## Runs

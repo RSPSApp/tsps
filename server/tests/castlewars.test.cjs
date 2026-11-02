@@ -477,12 +477,13 @@ test('a carrier whose banner was stripped before the drop hook still drops the f
   game.restoreFlagToBase(TEAM.ZAMORAK);
 });
 
-test('Castle Wars deaths keep player and bot gear, drop the flag and remove only game supplies', (t) => {
+test('Castle Wars deaths keep gear, drop flags and supplies but no bones; other deaths still drop bones', (t) => {
   const { PlayerDeathTask } = require('../dist/game/task/impl/PlayerDeath');
   const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');
   let deathPolicy;
   let respawn;
   const calls = [];
+  const deathApi = PluginManager.createApi('Castle Wars death regression');
   const island = {
     ...game,
     getTeamId: () => TEAM.SARADOMIN,
@@ -491,7 +492,7 @@ test('Castle Wars deaths keep player and bot gear, drop the flag and remove only
     resetIdleTicks: () => {},
   };
   Areas({
-    core, registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {}, onCustomEvent() {},
+    core, registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {}, onCustomEvent: deathApi.onCustomEvent,
     onShouldDropItemsOnDeath: (handler) => { deathPolicy = handler; },
     onPlayerDeath: (handler) => { respawn = handler; },
   }, island);
@@ -502,25 +503,33 @@ test('Castle Wars deaths keep player and bot gear, drop the flag and remove only
   });
   t.mock.method(PluginManager, 'emitPlayerDeath', (event) => { respawn(event); return event.handled; });
   t.mock.method(PluginManager, 'emitPlayerDefeated', () => {});
-  t.mock.method(ItemOnGroundManager, 'registerLocation', () => {});
-  const drop = t.mock.method(PlayerDeathTask, 'dropItems', () => { throw new Error('A safe death must not process gear'); });
-  for (const bot of [false, true]) {
+  const bones = t.mock.method(ItemOnGroundManager, 'registerLocation', () => {});
+  const drop = t.mock.method(PlayerDeathTask, 'dropItems', () => []);
+  function victim(bot, area = island.gameArea) {
     const gear = new core.Item(core.ItemIdentifiers.DRAGON_WARHAMMER, 1);
     const player = {
       isPlayerBot: () => bot,
-      getArea: () => island.gameArea,
+      getArea: () => area,
       getLocation: () => new core.Location(2420, 3075),
       getCombat: () => ({ getRecentDamagerEntries: () => [], getKiller: () => null }),
       getInventory: () => ({ getItems: () => [gear] }),
       resetAttributes() {},
+      moveTo() {},
       smartMoves: (bounds) => { assert.equal(bounds, data.TEAM_DATA[TEAM.SARADOMIN].respawnBounds); },
     };
-    const task = new PlayerDeathTask(player);
-    task.ticks = 0;
-    task.execute();
-    assert.equal(task.loseItems, false);
-    assert.equal(player.getInventory().getItems()[0], gear);
+    return { player, gear };
   }
+  for (const area of [island.gameArea, ...Object.values(island.waitingAreas)]) {
+    for (const bot of [false, true]) {
+      const { player, gear } = victim(bot, area);
+      const task = new PlayerDeathTask(player);
+      task.ticks = 0;
+      task.execute();
+      assert.equal(task.loseItems, false);
+      assert.equal(player.getInventory().getItems()[0], gear);
+    }
+  }
+  assert.equal(bones.mock.callCount(), 0, 'Castle Wars players and bots leave no bones in the arena or waiting rooms');
   assert.equal(drop.mock.callCount(), 0);
   assert.deepEqual(calls, ['flag', data.DEATH_REMOVE_ITEM_IDS, 'flag', data.DEATH_REMOVE_ITEM_IDS]);
   for (const area of Object.values(island.waitingAreas)) {
@@ -531,6 +540,19 @@ test('Castle Wars deaths keep player and bot gear, drop the flag and remove only
   const outside = { player: { getArea: () => ({}) }, shouldDrop: null };
   deathPolicy(outside);
   assert.equal(outside.shouldDrop, null, 'ordinary deaths keep their existing rules');
+  for (const shouldDrop of [false, true]) {
+    t.mock.method(PluginManager, 'emitShouldDropItemsOnDeath', () => shouldDrop);
+    const { player } = victim(false, island.lobbyArea);
+    const task = new PlayerDeathTask(player);
+    task.ticks = 0;
+    task.execute();
+    const call = bones.mock.calls.at(-1);
+    assert.equal(call.arguments[0], player);
+    assert.equal(call.arguments[1].getId(), core.ItemIdentifiers.BONES);
+    assert.ok(call.arguments[2].equals(player.getLocation()));
+  }
+  assert.equal(bones.mock.callCount(), 2, 'outside bones still drop for both safe and dangerous deaths');
+  assert.equal(drop.mock.callCount(), 1, 'only the dangerous outside death processes gear');
 });
 
 test('the arena is multi-combat: several enemies may hit one player, the lobby and waiting rooms are not', (t) => {

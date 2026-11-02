@@ -3,15 +3,18 @@
  * relic. With the Searing boots (from the cache's relic struct) worn, caught fish come cooked and
  * mined ore comes smelted into its own bar, with the Cooking or Smithing XP (ours: the Wiki gives
  * none; coal, and anything with no recipe of its own, stays as it is). Whatever the footwear,
- * Agility and Cooking never fail, and a lap counts twice and pays 25% more experience.
+ * Agility and Cooking never fail, a lap counts twice and pays 25% more experience, a mark of grace
+ * on a rooftop course is a 33% chance a lap (`agility:mark-chance`, in place of the course's own
+ * and its overlevel cut; the 3-minute mark cooldown still runs: ours), and a course mark picked up
+ * finishes a lap of its course, paid as one, with 10,000 coins (`agility:mark-taken`).
  *
  * The processing hears `storage:gather` twice: first (attached before the other gathering
  * relics) it swaps the request's item for the cooked fish or bar, so a relic that banks or
  * doubles the harvest (Endless Harvest) handles the processed item; last, it hands what nobody
  * stored to the inventory in place of the raw item.
- * Not here: Agility XP while running, a picked-up mark of grace or termites finishing the lap,
- * the 33% mark chance, and the doubled termites and tenfold crystal shards (Agility asks no
- * hook for those).
+ * Not here: Agility XP while running (the Wiki gives no rate: "based on your Agility level"),
+ * and termites finishing a lap, the doubled termites and the tenfold crystal shards (the Colossal
+ * Wyrm courses give no termites and Prifddinas no shards yet).
  */
 const Common = require("./Common.LeagueRelics");
 
@@ -79,6 +82,16 @@ function lapReward(request) {
   request.xp *= effect.lapXpMultiplier;
 }
 
+function markChance(request) {
+  if (active(request.player) && effect.markCourses.includes(request.course)) request.chance = effect.markChance;
+}
+
+function markTaken(request) {
+  if (!active(request.player)) return;
+  request.completesLap = true;
+  request.items.push([core.ItemIdentifiers.COINS, effect.markLapCoins]);
+}
+
 module.exports = function attach(pluginApi) {
   api = pluginApi;
   core = api.core;
@@ -87,6 +100,8 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("agility:roll", succeeds);
   api.onCustomEvent("cooking:burn", neverBurns);
   api.onCustomEvent("agility:lap-reward", lapReward);
+  api.onCustomEvent("agility:mark-chance", markChance);
+  api.onCustomEvent("agility:mark-taken", markTaken);
 };
 
 /** The last `storage:gather` listener: attached after every other gathering relic. */

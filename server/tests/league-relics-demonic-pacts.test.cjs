@@ -645,3 +645,75 @@ test("Flask of Fervour: everything restored, hits on the player 0 for four ticks
     assert.equal(other.handled, false);
   }
 });
+
+/** The Agility plugin, attached to a test api: its ground-item pickup hook and the marks it lays kept for the test. */
+function agility() {
+  const pickups = [];
+  const laid = [];
+  const floor = {
+    inventoryCapacity: (player, item) => player.getInventory().getAddableAmount(item),
+    registerLocation: (player, item, position, privateArea, options) => laid.push({ item, position, options }),
+    ownedBy: () => [],
+  };
+  const api = new Proxy({
+    core,
+    getTaskManager: () => ({ submit() {} }),
+    getItemOnGroundManager: () => floor,
+    onGroundItemPickup: (handler) => pickups.push(handler),
+    onCustomEvent() {},
+    emitCustomEvent: (name, payload) => {
+      for (const handler of custom[name] ?? []) handler(payload);
+    },
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) });
+  require("../plugins/skills/Agility.plugin").register(api);
+  /** Picks up a course mark the player owns on `tile`. */
+  const pickUp = (player, [x, y, z]) => {
+    const groundItem = { getItem: () => new core.Item(I.MARK_OF_GRACE, 1), getgoesGlobal: () => false, getDespawnDelay: () => 1000 };
+    for (const handler of pickups) handler({ player, groundItem, groundItemId: I.MARK_OF_GRACE, clickType: 1, location: { x, y, z }, handled: false });
+  };
+  return { pickUp, laid };
+}
+
+test("Hotfoot: a rooftop lap's mark is a 33% chance (agility:mark-chance), not on other courses", () => {
+  const who = cases(HOTFOOT);
+  const chance = (player, course) => emit("agility:mark-chance", { player, course, chance: 0.0667 }).chance;
+  for (const course of ["draynor", "alkharid", "varrock", "canifis", "falador", "seers", "pollnivneach", "rellekka", "ardougne"]) {
+    assert.equal(chance(who.relic, course), 0.33, course);
+  }
+  assert.equal(chance(who.relic, "ape-atoll"), 0.0667, "not a rooftop course");
+  assert.equal(chance(who.relic, "shayzien-basic"), 0.0667, "not a rooftop course");
+  for (const player of others(who)) assert.equal(chance(player, "draynor"), 0.0667);
+});
+
+test("Hotfoot: a picked-up course mark finishes a lap, counted twice and paid, with 10,000 coins and its own 33% mark roll", () => {
+  const { pickUp, laid } = agility();
+  const who = cases(HOTFOOT);
+  const mark = [3275, 3186, 3];
+  const laps = (player) => player.getAttribute("agility.laps")?.alkharid ?? 0;
+  for (const player of Object.values(who)) {
+    player.getSkillManager().setCurrentLevel(Skill.AGILITY, 99, false).setMaxLevels(Skill.AGILITY, 99, false);
+    player.setAttribute("agility.progress", { course: "alkharid", index: 3 });
+  }
+  // 99 Agility on Al Kharid: the course's own chance is 2/6 cut to a fifth, under 0.32; Hotfoot's is 0.33.
+  Math.random = () => 0.32;
+  const before = xp(who.relic, Skill.AGILITY);
+  pickUp(who.relic, mark);
+  assert.equal(laps(who.relic), 2, "the lap counts twice");
+  assert.equal(who.relic.getAttribute("agility.progress"), null, "the lap in progress is over");
+  assert.ok(xp(who.relic, Skill.AGILITY) > before, "the lap's completion bonus (36, 25% more)");
+  assert.equal(who.relic.getInventory().getAmount(I.COINS), 10000);
+  assert.equal(laid.filter(({ item }) => item.getId() === I.MARK_OF_GRACE).length, 1, "the finished lap rolls its own mark at 33%");
+
+  for (const player of others(who)) {
+    laid.length = 0;
+    pickUp(player, mark);
+    // Raging Echoes' slot is Corner Cutter, whose laps also count twice, but a mark finishes none.
+    assert.equal(laps(player), 0, player.getUsername());
+    assert.deepEqual(player.getAttribute("agility.progress"), { course: "alkharid", index: 3 });
+    assert.equal(player.getInventory().getAmount(I.COINS), 0);
+    assert.equal(laid.length, 0);
+  }
+  const elsewhere = character("elsewhere", "league", HOTFOOT);
+  pickUp(elsewhere, [3200, 3200, 0]);
+  assert.equal(laps(elsewhere), 0, "a mark off every course's mark tiles finishes nothing");
+});

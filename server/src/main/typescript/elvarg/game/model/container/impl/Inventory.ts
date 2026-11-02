@@ -19,7 +19,8 @@ export class Inventory extends ItemContainer {
 
   public refreshItems(): ItemContainer {
     // The bank inventory's Wield/Wear labels follow the slots (lazy: Bank imports Inventory).
-    (require("./Bank") as typeof import("./Bank")).Bank.sendSideOps(this.getPlayer());
+    const { Bank } = require("./Bank") as typeof import("./Bank");
+    if (this.getPlayer().getInterfaceId?.() === Bank.MAIN_INTERFACE_ID) Bank.sendSideOps(this.getPlayer());
     this.getPlayer()
       .getPacketSender()
       .sendItemContainer(this, Inventory.INTERFACE_ID);

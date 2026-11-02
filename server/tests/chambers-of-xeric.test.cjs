@@ -107,6 +107,7 @@ function fakePlayer(name, location = new Location(1234, 3566, 0)) {
         sendVarbit: (id, value) => { varbits.set(id, value); return sender; },
         getVarbit: (id) => varbits.get(id) ?? 0,
         sendConfig: (id, value) => { varbits.set(`varp${id}`, value); return sender; },
+        sendTypedMessage: (type, text) => { p.messages.push(text); (p.typed ??= []).push([type, text]); return sender; },
         sendSong: (id) => { (p.songs ??= []).push(id); return sender; },
         sendJingle: (id) => { (p.jingles ??= []).push(id); return sender; },
         sendInterface: (id) => { p.interfaces.push(id); return sender; },
@@ -717,5 +718,37 @@ test('a completed raid: counts, the chest\'s loot for each raider', () => {
   assert.ok(loot.length >= 2, 'commons (or a unique) and the dark journal');
   assert.ok(loot.some((entry) => entry.id === 20899), 'the dark journal');
   assert.ok(winner.messages.some((text) => text.includes('count is')));
+  raid.destroy();
+});
+
+test('the two CM runs: precise timing, a best that stands, the common chest light, raid notices', (t) => {
+  const Rewards = require('../plugins/minigames/cox/Rewards.ChambersOfXeric');
+  const precise = fakePlayer('Precise');
+  precise.getPacketSender().sendVarbit(Shared.VARBIT.PRECISE_TIMING, 1);
+  assert.equal(Shared.formatTicks(788, precise), '7:52.80');
+  assert.equal(Shared.formatTicks(3111, precise), '31:06.60');
+  assert.equal(Shared.formatTicks(788), '7:52');
+
+  const party = new Parties.Party(fakePlayer('Steady'), { key: 'Steady' });
+  const raid = new RaidModule.Raid(party);
+  raid.stage = RaidModule.STAGE.STARTED;
+  raid.startCycle = 0;
+  const steady = fakePlayer('Steady');
+  steady.getBank = () => ({ contains: () => false });
+  // Saved before team sizes had names: "normal:1" is the Solo best.
+  steady.setAttribute('cox:best-times', { 'normal:1': 10 });
+  raid.players.add(steady);
+  raid.original.add('Steady');
+  steady.setAttribute(RaidModule.ATTR_RAID, raid);
+  raid.addPoints(steady, 20000);
+  t.mock.method(Math, 'random', () => 0.99);
+  t.mock.method(PluginManager.getCoreApi().World, 'getProcessCycle', () => 100);
+  raid.complete();
+  Rewards.completed(raid);
+  assert.deepEqual(steady.getAttribute('cox:best-times'), { 'normal:Solo': 10 }, 'the old key moves to its team size');
+  const done = steady.typed.find(([, text]) => text.includes('Congratulations'));
+  assert.equal(done[0], PluginManager.getCoreApi().ChatType.FRIENDS_CHAT_NOTIFICATION);
+  assert.ok(done[1].endsWith(' Personal best: </col><col=ff0000>0:06</col>'), done[1]);
+  assert.equal(steady.getPacketSender().getVarbit(Shared.VARBIT.REWARD_LIGHT), 1, 'common loot lights white (1)');
   raid.destroy();
 });

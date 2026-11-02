@@ -148,16 +148,9 @@ class TektonRoom extends Raid.Room {
   /** Raiders in reach of a melee swing: beside him, not under him nor on a corner. */
   reachable() {
     const npc = this.tekton;
-    const at = npc.getLocation();
-    const size = npc.getSize();
     return this.raiders().filter((player) => {
       if (player.getHitpoints() <= 0) return false;
-      const x = player.getLocation().getX() - at.getX();
-      const y = player.getLocation().getY() - at.getY();
-      const inX = x >= 0 && x < size;
-      const inY = y >= 0 && y < size;
-      if (inX && inY) return false;
-      return (inX && (y === -1 || y === size)) || (inY && (x === -1 || x === size));
+      return Shared.besideFootprint(npc, player.getLocation());
     });
   }
 

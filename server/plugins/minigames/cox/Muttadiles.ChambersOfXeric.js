@@ -412,13 +412,7 @@ function distanceToSegment(point, a, b) {
 }
 
 MuttadileRoom.prototype.reachableBy = function reachableBy(npc, player) {
-  const at = npc.getLocation();
-  const size = npc.getSize();
-  const x = player.getLocation().getX() - at.getX();
-  const y = player.getLocation().getY() - at.getY();
-  const inX = x >= 0 && x < size;
-  const inY = y >= 0 && y < size;
-  return (inX && (y === -1 || y === size)) || (inY && (x === -1 || x === size));
+  return Shared.besideFootprint(npc, player.getLocation());
 };
 
 function passTendrils(event) {

@@ -69,8 +69,8 @@
  *   four raiders, against the Wiki's "up to three").
  * - Claw signs: sound 1551 from the claw, default again 3 ticks later. Crystal Burst: crystals
  *   30033, grown (30034) with the shunt and "The crystal beneath your feet grows..." 3-4 ticks
- *   later (17-34 seen), gone a tick after (gfx 1338, sound 3821). Lightning: 4 bolts solo, 6 with
- *   four raiders, one more in the last phase, any mix of directions on columns 3228-3237, gfx 1356
+ *   later (17-34 seen), gone a tick after (gfx 1338, sound 3821). Lightning: 4 bolts solo and with
+ *   three raiders, 6 with four, one more in the last phase, any mix of directions on columns 3228-3237, gfx 1356
  *   and sound 3887 per tile, wall to wall a tile a tick; a hit is 5-13 (seen), anim 3170, "You've been
  *   electrocuted to the spot!" and "You've been injured and can't use protection prayers!". Swap:
  *   the sign and messages, the gfx on the players every 2 ticks and on a lone tile from 2 ticks;
@@ -158,6 +158,8 @@ const DOUSING_SPELLS = ["Water Surge", "Water Wave", "Water Blast", "Water Bolt"
 /** Humidify's level and runes (astral, 3 water, law), which LunarSpells keeps to itself. */
 const HUMIDIFY = { LEVEL: 68, RUNES: [[9075, 1], [555, 3], [563, 1]], ANIMATION: 6294, PROJECTILE: 1669 };
 const DOUSE_REACH = 10;
+/** The Fire's Douse is its op1 (cache). */
+const DOUSE_OP = 1;
 
 /** Cache tiles. */
 const T = {
@@ -374,7 +376,7 @@ class OlmRoom extends Raid.Room {
     npc.getMovementQueue().setBlockMovement?.(true);
     npc.__coxOlm = true;
     // Its parts sit in the 5x8 locs of the chamber's wall.
-    npc.setFlag("combat:built-into-scenery");
+    npc.setFlag(Shared.core().CombatRange.BUILT_INTO_SCENERY_FLAG);
     return npc;
   }
 
@@ -673,7 +675,7 @@ class OlmRoom extends Raid.Room {
       }
     }
     for (const player of this.raid.players) {
-      if (player.__coxAcidUntil > this.raid.ticks && this.inChamber(player.getLocation())) this.addPool(player.getLocation());
+      if (this.raid.stateOf(player).acidUntil > this.raid.ticks && this.inChamber(player.getLocation())) this.addPool(player.getLocation());
     }
     if (this.pools.size === 0) return;
     for (const player of this.raiders()) {
@@ -681,9 +683,10 @@ class OlmRoom extends Raid.Room {
       const pool = this.pools.get(key);
       if (!pool || pool.ticks >= ACID_POOL_TICKS) continue;
       // Perfect Olm: never hurt by the same pool on consecutive ticks.
-      if (player.__coxOlmPoolKey === key && player.__coxOlmPoolTick === this.raid.ticks - 1) this.perfect = false;
-      player.__coxOlmPoolKey = key;
-      player.__coxOlmPoolTick = this.raid.ticks;
+      const state = this.raid.stateOf(player);
+      if (state.poolKey === key && state.poolTick === this.raid.ticks - 1) this.perfect = false;
+      state.poolKey = key;
+      state.poolTick = this.raid.ticks;
       Shared.damage(player, Shared.random(3, 6));
       CombatFactory.poisonEntity(player, 2);
     }
@@ -698,7 +701,7 @@ class OlmRoom extends Raid.Room {
     const delay = this.headShot(target, 1354);
     target.sendMessage("<col=ff0000>The Great Olm has smothered you in acid. It starts to drip off slowly.");
     Shared.later(this.raid, delay, () => {
-      target.__coxAcidUntil = this.raid.ticks + 21;
+      this.raid.stateOf(target).acidUntil = this.raid.ticks + 21;
       this.addPool(target.getLocation());
     });
     Shared.later(this.raid, delay + 21, () => this.busy.delete("acidDrip"));
@@ -1069,11 +1072,14 @@ class OlmRoom extends Raid.Room {
     }
   }
 
-  /** rsprox captures: bolts run north or south, wall to wall, a tile a tick (4 solo, 6 with four raiders; one more in the last phase). */
+  /**
+   * rsprox captures: bolts run north or south, wall to wall, a tile a tick; 4 solo, 4 with three
+   * raiders (all 12 specials of the two CM runs), 6 with four; one more in the last phase.
+   */
   lightning() {
     this.leftSign(ANIM.LEFT_CLAW_LIGHTNING);
     const { CombatFactory, Location, PrayerHandler, RegionManager } = Shared.core();
-    const count = 4 + Math.floor(this.raiders().length / 2) + (this.isLastPhase() ? 1 : 0);
+    const count = 4 + 2 * Math.floor(this.raiders().length / 4) + (this.isLastPhase() ? 1 : 0);
     const columns = Shared.shuffle([...Array(T.LIGHTNING_COLUMNS).keys()]).slice(0, count);
     const bolts = columns.map((column) => {
       const north = Shared.random(0, 1) === 0;
@@ -1095,7 +1101,7 @@ class OlmRoom extends Raid.Room {
           if (!player.getLocation().equals(bolt.tile)) continue;
           Shared.damage(player, Shared.random(5, 13));
           player.sendMessage("<col=ff0000>You've been electrocuted to the spot!</col>");
-          player.sendMessage("You've been injured and can't use protection prayers!");
+          player.sendMessage("<col=ff3045>You've been injured and can't use protection prayers!</col>");
           for (const prayer of [PrayerHandler.PROTECT_FROM_MAGIC, PrayerHandler.PROTECT_FROM_MELEE, PrayerHandler.PROTECT_FROM_MISSILES]) {
             if (PrayerHandler.isActivated(player, prayer)) PrayerHandler.deactivatePrayer(player, prayer);
           }
@@ -1495,9 +1501,9 @@ class OlmRoom extends Raid.Room {
     });
   }
 
-  /** The Combat Achievements its death decides; a solo or trio raid is by the raid's scale. */
+  /** The Combat Achievements its death decides; a solo or trio raid is by its raiders, not its scale. */
   completeAchievements() {
-    const { players, scale } = this.raid;
+    const { players, teamSize: scale } = this.raid;
     if (this.perfect && scale === 1) Achievements.complete([...players], "Perfect Olm (Solo)");
     if (this.perfect && scale === 3) Achievements.complete([...players], "Perfect Olm (Trio)");
     if (this.noLastPhaseSpecials && scale === 1) Achievements.complete([...players], "A Not So Special Lizard");
@@ -1527,12 +1533,15 @@ function fireRoomOf(npc, player) {
   return false;
 }
 
-/** The Fire's own op1, Douse (cache; how all 8 captured douses are done). Its cache name has a colour, so it is found by its flag. */
+/**
+ * The Fire's own op1, Douse (cache; how all 8 captured douses are done). Hooked by option, as its
+ * cache name has a colour; other NPCs' Douse falls through.
+ */
 function douseFire(event) {
   const room = fireRoomOf(event.npc, event.player);
-  if (room === null) return;
-  event.handled = true;
+  if (room === null) return false;
   if (room) room.douse(event.player, event.npc);
+  return true;
 }
 
 /** Wiki: vessels of water douse too, here by using them on the flame as well as by its option. */
@@ -1562,7 +1571,7 @@ function spellOnFire(event) {
 
 /** Wiki (2019): the flames can be reached from a distance. */
 function reachFire(event) {
-  if (event.npc?.__coxFireWall && event.clickType === 1) event.range = DOUSE_REACH;
+  if (event.npc?.__coxFireWall && event.clickType === DOUSE_OP) event.range = DOUSE_REACH;
 }
 
 /** Its head and right claw are out of melee reach; nothing is reached from outside the chamber. */
@@ -1599,7 +1608,7 @@ function olmCombat(api) {
 module.exports = function registerCoxOlm(api) {
   Shared.bind(api);
   Shared.onObjectIds(api, [OBJECT.BARRIER], useBarrier);
-  api.onNpcInteraction(douseFire);
+  api.onAnyNpcInteraction({ Douse: douseFire });
   api.onNpcRoute(reachFire);
   api.onItemOnNpc(vesselOnFire);
   api.onSpellOnNpc(spellOnFire);

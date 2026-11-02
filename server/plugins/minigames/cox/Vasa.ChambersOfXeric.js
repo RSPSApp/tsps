@@ -238,7 +238,7 @@ class VasaRoom extends Raid.Room {
       player.moveTo(this.tileAround(middle, NEAR_RANGE, NEAR_RANGE));
       CombatFactory.stun(player, 6, true);
       PrayerHandler.deactivatePrayers(player);
-      player.__coxNoPrayerUntil = this.raid.ticks + PRAYER_BLOCK_TICKS;
+      this.raid.stateOf(player).noPrayerUntil = this.raid.ticks + PRAYER_BLOCK_TICKS;
       player.performGraphic(Shared.gfx(GFX.STUNNED, { height: 124 }));
       Shared.sound(player, SOUND.STUNNED);
       this.blast += Math.max(0, Math.min(99, player.getHitpoints()) - 5);
@@ -259,12 +259,11 @@ class VasaRoom extends Raid.Room {
     const viewers = this.raiders();
     this.ring().forEach((tile, index) => Shared.graphicAt(viewers, GFX.EXPLOSION, tile, { delay: index * 3 }));
     Shared.areaSound(viewers, SOUND.BLAST, middle, { delay: 5, range: 15 });
-    const near = this.near ?? [];
     const far = this.far ?? [];
     const close = viewers.filter((player) => player.getLocation().getDistance(middle) <= 4);
-    const sharing = Math.max(near.filter((player) => close.includes(player)).length, close.length);
-    if (sharing > 0 && this.blast > 0) {
-      const damage = Math.min(99, Math.floor(this.blast / sharing));
+    // The blast is shared between everyone caught in it.
+    if (close.length > 0 && this.blast > 0) {
+      const damage = Math.min(99, Math.floor(this.blast / close.length));
       for (const player of close) {
         if (far.includes(player) && Shared.isProtected(player, "magic")) continue;
         Shared.damage(player, damage);
@@ -453,7 +452,7 @@ class VasaRoom extends Raid.Room {
       for (const player of this.raid.players) Shared.raidMessage(player, `As Vasa Nistirio is slain by ${Shared.displayName(killer)}, supplies are dropped for all.`);
     }
     if (this.teleports < 2) Achievements.complete(this.raiders(), "Stop Drop and Roll");
-    for (const player of [...(this.near ?? []), ...(this.far ?? [])]) player.__coxNoPrayerUntil = 0;
+    for (const player of [...(this.near ?? []), ...(this.far ?? [])]) this.raid.stateOf(player).noPrayerUntil = 0;
     const { ObjectManager, Animation } = Shared.core();
     const crystals = this.crystals.filter(Boolean);
     const fire = this.fire;
@@ -494,7 +493,7 @@ function passiveCombat(api) {
 
 function noPrayers(event) {
   const raid = Raid.raidOf(event.player);
-  if (!raid || !(event.player.__coxNoPrayerUntil > raid.ticks)) return;
+  if (!raid || !(raid.stateOf(event.player).noPrayerUntil > raid.ticks)) return;
   event.disabled = true;
   event.message = "Vasa Nistirio has blocked your use of prayers.";
   Shared.sound(event.player, SOUND.PRAYERS);

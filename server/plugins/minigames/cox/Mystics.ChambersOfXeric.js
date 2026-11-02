@@ -120,12 +120,7 @@ class MysticsRoom extends Raid.Room {
   }
 
   adjacent(npc, player) {
-    const at = npc.getLocation();
-    const x = player.getLocation().getX() - at.getX();
-    const y = player.getLocation().getY() - at.getY();
-    const inX = x >= 0 && x < 2;
-    const inY = y >= 0 && y < 2;
-    return (inX && (y === -1 || y === 2)) || (inY && (x === -1 || x === 2));
+    return Shared.besideFootprint(npc, player.getLocation(), 2);
   }
 
   attack(npc, player) {
@@ -174,8 +169,10 @@ class MysticsRoom extends Raid.Room {
     sender.sendClientScript(PORTAL_OVERLAY.OPEN, uid(1), uid(2), PORTAL_OVERLAY.MODEL, PORTAL_OVERLAY.COLOUR, -1, -1);
     Shared.sound(player, PORTAL_OVERLAY.SOUND);
     Shared.later(player, PORTAL_OVERLAY.MOVE_AFTER, () => {
-      player.moveTo(tile.clone());
       sender.sendClientScript(PORTAL_OVERLAY.CLOSE, uid(1), uid(2), -1, -1);
+      // Left the raid or died on the way: no move, and the raid has put its own overlay back or away.
+      if (Raid.raidOf(player) !== this.raid || player.getHitpoints() <= 0) return;
+      player.moveTo(tile.clone());
       Shared.later(player, 1, () => {
         sender.sendSubInterface(Shared.OVERLAY_UID, Shared.INTERFACE.OVERLAY, 1);
         this.raid.refreshPoints(player);

@@ -881,10 +881,11 @@ function dropFor(player, npc, npcId, location, damagers = []) {
   const event = { player, npc, npcId, drops, handled: false };
   pluginApi.emitCustomEvent("npc-drops:generated", event);
   if (event.handled) return drops.length;
-  // Where the loot lands; a boss whose body is out of reach (Zulrah) moves it under the killer.
-  const where = { player, npc, npcId, location };
+  // Where the loot lands; a boss whose body is out of reach (Zulrah) moves it under the killer,
+  // and `public` gives it to everyone at once (the Chambers of Xeric).
+  const where = { player, npc, npcId, location, public: false };
   pluginApi.emitCustomEvent("npc-drops:location", where);
-  placeDrops(player, drops, where.location, npc.__publicDrops === true ? { public: true } : {});
+  placeDrops(player, drops, where.location, where.public === true ? { public: true } : {});
   return drops.length;
 }
 

@@ -46,6 +46,7 @@ function nextFloor({ player }) {
   if (!raid?.map) return true;
   const plane = player.getLocation().getZ();
   const end = raid.rooms.find((room) => room.key === "FLOOR_END_DOWNSTAIRS" && room.record.plane === plane);
+  raid.devAssisted = true;
   if (end?.record.bound) player.moveTo(raid.map.landing(end.record.bound));
   return true;
 }
@@ -58,6 +59,8 @@ function clearRoom({ player }) {
     player.sendMessage("Use ::coxclear in a room of a started raid.");
     return true;
   }
+  // A cleared room earns no Combat Achievements, and nor does the rest of the raid.
+  raid.devAssisted = true;
   if (room.devFinish) {
     room.devFinish(player);
   } else {

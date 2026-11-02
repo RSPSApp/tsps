@@ -169,8 +169,9 @@ class ThievingRoom extends Raid.Room {
     const { Item, ItemOnGroundManager } = Shared.core();
     Shared.later(this.raid, 1, () => {
       const left = npc.getLocation().clone();
+      // A batch for each raider, seen only by them (the Wiki's "the raiders get a batch").
       for (const player of this.raiders()) {
-        for (const [id, amount] of CLEAR_REWARD) ItemOnGroundManager.registerLocation(player, new Item(id, amount), left, undefined, { public: true });
+        for (const [id, amount] of CLEAR_REWARD) ItemOnGroundManager.registerLocation(player, new Item(id, amount), left);
       }
       Shared.animate(npc, -1);
       Shared.walkStraight(npc, this.tile(bed.x, bed.y, 2));

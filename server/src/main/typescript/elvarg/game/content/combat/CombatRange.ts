@@ -11,6 +11,9 @@ type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 
 /** Footprint-aware combat reach and routing. */
 export class CombatRange {
+    /** Set on an NPC that stands inside solid locs (the Great Olm's parts): range still applies, scenery doesn't block. */
+    public static readonly BUILT_INTO_SCENERY_FLAG = "combat:built-into-scenery";
+
     static canReach(attacker: Mobile, method: CombatMethod, target: Mobile): boolean {
         if (!attacker || !target || CombatPosition.area(attacker, target) !== CombatPosition.area(target, attacker)) {
             return false;
@@ -38,7 +41,7 @@ export class CombatRange {
 
         // An NPC built into the scenery stands inside solid locs, so collision can't answer for
         // it: what's in range reaches it, melee from a side, not a corner.
-        if (target.hasFlag?.("combat:built-into-scenery")) {
+        if (target.hasFlag?.(CombatRange.BUILT_INTO_SCENERY_FLAG)) {
             return method.type() !== CombatType.MELEE || range !== 1 || this.sharesEdge(attackerBounds, targetBounds);
         }
 

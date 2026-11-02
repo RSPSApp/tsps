@@ -81,6 +81,12 @@ const SPOTS = [
 ];
 const CRYSTAL_TILES = [{ x: 3267, y: 5327 }, { x: 3311, y: 5339 }, { x: 3350, y: 5328 }];
 
+/** Back to base in every drainable combat stat. */
+function restoreDrains(npc) {
+  const { Skill } = Shared.core();
+  for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.RANGED, Skill.MAGIC]) npc.setCurrentLevels(skill, npc.getMaxLevel(skill));
+}
+
 class VanguardRoom extends Raid.Room {
   constructor(raid, record) {
     super(raid, record);
@@ -170,7 +176,7 @@ class VanguardRoom extends Raid.Room {
     living[health.indexOf(Math.min(...health))].performGraphic(Shared.gfx(SWIRL.LOW));
   }
 
-  /** Into their shells on one tick, drains restored; each walks to the next spot; the unbalanced heal to full. */
+  /** Into their shells on one tick, drains restored (Wiki); each walks to the next spot; the unbalanced heal to full. */
   shuffle() {
     const heal = this.unbalanced();
     this.stage = "shuffling";
@@ -180,8 +186,7 @@ class VanguardRoom extends Raid.Room {
       npc.getCombat().reset();
       Shared.animate(npc, STYLE[npc.__coxForm].fall);
       npc.setNpcTransformationId(FORM.SHELL);
-      npc.setStatDrainImmune(true);
-      npc.setStatDrainImmune(false);
+      restoreDrains(npc);
       npc.__coxSpot = (npc.__coxSpot + (clockwise ? 1 : 2)) % 3;
       Shared.walkStraight(npc, this.spots[npc.__coxSpot]);
     }

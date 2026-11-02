@@ -23,6 +23,8 @@ const OLM = { chunkX: 402, chunkY: 713, width: 5, height: 7, atChunkX: 0, atChun
 /** The Olm chamber's entrance and middle, on the cache's map. */
 const OLM_TILES = { entrance: { x: 3232, y: 5719 }, centre: { x: 3232, y: 5734 } };
 const PLANES = [0, 1, 2, 3];
+/** Upper Depths, Lower Depths, Fire in the Deep, and the silent track. */
+const MUSIC = { UPPER: 492, LOWER: 487, OLM: 493, SILENCE: 147 };
 
 /**
  * Tiles the raid binds rooms to, on the cache's map, by the room's version (west / north /
@@ -119,6 +121,17 @@ function mapClass() {
 
     allowSummonPet() {
       return false;
+    }
+
+    /**
+     * rsprox captures: Upper Depths on the top floor, Lower Depths below it, Fire in the Deep at
+     * the Olm; silence once the raid is complete.
+     */
+    getMusicTrack(player) {
+      if (this.raid?.completed) return MUSIC.SILENCE;
+      const location = player.getLocation();
+      if (this.inOlmChamber(location)) return MUSIC.OLM;
+      return location.getZ() === Layout.FLOOR_PLANES[0] ? MUSIC.UPPER : MUSIC.LOWER;
     }
 
     postLeave(mobile, logout) {

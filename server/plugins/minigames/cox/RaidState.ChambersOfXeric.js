@@ -37,16 +37,14 @@ const roomTypes = new Map();
 
 const STAGE = { WAITING: 0, STARTED: 1, UPPER_DONE: 2, MIDDLE_DONE: 3, OLM: 4 };
 const STAGE_COMPLETE = 5;
-const MUSIC = { UPPER: 492, LOWER: 487, OLM: 493, SILENCE: 147 };
-/** The audio setting holding the music player's mode (0 plays each area's track). */
-const MUSIC_MODE_SETTING = 18;
 const DEATH = { personalLoss: 0.4, teamLoss: 0.05, smallShare: 0.05 };
 /** Damage points: 5 per hitpoint dealt, each room capped at 5 x its NPCs' hitpoints + 5%. */
 const POINTS_PER_DAMAGE = 5;
 const ENTER_SOUND = 1952;
 const LEAVE_SOUND = 1956;
 const BUILD_DELAY = 3;
-const TIMER_REFRESH = 100;
+/** rsprox CM runs: raids_timer is sent at least every 7 ticks. */
+const TIMER_REFRESH = 7;
 
 function registerRoom(key, RoomClass) {
   roomTypes.set(key, RoomClass);
@@ -166,8 +164,6 @@ class Room {
     if (!npc) return null;
     npc.__skipDefaultRespawn = true;
     npc.__coxRoom = this;
-    // rsprox captures: what the raid's monsters drop is everyone's at once (timeUntilPublic 0).
-    npc.__publicDrops = true;
     if (options.scale !== false) Monsters.apply(npc, this.raid.scaling ?? this.raid.scalingInputs());
     this.map.add(npc);
     this.npcs.add(npc);
@@ -251,14 +247,22 @@ class Raid {
     this.map = null;
     this.rooms = [];
     this.roomOfPlayer = new Map();
-    this.trackOfPlayer = new Map();
     this.respawn = null;
     this.timer = null;
     this.ticks = 0;
     this.destroyed = false;
     this.building = false;
     this.deaths = [];
+    /** Each raider's timings within this raid (by `ticks`), gone when they leave it. */
+    this.raiderState = new Map();
     raids.add(this);
+  }
+
+  /** A raider's state for this raid only, such as when an effect on them ends. */
+  stateOf(player) {
+    let state = this.raiderState.get(player);
+    if (!state) this.raiderState.set(player, (state = {}));
+    return state;
   }
 
   get challenge() {
@@ -271,6 +275,14 @@ class Raid {
    */
   get scale() {
     return Math.max(1, this.original.size || this.players.size, this.party.scaling ?? 0);
+  }
+
+  /**
+   * The raiders who were there when it started. Team-size Combat Achievements count these: no
+   * source says a scaled raid counts as its scale (the 2023 update only calls it invisible players).
+   */
+  get teamSize() {
+    return Math.max(1, this.original.size || this.players.size);
   }
 
   // ---------------------------------------------------------------- building and entering
@@ -321,7 +333,7 @@ class Raid {
     player.setAttribute(ATTR_RAID, this);
     player.setAttribute(Shared.ATTR.INSIDE, true);
     Shared.sound(player, ENTER_SOUND);
-    player.getPacketSender().sendVarbit(Shared.VARBIT.ENTERING, 0);
+    player.getPacketSender().sendVarbit(Shared.VARBIT.REWARD_LIGHT, 0);
     Shared.fadeMove(player, () => {
       this.map.enter(player);
       player.moveTo(this.respawn);
@@ -376,7 +388,7 @@ class Raid {
     const layoutName = this.challenge ? "Challenge Mode (Full)" : Shared.LAYOUT_NAMES[this.party.layout];
     for (const player of this.players) {
       Shared.raidMessage(player, "The raid has begun!");
-      player.sendMessage(`Map Layout: ${layoutName}.`);
+      Shared.raidNotice(player, `Map Layout: ${layoutName}.`);
     }
     this.refreshTabs();
   }
@@ -402,9 +414,9 @@ class Raid {
     this.duration = this.ticksSinceStart();
     this.completed = true;
     // rsprox captures: progress 5 stops the client's timer as the raid is complete.
+    // The music falls silent through the map's getMusicTrack.
     for (const player of this.players) {
       player.getPacketSender().sendVarbit(Shared.VARBIT.TIMER, this.duration).sendVarbit(Shared.VARBIT.STAGE, STAGE_COMPLETE);
-      if ((player.getAudioSettings?.()?.[MUSIC_MODE_SETTING] ?? 0) === 0) player.getPacketSender().sendSong(MUSIC.SILENCE);
     }
     for (const hook of completeHooks) {
       try {
@@ -417,7 +429,8 @@ class Raid {
 
   ticksSinceStart() {
     if (this.completed) return this.duration;
-    return this.stage === STAGE.WAITING ? 0 : Shared.cycle() - this.startCycle + 1;
+    // rsprox CM runs: 7:52.80 is exactly 788 ticks after "The raid has begun!", and raids_timer reads 2 two ticks in.
+    return this.stage === STAGE.WAITING ? 0 : Shared.cycle() - this.startCycle;
   }
 
   tick() {
@@ -445,29 +458,12 @@ class Raid {
     const previous = this.roomOfPlayer.get(player) ?? null;
     if (room === previous) return;
     this.roomOfPlayer.set(player, room);
-    this.playMusic(player, location);
     room?.enter(player);
     if (this.stage === STAGE.WAITING) return;
     const plane = location.getZ();
     if (this.map.inOlmChamber(location)) this.reachStage(STAGE.OLM, this.map.olmEntrance);
     else if (plane === 2) this.reachStage(STAGE.UPPER_DONE, this.floorStart(2));
     else if (plane === 1) this.reachStage(STAGE.MIDDLE_DONE, this.floorStart(1));
-  }
-
-  /**
-   * rsprox captures: Upper Depths on the top floor, Lower Depths below it, Fire in the Deep at the
-   * Olm, each when the raider first arrives; silence once the raid is complete.
-   */
-  playMusic(player, location) {
-    if (this.completed) return;
-    const track = this.map.inOlmChamber(location) ? MUSIC.OLM : location.getZ() === Layout.FLOOR_PLANES[0] ? MUSIC.UPPER : MUSIC.LOWER;
-    if (this.trackOfPlayer.get(player) === track) return;
-    this.trackOfPlayer.set(player, track);
-    Shared.later(player, 1, () => {
-      if (!this.players.has(player)) return;
-      Shared.api().emitCustomEvent("music:unlock-track", { player, trackId: track });
-      if ((player.getAudioSettings?.()?.[MUSIC_MODE_SETTING] ?? 0) === 0) player.getPacketSender().sendSong(track);
-    });
   }
 
   floorStart(plane) {
@@ -482,9 +478,9 @@ class Raid {
     this.stage = stage;
     if (respawn) this.respawn = this.map.landing(respawn);
     const prefix = stage === STAGE.UPPER_DONE ? "Upper" : stage === STAGE.OLM ? "Lower" : "Middle";
-    const duration = Shared.formatTicks(this.ticksSinceStart());
+    const ticks = this.ticksSinceStart();
     // rsprox captures: "<col=ff289d>Upper level complete! Duration: </col><col=ff0000>9:03</col>".
-    for (const player of this.players) player.sendMessage(`<col=ff289d>${prefix} level complete! Duration: </col><col=ff0000>${duration}</col>`);
+    for (const player of this.players) Shared.raidNotice(player, `<col=ff289d>${prefix} level complete! Duration: </col><col=ff0000>${Shared.formatTicks(ticks, player)}</col>`);
     this.refreshTabs();
   }
 
@@ -533,7 +529,8 @@ class Raid {
     const listed = started ? [...this.players] : this.party.members().filter((member) => raidOf(member) === this || Shared.onMount(member));
     sender.sendVarbit(Shared.VARBIT.TAB_LEADER, this.party.isLeader(player) ? 1 : 0)
       .sendVarbit(Shared.VARBIT.TAB_PLAYERS, this.players.size)
-      .sendVarbit(Shared.VARBIT.SCALED_SIZE, this.party.scaling ?? 0)
+      // rsprox CM runs: 3 for a party of 3 with scaling cleared to 0.
+      .sendVarbit(Shared.VARBIT.SCALED_SIZE, this.scale)
       .sendVarbit(Shared.VARBIT.HIGHEST_COMBAT, Math.max(1, ...[...this.players].map((raider) => raider.getSkillManager().getCombatLevel())))
       .sendVarbit(Shared.VARBIT.LAYOUT_POOL, this.party.layout)
       .sendVarbit(Shared.VARBIT.STAGE, this.completed ? STAGE_COMPLETE : this.stage)
@@ -635,7 +632,7 @@ class Raid {
   removePlayer(player, logout) {
     this.players.delete(player);
     this.roomOfPlayer.delete(player);
-    this.trackOfPlayer.delete(player);
+    this.raiderState.delete(player);
     player.setAttribute(ATTR_RAID, null);
     // Kept through a logout: the player is saved inside, and login puts them back out.
     if (!logout) player.setAttribute(Shared.ATTR.INSIDE, null);

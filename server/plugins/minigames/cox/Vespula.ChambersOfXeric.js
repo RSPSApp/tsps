@@ -495,7 +495,7 @@ class VespulaRoom extends Raid.Room {
     for (const root of this.roots ?? []) Shared.replaceObject(this.map, root, OBJECT.PICKED_ROOT);
     Shared.later(this.raid, 2, () => {
       for (const player of this.raid.players) {
-        player.sendMessage("<col=ef20ff>As the link to the Abyss disintegrates, the abyssal creatures perish.</col>");
+        Shared.raidMessage(player, "As the link to the Abyss disintegrates, the abyssal creatures perish.");
       }
       for (const creature of dying) {
         creature.setHitpoints(0);

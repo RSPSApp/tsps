@@ -77,7 +77,6 @@ class ShamansRoom extends Raid.Room {
     this.shamans = [];
     this.blockers = [];
     this.tendrils = [];
-    this.woken = false;
     this.hurt = new Set();
   }
 
@@ -134,7 +133,6 @@ class ShamansRoom extends Raid.Room {
   }
 
   wake() {
-    this.woken = true;
     const { GameObject, ObjectManager } = Shared.core();
     this.tendrils = this.tendrilTiles.map((tile) => {
       const tendril = new GameObject(OBJECT.TENDRIL, tile, 10, 0, this.map);
@@ -199,12 +197,7 @@ class ShamansRoom extends Raid.Room {
   }
 
   adjacent(npc, player) {
-    const at = npc.getLocation();
-    const x = player.getLocation().getX() - at.getX();
-    const y = player.getLocation().getY() - at.getY();
-    const inX = x >= 0 && x < 3;
-    const inY = y >= 0 && y < 3;
-    return (inX && (y === -1 || y === 3)) || (inY && (x === -1 || x === 3));
+    return Shared.besideFootprint(npc, player.getLocation(), 3);
   }
 
   attack(npc, player) {
@@ -266,7 +259,9 @@ class ShamansRoom extends Raid.Room {
     });
     Shared.later(this.raid, JUMP_TICKS + 2, () => {
       npc.__coxJumping = false;
-      if (npc.isRegistered()) npc.getCombat().attack(player);
+      if (!npc.isRegistered()) return;
+      if (this.raiders().includes(player) && player.getHitpoints() > 0) npc.getCombat().attack(player);
+      else this.engage(npc);
     });
     return true;
   }

@@ -80,7 +80,6 @@ const SHARED_ITEM_SET = new Set(SHARED_ITEMS);
 const ATTR_PRIVATE = "cox:private-storage";
 const ATTR_DISMISSED = "cox:storage-warning-dismissed";
 const ATTR_VIEW = "cox:storage-view";
-const ATTR_BUILD_MENU = "cox:storage-build-menu";
 
 const uid = (group, component) => (group << 16) | component;
 
@@ -430,19 +429,28 @@ function openCreation(player, raid) {
   });
   sender.sendClientScript(BUILD_MENU.LIST_SCRIPT, TIERS.length - 1, 0);
   sender.sendInterfaceFlagsRange(uid(BUILD_MENU.INTERFACE, BUILD_MENU.CONTENTS), 1, TIERS.length - 1, 1);
-  player.setAttribute(ATTR_BUILD_MENU, raid);
+  raid.stateOf(player).buildMenu = true;
 }
 
-/** A row chosen: the menu's script resumes with its one-based index (as the POH's menu does). */
+/**
+ * A row chosen: the menu's script resumes with its one-based index (as the POH's menu does).
+ * 458 is also the POH's furniture menu, so only a menu this raid opened is ours.
+ */
 function chooseBuild(event) {
   const { player } = event;
   if (event.groupId !== BUILD_MENU.INTERFACE || event.childId !== BUILD_MENU.CONTENTS) return;
-  const raid = player.getAttribute(ATTR_BUILD_MENU);
-  if (!raid) return;
+  const raid = Raid.raidOf(player);
+  if (!raid?.stateOf(player).buildMenu) return;
   event.handled = true;
-  player.setAttribute(ATTR_BUILD_MENU, null);
+  raid.stateOf(player).buildMenu = false;
   player.getPacketSender().sendInterfaceRemoval();
-  if (TIERS[event.action] && Raid.raidOf(player) === raid) build(player, raid, event.action);
+  if (TIERS[event.action]) build(player, raid, event.action);
+}
+
+function buildMenuClosed({ player, interfaceId }) {
+  if (interfaceId !== BUILD_MENU.INTERFACE) return;
+  const raid = Raid.raidOf(player);
+  if (raid) raid.stateOf(player).buildMenu = false;
 }
 
 function build(player, raid, index) {
@@ -545,6 +553,7 @@ module.exports = function registerCoxStorage(api) {
   api.persistAttribute(ATTR_DISMISSED);
   Shared.onObjectIds(api, [...UNIT_IDS, MOUNT_UNIT], useUnit);
   api.onInterfaceActionClick(chooseBuild);
+  api.onCustomEvent("interface:closed", buildMenuClosed);
   api.onInterfaceActionButton(uid(Shared.INTERFACE.PRIVATE_STORAGE, COMPONENT.PRIVATE.ITEMS), clickStoredItem);
   api.onInterfaceActionButton(uid(Shared.INTERFACE.SHARED_STORAGE, COMPONENT.SHARED.ITEMS), clickStoredItem);
   api.onInterfaceActionButton(uid(SIDE_INTERFACE, COMPONENT.SIDE.ITEMS), clickInventoryItem);

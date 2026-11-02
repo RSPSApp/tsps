@@ -101,7 +101,7 @@ The rooms' set-up is covered by `server/tests/chambers-of-xeric.test.cjs`. A who
 - A floor's end room is always the same version by floor, in all five recordings: the last floor has the second version (hole 29735), the floors above it the first (29734). On Full, the middle floor's is the copy at chunk y 640 (hole 32542).
 - Every layout is 4x2 rooms (16x8 chunks).
 
-**Scale** (820: a party scaled to 50 reports "24+ players"): the raid scales to the higher of its raiders and the party's scale. Monsters, the Olm's phases, caps, and the team size in messages and speed tasks all use it.
+**Scale** (820: a party scaled to 50 reports "24+ players"): the raid scales to the higher of its raiders and the party's scale. Monsters, the Olm's phases, caps, varbit 9540, and the team size in messages and personal bests use it. Team-size Combat Achievements (Solo, Trio, 5-Scale) count the raiders who started it: no source says a scaled raid counts as its scale.
 
 **Reload** (the first room's steps, 2528): before the raid begins, the leader can generate a new layout ("Reload the raid to generate a new layout?"). Anyone else inside is put out (Wiki).
 
@@ -116,9 +116,11 @@ The rooms' set-up is covered by `server/tests/chambers-of-xeric.test.cjs`. A who
 **Starting and stages:**
 - Everyone lands in the first room. Its passage stays shut until the leader starts the raid from the party tab ("No-one may join the party after the raid begins."). The first room's bank chest shuts as the raid begins (47420 to 47419).
 - Reaching plane 2, plane 1 (three-floor layouts) and the Olm's chamber completes the Upper, Middle and Lower levels: "<Level> level complete! Duration: m:ss", and the respawn moves to that floor's start.
-- Music: Upper Depths (492) on the top floor, Lower Depths (487) below it, Fire in the Deep (493) at the Olm, silence (147) and jingle 152 on completing.
+- Durations are ticks since "The raid has begun!" (the CM runs: 7:52.80 is 788 ticks), shown as `m:ss`, or `m:ss.cc` with `option_precise_timing` (11866) on.
+- The raid's announcements (begun, map layout, level complete, completion, special loot, "slain by" drops) are friendschatnotification messages (type 11).
+- Music: Upper Depths (492) on the top floor, Lower Depths (487) below it, Fire in the Deep (493) at the Olm, silence (147) on completing, through the map's `getMusicTrack`; jingle 152 on completing.
 - The party tab (500) replaces the chat-channel tab:
-  - Varbits: 5423 you lead, 5424 raiders, 9540 the scale, 12285 the highest combat level, 5425 the stage (5 once complete, which stops the client's timer), 6386 the timer.
+  - Varbits: 5423 you lead, 5424 raiders, 9540 the scale, 12285 the highest combat level, 5425 the stage (5 once complete, which stops the client's timer), 6386 the timer (sent at least every 7 ticks).
   - Scripts: 1547 the list's size, 1548 a member, 1553 who you can kick.
 - The points overlay (513) is on the HUD: varbit 5431 the total and varp 4609 (`raids_playerscore`) your points.
 
@@ -201,7 +203,8 @@ The rooms' set-up is covered by `server/tests/chambers-of-xeric.test.cjs`. A who
 ## Rewards
 
 `Rewards.ChambersOfXeric.js` on `Raid.onComplete`:
-- Completion message, Normal / Challenge Mode counts (attributes), personal bests by mode and team size.
+- Completion message, with " (new personal best)" or " Personal best: <time>" (the CM runs), Normal / Challenge Mode counts (attributes), personal bests by mode and team-size name ("cm:3 players"; older "cm:3" keys move over), and `boss:personal-best` for clan broadcasts as "Chambers of Xeric (Team Size: 3 players)".
+- The chest's light (5456): 2 for a unique's finder, 1 for common loot (the CM runs).
 - Challenge Mode within the Wiki's target time: +5,000 points each, the kit (1/75) and dust (1/400) rolls.
 - Uniques by the Wiki: 1% per 8,676 points, 570,000 a roll, the 2026 weights, the receiver by personal points (left raiders' uniques discarded), olmlet 1/53. Otherwise two different commons scaled by points (a third of herbs as seeds), the ancient tablet, elite clue 1/12; the dark journal if not banked.
 - The ancient chest opens interface 539 (Take, Take-all, Bank-all, Discard-all); unclaimed loot is placed on the ground on leaving.
@@ -215,7 +218,7 @@ The rooms' set-up is covered by `server/tests/chambers-of-xeric.test.cjs`. A who
 | `::coxlayout` | The raid's layout and the room you're in. |
 | `::coxpoints <amount>` | Points for you in your raid. |
 | `::coxnext` | To the next floor's start (or the Olm's chamber). |
-| `::coxclear` | Completes the room you're in: a puzzle's own ending (the Ice Demon just thaws), or its monsters go and its exit opens. |
+| `::coxclear` | Completes the room you're in: a puzzle's own ending (the Ice Demon just thaws), or its monsters go and its exit opens. The raid earns no Combat Achievements after it (nor after `::coxnext`). |
 
 The raid is also in `::teleports` under Minigames.
 
@@ -363,11 +366,11 @@ All five recordings.
 | Ice Demon boulder base 30, prayer letting 2/3 through (a fit on few samples) | `IceDemon.ChambersOfXeric` |
 | Boss attack bases where the Wiki says "varies" | the room units |
 | The Olm's rising/transition timings, special timings and damage ranges not on the Wiki | `Olm.ChambersOfXeric` |
-| Reward interface's Bank-all, Take-all and Discard-all components; varbit 5456 for common loot (all recordings had a unique, which is 1) | `Rewards.ChambersOfXeric` |
+| Reward interface's Bank-all, Take-all and Discard-all components | `Rewards.ChambersOfXeric` |
 
 **Derived, not from a source** (to check): max hits grown with scaled offence (a Guardian comes to 29 in Challenge Mode, where the Wiki says 33); Vespula grounded 33 ticks; tightrope barrier tile turn; the team-size names between Solo and 24+.
 
-**Known differences:** lightning's prayer block says the engine's message rather than "You've been injured and can't use that prayer!"; the reward book's varbit (5457) isn't cleared when the chest's interface closes; the Olm's NPCs spawn in their risen forms rather than turning into them.
+**Known differences:** the reward book's varbit (5457) isn't cleared when the chest's interface closes; the Olm's NPCs spawn in their risen forms rather than turning into them.
 
 **Not built:** the Challenge Timeboard (live also says "Your team has made it onto this world's Challenge Timeboard!"), private-storage drag reorder, ironman storage rules.
 

@@ -87,7 +87,10 @@ const VARBIT = {
   TIMER: 6386,
   TAB_ICON: 5432,
   TAB_ICON_2: 8168,
-  ENTERING: 5456,
+  /** raids_client_rewardindicator: the chest's light, cleared as a raider enters. */
+  REWARD_LIGHT: 5456,
+  /** option_precise_timing: durations with hundredths. */
+  PRECISE_TIMING: 11866,
 };
 
 const VARP = {
@@ -218,9 +221,14 @@ function options(player, title, ...pairs) {
   api().sendMultiChatboxPrompt(player, title, ...args);
 }
 
-/** Pink game messages, as the raid sends them (not on the Wiki). */
+/** rsprox captures: the raid's announcements are friendschatnotification messages, not plain game ones. */
+function raidNotice(player, text) {
+  player.getPacketSender().sendTypedMessage(core().ChatType.FRIENDS_CHAT_NOTIFICATION, text);
+}
+
+/** Pink raid announcements (rsprox captures). */
 function raidMessage(player, text) {
-  player.sendMessage(`<col=ef20ff>${text}</col>`);
+  raidNotice(player, `<col=ef20ff>${text}</col>`);
 }
 
 /** The raid overlay's own fade: out, run `action` a tick later, then back in (not on the Wiki). */
@@ -440,6 +448,16 @@ function projectile(area, from, to, id, { delay = 0, duration = 30, perTile = 5,
   return Math.ceil(speed / 30);
 }
 
+/** Whether a tile shares an edge with an NPC's footprint: beside it, not under it nor on a corner. */
+function besideFootprint(npc, location, size = npc.getSize()) {
+  const at = npc.getLocation();
+  const x = location.getX() - at.getX();
+  const y = location.getY() - at.getY();
+  const inX = x >= 0 && x < size;
+  const inY = y >= 0 && y < size;
+  return (inX && (y === -1 || y === size)) || (inY && (x === -1 || x === size));
+}
+
 /** Moves an NPC in a straight line to a tile, whatever the map blocks there. */
 function walkStraight(npc, location) {
   npc.setFlag("movement:ignore-clipping");
@@ -545,14 +563,23 @@ function pickaxeOf(player) {
   return PICKAXES.find((pickaxe) => mining >= pickaxe.level && (has(player, pickaxe.id) || wielding(player, pickaxe.id))) ?? null;
 }
 
-function formatTicks(ticks) {
-  const seconds = Math.floor((Math.max(0, ticks) * 600) / 1000);
+function preciseTiming(player) {
+  return player?.getPacketSender?.()?.getVarbit?.(VARBIT.PRECISE_TIMING) === 1;
+}
+
+/**
+ * A duration as the raid prints it for `player`: "9:03" and "1:08:08" (rsprox 843, 820), or with
+ * precise timing on "7:52.80" (the CM runs, 3389).
+ */
+function formatTicks(ticks, player = null) {
+  const centis = Math.max(0, ticks) * 60;
+  const seconds = Math.floor(centis / 100);
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor(seconds / 60) % 60;
   const secs = seconds % 60;
   const pad = (value) => String(value).padStart(2, "0");
-  // rsprox captures: "9:03", no leading zero.
-  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(secs)}` : `${minutes}:${pad(secs)}`;
+  const time = hours > 0 ? `${hours}:${pad(minutes)}:${pad(secs)}` : `${minutes}:${pad(secs)}`;
+  return preciseTiming(player) ? `${time}.${pad(centis % 100)}` : time;
 }
 
 function displayName(player) {
@@ -563,8 +590,8 @@ module.exports = {
   bind, core, api,
   OUTSIDE, MOUNT_QUIDAMORTEM, OBJECT, NPC, INTERFACE, VARBIT, VARP, SCRIPT, BOARD_ROWS, MAX_RAIDERS,
   MAX_POINTS, PARTY_SKILLS, ATTR, OVERLAY_UID, MAIN_MODAL_UID, EVENT,
-  LAYOUT_POOL, LAYOUT_NAMES, isRaidItem, loc, inBox, onMount, cycle, later, repeat, statement, options, raidMessage, fadeMove, sound,
+  LAYOUT_POOL, LAYOUT_NAMES, isRaidItem, loc, inBox, onMount, cycle, later, repeat, statement, options, raidNotice, raidMessage, fadeMove, sound,
   channelOf, channelByKey, joinChannel, leaveChannel, formatTicks, displayName,
-  balanceWalk, crossFire, random, randomOf, shuffle, gfx, graphicAt, areaSound, healSplat, damage, isProtected, projectile, walkStraight, styleMethod, strike,
+  balanceWalk, crossFire, random, randomOf, shuffle, gfx, graphicAt, areaSound, healSplat, damage, isProtected, projectile, besideFootprint, walkStraight, styleMethod, strike,
   onObjectIds, replaceObject, action, stopAction, level, baseLevel, addXp, has, wielding, give, animate, axeOf, pickaxeOf, PICKAXES,
 };

@@ -5,7 +5,7 @@
  *
  * This unit decides what the raid's end decides (Wiki, Combat Achievements/All tasks): the
  * completion counts per mode, the raids without deaths, Solo / Trio / 5-scale speed tasks by the
- * raid's scale, Dust Seeker and Putting It Olm on the Line. Tasks about how a room went are
+ * raiders who started it (not its scale setting; no source says otherwise), Dust Seeker and Putting It Olm on the Line. Tasks about how a room went are
  * finished by that room's unit, through `complete`.
  */
 
@@ -16,7 +16,7 @@ const Rewards = require("./Rewards.ChambersOfXeric");
 const MONSTER = { normal: "Chambers of Xeric", challenge: "CM: Chambers of Xeric" };
 const SOLO_POINTS_TASK = 40000;
 
-/** Speed tasks: the raid's scale, then [task, minutes] for each mode. */
+/** Speed tasks: the team size, then [task, minutes] for each mode. */
 const SPEED = [
   { scale: 1,
     normal: [["Chambers of Xeric (Solo) Speed-Chaser", 21], ["Chambers of Xeric (Solo) Speed-Runner", 17]],
@@ -31,16 +31,16 @@ const SPEED = [
 
 const ticksOf = (minutes) => Math.round((minutes * 60) / 0.6);
 
-/** Finishes a task for each of these players. */
+/** Finishes a task for each of these players, unless a developer command helped their raid along. */
 function complete(players, task) {
-  for (const player of [].concat(players)) Shared.api().emitCustomEvent("combat-achievements:complete", { player, task });
+  for (const player of [].concat(players)) if (!Raid.raidOf(player)?.devAssisted) Shared.api().emitCustomEvent("combat-achievements:complete", { player, task });
 }
 
 function completed(raid) {
   const mode = raid.challenge ? "challenge" : "normal";
-  const solo = raid.scale === 1;
+  const solo = raid.teamSize === 1;
   const deathless = raid.deaths.length === 0;
-  const speed = SPEED.find((entry) => entry.scale === raid.scale)?.[mode] ?? [];
+  const speed = SPEED.find((entry) => entry.scale === raid.teamSize)?.[mode] ?? [];
   for (const player of raid.players) {
     const attribute = raid.challenge ? Shared.ATTR.CHALLENGE_KILLS : Shared.ATTR.KILLS;
     const count = Number(player.getAttribute(attribute)) || 0;

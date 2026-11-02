@@ -112,14 +112,15 @@ class GuardiansRoom extends Raid.Room {
   }
 
   living() {
-    return this.guardians.filter((npc) => npc.isRegistered() && npc.getHitpoints() > 0);
+    // A crumbled guardian stays registered at 1 hitpoint until it goes; it no longer sweeps.
+    return this.guardians.filter((npc) => npc.isRegistered() && npc.getHitpoints() > 0 && !npc.__coxCrumbled);
   }
 
   tick() {
     if (this.completed) return;
     for (const player of this.raiders()) {
       const index = this.behind.findIndex((tile) => tile.equals(player.getLocation()));
-      if (index >= 0 && !player.__coxBalancing && !(player.__coxKnockedAt >= this.raid.ticks - 1)) this.knockBack(player, index);
+      if (index >= 0 && !player.__coxBalancing && !(this.raid.stateOf(player).knockedAt >= this.raid.ticks - 1)) this.knockBack(player, index);
     }
   }
 
@@ -127,7 +128,7 @@ class GuardiansRoom extends Raid.Room {
   knockBack(player, index) {
     const living = this.living();
     if (living.length === 0) return;
-    player.__coxKnockedAt = this.raid.ticks;
+    this.raid.stateOf(player).knockedAt = this.raid.ticks;
     for (const guardian of living) {
       guardian.setPositionToFace(player.getLocation());
       Shared.animate(guardian, ANIM.SWEEP);
@@ -183,12 +184,7 @@ class GuardiansRoom extends Raid.Room {
   }
 
   adjacent(npc, player) {
-    const at = npc.getLocation();
-    const x = player.getLocation().getX() - at.getX();
-    const y = player.getLocation().getY() - at.getY();
-    const inX = x >= 0 && x < 2;
-    const inY = y >= 0 && y < 2;
-    return (inX && (y === -1 || y === 2)) || (inY && (x === -1 || x === 2));
+    return Shared.besideFootprint(npc, player.getLocation(), 2);
   }
 
   attack(npc, player) {

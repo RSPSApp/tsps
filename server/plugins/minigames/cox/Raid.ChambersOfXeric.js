@@ -200,6 +200,11 @@ function roomNpcDying(event) {
   if (room && !room.raid.destroyed && room.beforeNpcDeath(event.npc)) event.preventDeath = true;
 }
 
+/** rsprox captures: what the raid's monsters drop is everyone's at once (timeUntilPublic 0). */
+function publicDrops(where) {
+  if (where.npc?.__coxRoom) where.public = true;
+}
+
 /** A hit on a raid NPC: its room may change it (the Ice Demon's resistances, the Olm's claws). */
 function roomNpcHit(event) {
   event.npc?.__coxRoom?.modifyHit(event.npc, event.hit);
@@ -223,6 +228,7 @@ module.exports = function registerCoxRaid(api) {
   api.onNpcDeath(roomNpcDied);
   api.onNpcBeforeDeath(roomNpcDying);
   api.onNpcHitModify(roomNpcHit);
+  api.onCustomEvent("npc-drops:location", publicDrops);
 };
 
 module.exports.enterPassage = enterPassage;

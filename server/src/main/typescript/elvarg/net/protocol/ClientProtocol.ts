@@ -1829,25 +1829,85 @@ export function encodeWorldEntityInfo(updates: WorldEntityUpdate[], spawns: Worl
   return encodeServerPacket(ServerPacketId.WORLDENTITY_INFO, out.toBuffer());
 }
 
+/**
+ * A REGION_REPLACEMENT travels in a short packet inside a 64 KiB frame, so its payload
+ * (region header + terrain + objects) stops at 0xfffd. Dense regions are over that from the
+ * cache's own bytes alone (Falador 12084 is 82,249), so anything that does not fit is
+ * deflated instead of refused. The client inflates it back to the same raw terrain/objects.
+ */
+export const MAX_REGION_REPLACEMENT_PAYLOAD = 0xfffd;
+
+/** regionId(2) + flags(1) + rawTerrainLength(4) + rawObjectLength(4) */
+const COMPRESSED_REGION_REPLACEMENT_HEADER = 11;
+
+/** A prepared replacement payload; byte 2 is the allowReload flag, so it can be flipped. */
+export type RegionReplacementPacket = { opcode: ServerPacketId; payload: Buffer };
+
+/**
+ * Builds the payload once. A dense region costs a deflate (~3 ms), so callers that send
+ * the same replacement to many players (or on every scene-window change) keep this and
+ * re-wrap it instead of re-encoding the terrain each time.
+ */
+export function regionReplacementPacket(
+  regionId: number,
+  allowReload: boolean,
+  terrainData: Uint8Array,
+  objectData: Uint8Array | null
+): RegionReplacementPacket {
+  const objects = objectData ?? new Uint8Array(0);
+  const payloadLength = 7 + terrainData.length + objects.length;
+  if (payloadLength <= MAX_REGION_REPLACEMENT_PAYLOAD) {
+    const payload = Buffer.allocUnsafe(payloadLength);
+    payload.writeUInt16BE(regionId & 0xffff, 0);
+    payload[2] = allowReload ? 1 : 0;
+    payload.writeUInt16BE(terrainData.length, 3);
+    payload.writeUInt16BE(objects.length, 5);
+    Buffer.from(terrainData).copy(payload, 7);
+    Buffer.from(objects).copy(payload, 7 + terrainData.length);
+    return { opcode: ServerPacketId.REGION_REPLACEMENT, payload };
+  }
+  const deflated = deflateSync(
+    Buffer.concat([Buffer.from(terrainData), Buffer.from(objects)]),
+    { level: 9 }
+  );
+  const compressedLength = COMPRESSED_REGION_REPLACEMENT_HEADER + deflated.length;
+  if (compressedLength > MAX_REGION_REPLACEMENT_PAYLOAD) {
+    throw new Error(
+      `Region replacement ${regionId} is too large to stream: ${payloadLength} bytes, ` +
+      `${compressedLength} compressed, max ${MAX_REGION_REPLACEMENT_PAYLOAD}`
+    );
+  }
+  const payload = Buffer.allocUnsafe(compressedLength);
+  payload.writeUInt16BE(regionId & 0xffff, 0);
+  payload[2] = allowReload ? 1 : 0;
+  payload.writeUInt32BE(terrainData.length, 3);
+  payload.writeUInt32BE(objects.length, 7);
+  deflated.copy(payload, COMPRESSED_REGION_REPLACEMENT_HEADER);
+  return { opcode: ServerPacketId.REGION_REPLACEMENT_COMPRESSED, payload };
+}
+
+/** Wraps a prepared payload into a frame, reusing it when the reload flag already matches. */
+export function encodeCachedRegionReplacement(
+  packet: RegionReplacementPacket,
+  allowReload: boolean
+): Buffer {
+  const flag = allowReload ? 1 : 0;
+  if (packet.payload[2] === flag) return encodeServerPacket(packet.opcode, packet.payload);
+  const payload = Buffer.from(packet.payload);
+  payload[2] = flag;
+  return encodeServerPacket(packet.opcode, payload);
+}
+
 export function encodeRegionReplacement(
   regionId: number,
   allowReload: boolean,
   terrainData: Uint8Array,
   objectData: Uint8Array | null
 ): Buffer {
-  const objects = objectData ?? new Uint8Array(0);
-  const payloadLength = 7 + terrainData.length + objects.length;
-  if (payloadLength > 0xffff) {
-    throw new Error(`Region replacement ${regionId} exceeds short packet length`);
-  }
-  const payload = Buffer.allocUnsafe(payloadLength);
-  payload.writeUInt16BE(regionId & 0xffff, 0);
-  payload[2] = allowReload ? 1 : 0;
-  payload.writeUInt16BE(terrainData.length, 3);
-  payload.writeUInt16BE(objects.length, 5);
-  Buffer.from(terrainData).copy(payload, 7);
-  Buffer.from(objects).copy(payload, 7 + terrainData.length);
-  return encodeServerPacket(ServerPacketId.REGION_REPLACEMENT, payload);
+  return encodeCachedRegionReplacement(
+    regionReplacementPacket(regionId, allowReload, terrainData, objectData),
+    allowReload
+  );
 }
 
 export type ShopSlotView = { slot: number; itemId: number; quantity: number; defaultQuantity?: number; priceEach?: number; sellPrice?: number };

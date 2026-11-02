@@ -1650,6 +1650,34 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             };
         }
 
+        case ServerPacketId.REGION_REPLACEMENT_COMPRESSED: {
+            const regionId = reader.readShort();
+            const allowReload = reader.readBoolean();
+            const terrainLength = reader.readInt();
+            const objectLength = reader.readInt();
+            // A region's terrain and objects are a few MB at most; refuse a payload that
+            // claims to expand past what the map format can hold.
+            if (terrainLength <= 0 || objectLength < 0 || terrainLength + objectLength > 16 * 1024 * 1024) {
+                throw new RangeError(`Region replacement ${regionId} has invalid section lengths`);
+            }
+            const pako = require("pako");
+            const raw = pako.inflate(reader.readBytes(reader.remaining)) as Uint8Array;
+            if (raw.length !== terrainLength + objectLength) {
+                throw new RangeError(
+                    `Region replacement ${regionId} inflated to ${raw.length} bytes, expected ${terrainLength + objectLength}`,
+                );
+            }
+            return {
+                type: "region_replacement",
+                payload: {
+                    regionId,
+                    allowReload,
+                    terrainData: raw.subarray(0, terrainLength),
+                    objectData: objectLength > 0 ? raw.subarray(terrainLength) : undefined,
+                },
+            };
+        }
+
         case ServerPacketId.SET_INTERACTION_MODE: {
             const worldId = reader.readSignedShort();
             const tileMode = reader.readByte() & 0xff;

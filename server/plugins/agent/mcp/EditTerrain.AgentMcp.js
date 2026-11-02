@@ -255,11 +255,11 @@ module.exports = function registerEditTerrainTools(ctx) {
   // disk and the /regions/<id>.pack endpoint serves either.
   //
   // Streaming is a different question. A REGION_REPLACEMENT packet carries 7 + terrain +
-  // objects bytes against a 65,533-byte ceiling, and dense regions (Lumbridge is ~60 KB
-  // of terrain from the cache alone) do not fit objects on top. Those stream terrain-only
-  // - the client falls back to the cache's objects - while still persisting a .pack,
-  // because a .pack is a whole region rather than a patch, and the objects in it are the
-  // cache's, so the reloaded world matches what players were shown.
+  // objects bytes against a 65,533-byte ceiling, and dense regions are over it from the cache
+  // alone; encodeRegionReplacement deflates those, so they still stream whole (Falador 12084:
+  // 82,242 raw, ~13,400 deflated). The terrain-only fallback below remains for objects so large
+  // that even the deflated payload will not fit - the client then keeps the cache's objects -
+  // while the .pack on disk still carries them.
   const commitRegion = (regionId, terrain, tiles) => {
     const mapX = regionId >> 8;
     const mapY = regionId & 0xff;

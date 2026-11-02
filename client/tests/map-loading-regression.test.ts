@@ -24,6 +24,7 @@ import CONSTRUCTION_ROOMS from "../../server/plugins/skills/construction/data/ro
 import HOUSE_TEMPLATE_CHUNKS from "../../server/plugins/skills/construction/data/template-chunks.json";
 import { CachePipeline } from "../../server/src/main/typescript/elvarg/game/cache/CachePipeline";
 import { CacheMaps } from "../../server/src/main/typescript/elvarg/game/cache/CacheMaps";
+import { encodeRegionReplacement } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
 import { getMinimapMaps } from "../widgets/gl/MinimapRenderer";
 import { registerMinimapData } from "../render/render/minimap";
 import { clearInstance, doInstanceSceneBuild, loadInstanceScene, replaceSceneWithInstance, scheduleInstanceLocUpdate } from "../render/render/instance";
@@ -649,6 +650,21 @@ function regionReplacementUsesNativeMapData(): void {
     assert.deepEqual([...loader.getLocData(48, 55, new Map())!], [4, 5]);
 }
 
+function denseRegionReplacementIsDeflated(): void {
+    // A dense region is over the short-packet ceiling raw (Falador 12084 is 82,249 bytes),
+    // so the server deflates it and the client inflates it back to the same sections.
+    const terrain = new Uint8Array(80_000);
+    for (let index = 0; index < terrain.length; index++) terrain[index] = index & 0xff;
+    const objects = Uint8Array.from([9, 8, 7, 6]);
+    const frame = new Uint8Array(encodeRegionReplacement(12343, true, terrain, objects));
+    const decoded = decodeServerPacket(frame) as any;
+    assert.equal(decoded.type, "region_replacement");
+    assert.equal(decoded.payload.regionId, 12343);
+    assert.equal(decoded.payload.allowReload, true);
+    assert.deepEqual(decoded.payload.terrainData, terrain);
+    assert.deepEqual(decoded.payload.objectData, objects);
+}
+
 mapLoadBackoff();
 mapProfilingRequiresExplicitFlag();
 editorWaitsForRenderableRegion();
@@ -662,6 +678,7 @@ locUpdateBeforeInitialMapDoesNotStartADuplicateMapTask();
 locReplayInvalidatesCompletedMapsWaitingToRender();
 crossShapeReplacementKeepsBaseWallHidden();
 regionReplacementUsesNativeMapData();
+denseRegionReplacementIsDeflated();
 console.log("Map loading regression tests passed");
 
 // Disconnect restores the cache door and must discard its old open counterpart.

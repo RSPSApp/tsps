@@ -48,6 +48,8 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   LARGE_DOOR_101_OPEN: 39254,
   GUIDOR_GATE_LEFT_OPEN: 2052, // guidorgatelopen
   GUIDOR_GATE_RIGHT_OPEN: 2053, // guidorgateropen
+  MORT_MYRE_GATE_LEFT_OPEN: 1574, // inacmetalgateopenr, capture 1638
+  MORT_MYRE_GATE_RIGHT_OPEN: 1573, // inacmetalgateopenl, capture 1638
 });
 
 let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
@@ -316,8 +318,7 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LARGE_DOOR_9, O.LARGE_DOOR_10],
   ]);
   // Gates that let the player through and shut behind them, never staying open. Each leaf is
-  // [id, x, y, z, face] of a shape-0 wall loc; `crossX` is the tile column the player crosses into
-  // from the west, and from which they step west.
+  // [id, x, y, z, face] of a shape-0 wall loc; crossX/crossY is the boundary the player crosses.
   PASS_THROUGH_GATES = Object.freeze([
     // Guidor's gate, south-east Varrock (rsprox 1663, 3218, 3220): on Open the leaves swing to the
     // south edges of the two tiles west, the player steps through, and the gate shuts two ticks
@@ -331,6 +332,17 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       ],
       crossX: 3264,
       closeTicks: 2,
+    }),
+    // Mort Myre: capture 1638 ticks 1014/1016. Both Open-only leaves close behind the player.
+    Object.freeze({
+      closed: [[O.GATE_73, 3443, 3458, 0, 3], [O.GATE_72, 3444, 3458, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_LEFT_OPEN, 3443, 3457, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_RIGHT_OPEN, 3444, 3457, 0, 2],
+      ],
+      crossY: 3458,
+      closeTicks: 2,
+      openSoundId: 71,
     }),
   ]);
   DOUBLE_DOOR_FAMILY_IDS_BY_ID = new Map(
@@ -1223,21 +1235,23 @@ function passThroughGateAt(objectId, x, y, z) {
     gate.closed.some(([id, gx, gy, gz]) => id === objectId && gx === x && gy === y && gz === z)) ?? null;
 }
 
-function wallLoc([id, x, y, z, face]) {
-  return new core.GameObject(id, cloneLocation(x, y, z), 0, face, null);
+function wallLoc([id, x, y, z, face], privateArea) {
+  return new core.GameObject(id, cloneLocation(x, y, z), 0, face, privateArea);
 }
 
-function swapLocs(remove, add) {
-  for (const leaf of remove) core.ObjectManager.deregister(wallLoc(leaf), true);
-  for (const leaf of add) core.ObjectManager.register(wallLoc(leaf), true);
+function swapLocs(remove, add, privateArea) {
+  for (const leaf of remove) core.ObjectManager.deregister(wallLoc(leaf, privateArea), true);
+  for (const leaf of add) core.ObjectManager.register(wallLoc(leaf, privateArea), true);
 }
 
-/** The player crosses on the clicked row, from whichever side they stand on. */
-function stepThroughGate(player, gate, y, z) {
-  const toX = player.getLocation().getX() < gate.crossX ? gate.crossX : gate.crossX - 1;
+/** The player crosses on the clicked row or column, from whichever side they stand on. */
+function stepThroughGate(player, gate, x, y, z) {
+  const destination = gate.crossX != null
+    ? cloneLocation(player.getLocation().getX() < gate.crossX ? gate.crossX : gate.crossX - 1, y, z)
+    : cloneLocation(x, player.getLocation().getY() < gate.crossY ? gate.crossY : gate.crossY - 1, z);
   const queue = player.getMovementQueue();
   queue.reset();
-  queue.addSteps(cloneLocation(toX, y, z));
+  queue.addSteps(destination);
 }
 
 /** Opens a pass-through gate, steps the player across it and shuts it again (see PASS_THROUGH_GATES). */
@@ -1247,24 +1261,25 @@ function handlePassThroughGate(player, objectId, location) {
   const z = location?.getZ?.() ?? location?.z ?? 0;
   const gate = passThroughGateAt(objectId, x, y, z);
   if (!gate) return false;
-  const anchorKey = `pass-through:${gate.closed[0].slice(1).join(",")}`;
+  const privateArea = player.getPrivateArea?.() ?? null;
+  const anchorKey = doorStateKey(`pass-through:${gate.closed[0].slice(1).join(",")}`, privateArea);
   // Someone else's opening: step through it while it stands open.
   if (OPEN_PASS_THROUGH_GATES.has(anchorKey)) {
-    stepThroughGate(player, gate, y, z);
+    stepThroughGate(player, gate, x, y, z);
     return true;
   }
 
-  swapLocs(gate.closed, gate.opened);
+  swapLocs(gate.closed, gate.opened, privateArea);
   OPEN_PASS_THROUGH_GATES.add(anchorKey);
   // Captured: the opening sound only; the gate shuts silently (1636, 1663, 3220).
-  core.Sounds.sendSound(player, core.Sound.GATE_OPEN);
-  stepThroughGate(player, gate, y, z);
+  core.Sounds.sendSound(player, gate.openSoundId == null ? core.Sound.GATE_OPEN : new core.Sound(gate.openSoundId, 1, 0, 0));
+  stepThroughGate(player, gate, x, y, z);
 
   const task = new core.Task(gate.closeTicks, anchorKey);
   task.execute = () => {
     task.stop();
     OPEN_PASS_THROUGH_GATES.delete(anchorKey);
-    swapLocs(gate.opened, gate.closed);
+    swapLocs(gate.opened, gate.closed, privateArea);
   };
   core.TaskManager.submit(task);
   return true;

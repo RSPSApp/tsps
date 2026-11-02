@@ -943,10 +943,19 @@ test('an overhead NPC action owns its two-tick continuation; treating it as a di
     player.manager.reset();
     play();
     assert.ok(player.manager.getCurrent() instanceof ActionDialogue);
-    player.manager.advance(); // Mirrors clicking Continue while MCP reports kind "other".
+    player.manager.advance(); // A plugin moving the chain on, not a native Continue.
     TaskManager.process();
     TaskManager.process();
     assert.equal(player.manager.getCurrent(), undefined, 'advancing the internal action invalidates its guarded continuation');
+
+    player.manager.reset();
+    play();
+    // Held Space: a native Continue on the chatbox still showing reaches the waiting overhead.
+    assert.equal(player.manager.handleResume((231 << 16) | 5, -1), true);
+    assert.ok(player.manager.getCurrent() instanceof ActionDialogue, 'a Continue does not skip the overhead cadence');
+    TaskManager.process();
+    TaskManager.process();
+    assert.ok(player.manager.getCurrent() instanceof PlayerDialogue, 'the overhead still continues on its own timer');
   } finally {
     TaskManager.cancelTasks(player);
     TaskManager.pendingTasks.clear();
@@ -1446,4 +1455,13 @@ test('live condition runs fall through only after a chosen true branch', () => {
   } finally {
     PluginManager.npcDialogueConditionHooks.splice(PluginManager.npcDialogueConditionHooks.indexOf(condition), 1);
   }
+});
+
+test('dialogue alternatives follow saved pronouns independently of the body', () => {
+  const { formatPlayerText } = require('../plugins/npcs/NpcDialogues.plugin');
+  const player = (value) => ({ getUsername: () => 'Alex', getAppearance: () => ({ isMale: () => false, getPronouns: () => value }) });
+  assert.equal(formatPlayerText('[He/She/They] is ready.', player(0)), 'He is ready.');
+  assert.equal(formatPlayerText('[He/She/They] is ready.', player(1)), 'She is ready.');
+  assert.equal(formatPlayerText('[He/She/They] are ready.', player(2)), 'They are ready.');
+  assert.equal(formatPlayerText('[Greetings, sir/Greetings, madam/Greetings]', player(2)), 'Greetings');
 });

@@ -188,6 +188,12 @@
       ]
     },
     {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-aggie"
+      ]
+    },
+    {
       "page": "Transcript:Land of the Goblins",
       "variants": [
         "keys-to-the-crypt-talking-to-aggie",
@@ -224,6 +230,12 @@
       "page": "Transcript:Aggie",
       "variants": [
         "standard-dialogue"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-aggie"
       ]
     },
     {
@@ -1452,6 +1464,15 @@
         "a-porcine-of-interest",
         "a-porcine-of-interest-finishing-up",
         "treasure-trails-easy"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Halloween event",
+      "variants": [
+        "spooky-scarecrow-talking-to-sarah",
+        "spooky-scarecrow-talking-to-sarah-again",
+        "spooky-scarecrow-returning-to-sarah",
+        "spooky-scarecrow-talking-to-sarah-after-receiving-the-scarecrow-for-the-first-time"
       ]
     },
     {
@@ -3661,6 +3682,19 @@
       ]
     },
     {
+      "page": "Transcript:2025 Halloween event",
+      "variants": [
+        "starting-off-talking-to-fred-the-farmer",
+        "starting-off-talking-to-fred-after-starting-the-event",
+        "starting-off-talking-to-fred-after-being-suggested-to-visit-seth-groats",
+        "returning-to-fred-with-the-decorations-talking-to-fred",
+        "returning-to-fred-with-the-decorations-talking-to-fred-again",
+        "the-spook-a-thon-contest",
+        "the-spook-a-thon-contest-talking-to-fred-again-before-finishing-the-cutscene",
+        "the-spook-a-thon-contest-talking-to-fred-after-the-cutscene"
+      ]
+    },
+    {
       "page": "Transcript:Cold War",
       "variants": [
         "finding-the-outpost-speaking-with-fred"
@@ -4836,6 +4870,12 @@
         "treasure-trails-hard",
         "treasure-trails-hard-while-holding-the-puzzle-box",
         "ancient-wyvern-shield"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-oziach"
       ]
     },
     {
@@ -9746,6 +9786,14 @@
         "standard-dialogue",
         "treasure-trails"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "starting-the-event-talking-to-the-bartender-blue-moon-inn-before-starting-the-event",
+        "starting-the-event-talking-to-the-bartender-after-starting-the-event",
+        "completing-the-event-talking-to-the-bartender-after-completing-the-event"
+      ]
     }
   ],
   "1313": [
@@ -9880,6 +9928,12 @@
       "page": "Transcript:Tarquin",
       "variants": [
         "standard-dialogue"
+      ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-at-the-canoe-station"
       ]
     }
   ],
@@ -10028,6 +10082,15 @@
       "page": "Transcript:Seth Groats",
       "variants": [
         "standard-dialogue"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Halloween event",
+      "variants": [
+        "starting-off-talking-to-seth-groats",
+        "starting-off-talking-to-seth-again-after-receiving-the-picture-for-the-first-time",
+        "returning-to-fred-with-the-decorations-talking-to-seth-groats-after-collecting-each-item",
+        "the-spook-a-thon-contest"
       ]
     },
     {
@@ -11136,6 +11199,12 @@
       "page": "Transcript:Thief",
       "variants": [
         "thief-the-warrens"
+      ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-talking-to-a-thief"
       ]
     }
   ],
@@ -20339,6 +20408,12 @@
         "members",
         "free-to-play"
       ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-at-the-champions-guild-gardener"
+      ]
     }
   ],
   "2675": [
@@ -20738,6 +20813,12 @@
       "variants": [
         "standard-dialogue"
       ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-at-the-general-store"
+      ]
     }
   ],
   "2816": [
@@ -21075,6 +21156,12 @@
       ]
     },
     {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-karim"
+      ]
+    },
+    {
       "page": "Transcript:Family Crest",
       "variants": [
         "avan-talking-to-karim"
@@ -21158,6 +21245,12 @@
       ]
     },
     {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-at-horvik-s-smithy"
+      ]
+    },
+    {
       "page": "Transcript:Defender of Varrock",
       "variants": [
         "the-true-descendant-searching-for-the-descendant-talking-to-horvik-ravitz"
@@ -21185,6 +21278,12 @@
         "standard-dialogue",
         "treasure-trails-medium"
       ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-at-lowe-s-archery-emporium"
+      ]
     }
   ],
   "2884": [
@@ -21194,6 +21293,12 @@
         "standard-dialogue",
         "redeeming-combat-adventure-path-rewards-in-free-to-play",
         "redeeming-combat-adventure-path-rewards-in-members"
+      ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-at-the-general-store"
       ]
     }
   ],
@@ -21213,6 +21318,12 @@
       "variants": [
         "standard-dialogue-if-the-player-is-carrying-a-combat-path-voucher-and-hasn-t-received-all-possible-rewards-yet",
         "standard-dialogue-if-the-player-isn-t-carrying-a-combat-path-voucher-or-is-carrying-a-combat-path-voucher-and-has-received-all-possible-rewards-already"
+      ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-at-aubury-s-rune-shop"
       ]
     },
     {
@@ -21239,6 +21350,12 @@
       "variants": [
         "standard-dialogue",
         "on-a-non-members-world"
+      ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-at-the-fancy-clothes-store"
       ]
     },
     {
@@ -21349,6 +21466,32 @@
       "variants": [
         "standard-dialogue",
         "treasure-trails-easy"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "starting-the-event-talking-to-the-cook",
+        "starting-the-event-talking-to-the-cook-after-losing-the-serving-tray",
+        "starting-the-event-talking-to-the-cook-before-greeting-a-customer",
+        "serving-the-customers-talking-to-the-cook-after-greeting-a-customer",
+        "serving-the-customers-talking-to-the-cook-after-seating-a-customer",
+        "serving-the-customers-talking-to-the-cook-after-taking-a-drink-order",
+        "serving-the-customers-talking-to-the-cook-before-taking-a-food-order",
+        "serving-the-customers-talking-to-the-cook-after-taking-a-food-order",
+        "serving-the-customers-talking-to-the-cook-with-all-the-ingredients-for-the-first-time",
+        "serving-the-customers-talking-to-the-cook-with-all-the-ingredients-subsequent-times",
+        "serving-the-customers-talking-to-the-cook-before-serving-the-meal",
+        "serving-the-customers-talking-to-the-cook-before-seating-another-customer",
+        "completing-the-event-talking-to-the-cook",
+        "completing-the-event-sitting-at-the-table",
+        "completing-the-event-talking-to-the-cook-after-completing-the-event"
+      ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-in-the-blue-moon-inn"
       ]
     },
     {
@@ -22109,6 +22252,12 @@
       ]
     },
     {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-woman-near-the-blue-moon-inn-or-the-man-upstairs-in-the-inn"
+      ]
+    },
+    {
       "page": "Transcript:Plague City",
       "variants": [
         "entering-west-ardougne-talking-to-men-and-women-in-west-ardougne-woman-variant-1",
@@ -22448,6 +22597,12 @@
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
+      ]
     }
   ],
   "3056": [
@@ -22457,6 +22612,12 @@
         "standard-dialogue",
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
       ]
     }
   ],
@@ -22468,6 +22629,12 @@
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
+      ]
     }
   ],
   "3058": [
@@ -22477,6 +22644,12 @@
         "standard-dialogue",
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
       ]
     }
   ],
@@ -22488,6 +22661,12 @@
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
+      ]
     }
   ],
   "3060": [
@@ -22497,6 +22676,12 @@
         "standard-dialogue",
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
       ]
     }
   ],
@@ -22508,6 +22693,12 @@
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
+      ]
     }
   ],
   "3062": [
@@ -22517,6 +22708,12 @@
         "standard-dialogue",
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
       ]
     }
   ],
@@ -22537,6 +22734,12 @@
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
+      ]
     }
   ],
   "3065": [
@@ -22546,6 +22749,12 @@
         "standard-dialogue",
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
       ]
     }
   ],
@@ -22557,6 +22766,12 @@
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
+      ]
     }
   ],
   "3067": [
@@ -22566,6 +22781,12 @@
         "standard-dialogue",
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
       ]
     }
   ],
@@ -22577,6 +22798,12 @@
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
+      ]
     }
   ],
   "3069": [
@@ -22586,6 +22813,12 @@
         "standard-dialogue",
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
       ]
     }
   ],
@@ -22597,6 +22830,12 @@
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
+      ]
     }
   ],
   "3071": [
@@ -22607,6 +22846,12 @@
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
+      ]
     }
   ],
   "3072": [
@@ -22616,6 +22861,12 @@
         "standard-dialogue",
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
       ]
     }
   ],
@@ -22944,6 +23195,12 @@
       ]
     },
     {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-hans"
+      ]
+    },
+    {
       "page": "Transcript:Death to the Dorgeshuun",
       "variants": [
         "a-tour-of-lumbridge-hans"
@@ -23075,6 +23332,12 @@
       ]
     },
     {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-woman-near-the-blue-moon-inn-or-the-man-upstairs-in-the-inn"
+      ]
+    },
+    {
       "page": "Transcript:Plague City",
       "variants": [
         "entering-west-ardougne-talking-to-men-and-women-in-west-ardougne-woman-variant-1",
@@ -23093,6 +23356,12 @@
       ]
     },
     {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-woman-near-the-blue-moon-inn-or-the-man-upstairs-in-the-inn"
+      ]
+    },
+    {
       "page": "Transcript:Plague City",
       "variants": [
         "entering-west-ardougne-talking-to-men-and-women-in-west-ardougne-woman-variant-1",
@@ -23108,6 +23377,12 @@
       "variants": [
         "standard-dialogue",
         "standard-dialogue-blonde-woman-in-the-blue-moon-inn-or-jolly-boar-inn"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-woman-near-the-blue-moon-inn-or-the-man-upstairs-in-the-inn"
       ]
     },
     {
@@ -23717,6 +23992,12 @@
       "variants": [
         "thief-the-warrens"
       ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-talking-to-a-thief"
+      ]
     }
   ],
   "3253": [
@@ -23724,6 +24005,12 @@
       "page": "Transcript:Thief",
       "variants": [
         "thief-the-warrens"
+      ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-talking-to-a-thief"
       ]
     }
   ],
@@ -23794,6 +24081,12 @@
         "standard-dialogue",
         "blue-moon-inn-barbarian",
         "using-a-beer-glass-on-their-beer-barrel"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-barbarian"
       ]
     }
   ],
@@ -25903,6 +26196,18 @@
       "variants": [
         "standard-dialogue",
         "standard-dialogue-after-the-blood-moon-rises"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-dr-harlow"
+      ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-back-to-the-blue-moon-inn"
       ]
     },
     {
@@ -38397,6 +38702,12 @@
       "variants": [
         "thief-the-warrens"
       ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-talking-to-a-thief"
+      ]
     }
   ],
   "4249": [
@@ -46571,6 +46882,12 @@
       ]
     },
     {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-doris"
+      ]
+    },
+    {
       "page": "Transcript:Recipe for Disaster/Freeing Evil Dave",
       "variants": [
         "talking-to-doris",
@@ -48237,6 +48554,13 @@
       ]
     },
     {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "finishing-up",
+        "post-event-talking-to-wizard-grayzag"
+      ]
+    },
+    {
       "page": "Transcript:Imp Catcher",
       "variants": [
         "finding-the-beads-speaking-to-wizard-grayzag"
@@ -48282,6 +48606,12 @@
         "using-cadava-berries-on-him-after-romeo-and-juliet",
         "treasure-trails-beginner",
         "treasure-trails-easy"
+      ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-at-the-apothecary"
       ]
     },
     {
@@ -48366,6 +48696,12 @@
       "variants": [
         "standard-dialogue",
         "delivering-a-letter-from-the-wise-old-man"
+      ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-at-the-varrock-church"
       ]
     },
     {
@@ -49189,6 +49525,12 @@
       ]
     },
     {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-sir-prysin"
+      ]
+    },
+    {
       "page": "Transcript:Defender of Varrock",
       "variants": [
         "the-true-descendant-talking-to-npcs-upon-arrival-sir-prysin",
@@ -49213,6 +49555,12 @@
       "variants": [
         "standard-dialogue",
         "treasure-trails-hard"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-sir-prysin"
       ]
     },
     {
@@ -51624,6 +51972,12 @@
       "variants": [
         "standard-dialogue"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-jonny-the-beard"
+      ]
     }
   ],
   "5214": [
@@ -51794,6 +52148,12 @@
       "variants": [
         "thief-the-warrens"
       ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-talking-to-a-thief"
+      ]
     }
   ],
   "5218": [
@@ -51801,6 +52161,12 @@
       "page": "Transcript:Thief",
       "variants": [
         "thief-the-warrens"
+      ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-talking-to-a-thief"
       ]
     }
   ],
@@ -51810,6 +52176,12 @@
       "variants": [
         "thief-the-warrens"
       ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-talking-to-a-thief"
+      ]
     }
   ],
   "5220": [
@@ -51817,6 +52189,12 @@
       "page": "Transcript:Thief",
       "variants": [
         "thief-the-warrens"
+      ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-talking-to-a-thief"
       ]
     }
   ],
@@ -56642,6 +57020,14 @@
       ]
     }
   ],
+  "5921": [
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-on-the-roof-of-the-blue-moon-inn"
+      ]
+    }
+  ],
   "5923": [
     {
       "page": "Transcript:Skullball Boss",
@@ -58933,6 +59319,12 @@
         "standard-dialogue",
         "treasure-trails-easy"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-herquin"
+      ]
     }
   ],
   "6530": [
@@ -58940,6 +59332,12 @@
       "page": "Transcript:Rommik",
       "variants": [
         "standard-dialogue"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-rommik"
       ]
     }
   ],
@@ -62706,6 +63104,12 @@
       ]
     },
     {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-woman-near-the-blue-moon-inn-or-the-man-upstairs-in-the-inn"
+      ]
+    },
+    {
       "page": "Transcript:Plague City",
       "variants": [
         "entering-west-ardougne-talking-to-men-and-women-in-west-ardougne-woman-variant-1",
@@ -62724,6 +63128,12 @@
       ]
     },
     {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-woman-near-the-blue-moon-inn-or-the-man-upstairs-in-the-inn"
+      ]
+    },
+    {
       "page": "Transcript:Plague City",
       "variants": [
         "entering-west-ardougne-talking-to-men-and-women-in-west-ardougne-woman-variant-1",
@@ -62739,6 +63149,12 @@
       "variants": [
         "standard-dialogue",
         "standard-dialogue-blonde-woman-in-the-blue-moon-inn-or-jolly-boar-inn"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-woman-near-the-blue-moon-inn-or-the-man-upstairs-in-the-inn"
       ]
     },
     {
@@ -68622,6 +69038,12 @@
       "variants": [
         "thief-the-warrens"
       ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-talking-to-a-thief"
+      ]
     }
   ],
   "7915": [
@@ -68630,6 +69052,12 @@
       "variants": [
         "thief-the-warrens"
       ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-talking-to-a-thief"
+      ]
     }
   ],
   "7916": [
@@ -68637,6 +69065,12 @@
       "page": "Transcript:Thief",
       "variants": [
         "thief-the-warrens"
+      ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-talking-to-a-thief"
       ]
     }
   ],
@@ -78001,6 +78435,14 @@
         "standard-dialogue",
         "standard-dialogue-obtaining-banana-hat",
         "standard-dialogue-obtaining-mystic-cards"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Halloween event",
+      "variants": [
+        "spooky-pumpkin-lantern-talking-to-diango",
+        "spooky-pumpkin-lantern-talking-to-diango-again",
+        "spooky-pumpkin-lantern-talking-to-diango-after-getting-the-lantern"
       ]
     }
   ],
@@ -91036,6 +91478,15 @@
         "historical-dialogue-choosing-how-you-would-like-to-die",
         "historical-dialogue-ultimate-ironman-dialogue"
       ]
+    },
+    {
+      "page": "Transcript:2025 Halloween event",
+      "variants": [
+        "spooky-wall-lamp-talking-to-death",
+        "spooky-wall-lamp-talking-to-death-after-finishing-the-quiz",
+        "spooky-wall-lamp-talking-to-death-again-after-receiving-the-lamp-for-the-first-time",
+        "the-spook-a-thon-contest"
+      ]
     }
   ],
   "10368": [
@@ -91579,6 +92030,12 @@
         "standard-dialogue",
         "talking-to-old-man-yarlo-after-the-quest"
       ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-visiting-old-man-yarlo"
+      ]
     }
   ],
   "10426": [
@@ -91588,6 +92045,12 @@
         "standard-dialogue",
         "talking-to-old-man-yarlo-after-the-quest"
       ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-visiting-old-man-yarlo"
+      ]
     }
   ],
   "10427": [
@@ -91596,6 +92059,12 @@
       "variants": [
         "standard-dialogue",
         "talking-to-old-man-yarlo-after-the-quest"
+      ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-visiting-old-man-yarlo"
       ]
     }
   ],
@@ -93192,6 +93661,12 @@
       ]
     },
     {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-at-aubury-s-rune-shop"
+      ]
+    },
+    {
       "page": "Transcript:Rune Mysteries",
       "variants": [
         "delivering-the-research-package-talking-to-aubury",
@@ -93606,6 +94081,12 @@
       "variants": [
         "standard-dialogue",
         "standard-dialogue-blonde-woman-in-the-blue-moon-inn-or-jolly-boar-inn"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-woman-near-the-blue-moon-inn-or-the-man-upstairs-in-the-inn"
       ]
     },
     {
@@ -97311,6 +97792,12 @@
       ]
     },
     {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-woman-near-the-blue-moon-inn-or-the-man-upstairs-in-the-inn"
+      ]
+    },
+    {
       "page": "Transcript:Plague City",
       "variants": [
         "entering-west-ardougne-talking-to-men-and-women-in-west-ardougne-woman-variant-1",
@@ -97326,6 +97813,12 @@
       "variants": [
         "standard-dialogue",
         "standard-dialogue-blonde-woman-in-the-blue-moon-inn-or-jolly-boar-inn"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-woman-near-the-blue-moon-inn-or-the-man-upstairs-in-the-inn"
       ]
     },
     {
@@ -99155,6 +99648,12 @@
       ]
     },
     {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-at-aubury-s-rune-shop"
+      ]
+    },
+    {
       "page": "Transcript:Rune Mysteries",
       "variants": [
         "delivering-the-research-package-talking-to-aubury",
@@ -99178,6 +99677,12 @@
       "variants": [
         "standard-dialogue-if-the-player-is-carrying-a-combat-path-voucher-and-hasn-t-received-all-possible-rewards-yet",
         "standard-dialogue-if-the-player-isn-t-carrying-a-combat-path-voucher-or-is-carrying-a-combat-path-voucher-and-has-received-all-possible-rewards-already"
+      ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-at-aubury-s-rune-shop"
       ]
     },
     {
@@ -104698,7 +105203,7 @@
         "starting-off-talking-to-ceril-again",
         "confronting-the-hazeel-cult-talking-to-ceril-again",
         "joining-the-carnillean-side-talking-to-ceril",
-        "joining-the-carnillean-side-talking-to-ceril-before-obtaining-the-armour-or-after-losing-it-fact",
+        "joining-the-carnillean-side-talking-to-ceril-before-obtaining-the-armour-or-after-losing-it",
         "joining-the-carnillean-side-returning-the-armour-to-ceril",
         "joining-the-carnillean-side-talking-to-ceril-again",
         "joining-the-carnillean-side-searching-the-cupboard",
@@ -104741,7 +105246,7 @@
         "starting-off-talking-to-ceril-again",
         "confronting-the-hazeel-cult-talking-to-ceril-again",
         "joining-the-carnillean-side-talking-to-ceril",
-        "joining-the-carnillean-side-talking-to-ceril-before-obtaining-the-armour-or-after-losing-it-fact",
+        "joining-the-carnillean-side-talking-to-ceril-before-obtaining-the-armour-or-after-losing-it",
         "joining-the-carnillean-side-returning-the-armour-to-ceril",
         "joining-the-carnillean-side-talking-to-ceril-again",
         "joining-the-carnillean-side-searching-the-cupboard",
@@ -108368,6 +108873,12 @@
       "variants": [
         "standard-dialogue",
         "treasure-trails-hard"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-sir-prysin"
       ]
     },
     {
@@ -119337,6 +119848,12 @@
       "variants": [
         "standard-dialogue"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-jonny-the-beard"
+      ]
     }
   ],
   "14139": [
@@ -119344,6 +119861,12 @@
       "page": "Transcript:Jonny the Beard",
       "variants": [
         "standard-dialogue"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-jonny-the-beard"
       ]
     }
   ],
@@ -123654,6 +124177,12 @@
       ]
     },
     {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-the-woman-near-the-blue-moon-inn-or-the-man-upstairs-in-the-inn"
+      ]
+    },
+    {
       "page": "Transcript:Plague City",
       "variants": [
         "entering-west-ardougne-talking-to-men-and-women-in-west-ardougne-woman-variant-1",
@@ -126006,6 +126535,13 @@
         "at-sea-making-repairs",
         "standard-dialogue-pre-sailing-release"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-jobless-jim-before-he-had-his-dinner",
+        "misc-npc-dialogue-talking-to-jobless-jim-after-he-had-his-dinner"
+      ]
     }
   ],
   "15254": [
@@ -126029,6 +126565,13 @@
         "at-sea-operating-the-gale-catcher",
         "at-sea-making-repairs",
         "standard-dialogue-pre-sailing-release"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-jobless-jim-before-he-had-his-dinner",
+        "misc-npc-dialogue-talking-to-jobless-jim-after-he-had-his-dinner"
       ]
     }
   ],
@@ -126054,6 +126597,13 @@
         "at-sea-making-repairs",
         "standard-dialogue-pre-sailing-release"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-jobless-jim-before-he-had-his-dinner",
+        "misc-npc-dialogue-talking-to-jobless-jim-after-he-had-his-dinner"
+      ]
     }
   ],
   "15257": [
@@ -126077,6 +126627,13 @@
         "at-sea-operating-the-gale-catcher",
         "at-sea-making-repairs",
         "standard-dialogue-pre-sailing-release"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-jobless-jim-before-he-had-his-dinner",
+        "misc-npc-dialogue-talking-to-jobless-jim-after-he-had-his-dinner"
       ]
     }
   ],
@@ -126102,6 +126659,13 @@
         "at-sea-making-repairs",
         "standard-dialogue-pre-sailing-release"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-jobless-jim-before-he-had-his-dinner",
+        "misc-npc-dialogue-talking-to-jobless-jim-after-he-had-his-dinner"
+      ]
     }
   ],
   "15259": [
@@ -126126,6 +126690,13 @@
         "at-sea-making-repairs",
         "standard-dialogue-pre-sailing-release"
       ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-jobless-jim-before-he-had-his-dinner",
+        "misc-npc-dialogue-talking-to-jobless-jim-after-he-had-his-dinner"
+      ]
     }
   ],
   "15260": [
@@ -126149,6 +126720,13 @@
         "at-sea-operating-the-gale-catcher",
         "at-sea-making-repairs",
         "standard-dialogue-pre-sailing-release"
+      ]
+    },
+    {
+      "page": "Transcript:2025 Christmas event",
+      "variants": [
+        "misc-npc-dialogue-talking-to-jobless-jim-before-he-had-his-dinner",
+        "misc-npc-dialogue-talking-to-jobless-jim-after-he-had-his-dinner"
       ]
     }
   ],
@@ -129073,6 +129651,12 @@
       "variants": [
         "interacting-with-archibald"
       ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "collecting-mementos-talking-to-a-thief"
+      ]
     }
   ],
   "15590": [
@@ -129322,6 +129906,13 @@
         "standard-dialogue",
         "if-the-25th-anniversary-event-was-completed"
       ]
+    },
+    {
+      "page": "Transcript:25th Anniversary event",
+      "variants": [
+        "finishing-up",
+        "in-the-realm-of-memories-wizard-gary"
+      ]
     }
   ],
   "15636": [
@@ -129425,7 +130016,7 @@
         "standard-dialogue-jumping-2",
         "standard-dialogue-jumping-3",
         "standard-dialogue-jumping-overhead",
-        "standard-dialogue-dying-in-yama-s-lair-fact"
+        "standard-dialogue-dying-in-yama-s-lair"
       ]
     }
   ],
@@ -129449,7 +130040,7 @@
         "standard-dialogue-jumping-2",
         "standard-dialogue-jumping-3",
         "standard-dialogue-jumping-overhead",
-        "standard-dialogue-dying-in-yama-s-lair-fact"
+        "standard-dialogue-dying-in-yama-s-lair"
       ]
     }
   ],
@@ -129473,7 +130064,7 @@
         "standard-dialogue-jumping-2",
         "standard-dialogue-jumping-3",
         "standard-dialogue-jumping-overhead",
-        "standard-dialogue-dying-in-yama-s-lair-fact"
+        "standard-dialogue-dying-in-yama-s-lair"
       ]
     }
   ],
@@ -129497,7 +130088,7 @@
         "standard-dialogue-jumping-2",
         "standard-dialogue-jumping-3",
         "standard-dialogue-jumping-overhead",
-        "standard-dialogue-dying-in-yama-s-lair-fact"
+        "standard-dialogue-dying-in-yama-s-lair"
       ]
     }
   ],
@@ -129521,7 +130112,7 @@
         "standard-dialogue-jumping-2",
         "standard-dialogue-jumping-3",
         "standard-dialogue-jumping-overhead",
-        "standard-dialogue-dying-in-yama-s-lair-fact"
+        "standard-dialogue-dying-in-yama-s-lair"
       ]
     }
   ],
@@ -129545,7 +130136,7 @@
         "standard-dialogue-jumping-2",
         "standard-dialogue-jumping-3",
         "standard-dialogue-jumping-overhead",
-        "standard-dialogue-dying-in-yama-s-lair-fact"
+        "standard-dialogue-dying-in-yama-s-lair"
       ]
     }
   ],
@@ -129569,7 +130160,7 @@
         "standard-dialogue-jumping-2",
         "standard-dialogue-jumping-3",
         "standard-dialogue-jumping-overhead",
-        "standard-dialogue-dying-in-yama-s-lair-fact"
+        "standard-dialogue-dying-in-yama-s-lair"
       ]
     }
   ],
@@ -129593,7 +130184,7 @@
         "standard-dialogue-jumping-2",
         "standard-dialogue-jumping-3",
         "standard-dialogue-jumping-overhead",
-        "standard-dialogue-dying-in-yama-s-lair-fact"
+        "standard-dialogue-dying-in-yama-s-lair"
       ]
     }
   ],
@@ -129617,7 +130208,7 @@
         "standard-dialogue-jumping-2",
         "standard-dialogue-jumping-3",
         "standard-dialogue-jumping-overhead",
-        "standard-dialogue-dying-in-yama-s-lair-fact"
+        "standard-dialogue-dying-in-yama-s-lair"
       ]
     }
   ],
@@ -129641,7 +130232,7 @@
         "standard-dialogue-jumping-2",
         "standard-dialogue-jumping-3",
         "standard-dialogue-jumping-overhead",
-        "standard-dialogue-dying-in-yama-s-lair-fact"
+        "standard-dialogue-dying-in-yama-s-lair"
       ]
     }
   ],
@@ -129665,7 +130256,7 @@
         "standard-dialogue-jumping-2",
         "standard-dialogue-jumping-3",
         "standard-dialogue-jumping-overhead",
-        "standard-dialogue-dying-in-yama-s-lair-fact"
+        "standard-dialogue-dying-in-yama-s-lair"
       ]
     }
   ],
@@ -129689,7 +130280,7 @@
         "standard-dialogue-jumping-2",
         "standard-dialogue-jumping-3",
         "standard-dialogue-jumping-overhead",
-        "standard-dialogue-dying-in-yama-s-lair-fact"
+        "standard-dialogue-dying-in-yama-s-lair"
       ]
     }
   ],
@@ -129713,7 +130304,7 @@
         "standard-dialogue-jumping-2",
         "standard-dialogue-jumping-3",
         "standard-dialogue-jumping-overhead",
-        "standard-dialogue-dying-in-yama-s-lair-fact"
+        "standard-dialogue-dying-in-yama-s-lair"
       ]
     }
   ],

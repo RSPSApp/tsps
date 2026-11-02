@@ -80,11 +80,6 @@ export function sendWidgetAction(payload: WidgetActionClientPayload): void {
     if (!normalized) {
         return;
     }
-    // PlayerDesign (group 679) is client-only. Only the final APPEARANCE_SET packet is sent.
-    if ((((normalized.widgetId ?? 0) >>> 16) & 0xffff) === 679) {
-        return;
-    }
-
     const opId = normalized.opId ?? 1;
 
     // Import packet functions dynamically to avoid circular dependencies

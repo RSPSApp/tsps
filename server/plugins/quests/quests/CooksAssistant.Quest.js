@@ -15,6 +15,9 @@ module.exports = function registerCooksAssistantQuest(api) {
     { itemId: ItemIdentifiers.POT_OF_FLOUR, label: "a pot of flour" },
   ];
 
+  /** The transcript's "You still need to get" order; REQUIRED_ITEMS' order is saved as bits. */
+  const MISSING_LIST_ORDER = [ItemIdentifiers.BUCKET_OF_MILK, ItemIdentifiers.POT_OF_FLOUR, ItemIdentifiers.EGG];
+
   const DELIVERED_INGREDIENTS_ATTRIBUTE = "cooks-assistant:delivered-ingredients";
   const ALL_INGREDIENTS = (1 << REQUIRED_ITEMS.length) - 1;
   const HANDOVER_MESSAGE_ID = "qPWhXs";
@@ -65,11 +68,13 @@ module.exports = function registerCooksAssistantQuest(api) {
     const stage = questHandle.getStage(player);
     if (stage >= STAGE_COMPLETE) {
       return [
-        "<str>It was the Duke of Lumbridge's birthday,</str>",
-        "<str>and I brought his cook an egg, some flour</str>",
-        "<str>and some milk for his birthday cake.</str>",
+        "<str>It was the Duke of Lumbridge's birthday, but his cook had</str>",
+        "<str>forgotten to buy the ingredients he needed to make him a</str>",
+        "<str>cake. I brought the cook an egg, some flour and some milk and</str>",
+        "<str>the cook made a delicious looking cake with them.</str>",
         "",
-        "<str>I can now use the cook's high-quality range.</str>",
+        "<str>As a reward he now lets me use his high quality range which</str>",
+        "<str>lets me burn things less whenever I wish to cook there.</str>",
         "",
         "<col=ff0000>QUEST COMPLETE!</col>",
       ];
@@ -144,7 +149,9 @@ module.exports = function registerCooksAssistantQuest(api) {
     if (event.text === "Yes, I'll help you." && pendingStart.has(event.player)) {
       event.after = () => {
         pendingStart.delete(event.player);
-        if (quest.getStage(event.player) === 0) quest.setStage(event.player, STAGE_STARTED);
+        if (quest.getStage(event.player) !== 0) return;
+        quest.setStage(event.player, STAGE_STARTED);
+        event.player.sendMessage("You've started a new quest: <col=081190>Cook's Assistant</col>");
       };
     }
     const itemId = HANDOVER_LINE_ITEMS.get(event.text);
@@ -174,14 +181,21 @@ module.exports = function registerCooksAssistantQuest(api) {
     const { player, npcId, stepId } = event;
     if (npcId !== COOK_NPC_ID || quest.getStage(player) !== STAGE_STARTED) return;
     if (stepId === HANDOVER_MESSAGE_ID && hasAllIngredients(player)) {
-      for (const requirement of REQUIRED_ITEMS) deliverIngredient(player, requirement.itemId);
       event.box = { items: [ItemIdentifiers.POT_OF_FLOUR, ItemIdentifiers.BUCKET_OF_MILK] };
+      event.after = () => {
+        for (const requirement of REQUIRED_ITEMS) deliverIngredient(player, requirement.itemId);
+      };
     }
     if (stepId === MISSING_INGREDIENTS_MESSAGE_ID) {
-      const missing = REQUIRED_ITEMS.filter((_, index) => (deliveredIngredients(player) & (1 << index)) === 0);
-      event.text = `You still need to get: ${missing.map((entry) => entry.label).join(", ")}`;
-      player.sendMessage(event.text);
-      event.handled = true;
+      const missing = MISSING_LIST_ORDER.filter((itemId) => {
+        const index = REQUIRED_ITEMS.findIndex((entry) => entry.itemId === itemId);
+        return (deliveredIngredients(player) & (1 << index)) === 0;
+      });
+      event.text = ["You still need to get:", ...missing.map((itemId) => {
+        const { label } = REQUIRED_ITEMS.find((entry) => entry.itemId === itemId);
+        return label.charAt(0).toUpperCase() + label.slice(1);
+      })].join("<br>");
+      event.box = { statement: true };
     }
   }
 
@@ -196,6 +210,7 @@ module.exports = function registerCooksAssistantQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
+    completionJingleId: 152,
     xpRewards: [{ skillId: Skill.COOKING.getIndex(), amount: 300, label: "Cooking" }],
     scrollItemId: ItemIdentifiers.CAKE,
     buildJournal,

@@ -24,6 +24,9 @@ before(() => {
   const api = {
     core,
     persistAttribute() {},
+    onNpcDialogueVariant() {},
+    onNpcDialogueCondition() {},
+    onItemOnNpc() {},
     onObjectInteraction: (name, actions) => { if (typeof name !== 'function') for (const [op, fn] of Object.entries(actions)) hooks.objects.set(`${name}:${op}`, fn); },
     onNpcInteraction: (name, actions) => { if (typeof name !== 'function') for (const [op, fn] of Object.entries(actions)) hooks.npcs.set(`${name}:${op}`, fn); },
     onCustomEvent() {},
@@ -76,6 +79,7 @@ function fakePlayer({ at = new Location(3085, 3233, 0), level = 70 } = {}) {
     getLocation: () => p.location,
     getAttribute: () => null, setAttribute() {},
     getInventory: () => p.inventory,
+    getEquipment: () => ({ contains: () => false }),
     sendMessage: (m) => p.messages.push(m),
     performAnimation: (a) => p.anims.push(a.getId()),
     performGraphic: (g) => p.graphics.push(g.getId()),

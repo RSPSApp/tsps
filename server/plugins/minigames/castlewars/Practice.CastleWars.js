@@ -21,43 +21,6 @@ function supply(player, id, amount = 1) {
   if (inventory.getAmount(id) < amount) inventory.adds(id, amount - inventory.getAmount(id));
 }
 
-function prepare(player, state, teamId) {
-  if (!isPractice(state.role)) return false;
-  if (state.equipped) return true;
-  const I = core.ItemIdentifiers;
-  const E = core.Equipment;
-  const scorer = state.role === SCORER;
-  for (const skill of [core.Skill.ATTACK, core.Skill.DEFENCE, core.Skill.STRENGTH, core.Skill.HITPOINTS, core.Skill.RANGED, core.Skill.PRAYER, core.Skill.MAGIC]) {
-    player.getSkillManager().setMaxLevels(skill, 99).setCurrentLevels(skill, 99);
-  }
-  for (const [slot, id] of [
-    [E.BODY_SLOT, scorer ? I.MASORI_BODY_F_ : I.ANCESTRAL_ROBE_TOP],
-    [E.LEG_SLOT, scorer ? I.MASORI_CHAPS_F_ : I.ANCESTRAL_ROBE_BOTTOM],
-    [E.SHIELD_SLOT, scorer ? I.SPECTRAL_SPIRIT_SHIELD : I.ELIDINIS_WARD_F_],
-    [E.AMULET_SLOT, scorer ? I.AMULET_OF_FURY : I.OCCULT_NECKLACE],
-    [E.HANDS_SLOT, scorer ? I.BARROWS_GLOVES : I.TORMENTED_BRACELET],
-    [E.FEET_SLOT, scorer ? I.PEGASIAN_BOOTS : I.ETERNAL_BOOTS],
-    [E.RING_SLOT, scorer ? I.RING_OF_SUFFERING_I_ : I.MAGUS_RING_2],
-  ]) gear(player, slot, id);
-  if (!scorer) {
-    gear(player, E.WEAPON_SLOT, I.KODAI_WAND);
-    player.setSpellbook(core.MagicSpellbook.ANCIENT);
-    supply(player, I.WATER_RUNE, 10000);
-    supply(player, I.BLOOD_RUNE, 10000);
-    supply(player, I.DEATH_RUNE, 10000);
-  }
-  supply(player, I.BANDAGES, 8);
-  supply(player, I.EXPLOSIVE_POTION, 4);
-  supply(player, I.BUCKET_OF_WATER, 2);
-  supply(player, I.TINDERBOX);
-  if (!scorer) supply(player, I.BARRICADE, 3);
-  state.equipped = true;
-  state.colours = true;
-  game.equipTeamColours(player, teamId);
-  game.refreshPlayerAppearance(player, true);
-  return true;
-}
-
 function useOnBarricade(player, npc, itemId) {
   // Practice opponents keep tool supplies available for the full session.
   if (itemId === core.ItemIdentifiers.BUCKET_OF_WATER && !player.getInventory().contains(itemId)) player.getInventory().delete(core.ItemIdentifiers.BUCKET, 1);
@@ -72,7 +35,7 @@ function nearestBarricade(player, radius) {
   let distance = radius + 1;
   for (const npc of core.World.getNpcs()) {
     if (!npc || !game.isBarricade(npc) || npc.getLocation().getZ() !== player.getLocation().getZ()) continue;
-    const next = player.calculateDistance(npc);
+    const next = Math.abs(player.getLocation().getX() - npc.getLocation().getX()) + Math.abs(player.getLocation().getY() - npc.getLocation().getY());
     if (next < distance) { nearest = npc; distance = next; }
   }
   return nearest;
@@ -126,7 +89,10 @@ function defenderAttack(ctx, state, target) {
     player.getCombat().attack(target);
   } else {
     player.setSpecialActivated(false);
-    const spell = core.CombatSpells.ICE_BARRAGE.getSpell();
+    const level = player.getSkillManager().getCurrentLevel(core.Skill.MAGIC);
+    const spell = [core.CombatSpells.ICE_BARRAGE, core.CombatSpells.ICE_BLITZ, core.CombatSpells.ICE_BURST, core.CombatSpells.ICE_RUSH]
+      .map((entry) => entry.getSpell()).find((spell) => spell.levelRequired() <= level);
+    if (!spell) { player.getCombat().attack(target); return "running"; }
     core.Autocasting.setAutocast(player, spell);
     player.getCombat().castSpellOn(target, spell);
   }
@@ -136,7 +102,7 @@ function defenderAttack(ctx, state, target) {
 module.exports = function attachCastleWarsPractice(api, castleWars) {
   core = api.core;
   game = castleWars;
-  game.practiceBots = { prepare, scorerTools, defenderTools, defenderAttack };
+  game.practiceBots = { supply, scorerTools, defenderTools, defenderAttack };
 };
 
-module.exports._test = { SCORER, DEFENDER, isPractice, prepare, nearestBarricade, scorerTools, defenderTools, defenderAttack };
+module.exports._test = { SCORER, DEFENDER, isPractice, nearestBarricade, scorerTools, defenderTools, defenderAttack };

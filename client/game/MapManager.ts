@@ -497,6 +497,19 @@ export class MapManager<T extends MapSquare> {
         return this.gridRevision > 0 && !this.gridTransitionPending && this.isTargetGridReady(frameCount);
     }
 
+    /**
+     * Whether the square the view is centred on, the player's, can be drawn. A teleport leaves it
+     * unbuilt for a moment; walking over a square edge streams the next squares in while it stays.
+     */
+    isViewSquareReady(frameCount: number): boolean {
+        if (ClientState.inInstance) return this.isSceneReady(frameCount);
+        const mapId = getMapSquareId(
+            Math.floor(this.viewX / Scene.MAP_SQUARE_SIZE),
+            Math.floor(this.viewZ / Scene.MAP_SQUARE_SIZE),
+        );
+        return this.invalidMapIds.has(mapId) || this.mapSquares.get(mapId)?.canRender(frameCount) === true;
+    }
+
     private isTargetGridReady(frameCount: number): boolean {
         for (let i = 0; i < this.gridMapCount; i++) {
             const mapId = this.gridMapIds[i];

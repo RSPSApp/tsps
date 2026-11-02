@@ -42,6 +42,16 @@ export class PlayerDesignController {
         this.playerDesignAppearance = undefined;
     }
 
+    /** Keep local, unconfirmed edits while accepting the server's independent pronouns. */
+    preserveDraftAppearance(appearance: PlayerAppearance): void {
+        const draft = this.playerDesignAppearance;
+        if (!draft) return;
+        draft.pronouns = appearance.pronouns;
+        appearance.gender = draft.gender;
+        appearance.colors = Array.from(draft.colors);
+        appearance.kits = Array.from(draft.kits);
+    }
+
     handleWidgetAction(childId: number): boolean {
         // PlayerDesign (Interface group 679) is a client-side appearance editor.
         // Cache widgets in this group are mostly empty containers; clicks should mutate the local
@@ -260,11 +270,10 @@ export class PlayerDesignController {
             case COMP_CONFIRM:
                 return confirm();
             default:
-                this.syncPlayerDesignAppearanceToUi(pa);
-                return true;
+                return false;
         }
 
-        // Always suppress server widget ops for this interface (client-only).
+        // Appearance controls edit locally; other ops (such as pronouns) reach the server.
         if (!changed) {
             this.syncPlayerDesignAppearanceToUi(pa);
             return true;
@@ -276,6 +285,7 @@ export class PlayerDesignController {
             this.deps.getControlledPlayerServerId(),
         );
         if (localIdx !== undefined) {
+            pa.pronouns = this.deps.playerEcs.getAppearance(localIdx)?.pronouns ?? pa.pronouns;
             this.deps.playerEcs.setAppearance(localIdx, pa);
             try {
                 this.deps.playerEcs.ensureBaseForIndex(localIdx, {

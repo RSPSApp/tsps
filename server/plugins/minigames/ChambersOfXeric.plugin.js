@@ -31,6 +31,7 @@ module.exports = {
     require("./cox/Olm.ChambersOfXeric")(api);
     require("./cox/Hud.ChambersOfXeric")(api);
     require("./cox/Rewards.ChambersOfXeric")(api);
+    require("./cox/CombatAchievements.ChambersOfXeric")(api);
     require("./cox/Commands.ChambersOfXeric")(api);
   },
 };

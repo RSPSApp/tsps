@@ -665,6 +665,7 @@ export class PlayerSyncManager {
                 actions: decoded.actions,
                 appearance: {
                     gender: decoded.gender,
+                    pronouns: decoded.pronouns,
                     npcTransformationId: decoded.npcTransformationId,
                     colors: decoded.colors,
                     kits: decoded.kits,

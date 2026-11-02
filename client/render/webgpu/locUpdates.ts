@@ -17,12 +17,12 @@ import { getLocAnimationDurationMs } from "../render/locs2";
 import { applyGamemodeWorldLocs } from "../render/streaming";
 import { RENDER_CONSTANTS } from "../render/constants";
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
-import { isDoorLocType } from "../loc/SceneLocs";
+import { isDoorLoc } from "../loc/SceneLocs";
 import { matchingLocSlotIds, shapeSlotOverride, suppressShapeSlotAt } from "../loc/LocSlots";
 import { getMapSquareId } from "../../rs/map/MapFileIndex";
 import { LOC_OVERRIDE_KEEP_ID, LOC_OVERRIDE_REMOVED, locOverrideIdFromChange } from "../../rs/scene/LocOverride";
 import type { LocChangeOptions, RegionReplacementEvent } from "../../game/GameRenderer";
-import type { WebGPURenderer } from "./WebGPURenderer";
+import type { LocReloadBatch, WebGPURenderer } from "./WebGPURenderer";
 
 type Tile = { x: number; y: number };
 /** Which geometry a reload rebuilds. */
@@ -78,11 +78,12 @@ export class LocUpdates {
     private groupOf(...ids: number[]): LocReloadGroup {
         let doors = 0;
         let locs = 0;
+        const loader = this.r.osrsClient.locTypeLoader;
         for (const id of ids) {
             if ((id | 0) <= 0) continue;
-            const type = this.r.osrsClient.locTypeLoader.load(id | 0);
+            const type = loader.load(id | 0);
             if (!type) return "full";
-            if (isDoorLocType(type)) doors++;
+            if (isDoorLoc(type, this.r.osrsClient.varManager, loader)) doors++;
             else locs++;
         }
         if (doors > 0 && locs === 0) return "door";
@@ -176,7 +177,7 @@ export class LocUpdates {
         // hotspot was placed. In the main world the server removes what it replaces, so only the
         // exact (shape, rotation) slot goes: the GE's paving is NORMAL locs of another rotation,
         // and matching by shape alone erased a floor tile per fire (issue #1748).
-        const derived = this.r.instanceActive ? [] : this.locSlotIdsAt(tile, level, shape, rotation);
+        const derived = this.r.instanceActive ? [] : this.locSlotIdsAt(tile, level, shape, rotation).filter((id) => this.r.locOverrides.get(`${tile.x},${tile.y},${level},${id}`)?.newId !== LOC_OVERRIDE_REMOVED);
         // A different object taking over the same slot inherits what its predecessor replaced.
         const replaced = Array.from(new Set([...(existing?.replacedIds ?? []), ...derived]));
         this.r.addedLocs.set(key, { locId, x: tile.x, y: tile.y, level, shape, rotation, replacedIds: replaced });
@@ -216,6 +217,8 @@ export class LocUpdates {
         // The built index also holds the dynamic object itself; only other ids are cache locs.
         for (const id of this.locSlotIdsAt(tile, level, shape, rotation)) {
             if ((id | 0) === (locId | 0) || recorded.has(id)) continue;
+        // An explicit server deletion must survive removal of the replacement.
+        if (this.r.locOverrides.get(`${tile.x},${tile.y},${level},${id}`)?.newId === LOC_OVERRIDE_REMOVED) continue;
             this.suppressLocAt(tile, level, id);
             recorded.add(id);
             changed = true;
@@ -240,7 +243,7 @@ export class LocUpdates {
             return;
         }
         // A cache object was removed: suppress that one loc so it disappears (e.g. a chopped tree).
-        const deleted = this.locSlotIdsAt(tile, level, shape, rotation);
+        const deleted = this.locSlotIdsAt(tile, level, shape, rotation).filter((id) => this.r.locOverrides.get(`${tile.x},${tile.y},${level},${id}`)?.newId !== LOC_OVERRIDE_REMOVED);
         if (deleted.length > 0) {
             for (const id of deleted) this.suppressLocAt(tile, level, id);
             this.reloadTile(tile, this.groupOf(deleted[0]));
@@ -371,10 +374,12 @@ export class LocUpdates {
         this.pending.set(id, { x: mapX | 0, y: mapY | 0 });
         this.flushTimer ??= setTimeout(() => {
             this.flushTimer = undefined;
-            const batch = Array.from(this.pending.values());
+            const maps = Array.from(this.pending.values());
             this.pending.clear();
-            for (const map of batch) {
-                this.r.queueLocReload(map.x, map.y, this.dirty.get(getMapSquareId(map.x, map.y)) ?? "full");
+            // Squares changed together (a gate across a square edge) are applied together.
+            const batch: LocReloadBatch | undefined = maps.length > 1 ? { remaining: maps.length, ready: [] } : undefined;
+            for (const map of maps) {
+                this.r.queueLocReload(map.x, map.y, this.dirty.get(getMapSquareId(map.x, map.y)) ?? "full", batch);
             }
         }, RENDER_CONSTANTS.LOC_RELOAD_FLUSH_DELAY_MS);
     }

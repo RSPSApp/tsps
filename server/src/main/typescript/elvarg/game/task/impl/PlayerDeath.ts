@@ -66,12 +66,15 @@ export class PlayerDeathTask extends Task {
                         PluginManager.emitShouldDropItemsOnDeath(this.player, this.killer ?? null);
                     this.loseItems = pluginShouldDropItems ?? true;
                     const deathPosition = this.player.getLocation();
-                    // Always drop player bones on death, independent of item-drop policy.
-                    ItemOnGroundManager.registerLocation(
-                        this.killer ? this.killer : this.player,
-                        new Item(ItemIdentifiers.BONES),
-                        deathPosition
-                    );
+                    const bones = { player: this.player, killer: this.killer ?? null, location: deathPosition, allow: true };
+                    PluginManager.emitCustomEvent("player:death-bones", bones);
+                    if (bones.allow) {
+                        ItemOnGroundManager.registerLocation(
+                            this.killer ? this.killer : this.player,
+                            new Item(ItemIdentifiers.BONES),
+                            deathPosition
+                        );
+                    }
                     if (this.loseItems) {
                         this.itemsToKeep = PlayerDeathTask.dropItems(this.player, this.killer, deathPosition);
                     }

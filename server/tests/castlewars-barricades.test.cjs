@@ -63,6 +63,8 @@ before(() => {
   game.getTeamId = () => data.TEAM.SARADOMIN;
   game.swapObject = (...args) => swaps.push(args);
   game.gameArea = { getPlayers: () => [] };
+  game.getBarricadePlayerPriority = () => false;
+  game.hasPracticeBots = () => false;
   Barricades(api, game);
   require('../plugins/combat/specials/Shove.SpecialAttack')(PluginManager.createApi('Castle Wars shove regression'));
   Tunnels(api, game);
@@ -106,6 +108,49 @@ test('the energy-barrier exit and nonblocking map objects allow immediate barric
   }
 });
 
+test('practice menu priority selects native variants through burning, extinguishing and removal', (t) => {
+  let playerPriority = false;
+  let practice = true;
+  t.mock.method(game, 'getBarricadePlayerPriority', () => playerPriority);
+  t.mock.method(game, 'hasPracticeBots', () => practice);
+  for (const team of Object.values(data.TEAM)) {
+    t.mock.method(game, 'getTeamId', () => team);
+    for (const [isPractice, enabled] of [[true, false], [true, true], [false, false], [false, true]]) {
+      practice = isPractice;
+      playerPriority = enabled;
+      const p = playerAt(t, 2427, 3078);
+      const inventory = p.getInventory();
+      inventory.adds(core.ItemIdentifiers.TINDERBOX, 1);
+      inventory.adds(core.ItemIdentifiers.BUCKET_OF_WATER, 1);
+      const npc = deployed(t, p);
+      const standardId = data.BARRICADE_NPC[team];
+      const barricadeFirst = isPractice && !enabled;
+      const expected = barricadeFirst ? (team === data.TEAM.SARADOMIN ? core.NpcIdentifiers.BARRICADE : core.NpcIdentifiers.BARRICADE_3) : standardId;
+      assert.equal(npc.getId(), expected);
+      const definition = core.CacheDefinitions.getNpc(npc.getId());
+      const standard = core.CacheDefinitions.getNpc(standardId);
+      assert.equal(definition.drawPriority, barricadeFirst ? 0 : 1);
+      assert.deepEqual(definition.modelIds, standard.modelIds);
+      assert.deepEqual(definition.actions, standard.actions);
+      assert.equal(npc.hasFlag(core.NPC.BLOCKS_PLAYERS_FLAG), true);
+      assert.equal(game.isBarricade(npc), true);
+      p.moveTo(npc.getLocation().transform(-1, 0));
+      itemOnNpc({ player: p, target: npc, itemId: core.ItemIdentifiers.TINDERBOX, slot: inventory.getSlotForItemId(core.ItemIdentifiers.TINDERBOX), handled: false });
+      assert.equal(npc.getNpcTransformationId(), expected + 1);
+      assert.equal(core.CacheDefinitions.getNpc(expected + 1).drawPriority, barricadeFirst ? 0 : 1);
+      itemOnNpc({ player: p, target: npc, itemId: core.ItemIdentifiers.BUCKET_OF_WATER, slot: inventory.getSlotForItemId(core.ItemIdentifiers.BUCKET_OF_WATER), handled: false });
+      assert.equal(npc.getNpcTransformationId(), -1);
+      assert.equal(npc.getId(), expected, 'extinguishing restores the selected priority variant');
+      inventory.adds(core.ItemIdentifiers.EXPLOSIVE_POTION, 1);
+      itemOnNpc({ player: p, target: npc, itemId: core.ItemIdentifiers.EXPLOSIVE_POTION, slot: inventory.getSlotForItemId(core.ItemIdentifiers.EXPLOSIVE_POTION), handled: false });
+      assert.equal(game.isBarricade(npc), false, 'explosion releases either variant');
+      assert.equal(npc.hasFlag(core.NPC.BLOCKS_PLAYERS_FLAG), false);
+      World.getRemoveNPCQueue().splice(0);
+      World.getNpcs().remove(npc);
+    }
+  }
+});
+
 test('Shove cannot stun or displace either team\'s intact or burning barricades', (t) => {
   const tasks = [];
   t.mock.method(TaskManager, 'submit', task => tasks.push(task));
@@ -116,7 +161,7 @@ test('Shove cannot stun or displace either team\'s intact or burning barricades'
     const origin = npc.getLocation().clone();
     p.moveTo(origin.transform(-1, 0));
     for (const burning of [false, true]) {
-      npc.setNpcTransformationId(burning ? core.NpcIdentifiers.BARRICADE_2 : -1);
+      npc.setNpcTransformationId(burning ? core.NpcIdentifiers.BARRICADE_6 : -1);
       for (const id of [core.ItemIdentifiers.DRAGON_SPEAR, core.ItemIdentifiers.ZAMORAKIAN_SPEAR, core.ItemIdentifiers.ZAMORAKIAN_HASTA]) {
         p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(id));
         p.setSpecialPercentage(100);
@@ -269,7 +314,7 @@ test('lighting your own tile steps sideways; right-click Burn never consumes sup
   itemOnNpc(event);
   assert.equal(event.handled, true);
   assert.deepEqual(moves, [[-1, 0]]);
-  assert.equal(npc.getNpcTransformationId(), core.NpcIdentifiers.BARRICADE_2);
+  assert.equal(npc.getNpcTransformationId(), core.NpcIdentifiers.BARRICADE_6);
 });
 
 test('lighting steps right if the left tile is blocked and refuses when both sides are blocked', (t) => {
@@ -494,7 +539,7 @@ test('unavailable or invalid tool interactions neither move nor consume supplies
   assert.equal(game.isBarricade(npc), true);
 });
 
-test('Collapse requires explicit potion-on-wall use', (t) => {
+test('Collapse on a blocked tunnel consumes neither tools nor potions', (t) => {
   const p = playerAt(t, 2390, 9501, 0);
   p.getInventory().add(new core.Item(core.ItemIdentifiers.EXPLOSIVE_POTION));
   const object = MapObjects.get(core.ObjectIdentifiers.CAVE_WALL, new core.Location(2390, 9500, 0), null);
@@ -503,9 +548,17 @@ test('Collapse requires explicit potion-on-wall use', (t) => {
   collapse({ player: p, object });
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.EXPLOSIVE_POTION), 1);
   assert.equal(swaps.length, 0);
-  assert.match(p.messages.at(-1), /Use an explosive potion/);
+  assert.match(p.messages.at(-1), /already blocked/);
   t.mock.method(core.MapObjects, 'get', () => null);
   blastWall({ player: p, object, itemSlot: p.getInventory().getSlotForItemId(core.ItemIdentifiers.EXPLOSIVE_POTION) });
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.EXPLOSIVE_POTION), 0);
   assert.equal(swaps[0][1].getId(), core.ObjectIdentifiers.ROCKS_21);
+});
+
+test('standard-world barricades and burning variants use the cache types that render beneath players', () => {
+  for (const id of Object.values(data.BARRICADE_NPC)) {
+    assert.equal(core.CacheDefinitions.getNpc(id).drawPriority, 1);
+    assert.equal(core.CacheDefinitions.getNpc(id + 1).drawPriority, 1);
+    assert.equal(core.CacheDefinitions.getNpc(id).name, 'Barricade');
+  }
 });

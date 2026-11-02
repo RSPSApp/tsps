@@ -984,7 +984,7 @@ export class Combat {
                 break;
             case CanAttackResponse.NOT_ENOUGH_SPECIAL_ENERGY:
                 if (player) {
-                    player.sendMessage("You do not have enough special attack energy left!");
+                    player.sendMessage("You don't have enough power left.");
                     player.setSpecialActivated(false);
                     CombatSpecial.updateBar(player);
                 }

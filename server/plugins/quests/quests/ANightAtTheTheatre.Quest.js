@@ -110,7 +110,7 @@ module.exports = function registerANightAtTheTheatre(api) {
       player.sendMessage("Sugadinti is grateful for your help.");
       return true;
     }
-    if (!s && !requirement(player)) { player.sendMessage("You must complete A Taste of Hope before helping the Mysterious Stranger."); return true; }
+    if (!s && !requirement(player)) { startTranscript(api, player, npcId, STRANGER_PAGE, "initial-dialogue"); return true; }
     let variant;
     if (!s) variant = hasRaidCompletion(player) ? "starting-off-if-the-player-has-cleared-the-theatre-at-least-once" : "starting-off-if-the-player-hasn-t-cleared-the-theatre-before";
     else if (s < 14) variant = held(player, I.RANIS_HEAD) ? "talking-to-the-mysterious-stranger-after-getting-ranis-head" : "starting-off-talking-to-the-mysterious-stranger-after-being-told-to-get-ranis-head";
@@ -196,13 +196,7 @@ module.exports = function registerANightAtTheTheatre(api) {
   }
   function condition({ player, stepId, pages }) {
     const names = (pages ?? []).map(entry => String(entry.page ?? "").replace(/^Transcript:/, ""));
-    // The Stranger's post-quest page offers a Sinhaza shroud this server cannot
-    // award (the tier rules are not implemented), so the reward option is not
-    // offered; the teleport crystal option opens the shop.
-    if (names.includes(STRANGER_PAGE)) {
-      if (stepId === "FY0RCF") return true;
-      if (stepId === "WhwoJ-" || stepId === "-nVpES") return false;
-    }
+    // The Stranger's Sinhaza shroud conditions are answered by the Theatre of Blood's Stats unit.
     if (!names.includes(PAGE)) return;
     const conditions = {
       "YudDDA": !held(player, I.RANIS_HEAD), "tv61D-": !held(player, I.STRANGE_SPIDER_EGGS), "UuYs_j": !held(player, I.HESPORI_BARK),

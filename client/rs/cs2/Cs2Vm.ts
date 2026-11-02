@@ -264,6 +264,7 @@ export interface Cs2Context {
 
     // Player appearance
     getPlayerGender?: () => number;
+    getPlayerPronouns?: () => number;
 
     /** Minimap zoom and icon display state used by minimap CS2 opcodes. */
     getMinimapZoom?: () => number;
@@ -962,6 +963,7 @@ export class Cs2Vm {
 
             // Player appearance
             getPlayerGender: vm.context.getPlayerGender,
+            getPlayerPronouns: vm.context.getPlayerPronouns,
 
             // Minimap zoom
             getMinimapZoom: vm.context.getMinimapZoom,

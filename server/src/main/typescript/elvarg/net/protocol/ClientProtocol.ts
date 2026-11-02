@@ -49,6 +49,7 @@ export const enum ServerPacket {
 
 export type PlayerAppearance = {
   gender: number;
+  pronouns?: number;
   colors: number[];
   kits: number[];
   equip: number[];
@@ -1044,6 +1045,8 @@ export const ChatType = {
   MODAUTOTYPER: 91,
   /** A server broadcast ("Lethal fog will soon fill the island! ..." in Last Man Standing). */
   BROADCAST: 14,
+  /** friendschatnotification: shown on the chat-channel tab as well (the Chambers of Xeric's raid messages). */
+  FRIENDS_CHAT_NOTIFICATION: 11,
   /** Filtered out with "Filter: on" (the Game tab's filter). */
   SPAM: 105,
   /** An NPC's overhead line, shown as "Name: text"; the NPC's name goes in `from`. */
@@ -2761,7 +2764,7 @@ export function encodePlayerAppearance(
   text("");
   text("");
   text("");
-  byte(0);
+  byte(appearance.pronouns ?? appearance.gender);
   int(appearance.equipQty?.[13] ?? 0);
   int(appearance.equip[13] ?? -1);
   int(appearance.equip[12] ?? -1);

@@ -14,7 +14,10 @@ class NpcSync(
     class Npc(val index: Int, var type: Int, var x: Int, var z: Int, var level: Int, val onDeck: Boolean = false)
 
     sealed class Change(val index: Int) {
-        /** Came into view (or was re-added after a jump or type change). */
+        /**
+         * Came into view (or was re-added after a jump or type change), facing [direction] in
+         * the game's numbering (0 north-west, 1 north, ... 6 south, 7 south-east), as rsprot takes it.
+         */
         class Added(index: Int, val npc: Npc, val direction: Int, val jump: Boolean) : Change(index)
 
         class Removed(index: Int) : Change(index)
@@ -95,7 +98,7 @@ class NpcSync(
             val npc = Npc(index, type, baseX + dx, baseZ + dz, 0, onDeck = deck != null)
             npcs[index] = npc
             next += index
-            changes += Change.Added(index, npc, direction, jump)
+            changes += Change.Added(index, npc, GAME_DIRECTION[direction], jump)
         }
         bits.alignToByte()
         indices = next
@@ -117,5 +120,12 @@ class NpcSync(
         const val END = 0xFFFF
         val DX = intArrayOf(-1, 0, 1, -1, 1, -1, 0, 1)
         val DZ = intArrayOf(-1, -1, -1, 0, 0, 1, 1, 1)
+
+        /**
+         * tsps numbers directions from south-west ([DX], [DZ]); the game from north-west (its
+         * NPC_TURN_ANGLES are 768, 1024, 1280, 512, 1536, 256, 0, 1792). Passed through as is,
+         * every NPC spawned facing south faced north in RuneLite (#1826's Lumbridge bankers).
+         */
+        val GAME_DIRECTION = intArrayOf(5, 6, 7, 3, 4, 0, 1, 2)
     }
 }

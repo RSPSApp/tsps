@@ -323,6 +323,7 @@ function eat(event) {
   player.performAnimation(new core.Animation(EAT_ANIMATION));
 
   const message = eatMessage(food, bite, itemId);
+  const meta = inventory.getItems()[slot]?.getMeta();
   inventory.deleteAtSlot(slot, 1, false);
   const next = leftover(food, bite);
   if (next !== undefined) inventory.setItem(slot, new core.Item(next, 1));
@@ -337,7 +338,7 @@ function eat(event) {
   // `heal` is what it healed (nothing at full health); `restores` what the food restores.
   const maxHp = player.getSkillManager().getMaxLevel(core.Skill.HITPOINTS);
   const restores = food.outcomes ? heal : healAmount(food.heal?.max ?? food.heal, maxHp, () => 0, baseLevels(player));
-  pluginApi.emitCustomEvent("food:eaten", { player, itemId, heal, restores });
+  pluginApi.emitCustomEvent("food:eaten", { player, itemId, heal, restores, meta });
 }
 
 module.exports = {

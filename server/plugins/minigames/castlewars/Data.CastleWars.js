@@ -37,6 +37,7 @@ function buildData(core) {
     OVERLAY_HUD_UID: (161 << 16) | 8, // component.toplevel_osrs_stretch:overlay_hud
     // The client shows "Attack" on players from player option slot 1 (sendPlayerOption).
     ATTACK_OPTION_SLOT: 1,
+    TAKE_FROM_OPTION_SLOT: 7,
     WAITING_ROOM_INTERFACE: 131, // interface.castlewars_waitingroom
     STATUS_OVERLAY_INTERFACE: { [TEAM.SARADOMIN]: 58, [TEAM.ZAMORAK]: 59 }, // interface.castlewars_status_overlay_*
     EJECT_TEXT_UID: { [TEAM.SARADOMIN]: (58 << 16) | 26, [TEAM.ZAMORAK]: (59 << 16) | 25 },
@@ -61,7 +62,10 @@ function buildData(core) {
     GAME_BOUNDS: [box(2365, 2404, 9500, 9530, 0), box(2394, 2431, 9474, 9499, 0), box(2405, 2424, 9500, 9509, 0), new PolygonalBoundary([[2377, 3079], [2368, 3079], [2368, 3136], [2416, 3136], [2432, 3120], [2432, 3080], [2432, 3072], [2384, 3072]])],
 
     MAX_BARRICADES: 10,
-    BARRICADE_NPC: { [TEAM.SARADOMIN]: N.BARRICADE, [TEAM.ZAMORAK]: N.BARRICADE_3 },
+    // Standard-world variants render beneath players (25 March 2026).
+    BARRICADE_NPC: { [TEAM.SARADOMIN]: N.BARRICADE_5, [TEAM.ZAMORAK]: N.BARRICADE_7 },
+    // Practice can instead put barricade actions before overlapping players.
+    BARRICADE_FIRST_NPC: { [TEAM.SARADOMIN]: N.BARRICADE, [TEAM.ZAMORAK]: N.BARRICADE_3 },
     BRACELET_NEXT: { [I.CASTLE_WARS_BRACELET_3_]: I.CASTLE_WARS_BRACELET_2_, [I.CASTLE_WARS_BRACELET_2_]: I.CASTLE_WARS_BRACELET_1_, [I.CASTLE_WARS_BRACELET_1_]: -1 },
     CLEANUP_ITEM_IDS: new Set([...SUPPLY_ITEMS, I.SARADOMIN_CLOAK_3, I.ZAMORAK_CLOAK_3, I.SARADOMIN_BANNER, I.ZAMORAK_BANNER]),
     DEATH_REMOVE_ITEM_IDS: new Set([...SUPPLY_ITEMS.filter((id) => id !== I.RUNE_POUCH_6), I.SARADOMIN_BANNER, I.ZAMORAK_BANNER]),

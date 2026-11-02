@@ -98,7 +98,7 @@ function showRecruitment(player, text) {
   const { ActionDialogue, CountdownTask, DialogueChainBuilder, StatementDialogue, TaskManager } = common.core();
   fade(player, true, FADE_CYCLES);
   // The box replaces the conversation, so the transcript doesn't carry on (or close it).
-  const waiting = new ActionDialogue(0, { execute: () => StatementDialogue.send(player, text, false) });
+  const waiting = new ActionDialogue(0, { execute: () => StatementDialogue.send(player, text, false) }, true);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(waiting));
   TaskManager.submit(new CountdownTask(player, LEAVE_TICKS, () => common.sendVarbits(player)));
   TaskManager.submit(new CountdownTask(player, FADE_TICKS, () => {

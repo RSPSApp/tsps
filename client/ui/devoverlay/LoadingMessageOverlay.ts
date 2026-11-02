@@ -71,6 +71,12 @@ export class LoadingMessageOverlay implements Overlay {
     // Loading progress (0-100)
     private loadingPercent: number = 0;
 
+    // In-game scene loads: the box alone, once a load has lasted long enough not to flicker
+    private sceneLoadingSource?: () => boolean;
+    private sceneLoadingSince: number = -1;
+    private sceneLoading: boolean = false;
+    private readonly sceneLoadingDelay: number = 150; // ms
+
     // Screen dimensions
     private screenWidth: number = 765;
     private screenHeight: number = 503;
@@ -171,6 +177,16 @@ export class LoadingMessageOverlay implements Overlay {
         this.loadingPercent = Math.max(0, Math.min(100, percent));
     }
 
+    /**
+     * In game, whether the scene around the player is still being built (after a teleport or any
+     * map rebuild). OSRS draws "Loading - please wait." over its last frame while it loads a map;
+     * this client builds the scene in workers, so without the box a teleport showed the bare sky
+     * colour for a second or more (the Guardians of the Rift altar return, issue #1858).
+     */
+    setSceneLoadingSource(source: () => boolean): void {
+        this.sceneLoadingSource = source;
+    }
+
     init(args: OverlayInitArgs): void {
         this.app = args.app;
         this.gl = args.app.gl as WebGL2RenderingContext;
@@ -260,6 +276,11 @@ export class LoadingMessageOverlay implements Overlay {
             }
         }
 
+        const loadingScene = this.gameState === GameState.LOGGED_IN && this.sceneLoadingSource?.() === true;
+        if (!loadingScene) this.sceneLoadingSince = -1;
+        else if (this.sceneLoadingSince < 0) this.sceneLoadingSince = args.time;
+        this.sceneLoading = loadingScene && args.time - this.sceneLoadingSince >= this.sceneLoadingDelay;
+
         const message = this.getMessage();
         if (message !== this.lastMessage) {
             this.lastMessage = message;
@@ -285,6 +306,7 @@ export class LoadingMessageOverlay implements Overlay {
     }
 
     private getMessage(): string {
+        if (this.sceneLoading) return "Loading - please wait.";
         switch (this.gameState) {
             case GameState.LOADING_GAME:
                 if (this.loadingPercent > 0 && this.loadingPercent < 100) {
@@ -386,8 +408,9 @@ export class LoadingMessageOverlay implements Overlay {
             return;
         }
 
-        // Skip drawing if completely hidden
-        if (this.fadeState === FadeState.HIDDEN) {
+        // Skip drawing if completely hidden; an in-game scene load draws the box alone
+        const sceneLoadOnly = this.fadeState === FadeState.HIDDEN;
+        if (sceneLoadOnly && !this.sceneLoading) {
             return;
         }
 
@@ -401,7 +424,7 @@ export class LoadingMessageOverlay implements Overlay {
         const alpha = this.fadeState === FadeState.FADING_OUT ? 1.0 - this.fadeProgress : 1.0;
 
         // Draw black overlay during visible or fading states
-        if (this.blackDrawCall) {
+        if (this.blackDrawCall && !sceneLoadOnly) {
             // Enable blending for fade effect
             this.app.enable(PicoGL.BLEND);
             this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
@@ -445,7 +468,10 @@ export class LoadingMessageOverlay implements Overlay {
 
     /** Present into an external 2D context (DOM-hosted backends). Same fade + box as `draw`. */
     drawTo2D(ctx: CanvasRenderingContext2D): void {
-        if (this.fadeState === FadeState.HIDDEN) return;
+        if (this.fadeState === FadeState.HIDDEN) {
+            if (this.sceneLoading && this.lastMessage) ctx.drawImage(this.canvas, 10, 10);
+            return;
+        }
         const alpha = this.fadeState === FadeState.FADING_OUT ? 1.0 - this.fadeProgress : 1.0;
         ctx.save();
         ctx.globalAlpha = alpha;
@@ -458,7 +484,7 @@ export class LoadingMessageOverlay implements Overlay {
     }
 
     isVisible(): boolean {
-        return this.fadeState !== FadeState.HIDDEN;
+        return this.fadeState !== FadeState.HIDDEN || this.sceneLoading;
     }
 
     dispose(): void {

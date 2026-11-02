@@ -190,8 +190,8 @@ module.exports = function registerBetweenARockQuest(api) {
 
   // The Dwarven Mine (scorpions, book cart, tin/clay/copper/iron rocks).
   const DWARVEN_MINE_BOUNDS = new Boundary(2960, 3070, 9690, 9860, 0);
-  // Dondakan's mine behind the rock.
-  const ARZINIAN_MINE_BOUNDS = new Boundary(2300, 2460, 4920, 5010, 0);
+  // Dondakan's mine ends before map square 38: that square holds the Recruitment Drive rooms.
+  const ARZINIAN_MINE_BOUNDS = new Boundary(2300, 2431, 4920, 5010, 0);
 
   // The wiki golden-helmet warning messages, by tick spent inside the rock.
   const HELMET_TIMER_MESSAGES = [
@@ -1004,7 +1004,7 @@ module.exports = function registerBetweenARockQuest(api) {
         }
       }
     }
-    return new DondakanMineArea([new Boundary(2300, 2460, 4920, 5010, 0)]);
+    return new DondakanMineArea([ARZINIAN_MINE_BOUNDS]);
   }
 
   // ==========================================================================

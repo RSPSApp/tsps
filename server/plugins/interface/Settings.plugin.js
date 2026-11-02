@@ -330,7 +330,11 @@ function toggleSetting(player, settingId) {
 function chooseSettingOption(player, settingId, option) {
   const row = SETTINGS[settingId];
   const setting = catalog().settings.get(settingId);
-  if (!row || setting?.type !== SETTING_TYPE_DROPDOWN || option < 0 || option >= setting.optionCount) return false;
+  if (setting?.type !== SETTING_TYPE_DROPDOWN || !Number.isInteger(option) || option < 0 || option >= setting.optionCount) return false;
+  const request = { player, settingId, option, handled: false };
+  pluginApi?.emitCustomEvent("settings:option-chosen", request);
+  if (request.handled) return true;
+  if (!row) return false;
   if (!row.options) {
     setSettingVar(player, varKey(row), option);
     if (row.script !== undefined) player.getPacketSender().sendClientScript(row.script);

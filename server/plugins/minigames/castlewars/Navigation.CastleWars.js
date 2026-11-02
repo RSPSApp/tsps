@@ -89,7 +89,7 @@ function passEnergyBarrier(player, object, barrier) {
   game.resetIdleTicks(player);
   const tile = game.getLocationTile(player);
   const crossing = barrier.crossings.find(([at, from]) => game.isAt(object, at[0], at[1], at[2]) && game.isAt(tile, from[0], from[1], from[2]));
-  if (crossing && !ObstacleRunner.isBusy(player)) {
+  if (crossing && game.canEnterRespawn(player, new core.Location(...crossing[2])) && !ObstacleRunner.isBusy(player)) {
     // The leading wait keeps it to one tile per tick (see AlKharidGate).
     ObstacleRunner.run({ player }, [{ wait: 1 }, { walk: [[crossing[2][0], crossing[2][1]]] }]);
   }

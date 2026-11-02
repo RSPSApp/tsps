@@ -298,10 +298,15 @@ test("rifts: Guardians of the Rift's own count of rifts closed (Guardians of the
 
 test("tob: a Theatre of Blood raid finished in a mode the task names (Complete the Theatre of Blood 25 Times)", (t) => {
   const f = pactsCharacter(t);
-  // Verzik beaten: the raid counts the completion for each player still in it.
-  require("../plugins/minigames/tob/Rewards.TheatreOfBlood").countCompletion(f.player);
+  // Verzik beaten: the raid counts the completion, by its mode, for each player still in it.
+  const Stats = require("../plugins/minigames/tob/Stats.TheatreOfBlood");
+  Stats.countCompletion(f.player, "entry");
+  assert.equal((f.player.getAttribute("league:task-progress") ?? {})["complete-the-theatre-of-blood-25-times"], undefined, "Entry Mode is not the task's");
+  Stats.countCompletion(f.player, "normal");
   assert.ok(f.messages.some((text) => /Theatre of Blood count is/.test(text)), `the real count: ${f.messages}`);
   assert.equal(f.player.getAttribute("league:task-progress")["complete-the-theatre-of-blood-25-times"], 1);
+  Stats.countCompletion(f.player, "hard");
+  assert.equal(f.player.getAttribute("league:task-progress")["complete-the-theatre-of-blood-25-times"], 2, "Hard Mode counts too");
 });
 
 test("emote: an emote performed from the tab, by its slot (Use the Fortis Salute emote)", async (t) => {

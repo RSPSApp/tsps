@@ -7,6 +7,8 @@ import {
 import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
 import { flushPackets, setPacketSocket } from "../network/packet";
 import { sendWidgetAction } from "../network/serverConnection/outgoing/widgets";
+import { PlayerDesignController } from "../game/widgets/PlayerDesignController";
+import { PlayerAppearance, Gender } from "../rs/config/player/PlayerAppearance";
 import { state } from "../network/serverConnection/state";
 import { createCacheVm } from "../scripts/cache/cs2-sweep";
 import { createScriptEvent } from "../rs/cs2/Cs2Vm";
@@ -76,6 +78,27 @@ const click = (opId: number) => {
 const action = { type: "widget_action", widgetId: ITEMS, groupId: BANK, childId: 12, slot: 0, itemId: WHIP };
 assert.deepEqual(click(11), { ...action, buttonNum: 11 });
 assert.deepEqual(click(1), { ...action, buttonNum: 1 });
+// The designer consumes its local appearance controls, but the native pronoun dropdown is a server op.
+const appearance = new PlayerAppearance(Gender.MALE, [0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0]);
+appearance.pronouns = 2;
+let preview = appearance;
+const designer = new PlayerDesignController({
+    getIdkTypeLoader: () => ({}), getControlledPlayerServerId: () => 1,
+    playerEcs: { getIndexForServerId: () => 0, getAppearance: () => preview, setAppearance: (_index: number, next: PlayerAppearance) => { preview = next; } },
+} as any);
+assert.equal(designer.handleWidgetAction(15), true, "a local kit arrow remains client-owned");
+assert.equal(designer.handleWidgetAction(78), false, "pronoun controls must reach native dispatch");
+assert.equal(designer.handleWidgetAction(47), true, "a colour changes the local preview");
+assert.equal(preview.pronouns, 2, "local appearance previews retain the separately chosen pronouns");
+sent.length = 0;
+const pronouns = (679 << 16) | 78;
+sendWidgetAction({ widgetId: pronouns, groupId: 679, childId: 78, opId: 1, slot: 3 });
+flushPackets();
+assert.equal(sent.length, 1, "the transport must not discard every designer op");
+assert.deepEqual(decodeClientPacket(Buffer.from(sent[0])), {
+    type: "widget_action", widgetId: pronouns, groupId: 679, childId: 78,
+    buttonNum: 1, slot: 3, itemId: undefined,
+});
 setPacketSocket(null);
 state.socket = null as any;
 

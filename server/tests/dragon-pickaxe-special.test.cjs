@@ -92,7 +92,7 @@ for (const [name, id, animation] of PICKAXES) {
     activate(p);
     assert.equal(p.current, 80);
     assert.equal(p.energy, 99);
-    assert.deepEqual(p.calls.messages, ["You do not have enough special attack energy left!"]);
+    assert.deepEqual(p.calls.messages, ["You don't have enough power left."]);
     assert.deepEqual(p.calls.chat, []);
     assert.deepEqual(p.calls.animations, []);
     assert.deepEqual(p.calls.graphics, []);

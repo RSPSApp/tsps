@@ -93,5 +93,5 @@ test("Lumber Up sends its captured activation sound once and only with sufficien
   assert.equal(player.calls.graphics.length, 1);
   assert.equal(player.skillManager.level("WOODCUTTING"), 73);
   assert.equal(player.energy, 0);
-  assert.deepEqual(player.calls.messages, ["You do not have enough special attack energy left!"]);
+  assert.deepEqual(player.calls.messages, ["You don't have enough power left."]);
 });

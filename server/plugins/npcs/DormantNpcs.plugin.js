@@ -74,14 +74,18 @@ function wakeNear(player) {
   for (const npc of player.getLocalNpcs?.() ?? []) {
     if (!npc || dormantIds.get(npc.getId())?.family.trigger !== "approach" || npc.getHitpoints() <= 0) continue;
     if (npc.getLocation().getZ() !== at.getZ() || npc.getLocation().getDistance(at) > DATA.wakeRange) continue;
-    if (aggressiveTo(player, dormantIds.get(npc.getId()).awakeId)) wake(npc, player);
+    if (aggressiveTo(player, npc, dormantIds.get(npc.getId()).awakeId)) wake(npc, player);
   }
 }
 
-/** Whether this crab would still be aggressive towards the player (Wiki, Tolerance). */
-function aggressiveTo(player, awakeId) {
+/**
+ * Whether this crab would still be aggressive towards the player (Wiki, Tolerance). Plugins that
+ * keep monsters aggressive past tolerance (::aggro) answer through the same hook as for any NPC.
+ */
+function aggressiveTo(player, npc, awakeId) {
   const definition = core.NpcDefinition.forId(awakeId);
-  return !definition?.buildsAggressionTolerance?.() || !player.getAggressionTolerance().finished();
+  return !definition?.buildsAggressionTolerance?.() || !player.getAggressionTolerance().finished()
+    || core.PluginManager.emitNpcAggressionTolerance(player, npc) === true;
 }
 
 function canBeWokenBy(player) {

@@ -9,31 +9,46 @@
  *   damage and accuracy. They tolerate players, but whoever crosses the rope while they aren't
  *   fighting becomes their target.
  * - Crossing needs an Agility level between 80% and 100% of the party's average, at random.
- * - Using the keystone on the barrier kills any of them still standing.
+ * - Using the keystone on the barrier kills any of them still standing, and gives whoever used
+ *   it points (Shimmering barrier).
+ * - Whoever crosses takes all the damage at once just after the rope (Tightrope (Chambers of
+ *   Xeric); No Time for Death).
  * rsprox captures (recordings 820, 843, 3282, 3285, 3389):
  * - Crossing: the player faces the rope and walks across a tile a tick from 2 ticks later,
- *   with sound 2495 (2 loops) each tick, and gets the Agility XP the tick after arriving.
- *   There are no messages.
+ *   with sound 2495 (2 loops) each tick, and gets the Agility XP the tick after arriving: 1/10 of
+ *   the rope's level, at 15x (7.9, 8.3, 8.9, 7.4 in four raids, by 118.5 to 133.5 a crossing).
+ *   There are no messages. Attacks loosed while crossing all land the tick after arriving (843
+ *   ticks 1237, 1241, 1245 landing at 1248).
  * - Mages: 1162 with gfx 129 (height 92) and sound 155 (range 10); projectile 130 (from 51
- *   client cycles to 116-136, angle 16, heights 172 to 124); on the target gfx 131 (85
+ *   client cycles to 46 + 10 a tile, angle 16, heights 172 to 124); on the target gfx 131 (85
  *   splashing) and sound 156, sent with the flight's delay. Rangers: 426 with gfx 24 (height
- *   96) and sound 2693; projectile 15 (from 41 to 56-61, angle 15, progress 11, heights 163 to
- *   146), landing the tick after. Once they fight, they shout ("Stop them at all costs!",
- *   "Protect the keystone!") one a tick. Dying: 836.
- * Not on the Wiki (to check against a capture): the tiles; counts by raiders (rangers 2 / 3 at
- *   4+ / 4 at 7+, mages 2 / 3 at 4+ / 4 at 10+); walk anim 762; 7.5 Agility XP; protection
- *   prayers letting a third through; taking the keystone anim 832, sound 2582; dispelling anim
- *   832, sound 1657, "Your keystone glows as it is absorbed into the barrier, which disperses.".
+ *   96) and sound 2693; projectile 15 (from 41 to 46 + 5 a tile, angle 15, progress 11, heights
+ *   163 to 146). Once they fight, they shout ("Stop them at all costs!", "Protect the
+ *   keystone!") one a tick. Dying: 836.
+ * - Idle guards wander a tile or two around their spots (820, 843, 3282, 3389).
+ * - Solo raids have 2 and 2, the raid scaled to 50 (820) 4 and 4.
+ * - The barrier always pays 2,000 points (six rooms, 3389's Challenge Mode included), a tick
+ *   after "Your keystone glows as it is absorbed into the barrier, which disperses.", anim 832
+ *   and sound 1657; the barrier's tile fits the recordings in all three versions, turned. Taking
+ *   the keystone: anim 832, sound 2582.
+ * Not on the Wiki (to check against a capture): counts between those; walk anim 762; protection
+ *   prayers letting a third through (ranged hits to 17 through prayer at the base scale, under
+ *   the 23 that gives at 70; mages' can't be told apart); the player's block anim 424 at each
+ *   attack loosed on the rope isn't sent. The first step of a crossing moves 2 tiles at once in
+ *   the recordings; here it is 1, so a crossing ends a tick late.
  */
 
 const Shared = require("./Shared.ChambersOfXeric");
 const Raid = require("./RaidState.ChambersOfXeric");
+const Achievements = require("./CombatAchievements.ChambersOfXeric");
 
 const NPC = { RANGER: 7559, MAGE: 7560 };
 const OBJECT = { TIGHTROPE: 29750, KEYSTONE: 29751, BARRIER: 29749 };
 const KEYSTONE = 20884;
 const SHOUTS = ["Intruder!", "Stop them at all costs!", "Protect the keystone!"];
-const CROSS = { WALK: 762, SOUND: 2495, XP: 7.5, START: 2 };
+const CROSS = { WALK: 762, SOUND: 2495, START: 2 };
+const BARRIER_POINTS = 2000;
+const GUARD_WANDER = 2;
 
 /** Cache tiles by version. */
 const MAGE_TILES = [[{ x: 3285, y: 5363 }, { x: 3287, y: 5363 }], [{ x: 3317, y: 5363 }, { x: 3319, y: 5363 }], [{ x: 3340, y: 5365 }, { x: 3340, y: 5367 }]];
@@ -51,6 +66,7 @@ class TightropeRoom extends Raid.Room {
   constructor(raid, record) {
     super(raid, record);
     this.guards = [];
+    this.guardKilled = false;
   }
 
   load() {
@@ -93,10 +109,13 @@ class TightropeRoom extends Raid.Room {
   }
 
   addGuard(id, spot) {
-    const npc = this.spawnNpc(id, this.tile(spot.x, spot.y));
+    const npc = this.spawnNpc(id, this.tile(spot.x, spot.y), { wanderRadius: GUARD_WANDER });
     if (!npc) return;
-    npc.getMovementQueue().setBlockMovement?.(true);
     this.guards.push(npc);
+  }
+
+  onNpcDeath(npc) {
+    if (this.guards.includes(npc) && !this.completed) this.guardKilled = true;
   }
 
   combatPoints() {
@@ -133,6 +152,7 @@ class TightropeRoom extends Raid.Room {
       Shared.later(this.raid, 1 + index, () => npc.isRegistered() && npc.forceChat(Shared.randomOf(SHOUTS)));
     });
     player.__coxBalancing = true;
+    player.__coxCrossing = [];
     player.getMovementQueue().reset();
     player.setPositionToFace(destination);
     Shared.later(player, CROSS.START, () => {
@@ -143,9 +163,19 @@ class TightropeRoom extends Raid.Room {
         return true;
       });
       Shared.balanceWalk(player, destination, CROSS.WALK, () => {
-        Shared.later(player, 1, () => Shared.addXp(player, "AGILITY", CROSS.XP));
+        Shared.later(player, 1, () => {
+          Shared.addXp(player, "AGILITY", this.requirement / 10);
+          for (const land of player.__coxCrossing ?? []) land();
+          player.__coxCrossing = null;
+        });
       });
     });
+  }
+
+  /** ::coxclear: the barrier is dispelled by whoever asked. */
+  devFinish(player) {
+    if (!Shared.has(player, KEYSTONE)) Shared.give(player, KEYSTONE);
+    this.dispel(player);
   }
 
   dispel(player) {
@@ -160,6 +190,10 @@ class TightropeRoom extends Raid.Room {
     player.sendMessage("Your keystone glows as it is absorbed into the barrier, which disperses.");
     Shared.core().ObjectManager.deregister(this.barrier, true);
     this.barrier = null;
+    Shared.later(this.raid, 1, () => this.raid.addPoints(player, BARRIER_POINTS));
+    if (!this.guardKilled && this.guards.every((npc) => npc.isRegistered() && npc.getHitpoints() > 0)) {
+      Achievements.complete(this.raiders(), "No Time for Death");
+    }
     this.completed = true;
     for (const npc of this.guards) {
       if (npc.isRegistered() && npc.getHitpoints() > 0) npc.setHitpoints(0);
@@ -241,14 +275,20 @@ function guardCombat(api) {
       npc.performGraphic(Shared.gfx(mage ? 129 : 24, { height: mage ? 92 : 96 }));
       Shared.areaSound(viewers, mage ? 155 : 2693, from, { range: 10 });
       const flight = mage
-        ? { id: 130, start: 51, end: 86 + 5 * distance, angle: 16, progress: 64, startHeight: 43, endHeight: 31 }
-        : { id: 15, start: 41, end: 51 + Math.min(10, distance), angle: 15, progress: 11, startHeight: 41, endHeight: 36 };
+        ? { id: 130, start: 51, end: 46 + 10 * distance, angle: 16, progress: 64, startHeight: 43, endHeight: 31 }
+        : { id: 15, start: 41, end: 46 + 5 * distance, angle: 15, progress: 11, startHeight: 41, endHeight: 36 };
       new Projectile(from, player.getLocation(), player, flight.id, flight.start, flight.end, flight.startHeight, flight.endHeight, room.map)
         .withAngle(flight.angle)
         .withProgress(flight.progress)
         .sendProjectile();
       const lands = Math.max(1, Math.floor(flight.end / 30));
-      const hit = Shared.strike(npc, player, mage ? "magic" : "ranged", maxHit, lands, { prayerMultiplier: 1 / 3 });
+      const style = mage ? "magic" : "ranged";
+      const options = { prayerMultiplier: 1 / 3 };
+      if (player.__coxCrossing) {
+        player.__coxCrossing.push(() => Shared.strike(npc, player, style, maxHit, 0, options));
+        return;
+      }
+      const hit = Shared.strike(npc, player, style, maxHit, lands, options);
       if (mage) {
         player.performGraphic(Shared.gfx(hit.isAccurate?.() !== false ? 131 : 85, { delay: flight.end, height: 124 }));
         Shared.areaSound(viewers, 156, player.getLocation(), { delay: flight.end, range: 10 });

@@ -46,7 +46,7 @@ import {
 } from "../buffer/SceneBuffer";
 import { LocAnimatedGroup } from "../loc/LocAnimatedGroup";
 import { SceneLocEntity } from "../loc/SceneLocEntity";
-import { getSceneLocs, isDoorLocType, isLowDetail, isRoofLocModelType } from "../loc/SceneLocs";
+import { getSceneLocs, isDoorLoc, isDoorLocType, isLowDetail, isRoofLocModelType } from "../loc/SceneLocs";
 import { createNpcDatas } from "../npc/NpcData";
 import {
     type NpcInstance,
@@ -1709,14 +1709,13 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                 }
             }
         }
+        // Split as addLocEntities draws them: a multiloc by the variant it shows.
+        const isDoorEntity = (loc: SceneLocEntity) =>
+            isDoorLoc(locTypeLoader.load(loc.interactId), varManager, locTypeLoader);
         const locEntities = shouldLoadDoorOnly
-            ? sceneLocs.locEntities.filter((loc) =>
-                  isDoorLocType(locTypeLoader.load(loc.interactId)),
-              )
+            ? sceneLocs.locEntities.filter(isDoorEntity)
             : shouldLoadLocOnly
-              ? sceneLocs.locEntities.filter(
-                    (loc) => !isDoorLocType(locTypeLoader.load(loc.interactId)),
-                )
+              ? sceneLocs.locEntities.filter((loc) => !isDoorEntity(loc))
               : sceneLocs.locEntities;
 
         // Create loc animated groups and add transformed locs

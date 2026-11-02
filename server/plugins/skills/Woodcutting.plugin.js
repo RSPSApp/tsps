@@ -997,11 +997,12 @@ function rollRespawnTicks(tree) {
     : tree.respawnTicks;
 }
 
+/** Fells the tree unless content keeps it standing ("woodcutting:deplete-tree", a league relic's endless trees); true when it fell. */
 function depleteTree(player, treeObject, tree) {
   const respawnTicks = rollRespawnTicks(tree);
   const event = { player, object: treeObject, respawnTicks, handled: false };
   pluginApi.emitCustomEvent("woodcutting:deplete-tree", event);
-  if (event.handled) return;
+  if (event.handled) return false;
   const stump = new GameObject(
     resolveStumpId(treeObject.getId(), tree),
     treeObject.getLocation().clone(),
@@ -1013,6 +1014,7 @@ function depleteTree(player, treeObject, tree) {
   ObjectManager.register(stump, true);
   sendRespawnTimer(player, stump, respawnTicks);
   TaskManager.submit(new TreeRespawnTask(respawnTicks, treeObject, stump));
+  return true;
 }
 
 function startWoodcutting(player, treeObject, tree, activeSessions) {
@@ -1199,8 +1201,9 @@ function processWoodcuttingTick(activeSessions, currentTick) {
         stopWoodcutting(activeSessions, player, false);
         continue;
       }
+      // A tree content keeps standing is chopped on, its despawn timer starting afresh.
+      if (!depleteTree(player, activeTree, state.tree)) continue;
       Sounds.sendSound(player, Sound.WOODCUTTING_TREE_DOWN);
-      depleteTree(player, activeTree, state.tree);
       stopWoodcutting(activeSessions, player);
       continue;
     }

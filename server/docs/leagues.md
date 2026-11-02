@@ -1701,7 +1701,10 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   `deed { event, items?, count }` from a content plugin's own event of one deed, the generator's
   table naming the event for the task's name and description (its `itemId` one of the items when the
   trigger names them): "Worship the Ectofuntus" (`ectofuntus:worshipped`), "Fill a Large / Giant
-  Pouch" (`runecrafting:pouch-filled`, essence put in that pouch),
+  Pouch" (`runecrafting:pouch-filled`, essence put in that pouch), "Activate an Imbued Heart"
+  (`imbued-heart:invigorated`), "Load a blowpipe with Rune / Dragon Darts"
+  (`toxic-blowpipe:darts-loaded`, those darts, unpoisoned), "Open a Looting Bag" (`looting-bag:opened`),
+  "Activate an Arcane or Dexterous Prayer Scroll" (`prayer:scroll-read`, either scroll read),
   `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what

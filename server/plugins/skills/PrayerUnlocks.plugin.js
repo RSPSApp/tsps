@@ -150,6 +150,8 @@ function learnScroll(player, scroll) {
   player.setAttribute(scroll.attribute, true);
   sendUnlock(player, scroll);
   player.sendMessage(`You study the scroll and learn a new prayer: ${scroll.name}`);
+  // "prayer:scroll-read" { player, itemId }: a prayer scroll read, its prayer learnt.
+  api.emitCustomEvent("prayer:scroll-read", { player, itemId: scroll.itemId });
 }
 
 function readScroll(event) {

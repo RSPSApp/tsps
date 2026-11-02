@@ -400,6 +400,35 @@ test("deed: a plugin's own event of the deed (Worship the Ectofuntus; Fill a Lar
   assert.ok(done(rc, "fill-a-large-pouch"));
 });
 
+test("deed: the heart invigorated, darts loaded, the looting bag opened, a prayer scroll read", async (t) => {
+  const f = pactsCharacter(t);
+  const inventory = f.player.getInventory();
+  inventory.add(new core.Item(item("Imbued heart")), true);
+  await inventoryOption(f, "Imbued heart", "Invigorate");
+  assert.ok(f.player.getSkillManager().getCurrentLevel(core.Skill.MAGIC) > f.player.getSkillManager().getMaxLevel(core.Skill.MAGIC), `the real heart boosts Magic: ${f.messages}`);
+  assert.ok(done(f, "activate-an-imbued-heart"));
+
+  inventory.add(new core.Item(item("Toxic blowpipe")), true);
+  inventory.add(new core.Item(item("Mithril dart"), 10), true);
+  inventory.add(new core.Item(item("Rune dart"), 10), true);
+  const useOn = (dart) => send(f, { type: "inventory_use_on", itemId: item(dart), slot: inventory.getSlotForItemId(item(dart)), target: { kind: "inventory", slot: inventory.getSlotForItemId(item("Toxic blowpipe")) } }, 2);
+  await useOn("Mithril dart");
+  assert.ok(f.messages.some((text) => /You load 10 mithril dart/i.test(text)), `the real blowpipe loads them: ${f.messages}`);
+  assert.ok(!done(f, "load-a-blowpipe-with-rune-darts"), "mithril darts are no rune darts");
+  await useOn("Rune dart");
+  assert.ok(done(f, "load-a-blowpipe-with-rune-darts"), `rune darts loaded: ${f.messages}`);
+
+  inventory.add(new core.Item(item("Looting bag")), true);
+  await inventoryOption(f, "Looting bag", "Open");
+  assert.ok(done(f, "open-a-looting-bag"), `the real bag opens: ${f.messages}`);
+
+  inventory.add(new core.Item(item("Arcane prayer scroll")), true);
+  await inventoryOption(f, "Arcane prayer scroll", "Read");
+  await send(f, { type: "dialogue_continue", widgetId: core.OptionDialogue.OPTIONS_WIDGET_ID, childIndex: 1 }, 2);
+  assert.equal(inventory.getAmount(item("Arcane prayer scroll")), 0, `the real scroll is read: ${f.messages}`);
+  assert.ok(done(f, "activate-an-arcane-or-dexterous-prayer-scroll"));
+});
+
 /** A cache NPC of the name with the option, beside the player; the option's click. */
 function npcBeside(t, f, name, option) {
   const id = [...Array(20000).keys()].find((each) => core.CacheDefinitions.getNpc(each)?.name === name && (core.CacheDefinitions.getNpc(each).actions ?? []).some((action) => action?.toLowerCase() === option));

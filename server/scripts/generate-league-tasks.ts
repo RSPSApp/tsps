@@ -460,6 +460,14 @@ const DEEDS: Array<{ name: RegExp; description: RegExp; event: string; items?: (
   { name: /^Worship the Ectofuntus$/i, description: /^Worship the Ectofuntus\.?$/i, event: "ectofuntus:worshipped" },
   // Pouches.Runecrafting: essence put into that pouch.
   { name: /^Fill an? (Large|Giant) Pouch$/i, description: /^Fill an? (Large|Giant) Pouch with Essence\.?$/i, event: "runecrafting:pouch-filled", items: (match) => [`${match[1]} pouch`] },
+  // ImbuedHeart: the heart's Invigorate taking (not refused while it recovers).
+  { name: /^Activate an Imbued Heart$/i, description: /^Obtain and activate an Imbued heart\.?$/i, event: "imbued-heart:invigorated" },
+  // ToxicBlowpipe: those darts loaded into it ("a Blowpipe" is the toxic one, the only one darts load into).
+  { name: /^Load a blowpipe with (Rune|Dragon) Darts$/i, description: /^Load an? (?:Toxic )?Blowpipe with (Rune|Dragon) Darts?s?\.?$/i, event: "toxic-blowpipe:darts-loaded", items: (match) => [`${match[1]} dart`] },
+  // LootingBag: the bag's Open.
+  { name: /^Open a Looting Bag$/i, description: /^Open a Looting Bag\.?$/i, event: "looting-bag:opened" },
+  // PrayerUnlocks: either scroll read, its prayer learnt.
+  { name: /^Activate an Arcane or Dexterous Prayer Scroll$/i, description: /^Activate an Arcane prayer scroll or Dexterous prayer scroll(?: Prayer scroll)?\.?$/i, event: "prayer:scroll-read", items: () => ["Arcane prayer scroll", "Dexterous prayer scroll"] },
 ];
 const CONDITION_IN = (text: string) => /\b(?:in less than|in under|or less|without|solo)\b/i.test(text);
 

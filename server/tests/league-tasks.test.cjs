@@ -481,6 +481,7 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("use-the-bank-in-nardah"), { kind: "bank", place: "nardah-bank", count: 1 });
   assert.deepEqual(trigger("use-the-bank-on-lunar-isle"), { kind: "bank", place: "lunar-isle", count: 1 });
   assert.deepEqual(trigger("worship-the-ectofuntus"), { kind: "deed", event: "ectofuntus:worshipped", count: 1 });
+  assert.deepEqual(trigger("load-a-blowpipe-with-dragon-darts"), { kind: "deed", event: "toxic-blowpipe:darts-loaded", count: 1, items: ["Dragon dart"] });
   assert.deepEqual(trigger("fill-a-giant-pouch"), { kind: "deed", event: "runecrafting:pouch-filled", count: 1, items: ["Giant pouch"] });
   assert.deepEqual(trigger("cross-a-pillar-shortcut-in-the-revenant-caves"), { kind: "shortcut", shortcuts: ["Pillar (Revenant Caves, easy)", "Pillar (Revenant Caves, medium)", "Pillar (Revenant Caves, hard)"], count: 1 });
   assert.deepEqual(trigger("take-a-shortcut-across-the-shilo-village-river"), { kind: "shortcut", shortcuts: ["Stepping stone (Shilo Village)"], count: 1 });

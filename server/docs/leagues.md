@@ -724,7 +724,7 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | 3 | Bank Heist | done |
 | 3 | Evil Eye | done: the Wiki's 60 bosses and raids by area, each on the entrance tile the server's own data gives (`league-evil-eye.json`), with the league's area-teleport cast (no recording of the eye in use) |
 | 3 | Map of Alacrity | partial: 57 of the Wiki map's 141 shortcuts, those the server has with a side the pin and the data agree on (`league-map-of-alacrity.json`, which lists the rest and why), the Agility level and the Wiki's quest notes; the league's area-teleport cast |
-| 4 | Transmute | its toggles and item only, no spells |
+| 4 | Transmute | done: Alchemic Divergence and Convergence (218:199, 218:200) move up to 10 of an item a tier along the cache's `transmutation` table, 10 Magic XP each, no level or runes, every 5 ticks, a stack cast on again while its slot holds it, noted stays noted, to the bank by toggle, loose items in place with a slot each (237/01102, 01106, 238/04211); the alchemy spell while toggled off; the ledger's endless nature runes and its scroll for an item used on it; not Divergence on a top tier (unrecorded), the ledger's Read (nothing says what it shows), or which skilling pauses the casts |
 | 4 | Conniving Clues | done |
 | 4 | Butler's Bell | the item only |
 | 5 | Nature's Accord | partial: noted yields, undying crops, kept seeds, the Fairy mushroom, no Farming level to plant, make a seedling or a scarecrow (`farming:level-rules`); not the spirit tree count, the Tithe Farm's seeds, or Tree Gnome Village on unlock |

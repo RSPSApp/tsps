@@ -337,6 +337,27 @@
         "_source": "237/01164 (op Activate: the line, vengeance_spell_anim_nostalling, spotanim leagues_6_sigil_of_life, sound 165, the impact map_anims within 3 tiles)."
       }
     },
+    "transmute": {
+      "league": 6, "key": "transmute", "ledger": "TRANSMUTATION_LEDGER",
+      "_tiers": "The cache's `transmutation` table (225): each row's `tier_item` lists its tiers lowest first, each tier twice; its `name` titles the ledger's scroll.",
+      "table": "transmutation", "tierColumn": "tier_item", "nameColumn": "name",
+      "_spells": "The spellbook's transmute_upgrade (218:199) and transmute_downgrade (218:200), named by their spell objs; with the alchemy toggle off each is the alchemy spell it stands in for (237/01102: High Level Alchemy's own cast from 218:199).",
+      "spells": {
+        "Alchemic Divergence": { "step": 1, "alchemy": "High Level Alchemy", "animation": "transmutation_cast", "graphic": "league_6_transmutation_upgrade" },
+        "Alchemic Convergence": { "step": -1, "alchemy": "Low Level Alchemy", "animation": "transmutation_cast_downgrade", "graphic": "league_6_transmutation_downgrade" }
+      },
+      "perCast": 10, "xpPerItem": 10, "castTicks": 5,
+      "_cast": "Wiki: up to 10 a cast, 10 Magic XP an item, no level, 5 ticks, and no runes (Alchemic Divergence: cost None; 6 May 2026: 'correctly display as costing no runes'; the spell objs carry no rune params). 237/01102, 01106: a stack (noted or stackable) gives 10 and is cast on again every 5 ticks while its slot holds it, with the graphic alone; loose items convert up to 10 held, in place, only with a free slot for each; a click during a cast waits for it.",
+      "alchemyToggle": "league_relic_transmutation_alchemy_toggle", "bankToggle": "league_relic_transmutation_bank_toggle",
+      "currentColour": "ff3045", "_currentColour": "The ledger's scroll marks the item's own tier in this red with ' (Current)' (Wiki: Transmutation_ledger_interface.png; the toggles' off colour).",
+      "messages": {
+        "nothing": "Nothing interesting happens.",
+        "lowest": "The spell has no effect as this is the lowest tier item for that type.",
+        "noRoom": "<col=ff3045>You do not have inventory space for anymore transmuted items of that type.",
+        "current": " (Current)",
+        "_source": "237/01102 (nothing, on a bronze bar; noRoom), 238/04211 (lowest: an item box showing the item cast on)."
+      }
+    },
     "arcaneGrimoire": {
       "item": "Arcane grimoire",
       "options": { "change": "Change Spellbook", "previous": "Previous Spellbook", "check": "Check Previous" },

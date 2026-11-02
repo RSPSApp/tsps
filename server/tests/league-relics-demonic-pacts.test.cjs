@@ -41,6 +41,7 @@ const EVIL_EYE = { 2: 2 };
 const MAP_OF_ALACRITY = { 2: 3 };
 const EXECUTIONER = { 7: 1 };
 const FLASK_OF_FERVOUR = { 7: 3 };
+const TRANSMUTE = { 3: 1 };
 
 let core;
 let I;
@@ -1224,5 +1225,160 @@ test("Evil Eye and Map of Alacrity: nothing for a character without the relic, a
       assert.equal(click(player, itemId, "Last-destination").handled, false);
       assert.equal(prompts.length, count, "no menu");
     }
+  }
+});
+
+/** A process cycle the tests move on: each tick runs the task manager once. */
+function withClock(t) {
+  let cycle = 1000;
+  t.mock.method(core.World, "getProcessCycle", () => cycle);
+  return (ticks = 1) => {
+    for (let tick = 0; tick < ticks; tick++) {
+      cycle++;
+      core.TaskManager.process();
+    }
+  };
+}
+
+function castOn(player, spellName, slot) {
+  const item = player.getInventory().getItems()[slot];
+  const event = { player, spellName, spellWidget: 0, spellItemId: -1, itemId: item.getId(), slot, handled: false };
+  hooks.onSpellOnItem(event);
+  return event;
+}
+
+/** The Magic XP `base` XP brings this character (the league's rates). */
+function magicRate(player, base) {
+  const control = character(`${player.getUsername()}-control`, "league", {});
+  const before = xp(control, Skill.MAGIC);
+  control.getSkillManager().addExperiences(Skill.MAGIC, base);
+  return xp(control, Skill.MAGIC) - before;
+}
+
+test("Transmute: Divergence turns 10 of a noted stack into the next tier, noted, with 10 Magic XP each, and casts again every 5 ticks", (t) => {
+  const tick = withClock(t);
+  const who = cases(TRANSMUTE);
+  const player = who.relic;
+  const inventory = player.getInventory();
+  inventory.resetItems();
+  inventory.adds(I.UNCUT_SAPPHIRE_2, 24);
+  const before = xp(player, Skill.MAGIC);
+  assert.equal(castOn(player, "Alchemic Divergence", 0).handled, true);
+  assert.equal(inventory.getAmount(I.UNCUT_SAPPHIRE_2), 14);
+  assert.equal(inventory.getAmount(Common.noted(I.UNCUT_EMERALD)), 10, "noted stays noted");
+  assert.equal(xp(player, Skill.MAGIC) - before, magicRate(player, 100));
+  tick(4);
+  assert.equal(inventory.getAmount(I.UNCUT_SAPPHIRE_2), 14, "not before 5 ticks");
+  tick(1);
+  assert.equal(inventory.getAmount(I.UNCUT_SAPPHIRE_2), 4);
+  assert.equal(inventory.getAmount(Common.noted(I.UNCUT_EMERALD)), 20);
+  tick(5);
+  assert.equal(inventory.getAmount(I.UNCUT_SAPPHIRE_2), 0, "the last 4");
+  assert.equal(inventory.getAmount(Common.noted(I.UNCUT_EMERALD)), 24);
+  tick(10);
+  assert.equal(inventory.getAmount(Common.noted(I.UNCUT_EMERALD)), 24, "the slot is empty: no more casts");
+});
+
+test("Transmute: Convergence goes a tier down; loose items convert in place, up to 10, only with a free slot for each", (t) => {
+  const tick = withClock(t);
+  const player = cases(TRANSMUTE).relic;
+  const inventory = player.getInventory();
+  inventory.resetItems();
+  for (let count = 0; count < 4; count++) inventory.adds(I.UNCUT_DIAMOND, 1);
+  castOn(player, "Alchemic Convergence", 0);
+  assert.equal(inventory.getAmount(I.UNCUT_DIAMOND), 0);
+  assert.equal(inventory.getAmount(I.UNCUT_RUBY), 4);
+  inventory.resetItems();
+  for (let count = 0; count < 22; count++) inventory.adds(I.BONES, 1);
+  tick(5);
+  const messages = player.sent.messages.length;
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(inventory.getAmount(I.BONES), 22, "6 free slots for 10 bones");
+  assert.equal(player.sent.messages.at(-1), "<col=ff3045>You do not have inventory space for anymore transmuted items of that type.");
+  assert.equal(player.sent.messages.length, messages + 1);
+});
+
+test("Transmute: an item no row has, and the lowest tier, as recorded; a stackable stack (runes) moves 10", (t) => {
+  withClock(t);
+  const player = cases(TRANSMUTE).relic;
+  const inventory = player.getInventory();
+  inventory.resetItems();
+  inventory.adds(I.BRONZE_BAR, 1);
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(player.sent.messages.at(-1), "Nothing interesting happens.");
+  assert.equal(inventory.getAmount(I.BRONZE_BAR), 1);
+  inventory.resetItems();
+  inventory.adds(I.UNCUT_SAPPHIRE_2, 5);
+  const boxes = [];
+  t.mock.method(player, "getDialogueManager", () => ({ startDialogues: (chain) => boxes.push(chain) }));
+  castOn(player, "Alchemic Convergence", 0);
+  assert.equal(boxes.length, 1, "the lowest tier's item box");
+  assert.equal(inventory.getAmount(I.UNCUT_SAPPHIRE_2), 5);
+  inventory.resetItems();
+  inventory.adds(I.FIRE_RUNE, 25);
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(inventory.getAmount(I.FIRE_RUNE), 15);
+  assert.equal(inventory.getAmount(I.CHAOS_RUNE), 10);
+});
+
+test("Transmute: with the bank toggle a stack's products go to the bank; with the alchemy toggle off the spells are alchemy", (t) => {
+  withClock(t);
+  const player = cases(TRANSMUTE).relic;
+  const inventory = player.getInventory();
+  inventory.resetItems();
+  inventory.adds(I.UNCUT_SAPPHIRE_2, 10);
+  toggle(player, "league_relic_transmutation_bank_toggle");
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(banked(player, I.UNCUT_EMERALD), 10);
+  assert.equal(inventory.getAmount(Common.noted(I.UNCUT_EMERALD)), 0);
+  toggle(player, "league_relic_transmutation_alchemy_toggle");
+  const { MagicOnItemPacketListener } = require("../dist/net/packet/impl/MagicOnItemPacketListener");
+  const alchemy = t.mock.method(MagicOnItemPacketListener.prototype, "castOnItem", () => true);
+  inventory.resetItems();
+  inventory.adds(I.UNCUT_SAPPHIRE_2, 10);
+  assert.equal(castOn(player, "Alchemic Convergence", 0).handled, true);
+  assert.deepEqual(alchemy.mock.calls[0].arguments.slice(0, 4), [player, MagicOnItemPacketListener.prototype.resolveSpellId("Low Level Alchemy"), I.UNCUT_SAPPHIRE_2, 0]);
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(alchemy.mock.calls[1].arguments[1], MagicOnItemPacketListener.prototype.resolveSpellId("High Level Alchemy"));
+  assert.equal(inventory.getAmount(I.UNCUT_SAPPHIRE_2), 10, "no transmute");
+});
+
+test("Transmute: the ledger, carried or worn, is endless nature runes; an item used on it shows its row with its own tier in red", () => {
+  const who = cases(TRANSMUTE);
+  const bypass = (player) => {
+    const event = { player, spellbook: null, spellId: -1, runeId: I.NATURE_RUNE, bypass: null };
+    hooks.onSpellRuneBypass(event);
+    return event.bypass;
+  };
+  const player = who.relic;
+  player.getInventory().resetItems();
+  assert.equal(bypass(player), null);
+  player.getInventory().adds(I.TRANSMUTATION_LEDGER, 1);
+  assert.equal(bypass(player), true);
+  player.getInventory().resetItems();
+  player.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(I.TRANSMUTATION_LEDGER, 1));
+  assert.equal(bypass(player), true, "worn");
+  const strings = new Map();
+  const sender = new Proxy({}, { get: (target, key) => (key === "sendString" ? (text, id) => (strings.set(id & 0xffff, text), sender) : () => sender) });
+  player.getPacketSender = () => sender;
+  const event = { player, usedItemId: Common.noted(I.MAPLE_LOGS), usedWithItemId: I.TRANSMUTATION_LEDGER, handled: false };
+  hooks.onItemOnItem(event);
+  assert.equal(event.handled, true);
+  assert.equal(strings.get(2), "Logs (Normal)");
+  assert.equal(strings.get(4), "1. Logs");
+  assert.equal(strings.get(8), "<col=ff3045>5. Maple logs (Current)</col>");
+  assert.equal(strings.get(12), "9. Redwood logs");
+  const none = { player, usedItemId: I.BRONZE_BAR, usedWithItemId: I.TRANSMUTATION_LEDGER, handled: false };
+  hooks.onItemOnItem(none);
+  assert.equal(none.handled, false, "the game's own answer");
+});
+
+test("Transmute: the spells are left alone for a character without the relic, another league's or a main character", (t) => {
+  withClock(t);
+  for (const player of others(cases(TRANSMUTE))) {
+    player.getInventory().resetItems();
+    player.getInventory().adds(I.UNCUT_SAPPHIRE_2, 10);
+    assert.equal(castOn(player, "Alchemic Divergence", 0).handled, false);
+    assert.equal(player.getInventory().getAmount(I.UNCUT_SAPPHIRE_2), 10);
   }
 });

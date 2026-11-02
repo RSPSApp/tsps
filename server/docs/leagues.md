@@ -1305,10 +1305,10 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   perm_floating_panel_content 647:20 OP1 + IF_SCRIPT_TRIGGER), then `talent_tree_init` (7892) [1]
   and script 9397. A second click while it is open: "The Demonic Pacts interface is already open."
   The frame's slot 11 closes it.
-- **A buy** is Apply Changes, the data layer's script trigger: one int array, written as plain
-  unsigned varints (not the zigzag other triggers use; RuneLite sends `[1, 126]` for one node,
-  component 126): the count of nodes selected, then each one's component, two per node, so a node is component / 2 (237/01098: [1, 126] set bit 63;
-  238: [2, 88, 94] bought two). Each is checked in the order selected (a later one may link to an
+- **A buy** is Apply Changes, the data layer's script trigger: one int array of the selected
+  nodes, its length as a plain varint and each node zigzag-encoded like any int (237/01098:
+  `[1, 126]` set bit 63; 238: `[2, 88, 94]` bought nodes 44 and 47). The web client wrote the
+  nodes unsigned until it matched (node 63 arrived as 63, which the server refused). Each is checked in the order selected (a later one may link to an
   earlier one), and each sends its own varps and effect; the unlock below plays once. The first pact must be the central one
   (node 0); later ones must link to one held, with a point left and fewer than 40 spent. Then, in
   the recorded order: `talent_points_spent`, the unlock bit, the effect varbit, human_relic_unlock

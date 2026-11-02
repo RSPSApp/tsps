@@ -212,7 +212,7 @@ test("View Demonic Pacts opens the tree as captured; a bought node pays, sets it
   assert.equal(buyNode(pacts, Common.nodes[0].links[0]), true);
   assert.equal(Common.pacts(pacts).length, 1, "no point left to spend");
   assert.match(pacts.sent.messages.at(-1), /no pact points/);
-  assert.equal(hooks[`button:${uid(TREE, 11)}`]({ player: pacts, scriptTrigger: true, argsData: trigger(1, 3) }), true, "an odd component is no node");
+  assert.equal(hooks[`button:${uid(TREE, 11)}`]({ player: pacts, scriptTrigger: true, argsData: trigger(1, 3) }), true, "3 zigzag-decodes to -2: no node");
   assert.equal(Common.pacts(pacts).length, 1);
 });
 
@@ -406,4 +406,17 @@ test("nobody else gets a pact point or reset from the pact and reset tasks", () 
   assert.equal(Common.earned(echoes), 0);
   assert.equal(Common.resets(echoes), 0);
   assert.equal(echoes.sent.varbits.has(varbit("talent_resets_available")), false);
+});
+
+test("Apply Changes reads nodes zigzag-encoded, as the real client sends them: [1, 126] is node 63", () => {
+  const pacts = character("pactzigzag");
+  pacts.setAttribute(Common.POINTS_ATTRIBUTE, 3);
+  buyNode(pacts, 0);
+  ticks(5);
+  openTree(pacts);
+  // The web client once sent node 63 unsigned, [1, 63]: 63 zigzag-decodes to -32, no node.
+  hooks[`button:${uid(TREE, 11)}`]({ player: pacts, scriptTrigger: true, argsData: [1, 63] });
+  assert.deepEqual(Common.pacts(pacts), [0]);
+  hooks[`button:${uid(TREE, 11)}`]({ player: pacts, scriptTrigger: true, argsData: [1, 126] });
+  assert.deepEqual(Common.pacts(pacts), [0, 63], "237/01098: [1, 126] set bit 63");
 });

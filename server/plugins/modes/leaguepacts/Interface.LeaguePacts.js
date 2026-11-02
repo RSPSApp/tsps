@@ -152,12 +152,13 @@ function later(player, ticks, action) {
 function dataLayerTriggered(event) {
   const { player } = event;
   if (!event.scriptTrigger || !open.has(player) || !Common.isPacts(player)) return false;
-  // Apply Changes: one int array, its length then each selected node's component (two per node),
-  // as plain varints (triggerVarints: the real client's encoding).
-  const [count, ...components] = triggerVarints(event.argsData);
-  const picked = components.slice(0, Math.max(0, count | 0));
-  if (!picked.length || picked.some((component) => !Number.isInteger(component) || component < 0 || component % 2 !== 0)) return true;
-  buyAll(player, picked.map((component) => component / 2));
+  // Apply Changes: one int array of the selected nodes, as the real client writes it: its length
+  // as a plain varint, then each node zigzag-encoded like any int (237/01098: node 63 as [1, 126];
+  // 238: nodes 44 and 47 as [2, 88, 94]).
+  const [count, ...encoded] = triggerVarints(event.argsData);
+  const picked = encoded.slice(0, Math.max(0, count | 0)).map((value) => (value >>> 1) ^ -(value & 1));
+  if (!picked.length || picked.some((node) => !Number.isInteger(node) || node < 0)) return true;
+  buyAll(player, picked);
   return true;
 }
 

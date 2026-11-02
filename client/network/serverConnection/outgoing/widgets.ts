@@ -194,11 +194,12 @@ export function sendIfTriggerOpLocal(
         if (typeof arg === "number" && Number.isFinite(arg)) {
             writeVarInt(arg);
         } else if (isCs2ArrayObject(arg) && arg.valueType === "int") {
-            // An int array ("*" in the signature): its length, then each element, as plain
-            // unsigned varints, as the real client sends the pact tree's Apply Changes
-            // (talent_tree:data_layer, recorded [2, 88, 94]; [1, -44, 1] is 212).
+            // An int array ("*" in the signature): its length as a plain unsigned varint, then
+            // each element zigzag-encoded like any int, as the real client sends the pact tree's
+            // Apply Changes (talent_tree:data_layer: node 63 recorded as [1, 126], nodes 44 and 47
+            // as [2, 88, 94]). Elements sent unsigned arrived as 63, which the server refused.
             writeUnsignedVarInt(arg.length);
-            for (let j = 0; j < arg.length; j++) writeUnsignedVarInt(arg.getInt(j));
+            for (let j = 0; j < arg.length; j++) writeVarInt(arg.getInt(j));
         } else if (typeof arg === "string") {
             buf.writeStringCp1252NullTerminated(arg);
         } else if (arg == null) {

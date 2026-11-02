@@ -1303,6 +1303,23 @@ function requestDoorOpen(event) {
     location: { x: location.getX(), y: location.getY(), z: location.getZ() }, clickType });
 }
 
+// Read the shared world's current leaves without changing the door or its auto-close timer.
+function readDoorState(event) {
+  const requested = event.objects ?? [];
+  const current = new Set(requested);
+  for (const state of OPEN_OBJECT_STATES.values()) {
+    if (state.closed[0]?.privateArea) continue;
+    const replaced = requested.filter(object => state.closed.some(snapshot =>
+      (object.getPrivateArea() ?? null) === (snapshot.privateArea ?? null) &&
+      object.getId() === snapshot.id && object.getType() === snapshot.type && object.getFace() === snapshot.face &&
+      locationKey(object.getLocation()) === locationKey(snapshot.location)));
+    if (!replaced.length) continue;
+    for (const object of replaced) current.delete(object);
+    for (const snapshot of state.current) current.add(objectFromSnapshot(snapshot));
+  }
+  event.objects = [...current];
+}
+
 function routeWallDoor(event) {
   const name = event.definition?.getName?.() ?? "";
   if (event.object?.getType?.() !== 0 ||
@@ -1340,6 +1357,7 @@ module.exports = {
     api.onRegionLoaded(({ regionId }) => reapplyOpenDoorsForRegion(regionId));
     api.onServerStartup(registerWallDoorRoutes);
     api.onCustomEvent("door:open", requestDoorOpen);
+    api.onCustomEvent("door:state", readDoorState);
   },
   __internals: { OPEN_OBJECT_STATES, RUNTIME_DOUBLE_DOOR_RECORDS },
 };

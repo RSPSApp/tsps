@@ -73,18 +73,19 @@ function harness({ npcDrops = false } = {}) {
 }
 
 function player() {
-  const attributes = new Map(), items = new Map(), varbits = new Map(), strings = new Map(), animations = [], damage = [], messages = [], graphics = [], objectsSent = [];
+  const attributes = new Map(), items = new Map(), varbits = new Map(), strings = new Map(), animations = [], damage = [], messages = [], graphics = [], objectsSent = [], objectsRemoved = [];
   let area = null, location = new core.Location(3254, 3274, 0);
   const packet = new Proxy({ sendVarbit: (id, value) => { varbits.set(id, value); return packet; },
     sendString: (text, id) => { strings.set(id, text); return packet; },
     sendObject: object => { objectsSent.push(object); return packet; },
+    sendObjectRemoval: object => { objectsRemoved.push(object); return packet; },
     sendGraphic: (graphic, at) => { graphics.push([at.getX(), at.getY()]); return packet; } }, { get: (target, key) => target[key] ?? (() => packet) });
   const inventory = { getAmount: id => items.get(id) ?? 0, contains: id => (items.get(id) ?? 0) > 0, getFreeSlots: () => p.full ? 0 : 28,
     isFull: () => Boolean(p.full), adds: (id, amount) => items.set(id, (items.get(id) ?? 0) + amount),
     deleteNumber: (id, amount) => { assert.ok((items.get(id) ?? 0) >= amount); items.set(id, items.get(id) - amount); },
     get: () => p.lamp, deleteAtSlot: () => { p.lamp = null; } };
   const p = { attributes, items, varbits, strings, animations, damage, messages,
-    graphics, objectsSent, getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
+    graphics, objectsSent, objectsRemoved, getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => inventory, getPacketSender: () => packet,
     getDialogueManager: () => ({ startDialogues: noop, reset: noop }),
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; } }), setUntargetable: noop,
@@ -163,6 +164,8 @@ test('bull release is private, uses the captured bull and cleans up pending or a
   h.hooks.onPlayerLogout[0]({ player: p }); assert.equal(p.getArea(), null); assert.equal(h.npcs[0].removed, true);
   const pending = player(); h.quest.setStage(pending, 18); h.action(pending, N.BULL, 'mKQNRL');
   h.hooks.onPlayerLogout[0]({ player: pending }); h.tick(4); assert.equal(h.npcs.length, 1);
+  assert.deepEqual(pending.objectsRemoved, [], 'cancelled entry never hides world gates');
+  assert.deepEqual(pending.objectsSent, [], 'cancelled entry has no gate view to restore');
 });
 
 test('leaving a post-quest fight restores the cow-field gates so Brutus can be released again', () => {
@@ -170,17 +173,51 @@ test('leaving a post-quest fight restores the cow-field gates so Brutus can be r
   h.action(p, N.BULL, 'mKQNRL'); h.tick(4);
   h.hooks.onObjectInteraction[0]({ player: p, objectId: O.GATE_323 });
   assert.equal(p.getArea(), null, 'the exit gate ends the private field');
-  assert.deepEqual(p.objectsSent.map(object => [object.getId(), object.getLocation().getX(), object.getLocation().getY(), object.getFace()])
+  assert.deepEqual(p.objectsSent.slice(-4).map(object => [object.getId(), object.getLocation().getX(), object.getLocation().getY(), object.getFace()])
     .sort((a, b) => a[0] - b[0]),
   [[O.GATE_18, 3253, 3266, 0], [O.GATE_20, 3253, 3267, 0], [O.GATE_319, 3263, 3294, 1], [O.GATE_322, 3262, 3294, 1]],
   'each actionless private leaf is replaced by the map gate it hid, so "Release" is back');
+});
+
+test('private gates hide moved world leaves and restore the current world state on exit or logout', () => {
+  for (const initiallyOpen of [false, true]) for (const openOnExit of [false, true]) for (const logout of [false, true]) {
+    const h = harness(), p = player(); h.quest.setStage(p, 22);
+    let open = initiallyOpen;
+    const opened = [new core.GameObject(O.GATE_19, new core.Location(3252, 3266, 0), 0, 3, null),
+      new core.GameObject(O.GATE_25, new core.Location(3251, 3266, 0), 0, 3, null)];
+    h.api.onCustomEvent('door:state', event => {
+      if (open) event.objects = [...event.objects.filter(object => ![O.GATE_18, O.GATE_20].includes(object.getId())), ...opened];
+    });
+    h.action(p, N.BULL, 'mKQNRL'); h.tick(4);
+    const view = objects => objects.map(object => [object.getId(), object.getLocation().getX(), object.getLocation().getY(), object.getFace()]);
+    assert.deepEqual(view(p.objectsRemoved).slice(2), initiallyOpen
+      ? [[O.GATE_19, 3252, 3266, 3], [O.GATE_25, 3251, 3266, 3]]
+      : [[O.GATE_20, 3253, 3267, 0], [O.GATE_18, 3253, 3266, 0]], 'entry hides the leaves at their current world tiles');
+    open = openOnExit; p.objectsRemoved.length = 0;
+    if (logout) h.hooks.onPlayerLogout[0]({ player: p });
+    else h.hooks.onObjectInteraction[0]({ player: p, objectId: O.GATE_323 });
+    assert.equal(p.getArea(), null);
+    assert.deepEqual(p.objectsSent.slice(0, 4).map(object => object.getId()), [O.GATE_319, O.GATE_322, O.GATE_20, O.GATE_18],
+      'first replace the private identities with their map identities');
+    assert.deepEqual(p.objectsRemoved.map(object => object.getId()), [O.GATE_319, O.GATE_322, O.GATE_20, O.GATE_18],
+      'then clear the closed map slots before applying the world view');
+    assert.deepEqual(p.objectsSent.slice(4).map(object => object.getId()), openOnExit
+      ? [O.GATE_319, O.GATE_322, O.GATE_19, O.GATE_25]
+      : [O.GATE_319, O.GATE_322, O.GATE_20, O.GATE_18], 'exit reads the live world, including changes during the fight');
+    assert.ok(opened.every(object => object.getPrivateArea() === null), 'the world leaves remain shared');
+    p.objectsRemoved.length = 0;
+    h.action(p, N.BULL, 'mKQNRL'); h.tick(4);
+    assert.deepEqual(p.objectsRemoved.map(object => object.getId()), openOnExit
+      ? [O.GATE_319, O.GATE_322, O.GATE_19, O.GATE_25]
+      : [O.GATE_319, O.GATE_322, O.GATE_20, O.GATE_18], 're-entry hides the current view again');
+  }
 });
 
 test('killing Brutus during the quest restores the gates before the field tears down', () => {
   const h = harness(), p = player(); h.quest.setStage(p, 18); h.action(p, N.BULL, 'mKQNRL'); h.tick(2);
   h.hooks.onNpcDeath[0]({ killer: p, npc: h.npcs[0], npcId: N.BRUTUS });
   assert.equal(h.quest.getStage(p), 20);
-  assert.deepEqual(p.objectsSent.map(object => object.getId()).sort((a, b) => a - b), [O.GATE_18, O.GATE_20, O.GATE_319, O.GATE_322]);
+  assert.deepEqual(p.objectsSent.slice(-4).map(object => object.getId()).sort((a, b) => a - b), [O.GATE_18, O.GATE_20, O.GATE_319, O.GATE_322]);
 });
 
 test('quest Bull claims its kill before drop consumers while postquest Brutus keeps his drops', () => {

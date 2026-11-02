@@ -47,7 +47,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   ];
   const BULL_GATE_OBJECT_IDS = new Set(BULL_GATE_LEAVES.map((leaf) => leaf.id));
   // The actionless leaves that replace the field's gates while the fight owns it. Their
-  // `standing` ids are the map's own gates, put back when the field returns to the world.
+  // `standing` ids identify the map gates whose current state is restored on exit.
   const ARENA_GATES = [
     { object: ObjectIdentifiers.GATE_321, standing: ObjectIdentifiers.GATE_319, x: 3263, y: 3294, face: 1 },
     { object: ObjectIdentifiers.GATE_320, standing: ObjectIdentifiers.GATE_322, x: 3262, y: 3294, face: 1 },
@@ -136,6 +136,12 @@ module.exports = function registerIdesOfMilkQuest(api) {
     return task;
   }
 
+  function currentWorldGates(standing) {
+    const state = { objects: standing };
+    api.emitCustomEvent("door:state", state);
+    return state.objects;
+  }
+
   class BullArena extends PrivateArea {
     constructor(player) {
       super([new Boundary(3240, 3268, 3265, 3301, 0)]);
@@ -152,11 +158,11 @@ module.exports = function registerIdesOfMilkQuest(api) {
     npcAggression(player, npc) { return player === this.player && npc === this.bull; }
     postLeave(mobile, logout) {
       if (mobile === this.player) {
-        // A private loc stays on the client until it is replaced, and removing one also hides
-        // the map's own loc underneath. Put the field's real gates back, or the actionless
-        // arena leaves stay and the pen can never be reopened.
         const sender = mobile.getPacketSender();
+        // Replace the private identities before applying the world's current closed/open view.
         for (const standing of this.standingGates) sender.sendObject(standing);
+        for (const standing of this.standingGates) sender.sendObjectRemoval(standing);
+        for (const object of currentWorldGates(this.standingGates)) sender.sendObject(object);
         TaskManager.cancelTasks(this);
         fightsByPlayer.delete(mobile);
         bullsByPlayer.delete(mobile);
@@ -647,11 +653,13 @@ module.exports = function registerIdesOfMilkQuest(api) {
       arena.enter(player);
       arena.standingGates = ARENA_GATES.map(gate => {
         const location = new Location(gate.x, gate.y, 0);
-        const standing = MapObjects.get(gate.standing, location, null)
+        return MapObjects.get(gate.standing, location, null)
           ?? new GameObject(gate.standing, location, 0, gate.face, null);
-        ObjectManager.register(new GameObject(gate.object, location, 0, gate.face, arena), true);
-        return standing;
       });
+      for (const object of currentWorldGates(arena.standingGates)) sender.sendObjectRemoval(object);
+      for (const gate of ARENA_GATES) {
+        ObjectManager.register(new GameObject(gate.object, new Location(gate.x, gate.y, 0), 0, gate.face, arena), true);
+      }
       spawnArenaBull(arena);
       if (!arena.bull) { leaveFight(player); return; }
       later(arena, 2, () => {

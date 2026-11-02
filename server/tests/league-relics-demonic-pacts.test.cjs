@@ -405,6 +405,22 @@ test("Nature's Accord: ten times the yield, noted, with its XP; crops never die 
   }
 });
 
+test("Nature's Accord: no Farming level to plant, make a seedling or a scarecrow (farming:level-rules)", (t) => {
+  require("../plugins/skills/farming/Core.Farming").init({ core });
+  const Patches = require("../plugins/skills/farming/Patches.Farming");
+  t.mock.method(core.PluginManager, "emitCustomEvent", emit);
+  const who = cases(NATURES_ACCORD);
+  for (const player of [who.relic, ...others(who)]) player.getSkillManager().setCurrentLevel(Skill.FARMING, 1, false);
+  for (const kind of ["plant", "seedling", "scarecrow"]) {
+    assert.equal(Patches.hasLevel(who.relic, 85, kind), true, `${kind} with the relic`);
+    for (const player of others(who)) assert.equal(Patches.hasLevel(player, 85, kind), false, `${kind} without it`);
+  }
+  assert.equal(who.relic.sent.messages.some((line) => line.includes("Farming")), false);
+  assert.ok(who.without.sent.messages.includes("You need level 85 Farming."), "the refusal");
+  who.main.getSkillManager().setCurrentLevel(Skill.FARMING, 85, false);
+  assert.equal(Patches.hasLevel(who.main, 85, "plant"), true, "the level itself still does");
+});
+
 test("Larcenist: sure pickpockets, ten times the pouches, loot noted and tenfold, repeats, stalls that stay stocked", () => {
   const who = cases(LARCENIST);
   const target = emit("thieving:pickpocket-target", { player: who.relic, target: {}, alwaysSucceeds: false, pouchLimit: 28 });

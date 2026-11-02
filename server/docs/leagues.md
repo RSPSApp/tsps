@@ -158,6 +158,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `magic:alchemy-policy` (extended) | core `MagicOnItemPacketListener` | asked before the level check (the zone rules still follow it), now with `requiredLevel`, `freeRunes`, `keepItem` and `recast` (cast again on the slot once this cast ends while it holds the same item); a plugin that turns the cast into something else (Mage Training Arena, While Guthix Sleeps) clears `confirm`, `keepItem` and `recast` |
 | `bone-altars:offering` | BoneAltars | `{ player, itemId, boneItemId, cost, anyAltar }`: an item that is not a bone offered as `boneItemId`, `cost` of it an offering, and with `anyAltar` on any altar one prays at (the bone's burying XP; a private area's altars, a house's, stay its own) |
 | `farming:plant-rules` | Farming, as a seed or sapling is planted | `{ player, crop, seedId, patch, keepSeed, grown, diseaseFree, undying, message }`: a line said after the planting's own; keep the seed, grow the crop at once (not anima plants), keep it from disease, or keep a diseased crop from dying (it waits for a cure); the last two are kept on the patch's state |
+| `farming:level-rules` | Farming, as a seed or sapling is planted, a seedling made or a scarecrow made or placed without the level | `{ player, kind, required, waived }`: `kind` is `plant`, `seedling` or `scarecrow`; set `waived` to let the player do it anyway |
 | `farming:harvests-per-action`, `farming:pick` | Farming | `{ player, patch, crop, harvests }` picks an action; `{ player, crop, patch, itemId, amount, experience, stored }` before a pick is handed over (`experience` is the pick's Farming XP; `stored` what a listener took itself, as the bank) |
 | `skills:produced` (extended) | the production skills | now with `kind` (the loop, as `skills:actions-per-cycle` names it) and, for leather and jewellery, `materials` (`[id, amount]` one product used) |
 | `construction:materials` | Construction, before a build's materials go | `{ player, buildable, materials }`: a listener may lower an amount |
@@ -720,7 +721,7 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | 4 | Transmute | its toggles and item only, no spells |
 | 4 | Conniving Clues | done |
 | 4 | Butler's Bell | the item only |
-| 5 | Nature's Accord | partial: noted yields, undying crops, kept seeds, the Fairy mushroom; not the waived levels |
+| 5 | Nature's Accord | partial: noted yields, undying crops, kept seeds, the Fairy mushroom, no Farming level to plant, make a seedling or a scarecrow (`farming:level-rules`); not the spirit tree count, the Tithe Farm's seeds, or Tree Gnome Village on unlock |
 | 5 | Larcenist | partial: not guards never catching you (no thieving hook), the Varlamore valuables |
 | 5 | Soul Harvest | partial: shards from bones, ashes (our 0.8 x XP; the Wiki gives none) and crops; not health checks, Runecraft or libation uses |
 | 6 | Grimoire | done (every prayer as well) |

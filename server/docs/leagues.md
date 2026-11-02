@@ -1709,7 +1709,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   { spellbook: "lunar" }, `where` the event's own fields), "Turn off your run" (the run toggle's new
   `player:run-toggled` { running: false }), "Perform a Special Attack", "Use the Special Attack of a Dragon Axe", "Blow the
   Soulflame Horn" (`CombatSpecial.drain`'s new `combat-special:performed`, its `itemId` the weapon
-  wielded), "Set Up a Dwarf Cannon" (`dwarf-cannon:set-up`, the fourth part on),
+  wielded), "Set Up a Dwarf Cannon" (`dwarf-cannon:set-up`, the fourth part on), "Rake a Flower
+  Patch" (Farming's `farming:raked` { patchType: "FLOWER" }), "Fill a Bucket With Supercompost"
+  (`farming:bin-taken`, a bucket filled at the bin),
   `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what

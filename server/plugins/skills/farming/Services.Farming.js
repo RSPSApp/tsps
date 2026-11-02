@@ -200,6 +200,8 @@ function takeBinStep(player, work) {
     if (bin.tier === ROTTEN_TOMATO_TIER || inventory.contains(Data.itemId("Bucket"))) {
         if (bin.tier !== ROTTEN_TOMATO_TIER) inventory.deleteNumber(Data.itemId("Bucket"), 1);
         inventory.addItem(new core.Item(Data.itemId(COMPOST_NAMES[bin.tier])));
+        // "farming:bin-taken" { player, itemId }: a bucket filled from the bin (or a rotten tomato taken).
+        core.PluginManager.emitCustomEvent("farming:bin-taken", { player, itemId: Data.itemId(COMPOST_NAMES[bin.tier]) });
     } else {
         // Choose from the live inventory at output time; ordinary buckets always have priority.
         const bucket = binBottomless(player, bin);

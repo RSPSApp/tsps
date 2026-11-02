@@ -332,6 +332,8 @@ function rake(player, patch) {
     state.weeds--;
     state.nextAt = Model.nextGrowth(Date.now(), Data.FORMULAS.growth.tickMinutes, farmFor(player).offset);
     award(player, 4, patch);
+    // "farming:raked" { player, patch, patchType }: a weed raked from the patch.
+    core.PluginManager.emitCustomEvent("farming:raked", { player, patch, patchType: patch.type });
     return state.weeds > 0;
 }
 function harvestStep(player, work) {

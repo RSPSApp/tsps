@@ -472,6 +472,45 @@ test("deed: a special attack performed, by its weapon (the Dragon Axe's Lumber U
   assert.ok(done(gunner, "set-up-a-dwarf-cannon"));
 });
 
+test("deed: a weed raked from a flower patch (Rake a Flower Patch), not from an allotment", async (t) => {
+  const { CACHE } = require("../plugins/skills/farming/Data.Farming");
+  const rakeAt = async (type) => {
+    // The Civitas illa Fortis patches, an open walk away.
+    const patch = CACHE.patches.find((each) => each.type === type && each.x === 1585);
+    core.RegionManager.loadMapFiles(patch.x, patch.y);
+    const f = pactsCharacter(t, [1592, 3096, 0]);
+    f.player.setAttribute("league:areas", [21, 1, 2, 3, 4, 5, 6, 7, 8, 11, 20]);
+    f.player.getInventory().add(new core.Item(item("Rake")), true);
+    await send(f, { type: "object_option", id: patch.id, x: patch.x, y: patch.y, action: "Rake" }, 12);
+    return f;
+  };
+  const allotment = await rakeAt("ALLOTMENT");
+  assert.ok(allotment.player.getInventory().getAmount(item("Weeds")) > 0, `the real rake weeds it: ${allotment.messages}`);
+  assert.ok(!done(allotment, "rake-a-flower-patch"));
+  const flower = await rakeAt("FLOWER");
+  assert.ok(flower.player.getInventory().getAmount(item("Weeds")) > 0, `the real rake weeds it: ${flower.messages}`);
+  assert.ok(done(flower, "rake-a-flower-patch"));
+});
+
+test("deed: a bucket filled from a compost bin of supercompost (Fill a Bucket With Supercompost)", async (t) => {
+  const { CACHE } = require("../plugins/skills/farming/Data.Farming");
+  const Patches = require("../plugins/skills/farming/Patches.Farming");
+  const bin = CACHE.patches.find((each) => each.type === "COMPOST" && each.x === 3056); // Falador's
+  core.RegionManager.loadMapFiles(bin.x, bin.y);
+  const f = pactsCharacter(t);
+  f.player.setAttribute("league:areas", [21, 3]); // Varlamore and Asgarnia
+  f.player.moveTo(new core.Location(bin.x - 1, bin.y, bin.z));
+  f.player.needsPlacement = false;
+  // A bin rotted to supercompost and opened, as the bin's own state keeps it.
+  Patches.stateFor(f.player, bin).bin = { count: 3, super: 3, tomatoes: 0, tier: 2, closedAt: 1, open: true };
+  Patches.syncPatch(f.player, bin);
+  f.player.getInventory().add(new core.Item(item("Bucket")), true);
+  await send(f, { type: "object_option", id: bin.id, x: bin.x, y: bin.y, action: "Take" }, 2);
+  for (let i = 0; i < 4; i++) Patches.tick();
+  assert.equal(f.player.getInventory().getAmount(item("Supercompost")), 1, `the real bin fills the bucket: ${f.messages}`);
+  assert.ok(done(f, "fill-a-bucket-with-supercompost"));
+});
+
 /** A cache NPC of the name with the option, beside the player; the option's click. */
 function npcBeside(t, f, name, option) {
   const id = [...Array(20000).keys()].find((each) => core.CacheDefinitions.getNpc(each)?.name === name && (core.CacheDefinitions.getNpc(each).actions ?? []).some((action) => action?.toLowerCase() === option));

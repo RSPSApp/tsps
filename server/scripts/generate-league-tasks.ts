@@ -475,6 +475,10 @@ const DEEDS: Array<{ name: RegExp; description: RegExp; event: string; items?: (
   { name: /^Blow the Soulflame Horn$/i, description: /^Use the special attack of the soulflame horn\.?$/i, event: "combat-special:performed", items: () => ["Soulflame horn"] },
   // DwarfCannon's set-up: the fourth part on.
   { name: /^Set Up a Dwarf Cannon$/i, description: /^Set Up a Dwarf Multicannon\.?$/i, event: "dwarf-cannon:set-up" },
+  // Farming's rake: a weed raked from a patch of that kind.
+  { name: /^Rake a Flower Patch$/i, description: /^Rake a flower patch\.?$/i, event: "farming:raked", where: { patchType: "FLOWER" } },
+  // Farming's compost bin: a bucket filled with its product.
+  { name: /^Fill a Bucket With Supercompost$/i, description: /^Fill a Bucket with Supercompost from a Compost Bin\.?$/i, event: "farming:bin-taken", items: () => ["Supercompost"] },
   { name: /^Open a Looting Bag$/i, description: /^Open a Looting Bag\.?$/i, event: "looting-bag:opened" },
   // PrayerUnlocks: either scroll read, its prayer learnt.
   { name: /^Activate an Arcane or Dexterous Prayer Scroll$/i, description: /^Activate an Arcane prayer scroll or Dexterous prayer scroll(?: Prayer scroll)?\.?$/i, event: "prayer:scroll-read", items: () => ["Arcane prayer scroll", "Dexterous prayer scroll"] },

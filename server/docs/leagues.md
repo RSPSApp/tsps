@@ -1575,7 +1575,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what
   the food restores, at full health too): "Eat / Drink a X" by the description's item or else the
   name's, a place ("in Auburn Valley", "from a bird bath") none. The generator derives them from the
-  name and the Wiki's description, read with its links' targets (a set an equip task names is the
+  name and the Wiki's description, read with its links' targets (something worn in a league area,
+  "while inside" too, is an equip task with an `area`, checked as it goes on and as the player
+  crosses into a map square; a set an equip task names is the
   cache's item set, enum 1034's pieces as the Grand Exchange's set exchange reads them: "a full set
   of Ahrim the Blighted's equipment" every piece, "any piece of the Justiciar Armour set" any,
   "a full set of any Barrows equipment" one whole Barrows set (`equip-any-set { sets }`), and a

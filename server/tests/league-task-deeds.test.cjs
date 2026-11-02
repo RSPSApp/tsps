@@ -403,3 +403,17 @@ test("pet: a skilling pet awarded by the real Woodcutting (Obtain any Skilling P
   assert.ok((f.player.getAttribute("pets.owned") ?? []).length > 0, "a roll of 0 also awards the Beaver");
   assert.ok(done(f, "obtain-a-skilling-pet"));
 });
+
+test("equip in an area: worn there, also as the player walks in wearing it (Equip a dark bow in Tirannwn)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.RANGED, 99);
+  skills.setCurrentLevel(core.Skill.RANGED, 99);
+  f.player.setAttribute("league:areas", [21, 7]); // Varlamore and Tirannwn unlocked
+  f.player.getInventory().add(new core.Item(item("Dark bow")), true);
+  await inventoryOption(f, "Dark bow", "Wield", 2, 2);
+  assert.ok(f.player.getEquipment().getItems().some((each) => each?.getId() === item("Dark bow")), `the real Equipment wields it: ${f.messages}`);
+  assert.ok(!done(f, "equip-a-dark-bow-in-tirannwn"), "not in Tirannwn yet");
+  f.player.moveTo(new core.Location(2341, 3171, 0)); // Lletya
+  assert.ok(done(f, "equip-a-dark-bow-in-tirannwn"), "crossing into Tirannwn wearing it");
+});

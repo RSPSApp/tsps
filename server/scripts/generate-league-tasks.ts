@@ -838,6 +838,19 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     const bones = parts.map((part) => itemNamed(part, items) ?? itemNamed(`${part}s`, items));
     return bones.length && bones.every(Boolean) ? { trigger: { kind: "bury", items: [...new Set(bones as string[])], count: named.count } } : {};
   }
+  // Something worn in a league area ("Equip a dark bow in Tirannwn", "a pair of dragon boots while
+  // inside the Wilderness", "a leaf-bladed sword, leaf-bladed battleaxe, or leaf-bladed spear in
+  // Tirannwn"): worn while there (`area`, checked as it goes on and as the player crosses into a
+  // map square).
+  if (/^Equip /i.test(name)) {
+    const placed = leagueAreaOf(clean(description).replace(/ while (?:inside|in) /i, " in "));
+    if (placed.area !== null && !/\bany\b/i.test(placed.text)) {
+      const list = placed.text.replace(/^Equip (?:either )?/i, "");
+      const parts = list.split(/,\s*(?:or )?|\s+or\s+/).map((part) => part.replace(/^(?:a pair of |an? |the |some )/i, "").trim()).filter(Boolean);
+      const named = parts.map((part) => wornNamed(part, items));
+      if (!/ and /.test(list) && named.length && named.every(Boolean)) return { trigger: { kind: "equip", items: [...new Set(named as string[])], area: placed.area } };
+    }
+  }
   // A condition, or a group the description names ("Chop any kind of logs", "Catch any butterfly"):
   // no single item or NPC stands for it.
   if (CONDITION.test(clean(description)) || /\bany\b/i.test(clean(description))) return {};
@@ -847,7 +860,7 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   // Adamant Plateskirt" (all, the last either of two).
   if (/^Equip /i.test(name) && (match = /^Equip (?:either )?(.+)$/i.exec(clean(description)))) {
     const list = match[1];
-    const article = (part: string) => part.replace(/^(?:an? |the |some |a pair of )/i, "").trim();
+    const article = (part: string) => part.replace(/^(?:a pair of |an? |the |some )/i, "").trim();
     const anyOf = / or /.test(list) && !/ and /.test(list);
     if (anyOf && /,| or /.test(list)) {
       const named = list.split(/,\s*(?:or )?|\s+or\s+/).map(article).filter(Boolean).map((part) => wornNamed(part, items));

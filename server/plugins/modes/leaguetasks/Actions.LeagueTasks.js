@@ -154,6 +154,7 @@ function checkWorn(player) {
   if (!tasks.length) return;
   const worn = new Set(player.getEquipment().getItems().filter((item) => item && item.getId() >= 0).map((item) => key(itemName(item.getId()))));
   for (const task of tasks) {
+    if (!inArea(player, type, task)) continue;
     // An equip-all slot may take either of several ("either some platelegs or a plateskirt").
     const wears = (item) => (Array.isArray(item) ? item.some((each) => worn.has(key(each))) : worn.has(key(item)));
     const { kind, items, sets } = task.trigger;
@@ -345,6 +346,8 @@ function login({ player, league }) {
 module.exports = function attach(api) {
   api.persistAttribute(PROGRESS_ATTRIBUTE, {});
   api.onCustomEvent("equipment:changed", equipmentChanged);
+  // Worn in an area: also as the player crosses into a map square there (league areas are squares).
+  api.onPlayerMapSquareChange?.(({ player }) => player && checkWorn(player));
   api.onCustomEvent("skills:produced", produced);
   api.onCustomEvent("fishing:success", gathered);
   api.onCustomEvent("woodcutting:success", chopped);

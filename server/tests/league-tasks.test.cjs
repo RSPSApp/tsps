@@ -574,6 +574,10 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("defeat-the-moons-of-peril-25-times"), { kind: "kill", npcs: ["Moons of Peril"], count: 25, credited: true });
   assert.equal(trigger("defeat-the-royal-titans-solo"), undefined, "without any other player joining is a condition");
 
+  // Worn in a league area ("while inside" too).
+  assert.deepEqual(trigger("equip-a-pair-of-dragon-boots-in-the-wilderness"), { kind: "equip", items: ["Dragon boots"], area: 11 });
+  assert.deepEqual(trigger("equip-a-one-hand-leaf-bladed-weapon-in-tirannwn").items, ["Leaf-bladed sword", "Leaf-bladed battleaxe", "Leaf-bladed spear"]);
+
   // Prayers by PrayerHandler's names; one this server lacks is left out.
   assert.deepEqual(trigger("use-the-protect-from-melee-prayer"), { kind: "prayer", prayers: ["Protect from Melee"], count: 1 });
   assert.equal(trigger("activate-deadeye"), undefined, "not on this server");

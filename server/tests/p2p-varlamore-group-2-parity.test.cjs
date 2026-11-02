@@ -735,6 +735,28 @@ test('TP: the twins start it (2) and point to the temple (4); Metzli moves it to
   h.continueUntil(p, () => p.text.startsWith('Then it sounds like we')); assert.equal(h.quest.getStage(p), 12);
 });
 
+test('TP crypt gate: the open leaf and gateway stand for the party, then the gate shuts two ticks after crossing', () => {
+  const { h, p } = tp(); h.quest.setStage(p, 8);
+  require('../plugins/skills/agility/ObstacleRunner.Agility').init(h.api);
+  p.moveTo(new core.Location(1698, 9497, 0));
+  const gate = {
+    getId: () => 50861,
+    getType: () => 0,
+    getFace: () => 3,
+    getLocation: () => new core.Location(1698, 9496, 0),
+  };
+  h.namedObjects.get('Gate').Open({ player: p, definition: { id: 50861 }, objectId: 50861, object: gate });
+  const open = h.objects.find(object => object.getId() === 50862);
+  const gateway = h.objects.find(object => object.getId() === 38848);
+  assert.ok(open, 'the open leaf is registered in the world, not just sent to the clicker');
+  assert.ok(gateway, 'the captured inviswall stands on the gate tile');
+  assert.deepEqual([open.getLocation().getX(), open.getLocation().getY(), open.getFace()], [1698, 9495, 0]);
+  assert.ok(p.log.some(row => row[0] === 'sendSong' && row[1] === 810), 'the quest track plays as the gate opens');
+  h.tick(6);
+  assert.equal(h.objects.some(object => object.getId() === 50862 || object.getId() === 38848), false);
+  assert.ok(h.objects.some(object => object.getId() === 50861), 'the closed gate is back');
+});
+
 test('TP: Furia hands over the crest in its item box (14), showing the crest box to each group of knights', () => {
   const { h, p } = tp(); h.quest.setStage(p, 12);
   tpTalk(h, p, N.FURIA_TULLUS_2);

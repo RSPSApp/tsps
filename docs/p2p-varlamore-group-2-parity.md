@@ -137,6 +137,13 @@ clipped and holds the fountain actor, so the last two tiles walk under the same 
 for that move and cleared before the splash. splash10942 waits for that walk, so it lands two
 ticks later than the capture.
 
+The crypt gate is now a world loc change: the invisible wall 38848 stands on the
+gate tile, the open leaf 50862 swings onto the tile across the doorway, and both
+are sent to every player. It shuts two ticks after `ObstacleRunner` reports the
+crossing finished, rather than two ticks after the click, so a route from a
+distance cannot leave the player walking through a closed gate. "A Matter of
+Intrigue" (810) plays and unlocks as the gate opens during the quest.
+
 Quetzal travel uses the cache landing table and interface 874, with saved
 unlocks, locked-destination checks and a single flight at a time. The new camera
 arc packet is encoded and decoded by the server and client together.

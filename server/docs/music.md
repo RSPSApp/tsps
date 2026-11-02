@@ -15,6 +15,12 @@ The cache's unlock hints (DB table 44, column 2: "in Varrock.", "during the Drag
 say where each track plays. Area tracks unlock from `music-data.json` region changes, boss and
 minigame tracks from their own plugins' `music:unlock-track` events.
 
+Varlamore's region entries come from the Wiki's own music-track maps (Civitas illa Fortis,
+Aldarin, the Avium Savannah, the Auburn Valley, Whispering Wind and the quest/underground
+areas), rasterised onto the 64x64 map regions the server selects by. The smallest area covering
+a region's centre wins, so the Colosseum (782), the Twilight Temple (809) and the other small
+areas keep their own track instead of the surrounding one.
+
 Quest tracks are the live floor: live unlocks each the first time it plays, somewhere inside the
 quest, and a quest plugin that knows the moment emits `music:unlock-track` there (Below Ice Mountain,
 Meat and Greet). `QuestUnlocks.Music.js` reads every quest-naming hint, and on `quest:completed` the

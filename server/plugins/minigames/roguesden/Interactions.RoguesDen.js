@@ -273,7 +273,7 @@ function attach(api) {
     const id = event.objectId;
     if (id === ids.trapdoor) return trapdoor(event);
     if (id === ids.mazeDoorway) return mazeDoorway(event);
-    if (id === ids.pubPassageway || id === ids.pubDoor) return pubExit(event);
+    if (id === ids.pubPassageway) return pubExit(event);
     if (id === ids.viewingLadder) return viewingLadder(event);
     if (id === ids.contortionBars) return contortionBars(event);
     if (id === ids.ledgeWall || id === ids.ledgeBridge) return ledge(event);

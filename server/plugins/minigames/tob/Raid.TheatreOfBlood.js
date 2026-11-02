@@ -14,6 +14,7 @@
 const Shared = require("./Shared.TheatreOfBlood");
 const Raid = require("./RaidState.TheatreOfBlood");
 const Retrieval = require("./Retrieval.TheatreOfBlood");
+const EscapeCrystal = require("./EscapeCrystal.TheatreOfBlood");
 
 const { OBJECT, NPC } = Shared;
 /** The treasure-room door's width (cache: 3x4), and how far south of it it's used from. */
@@ -35,9 +36,15 @@ function activeRoom(player) {
 // ---------------------------------------------------------------- objects
 
 function passBarrier(event) {
-  const room = activeRoom(event.player);
-  if (!room) return false;
-  room.passBarrier(event.player, event.object);
+  const { player, object } = event;
+  const room = activeRoom(player);
+  if (room) {
+    room.passBarrier(player, object);
+    return true;
+  }
+  if (!raidIn(player)) return false;
+  // The party has moved on: a room left behind is won, so its barriers just let people through.
+  Raid.cross(player, { x: object.getLocation().getX(), y: object.getLocation().getY(), face: object.getFace() });
   return true;
 }
 
@@ -107,18 +114,6 @@ function dieInTheatre(event) {
   raid.onPlayerDied(event.player);
 }
 
-/** Wiki: an escape crystal is used up getting out of the theatre. */
-function useEscapeCrystal(event) {
-  const { player } = event;
-  if (event.itemId !== Shared.ITEM.ESCAPE_CRYSTAL) return false;
-  const raid = raidIn(player);
-  if (!raid) return false;
-  if (raid.member(player).jailed) return true;
-  player.getInventory().delete(Shared.ITEM.ESCAPE_CRYSTAL, 1);
-  raid.leave(player, "");
-  return true;
-}
-
 // ---------------------------------------------------------------- combat
 
 /** Damage to a room's NPCs counts towards the MVP and the supply points. */
@@ -151,10 +146,17 @@ function returnAfterLogout({ player }) {
   const left = player.getAttribute(Raid.ATTR_LOGOUT);
   if (left) {
     const raid = Raid.byId(left.raid);
+    // Wiki (Escape crystal, 26 March 2025): one carried is used up, and the player returns outside.
+    if (EscapeCrystal.usedOnLogin(player)) {
+      raid?.forget(player);
+      player.setAttribute(Raid.ATTR_LOGOUT, null);
+      player.moveTo(Shared.loc(Shared.OUTSIDE));
+      return;
+    }
     if (raid?.rejoin(player)) return;
     player.setAttribute(Raid.ATTR_LOGOUT, null);
     if (left.fight) {
-      Retrieval.storeAfterWipe(player);
+      Retrieval.storeAfterWipe(player, { free: left.mode === "entry" });
       player.sendMessage("Your party could not be found. A magical chest has retrieved some of your items; you can collect them from it outside of the Theatre of Blood.");
     }
   }
@@ -181,11 +183,10 @@ module.exports = function registerTheatreRaid(api) {
   Shared.onObject(api, [OBJECT.ORATOR, OBJECT.ORATOR_SEATED], talkToOrator);
   api.onShouldDropItemsOnDeath(keepItemsOnDeath);
   api.onPlayerDeath(dieInTheatre);
-  api.onItemAction("Escape crystal", { Teleport: useEscapeCrystal });
   api.onPlayerLogin(returnAfterLogout);
   api.onPlayerDealtDamage(trackDamage);
   api.onNpcHitModify(roomModifiesHit);
   api.onNpcBeforeDeath(roomHoldsOn);
 };
 
-Object.assign(module.exports, { passBarrier, usePassage, talkToOrator, dieInTheatre, useEscapeCrystal, returnAfterLogout });
+Object.assign(module.exports, { passBarrier, usePassage, talkToOrator, dieInTheatre, returnAfterLogout });

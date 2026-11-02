@@ -16,6 +16,7 @@ Combat Achievements live in `server/plugins/achievements/combatachievements/`. T
 | Fight Caves | count, speed, Facing Jad Head-on, No Time for a Drink, the Tz-Kih, Yt-MejKot and Yt-HurKot tasks, A Near Miss! |
 | Inferno | count, speed, Half-Way There, The Floor Is Lava, Nibblers Begone!, Wasn't Even Close, Budget Setup, Nibbler Chaser, Facing Jad Head-on II, Jad? What Are You Doing Here?, No Luck Required, Playing with Jads |
 | Tombs of Amascut | counts per mode and Entry-or-above, raid level, deathless raid level, Hardcore Raiders/Tombs, Resourceful Raider, the three speed runners |
+| Theatre of Blood | all 50, Entry and Hard included: counts per mode (`EM:`/`HM:` monsters), the speed tasks, Back in My Day, Morytania Only, Perfect Theatre and Pack Like a Yak from the raid's end; each room's own from that room. Rooms call `raid.failTask` / `raid.completeTask`; failures say "You have failed Task: reason", as captured. See [theatre-of-blood.md](theatre-of-blood.md) |
 | Doom of Mokhaiotl | depth (3, 8, 16), Doom Crawler, Doom Chaser, Doom Racer; count = delves completed |
 | Fortis Colosseum | count, speed (total of every wave), One-off, Reinforcements |
 | Barrows | chest count, Pray for Success, Faithless Crypt Run, Can't Touch Me |
@@ -25,7 +26,7 @@ Combat Achievements live in `server/plugins/achievements/combatachievements/`. T
 | Araxxor | count, the three speed tasks (N kills in 10:00 in one stay), Perfect Araxxor (I and II), Relaxxor, Let it seep in, Araxyte Betrayal, Arachnid Lover, Swimming in Venom |
 | Skotizo | counts, Demonic Weakening, Demonbane Weaponry, Up for the Challenge, Demon Evasion, Precise Positioning |
 
-That's 305 of the 655 tasks: Easy 27/41, Medium 40/64, Hard 40/89, Elite 83/166, Master 64/173, Grandmaster 51/122. Most of the rest belong to content this server doesn't have yet (the Chambers of Xeric, the Theatre of Blood, the Nightmare, the Desert Treasure II bosses) or need a boss's own mechanics reported (ToA's rooms, Doom's grubs, the GWD instances).
+That's 355 of the 655 tasks (the count before the Theatre of Blood's 50 was 305: Easy 27/41, Medium 40/64, Hard 40/89, Elite 83/166, Master 64/173, Grandmaster 51/122). Most of the rest belong to content this server doesn't have yet (the Chambers of Xeric, the Nightmare, the Desert Treasure II bosses) or need a boss's own mechanics reported (ToA's rooms, Doom's grubs, the GWD instances).
 
 From another plugin:
 
@@ -35,6 +36,7 @@ api.emitCustomEvent("combat-achievements:kill", { player, monster: "Barrows", co
 // The request comes back with `total`, the count it now holds; announce(total), when given, runs
 // before any task finishes, so the plugin's kill-count message comes first (live's order).
 api.emitCustomEvent("combat-achievements:kill", { player, monster: "Araxxor", count, announce: (total) => tell(total) });
+api.emitCustomEvent("combat-achievements:has-task", request);                               // { player, task } comes back with `done`
 api.onCustomEvent("combat-achievements:kill-count", ({ player, counts }) => { counts.Zulrah = kills(player); }); // at login
 api.onCustomEvent("combat-achievements:personal-best", (request) => { request.best = bestTicks(request.player); });
 api.onCustomEvent("combat-achievements:reset-best", (request) => { /* ... */ request.handled = true; });

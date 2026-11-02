@@ -124,7 +124,7 @@ test("Power of Death needs the full energy bar and changes nothing without it", 
   const player = fakePlayer(I.STAFF_OF_THE_DEAD, { special: 99 });
   assert.deepEqual(press(player), []);
   assert.equal(player.special, 99);
-  assert.deepEqual(player.messages, ["You do not have enough special attack energy left!"]);
+  assert.deepEqual(player.messages, ["You don't have enough power left."]);
   assert.equal(incoming(player, 20, CombatType.MELEE), 20);
 });
 

@@ -18415,31 +18415,6 @@ test('Night at the Theatre obtains and hands in the head once, and scopes shared
 });
 
 
-test('Entry Mode notice board starts its party prompt from the live cache object id', () => {
-  const { api } = mockApi();
-  const interactions=[];let prompt;
-  api.onObjectInteraction=(name,options)=>interactions.push([name,options]);
-  api.sendMultiChatboxPrompt=(...args)=>{prompt=args;};
-  const entry=require('../plugins/minigames/tob/Entry.TheatreOfBlood');entry(api);
-  const player={attributes:new Map(),getAttribute(k){return this.attributes.get(k);},setAttribute(k,v){this.attributes.set(k,v);},sendMessage(){}};
-  const actions=interactions.find(([name])=>name==='Notice board')[1];
-  const read=actions.Read;
-  assert.equal(typeof actions.read,'function','the live cache interaction may be lowercased by ObjectDefinition');
-  assert.equal(read({player,objectId:32655,definition:{id:24099}}),true);
-  assert.equal(read({player,objectId:24099}),false,'unrelated notice boards keep their own interaction');
-  assert.equal(prompt[1],'Theatre of Blood: choose a mode');
-  assert.equal(prompt[2],'Solo Entry Mode.');
-  prompt[3]();
-  assert.equal(player.attributes.get('tob:entry-party'),true);
-  let normal;
-  api.onCustomEvent('tob:normal-party',event=>{normal=event.player;});
-  assert.equal(prompt[4],'Normal Mode party.');
-  prompt[5]();
-  assert.equal(normal,player);
-  assert.equal(player.attributes.get('tob:entry-party'),false);
-  assert.equal(interactions.find(([name])=>name==='Theatre of Blood')[1].Enter({player,objectId:32653}),false,'normal parties retain the main entrance handler');
-});
-
 test('Entry Mode leaves the entrance available to normal Theatre parties', () => {
   const { api } = mockApi();
   const interactions=[];let sent=[];

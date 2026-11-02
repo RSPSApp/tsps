@@ -38,6 +38,12 @@ function restore({ player }) {
   Kills.restore(player);
 }
 
+/** "combat-achievements:has-task" { player, task } comes back with `done`. */
+function onHasTask(request) {
+  const task = Data.taskNamed(request?.task);
+  if (request?.player && task) request.done = Progress.isComplete(request.player, task.id);
+}
+
 function onComplete(request) {
   if (request?.player && request.task !== undefined) request.completed = Progress.complete(request.player, request.task);
 }
@@ -112,6 +118,7 @@ module.exports = {
     require("./combatachievements/tasks/Sarachnis.CombatAchievements")(api, Fights);
     api.onPlayerLogin(restore);
     api.onCustomEvent("combat-achievements:complete", onComplete);
+    api.onCustomEvent("combat-achievements:has-task", onHasTask);
     api.onCustomEvent("combat-achievements:open", onOpen);
     api.onCustomEvent("combat-achievements:tier", onTier);
     api.registerCommand("ca", caCommand, api.core.PlayerRights.ADMINISTRATOR, "Combat Achievements: ::ca complete <task> | kc <monster> <n> | reset");

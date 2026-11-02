@@ -53,6 +53,7 @@ const OBJECT = {
 
 const ITEM = {
   ESCAPE_CRYSTAL: 22517,
+  BANDAGES: 25730,
   DAWNBRINGER: 22516,
   COINS: 995,
 };
@@ -116,10 +117,19 @@ const OVERLAY_HUD_UID = (161 << 16) | 1;
 
 /**
  * Wiki: bosses have 75% of their hitpoints for a team of three or fewer, 87.5% for four and
- * all of them for five. Normal mode only; Entry and Hard mode would add their own row.
+ * all of them for five. `index` is the mode script 2323 takes (captured: 0 normal, 2 hard).
+ * `challengeTicks` is Hard Mode's target for the overall time by team size (Wiki).
  */
+const teamScale = (size) => (size >= 5 ? 1 : size === 4 ? 0.875 : 0.75);
+const minutesToTicks = (minutes) => Math.round((minutes * 60) / 0.6);
 const MODES = {
-  normal: { name: "Normal", tag: "(Normal Mode)", hitpoints: (size) => (size >= 5 ? 1 : size === 4 ? 0.875 : 0.75) },
+  // Wiki (The Maiden of Sugadinti): Entry scales down to 20% solo. A fifth per player fits the captures' damage totals (227/00101 solo, 227/00554 duo).
+  entry: { key: "entry", name: "Entry", tag: "(Entry Mode)", index: 1, hitpoints: (size) => Math.min(1, size * 0.2) },
+  normal: { key: "normal", name: "Normal", tag: "(Normal Mode)", index: 0, hitpoints: teamScale },
+  hard: {
+    key: "hard", name: "Hard", tag: "(Hard Mode)", index: 2, hitpoints: teamScale,
+    challengeTicks: { 1: minutesToTicks(70), 2: minutesToTicks(35), 3: minutesToTicks(30), 4: minutesToTicks(27), 5: minutesToTicks(25) },
+  },
 };
 
 /**
@@ -316,9 +326,15 @@ function objectPronoun(player) {
   return player.getAppearance?.()?.isMale?.() === false ? "her" : "him";
 }
 
+/** m:ss.cc, as every captured wave and completion message shows a time. */
 function formatTicks(ticks) {
-  const seconds = Math.max(0, Math.floor(ticks * 0.6));
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  const centis = Math.max(0, Math.round(ticks * 60));
+  return `${Math.floor(centis / 6000)}:${String(Math.floor(centis / 100) % 60).padStart(2, "0")}.${String(centis % 100).padStart(2, "0")}`;
+}
+
+/** The value for a raid's mode from { entry, normal, hard }; `normal` when a mode has no entry. */
+function byMode(raid, table) {
+  return table[raid.mode] ?? table.normal;
 }
 
 /**
@@ -510,5 +526,5 @@ module.exports = {
   THEATRE, THEATRE_PLANES, VER_SINHAZA, OUTSIDE, NPC, OBJECT, ITEM, INTERFACE, SCRIPT, VARP, VARBIT,
   HEALTH_BAR, MAX_PARTY_SIZE, MAX_APPLICANTS, LIST_ROWS, OVERLAY_HUD_UID, MODES, ROOMS, ROOM_ORDER,
   loc, tileOf, inBox, inTheatre, inVerSinhaza, cycle, later, repeat, statement, npcSay, options,
-  fade, fadeRed, fadeMove, facing, displayName, objectPronoun, formatTicks, onObject,
+  fade, fadeRed, fadeMove, facing, displayName, objectPronoun, formatTicks, byMode, onObject,
 };

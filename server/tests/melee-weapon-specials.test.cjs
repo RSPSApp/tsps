@@ -257,7 +257,7 @@ test("an instant special without enough energy changes nothing", () => {
   assert.equal(player.skillManager.level("STRENGTH"), 90);
   assert.equal(player.skillManager.level("ATTACK"), 90);
   assert.deepEqual(player.calls.chat, []);
-  assert.deepEqual(player.calls.messages, ["You do not have enough special attack energy left!"]);
+  assert.deepEqual(player.calls.messages, ["You don't have enough power left."]);
 });
 
 // Wiki: Excalibur gives a visible +8 Defence boost; visible boosts do not stack.
@@ -295,7 +295,7 @@ test("Sanctuary below 100% energy leaves Defence and energy unchanged", () => {
   CombatSpecial.activate(player);
   assert.equal(player.skillManager.level("DEFENCE"), 50);
   assert.equal(player.energy, 99);
-  assert.deepEqual(player.calls.messages, ["You do not have enough special attack energy left!"]);
+  assert.deepEqual(player.calls.messages, ["You don't have enough power left."]);
 });
 
 test("a swing special lights on the first press and toggling it off cancels without spending energy", () => {

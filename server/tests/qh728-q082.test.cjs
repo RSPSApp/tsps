@@ -511,6 +511,69 @@ test('invisible ghasts in Mort Myre attack, rot food, and become visible', () =>
   }
 });
 
+test('one invisible ghast keeps one visible copy through repeat attacks, death and logout', () => {
+  const player = makePlayer();
+  const h = harness({ player });
+  player.setLocation(new core.Location(3440, 3345, 0));
+  const ghast = {
+    getId: () => N.GHAST,
+    getLocation: () => new core.Location(3441, 3345, 0),
+  };
+  player.localNpcs = [ghast];
+  h.quest.setStage(player, 90);
+  const visibleGhasts = () => h.spawned.filter((npc) => npc.getId() === N.GHAST_2);
+  const random = Math.random;
+  try {
+    Math.random = () => 0.9; // never ignored, never a miss
+    h.clock.tick = 0;
+    h.area.process(player); // the first pass only schedules the attempt
+    player.inventory.adds(I.SHRIMPS, 3);
+
+    h.clock.tick = 20;
+    h.area.process(player);
+    assert.equal(visibleGhasts().length, 1);
+    const first = h.spawned.at(-1);
+
+    // The source stays in the player's local NPCs, so two more hits must reuse its one form.
+    assert.ok(player.localNpcs.includes(ghast));
+    h.clock.tick = 60;
+    h.area.process(player);
+    h.clock.tick = 100;
+    h.area.process(player);
+    assert.equal(visibleGhasts().length, 1, 'a revealed source does not spawn a second copy');
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 0, 'each hit still takes one food item');
+
+    // Using the pouch on a source that is already visible costs nothing and adds no copy.
+    player.inventory.adds(FILLED_POUCH, 1);
+    itemOnNpcAction(h, { npcId: N.GHAST, itemId: FILLED_POUCH, target: ghast });
+    assert.equal(visibleGhasts().length, 1);
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 1, 'no charge is spent on a ghast already visible');
+
+    // The form dying counts once and frees the source to be revealed again.
+    death(h, first);
+    assert.equal(h.quest.getStage(player), 95);
+    death(h, first);
+    assert.equal(h.quest.getStage(player), 95, 'one form cannot count twice');
+
+    itemOnNpcAction(h, { npcId: N.GHAST, itemId: FILLED_POUCH, target: ghast });
+    const second = h.spawned.at(-1);
+    assert.equal(second.getId(), N.GHAST_2);
+    assert.notEqual(second, first, 'a dead form is replaced, not reused');
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 0);
+
+    // Logout removes the tracked form, so the next visit starts with nothing lingering.
+    for (const handler of h.logouts) handler({ player });
+    assert.ok(h.removed.includes(second), 'logout removes the visible form it tracked');
+    player.inventory.adds(FILLED_POUCH, 1);
+    itemOnNpcAction(h, { npcId: N.GHAST, itemId: FILLED_POUCH, target: ghast });
+    const third = h.spawned.at(-1);
+    assert.equal(third.getId(), N.GHAST_2);
+    assert.notEqual(third, second);
+  } finally {
+    Math.random = random;
+  }
+});
+
 test('login replays the saved stage in varp 307, including a fresh stage 0', () => {
   const h = harness();
   const p = h.player;

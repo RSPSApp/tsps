@@ -214,8 +214,21 @@ module.exports = function registerNatureSpiritQuest(api) {
     );
   }
 
-  /** The visible ghasts we spawned, so a death can be counted for its owner. */
+  /**
+   * The visible ghasts we spawned, by NPC: the invisible source it stands for and the owner
+   * who can see it. The source stays in the world (and in the player's local NPCs), so this
+   * association is what keeps one source to one visible form.
+   */
   const visibleGhasts = new Map();
+
+  /** The visible form this player already sees for an invisible ghast, if any. */
+  function visibleGhastFor(player, source) {
+    for (const [npc, reveal] of visibleGhasts) {
+      if (reveal.source === source && reveal.owner === player) return npc;
+    }
+    return null;
+  }
+
   /** The game cycle each player's next ghast attack may happen on. */
   const ghastNextAttack = new WeakMap();
 
@@ -296,8 +309,14 @@ module.exports = function registerNatureSpiritQuest(api) {
     ItemOnGroundManager.registerLocation(player, new Item(WASHING_BOWL_ITEM_ID, 1), position);
   }
 
-  /** Spawn the visible form where the invisible ghast stands, owned by the player who saw it. */
+  /**
+   * Spawn the visible form where the invisible ghast stands, owned by the player who saw it.
+   * The invisible source is never removed (it is a shared world spawn), so a source that is
+   * already revealed for this player keeps the form it has instead of growing another copy.
+   */
   function spawnVisibleGhast(player, ghast) {
+    const existing = visibleGhastFor(player, ghast);
+    if (existing) return existing;
     const location = ghast.getLocation();
     const visible = api.spawnNpc({
       id: GHAST_VISIBLE_NPC_ID,
@@ -310,13 +329,15 @@ module.exports = function registerNatureSpiritQuest(api) {
     });
     if (visible) {
       visible.__skipDefaultRespawn = true;
-      visibleGhasts.set(visible, player);
+      visibleGhasts.set(visible, { owner: player, source: ghast });
     }
     return visible ?? null;
   }
 
   /** A filled pouch spent to make a ghast visible and attackable. */
   function revealGhast(player, ghast) {
+    // Already visible to this player: spending a charge would reveal nothing new.
+    if (visibleGhastFor(player, ghast)) return true;
     if (!held(player, DRUID_POUCH_FILLED_ITEM_ID)) {
       player.sendMessage("You have nothing left in your druid pouch!");
       return false;
@@ -381,7 +402,8 @@ module.exports = function registerNatureSpiritQuest(api) {
    * A ghast's attack: 7/10 miss, else rot one food item or hit 1-3 when there is none. A hit
    * makes the ghast visible, as live does; the kill then counts towards the quest like any
    * pouch-revealed one. The Wiki gives the roll but neither the interval nor the exact retreat,
-   * so one player sees an attempt every 12-30 ticks and the ghast stays where it was.
+   * so one player sees an attempt every 12-30 ticks and the ghast stays where it was. Once the
+   * form has appeared the source keeps attacking through it, never spawning a second copy.
    */
   function ghastAttack(player, ghast) {
     const cycle = World.getProcessCycle();
@@ -898,10 +920,10 @@ module.exports = function registerNatureSpiritQuest(api) {
 
   /** Each revealed ghast that dies counts toward the three. */
   function handleGhastDeath(event) {
-    const owner = visibleGhasts.get(event.npc);
-    if (!owner) return;
+    const reveal = visibleGhasts.get(event.npc);
+    if (!reveal) return;
     visibleGhasts.delete(event.npc);
-    const player = event.killer ?? owner;
+    const player = event.killer ?? reveal.owner;
     const stage = quest.getStage(player);
     if (stage < STAGE_ADDED_POUCH || stage >= STAGE_KILLED_GHAST_3) return;
     const next = stage >= 100 ? STAGE_KILLED_GHAST_3 : stage >= 95 ? 100 : 95;
@@ -1007,8 +1029,8 @@ module.exports = function registerNatureSpiritQuest(api) {
   function handleLogout({ player }) {
     if (!player) return;
     clearSpawns(player);
-    for (const [npc, owner] of [...visibleGhasts]) {
-      if (owner !== player) continue;
+    for (const [npc, reveal] of [...visibleGhasts]) {
+      if (reveal.owner !== player) continue;
       visibleGhasts.delete(npc);
       api.removeNpc(npc);
     }

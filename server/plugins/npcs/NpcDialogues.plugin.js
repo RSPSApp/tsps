@@ -869,7 +869,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
               // overhead leaves no active ActionDialogue behind.
               if (!rest.length) manager.reset?.();
             }));
-          } });
+          } }, true);
           chain.add(overheadAction);
           startChain(chain);
           return;
@@ -900,7 +900,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
             api.core.TaskManager.submit(new api.core.CountdownTask(player, request.holdTicks, () => {
               if (manager.getCurrent?.() === hold) manager.advance();
             }));
-          } })
+          } }, true)
           : undefined;
         if (hold) chain.add(hold);
         let held;

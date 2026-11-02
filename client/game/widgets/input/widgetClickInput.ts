@@ -11,7 +11,7 @@ import { runWidgetJsOp } from "../../../widgets/custom/dynamicWidgets";
 import { ClientState } from "../../ClientState";
 import { ClickMode } from "../../InputManager";
 import type { WidgetInteractionController } from "../WidgetInteractionController";
-import { spellWidgetChildSlot } from "../SpellSelectionController";
+import { spellClickNeedsTarget, spellWidgetChildSlot } from "../SpellSelectionController";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
 import type { WidgetInputControllerDeps, WidgetInputFrame, WidgetInputState } from "./widgetInputTypes";
 import type { PrimaryWidgetAction } from "./widgetPrimaryAction";
@@ -212,7 +212,7 @@ export function processWidgetClickInput(
                         // Only enter targeting mode if targetMask > 0 (spell needs a target)
                         // Teleport spells have targetMask === 0 and should cast immediately.
                         const targetMask = deps.getSpellSelection().getWidgetTargetMask(w);
-                        const needsTarget = targetMask > 0;
+                        const needsTarget = spellClickNeedsTarget(w, targetMask);
 
                         if (
                             !needsTarget &&

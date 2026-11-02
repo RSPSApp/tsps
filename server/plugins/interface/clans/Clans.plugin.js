@@ -355,6 +355,10 @@ function createClanCommand({ player, parts }) {
     player.sendMessage("You are already in a clan.");
     return true;
   }
+  if (Formation.isForming(player)) {
+    player.sendMessage("You are already forming a clan.");
+    return true;
+  }
   if (Store.byName(name)) {
     player.sendMessage("That name is taken.");
     return true;
@@ -373,6 +377,18 @@ function addMemberCommand({ player, parts }) {
   }
   if (Core.clanOf(target)) {
     player.sendMessage("That player is already in a clan.");
+    return true;
+  }
+  if (Formation.isForming(target)) {
+    player.sendMessage("That player is forming a clan.");
+    return true;
+  }
+  if (Core.isBanned(clan, target.getUsername())) {
+    player.sendMessage("That player is banned from your clan.");
+    return true;
+  }
+  if (clan.members.length >= Core.MAX_MEMBERS) {
+    player.sendMessage("Your clan is full.");
     return true;
   }
   Core.addMember(clan, target);

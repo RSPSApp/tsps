@@ -521,6 +521,30 @@ function startForming(founder) {
   answer(founder, 1);
 }
 
+test('the owner shortcuts keep to the clan\'s rules: forming, bans and the member cap', () => {
+  const [founder, other] = founders(2);
+  startForming(founder);
+  createClan(founder, 'Shortcut');
+  assert.equal(founder.messages.at(-1), 'You are already forming a clan.');
+  assert.equal(StoreClans().byName('Shortcut'), undefined);
+  const owner = player('Owner');
+  createClan(owner);
+  const clan = StoreClans().byName('Blur');
+  addMember(owner, founder);
+  assert.equal(owner.messages.at(-1), 'That player is forming a clan.');
+  clan.banned = [other.getUsername()];
+  addMember(owner, other);
+  assert.equal(owner.messages.at(-1), 'That player is banned from your clan.');
+  clan.banned = [];
+  clan.members.push(...Array.from({ length: 500 - clan.members.length }, (_, i) => ({ account: `m${i}`, name: `M${i}`, rank: 0 })));
+  addMember(owner, other);
+  assert.equal(owner.messages.at(-1), 'Your clan is full.');
+  assert.equal(clan.members.length, 500);
+  clan.members.splice(2);
+  addMember(owner, other);
+  assert.equal(CoreClans().memberOf(clan, other.getUsername().toLowerCase()).rank, 0, 'and otherwise still add');
+});
+
 function inviteAll(founder, others) {
   for (const other of others) {
     hooks.custom.get('magic:spell-on-player')({ player: founder, target: other, spellWidget: (705 << 16) | 9 });

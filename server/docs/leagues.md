@@ -159,6 +159,8 @@ relics are the first askers; nothing changes when nobody answers):
 | `bone-altars:offering` | BoneAltars | `{ player, itemId, boneItemId, cost, anyAltar }`: an item that is not a bone offered as `boneItemId`, `cost` of it an offering, and with `anyAltar` on any altar one prays at (the bone's burying XP; a private area's altars, a house's, stay its own) |
 | `farming:plant-rules` | Farming, as a seed or sapling is planted | `{ player, crop, seedId, patch, keepSeed, grown, diseaseFree, undying, message }`: a line said after the planting's own; keep the seed, grow the crop at once (not anima plants), keep it from disease, or keep a diseased crop from dying (it waits for a cure); the last two are kept on the patch's state |
 | `farming:level-rules` | Farming, as a seed or sapling is planted, a seedling made or a scarecrow made or placed without the level | `{ player, kind, required, waived }`: `kind` is `plant`, `seedling` or `scarecrow`; set `waived` to let the player do it anyway |
+| `farming:check-health` | Farming, after a grown crop's health check | `{ player, crop, type, patch, experience }`: `experience` is the check's Farming XP |
+| `runecrafting:essence` | Runecrafting, at an altar that binds pure essence | `{ player, pure }`: push item ids that bind there as pure essence would |
 | `farming:harvests-per-action`, `farming:pick` | Farming | `{ player, patch, crop, harvests }` picks an action; `{ player, crop, patch, itemId, amount, experience, stored }` before a pick is handed over (`experience` is the pick's Farming XP; `stored` what a listener took itself, as the bank) |
 | `skills:produced` (extended) | the production skills | now with `kind` (the loop, as `skills:actions-per-cycle` names it) and, for leather and jewellery, `materials` (`[id, amount]` one product used) |
 | `construction:materials` | Construction, before a build's materials go | `{ player, buildable, materials }`: a listener may lower an amount |
@@ -723,7 +725,7 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | 4 | Butler's Bell | the item only |
 | 5 | Nature's Accord | partial: noted yields, undying crops, kept seeds, the Fairy mushroom, no Farming level to plant, make a seedling or a scarecrow (`farming:level-rules`); not the spirit tree count, the Tithe Farm's seeds, or Tree Gnome Village on unlock |
 | 5 | Larcenist | partial: not guards never catching you (no thieving hook), the Varlamore valuables |
-| 5 | Soul Harvest | partial: shards from bones, ashes (our 0.8 x XP; the Wiki gives none) and crops; not health checks, Runecraft or libation uses |
+| 5 | Soul Harvest | partial: shards from bones, ashes (our 0.8 x XP; the Wiki gives none), crops and health checks (`farming:check-health`), bound as pure essence (`runecrafting:essence`); not the libation bowl (not on the server), nor the Ourania, combination or minigame altars |
 | 6 | Grimoire | done (every prayer as well) |
 | 6 | Eternal Sustenance | done |
 | 6 | Culling Spree | partial: free perks, elite clues per superior; not the three-task choice, the second superior or the helmet's effects |

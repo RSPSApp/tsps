@@ -384,6 +384,18 @@ function craftOurania(player) {
   }
 }
 
+/**
+ * The essence an altar binds: its own, and, where pure essence works, what content binds in its
+ * place ("runecrafting:essence" { player, pure }: push item ids to `pure`, a league relic's soul
+ * shards).
+ */
+function bindable(player, essence) {
+  if (!essence.ids.includes(ItemIdentifiers.PURE_ESSENCE)) return essence.ids;
+  const request = { player, pure: [] };
+  pluginApi.emitCustomEvent("runecrafting:essence", request);
+  return essence.ids.concat(request.pure.filter((id) => Number.isInteger(id) && !essence.ids.includes(id)));
+}
+
 function handleCraftRunes(event) {
   if (event.objectId === OURANIA_ALTAR) {
     craftOurania(event.player);
@@ -406,7 +418,8 @@ function handleCraftRunes(event) {
   }
 
   const { essence } = runeData;
-  if (!essence.ids.some((essenceId) => player.getInventory().contains(essenceId))) {
+  const essenceIds = bindable(player, essence);
+  if (!essenceIds.some((essenceId) => player.getInventory().contains(essenceId))) {
     // The true Blood Altar's and Kourend's refusals are message boxes (rsprox captures 1636, 1673).
     if (essence.mesbox) {
       const { DialogueChainBuilder, StatementDialogue } = pluginApi.core;
@@ -420,12 +433,13 @@ function handleCraftRunes(event) {
 
   const amountPerEssence = runeMultiplier(level, runeData);
   let craftedEssence = 0;
-  for (const essenceId of essence.ids) {
-    while (player.getInventory().contains(essenceId)) {
-      player.getInventory().deleteNumber(essenceId, 1);
-      player.getInventory().addItem(new Item(runeData.runeId, amountPerEssence));
-      craftedEssence++;
-    }
+  for (const essenceId of essenceIds) {
+    // All of one essence at once: a stack (soul shards) frees its slot for the runes as essence does.
+    const count = player.getInventory().getAmount(essenceId);
+    if (count <= 0) continue;
+    player.getInventory().deleteNumber(essenceId, count);
+    player.getInventory().addItem(new Item(runeData.runeId, count * amountPerEssence));
+    craftedEssence += count;
   }
 
   if (craftedEssence > 0) {

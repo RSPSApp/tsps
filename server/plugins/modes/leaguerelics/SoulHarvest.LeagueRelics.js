@@ -4,9 +4,13 @@
  * the relic's owner come as stackable Soul shards instead, roughly the bones' blessed bone shards
  * (the data's `shards`), straight to the inventory when it has room for them, else on the floor
  * with the rest of the drop. Every farming crop harvested comes as shards too: one for each 4
- * Farming XP the harvest pays (not the league's rate; fractions carry to the next pick: ours).
- * Not here: the shards from checking a crop's health (the check tells no XP), and their uses
- * (Runecraft essence, the Teomat's libation bowl).
+ * Farming XP the harvest pays (not the league's rate; fractions carry to the next pick: ours),
+ * and for a health check's XP (`farming:check-health`), to the inventory when they fit (else they
+ * stay owed: ours). The shards bind as pure essence at any altar that takes it
+ * (`runecrafting:essence`).
+ * Not here: the Teomat's libation bowl (100 shards for 550 Prayer XP), which the server lacks;
+ * the shards as essence at the Ourania Altar, the combination runes and the minigames' altars,
+ * which bind their own essence lists.
  */
 const Common = require("./Common.LeagueRelics");
 const Toggles = require("./Toggles.LeagueRelics");
@@ -56,12 +60,18 @@ function drops({ player, drops: list }) {
   else list.push({ itemId: shardId(), amount: shards, noted: false });
 }
 
+/** The whole shards `experience` Farming XP (and what was owed) is worth, the rest kept owed. */
+function shardsForXp(player, experience) {
+  const xp = (owedXp.get(player) ?? 0) + Math.max(0, experience);
+  const shards = Math.floor(xp / effect.farmingXpPerShard);
+  owedXp.set(player, xp - shards * effect.farmingXpPerShard);
+  return shards;
+}
+
 /** `farming:pick`: shards for the pick's Farming XP in place of the crop. */
 function picked(pick) {
   if (!active(pick.player) || !Number.isFinite(pick.experience)) return;
-  const xp = (owedXp.get(pick.player) ?? 0) + Math.max(0, pick.experience);
-  const shards = Math.floor(xp / effect.farmingXpPerShard);
-  owedXp.set(pick.player, xp - shards * effect.farmingXpPerShard);
+  const shards = shardsForXp(pick.player, pick.experience);
   if (shards > 0) {
     pick.itemId = shardId();
     pick.amount = shards;
@@ -71,9 +81,26 @@ function picked(pick) {
   }
 }
 
+/** `farming:check-health`: shards for the check's Farming XP, to the inventory when they fit. */
+function checkedHealth({ player, experience }) {
+  if (!active(player) || !Number.isFinite(experience)) return;
+  const shards = shardsForXp(player, experience);
+  if (shards <= 0) return;
+  const inventory = player.getInventory();
+  if (inventory.getAddableAmount(new core.Item(shardId(), shards)) >= shards) inventory.adds(shardId(), shards);
+  else owedXp.set(player, (owedXp.get(player) ?? 0) + shards * effect.farmingXpPerShard);
+}
+
+/** `runecrafting:essence`: the shards bind where pure essence does. */
+function essence(request) {
+  if (active(request.player)) request.pure.push(shardId());
+}
+
 module.exports = function attach(api) {
   core = api.core;
   effect = Common.data.effects.soulHarvest;
   api.onCustomEvent("npc-drops:generated", drops);
   api.onCustomEvent("farming:pick", picked);
+  api.onCustomEvent("farming:check-health", checkedHealth);
+  api.onCustomEvent("runecrafting:essence", essence);
 };

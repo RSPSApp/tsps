@@ -459,6 +459,42 @@ test("Soul Harvest: dropped bones and ashes become soul shards in the inventory 
   }
 });
 
+test("Soul Harvest: a health check's Farming XP comes as shards too, a shard per 4 XP", () => {
+  const who = cases(SOUL_HARVEST);
+  emit("farming:check-health", { player: who.relic, crop: "MAGIC_TREE", type: "TREE", experience: 13768.3 });
+  assert.equal(who.relic.getInventory().getAmount(I.SOUL_SHARD), 3442);
+  for (const player of others(who)) {
+    emit("farming:check-health", { player, crop: "MAGIC_TREE", type: "TREE", experience: 13768.3 });
+    assert.equal(player.getInventory().getAmount(I.SOUL_SHARD), 0);
+  }
+});
+
+test("Soul Harvest: soul shards bind as pure essence at the altars that take it (runecrafting:essence)", () => {
+  const altars = {};
+  const api = new Proxy({
+    core,
+    onObjectInteraction: (name, actions) => (altars[name] = { ...altars[name], ...actions }),
+    emitCustomEvent: emit,
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) });
+  require("../plugins/skills/Runecrafting.plugin").register(api);
+  const who = cases(SOUL_HARVEST);
+  const craft = (player, objectId) => {
+    player.getSkillManager().setCurrentLevel(Skill.RUNECRAFTING, 99, false);
+    player.getInventory().resetItems();
+    player.getInventory().adds(I.SOUL_SHARD, 20).adds(I.PURE_ESSENCE, 2);
+    const event = { player, objectId, handled: false };
+    altars.Altar["Craft-rune"](event);
+    assert.equal(event.handled, true);
+    return player.getInventory();
+  };
+  const nature = craft(who.relic, core.ObjectIdentifiers.ALTAR_46);
+  assert.deepEqual([nature.getAmount(I.SOUL_SHARD), nature.getAmount(I.PURE_ESSENCE), nature.getAmount(I.NATURE_RUNE)], [0, 0, 44], "22 essence, 2 runes each at 99");
+  for (const player of others(who)) {
+    const kept = craft(player, core.ObjectIdentifiers.ALTAR_46);
+    assert.deepEqual([kept.getAmount(I.SOUL_SHARD), kept.getAmount(I.NATURE_RUNE)], [20, 4], "only the pure essence");
+  }
+});
+
 test("Eternal Sustenance: the food eaten is back in its slot", () => {
   const who = cases(ETERNAL_SUSTENANCE);
   for (const player of [who.relic, ...others(who)]) {

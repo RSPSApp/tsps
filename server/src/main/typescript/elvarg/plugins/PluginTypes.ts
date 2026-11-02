@@ -1331,6 +1331,20 @@ export interface PluginApi {
   registerMeleeStrengthPercentModifier(
     modifier: (entity: any, percent: number) => number
   ): void;
+  /**
+   * Adds to the worn melee strength bonus as a max hit is worked out, before the formula, for
+   * boosts the Wiki words as "melee strength is increased by".
+   */
+  registerMeleeStrengthBonusModifier(
+    modifier: (entity: any, strengthBonus: number) => number
+  ): void;
+  /**
+   * Raises the level a skill rests at above its base level: boost decay lowers a boosted level
+   * no further than it, and natural restoration raises a drained one up to it (a permanent boost).
+   */
+  registerRestingLevelModifier(
+    modifier: (player: any, skill: any, level: number) => number
+  ): void;
   registerMeleeHitModifier(
     modifier: (entity: any, baseHit: number) => number
   ): void;

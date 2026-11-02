@@ -7,7 +7,7 @@ import { Mobile } from "../../../entity/impl/Mobile";
 import type { Player } from "../../../entity/impl/player/Player";
 import type { NPC } from "../../../entity/impl/npc/NPC";
 import type { CombatSpell } from "../magic/CombatSpell";
-import { applyCombatEffectiveLevelModifiers, applyMagicDamageBonusModifiers, applyMeleeStrengthPercentModifiers, applyMagicHitModifiers, applyMeleeHitModifiers, applyRangedHitModifiers } from "../EquipmentEffects";
+import { applyCombatEffectiveLevelModifiers, applyMagicDamageBonusModifiers, applyMeleeStrengthPercentModifiers, applyMeleeStrengthBonusModifiers, applyMagicHitModifiers, applyMeleeHitModifiers, applyRangedHitModifiers } from "../EquipmentEffects";
 import { CombatSpecial } from "../CombatSpecial";
 import { SpecialAttackMaximumHitSource, WeaponSpecialTraits } from "../WeaponSpecialTraits";
 import { PluginManager } from "../../../../plugins/PluginManager";
@@ -158,7 +158,7 @@ export class DamageFormulas {
         if (entity.isPlayer()) {
             let player = entity.getAsPlayer();
             const traits = CombatSpecial.activeTraitsFor(entity);
-            let strengthBonus = player.getBonusManager().getOtherBonus()[BonusManager.STRENGTH];
+            const strengthBonus = applyMeleeStrengthBonusModifiers(player, player.getBonusManager().getOtherBonus()[BonusManager.STRENGTH]);
             maxHit = DamageFormulas.scaleRatio(
                 DamageFormulas.effectiveStrengthLevel(player, traits?.strengthLevelMultiplier) * (strengthBonus + 64) + 320,
                 1,

@@ -41,5 +41,7 @@ both are fixed.
   and the second none; Brutus spawned as 15626 with 58 Hitpoints in the private field;
   Gillie handed over the cowbell amulet (33103) and magic lamp (33117); repeat Gillie and
   Cassius dialogue matched; a normal logout/login kept the stage, Quest point and items.
+- **Re-check:** a second level-3 account saw the recommendation box before the start menu and
+  Gillie's corrected "he'll be happy" line.
 - **Not checked:** alternate refusal/space branches, every special-attack roll, and the
   lamp's exact XP confirmation. The capture covers one route and one fight.

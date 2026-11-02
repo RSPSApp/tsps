@@ -348,3 +348,29 @@ test('a channel shows its owner and members by display name, and is joined and k
   Manager.kick(owner, 'Minion');
   assert.match(member.texts(), /You have been kicked from the channel\./);
 }));
+
+test('players who only ignore the renamed player are told of every rename, each with the name just left', () => withDisplayNames(() => {
+  const sent = [];
+  const day = 86400000;
+  const ignorer = named('Ignorer', sent);
+  const watcher = named('Watcher', sent);
+  const stranger = named('Stranger', sent);
+  const bob = named('Bob', sent);
+  Manager.handleAction(ignorer, { action: 'add_ignore', name: 'Bob' });
+  Manager.handleAction(watcher, { action: 'add_friend', name: 'Bob' });
+  const snapshots = (who) => sent.filter(([to, packet]) => to === who && packet[0] === FRIENDS_CHAT_UPDATE).length;
+  const before = { ignorer: snapshots(ignorer), watcher: snapshots(watcher), stranger: snapshots(stranger) };
+  // A cooldown of 0 days lets the renames follow each other.
+  DisplayNames.set('Bob', 'Zed', Date.now(), 35 * day);
+  Manager.onDisplayNameChanged(bob);
+  assert.equal(snapshots(ignorer), before.ignorer + 1);
+  assert.match(lastSnapshot(ignorer, sent), /Zed\0Bob\0/);
+  DisplayNames.set('Bob', 'Yew', Date.now(), 35 * day);
+  Manager.onDisplayNameChanged(bob);
+  assert.equal(snapshots(ignorer), before.ignorer + 2);
+  assert.match(lastSnapshot(ignorer, sent), /Yew\0Zed\0/);
+  // Friends hear of each rename once; players with no relation to Bob hear nothing.
+  assert.equal(snapshots(watcher), before.watcher + 2);
+  assert.match(lastSnapshot(watcher, sent), /Yew\0Zed\0/);
+  assert.equal(snapshots(stranger), before.stranger);
+}));

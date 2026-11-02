@@ -75,4 +75,17 @@ class SocialTest {
         assertEquals(listOf(true, false), lastIgnores().map { it.added })
         assertEquals(listOf("Bob", null), lastIgnores().map { it.previousName })
     }
+
+    @Test
+    fun `renames one after another keep one entry, as long as each one is sent`() {
+        val friends = mutableListOf<String>()
+        val ignores = mutableListOf<String>()
+        for (step in listOf(Triple("Bob", "", "Ann"), Triple("Zed", "Bob", "Ann"), Triple("Yew", "Zed", "Ann"))) {
+            snapshot(listOf(Triple(step.first, step.second, true), Triple(step.third, "", true)), listOf(step.first to step.second))
+            apply(friends, lastFriends().map { Triple(it.added, it.name, it.previousName) })
+            apply(ignores, lastIgnores().map { Triple(it.added, it.name, it.previousName) })
+        }
+        assertEquals(listOf("Yew", "Ann"), friends)
+        assertEquals(listOf("Yew"), ignores)
+    }
 }

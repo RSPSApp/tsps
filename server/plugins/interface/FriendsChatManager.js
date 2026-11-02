@@ -762,12 +762,22 @@ class FriendsChatManager {
             }
         });
     }
-    /** A player's display name changed: whoever lists them or shares a channel with them sees the new one. */
+    /**
+     * A player's display name changed: whoever lists them, as a friend or as ignored, or shares a
+     * channel with them sees the new one. Every rename reaches them, so the official client can
+     * always match the entry by the name just given up.
+     */
     static onDisplayNameChanged(player) {
         if (this.offlinePlayerIds.has(player.getIndex()))
             return;
         this.sendSnapshot(player);
-        this.refreshFriendWatchers(player.getLongUsername(), player);
+        const renamed = player.getLongUsername();
+        World.getPlayers().forEach((other) => {
+            if (other && other !== player && !this.offlinePlayerIds.has(other.getIndex()) &&
+                (other.getRelations().hasFriend(renamed) || other.getRelations().hasIgnore(renamed))) {
+                this.sendSnapshot(other);
+            }
+        });
         const ownerKey = this.membershipByPlayer.get(player.getIndex());
         if (ownerKey)
             this.broadcastChannel(ownerKey);

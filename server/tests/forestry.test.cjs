@@ -89,6 +89,7 @@ function fakePlayer({ at = new Location(3085, 3233, 0), level = 70, kit = true }
     getLocation: () => p.location,
     getAttribute: (k) => attributes.get(k), setAttribute: (k, v) => attributes.set(k, v),
     getInventory: () => p.inventory,
+    getEquipment: () => ({ contains: () => false }),
     sendMessage: (m) => p.messages.push(m),
     performAnimation: (a) => p.anims.push(a.getId()),
     setPositionToFace() {},
@@ -166,6 +167,17 @@ test('an event needs an eligible tree, a kit, enough chopping, and none nearby; 
   log(q);
   ticks(1);
   assert.equal(Spawns.active.size, 1, 'none within 30 tiles of another');
+});
+
+test('an equipped Forestry kit also enables events', () => {
+  const p = fakePlayer({ kit: false });
+  p.getEquipment = () => ({ contains: (id) => id === 28136 });
+  Math.random = () => 0;
+  chop(p, tree(), 25);
+  log(p);
+  ticks(1);
+  Math.random = random;
+  assert.equal(Sapling.saplings.size + Roots.events.size, 1);
 });
 
 test('a regular tree or too little chopping brings nothing', () => {

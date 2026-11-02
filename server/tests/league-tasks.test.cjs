@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "pet", "tempoross", "open-chest", "plant", "harvest", "foundry", "plunder-chest", "sepulchre-floor", "rumours", "random-event", "totem", "dummy", "gather-with", "enter", "teleport", "rifts", "tob", "emote", "take", "pickpocket-loot", "bird-nest", "buy", "alch", "kill-each", "bank", "npc-op", "shortcut"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "pet", "tempoross", "open-chest", "plant", "harvest", "foundry", "plunder-chest", "sepulchre-floor", "rumours", "random-event", "totem", "dummy", "gather-with", "enter", "teleport", "rifts", "tob", "emote", "take", "pickpocket-loot", "bird-nest", "buy", "alch", "kill-each", "bank", "npc-op", "shortcut", "deed"]);
   // The agility plugin's course keys (and Yama's stepping stones, the Leagues lair's own course).
   const courseDir = path.join(__dirname, "../plugins/skills/agility/courses");
   const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
@@ -480,6 +480,8 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("convert-an-item-into-at-least-500-coins"), { kind: "alch", coins: 500, count: 1 });
   assert.deepEqual(trigger("use-the-bank-in-nardah"), { kind: "bank", place: "nardah-bank", count: 1 });
   assert.deepEqual(trigger("use-the-bank-on-lunar-isle"), { kind: "bank", place: "lunar-isle", count: 1 });
+  assert.deepEqual(trigger("worship-the-ectofuntus"), { kind: "deed", event: "ectofuntus:worshipped", count: 1 });
+  assert.deepEqual(trigger("fill-a-giant-pouch"), { kind: "deed", event: "runecrafting:pouch-filled", count: 1, items: ["Giant pouch"] });
   assert.deepEqual(trigger("cross-a-pillar-shortcut-in-the-revenant-caves"), { kind: "shortcut", shortcuts: ["Pillar (Revenant Caves, easy)", "Pillar (Revenant Caves, medium)", "Pillar (Revenant Caves, hard)"], count: 1 });
   assert.deepEqual(trigger("take-a-shortcut-across-the-shilo-village-river"), { kind: "shortcut", shortcuts: ["Stepping stone (Shilo Village)"], count: 1 });
   assert.deepEqual(trigger("talk-to-a-gladiator"), { kind: "npc-op", npcs: ["Gladiator"], option: "talk-to", count: 1 });

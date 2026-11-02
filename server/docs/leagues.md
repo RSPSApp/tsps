@@ -1698,6 +1698,10 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   shortcut's own name (`agility-shortcuts.json`'s; a course obstacle has none): "Use the Stepping stone
   (Shilo Village) in Shilo Village", "Cross a Pillar (Revenant Caves) in the Revenant Caves" (any of
   the easy, medium and hard pillars; the place only says where it is),
+  `deed { event, items?, count }` from a content plugin's own event of one deed, the generator's
+  table naming the event for the task's name and description (its `itemId` one of the items when the
+  trigger names them): "Worship the Ectofuntus" (`ectofuntus:worshipped`), "Fill a Large / Giant
+  Pouch" (`runecrafting:pouch-filled`, essence put in that pouch),
   `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what

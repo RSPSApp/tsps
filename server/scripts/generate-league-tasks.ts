@@ -450,6 +450,17 @@ const MINIGAME_COMPLETIONS: Array<[RegExp, string[]]> = [
   [/^Defeat the Doom of Mokhaiotl at any delve level$/i, ["Doom of Mokhaiotl"]],
   [/^Loot a Chest \(Barrows\) once$/i, ["Barrows"]],
 ];
+/**
+ * Deeds a content plugin emits an event of its own for, the task's name and description both
+ * matching (`deed { event, items?, count }`): the event, and the item the event's `itemId` must be
+ * (its cache name, from the match), the count the description's "N times" or the name's number.
+ */
+const DEEDS: Array<{ name: RegExp; description: RegExp; event: string; items?: (match: RegExpExecArray) => string[] }> = [
+  // Worship.Ectofuntus: a worship made (the slime and bonemeal put in).
+  { name: /^Worship the Ectofuntus$/i, description: /^Worship the Ectofuntus\.?$/i, event: "ectofuntus:worshipped" },
+  // Pouches.Runecrafting: essence put into that pouch.
+  { name: /^Fill an? (Large|Giant) Pouch$/i, description: /^Fill an? (Large|Giant) Pouch with Essence\.?$/i, event: "runecrafting:pouch-filled", items: (match) => [`${match[1]} pouch`] },
+];
 const CONDITION_IN = (text: string) => /\b(?:in less than|in under|or less|without|solo)\b/i.test(text);
 
 /** The emotes plugin's locked emotes by slot (plugins/interface/data/emotes.json): their names. */
@@ -1012,6 +1023,18 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
       const times = / (\d+) times$/i.exec(description.replace(/\.$/, ""));
       return { trigger: { kind: "kill", npcs: completion[1], count: times ? Number(times[1]) : 1, credited: true } };
     }
+  }
+  // A deed its plugin emits an event of its own for ("Worship the Ectofuntus", "Fill a Large Pouch").
+  for (const deed of DEEDS) {
+    const named = deed.name.exec(name);
+    if (!named || !(match = deed.description.exec(description))) continue;
+    const trigger: Trigger = { kind: "deed", event: deed.event, count: 1 };
+    if (deed.items) {
+      const listed = deed.items(match).map((each) => itemNamed(each, items));
+      if (listed.some((each) => !each)) return {};
+      trigger.items = listed;
+    }
+    return { trigger };
   }
   // "Help the Spirit Anglers defeat Tempoross": Tempoross subdued (the minigame's tempoross:subdued;
   // no NPC dies).

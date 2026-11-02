@@ -18,6 +18,7 @@ before(async () => {
       worship = actions.Worship;
     },
     onItemOnObject(handler) { useOnEctofuntus = handler; },
+    emitCustomEvent() {},
   };
   Common.init(api);
   require("../plugins/skills/ectofuntus/Worship.Ectofuntus")(api);

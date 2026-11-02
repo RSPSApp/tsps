@@ -374,6 +374,32 @@ test("shortcut: an agility shortcut crossed, by its name (Take a Shortcut Across
   assert.ok(done(f, "take-a-shortcut-across-the-shilo-village-river"));
 });
 
+test("deed: a plugin's own event of the deed (Worship the Ectofuntus; Fill a Large Pouch, not a medium one)", async (t) => {
+  core.RegionManager.loadMapFiles(3658, 3517);
+  const ecto = pactsCharacter(t);
+  ecto.player.setAttribute("league:areas", [21, 5]); // Varlamore and Morytania
+  ecto.player.moveTo(new core.Location(3658, 3517, 0)); // south of the Ectofuntus
+  ecto.player.needsPlacement = false;
+  ecto.player.getInventory().add(new core.Item(item("Bucket of slime")), true);
+  ecto.player.getInventory().add(new core.Item(item("Bonemeal")), true);
+  await send(ecto, { type: "object_option", id: 16648, x: 3658, y: 3518, action: "Worship" }, 6);
+  assert.equal(ecto.player.getInventory().getAmount(item("Bucket of slime")), 0, `the real Ectofuntus takes the slime: ${ecto.messages}`);
+  assert.ok(done(ecto, "worship-the-ectofuntus"));
+
+  const rc = pactsCharacter(t);
+  const skills = rc.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.RUNECRAFTING, 99);
+  skills.setCurrentLevel(core.Skill.RUNECRAFTING, 99);
+  rc.player.getInventory().add(new core.Item(item("Medium pouch")), true);
+  rc.player.getInventory().add(new core.Item(item("Large pouch")), true);
+  rc.player.getInventory().add(new core.Item(item("Pure essence"), 20), true);
+  await inventoryOption(rc, "Medium pouch", "Fill");
+  assert.ok(!done(rc, "fill-a-large-pouch"), "a medium pouch is no large one");
+  await inventoryOption(rc, "Large pouch", "Fill");
+  assert.ok(rc.player.getInventory().getAmount(item("Pure essence")) < 20 - 6, `the real pouches take the essence: ${rc.messages}`);
+  assert.ok(done(rc, "fill-a-large-pouch"));
+});
+
 /** A cache NPC of the name with the option, beside the player; the option's click. */
 function npcBeside(t, f, name, option) {
   const id = [...Array(20000).keys()].find((each) => core.CacheDefinitions.getNpc(each)?.name === name && (core.CacheDefinitions.getNpc(each).actions ?? []).some((action) => action?.toLowerCase() === option));

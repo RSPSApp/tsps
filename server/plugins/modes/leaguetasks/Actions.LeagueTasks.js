@@ -61,6 +61,9 @@
  *   (`npc:operated`, a menu option, "talk-to" or "pet", that something answered on an NPC of the name),
  *   `shortcut { shortcuts, count }` (`agility:obstacle`'s `shortcut`, an agility shortcut crossed, by
  *   its name in agility-shortcuts.json).
+ * - `deed { event, items?, count }`: a content plugin's own event of the deed (the generator's table
+ *   names it: `ectofuntus:worshipped`, `runecrafting:pouch-filled`), its `itemId` one of the items if
+ *   the trigger names them.
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -90,7 +93,7 @@ function add(map, name, task) {
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { enter: new Map(), rifts: [], equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [], collectionLog: [], checkHealth: new Map(), events: new Map(), prayer: new Map() };
+  const entry = { enter: new Map(), deeds: new Map(), rifts: [], equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [], collectionLog: [], checkHealth: new Map(), events: new Map(), prayer: new Map() };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (trigger?.kind === "enter") entry.enter.set(trigger.place, (entry.enter.get(trigger.place) ?? []).concat(task));
@@ -110,6 +113,7 @@ function indexOf(type) {
     else if (trigger?.kind === "pick") for (const plant of trigger.plants ?? []) add(entry.pick, plant, task);
     else if (trigger?.kind === "pick-each") entry.pickEach.push(task);
     else if (trigger?.kind === "collection-log") entry.collectionLog.push(task);
+    else if (trigger?.kind === "deed") entry.deeds.set(trigger.event, (entry.deeds.get(trigger.event) ?? []).concat(task));
     else if (EVENT_KINDS.has(trigger?.kind)) add(entry.events, trigger.kind, task);
     else if (trigger?.kind === "prayer") for (const prayer of trigger.prayers ?? []) add(entry.prayer, prayer, task);
     else if (trigger?.kind === "check-health") {
@@ -397,6 +401,25 @@ function entered(player, place) {
   for (const task of indexOf(type).enter.get(place) ?? []) if (!done.has(task.id)) Complete.complete(player, task.id, type);
 }
 
+/**
+ * `deed { event, items?, count }`: a content plugin's own event of the deed (`ectofuntus:worshipped`,
+ * `runecrafting:pouch-filled`), its `itemId` one of the items if they are named.
+ */
+function didDeed(name, event) {
+  const player = event?.player;
+  const type = player ? Common.leagueOf(player) : null;
+  if (type === null) return;
+  const tasks = (indexOf(type).deeds.get(name) ?? []).filter((task) => !task.trigger.items || task.trigger.items.some((each) => key(each) === key(itemName(event.itemId))));
+  countTasks(player, type, tasks);
+}
+
+/** The events some league's deed task names, each listened to. */
+function watchDeeds(api) {
+  const named = new Set();
+  for (const type of Common.types()) for (const task of Common.catalog(type).tasks) if (task.trigger?.kind === "deed") named.add(task.trigger.event);
+  for (const name of named) api.onCustomEvent(name, (event) => didDeed(name, event));
+}
+
 /** The places some league's enter task names: each box of each a zone. */
 function watchPlaces(api) {
   const named = new Set();
@@ -487,6 +510,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("potions:drunk", drank);
   api.onCustomEvent("league:login", login);
   watchPlaces(api);
+  watchDeeds(api);
 };
 
 module.exports.PROGRESS_ATTRIBUTE = PROGRESS_ATTRIBUTE;

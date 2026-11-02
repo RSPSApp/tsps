@@ -67,6 +67,8 @@ function worship({ player }) {
   Common.spam(player, "You put some ectoplasm and bonemeal into the Ectofuntus, and worship it.");
   player.getSkillManager().addExperiences(Skill.PRAYER, pot.row.xp);
   Common.setTokens(player, Common.tokens(player) + TOKENS_PER_WORSHIP);
+  // "ectofuntus:worshipped" { player, itemId }: a worship made, with that bonemeal.
+  Common.api.emitCustomEvent("ectofuntus:worshipped", { player, itemId: pot.id });
   return true;
 }
 

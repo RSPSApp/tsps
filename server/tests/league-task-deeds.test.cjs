@@ -266,6 +266,29 @@ test("emote: an emote performed from the tab, by its slot (Use the Fortis Salute
   assert.ok(done(f, "use-the-fortis-salute-emote"), `the real Emotes performs it: ${f.messages}`);
 });
 
+test("take: a ground item picked up or telegrabbed where the task says (White berries in Tirannwn; a Bloody bracer in Slepe)", (t) => {
+  const manager = core.ItemOnGroundManager;
+  const at = (x, y, areas) => {
+    const f = pactsCharacter(t);
+    f.player.setAttribute("league:areas", areas);
+    f.player.moveTo(new core.Location(x, y, 0));
+    f.player.needsPlacement = false;
+    return f;
+  };
+  const lletya = at(2341, 3171, [21, 2, 7]); // Varlamore, Karamja and Tirannwn unlocked
+  manager.pickup(lletya.player, manager.registers(lletya.player, new core.Item(item("White berries"))));
+  assert.equal(lletya.player.getInventory().getAmount(item("White berries")), 1, `the real pick-up: ${lletya.messages}`);
+  assert.equal(lletya.player.getAttribute("league:task-progress")["pick-up-10-whiteberries-in-tirannwn"], 1);
+  const slepe = at(3724, 3335, [21, 2, 5]); // and Morytania
+  const { MagicOnItemPacketListener } = require("../dist/net/packet/impl/MagicOnItemPacketListener");
+  const bracer = manager.registers(slepe.player, new core.Item(item("Bloody bracer")));
+  manager.pickup(slepe.player, manager.registers(slepe.player, new core.Item(item("Bloody bracer"))));
+  assert.ok(!done(slepe, "telegrab-a-bloody-bracer"), "picked up by hand is no telegrab");
+  new MagicOnItemPacketListener().landGroundItemGrab(slepe.player, bracer.getItem().getId(), bracer.getPosition());
+  assert.equal(slepe.player.getInventory().getAmount(item("Bloody bracer")), 2, `the real grab lands: ${slepe.messages}`);
+  assert.ok(done(slepe, "telegrab-a-bloody-bracer"));
+});
+
 /** An inventory item's option, as the client clicks it. */
 async function inventoryOption(f, name, option, optionIndex = 1, count = 4) {
   const id = item(name);

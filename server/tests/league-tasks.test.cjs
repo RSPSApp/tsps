@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "pet", "tempoross", "open-chest", "plant", "harvest", "foundry", "plunder-chest", "sepulchre-floor", "rumours", "random-event", "totem", "dummy", "gather-with", "enter", "teleport", "rifts", "tob", "emote"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "pet", "tempoross", "open-chest", "plant", "harvest", "foundry", "plunder-chest", "sepulchre-floor", "rumours", "random-event", "totem", "dummy", "gather-with", "enter", "teleport", "rifts", "tob", "emote", "take"]);
   // The agility plugin's course keys (and Yama's stepping stones, the Leagues lair's own course).
   const courseDir = path.join(__dirname, "../plugins/skills/agility/courses");
   const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
@@ -474,6 +474,7 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
 
   assert.deepEqual(trigger("mine-5-tin-ore"), { kind: "produce", items: ["Tin ore"], count: 5 });
   assert.deepEqual(trigger("guardians-of-the-rift-10-rifts-closed"), { kind: "rifts", count: 10 });
+  assert.deepEqual(trigger("pick-up-snapegrass"), { kind: "take", items: ["Snape grass"], source: "pickup", count: 1, place: "lunar-isle" });
   assert.deepEqual(trigger("use-the-fortis-salute-emote"), { kind: "emote", slots: [53], count: 1 });
   assert.deepEqual(trigger("complete-the-theatre-of-blood-25-times"), { kind: "tob", modes: ["normal", "hard"], count: 25 });
   assert.deepEqual(trigger("cast-kourend-castle-teleport"), { kind: "teleport", spells: ["kourend castle teleport"], count: 1 });
@@ -568,11 +569,11 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   emit("thieving:success", { player: doer, method: "stall", stall: "Bakery stall", itemId: itemId("Bread") });
   assert.ok(completed(doer).includes("steal-some-bread"));
 
-  // Fields: the plant picked; several crops each that many; a minigame's sq'irk or a ground item is none.
+  // Fields: the plant picked; several crops each that many; a minigame's sq'irk is none, a ground item picked up is a take.
   assert.deepEqual(trigger("pick-6-flax"), { kind: "pick", plants: ["Flax"], count: 6 });
   assert.deepEqual(trigger("pick-6-wheat-6-cabbages-and-6-potatoes"), { kind: "pick-each", plants: { Wheat: 6, Cabbage: 6, Potato: 6 } });
   assert.equal(trigger("pick-a-winter-sq-irk"), undefined);
-  assert.equal(trigger("pick-up-snapegrass"), undefined);
+  assert.equal(trigger("pick-up-snapegrass").kind, "take");
 
   // The clue tiers' collection log slots: "Fill 15 slots" and "Gain 10 unique items from Reward casket".
   assert.deepEqual(trigger("fill-15-hard-clue-collection-log-slots"), { kind: "collection-log", category: "Hard Treasure Trails", count: 15 });

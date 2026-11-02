@@ -1629,6 +1629,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   "on normal or hard mode 25 times"; the server's raid sends normal and entry),
   `emote { slots, count }` from the emotes plugin's `player:emote` (by the tab's slot; "Use the
   Fortis Salute emote", named as its locked emotes are in `emotes.json`),
+  `take { items, source, count }` from ItemOnGroundManager's `ground-items:taken` (a ground item
+  picked up, "pickup", or telegrabbed, "telegrab": "Pick up 10 White berries in Tirannwn", "Telegrab
+  a Bloody bracer in Slepe"; a field's crop is a pick),
   `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what

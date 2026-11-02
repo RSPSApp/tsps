@@ -621,6 +621,8 @@ const PLACE_DEFS: PlaceDef[] = [
   { key: "cosmic-altar", names: ["Cosmic Altar in Zanaris", "Cosmic Altar"], page: "Cosmic_Altar", flood: { cap: 1000 } },
   { key: "keldagrim", names: ["Keldagrim"], page: "Keldagrim", server: { rects: [[2790, 10100, 2940, 10215]], from: "the Keldagrim plugin's city zone" } },
   { key: "port-phasmatys", names: ["Port Phasmatys"], page: "Port_Phasmatys", flood: { cap: 3000 } },
+  { key: "lunar-isle", names: ["Lunar Isle"], page: "Lunar_Isle", flood: { cap: 8000, bbox: true } },
+  { key: "slepe", names: ["Slepe"], page: "Slepe", slayerArea: "Slepe" },
   { key: "harmony-island", names: ["Harmony Island"], page: "Harmony_Island", flood: { cap: 3000, bbox: true } },
   { key: "mos-le-harmless", names: ["Mos Le'Harmless"], page: "Mos_Le'Harmless", flood: { cap: 15000, bbox: true } },
   { key: "ferox-enclave", names: ["Ferox Enclave"], page: "Ferox_Enclave", server: { polygon: require(path.resolve(__dirname, "../plugins/areas/ferox/Bounds.FeroxEnclave")).BOUNDARY, from: "the FeroxEnclave plugin's outline" } },
@@ -1276,6 +1278,22 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     const count = countAndSubject(name.replace(/^(?:Steal|Thieve) /i, "")).count;
     const trigger: Trigger = { kind: "steal", stalls: [stall], count };
     if (what) trigger.items = [what];
+    if (area !== null) trigger.area = area;
+    if (spot.place) trigger.place = spot.place;
+    return { trigger };
+  }
+  // "Pick up 10 White berries in Tirannwn", "Pick up Snape grass from Lunar Isle", "Telegrab a Bloody
+  // bracer in Slepe": that ground item taken (ItemOnGroundManager's ground-items:taken, by hand or by
+  // Telekinetic Grab), in the league area or place that follows.
+  if ((match = /^(Pick up|Telegrab) (.+)$/i.exec(name))) {
+    const { area, text: unplaced } = leagueAreaOf(clean(description));
+    const spot = placeOf(unplaced);
+    const taken = new RegExp(`^${match[1]} (.+)$`, "i").exec(spot.text);
+    if (!taken || PLACE.test(taken[1]) || /\bfrom\b/i.test(taken[1]) || CONDITION.test(taken[1])) return {};
+    const { count, subject } = countAndSubject(taken[1]);
+    const item = itemNamed(subject, items);
+    if (!item) return {};
+    const trigger: Trigger = { kind: "take", items: [item], source: match[1].toLowerCase() === "telegrab" ? "telegrab" : "pickup", count };
     if (area !== null) trigger.area = area;
     if (spot.place) trigger.place = spot.place;
     return { trigger };

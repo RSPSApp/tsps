@@ -118,7 +118,10 @@ knight errands, the crate and letter, Azali's escort/rest/fountain sequence,
 Mezan's two-style spar, Velam's judgement, Renu's feed and flight, and the
 Teomat attack and aftermath. The eight cultists are real combat targets and the guards and
 Itzla fight them for real: each pair closes to melee range, trades the captured swing/block
-animations, and the hits take hitpoints, so allied kills count toward the eight. Mezan
+animations, and the hits take hitpoints. Each exchange also refreshes the scripted pair's
+combat stopwatch, so `NPC.process()` cannot regenerate the damage between blows, and a
+cultist's death is counted at the death itself, so an allied kill counts toward the eight
+even though it carries no player damage credit. Mezan
 changes protection after a streak of attacks in one style. Progress and scene
 cleanup survive logout. Earlier stage values are migrated once.
 

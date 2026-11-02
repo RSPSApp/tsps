@@ -8,6 +8,7 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
+const { TickStopwatch } = require('../dist/util/TickStopwatch');
 const runtime = require('../plugins/quests/QuestRuntime');
 const core = PluginManager.getCoreApi();
 const I = core.ItemIdentifiers, N = core.NpcIdentifiers;
@@ -78,6 +79,7 @@ function harness(name) {
           if (next) location = next;
         },
       };
+      const lastAttack = new TickStopwatch();
       const npc = { ...definition, animations: [], graphics: [], getId: () => definition.id, getIndex: () => npc.index,
         index: nextIndex++, setForceMovement: movement => {p.forceMovement=movement;}, getLocation: () => location, moveTo: to => { location = to; },
         getArea: () => area, setArea: value => { area = value; }, isNpc: () => true, isPlayer: () => false, getAsNpc: () => npc,
@@ -93,6 +95,7 @@ function harness(name) {
         setCombatXpMultiplier: value => { npc.multiplier = value; },
         getCombat: () => ({
           attack: player => { npc.target = player; }, reset: () => { npc.target = null; },
+          getLastAttack: () => lastAttack,
           getHitQueue: () => ({
             addPendingDamage(hits) {
               const total = hits.reduce((sum, hit) => sum + hit.getDamage(), 0);
@@ -103,7 +106,9 @@ function harness(name) {
               for (const fn of hooks.onNpcBeforeDeath ?? []) fn(death);
               if (death.preventDeath) return;
               npc.removed = true; removed.push(npc);
-              for (const fn of hooks.onNpcDeath ?? []) fn({ npc, npcId: npc.getId(), killer: null });
+              // NPCDeathTask only emits onNpcDeath when getKiller(true) finds a player, so an
+              // allied blow (no player damage credit) never reaches that lifecycle event.
+              if (npc.creditKiller) for (const fn of hooks.onNpcDeath ?? []) fn({ npc, npcId: npc.getId(), killer: npc.creditKiller });
             },
           }),
         }),
@@ -120,7 +125,19 @@ function harness(name) {
     line(p, npcId, text) { const event = { player: p, npcId, text, pages: [{ page: h.quest.name }] }; h.emit('npc-dialogue:line', event); return event; },
     action(p, npcId, stepId) { const event = { player: p, npcId, stepId, pages: [{ page: h.quest.name }] }; h.emit('npc-dialogue:action', event); return event; },
     talk(p, npcId) { const choice = (hooks.onNpcDialogueVariant ?? []).map(fn => fn({ player: p, npcId })).find(Boolean); assert.ok(choice); runtime.startTranscript(api, p, npcId, typeof choice === 'string' ? h.quest.name : choice.page, typeof choice === 'string' ? choice : choice.variant); },
-    tick(count) { while (count-- > 0) { [...tasks].forEach(task => task.tick()); for (const npc of npcs) if (!npc.removed) npc.getMovementQueue().advance?.(); } },
+    tick(count) { while (count-- > 0) {
+      if (h.simulateNpcProcess) core.World.processCycle = (core.World.getProcessCycle() + 1) & 0x7fffffff;
+      [...tasks].forEach(task => task.tick());
+      for (const npc of npcs) if (!npc.removed) {
+        npc.getMovementQueue().advance?.();
+        if (!h.simulateNpcProcess || !npc.__process || npc.hitpoints <= 0) continue;
+        // The production out-of-combat regeneration in NPC.process(): 10% of max, every
+        // 20 seconds (33 ticks) since the last combat involvement.
+        if (!npc.getCombat().getLastAttack().hasElapsed(20000)) continue;
+        const max = npc.getMaxHitpoints();
+        if (max > npc.hitpoints) npc.setHitpoints(Math.min(max, Math.floor(npc.hitpoints + Math.max(1, Math.floor(max * 0.1)))));
+      }
+    } },
     choose(p, text) { const prompt = p.prompt; assert.ok(prompt, `no menu for ${text}`); const index = prompt.options.findIndex(label => label === text); assert.ok(index >= 0, `missing ${text} in ${prompt.options}`); p.prompt = null; prompt.pairs[index * 2 + 1](); },
     continueUntil(p, predicate, limit = 80) { while (!predicate()) { assert.ok(limit-- > 0, `dialogue stalled at ${p.text}`); assert.ok(p.manager.getCurrent(), `dialogue ended at ${p.text}`); p.manager.advance(); } },
   }; return h;
@@ -861,8 +878,11 @@ test('TP Teomat: Itzla (40, 42), Metzli and the attack (44), eight cultists (46)
   const cultists = h.npcs.filter(npc => !npc.removed && npc.id >= 12918 && npc.id <= 12923);
   const guards = h.npcs.filter(npc => !npc.removed && npc.id >= 12924 && npc.id <= 12927);
   assert.equal(cultists.length, 8); h.tick(1); assert.equal(cultists.find(npc => npc.id === 12918).target, p);
+  // Run the production out-of-combat regeneration for every battle actor from here on.
+  for (const npc of [...cultists, ...guards]) npc.__process = true;
+  h.simulateNpcProcess = true;
   // Every pair with an ally closes to melee range and trades real hits.
-  const doomed = cultists.find(npc => npc.id === 12923); doomed.hitpoints = 2;
+  const doomed = cultists.find(npc => npc.id === 12923);
   h.tick(7);
   for (let i = 0; i < 4 && cultists.some(npc => !npc.removed && npc.__tpPartner && npc.getLocation().getDistance(npc.__tpPartner.getLocation()) > 1); i++) h.tick(1);
   for (const cultist of cultists) {
@@ -873,14 +893,37 @@ test('TP Teomat: Itzla (40, 42), Metzli and the attack (44), eight cultists (46)
   assert.deepEqual([cultists[6].faceTo.getX(), cultists[6].faceTo.getY()], [1444, 3176], 'the cultist turns to the guard it fights');
   assert.ok(guards.some(npc => (npc.damage ?? 0) > 0), 'the cultists take hitpoints off the guards');
   assert.ok(cultists.some(npc => (npc.damage ?? 0) > 0), 'the guards take hitpoints off the cultists');
+  // A scripted exchange is combat: over forty production-style NPC ticks the pairs never
+  // heal back the damage their real hits took.
+  const traces = new Map(cultists.filter(npc => npc.__tpPartner).map(npc => [npc, [npc.hitpoints]]));
+  for (let i = 0; i < 40; i++) {
+    h.tick(1);
+    for (const [npc, trace] of traces) if (!npc.removed) trace.push(npc.hitpoints);
+  }
+  for (const [npc, trace] of traces) {
+    if (npc.removed) continue;
+    for (let i = 1; i < trace.length; i++) assert.ok(trace[i] <= trace[i - 1], `cultist ${npc.getId()} does not regenerate while its pair fights`);
+    assert.ok(trace.at(-1) < trace[0], `cultist ${npc.getId()} takes real damage from its ally`);
+    assert.ok(npc.getCombat().getLastAttack().elapsed() < 20000, 'the scripted exchange refreshes combat participation');
+  }
+  doomed.hitpoints = 2;
   const guard = guards[0]; guard.hitpoints = 0;
   const allyDeath = { npc: guard, preventDeath: false }; h.hooks.onNpcBeforeDeath.forEach(fn => fn(allyDeath));
   assert.equal(allyDeath.preventDeath, true, 'a scene guard is not killed by the cultists');
   for (let i = 0; i < 8 && (guard.hitpoints === 0 || !doomed.removed); i++) h.tick(1);
   assert.ok(!guard.removed); assert.ok(guard.hitpoints > 0, 'the guard recovers and stays in the scene');
   assert.ok(doomed.removed, 'an allied kill removes the cultist'); assert.equal(p.messages.at(-1), 'Enemies Defeated: 1/8');
-  for (const npc of cultists.filter(n => !n.removed)) h.hooks.onNpcDeath.forEach(fn => fn({ npc, npcId: npc.id, killer: p }));
+  assert.equal(p.messages.filter(text => text === 'Enemies Defeated: 1/8').length, 1,
+    'an uncredited allied kill is counted exactly once');
+  // The rest die with player credit: production emits both onNpcBeforeDeath and onNpcDeath.
+  for (const npc of cultists.filter(n => !n.removed)) {
+    npc.creditKiller = p;
+    npc.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(npc.hitpoints, core.HitMask.RED)]);
+  }
   assert.equal(p.messages.at(-1), 'Enemies Defeated: 8/8');
+  const defeats = p.messages.filter(text => text.startsWith('Enemies Defeated:'));
+  assert.equal(defeats.length, 8, 'each of the eight cultists is counted once');
+  assert.equal(new Set(defeats).size, 8);
   h.tick(3); assert.equal(h.quest.getStage(p), 46); assert.equal(p.varbits.get(11123), 2);
   h.tick(8); assert.equal(p.text, 'What happened?!');
   const unrelated = { player: p, npcId: N.PRINCE_ITZLA_ARKAN_3, step: { speaker: 'Guard' },
@@ -898,6 +941,34 @@ test('TP Teomat: Itzla (40, 42), Metzli and the attack (44), eight cultists (46)
   h.continueUntil(p, () => p.text.startsWith("However, let's not worry")); assert.equal(h.quest.getStage(p), 50);
   assert.ok(p.messages.includes("Congratulations, you've completed a quest: <col=081190>Twilight's Promise</col>"));
   assert.deepEqual(p.xp, [[core.Skill.THIEVING.getIndex(), 3000]]);
+});
+
+test('TP battle: the scripted spar keeps real NPC.process() from regenerating the cultist', () => {
+  const npc = new core.NPC(12923, new core.Location(1438, 3172, 0));
+  npc.__skipDefaultRespawn = true;
+  const cycle = core.World.getProcessCycle();
+  try {
+    assert.equal(npc.getMaxHitpoints(), 25, 'the real cache cultist has 25 hitpoints');
+    // What sparHit() does to both fighters after each exchange, four ticks apart.
+    npc.setHitpoints(23);
+    core.World.processCycle = 100;
+    npc.getCombat().getLastAttack().reset();
+    for (let tick = 1; tick <= 40; tick++) {
+      core.World.processCycle = 100 + tick;
+      if (tick % 4 === 0) npc.getCombat().getLastAttack().reset();
+      npc.process();
+    }
+    assert.equal(npc.getHitpoints(), 23, 'real out-of-combat regeneration never starts while the pair fights');
+    // Control: the same processing heals it once the combat stopwatch is stale.
+    npc.setHitpoints(23);
+    core.World.processCycle = 100;
+    npc.getCombat().getLastAttack().reset();
+    core.World.processCycle = 140;
+    npc.process();
+    assert.equal(npc.getHitpoints(), 25, 'the production regeneration path is still live');
+  } finally {
+    core.World.processCycle = cycle;
+  }
 });
 
 test('TP old saves map once to the captured stages', () => {

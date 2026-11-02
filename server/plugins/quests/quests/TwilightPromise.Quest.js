@@ -1414,6 +1414,11 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Scenes.face(defender, [at.getX(), at.getY()]);
     attacker.performAnimation(new Animation(swing));
     defender.performAnimation(new Animation(block));
+    // These are scripted blows, so neither fighter has a combat target. Refresh the combat
+    // stopwatch the same way an ordinary hit would, or NPC.process() treats both as out of
+    // combat and regenerates the damage back while the pair is still trading swings.
+    attacker.getCombat()?.getLastAttack?.().reset?.();
+    defender.getCombat()?.getLastAttack?.().reset?.();
     const damage = SPAR_DAMAGE.min + Math.floor(Math.random() * (SPAR_DAMAGE.max - SPAR_DAMAGE.min + 1));
     defender.getCombat()?.getHitQueue?.().addPendingDamage([new HitDamage(damage, HitMask.RED)]);
   }
@@ -1446,11 +1451,16 @@ module.exports = function registerTwilightPromiseQuest(api) {
     });
   }
 
-  function handleNpcDeath(event) {
+  /**
+   * A cultist's death counts at the death itself, not on player credit: an allied blow carries
+   * no player damage, so NPCDeathTask never emits onNpcDeath for it. Counting before the death
+   * task covers both credited and uncredited kills, and the `isDying` guard makes it once each.
+   */
+  function handleCultistDeath(event) {
     const npc = event.npc;
     const player = npc?.__questSceneOwner;
     const scene = player ? Scenes.get(player) : null;
-    if (!scene || scene.name !== "battle" || !scene.cultists.includes(npc)) return;
+    if (!scene || scene.name !== "battle" || event.preventDeath || !scene.cultists.includes(npc)) return;
     scene.kills++;
     player.sendMessage(`Enemies Defeated: ${scene.kills}/${BATTLE_CULTISTS.length}`);
     if (scene.kills >= BATTLE_CULTISTS.length) Scenes.later(scene, 3, () => beginAftermath(player));
@@ -1627,7 +1637,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
   api.onNpcHitModify(blockMezanHit);
   api.onNpcBeforeDeath(keepMezanStanding);
   api.onNpcBeforeDeath(keepBattleAllyStanding);
-  api.onNpcDeath(handleNpcDeath);
+  api.onNpcBeforeDeath(handleCultistDeath);
   api.onPlayerProcess(handleProcess);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);

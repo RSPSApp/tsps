@@ -58,6 +58,14 @@ function makePlayer() {
     containsNumber: (id) => inventory.getAmount(id) > 0,
     getFreeSlots: () => 28 - usedSlots(),
     isFull: () => usedSlots() >= 28,
+    getItems() {
+      return [...items.entries()].map(([id, amount]) => ({
+        getId: () => id,
+        getAmount: () => amount,
+        setId(next) { items.delete(id); items.set(next, amount); },
+      }));
+    },
+    refreshItems() {},
     adds(id, amount = 1) {
       items.set(id, inventory.getAmount(id) + amount);
       return inventory;
@@ -74,7 +82,7 @@ function makePlayer() {
   };
 
   const player = {
-    attrs, items, messages, xp, jingles, moves, configs, varbits, inventory,
+    attrs, items, messages, xp, jingles, moves, configs, varbits, inventory, damage: [],
     localNpcs: [],
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
@@ -89,6 +97,9 @@ function makePlayer() {
       getCombatLevel: () => 20,
     }),
     getPacketSender: () => sender,
+    getCombat: () => ({
+      getHitQueue: () => ({ addPendingDamage: (hits) => player.damage.push(...hits) }),
+    }),
     getLocation: () => location,
     setLocation: (next) => { location = next; },
     moveTo: (next) => moves.push([next.getX(), next.getY(), next.getZ()]),
@@ -130,6 +141,7 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
   const registered = [];
   const deregistered = [];
   const worldObjects = [];
+  const clock = { tick: 0 };
   let area = null;
 
   class FakeGameObject {
@@ -150,7 +162,7 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
   const fakeCore = {
     ...core,
     TaskManager: { submit: noop, cancelTasks: noop },
-    World: { getObjects: () => worldObjects },
+    World: { getObjects: () => worldObjects, getProcessCycle: () => clock.tick },
     MapObjects: { mapObjects: new Map(), getHash: (x, y, z) => `${x},${y},${z}` },
     RegionManager: { loadMapFiles: noop },
     GameObject: FakeGameObject,
@@ -227,7 +239,7 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
   const h = {
     player, custom, variants, conditions, objectHooks, itemOnNpc, itemOnObject,
     itemActions, itemOnItem, groundPickups, logins, logouts, deaths, spawned, removed, registered,
-    deregistered, worldObjects, quest, get area() { return area; },
+    deregistered, worldObjects, quest, clock, get area() { return area; },
   };
   if (!firstHarness) firstHarness = h;
   return h;
@@ -453,6 +465,50 @@ test('mandatory source route reaches completion through the registered handlers'
     variant: 'standard-dialogue-after-priest-in-peril-after-nature-spirit',
   });
   assert.equal(variant(h, N.NATURE_SPIRIT), 'returning-to-filliman-s-grove-attempting-to-talk-to-him-again-before-he-disappears');
+});
+
+test('invisible ghasts in Mort Myre attack, rot food, and become visible', () => {
+  const player = makePlayer();
+  const h = harness({ player });
+  player.setLocation(new core.Location(3440, 3345, 0));
+  const ghast = {
+    getId: () => N.GHAST,
+    getLocation: () => new core.Location(3441, 3345, 0),
+  };
+  player.localNpcs = [ghast];
+  const random = Math.random;
+  try {
+    // First tick only schedules the first attempt; the roll happens on a later cycle.
+    h.clock.tick = 0;
+    h.area.process(player);
+    player.inventory.adds(I.SHRIMPS, 1);
+    h.clock.tick = 20;
+    Math.random = () => 0.9; // not ignored, not a miss
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 0, 'the attack rots the food');
+    assert.equal(player.inventory.getAmount(I.ROTTEN_FOOD), 1);
+    assert.equal(h.spawned.at(-1).getId(), N.GHAST_2, 'a ghast that lands a hit becomes visible');
+    assert.equal(player.damage.length, 0, 'rotting food replaces the damage');
+
+    // With nothing to rot the same roll deals 1-3 damage.
+    h.clock.tick = 200;
+    Math.random = () => 0.9;
+    h.area.process(player);
+    assert.equal(player.damage.length, 1);
+    assert.ok(player.damage[0].getDamage() >= 1 && player.damage[0].getDamage() <= 3);
+
+    // 7/10 of attempts miss: no rot, no damage, no visible ghast.
+    h.clock.tick = 400;
+    Math.random = () => 0.1;
+    const spawnedBefore = h.spawned.length;
+    player.inventory.adds(I.SHRIMPS, 1);
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 1);
+    assert.equal(player.damage.length, 1);
+    assert.equal(h.spawned.length, spawnedBefore);
+  } finally {
+    Math.random = random;
+  }
 });
 
 test('login replays the saved stage in varp 307, including a fresh stage 0', () => {

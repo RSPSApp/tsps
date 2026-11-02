@@ -17,13 +17,15 @@
  * bowl at the camp hides the mirror, the Bloom spell sprouts fungi on a
  * rotting log, the fungus/used spell go on the nature/spirit stones, the
  * Nature Spirit blesses the silver sickle and hands over the druid pouch, the
- * blessed sickle blooms swamp plants into pouch charges, and walking a filled
- * pouch past a ghast reveals it so the kill can count.
+ * blessed sickle blooms swamp plants into pouch charges, and the swamp's invisible
+ * ghasts attack players (rotting food, or 1-3 damage with none) and become visible
+ * when they land a hit. Using a filled pouch on one reveals it too.
  */
 module.exports = function registerNatureSpiritQuest(api) {
   const {
-    Skill, Equipment, Location, Item, ItemOnGroundManager, Boundary, Area, GameObject,
+    Animation, Skill, Equipment, Location, Item, ItemOnGroundManager, Boundary, Area, GameObject,
     ObjectManager, MapObjects, RegionManager, World, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers,
+    HitDamage, HitMask, CacheDefinitions,
   } = api.core;
   const { registerQuest, refreshQuestList } = require("../QuestRuntime");
 
@@ -105,6 +107,24 @@ module.exports = function registerNatureSpiritQuest(api) {
 
   const GHAST_NPC_ID = NpcIdentifiers.GHAST; // 945, the invisible swamp ghast
   const GHAST_VISIBLE_NPC_ID = NpcIdentifiers.GHAST_2; // 946, the level 30 ghast
+  /** Every invisible version placed in Mort Myre (the Wiki lists 945 and 5622-5624). */
+  const INVISIBLE_GHAST_IDS = new Set([
+    NpcIdentifiers.GHAST,
+    NpcIdentifiers.GHAST_3,
+    NpcIdentifiers.GHAST_4,
+    NpcIdentifiers.GHAST_5,
+  ]);
+  /** The visible ghast's recorded attack animation (npc-captured-animations, NPC 946). */
+  const GHAST_ATTACK_ANIMATION = 1087;
+  const GHAST_ATTACK_RANGE = 8;
+  /** Not in the Wiki: how often one player may be attacked, in game ticks. */
+  const GHAST_ATTACK_MIN_DELAY = 12;
+  const GHAST_ATTACK_MAX_DELAY = 30;
+  /** Wiki: ghasts have a 7/10 chance of missing completely. */
+  const GHAST_MISS_CHANCE = 0.7;
+  /** Wiki: the easy Morytania diary gives a 50% chance the ghast ignores the player. */
+  const GHAST_DIARY_IGNORE_CHANCE = 0.5;
+  const ROTTEN_FOOD_ITEM_ID = ItemIdentifiers.ROTTEN_FOOD;
 
   /** What casting Bloom on each rotting plant grows. */
   const BLOOMED_PLANT = new Map([
@@ -196,6 +216,8 @@ module.exports = function registerNatureSpiritQuest(api) {
 
   /** The visible ghasts we spawned, so a death can be counted for its owner. */
   const visibleGhasts = new Map();
+  /** The game cycle each player's next ghast attack may happen on. */
+  const ghastNextAttack = new WeakMap();
 
   /** Swap a scenery object for another id in place (the reference's loc change). */
   function replaceObject(object, newId) {
@@ -274,14 +296,8 @@ module.exports = function registerNatureSpiritQuest(api) {
     ItemOnGroundManager.registerLocation(player, new Item(WASHING_BOWL_ITEM_ID, 1), position);
   }
 
-  /** A filled pouch spent to make a ghast visible and attackable. */
-  function revealGhast(player, ghast) {
-    if (!held(player, DRUID_POUCH_FILLED_ITEM_ID)) {
-      player.sendMessage("You have nothing left in your druid pouch!");
-      return;
-    }
-    player.getInventory().deleteNumber(DRUID_POUCH_FILLED_ITEM_ID, 1);
-    if (!held(player, DRUID_POUCH_FILLED_ITEM_ID)) player.getInventory().adds(DRUID_POUCH_EMPTY_ITEM_ID, 1);
+  /** Spawn the visible form where the invisible ghast stands, owned by the player who saw it. */
+  function spawnVisibleGhast(player, ghast) {
     const location = ghast.getLocation();
     const visible = api.spawnNpc({
       id: GHAST_VISIBLE_NPC_ID,
@@ -296,7 +312,90 @@ module.exports = function registerNatureSpiritQuest(api) {
       visible.__skipDefaultRespawn = true;
       visibleGhasts.set(visible, player);
     }
+    return visible ?? null;
+  }
+
+  /** A filled pouch spent to make a ghast visible and attackable. */
+  function revealGhast(player, ghast) {
+    if (!held(player, DRUID_POUCH_FILLED_ITEM_ID)) {
+      player.sendMessage("You have nothing left in your druid pouch!");
+      return false;
+    }
+    player.getInventory().deleteNumber(DRUID_POUCH_FILLED_ITEM_ID, 1);
+    if (!held(player, DRUID_POUCH_FILLED_ITEM_ID)) player.getInventory().adds(DRUID_POUCH_EMPTY_ITEM_ID, 1);
+    spawnVisibleGhast(player, ghast);
     player.sendMessage("The druid pouch makes the ghast visible.");
+    return true;
+  }
+
+  /** The easy Morytania diary makes half of the ghasts ignore the player (Wiki). */
+  function easyMorytaniaDiary(player) {
+    const request = { player, diary: "morytania", tier: "easy", complete: false };
+    api.emitCustomEvent("diary:is-complete", request);
+    return request.complete === true;
+  }
+
+  function nearestInvisibleGhast(player) {
+    const location = player.getLocation();
+    let nearest = null;
+    let nearestDistance = GHAST_ATTACK_RANGE + 1;
+    for (const npc of player.getLocalNpcs?.() ?? []) {
+      if (!INVISIBLE_GHAST_IDS.has(npc?.getId?.())) continue;
+      const at = npc.getLocation?.();
+      if (!at || at.getZ() !== location.getZ()) continue;
+      const distance = Math.max(Math.abs(at.getX() - location.getX()), Math.abs(at.getY() - location.getY()));
+      if (distance < nearestDistance) {
+        nearest = npc;
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
+  }
+
+  /** Food is what the cache gives an Eat action; potions and raw/inedible items stay put. */
+  function isFoodItem(itemId) {
+    const definition = CacheDefinitions.getItem(itemId);
+    if (!definition || definition.noteTemplate >= 0) return false;
+    return (definition.inventoryActions ?? []).some((action) => String(action).toLowerCase() === "eat");
+  }
+
+  /** The first edible item in the pack becomes rotten food; false with nothing to rot. */
+  function rotFood(player) {
+    const inventory = player.getInventory();
+    const items = inventory.getItems?.() ?? [];
+    for (const item of items) {
+      if (!item || !isFoodItem(item.getId())) continue;
+      if (item.getAmount() > 1) {
+        inventory.deleteNumber(item.getId(), 1);
+        inventory.adds(ROTTEN_FOOD_ITEM_ID, 1);
+      } else {
+        item.setId(ROTTEN_FOOD_ITEM_ID);
+        inventory.refreshItems();
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * A ghast's attack: 7/10 miss, else rot one food item or hit 1-3 when there is none. A hit
+   * makes the ghast visible, as live does; the kill then counts towards the quest like any
+   * pouch-revealed one. The Wiki gives the roll but neither the interval nor the exact retreat,
+   * so one player sees an attempt every 12-30 ticks and the ghast stays where it was.
+   */
+  function ghastAttack(player, ghast) {
+    const cycle = World.getProcessCycle();
+    ghastNextAttack.set(player, cycle + GHAST_ATTACK_MIN_DELAY
+      + Math.floor(Math.random() * (GHAST_ATTACK_MAX_DELAY - GHAST_ATTACK_MIN_DELAY + 1)));
+    if (easyMorytaniaDiary(player) && Math.random() < GHAST_DIARY_IGNORE_CHANCE) return;
+    if (Math.random() < GHAST_MISS_CHANCE) return;
+    if (!rotFood(player)) {
+      player.getCombat().getHitQueue().addPendingDamage([
+        new HitDamage(1 + Math.floor(Math.random() * 3), HitMask.RED),
+      ]);
+    }
+    const visible = spawnVisibleGhast(player, ghast);
+    visible?.performAnimation?.(new Animation(GHAST_ATTACK_ANIMATION));
   }
 
   function firstProduce(player) {
@@ -815,22 +914,26 @@ module.exports = function registerNatureSpiritQuest(api) {
   }
 
   /**
-   * Walking a filled pouch past a ghast is what makes it attack and become
-   * visible; scope it to the swamp so no other area pays for the hook.
+   * The swamp's invisible ghasts now do what the Wiki says they do: they attack players,
+   * rotting a food item or dealing 1-3 when there is none, and the ghast that lands a hit
+   * becomes visible. Scope it to the swamp so no other area pays for the hook.
    */
   function createSwampArea() {
     class MortMyreSwampArea extends Area {
       process(mobile) {
         if (!mobile?.isPlayer?.()) return;
         const player = mobile.getAsPlayer();
-        if (quest.getStage(player) < STAGE_ADDED_POUCH) return;
-        if (!held(player, DRUID_POUCH_FILLED_ITEM_ID)) return;
-        for (const npc of player.getLocalNpcs?.() ?? []) {
-          if (npc?.getId?.() !== GHAST_NPC_ID) continue;
-          if (player.calculateDistance(npc) > 1) continue;
-          revealGhast(player, npc);
+        if (player.getPrivateArea?.()) return;
+        const cycle = World.getProcessCycle();
+        const next = ghastNextAttack.get(player);
+        if (next === undefined) {
+          ghastNextAttack.set(player, cycle + GHAST_ATTACK_MIN_DELAY);
           return;
         }
+        if (cycle < next) return;
+        const ghast = nearestInvisibleGhast(player);
+        if (!ghast) return;
+        ghastAttack(player, ghast);
       }
     }
     return new MortMyreSwampArea([SWAMP_BOUNDS]);

@@ -31,14 +31,17 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const {
     ActionDialogue,
     Animation,
+    CountdownTask,
     DialogueChainBuilder,
     GameObject,
     ItemIdentifiers,
     Location,
     NpcIdentifiers,
     ObjectIdentifiers,
+    ObjectManager,
     PrayerHandler,
     Skill,
+    TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
@@ -134,6 +137,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const GATE_OBJECT_ID = ObjectIdentifiers.GATE_295; // 50861, vmq2_temple_gate
   const GATE_OPEN_OBJECT_ID = ObjectIdentifiers.GATE_296; // 50862
   const GATEWAY_OBJECT_ID = 38848; // the nameless loc the capture swaps onto the gate
+  /** "A Matter of Intrigue" (archive track 810), unlocked and played in the temple during the quest. */
+  const TEMPLE_QUEST_TRACK = 810;
   const GATE_TILE = { x: 1698, y: 9496 };
   const CRATE_OBJECT_ID = 50870; // vmq2_cothon_crate
   const CRATES_OBJECT_ID = 50871; // vmq2_cothon_crates
@@ -803,7 +808,20 @@ module.exports = function registerTwilightPromiseQuest(api) {
     return true;
   }
 
-  /** The crypt gate lets the player through and shuts behind them, as captured. */
+  /** A gate leaf, or the invisible wall the capture swaps onto its tile, for every player to see. */
+  function placeGateLoc(id, x, y, z, face) {
+    const loc = new GameObject(id, new Location(x, y, z), 0, face, null);
+    ObjectManager.register(loc, true);
+    return loc;
+  }
+
+  /** The quest's own track, first heard as the crypt gate opens; completion unlocks it as well. */
+  function playTempleTrack(player) {
+    api.emitCustomEvent("music:unlock-track", { player, trackId: TEMPLE_QUEST_TRACK });
+    player.getPacketSender().sendSong(TEMPLE_QUEST_TRACK);
+  }
+
+  /** The crypt gate lets the player through and shuts two ticks after they cross, as captured. */
   function handleGate(request) {
     if (request.handled || request.objectId !== GATE_OBJECT_ID) return;
     const { player, object } = request;
@@ -816,12 +834,19 @@ module.exports = function registerTwilightPromiseQuest(api) {
     }
     const crossing = crossingFor(object, player.getLocation());
     if (!crossing || ObstacleRunner.isBusy(player)) return;
-    const sender = player.getPacketSender();
-    const open = new GameObject(GATE_OPEN_OBJECT_ID, new Location(location.getX(), location.getY() - 1, location.getZ()), 0, 0, null);
-    sender.sendObject(open).sendObject(new GameObject(GATEWAY_OBJECT_ID, location.clone(), 0, object.getFace(), null));
-    ObstacleRunner.run({ player, object }, [{ walk: [[crossing.destination.x, crossing.destination.y]] }]);
-    Scenes.later(player, 2, () => {
-      sender.sendObjectRemoval(open).sendObject(new GameObject(GATE_OBJECT_ID, location.clone(), 0, object.getFace(), null));
+    const face = object.getFace() & 3;
+    const [dx, dy] = [[-1, 0], [0, 1], [1, 0], [0, -1]][face];
+    const gateway = placeGateLoc(GATEWAY_OBJECT_ID, location.getX(), location.getY(), location.getZ(), face);
+    const open = placeGateLoc(GATE_OPEN_OBJECT_ID, location.getX() + dx, location.getY() + dy, location.getZ(), (face + 1) & 3);
+    if (stage(player) < STAGE_COMPLETE) playTempleTrack(player);
+    ObstacleRunner.run({ player, object }, [{ walk: [[crossing.destination.x, crossing.destination.y]] }], {
+      // The gate shut two ticks after the player crossed, never two ticks after the click: a
+      // route to the gate from a distance must not finish with it already closed.
+      onFinish: () => TaskManager.submit(new CountdownTask(open, 2, () => {
+        ObjectManager.deregister(open, true);
+        ObjectManager.deregister(gateway, true);
+        placeGateLoc(GATE_OBJECT_ID, location.getX(), location.getY(), location.getZ(), face);
+      })),
     });
   }
 

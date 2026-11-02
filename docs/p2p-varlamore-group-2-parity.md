@@ -128,6 +128,13 @@ lookup had selected generic Guard397. Those bindings apply only to this quest's
 owned aftermath. Azali's two-tile fountain teleport at1541 is also in the
 recording, followed by splash10942/removal at1543, so that sequence is retained.
 
+The crypt gate is now a world loc change: the invisible wall 38848 stands on the
+gate tile, the open leaf 50862 swings onto the tile across the doorway, and both
+are sent to every player. It shuts two ticks after `ObstacleRunner` reports the
+crossing finished, rather than two ticks after the click, so a route from a
+distance cannot leave the player walking through a closed gate. "A Matter of
+Intrigue" (810) plays and unlocks as the gate opens during the quest.
+
 Quetzal travel uses the cache landing table and interface 874, with saved
 unlocks, locked-destination checks and a single flight at a time. The new camera
 arc packet is encoded and decoded by the server and client together.

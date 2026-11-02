@@ -302,6 +302,9 @@ export function regionReplacementPayloadSize(
     terrain: Uint8Array,
     objects: Uint8Array,
 ): number {
+    if (terrain.length + objects.length > 16 * 1024 * 1024) {
+        throw new RangeError("Region replacement exceeds the 16 MiB raw limit");
+    }
     const raw = 7 + terrain.length + objects.length;
     if (raw <= MAX_REGION_PACK_PAYLOAD) return raw;
     const combined = new Uint8Array(terrain.length + objects.length);

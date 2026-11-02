@@ -1655,16 +1655,28 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             const allowReload = reader.readBoolean();
             const terrainLength = reader.readInt();
             const objectLength = reader.readInt();
-            // A region's terrain and objects are a few MB at most; refuse a payload that
-            // claims to expand past what the map format can hold.
+            // Matches the server encoder's raw region budget.
             if (terrainLength <= 0 || objectLength < 0 || terrainLength + objectLength > 16 * 1024 * 1024) {
                 throw new RangeError(`Region replacement ${regionId} has invalid section lengths`);
             }
             const pako = require("pako");
-            const raw = pako.inflate(reader.readBytes(reader.remaining)) as Uint8Array;
-            if (raw.length !== terrainLength + objectLength) {
+            const raw = new Uint8Array(terrainLength + objectLength);
+            let length = 0;
+            const inflater = new pako.Inflate({ chunkSize: 16384 });
+            inflater.onData = (part: Uint8Array) => {
+                if (length + part.length > raw.length) {
+                    throw new RangeError(`Region replacement ${regionId} exceeds its declared length`);
+                }
+                raw.set(part, length);
+                length += part.length;
+            };
+            inflater.push(reader.readBytes(reader.remaining), true);
+            if (inflater.err || !inflater.ended) {
+                throw new RangeError(`Region replacement ${regionId} has invalid compressed data`);
+            }
+            if (length !== raw.length) {
                 throw new RangeError(
-                    `Region replacement ${regionId} inflated to ${raw.length} bytes, expected ${terrainLength + objectLength}`,
+                    `Region replacement ${regionId} inflated to ${length} bytes, expected ${raw.length}`,
                 );
             }
             return {

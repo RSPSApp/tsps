@@ -109,7 +109,9 @@ const makePlugin = () => {
     };
     // 80 KB of zeros is far over the raw ceiling but deflates to almost nothing.
     assert.deepEqual(oversizedRegionPacks([pack(new Uint8Array(80_000))]), []);
-    // Random bytes do not shrink, which is the only shape that can no longer be streamed.
+    // The client must also be able to hold the expanded data, however well it compresses.
+    assert.throws(() => oversizedRegionPacks([pack(new Uint8Array(16 * 1024 * 1024))]), /16 MiB/);
+    // Random bytes can also exceed the compressed packet budget.
     const random = new Uint8Array(80_000);
     let seed = 123456789;
     for (let index = 0; index < random.length; index++) {

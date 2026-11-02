@@ -3,6 +3,7 @@ import Denque from "denque";
 import { strict as assert } from "node:assert";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { deflateSync } from "node:zlib";
 
 import { MapManager } from "../game/MapManager";
 import { ClientState } from "../game/ClientState";
@@ -665,6 +666,50 @@ function denseRegionReplacementIsDeflated(): void {
     assert.deepEqual(decoded.payload.objectData, objects);
 }
 
+
+function compressedRegionInflationIsBounded(): void {
+    const compressedFrame = (size: number, declaredSize: number): Buffer => {
+        const compressed = deflateSync(Buffer.alloc(size));
+        const frame = Buffer.alloc(14 + compressed.length);
+        frame[0] = 147;
+        frame.writeUInt16BE(frame.length - 3, 1);
+        frame.writeUInt16BE(12084, 3);
+        frame[5] = 1;
+        frame.writeUInt32BE(declaredSize, 6);
+        compressed.copy(frame, 14);
+        return frame;
+    };
+    const pako = require("pako");
+    const push = pako.Inflate.prototype.push;
+    let emittedBytes = 0;
+    pako.Inflate.prototype.push = function (...args: any[]) {
+        const onData = this.onData;
+        this.onData = function (part: Uint8Array) {
+            emittedBytes += part.length;
+            return onData.call(this, part);
+        };
+        return push.apply(this, args);
+    };
+    try {
+        const bomb = compressedFrame(32 * 1024 * 1024, 1);
+        assert.ok(bomb.length < 65536);
+        assert.throws(() => decodeServerPacket(bomb), RangeError);
+        assert.ok(emittedBytes <= 16384, `stop after the first overflowing chunk, emitted ${emittedBytes} bytes`);
+    } finally {
+        pako.Inflate.prototype.push = push;
+    }
+    assert.throws(() => decodeServerPacket(compressedFrame(1, 16 * 1024 * 1024 + 1)), /invalid section lengths/);
+    assert.throws(() => decodeServerPacket(compressedFrame(1, 2)), /expected 2/);
+    const truncated = compressedFrame(80_000, 80_000).subarray(0, -1);
+    truncated.writeUInt16BE(truncated.length - 3, 1);
+    assert.throws(() => decodeServerPacket(truncated), /invalid compressed data/);
+    const corrupt = compressedFrame(80_000, 80_000);
+    corrupt[corrupt.length - 1] ^= 1;
+    assert.throws(() => decodeServerPacket(corrupt), /invalid compressed data/);
+    const atLimit = decodeServerPacket(compressedFrame(16 * 1024 * 1024, 16 * 1024 * 1024)) as any;
+    assert.equal(atLimit.payload.terrainData.length, 16 * 1024 * 1024);
+}
+
 mapLoadBackoff();
 mapProfilingRequiresExplicitFlag();
 editorWaitsForRenderableRegion();
@@ -679,6 +724,7 @@ locReplayInvalidatesCompletedMapsWaitingToRender();
 crossShapeReplacementKeepsBaseWallHidden();
 regionReplacementUsesNativeMapData();
 denseRegionReplacementIsDeflated();
+compressedRegionInflationIsBounded();
 console.log("Map loading regression tests passed");
 
 // Disconnect restores the cache door and must discard its old open counterpart.

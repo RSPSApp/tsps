@@ -101,4 +101,18 @@ function randomBytes(length) {
   assert.ok(!MapRegionReplacementManager.getRegionIds().includes(regionId));
 }
 
+// Even highly compressible data must fit the client's raw output budget.
+{
+  const regionId = 12088;
+  const limit = 16 * 1024 * 1024;
+  assert.doesNotThrow(() => MapRegionReplacementManager.replaceMapRegionData(regionId, new Uint8Array(limit), null, "test"));
+  const { frames, player } = capture();
+  MapRegionReplacementManager.sendReplacementToPlayer(player, regionId, true);
+  assert.equal(frames[0].readUInt32BE(6), limit);
+  assert.throws(() => MapRegionReplacementManager.replaceMapRegionData(regionId, new Uint8Array(limit), new Uint8Array([0]), "test"), /invalid section lengths/);
+  assert.equal(MapRegionReplacementManager.getReplacementMapData(regionId).terrainData.length, limit,
+    "an oversized update must leave the previous valid replacement intact");
+  assert.throws(() => MapRegionReplacementManager.replaceMapRegionData(regionId, new Uint8Array(), null, "test"), /invalid section lengths/);
+}
+
 console.log("Region replacement packet tests passed");

@@ -1855,6 +1855,10 @@ export function regionReplacementPacket(
   objectData: Uint8Array | null
 ): RegionReplacementPacket {
   const objects = objectData ?? new Uint8Array(0);
+  // Matches the decoder's bounded output buffer; check before copying or compressing.
+  if (terrainData.length === 0 || terrainData.length + objects.length > 16 * 1024 * 1024) {
+    throw new RangeError(`Region replacement ${regionId} has invalid section lengths`);
+  }
   const payloadLength = 7 + terrainData.length + objects.length;
   if (payloadLength <= MAX_REGION_REPLACEMENT_PAYLOAD) {
     const payload = Buffer.allocUnsafe(payloadLength);

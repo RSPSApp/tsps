@@ -1688,6 +1688,12 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   `bank { place, count }` from the bank's `bank:opened` (opened inside the place: "Use the Bank in
   Nardah" inside the Nardah bank page's square, "Bank at Mount Quidamortem" inside its bank's outline,
   "Use the Bank on Lunar Isle" anywhere on the island, which has one bank),
+  `npc-op { npcs, option, count }` from the NPC option listener's new `npc:operated` { player, npc,
+  npcId, option } (a menu option something answered: a Talk-to that started a dialogue, a Pet;
+  "Nothing interesting happens" is none): "Talk to a Gladiator (Fortis Colosseum)", "Talk to Ilfeen in
+  Tirannwn", "Talk to the Mysterious Old Man in Falador", "Pet Renu"; every cache NPC of the name
+  with that option is one of the linked NPC page's ids (`<dir>/npcs/<page>.wikitext`), so the name
+  is that NPC,
   `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what

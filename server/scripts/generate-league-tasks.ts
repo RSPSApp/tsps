@@ -334,7 +334,7 @@ function alternativesOf(description: string): string[] {
 }
 
 /** The cache names a trigger may name, each checked before it is written. */
-interface Names { npcs: Map<string, string>; quests: Map<string, string>; items: Map<string, string>; homes?: Map<string, string[]>; sets?: Map<string, string[][]> }
+interface Names { npcs: Map<string, string>; quests: Map<string, string>; items: Map<string, string>; homes?: Map<string, string[]>; sets?: Map<string, string[][]>; npcIds?: Map<string, number[]> }
 
 /** A condition in a task's description (where, how, how fast): not a plain count of the deed. */
 const CONDITION = /\b(without|while|using|within|in under|with only|solo|duo|trio|wearing|wielding|less than|fewer than|must be|do not count|at once|in one|at the same time|in a row|whilst|before|after)\b/i;
@@ -619,6 +619,7 @@ const PLACE_DEFS: PlaceDef[] = [
   { key: "woodcutting-guild", names: ["Woodcutting Guild"], page: "Woodcutting_Guild", wikiPolygon: true },
   { key: "warriors-guild", names: ["Warriors' Guild", "Warriors Guild"], page: "Warriors'_Guild", wikiPolygon: true },
   { key: "hardwood-grove", names: ["Tai Bwo Wannai Hardwood Grove", "Hardwood Grove in Tai Bwo Wannai", "Hardwood Grove"], page: "Hardwood_Grove", wikiPolygon: true },
+  { key: "falador", names: ["Falador"], page: "Falador", wikiPolygon: true },
   // A town's bank, its own page's outline, square or rectangle (Nardah bank's booths and the tiles before them).
   { key: "mount-quidamortem-bank", names: ["Mount Quidamortem bank"], page: "Mount_Quidamortem_bank", wikiPolygon: true },
   { key: "jatizso-bank", names: ["Jatizso bank"], page: "Jatizso_bank", wikiPolygon: true },
@@ -1052,6 +1053,30 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
   if (/^(?:Purchase|Buy) /i.test(name) && (match = /^(?:Purchase|Buy) (?:an? |the |some )?(.+?) from (?:an? |the )?(.+?)(?: in (?:the )?[A-Z][^.]*)?\.?$/i.exec(description))) {
     const bought = shopItemOf(match[1], match[2], items);
     if (bought) return { trigger: { kind: "buy", items: [bought.item], shops: bought.shops, count: 1 } };
+  }
+  // "Talk to any Port master", "Talk to a Gladiator (Fortis Colosseum)", "Talk to Ilfeen in Tirannwn",
+  // "Pet Renu": that option done on an NPC of the name (npc:operated, once something answered it), in
+  // the league area or place that follows. Every cache NPC of the name with that option must be one
+  // of the linked NPC page's ids, so the name means that NPC ("(Fortis Colosseum)" its page only).
+  if ((match = /^(Talk to|Pet) (.+)$/i.exec(name))) {
+    const option = match[1].toLowerCase() === "pet" ? "pet" : "talk-to";
+    const subjectOf = (text: string) => {
+      const { area, text: unplaced } = leagueAreaOf(text.replace(/\.$/, ""));
+      const spot = placeOf(unplaced);
+      const said = /^(?:Talk to|Pet) (?:any |an? |the )?(.+)$/i.exec(spot.text)?.[1] ?? "";
+      return { area, place: spot.place, page: said, npc: said.replace(/\s*\([^)]*\)$/, "") };
+    };
+    const named = subjectOf(name), said = subjectOf(description);
+    if (named.area !== said.area || named.place !== said.place || PLACE.test(said.npc) || CONDITION.test(said.npc)) return {};
+    const npc = npcNamed(said.npc, npcs);
+    if (!npc || npc !== npcNamed(named.npc, npcs)) return {};
+    const pageIds = names.npcIds?.get(said.page.toLowerCase()) ?? [];
+    const ids = npcIdsWithOption(npc, option);
+    if (!ids.length || ids.some((id) => !pageIds.includes(id))) return {};
+    const trigger: Trigger = { kind: "npc-op", npcs: [npc], option, count: 1 };
+    if (said.area !== null) trigger.area = said.area;
+    if (said.place) trigger.place = said.place;
+    return { trigger };
   }
   // "Use the Bank in Nardah", "Bank at Mount Quidamortem" ("Open your Bank using the Bank at Mount
   // Quidamortem"): the bank opened (bank:opened) inside that town's bank (its own page's bounds), or
@@ -1704,6 +1729,32 @@ function setListsOf(wikitext: string): string[][] {
  * Where the Wiki says a monster lives: each {{LocLine}}'s location (its first link), else its
  * infobox's. A monster that lives in one place only is killed there whatever a task adds.
  */
+/** The NPC pages the talk and pet tasks link to ("Talk to a [[Gladiator (Fortis Colosseum)]]"), saved as `<dir>/npcs/<page>.wikitext`. */
+function operatedPagesOf(wikitext: string): string[] {
+  const pages: string[] = [];
+  for (const [, description] of wikitext.matchAll(/\{\{(?:DPL|REL|TRL)TaskRow\|(?:Talk to|Pet) [^|]*\|([^\n]*?)\|s=/g)) {
+    const subject = /^(?:Talk to|Pet) (?:any |an? |the )?(?:\[\[[^\]]+\]\]'s )?\[\[([^\]|#]+)/i.exec(description);
+    // A title's first letter is the Wiki's capital ("[[port master]]" is Port master).
+    if (subject) pages.push(subject[1].trim().replace(/^./, (first) => first.toUpperCase()));
+  }
+  return pages;
+}
+
+/** Every NPC id an NPC page's infoboxes give (`|id = 7668, 14183`, `|id1 = 12834`). */
+function npcIdsOf(wikitext: string): number[] {
+  return [...wikitext.matchAll(/^\|\s*id\d*\s*=([^\n]*)$/gm)].flatMap((match) => match[1].split(",").map((id) => Number(id.trim()))).filter(Number.isInteger);
+}
+
+/** The cache NPCs of a name whose menu has the option ("Talk-to", "Pet"). */
+function npcIdsWithOption(name: string, option: string): number[] {
+  const ids: number[] = [];
+  for (let id = 0; id < CacheDefinitions.getCounts().npcs; id++) {
+    const npc = CacheDefinitions.getNpc(id);
+    if (npc?.name?.toLowerCase() === name.toLowerCase() && (npc.actions ?? []).some((action: string | null) => action?.toLowerCase() === option)) ids.push(id);
+  }
+  return ids;
+}
+
 function homesOf(wikitext: string): string[] {
   const firstLink = (text: string) => /\[\[([^\]|#]+)/.exec(text)?.[1].trim() ?? text.replace(/\(.*$/, "").trim();
   const lines = [...wikitext.matchAll(/\{\{LocLine\b[\s\S]*?\|\s*location\s*=([^|\n]*)/g)].map((match) => firstLink(match[1]));
@@ -1789,6 +1840,9 @@ async function main() {
   // The homes of the monsters the kill tasks name before a place, by lower-cased page title.
   const homePages = [...new Set(LEAGUES.flatMap((league) => homePagesOf(rawPages.get(league)!)))].sort();
   for (const page of homePages) names.homes!.set(page.toLowerCase(), homesOf(await wikiPageOf("npcs", page, options)));
+  // The ids of the NPCs the talk and pet tasks link to, by lower-cased page title.
+  names.npcIds = new Map();
+  for (const page of [...new Set(LEAGUES.flatMap((league) => operatedPagesOf(rawPages.get(league)!)))].sort()) names.npcIds.set(page.toLowerCase(), npcIdsOf(await wikiPageOf("npcs", page, options)));
   // The pieces of the sets equip tasks link to that the cache has no item set for.
   names.sets = new Map();
   for (const page of [...new Set(LEAGUES.flatMap((league) => setPagesOf(rawPages.get(league)!)))].sort()) names.sets.set(page.toLowerCase(), setListsOf(await wikiPageOf("sets", page, options)));

@@ -57,7 +57,8 @@
  *   (`woodcutting:nest-drop`, a nest from a tree), `buy { items, shops, count }` (`shop:purchase`, that
  *   item bought from one of those shops, by their names), `alch { coins, count }`
  *   (`magic:alchemy-completed`, an alchemy paying at least that many coins), `bank { place, count }`
- *   (`bank:opened`, the bank opened inside the place: a town's bank).
+ *   (`bank:opened`, the bank opened inside the place: a town's bank), `npc-op { npcs, option, count }`
+ *   (`npc:operated`, a menu option, "talk-to" or "pet", that something answered on an NPC of the name).
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -368,6 +369,7 @@ const EVENT_KINDS = new Map([
   ["tob", (trigger, event) => trigger.modes.includes(event.mode)],
   ["teleport", (trigger, event) => trigger.spells.includes(String(event.name ?? "").toLowerCase())],
   ["bank", () => true],
+  ["npc-op", (trigger, event) => trigger.option === String(event.option ?? "").toLowerCase() && trigger.npcs.some((npc) => key(npc) === key(npcName(event.npcId)))],
   ["foundry", (trigger, event) => Number(event.quality) > 0 && (!(trigger.quality > 0) || Number(event.quality) >= trigger.quality)],
 ]);
 
@@ -465,6 +467,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("shop:purchase", onEvent("buy"));
   api.onCustomEvent("magic:alchemy-completed", onEvent("alch"));
   api.onCustomEvent("bank:opened", onEvent("bank"));
+  api.onCustomEvent("npc:operated", onEvent("npc-op"));
   // Gathered with a tool: the logs or ore and the axe or pickaxe the success events carry.
   const gatheredWith = onEvent("gather-with");
   api.onCustomEvent("woodcutting:success", (event) => gatheredWith({ ...event, gatherSkill: "woodcutting", toolId: event.axeId, itemId: event.logId }));

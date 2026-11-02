@@ -360,6 +360,31 @@ test("pickpocket-loot: an item in the pocket's loot (Pickpocket a Diamond From a
   assert.ok(done(f, "pickpocket-a-diamond-from-a-tzhaar"));
 });
 
+/** A cache NPC of the name with the option, beside the player; the option's click. */
+function npcBeside(t, f, name, option) {
+  const id = [...Array(20000).keys()].find((each) => core.CacheDefinitions.getNpc(each)?.name === name && (core.CacheDefinitions.getNpc(each).actions ?? []).some((action) => action?.toLowerCase() === option));
+  const at = f.player.getLocation();
+  const npc = core.NPC.create(id, new core.Location(at.getX() + 1, at.getY(), at.getZ()));
+  core.World.getNpcs().add(npc);
+  t.after(() => core.World.getNpcs().remove(npc));
+  return { npc, clickType: npc.getCurrentDefinition(f.player).getActions().findIndex((action) => action?.toLowerCase() === option) + 1 };
+}
+
+test("npc-op: an NPC's option that something answered (Talk to a Gladiator); one nothing answers is none", async (t) => {
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const f = pactsCharacter(t);
+  const gladiator = npcBeside(t, f, "Gladiator", "talk-to");
+  await send(f, { type: "npc_option", index: gladiator.npc.getIndex(), clickType: gladiator.clickType }, 4);
+  assert.ok(f.player.getDialogueManager().isActive(), `the real Talk-to starts the Wiki's dialogue: ${f.messages}`);
+  assert.ok(done(f, "talk-to-a-gladiator"));
+  // Renu's Pet has no handler on this server yet: "Nothing interesting happens" is no pet.
+  const other = pactsCharacter(t);
+  const renu = npcBeside(t, other, "Renu", "pet");
+  await send(other, { type: "npc_option", index: renu.npc.getIndex(), clickType: renu.clickType }, 4);
+  assert.ok(other.messages.includes("Nothing interesting happens."), `nothing answers: ${other.messages}`);
+  assert.ok(!done(other, "pet-renu"));
+});
+
 test("kill-each: one death of each NPC, in the task's area (Defeat a Moss, Fire & Hill Giant in Kourend)", (t) => {
   const f = pactsCharacter(t);
   f.player.setAttribute("league:areas", [21, 2, 20]); // Varlamore, Karamja and Kourend unlocked

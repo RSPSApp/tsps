@@ -211,9 +211,11 @@ function collapseTunnel(player, patch, slot) {
   }
   if (slot !== undefined) player.getInventory().deleteAtSlot(slot, 1);
   const [x, y, face] = patch.rocks;
+  // Standards come out before the rocks go in: removing a standard clears its tile's clipping
+  // and sends a type-10 removal for the tile, which would otherwise hit the new rocks.
+  unburyStandards(patch);
   game.swapObject(null, new core.GameObject(core.ObjectIdentifiers.ROCKS_21, new core.Location(x, y, 0), 10, face, null));
   game.setTeamVar(patch.team, patch.varbit, 0);
-  unburyStandards(patch);
   player.sendMessage("You've collapsed the tunnel!");
   for (const victim of game.gameArea.getPlayers().filter((other) => crushedBy(patch, other))) {
     victim.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(victim.getHitpoints(), core.HitMask.RED)]);

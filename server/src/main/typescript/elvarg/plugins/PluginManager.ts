@@ -2568,6 +2568,7 @@ export class PluginManager {
         "secondClick",
         "thirdClick",
         "fourthClick",
+        "fifthClick",
       ] as const) {
         const action = definition[property];
         if (action === undefined) {
@@ -2628,7 +2629,8 @@ export class PluginManager {
         !normalized.firstClick &&
         !normalized.secondClick &&
         !normalized.thirdClick &&
-        !normalized.fourthClick
+        !normalized.fourthClick &&
+        !normalized.fifthClick
       ) {
         console.warn(
           `[plugins] ${pluginName} attempted empty NPC interaction definition registration`

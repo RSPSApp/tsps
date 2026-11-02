@@ -1750,6 +1750,10 @@ export class OsrsClient {
                 if (idx === undefined || idx < 0) return 0;
                 return self.playerEcs.getAppearance(idx)?.gender ?? 0;
             },
+            getPlayerPronouns: () => {
+                const idx = self.playerEcs.getIndexForServerId(self.controlledPlayerServerId);
+                return idx === undefined || idx < 0 ? -1 : self.playerEcs.getAppearance(idx)?.pronouns ?? -1;
+            },
             getMinimapZoom: () => {
                 return self.minimapZoom;
             },
@@ -4761,6 +4765,9 @@ export class OsrsClient {
             // Sync equipment inventory only for local player
             const isLocalPlayer = serverId === this.controlledPlayerServerId;
             const pa = this.buildPlayerAppearanceFromPayload(appearance, isLocalPlayer);
+            if (isLocalPlayer && this.widgetManager.getInterfaceParentContainerUid(679) !== undefined) {
+                this.playerDesign?.preserveDraftAppearance(pa);
+            }
             this.playerEcs.setAppearance(ecsIndex, pa);
             // Keep the dedicated icon array in lockstep with the decoded
             // appearance for remote players as well as the local player.
@@ -4876,7 +4883,9 @@ export class OsrsClient {
         if (syncEquipment && !(Number(payload?.npcTransformationId) >= 0)) {
             this.syncEquipmentInventory(equip, equipQty);
         }
-        return new PlayerAppearance(gender, colors, kits, equip, headIcons, payload?.npcTransformationId);
+        const appearance = new PlayerAppearance(gender, colors, kits, equip, headIcons, payload?.npcTransformationId);
+        appearance.pronouns = Number.isInteger(payload?.pronouns) ? payload.pronouns : gender;
+        return appearance;
     }
 
     /** Sync the equipment inventory from appearance equip array for CS2 INV_GETOBJ(94, slot) */

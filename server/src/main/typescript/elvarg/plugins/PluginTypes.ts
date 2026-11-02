@@ -213,6 +213,7 @@ export interface PluginNpcInteractionDefinition {
   secondClick?: PluginNpcInteractionActionDefinition;
   thirdClick?: PluginNpcInteractionActionDefinition;
   fourthClick?: PluginNpcInteractionActionDefinition;
+  fifthClick?: PluginNpcInteractionActionDefinition;
 }
 
 export interface PluginNpcDeathEvent {

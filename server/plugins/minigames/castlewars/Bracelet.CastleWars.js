@@ -45,7 +45,7 @@ function showCharges(player) {
 }
 
 function depositBracelets(event) {
-  if (event.target.getDefinition().getName() !== "Lanthus") return;
+  if ((event.definition ?? event.target.getCurrentDefinition(event.player)).getName() !== "Lanthus") return;
   const definition = api.core.ItemDefinition.forId(event.itemId);
   const id = definition.isNoted() ? definition.unNote() : event.itemId;
   const ids = Object.keys(game.data.BRACELET_NEXT).map(Number);

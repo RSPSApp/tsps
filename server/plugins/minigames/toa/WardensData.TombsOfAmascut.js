@@ -1,9 +1,22 @@
 "use strict";
 
 /**
- * Tile tables for the Wardens, converted from Near-Reality's WardenEncounter, WardensObelisk,
- * SecondWardenEncounter and FlyingWardenNPC. Tiles are [x, y] on plane 1; floor pieces are
- * [objectId, type, rotation, x, y].
+ * Tile tables for the Wardens, each compared tile for tile with a capture. Tiles are [x, y] on
+ * plane 1 (captures are instance copies, so they're compared by offset from the obelisk or the
+ * final Warden); floor pieces are [objectId, type, rotation, x, y].
+ *
+ * - ELIDINIS_TRAPS / TUMEKEN_TRAPS: toa_wardens_pyramid01/02, 227/01852 ticks 19912 and 19928:
+ *   exact, all 30 and 32.
+ * - WHEELS: the 2236 tile graphics, 223/00014 ticks 3720-3951: exact, in this order.
+ * - FLOOR_COLLAPSE: rows 0-4 exact against 223/00014 ticks 4422-4498 (id, rotation, tile, row).
+ *   Rows 5-7 appear in no recording; no fight lasted that long. Which tile of a row falls on
+ *   which of its four ticks differs per fight; this table is one order.
+ * - FLOOR_ATTACKS: each rotation's tiles exact against 223/00014 ticks 4031, 4038, 4045. Which
+ *   of the four graphics a tile shows differs per slam, so the room picks one at random.
+ * - FULL_FLOOR_ATTACK: 227/00101 tick 18608: 140 of its 142 tiles match.
+ * - SKULLS: every siphon set of all 40 recorded fights; each is always the same.
+ *
+ * The obelisk's skull bombs have no table: they land at random (Wardens' sendSkullBombs).
  */
 
 /** The 3x3 rotating blades Elidinis' Warden calls down (south-west corners). */
@@ -141,13 +154,7 @@ const WHEELS = [
   ]
 ];
 
-/** Where the obelisk's skull bombs land, in order from a random start. */
-const SKULL_BOMBS = [
-  [3816, 5148], [3810, 5161], [3804, 5144], [3810, 5153], [3807, 5161], [3818, 5164],
-  [3799, 5148], [3798, 5160], [3807, 5147], [3811, 5160], [3798, 5154]
-];
-
-/** P3 floor collapse: object groups placed one per tick, four groups per row. */
+/** P3 floor collapse: object groups placed one per tick, four groups per row, y 5165 first. */
 const FLOOR_COLLAPSE = [
   [
     [45730, 22, 1, 3933, 5165], [45730, 22, 1, 3930, 5165], [45730, 22, 1, 3928, 5165],
@@ -434,7 +441,7 @@ const FULL_FLOOR_ATTACK = [
   ]
 ];
 
-/** Energy siphon tiles for each of the four skull phases; [0] solo, [1] parties (NR leaves [1] a copy). */
+/** Energy siphon tiles for each of the four skull phases; [0] one player in the arena, [1] more. */
 const SKULLS = [
   [
     [
@@ -453,19 +460,24 @@ const SKULLS = [
   ],
   [
     [
-      [3933, 5162], [3936, 5164], [3939, 5162], [3936, 5160]
+      [3929, 5163], [3931, 5160], [3933, 5163], [3934, 5159], [3936, 5161], [3938, 5159],
+      [3939, 5163], [3941, 5160], [3943, 5163]
     ],
     [
-      [3932, 5164], [3934, 5161], [3936, 5164], [3938, 5161], [3940, 5164]
+      [3930, 5164], [3931, 5161], [3933, 5164], [3934, 5162], [3935, 5159], [3937, 5159],
+      [3938, 5162], [3939, 5164], [3941, 5161], [3942, 5164]
     ],
     [
-      [3934, 5164], [3934, 5162], [3934, 5160], [3938, 5164], [3938, 5162], [3938, 5160]
+      [3932, 5159], [3932, 5161], [3932, 5163], [3935, 5160], [3935, 5162], [3935, 5164],
+      [3936, 5158], [3937, 5160], [3937, 5162], [3937, 5164], [3940, 5159], [3940, 5161],
+      [3940, 5163]
     ],
     [
-      [3930, 5161], [3932, 5164], [3934, 5161], [3936, 5164], [3938, 5161], [3940, 5164],
-      [3942, 5161]
+      [3928, 5161], [3929, 5164], [3931, 5158], [3931, 5161], [3933, 5164], [3934, 5161],
+      [3935, 5164], [3936, 5158], [3937, 5164], [3938, 5161], [3939, 5164], [3941, 5158],
+      [3941, 5161], [3943, 5164], [3944, 5161]
     ]
   ]
 ];
 
-module.exports = { ELIDINIS_TRAPS, TUMEKEN_TRAPS, WHEELS, SKULL_BOMBS, FLOOR_COLLAPSE, FLOOR_ATTACKS, FULL_FLOOR_ATTACK, SKULLS };
+module.exports = { ELIDINIS_TRAPS, TUMEKEN_TRAPS, WHEELS, FLOOR_COLLAPSE, FLOOR_ATTACKS, FULL_FLOOR_ATTACK, SKULLS };

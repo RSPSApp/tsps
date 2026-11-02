@@ -58,6 +58,14 @@ function makePlayer() {
     containsNumber: (id) => inventory.getAmount(id) > 0,
     getFreeSlots: () => 28 - usedSlots(),
     isFull: () => usedSlots() >= 28,
+    getItems() {
+      return [...items.entries()].map(([id, amount]) => ({
+        getId: () => id,
+        getAmount: () => amount,
+        setId(next) { items.delete(id); items.set(next, amount); },
+      }));
+    },
+    refreshItems() {},
     adds(id, amount = 1) {
       items.set(id, inventory.getAmount(id) + amount);
       return inventory;
@@ -74,7 +82,7 @@ function makePlayer() {
   };
 
   const player = {
-    attrs, items, messages, xp, jingles, moves, configs, varbits, inventory,
+    attrs, items, messages, xp, jingles, moves, configs, varbits, inventory, damage: [],
     localNpcs: [],
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
@@ -89,6 +97,9 @@ function makePlayer() {
       getCombatLevel: () => 20,
     }),
     getPacketSender: () => sender,
+    getCombat: () => ({
+      getHitQueue: () => ({ addPendingDamage: (hits) => player.damage.push(...hits) }),
+    }),
     getLocation: () => location,
     setLocation: (next) => { location = next; },
     moveTo: (next) => moves.push([next.getX(), next.getY(), next.getZ()]),
@@ -130,6 +141,7 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
   const registered = [];
   const deregistered = [];
   const worldObjects = [];
+  const clock = { tick: 0 };
   let area = null;
 
   class FakeGameObject {
@@ -150,7 +162,7 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
   const fakeCore = {
     ...core,
     TaskManager: { submit: noop, cancelTasks: noop },
-    World: { getObjects: () => worldObjects },
+    World: { getObjects: () => worldObjects, getProcessCycle: () => clock.tick },
     MapObjects: { mapObjects: new Map(), getHash: (x, y, z) => `${x},${y},${z}` },
     RegionManager: { loadMapFiles: noop },
     GameObject: FakeGameObject,
@@ -227,7 +239,7 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
   const h = {
     player, custom, variants, conditions, objectHooks, itemOnNpc, itemOnObject,
     itemActions, itemOnItem, groundPickups, logins, logouts, deaths, spawned, removed, registered,
-    deregistered, worldObjects, quest, get area() { return area; },
+    deregistered, worldObjects, quest, clock, get area() { return area; },
   };
   if (!firstHarness) firstHarness = h;
   return h;
@@ -453,6 +465,179 @@ test('mandatory source route reaches completion through the registered handlers'
     variant: 'standard-dialogue-after-priest-in-peril-after-nature-spirit',
   });
   assert.equal(variant(h, N.NATURE_SPIRIT), 'returning-to-filliman-s-grove-attempting-to-talk-to-him-again-before-he-disappears');
+});
+
+test('invisible ghasts in Mort Myre attack, rot food, and become visible', () => {
+  const player = makePlayer();
+  const h = harness({ player });
+  player.setLocation(new core.Location(3440, 3345, 0));
+  const ghast = {
+    getId: () => N.GHAST,
+    getLocation: () => new core.Location(3441, 3345, 0),
+  };
+  player.localNpcs = [ghast];
+  const random = Math.random;
+  try {
+    // First tick only schedules the first attempt; the roll happens on a later cycle.
+    h.clock.tick = 0;
+    h.area.process(player);
+    player.inventory.adds(I.SHRIMPS, 1);
+    h.clock.tick = 20;
+    Math.random = () => 0.9; // not ignored, not a miss
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 0, 'the attack rots the food');
+    assert.equal(player.inventory.getAmount(I.ROTTEN_FOOD), 1);
+    assert.equal(h.spawned.at(-1).getId(), N.GHAST_2, 'a ghast that lands a hit becomes visible');
+    assert.equal(player.damage.length, 0, 'rotting food replaces the damage');
+
+    // With nothing to rot the same roll deals 1-3 damage.
+    h.clock.tick = 200;
+    Math.random = () => 0.9;
+    h.area.process(player);
+    assert.equal(player.damage.length, 1);
+    assert.ok(player.damage[0].getDamage() >= 1 && player.damage[0].getDamage() <= 3);
+
+    // 7/10 of attempts miss: no rot, no damage, no visible ghast.
+    h.clock.tick = 400;
+    Math.random = () => 0.1;
+    const spawnedBefore = h.spawned.length;
+    player.inventory.adds(I.SHRIMPS, 1);
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 1);
+    assert.equal(player.damage.length, 1);
+    assert.equal(h.spawned.length, spawnedBefore);
+  } finally {
+    Math.random = random;
+  }
+});
+
+test('one invisible ghast keeps one visible copy through repeat attacks, death and logout', () => {
+  const player = makePlayer();
+  const h = harness({ player });
+  player.setLocation(new core.Location(3440, 3345, 0));
+  const ghast = {
+    getId: () => N.GHAST,
+    getLocation: () => new core.Location(3441, 3345, 0),
+  };
+  player.localNpcs = [ghast];
+  h.quest.setStage(player, 90);
+  const visibleGhasts = () => h.spawned.filter((npc) => npc.getId() === N.GHAST_2);
+  const random = Math.random;
+  try {
+    Math.random = () => 0.9; // never ignored, never a miss
+    h.clock.tick = 0;
+    h.area.process(player); // the first pass only schedules the attempt
+    player.inventory.adds(I.SHRIMPS, 3);
+
+    h.clock.tick = 20;
+    h.area.process(player);
+    assert.equal(visibleGhasts().length, 1);
+    const first = h.spawned.at(-1);
+
+    // The source stays in the player's local NPCs, so two more hits must reuse its one form.
+    assert.ok(player.localNpcs.includes(ghast));
+    h.clock.tick = 60;
+    h.area.process(player);
+    h.clock.tick = 100;
+    h.area.process(player);
+    assert.equal(visibleGhasts().length, 1, 'a revealed source does not spawn a second copy');
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 0, 'each hit still takes one food item');
+
+    // Using the pouch on a source that is already visible costs nothing and adds no copy.
+    player.inventory.adds(FILLED_POUCH, 1);
+    itemOnNpcAction(h, { npcId: N.GHAST, itemId: FILLED_POUCH, target: ghast });
+    assert.equal(visibleGhasts().length, 1);
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 1, 'no charge is spent on a ghast already visible');
+
+    // The form dying counts once and frees the source to be revealed again.
+    death(h, first);
+    assert.equal(h.quest.getStage(player), 95);
+    death(h, first);
+    assert.equal(h.quest.getStage(player), 95, 'one form cannot count twice');
+
+    itemOnNpcAction(h, { npcId: N.GHAST, itemId: FILLED_POUCH, target: ghast });
+    const second = h.spawned.at(-1);
+    assert.equal(second.getId(), N.GHAST_2);
+    assert.notEqual(second, first, 'a dead form is replaced, not reused');
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 0);
+
+    // Logout removes the tracked form, so the next visit starts with nothing lingering.
+    for (const handler of h.logouts) handler({ player });
+    assert.ok(h.removed.includes(second), 'logout removes the visible form it tracked');
+    player.inventory.adds(FILLED_POUCH, 1);
+    itemOnNpcAction(h, { npcId: N.GHAST, itemId: FILLED_POUCH, target: ghast });
+    const third = h.spawned.at(-1);
+    assert.equal(third.getId(), N.GHAST_2);
+    assert.notEqual(third, second);
+  } finally {
+    Math.random = random;
+  }
+});
+
+test('a filled druid pouch spends a charge to reveal an attacking ghast instead of food or damage', () => {
+  const player = makePlayer();
+  const h = harness({ player });
+  player.setLocation(new core.Location(3440, 3345, 0));
+  const ghast = {
+    getId: () => N.GHAST,
+    getLocation: () => new core.Location(3441, 3345, 0),
+  };
+  player.localNpcs = [ghast];
+  h.quest.setStage(player, 90);
+  const visibleGhasts = () => h.spawned.filter((npc) => npc.getId() === N.GHAST_2);
+  const random = Math.random;
+  try {
+    Math.random = () => 0.9; // never ignored, never a miss
+    h.clock.tick = 0;
+    h.area.process(player); // the first pass only schedules the attempt
+    player.inventory.adds(I.SHRIMPS, 1);
+    player.inventory.adds(FILLED_POUCH, 3);
+
+    // Food in the pack: one charge reveals the ghast, and the food survives.
+    h.clock.tick = 20;
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 2, 'the pouch spends one charge');
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 1, 'the protected food is not rotted');
+    assert.equal(player.inventory.getAmount(I.ROTTEN_FOOD), 0);
+    assert.equal(player.damage.length, 0, 'a revealed attacker deals no damage');
+    assert.equal(visibleGhasts().length, 1);
+
+    // The revealed source keeps attacking through its one form: no second charge or copy.
+    h.clock.tick = 60;
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 2, 'no charge is spent on a ghast already visible');
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 1);
+    assert.equal(visibleGhasts().length, 1);
+
+    // No food either: the pouch still protects, spending the next charge on a fresh reveal.
+    death(h, h.spawned.at(-1));
+    player.inventory.deleteNumber(I.SHRIMPS, 1);
+    h.clock.tick = 100;
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 1, 'the pouch spends a charge with no food to rot');
+    assert.equal(player.damage.length, 0, 'no food does not mean damage while the pouch is charged');
+    assert.equal(visibleGhasts().length, 2, 'the dead form is replaced by a fresh reveal');
+
+    // The last charge goes the same way and leaves the empty pouch behind.
+    death(h, h.spawned.at(-1));
+    player.inventory.adds(I.SHRIMPS, 1);
+    h.clock.tick = 140;
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 0);
+    assert.equal(player.inventory.getAmount(EMPTY_POUCH), 1, 'the spent pouch becomes the empty pouch');
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 1);
+    assert.equal(visibleGhasts().length, 3);
+
+    // An empty pouch is no protection: the food rots again.
+    death(h, h.spawned.at(-1));
+    h.clock.tick = 180;
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 0, 'without a charged pouch the food rots');
+    assert.equal(player.inventory.getAmount(I.ROTTEN_FOOD), 1);
+    assert.equal(visibleGhasts().length, 4);
+  } finally {
+    Math.random = random;
+  }
 });
 
 test('login replays the saved stage in varp 307, including a fresh stage 0', () => {

@@ -515,6 +515,7 @@ export class PlayerSession {
       payload = encodePlayerAppearance(
         {
           gender: look[Appearance.GENDER] ?? 0,
+          pronouns: player.getAppearance().getPronouns(),
           colors: [
             look[Appearance.HAIR_COLOUR],
             look[Appearance.TORSO_COLOUR],

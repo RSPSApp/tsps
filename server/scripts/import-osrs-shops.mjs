@@ -79,6 +79,10 @@ const NPC_OVERRIDES = {
   // Felix's Trade opens the Guardians of the Rift Omnishop; only the Temple of
   // the Eye quest copies of him keep this shop.
   "Temple Supplies": { remove: [11404] },
+  // Fadli's Buy opens the Shop of Distaste; this shop opens from the rotten tomato
+  // crates by the pillories and Emir's Arena (Wiki: Pelters' Veg Stall), which the
+  // Pillory plugin serves.
+  "Pelters' Veg Stall": { remove: [3340] },
 };
 
 // Shops whose rows tsps lists in another order than the Wiki: these IDs come
@@ -192,6 +196,7 @@ function npcInteractions(name, owners) {
     bySlot.set(Number(slot), set);
   }
   return [...bySlot.entries()]
+    .filter(([, ids]) => ids.size > 0)
     .sort((a, b) => a[0] - b[0])
     .map(([optionSlot, ids]) => ({ npcIds: [...ids].sort((a, b) => a - b), optionSlot }));
 }

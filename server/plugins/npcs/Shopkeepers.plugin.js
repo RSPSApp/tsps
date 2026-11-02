@@ -3,7 +3,7 @@ const path = require("path");
 const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 
-const CLICK_FIELDS = ["firstClick", "secondClick", "thirdClick", "fourthClick"];
+const CLICK_FIELDS = ["firstClick", "secondClick", "thirdClick", "fourthClick", "fifthClick"];
 
 const ITEM_CURRENCY_ALIASES = {
   [ItemIdentifiers.AGILITY_ARENA_TICKET]: ["Agility arena ticket (discontinued)"],

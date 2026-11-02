@@ -111,7 +111,8 @@ function entryWipe({ player }) {
 
 /** Heal: as a shark, prayer, stamina, super combat and ranging potion at once. */
 function useBandage(event) {
-  const { player } = event;
+  const { player, itemId } = event;
+  if (itemId !== Shared.ITEM.BANDAGES) return false;
   const { Skill } = Shared.core();
   const inventory = player.getInventory();
   if (!inventory.contains(Shared.ITEM.BANDAGES)) return true;

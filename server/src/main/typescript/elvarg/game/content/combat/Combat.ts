@@ -758,6 +758,9 @@ export class Combat {
         if (!this.character.isNpc()) return false;
         const npc = this.character.getAsNpc();
         if (Number(npc.getAttribute("arceuus:dark-lure-until") ?? 0) > World.getProcessCycle()) return false;
+        // "combat:no-retreat": an NPC content moves about its arena (a raid boss teleported by its own
+        // specials) never gives up on its target for being far from where it spawned.
+        if (npc.hasFlag("combat:no-retreat")) return false;
         if (!npc.getCurrentDefinition().doesRetreat()) return false;
         const coordinator = npc.getMovementCoordinator();
         if (coordinator.getCoordinateState() === CoordinateState.RETREATING ||

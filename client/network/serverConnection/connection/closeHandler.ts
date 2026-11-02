@@ -37,9 +37,11 @@ export function initSocketCloseHandler(ws: GameSocket, initConnection: (url: str
             // pins the rest of the session to relay-only, so the next login flails.
             const connectivityFailure = evt.code === 4001;
             if (connectivityFailure && !suppress && !isIntentionalClose) preferWebRtcRelay();
-            const terminalConnectFailure = evt.code === 4000;
             // Only reconnect if we have stored session credentials (were previously logged in)
             const hasSession = state.sessionUsername !== null && state.sessionPassword !== null;
+            // A world that drops a logged-in player mid-login can refuse the next attempt once
+            // (session-error, relay restart), so 4000 only ends a first login.
+            const terminalConnectFailure = evt.code === 4000 && !hasSession;
             const shouldReconnect =
                 hasSession &&
                 !suppress &&

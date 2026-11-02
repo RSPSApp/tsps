@@ -158,6 +158,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `herblore:herbs` | Herblore | lookup: every herb `{ grimyId, cleanId, level, xp }` |
 | `firemaking:light-roll`, `firemaking:logs-per-action` | Firemaking | `{ player, success }` after the lighting roll; `{ player, logId, amount }` for the logs one action burns |
 | `shop:buy-price`, `shop:delivery` | core `ShopManager` (the price shown, the value check and the purchase; the purchase) | `{ player, shopId, shopName, currency, itemId, price }`: a priced item may become free (0), never below; `{ player, shopId, currency, itemId, deliverId }`: the purchase is handed over as `deliverId` (a note), whose own stacking decides the room it needs |
+| `shop:keep-stock` | core `ShopManager` (a purchase, as it takes the stock) | `{ player, shopId, itemId, amount, keep }`: `keep` leaves the shop's own stock as it was, so only stock above its own amount (what players sold it) goes; ShopStock.LeagueMode.js keeps it for a league whose `shopStock.keep` is set (Leagues VI) |
 | `shop:can-sell`, `shop:sell-price` (extended) | core `ShopManager` | the existing payloads now carry `player` (when a player is selling) and `currency` |
 | `magic:alchemy-policy` (extended) | core `MagicOnItemPacketListener` | asked before the level check (the zone rules still follow it), now with `requiredLevel`, `freeRunes`, `keepItem` and `recast` (cast again on the slot once this cast ends while it holds the same item); a plugin that turns the cast into something else (Mage Training Arena, While Guthix Sleeps) clears `confirm`, `keepItem` and `recast` |
 | `bone-altars:offering` | BoneAltars | `{ player, itemId, boneItemId, cost, anyAltar }`: an item that is not a bone offered as `boneItemId`, `cost` of it an offering, and with `anyAltar` on any altar one prays at (the bone's burying XP; a private area's altars, a house's, stay its own) |
@@ -1284,6 +1285,14 @@ progress in `league:mastery-progress`.
   are not raised); 6 60% Prayer penetration:
   the roll bypasses the target's protection prayer and the damage then takes 40% of the usual
   reduction (0.6 + 0.4 x the core's constant).
+
+### Shops that never deplete (Leagues VI)
+
+`league/ShopStock.LeagueMode.js`, data `leagues.json` `shopStock`: "Most shop stock will not
+deplete" (Leagues VI's news posts, the Wiki's guides). A league character's purchase leaves the
+shop's own stock as it was (`shop:keep-stock`); only stock players sold it still goes, down to
+the shop's own amount (ours). Every league buy in the recordings (39 shops, 600+ buys) left the
+stock unchanged; the exceptions "most" implies are not recorded, so there are none.
 
 ## Demonic Pacts
 

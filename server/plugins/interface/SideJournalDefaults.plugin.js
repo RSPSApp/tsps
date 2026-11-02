@@ -100,6 +100,10 @@ function playTime(player) {
   return saved + (start === undefined ? 0 : Math.max(0, Date.now() - start));
 }
 
+function queryPlayTime(request) {
+  request.milliseconds = playTime(request.player);
+}
+
 /** Moves the session so far into the saved total, so a save always holds it. */
 function flushPlayTime(player) {
   if (!sessionStartByPlayer.has(player)) return;
@@ -166,6 +170,7 @@ module.exports = {
   register(api) {
     pluginApi = api;
     api.onCustomEvent("side-journal:mount", mountRequested);
+    api.onCustomEvent("account:play-time", queryPlayTime);
     api.persistAttribute(PLAY_TIME_ATTRIBUTE, 0);
     api.persistAttribute(PLAY_TIME_DISPLAY_ATTRIBUTE, false);
     api.persistAttribute(PLAY_TIME_REMIND_DISABLE_ATTRIBUTE, false);

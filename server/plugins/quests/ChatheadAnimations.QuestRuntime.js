@@ -2,7 +2,8 @@
  * Chat-head animations for quest speech, from live OSRS captures. The Wiki transcripts behind
  * npc-dialogues.json carry the words but not the head's animation, so each captured line's
  * animation is looked up by speaker and exact text; anything uncaptured keeps the default head.
- * data/chathead-animations.json is built by scripts/chathead-animations-from-capture.js.
+ * data/chathead-animations.json holds the lines of the rsprox captures each audited quest's
+ * docs/quests page lists.
  */
 const ANIMATIONS = require("./data/chathead-animations.json");
 const PLAYER_SPEAKER = "player";

@@ -585,7 +585,8 @@ module.exports = function registerDemonSlayerQuest(api) {
   // The dump keeps wiki placeholders in a few spoken lines; render them.
   function renderDialogueLine(event) {
     const text = String(event.text || "");
-    if (text === "Okay, here you go." && quest.getStage(event.player) === 0) event.after = () => payAris(event.player);
+    if (text === "Okay, here you go." && (event.npcId === ARIS_NPC_ID || event.npcId === ARIS_LEGACY_NPC_ID) &&
+        quest.getStage(event.player) === 0) event.after = () => payAris(event.player);
     if (text === "I gave the other to the wizard Traiborn." && PRYSIN_NPC_IDS.has(event.npcId)) {
       event.after = () => {
         const stage = quest.getStage(event.player);

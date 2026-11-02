@@ -99,6 +99,14 @@ const choose = (prompt, label) => {
   const index = prompt.options.indexOf(label); assert.ok(index >= 0, `missing choice ${label}`); prompt.options[index + 1]();
 };
 
+test("Demon Slayer's coin is only taken for Aris, not another NPC's 'Okay, here you go.'", () => {
+  const q = register('DemonSlayer', 'demon_slayer'), p = player(); p.items.set(995, 10);
+  // Biohazard's repeat Chemist transcript has the same spoken line.
+  const chemist = { player: p, npcId: core.NpcIdentifiers.CHEMIST, text: 'Okay, here you go.' };
+  q.emit('npc-dialogue:line', chemist);
+  assert.equal(chemist.after, undefined); assert.equal(p.items.get(995), 10);
+});
+
 test('Demon Slayer keeps the captured incantation in dialogue and preserves sibling varbits', () => {
   const q = register('DemonSlayer', 'demon_slayer'), p = player(); p.items.set(995, 2);
   const pay = { player: p, npcId: core.NpcIdentifiers.ARIS, text: 'Okay, here you go.' };

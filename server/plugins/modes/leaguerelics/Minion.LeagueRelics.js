@@ -117,11 +117,17 @@ function attack(player, minion, target) {
   else core.TaskManager.submit(new core.CountdownTask(npc, look.hitDelayTicks - 1, land));
 }
 
-/** The NPC its owner fights, when the minion may fight it too. */
+/**
+ * The NPC its owner fights, when the minion may fight it too: only one the owner may attack now
+ * (core's attack permission, which spends nothing). Combat keeps a refused target to retry it
+ * (a second NPC clicked while another holds the owner in single combat), so the target alone
+ * is no leave to hit it.
+ */
 function targetOf(player) {
   const target = player.getCombat().getTarget();
   if (!target?.isNpc?.() || !target.isRegistered?.() || target.isUntargetable?.() || target.getHitpoints() <= 0) return null;
   if (DATA.spared.includes(target.getDefinition?.()?.getName?.())) return null;
+  if (core.CombatFactory.canAttackPermission(player, target) !== core.CanAttackResponse.CAN_ATTACK) return null;
   return target;
 }
 

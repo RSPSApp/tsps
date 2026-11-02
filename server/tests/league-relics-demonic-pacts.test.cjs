@@ -1558,6 +1558,8 @@ test("Minion: fights its owner's NPC every 3 ticks for 3 to its max, in the targ
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: ([hit]) => hits.push(hit) }), addDamage() {} }),
   };
   t.mock.method(player, "getCombat", () => ({ getTarget: () => target }));
+  let permission = core.CanAttackResponse.CAN_ATTACK;
+  t.mock.method(core.CombatFactory, "canAttackPermission", () => permission);
   const shown = { models: null, animations: [], graphics: [] };
   const npc = {
     isRegistered: () => true, getFollowing: () => null, setFollowing() {}, getInteractingMobile: () => target, setMobileInteraction() {},
@@ -1583,6 +1585,10 @@ test("Minion: fights its owner's NPC every 3 ticks for 3 to its max, in the targ
   for (let tick = 0; tick < 4; tick++) core.TaskManager.process();
   assert.ok(hits.length >= 1);
   assert.ok(hits.every((hit) => hit.getDamage() === 3), "a sure hit's lowest roll is the min hit");
+  permission = core.CanAttackResponse.ALREADY_UNDER_ATTACK;
+  for (let tick = 0; tick < 6; tick++) Minion().tick(player, minion);
+  assert.equal(shown.animations.length, 2, "never a target its owner may not attack");
+  permission = core.CanAttackResponse.CAN_ATTACK;
   name = "Yama";
   for (let tick = 0; tick < 6; tick++) Minion().tick(player, minion);
   assert.equal(shown.animations.length, 2, "never Yama");

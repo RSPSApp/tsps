@@ -38,15 +38,34 @@ const equipmentModelRenderOrder = (slot: EquipmentSlot): number => {
     return slot;
 };
 
-// Feet/boots share the legs' layer: a higher layer's depth bias (~15 model units at 7) pushes
-// them through a skirt hanging in front. Leg equipment sits at 0 (under the torso); leg kits at 7.
-const feetRenderLayer = (kits: number[]): number => ((kits[5] ?? -1) !== -1 ? 7 : 0);
+// Legs and feet, kits or equipment, sit at 0 (under the torso). The cache gives leg kits
+// priorities 0-2 against a cape's 5-6, so a cape always covers them; a higher layer's depth bias
+// (~15 model units at 7) pushed them through capes and skirts hanging in front.
+const LEGS_RENDER_LAYER = 0;
 
-const equipmentRenderLayer = (slot: EquipmentSlot, kits: number[]): number => {
-    if (slot === EquipmentSlot.BOOTS) return feetRenderLayer(kits);
-    if (slot === EquipmentSlot.BODY || slot === EquipmentSlot.LEGS) return 0;
+const equipmentRenderLayer = (slot: EquipmentSlot): number => {
+    if (slot === EquipmentSlot.BODY || slot === EquipmentSlot.LEGS || slot === EquipmentSlot.BOOTS) {
+        return LEGS_RENDER_LAYER;
+    }
     if (slot === EquipmentSlot.AMULET) return 4;
     return 7;
+};
+
+// A cape keeps its own face order instead of one flat layer, which let its back show through the
+// emblem. Faces at the legs' priorities (0-2, the lining) share the legs' layer so the legs stay
+// in front of them; the lowest priority above that (a skillcape's back, 5) goes one layer under
+// the rest (its outer faces and emblem, 6-7).
+const CAPE_COMPOSITION_SLOT = 1;
+const LEG_KIT_TOP_PRIORITY = 2;
+
+const capeLayerByPriority = (priorities: ArrayLike<number>): Map<number, number> => {
+    const distinct = [...new Set(Array.from(priorities))];
+    const upper = distinct.filter((priority) => priority > LEG_KIT_TOP_PRIORITY);
+    const back = upper.length > 1 ? Math.min(...upper) : undefined;
+    return new Map(distinct.map((priority) => [
+        priority,
+        priority <= LEG_KIT_TOP_PRIORITY ? LEGS_RENDER_LAYER : priority === back ? 6 : 7,
+    ]));
 };
 
 // Phase A: compose body from IdentityKits only (no equipment yet)
@@ -71,6 +90,7 @@ export class PlayerModelLoader {
         // null = keep the model's own per-face priorities (only the torso uses these; its
         // overlay/pocket faces carry higher priorities than the shirt and must win on ties).
         const modelRenderLayers: (number | null)[] = [];
+        const capeModels = new Set<number>();
         const colors = Array.isArray(appearance.colors) ? appearance.colors : [];
 
         // Body parts 0..6 per Idk: 0 head, 1 jaw, 2 torso, 3 arms, 4 hands, 5 legs, 6 feet
@@ -115,7 +135,7 @@ export class PlayerModelLoader {
                     }
                     modelDatas.push(md);
                     modelRenderLayers.push(
-                        part === 2 ? null : part === 6 ? feetRenderLayer(appearance.kits) : 7,
+                        part === 2 ? null : part === 5 || part === 6 ? LEGS_RENDER_LAYER : 7,
                     );
                 }
             } catch {}
@@ -168,6 +188,9 @@ export class PlayerModelLoader {
                             md.translate(ox, oy, oz);
                         }
                     } catch {}
+                    if (extraCompositionSlots?.[objIndex] === CAPE_COMPOSITION_SLOT) {
+                        capeModels.add(modelDatas.length);
+                    }
                     modelDatas.push(md);
                     modelRenderLayers.push(renderLayer);
                 }
@@ -223,7 +246,13 @@ export class PlayerModelLoader {
         for (let i = 0; i < modelDatas.length; i++) {
             const faceEnd = faceOffset + modelDatas[i].faceCount;
             const layer = modelRenderLayers[i];
-            if (layer !== null) model.faceRenderLayers.fill(layer, faceOffset, faceEnd);
+            const priorities = modelDatas[i].faceRenderPriorities;
+            if (capeModels.has(i) && priorities) {
+                const layers = capeLayerByPriority(priorities);
+                for (let f = 0; f < priorities.length; f++) {
+                    model.faceRenderLayers[faceOffset + f] = layers.get(priorities[f])!;
+                }
+            } else if (layer !== null) model.faceRenderLayers.fill(layer, faceOffset, faceEnd);
             faceOffset = faceEnd;
         }
         // do not baseline-align the merged player model (PlayerComposition.getModel
@@ -349,7 +378,7 @@ export class PlayerModelLoader {
         return this.buildStaticModel(
             workingAppearance,
             extras.map(({ obj }) => obj),
-            extras.map(({ slot }) => equipmentRenderLayer(slot, kits)),
+            extras.map(({ slot }) => equipmentRenderLayer(slot)),
             extras.map(({ slot,compositionSlot }) => compositionSlot ?? [0,1,2,3,4,5,7,9,10,12,13,11][slot]),
         );
     }
@@ -389,7 +418,7 @@ export class PlayerModelLoader {
         return this.buildStaticModel(
             armAppearance,
             extras.map(({ obj }) => obj),
-            extras.map(({ slot }) => equipmentRenderLayer(slot, armAppearance.kits)),
+            extras.map(({ slot }) => equipmentRenderLayer(slot)),
             extras.map(({ slot }) => [0,1,2,3,4,5,7,9,10,12,13,11][slot]),
         );
     }

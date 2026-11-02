@@ -1375,20 +1375,36 @@ export class ClientConnection {
   private groundItemAction(packet: Extract<ReturnType<typeof decodeClientPackets>[number], { type: "ground_item_action" }>): void {
     const player = this.player!;
     const option = packet.option?.toLowerCase() ?? "";
+    const actions = CacheDefinitions.getItem(packet.itemId)?.groundActions ?? [];
     if (option === "examine") {
       const definition = ItemDefinition.forId(packet.itemId);
       player.sendMessage(definition.getExamine() || definition.getName());
-    } else if (option === "take" || (!option && (player.getPrivateArea() || packet.optionIndex === 3 || packet.optionIndex == null))) {
-      // A named option other than Take is the item's own, even in a private area (giant
-      // bones' "Bury" is their op3, where Take usually sits).
+      return;
+    }
+    if (option === "take") {
       PickupItemPacketListener.pickup(player, packet.itemId, packet.x, packet.y, packet.stackId);
-    } else {
-      // A named option (the agent MCP) is resolved to its op number, as the client sends it.
-      const named = option
-        ? CacheDefinitions.getItem(packet.itemId)?.groundActions?.findIndex((action) => action?.toLowerCase() === option) ?? -1
-        : -1;
+      return;
+    }
+
+    if (option) {
+      const namedIndex = actions.findIndex((action) => action?.toLowerCase() === option);
+      if (namedIndex < 0) return;
+      // The name must match the cache, and a supplied op number must agree with it.
+      const index = packet.optionIndex ?? namedIndex + 1;
+      if (index !== namedIndex + 1) return;
       SecondGroundItemOptionPacketListener.interact(
-        player, packet.itemId, packet.x, packet.y, packet.optionIndex ?? (named >= 0 ? named + 1 : 2)
+        player, packet.itemId, packet.x, packet.y, index
+      );
+    } else {
+      const index = packet.optionIndex ?? 3;
+      const action = actions[index - 1];
+      if (action?.toLowerCase() === "take" || (index === 3 && !action)) {
+        PickupItemPacketListener.pickup(player, packet.itemId, packet.x, packet.y, packet.stackId);
+        return;
+      }
+      if (!action) return;
+      SecondGroundItemOptionPacketListener.interact(
+        player, packet.itemId, packet.x, packet.y, index
       );
     }
   }

@@ -214,7 +214,7 @@ test('normal Open supports the other jail cell and requires a carried dusty key 
 
 test('opening the Cauldron of Thunder prison door wakes one suit of armour per click, then opens', () => {
   const h = setup();
-  const { awakeSuits } = require('../plugins/areas/TaverleyDungeon.plugin').__internals;
+  const { awakeSuits } = require('../plugins/areas/TaverleyDungeon.plugin')._test;
   const O = core.ObjectIdentifiers, SUIT = O.SUIT_OF_ARMOUR_2;
   const south = new core.Location(2887, 9829, 0), north = new core.Location(2887, 9832, 0);
   const door = new core.Location(2889, 9830, 0);
@@ -264,7 +264,7 @@ test('opening the Cauldron of Thunder prison door wakes one suit of armour per c
 
 test('a suit that is left alone stands down and its loc returns', () => {
   const h = setup();
-  const { awakeSuits } = require('../plugins/areas/TaverleyDungeon.plugin').__internals;
+  const { awakeSuits } = require('../plugins/areas/TaverleyDungeon.plugin')._test;
   const O = core.ObjectIdentifiers, south = new core.Location(2887, 9829, 0);
   try {
     core.RegionManager.loadMapFiles(2889, 9830, false);

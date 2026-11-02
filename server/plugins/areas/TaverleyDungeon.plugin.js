@@ -209,5 +209,5 @@ module.exports = {
     api.onNpcDialogueCondition(answerVelrak.bind(null, api.core));
     api.onCustomEvent('npc-dialogue:action', giveDustyKey.bind(null, api.core));
   },
-  __internals: { awakeSuits },
+  _test: { awakeSuits },
 };

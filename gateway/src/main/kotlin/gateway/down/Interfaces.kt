@@ -207,6 +207,8 @@ class Interfaces(
         send(IfSetEventsV2(uid ushr 16, uid and 0xFFFF, start.signed16(), end.signed16(), events and (OLD_OP_BITS shl 1).inv(), ops))
     }
 
+    private var summaryCombat = -1
+
     private fun stats(reader: TspsReader) {
         repeat(reader.u8()) {
             val stat = reader.u8()
@@ -219,7 +221,20 @@ class Interfaces(
         }
         reader.u16() // total level
         // The browser works the combat level out itself and shows it from this varbit.
-        varps.setVarbit(COMBAT_LEVEL_VARBIT, reader.u8())?.let(send)
+        val combat = reader.u8()
+        varps.setVarbit(COMBAT_LEVEL_VARBIT, combat)?.let(send)
+        summaryCombatLevel(combat)
+    }
+
+    /**
+     * The character summary (712) shows varc 52, which the official client only sets by running
+     * script 3954 (the browser sets the varc itself). Unset it reads -1. The script lays out the
+     * summary rows, so it waits until 712 is mounted and runs again only when the level changes.
+     */
+    private fun summaryCombatLevel(combat: Int) {
+        if (combat == summaryCombat || !exists(SUMMARY_CONTENTS)) return
+        summaryCombat = combat
+        send(RunClientScript(SUMMARY_COMBAT_SCRIPT, listOf(SUMMARY_CONTENTS, SUMMARY_CLICK_LAYER, combat)))
     }
 
     private inline fun component(reader: TspsReader, message: (Int, Int) -> OutgoingGameMessage) {
@@ -246,5 +261,8 @@ class Interfaces(
         const val ARG_LONG = 2
         const val OLD_OP_BITS = 0x3FF
         const val COMBAT_LEVEL_VARBIT = 13027
+        const val SUMMARY_COMBAT_SCRIPT = 3954
+        const val SUMMARY_CONTENTS = (712 shl 16) or 2
+        const val SUMMARY_CLICK_LAYER = (712 shl 16) or 3
     }
 }

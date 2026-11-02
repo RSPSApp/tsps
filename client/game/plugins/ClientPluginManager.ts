@@ -117,12 +117,20 @@ export type NpcOutline = { ecsId: number; serverId: number; color: number; alpha
 /** A movable overlay's top left in device pixels, and the device pixels per layout unit. */
 export type OverlayPlacement = { x: number; y: number; scaleX: number; scaleY: number };
 
-/** UI drawn above the widgets and under the right-click menu (RuneLite's ABOVE_WIDGETS). */
+/** UI drawn above the widgets; overlays may opt into a specific menu-safe draw point. */
 export interface WidgetOverlay {
     /** Changes whenever the drawing would; a change redraws the UI. */
     signature(): string;
     /** Draws the overlay and returns the device rects it covered. */
     draw(context: WidgetOverlayDrawContext): { x: number; y: number; w: number; h: number }[];
+    /** Draw after widget content and tooltips, immediately before the context menu. */
+    drawBeforeMenu?: boolean;
+    /**
+     * The device rects the next draw will cover, when the overlay can tell before drawing. A
+     * changed overlay then redraws only those rects and the ones it covered before, instead
+     * of the whole UI; without it (or returning undefined) a change redraws everything.
+     */
+    coverage?(): { x: number; y: number; w: number; h: number }[] | undefined;
     /**
      * Draw just after the side-panel anchor widget instead of above the whole widget tree.
      * Used by overlays that sit over the side panel (status bars) so tooltips still win.

@@ -575,12 +575,13 @@ export class PacketSender {
       return this;
   }
 
-  public sendString(string: string, id: number): PacketSender {
+  /** Explicit ownership prevents browser cache scripts rewriting the widget; false releases it. */
+  public sendString(string: string, id: number, serverOwned?: boolean): PacketSender {
     const safeText = String(string ?? "");
-    if (!this.player.getFrameUpdater().shouldUpdate(safeText, id)) {
+    if (!this.player.getFrameUpdater().shouldUpdate(safeText, id, serverOwned)) {
       return this;
     }
-    this.player.getSession().sendClientPacket(encodeWidgetSetText(id, safeText));
+    this.player.getSession().sendClientPacket(encodeWidgetSetText(id, safeText, serverOwned));
     return this;
   }
 
@@ -1113,6 +1114,14 @@ export class PacketSender {
 
     const targetIndex = this.resolveProjectileTargetIndex(lockon);
     const sourceIndex = source == null ? 0 : this.resolveProjectileTargetIndex(source);
+    // A projectile whose end is at or before its launch is drawn for one client cycle and
+    // vanishes on the caster (the reported "javelin appears on the player, then disappears").
+    // Never send that: fall back to a normal 5-cycles-a-tile flight when a caller passes one.
+    let endCycleOffset = Math.max(delay + 1, speed);
+    if (endCycleOffset <= delay + 1) {
+      const tiles = typeof start.getDistance === "function" ? start.getDistance(end) : 0;
+      endCycleOffset = delay + 5 + Math.max(0, tiles | 0) * 5;
+    }
     if (this.player.getSession().sendClientPacket(encodeProjectiles([{
       projectileId,
       source: { x: start.getX(), y: start.getY(), level: start.getZ?.() ?? 0 },
@@ -1122,7 +1131,7 @@ export class PacketSender {
       slope: angle,
       startPos: distanceOffset,
       startCycleOffset: delay,
-      endCycleOffset: Math.max(delay + 1, speed),
+      endCycleOffset,
       targetActor: PacketSender.projectileActor(targetIndex),
       sourceActor: PacketSender.projectileActor(sourceIndex),
     }]))) return this;

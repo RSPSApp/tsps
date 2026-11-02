@@ -438,6 +438,56 @@ test("Pandemonium's tutorial ship keeps its explicit deck tiles and dynamic locs
   }
 });
 
+test("Red Reef pirate ships send their captured deck locs and crew", () => {
+  const CAPTURED_LOCS = [
+    [29464, 5, 7, 0, 10, 0],
+    [29469, 1, 7, 0, 10, 0],
+    [29467, 5, 8, 0, 10, 0],
+    [29470, 1, 8, 0, 10, 0],
+    [29463, 2, 7, 1, 10, 1],
+    [29463, 4, 8, 1, 10, 3],
+    [29536, 3, 11, 1, 10, 0],
+    [29497, 4, 10, 1, 10, 0],
+  ];
+  const CREW = {
+    red_reef_pirate_1: [15677, 15678, 15679, 15683],
+    red_reef_pirate_2: [15680, 15681, 15682, 15684],
+  };
+  const locTuple = (loc) => [loc.id, loc.x, loc.y, loc.level, loc.shape, loc.rotation];
+  for (const id of Object.keys(CREW)) {
+    const ship = StaticShips.spawn(id);
+    try {
+      // Local x/y are tiles in the ship's template zone: deckBaseX is the scene tile the first
+      // template chunk is copied to, the frame capture 4152's "local to (3864, 6360)" uses.
+      assert.deepEqual((ship.spec.syncLocs ?? []).map(locTuple), CAPTURED_LOCS, `${id} sends live's loc set`);
+      assert.deepEqual(ship.spec.locs.filter((loc) => loc.x === 5 && loc.y === 7).map((loc) => loc.id),
+        [29464], "an added loc replaces the template gunport on its tile, rather than doubling it");
+      const packets = require("../dist/game/content/sailing/WorldEntitySync")
+        .WorldEntitySync.flush(fakePlayer(1, new Location(ship.boat.tileX, ship.boat.tileY, 0)));
+      assert.equal(packets.filter((packet) => packet[0] === 134).length, CAPTURED_LOCS.length,
+        `${id} sends one LOC_ADD_CHANGE per captured loc`);
+      const locPackets = packets.filter((packet) => packet[0] === 134);
+      // x/y are the deck scene's tiles: deckBase plus the template-zone local, so they line up
+      // with the rebuild's first template chunk. The capture's lines carry no op flags (8 bytes).
+      assert.deepEqual(locPackets.map((packet) => [
+        packet.readUInt16BE(2), packet.readUInt16BE(4), packet.readUInt16BE(6), packet[8], packet[1],
+      ]), CAPTURED_LOCS.map(([locId, x, y, level]) => [
+        locId, ship.boat.deckBaseX + x, ship.boat.deckBaseY + y, level, 8,
+      ]), `${id} sends its locs in the deck scene's tile frame`);
+      assert.deepEqual(ship.npcs.map((npc) => npc.getId()).sort((a, b) => a - b),
+        [15188, ...CREW[id]].sort((a, b) => a - b), `${id} holds its HP dummy and crew`);
+      for (const npc of ship.npcs) assert.equal(BoatManager.getBoatAboard(npc), ship.boat);
+    } finally {
+      const npcs = ship.npcs.slice();
+      StaticShips.dispose(ship);
+      for (const npc of npcs) {
+        assert.notEqual(World.getNpcs().get(npc.getIndex()), npc, "dispose removes the deck NPCs");
+        assert.equal(World.getAddNPCQueue().includes(npc), false);
+      }
+    }
+  }
+});
+
 test("attacking a hostile ship without manning a cannon is refused", () => {
   const boat = raft(1, 2830, 2360);
   const ship = StaticShips.spawn("red_reef_pirate_1");

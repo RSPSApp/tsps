@@ -14,7 +14,7 @@ const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
 const OVERLAY_TYPE = 1;
 /** Side tab contents (161:76 + tab), in tab order (stone0..13). */
 const TAB_CONTENT_CHILD = (tab) => (161 << 16) | (76 + tab);
-const TAB_GROUP = [593, 320, 629, 149, 387, 541, 218, 7, 109, 429, 182, 116, 216, 239];
+const TAB_GROUP = [593, 320, 629, 149, 387, 541, 218, 707, 109, 429, 182, 116, 216, 239];
 const COMBAT_TAB = 0;
 const LOGOUT_TAB = 10;
 const INVENTORY_TAB = 3;

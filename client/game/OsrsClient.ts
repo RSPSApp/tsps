@@ -331,6 +331,7 @@ import { clampPlane } from "./utils/PlaneUtil";
 import { VarcPersistence } from "./vars/VarcPersistence";
 import {
     STANDARD_GAMEFRAME_ROOT,
+    isCloseOnOutsideClickModalTarget,
     loadGameframePaneRedirect,
 } from "./widgets/gameframePanes";
 import { NotificationDisplay } from "./widgets/NotificationDisplay";
@@ -1426,6 +1427,23 @@ export class OsrsClient {
         return this.serverSubInterfaces.has(standardTargetUid | 0);
     }
 
+    /**
+     * Main and side modals close when a world click lands outside the mounted
+     * interface; chatbox modals (dialogues) and overlays do not.
+     */
+    private isCloseOnOutsideClickTarget(standardTargetUid: number, type: number): boolean {
+        return isCloseOnOutsideClickModalTarget(standardTargetUid, type);
+    }
+
+    /** True while a main or side modal is open, so a world click should close it. */
+    public hasCloseOnOutsideClickModal(): boolean {
+        if (!this.widgetManager) return false;
+        for (const parent of this.widgetManager.interfaceParents.values()) {
+            if (parent.closeOnOutsideClick) return true;
+        }
+        return false;
+    }
+
     /** Mounts a sub-interface and runs everything the open packet asked for. */
     private mountSubInterface(payload: any): void {
         if (!this.widgetManager) {
@@ -1447,7 +1465,12 @@ export class OsrsClient {
             );
             return;
         }
-        this.widgetManager.openSubInterface(targetUid, payload.groupId, payload.type);
+        this.widgetManager.openSubInterface(
+            targetUid,
+            payload.groupId,
+            payload.type,
+            this.isCloseOnOutsideClickTarget(standardTargetUid, payload.type),
+        );
         this.cs2Vm.clearHandlerCaches();
         markWidgetsLoaded();
         // PlayerDesign (679) starts each open from the live appearance, so an abandoned or
@@ -2778,6 +2801,9 @@ export class OsrsClient {
                 const text = typeof payload.text === "string" ? payload.text : String(payload.text);
                 const w = this.widgetManager?.getWidgetByUid(uid);
                 if (w) {
+                    if (typeof payload.serverOwned === "boolean") {
+                        this.widgetManager.setServerOwnedWidget(uid, payload.serverOwned);
+                    }
                     if (!this.customInterfaces.handleSetText(uid, text)) {
                         w.text = text;
                         markWidgetInteractionDirty(w);
@@ -4843,8 +4869,7 @@ export class OsrsClient {
                 const displaySlot = EquipToDisplaySlot[equipSlot];
                 if (displaySlot !== undefined) {
                     const qtyRaw = equipQty?.[equipSlot] ?? 0;
-                    const quantity =
-                        equipSlot === EquipmentSlot.AMMO ? Math.max(1, Number(qtyRaw) | 0) : 1;
+                    const quantity = Math.max(1, Number(qtyRaw) | 0);
                     slots.push({ slot: displaySlot, itemId, quantity });
                 }
             }

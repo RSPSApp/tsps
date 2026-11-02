@@ -174,14 +174,5 @@
     "pruneMessage": "You prune the Growthling.",
     "noAxeMessage": "Cut the growthling down with an axe or secateurs.",
     "logs": { "withAxe": 32536, "withoutAxe": 5582, "x": 3228, "y": 9932, "z": 0, "type": 10, "face": 0, "axe": 1351, "returnTicks": 49, "take": "You take a bronze axe from the logs.", "haveAxe": "You already have an axe." }
-  },
-  "giantBones": {
-    "item": 30898,
-    "question": "Bury the bones? (This grants Prayer XP)",
-    "options": ["Yes.", "Yes, and don't ask again.", "No."],
-    "anim": 827,
-    "sound": 2738,
-    "xp": 150,
-    "noRoom": "I don't think those will fit in my backpack..."
   }
 }

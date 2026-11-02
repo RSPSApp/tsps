@@ -382,6 +382,108 @@ test("loading a preset only puts on what the preset's own levels can wear", () =
   assert.ok(messages.includes("Preset loaded!"));
 });
 
+test("quest requirements validate the whole preset before changing gear and allow later switches", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { Item } = require("../dist/game/model/Item");
+  const { ItemIdentifiers: Items } = require("../dist/util/ItemIdentifiers");
+  const { Skill } = require("../dist/game/model/Skill");
+  const { Equipment } = require("../dist/game/model/container/impl/Equipment");
+  const { Inventory } = require("../dist/game/model/container/impl/Inventory");
+  const { EquipPacketListener } = require("../dist/net/packet/impl/EquipPacketListener");
+  require("../plugins/items/ItemDefinitionLoader.plugin").register({
+    log() {}, onPlayerLogin() {}, registerContentEndpoint() {},
+  });
+  const api = PluginManager.createApi("PresetQuestRequirementsTest");
+  const incomplete = new Set(["Monkey Madness I", "Lost City"]);
+  let requirementsEnabled = true;
+  api.onCustomEvent("quest:is-complete", request => { request.complete = !incomplete.has(request.name); });
+  require("../plugins/quests/Equipment.Quests")({
+    ...api,
+    getPluginConfig: (_key, fallback) => requirementsEnabled ?? fallback,
+  });
+  presets.register(api);
+
+  const messages = [];
+  const sender = new Proxy({
+    sendMessage: text => messages.push(text),
+    getVarbit: () => 0, getVarp: () => 0,
+  }, { get: (target, key) => target[key] ?? (() => sender) });
+  const player = new Player(null);
+  player.setSkullTimer(0);
+  player.getPacketSender = () => sender;
+  player.resetAttributes = () => {};
+  player.getInventory().addItem(new Item(Items.COINS, 500));
+  player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(Items.BRONZE_SWORD, 1));
+  player.setSpellbook(MagicSpellbook.LUNAR);
+  const items = container => container.getItems().map(item => [item.getId(), item.getAmount()]);
+  const snapshot = () => ({
+    inventory: items(player.getInventory()), equipment: items(player.getEquipment()),
+    banks: player.getBanks().map(bank => bank ? items(bank) : null),
+    attack: player.getSkillManager().getMaxLevel(Skill.ATTACK), spellbook: player.getSpellbook(),
+  });
+  const before = snapshot();
+  const preset = presets.getGlobalPresetByName("DDS Pure (M)");
+  assert.ok(preset);
+  assert.equal(presets.applyPreset(player, preset), false, "the worn scimitar requires Monkey Madness I");
+  assert.deepEqual(snapshot(), before, "a refusal preserves inventory, equipment, bank, levels and spellbook");
+  assert.ok(messages.includes("You need to complete the Monkey Madness I quest first."));
+
+  incomplete.delete("Monkey Madness I");
+  messages.length = 0;
+  assert.equal(presets.applyPreset(player, preset), false, "the inventory dagger also requires Lost City");
+  assert.deepEqual(snapshot(), before);
+  assert.ok(messages.includes("You need to complete the Lost City quest first."));
+
+  const switchWeapon = id => {
+    const slot = player.getInventory().getItems().findIndex(item => item.getId() === id);
+    assert.ok(slot >= 0, `weapon ${id} is available to switch to`);
+    EquipPacketListener.equip(player, id, slot, Inventory.INTERFACE_ID);
+    assert.equal(player.getEquipment().get(Equipment.WEAPON_SLOT).getId(), id);
+  };
+  incomplete.clear();
+  assert.equal(presets.applyPreset(player, preset), true);
+  assert.equal(player.getEquipment().get(Equipment.WEAPON_SLOT).getId(), Items.DRAGON_SCIMITAR);
+  switchWeapon(Items.DRAGON_DAGGER_P_PLUS_PLUS_);
+  switchWeapon(Items.DRAGON_SCIMITAR);
+
+  requirementsEnabled = false;
+  incomplete.add("Monkey Madness I");
+  incomplete.add("Lost City");
+  assert.equal(presets.applyPreset(player, preset), true, "the config override also applies to preset loads");
+  switchWeapon(Items.DRAGON_DAGGER_P_PLUS_PLUS_);
+  switchWeapon(Items.DRAGON_SCIMITAR);
+
+  const { Presetable } = require("../dist/game/content/presets/Presetable");
+  require("../plugins/items/CapeOfSkulls.plugin").register(api);
+  let dialogues = 0;
+  const manager = player.getDialogueManager();
+  const startDialogues = manager.startDialogues.bind(manager);
+  manager.startDialogues = (...args) => { dialogues++; return startDialogues(...args); };
+  player.getInventory().resetItems().addItem(new Item(Items.CAPE_OF_SKULLS, 1));
+  player.getEquipment().resetItems().refreshItems();
+  requirementsEnabled = true;
+  incomplete.add("Lost City");
+  const cape = new Item(Items.CAPE_OF_SKULLS, 1);
+  const stats = [99, 99, 99, 99, 99, 99, 99];
+  const blocked = new Presetable("Cape and locked switch", [cape, new Item(Items.DRAGON_DAGGER, 1)], [], stats, MagicSpellbook.NORMAL, false);
+  const beforeRefusal = snapshot();
+  assert.equal(presets.applyPreset(player, blocked), false);
+  assert.deepEqual(snapshot(), beforeRefusal);
+  assert.equal(dialogues, 0, "a refused preset must not open the inventory cape's wear confirmation");
+  assert.equal(player.getSkullTimer(), 0);
+
+  const inventoryCape = new Presetable("Inventory cape", [cape], [], stats, MagicSpellbook.NORMAL, false);
+  assert.equal(presets.applyPreset(player, inventoryCape), true, "carrying a cape is not wearing it");
+  assert.equal(dialogues, 0);
+  assert.equal(player.getEquipment().get(Equipment.CAPE_SLOT).getId(), -1);
+  assert.equal(player.getInventory().getAmount(Items.CAPE_OF_SKULLS), 1);
+  assert.equal(player.getSkullTimer(), 0);
+  EquipPacketListener.equip(player, Items.CAPE_OF_SKULLS, player.getInventory().getSlotForItemId(Items.CAPE_OF_SKULLS), Inventory.INTERFACE_ID);
+  assert.equal(dialogues, 1, "an actual Wear click still opens the normal confirmation");
+  assert.equal(player.getSkullTimer(), 0);
+});
+
 test("dropping a preset item destroys it without the confirmation interface", () => {
   const destroy = require("../plugins/interface/DestroyItem.plugin");
   let onDrop;
@@ -502,5 +604,9 @@ test('preset combat levels in the list match the skill manager formula', () => {
       expected,
       `${preset.getName()} shows its combat level`
     );
+  }
+  for (const attack of [1, 50]) {
+    assert.equal(presets._test.presetCombatLevel({ getStats: () => [attack, 1, 99, 65, 99, 1, 99] }), 64,
+      "preset list level matches SkillManager");
   }
 });

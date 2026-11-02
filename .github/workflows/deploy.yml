@@ -44,6 +44,8 @@ jobs:
                   (cd tsps/server && yarn install --immutable)
                   (cd tsps/client && yarn install --immutable)
                   (cd rsps-website/host && corepack yarn@1.22.22 install --frozen-lockfile)
+            - name: Test cache publishing
+              run: node --test tsps/server/tests/ensure-cache.test.cjs
             - name: Build host
               working-directory: rsps-website/host
               run: |
@@ -74,7 +76,10 @@ jobs:
         steps:
             - uses: actions/checkout@v4
               with:
-                  sparse-checkout: .github/scripts
+                  sparse-checkout-cone-mode: false
+                  sparse-checkout: |
+                      /.github/scripts/
+                      /server/target.txt
                   persist-credentials: false
             - uses: actions/setup-node@v4
               with:
@@ -94,8 +99,8 @@ jobs:
               run: |
                   node .github/scripts/ftp-upload.mjs dist/host "$FTP_REMOTE_DIR"
                   node .github/scripts/ftp-upload.mjs dist/client /play
-            # The key's forced command on the VPS is /usr/local/bin/tsps-deploy, which
-            # fast-forwards /root/tsps to this commit, builds and restarts World 1.
+            # /usr/local/bin/tsps-deploy is installed from .github/scripts/deploy-world1.sh.
+            # It also publishes the full client cache locally on the VPS.
             - name: Deploy World 1
               env:
                   VPS_DEPLOY_KEY: ${{ secrets.VPS_DEPLOY_KEY }}
@@ -104,3 +109,22 @@ jobs:
                   printf '%s\n' "$VPS_DEPLOY_KEY" > ~/.ssh/world1 && chmod 600 ~/.ssh/world1
                   echo '192.209.62.27 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCoB0OlJIGSQYZiN9md4kUJSSdLFzEdjBjkpQSQlbdvZ3HSK1u91SjmexudbuCIjylFnafxjqWsihpz85cZCYnkcwf1NpMEvqhVUCkO4WTqT5bAaPMM7QLyL3VcOMDFqDFC30Gub1rFOdxty9hun22uiqwaizrM2dBJP7DwC2QTz9tA9A1Vc0GW9OxeUluNGpdOixtcotVBYZccHgRQpUjN2FOKA5CPdFPMuRpmTMETCPUp3iBiQlY9P6YTKULhd8NPUC95wFHR7MoMrwgJsx/kE3kmUzaLsIq8HKs9hFmlzKR2o12pxzbuF+FmrvUwBsLKC64AWVKsKNz2LXjvEV9CZY6BOJ6qRFu8qsN1AmVr+/q0X4EeaOQ+9PxQMaHnpI7y85bqxbpgKMkoxwmnWOB1GJsMrN3eijozk+iK04NEQOfsrH4npRmvkudQ7ActxtvDXzKv0RCUE6dj9u4gxHjQKncIgcczPGKskuymFMHfaVNZppiGdD0f8CFA5uIIYJE=' > ~/.ssh/known_hosts
                   ssh -i ~/.ssh/world1 -o IdentitiesOnly=yes -o BatchMode=yes root@192.209.62.27 "$GITHUB_SHA"
+            - name: Verify public client cache
+              run: |
+                  node --input-type=module <<'JS'
+                  import assert from 'node:assert/strict';
+                  import { readFileSync } from 'node:fs';
+                  const target = readFileSync('server/target.txt', 'utf8').trim();
+                  const base = 'https://rsps.app/play/caches/';
+                  const manifest = await fetch(base + 'caches.json', { cache: 'no-store' });
+                  assert.ok(manifest.ok, `Cache manifest returned ${manifest.status}`);
+                  const entries = await manifest.json();
+                  assert.equal(entries[0]?.name, target, 'Public client cache does not match server/target.txt');
+                  for (const file of ['main_file_cache.dat2', 'main_file_cache.idx255']) {
+                      const response = await fetch(`${base}${target}/${file}`, { headers: { Range: 'bytes=0-0' } });
+                      assert.equal(response.status, 206, `${file} is missing or does not support range requests`);
+                      assert.match(response.headers.get('content-range') ?? '', /^bytes 0-0\/[1-9]\d*$/);
+                      assert.equal((await response.arrayBuffer()).byteLength, 1);
+                  }
+                  console.log(`Public client cache verified: ${target}`);
+                  JS

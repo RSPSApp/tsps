@@ -43,4 +43,9 @@ function available(api, definition, player, following = false) {
     (!wilderness && !Object.values(DATA.oldHunter).some(boxes => inside(location, boxes)));
 }
 
-module.exports = { available, bank };
+/** The diving variants appear here: the Wiki's Underwater NPC versions and reduced pool. */
+function underwater(player) {
+  return inside(player.getLocation(), DATA.underwater);
+}
+
+module.exports = { available, bank, underwater };

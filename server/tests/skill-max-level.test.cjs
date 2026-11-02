@@ -6,10 +6,30 @@ const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
 
 const { Skill } = require("../dist/game/model/Skill");
+const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const { SkillManager } = require("../dist/game/content/skill/SkillManager");
 
 const sender = new Proxy({}, { get: (_, name) => (name === "then" ? undefined : () => sender) });
 const skills = new SkillManager({ getPacketSender: () => sender });
+
+test("combat levels retain the fractional base until the final round down", () => {
+  const cases = [
+    [[1, 1, 99, 65, 99, 1, 99], 64],
+    [[50, 1, 99, 65, 99, 1, 99], 64],
+    [[1, 1, 99, 65, 1, 1, 99], 64],
+    [[50, 1, 99, 65, 1, 1, 1], 64],
+    [[1, 1, 1, 10, 99, 1, 1], 50],
+    [[1, 1, 99, 66, 99, 1, 99], 64],
+    [[1, 1, 99, 66, 99, 2, 99], 65],
+    [[1, 1, 99, 66, 99, 3, 99], 65],
+    [[1, 1, 1, 10, 1, 1, 1], 3],
+    [[99, 99, 99, 99, 99, 99, 99], 126],
+  ];
+  for (const [levels, expected] of cases) {
+    assert.equal(SkillManager.calculateCombatLevel(levels), expected, levels.join(","));
+    assert.equal(SkillManager.prototype.getCombatLevel.call({ skills: { maxLevel: levels } }), expected);
+  }
+});
 
 test("lowering a skill takes effect on the first call (issue #101)", () => {
   for (const level of [99, 1]) {
@@ -650,6 +670,7 @@ function feedbackPlayer(core) {
   };
   const sender = new Proxy({
     sendCreationMenu(value) { menu = value; return sender; },
+    sendTypedMessage(type, text) { sent.push(["sendTypedMessage", type, text]); messages.push(text); return sender; },
     sendChatboxInterface(id) { chatbox = id; sent.push(["chatbox", id]); return sender; },
     isChatboxInterface: id => chatbox === id,
     closeInterface(id) { if (chatbox === id) chatbox = -1; return sender; },
@@ -677,7 +698,7 @@ function feedbackPlayer(core) {
 function registerFeedbackPlugin(name, core, extra = {}) {
   // Like the plugin API, every handler a hook name gets runs until one handles the event.
   const handlers = {}, hooks = { customEvents: new Map() };
-  const api = new Proxy({ core, log() {}, ...extra }, {
+  const api = new Proxy({ core, log() {}, getPluginConfig: (_key, defaultValue) => defaultValue, ...extra }, {
     get: (target, key) => target[key] ?? ((...args) => {
       if (key === "onCustomEvent") {
         const [name, handler] = args;
@@ -754,6 +775,30 @@ test("as captured: Disabled pop-ups keep the message and graphic, and interrupt 
   assert.deepEqual(p.messages, ["Congratulations, you've just advanced your Defence level. You are now level 81."]);
   assert.deepEqual(p.graphics, [199]);
   assert.equal(p.sent.some(([type]) => type === "chatbox"), false);
+  assert.equal(p.stopped, 0);
+  assert.deepEqual(emitted, []);
+  assert.deepEqual(p.animations, []);
+});
+
+test("world config can disable interruption without closing another dialogue or stopping the action", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi(), emitted = [];
+  const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core, {
+    getPluginConfig(key, defaultValue) {
+      assert.equal(key, "SkillLevelUp:interruptActions");
+      assert.equal(defaultValue, true);
+      return false;
+    },
+    emitCustomEvent: name => emitted.push(name),
+  });
+  const p = levelledPlayer(core);
+  p.getPacketSender().sendChatboxInterface(999);
+  p.sent.length = 0;
+  hooks.onPlayerLevelUp({ player: p, skill: Skill.FISHING, oldLevel: 66, newLevel: 67 });
+  assert.deepEqual(p.messages, ["Congratulations, you've just advanced your Fishing level. You are now level 67."]);
+  assert.deepEqual(p.graphics, [199]);
+  assert.equal(p.getPacketSender().isChatboxInterface(999), true);
+  assert.equal(p.sent.some(([type]) => type === "chatbox" || type === "sendInterfaceRemoval"), false);
   assert.equal(p.stopped, 0);
   assert.deepEqual(emitted, []);
   assert.deepEqual(p.animations, []);
@@ -867,17 +912,20 @@ test("Fletching keeps going while moving, stops on the next click and resumes af
     getTaskManager: () => ({ submit: task => { task.setRunning(true); tasks.push(task); } }),
   });
   // The level-up pop-up is what stops Fletching: SkillLevelUp announces it as an event.
+  let interruptActions = true;
   const feedback = registerFeedbackPlugin("interface/SkillLevelUp", core, {
+    getPluginConfig: () => interruptActions,
     emitCustomEvent: (name, event) => name === "level-up:popup-opened" && hooks.onCustomEvent(event),
   });
-  for (const mode of ["moving", "click", "level-up"]) {
+  for (const mode of ["moving", "click", "level-up", "uninterrupted-level-up"]) {
+    interruptActions = mode !== "uninterrupted-level-up";
     const p = feedbackPlayer(core);
     let xp = 0;
     p.skills = {
       getCurrentLevel: () => 99, getTotalLevel: () => 100, getCombatLevel: () => 3, stopSkillable() {},
       addExperiences() {
         xp++;
-        if (mode === "level-up" && xp === 1) feedback.onPlayerLevelUp({ player: p, skill: Skill.FLETCHING, oldLevel: 1, newLevel: 2 });
+        if (mode.endsWith("level-up") && xp === 1) feedback.onPlayerLevelUp({ player: p, skill: Skill.FLETCHING, oldLevel: 1, newLevel: 2 });
       },
     };
     p.counts.set(core.ItemIdentifiers.KNIFE, 1); p.counts.set(core.ItemIdentifiers.LOGS, 2);
@@ -892,8 +940,8 @@ test("Fletching keeps going while moving, stops on the next click and resumes af
       if (mode === "moving") p.moveTo(new core.Location(3000 + n, 3000, 0));
       if (task.isRunning()) task.execute();
     }
-    assert.equal(xp, { moving: 2, click: 0, "level-up": 1 }[mode]);
-    assert.equal(p.counts.get(core.ItemIdentifiers.LOGS) ?? 0, { moving: 0, click: 2, "level-up": 1 }[mode]);
+    assert.equal(xp, { moving: 2, click: 0, "level-up": 1, "uninterrupted-level-up": 2 }[mode]);
+    assert.equal(p.counts.get(core.ItemIdentifiers.LOGS) ?? 0, { moving: 0, click: 2, "level-up": 1, "uninterrupted-level-up": 0 }[mode]);
     assert.equal(task.isRunning(), mode === "level-up");
     if (mode === "level-up") {
       assert.equal(p.animations.at(-1), 65535, "the popup holds the remaining batch and animation");
@@ -1061,7 +1109,7 @@ test("native autocast indicators clear on staff removal while remembering the de
     const varbits = new Map();
     const sender = new Proxy({ sendVarbit(id, n) { varbits.set(id, n); return sender; } }, { get: (t, key) => t[key] ?? (() => sender) });
     const p = { getCombat: () => ({ getAutocastSpell: () => selected, setAutocastSpell: s => { selected = s; } }),
-      getEquipment: () => ({ hasStaffEquipped: () => staff, getItems: () => new Array(14).fill(new Item(-1, 0)) }),
+      getEquipment: () => ({ hasStaffEquipped: () => staff, getWeapon: () => new Item(staff ? ItemIdentifiers.STAFF_OF_AIR : -1, 1), getItems: () => new Array(14).fill(new Item(-1, 0)) }),
       getPacketSender: () => sender, getFightType: () => fightType, setFightType: type => { fightType = type; },
       setWeapon() {}, autoRetaliateReturn: () => false, sendMessage() {} };
     Autocasting.setAutocast(p, CombatSpells.WIND_STRIKE);
@@ -1076,6 +1124,7 @@ test("native autocast indicators clear on staff removal while remembering the de
 
 
 test("choosing a style while autocasting turns autocast off, and autocast shows as com_mode 4 (rsprox)", () => {
+  const { Item } = require("../dist/game/model/Item");
   const { Autocasting } = require("../dist/game/content/combat/magic/Autocasting");
   const { CombatSpells } = require("../dist/game/content/combat/magic/CombatSpells");
   const { BonusManager } = require("../dist/game/model/equipment/BonusManager");
@@ -1092,7 +1141,7 @@ test("choosing a style while autocasting turns autocast off, and autocast shows 
       sendConfig(id, n) { varps.set(id, n); return sender; },
     }, { get: (t, key) => t[key] ?? (() => sender) });
     const p = { getCombat: () => ({ getAutocastSpell: () => selected, setAutocastSpell: s => { selected = s; } }),
-      getEquipment: () => ({ hasStaffEquipped: () => true }),
+      getEquipment: () => ({ hasStaffEquipped: () => true, getWeapon: () => new Item(ItemIdentifiers.STAFF_OF_AIR, 1) }),
       getWeapon: () => WeaponInterfaces.STAFF,
       getPacketSender: () => sender, getFightType: () => fightType, setFightType: type => { fightType = type; },
       sendMessage() {} };

@@ -48,6 +48,7 @@ import { PlayerModelLoader } from "../../rs/config/player/PlayerModelLoader";
 import { decodeInteractionIndex } from "../../rs/interaction/InteractionIndex";
 import { getMapIndexFromTile, getMapPlaneId, getMapSquareId } from "../../rs/map/MapFileIndex";
 import { Model } from "../../rs/model/Model";
+import { LOC_OVERRIDE_KEEP_ID, LOC_OVERRIDE_REMOVED } from "../../rs/scene/LocOverride";
 import { ModelData } from "../../rs/model/ModelData";
 import { Scene } from "../../rs/scene/Scene";
 import { getUiScale } from "../../ui/UiScale";
@@ -186,6 +187,7 @@ import {
     createProjectileProgram,
 } from "../shaders/Shaders";
 import { KNOWN_WATER_TEXTURE_IDS } from "../water/WaterTextureIds";
+import { suppressShapeSlotAt } from "../loc/LocSlots";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
 import { RENDER_CONSTANTS } from "./constants";
 
@@ -193,45 +195,47 @@ export function onLocDel(host: WebGLOsrsRendererHost, tile: { x: number; y: numb
 
         try {
             const key = `${tile.x},${tile.y},${level},${shape}`;
+            const added = host.addedLocs.get(key);
+            const wasAdded = added !== undefined && ((added.rotation | 0) & 0x3) === ((rotation | 0) & 0x3);
             host.addedLocs.delete(key);
 
-            // Suppress the base cache-baked loc at this tile so a deregistered
-            // object (e.g. a chopped tree) actually disappears - buildScene has
-            // no other way to know a cache loc was removed.
-            let overrideKey = `${tile.x | 0},${tile.y | 0},${level | 0},-1`;
-            let existingOverride = host.locOverrides.get(overrideKey);
-            if (typeof existingOverride?.matchType === "number" && existingOverride.matchType !== shape) {
-                overrideKey += `,${shape}`;
-                existingOverride = host.locOverrides.get(overrideKey);
-            }
-            if (
-                existingOverride?.newId !== 0 ||
-                typeof existingOverride.matchType !== "number" ||
-                existingOverride.matchType === shape
-            ) {
-                host.locOverrides.set(overrideKey, {
-                    newId: 0,
-                    matchType: shape as LocModelType,
+            const deletedLoc =
+                wasAdded
+                    ? undefined
+                    : host.getLocIdsAtTileAllLevels(tile.x, tile.y).find((loc) => {
+                          if ((loc.level | 0) !== (level | 0)) return false;
+                          const typeRot = loc.typeRot;
+                          return (
+                              typeRot !== undefined &&
+                              ((typeRot | 0) & 0x3f) === ((shape | 0) & 0x3f) &&
+                              ((typeRot >> 6) & 0x3) === ((rotation | 0) & 0x3)
+                          );
+                      });
+
+            if (wasAdded) {
+                // The object the server added is gone. Its add never removed the cache scenery
+                // here, and whatever it did replace comes back.
+                for (const id of added.replacedIds ?? []) {
+                    host.locOverrides.delete(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`);
+                }
+            } else if (deletedLoc && (deletedLoc.id | 0) >= 0) {
+                // Suppress exactly the cache loc that was removed (a chopped tree, a door).
+                host.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${deletedLoc.id | 0}`, {
+                    newId: LOC_OVERRIDE_REMOVED,
                 });
+            } else {
+                // No id to key on: fall back to this tile's slot only, never every loc of the shape.
+                suppressShapeSlotAt(host.locOverrides, tile.x, tile.y, level, shape, rotation);
             }
 
             const mapX = Math.floor(tile.x / 64);
             const mapY = Math.floor(tile.y / 64);
-            // LOC_DEL does not carry an object id. Resolve it from the current
-            // per-tile loc index so deletes can stay on the same partial path.
-            const deletedLoc = host.getLocIdsAtTileAllLevels(tile.x, tile.y).find((loc) => {
-                if ((loc.level | 0) !== (level | 0)) return false;
-                const typeRot = loc.typeRot;
-                return (
-                    typeRot !== undefined &&
-                    ((typeRot | 0) & 0x3f) === ((shape | 0) & 0x3f) &&
-                    ((typeRot >> 6) & 0x3) === ((rotation | 0) & 0x3)
-                );
-            });
             const locType =
-                deletedLoc && (deletedLoc.id | 0) > 0
-                    ? host.osrsClient.locTypeLoader.load(deletedLoc.id | 0)
-                    : undefined;
+                wasAdded
+                    ? host.osrsClient.locTypeLoader.load(added.locId | 0)
+                    : deletedLoc && (deletedLoc.id | 0) >= 0
+                      ? host.osrsClient.locTypeLoader.load(deletedLoc.id | 0)
+                      : undefined;
             const group = locType ? (isDoorLocType(locType) ? "door" : "loc") : "full";
             if (host.instanceActive) host.scheduleInstanceLocUpdate(group);
             else host.scheduleLocGeometryUpdate(mapX, mapY, group);
@@ -299,7 +303,7 @@ export function onLocAnim(host: WebGLOsrsRendererHost,
             });
             if (!onAddedLoc) {
                 host.locOverrides.set(matchKey, {
-                    newId: -1,
+                    newId: LOC_OVERRIDE_KEEP_ID,
                     newRotation: rotation & 0x3,
                     seqId: animId | 0,
                     seqRandomStart: false,
@@ -364,16 +368,17 @@ export function reloadLocAnimationTile(host: WebGLOsrsRendererHost, tile: { x: n
         }
         const mapX = Math.floor((tile.x | 0) / 64);
         const mapY = Math.floor((tile.y | 0) / 64);
+        const locType = host.osrsClient.locTypeLoader.load(locId | 0);
+        const group = locType && isDoorLocType(locType) ? "door" : "loc";
+        // In an instance this rebuilds only the scene's locs, as a loc change does: rebuilding
+        // the whole scene for every animation (Tempoross' cannons fire every 2 ticks) kept
+        // superseding the build in flight, so new fires and the electrified cannon took
+        // half a minute to appear.
         if (host.instanceActive) {
-            host.scheduleInstanceLocRebuild();
+            host.scheduleInstanceLocUpdate(group);
             return;
         }
-        const locType = host.osrsClient.locTypeLoader.load(locId | 0);
-        host.scheduleLocGeometryUpdate(
-            mapX,
-            mapY,
-            locType && isDoorLocType(locType) ? "door" : "loc",
-        );
+        host.scheduleLocGeometryUpdate(mapX, mapY, group);
     
 }
 

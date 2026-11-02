@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 function buildSpecial(core) {
-  const { Animation, CombatSpecial, ItemIdentifiers, MeleeCombatMethod, Skill, Sounds } = core;
+  const { Animation, CombatSpecial, ItemIdentifiers, MeleeCombatMethod, Skill, Sound, Sounds } = core;
 
   const DRAIN = 35;
   const DEFENCE_DRAIN_FRACTION = 0.75;
@@ -23,7 +23,7 @@ function buildSpecial(core) {
     start(character, target) {
       CombatSpecial.drain(character, DRAIN);
       character.performAnimation(ANIMATION);
-      Sounds.sendSound(character, character.getAttackSound());
+      Sounds.playAreaSoundAt(character, Sound.DRAGON_WARHAMMER_SPECIAL);
     }
 
     handleAfterHitEffects(hit) {

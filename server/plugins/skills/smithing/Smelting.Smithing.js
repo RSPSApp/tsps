@@ -281,10 +281,12 @@ function fillFurnaceIds() {
 /**
  * "smithing:bar-for-ore": the bar an ore smelts into and its XP, for content that smelts as it mines (a
  * league relic): the furnace recipe whose main ore it is (its first ingredient), so coal, a steel bar's
- * second ingredient, smelts into nothing.
+ * second ingredient, smelts into nothing. An optional outputId selects that bar's recipe.
  */
 function answerBarForOre(request) {
-  const recipe = Data.SMELTING_RECIPES.find((candidate) => !candidate.furnace && candidate.ingredients[0]?.[0] === request.oreId);
+  const recipe = Data.SMELTING_RECIPES.find((candidate) =>
+    !candidate.furnace && candidate.ingredients[0]?.[0] === request.oreId &&
+    (request.outputId == null || candidate.barId === request.outputId));
   if (!recipe) return;
   request.barId = recipe.barId;
   request.xp = recipe.xp;

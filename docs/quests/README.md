@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](../../server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-187 quests · ✅ passed: 31 · ⚠️ passed with issues: 22 · 🔄 in progress: 5 · ❌ failed: 1 · 🔁 needs recheck: 7 · untested: 121
+191 quests · ✅ passed: 30 · ⚠️ passed with issues: 21 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 11 · untested: 120
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -14,13 +14,14 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [A Kingdom Divided](a-kingdom-divided/README.md) | untested |  |  |  |  |
 | [A Night at the Theatre](a-night-at-the-theatre/README.md) | untested |  |  |  |  |
 | [A Porcine of Interest](a-porcine-of-interest/README.md) | ✅ passed | 2026-10-23 | agent |  | 1 |
-| [A Ruff Situation](a-ruff-situation/README.md) | ✅ passed | 2026-10-30 | agent | claude-haiku-5-5 |  |
+| [A Ruff Situation](a-ruff-situation/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 |  |
 | A Soul's Bane | untested |  |  |  |  |
 | [A Tail of Two Cats](a-tail-of-two-cats/README.md) | untested |  |  |  |  |
 | [A Taste of Hope](taste-of-hope/README.md) | untested |  |  |  |  |
 | [Animal Magnetism](animal-magnetism/README.md) | untested |  |  |  |  |
 | [Another Slice of H.A.M.](another-slice-of-ham/README.md) | 🔄 in progress |  | agent |  |  |
 | [At First Light](at-first-light/README.md) | ⚠️ passed with issues |  | agent |  | 1 |
+| [Bear Your Soul](bear-your-soul/README.md) | 🔄 in progress | 2026-10-31 | agent | DeepSeek V4.1 Flash |  |
 | [Below Ice Mountain](below-ice-mountain/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
 | [Beneath Cursed Sands](beneath-cursed-sands/README.md) | untested |  |  |  |  |
 | Between a Rock... | untested |  |  |  |  |
@@ -28,8 +29,8 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Biohazard](biohazard/README.md) | 🔄 in progress |  | agent |  | 2 |
 | [Black Knights' Fortress](black-knights-fortress/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
 | [Bone Voyage](bone-voyage/README.md) | ✅ passed |  | agent |  |  |
-| [Cabin Fever](cabin-fever/README.md) | untested |  |  |  |  |
-| [Children of the Sun](children-of-the-sun/README.md) | ⚠️ passed with issues | 2026-10-30 | agent | grok-4.7 | 6 |
+| [Cabin Fever](cabin-fever/README.md) | 🔄 in progress | 2026-10-31 | agent | DeepSeek V4.1 Flash | 1 |
+| [Children of the Sun](children-of-the-sun/README.md) | 🔁 needs recheck | 2026-10-30 | agent | grok-4.7 | 6 |
 | [Client of Kourend](client-of-kourend/README.md) | ✅ passed | 2026-10-23 | agent |  | 1 |
 | [Clock Tower](clock-tower/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
 | Cold War | untested |  |  |  |  |
@@ -38,6 +39,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Crab Quest | untested |  |  |  |  |
 | Creature of Fenkenstrain | untested |  |  |  |  |
 | [Current Affairs](current-affairs/README.md) | untested |  |  |  |  |
+| Daddy's Home | untested |  |  |  |  |
 | [Darkness of Hallowvale](darkness-of-hallowvale/README.md) | untested |  |  |  |  |
 | [Death on the Isle](death-on-the-isle/README.md) | untested |  |  |  |  |
 | [Death Plateau](death-plateau/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
@@ -45,7 +47,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Defender of Varrock | untested |  |  |  |  |
 | [Demon Slayer](demon-slayer/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
 | [Desert Treasure I](desert-treasure-i/README.md) | untested |  |  |  |  |
-| Desert Treasure II - The Fallen Empire | untested |  |  |  |  |
+| [Desert Treasure II - The Fallen Empire](desert-treasure-ii/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 9 |
 | [Devious Minds](devious-minds/README.md) | untested |  |  |  |  |
 | [Doric's Quest](dorics-quest/README.md) | ✅ passed | 2026-10-25 | community |  |  |
 | [Dragon Slayer I](dragon-slayer-i/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
@@ -84,6 +86,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Icthlarin's Little Helper | untested |  |  |  |  |
 | Imp Catcher | untested |  |  |  |  |
 | [In Aid of the Myreque](in-aid-of-the-myreque/README.md) | untested |  |  |  |  |
+| In Search of Knowledge | untested |  |  |  |  |
 | [In Search of the Myreque](in-search-of-the-myreque/README.md) | untested |  |  |  |  |
 | [Jungle Potion](jungle-potion/README.md) | ✅ passed |  | agent |  |  |
 | [King's Ransom](kings-ransom/README.md) | untested |  |  |  |  |
@@ -113,7 +116,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Perilous Moons | untested |  |  |  |  |
 | [Pirate's Treasure](pirates-treasure/README.md) | ✅ passed | 2026-10-25 | community |  |  |
 | Plague City | untested |  |  |  |  |
-| Priest in Peril | untested |  |  |  |  |
+| [Priest in Peril](priest-in-peril/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 1 |
 | [Prince Ali Rescue](prince-ali-rescue/README.md) | ⚠️ passed with issues | 2026-10-29 | agent | grok-4.7 | 1 |
 | [Prying Times](prying-times/README.md) | untested |  |  |  |  |
 | [Rag and Bone Man I](rag-and-bone-man-i/README.md) | untested |  |  |  |  |
@@ -148,7 +151,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Tale of the Righteous](tale-of-the-righteous/README.md) | untested |  |  |  |  |
 | [Tears of Guthix](tears-of-guthix/README.md) | untested |  |  |  |  |
 | Temple of Ikov | untested |  |  |  |  |
-| [Temple of the Eye](temple-of-the-eye/README.md) | untested |  |  |  |  |
+| [Temple of the Eye](temple-of-the-eye/README.md) | 🔄 in progress | 2026-11-01 | agent MCP | Claude Opus 5.5 |  |
 | [The Ascent of Arceuus](the-ascent-of-arceuus/README.md) | ✅ passed |  | agent |  | 1 |
 | [The Blood Moon Rises](the-blood-moon-rises/README.md) | untested |  |  |  |  |
 | [The Corsair Curse](the-corsair-curse/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
@@ -188,6 +191,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Troubled Tortugans | untested |  |  |  |  |
 | [Twilight's Promise](twilights-promise/README.md) | untested |  |  |  |  |
 | Underground Pass | untested |  |  |  |  |
+| Vale Totems | untested |  |  |  |  |
 | [Vampyre Slayer](vampyre-slayer/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
 | [Wanted!](wanted/README.md) | untested |  |  |  |  |
 | Watchtower | untested |  |  |  |  |

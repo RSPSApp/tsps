@@ -1,10 +1,8 @@
-import * as fs from "fs";
-import { GameConstants } from "../../../GameConstants";
 import {
     NpcInteractionActionDefinition,
     NpcInteractionDefinition,
 } from "../../NpcInteractionDefinition";
-import { DefinitionLoader, LoadedDefinitionSource } from "../DefinitionLoader";
+import { DefinitionLoader } from "../DefinitionLoader";
 
 interface RawNpcInteractionDefinition {
     npcId?: unknown;
@@ -27,26 +25,11 @@ interface MutableNpcInteractionDefinition {
 
 export class NpcInteractionDefinitionLoader extends DefinitionLoader {
     public static readonly DEFINITION_TYPE = "npc_interactions";
-    public static readonly CORE_SOURCE = "core";
 
     public load(): boolean {
-        const contributed = this.loadSources<RawNpcInteractionDefinition>(
+        const { sources, failures } = this.loadSources<RawNpcInteractionDefinition>(
             NpcInteractionDefinitionLoader.DEFINITION_TYPE
         );
-        const sources: LoadedDefinitionSource<RawNpcInteractionDefinition>[] = [
-            {
-                name: NpcInteractionDefinitionLoader.CORE_SOURCE,
-                owner: NpcInteractionDefinitionLoader.CORE_SOURCE,
-                priority: 0,
-                definitions: this.readCoreDefinitions(),
-            },
-            ...contributed.sources,
-        ].sort((a, b) => {
-            const priorityDifference = a.priority - b.priority;
-            return priorityDifference !== 0
-                ? priorityDifference
-                : a.name.localeCompare(b.name);
-        });
 
         const mergedByNpcId = new Map<number, MutableNpcInteractionDefinition>();
         let candidates = 0;
@@ -93,32 +76,12 @@ export class NpcInteractionDefinitionLoader extends DefinitionLoader {
             `${sources.map((source) => source.name).join("+")} ` +
             `(candidates=${candidates}, invalid=${invalid})`
         );
-        return contributed.failures === 0;
+        return failures === 0;
     }
 
+    /** Plugins supply every definition, so there is no file; this only labels run()'s log. */
     public file(): string {
-        return GameConstants.DEFINITIONS_DIRECTORY + "npc-interactions.json";
-    }
-
-    private readCoreDefinitions(): RawNpcInteractionDefinition[] {
-        const parsed: unknown = this.readCoreDocument();
-        if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
-            throw new Error(
-                "npc-interactions.json must contain an object keyed by NPC id"
-            );
-        }
-        return Object.entries(parsed as Record<string, unknown>).map(
-            ([npcId, definition]) => ({
-                npcId: Number(npcId),
-                ...(
-                    definition &&
-                    !Array.isArray(definition) &&
-                    typeof definition === "object"
-                        ? definition as Record<string, unknown>
-                        : {}
-                ),
-            })
-        );
+        return NpcInteractionDefinitionLoader.DEFINITION_TYPE;
     }
 
     private mergeAction(
@@ -222,15 +185,5 @@ export class NpcInteractionDefinitionLoader extends DefinitionLoader {
             return null;
         }
         return { x: Math.trunc(x), y: Math.trunc(y), z: Math.trunc(z) };
-    }
-
-    private readCoreDocument(): Record<string, unknown> {
-        const parsed: unknown = JSON.parse(fs.readFileSync(this.file(), "utf8"));
-        if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
-            throw new Error(
-                "npc-interactions.json must contain an object keyed by NPC id"
-            );
-        }
-        return parsed as Record<string, unknown>;
     }
 }

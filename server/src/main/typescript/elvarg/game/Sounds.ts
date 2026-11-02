@@ -72,6 +72,27 @@ export class Sounds {
         player.getPacketSender().sendSoundEffect(soundId, loopType, delay, volume);
     }
 
+    /**
+     * A sound at an entity's own tile. Live sends most melee special attacks this way (an area
+     * sound with range 5), so players standing nearby hear them too. Use `sendSound` for the
+     * private synth variant.
+     */
+    public static playAreaSoundAt(entity: unknown, sound: Sound, radius = 5): void {
+        if (!sound) return;
+        const location = (entity as any)?.getLocation?.();
+        if (!location) return;
+        const level = typeof location.getZ === "function" ? location.getZ() : 0;
+        Sounds.playAreaSound({
+            soundId: sound.getId(),
+            x: location.getX(),
+            y: location.getY(),
+            level,
+            loops: sound.getLoopType(),
+            delay: sound.getDelay(),
+            radius,
+        });
+    }
+
     public static playAreaSound(options: {
         soundId: number;
         x: number;

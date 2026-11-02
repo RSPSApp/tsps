@@ -347,7 +347,8 @@ export function loadMap(host: WebGLOsrsRendererHost,
             }
 
             host.mapManager.addMap(mapX, mapY, existing);
-            if (!mapData.doorOnly && !mapData.locOnly) {
+            // Ground items stand on the locs just rebuilt; a door-only build changes none of those.
+            if (!mapData.doorOnly) {
                 if (host.rebuildGroundItemsForMap(existing, host.groundItemStacks.get(mapId))) {
                     host.groundItemStackHashes.delete(mapId);
                 }

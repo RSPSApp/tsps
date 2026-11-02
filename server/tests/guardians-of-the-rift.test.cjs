@@ -413,7 +413,7 @@ test('full power closes the rift 32 ticks later with the captured messages, poin
     '<col=06600c>The Great Guardian successfully closed the rift!</col>',
     'Amount of rifts you have closed: <col=ff0000>1</col>.',
     'Elemental energy attuned: <col=ef1020>2</col>. Catalytic energy attuned: <col=ef1020>4</col>.',
-    'Total elemental energy: <col=ef1020>5</col>. Total catalytic energy: <col=ef1020>7</col>.',
+    'Total elemental energy: <col=ef1020>5</col>. Total catalytic energy:  <col=ef1020>7</col>.',
     "You've been awarded 4,455 bonus Runecraft XP for closing the rift.",
     'You have been awarded 5 abyssal pearls.',
     'The Portal Guardians will keep their rifts open for another 30 seconds.',
@@ -1235,7 +1235,7 @@ test('rift guardians hit the nearest creature, and that creature turns on them',
   const player = fakePlayer();
   openGame(player);
   Game._game.phase = Game.PHASE.ATTACK;
-  const guardian = fakeNpc({ id: Shared.npc('gotr_guardian_fire'), x: 3610, y: 9512 });
+  const guardian = fakeNpc({ id: Shared.npc('gotr_guardian_blood'), x: 3610, y: 9512 });
   guardian.__gotrTier = 4;
   guardian.__gotrNextAttack = 0;
   RiftGuardians.guardians.add(guardian);
@@ -1251,6 +1251,21 @@ test('rift guardians hit the nearest creature, and that creature turns on them',
   assert.ok(guardian.animations.includes(Shared.seq('rift_guardian_attack_ranged')), 'two tiles off: ranged');
   assert.equal(leech.getHitpoints(), 4);
   assert.equal(Creatures.creatures.get(leech).attacker, guardian, 'the leech fights back');
+});
+
+test('elemental rift guardians only fight beside a creature (capture 1840)', () => {
+  const player = fakePlayer();
+  openGame(player);
+  Game._game.phase = Game.PHASE.ATTACK;
+  const guardian = fakeNpc({ id: Shared.npc('gotr_guardian_fire'), x: 3610, y: 9512 });
+  guardian.__gotrTier = 4;
+  guardian.__gotrNextAttack = 0;
+  RiftGuardians.guardians.add(guardian);
+  const leech = fakeNpc({ id: Shared.npc('gotr_abyssal_leech'), x: 3611, y: 9517 });
+  Creatures.creatures.set(leech, { kind: 'leech', nextAttack: Infinity, attacker: null });
+  ticks(1);
+  assert.equal(guardian.animations.length, 0, 'still walking at two tiles off');
+  assert.equal(leech.getHitpoints(), 5);
 });
 
 test('full power kills every creature', () => {

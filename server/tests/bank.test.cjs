@@ -999,3 +999,25 @@ test("price checking quantities and closing returns every item", () => {
     PluginManager.emitCustomEvent = originalEmit;
   }
 });
+
+test("the worn items view banks the one worn item clicked", () => {
+  const player = createPlayer();
+  // A plain container stands in for the worn equipment; the view's slot is the item's place in
+  // the list, so the click's item names it.
+  const worn = new Inventory(player);
+  worn.resetItems();
+  worn.add(new Item(TRIDENT, 1), false);
+  worn.add(new Item(LAVA_BATTLESTAFF, 1), false);
+  player.getEquipment = () => worn;
+  const click = (buttonNum, itemId) => Bank.handleWidgetAction(player, {
+    groupId: Bank.SIDE_INTERFACE_ID, childId: Bank.SIDE_WORN_CHILD, buttonNum, slot: 1, itemId,
+  });
+
+  assert.equal(click(1, LAVA_BATTLESTAFF), true);
+  assert.equal(player.getBank().getAmount(LAVA_BATTLESTAFF), 1);
+  assert.equal(worn.getAmount(LAVA_BATTLESTAFF), 0);
+  assert.equal(worn.getAmount(TRIDENT), 1, "only the clicked item");
+  // Its other ops aren't banking.
+  assert.notEqual(click(10, TRIDENT), true);
+  assert.equal(worn.getAmount(TRIDENT), 1);
+});

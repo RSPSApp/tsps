@@ -207,6 +207,11 @@ function takeWeakCell({ player, objectId }) {
     player.getInventory().full();
     return true;
   }
+  // Wiki: one charged cell at a time. The refusal's wording is ours.
+  if (Shared.ITEM.CELLS.some((cell) => Shared.count(player, cell) > 0)) {
+    player.sendMessage("You can only carry one charged cell at a time.");
+    return true;
+  }
   player.getInventory().adds(Shared.obj(Shared.ITEM.CELLS[0]), 1);
   Shared.animate(player, "human_pickuptable_walkmerge");
   Shared.sound(player, SOUND.TAKE);

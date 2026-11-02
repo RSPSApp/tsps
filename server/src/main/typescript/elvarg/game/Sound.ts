@@ -105,8 +105,54 @@ export class Sound {
     /** Lumber Up activation, rsprox captures 293 and 3149. */
     public static readonly DRAGON_AXE_SPECIAL = new Sound(2531, 1, 0, 1)
     public static readonly DRAGON_LONGSWORD_SPECIAL = new Sound(2529, 1, 0, 0)
-    public static readonly MAGIC_LONGBOW_SPECIAL = Sound.SHOOT_BOW_QUIET
+    public static readonly MAGIC_LONGBOW_SPECIAL = new Sound(2536, 1, 0, 0) // Powershot
     public static readonly WHIP_SPECIAL = new Sound(2713, 1, 0, 0)
+
+    // More special attacks. The wiki's "Sound effects" tables name the synth; the id is the
+    // rsprox gameval's for that name. Delays are client cycles (20 ms) from the captures.
+    /** Every godsword's special attack (rsprox: area sound 3869 at the attacker). */
+    public static readonly GODSWORD_SPECIAL = new Sound(3869, 1, 0, 0)
+    /** Slice and Dice: first, second, third and fourth hits (rsprox recording 4014). */
+    public static readonly DRAGON_CLAWS_SPECIAL_1 = new Sound(4138, 1, 10, 0)
+    public static readonly DRAGON_CLAWS_SPECIAL_2 = new Sound(4140, 1, 30, 0)
+    public static readonly DRAGON_CLAWS_SPECIAL_3 = new Sound(4141, 1, 42, 0)
+    public static readonly DRAGON_CLAWS_SPECIAL_4 = new Sound(4141, 1, 60, 0)
+    /** Sever (dragon scimitar). */
+    public static readonly DRAGON_SCIMITAR_SPECIAL = new Sound(2540, 1, 0, 0)
+    /** Sweep (dragon halberd). */
+    public static readonly DRAGON_HALBERD_SPECIAL = new Sound(2533, 1, 0, 0)
+    /** Smash (dragon warhammer). */
+    public static readonly DRAGON_WARHAMMER_SPECIAL = new Sound(2520, 1, 0, 0)
+    /** Quicksmash (granite maul and abyssal bludgeon). */
+    public static readonly GRANITE_MAUL_SPECIAL = new Sound(2715, 1, 0, 0)
+    /** Anchor sunder (barrelchest anchor). */
+    public static readonly BARRELCHEST_ANCHOR_SPECIAL = new Sound(3481, 1, 0, 0)
+    /** Brine sabre's special attack. */
+    public static readonly BRINE_SABRE_SPECIAL = new Sound(3473, 1, 0, 0)
+    /** Impale (rune claws). */
+    public static readonly RUNE_CLAWS_SPECIAL = new Sound(2534, 1, 0, 0)
+    /** Burning claws' special attack (rsprox recording 3327). */
+    public static readonly BURNING_CLAWS_SPECIAL_1 = new Sound(9316, 1, 29, 0)
+    public static readonly BURNING_CLAWS_SPECIAL_2 = new Sound(9316, 1, 60, 0)
+    /** Soulshot (seercull). */
+    public static readonly SEERCULL_SPECIAL = new Sound(2546, 1, 0, 0)
+    /** Sanctuary (excalibur). */
+    public static readonly EXCALIBUR_SPECIAL = new Sound(2539, 1, 0, 0)
+    /** Armadyl crossbow's special attack (rsprox recording 3277). */
+    public static readonly ARMADYL_CROSSBOW_SPECIAL = new Sound(3892, 1, 15, 0)
+    /** Toxic Siphon (rsprox recording 4121: after the dart's 2696, 32 cycles later). */
+    public static readonly TOXIC_BLOWPIPE_SPECIAL = new Sound(800, 1, 32, 0)
+    /** Dark bow: the double release, then the dragon or shadow arrow (rsprox recording 273). */
+    public static readonly DARK_BOW_DOUBLEFIRE = new Sound(3731, 1, 0, 0)
+    public static readonly DARK_BOW_DRAGON_SPECIAL = new Sound(3733, 1, 0, 0)
+    public static readonly DARK_BOW_SHADOW_SPECIAL = new Sound(3736, 1, 0, 0)
+    /** Emberlight's three-part special attack (rsprox recording 3333). */
+    public static readonly EMBERLIGHT_SPECIAL_1 = new Sound(9319, 1, 11, 0)
+    public static readonly EMBERLIGHT_SPECIAL_2 = new Sound(9320, 1, 28, 0)
+    public static readonly EMBERLIGHT_SPECIAL_3 = new Sound(9321, 1, 53, 0)
+    /** Voidwaker: the demonbane cast, then the thunder 30 cycles later (rsprox 1698). */
+    public static readonly VOIDWAKER_SPECIAL_1 = new Sound(5027, 1, 0, 0)
+    public static readonly VOIDWAKER_SPECIAL_2 = new Sound(6182, 1, 30, 0)
 
     // Spell sounds
 

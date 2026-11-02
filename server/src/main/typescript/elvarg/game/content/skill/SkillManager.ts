@@ -3,7 +3,7 @@ import { Player } from "../../entity/impl/player/Player";
 import { GameConstants } from "../../GameConstants";
 import { PlayerRights } from "../../model/rights/PlayerRights";
 import { Flag } from "../../model/Flag";
-import { PrayerData, PrayerHandler } from "../PrayerHandler";
+import { PrayerHandler } from "../PrayerHandler";
 import { WeaponInterfaceManager } from "../combat/WeaponInterfaceManager";
 import { BonusManager } from "../../model/equipment/BonusManager";
 import { GameObject } from "../../entity/impl/object/GameObject";
@@ -274,16 +274,10 @@ export class SkillManager {
     }
 
     public updateSkill(skill: Skill) {
-        if (skill === Skill.PRAYER || skill === Skill.DEFENCE) {
-            const prayerLevel = this.getMaxLevel(Skill.PRAYER);
-            const defenceLevel = this.getMaxLevel(Skill.DEFENCE);
-            this.player.getPacketSender()
-                .sendVarbit(5453, prayerLevel >= PrayerData.PRESERVE.requirement ? 1 : 0)
-                .sendVarbit(3909, prayerLevel >= PrayerData.CHIVALRY.requirement && defenceLevel >= 60 ? 8 : 0)
-                .sendVarbit(5451, prayerLevel >= PrayerData.RIGOUR.requirement && defenceLevel >= 70 ? 1 : 0)
-                .sendVarbit(5452, prayerLevel >= PrayerData.AUGURY.requirement && defenceLevel >= 70 ? 1 : 0);
-        }
-
+        // The prayer-tab unlock varbits (5451-5453 and 3909) are not level
+        // gates: a scroll or the quest owns them. SkillManager only sends the
+        // skill delta, so a login/level-up/drain refresh cannot overwrite the
+        // unlocks PrayerUnlocks.plugin.js has earned.
         // Native skill deltas also carry total and combat levels; legacy 317
         // text widgets do not exist in the OSRS interfaces.
         this.player.getPacketSender().sendSkill(skill);
@@ -316,25 +310,11 @@ export class SkillManager {
         const prayer = levels[Skill.PRAYER.getIndex()];
         const ranged = levels[Skill.RANGED.getIndex()];
         const magic = levels[Skill.MAGIC.getIndex()];
-        let combatLevel = 3;
-        combatLevel = Math.floor((defence + hp + Math.floor(prayer / 2)) * 0.2535) + 1;
+        const base = (defence + hp + Math.floor(prayer / 2)) * 0.25;
         const melee = (attack + strength) * 0.325;
         const ranger = Math.floor(ranged * 1.5) * 0.325;
         const mage = Math.floor(magic * 1.5) * 0.325;
-        if (melee >= ranger && melee >= mage) {
-            combatLevel = Math.floor(combatLevel + melee);
-        } else if (ranger >= melee && ranger >= mage) {
-            combatLevel = Math.floor(combatLevel + ranger);
-        } else if (mage >= melee && mage >= ranger) {
-            combatLevel = Math.floor(combatLevel + mage);
-        }
-        if (combatLevel > 126) {
-            return 126;
-        }
-        if (combatLevel < 3) {
-            return 3;
-        }
-        return combatLevel;
+        return Math.min(126, Math.max(3, Math.floor(base + Math.max(melee, ranger, mage))));
     }
 
     private applyMinimumSkill(skill: Skill, minLevel: number, minExperience?: number): boolean {

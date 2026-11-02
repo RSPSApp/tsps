@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generated": "2026-10-24",
+    "generated": "2026-11-01",
     "source": "https://oldschool.runescape.wiki",
     "license": "CC BY-NC-SA 3.0 \u2014 content from the Old School RuneScape Wiki",
     "id_space": "osrs cache ids (item and npc ids from the osrsreboxed databases)",
@@ -5739,6 +5739,7 @@
       "table_name": "Ancient Custodian Drops",
       "wiki_page": "Ancient Custodian",
       "main_max_roll": 124,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 532,
@@ -55486,6 +55487,7 @@
       "table_name": "Crushing hand Drops",
       "wiki_page": "Crushing hand",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 526,
@@ -70983,6 +70985,7 @@
       "table_name": "Elder aquanite Drops",
       "wiki_page": "Elder aquanite",
       "main_max_roll": 22,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 532,
@@ -74878,6 +74881,7 @@
       "table_name": "Ent Drops",
       "wiki_page": "Ent",
       "main_max_roll": 128,
+      "rolls": 25,
       "entries": [
         {
           "item_id": 1511,
@@ -77340,6 +77344,7 @@
       "table_name": "Flaming pyrelord Drops",
       "wiki_page": "Flaming pyrelord",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 25766,
@@ -86758,18 +86763,6 @@
           "section": "Weapons and armour"
         },
         {
-          "item_id": 559,
-          "name": "Body rune",
-          "quantity": [
-            7,
-            7
-          ],
-          "weight": 5,
-          "out_of": 128,
-          "rarity": 0.0390625,
-          "section": "Runes and ammunition"
-        },
-        {
           "item_id": 555,
           "name": "Water rune",
           "quantity": [
@@ -86779,6 +86772,18 @@
           "weight": 6,
           "out_of": 128,
           "rarity": 0.046875,
+          "section": "Runes and ammunition"
+        },
+        {
+          "item_id": 559,
+          "name": "Body rune",
+          "quantity": [
+            7,
+            7
+          ],
+          "weight": 5,
+          "out_of": 128,
+          "rarity": 0.0390625,
           "section": "Runes and ammunition"
         },
         {
@@ -86809,36 +86814,12 @@
           "item_id": 995,
           "name": "Coins",
           "quantity": [
-            5,
-            5
+            15,
+            15
           ],
           "weight": 28,
           "out_of": 128,
           "rarity": 0.21875,
-          "section": "Coins"
-        },
-        {
-          "item_id": 995,
-          "name": "Coins",
-          "quantity": [
-            9,
-            9
-          ],
-          "weight": 3,
-          "out_of": 128,
-          "rarity": 0.0234375,
-          "section": "Coins"
-        },
-        {
-          "item_id": 995,
-          "name": "Coins",
-          "quantity": [
-            15,
-            15
-          ],
-          "weight": 3,
-          "out_of": 128,
-          "rarity": 0.0234375,
           "section": "Coins"
         },
         {
@@ -86883,18 +86864,6 @@
           "section": "Other"
         },
         {
-          "item_id": 10999,
-          "name": "Goblin book",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 128,
-          "rarity": 0.015625,
-          "section": "Other"
-        },
-        {
           "item_id": 288,
           "name": "Goblin mail",
           "quantity": [
@@ -86916,6 +86885,42 @@
           "weight": 3,
           "out_of": 128,
           "rarity": 0.0234375,
+          "section": "Other"
+        },
+        {
+          "item_id": 3010,
+          "name": "Energy potion(3)",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 3,
+          "out_of": 128,
+          "rarity": 0.0234375,
+          "section": "Other"
+        },
+        {
+          "item_id": 3008,
+          "name": "Energy potion(4)",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 3,
+          "out_of": 128,
+          "rarity": 0.0234375,
+          "section": "Other"
+        },
+        {
+          "item_id": 10999,
+          "name": "Goblin book",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 128,
+          "rarity": 0.015625,
           "section": "Other"
         },
         {
@@ -86953,48 +86958,6 @@
           "out_of": 128,
           "rarity": 0.0078125,
           "section": "Other"
-        },
-        {
-          "item_id": 3014,
-          "name": "Energy potion(1)",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 1,
-          "out_of": 8,
-          "rarity": 0.125,
-          "section": "Other",
-          "assumed_rarity": true
-        },
-        {
-          "item_id": 3012,
-          "name": "Energy potion(2)",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 1,
-          "out_of": 8,
-          "rarity": 0.125,
-          "section": "Other",
-          "assumed_rarity": true
-        },
-        {
-          "item_id": 3008,
-          "name": "Energy potion(4)",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 1,
-          "out_of": 8,
-          "rarity": 0.125,
-          "section": "Other",
-          "assumed_rarity": true
         }
       ],
       "tertiary": [
@@ -87197,24 +87160,12 @@
           "item_id": 995,
           "name": "Coins",
           "quantity": [
-            1,
-            1
+            8,
+            8
           ],
           "weight": 34,
           "out_of": 128,
           "rarity": 0.265625,
-          "section": "Coins"
-        },
-        {
-          "item_id": 995,
-          "name": "Coins",
-          "quantity": [
-            3,
-            3
-          ],
-          "weight": 13,
-          "out_of": 128,
-          "rarity": 0.1015625,
           "section": "Coins"
         },
         {
@@ -87254,9 +87205,28 @@
           "section": "Coins"
         },
         {
-          "nothing": true,
-          "weight": 8,
-          "out_of": 128
+          "item_id": 3012,
+          "name": "Energy potion(2)",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 13,
+          "out_of": 128,
+          "rarity": 0.1015625,
+          "section": "Other"
+        },
+        {
+          "item_id": 288,
+          "name": "Goblin mail",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 10,
+          "out_of": 128,
+          "rarity": 0.078125,
+          "section": "Other"
         },
         {
           "item_id": 2347,
@@ -87271,6 +87241,11 @@
           "section": "Other"
         },
         {
+          "nothing": true,
+          "weight": 8,
+          "out_of": 128
+        },
+        {
           "item_id": 10999,
           "name": "Goblin book",
           "quantity": [
@@ -87281,21 +87256,6 @@
           "out_of": 128,
           "rarity": 0.015625,
           "section": "Other"
-        },
-        {
-          "item_id": 288,
-          "name": "Goblin mail",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 10,
-          "out_of": 128,
-          "rarity": 0.078125,
-          "section": "Other",
-          "notes": [
-            "Colour received depends on the goblin mail worn."
-          ]
         },
         {
           "item_id": 1987,
@@ -87339,34 +87299,6 @@
           "out_of": 128,
           "rarity": 0.015625,
           "section": "Herbs"
-        },
-        {
-          "item_id": 3014,
-          "name": "Energy potion(1)",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 1,
-          "out_of": 8,
-          "rarity": 0.125,
-          "section": "Other",
-          "assumed_rarity": true
-        },
-        {
-          "item_id": 3012,
-          "name": "Energy potion(2)",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 1,
-          "out_of": 8,
-          "rarity": 0.125,
-          "section": "Other",
-          "assumed_rarity": true
         }
       ],
       "tertiary": [
@@ -106174,6 +106106,7 @@
       "table_name": "Infernal pyrelord Drops",
       "wiki_page": "Infernal pyrelord",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 25766,
@@ -106763,6 +106696,7 @@
       "table_name": "Insatiable mutated Bloodveld Drops",
       "wiki_page": "Insatiable mutated Bloodveld",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 25769,
@@ -123521,6 +123455,7 @@
       "table_name": "Magma strykewyrm Drops",
       "wiki_page": "Magma strykewyrm",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 31726,
@@ -124024,6 +123959,7 @@
       "table_name": "Malevolent Mage Drops",
       "wiki_page": "Malevolent Mage",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 526,
@@ -126131,6 +126067,7 @@
       "table_name": "Marble gargoyle Drops",
       "wiki_page": "Marble gargoyle",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 23083,
@@ -133000,6 +132937,7 @@
       "table_name": "Mutated Terrorbird Drops",
       "wiki_page": "Mutated Terrorbird",
       "main_max_roll": 64,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 526,
@@ -151607,6 +151545,7 @@
       "table_name": "Scavenger beast Drops",
       "wiki_page": "Scavenger beast",
       "main_max_roll": 18,
+      "rolls": 2,
       "entries": [
         {
           "item_id": 526,
@@ -193623,6 +193562,7 @@
       "table_name": "Vitreous Chilled Jelly Drops",
       "wiki_page": "Vitreous Chilled Jelly",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 23083,
@@ -193901,6 +193841,7 @@
       "table_name": "Vitreous Jelly Drops",
       "wiki_page": "Vitreous Jelly",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 23083,
@@ -194130,6 +194071,7 @@
       "table_name": "Vitreous Warped Jelly Drops",
       "wiki_page": "Vitreous Warped Jelly",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 23083,
@@ -194383,6 +194325,7 @@
       "table_name": "Vorkath Drops",
       "wiki_page": "Vorkath",
       "main_max_roll": 150,
+      "rolls": 2,
       "entries": [
         {
           "item_id": 22124,
@@ -210071,6 +210014,7 @@
       "table_name": "Zulrah Drops",
       "wiki_page": "Zulrah",
       "main_max_roll": 250,
+      "rolls": 2,
       "entries": [
         {
           "item_id": 12934,

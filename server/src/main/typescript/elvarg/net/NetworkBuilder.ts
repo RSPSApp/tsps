@@ -153,7 +153,11 @@ const CLOSE_ON_INTERFACE_CLOSE_ATTRIBUTE = "interface:close-on-interface-close";
 /** The combat tab (combat_interface) and its auto-retaliate and special attack buttons. */
 const COMBAT_INTERFACE = 593;
 const COMBAT_AUTO_RETALIATE_CHILD = 32;
-const COMBAT_SPECIAL_ATTACK_CHILD = 41;
+/**
+ * The combat tab's special attack bar. Rev 241 moved the visible bar to 57 (under 39); 41 is
+ * the older bar, now under a container the cache keeps hidden. 67 is the offhand bar.
+ */
+const COMBAT_SPECIAL_ATTACK_CHILDREN = new Set([41, 57]);
 const WORLD_INTERACTIONS = new Set([
   "move",
   "teleport",
@@ -766,7 +770,7 @@ export class ClientConnection {
                 172,
                 this.player.autoRetaliateReturn() ? 0 : 1,
               );
-            } else if (actionPacket.groupId === COMBAT_INTERFACE && actionPacket.childId === COMBAT_SPECIAL_ATTACK_CHILD) {
+            } else if (actionPacket.groupId === COMBAT_INTERFACE && COMBAT_SPECIAL_ATTACK_CHILDREN.has(actionPacket.childId)) {
               CombatSpecial.activate(this.player);
             } else if (WeaponInterfaceManager.handleStyleButton(this.player, actionPacket.groupId, actionPacket.childId)) {
               BonusManager.update(this.player);
@@ -1371,20 +1375,36 @@ export class ClientConnection {
   private groundItemAction(packet: Extract<ReturnType<typeof decodeClientPackets>[number], { type: "ground_item_action" }>): void {
     const player = this.player!;
     const option = packet.option?.toLowerCase() ?? "";
+    const actions = CacheDefinitions.getItem(packet.itemId)?.groundActions ?? [];
     if (option === "examine") {
       const definition = ItemDefinition.forId(packet.itemId);
       player.sendMessage(definition.getExamine() || definition.getName());
-    } else if (option === "take" || (!option && (player.getPrivateArea() || packet.optionIndex === 3 || packet.optionIndex == null))) {
-      // A named option other than Take is the item's own, even in a private area (giant
-      // bones' "Bury" is their op3, where Take usually sits).
+      return;
+    }
+    if (option === "take") {
       PickupItemPacketListener.pickup(player, packet.itemId, packet.x, packet.y, packet.stackId);
-    } else {
-      // A named option (the agent MCP) is resolved to its op number, as the client sends it.
-      const named = option
-        ? CacheDefinitions.getItem(packet.itemId)?.groundActions?.findIndex((action) => action?.toLowerCase() === option) ?? -1
-        : -1;
+      return;
+    }
+
+    if (option) {
+      const namedIndex = actions.findIndex((action) => action?.toLowerCase() === option);
+      if (namedIndex < 0) return;
+      // The name must match the cache, and a supplied op number must agree with it.
+      const index = packet.optionIndex ?? namedIndex + 1;
+      if (index !== namedIndex + 1) return;
       SecondGroundItemOptionPacketListener.interact(
-        player, packet.itemId, packet.x, packet.y, packet.optionIndex ?? (named >= 0 ? named + 1 : 2)
+        player, packet.itemId, packet.x, packet.y, index
+      );
+    } else {
+      const index = packet.optionIndex ?? 3;
+      const action = actions[index - 1];
+      if (action?.toLowerCase() === "take" || (index === 3 && !action)) {
+        PickupItemPacketListener.pickup(player, packet.itemId, packet.x, packet.y, packet.stackId);
+        return;
+      }
+      if (!action) return;
+      SecondGroundItemOptionPacketListener.interact(
+        player, packet.itemId, packet.x, packet.y, index
       );
     }
   }

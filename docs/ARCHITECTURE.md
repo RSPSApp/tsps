@@ -184,7 +184,7 @@ This is a generic pipeline — any gamemode can use it to deliver arbitrary data
 
 ## Content Systems
 
-All gameplay content (skills, combat, shops, UI, etc.) is registered through the **script system** via `ScriptRegistry`. Content is organized into [Gamemodes](gamemodes.md) (server identity and rules) and [Extrascripts](extrascripts.md) (universal modules).
+All gameplay content (skills, combat, shops, UI, etc.) is registered through the **script system** via `ScriptRegistry`. Content is organized into [Plugins](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/plugins.md) (server identity and rules) and [Extrascripts](extrascripts.md) (universal modules).
 
 ### Gamemode Hierarchy
 
@@ -199,7 +199,7 @@ BaseGamemode (abstract — OSRS defaults, no content)
 
 `VanillaGamemode` (`server/gamemodes/vanilla/index.ts`) extends BaseGamemode with the full OSRS experience: banking, shops (via `ShopService`), equipment, all 13 global combat/spell providers, skill implementations, and UI widget handlers. Complex subsystems are extracted into dedicated service classes (e.g. `ShopService` wraps `ShopManager` + server integration) so the gamemode index stays thin.
 
-Most community gamemodes should extend `VanillaGamemode` and override what they need. See [Gamemodes](gamemodes.md) for details.
+Most community gamemodes should extend `VanillaGamemode` and override what they need. See [Plugins](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/plugins.md) for details.
 
 ### Script Loading
 

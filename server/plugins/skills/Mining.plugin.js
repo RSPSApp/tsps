@@ -600,7 +600,7 @@ class MiningTask extends Task {
         continue;
       }
 
-      if (!player.getLocation().isWithinInteractionDistance(rockObject.getLocation())) {
+      if (!rockObject.isWithinInteractionDistance(player.getLocation())) {
         stopMining(this.activeSessions, player);
         continue;
       }

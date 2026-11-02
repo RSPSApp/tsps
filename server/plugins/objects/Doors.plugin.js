@@ -29,6 +29,8 @@ const DOOR_NAMES = new Set([
   "Gate", "Metal gate", "Doorway", "Tree Door", "Storeroom Door", "Ardougne Wall Door",
   "Vitur door", "Myrmel door", "Shadum door", "Jovkai door", "Chained door", "Trapdoor",
   "Longhall door", "Prison door",
+  // Pollnivneach curtains: closed 1533 "Open" -> open 1534 "Close" (closed id + 1, cache-derived).
+  "Curtain",
 ]);
 
 // Always name locs by their core.ObjectIdentifiers property (O.DOOR_358), never a raw id: the
@@ -46,7 +48,7 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   LARGE_DOOR_101_OPEN: 39254,
 });
 
-let SELF_OPENING_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
+let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
 let DOUBLE_DOOR_ID_FAMILIES, DOUBLE_DOOR_FAMILY_IDS_BY_ID, DORGESH_CITY_DOOR_IDS;
 let SPECIAL_DOUBLE_DOOR_PAIRS, SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID, SPECIAL_DOUBLE_DOOR_OPEN_IDS_BY_CLOSED_ID;
 
@@ -89,6 +91,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // interior doors (DOOR_499 closed -> DOOR_498 open) are inverted: the open "Close"-only leaf
   // carries the lower id, so the ascending scan never sees the pair.
   SINGLE_DOOR_OPEN_IDS = new Map([
+    // Generic trapdoors have distinct open models, two ids after their closed variants.
+    [O.TRAPDOOR_4, O.TRAPDOOR_6],
+    [O.TRAPDOOR_5, O.TRAPDOOR_7],
     [O.LARGE_DOOR_11, O.LARGE_DOOR_14],
     [O.DOOR_180, O.DOOR_181],
     [O.DOOR_499, O.DOOR_498],
@@ -117,6 +122,11 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LONGHALL_DOOR, O.LONGHALL_DOOR_3],
     [O.LONGHALL_DOOR_2, O.LONGHALL_DOOR_4],
   ]);
+
+  // Curtains do not swing: the open loc is a drawn-back curtain model (1534: 879/880 vs the
+  // closed 1533's 884/885) that replaces the closed one on the same tile with the same rotation.
+  // These floor trapdoors likewise replace their model in place.
+  IN_PLACE_DOOR_IDS = new Set([O.CURTAIN_3, O.TRAPDOOR_4, O.TRAPDOOR_5]);
 
   // Tree Gnome Stronghold main gate: one 5x2 loc (190, face 2) opens into two
   // nameless 2x2 leaves (191/192), leaving the centre tile clear.
@@ -379,9 +389,12 @@ function buildDoorCatalog() {
     // Gameval names can identify the open leaf even when its id comes first
     // (canafis_door_ground_open / canafis_door_ground). Keep paired gates with
     // their family handler and require a matching, Close-only cache definition.
+    // A leaf of a same-model double door (fai_varrock_member_gatel/r 11766/11767) also has a
+    // gameval-named open loc; leave it to the pairing below, which registers both leaves.
     const namedOpenId = namedOpenLeaf(id);
     const namedOpen = namedOpenId == null ? null : core.CacheDefinitions.getObject(namedOpenId);
     if (
+      !isSameModelLeafPair(id, id + 1) && !isSameModelLeafPair(id - 1, id) &&
       !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(id) &&
       !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(namedOpenId) &&
       namedOpen?.name === def.name &&
@@ -463,6 +476,37 @@ function buildDoorCatalog() {
     if (!SINGLE_DOOR_OPEN_IDS.has(left) && !SINGLE_DOOR_OPEN_IDS.has(left + 1)) addSameModelDoubleDoor(left, left + 1);
   }
   return { closedToOpen, openToClosed };
+}
+
+// Two consecutive locs that are the closed leaves of one same-model double door: same name and
+// models, both offering only "Open", and each with a gameval-named open loc.
+function isSameModelLeafPair(a, b) {
+  const left = core.CacheDefinitions.getObject(a);
+  const right = core.CacheDefinitions.getObject(b);
+  if (!left || !right || left.name !== right.name) return false;
+  if (!Array.isArray(left.models) || left.models.length === 0) return false;
+  if (JSON.stringify(left.models) !== JSON.stringify(right.models)) return false;
+  const openOnly = (def) => hasAction(def.actions, "open") && !hasAction(def.actions, "close");
+  if (!openOnly(left) || !openOnly(right)) return false;
+  const names = core.CacheDefinitions.getLocNames();
+  return isMirroredLeafName(names.get(a), names.get(b)) && namedOpenLeaf(a) != null && namedOpenLeaf(b) != null;
+}
+
+// The two gameval names differ only by the leaf's side: gatel/gater, _left/_right, door/doorl,
+// face/face_mirr. Neighbouring variants (archeuus_door_double_left_green/_red) are not leaves.
+const LEAF_SIDE_SUFFIXES = new Set(["l|r", "left|right", "|l", "|r", "|_mirr", "|_mirror"]);
+function isMirroredLeafName(a, b) {
+  if (!a || !b || a === b) return false;
+  let start = 0;
+  while (start < a.length && start < b.length && a[start] === b[start]) start++;
+  let end = 0;
+  while (end < a.length - start && end < b.length - start && a[a.length - 1 - end] === b[b.length - 1 - end]) end++;
+  // Back the shared tail off a letter at a time: left_closed/right_closed share "t_closed".
+  for (; end >= 0; end--) {
+    const [x, y] = [a.slice(start, a.length - end), b.slice(start, b.length - end)].sort();
+    if (LEAF_SIDE_SUFFIXES.has(`${x}|${y}`)) return true;
+  }
+  return false;
 }
 
 // The open loc the cache's gameval names for a closed leaf (fai_varrock_member_gatel ->
@@ -898,9 +942,10 @@ function handleMappedDoor(player, object, objectId, location) {
   const nextId = open ? closedId : openId;
   const type = Number(activeObject.getType?.() ?? activeObject.type ?? 0);
   const rotation = Number(activeObject.getFace?.() ?? activeObject.face ?? 0) & 0x3;
+  const inPlace = IN_PLACE_DOOR_IDS.has(closedId);
   const nextRotation = open ? ((rotation + 1) & 0x3) : rotation;
   const offsetIndex = type === 9 ? ((nextRotation + 1) & 0x3) : nextRotation;
-  const [dx, dy] = COORD_OFFSETS[offsetIndex] ?? [0, 0];
+  const [dx, dy] = inPlace ? [0, 0] : (COORD_OFFSETS[offsetIndex] ?? [0, 0]);
   const previousObject = activeObject;
   const nextObject = open && existingState?.closed?.[0]
     ? objectFromSnapshot(existingState.closed[0])
@@ -912,7 +957,7 @@ function handleMappedDoor(player, object, objectId, location) {
         activeLocation.getZ?.() ?? activeLocation.z ?? 0
       ),
       type,
-      open ? ((rotation - 1) & 0x3) : ((rotation + 1) & 0x3),
+      inPlace ? rotation : open ? ((rotation - 1) & 0x3) : ((rotation + 1) & 0x3),
       privateArea
     );
 
@@ -1186,8 +1231,16 @@ function routeWallDoor(event) {
   const name = event.definition?.getName?.() ?? "";
   if (event.object?.getType?.() !== 0 ||
     (!DOOR_NAMES.has(name) && !/\b(?:doors?|doorway|gates?)\b/i.test(name))) return;
-  // A straight wall door is used across its face, never from either end of the wall.
+  // A closed straight wall door is used across its face, never from either end of the wall.
+  // An open leaf stands across the doorway instead, and the tile inside the doorway is at its
+  // end, so it keeps ordinary wall reach: closing it from inside doesn't walk the player out.
+  if (isOpenLeaf(event.definition)) return;
   event.blockAccessFlags = (event.blockAccessFlags ?? 0) | 0x5;
+}
+
+function isOpenLeaf(definition) {
+  const actions = definition?.getInteractions?.();
+  return hasAction(actions, "close") && !hasAction(actions, "open");
 }
 
 function registerWallDoorRoutes() {

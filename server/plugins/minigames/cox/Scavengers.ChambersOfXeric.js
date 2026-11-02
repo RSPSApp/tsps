@@ -238,19 +238,12 @@ function crossObject(event) {
   return true;
 }
 
-/** Wiki: scavenger beasts drop three items at a time. */
-function threeDrops(event) {
-  if (!NPC.SCAVENGERS.includes(event.npcId) || !(event.npc?.__coxRoom instanceof ScavengerRoom)) return;
-  Shared.api().emitCustomEvent("npc-drops:extra-rolls", { player: event.player, npc: event.npc, npcId: event.npcId, rolls: 2, drops: event.drops });
-}
-
 module.exports = function registerCoxScavengers(api) {
   Shared.bind(api);
   Shared.onObjectIds(api, [OBJECT.ROCKS], mineRocks);
   Shared.onObjectIds(api, [OBJECT.SAPLING], chopSapling);
   Shared.onObjectIds(api, [OBJECT.BOULDER], pushBoulder);
   Shared.onObjectIds(api, [OBJECT.RUBBLE, OBJECT.STUMP], crossObject);
-  api.onCustomEvent("npc-drops:roll", threeDrops);
 };
 
 Object.assign(module.exports, { ScavengerRoom, scavengerCount });

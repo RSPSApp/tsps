@@ -129,7 +129,12 @@ function travel(player, altar, going, message) {
     if (Records.setting(player, "gotr_colourful_fade_disabled") !== 1) {
       player.getPacketSender().sendClientScript(Shared.SCRIPT.REMOVE_PORTAL);
     }
-    Shared.later(1, () => player.isRegistered() && overlay(player, altar, false));
+    Shared.later(1, () => {
+      if (!player.isRegistered()) return;
+      overlay(player, altar, false);
+      // The Guardians may have changed while the player was away.
+      if (!going) animateGuardians([player]);
+    });
   });
 }
 
@@ -154,7 +159,10 @@ function refuse(player, altar) {
 function enter({ player, objectId }) {
   const altar = byGuardian(objectId);
   if (!altar || !Shared.inTemple(player.getLocation()) || !Shared.questComplete(player)) return false;
-  if (!Game.isPlaying(player)) return true;
+  if (!Game.isPlaying(player)) {
+    player.sendMessage("There's no need to do that right now.");
+    return true;
+  }
   if (!isActive(altar)) {
     Shared.statement(player, "The Guardian is dormant. Its energy might return soon.");
     return true;
@@ -262,7 +270,7 @@ function chargeCell(player, altar) {
 }
 
 function findTalisman(player, altar, essence) {
-  if (Records.setting(player, altar.toggle) === 1 || Shared.count(player, altar.talisman) > 0) return;
+  if (Records.setting(player, altar.toggle) === 1) return;
   for (let i = 0; i < essence; i++) {
     if (Math.random() * TALISMAN_CHANCE >= 1) continue;
     player.getInventory().adds(Shared.obj(altar.talisman), 1);

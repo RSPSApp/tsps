@@ -36,3 +36,20 @@ console.log("multiloc-varps: ok");
     assert.notEqual(multiLocVariants(ids, loader, vars(0)), multiLocVariants(ids, loader, vars(1)));
     assert.equal(multiLocVariants(undefined, loader, vars(0)), "");
 }
+
+// Loc id 0 is a multiloc too (Dwarf Cannon's remains, on varp 0): a varp-0 change rebuilds its
+// square, and the variant follows the varp.
+{
+    const remains: Record<number, any> = {
+        0: { transforms: [-1, -1, -1, 15596, -1], transformVarbit: -1, transformVarp: 0, transform(vars: any) {
+            const index = vars.getVarp(0);
+            return index >= 0 && index < 4 && this.transforms[index] !== -1 ? { id: this.transforms[index] } : undefined;
+        } },
+    };
+    const loader: any = { load: (id: number) => remains[id] };
+    const ids = [Int32Array.from([0])];
+    assert.deepEqual([...multiLocVarps(ids, loader, varbitLoader)], [0], "loc 0 reads varp 0");
+    const vars = (value: number): any => ({ getVarp: () => value, getVarbit: () => 0 });
+    assert.equal(multiLocVariants(ids, loader, vars(3)), "0:15596", "varp 0 = 3 shows the remains");
+    assert.equal(multiLocVariants(ids, loader, vars(2)), "0:-1");
+}

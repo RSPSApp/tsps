@@ -105,6 +105,3 @@ mirror them for the client.
 - Essence pouches never degrade in tsps, so the Runecraft cape's no-decay perk has nothing to stop.
 - The max hood choice at Mac is a chat menu, not the live interface.
 - Rename the boat through one validated text prompt rather than the live descriptor/noun list.
-- `data/definitions/npc-interactions.json` still binds old custom shops to other real NPCs
-  (221, 2200, 4921, 308/315/316); Ajjat's and the Ranging Guild armour salesman's were removed
-  so their own dialogue and shop work.

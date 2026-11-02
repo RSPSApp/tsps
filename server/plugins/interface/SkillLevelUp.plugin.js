@@ -5,6 +5,7 @@
 //
 // Opening a pop-up interrupts what the player is doing: it emits "level-up:popup-opened"
 // { player, skill, pause }, which holds skilling until Continue. With pop-ups off, nothing stops.
+// World owners can also disable the blocking pop-up with SkillLevelUp:interruptActions.
 const GROUP = 233;
 const TEXT1 = (GROUP << 16) | 1;
 const TEXT2 = (GROUP << 16) | 2;
@@ -19,6 +20,7 @@ const TOPLEVEL_CHATBOX_RESETBACKGROUND_SCRIPT = 2379;
 
 // option_level_up_message_disabled: "Level-up pop-up notifications" set to Disabled.
 const POPUP_DISABLED_VARBIT = 20157;
+const INTERRUPT_ACTIONS_CONFIG = "SkillLevelUp:interruptActions";
 
 const LEVELUP_ANIM = 199;
 const LEVELUP_99_ANIM = 1388;
@@ -144,7 +146,7 @@ function showLevelUp({ player, skill, oldLevel, newLevel }) {
   const combatGained = Number.isInteger(previousCombat) && combat > previousCombat;
   if (combatGained) announceCombatLevel(player);
 
-  if (!popupsEnabled(player)) return;
+  if (!popupsEnabled(player) || pluginApi.getPluginConfig(INTERRUPT_ACTIONS_CONFIG, true) === false) return;
   if (combatGained && player.getAttribute(COMBAT_POPUP_FROM_ATTRIBUTE) === undefined) {
     player.setAttribute(COMBAT_POPUP_FROM_ATTRIBUTE, previousCombat);
   }

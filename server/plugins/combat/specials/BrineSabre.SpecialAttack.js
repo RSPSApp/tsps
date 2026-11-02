@@ -13,7 +13,7 @@ function isUnderwater(location) {
 }
 
 function buildSpecial(api) {
-  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Skill } = api.core;
+  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Skill, Sound, Sounds } = api.core;
 
   const DRAIN = 75;
   const SPECIAL_ANIMATION = new Animation(6118);
@@ -36,9 +36,9 @@ function buildSpecial(api) {
 
     start(character, target) {
       CombatSpecial.drain(character, DRAIN);
-      super.start(character, target);
       character.performAnimation(SPECIAL_ANIMATION);
       character.performGraphic(SPECIAL_VFX);
+      Sounds.sendSound(character, Sound.BRINE_SABRE_SPECIAL);
     }
 
     handleAfterHitEffects(hit) {

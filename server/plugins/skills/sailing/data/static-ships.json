@@ -34,6 +34,100 @@
     "templateChunkY": 795,
     "deckLevel": 1,
     "walkable": "all",
+    "deckLocs": [
+      {
+        "id": 29464,
+        "x": 5,
+        "y": 7,
+        "level": 0,
+        "shape": 10,
+        "rotation": 0
+      },
+      {
+        "id": 29469,
+        "x": 1,
+        "y": 7,
+        "level": 0,
+        "shape": 10,
+        "rotation": 0
+      },
+      {
+        "id": 29467,
+        "x": 5,
+        "y": 8,
+        "level": 0,
+        "shape": 10,
+        "rotation": 0
+      },
+      {
+        "id": 29470,
+        "x": 1,
+        "y": 8,
+        "level": 0,
+        "shape": 10,
+        "rotation": 0
+      },
+      {
+        "id": 29463,
+        "x": 2,
+        "y": 7,
+        "level": 1,
+        "shape": 10,
+        "rotation": 1
+      },
+      {
+        "id": 29463,
+        "x": 4,
+        "y": 8,
+        "level": 1,
+        "shape": 10,
+        "rotation": 3
+      },
+      {
+        "id": 29536,
+        "x": 3,
+        "y": 11,
+        "level": 1,
+        "shape": 10,
+        "rotation": 0
+      },
+      {
+        "id": 29497,
+        "x": 4,
+        "y": 10,
+        "level": 1,
+        "shape": 10,
+        "rotation": 0
+      }
+    ],
+    "deckNpcs": [
+      {
+        "id": 15188,
+        "x": 3,
+        "y": 8,
+        "face": 6
+      },
+      {
+        "id": 15677,
+        "x": 2,
+        "y": 9
+      },
+      {
+        "id": 15678,
+        "x": 2,
+        "y": 9
+      },
+      {
+        "id": 15679,
+        "x": 2,
+        "y": 9
+      },
+      {
+        "id": 15683,
+        "x": 2,
+        "y": 9
+      }
+    ],
     "hull": {
       "offsetX": 0,
       "offsetY": -256,
@@ -60,6 +154,100 @@
     "templateChunkY": 795,
     "deckLevel": 1,
     "walkable": "all",
+    "deckLocs": [
+      {
+        "id": 29464,
+        "x": 5,
+        "y": 7,
+        "level": 0,
+        "shape": 10,
+        "rotation": 0
+      },
+      {
+        "id": 29469,
+        "x": 1,
+        "y": 7,
+        "level": 0,
+        "shape": 10,
+        "rotation": 0
+      },
+      {
+        "id": 29467,
+        "x": 5,
+        "y": 8,
+        "level": 0,
+        "shape": 10,
+        "rotation": 0
+      },
+      {
+        "id": 29470,
+        "x": 1,
+        "y": 8,
+        "level": 0,
+        "shape": 10,
+        "rotation": 0
+      },
+      {
+        "id": 29463,
+        "x": 2,
+        "y": 7,
+        "level": 1,
+        "shape": 10,
+        "rotation": 1
+      },
+      {
+        "id": 29463,
+        "x": 4,
+        "y": 8,
+        "level": 1,
+        "shape": 10,
+        "rotation": 3
+      },
+      {
+        "id": 29536,
+        "x": 3,
+        "y": 11,
+        "level": 1,
+        "shape": 10,
+        "rotation": 0
+      },
+      {
+        "id": 29497,
+        "x": 4,
+        "y": 10,
+        "level": 1,
+        "shape": 10,
+        "rotation": 0
+      }
+    ],
+    "deckNpcs": [
+      {
+        "id": 15188,
+        "x": 3,
+        "y": 8,
+        "face": 6
+      },
+      {
+        "id": 15680,
+        "x": 2,
+        "y": 9
+      },
+      {
+        "id": 15681,
+        "x": 2,
+        "y": 9
+      },
+      {
+        "id": 15682,
+        "x": 2,
+        "y": 9
+      },
+      {
+        "id": 15684,
+        "x": 2,
+        "y": 9
+      }
+    ],
     "hull": {
       "offsetX": 0,
       "offsetY": -256,

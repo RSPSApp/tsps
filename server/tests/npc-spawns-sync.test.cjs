@@ -60,6 +60,47 @@ test('identity reconciliation keeps a nameless multinpc parent whose variant has
   assert.deepEqual(result.spawns, [parent]); assert.equal(result.repairs.length, 0);
 });
 
+test("a new spawn inherits a stationary NPC's explicit radius over the implicit default", () => {
+  const rows = [
+    ...Array.from({ length: 20 }, (_, i) => ({ id: 0, name: 'Tool Leprechaun', x: i, y: 0, level: 0, wanderRadius: 0 })),
+    ...Array.from({ length: 25 }, (_, i) => ({ id: 0, name: 'Tool Leprechaun', x: i, y: 1, level: 0 })),
+  ];
+  // Tool Leprechauns: 20 rows at 0, 25 left on the default 5. The explicit radius wins.
+  assert.equal(matching.chooseWanderRadius(rows, { id: 0, name: 'Tool Leprechaun' },
+    { walkSeqId: 12042, attackable: false }), 0);
+  // Two explicit witnesses are the minimum: one is not enough to override 25 defaults.
+  assert.equal(matching.chooseWanderRadius([...rows.slice(0, 1), ...rows.slice(20)],
+    { id: 0, name: 'Tool Leprechaun' }, { walkSeqId: 12042, attackable: false }), undefined);
+});
+
+test('an attackable NPC keeps the effective majority, not a stray explicit radius', () => {
+  const rows = [
+    ...Array.from({ length: 6 }, (_, i) => ({ id: 2854, name: 'Rat', x: i, y: 0, level: 0 })),
+    ...Array.from({ length: 2 }, (_, i) => ({ id: 2854, name: 'Rat', x: i, y: 1, level: 0, wanderRadius: 2 })),
+  ];
+  assert.equal(matching.chooseWanderRadius(rows, { id: 2854, name: 'Rat' },
+    { walkSeqId: 2703, attackable: true }), undefined, 'the default 5 is still the majority');
+  const mostlyTight = [
+    ...Array.from({ length: 6 }, (_, i) => ({ id: 2854, name: 'Rat', x: i, y: 0, level: 0, wanderRadius: 2 })),
+    ...Array.from({ length: 2 }, (_, i) => ({ id: 2854, name: 'Rat', x: i, y: 1, level: 0 })),
+  ];
+  assert.equal(matching.chooseWanderRadius(mostlyTight, { id: 2854, name: 'Rat' },
+    { walkSeqId: 2703, attackable: true }), 2);
+});
+
+test('the name fallback carries a radius across interchangeable ids, and no animation is 0', () => {
+  const rows = [
+    { id: 936, name: 'Mountain troll', x: 0, y: 0, level: 0, wanderRadius: 2 },
+    { id: 936, name: 'Mountain troll', x: 1, y: 0, level: 0, wanderRadius: 2 },
+  ];
+  assert.equal(matching.chooseWanderRadius(rows, { id: 937, name: 'Mountain troll' },
+    { walkSeqId: 283, attackable: true }), 2, 'interchangeable copy');
+  assert.equal(matching.chooseWanderRadius([], { id: 9999, name: 'Prop' },
+    { walkSeqId: -1, attackable: false }), 0);
+  assert.equal(matching.chooseWanderRadius([], { id: 9999, name: 'Walker' },
+    { walkSeqId: 819, attackable: false }), undefined);
+});
+
 test('the actual sync CLI preserves LF/CRLF and all other bytes, then regenerates identically', t => {
   const fs = require('node:fs'), os = require('node:os'), cp = require('node:child_process');
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'npc-spawn-sync-'));

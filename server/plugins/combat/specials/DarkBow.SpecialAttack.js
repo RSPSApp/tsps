@@ -57,7 +57,9 @@ function buildDarkBowSpecialAttack(core) {
       let player = character.getAsPlayer();
       CombatSpecial.drain(player, DRAIN);
       player.performAnimation(ANIMATION);
-      Sounds.sendSound(character, Sound.SHOOT_BOW_QUIET);
+      // Descent of Dragons / Descent of Darkness (rsprox 273: 3731 then 3733 for dragon arrows).
+      Sounds.sendSound(character, Sound.DARK_BOW_DOUBLEFIRE);
+      Sounds.sendSound(character, isDragonArrow(player) ? Sound.DARK_BOW_DRAGON_SPECIAL : Sound.DARK_BOW_SHADOW_SPECIAL);
       let projectileId = 1099;
       if (!isDragonArrow(player)) {
         projectileId = 1101;

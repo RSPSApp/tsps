@@ -2,8 +2,8 @@
  * Power Miner (https://oldschool.runescape.wiki/w/Power_Miner_(Raging_Echoes_League)), Raging
  * Echoes' tier 1 relic: the Echo pickaxe (a crystal pickaxe with no requirement, in Mining's own
  * table), a failed swing's second 50% chance, ore straight to the bank, a rock that lasts four
- * ores, and the pickaxe's toggles: ore smelted into its bar (the first furnace recipe that takes
- * the ore, its other ingredients waived: ours) and gems cut, with the Smithing and Crafting XP
+ * ores, and the pickaxe's toggles: ore smelted into the relic's bar (iron becomes steel, with
+ * other ingredients waived) and gems cut, with the Smithing and Crafting XP
  * whatever the level.
  */
 const Common = require("./Common.LeagueRelics");
@@ -12,6 +12,7 @@ const EchoTool = require("./EchoTool.LeagueRelics");
 let api;
 let core;
 let effect;
+let smeltBars;
 
 /** Ores taken from each rock since it last depleted. */
 const mined = new WeakMap();
@@ -48,8 +49,8 @@ function keepRock(request) {
 /** What the ore becomes in the bank, with the XP it pays: a bar, a cut gem, or the ore itself. */
 function processed(player, itemId) {
   const current = EchoTool.mode(player, effect);
-  if (current.includes("smelt")) {
-    const bar = { oreId: itemId, barId: null, xp: null };
+  if (current.includes("smelt") && smeltBars.has(itemId)) {
+    const bar = { oreId: itemId, outputId: smeltBars.get(itemId), barId: null, xp: null };
     api.emitCustomEvent("smithing:bar-for-ore", bar);
     if (bar.barId) return { itemId: bar.barId, skill: core.Skill.SMITHING, xp: bar.xp };
   }
@@ -86,6 +87,7 @@ module.exports = function attach(pluginApi) {
   api = pluginApi;
   core = api.core;
   effect = Common.data.effects.powerMiner;
+  smeltBars = new Map(Object.entries(effect.smeltBars).map(([ore, bar]) => [core.ItemIdentifiers[ore], core.ItemIdentifiers[bar]]));
   EchoTool.attach(api, effect);
   api.onCustomEvent("mining:attempt", secondChance);
   api.onCustomEvent("mining:deplete-rock", keepRock);

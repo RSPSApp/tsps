@@ -1,4 +1,4 @@
-import { TOPLEVEL, TOPLEVEL_OSRS_STRETCH, TOPLEVEL_PRE_EOC } from "@runelite/api/gameval/InterfaceID";
+import { TOPLEVEL, TOPLEVEL_OSM, TOPLEVEL_OSRS_STRETCH, TOPLEVEL_PRE_EOC } from "@runelite/api/gameval/InterfaceID";
 import type { OsrsClient } from "../../../../game/OsrsClient";
 import { getMousePos } from "../../../../game/InputManager";
 import type {
@@ -65,6 +65,11 @@ const LAYOUTS: Record<number, { viewport: number; hud: number; chat: number }> =
         viewport: uid(TOPLEVEL_PRE_EOC, 88),
         hud: uid(TOPLEVEL_PRE_EOC, 15),
         chat: uid(TOPLEVEL_PRE_EOC, 93),
+    },
+    [TOPLEVEL_OSM]: {
+        viewport: uid(TOPLEVEL_OSM, 1),
+        hud: uid(TOPLEVEL_OSM, 26),
+        chat: uid(TOPLEVEL_OSM, 49),
     },
 };
 /** chatbox:chatarea, hidden when the chat is collapsed. */

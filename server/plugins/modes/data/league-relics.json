@@ -120,11 +120,17 @@
       "skills": ["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC"]
     },
     "equilibrium": { "league": [4, 5], "key": "equilibrium", "bonusFraction": 0.1, "leastExperiencedFraction": 0.2 },
-    "_gatheringComment": "The gathering relics (docs/leagues.md). Wiki numbers unless marked ours: Trickster's and Animal Wrangler's faster box-trap lure (the trap's 5-tick look for prey halved to 2 ticks: the Wiki gives no figure); the Echo tools' toggles cycle through their modes with our messages; Power Miner's auto-smelt takes the furnace recipe whose main ore it is and waives its other ingredients (a copper ore alone makes a bronze bar; coal makes nothing), its four ores a rock are counted per rock for everyone who mines it and do not count mining gloves (not modelled here); a Fishing second chance lands the best fish the player can catch at the spot; Trickster's and Dodgy Deals' coins are multiplied as coin pouches; Corner Cutter's 25% is on the lap's completion bonus; the Sage's greaves of Trickster and Corner Cutter are not in this cache.",
+    "_gatheringComment": "The gathering relics (docs/leagues.md). Wiki numbers unless marked ours: Trickster's and Animal Wrangler's faster box-trap lure (the trap's 5-tick look for prey halved to 2 ticks: the Wiki gives no figure); the Echo tools' toggles cycle through their modes with our messages; Power Miner's auto-smelt follows its smeltBars conversions and waives other ingredients (iron becomes steel without coal; coal stays coal), its four ores a rock are counted per rock for everyone who mines it and do not count mining gloves (not modelled here); a Fishing second chance lands the best fish the player can catch at the spot; Trickster's and Dodgy Deals' coins are multiplied as coin pouches; Corner Cutter's 25% is on the lap's completion bonus; the Sage's greaves of Trickster and Corner Cutter are not in this cache.",
     "endlessHarvest": { "league": 4, "key": "endless-harvest", "skills": ["MINING", "WOODCUTTING", "FISHING"], "multiplier": 2 },
     "trickster": { "league": 4, "key": "trickster", "pouchLimitMultiplier": 3, "lootMultiplier": 2, "boxTrapMultiplier": 2, "boxTrapLureTicks": 2, "logsPerAction": 9 },
     "powerMiner": {
       "league": 5, "key": "power-miner", "tool": "ECHO_PICKAXE", "toolName": "Echo pickaxe", "secondChance": 0.5, "oresPerRock": 4,
+      "smeltBars": {
+        "COPPER_ORE": "BRONZE_BAR", "BLURITE_ORE": "BLURITE_BAR", "IRON_ORE": "STEEL_BAR",
+        "SILVER_ORE": "SILVER_BAR", "LEAD_ORE": "LEAD_BAR", "GOLD_ORE": "GOLD_BAR",
+        "MITHRIL_ORE": "MITHRIL_BAR", "ADAMANTITE_ORE": "ADAMANTITE_BAR", "RUNITE_ORE": "RUNITE_BAR",
+        "PERFECT_GOLD_ORE": "PERFECT_GOLD_BAR", "BUCKET_OF_SAND": "MOLTEN_GLASS"
+      },
       "modes": ["smelt and cut", "smelt", "cut", "off"], "modeText": { "smelt and cut": "smelt the ore and cut the gems you mine", "smelt": "smelt the ore you mine", "cut": "cut the gems you mine", "off": "leave what you mine as it is" }
     },
     "lumberjack": {

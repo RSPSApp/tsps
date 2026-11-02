@@ -161,6 +161,17 @@ function transcriptStep(event) {
   sail(player, route);
 }
 
+/**
+ * A transcript's "If not already at X:" (ferries.json `here`, by NPC name): hidden where the
+ * ferryman standing at X is the one being talked to.
+ */
+function answerHere(event) {
+  const conditions = Common.data.here?.[definitionName(event)];
+  if (!conditions || !Object.hasOwn(conditions, event.text ?? "")) return undefined;
+  const gameval = Common.npcGameval(event.npc, event.npcId);
+  return gameval ? gameval !== conditions[event.text] : undefined;
+}
+
 function lineEntries(event) {
   return Common.data.lines.filter((entry) => entry.npc === definitionName(event));
 }
@@ -199,10 +210,11 @@ function attach(api) {
   api.onNpcInteraction(npcOption);
   api.onObjectInteraction(locOption);
   api.onNpcDialogueCondition(answerEntrana);
+  api.onNpcDialogueCondition(answerHere);
   api.onCustomEvent("npc-dialogue:action", transcriptStep);
   api.onCustomEvent("npc-dialogue:choice", rememberChoice);
   api.onCustomEvent("npc-dialogue:line", sailAfterLine);
   api.onCustomEvent("ferries:travel", travelEvent);
 }
 
-module.exports = { attach, npcOption, locOption, transcriptStep, answerEntrana, contraband, sailAfterLine, rememberChoice, travelEvent };
+module.exports = { attach, npcOption, locOption, transcriptStep, answerEntrana, answerHere, contraband, sailAfterLine, rememberChoice, travelEvent };

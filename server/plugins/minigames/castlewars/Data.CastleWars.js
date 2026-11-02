@@ -40,13 +40,21 @@ function buildData(core) {
     WAITING_ROOM_INTERFACE: 131, // interface.castlewars_waitingroom
     STATUS_OVERLAY_INTERFACE: { [TEAM.SARADOMIN]: 58, [TEAM.ZAMORAK]: 59 }, // interface.castlewars_status_overlay_*
     EJECT_TEXT_UID: { [TEAM.SARADOMIN]: (58 << 16) | 26, [TEAM.ZAMORAK]: (59 << 16) | 25 },
+    BARRICADE_TEXT_UID: { [TEAM.SARADOMIN]: (58 << 16) | 15, [TEAM.ZAMORAK]: (59 << 16) | 15 },
     // Scores, flag states and the timer are drawn by the cache's own scripts (887/888/2375),
     // so the server only feeds the vars they read.
     TIMER_VARP: 380, // seconds until start in the waiting room, minutes remaining in game
     FLAG_VARBIT: { [TEAM.SARADOMIN]: 143, [TEAM.ZAMORAK]: 153 },
     SCORE_VARBIT: { [TEAM.SARADOMIN]: 145, [TEAM.ZAMORAK]: 155 },
+    TEAM_PLAYING_VARBIT: { [TEAM.SARADOMIN]: 144, [TEAM.ZAMORAK]: 154 },
+    BARRICADE_COUNT_VARBIT: 16198, // castlewars_barricades_inside (the total on standard worlds)
+    STANDARD_WORLD_VARBIT: 16207, // castlewars_world_client: shared cap, rather than inside/outside
     // Each team's own castle status (main door, side door, tunnels, catapult), read by the same scripts.
     TEAM_VARBIT,
+    TEAM_HUD_VARBIT: {
+      [TEAM.SARADOMIN]: TEAM_VARBIT,
+      [TEAM.ZAMORAK]: { DOOR_HEALTH: 146, DOOR_UNLOCKED: 147, TUNNEL_NS_CLEAR: 148, TUNNEL_EW_CLEAR: 149, CATAPULT_BROKEN: 150 },
+    },
     TEAM_VARBIT_DEFAULTS: { [TEAM_VARBIT.DOOR_HEALTH]: 100 },
 
     LOBBY_BOUNDS: [box(2435, 2446, 3081, 3098, 0)],

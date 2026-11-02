@@ -728,7 +728,12 @@ module.exports = function registerKingsRansomQuest(api) {
 
   function talkGossip(player, npcId, stage) {
     if (stage >= STAGE_COMPLETE) return play(player, npcId, "after-king-s-ransom", GOSSIP_PAGE) || true;
-    if (stage < STAGE_STARTED) return play(player, npcId, "strange-things-are-afoot-talking-to-gossip") || true;
+    if (stage < STAGE_STARTED) {
+      // This opening thanks the player for solving Lord Sinclair's murder; until
+      // Murder Mystery is complete, leave Gossip to that quest's own variants.
+      if (!isQuestComplete(player, "murder_mystery")) return false;
+      return play(player, npcId, "strange-things-are-afoot-talking-to-gossip") || true;
+    }
     if (stage < STAGE_INVESTIGATE) return play(player, npcId, "strange-things-are-afoot-talking-to-gossip-again") || true;
     if (stage < STAGE_EVIDENCE_SHOWN) {
       return play(player, npcId, "peril-at-the-end-house-talking-to-gossip-after-talking-to-the-guard") || true;

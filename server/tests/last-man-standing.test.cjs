@@ -29,6 +29,7 @@ before(() => {
     core,
     getPluginConfig: (_key, fallback) => fallback,
     getSkillManager: () => require('../dist/game/content/skill/SkillManager').SkillManager,
+    emitCustomEvent() {},
   });
 });
 

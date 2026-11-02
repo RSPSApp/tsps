@@ -251,8 +251,10 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     public instanceRegionX: number = 0;
     public instanceRegionY: number = 0;
     public instanceLocRebuildTimer: ReturnType<typeof setTimeout> | null = null;
-    /** Bumped per instance scene build; only the latest build's result is applied. */
+    /** Bumped per instance scene build. */
     public instanceBuildSeq: number = 0;
+    /** The newest instance build queued to draw; older builds finishing later are dropped. */
+    public instanceAppliedBuild: number = 0;
     /** Instance scene builds the worker has not returned yet. */
     public instanceBuildsInFlight: number = 0;
     /** A built instance scene waiting in mapsToLoad; it replaces the drawn scene when applied. */
@@ -298,7 +300,16 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     /** Dynamically spawned locs (LOC_ADD_CHANGE). Keyed by "x,y,level,shape". */
     public addedLocs: Map<
         string,
-        { locId: number; x: number; y: number; level: number; shape: number; rotation: number }
+        {
+            locId: number;
+            x: number;
+            y: number;
+            level: number;
+            shape: number;
+            rotation: number;
+            /** Cache locs this add replaced, so removing it restores them. */
+            replacedIds?: number[];
+        }
     > = new Map();
     // Track spawned locs not in base map data. The first three key fields are world x,y,level.
     public locSpawns: Map<string, { id: number; type: number; rotation: number }> = new Map();
@@ -1414,7 +1425,8 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     override invalidateDefinitionCaches(): void {
         this.definitionContentEpoch++;
         this.worldEntityLoadTokens.clear();
-        this.instanceBuildSeq++;
+        // Builds already in flight used the old definitions: none of them may be drawn.
+        this.instanceAppliedBuild = ++this.instanceBuildSeq;
         if (this.instanceLocRebuildTimer !== null) clearTimeout(this.instanceLocRebuildTimer);
         this.instanceLocRebuildTimer = null;
         if (this.pendingInstanceScene) WebGLMapSquare.cancelPreparedLoad(this.pendingInstanceScene);

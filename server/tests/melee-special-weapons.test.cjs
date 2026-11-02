@@ -23,6 +23,7 @@ const { RangedWeapon } = require("../dist/game/content/combat/ranged/RangedData"
 const { TimerKey } = require("../dist/util/timers/TimerKey");
 const { TaskManager } = require("../dist/game/task/TaskManager");
 const { PluginManager } = require("../dist/plugins/PluginManager");
+const { World } = require("../dist/game/World");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 
 const items = JSON.parse(
@@ -50,7 +51,7 @@ before(() => {
 
 /** A player-shaped attacker that records what the specials do to it. */
 function fakeFighter({ special = 100, inDuelNoMovement = false } = {}) {
-  const log = { drains: [], messages: [], animations: 0, graphics: 0, bars: 0 };
+  const log = { drains: [], messages: [], animations: 0, graphics: 0, bars: 0, area: [] };
   const fighter = {
     log,
     special,
@@ -72,6 +73,7 @@ function fakeFighter({ special = 100, inDuelNoMovement = false } = {}) {
       sendInterfaceComponentMoval() {},
       sendInterfaceDisplayState() {},
       sendSoundEffect() {},
+      sendAreaSound(...args) { log.area.push(args); },
     }),
     getWeapon: () => ({ getSpecialBar: () => -1, getSpecialMeter: () => -1 }),
     performAnimation() { log.animations++; },
@@ -80,7 +82,7 @@ function fakeFighter({ special = 100, inDuelNoMovement = false } = {}) {
     getAttackSound: () => null,
     sendMessage(message) { log.messages.push(message); },
     getBaseAttackSpeed: () => 4,
-    getLocation: () => ({ getX: () => 3199, getY: () => 3200 }),
+    getLocation: () => ({ getX: () => 3199, getY: () => 3200, getZ: () => 0 }),
     getDueling: () => ({
       inDuel: () => inDuelNoMovement,
       getRules: () => ({ [require("../dist/game/content/Duelling").DuelRule.NO_MOVEMENT.getButtonId()]: true }),
@@ -659,6 +661,24 @@ test("every hasta is a melee SPEAR weapon with no ammunition or charges", () => 
     assert.equal(RangedWeapon.getSelfAmmo(hasta.id) ?? null, null, `${hasta.id} fires nothing`);
     assert.equal(hasta.charges, undefined);
   }
+});
+
+test("dragon claws play the four Slice and Dice sounds with the captured delays", () => {
+  const attacker = fakeFighter();
+  attacker.isPlayerBot = () => false;
+  const target = fakeTarget();
+  const original = World.getPlayers;
+  World.getPlayers = () => [attacker];
+  try {
+    special("dragon_claws").getCombatMethod().start(attacker, target);
+  } finally {
+    World.getPlayers = original;
+  }
+  assert.deepEqual(
+    attacker.log.area.map(([soundId, , , , , delay]) => [soundId, delay]),
+    [[4138, 10], [4140, 30], [4141, 42], [4141, 60]],
+    "rsprox recording 4014",
+  );
 });
 
 test("broken dragon hastas are crafting items that cannot be equipped", async () => {

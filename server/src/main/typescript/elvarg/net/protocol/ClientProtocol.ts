@@ -1917,10 +1917,12 @@ export function encodeTriggerOnDialogAbort(): Buffer {
   return encodeServerPacket(ServerPacketId.TRIGGER_ONDIALOGABORT, Buffer.alloc(0));
 }
 
-export function encodeWidgetSetText(uid: number, text: string): Buffer {
+export function encodeWidgetSetText(uid: number, text: string, serverOwned?: boolean): Buffer {
   const id = Buffer.alloc(4);
   id.writeInt32BE(uid | 0);
-  return encodeServerPacket(ServerPacketId.WIDGET_SET_TEXT, Buffer.concat([id, string(text)]));
+  return encodeServerPacket(ServerPacketId.WIDGET_SET_TEXT, Buffer.concat([
+    id, string(text), serverOwned === undefined ? Buffer.alloc(0) : Buffer.from([serverOwned ? 1 : 0]),
+  ]));
 }
 
 export function encodeWidgetSetHidden(uid: number, hidden: boolean): Buffer {
@@ -2191,6 +2193,11 @@ const QUEST_TAB_ICON_CHILD_BY_ROOT: Record<number, number> = {
 const SIDE_JOURNAL_GROUP_ID = 629;
 const SIDE_JOURNAL_TAB_CONTAINER_CHILD_ID = 43;
 const INTERFACE_CHARACTER_SUMMARY_ID = 712;
+// The social tab is a tab bar (side_channels): the server swaps its content on each tab click,
+// starting on the chat-channel (rsprox 4186, 2528). plugins/interface/SideChannels.plugin.js.
+const SIDE_CHANNELS_GROUP_ID = 707;
+const SIDE_CHANNELS_CONTENT_CHILD_ID = 7;
+const CHAT_CHANNEL_GROUP_ID = 7;
 const QUEST_TAB_ICON_CHILD_ID = 61;
 // Mirrors client/widgets/WidgetFlags.ts: op1 (default, already implied) | op2/op3/op4
 // (Character Summary / Quest List / Achievement Diaries submenu entries).
@@ -2256,6 +2263,9 @@ export function encodeGameframeTabSetup(group: number, root: number = 161): Buff
     packets.push(encodeOpenSub(SIDE_JOURNAL_GROUP_ID, SIDE_JOURNAL_TAB_CONTAINER_CHILD_ID, INTERFACE_CHARACTER_SUMMARY_ID));
     groups.push(INTERFACE_CHARACTER_SUMMARY_ID);
   }
+  if (group === SIDE_CHANNELS_GROUP_ID) {
+    packets.push(encodeOpenSub(SIDE_CHANNELS_GROUP_ID, SIDE_CHANNELS_CONTENT_CHILD_ID, CHAT_CHANNEL_GROUP_ID));
+  }
   for (const [uid, packet] of gameframeFlagEntries(root)) {
     if (groups.includes(uid >>> 16)) packets.push(packet);
   }
@@ -2303,7 +2313,7 @@ export function encodeGameframeBootstrap(playerName: string, root: number = 161,
     // 161:7 (hud_container_back) has no fixed-layout pane, so XP drops mounted there vanished.
     [96, 162], [93, 163], [33, orbsGroupFor(root)], ...(xpDropsEnabled ? [[9, 122]] : []), [6, 651, 5929],
     [76, 593], [77, 320], [78, 629], [79, MAIN_INVENTORY_GROUP_ID], [80, 387], [81, 541],
-    [82, 218], [83, 7], [84, 109], [85, 429], [86, 182], [87, 116],
+    [82, 218], [83, SIDE_CHANNELS_GROUP_ID], [84, 109], [85, 429], [86, 182], [87, 116],
     [88, 216], [89, 239],
     // The boss HP bar HUD (hpbar_hud), as OSRS opens it at login (164:2 resizable).
     [2, 303],
@@ -2321,6 +2331,7 @@ export function encodeGameframeBootstrap(playerName: string, root: number = 161,
     // the client maps them onto the active root's components (pane redirects).
     ...mounts.map(([child, group, postScript]) => encodeOpenSub(161, child, group, postScript)),
     encodeOpenSub(SIDE_JOURNAL_GROUP_ID, SIDE_JOURNAL_TAB_CONTAINER_CHILD_ID, INTERFACE_CHARACTER_SUMMARY_ID),
+    encodeOpenSub(SIDE_CHANNELS_GROUP_ID, SIDE_CHANNELS_CONTENT_CHILD_ID, CHAT_CHANNEL_GROUP_ID),
     ...encodeGameframeFlags(root),
     packet(ServerPacket.WIDGET_RUN_SCRIPT, loginScript, 2),
   ];
@@ -2603,6 +2614,7 @@ export function encodePlayerAppearance(
   int(appearance.equipQty?.[13] ?? 0);
   int(appearance.equip[13] ?? -1);
   int(appearance.equip[12] ?? -1);
+  int(appearance.equipQty?.[3] ?? 0);
   return Buffer.from(bytes);
 }
 

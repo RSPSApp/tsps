@@ -16,6 +16,7 @@ const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const { ObjectDefinition } = require("../dist/game/definition/ObjectDefinition");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const Ferries = require("../plugins/world/Ferries.plugin");
+const BarnabyFerry = require("../plugins/world/BarnabyFerry.plugin");
 
 const { Common, Voyages, Routes } = Ferries._test;
 const npcId = (name) => CacheDefinitions.getNpcId(name);
@@ -75,6 +76,8 @@ const api = {
     ChatType: { SPAM: "spam" },
     TaskManager: { submit: (task) => tasks.push(task), cancelTasks: (key) => tasks.forEach((task) => task.key === key && task.stop()) },
     StatementDialogue: { send: (player, text) => player.sent.boxes.push(text) },
+    TeleportHandler: { checkReqs: () => true, teleport: () => assert.fail("a ferry must not cast a teleport") },
+    TeleportType: { NORMAL: "NORMAL" },
   },
   onNpcInteraction: (handler) => hooks.npc.push(handler),
   onObjectInteraction: (handler) => hooks.object.push(handler),
@@ -115,6 +118,7 @@ function createPlayer({ at = new Location(3046, 3236, 0), items = [], worn = [],
   const sent = { messages: [], spam: [], boxes: [], interfaces: [], scripts: [], anims: [], subs: [], closed: [], songs: [], jingles: [], shown: [], varbits: new Map(), removals: 0 };
   let location = at;
   let blocked = false;
+  let registered = true;
   const sender = {
     sendTypedMessage: (type, text) => { sent.spam.push(text); return sender; },
     sendSong: (id) => { sent.songs.push(id); return sender; },
@@ -131,6 +135,7 @@ function createPlayer({ at = new Location(3046, 3236, 0), items = [], worn = [],
     sendVarbit: (id, value) => { sent.varbits.set(id, value); return sender; },
   };
   const container = (slots) => ({
+    get: (slot) => slots[slot],
     getItems: () => slots,
     getAmount: (id) => slots.reduce((sum, item) => sum + (item.getId() === id ? item.getAmount() : 0), 0),
     deleteNumber: (id, amount) => { const item = slots.find((slot) => slot.getId() === id); item.setAmount(item.getAmount() - amount); },
@@ -150,7 +155,8 @@ function createPlayer({ at = new Location(3046, 3236, 0), items = [], worn = [],
     getDialogueManager: () => ({ reset() {} }),
     getSpellbook: () => ({ getInterfaceId: () => 218 }),
     setUntargetable() {},
-    isRegistered: () => true,
+    isRegistered: () => registered,
+    setRegistered: (value) => { registered = value; },
     sendMessage: (text) => sent.messages.push(text),
   };
 }
@@ -183,6 +189,7 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   ObjectDefinition.init();
   Ferries.register(api);
+  BarnabyFerry.register({ ...api, onNpcInteraction() {}, onNpcDialogueVariant() {}, onNpcDialogueCondition() {}, onCustomEvent() {} });
 });
 
 beforeEach(() => {
@@ -434,6 +441,99 @@ test("quest plugins hand crossings over with ferries:travel", () => {
   const unknown = { player: createPlayer(), route: "atlantis", handled: false };
   api.emitCustomEvent("ferries:travel", unknown);
   assert.equal(unknown.handled, false, "the quest falls back to its own move");
+});
+
+test("Barnaby's three destinations fade, sail and arrive without casting a teleport or charging twice", () => {
+  const destinations = [[2680, 3274, 0], [2768, 3227, 0], [2916, 3225, 0]];
+  for (const [index, port] of BarnabyFerry._test.PORTS.entries()) {
+    const player = createPlayer({ coins: 100 });
+    const sail = () => BarnabyFerry._test.sail(player, port, BarnabyFerry._test.fareFor(player));
+    sail();
+    sail();
+    assert.equal(player.getInventory().getAmount(ItemIdentifiers.COINS), 70, "only the accepted voyage charges");
+    assert.deepEqual(player.sent.messages, ["You pay 30 coins and board the ship."]);
+    assert.equal(player.blocked, true);
+    assert.equal(player.sent.subs.length, 1);
+    assert.equal(player.sent.subs[0].id, 174, "fade overlay, not a spellbook animation");
+    assert.deepEqual(player.sent.subs[0].options.postScripts, [{ scriptId: 948, args: [0, 255, 0, 0, 50] }]);
+    tick(2);
+    assert.deepEqual(at(player), [3046, 3236, 0], "the crossing takes time");
+    tick(1);
+    assert.deepEqual(at(player), destinations[index]);
+    assert.equal(player.blocked, true, "arrival remains held until fade-in");
+    tick(1);
+    assert.deepEqual(player.sent.subs[1].options.postScripts, [{ scriptId: 948, args: [0, 0, 0, 255, 50] }]);
+    assert.equal(player.blocked, false);
+    assert.equal(Common.travelling(player), false);
+    tick(3);
+    assert.deepEqual(player.sent.closed, [(161 << 16) | 1]);
+  }
+});
+
+test("logging out on Barnaby's discounted crossing lands the player and releases the travel hold", () => {
+  const player = createPlayer({ coins: 100, worn: [ItemIdentifiers.KARAMJA_GLOVES_1] });
+  const port = BarnabyFerry._test.PORTS[1];
+  BarnabyFerry._test.sail(player, port, BarnabyFerry._test.fareFor(player));
+  assert.equal(player.getInventory().getAmount(ItemIdentifiers.COINS), 85);
+  tick(1);
+  for (const handler of hooks.logout) handler({ player });
+  player.setRegistered(false);
+  assert.deepEqual(at(player), [2768, 3227, 0]);
+  assert.equal(player.blocked, false);
+  assert.equal(Common.travelling(player), false);
+  tick(10);
+  assert.equal(player.sent.subs.length, 1, "logged-out players receive no later fade callbacks");
+  assert.equal(player.getInventory().getAmount(ItemIdentifiers.COINS), 85);
+});
+
+test("Achilka's riverboat: fade, minimap and busy off on +1, Kastori with the captured message on +3, back on +5", () => {
+  const minimap = CacheDefinitions.getVarbitId("minimap_state");
+  const busy = CacheDefinitions.getVarbitId("busy");
+  const player = createPlayer({ at: new Location(1257, 3122, 0) });
+  const event = click(player, "Achilka", "Kastori", { gameval: "tlati_riverboat_owner_west" });
+  assert.equal(event.handled, true);
+  assert.deepEqual(player.sent.subs.at(-1).options.postScripts[0].args, [0, 255, 0, 0, 50]);
+  tick(1);
+  assert.equal(player.sent.varbits.get(minimap), 2);
+  assert.equal(player.sent.varbits.get(busy), 1);
+  tick(2);
+  assert.deepEqual(at(player), [1390, 3074, 0]);
+  assert.deepEqual(player.sent.spam, ["Achilka takes you along the river to Kastori."]);
+  tick(2);
+  assert.equal(player.sent.varbits.get(minimap), 0);
+  assert.equal(player.sent.varbits.get(busy), 0);
+  assert.deepEqual(player.sent.subs.at(-1).options.postScripts[0].args, [0, 0, 0, 255, 50]);
+  assert.equal(player.blocked, false);
+  tick(2);
+  assert.ok(player.sent.closed.includes((161 << 16) | 1));
+});
+
+test("every Achilka offers the other two stops; her transcript rides and hides the stop she stands at", () => {
+  const stops = { tlati_riverboat_owner_south: "Kastori", tlati_riverboat_owner_west: "Tal Teklan", tlati_riverboat_owner_north: "Gloomthorn Trail" };
+  for (const [gameval, stop] of Object.entries(stops)) {
+    const definition = CacheDefinitions.getNpc(npcId(gameval));
+    assert.equal(definition.name, "Achilka");
+    const others = Object.values(stops).filter((other) => other !== stop).sort();
+    assert.deepEqual(definition.actions.filter((action) => action && action !== "Talk-to").sort(), others, gameval);
+    for (const option of others) {
+      tasks = [];
+      const player = createPlayer();
+      assert.equal(click(player, "Achilka", option, { gameval }).handled, true, `${gameval} ${option}`);
+    }
+  }
+  const player = createPlayer();
+  const step = { player, stepId: "WjyUrt", handled: false };
+  for (const handler of hooks.events.get("npc-dialogue:action")) handler(step);
+  assert.equal(step.handled, true);
+  tick(7);
+  assert.deepEqual(at(player), [1400, 3246, 0]);
+  const west = npcId("tlati_riverboat_owner_west");
+  const ask = (name, text) => hooks.conditions.map((handler) => handler({
+    player, npcId: west, text, definition: { getName: () => name },
+  })).find((answer) => answer != null);
+  assert.equal(ask("Achilka", "If not already at Tal Teklan:"), false);
+  assert.equal(ask("Achilka", "If not already at Kastori:"), true);
+  assert.equal(ask("Hans", "If not already at Kastori:"), undefined);
 });
 
 test("every route's gamevals resolve in the cache", () => {

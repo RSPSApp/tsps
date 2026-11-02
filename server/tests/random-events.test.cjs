@@ -17,6 +17,7 @@ const JekyllPlugin = require('../plugins/npcs/DrJekyll.plugin');
 const Gift = require('../plugins/npcs/random-events/GiftRewards.RandomEvents');
 const PlantPlugin = require('../plugins/npcs/StrangePlant.plugin');
 const { Animation } = require('../dist/game/model/Animation');
+const { Graphic } = require('../dist/game/model/Graphic');
 const { Task } = require('../dist/game/task/Task');
 const { PlayerRights } = require('../dist/game/model/rights/PlayerRights');
 const { ItemOnGround, State } = require('../dist/game/entity/impl/grounditem/ItemOnGround');
@@ -39,8 +40,10 @@ class FakeGameObject {
   getPrivateArea() { return this.privateArea; }
 }
 
+const NPC_NAMES = { [N.NILES]: 'Niles', [N.RICK_TURPENTINE]: 'Rick Turpentine', [N.GENIE]: 'Genie', [N.SANDWICH_LADY]: 'Sandwich lady' };
 const ITEM_NAMES = { [I.LAMP]: 'Lamp', [I.BEER]: 'Beer', [I.KEBAB]: 'Kebab', [I.COINS]: 'Coins',
-  [I.MEAT_PIE]: 'Meat pie', [I.STRANGE_FRUIT]: 'Strange fruit', [I.CAMO_TOP]: 'Camo top' };
+  [I.MEAT_PIE]: 'Meat pie', [I.STRANGE_FRUIT]: 'Strange fruit', [I.CAMO_TOP]: 'Camo top',
+  [I.SAPPHIRE_2]: 'Sapphire', [I.EMERALD_2]: 'Emerald', [I.RUBY_2]: 'Ruby', [I.DIAMOND_2]: 'Diamond' };
 const UNTRADEABLE = new Set([I.CAMO_TOP]);
 // Coins plus the runes, feathers and arrows the Maze pays: rewards that stack live.
 const STACKABLE = new Set([I.COINS, I.FEATHER, I.IRON_ARROW, I.STEEL_ARROW, I.DEATH_RUNE,
@@ -50,6 +53,15 @@ const REWARD = (amount, name) => `Your reward is: <col=ff0000>${amount}</col> x 
 const PLACED = (amount, name) =>
   `Your reward is: <col=ff0000>${amount}</col> x <col=ff0000>${name}</col> - it has been placed <col=ff0000>on the ground</col>.`;
 const npcLines = p => [...(p.dialogue?.getDialogues?.().values() ?? [])].map(entry => entry.getText?.()).filter(Boolean);
+
+/** A served event's NPC lingers on its 10-tick beat; this runs past the longest such wait. */
+const leaves = (h, p) => { h.advance(13_000); h.emit('PlayerProcess', { player: p }); };
+
+function trayClick(h, p, model, action = 1) {
+  const index = [6, 7, 8, 9, 10, 11, 12].findIndex(child => p.models?.get((297 << 16) | child) === model);
+  assert.notEqual(index, -1, `tray model ${model}`);
+  h.emit('InterfaceActionClick', { player: p, buttonId: (297 << 16) | (6 + index), action });
+}
 
 function harness(t, members = true) {
   let now = 1_000, random = 0.5;
@@ -74,8 +86,9 @@ function harness(t, members = true) {
   const tasks = [];
   const api = {
     core: { Item, ItemIdentifiers: I, NpcIdentifiers: N, Skill, Location, Wilderness: { isPvpArea: () => false },
-      WorldDefinition: { isMembersWorld: () => members }, World: { getProcessCycle: () => Math.floor(now / 600) },
-      Animation, Task, PlayerRights,
+      WorldDefinition: { isMembersWorld: () => members }, World: { getProcessCycle: () => Math.floor(now / 600), forEachNetworkPlayer() {} },
+      NpcDefinition: { forId: id => ({ getName: () => NPC_NAMES[id] }) },
+      Animation, Graphic, Task, PlayerRights,
       DialogueChainBuilder, NpcDialogue, PlayerDialogue, StatementDialogue,
       ItemStatementDialogue, EndDialogue, ActionDialogue, GameObject: FakeGameObject, ObjectManager,
       MapObjects: { get: () => null, mapObjects, getHash: (x, y, z) => `${x},${y},${z}` } },
@@ -95,12 +108,16 @@ function harness(t, members = true) {
     getTaskManager: () => ({ submit(task) { task.setRunning(true); tasks.push(task); } }),
     registerCustomInterface(definition) { interfaces.push(definition); },
     spawnNpc(definition) {
-      const npc = { definition, owner: definition.owner, location: new Location(definition.x, definition.y, definition.z),
-        getOwner() { return this.owner; }, getId() { return definition.id; },
+      const npc = { definition, owner: definition.owner, ownerOnly: definition.ownerOnly,
+        location: new Location(definition.x, definition.y, definition.z),
+        getOwner() { return this.owner; }, getId() { return definition.id; }, isOwnerOnly() { return !!this.ownerOnly; },
         getDefinition() { return { getId: () => definition.id }; }, getLocation() { return this.location; },
         setFollowing(p) { this.following = p; }, setMobileInteraction(p) { this.interaction = p; },
+        setFace(face) { this.face = face; }, getFace() { return this.face; },
         forceChat(text) { this.chat = text; }, performAnimation(animation) { this.animation = animation.getId(); },
-        setHitpoints(hp) { this.hitpoints = hp; }, setNpcTransformationId() {} };
+        setHitpoints(hp) { this.hitpoints = hp; }, setNpcTransformationId(id) { this.transformation = id; },
+        setPositionToFace(location) { this.faced = location; }, performGraphic(graphic) { this.graphic = graphic.id; } };
+      if (Number.isFinite(definition.face)) npc.setFace(definition.face);
       npcs.push(npc); return npc;
     },
     removeNpc(npc) { npc.removed = true; },
@@ -125,6 +142,8 @@ function harness(t, members = true) {
     onItemAction(name, actions) { hooks[name] = actions; },
     onItemOnObject(handler) { (hooks.itemOnObject ??= []).push(handler); },
     onItemOnNpc(handler) { (hooks.itemOnNpc ??= []).push(handler); },
+    onObjectRoute(handler) { (hooks.objectRoute ??= []).push(handler); },
+    onGroundItemPickup(handler) { (hooks.groundPickup ??= []).push(handler); },
     onObjectInteraction(a, b) {
       if (typeof a !== 'string') { (hooks.objectRaw ??= []).push(a); return; }
       const merged = { ...(hooks[`object:${a}`] ?? {}) };
@@ -161,10 +180,12 @@ function harness(t, members = true) {
       getCombatFollowing: () => p.combatFollowing,
       getPrivateArea: () => p.privateArea, getArea: () => p.area,
       getDueling: () => ({ inDuel: () => !!p.duel }), getForceMovement: () => p.movement,
+      getAppearance: () => ({ isMale: () => !p.female }),
       getInterfaceId: () => p.interfaceId, setInterfaceId(id) { p.interfaceId = id; },
       sendMessage: text => messages.push(text), forceChat(text) { p.chat = text; },
       setNpcTransformationId(id) { p.transformation = id; },
       performAnimation(animation) { p.animation = animation.getId(); },
+      setPositionToFace(location) { p.face = location; },
       moveTo(location) { p.location = location; }, setLocation(location) { p.location = location; },
       getEquipment: () => ({ containsNumber: () => false }),
       getBank: () => ({ containsNumber: () => false }),
@@ -194,16 +215,21 @@ function harness(t, members = true) {
           assert.equal(multipliers, false);
           if (!p.blockXp) xp.set(skill, Math.min(200_000_000, (xp.get(skill) ?? 0) + amount));
         } }),
-      getPacketSender: () => ({ sendInterface(id) { p.interfaceId = id; },
+      getSpellbook: () => ({ getInterfaceId: () => 218 }),
+      getPacketSender: () => ({ closeSubInterface() {}, sendTabInterface() {}, sendInterface(id) { p.interfaceId = id; },
         sendInterfaceRemoval() { p.interfaceId = -1; p.chatboxGroupId = -1; }, sendString(text, uid) {
           p.trayTitle = text; (p.strings ??= new Map()).set(uid, text);
         },
         sendItemOnInterfaces(uid, id) { (p.tray ??= []).push([uid, id]); },
         sendInterfaceRawModel(uid, model) { (p.models ??= new Map()).set(uid, model); },
-        sendInterfaceDisplayState() {}, sendSubInterface() {}, sendConfig() {},
+        sendInterfaceDisplayState() {}, sendSubInterface() {}, sendConfig(id, value) { (p.configs ??= new Map()).set(id, value); },
+        sendVarbit(id, value) { (p.varbits ??= new Map()).set(id, value); },
         sendInterfaceScript() {}, sendChatboxInterface(id) { p.chatboxGroupId = id; }, sendClientScript() {},
         isChatboxInterface(id) { return p.chatboxGroupId === id; },
-        sendInterfaceAnimation() {},
+        sendInterfaceAnimation() {}, sendSound() {}, sendGraphic() {}, sendAreaSound() {},
+        sendGlobalGraphic(graphic, tile) { (p.smokes ??= []).push([graphic.id, tile]); },
+        sendTypedMessage(type, text, from) { (p.typed ??= []).push([type, text, from]); },
+        sendObjectAnimation(object, animation) { (p.objectAnimations ??= []).push([object, animation.getId()]); },
         sendInterfaceFlagsRange(uid, from, to, flags) { (p.flags ??= []).push([uid, from, to, flags]); } }),
     };
     return p;
@@ -490,6 +516,9 @@ test('advance_time reaches the real scheduler and expires its invitation', t => 
   assert.equal(h.npcs.length, 1);
   h.api.emitCustomEvent('agent:advance-time', { player: p, ms: 60_000, handledBy: [] });
   h.emit('PlayerProcess', { player: p });
+  assert.equal(h.npcs[0].chat, 'Maybe later.');
+  h.api.emitCustomEvent('agent:advance-time', { player: p, ms: 1_800, handledBy: [] });
+  h.emit('PlayerProcess', { player: p });
   assert.equal(h.npcs[0].removed, true);
 });
 
@@ -535,7 +564,7 @@ test('randevt is described and owner-only, selects each index immediately and re
   const ids = [N.GENIE, N.SANDWICH_LADY, N.DRUNKEN_DWARF, N.RICK_TURPENTINE,
     N.MILES, N.MYSTERIOUS_OLD_MAN_2, N.DR_JEKYLL, N.COUNT_CHECK_2, null, N.CAPT_ARNAV,
     N.BEE_KEEPER_2, N.QUIZ_MASTER_2, N.SERGEANT_DAMIEN_2, N.FREAKY_FORESTER_2, N.LEO_2,
-    N.FLIPPA_2, N.EVIL_BOB, N.EVIL_BOB, N.POSTIE_PETE_2, N.MYSTERIOUS_OLD_MAN_4,
+    N.FLIPPA_2, N.EVIL_BOB, N.EVIL_BOB_3, N.POSTIE_PETE_2, N.MYSTERIOUS_OLD_MAN_4,
     N.MYSTERIOUS_OLD_MAN_5, N.PILLORY_GUARD, N.DUNCE_2, N.STRANGE_PLANT];
   let previous;
   ids.forEach((id, index) => {
@@ -544,8 +573,7 @@ test('randevt is described and owner-only, selects each index immediately and re
     assert.equal(event.handled, true);
     let npc = h.npcs.at(-1);
     if (id === null) {
-      npc = h.npcs.slice(-5).find(entry =>
-        [N.FROG_PRIN, N.FROG_PRIN_2, N.FROG_PRINCE, N.FROG_PRINCESS].includes(entry.definition.id));
+      npc = h.npcs.slice(-6).find(entry => entry.definition.id === N.FROG_7);
       assert.ok(npc);
     } else {
       assert.equal(npc.definition.id, id);
@@ -585,7 +613,7 @@ test('Genie and dwarf deny other players, put what does not fit on the ground an
   // Live, the dwarf with one free slot: the beer goes in, the kebab is placed on the ground.
   for (const [kind, name, expected, line] of [
     [0, 'Genie', [I.LAMP], "Ah, so you are there, Master Player. I'm so glad you summoned me. Please take this lamp and make your wish."],
-    [2, 'Drunken Dwarf', [I.BEER, I.KEBAB], "I 'new it were you matey! I remember your kebab stories! 'Ere, have some ob the good stuff!"]]) {
+    [2, 'Drunken Dwarf', [I.BEER, I.KEBAB], "I 'new it were you matey! 'Ere, have some ob the good<br>stuff!"]]) {
     const p = h.player(), other = h.player(), npc = h.spawn(p, kind);
     assert.equal(npc.definition.id, kind === 0 ? N.GENIE : N.DRUNKEN_DWARF);
     h.hooks[name]['Talk-to']({ player: other, npc }); h.hooks[name].Dismiss({ player: other, npc });
@@ -593,7 +621,10 @@ test('Genie and dwarf deny other players, put what does not fit on the ground an
     npc.owner = other; h.hooks[name]['Talk-to']({ player: p, npc }); assert.deepEqual(p.rewards, []); npc.owner = p;
     const dropsBefore = h.drops.length; p.messages.length = 0;
     p.free = expected.length - 1; h.hooks[name]['Talk-to']({ player: p, npc });
+    assert.deepEqual(npcLines(p), [line]);
     h.hooks[name]['Talk-to']({ player: p, npc });
+    assert.equal(npc.removed, undefined, 'stays until its 10-tick beat');
+    assert.equal(npc.following, null, 'stops following'); leaves(h, p);
     assert.equal(npc.removed, true);
     assert.deepEqual(p.rewards, expected.slice(0, -1));
     assert.equal(h.drops.length, dropsBefore + 1, 'only the item that did not fit is dropped');
@@ -602,7 +633,7 @@ test('Genie and dwarf deny other players, put what does not fit on the ground an
     assert.equal(drop.getDespawnDelay(), 18_000); assert.equal(drop.getgoesGlobal(), true);
     assert.ok(drop.getPosition().equals(p.location));
     assert.deepEqual(p.messages, [...expected.slice(0, -1).map(id => REWARD(1, ITEM_NAMES[id])), PLACED(1, last)]);
-    assert.deepEqual(npcLines(p), [line]);
+    assert.deepEqual(npcLines(p).length, 1, 'talking again while leaving is his leaving line');
   }
 });
 
@@ -627,9 +658,10 @@ test('every event delivers real inventory items and refreshes the container exac
     const interact = () => h.hooks[name][index === 23 ? 'Pick' : 'Talk-to']({ player: p, npc });
     interact();
     if (index === 1) openOptions(h, p);
-    if (index === 1) h.emit('InterfaceActionClick', { player: p, buttonId: (297 << 16) | 6, action: 1 });
-    if (index === 4) certerChoice(h, p, 'Fish');
-    interact();
+    if (index === 1) trayClick(h, p, 10726);
+    if (index === 4) certerChoice(h, p, 'An axe.');
+    if (index === 6) openOptions(h, p);
+    interact(); leaves(h, p);
     assert.deepEqual(inventory.getValidItems().map(item => [item.getId(), item.getAmount()]), expected, name);
     assert.equal(refreshes, expected.length, name);
     assert.equal(npc.removed, true, name);
@@ -645,37 +677,45 @@ test('every event delivers real inventory items and refreshes the container exac
     const npc = h.spawn(p, index); h.random(0);
     assert.equal(inventory.getFreeSlots(), 0);
     h.hooks[index === 3 ? 'Rick Turpentine' : 'Dr Jekyll']['Talk-to']({ player: p, npc });
-    if (index === 6) h.prompts.at(-1).options[0].cb();
+    if (index === 6) { openOptions(h, p); h.prompts.at(-1).options[0].cb(); openOptions(h, p); }
     assert.equal(inventory.get(5).getId(), index === 3 ? I.COINS : I.STAMINA_POTION_4_);
     assert.equal(inventory.get(5).getAmount(), index === 3 ? 90 : 1);
-    assert.equal(inventory.getFreeSlots(), 0); assert.equal(npc.removed, true);
+    leaves(h, p); assert.equal(inventory.getFreeSlots(), 0); assert.equal(npc.removed, true);
   }
 });
 
-test('Sandwich tray validates owner, selection and open interface, with harmless retry and stale roll', t => {
+test('Sandwich tray validates owner, selection and open interface, with a wrong pick ending it and stale roll', t => {
   const h = harness(t), p = h.player(), other = h.player(), npc = h.spawn(p, 1, 0);
   const click = (player, index, action = 1) => h.emit('InterfaceActionClick', { player, buttonId: (297 << 16) | (6 + index), action });
   click(p, 0); assert.deepEqual(p.rewards, []);
   h.hooks['Sandwich lady']['Talk-to']({ player: p, npc });
   // Live offers the food in a dialogue first; the tray opens when it is continued.
   assert.equal(p.tray, undefined);
-  assert.deepEqual(npcLines(p), ['You look hungry to me. I tell you what - have a baguette on me.']);
+  assert.deepEqual(npcLines(p), ['You look hungry to me. I tell you what -<br>have a baguette on me.']);
   openOptions(h, p);
-  assert.equal(p.tray.length, 7); assert.match(p.trayTitle, /baguette/);
-  assert.deepEqual(p.flags, Array.from({ length: 7 }, (_, index) => [(297 << 16) | (6 + index), -1, -1, 2]));
-  click(p, 0, 2); assert.deepEqual(p.rewards, []);
-  other.interfaceId = 297; click(other, 0); click(p, 1); assert.deepEqual(p.rewards, []); assert.equal(npc.removed, undefined);
-  h.random(0); click(p, 0); click(p, 0);
+  // Raw tray models, all seven foods, as captured; no invented item or flags packets.
+  assert.deepEqual([...p.models.values()].sort(), [10726, 10727, 10728, 10729, 10730, 10731, 10732]);
+  assert.equal(p.trayTitle, 'Have a baguette for free!');
+  assert.equal(p.tray, undefined); assert.equal(p.flags, undefined);
+  trayClick(h, p, 10726, 2); assert.deepEqual(p.rewards, []);
+  other.interfaceId = 297; click(other, 0); assert.deepEqual(p.rewards, []); assert.equal(npc.removed, undefined);
+  h.random(0); trayClick(h, p, 10726); trayClick(h, p, 10726);
   assert.deepEqual(p.rewards, [I.STALE_BAGUETTE]); assert.equal(p.interfaceId, -1);
   assert.deepEqual(npcLines(p), ['Hope that fills you up!']);
   const normal = h.player(), npc2 = h.spawn(normal, 1, 0);
   h.hooks['Sandwich lady']['Talk-to']({ player: normal, npc: npc2 }); openOptions(h, normal);
-  h.random(1 / 64); click(normal, 0);
+  h.random(1 / 64); trayClick(h, normal, 10726);
   assert.deepEqual(normal.rewards, [I.BAGUETTE]);
+  // The Wiki transcript's line for the wrong food; no reward and she leaves.
+  const greedy = h.player(), npc4 = h.spawn(greedy, 1, 0);
+  h.hooks['Sandwich lady']['Talk-to']({ player: greedy, npc: npc4 }); openOptions(h, greedy);
+  trayClick(h, greedy, 10730); assert.deepEqual(greedy.rewards, []); assert.equal(greedy.interfaceId, -1);
+  assert.deepEqual(npcLines(greedy), ["Hey, I didn't say you could have that!"]);
+  leaves(h, greedy); assert.equal(npc4.removed, true);
   // Live: a pie that doesn't fit is placed on the ground for three hours.
   const full = h.player(), npc3 = h.spawn(full, 1, 4); full.free = 0;
-  h.hooks['Sandwich lady']['Talk-to']({ player: full, npc: npc3 }); openOptions(h, full); click(full, 4);
-  assert.deepEqual(full.rewards, []); assert.equal(npc3.removed, true);
+  h.hooks['Sandwich lady']['Talk-to']({ player: full, npc: npc3 }); openOptions(h, full); trayClick(h, full, 10730);
+  leaves(h, full); assert.deepEqual(full.rewards, []); assert.equal(npc3.removed, true);
   assert.equal(h.drops.at(-1).getItem().getId(), I.MEAT_PIE); assert.equal(h.drops.at(-1).getDespawnDelay(), 18_000);
   assert.deepEqual(full.messages, [PLACED(1, 'Meat pie')]);
 });
@@ -693,6 +733,7 @@ test('dismissal, expiry, distance, plane, instances, logout, death and shutdown 
       if (reason === 'plane') p.location = new Location(3222, 3222, 1);
       if (reason === 'instance') p.privateArea = {};
       h.emit('PlayerProcess', { player: p });
+      if (reason === 'expiry') { assert.equal(npc.chat, 'Maybe later.'); assert.equal(npc.removed, undefined); h.advance(1_800); h.emit('PlayerProcess', { player: p }); }
     }
     assert.equal(npc.removed, true, reason); assert.deepEqual(p.rewards, []);
   }
@@ -742,7 +783,7 @@ test('Rick places a gift that does not fit on the ground, denies strangers and c
   h.hooks['Rick Turpentine']['Talk-to']({ player: h.player(), npc });
   p.free = 0; h.random(0.6); h.hooks['Rick Turpentine']['Talk-to']({ player: p, npc });
   h.random(0.99); h.hooks['Rick Turpentine']['Talk-to']({ player: p, npc });
-  assert.deepEqual(p.rewards, []); assert.equal(npc.removed, true);
+  leaves(h, p); assert.deepEqual(p.rewards, []); assert.equal(npc.removed, true);
   assert.deepEqual(h.drops.map(drop => drop.getItem().getId()), [I.UNCUT_SAPPHIRE]);
 });
 
@@ -779,6 +820,10 @@ test('F2P has no Jekyll definition and coins can join an existing stack in a ful
   const last = h.spawn(h.player(), 4, 6); assert.equal(last.definition.id, N.GILES);
 });
 
+const CERTER_ANSWERS = { 8828: 'An axe.', 8829: 'A fish.', 8830: 'A fish.', 8831: 'A necklace.', 8832: 'A shield.',
+  8833: 'A helmet.', 8834: 'A ring.', 8835: 'A pair of shears.', 8836: 'A sword.', 8837: 'A spade.' };
+const answerLabel = p => CERTER_ANSWERS[p.models.get((184 << 16) | 7)];
+
 function certerChoice(h, p, name, action = 1) {
   const index = [1, 2, 3].findIndex(child => p.strings?.get((184 << 16) | child) === name);
   assert.notEqual(index, -1, `choice ${name}`);
@@ -791,27 +836,34 @@ test('all Certer brothers use cache models, distinct answers, owner/op/interface
     const p = h.player(), npc = h.spawn(p, 4, variant), other = h.player();
     assert.equal(npc.definition.id, npcId);
     h.random(0); h.hooks[name]['Talk-to']({ player: p, npc });
-    assert.equal(p.tray[0][0], (184 << 16) | 7); assert.equal(p.tray[0][1], 6189);
+    // 552: the raw model, the answer texts with their article and full stop.
+    assert.equal(p.models.get((184 << 16) | 7), 8828); assert.equal(p.tray, undefined); assert.equal(p.flags, undefined);
     assert.equal(new Set(p.strings.values()).size, 3);
-    assert.deepEqual(p.flags, [8, 9, 10].map(child => [(184 << 16) | child, -1, -1, 2]));
-    other.interfaceId = 184; other.strings = p.strings; certerChoice(h, other, 'Fish');
-    certerChoice(h, p, 'Fish', 2); p.interfaceId = -1; certerChoice(h, p, 'Fish');
+    assert.ok([...p.strings.values()].includes('An axe.'));
+    other.interfaceId = 184; other.strings = p.strings; certerChoice(h, other, 'An axe.');
+    certerChoice(h, p, 'An axe.', 2); p.interfaceId = -1; certerChoice(h, p, 'An axe.');
     assert.deepEqual(p.rewards, []); assert.equal(npc.removed, undefined);
     h.hooks[name]['Talk-to']({ player: p, npc });
-    p.free = 0; h.random(0.6); certerChoice(h, p, 'Fish');
-    h.random(0.99); certerChoice(h, p, 'Fish');
-    assert.deepEqual(p.rewards, []); assert.equal(npc.removed, true); assert.equal(p.interfaceId, -1);
+    p.free = 0; h.random(0.6); certerChoice(h, p, p.strings.get((184 << 16) | 1) && answerLabel(p));
+    assert.deepEqual(npcLines(p), ['Thank you, I hope you like your present. I must be<br>leaving now though.']);
+    assert.equal(p.interfaceId, -1); assert.equal(npc.animation, 863, 'waves as he leaves');
+    h.random(0.99); leaves(h, p);
+    assert.deepEqual(p.rewards, []); assert.equal(npc.removed, true);
     assert.equal(h.drops.at(-1).getItem().getId(), I.UNCUT_SAPPHIRE);
   }
 });
 
 test('Certer wrong answers end without a reward; expiry closes its interface', t => {
   const h = harness(t), p = h.player(), npc = h.spawn(p, 4);
-  h.random(0); h.hooks.Niles['Talk-to']({ player: p, npc }); certerChoice(h, p, 'Sword');
-  assert.equal(npc.removed, true); assert.deepEqual(p.rewards, []); assert.equal(p.interfaceId, -1);
+  h.random(0); h.hooks.Niles['Talk-to']({ player: p, npc });
+  certerChoice(h, p, [...p.strings.values()].find(label => label !== 'An axe.'));
+  assert.deepEqual(npcLines(p), ["Sorry, that's just not the right answer!"]);
+  assert.deepEqual(p.rewards, []); assert.equal(p.interfaceId, -1); assert.deepEqual(p.messages, []);
+  leaves(h, p); assert.equal(npc.removed, true);
   const q = h.player(), expired = h.spawn(q, 4); h.random(0); h.hooks.Niles['Talk-to']({ player: q, npc: expired });
-  h.advance(60_000); h.emit('PlayerProcess', { player: q }); certerChoice(h, q, 'Fish');
-  assert.equal(expired.removed, true); assert.deepEqual(q.rewards, []); assert.equal(q.interfaceId, -1);
+  h.advance(60_000); h.emit('PlayerProcess', { player: q }); certerChoice(h, q, 'An axe.');
+  assert.deepEqual(q.rewards, []); assert.equal(q.interfaceId, -1);
+  h.advance(1_800); h.emit('PlayerProcess', { player: q }); assert.equal(expired.removed, true);
 });
 
 test('Jekyll selects the highest clean herb and all fourteen exchanges work with a full inventory', t => {
@@ -825,8 +877,16 @@ test('Jekyll selects the highest clean herb and all fourteen exchanges work with
     const p = h.player(), npc = h.spawn(p, 6);
     assert.equal(npc.definition.id, N.DR_JEKYLL);
     p.slots[0] = new Item(I.GUAM_LEAF, 1); p.slots[4] = new Item(herbId, 1); p.free = 0;
-    h.hooks['Dr Jekyll']['Talk-to']({ player: p, npc }); const yes = h.prompts.at(-1).options[0].cb;
-    yes(); yes(); assert.deepEqual(p.rewards, [potionId]); assert.equal(npc.removed, true);
+    h.hooks['Dr Jekyll']['Talk-to']({ player: p, npc }); openOptions(h, p);
+    assert.equal(h.prompts.at(-1).title, 'Select an option');
+    assert.deepEqual(h.prompts.at(-1).options.map(option => option.label), ['Here you are.', 'No, I need it myself.']);
+    const yes = h.prompts.at(-1).options[0].cb;
+    yes(); assert.deepEqual(npcLines(p), ['Here you are.']); assert.deepEqual(p.rewards, []);
+    openOptions(h, p);
+    assert.deepEqual(p.rewards, [potionId]);
+    assert.deepEqual(npcLines(p), ['Thank you so much! Here, take this potion in return.']);
+    yes(); openOptions(h, p); assert.deepEqual(p.rewards, [potionId], 'only once');
+    leaves(h, p); assert.equal(npc.removed, true);
     assert.equal(p.slots[herbId === I.GUAM_LEAF ? 0 : 4], undefined);
   }
 });
@@ -835,13 +895,17 @@ test('Jekyll ignores noted/grimy/huasca, offers a fallback and preserves refused
   const h = harness(t), p = h.player(), npc = h.spawn(p, 6);
   p.slots[0] = new Item(I.GRIMY_TORSTOL, 1); p.slots[1] = new Item(I.TORSTOL_2, 1);
   p.slots[2] = new Item(I.HUASCA, 1); p.free = 0;
-  h.hooks['Dr Jekyll']['Talk-to']({ player: p, npc }); h.hooks['Dr Jekyll']['Talk-to']({ player: p, npc });
-  assert.deepEqual(p.rewards, []); assert.equal(npc.removed, true);
+  h.hooks['Dr Jekyll']['Talk-to']({ player: p, npc });
+  // 4056: no herb to give, he asks for guam, the player has none, the spare potion.
+  assert.deepEqual(npcLines(p), ["Have you got any guam leaf? I've fixed my Hyde problem, so it's not urgent, but I could do with a guam leaf.", "I don't have any."]);
+  openOptions(h, p); h.hooks['Dr Jekyll']['Talk-to']({ player: p, npc });
+  leaves(h, p); assert.deepEqual(p.rewards, []); assert.equal(npc.removed, true);
   assert.deepEqual(h.drops.map(drop => drop.getItem().getId()), [I.STRENGTH_POTION_2_]);
   assert.equal(p.slots.filter(Boolean).length, 3);
   const q = h.player(), refused = h.spawn(q, 6), herb = new Item(I.TORSTOL, 1); q.slots[2] = herb;
-  h.hooks['Dr Jekyll']['Talk-to']({ player: q, npc: refused }); h.prompts.at(-1).options[1].cb();
+  h.hooks['Dr Jekyll']['Talk-to']({ player: q, npc: refused }); openOptions(h, q); h.prompts.at(-1).options[1].cb(); openOptions(h, q);
   assert.equal(q.slots[2], herb); assert.deepEqual(q.rewards, [I.STRENGTH_POTION_2_]);
+  assert.deepEqual(npcLines(q), ['Fair enough. Here, have a spare potion, and thanks for<br>your time.']);
 });
 
 test('Jekyll rejects strangers, moved/replaced herbs, stale prompts and replies after cleanup', t => {
@@ -850,19 +914,24 @@ test('Jekyll rejects strangers, moved/replaced herbs, stale prompts and replies 
     const p = h.player(), npc = h.spawn(p, 6), herb = new Item(I.IRIT_LEAF, 1); p.slots[2] = herb;
     const before = h.prompts.length; h.hooks['Dr Jekyll']['Talk-to']({ player: h.player(), npc });
     assert.equal(h.prompts.length, before);
-    h.hooks['Dr Jekyll']['Talk-to']({ player: p, npc }); const yes = h.prompts.at(-1).options[0].cb;
+    h.hooks['Dr Jekyll']['Talk-to']({ player: p, npc }); openOptions(h, p); const yes = h.prompts.at(-1).options[0].cb;
     if (reason === 'moved') { p.slots[3] = herb; p.slots[2] = undefined; }
     if (reason === 'swapped') p.slots[2] = new Item(I.IRIT_LEAF, 1);
     if (reason === 'new-prompt') h.hooks['Dr Jekyll']['Talk-to']({ player: p, npc });
     if (reason.startsWith('Player')) h.emit(reason, { player: p });
     if (reason === 'expired') h.advance(60_000);
     if (reason === 'dismiss') h.hooks['Dr Jekyll'].Dismiss({ player: p, npc });
-    yes(); yes(); assert.deepEqual(p.rewards, [], reason);
+    yes(); openOptions(h, p);
+    // A herb that moved during the talk can't be traded: he hands over the spare potion instead.
+    const expected = reason === 'moved' || reason === 'swapped' ? [I.STRENGTH_POTION_2_] : [];
+    assert.deepEqual(p.rewards, expected, reason);
+    assert.equal(p.messages.some(text => /Your herb/.test(text)), false, reason);
   }
   const p = h.player(), npc = h.spawn(p, 6); p.slots[2] = new Item(I.GUAM_LEAF, 1);
-  h.hooks['Dr Jekyll']['Talk-to']({ player: p, npc }); const oldYes = h.prompts.at(-1).options[0].cb;
+  h.hooks['Dr Jekyll']['Talk-to']({ player: p, npc }); openOptions(h, p); const oldYes = h.prompts.at(-1).options[0].cb;
   p.slots[2] = new Item(I.TORSTOL, 1); h.hooks['Dr Jekyll']['Talk-to']({ player: p, npc });
-  assert.match(h.prompts.at(-1).title, /torstol/); oldYes(); h.prompts.at(-1).options[0].cb();
+  assert.match(npcLines(p)[0], /any torstol\?/); oldYes(); assert.deepEqual(p.rewards, []);
+  h.hooks['Dr Jekyll']['Talk-to']({ player: p, npc }); openOptions(h, p); h.prompts.at(-1).options[0].cb(); openOptions(h, p);
   assert.deepEqual(p.rewards, [I.STAMINA_POTION_4_]);
 });
 
@@ -872,7 +941,7 @@ test('Mysterious Old Man gives a single owned gift, places it on the ground when
   h.hooks['Mysterious Old Man']['Talk-to']({ player: h.player(), npc });
   p.free = 0; h.random(0.6); h.hooks['Mysterious Old Man']['Talk-to']({ player: p, npc });
   h.hooks['Mysterious Old Man']['Talk-to']({ player: p, npc });
-  assert.deepEqual(p.rewards, []); assert.equal(npc.removed, true);
+  leaves(h, p); assert.deepEqual(p.rewards, []); assert.equal(npc.removed, true);
   assert.deepEqual(h.drops.map(drop => drop.getItem().getId()), [I.UNCUT_SAPPHIRE]);
   const coins = h.player(), giver = h.spawn(coins, 5); h.random(0);
   h.hooks['Mysterious Old Man']['Talk-to']({ player: coins, npc: giver });
@@ -904,23 +973,30 @@ test('Strange Plant stays planted, grows before picking, denies strangers and re
   assert.equal(npc.following, undefined); assert.equal(npc.chat, undefined);
   h.hooks['Strange plant'].Pick({ player: p, npc }); assert.match(p.messages.at(-1), /isn't ready/);
   h.advance(26_999); h.hooks['Strange plant'].Pick({ player: p, npc }); assert.deepEqual(p.rewards, []);
-  h.advance(1); h.hooks['Strange plant'].Pick({ player: h.player(), npc });
+  const stranger = h.player();
+  h.advance(1); h.hooks['Strange plant'].Pick({ player: stranger, npc });
+  assert.deepEqual(stranger.messages, ["It's not here for you."]);
   h.emit('PlayerProcess', { player: p }); assert.equal(npc.chat, undefined, 'plants do not talk');
   h.hooks['Strange plant'].Pick({ player: p, npc }); h.hooks['Strange plant'].Pick({ player: p, npc });
-  assert.deepEqual(p.rewards, [I.STRANGE_FRUIT]); assert.equal(npc.removed, true); assert.equal(h.drops.length, 0);
+  assert.deepEqual(p.rewards, [I.STRANGE_FRUIT]); assert.equal(h.drops.length, 0);
+  // 1625: wilts on picking, gone 21 ticks later; the pick message is game spam.
+  assert.equal(npc.animation, 350); assert.equal(npc.removed, undefined);
+  assert.deepEqual(p.typed, [[105, 'You pick the fruit from the plant.', undefined]]);
+  h.advance(21 * 600 - 1); h.emit('PlayerProcess', { player: p }); assert.equal(npc.removed, undefined);
+  h.advance(1); h.emit('PlayerProcess', { player: p }); assert.equal(npc.removed, true);
 });
 
 test('full-inventory fruit remains private on the ground for exactly three hours', t => {
   const h = harness(t), p = h.player(), npc = h.spawn(p, 23);
   p.free = 0; h.advance(27_000); h.hooks['Strange plant'].Pick({ player: p, npc });
   h.hooks['Strange plant'].Pick({ player: p, npc });
-  assert.deepEqual(p.rewards, []); assert.equal(h.drops.length, 1); assert.equal(npc.removed, true);
+  assert.deepEqual(p.rewards, []); assert.equal(h.drops.length, 1);
   const drop = h.drops[0];
   assert.equal(drop.getItem().getId(), I.STRANGE_FRUIT); assert.equal(drop.getOwner(), p.getUsername());
   assert.equal(drop.getgoesGlobal(), false); assert.equal(drop.getState(), State.SEEN_BY_PLAYER);
   assert.ok(drop.getPosition().equals(p.location)); assert.notEqual(drop.getPosition(), p.location);
   assert.equal(drop.getDespawnDelay(), 18_000);
-  assert.deepEqual(p.messages.slice(-2), [PLACED(1, 'Strange fruit'), 'You pick the fruit from the plant.']);
+  assert.deepEqual(p.messages.slice(-1), [PLACED(1, 'Strange fruit')]);
   const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');
   let removed = 0; t.mock.method(ItemOnGroundManager, 'deregister', item => { assert.equal(item, drop); removed++; });
   for (let tick = 1; tick < 18_000; tick++) drop.process();
@@ -935,9 +1011,17 @@ test('Strange Plant cleans up without fruit after dismissal, expiry, distance or
     h.hooks['Strange plant'].Dismiss({ player: h.player(), npc }); assert.equal(npc.removed, undefined);
     if (reason === 'dismiss') h.hooks['Strange plant'].Dismiss({ player: p, npc });
     if (reason === 'logout') h.emit('PlayerLogout', { player: p });
-    if (reason === 'expiry') { h.advance(60_000); h.emit('PlayerProcess', { player: p }); }
+    if (reason === 'expiry') {
+      // 127: ignored, it wilts at +110 ticks and is gone 21 ticks later.
+      h.advance(109 * 600); h.emit('PlayerProcess', { player: p }); assert.equal(npc.animation, 348);
+      h.advance(600); h.emit('PlayerProcess', { player: p }); assert.equal(npc.animation, 350);
+    }
     if (reason === 'distance') { p.location = new Location(3300, 3300, 0); h.emit('PlayerProcess', { player: p }); }
     h.hooks['Strange plant'].Pick({ player: p, npc });
+    if (reason === 'dismiss' || reason === 'expiry') {
+      assert.equal(npc.animation, 350); assert.equal(npc.removed, undefined);
+      h.advance(21 * 600); h.emit('PlayerProcess', { player: p });
+    }
     assert.equal(npc.removed, true); assert.deepEqual(p.rewards, []);
   }
   assert.deepEqual(h.drops, []); assert.equal(PlantPlugin.members, true);
@@ -963,6 +1047,12 @@ function choose(h, p, index) {
   prompt.options[index].cb();
 }
 
+// The accepting option echoes the player's line; continuing it runs the teleport.
+function accept(h, p) {
+  choose(h, p, 0);
+  openOptions(h, p);
+}
+
 function fireRaw(h, key, event) {
   for (const handler of h.hooks[key] ?? []) {
     event.handled = false;
@@ -982,94 +1072,257 @@ function fireNpcClick(h, npcId, clickType, event) {
   return false;
 }
 
-test('Count Check reports the check and gives its lamp', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 7);
+test('Count Check gives his lamp to a player with a Bank PIN and fails one without', t => {
+  const h = harness(t);
+  let pin = true;
+  h.api.onCustomEvent('bank-pin:status', query => { query.set = pin; });
+  const p = h.player(), npc = h.spawn(p, 7);
   assert.equal(npc.definition.id, N.COUNT_CHECK_2);
   h.hooks['Count Check']['Talk-to']({ player: p, npc, handled: false });
-  assert.deepEqual(p.rewards, [I.LAMP]);
-  assert.equal(npc.removed, true);
+  assert.deepEqual(p.rewards, [I.LAMP]); assert.deepEqual(p.messages, [REWARD(1, 'Lamp')]);
+  assert.match(npcLines(p)[0], /so you pass my checks! Enjoy your prize\.$/);
+  assert.equal(npc.animation, 858, 'he bows as he leaves');
+  h.hooks['Count Check']['Talk-to']({ player: p, npc, handled: false });
+  assert.deepEqual(npcLines(p), ['I must be leaving now.']); assert.deepEqual(p.rewards, [I.LAMP]);
+  leaves(h, p); assert.equal(npc.removed, true);
+  pin = false;
+  const q = h.player(), failed = h.spawn(q, 7);
+  h.hooks['Count Check']['Talk-to']({ player: q, npc: failed, handled: false });
+  assert.deepEqual(q.rewards, []); assert.match(npcLines(q)[0], /You do not have a Bank PIN, so you fail my checks!/);
+  leaves(h, q); assert.equal(failed.removed, true);
 });
 
-const FROG_POSITIVE = ["Okay.", "Sure, I will.", "Very well, if a touch is all you need, I'll do it.",
-  "Yes, I will touch you.", "How about if we kiss?", "May I kiss you instead?",
-  "Would a kiss be acceptable?"];
-const FROG_POLITE = ["I would prefer not to, sorry.", "I'm sorry, I'd prefer not to do that."];
-const FROG_RUDE = ["No way, I'm not kissing you.", "Eww, no way!", "I'd rather become a frog too!"];
+test('gift events follow the captured overhead timeline, smoke and refusal lines', t => {
+  const h = harness(t), tick = (p, n = 1) => { for (let i = 0; i < n; i++) { h.advance(600); h.emit('PlayerProcess', { player: p }); } };
+  const p = h.player(), npc = h.spawn(p, 4), other = h.player();
+  assert.equal(p.smokes.length, 2, 'two arrival smokes for a Certer'); assert.equal(p.smokes[0][0], 86);
+  assert.equal(npc.chat, undefined, 'nothing said on the tick it appears');
+  tick(p); assert.equal(npc.chat, 'Greetings Player, I need your help.'); assert.equal(npc.animation, 863);
+  npc.chat = undefined; tick(p, 8); assert.equal(npc.chat, undefined);
+  tick(p); assert.match(npc.chat, /Player/);
+  for (let beat = 2; beat <= 9; beat++) { npc.chat = undefined; tick(p, 10); assert.ok(npc.chat, `beat ${beat}`); }
+  tick(p, 10); assert.equal(npc.chat, 'Maybe later.'); assert.equal(npc.removed, undefined);
+  h.hooks.Niles['Talk-to']({ player: p, npc }); assert.deepEqual(npcLines(p), ['I must be leaving now.']);
+  tick(p, 2); assert.equal(npc.removed, undefined); tick(p); assert.equal(npc.removed, true);
+  assert.equal(p.smokes.length, 3, 'one smoke on leaving');
+  h.hooks.Niles['Talk-to']({ player: other, npc });
+  const r = h.player(); r.female = true; const rick = h.spawn(r, 3);
+  tick(r); assert.equal(rick.chat, 'Good day to you, milady.'); assert.equal(rick.animation, 858);
+  h.hooks['Rick Turpentine']['Talk-to']({ player: other, npc: rick });
+  assert.deepEqual(npcLines(other), ['It is someone else with whom I desire to speak, but he seems to be preoccupied.']);
+  assert.deepEqual(other.messages, [], 'no invented refusal message');
+  // The spoken line is copied to the chatbox as a type 114 message when the page opens.
+  h.hooks['Rick Turpentine']['Talk-to']({ player: r, npc: rick });
+  assert.deepEqual(npcLines(r), ['Today is your lucky day, madam!<br>I am donating to the victims of crime to atone for my<br>past actions!']);
+  const [line] = r.dialogue.getDialogues().values();
+  try { line.send(r); } catch { /* the fake sender has no chathead packets */ }
+  assert.deepEqual(r.typed.at(-1), [114, 'Today is your lucky day, madam! I am donating to the victims of crime to atone for my past actions!', 'Rick Turpentine']);
+});
 
-test('Kiss the frog pays a token, politely ends, or turns rude players into a frog', t => {
-  for (const [pool, expected] of [[FROG_POSITIVE, 'token'], [FROG_POLITE, 'end'], [FROG_RUDE, 'transform']]) {
-    const h = harness(t), p = h.player(), before = h.npcs.length;
-    h.spawn(p, 8);
-    const npc = h.npcs.slice(before).find(entry =>
-      [N.FROG_PRIN, N.FROG_PRIN_2, N.FROG_PRINCE, N.FROG_PRINCESS].includes(entry.definition.id));
-    assert.ok(npc, 'the royal frog');
-    assert.equal(h.npcs.length - before, 5, 'the royal and a chorus of frogs');
-    h.hooks.Frog['Talk-to']({ player: p, npc, handled: false });
-    const prompt = openOptions(h, p);
-    const index = prompt.options.findIndex(entry => pool.includes(entry.label));
-    assert.notEqual(index, -1);
-    choose(h, p, index);
-    if (expected === 'token') {
-      assert.deepEqual(p.rewards, [I.FROG_TOKEN]);
-      assert.equal(npc.removed, true);
-    } else if (expected === 'end') {
-      assert.deepEqual(p.rewards, []);
-      assert.equal(npc.removed, true);
-      assert.ok(h.npcs.slice(before).every(entry => entry.removed), 'the frog chorus is cleaned up too');
-    } else {
-      assert.equal(p.transformation, N.FROG_6);
-      assert.equal(p.location.getX(), 2464);
-      assert.equal(p.location.getY(), 4780);
-      const royal = [...h.npcs].reverse().find(entry => entry.definition.kind === undefined && entry.owner === p);
-      h.hooks.Frog['Talk-to']({ player: p, npc: royal, handled: false });
-      choose(h, p, 0);
-      assert.equal(p.transformation, -1);
-      assert.equal(Teleports.sessionOf(p), undefined);
-    }
-  }
+const FROG_TOUCH = ["Very well, if a touch is all you need, I'll do it.", "Yes, I will touch you.",
+  "Sure, I'll touch you.", "A touch? Yes, I'll do that."];
+const FROG_KISS = ["How about if we kiss?", "May I kiss you instead?", "Would a kiss be acceptable?"];
+const FROG_POLITE = ["I would prefer not to, sorry.", "I'm sorry, I'd prefer not to do that."];
+const FROG_BECOME = ["I'd rather become a frog too!", "What if I want to be a frog like you?"];
+
+function frogEvent(t) {
+  const h = harness(t), p = eventPlayer(h), before = h.npcs.length;
+  h.spawn(p, 8);
+  const frogs = h.npcs.slice(before), npc = frogs.find(entry => entry.definition.id === N.FROG_7);
+  assert.ok(npc, 'the crowned frog');
+  assert.equal(frogs.length, 6, 'six frogs, as 1702 has');
+  h.hooks.Frog['Talk-to']({ player: p, npc, handled: false });
+  return { h, p, npc, frogs, prompt: openOptions(h, p) };
+}
+
+test('Kiss the frog: the kiss turns the frog back, pays the token and the royal leaves', t => {
+  const { h, p, npc, frogs, prompt } = frogEvent(t);
+  assert.equal(prompt.title, 'Select an option');
+  assert.equal(prompt.options.length, 4, 'one of each kind, as 1702 offers');
+  choose(h, p, prompt.options.findIndex(entry => FROG_KISS.includes(entry.label)));
+  endChat(p);
+  assert.deepEqual(pageTexts(p), ['Yes!']);
+  endChat(p);
+  assert.equal(p.animation, 2376);
+  assert.equal(npc.animation, 2374);
+  h.ticks(2);
+  assert.equal(npc.animation, 2375);
+  assert.deepEqual(p.rewards, []);
+  h.ticks(2);
+  assert.ok([N.FROG_PRINCE, N.FROG_PRINCESS].includes(npc.transformation));
+  assert.equal(npc.graphic, 85);
+  assert.deepEqual(p.rewards, [I.FROG_TOKEN]);
+  assert.match(pageTexts(p)[0], /^Thank you so much, Player\. I must return to my fairytale kingdom\./);
+  endChat(p);
+  assert.equal(npc.animation, 1374);
+  assert.notEqual(npc.removed, true);
+  h.ticks(3);
+  assert.ok(frogs.every(entry => entry.removed), 'the whole group leaves together');
+});
+
+test('Kiss the frog: a touch turns the frog back without the kiss animation', t => {
+  const { h, p, npc, prompt } = frogEvent(t);
+  choose(h, p, prompt.options.findIndex(entry => FROG_TOUCH.includes(entry.label)));
+  endChat(p);
+  assert.notEqual(p.animation, 2376);
+  assert.equal(npc.animation, 2374);
+  h.ticks(4);
+  assert.deepEqual(p.rewards, [I.FROG_TOKEN]);
+});
+
+test('Kiss the frog: a polite refusal only ends the chat', t => {
+  const { h, p, npc, prompt } = frogEvent(t);
+  const index = prompt.options.findIndex(entry => FROG_POLITE.includes(entry.label));
+  const label = prompt.options[index].label;
+  choose(h, p, index);
+  assert.deepEqual(pageTexts(p), [label]);
+  assert.deepEqual(p.rewards, []);
+  assert.notEqual(npc.removed, true);
+  assert.equal(p.location.getX(), 3222);
+});
+
+test('Kiss the frog: asking to be a frog goes to Frogland and its crowned frog lets you leave', t => {
+  const { h, p, frogs, prompt } = frogEvent(t);
+  choose(h, p, prompt.options.findIndex(entry => FROG_BECOME.includes(entry.label)));
+  endChat(p);
+  assert.equal(p.transformation, N.FROG_6);
+  assert.equal(p.location.getX(), 2464);
+  assert.equal(p.location.getY(), 4780);
+  assert.ok(frogs.every(entry => entry.removed));
+  const count = h.npcs.length;
+  const crowned = { getId: () => N.FROG_7 };
+  h.hooks.Frog['Talk-to']({ player: p, npc: crowned, handled: false });
+  assert.equal(h.npcs.length, count, 'the world spawn answers, no royal is spawned');
+  assert.deepEqual(pageTexts(p), ['Are you ready to leave now?']);
+  choose(h, p, 0);
+  endChat(p);
+  assert.equal(p.transformation, -1);
+  assert.equal(Teleports.sessionOf(p), undefined);
+  assert.equal(p.location.getX(), 3222);
+});
+
+test('Kiss the frog: the other frogs give the live lines, by owner', t => {
+  const { h, p, frogs } = frogEvent(t);
+  const speaker = frogs.find(entry => entry.definition.id === N.FROG_5);
+  const other = frogs.find(entry => entry.definition.id === N.FROG_6);
+  h.hooks.Frog['Talk-to']({ player: p, npc: speaker, handled: false });
+  assert.match(pageTexts(p)[0], /^Don't talk to me! Speak to the frog (prince|princess)!$/);
+  h.hooks.Frog['Talk-to']({ player: p, npc: other, handled: false });
+  assert.match(pageTexts(p)[0], /^Hurrah for the frog (prince|princess)!$/);
+  const q = h.player();
+  h.hooks.Frog['Talk-to']({ player: q, npc: other, handled: false });
+  assert.deepEqual(pageTexts(q), ['The frogs do not need your help right now.']);
 });
 
 test('Thessalia exchanges a frog token for costume pieces, keeping the rest', t => {
   const h = harness(t), p = h.player();
   p.slots[0] = new Item(I.FROG_TOKEN, 1); p.slots[1] = new Item(I.FROG_TOKEN, 1);
   h.hooks.Thessalia['Talk-to']({ player: p, npc: {}, handled: false });
+  assert.equal(openOptions(h, p).options.length, 5);
   choose(h, p, 0);
+  assert.deepEqual(pageTexts(p), ['A frog mask, please!']);
+  endChat(p);
   assert.equal(p.rewards.at(-1), I.FROG_MASK);
   assert.equal(p.slots[0], undefined);
   assert.ok(p.slots[1]);
   h.hooks.Thessalia['Talk-to']({ player: p, npc: {}, handled: false });
   choose(h, p, 3);
+  assert.deepEqual(pageTexts(p), ["I'll take the reward lamp, thanks."]);
+  endChat(p);
   assert.equal(p.rewards.at(-1), I.LAMP);
 });
 
-test("Capt' Arnav's combilock opens, rolls and pays only on a solved lock", t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 9);
+// A player whose packet sender records everything and chains like the real one, for the events
+// that draw through packets the base harness doesn't fake (Capt' Arnav, Pillory, Quiz Master).
+function eventPlayer(h) {
+  const { Misc } = require('../dist/util/Misc');
+  const { Graphic } = require('../dist/game/model/Graphic');
+  Object.assign(h.api.core, { Misc, Graphic });
+  const p = h.player(), base = p.getPacketSender;
+  p.sent = [];
+  p.getSpellbook = () => ({ getInterfaceId: () => 218 });
+  p.getPacketSender = () => {
+    const sender = base();
+    const proxy = new Proxy(sender, { get: (target, name) => {
+      if (name === 'isChatboxInterface') return target[name];
+      return (...args) => { p.sent.push([name, ...args]); target[name]?.(...args); return proxy; };
+    } });
+    return proxy;
+  };
+  return p;
+}
+
+// Runs the action at the end of the player's current chain of pages.
+function endChat(p) {
+  for (const entry of [...p.dialogue.getDialogues().values()]) {
+    if (entry.constructor.name === 'ActionDialogue') entry.send(p);
+  }
+}
+
+function pageTexts(p) {
+  return [...p.dialogue.getDialogues().values()].map(entry => entry.getText?.()).filter(Boolean);
+}
+
+function sentWith(p, name, ...args) {
+  return p.sent.some(entry => entry[0] === name && args.every((arg, index) => entry[index + 1] === arg));
+}
+
+function openArnavLock(h, p, npc) {
   h.hooks["Capt' Arnav"]['Talk-to']({ player: p, npc, handled: false });
   choose(h, p, 0);
+  assert.deepEqual(pageTexts(p), ["Yes, I'll help you unlock your chest.", 'There are three columns. What you need to do for me is to match up each picture with the word underneath the column, and then unlock the chest.']);
+  endChat(p);
   assert.equal(p.interfaceId, 26);
-  assert.ok(p.flags.some(flag => flag[0] === (26 << 16) | 5));
-  const active = Events.activeFor(p);
-  h.emit('InterfaceActionClick', { player: p, buttonId: (26 << 16) | 5, action: 1 });
+  return Events.activeFor(p);
+}
+
+test("Capt' Arnav's combilock runs on varp 531, explains once and pays only on a solved lock", t => {
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 9);
+  const active = openArnavLock(h, p, npc);
+  assert.ok(active.lock.every(column => ['BOWL', 'BAR', 'RING'].includes(p.strings.get((26 << 16) | (22 + active.lock.indexOf(column))))));
+  active.lock.forEach(column => { column.value = 0; });
+  // The up arrow adds one and the down arrow three, two bits per column (rsprox 1108, 91).
+  h.emit('InterfaceActionClick', { player: p, buttonId: (26 << 16) | 11, action: 1 });
+  assert.ok(sentWith(p, 'sendConfig', 531, 1 << 4));
+  h.emit('InterfaceActionClick', { player: p, buttonId: (26 << 16) | 6, action: 1 });
+  assert.ok(sentWith(p, 'sendConfig', 531, (1 << 4) | 3));
   h.emit('InterfaceActionClick', { player: p, buttonId: (26 << 16) | 25, action: 1 });
   assert.deepEqual(p.rewards, []);
-  assert.equal(p.messages.at(-1), 'The chest stays firmly locked.');
-  active.lock.forEach(state => {
-    const index = state.cylinder.findIndex(item => item[1] === state.word);
-    state.offset = (index - 1 + state.cylinder.length) % state.cylinder.length;
-  });
+  assert.equal(p.interfaceId, -1);
+  assert.equal(pageTexts(p)[0], 'Arrr! That be nowhere near close! Did ye not listen the first time around?');
+  assert.equal(pageTexts(p).at(-1), 'Certainly. Let me try again.');
+  endChat(p);
+  assert.equal(p.interfaceId, 26);
+  active.lock.forEach(column => { column.value = column.target; });
   h.emit('InterfaceActionClick', { player: p, buttonId: (26 << 16) | 25, action: 1 });
   assert.equal(p.rewards.length, 1);
-  assert.equal(npc.removed, true);
+  leaves(h, p); assert.equal(npc.removed, true);
+  assert.ok(sentWith(p, 'sendSound', 2303));
+  assert.match(pageTexts(p)[0], /^Ah, well done matey/);
+  assert.deepEqual(p.messages.filter(text => !text.startsWith('Your reward is')), []);
   const doomed = h.spawn(h.player(), 9);
   h.hooks["Capt' Arnav"]['Talk-to']({ player: h.player(), npc: doomed });
 });
 
+test("Capt' Arnav gives up after a second wrong try, without a reward", t => {
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 9);
+  const active = openArnavLock(h, p, npc);
+  active.lock.forEach(column => { column.value = 0; });
+  h.emit('InterfaceActionClick', { player: p, buttonId: (26 << 16) | 25, action: 1 });
+  endChat(p);
+  h.emit('InterfaceActionClick', { player: p, buttonId: (26 << 16) | 25, action: 1 });
+  assert.deepEqual(p.rewards, []);
+  assert.equal(npc.removed, true);
+  assert.deepEqual(pageTexts(p), ["Arrr! I'd better find someone else."]);
+  assert.deepEqual(p.messages, []);
+});
+
 test('throwing session cleanup callbacks do not strand players or stop shutdown cleanup', t => {
-  const h = harness(t), players = [h.player(), h.player()], cleaned = [];
+  const h = harness(t), players = [eventPlayer(h), eventPlayer(h)], cleaned = [];
   t.mock.method(console, 'error', () => {});
   for (const [index, p] of players.entries()) {
     const origin = p.location.clone(), npc = h.spawn(p, 10);
-    h.hooks['Bee keeper']['Talk-to']({ player: p, npc, handled: false }); choose(h, p, 0);
+    h.hooks['Bee keeper']['Talk-to']({ player: p, npc, handled: false }); choose(h, p, 0); endChat(p);
     const session = Teleports.sessionOf(p);
     session.cleanup.unshift(() => { throw new Error('cleanup failed'); }, () => cleaned.push(index));
     p.origin = origin;
@@ -1083,75 +1336,170 @@ test('throwing session cleanup callbacks do not strand players or stop shutdown 
   }
 });
 
-test('Beekeeper assembles the hive and rewards a lamp plus an outfit piece', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 10);
+const HIVE_COMPONENTS = [10, 11, 12, 13, 15, 17, 19, 21];
+
+function dragPart(h, p, fromIndex, toIndex) {
+  h.api.emitCustomEvent('player:widget-action', { player: p, handled: false, packet: { type: 'widget_drag',
+    sourceWidgetId: (420 << 16) | HIVE_COMPONENTS[fromIndex], targetWidgetId: (420 << 16) | HIVE_COMPONENTS[toIndex] } });
+}
+
+/** Drags each part from the loose row into the slot for 'order' (part per slot). */
+function buildHive(h, p, session, order) {
+  order.forEach((part, slot) => dragPart(h, p, session.data.slots.indexOf(part), 4 + slot));
+}
+
+test('Beekeeper: the parts are dragged into the slots and a correct hive pays the piece, then the lamp', t => {
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 10);
   h.hooks['Bee keeper']['Talk-to']({ player: p, npc, handled: false });
+  assert.equal(openOptions(h, p).title, 'What would you like to say?');
   choose(h, p, 0);
-  assert.equal(p.location.getX(), 1926);
+  assert.deepEqual(pageTexts(p), ["Ooh, a bee hive. I'll help you."]);
+  endChat(p);
   const session = Teleports.sessionOf(p);
   assert.equal(session.kind, 'beekeeper');
-  assert.ok(session.keeper.getLocation().equals(new Location(1927, 5044, 0)), 'keeper spawns beside arrival, not invitation');
-  for (const part of ['Lid', 'Body', 'Entrance', 'Legs']) {
-    choose(h, p, openOptions(h, p).options.findIndex(entry => entry.label === part));
-  }
+  assert.ok(session.keeper.getLocation().equals(new Location(1928, 5044, 0)), 'keeper two tiles from the landing');
+  assert.ok(p.location.equals(new Location(1927, 5044, 0)), 'the player steps up to him');
+  assert.equal(pageTexts(p).length, 4);
+  endChat(p);
+  assert.equal(p.interfaceId, 420);
+  assert.deepEqual(session.data.slots.slice(4), [0, 0, 0, 0]);
+  assert.deepEqual([...session.data.slots.slice(0, 4)].sort(), [1, 2, 3, 4]);
+  buildHive(h, p, session, [1, 2, 3, 4]);
+  assert.deepEqual(session.data.slots, [0, 0, 0, 0, 1, 2, 3, 4]);
+  assert.ok(sentWith(p, 'sendVarbit', 10605, 1), 'the lid slot is sent to the client');
   h.emit('InterfaceActionClick', { player: p, buttonId: (420 << 16) | 22, action: 1 });
-  assert.ok(p.rewards.includes(I.LAMP));
-  assert.ok(p.rewards.includes(25129), "the beekeeper's hat");
+  assert.ok(sentWith(p, 'sendSound', 938));
+  assert.equal(p.interfaceId, -1);
+  assert.equal(pageTexts(p)[0], "That's perfect! I'll get some bees moved in immediately.");
+  endChat(p);
+  assert.equal(p.location.getX(), 1927, 'not home until three ticks later');
+  h.ticks(3);
+  assert.equal(p.rewards.length, 2);
+  assert.ok([25129, 25131, 25133, 25135, 25137].includes(p.rewards[0]), 'an outfit piece first');
+  assert.equal(p.rewards[1], I.LAMP);
   assert.equal(Teleports.sessionOf(p), undefined);
   assert.equal(p.location.getX(), 3222);
 });
 
-test('Beekeeper loses after six wrong builds', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 10);
+test('Beekeeper: six wrong builds set the bees on the player and pay nothing', t => {
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 10);
   h.hooks['Bee keeper']['Talk-to']({ player: p, npc, handled: false });
   choose(h, p, 0);
+  endChat(p);
+  endChat(p);
   const session = Teleports.sessionOf(p);
-  for (let attempt = 0; attempt < 6 && Teleports.sessionOf(p); attempt++) {
-    for (const part of ['Lid', 'Body', 'Entrance', 'Legs']) {
-      choose(h, p, openOptions(h, p).options.findIndex(entry => entry.label === part));
-    }
-    // Put the wrong part in the lid slot so every build fails.
-    const last = session.data.placed[0];
-    session.data.placed[0] = session.data.placed[1];
-    session.data.placed[1] = last;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    buildHive(h, p, session, [2, 1, 3, 4]);
     h.emit('InterfaceActionClick', { player: p, buttonId: (420 << 16) | 22, action: 1 });
+    const left = 6 - attempt;
+    assert.equal(pageTexts(p)[1], left === 1 ? "I'll let you have one more try." : "I'll let you have " + left + " more tries.");
+    endChat(p);
+    assert.equal(p.interfaceId, 420);
   }
+  buildHive(h, p, session, [2, 1, 3, 4]);
+  h.emit('InterfaceActionClick', { player: p, buttonId: (420 << 16) | 22, action: 1 });
+  assert.equal(pageTexts(p)[0], 'Uh-oh, the bees are fed up with waiting for you to build them a home!');
+  endChat(p);
+  assert.equal(p.chat, 'Aaaaargh - BEES!');
+  h.ticks(12);
   assert.deepEqual(p.rewards, []);
   assert.equal(Teleports.sessionOf(p), undefined);
+  assert.equal(p.location.getX(), 3222);
 });
 
-const QUIZ_GROUP = 30012;
-test('Quiz Master pays 1,000 coins after four correct odd-one-out answers', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 11);
+test('Beekeeper: an incomplete hive does nothing and talking to him reopens it or leaves', t => {
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 10);
+  h.hooks['Bee keeper']['Talk-to']({ player: p, npc, handled: false });
+  choose(h, p, 0);
+  endChat(p);
+  endChat(p);
+  const session = Teleports.sessionOf(p);
+  h.emit('InterfaceActionClick', { player: p, buttonId: (420 << 16) | 22, action: 1 });
+  assert.equal(session.data.attempts, 6);
+  p.interfaceId = -1;
+  h.hooks['Bee keeper']['Talk-to']({ player: p, npc: session.keeper, handled: false });
+  assert.deepEqual(pageTexts(p), ['Ready to try again?']);
+  choose(h, p, 1);
+  endChat(p);
+  assert.equal(p.interfaceId, 420);
+  h.hooks['Bee keeper']['Talk-to']({ player: p, npc: session.keeper, handled: false });
+  choose(h, p, 2);
+  assert.equal(Teleports.sessionOf(p), undefined);
+  assert.deepEqual(p.rewards, []);
+});
+
+const QUIZ_OPTIONS = (191 << 16) | 1;
+const QUIZ_FIRST_QUESTION_TICKS = 16;
+const QUIZ_REPLY_TICKS = 3;
+function startQuiz(h, p, npc) {
   h.hooks['Quiz Master']['Talk-to']({ player: p, npc, handled: false });
   choose(h, p, 0);
+  assert.deepEqual(pageTexts(p), ["Yes please, I'm so excited!"]);
+  endChat(p);
   const session = Teleports.sessionOf(p);
+  h.ticks(QUIZ_FIRST_QUESTION_TICKS);
+  return session;
+}
+
+function answerQuiz(h, p, slot) {
+  h.emit('InterfaceActionClick', { player: p, buttonId: QUIZ_OPTIONS, action: 1, slot });
+}
+
+test('Quiz Master opens 191 with script 3799 and pays 1,000 coins after four correct answers', t => {
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 11);
+  const session = startQuiz(h, p, npc);
+  assert.ok(p.messages.includes('Answer four questions correctly in a row to be teleported back where you came from.'));
+  assert.equal(p.chatboxGroupId, 191);
+  assert.ok(sentWith(p, 'sendClientScript', 3799, QUIZ_OPTIONS, ...session.data.models.flat()));
+  assert.ok(sentWith(p, 'sendInterfaceFlagsRange', QUIZ_OPTIONS, 0, 2, 2));
   for (let i = 0; i < 4; i++) {
-    const index = session.data.items.indexOf(session.data.odd);
-    h.emit('InterfaceActionClick', { player: p, buttonId: (QUIZ_GROUP << 16) | (3 + index), action: 1 });
+    answerQuiz(h, p, session.data.models.indexOf(session.data.odd));
+    // Waits for the host's line: a second click on the same question does nothing.
+    answerQuiz(h, p, session.data.models.indexOf(session.data.odd));
+    h.ticks(QUIZ_REPLY_TICKS);
   }
   assert.equal(session.data.streak, 4);
-  choose(h, p, 0);
+  assert.ok(sentWith(p, 'sendJingle', 110));
+  const prompt = h.prompts.at(-1);
+  assert.equal(prompt.title, 'Select Your Prize');
+  assert.deepEqual(prompt.options.map(option => option.label), ['1,000 Coins', 'Mystery Box']);
+  prompt.options[0].cb();
   assert.deepEqual(p.rewards, [I.COINS]);
   assert.equal(p.rewardItems.at(-1).getAmount(), 1000);
+  assert.equal(p.messages.at(-1), REWARD(1000, 'Coins'));
   assert.equal(Teleports.sessionOf(p), undefined);
+  assert.ok(sentWith(p, 'sendTabInterface', 0, 593), 'the tabs come back');
+  assert.deepEqual([p.location.getX(), p.location.getY()], [3222, 3222]);
 });
 
-test('Quiz Master wrong answers only reset the streak', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 11);
-  h.hooks['Quiz Master']['Talk-to']({ player: p, npc, handled: false });
-  choose(h, p, 0);
-  const session = Teleports.sessionOf(p);
-  const wrong = session.data.items.findIndex(item => item !== session.data.odd);
-  h.emit('InterfaceActionClick', { player: p, buttonId: (QUIZ_GROUP << 16) | (3 + wrong), action: 1 });
+test('Quiz Master wrong answers only reset the streak and ask again', t => {
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 11);
+  const session = startQuiz(h, p, npc);
+  answerQuiz(h, p, session.data.models.indexOf(session.data.odd));
+  h.ticks(QUIZ_REPLY_TICKS);
+  assert.equal(session.data.streak, 1);
+  answerQuiz(h, p, session.data.models.findIndex(model => model !== session.data.odd));
   assert.equal(session.data.streak, 0);
-  assert.match(p.messages.at(-1), /WRONG|Wrong|No!|not the odd/);
+  assert.match(p.strings.get((231 << 16) | 6), /<br>Okay, next question!$/);
+  assert.equal(session.data.phase, 'reply');
+  h.ticks(QUIZ_REPLY_TICKS);
+  assert.equal(session.data.phase, 'question');
+});
+
+test('Quiz Master holds the player: tabs closed, seated, and a closed chatbox comes back', t => {
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 11);
+  const session = startQuiz(h, p, npc);
+  assert.ok(sentWith(p, 'closeSubInterface', (161 << 16) | 79), 'the inventory tab is closed');
+  assert.equal(p.animation, 2378);
+  p.chatboxGroupId = -1;
+  h.emit('PlayerProcess', { player: p });
+  assert.equal(p.chatboxGroupId, 191);
+  assert.ok(session.data.models);
 });
 
 test('Quiz Master seats the player in the walled tile facing him on plane 1', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 11);
-  h.hooks['Quiz Master']['Talk-to']({ player: p, npc, handled: false });
-  choose(h, p, 0);
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 11);
+  startQuiz(h, p, npc);
   assert.deepEqual([p.location.getX(), p.location.getY(), p.location.getZ()], [1952, 4764, 1]);
   assert.ok(Teleports.sessionOf(p), 'arriving upstairs keeps the session');
   // The core area that holds the session must cover the seat on its plane, or arriving would end it.
@@ -1162,95 +1510,242 @@ test('Quiz Master seats the player in the walled tile facing him on plane 1', t 
   assert.ok(Teleports.createAreas().some(area => area.getBoundaries()[0].inside(seat)), 'the quiz area is on plane 1');
 });
 
-test('Quiz Master questions have two items of one category and one odd one out', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 11);
-  h.hooks['Quiz Master']['Talk-to']({ player: p, npc, handled: false });
-  choose(h, p, 0);
-  const session = Teleports.sessionOf(p);
-  // RuneLite ItemID MACRO_QUIZ_FOOD1/2, WEAPON1/2, ARMOUR1/2, TOOL1/2, JEWEL1/2.
-  const category = item => Math.floor((item - 6189) / 2);
+test('Quiz Master questions have both models of one pair and one odd one out', t => {
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 11);
+  let value = 0;
+  h.random(0);
+  const session = startQuiz(h, p, npc);
+  // The pairs every recorded answer implies, with live's zooms.
+  const PAIR = { 8828: 'a', 8836: 'a', 8829: 'b', 8830: 'b', 8831: 'c', 8834: 'c', 8832: 'd', 8833: 'd', 8835: 'e', 8837: 'e' };
+  const ZOOM = { 8828: 700, 8829: 800, 8830: 800, 8831: 400, 8832: 800, 8833: 400, 8834: 400, 8835: 500, 8836: 600, 8837: 1000 };
   for (let i = 0; i < 200; i++) {
-    const { items, odd } = session.data;
-    const others = items.filter(item => item !== odd);
-    assert.equal(items.length, 3);
-    assert.equal(others.length, 2, `the odd item appears once: ${items}`);
-    assert.equal(category(others[0]), category(others[1]), `the other two share a category: ${items}`);
-    assert.notEqual(category(odd), category(others[0]), `the odd one is from another category: ${items}`);
+    const { models, odd } = session.data;
+    const others = models.filter(model => model !== odd);
+    assert.equal(models.length, 3);
+    assert.equal(others.length, 2, `the odd model appears once: ${models}`);
+    assert.equal(PAIR[others[0][0]], PAIR[others[1][0]], `the other two are a pair: ${models}`);
+    assert.notEqual(PAIR[odd[0]], PAIR[others[0][0]], `the odd one is from another pair: ${models}`);
+    assert.ok(models.every(([model, zoom]) => ZOOM[model] === zoom));
     // A wrong answer asks a fresh question without ending the event.
-    h.emit('InterfaceActionClick', { player: p, buttonId: (QUIZ_GROUP << 16) | (3 + items.indexOf(others[0])), action: 1 });
+    answerQuiz(h, p, models.indexOf(others[0]));
+    value = (value + 0.137) % 1;
+    h.random(value);
+    h.ticks(QUIZ_REPLY_TICKS);
   }
 });
 
-test('Drill Demon accepts four matching exercises in a row for the camo top', t => {
+test('Drill Demon wants five matching exercises in a row for the camo top', t => {
   const h = harness(t), p = h.player(), npc = h.spawn(p, 12);
   h.hooks['Sergeant Damien']['Talk-to']({ player: p, npc, handled: false });
-  choose(h, p, 0);
+  assert.deepEqual(npcLines(p).slice(0, 1), ["Private Player, atten-SHUN! You've been recommended for my corps. Do you think you can be the best?"]);
+  openOptions(h, p);
+  assert.equal(h.prompts.at(-1).title, 'What would you like to say?');
+  accept(h, p);
   const session = Teleports.sessionOf(p);
   assert.equal(p.location.getX(), 3163, 'drill arrival x');
-  assert.equal(p.location.getY(), 4819, 'drill arrival y');
-  for (let i = 0; i < 4; i++) {
-    const entry = [...session.data.matExercise.entries()].find(([, exercise]) => exercise === session.data.order);
+  assert.equal(p.location.getY(), 4820, 'drill arrival y');
+  assert.match(npcLines(p)[0], /^Move yourself, Private!/);
+  assert.deepEqual([...p.varbits.keys()].sort(), [1335, 1336, 1337, 1338], 'the signs are multiloc varbits');
+  openOptions(h, p);
+  for (let i = 0; i < 5; i++) {
+    assert.equal(Teleports.sessionOf(p), session, `still drilling before exercise ${i + 1}`);
+    assert.deepEqual(npcLines(p), [session.data.order.line]);
+    const exerciseDone = session.data.order;
+    const entry = [...session.data.matExercise.entries()].find(([, exercise]) => exercise === exerciseDone);
     assert.ok(entry, 'a mat matches the order');
+    p.location = new Location(entry[0], 4820, 0);
     h.hooks['object:Exercise mat'].Use({ player: p, handled: false,
       object: { getLocation: () => new Location(entry[0], 4820, 0), getId: () => 1 } });
+    h.ticks(3);
+    assert.ok(p.face.equals(new Location(entry[0], 4821, 0)), 'the exercise faces the sign');
+    assert.equal(p.animation, exerciseDone.animation);
+    h.ticks(exerciseDone.ticks);
+    assert.equal(p.animation, 65535);
   }
-  assert.ok(p.rewards.includes(I.LAMP));
-  assert.ok(p.rewards.includes(6654), 'camo top');
+  assert.deepEqual(npcLines(p), ["Well I'll be, you actually did it, Private. Now take this and get out of my sight."]);
+  openOptions(h, p);
+  assert.deepEqual(p.rewards, [6654], 'the camo top and no lamp');
   assert.equal(Teleports.sessionOf(p), undefined);
 });
 
-test('Drill Demon breaks the streak on a wrong mat', t => {
+test('Drill Demon walks onto the mat tile under the sign from either half of a mat', t => {
+  const h = harness(t);
+  assert.equal(h.hooks.objectRoute?.length, 1, 'the drill plugin registers the mat route');
+  for (const [x, y, id] of [[3160, 4819, 20810], [3160, 4820, 20810], [3162, 4819, 16508],
+    [3164, 4819, 9313], [3166, 4819, 20801]]) {
+    const route = { clickType: 1, objectId: id, object: { getLocation: () => new Location(x, y, 0) } };
+    for (const handler of h.hooks.objectRoute) handler(route);
+    assert.deepEqual(route.destination, { x, y: 4820, z: 0 }, `${x},${y}: walks onto the north tile`);
+  }
+  const other = { clickType: 1, objectId: 9315, object: { getLocation: () => new Location(3165, 4820, 0) } };
+  for (const handler of h.hooks.objectRoute) handler(other);
+  assert.equal(other.destination, undefined, 'sign posts keep the core route');
+  const look = { clickType: 2, objectId: 20810, object: { getLocation: () => new Location(3160, 4820, 0) } };
+  for (const handler of h.hooks.objectRoute) handler(look);
+  assert.equal(look.destination, undefined, 'only Use walks to the mat');
+});
+
+test('Drill Demon breaks the streak on a wrong mat and lets the player leave', t => {
   const h = harness(t), p = h.player(), npc = h.spawn(p, 12);
   h.hooks['Sergeant Damien']['Talk-to']({ player: p, npc, handled: false });
-  choose(h, p, 0);
+  accept(h, p);
   const session = Teleports.sessionOf(p);
+  h.hooks['object:Exercise mat'].Use({ player: p, handled: false,
+    object: { getLocation: () => new Location(3160, 4820, 0), getId: () => 1 } });
+  assert.deepEqual(npcLines(p), ["I haven't given you the order yet, worm!"]);
+  openOptions(h, p);
+  session.data.streak = 3;
   const wrong = [...session.data.matExercise.entries()].find(([, exercise]) => exercise !== session.data.order);
+  p.location = new Location(wrong[0], 4820, 0);
   h.hooks['object:Exercise mat'].Use({ player: p, handled: false,
     object: { getLocation: () => new Location(wrong[0], 4820, 0), getId: () => 1 } });
+  h.ticks(20);
   assert.equal(session.data.streak, 0);
-  assert.ok(p.messages.some(message => /Wrong exercise/.test(message)));
+  assert.equal(npcLines(p)[0], `Wrong exercise, worm! ${session.data.order.line}`);
+  assert.deepEqual(p.messages, []);
+  const talk = { player: p, npc: { getId: () => N.SERGEANT_DAMIEN }, handled: false };
+  h.hooks['Sergeant Damien']['Talk-to'](talk);
+  assert.equal(talk.handled, true);
+  assert.equal(npcLines(p)[0], session.data.order.line);
+  openOptions(h, p);
+  assert.deepEqual(npcLines(p), [session.data.order.box], 'the objbox follows the line');
+  assert.deepEqual(p.typed.at(-1), [115, session.data.order.box, undefined]);
+  openOptions(h, p);
+  assert.equal(h.prompts.at(-1).title, 'Select an option');
+  h.prompts.at(-1).options[1].cb();
+  assert.deepEqual(npcLines(p), ['I want to leave.']);
+  openOptions(h, p);
+  assert.deepEqual(npcLines(p), ['Pathetic. Get out of here then.']);
+  openOptions(h, p);
+  assert.equal(Teleports.sessionOf(p), undefined);
+  assert.deepEqual(p.rewards, []);
 });
 
 test('Freaky Forester takes any carcass and the portal pays the outfit piece', t => {
   const h = harness(t), p = h.player(), npc = h.spawn(p, 13);
   h.hooks['Freaky Forester']['Talk-to']({ player: p, npc, handled: false });
-  choose(h, p, 0);
+  accept(h, p);
   const session = Teleports.sessionOf(p);
-  const bird = { getId: () => 5497, getLocation: () => p.location.clone(), forceChat() {}, setHitpoints() {} };
+  assert.ok([[2599, 4774], [2598, 4775]].some(([x, y]) => p.location.getX() === x && p.location.getY() === y),
+    'arrives beside the forester, not on him');
+  assert.ok(p.configs.get(531) >= 1 && p.configs.get(531) <= 24, 'varp 531 makes the pheasants visible');
+  assert.match(npcLines(p)[0], /^Hey there, Player\. .* Bring me the raw pheasant when you're done\.$/);
+  assert.deepEqual(p.messages, []);
+  const request = npcLines(p)[0];
+  h.hooks['Freaky Forester']['Talk-to']({ player: p, npc: { getId: () => 372 }, handled: false });
+  assert.deepEqual(npcLines(p), [request], 'he repeats the same request');
+  const bird = { getId: () => 5497, getLocation: () => p.location.clone(), performAnimation(animation) { this.animation = animation.getId(); },
+    setHitpoints(hp) { this.hp = hp; } };
   assert.equal(fireNpcClick(h, 5497, 2, { player: p, npc: bird, npcId: 5497 }), true);
+  h.ticks(3);
+  assert.equal(bird.hp, 0);
+  assert.equal(bird.animation, 2373);
+  h.ticks(2);
   assert.equal(h.drops.at(-1).getItem().getId(), I.RAW_PHEASANT_3);
+  assert.deepEqual(npcLines(p), ['Now bring me the raw pheasant.']);
   p.slots[0] = new Item(I.RAW_PHEASANT_3, 1);
+  fireNpcClick(h, 5497, 2, { player: p, npc: bird, npcId: 5497 });
+  assert.equal(p.messages.at(-1), "You already have a pheasant carcass. You don't need to kill another.");
+  const second = { player: p, groundItemId: I.RAW_PHEASANT_3, handled: false };
+  h.hooks.groundPickup[0](second);
+  assert.equal(second.handled, true);
+  assert.equal(p.messages.at(-1), "You already have a pheasant carcass in your inventory, you don't need to kill another.");
   assert.equal(session.data.done, false);
   h.hooks['Freaky Forester']['Talk-to']({ player: p, npc: { getId: () => 372 }, handled: false });
   assert.equal(session.data.done, true);
+  assert.deepEqual(npcLines(p), ['Thanks, Player, you may use the portal to leave the area now.']);
   p.slots[0] = undefined;
+  h.hooks['Freaky Forester']['Talk-to']({ player: p, npc: { getId: () => 372 }, handled: false });
+  assert.deepEqual(npcLines(p), ['Okay, Player, you can leave the area now.']);
+  fireNpcClick(h, 5497, 2, { player: p, npc: bird, npcId: 5497 });
+  assert.equal(p.messages.at(-1), "You don't need to attack any more pheasants. You're allowed to leave.");
   h.hooks['object:Exit portal'].Use({ player: p, handled: false,
     object: { getId: () => 20843, getLocation: () => p.location.clone() } });
   assert.deepEqual(p.rewards, [6182]);
+  assert.deepEqual(npcLines(p), ['You get a lederhosen hat for your help, many thanks!']);
+  assert.equal(p.configs.get(531), 0);
   assert.equal(Teleports.sessionOf(p), undefined);
 });
 
-test('Gravedigger buries the five right coffins for zombie pieces', t => {
+test('Freaky Forester portal leaves without a reward before the hand-in', t => {
+  const h = harness(t), p = h.player(), npc = h.spawn(p, 13);
+  h.hooks['Freaky Forester']['Talk-to']({ player: p, npc, handled: false });
+  accept(h, p);
+  h.hooks['object:Exit portal'].Use({ player: p, handled: false,
+    object: { getId: () => 20843, getLocation: () => p.location.clone() } });
+  assert.deepEqual(p.rewards, []);
+  assert.deepEqual(p.messages, []);
+  assert.equal(Teleports.sessionOf(p), undefined);
+});
+
+test('Gravedigger: any coffin fits, Leo judges them, and the right five pay zombie pieces', t => {
   const h = harness(t), p = h.player(), npc = h.spawn(p, 14);
   h.hooks.Leo['Talk-to']({ player: p, npc, handled: false });
-  choose(h, p, 0);
+  accept(h, p);
   const session = Teleports.sessionOf(p);
-  const professions = ['cook', 'farmer', 'lumberjack', 'miner', 'potter'];
+  assert.deepEqual([p.location.getX(), p.location.getY()], [1928, 5002]);
+  assert.deepEqual([session.leo.location.getX(), session.leo.location.getY()], [1928, 5003]);
+  assert.deepEqual(npcLines(p), ["You have to help me, Player! I've put the wrong coffins into these graves.",
+    "I need you to pick up the coffin from each grave, see who's inside it, and bury it in the grave with the correct gravestone."]);
+  openOptions(h, p);
+  assert.equal(p.interfaceId, 220, 'the instruction scroll');
   const graves = [[1924, 4996], [1926, 4999], [1928, 4996], [1930, 4999], [1932, 4996]];
+  const filled = [9364, 9365, 9366, 9367, 10049];
   for (let i = 0; i < 5; i++) {
-    const grave = { getId: () => 9364 + i, getType: () => 10, getFace: () => 0,
+    const grave = { getId: () => filled[i], getType: () => 10, getFace: () => 0,
       getPrivateArea: () => null, getLocation: () => new Location(graves[i][0], graves[i][1], 0) };
     h.hooks['object:Grave']['Take-Coffin']({ player: p, object: grave, handled: false });
-    const item = 7587 + professions.indexOf(session.data.professions[i]);
-    p.slots[0] = new Item(item, 1);
-    const target = { getId: () => 10050 + i, getLocation: () => new Location(graves[i][0], graves[i][1], 0) };
-    assert.equal(fireRaw(h, 'itemOnObject', { player: p, itemId: item, object: target }), true);
+    h.ticks(1);
+    assert.equal(session.data.contents[i], null);
+    assert.equal(p.typed.at(-1)[1], 'You take the coffin from the grave.');
   }
-  assert.equal(session.data.buried.size, 5);
+  const put = (grave, coffin) => {
+    p.slots[0] = new Item(coffin, 1);
+    const target = { getId: () => 10050 + grave, getType: () => 10, getFace: () => 0, getPrivateArea: () => null,
+      getLocation: () => new Location(graves[grave][0], graves[grave][1], 0) };
+    assert.equal(fireRaw(h, 'itemOnObject', { player: p, itemId: coffin, object: target }), true);
+    h.ticks(1);
+    assert.equal(p.typed.at(-1)[1], 'You put the coffin into the grave.');
+  };
+  const { owners } = session.data;
+  put(0, owners[1]);
   h.hooks.Leo['Talk-to']({ player: p, npc: session.leo, handled: false });
-  choose(h, p, 0);
+  assert.equal(h.prompts.at(-1).title, 'Select an option');
+  h.prompts.at(-1).options[0].cb();
+  assert.deepEqual(npcLines(p), ["I think I've finished!"]);
+  openOptions(h, p);
+  assert.match(npcLines(p)[0], /^That's a good attempt, but it's just not right\./);
+  assert.equal(npcLines(p)[1], "All right, I'll give it another shot.");
+  session.data.contents[0] = null;
+  for (let i = 0; i < 5; i++) put(i, owners[i]);
+  h.hooks.Leo['Talk-to']({ player: p, npc: session.leo, handled: false });
+  h.prompts.at(-1).options[0].cb();
+  openOptions(h, p);
+  assert.deepEqual(npcLines(p), ["Wonderful! That's taken care of them. I'll take you back, and give you your reward."]);
+  assert.equal(Teleports.sessionOf(p), session, 'live waits a few ticks');
+  h.ticks(9);
   assert.ok(p.rewards.includes(13283) && p.rewards.includes(13284));
   assert.equal(Teleports.sessionOf(p), undefined);
+});
+
+test('Gravedigger stones and coffins show pictures, and bones cannot be buried', t => {
+  const h = harness(t), p = h.player(), npc = h.spawn(p, 14);
+  h.hooks.Leo['Talk-to']({ player: p, npc, handled: false });
+  accept(h, p);
+  const session = Teleports.sessionOf(p);
+  h.hooks['object:Gravestone'].Read({ player: p, handled: false,
+    object: { getLocation: () => new Location(1924, 4998, 0) } });
+  assert.deepEqual(p.typed.at(-1).slice(0, 2), [105, 'You examine the gravestone. It shows...']);
+  assert.equal(p.interfaceId, 175);
+  assert.ok([13399, 13402, 13403, 13404, 16035].includes(p.models.get((175 << 16) | 1)));
+  h.hooks.Coffin.Check({ player: p, itemId: 7591 });
+  assert.equal(p.interfaceId, 141);
+  assert.deepEqual(p.tray.slice(0, 2), [[(141 << 16) | 3, 7598], [(141 << 16) | 4, 7611]]);
+  ITEM_NAMES[I.BONES] = 'Bones';
+  assert.equal(fireRaw(h, 'itemOnObject', { player: p, itemId: I.BONES, object: { getId: () => 9364,
+    getLocation: () => new Location(1924, 4996, 0) } }), true);
+  assert.equal(p.messages.at(-1), 'Burying that here would be very silly.');
+  Teleports.finish(session);
 });
 
 test('Pinball inviter supports the cache Talk-to and Dismiss actions through real dispatch', async t => {
@@ -1271,9 +1766,11 @@ test('Pinball inviter supports the cache Talk-to and Dismiss actions through rea
   assert.equal(operate(1), true, 'the spawned cache variant dispatches Talk-to');
   assert.ok(p.dialogue);
   choose(h, p, 1);
-  assert.equal(Teleports.hasSession(p), false, 'declining keeps the invitation');
-  assert.equal(npc.removed, undefined);
-  assert.equal(operate(1), true, 'the invitation can be reopened');
+  assert.deepEqual(npcLines(p), ['No thanks.']);
+  assert.equal(Teleports.hasSession(p), false, 'declining does not move the player');
+  assert.equal(npc.removed, undefined, 'he goes on the next beat (1637 t7516)');
+  assert.equal(operate(1), true, 'talking again after declining is handled');
+  assert.match(npcLines(p).join('\n'), /Going away now\./);
   assert.equal(definition.getActions()[4], 'Dismiss', 'the client exposes Dismiss');
   assert.equal(operate(5), true);
   assert.equal(npc.removed, true);
@@ -1283,102 +1780,337 @@ test('Pinball inviter supports the cache Talk-to and Dismiss actions through rea
 
 test('Pinball awards noted gems with the Wiki 3/3/3/1 weights at roll boundaries', t => {
   const h = harness(t);
-  const cases = [[0, 1608, 5], [0.299999, 1608, 5], [0.3, 1606, 5],
-    [0.599999, 1606, 5], [0.6, 1604, 5], [0.899999, 1604, 5],
-    [0.9, 1602, 2], [0.999999, 1602, 2]];
-  for (const [roll, id, amount] of cases) {
+  const cases = [[0, 1608, 5, 'Sapphire', 'five sapphires'], [0.299999, 1608, 5, 'Sapphire', 'five sapphires'],
+    [0.3, 1606, 5, 'Emerald', 'five emeralds'], [0.599999, 1606, 5, 'Emerald', 'five emeralds'],
+    [0.6, 1604, 5, 'Ruby', 'five rubies'], [0.899999, 1604, 5, 'Ruby', 'five rubies'],
+    [0.9, 1602, 2, 'Diamond', 'two diamonds'], [0.999999, 1602, 2, 'Diamond', 'two diamonds']];
+  for (const [roll, id, amount, name, awarded] of cases) {
     const p = h.player(), origin = p.location.clone(), npc = h.spawn(p, 15);
     h.hooks.Flippa['Talk-to']({ player: p, npc, handled: false });
-    choose(h, p, 0);
+    accept(h, p);
     const session = Teleports.sessionOf(p);
     session.data.done = true;
     h.random(roll);
-    h.hooks['object:Cave Exit'].Use({ player: p, handled: false,
+    h.hooks['object:Cave Exit'].Exit({ player: p, handled: false,
       object: { getId: () => 9293, getLocation: () => new Location(1971, 5036, 0) } });
     assert.deepEqual(p.rewardItems.map(item => [item.getId(), item.getAmount()]), [[id, amount]], `roll ${roll}`);
+    assert.deepEqual(p.messages, [`You were awarded ${awarded}!`, REWARD(amount, name)], `roll ${roll}`);
     assert.ok(p.location.equals(origin));
     assert.equal(Teleports.hasSession(p), false);
   }
 });
 
+test('Pinball spawns the room Flippa and Tilt and Tilt explains the game', t => {
+  const h = harness(t), p = h.player(), npc = h.spawn(p, 15);
+  h.hooks.Flippa['Talk-to']({ player: p, npc, handled: false });
+  accept(h, p);
+  const session = Teleports.sessionOf(p);
+  assert.equal(session.flippa.getId(), N.FLIPPA);
+  assert.deepEqual([session.flippa.location.getX(), session.flippa.location.getY()], [1973, 5041]);
+  assert.equal(session.flippa.getFace(), 3, 'Flippa faces west');
+  assert.equal(session.flippa.isOwnerOnly(), true, 'each player has their own room NPCs');
+  assert.equal(session.tilt.getId(), N.TILT);
+  assert.deepEqual([session.tilt.location.getX(), session.tilt.location.getY()], [1971, 5041]);
+  assert.equal(session.tilt.getFace(), 4, 'Tilt faces east');
+  assert.match(npcLines(p).join('\n'), /You poke 10 flashing pillars/);
+  Teleports.finish(session);
+});
+
+test('Pinball Flippa and Tilt repeat the live instructions and farewell', t => {
+  const h = harness(t), p = h.player(), npc = h.spawn(p, 15);
+  h.hooks.Flippa['Talk-to']({ player: p, npc, handled: false });
+  accept(h, p);
+  const session = Teleports.sessionOf(p);
+  h.hooks.Tilt['Talk-To']({ player: p, npc: session.tilt, handled: false });
+  assert.deepEqual(npcLines(p), ['Err...what am I supposed to do here again?', 'You gotta poke dem pillars.',
+    'What? All of them?', "No, no. If you poke dem ones dat don't have a dem flashin' rings, den dats bad.",
+    'So I have to poke the pillars that are flashing?', 'Yer. You do dat ten times, you get prize.']);
+  session.data.done = true;
+  h.hooks.Flippa['Talk-To']({ player: p, npc: session.flippa, handled: false });
+  assert.deepEqual(npcLines(p), ["So...I'm free to go now, right?", 'Yer, get going. We get break now.',
+    'Ok. Err...have a nice break.']);
+  const invitation = { player: p, npc: { getId: () => N.FLIPPA_2 }, handled: false };
+  h.hooks.Flippa['Talk-to'](invitation);
+  assert.equal(invitation.handled, false, 'the invitation NPC keeps its own handler in the room');
+  Teleports.finish(session);
+});
+
+test('Pinball glows the post with its animation and never swaps object ids', t => {
+  const h = harness(t), p = h.player(), npc = h.spawn(p, 15);
+  const posts = Pinball._test.POSTS.map(([tile, inactive]) => {
+    const object = new FakeGameObject(inactive, new Location(tile[0], tile[1], 0), 10, 0);
+    h.api.core.ObjectManager.register(object);
+    return object;
+  });
+  h.hooks.Flippa['Talk-to']({ player: p, npc, handled: false });
+  accept(h, p);
+  const session = Teleports.sessionOf(p);
+  assert.deepEqual(p.objectAnimations, [[posts[session.data.glow], Pinball._test.GLOW_ON]], 'one post starts glowing');
+  p.objectAnimations.length = 0;
+  session.data.glow = 0;
+  h.hooks['object:Pinball Post'].Tag({ player: p, object: posts[0], handled: false });
+  assert.ok(p.face.equals(posts[0].getLocation()));
+  h.ticks(1);
+  assert.equal(p.animation, 832);
+  assert.deepEqual(p.objectAnimations, [], 'the tag lands after the animation');
+  h.ticks(2);
+  assert.equal(posts[0].getId(), 8982, 'the map object is not replaced');
+  assert.equal(session.data.score, 1);
+  assert.equal(p.objectAnimations.length, 2, 'only the two changed posts are sent');
+  assert.deepEqual(p.objectAnimations[0], [posts[0], Pinball._test.GLOW_OFF], 'the tagged post stops glowing');
+  assert.ok(p.objectAnimations[1][0] !== posts[0] && p.objectAnimations[1][1] === Pinball._test.GLOW_ON,
+    'another post starts glowing');
+  Teleports.finish(session);
+});
+
+test('Pinball keeps a glowing post per player, as live instances the room', t => {
+  const h = harness(t), p = h.player(), q = h.player();
+  const posts = Pinball._test.POSTS.map(([tile, inactive]) => {
+    const object = new FakeGameObject(inactive, new Location(tile[0], tile[1], 0), 10, 0);
+    h.api.core.ObjectManager.register(object);
+    return object;
+  });
+  for (const player of [p, q]) {
+    const npc = h.spawn(player, 15);
+    h.hooks.Flippa['Talk-to']({ player, npc, handled: false });
+    accept(h, player);
+  }
+  const pSession = Teleports.sessionOf(p), qSession = Teleports.sessionOf(q);
+  pSession.data.glow = 1;
+  qSession.data.glow = 3;
+  q.objectAnimations = [];
+  h.hooks['object:Pinball Post'].Tag({ player: p, object: posts[1], handled: false });
+  h.ticks(3);
+  assert.equal(pSession.data.score, 1);
+  assert.notEqual(pSession.data.glow, 1);
+  assert.equal(qSession.data.glow, 3, 'the other player keeps their post');
+  assert.deepEqual(q.objectAnimations, [], 'and sees no change');
+  Teleports.finish(pSession);
+  Teleports.finish(qSession);
+});
+
 test('Pinball scores the glowing post, resets on others and pays at the cave exit', t => {
   const h = harness(t), p = h.player(), npc = h.spawn(p, 15);
   h.hooks.Flippa['Talk-to']({ player: p, npc, handled: false });
-  choose(h, p, 0);
+  accept(h, p);
   const session = Teleports.sessionOf(p);
-  const [tile] = Pinball._test.POSTS[0];
-  const fake = { getId: () => Pinball._test.POSTS[0][2], getLocation: () => new Location(tile[0], tile[1], 0) };
-  Pinball._test.room.glow = 0;
+  const postAt = index => {
+    const [tile] = Pinball._test.POSTS[index];
+    return { getId: () => Pinball._test.POSTS[index][1], getLocation: () => new Location(tile[0], tile[1], 0) };
+  };
+  session.data.glow = 0;
+  session.data.score = 5;
+  h.hooks['object:Pinball Post'].Tag({ player: p, object: postAt(1), handled: false });
+  h.ticks(3);
+  assert.equal(session.data.score, 0, 'a post without rings resets the score');
+  assert.equal(session.data.glow, 0);
   session.data.score = 9;
-  h.hooks['object:Pinball Post'].Tag({ player: p, object: fake, handled: false });
+  h.hooks['object:Pinball Post'].Tag({ player: p, object: postAt(0), handled: false });
+  h.ticks(3);
   assert.equal(session.data.done, true);
-  h.hooks['object:Cave Exit'].Use({ player: p, handled: false,
+  assert.deepEqual(p.messages, ['Congratulations, you have won!', 'You may now leave the game area.']);
+  h.hooks['object:Cave Exit'].Exit({ player: p, handled: false,
     object: { getId: () => 9293, getLocation: () => new Location(1971, 5036, 0) } });
   assert.equal(p.rewardItems.length, 1);
   assert.ok([1608, 1606, 1604, 1602].includes(p.rewards[0]));
   assert.equal(Teleports.sessionOf(p), undefined);
 });
 
-test('Evil Bob island fishing, uncooking and feeding pays 650 Fishing XP', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 16);
+// Evil Bob, Prison Pete, Evil twin and Maze players: a spied sender plus the teleport graphic.
+function audited(h) {
+  const p = eventPlayer(h);
+  p.performGraphic = graphic => { p.graphic = graphic.id; };
+  return p;
+}
+
+test('Evil Bob island: nets on the ground, servant cutscene, fish, uncook, feed, portal, 650 XP', t => {
+  const h = harness(t), p = audited(h), npc = h.spawn(p, 16);
   h.hooks['Evil Bob']['Talk-to']({ player: p, npc, handled: false });
+  assert.deepEqual(pageTexts(p), ['Hey, Player, come with me if you like fishing! Or has this amulet of humanspeak broken again?']);
   choose(h, p, 0);
+  assert.equal(h.prompts.at(-1).title, 'Follow the scary cat?');
+  assert.equal(p.animation, 714); assert.equal(p.graphic, 111); assert.ok(sentWith(p, 'sendSound', 200));
+  assert.equal(Teleports.sessionOf(p), undefined, 'the teleport plays first');
+  h.ticks(3);
   const session = Teleports.sessionOf(p);
+  assert.ok(session, 'on the island three ticks later');
+  assert.equal(p.messages.at(-1), ' <br>Welcome to ScapeRune.');
+  assert.deepEqual(pageTexts(p).slice(0, 3), ['Huh?', 'Where am I?', 'On my island.']);
+  assert.equal(h.drops.filter(drop => drop.getItem().getId() === 6209).length, 7, 'seven nets lie on the island');
   session.data.spot = 'west';
-  p.slots[0] = new Item(6209, 1);
-  h.hooks.Servant['Talk-to']({ player: p, npc: {}, npcId: N.SERVANT_2, handled: false });
-  assert.ok(p.dialogue, 'the servant speaks');
-  assert.match(JSON.stringify([...p.dialogue.getDialogues().values()].map(entry => entry.getText?.() ?? '')), /west/);
   const spot = { getId: () => 23114, getLocation: () => new Location(2510, 4775, 0) };
   assert.equal(fireRaw(h, 'objectRaw', { player: p, object: spot }), true);
-  assert.equal(p.rewards.at(-1), 6202, 'a cooked fishlike thing');
+  assert.match(pageTexts(p).join(), /You need a fishing net to fish here/);
+  h.hooks.Servant['Talk-to']({ player: p, npc: {}, npcId: N.SERVANT_2, handled: false });
+  assert.equal(pageTexts(p).at(-1), 'Look... over t-t-there! That fishing spot c-c-contains the f-f-f-fish he likes.');
+  endChat(p);
+  assert.ok(sentWith(p, 'sendCameraMoveTo', 2518, 4776, 500), 'the cutscene flies to the west spot');
+  h.ticks(8);
+  assert.ok(sentWith(p, 'sendCameraReset'));
+  const net = h.drops.find(drop => drop.getItem().getId() === 6209);
+  h.hooks.groundPickup.forEach(hook => hook({ player: p, groundItem: net, groundItemId: 6209, handled: false }));
+  const before = h.drops.length;
+  h.ticks(25);
+  assert.equal(h.drops.length, before + 1, 'a taken net comes back');
+  p.slots[0] = new Item(6209, 1);
+  assert.equal(fireRaw(h, 'objectRaw', { player: p, object: spot }), true);
+  assert.equal(p.messages.at(-1), 'You cast out your net...');
+  assert.equal(p.animation, 620);
+  h.ticks(8);
+  assert.notEqual(p.rewards.at(-1), 6202);
+  h.ticks(1);
+  assert.equal(p.rewards.at(-1), 6202, 'a cooked fishlike thing nine ticks later');
   p.slots[1] = new Item(6202, 1);
   assert.equal(fireRaw(h, 'itemOnObject', { player: p, itemId: 6202,
     object: { getId: () => 23113, getLocation: () => new Location(2524, 4779, 0) } }), true);
+  assert.equal(p.animation, 897);
+  h.ticks(3);
   assert.equal(p.rewards.at(-1), 6200, 'raw now');
   p.slots[1] = new Item(6200, 1);
-  assert.equal(fireRaw(h, 'itemOnNpc', { player: p, itemId: 6200, npcId: N.EVIL_BOB_2 }), true);
+  const bob = { forceChat(text) { this.chat = text; } };
+  assert.equal(fireRaw(h, 'itemOnNpc', { player: p, itemId: 6200, npcId: N.EVIL_BOB_2, target: bob }), true);
   assert.equal(session.data.asleep, true);
+  assert.deepEqual(pageTexts(p), ["Mmm, mmm... that's... mmm... delicious...", 'Now, let me take... a little... catnap...']);
+  h.ticks(2);
+  assert.equal(bob.chat, 'ZZZzzz');
   p.levels.set(apiSkillMagic(h), 1);
   assert.equal(fireRaw(h, 'objectRaw', { player: p, object: { getId: () => 23115,
     getLocation: () => new Location(2523, 4777, 0) } }), true);
+  assert.equal(p.animation, 2110, 'a raspberry at the servant');
+  h.ticks(3);
+  assert.equal(p.chat, 'Be seeing you!');
+  h.ticks(5);
   assert.equal(p.xp.get(apiSkillFishing(h)), 650);
   assert.equal(Teleports.sessionOf(p), undefined);
+  assert.equal(p.getInventory().containsNumber(6209), false, 'the net stays behind');
+  assert.deepEqual(pageTexts(p), ['Now what was that all about? Did any of that really happen?',
+    "You feel somehow that you've become better at Fishing."]);
+});
+
+test('Evil Bob eats the wrong fish and wants one more, and leaving early pays nothing', t => {
+  const h = harness(t), p = audited(h), npc = h.spawn(p, 16);
+  h.hooks['Evil Bob']['Talk-to']({ player: p, npc, handled: false });
+  choose(h, p, 0);
+  h.ticks(3);
+  const session = Teleports.sessionOf(p);
+  p.slots[0] = new Item(6204, 1);
+  assert.equal(fireRaw(h, 'itemOnNpc', { player: p, itemId: 6204, npcId: N.EVIL_BOB_2 }), true);
+  assert.equal(session.data.required, 2);
+  assert.equal(pageTexts(p)[0], 'What was this? That was absolutely disgusting!');
+  assert.equal(fireRaw(h, 'objectRaw', { player: p, object: { getId: () => 23115,
+    getLocation: () => new Location(2523, 4777, 0) } }), true);
+  assert.equal(Teleports.sessionOf(p), undefined);
+  assert.equal(p.xp.size, 0);
 });
 
 function apiSkillMagic(h) { return h.api.core.Skill.MAGIC; }
 function apiSkillFishing(h) { return h.api.core.Skill.FISHING; }
 
-test('Prison Pete pays out after three correct balloon keys', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 17);
+const PETE_TALK = { getId: () => N.PRISON_PETE };
+function pullPrisonLever(h, p) {
+  assert.equal(fireRaw(h, 'objectRaw', { player: p,
+    object: { getId: () => 24296, getLocation: () => new Location(2094, 4464, 0) } }), true);
+}
+
+test('Prison Pete: balloon shapes by varbit, lever model, keys, barriers, exit, weighted reward', t => {
+  const h = harness(t), p = audited(h), npc = h.spawn(p, 17);
   h.hooks['Evil Bob']['Talk-to']({ player: p, npc, handled: false });
   choose(h, p, 0);
+  assert.ok(sentWith(p, 'sendSound', 201));
+  assert.equal(Teleports.sessionOf(p), undefined);
+  h.ticks(6);
   const session = Teleports.sessionOf(p);
+  assert.ok(session);
+  assert.equal(p.messages.at(-1), ' <br>Welcome to ScapeRune.');
+  assert.ok(p.varbits.get(1549) >= 1 && p.varbits.get(1549) <= 24, 'the balloons take an arrangement');
+  assert.equal(pageTexts(p)[0], "So you've been captured too?");
+  const balloonNpc = { getLocation: () => new Location(2080, 4460, 0) };
+  assert.equal(fireNpcClick(h, 5488, 1, { player: p, npc: balloonNpc, npcId: 5488 }), true);
+  assert.equal(pageTexts(p)[0], "You're meant to pull the lever to find out which sort of animal to pop!");
   for (let round = 0; round < 3; round++) {
-    assert.equal(fireRaw(h, 'objectRaw', { player: p,
-      object: { getId: () => 24296, getLocation: () => new Location(2094, 4464, 0) } }), true);
-    h.ticks(6);
-    assert.equal(p.interfaceId, 273, 'lever preview remains visible for six ticks');
-    h.ticks(1);
-    assert.equal(p.interfaceId, -1, 'session timer still closes the lever preview at seven ticks');
+    pullPrisonLever(h, p);
+    if (round === 0) {
+      assert.match(pageTexts(p)[0], /^That's right, pull it/);
+      endChat(p);
+    }
+    assert.equal(p.animation, 798);
+    h.ticks(2);
     const needed = session.data.required;
-    const balloon = session.data.balloons.find(entry => entry.shape === needed.shape);
-    assert.equal(fireNpcClick(h, balloon.id, 1, { player: p, npc: balloon.npc, npcId: balloon.id }), true);
+    assert.equal(p.models.get((273 << 16) | 4), needed.lever, 'the lever shows the required shape');
+    h.ticks(20);
+    assert.equal(p.interfaceId, 273, 'the panel stays until the player closes it');
+    assert.equal(fireNpcClick(h, needed.npcs[0], 1, { player: p, npc: balloonNpc, npcId: needed.npcs[0] }), true);
+    h.ticks(2);
     assert.equal(session.data.keyCorrect, true);
+    assert.equal(p.rewards.at(-1), 6966);
     p.slots[0] = new Item(6966, 1);
-    assert.equal(fireRaw(h, 'itemOnNpc', { player: p, itemId: 6966, npcId: N.PRISON_PETE }), true);
+    // Live: Talk-to Pete while carrying the key, no item-on-NPC action (rsprox 4067, 555).
+    const promptsBefore = h.prompts.length;
+    h.hooks['Prison Pete']['Talk-to']({ player: p, npc: PETE_TALK, handled: false });
+    assert.equal(pageTexts(p)[0], "Ooh, thanks! I'll see if it's the right one...");
+    endChat(p);
+    assert.equal(p.getInventory().containsNumber(6966), false, 'Pete takes the key');
+    assert.equal(session.data.required, null, 'the spent shape cannot be popped again before the lever');
+    assert.equal(h.prompts.length, promptsBefore, 'carrying a key talks Pete into taking it, not the intro options');
+    h.ticks(3);
+    assert.equal(p.configs.get(638), (round + 1) << 5, 'one barrier clears');
   }
   assert.equal(session.data.correct, 3);
-  h.hooks['Prison Pete']['Talk-to']({ player: p, npc: { getId: () => N.PRISON_PETE }, handled: false });
-  assert.notEqual(p.rewards.at(-1), 6966, 'the key was handed over, not kept');
-  assert.ok(p.rewards.length >= 1);
+  assert.match(pageTexts(p)[0], /^You did it/);
+  p.location = new Location(2097, 4466, 0);
+  h.emit('PlayerProcess', { player: p });
+  assert.equal(p.messages.at(-1), 'You quickly escape the prison with Pete.');
+  assert.ok(sentWith(p, 'sendJingle', 150));
+  h.ticks(7);
+  assert.equal(Teleports.sessionOf(p), undefined);
+  assert.ok(p.location.equals(new Location(3222, 3222, 0)), 'the pair escape to the return tile');
+  const rewardsBefore = p.rewards.length;
+  h.ticks(3);
+  assert.equal(p.rewards.length, rewardsBefore + 1);
+  assert.equal(pageTexts(p)[0], 'Thanks a lot for your help! Here, have a present:');
+});
+
+test('Prison Pete: a wrong key puts the barriers back', t => {
+  const h = harness(t), p = audited(h), npc = h.spawn(p, 17);
+  h.hooks['Evil Bob']['Talk-to']({ player: p, npc, handled: false });
+  choose(h, p, 0);
+  h.ticks(6);
+  const session = Teleports.sessionOf(p);
+  session.data.correct = 1;
+  session.data.pulled = true;
+  pullPrisonLever(h, p);
+  h.ticks(2);
+  const wrong = [5488, 5489, 5491, 5493].find(id => !session.data.required.npcs.includes(id));
+  fireNpcClick(h, wrong, 1, { player: p, npc: { getLocation: () => new Location(2080, 4460, 0) }, npcId: wrong });
+  h.ticks(2);
+  assert.equal(session.data.keyCorrect, false);
+  p.slots[0] = new Item(6966, 1);
+  h.hooks['Prison Pete']['Talk-to']({ player: p, npc: PETE_TALK, handled: false });
+  endChat(p);
+  h.ticks(3);
+  assert.match(pageTexts(p)[0], /^Aww, that was the wrong key!/);
+  assert.equal(session.data.correct, 0);
+  assert.equal(p.configs.get(638), 0);
+});
+
+test('leaving the prison removes the event key', t => {
+  const h = harness(t), p = audited(h), npc = h.spawn(p, 17);
+  h.hooks['Evil Bob']['Talk-to']({ player: p, npc, handled: false });
+  choose(h, p, 0);
+  h.ticks(6);
+  const session = Teleports.sessionOf(p);
+  p.slots[0] = new Item(6966, 1);
+  assert.equal(p.getInventory().containsNumber(6966), true);
+  Teleports.finish(session, { message: 'You leave the prison.' });
+  assert.equal(p.getInventory().containsNumber(6966), false, 'the temporary key did not survive the event');
   assert.equal(Teleports.sessionOf(p), undefined);
 });
 
 test('rewards go one at a time at the return tile: what fits is kept, the rest is placed there', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 10);
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 10);
   h.hooks['Bee keeper']['Talk-to']({ player: p, npc, handled: false });
   choose(h, p, 0);
+  endChat(p);
   const session = Teleports.sessionOf(p);
   for (let slot = 0; slot < 27; slot++) p.slots[slot] = new Item(I.SHARK, 1);
   p.free = 1; p.messages.length = 0;
@@ -1394,121 +2126,279 @@ test('rewards go one at a time at the return tile: what fits is kept, the rest i
   assert.deepEqual(p.messages, [REWARD(1, 'Lamp'), PLACED(1, 'Camo top')]);
 });
 
-test('Evil twin catches the matching suspect within two grabs and pays gems', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 18);
+function enterEvilTwin(h, p, npc) {
   h.hooks['Postie Pete']['Talk-to']({ player: p, npc, handled: false });
   choose(h, p, 0);
+  endChat(p);
+  assert.equal(p.animation, 1816);
+  h.ticks(3);
   const session = Teleports.sessionOf(p);
-  h.hooks['object:Control panel'].Operate({ player: p, handled: false,
+  assert.ok(p.location.equals(new Location(1862, 5137, 0)));
+  return session;
+}
+
+function openClaw(h, p) {
+  h.hooks['object:Control panel'].Use({ player: p, handled: false,
     object: { getId: () => 20813, getLocation: () => new Location(1870, 5135, 0) } });
-  const twinIndex = session.data.suspects.findIndex(entry => entry.npc === session.data.twin.npc);
-  session.data.claw = (twinIndex + 1) % 4;
+}
+
+function clawOver(session, npc) {
+  const [x, y] = session.data.claw;
+  npc.location = new Location(x, y, 0);
+}
+
+test('Evil twin: claw locs and camera move per click, the twin is caged, Molly pays gems', t => {
+  const h = harness(t), p = audited(h), npc = h.spawn(p, 18);
+  const session = enterEvilTwin(h, p, npc);
+  assert.equal(session.data.suspects.length, 5, 'the twin and four civilians');
+  assert.equal(session.data.suspects.filter(entry => entry.id === session.data.twin.id).length, 1);
+  h.hooks.Suspect.Grab({ player: p, handled: false });
+  assert.deepEqual(pageTexts(p), ['You need to use the control panel to use the claw!']);
+  openClaw(h, p);
+  assert.ok(sentWith(p, 'sendCameraMoveTo', 1870, 5140, 675));
+  assert.ok(sentWith(p, 'sendSubInterface', (161 << 16) | 74, 277, 0));
+  h.emit('InterfaceActionClick', { player: p, buttonId: (277 << 16) | 7, action: 1 });
+  assert.deepEqual(session.data.claw, [1869, 5132], 'component 7 moves the claw west');
+  assert.ok(sentWith(p, 'sendObjectRemoval')); assert.ok(sentWith(p, 'sendObject')); assert.ok(sentWith(p, 'sendSound', 2273));
+  const innocent = session.data.suspects[1], twin = session.data.twin;
+  clawOver(session, innocent.npc);
+  twin.npc.location = new Location(1800, 5000, 0);
   h.emit('InterfaceActionClick', { player: p, buttonId: (277 << 16) | 3, action: 1 });
-  assert.match(p.messages.at(-1), /innocent/);
-  session.data.claw = twinIndex;
+  assert.equal(session.data.attempts, 1);
+  innocent.npc.location = new Location(1800, 5001, 0);
+  clawOver(session, twin.npc);
   h.emit('InterfaceActionClick', { player: p, buttonId: (277 << 16) | 3, action: 1 });
   assert.equal(session.data.caught, true);
+  assert.equal(p.messages.at(-1), 'You caught the Evil twin!');
+  assert.equal(twin.npc.animation, 4001);
+  h.ticks(5);
+  assert.equal(twin.npc.chat, "You're putting me in prison?!");
+  h.ticks(11);
+  assert.equal(innocent.npc, null, 'the civilians are sent home');
+  h.ticks(4);
+  assert.equal(p.messages.at(-1), 'Congratulations! You caught the evil twin.');
+  assert.equal(pageTexts(p)[0], 'Well done! You managed to catch my sister!');
   h.hooks.Molly['Talk-to']({ player: p, npc: session.molly, handled: false });
+  assert.equal(pageTexts(p)[0], "Well, I've managed to get her into the cage.");
+  endChat(p);
   assert.equal(p.rewards.length, 1);
   assert.ok([1624, 1622, 1620, 1618].includes(p.rewards[0]), 'noted uncut gems');
+  assert.ok(sentWith(p, 'sendJingle', 101));
   assert.equal(Teleports.sessionOf(p), undefined);
 });
 
-test('Maze chests cost potential, the shrine pays and timeouts leave empty-handed', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 19);
+test('Evil twin: two wrong grabs earn a scolding and a fling; the door follows the transcript', t => {
+  const h = harness(t), p = audited(h), npc = h.spawn(p, 18);
+  const session = enterEvilTwin(h, p, npc);
+  const door = { getId: () => 20817, getLocation: () => new Location(1864, 5137, 0) };
+  h.hooks['object:Door'].Open({ player: p, handled: false, object: door });
+  assert.deepEqual(pageTexts(p), ["Wait! Do you know what you're doing here?"]);
+  session.data.briefed = true;
+  h.hooks['object:Door'].Open({ player: p, handled: false, object: door });
+  assert.ok(p.location.equals(new Location(1865, 5137, 0)), 'through the door');
+  h.hooks['object:Door'].Open({ player: p, handled: false, object: door });
+  assert.deepEqual(pageTexts(p), ['You need to finish grabbing my twin before you come back through!']);
+  openClaw(h, p);
+  const [first, second] = session.data.suspects.slice(1);
+  for (const suspect of session.data.suspects) suspect.npc.location = new Location(1800, 5000, 0);
+  clawOver(session, first.npc);
+  h.emit('InterfaceActionClick', { player: p, buttonId: (277 << 16) | 3, action: 1 });
+  first.npc.location = new Location(1800, 5000, 0);
+  clawOver(session, second.npc);
+  h.emit('InterfaceActionClick', { player: p, buttonId: (277 << 16) | 3, action: 1 });
+  assert.equal(session.data.failed, true);
+  assert.deepEqual(pageTexts(p), ['Well, you tried your best I suppose. Come next door and talk to me.']);
+  h.hooks.Molly['Talk-to']({ player: p, npc: session.molly, handled: false });
+  assert.match(pageTexts(p)[1], /^Such incompetence!/);
+  endChat(p);
+  assert.equal(p.rewards.length, 0);
+  assert.equal(Teleports.sessionOf(p), undefined);
+  assert.notEqual(p.location.getX(), 3222, 'flung to a wiki spot, not home');
+});
+
+function enterMaze(h, p, npc) {
   h.hooks['Mysterious Old Man']['Talk-to']({ player: p, npc, handled: false });
   choose(h, p, 0);
-  const session = Teleports.sessionOf(p);
+  endChat(p);
+  return Teleports.sessionOf(p);
+}
+
+test('Maze chests cost potential, the shrine pays and timeouts leave empty-handed', t => {
+  const h = harness(t), p = audited(h), npc = h.spawn(p, 19);
+  const session = enterMaze(h, p, npc);
   assert.equal(session.data.potential, 100);
+  assert.equal(p.messages.at(-1), 'Reach the maze centre as fast as possible.');
+  assert.ok(sentWith(p, 'sendConfig', 531, 100));
   h.hooks['object:Chest'].Open({ player: p, handled: false,
     object: { getId: () => 14986, getType: () => 10, getFace: () => 0, getPrivateArea: () => null,
       getLocation: () => new Location(2890, 4599, 0) } });
   assert.equal(session.data.potential, 99);
   assert.equal(p.rewards.length, 1);
+  h.advance(600 * 5);
+  h.emit('PlayerProcess', { player: p });
+  assert.equal(session.data.potential, 98, 'the chest cost survives the drain');
   p.totalLevel = 1000;
   h.hooks['object:Strange shrine'].Touch({ player: p, handled: false,
     object: { getId: () => 14985, getLocation: () => new Location(2911, 4575, 0) } });
+  assert.equal(p.animation, 862);
+  assert.ok(sentWith(p, 'sendJingle', 117));
+  h.ticks(7);
   assert.equal(p.rewards.length, 4, 'three shrine rolls after the chest');
   assert.equal(Teleports.sessionOf(p), undefined);
-  const q = h.player(), expired = h.spawn(q, 19);
-  h.hooks['Mysterious Old Man']['Talk-to']({ player: q, npc: expired, handled: false });
-  choose(h, q, 0);
+  assert.ok(sentWith(p, 'sendConfig', 531, 0));
+  const q = audited(h), expired = h.spawn(q, 19);
+  enterMaze(h, q, expired);
   h.advance(500 * 3000);
   h.emit('PlayerProcess', { player: q });
   assert.deepEqual(q.rewards, []);
   assert.equal(Teleports.sessionOf(q), undefined);
 });
 
-const MIME_EMOTES = ['Think', 'Laugh', 'Climb rope', 'Glass box', 'Cry', 'Dance', 'Lean', 'Glass wall'];
-test('Mime copies four performances, crying on the wrong emote', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 20);
-  h.hooks['Mysterious Old Man']['Talk-to']({ player: p, npc, handled: false });
-  choose(h, p, 0);
-  const session = Teleports.sessionOf(p);
-  assert.notEqual(p.chatboxGroupId, 188, 'watch the performance before choosing');
-  const early = MIME_EMOTES.indexOf(session.data.emote.name);
-  h.emit('InterfaceActionClick', { player: p, buttonId: (188 << 16) | (2 + early), action: 1 });
-  assert.equal(session.data.correct, 0, 'early packets cannot answer');
-  h.ticks(3); // Cry: cache sequence 860 is 88 client cycles, rounded to 3 game ticks.
-  assert.equal(p.chatboxGroupId, 188);
-  assert.notEqual(p.interfaceId, 188, 'emote choices belong in the chatbox');
-  const wrong = MIME_EMOTES.findIndex(name => name !== session.data.emote.name);
-  h.emit('InterfaceActionClick', { player: p, buttonId: (188 << 16) | (2 + wrong), action: 1 });
-  assert.equal(session.data.correct, 0);
-  assert.equal(p.animation, 860);
-  assert.notEqual(p.chatboxGroupId, 188, 'hide choices during the reaction');
-  h.ticks(3);
-  for (let i = 0; i < 4; i++) {
-    const index = MIME_EMOTES.indexOf(session.data.emote.name);
-    h.emit('InterfaceActionClick', { player: p, buttonId: (188 << 16) | (2 + index), action: 1 });
-    h.emit('InterfaceActionClick', { player: p, buttonId: (188 << 16) | (2 + index), action: 1 });
-    assert.equal(session.data.correct, i + 1, 'one accepted answer per performance');
-    assert.equal(p.animation, 862);
-    assert.notEqual(p.chatboxGroupId, 188);
-    h.ticks(4); // Client advances after cycle > frame length, including at the final frame.
-    assert.equal(p.rewards.length, 0, 'finish waits until Cheer has ended');
-    assert.notEqual(p.chatboxGroupId, 188);
-    h.ticks(1);
-    if (i < 3) { assert.notEqual(p.chatboxGroupId, 188); h.ticks(3); }
-  }
-  assert.ok(p.rewards.includes(3057) || p.rewards.includes(I.LAMP));
-  assert.equal(Teleports.sessionOf(p), undefined);
-  assert.equal(p.rewards.length, 1);
-  h.ticks(100);
-  assert.equal(p.rewards.length, 1);
+test('Maze gates put the player through, and 14981 refuses from the junction side', t => {
+  const h = harness(t), p = audited(h), npc = h.spawn(p, 19);
+  enterMaze(h, p, npc);
+  const gate = (id, x, y, face) => ({ getId: () => id, getFace: () => face, getLocation: () => new Location(x, y, 0) });
+  p.location = new Location(2888, 4587, 0);
+  h.hooks['object:Gate'].Open({ player: p, handled: false, object: gate(14979, 2888, 4587, 2) });
+  assert.ok(p.location.equals(new Location(2889, 4587, 0)));
+  assert.ok(sentWith(p, 'sendSound', 62));
+  h.hooks['object:Gate'].Open({ player: p, handled: false, object: gate(14979, 2888, 4587, 2) });
+  assert.ok(p.location.equals(new Location(2888, 4587, 0)), 'and back again');
+  p.location = new Location(2904, 4573, 0);
+  h.hooks['object:Gate'].Open({ player: p, handled: false, object: gate(14981, 2904, 4573, 2) });
+  assert.ok(p.location.equals(new Location(2904, 4573, 0)));
+  assert.deepEqual(pageTexts(p), ["I don't think that's the right way."]);
 });
 
-test('Mime finds the stage NPC after arrival and waits for each cache animation', t => {
-  const h = harness(t), p = h.player();
+const MIME_EMOTES = ['Think', 'Laugh', 'Climb rope', 'Glass box', 'Cry', 'Dance', 'Lean', 'Glass wall'];
+const MIME_OUTFIT = [3057, 3058, 3059, 3060, 3061];
+const MIME_ANIMATIONS = [857, 861, 1130, 1131, 860, 866, 1129, 1128];
+
+function joinMime(h, p, random = 0.5) {
+  const npc = h.spawn(p, 20);
+  h.random(random);
+  h.hooks['Mysterious Old Man']['Talk-to']({ player: p, npc, handled: false });
+  assert.equal(openOptions(h, p).title, 'What would you like to say?');
+  choose(h, p, 0);
+  assert.deepEqual(pageTexts(p), ["Yeah, I'd love to do a mime show."]);
+  endChat(p);
+  assert.ok(p.location.equals(new Location(2008, 4764, 0)), 'every capture lands here first');
+  assert.ok(p.messages.includes("You need to copy the mime's performance, then you'll return to where you were."));
+  assert.deepEqual(pageTexts(p), ["You need to copy the mime's performance, then you'll be returned to where you were."]);
+  endChat(p);
+  assert.ok(p.location.equals(new Location(2008, 4762, 0)), 'continuing moves them onto the spotlight');
+  return Teleports.sessionOf(p);
+}
+
+function clickEmote(h, p, index) {
+  h.emit('InterfaceActionClick', { player: p, buttonId: (188 << 16) | (2 + index), action: 1 });
+}
+
+test('Mime copies four performances on the fixed loop, a wrong copy only cries', t => {
+  const h = harness(t), p = eventPlayer(h);
+  const session = joinMime(h, p);
+  assert.notEqual(p.chatboxGroupId, 188, 'watch the performance before choosing');
+  clickEmote(h, p, MIME_EMOTES.indexOf(session.data.emote.name));
+  assert.equal(session.data.correct, 0, 'early packets cannot answer');
+  h.ticks(9);
+  assert.notEqual(p.chatboxGroupId, 188);
+  h.ticks(1);
+  assert.equal(p.chatboxGroupId, 188, 'ten ticks after the chat, as in 1855 and 1104');
+  assert.notEqual(p.interfaceId, 188, 'emote choices belong in the chatbox');
+  const wrong = MIME_EMOTES.findIndex(name => name !== session.data.emote.name);
+  clickEmote(h, p, wrong);
+  assert.equal(session.data.correct, 0);
+  assert.equal(p.animation, MIME_ANIMATIONS[wrong], 'the player performs what they clicked');
+  assert.notEqual(p.chatboxGroupId, 188, 'hide choices during the reaction');
+  h.ticks(6);
+  assert.equal(p.animation, MIME_ANIMATIONS[wrong]);
+  h.ticks(1);
+  assert.equal(p.animation, 860, 'cry seven ticks after the copy');
+  h.ticks(22);
+  assert.equal(p.chatboxGroupId, 188, '29 ticks per performance');
+  for (let i = 0; i < 4; i++) {
+    const index = MIME_EMOTES.indexOf(session.data.emote.name);
+    clickEmote(h, p, index);
+    clickEmote(h, p, index);
+    assert.equal(session.data.correct, i + 1, 'one accepted answer per performance');
+    assert.equal(p.animation, MIME_ANIMATIONS[index]);
+    assert.notEqual(p.chatboxGroupId, 188);
+    h.ticks(7);
+    assert.equal(p.animation, 862);
+    if (i < 3) h.ticks(22);
+  }
+  assert.deepEqual(p.rewards, [], 'home two ticks after the last cheer');
+  h.ticks(2);
+  assert.equal(Teleports.sessionOf(p), undefined);
+  assert.equal(p.location.getX(), 3222);
+  assert.equal(p.rewards.length, 2, 'one or two pieces');
+  assert.ok(p.rewards.every(id => MIME_OUTFIT.includes(id)));
+  h.ticks(100);
+  assert.equal(p.rewards.length, 2);
+});
+
+function winMime(h, p, random) {
+  const session = joinMime(h, p, random);
+  h.ticks(10);
+  for (let i = 0; i < 4; i++) {
+    clickEmote(h, p, MIME_EMOTES.indexOf(session.data.emote.name));
+    h.ticks(i < 3 ? 29 : 9);
+  }
+}
+
+test('Mime emote rewards use the live message and message box', t => {
+  const h = harness(t), p = eventPlayer(h);
+  h.api.onCustomEvent('emotes:unlock', request => { request.unlocked = true; });
+  winMime(h, p, 0.9);
+  assert.deepEqual(p.rewards, []);
+  assert.ok(sentWith(p, 'sendTypedMessage', 115));
+  assert.match(pageTexts(p)[0], /^You can now use the (Glass Box|Climb Rope|Lean|Glass Wall) emote!$/);
+});
+
+test('Mime pays a lamp once the outfit and emotes are all owned', t => {
+  const h = harness(t), p = eventPlayer(h);
+  MIME_OUTFIT.forEach((id, slot) => { p.slots[slot] = new Item(id, 1); });
+  winMime(h, p, 0.9);
+  assert.deepEqual(p.rewards, [I.LAMP]);
+});
+
+test('Mime starts even if the intro chat is closed instead of continued', t => {
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 20);
+  h.hooks['Mysterious Old Man']['Talk-to']({ player: p, npc, handled: false });
+  choose(h, p, 0);
+  endChat(p);
+  h.emit('PlayerProcess', { player: p });
+  assert.ok(p.location.equals(new Location(2008, 4762, 0)));
+  assert.equal(Teleports.sessionOf(p).data.phase, 'demonstrating');
+});
+
+test('Mime turns, performs and bows on the live ticks for each cache animation', t => {
+  const h = harness(t), p = eventPlayer(h);
   const mime = h.api.spawnNpc({ id: N.MIME, x: 2011, y: 4762, z: 0 });
   h.api.getWorld = () => ({ getNpcsNear(location, radius) {
     return location.getDistance(mime.getLocation()) <= radius ? [mime] : [];
   } });
-  // Cache 241 lengths in component order, rounded up from 30 client cycles per game tick.
-  for (const [index, animation, ticks] of [[0,857,4], [1,861,3], [2,1130,6], [3,1131,3],
-    [4,860,3], [5,866,7], [6,1129,6], [7,1128,7]]) {
-    const npc = h.spawn(p, 20);
-    h.random((index + 0.1) / 8);
-    h.hooks['Mysterious Old Man']['Talk-to']({ player: p, npc, handled: false });
-    choose(h, p, 0);
-    assert.ok(p.location.equals(new Location(2008, 4762, 0)), 'arrive on the stage spotlight, opposite the mime');
+  MIME_ANIMATIONS.forEach((animation, index) => {
+    joinMime(h, p, (index + 0.1) / 8);
+    assert.ok(mime.faced.equals(new Location(2011, 4761, 0)), 'turns away first');
+    h.ticks(2);
     assert.equal(mime.animation, animation, 'real stage NPC performs the chosen emote');
-    assert.ok(!p.messages.some(message => /The mime performs:/.test(message)));
-    h.ticks(ticks - 1);
-    assert.notEqual(p.chatboxGroupId, 188, 'prompt stays hidden until the final tick');
+    h.ticks(6);
+    assert.equal(mime.animation, 858, 'bows');
+    assert.ok(mime.faced.equals(new Location(2008, 4762, 0)), 'at the player');
+    h.ticks(1);
+    assert.notEqual(p.chatboxGroupId, 188);
     h.ticks(1);
     assert.equal(p.chatboxGroupId, 188);
     Teleports.finish(Teleports.sessionOf(p));
-  }
+  });
 });
 
 for (const exit of ['depart', 'logout', 'replacement', 'shutdown']) {
-  test(`Mime cancels a pending demonstration on ${exit}`, t => {
-    const h = harness(t), p = h.player(), npc = h.spawn(p, 20);
-    h.hooks['Mysterious Old Man']['Talk-to']({ player: p, npc, handled: false });
-    choose(h, p, 0);
-    const session = Teleports.sessionOf(p);
-    assert.equal(h.tasks.filter(task => task.isRunning()).length, 1, 'demonstration owns a pending completion');
+  test('Mime cancels a pending demonstration on ' + exit, t => {
+    const h = harness(t), p = eventPlayer(h);
+    const session = joinMime(h, p);
+    const { npc } = session.active;
     if (exit === 'depart') Teleports.departed(p, false);
     if (exit === 'logout') h.emit('PlayerLogout', { player: p });
     if (exit === 'shutdown') h.emit('ServerShutdown');
@@ -1524,23 +2414,19 @@ for (const exit of ['depart', 'logout', 'replacement', 'shutdown']) {
 }
 
 test('Mime closes an open answer on departure and cancels the final reward on logout', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 20);
-  h.hooks['Mysterious Old Man']['Talk-to']({ player: p, npc, handled: false });
-  choose(h, p, 0);
-  h.ticks(3);
+  const h = harness(t), p = eventPlayer(h);
+  joinMime(h, p);
+  h.ticks(10);
   assert.equal(p.chatboxGroupId, 188);
   Teleports.departed(p, false);
   assert.equal(p.chatboxGroupId, -1);
 
-  const q = h.player(), invitation = h.spawn(q, 20);
-  h.hooks['Mysterious Old Man']['Talk-to']({ player: q, npc: invitation, handled: false });
-  choose(h, q, 0);
-  const session = Teleports.sessionOf(q);
+  const q = eventPlayer(h);
+  const session = joinMime(h, q);
+  h.ticks(10);
   for (let round = 0; round < 4; round++) {
-    h.ticks(3);
-    const index = MIME_EMOTES.indexOf(session.data.emote.name);
-    h.emit('InterfaceActionClick', { player: q, buttonId: (188 << 16) | (2 + index), action: 1 });
-    if (round < 3) h.ticks(5);
+    clickEmote(h, q, MIME_EMOTES.indexOf(session.data.emote.name));
+    if (round < 3) h.ticks(29);
   }
   assert.equal(session.data.correct, 4);
   h.emit('PlayerLogout', { player: q });
@@ -1550,55 +2436,253 @@ test('Mime closes an open answer on departure and cancels the final reward on lo
   assert.equal(q.chatboxGroupId, -1);
 });
 
-test('Pillory picks the matching key three times, wrong picks add locks', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 21);
+/** Talks to the Pillory Guard and goes quietly, returning the stay in the cage. */
+function arrestPlayer(h, p, npc) {
   h.hooks['Pillory Guard']['Talk-to']({ player: p, npc, handled: false });
-  choose(h, p, 0);
+  accept(h, p);
   const session = Teleports.sessionOf(p);
+  assert.ok(session, 'arrested');
+  h.ticks(1); // The lock opens the tick after he arrives (1108 t16510).
+  return session;
+}
+
+test('Pillory picks the matching key for each lock, wrong picks add a lock and reset', t => {
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 21);
+  const session = arrestPlayer(h, p, npc);
+  assert.equal(p.interfaceId, 27);
   assert.equal(session.data.locks, 3);
+  assert.ok(sentWith(p, 'closeSubInterface', (161 << 16) | 79), 'the inventory tab is closed');
+  assert.ok(sentWith(p, 'sendSubInterface', (162 << 16) | 567, 263, 1), 'the hint is on the chatbox overlay');
+  assert.ok(sentWith(p, 'sendSound', 2275));
+  // Every lock and its key in rsprox 1108, 1840 and 559.
+  const FITS = { 13382: 13396, 13390: 4141, 13393: 11032, 13394: 13395 };
+  assert.equal(p.models.get((27 << 16) | 3), session.data.shape);
+  assert.equal(FITS[session.data.shape], session.data.target);
+  assert.ok(session.data.keys.includes(session.data.target));
   const wrong = session.data.keys.findIndex(key => key !== session.data.target);
   h.emit('InterfaceActionClick', { player: p, buttonId: (27 << 16) | (7 + wrong), action: 1 });
   assert.equal(session.data.locks, 4);
   assert.equal(session.data.opened, 0);
+  assert.equal(p.models.get((27 << 16) | 13), 9757, 'the fourth lock is drawn');
+  assert.deepEqual(p.messages, []);
   for (let pick = 0; pick < 4; pick++) {
     const right = session.data.keys.findIndex(key => key === session.data.target);
     h.emit('InterfaceActionClick', { player: p, buttonId: (27 << 16) | (7 + right), action: 1 });
+    if (pick === 0) assert.equal(p.models.get((27 << 16) | 10), 9758, 'an opened lock shows open');
   }
+  assert.deepEqual(p.messages.slice(0, 3), ["You solved a lock! That's 1 down and 3 to go!",
+    "You solved a lock! That's 2 down and 2 to go!", "You solved a lock! That's 3 down and 1 to go!"]);
+  assert.ok(sentWith(p, 'sendSound', 2274));
+  assert.equal(p.rewards.length, 0, 'the escape waits a tick');
+  h.ticks(1);
+  assert.equal(p.messages[3], "You've escaped!");
   assert.equal(p.rewards.length, 1);
   assert.equal(Teleports.sessionOf(p), undefined);
+  assert.ok(sentWith(p, 'sendTabInterface', 0, 593), 'the tabs come back');
 });
+
+test('Pillory cage door reopens the locks inside the event and refuses outside it', t => {
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 21);
+  const outsider = h.player();
+  h.hooks['object:Cage'].Unlock({ player: outsider, handled: false });
+  assert.equal(outsider.messages.at(-1), "You can't unlock the pillory, you'll let all the criminals out!");
+  arrestPlayer(h, p, npc);
+  p.interfaceId = -1;
+  h.hooks['object:Cage'].Unlock({ player: p, handled: false });
+  assert.equal(p.interfaceId, 27);
+});
+
+test('Pillory Tramp pelts the player with a tomato without hurting them', t => {
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 21);
+  const tramp = { getId: () => 381, getLocation: () => new Location(3228, 3411, 0), forceChat(text) { this.said = text; },
+    performAnimation(animation) { this.animation = animation.getId(); }, performGraphic(graphic) { this.graphic = graphic.id; } };
+  h.npcs.push(tramp);
+  arrestPlayer(h, p, npc);
+  h.ticks(10);
+  assert.equal(tramp.said, 'Take that you thief!');
+  assert.equal(tramp.animation, 385);
+  assert.equal(tramp.graphic, 30);
+  assert.ok(p.sent.some(entry => entry[0] === 'sendProjectile' && entry[5] === 29));
+  assert.equal(p.hp, 10);
+});
+
+test('Pillory Guard refuses with Hmmph and stays put', t => {
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 21);
+  h.hooks['Pillory Guard']['Talk-to']({ player: p, npc, handled: false });
+  choose(h, p, 1);
+  assert.deepEqual(pageTexts(p), ["I'm not coming.", 'Hmmph!']);
+  assert.equal(Teleports.sessionOf(p), undefined);
+});
+
+function joinExam(h, p, random) {
+  const npc = h.spawn(p, 22);
+  h.hooks.Dunce['Talk-to']({ player: p, npc, handled: false });
+  assert.equal(openOptions(h, p).title, 'What would you like to say?');
+  choose(h, p, 0);
+  assert.deepEqual(pageTexts(p), ['Sure, I fancy an exam.']);
+  h.random(random);
+  endChat(p);
+  assert.ok(p.location.equals(new Location(1886, 5025, 0)), 'every capture lands here');
+  assert.ok(p.messages.includes('Answer three out of six questions correctly to succeed.'));
+  assert.equal(pageTexts(p).length, 4);
+  endChat(p);
+  return Teleports.sessionOf(p);
+}
+
+function answerPattern(h, p, session, right) {
+  const { choices, answer } = session.data.pattern;
+  const index = right ? choices.indexOf(answer) : choices.findIndex(model => model !== answer);
+  h.emit('InterfaceActionClick', { player: p, buttonId: (103 << 16) | (15 + index * 2), action: 1 });
+}
+
+const EXAM_DOOR = { getId: () => 9316, getLocation: () => new Location(1881, 5022, 0) };
 
 test('Surprise Exam passes three pattern questions and the door pays the book', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 22);
-  h.hooks.Dunce['Talk-to']({ player: p, npc, handled: false });
-  choose(h, p, 0);
-  const session = Teleports.sessionOf(p);
-  for (let question = 0; question < 3; question++) {
-    const index = session.data.pattern.choices.indexOf(session.data.pattern.answer);
-    h.emit('InterfaceActionClick', { player: p, buttonId: (103 << 16) | (15 + index * 2), action: 1 });
+  const h = harness(t), p = eventPlayer(h);
+  const session = joinExam(h, p, 0.9);
+  assert.equal(p.interfaceId, 103);
+  assert.ok(sentWith(p, 'sendClientScript', 51, (103 << 16) | 10), 'the sequence goes to components 10-12');
+  assert.ok(p.messages.includes('Pick the object that should come next in the pattern.'));
+  for (let question = 0; question < 2; question++) {
+    answerPattern(h, p, session, true);
+    assert.ok(sentWith(p, 'sendSound', 2274));
+    assert.equal(pageTexts(p).at(-1), 'Pick the object that should come next in the pattern.');
+    endChat(p);
   }
+  answerPattern(h, p, session, true);
   assert.equal(session.data.passed, true);
-  h.hooks['object:Door'].Open({ player: p, handled: false,
-    object: { getId: () => 9316, getLocation: () => new Location(1881, 5022, 0) } });
-  assert.ok(p.rewards.includes(I.BOOK_OF_KNOWLEDGE));
+  assert.ok(sentWith(p, 'sendJingle', 269));
+  assert.equal(pageTexts(p).at(-1), 'To exit, use any of the doors in this room.');
+  h.hooks['Mr. Mordaut']['Talk-to']({ player: p, npc: {}, handled: false });
+  assert.deepEqual(pageTexts(p), ['To exit, use any of the doors in this room.']);
+  h.hooks['object:Door'].Open({ player: p, handled: false, object: EXAM_DOOR });
+  assert.deepEqual(p.rewards, [I.BOOK_OF_KNOWLEDGE]);
   assert.equal(Teleports.sessionOf(p), undefined);
 });
 
-test('Surprise Exam fails after three wrong answers and pays nothing at the door', t => {
-  const h = harness(t), p = h.player(), npc = h.spawn(p, 22);
-  h.hooks.Dunce['Talk-to']({ player: p, npc, handled: false });
-  choose(h, p, 0);
-  const session = Teleports.sessionOf(p);
-  for (let wrong = 0; wrong < 3; wrong++) {
-    const index = session.data.pattern.choices.findIndex(item => item !== session.data.pattern.answer);
-    h.emit('InterfaceActionClick', { player: p, buttonId: (103 << 16) | (15 + index * 2), action: 1 });
+test('Surprise Exam owned book: Mordaut says so and the door pays a wiki fallback', t => {
+  const h = harness(t), p = eventPlayer(h);
+  p.slots[0] = new Item(I.BOOK_OF_KNOWLEDGE, 1);
+  const session = joinExam(h, p, 0.9);
+  for (let question = 0; question < 3; question++) {
+    answerPattern(h, p, session, true);
+    if (question < 2) endChat(p);
   }
+  assert.match(pageTexts(p)[1], /^Hmm, you already appear to have a Book of Knowledge\./);
+  h.hooks['object:Door'].Open({ player: p, handled: false, object: EXAM_DOOR });
+  assert.equal(p.rewards.length, 1);
+  assert.notEqual(p.rewards[0], I.BOOK_OF_KNOWLEDGE);
+  assert.notEqual(p.rewards[0], I.LAW_RUNE, 'the wiki list has a cosmic talisman, not a law rune');
+});
+
+test('Surprise Exam repeats a wrong question, fails on the third and pays nothing at the door', t => {
+  const h = harness(t), p = eventPlayer(h);
+  const session = joinExam(h, p, 0.9);
+  const asked = session.data.question;
+  answerPattern(h, p, session, false);
+  assert.match(pageTexts(p)[1], /^Remember, the goal here is to find the pattern\./, 'the hint is only for the first');
+  endChat(p);
+  assert.equal(session.data.question, asked, 'the same question again');
+  answerPattern(h, p, session, false);
+  assert.equal(pageTexts(p).length, 2);
+  endChat(p);
+  answerPattern(h, p, session, false);
   assert.equal(session.data.passed, false);
   assert.equal(session.data.wrong, 3);
-  h.hooks['object:Door'].Open({ player: p, handled: false,
-    object: { getId: () => 9316, getLocation: () => new Location(1881, 5022, 0) } });
+  assert.equal(pageTexts(p)[0], "How unfortunate, you FAILED. You'd better hit the books and study up for next time.");
+  h.hooks['object:Door'].Open({ player: p, handled: false, object: EXAM_DOOR });
   assert.deepEqual(p.rewards, []);
   assert.equal(Teleports.sessionOf(p), undefined);
+});
+
+test('Surprise Exam cards use the live scripts and selection varp, and the door leaves early', t => {
+  const h = harness(t), p = eventPlayer(h);
+  const session = joinExam(h, p, 0.1);
+  assert.equal(p.interfaceId, 559);
+  assert.ok(sentWith(p, 'sendClientScript', 52, (559 << 16) | 21));
+  assert.ok(p.messages.includes('Look at the hint on the right and find three objects related to it.'));
+  const state = session.data.cards;
+  const related = state.related.map(model => state.cards.indexOf(model));
+  h.emit('InterfaceActionClick', { player: p, buttonId: (559 << 16) | 68, action: 1 });
+  assert.equal(session.data.correct, 0, 'confirm needs three cards');
+  let mask = 0;
+  for (const card of related) {
+    h.emit('InterfaceActionClick', { player: p, buttonId: (559 << 16) | (52 + card), action: 1 });
+    mask |= 1 << card;
+    assert.ok(sentWith(p, 'sendConfig', 1037, mask));
+  }
+  h.emit('InterfaceActionClick', { player: p, buttonId: (559 << 16) | 68, action: 1 });
+  assert.equal(session.data.correct, 1);
+  h.hooks['object:Door'].Open({ player: p, handled: false, object: EXAM_DOOR });
+  assert.deepEqual(p.rewards, []);
+  assert.equal(Teleports.sessionOf(p), undefined);
+  assert.equal(p.location.getX(), 3222);
+});
+
+test('invitations share the timeline: Bob mews, refusals come from the transcripts, a decline leaves on the beat', t => {
+  const h = harness(t), tick = (p, n = 1) => { for (let i = 0; i < n; i++) { h.advance(600); h.emit('PlayerProcess', { player: p }); } };
+  const p = eventPlayer(h), other = eventPlayer(h), bob = h.spawn(p, 17);
+  assert.equal(bob.definition.id, N.EVIL_BOB_3);
+  tick(p); assert.match(bob.chat, /^(Mew!|Yowl!|Meeeow!|Meeeeow!)$/);
+  tick(p, 99); assert.equal(bob.chat, 'Meeeeowby laaaater...');
+  h.hooks['Evil Bob']['Talk-to']({ player: other, npc: bob, handled: false });
+  assert.equal(other.dialogue.getDialogues().get(0).constructor.name, 'StatementDialogue');
+  tick(p, 3); assert.equal(bob.removed, true);
+  const cases = [[9, "Capt' Arnav", /Arrr, you're not the person I be needin'\./], [11, 'Quiz Master', /^Sorry, it's Player that's having the lucky day\.$/],
+    [21, 'Pillory Guard', /^I'm here to arrest Player\.$/], [12, 'Sergeant Damien', null], [13, 'Freaky Forester', /^I'm looking for Player\.$/],
+    [14, 'Leo', /^Sorry, I need help from Player\.$/], [15, 'Flippa', /^Nope, you wrong person\.$/], [18, 'Postie Pete', /^Sorry, I don't have any messages for you\.$/],
+    [22, 'Dunce', /^Nope, you're not the one the teacher wanted me to find!$/], [10, 'Bee keeper', /^Sorry, you're not the person I need\.$/]];
+  for (const [kind, name, line] of cases) {
+    const q = eventPlayer(h), stranger = eventPlayer(h), npc = h.spawn(q, kind);
+    assert.equal(npc.chat, undefined, name); tick(q); assert.ok(npc.chat, name);
+    h.hooks[name]['Talk-to']({ player: stranger, npc, handled: false });
+    if (line) assert.match(npcLines(stranger)[0], line, name); else assert.equal(stranger.dialogue, undefined, name);
+    assert.deepEqual(stranger.messages, [], name);
+    h.emit('PlayerLogout', { player: q });
+  }
+});
+
+test('teleport refusal: silent without evidenced text, overhead when the event says so', t => {
+  const h = harness(t), p = eventPlayer(h);
+  h.api.core.Area ??= class {};
+  h.api.core.Boundary ??= class {};
+  const [area] = Teleports.createAreas();
+  const npc = h.spawn(p, 20);
+  h.hooks['Mysterious Old Man']['Talk-to']({ player: p, npc, handled: false });
+  accept(h, p);
+  const stay = Teleports.sessionOf(p);
+  assert.equal(stay.teleportRefusalOverhead, true, 'the mime refuses overhead');
+  p.chat = undefined; p.messages.length = 0;
+  assert.equal(area.canTeleport(p), false);
+  assert.equal(p.chat, 'I need to finish my performance!'); assert.deepEqual(p.messages, []);
+  stay.teleportRefusal = null; p.chat = undefined;
+  assert.equal(area.canTeleport(p), false); assert.equal(p.chat, undefined); assert.deepEqual(p.messages, []);
+});
+
+test('Mystery box members table has 15 slots: clue 2/15 by tier, nothing when that tier is held, rare drop 1/15', t => {
+  const MysteryBox = require('../plugins/npcs/random-events/MysteryBox.RandomEvents');
+  const h = harness(t), p = h.player();
+  let allowed = true, rare = [];
+  h.api.onCustomEvent('treasure-trails:can-receive', request => { request.seen = true; if (!allowed) request.allowed = false; });
+  h.api.onCustomEvent('npc-drops:roll-table', request => { assert.equal(request.table.entries[0].shared_table, 'rareDrop'); request.drops.push(...rare); });
+  const sequence = (...values) => t.mock.method(Math, 'random', () => values.shift() ?? 0);
+  // First roll clears the baguette, second picks the slot, third the clue tier.
+  sequence(0.5, 12.5 / 15, 9.5 / 20); assert.deepEqual(MysteryBox.roll(h.api, p), [{ id: I.CLUE_SCROLL_EASY_, amount: 1, clue: true }]);
+  sequence(0.5, 13.5 / 15, 10.5 / 20); assert.deepEqual(MysteryBox.roll(h.api, p), [{ id: I.CLUE_SCROLL_MEDIUM_, amount: 1, clue: true }]);
+  sequence(0.5, 13.5 / 15, 16.5 / 20); assert.deepEqual(MysteryBox.roll(h.api, p), [{ id: I.CLUE_SCROLL_HARD_, amount: 1, clue: true }]);
+  allowed = false; sequence(0.5, 12.5 / 15, 0); assert.deepEqual(MysteryBox.roll(h.api, p), []);
+  sequence(0.5, 14.5 / 15); assert.deepEqual(MysteryBox.roll(h.api, p), []);
+  rare = [{ itemId: I.COINS, amount: 3000, noted: false }];
+  sequence(0.5, 14.5 / 15); assert.deepEqual(MysteryBox.roll(h.api, p), [{ id: I.COINS, amount: 3000 }]);
+  // Entrana swaps the scimitar and plate for noted bars.
+  p.location = new Location(2830, 3350, 0);
+  const seen = new Set();
+  for (let slot = 0; slot < 12; slot++) { sequence(0.5, (slot + 0.5) / 15); seen.add(MysteryBox.roll(h.api, p)[0].id); }
+  assert.ok(seen.has(2360) && seen.has(2354)); assert.ok(!seen.has(1329) && !seen.has(1119));
+  const f2p = harness(t, false); const fp = f2p.player();
+  const slots = new Set();
+  for (let slot = 0; slot < 6; slot++) { sequence(0.5, (slot + 0.5) / 6); slots.add(MysteryBox.roll(f2p.api, fp)[0].id); }
+  assert.equal(slots.size, 6);
 });
 
 test('Mystery boxes roll the stale baguette first and the world-appropriate table', t => {
@@ -1611,6 +2695,17 @@ test('Mystery boxes roll the stale baguette first and the world-appropriate tabl
   const members = harness(t, true);
   members.random(0.5);
   assert.ok(MysteryBox.roll(members.api)[0].id > 0);
+});
+
+test('Opening a mystery box says what is inside and hands it over through the reward path', t => {
+  const h = harness(t), p = h.player();
+  p.slots[0] = new Item(I.MYSTERY_BOX, 1);
+  h.random(1 / 512);
+  h.hooks['Mystery box'].Open({ player: p });
+  assert.equal(p.slots[0], undefined);
+  assert.deepEqual(p.rewards, [I.STALE_BAGUETTE]);
+  assert.deepEqual(p.messages, ['Inside the box you find a baguette! Make of it what you will.',
+    REWARD(1, `Item ${I.STALE_BAGUETTE}`)]);
 });
 
 test('Book of Knowledge grants 15 times the level and keeps itself when XP is blocked', t => {

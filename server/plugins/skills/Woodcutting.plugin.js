@@ -1104,7 +1104,7 @@ function processWoodcuttingTick(activeSessions, currentTick) {
     }
 
     if (
-      !player.getLocation().isWithinInteractionDistance(activeTree.getLocation())
+      !activeTree.isWithinInteractionDistance(player.getLocation())
     ) {
       stopWoodcutting(activeSessions, player);
       continue;

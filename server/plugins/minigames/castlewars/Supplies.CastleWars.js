@@ -8,6 +8,9 @@ const { boostSkill, restoreSkillToBaseWithFormula } = require("../../items/Consu
 
 const TAKE_FIVE_CLICK = 2;
 const POTION_AREA = "castle-wars";
+const SPELLBOOK_PARAM = 336;
+const LUNAR_SPELLBOOK_INDEX = 2;
+const CASTLE_WARS_POUCH_PARAM = 2259;
 
 let api;
 let core;
@@ -46,10 +49,15 @@ function giveStartingPouch({ player }) {
   giveSupply(player, data.RUNE_POUCH, 1, "Your rune pouch supplies unlimited combat runes during Castle Wars.");
 }
 
-function supplyCombatRunes(event) {
-  if (game.isPlaying(event.player) && event.player.getInventory().contains(data.RUNE_POUCH) && suppliedSpells.get(event.spellbook)?.has(event.spellId)) {
-    event.bypass = true;
-  }
+function supplyRunes(event) {
+  if (!game.isPlaying(event.player) || !event.player.getInventory().contains(data.RUNE_POUCH)) return;
+  if (suppliedSpells.get(event.spellbook)?.has(event.spellId)) { event.bypass = true; return; }
+  if (event.spellbook !== core.MagicSpellbook.LUNAR) return;
+  // Existing spells use either their cache widget id or their spell-item id.
+  const name = core.CacheDefinitions.getSpellName(event.spellId, event.spellId);
+  const spell = name && core.CacheDefinitions.getSpellByName(name);
+  const params = spell && core.CacheDefinitions.getItem(spell.itemId).params;
+  if (params?.get(SPELLBOOK_PARAM) === LUNAR_SPELLBOOK_INDEX && params.get(CASTLE_WARS_POUCH_PARAM) === 1) event.bypass = true;
 }
 
 function noFreeMagicExperience(event) {
@@ -104,7 +112,7 @@ module.exports = function attachCastleWarsSupplies(pluginApi, castleWars) {
   }
   api.onObjectInteraction(takeSupply);
   api.onObjectRoute(routeToTap);
-  api.onSpellRuneBypass(supplyCombatRunes);
+  api.onSpellRuneBypass(supplyRunes);
   api.onCanGainExperience(noFreeMagicExperience);
   api.onServerStartup(registerSupplyPotions);
   api.onCustomEvent("castlewars:started-player", giveStartingPouch);

@@ -1,9 +1,8 @@
 import { Equipment } from "../../model/container/impl/Equipment";
 import type { Player } from "../../entity/impl/player/Player";
-import { FightType } from "./FightType";
+import { COMBAT_STYLE_BY_CATEGORY_ATTRIBUTE, FightType } from "./FightType";
 import { CombatSpecial } from "./CombatSpecial";
 import { Autocasting } from "./magic/Autocasting";
-import { FightStyle } from "./FightStyle";
 import { WeaponInterfaces } from "./WeaponInterfaces";
 
 export class WeaponInterfaceManager {
@@ -11,6 +10,15 @@ export class WeaponInterfaceManager {
 
     /** The combat tab's four style buttons (593:6, 10, 14, 18), the styles' slots 0-3. */
     private static readonly STYLE_BUTTONS = [6, 10, 14, 18];
+
+    /** A category keeps the last style chosen for it; see COMBAT_STYLE_BY_CATEGORY_ATTRIBUTE. */
+    private static rememberStyle(player: Player, fightType: FightType): void {
+        const styles = player.getAttribute(COMBAT_STYLE_BY_CATEGORY_ATTRIBUTE) ?? {};
+        player.setAttribute(COMBAT_STYLE_BY_CATEGORY_ATTRIBUTE, {
+            ...styles,
+            [player.getWeapon().getCategory()]: fightType.getChildId(),
+        });
+    }
 
     /** A style button clicked on the combat tab (the click is the server's to answer, as live). */
     public static handleStyleButton(player: Player, groupId: number, childId: number): boolean {
@@ -26,6 +34,7 @@ export class WeaponInterfaceManager {
         if (!fightType) return false;
         Autocasting.clearForStyle(player);
         player.setFightType(fightType);
+        WeaponInterfaceManager.rememberStyle(player, fightType);
         player.getPacketSender().sendConfig(fightType.getParentId(), fightType.getChildId());
         Autocasting.refreshIndicators(player);
         return true;
@@ -74,11 +83,13 @@ export class WeaponInterfaceManager {
             (type): type is FightType => type instanceof FightType
         );
 
+        const rememberedSlot = player.getAttribute(COMBAT_STYLE_BY_CATEGORY_ATTRIBUTE)?.[weapon.getCategory()];
         const currentFightType = FightType.resolve(player.getFightType());
-        const fightType = availableFightTypes.find(type => type === currentFightType)
-            ?? availableFightTypes.find(type => type.getStyle() === FightStyle.AGGRESSIVE)
-            ?? availableFightTypes[0];
+        const fightType = availableFightTypes.find(type => type.getChildId() === rememberedSlot)
+            ?? availableFightTypes.find(type => rememberedSlot === undefined && type === currentFightType)
+            ?? availableFightTypes.reduce((first, type) => type.getChildId() < first.getChildId() ? type : first);
         player.setFightType(fightType);
+        WeaponInterfaceManager.rememberStyle(player, fightType);
         player.getPacketSender().sendConfig(fightType.getParentId(), fightType.getChildId());
         // Covers unequip, bank equipment deposits, login and depleted thrown weapons.
         Autocasting.refreshIndicators(player);

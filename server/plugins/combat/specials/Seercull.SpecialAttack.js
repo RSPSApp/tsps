@@ -1,6 +1,6 @@
 // TODO: Soulshot special attack animation/graphic ids not found; skipped.
 function buildSpecial(core) {
-  const { CombatSpecial, Equipment, ItemIdentifiers, Misc, PendingHit, RangedCombatMethod, Skill, WeaponProfiles } = core;
+  const { CombatSpecial, Equipment, ItemIdentifiers, Misc, PendingHit, RangedCombatMethod, Skill, Sound, WeaponProfiles } = core;
 
   const DRAIN = 100;
   const RANGED_STRENGTH_BONUS_INDEX = 11;
@@ -44,6 +44,10 @@ function buildSpecial(core) {
     start(character, target) {
       CombatSpecial.drain(character, DRAIN);
       super.start(character, target);
+    }
+
+    fireSound() {
+      return Sound.SEERCULL_SPECIAL;
     }
 
     handleAfterHitEffects(hit) {

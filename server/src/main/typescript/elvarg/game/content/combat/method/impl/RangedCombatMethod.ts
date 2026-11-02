@@ -20,6 +20,11 @@ export class RangedCombatMethod extends CombatMethod {
         return CombatType.RANGED;
     }
 
+    /** A special attack's own launch sound; the weapon/ammunition sound is used when unset. */
+    protected fireSound(_character: Mobile): Sound | undefined {
+        return undefined;
+    }
+
     hits(character: Mobile, target: Mobile): PendingHit[] {
         const distance = CombatPosition.distance(character, target);
         const delays = character.isPlayer() ? WeaponProfiles.hitDelays(character.getAsPlayer(), distance) : [1];
@@ -91,7 +96,7 @@ export class RangedCombatMethod extends CombatMethod {
             if (projectile.progress != null) shot.withProgress(projectile.progress);
             shot.sendProjectile();
         }
-        Sounds.sendSound(character, profile?.fireSound ?? Sound.SHOOT_ARROW);
+        Sounds.sendSound(character, this.fireSound(character) ?? profile?.fireSound ?? Sound.SHOOT_ARROW);
 
         if (character.isPlayer()) {
             // The shot's ammo is consumed when its hit lands, like the hitsplat.

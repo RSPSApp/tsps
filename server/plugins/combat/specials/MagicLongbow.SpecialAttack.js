@@ -1,6 +1,6 @@
 // TODO: Powershot special attack animation/graphic ids not found; skipped.
 module.exports = function registerMagicLongbowSpecialAttack(api) {
-  const { CombatSpecial, Equipment, ItemIdentifiers, Misc, PendingHit, RangedCombatMethod, Skill, WeaponProfiles } = api.core;
+  const { CombatSpecial, Equipment, ItemIdentifiers, Misc, PendingHit, RangedCombatMethod, Skill, Sound, WeaponProfiles } = api.core;
 
   const DRAIN = 35;
   const RANGED_STRENGTH_BONUS_INDEX = 11;
@@ -46,6 +46,10 @@ module.exports = function registerMagicLongbowSpecialAttack(api) {
     start(character, target) {
       CombatSpecial.drain(character, DRAIN);
       super.start(character, target);
+    }
+
+    fireSound() {
+      return Sound.MAGIC_LONGBOW_SPECIAL;
     }
   }
 

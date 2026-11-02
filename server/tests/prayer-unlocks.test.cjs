@@ -1,0 +1,326 @@
+// Run after `yarn build`: node --test tests/prayer-unlocks.test.cjs
+const assert = require("node:assert/strict");
+const { test } = require("node:test");
+
+const { Server } = require("../dist/Server");
+Server.installProductionPathResolver();
+
+const { PrayerData } = require("../dist/game/content/PrayerHandler");
+const { ItemIds } = require("../dist/util/IdEnums");
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { Skill } = require("../dist/game/model/Skill");
+
+const plugin = require("../plugins/skills/PrayerUnlocks.plugin");
+
+let loginHook = null;
+let prayerDisabledHook = null;
+const customEventHooks = new Map();
+const itemActions = new Map();
+let defaultAttributes = [];
+let prompt = null;
+let bypassHook = null;
+
+plugin.register({
+  core: { PrayerData, ItemIdentifiers: ItemIds },
+  persistAttribute(key, value) { defaultAttributes.push([key, value]); },
+  onPlayerLogin(handler) { loginHook = handler; },
+  onPrayerDisabled(handler) { prayerDisabledHook = handler; },
+  onCustomEvent(name, handler) { customEventHooks.set(name, handler); },
+  onItemAction(name, actions) { itemActions.set(name, actions); },
+  emitCustomEvent(name, event) { if (name === "prayer:unlocks-bypass" && bypassHook) bypassHook(event); },
+  sendMultiChatboxPrompt(player, title, ...pairs) {
+    prompt = { player, title, options: [] };
+    for (let i = 0; i < pairs.length; i += 2) {
+      prompt.options.push({ text: pairs[i], callback: pairs[i + 1] });
+    }
+    return true;
+  },
+});
+
+function player({ attributes = {}, items = [] } = {}) {
+  const attrs = new Map(Object.entries(attributes));
+  const varbits = [];
+  const messages = [];
+  const inventory = items.slice();
+  return {
+    attrs,
+    varbits,
+    messages,
+    inventory,
+    getAttribute: (key) => attrs.get(key),
+    setAttribute: (key, value) => attrs.set(key, value),
+    getInventory: () => ({
+      contains: (id) => inventory.includes(id),
+      deleteNumber(id) {
+        const index = inventory.indexOf(id);
+        if (index !== -1) inventory.splice(index, 1);
+      },
+    }),
+    getPacketSender: () => ({ sendVarbit: (id, value) => varbits.push([id, value]) }),
+    busy: () => false,
+    sendMessage: (text) => messages.push(text),
+  };
+}
+
+function denied(prayer, p) {
+  const event = { player: p, prayer: PrayerData[prayer] };
+  prayerDisabledHook(event);
+  return event;
+}
+
+/**
+ * A real Player/SkillManager with the packet sender recorded, so the test proves
+ * the native refresh paths no longer write the prayer-tab unlock varbits.
+ */
+function nativePlayer(t) {
+  const player = new Player(null);
+  const varbits = [];
+  const sender = new Proxy({}, {
+    get: (_target, name) => (...args) => {
+      if (name === "sendVarbit") varbits.push([args[0], args[1]]);
+      return sender;
+    },
+  });
+  t.mock.method(player, "getPacketSender", () => sender);
+  t.mock.method(player, "sendMessage", () => {});
+  player.setRegistered(true);
+  player.getSkillManager().setMaxLevel(Skill.PRAYER, 99, false);
+  player.getSkillManager().setMaxLevel(Skill.DEFENCE, 99, false);
+  player.getSkillManager().setCurrentLevel(Skill.PRAYER, 99, false);
+  return { player, varbits };
+}
+
+function read(name, p, itemId) {
+  const action = itemActions.get(name)?.Read;
+  assert.ok(action, `${name} has a Read action`);
+  assert.equal(action({ player: p, itemId }), true);
+}
+
+test("the five prayers are locked until their own unlock is earned", () => {
+  const p = player();
+  for (const prayer of ["CHIVALRY", "PIETY", "RIGOUR", "AUGURY", "PRESERVE"]) {
+    assert.equal(denied(prayer, p).disabled, true, prayer);
+  }
+});
+
+test("player bots keep the prayers their loadouts assume", () => {
+  const bot = player();
+  bot.isPlayerBot = () => true;
+  for (const prayer of ["CHIVALRY", "PIETY", "RIGOUR", "AUGURY", "PRESERVE"]) {
+    assert.notEqual(denied(prayer, bot).disabled, true, prayer);
+  }
+});
+
+test("a minigame that hands out the prayers can bypass the unlock", () => {
+  const p = player();
+  assert.equal(denied("RIGOUR", p).disabled, true);
+  bypassHook = (event) => { event.bypass = true; };
+  try {
+    assert.notEqual(denied("RIGOUR", p).disabled, true);
+    assert.notEqual(denied("CHIVALRY", p).disabled, true);
+  } finally {
+    bypassHook = null;
+  }
+});
+
+test("Chivalry and Piety need King's Ransom, not just Prayer and Defence", () => {
+  const locked = player({ attributes: { "quest.kings_ransom.stage": 80 } });
+  assert.equal(denied("CHIVALRY", locked).disabled, true);
+  assert.equal(denied("PIETY", locked).disabled, true);
+  assert.equal(denied("PIETY", locked).message, "Complete King's Ransom to unlock Piety.");
+
+  const complete = player({ attributes: { "quest.kings_ransom.stage": 85 } });
+  assert.notEqual(denied("CHIVALRY", complete).disabled, true);
+  assert.notEqual(denied("PIETY", complete).disabled, true);
+});
+
+test("reading a dexterous scroll unlocks Rigour, consumes it and syncs the varbit", () => {
+  const p = player({ items: [ItemIds.DEXTEROUS_PRAYER_SCROLL, ItemIds.SHARK] });
+  read("Dexterous prayer scroll", p, ItemIds.DEXTEROUS_PRAYER_SCROLL);
+
+  assert.match(prompt.title, /archaic invocation of the gods/);
+  const learn = prompt.options.find((option) => option.text === "Learn Rigour");
+  assert.ok(learn);
+  assert.equal(denied("RIGOUR", p).disabled, true, "not unlocked until the prompt is answered");
+
+  learn.callback(p);
+  assert.equal(p.getAttribute("prayer:rigour-unlocked"), true);
+  assert.deepEqual(p.inventory, [ItemIds.SHARK], "the scroll is consumed");
+  assert.deepEqual(p.varbits, [[5451, 1]]);
+  assert.deepEqual(p.messages, ["You study the scroll and learn a new prayer: Rigour"]);
+  assert.notEqual(denied("RIGOUR", p).disabled, true);
+});
+
+test("the arcane and torn scrolls unlock Augury and Preserve", () => {
+  for (const [name, item, attribute, varbit, prayer] of [
+    ["Arcane prayer scroll", ItemIds.ARCANE_PRAYER_SCROLL, "prayer:augury-unlocked", 5452, "AUGURY"],
+    ["Torn prayer scroll", ItemIds.TORN_PRAYER_SCROLL, "prayer:preserve-unlocked", 5453, "PRESERVE"],
+  ]) {
+    const p = player({ items: [item] });
+    read(name, p, item);
+    prompt.options.find((option) => option.text.startsWith("Learn ")).callback(p);
+    assert.equal(p.getAttribute(attribute), true, name);
+    assert.deepEqual(p.varbits, [[varbit, 1]], name);
+    assert.notEqual(denied(prayer, p).disabled, true, name);
+  }
+});
+
+test("the admin unlock event sets the attribute and syncs the varbit", () => {
+  const p = player();
+  customEventHooks.get("prayer:unlock")({ player: p, prayer: PrayerData.RIGOUR });
+  assert.equal(p.getAttribute("prayer:rigour-unlocked"), true);
+  assert.deepEqual(p.varbits, [[5451, 1]]);
+  assert.notEqual(denied("RIGOUR", p).disabled, true);
+});
+
+/** Registers the real PvP-mode plugin and returns its prayer:unlocks-bypass handler. */
+function registerPvpMode() {
+  const pvpMode = require("../plugins/modes/PvpMode.plugin");
+  let bypass = null;
+  pvpMode.register({
+    getTaskManager: () => ({}),
+    registerCommand() {},
+    onPlayerDefeated() {},
+    onCustomEvent(name, handler) { if (name === "prayer:unlocks-bypass") bypass = handler; },
+    persistAttribute() {},
+    registerCustomInterface() {},
+    onCanBankItem() {},
+    onInterfaceActionButton() {},
+  });
+  assert.ok(bypass, "PvP mode listens for prayer:unlocks-bypass");
+  return bypass;
+}
+
+test("PvP mode answers the unlock bypass, so presets keep their prayers", () => {
+  const bypass = registerPvpMode();
+  const event = { player: player(), prayer: PrayerData.PIETY, bypass: false };
+  bypass(event);
+  assert.equal(event.bypass, true);
+});
+
+test("a PvP-mode login shows the preset prayers unlocked without persisting the bypass", (t) => {
+  bypassHook = registerPvpMode();
+  try {
+    const { player: p, varbits } = nativePlayer(t);
+    loginHook({ player: p });
+
+    assert.deepEqual(varbits, [[3909, 8], [5453, 1], [5451, 1], [5452, 1]],
+      "the client is told every prayer is usable, as PrayerHandler already says");
+    assert.equal(p.getAttribute("prayer:rigour-unlocked"), undefined, "the bypass is not persisted");
+    assert.equal(p.getAttribute("prayer:preserve-unlocked"), undefined);
+    assert.notEqual(denied("RIGOUR", p).disabled, true);
+    assert.notEqual(denied("CHIVALRY", p).disabled, true);
+
+    // A preset load or an ordinary Prayer refresh must not overwrite the client state.
+    varbits.length = 0;
+    p.getSkillManager().updateSkill(Skill.PRAYER);
+    p.getSkillManager().setCurrentLevel(Skill.PRAYER, 98, true);
+    assert.deepEqual(varbits, [], "ordinary refreshes leave the unlock varbits alone");
+  } finally {
+    bypassHook = null;
+  }
+});
+
+test("a sync request re-sends the effective unlocks, bypass included", () => {
+  const p = player();
+  customEventHooks.get("prayer:sync-unlocks")({ player: p });
+  assert.deepEqual(p.varbits, [[3909, 0], [5453, 0], [5451, 0], [5452, 0]],
+    "without a bypass or progress everything stays locked");
+  assert.equal(p.attrs.size, 0);
+
+  bypassHook = registerPvpMode();
+  try {
+    p.varbits.length = 0;
+    customEventHooks.get("prayer:sync-unlocks")({ player: p });
+    assert.deepEqual(p.varbits, [[3909, 8], [5453, 1], [5451, 1], [5452, 1]]);
+    assert.equal(p.attrs.size, 0, "the bypass never writes the earned attributes");
+  } finally {
+    bypassHook = null;
+  }
+});
+
+test("a scroll does not open its prompt while the player is busy", () => {
+  prompt = null;
+  const p = player({ items: [ItemIds.DEXTEROUS_PRAYER_SCROLL] });
+  p.busy = () => true;
+  assert.equal(itemActions.get("Dexterous prayer scroll").Read({ player: p, itemId: ItemIds.DEXTEROUS_PRAYER_SCROLL }), true);
+  assert.equal(prompt, null, "no prompt");
+  assert.deepEqual(p.messages, ["You cannot do that right now."]);
+  assert.deepEqual(p.inventory, [ItemIds.DEXTEROUS_PRAYER_SCROLL], "the scroll stays");
+});
+
+test("a learned scroll is not consumed again", () => {
+  prompt = null;
+  const p = player({ attributes: { "prayer:preserve-unlocked": true }, items: [ItemIds.TORN_PRAYER_SCROLL] });
+  read("Torn prayer scroll", p, ItemIds.TORN_PRAYER_SCROLL);
+  assert.equal(prompt, null, "no prompt");
+  assert.equal(p.inventory.length, 1, "the scroll stays");
+  assert.match(p.messages.at(-1), /nothing more for you to learn/);
+});
+
+test("logging in sends the unlock varbits, including the Knight Waves state", () => {
+  const p = player({
+    attributes: {
+      "prayer:rigour-unlocked": true, "prayer:augury-unlocked": false,
+      "quest.kings_ransom.stage": 85,
+    },
+  });
+  loginHook({ player: p });
+  assert.deepEqual(p.varbits, [[3909, 8], [5453, 0], [5451, 1], [5452, 0]]);
+});
+
+test("King's Ransom completion reveals Chivalry and Piety to the client", () => {
+  const p = player();
+  const stageChanged = customEventHooks.get("quest:stage-changed");
+  assert.ok(stageChanged, "the plugin follows King's Ransom's stage");
+
+  // QuestRuntime saves the stage before emitting the event.
+  p.setAttribute("quest.kings_ransom.stage", 84);
+  stageChanged({ player: p, key: "kings_ransom", stage: 84 });
+  assert.deepEqual(p.varbits, [[3909, 0]], "still in progress");
+
+  p.setAttribute("quest.kings_ransom.stage", 85);
+  stageChanged({ player: p, key: "kings_ransom", stage: 85 });
+  assert.deepEqual(p.varbits, [[3909, 0], [3909, 8]], "complete");
+
+  stageChanged({ player: p, key: "cooks_assistant", stage: 85 });
+  assert.equal(p.varbits.length, 2, "another quest's stage is ignored");
+});
+
+test("a native Prayer login refresh and drain keep a player without scrolls locked", (t) => {
+  const { player: p, varbits } = nativePlayer(t);
+  loginHook({ player: p });
+  assert.deepEqual(varbits, [[3909, 0], [5453, 0], [5451, 0], [5452, 0]]);
+
+  varbits.length = 0;
+  // Player.onLogin, a level-up and the prayer-point drain all call these.
+  p.getSkillManager().updateSkill(Skill.PRAYER);
+  p.getSkillManager().updateSkill(Skill.DEFENCE);
+  p.getSkillManager().setCurrentLevel(Skill.PRAYER, 98, true);
+
+  assert.deepEqual(varbits, [], "core no longer writes the unlock varbits");
+  assert.equal(denied("RIGOUR", p).disabled, true, "the server still denies Rigour");
+  assert.equal(denied("CHIVALRY", p).disabled, true, "and Chivalry");
+});
+
+test("a native Prayer refresh and drain cannot wipe an earned scroll unlock", (t) => {
+  const { player: p, varbits } = nativePlayer(t);
+  p.setAttribute("prayer:rigour-unlocked", true);
+  loginHook({ player: p });
+  assert.deepEqual(varbits, [[3909, 0], [5453, 0], [5451, 1], [5452, 0]]);
+
+  varbits.length = 0;
+  p.getSkillManager().updateSkill(Skill.PRAYER);
+  p.getSkillManager().setCurrentLevel(Skill.PRAYER, 50, true);
+
+  assert.deepEqual(varbits, [], "the earned unlock is not overwritten");
+  assert.notEqual(denied("RIGOUR", p).disabled, true);
+});
+
+test("the plugin starts every unlock locked", () => {
+  assert.deepEqual(defaultAttributes, [
+    ["prayer:preserve-unlocked", false],
+    ["prayer:rigour-unlocked", false],
+    ["prayer:augury-unlocked", false],
+  ]);
+});

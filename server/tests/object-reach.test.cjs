@@ -729,3 +729,29 @@ test('an inventory item action cancels the queued object op but keeps the walk',
   assert.equal(location.y, 99, 'the player walks on to the clicked object');
   assert.equal(events.includes('op'), false, 'the queued object op never runs');
 });
+
+test('a skilling loc keeps its action going from any side of its footprint (5x5 essence rock)', () => {
+  const originalForId = ObjectDefinition.forId;
+  ObjectDefinition.forId = () => ({ getSizeX: () => 5, getSizeY: () => 5 });
+  try {
+    // The north-west Rune Essence rock: south-west corner 2891,4847 (#1706).
+    const rock = new GameObject(34773, new Location(2891, 4847, 0), 10, 3, null);
+    assert.equal(rock.footprintDistance(new Location(2896, 4849, 0)), 1, 'east side');
+    assert.equal(rock.footprintDistance(new Location(2893, 4852, 0)), 1, 'north side');
+    assert.equal(rock.footprintDistance(new Location(2893, 4849, 0)), 0, 'inside');
+    assert.equal(rock.isWithinInteractionDistance(new Location(2896, 4849, 0)), true);
+    assert.equal(rock.isWithinInteractionDistance(new Location(2899, 4849, 0)), false);
+    assert.equal(rock.isWithinInteractionDistance(new Location(2896, 4849, 1)), false, 'another plane');
+  } finally {
+    ObjectDefinition.forId = originalForId;
+  }
+  const originalSizes = ObjectDefinition.forId;
+  ObjectDefinition.forId = () => ({ getSizeX: () => 1, getSizeY: () => 3 });
+  try {
+    const turned = new GameObject(1, new Location(100, 100, 0), 10, 1, null);
+    assert.equal(turned.footprintDistance(new Location(103, 100, 0)), 1, 'a quarter turn lays a 1x3 loc along x');
+    assert.equal(turned.footprintDistance(new Location(100, 102, 0)), 2);
+  } finally {
+    ObjectDefinition.forId = originalSizes;
+  }
+});

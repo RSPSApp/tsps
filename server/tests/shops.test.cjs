@@ -212,6 +212,23 @@ test("a sale whose payment wouldn't fit is refused, unless selling frees the slo
   assert.equal(player.getInventory().getAmount(COINS), 5 * Math.floor(200 * 0.85));
 });
 
+test("a specialist shop buys an item it lists at 0 stock, which then depletes back to 0", () => {
+  loadShops(0);
+  const player = createPlayer();
+  ShopManager.open(player, AXE_SHOP);
+  assert.deepEqual(stockOf(), [[BRONZE_AXE, 2], [STEEL_AXE, 0]]);
+  for (let tick = 0; tick < 200; tick++) ShopManager.restockAll();
+  assert.deepEqual(stockOf(), [[BRONZE_AXE, 2], [STEEL_AXE, 0]], "no restock above a base of 0");
+
+  player.getInventory().add(new Item(STEEL_AXE, 1), false);
+  sell(player, 0);
+  assert.equal(player.getInventory().getAmount(COINS), Math.floor(200 * 0.85));
+  assert.deepEqual(stockOf(), [[BRONZE_AXE, 2], [STEEL_AXE, 1]]);
+
+  for (let tick = 0; tick < 100; tick++) ShopManager.restockAll();
+  assert.deepEqual(stockOf(), [[BRONZE_AXE, 2], [STEEL_AXE, 0]], "keeps its slot once depleted");
+});
+
 test("every general store buys items it doesn't stock and restocks its own", () => {
   const player = openShop(10000, GENERAL_STORE);
   player.getInventory().add(new Item(STEEL_AXE, 1), false);
@@ -265,6 +282,38 @@ test("a currency with a unit uses OSRS's wording: costs, buy-back and too few", 
   ]);
 });
 
+
+test("Baba Yaga's Trade opens her post-Lunar Diplomacy shop", () => {
+  const shops = require("../data/definitions/shops.json");
+  const BabaYaga = require("../plugins/npcs/BabaYaga.plugin");
+  const opened = [];
+  let actions;
+  BabaYaga.register({
+    core: { ShopManager: { open: (...args) => opened.push(args) } },
+    onNpcInteraction: (name, handlers) => { if (name === "Baba Yaga") actions = handlers; },
+  });
+  const player = {};
+  actions.Trade({ player });
+  assert.equal(opened[0][0], player);
+  assert.match(shops.find(({ id }) => id === opened[0][1]).name, /^Baba Yaga's Magic Shop\. \(After Lunar Diplomacy\)$/);
+});
+
+test("a custom shop's npcInteractions bind its NPC, over shops.json on the same option", (t) => {
+  const fs = require("node:fs");
+  const { shopkeepers } = require("../plugins/npcs/Shopkeepers.plugin");
+  const trader = (id, npcId, optionSlot) => ({ id, npcInteractions: [{ npcIds: [npcId], optionSlot }] });
+  const files = {
+    "shops.json": [trader(100, 1, 3), trader(101, 2, 3), trader(102, 2, 3), trader(103, 3, 3)],
+    "custom-shops.json": [trader(7, 3, 3), trader(8, 4, 1), trader(9, 5, 9), { id: 10, originalStock: [] }],
+  };
+  const readFileSync = fs.readFileSync;
+  t.mock.method(fs, "readFileSync", (file, ...args) => {
+    const name = Object.keys(files).find((candidate) => String(file).endsWith(`/${candidate}`));
+    return name ? JSON.stringify(files[name]) : readFileSync(file, ...args);
+  });
+  assert.deepEqual([...shopkeepers()], [["1:3", 100], ["2:3", null], ["3:3", 7], ["4:1", 8]],
+    "shops.json keeps its bindings and ambiguity; custom shops add theirs; an out-of-range slot is ignored");
+});
 
 const CustomShops = require("../plugins/interface/CustomShops.plugin");
 const CUSTOM_GROUP = 30009;

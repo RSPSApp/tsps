@@ -1,6 +1,5 @@
 const { GameConstants } = require("../../../src/main/typescript/elvarg/game/GameConstants");
 const { CacheDefinitions } = require("../../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
-const { PrayerData, PrayerHandler } = require("../../../src/main/typescript/elvarg/game/content/PrayerHandler");
 const { SkillManager } = require("../../../src/main/typescript/elvarg/game/content/skill/SkillManager");
 const { CombatSpecial } = require("../../../src/main/typescript/elvarg/game/content/combat/CombatSpecial");
 const { CombatSpells } = require("../../../src/main/typescript/elvarg/game/content/combat/magic/CombatSpells");
@@ -419,16 +418,7 @@ function presetCombatLevel(preset) {
   if (stats.length < 7) {
     return null;
   }
-  const [attack, defence, strength, hp, ranged, prayer, magic] = stats.map((level) =>
-    Math.max(1, Math.floor(Number(level) || 1))
-  );
-  const base = Math.floor((defence + hp + Math.floor(prayer / 2)) * 0.2535) + 1;
-  const level = base + Math.max(
-    (attack + strength) * 0.325,
-    Math.floor(ranged * 1.5) * 0.325,
-    Math.floor(magic * 1.5) * 0.325
-  );
-  return Math.min(126, Math.max(3, Math.floor(level)));
+  return presetWearer(preset).getSkillManager().getCombatLevel();
 }
 
 function renderPresetLists(player) {
@@ -571,6 +561,16 @@ function applyPreset(player, preset) {
     sender.sendMessage("You can't load a preset in the wilderness!");
     return false;
   }
+  // Inventory weapons must follow the same rules when the player switches gear later.
+  for (const item of [...(preset.getEquipment() ?? []), ...(preset.getInventory() ?? [])]) {
+    if (!isValidItem(item) || equipmentSlotOf(item.getId()) < 0) continue;
+    const request = { player, item, allow: true, messages: [] };
+    pluginApi?.emitCustomEvent?.("quest:can-equip", request);
+    if (!request.allow) {
+      for (const message of request.messages) sender.sendMessage(message);
+      return false;
+    }
+  }
   // Validate a custom preset's real-item requirements up front, before anything is
   // banked or cleared, so a preset you cannot yet afford is a no-op instead of a wipe.
   const nonSpawnableRequirements = [];
@@ -667,9 +667,6 @@ function applyPreset(player, preset) {
   }
 
   sender.sendTabInterface(6, player.getSpellbook().getInterfaceId());
-  sender.sendConfig(709, PrayerHandler.canUse(player, PrayerData.PRESERVE, false) ? 1 : 0);
-  sender.sendConfig(711, PrayerHandler.canUse(player, PrayerData.RIGOUR, false) ? 1 : 0);
-  sender.sendConfig(713, PrayerHandler.canUse(player, PrayerData.AUGURY, false) ? 1 : 0);
 
   player.resetAttributes();
   sender.sendMessage("Preset loaded!");

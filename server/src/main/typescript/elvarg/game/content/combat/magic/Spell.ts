@@ -46,6 +46,19 @@ export abstract class Spell {
     abstract startCast(cast: Mobile, castOn: Mobile): void
     abstract baseExperience();
 
+    /**
+     * Whether the spell accepts this target. Combat spells override it; utility spells (Telekinetic
+     * Grab on the Theatre's guardian) cast on scripted NPCs by default.
+     */
+    public canCastOnTarget(cast: Mobile, target: Mobile): boolean {
+        return true;
+    }
+
+    /** The sound played on an accepted scripted cast; combat spells override it. */
+    public castSound(): any {
+        return null;
+    }
+
     /** Members-only on the standard spellbook; free-to-play worlds disable it (other books are all members). */
     public members = false;
 

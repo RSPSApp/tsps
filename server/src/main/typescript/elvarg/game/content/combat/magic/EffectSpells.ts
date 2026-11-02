@@ -135,7 +135,7 @@ export class EffectSpells extends Spell {
     public static TELEKINETIC_GRAB = new EffectSpells(
         () => { return 1168; },
         () => { return 33; },
-        () => { return 3988; },
+        () => { return 43; },
         () => { return [new Item(563), new Item(556)]; },
         () => { return null; },
         () => { }

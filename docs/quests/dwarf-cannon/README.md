@@ -22,6 +22,16 @@ checked too. The cannon's repair order and the `travel_to` no-route issue are st
 
 Newest first.
 
+- **open** Railing repair (#1699) now follows the Wiki transcript variant
+  `fixing-the-railings-trying-to-fix-a-railing`: "You attempt to repalce the broken
+  railing..." (the transcript's spelling), seq 4190 `mcannon_hammer_anim` for its 5 ticks, then
+  a random success ("This railing is now fixed.") or failure (one of the four messages, 0-2
+  damage, an overhead cry). rsprox captures: none. The animation, its timing and the 50%
+  success chance are unverified.
+- **fixed** The watchtower's Dwarf remains (loc id 0, `mcannonremains_multiloc`) never showed:
+  the client treated loc id 0 as "no loc". Overrides now mark a removal with their own value.
+  Take plays the transcript's "I had better take these remains." Covered by client unit tests,
+  not yet checked in game.
 - **open** `travel_to` returned `no-route` twice right after the goblin-side log balance
   (around 2598–2601, 3477), and it did not recover on the next call. Walking the planner's
   waypoints with `walk_to` got through. Not a quest bug; recorded for the travel tool.

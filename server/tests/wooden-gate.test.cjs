@@ -162,6 +162,13 @@ test('shared wall-door reach masks cover every operation and preserve other obje
     for (const shape of [2, 4, 9, 10, 11, 22]) {
       assert.equal(route({ shape }).blockAccessFlags, 0, `shape ${shape} retains its existing reach geometry`);
     }
+    const openLeaf = {
+      object: new GameObject(1544, new Location(3128, 3247, 0), 0, 2, null),
+      sourceLocation: { x: 3128, y: 3245, z: 0 }, clickType: 1, blockAccessFlags: 0, destination: null,
+      definition: { getName: () => 'Door', getInteractions: () => ['Close', null, null, null, null] },
+    };
+    h.routes[0](openLeaf);
+    assert.equal(openLeaf.blockAccessFlags, 0, 'an open leaf is closed from the doorway tile at its end (#1706)');
     const questRoute = { x: 300, y: 400, z: 1 };
     assert.equal(route({ destination: questRoute }).destination, questRoute, 'explicit plugin destinations remain intact');
     assert.equal(route({ blockAccessFlags: 0xa }).blockAccessFlags, 0xf, 'the door mask retains prior access restrictions');
@@ -1540,6 +1547,46 @@ test('the Tutorial Island survival gate swings open and closes back to its own p
   }
 });
 
+test('the Castle Wars central trapdoors open into climbable models on the same tiles', async () => {
+  await initializeMapCollisionOnce();
+  RegionManager.loadMapFiles(2399, 3099);
+  const ids = [1579, 1580, 1581, 1582];
+  const definitions = new Map(ids.map(id => [id, CacheDefinitions.getObject(id)]));
+  assert.deepEqual(definitions.get(1579).actions.filter(Boolean), ['Open']);
+  assert.deepEqual(definitions.get(1581).actions.filter(Boolean), ['Climb-down', 'Close']);
+  const traps = [[2399, 3099, 3], [2400, 3108, 1]].map(([x, y, face]) => {
+    const object = MapObjects.getType(new Location(x, y, 0), 22, null);
+    assert.equal(object.getId(), 1579, `the actual cache map trapdoor at ${x},${y}`);
+    assert.equal(object.getFace(), face);
+    return object;
+  });
+  const h = buildHarness({ cacheObjects: definitions, realMapObjects: true });
+  try {
+    for (const object of traps) {
+      const { x, y } = object.getLocation();
+      const face = object.getFace();
+      assert.deepEqual(h.click(1579, x, y, face, 'Open', 'Trapdoor', 22), [
+        ['deregister', 1579, x, y, face],
+        ['register', 1581, x, y, face],
+      ], 'opening preserves the floor decoration tile and orientation');
+      assert.deepEqual(h.click(1581, x, y, face, 'Close', 'Trapdoor', 22), [
+        ['deregister', 1581, x, y, face],
+        ['register', 1579, x, y, face],
+      ], 'Close restores the original cached trapdoor');
+    }
+    for (const [closed, opened] of [[1579, 1581], [1580, 1582]]) {
+      for (let face = 0; face < 4; face++) {
+        assert.deepEqual(h.click(closed, 100, 100, face, 'Open', 'Trapdoor', 22), [
+          ['deregister', closed, 100, 100, face], ['register', opened, 100, 100, face],
+        ], 'both cache variants preserve every floor-decoration rotation');
+        assert.deepEqual(h.click(opened, 100, 100, face, 'Close', 'Trapdoor', 22), [
+          ['deregister', opened, 100, 100, face], ['register', closed, 100, 100, face],
+        ]);
+      }
+    }
+  } finally { h.restore(); }
+});
+
 test('the Gnome Ball pitch gate 2394 rotates in place and closes back onto its wall', () => {
   const h = buildHarness();
   try {
@@ -1791,6 +1838,50 @@ test('Varrock doors open across the actionless loc before their Close variant (1
     assert.deepEqual(h.click(11780, 3190, 3384, 0, 'Open', 'Door'), [
       ['deregister', 11780, 3190, 3384, 0],
       ['register', 11782, 3189, 3384, 1],
+    ]);
+  } finally {
+    h.restore();
+  }
+});
+
+test('Pollnivneach curtains draw back in place into their cache Close loc and close again (1533 <-> 1534, issue #1708)', async () => {
+  await initializeMapCollisionOnce();
+  const h = buildHarness({ cacheObjects: new Map([1533, 1534].map((id) => [id, CacheDefinitions.getObject(id)])) });
+  try {
+    assert.ok(h.handlers.get('Curtain'), 'Curtain locs are handled as doors');
+    // Curtains are drawn back in place: same tile, same rotation, no door swing.
+    // Closed curtain placed by the cache at 3345,2955 (rotation 0).
+    assert.deepEqual(h.click(1533, 3345, 2955, 0, 'Open', 'Curtain'), [
+      ['deregister', 1533, 3345, 2955, 0],
+      ['register', 1534, 3345, 2955, 0],
+    ]);
+    assert.deepEqual(h.click(1534, 3345, 2955, 0, 'Close', 'Curtain'), [
+      ['deregister', 1534, 3345, 2955, 0],
+      ['register', 1533, 3345, 2955, 0],
+    ]);
+    // A curtain the cache places open (3349,2962, rotation 1) closes on its own tile too.
+    assert.deepEqual(h.click(1534, 3349, 2962, 1, 'Close', 'Curtain'), [
+      ['deregister', 1534, 3349, 2962, 1],
+      ['register', 1533, 3349, 2962, 1],
+    ]);
+  } finally {
+    h.restore();
+  }
+});
+
+test('the gate on the road east of Varrock opens both leaves into their named open locs (11766/11767)', async () => {
+  await initializeMapCollisionOnce();
+  const ids = [11766, 11767, 11768, 11769, 11770, 11771];
+  const h = buildHarness({ cacheObjects: new Map(ids.map((id) => [id, CacheDefinitions.getObject(id)])) });
+  try {
+    h.place(11766, 3319, 3468, 2);
+    h.place(11767, 3319, 3467, 2);
+    // rsprox captures 1636 and 3226: both leaves go on one tick, swinging east.
+    assert.deepEqual(h.click(11766, 3319, 3468, 2, 'Open', 'Gate'), [
+      ['deregister', 11766, 3319, 3468, 2],
+      ['deregister', 11767, 3319, 3467, 2],
+      ['register', 11770, 3320, 3468, 1],
+      ['register', 11771, 3320, 3467, 3],
     ]);
   } finally {
     h.restore();

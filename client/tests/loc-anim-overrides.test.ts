@@ -1,6 +1,7 @@
 import "./browser-self";
 import assert from "node:assert/strict";
 import { onLocAnim } from "../render/render/locs2";
+import { LOC_OVERRIDE_REMOVED } from "../rs/scene/LocOverride";
 
 /** Just what onLocAnim touches; frameSteps maps a seq id to its frame step. */
 function stubHost(frameSteps: Record<number, number>) {
@@ -19,7 +20,7 @@ function stubHost(frameSteps: Record<number, number>) {
 }
 
 const tile = { x: 3679, y: 5140 };
-const removal = { newId: 0, matchType: 10 };
+const removal = { newId: LOC_OVERRIDE_REMOVED, matchType: 10 };
 
 // A loc the server added over a map loc: the removal of the map loc (tile-wide key) must
 // survive an animation on the added one, or the old loc shows again beside it.

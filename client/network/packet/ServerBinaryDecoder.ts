@@ -911,15 +911,20 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 },
             };
 
-        case ServerPacketId.WIDGET_SET_TEXT:
+        case ServerPacketId.WIDGET_SET_TEXT: {
+            const end = reader.offset + packetLength;
+            const uid = reader.readInt();
+            const text = reader.readString();
             return {
                 type: "widget",
                 payload: {
                     action: "set_text",
-                    uid: reader.readInt(),
-                    text: reader.readString(),
+                    uid,
+                    text,
+                    ...(reader.offset < end ? { serverOwned: reader.readByte() !== 0 } : {}),
                 },
             };
+        }
 
         case ServerPacketId.WIDGET_SET_HIDDEN:
             return {

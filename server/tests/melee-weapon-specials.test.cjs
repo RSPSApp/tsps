@@ -57,7 +57,7 @@ function skills(levelsByName) {
 }
 
 function fakePlayer({ weaponId, energy = 100, levels = {} }) {
-  const calls = { orb: 0, state: [], animations: [], graphics: [], chat: [], messages: [], sounds: [] };
+  const calls = { orb: 0, state: [], animations: [], graphics: [], chat: [], messages: [], sounds: [], area: [] };
   const player = {
     calls,
     skillManager: skills(levels),
@@ -79,6 +79,7 @@ function fakePlayer({ weaponId, energy = 100, levels = {} }) {
     getWeapon: () => ({ getSpecialBar: () => -1, getSpecialMeter: () => -1 }),
     getPacketSender: () => ({
       sendSoundEffect: (...args) => calls.sounds.push(args),
+      sendAreaSound: (...args) => calls.area.push(args),
       updateSpecialAttackOrb: () => { calls.orb++; },
       sendSpecialAttackState: (on) => { calls.state.push(on); },
     }),
@@ -183,6 +184,33 @@ test("activating Rampage drains energy once, updates the bar and applies the sta
   assert.equal(player.calls.animations[0].getId(), 1056);
   assert.equal(player.calls.graphics[0].getId(), 246);
   assert.deepEqual(player.calls.sounds, [[2538, 1, 0, 1]], "rsprox recording 1023: immediate activation sound");
+});
+
+test("special attacks play their own recorded sound, not the normal weapon sound", () => {
+  const cases = [
+    ["armadyl_godsword", ItemIdentifiers.ARMADYL_GODSWORD, [3869], []],
+    ["bandos_godsword", ItemIdentifiers.BANDOS_GODSWORD, [3869], []],
+    ["saradomin_godsword", ItemIdentifiers.SARADOMIN_GODSWORD, [3869], []],
+    ["zamorak_godsword", ItemIdentifiers.ZAMORAK_GODSWORD, [3869], []],
+    ["ancient_godsword", ItemIdentifiers.ANCIENT_GODSWORD, [3869], []],
+    ["dragon_warhammer", ItemIdentifiers.DRAGON_WARHAMMER, [2520], []],
+    ["statius_warhammer", ItemIdentifiers.STATIUSS_WARHAMMER, [2520], []],
+    ["barrelchest_anchor", ItemIdentifiers.BARRELCHEST_ANCHOR, [3481], []],
+    ["excalibur", ItemIdentifiers.EXCALIBUR, [], [2539]],
+  ];
+  for (const [id, weaponId, areaIds, synthIds] of cases) {
+    const player = fakePlayer({ weaponId });
+    const target = npcTarget(99);
+    const original = World.getPlayers;
+    World.getPlayers = () => [player];
+    try {
+      special(id).getCombatMethod().start(player, target);
+    } finally {
+      World.getPlayers = original;
+    }
+    assert.deepEqual(player.calls.area.map(([soundId]) => soundId), areaIds, `${id} area sound`);
+    assert.deepEqual(player.calls.sounds.map(([soundId]) => soundId), synthIds, `${id} synth sound`);
+  }
 });
 
 test("Rampage refreshes its base Strength boost without stacking repeated uses", () => {

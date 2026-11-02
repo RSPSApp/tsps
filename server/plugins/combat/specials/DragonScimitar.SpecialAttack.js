@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerDragonScimitarSpecialAttack(api) {
-  const { Animation, CombatFactory, CombatSpecial, Graphic, GraphicHeight, ItemIdentifiers, MeleeCombatMethod, Sounds } = api.core;
+  const { Animation, CombatFactory, CombatSpecial, Graphic, GraphicHeight, ItemIdentifiers, MeleeCombatMethod, Sound, Sounds } = api.core;
 
   const DRAIN = 55;
   const SEVER_ACCURACY_MULTIPLIER = 1.25;
@@ -12,7 +12,7 @@ module.exports = function registerDragonScimitarSpecialAttack(api) {
       CombatSpecial.drain(character, DRAIN);
       character.performAnimation(ANIMATION);
       character.performGraphic(GRAPHIC);
-      Sounds.sendSound(character, character.getAttackSound());
+      Sounds.sendSound(character, Sound.DRAGON_SCIMITAR_SPECIAL);
     }
 
     handleAfterHitEffects(hit) {

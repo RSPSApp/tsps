@@ -8,6 +8,13 @@
 const Rewards = require("./Rewards.RandomEvents");
 const LUMBRIDGE = { x: 3222, y: 3218 };
 const RETURN_LOCATION_ATTRIBUTE = "random-events:return-location";
+// Tabs closed for a stay, as [gameframe slot, group]: combat, stats, quests, inventory,
+// equipment, prayer, magic, settings, emotes.
+const TOPLEVEL = 161;
+const COMBAT_TAB = 76;
+const MAGIC_TAB = 82;
+const PRAYER_GROUP = 541;
+const HIDDEN_TABS = [[77, 320], [78, 629], [79, 149], [80, 387], [81, 541], [87, 116], [88, 216]];
 const sessions = new Map();
 // Areas that host players: registered as core Areas so leaving by any route (teleport,
 // death, command) ends the session, exactly once.
@@ -26,10 +33,11 @@ const DESTINATIONS = [
   { kind: "quiz", minX: 1940, maxX: 1966, minY: 4756, maxY: 4782, z: 1 },
   { kind: "exam", minX: 1876, maxX: 1896, minY: 5014, maxY: 5038 },
   { kind: "frogland", minX: 2450, maxX: 2478, minY: 4764, maxY: 4794 },
-  // The pillory cages: Varrock, Seers' Village and Yanille.
-  { kind: "pillory", minX: 3218, maxX: 3240, minY: 3400, maxY: 3416 },
-  { kind: "pillory", minX: 2672, maxX: 2696, minY: 3480, maxY: 3498 },
-  { kind: "pillory", minX: 2596, maxX: 2618, minY: 3096, maxY: 3114 },
+  // The pillory cages, not the towns around them: login recovery moves anyone found inside a
+  // destination, so wider bounds would send people logging in at Seers' bank to Lumbridge.
+  { kind: "pillory", minX: 3227, maxX: 3229, minY: 3406, maxY: 3407 },
+  { kind: "pillory", minX: 2682, maxX: 2684, minY: 3489, maxY: 3490 },
+  { kind: "pillory", minX: 2605, maxX: 2607, minY: 3105, maxY: 3106 },
 ];
 let api;
 let Hook;
@@ -43,6 +51,11 @@ function initialize(pluginApi, hooks) {
 
 function sessionOf(player) {
   return sessions.get(player);
+}
+
+/** Every active stay of `kind`, for shared rooms that must update all their players. */
+function sessionsOfKind(kind) {
+  return [...sessions.values()].filter(session => session.kind === kind);
 }
 
 /** Whether any teleport event is currently holding this player. */
@@ -75,7 +88,8 @@ function begin(active, spec) {
     tick: spec.tick ?? null,
     cleanup: [],
     finishing: false,
-    teleportRefusal: spec.teleportRefusal ?? "You can't leave just like that!",
+    teleportRefusal: spec.teleportRefusal ?? null,
+    teleportRefusalOverhead: spec.teleportRefusalOverhead === true,
   };
   player.setAttribute(RETURN_LOCATION_ATTRIBUTE, {
     x: session.returnLocation.getX(), y: session.returnLocation.getY(), z: session.returnLocation.getZ(),
@@ -85,6 +99,10 @@ function begin(active, spec) {
   // The invitation lifecycle ends here: the follower NPC is removed without rewarding.
   Hook?.finish?.(active);
   player.moveTo(new Location(spec.arrive.x, spec.arrive.y, spec.arrive.z ?? 0));
+  if (spec.hideTabs) {
+    hideTabs(player);
+    onEnd(session, () => { if (player.isRegistered()) restoreTabs(player); });
+  }
   (spec.onStart ?? active.definition.enter)?.(session);
   return session;
 }
@@ -150,6 +168,25 @@ function owns(player, itemId) {
   return false;
 }
 
+/** Closes the side tabs live closes for a stay in an event room (rsprox 1855, 1104, 1764, 1846, 1098). */
+function hideTabs(player) {
+  const sender = player.getPacketSender();
+  for (const slot of [COMBAT_TAB, MAGIC_TAB, ...HIDDEN_TABS.map(([tab]) => tab)]) {
+    sender.closeSubInterface((TOPLEVEL << 16) | slot);
+  }
+}
+
+function restoreTabs(player) {
+  const sender = player.getPacketSender();
+  sender.sendTabInterface(0, 593);
+  sender.sendTabInterface(6, player.getSpellbook().getInterfaceId());
+  // Tab 5 re-mounts prayer with its click flags; a plain mount on its slot would drop them.
+  sender.sendTabInterface(5, PRAYER_GROUP);
+  for (const [slot, group] of HIDDEN_TABS) if (group !== PRAYER_GROUP) sender.sendTabInterface(slot, group);
+  player.getInventory().refreshItems?.();
+  player.getEquipment().refreshItems?.();
+}
+
 /** Gives rewards at the player's tile through the shared reward path, then `message`. */
 function grant(session, rewards, message = null) {
   const player = session.player;
@@ -158,7 +195,7 @@ function grant(session, rewards, message = null) {
   if (message) player.sendMessage(message);
 }
 
-/** Sends the player home. A blocked return tile falls back to Lumbridge, as OSRS does. */
+/** Sends the player home. A blocked return tile falls back to Lumbridge (Mod Ash), with the line on the Wiki's Quiz Master page. */
 function returnToStart(session) {
   const { player, returnLocation } = session;
   if (!player.isRegistered()) return;
@@ -166,7 +203,7 @@ function returnToStart(session) {
   const area = player.getPrivateArea?.() ?? null;
   if (region.blocked(returnLocation, area)) {
     player.moveTo(new api.core.Location(LUMBRIDGE.x, LUMBRIDGE.y, 0));
-    player.sendMessage("You were returned to Lumbridge.");
+    player.sendMessage("Whoops, you couldn't be returned to where you came from.");
     return;
   }
   player.moveTo(returnLocation);
@@ -250,7 +287,10 @@ function createAreas() {
       canTeleport(player) {
         const session = sessions.get(player);
         if (!session) return null;
-        player.sendMessage(session.teleportRefusal);
+        if (session.teleportRefusal) {
+          if (session.teleportRefusalOverhead) player.forceChat(session.teleportRefusal);
+          else player.sendMessage(session.teleportRefusal);
+        }
         return false;
       }
       postLeave(mobile, logout) {
@@ -262,6 +302,6 @@ function createAreas() {
 }
 
 module.exports = {
-  initialize, sessionOf, hasSession, begin, spawnNpc, spawnObject, onEnd, replaceObject, later,
-  owns, grant, finish, departed, process, recover, shutdown, createAreas, returnToStart,
+  initialize, sessionOf, sessionsOfKind, hasSession, begin, spawnNpc, spawnObject, onEnd, replaceObject, later,
+  owns, grant, hideTabs, restoreTabs, finish, departed, process, recover, shutdown, createAreas, returnToStart,
 };

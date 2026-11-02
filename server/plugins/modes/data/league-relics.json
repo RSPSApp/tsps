@@ -273,7 +273,9 @@
       "batch": { "FLETCHING": ["logs", "shields", "stringing", "chisel", "arrows", "bolts", "tipped", "darts"] },
       "capped": { "arrows": 10, "bolts": 10, "tipped": 10, "darts": 10 },
       "trapMultiplier": 2, "lureTicks": 2, "_lureTicks": "ours, as Trickster: the trap's 5-tick look for prey every 2 ticks.",
-      "burnToggle": "league_relic_woodsman_toggle_burn", "bankToggle": "league_relic_woodsman_toggle_bank"
+      "burnToggle": "league_relic_woodsman_toggle_burn", "bankToggle": "league_relic_woodsman_toggle_bank",
+      "rumourXpMultiplier": 2, "sackRollMultiplier": 2, "implingLootMultiplier": 2,
+      "_implings": "A jar's loot doubled and noted (Wiki); its clue rolls are not loot, and an item that neither stacks nor notes stays single (as the other noted-loot relics: ours). The sack's doubled rolls are its loot rolls, not its blueprint, kit and outfit rolls."
     },
     "connivingClues": {
       "league": 6, "key": "conniving-clues", "clueOneIn": 15, "vesselMultiplier": 10, "waived": ["emote", "falo", "charlie"],

@@ -176,6 +176,8 @@ relics are the first askers; nothing changes when nobody answers):
 | `miscellania:open` (extended), `miscellania:check`, `miscellania:collect` | Managing Miscellania | `{ player, opened }` opens the kingdom's interface; `{ player, handled }` reports the approval and coffers, or collects as Advisor Ghrim's Collect does |
 | `npc-drops:tertiary-chance` (extended) | NpcDrops | a rule may give `outOf` (each matching entry at least 1 in that many) or `guarantee` (the rarest matching entry when none hit) instead of `multiplier` |
 | `hunter:impling-clue-chance` | Hunter, opening an impling jar | `{ player, impling, tier, oneIn }` for each clue the jar can hold |
+| `hunter:impling-loot`, `hunter:rumour-reward`, `hunter:sack-rolls` | Hunter (impling jars, Hunters' rumours, Hunters' loot sacks) | `{ player, impling, rewards }` for a jar's loot, before its clue rolls; `{ player, tier, xp }` as a rumour is handed in; `{ player, tier, rolls }` for a sack's loot rolls (not its blueprint, kit and outfit rolls) |
+| `quetzals:whistle-charge` | Quetzals (a whistle's flight, as it lands) | `{ player, itemId, kept }`: `kept` and the charge stays |
 | `treasure-trails:vessel-chance` | Woodcutting and Hunter (clue nests), Mining (geodes), Hunter's drift nets and aerial fishing (bottles) | `{ player, vessel, tier, multiplier }`: the vessel `multiplier` times as likely |
 | `treasure-trails:trail-length`, `treasure-trails:casket-rolls` | Treasure Trails (both trail kinds) | `{ player, tier, length, minimum, maximum }` as a trail starts; `{ player, tier, rolls, minimum, maximum }` as a casket opens; both kept within the tier's range |
 | `treasure-trails:casket-opened` | Treasure Trails' caskets | `{ player, tier }` after a casket's rewards are handed over (not the Mimic's) |
@@ -712,7 +714,7 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | 1 | Abundance | done |
 | 2 | Hotfoot | partial: cooked fish, smelted ore, laps counted twice with +25% XP, no failures, a 33% mark chance on the nine rooftop courses (`agility:mark-chance`; the mark cooldown still runs), a picked-up course mark finishing the lap with 10,000 coins (`agility:mark-taken`); not the Agility XP for running (the Wiki gives no rate), termites finishing a lap or doubled, or the tenfold shards (the Colossal Wyrm courses give no termites, Prifddinas no shards) |
 | 2 | Friendly Forager | done (Raging Echoes' unit, plus Herblore at once; the recorded lines) |
-| 2 | Woodsman | partial: Fletching batches, log burning, Hunter catches; not the seed drops, rumour and sack doubling, implings' extra roll or the whistle's charges |
+| 2 | Woodsman | partial: Fletching batches, log burning, Hunter catches, impling loot doubled and noted (`hunter:impling-loot`), double rumour XP and sack loot rolls (`hunter:rumour-reward`, `hunter:sack-rolls`), whistles that keep their charges (`quetzals:whistle-charge`); not the trap's herb or tree seed (the Wiki gives no list or chances) |
 | 3 | Bank Heist | done |
 | 3 | Evil Eye, Map of Alacrity | the item only (their destinations' coordinates are not in the cache) |
 | 4 | Transmute | its toggles and item only, no spells |

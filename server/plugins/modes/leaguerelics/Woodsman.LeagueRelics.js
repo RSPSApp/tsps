@@ -5,10 +5,12 @@
  * attached before the other gathering relics, so a doubled harvest's extra logs are banked: ours),
  * and in Hunter every catch succeeds, traps look for prey faster (ours: every 2 ticks instead of
  * 5) and give double loot and XP, sent to the bank while its bank toggle is on (the default) and
- * the bank has room, and impling jars never break.
- * Not here: the herb or tree seed every trap drops (no list of them), the doubled Hunters'
- * rumour XP and loot sack rolls, the noted extra roll of an impling jar, and Quetzal whistles
- * that keep their charges (none of those asks a hook).
+ * the bank has room, and impling jars never break and give their loot doubled and noted
+ * (`hunter:impling-loot`, before the jar's clue rolls). A Hunters' rumour pays double XP
+ * (`hunter:rumour-reward`), a Hunters' loot sack rolls its loot twice as many times
+ * (`hunter:sack-rolls`; its rare rolls stay one each), and a quetzal whistle keeps its charge
+ * (`quetzals:whistle-charge`; an empty one still needs recharging).
+ * Not here: the herb or tree seed every trap drops (the Wiki gives no list or chances).
  */
 const Common = require("./Common.LeagueRelics");
 const Toggles = require("./Toggles.LeagueRelics");
@@ -74,6 +76,25 @@ function jarKept(request) {
   if (active(request.player)) request.kept = true;
 }
 
+function implingLoot(request) {
+  if (!active(request.player)) return;
+  request.rewards = request.rewards.map(([itemId, amount]) => (Common.multipliable(itemId)
+    ? [Common.noted(itemId), amount * effect.implingLootMultiplier]
+    : [itemId, amount]));
+}
+
+function rumourReward(request) {
+  if (active(request.player)) request.xp *= effect.rumourXpMultiplier;
+}
+
+function sackRolls(request) {
+  if (active(request.player)) request.rolls *= effect.sackRollMultiplier;
+}
+
+function whistleCharge(request) {
+  if (active(request.player)) request.kept = true;
+}
+
 module.exports = function attach(pluginApi) {
   api = pluginApi;
   core = api.core;
@@ -85,4 +106,8 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("hunter:lure-interval", lure);
   api.onCustomEvent("hunter:rewards", trapRewards);
   api.onCustomEvent("hunter:jar-kept", jarKept);
+  api.onCustomEvent("hunter:impling-loot", implingLoot);
+  api.onCustomEvent("hunter:rumour-reward", rumourReward);
+  api.onCustomEvent("hunter:sack-rolls", sackRolls);
+  api.onCustomEvent("quetzals:whistle-charge", whistleCharge);
 };

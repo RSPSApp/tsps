@@ -286,6 +286,10 @@ function rewards(player, def) {
     if (def.key === "GOURMET" && roll(1, 500) === 1) result.push([I.GRUBBY_KEY, 1]);
     if (def.key === "CRYSTAL" && roll(1, 128) === 1) result.push([I.ELVEN_SIGNET, 1]);
   }
+  // Content may change the jar's loot before its clue rolls ("hunter:impling-loot", a league relic's doubled notes).
+  const request = { player, impling: def.key, rewards: result };
+  H.api.emitCustomEvent("hunter:impling-loot", request);
+  result = request.rewards;
   const clues = { BABY: [["BEGINNER", 50], ["EASY", 100]], YOUNG: [["BEGINNER", 25], ["EASY", 50]], GOURMET: [["EASY", 25]],
     EARTH: [["MEDIUM", 100]], ESSENCE: [["MEDIUM", 50]], ECLECTIC: [["MEDIUM", 25]], NATURE: [["HARD", 100]],
     MAGPIE: [["HARD", 50]], NINJA: [["HARD", 25]], DRAGON: [["ELITE", 50]], CRYSTAL: [["ELITE", 50]] };

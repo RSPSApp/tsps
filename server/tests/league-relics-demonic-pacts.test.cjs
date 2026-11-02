@@ -759,3 +759,68 @@ test("Barbarian Gathering: bare hands fish a bait spot with no bait, and use non
   assert.equal(who.relic.getInventory().getAmount(I.FISHING_BAIT), 4, "a rod's cast takes its bait");
   for (const player of others(who)) assert.equal(Fishing.hasToolRequirements(player, tool), null);
 });
+
+/** Runs `body` with Hunter's shared context pointed at the league's units (its events answered as the relics answer them). */
+function withHunter(body) {
+  const C = require("../plugins/skills/hunter/Context.Hunter");
+  const previous = { api: C.H.api, core: C.H.core };
+  C.H.api = { core, emitCustomEvent: (name, payload) => emit(name, payload) };
+  C.H.core = core;
+  try {
+    return body();
+  } finally {
+    Object.assign(C.H, previous);
+  }
+}
+
+test("Woodsman: an impling jar's loot doubled and noted (hunter:impling-loot), its clues still one each", () => withHunter(() => {
+  const Catching = require("../plugins/skills/hunter/Catching.Hunter");
+  const who = cases(WOODSMAN);
+  Math.random = () => 0;
+  const clues = (loot) => loot.filter(([id]) => /clue|scroll box/i.test(core.ItemDefinition.forId(id).getName()));
+  const relic = Catching.rewards(who.relic, { key: "BABY" });
+  assert.deepEqual(relic[0], [core.ItemDefinition.forId(I.CHISEL).getNoteId(), 2], "the first row (a chisel), noted and doubled");
+  for (const player of others(who)) {
+    const loot = Catching.rewards(player, { key: "BABY" });
+    assert.deepEqual(loot[0], [I.CHISEL, 1]);
+    assert.deepEqual(clues(relic), clues(loot), "the clue rolls are the jar's own");
+  }
+  assert.ok(clues(relic).length > 0, "a clue was rolled");
+}));
+
+test("Woodsman: a Hunters' rumour pays double XP (hunter:rumour-reward), a loot sack rolls its loot twice as often (hunter:sack-rolls)", () => withHunter(() => {
+  const Rumours = require("../plugins/skills/hunter/Rumours.Hunter");
+  const who = cases(WOODSMAN);
+  const rumourXp = (player) => {
+    const skills = player.getSkillManager();
+    skills.setCurrentLevel(Skill.HUNTER, 99, false).setMaxLevels(Skill.HUNTER, 99, false);
+    const [taskKey, task] = Object.entries(Rumours.tasks).find(([, each]) => each.part && I[each.part]);
+    const s = Rumours.state(player);
+    s.unlocked = true;
+    s.assignments[0] = { task: taskKey, found: true };
+    player.getInventory().add(new core.Item(I[task.part], 1));
+    const paid = [];
+    const add = skills.addExperiences;
+    skills.addExperiences = (skill, amount) => (skill === Skill.HUNTER && paid.push(amount), skills);
+    try {
+      Rumours.assign(player, 0);
+    } finally {
+      skills.addExperiences = add;
+    }
+    return paid;
+  };
+  const novice = Rumours.masters()[0][3];
+  assert.deepEqual(rumourXp(who.relic), [(99 + 5) * novice * 2]);
+  for (const player of others(who)) assert.deepEqual(rumourXp(player), [(99 + 5) * novice]);
+
+  Math.random = () => 0.5;
+  assert.equal(Rumours.sackRewards(who.relic, "basic").length, 10, "a basic sack's 5 loot rolls, doubled");
+  for (const player of others(who)) assert.equal(Rumours.sackRewards(player, "basic").length, 5);
+}));
+
+test("Woodsman: a quetzal whistle keeps its charge (quetzals:whistle-charge)", () => {
+  const who = cases(WOODSMAN);
+  const kept = (player) => emit("quetzals:whistle-charge", { player, itemId: I.BASIC_QUETZAL_WHISTLE, kept: false }).kept;
+  assert.equal(kept(who.relic), true);
+  for (const player of others(who)) assert.equal(kept(player), false);
+});

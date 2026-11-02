@@ -12,6 +12,7 @@ import { DebugControls } from "./DebugControls";
 import "./GameContainer.css";
 import { GameRenderer } from "./GameRenderer";
 import { GameState } from "./login/GameState";
+import { useSidebarVisible } from "./useSubscribedGameState";
 import { OsrsClient } from "./OsrsClient";
 import { Sidebar } from "./sidebar/Sidebar";
 import { SidebarToggleArrow } from "./sidebar/SidebarToggleArrow";
@@ -105,6 +106,7 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
     const [downloadProgress, setDownloadProgress] = useState<DownloadProgress>();
 
     const [hideUi, setHideUi] = useState(false);
+    const sidebarVisible = useSidebarVisible(osrsClient.stateMachine, hideUi);
 
     // The FPS readout is written straight into its element: as React state it re-rendered this
     // whole tree (sidebar, HUD, canvas shell) four times a second for a number nothing else reads.
@@ -439,7 +441,7 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
                 </div>
 
                 {/* RuneLite's open/close arrow at the game's right edge (Ctrl+F11 does the same). */}
-                {!hideUi && osrsClient.gameState >= GameState.LOGIN_SCREEN && (
+                {sidebarVisible && (
                     <SidebarToggleArrow store={osrsClient.sidebar} />
                 )}
 
@@ -463,7 +465,7 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
 
             {/* Beside the game view, so a docked panel narrows it. From the login screen on: not
                 while the cache downloads or loads (DOWNLOADING, LOADING). */}
-            {!hideUi && osrsClient.gameState >= GameState.LOGIN_SCREEN && (
+            {sidebarVisible && (
                 <Sidebar
                     toolbar={osrsClient.runeLite.clientToolbar}
                     store={osrsClient.sidebar}

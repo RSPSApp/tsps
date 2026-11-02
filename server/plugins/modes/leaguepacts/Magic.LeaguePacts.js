@@ -239,8 +239,8 @@ function endBurns(target) {
   for (const task of running) task.stop();
 }
 
-/** One burn: 1 damage every 4 ticks, 10 in all; a target holds 5 at most. */
-function applyBurn(target) {
+/** One burn: 1 damage every 4 ticks, 10 in all; a target holds 5 at most. Its damage is the caster's, so a burn's kill is theirs. */
+function applyBurn(attacker, target) {
   let running = burns.get(target);
   if (!running) burns.set(target, (running = new Set()));
   if (running.size >= MAX_BURNS) return;
@@ -255,7 +255,8 @@ function applyBurn(target) {
         endBurns(target);
         return;
       }
-      target.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(1, core.HitMask.RED)]);
+      target.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(1, core.HitMask.RED).setSource(attacker)
+        .onApplied((dealt) => target.getCombat().addDamage(attacker, dealt))]);
       if (--this.remaining > 0) return;
       running.delete(this);
       this.stop();
@@ -272,7 +273,7 @@ function bounceBurn(attacker, target) {
   for (const candidate of candidates) {
     if (bounced >= BURN_BOUNCES) break;
     if (!core.CombatFactory.canAttackSecondaryTarget(attacker, target, candidate, BURN_BOUNCE_RADIUS)) continue;
-    applyBurn(candidate);
+    applyBurn(attacker, candidate);
     bounced++;
   }
 }
@@ -291,7 +292,7 @@ function hitResolved({ attacker, target, hit }) {
     heal(attacker, Math.floor(hit.getTotalDamage() * WATER_HEAL_FRACTION));
   }
   if (element === "fire" && Common.effect(attacker, "talent_fire_spell_burn_bounce") && target.getHitpoints() > 0) {
-    applyBurn(target);
+    applyBurn(attacker, target);
     bounceBurn(attacker, target);
   }
   if (element === "earth" && Common.effect(attacker, "talent_earth_reduce_defence")) {

@@ -247,7 +247,10 @@ test('mandatory route: pay, milk, seasoned sardine, all Lumber Yard crates, kitt
   h.quest.setStage(h.player, 4);
 
   h.npc(N.CRATE, crateSpawns[0].x, crateSpawns[0].y);
+  transcripts.length = 0;
   h.itemOnNpc(I.FLUFFS_KITTEN, N.GERTRUDES_CAT_2);
+  assert.deepEqual(transcripts.at(-1), { npcId: N.GERTRUDES_CAT_2, page: "Gertrude's Cat",
+    variant: 'making-seasoned-sardines-returning-the-kitten-to-fluffs' }, 'the Wiki scene plays, not a made-up message');
   assert.equal(h.quest.getStage(h.player), 5);
   assert.equal(h.configs.get(180), 5);
   assert.equal(h.inventory.getAmount(I.FLUFFS_KITTEN), 0);

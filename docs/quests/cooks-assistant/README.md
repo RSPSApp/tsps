@@ -2,10 +2,10 @@
 quest: Cook's Assistant
 key: cooks_assistant
 status: passed
-tested: 2026-10-29
+tested: 2026-11-01
 tester: agent
 model: claude-opus-5-5
-commit: 15e0e9b82ee1
+commit: b7fb0e92d
 cache: osrs-241_2026-10-20
 start: fresh
 travel: travel_to
@@ -14,14 +14,53 @@ travel: travel_to
 # Cook's Assistant
 
 A fresh account completed the quest by the normal route, travelling only with `travel_to`
-after being placed in the kitchen. Start, ingredient gathering, hand-in and rewards match
-live OSRS. Repeat dialogue, relog and the other Cook dialogue branches were not checked.
+after being placed in the kitchen, and the conversation matches rsprox capture 1718 box for box.
+Repeat talk and relog hold. The "Where do I find..." branches have no capture and weren't played.
 
 ## Findings
 
-None.
+- **open** Chat text wraps at a fixed character count rather than where live breaks its lines
+  (shared `Misc.wrapText`), and the chat quest link is always `081190` where 1718 sent `0ab0ff`.
+- **fixed** Against rsprox 1718 (rev 227) and 4156 (rev 238): the completed journal's wording, the
+  missing "You've started a new quest" line, chat-head animations, completion jingle 152, and the
+  ingredients leaving the inventory on continuing past the hand-over box.
+- **fixed** Against the Wiki transcript only (no capture): the "You still need to get" message box.
+
+## Capture audit
+
+Rsprox 1718, ticks 7072-7095, carries the start and the all-ingredients hand-in in one conversation.
+The live run on this server matches it box for box: speakers, text, options, item box objects 1933
+and 1927, varp 29 going 0 → 1 on continuing past "Yes, I'll help you.", 1 → 2 on continuing past the
+last line, scroll item 1891, 1 quest point, 300 Cooking XP.
+
+No capture has the in-progress journal, the not-started journal, or the "Talking to the Cook again"
+and "Where do I find..." branches, so those rest on the Wiki transcript alone.
 
 ## Runs
+
+### 2026-11-01 · agent · claude-opus-5-5 · natural route
+
+- **Start:** fresh account placed in the kitchen with `::tele` before the baseline (varp 29 = 0,
+  varp 101 = 0, Cooking 1 with 0 XP, empty inventory). No items supplied; `travel_to` only after that.
+- **Route:** Cook > "What's wrong?" > "Yes." > "Actually, I know where to find this stuff" (varp 29:
+  0 → 1, with the started-quest message). Pot from the kitchen, bucket from the cellar, milk from the
+  Dairy cow, grain from the field by the mill, hopper and controls on the mill's top floor, flour
+  from the bin. Handed in milk and flour, fetched an egg from the coop at 3185,3297, handed that in.
+- **Result:** varp 29: 1 → 2, varp 101: 0 → 1, Cooking level 4 and the completed-quest message. No
+  `travel_to` leg came back blocked or with a note.
+- **Repeat:** the Cook plays his post-quest dialogue with no second reward. **Relog:** stage, quest
+  points and XP persisted.
+- **Not checked:** the "Where do I find..." branches, head animation packets on the wire (covered at
+  the event level by `server/tests/chathead-animations.test.cjs`).
+
+### 2026-11-01 · agent · claude-opus-5-5 · capture comparison
+
+- **Start:** fresh accounts placed with `::tele`, ingredients supplied with `::item`. This run
+  compares the conversation with rsprox 1718; it isn't a play of the route.
+- **Route:** all three ingredients in one conversation; separately, empty-handed start, then a
+  return with nothing and a return with milk.
+- **Result:** as in "Capture audit". Inventory held 3 items through the hand-over box and 0 at the
+  next line. After milk, the box lists "A pot of flour", "An egg".
 
 ### 2026-10-29 · agent · claude-opus-5-5
 

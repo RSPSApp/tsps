@@ -26,6 +26,12 @@ const {
   PRESET_ROW_COUNT,
   GLOBAL_ROW_COUNT,
   CUSTOM_ROW_COUNT,
+  PRESET_TABS,
+  TAB_BUTTON_START,
+  TAB_LABEL_START,
+  TAB_COLOUR,
+  TAB_ACTIVE_COLOUR,
+  ROW_PITCH,
   INVENTORY_SLOT_START,
   INVENTORY_SLOT_COUNT,
   EQUIPMENT_SLOT_START,
@@ -42,6 +48,7 @@ const CURRENT_PRESET_ATTRIBUTE = "pvp:current-preset";
 const OPEN_ON_DEATH_ATTRIBUTE = "pvp:open-presets-on-death";
 const CUSTOM_PRESETS_ATTRIBUTE = "pvp:custom-presets";
 const CUSTOM_PRESET_SLOT_ATTRIBUTE = "pvp:selected-custom-preset-slot";
+const PRESET_TAB_ATTRIBUTE = "pvp:preset-tab";
 let presetsEnabled = false;
 
 let pluginApi = null;
@@ -67,19 +74,15 @@ const MAIN_MODAL_UID = (161 << 16) | 16;
 const INTERFACE_DEFINITION = buildPresetsInterfaceDefinition();
 
 const STAT_LABELS = ["Attack", "Defence", "Strength", "Hitpoints", "Ranged", "Prayer", "Magic"];
-// One list: the predefined presets, then the player's own slots.
-const GLOBAL_ROW_UIDS = Array.from({ length: GLOBAL_ROW_COUNT }, (_, row) =>
-  uid(PRESET_ROW_START + row)
-);
-const CUSTOM_ROW_UIDS = Array.from({ length: CUSTOM_ROW_COUNT }, (_, row) =>
-  uid(PRESET_ROW_START + GLOBAL_ROW_COUNT + row)
-);
+// The active category's predefined presets, then the player's own slots.
+const PRESET_ROW_UIDS = Array.from({ length: PRESET_ROW_COUNT }, (_, row) => uid(PRESET_ROW_START + row));
+const TAB_UIDS = PRESET_TABS.map((_, index) => uid(TAB_BUTTON_START + index));
 const PRESET_BUTTON_UIDS = [
   uid(COMPONENT.LOAD_BUTTON),
   uid(COMPONENT.SAVE_BUTTON),
   uid(COMPONENT.DEATH_BUTTON),
-  ...GLOBAL_ROW_UIDS,
-  ...CUSTOM_ROW_UIDS,
+  ...PRESET_ROW_UIDS,
+  ...TAB_UIDS,
 ];
 
 const COMBAT_SKILLS = [
@@ -100,6 +103,7 @@ function loadPlayerPresets() {
   const rows = JSON.parse(fs.readFileSync(file, "utf8"));
   if (!Array.isArray(rows) || rows.length !== GLOBAL_ROW_COUNT) throw new Error(`[presets] ${file} must contain ${GLOBAL_ROW_COUNT} presets`);
   const keys = new Set();
+  const byTab = new Map(PRESET_TABS.map((tab) => [tab, []]));
   const readItem = (value, location) => {
     const itemKey = typeof value === "string" ? value : value?.[0];
     const amount = typeof value === "string" ? 1 : value?.[1];
@@ -119,9 +123,13 @@ function loadPlayerPresets() {
     if (!Array.isArray(row.stats) || row.stats.length !== 7 || row.stats.some((level) => !Number.isInteger(level) || level < 1 || level > 99)) throw new Error(`[presets] ${location}.stats must contain seven levels from 1 to 99`);
     if (!Object.hasOwn(SPELLBOOKS, row.spellbook)) throw new Error(`[presets] ${location}.spellbook is invalid`);
     if (row.autocastSpellId !== undefined && !Number.isInteger(row.autocastSpellId)) throw new Error(`[presets] ${location}.autocastSpellId must be an integer`);
-    return [row.key, new Presetable(row.name, row.inventory.map((item, slot) => readItem(item, `${location}.inventory[${slot}]`)), Object.entries(row.equipment).map(([slot, item]) => readItem(item, `${location}.equipment.${slot}`)), row.stats, SPELLBOOKS[row.spellbook], true, row.autocastSpellId ?? -1)];
+    const tab = row.tab ?? PRESET_TABS[0];
+    if (!byTab.has(tab)) throw new Error(`[presets] ${location}.tab is invalid`);
+    const preset = new Presetable(row.name, row.inventory.map((item, slot) => readItem(item, `${location}.inventory[${slot}]`)), Object.entries(row.equipment).map(([slot, item]) => readItem(item, `${location}.equipment.${slot}`)), row.stats, SPELLBOOKS[row.spellbook], true, row.autocastSpellId ?? -1);
+    byTab.get(tab).push(preset);
+    return [row.key, preset];
   });
-  return { list: presets.map(([, preset]) => preset), byKey: new Map(presets) };
+  return { list: presets.map(([, preset]) => preset), byKey: new Map(presets), byTab };
 }
 
 const PLAYER_PRESETS = loadPlayerPresets();
@@ -129,6 +137,15 @@ const GLOBAL_PRESETS = PLAYER_PRESETS.list;
 
 function getGlobalPresetPool() {
   return GLOBAL_PRESETS.filter((preset) => preset != null);
+}
+
+function selectedTab(player) {
+  const tab = player.getAttribute(PRESET_TAB_ATTRIBUTE);
+  return PRESET_TABS.includes(tab) ? tab : PRESET_TABS[0];
+}
+
+function tabPresets(player) {
+  return PLAYER_PRESETS.byTab.get(selectedTab(player));
 }
 
 function getGlobalPresetByName(name) {
@@ -412,7 +429,7 @@ function isPresetBlockedInWilderness(player) {
   return Wilderness.isIn(player) && !isFeroxSafeLocation(player?.getLocation?.()) && !isPlayerBot(player);
 }
 
-/** The combat level a preset's stat line would give (same formula as SkillManager). */
+/** Use the same combat calculation as players and equipment requirements. */
 function presetCombatLevel(preset) {
   const stats = Array.isArray(preset?.getStats?.()) ? preset.getStats() : [];
   if (stats.length < 7) {
@@ -423,20 +440,30 @@ function presetCombatLevel(preset) {
 
 function renderPresetLists(player) {
   const sender = player.getPacketSender();
-  const pool = getGlobalPresetPool();
+  const pool = tabPresets(player);
   const presets = customPresets(player);
   const selected = player.getAttribute?.(CURRENT_PRESET_ATTRIBUTE) ?? null;
+  PRESET_TABS.forEach((tab, index) => {
+    const active = tab === selectedTab(player);
+    sender.sendString(`<col=${active ? "ffffff" : "ffd27f"}>${tab}</col>`, uid(TAB_LABEL_START + index));
+    const colour = active ? TAB_ACTIVE_COLOUR : TAB_COLOUR;
+    // Widget definitions use RGB888; the native colour packet expects RGB555.
+    const packed = ((colour >> 9) & 0x7c00) | ((colour >> 6) & 0x3e0) | ((colour >> 3) & 0x1f);
+    sender.sendInterfaceColour(uid(TAB_BUTTON_START + index), packed);
+  });
+  sender.sendString(String((pool.length + CUSTOM_ROW_COUNT) * ROW_PITCH + 4), uid(COMPONENT.LIST_CONTENT_HEIGHT));
   for (let row = 0; row < PRESET_ROW_COUNT; row++) {
-    const custom = row >= GLOBAL_ROW_COUNT;
-    const preset = custom ? presets[row - GLOBAL_ROW_COUNT] : pool[row];
+    const custom = row >= pool.length;
+    const hidden = row >= pool.length + CUSTOM_ROW_COUNT;
+    const preset = custom ? presets[row - pool.length] : pool[row];
     const name = preset?.getName?.();
     const isSelected = custom
-      ? row - GLOBAL_ROW_COUNT === selectedCustomPresetSlot(player)
+      ? row - pool.length === selectedCustomPresetSlot(player)
       : preset === selected;
     sender.sendString(
       name
         ? `<col=${isSelected ? "ffffff" : "c5b79b"}>${name}</col>`
-        : custom
+        : custom && !hidden
           ? "<col=6f6355>Empty slot</col>"
           : "",
       uid(PRESET_ROW_START + row)
@@ -447,6 +474,8 @@ function renderPresetLists(player) {
       combatLevel != null ? `<col=${isSelected ? "ffffff" : "c5b79b"}>${combatLevel}</col>` : "",
       uid(PRESET_LEVEL_START + row)
     );
+    sender.sendInterfaceDisplayState(uid(PRESET_ROW_START + row), hidden);
+    sender.sendInterfaceDisplayState(uid(PRESET_LEVEL_START + row), hidden);
   }
 }
 
@@ -536,10 +565,12 @@ function openPresetInterface(player, preset = null) {
     // Script 227 is the frame script with the standard close button - the same widget
     // every other interface uses, hover and pressed states included. Its op closes the
     // interface client-side and the client tells us via IF_CLOSE.
-    postScripts: [{ scriptId: 227, args: [uid(COMPONENT.FRAME), "Presets"] }],
+    postScripts: [{ scriptId: 227, args: [uid(COMPONENT.FRAME), ""] }],
   });
 
-  selectPreset(player, preset ?? null);
+  const tab = PRESET_TABS.find((name) => PLAYER_PRESETS.byTab.get(name).includes(preset));
+  player.setAttribute(PRESET_TAB_ATTRIBUTE, tab ?? PRESET_TABS[0]);
+  selectPreset(player, preset ?? tabPresets(player)[0] ?? null);
   return true;
 }
 
@@ -748,9 +779,10 @@ function handlePresetRowClick(player, buttonId) {
     return false;
   }
 
-  const globalRow = GLOBAL_ROW_UIDS.indexOf(buttonId);
-  if (globalRow >= 0) {
-    const preset = getGlobalPresetPool()[globalRow] ?? null;
+  const row = PRESET_ROW_UIDS.indexOf(buttonId);
+  const pool = tabPresets(player);
+  if (row >= 0 && row < pool.length) {
+    const preset = pool[row] ?? null;
     if (!preset) {
       player.sendMessage("That preset is currently unavailable.");
       return true;
@@ -759,8 +791,8 @@ function handlePresetRowClick(player, buttonId) {
     return true;
   }
 
-  const customRow = CUSTOM_ROW_UIDS.indexOf(buttonId);
-  if (customRow >= 0) {
+  const customRow = row - pool.length;
+  if (row >= 0 && customRow >= 0 && customRow < CUSTOM_ROW_COUNT) {
     const preset = customPresets(player)[customRow] ?? null;
     if (preset) {
       selectPreset(player, preset, customRow);
@@ -776,6 +808,13 @@ function handlePresetRowClick(player, buttonId) {
 function handlePresetActionButton(player, buttonId) {
   if (!requireOpenInterface(player)) {
     return false;
+  }
+
+  const tab = TAB_UIDS.indexOf(buttonId);
+  if (tab >= 0) {
+    player.setAttribute(PRESET_TAB_ATTRIBUTE, PRESET_TABS[tab]);
+    selectPreset(player, tabPresets(player)[0] ?? null);
+    return true;
   }
 
   switch (buttonId) {

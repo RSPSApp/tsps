@@ -8,18 +8,26 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 before(() => CachePipeline.initialize());
 
 const { MagicSpellbook } = require("../dist/game/model/MagicSpellbook");
-const { GROUP_ID, GLOBAL_ROW_COUNT, PRESET_ROW_START, uid } = require("../plugins/modes/pvp/PresetsWidget.PvpMode");
+const { GROUP_ID, GLOBAL_ROW_COUNT, PRESET_ROW_START, PRESET_ROW_COUNT, COMPONENT, PRESET_TABS, TAB_BUTTON_START, TAB_LABEL_START, TAB_COLOUR, TAB_ACTIVE_COLOUR, ROW_PITCH, uid } = require("../plugins/modes/pvp/PresetsWidget.PvpMode");
 const presets = require("../plugins/modes/pvp/Presets.PvpMode");
 
 function playerWithAttributes(attributes = new Map()) {
   const strings = [];
+  const texts = new Map();
+  const hidden = new Map();
+  const colours = new Map();
+  const messages = [];
   const sender = {
-    sendString(value) {
+    sendMessage(message) { messages.push(message); return sender; },
+    sendString(value, component) {
       strings.push(value);
+      texts.set(component, value);
       return sender;
     },
     sendItemOnInterfaces() { return sender; },
-    sendInterfaceDisplayState() { return sender; },
+    sendInterfaceDisplayState(component, value) { hidden.set(component, value); return sender; },
+    sendInterfaceColour(component, value) { colours.set(component, value); return sender; },
+    sendSubInterface() { return sender; },
     sendEnterInputPrompt() { return sender; },
   };
   let syntaxAction = null;
@@ -27,6 +35,8 @@ function playerWithAttributes(attributes = new Map()) {
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInterfaceId: () => GROUP_ID,
+    setInterfaceId() {},
+    getLocation: () => null,
     getPacketSender: () => sender,
     sendMessage: (message) => sender.sendMessage(message),
     setEnteredSyntaxAction: (action) => { syntaxAction = action; },
@@ -38,7 +48,7 @@ function playerWithAttributes(attributes = new Map()) {
     getCombat: () => ({ getAutocastSpell: () => null }),
     isPlayerBot: () => false,
   };
-  return { attributes, player, strings };
+  return { attributes, player, strings, texts, hidden, colours, messages };
 }
 
 function assertBotPresetLoot() {
@@ -130,7 +140,8 @@ test("custom presets rehydrate from their persisted attribute", () => {
   });
   assert.deepEqual(persisted, ["pvp:custom-presets"]);
 
-  const customSlot = uid(PRESET_ROW_START + GLOBAL_ROW_COUNT);
+  const defaultCount = require("../plugins/modes/data/pvp-presets-players.json").filter((row) => !row.tab || row.tab === "1 Defence").length;
+  const customSlot = uid(PRESET_ROW_START + defaultCount);
   const source = playerWithAttributes();
   onButton({ player: source.player, buttonId: customSlot });
   source.player.getEnteredSyntaxAction().execute("saved build");
@@ -609,4 +620,75 @@ test('preset combat levels in the list match the skill manager formula', () => {
     assert.equal(presets._test.presetCombatLevel({ getStats: () => [attack, 1, 99, 65, 99, 1, 99] }), 64,
       "preset list level matches SkillManager");
   }
+});
+
+test("kit categories follow Defence levels and reserve Max for all-99 stat lines", () => {
+  const rows = require("../plugins/modes/data/pvp-presets-players.json");
+  const counts = Object.fromEntries(PRESET_TABS.map(tab => [tab, 0]));
+  for (const row of rows) {
+    const defence = row.stats[1];
+    const expected = row.stats.every(level => level === 99) ? "Max"
+      : defence === 1 ? "1 Defence" : defence === 42 ? "Void"
+      : defence === 45 ? "Zerker" : defence > 45 ? "Tank" : null;
+    assert.ok(expected, row.name);
+    assert.equal(row.tab, expected, row.name);
+    counts[row.tab]++;
+  }
+  assert.deepEqual(counts, { "1 Defence": 5, Void: 0, Zerker: 2, Tank: 1, Max: 10 });
+  assert.equal(GLOBAL_ROW_COUNT, 18);
+  assert.equal(PRESET_ROW_COUNT, 20, "capacity covers the largest category and ten personal slots");
+});
+
+test("category tabs preview kits and share personal slots, including the empty Void category", () => {
+  let onButton, registeredButtons, declaration;
+  presets.register({
+    getPrayerHandler: () => ({}), getCombatFactory: () => ({}), getSkillManager: () => ({}),
+    persistAttribute() {}, onCanBankItem() {},
+    registerCustomInterface(value) { declaration = value; },
+    onInterfaceActionButton(buttons, handler) { registeredButtons = buttons; onButton = handler; },
+  });
+  const rows = require("../plugins/modes/data/pvp-presets-players.json");
+  const f = playerWithAttributes();
+  const click = component => onButton({ player: f.player, buttonId: uid(component) });
+  const plain = value => value.replace(/<[^>]*>/g, "");
+  assert.equal(presets.openPresetInterface(f.player), true);
+  assert.equal(f.player.getAttribute("pvp:current-preset").getName(), "G Mauler (R)");
+  assert.deepEqual(declaration.scroll[0].resetOnComponents, PRESET_TABS.map((_, index) => TAB_BUTTON_START + index));
+  const packedColour = colour => ((colour >> 9) & 0x7c00) | ((colour >> 6) & 0x3e0) | ((colour >> 3) & 0x1f);
+  for (const [index, tab] of PRESET_TABS.entries()) {
+    assert.ok(registeredButtons.includes(uid(TAB_BUTTON_START + index)));
+    assert.equal(click(TAB_BUTTON_START + index), true);
+    const expected = rows.filter(row => row.tab === tab);
+    assert.equal(f.texts.get(uid(COMPONENT.SELECTED_NAME)), expected[0]?.name ?? "No preset selected");
+    assert.equal(f.texts.get(uid(COMPONENT.LIST_CONTENT_HEIGHT)), String((expected.length + 10) * ROW_PITCH + 4));
+    for (let row = 0; row < PRESET_ROW_COUNT; row++) {
+      const hidden = row >= expected.length + 10;
+      assert.equal(f.hidden.get(uid(PRESET_ROW_START + row)), hidden);
+      assert.equal(plain(f.texts.get(uid(PRESET_ROW_START + row))), expected[row]?.name ?? (hidden ? "" : "Empty slot"));
+    }
+    PRESET_TABS.forEach((label, labelIndex) => {
+      assert.equal(f.texts.get(uid(TAB_LABEL_START + labelIndex)), "<col=" + (labelIndex === index ? "ffffff" : "ffd27f") + ">" + label + "</col>");
+      assert.equal(f.colours.get(uid(TAB_BUTTON_START + labelIndex)), packedColour(labelIndex === index ? TAB_ACTIVE_COLOUR : TAB_COLOUR));
+    });
+    if (expected.length === 0) {
+      assert.equal(click(COMPONENT.LOAD_BUTTON), true);
+      assert.equal(f.messages.at(-1), "You haven't selected any preset yet.");
+    }
+    assert.equal(click(PRESET_ROW_START + expected.length + 10), false, "hidden rows cannot select or save a kit");
+  }
+  click(PRESET_ROW_START + rows.filter(row => row.tab === "Max").length);
+  f.player.getEnteredSyntaxAction().execute("shared build");
+  for (const [index, tab] of PRESET_TABS.entries()) {
+    click(TAB_BUTTON_START + index);
+    click(PRESET_ROW_START + rows.filter(row => row.tab === tab).length);
+    assert.equal(f.player.getAttribute("pvp:current-preset").getName(), "Shared Build");
+    assert.equal(f.player.getAttribute("pvp:selected-custom-preset-slot"), 0);
+  }
+  const zerker = presets.getGlobalPresetByKey("ATT_70_ZERKER_97");
+  presets.openPresetInterface(f.player, zerker);
+  assert.equal(f.player.getAttribute("pvp:preset-tab"), "Zerker");
+  assert.equal(f.player.getAttribute("pvp:current-preset"), zerker);
+  assert.ok(registeredButtons.includes(uid(COMPONENT.DEATH_BUTTON)));
+  click(COMPONENT.DEATH_BUTTON);
+  assert.equal(presets.shouldOpenOnDeath(f.player), false, "the existing death toggle remains available");
 });

@@ -31,9 +31,13 @@ module.exports = function registerGertrudesCatQuest(api) {
   const LOST_KITTEN_NPC_ID = NpcIdentifiers.KITTEN; // 3498
   const RETURN_KITTEN_VARIANT = "making-seasoned-sardines-returning-the-kitten-to-fluffs";
   const KITTEN_SPEAKER = "Fluffs' kitten";
+  /** The transcript calls her "Fluffs"; the cache names the NPC "Gertrude's cat". */
+  const FLUFFS_SPEAKER = "Fluffs";
   const RAN_OFF_ACTION_ID = "9c0VXK"; // "Fluffs has run off home with her offsping."
   /** player -> the kitten actor purring beside Fluffs. */
   const returnedKittens = new WeakMap();
+  /** player -> the Fluffs the kitten was handed to, for her overhead line. */
+  const returningFluffs = new WeakMap();
   const CRATE_NPC_ID = NpcIdentifiers.CRATE;
   const QUEST_NPC_IDS = new Set([...GERTRUDE_NPC_IDS, SHILOP_NPC_ID, WILOUGH_NPC_ID, FLUFFS_NPC_ID]);
 
@@ -280,6 +284,7 @@ module.exports = function registerGertrudesCatQuest(api) {
   /** The Wiki's return scene: Fluffs and her kitten purr, then run off home together. */
   function returnKitten(player, fluffs) {
     removeKitten(player);
+    if (fluffs) returningFluffs.set(player, fluffs);
     const at = fluffs?.getLocation?.();
     const kitten = at
       ? api.spawnNpc({ id: LOST_KITTEN_NPC_ID, x: at.getX(), y: at.getY() - 1, z: at.getZ(), owner: player, ownerOnly: true, wanderRadius: 0 })
@@ -291,17 +296,22 @@ module.exports = function registerGertrudesCatQuest(api) {
   }
 
   function removeKitten(player) {
+    returningFluffs.delete(player);
     const kitten = returnedKittens.get(player);
     if (!kitten) return;
     returnedKittens.delete(player);
     api.removeNpc(kitten);
   }
 
-  /** The kitten's overhead purr is said by the kitten actor. */
+  /** The return scene's purrs are said by the Fluffs it was handed to and the kitten actor. */
   function bindKittenLine(request) {
-    if (request.step?.speaker !== KITTEN_SPEAKER || request.step?.presentation !== "overhead") return;
-    const kitten = returnedKittens.get(request.player);
-    if (kitten) request.actors = [kitten];
+    if (request.step?.presentation !== "overhead") return;
+    const speaker = request.step?.speaker;
+    const actor = speaker === KITTEN_SPEAKER ? returnedKittens.get(request.player)
+      : speaker === FLUFFS_SPEAKER ? returningFluffs.get(request.player) : undefined;
+    if (speaker !== KITTEN_SPEAKER && speaker !== FLUFFS_SPEAKER) return;
+    if (!returningFluffs.has(request.player) && !returnedKittens.has(request.player)) return;
+    if (actor) request.actors = [actor];
     else request.skip = true;
   }
 

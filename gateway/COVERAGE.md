@@ -99,7 +99,7 @@ sessions, so the browser wire format doesn't change.
 | SEND_SNAPSHOT | 199 REPORT_ABUSE | mapped | 6 | |
 | CLICKWORLDMAP / TELEPORT | 105 / 212 | mapped | 9 | developer teleports in tsps |
 | UPDATE_PLAYER_MODEL_V2 | 37 APPEARANCE_SET | mapped | 9 | the official client's designer (679) never sends it: each arrow, A/B and Confirm is an IF_BUTTON that tsps's Makeover Mage plugin applies on the server (the ops are enabled when 679 opens). The gateway still decodes it (rsprot 241 has no decoder, and an undecodable packet disconnects), passing a design only when its ids are valid |
-| trade interface buttons | 180 TRADE_ACTION | mapped | 9 | accept/decline (335:10/13, 334:13/14/32), Offer/Remove ×1/5/10/All on 336:0 and 335:25, and X through the count dialog (script 108) the gateway opens itself |
+| trade interface buttons | 180 TRADE_ACTION | mapped | 9 | accept/decline (335:10/13, 334:13/14/32) and the quantity ops through the count dialog (script 108) the gateway opens itself: the inventory side (336:0, script 3620) has default/1/5/X/All at ops 1-5 and no Offer-10; the own offer (335:25, script 763) is 1/5/10/All/X |
 | WINDOW_STATUS | — | dropped | 4 | tsps picks the root from the saved layout setting, as for the browser |
 | MAP_BUILD_COMPLETE | — | dropped | 2 | gateway-only signal |
 | EVENT_*, IDLE, REFLECTION_CHECK_REPLY, SEND_PING_REPLY, CONNECTION_TELEMETRY, DETECT_MODIFIED_CLIENT, MEMBERSHIP_PROMOTION_ELIGIBILITY, RSEVEN_STATUS, SOUND_JINGLEEND, BUG_REPORT, HISCORE_REQUEST, IF_CRMVIEW_OP, EXIT_FREECAM, CLANCHANNEL_FULL_REQUEST, CLANSETTINGS_FULL_REQUEST | — | dropped | 1 | no tsps handler; tsps sends clan state unasked |

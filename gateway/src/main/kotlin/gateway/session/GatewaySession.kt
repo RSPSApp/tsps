@@ -13,6 +13,7 @@ import gateway.down.NpcSync
 import gateway.down.PlayerSync
 import gateway.down.Social
 import gateway.down.Trade
+import gateway.down.TRADE_QUANTITY_VARBIT
 import gateway.down.TspsChatMessage
 import gateway.down.World
 import gateway.down.TspsHandshake
@@ -75,7 +76,7 @@ class GatewaySession(
     private val social = Social(::send)
     private val clans = Clans(::send)
     private val worldUpdates = World(::send, boats::deckAt, boats::sessionWorld)
-    private val trade by lazy { Trade(::send, { tsps.send(it) }, items::carried) }
+    private val trade by lazy { Trade(::send, { tsps.send(it) }, items::carried, { varps.getVarbit(TRADE_QUANTITY_VARBIT) }) }
 
     /** Everything that turns tsps messages into OSRS packets, asked in turn. */
     private val translators: List<(TspsPacket) -> Boolean> by lazy {

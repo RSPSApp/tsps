@@ -87,16 +87,30 @@ function config(pairs, specialId) {
     specialId,
     // The deposit stays: an emptied sceptre is still activated.
     swapWhenEmpty: false,
+    chargeUsed: paid,
     noChargesMessage: "There is not enough revenant ether left powering your sceptre.",
   };
 }
 
-/** The worn, charged sceptre (either version) when its Wilderness passive applies to this target. */
+/** The tick each player last paid a charge on: that attack keeps the passive it paid for. */
+const paidOn = new WeakMap();
+
+/** A charge was spent (a cast, Condemn, or a spellbook cast with the passive). */
+function paid(player) {
+  paidOn.set(player, core.World.getProcessCycle());
+}
+
+/**
+ * The worn, activated sceptre (either version) when its Wilderness passive applies to this target:
+ * while it holds a charge, or for the attack that has just paid its last one (paid before its roll).
+ */
 function passiveStaff(attacker, target) {
   if (!attacker?.isPlayer?.() || !target?.isNpc?.()) return null;
   const player = attacker.getAsPlayer();
   const staff = [sceptre, autocasting].find((s) => s.wields(player, true));
-  if (!staff || staff.chargesOf(staff.weaponOf(player)) <= 0) return null;
+  if (!staff) return null;
+  const charged = staff.chargesOf(staff.weaponOf(player)) > 0 || paidOn.get(player) === core.World.getProcessCycle();
+  if (!charged) return null;
   return core.Wilderness.isInLocation(target.getLocation()) ? staff : null;
 }
 
@@ -117,7 +131,9 @@ function boostAccuracy(request) {
 /** A spellbook cast with the passive spends a charge, as the built-in spell's own does. */
 function spellCast({ player }) {
   const target = player?.getCombat?.()?.getTarget?.();
-  passiveStaff(player, target)?.useCharge(player);
+  const staff = passiveStaff(player, target);
+  // A charge already paid this tick (Condemn's, the built-in spell's) covers this attack too.
+  if (staff && paidOn.get(player) !== core.World.getProcessCycle()) staff.useCharge(player);
 }
 
 function resolveSceptre(attacker) {

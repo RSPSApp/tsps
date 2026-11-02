@@ -361,3 +361,42 @@ test("an armed Soul Rend lends nothing to an explicitly cast spell (PR #1947 rev
   const plain = DamageFormulas.sourceHitBounds(player, core.CombatType.MAGIC, target).maximum;
   assert.equal(special, Math.floor(plain * 1.3));
 });
+
+test("the Accursed sceptre's last charge still pays for its own Wilderness passive (PR #1947 review)", () => {
+  const { World } = require("../dist/game/World");
+  const { CHARGES_KEY } = Accursed._test;
+  const wilderness = { isPlayer: () => false, isNpc: () => true, getLocation: () => new Location(3103, 3600, 0) };
+  const cycle = World.getProcessCycle;
+  let tick = 1000;
+  World.getProcessCycle = () => tick;
+  try {
+    // The built-in spell: canAttack pays the charge, then the hit is rolled on the same tick.
+    const builtIn = (charges) => {
+      const sceptre = staffItem(I.ACCURSED_SCEPTRE, CHARGES_KEY, charges);
+      const p = player({ weapon: sceptre });
+      assert.equal(accursed.resolvers[0].resolve(p).canAttack(p, wilderness), true);
+      const roll = { attacker: p, target: wilderness, maxHit: 30, attackRoll: 1000 };
+      Accursed._test.boostMaxHit(roll);
+      Accursed._test.boostAccuracy(roll);
+      return [roll.maxHit, roll.attackRoll, Accursed._test.sceptre.chargesOf(sceptre)];
+    };
+    assert.deepEqual(builtIn(2), [45, 1500, 1]);
+    assert.deepEqual(builtIn(1), [45, 1500, 0], "the last charge is a paid attack too");
+
+    // A spellbook cast with the (a) sceptre pays at cast-committed, before its roll.
+    const sceptre = staffItem(I.ACCURSED_SCEPTRE_A_, CHARGES_KEY, 1);
+    const p = player({ weapon: sceptre });
+    p.state.target = wilderness;
+    Accursed._test.spellCast({ player: p });
+    assert.equal(sceptre.getMetaValue(CHARGES_KEY), undefined, "its last charge is spent");
+    const roll = { attacker: p, target: wilderness, maxHit: 30, attackRoll: 1000 };
+    Accursed._test.boostMaxHit(roll);
+    assert.equal(roll.maxHit, 45);
+    tick++;
+    const next = { attacker: p, target: wilderness, maxHit: 30, attackRoll: 1000 };
+    Accursed._test.boostMaxHit(next);
+    assert.equal(next.maxHit, 30, "the next attack, unpaid, gets nothing");
+  } finally {
+    World.getProcessCycle = cycle;
+  }
+});

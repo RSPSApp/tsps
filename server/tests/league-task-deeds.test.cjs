@@ -453,6 +453,25 @@ test("deed: the Lunar spellbook switched to at an altar, the run turned off from
   assert.ok(done(f, "turn-off-your-run"));
 });
 
+test("deed: a special attack performed, by its weapon (the Dragon Axe's Lumber Up); a cannon set up", async (t) => {
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const f = pactsCharacter(t);
+  f.player.getSkillManager().setMaxLevel(core.Skill.ATTACK, 60);
+  f.player.getSkillManager().setCurrentLevel(core.Skill.ATTACK, 60);
+  f.player.getInventory().add(new core.Item(item("Dragon axe")), true);
+  await inventoryOption(f, "Dragon axe", "Wield", 2);
+  assert.equal(f.player.getEquipment().get(core.Equipment.WEAPON_SLOT).getId(), item("Dragon axe"), `the real equipment wields it: ${f.messages}`);
+  await send(f, { type: "varp_transmit", varpId: 301, value: 1 }, 2);
+  assert.ok(f.player.getSpecialPercentage() < 100, `the real special spends its energy: ${f.messages}`);
+  assert.ok(done(f, "use-the-special-attack-of-a-dragon-axe") && done(f, "perform-a-special-attack"));
+
+  const gunner = pactsCharacter(t);
+  for (const part of ["Cannon base", "Cannon stand", "Cannon barrels", "Cannon furnace"]) gunner.player.getInventory().add(new core.Item(item(part)), true);
+  await inventoryOption(gunner, "Cannon base", "Set-up", 1, 12);
+  assert.ok(gunner.player.getInventory().getAmount(item("Cannon furnace")) === 0, `the real set-up uses every part: ${gunner.messages}`);
+  assert.ok(done(gunner, "set-up-a-dwarf-cannon"));
+});
+
 /** A cache NPC of the name with the option, beside the player; the option's click. */
 function npcBeside(t, f, name, option) {
   const id = [...Array(20000).keys()].find((each) => core.CacheDefinitions.getNpc(each)?.name === name && (core.CacheDefinitions.getNpc(each).actions ?? []).some((action) => action?.toLowerCase() === option));

@@ -1707,7 +1707,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   "Activate an Arcane or Dexterous Prayer Scroll" (`prayer:scroll-read`, either scroll read),
   "Switch to the Lunar Spellbook" (`MagicSpellbook.changeSpellbook`'s new `magic:spellbook-changed`
   { spellbook: "lunar" }, `where` the event's own fields), "Turn off your run" (the run toggle's new
-  `player:run-toggled` { running: false }),
+  `player:run-toggled` { running: false }), "Perform a Special Attack", "Use the Special Attack of a Dragon Axe", "Blow the
+  Soulflame Horn" (`CombatSpecial.drain`'s new `combat-special:performed`, its `itemId` the weapon
+  wielded), "Set Up a Dwarf Cannon" (`dwarf-cannon:set-up`, the fourth part on),
   `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what

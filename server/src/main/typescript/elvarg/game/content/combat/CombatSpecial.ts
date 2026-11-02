@@ -146,6 +146,9 @@ export class CombatSpecial {
         if (character.isPlayer()) {
             let p = character.getAsPlayer();
             CombatSpecial.updateBar(p);
+            // "combat-special:performed" { player, itemId }: a special attack performed, with the weapon wielded.
+            const { PluginManager } = require("../../../plugins/PluginManager");
+            PluginManager.emitCustomEvent("combat-special:performed", { player: p, itemId: p.getEquipment?.()?.get(Equipment.WEAPON_SLOT)?.getId?.() ?? -1 });
         }
     }
 

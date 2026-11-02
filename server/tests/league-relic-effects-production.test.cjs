@@ -394,3 +394,17 @@ test("through the skills' own loops: a smithing session, a crafting loop and a p
   assert.deepEqual(compost(forager.relic), [1, 0], "the fourth dose");
   for (const player of others(forager)) assert.deepEqual(compost(player), [0, 1], `${player.getUsername()} as usual`);
 });
+
+test("Friendly Forager: Demonic Pacts' pouch holds 100 of each herb (Wiki, 15 April 2026), Raging Echoes' 30", () => {
+  const guam = obj("unidentified_guam");
+  for (const [league, cap] of [[6, 100], [5, 30]]) {
+    const player = character(`pouch-cap-${league}`, "league", FORAGER, league);
+    player.getInventory().adds(I.FORAGERS_POUCH, 1);
+    const pouch = player.getInventory().getItems().find((item) => item?.getId() === I.FORAGERS_POUCH);
+    pouch.setMetaValue(FORAGER_STORE, { [guam]: cap - 10 });
+    player.getInventory().adds(guam, 20);
+    itemActions.get("Forager's pouch").Fill({ player });
+    assert.equal(pouch.getMetaValue(FORAGER_STORE)[guam], cap, `league ${league}: full`);
+    assert.equal(player.getInventory().getAmount(guam), 10, "the rest stay out");
+  }
+});

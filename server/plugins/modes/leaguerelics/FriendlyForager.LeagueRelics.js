@@ -1,7 +1,8 @@
 /**
  * Friendly Forager (https://oldschool.runescape.wiki/w/Friendly_Forager_(Raging_Echoes_League)),
  * Raging Echoes' tier 2 relic: the Forager's pouch, carried or worn, finds a grimy herb (one the
- * player could clean at their Herblore level + 25, of a kind it has room for, 30 of each) when
+ * player could clean at their Herblore level + 25, of a kind it has room for, 30 of each, 100 in
+ * Demonic Pacts) when
  * they gather with Woodcutting, Fishing, Mining or Hunter, at most once every 9 ticks, with the
  * herb's cleaning XP (ours: the Wiki says "a small amount"). Its Check, Fill and Withdraw (as
  * notes) options manage the herbs, which it keeps itself (live shares them with the herb sack).
@@ -59,6 +60,11 @@ function herbName(itemId) {
   return core.ItemDefinition.forId(itemId)?.getName?.() ?? "Herbs";
 }
 
+/** How many of each herb the player's pouch holds: the league's own (Demonic Pacts' 100), else 30. */
+function herbCap(player) {
+  return effect.leagueHerbCap?.[Common.leagueOf(player)] ?? effect.herbCap;
+}
+
 /** A gathering action: a herb the pouch has room for and the player could clean at level + 25. A minigame's reward (a `source`, the rumour sack) is not gathering. */
 function find({ player, source, method }) {
   if (source || method === "rumour-sack" || !player?.isPlayer?.() || !active(player)) return;
@@ -68,7 +74,7 @@ function find({ player, source, method }) {
   if (cycle < (nextFind.get(player) ?? 0)) return;
   const level = player.getSkillManager().getCurrentLevel(core.Skill.HERBLORE) + effect.levelRange;
   const contents = stored(pouch);
-  const candidates = herbs().filter((herb) => herb.level <= level && (contents[herb.grimyId] ?? 0) < effect.herbCap);
+  const candidates = herbs().filter((herb) => herb.level <= level && (contents[herb.grimyId] ?? 0) < herbCap(player));
   if (candidates.length === 0) return;
   const herb = candidates[Math.floor(Math.random() * candidates.length)];
   contents[herb.grimyId] = (contents[herb.grimyId] ?? 0) + 1;
@@ -101,7 +107,7 @@ function fill(event) {
   const inventory = player.getInventory();
   let moved = 0;
   for (const id of known) {
-    const room = effect.herbCap - (contents[id] ?? 0);
+    const room = herbCap(player) - (contents[id] ?? 0);
     const amount = Math.min(room, inventory.getAmount(id));
     if (amount <= 0) continue;
     inventory.deleteNumber(id, amount);

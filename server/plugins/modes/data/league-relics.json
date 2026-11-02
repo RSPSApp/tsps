@@ -183,6 +183,7 @@
       "_leagueBatch": "Demonic Pacts' pouch also makes every Herblore item at once (Wiki, cache text), up to 28 a cycle as the production relics.",
       "leagueBatch": { "6": { "maxActions": 28, "batch": { "HERBLORE": ["clean", "mix"] } } },
       "cooldownTicks": 9, "levelRange": 25, "herbCap": 30, "secondarySaveChance": 0.9,
+      "leagueHerbCap": { "6": 100 }, "_leagueHerbCap": "Wiki, Forager's pouch (15 April 2026): Demonic Pacts' pouch holds 100 of each herb, as the silklined herb sack.",
       "triggers": ["mining:success", "woodcutting:success", "fishing:success", "hunter:success"],
       "_saving": "Wiki: the torstol potion (unf) of super combat potions and anti-venom+ is saved like a secondary; crystal dust (divine potions) never is.",
       "alsoSaved": ["torstolvial"], "neverSaved": ["prif_crystal_shard_crushed"]

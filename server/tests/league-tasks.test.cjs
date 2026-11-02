@@ -531,6 +531,10 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.equal(trigger("craft-some-pottery-in-sophanem"), undefined, "pottery is a skill's products, no one item");
   assert.deepEqual(trigger("equip-amy-s-saw"), { kind: "equip", items: ["Amy's saw"] }, "from Mahogany Homes is where it comes from");
   assert.deepEqual(trigger("equip-a-golden-tench"), { kind: "equip", items: ["Golden tench"] }, "caught by aerial fishing, likewise");
+  // A set the cache has no item set for: its Wiki page's table of pieces.
+  assert.deepEqual(trigger("equip-a-full-armadyl-armour-set"), { kind: "equip-all", items: ["Armadyl helmet", "Armadyl chestplate", "Armadyl chainskirt"] });
+  assert.equal(trigger("equip-a-full-void-knight-set").sets.length, 3, "one table per helm, sharing the rest");
+  assert.equal(trigger("equip-a-full-crystal-armour-set"), undefined, "weapons, armour and tools are three things");
 
   // Fires, burnt food and bones: the logs or bones named, any bones for "Remains of any kind".
   assert.deepEqual(trigger("burn-100-willow-logs"), { kind: "burn", items: ["Willow logs"], count: 100 });

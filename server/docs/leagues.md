@@ -1627,7 +1627,12 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   crosses into a map square; a set an equip task names is the
   cache's item set, enum 1034's pieces as the Grand Exchange's set exchange reads them: "a full set
   of Ahrim the Blighted's equipment" every piece, "any piece of the Justiciar Armour set" any,
-  "a full set of any Barrows equipment" one whole Barrows set (`equip-any-set { sets }`), and a
+  "a full set of any Barrows equipment" one whole Barrows set (`equip-any-set { sets }`); a set the
+  cache has no item set for is its Wiki page's (the description's link, saved as
+  `<dir>/sets/<page>.wikitext`): its `{{Infotable Bonuses}}` or `{{Skill outfit}}` table of pieces,
+  or the pieces its `{{Infobox Set}}` pictures link to, every one a cache item ("a full set of Armadyl
+  armour"; Void Knight's three tables, one per helm, are three whole sets; tables that share no piece,
+  Crystal armour's weapons, armour and tools, leave it unmapped), and a
   Barrows "piece of armour" is no weapon; an equip-all slot may be "either
   some platelegs or a plateskirt"; a worn item is as the cache spells it, "Seer's Ring" the Seers
   ring, "vambs" vambraces; what only restates the deed is

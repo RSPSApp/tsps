@@ -1172,6 +1172,11 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
       }
       const sets = itemSetNamed(set[1]);
       if (sets && sets.length === 1) return { trigger: { kind: "equip-all", items: sets[0] } };
+      // A set the cache has no item set for: its Wiki page's pieces, every one a cache item; one
+      // table is that set, several are one set each (any of them whole).
+      const listed = wikiSetNamed(set[1], names);
+      if (listed?.length === 1) return { trigger: { kind: "equip-all", items: listed[0] } };
+      if (listed && listed.length > 1) return { trigger: { kind: "equip-any-set", sets: listed } };
     } else if ((set = /^(?:any |a )?piece of (?:the )?(?:any )?(.+?)(?: set)?$/i.exec(said))) {
       if (/^barrows armour$/i.test(set[1])) {
         // A piece of armour: the sets' weapons (the staff, the greataxe...) are no armour.
@@ -1179,7 +1184,7 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
           .filter((piece) => !/(?:staff|greataxe|warspear|crossbow|hammers|flail)$/i.test(piece));
         if (barrows.length) return { trigger: { kind: "equip", items: [...new Set(barrows)] } };
       }
-      const sets = itemSetNamed(set[1]);
+      const sets = itemSetNamed(set[1]) ?? wikiSetNamed(set[1], names);
       if (sets) return { trigger: { kind: "equip", items: [...new Set(sets.flat())] } };
     }
   }

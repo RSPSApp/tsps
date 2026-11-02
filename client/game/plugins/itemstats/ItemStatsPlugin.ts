@@ -30,6 +30,7 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
         name: "Item Stats",
         description: "Show equipment bonuses and compare gear with worn equipment",
         tags: ["combat", "equipment", "items", "stats"],
+        enabledByDefault: false,
         configKey: "itemstatsplugin",
     };
 

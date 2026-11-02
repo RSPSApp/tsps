@@ -230,9 +230,10 @@ export class LocUpdates {
         const wasAdded = added !== undefined && (added.rotation & 0x3) === (rotation & 0x3);
         this.r.addedLocs.delete(key);
         if (wasAdded) {
-            // The object the server added is gone. Its add never removed the cache scenery at
-            // this tile, and whatever it did replace comes back.
+            // Deleting a replay of the cache loc removes that loc; only scenery replaced
+            // by a different added id comes back.
             for (const id of added.replacedIds ?? []) {
+                if ((id | 0) === (added.locId | 0)) continue;
                 this.r.locOverrides.delete(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`);
             }
             this.reloadTile(tile, this.groupOf(added.locId));

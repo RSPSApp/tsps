@@ -40,7 +40,7 @@
  *   have enough inventory space."
  * - Side panel: op1 selects an inventory item (varp 3870, omnishop_side_info_setup [slot, shop,
  *   1, 0, sellable ? 1 : -1, entry or -1, description]); ops 2-5 and its buttons sell 1/5/10/50
- *   for 40% of the cost (Alchemist labcoat: 2,250/2,800/3,700 -> +900/+1,120/+1,480), then
+ *   for the cache's sell rate (default 40%: labcoat 2,250/2,800/3,700 -> +900/+1,120/+1,480), then
  *   omnishop_side_info_close. Close Info sets varp 3870 back to -1.
  */
 
@@ -79,7 +79,7 @@ const QUANTITY_ENUM = 5844;
 /** List and side ops 2-5 are the four quantities; op10 is Examine. */
 const FIRST_QUANTITY_OP = 2;
 const EXAMINE_OP = 10;
-const SELL_RATE = 0.4;
+const INHERIT_RATE = -2147483648;
 const EVENT = {
   OP1_TO_OP6: (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6),
   OP10: 1 << 10,
@@ -129,6 +129,14 @@ function buyQuantities(row) {
   });
 }
 
+/** Native cost procs 7261/7262 inherit the shop rate and clamp it to at least 10%. */
+function costRate(shop, stock, buying) {
+  const suffix = buying ? "buy" : "sell";
+  const override = int(stock, TABLE.STOCK, `omnishop_stock_cost_mod_${suffix}`, INHERIT_RATE);
+  return Math.max(100, override === INHERIT_RATE
+    ? int(shop, TABLE.SHOP, `omnishop_shop_cost_mod_${suffix}`, buying ? 1000 : 400) : override);
+}
+
 /** A shop row read once: its stock and currencies. */
 function shopOf(rowId) {
   if (shops.has(rowId)) return shops.get(rowId);
@@ -138,7 +146,12 @@ function shopOf(rowId) {
     const stockRow = cache().getDbRow(Number(stockId));
     const cost = values(stockRow, TABLE.STOCK, "omnishop_stock_cost");
     const costs = [];
-    for (let i = 0; i + 1 < cost.length; i += 2) costs.push({ currency: Number(cost[i]), amount: Number(cost[i + 1]) });
+    for (let i = 0; i + 1 < cost.length; i += 2) costs.push({
+      currency: Number(cost[i]),
+      amount: Math.max(Number(cost[i + 1]) > 0 ? 1 : 0,
+        Math.floor(Number(cost[i + 1]) * costRate(row, stockRow, true) / 1000)),
+      refund: Math.floor(Number(cost[i + 1]) * costRate(row, stockRow, false) / 1000),
+    });
     return {
       index,
       row: Number(stockId),
@@ -148,8 +161,12 @@ function shopOf(rowId) {
         || int(stockRow, TABLE.STOCK, "omnishop_stock_restricted_category") > 0,
       restrictedUim: int(stockRow, TABLE.STOCK, "omnishop_stock_restricted_uim") === 1,
       single: int(stockRow, TABLE.STOCK, "omnishop_stock_transaction_multiplier", 1) === 0,
+      amount: Math.max(1, int(stockRow, TABLE.STOCK, "omnishop_stock_transaction_multiplier", 1)),
       maxPurchase: int(stockRow, TABLE.STOCK, "omnishop_stock_max_purchase", 0),
-      sellable: int(stockRow, TABLE.STOCK, "omnishop_stock_sellable") === 1,
+      buyable: int(stockRow, TABLE.STOCK, "omnishop_stock_buyable", 1) === 1
+        && int(stockRow, TABLE.STOCK, "omnishop_stock_view_only") !== 1,
+      sellable: int(stockRow, TABLE.STOCK, "omnishop_stock_sellable") === 1
+        && int(stockRow, TABLE.STOCK, "omnishop_stock_view_only") !== 1,
       noted: int(stockRow, TABLE.STOCK, "omnishop_stock_sold_noted") === 1,
     };
   });
@@ -183,6 +200,7 @@ function wallet(player, shop, currency) {
   if (obj > 0) {
     const inventory = player.getInventory();
     return {
+      itemId: obj,
       balance: inventory.getAmount(obj),
       set: (value) => {
         const delta = value - inventory.getAmount(obj);
@@ -259,6 +277,7 @@ function redraw(player, shop) {
 
 /** One unit: the checks, the payment and the item. False stops the rest of the order. */
 function buyOne(player, shop, entry) {
+  if (!entry.buyable) return false;
   if (entry.restrictedUim && isUltimate(player)) {
     player.sendMessage(MESSAGE.ULTIMATE);
     return false;
@@ -271,7 +290,8 @@ function buyOne(player, shop, entry) {
   const check = { player, shop: shop.name, stock, itemId: entry.itemId, cancel: false, unlock: false };
   pluginApi.emitCustomEvent("omnishop:can-buy", check);
   if (check.cancel) return false;
-  const wallets = entry.costs.map((cost) => ({ cost, wallet: wallet(player, shop, cost.currency) }));
+  const wallets = entry.costs.filter((cost) => cost.amount > 0)
+    .map((cost) => ({ cost, wallet: wallet(player, shop, cost.currency) }));
   const short = wallets.find(({ cost, wallet: held }) => !held || held.balance < cost.amount);
   if (short) {
     player.sendMessage(MESSAGE.TOO_POOR(currencyName(short.cost.currency)));
@@ -280,18 +300,23 @@ function buyOne(player, shop, entry) {
   const { ItemDefinition } = core;
   const itemId = entry.noted ? (ItemDefinition.forId(entry.itemId)?.getNoteId?.() ?? entry.itemId) : entry.itemId;
   const inventory = player.getInventory();
-  const stackable = ItemDefinition.forId(itemId)?.isStackable?.() === true;
-  if (check.unlock !== true && inventory.getFreeSlots() < 1 && !(stackable && inventory.contains(itemId))) {
-    player.sendMessage(MESSAGE.NO_SPACE);
-    return false;
+  if (check.unlock !== true) {
+    const preview = new core.Inventory(player).setItems(inventory.getCopiedItems());
+    for (const { cost, wallet: held } of wallets) {
+      if (held.itemId > 0) preview.deleted(held.itemId, cost.amount, false);
+    }
+    if (preview.getAddableAmount(new core.Item(itemId, entry.amount)) < entry.amount) {
+      player.sendMessage(MESSAGE.NO_SPACE);
+      return false;
+    }
   }
   for (const { cost, wallet: held } of wallets) held.set(held.balance - cost.amount);
   const request = { player, shop: shop.name, stock, itemId: entry.itemId, handled: false };
   pluginApi.emitCustomEvent("omnishop:purchase", request);
   if (!request.handled) {
-    inventory.adds(itemId, 1);
+    inventory.adds(itemId, entry.amount);
     inventory.refreshItems();
-    pluginApi.emitCustomEvent("collection-log:obtain", { player, itemId: entry.itemId, amount: 1 });
+    pluginApi.emitCustomEvent("collection-log:obtain", { player, itemId: entry.itemId, amount: entry.amount });
   }
   // A purchase handler may have closed the shop (a boat is delivered with a message box).
   if (openShopFor(player)) redraw(player, shop);
@@ -362,7 +387,8 @@ function clickBuy(event) {
 }
 
 function stockFor(shop, itemId) {
-  return shop.stock.find((entry) => entry.itemId === itemId) ?? null;
+  return shop.stock.find((entry) => entry.itemId === itemId && entry.sellable)
+    ?? shop.stock.find((entry) => entry.itemId === itemId) ?? null;
 }
 
 function sell(player, shop, slot, quantity) {
@@ -374,11 +400,24 @@ function sell(player, shop, slot, quantity) {
     return;
   }
   for (let unit = 0; unit < quantity && inventory.getItems()[slot]?.getId?.() === entry.itemId; unit++) {
-    inventory.deleteAtSlot(slot, 1);
-    for (const cost of entry.costs) {
-      const held = wallet(player, shop, cost.currency);
-      held?.set(held.balance + Math.floor(cost.amount * SELL_RATE));
+    const payments = entry.costs.filter((cost) => cost.refund > 0)
+      .map((cost) => ({ cost, wallet: wallet(player, shop, cost.currency) }));
+    const preview = new core.Inventory(player).setItems(inventory.getCopiedItems());
+    preview.deleteAtSlot(slot, 1, false);
+    let fits = true;
+    for (const { cost, wallet: held } of payments) {
+      if (!held || (held.itemId > 0 && preview.getAddableAmount(new core.Item(held.itemId, cost.refund)) < cost.refund)) {
+        fits = false;
+        break;
+      }
+      if (held.itemId > 0) preview.add(new core.Item(held.itemId, cost.refund), false);
     }
+    if (!fits) {
+      player.sendMessage(MESSAGE.NO_SPACE);
+      break;
+    }
+    inventory.deleteAtSlot(slot, 1);
+    for (const { cost, wallet: held } of payments) held.set(held.balance + cost.refund);
     redraw(player, shop);
   }
   inventory.refreshItems();

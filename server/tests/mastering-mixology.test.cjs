@@ -98,3 +98,135 @@ test('the resin text over the belt matches the capture', () => {
   assert.equal(Orders.chatterText({ mox: 0, aga: 672, lye: 224 }), '   <col=11ff00>+672 Aga</col>   <col=ff242f>+224 Lye</col>');
   assert.equal(Orders.chatterText({ mox: 448, aga: 0, lye: 560 }), '<col=389cff>+448 Mox</col>   <col=ff242f>+560 Lye</col>');
 });
+
+/** Exercise the shared reward shop with actual cache rows and a native inventory. */
+function omnishopHarness(shop = 'forestry_shop') {
+  const core = PluginManager.getCoreApi();
+  const events = new Map(), buttons = new Map();
+  const api = {
+    core,
+    onCustomEvent(name, fn) { const list = events.get(name) ?? []; list.push(fn); events.set(name, list); },
+    emitCustomEvent(name, event) { for (const fn of events.get(name) ?? []) fn(event); },
+    onInterfaceActionButton(ids, fn) { for (const id of [ids].flat()) buttons.set(id, fn); },
+  };
+  require('../plugins/interface/Omnishop.plugin').register(api);
+  const messages = [], attributes = new Map(), varps = new Map();
+  let interfaceId = -1;
+  const sender = new Proxy({}, { get: (_, key) => (...args) => {
+    if (key === 'getVarp') return varps.get(args[0]) ?? 0;
+    if (key === 'sendConfig') varps.set(args[0], args[1]);
+    return sender;
+  } });
+  const player = {
+    getUsername: () => 'Omnishop tester', getInterfaceId: () => interfaceId,
+    setInterfaceId: (id) => { interfaceId = id; }, getPacketSender: () => sender,
+    getAttribute: (key) => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
+    getEquipment: () => ({ contains: () => false }), getBanks: () => [],
+    sendMessage: (text) => messages.push(text),
+  };
+  const inventory = new core.Inventory(player);
+  player.getInventory = () => inventory;
+  const shopRow = core.CacheDefinitions.getDbRow(core.CacheDefinitions.getDbRowId(shop));
+  const stock = shopRow.column(core.CacheDefinitions.getDbColumn(shopRow.tableId, 'omnishop_shop_stock'));
+  const click = (name, fields) => {
+    const buttonId = core.CacheDefinitions.getComponentId(name);
+    buttons.get(buttonId)({ player, buttonId, handled: false, ...fields });
+  };
+  api.emitCustomEvent('omnishop:open', { player, shop, handled: false });
+  return {
+    inventory, player, messages, api, core,
+    buy(row, op = 2) {
+      const index = stock.indexOf(core.CacheDefinitions.getDbRowId(row));
+      assert.ok(index >= 0, row);
+      click('omnishop_main:list', { slot: index * 12, action: op });
+    },
+    sell(id) { click('omnishop_side:items', { slot: inventory.getSlotForItemId(id), action: 2 }); },
+  };
+}
+
+test('native Forestry free kits and ten-voucher bundles use cache transaction amounts', () => {
+  const h = omnishopHarness();
+  h.buy('forestry_shop_stock_0');
+  assert.equal(h.inventory.getAmount(28136), 1, 'the kit is free without coins');
+  h.inventory.adds(28134, 750);
+  h.buy('forestry_shop_stock_20', 3);
+  assert.equal(h.inventory.getAmount(28628), 50, 'Buy-5 buys five ten-voucher bundles');
+  assert.equal(h.inventory.getAmount(28134), 0);
+});
+
+test('native Forestry stock overrides price eggs at 75000 bark and refund 250', () => {
+  for (const [row, itemId] of [['forestry_shop_stock_25', 28663], ['forestry_shop_stock_26', 28626]]) {
+    const h = omnishopHarness();
+    h.inventory.adds(28134, 74999);
+    h.buy(row);
+    assert.equal(h.inventory.getAmount(itemId), 0, 'short purchases take nothing');
+    assert.equal(h.inventory.getAmount(28134), 74999);
+    h.inventory.adds(28134, 1);
+    h.buy(row);
+    assert.equal(h.inventory.getAmount(itemId), 1);
+    assert.equal(h.inventory.getAmount(28134), 0);
+    h.sell(itemId);
+    assert.equal(h.inventory.getAmount(itemId), 0);
+    assert.equal(h.inventory.getAmount(28134), 250, 'stock modifier is clamped to 10% by native cost calculation');
+  }
+});
+
+test('native Forestry sell-only drops cannot be bought and refund the shop 80% rate', () => {
+  for (const [row, itemId, refund] of [
+    ['forestry_shop_stock_24', 28624, 5],
+    ['forestry_shop_stock_28', 28655, 150],
+    ['forestry_shop_stock_29', 28674, 25],
+  ]) {
+    const h = omnishopHarness();
+    h.inventory.adds(28134, 1000);
+    h.buy(row);
+    assert.equal(h.inventory.getAmount(itemId), 0, 'forged buy op on sell-only stock is ignored');
+    assert.equal(h.inventory.getAmount(28134), 1000);
+    h.inventory.adds(itemId, 1);
+    h.sell(itemId);
+    assert.equal(h.inventory.getAmount(itemId), 0);
+    assert.equal(h.inventory.getAmount(28134), 1000 + refund);
+  }
+});
+
+test('shared purchases account for paid inventory slots and refuse overflowing reward stacks', () => {
+  const h = omnishopHarness();
+  h.inventory.adds(28134, 150);
+  while (h.inventory.getFreeSlots()) h.inventory.adds(1351, 1);
+  h.buy('forestry_shop_stock_20');
+  assert.equal(h.inventory.getAmount(28134), 0, 'spending the entire bark stack makes room');
+  assert.equal(h.inventory.getAmount(28628), 10);
+  h.inventory.delete(1351, 1);
+  h.inventory.adds(28134, 150);
+  h.inventory.delete(28628, 10);
+  h.inventory.adds(28628, 2147483640);
+  h.buy('forestry_shop_stock_20');
+  assert.equal(h.inventory.getAmount(28134), 150, 'overflow refuses before payment');
+  assert.equal(h.inventory.getAmount(28628), 2147483640);
+});
+
+test('shared sales refuse before destroying an item if the refund would overflow', () => {
+  const h = omnishopHarness();
+  h.inventory.adds(28134, 2147483640);
+  h.inventory.adds(28674, 1);
+  h.sell(28674);
+  assert.equal(h.inventory.getAmount(28674), 1);
+  assert.equal(h.inventory.getAmount(28134), 2147483640);
+});
+
+test('native Mixology refunds retain the default 40% for each owned currency', () => {
+  const h = omnishopHarness('mixology_rewards');
+  const balances = new Map();
+  h.api.onCustomEvent('omnishop:currency', (event) => {
+    event.balance = balances.get(event.currency) ?? 0;
+    event.set = (value) => balances.set(event.currency, value);
+  });
+  h.inventory.adds(29978, 1);
+  h.sell(29978);
+  assert.equal(h.inventory.getAmount(29978), 0);
+  for (const [name, expected] of [
+    ['omnishop_currency_mixology_mox', 900],
+    ['omnishop_currency_mixology_aga', 1120],
+    ['omnishop_currency_mixology_lye', 1480],
+  ]) assert.equal(balances.get(h.core.CacheDefinitions.getDbRowId(name)), expected, name);
+});

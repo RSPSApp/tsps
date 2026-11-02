@@ -440,3 +440,21 @@ test("open-chest: a key chest opened by the real KeyChests (Open the Crystal Che
   assert.equal(f.player.getInventory().getAmount(chest.keyId), 0, `the key used: ${f.messages}`);
   assert.ok(done(f, "open-the-crystal-chest"));
 });
+
+test("plant: seeds dibbed in an allotment through the real Farming (Plant some seeds in an allotment patch)", (t) => {
+  const f = pactsCharacter(t);
+  const Data = require("../plugins/skills/farming/Data.Farming");
+  const Patches = require("../plugins/skills/farming/Patches.Farming");
+  const patch = Data.CACHE.patches.find((each) => each.type === "ALLOTMENT");
+  Object.assign(Patches.stateFor(f.player, patch), { weeds: 0 });
+  f.player.moveTo(new core.Location(patch.x, patch.y, patch.z));
+  t.mock.method(core.MapObjects, "get", () => null);
+  for (const name of ["Seed dibber", "Potato seed"]) f.player.getInventory().add(new core.Item(Data.itemId(name), name === "Potato seed" ? 3 : 1), true);
+  const seed = Data.itemId("Potato seed");
+  PM.emitItemOnObject({ player: f.player, object: { getId: () => patch.id, getLocation: () => new core.Location(patch.x, patch.y, patch.z), getDefinition: () => core.ObjectDefinition.forId(patch.id) },
+    objectId: patch.id, item: f.player.getInventory().get(f.player.getInventory().getSlotForItemId(seed)), itemId: seed, itemSlot: f.player.getInventory().getSlotForItemId(seed),
+    interfaceType: 0, location: { x: patch.x, y: patch.y, z: patch.z }, handled: false });
+  for (let i = 0; i < 4; i++) { core.TaskManager.process(); Patches.tick(); }
+  assert.ok(f.player.getInventory().getAmount(seed) < 3, `the real Farming plants them: ${f.messages}`);
+  assert.ok(done(f, "plant-seeds-in-an-allotment-patch"));
+});

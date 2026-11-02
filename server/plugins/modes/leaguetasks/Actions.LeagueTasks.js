@@ -40,6 +40,9 @@
  * - `pet { skilling, count }`: a new pet, a skilling pet's if `skilling`, `pets:obtained` { skill }.
  * - `tempoross { count }`: Tempoross subdued, `tempoross:subdued`; `open-chest { chests, count }`: a
  *   key chest opened, by its name, `chests:opened`.
+ * - `plant { crops | patches, count }` (`farming:planted`), `harvest { crops, count }`
+ *   (`farming:harvest`, a patch emptied), `foundry { quality?, count }`
+ *   (`giants-foundry:sword-handed-in`).
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -320,6 +323,10 @@ const EVENT_KINDS = new Map([
   ["pet", (trigger, event) => !trigger.skilling || !!event.skill],
   ["tempoross", () => true],
   ["open-chest", (trigger, event) => trigger.chests.some((chest) => key(chest) === key(event.chest))],
+  ["plant", (trigger, event) => (!trigger.crops || trigger.crops.includes(event.crop)) && (!trigger.patches || trigger.patches.includes(event.patch?.type))],
+  ["harvest", (trigger, event) => trigger.crops.includes(event.crop)],
+  // A successful sword: a ruined one (quality 0) counts for neither.
+  ["foundry", (trigger, event) => Number(event.quality) > 0 && (!(trigger.quality > 0) || Number(event.quality) >= trigger.quality)],
 ]);
 
 function onEvent(kind) {
@@ -370,6 +377,9 @@ module.exports = function attach(api) {
   api.onCustomEvent("pets:obtained", onEvent("pet"));
   api.onCustomEvent("tempoross:subdued", onEvent("tempoross"));
   api.onCustomEvent("chests:opened", onEvent("open-chest"));
+  api.onCustomEvent("farming:planted", onEvent("plant"));
+  api.onCustomEvent("farming:harvest", onEvent("harvest"));
+  api.onCustomEvent("giants-foundry:sword-handed-in", onEvent("foundry"));
   api.onCustomEvent("farming:check-health", checkedHealth);
   api.onCustomEvent("collection-log:new-item", logged);
   api.onCustomEvent("world:picked", picked);

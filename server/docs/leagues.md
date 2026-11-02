@@ -1572,7 +1572,11 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   higher" the harder boats too), `prayer { prayers, count }` from `prayer:activated` (PrayerData's
   names; a prayer the server lacks is left out), `tempoross { count }` from `tempoross:subdued`
   (no NPC dies), `open-chest { chests, count }` from KeyChests' `chests:opened` (the crystal,
-  enhanced crystal and Larran's chests by name), `pet { skilling, count }` from Pets'
+  enhanced crystal and Larran's chests by name), `plant { crops | patches, count }` from
+  `farming:planted`, `harvest { crops, count }` from `farming:harvest` (a patch emptied, so a
+  count of a crop is no harvest count), `foundry { quality?, count }` from
+  `giants-foundry:sword-handed-in` (a successful sword: a ruined one, quality 0, is none),
+  `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what
   the food restores, at full health too): "Eat / Drink a X" by the description's item or else the

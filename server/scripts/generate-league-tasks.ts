@@ -409,6 +409,10 @@ const KEY_CHESTS: Array<[RegExp, string[]]> = [
   [/^Open (?:\d+ of )?either Larran's Small Chest or Larran's Big Chest$/i, ["Larran's small chest", "Larran's big chest"]],
 ];
 
+/** The farming plugin's crop keys (plugins/skills/farming/Data.Farming.js's rows: ["RANARR", "Ranarr seed", ...]). */
+const FARMING_CROPS: Set<string> = new Set([...fs.readFileSync(path.resolve(__dirname, "../plugins/skills/farming/Data.Farming.js"), "utf8")
+  .matchAll(/^\s*\["([A-Z_]+)", "[^"]*seed"/gm)].map((row) => row[1]));
+
 /** Minigame completions and the monster their plugin credits for each (combat-achievements:kill). */
 const MINIGAME_COMPLETIONS: Array<[RegExp, string[]]> = [
   [/^Complete The Gauntlet in Prifddinas(?: \d+ times)?$/i, ["Crystalline Hunllef"]],
@@ -420,6 +424,7 @@ const MINIGAME_COMPLETIONS: Array<[RegExp, string[]]> = [
   [/^Defeat the Royal Titans(?: \d+ times)?$/i, ["Royal Titans"]],
   [/^Help the pyromancers defeat the Wintertodt(?: \d+ times)?$/i, ["Wintertodt"]],
   [/^Defeat the Doom of Mokhaiotl at any delve level$/i, ["Doom of Mokhaiotl"]],
+  [/^Loot a Chest \(Barrows\) once$/i, ["Barrows"]],
 ];
 const CONDITION_IN = (text: string) => /\b(?:in less than|in under|or less|without|solo)\b/i.test(text);
 
@@ -461,7 +466,7 @@ function countAndSubject(rest: string): { count: number; subject: string } {
  * the `produce` kind counts it (docs/leagues.md, Tasks).
  */
 const PRODUCE_VERBS: Record<string, string[]> = {
-  catch: ["Raw ", ""], chop: [""], mine: [""], cook: ["", "Cooked "], craft: [""], fletch: [""], smelt: [""], smith: [""],
+  catch: ["Raw ", ""], snare: [""], chop: [""], mine: [""], cook: ["", "Cooked "], craft: [""], fletch: [""], smelt: [""], smith: [""],
   make: [""], create: [""], brew: [""], clean: [""], cut: [""],
 };
 
@@ -597,6 +602,22 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   if (keyChest) {
     const times = /^Open (\d+) of /i.exec(description);
     return { trigger: { kind: "open-chest", chests: keyChest[1], count: times ? Number(times[1]) : 1 } };
+  }
+  // Farming: "Plant some seeds in an allotment patch" (any crop in that kind of patch), "Plant an Anima
+  // Seed in the Farming Guild" (its only patch: Attas, Iasor or Kronos), "Harvest a Ranarr weed from
+  // any Herb patch" (a patch of it harvested; a count of the crop is no harvest count).
+  if ((match = /^Plant some seeds in an? (allotment|herb|flower|hops|bush) patch\.?$/i.exec(description))) {
+    return { trigger: { kind: "plant", patches: [match[1].toUpperCase()], count: 1 } };
+  }
+  if (/^Plant an Anima Seed in the Farming Guild\.?$/i.test(description)) return { trigger: { kind: "plant", crops: ["ATTAS", "IASOR", "KRONOS"], count: 1 } };
+  if ((match = /^Harvest an? (.+?) from any [A-Za-z]+ patch\.?$/i.exec(description))) {
+    const crop = match[1].toUpperCase().replace(/ WEED$/, "").replace(/[^A-Z]+/g, "_");
+    return FARMING_CROPS.has(crop) ? { trigger: { kind: "harvest", crops: [crop], count: 1 } } : {};
+  }
+  // Giants' Foundry: "Hand in 10 successful swords to Kovac", "Hand in a sword with at least 50 quality".
+  if ((match = /^Hand in (\d+) successful swords to Kovac\.?$/i.exec(description))) return { trigger: { kind: "foundry", count: Number(match[1]) } };
+  if ((match = /^Hand in a sword with at least (\d+) quality in Giants' Foundry\.?$/i.exec(description))) {
+    return { trigger: { kind: "foundry", quality: Number(match[1]), count: 1 } };
   }
   // "Defeat 25 Superior slayer monsters", "Defeat a Superior slayer monster": superiors killed.
   if ((match = /^Defeat (an?|\d+) Superior slayer monsters?\.?$/i.exec(description))) {
@@ -932,7 +953,9 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     for (const candidate of [subject, describedSubject]) {
       // A herb is cleaned into its clean self: "Clean 15 Grimy Tarromin" counts the Tarromin.
       const made = lowerVerb === "clean" ? candidate.replace(/^Grimy /i, "") : candidate;
-      if (lowerVerb === "catch") {
+      // "Snare a Bird" is any bird snared: no one creature.
+      if (lowerVerb === "snare" && /^birds?$/i.test(made)) return {};
+      if (lowerVerb === "catch" || lowerVerb === "snare") {
         // A fish is caught raw; anything else caught is a creature hunted ("Catch 500 Chinchompas").
         const fish = itemNamed(made, items, ["Raw "]);
         if (fish) return withArea({ kind: "produce", items: [fish], count });

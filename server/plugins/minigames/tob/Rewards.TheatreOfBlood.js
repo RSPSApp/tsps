@@ -32,7 +32,6 @@ const Shared = require("./Shared.TheatreOfBlood");
 const Raid = require("./RaidState.TheatreOfBlood");
 
 const ATTR_LOOT = "tob:loot";
-const ATTR_COMPLETIONS = "tob:completions";
 const INTERFACE = 23;
 const LOOT_INVENTORY = 612;
 const LOOT_SLOTS = 6;
@@ -49,15 +48,25 @@ const CHESTS = [[33, 42], [40, 39], [26, 39], [26, 35], [40, 35]].map(([x, y], s
 const CHEST_STATE = { OTHERS: 0, OTHERS_UNIQUE: 1, MINE: 2, MINE_UNIQUE: 3 };
 const OPENED = { REGULAR: 32994, UNIQUE: 41746 };
 const CLAIM_CHEST = { id: 41437, varbit: 11958 };
+/** "Message (Theatre of Blood)", the Wiki's id. */
+const DEADWEIGHT_MESSAGE = 22475;
 
-const UNIQUE_CHANCE = 1 / 9.1;
+/**
+ * By mode (Wiki, Monumental chest; Hard Mode): Entry has no uniques or pet, and 80% less common
+ * loot; Hard has 1/7.7, the hilt's weight down by one, 15% more common loot and 15% more within
+ * the target time, whose tertiaries (dust, kits) need the target met. Clue: 1/25, 3/25, 3.5/25.
+ */
+const LOOT_BY_MODE = {
+  entry: { unique: 0, hilt: 8, common: 0.2, clue: 1 / 25, pet: 0 },
+  normal: { unique: 1 / 9.1, hilt: 8, common: 1, clue: 3 / 25, pet: 1 / 650 },
+  hard: { unique: 1 / 7.7, hilt: 7, common: 1.15, targetCommon: 1.3, clue: 3.5 / 25, pet: 1 / 500, dust: 1 / 275, sanguineKit: 1 / 150, holyKit: 1 / 100 },
+};
 const DEATH_PENALTY = 0.2;
 const COMMON_ROLLS = 3;
-const TERTIARY = { clue: 3 / 25, pet: 1 / 650 };
 
-function uniqueTable(I) {
+function uniqueTable(I, hilt = 8) {
   return [
-    [I.AVERNIC_DEFENDER_HILT, 8], [I.GHRAZI_RAPIER, 2], [I.SANGUINESTI_STAFF_UNCHARGED_, 2],
+    [I.AVERNIC_DEFENDER_HILT, hilt], [I.GHRAZI_RAPIER, 2], [I.SANGUINESTI_STAFF_UNCHARGED_, 2],
     [I.JUSTICIAR_FACEGUARD, 2], [I.JUSTICIAR_CHESTGUARD, 2], [I.JUSTICIAR_LEGGUARDS, 2],
     [I.SCYTHE_OF_VITUR_UNCHARGED_, 1],
   ];
@@ -126,14 +135,18 @@ function rollRaid(raid, random = Math.random) {
   const result = new Map();
   let uniqueWinner = null;
   let uniqueId = -1;
-  if (random() < UNIQUE_CHANCE * teamStanding) {
+  const table = LOOT_BY_MODE[raid.mode];
+  const target = Shared.MODES[raid.mode].challengeTicks?.[raid.size];
+  const inTarget = !!target && raid.overallTicks <= target;
+  const commonScale = (inTarget ? table.targetCommon : table.common) * teamStanding;
+  if (random() < table.unique * teamStanding) {
     const pick = weightedPick(players, (player) => {
       const member = raid.member(player);
       return standing(member) * Math.max(1, damageDealt(member));
     }, random);
     if (pick) {
       uniqueWinner = pick;
-      uniqueId = weightedPick(uniqueTable(I), ([, weight]) => weight, random)[0];
+      uniqueId = weightedPick(uniqueTable(I, table.hilt), ([, weight]) => weight, random)[0];
     }
   }
   const commons = commonTable(I);
@@ -143,17 +156,22 @@ function rollRaid(raid, random = Math.random) {
     if (player === uniqueWinner) {
       loot.push({ id: uniqueId, amount: 1 });
     } else if (damageDealt(member) <= 0) {
-      loot.push({ id: I.CABBAGE, amount: 1 }, { id: I.MESSAGE_4, amount: 1 });
+      loot.push({ id: I.CABBAGE, amount: 1 }, { id: DEADWEIGHT_MESSAGE, amount: 1 });
     } else {
       for (let roll = 0; roll < COMMON_ROLLS; roll++) {
         const [id, , min, max] = weightedPick(commons, ([, weight]) => weight, random);
-        const amount = Math.max(1, Math.floor((min + Math.floor(random() * (max - min + 1))) * teamStanding));
+        const amount = Math.max(1, Math.floor((min + Math.floor(random() * (max - min + 1))) * commonScale));
         addLoot(loot, noted(id), amount);
       }
     }
     const own = standing(member);
-    if (random() < TERTIARY.clue * own) addLoot(loot, I.CLUE_SCROLL_ELITE_, 1);
-    if (random() < TERTIARY.pet * own) addLoot(loot, I.LIL_ZIK, 1);
+    if (random() < table.clue * own) addLoot(loot, I.CLUE_SCROLL_ELITE_, 1);
+    if (random() < table.pet * own) addLoot(loot, I.LIL_ZIK, 1);
+    if (inTarget) {
+      if (random() < table.dust * own) addLoot(loot, I.SANGUINE_DUST, 1);
+      if (random() < table.sanguineKit * own) addLoot(loot, I.SANGUINE_ORNAMENT_KIT, 1);
+      if (random() < table.holyKit * own) addLoot(loot, I.HOLY_ORNAMENT_KIT, 1);
+    }
     result.set(player, loot);
   }
   return { loot: result, uniqueWinner, uniqueId };
@@ -186,7 +204,8 @@ class RewardsRoom extends Raid.Room {
     });
     if (uniqueWinner) {
       const name = Shared.core().ItemDefinition.forId(uniqueId)?.getName?.() ?? "a unique";
-      for (const player of raid.players) player.sendMessage(`<col=ef1020>${Shared.displayName(uniqueWinner)} found something special: ${name}</col>`);
+      // Captured (227/01852, 227/01764): both names in red.
+      for (const player of raid.players) player.sendMessage(`<col=ff0000>${Shared.displayName(uniqueWinner)}</col> found something special: <col=ff0000>${name}</col>`);
     }
   }
 
@@ -369,13 +388,17 @@ function useChest(event) {
   return room.openChest(player, event.location ?? Shared.tileOf(event.object));
 }
 
-/** The teleport crystal takes the player out of the theatre. */
+/** The teleport crystal takes the player out of the theatre, asking first (captured, 227/01764). */
 function useCrystal(event) {
   const { player } = event;
   const raid = Raid.raidOf(player);
   if (!raid) return false;
-  if (lootOf(player).length > 0) player.sendMessage("Your unclaimed rewards can be collected from the Rewards Chest by the bank in Ver Sinhaza.");
-  raid.leave(player, "");
+  Shared.options(player, "Make sure you've collected all your stuff!",
+    "Leave the Theatre.", () => {
+      if (lootOf(player).length > 0) player.sendMessage("Your unclaimed rewards can be collected from the Rewards Chest by the bank in Ver Sinhaza.");
+      raid.leave(player, "");
+    },
+    "Stay in the Theatre.", () => {});
   return true;
 }
 
@@ -392,25 +415,10 @@ function showClaimChest({ player }) {
   player.getPacketSender().sendVarbit(CLAIM_CHEST.varbit, lootOf(player).length > 0 ? 1 : 0);
 }
 
-/** Verzik beaten: the completion count goes up for everyone still in the raid. */
-function countCompletion(player) {
-  const completions = (Number(player.getAttribute(ATTR_COMPLETIONS)) || 0) + 1;
-  player.setAttribute(ATTR_COMPLETIONS, completions);
-  player.sendMessage(`Your completed Theatre of Blood count is: <col=ff0000>${completions}</col>.`);
-  // The raid is over for normal mode too, so the quests waiting on a clear hear it.
-  Shared.api()?.emitCustomEvent("tob:completed", { player, mode: "normal" });
-}
-
-/** A normal-mode clear counts as a Theatre of Blood completion. */
-function hasCompletion(request) {
-  if ((Number(request.player.getAttribute(ATTR_COMPLETIONS)) || 0) > 0) request.complete = true;
-}
-
 module.exports = function registerTheatreRewards(api) {
   Shared.bind(api);
   Raid.registerRoom("REWARDS", RewardsRoom);
   api.persistAttribute(ATTR_LOOT);
-  api.persistAttribute(ATTR_COMPLETIONS);
   Shared.onObject(api, ["Monumental chest", ...CHESTS.map((chest) => chest.id)], useChest);
   Shared.onObject(api, Shared.OBJECT.TELEPORT_CRYSTAL, useCrystal);
   Shared.onObject(api, CLAIM_CHEST.id, claimChest);
@@ -419,7 +427,6 @@ module.exports = function registerTheatreRewards(api) {
   api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.TAKE_ALL, clickTakeAll);
   api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.DISCARD_ALL, clickDiscardAll);
   api.onInterfaceActionButton(ITEMS_UID, clickLootItem);
-  api.onCustomEvent("tob:has-completion", hasCompletion);
 };
 
-Object.assign(module.exports, { RewardsRoom, rollRaid, standing, lootOf, setLoot, countCompletion, CHESTS, ATTR_LOOT, ATTR_COMPLETIONS });
+Object.assign(module.exports, { RewardsRoom, rollRaid, standing, lootOf, setLoot, CHESTS, ATTR_LOOT, LOOT_BY_MODE });

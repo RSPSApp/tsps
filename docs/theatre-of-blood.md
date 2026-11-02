@@ -1,69 +1,90 @@
 # Theatre of Blood
 
-The raid beneath Ver Sinhaza, built from the OSRS Wiki, the cache and rsprox captures (https://rsprox.net/database; 15 recordings of the theatre, all on Leagues or Grid Master worlds). The captures set what the game shows (animations, projectiles and their timing, sounds, messages, interfaces); the numbers follow the Wiki, since those worlds change damage and timers. What neither gives is listed under [Estimates](#estimates).
+The raid beneath Ver Sinhaza, in Entry, Normal and Hard Mode, built from the OSRS Wiki, the cache and rsprox captures (https://rsprox.net/database). The captures set what the game shows (ids, animations, projectiles and their timing, sounds, messages, interfaces); the Wiki decides numbers, because every capture of a raid is on a Leagues or Grid Master world, which change damage, timers and loot. Each unit's header comment says where each of its values comes from. [What isn't verified](#what-isnt-verified) lists the rest.
 
 It is one plugin, `server/plugins/minigames/TheatreOfBlood.plugin.js`, which delegates to one unit per area in `server/plugins/minigames/tob/`.
 
 ## Status
 
-| Phase | What | State |
+| Piece | State | How it was checked |
 | --- | --- | --- |
-| 1 | Ver Sinhaza, parties, the entrance, instancing, barriers and passages, the Vyre Orators, deaths and the jail, wipes and the retrieval chest, logouts, teleports, the HUD | Done, tested |
-| 2 | The Maiden of Sugadinti and the Pestilent Bloat, the supply chests | Built, untested |
-| 3 | The Nylocas (its waves from the Wiki) and Sotetseg | Built, untested |
-| 4 | Xarpus, the Dawnbringer and Verzik Vitur | Built, untested |
-| 5 | The vault's monumental chests, the Rewards Chest, completion counts | Built, untested |
-
-Normal mode only. The party carries a `mode` and `TobShared.MODES` holds the per-mode numbers, so Entry and Hard mode can be added later. The Theatre's items (scythe and sanguinesti charges, ornament kits, the Avernic defender, the books) are a separate piece of work.
-
-`::tobcomplete` still completes the room the party is in, to skip a boss while testing.
+| Parties, modes, the entrance, instancing, barriers and passages | Done | Played over the agent MCP |
+| The six rooms in Normal Mode | Done | Solo route played from entry to leaving, fights shortened; see [Tested](#tested) |
+| Entry and Hard Mode | Built | See [Tested](#tested) for how far each was played |
+| Deaths, the jail, wipes, logouts, teleports, a second party | Done | Played as scenarios |
+| Retrieval chest, stats, scoreboard, escape crystal, spectating | Built | Played as scenarios; the interfaces' looks not seen in a client |
+| Combat Achievements | Built | The rooms report them; several seen firing in play, most only by unit test or not at all |
+| Theatre's items | See [Items](#items) | Avernic defender and kits played; scythe and staff checked against the Wiki's text |
 
 ## Layout
 
 | File | What it owns |
 | --- | --- |
-| `Shared.TheatreOfBlood.js` | Ids, tiles, the room table, modes and helpers. |
-| `Parties.TheatreOfBlood.js` | Parties: members, applicants, the declined, preferences. |
-| `RaidState.TheatreOfBlood.js` | `Raid` and the `Room` base: instancing (its Area blocks teleports, and attacks by the jailed and by scripted NPCs), rooms in order, barriers, the HUD, deaths and the jail, wipes, leaving and logouts. |
-| `Lobby.*` | The notice board's party list (364) and party information (50), the HUD in Ver Sinhaza, the entrance. |
-| `Raid.*` | Barrier, passage and orator objects; deaths, escape crystals and logging back in. |
-| `Retrieval.*` | The retrieval chests in Ver Sinhaza. |
-| `Supplies.*` | The supply chests and their interface (405). |
-| `Maiden.*`, `Bloat.*`, `Nylocas.*`, `Sotetseg.*`, `Xarpus.*`, `Verzik.*` | One room each. `NylocasWaves.TheatreOfBlood.js` holds the Nylocas waves. |
-| `Rewards.*` | Verzik's vault, the loot interface (23) and the Rewards Chest in Ver Sinhaza. |
+| `Shared.TheatreOfBlood.js` | Ids, tiles, the room table, the modes and helpers. |
+| `Parties.TheatreOfBlood.js` | Parties: members, applicants, the declined, preferences, the mode. |
+| `RaidState.TheatreOfBlood.js` | `Raid` and the `Room` base: instancing, rooms in order, barriers, the HUD, deaths and the jail, wipes, Entry's retries, leaving and logouts. |
+| `Lobby.*` | The notice board's party list (364) and party information (50), the mode, the Mysterious Stranger's gate, the entrance. |
+| `Raid.*` | Barrier, passage and orator objects; deaths and logging back in. |
+| `Retrieval.*` | The retrieval chests (602). |
+| `Supplies.*` | The supply chests (405), Entry's bandages. |
+| `Maiden.*`, `Bloat.*`, `Nylocas.*`, `NylocasWaves.*`, `Sotetseg.*`, `Xarpus.*`, `Verzik.*` | One room each, in all three modes. |
+| `Rewards.*` | Verzik's vault, the loot interface (23), the Rewards Chest. |
+| `InfoBoard.*` | The strategy table (459). |
+| `Stats.*` | Attempts, completions, deaths and best times per mode, the last wave's lines, the scoreboard (363). |
+| `CombatAchievements.*` | The 50 tasks' modes, failure lines, and what the raid's end decides. |
+| `EscapeCrystal.*` | The crystal in the raid. |
+| `Spectate.*` | Abigaila and watching a raid. |
+| `Books.*` | The bosses' books and the bookshelves. |
+| `Entry.*` | The Blood Moon Rises' encounters. It used to be a solo Entry Mode; that path remains only for a save finished under it. |
 | `Commands.*` | Developer commands. |
 
-Each boss file starts with a comment listing where each of its numbers comes from. The rooms share three hooks in `Raid.*`:
+Other files: `plugins/items/AvernicDefender.plugin.js`; the kits' rows in `plugins/items/data/ornament-kits.json`; `combat-achievements:has-task` in `CombatAchievements.plugin.js`.
+
+The rooms share hooks in `Raid.*`:
 - `modifyHit` changes hits on the room's NPCs (caps, immunities, reflections).
-- `holdsOn` keeps an NPC alive at 0 hitpoints, so the room can handle it (Verzik's phases, falling supports and pillars).
+- `holdsOn` keeps an NPC alive at 0 hitpoints, so the room can handle it (Verzik's phases, supports, the Maiden's death).
 - Scripted NPCs (`__tobScripted`) attack only when their room makes them.
 
-A room's fight starts when the leader crosses its barrier (for Verzik, when the leader says yes to her). The Maiden appears then; the other bosses wait in their rooms from the start.
+A room reports its tasks with `raid.failTask(task, reason)` and `raid.completeTask(task)`. A task outside the raid's mode is ignored.
+
+## Modes
+
+`Shared.MODES` holds what differs between rooms. A room picks a value with `Shared.byMode(raid, { entry, normal, hard })`.
+
+| | Entry | Normal | Hard |
+| --- | --- | --- | --- |
+| Team hitpoints | a fifth per player (Wiki: "down to 20%"; fits 2 samples) | 75%, 87.5%, 100% for up to 3, 4, 5 (Wiki) | as Normal |
+| A wipe | another attempt, three bandages each; the room starts again | the raid fails | the raid fails |
+| Supply chests | ten bandages per chest (not carried over) | points | points (as Normal; see [What isn't verified](#what-isnt-verified)) |
+| Loot (Wiki) | no uniques or pet, 20% common, clue 1/25 | 1/9.1, hilt 8/19, clue 3/25, pet 1/650 | 1/7.7, hilt 7/18, +15% common (+30% inside the target), clue 3.5/25, pet 1/500; inside the target, dust 1/275, Sanguine kit 1/150, Holy kit 1/100 |
+| Retrieval | free | 100,000 coins | 100,000 coins |
+
+Hard Mode needs everyone to have a Normal completion (Wiki). The leader picks the mode from the party's screen: "Select a mode. Currently set to Normal Mode." (captured). Its target is 25, 27, 30, 35 and 70 minutes for five to one players (Wiki), on the overall time, stated as "Time to beat: <col=ff0000>35:00</col>" as the first fight starts (captured).
+
+**Hard Mode's bosses and the captures disagree.** The Wiki's infoboxes give Maiden 3500, Bloat 2400, Vasilias 2500, Sotetseg 4000, Xarpus 6000, Verzik 2000/3500/3500, and those are used. Every Hard capture's damage totals fit about 1.5x that (Sotetseg 4502/5252/6002 at 3/4/5 players, Xarpus 6751/7877/9002, Verzik 3000/5250/5250 at five), while Normal raids on the same worlds match the Wiki exactly. They are all Leagues worlds, so the Wiki stands; to follow the captures, change `HITPOINTS` in `Nylocas.*`, `Sotetseg.*` and `Xarpus.*` and `PHASE_HITPOINTS` in `Verzik.*`.
 
 ## Instancing
 
-Each raid has one `PrivateArea` over the theatre's map squares, x 3136–3391 and y 4224–4479 on planes 0–3, with rooms at their real coordinates, as for Tombs of Amascut. `world.json` marks the region multi-combat. The bosses that `npc-spawns.json` placed there (Maiden, ten Matomenos, Bloat, Vasilias, Sotetseg, Xarpus, Verzik) were removed: each raid spawns its own. `npc-spawn-sync.json` skips the region, so the Wiki spawn sync doesn't put them back.
-
-Bosses' hitpoints scale with the team size (Wiki): 75% for up to three players, 87.5% for four, 100% for five.
+Each raid has one `PrivateArea` over the theatre's map squares, x 3136–3391 and y 4224–4479 on planes 0–3, with rooms at their real coordinates. `world.json` marks the region multi-combat. `npc-spawn-sync.json` skips the region; each raid spawns its own bosses.
 
 ## Ver Sinhaza
-
-Ver Sinhaza's NPCs (the Vyre Orators, the Mysterious Stranger and others) were already spawned.
 
 | What | Where | Notes |
 | --- | --- | --- |
 | Notice board (32655, Read) | (3662, 3218) | Opens the party list. |
 | Theatre of Blood (32653, Enter) | (3678, 3216) | The entrance. |
 | Chest (32656, Claim) | (3657, 3215), (3657, 3223) | Item retrieval. |
+| Scoreboard (32987, Read) | (3676, 3223) | Statistics. |
+| Rewards Chest (41437, Claim) | (3650, 3217) | Loot left behind. |
+
+**First conversation:** someone who hasn't spoken to the Mysterious Stranger is called over at the notice board and the entrance: "Hey. Over here." (captured 234/03285 tick 23906). A completion also counts as having met him. Someone without A Taste of Hope hears the Wiki's initial lines; the quest's unit plays the rest.
 
 **The party list (364).**
-- Script 2340 fills rows 0–44 with `name|name|name|name|name|size|preferred size|preferred combat|mode|age|`.
-- The viewer's own leader is shown in white. Parties already in the theatre aren't listed.
-- **The buttons are pause buttons.** Refresh, My/Make party and Friends/Clan (varbit 12988) are components 64, 66 and 67. Clicking one runs script 890, which resumes child 0, 1 or 2 of component 3 (enum 1938). The server gets RESUME_PAUSEBUTTON with that parent and child, so the plugin hooks `onInterfaceActionClick` (the child arrives in `action`), not a button op.
-- **Rows** are components 18–62 (enum 1937, 45 rows). Each has a plain "View party" op (script 5220), needing the op-1 flag on its component.
-- Varp 1740 is 0 for someone in a party, -1 otherwise.
+- Script 2340 fills rows 0–44 with `name|name|name|name|name|size|preferred size|preferred combat|mode|age`, as captured: no trailing bar.
+- The buttons are pause buttons. Refresh, My/Make party and Friends/Clan (varbit 12988) are children 0, 1 and 2 of component 3 (enum 1938), so a click arrives as RESUME_PAUSEBUTTON, handled in `onInterfaceActionClick`. Rows are components 18–62, with a plain "View party" op.
+- Varp 1740 (`tob_mycontroller` in the symbols) is 0 for someone in a party, -1 otherwise, as captured.
 
-**A party's information (50).** Every button is a pause button that resumes a child of component 0. Enum 1939 maps the buttons to children 0–6. Kick/Quit (script 2319) resumes 7 + row, and Accept/Decline (script 2330) 12 + row and 22 + row:
+**A party's information (50).** Every button resumes a child of component 0:
 
 | Slot | Button |
 | --- | --- |
@@ -78,223 +99,139 @@ Ver Sinhaza's NPCs (the Vyre Orators, the Mysterious Stranger and others) were a
 | 12–21 | Accept applicants |
 | 22–31 | Decline applicants |
 
-- Script 2317 writes each member's line (`name|combat|attack|strength|ranged|magic|defence|hitpoints|prayer|completions|`).
-- Script 2321 writes each applicant's line, for members and applicants only.
-- Script 2323 writes the footer: the viewer's rights (0 can apply, 1 member, 2 leader, 3 applicant, 4 declined), the preferences and the mode.
-- A declined player can't apply again until the leader unblocks.
-- A party holds five members and ten applicants.
-- The client shows a pressed pause button as waiting until the interface is redrawn, so every click redraws it.
-- Scripts 2319, 2327 and 2330 use the dot form, `.cc_resume_pausebutton`, so the client's handler resumes the dot widget for operand 1.
-
-**The HUD (28)** sits on the overlay. In Ver Sinhaza, varbit 6440 is 1 with a party and 0 without, and component 12 lists the names. Leaving Ver Sinhaza (other than into the theatre) or logging out leaves the party or withdraws the application.
+Script 2323's footer takes the viewer's rights and the mode (0 Normal, 1 Entry, 2 Hard; captured). Script 2317's members and 2321's applicants are `name|combat|attack|strength|ranged|magic|defence|hitpoints|prayer|completions`. Leaving Ver Sinhaza (other than into the theatre) or logging out leaves the party or withdraws the application.
 
 **The entrance:**
-1. Without a party: "You are not in a party..." with "Form or join a party" (the list) or Cancel.
+1. Without a party: "You are not in a party..." with "Form or join a party", "Observe a specific party", "Observe recent party" and "Cancel" (captured).
 2. Only the leader may go in first: "Your leader, X, must go first."
-3. The first time, the death warning, then "Accept the warning and proceed?". Accepting is remembered.
-4. Without an escape crystal: buy one (the Mysterious Stranger's shop, 1240), enter without, or enter and don't ask again.
-5. The leader confirms "Is your party ready? (Members: N)". The others are told "X has entered the Theatre of Blood. Step inside to join them..." and follow through the entrance.
+3. The first time, the death warning (captured), then "Accept the warning and proceed?".
+4. Without a crystal: the captured prompt, in the crystal's current name.
+5. The leader confirms "Is your party ready? Members: N. Mode: X." (captured).
 
 ## The raid
 
-The rooms, in order:
-
 | Room | Arrival | Barrier into the fight | Way on |
 | --- | --- | --- | --- |
-| The Maiden of Sugadinti | (3219, 4459) | x 3185, from the east | Passage (3176/3177, 4422) |
-| The Pestilent Bloat | (3322, 4448) | x 3304 from the east (x 3287 from the west) | Passage (3269, 4447/4448) |
+| The Maiden of Sugadinti | (3220, 4460) | x 3185, from the east | Out by the same barrier, then the passage (3176/3177, 4422) |
+| The Pestilent Bloat | (3322, 4448) | x 3304 from the east (x 3287 from the west) | Out by the west barrier, then the passage (3269, 4447/4448) |
 | The Nylocas | (3295, 4283) | y 4255, from the north | Passage (3303, 4275/4276) |
 | Sotetseg | (3279, 4293) | y 4307, from the south | Passage (3279/3280, 4293) |
-| Xarpus | (3170, 4375, 1) | y 4379 from the south (y 4395 from the north) | Door (3169, 4400, 1) |
-| The Final Challenge | (3168, 4303) | — | Treasure room (3167, 4324), spawned once Verzik is beaten |
-| Verzik Vitur's Vault | (3237, 4307) | — | — |
+| Xarpus | (3170, 4375, 1) | y 4379 from the south (y 4395 from the north) | Out by the north barrier, then the door (3169, 4400, 1); the Dawnbringer's skeleton is on the way (3171, 4397) |
+| The Final Challenge | (3168, 4303) | talk to Verzik | Treasure room (3167, 4324) |
+| Verzik Vitur's Vault | (3237, 4307) | — | Teleport crystal (3246, 4315) |
 
-The barriers and passages are in the cache's map. Each room's Vyre Orator is a loc (32756, or 32757 for the seated one) placed when the party reaches the room.
+A barrier of a room the party has already left lets anyone through.
 
-**Barriers (Pass):**
-- The leader starts a room's fight ("Is your party ready to fight?").
-- Once a fight is on, anyone may join it. Nobody leaves until it's won: "You must stay and fight!" (also from the orator).
-
-**Passages (Enter, Quick-Enter):**
-- Only once the room is completed ("You can't proceed until the challenge is complete.").
-- The first through builds the next room and tells the others "X has advanced to Wave N. Join them...". Later ones follow into the party's room.
-- Enter asks "Are you ready to proceed?" first.
-
-**Completing a room:**
-- "Wave 'Name' complete! Duration: m:ss Total: m:ss" (Verzik's room without the total).
-- Everyone's hitpoints, prayer, special attack and run energy are restored, and the dead are released.
+**Completing a room:** "Wave 'Name' (Normal Mode) complete!<br>Duration: ... Total: ...", times as m:ss.cc, jingle 250, "You feel refreshed as your health is replenished." (all captured). The last wave's lines come from `Stats.*`: its line with "Theatre of Blood completion time" (the challenge time), "Theatre of Blood total completion time" (the overall time), each " (new personal best)" or ". Personal best: t", then "Your completed Theatre of Blood[: Entry Mode|: Hard Mode] count is: N." (captured). Inside Hard's target, "Your party beat the overall target time of m:ss!", worded as the Tombs' capture; no Theatre capture has one.
 
 **Deaths:**
-- Inside a fight that isn't won, the player waits in the room's jail with the purgatory stance (8070, RuneLite's `TOB_PURGATORY_STANCE`). Their inventory and equipment tabs are closed: "If your party survives the wave, you will respawn."
-- The room is won: they come back where they crossed into the fight (in Verzik's room, where they fell).
-- Everyone jailed fails the raid three ticks later. Everything a death wouldn't keep goes to the retrieval chest, and everyone is put outside at (3677, 3217) and restored. "Your party has failed."
-- Elsewhere a death costs nothing: back at the room's entrance.
+- Inside a fight that isn't won, the player waits in the room's jail. "You have died. Death count: N." and "<name> has died. Death count: N." (captured).
+- The room is won: they come back where they crossed in (in Verzik's room, where they fell).
+- Everyone jailed: in Entry, the room starts again; otherwise everything goes to the retrieval chest and everyone is put outside at (3677, 3217): "Your party has failed." and "A magical chest has retrieved some of your items. You can collect them from it outside the Theatre of Blood." (captured).
 - Items are never dropped in the theatre.
 
-**Logging out** (Wiki):
-- During a fight it counts as a death. Logging back in returns the player to their party's room, in the jail if the fight is still on.
-- If the raid has ended, a logout mid-fight is a full death: items to the retrieval chest.
-- A logout outside a fight is safe: back at the party's room, or outside.
+**Logging out** (Wiki): during a fight it counts as a death; logging back in returns the player to their party's room, in the jail if the fight is still on. With an escape crystal carried, one is used up and they return outside (Wiki, 26 March 2025). If the raid has ended, a logout mid-fight is a full death: items to the retrieval chest.
 
-**Teleports** are blocked ("You can't teleport from the Theatre of Blood."). An escape crystal (22517, Teleport) gets out and is used up.
-
-**Resigning:** the Vyre Orator's Talk-to or Resign: "There is no penalty for resigning now."
-
-**The HUD in the raid:**
-- Varbit 6440 is 2, and 6441 is the player's slot.
-- Script 2301 sends the five names. Varbits 6442–6446 hold each slot's state: 1–27 health (hitpoints capped at 99), 30 dead, 31 elsewhere.
-- The room's health bar: varbit 6447 is its kind (1 regular, 2 disabled, 3 cyan), and 6448/6449 its current and maximum hitpoints over 10.
+**Teleports** are blocked, except for spectators and by escape crystal.
 
 ## The bosses
 
-Normal-mode numbers (Wiki) unless marked otherwise; see [Captured](#captured) and [Estimates](#estimates) for the rest.
+Each boss's unit is the reference for its numbers and their sources. What's most worth knowing:
 
-**Animations:** every theatre NPC (8338–8389, except the spectator Abigaila) has an entry in `npc-combat-defs.json`.
-- Blocks are `-1`: RuneLite names no block animation for any of them except Verzik's first form (8110, `VERZIK_PHASE1_DEFEND`).
-- Attacks and deaths the engine doesn't play are `-1`. Without an entry, NPCs fall back to the player's punch, block and death (422/424/836) or to guessed animations.
-
-### The Maiden of Sugadinti
-- She attacks every 10 ticks, with Blackstorm or blood.
-- **Blackstorm** targets the nearest player and always lands, for up to 36.5 + 3.5 × the Matomenos that reached her. Protect from Magic halves it. Half the time it drains stats by (damage + 1) / 5.
-- **Blood** puts splats on every player's tile plus two near one of them. A splat hurts for 10 + 2 × those Matomenos, heals her and drains prayer. It can become a blood spawn (10%, or 20% if stood on; at most eight). Blood spawns leave trails that hurt and heal her.
-- **At 70%, 50% and 30%** she changes form, and two Matomenos per player (at most ten) walk to her. Each one that reaches her heals her for twice its hitpoints. Freezing them stops them.
-
-### The Pestilent Bloat
-- It walks round the tank. While it walks, flies hit everyone it can see for up to 20 every tick (75% with Protect from Missiles), and damage dealt to it is halved.
-- It walks for 34–42 ticks (38–46 the first time), then sleeps for 32 ticks and stomps on the 30th.
-- It can turn round at most once every 32 ticks.
-- Below 90%, hands fall while it walks. Between 40% and 60% it runs; below 40% each hit switches between walking and running.
-
-### The Nylocas
-- Thirty-one fixed waves from the east, south and west lanes come every 4 ticks. Waves stall while 12 nylocas are alive (24 from wave 20).
-- **The waves** (`NylocasWaves.TheatreOfBlood.js`) come from the Wiki's table. Its colours give each flickering nylocas's styles in order; it shows the first two, 4 ticks each, then fights as the worded style. In wave 21's west lane the words disagree with the colours; the colours are used.
-- **Each nylocas** takes damage only from its own style.
-  - Small: 11 hitpoints, max hit 17. Big: 22 and 24, splitting into two small ones of any style.
-  - They blow up 30 seconds after appearing (up to 18 or 21).
-  - Most go for the four supports; the aggressive ones (8348–8353) go for the team.
-- **Supports:** each one that falls hits the team for up to 50. The last one falling kills everyone.
-- **Nylocas Vasilias** (2500) follows the last wave. It changes style every 10 ticks, which stops everyone's attack, and hits up to 70 every 4 ticks. Its melee is fully blocked by prayer; the other prayers leave 17 of 70. A hit in the wrong style is turned back on the attacker and heals it.
-
-### Sotetseg
-- It stands still and attacks every 5 ticks.
-- **Melee:** a horn lunge at someone beside it, up to 45 (22 through prayer), landing a tick late.
-- **Balls:** up to 50, fully blocked by the right prayer. One that isn't blocked turns protection prayers off for 3 seconds. The first (magic) ball splits into a magic and a ranged one aimed at two others.
-- **The big ball** comes after 10 balls. It is shared by the 3×3 round its target and kills a lone target when two or more are in the room.
-- **The maze**, at 66.6% and 33.3%:
-  1. One player is taken to the Shadow Realm ("Sotetseg chooses you..."), on plane 3 at x 3354–3367, y 4311–4325. The others are pulled to (3274, 4307).
-  2. The runner follows the red path (our generator) to the portal (33037), taking 1–3 every 7 ticks.
-  3. The runner's tile glows red (33035) on the real maze. The others take 6.67% of their hitpoints + 15 every tick on a wrong tile, and so does anyone beside them.
-  4. From the fourth row a tornado (8389) follows the path.
-  5. Clearing the maze restores its Defence.
-
-### Xarpus
-- **Recovery:** it starts at 75% and doesn't attack. Exhumed (32743) rise and heal it every tick nobody stands on them: 12 for a trio and 15 for four (7, 8 and 18 for one, two and five are estimates).
-- **Poison:** it spits every 4 ticks. The splat poisons the 3×3 round it, splashes on, and stays as acidic miasma (32744), which hurts 4–8 every tick. Standing under it hurts up to 9.
-- **Counter:** at 25% it screeches and stares at a quadrant, turning every 8 ticks. Each hitsplat from that quadrant comes back as 50–75 poison.
-- **The Dawnbringer:** once Xarpus is beaten, the skeleton (32741) in the room's north alcove gives it.
-
-### Verzik Vitur
-The leader starts the fight by talking to her; varp 1748 gives her that Talk-to (14795).
-1. **Phase 1** (2000, every 14 ticks):
-   - Only the Dawnbringer's special hurts her properly: other hits are capped at 10 (melee) or 3.
-   - Her blast hits anyone she can see for up to 137 (half through Protect from Magic). Players behind a pillar are hidden; the pillar takes the blast instead and collapses when out of hitpoints, for up to 70 on anyone beside it.
-2. **Phase 2** (3500, every 4 ticks):
-   - She brings the pillars down and flies to the middle; the Dawnbringer falls apart.
-   - She body-slams anyone under her, throws urns at tiles (44, halved by Protect from Missiles) and chains a lightning ball through the team.
-   - She calls nylocas, which chase and explode and are hurt only by their style, and Nylocas Athanatos, which heals her unless hit with a poisoned weapon.
-   - Below 35% she adds blood spells and calls Matomenos; for three seconds after a call, hits heal her.
-3. **Phase 3** (3500, every 7 ticks):
-   - She walks and attacks with melee (63, everyone beside her target), ranged and magic (33, half through prayer, at everyone).
-   - Every fifth attack is a special, in turn: nylocas, webs, safe spots, the green ball.
-   - Below 20% she attacks every 5 ticks and sends a tornado after each player. It takes half their hitpoints and heals her three times that.
-- Then the treasure-room door (32738) opens, and everyone's completion count goes up: "Your completed Theatre of Blood count is: N."
+- **The Maiden.** Attacks every 10 ticks (Hard, faster with each Matomenos that reaches her, down to 6: a fit from 10 raids). Blood 30% of the time (a fit: 86 of 276). Matomenos: 1 per player in Entry, 2 in Normal, always 10 in Hard. Hard's blood spawns take no damage and their trails stay. Hard's repeated attacks: see [What isn't verified](#what-isnt-verified).
+- **The Bloat.** Walks the 12x12 loop, starting either way round. Flies hit everyone it can see for 10–20 every tick (Wiki), so a player has to time going in. They spread between players who can see each other. Hands every 6 ticks, every 4 below 30% (a fit); Hard, from the fight's start. Turn odds are a fit (5 and 6 samples).
+- **The Nylocas.** 31 waves, identical in all three modes down to tile and support across 16 captured rooms. The Wiki's chart has three errors, noted in `NylocasWaves.*`. A support's hit is 1 hitpoint and its pool scales with team size (exact against the captures). Hard: Prinkipas on waves 10, 20, 30; wrong-style hits reflect; Vasilias' splash and bounce.
+- **Sotetseg.** The realm's path is a column every 2nd row within 5 tiles of the last, as captured. Hard: all but one go to the realm, the maze divided among them (varbit 12269); two death balls.
+- **Xarpus.** It begins at the Wiki's figure, which is 75% of its true maximum; the stare comes at a third of its risen hitpoints on the 4-tick beat (14 of 14 samples), not the Wiki's 25%. Absorbed exhumed raise its stats and poison by 1.4% each (an estimate; the Wiki gives no rate, and that's the lowest the captures allow). Hard: poison round the arena's edge, Defence 200, the stare turning to whoever hits it.
+- **Verzik.** Any member may start her (captured). Phase 1: blasts behind pillars by a ray from her middle; the Dawnbringer's special, which needed `combat-special:can-use` allowed by the room. Phase 2 and 3's order, timing and tiles as captured in the unit. Hard: rubble, pools for 16 ticks, three-strike dots, a lethal green ball with two or more, a heal of 30% at 5% ("You think this is over?!" captured).
 
 ## Supply chests
 
-After Bloat and Sotetseg (Wiki):
-- **Points:** each player gets supply points (varbit 6460) by their share of the damage, a band lower per death. Points carry over to the second chest.
-- **The chest:** Open, then Search, shows the supplies (405). The stock and prices are enums 1952/1953.
-- **Limits:** one stamina potion per chest. Someone who died in both rooms since the last chest gets only an onion.
+After Bloat and Sotetseg (Wiki): points by the player's share of the damage, a band lower per death. Open, then Search, shows the supplies (405). One stamina potion per chest. Someone who died in both rooms since the last chest gets only an onion. In Entry the chest gives ten bandages. A bandage (Wiki) heals 20 and 20% run, restores prayer (the Wiki's amount is unknown; ours is a super restore's), cures poison, gives a stamina effect and boosts Attack, Strength and Defence by 15% + 4, Ranged by 10% + 4, Magic by 4.
 
 ## The vault
 
-Verzik Vitur's vault (`Rewards.*`), from the Wiki's Monumental chest page:
-- **The chests:** one monumental chest per player, at the Wiki's tiles in party order (the order is an estimate).
-  - Each is a multiloc (33086–33090) on varbits 6450–6454: 0 a teammate's, 1 a teammate's with a unique, 2 the player's, 3 the player's with a unique.
-  - Opening one shows the loot interface (23; inventory 612): Bank-all, Take-all, Discard-all, and Take per item.
-- **Uniques:** 1 in 9.1 for the team without deaths, given to one player weighted by damage and deaths. Weights: hilt 8/19, rapier, staff and the three Justiciar pieces 2/19 each, scythe 1/19. A unique replaces the common loot.
-- **Commons:** three rolls of the 1/30 table, noted. A player who did no damage gets a cabbage and a message.
-- **Tertiaries:** an elite clue (3/25) and Lil' Zik (1/650).
-- **Leaving:** the teleport crystal (32996, Use) leaves the theatre.
-- **Unclaimed loot** stays in the attribute `tob:loot` and is claimed from the Rewards Chest (41437, varbit 11958) by the bank in Ver Sinhaza. The Wiki says it's lost on logging out; here it's kept.
+From the Wiki's Monumental chest page, by mode as in [Modes](#modes):
+- **The chests:** one per player at the Wiki's tiles in party order. Each is a multiloc on varbits 6450–6454 (`tob_treasureroom_chest_0`–`4`). Opening shows the loot interface (23; inventory 612).
+- **A unique** replaces the common loot; "<name> found something special: <item>", both in red (captured).
+- **Commons:** three rolls of the 1/30 table, noted. A player who did no damage gets a cabbage and a message (22475).
+- **Leaving:** the teleport crystal asks "Make sure you've collected all your stuff!" with "Leave the Theatre." / "Stay in the Theatre." (captured).
+- **Unclaimed loot** stays in `tob:loot`, claimed from the Rewards Chest (varbit 11958 `tob_should_have_loot`). The Wiki says it's lost on logging out; here it's kept.
+- **The strategy table (459):** each wave's time, the MVP, the challenge and overall times, each member's deaths.
 
 ## The retrieval chest
 
-After a wipe (or a logout mid-fight whose raid ended), the stored items wait in the chest for 100,000 coins (Wiki). A second wipe before reclaiming replaces them, so the first lot is lost (Wiki). Items that don't fit in the inventory go to the bank. The items are listed in the attribute `tob:retrieval`.
+Captured (227/01764, 234/03299, 227/01833): `gravestone_retrieval` (602) over inventory 525, as Torfinn's. Its button pays first ("Payment has been taken from your bank: 100,000 x Coins"), then takes whatever fits; the rest waits. That interface is shared with `plugins/bosses/vorkath/Retrieval.Vorkath.js`, so each answers clicks only when it opened it. A second wipe before reclaiming replaces the first lot (Wiki). Everything goes in, including what a death would keep (Wiki). Entry's is free (Wiki).
 
-An empty chest says "The chest seems to be empty. If it did have any of your items, but you died before collecting them, they'll now be lost." (not captured).
+## Stats
 
-## Captured
+`Stats.*`, in the saved attribute `tob:stats`, per mode: attempts (each entering), completions, deaths, and the best challenge and overall time per team size. The counts stay in `tob:completions` and `tob:entry-completions` (older saves) and `tob:hard-completions`.
 
-From the rsprox recordings (ticks counted from the action or the attack):
+The scoreboard (363) has a View tab per mode (varbit 12270 `tob_scoreboard_tab`; script 4492) and a grid of text, components 41–66. No capture opens it, so which cell shows what is read off the labels' order and is unconfirmed. "Global" is the running server's totals since it started, not saved.
 
-- **Arrivals:** the Maiden (3220, 4460), the Bloat (3322, 4448), the Nylocas (3295, 4283), Xarpus (3170, 4375, plane 1), the vault (3237, 4307). OSRS builds the theatre as an instance; the captures map Sotetseg's arrival to (3294, 4315) and Verzik's to (3168, 4299), which are enclosed in this cache's static map, so those two keep their estimates.
-- **Entering:** "You enter the Theatre of Blood (Normal Mode)...", sound 1952 and the fade to "The Theatre awaits..."; the move a tick later, then the fade in with the room's name. The others read "<name> has entered the Theatre of Blood (Normal Mode). Step inside to join him..." ("her" for a woman).
-- **Barriers and passages:** "Your leader, <name>, must go first.", "Is your party ready to fight?" with "Yes, let's begin." / "No, don't start yet.", "Some of your party don't seem to have arrived yet. If you proceed, they will be abandoned.", "You must stay and fight!" (also said by the Vyre Orator), "<name> has advanced to Wave N. Join him...".
-- **Completing a room:** "Wave '<room>' (Normal Mode) complete!<br>Duration: ... Total: ..." in red, jingle 250, and "You feel refreshed as your health is replenished.".
-- **Interfaces, scripts and varbits:** the party list (364), the party (50), the HUD (28, on overlay_atmosphere), the supply chest (405), the loot (23); scripts 2301 (the HUD's names), 2306 (fade), 2307 (portal), 2308 (Sotetseg's fade), 2317/2321/2323/2340 (the party screens); varbits 6440-6449 (the HUD and the room's bar) and 6460 (supply points).
-- **Music:** each room's track on arrival: the Maiden 570, the Bloat 578, the Nylocas 580, Sotetseg 584, Xarpus 567, Verzik 566, the vault 582.
-- **Facing:** the Maiden spawns facing east, Verzik, Sotetseg and the others south; the Matomenos face south-west from the north wall and north-west from the south.
-- **The room's bar:** varbits 6447-6449 with a maximum of 1000, the value in thousandths of the boss's hitpoints (1 normal, 2 greyed during Xarpus' recovery and Sotetseg's maze, 3 cyan for Verzik's first phase).
-- **Supply chests:** closed through the fight, swapped for the open chest (32759, Search) the moment the room is won.
-- **The treasure room door:** used from two tiles south of it, (3167, 4322); the row between is the throne's step.
-- **Resigning:** "There is no penalty for resigning now." with "Resign and leave the Theatre." / "Do not resign.".
-- **The bosses:**
-  - **Maiden:** an attack every 10 ticks; Blackstorm (1577) leaves 109 cycles in and flies 10 per tile at height 0; blood (1578) leaves at 20 (the two extra splats at 45) and flies 15 per tile; sounds 176 and 3547; the Matomenos' ten spawn tiles.
-  - **Bloat:** the flies (1568, and 1569 for the small ones) land 30 cycles after they leave, whatever the distance.
-  - **Nylocas:** 7989/7999/8004 at players, 7990/8001/8004 on a support; ranged projectiles (1559/1561) leave at 39 and magic (1609/1610) at 25, 10 cycles per tile; detonations 7992/8000/8006 with 1565-1567; Vasilias' arrival (8075) and its attacks every 4 ticks with the ranged and magic animations.
-  - **Sotetseg:** an attack every 5 ticks; 8138 melee (sound 4015), 8139 the balls (sound 3539); the ball (1606) lands 203 cycles in and splits off the player it hits into a magic (1606) and a ranged (1607) ball at two others; the big ball (1604) lands 480 cycles in; a wrong maze tile turns red (33036) with explosion 505, sound 3970 and a zap (1603) at whoever it hurts; the realm's drain (1608).
-  - **Xarpus:** a spit every 4 ticks (8059, sound 4018); the spit (1555) and its splashes, the exhumed's orb (1550) and the guano under it (1557), each with its own timing and arc; "Screeeeech!" at 25%.
-  - **Verzik:** phase 1's blast (1580) leaves two ticks after her animation, 15 cycles per tile; phase 2's urns (1583), lightning (1585), blood (1591), purple ball (1586) and the Athanatos' globules (1587/1588, landing 22 cycles in), with her sounds (1514, the bounce's 1021/3201, the heal's 684); phase 3's ranged (1593) and magic (1594) on the animation's tick, the webs (1601, up to 10 cycles apart), the power blast (1596), the green ball (1598); "You think you can defeat me?" as the pillars fall, "Behold my true nature!" for phase 3, "I'm not finished with you just yet!" at 20%.
-  - **Death sounds:** the Bloat 3971, Xarpus 3549, Verzik 4008.
+## Escape crystal
 
-## Estimates
+`EscapeCrystal.*`, from the Wiki:
+- **Teleport** gets out, used up. A worn crystal can't.
+- **Configure:** use on party members (both must have one; both used up), the inactivity timer (2–300 seconds), and the ring of life when worn.
+- **Auto-afk** arms it: any hit, zero included, after that much inactivity or right after logging in; never while moving. Inactivity is `lastInputCycle`.
+- Varbits 14838 (`teleport_crystal_afk_mode`), 14849 (`_afk_delay`), 14857 (`_rol`).
 
-Neither the Wiki, the cache nor the captures give these:
+No capture shows any of this, so the menu's and the messages' words are ours. The crystal only works here in the Theatre; the Wiki's other activities are left to their own plugins.
 
-- **Tiles:** Sotetseg's and Verzik's arrival tiles ((3168, 4298) is solid in this cache, so Verzik's arena's south edge (3168, 4303) is used); every room's orator, spectator and jail tiles, Verzik's treasure-room door, and the spot outside the entrance. One of Xarpus' jail tiles, (3183, 4387), is open floor while the others are wall alcoves.
-- **Dialogue (our wording):** the entrance's warnings and the crystal question, the Vyre Orator's other lines, the passage's "Are you ready to proceed?", "You can't teleport from the Theatre of Blood.", the supply chest's and the empty retrieval chest's messages, the Dawnbringer's.
-- **Bosses:**
-  - **Maiden:** blood 1 time in 4 (the captures show about one throw in five attacks); splats lasting 10 ticks; the blood-spawn roll; trails.
-  - **Bloat:** the loop's corners; flies spreading to neighbours; the hands' count, timing and stun; the odds of turning.
-  - **Nylocas:** the supports' tiles, attack spots and 500 hitpoints; Vasilias' spawn tile; where the lanes start (the tunnels are solid in the map); which supports each lane goes for; explosions reaching a tile round them; the supports' animations (8073/8074, RuneLite's names; no capture has one falling).
-  - **Sotetseg:** melee or magic half the time beside it; the maze generator and the realm's tiles; the pulled-to and return tiles; the tornado's 35-45; a solo big ball's 70; the big ball's damage between the Wiki's 121 (two players) and 188 (five); where the portal stands.
-  - **Xarpus:** the exhumed's timing (every 13/8/8/4/4 ticks for 1-5 players), their 11-tick life and heals (20/16/12/9/6); the splash rules; the pauses round the phases; the quadrant corners.
-  - **Verzik:** her tiles and the pillars'; the blast on a pillar (40-60); phase 2's attack order, the nylocas' fuse (25 ticks) and falloff (63/26/8), Athanatos' life and heals, the blood spell's max (29), the Matomenos' tiles; phase 3's web spin (35 ticks; webs burst after 12 for up to 40), the safe spots' 80, the green ball's bounces; phase 2's projectiles land on whole ticks in the captures, so their per-tile rates are fitted.
-  - **The vault:** the chests' order and facing, inventory 612, the opening animation (536).
-- **Rules:**
-  - Completing a room restores special attack and run energy too.
-  - The jailed return to where they crossed in; the jail tiles are used in turn.
-  - A wipe needs everyone in the party jailed, so someone who stayed outside the fight keeps the raid going.
-- **Supply points:** the grading by damage share.
-- **Vault:** each death costing a fifth of a player's standing (in the unique chance, the unique weighting, common amounts and tertiaries); the Rewards Chest's varbit values.
+## Spectating
 
-## Not done yet
+From the entrance without a party, or Abigaila (Lumbridge general store, the Grand Exchange): by a member's or spectator's name, or the most recent party; carrying nothing but an oculus orb, not poisoned or diseased (Wiki). A spectator sees the raid's area from the room's `spectate` tile, follows the party's rooms, can't attack and is put out when the raid ends. They leave by teleporting (our rule).
 
-- Spectating, and Abigaila.
-- The Mysterious Stranger's first conversation before the notice board.
-- The retrieval interface: the chest uses a dialogue.
-- The escape crystal's Configure, auto-activation, use on a teammate, and its worn mode.
-- Xarpus' absorbed exhumed don't raise its stats or poison damage.
-- MVP points, the personal and party stats, the scoreboard, and combat achievements.
-- Entry and Hard mode, and the Theatre's items (separate work).
+Not built: the rooms' "Arena: View" ledges (a loc with that option exists, id 8718), the camera's chatbox buttons, the war table, and the friends-only check, which only has a `tob:may-spectate` event nothing answers.
+
+## Combat Achievements
+
+All 50 tasks have a mode in `CombatAchievements.*` and a condition somewhere. Captured: the failure lines' wording, sent to whoever doesn't have the task; a Perfect room's failure failing Perfect Theatre; the speed tasks running on the challenge time (Trio Speed-Runner, 17:30, at challenge 15:25.80, overall 17:36.00; 227/01758). Hard's speed tasks say overall time (Wiki). See `docs/combat-achievements.md`.
+
+## Items
+
+| Item | State |
+| --- | --- |
+| Avernic defender | New: `AvernicDefender.plugin.js`. Hilt on a dragon defender, Dismantle destroys the hilt, Inspect (Wiki). Played. Nothing made it before. |
+| Holy and Sanguine ornament kits | New rows in `ornament-kits.json`, charged and uncharged, refunded on Dismantle (Wiki). Holy rapier played. |
+| Scythe of Vitur | Existing plugin read against the Wiki: hits, max-hit halving, the well, charges. No change. |
+| Sanguinesti staff | Existing plugin read against the Wiki: max hit, leech, charges. No change. |
+| Books | `Books.*`: each boss leaves its book for someone without it, and the bookshelves give the first one missing. Their text isn't transcribed, so reading says the writing's too faded. |
+| Sanguine dust | Drops from Hard Mode. Lil' Zik's forms are `Dust.Pets.js`'s. |
+| Sinhaza shrouds | `Stats.*`: tiers 1-5 at 100, 500, 1000, 1500 and 2000 Normal or Hard completions, from the Mysterious Stranger's "What do you have for me?"; Change moves between earned tiers (Wiki; Transcript:Mysterious Stranger). The refusal of a tier not earned yet is our wording. Unit tested, not played: no account here has 100 completions. |
+| Dawnbringer | Its special, and every other, now says "You don't have enough power left." when energy is short, as 24 captures do (`Combat.ts`, `CombatSpecial.ts`). |
+
+Xarpus' splat also poisons, starting at 2 (Wiki, Strategies; "You have been poisoned!" captured).
+
+## Tested
+
+Over the agent MCP (2026-11-02). No fight was played at full length: every boss was cut to 1 hitpoint with `set_npc_hitpoints` once its fight began.
+- **Solo, Normal:** party through the notice board, the Stranger's gate, the entrance and its prompts, then every room through its real barriers and passages. That includes both of Sotetseg's mazes run to the portal, the Xarpus north barrier, the skeleton and the door, all three of Verzik's phases to her death, the vault's chest, strategy table, bookshelf and crystal, and leaving. The Nylocas room was skipped with `::tobcomplete`. Verzik was finished for real once and skipped once to test the vault.
+- **Two players, Normal, Hard and Entry:** the Maiden fought; the Bloat finished with `::tobcomplete`, because a script can't time going in as a player does and its flies kill in about 8 ticks; the Nylocas skipped; Sotetseg's mazes run, then `::tobcomplete`; Xarpus fought; Verzik not reached in these.
+- **Scenarios:** a death, the jail and release when the room is won; a team wipe, the retrieval chest refusing without coins, taking the fee, giving back, then empty; logging out mid-fight and rejoining into the jail; a crystal carried at logout; teleports refused; a crystal used on a teammate; auto-afk firing on a hit; two parties at once, each with its own Maiden, unseen and unattackable by the other; spectating the most recent party and teleporting out; the scoreboard; the Avernic defender and a Holy kit.
+
+## What isn't verified
+
+- **The real client:** interfaces, looks and timing weren't seen in a client; everything was driven headless.
+- **Hard Mode's bosses' hitpoints:** see [Modes](#modes).
+- **Hard's supply points:** the Wiki says they're fewer ("usually 15, at most 18" by Sotetseg), with no rule; here they're as Normal.
+- **Fits from few samples:** Entry's team scaling, Entry's waves' gaps, Entry's forms, Hard's Maiden speed-up, Hard's repeated attacks (×1.15, third in a row, limited to three players or fewer, no sample of it with others alive), Bloat's turn odds, Xarpus' absorption and Entry's numbers, Verzik's Entry team multipliers for 3 and 4 players.
+- **Estimates with no source:** the jail's stance (RuneLite's name), the retrieval lot's second-wipe timing, Sotetseg's tornado damage, the Hard realm's sections for three runners, Hard's dots' 80 per strike, Hard Matomenos' blast, each death costing a fifth of a player's standing (unique chance, weighting, commons, tertiaries), the MVP's formula, supply grading.
+- **Our wording, not captured:** the Vyre Orator's lines, "Are you ready to proceed?", the crystal's, the Avernic defender's, Hard's refusal, Entry's retry line, the supply chest's Open line.
+- **Not built, for want of a source:**
+  - Varbit 6400 `tob_verzik_throne_visible`: no capture changes it, and its values are unknown.
+  - The books' text: the Wiki's transcripts are the books' whole text, too much to copy in.
+  - The rooms' "Arena: View" ledges: no capture uses one.
+  - The Mysterious Stranger's in-raid advice: the old solo mode spawned him in rooms, but no capture has him there.
+  - Xarpus' and Verzik's follow-up death forms where the units note them.
 
 ## Developer commands
 
 | Command | What it does |
 | --- | --- |
 | `::tob` | To Ver Sinhaza, by the notice board. |
-| `::tobcomplete` | Completes the room your party has reached. |
+| `::tobcomplete` | Completes the room your party has reached, removing its NPCs. |
 | `::tobroom <room>` | Moves your party to a room (`MAIDEN`, `BLOAT`, `NYLOCAS`, `SOTETSEG`, `XARPUS`, `VERZIK`, `REWARDS`). |
 
 The Theatre of Blood is also in `::teleports` under Minigames.

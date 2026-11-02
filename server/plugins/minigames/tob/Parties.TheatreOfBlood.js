@@ -26,7 +26,7 @@ class Party {
     this.blocked = new Set();
     this.preferredSize = 0;
     this.preferredCombat = DEFAULT_COMBAT;
-    /** Normal mode only for now; Entry and Hard would set this. */
+    /** The party's mode (Shared.MODES); the leader picks it on the party's screen. */
     this.mode = "normal";
     this.createdCycle = Shared.cycle();
     this.raid = null;

@@ -27,6 +27,7 @@ function loadKits() {
     result: Number(entry.result),
     worn: Number(entry.worn) || 0,
     name: entry.name,
+    refund: entry.refund === true,
   }));
 }
 
@@ -81,6 +82,8 @@ function revertItem(event) {
   }
   if (barrowsBase == null) {
     event.item.setId(entry.base);
+    // Wiki (Holy ghrazi rapier and friends): these kits come back when dismantled.
+    if (entry.refund) event.player.getInventory().add(new core.Item(entry.kit, 1), false);
   } else {
     event.item.setId(Barrows.stageItemId(barrowsBase, Barrows.stageOf(itemId) ?? 0));
   }

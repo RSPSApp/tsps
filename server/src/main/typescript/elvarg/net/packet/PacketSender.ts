@@ -743,7 +743,7 @@ export class PacketSender {
   sendPrivateMessage(target: any, message: Uint8Array, size: number): this {
     const text = Misc.ucFirst(Misc.textUnpack(Array.from(message), size).toLowerCase());
     this.player.getSession().sendClientPacket(encodeChatMessage(
-      "private_in", text, target?.getDisplayName?.() ?? target?.getUsername?.() ?? "", "", target?.getIndex?.() ?? 0
+      "private_in", text, target?.getDisplayName?.() ?? "", "", target?.getIndex?.() ?? 0
     ));
     return this;
   }

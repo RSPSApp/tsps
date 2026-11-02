@@ -22,6 +22,7 @@ import {
     createLayersIcon,
     createOverlayIcon,
     createPathIcon,
+    createFillIcon,
     createPaintIcon,
     createPointerIcon,
     createRotateIcon,
@@ -255,6 +256,11 @@ class EditorChrome {
             { id: "terrain", label: "Paint tiles (R rotates the shape)", icon: createPaintIcon },
             { id: "path", label: "Draw path", icon: createPathIcon },
             {
+                id: "fill",
+                label: "Fill: repaint a whole connected overlay, keeping tile shapes",
+                icon: createFillIcon,
+            },
+            {
                 id: "undo",
                 label: "Undo (Ctrl+Z)",
                 icon: createUndoIcon,
@@ -307,7 +313,7 @@ class EditorChrome {
             "select",
             (toolId) =>
                 this.plugin.setConfig({
-                    tool: toolId === "path" || toolId === "terrain" ? toolId : "select",
+                    tool: toolId === "path" || toolId === "terrain" || toolId === "fill" ? toolId : "select",
                 }),
         );
 
@@ -370,6 +376,7 @@ class EditorChrome {
         const coordinates = document.createElement("span");
         coordinates.title = "Tile under the pointer: x, y, level, and its map region";
         Object.assign(coordinates.style, { minWidth: "170px", marginLeft: "8px", color: "#cbd5e1", whiteSpace: "nowrap" });
+        this.plugin.setNoticeListener((message) => this.toast(message));
         this.plugin.setPointerTileListener((tile) => {
             coordinates.textContent = tile
                 ? `${tile.tileX}, ${tile.tileY}, ${tile.plane} · Region ${regionIdOf(tile.tileX, tile.tileY)}`
@@ -857,6 +864,8 @@ class EditorChrome {
                   ? "path"
                   : state.config.tool === "terrain"
                   ? "terrain"
+                  : state.config.tool === "fill"
+                  ? "fill"
                   : state.config.tool === "wall"
                     ? "wall"
                   : "select",

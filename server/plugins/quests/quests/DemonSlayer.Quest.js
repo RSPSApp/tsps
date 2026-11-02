@@ -650,7 +650,7 @@ module.exports = function registerDemonSlayerQuest(api) {
       event.handled = true;
       player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ActionDialogue(0, {
         execute: () => StatementDialogue.send(player, "The wizards cast an evil spell...", false),
-      })));
+      }, true)));
       const fight = demonEncounters.get(player);
       later(fight, 14, () => {
         if (demonEncounters.get(player) === fight && fight.summoning) {

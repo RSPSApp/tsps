@@ -235,7 +235,7 @@ test('Felix the third tower apprentice keeps his named conversation and opens hi
   }
 });
 
-async function nativeIncantation(t, burst = false, interrupt = null, startStage = 85) {
+async function nativeIncantation(t, burst = false, interrupt = null, startStage = 85, holdSpace = false) {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const { PlayerSession } = require('../dist/net/PlayerSession');
   const { ClientConnection } = require('../dist/net/NetworkBuilder');
@@ -256,6 +256,7 @@ async function nativeIncantation(t, burst = false, interrupt = null, startStage 
   const sedridor = PluginManager.spawnNpc({ id: N.ARCHMAGE_SEDRIDOR_2, x: 3105, y: 9573, z: 0 });
   t.after(() => PluginManager.removeNpc(sedridor));
   const manager = player.getDialogueManager(), lines = [], chants = [], portals = [];
+  let heldContinues = 0;
   const registerObject = core.ObjectManager.register;
   t.mock.method(core.ObjectManager, 'register', function(object, ...args) {
     const result = registerObject.call(this, object, ...args);
@@ -330,18 +331,23 @@ async function nativeIncantation(t, burst = false, interrupt = null, startStage 
     } else if (manager.getCurrent()?.getText) {
       lines.push(manager.getCurrent().getText().replace(/\s+/g, ' '));
       await send({ type: 'dialogue_continue', widgetId: (player.getPacketSender().getChatboxGroupId() << 16) | 5, childIndex: -1 });
+    } else if (holdSpace && player.getPacketSender().getChatboxGroupId() >= 0) {
+      // Held Space: a Continue on whatever chatbox is still up while the chant (or a hold) waits on its timer.
+      heldContinues++;
+      await send({ type: 'dialogue_continue', widgetId: (player.getPacketSender().getChatboxGroupId() << 16) | 5, childIndex: -1 });
     } else tick();
   }
   assert.equal(quest.getStage(player), 100, JSON.stringify({ lines, chants, actors: spawned.map(npc => ({ id: npc.getId(), registered: npc.isRegistered(), visible: npc.isVisible(), local: player.getLocalNpcs().includes(npc) })), blocked: player.getMovementQueue().isMovementBlocked() }));
   assert.equal(chants.length, 4);
   assert.deepEqual(chants.map(([id]) => id).sort(), [N.APPRENTICE_TAMARA_2, N.APPRENTICE_FELIX_3, N.APPRENTICE_CORDELIA_2, N.WIZARD_PERSTEN_3].sort());
   assert.ok(chants.every(([, text]) => text === 'Saris! Val! Curak! Belito!'));
-  assert.ok(lines.includes('It worked!'));
+  if (!holdSpace) assert.ok(lines.includes('It worked!'), 'held Space may skip it as soon as it shows');
   assert.equal(portals.length, 1, 'the actual scene portal was registered once');
   assert.equal(portals[0].getOwner(), player);
   assert.equal(core.World.getObjects().includes(portals[0]), false, 'entering the temple removed the cutscene portal');
   assert.ok(packets.length > 0, 'actual native NPC/player sync and UI packets were encoded');
   assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  if (holdSpace) assert.ok(heldContinues > 0, 'Continues reached the waiting chant');
 }
 
 test('the native incantation cast chants, opens its portal and continues into the temple', nativeIncantation);
@@ -351,3 +357,4 @@ test('a replacement dialogue cancels the deferred incantation start', t => nativ
 test('a bank replacement cancels the deferred scene and releases its old controls', t => nativeIncantation(t, true, 'bank'));
 test('a new private quest scene keeps its own controls when the deferred incantation is cancelled', t => nativeIncantation(t, true, 'scene'));
 test('logout cancels the deferred incantation start', t => nativeIncantation(t, true, 'logout'));
+test('Continues held through the chant cannot end its timed overhead line', t => nativeIncantation(t, true, null, 85, true));

@@ -44,6 +44,11 @@ For #1858, queued Continues could reach the incantation's overhead chant before 
 cast entered native NPC sync, closing the dialogue while leaving stage 90 and cutscene controls
 active. The scene now holds for one sync tick before starting its unchanged transcript.
 
+Holding Space through the chant still froze the scene: "Alright, with me!" stays in the chatbox
+while the chant waits on its timer, and a Continue on it ended the chain under that timer. Native
+Continues no longer advance a step that moves itself on (an overhead line, a held line, `Scenes.hold`),
+which covers every transcript cutscene, not just this one.
+
 Known gaps:
 
 - Other players on the same step are visible (shared map, not an instance).
@@ -56,6 +61,11 @@ Known gaps:
 
 ## Runs
 
+- **2026-11-02, offline native checkpoint (stage 85), held Space:** the same harness sends a
+  Continue on the open chatbox every tick the chant waits. Stage 100, four chants, one portal and
+  restored controls; with the guard removed it stays at stage 90. In the web client (browser pane),
+  key-repeated Space didn't freeze it even without the guard: the client sends one Continue per
+  chatbox until that widget is rebuilt, so the window the report hit wasn't reached live.
 - **2026-11-02, offline native checkpoints (stages 85 and 90):** real Player, ClientConnection,
   quest/dialogue dispatch, NPC spawning and local sync. Paced and same-tick queued Continues reach
   stage 100; the four actors chant, the portal opens, and controls return. Bank/dialogue replacement

@@ -34,7 +34,9 @@ Engine additions this feature needed:
 - tile spot animations (`SPOT_ANIM` target type 2) in both the server encoder and the client decoder, used by `sendGraphic`/`sendGlobalGraphic`;
 - per-NPC maximum hitpoints (`NPC.setMaxHitpoints`), used for raid scaling and the health bar;
 - cache struct params (`CacheDefinitions.getStructParams`), used to read invocations;
-- `ForceMovement`, `ForceMovementTask`, `OperationType`, `LocModelType` and `StatementDialogue` on `api.core`.
+- `ForceMovement`, `ForceMovementTask`, `OperationType`, `LocModelType` and `StatementDialogue` on `api.core`;
+- a per-NPC defence roll factor (`NPC.setDefenceRollFactor`, read by the accuracy formulas), for the raid-level scaling of defence rolls that some NPCs skip (`scaleDefence: false`);
+- the `combat:no-retreat` NPC flag (`Combat.shouldRetreat`), set with `combat:no-regen` on every raid NPC: Akkha, moved about by his own specials, otherwise dropped his target for being far from his spawn tile and stood idle.
 
 ## Scaling and points
 
@@ -45,35 +47,49 @@ These follow the wiki's *Tombs of Amascut* mechanics:
 - **NPC damage:** the same raid-level and path-level factors, capped at 2.5×.
 - **Points:**
   - Everyone starts on 5,000 points, which are taken off again for the loot and the purple chance.
-  - Damage dealt × the NPC's points multiplier earns room points, capped at 20,000 a room (60,000 for the Wardens, from OpenRune). They're added to the total, capped at 64,000, when the room is completed.
+  - Damage dealt × the NPC's points multiplier earns room points, capped at 20,000 a room, the Wardens included (Wiki, Tombs of Amascut: Points). They're added to the total, capped at 64,000, when the room is completed.
   - The room's top scorer gets an MVP bonus of 300 × team size.
   - Puzzle completions are worth Scabaras 300, Apmeken 450 and Crondis 400. These are OpenRune's numbers; the Wiki gives none.
   - A death costs 20% of a player's total (at least 1,000).
   - At the end, each player's loot points go to `TOA_PERSONAL_CONTRIBUTION` (varp 3606).
 - **Unique loot:** chance = total party points / (10,500 − 20 × (raid level up to 400 + a third of the next 150)) percent, capped at 55%. At most one unique per raid; the recipient is weighted by personal points. Weights out of 24: Lightbearer 7, Osmumten's fang 7, Elidinis' ward 3, each Masori piece 2, Tumeken's shadow 1. Below raid level 150, the ward, Masori and shadow need an extra 1/50 roll; below 50, so do all uniques.
 
-## Behaviour taken only from Near-Reality
+## Status of the polish (feat/152-toa-polish)
 
-The OSRS Wiki and the cache weren't reachable when this was first written, so Near-Reality's ToA code was the behaviour oracle. The following still come from it alone, where the Wiki gives no numbers (see *Checked against the Wiki and the cache*):
+Each room file's header lists its sources (rsprox rev/recording/tick, Wiki) and its estimates. Captures decide what the game shows, the Wiki the numbers, the cache the ids.
 
-- Every boss's attack timings, special-attack cycles, tile patterns and base damage numbers. This includes the Wardens' orb paths, rotating-blade tiles, wheel, isolation, skull-bomb and floor-collapse tables (`WardensData.TombsOfAmascut.js`), and Akkha's orb paths and quadrants.
-- Wardens phase two: only the Warden's current style (magic or ranged) breaks its shield. Core damage passes through ×5, and the core stays out for 21/29/37/45/53 ticks depending on remaining health.
-- Points multipliers on Warden NPCs: obelisk 1.5, Warden 2, final Warden 2.5.
-- The common loot table's items and divisors, fossilised dung below 1,500 points, and the deathless kits and remnants. (The quantity factor above raid level 300 matches the Wiki.)
-- The Masori and Armadyl plate counts and experience, and the ward's 10,000 soul runes.
-- The lobby scoreboard (46071, interface 775), filled as OpenRune does:
-  - A tab per mode (`TOA_SCOREBOARD_TAB`) shows your attempts, completions and deaths, and your best overall and challenge times for each team size.
-  - These are recorded from now on: an attempt when a raid starts, a death on each death, and times on completion.
-  - The world columns show "-", since there are no world-wide records.
-- The lobby's shroud chest (46080): Icthlarin's shroud tiers at 100/500/1000/1500/2000 Normal+Expert completions, and the tier 5 hood (Wiki; the menu is OpenRune's).
-- The pickaxe cavities (45468 in Het's room, 49566 in the lobby) keep one pickaxe per player. It's shown in the wall by `TOA_PICKAXE_STORED` (varbit 14440, its place in OpenRune's list plus one). Bronze is turned away ("Het will provide"). Deposit stores the best held or wielded pickaxe; using one on the cavity stores that one.
-- The Scabaras puzzle room's shortcuts between its north and south paths (the Wiki only says they exist):
-  - The Passage (45343) is crawled through from (3548, 5276) or (3548, 5284).
-  - The Platform (45396) is jumped across from (3560, 5277) or (3560, 5283).
-- Attack delay:
-  - Striking a Scabaras obelisk, or an energy siphon with melee, stops the attack and leaves no attack delay, so the next one can be hit at once.
-  - When the final Warden sends its skulls, every player's attack is stopped and their delay cleared the same way.
-  - Kephri's eggs keep the normal delay; Near-Reality doesn't clear it for them either.
+### Played over the agent MCP (2 November 2026)
+
+Real objects, NPCs and paths, driven from scripts; nothing below was skipped unless it says so.
+
+- **Puzzles, through their own objects:**
+  - Crondis: the container, the waterfalls and the palm, with the crocodiles drinking, at full length (Normal, twice).
+  - Het: a beam route found from the room's walls and mirrors, loose mirrors picked up, placed and turned, walls broken, the statue struck. The seal was mined over two phases; the first ran out as it should.
+  - Scabaras: lights-out, memory (the sequence read off the plates tick by tick), obelisks (the order survived wrong strikes), addition (the tablet's number walked exactly), the passage, the platform and the matching boards, in two rooms. Het and Scabaras were played in Entry raids of their own; the whole Normal and Expert raids skipped them.
+  - Apmeken: roof supports and vents with the real hazards, including a death, the team wipe, the retry and a clean second attempt (Normal).
+- **Bosses:** Zebak at full length (Normal). Ba-Ba, Kephri, Akkha (all four thresholds and the final stand) and the Wardens (every phase) to death with their hitpoints cut by `set_npc_hitpoints`.
+- **Raids:** Entry solo; Normal solo (Walk the Path, Pathfinder, Quiet and Deadly Prayers, Jog, Lively Larvae); Expert (17 invocations, raid level 305: Zebak, Ba-Ba, Kephri, Akkha and the Wardens, then the chest and the spirit); parties of two; up to four raids at once.
+- **The end:** the vault, the sarcophagus reveal, a forced purple, the chest's Take-All with noted items, leaving through the vault spirit, the lobby niche.
+- **Escape crystal:** Configure, refused on a teammate until configured, used on a teammate (both crystals used, both told), Teleport out, and a logout holding one.
+- **Deaths and leaving:** a party death (the ghost waits at the room's entrance) and the revival when the room is won; a solo wipe and retry; a Hardcore wipe and the retrieval chest (the fee, the items back, the empty line); logging out mid-fight in a party (counted as a death) and rejoining; a solo logout outside a fight (ejected, nothing lost); a Hardcore logout mid-fight (a wipe: three items kept, the rest to the chest); a logout with an escape crystal (the crystal used, the gear kept); teleporting out.
+
+Cheats used in those runs: infinite health (so one player in Ba-Ba's pit with Mind the Gap lived, and was moved out with `::tele`), and `::toaskippuzzle`, `::toaskiptowarden`, `::toaskiptoreward` where a run only needed later rooms.
+
+### Still unverified
+
+- The retrieval chest's line and the crystal's line at login: the player is moved and the items are handled correctly, but the agent MCP's login reply carries no messages at all, so neither line was seen.
+- The Auto-afk and ring-of-life modes of the escape crystal.
+- Full-length fights other than Zebak, and Normal or Expert with a real death invocation beyond Hardcore.
+
+**Still only from Near-Reality or OpenRune:**
+- Apmeken: the needless-fix texts and their full damage; clearing venom on completion. Het: which pickaxe maps to which stored value past rune.
+- Scabaras: flip messages and animation; the tablet's refusal; the memory button's messages. Kephri: too many agile scarabs turning eggs into dung; an egg landing on a player; the spitter through prayer.
+- Akkha: element cooldowns; lightning's prayer block; the unstable burst's graphic timing. Ba-Ba: solo rock 39; falling rock; sarcophagus shot and Faith's 15%; baboon max 12; the pit rows and deep-pit death.
+- Crondis: the first crocodile after a reset. Zebak: the bite through prayer; bleed numbers; the scream's hit; water crocodile bites.
+- Wardens: entomb's timing; divine sounds; failed-siphon damage; rock damage; the Kephri phantom's Aerial bonus; ring lightning; clearing attack delay on skulls; Zebak's style flip, Vigilant's and the special's chances.
+- Points: puzzle completion points (Scabaras 300, Apmeken 450, Crondis 400). Lobby: the shroud menu, the sack's dialogue, the cavity's text.
+
+**Not built:** Metamorphosis into a remnant's forms (the unlock is); the first-raid freed gods and captured gods in the rooms; per-viewer corruption tint.
 
 ## NPC animations
 
@@ -120,10 +136,7 @@ Checked against OpenRune-Server #274, which was built against a live capture, wi
 
 ## Simplifications
 
-- **Apmeken:** the corruption special is disabled, as it is in Near-Reality.
-- **Wardens phase three floor:** collapsed rows push players back onto the remaining floor rather than becoming unwalkable.
-- **The pet:** the Wiki gives its formula but not its exact raid level scaling beyond thresholds at 400 and 550; it uses a third of the levels between them.
-- **Logout and failure:** logging out leaves the raid with no rejoin, and a failed raid keeps your items. OSRS sends them to a retrieval chest in the lobby for a fee; there's no retrieval chest yet.
+- **Logout and failure:** see `Raid.onLogout`, `Raid.rejoin` and `Retrieval.*` (built from the Wiki and 227/01762; rejoin not yet played).
 - **Restart recovery:** logging in inside the tombs without an active raid returns you to the lobby. The raid exit also returns stranded players to the lobby.
 - **Scoreboard:** the burial chamber scoreboard (44942) isn't implemented; the lobby one shows only personal records.
 

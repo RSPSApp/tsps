@@ -13,7 +13,9 @@
  * Cache: varbits teleport_crystal_afk_mode (14838), teleport_crystal_afk_delay (14849),
  * teleport_crystal_rol (14857). The client shows the armed state from them.
  * No capture opens Configure or fires the crystal: its menu's words and messages are ours.
- * Elsewhere (the Wiki's other activities) the crystal is left to those activities' own plugins.
+ * Configure and Auto-afk set the crystal up wherever it is, so this unit keeps those settings for
+ * every activity: the Tombs of Amascut asks for them with `escape-crystal:settings`. Teleporting,
+ * using it on someone and firing it are left to each activity's own plugin.
  */
 
 const Shared = require("./Shared.TheatreOfBlood");
@@ -126,9 +128,11 @@ function configure({ player }) {
 function useOnPlayer(event) {
   const { player, target, itemId } = event;
   if (itemId !== CRYSTAL) return;
-  event.handled = true;
   const raid = raidIn(player);
-  if (!raid || Raid.raidOf(target) !== raid) {
+  // Another activity's crystal (the Tombs of Amascut's) is that activity's to answer.
+  if (!raid) return;
+  event.handled = true;
+  if (Raid.raidOf(target) !== raid) {
     player.sendMessage("You can only use this on a member of your party in the Theatre of Blood.");
     return;
   }
@@ -177,6 +181,16 @@ function damageApplied({ target, hit }) {
   if ((afkFires(player) || ringFires(player, damage)) && escape(player, raid)) player.__tobEscapedCycle = Shared.cycle();
 }
 
+/** The crystal's settings, for another activity's plugin ("escape-crystal:settings" { player }). */
+function settingsOf(request) {
+  const { player } = request;
+  if (!player) return;
+  request.afk = !!player.getAttribute(ATTR.AFK);
+  request.delay = delayOf(player);
+  request.ring = !!player.getAttribute(ATTR.RING);
+  request.teammates = !!player.getAttribute(ATTR.TEAMMATES);
+}
+
 /** Wiki: a logout in the raid with a crystal uses it; the player returns outside. */
 function usedOnLogin(player) {
   if (!player.getInventory().contains(CRYSTAL)) return false;
@@ -191,6 +205,7 @@ module.exports = function registerTheatreEscapeCrystal(api) {
   api.onItemAction("Escape crystal", { Teleport: teleport, "Auto-afk": toggleAfk, Configure: configure });
   api.onItemOnPlayer(useOnPlayer);
   api.onCustomEvent("combat:damage-apply", damageApplied);
+  api.onCustomEvent("escape-crystal:settings", settingsOf);
 };
 
-Object.assign(module.exports, { ATTR, teleport, toggleAfk, configure, useOnPlayer, damageApplied, afkFires, ringFires, usedOnLogin, wears, usesUp, delayOf });
+Object.assign(module.exports, { ATTR, teleport, toggleAfk, configure, useOnPlayer, damageApplied, settingsOf, afkFires, ringFires, usedOnLogin, wears, usesUp, delayOf });

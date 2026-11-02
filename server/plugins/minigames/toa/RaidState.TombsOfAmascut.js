@@ -9,6 +9,7 @@
 const Shared = require("./Shared.TombsOfAmascut");
 const Parties = require("./Parties.TombsOfAmascut");
 const CombatAchievements = require("./CombatAchievements.TombsOfAmascut");
+const Retrieval = require("./Retrieval.TombsOfAmascut");
 
 const { ROOMS, VARBIT, SCRIPT, INTERFACE } = Shared;
 
@@ -17,6 +18,8 @@ const ATTR_RAID = "toa:raid";
 /** Room key -> Room subclass, filled in by the room units. */
 const roomTypes = new Map();
 const raids = new Set();
+/** Username -> the raid they logged out of, for rejoining it. */
+const absentees = new Map();
 let AreaClass = null;
 
 const STAGE = { IDLE: "idle", STARTED: "started", COMPLETED: "completed" };
@@ -28,6 +31,10 @@ function registerRaidItems(...ids) {
   for (const id of ids.flat()) {
     if (Number.isInteger(id) && id > 0) raidItems.add(id);
   }
+}
+
+function isRaidItem(id) {
+  return raidItems.has(id);
 }
 
 // Raid-scoped rules and per-tick work from the unit files. The raid's area runs them, so
@@ -128,6 +135,13 @@ class Member {
     this.canClaimSupplies = false;
     this.supplies = [];
     this.hud = new Map();
+    /** Room points at each completed room, for The Leech. */
+    this.roomScores = [];
+    /** Combat achievements only this player can no longer get, and those they earned this raid. */
+    this.failedTasks = new Set();
+    this.earnedTasks = new Set();
+    /** What the raid summary's titles need (Raid.tally). */
+    this.tallies = {};
   }
 }
 
@@ -144,6 +158,8 @@ class Room {
     this.teamSize = raid.original.size;
     this.failed = false;
     this.destroyed = false;
+    /** Who has died in this room: "without dying yourself". */
+    this.diedHere = new Set();
   }
 
   get area() {
@@ -183,6 +199,9 @@ class Room {
 
   /** Called when a player steps from one tile onto `to` while in this room. */
   onStep(_player, _from, _to) {}
+
+  /** Called as a player leaves the raid from this room (a crystal, a teleport, a logout): undo what the room holds on them. */
+  onPlayerLeave(_player) {}
 
   /** Shows the boss health bar (the BossHud plugin) to everyone in the room. */
   openBossHud(npc) {
@@ -231,6 +250,11 @@ class Room {
     return this.raid.players.filter((player) => this.raid.roomFor(player) === this);
   }
 
+  /** Those in this room who haven't died in it, for tasks "without dying yourself". */
+  deathlessPlayers() {
+    return this.roomPlayers().filter((player) => !this.diedHere.has(player));
+  }
+
   inChallenge(entity) {
     const bounds = this.def.bounds;
     if (!bounds) return false;
@@ -272,12 +296,19 @@ class Room {
     });
     if (!npc) return null;
     npc.__skipDefaultRespawn = true;
+    // Nothing in the raid heals by itself: an NPC's out-of-combat regeneration (10% a tick after
+    // 20 seconds without attacking) healed Ba-Ba through her boulder phase, played over the MCP.
+    npc.setFlag("combat:no-regen");
+    // Nor gives up on its target for being far from its spawn tile: Akkha, moved about by his own
+    // specials, dropped his and stood idle for good (Normal and Expert, played over the MCP).
+    npc.setFlag("combat:no-retreat");
     npc.__toaRoom = this;
     npc.__toaPoints = options.points ?? 1;
     if (options.inert) npc.setFlag("combat:no-retaliate");
     raid.area.add(npc);
     this.npcs.add(npc);
     if (options.scale !== false) raid.scale(npc, options.pathLevel ?? this.pathLevel());
+    if (options.scaleDefence === false) npc.setDefenceRollFactor(1);
     return npc;
   }
 
@@ -389,12 +420,16 @@ class Room {
     }
   }
 
-  destroy() {
+  /**
+   * `keepObjects` leaves its opened barriers as they are, for those still inside: putting the map's
+   * back shut the second player of a party in Crondis's room (played over the MCP).
+   */
+  destroy({ keepObjects = false } = {}) {
     if (this.destroyed) return;
     this.closeBossHud();
     this.cancelTasks();
     for (const npc of [...this.npcs]) this.despawn(npc);
-    this.resetObjects();
+    if (!keepObjects) this.resetObjects();
     this.objects.clear();
     this.destroyed = true;
   }
@@ -426,7 +461,7 @@ class Room {
       if (this.def.puzzle) Shared.jingle(player, Shared.JINGLE.PUZZLE_DONE);
       if (!this.inChallenge(player) && this.def.challenge) player.moveTo(Shared.loc(this.def.challenge));
       if (!isEnd) {
-        player.sendMessage(`Challenge complete: ${name}. Duration: <col=ef1020>${Shared.formatTicks(duration)}</col>. Total: <col=ef1020>${Shared.formatTicks(total)}</col>`);
+        player.sendMessage(`Challenge complete: ${name}. Duration: <col=ef1020>${Shared.formatTicksHundredths(duration)}</col>. Total: <col=ef1020>${Shared.formatTicksHundredths(total)}</col>`);
       } else {
         raid.sendCompletionMessages(player, name, duration, total);
       }
@@ -434,19 +469,24 @@ class Room {
     this.cancelTasks();
     this.closeBossHud();
     this.onComplete();
+    if (isEnd) {
+      Shared.api().emitCustomEvent("toa:raid-won", { raid });
+      for (const player of raid.players) player.getPacketSender().sendVarbit(VARBIT.HUD_HIDE_PLAYERS, 1);
+    }
     if (this.def.osmumten) this.spawnOsmumten();
     this.dropBossLoot();
     if (this.def.boss && this.def.path) raid.completePath(this.def.path);
+  }
+
+  /** A player back in this room after logging out: whatever the room shows them, again. */
+  onPlayerRejoin(player) {
+    this.onPlayerArrive?.(player);
   }
 
   reset() {
     this.stage = STAGE.IDLE;
     this.cancelTasks();
     this.closeBossHud();
-    const diet = this.settings.isActive("ON_A_DIET");
-    for (const player of this.roomPlayers()) {
-      if (!diet && !this.failed) this.raid.give(player, Shared.core().ItemIdentifiers.HONEY_LOCUST, Shared.random(4, 6));
-    }
     this.onReset();
   }
 
@@ -529,7 +569,7 @@ class Room {
     const enter = () => {
       if (this.stage === STAGE.IDLE) {
         this.start();
-        for (const member of this.raid.players) member.sendMessage(`Challenge started: ${this.challengeName()}`);
+        for (const member of this.raid.players) member.sendMessage(`Challenge started: ${this.challengeName()}.`);
       }
       walkThrough(player, object);
     };
@@ -553,7 +593,7 @@ class Room {
     const enter = () => {
       if (!this.def.wardens && this.stage === STAGE.IDLE) {
         this.start();
-        for (const member of this.raid.players) member.sendMessage(`Challenge started: ${this.challengeName()}`);
+        for (const member of this.raid.players) member.sendMessage(`Challenge started: ${this.challengeName()}.`);
       }
       Shared.sound(player, Shared.SOUND.TELEPORT);
       player.performGraphic(new (Shared.core().Graphic)(Shared.GRAPHIC.TELEPORT));
@@ -605,9 +645,17 @@ class Raid {
     this.permittedTeamDeaths = this.settings.permittedTeamDeaths();
     this.timeLimitMinutes = this.settings.timeLimitMinutes();
     this.failedTime = false;
+    /** Combat achievements the whole party can no longer get this raid. */
+    this.failedTasks = new Set();
     this.completedRaidLevel = -1;
     this.lastCycle = -1;
     this.over = false;
+    /** Username -> { member, room, encounter }: logged out, and may yet come back. */
+    this.absent = new Map();
+    /** Loot points of those who left: still counted when the unique is rolled (Wiki, Mod Ash). */
+    this.departedPoints = 0;
+    /** Who left: the raid summary still shows them (Wiki, 28 September 2022). */
+    this.departed = [];
     lobby.raid = this;
     lobby.unlist();
     for (const player of lobby.players) this.add(player);
@@ -631,6 +679,31 @@ class Raid {
 
   isLeader(player) {
     return this.leader === player;
+  }
+
+  // ---------------------------------------------------------------- combat achievements
+
+  /**
+   * A task's chance is gone: "You have failed <task>: <reason>", once. Without a player it's the
+   * whole party's and the reason names who did it; with one it's theirs alone and says "You".
+   */
+  failTask(task, reason, player = null) {
+    CombatAchievements.failed(this, task, reason, player);
+  }
+
+  /** Awards a task to `players` if it's still live for them; the unit applies its mode. */
+  completeTask(task, players = this.players) {
+    CombatAchievements.completed(this, task, players);
+  }
+
+  taskLive(task, player = null) {
+    return CombatAchievements.live(this, task, player);
+  }
+
+  /** Counts something a raid summary title needs. */
+  tally(player, key, amount = 1) {
+    const { tallies } = this.member(player);
+    tallies[key] = (tallies[key] ?? 0) + amount;
   }
 
   roomFor(player) {
@@ -688,7 +761,8 @@ class Raid {
     const current = this.rooms.get(key);
     if (this.roomKey !== key || !current || current.destroyed) {
       if (leaderOnly && !this.isLeader(player)) {
-        Shared.statement(player, `Your leader, ${Shared.displayName(this.leader)}, must enter first.`);
+        Shared.statement(player, `Your leader, ${Shared.displayName(this.leader)}, must go first.`);
+        player.sendMessage(`Your leader, ${Shared.displayName(this.leader)}, must go first.`);
         return false;
       }
       this.buildRoom(key);
@@ -697,13 +771,13 @@ class Raid {
     if (member.roomKey === null) {
       player.sendMessage(`You enter the Tombs of Amascut (${this.settings.mode} Mode)...`);
       if (this.timeLimitMinutes !== -1) {
-        player.sendMessage(`Overall time to beat: <col=ef1020>${this.timeLimitMinutes}:00</col>. The timer starts upon choosing your first path.`);
+        Shared.later(player, FADE_ARRIVAL_TICKS, () => player.sendMessage(`Overall time to beat: <col=ef1020>${this.timeLimitMinutes}:00.00</col>. The timer starts upon choosing your first path.`));
       }
     }
     if (this.startCycle === 0 && key !== "MAIN_HALL") {
       this.startCycle = Shared.cycle();
       if (this.timeLimitMinutes !== -1) {
-        this.broadcast(`Overall time to beat: <col=ef1020>${this.timeLimitMinutes}:00</col>. The timer has started!`);
+        this.broadcast(`Overall time to beat: <col=ef1020>${this.timeLimitMinutes}:00.00</col>. The timer has started!`);
       }
     }
     member.roomKey = key;
@@ -712,8 +786,7 @@ class Raid {
       if (player.getArea?.() !== this.area) this.area.enter(player);
       player.moveTo(target);
       this.rooms.get(key)?.onPlayerArrive?.(player);
-      this.sendHud(player);
-    });
+    }, () => this.sendHud(player));
     this.refreshHudStates();
     return true;
   }
@@ -726,7 +799,7 @@ class Raid {
     this.rooms.set(key, room);
     this.roomKey = key;
     if (previous && previous !== room) {
-      previous.destroy();
+      previous.destroy({ keepObjects: this.players.some((player) => this.member(player).roomKey === previous.key) });
       // Rebuilding the same room keeps its new entry.
       if (previous.key !== key) this.rooms.delete(previous.key);
     }
@@ -742,7 +815,8 @@ class Raid {
       const before = this.roomKey;
       if (!this.enterRoom(player, room.def.next, { leaderOnly: false })) return;
       if (this.roomKey !== before) {
-        this.broadcast(`${Shared.displayName(player)} has proceeded to the next challenge. Join them...`, player);
+        const next = this.roomKey === "REWARD" ? "Osmumten's Burial Chamber" : "the next challenge";
+        this.broadcast(`${Shared.displayName(player)} has proceeded to ${next}. Join ${Shared.pronoun(player)}...`, player);
       }
     };
     if (quick) proceed();
@@ -756,13 +830,30 @@ class Raid {
     const destination = back ? Shared.loc({ x: back.back.x + Shared.random(0, back.spread), y: back.back.y }, 0) : null;
     this.enterRoom(player, "MAIN_HALL", { leaderOnly: false, destination });
     if (this.roomKey !== before) {
-      this.broadcast(`${Shared.displayName(player)} has returned to the Nexus. Join them...`, player);
+      this.broadcast(`${Shared.displayName(player)} has returned to the Nexus. Join ${Shared.pronoun(player)}...`, player);
     }
   }
 
   completePath(pathKey) {
-    if (!this.pathsCompleted.includes(pathKey)) this.pathsCompleted.push(pathKey);
+    if (this.pathsCompleted.includes(pathKey)) return;
+    this.pathsCompleted.push(pathKey);
     this.pathKey = null;
+    this.walkThePath();
+  }
+
+  /**
+   * Wiki: the first path done raises two of the others, the next two one each. 227/01852 tick 11029:
+   * the rumbling comes as the boss dies, with its completion message.
+   */
+  walkThePath() {
+    if (!this.settings.isActive("WALK_THE_PATH")) return;
+    const raises = WALK_THE_PATH_RAISES[this.pathsCompleted.length - 1] ?? 0;
+    const open = Shared.shuffle(Shared.PATHS.filter((path) => !this.pathsCompleted.includes(path.key)));
+    for (const path of open.slice(0, raises)) {
+      this.pathLevels[Shared.PATH_BY_KEY[path.key].index]++;
+      this.broadcast(`You hear a mysterious rumbling coming from the Path of ${path.name}.`);
+    }
+    this.sendPathLevels();
   }
 
   hasStragglers() {
@@ -791,6 +882,7 @@ class Raid {
     const now = Shared.cycle();
     if (now === this.lastCycle || this.over) return;
     this.lastCycle = now;
+    CombatAchievements.checkGear(this);
     for (const room of this.rooms.values()) {
       if (room.destroyed) continue;
       room.tick();
@@ -829,20 +921,102 @@ class Raid {
     this.leave(player, { teleport: false });
   }
 
+  /**
+   * Wiki (Death mechanics): back on the same world while a teammate is still in the raid, a player
+   * rejoins, and a logout during an encounter counts as a death. Otherwise they're out when they
+   * return: ejected safely, or with a death invocation on and an encounter under way, wiped (the
+   * items go to the chest, losing what it held). An escape crystal in the inventory is used up and
+   * turns all of that into an eject (Wiki, 26 March 2025). Hence the saved note: the raid may not
+   * outlive them, or the server.
+   */
   onLogout(player) {
     const room = this.roomFor(player);
-    if (room?.isStarted() && room.inChallenge(player)) {
-      this.member(player).deaths++;
-      this.totalDeaths++;
-      this.broadcast(`<col=ff0000>${Shared.displayName(player)}</col> has logged out. Total deaths: <col=ff0000>${this.totalDeaths}</col>.`, player);
+    const member = this.member(player);
+    const encounter = !!room?.isStarted() && room.inChallenge(player) && !member.ghost;
+    const crystal = encounter && player.getInventory().contains(Shared.escapeCrystalId());
+    if (crystal) player.getInventory().delete(Shared.escapeCrystalId(), 1);
+    player.setAttribute(ATTR_LOGOUT, { encounter: encounter && !crystal, attempts: this.permittedTeamDeaths !== -1, crystal });
+    const username = player.getUsername();
+    if (encounter && !crystal) this.countDeath(player, member, room);
+    this.players = this.players.filter((other) => other !== player);
+    if (crystal) {
+      this.departedPoints += this.lootPoints(player);
+      this.departed.push({ name: Shared.displayName(player), member });
+      this.original.delete(username);
+      this.members.delete(player);
+    } else {
+      this.absent.set(username, { member, player, room: room?.key ?? null });
+      absentees.set(username, this);
     }
-    this.leave(player, { teleport: false, logout: true });
+    if (this.leader === player && this.players.length > 0) this.promoteLeader();
     player.setLocation(Shared.loc(Shared.LOBBY_RETURN));
+    this.refreshHudNames();
+    this.refreshHudStates();
+    if (this.players.length === 0) {
+      this.dispose();
+      return;
+    }
+    if (this.room?.isStarted()) this.checkTeamWipe(this.room);
+  }
+
+  /** Back on the same world with the party still here: into the party's room. */
+  rejoin(player) {
+    const username = player.getUsername();
+    const entry = this.absent.get(username);
+    if (!entry || this.players.length === 0) return false;
+    this.absent.delete(username);
+    absentees.delete(username);
+    player.setAttribute(ATTR_LOGOUT, null);
+    const { member } = entry;
+    this.members.delete(entry.player);
+    this.members.set(player, member);
+    this.players.push(player);
+    player.setAttribute(ATTR_RAID, this);
+    Parties.rejoinParty(this.lobby, player, entry.player);
+    this.chestSlots?.has(entry.player) && this.chestSlots.set(player, this.chestSlots.get(entry.player));
+    if (this.sarcophagusOwner === entry.player) this.sarcophagusOwner = player;
+    if (this.lootRecipients?.has(username)) player.getPacketSender().sendVarbit(VARBIT.SHOULD_HAVE_LOOT, 1);
+    const room = this.room;
+    member.roomKey = this.roomKey;
+    member.lastTile = null;
+    if (room) {
+      const fighting = room.isStarted();
+      // Wiki: "log back in during a new one" counts as well.
+      if (fighting && entry.room !== room.key) this.countDeath(player, member, room);
+      if (player.getArea?.() !== this.area) this.area.enter(player);
+      player.moveTo(room.def.spawn && !room.isCompleted() ? Shared.spread(room.def.spawn, room.def.spread) : Shared.loc(room.def.challenge ?? room.def.spawn));
+      if (fighting) this.makeGhost(player);
+      room.onPlayerRejoin(player);
+    }
+    this.sendHud(player);
+    this.refreshHudNames();
+    this.refreshHudStates();
+    player.sendMessage("You rejoin your party in the Tombs of Amascut.");
+    return true;
+  }
+
+  /** A logout's death: counted and paid for like any other, with no body to move. */
+  countDeath(player, member, room) {
+    member.deaths++;
+    this.totalDeaths++;
+    room?.diedHere.add(player);
+    recordStat(player, "deaths", Shared.modeName(this.raidLevel));
+    member.points = Math.max(0, member.points - Math.max(DEATH_MIN_POINTS, Math.floor(member.points * DEATH_POINTS_FRACTION)));
+    const name = `<col=ff0000>${Shared.displayName(player)}</col>`;
+    this.broadcast(`${name} has died. Total deaths: <col=ff0000>${this.totalDeaths}</col>.`, player);
+  }
+
+  promoteLeader() {
+    this.leader = this.players[0];
+    this.leader.sendMessage("You have been promoted to the raid party leader.");
   }
 
   /** Takes a player out of the raid; with `teleport` they are faded back to the lobby. */
-  leave(player, { teleport = true, logout = false } = {}) {
+  leave(player, { teleport = true, logout = false, arrived = null } = {}) {
     if (!this.players.includes(player)) return;
+    this.roomFor(player)?.onPlayerLeave(player);
+    this.departedPoints += this.lootPoints(player);
+    this.departed.push({ name: Shared.displayName(player), member: this.member(player) });
     this.players = this.players.filter((member) => member !== player);
     if (!logout) this.original.delete(player.getUsername());
     this.revive(player);
@@ -851,14 +1025,12 @@ class Raid {
     this.closeHud(player);
     removeRaidItems(player);
     this.lobby.leave(player, false);
-    if (this.leader === player && this.players.length > 0) {
-      this.leader = this.players[0];
-      this.leader.sendMessage("You have been promoted to the raid party leader.");
-    }
+    if (this.leader === player && this.players.length > 0) this.promoteLeader();
     if (teleport) {
       Shared.fadeMove(player, () => {
         if (player.getArea?.() === this.area) this.area.leave(player, false);
         player.moveTo(Shared.loc({ x: Shared.LOBBY_RETURN.x + Shared.random(0, 2), y: Shared.LOBBY_RETURN.y + Shared.random(0, 1) }));
+        arrived?.();
       });
     }
     this.refreshHudNames();
@@ -877,6 +1049,8 @@ class Raid {
     this.rooms.clear();
     if (!this.area.isDestroyed()) this.area.destroy();
     raids.delete(this);
+    for (const username of this.absent.keys()) absentees.delete(username);
+    this.absent.clear();
     this.lobby.raid = null;
   }
 
@@ -909,8 +1083,9 @@ class Raid {
     const room = this.roomFor(player);
     this.totalDeaths++;
     member.deaths++;
+    room?.diedHere.add(player);
     recordStat(player, "deaths", Shared.modeName(this.raidLevel));
-    member.points = Math.max(0, member.points - Math.max(1000, Math.floor(member.points * 0.2)));
+    member.points = Math.max(0, member.points - Math.max(DEATH_MIN_POINTS, Math.floor(member.points * DEATH_POINTS_FRACTION)));
     player.sendMessage(`You have died. Total deaths: <col=ff0000>${this.totalDeaths}</col>.`);
     if (room?.isStarted() && room.challengePlayers().length > 0) {
       player.sendMessage(this.permittedTeamDeaths === -1 || this.permittedTeamDeaths > this.teamDeaths + 1
@@ -928,7 +1103,7 @@ class Raid {
     } else {
       player.moveTo(Shared.loc(room.def.challenge));
     }
-    Shared.later(player, 1, () => room.isStarted() && this.checkTeamWipe(room));
+    Shared.later(player, WIPE_CHECK_TICKS, () => room.isStarted() && this.checkTeamWipe(room));
   }
 
   makeGhost(player) {
@@ -956,7 +1131,12 @@ class Raid {
     player.getEquipment().refreshItems();
   }
 
-  /** Everyone in the fight is down: spend a team life (reset the room) or fail the raid. */
+  /**
+   * Everyone in the fight is down: spend an attempt (the room resets) or fail the raid. 227/00554
+   * ticks 11743-11752: the message and jingle 2 ticks after the death, with the fade out; the honey
+   * locusts while the screen is black; the fade in 5 ticks after it began. 227/01762 ticks 18798-18807
+   * for the raid's failure: 3 ticks after the death, then the chest's message on arriving.
+   */
   checkTeamWipe(room) {
     if (!room.isStarted()) return;
     const standing = this.players.some((player) => this.roomFor(player) === room && player.getHitpoints() > 0
@@ -964,28 +1144,44 @@ class Raid {
     if (standing) return;
     this.teamDeaths++;
     const retry = this.permittedTeamDeaths === -1 || this.teamDeaths < this.permittedTeamDeaths;
-    if (!retry) room.failed = true;
+    room.stage = STAGE.IDLE;
+    room.closeBossHud();
+    room.cancelTasks();
+    if (!retry) {
+      room.failed = true;
+      Shared.later(this, 1, () => this.fail());
+      return;
+    }
+    const diet = this.settings.isActive("ON_A_DIET");
     for (const player of room.roomPlayers()) {
+      player.sendMessage(`Your party failed to complete the challenge. ${this.permittedTeamDeaths === -1
+        ? "You may try again..."
+        : `You have <col=ff0000>${this.permittedTeamDeaths - this.teamDeaths}</col> attempts remaining...`}`);
+      Shared.jingle(player, Shared.JINGLE.FAILURE);
       Shared.fadeMove(player, () => {
         this.revive(player);
         player.resetAttributes();
-        Shared.jingle(player, Shared.JINGLE.FAILURE);
-        if (retry) {
-          player.sendMessage(`Your party failed to complete the challenge. ${this.permittedTeamDeaths === -1
-            ? "You may try again..."
-            : `You have <col=ff0000>${this.permittedTeamDeaths - this.teamDeaths}</col> attempts remaining...`}`);
-        }
-      });
+        player.moveTo(Shared.spread(room.def.spawn, room.def.spread));
+        if (!diet) this.give(player, Shared.core().ItemIdentifiers.HONEY_LOCUST, WIPE_HONEY_LOCUSTS);
+      }, () => this.sendHud(player));
     }
     room.reset();
-    if (!retry) Shared.later(this, 3, () => this.fail());
   }
 
   fail() {
     for (const player of [...this.players]) {
+      this.revive(player);
       player.sendMessage("You failed to survive the Tombs of Amascut.");
       Shared.jingle(player, Shared.JINGLE.FAILURE);
-      this.leave(player, { teleport: true });
+      removeRaidItems(player);
+      player.resetAttributes();
+      const stored = Retrieval.storeLost(player);
+      this.leave(player, {
+        teleport: true,
+        arrived: () => {
+          if (stored > 0) player.sendMessage(Retrieval.RETRIEVED_LINE);
+        },
+      });
     }
     this.dispose();
   }
@@ -1004,24 +1200,33 @@ class Raid {
 
   sendCompletionMessages(player, name, duration, total) {
     const mode = Shared.modeName(this.raidLevel);
-    player.sendMessage(`Challenge complete: ${name}. Duration: <col=ef1020>${Shared.formatTicks(duration)}</col>`);
-    player.sendMessage(`Tombs of Amascut: ${mode} Mode challenge completion time: <col=ef1020>${Shared.formatTicks(total)}</col>`);
-    player.sendMessage(`Tombs of Amascut: ${mode} Mode total completion time: <col=ef1020>${Shared.formatTicks(this.totalTicks)}</col>`);
+    const stored = statsOf(player);
+    const size = Math.max(1, Math.min(MAX_TEAM_SIZE, this.original.size));
+    const key = `${String(mode).toLowerCase()}:${size}`;
+    const best = (kind, ticks) => (stored[kind][key] && stored[kind][key] <= ticks
+      ? `. Personal best: ${Shared.formatTicksHundredths(stored[kind][key])}`
+      : " (new personal best)");
+    const time = (ticks) => `<col=ef1020>${Shared.formatTicksHundredths(ticks)}</col>`;
+    // 227/01852 tick 12909: the room and the challenge time share one message.
+    player.sendMessage(`Challenge complete: ${name}. Duration: ${time(duration)}<br>Tombs of Amascut: ${mode} Mode challenge completion time: ${time(total)}${best("challenge", total)}`);
+    player.sendMessage(`Tombs of Amascut: ${mode} Mode total completion time: ${time(this.totalTicks)}${best("overall", this.totalTicks)}`);
     const count = incrementKillCount(player, mode);
-    CombatAchievements.completed(this, player, mode, player.getAttribute(ATTR_KILL_COUNTS));
     recordBestTimes(player, mode, this.original.size, total, this.totalTicks);
-    player.sendMessage(`Your completed Tombs of Amascut: ${mode} Mode count is: <col=ff0000>${count}</col>.`);
+    const modeWords = mode === "Normal" ? "" : `: ${mode} Mode`;
+    player.sendMessage(`Your completed Tombs of Amascut${modeWords} count is: <col=ff0000>${count}</col>.`);
     if (this.timeLimitMinutes !== -1) {
       player.sendMessage(this.failedTime
-        ? `<col=FF0000>Your party failed to beat the overall target time of ${this.timeLimitMinutes}:00</col>`
-        : `<col=00FF00>Your party beat the overall target time of ${this.timeLimitMinutes}:00!</col>`);
+        ? `<col=ff3045>Your party failed to beat the overall target time of ${this.timeLimitMinutes}:00.</col>`
+        : `<col=229628>Your party beat the overall target time of ${this.timeLimitMinutes}:00!</col>`);
     }
+    CombatAchievements.raidCompleted(this, player, mode, player.getAttribute(ATTR_KILL_COUNTS));
   }
 
   /**
    * Wiki: room points go to every player's total when the room is completed (capped at 64,000),
    * and whoever scored the most in a puzzle or boss room gets an MVP bonus of 300 x team size.
-   * The puzzles' completion points are OpenRune's (the Wiki gives none).
+   * The puzzles' completion points come from another server only: neither the Wiki nor a capture
+   * gives them (docs/tombs-of-amascut.md).
    */
   completeRoomPoints(room) {
     const def = room.def;
@@ -1034,6 +1239,8 @@ class Raid {
     }
     for (const player of this.players) {
       const member = this.member(player);
+      if (def.puzzle || def.boss) member.roomScores.push(member.roomPoints);
+      if (player === mvp) this.tally(player, "mvpRooms");
       let earned = member.roomPoints + completion;
       if (player === mvp) earned += MVP_POINTS_PER_PLAYER * this.players.length;
       member.points = Math.min(TOTAL_POINTS_CAP, member.points + earned);
@@ -1041,15 +1248,11 @@ class Raid {
     }
   }
 
-  /**
-   * Room points for the room the player is in (Wiki: capped at 20,000; OpenRune gives the
-   * Wardens 60,000). They count once the room is completed.
-   */
+  /** Room points for the room the player is in (Wiki: capped at 20,000), counted once it's completed. */
   addPoints(player, amount) {
     const member = this.members.get(player);
     if (!member) return;
-    const cap = this.roomFor(player)?.def.key.startsWith("WARDENS") ? WARDENS_ROOM_POINTS_CAP : ROOM_POINTS_CAP;
-    member.roomPoints = Math.min(cap, member.roomPoints + Math.floor(amount));
+    member.roomPoints = Math.min(ROOM_POINTS_CAP, member.roomPoints + Math.floor(amount));
   }
 
   /** The points the loot is rolled with: the total less the 5,000 everyone starts with. */
@@ -1057,7 +1260,7 @@ class Raid {
     return Math.max(0, this.member(player).points - START_POINTS);
   }
 
-  /** At the end, each player's loot points go to TOA_PERSONAL_CONTRIBUTION (as OpenRune). */
+  /** At the end, each player's loot points go to TOA_PERSONAL_CONTRIBUTION (no recording shows it set). */
   sendContributions() {
     for (const player of this.players) player.getPacketSender().sendConfig(VARP_PERSONAL_CONTRIBUTION, this.lootPoints(player));
   }
@@ -1070,19 +1273,22 @@ class Raid {
 
   // ---------------------------------------------------------------- HUD
 
+  /** Every recording opens the HUD (481) on the atmosphere overlay, where the fade has just been. */
   sendHud(player) {
     const sender = player.getPacketSender();
-    sender.sendSubInterface(Shared.OVERLAY_HUD_UID, INTERFACE.RAID_HUD, 1);
+    sender.sendSubInterface(Shared.OVERLAY_ATMOSPHERE_UID, INTERFACE.RAID_HUD, 1);
     sender.sendVarbit(VARBIT.HUD_RAID_LEVEL, this.settings.raidLevel);
+    sender.sendVarbit(VARBIT.HUD_HIDE_PLAYERS, this.totalTicks !== -1 ? 1 : 0);
     this.member(player).hud.clear();
     this.sendHudNames(player);
     this.sendTimer(player);
-    for (let i = 0; i < this.pathLevels.length; i++) sender.sendVarbit(VARBIT.HUD_PATH_LEVEL_BASE + i, this.pathLevels[i]);
+    this.sendPathLevelsTo(player);
     this.refreshHudStates();
   }
 
   closeHud(player) {
-    player.getPacketSender().closeSubInterface(Shared.OVERLAY_HUD_UID);
+    player.getPacketSender().closeSubInterface(Shared.OVERLAY_ATMOSPHERE_UID);
+    player.getPacketSender().sendVarbit(VARBIT.HUD_HIDE_PLAYERS, 0);
   }
 
   sendHudNames(player) {
@@ -1103,18 +1309,19 @@ class Raid {
   }
 
   sendPathLevels() {
-    for (const player of this.players) {
-      for (let i = 0; i < this.pathLevels.length; i++) {
-        player.getPacketSender().sendVarbit(VARBIT.HUD_PATH_LEVEL_BASE + i, this.pathLevels[i]);
-      }
-    }
+    for (const player of this.players) this.sendPathLevelsTo(player);
+  }
+
+  /** TOA_CLIENT_<PATH>_LEVEL: each path has its own varbit (Shared.PATHS' levelVarbit). */
+  sendPathLevelsTo(player) {
+    Shared.PATHS.forEach((path, index) => player.getPacketSender().sendVarbit(path.levelVarbit, this.pathLevels[index]));
   }
 
   setHudPath(player, value) {
     player.getPacketSender().sendVarbit(VARBIT.HUD_PATH, value);
   }
 
-  /** Each party slot's health orb: 1-29 health, 30 dead, 31 elsewhere, 0 empty. */
+  /** Each party slot's health orb: 1-27 health (rev 231/00389: floor(27 x hp / max)), 30 dead, 31 elsewhere, 0 empty. */
   refreshHudStates() {
     for (const viewer of this.players) {
       const member = this.member(viewer);
@@ -1137,7 +1344,7 @@ class Raid {
           send(VARBIT.HUD_PLAYER_BASE + i, 30);
         } else {
           const max = Math.max(1, other.getSkillManager().getMaxLevel(Shared.core().Skill.HITPOINTS));
-          send(VARBIT.HUD_PLAYER_BASE + i, 1 + Math.min(28, Math.floor((other.getHitpoints() / max) * 28)));
+          send(VARBIT.HUD_PLAYER_BASE + i, Math.max(1, Math.min(27, Math.floor((other.getHitpoints() / max) * 27))));
         }
       }
     }
@@ -1216,8 +1423,16 @@ function ownsBook(player, book, varbit) {
 const START_POINTS = 5000;
 const TOTAL_POINTS_CAP = 64000;
 const ROOM_POINTS_CAP = 20000;
-const WARDENS_ROOM_POINTS_CAP = 60000;
 const MVP_POINTS_PER_PLAYER = 300;
+const DEATH_POINTS_FRACTION = 0.2;
+const DEATH_MIN_POINTS = 1000;
+const WALK_THE_PATH_RAISES = [2, 1, 1];
+const WIPE_CHECK_TICKS = 2;
+/** 227/00554 tick 11748; one recording, the only wipe with locusts on a raid that retries. */
+const WIPE_HONEY_LOCUSTS = 2;
+const FADE_ARRIVAL_TICKS = 4;
+/** What's noted when a player logs out, in case the raid is gone when they return. */
+const ATTR_LOGOUT = "toa:logout";
 const PUZZLE_POINTS = { SCABARAS: 300, APMEKEN: 450, CRONDIS: 400 };
 const VARP_PERSONAL_CONTRIBUTION = 3606;
 
@@ -1285,7 +1500,7 @@ function begin(leader) {
   const raid = new Raid(lobby, leader);
   for (const member of raid.players) {
     if (member === leader) continue;
-    member.sendMessage(`${Shared.displayName(leader)} has entered the Tombs of Amascut. Step inside to join them...`);
+    member.sendMessage(`${Shared.displayName(leader)} has entered the Tombs of Amascut. Step inside to join ${Shared.pronoun(leader)}...`);
     member.getPacketSender().sendVarbit(VARBIT.PARTY_STATUS, 2);
   }
   return raid;
@@ -1303,12 +1518,15 @@ module.exports = {
   roomOf,
   begin,
   raids,
+  absentees,
+  ATTR_LOGOUT,
   killCounts,
   statsOf,
   ATTR_STATS,
   MAX_TEAM_SIZE,
   removeRaidItems,
   registerRaidItems,
+  isRaidItem,
   styleMethod,
   walkThrough,
   START_POINTS,

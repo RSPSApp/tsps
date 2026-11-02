@@ -332,7 +332,7 @@ function alternativesOf(description: string): string[] {
 }
 
 /** The cache names a trigger may name, each checked before it is written. */
-interface Names { npcs: Map<string, string>; quests: Map<string, string>; items: Map<string, string>; homes?: Map<string, string[]> }
+interface Names { npcs: Map<string, string>; quests: Map<string, string>; items: Map<string, string>; homes?: Map<string, string[]>; sets?: Map<string, string[][]> }
 
 /** A condition in a task's description (where, how, how fast): not a plain count of the deed. */
 const CONDITION = /\b(without|while|using|within|in under|with only|solo|duo|trio|wearing|wielding|less than|fewer than|must be|do not count|at once|in one|at the same time|in a row|whilst|before|after)\b/i;
@@ -401,6 +401,19 @@ function itemSetNamed(text: string): string[][] | null {
   const base = text.replace(/,.*$/, "").replace(/^(?:the |any )/i, "").replace(/ (?:equipment|armou?r|robes|outfit|gear)(?: set)?$/i, "")
     .replace(/^([A-Z][a-z]+) the [A-Z][a-z]+'s$/, "$1's");
   return itemSetsByName().get(setKey(base)) ?? null;
+}
+
+/** A set by its Wiki page's title: its tables of pieces as the cache names them, or null when any piece is no cache item. */
+function wikiSetNamed(title: string, names: Names): string[][] | null {
+  const lists = names.sets?.get(title.toLowerCase());
+  if (!lists?.length) return null;
+  const named = lists.map((list) => list.map((piece) => names.items.get(piece.toLowerCase()) ?? null));
+  if (!named.every((list) => list.length && list.every(Boolean))) return null;
+  // Several tables are the one set's variants only when each shares pieces with the others (Void
+  // Knight's helms with the same top, robe and gloves); Crystal armour's weapons, armour and tools
+  // are three things.
+  const shares = (a: Array<string | null>, b: Array<string | null>) => a.some((piece) => b.includes(piece));
+  return named.every((list) => named.every((other) => shares(list, other))) ? (named as string[][]) : null;
 }
 
 /** Key chests as tasks name them -> the key chests plugin's names (their place only says where they are). */
@@ -603,7 +616,7 @@ const PLACE_DEFS: PlaceDef[] = [
   { key: "port-phasmatys", names: ["Port Phasmatys"], page: "Port_Phasmatys", flood: { cap: 3000 } },
   { key: "harmony-island", names: ["Harmony Island"], page: "Harmony_Island", flood: { cap: 3000, bbox: true } },
   { key: "mos-le-harmless", names: ["Mos Le'Harmless"], page: "Mos_Le'Harmless", flood: { cap: 15000, bbox: true } },
-  { key: "ferox-enclave", names: ["Ferox Enclave"], page: "Ferox_Enclave", server: { polygon: require("../plugins/areas/ferox/Bounds.FeroxEnclave").BOUNDARY, from: "the FeroxEnclave plugin's outline" } },
+  { key: "ferox-enclave", names: ["Ferox Enclave"], page: "Ferox_Enclave", server: { polygon: require(path.resolve(__dirname, "../plugins/areas/ferox/Bounds.FeroxEnclave")).BOUNDARY, from: "the FeroxEnclave plugin's outline" } },
 ];
 
 /** The places' saved Wiki pages (`--from <dir>/places`, `--save`), read before the triggers are derived. */
@@ -815,6 +828,10 @@ function placeNamed(text: string): string | null {
 function withoutRestatement(name: string, description: string): string {
   let text = description.replace(/\s+(?:whilst|while) fishing(?=\.?$)/i, "");
   if (/^Craft .*\bRunes?\b/i.test(name)) text = text.replace(/\s+(?:from Essence\s+)?at the [A-Za-z]+ Altar(?: \((?:Kourend|Zanaris)\))?(?=\.?$)/i, "");
+  // Where something worn comes from ("Equip Amy's Saw from Mahogany Homes", "a Pearl fishing rod,
+  // purchased from Alry on Molch Island", "a Golden tench, caught by aerial fishing"): no condition
+  // on wearing it.
+  if (/^Equip /i.test(name)) text = text.replace(/(?:,\s*(?:purchased|bought|rewarded|caught|obtained|won)\b[^.]*| (?:purchased |bought |rewarded |obtained )?from (?:the )?[A-Z][^.,]*)(?=\.?$)/, "");
   return text;
 }
 
@@ -1460,6 +1477,31 @@ function homePagesOf(wikitext: string): string[] {
   return pages;
 }
 
+/** The sets an equip task names by link ("a full set of [[Armadyl armour|...]]", "any piece of the [[Infinity robes]]"). */
+function setPagesOf(wikitext: string): string[] {
+  const pages: string[] = [];
+  for (const [, name, description] of wikitext.matchAll(/\{\{(?:DPL|REL|TRL)TaskRow\|([^|]*)\|([^\n]*?)\|s=/g)) {
+    if (!/^Equip /i.test(name)) continue;
+    const link = /\b(?:full set of|full|piece of)\s+(?:the |any )?\[\[([^\]|#]+)/i.exec(description);
+    if (link) pages.push(link[1].trim());
+  }
+  return pages;
+}
+
+/**
+ * A set's pieces as its Wiki page tabulates them: each {{Infotable Bonuses}} or {{Skill outfit}}
+ * a table (Void Knight equipment has three, one per helm), else the pieces its {{Infobox Set}}
+ * pictures link to.
+ */
+function setListsOf(wikitext: string): string[][] {
+  const lists = [...wikitext.matchAll(/\{\{(?:Infotable Bonuses|Skill outfit)\|([^{}]*)\}\}/g)]
+    .map((match) => match[1].split("|").map((arg) => arg.trim()).filter((arg) => arg && !arg.includes("=")).map((arg) => arg.replace(/#.*$/, "")));
+  if (lists.length) return lists;
+  const infobox = /\{\{Infobox Set[\s\S]*?\|image\s*=([^\n]*)/.exec(wikitext);
+  const pictured = infobox ? [...infobox[1].matchAll(/link=([^\]|]+)/g)].map((match) => match[1].trim()) : [];
+  return pictured.length ? [pictured] : [];
+}
+
 /**
  * Where the Wiki says a monster lives: each {{LocLine}}'s location (its first link), else its
  * infobox's. A monster that lives in one place only is killed there whatever a task adds.
@@ -1549,6 +1591,9 @@ async function main() {
   // The homes of the monsters the kill tasks name before a place, by lower-cased page title.
   const homePages = [...new Set(LEAGUES.flatMap((league) => homePagesOf(rawPages.get(league)!)))].sort();
   for (const page of homePages) names.homes!.set(page.toLowerCase(), homesOf(await wikiPageOf("npcs", page, options)));
+  // The pieces of the sets equip tasks link to that the cache has no item set for.
+  names.sets = new Map();
+  for (const page of [...new Set(LEAGUES.flatMap((league) => setPagesOf(rawPages.get(league)!)))].sort()) names.sets.set(page.toLowerCase(), setListsOf(await wikiPageOf("sets", page, options)));
   resolvePlaces();
 
   const output: Record<string, unknown> = {

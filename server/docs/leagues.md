@@ -1631,7 +1631,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   Barrows "piece of armour" is no weapon; an equip-all slot may be "either
   some platelegs or a plateskirt"; a worn item is as the cache spells it, "Seer's Ring" the Seers
   ring, "vambs" vambraces; what only restates the deed is
-  dropped first: "whilst fishing", a rune's "from Essence at the Fire Altar"; a produce task's
+  dropped first: "whilst fishing", a rune's "from Essence at the Fire Altar", where something worn
+  comes from ("Amy's Saw from Mahogany Homes", "a Pearl fishing rod, purchased from Alry"); a produce task's
   trailing league region is its `area`; a subject the name doesn't resolve is taken from the
   description: "Clean a Grimy Guam" is the guam leaf; a tree chopped is its logs; a boss "in" its
   own lair, a Combat Achievements monster, is just its kills: "Defeat Vorkath on Ungael 50 times";

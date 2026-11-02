@@ -151,3 +151,112 @@ test('a missing explicit activity page or variant cannot replace the current con
   await choose(f, 2);
   assert.equal(MultiChatboxPrompt.getPending(player), null);
 });
+
+const AGE_QUESTION = "Can you tell me how long I've been here?";
+const AGE_INTRO = "Ahh, I see all the newcomers arriving in Lumbridge, fresh-faced and eager for adventure. I remember you...";
+const AGE_TASK = 'learn-your-age-from-hans-in-lumbridge';
+const PLAY_TIME = 'account-summary:play-time';
+function hansFixture(t) {
+  const f = fixture(t);
+  f.player.setLocation(new core.Location(3221, 3219));
+  core.RegionManager.loadMapFiles(3221, 3219);
+  f.npc = core.NPC.create(core.NpcIdentifiers.HANS, new core.Location(3222, 3219));
+  core.World.getNpcs().add(f.npc);
+  f.npc.setRegistered(true);
+  t.after(() => { f.npc.setRegistered(false); core.World.getNpcs().remove(f.npc); });
+  f.current = () => f.player.getDialogueManager().getCurrent();
+  f.text = () => f.current()?.getText()?.replace(/\s+/g, ' ');
+  f.done = () => f.player.getAttribute('achievement-diaries:tasks')?.lumbridge ?? [];
+  return f;
+}
+async function hansOp(f, action) {
+  const actions = f.npc.getCurrentDefinition(f.player).getActions();
+  const clickType = actions.indexOf(action) + 1;
+  assert.ok(clickType > 0, `cache Hans action ${action}`);
+  await f.connection.dispatch([{ type: 'npc_option', index: f.npc.getIndex(), clickType }]);
+  f.connection.processTurnPackets();
+}
+async function nextLine(f) {
+  const group = f.player.getPacketSender().getChatboxGroupId();
+  await f.connection.dispatch([{ type: 'dialogue_continue', widgetId: (group << 16) | 5, childIndex: -1 }]);
+  f.connection.processTurnPackets();
+}
+function journalLifecycle(kind, player) {
+  const hook = PM[`${kind}Hooks`].find(hook => hook.pluginName === 'SideJournalDefaults');
+  assert.ok(hook, `real journal ${kind} lifecycle`);
+  hook.handler({ player, username: player.getUsername() });
+}
+
+test('Hans native Age reads actual online time and account age, credits only the final line and remains idempotent', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 10, 2) });
+  const f = hansFixture(t), { player } = f;
+  player.setCreationDate(Date.now() - 30 * 86400_000);
+  player.setAttribute(PLAY_TIME, (26 * 60 + 3) * 60000 + 59_999);
+  journalLifecycle('login', player);
+  t.after(() => journalLifecycle('logout', player));
+  t.mock.timers.tick(5 * 60000);
+
+  await hansOp(f, 'Age');
+  assert.equal(f.text(), AGE_INTRO, 'actual NPC option starts the canonical shortcut');
+  assert.deepEqual(f.done(), [], 'constructing the final line does not award it early');
+  player.closeInterruptibleInterfaces();
+  assert.deepEqual(f.done(), [], 'aborting the introduction earns nothing');
+
+  await hansOp(f, 'Age');
+  await nextLine(f);
+  assert.equal(f.text(), "You've spent 1 days, 2 hours, 8 minutes in the world since you arrived 30 days ago.");
+  assert.deepEqual(f.done(), [AGE_TASK]);
+  await nextLine(f);
+  await hansOp(f, 'Age');
+  await nextLine(f);
+  assert.deepEqual(f.done(), [AGE_TASK], 'repeated Age requests do not duplicate diary progress');
+
+  journalLifecycle('logout', player);
+  player.closeInterruptibleInterfaces();
+  t.mock.timers.tick(86400_000);
+  await hansOp(f, 'Age');
+  await nextLine(f);
+  assert.equal(f.text(), "You've spent 1 days, 2 hours, 8 minutes in the world since you arrived 31 days ago.", 'offline time ages the account without adding played time');
+});
+
+test('Hans normal Talk-to native choice uses the same filled source line and does not credit unrelated answers', async t => {
+  const f = hansFixture(t);
+  f.player.setCreationDate(Date.now() - 2 * 86400_000);
+  await hansOp(f, 'Talk-to');
+  assert.equal(f.text(), 'Hello. What are you doing here?');
+  await nextLine(f);
+  assert.equal(MultiChatboxPrompt.getPending(f.player).options[3], AGE_QUESTION);
+  await choose(f, 1);
+  assert.equal(f.text(), "I'm looking for whoever is in charge of this place.");
+  assert.deepEqual(f.done(), []);
+  f.player.closeInterruptibleInterfaces();
+
+  await hansOp(f, 'Talk-to');
+  await nextLine(f);
+  await choose(f, 4);
+  assert.equal(f.text(), AGE_QUESTION);
+  await nextLine(f);
+  assert.equal(f.text(), AGE_INTRO);
+  assert.deepEqual(f.done(), []);
+  await nextLine(f);
+  assert.equal(f.text(), "You've spent 0 days, 0 hours, 0 minutes in the world since you arrived 2 days ago.");
+  assert.deepEqual(f.done(), [AGE_TASK]);
+});
+
+test('Hans can tell an age outside Lumbridge or in an instance without awarding the location-specific task', async t => {
+  for (const privateArea of [null, new core.PrivateArea()]) {
+    const f = hansFixture(t);
+    if (privateArea) {
+      f.player.setArea(privateArea);
+      f.npc.setArea(privateArea);
+    } else {
+      f.player.setLocation(new core.Location(3221, 3399));
+      f.npc.setLocation(new core.Location(3222, 3399));
+      core.RegionManager.loadMapFiles(3221, 3399);
+    }
+    await hansOp(f, 'Age');
+    await nextLine(f);
+    assert.match(f.text() ?? '', /^You've spent 0 days, 0 hours, 0 minutes /);
+    assert.deepEqual(f.done(), []);
+  }
+});

@@ -571,6 +571,25 @@ test('warlord owned combat cancels on logout and can retry without progress gran
 });
 
 
+test('the warlord gives up past his combat follow distance instead of chasing across the map', () => {
+  const h=harness(),p=makePlayer();h.quest.setStage(p,7);p.setLocation(2458,3302,0);
+  const source=new NPC(7621,new core.Location(2457,3302,0));source.isRegistered=()=>true;
+  const e={player:p,npc:source,npcId:7621,text:"Ha, you really think you stand a chance? I'll crush you."};
+  emit(h,'npc-dialogue:line',e);e.after();
+  const fighter=h.spawned.at(-1);
+  const leash=h.tasks.find(task=>task.constructor.name==='WarlordLeashTask');
+  assert.ok(leash,'the encounter is leashed');
+  const follow=fighter.getCurrentDefinition().getCombatFollowDistance();
+  fighter.moveTo(new core.Location(2457+follow,3302,0));
+  leash.execute();
+  assert.notEqual(fighter.removed,true,'within reach he keeps fighting');
+  fighter.moveTo(new core.Location(2457+follow+1,3302,0));
+  leash.execute();
+  assert.equal(fighter.removed,true,'past it he goes');
+  assert.equal(p.varbits.get(3460),0);
+  assert.equal(h.quest.getStage(p),7,'the fight can be started again');
+});
+
 test('warlord fighting visibility replays actual encounter and clears orphan state without touching siblings', () => {
   const h=harness(),p=makePlayer();h.quest.setStage(p,7);
   const source=new NPC(4971,new core.Location(2457,3302,0));source.isRegistered=()=>true;

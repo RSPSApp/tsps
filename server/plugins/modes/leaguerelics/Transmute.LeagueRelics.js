@@ -9,8 +9,8 @@
  *   Alchemy's own animation from 218:199).
  * - Toggle on: up to 10 of an item one tier up or down its row of the cache's `transmutation`
  *   table (the Wiki's lists are that table), 10 Magic XP an item, no level, no runes (Wiki:
- *   Alchemic Divergence costs none, 6 May 2026), every 5 ticks, a click during a cast waiting for
- *   it. As recorded (237/01102, 01106, 238/04211): a stack, noted or stackable, gives 10 of the
+ *   Alchemic Divergence costs none, 6 May 2026), every 5 ticks (`skills:action-interval`, kind
+ *   `transmute`: Flow State's 2), a click during a cast waiting for it. As recorded (237/01102, 01106, 238/04211): a stack, noted or stackable, gives 10 of the
  *   next tier in the same form (noted stays noted) and is cast on again every 5 ticks while its
  *   slot holds it, with the graphic alone; loose items convert up to 10 of those held, in place,
  *   and only with a free slot for each; with the bank toggle on a stack's products go to the bank.
@@ -55,6 +55,13 @@ function active(player) {
 function unnoted(itemId) {
   const definition = core.ItemDefinition.forId(itemId);
   return definition?.isNoted?.() ? definition.getNoteId() : itemId;
+}
+
+/** The cast's pace: 5 ticks unless content lowers it ("skills:action-interval", Flow State's 2). */
+function pace(player) {
+  const request = { player, skill: core.Skill.MAGIC, kind: "transmute", ticks: effect.castTicks };
+  Common.api.emitCustomEvent("skills:action-interval", request);
+  return Math.max(1, request.ticks | 0);
 }
 
 function stacks(itemId) {
@@ -155,9 +162,10 @@ function cast(player, spellName, slot, itemId, clicked) {
   const { CacheDefinitions, Animation, Graphic } = core;
   if (clicked) player.performAnimation(new Animation(CacheDefinitions.getSeqId(spell.animation)));
   player.performGraphic(new Graphic(CacheDefinitions.getSpotanimId(spell.graphic)));
-  own.readyAt = now + effect.castTicks;
+  const ticks = pace(player);
+  own.readyAt = now + ticks;
   if (how.stack && inventory.getItems()[slot]?.getId() === itemId) {
-    later(player, effect.castTicks, () => cast(player, spellName, slot, itemId, false));
+    later(player, ticks, () => cast(player, spellName, slot, itemId, false));
   }
 }
 

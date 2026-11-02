@@ -309,10 +309,10 @@
     },
     "flowState": {
       "league": 6, "key": "flow-state", "ticks": 2,
-      "_skills": "The skills paced (\"skills:action-interval\"), each to the loop kinds it covers, or true for all of them (Wiki: smelting, not anvil work).",
+      "_skills": "The skills paced (\"skills:action-interval\"), each to the loop kinds it covers, or true for all of them (Wiki, Flow_State_(Demonic_Pacts_League): smelting ores, smithing bars and making cannonballs; Wintertodt's roots and brazier lighting; Tempoross's fishing; the transmutation spells). Fishing's own spots ask `fishing:interval`; Tempoross's harpoons ask this as `tempoross`.",
       "skills": {
         "MINING": true, "WOODCUTTING": true, "COOKING": true, "FIREMAKING": true, "PRAYER": true, "FLETCHING": true,
-        "SMITHING": ["smelt"], "CRAFTING": true, "FARMING": true, "MAGIC": true
+        "SMITHING": true, "CRAFTING": true, "FARMING": true, "MAGIC": true, "FISHING": ["tempoross"]
       }
     },
     "evilEye": {

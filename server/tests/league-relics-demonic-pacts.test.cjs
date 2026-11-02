@@ -44,6 +44,7 @@ const FLASK_OF_FERVOUR = { 7: 3 };
 const TRANSMUTE = { 3: 1 };
 const BUTLERS_BELL = { 3: 3 };
 const MINION = { 7: 2 };
+const TRANSMUTE_AND_FLOW_STATE = { 3: 1, 6: 1 };
 
 let core;
 let I;
@@ -597,7 +598,7 @@ test("Flow State: catches roll every 2 ticks", () => {
   for (const player of others(who)) assert.equal(emit("fishing:interval", { player, ticks: 5 }).ticks, 5);
 });
 
-test("Flow State: every listed skill's loop paces at 2 ticks (skills:action-interval), smelting but not anvil work", () => {
+test("Flow State: every listed skill's loop paces at 2 ticks (skills:action-interval): smithing at a furnace or anvil, the minigames' loops, transmutation", () => {
   const who = cases(FLOW_STATE);
   const pace = (player, skill, kind, ticks) => emit("skills:action-interval", { player, skill, kind, ticks }).ticks;
   const loops = [
@@ -605,13 +606,15 @@ test("Flow State: every listed skill's loop paces at 2 ticks (skills:action-inte
     [Skill.FIREMAKING, "tend"], [Skill.PRAYER, "offer"], [Skill.FLETCHING, "logs"], [Skill.SMITHING, "smelt"],
     [Skill.CRAFTING, "leather"], [Skill.CRAFTING, "smelt"], [Skill.FARMING, "rake"], [Skill.FARMING, "harvest"],
     [Skill.MAGIC, "alchemy"], [Skill.MAGIC, "superheat"], [Skill.MAGIC, "enchant"],
+    [Skill.SMITHING, "smith"], [Skill.SMITHING, "cannonballs"], [Skill.MAGIC, "transmute"],
+    [Skill.WOODCUTTING, "roots"], [Skill.FLETCHING, "roots"], [Skill.FIREMAKING, "brazier"], [Skill.FISHING, "tempoross"],
   ];
   for (const [skill, kind] of loops) {
     assert.equal(pace(who.relic, skill, kind, 5), 2, `${kind} with the relic`);
     assert.equal(pace(who.relic, skill, kind, 1), 1, `${kind}: a faster pace stays (a recipe's own)`);
     for (const player of others(who)) assert.equal(pace(player, skill, kind, 5), 5, `${kind} without it`);
   }
-  assert.equal(pace(who.relic, Skill.SMITHING, "smith", 5), 5, "anvil work is not smelting");
+  assert.equal(pace(who.relic, Skill.FISHING, "spot", 5), 5, "a Fishing spot asks fishing:interval instead");
   assert.equal(pace(who.relic, Skill.HERBLORE, "mix", 5), 5, "a skill the Wiki leaves out");
   assert.equal(pace(who.relic, Skill.AGILITY, "lap", 5), 5);
 });
@@ -1619,4 +1622,16 @@ test("Flask of Fervour: the cooldown varp is the map_clock tick it ends on (the 
     emit("league:login", { player });
     assert.equal(player.sent.configs.has(varp), false);
   }
+});
+
+test("Flow State paces Transmute's casts at 2 ticks (skills:action-interval, transmute)", (t) => {
+  const tick = withClock(t);
+  const player = character("transmute-flow", "league", TRANSMUTE_AND_FLOW_STATE);
+  const inventory = player.getInventory();
+  inventory.resetItems();
+  inventory.adds(I.UNCUT_SAPPHIRE_2, 30);
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(inventory.getAmount(I.UNCUT_SAPPHIRE_2), 20);
+  tick(2);
+  assert.equal(inventory.getAmount(I.UNCUT_SAPPHIRE_2), 10, "again 2 ticks on");
 });

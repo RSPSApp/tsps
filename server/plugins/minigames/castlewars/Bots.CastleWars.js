@@ -797,25 +797,17 @@ function walkTowards(ctx, state, x, y) {
   return "running";
 }
 
-/** Climb one step: stand within its reach, then hand the destination to game.climbTo. */
+/** Use the normal object route so stairs cannot be climbed through their blocked sides. */
 function runClimbStep(ctx, state, step) {
-  const player = ctx.player;
-  const location = player.getLocation();
-  const movement = player.getMovementQueue();
-  const [fromX, fromY] = step.from;
-  const reach = step.reach ?? 1;
-  const atFrom = chebyshevDistance(location.getX(), location.getY(), fromX, fromY) <= reach;
-  if (!atFrom || movement.size() > 0) {
-    return walkTowards(ctx, state, fromX, fromY);
-  }
-  if (ctx.nowMs < state.nextClimbAt) {
-    return "running";
-  }
-  // climbTo carries an explicit destination, so the climb starts from wherever the bot
-  // stands next tick. It must not walk that tick - game.climbTo blocks movement anyway.
+  if (ctx.nowMs < state.nextClimbAt) return "running";
+  const [x, y, z] = step.from;
+  const id = Object.entries(game.data.CLIMB_ROUTES).find(([, pairs]) => pairs.some(([from, to]) =>
+    from.every((value, index) => value === step.from[index]) && to.every((value, index) => value === step.to[index])))?.[0];
+  const object = id && core.MapObjects.get(Number(id), new core.Location(x, y, z), null);
+  if (!object) return walkTowards(ctx, state, x, y);
   state.nextClimbAt = ctx.nowMs + CLIMB_COOLDOWN_MS;
   state.pendingClimb = { at: ctx.nowMs, to: step.to };
-  game.climbTo(player, step.to);
+  ctx.player.getMovementQueue().walkToObject(object, { execute: () => game.climbTo(ctx.player, step.to) });
   return "running";
 }
 
@@ -1057,12 +1049,45 @@ function roleOf(player) {
  * loadout of the tier. Returns null for a bot without a tier (plain random PvP presets).
  */
 function pickTierChoice(player, role, tier) {
-  const style = role === ROLES.ARCHER ? "range" : role === ROLES.MAGE ? "magic" : null;
+  const style = role === ROLES.ARCHER ? "range" : (role === ROLES.MAGE || role === ROLES.DEFENDER) ? "magic" : null;
   return pickSharedTierChoice(tier, { index: botNumber(player), style });
 }
 
+function preparePracticeLoadout(player, state, teamId) {
+  if (state.role !== ROLES.SCORER && state.role !== ROLES.DEFENDER) return;
+  const I = core.ItemIdentifiers;
+  const E = core.Equipment;
+  const scorer = state.role === ROLES.SCORER;
+  player.getSkillManager().setMaxLevels(core.Skill.THIEVING, 99).setCurrentLevels(core.Skill.THIEVING, 99);
+  for (const [slot, id] of [
+    [E.HEAD_SLOT, scorer ? I.MASORI_MASK_F_ : I.ANCESTRAL_HAT],
+    [E.WEAPON_SLOT, scorer ? I.MASTER_WAND : I.KODAI_WAND],
+    [E.BODY_SLOT, scorer ? I.MASORI_BODY_F_ : I.ANCESTRAL_ROBE_TOP],
+    [E.LEG_SLOT, scorer ? I.MASORI_CHAPS_F_ : I.ANCESTRAL_ROBE_BOTTOM],
+    [E.SHIELD_SLOT, scorer ? I.SPECTRAL_SPIRIT_SHIELD : I.ELIDINIS_WARD_F_],
+    [E.AMULET_SLOT, scorer ? I.AMULET_OF_FURY : I.OCCULT_NECKLACE],
+    [E.HANDS_SLOT, scorer ? I.ZARYTE_VAMBRACES : I.TORMENTED_BRACELET],
+    [E.FEET_SLOT, scorer ? I.PEGASIAN_BOOTS : I.ETERNAL_BOOTS],
+    [E.RING_SLOT, scorer ? I.RING_OF_SUFFERING_I_ : I.MAGUS_RING_2],
+  ]) player.getEquipment().setItem(slot, new core.Item(id, 1));
+  if (!scorer) {
+    player.setSpellbook(core.MagicSpellbook.ANCIENT);
+    game.practiceBots.supply(player, I.WATER_RUNE, 10000);
+    game.practiceBots.supply(player, I.BLOOD_RUNE, 10000);
+    game.practiceBots.supply(player, I.DEATH_RUNE, 10000);
+  }
+  game.practiceBots.supply(player, I.BANDAGES, 8);
+  game.practiceBots.supply(player, I.EXPLOSIVE_POTION, 4);
+  game.practiceBots.supply(player, I.BUCKET_OF_WATER, 2);
+  game.practiceBots.supply(player, I.TINDERBOX);
+  if (!scorer) game.practiceBots.supply(player, I.BARRICADE, 3);
+  state.equipped = true;
+  state.colours = true;
+  game.equipTeamColours(player, teamId);
+  game.refreshPlayerAppearance(player, true);
+}
+
 function ensureLoadout(player, state, teamId, nowMs) {
-  if (game.practiceBots?.prepare(player, state, teamId)) return;
   if (state.equipped || nowMs < state.nextLoadoutAt) {
     return;
   }
@@ -1101,6 +1126,7 @@ function ensureLoadout(player, state, teamId, nowMs) {
     // Castle Wars food is the bandage table: the preset's sharks/karambwans would fill every
     // slot and leave no room to pick bandages up.
     stripFood(player);
+    preparePracticeLoadout(player, state, teamId);
   }
   // Team colours go on even while the preset is deferred (the bot is in combat), and go on
   // again after it lands so its helmet cannot cover the hood.
@@ -1109,7 +1135,7 @@ function ensureLoadout(player, state, teamId, nowMs) {
     game.equipTeamColours(player, teamId);
   }
   if (state.role === ROLES.FLAG) {
-    ensureFlagWeapon(player);
+    ensureFlagWeapon(player, state.role);
   }
 }
 
@@ -1307,9 +1333,20 @@ function bandageTeammate(ctx, state, teamId) {
   return "failure";
 }
 
-/** Capturing a flag needs an empty weapon slot; flag bots never carry one. */
-function ensureFlagWeapon(player) {
+/** Scorers keep their defensive wand until pickup stows both hands. */
+function ensureFlagWeapon(player, role = ROLES.FLAG) {
   if (game.getCarriedFlagTeam(player)) {
+    return;
+  }
+  if (role === ROLES.SCORER) {
+    let changed = false;
+    for (const [slot, id] of [[core.Equipment.WEAPON_SLOT, core.ItemIdentifiers.MASTER_WAND], [core.Equipment.SHIELD_SLOT, core.ItemIdentifiers.SPECTRAL_SPIRIT_SHIELD]]) {
+      if (player.getEquipment().getSlot(slot) === id) continue;
+      player.getInventory().deleteNumber(id, 1);
+      player.getEquipment().setItem(slot, new core.Item(id, 1));
+      changed = true;
+    }
+    if (changed) game.refreshPlayerAppearance(player, true);
     return;
   }
   if (player.getEquipment().getSlot(core.Equipment.WEAPON_SLOT) > 0) {
@@ -1673,7 +1710,7 @@ function flagCycle(ctx, state, teamId) {
       `[cw_bot] flag_probe ${player.getUsername?.()} mode=${state.flagMode} carried=${game.getCarriedFlagTeam(player) ?? "none"} ownFlag=${game.flagStatus[teamId]} enemyFlag=${game.flagStatus[enemyTeam]} route=${state.route ? "set" : "null"} cursor=${state.cursor} at=${player.getLocation().getX()},${player.getLocation().getY()},${player.getLocation().getZ()}`
     );
   }
-  ensureFlagWeapon(player);
+  ensureFlagWeapon(player, state.role);
   if (!state.flagMode) {
     state.flagMode = FLAG_MODE.OUT;
   }
@@ -2248,6 +2285,9 @@ module.exports._test = {
   botNumber,
   variantIndex,
   pickTierChoice,
+  ensureLoadout,
+  preparePracticeLoadout,
+  ensureFlagWeapon,
   tierCombatLevel,
   TIER_BANDS,
   TIER_PROFILE_IDS,

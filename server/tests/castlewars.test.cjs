@@ -338,6 +338,8 @@ test('practice sizes count the human and select the requested opposing bot role'
     const opponents = bots.filter((bot) => game.getTeamId(bot) === TEAM.ZAMORAK);
     assert.equal(opponents.length, size);
     assert.ok(opponents.every((bot) => bot.getAttribute(game.BOT_ROLE_KEY) === 'scorer'));
+    assert.ok(bots.filter((bot) => game.getTeamId(bot) === TEAM.SARADOMIN).every((bot) => bot.getAttribute(game.BOT_ROLE_KEY) === 'defender'));
+    assert.ok(bots.every((bot) => bot.getAttribute(game.BOT_TIER_KEY) === 'veteran'));
   }
 });
 

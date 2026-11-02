@@ -72,12 +72,16 @@ function miningInterval(pickaxe) {
   return request.ticks ?? pickaxe.attemptIntervalTicks;
 }
 
-function mineRocks({ player, object }) {
-  const patch = patchAtRocks(object);
+function mineRocks({ player, object }, collapse = false) {
+  const patch = collapse ? patchAtWall(object) : patchAtRocks(object);
   if (!patch) {
     return false;
   }
   if (!game.requirePlaying(player)) {
+    return true;
+  }
+  if (collapse && isBlocked(patch)) {
+    player.sendMessage("The tunnel is already blocked.");
     return true;
   }
   const pickaxe = bestPickaxe(player);
@@ -111,6 +115,11 @@ function mineRocks({ player, object }) {
       return;
     }
     if (--ticks > 0) return;
+    if (collapse) {
+      collapseTunnel(player, patch);
+      task.stop();
+      return;
+    }
     remaining = clearRocks(player, remaining, patch);
     if (!remaining) {
       task.stop();
@@ -158,7 +167,7 @@ function collapseTunnel(player, patch, slot) {
     player.sendMessage("The tunnel is already blocked.");
     return;
   }
-  player.getInventory().deleteAtSlot(slot, 1);
+  if (slot !== undefined) player.getInventory().deleteAtSlot(slot, 1);
   const [x, y, face] = patch.rocks;
   game.swapObject(null, new core.GameObject(core.ObjectIdentifiers.ROCKS_21, new core.Location(x, y, 0), 10, face, null));
   game.setTeamVar(patch.team, patch.varbit, 0);
@@ -168,16 +177,8 @@ function collapseTunnel(player, patch, slot) {
   }
 }
 
-function collapseWall({ player, object }) {
-  const patch = patchAtWall(object);
-  if (!patch) {
-    return false;
-  }
-  if (!game.requirePlaying(player)) {
-    return true;
-  }
-  player.sendMessage("Use an explosive potion on the cave wall to collapse the tunnel.");
-  return true;
+function collapseWall(event) {
+  return mineRocks(event, true);
 }
 
 function blastWall({ player, object, itemSlot }) {

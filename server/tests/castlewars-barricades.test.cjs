@@ -116,7 +116,7 @@ test('Shove cannot stun or displace either team\'s intact or burning barricades'
     const origin = npc.getLocation().clone();
     p.moveTo(origin.transform(-1, 0));
     for (const burning of [false, true]) {
-      npc.setNpcTransformationId(burning ? core.NpcIdentifiers.BARRICADE_2 : -1);
+      npc.setNpcTransformationId(burning ? core.NpcIdentifiers.BARRICADE_6 : -1);
       for (const id of [core.ItemIdentifiers.DRAGON_SPEAR, core.ItemIdentifiers.ZAMORAKIAN_SPEAR, core.ItemIdentifiers.ZAMORAKIAN_HASTA]) {
         p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(id));
         p.setSpecialPercentage(100);
@@ -269,7 +269,7 @@ test('lighting your own tile steps sideways; right-click Burn never consumes sup
   itemOnNpc(event);
   assert.equal(event.handled, true);
   assert.deepEqual(moves, [[-1, 0]]);
-  assert.equal(npc.getNpcTransformationId(), core.NpcIdentifiers.BARRICADE_2);
+  assert.equal(npc.getNpcTransformationId(), core.NpcIdentifiers.BARRICADE_6);
 });
 
 test('lighting steps right if the left tile is blocked and refuses when both sides are blocked', (t) => {
@@ -494,7 +494,7 @@ test('unavailable or invalid tool interactions neither move nor consume supplies
   assert.equal(game.isBarricade(npc), true);
 });
 
-test('Collapse requires explicit potion-on-wall use', (t) => {
+test('Collapse on a blocked tunnel consumes neither tools nor potions', (t) => {
   const p = playerAt(t, 2390, 9501, 0);
   p.getInventory().add(new core.Item(core.ItemIdentifiers.EXPLOSIVE_POTION));
   const object = MapObjects.get(core.ObjectIdentifiers.CAVE_WALL, new core.Location(2390, 9500, 0), null);
@@ -503,9 +503,17 @@ test('Collapse requires explicit potion-on-wall use', (t) => {
   collapse({ player: p, object });
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.EXPLOSIVE_POTION), 1);
   assert.equal(swaps.length, 0);
-  assert.match(p.messages.at(-1), /Use an explosive potion/);
+  assert.match(p.messages.at(-1), /already blocked/);
   t.mock.method(core.MapObjects, 'get', () => null);
   blastWall({ player: p, object, itemSlot: p.getInventory().getSlotForItemId(core.ItemIdentifiers.EXPLOSIVE_POTION) });
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.EXPLOSIVE_POTION), 0);
   assert.equal(swaps[0][1].getId(), core.ObjectIdentifiers.ROCKS_21);
+});
+
+test('standard-world barricades and burning variants use the cache types that render beneath players', () => {
+  for (const id of Object.values(data.BARRICADE_NPC)) {
+    assert.equal(core.CacheDefinitions.getNpc(id).drawPriority, 1);
+    assert.equal(core.CacheDefinitions.getNpc(id + 1).drawPriority, 1);
+    assert.equal(core.CacheDefinitions.getNpc(id).name, 'Barricade');
+  }
 });

@@ -65,7 +65,6 @@ import {
     getCurrentTick,
     getServerTickPhaseNow,
     isServerConnected,
-    sendFaceTile,
     sendFriendsChatAction,
     sendGroundItemAction,
     sendIfTriggerOpLocal,
@@ -4710,11 +4709,6 @@ export class OsrsClient {
                 });
             }
             if (serverId !== undefined) {
-                if (tile && isServerConnected()) {
-                    try {
-                        sendFaceTile({ x: tile.tileX | 0, y: tile.tileY | 0 });
-                    } catch {}
-                }
                 try {
                     const localIdx = this.playerEcs.getIndexForServerId(
                         this.controlledPlayerServerId,
@@ -5365,11 +5359,6 @@ export class OsrsClient {
             const connected = isServerConnected();
 
             if (serverId !== undefined && connected) {
-                if (tile) {
-                    try {
-                        sendFaceTile({ x: tile.tileX | 0, y: tile.tileY | 0 });
-                    } catch {}
-                }
                 const opNum = this.resolveNpcActionOpNum(
                     npcTypeId,
                     option,

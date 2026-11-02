@@ -513,6 +513,8 @@ function reconcileAdded(
     // The built index also holds the dynamic object itself; only other ids are cache locs.
     for (const id of addChangeSlotIds(host, tile, level, shape, rotation)) {
         if ((id | 0) === (added.locId | 0) || recorded.has(id)) continue;
+        // An explicit server deletion must survive removal of the replacement.
+        if (host.locOverrides.get(`${tile.x},${tile.y},${level},${id}`)?.newId === LOC_OVERRIDE_REMOVED) continue;
         host.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`, { newId: LOC_OVERRIDE_REMOVED });
         recorded.add(id);
         changed = true;
@@ -574,7 +576,7 @@ export function onLocAddChange(host: WebGLOsrsRendererHost,
             // (issue #1748).
             const derived = host.instanceActive
                 ? []
-                : addChangeSlotIds(host, tile, level, shape, rotation);
+                : addChangeSlotIds(host, tile, level, shape, rotation).filter((id) => host.locOverrides.get(`${tile.x},${tile.y},${level},${id}`)?.newId !== LOC_OVERRIDE_REMOVED);
             // A different object taking over the same slot inherits what its predecessor replaced.
             const replaced = Array.from(new Set([...(existing?.replacedIds ?? []), ...derived]));
             host.addedLocs.set(key, { locId, x: tile.x, y: tile.y, level, shape, rotation, replacedIds: replaced });

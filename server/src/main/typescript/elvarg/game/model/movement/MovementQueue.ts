@@ -1600,7 +1600,8 @@ export class MovementQueue {
                 }
                 this.pathX = this.player.getLocation().getX();
                 this.pathY = this.player.getLocation().getY();
-                this.player.setPositionToFace(new Location(objectX, objectY, this.player.getLocation().getZ()));
+                this.player.setPositionToFace(objectX === this.player.getLocation().getX() && objectY === this.player.getLocation().getY()
+                    ? null : new Location(objectX, objectY, this.player.getLocation().getZ()));
                 task.stop();
                 TaskManager.cancelTasks(this.player.getIndex());
                 action.execute();

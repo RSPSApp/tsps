@@ -109,7 +109,7 @@ function give(player, id, amount) {
 }
 
 function hasKit(player) {
-  return player.getInventory().contains(data.items.kit);
+  return player.getInventory().contains(data.items.kit) || player.getEquipment().contains(data.items.kit);
 }
 
 function distance(a, b) {

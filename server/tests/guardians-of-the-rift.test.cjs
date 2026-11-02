@@ -134,6 +134,7 @@ function container(size) {
     contains: (id) => slots.some((slot) => slot?.id === id),
     getAmount: (id) => slots.reduce((sum, slot) => sum + (slot?.id === id ? slot.amount : 0), 0),
     getFreeSlots: () => slots.filter((slot) => !slot).length,
+    getCopiedItems: () => slots.map((slot) => new (Shared.core().Item)(slot?.id ?? -1, slot?.amount ?? 0)),
     refreshItems() { return self; },
   };
   return self;

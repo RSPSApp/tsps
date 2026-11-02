@@ -23,6 +23,9 @@ before(() => {
   const api = {
     core,
     persistAttribute() {},
+    onNpcDialogueVariant() {},
+    onNpcDialogueCondition() {},
+    onItemOnNpc() {},
     onObjectInteraction() {},
     onNpcInteraction: (name, actions) => {
       if (typeof name === 'function') (hooks.anyNpc ??= []).push(name);
@@ -76,6 +79,7 @@ function fakePlayer({ at = new Location(3085, 3233, 0), level = 70 } = {}) {
     getLocation: () => p.location,
     getAttribute: (k) => attributes.get(k), setAttribute: (k, v) => attributes.set(k, v),
     getInventory: () => p.inventory,
+    getEquipment: () => ({ contains: () => false }),
     sendMessage: (m) => p.messages.push(m),
     performAnimation: (a) => p.anims.push(a.getId()),
     performGraphic: (g) => p.graphics.push(g.getId()),

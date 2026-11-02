@@ -30,6 +30,8 @@ function setupBarricade({ player }) {
   if (
     RegionManager.blocked(location, player.getPrivateArea()) ||
     game.isSteppingStone(game.getLocationTile(location)) ||
+    // Not where a tunnel's rocks stand or would fall, even once mined away (issue 1929).
+    game.isTunnelRockTile?.(location) ||
     World.isNpcOccupyingTile(location, null, 1, player.getPrivateArea())
   ) {
     player.sendMessage("You can't set up a barricade here.");

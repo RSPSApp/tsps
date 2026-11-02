@@ -54,12 +54,14 @@ function fakeArea(players = []) {
 function fakePlayer({ head = -1, cape = -1, inventory = [], bot = false } = {}) {
   const attributes = new Map();
   const state = {
-    messages: [], moves: [], logouts: 0,
+    messages: [], moves: [], logouts: 0, typed: [], statements: [],
     getEquipment: () => ({
       getSlot: (slot) => (slot === core.Equipment.HEAD_SLOT ? head : slot === core.Equipment.CAPE_SLOT ? cape : -1),
     }),
     getInventory: () => ({ getItems: () => inventory.map((id) => ({ getId: () => id })) }),
     sendMessage: (message) => state.messages.push(message),
+    getPacketSender: () => ({ sendTypedMessage: (type, message) => state.typed.push([type, message]) }),
+    getDialogueManager: () => ({ startDialogues: (chain) => state.statements.push(chain) }),
     smartMove: (location) => state.moves.push(location),
     moveTo: (location) => state.moves.push(location),
     isPlayerBot: () => bot,
@@ -168,7 +170,10 @@ test('capes block entry before the teleport', () => {
   enterPortal(player, core.ObjectIdentifiers.GUTHIX_PORTAL);
   assert.equal(game.getTeamId(player), null);
   assert.equal(player.moves.length, 0);
-  assert.deepEqual(player.messages, ["You can't wear capes in Castle Wars."]);
+  // rsprox 3233 (rev 232): the reason in chat, then the message box.
+  assert.deepEqual(player.messages, ["You can't wear capes in the arena."]);
+  assert.deepEqual(player.typed, [[115, 'Some items are stopping you from entering the Castle Wars waiting area. See the chat for details.']]);
+  assert.equal(player.statements.length, 1);
 });
 
 test('modern Castle Wars allows helmets when entering a portal', () => {

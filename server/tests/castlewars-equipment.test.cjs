@@ -294,11 +294,42 @@ test('Lanthus accepts noted bracelets with confirmation, persists charges, and c
   assert.equal(p.getAttribute('castlewars:bracelet-charges'), 5);
   assert.equal(match.hasBraceletEffect(p), true);
   assert.equal(p.getEquipment().getSlot(core.Equipment.HANDS_SLOT), core.ItemIdentifiers.CASTLE_WARS_BRACELET_3_, 'only one charge source is spent');
+  // Issue 1929: the game start says the bracelet took effect.
+  assert.deepEqual(p.messages.slice(-2), [
+    "Your Castle wars bracelet is active for this game: you deal 20% more damage to whoever carries your team's standard.",
+    'Lanthus used one of your stored bracelet charges. 5 charges left.',
+  ]);
+  assert.equal(opponent.messages.some((line) => /bracelet/.test(line)), false, 'no bracelet, no message');
   match.showBraceletCharges(p); choice[1]();
   match.clearBraceletEffect(p); countdowns[0].onComplete();
   assert.equal(p.getAttribute('castlewars:bracelet-charges'), 5, 'disabled stored charges remain');
   assert.equal(p.getEquipment().getSlot(core.Equipment.HANDS_SLOT), core.ItemIdentifiers.CASTLE_WARS_BRACELET_2_);
   assert.equal(match.hasBraceletEffect(p), true, 'a worn bracelet still works');
+  assert.equal(p.messages.at(-1), 'Your Castle wars bracelet has 2 charges left.');
+});
+
+test('a worn bracelet on its last charge crumbles at the game start, with a message', (t) => {
+  const countdowns = [];
+  const api = {
+    ...PluginManager.createApi('CastleWarsBraceletCrumbleTest'),
+    getAreaManager: () => ({ areas: [] }), getBonusManager: () => ({ update() {} }),
+    getObjectManager: () => ({ register() {}, deregister() {} }), getRegionManager: () => core.RegionManager,
+    getTaskManager: () => ({ submit(task) { if (task.onComplete) countdowns.push(task); }, cancelTasks() {} }), getWorld: () => core.World,
+    emitCustomEvent() {},
+  };
+  const match = Game(api);
+  const p = player(t, [core.ItemIdentifiers.CASTLE_WARS_BRACELET_1_]), opponent = player(t);
+  t.mock.method(p, 'smartMove', () => {}); t.mock.method(opponent, 'smartMove', () => {});
+  match.waitingAreas = {
+    [match.TEAM.SARADOMIN]: { getPlayers: () => [p] },
+    [match.TEAM.ZAMORAK]: { getPlayers: () => [opponent] },
+  };
+  match.gameArea = { getPlayers: () => [] }; match.lobbyArea = { getPlayers: () => [] };
+  match.endGame(); // the match phase is module state, left running by the test above
+  match.beginStartCountdown(); countdowns.at(-1).execute();
+  assert.equal(p.getEquipment().getSlot(core.Equipment.HANDS_SLOT), -1);
+  assert.equal(match.hasBraceletEffect(p), true);
+  assert.equal(p.messages.at(-1), 'Your Castle wars bracelet crumbles to dust.');
 });
 
 test('bandages heal 10%, restore 30% run, and apply the patient bracelet bonus once before rounding', (t) => {

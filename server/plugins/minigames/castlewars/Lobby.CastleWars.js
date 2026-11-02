@@ -110,6 +110,19 @@ function chooseTeam(sizes, requestedTeam) {
   return sizes[requestedTeam] > sizes[other(requestedTeam)] ? null : requestedTeam;
 }
 
+const MESBOX_CHAT = 115;
+const ENTRY_REFUSED = "Some items are stopping you from entering the Castle Wars waiting area. See the chat for details.";
+
+/**
+ * One reason per attempt in chat, then a message box pointing at it (rsprox 3233, rev 232:
+ * "You can't wear capes in the arena." is checked before non-combat items).
+ */
+function refuseEntry(player, reason) {
+  player.sendMessage(reason);
+  player.getPacketSender().sendTypedMessage(MESBOX_CHAT, ENTRY_REFUSED);
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, ENTRY_REFUSED)));
+}
+
 function joinWaitingRoom(player, requestedTeam, botTier = undefined, portalGod = requestedTeam ?? "guthix", maxed = false) {
   const phase = game.getPhase();
   if (phase === game.PHASE.ACTIVE || phase === game.PHASE.ENDING) {
@@ -117,11 +130,12 @@ function joinWaitingRoom(player, requestedTeam, botTier = undefined, portalGod =
     return;
   }
   if (player.getEquipment().getSlot(core.Equipment.CAPE_SLOT) > 0) {
-    player.sendMessage("You can't wear capes in Castle Wars.");
+    refuseEntry(player, "You can't wear capes in the arena.");
     return;
   }
   if (player.getInventory().getItems().some((item) => FoodPlugin.isFoodItem(item?.getId?.()))) {
-    player.sendMessage("You may not bring your own consumables inside Castle Wars.");
+    // RSPS-only wording; the capture only shows the cape and non-combat item refusals.
+    refuseEntry(player, "You may not bring your own consumables inside Castle Wars.");
     return;
   }
 

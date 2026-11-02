@@ -211,3 +211,76 @@ test('normal Open supports the other jail cell and requires a carried dusty key 
     assert.equal(inventory.getAmount(I.DUSTY_KEY), 1);
   } finally { h.cleanup(); }
 });
+
+test('opening the Cauldron of Thunder prison door wakes one suit of armour per click, then opens', () => {
+  const h = setup();
+  const { awakeSuits } = require('../plugins/areas/TaverleyDungeon.plugin').__internals;
+  const O = core.ObjectIdentifiers, SUIT = O.SUIT_OF_ARMOUR_2;
+  const south = new core.Location(2887, 9829, 0), north = new core.Location(2887, 9832, 0);
+  const door = new core.Location(2889, 9830, 0);
+  try {
+    core.RegionManager.loadMapFiles(2889, 9830, false);
+    const standing = core.MapObjects.get(SUIT, south, null);
+    assert.deepEqual([standing?.getType(), standing?.getFace()], [10, 1], 'the suit loc is shape 10 rotation 1 (live loc_del)');
+    assert.ok(core.MapObjects.get(SUIT, north, null));
+    assert.ok(core.MapObjects.get(O.PRISON_DOOR_4, door, null));
+    h.place(2888, 9830);
+
+    h.open(O.PRISON_DOOR_4, 2889, 9830);
+    assert.equal(core.MapObjects.get(SUIT, south, null), null, 'the nearest suit comes off its stand first');
+    assert.ok(core.MapObjects.get(SUIT, north, null));
+    const first = awakeSuits.get('2887,9829,0');
+    assert.equal(first?.getId(), core.NpcIdentifiers.SUIT_OF_ARMOUR);
+    assert.equal(first.isRegistered(), true);
+    assert.equal(first.getCombat().getTarget(), h.player, 'the suit attacks whoever woke it');
+    assert.deepEqual(h.messages.filter(text => text === 'Suddenly the suit of armour comes to life!').length, 1);
+    assert.ok(core.MapObjects.get(O.PRISON_DOOR_4, door, null), 'the door stays shut while a suit wakes');
+
+    h.open(O.PRISON_DOOR_4, 2889, 9830);
+    assert.equal(core.MapObjects.get(SUIT, north, null), null, 'the next click wakes the other suit');
+    assert.equal(awakeSuits.size, 2);
+    assert.equal(h.messages.filter(text => text === 'Suddenly the suit of armour comes to life!').length, 1,
+      'live sent the message for the first suit only');
+
+    h.open(O.PRISON_DOOR_4, 2889, 9830);
+    assert.equal(core.MapObjects.get(O.PRISON_DOOR_4, door, null), null, 'with no suit left standing the door opens');
+    assert.equal(awakeSuits.size, 2, 'no suit is woken twice');
+
+    // A killed (removed) suit goes back on its stand; the other stays awake.
+    h.api.removeNpc(first);
+    h.tick(1);
+    assert.ok(core.MapObjects.get(SUIT, south, null), 'the suit loc returns once its NPC is gone');
+    assert.equal(awakeSuits.has('2887,9829,0'), false);
+    assert.equal(core.MapObjects.get(SUIT, north, null), null, 'the other suit is still awake');
+  } finally {
+    for (const npc of [...awakeSuits.values()]) h.api.removeNpc(npc);
+    h.tick(1);
+    for (const task of [...core.TaskManager.activeTasks]) {
+      if (typeof task.key === 'string' && /2889,983[01]/.test(task.key)) { task.execute(); task.stop(); }
+    }
+    h.cleanup();
+  }
+});
+
+test('a suit that is left alone stands down and its loc returns', () => {
+  const h = setup();
+  const { awakeSuits } = require('../plugins/areas/TaverleyDungeon.plugin').__internals;
+  const O = core.ObjectIdentifiers, south = new core.Location(2887, 9829, 0);
+  try {
+    core.RegionManager.loadMapFiles(2889, 9830, false);
+    h.place(2888, 9830);
+    h.open(O.PRISON_DOOR_4, 2889, 9830);
+    const suit = awakeSuits.get('2887,9829,0');
+    assert.ok(suit?.isRegistered());
+    suit.getCombat().reset();
+    h.player.moveTo(new core.Location(2900, 9800, 0));
+    h.tick(310);
+    assert.equal(suit.isRegistered(), false, 'the idle suit is removed');
+    assert.ok(core.MapObjects.get(O.SUIT_OF_ARMOUR_2, south, null), 'and stands on its tile again');
+    assert.equal(awakeSuits.size, 0);
+  } finally {
+    for (const npc of [...awakeSuits.values()]) h.api.removeNpc(npc);
+    h.tick(1);
+    h.cleanup();
+  }
+});

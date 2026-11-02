@@ -1694,6 +1694,10 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   Tirannwn", "Talk to the Mysterious Old Man in Falador", "Pet Renu"; every cache NPC of the name
   with that option is one of the linked NPC page's ids (`<dir>/npcs/<page>.wikitext`), so the name
   is that NPC,
+  `shortcut { shortcuts, count }` from the Agility plugin's `agility:obstacle`, now with the
+  shortcut's own name (`agility-shortcuts.json`'s; a course obstacle has none): "Use the Stepping stone
+  (Shilo Village) in Shilo Village", "Cross a Pillar (Revenant Caves) in the Revenant Caves" (any of
+  the easy, medium and hard pillars; the place only says where it is),
   `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what

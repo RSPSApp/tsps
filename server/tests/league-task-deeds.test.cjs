@@ -360,6 +360,20 @@ test("pickpocket-loot: an item in the pocket's loot (Pickpocket a Diamond From a
   assert.ok(done(f, "pickpocket-a-diamond-from-a-tzhaar"));
 });
 
+test("shortcut: an agility shortcut crossed, by its name (Take a Shortcut Across the Shilo Village River)", async (t) => {
+  core.RegionManager.loadMapFiles(2863, 2971);
+  const f = pactsCharacter(t);
+  f.player.setAttribute("league:areas", [21, 2]); // Varlamore and Karamja
+  f.player.moveTo(new core.Location(2863, 2971, 0)); // the south bank
+  f.player.needsPlacement = false;
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.AGILITY, 99);
+  skills.setCurrentLevel(core.Skill.AGILITY, 99);
+  await send(f, { type: "object_option", id: 16466, x: 2863, y: 2974, action: "Cross" }, 16);
+  assert.equal(f.player.getLocation().getY(), 2976, `the real shortcut crosses the river: ${f.messages}`);
+  assert.ok(done(f, "take-a-shortcut-across-the-shilo-village-river"));
+});
+
 /** A cache NPC of the name with the option, beside the player; the option's click. */
 function npcBeside(t, f, name, option) {
   const id = [...Array(20000).keys()].find((each) => core.CacheDefinitions.getNpc(each)?.name === name && (core.CacheDefinitions.getNpc(each).actions ?? []).some((action) => action?.toLowerCase() === option));

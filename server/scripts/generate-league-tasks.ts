@@ -453,6 +453,8 @@ const MINIGAME_COMPLETIONS: Array<[RegExp, string[]]> = [
 const CONDITION_IN = (text: string) => /\b(?:in less than|in under|or less|without|solo)\b/i.test(text);
 
 /** The emotes plugin's locked emotes by slot (plugins/interface/data/emotes.json): their names. */
+/** The agility shortcuts by their names (plugins/skills/data/agility-shortcuts.json: "Stepping stone (Shilo Village)"). */
+const SHORTCUT_NAMES: string[] = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../plugins/skills/data/agility-shortcuts.json"), "utf8")).shortcuts.map((entry: { name?: string }) => entry.name).filter(Boolean);
 const EMOTE_LOCKS: Record<string, { name?: string }> = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../plugins/interface/data/emotes.json"), "utf8")).locks;
 
 /** The server's shops (data/definitions/shops.json): name and the names of what they stock. */
@@ -1053,6 +1055,17 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
   if (/^(?:Purchase|Buy) /i.test(name) && (match = /^(?:Purchase|Buy) (?:an? |the |some )?(.+?) from (?:an? |the )?(.+?)(?: in (?:the )?[A-Z][^.]*)?\.?$/i.exec(description))) {
     const bought = shopItemOf(match[1], match[2], items);
     if (bought) return { trigger: { kind: "buy", items: [bought.item], shops: bought.shops, count: 1 } };
+  }
+  // "Use the Stepping stone (Shilo Village) in Shilo Village", "Cross a Pillar (Revenant Caves) in the
+  // Revenant Caves": the agility shortcut of that name crossed (the Agility plugin's agility:obstacle);
+  // a name its entries tell apart ("Pillar (Revenant Caves, easy)", "medium", "hard") is any of them.
+  // A place after it only restates where the shortcut is (its name's own).
+  if (/\bshortcut\b|^Cross /i.test(name) && (match = /^(?:Use|Cross) (?:the |an? )?(.+? \(([^)]+)\))(?: in (?:the )?(.+?))?\.?$/i.exec(description))) {
+    const [, linked, where, place] = match;
+    if (place && place.replace(/ \(location\)$/i, "").toLowerCase() !== where.toLowerCase()) return {};
+    const family = linked.slice(0, -1);
+    const shortcuts = SHORTCUT_NAMES.filter((each) => each === linked || each.startsWith(`${family}, `));
+    return shortcuts.length ? { trigger: { kind: "shortcut", shortcuts: [...new Set(shortcuts)], count: 1 } } : {};
   }
   // "Talk to any Port master", "Talk to a Gladiator (Fortis Colosseum)", "Talk to Ilfeen in Tirannwn",
   // "Pet Renu": that option done on an NPC of the name (npc:operated, once something answered it), in

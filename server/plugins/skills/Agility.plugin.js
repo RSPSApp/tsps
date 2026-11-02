@@ -554,7 +554,8 @@ function attemptObstacle(player, context, entry) {
     onFinish: (completed) => {
       finishObstacle(player, obstacle, success, completed, fail, lapStart);
       if (completed && success) {
-        pluginApi.emitCustomEvent("agility:obstacle", { player, objectId, location: context.obj });
+        // A shortcut's own name (agility-shortcuts.json's, "Stepping stone (Shilo Village)"); a course obstacle has none.
+        pluginApi.emitCustomEvent("agility:obstacle", { player, objectId, location: context.obj, shortcut: obstacle.course ? null : obstacle.name ?? null });
       }
       if (completed && success && obstacle.skipTo != null) {
         skipAhead(player, obstacle, context);

@@ -11,7 +11,7 @@ import { type BankTagsClient, osrsBankTagsClient } from "../banktags/bankClient"
 import { Bankmain, ScriptID } from "../banktags/bankmain";
 import { BankSearch } from "../banktags/BankSearch";
 import { BankConfig } from "./BankConfig";
-import { createValueText, type ItemPrices, itemPrices, valueSearch } from "./bankValue";
+import { BANK_FILLER, createValueText, type ItemPrices, itemPrices, type ValueSearchItem, valueSearch } from "./bankValue";
 
 /** Where Bank reads guide prices; tests give their own. */
 export type BankPrices = {
@@ -26,8 +26,10 @@ const SERVER_PRICES: BankPrices = { guidePrice, revision: getItemPricesRevision 
  * view, at Grand Exchange and high alchemy prices, and the bank search takes value searches
  * ("ge>1m", "ha<50k", "qty>=100", "100k-1m").
  *
- * The title is appended after [clientscript,bankmain_build] runs; RuneLite's patched copy of
- * [clientscript,bankmain_filteritem] supplies the search callback.
+ * The value is taken just before [clientscript,bankmain_finishbuilding] runs, so it sees the
+ * bank's own layout rather than Bank Tags' rearranged one, and the title is appended when that
+ * script is done. RuneLite's patched copy of [clientscript,bankmain_filteritem] supplies the
+ * search callback.
  */
 export class BankPlugin extends Plugin implements ClientPlugin {
     static descriptor: PluginDescriptor = {
@@ -53,6 +55,8 @@ export class BankPlugin extends Plugin implements ClientPlugin {
     private searchPricesPending = false;
     /** The price table's revision when the title was built without some prices; it relays out when they arrive. */
     private pricesPendingAt?: number;
+    /** The items the bank's own layout showed, captured before Bank Tags lays a tab out. */
+    private containerValue?: { ge: number; ha: number };
 
     constructor(osrsClient?: OsrsClient, deps?: { client?: BankTagsClient; configManager?: ConfigManager; prices?: BankPrices }) {
         super();
@@ -70,6 +74,7 @@ export class BankPlugin extends Plugin implements ClientPlugin {
         this.itemQuantities = undefined;
         this.searchPricesPending = false;
         this.pricesPendingAt = undefined;
+        this.containerValue = undefined;
         // Builds the title again, without the value.
         this.bankSearch.layoutBank();
     }
@@ -86,9 +91,28 @@ export class BankPlugin extends Plugin implements ClientPlugin {
     }
 
     onScriptFinished(scriptId: number): void {
-        if (!this.isStarted() || scriptId !== ScriptID.BANKMAIN_BUILD) return;
-        this.itemQuantities = undefined;
-        this.guard("bank title", () => this.appendBankValue());
+        if (!this.isStarted()) return;
+        if (scriptId === ScriptID.BANKMAIN_BUILD) {
+            // The build's searches have run; the next one counts the bank again.
+            this.itemQuantities = undefined;
+        } else if (scriptId === ScriptID.BANKMAIN_FINISHBUILDING) {
+            this.guard("bank title", () => this.appendBankValue());
+            this.containerValue = undefined;
+        }
+    }
+
+    /**
+     * BankPlugin.onScriptPreFired(BANKMAIN_FINISHBUILDING), before Bank Tags rearranges the tab: a
+     * layout can repeat a stack and draw a missing item as a placeholder with quantity 0x7fffffff,
+     * which a total taken after it would count.
+     */
+    onScriptPreFired(scriptId: number): void {
+        if (!this.isStarted() || scriptId !== ScriptID.BANKMAIN_FINISHBUILDING) return;
+        this.guard("bank value", () => {
+            // The searches used this build's prices, hidden items and all.
+            this.containerValue = this.containerPrices(this.searchPricesPending);
+            this.searchPricesPending = false;
+        });
     }
 
     onScriptCallback({ eventName, vm }: ScriptCallbackEvent): void {
@@ -100,12 +124,9 @@ export class BankPlugin extends Plugin implements ClientPlugin {
         });
     }
 
-    /** BankPlugin.onScriptPostFired(BANKMAIN_BUILD). */
+    /** BankPlugin.onScriptPostFired(BANKMAIN_FINISHBUILDING). */
     private appendBankValue(): void {
-        // The build's value searches have run by now; take what they needed before the next one.
-        const searchedPending = this.searchPricesPending;
-        this.searchPricesPending = false;
-        const prices = this.containerPrices(searchedPending);
+        const prices = this.containerValue;
         if (!prices) return;
         const title = this.client.getWidget(Bankmain.TITLE);
         if (!title) return;
@@ -148,25 +169,30 @@ export class BankPlugin extends Plugin implements ClientPlugin {
         return { ge, ha };
     }
 
-    private searchItem(itemId: number): { quantity: number; ge: number; ha: number } {
+    private searchItem(itemId: number): ValueSearchItem {
         if (!this.itemQuantities) {
             this.itemQuantities = new Map();
             for (const slot of this.client.getItemContainer(BANK)?.getSlots() ?? []) {
-                if (slot.itemId < 0) continue;
+                // Bank fillers are empty-slot markers, not items the bank holds.
+                if (slot.itemId < 0 || slot.itemId === BANK_FILLER) continue;
                 this.itemQuantities.set(slot.itemId, (this.itemQuantities.get(slot.itemId) ?? 0) + slot.quantity);
             }
         }
         const price = this.itemPrices(itemId);
         // An unknown price reads as zero here, which can hide every item: remember to lay out again.
         if (price.ge === undefined) this.searchPricesPending = true;
-        return { quantity: this.itemQuantities.get(itemId) ?? 0, ge: price.ge ?? 0, ha: price.ha };
+        return {
+            quantity: this.itemQuantities.get(itemId) ?? 0,
+            ge: price.ge ?? 0,
+            ha: price.ha,
+            placeholder: (this.client.getItemDefinition(itemId)?.placeholderTemplate ?? -1) !== -1,
+        };
     }
 
     private itemPrices(itemId: number): ItemPrices {
         return itemPrices(
             itemId,
-            (id) => this.client.canonicalize(id),
-            (id) => Math.max(0, Number(this.client.getItemDefinition(id)?.price ?? 0) | 0),
+            (id) => this.client.getItemDefinition(id),
             (id) => this.prices.guidePrice(id),
         );
     }

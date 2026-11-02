@@ -41,6 +41,25 @@ function open({ player }) {
   return true;
 }
 
+/**
+ * What the relic is to the viewer, as 3193 takes it (the interface data's `viewStates`): their own (the tier's pick,
+ * or Reloaded's), another of a chosen tier (unless Reloaded may still take it), out of reach of
+ * their points, or theirs to choose.
+ */
+function viewState(player, type, tier, relicSlot) {
+  const states = ui().viewStates;
+  const picked = Common.chosen(player)[tier];
+  const reloaded = Common.reloadedPick(player, type);
+  if (picked === relicSlot || reloaded === Common.relic(type, tier, relicSlot)) return states.unlocked;
+  if (picked !== undefined) {
+    // Reloaded's extra pick may still take it: chosen tiers stay open to that one choice.
+    const reloadedWhy = Unlock.reloadedRefusal(player, type, tier, relicSlot, true);
+    return reloadedWhy === null || reloadedWhy === "alreadyChosen" ? states.tierTaken : states.available;
+  }
+  if (Common.points(player) < Common.catalog(type).tiers[tier].cost) return states.locked;
+  return states.available;
+}
+
 function view({ player, slot }) {
   const type = Common.leagueOf(player);
   const index = Number(slot);
@@ -49,7 +68,7 @@ function view({ player, slot }) {
   const tier = Math.floor(index / SLOTS_PER_TIER);
   const relicSlot = (index % SLOTS_PER_TIER) + 1;
   if (!Common.relic(type, tier, relicSlot)) return false;
-  const { group, viewScript, viewScriptComponents, viewScriptState, toggleScript, toggleScriptComponents } = ui();
+  const { group, viewScript, viewScriptComponents, toggleScript, toggleScriptComponents } = ui();
   const structs = Common.structIds(type, tier, relicSlot);
   const sender = player.getPacketSender();
   state.slot = index;
@@ -59,7 +78,7 @@ function view({ player, slot }) {
   const passive = Common.catalog(type).tiers[tier]?.passive ?? "";
   sender.sendInterfaceScript(viewScript, [
     ...viewScriptComponents.map((child) => Unlock.uid(group, child)),
-    viewScriptState,
+    viewState(player, type, tier, relicSlot),
     structs.relicStruct,
     structs.passiveStruct,
     String(relic.description ?? ""),

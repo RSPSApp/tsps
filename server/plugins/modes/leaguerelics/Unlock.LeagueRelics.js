@@ -259,4 +259,5 @@ module.exports = function attach(api) {
 
 module.exports.unlock = unlock;
 module.exports.refusal = refusal;
+module.exports.reloadedRefusal = reloadedRefusal;
 module.exports.uid = uid;

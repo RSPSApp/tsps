@@ -671,8 +671,11 @@ tooltip is 655:53.
 - **The flow, as captured.** The side panel's View Relics (656:44) opens 655 as the main modal
   with `if_setevents` on its slots (655:22, 0-23) and menu (655:6, 10-20). A slot click sets
   `league_relic_last_viewed` (10048) to tier x 3 + slot and runs the client's redraw scripts 3193
-  (the panel's components, the state 2 both captured clicks sent for an affordable, unchosen
-  tier (other states were not captured), the relic struct, the tier's passive struct) and 3181.
+  (the panel's components, the relic's state, the relic struct, the tier's passive struct) and
+  3181. The state is what the client's buttons and toggles read: 1 the character's own relic
+  (237/01104; it also unlocks the relic's effect toggles, which refuse with "You need to have that
+  relic unlocked in order to toggle its effects." otherwise), 4 another relic of a chosen tier
+  (Reloaded's extra pick aside), 0 a tier the points don't reach, 2 one to choose.
   Known issue: on this web client the relic information panel stays blank after those two
   scripts (`extra_info` 655:27 remains hidden, for data-driven and cache-native leagues alike;
   every component id was re-checked against the rev 241 gamevals and the scripts run without a

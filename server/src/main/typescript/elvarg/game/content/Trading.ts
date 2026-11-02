@@ -165,13 +165,13 @@ export class Trading {
                 this.player.getTrading().initiateTrade();
                 t_.getTrading().initiateTrade();
             } else {
-                this.player.sendMessage("You've sent a trade request to " + t_.getUsername() + ".");
+                this.player.sendMessage("You've sent a trade request to " + t_.getDisplayName() + ".");
                 // The client shows "<name> wishes to trade with you." and makes it clickable.
                 t_.getSession().sendClientPacket(encodeChatMessage(
-                    "trade", "wishes to trade with you.", this.player.getUsername(), "",
+                    "trade", "wishes to trade with you.", this.player.getDisplayName(), "",
                     this.player.getIndex(), Trading.TRADE_REQUEST_CHAT_TYPE,
                 ));
-                t_.getSession().sendClientPacket(encodeTradeRequest(this.player.getIndex(), this.player.getUsername()));
+                t_.getSession().sendClientPacket(encodeTradeRequest(this.player.getIndex(), this.player.getDisplayName()));
                 if (t_.isPlayerBot && t_.isPlayerBot()) {
                     // Player Bots: Automatically accept any trade request
                     (t_ as any).getTradingInteraction?.().acceptTradeRequest?.(this.player);
@@ -266,7 +266,7 @@ export class Trading {
             let freeSlots = this.interact.getInventory().getFreeSlots();
             if (slotsNeeded > freeSlots) {
                 this.player.sendMessage("");
-                this.player.sendMessage("@or3@" + this.interact.getUsername() + " will not be able to hold that item.");
+                this.player.sendMessage("@or3@" + this.interact.getDisplayName() + " will not be able to hold that item.");
                 this.player.sendMessage(
                     "@or3@They have " + freeSlots + " free inventory slot" + (freeSlots == 1 ? "." : "s."));
 
@@ -498,7 +498,7 @@ export class Trading {
     private party(player: Player): TradePartyView {
         const trading = player.getTrading();
         return {
-            playerId: player.getIndex(), name: player.getUsername(),
+            playerId: player.getIndex(), name: player.getDisplayName(),
             accepted: trading.getState() === TradeState.ACCEPTED_TRADE_SCREEN,
             confirmAccepted: trading.getState() === TradeState.ACCEPTED_CONFIRM_SCREEN,
             offers: trading.getContainer().getItems().flatMap((item, slot) =>
@@ -528,7 +528,7 @@ export class Trading {
     private sendText(opened: boolean): void {
         const other = this.interact;
         if (!other) return;
-        const name = other.getUsername();
+        const name = other.getDisplayName();
         const otherState = other.getTrading().getState();
         const texts: Array<[number, string]> = this.state >= TradeState.CONFIRM_SCREEN
             ? [

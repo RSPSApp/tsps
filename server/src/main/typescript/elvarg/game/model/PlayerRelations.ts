@@ -1,6 +1,7 @@
 import { Player } from "../entity/impl/player/Player";
 import { World } from "../World";
 import { Misc } from "../../util/Misc";
+import { DisplayNames } from "../entity/impl/player/DisplayNames";
 
 export class PlayerRelations {
     private static readonly MAX_FRIENDS = 200;
@@ -24,6 +25,11 @@ export class PlayerRelations {
 
     constructor(player: Player) {
         this.player = player;
+    }
+
+    /** How a listed account's name reads in a message: its display name, if it chose one. */
+    private static shownName(username: string): string {
+        return DisplayNames.entryOf(username)?.name ?? username;
     }
 
     public getPrivateMessageId(): number {
@@ -274,11 +280,11 @@ export class PlayerRelations {
             return;
         }
         if (this.ignoreList.indexOf(username) !== -1) {
-            this.player.sendMessage("Please remove " + name + " from your ignore list first.");
+            this.player.sendMessage("Please remove " + PlayerRelations.shownName(name) + " from your ignore list first.");
             return;
         }
         if (this.friendList.indexOf(username) !== -1) {
-            this.player.sendMessage(name + " is already on your friends list!");
+            this.player.sendMessage(PlayerRelations.shownName(name) + " is already on your friends list!");
         } else {
             this.friendList.push(username);
             this.friendSet.add(username);
@@ -327,11 +333,11 @@ export class PlayerRelations {
             return;
         }
         if (this.friendList.indexOf(username) !== -1) {
-            this.player.sendMessage("Please remove " + name + " from your friend list first.");
+            this.player.sendMessage("Please remove " + PlayerRelations.shownName(name) + " from your friend list first.");
             return;
         }
         if (this.ignoreList.indexOf(username) !== -1) {
-            this.player.sendMessage(name + " is already on your ignore list!");
+            this.player.sendMessage(PlayerRelations.shownName(name) + " is already on your ignore list!");
         } else {
             this.ignoreList.push(username);
             this.ignoreSet.add(username);

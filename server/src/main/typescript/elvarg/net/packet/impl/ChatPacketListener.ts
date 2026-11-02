@@ -65,7 +65,7 @@ export class ChatPacketListener {
       sent.add(recipient.getIndex());
       recipient.getPacketSender().sendPublicChat(
         text,
-        `${iconPrefix}${player.getUsername()}`,
+        `${iconPrefix}${player.getDisplayName()}`,
         player.getIndex(),
         autoChat ? (iconPrefix ? ChatType.MODAUTOTYPER : ChatType.AUTOTYPER) : undefined,
         style

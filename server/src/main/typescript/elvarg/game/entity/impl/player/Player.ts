@@ -131,6 +131,7 @@ export class Player extends Mobile {
     public dialogueManager = new DialogueManager(this);
 
     public username: string;
+    private displayName = "";
     private passwordHashWithSalt: string;
     private hostAddress: string;
     private isDiscordLogin: boolean = false;
@@ -809,6 +810,17 @@ export class Player extends Mobile {
 
     public setUsername(username: string): Player {
         this.username = username;
+        return this;
+    }
+
+    /** The name other players see (DisplayNames); the username stays the account's key. */
+    public getDisplayName(): string {
+        return this.displayName || this.username;
+    }
+
+    public setDisplayName(displayName: string): Player {
+        this.displayName = displayName;
+        this.getUpdateFlag().flag(Flag.APPEARANCE);
         return this;
     }
 

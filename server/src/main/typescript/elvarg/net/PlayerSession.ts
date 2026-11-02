@@ -539,7 +539,7 @@ export class PlayerSession {
             prayer: player.getAppearance().getHeadHint(),
           },
         },
-        player.getUsername(),
+        player.getDisplayName(),
         player.getSkillManager().getCombatLevel(),
         player.getSkillManager().getTotalLevel(),
         animations

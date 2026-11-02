@@ -253,6 +253,19 @@ test("tob: a Theatre of Blood raid finished in a mode the task names (Complete t
   assert.equal(f.player.getAttribute("league:task-progress")["complete-the-theatre-of-blood-25-times"], 1);
 });
 
+test("emote: an emote performed from the tab, by its slot (Use the Fortis Salute emote)", async (t) => {
+  const f = pactsCharacter(t);
+  const emote = async () => {
+    f.player.getPacketSender().sendInterfaceRemoval(); // whatever the login left open
+    await send(f, { type: "widget_action", widgetId: (216 << 16) | 2, groupId: 216, childId: 2, slot: 53, itemId: -1, buttonNum: 1 }, 1);
+  };
+  await emote();
+  assert.ok(!done(f, "use-the-fortis-salute-emote"), `locked until Grand Champion: ${f.messages}`);
+  f.player.getPacketSender().sendConfig(core.CacheDefinitions.getVarpId("colosseum_glory"), 20000);
+  await emote();
+  assert.ok(done(f, "use-the-fortis-salute-emote"), `the real Emotes performs it: ${f.messages}`);
+});
+
 /** An inventory item's option, as the client clicks it. */
 async function inventoryOption(f, name, option, optionIndex = 1, count = 4) {
   const id = item(name);

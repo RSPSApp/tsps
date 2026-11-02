@@ -1627,6 +1627,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   of rifts closed reaching the count: "Guardians of the Rift 10 Rifts closed"),
   `tob { modes, count }` from the Theatre of Blood's `tob:completed` (a raid of one of the modes:
   "on normal or hard mode 25 times"; the server's raid sends normal and entry),
+  `emote { slots, count }` from the emotes plugin's `player:emote` (by the tab's slot; "Use the
+  Fortis Salute emote", named as its locked emotes are in `emotes.json`),
   `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what

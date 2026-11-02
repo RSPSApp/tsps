@@ -452,6 +452,9 @@ const MINIGAME_COMPLETIONS: Array<[RegExp, string[]]> = [
 ];
 const CONDITION_IN = (text: string) => /\b(?:in less than|in under|or less|without|solo)\b/i.test(text);
 
+/** The emotes plugin's locked emotes by slot (plugins/interface/data/emotes.json): their names. */
+const EMOTE_LOCKS: Record<string, { name?: string }> = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../plugins/interface/data/emotes.json"), "utf8")).locks;
+
 /** The server's prayers by plain name ("protect from melee"), from PrayerHandler's PrayerData keys. */
 const PRAYER_NAMES: Map<string, string> = (() => {
   const source = fs.readFileSync(path.resolve(__dirname, "../src/main/typescript/elvarg/game/content/PrayerHandler.ts"), "utf8");
@@ -985,6 +988,12 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   // "Fully decorate a Maple totem in the Vale Totems" (the Redwood one's place is the Auburn Valley, where they stand).
   if ((match = /^Fully decorate an? ([A-Za-z]+) totem in (?:the Vale Totems|the Auburn Valley)\.?$/i.exec(description))) {
     return { trigger: { kind: "totem", woods: [match[1].toLowerCase()], count: 1 } };
+  }
+  // "Use the Fortis Salute emote": that emote performed (the emotes plugin's player:emote, by its
+  // slot; the names are its locked emotes', plugins/interface/data/emotes.json).
+  if ((match = /^Use the (.+) emote$/i.exec(name)) && new RegExp(`^Use the ${match[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} emote\\.?$`, "i").test(description)) {
+    const slot = Object.entries(EMOTE_LOCKS).find(([, lock]) => lock.name?.toLowerCase() === match![1].toLowerCase())?.[0];
+    return slot === undefined ? {} : { trigger: { kind: "emote", slots: [Number(slot)], count: 1 } };
   }
   // "Complete the Theatre of Blood on normal or hard mode 25 times": raids finished in those modes
   // (the raid's tob:completed); a condition ("without any party member dying") is no count.

@@ -48,11 +48,13 @@ function applyStartingLevels(player, type) {
 /**
  * The league's automatic quests (`startQuests`; Demonic Pacts: Druidic Ritual, Rune Mysteries and
  * the rest the Wiki lists), at every login so a character made before the list gets them too; the
- * quests already complete are left alone, and none gives experience (`league:complete-quests`).
+ * quests already complete are left alone, and none gives experience or items (`league:complete-quests`,
+ * `items: false`): live's new Demonic Pacts character holds only the starter kit (237/01098), no Air
+ * talisman, Elemental shield or Wolfbane.
  */
 function completeStartQuests(player, type) {
   const quests = Common.league(type).startQuests;
-  if (Array.isArray(quests) && quests.length) Common.api.emitCustomEvent("league:complete-quests", { player, quests });
+  if (Array.isArray(quests) && quests.length) Common.api.emitCustomEvent("league:complete-quests", { player, quests, items: false });
 }
 
 /** The mode the Ironman plugin reports ("none" without one), or undefined when that plugin is not loaded. */

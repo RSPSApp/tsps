@@ -225,3 +225,29 @@ test("league:complete-quests gives none of the quests' experience: Varlamore's, 
     "Perilous Moons' 40,000 Slayer and Twilight's Promise's Thieving held back");
   hooks.length = attached;
 });
+
+test("league:complete-quests with items: false: Demonic Pacts' start quests hand no item (live's new character holds only the starter kit, 237/01098)", () => {
+  const startQuests = require("../plugins/modes/data/leagues.json").leagues["6"].startQuests;
+  const named = (quests) => quests.map((name) => QuestRuntime.questNamed(name)).filter(Boolean);
+  const fresh = (name) => {
+    const player = new Player(null);
+    player.setUsername(name);
+    const sender = new Proxy({}, { get: () => () => sender });
+    player.getPacketSender = () => sender;
+    player.sendMessage = () => {};
+    return player;
+  };
+  const held = (player) => player.getInventory().getValidItems().length
+    + player.getBanks().reduce((sum, bank) => sum + (bank?.getValidItems().length ?? 0), 0);
+  const player = fresh("start-quests");
+  Unlocks._test.completeNamedQuests({ player, quests: startQuests, items: false });
+  for (const task of tasks.splice(0)) (task.execute ?? task.run).call(task);
+  assert.ok(named(startQuests).every((quest) => quest.isComplete(player)), "every start quest complete");
+  assert.equal(held(player), 0, "no Air talisman, Elemental shield, Wolfbane or any other reward");
+  const { ItemIdentifiers: I } = core;
+  const rewarded = fresh("start-quests-items");
+  Unlocks._test.completeNamedQuests({ player: rewarded, quests: ["Rune Mysteries", "Elemental Workshop I", "Priest in Peril"] });
+  for (const id of [I.AIR_TALISMAN, I.ELEMENTAL_SHIELD, I.WOLFBANE]) {
+    assert.ok(rewarded.getInventory().getAmount(id) > 0, `a pack (items kept) still gives item ${id}`);
+  }
+});

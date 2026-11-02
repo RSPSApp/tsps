@@ -1391,8 +1391,11 @@ recorded; the usual teleport rules apply.
 
 **Automatic quests** (leagues.json `startQuests`; Wiki Demonic_Pacts_League, Auto-completed quests):
 Account completes Dragon Slayer I, Druidic Ritual, Rune Mysteries and the other 13 at every login
-through `league:complete-quests`, so a character made before the list gets them too; none gives
-experience (Unlocks' hook), and live's new character has only its starting levels (237/01098).
+through `league:complete-quests` (`items: false`), so a character made before the list gets them
+too; none gives experience (Unlocks' hook) or items: live's new character has only its starting
+levels and the starter kit (237/01098), no Air talisman, Elemental shield or Wolfbane. An area's
+quests (`league:complete-quests` from the area unlocks) and Shattered Relics' packs keep their
+item rewards.
 
 **Yama's Lair** (Demonic Pacts' start, `start` 1503, 5602; 237/01098): its 24 NPCs are world
 spawns from that recording (`npc-spawns.json`, source `rsprox:237/01098`); the Glowing portal's

@@ -151,7 +151,7 @@ function give(player, item) {
  * against an empty inventory, so many rewards in a row are never lost to a full one; then the
  * inventory comes back and the rewards go into it, or the bank where they don't fit.
  */
-function completeQuest(player, quest) {
+function completeQuest(player, quest, { items = true } = {}) {
   const inventory = player.getInventory();
   const carried = inventory.getCopiedItems();
   const banked = bankedExperienceItems(player);
@@ -173,7 +173,8 @@ function completeQuest(player, quest) {
         extra -= taken;
       }
     }
-    for (const item of rewards) {
+    // Without `items`, the rewards are dropped: a league's start quests hand none (237/01098).
+    for (const item of items ? rewards : []) {
       if (!isExperienceItem(item.getId())) give(player, item);
     }
     inventory.refreshItems();
@@ -193,8 +194,9 @@ function completeQuests(player, name) {
 }
 
 /**
- * `league:complete-quests` { player, quests: [names] }: completes the named quests the way a pack
- * does (no experience, the final rewards kept), in reverse list order, so a list written as the
+ * `league:complete-quests` { player, quests: [names], items? }: completes the named quests the way a
+ * pack does (no experience, the final rewards kept; with `items: false` no item rewards either), in
+ * reverse list order, so a list written as the
  * Wiki nests a quest's requirements under it completes the requirements first (Demonic Pacts'
  * areas). Names this server registers no quest for are left out.
  */
@@ -205,7 +207,7 @@ function completeNamedQuests(request) {
   completing.add(player);
   try {
     for (const quest of quests) {
-      if (!quest.isComplete(player)) completeQuest(player, quest);
+      if (!quest.isComplete(player)) completeQuest(player, quest, { items: request.items !== false });
     }
   } finally {
     completing.delete(player);

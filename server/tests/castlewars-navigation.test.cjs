@@ -274,17 +274,48 @@ test('leaving either respawn room by ladder renews the idle allowance on return'
   }
 });
 
-test('only the requested staircase and inner-ladder rails are removed', (t) => {
+test('staircase battlements block the gaps while both castles retain their climb routes', (t) => {
   core.RegionManager.init();
   attachNavigation(registry, game);
   const objectAt = (x, y, type = 0) => core.MapObjects.getType(new core.Location(x, y, 1), type, null);
-  const outer = objectAt(2419, 3072);
+  const stairWalls = [];
+  for (const [x, y] of [[2380, 3127], [2419, 3080]]) {
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let shape = 0; shape <= 3; shape++) {
+      const object = objectAt(x + dx, y + dy, shape);
+      if (object) stairWalls.push(object);
+    }
+  }
+  assert.ok(stairWalls.length > 0, 'the actual cache supplies the stair enclosures');
   const removed = [];
-  t.mock.method(core.ObjectManager, 'deregister', object => removed.push(object));
+  const deregister = core.ObjectManager.deregister.bind(core.ObjectManager);
+  t.mock.method(core.ObjectManager, 'deregister', (object, update) => { removed.push(object); return deregister(object, update); });
   startup.at(-1)();
-  assert.equal(removed.length, 14);
-  assert.ok(removed.every(object => object.getLocation().getZ() === 1 && object.getType() <= 3));
-  assert.ok(removed.some(object => object.getLocation().equals(new core.Location(2419, 3080, 1))));
-  assert.ok(removed.some(object => object.getLocation().equals(new core.Location(2380, 3127, 1))));
-  assert.ok(!removed.includes(outer), 'the outer castle wall remains');
+  const { RsmodRouteFinding } = require('../dist/game/model/movement/path/RsmodRouteFinding');
+  const finder = new RsmodRouteFinding(core.RegionManager.getClipping.bind(core.RegionManager));
+  for (const [team, inside, gap, up, down, upperLanding, lowerLanding] of [
+    [game.TEAM.ZAMORAK, [2378, 3130, 1], [2380, 3123], [4418, 2380, 3127, 0], [4415, 2380, 3127, 1], [2379, 3127, 1], [2380, 3130, 0]],
+    [game.TEAM.SARADOMIN, [2421, 3077, 1], [2419, 3084], [4417, 2419, 3078, 0], [4415, 2419, 3080, 1], [2420, 3080, 1], [2419, 3077, 0]],
+  ]) {
+    assert.equal(finder.findRoute({ level: 1, srcX: inside[0], srcY: inside[1], srcSize: 1,
+      destX: gap[0], destY: gap[1], privateArea: null, moveNear: false }).success, false, 'the cache perimeter blocks walking into the empty space');
+    assert.equal(finder.findRoute({ level: 1, srcX: upperLanding[0], srcY: upperLanding[1], srcSize: 1,
+      destX: inside[0], destY: inside[1], privateArea: null, moveNear: false }).success, true, 'the upstairs landing remains connected to the castle');
+    for (const [at, source, destination] of [[up, lowerLanding, upperLanding], [down, inside, lowerLanding]]) for (const bot of [false, true]) {
+      const object = core.MapObjects.get(at[0], new core.Location(...at.slice(1)), null);
+      assert.ok(object, 'the cache staircase remains');
+      const definition = object.getDefinition(), p = player(team, source);
+      t.mock.method(p, 'isPlayerBot', () => bot);
+      core.PathFinder.calculateObjectRoute(p, object.getType() + 1, at[1], at[2], definition.getSizeX(), definition.getSizeY(), object.getFace(), definition.getBlockingMask());
+      const approach = p.getMovementQueue().getDestination() ?? p.getLocation();
+      p.moveTo(approach);
+      assert.equal(core.PathFinder.reachedObject(p, at[1], at[2], definition.getSizeX(), definition.getSizeY(), object.getFace(), object.getType(), definition.getBlockingMask()), true,
+        `the native ${bot ? 'bot' : 'player'} route reaches the intended stair face`);
+      const event = { player: p, object, handled: false };
+      customHandlers.get('ladders:climb')(event);
+      assert.equal(event.handled, true);
+      assert.ok(p.getLocation().equals(new core.Location(...destination)), 'climbing retains the existing landing');
+    }
+  }
+  for (const wall of stairWalls) assert.equal(core.MapObjects.get(wall.getId(), wall.getLocation(), null), wall, 'retain the cache wall geometry and collision');
+  assert.equal(removed.length, 4, 'only the separate inner-ladder rails are removed');
 });

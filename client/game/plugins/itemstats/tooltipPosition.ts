@@ -22,6 +22,7 @@ export function scaleTooltipRect(
     return { x: rect.x * scaleX, y: rect.y * scaleY, w: rect.w * scaleX, h: rect.h * scaleY };
 }
 
+/** Returns the active spell action or the current menu action. */
 export function currentInteractionActionText(client: any): string {
     if (ClientState.isSpellSelected) {
         const spellName = selectedSpellDisplayName();
@@ -58,10 +59,6 @@ function selectedSpellDisplayName(): string {
         if (clean) return clean;
     }
     return "";
-}
-
-function cleanActionText(text: unknown): string {
-    return String(text ?? "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
 }
 
 export function positionTooltip(
@@ -122,9 +119,10 @@ export function fallbackInteractionBounds(
     canvasWidth: number,
     canvasHeight: number,
     scale: number | { x: number; y: number } = 1,
+    scaleYInput?: number,
 ): { x: number; y: number; w: number; h: number } {
     const scaleX = typeof scale === "number" ? scale : scale.x;
-    const scaleY = typeof scale === "number" ? scale : scale.y;
+    const scaleY = scaleYInput ?? (typeof scale === "number" ? scale : scale.y);
     const w = Math.max(1, Math.min(240 * scaleX, canvasWidth));
     const h = Math.max(1, Math.min(52 * scaleY, canvasHeight));
     return {
@@ -220,4 +218,8 @@ export function findMouseoverTimerBounds(
 
 function normalizeText(text: string): string {
     return text.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function cleanActionText(text: unknown): string {
+    return String(text ?? "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
 }

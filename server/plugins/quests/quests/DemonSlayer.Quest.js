@@ -114,6 +114,8 @@ module.exports = function registerDemonSlayerQuest(api) {
   const demonEncounters = new WeakMap();
   /** Players whose weakened Delrith slipped away: he returns once they leave the circle and come back. */
   const delrithEscaped = new WeakSet();
+  /** The public stone circle (DELRITH_ZONE); its leave is what clears delrithEscaped. */
+  let delrithCircle;
   const visions = new WeakMap();
 
   function later(key, ticks, callback) {
@@ -820,9 +822,16 @@ module.exports = function registerDemonSlayerQuest(api) {
       tracked.weakenedExpiresAt !== undefined &&
       World.getProcessCycle() >= tracked.weakenedExpiresAt
     ) {
-      // Wiki: taken too long, Delrith is gone until the player leaves and comes back.
-      delrithEscaped.add(player);
+      // Wiki: taken too long, Delrith is gone until the player leaves and comes back. The fight's
+      // private scene reaches past the circle; a player outside it has already left. One inside
+      // is put straight back in the circle, so the exit that clears the mark is the one seen.
+      const inCircle = inDelrithZone(player.getLocation());
       clearDemonEncounter(player);
+      if (inCircle && delrithCircle) {
+        delrithEscaped.add(player);
+        delrithCircle.enter(player);
+        player.setArea(delrithCircle);
+      }
       return;
     }
     ensureDelrith(player);
@@ -1016,6 +1025,12 @@ module.exports = function registerDemonSlayerQuest(api) {
     });
   }
 
+  function inDelrithZone(location) {
+    return DELRITH_ZONE.levels.includes(location.getZ()) &&
+      location.getX() >= DELRITH_ZONE.minX && location.getX() <= DELRITH_ZONE.maxX &&
+      location.getY() >= DELRITH_ZONE.minY && location.getY() <= DELRITH_ZONE.maxY;
+  }
+
   class DelrithArea extends Area {
     process(mobile) {
       if (mobile.isPlayer()) handlePlayerProcess({ player: mobile });
@@ -1084,7 +1099,8 @@ module.exports = function registerDemonSlayerQuest(api) {
   api.onGroundItemPickup(handleSewerKeyPickup);
 
   // Delrith: owner-only summon in the stone circle, weaken then banish.
-  api.registerArea(new DelrithArea([new Boundary(DELRITH_ZONE.minX, DELRITH_ZONE.maxX, DELRITH_ZONE.minY, DELRITH_ZONE.maxY, 0)]));
+  delrithCircle = new DelrithArea([new Boundary(DELRITH_ZONE.minX, DELRITH_ZONE.maxX, DELRITH_ZONE.minY, DELRITH_ZONE.maxY, 0)]);
+  api.registerArea(delrithCircle);
   api.onNpcBeforeDeath(handleDelrithBeforeDeath);
   api.onNpcInteraction("Weakened Delrith", { Banish: banishWeakenedDelrith });
 

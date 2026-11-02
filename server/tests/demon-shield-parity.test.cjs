@@ -501,3 +501,47 @@ test('the summoners speak with the captured chatheads (1843)', () => {
   assert.deepEqual([one.speakerId, one.expression], [core.NpcIdentifiers.DARK_WIZARD_7, 571], 'chatshock1 on qip_ds_young_dark_wizard1');
   assert.deepEqual([all.speakerId, all.expression], [core.NpcIdentifiers.DARK_WIZARD_8, 567], 'chathap1 on qip_ds_young_dark_wizard2');
 });
+
+test('a Delrith timeout outside the circle lets him return at once; inside, after one real exit (AreaManager)', () => {
+  const { AreaManager } = require('../dist/game/model/areas/AreaManager');
+  const originalCycle = core.World.processCycle;
+  const q = register('DemonSlayer', 'demon_slayer');
+  const circle = q.areas[0];
+  AreaManager.areas.push(circle);
+  const run = (timeoutTile) => {
+    const p = player(); q.quest.setStage(p, 29);
+    Object.assign(p, { getMultiIcon: () => 0, setMultiIcon() {} });
+    const at = (x, y) => { p.moveTo(new core.Location(x, y, 0)); AreaManager.process(p); };
+    at(3227, 3369);
+    q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.DENATH_4, stepId: 'xjQ9zZ' });
+    q.tick(6);
+    const line = { player: p, text: "I've got to get out of here..." };
+    q.emit('npc-dialogue:line', line); line.after();
+    q.call('onNpcBeforeDeath', { npc: q.spawned.at(-1), preventDeath: false });
+    at(...timeoutTile);
+    core.World.processCycle += 100;
+    at(...timeoutTile);
+    return { p, at, spawned: q.spawned.length };
+  };
+  try {
+    // Outside the public circle (y < 3362) but still in the private scene: no mark to clear.
+    const outside = run([3227, 3361]);
+    assert.equal(outside.p.getArea(), null, 'the timeout ends the private scene');
+    outside.at(3227, 3369);
+    assert.equal(q.spawned.length, outside.spawned + 4, 'the first return summons him again');
+    q.call('onPlayerLogout', { player: outside.p });
+
+    // Inside the circle: he stays gone until the player has left it once.
+    const inside = run([3227, 3369]);
+    assert.equal(inside.p.getArea(), circle, 'the player is back in the public circle');
+    inside.at(3228, 3370);
+    assert.equal(q.spawned.length, inside.spawned, 'staying in the circle summons nothing');
+    inside.at(3227, 3361);
+    inside.at(3227, 3369);
+    assert.equal(q.spawned.length, inside.spawned + 4, 'leaving and coming back summons him');
+    q.call('onPlayerLogout', { player: inside.p });
+  } finally {
+    core.World.processCycle = originalCycle;
+    AreaManager.areas.splice(AreaManager.areas.indexOf(circle), 1);
+  }
+});

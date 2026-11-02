@@ -8,6 +8,15 @@ const PoisonTimerOverlay = lazy(() =>
 const FreezeTimerOverlay = lazy(() =>
     import("./StatusTimerOverlay").then((m) => ({ default: m.FreezeTimerOverlay })),
 );
+const AntifireTimerOverlay = lazy(() =>
+    import("./StatusTimerOverlay").then((m) => ({ default: m.AntifireTimerOverlay })),
+);
+const TeleblockTimerOverlay = lazy(() =>
+    import("./StatusTimerOverlay").then((m) => ({ default: m.TeleblockTimerOverlay })),
+);
+const StaminaTimerOverlay = lazy(() =>
+    import("./StatusTimerOverlay").then((m) => ({ default: m.StaminaTimerOverlay })),
+);
 
 export interface StatusTimerPluginConfig {
     enabled: boolean;
@@ -126,5 +135,44 @@ export class FreezeTimerPlugin extends StatusTimerPlugin {
 
     renderHud(osrsClient: OsrsClient): ReactNode {
         return createElement(FreezeTimerOverlay, { osrsClient, plugin: this });
+    }
+}
+
+export class AntifireTimerPlugin extends StatusTimerPlugin {
+    static descriptor: PluginDescriptor = {
+        name: "Antifire Timer",
+        description: "Shows how long your antifire or super antifire protection lasts.",
+        tags: ["combat", "timer", "potion", "dragonfire"],
+        configKey: "antifiretimerplugin",
+    };
+
+    renderHud(osrsClient: OsrsClient): ReactNode {
+        return createElement(AntifireTimerOverlay, { osrsClient, plugin: this });
+    }
+}
+
+export class TeleblockTimerPlugin extends StatusTimerPlugin {
+    static descriptor: PluginDescriptor = {
+        name: "Teleblock Timer",
+        description: "Shows how long you are teleblocked.",
+        tags: ["combat", "timer", "pvp", "teleport"],
+        configKey: "teleblocktimerplugin",
+    };
+
+    renderHud(osrsClient: OsrsClient): ReactNode {
+        return createElement(TeleblockTimerOverlay, { osrsClient, plugin: this });
+    }
+}
+
+export class StaminaTimerPlugin extends StatusTimerPlugin {
+    static descriptor: PluginDescriptor = {
+        name: "Stamina Timer",
+        description: "Shows how long your stamina potion lasts.",
+        tags: ["timer", "potion", "run", "energy"],
+        configKey: "staminatimerplugin",
+    };
+
+    renderHud(osrsClient: OsrsClient): ReactNode {
+        return createElement(StaminaTimerOverlay, { osrsClient, plugin: this });
     }
 }

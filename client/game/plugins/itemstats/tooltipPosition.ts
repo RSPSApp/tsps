@@ -1,4 +1,33 @@
-/** Place a tooltip in renderer-canvas pixels relative to the pointer. */
+import { ClientState } from "../../ClientState";
+
+/** Returns the active spell action or the current menu action. */
+export function currentInteractionActionText(client: any): string {
+    if (ClientState.isSpellSelected) {
+        const spellName = selectedSpellDisplayName();
+        if (spellName) return `${cleanActionText(ClientState.selectedSpellActionName) || "Cast"} ${spellName}`;
+    }
+    const entries: any[] = Array.isArray(client?.menuActiveSimpleEntries) ? client.menuActiveSimpleEntries : [];
+    const topEntry = entries.find((entry) => String(entry?.option ?? "").trim() &&
+        String(entry.option).trim().toLowerCase() !== "cancel");
+    return topEntry
+        ? `${cleanActionText(topEntry.option)} ${cleanActionText(topEntry.target ?? "")}`.trim()
+        : "";
+}
+
+function selectedSpellDisplayName(): string {
+    for (const candidate of [
+        ClientState.selectedSpellName,
+        ClientState.selectedSpellSourceWidget?.opBase,
+        ClientState.selectedSpellSourceWidget?.dataText,
+        ClientState.selectedSpellSourceWidget?.name,
+        ClientState.selectedSpellSourceWidget?.text,
+    ]) {
+        const clean = cleanActionText(candidate);
+        if (clean) return clean;
+    }
+    return "";
+}
+
 export function positionTooltip(
     pointerX: number,
     pointerY: number,
@@ -57,9 +86,10 @@ export function fallbackInteractionBounds(
     canvasWidth: number,
     canvasHeight: number,
     scale: number | { x: number; y: number } = 1,
+    scaleYInput?: number,
 ): { x: number; y: number; w: number; h: number } {
     const scaleX = typeof scale === "number" ? scale : scale.x;
-    const scaleY = typeof scale === "number" ? scale : scale.y;
+    const scaleY = scaleYInput ?? (typeof scale === "number" ? scale : scale.y);
     const w = Math.max(1, Math.min(240 * scaleX, canvasWidth));
     const h = Math.max(1, Math.min(52 * scaleY, canvasHeight));
     return {
@@ -155,4 +185,8 @@ export function findMouseoverTimerBounds(
 
 function normalizeText(text: string): string {
     return text.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function cleanActionText(text: unknown): string {
+    return String(text ?? "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
 }

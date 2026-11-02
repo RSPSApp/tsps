@@ -1,6 +1,8 @@
 import { strict as assert } from "node:assert";
 import {
     compareWornGear,
+    compareAttackSpeed,
+    compareItemWeight,
     itemAttackSpeed,
     itemEquipSlot,
     itemEquipSlots,
@@ -16,10 +18,11 @@ import {
 import { ItemStatsPlugin } from "../game/plugins/itemstats/ItemStatsPlugin";
 import { findFoodDefinition, formatPoisonImmunity, formatRestore, readFoodStats } from "../game/plugins/itemstats/foodStats";
 import { GameState } from "../runelite/api/GameState";
-import { buildCombatStatGroups } from "../game/plugins/itemstats/itemStatsPresentation";
+import { buildCombatStatGroups, formatItemStatsRow, shouldShowSpeedRow, shouldShowWeightRow } from "../game/plugins/itemstats/itemStatsPresentation";
 import { BANKMAIN, INVENTORY } from "../runelite/api/gameval/InterfaceID";
 
 async function main(): Promise<void> {
+assert.equal(ItemStatsPlugin.descriptor.enabledByDefault, false, "Item Stats stays off until enabled");
 const scaledPosition = positionTooltip(800, 600, 1600, 1200, 360, 240,
     { x: 760, y: 700, w: 160, h: 40 }, 2);
 assert.ok(scaledPosition.x >= 4 && scaledPosition.y >= 4);
@@ -55,22 +58,43 @@ const magicDeltaComparison = compareWornGear(
 );
 assert.equal(magicDeltaComparison?.delta.magicDamage, 0.4, "magic damage deltas use tenths without binary float artifacts");
 const magicRows = buildCombatStatGroups(readItemStats(item({ 1564: 0, 299: 7 })), magicDeltaComparison?.delta);
-assert.deepEqual(magicRows.find(({ title }) => title === "Other bonuses")?.rows.find(({ label }) => label === "Magic damage"), {
-    label: "Magic damage", value: "0.7 (+0.4)", delta: 0.4,
+assert.deepEqual(magicRows.find(({ title }) => title === "")?.rows.find(({ label }) => label === "Magic Dmg"), {
+    label: "Magic Dmg", value: "+0.4%", delta: 0.4,
 });
 const floatMagicRows = buildCombatStatGroups({ ...readItemStats(undefined), magicDamage: 0.7 }, {
     ...readItemStats(undefined), magicDamage: 0.39999999999999997,
 });
-assert.equal(floatMagicRows.find(({ title }) => title === "Other bonuses")?.rows[0].value, "0.7 (+0.4)");
+assert.equal(floatMagicRows.find(({ title }) => title === "")?.rows[0].value, "+0.4%");
+const baseMagicRow = buildCombatStatGroups({ ...readItemStats(undefined), magicDamage: 0.7 }, {
+    ...readItemStats(undefined), magicDamage: 0.4,
+}, true).find(({ title }) => title === "")?.rows[0];
+assert.equal(baseMagicRow?.value, "0.7% (+0.4%)", "base magic damage includes its percent sign");
+assert.equal(formatItemStatsRow(baseMagicRow!, (text) => text),
+    "<col=ffffff>Magic Dmg: 0.7% (</col><col=33ee33>+0.4%</col><col=ffffff>)</col>");
 const combatGroups = buildCombatStatGroups(readItemStats(helm), {
     ...readItemStats(undefined),
     attackStab: 2,
     defenceSlash: -1,
 });
-assert.deepEqual(combatGroups.map(({ title }) => title), ["Attack bonuses", "Defence bonuses", "Other bonuses"]);
-assert.deepEqual(combatGroups[0].rows[0], { label: "Stab", value: "5 (+2)", delta: 2 });
-assert.deepEqual(combatGroups[1].rows[0], { label: "Stab", value: "10", delta: 0 });
-assert.deepEqual(combatGroups[2].rows.map(({ label }) => label), ["Melee strength", "Ranged strength", "Magic damage", "Prayer"]);
+assert.deepEqual(combatGroups.map(({ title }) => title), ["Attack Bonus", "Defence Bonus"]);
+assert.deepEqual(combatGroups[0].rows[0], { label: "Stab", value: "+2", delta: 2 });
+assert.equal(combatGroups[1].rows[0].value, "-1", "negative comparison values keep their sign");
+assert.equal(formatItemStatsRow(combatGroups[0].rows[0], (text) => text),
+    "<col=ffffff>Stab: </col><col=33ee33>+2</col>", "default comparisons keep labels white and tint only the delta");
+assert.equal(formatItemStatsRow(combatGroups[1].rows[0], (text) => text),
+    "<col=ffffff>Slash: </col><col=ee3333>-1</col>", "negative deltas use RuneLite's worse color");
+assert.equal(formatItemStatsRow(combatGroups[0].rows[0], (text) => text.slice(0, 7)),
+    "<col=ffffff>Stab: </col><col=33ee33>+</col>", "truncation preserves the label and value colors");
+const absoluteRows = buildCombatStatGroups(readItemStats(helm));
+assert.equal(absoluteRows[1].rows[0].value, "5", "without a comparison the tooltip shows the item's absolute stat");
+assert.equal(absoluteRows[0].rows.find(({ label }) => label === "Magic Dmg")?.value, "0.4%");
+const unchangedStats = readItemStats(helm);
+const unchangedDelta = readItemStats(undefined);
+assert.equal(buildCombatStatGroups(unchangedStats, unchangedDelta).length, 0,
+    "default comparison hides unchanged stats");
+assert.equal(buildCombatStatGroups(unchangedStats, unchangedDelta, true).find(({ title }) => title === "Attack Bonus")?.rows.length, 1,
+    "base mode retains nonzero base stats when the delta is zero");
+assert.equal(combatGroups[1].rows.length, 1, "unchanged rows are hidden while comparing gear");
 assert.equal(itemEquipSlot(body), 4);
 assert.equal(itemEquipSlot(item({ 1564: 6 })), undefined, "unknown slot is not compared");
 assert.equal(itemEquipSlot({ wearPos: 5 }), 5, "legacy definitions use the wear-position opcode");
@@ -81,6 +105,23 @@ assert.equal(itemEquipSlot({ wearPos: 5, params: { get: (key) => key === 1564 ? 
 assert.deepEqual([...itemEquipSlots({ wearPos: 3, wearPos2: 5 })], [3, 5]);
 assert.equal(itemAttackSpeed(item({ 14: 4 })), 4);
 assert.equal(itemAttackSpeed(item({ 14: 0 })), undefined);
+const abyssalWhip = { ...item({ 1564: 3, 14: 4 }), weight: 453 };
+assert.equal(compareItemWeight(abyssalWhip, [], () => undefined), 0.453, "453 cache grams display as 0.453 kg");
+assert.equal(compareItemWeight({ ...abyssalWhip, weight: 0 }, [], () => undefined), 0,
+    "zero-weight equipment has no weight change");
+assert.equal(compareItemWeight(abyssalWhip, [{ slot: 3, itemId: 1 }], () => ({ ...abyssalWhip, weight: 700 })), -0.247,
+    "replacement weight subtracts the worn item");
+assert.equal(shouldShowWeightRow(0, -0.7, false), false, "default weight mode hides a zero-weight candidate");
+assert.equal(shouldShowWeightRow(0, -0.7, true), true, "base mode can show a zero base with its replacement delta");
+assert.equal(compareAttackSpeed(abyssalWhip, [], () => undefined), 0,
+    "weapon speed compares against unarmed speed of four ticks");
+assert.equal(compareAttackSpeed({ ...item({ 1564: 3, 14: 5 }), weight: 453 }, [{ slot: 3, itemId: 1 }],
+    () => ({ attackSpeed: 4 })), 1, "slower replacement has a positive speed delta");
+assert.equal(compareAttackSpeed({ params: { get: (key: number) => key === 1564 ? 5 : undefined } }, [{ slot: 3, itemId: 1 }],
+    () => ({ params: { get: (key: number) => key === 14 ? 5 : key === 1564 ? 3 : undefined }, wearPos2: 5 })), -1,
+    "equipping a shield that displaces a two-handed weapon returns speed to unarmed");
+assert.equal(shouldShowSpeedRow(undefined, -1, true), true, "base mode shows a shield's two-handed weapon speed change");
+assert.equal(shouldShowSpeedRow(undefined, 0, true), false, "a missing shield speed is normalized to zero");
 
 const comparison = compareWornGear(betterHelm, [
     { slot: 0, itemId: 100 },
@@ -297,7 +338,7 @@ const testClient: any = {
 };
 const hitPlugin = new ItemStatsPlugin(testClient);
 const itemDefinitions = new Map<number, any>([
-    [100, { name: "Bronze axe", params: { get: (key: number) => key === 1564 ? 3 : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].includes(key) ? 2 : undefined } }],
+    [100, { name: "Bronze axe", weight: 453, params: { get: (key: number) => ({ 1564: 3, 0: 5, 14: 4 })[key] } }],
     [200, { name: "Bronze axe (noted)", noteTemplate: 1, note: 100 }],
     [201, { name: "Bronze axe (placeholder)", placeholderTemplate: 1, placeholder: 100 }],
 ]);
@@ -305,6 +346,97 @@ testClient.objTypeLoader = { load: (id: number) => itemDefinitions.get(id) };
 assert.equal((hitPlugin as any).canonicalItemId(200), 100, "bank notes resolve to the canonical item");
 assert.equal((hitPlugin as any).canonicalItemId(201), 100, "bank placeholders resolve to the canonical item");
 await hitPlugin.start();
+const drawRects: number[][] = [];
+const drawContext = {
+    renderer: { canvas: { width: 1525, height: 945 }, drawRect: (...args: number[]) => drawRects.push(args) } as any,
+    fontLoader: () => undefined,
+    sprite: () => undefined,
+    place: () => undefined,
+    overlayTextScale: () => ({ x: 1, y: 1 }),
+    inputScale: () => ({ x: 1, y: 1 }),
+};
+const compactRects = hitPlugin.widgetOverlay.draw(drawContext);
+assert.equal(compactRects.length, 1, "item stats draw a tooltip");
+assert.ok(compactRects[0].w < 176, "the tooltip width follows its content instead of a wide fixed minimum");
+assert.ok(compactRects[0].h < 100, "compact inline rows keep the tooltip short");
+const scaledRects = hitPlugin.widgetOverlay.draw({
+    ...drawContext,
+    overlayTextScale: () => ({ x: 2, y: 1.5 }),
+    inputScale: () => ({ x: 2, y: 1.5 }),
+});
+assert.equal(scaledRects.length, 1, "scaled item stats draw a tooltip");
+assert.equal(scaledRects[0].w, compactRects[0].w * 2, "tooltip width follows the horizontal UI text scale");
+assert.equal(scaledRects[0].h, compactRects[0].h * 1.5, "tooltip height follows the vertical UI text scale");
+assert.equal(drawRects[5][2], scaledRects[0].w, "background bounds match the scaled tooltip rect");
+assert.equal(drawRects[5][3], scaledRects[0].h, "background height matches the scaled tooltip rect");
+assert.deepEqual(drawRects[5][4], [70 / 255, 61 / 255, 50 / 255, 156 / 255],
+    "tooltip uses RuneLite's translucent brown-gray surface");
+assert.deepEqual(drawRects.slice(6, 10).map(([x, y, w, h]) => [x, y, w, h]), [
+    [scaledRects[0].x, scaledRects[0].y, scaledRects[0].w, 1.5],
+    [scaledRects[0].x, scaledRects[0].y + scaledRects[0].h - 1.5, scaledRects[0].w, 1.5],
+    [scaledRects[0].x, scaledRects[0].y + 1.5, 2, scaledRects[0].h - 3],
+    [scaledRects[0].x + scaledRects[0].w - 2, scaledRects[0].y + 1.5, 2, scaledRects[0].h - 3],
+], "tooltip has a one-logical-pixel border scaled with the UI");
+assert.ok(drawRects.slice(6, 10).every(([, , , , color]) => color?.[3] === 1),
+    "tooltip border is opaque dark gray");
+assert.ok(drawRects.slice(6, 10).every(([, , , , color]) => color?.[0] === 55 / 255 && color?.[1] === 51 / 255 && color?.[2] === 47 / 255),
+    "tooltip border uses a warm dark gray-brown outline");
+// Touch displays cap their backing store below the device pixel ratio, so the overlay canvas is
+// larger than the input buffer. The pointer and the hit rect arrive in input pixels; the widget
+// tree (mouseover text included) renders at the overlay's scale, so its measured bounds are
+// already overlay pixels. Convert only the input side and keep the tooltip beside the text.
+const touchHitWidget = {
+    groupId: INVENTORY, itemId: 100, x: 0, y: 0, width: 32, height: 32,
+    _absX: 0, _absY: 0, _absWidth: 32, _absHeight: 32,
+};
+const touchLabelWidget = {
+    text: "<col=ffff00>Wield Bronze axe", x: 0, y: 36, width: 150, height: 20,
+    _absX: 0, _absY: 72, _absWidth: 300, _absHeight: 40,
+};
+const touchMouseoverTimer = { uid: 700, onTimer: [4725] };
+const touchClient: any = {
+    equipment: { getSlots: () => [] },
+    widgetManager: {
+        rootInterface: 161,
+        getInputRoots: () => [touchHitWidget],
+        getWidgetsForGroup: () => [touchHitWidget],
+        getActiveTimerWidgets: () => [touchMouseoverTimer],
+        getStaticChildrenByParentUid: (uid: number) => uid === 700 ? [touchLabelWidget] : [],
+    },
+    inputManager: { mouseX: 16, mouseY: 16 },
+    gameState: GameState.LOGGED_IN,
+    menuOpen: false,
+    menuActiveSimpleEntries: [{ option: "Wield", target: "Bronze axe" }],
+};
+touchClient.objTypeLoader = { load: (id: number) => itemDefinitions.get(id) };
+const touchStats = new ItemStatsPlugin(touchClient);
+await touchStats.start();
+const touchOverlayCanvas = { width: 1530, height: 1006 };
+const touchDrawContext = {
+    renderer: { canvas: touchOverlayCanvas, drawRect: () => {} } as any,
+    fontLoader: () => undefined,
+    sprite: () => undefined,
+    place: () => undefined,
+    overlayTextScale: () => ({ x: 1, y: 1 }),
+    inputScale: () => ({ x: 2, y: 2 }),
+};
+const [touchStatsRect] = touchStats.widgetOverlay.draw(touchDrawContext);
+const drawnTouchAction = { x: 0, y: 72, w: 300, h: 40 };
+assert.ok(touchStatsRect && !overlaps(touchStatsRect, drawnTouchAction),
+    "the scaled overlay clears the action text at its drawn position");
+assert.equal(touchStatsRect.y, 120,
+    "measured interaction bounds are not scaled a second time");
+assert.ok(touchStatsRect.x >= 0 && touchStatsRect.y >= 0 &&
+    touchStatsRect.x + touchStatsRect.w <= 1530 && touchStatsRect.y + touchStatsRect.h <= 1006,
+    "the scaled overlay tooltip stays inside the larger overlay canvas");
+const [desktopStatsRect] = touchStats.widgetOverlay.draw({
+    ...touchDrawContext,
+    renderer: { canvas: { width: 765, height: 503 }, drawRect: () => {} } as any,
+    inputScale: () => ({ x: 1, y: 1 }),
+});
+assert.equal(desktopStatsRect.y, 120,
+    "an unscaled overlay keeps the same input and drawing space");
+await touchStats.stop();
 const visibleSignature = hitPlugin.widgetOverlay.signature();
 assert.ok(visibleSignature.includes(JSON.stringify({ x: 1304, y: 704, w: 196, h: 40 })));
 assert.equal(hitPlugin.widgetOverlay.signature(), visibleSignature);
@@ -345,19 +477,16 @@ assert.equal(hitPlugin.widgetOverlay.signature(), visibleSignature,
 testClient.renderer.canvas.__ui.menu.open = false;
 assert.equal(hitPlugin.widgetOverlay.signature(), visibleSignature, "show again after both menus close");
 
-// Draw using device-pixel input coordinates at DPR 2. HUD scale changes the tooltip
-// dimensions, not the pointer or measured interaction bounds.
-const rects: { x: number; y: number; w: number; h: number }[] = [];
+// HUD scale changes tooltip dimensions without scaling the pointer or measured action bounds.
+const scaleRects: { x: number; y: number; w: number; h: number }[] = [];
 let canvasHeight = 1000;
-const drawContext: any = {
-    renderer: { canvas: { width: 1800, get height() { return canvasHeight; } }, drawRect: (x: number, y: number, w: number, h: number) => rects.push({ x, y, w, h }) },
+let hudScale = 1;
+const scaleDrawContext: any = {
+    renderer: { canvas: { width: 1800, get height() { return canvasHeight; } }, drawRect: (x: number, y: number, w: number, h: number) => scaleRects.push({ x, y, w, h }) },
     fontLoader: () => undefined,
-    overlayTextScale: () => ({ x: activeScale, y: activeScale }),
-    inputScale: () => ({ x: inputScaleX, y: inputScaleY }),
+    overlayTextScale: () => ({ x: hudScale, y: hudScale }),
+    inputScale: () => ({ x: 1, y: 1 }),
 };
-let activeScale = 1;
-let inputScaleX = 1;
-let inputScaleY = 1;
 testClient.inputManager.mouseX = 900;
 testClient.inputManager.mouseY = 500;
 hitWidget._absX = 880; hitWidget._absY = 480; hitWidget._absWidth = 40; hitWidget._absHeight = 40;
@@ -365,41 +494,19 @@ hitWidget.x = 880; hitWidget.y = 480; hitWidget.width = 40; hitWidget.height = 4
 labelWidget._absX = 860; labelWidget._absY = 540; labelWidget._absWidth = 140; labelWidget._absHeight = 32;
 optionWidget._absX = 860; optionWidget._absY = 560;
 for (const scale of [1, 1.25, 2]) {
-    activeScale = scale;
-    rects.length = 0;
-    const covered = hitPlugin.widgetOverlay.draw(drawContext);
-    const panel = covered[0];
+    hudScale = scale;
+    scaleRects.length = 0;
+    const panel = hitPlugin.widgetOverlay.draw(scaleDrawContext)[0];
     assert.ok(panel, `panel draws at ${scale}x`);
     assert.ok(panel.x < 900 && panel.x + panel.w > 900, "tooltip stays centered near the device-pixel pointer");
     assert.ok(panel.y >= 572 || panel.y + panel.h <= 532, "tooltip avoids the interaction text bounds");
-    assert.ok(panel.x >= 2 && panel.y >= 2 && panel.x + panel.w <= 1798 && panel.y + panel.h <= 998,
+    assert.ok(panel.x >= 2 && panel.y >= 2 && panel.x + panel.w <= 1798 && panel.y + panel.h <= canvasHeight - 2,
         "tooltip remains inside the device-pixel viewport");
 }
-// Touch UI: the main-canvas pointer gets overlayScale only, while tooltip geometry
-// gets UI render scale multiplied by the overlay's non-uniform scale.
-activeScale = 3; // UI scale 2 × overlay X scale 1.5
-inputScaleX = 1.5;
-inputScaleY = 1.25;
-canvasHeight = 2000;
-labelWidget._absX = 1280; labelWidget._absY = 700; labelWidget._absWidth = 210; labelWidget._absHeight = 50;
-optionWidget._absX = 1280; optionWidget._absY = 730;
-rects.length = 0;
-const touchPanel = hitPlugin.widgetOverlay.draw(drawContext)[0];
-assert.ok(touchPanel && touchPanel.x < 1350 && touchPanel.x + touchPanel.w > 1350,
-    "touch pointer uses overlay scale once, without UI-scale multiplication");
-assert.ok(touchPanel.y >= 750 || touchPanel.y + touchPanel.h <= 690,
-    "touch tooltip avoids measured bounds already expressed in overlay space");
-assert.ok(touchPanel.x + touchPanel.w <= 1798 && touchPanel.y + touchPanel.h <= 1998,
-    "non-uniform touch scale stays clamped to the viewport");
-assert.notEqual(hitPlugin.widgetOverlay.signature(), visibleSignature,
-    "scale changes participate in the tooltip redraw signature");
-testClient.menuOpen = true;
-assert.deepEqual(hitPlugin.widgetOverlay.draw(drawContext), [], "tooltip hides while a context menu is open");
-testClient.menuOpen = false;
-hitWidget._absX = 1300; hitWidget._absY = 650; hitWidget._absWidth = 50; hitWidget._absHeight = 50;
-hitWidget.x = 1300; hitWidget.y = 650; hitWidget.width = 50; hitWidget.height = 50;
 testClient.inputManager.mouseX = 1325;
 testClient.inputManager.mouseY = 665;
+hitWidget._absX = 1300; hitWidget._absY = 650; hitWidget._absWidth = 50; hitWidget._absHeight = 50;
+hitWidget.x = 1300; hitWidget.y = 650; hitWidget.width = 50; hitWidget.height = 50;
 labelWidget._absX = 1304; labelWidget._absY = 704; labelWidget._absWidth = 196; labelWidget._absHeight = 40;
 optionWidget._absX = 1304; optionWidget._absY = 726;
 
@@ -427,6 +534,10 @@ testClient.widgetManager.interfaceParents.clear();
 await hitPlugin.stop();
 
 console.log("item stats read cache bonuses and describe consumables");
+}
+
+function overlaps(a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }): boolean {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
 main().catch((error) => {

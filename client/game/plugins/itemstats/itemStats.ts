@@ -25,6 +25,7 @@ export interface ItemStatSource {
     wearPos2?: number;
     wearPos3?: number;
     attackSpeed?: number;
+    weight?: number;
 }
 
 export interface WornItem {
@@ -135,6 +136,44 @@ export function itemEquipSlots(item: ItemStatSource | undefined): Set<number> {
 export function itemAttackSpeed(item: ItemStatSource | undefined): number | undefined {
     const value = item?.params?.get(ITEM_ATTACK_SPEED_PARAM) ?? item?.attackSpeed;
     return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+/** Replacement weight delta in kilograms, using cache weight values in grams. */
+export function compareItemWeight(
+    candidate: ItemStatSource | undefined,
+    wornItems: readonly WornItem[],
+    loadItem: (id: number) => ItemStatSource | undefined,
+): number | undefined {
+    const slots = itemEquipSlots(candidate);
+    if (!slots.size) return undefined;
+    let replacedGrams = 0;
+    for (const worn of wornItems) {
+        if (worn.itemId < 0) continue;
+        const item = loadItem(worn.itemId);
+        const occupied = itemEquipSlots(item);
+        occupied.add(worn.slot);
+        if ([...occupied].some((slot) => slots.has(slot))) replacedGrams += readNumber(item?.weight);
+    }
+    return (readNumber(candidate?.weight) - replacedGrams) / 1000;
+}
+
+/** Weapon speed change in ticks; lower attack speed is better. */
+export function compareAttackSpeed(
+    candidate: ItemStatSource | undefined,
+    wornItems: readonly WornItem[],
+    loadItem: (id: number) => ItemStatSource | undefined,
+): number | undefined {
+    const slot = itemEquipSlot(candidate);
+    if (slot !== 3 && slot !== 5) return undefined;
+    const currentWeapon = wornItems.find(({ slot, itemId }) => slot === 3 && itemId >= 0);
+    const currentWeaponItem = currentWeapon ? loadItem(currentWeapon.itemId) : undefined;
+    const currentSpeed = currentWeapon ? itemAttackSpeed(currentWeaponItem) ?? 4 : 4;
+    if (slot === 5) {
+        if (!currentWeapon || !itemEquipSlots(currentWeaponItem).has(5)) return undefined;
+        return 4 - currentSpeed;
+    }
+    const candidateSpeed = itemAttackSpeed(candidate);
+    return candidateSpeed === undefined ? undefined : candidateSpeed - currentSpeed;
 }
 
 export const ITEM_STAT_LABELS: Record<ItemStat, string> = {

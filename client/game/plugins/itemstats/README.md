@@ -1,6 +1,6 @@
 # Item stats
 
-This plugin reads combat bonus params stored in each item definition in the loaded OSRS cache. `ItemStatsPlugin.getItemStats(itemId)` returns one item's bonuses. `compareItem(itemId)` reports the worn totals before and after replacing the matching equipment slot. When enabled, the plugin shows the bonuses and replacement deltas while you hover an item in your inventory, equipment, or bank.
+This plugin reads combat bonus params stored in each item definition in the loaded OSRS cache. `ItemStatsPlugin.getItemStats(itemId)` returns one item's bonuses. `compareItem(itemId)` reports the worn totals before and after replacing the matching equipment slot. The plugin is off by default. When enabled, it shows bonuses and replacement deltas while you hover an item in your inventory, equipment, or bank. Its display settings let you hide equipment stats, show the hovered item's weight, or keep base stats beside the comparison. The Weight row shows the hovered item's weight. When Show base stats is enabled, it also shows the change from the worn item. Rows appear in a compact tooltip, and unchanged bonuses stay hidden unless base stats are enabled.
 
 Bonus parameter ids follow RuneLite's `ItemStats` mapping. Attack and defence bonuses use params 0-9, melee strength uses param 10, prayer uses param 11, ranged strength uses params 12 and 189, and magic damage uses param 299. The implementation also reads attack speed from param 14. Food effects come from the server's `food.json`; potion boosts and rune details use the plugin's local mappings.
 

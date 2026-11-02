@@ -12,30 +12,40 @@
  * - A difference of more than 40% of their health (33.3% in parties of five or more) makes them
  *   shuffle at once and heal to full. Otherwise they shuffle every 20-36 ticks.
  * - In their shells they can't be hurt; a fatal hit landing in the shell leaves 1 hitpoint.
- *   Shuffling, they drop their targets.
+ *   Shuffling, they drop their targets. Retreating into their shells restores drained stats.
+ *   Max hits: melee 3 x 18, ranged and magic 22 (27 and 33 in Challenge Mode).
+ * - Strategies: those in the shells' path take 3-6 every few ticks.
  * rsprox captures (recordings 843, 3285, 3389):
  * - Woken, the dormant three play 7428 and 5 ticks later become melee (7527), ranged (7528)
  *   and magic (7529) with their transitions 7438 / 7443 / 7433.
- * - Attacks every 4 ticks: melee 7441 (sound 3308, range 10); ranged 7446 (sound 239) with
- *   projectiles 1332, 1333 and 1334 (from 26 / 25 / 23 client cycles to 64, angles 19 / 16 /
- *   10, progress 96, heights 100 to 5) landing 2 ticks later as gfx 305 with sound 360 (range
- *   8); magic 7436 (sound 3530) with three projectiles 1331 (from 45 / 30 / 30 to 96, angles
- *   60-62, heights 150 to 5) landing 3 ticks later as gfx 659 (10 cycles' delay) with sound
- *   156. Impact sounds come 0, 3 and 6 cycles apart.
- * - Before shuffling, swirls flash on them every 2 ticks (57 on the healthy, 56 on the low).
- *   They fall into their shells (7442 / 7447 / 7437, walking form 7526) on one tick and stand
- *   up in their new roles 9-13 ticks later; out of balance, they heal to full 4 ticks in
- *   (7431, heal hitsplats).
- * - Dying: 7432; gone 3 ticks later.
- * Not on the Wiki (to check against a capture): the tiles; the shells' paths, clockwise or
- *   not; walking over someone hurting 1-5; the ranged one never moving out of turn; the bases
- *   (melee 3 x 18, ranged and magic 22); prayers letting a third through; "The Vanguard is
- *   protected by its shell."; the exit crystal 30017.
+ * - Attacks every 4 ticks, the first 5 after standing up: melee 7441 (sound 3308, range 10);
+ *   ranged 7446 (sound 239) with projectiles 1334, 1333 and 1332, the first locked on the target
+ *   and the others up to 4 tiles round it (from 23 / 25 / 26 client cycles to 40 + 6 a tile
+ *   from the target, angles 10 / 16 / 19, progress 96, heights 100 to 5), landing as gfx 305
+ *   with sound 360 (range 8) after end / 30 ticks; magic 7436 (sound 3530) with three
+ *   projectiles 1331 the same way (from 45 / 30 / 30 to 21 + 25 a tile, angles 60-62, heights
+ *   150 to 5) landing as gfx 659 (10 cycles' delay) with sound 156. Impact sounds come 0, 3 and
+ *   6 cycles apart.
+ * - Their balance is checked every 2 ticks: past the Wiki's limit they shuffle on that tick.
+ *   Short of it, from about half the limit (fitted: none at 16%, seen at 23%), a swirl shows
+ *   on the healthiest (57) and the lowest (56).
+ * - They fall into their shells (7442 / 7447 / 7437, walking form 7526) on one tick and stand
+ *   up in their new roles 9-13 ticks later, each a spot along from its own, all clockwise or
+ *   all not, wherever the melee one had wandered to; out of balance, they heal to full 4 ticks
+ *   in (7431, heal hitsplats).
+ * - Dying: 7432; gone 3 ticks later with "As the Vanguard is slain by <name>, supplies are
+ *   dropped for all."; the others fight on whatever the gap to the dead one (3389).
+ * Tiles: the three spots and the exit crystal 30017 are checked for the west version (3389) and
+ *   the east one (843, 3285). No capture has the north version: its tiles are unverified.
+ * Not on the Wiki (to check against a capture): the shells' trample every 3 ticks; the ranged
+ *   one never moving out of turn; prayers letting a third through; "The Vanguard is protected
+ *   by its shell.".
  */
 
 const Shared = require("./Shared.ChambersOfXeric");
 const Raid = require("./RaidState.ChambersOfXeric");
 const Monsters = require("./Monsters.ChambersOfXeric");
+const Achievements = require("./CombatAchievements.ChambersOfXeric");
 
 const FORM = { BURIED: 7525, SHELL: 7526, MELEE: 7527, RANGED: 7528, MAGIC: 7529 };
 const CRYSTAL = 30017;
@@ -45,32 +55,31 @@ const STYLE = {
     rise: 7443, fall: 7447, attack: 7446, base: 22, stat: 3, style: "ranged", sound: 239,
     impact: { gfx: 305, gfxDelay: 0, sound: 360 },
     flights: [
-      { id: 1332, start: 26, end: 64, angle: 19 }, { id: 1333, start: 25, end: 64, angle: 16 },
-      { id: 1334, start: 23, end: 64, angle: 10 },
+      { id: 1334, start: 23, angle: 10 }, { id: 1333, start: 25, angle: 16 }, { id: 1332, start: 26, angle: 19 },
     ],
-    progress: 96, startHeight: 25,
+    end: 40, endPerTile: 6, progress: 96, startHeight: 25,
   },
   [FORM.MAGIC]: {
     rise: 7433, fall: 7437, attack: 7436, base: 22, stat: 4, style: "magic", sound: 3530,
     impact: { gfx: 659, gfxDelay: 10, sound: 156 },
     flights: [
-      { id: 1331, start: 45, end: 96, angle: 60 }, { id: 1331, start: 30, end: 96, angle: 61 },
-      { id: 1331, start: 30, end: 96, angle: 62 },
+      { id: 1331, start: 45, angle: 60 }, { id: 1331, start: 30, angle: 61 }, { id: 1331, start: 30, angle: 62 },
     ],
-    progress: 64, startHeight: 37,
+    end: 21, endPerTile: 25, progress: 64, startHeight: 37,
   },
 };
 const ANIM = { RISE: 7428, HEAL: 7431 };
-const SWIRL = { HIGH: 57, LOW: 56, EVERY: 2, ROUNDS: 3 };
-const TIMING = { RISE: 5, HEAL: 4, STAND_UP: [9, 13] };
+const SWIRL = { HIGH: 57, LOW: 56, FROM: 0.5 };
+const TIMING = { BALANCE: 2, RISE: 5, FIRST_ATTACK: 5, HEAL: 4, STAND_UP: [9, 13], TRAMPLE: 3 };
+const TOGETHER_TICKS = Math.floor(10 / 0.6);
 
 /** Cache tiles by version: the three spots' centres. */
 const SPOTS = [
-  [{ x: 3285, y: 5329 }, { x: 3277, y: 5334 }, { x: 3276, y: 5324 }],
+  [{ x: 3282, y: 5325 }, { x: 3277, y: 5333 }, { x: 3273, y: 5326 }],
   [{ x: 3317, y: 5330 }, { x: 3309, y: 5334 }, { x: 3309, y: 5324 }],
-  [{ x: 3347, y: 5325 }, { x: 3341, y: 5334 }, { x: 3337, y: 5325 }],
+  [{ x: 3348, y: 5325 }, { x: 3342, y: 5332 }, { x: 3338, y: 5325 }],
 ];
-const CRYSTAL_TILES = [{ x: 3268, y: 5327 }, { x: 3311, y: 5339 }, { x: 3350, y: 5328 }];
+const CRYSTAL_TILES = [{ x: 3267, y: 5327 }, { x: 3311, y: 5339 }, { x: 3350, y: 5328 }];
 
 class VanguardRoom extends Raid.Room {
   constructor(raid, record) {
@@ -81,12 +90,13 @@ class VanguardRoom extends Raid.Room {
 
   load() {
     this.spots = SPOTS[this.record.variant].map((spot) => this.tile(spot.x - 1, spot.y - 1, 3));
-    for (const spot of this.spots) {
+    this.spots.forEach((spot, index) => {
       const vanguard = this.spawnNpc(FORM.BURIED, spot.clone());
-      if (!vanguard) continue;
+      if (!vanguard) return;
       vanguard.__coxShell = true;
+      vanguard.__coxSpot = index;
       this.vanguards.push(vanguard);
-    }
+    });
     this.blockExit(CRYSTAL_TILES, CRYSTAL);
   }
 
@@ -99,12 +109,17 @@ class VanguardRoom extends Raid.Room {
   }
 
   /** Wiki: 40% of their health apart (33.3% with five or more raiders). */
+  balanceLimit() {
+    return (this.raid.scale >= 5 ? 1 / 3 : 0.4) * Math.max(...this.living().map((npc) => npc.getMaxHitpoints()));
+  }
+
+  healthGap() {
+    const health = this.living().map((npc) => npc.getHitpoints());
+    return health.length < 2 ? 0 : Math.max(...health) - Math.min(...health);
+  }
+
   unbalanced() {
-    const living = this.living();
-    if (living.length < 2) return false;
-    const limit = (this.raid.scale >= 5 ? 1 / 3 : 0.4) * Math.max(...living.map((npc) => npc.getMaxHitpoints()));
-    const health = living.map((npc) => npc.getHitpoints());
-    return Math.max(...health) - Math.min(...health) > limit;
+    return this.healthGap() > this.balanceLimit();
   }
 
   tick() {
@@ -112,12 +127,10 @@ class VanguardRoom extends Raid.Room {
       if (this.raiders().some((player) => this.vanguards.some((npc) => player.getLocation().getDistance(npc.getLocation()) < 7))) this.rise();
       return;
     }
-    if (this.stage !== "fighting") return;
-    for (const npc of this.living()) this.engage(npc);
-    if (this.warning == null && (this.unbalanced() || this.raid.ticks >= this.nextShuffle)) this.warning = 0;
-    if (this.warning == null) return;
-    if (this.warning % SWIRL.EVERY === 0) this.swirl();
-    if (++this.warning > SWIRL.EVERY * SWIRL.ROUNDS) this.shuffle();
+    if (this.stage !== "fighting" || this.living().length === 0) return;
+    for (const npc of this.living()) if (this.raid.ticks >= npc.__coxAttackFrom) this.engage(npc);
+    if (this.raid.ticks % TIMING.BALANCE === 0) this.swirl();
+    if (this.raid.ticks >= this.nextShuffle || (this.raid.ticks % TIMING.BALANCE === 0 && this.unbalanced())) this.shuffle();
   }
 
   /** They stir (7428) and 5 ticks later take their roles. */
@@ -139,25 +152,27 @@ class VanguardRoom extends Raid.Room {
   }
 
   standUp() {
-    for (const npc of this.living()) npc.__coxShell = false;
+    for (const npc of this.living()) {
+      npc.__coxShell = false;
+      npc.__coxAttackFrom = this.raid.ticks + TIMING.FIRST_ATTACK;
+    }
     this.stage = "fighting";
     this.nextShuffle = this.raid.ticks + Shared.random(20, 36);
   }
 
-  /** The warning before a shuffle: a swirl on each, high-health or low-health. */
+  /** Near the limit, a swirl on the healthiest and on the lowest. */
   swirl() {
+    if (this.healthGap() < this.balanceLimit() * SWIRL.FROM) return;
     const living = this.living();
-    const lowest = Math.min(...living.map((npc) => npc.getHitpoints() / npc.getMaxHitpoints()));
-    for (const npc of living) {
-      const low = npc.getHitpoints() / npc.getMaxHitpoints() === lowest && living.length > 1;
-      npc.performGraphic(Shared.gfx(low ? SWIRL.LOW : SWIRL.HIGH));
-    }
+    const health = living.map((npc) => npc.getHitpoints());
+    const highest = Math.max(...health);
+    living.filter((npc) => npc.getHitpoints() === highest).forEach((npc) => npc.performGraphic(Shared.gfx(SWIRL.HIGH)));
+    living[health.indexOf(Math.min(...health))].performGraphic(Shared.gfx(SWIRL.LOW));
   }
 
-  /** Into their shells on one tick; each walks to the next spot; the unbalanced heal to full. */
+  /** Into their shells on one tick, drains restored; each walks to the next spot; the unbalanced heal to full. */
   shuffle() {
     const heal = this.unbalanced();
-    this.warning = null;
     this.stage = "shuffling";
     const clockwise = Shared.random(0, 1) === 0;
     for (const npc of this.living()) {
@@ -165,14 +180,13 @@ class VanguardRoom extends Raid.Room {
       npc.getCombat().reset();
       Shared.animate(npc, STYLE[npc.__coxForm].fall);
       npc.setNpcTransformationId(FORM.SHELL);
+      npc.setStatDrainImmune(true);
+      npc.setStatDrainImmune(false);
+      npc.__coxSpot = (npc.__coxSpot + (clockwise ? 1 : 2)) % 3;
+      Shared.walkStraight(npc, this.spots[npc.__coxSpot]);
     }
-    this.vanguards.forEach((npc) => {
-      if (!npc.isRegistered() || npc.getHitpoints() <= 0) return;
-      const index = this.spots.findIndex((spot) => spot.equals(npc.getLocation()));
-      const from = index >= 0 ? index : this.vanguards.indexOf(npc);
-      Shared.walkStraight(npc, this.spots[(from + (clockwise ? 1 : 2)) % 3]);
-    });
     if (heal) {
+      this.resetHealth = true;
       Shared.later(this.raid, TIMING.HEAL, () => {
         for (const npc of this.living()) {
           Shared.animate(npc, ANIM.HEAL);
@@ -198,41 +212,48 @@ class VanguardRoom extends Raid.Room {
     if (attacker?.isPlayer?.()) attacker.getAsPlayer().sendMessage("The Vanguard is protected by its shell.");
   }
 
-  /** A fatal hit in the shell, or one that would leave the others out of balance, leaves 1. */
+  /** A fatal hit in the shell leaves 1. */
   beforeNpcDeath(npc) {
-    if (!this.vanguards.includes(npc)) return false;
-    const others = this.living().filter((other) => other !== npc);
-    if (npc.__coxShell || (others.length === 2 && this.stage === "fighting" && this.unbalanced())) {
-      npc.setHitpoints(1);
-      return true;
-    }
-    return false;
+    if (!this.vanguards.includes(npc) || !npc.__coxShell) return false;
+    npc.setHitpoints(1);
+    return true;
   }
 
-  onNpcDeath(npc) {
+  /** One gone: the supplies' message; the last, the exit and the Combat Achievements. */
+  onNpcDeath(npc, killer) {
     if (!this.vanguards.includes(npc)) return;
-    if (this.living().filter((other) => other !== npc).length === 0) this.clearExit();
+    if (killer) {
+      for (const player of this.raid.players) Shared.raidMessage(player, `As the Vanguard is slain by ${Shared.displayName(killer)}, supplies are dropped for all.`);
+    }
+    this.firstDeathTick ??= this.raid.ticks;
+    if (this.living().filter((other) => other !== npc).length > 0) return;
+    this.clearExit();
+    const raiders = this.raiders();
+    if (this.raid.ticks - this.firstDeathTick <= TOGETHER_TICKS) Achievements.complete(raiders, "Together We'll Fall");
+    if (!this.resetHealth) Achievements.complete(raiders, "Perfectly Balanced");
   }
 
+  /** Strategies: 3-6 every few ticks in their path. */
   shellsTrample() {
+    if (this.raid.ticks % TIMING.TRAMPLE !== 0) return;
     for (const npc of this.living()) {
       if (!npc.__coxShell || !npc.getMovementQueue().isMovings()) continue;
       const at = npc.getLocation();
       for (const player of this.raiders()) {
         const x = player.getLocation().getX() - at.getX();
         const y = player.getLocation().getY() - at.getY();
-        if (x >= 0 && x < 3 && y >= 0 && y < 3) Shared.damage(player, Shared.random(1, 5));
+        if (x >= 0 && x < 3 && y >= 0 && y < 3) Shared.damage(player, Shared.random(3, 6));
       }
     }
   }
 
-  /** Three tiles: the target's and two free ones within 3 of it. */
+  /** Three tiles: the target's and two free ones within 4 of it. */
   volleyTiles(npc, target) {
     const { Location, RegionManager } = Shared.core();
     const at = target.getLocation();
     const tiles = [at.clone()];
     for (let tries = 0; tries < 50 && tiles.length < 3; tries++) {
-      const tile = new Location(at.getX() + Shared.random(-3, 3), at.getY() + Shared.random(-3, 3), at.getZ());
+      const tile = new Location(at.getX() + Shared.random(-4, 4), at.getY() + Shared.random(-4, 4), at.getZ());
       if (tiles.some((other) => other.equals(tile)) || RegionManager.blocked(tile, this.map)) continue;
       const inside = tile.getX() >= npc.getLocation().getX() && tile.getX() < npc.getLocation().getX() + 3
         && tile.getY() >= npc.getLocation().getY() && tile.getY() < npc.getLocation().getY() + 3;
@@ -254,10 +275,11 @@ class VanguardRoom extends Raid.Room {
     const { Projectile } = Shared.core();
     const from = Projectile.centreOf(npc);
     const tiles = this.volleyTiles(npc, target);
-    const lands = Math.floor(form.flights[0].end / 30);
+    const end = form.end + form.endPerTile * from.getDistance(target.getLocation());
+    const lands = Math.floor(end / 30);
     tiles.forEach((tile, index) => {
       const flight = form.flights[index % form.flights.length];
-      new Projectile(from, tile, null, flight.id, flight.start, flight.end, form.startHeight, 1, this.map)
+      new Projectile(from, tile, index === 0 ? target : null, flight.id, flight.start, end, form.startHeight, 1, this.map)
         .withAngle(flight.angle)
         .withProgress(form.progress)
         .sendProjectile();
@@ -296,7 +318,7 @@ function vanguardCombat(api) {
     }
 
     canAttack(npc) {
-      return !npc.__coxShell;
+      return !npc.__coxShell && npc.__coxRoom?.raid.ticks >= npc.__coxAttackFrom;
     }
 
     canPursue(npc) {

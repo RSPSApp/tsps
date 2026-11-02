@@ -36,6 +36,10 @@ const rejoining = new Map();
 const roomTypes = new Map();
 
 const STAGE = { WAITING: 0, STARTED: 1, UPPER_DONE: 2, MIDDLE_DONE: 3, OLM: 4 };
+const STAGE_COMPLETE = 5;
+const MUSIC = { UPPER: 492, LOWER: 487, OLM: 493, SILENCE: 147 };
+/** The audio setting holding the music player's mode (0 plays each area's track). */
+const MUSIC_MODE_SETTING = 18;
 const DEATH = { personalLoss: 0.4, teamLoss: 0.05, smallShare: 0.05 };
 /** Damage points: 5 per hitpoint dealt, each room capped at 5 x its NPCs' hitpoints + 5%. */
 const POINTS_PER_DAMAGE = 5;
@@ -162,6 +166,8 @@ class Room {
     if (!npc) return null;
     npc.__skipDefaultRespawn = true;
     npc.__coxRoom = this;
+    // rsprox captures: what the raid's monsters drop is everyone's at once (timeUntilPublic 0).
+    npc.__publicDrops = true;
     if (options.scale !== false) Monsters.apply(npc, this.raid.scaling ?? this.raid.scalingInputs());
     this.map.add(npc);
     this.npcs.add(npc);
@@ -177,7 +183,8 @@ class Room {
     if (!tile) return null;
     const { GameObject, ObjectManager } = Shared.core();
     const at = this.tile(tile.x, tile.y, 2);
-    this.exitCrystal = new GameObject(crystalId, at, 10, this.record.rotation, this.map);
+    // rsprox captures: every exit crystal has rotation 0, whatever the room's turn.
+    this.exitCrystal = new GameObject(crystalId, at, 10, 0, this.map);
     ObjectManager.register(this.exitCrystal, true);
     return this.exitCrystal;
   }
@@ -211,6 +218,11 @@ class Room {
 
 /** The first room: no one goes past its passage until the leader starts the raid. */
 class EntranceRoom extends Room {
+  /** rsprox capture 843: the first room's bank chest is shut as the raid begins (Wiki too). */
+  load() {
+    for (const chest of this.templateObjects(Shared.OBJECT.BANK_CHEST)) Shared.replaceObject(this.map, chest, Shared.OBJECT.BANK_CHEST_SHUT);
+  }
+
   canPass(player) {
     if (this.raid.stage !== STAGE.WAITING) return true;
     // rsprox captures: the leader is pointed at the side-panel, the rest told to wait.
@@ -239,6 +251,7 @@ class Raid {
     this.map = null;
     this.rooms = [];
     this.roomOfPlayer = new Map();
+    this.trackOfPlayer = new Map();
     this.respawn = null;
     this.timer = null;
     this.ticks = 0;
@@ -252,15 +265,18 @@ class Raid {
     return this.party.challenge;
   }
 
-  /** How many raiders the raid scales to: those who were there when it started. */
+  /**
+   * How many raiders the raid scales to: those who were there when it started, or the party's
+   * scale if that's higher (rsprox capture 820: a party scaled to 50 is a 24+ team).
+   */
   get scale() {
-    return Math.max(1, this.original.size || this.players.size);
+    return Math.max(1, this.original.size || this.players.size, this.party.scaling ?? 0);
   }
 
   // ---------------------------------------------------------------- building and entering
 
   build() {
-    const layout = this.challenge ? Layout.challengeLayout() : Layout.normalLayout(this.random);
+    const layout = Layout.forPool(this.party.layout, this.challenge, this.random);
     this.layout = layout;
     this.map = CoxMap.createMap(layout, this.random);
     this.map.raid = this;
@@ -351,7 +367,12 @@ class Raid {
       }
     }
     Parties.delist(this.party);
-    for (const player of this.players) Shared.raidMessage(player, "The raid has begun!");
+    // rsprox captures: "Map Layout: Small." / "Large." / "Challenge Mode (Full).".
+    const layoutName = this.challenge ? "Challenge Mode (Full)" : Shared.LAYOUT_NAMES[this.party.layout];
+    for (const player of this.players) {
+      Shared.raidMessage(player, "The raid has begun!");
+      player.sendMessage(`Map Layout: ${layoutName}.`);
+    }
     this.refreshTabs();
   }
 
@@ -375,7 +396,11 @@ class Raid {
     if (this.completed || this.destroyed) return;
     this.duration = this.ticksSinceStart();
     this.completed = true;
-    for (const player of this.players) player.getPacketSender().sendVarbit(Shared.VARBIT.TIMER, this.duration);
+    // rsprox captures: progress 5 stops the client's timer as the raid is complete.
+    for (const player of this.players) {
+      player.getPacketSender().sendVarbit(Shared.VARBIT.TIMER, this.duration).sendVarbit(Shared.VARBIT.STAGE, STAGE_COMPLETE);
+      if ((player.getAudioSettings?.()?.[MUSIC_MODE_SETTING] ?? 0) === 0) player.getPacketSender().sendSong(MUSIC.SILENCE);
+    }
     for (const hook of completeHooks) {
       try {
         hook(this);
@@ -415,12 +440,29 @@ class Raid {
     const previous = this.roomOfPlayer.get(player) ?? null;
     if (room === previous) return;
     this.roomOfPlayer.set(player, room);
+    this.playMusic(player, location);
     room?.enter(player);
     if (this.stage === STAGE.WAITING) return;
     const plane = location.getZ();
     if (this.map.inOlmChamber(location)) this.reachStage(STAGE.OLM, this.map.olmEntrance);
     else if (plane === 2) this.reachStage(STAGE.UPPER_DONE, this.floorStart(2));
     else if (plane === 1) this.reachStage(STAGE.MIDDLE_DONE, this.floorStart(1));
+  }
+
+  /**
+   * rsprox captures: Upper Depths on the top floor, Lower Depths below it, Fire in the Deep at the
+   * Olm, each when the raider first arrives; silence once the raid is complete.
+   */
+  playMusic(player, location) {
+    if (this.completed) return;
+    const track = this.map.inOlmChamber(location) ? MUSIC.OLM : location.getZ() === Layout.FLOOR_PLANES[0] ? MUSIC.UPPER : MUSIC.LOWER;
+    if (this.trackOfPlayer.get(player) === track) return;
+    this.trackOfPlayer.set(player, track);
+    Shared.later(player, 1, () => {
+      if (!this.players.has(player)) return;
+      Shared.api().emitCustomEvent("music:unlock-track", { player, trackId: track });
+      if ((player.getAudioSettings?.()?.[MUSIC_MODE_SETTING] ?? 0) === 0) player.getPacketSender().sendSong(track);
+    });
   }
 
   floorStart(plane) {
@@ -434,7 +476,7 @@ class Raid {
     if (this.stage >= stage) return;
     this.stage = stage;
     if (respawn) this.respawn = this.map.landing(respawn);
-    const prefix = stage === STAGE.UPPER_DONE ? "Upper" : stage === STAGE.OLM || !this.challenge ? "Lower" : "Middle";
+    const prefix = stage === STAGE.UPPER_DONE ? "Upper" : stage === STAGE.OLM ? "Lower" : "Middle";
     const duration = Shared.formatTicks(this.ticksSinceStart());
     // rsprox captures: "<col=ff289d>Upper level complete! Duration: </col><col=ff0000>9:03</col>".
     for (const player of this.players) player.sendMessage(`<col=ff289d>${prefix} level complete! Duration: </col><col=ff0000>${duration}</col>`);
@@ -468,9 +510,10 @@ class Raid {
   }
 
   refreshPoints(player) {
-    player.getPacketSender()
-      .sendVarbit(Shared.VARBIT.TOTAL_POINTS, Math.min(this.totalPoints, Shared.MAX_POINTS))
-      .sendVarbit(Shared.VARBIT.PERSONAL_POINTS, Math.min(this.pointsOf(player), Shared.MAX_POINTS));
+    // rsprox captures: the personal score is the raids_playerscore varp, and isn't capped.
+    const sender = player.getPacketSender();
+    sender.sendVarbit(Shared.VARBIT.TOTAL_POINTS, Math.min(this.totalPoints, Shared.MAX_POINTS));
+    sender.sendConfig(Shared.VARP.PERSONAL_POINTS, this.pointsOf(player));
   }
 
   // ---------------------------------------------------------------- the party tab
@@ -485,7 +528,10 @@ class Raid {
     const listed = started ? [...this.players] : this.party.members().filter((member) => raidOf(member) === this || Shared.onMount(member));
     sender.sendVarbit(Shared.VARBIT.TAB_LEADER, this.party.isLeader(player) ? 1 : 0)
       .sendVarbit(Shared.VARBIT.TAB_PLAYERS, this.players.size)
-      .sendVarbit(Shared.VARBIT.STAGE, this.stage)
+      .sendVarbit(Shared.VARBIT.SCALED_SIZE, this.party.scaling ?? 0)
+      .sendVarbit(Shared.VARBIT.HIGHEST_COMBAT, Math.max(1, ...[...this.players].map((raider) => raider.getSkillManager().getCombatLevel())))
+      .sendVarbit(Shared.VARBIT.LAYOUT_POOL, this.party.layout)
+      .sendVarbit(Shared.VARBIT.STAGE, this.completed ? STAGE_COMPLETE : this.stage)
       .sendVarbit(Shared.VARBIT.TIMER, this.ticksSinceStart());
     sender.sendClientScript(Shared.SCRIPT.TAB_SIZE, listed.length);
     listed.forEach((member, index) => {
@@ -497,6 +543,21 @@ class Raid {
     const channel = this.party.channel(player);
     const canKick = channel && channel.rankOf(player) >= channel.kickRank;
     sender.sendClientScript(Shared.SCRIPT.TAB_KICKABLE, canKick ? this.players.size : 0);
+  }
+
+  /**
+   * The leader's Reload on the first room's steps: a new layout, and anyone else inside is put
+   * out (Wiki; rsprox capture 2528 for the leader's side).
+   */
+  reload(player) {
+    if (this.destroyed || this.stage !== STAGE.WAITING) return;
+    const { party } = this;
+    this.destroy("reload");
+    Shared.later(player, BUILD_DELAY, () => {
+      if (!player.isRegistered?.() || Parties.partyOf(player) !== party) return;
+      party.raid ??= new Raid(party);
+      party.raid.enter(player);
+    });
   }
 
   // ---------------------------------------------------------------- deaths
@@ -531,7 +592,7 @@ class Raid {
     let dropped = false;
     items.forEach((item, slot) => {
       if (!item || item.getId() < 0 || !Shared.isRaidItem(item.getId())) return;
-      ItemOnGroundManager.registerLocation(player, new Item(item.getId(), item.getAmount()), spot);
+      ItemOnGroundManager.registerLocation(player, new Item(item.getId(), item.getAmount(), item.getMeta()), spot);
       inventory.setItem(slot, new Item(-1, 0));
       dropped = true;
     });
@@ -569,6 +630,7 @@ class Raid {
   removePlayer(player, logout) {
     this.players.delete(player);
     this.roomOfPlayer.delete(player);
+    this.trackOfPlayer.delete(player);
     player.setAttribute(ATTR_RAID, null);
     // Kept through a logout: the player is saved inside, and login puts them back out.
     if (!logout) player.setAttribute(Shared.ATTR.INSIDE, null);

@@ -20,6 +20,9 @@ function showLayout({ player }) {
   raid.layout.floors.forEach((floor, index) => {
     player.sendMessage(`Floor ${index + 1}: ${floor.map((chunk) => chunk.room).join(", ")}`);
   });
+  const corners = raid.rooms.filter((entry) => entry.record.gridX !== undefined)
+    .map((entry) => `${entry.record.index}:${entry.key}@${raid.map.getBaseX() + entry.record.gridX * 32},${raid.map.getBaseY() + entry.record.gridY * 32},${entry.record.plane}`);
+  player.sendMessage(`Rooms: ${corners.join(" ")}`);
   const room = raid.roomAt(player.getLocation());
   player.sendMessage(`You are in: ${room ? `${room.key} (version ${room.record.variant}, turned ${room.record.rotation})` : "no room"}`);
   return true;
@@ -47,10 +50,29 @@ function nextFloor({ player }) {
   return true;
 }
 
+/** ::coxclear - completes the room you are in: a puzzle's own ending, or its monsters go and its exit opens. */
+function clearRoom({ player }) {
+  const raid = Raid.raidOf(player);
+  const room = raid?.roomAt(player.getLocation());
+  if (!room || raid.stage === Raid.STAGE.WAITING) {
+    player.sendMessage("Use ::coxclear in a room of a started raid.");
+    return true;
+  }
+  if (room.devFinish) {
+    room.devFinish(player);
+  } else {
+    room.cleanup();
+    room.clearExit();
+  }
+  player.sendMessage(`Cleared ${room.key}.`);
+  return true;
+}
+
 module.exports = function registerCoxCommands(api) {
   const { DEVELOPER } = api.core.PlayerRights;
   api.registerCommand("cox", toMount, DEVELOPER);
   api.registerCommand("coxlayout", showLayout, DEVELOPER);
   api.registerCommand("coxpoints", givePoints, DEVELOPER);
   api.registerCommand("coxnext", nextFloor, DEVELOPER);
+  api.registerCommand("coxclear", clearRoom, DEVELOPER);
 };

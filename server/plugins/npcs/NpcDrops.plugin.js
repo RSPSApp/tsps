@@ -829,7 +829,7 @@ function dropFor(player, npc, npcId, location, damagers = []) {
   // Where the loot lands; a boss whose body is out of reach (Zulrah) moves it under the killer.
   const where = { player, npc, npcId, location };
   pluginApi.emitCustomEvent("npc-drops:location", where);
-  placeDrops(player, drops, where.location);
+  placeDrops(player, drops, where.location, npc.__publicDrops === true ? { public: true } : {});
   return drops.length;
 }
 
@@ -837,7 +837,7 @@ function dropFor(player, npc, npcId, location, damagers = []) {
  * Puts rolled drops on the ground for `player` (noted where the table says), or currency in the
  * pack when a worn ring of wealth has Coin collection on.
  */
-function placeDrops(player, drops, location) {
+function placeDrops(player, drops, location, options = {}) {
   for (const drop of drops) {
     if (!Number.isInteger(drop.itemId) || drop.amount <= 0) {
       continue;
@@ -859,10 +859,10 @@ function placeDrops(player, drops, location) {
       ? item.getDefinition().isStackable()
       : false;
     if (stackable) {
-      itemOnGroundManager.registerLocation(player, item, location);
+      itemOnGroundManager.registerLocation(player, item, location, undefined, options);
     } else {
       for (let i = 0; i < drop.amount; i++) {
-        itemOnGroundManager.registerLocation(player, new Item(itemId, 1), location);
+        itemOnGroundManager.registerLocation(player, new Item(itemId, 1), location, undefined, options);
       }
     }
   }

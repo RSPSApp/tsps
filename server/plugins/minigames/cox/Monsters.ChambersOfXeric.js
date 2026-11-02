@@ -135,6 +135,19 @@ function scale(id, raidInputs) {
   return { hitpoints: hp, stats, maxHit };
 }
 
+/**
+ * Wiki (Mod Ash, 9 July 2026): how often their drained stats come back a level. Tekton, the
+ * Muttadiles and Vasa set theirs in their rooms; grubs never restore, and aren't scaled here.
+ */
+const STAT_RESTORE_TICKS = new Map([
+  [7569, 8], [7570, 8], [7571, 8], [7572, 8],
+  [7573, 20], [7574, 20],
+  [7604, 25], [7605, 25], [7606, 25],
+  [7530, 10], [7531, 10], [7532, 10],
+  [7533, 45],
+  [7538, 16], [7539, 16],
+]);
+
 /** Scales a spawned NPC for its raid. */
 function apply(npc, raidInputs) {
   const scaled = scale(npc.getId(), raidInputs);
@@ -142,6 +155,8 @@ function apply(npc, raidInputs) {
   npc.setMaxHitpoints(scaled.hitpoints);
   npc.setHitpoints(scaled.hitpoints);
   npc.setCombatOverride?.({ stats: scaled.stats, maxHit: scaled.maxHit || undefined });
+  const restore = STAT_RESTORE_TICKS.get(npc.getId());
+  if (restore) npc.setStatRestoreTicks(restore);
   return scaled;
 }
 

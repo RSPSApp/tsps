@@ -36,6 +36,12 @@ export class CombatRange {
             return false;
         }
 
+        // An NPC built into the scenery stands inside solid locs, so collision can't answer for
+        // it: what's in range reaches it, melee from a side, not a corner.
+        if (target.hasFlag?.("combat:built-into-scenery")) {
+            return method.type() !== CombatType.MELEE || range !== 1 || this.sharesEdge(attackerBounds, targetBounds);
+        }
+
         if (method.type() === CombatType.MELEE) {
             // Only large NPC attackers reach here overlapped: distance 0 is in range.
             if (overlapped) return true;
@@ -158,6 +164,12 @@ export class CombatRange {
 
     private static overlaps(a: Bounds, b: Bounds): boolean {
         return a.minX <= b.maxX && b.minX <= a.maxX && a.minY <= b.maxY && b.minY <= a.maxY;
+    }
+
+    private static sharesEdge(a: Bounds, b: Bounds): boolean {
+        const besideX = (a.maxX + 1 === b.minX || b.maxX + 1 === a.minX) && a.minY <= b.maxY && b.minY <= a.maxY;
+        const besideY = (a.maxY + 1 === b.minY || b.maxY + 1 === a.minY) && a.minX <= b.maxX && b.minX <= a.maxX;
+        return besideX || besideY;
     }
 
     private static hasOpenSharedEdge(a: Bounds, b: Bounds, z: number, area: any): boolean {

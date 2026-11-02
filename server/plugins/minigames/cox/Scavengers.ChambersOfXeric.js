@@ -6,18 +6,22 @@
  *
  * Wiki (Chambers of Xeric; Scavenger beast; Gaining points, Shortcuts):
  * - The number of scavengers and (mildly) their strength follow the party size. They drop
- *   three items at a time.
+ *   bones and two rolls at a time. They spawn with a preference for tiles near players.
  * - Clearing a shortcut gives points of 5 x its level requirement.
- * Not on the Wiki (to check against a capture): the counts (1 solo, 2 up to 4, 3 to 7, 4 to 15, 5 to 23, 6 to 31, 7 to 39,
- *   8 beyond); they spawn around the room's middle, 2 tiles apart; bite anim 255; the
- *   shortcut's tile; its level is random between the party's lowest and highest level + 2 (at
- *   most 99); each swing has a 1 in max(5, min(20, raiders / 3)) chance to clear it (rubble
- *   29739, stump 29737, crossed with anim 839); 4.5 Mining XP a swing; the boulder needs
- *   Strength and rolls 3 tiles (anim 6131), hurting whoever it lands on for 4-6.
+ * Not on the Wiki (to check against a capture): the counts between solo and 50; where they first
+ *   spawn (around the room's middle, 2 tiles apart); the shortcut's tile; its level is random
+ *   between the party's lowest and highest level + 2 (at most 99); each swing has a 1 in max(5,
+ *   min(20, raiders / 3)) chance to clear it (stump 29737); Woodcutting and Strength XP; the
+ *   boulder needs Strength and rolls 3 tiles (anim 6131), hurting whoever it lands on for 4-6.
  * rsprox captures (recordings 820, 843, 3282, 3285, 3389):
- * - Scavengers bite with 255 and die with 258; one is gone 2 ticks after dying and another
- *   takes its place 2 ticks after that, so the room never empties.
- * - Clearing the rocks: the rubble (29739) with sound 360 (range 4).
+ * - Solo rooms hold 1 at a time; the raid scaled to 50 (820) had 2 in each of its three rooms,
+ *   4 ticks apart, and no third in the 16 ticks the party stayed in one.
+ * - Scavengers bite with 255 and die with 258; one is gone 2 ticks after dying and another takes
+ *   its place 2 ticks after that, within 4 tiles of the last (3389 ticks 4319-4335), so the room
+ *   never empties.
+ * - Clearing the rocks (820 ticks 2589-2597): "You swing your pick at the rocks..."; the rubble
+ *   (29739) with sound 360 (range 4), Mining XP 5.3 at 15x, once; points for level 99 were 495,
+ *   as the Wiki says. Then over it a tick later: anim 839, sound 2451 (2 loops, 10 cycles' delay).
  */
 
 const Shared = require("./Shared.ChambersOfXeric");
@@ -32,11 +36,13 @@ const SHORTCUTS = [
   { object: OBJECT.BOULDER, skill: "STRENGTH", cleared: null },
 ];
 
-const RESPAWN_TICKS = 4;
+/** From the death hook, which comes as the dead one goes (rsprox captures). */
+const RESPAWN_TICKS = 2;
+const RESPAWN_RANGE = 3;
+const MINING_XP = 5.3;
 
 function scavengerCount(raiders) {
-  const limits = [[1, 1], [4, 2], [7, 3], [15, 4], [23, 5], [31, 6], [39, 7]];
-  return limits.find(([most]) => raiders <= most)?.[1] ?? 8;
+  return raiders <= 1 ? 1 : 2;
 }
 
 class ScavengerRoom extends Raid.Room {
@@ -54,7 +60,6 @@ class ScavengerRoom extends Raid.Room {
       if (!this.freeSquare(tile) || this.beasts.some((beast) => beast.getLocation().getDistance(tile) <= 2)) continue;
       const beast = this.spawnNpc(Shared.randomOf(NPC.SCAVENGERS), tile, { wanderRadius: 4 });
       if (!beast) continue;
-      beast.__coxHome = tile;
       this.beasts.push(beast);
     }
     if (this.key === "LARGE_SCAVENGER_BEAST") this.placeShortcut();
@@ -75,16 +80,25 @@ class ScavengerRoom extends Raid.Room {
     return Math.floor(5 * this.beasts.reduce((sum, beast) => sum + beast.getMaxHitpoints(), 0) * 1.05);
   }
 
-  /** rsprox captures: another takes a dead one's place 4 ticks after it dies. */
+  /** A free 2x2 near a tile, or the tile itself. */
+  respawnTile(near) {
+    const { Location } = Shared.core();
+    for (let tries = 0; tries < 20; tries++) {
+      const tile = new Location(near.getX() + Shared.random(-RESPAWN_RANGE, RESPAWN_RANGE), near.getY() + Shared.random(-RESPAWN_RANGE, RESPAWN_RANGE), near.getZ());
+      if (this.freeSquare(tile)) return tile;
+    }
+    return near;
+  }
+
+  /** rsprox captures: another takes a dead one's place near it, 4 ticks after it starts dying. */
   onNpcDeath(npc) {
     const index = this.beasts.indexOf(npc);
     if (index < 0) return;
-    const home = npc.__coxHome ?? npc.getLocation().clone();
+    const near = npc.getLocation().clone();
     Shared.later(this.raid, RESPAWN_TICKS, () => {
       if (this.raid.destroyed || this.beasts[index] !== npc) return;
-      const beast = this.spawnNpc(Shared.randomOf(NPC.SCAVENGERS), home, { wanderRadius: 4 });
+      const beast = this.spawnNpc(Shared.randomOf(NPC.SCAVENGERS), this.respawnTile(near), { wanderRadius: 4 });
       if (!beast) return;
-      beast.__coxHome = home;
       this.beasts[index] = beast;
     });
   }
@@ -113,7 +127,6 @@ class ScavengerRoom extends Raid.Room {
     }
     shortcut.workers.add(player);
     const odds = Math.max(5, Math.min(20, Math.floor(this.raid.scale / 3)));
-    if (shortcut.skill === "MINING") Shared.addXp(player, "MINING", 4.5);
     if (Shared.random(0, odds - 1) !== 0) return true;
     this.clear(player);
     return false;
@@ -123,7 +136,10 @@ class ScavengerRoom extends Raid.Room {
   clear(player) {
     const shortcut = this.shortcut;
     shortcut.done = true;
-    for (const worker of shortcut.workers) this.raid.addPoints(worker, shortcut.level * 5);
+    for (const worker of shortcut.workers) {
+      this.raid.addPoints(worker, shortcut.level * 5);
+      if (shortcut.skill === "MINING") Shared.addXp(worker, "MINING", MINING_XP);
+    }
     shortcut.workers.clear();
     if (shortcut.cleared) {
       shortcut.object = Shared.replaceObject(this.map, shortcut.object, shortcut.cleared);
@@ -159,13 +175,14 @@ function roomOf(player) {
   return room instanceof ScavengerRoom ? room : null;
 }
 
-/** Over the rubble or stump to the far side (Not on the Wiki (to check against a capture): anim 839). */
+/** Over the rubble or stump to the far side. */
 function crossRemnant(player, object) {
   const { Location } = Shared.core();
   const at = object.getLocation();
   const here = player.getLocation();
   const destination = new Location(at.getX() * 2 - here.getX(), at.getY() * 2 - here.getY(), at.getZ());
   Shared.animate(player, 839);
+  player.getPacketSender().sendSound(2451, 2, 10);
   Shared.balanceWalk(player, destination, -1, null);
 }
 
@@ -178,7 +195,7 @@ function mineRocks(event) {
     player.sendMessage("You do not have a pickaxe which you have the Mining level to use.");
     return true;
   }
-  player.sendMessage("You swing your pickaxe at the rocks...");
+  player.sendMessage("You swing your pick at the rocks...");
   let ticks = 0;
   Shared.action(player, {
     first: 1,

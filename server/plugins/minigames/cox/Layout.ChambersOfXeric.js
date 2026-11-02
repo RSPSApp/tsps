@@ -8,11 +8,14 @@
  * The cache has three versions of most rooms - the path turning left, going straight on, or
  * turning right - side by side, at chunk x 408, 412 and 416.
  *
- * Not on the Wiki (to check against a capture): the 26 layout patterns (room types and turns, as the
- * RuneLite raids plugin names them), the two combat-room rotations, how rooms are drawn from
- * them, how the path is laid out and cropped, and Challenge Mode's fixed three floors.
+ * rsprox captures (rooms rebuilt from where NPCs stand): Challenge Mode's floors and the path
+ * through them in 3389; "#SCFPC*#PCCSF*" in 820; both Large patterns marked below; the rotations.
+ * Not on the Wiki or in a capture: the other small patterns (room types and turns, as the RuneLite
+ * raids plugin names them), how rooms are drawn from the rotations, how the path is cropped.
  * Wiki: the two rotations of combat rooms (Tekton, Vasa, Guardians, Mystics, Shamans,
- * Muttadiles, Vanguards, Vespula and its counterpart), and Challenge Mode's fixed layout.
+ * Muttadiles, Vanguards, Vespula and its counterpart), and Challenge Mode's fixed layout, which
+ * the "Full" map layout also uses; "Large" raids are the eight-room-floor patterns, where a
+ * third puzzle slot can repeat a puzzle.
  */
 
 const DIRECTIONS = ["NORTH", "EAST", "SOUTH", "WEST"];
@@ -43,6 +46,7 @@ const ROOMS = {
   VESPULA: { chunkY: 660, plane: 2, kind: "combat", name: "Vespula" },
   CRAB_PUZZLE: { chunkY: 668, plane: 2, kind: "puzzle", name: "Crabs" },
 };
+const MIDDLE_END_CHUNK_Y = 640;
 const ROOM_CHUNKS = 4;
 const VARIANT_CHUNK_X = [408, 412, 416];
 
@@ -69,7 +73,9 @@ const LAYOUT_CODES = [
   "#SFCCS*#PCPSF* - #ENWWSW#ENESEN", "#SPCFC*#CSPCF* - #WWNEEE#WSWNWS", "#SPCFC*#SCCPF* - #ESENES#WWWNEE",
   "#SPSFP*#CCCSF* - #NWSWWN#ESEENW", "#SCFCP*#CSCPF* - #ENESEN#WWWSEE", "#SCPFC*#PCSCF* - #WNEEES#NWSWNW",
   "#FSPCC*#PSCCF* - #WWWSEE#ENWWSW", "#FSCCP*#PCSCF* - #ENWWWS#NEESEN", "#SCPFC*#CCSSF* - #NEESEN#WSWWNE",
-  "#SFCCPC*#PCSCPF* - #WSEENES#WWWNEEE", "#SCFCPC*#CSPCSF* - #ESWWNWS#NESENES",
+  "#SFCCPC*#PCSCPF* - #WSEENES#WWWNEEE",
+  // rsprox captures 843 and 3282, and 3285 (Wiki: five combat rooms and three puzzles).
+  "#SCFCPC*#CPPCSF* - #ESWWNWS#NESENES", "#SCCFPC*#CPCSPF* - #NESEENW#ESWWNWS",
 ];
 const KIND_OF_CHAR = { "#": "start", "*": "end", S: "scavengers", C: "combat", F: "farming", P: "puzzle" };
 const DIRECTION_OF_CHAR = { N: "NORTH", E: "EAST", S: "SOUTH", W: "WEST" };
@@ -93,6 +99,11 @@ function parsePattern(code) {
 }
 
 const PATTERNS = LAYOUT_CODES.map((code) => ({ code, rooms: parsePattern(code) }));
+/** Wiki: a large raid's floors have eight rooms each; the rest of the patterns make small raids. */
+const LARGE_FLOOR_ROOMS = 8;
+const isLarge = (pattern) => pattern.rooms.length === 2 * LARGE_FLOOR_ROOMS;
+const SMALL_PATTERNS = PATTERNS.filter((pattern) => !isLarge(pattern));
+const LARGE_PATTERNS = PATTERNS.filter(isLarge);
 
 function pick(list, random) {
   return list[Math.floor(random() * list.length)];
@@ -103,9 +114,11 @@ function takeRandom(list, random) {
 }
 
 /** The rooms of a normal raid, split into its two floors: [{ room, direction }]. */
-function generateRooms(random = Math.random) {
-  const pattern = pick(PATTERNS, random);
-  const rotation = pick(BOSS_ROTATIONS, random);
+function generateRooms(random = Math.random, patterns = SMALL_PATTERNS) {
+  const pattern = pick(patterns, random);
+  // rsprox captures: 843 and 820 run forward through a rotation, 3282 and 3285 backward.
+  const forward = pick(BOSS_ROTATIONS, random);
+  const rotation = random() < 0.5 ? forward : [...forward].reverse();
   const combatCount = pattern.rooms.filter((room) => room.kind === "combat").length;
   const start = Math.floor(random() * rotation.length);
   const combat = Array.from({ length: combatCount }, (_, i) => rotation[(start + i) % rotation.length]);
@@ -141,16 +154,15 @@ class Palette {
     this.chunks = [];
   }
 
-  add(room, direction, forceStraight, random) {
+  add(room, direction, lastFloor) {
     const chunk = { room, x: this.x, y: this.y, entry: this.lastDirection, variant: 0 };
     if (room === "RAID_START") {
       chunk.entry = "NORTH";
       chunk.variant = direction === "WEST" ? 0 : direction === "NORTH" ? 1 : 2;
-    } else if (forceStraight) {
-      chunk.variant = 0;
     } else if (room === "FLOOR_END_DOWNSTAIRS") {
-      // The floor's end room has only two versions.
-      chunk.variant = Math.floor(random() * 2);
+      // rsprox captures 820, 843, 3282, 3285, 3389: the last floor's hole is 29735, the second
+      // version; the floors above use 29734, the first.
+      chunk.variant = lastFloor ? 1 : 0;
     } else {
       const left = DIRECTIONS[(DIRECTIONS.indexOf(this.lastDirection) + 3) % 4];
       chunk.variant = this.lastDirection === direction ? 1 : direction === left ? 0 : 2;
@@ -173,36 +185,49 @@ class Palette {
 }
 
 /** Lays one floor out from its rooms in order, each entered from the direction it lists. */
-function layFloor(rooms, firstDirection, forceLastRoom, random) {
+function layFloor(rooms, firstDirection, lastFloor) {
   const palette = new Palette(firstDirection);
   rooms.forEach((entry, index) => {
     const next = rooms[index + 1]?.direction ?? "SOUTH";
-    palette.add(entry.room, next, forceLastRoom && index === rooms.length - 1, random);
+    palette.add(entry.room, next, lastFloor);
   });
   palette.crop();
   return palette.chunks;
 }
 
-/** A normal raid: a random pattern, its two floors laid out. */
-function normalLayout(random = Math.random) {
-  const { pattern, floors } = generateRooms(random);
+/** A normal raid: a random pattern of the pool (small by default), its two floors laid out. */
+function normalLayout(random = Math.random, patterns = SMALL_PATTERNS) {
+  const { pattern, floors } = generateRooms(random, patterns);
   const laid = floors.map((rooms, floor) => {
     const second = rooms[1]?.direction;
     const first = second === "WEST" ? "WEST" : second === "NORTH" ? "NORTH" : "EAST";
-    return layFloor(rooms, first, floor === 1, random);
+    return layFloor(rooms, first, floor === 1);
   });
   return { pattern, challenge: false, floors: laid };
 }
 
-/** Challenge Mode: always the same three floors. */
-function challengeLayout() {
-  const floors = CHALLENGE_FLOORS.map((rooms) => {
+/** The full layout: always the same three floors, Challenge Mode's (Wiki). */
+function fullLayout(challenge = false) {
+  const floors = CHALLENGE_FLOORS.map((rooms, floor) => {
     const palette = new Palette("NORTH");
-    for (const [room, direction] of rooms) palette.add(room, direction, false, () => 0);
+    for (const [room, direction] of rooms) palette.add(room, direction, floor === CHALLENGE_FLOORS.length - 1);
     palette.crop();
+    // rsprox capture 3389: the middle floor's end room is the copy with hole 32542.
+    if (floor === 1) palette.chunks.find((chunk) => chunk.room === "FLOOR_END_DOWNSTAIRS").sourceChunkY = MIDDLE_END_CHUNK_Y;
     return palette.chunks;
   });
-  return { pattern: null, challenge: true, floors };
+  return { pattern: null, challenge, floors };
+}
+
+function challengeLayout() {
+  return fullLayout(true);
+}
+
+/** The layout a party's map pool (Shared.LAYOUT_POOL: small, large, full) generates. */
+function forPool(pool, challenge, random = Math.random) {
+  if (challenge) return challengeLayout();
+  if (pool === 2) return fullLayout(false);
+  return normalLayout(random, pool === 1 ? LARGE_PATTERNS : SMALL_PATTERNS);
 }
 
 /** Planes the floors go on: the top floor on 3, then 2, then 1. */
@@ -224,10 +249,10 @@ function sizeOf(layout) {
 /** The cache chunk a room is copied from. */
 function sourceOf(chunk) {
   const room = ROOMS[chunk.room];
-  return { chunkX: VARIANT_CHUNK_X[chunk.variant], chunkY: room.chunkY, plane: room.plane };
+  return { chunkX: VARIANT_CHUNK_X[chunk.variant], chunkY: chunk.sourceChunkY ?? room.chunkY, tileChunkY: room.chunkY, plane: room.plane };
 }
 
 module.exports = {
   ROOMS, ROOM_CHUNKS, VARIANT_CHUNK_X, DIRECTIONS, PUZZLE_ROOMS, BOSS_ROTATIONS, LAYOUT_CODES, PATTERNS,
-  CHALLENGE_FLOORS, FLOOR_PLANES, parsePattern, generateRooms, normalLayout, challengeLayout, sizeOf, sourceOf,
+  CHALLENGE_FLOORS, FLOOR_PLANES, SMALL_PATTERNS, LARGE_PATTERNS, parsePattern, generateRooms, normalLayout, fullLayout, challengeLayout, forPool, sizeOf, sourceOf,
 };

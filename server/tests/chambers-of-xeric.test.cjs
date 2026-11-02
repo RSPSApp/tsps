@@ -104,6 +104,8 @@ function fakePlayer(name, location = new Location(1234, 3566, 0)) {
         sendVarbit: (id, value) => { varbits.set(id, value); return sender; },
         getVarbit: (id) => varbits.get(id) ?? 0,
         sendConfig: (id, value) => { varbits.set(`varp${id}`, value); return sender; },
+        sendSong: (id) => { (p.songs ??= []).push(id); return sender; },
+        sendJingle: (id) => { (p.jingles ??= []).push(id); return sender; },
         sendInterface: (id) => { p.interfaces.push(id); return sender; },
         sendInterfaceRemoval: () => sender,
         sendSubInterface: (uid, id) => { p.subs.push([uid, id]); return sender; },
@@ -181,7 +183,8 @@ before(() => {
 // ------------------------------------------------------------------ layouts
 
 test('every layout pattern reads as two floors of rooms entered from a direction', () => {
-  assert.equal(Layout.PATTERNS.length, 26);
+  assert.equal(Layout.PATTERNS.length, 27);
+  assert.equal(Layout.LARGE_PATTERNS.length, 3);
   for (const { code, rooms } of Layout.PATTERNS) {
     assert.equal(rooms.length % 2, 0, code);
     const half = rooms.length / 2;
@@ -203,7 +206,8 @@ test('a normal raid: two floors, two puzzles, combat rooms from one rotation, al
     // Two puzzles are drawn; a layout with a third puzzle slot repeats any of the four there.
     assert.ok(puzzles.size <= (slots > 2 ? 3 : 2), 'two of the four puzzles');
     const combat = rooms.filter((room) => Layout.ROOMS[room].kind === 'combat');
-    assert.ok(Layout.BOSS_ROTATIONS.some((rotation) => {
+    // Captures run through a rotation either way round.
+    assert.ok(Layout.BOSS_ROTATIONS.flatMap((rotation) => [rotation, [...rotation].reverse()]).some((rotation) => {
       const start = rotation.indexOf(combat[0]);
       return combat.every((room, k) => rotation[(start + k) % rotation.length] === room);
     }), `combat rooms follow a rotation: ${combat}`);
@@ -275,15 +279,63 @@ test('parties: a chat-channel is needed, a Recruit makes it, Challenge Mode is t
   assert.ok(party);
   assert.ok(leader.interfaces.includes(Shared.INTERFACE.PARTY));
   const header = leader.scripts.find(([id]) => id === Shared.SCRIPT.PARTY_HEADER);
-  assert.deepEqual(header.slice(1), ['Raiding Party of Leader (2)', 2, 0, 99]);
+  assert.deepEqual(header.slice(1), ['Raiding Party of Leader (2)', 2, 0, 15]);
   const member = leader.scripts.find(([id]) => id === Shared.SCRIPT.PARTY_MEMBER);
   assert.equal(member[2].split('|').length, 4 + Shared.PARTY_SKILLS.length + 1);
-  Lobby.clickPartyButton({ player: leader, slot: 8 });
+  Lobby.clickPartyButton({ player: leader, slot: 9 });
   assert.equal(party.challenge, true);
   assert.equal(leader.varbits.get(Shared.VARBIT.CHALLENGE_MODE), 1);
+  assert.equal(leader.varbits.get(Shared.VARBIT.LAYOUT_POOL), Shared.LAYOUT_POOL.FULL, 'Challenge Mode is always the full layout');
   Lobby.clickPartyButton({ player: leader, slot: 1 });
   assert.ok(party.isAdvertised());
   Parties.clear();
+});
+
+test('map layouts: Small, Large and Full, with the hole each floor has on live', () => {
+  const large = Layout.forPool(Shared.LAYOUT_POOL.LARGE, false);
+  assert.ok(large.floors.every((floor) => floor.length === 8), 'eight rooms a floor');
+  const combat = large.floors.flat().filter((chunk) => Layout.ROOMS[chunk.room].kind === 'combat').length;
+  const puzzles = large.floors.flat().filter((chunk) => Layout.ROOMS[chunk.room].kind === 'puzzle').length;
+  assert.deepEqual([combat, puzzles], [5, 3], 'Wiki: five combat rooms and three puzzles');
+  const full = Layout.forPool(Shared.LAYOUT_POOL.FULL, false);
+  assert.equal(full.challenge, false);
+  assert.equal(full.floors.length, 3);
+  assert.equal(Layout.forPool(Shared.LAYOUT_POOL.SMALL, true).challenge, true, 'Challenge Mode is always the full layout');
+  const ends = (layout) => layout.floors.map((floor) => floor.find((chunk) => chunk.room === 'FLOOR_END_DOWNSTAIRS'));
+  assert.deepEqual(ends(large).map((chunk) => chunk.variant), [0, 1], 'hole 29734, then 29735 on the last floor');
+  assert.deepEqual(ends(full).map((chunk) => chunk.variant), [0, 0, 1]);
+  assert.equal(Layout.sourceOf(ends(full)[1]).chunkY, 640, 'the middle floor has hole 32542');
+  assert.equal(Layout.sourceOf(ends(full)[0]).chunkY, 644);
+});
+
+test('the party page: scaling, Challenge Mode and the map layout are slots 8, 9 and 10', () => {
+  Parties.clear();
+  const leader = fakePlayer('Scaler');
+  channelWith('Scaler', leader);
+  Lobby.makeParty(leader);
+  const party = Parties.partyOf(leader);
+  Lobby.clickPartyButton({ player: leader, slot: 10 });
+  assert.equal(leader.prompts.at(-1).title, 'How large of a layout to generate?');
+  leader.prompts.at(-1).args[3]();
+  assert.equal(party.layoutPool, Shared.LAYOUT_POOL.LARGE);
+  assert.equal(leader.varbits.get(Shared.VARBIT.LAYOUT_POOL), Shared.LAYOUT_POOL.LARGE);
+  assert.equal(leader.getAttribute(Shared.ATTR.LAST_LAYOUT), Shared.LAYOUT_POOL.LARGE, 'kept for the next party');
+  party.scaling = 50;
+  const raid = new RaidModule.Raid(party);
+  raid.players.add(leader);
+  assert.equal(raid.scale, 50, 'a raid scales to the party\'s scale');
+  party.scaling = 0;
+  assert.equal(raid.scale, 1);
+  raid.destroy();
+  Parties.clear();
+});
+
+test('team sizes and the completion message are as live has them', () => {
+  const Rewards = require('../plugins/minigames/cox/Rewards.ChambersOfXeric');
+  assert.equal(Rewards.teamSize(1), 'Solo');
+  assert.equal(Rewards.teamSize(3), '3 players');
+  assert.equal(Rewards.teamSize(50), '24+ players');
+  assert.equal(Shared.formatTicks(905), '9:03');
 });
 
 test('a raid: in, started by the leader, points, a safe death, and out', () => {
@@ -308,7 +360,7 @@ test('a raid: in, started by the leader, points, a safe death, and out', () => {
   assert.equal(raid.rooms[0].canPass(leader, passage), true);
 
   raid.addPoints(leader, 1000);
-  assert.equal(leader.varbits.get(Shared.VARBIT.PERSONAL_POINTS), 1000);
+  assert.equal(leader.varbits.get(`varp${Shared.VARP.PERSONAL_POINTS}`), 1000);
   raid.onDeath(leader);
   assert.equal(raid.pointsOf(leader), 600, 'a death costs 40%');
   assert.equal(raid.totalPoints, 600);
@@ -382,17 +434,16 @@ test('supplies: potion and food points go to their maker, more when someone else
     raid.original.add(player.getUsername());
     player.setAttribute(RaidModule.ATTR_RAID, raid);
   }
-  Supplies.recordMade(raid, Supplies.supplyKey(20996), brewer);
-  Supplies.drank({ player: drinker, itemId: 20995 });
+  const made = { [Supplies.META_MAKER]: 'Brewer' };
+  Supplies.drank({ player: drinker, itemId: 20995, meta: made });
   assert.equal(raid.pointsOf(brewer), 600, 'an overload (+) sip by someone else: 400 x 1.5');
-  Supplies.drank({ player: drinker, itemId: 20993 });
-  assert.equal(raid.pointsOf(brewer), 1200);
-  Supplies.drank({ player: drinker, itemId: 20993 });
-  assert.equal(raid.pointsOf(brewer), 1200, 'the finished gourd took its maker off the list');
+  Supplies.drank({ player: drinker, itemId: 20993, meta: made });
+  assert.equal(raid.pointsOf(brewer), 600, 'a re-sip while the last is working gives nothing');
+  Supplies.drank({ player: drinker, itemId: 20921 });
+  assert.equal(raid.pointsOf(brewer), 600, 'nobody made a potion with no maker');
 
-  Supplies.cooked({ player: brewer, itemId: 20868 });
-  Supplies.ate({ player: brewer, itemId: 20868, heal: 20 });
-  assert.equal(raid.pointsOf(brewer), 1200 + 4 + 8 * 6, 'a kyren fish eaten by its cook');
+  Supplies.ate({ player: brewer, itemId: 20868, heal: 20, meta: made });
+  assert.equal(raid.pointsOf(brewer), 600 + 4 + 8 * 6, 'a kyren fish eaten by its cook');
 
   const request = { player: drinker, area: 'chambers-of-xeric', inside: false };
   Supplies.potionArea(request);
@@ -530,7 +581,7 @@ test('a Challenge Mode raid loads every room without errors', () => {
   const leader = fakePlayer('Challenger');
   channelWith('Challenger', leader);
   Lobby.makeParty(leader);
-  Lobby.clickPartyButton({ player: leader, slot: 8 });
+  Lobby.clickPartyButton({ player: leader, slot: 9 });
   leader.setAttribute(Shared.ATTR.WARNED, true);
   Lobby.enterChambers({ player: leader });
   const raid = Parties.partyOf(leader).raid;
@@ -570,6 +621,8 @@ test('a Challenge Mode raid loads every room without errors', () => {
   ticks(12);
   assert.equal(vasa.state, 'special');
   ticks(1);
+  assert.equal(vasa.state, 'aiming');
+  for (let i = 0; i < 4 && vasa.state === 'aiming'; i++) ticks(1);
   assert.equal(vasa.state, 'walking');
   assert.ok(vasa.crystals.some(Boolean), 'a crystal is lit');
   assert.ok(spawned.some((npc) => npc.getId() === 7602), 'the corrupted scavenger');

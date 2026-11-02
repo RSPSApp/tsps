@@ -36,6 +36,9 @@ const OBJECT = {
   ENTRANCE: 29777,
   /** The steps in the first room, back out to Mount Quidamortem. */
   STEPS: 29778,
+  /** The first room's bank chest, and as it is once the raid has begun. */
+  BANK_CHEST: 47420,
+  BANK_CHEST_SHUT: 47419,
   /** The gaps between rooms. */
   PASSAGE: 29789,
   /** The hole down at a floor's end, and the rope back up at the next floor's start. */
@@ -67,13 +70,20 @@ const VARBIT = {
   PREFERRED_SIZE: 5433,
   PREFERRED_COMBAT: 5426,
   PREFERRED_TOTAL: 5427,
+  /** rsprox captures 820, 843, 3389: the party's scale and map layout, as the page shows them. */
+  SCALING: 9539,
+  LAYOUT_POOL: 5408,
+  REMEMBER_SCALING: 9541,
+  REMEMBER_PARTY_TYPE: 3288,
   /** The in-raid tab: whether you lead it, how many are in, and the raid's stage. */
   TAB_LEADER: 5423,
   TAB_PLAYERS: 5424,
   STAGE: 5425,
-  /** The points overlay. */
+  /** The points overlay's team total (the personal score is VARP.PERSONAL_POINTS). */
   TOTAL_POINTS: 5431,
-  PERSONAL_POINTS: 5422,
+  /** The party tab's scaled size (shown above the real one) and highest combat level. */
+  SCALED_SIZE: 9540,
+  HIGHEST_COMBAT: 12285,
   /** The raid's timer in ticks, and the chat-channel tab's icon while raiding. */
   TIMER: 6386,
   TAB_ICON: 5432,
@@ -85,6 +95,8 @@ const VARP = {
   /** The recruiting board: -1 when your chat-channel has no party, 0 when it has one. */
   BOARD_HAS_PARTY: 1427,
   RAID_STATE: 1431,
+  /** raids_playerscore: the points overlay's personal score. */
+  PERSONAL_POINTS: 4609,
 };
 
 const SCRIPT = {
@@ -112,7 +124,16 @@ const PARTY_SKILLS = [
   "WOODCUTTING", "FLETCHING", "SLAYER", "FARMING", "CONSTRUCTION", "HUNTER",
 ];
 
+/** rsprox captures: the party page's map layouts, in the order its menu and varbit have them. */
+const LAYOUT_POOL = { SMALL: 0, LARGE: 1, FULL: 2 };
+const LAYOUT_NAMES = ["Small", "Large", "Full"];
+
 const ATTR = {
+  /** What the player last set when making a party. */
+  LAST_SCALING: "cox:last-scaling",
+  LAST_LAYOUT: "cox:last-layout",
+  /** Adverts used today: { day, used }. */
+  ADVERTS: "cox:adverts",
   /** Has accepted the entrance's warning. */
   WARNED: "cox:warned",
   KILLS: "cox:kills",
@@ -532,7 +553,8 @@ function formatTicks(ticks) {
   const minutes = Math.floor(seconds / 60) % 60;
   const secs = seconds % 60;
   const pad = (value) => String(value).padStart(2, "0");
-  return hours > 0 ? `${pad(hours)}:${pad(minutes)}:${pad(secs)}` : `${pad(minutes)}:${pad(secs)}`;
+  // rsprox captures: "9:03", no leading zero.
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(secs)}` : `${minutes}:${pad(secs)}`;
 }
 
 function displayName(player) {
@@ -543,7 +565,7 @@ module.exports = {
   bind, core, api,
   OUTSIDE, MOUNT_QUIDAMORTEM, OBJECT, NPC, INTERFACE, VARBIT, VARP, SCRIPT, BOARD_ROWS, MAX_RAIDERS,
   MAX_POINTS, PARTY_SKILLS, ATTR, OVERLAY_UID, CHAT_CHANNEL_TAB_UID, MAIN_MODAL_UID, EVENT,
-  isRaidItem, loc, inBox, onMount, cycle, later, repeat, statement, options, raidMessage, fadeMove, sound,
+  LAYOUT_POOL, LAYOUT_NAMES, isRaidItem, loc, inBox, onMount, cycle, later, repeat, statement, options, raidMessage, fadeMove, sound,
   channelOf, channelByKey, joinChannel, leaveChannel, formatTicks, displayName,
   balanceWalk, crossFire, random, randomOf, shuffle, gfx, graphicAt, areaSound, healSplat, damage, isProtected, projectile, walkStraight, styleMethod, strike,
   onObjectIds, replaceObject, action, stopAction, level, baseLevel, addXp, has, wielding, give, animate, axeOf, pickaxeOf, PICKAXES,

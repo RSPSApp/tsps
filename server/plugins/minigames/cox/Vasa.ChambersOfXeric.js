@@ -12,34 +12,47 @@
  *   then next to him; those who ran in with Protect from Magic take nothing.
  * - Boulders: a ranged attack on everyone within 8 tiles but not under him; standing under him
  *   is stomped (up to 8 a tick).
- * - After the special he picks a crystal and walks to it; there he can't be hurt, healing 1%
- *   every 2 ticks (and Defence by 10% + 1). The first time he reaches one, a 66-67 tick timer
- *   starts, running only while a crystal is active; at zero he leaves it for the centre and his
- *   special. Disabling the crystal first undoes the healing.
- * - The crystals are immune to Ranged and take a third from Magic.
- * rsprox captures (recordings 820, a whole fight with five specials, and 3282):
+ * - After the special he picks a crystal and walks to it; there he can't be hurt, siphoning 1%
+ *   every 2 ticks and restoring Defence by 10% + 1. The first time he reaches one, a 66-67 tick
+ *   timer starts, running only while a crystal is active; at zero he leaves it for the centre
+ *   and his special, healing all he siphoned. Disabling the crystal first loses the healing.
+ * - The crystals are immune to Ranged and take a third from Magic. Stats recover 1 per 10 ticks
+ *   on him, 1 per 9 on the crystals (Mod Ash).
+ * - Strategies: Protect from Melee when running through him.
+ * rsprox captures (recordings 820, a whole fight with five specials; 843, 3282, 3285, 3389):
+ * - The room runs a 4-tick pulse, and he wakes, lights crystals and raises the fire on it.
  * - Woken: 7408 with sounds 1724 and 1595 (range 15); the fire 4 ticks later; 7409 and the
  *   walking form (7566) the tick after. Each special starts with 7409: 3 ticks later the
- *   party is teleported (those beside him: gfx 245, sound 2727), and 2 ticks after that they
- *   are told "Vasa Nistirio has blocked your use of prayers." (sound 2673); 8 ticks after 7409
- *   he explodes (7410, sound 1781) with eight projectiles 1327 (8 client cycles apart, to 125,
- *   heights 420 to 10) landing 4 ticks later as gfx 1328 round him (3 cycles apart; sound 3428)
- *   with the blast. He lights his next crystal about then and walks to it.
+ *   party is teleported (those beside him 3 tiles from his centre: gfx 245, sound 2727; the far
+ *   half 10 away); trying to pray then gets "Vasa Nistirio has blocked your use of prayers."
+ *   with sound 2673, seen as late as 15 ticks after 7409. 8 ticks after 7409 he explodes
+ *   (7410, sound 1781) with eight projectiles 1327 (8 client cycles apart, to 125, heights 420
+ *   to 10; anticlockwise from his south-west on any turn of the room) landing 4 ticks later as
+ *   gfx 1328 round him (3 cycles apart; sound 3428) with the blast. A tick on he throws, and
+ *   on the first pulse from 12 ticks after 7409 he lights his next crystal and walks to it.
  * - Walking he stomps (sound 3834, range 12, twice a tick) and throws boulders every 3 ticks,
  *   one per raider: projectile 1329 (0, 5, 10 cycles to 90, angle 5, heights 150 to 10; sound
  *   781 looped once per boulder) landing 2 ticks later as gfx 1330 with sound 1021.
  * - At the crystal: 7412 and the healing form (7567) on one tick, sound 2885 every 2 ticks;
- *   66-67 ticks later 7414 and walking again, the crystal gone 2 ticks after.
- * - Dying: 7415; he and his crystal go 3 ticks later, as the exit crystals shatter and the fire
- *   goes.
- * Not on the Wiki (to check against a capture): the tiles (the four crystals, the centre, the
- *   fire, the exit crystals 30016); where the far half is sent; the boulder base (18) and its
- *   3x3; stomps 1-5; "The crystal is currently invulerable to damage."; prayers blocked 8 ticks.
+ *   from the tick after, a siphon hitsplat (type 11) of 1% every 2 ticks, changing nothing.
+ *   66-67 ticks later 7414 and walking again with one heal hitsplat of what he took back, the
+ *   crystal gone 2 ticks after. A crystal felled: 7414 the tick after, nothing healed (3389).
+ * - Dying: 7415; he goes 3 ticks later with "As Vasa Nistirio is slain by <name>, supplies are
+ *   dropped for all."; 3 ticks after that his crystal goes, the exit crystals shatter and the
+ *   fire goes.
+ * Tiles: the four crystals (4x4), the centre (5x5), the fire (rotation 0) and the exit crystals
+ *   (rotations 0 and 1) are checked for the west version (843, 3282) and the north one (820 for
+ *   the crystals and centre, 3285, 3389), all with the room entered from the west or east. No
+ *   capture has the east version, or a room entered from the south or north.
+ * Not on the Wiki (to check against a capture): the boulder base (18) and its 3x3; the far half's
+ *   tiles beyond the one distance seen; "The crystal is currently invulerable to damage."; how
+ *   long prayers stay blocked past 15 ticks.
  */
 
 const Shared = require("./Shared.ChambersOfXeric");
 const Raid = require("./RaidState.ChambersOfXeric");
 const Monsters = require("./Monsters.ChambersOfXeric");
+const Achievements = require("./CombatAchievements.ChambersOfXeric");
 
 const NPC = { ROCKS: 7565, VASA: 7566, SIPHONING: 7567, CRYSTAL: 7568 };
 const OBJECT = { LIT: 29774, DARK: 29775, EXIT: 30016, FIRE: 30019 };
@@ -49,13 +62,23 @@ const SOUND = {
   WAKE: 1724, WAKE_2: 1595, STUNNED: 2727, PRAYERS: 2673, EXPLODE: 1781, BLAST: 3428,
   STEP: 3834, BOULDER: 781, BOULDER_HIT: 1021, SIPHON: 2885,
 };
-/** Ticks from 7409: the teleport, the prayer message, the explosion, its landing, the next crystal. */
-const SPECIAL = { TELEPORT: 3, PRAYERS: 5, EXPLODE: 8, BLAST: 12, CRYSTAL: 13 };
+/** Ticks from 7409: the teleport, the explosion, its landing, the first boulder (and he then waits for a pulse). */
+const SPECIAL = { TELEPORT: 3, EXPLODE: 8, BLAST: 12, AIM: 13 };
 const WAKE = { FIRE: 4, SWIRL: 5 };
+const PULSE = 4;
 const BOULDER_EVERY = 3;
 const CRYSTAL_TIMER = [66, 67];
 const BOULDER_BASE = 18;
-const PRAYER_BLOCK_TICKS = 8;
+/** From the teleport: 3389 still refused a prayer 15 ticks after 7409. */
+const PRAYER_BLOCK_TICKS = 13;
+const SIPHON_HITSPLAT = 11;
+const STOMP_MAX = 8;
+const SIZE = { VASA: 5, CRYSTAL: 4 };
+/** Wiki: how many ticks a stat takes to recover 1. */
+const STAT_RESTORE_TICKS = { VASA: 10, CRYSTAL: 9 };
+/** From his centre: those beside him, and those by the walls. */
+const NEAR_RANGE = 3;
+const FAR_RANGE = [10, 14];
 
 /** Cache tiles by version. */
 const CRYSTAL_TILES = [
@@ -63,9 +86,12 @@ const CRYSTAL_TILES = [
   [{ x: 3301, y: 5285 }, { x: 3301, y: 5302 }, { x: 3319, y: 5302 }, { x: 3319, y: 5285 }],
   [{ x: 3333, y: 5285 }, { x: 3333, y: 5303 }, { x: 3350, y: 5303 }, { x: 3350, y: 5285 }],
 ];
-const EXIT_TILES = [[{ x: 3268, y: 5295 }, { x: 3268, y: 5296 }], [{ x: 3311, y: 5307 }, { x: 3312, y: 5307 }], [{ x: 3355, y: 5296 }, { x: 3355, y: 5295 }]];
+/** Each corner's rotation on the cache's map (SW, NW, NE, SE), turned with the room. */
+const CRYSTAL_TURNS = [1, 2, 0, 3];
+/** Rotations 0 and 1 in this order, whatever the room's turn. */
+const EXIT_TILES = [[{ x: 3268, y: 5295 }, { x: 3268, y: 5296 }], [{ x: 3311, y: 5307 }, { x: 3312, y: 5307 }], [{ x: 3355, y: 5295 }, { x: 3355, y: 5296 }]];
 const FIRE_TILES = [{ x: 3279, y: 5281 }, { x: 3311, y: 5281 }, { x: 3343, y: 5281 }];
-const CENTRE_TILES = [{ x: 3278, y: 5293 }, { x: 3309, y: 5293 }, { x: 3341, y: 5294 }];
+const CENTRE_TILES = [{ x: 3278, y: 5293 }, { x: 3309, y: 5294 }, { x: 3341, y: 5294 }];
 
 class VasaRoom extends Raid.Room {
   constructor(raid, record) {
@@ -75,21 +101,24 @@ class VasaRoom extends Raid.Room {
     this.crystalObjects = [];
     this.exits = [];
     this.timer = null;
+    this.pulse = 0;
+    this.teleports = 0;
   }
 
   load() {
     const variant = this.record.variant;
     const { GameObject, ObjectManager } = Shared.core();
-    this.crystalTiles = CRYSTAL_TILES[variant].map((spot) => this.tile(spot.x, spot.y, 6));
-    this.crystalObjects = this.crystalTiles.map((tile) => {
-      const object = new GameObject(OBJECT.DARK, tile, 10, this.record.rotation, this.map);
+    this.crystalTiles = CRYSTAL_TILES[variant].map((spot) => this.tile(spot.x, spot.y, SIZE.CRYSTAL));
+    this.crystalObjects = this.crystalTiles.map((tile, index) => {
+      const object = new GameObject(OBJECT.DARK, tile, 10, (CRYSTAL_TURNS[index] + this.record.rotation) & 3, this.map);
       ObjectManager.register(object, true);
       return object;
     });
-    this.home = this.tile(CENTRE_TILES[variant].x, CENTRE_TILES[variant].y, 6);
+    this.home = this.tile(CENTRE_TILES[variant].x, CENTRE_TILES[variant].y, SIZE.VASA);
     this.vasa = this.spawnNpc(NPC.ROCKS, this.home.clone());
-    this.exits = EXIT_TILES[variant].map((spot) => {
-      const object = new GameObject(OBJECT.EXIT, this.tile(spot.x, spot.y), 10, this.record.rotation, this.map);
+    this.vasa?.setStatRestoreTicks(STAT_RESTORE_TICKS.VASA);
+    this.exits = EXIT_TILES[variant].map((spot, index) => {
+      const object = new GameObject(OBJECT.EXIT, this.tile(spot.x, spot.y), 10, index, this.map);
       ObjectManager.register(object, true);
       return object;
     });
@@ -118,13 +147,16 @@ class VasaRoom extends Raid.Room {
   }
 
   tick() {
+    this.pulse++;
     if (!this.alive()) return;
     if (this.state !== "asleep" && this.state !== "waking") {
-      for (const player of this.raiders()) if (this.under(player)) Shared.damage(player, Shared.random(1, 5));
+      // Wiki: up to 8 a tick; Strategies: Protect from Melee when running through him.
+      for (const player of this.raiders()) if (this.under(player) && !Shared.isProtected(player, "melee")) Shared.damage(player, Shared.random(1, STOMP_MAX));
     }
     switch (this.state) {
       case "asleep": return this.watch();
       case "waking": return this.wake();
+      case "aiming": return this.aiming();
       case "walking": return this.walking();
       case "siphoning": return this.siphon();
       case "returning": return this.returning();
@@ -133,6 +165,7 @@ class VasaRoom extends Raid.Room {
   }
 
   watch() {
+    if (this.pulse % PULSE !== 0) return;
     if (!this.raiders().some((player) => player.getLocation().getDistance(this.centre()) <= 7)) return;
     this.state = "waking";
     this.stage = 0;
@@ -148,7 +181,7 @@ class VasaRoom extends Raid.Room {
     } else if (stage === WAKE.FIRE) {
       const spot = FIRE_TILES[this.record.variant];
       const { GameObject, ObjectManager } = Shared.core();
-      this.fire = new GameObject(OBJECT.FIRE, this.tile(spot.x, spot.y, 2), 10, this.record.rotation, this.map);
+      this.fire = new GameObject(OBJECT.FIRE, this.tile(spot.x, spot.y, 2), 10, 0, this.map);
       ObjectManager.register(this.fire, true);
     } else if (stage === WAKE.SWIRL) {
       this.vasa.setNpcTransformationId(NPC.VASA);
@@ -156,18 +189,11 @@ class VasaRoom extends Raid.Room {
     }
   }
 
-  /** 7409; the teleport 3 ticks on, the prayer block 2 after, the explosion at 8, the blast at 12. */
+  /** 7409; the teleport 3 ticks on, the explosion at 8, the blast at 12, then the next crystal. */
   special() {
     this.state = "special";
     Shared.animate(this.vasa, ANIM.SWIRL);
     Shared.later(this.raid, SPECIAL.TELEPORT, () => this.teleport());
-    Shared.later(this.raid, SPECIAL.PRAYERS, () => {
-      for (const player of this.near ?? []) {
-        if (this.raid.roomAt(player.getLocation()) !== this) continue;
-        player.sendMessage("Vasa Nistirio has blocked your use of prayers.");
-        Shared.sound(player, SOUND.PRAYERS);
-      }
-    });
     Shared.later(this.raid, SPECIAL.EXPLODE, () => {
       if (!this.alive()) return;
       Shared.animate(this.vasa, ANIM.EXPLODE);
@@ -181,7 +207,17 @@ class VasaRoom extends Raid.Room {
       });
     });
     Shared.later(this.raid, SPECIAL.BLAST, () => this.explode());
-    Shared.later(this.raid, SPECIAL.CRYSTAL, () => this.alive() && this.chooseCrystal());
+    Shared.later(this.raid, SPECIAL.AIM, () => {
+      if (!this.alive()) return;
+      this.state = "aiming";
+      this.boulderTicks = 0;
+    });
+  }
+
+  /** Throwing from the centre until a pulse lights his next crystal. */
+  aiming() {
+    this.boulders(false);
+    if (this.pulse % PULSE === 0) this.chooseCrystal();
   }
 
   /** Half the party beside him, stunned and without prayers; the rest by the walls. */
@@ -191,14 +227,15 @@ class VasaRoom extends Raid.Room {
     this.near = [];
     this.far = [];
     this.blast = 0;
+    this.teleports++;
     if (raiders.length === 0) return;
     this.near.push(raiders.shift());
     for (const player of raiders) (this.far.length < this.near.length ? this.far : this.near).push(player);
     const { CombatFactory, PrayerHandler } = Shared.core();
     const middle = this.centre();
-    for (const player of this.far) player.moveTo(this.tileAround(middle, 10, 14));
+    for (const player of this.far) player.moveTo(this.tileAround(middle, FAR_RANGE[0], FAR_RANGE[1]));
     for (const player of this.near) {
-      player.moveTo(this.tileAround(middle, 3, 4));
+      player.moveTo(this.tileAround(middle, NEAR_RANGE, NEAR_RANGE));
       CombatFactory.stun(player, 6, true);
       PrayerHandler.deactivatePrayers(player);
       player.__coxNoPrayerUntil = this.raid.ticks + PRAYER_BLOCK_TICKS;
@@ -208,11 +245,11 @@ class VasaRoom extends Raid.Room {
     }
   }
 
-  /** The eight tiles around him the blast falls on, in the order it lands. */
+  /** The eight tiles around him the blast falls on, in the order it lands (843, 820, 3285 alike). */
   ring() {
     const { Location } = Shared.core();
     const at = this.vasa.getLocation();
-    const order = [[-1, -1], [2, -1], [5, -1], [5, 2], [5, 5], [2, 5], [-1, 5], [-1, 2]];
+    const order = [[-1, -1], [-1, 2], [-1, 5], [2, 5], [5, 5], [5, 2], [5, -1], [2, -1]];
     return order.map(([x, y]) => new Location(at.getX() + x, at.getY() + y, at.getZ()));
   }
 
@@ -239,7 +276,7 @@ class VasaRoom extends Raid.Room {
     const { Location, RegionManager } = Shared.core();
     for (let tries = 0; tries < 50; tries++) {
       const tile = new Location(middle.getX() + Shared.random(-max, max), middle.getY() + Shared.random(-max, max), middle.getZ());
-      if (tile.getDistance(middle) <= min || RegionManager.blocked(tile, this.map) || this.raid.roomAt(tile) !== this) continue;
+      if (tile.getDistance(middle) < min || RegionManager.blocked(tile, this.map) || this.raid.roomAt(tile) !== this) continue;
       return tile;
     }
     return middle;
@@ -259,7 +296,7 @@ class VasaRoom extends Raid.Room {
     this.timer ??= Shared.random(...CRYSTAL_TIMER);
     if (this.timer <= 0) this.timer = Shared.random(...CRYSTAL_TIMER);
     this.state = "walking";
-    this.boulderTicks = 0;
+    this.boulderTicks ??= 0;
     this.stepped = 0;
     this.siphoned = 0;
     Shared.core().PathFinder.calculateEntityRoute(this.vasa, this.crystals[this.current]);
@@ -268,7 +305,10 @@ class VasaRoom extends Raid.Room {
   lightCrystal(index) {
     this.crystalObjects[index] = Shared.replaceObject(this.map, this.crystalObjects[index], OBJECT.LIT);
     const crystal = this.spawnNpc(NPC.CRYSTAL, this.crystalTiles[index].clone());
-    if (crystal) crystal.__coxCrystal = index;
+    if (crystal) {
+      crystal.__coxCrystal = index;
+      crystal.setStatRestoreTicks(STAT_RESTORE_TICKS.CRYSTAL);
+    }
     this.crystals[index] = crystal;
   }
 
@@ -288,27 +328,33 @@ class VasaRoom extends Raid.Room {
     return undefined;
   }
 
-  /** Wiki (Mod Ash): 1% every 2 ticks while the crystal stands; the timer runs out, the special. */
+  /**
+   * Wiki (Mod Ash): 1% and Defence 10% + 1 every 2 ticks while the crystal stands. The hitpoints
+   * only come back if the timer runs out; a crystal felled first loses them.
+   */
   siphon() {
     const crystal = this.crystals[this.current];
     if (!crystal?.isRegistered() || crystal.getHitpoints() <= 0) {
-      // Disabled in time: the healing is undone.
-      if (this.siphoned > 0) this.vasa.setHitpoints(Math.max(1, this.vasa.getHitpoints() - this.siphoned));
       this.siphoned = 0;
+      Shared.animate(this.vasa, ANIM.SIPHONED);
       this.vasa.setNpcTransformationId(NPC.VASA);
       return this.goHome();
     }
-    if (++this.siphonTicks % 2 === 0) Shared.areaSound(this.raiders(), SOUND.SIPHON, this.centre(), { range: 12 });
-    if (this.siphonTicks % 2 === 0) {
-      const before = this.vasa.getHitpoints();
-      this.vasa.heal(Math.max(1, Math.floor(this.vasa.getMaxHitpoints() * 0.01)));
-      this.siphoned += this.vasa.getHitpoints() - before;
+    if (++this.siphonTicks % 2 === 1) {
+      Shared.areaSound(this.raiders(), SOUND.SIPHON, this.centre(), { range: 12 });
+      const share = Math.max(1, Math.floor(this.vasa.getMaxHitpoints() * 0.01));
+      this.siphoned += share;
+      this.vasa.showHitsplat?.(share, { mine: SIPHON_HITSPLAT, others: SIPHON_HITSPLAT });
+      const defence = this.vasa.getDefinition().getStats()[Monsters.LEVELS.DEFENCE];
+      this.vasa.setDefenceLevel(Math.min(defence, this.vasa.getDefenceLevel() + Math.floor(defence / 10) + 1));
     }
     if (--this.timer <= 0) {
       const index = this.current;
       this.crystals[index] = null;
       Shared.animate(this.vasa, ANIM.SIPHONED);
       this.vasa.setNpcTransformationId(NPC.VASA);
+      Shared.healSplat(this.vasa, Math.min(this.siphoned, this.vasa.getMaxHitpoints() - this.vasa.getHitpoints()));
+      this.siphoned = 0;
       Shared.later(this.raid, 2, () => {
         this.removeNpc(crystal);
         this.crystalObjects[index] = Shared.replaceObject(this.map, this.crystalObjects[index], OBJECT.DARK);
@@ -341,10 +387,12 @@ class VasaRoom extends Raid.Room {
     if (this.waited++ >= 3) this.chooseCrystal();
   }
 
-  /** His footsteps, and every 3 ticks a boulder at each raider within 8 tiles, not under him. */
-  boulders() {
-    Shared.areaSound(this.raiders(), SOUND.STEP, this.vasa.getLocation(), { range: 12 });
-    Shared.areaSound(this.raiders(), SOUND.STEP, this.vasa.getLocation(), { delay: Shared.random(5, 9), range: 12 });
+  /** His footsteps as he walks, and every 3 ticks a boulder at each raider within 8 tiles, not under him. */
+  boulders(walking = true) {
+    if (walking) {
+      Shared.areaSound(this.raiders(), SOUND.STEP, this.vasa.getLocation(), { range: 12 });
+      Shared.areaSound(this.raiders(), SOUND.STEP, this.vasa.getLocation(), { delay: Shared.random(5, 9), range: 12 });
+    }
     if (this.boulderTicks++ % BOULDER_EVERY !== 0) return;
     const middle = this.centre();
     const max = Monsters.maxHitFor(this.vasa, BOULDER_BASE, Monsters.LEVELS.RANGED);
@@ -390,7 +438,7 @@ class VasaRoom extends Raid.Room {
     hit.updateTotalDamage();
   }
 
-  onNpcDeath(npc) {
+  onNpcDeath(npc, killer) {
     if (npc !== this.vasa) {
       const index = this.crystals.indexOf(npc);
       if (index >= 0) {
@@ -401,6 +449,10 @@ class VasaRoom extends Raid.Room {
     }
     this.state = "dead";
     this.completed = true;
+    if (killer) {
+      for (const player of this.raid.players) Shared.raidMessage(player, `As Vasa Nistirio is slain by ${Shared.displayName(killer)}, supplies are dropped for all.`);
+    }
+    if (this.teleports < 2) Achievements.complete(this.raiders(), "Stop Drop and Roll");
     for (const player of [...(this.near ?? []), ...(this.far ?? [])]) player.__coxNoPrayerUntil = 0;
     const { ObjectManager, Animation } = Shared.core();
     const crystals = this.crystals.filter(Boolean);
@@ -444,7 +496,8 @@ function noPrayers(event) {
   const raid = Raid.raidOf(event.player);
   if (!raid || !(event.player.__coxNoPrayerUntil > raid.ticks)) return;
   event.disabled = true;
-  event.message = "You have been injured and can't use prayers right now.";
+  event.message = "Vasa Nistirio has blocked your use of prayers.";
+  Shared.sound(event.player, SOUND.PRAYERS);
 }
 
 function crossFire(event) {

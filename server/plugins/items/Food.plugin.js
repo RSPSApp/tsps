@@ -323,6 +323,7 @@ function eat(event) {
   player.performAnimation(new core.Animation(EAT_ANIMATION));
 
   const message = eatMessage(food, bite, itemId);
+  const meta = inventory.getItems()[slot]?.getMeta();
   inventory.deleteAtSlot(slot, 1, false);
   const next = leftover(food, bite);
   if (next !== undefined) inventory.setItem(slot, new core.Item(next, 1));
@@ -334,7 +335,7 @@ function eat(event) {
   for (const line of after) player.sendMessage(line);
   countBite(player);
   const heal = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS) - hitpointsBefore;
-  pluginApi.emitCustomEvent("food:eaten", { player, itemId, heal });
+  pluginApi.emitCustomEvent("food:eaten", { player, itemId, heal, meta });
 }
 
 module.exports = {

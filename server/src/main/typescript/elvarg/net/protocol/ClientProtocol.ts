@@ -265,6 +265,8 @@ export type ClientMessage =
   | { type: "object_option"; id: number; x: number; y: number; clickType?: number; action?: string }
   | { type: "world_entity_option"; index: number; clickType: number }
   | { type: "chat"; text: string; messageType: "public" | "game" | "friends_chat"; autoChat?: boolean; style?: ChatStyle }
+  | { type: "clan_chat"; clanType: number; text: string }
+  | { type: "clan_channel_action"; action: "kick" | "ban" | "mute"; name: string; value: number }
   | { type: "friends_chat_action"; action: FriendsChatAction }
   | { type: "private_message"; recipient: string; text: string }
   | { type: "chat_filter"; publicMode: number; privateMode: number; tradeMode: number }
@@ -416,6 +418,8 @@ function clientPacketLength(opcode: number): number | undefined {
 
 /** The CHAT packet's kind byte for public autochat (0 public, 1 game, 2 friends chat). */
 const CHAT_KIND_AUTOCHAT = 3;
+/** Clan chat (chat_sendclan): the clan type follows the kind byte. */
+const CHAT_KIND_CLAN = 4;
 
 export function decodeClientPackets(frame: Buffer): ClientMessage[] {
   const messages: ClientMessage[] = [];
@@ -789,12 +793,22 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
     case ClientPacket.CHAT: {
       // Kind 3 is public chat the client's autochat timer repeats (chat_sendpublic type 1).
       const kind = reader.byte();
+      if (kind === CHAT_KIND_CLAN) {
+        const clanType = (reader.byte() << 24) >> 24; // -1 is the listened guest clan
+        return { type: "clan_chat", clanType, text: reader.string() };
+      }
       const messageType = (["public", "game", "friends_chat"] as const)[kind] ?? "public";
       const text = reader.string();
       const style = readChatStyle(reader);
       return kind === CHAT_KIND_AUTOCHAT
         ? { type: "chat", messageType: "public", autoChat: true, text, ...(style && { style }) }
         : { type: "chat", messageType, text, ...(style && { style }) };
+    }
+    case HighClientPacket.CLAN_CHANNEL_ACTION: {
+      const action = (["kick", "ban", "mute"] as const)[reader.byte()];
+      const value = reader.byte();
+      const name = reader.string();
+      return action ? { type: "clan_channel_action", action, name, value } : { type: "raw", opcode, payload: frame.subarray(frame.length - length) };
     }
     case HighClientPacket.FRIENDS_CHAT_ACTION: {
       const actionCode = reader.byte();
@@ -1134,6 +1148,143 @@ export function encodeFriendsChatSnapshot(snapshot: FriendsChatSnapshot): Buffer
     parts.push(string(ignored.name), string(ignored.previousName));
   }
   return encodeServerPacket(ServerPacketId.FRIENDS_CHAT_UPDATE, Buffer.concat(parts));
+}
+
+/** One clan's persistent state, as `ClanSettingsFull` carries it. */
+export interface ClanSettingsSnapshot {
+  updateNum: number;
+  creationTime: number;
+  name: string;
+  allowGuests: boolean;
+  talkRank: number;
+  kickRank: number;
+  ownerSlot: number;
+  replacementOwnerSlot: number;
+  members: { name: string; rank: number; extraInfo: number; joinRuneDay: number; muted: boolean }[];
+  banned: string[];
+  settings: { id: number; value: number }[];
+}
+
+/** A clan's live channel, as `ClanChannelFull` carries it. */
+export interface ClanChannelSnapshot {
+  key: number;
+  updateNum: number;
+  name: string;
+  talkRank: number;
+  kickRank: number;
+  users: ClanChannelUser[];
+}
+
+export interface ClanChannelUser {
+  name: string;
+  rank: number;
+  world: number;
+}
+
+export type ClanChannelDeltaEvent =
+  | { type: "add"; user: ClanChannelUser }
+  | { type: "delete"; index: number };
+
+function u16(value: number): Buffer {
+  const bytes = Buffer.alloc(2);
+  bytes.writeUInt16BE(value & 0xffff);
+  return bytes;
+}
+
+function i32(value: number): Buffer {
+  const bytes = Buffer.alloc(4);
+  bytes.writeInt32BE(value | 0);
+  return bytes;
+}
+
+function clanChannelUserBytes(user: ClanChannelUser): Buffer {
+  return Buffer.concat([string(user.name), Buffer.from([user.rank & 0xff]), u16(user.world)]);
+}
+
+/** The clan type comes first; a null clan means the player has none of that type. */
+export function encodeClanSettingsFull(clanType: number, clan: ClanSettingsSnapshot | null): Buffer {
+  const parts: Buffer[] = [Buffer.from([clanType & 0xff, clan ? 1 : 0])];
+  if (clan) {
+    parts.push(
+      i32(clan.updateNum),
+      i32(clan.creationTime),
+      string(clan.name),
+      Buffer.from([clan.allowGuests ? 1 : 0, clan.talkRank & 0xff, clan.kickRank & 0xff]),
+      u16(clan.ownerSlot),
+      u16(clan.replacementOwnerSlot),
+      u16(clan.members.length),
+    );
+    for (const member of clan.members) {
+      parts.push(
+        string(member.name),
+        Buffer.from([member.rank & 0xff, member.muted ? 1 : 0]),
+        i32(member.extraInfo),
+        u16(member.joinRuneDay),
+      );
+    }
+    parts.push(u16(clan.banned.length), ...clan.banned.map(string), u16(clan.settings.length));
+    for (const setting of clan.settings) parts.push(u16(setting.id), i32(setting.value));
+  }
+  return encodeServerPacket(ServerPacketId.CLAN_SETTINGS_FULL, Buffer.concat(parts));
+}
+
+/** A null channel is `ClanChannelFull(Leave)`. */
+export function encodeClanChannelFull(clanType: number, channel: ClanChannelSnapshot | null): Buffer {
+  const parts: Buffer[] = [Buffer.from([clanType & 0xff, channel ? 1 : 0])];
+  if (channel) {
+    parts.push(
+      i32(channel.key),
+      i32(channel.updateNum),
+      string(channel.name),
+      Buffer.from([channel.talkRank & 0xff, channel.kickRank & 0xff]),
+      u16(channel.users.length),
+      ...channel.users.map(clanChannelUserBytes),
+    );
+  }
+  return encodeServerPacket(ServerPacketId.CLAN_CHANNEL_FULL, Buffer.concat(parts));
+}
+
+export function encodeClanChannelDelta(
+  clanType: number,
+  key: number,
+  updateNum: number,
+  events: ClanChannelDeltaEvent[],
+): Buffer {
+  const parts: Buffer[] = [Buffer.from([clanType & 0xff]), i32(key), i32(updateNum), u16(events.length)];
+  for (const event of events) {
+    parts.push(
+      event.type === "add"
+        ? Buffer.concat([Buffer.from([1]), clanChannelUserBytes(event.user)])
+        : Buffer.concat([Buffer.from([2]), u16(event.index)]),
+    );
+  }
+  return encodeServerPacket(ServerPacketId.CLAN_CHANNEL_DELTA, Buffer.concat(parts));
+}
+
+export function encodeClanVar(id: number, value: number): Buffer {
+  return encodeServerPacket(ServerPacketId.CLAN_VAR, Buffer.concat([u16(id), i32(value)]));
+}
+
+export type ClanSettingsDeltaUpdate =
+  | { type: "add_member"; name: string; joinRuneDay: number }
+  | { type: "delete_member"; index: number }
+  | { type: "member_rank"; index: number; rank: number }
+  | { type: "member_muted"; index: number; muted: boolean }
+  | { type: "member_extra_info"; index: number; value: number; startBit: number; endBit: number }
+  | { type: "int_setting"; setting: number; value: number };
+
+export function encodeClanSettingsDelta(clanType: number, updateNum: number, updates: ClanSettingsDeltaUpdate[]): Buffer {
+  const parts: Buffer[] = [Buffer.from([clanType & 0xff]), i32(updateNum), u16(updates.length)];
+  for (const update of updates) {
+    if (update.type === "add_member") parts.push(Buffer.from([1]), string(update.name), u16(update.joinRuneDay));
+    else if (update.type === "delete_member") parts.push(Buffer.from([2]), u16(update.index));
+    else if (update.type === "member_rank") parts.push(Buffer.from([3]), u16(update.index), Buffer.from([update.rank & 0xff]));
+    else if (update.type === "member_muted") parts.push(Buffer.from([4]), u16(update.index), Buffer.from([update.muted ? 1 : 0]));
+    else if (update.type === "member_extra_info") {
+      parts.push(Buffer.from([5]), u16(update.index), i32(update.value), Buffer.from([update.startBit, update.endBit]));
+    } else parts.push(Buffer.from([6]), u16(update.setting), i32(update.value));
+  }
+  return encodeServerPacket(ServerPacketId.CLAN_SETTINGS_DELTA, Buffer.concat(parts));
 }
 
 export function encodeVarp(id: number, value: number): Buffer {

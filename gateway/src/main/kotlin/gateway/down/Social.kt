@@ -2,6 +2,7 @@ package gateway.down
 
 import gateway.tsps.TspsPacket
 import gateway.tsps.TspsServerPacket
+import net.rsprot.protocol.game.outgoing.clan.MessageClanChannel
 import net.rsprot.protocol.game.outgoing.friendchat.MessageFriendChannel
 import net.rsprot.protocol.game.outgoing.friendchat.UpdateFriendChatChannelFull.FriendChatEntry
 import net.rsprot.protocol.game.outgoing.friendchat.UpdateFriendChatChannelFullV2
@@ -82,13 +83,15 @@ class Social(private val send: (OutgoingGameMessage) -> Unit) {
         return true
     }
 
-    /** Private and friends-chat lines from CHAT_MESSAGE; false when [chat] is neither. */
+    /** Private, friends-chat and clan lines from CHAT_MESSAGE; false when [chat] is none of them. */
     fun chat(chat: TspsChatMessage): Boolean {
         val name = chat.from.replace(ICON, "")
         when (chat.type) {
             PRIVATE_IN -> send(MessagePrivate(name, WORLD, ++messageCounter, chat.modIcon, chat.text))
             PRIVATE_OUT -> send(MessagePrivateEcho(name, chat.text))
             FRIENDS_CHAT -> send(MessageFriendChannel(name, chat.prefix, WORLD, ++messageCounter, chat.modIcon, chat.text))
+            CLAN_CHAT -> send(MessageClanChannel(OWN_CLAN, name, WORLD, ++messageCounter, chat.modIcon, chat.text))
+            GUEST_CLAN_CHAT -> send(MessageClanChannel(GUEST_CLAN, name, WORLD, ++messageCounter, chat.modIcon, chat.text))
             else -> return false
         }
         return true
@@ -98,6 +101,10 @@ class Social(private val send: (OutgoingGameMessage) -> Unit) {
         const val PRIVATE_IN = 3
         const val PRIVATE_OUT = 6
         const val FRIENDS_CHAT = 9
+        const val CLAN_CHAT = 41
+        const val GUEST_CLAN_CHAT = 44
+        const val OWN_CLAN = 0
+        const val GUEST_CLAN = -1
         const val WORLD = 1
         const val WORLD_NAME = "tsps"
         val ICON = Regex("""<img=\d+>""")

@@ -6,6 +6,7 @@
  * (Wiki: 26 ticks), then the angel is back on its spot, dormant, to be woken again.
  */
 const Common = require("./Common.MadAngel");
+const BOSS_NAME = "Mad Angel";
 
 function onAngelDeath(event) {
   const session = event.npc?.__madAngel;
@@ -26,6 +27,7 @@ function onAngelDeath(event) {
   const best = Number(player.getAttribute(Common.BEST_TICKS_ATTRIBUTE)) || 0;
   if (!best || ticks < best) {
     player.setAttribute(Common.BEST_TICKS_ATTRIBUTE, ticks);
+    Common.api.emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
     player.sendMessage(`Fight duration: <col=ff0000>${Common.formatTicks(ticks)}</col> (new personal best)`);
   } else {
     player.sendMessage(`Fight duration: <col=ff0000>${Common.formatTicks(ticks)}</col>. Personal best: ${Common.formatTicks(best)}`);

@@ -3,8 +3,7 @@
  * sets the selected varbit and mounts that tab's interface in the content pane (rsprox 2528, 75).
  * The choice is kept across logins (rsprox 3886 logs in on Your Clan, 2762 on Grouping).
  *
- * Your Clan and Guest Clan are the cache's own interfaces in their "No current clan" state:
- * tsps has no clans.
+ * Your Clan and Guest Clan are the cache's own interfaces; Clans.plugin.js feeds them.
  */
 
 const GROUP = 707;
@@ -12,11 +11,8 @@ const CONTENT_UID = (GROUP << 16) | 7;
 const TAB_SELECTED_VARBIT = 13071; // side_channels_tab_selected
 const TAB_ATTRIBUTE = "side-channels:tab";
 const CHAT_CHANNEL_TAB = 0;
-// clan_affinitystatus and its guest twin (script 4288): 0 Connecting, 1 No current clan. Live
-// clan members go through 2 and 3 once the login's clan packets arrive (rsprox 763).
-const CLAN_STATUS_VARBIT = 933;
-const GUEST_CLAN_STATUS_VARBIT = 12164;
-const NO_CLAN = 1;
+const YOUR_CLAN_TAB = 1;
+const SOCIAL_SIDE_BUTTON = 7;
 const CHAT_CHANNEL_GROUP = 7;
 /** Button component -> tab index and interface, by the rev 241 cache's 707:2-5. */
 const TABS = [
@@ -33,6 +29,13 @@ const OP1 = 1 << 1;
 
 /** What stands in for the chat-channel tab, such as the raid party: { group, onMount }. */
 const replacements = new WeakMap();
+/** What stands in for Your Clan, such as the clan creation panel: { group, onMount }. */
+const clanReplacements = new WeakMap();
+
+function replacementFor(player, tab) {
+  if (tab === CHAT_CHANNEL_TAB) return replacements.get(player);
+  return tab === YOUR_CLAN_TAB ? clanReplacements.get(player) : undefined;
+}
 
 function selectedTab(player) {
   const tab = player.getAttribute(TAB_ATTRIBUTE);
@@ -42,7 +45,7 @@ function selectedTab(player) {
 function mountSelected(player) {
   const sender = player.getPacketSender();
   const tab = selectedTab(player);
-  const replacement = tab === CHAT_CHANNEL_TAB ? replacements.get(player) : undefined;
+  const replacement = replacementFor(player, tab);
   const group = replacement?.group ?? TABS[tab].group;
   sender.sendVarbit(TAB_SELECTED_VARBIT, tab);
   sender.sendSubInterface(CONTENT_UID, group, 1);
@@ -61,7 +64,6 @@ function selectTab(event) {
 
 /** The login and every later mount of 707 start on the chat-channel. */
 function restoreSelectedTab({ player }) {
-  player.getPacketSender().sendVarbit(CLAN_STATUS_VARBIT, NO_CLAN).sendVarbit(GUEST_CLAN_STATUS_VARBIT, NO_CLAN);
   if (selectedTab(player) !== CHAT_CHANNEL_TAB || replacements.has(player)) mountSelected(player);
 }
 
@@ -82,6 +84,20 @@ function replaceChatChannel({ player, group, onMount }) {
   if (selectedTab(player) === CHAT_CHANNEL_TAB) mountSelected(player);
 }
 
+/**
+ * "side-channels:replace-your-clan" ({ player, group, onMount }): shows `group` on Your Clan and
+ * brings it up. A null group puts Your Clan back.
+ */
+function replaceYourClan({ player, group, onMount }) {
+  if (group == null) clanReplacements.delete(player);
+  else {
+    clanReplacements.set(player, { group, onMount });
+    player.setAttribute(TAB_ATTRIBUTE, YOUR_CLAN_TAB);
+    player.getPacketSender().sendTab(SOCIAL_SIDE_BUTTON);
+  }
+  if (selectedTab(player) === YOUR_CLAN_TAB) mountSelected(player);
+}
+
 module.exports = {
   name: "SideChannels",
   register(api) {
@@ -91,5 +107,6 @@ module.exports = {
     api.onCustomEvent("gameframe:ready", restoreSelectedTab);
     api.onCustomEvent("gameframe:tab-mounted", restoreSelectedTabOnMount);
     api.onCustomEvent("side-channels:replace-chat-channel", replaceChatChannel);
+    api.onCustomEvent("side-channels:replace-your-clan", replaceYourClan);
   },
 };

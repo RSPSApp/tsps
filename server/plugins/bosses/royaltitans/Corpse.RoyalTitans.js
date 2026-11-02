@@ -24,6 +24,7 @@ const CombatAchievements = require("./CombatAchievements.RoyalTitans");
 const PAGES_ITEM_ID = 30640;
 const BRAN_ITEM_ID = 30622;
 const SACRIFICE_PET_RATE = 1500;
+const BOSS_NAME = "Royal Titans";
 /** Below 1% share (1-11 damage of 1200) rolls twice but yields 1 of each (Wiki). */
 const MIN_SHARE_PERCENT = 0.01;
 /** Take pages: possible from ~72 damage, guaranteed at 120 (Wiki; estimated mapping). */
@@ -158,6 +159,7 @@ function announceKill(player, kills, ticks) {
   const best = player.getAttribute(Shared.BEST_TICKS_ATTRIBUTE);
   if (!best || ticks < best) {
     player.setAttribute(Shared.BEST_TICKS_ATTRIBUTE, ticks);
+    api.emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
     player.sendMessage(`Fight duration: <col=ff0000>${Shared.formatTicks(ticks)}</col> (new personal best)`);
   } else {
     player.sendMessage(`Fight duration: <col=ff0000>${Shared.formatTicks(ticks)}</col>. Personal best: ${Shared.formatTicks(best)}`);

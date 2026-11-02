@@ -90,6 +90,7 @@ function lastJadDown(player, challenge) {
   if (best) {
     times[number] = ticks;
     player.setAttribute(Common.BEST_TIMES_ATTRIBUTE, times);
+    api.emitCustomEvent("boss:personal-best", { player, boss: `TzHaar-Ket-Rak's ${data.ordinals[number - 1]} Challenge`, ticks });
   }
   Scoreboard.completed(number, ticks);
   sendCounts(player);

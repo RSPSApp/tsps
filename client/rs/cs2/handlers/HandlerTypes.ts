@@ -250,6 +250,11 @@ export interface HandlerContext {
     // Optional - if not provided, clan ops return default values (empty/0/-1)
     clanSettings?: ClanSettings | null;
     clanChannel?: ClanChannel | null;
+    /** Which clan the commands above read: false the player's own, true the listened guest clan. */
+    selectClanSettings?: (listened: boolean) => void;
+    selectClanChannel?: (listened: boolean) => void;
+    /** %varclan values, as the server sends them. */
+    clanVars?: Map<number, number>;
 
     // Event context (for magic argument substitution)
     eventContext: EventContext;

@@ -65,6 +65,7 @@ export const enum ClientPacketId {
     // TRADE (180-189) - moved to avoid 250 range
     // ========================================
     TRADE_ACTION = 180,
+    CLAN_CHANNEL_ACTION = 181, // action(1) + value(1) + name(string)
 
     // ========================================
     // CHAT/VARPS (190-199)
@@ -124,6 +125,7 @@ export const CLIENT_PACKET_LENGTHS: Record<ClientPacketId, number> = {
     [ClientPacketId.EMOTE]: 3, // index(2) + loop(1)
 
     [ClientPacketId.TRADE_ACTION]: -1,
+    [ClientPacketId.CLAN_CHANNEL_ACTION]: -1,
 
     [ClientPacketId.CHAT]: -1,
     [ClientPacketId.VARP_TRANSMIT]: 6, // varpId(2) + value(4)

@@ -1,0 +1,542 @@
+[
+ {
+  "index": 0,
+  "category": "Owner",
+  "label": "Permission access",
+  "minRank": 100,
+  "atLeast": null,
+  "special": false,
+  "setting": 12,
+  "struct": 2943
+ },
+ {
+  "index": 1,
+  "category": "Management",
+  "label": "Edit rank titles",
+  "minRank": 100,
+  "atLeast": null,
+  "special": false,
+  "setting": 16,
+  "struct": 2949
+ },
+ {
+  "index": 2,
+  "category": "Management",
+  "label": "Assign member ranks",
+  "minRank": 100,
+  "atLeast": null,
+  "special": false,
+  "setting": 14,
+  "struct": 2948
+ },
+ {
+  "index": 3,
+  "category": "Management",
+  "label": "Recruitment",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 17,
+  "struct": 2951
+ },
+ {
+  "index": 4,
+  "category": "Management",
+  "label": "Expel members",
+  "minRank": 100,
+  "atLeast": 2948,
+  "special": false,
+  "setting": 15,
+  "struct": 2950
+ },
+ {
+  "index": 5,
+  "category": "Management",
+  "label": "Edit public profile",
+  "minRank": 100,
+  "atLeast": null,
+  "special": false,
+  "setting": 13,
+  "struct": 2947
+ },
+ {
+  "index": 6,
+  "category": "Management",
+  "label": "Icons",
+  "minRank": 100,
+  "atLeast": null,
+  "special": false,
+  "setting": 25,
+  "struct": 2952
+ },
+ {
+  "index": 7,
+  "category": "Chat",
+  "label": "Talk in chat",
+  "minRank": -1,
+  "atLeast": null,
+  "special": false,
+  "setting": null,
+  "struct": 2954
+ },
+ {
+  "index": 8,
+  "category": "Chat",
+  "label": "Kick from chat",
+  "minRank": null,
+  "atLeast": 2954,
+  "special": false,
+  "setting": null,
+  "struct": 2955
+ },
+ {
+  "index": 9,
+  "category": "Chat",
+  "label": "Ban from chat",
+  "minRank": 100,
+  "atLeast": 2955,
+  "special": false,
+  "setting": 18,
+  "struct": 2956
+ },
+ {
+  "index": 10,
+  "category": "Chat",
+  "label": "Guests may listen in chat",
+  "minRank": null,
+  "atLeast": null,
+  "special": true,
+  "setting": null,
+  "struct": 2957
+ },
+ {
+  "index": 11,
+  "category": "Chat",
+  "label": "Guest minimum combat",
+  "minRank": null,
+  "atLeast": null,
+  "special": true,
+  "setting": null,
+  "struct": 2958
+ },
+ {
+  "index": 12,
+  "category": "Chat",
+  "label": "Guest minimum skill total",
+  "minRank": null,
+  "atLeast": null,
+  "special": true,
+  "setting": null,
+  "struct": 2959
+ },
+ {
+  "index": 13,
+  "category": "Chat",
+  "label": "Guest minimum QP",
+  "minRank": null,
+  "atLeast": null,
+  "special": true,
+  "setting": null,
+  "struct": 2960
+ },
+ {
+  "index": 14,
+  "category": "Chat",
+  "label": "Guest Iron status",
+  "minRank": null,
+  "atLeast": null,
+  "special": true,
+  "setting": null,
+  "struct": 2961
+ },
+ {
+  "index": 15,
+  "category": "Events",
+  "label": "Organise events",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 21,
+  "struct": 2966
+ },
+ {
+  "index": 16,
+  "category": "Events",
+  "label": "Event starting notification",
+  "minRank": null,
+  "atLeast": null,
+  "special": true,
+  "setting": 110,
+  "struct": 4570
+ },
+ {
+  "index": 17,
+  "category": "Events",
+  "label": "Initiate Clan Wars",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 22,
+  "struct": 2967
+ },
+ {
+  "index": 18,
+  "category": "Coffer",
+  "label": "Deposit into coffer",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 19,
+  "struct": 2963
+ },
+ {
+  "index": 19,
+  "category": "Coffer",
+  "label": "Withdraw from coffer",
+  "minRank": null,
+  "atLeast": 2963,
+  "special": false,
+  "setting": 20,
+  "struct": 2964
+ },
+ {
+  "index": 20,
+  "category": "Clan Hall",
+  "label": "Enter clan hall",
+  "minRank": -1,
+  "atLeast": null,
+  "special": false,
+  "setting": 23,
+  "struct": 2969
+ },
+ {
+  "index": 21,
+  "category": "Clan Hall",
+  "label": "Edit clan hall",
+  "minRank": 100,
+  "atLeast": 2969,
+  "special": false,
+  "setting": 24,
+  "struct": 2970
+ },
+ {
+  "index": 22,
+  "category": "Clan Hall",
+  "label": "Deposit in the party chest",
+  "minRank": -1,
+  "atLeast": null,
+  "special": false,
+  "setting": 94,
+  "struct": 4387
+ },
+ {
+  "index": 23,
+  "category": "Clan Hall",
+  "label": "Pull the lever for the party chest",
+  "minRank": -1,
+  "atLeast": null,
+  "special": false,
+  "setting": 95,
+  "struct": 4388
+ },
+ {
+  "index": 24,
+  "category": "Clan Hall",
+  "label": "Get drops from party balloons",
+  "minRank": -1,
+  "atLeast": null,
+  "special": false,
+  "setting": 96,
+  "struct": 4389
+ },
+ {
+  "index": 25,
+  "category": "Notifications",
+  "label": "Joining/Leaving clan",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 27,
+  "struct": 3106
+ },
+ {
+  "index": 26,
+  "category": "Notifications",
+  "label": "Broadcasts from main world only",
+  "minRank": null,
+  "atLeast": null,
+  "special": true,
+  "setting": 112,
+  "struct": 4572
+ },
+ {
+  "index": 27,
+  "category": "Notifications",
+  "label": "Quest broadcasts",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 28,
+  "struct": 4230
+ },
+ {
+  "index": 28,
+  "category": "Notifications",
+  "label": "Achievement diary broadcasts",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 62,
+  "struct": 4233
+ },
+ {
+  "index": 29,
+  "category": "Notifications",
+  "label": "Hardcore death broadcasts",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 63,
+  "struct": 4234
+ },
+ {
+  "index": 30,
+  "category": "Notifications",
+  "label": "Collection log broadcasts",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 58,
+  "struct": 4231
+ },
+ {
+  "index": 31,
+  "category": "Notifications",
+  "label": "Collection log broadcast every x logs",
+  "minRank": null,
+  "atLeast": null,
+  "special": true,
+  "setting": 111,
+  "struct": 4571
+ },
+ {
+  "index": 32,
+  "category": "Notifications",
+  "label": "Personal best broadcasts",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 59,
+  "struct": 4232
+ },
+ {
+  "index": 33,
+  "category": "Notifications - Skilling",
+  "label": "Level-up broadcasts",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 30,
+  "struct": 4236
+ },
+ {
+  "index": 34,
+  "category": "Notifications - Skilling",
+  "label": "Level-up increments of 10",
+  "minRank": null,
+  "atLeast": null,
+  "special": true,
+  "setting": null,
+  "struct": 4239
+ },
+ {
+  "index": 35,
+  "category": "Notifications - Skilling",
+  "label": "Level-up increments of 5",
+  "minRank": null,
+  "atLeast": null,
+  "special": true,
+  "setting": null,
+  "struct": 4240
+ },
+ {
+  "index": 36,
+  "category": "Notifications - Skilling",
+  "label": "Level-up increments of 1",
+  "minRank": null,
+  "atLeast": null,
+  "special": true,
+  "setting": null,
+  "struct": 4241
+ },
+ {
+  "index": 37,
+  "category": "Notifications - Skilling",
+  "label": "Post-99 XP broadcasts",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 64,
+  "struct": 4237
+ },
+ {
+  "index": 38,
+  "category": "Notifications - Skilling",
+  "label": "Post-99 XP broadcast intervals",
+  "minRank": null,
+  "atLeast": null,
+  "special": true,
+  "setting": null,
+  "struct": 4238
+ },
+ {
+  "index": 39,
+  "category": "Notifications - PvM",
+  "label": "Loot broadcasts",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 29,
+  "struct": 4243
+ },
+ {
+  "index": 40,
+  "category": "Notifications - PvM",
+  "label": "Loot broadcast value",
+  "minRank": null,
+  "atLeast": null,
+  "special": true,
+  "setting": null,
+  "struct": 3109
+ },
+ {
+  "index": 41,
+  "category": "Notifications - PvM",
+  "label": "Combat Achievement tier broadcasts",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 32,
+  "struct": 4244
+ },
+ {
+  "index": 42,
+  "category": "Notifications - PvM",
+  "label": "Combat Achievement task broadcasts",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 100,
+  "struct": 853
+ },
+ {
+  "index": 43,
+  "category": "Notifications - PvM",
+  "label": "Combat Achievement task threshold",
+  "minRank": null,
+  "atLeast": null,
+  "special": true,
+  "setting": null,
+  "struct": 854
+ },
+ {
+  "index": 44,
+  "category": "Notifications - PvP",
+  "label": "PK broadcasts",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 60,
+  "struct": 4246
+ },
+ {
+  "index": 45,
+  "category": "Notifications - PvP",
+  "label": "PK broadcast value",
+  "minRank": null,
+  "atLeast": null,
+  "special": true,
+  "setting": null,
+  "struct": 4247
+ },
+ {
+  "index": 46,
+  "category": "Notifications - PvP",
+  "label": "Player defeat broadcasts",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 61,
+  "struct": 4248
+ },
+ {
+  "index": 47,
+  "category": "Notifications - PvP",
+  "label": "Loot key broadcasts",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 97,
+  "struct": 4677
+ },
+ {
+  "index": 48,
+  "category": "Notifications - PvP",
+  "label": "Loot key broadcast value",
+  "minRank": null,
+  "atLeast": null,
+  "special": true,
+  "setting": null,
+  "struct": 4678
+ },
+ {
+  "index": 49,
+  "category": "Notifications - Leagues",
+  "label": "Shared league broadcasts",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 105,
+  "struct": 6240
+ },
+ {
+  "index": 50,
+  "category": "Notifications - Leagues",
+  "label": "Relic tier",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 106,
+  "struct": 6241
+ },
+ {
+  "index": 51,
+  "category": "Notifications - Leagues",
+  "label": "Area unlocks",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 107,
+  "struct": 6242
+ },
+ {
+  "index": 52,
+  "category": "Notifications - Leagues",
+  "label": "League rank",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 108,
+  "struct": 6243
+ },
+ {
+  "index": 53,
+  "category": "Notifications - Leagues",
+  "label": "Combat Masteries",
+  "minRank": null,
+  "atLeast": null,
+  "special": false,
+  "setting": 109,
+  "struct": 6244
+ }
+]

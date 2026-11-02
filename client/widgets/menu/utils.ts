@@ -897,7 +897,7 @@ export function findBlockingWidgetInHits(
         );
         const hasTransmitOps = (flags & 0x7fe) !== 0;
         const hasSpellAction =
-            targetMask > 0 && !!sanitizeText(w?.spellActionName ?? w?.targetVerb);
+            targetMask > 0 && !!sanitizeText(w?.spellActionName || w?.targetVerb);
         const hasItem = typeof w?.itemId === "number" && (w.itemId | 0) >= 0;
         const isPauseWidget = isPauseButtonWidget(w, getWidgetFlags, getWidgetByUid);
         const isDraggable = !!(w?.isDraggable || w?.eventHandlers?.onDrag || w?.onDrag);

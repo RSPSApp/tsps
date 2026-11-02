@@ -16,6 +16,7 @@ const Attacks = require("./Attacks.Nex");
 const Specials = require("./Specials.Nex");
 
 const SIZE = 3;
+const BOSS_NAME = "Nex";
 
 class Fight {
   /**
@@ -595,6 +596,7 @@ class Fight {
     const duration = kill.duration.replace("[time]", Common.formatTicks(ticks));
     if (!best || ticks < best) {
       player.setAttribute(Common.BEST_ATTRIBUTE, ticks);
+      Common.api.emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
       player.sendMessage(duration + kill.best);
     } else {
       player.sendMessage(duration + kill.personalBest.replace("[time]", Common.formatTicks(best)));

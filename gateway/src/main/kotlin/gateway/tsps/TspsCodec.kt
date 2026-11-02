@@ -129,6 +129,7 @@ object TspsClientPacket {
     const val IF_BUTTON = 13
     const val MOVE_GAMECLICK = 16
     const val IF_BUTTONX = 91
+    const val CLAN_CHANNEL_ACTION = 181
     const val CHAT = 190
     const val SET_HEADING = 214
     const val PING = 201
@@ -139,6 +140,7 @@ object TspsClientPacket {
     const val CAPABILITY_NATIVE_CLIENT = 0x1
     private const val CLIENT_TYPE_DESKTOP = 0
     private const val CHAT_KIND_PUBLIC = 0
+    private const val CHAT_KIND_CLAN = 4
 
     fun login(username: String, password: String, revision: Int): ByteArray =
         TspsWriter().string(username).string(password).i32(revision).u8(0).varShort(LOGIN)
@@ -207,6 +209,12 @@ object TspsClientPacket {
     /** Public chat: kind 0 public, 2 friends chat, 3 autochat (`encodeChat` in the browser client). */
     fun chat(kind: Int, text: String, style: gateway.down.ChatStyle? = null): ByteArray =
         TspsWriter().u8(kind).string(text).also { style?.write(it) }.varByte(CHAT)
+
+    /** Clan chat: [clanType] 0 the player's clan, -1 the guest clan (`encodeClanChat`). */
+    fun clanChat(clanType: Int, text: String): ByteArray = TspsWriter().u8(CHAT_KIND_CLAN).u8(clanType and 0xFF).string(text).varByte(CHAT)
+
+    /** A channel user's op, by name: action 0 kick, 1 ban, 2 mute (`value` 1 mutes). */
+    fun clanChannelAction(action: Int, name: String, value: Int): ByteArray = TspsWriter().u8(action).u8(value).string(name).varByte(CLAN_CHANNEL_ACTION)
 
     /** A `::` command; tsps reads commands from public chat. */
     fun command(command: String): ByteArray = TspsWriter().u8(CHAT_KIND_PUBLIC).string("::$command").varByte(CHAT)

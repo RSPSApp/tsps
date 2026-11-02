@@ -109,6 +109,7 @@ function openKey(player, slot, expectedKey = null) {
   syncLootKeySkull(player);
   setChestItems(player, items);
   setChestTab(player, tab);
+  pluginApi?.emitCustomEvent("loot-keys:opened", { player, value: totalValue(items) });
   return true;
 }
 

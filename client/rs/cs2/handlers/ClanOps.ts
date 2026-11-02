@@ -4,9 +4,11 @@
  * ACTIVECLANSETTINGS_* - Access persistent clan configuration (members, ranks, permissions)
  * ACTIVECLANCHANNEL_* - Access active clan channel state (online users, worlds)
  *
- * These opcodes operate on the "active" clan which is set by FIND_LISTENED or FIND_AFFINED.
- * In this implementation, we use ctx.clanSettings and ctx.clanChannel directly.
+ * These opcodes operate on the "active" clan which is set by FIND_LISTENED or FIND_AFFINED:
+ * ctx.clanSettings and ctx.clanChannel read whichever of them was selected last.
  */
+import { OWN_CLAN_TYPE } from "../../../common/social/Clans";
+import { sendClanChannelAction } from "../../../network/ServerConnection";
 import { Opcodes } from "../Opcodes";
 import type { ClanChannel, ClanSettings, HandlerMap } from "./HandlerTypes";
 
@@ -20,6 +22,12 @@ function getSettings(ctx: { clanSettings?: ClanSettings | null }): ClanSettings 
 /**
  * Helper to safely get clan channel, returning null if not available.
  */
+/** The server acts on the name: a slot can shift under an open menu as people leave. */
+function sendChannelAction(ctx: { clanChannel?: ClanChannel | null }, action: "kick" | "ban" | "mute", slot: number, value = 0): void {
+    const name = getChannel(ctx)?.userNames[slot];
+    if (name) sendClanChannelAction(action, name, value);
+}
+
 function getChannel(ctx: { clanChannel?: ClanChannel | null }): ClanChannel | null {
     return ctx.clanChannel ?? null;
 }
@@ -41,20 +49,22 @@ function computeSortedIndices(names: string[]): number[] {
 export function registerClanOps(handlers: HandlerMap): void {
     // === Clan Settings ===
 
-    // Check if listened clan settings exist (own clan)
+    // Select the listened (guest) clan's settings
     // Returns 1 if found, 0 if not
     handlers.set(Opcodes.ACTIVECLANSETTINGS_FIND_LISTENED, (ctx) => {
+        ctx.selectClanSettings?.(true);
         const settings = getSettings(ctx);
         ctx.pushInt(settings ? 1 : 0);
     });
 
-    // Check if affined clan settings exist for given clan type
-    // Pops: clanType (0 = own clan, 1 = guest clan)
+    // Select the settings of a clan the player belongs to
+    // Pops: clanType (0 = own clan, 1 = group, which tsps doesn't have)
     // Returns 1 if found, 0 if not
     handlers.set(Opcodes.ACTIVECLANSETTINGS_FIND_AFFINED, (ctx) => {
-        ctx.intStackSize--; // Pop clanType (we only support one clan for now)
+        const clanType = ctx.intStack[--ctx.intStackSize];
+        ctx.selectClanSettings?.(false);
         const settings = getSettings(ctx);
-        ctx.pushInt(settings ? 1 : 0);
+        ctx.pushInt(clanType === OWN_CLAN_TYPE && settings ? 1 : 0);
     });
 
     // Get clan name
@@ -208,11 +218,11 @@ export function registerClanOps(handlers: HandlerMap): void {
     });
 
     // Add user to ban list from channel (action - no return)
-    // Pops: clan, userSlot (in channel)
+    // Pops: userSlot (in channel), clan (clan_sidepanel_op's call)
     handlers.set(Opcodes.AFFINEDCLANSETTINGS_ADDBANNED_FROMCHANNEL, (ctx) => {
         ctx.intStackSize -= 2;
-        // This would send a server request to ban the user
-        // Implementation depends on server protocol
+        const slot = ctx.intStack[ctx.intStackSize];
+        sendChannelAction(ctx, "ban", slot);
     });
 
     // Get affined member join date (runeday)
@@ -229,11 +239,12 @@ export function registerClanOps(handlers: HandlerMap): void {
     });
 
     // Set affined member muted status from channel (action - no return)
-    // Pops: clan, userSlot, muted (1 = mute, 0 = unmute)
+    // Pops: userSlot, muted (1 = mute, 0 = unmute), clan
     handlers.set(Opcodes.AFFINEDCLANSETTINGS_SETMUTED_FROMCHANNEL, (ctx) => {
         ctx.intStackSize -= 3;
-        // This would send a server request to mute/unmute the user
-        // Implementation depends on server protocol
+        const slot = ctx.intStack[ctx.intStackSize];
+        const muted = ctx.intStack[ctx.intStackSize + 1];
+        sendChannelAction(ctx, "mute", slot, muted);
     });
 
     // Get affined member muted status
@@ -249,22 +260,29 @@ export function registerClanOps(handlers: HandlerMap): void {
         }
     });
 
+    // True once the server has sent %varclan values (the coffer's screen checks it).
+    handlers.set(Opcodes.CLANPROFILE_FIND, (ctx) => {
+        ctx.pushInt(ctx.clanVars?.size ? 1 : 0);
+    });
+
     // === Clan Channel ===
 
-    // Check if listened clan channel exists (own clan)
+    // Select the listened (guest) clan's channel
     // Returns 1 if found, 0 if not
     handlers.set(Opcodes.ACTIVECLANCHANNEL_FIND_LISTENED, (ctx) => {
+        ctx.selectClanChannel?.(true);
         const channel = getChannel(ctx);
         ctx.pushInt(channel ? 1 : 0);
     });
 
-    // Check if affined clan channel exists for given clan type
-    // Pops: clanType (0 = own clan, 1 = guest clan)
+    // Select the channel of a clan the player belongs to
+    // Pops: clanType (0 = own clan, 1 = group, which tsps doesn't have)
     // Returns 1 if found, 0 if not
     handlers.set(Opcodes.ACTIVECLANCHANNEL_FIND_AFFINED, (ctx) => {
-        ctx.intStackSize--; // Pop clanType (we only support one channel for now)
+        const clanType = ctx.intStack[--ctx.intStackSize];
+        ctx.selectClanChannel?.(false);
         const channel = getChannel(ctx);
-        ctx.pushInt(channel ? 1 : 0);
+        ctx.pushInt(clanType === OWN_CLAN_TYPE && channel ? 1 : 0);
     });
 
     // Get clan channel name
@@ -330,9 +348,8 @@ export function registerClanOps(handlers: HandlerMap): void {
     // Kick user from channel (action - no return)
     // Pops: userSlot
     handlers.set(Opcodes.ACTIVECLANCHANNEL_KICKUSER, (ctx) => {
-        ctx.intStackSize--; // Pop userSlot
-        // This would send a server request to kick the user
-        // Implementation depends on server protocol
+        const slot = ctx.intStack[--ctx.intStackSize];
+        sendChannelAction(ctx, "kick", slot);
     });
 
     // Find online user slot by name

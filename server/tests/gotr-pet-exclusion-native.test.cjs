@@ -46,3 +46,10 @@ test('ordinary essence fallback in the same GOTR trip keeps crafting without gra
  await craft(f,object);assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.PURE_ESSENCE),2);const xp=f.p.getSkillManager().getExperience(core.Skill.RUNECRAFTING),runes=f.p.getInventory().getAmount(core.ItemIdentifiers.AIR_RUNE);
  await craft(f,object);assert.equal(Game.isPlaying(f.p),true);assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.PURE_ESSENCE),0);assert.ok(f.p.getInventory().getAmount(core.ItemIdentifiers.AIR_RUNE)>runes);assert.ok(f.p.getSkillManager().getExperience(core.Skill.RUNECRAFTING)>xp);assert.equal(Boolean(f.p.getAttribute('pets:current')),false);assert.deepEqual(f.p.getAttribute('pets.owned')??[],[]);assert.equal(f.p.getAttribute('clog.items')?.[item('skillpetrunecrafting_fire')]??0,0);
 });
+test('native GOTR altar exit portal returns the trip to the temple, not the ruins (whatever loads first)',async t=>{
+ const f=actor(t),altar=Altars.ALTARS.find(a=>a.key==='law'),object=setupAltar(t,f,altar.exit,altar);
+ Game._game.phase=Game.PHASE.ATTACK;Game._game.elapsed=0;Game._game.altars={elemental:1,catalytic:1,changesIn:33};Game.join(f.p);
+ core.RegionManager.loadMapFiles(3615,9491);
+ await send(f,{type:'object_option',id:object.getId(),x:object.getLocation().getX(),y:object.getLocation().getY(),action:'Use'});
+ assert.deepEqual([f.p.getLocation().getX(),f.p.getLocation().getY()],[3615,9491]);assert.equal(Game.isPlaying(f.p),true);
+});

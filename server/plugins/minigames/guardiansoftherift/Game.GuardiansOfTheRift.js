@@ -262,8 +262,8 @@ function newGameId() {
 }
 
 /** Wiki: fragments, essence and talismans can't leave a game; pouches give up guardian essence too. */
-function removeGameItems(player) {
-  Shared.removeItems(player, Shared.GAME_ITEMS);
+function removeGameItems(player, items = Shared.GAME_ITEMS) {
+  Shared.removeItems(player, items);
   Shared.api().emitCustomEvent("runecrafting:remove-guardian-essence", { player });
 }
 
@@ -365,7 +365,7 @@ function openRift() {
   game.startingPlayers = game.players.size;
   for (const [player, state] of game.players) {
     Object.assign(state, freshState(), { gameId: newGameId() });
-    removeGameItems(player);
+    removeGameItems(player, Shared.NEW_GAME_ITEMS);
     Shared.setVarp(player, Shared.VARP.GAME_ID, state.gameId);
     Shared.setVarbit(player, Shared.VARBIT.IS_PLAYING, 1);
     Shared.setVarbit(player, Shared.VARBIT.FINISHED_GAME, 0);
@@ -490,6 +490,14 @@ function tickPortal() {
 
 // ------------------------------------------------------------------ the loop
 
+/** The last game's stones and mining count go with the countdown's first line (rsprox captures). */
+function clearLastGame() {
+  for (const player of game.players.keys()) {
+    Shared.removeItems(player, Shared.STONES);
+    Shared.setVarbit(player, Shared.VARBIT.MINING_COUNT, 0);
+  }
+}
+
 /** With nobody inside the barrier the lobby waits at its 30 seconds: no game for an empty temple. */
 function tickLobby() {
   if (game.players.size === 0 && game.timer <= EMPTY_LOBBY_HOLD) {
@@ -498,6 +506,7 @@ function tickLobby() {
   }
   const line = COUNTDOWN.get(game.timer);
   if (line) message(line);
+  if (game.timer === EMPTY_LOBBY_HOLD) clearLastGame();
   if (--game.timer <= 0) openRift();
 }
 

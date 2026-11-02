@@ -33,7 +33,7 @@ const Apprentices = require('../plugins/minigames/guardiansoftherift/Apprentices
 
 const hooks = {
   objects: {}, npcs: {}, items: {}, clicks: {}, custom: {}, login: [], logout: [], conditions: [], areas: [], prompts: [],
-  dialogues: [], canBankItem: [], itemOnObject: {}, itemOnItem: {}, itemOnNpc: [], drops: [], npcsSpawned: [], npcsRemoved: [],
+  dialogues: [], canBankItem: [], beforeObjects: [], itemOnObject: {}, itemOnItem: {}, itemOnNpc: [], drops: [], npcsSpawned: [], npcsRemoved: [],
   persisted: new Set(), currencies: new Map(),
 };
 
@@ -78,6 +78,7 @@ function fakeApi() {
     onPlayerLogin: (handler) => hooks.login.push(handler),
     onPlayerLogout: (handler) => hooks.logout.push(handler),
     onObjectInteraction: (name, actions) => { hooks.objects[name] = actions; },
+    onBeforeObjectInteraction: (handler) => hooks.beforeObjects.push(handler),
     onNpcInteraction: (name, actions) => { hooks.npcs[name] = actions; },
     onNpcDialogueCondition: (handler) => hooks.conditions.push(handler),
     onCustomEvent: (name, handler) => (hooks.custom[name] ??= []).push(handler),
@@ -223,6 +224,13 @@ function ticks(count) {
     Game.tick();
     TaskManager.process();
   }
+}
+
+/** A click the before-hooks see first, whatever loaded first (the altar trips claim theirs there). */
+function claimed(player, objectId, option) {
+  const event = { player, objectId, option, handled: false };
+  for (const handler of hooks.beforeObjects) if (!event.handled) handler(event);
+  return event.handled;
 }
 
 function barrier(player, option) {
@@ -907,7 +915,7 @@ test('an active Guardian takes the player to its altar and stays in the game; th
   assert.deepEqual([player.location.getX(), player.location.getY()], [2655, 4830]);
   ticks(6);
   assert.equal(Game.isPlaying(player), true, 'an altar trip keeps the game');
-  hooks.objects.Portal.Use({ player, objectId: Shared.loc(EARTH.exit) });
+  assert.equal(claimed(player, Shared.loc(EARTH.exit), 'Use'), true, 'the trip owns the exit portal');
   ticks(2);
   assert.equal(player.messages.at(-1), 'You step through the portal and find yourself back in the temple.');
   assert.deepEqual([player.location.getX(), player.location.getY()], [3615, 9491]);
@@ -925,7 +933,8 @@ test('crafting guardian essence makes runes, a stone each, the XP and charges on
   player.inventory.adds(Shared.obj(Shared.ITEM.ESSENCE), 10);
   player.inventory.add(Shared.obj(Shared.ITEM.UNCHARGED_CELL), 3);
   STACKABLE.add(557);
-  hooks.objects.Altar['Craft-rune']({ player, objectId: Shared.loc(EARTH.altar) });
+  player.__gotrTrip = EARTH;
+  assert.equal(claimed(player, Shared.loc(EARTH.altar), 'Craft-rune'), true);
   assert.equal(player.inventory.getAmount(Shared.obj(Shared.ITEM.ESSENCE)), 0);
   assert.equal(player.inventory.getAmount(557), 40);
   assert.equal(player.inventory.getAmount(Shared.obj(Shared.ITEM.ELEMENTAL_STONE)), 10);
@@ -935,13 +944,18 @@ test('crafting guardian essence makes runes, a stone each, the XP and charges on
   assert.equal(player.xpBySkill.Runecrafting, 65);
 
   player.inventory.adds(Shared.obj(Shared.ITEM.ESSENCE), 5);
-  hooks.objects.Altar['Craft-rune']({ player, objectId: Shared.loc(EARTH.altar) });
+  claimed(player, Shared.loc(EARTH.altar), 'Craft-rune');
   assert.equal(player.inventory.getAmount(Shared.obj('gotr_cell_tier3')), 1, 'one charged cell at a time');
   assert.equal(player.inventory.getAmount(Shared.obj(Shared.ITEM.UNCHARGED_CELL)), 2);
 
   const outsider = fakePlayer('Outsider');
   outsider.inventory.adds(Shared.obj(Shared.ITEM.ESSENCE), 1);
-  assert.equal(hooks.objects.Altar['Craft-rune']({ player: outsider, objectId: Shared.loc(EARTH.altar) }), false, 'outside a game it is plain Runecraft');
+  outsider.__gotrTrip = EARTH;
+  assert.equal(claimed(outsider, Shared.loc(EARTH.altar), 'Craft-rune'), false, 'outside a game it is plain Runecraft');
+  const pure = fakePlayer('Pure');
+  attackPhase(pure);
+  pure.__gotrTrip = EARTH;
+  assert.equal(claimed(pure, Shared.loc(EARTH.altar), 'Craft-rune'), false, 'without guardian essence Runecrafting crafts');
 });
 
 test('a portal talisman opens its dormant Guardian and shatters; Toggle-talisman flips its varbit', () => {
@@ -1023,6 +1037,73 @@ test('cells raise, strengthen and recharge barriers with the captured messages, 
   assert.equal(player.messages.at(-1), 'The medium cell is consumed as it <col=ff0000>recharges</col> the barrier.');
   assert.equal(tile.npc.getHitpoints(), 175);
   assert.equal(player.varbit(Shared.VARBIT.ELEMENTAL_EARNED), 35, '+5');
+});
+
+test('before the open an uncharged cell builds a weak barrier; nothing built before it pays (Wiki, 13 November 2024)', () => {
+  const player = fakePlayer();
+  barrier(player, 'Quick-pass');
+  assert.equal(Game.phase(), Game.PHASE.LOBBY);
+  const uncharged = Shared.obj(Shared.ITEM.UNCHARGED_CELL);
+  const tile = Cells.tiles[0];
+  player.inventory.add(uncharged, 2);
+  place(player, tile);
+  assert.equal(tile.tier, 1, 'an uncharged cell builds a weak barrier');
+  assert.equal(player.inventory.getAmount(uncharged), 1);
+  place(player, tile);
+  assert.equal(player.inventory.getAmount(uncharged), 1, 'it only builds; strengthening takes a charged cell');
+  assert.match(statementText(player), /You need a charged cell to place on the tile\./);
+  player.inventory.add(CELL(2), 1);
+  place(player, tile);
+  assert.equal(tile.tier, 2, 'charged cells strengthen before the open too (rsprox captures)');
+  assert.equal(player.xpBySkill.Runecrafting, undefined, 'no experience before the open');
+  assert.equal(player.varbit(Shared.VARBIT.ELEMENTAL_EARNED), 0);
+
+  Game._game.timer = 1;
+  ticks(1);
+  assert.equal(Game.phase(), Game.PHASE.PREPARE);
+  assert.equal(tile.tier, 2, 'the barrier stands into the game');
+  place(player, Cells.tiles[1]);
+  assert.equal(Cells.tiles[1].tier, 0, 'once the rift is open an uncharged cell builds nothing');
+  assert.equal(player.inventory.getAmount(uncharged), 1);
+});
+
+test('a new game keeps cells and takes fragments, essence, stones and talismans (Wiki; rsprox captures)', () => {
+  const player = fakePlayer();
+  barrier(player, 'Quick-pass');
+  const uncharged = Shared.obj(Shared.ITEM.UNCHARGED_CELL);
+  player.inventory.add(uncharged, 10);
+  player.inventory.add(CELL(3), 1);
+  player.inventory.add(Shared.obj(Shared.ITEM.FRAGMENTS), 5);
+  player.inventory.adds(Shared.obj(Shared.ITEM.ESSENCE), 3);
+  player.inventory.add(Shared.obj(Shared.ITEM.CATALYTIC_STONE), 4);
+  player.inventory.add(Shared.obj(EARTH.talisman), 1);
+  Game._game.timer = 1;
+  ticks(1);
+  assert.equal(Game.phase(), Game.PHASE.PREPARE);
+  assert.equal(player.inventory.getAmount(uncharged), 10, 'the capture: ten taken between games, ten after the open');
+  assert.equal(player.inventory.getAmount(CELL(3)), 1);
+  for (const item of [Shared.ITEM.FRAGMENTS, Shared.ITEM.ESSENCE, Shared.ITEM.CATALYTIC_STONE, EARTH.talisman]) {
+    assert.equal(player.inventory.getAmount(Shared.obj(item)), 0, item);
+  }
+});
+
+test("the lobby's 30-second line takes the last game's stones and mining count, not its cells (rsprox captures)", () => {
+  const player = fakePlayer();
+  openGame(player);
+  const uncharged = Shared.obj(Shared.ITEM.UNCHARGED_CELL);
+  player.inventory.add(uncharged, 10);
+  player.inventory.add(Shared.obj(Shared.ITEM.CATALYTIC_STONE), 65);
+  Shared.setVarbit(player, Shared.VARBIT.MINING_COUNT, 250);
+  Game._game.phase = Game.PHASE.CLOSING;
+  Game._game.timer = 1;
+  ticks(1);
+  assert.equal(Game.phase(), Game.PHASE.LOBBY);
+  assert.equal(player.inventory.getAmount(Shared.obj(Shared.ITEM.CATALYTIC_STONE)), 65, 'the close itself leaves them');
+  ticks(4);
+  assert.equal(player.messages.at(-1), 'The rift will become active in 30 seconds.');
+  assert.equal(player.inventory.getAmount(Shared.obj(Shared.ITEM.CATALYTIC_STONE)), 0);
+  assert.equal(player.varbit(Shared.VARBIT.MINING_COUNT), 0);
+  assert.equal(player.inventory.getAmount(uncharged), 10);
 });
 
 test('the surge hits every barrier for 50; a broken tile takes 12 fragments to repair', () => {

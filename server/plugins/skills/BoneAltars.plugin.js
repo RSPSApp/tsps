@@ -19,7 +19,7 @@
  *     pray at as well as these (`anyAltar`, at the bone's burying experience). A league relic's coins.
  */
 const DATA = require("./data/bone-altars.json");
-const { pauseForLevelUp } = require("./SkillActions");
+const { pauseForLevelUp, actionInterval } = require("./SkillActions");
 
 let api = null;
 let core = null;
@@ -133,16 +133,18 @@ const offerings = new WeakMap();
 
 /**
  * Offers every `intervalTicks` from the next one, keyed to the player so a walk or click stops
- * it; a level-up pop-up pauses it, as it does other skilling (docs/settings.md).
+ * it; a level-up pop-up pauses it, as it does other skilling (docs/settings.md). Content may
+ * offer faster ("skills:action-interval", a league relic's 2-tick pace).
  */
 function keepOffering(player, object, altar, boneId, bone, cost = 1) {
   let tick = 0;
+  const interval = actionInterval(api, player, core.Skill.PRAYER, "offer", DATA.intervalTicks);
   const task = new (class extends core.Task {
     constructor() { super(1, player.getIndex(), false); }
     execute() {
       if (!player.isRegistered() || player.getHitpoints() <= 0) return this.stop();
       if (this.levelUpPaused) return;
-      if (++tick % DATA.intervalTicks !== 0) return;
+      if (++tick % interval !== 0) return;
       if (!offer(player, object, altar, boneId, bone, cost)) this.stop();
     }
   })();

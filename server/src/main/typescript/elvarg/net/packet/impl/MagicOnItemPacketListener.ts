@@ -266,6 +266,10 @@ export class MagicOnItemPacketListener {
       // Content may lower the level, waive the runes, keep the item or cast again on what is left (a league relic).
       requiredLevel, freeRunes: false, keepItem: false, recast: false };
     PluginManager.emitCustomEvent("magic:alchemy-policy", policy);
+    // Content may cast faster ("skills:action-interval", a league relic's 2-tick pace), from the pace the policy settled on.
+    const pace = { player, skill: Skill.MAGIC, kind: "alchemy", ticks: policy.castTicks };
+    PluginManager.emitCustomEvent("skills:action-interval", pace);
+    policy.castTicks = Math.max(1, pace.ticks | 0);
     if (player.getSkillManager().getCurrentLevel(Skill.MAGIC) < policy.requiredLevel) {
       player.sendMessage(`You need a Magic level of ${policy.requiredLevel} to cast this spell.`);
       return;

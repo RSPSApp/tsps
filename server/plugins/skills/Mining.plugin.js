@@ -9,7 +9,7 @@ const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemI
 const InfernalPickaxe = require("./mining/InfernalPickaxe.Mining");
 const CrystalPickaxe = require("./mining/CrystalPickaxe.Mining");
 const ClueGeodes = require("./mining/ClueGeodes.Mining");
-const { pauseForLevelUp } = require("./SkillActions");
+const { pauseForLevelUp, actionInterval } = require("./SkillActions");
 
 // rsprox recordings: a mined-out rock becomes "rocks1"/"rocks2" (the digit of the rock's own gameval,
 // copperrock2 -> rocks2) and the miner is sent a respawn timer by the cache's add_overlaytimer_loc.
@@ -635,7 +635,8 @@ class MiningTask extends Task {
       if (this.cycle < state.nextRollTick) {
         continue;
       }
-      state.nextRollTick = this.cycle + rollInterval(pickaxe);
+      // Content may mine faster ("skills:action-interval", a league relic's 2-tick pace).
+      state.nextRollTick = this.cycle + actionInterval(pluginApi, player, Skill.MINING, "mine", rollInterval(pickaxe));
       ROLL_READY_TICKS.set(player, state.nextRollTick);
       player.performAnimation(swingAnimation(state.pickaxe, state.rock));
 

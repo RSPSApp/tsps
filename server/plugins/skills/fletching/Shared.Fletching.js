@@ -317,7 +317,12 @@ function makeBatch(player, recipe, via) {
   return true;
 }
 
+/** Ticks to the next batch: the recipe's, its tool's; content may make it faster ("skills:action-interval", a league relic's 2-tick pace). */
 function interval(player, recipe) {
+  return SkillActions.actionInterval(api, player, core.Skill.FLETCHING, recipe.group, toolInterval(player, recipe));
+}
+
+function toolInterval(player, recipe) {
   if (recipe.jewellersTicks && player.getInventory().contains(jewellersChiselId)) return recipe.jewellersTicks;
   if (recipe.knifeBonus && carries(player, [fletchingKnifeId])) return recipe.ticks - 1;
   return recipe.ticks;

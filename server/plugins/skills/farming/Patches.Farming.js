@@ -11,7 +11,7 @@ const Vault = require("./Vault.Farming");
 const Hespori = require("./Hespori.Farming");
 const Redwood = require("./Redwood.Farming");
 const Tools = require("./Tools.Farming");
-const { pauseForLevelUp } = require("../SkillActions");
+const { pauseForLevelUp, actionInterval } = require("../SkillActions");
 
 const FARM_ATTRIBUTE = "farming:state";
 const TROLL_HERB_PATCH = Data.CACHE.patches.find(p => p.type === "HERB" && p.x === 2826 && p.y === 3694 && p.z === 0);
@@ -309,6 +309,10 @@ function workStep(player, work) {
     if (!again) WORK.delete(player);
     if (!work.action.endsWith("-bin")) syncPatch(player, work.patch);
 }
+/** Ticks between rake swings or harvest picks; content may make them faster ("skills:action-interval", a league relic's 2-tick pace). */
+function pace(player, kind, ticks) {
+    return actionInterval(core.PluginManager, player, core.Skill.FARMING, kind, ticks);
+}
 function rakeStep(player, work) {
     const state = stateFor(player, work.patch);
     if (work.swung && !rake(player, work.patch)) return false;
@@ -316,7 +320,7 @@ function rakeStep(player, work) {
     animate(player, ANIM.RAKE);
     sound(player, SOUND.RAKE);
     work.swung = true;
-    work.nextTick = workTick + RAKE_PERIOD;
+    work.nextTick = workTick + pace(player, "rake", RAKE_PERIOD);
     return true;
 }
 function rake(player, patch) {
@@ -346,7 +350,7 @@ function harvestStep(player, work) {
             again = false;
         }
         if (!again) return false;
-        work.nextTick = work.swungAt + PICK_PERIOD;
+        work.nextTick = work.swungAt + pace(player, "harvest", PICK_PERIOD);
         if (workTick < work.nextTick) return true;
     }
     if (!canPick(player, work.patch)) return false;

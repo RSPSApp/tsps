@@ -478,6 +478,127 @@ test("Flow State: catches roll every 2 ticks", () => {
   for (const player of others(who)) assert.equal(emit("fishing:interval", { player, ticks: 5 }).ticks, 5);
 });
 
+test("Flow State: every listed skill's loop paces at 2 ticks (skills:action-interval), smelting but not anvil work", () => {
+  const who = cases(FLOW_STATE);
+  const pace = (player, skill, kind, ticks) => emit("skills:action-interval", { player, skill, kind, ticks }).ticks;
+  const loops = [
+    [Skill.MINING, "mine"], [Skill.WOODCUTTING, "chop"], [Skill.COOKING, "cook"], [Skill.FIREMAKING, "light"],
+    [Skill.FIREMAKING, "tend"], [Skill.PRAYER, "offer"], [Skill.FLETCHING, "logs"], [Skill.SMITHING, "smelt"],
+    [Skill.CRAFTING, "leather"], [Skill.CRAFTING, "smelt"], [Skill.FARMING, "rake"], [Skill.FARMING, "harvest"],
+    [Skill.MAGIC, "alchemy"], [Skill.MAGIC, "superheat"], [Skill.MAGIC, "enchant"],
+  ];
+  for (const [skill, kind] of loops) {
+    assert.equal(pace(who.relic, skill, kind, 5), 2, `${kind} with the relic`);
+    assert.equal(pace(who.relic, skill, kind, 1), 1, `${kind}: a faster pace stays (a fletching knife's, a recipe's)`);
+    for (const player of others(who)) assert.equal(pace(player, skill, kind, 5), 5, `${kind} without it`);
+  }
+  assert.equal(pace(who.relic, Skill.SMITHING, "smith", 5), 5, "anvil work is not smelting");
+  assert.equal(pace(who.relic, Skill.HERBLORE, "mix", 5), 5, "a skill the Wiki leaves out");
+  assert.equal(pace(who.relic, Skill.AGILITY, "lap", 5), 5);
+});
+
+/** A skill plugin's api: its tasks kept for the test to run, its events answered by the league's units as well as its own. */
+function skillApi(answers = {}) {
+  const tasks = [];
+  const own = {};
+  const submit = (task) => {
+    task.setRunning?.(true);
+    tasks.push(task);
+  };
+  return new Proxy({
+    core: { ...core, TaskManager: { submit } },
+    tasks,
+    getTaskManager: () => ({ submit }),
+    onCustomEvent: (name, handler) => (own[name] ??= []).push(handler),
+    emitCustomEvent: (name, payload) => {
+      answers[name]?.(payload);
+      for (const handler of [...(own[name] ?? []), ...(custom[name] ?? [])]) handler(payload);
+    },
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) });
+}
+
+/** Runs a task for `ticks` ticks, noting each tick `changed()` is true. */
+function ticksOf(task, ticks, changed) {
+  const at = [];
+  for (let tick = 1; tick <= ticks && task.isRunning(); tick++) {
+    task.execute();
+    if (changed()) at.push(tick);
+  }
+  return at;
+}
+
+test("Flow State: Crafting's make-many loop asks for its pace and makes an item every 2 ticks (3 without)", () => {
+  const Crafting = require("../plugins/skills/crafting/Shared.Crafting");
+  const api = skillApi();
+  Crafting.attach(api);
+  const who = cases(FLOW_STATE);
+  const made = (player) => {
+    let count = 0;
+    let seen = 0;
+    Crafting.startMaking(player, { amount: 4, startTick: 0, firstTick: 2, interval: 3, kind: "leather", has: () => true, make: () => (count++, true) });
+    return ticksOf(api.tasks.at(-1), 12, () => seen !== count && (seen = count, true));
+  };
+  assert.deepEqual(made(who.relic), [2, 4, 6, 8]);
+  for (const player of others(who)) assert.deepEqual(made(player), [2, 5, 8, 11], "the loop's own 3 ticks");
+});
+
+test("Flow State: Fletching's knife on logs asks for its pace: shafts every 2 ticks (3 without)", () => {
+  const Fletching = require("../plugins/skills/fletching/Shared.Fletching");
+  const api = skillApi();
+  Fletching.init(api);
+  const who = cases(FLOW_STATE);
+  const cut = (player) => {
+    player.getInventory().add(new core.Item(I.KNIFE, 1)).add(new core.Item(I.LOGS, 3));
+    let menu = null;
+    const sender = player.getPacketSender();
+    player.getPacketSender = () => new Proxy(sender, { get: (target, key) => (key === "sendCreationMenu" ? (value) => (menu = value, sender) : target[key]) });
+    Fletching.handlePair(player, I.KNIFE, I.LOGS);
+    menu.execute(I.ARROW_SHAFT, 3);
+    let seen = 0;
+    return ticksOf(api.tasks.at(-1), 12, () => {
+      const shafts = player.getInventory().getAmount(I.ARROW_SHAFT);
+      return shafts !== seen && (seen = shafts, true);
+    });
+  };
+  assert.deepEqual(cut(who.relic), [2, 4, 6]);
+  for (const player of others(who)) assert.deepEqual(cut(player), [2, 5, 8], "the logs group's own 3 ticks");
+});
+
+test("Flow State: bones offered on an altar repeat every 2 ticks (4 without)", () => {
+  const BoneAltars = require("../plugins/skills/BoneAltars.plugin");
+  const api = skillApi({ "prayer:bone": (request) => { if (request.itemId === I.BONES) request.bone = { xp: 4.5 }; } });
+  BoneAltars.register(api);
+  const who = cases(FLOW_STATE);
+  const altar = { blessing: () => ({ experience: 4.5, message: "The gods are pleased with your offering." }) };
+  const object = { getLocation: () => new Location(3201, 3200, 0) };
+  const offered = (player) => {
+    player.getInventory().add(new core.Item(I.BONES, 8));
+    const request = { player, object, itemId: I.BONES, altar, handled: false };
+    api.emitCustomEvent("bone-altars:offer", request);
+    assert.equal(request.handled, true);
+    assert.equal(player.getInventory().getAmount(I.BONES), 7, "the first at once");
+    let left = 7;
+    return ticksOf(api.tasks.at(-1), 8, () => {
+      const now = player.getInventory().getAmount(I.BONES);
+      return now !== left && (left = now, true);
+    });
+  };
+  Math.random = () => 0.99;
+  assert.deepEqual(offered(who.relic), [2, 4, 6, 8]);
+  for (const player of others(who)) assert.deepEqual(offered(player), [4, 8], "the altar's own 4 ticks");
+});
+
+test("skills:action-interval: unanswered, a loop keeps its own pace; never under 1", () => {
+  const { actionInterval } = require("../plugins/skills/SkillActions");
+  const seen = [];
+  const emitter = { emitCustomEvent: (name, request) => seen.push([name, { ...request }]) };
+  const player = character("pace", "main");
+  assert.equal(actionInterval(emitter, player, Skill.MINING, "mine", 5), 5);
+  assert.deepEqual(seen, [["skills:action-interval", { player, skill: Skill.MINING, kind: "mine", ticks: 5 }]]);
+  assert.equal(actionInterval({ emitCustomEvent: (name, request) => (request.ticks = 0) }, player, Skill.MINING, "mine", 5), 1);
+  assert.equal(actionInterval(null, player, Skill.MINING, "mine", 4), 4);
+});
+
 test("Executioner (Demonic Pacts): the axe finishes an NPC under 20%, but never Yama", () => {
   const who = cases(EXECUTIONER);
   const npc = (name) => ({ isNpc: () => true, isPlayer: () => false, getHitpoints: () => 10, getMaxHitpoints: () => 100, getDefinition: () => ({ getName: () => name }) });

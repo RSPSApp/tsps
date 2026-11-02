@@ -16,7 +16,7 @@ const EntTrunk = require("./woodcutting/EntTrunk.Woodcutting");
 const ThickVines = require("./woodcutting/ThickVines.Woodcutting");
 const Shrine = require("./woodcutting/Shrine.Woodcutting");
 const FarmedRedwood = require("./farming/Redwood.Farming");
-const { pauseForLevelUp } = require("./SkillActions");
+const { pauseForLevelUp, actionInterval } = require("./SkillActions");
 
 const DEFAULT_TREE_STUMP_ID = ObjectIds.TREE_STUMP_2;
 // Older trees share models but not stumps, and some sit next to an unrelated stump id; key their
@@ -1149,7 +1149,8 @@ function processWoodcuttingTick(activeSessions, currentTick) {
     if (currentTick < state.nextActionTick) {
       continue;
     }
-    state.nextActionTick = currentTick + WOODCUTTING_ACTION_INTERVAL_TICKS;
+    // Content may chop faster ("skills:action-interval", a league relic's 2-tick pace).
+    state.nextActionTick = currentTick + actionInterval(pluginApi, player, Skill.WOODCUTTING, "chop", WOODCUTTING_ACTION_INTERVAL_TICKS);
     // Content may turn a miss into a hit ("woodcutting:attempt", a league relic's second chance).
     const attempt = { player, object: activeTree, logId: state.tree.logId, success: rollLog(player, state.tree, state.axe) };
     pluginApi.emitCustomEvent("woodcutting:attempt", attempt);

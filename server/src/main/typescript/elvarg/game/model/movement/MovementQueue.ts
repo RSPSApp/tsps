@@ -788,6 +788,7 @@ export class MovementQueue {
     public resetFollow() {
         this.character.setCombatFollowing(null);
         this.character.setFollowing(null);
+        this.character.setMobileInteraction?.(null);
         this.character.setPositionToFace(null);
     }
 
@@ -821,6 +822,8 @@ export class MovementQueue {
             return;
         }
 
+        const playerFollowingPlayer = this.character.isPlayer() && following.isPlayer();
+
         if (following.getPrivateArea() != this.character.getPrivateArea()) {
             if (this.tryTeleportPetToFollower(following)) {
                 return;
@@ -832,9 +835,22 @@ export class MovementQueue {
             return;
         }
 
-        // Keep parity with Java follow task behavior for generic following.
-        // For pets, OSRS-like behavior is to snap back to the owner when they
-        // get too far away.
+        // A leader who teleports (including going up or down a level) is gone: OSRS ends
+        // the follow there, rather than walking the follower to wherever the leader landed.
+        if (
+            playerFollowingPlayer &&
+            following.getTeleportSerial() != this.character.getFollowedTeleportSerial()
+        ) {
+            this.character.setFollowing(null);
+            this.character.setMobileInteraction(null);
+            this.character.setPositionToFace(null);
+            this.reset();
+            return;
+        }
+
+        // Pets snap back to their owner when they fall behind. Every other follower keeps
+        // chasing: OSRS follow is a persistent interaction, so a player can follow another
+        // across the whole map and a leader outrunning the 15-tile view does not end it.
         const tooFarAway = !following
             .getLocation()
             .isWithinDistance(this.character.getLocation(), GameConstants.PET_FOLLOW_AUTO_TELEPORT_DISTANCE);
@@ -842,17 +858,7 @@ export class MovementQueue {
             return;
         }
 
-        // Keep parity with Java follow task behavior.
-        if (
-            following.isTeleportingReturn() ||
-            tooFarAway
-        ) {
-            if (this.tryTeleportPetToFollower(following)) {
-                return;
-            }
-            if (this.character.isPlayer() && following.isPlayer()) {
-                this.character.sendMessage(`Unable to find ${following.getAsPlayer().getUsername()}.`);
-            }
+        if (!playerFollowingPlayer && (following.isTeleportingReturn() || tooFarAway)) {
             this.character.setFollowing(null);
             this.character.setMobileInteraction(null);
             this.character.setPositionToFace(null);

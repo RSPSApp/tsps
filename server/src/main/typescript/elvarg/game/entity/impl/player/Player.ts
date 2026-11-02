@@ -742,6 +742,13 @@ export class Player extends Mobile {
     clearPendingAction(): void {
         this.getCombat().clearInteraction();
         TaskManager.cancelWalkToTasks(this.getIndex());
+        // Following is an interaction too, so an inventory item action ends it.
+        const following = this.getFollowing();
+        if (following) {
+            this.setFollowing(null);
+            if (this.getInteractingMobile() === following) this.setMobileInteraction(null);
+            if (this.getPositionToFace()?.equals(following.getLocation())) this.setPositionToFace(null);
+        }
     }
 
     isStaff(): boolean {

@@ -494,7 +494,7 @@ function countAndSubject(rest: string): { count: number; subject: string } {
  */
 const PRODUCE_VERBS: Record<string, string[]> = {
   catch: ["Raw ", ""], snare: [""], chop: [""], mine: [""], cook: ["", "Cooked "], craft: [""], fletch: [""], smelt: [""], smith: [""],
-  make: [""], create: [""], brew: [""], clean: [""], cut: [""],
+  make: [""], create: [""], brew: [""], clean: [""], cut: [""], spin: [""],
 };
 
 /** The Combat Achievements' monsters by plain name (enum 3970: "Hueycoatl, The" is "hueycoatl"). */
@@ -840,6 +840,10 @@ function withoutRestatement(name: string, description: string): string {
   // Where something worn comes from ("Equip Amy's Saw from Mahogany Homes", "a Pearl fishing rod,
   // purchased from Alry on Molch Island", "a Golden tench, caught by aerial fishing"): no condition
   // on wearing it.
+  // "Make an anti-venom potion 100 times at any dosage": a potion counts by its name, whatever its doses.
+  text = text.replace(/ at any dosage(?=\.?$)/i, "");
+  // "Successfully cut a red topaz": the deed is the success.
+  text = text.replace(/^Successfully ([a-z])/, (_all, letter: string) => letter.toUpperCase());
   // "Help the Shayzien house by dealing with 150 Lizardmen shaman": the kills, the house's only the reason.
   text = text.replace(/^Help the [A-Z][a-z]+ [Hh]ouse by dealing with /, "Defeat ");
   // "Chop 75 Magic Logs from Magic Trees": the tree its logs come from.
@@ -850,7 +854,13 @@ function withoutRestatement(name: string, description: string): string {
 
 /** A potion by its name without doses ("Attack potion" for "Attack potion(3)"), or null. */
 function potionNamed(text: string, items: Map<string, string>): string | null {
+  // "Extended Antifire Potion", "Anti-venom+ Potions": the potion's own name has no "potion" in it.
   const base = text.replace(/,/g, "").trim();
+  const named = potionNamedAs(base, items);
+  return named ?? (/ potions?$/i.test(base) ? potionNamedAs(base.replace(/ potions?$/i, ""), items) : null);
+}
+
+function potionNamedAs(base: string, items: Map<string, string>): string | null {
   for (const form of [...new Set([...singulars(base), base])]) {
     for (const dose of ["(4)", "(3)", "(2)", "(1)"]) {
       const item = items.get(`${form}${dose}`.toLowerCase());
@@ -928,8 +938,10 @@ function teleportOf(name: string, description: string, items: Map<string, string
   return null;
 }
 
-function deriveTrigger(name: string, rawDescription: string, names: Names): { trigger?: Trigger; unmapped?: string } {
+function deriveTrigger(fullName: string, rawDescription: string, names: Names): { trigger?: Trigger; unmapped?: string } {
   const { npcs, quests, items, homes } = names;
+  // "Successfully Cut a Red Topaz" is cutting one.
+  const name = fullName.replace(/^Successfully ([a-z])/i, (_all, letter: string) => letter.toUpperCase());
   let description = withoutRestatement(name, rawDescription);
   let match: RegExpExecArray | null;
   if ((match = /^Reach Level (\d+) ([A-Za-z]+)$/.exec(name)) && SKILLS[match[2].toLowerCase()]) {

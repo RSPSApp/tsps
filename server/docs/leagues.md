@@ -1666,7 +1666,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   Tombs of Amascut's normal and expert raids) ("[[Oathplate chest|chest]]" is
   the Oathplate chest): "Equip a/an X" and the description's list ("either A, B or C" any one, "A,
   B and C" all); "Catch / Chop / Mine / Cook / Craft / Fletch / Smelt / Smith / Make / Create /
-  Brew / Clean / Cut [N] X" as an item made (a fish caught raw, a herb counted clean; a catch with
+  Brew / Clean / Cut / Spin [N] X" ("Successfully" before it is the deed; a potion's name without
+  "potion", whatever its dosage) as an item made (a fish caught raw, a herb counted clean; a catch with
   no raw fish is a creature hunted); "Pickpocket X [N times]" with the description's
   alternatives; "N <tier> Clue Scroll(s)". A description naming a group ("any kind of logs"), a
   place or a condition leaves the task unmapped; so does a parenthesis remark, while one without a

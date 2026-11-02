@@ -480,6 +480,10 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("complete-the-theatre-of-blood-25-times"), { kind: "tob", modes: ["normal", "hard"], count: 25 });
   assert.deepEqual(trigger("cast-kourend-castle-teleport"), { kind: "teleport", spells: ["kourend castle teleport"], count: 1 });
   assert.ok(trigger("teleport-using-law-runes").spells.includes("paddewwa teleport"), "every teleport whose runes have a law rune");
+  assert.deepEqual(trigger("make-an-extended-antifire-potion"), { kind: "produce", items: ["Extended antifire"], count: 1 }, "a potion's name has no 'potion' in it");
+  assert.deepEqual(trigger("create-100-anti-venom-potions").items, ["Anti-venom"], "at any dosage");
+  assert.deepEqual(trigger("successfully-cut-a-red-topaz"), { kind: "produce", items: ["Red topaz"], count: 1 });
+  assert.deepEqual(trigger("spin-a-ball-of-wool"), { kind: "produce", items: ["Ball of wool"], count: 1 });
   assert.deepEqual(trigger("chop-75-magic-logs"), { kind: "produce", items: ["Magic logs"], count: 75 }, "from Magic Trees is where the logs come from");
   assert.deepEqual(trigger("pickpocket-a-master-farmer"), { kind: "pickpocket", npcs: ["Master Farmer"], count: 1 }, "pickpocket from a Master farmer");
   for (let i = 0; i < 4; i++) emit("mining:success", { player: doer, itemId: itemId("Tin ore") });

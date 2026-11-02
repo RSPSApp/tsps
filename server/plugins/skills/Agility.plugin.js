@@ -390,6 +390,24 @@ function takeMark(event) {
   }
 }
 
+/**
+ * An obstacle's own find (`gives`: { item (an ItemIdentifiers name), amount, message }, Prifddinas's portal shard): its line,
+ * then the item to the inventory, the floor for what has no room. Content may change the amount
+ * first ("agility:course-item" { player, course, itemId, amount }, a league relic's tenfold shards).
+ */
+function giveCourseItem(player, course, gives) {
+  const itemId = core.ItemIdentifiers[gives.item];
+  const request = { player, course: course?.key ?? null, itemId, amount: gives.amount };
+  pluginApi.emitCustomEvent("agility:course-item", request);
+  const amount = Math.max(0, request.amount | 0);
+  if (amount <= 0) return;
+  if (gives.message) player.sendMessage(gives.message);
+  const item = new core.Item(itemId, amount);
+  const added = Math.min(amount, player.getInventory().getAddableAmount(item));
+  if (added > 0) player.getInventory().adds(itemId, added);
+  if (amount > added) ItemOnGroundManager.registerLocation(player, new core.Item(itemId, amount - added), player.getLocation().clone());
+}
+
 function pauseMarksOnLogout({ player }) {
   spawnedMarks(player.getUsername()).forEach((item) => item.setAgingPaused(true));
 }
@@ -424,6 +442,9 @@ function finishObstacle(player, obstacle, success, completed, fail = obstacle.fa
     player.getPacketSender().sendRunEnergy();
   }
   obstacle.onSuccess?.(player);
+  if (obstacle.gives != null) {
+    giveCourseItem(player, obstacle.course, obstacle.gives);
+  }
   if (obstacle.takes != null) {
     takeAll(player, obstacle.takes);
   }
@@ -673,3 +694,5 @@ module.exports = {
     });
   },
 };
+
+module.exports.giveCourseItem = giveCourseItem;

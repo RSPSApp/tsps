@@ -6,15 +6,18 @@
  * Agility and Cooking never fail, a lap counts twice and pays 25% more experience, a mark of grace
  * on a rooftop course is a 33% chance a lap (`agility:mark-chance`, in place of the course's own
  * and its overlevel cut; the 3-minute mark cooldown still runs: ours), and a course mark picked up
- * finishes a lap of its course, paid as one, with 10,000 coins (`agility:mark-taken`).
+ * finishes a lap of its course, paid as one, with 10,000 coins (`agility:mark-taken`). Prifddinas's
+ * portal shards come tenfold (`agility:course-item`) and the Brimhaven Agility Arena's tickets and
+ * vouchers twofold (`minigame:points`, after the tier passive's: the Wiki's 16 a pillar at 8x).
  *
  * The processing hears `storage:gather` twice: first (attached before the other gathering
  * relics) it swaps the request's item for the cooked fish or bar, so a relic that banks or
  * doubles the harvest (Endless Harvest) handles the processed item; last, it hands what nobody
  * stored to the inventory in place of the raw item.
- * Not here: Agility XP while running (the Wiki gives no rate: "based on your Agility level"),
- * and termites finishing a lap, the doubled termites and the tenfold crystal shards (the Colossal
- * Wyrm courses give no termites and Prifddinas no shards yet).
+ * Not here: Agility XP while running (the Wiki gives no rate: "based on your Agility level", and no
+ * Demonic Pacts recording has the boots), and termites finishing a lap or doubled (the Colossal
+ * Wyrm courses give no termites: their spawn rate is unknown, the Wiki says, and its course page
+ * is marked out of date).
  */
 const Common = require("./Common.LeagueRelics");
 
@@ -92,6 +95,19 @@ function markTaken(request) {
   request.items.push([core.ItemIdentifiers.COINS, effect.markLapCoins]);
 }
 
+/** Prifddinas's portal shards, tenfold. */
+function courseItem(request) {
+  const items = effect.courseItems[request.course];
+  const name = items && Object.keys(items).find((key) => core.ItemIdentifiers[key] === request.itemId);
+  if (name && active(request.player)) request.amount *= items[name];
+}
+
+/** The Brimhaven Agility Arena's tickets and vouchers, twofold. */
+function minigamePoints(request) {
+  const multiplier = effect.minigamePoints?.[request.minigame];
+  if (multiplier && active(request.player)) request.points *= multiplier;
+}
+
 module.exports = function attach(pluginApi) {
   api = pluginApi;
   core = api.core;
@@ -102,6 +118,8 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("agility:lap-reward", lapReward);
   api.onCustomEvent("agility:mark-chance", markChance);
   api.onCustomEvent("agility:mark-taken", markTaken);
+  api.onCustomEvent("agility:course-item", courseItem);
+  api.onCustomEvent("minigame:points", minigamePoints);
 };
 
 /** The last `storage:gather` listener: attached after every other gathering relic. */

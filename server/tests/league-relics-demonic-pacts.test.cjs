@@ -1635,3 +1635,34 @@ test("Flow State paces Transmute's casts at 2 ticks (skills:action-interval, tra
   tick(2);
   assert.equal(inventory.getAmount(I.UNCUT_SAPPHIRE_2), 10, "again 2 ticks on");
 });
+
+test("Hotfoot: Prifddinas's portal shard comes tenfold (agility:course-item), with the recorded line; the floor takes what the inventory can't", () => {
+  const { laid } = agility();
+  const { giveCourseItem } = require("../plugins/skills/Agility.plugin");
+  const portal = { item: "CRYSTAL_SHARD", amount: 1, message: "You find a crystal shard on your way through the portal." };
+  const who = cases(HOTFOOT);
+  for (const player of Object.values(who)) player.getInventory().resetItems();
+  giveCourseItem(who.relic, { key: "prifddinas" }, portal);
+  assert.equal(who.relic.getInventory().getAmount(I.CRYSTAL_SHARD), 10);
+  assert.equal(who.relic.sent.messages.at(-1), portal.message);
+  for (const player of others(who)) {
+    giveCourseItem(player, { key: "prifddinas" }, portal);
+    assert.equal(player.getInventory().getAmount(I.CRYSTAL_SHARD), 1, player.getUsername());
+  }
+  giveCourseItem(who.relic, { key: "seers" }, portal);
+  assert.equal(who.relic.getInventory().getAmount(I.CRYSTAL_SHARD), 11, "another course's find is its own");
+  const full = character("full-hotfoot", "league", HOTFOOT);
+  full.getInventory().resetItems();
+  for (let slot = 0; slot < 28; slot++) full.getInventory().adds(I.BONES, 1);
+  giveCourseItem(full, { key: "prifddinas" }, portal);
+  assert.equal(laid.at(-1).item.getId(), I.CRYSTAL_SHARD);
+  assert.equal(laid.at(-1).item.getAmount(), 10, "on the floor");
+});
+
+test("Hotfoot: the Brimhaven Agility Arena's tickets and vouchers come twofold (minigame:points), after the tier passive", () => {
+  const relic = character("arena-hotfoot", "league", HOTFOOT);
+  const forager = character("arena-forager", "league", FRIENDLY_FORAGER);
+  const points = (player, minigame) => emit("minigame:points", { player, minigame, points: 1 }).points;
+  assert.equal(points(relic, "brimhaven-agility-arena"), 2 * points(forager, "brimhaven-agility-arena"));
+  assert.equal(points(relic, "pest-control"), points(forager, "pest-control"), "another minigame's are its own");
+});

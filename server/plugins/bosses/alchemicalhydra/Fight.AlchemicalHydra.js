@@ -29,6 +29,7 @@ class Fight {
     this.basics = 0;
     this.style = "ranged";
     this.shielded = true;
+    this.empowered = false;
     this.transitionUntil = 0;
     this.tickCount = 0;
     this.pools = [];
@@ -90,6 +91,7 @@ class Fight {
     this.attacks = 0;
     this.basics = 0;
     this.shielded = !this.enraged && this.phase < 3;
+    this.empowered = false;
     if (this.enraged) this.style = this.style === "ranged" ? "magic" : "ranged";
     Common.later(Common.data.combat.phaseChangeTicks, () => {
       if (this.stopped) return;
@@ -98,7 +100,7 @@ class Fight {
     });
   }
 
-  /** Every few ticks the vents erupt: by its own vent the Hydra loses its shield. */
+  /** Every few ticks the vents erupt: by its own vent the Hydra loses its shield, by another it rages. */
   eruptVents(players) {
     const want = PHASES()[this.phase].vent;
     for (const [colour, tile] of Object.entries(Common.data.vents)) {
@@ -106,11 +108,24 @@ class Fight {
       if (!near) continue;
       if (colour === want && this.shielded) {
         this.shielded = false;
+        this.empowered = false;
+        this.npc.forceChat?.(Common.message("roar"));
         for (const player of players) player.sendMessage(Common.message("weakened"));
-      } else if (colour !== want && want) {
+      } else if (colour !== want && want && this.shielded) {
+        this.empowered = true;
         for (const player of players) player.sendMessage(Common.message("empowered"));
       }
     }
+  }
+
+  /**
+   * The most a hit can take off the player: 35, 52 while an incorrect vent empowers it (up
+   * to 50% more, the Wiki's infobox's 35 -> 52), 55 once enraged.
+   */
+  maxHit() {
+    const { combat } = Common.data;
+    if (this.enraged) return combat.enragedMaxHit;
+    return this.empowered ? combat.empoweredMaxHit : combat.maxHit;
   }
 
   /** onNpcHitModify: 75% less damage while shielded (the enraged form keeps no shield). */

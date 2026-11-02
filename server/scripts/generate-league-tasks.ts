@@ -627,6 +627,10 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   if ((match = /^Hand in a sword with at least (\d+) quality in Giants' Foundry\.?$/i.exec(description))) {
     return { trigger: { kind: "foundry", quality: Number(match[1]), count: 1 } };
   }
+  // "Fully decorate a Maple totem in the Vale Totems" (the Redwood one's place is the Auburn Valley, where they stand).
+  if ((match = /^Fully decorate an? ([A-Za-z]+) totem in (?:the Vale Totems|the Auburn Valley)\.?$/i.exec(description))) {
+    return { trigger: { kind: "totem", woods: [match[1].toLowerCase()], count: 1 } };
+  }
   // A random event completed (the random events plugin's `random-events:completed`).
   // The task's own name must be that event's too: the Wiki's row for "Complete the Postie Pete random
   // event" describes the Evil twin.

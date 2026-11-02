@@ -68,7 +68,7 @@ function select(table, player, api, random = Math.random, multiplier = () => 1) 
             else if (request.killCount >= endpoint.kill_count)
                 rate = endpoint;
         }
-        if (random() * rate.out_of >= Math.min(rate.out_of, rate.weight * multiplier(rate)))
+        if (random() * rate.out_of >= Math.min(rate.out_of, rate.weight * multiplier(rate, stage)))
             continue;
         let slot = Math.floor(random() * stage.main_max_roll);
         const selected = stage.entries.find(row => (slot -= row.weight) < 0);

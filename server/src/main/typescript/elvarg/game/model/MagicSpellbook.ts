@@ -2,6 +2,7 @@ import { Player } from '../entity/impl/player/Player';
 import { TeleportType } from "./teleportation/TeleportType";
 import { Skill } from './Skill';
 
+const getPluginManager = () => require('../../plugins/PluginManager').PluginManager as typeof import('../../plugins/PluginManager').PluginManager;
 const getAutocasting = () => require('../content/combat/magic/Autocasting').Autocasting as typeof import('../content/combat/magic/Autocasting').Autocasting;
 
 
@@ -57,6 +58,10 @@ export class MagicSpellbook {
 
         //Send the new spellbook interface to the client side tabs
         player.getPacketSender().sendTabInterface(6, player.getSpellbook().getInterfaceId());
+
+        // "magic:spellbook-changed" { player, spellbook }: the book switched to, by its key ("lunar").
+        const key = Object.keys(MagicSpellbook).find((name) => (MagicSpellbook as any)[name] === book)?.toLowerCase() ?? null;
+        getPluginManager().emitCustomEvent("magic:spellbook-changed", { player, spellbook: key });
     }
 
     /**

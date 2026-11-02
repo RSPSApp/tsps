@@ -1,12 +1,58 @@
 "use strict";
 
 /**
- * Path of Apmeken, Ba-Ba (Ape-ex Predator). Ba-Ba slams the ground under her target and
- * throws a great rock at everyone, which only rubble, sarcophagi or baboons standing beside
- * you soften. Below 75% baboons join in and wear down the sarcophagi (which then spit
- * debris); at 66% and 33% she knocks everyone to the pit's edge and rolls ten waves of
- * boulders at them, one cracked boulder in each wave.
- * Wiki: https://oldschool.runescape.wiki/w/Ba-Ba
+ * Path of Apmeken, Ba-Ba (Ape-ex Predator). Wiki: https://oldschool.runescape.wiki/w/Ba-Ba
+ *
+ * Ba-Ba slams the ground under her target and throws a great rock at everyone, which rubble,
+ * sarcophagi, baboons or a neighbour share with you. Baboons come and go, wearing down the
+ * sarcophagi (which then spit debris). At 66% and 33% she knocks everyone to the pit's edge
+ * and rolls waves of boulders at them, one cracked boulder in each wave.
+ *
+ * Where the numbers come from. Captures are rev/rec/tick; no recording after the 25 June 2025
+ * rework has a rock throw or a baboon, so those timings are from before it (rev 223-227).
+ *
+ * Wiki:
+ * - Melee max 24, fully blocked by Protect from Melee (June 2025). 2 points per damage.
+ * - Next to cover the rock does nothing, "always split completely" (June 2025); it costs rubble
+ *   10, a sarcophagus 30 and a baboon 12. Rubble has 10 health and 10 more per extra player.
+ *   Standing by another player also shares it. Destroyed rubble brings the next rockfall.
+ * - Thresholds 66% and 33%. Ten sets of boulders. Melee ends the set early.
+ * - Boulder hitpoints: the Boulder page's table by team size and path level. The cracked one has
+ *   the same, and ranged always lands its maximum on it.
+ * - Baboons: 1-4 by group size, 10 hitpoints, always take a maximum hit, two banana peels with
+ *   Jungle Japes (June 2025). They hit a sarcophagus for 20.
+ * - Shaking Things Up: slam area 5x5 -> 7x7. Boulderdash faster. Peel stun 3 seconds.
+ *
+ * Captures:
+ * - Ids and timing: spawn 9752, melee lands on its animation (234/03280 6171-6185).
+ * - Rockfall: 2250 at path 0 lands 6 ticks later, 2251 at paths 3-6 lands in 4 (79 samples across
+ *   41 fights; path 2 unseen, taken from the Wiki's level 2 step). Marks the player's tile and
+ *   the middle of each rubble. Rubble tiles: the 36 captured in those fights.
+ * - Rock: thrown 7 ticks before it lands, projectile 90-210, angle 40 (223/00014 3250-3257).
+ * - Slam: rings of shadow 30 cycles apart, landing 4 ticks later or 5 with Shaking Things Up;
+ *   1103 at 6 cycles per ring (00014 3240-3244, 00101 17930-2). The stomp under her: 2 ticks.
+ * - Boulder phase: 9748 on her throne, scream +2 with 11780, first set +2, every 8 ticks (6 with
+ *   Boulderdash: 00553, 00554, 01757), boulders 2 after each throw from (3813, 5401-5413) and gone
+ *   16 ticks later, 9751 back to 11778 (11779 after the second) (234/03280 6191-6246).
+ * - Sarcophagus: 45752 -> 45753; first shots after 5-6 ticks, every 3, 2-3 a time, projectile
+ *   90 cycles at angle 41-44 (01757 30735-30747, 01844, 01845).
+ * - Baboons: 9753; 3 ticks between shots, 2243 from height 17 at 4 cycles a tile (00014 3269-3274).
+ *
+ * Estimates (fits, from few samples):
+ * - Slam by rings out, 24/15/10/6 x factor: 9 hits, raid level 0-555.
+ * - Boulder collision 14-21 x factor: 3280 (14, 17, 17), 3431 (43), 844 (42, 45, 52).
+ * - Banana peel 6 x factor +- 1: 8 hits of 14-16 at raid level 520.
+ * - Rock with no cover in a party, 24 x factor: 57-60 at the cap, 8 hits. Half of that beside one
+ *   other player (28-29, 4 hits).
+ * - First baboons 42 ticks in and every 150 ticks: first 39-50 in 10 fights; 3 repeats.
+ * - First rockfall 12 ticks in (9-14, 12 fights); first slam on her third swing, then every
+ *   fifth; rock 11+ ticks after rockfall on her next swing (11-25, 14 samples), 34 if no rubble fell.
+ * - Sarcophagus reach by path level (width x depth): 7 x 10 at paths 5-6 (7 openings, up to 145
+ *   shots); 5 x 8 at path 2 and 3 x 6 at path 0 are guesses from the Wiki's "wider".
+ *
+ * Still only from Near-Reality: the solo rock's 39 (no uncovered solo rock in any recording), the
+ * falling rock's 19-24, the sarcophagus shot's 8-9 and Gotta Have Faith's 15% of missing prayer,
+ * the baboon's 12, the pit's rows (y 5406-5410) and the "deep pit" message (never captured).
  */
 
 const Shared = require("./Shared.TombsOfAmascut");
@@ -18,34 +64,75 @@ const SARCOPHAGI = [
   { x: 3803, y: 5416 }, { x: 3808, y: 5416 }, { x: 3813, y: 5416 }, { x: 3818, y: 5416 },
   { x: 3803, y: 5400 }, { x: 3808, y: 5400 }, { x: 3813, y: 5400 }, { x: 3818, y: 5400 },
 ];
+// Where rubble has fallen, its south-west tile: one pile from the north half, one from the south.
+const RUBBLE_ROW_X = [3798, 3803, 3804, 3805, 3806, 3807, 3808, 3809, 3810, 3811, 3816];
 const RUBBLE_TILES = [
-  [{ x: 3798, y: 5413 }, { x: 3798, y: 5407 }, { x: 3798, y: 5401 }, { x: 3803, y: 5401 }, { x: 3803, y: 5413 }, { x: 3805, y: 5407 }],
-  [{ x: 3816, y: 5413 }, { x: 3812, y: 5413 }, { x: 3812, y: 5406 }, { x: 3812, y: 5401 }, { x: 3817, y: 5401 }, { x: 3810, y: 5405 }],
+  [...RUBBLE_ROW_X.map((x) => ({ x, y: 5413 })), ...[3803, 3805, 3809, 3811].map((x) => ({ x, y: 5407 })), ...[3803, 3805, 3806, 3810, 3811].map((x) => ({ x, y: 5408 }))],
+  [...RUBBLE_ROW_X.map((x) => ({ x, y: 5401 })), ...[3803, 3804, 3805, 3808, 3811].map((x) => ({ x, y: 5406 }))],
 ];
 const BABOON_SPAWN = { x: 3811, y: 5408 };
 const PIT_WALL_X = 3798;
 const PIT_MIN_Y = 5406;
+const BOULDER_LIFE = 16;
+const BOULDER_SIZE = 3;
+const BOULDER_PUSH = 6;
+const BOULDER_SETS = 10;
+const THROW_TO_ROLL = 2;
+const THROW_INTERVAL = 8;
+const THROW_INTERVAL_DASH = 6;
+const BOULDER_THROWN_FROM = { x: 3816, y: 5409 };
+// Wiki, Boulder: hitpoints by team size (1-8) at path levels 0-1, 2-3 and 4+.
+const BOULDER_HITPOINTS = [
+  [25, 27, 31], [36, 39, 45], [47, 51, 58], [55, 60, 68], [62, 68, 77], [70, 77, 87], [77, 84, 96], [85, 93, 106],
+];
 
 const RUBBLE = 42838;
 const SARCOPHAGUS = 45752; // open: + 1
 const BANANA_PEEL = 45755;
 
 const ANIMATION = {
-  SPAWN: 9752, ATTACK: 9743, THROW_ROCK: 9744, FLY: 9748, THROW_BOULDERS: 9749, PLAYER_FLYBACK: 9799,
+  SPAWN: 9752, ATTACK: 9743, THROW_ROCK: 9744, FLY: 9748, THROW_BOULDERS: 9749, END_BOULDERS: 9751, PLAYER_FLYBACK: 9799,
   PIT_FALL: 4366, SLIP: 4030, COLLISION: 7210, SLIDE: 1114, BABOON_SPAWN: 9753, BABOON_RANGED: 9745, BABOON_MELEE: 9742,
 };
 const GRAPHIC = {
-  SHADOW_END: 1103, SHADOW_SLOW: 1447, SHADOW_FAST: 2111, SHADOW_RING: 1446, RUBBLE_FALL: 2250, ROCK_IMPACT: 1463,
+  SHADOW_END: 1103, SHADOW_SLOWEST: 1448, SHADOW_SLOW: 1447, SHADOW_FAST: 2111, SHADOW_RING: 1446, RUBBLE_FALL: 2250, ROCK_IMPACT: 1463,
   SARCO_OPEN: 128, SARCO_IMPACT: 2265, SLIP: 1575, STUN: 245,
 };
+const SHADOW_RINGS = [GRAPHIC.SHADOW_SLOW, GRAPHIC.SHADOW_RING, GRAPHIC.SHADOW_FAST];
+const SHADOW_RINGS_SHAKING = [GRAPHIC.SHADOW_SLOWEST, GRAPHIC.SHADOW_SLOW, GRAPHIC.SHADOW_RING, GRAPHIC.SHADOW_FAST];
+const SHADOW_RINGS_STOMP = [GRAPHIC.SHADOW_FAST, GRAPHIC.SHADOW_FAST, GRAPHIC.SHADOW_FAST];
+const SHADOW_RING_DELAY = 30;
 const PROJECTILE = { ROCK: 2244, BOULDER: 2245, SARCO: 2246, BABOON: 2243 };
 const SOUND = { THROW_ROCK: 6023, FLYBACK: 3201, BOULDERS: 5981, RUBBLE: 5949, ROCK_IMPACT: 5987, SLIP: 2727, COLLISION: 6033, DARKNESS: 3737, SHADOW_END: 5972 };
 
-const MAX_HIT = { MELEE: 24, ROCK: 39, SLAM: 17, RUBBLE: 19, COLLISION: 14, SARCO: 8, BANANA: 8, BABOON: 12 };
-const COVER = { rubble: 0.05, sarcophagus: 0.55, baboon: 0.45 };
+const MAX_HIT = { MELEE: 24, ROCK_SOLO: 39, ROCK_PARTY: 24, RUBBLE: 19, SARCO: 8, BANANA: 6, BABOON: 12 };
+const SLAM_BY_RING = [24, 15, 10, 6];
+const COLLISION = { min: 14, max: 21 };
 const COVER_COST = { rubble: 10, sarcophagus: 30, baboon: 12 };
+const RUBBLE_HEALTH = 10;
 const SARCOPHAGUS_HEALTH = 100;
-const BABOON_RESPAWN = 325;
+const SARCOPHAGUS_HIT = 20;
+const SARCOPHAGUS_FIRST_SHOT = 6;
+const SARCOPHAGUS_INTERVAL = 3;
+const SARCOPHAGUS_SHOTS = { min: 2, max: 3 };
+const SARCOPHAGUS_LANDS = 3;
+const SARCOPHAGUS_REACH = [{ width: 3, depth: 6 }, { width: 5, depth: 8 }, { width: 7, depth: 10 }];
+const FAITH_FACTOR = 0.15;
+const BABOON_HITPOINTS = 10;
+const BABOON_FIRST = 42;
+const BABOON_RESPAWN = 150;
+const BABOON_ATTACK_SPEED = 3;
+const ATTACK_SPEED = 6;
+const FIRST_ROCKFALL = 12;
+const ROCK_AFTER_FALL = 11;
+const ROCK_AGAIN = 34;
+const ROCK_LANDS = 7;
+const FALL_AFTER_ROCK = 2;
+const SLAM_EVERY = 5;
+const PEEL_STUN = 5;
+const TASK = { PERFECT: "Perfect Ba-Ba", SKIP: "No skipping allowed", RUSH: "I'm in a rush", EXPERT: "Ba-Bananza" };
+const RUSH_BOULDERS = 4; // Wiki: "four or fewer"; the game's message says five.
+const EXPERT_PATH_LEVEL = 4;
 
 class BaBaRoom extends Raid.Room {
   build() {
@@ -56,8 +143,10 @@ class BaBaRoom extends Raid.Room {
     this.rockTiles = [];
     this.rubbleTicks = 0;
     this.sarcophagi = SARCOPHAGI.map((tile, index) => ({ tile, index, health: SARCOPHAGUS_HEALTH, open: false, pending: 0 }));
-    this.baboons = [null, null];
+    this.baboons = new Array(Math.min(4, Math.ceil(this.teamSize / 2))).fill(null);
     this.boulders = new Set();
+    this.bouldersDestroyed = 0;
+    this.dying = false;
     this.peels = new Map();
     this.settingsCache = {
       shaking: this.settings.isActive("SHAKING_THINGS_UP"),
@@ -71,13 +160,14 @@ class BaBaRoom extends Raid.Room {
 
   onStart() {
     const { NpcIdentifiers, Animation } = Shared.core();
-    this.baba = this.spawn(NpcIdentifiers.BA_BA, SPAWN, { points: 2, face: 3 }); // Wiki: 2 points per damage
+    this.baba = this.spawn(NpcIdentifiers.BA_BA, SPAWN, { points: 2, face: 3 }); // Wiki, Chest: 2 points per damage
     if (!this.baba) return;
     this.baba.__toaBaba = true;
     this.baba.performAnimation(new Animation(ANIMATION.SPAWN));
     this.state = {
-      shadowCycle: 2, slam: null, underneath: 2, rockThrow: 0, rockImpact: 0, baboonTicks: -1,
-      script: [], scriptDelay: 0, cracked: Shared.random(0, 4), lastHp: this.baba.getHitpoints(),
+      shadowCycle: 3, slam: null, underneath: 2, rockDue: 0, fallTicks: FIRST_ROCKFALL, rockImpact: 0, baboonTicks: BABOON_FIRST,
+      script: [], scriptDelay: 0, cracked: Shared.random(1, 3), lastHp: this.baba.getHitpoints(),
+      boulders: false, phasesDone: 0, phasesWaiting: 0,
     };
     this.openBossHud(this.baba);
   }
@@ -88,6 +178,34 @@ class BaBaRoom extends Raid.Room {
 
   onComplete() {
     this.clearAdds();
+    this.reportTasks();
+  }
+
+  allInvocations() {
+    const on = this.settingsCache;
+    return on.shaking && on.gap && on.dash && on.japes && on.faith;
+  }
+
+  failPerfect(reason) {
+    this.raid.failTask(TASK.PERFECT, reason);
+  }
+
+  reportTasks() {
+    const survivors = this.deathlessPlayers();
+    if (survivors.length > 0) this.raid.completeTask(TASK.RUSH, survivors);
+    if (survivors.length > 0 && this.settingsCache.dash) this.raid.completeTask(TASK.SKIP, survivors);
+    if (!this.allInvocations()) return;
+    if (this.teamSize >= 2) this.raid.completeTask(TASK.PERFECT);
+    if (survivors.length > 0 && this.pathLevel() >= EXPERT_PATH_LEVEL) this.raid.completeTask(TASK.EXPERT, survivors);
+  }
+
+  /** The Wiki's two boulder tasks: every boulder counts for the rush, a cracked one for its destroyer. */
+  boulderDestroyed(boulder) {
+    this.bouldersDestroyed++;
+    if (boulder.__toaBoulder.cracked && boulder.__toaLastHit?.isPlayer?.()) {
+      this.raid.failTask(TASK.SKIP, "You destroyed a weakened boulder.", boulder.__toaLastHit);
+    }
+    if (this.bouldersDestroyed > RUSH_BOULDERS) this.raid.failTask(TASK.RUSH, "More than five rolling boulders were destroyed.");
   }
 
   onReset() {
@@ -100,7 +218,7 @@ class BaBaRoom extends Raid.Room {
     for (const rubble of this.rubble) if (rubble) this.removeRubble(rubble);
     this.rubble = [null, null];
     for (const baboon of this.baboons) if (baboon) this.despawn(baboon);
-    this.baboons = [null, null];
+    this.baboons = this.baboons.map(() => null);
     for (const boulder of this.boulders) this.despawn(boulder);
     this.boulders.clear();
     for (const tile of this.peels.values()) this.setObject(-1, tile, 10);
@@ -140,9 +258,14 @@ class BaBaRoom extends Raid.Room {
       }
       return;
     }
-    if (state.rockThrow > 0 && --state.rockThrow <= 0) this.throwRock(players);
-    else if (state.rockImpact > 0 && --state.rockImpact <= 0) this.landRock(players);
-    else if (state.baboonTicks > 0 && --state.baboonTicks <= 0) state.baboonTicks = this.spawnBaboons() ? BABOON_RESPAWN : 10;
+    if (state.phasesWaiting > 0 && !state.slam) {
+      state.phasesWaiting--;
+      this.boulderPhase();
+      return;
+    }
+    if (state.fallTicks > 0 && --state.fallTicks <= 0) this.dropRubble();
+    if (state.rockImpact > 0 && --state.rockImpact <= 0) this.landRock(players);
+    if (state.baboonTicks > 0 && --state.baboonTicks <= 0) state.baboonTicks = this.spawnBaboons() ? BABOON_RESPAWN : 10;
     if (state.slam && --state.slam.ticks <= 0) this.slam(players);
     const target = baba.getCombat().getTarget?.();
     if (target && !state.slam && overlaps(baba, target)) {
@@ -155,35 +278,41 @@ class BaBaRoom extends Raid.Room {
     }
   }
 
-  /** 75%: baboons start coming. 66% and 33%: the boulder phase. */
+  /** 66% and 33%: the boulder phase, as soon as the last one is over. */
   checkThresholds() {
     const baba = this.baba;
     const state = this.state;
     const now = baba.getHitpoints();
     const max = baba.getMaxHitpoints();
     const crossed = (share) => state.lastHp > Math.floor(max * share) && now <= Math.floor(max * share);
-    if (crossed(0.75)) state.baboonTicks = 1;
-    if (crossed(0.66) || crossed(0.33)) this.boulderPhase();
+    if (now > 0 && crossed(0.66)) state.phasesWaiting++;
+    if (now > 0 && crossed(0.33)) state.phasesWaiting++;
     state.lastHp = now;
   }
 
   // -------------------------------------------------------------- attacks
 
-  /** One swing at her target; every few she slams the ground instead. */
+  /** One swing at her target; every few she slams the ground or throws her rock instead. */
   attack(target, method) {
     const state = this.state;
     if (!state || this.busy()) return [];
     const { Animation } = Shared.core();
-    if (state.rockImpact <= 0 && (state.shadowCycle <= 0 || --state.shadowCycle <= 0)) {
-      this.startSlam(target, false);
-      state.shadowCycle = 5;
+    const players = this.challengePlayers();
+    if (state.rockDue > 0 && Shared.cycle() >= state.rockDue && state.rockImpact <= 0) {
+      state.rockDue = 0;
+      state.shadowCycle--;
+      this.throwRock(players);
       return [];
     }
-    if (state.shadowCycle === 3) {
-      this.dropRubble();
-      state.rockThrow = 13;
+    if (--state.shadowCycle <= 0) {
+      state.shadowCycle = SLAM_EVERY;
+      this.startSlam(target, false);
+      return [];
     }
     this.baba.performAnimation(new Animation(ANIMATION.ATTACK));
+    if (target.isPlayer?.() && !Shared.isProtected(target, "melee")) {
+      this.failPerfect(`${Shared.displayName(target)} didn't pray against a melee attack.`);
+    }
     // Wiki: since June 2025 her melee is fully blocked by Protect from Melee.
     return [this.styledHit(this.baba, target, method, "melee", MAX_HIT.MELEE, 0, { prayerMultiplier: 0 })];
   }
@@ -193,23 +322,26 @@ class BaBaRoom extends Raid.Room {
     baba.getCombat().reset();
     const centre = underneath ? baba.getLocation().transform(2, 2) : target.getLocation().clone();
     const fast = overlaps(baba, target);
-    this.state.slam = { centre, fast, ticks: fast ? 2 : 4 };
-    this.graphic(fast ? GRAPHIC.SHADOW_FAST : GRAPHIC.SHADOW_SLOW, centre);
-    for (let distance = 1; distance < (this.settingsCache.shaking ? 4 : 3); distance++) {
+    const rings = fast ? SHADOW_RINGS_STOMP : this.settingsCache.shaking ? SHADOW_RINGS_SHAKING : SHADOW_RINGS;
+    this.state.slam = { centre, fast, target, ticks: fast ? 2 : rings.length + 1 };
+    rings.forEach((graphic, distance) => {
+      const delay = distance * SHADOW_RING_DELAY;
+      if (distance === 0) {
+        this.graphic(graphic, centre, { delay });
+        return;
+      }
       for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
         const tile = centre.transform(dx * distance, dy * distance);
-        if (Shared.floorFree(this.area, tile)) {
-          this.graphic(distance === 1 && !fast ? GRAPHIC.SHADOW_RING : GRAPHIC.SHADOW_FAST, tile, { delay: distance * 30 });
-        }
+        if (Shared.floorFree(this.area, tile)) this.graphic(graphic, tile, { delay });
       }
-    }
+    });
     for (const player of this.challengePlayers()) Shared.sound(player, SOUND.DARKNESS);
   }
 
-  /** The slam lands: full damage in the middle, a tenth less per tile out. */
+  /** The slam lands: hardest in the middle, weaker each ring out. */
   slam(players) {
     const { Animation } = Shared.core();
-    const { centre, fast } = this.state.slam;
+    const { centre, fast, target } = this.state.slam;
     this.state.slam = null;
     this.baba.performAnimation(new Animation(ANIMATION.ATTACK));
     const length = this.settingsCache.shaking || fast ? 3 : 2;
@@ -219,18 +351,21 @@ class BaBaRoom extends Raid.Room {
         const tile = centre.transform(dx, dy);
         if (!Shared.floorFree(this.area, tile)) continue;
         const distance = Math.max(Math.abs(dx), Math.abs(dy));
-        this.graphic(GRAPHIC.SHADOW_END, tile, { delay: distance === 0 ? 0 : (1 + distance) * 6 });
+        this.graphic(GRAPHIC.SHADOW_END, tile, { delay: distance * 6 });
         for (const player of players) {
           if (!player.getLocation().equals(tile)) continue;
-          Shared.damage(player, Math.floor((1 - 0.1 * distance) * this.maxHit(MAX_HIT.SLAM)) + Shared.random(0, 5));
+          Shared.damage(player, this.maxHit(SLAM_BY_RING[distance]));
+          this.failPerfect(`${Shared.displayName(player)} was hit by Ba-Ba's slam.`);
         }
       }
     }
+    if (target?.getHitpoints?.() > 0 && this.inChallenge(target)) this.baba.getCombat().attack(target);
   }
 
+  /** Rock falls on each player's tile and on two piles of debris; the rock throw follows. */
   dropRubble() {
-    const speed = Math.min(2, Math.floor(this.pathLevel() / 2));
-    this.rubbleTicks = 6 - speed * 2;
+    const faster = this.pathLevel() >= 2;
+    this.rubbleTicks = faster ? 4 : 6;
     this.rockTiles = [];
     for (const player of this.challengePlayers()) {
       const location = player.getLocation();
@@ -243,11 +378,13 @@ class BaBaRoom extends Raid.Room {
         const location = Shared.loc(tile, 0);
         if (!Shared.floorFree(this.area, location) || overlapsTile(this.baba, location, 3)) continue;
         this.nextRubble[side] = location;
-        this.rockTiles.push(location);
+        // The shadow marks the pile's middle tile, and only that tile hurts.
+        this.rockTiles.push(location.transform(1, 1));
         break;
       }
     }
-    for (const tile of this.rockTiles) this.graphic(GRAPHIC.RUBBLE_FALL + speed, tile, { delay: 20 });
+    for (const tile of this.rockTiles) this.graphic(faster ? GRAPHIC.RUBBLE_FALL + 1 : GRAPHIC.RUBBLE_FALL, tile, { delay: 20 });
+    this.state.rockDue = Shared.cycle() + ROCK_AFTER_FALL;
   }
 
   /** Rubble lands on the marked tiles, crushing anyone there and shoving others aside. */
@@ -255,11 +392,13 @@ class BaBaRoom extends Raid.Room {
     if (this.rubbleTicks <= 0 || --this.rubbleTicks > 0 || this.state.script.length > 0) return;
     for (const tile of this.rockTiles) {
       for (const player of players) {
-        if (player.getLocation().equals(tile)) Shared.damage(player, this.maxHit(MAX_HIT.RUBBLE) + Shared.random(0, 5));
+        if (!player.getLocation().equals(tile)) continue;
+        Shared.damage(player, this.maxHit(MAX_HIT.RUBBLE) + Shared.random(0, 5));
+        this.failPerfect(`${Shared.displayName(player)} was hit by falling rocks.`);
       }
     }
     this.rockTiles = [];
-    const health = 10 + Math.floor((players.length - 1) / 2) * 10;
+    const health = RUBBLE_HEALTH * Math.max(1, players.length);
     for (let side = 0; side < 2; side++) {
       const location = this.nextRubble[side];
       if (!location) continue;
@@ -274,7 +413,7 @@ class BaBaRoom extends Raid.Room {
       rubble.getMovementQueue().setBlockMovement(true);
       this.setObject(RUBBLE, { x: location.getX(), y: location.getY(), z: 0 }, 10, 2);
       this.rubble[side] = rubble;
-      for (const baboon of this.baboons) if (baboon && overlaps(rubble, baboon)) baboon.setHitpoints(0);
+      for (const baboon of this.baboons) if (baboon && overlaps(rubble, baboon)) Shared.kill(baboon);
       for (const player of players) if (overlaps(rubble, player)) this.shoveOut(player, rubble);
     }
   }
@@ -288,6 +427,7 @@ class BaBaRoom extends Raid.Room {
           const tile = location.transform(dx, dy);
           if (!Shared.floorFree(this.area, tile) || overlapsTile(rubble, tile, 1)) continue;
           player.forceChat?.("Ouch!");
+          player.sendMessage("You are knocked back from the rubble.");
           player.performAnimation(new (Shared.core().Animation)(ANIMATION.SLIDE));
           Shared.knockback(player, dx, dy, { ticks: 1, speed: 29 });
           return;
@@ -305,23 +445,29 @@ class BaBaRoom extends Raid.Room {
   throwRock(players) {
     const { Animation } = Shared.core();
     this.baba.performAnimation(new Animation(ANIMATION.THROW_ROCK));
-    this.state.rockImpact = 7;
+    this.state.rockImpact = ROCK_LANDS;
     for (const player of players) {
-      player.sendMessage("<col=ef0083>Ba-Ba throws a large boulder at you.</col>");
-      Shared.sound(player, SOUND.THROW_ROCK);
-      Shared.tileProjectile(this.area, this.baba, player, PROJECTILE.ROCK, { delay: 90, duration: 120, startHeight: 100, endHeight: 31 });
+      player.sendMessage("<col=ff289d>Ba-Ba throws a large boulder at you.</col>");
+      Shared.sound(player, SOUND.THROW_ROCK, 10);
+      Shared.tileProjectile(this.area, this.baba, player, PROJECTILE.ROCK, { delay: 90, duration: 120, perTile: 0, startHeight: 100, endHeight: 31, angle: 40 });
     }
   }
 
-  /** The rock lands on everyone; standing beside cover soaks most of it, at the cover's expense. */
+  /**
+   * The rock lands on everyone. Beside cover it does nothing at the cover's expense (Wiki: since
+   * June 2025 "always split completely"); beside another player the two share it.
+   */
   landRock(players) {
-    const base = this.maxHit(MAX_HIT.ROCK);
+    const base = this.maxHit(this.teamSize > 1 ? MAX_HIT.ROCK_PARTY : MAX_HIT.ROCK_SOLO);
     for (const player of players) {
       player.performGraphic(Shared.gfx(GRAPHIC.ROCK_IMPACT, { height: 50 }));
       Shared.sound(player, SOUND.ROCK_IMPACT);
-      const cover = this.coverFor(player);
-      Shared.damage(player, cover ? Math.floor(base * COVER[cover.kind]) : base);
+      if (this.coverFor(player)) continue;
+      const beside = players.filter((other) => other !== player && other.getLocation().getDistance(player.getLocation()) <= 1).length;
+      Shared.damage(player, Math.floor(base / (1 + beside)));
+      this.failPerfect(`${Shared.displayName(player)} was hit by Ba-Ba's rock.`);
     }
+    let destroyed = false;
     for (const rubble of this.rubble) {
       if (rubble && rubble.__toaCover.pending > 0) {
         rubble.setHitpoints(Math.max(0, rubble.getHitpoints() - rubble.__toaCover.pending));
@@ -329,6 +475,7 @@ class BaBaRoom extends Raid.Room {
         if (rubble.getHitpoints() <= 0) {
           this.rubble[this.rubble.indexOf(rubble)] = null;
           this.removeRubble(rubble);
+          destroyed = true;
         }
       }
     }
@@ -342,6 +489,8 @@ class BaBaRoom extends Raid.Room {
         baboon.__toaCover.pending = 0;
       }
     }
+    if (destroyed) this.state.fallTicks = FALL_AFTER_ROCK;
+    else this.state.rockDue = Shared.cycle() + ROCK_AGAIN;
   }
 
   coverFor(player) {
@@ -370,40 +519,47 @@ class BaBaRoom extends Raid.Room {
     if (sarcophagus.health <= 0) this.openSarcophagus(sarcophagus);
   }
 
-  /** An opened sarcophagus spits three bursts of debris every four ticks. */
+  /** An opened sarcophagus spits two or three shots every three ticks, into a cone by path level. */
   openSarcophagus(sarcophagus) {
     sarcophagus.open = true;
+    this.failPerfect("A sarcophagus was opened.");
     const origin = Shared.loc(sarcophagus.tile, 0);
     const south = sarcophagus.index > 3;
     this.setObject(SARCOPHAGUS + 1, { ...sarcophagus.tile, z: 0 }, 10, sarcophagus.index < 4 ? 1 : 3);
-    this.repeat(4, () => {
+    const reach = SARCOPHAGUS_REACH[Math.min(2, Math.floor(this.pathLevel() / 2))];
+    this.later(SARCOPHAGUS_FIRST_SHOT - SARCOPHAGUS_INTERVAL, () => this.repeat(SARCOPHAGUS_INTERVAL, () => {
       if (!this.baba || this.baba.getHitpoints() <= 0) return false;
       this.graphic(GRAPHIC.SARCO_OPEN, origin, { height: 150 });
       const tiles = [];
-      for (let dx = -4; dx <= 4; dx++) {
-        for (let dy = -8; dy <= -1; dy++) {
-          const tile = origin.transform(dx, south ? -dy : dy);
+      for (let dx = -reach.width; dx <= reach.width; dx++) {
+        for (let dy = 1; dy <= reach.depth; dy++) {
+          const tile = origin.transform(dx, south ? dy : -dy);
           if (Shared.floorFree(this.area, tile)) tiles.push(tile);
         }
       }
-      for (const tile of Shared.shuffle(tiles).slice(0, 3)) {
-        Shared.tileProjectile(this.area, origin, tile, PROJECTILE.SARCO, { duration: 90, startHeight: 37, endHeight: 0 });
-        this.later(2, () => {
+      for (const tile of Shared.shuffle(tiles).slice(0, Shared.random(SARCOPHAGUS_SHOTS.min, SARCOPHAGUS_SHOTS.max))) {
+        Shared.tileProjectile(this.area, origin, tile, PROJECTILE.SARCO, { duration: 90, perTile: 0, startHeight: 37, endHeight: 0, angle: 44 });
+        this.later(SARCOPHAGUS_LANDS, () => {
           this.graphic(GRAPHIC.SARCO_IMPACT, tile, { delay: 5 });
           for (const player of this.challengePlayers()) {
             if (!player.getLocation().equals(tile)) continue;
-            let damage = Math.floor(MAX_HIT.SARCO * this.raid.damageFactor(0));
-            if (this.settingsCache.faith) {
-              const { Skill } = Shared.core();
-              const skills = player.getSkillManager();
-              damage += Math.floor(Math.max(0, skills.getCurrentLevel(Skill.PRAYER) - skills.getMaxLevel(Skill.PRAYER)) * 0.15);
-            }
-            Shared.damage(player, damage + Shared.random(0, 1));
+            Shared.damage(player, this.sarcophagusDamage(player));
           }
         });
       }
       return true;
-    });
+    }));
+  }
+
+  /** Wiki: Gotta Have Faith adds damage the lower the player's prayer points. */
+  sarcophagusDamage(player) {
+    let damage = this.maxHit(MAX_HIT.SARCO);
+    if (this.settingsCache.faith) {
+      const { Skill } = Shared.core();
+      const skills = player.getSkillManager();
+      damage += Math.floor(Math.max(0, skills.getMaxLevel(Skill.PRAYER) - skills.getCurrentLevel(Skill.PRAYER)) * FAITH_FACTOR);
+    }
+    return damage + Shared.random(0, 1);
   }
 
   // -------------------------------------------------------------- baboons
@@ -413,8 +569,8 @@ class BaBaRoom extends Raid.Room {
     const free = this.baboons.map((baboon, index) => (!baboon || baboon.getHitpoints() <= 0 ? index : -1)).filter((index) => index !== -1);
     if (free.length === 0) return false;
     const tiles = [];
-    for (let dx = -5; dx <= 3; dx++) {
-      for (let dy = -4; dy <= 4; dy++) {
+    for (let dx = -5; dx <= 8; dx++) {
+      for (let dy = -4; dy <= 6; dy++) {
         const tile = Shared.loc({ x: BABOON_SPAWN.x + dx, y: BABOON_SPAWN.y + dy }, 0);
         if (Shared.floorFree(this.area, tile) && !overlapsTile(this.baba, tile, 1)) tiles.push(tile);
       }
@@ -423,8 +579,10 @@ class BaBaRoom extends Raid.Room {
     free.forEach((slot, index) => {
       const tile = shuffled[index];
       if (!tile) return;
-      const baboon = this.spawn(NpcIdentifiers.BABOON, { x: tile.getX(), y: tile.getY(), z: 0 }, { points: 1 });
+      const baboon = this.spawn(NpcIdentifiers.BABOON, { x: tile.getX(), y: tile.getY(), z: 0 }, { points: 1, scale: false });
       if (!baboon) return;
+      baboon.setMaxHitpoints(BABOON_HITPOINTS);
+      baboon.setHitpoints(BABOON_HITPOINTS);
       baboon.__toaCover = { kind: "baboon", pending: 0, shots: 3 };
       baboon.performAnimation(new Animation(ANIMATION.BABOON_SPAWN));
       this.baboons[slot] = baboon;
@@ -441,7 +599,7 @@ class BaBaRoom extends Raid.Room {
       if (!baboon) return;
       if (baboon.getHitpoints() <= 0 || baboon.isRegistered?.() === false) {
         this.baboons[slot] = null;
-        if (this.settingsCache.japes) this.dropPeel(baboon.getLocation());
+        if (this.settingsCache.japes) this.dropPeels(baboon.getLocation());
         return;
       }
       const cover = baboon.__toaCover;
@@ -462,9 +620,9 @@ class BaBaRoom extends Raid.Room {
       const tile = Shared.loc(sarcophagus.tile, 0);
       if (baboon.getLocation().getDistance(tile) > 2) {
         if (baboon.getMovementQueue().size() === 0) PathFinder.calculateWalkRoute(baboon, tile.getX(), tile.getY() + (sarcophagus.index < 4 ? -2 : 2));
-      } else if (Shared.cycle() % 4 === 0) {
+      } else if (Shared.cycle() % BABOON_ATTACK_SPEED === 0) {
         baboon.performAnimation(new Animation(ANIMATION.BABOON_MELEE));
-        this.damageSarcophagus(sarcophagus, 20);
+        this.damageSarcophagus(sarcophagus, SARCOPHAGUS_HIT);
         if (sarcophagus.open) cover.shots = 3;
       }
     });
@@ -473,17 +631,26 @@ class BaBaRoom extends Raid.Room {
   baboonShot(npc, target, method) {
     const { Animation } = Shared.core();
     npc.performAnimation(new Animation(ANIMATION.BABOON_RANGED));
-    const ticks = Shared.tileProjectile(this.area, npc, target, PROJECTILE.BABOON, { delay: 67, duration: 34, perTile: 4, startHeight: 36, endHeight: 36 });
+    const ticks = Shared.tileProjectile(this.area, npc, target, PROJECTILE.BABOON, { delay: 67, duration: 0, perTile: 4, startHeight: 17, endHeight: 36, angle: 14 });
     if (npc.__toaCover.shots > 0) npc.__toaCover.shots--;
     return [this.styledHit(npc, target, method, "ranged", MAX_HIT.BABOON, ticks, { scale: false })];
   }
 
+  /** Wiki: since June 2025 two peels from each fallen baboon, on its tile and one beside it. */
+  dropPeels(location) {
+    this.dropPeel(location);
+    for (const [dx, dy] of Shared.shuffle([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
+      if (this.dropPeel(location.transform(dx, dy))) return;
+    }
+  }
+
   dropPeel(location) {
     const tileKey = `${location.getX()},${location.getY()}`;
-    if (this.peels.has(tileKey) || !Shared.floorFree(this.area, location)) return;
+    if (this.peels.has(tileKey) || !Shared.floorFree(this.area, location)) return false;
     const tile = { x: location.getX(), y: location.getY(), z: 0 };
     this.peels.set(tileKey, tile);
     this.setObject(BANANA_PEEL, tile, 10, Shared.random(0, 3));
+    return true;
   }
 
   /** Jungle Japes: banana skins left by fallen baboons trip you up. */
@@ -494,59 +661,83 @@ class BaBaRoom extends Raid.Room {
     const { Animation } = Shared.core();
     this.peels.delete(tileKey);
     this.setObject(-1, tile, 10);
-    Shared.damage(player, Math.floor(MAX_HIT.BANANA * this.raid.damageFactor(0)));
-    player.sendMessage("You slip and fall on a banana skin!");
+    Shared.damage(player, this.maxHit(MAX_HIT.BANANA) + Shared.random(-1, 1));
     player.performAnimation(new Animation(ANIMATION.SLIP));
     player.performGraphic(Shared.gfx(GRAPHIC.SLIP, { height: 124 }));
     Shared.sound(player, SOUND.SLIP);
     player.getMovementQueue().reset();
     player.getMovementQueue().setBlockMovement(true);
-    Shared.later(player, 5, () => player.getMovementQueue().setBlockMovement(false));
+    Shared.later(player, PEEL_STUN, () => player.getMovementQueue().setBlockMovement(false));
   }
 
   // -------------------------------------------------------------- boulders
 
   /** She leaps back, throws everyone against the pit wall, then rolls waves of boulders. */
   boulderPhase() {
-    const { Animation } = Shared.core();
+    const { Animation, NpcIdentifiers } = Shared.core();
     const baba = this.baba;
     const state = this.state;
     baba.getCombat().reset();
     baba.getMovementQueue().reset();
     baba.getMovementQueue().setBlockMovement(true);
     baba.setUntargetable(true);
-    state.rockThrow = 0;
+    state.boulders = true;
+    state.cracked = Shared.random(1, 3);
+    state.rockDue = 0;
+    state.rockImpact = 0;
+    state.fallTicks = 0;
     state.slam = null;
     state.underneath = 2;
+    this.clearRockfall();
     const script = [];
     script.push([3, () => {}]);
-    script.push([1, () => {
+    script.push([2, () => {
+      baba.moveTo(Shared.loc(SPAWN));
       baba.performAnimation(new Animation(ANIMATION.FLY));
-      this.clearRockfall();
     }]);
-    script.push([1, () => baba.moveTo(Shared.loc(SPAWN))]);
-    script.push([1, () => this.knockToWall()]);
-    script.push([0, () => {
-      this.clearRockfall();
+    script.push([THROW_TO_ROLL, () => {
+      baba.setNpcTransformationId(NpcIdentifiers.BA_BA_3);
+      this.knockToWall();
       baba.setUntargetable(false);
     }]);
-    const waves = this.settingsCache.dash ? 15 : 10;
-    for (let wave = 0; wave < waves; wave++) {
-      script.push([2, () => {
+    const interval = this.settingsCache.dash ? THROW_INTERVAL_DASH : THROW_INTERVAL;
+    for (let wave = 0; wave < BOULDER_SETS; wave++) {
+      script.push([THROW_TO_ROLL, () => {
         for (const player of this.challengePlayers()) Shared.sound(player, SOUND.BOULDERS);
         for (const start of BOULDER_STARTS) {
-          Shared.tileProjectile(this.area, baba, Shared.loc({ x: start.x + 2, y: start.y }, 0), PROJECTILE.BOULDER, { delay: 30, duration: 60, startHeight: 50, endHeight: 5 });
+          Shared.tileProjectile(this.area, Shared.loc(BOULDER_THROWN_FROM, 0), Shared.loc({ x: start.x + 2, y: start.y }, 0), PROJECTILE.BOULDER,
+            { delay: 30, duration: 60, perTile: 0, startHeight: 50, endHeight: 5, angle: 35 });
         }
         baba.performAnimation(new Animation(ANIMATION.THROW_BOULDERS));
-        state.cracked = Math.max(0, Math.min(4, state.cracked + Shared.random(0, 4) - 2));
+        // Wiki: the first in the middle three, then up to two places from the last.
+        if (wave > 0) state.cracked = Math.max(0, Math.min(4, state.cracked + Shared.random(0, 4) - 2));
       }]);
-      script.push([this.settingsCache.dash ? 5 : 6, () => {
+      script.push([interval - THROW_TO_ROLL, () => {
         BOULDER_STARTS.forEach((start, index) => this.rollBoulder(start, index === state.cracked));
       }]);
     }
-    script.push([0, () => baba.getMovementQueue().setBlockMovement(false)]);
+    script.push([0, () => this.endBoulders()]);
     state.script = script;
     state.scriptDelay = 0;
+  }
+
+  /** The set is over, or (Wiki) someone hit her with melee: back to fighting, the second time as 11779. */
+  endBoulders() {
+    const { Animation, NpcIdentifiers } = Shared.core();
+    const baba = this.baba;
+    const state = this.state;
+    if (!state.boulders) return;
+    state.boulders = false;
+    state.script = [];
+    state.scriptDelay = 0;
+    state.phasesDone++;
+    baba.setNpcTransformationId(state.phasesDone > 1 ? NpcIdentifiers.BA_BA_2 : NpcIdentifiers.BA_BA);
+    baba.performAnimation(new Animation(ANIMATION.END_BOULDERS));
+    baba.getMovementQueue().setBlockMovement(false);
+    state.shadowCycle = 3;
+    state.fallTicks = FIRST_ROCKFALL;
+    const target = Shared.randomOf(this.challengePlayers());
+    if (target) baba.getCombat().attack(target);
   }
 
   clearRockfall() {
@@ -566,14 +757,14 @@ class BaBaRoom extends Raid.Room {
   knockToWall() {
     const { Animation } = Shared.core();
     for (const player of this.challengePlayers()) {
-      player.sendMessage("<col=ef0083>Ba-Ba screams and knocks you back!</col>");
+      player.sendMessage("<col=ff289d>Ba-Ba screams and knocks you back!</col>");
       player.performAnimation(new Animation(ANIMATION.PLAYER_FLYBACK));
       player.performGraphic(Shared.gfx(GRAPHIC.STUN, { height: 124 }));
       Shared.sound(player, SOUND.FLYBACK);
       const location = player.getLocation();
       const gap = this.settingsCache.gap && this.intoGap(location.getY());
       const targetX = PIT_WALL_X + (gap ? -2 : 0);
-      if (targetX !== location.getX()) Shared.knockback(player, targetX - location.getX(), 0, { ticks: 1, speed: 5 + 10 * Math.abs(targetX - location.getX()) });
+      if (targetX !== location.getX()) Shared.knockback(player, targetX - location.getX(), 0, { ticks: 1, speed: 120 });
       if (gap) this.later(2, () => this.fallIntoPit(player));
     }
   }
@@ -588,24 +779,19 @@ class BaBaRoom extends Raid.Room {
   rollBoulder(start, cracked) {
     const { NpcIdentifiers } = Shared.core();
     const id = cracked ? NpcIdentifiers.COL_00FFFF_BOULDER_COL_6 : NpcIdentifiers.COL_00FFFF_BOULDER_COL_5;
-    const boulder = this.spawn(id, { ...start, z: 0 }, { scale: false, points: 0 });
+    const boulder = this.spawn(id, { ...start, z: 0 }, { scale: false, points: 1 }); // Wiki: 1 point for most NPCs
     if (!boulder) return;
     boulder.__toaScripted = true;
-    boulder.__toaBoulder = { cracked };
+    boulder.__toaBoulder = { cracked, life: BOULDER_LIFE };
     boulder.canWalkThroughNPCs = () => true;
-    let health = cracked ? 1 : boulder.getDefinition().getHitpoints();
-    if (!cracked) {
-      const level = this.pathLevel();
-      // Wiki: +2 at path level 2 (27), and 4 more at level 4 (31).
-      health += level >= 4 ? 6 : level >= 2 ? 2 : 0;
-      health = Math.floor(health * (1 + 0.45 * (this.teamSize - 1)));
-    }
+    const level = this.pathLevel();
+    const health = BOULDER_HITPOINTS[Math.min(8, Math.max(1, this.teamSize)) - 1][level >= 4 ? 2 : level >= 2 ? 1 : 0];
     boulder.setMaxHitpoints(health);
     boulder.setHitpoints(health);
     this.boulders.add(boulder);
   }
 
-  /** Boulders roll a tile west each tick, flattening whoever they meet. */
+  /** Boulders roll a tile west each tick, flattening whoever they meet, baboons and debris too. */
   tickBoulders(players) {
     const { Animation } = Shared.core();
     for (const boulder of [...this.boulders]) {
@@ -616,25 +802,30 @@ class BaBaRoom extends Raid.Room {
       const location = boulder.getLocation();
       for (const player of players) {
         const at = player.getLocation();
-        if (at.getX() < location.getX() || at.getX() > location.getX() + 1 || at.getY() < location.getY() || at.getY() > location.getY() + 2) continue;
+        if (at.getX() < location.getX() || at.getX() >= location.getX() + BOULDER_SIZE - 1 || at.getY() < location.getY() || at.getY() >= location.getY() + BOULDER_SIZE) continue;
         Shared.sound(player, SOUND.COLLISION);
-        const pushTo = at.getX() - (this.settingsCache.dash ? 5 : 6);
+        const pushTo = at.getX() - BOULDER_PUSH;
         if (this.settingsCache.gap && pushTo < PIT_WALL_X && this.intoGap(at.getY())) {
           Shared.knockback(player, PIT_WALL_X - 1 - at.getX(), 0, { ticks: 1, speed: 30 });
           this.later(1, () => this.fallIntoPit(player));
         } else {
           player.performAnimation(new Animation(ANIMATION.COLLISION));
           Shared.knockback(player, Math.max(PIT_WALL_X, pushTo) - at.getX(), 0, { ticks: 1, speed: 30 });
-          Shared.damage(player, Math.floor(this.raid.damageFactor(0) * MAX_HIT.COLLISION));
+          this.later(1, () => Shared.damage(player, Math.floor(Shared.random(COLLISION.min, COLLISION.max) * this.damageFactor())));
         }
+        this.failPerfect(`${Shared.displayName(player)} was hit by a rolling boulder.`);
       }
       for (const baboon of this.baboons) {
-        if (baboon && baboon.getLocation().getX() === location.getX() && baboon.getLocation().getY() >= location.getY() && baboon.getLocation().getY() <= location.getY() + 2) {
-          baboon.setHitpoints(0);
+        if (baboon && overlaps(boulder, baboon)) Shared.kill(baboon);
+      }
+      for (let side = 0; side < 2; side++) {
+        const rubble = this.rubble[side];
+        if (rubble && overlaps(boulder, rubble)) {
+          this.removeRubble(rubble);
+          this.rubble[side] = null;
         }
       }
-      const next = location.transform(-1, 0);
-      if (!Shared.floorFree(this.area, next)) {
+      if (--boulder.__toaBoulder.life <= 0) {
         this.boulders.delete(boulder);
         this.despawn(boulder);
         continue;
@@ -642,12 +833,15 @@ class BaBaRoom extends Raid.Room {
       // No animate here: the boulder's own idle and walk animation is the roll (9518), and
       // restarting it every tick held the boulder still on the client (the sequence blocks
       // movement while it plays), however far it moved on the server.
-      Shared.walkStraight(boulder, next);
+      Shared.walkStraight(boulder, location.transform(-1, 0));
     }
   }
 
+  /** Her death plays out before the room is over (03280 6323-6327). */
   died() {
-    this.complete();
+    if (this.dying) return;
+    this.dying = true;
+    this.later(4, () => this.complete());
   }
 
   graphic(id, tile, options = {}) {
@@ -696,32 +890,42 @@ function babaRoom(npc) {
 // ------------------------------------------------------------------ hooks
 
 function babaDowned(event) {
-  const room = babaRoom(event.npc);
-  if (room && event.npc.__toaBaba) room.died();
-}
-
-/** Cracked boulders break at a single hit. */
-function crackedBoulder(event) {
   const npc = event.npc;
-  if (!babaRoom(npc) || !npc.__toaBoulder?.cracked) return;
-  for (const hit of event.hit.getHits()) hit.setDamage(Math.max(1, npc.getHitpoints()));
-  event.hit.updateTotalDamage();
+  const room = babaRoom(npc);
+  if (!room) return;
+  if (npc.__toaBaba) room.died();
+  else if (npc.__toaBoulder) room.boulderDestroyed(npc);
 }
 
-/** She shrugs off ranged attackers who stay safely across the pit during the boulders. */
-function babaUnreachable(event) {
-  const target = event.target;
-  const room = babaRoom(target);
-  if (!room || !target.__toaBaba || !room.busy() || !event.attacker?.isPlayer?.()) return;
-  if (room.state.script.length > 0) event.allow = false;
+/** Who last hit a boulder (for the tasks); melee on Ba-Ba ends the boulders (Wiki). */
+function boulderStruck(event) {
+  const npc = event.npc;
+  const room = babaRoom(npc);
+  if (!room) return;
+  const attacker = event.hit.getAttacker?.();
+  if (npc.__toaBoulder) npc.__toaLastHit = attacker;
+  if (npc.__toaBaba && room.state?.boulders && attacker?.isPlayer?.()
+    && event.hit.getCombatType?.() === Shared.core().CombatType.MELEE) room.endBoulders();
+}
+
+/** Baboons always take a maximum hit (Wiki, June 2025); so does a cracked boulder from ranged. */
+function certainHits(roll) {
+  const npc = roll.target;
+  if (!roll.attacker?.isPlayer?.() || !babaRoom(npc)) return;
+  const baboon = npc.__toaCover?.kind === "baboon";
+  const cracked = npc.__toaBoulder?.cracked && roll.combatType === Shared.core().CombatType.RANGED;
+  if (baboon || cracked) {
+    roll.forceAccurate = true;
+    roll.forceMaxHit = true;
+  }
 }
 
 module.exports = function registerBaBa(api) {
   Shared.bind(api);
   Raid.registerRoom("APMEKEN_BOSS", BaBaRoom);
   api.onNpcBeforeDeath(babaDowned);
-  api.onNpcHitModify(crackedBoulder);
-  Raid.onRaidArea("canAttack", babaUnreachable);
+  api.onNpcHitModify(boulderStruck);
+  api.onCombatHitRoll(certainHits);
   registerBaBaCombat(api);
 };
 
@@ -731,6 +935,10 @@ function registerBaBaCombat(api) {
   class BaBaCombatMethod extends CombatMethod {
     type() {
       return CombatType.MELEE;
+    }
+
+    attackSpeed() {
+      return ATTACK_SPEED;
     }
 
     canAttack(npc) {
@@ -749,6 +957,10 @@ function registerBaBaCombat(api) {
       return CombatType.RANGED;
     }
 
+    attackSpeed() {
+      return BABOON_ATTACK_SPEED;
+    }
+
     attackDistance() {
       return 7;
     }
@@ -759,6 +971,6 @@ function registerBaBaCombat(api) {
     }
   }
 
-  api.registerNpcCombatMethodProvider(NpcIdentifiers.BA_BA, BaBaCombatMethod, { singleton: false });
+  api.registerNpcCombatMethodProvider([NpcIdentifiers.BA_BA, NpcIdentifiers.BA_BA_2, NpcIdentifiers.BA_BA_3], BaBaCombatMethod, { singleton: false });
   api.registerNpcCombatMethodProvider(NpcIdentifiers.BABOON, BaBaBaboonCombatMethod);
 }

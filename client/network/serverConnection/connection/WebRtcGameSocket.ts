@@ -71,7 +71,7 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
         super();
         this.url = signallingEndpoint(config.signalUrl);
         this.timeout = setTimeout(
-            () => this.state === CONNECTING && this.fail(`WebRTC connection to world ${config.worldId} timed out`, true),
+            () => this.state === CONNECTING && this.fail(`WebRTC connection to world ${config.worldId} timed out`, 4001),
             CONNECT_TIMEOUT_MS,
         );
         void this.start();
@@ -201,7 +201,7 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
             }
         };
         this.peer.onconnectionstatechange = () => {
-            if (this.peer.connectionState === "failed") this.fail("WebRTC ICE negotiation failed", true);
+            if (this.peer.connectionState === "failed") this.fail("WebRTC ICE negotiation failed", 4001);
         };
         this.channel.addEventListener("message", (event) => {
             const data = event.data;
@@ -213,7 +213,13 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
         });
         this.channel.addEventListener("open", () => void this.open());
         this.channel.addEventListener("close", () => this.finishClose(1006, "DataChannel closed", false));
-        this.channel.addEventListener("error", () => this.fail("WebRTC DataChannel failed", true));
+        this.channel.addEventListener("error", (event) => {
+            const error = (event as RTCErrorEvent).error;
+            // SCTP cause 12 is a User-Initiated Abort: the world closed the connection, which says
+            // nothing about this route, so reconnect without forcing the TURN relay.
+            this.fail(`WebRTC DataChannel failed${error?.message ? `: ${error.message}` : ""}`,
+                error?.sctpCauseCode === 12 ? 4002 : 4001);
+        });
     }
 
     private bindSignal(): void {
@@ -305,14 +311,14 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
         try { this.signal?.close(1000, "DataChannel established"); } catch {}
     }
 
-    private fail(message: string, retryable = false): void {
+    private fail(message: string, code: 4000 | 4001 | 4002 = 4000): void {
         if (this.state >= CLOSING) return;
         console.warn(`[webrtc] ${message}`);
         const event = new Event("error") as Event & { error?: Error };
         event.error = new Error(message);
         this.dispatchEvent(event);
-        // 4001 = connectivity failure (retry once via TURN); 4000 = terminal.
-        this.close(retryable ? 4001 : 4000, message);
+        // 4001 = connectivity failure (retry once via TURN); 4002 = retry as is; 4000 = terminal.
+        this.close(code, message);
     }
 
     private finishClose(code: number, reason: string, wasClean: boolean): void {

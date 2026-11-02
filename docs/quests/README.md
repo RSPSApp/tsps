@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](../../server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-191 quests · ✅ passed: 29 · ⚠️ passed with issues: 17 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 16 · untested: 120
+191 quests · ✅ passed: 27 · ⚠️ passed with issues: 18 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 17 · untested: 120
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -62,7 +62,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Enakhra's Lament](enakhras-lament/README.md) | untested |  |  |  |  |
 | Enlightened Journey | untested |  |  |  |  |
 | Enter the Abyss | untested |  |  |  |  |
-| [Ernest the Chicken](ernest-the-chicken/README.md) | ✅ passed | 2026-10-25 | community |  |  |
+| [Ernest the Chicken](ernest-the-chicken/README.md) | ⚠️ passed with issues | 2026-11-02 | agent | DeepSeek V4.1 Flash | 1 |
 | [Ethically Acquired Antiquities](ethically-acquired-antiquities/README.md) | untested |  |  |  |  |
 | Fairytale I - Growing Pains | untested |  |  |  |  |
 | [Fairytale II - Cure a Queen](fairytale-ii-cure-a-queen/README.md) | untested |  |  |  |  |
@@ -172,7 +172,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [The Great Brain Robbery](great-brain-robbery/README.md) | untested |  |  |  |  |
 | [The Hand in the Sand](hand-in-the-sand/README.md) | untested |  |  |  |  |
 | [The Heart of Darkness](the-heart-of-darkness/README.md) | untested |  |  |  |  |
-| [The Ides of Milk](the-ides-of-milk/README.md) | ✅ passed | 2026-10-25 | community |  |  |
+| [The Ides of Milk](the-ides-of-milk/README.md) | ✅ passed | 2026-11-02 | agent | DeepSeek V4.1 Flash |  |
 | [The Knight's Sword](the-knights-sword/README.md) | ⚠️ passed with issues | 2026-10-30 | agent | claude-haiku-5-5 | 6 |
 | The Lost Tribe | untested |  |  |  |  |
 | [The Path of Glouphrie](the-path-of-glouphrie/README.md) | untested |  |  |  |  |
@@ -184,7 +184,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [The Tourist Trap](the-tourist-trap/README.md) | untested |  |  |  |  |
 | Throne of Miscellania | untested |  |  |  |  |
 | [Tower of Life](tower-of-life/README.md) | untested |  |  |  |  |
-| [Tree Gnome Village](tree-gnome-village/README.md) | ✅ passed | 2026-10-29 | agent | grok-4.7 | 1 |
+| [Tree Gnome Village](tree-gnome-village/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 1 |
 | [Tribal Totem](tribal-totem/README.md) | ✅ passed | 2026-10-25 | agent |  | 1 |
 | Troll Romance | untested |  |  |  |  |
 | [Troll Stronghold](troll-stronghold/README.md) | untested |  |  |  |  |

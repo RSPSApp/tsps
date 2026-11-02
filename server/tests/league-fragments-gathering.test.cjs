@@ -342,6 +342,7 @@ test("Farming's harvest: Certified Farmer notes the produce; Greedy Gatherer mor
     farm.patches[Data.patchKey(patch)] = { ...Model.emptyPatch(Date.now(), farm), crop: "ELKHORN_CORAL", status: "grown", stage: crop.stages, lives: 6 };
     player.setAttribute(Patches.FARM_ATTRIBUTE, farm);
     farmingHooks.onObjectInteraction({ player, object: { getId: () => patch.id }, location: { x: patch.x, y: patch.y, z: patch.z }, clickType: 1 });
+    Patches.tick(); // the swing is on the click, its harvest the next farming tick, as captured
   };
   const note = core.ItemDefinition.forId(crop.produce).getNoteId();
 

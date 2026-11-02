@@ -803,7 +803,8 @@ export class PacketSender {
   }
 
   /**
-   * "interface:closed" { player, interfaceId }: the player's main or chatbox interface closed, by any route
+   * "interface:closed" { player, interfaceId }: the player's main or chatbox interface, or a
+   * sub-interface closed by name (closeInterface), closed, by any route
    * (its own close, the client's IF_CLOSE, walking away), so content can undo what it set up.
    */
   private emitInterfaceClosed(interfaceId: number): void {
@@ -894,6 +895,8 @@ export class PacketSender {
     if (target) {
       this.subInterfaceTargets.delete(groupId);
       this.player.getSession().sendClientPacket(encodeWidgetCloseSub(target.targetUid));
+      // A sub-interface closed by name (an overlay such as a floater) closes "by any route" too.
+      this.emitInterfaceClosed(groupId);
     }
     return this;
   }

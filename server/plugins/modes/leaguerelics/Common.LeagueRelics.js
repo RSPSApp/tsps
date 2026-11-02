@@ -44,19 +44,26 @@ function enumEntries(id) {
 /**
  * The current league's catalog as the cache holds it: the league struct's tier enum, each tier's
  * cost, passive struct and relic enum, each relic's name and description (the params the relic
- * interface reads). Relics granting items are not known from the cache, so none hands out items.
+ * interface reads). A relic struct naming an item (Demonic Pacts' `relicItemParam`, 2049) hands
+ * it out, and like every item relic is unlocked in a bank (the captured rule, 237/01102).
  */
 function catalogFromCache(type) {
   const { params } = data;
   const { CacheDefinitions } = core;
   const leagueParams = CacheDefinitions.getStructParams(league(type).struct);
+  const itemParam = cacheLeague(type)?.relicItemParam;
   const tiers = enumEntries(leagueParams.get(params.tiersEnum)).map(([, tierStruct]) => {
     const tierParams = CacheDefinitions.getStructParams(tierStruct);
     const passiveStruct = tierParams.get(params.tierPassive);
     const relics = enumEntries(tierParams.get(params.tierRelics)).map(([, relicStruct]) => {
       const relicParams = CacheDefinitions.getStructParams(relicStruct);
       const name = String(relicParams.get(params.relicName) ?? "");
-      return { key: slug(name), name, description: String(relicParams.get(params.relicDescription) ?? ""), grants: [], struct: relicStruct };
+      const item = itemParam === undefined ? undefined : relicParams.get(itemParam);
+      const grants = Number.isInteger(item) && item > 0 ? [item] : [];
+      return {
+        key: slug(name), name, description: String(relicParams.get(params.relicDescription) ?? ""),
+        grants, requiresBank: grants.length > 0, struct: relicStruct,
+      };
     });
     return {
       cost: Number(tierParams.get(params.tierCost)) || 0,
@@ -65,6 +72,11 @@ function catalogFromCache(type) {
     };
   });
   return { fromCache: true, tiers };
+}
+
+/** The effects entry describing a cache-read league (Demonic Pacts' `demonicPacts`), or null. */
+function cacheLeague(type) {
+  return Object.values(data.effects).find((entry) => entry?.cacheLeague === true && [].concat(entry.league).includes(Number(type))) ?? null;
 }
 
 /** A league's tiers and relics: the data's, or the cache's own for a league marked `fromCache`. */
@@ -122,13 +134,18 @@ function hasRelic(player, key) {
 /** The extra pick Reloaded gives (Raging Echoes' tier 4): { tier, slot } saved beside the tiers' picks. */
 const RELOADED_ATTRIBUTE = "league:relics-extra";
 
+/** The tiers Reloaded's extra pick may come from in a league: the league's own (`leagueTiers`), else `tiers`. */
+function reloadedTiers(effect, type) {
+  return effect.leagueTiers?.[type] ?? effect.tiers;
+}
+
 /** The relic of the extra pick, while the character holds Reloaded itself; else null. */
 function reloadedPick(player, type = leagueOf(player), picks = chosen(player)) {
   const effect = data.effects.reloaded;
   if (!effect || ![].concat(effect.league).includes(type)) return null;
   const holds = catalog(type).tiers.some((tier, tierIndex) => tier.relics[picks[tierIndex] - 1]?.key === effect.key);
   const extra = player.getAttribute(RELOADED_ATTRIBUTE);
-  if (!holds || !extra || !effect.tiers.includes(extra.tier)) return null;
+  if (!holds || !extra || !reloadedTiers(effect, type).includes(extra.tier)) return null;
   return relic(type, extra.tier, extra.slot);
 }
 
@@ -255,13 +272,15 @@ function restoreSpecial(player, percent) {
   core.CombatSpecial.updateBar(player);
 }
 
-function message(key, values = {}) {
-  return data.messages[key].text.replace(/\{(\w+)\}/g, (match, name) => values[name] ?? match);
+/** A message's text; a cache-read league's own wording (its entry's `messages`) wins for its characters. */
+function message(key, values = {}, type = null) {
+  const own = type === null ? undefined : cacheLeague(type)?.messages?.[key];
+  return (own ?? data.messages[key].text).replace(/\{(\w+)\}/g, (match, name) => values[name] ?? match);
 }
 
 module.exports = {
   init, leagueOf, catalog, league, relic, chosen, points, highestTier, hasRelic, effectActive, reloadedPick,
-  RELOADED_ATTRIBUTE, ids, message, maxHitFor, restoreSpecial, bankHasRoom, bank, noted, multipliable,
+  RELOADED_ATTRIBUTE, reloadedTiers, cacheLeague, slug, ids, message, maxHitFor, restoreSpecial, bankHasRoom, bank, noted, multipliable,
   multipliedLoot, isPotion, hasStackableSecondary, batchActions, derivedHit, isBuildingDerivedHit,
   RELICS_ATTRIBUTE, structIds,
   get data() { return data; },

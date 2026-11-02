@@ -39,7 +39,8 @@ const STALLS = new Map([
   ],
   ["Silk stall", { theft: "silk", attemptMessage: "You attempt to steal some silk from the silk stall.", respawnTicks: 8, owners: ["Silk merchant", "Silk Merchant", "Anwen"], petBase: 68926, level: 20, xp: 24,
     rewards: [["SILK", 1, 1, "You steal a piece of silk."]] }],
-  ["Tea stall", { theft: "tea", attemptMessage: "You attempt to steal a cup of tea...", respawnTicks: 4, owners: ["Tea Seller"], petBase: 68926, level: 5, xp: 16, rewards: [["CUP_OF_TEA", 1, 1, "You steal a cup of tea."]] }],
+  // The Wiki's cup of tea is cup_of_tea (1978), which notes; CUP_OF_TEA (712) is display_tea, which doesn't.
+  ["Tea stall", { theft: "tea", attemptMessage: "You attempt to steal a cup of tea...", respawnTicks: 4, owners: ["Tea Seller"], petBase: 68926, level: 5, xp: 16, rewards: [["CUP_OF_TEA_2", 1, 1, "You steal a cup of tea."]] }],
   ["Fur stall", { theft: "fur", respawnTicks: 12, owners: ["Fur trader", "Fur Merchant"], petBase: 36490, level: 35, xp: 45, rewards: [["GREY_WOLF_FUR", 1, 1]] }],
   [
     "Gem stall",
@@ -96,6 +97,38 @@ STALLS.set("Market stall", { theft: "wine", respawnTicks: 8, owners: ["Fortunato
 STALLS.set("Fruit Stall", { theft: "hosidius", respawnTicks: 4, owners: [], petBase: 124066, level: 25, xp: 28.5,
   rewards: [["COOKING_APPLE", 1, 40], ["BANANA", 1, 20], ["STRAWBERRY", 1, 7], ["JANGERBERRIES", 1, 5], ["LEMON", 1, 5], ["REDBERRIES", 1, 5],
     ["PINEAPPLE", 1, 5], ["LIME", 1, 5], ["STRANGE_FRUIT", 1, 5], ["GOLOVANOVA_FRUIT_TOP", 1, 2], ["PAPAYA_FRUIT", 1, 1]] });
+// Rellekka, Miscellania, Etceteria and the Warrens (Wiki: Fish stall, Veg stall). The Warrens'
+// stall has a thief instead of a guard watching it.
+STALLS.set("Fish stall", { theft: "fish", minutes: 15, respawnTicks: 12, owners: ["Fish monger", "Fishmonger"], guards: ["thief"], petBase: 36490, level: 42, xp: 42,
+  rewards: [["RAW_SALMON", 1, 14], ["RAW_TUNA", 1, 5], ["RAW_LOBSTER", 1, 1]] });
+STALLS.set("Veg stall", { theft: "veg", respawnTicks: 2, owners: ["Greengrocer"], petBase: 206777, level: 2, xp: 10,
+  rewards: [["POTATO", 1, 3], ["CABBAGE", 1, 2], ["ONION", 1, 2], ["TOMATO", 1, 2], ["GARLIC", 1, 1]] });
+
+// Keldagrim (Wiki: Crossbow stall, Crafting stall). The clothes stall has nothing to steal (below).
+const CRAFTING_REWARDS = [["AMULET_MOULD", 1, 12], ["BRACELET_MOULD", 1, 12], ["NECKLACE_MOULD", 1, 11], ["RING_MOULD", 1, 11], ["CHISEL", 1, 6], ["GOLD_BAR", 1, 2]];
+STALLS.set("Crossbow stall", { theft: "xbows", respawnTicks: 8, owners: ["Hirko"], petBase: 36490, level: 49, xp: 52,
+  rewards: [["BRONZE_BOLTS", 3, 46], ["BRONZE_LIMBS", 3, 18], ["WOODEN_STOCK", 3, 12], ["MITHRIL_BOLTS", 3, 3], ["MITHRIL_LIMBS", 3, 1]] });
+STALLS.set("Crafting stall", { theft: "keldacraft", respawnTicks: 8, owners: ["Nolar"], petBase: 47718, level: 5, xp: 20, rewards: CRAFTING_REWARDS });
+
+/**
+ * Ape Atoll (Wiki: Crafting stall, Food Stall, General Stall, Magic Stall, Scimitar Stall): only
+ * in human form, and an attempt can miss by the stall's Skilling success chart (no stun, try again
+ * at once). The owners neither watch the stall nor refuse to trade afterwards. The General Stall
+ * is not on Rocky's list; it takes the other low-level Ape Atoll stalls' rate.
+ */
+const APE_ATOLL_STALL = { owners: [], marksMerchant: false, humanOnly: true };
+STALLS.set("Food Stall", { ...APE_ATOLL_STALL, respawnTicks: 6, petBase: 47718, level: 5, xp: 16, success: [200, 480], rewards: [["BANANA", 1, 1]] });
+STALLS.set("Crafting Stall", { ...APE_ATOLL_STALL, respawnTicks: 8, petBase: 47718, level: 5, xp: 20, success: [128, 512], rewards: CRAFTING_REWARDS });
+STALLS.set("General Stall", { ...APE_ATOLL_STALL, respawnTicks: 8, petBase: 47718, level: 5, xp: 25, success: [128, 512],
+  rewards: [["HAMMER", 1, 1], ["POT", 1, 1], ["TINDERBOX", 1, 1]] });
+STALLS.set("Magic Stall", { ...APE_ATOLL_STALL, respawnTicks: 12, petBase: 36490, level: 65, xp: 90, success: [20, 180],
+  rewards: [["AIR_RUNE", 1, 6], ["EARTH_RUNE", 1, 6], ["FIRE_RUNE", 1, 6], ["LAW_RUNE", 1, 1], ["NATURE_RUNE", 1, 1]] });
+STALLS.set("Scimitar Stall", { ...APE_ATOLL_STALL, respawnTicks: 32, petBase: 36490, level: 65, xp: 210, success: [20, 180],
+  rewards: [["IRON_SCIMITAR", 1, 23], ["STEEL_SCIMITAR", 1, 13], ["MITHRIL_SCIMITAR", 1, 3], ["ADAMANT_SCIMITAR", 1, 1]] });
+const MISSED_THEFT_MESSAGE = "You attempt to steal from the stall but you miss your chance...";
+const MONKEY_FORM_MESSAGE = "You wouldn't like to blow your cover by getting caught stealing.";
+const CLOTHES_STALL_MESSAGE = "You don't really see anything you'd want to steal from this stall.";
+
 STALLS.set("Baker's stall", STALLS.get("Bakery stall"));
 STALLS.set("Baker's Stall", STALLS.get("Bakery stall"));
 STALLS.set("Gem Stall", STALLS.get("Gem stall"));
@@ -136,6 +169,27 @@ const PORT_ROBERTS_STALLS = new Map([
   ] }],
 ].map(([loc, stall]) => [loc, { depletes: false, marksMerchant: false, stealDelayMs: PORT_ROBERTS_STEAL_DELAY_MS, owners: [], ...stall }]));
 
+/**
+ * Mor Ul Rek (Wiki: Shop Counter (gems), Shop Counter (ore)): both counters are "Shop Counter", so
+ * the cache loc name picks each, and TzHaar-Hur-Rin won't trade with a thief for 30 minutes. The gem
+ * counter first rolls 1/50,000 for an onyx (uncut 2/3 of the time, Mod Ash), then its gem table.
+ */
+const MOR_UL_REK_STALLS = new Map([
+  ["tzhaar_shopcounter_gem", { level: 75, xp: 408, respawnTicks: 175,
+    rare: { chance: 50000, rewards: [["UNCUT_ONYX", 1, 2, "You steal an uncut onyx! Wow!"], ["ONYX", 1, 1, "You steal an onyx! Wow!"]] },
+    rewards: [
+      ["UNCUT_SAPPHIRE", 1, 1000], ["SAPPHIRE", 1, 500], ["UNCUT_EMERALD", 1, 600], ["EMERALD", 1, 300], ["UNCUT_RUBY", 1, 300], ["RUBY", 1, 150],
+      ["UNCUT_DIAMOND", 1, 98], ["DIAMOND", 1, 49], ["UNCUT_DRAGONSTONE", 1, 2], ["DRAGONSTONE", 1, 1],
+    ] }],
+  ["tzhaar_shopcounter_ore", { level: 82, xp: 350, respawnTicks: 50, rewards: [
+    ["IRON_ORE", 1, 25], ["COAL", 1, 15], ["SILVER_ORE", 1, 10], ["GOLD_ORE", 1, 10], ["MITHRIL_ORE", 1, 10], ["ADAMANTITE_ORE", 1, 8], ["RUNITE_ORE", 1, 2],
+  ] }],
+].map(([loc, stall]) => [loc, { theft: "tzhaar_gemore", minutes: 30, owners: ["TzHaar-Hur-Rin"], petBase: 36490, ...stall }]));
+
+/** Stalls that share a name with others, keyed by their cache loc name. */
+const LOC_STALLS = new Map([...PORT_ROBERTS_STALLS, ...MOR_UL_REK_STALLS]);
+const ALL_STALLS = [...new Set([...STALLS.values(), ...LOC_STALLS.values()])];
+
 function randomReward(rewards) {
   const totalWeight = rewards.reduce((sum, [, , weight]) => sum + weight, 0);
   let roll = Math.floor(Math.random() * totalWeight);
@@ -162,10 +216,18 @@ function stealLine(item) {
   return `You steal ${article} ${name}.`;
 }
 
-/** The cache's empty counterpart, preserving each market's stall model and footprint. */
+/**
+ * The cache's empty counterpart, preserving each market's stall model and footprint: the empty
+ * stall is the full one's own base model (Rellekka's fish stall is models 4292 + 1421, its empty
+ * market stall 1421; Keldagrim's 5879 + goods and 5879; Ape Atoll's go back to a bamboo desk).
+ */
 function emptyStallId(object) {
   const ids = core.ObjectIdentifiers;
   const id = object.getId();
+  if ([ids.FISH_STALL, ids.FUR_STALL_2, ids.FISH_STALL_2, ids.VEG_STALL, ids.FISH_STALL_3, ids.VEG_STALL_2, ids.FISH_STALL_4].includes(id)) return ids.MARKET_STALL_7;
+  if ([ids.CROSSBOW_STALL, ids.CRAFTING_STALL_2].includes(id)) return ids.MARKET_STALL_12;
+  if ([ids.CRAFTING_STALL, ids.FOOD_STALL, ids.GENERAL_STALL, ids.MAGIC_STALL, ids.SCIMITAR_STALL].includes(id)) return ids.BAMBOO_DESK;
+  if ([ids.SHOP_COUNTER_4, ids.SHOP_COUNTER_5].includes(id)) return ids.SHOP_COUNTER_3;
   if (id === ids.MARKET_STALL_14) return ids.MARKET_STALL_15;
   if (id === ids.BAKERS_STALL_2) return ids.EMPTY_STALL;
   if ([ids.GEM_STALL_2, ids.BAKERY_STALL_2, ids.SILVER_STALL_2].includes(id)) return ids.MARKET_STALL_12;
@@ -201,10 +263,20 @@ function hiddenFromGuards(nearby, player) {
   return nearby.some((npc) => npc.getHitpoints() > 0 && npc.getLocation().equals(player.getLocation()));
 }
 
-/** A stall always succeeds unless a guard or its owner can see the thief. */
-function caughtStealing(player, stall) {
+/**
+ * A stall always succeeds unless a guard or its owner can see the thief. Content may keep the
+ * thief from being caught ("thieving:stall-watch" { player, object, unseen }, a league relic).
+ */
+function caughtStealing(player, stall, object) {
+  const watch = { player, object, unseen: false };
+  pluginApi.emitCustomEvent("thieving:stall-watch", watch);
+  if (watch.unseen === true) return false;
   const nearby = core.World.getNpcsNear(player.getLocation(), LOOKOUT_RADIUS, player.getPrivateArea());
-  const guards = hiddenFromGuards(nearby, player) ? [] : nearby.filter((npc) => GUARDS.has(String(npc.getDefinition().getName() ?? "").toLowerCase()) && npc.getDefinition().isAttackable() && npc.getHitpoints() > 0 && !npc.getCombat().getTarget());
+  const guarding = (npc) => {
+    const name = String(npc.getDefinition().getName() ?? "").toLowerCase();
+    return GUARDS.has(name) || !!stall.guards?.includes(name);
+  };
+  const guards = hiddenFromGuards(nearby, player) ? [] : nearby.filter((npc) => guarding(npc) && npc.getDefinition().isAttackable() && npc.getHitpoints() > 0 && !npc.getCombat().getTarget());
   const seesPlayer = (npc) => core.RegionManager.canProjectileAttackBounds(npc.getLocation(), player.getLocation(), npc.getSize(), npc.getSize(), 1, 1, player.getPrivateArea());
   const lookout = guards.find((npc) => !npc.getLocation().equals(player.getLocation()) && seesPlayer(npc))
     ?? nearby.find((npc) => stall.owners.includes(npc.getDefinition().getName()) && npc.getHitpoints() > 0
@@ -227,6 +299,8 @@ const REGIONAL_THEFT_KEYS = new Map([
   ["viking_fur_market", "vikingfur"], ["vikingexile_fur_market", "vikingfur"],
   ["prif_marketstall_silk", "silk_prif"], ["prif_marketstall_silver", "silver_prif"],
   ["prif_marketstall_gem", "gem_prif"], ["prif_marketstall_spice", "spice_prif"],
+  ["viking_fish_market", "vikingfish"], ["misc_fish_market", "miscfish"], ["etc_fish_market", "etcfish"], ["fish_stall_warrens", "warrensfish"],
+  ["misc_veg_market", "miscveg"], ["etc_veg_market", "etcveg"],
 ]);
 
 function theftVarbitKey(object, stall) {
@@ -261,8 +335,8 @@ function rememberTheft(player, stall, varbitKey) {
 
 function login({ player }) {
   // The Wiki requires consecutive in-game minutes; a logout restarts the wait.
-  for (const stall of new Set(STALLS.values())) {
-    if (player.getAttribute(THEFT_ATTRIBUTE)?.[stall.theft]) rememberTheft(player, stall);
+  for (const stall of ALL_STALLS) {
+    if (stall.theft && player.getAttribute(THEFT_ATTRIBUTE)?.[stall.theft]) rememberTheft(player, stall);
   }
 }
 
@@ -272,7 +346,7 @@ function logout({ player }) {
 
 function merchantInteraction(event) {
   const name = event.definition.getName();
-  const stall = [...STALLS.values()].find((entry) => entry.owners.includes(name));
+  const stall = ALL_STALLS.find((entry) => entry.marksMerchant !== false && entry.owners.includes(name));
   if (!stall || !event.player.getAttribute(THEFT_ATTRIBUTE)?.[stall.theft]) return false;
   event.npc.forceChat(name === "Fortunato" ? "You're the thief who stole from me!" : "You're the one who stole something from me!");
   core.TaskManager.submit(new core.CountdownTask(event.npc, 2, () => event.npc.forceChat("Guards guards!")));
@@ -293,9 +367,31 @@ function samePlace(location, from) {
   return !!from && here.x !== undefined && here.x === from.x && here.y === from.y && here.z === from.z;
 }
 
-/** A stall's identity: Port Roberts' nine reuse the mainland names, the cache loc name separates them. */
+/** A stall's identity: Port Roberts' nine and Mor Ul Rek's two share names, the cache loc name separates them. */
 function stallFor(object, name) {
-  return PORT_ROBERTS_STALLS.get(core.CacheDefinitions.getLocNames().get(object.getId())) ?? STALLS.get(name);
+  return LOC_STALLS.get(core.CacheDefinitions.getLocNames().get(object.getId())) ?? STALLS.get(name);
+}
+
+/** The gem counter's onyx comes before its gem table (Mod Ash, Wiki: Shop Counter (gems)). */
+function rollStall(stall) {
+  if (stall.rare && Math.floor(Math.random() * stall.rare.chance) === 0) return randomReward(stall.rare.rewards);
+  return randomReward(stall.rewards);
+}
+
+/** Wiki (Module:Skilling success chart): low/high interpolated by level, out of 256. */
+function successChance([low, high], level) {
+  return Math.max(0, Math.min(1, (1 + Math.floor(low * (99 - level) / 98 + high * (level - 1) / 98 + 0.5)) / 256));
+}
+
+/** Ape Atoll's stalls refuse a monkey ("greegree:form" answers while the player is transformed). */
+function inMonkeyForm(player) {
+  const request = { player, form: null };
+  pluginApi.emitCustomEvent("greegree:form", request);
+  return request.form != null;
+}
+
+function stealFromClothesStall({ player }) {
+  player.sendMessage(CLOTHES_STALL_MESSAGE);
 }
 
 function finishTheft(event, stall) {
@@ -303,7 +399,11 @@ function finishTheft(event, stall) {
   if (object.getPrivateArea()?.isDestroyed()) return;
   // Another item can fill the final slot during the attempt tick.
   if (player.getInventory().isFull()) { player.getInventory().full(); return; }
-  const { item: reward, message } = randomReward(stall.rewards);
+  if (stall.success && Math.random() >= successChance(stall.success, player.getSkillManager().getCurrentLevel(core.Skill.THIEVING))) {
+    player.sendMessage(MISSED_THEFT_MESSAGE);
+    return;
+  }
+  const { item: reward, message } = rollStall(stall);
   const request = { player, itemId: reward.getId(), amount: reward.getAmount(), stored: 0 };
   pluginApi.emitCustomEvent("storage:gather", request);
   if (reward.getAmount() > request.stored) player.getInventory().addItem(new core.Item(reward.getId(), reward.getAmount() - request.stored));
@@ -329,7 +429,7 @@ function finishTheft(event, stall) {
 function handleStealFromStall(event) {
   const stall = stallFor(event.object, event.definition.getName());
   if (!stall) {
-    return;
+    return false;
   }
 
   // Other objects share the wine stall's name, including its clickable empty version.
@@ -338,6 +438,10 @@ function handleStealFromStall(event) {
   if (depleted.has(event.object)) return;
 
   const player = event.player;
+  if (stall.humanOnly && inMonkeyForm(player)) {
+    player.sendMessage(MONKEY_FORM_MESSAGE);
+    return;
+  }
   if (player.getSkillManager().getCurrentLevel(core.Skill.THIEVING) < stall.level) {
     player.sendMessage(`You need a Thieving level of at least ${stall.level} to do this.`);
     event.handled = true;
@@ -356,7 +460,7 @@ function handleStealFromStall(event) {
   player.setPositionToFace(event.object.getLocation());
   const attempt = stall.attemptMessage;
   if (attempt) spam(player, attempt);
-  if (caughtStealing(player, stall)) return;
+  if (caughtStealing(player, stall, event.object)) return;
   player.getClickDelay().reset();
   player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId("human_pickuptable")));
   player.getPacketSender().sendSound(THIEVING_SOUND, 10, 0);
@@ -371,7 +475,7 @@ function attach(api) {
   api.persistAttribute(THEFT_ATTRIBUTE, null);
   api.onPlayerLogin(login);
   api.onPlayerLogout(logout);
-  api.onNpcsInteraction([...new Set([...STALLS.values()].flatMap((stall) => stall.owners))], { "Talk-to": merchantInteraction, Trade: merchantInteraction });
+  api.onNpcsInteraction([...new Set(ALL_STALLS.filter((stall) => stall.marksMerchant !== false).flatMap((stall) => stall.owners))], { "Talk-to": merchantInteraction, Trade: merchantInteraction });
   api.onObjectInteraction("Silver stall", { "Steal-from": handleStealFromStall });
   api.onObjectInteraction("Spice stall", { "Steal-from": handleStealFromStall });
   api.onObjectInteraction("Market stall", { "Steal-From": handleStealFromStall });
@@ -385,12 +489,21 @@ function attach(api) {
   api.onObjectInteraction("Baker's Stall", { "Steal-from": handleStealFromStall });
   api.onObjectInteraction("Seed Stall", { "Steal from": handleStealFromStall });
   api.onObjectInteraction("Fruit Stall", { "Steal-from": handleStealFromStall });
-  // Port Roberts (their cache loc names pick the Port Roberts definition).
   api.onObjectInteraction("Veg stall", { "Steal-from": handleStealFromStall });
   api.onObjectInteraction("Fish stall", { "Steal-from": handleStealFromStall });
+  api.onObjectInteraction("Crossbow stall", { "Steal-from": handleStealFromStall });
+  api.onObjectInteraction("Crafting stall", { "Steal-from": handleStealFromStall });
+  api.onObjectInteraction("Clothes stall", { "Steal-from": stealFromClothesStall });
+  api.onObjectInteraction("Crafting Stall", { "Steal from": handleStealFromStall });
+  api.onObjectInteraction("Food Stall", { "Steal from": handleStealFromStall });
+  api.onObjectInteraction("General Stall", { "Steal from": handleStealFromStall });
+  api.onObjectInteraction("Magic Stall", { "Steal from": handleStealFromStall });
+  api.onObjectInteraction("Scimitar Stall", { "Steal from": handleStealFromStall });
+  // Port Roberts and Mor Ul Rek (their cache loc names pick the definition).
   api.onObjectInteraction("Ore stall", { "Steal-from": handleStealFromStall });
   api.onObjectInteraction("Cannonball stall", { "Steal-from": handleStealFromStall });
+  api.onObjectInteraction("Shop Counter", { "Steal-from": handleStealFromStall });
 }
 
 module.exports = attach;
-module.exports._test = { handleStealFromStall, stealLine, STALLS, PORT_ROBERTS_STALLS, depleted, emptyStallId, merchantInteraction, login, logout, THEFT_ATTRIBUTE };
+module.exports._test = { handleStealFromStall, stealFromClothesStall, stealLine, successChance, STALLS, PORT_ROBERTS_STALLS, MOR_UL_REK_STALLS, depleted, emptyStallId, merchantInteraction, login, logout, THEFT_ATTRIBUTE };

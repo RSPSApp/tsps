@@ -97,7 +97,8 @@ function character(name, profile = "league", { login = true } = {}) {
         case "sendInterfaceFlagsRange": return (...args) => (sent.flags.push(args), sender);
         case "sendContentData": return (source, datasets) => (sent.content.push(datasets), sender);
         case "sendInterfaceRemoval": return () => (sent.removals++, sender);
-        case "closeInterface": return (group) => (sent.closed.push(group), sender);
+        case "closeInterface": return (group) => (sent.closed.push(group), sent.order.push(["close", group]), sender);
+        case "sendInterfaceScript": return (id, args = []) => (sent.order.push(["script", id, ...args]), sender);
         default: return () => sender;
       }
     },
@@ -124,14 +125,26 @@ function setLevel(player, skill, level) {
 const levelUp = (player, skill, level) => hooks.onPlayerLevelUp({ player, skill, oldLevel: setLevel(player, skill, level), newLevel: level });
 
 test("the catalog is sound: the Wiki's counts and points, unique ids, verified triggers", () => {
-  const expected = { 4: { tiers: [269, 390, 385, 390, 46], medium: 40, total: 145490 }, 5: { tiers: [224, 536, 437, 345, 47], medium: 30, total: 141080 } };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest"]);
+  const expected = {
+    4: { tiers: [269, 390, 385, 390, 46], medium: 40, total: 145490 },
+    5: { tiers: [224, 536, 437, 345, 47], medium: 30, total: 141080 },
+    // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
+    6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
+  };
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "pet", "tempoross", "open-chest", "plant", "harvest", "foundry", "plunder-chest", "sepulchre-floor", "rumours", "random-event", "totem", "dummy", "gather-with", "enter", "teleport", "rifts", "tob", "emote", "take", "pickpocket-loot", "bird-nest", "buy", "alch", "kill-each", "bank", "npc-op", "shortcut", "deed"]);
+  // The agility plugin's course keys (and Yama's stepping stones, the Leagues lair's own course).
+  const courseDir = path.join(__dirname, "../plugins/skills/agility/courses");
+  const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
+    .flatMap((file) => [...require("fs").readFileSync(path.join(courseDir, file), "utf8").matchAll(/^\s*key: "([^"]+)"/gm)].map((match) => match[1]))]);
   const npcNames = new Set();
+  const creditedNames = new Set();
   // The cache's own list (enum 5950's rows): a task it has by name takes its category.
   const cacheRows = new Map();
-  for (const rowId of CacheDefinitions.getEnumValues(5950).values()) {
+  const cacheByPosition = new Map();
+  for (const [position, rowId] of CacheDefinitions.getEnumValues(5950)) {
     const row = CacheDefinitions.getDbRow(rowId);
     if (row) cacheRows.set(String(row.columns.get(0)?.[0]).toLowerCase(), row);
+    if (row) cacheByPosition.set(position, row);
   }
   assert.ok(cacheRows.size > 1500, "the cache's task list");
   for (const [type, league] of Object.entries(catalog.leagues)) {
@@ -141,19 +154,38 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     assert.equal(tasks.find((task) => task.tier === 2).points, expected[type].medium);
     assert.equal(new Set(tasks.map((task) => task.id)).size, tasks.length, "ids are unique");
     assert.ok(tasks.length <= 1984, "within the client's completion bits");
-    for (let i = 1; i < tasks.length; i++) assert.ok(tasks[i - 1].tier <= tasks[i].tier, "sorted by tier");
+    if (league.fromCache) {
+      // The cache's own list, in its order: a task's position is its completion bit and its row.
+      assert.equal(type, "6", "Demonic Pacts is the league this cache carries");
+      for (let i = 1; i < tasks.length; i++) assert.ok(tasks[i - 1].position < tasks[i].position, "in the cache's order");
+      for (const task of tasks) {
+        const row = cacheByPosition.get(task.position);
+        assert.equal(task.name, row.columns.get(0)?.[0], `${task.id}: the cache's name at ${task.position}`);
+        // A row without a column reads the table's default, -1 (one row has no category).
+        assert.deepEqual([task.tier, task.area, task.category], [32, 36, 35].map((column) => row.columns.get(column)?.[0] ?? -1), task.id);
+        assert.equal(task.wikiId, task.position, `${task.id}: the Wiki's id is the cache position`);
+      }
+      assert.equal(tasks.filter((task) => task.pactTask).length, expected[type].pacts, "the Wiki's pact tasks");
+    } else {
+      for (let i = 1; i < tasks.length; i++) assert.ok(tasks[i - 1].tier <= tasks[i].tier, "sorted by tier");
+    }
     for (const task of tasks) {
-      assert.ok([1, 2, 3, 4, 5, 6].includes(task.category) && Object.values(catalog.areas).includes(task.area), task.id);
+      assert.ok(([1, 2, 3, 4, 5, 6].includes(task.category) || (league.fromCache && task.category === -1)) && Object.values(catalog.areas).includes(task.area), task.id);
       const cached = cacheRows.get(task.name.toLowerCase());
       assert.equal(task.categorySource, cached ? "cache" : "rule", task.id);
-      if (cached) assert.equal(task.category, cached.columns.get(35)?.[0], `${task.id}: the cache's category`);
+      if (cached) assert.equal(task.category, cached.columns.get(35)?.[0] ?? -1, `${task.id}: the cache's category (the table's -1 without one)`);
       if (task.trigger) {
         assert.ok(kinds.has(task.trigger.kind), `${task.id}: ${task.trigger.kind}`);
+        for (const course of task.trigger.courses ?? []) assert.ok(courseKeys.has(course), `${task.id}: course ${course}`);
         if (task.trigger.kind === "kill") {
           assert.ok(Array.isArray(task.trigger.npcs) && task.trigger.npcs.length > 0, task.id);
-          for (const npc of task.trigger.npcs) npcNames.add(npc);
+          // A credited completion is a name a plugin credits through combat-achievements:kill, not an NPC's.
+          for (const npc of task.trigger.npcs) (task.trigger.credited ? creditedNames : npcNames).add(npc);
         }
+        if (task.trigger.kind === "kill-each") for (const npc of Object.keys(task.trigger.npcs)) npcNames.add(npc);
         if (task.trigger.kind === "level") assert.ok(Skill[task.trigger.skill] instanceof Skill, task.id);
+        // A named place: the catalog's own bounds, boxes of tiles.
+        if (task.trigger.place !== undefined) assert.ok(catalog.places[task.trigger.place]?.rects.every((rect) => rect.length === 4 && rect[0] <= rect[2] && rect[1] <= rect[3]), `${task.id}: place ${task.trigger.place}`);
       }
     }
   }
@@ -162,6 +194,10 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     try { cacheNames.add(CacheDefinitions.getNpc(id)?.name); } catch { break; }
   }
   for (const name of npcNames) assert.ok(cacheNames.has(name), `a cache NPC is called "${name}"`);
+  const crediting = ["minigames", "bosses"].flatMap((dir) => require("fs").readdirSync(path.join(__dirname, "../plugins", dir), { recursive: true })
+    .filter((file) => String(file).endsWith(".js")).map((file) => require("fs").readFileSync(path.join(__dirname, "../plugins", dir, String(file)), "utf8")))
+    .filter((text) => text.includes("combat-achievements:kill")).join("\n");
+  for (const name of creditedNames) assert.ok(crediting.includes(`"${name}"`), `a minigame credits "${name}"`);
 });
 
 test("login sends the league's catalog as enum and DB row overrides, the completion varps and the saved filters", () => {
@@ -191,6 +227,21 @@ test("login sends the league's catalog as enum and DB row overrides, the complet
   assert.equal(dataset(echoes, "dbRowOverrides")[0].rowId, 350000, "a league's rows have their own ids");
 });
 
+test("Demonic Pacts, the cache's own league: no catalog overrides, and a task's bit is its cache position", () => {
+  worldLeague = 6;
+  const pacts = character("pacts");
+  worldLeague = 4;
+  assert.equal(dataset(pacts, "enumOverrides")?.find((row) => row.enumId === 5950), undefined, "the client's own task enum stands");
+  assert.equal((dataset(pacts, "dbRowOverrides") ?? []).length, 0, "and its own rows");
+  const giant = catalog.leagues["6"].tasks.find((task) => task.id === "defeat-a-hill-giant");
+  const last = catalog.leagues["6"].tasks.at(-1);
+  assert.deepEqual([last.position, catalog.leagues["6"].tasks.length], [1592, 1592], "past the one row the cache leaves out of the league, a task keeps its cache position");
+  kill(pacts, "Hill Giant");
+  assert.deepEqual(completed(pacts), ["defeat-a-hill-giant"]);
+  assert.equal(pacts.sent.varps.get(bitVarp(giant.position)), 1 << (giant.position % 32), "the bit the client's script 9470 reads");
+  assert.equal(pacts.sent.messages.at(-1), "Congratulations, you've completed an easy task: <col=FE206A>Defeat a Hill Giant</col>.", "in the league's colour");
+});
+
 test("View Tasks opens the list with the captured events; the dropdowns set and keep their filter varbits", () => {
   const league = character("viewer");
   assert.equal(hooks[`button:${uid(TASKS, 37)}`]({ player: league, slot: 3 }), false, "a dropdown click before View Tasks is ignored");
@@ -201,9 +252,9 @@ test("View Tasks opens the list with the captured events; the dropdowns set and 
   assert.equal(league.sent.removals, 1, "the main modal is closed first");
   assert.deepEqual(league.sent.subs.at(-1), [FLOATER, TASKS, 1], "league_tasks in the toplevel floater as an overlay");
   assert.deepEqual(league.sent.flags, [
-    [uid(TASKS, 37), 1, 7, OP1], [uid(TASKS, 38), 1, 8, OP1], [uid(TASKS, 39), 1, 15, OP1], [uid(TASKS, 40), 1, 7, OP1], [uid(TASKS, 42), 1, 4, OP1],
+    [uid(TASKS, 37), 1, 7, OP1], [uid(TASKS, 42), 1, 4, OP1], [uid(TASKS, 41), 1, 4, OP1], [uid(TASKS, 38), 1, 8, OP1], [uid(TASKS, 39), 1, 15, OP1], [uid(TASKS, 40), 1, 7, OP1],
     [uid(TASKS, 18), 0, 1480, OP1], [uid(TASKS, 6), 10, 18, OP1],
-  ], "if_setevents as captured, on this cache's dropdown lists and rows (the rows up to the task count)");
+  ], "if_setevents as captured, in the Leagues VI order, on this cache's dropdown lists and rows (the rows up to the task count)");
   assert.equal(hooks[`button:${uid(TASKS, 37)}`]({ player: league, slot: 3 }), true);
   assert.equal(league.sent.varbits.get(10033), 2, "captured: dropdown slot 3 -> league_task_filter_tier 2");
   assert.equal(hooks[`button:${uid(TASKS, 38)}`]({ player: league, slot: 2 }), true);
@@ -256,6 +307,420 @@ test("a kill awards its task once: the completion bit first, then the points, th
   const before = { ...league.getAttribute("league:task-kills") };
   kill(league, "Unicorn");
   assert.deepEqual(league.getAttribute("league:task-kills"), before, "a kill no task accepts counts for nothing");
+});
+
+test("Demonic Pacts' list as captured: the row events to the cache list's last key, the override wipe, the search and its close", () => {
+  worldLeague = 6;
+  const pacts = character("searcher");
+  worldLeague = 4;
+  assert.equal(hooks[`button:${uid(TASKS, 45)}`]({ player: pacts }), false, "the search bar of a closed list");
+  pacts.sent.order.length = 0;
+  assert.equal(hooks[`button:${uid(SIDE_PANEL, 36)}`]({ player: pacts }), true);
+  assert.deepEqual(pacts.sent.flags.find(([id]) => id === uid(TASKS, 18)), [uid(TASKS, 18), 0, 1592, OP1], "rev 237: tasks_background 0-1592");
+  assert.deepEqual(pacts.sent.order.filter(([kind]) => kind === "script"), [["script", 9404]], "league_task_override_task_wipe after the events");
+
+  pacts.sent.order.length = 0;
+  assert.equal(hooks[`button:${uid(TASKS, 45)}`]({ player: pacts }), true);
+  assert.deepEqual(pacts.sent.order, [["varbit", 17310, 1], ["varbit", 17311, 1], ["script", 2157]], "searching, the keyboard, chatdefault_stopinput");
+  pacts.sent.order.length = 0;
+  assert.equal(hooks[`button:${uid(TASKS, 3)}`]({ player: pacts }), true);
+  assert.deepEqual(pacts.sent.order, [["varbit", 17310, 0], ["varbit", 17311, 0], ["close", TASKS], ["script", 2158], ["script", 9431]], "the captured close of a search");
+
+  hooks[`button:${uid(SIDE_PANEL, 36)}`]({ player: pacts });
+  pacts.sent.order.length = 0;
+  hooks[`button:${uid(TASKS, 3)}`]({ player: pacts });
+  assert.deepEqual(pacts.sent.order, [["close", TASKS], ["script", 9431]], "a close without a search");
+
+  hooks[`button:${uid(SIDE_PANEL, 36)}`]({ player: pacts });
+  assert.equal(hooks[`button:${uid(TASKS, 41)}`]({ player: pacts, slot: 2 }), true, "the pact-task dropdown");
+  assert.equal(pacts.sent.varbits.get(20357), 1, "league_task_filter_mastery_point");
+});
+
+test("a league modal sets busy, closes the task list first and clears busy as it closes (rev 237 wire order)", () => {
+  worldLeague = 6;
+  const panel = character("modals");
+  worldLeague = 4;
+  hooks[`button:${uid(SIDE_PANEL, 36)}`]({ player: panel });
+  panel.sent.order.length = 0;
+  assert.equal(hooks[`button:${uid(SIDE_PANEL, 7)}`]({ player: panel }), true, "the Summary");
+  assert.deepEqual(panel.sent.order.slice(0, 3), [["varbit", 12393, 1], ["close", TASKS], ["script", 9431]], "busy, then the floater and its close script");
+  assert.deepEqual(panel.sent.order.find(([kind, id]) => kind === "script" && id === 2524), ["script", 2524, -1, -1], "then 2524 before the modal");
+  for (const handler of custom["interface:closed"]) handler({ player: panel, interfaceId: 529 });
+  assert.equal(panel.sent.varbits.get(12393), 0, "closing it clears busy");
+  panel.sent.varbits.delete(12393);
+  for (const handler of custom["interface:closed"]) handler({ player: panel, interfaceId: 529 });
+  assert.equal(panel.sent.varbits.has(12393), false, "once");
+});
+
+test("a kill with a league area counts only there: Defeat a Snake in Karamja", () => {
+  worldLeague = 6;
+  const hunter = character("areakiller");
+  worldLeague = 4;
+  const task = catalog.leagues["6"].tasks.find((entry) => entry.id === "defeat-a-snake-in-karamja");
+  assert.deepEqual(task.trigger, { kind: "kill", npcs: ["Snake"], count: 1, area: 2 }, "Karamja, the areas plugin's 2");
+  const areaAt = custom["league:area-at"];
+  custom["league:area-at"] = [(query) => { query.area = query.x === 2850 ? 2 : 21; }];
+  try {
+    hooks.onNpcDeath({ killer: hunter, npc: npc("Snake"), npcId: 0, location: { x: 1700, y: 3100, z: 0 } });
+    assert.ok(!completed(hunter).includes(task.id), "a snake in Varlamore is no Karamja snake");
+    hooks.onNpcDeath({ killer: hunter, npc: npc("Snake"), npcId: 0, location: { x: 2850, y: 3000, z: 0 } });
+    assert.ok(completed(hunter).includes(task.id));
+  } finally {
+    if (areaAt) custom["league:area-at"] = areaAt; else delete custom["league:area-at"];
+  }
+});
+
+test("experience tasks: 25 million in a skill, and in 5 non-combat skills", () => {
+  worldLeague = 6;
+  const grinder = character("xpgrinder");
+  worldLeague = 4;
+  const tasks = catalog.leagues["6"].tasks;
+  const agility = tasks.find((task) => task.id === "obtain-25-million-agility-xp");
+  const five = tasks.find((task) => task.id === "obtain-25-million-xp-in-5-non-combat-skills");
+  assert.deepEqual(agility.trigger, { kind: "experience", skills: ["AGILITY"], amount: 25000000, count: 1 });
+  const skills = grinder.getSkillManager();
+  const xp = (skill, amount) => { skills.setExperiences(skill, amount, false); hooks.onExperienceGained({ player: grinder, skill, experience: 1 }); };
+  xp(Skill.AGILITY, 24999999);
+  assert.ok(!completed(grinder).includes(agility.id));
+  xp(Skill.AGILITY, 25000000);
+  assert.ok(completed(grinder).includes(agility.id));
+  for (const skill of [Skill.MINING, Skill.FISHING, Skill.COOKING]) xp(skill, 25000000);
+  assert.ok(!completed(grinder).includes(five.id), "four of five");
+  xp(Skill.ATTACK, 25000000);
+  assert.ok(!completed(grinder).includes(five.id), "Attack is a combat skill");
+  xp(Skill.HERBLORE, 25000000);
+  assert.ok(completed(grinder).includes(five.id));
+});
+
+test("a diary tier task completes when the diaries plugin says the tier is done", () => {
+  worldLeague = 6;
+  const diarist = character("diarist");
+  worldLeague = 4;
+  const task = catalog.leagues["6"].tasks.find((entry) => entry.id === "complete-the-easy-karamja-diary");
+  assert.deepEqual(task.trigger, { kind: "diary", diary: "karamja", tier: "easy" });
+  const kourend = catalog.leagues["6"].tasks.find((entry) => entry.name === "Kourend and Kebos Easy Diary Tasks");
+  assert.deepEqual(kourend.trigger, { kind: "diary", diary: "kourend", tier: "easy" });
+  let done = false;
+  custom["diary:is-complete"] = [(query) => { query.complete = done && query.diary === "karamja" && query.tier === "easy"; }];
+  try {
+    for (const handler of custom["diary:task"]) handler({ player: diarist, diary: "karamja", task: "x" });
+    assert.ok(!completed(diarist).includes(task.id));
+    done = true;
+    for (const handler of custom["diary:task"]) handler({ player: diarist, diary: "karamja", task: "y" });
+    assert.ok(completed(diarist).includes(task.id));
+  } finally {
+    delete custom["diary:is-complete"];
+  }
+});
+
+test("Combat Achievement tasks: a tier, counts, speed tasks and a monster's every task", () => {
+  worldLeague = 6;
+  const warrior = character("caleague");
+  worldLeague = 4;
+  const tasks = catalog.leagues["6"].tasks;
+  const byName = (name) => tasks.find((task) => task.name === name);
+  assert.deepEqual(byName("Combat Achievements Easy Tier").trigger, { kind: "ca-tier", tier: "Easy" });
+  assert.deepEqual(byName("50 Combat Achievements").trigger, { kind: "ca-count", count: 50 });
+  assert.deepEqual(byName("Complete 5 Speed Tasks").trigger, { kind: "ca-count", count: 5, type: "speed" });
+  assert.deepEqual(byName("Mole Combat Achievements").trigger, { kind: "ca-boss", monster: "Giant Mole" }, "enum 3970's name");
+  assert.equal(byName("Hueycoatl Combat Achievements").trigger.monster, "Hueycoatl, The");
+  const state = { completed: 49, speed: 4, monsters: ["Giant Mole"], easy: false };
+  custom["combat-achievements:summary"] = [(query) => Object.assign(query, { completed: state.completed, speed: state.speed, monsters: state.monsters })];
+  custom["combat-achievements:tier"] = [(query) => { query.unlocked = query.tier === "Easy" && state.easy; }];
+  try {
+    const fire = () => { for (const handler of custom["combat-achievements:completed"]) handler({ player: warrior }); };
+    fire();
+    assert.ok(completed(warrior).includes(byName("Mole Combat Achievements").id), "the Giant Mole's every task");
+    assert.ok(!completed(warrior).includes(byName("50 Combat Achievements").id));
+    Object.assign(state, { completed: 50, speed: 5, easy: true });
+    fire();
+    for (const name of ["50 Combat Achievements", "Complete 5 Speed Tasks", "Combat Achievements Easy Tier", "Complete all tasks for 1 boss"]) {
+      assert.ok(completed(warrior).includes(byName(name).id), name);
+    }
+  } finally {
+    delete custom["combat-achievements:summary"];
+    delete custom["combat-achievements:tier"];
+  }
+});
+
+/** The first cache item / NPC of that exact name. */
+function itemId(name) {
+  for (let id = 0; id < CacheDefinitions.getCounts().items; id++) if (CacheDefinitions.getItem(id)?.name === name) return id;
+  throw new Error(`no item "${name}"`);
+}
+function npcId(name) {
+  for (let id = 0; id < CacheDefinitions.getCounts().npcs; id++) if (CacheDefinitions.getNpc(id)?.name === name) return id;
+  throw new Error(`no NPC "${name}"`);
+}
+const emit = (name, payload) => { for (const handler of custom[name] ?? []) handler(payload); };
+
+test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, gathered, hunted, stolen and casket kinds", () => {
+  worldLeague = 6;
+  const doer = character("doer");
+  worldLeague = 4;
+  const tasks = catalog.leagues["6"].tasks;
+  const trigger = (id) => tasks.find((task) => task.id === id).trigger;
+  assert.deepEqual(trigger("equip-a-tyras-helm"), { kind: "equip", items: ["Tyras helm"] });
+  doer.getEquipment = () => ({ getItems: () => [{ getId: () => itemId("Tyras helm") }] });
+  emit("equipment:changed", { player: doer });
+  assert.ok(completed(doer).includes("equip-a-tyras-helm"), "worn: equipment:changed");
+  assert.deepEqual(trigger("equip-full-oathplate"), { kind: "equip-all", items: ["Oathplate helm", "Oathplate chest", "Oathplate legs"] }, "the Wiki's link targets, not its labels");
+  const worn = (...names) => (doer.getEquipment = () => ({ getItems: () => names.map((name) => ({ getId: () => itemId(name) })) }));
+  worn("Oathplate helm", "Oathplate chest");
+  emit("equipment:changed", { player: doer });
+  assert.ok(completed(doer).includes("equip-any-oathplate-piece") && !completed(doer).includes("equip-full-oathplate"), "a piece is not the set");
+  worn("Oathplate helm", "Oathplate chest", "Oathplate legs");
+  emit("equipment:changed", { player: doer });
+  assert.ok(completed(doer).includes("equip-full-oathplate"), "every piece at once");
+
+  assert.deepEqual(trigger("mine-5-tin-ore"), { kind: "produce", items: ["Tin ore"], count: 5 });
+  assert.deepEqual(trigger("guardians-of-the-rift-10-rifts-closed"), { kind: "rifts", count: 10 });
+  assert.deepEqual(trigger("pickpocket-an-elite-clue-from-a-hero"), { kind: "pickpocket-loot", npcs: ["Hero"], items: ["Clue scroll (elite)", "Scroll box (elite)"], count: 1 });
+  assert.deepEqual(trigger("purchase-a-celestial-ring"), { kind: "buy", items: ["Celestial ring (uncharged)"], shops: ["Dusuri's Star Shop"], count: 1 }, "the ring as the shop sells it");
+  assert.deepEqual(trigger("convert-an-item-into-at-least-500-coins"), { kind: "alch", coins: 500, count: 1 });
+  assert.deepEqual(trigger("use-the-bank-in-nardah"), { kind: "bank", place: "nardah-bank", count: 1 });
+  assert.deepEqual(trigger("use-the-bank-on-lunar-isle"), { kind: "bank", place: "lunar-isle", count: 1 });
+  assert.deepEqual(trigger("use-the-bank-chest-inside-fortis-colosseum"), { kind: "bank", place: "fortis-colosseum-lobby", count: 1 });
+  // A subject the cache spells otherwise: the item or NPC its linked page's infobox names, every cache
+  // entry of that name one of the page's ids (the Chompy bird hats, every rank's one name, are none).
+  assert.deepEqual(trigger("catch-150-red-chinchompas-in-kandarin"), { kind: "hunt", npcs: ["Carnivorous chinchompa"], count: 150, area: 4 });
+  assert.deepEqual(trigger("mine-30-chunks-of-granite"), { kind: "produce", items: ["Granite (500g)", "Granite (2kg)", "Granite (5kg)"], count: 30, area: 6 });
+  assert.deepEqual(trigger("equip-the-webweaver"), { kind: "equip", items: ["Webweaver bow (u)", "Webweaver bow"] });
+  assert.deepEqual(trigger("equip-an-enchanted-slayer-staff"), { kind: "equip", items: ["Slayer's staff (e)"] });
+  assert.equal(trigger("equip-a-marksman-chompy-hat"), undefined);
+  assert.equal(trigger("create-a-mithril-grapple"), undefined, "the unfinished grapple is a Mith grapple too");
+  assert.deepEqual(trigger("chop-down-an-arctic-pine-tree"), { kind: "produce", items: ["Arctic pine logs"], count: 1 });
+  assert.deepEqual(trigger("worship-the-ectofuntus"), { kind: "deed", event: "ectofuntus:worshipped", count: 1 });
+  assert.deepEqual(trigger("load-a-blowpipe-with-dragon-darts"), { kind: "deed", event: "toxic-blowpipe:darts-loaded", count: 1, items: ["Dragon dart"] });
+  assert.deepEqual(trigger("switch-to-the-lunar-spellbook"), { kind: "deed", event: "magic:spellbook-changed", count: 1, where: { spellbook: "lunar" } });
+  assert.deepEqual(trigger("fill-a-giant-pouch"), { kind: "deed", event: "runecrafting:pouch-filled", count: 1, items: ["Giant pouch"] });
+  assert.deepEqual(trigger("cross-a-pillar-shortcut-in-the-revenant-caves"), { kind: "shortcut", shortcuts: ["Pillar (Revenant Caves, easy)", "Pillar (Revenant Caves, medium)", "Pillar (Revenant Caves, hard)"], count: 1 });
+  assert.deepEqual(trigger("take-a-shortcut-across-the-shilo-village-river"), { kind: "shortcut", shortcuts: ["Stepping stone (Shilo Village)"], count: 1 });
+  assert.deepEqual(trigger("talk-to-a-gladiator"), { kind: "npc-op", npcs: ["Gladiator"], option: "talk-to", count: 1 });
+  assert.deepEqual(trigger("talk-to-ilfeen-in-tirannwn"), { kind: "npc-op", npcs: ["Ilfeen"], option: "talk-to", count: 1, area: 7 });
+  assert.deepEqual(trigger("talk-to-the-mysterious-old-man-in-falador"), { kind: "npc-op", npcs: ["Mysterious Old Man"], option: "talk-to", count: 1, place: "falador" });
+  assert.deepEqual(trigger("obtain-a-bird-nest"), { kind: "bird-nest", count: 1 });
+  assert.deepEqual(trigger("pick-up-snapegrass"), { kind: "take", items: ["Snape grass"], source: "pickup", count: 1, place: "lunar-isle" });
+  assert.deepEqual(trigger("use-the-fortis-salute-emote"), { kind: "emote", slots: [53], count: 1 });
+  assert.deepEqual(trigger("complete-the-theatre-of-blood-25-times"), { kind: "tob", modes: ["normal", "hard"], count: 25 });
+  assert.deepEqual(trigger("cast-kourend-castle-teleport"), { kind: "teleport", spells: ["kourend castle teleport"], count: 1 });
+  assert.ok(trigger("teleport-using-law-runes").spells.includes("paddewwa teleport"), "every teleport whose runes have a law rune");
+  assert.deepEqual(trigger("make-an-extended-antifire-potion"), { kind: "produce", items: ["Extended antifire"], count: 1 }, "a potion's name has no 'potion' in it");
+  assert.deepEqual(trigger("create-100-anti-venom-potions").items, ["Anti-venom"], "at any dosage");
+  assert.deepEqual(trigger("successfully-cut-a-red-topaz"), { kind: "produce", items: ["Red topaz"], count: 1 });
+  assert.deepEqual(trigger("spin-a-ball-of-wool"), { kind: "produce", items: ["Ball of wool"], count: 1 });
+  assert.deepEqual(trigger("chop-75-magic-logs"), { kind: "produce", items: ["Magic logs"], count: 75 }, "from Magic Trees is where the logs come from");
+  assert.deepEqual(trigger("pickpocket-a-master-farmer"), { kind: "pickpocket", npcs: ["Master Farmer"], count: 1 }, "pickpocket from a Master farmer");
+  for (let i = 0; i < 4; i++) emit("mining:success", { player: doer, itemId: itemId("Tin ore") });
+  assert.equal(doer.getAttribute("league:task-progress")["mine-5-tin-ore"], 4, "progress kept");
+  assert.ok(!completed(doer).includes("mine-5-tin-ore"));
+  emit("mining:success", { player: doer, itemId: itemId("Tin ore") });
+  assert.ok(completed(doer).includes("mine-5-tin-ore"), "the fifth ore");
+  assert.equal(doer.getAttribute("league:task-progress")["mine-5-tin-ore"], undefined, "a done task keeps no count");
+
+  assert.deepEqual(trigger("clean-15-grimy-tarromin"), { kind: "produce", items: ["Tarromin"], count: 15 }, "a herb counts once clean");
+  emit("skills:produced", { player: doer, itemId: itemId("Tarromin"), amount: 15 });
+  assert.ok(completed(doer).includes("clean-15-grimy-tarromin"), "skills:produced, with its amount");
+  emit("fishing:success", { player: doer, itemId: itemId("Raw cod") });
+  assert.equal(doer.getAttribute("league:task-progress")["catch-10-cod"], 1, "a fish is caught raw");
+  assert.equal(trigger("chop-some-logs"), undefined, "\"any kind of logs\" is no single item");
+  emit("woodcutting:success", { player: doer, logId: itemId("Willow logs") });
+  assert.equal(doer.getAttribute("league:task-progress")["chop-100-willow-logs"], 1, "woodcutting:success by its log");
+
+  assert.deepEqual(trigger("pickpocket-a-citizen").npcs, ["Man", "Woman"], "the description's alternatives");
+  emit("thieving:success", { player: doer, method: "stall", target: "Woman" });
+  assert.ok(!completed(doer).includes("pickpocket-a-citizen"), "a stall is no pocket");
+  emit("thieving:success", { player: doer, method: "pickpocket", target: "Woman" });
+  assert.ok(completed(doer).includes("pickpocket-a-citizen"));
+
+  emit("hunter:success", { player: doer, method: "net", npcId: npcId("Baby impling") });
+  assert.ok(completed(doer).includes("catch-a-baby-impling"), "hunter:success by the creature");
+  emit("treasure-trails:casket-opened", { player: doer, tier: "easy" });
+  assert.ok(completed(doer).includes("1-easy-clue-scroll"));
+  assert.equal(doer.getAttribute("league:task-progress")["25-easy-clue-scrolls"], 1);
+
+  // Produce, as the descriptions say it: a restated "whilst fishing" or rune altar is no condition,
+  // a potion has no dose, the description names the herb, a tree chopped is its logs, a trailing
+  // league region is the task's area.
+  assert.deepEqual(trigger("catch-a-herring"), { kind: "produce", items: ["Raw herring"], count: 1 });
+  assert.deepEqual(trigger("catch-an-anchovy").items, ["Raw anchovies"], "the description's raw fish as written");
+  assert.deepEqual(trigger("craft-a-fire-rune"), { kind: "produce", items: ["Fire rune"], count: 1 });
+  assert.deepEqual(trigger("make-30-prayer-potions"), { kind: "produce", items: ["Prayer potion"], count: 30 });
+  assert.deepEqual(trigger("clean-a-grimy-guam"), { kind: "produce", items: ["Guam leaf"], count: 1 });
+  assert.deepEqual(trigger("chop-100-maples-in-tirannwn"), { kind: "produce", items: ["Maple logs"], count: 100, area: 7 });
+  assert.deepEqual(trigger("catch-a-swamp-lizard-in-morytania"), { kind: "hunt", npcs: ["Swamp lizard"], count: 1, area: 5 });
+  assert.equal(trigger("chop-some-logs"), undefined, "any logs is still no single item");
+  emit("woodcutting:success", { player: doer, logId: itemId("Maple logs") });
+  assert.equal(doer.getAttribute("league:task-progress")["chop-100-maples-in-tirannwn"], undefined, "not chopped in Tirannwn");
+
+  // A boss in its own lair: the place only says where it lives (a Combat Achievements monster).
+  assert.deepEqual(trigger("defeat-vorkath-50-times"), { kind: "kill", npcs: ["Vorkath"], count: 50 });
+  assert.deepEqual(trigger("defeat-sarachnis-50-times"), { kind: "kill", npcs: ["Sarachnis"], count: 50 });
+  assert.equal(trigger("defeat-vorkath-15-times-without-leaving"), undefined, "its condition still stands");
+  // A monster the Wiki has in one place only: the place only says where it lives.
+  assert.deepEqual(trigger("defeat-a-drake"), { kind: "kill", npcs: ["Drake"], count: 1 }, "every Drake the Wiki lists is in the Karuulm Slayer Dungeon");
+  assert.equal(trigger("defeat-a-snake-in-karamja").area, 2, "a monster of many homes keeps its place");
+  assert.deepEqual(trigger("defeat-a-moss-fire-and-hill-giant-in-kourend"), { kind: "kill-each", npcs: { "Moss giant": 1, "Fire giant": 1, "Hill Giant": 1 }, area: 20 });
+  assert.deepEqual(trigger("defeat-the-grotesque-guardians-50-times"), { kind: "kill", npcs: ["Dusk"], count: 50 }, "the Combat Achievements plugin's NPC for the monster");
+  assert.deepEqual(trigger("defeat-150-lizardmen-shaman"), { kind: "kill", npcs: ["Lizardman shaman"], count: 150 }, "helping the house is dealing with them");
+  // A named place the server knows the bounds of.
+  assert.deepEqual(trigger("enter-the-crafting-guild"), { kind: "enter", place: "crafting-guild" });
+  assert.deepEqual(trigger("defeat-a-runite-golem"), { kind: "kill", npcs: ["Runite Golem"], count: 1, place: "resource-area" });
+  assert.equal(catalog.places["wizards-guild"].source, "the Wiki's outline");
+  assert.deepEqual(trigger("cook-20-sharks-in-darkmeyer"), { kind: "produce", items: ["Shark"], count: 20, place: "darkmeyer-city" });
+  assert.deepEqual(trigger("steal-a-chisel"), { kind: "steal", stalls: ["Crafting Stall"], count: 1, items: ["Chisel"], place: "keldagrim" });
+  assert.equal(trigger("craft-some-pottery-in-sophanem"), undefined, "pottery is a skill's products, no one item");
+  assert.deepEqual(trigger("equip-amy-s-saw"), { kind: "equip", items: ["Amy's saw"] }, "from Mahogany Homes is where it comes from");
+  assert.deepEqual(trigger("equip-a-golden-tench"), { kind: "equip", items: ["Golden tench"] }, "caught by aerial fishing, likewise");
+  // A set the cache has no item set for: its Wiki page's table of pieces.
+  assert.deepEqual(trigger("equip-a-full-armadyl-armour-set"), { kind: "equip-all", items: ["Armadyl helmet", "Armadyl chestplate", "Armadyl chainskirt"] });
+  assert.equal(trigger("equip-a-full-void-knight-set").sets.length, 3, "one table per helm, sharing the rest");
+  assert.equal(trigger("equip-a-full-crystal-armour-set"), undefined, "weapons, armour and tools are three things");
+
+  // Fires, burnt food and bones: the logs or bones named, any bones for "Remains of any kind".
+  assert.deepEqual(trigger("burn-100-willow-logs"), { kind: "burn", items: ["Willow logs"], count: 100 });
+  assert.equal(trigger("burn-20-pyre-logs"), undefined, "pyre logs go on a funeral pyre");
+  assert.deepEqual(trigger("burn-some-food"), { kind: "burn-food", count: 1 });
+  assert.deepEqual(trigger("bury-6-bones"), { kind: "bury", any: true, count: 6 });
+  assert.deepEqual(trigger("bury-some-wyvern-or-dragon-bones"), { kind: "bury", items: ["Wyvern bones", "Dragon bones"], count: 1 });
+  assert.equal(trigger("bury-some-wyrm-bones-near-a-wyrm-skeleton"), undefined, "a place is no plain count");
+
+  // Spells: combat spells and the alchemies by name, "any wave spell" the four; a teleport or a place is left out.
+  assert.deepEqual(trigger("cast-ice-burst"), { kind: "cast", spells: ["Ice Burst"], count: 1 });
+  assert.deepEqual(trigger("cast-a-wave-spell").spells, ["Wind Wave", "Water Wave", "Earth Wave", "Fire Wave"]);
+  assert.equal(trigger("cast-claws-of-guthix"), undefined, "outside of the Mage Arena");
+  assert.equal(trigger("cast-home-teleport"), undefined, "a teleport");
+
+  // Stalls: the stall a cache loc names, the item if named, the league area if one follows.
+  assert.deepEqual(trigger("steal-some-bread"), { kind: "steal", stalls: ["Bakery stall"], count: 1, items: ["Bread"] });
+  assert.deepEqual(trigger("steal-from-a-fur-stall"), { kind: "steal", stalls: ["Fur stall"], count: 1, area: 4 });
+  assert.equal(trigger("steal-from-the-fortis-spice-stall"), undefined, "no loc of that name");
+  emit("thieving:success", { player: doer, method: "stall", stall: "Bakery stall", itemId: itemId("Cake") });
+  assert.ok(!completed(doer).includes("steal-some-bread"), "another item from the stall");
+  emit("thieving:success", { player: doer, method: "stall", stall: "Bakery stall", itemId: itemId("Bread") });
+  assert.ok(completed(doer).includes("steal-some-bread"));
+
+  // Fields: the plant picked; several crops each that many; a minigame's sq'irk is none, a ground item picked up is a take.
+  assert.deepEqual(trigger("pick-6-flax"), { kind: "pick", plants: ["Flax"], count: 6 });
+  assert.deepEqual(trigger("pick-6-wheat-6-cabbages-and-6-potatoes"), { kind: "pick-each", plants: { Wheat: 6, Cabbage: 6, Potato: 6 } });
+  assert.equal(trigger("pick-a-winter-sq-irk"), undefined);
+  assert.equal(trigger("pick-up-snapegrass").kind, "take");
+
+  // The clue tiers' collection log slots: "Fill 15 slots" and "Gain 10 unique items from Reward casket".
+  assert.deepEqual(trigger("fill-15-hard-clue-collection-log-slots"), { kind: "collection-log", category: "Hard Treasure Trails", count: 15 });
+  assert.deepEqual(trigger("100-collection-log-slots"), { kind: "collection-log", count: 100 }, "the whole log's slots");
+  assert.deepEqual(trigger("gain-a-unique-item-from-a-master-clue"), { kind: "collection-log", category: "Master Treasure Trails", count: 1 });
+
+  // Health checks: the crop type, a cactus by its crop; a place other than its only one is left out.
+  assert.deepEqual(trigger("check-a-grown-fruit-tree"), { kind: "check-health", types: ["FRUIT_TREE"], count: 1 });
+  assert.deepEqual(trigger("check-a-grown-cactus"), { kind: "check-health", crops: ["CACTUS"], count: 1 });
+  assert.deepEqual(trigger("check-the-health-of-5-crystal-trees"), { kind: "check-health", types: ["CRYSTAL_TREE"], count: 5 });
+
+  // Sets: every piece at once, a slot taking either; names as the cache spells them.
+  assert.deepEqual(trigger("equip-a-full-rune-set"), { kind: "equip-all", items: ["Rune platebody", "Rune full helm", ["Rune platelegs", "Rune plateskirt"]] });
+  assert.deepEqual(trigger("equip-a-full-blue-dragonhide-set").items, ["Blue d'hide body", "Blue d'hide chaps", "Blue d'hide vambraces"]);
+  assert.deepEqual(trigger("equip-a-seer-s-ring"), { kind: "equip", items: ["Seers ring"] });
+
+  // The cache's item sets (enum 1034): every piece, any piece, or one whole Barrows set.
+  assert.deepEqual(trigger("equip-full-dharoks-armour-set").items, ["Dharok's helm", "Dharok's platebody", "Dharok's platelegs", "Dharok's greataxe"]);
+  assert.equal(trigger("equip-any-full-barrows-armour-set").sets.length, 6);
+  assert.ok(!trigger("equip-a-piece-of-any-barrows-armour-set").items.includes("Ahrim's staff"), "a weapon is no armour");
+
+  // Minigame completions: the monster their plugin credits, credited events only.
+  assert.deepEqual(trigger("complete-the-inferno-5-times"), { kind: "kill", npcs: ["TzKal-Zuk"], count: 5, credited: true });
+  assert.deepEqual(trigger("complete-tombs-of-amascut").npcs, ["Tombs of Amascut", "XM: Tombs of Amascut"]);
+  assert.equal(trigger("complete-the-corrupted-gauntlet-in-4-30"), undefined, "a time is a condition");
+
+  // "1 Time", "the Kraken Boss", Tempoross subdued, the Doom at any delve level.
+  assert.deepEqual(trigger("defeat-amoxliatl-1-time"), { kind: "kill", npcs: ["Amoxliatl"], count: 1, area: 21 });
+  assert.deepEqual(trigger("defeat-the-kraken-boss-50-times"), { kind: "kill", npcs: ["Kraken"], count: 50 });
+  assert.deepEqual(trigger("defeat-tempoross-1-time"), { kind: "tempoross", count: 1 });
+  assert.deepEqual(trigger("defeat-the-doom-of-mokhiatl"), { kind: "kill", npcs: ["Doom of Mokhaiotl"], count: 1, credited: true });
+
+  // Key chests by the key chests plugin's names.
+  assert.deepEqual(trigger("open-15-larran-s-chests"), { kind: "open-chest", chests: ["Larran's small chest", "Larran's big chest"], count: 15 });
+  assert.deepEqual(trigger("open-the-enhanced-crystal-chest").chests, ["Elven Crystal Chest"]);
+
+  // Farming, Giants' Foundry (a ruined sword is no successful one), snares, Barrows chests.
+  assert.deepEqual(trigger("harvest-a-ranarr-weed"), { kind: "harvest", crops: ["RANARR"], count: 1 });
+  assert.deepEqual(trigger("plant-an-anima-seed").crops, ["ATTAS", "IASOR", "KRONOS"]);
+  assert.deepEqual(trigger("giants-foundry-50-quality-sword"), { kind: "foundry", quality: 50, count: 1 });
+  assert.deepEqual(trigger("snare-5-crimson-swifts"), { kind: "hunt", npcs: ["Crimson swift"], count: 5 });
+  assert.equal(trigger("snare-a-bird-20-times"), undefined, "any bird is no one creature");
+  assert.deepEqual(trigger("loot-a-barrows-chest").npcs, ["Barrows"]);
+  emit("giants-foundry:sword-handed-in", { player: doer, quality: 0, swords: 1 });
+  assert.equal(doer.getAttribute("league:task-progress")["giants-foundry-10-handins"], undefined, "a ruined sword");
+  emit("giants-foundry:sword-handed-in", { player: doer, quality: 60, swords: 2 });
+  assert.ok(completed(doer).includes("giants-foundry-50-quality-sword"));
+  assert.equal(doer.getAttribute("league:task-progress")["giants-foundry-10-handins"], 1);
+
+  // Pyramid Plunder: a room's Grand Gold Chest.
+  assert.deepEqual(trigger("room-8-of-pyramid-plunder-25-times"), { kind: "plunder-chest", room: 8, count: 25 });
+
+  assert.deepEqual(trigger("complete-a-ribbiting-tale"), { kind: "quest", name: "The Ribbiting Tale of a Lily Pad Labour Dispute" }, "the description's full name");
+  assert.deepEqual(trigger("complete-the-prison-pete-random-event"), { kind: "random-event", events: ["prison"], count: 1 });
+  assert.equal(trigger("complete-the-postie-pete-random-event"), undefined, "its Wiki row describes the Evil twin");
+  assert.deepEqual(trigger("fully-decorate-a-maple-totem-in-the-auburn-valley"), { kind: "totem", woods: ["maple"], count: 1 });
+  emit("vale-totems:decorated", { player: doer, wood: "oak" });
+  assert.ok(!completed(doer).includes("fully-decorate-a-maple-totem-in-the-auburn-valley"), "another wood's totem");
+  emit("vale-totems:decorated", { player: doer, wood: "maple" });
+  assert.ok(completed(doer).includes("fully-decorate-a-maple-totem-in-the-auburn-valley"));
+  assert.deepEqual(trigger("mine-some-runite-ore-with-a-dragon-pickaxe"), { kind: "gather-with", skill: "mining", tools: ["Dragon pickaxe"], count: 1, items: ["Runite ore"], area: 11 });
+  assert.deepEqual(trigger("complete-25-hunter-rumours"), { kind: "rumours", count: 25 });
+  assert.deepEqual(trigger("floor-5-of-the-hallowed-sepulchre"), { kind: "sepulchre-floor", floor: 5, count: 1 });
+
+  // Group encounters as their plugins credit them.
+  assert.deepEqual(trigger("defeat-the-moons-of-peril-25-times"), { kind: "kill", npcs: ["Moons of Peril"], count: 25, credited: true });
+  assert.equal(trigger("defeat-the-royal-titans-solo"), undefined, "without any other player joining is a condition");
+
+  // Worn in a league area ("while inside" too).
+  assert.deepEqual(trigger("equip-a-pair-of-dragon-boots-in-the-wilderness"), { kind: "equip", items: ["Dragon boots"], area: 11 });
+  assert.deepEqual(trigger("equip-a-one-hand-leaf-bladed-weapon-in-tirannwn").items, ["Leaf-bladed sword", "Leaf-bladed battleaxe", "Leaf-bladed spear"]);
+
+  // Prayers by PrayerHandler's names; one this server lacks is left out.
+  assert.deepEqual(trigger("use-the-protect-from-melee-prayer"), { kind: "prayer", prayers: ["Protect from Melee"], count: 1 });
+  assert.equal(trigger("activate-deadeye"), undefined, "not on this server");
+
+  // Pets: a skilling pet's skill; a boss pet is not told apart from the others.
+  assert.deepEqual(trigger("obtain-a-skilling-pet"), { kind: "pet", skilling: true, count: 1 });
+
+  // Slayer, Temple Trekking and Pest Control completions.
+  assert.deepEqual(trigger("complete-200-slayer-tasks"), { kind: "slayer-tasks", count: 200 });
+  assert.deepEqual(trigger("defeat-25-superior-slayer-creatures"), { kind: "superior-kills", count: 25 });
+  assert.deepEqual(trigger("complete-a-medium-temple-trek"), { kind: "temple-trek", difficulty: "medium", count: 1 });
+  assert.deepEqual(trigger("complete-a-game-of-intermediate-pest-control").boats, ["intermediate", "veteran"]);
+
+  // Laps: the agility plugin's course keys; a lap reward of several laps counts them all.
+  assert.deepEqual(trigger("complete-10-laps-of-the-varlamore-agility-course"), { kind: "agility-laps", courses: ["wyrm-basic", "wyrm-advanced"], count: 10 }, "either Colossal Wyrm course");
+  assert.deepEqual(trigger("complete-the-shayzien-basic-agility-course").courses, ["shayzien-basic"], "the name's course where the link's is both");
+  assert.equal(trigger("complete-the-prifddinas-agility-course-in-1-10"), undefined, "a timed lap is no count");
+  emit("agility:lap", { player: doer, course: "wyrm-basic", laps: 6, count: 6 });
+  emit("agility:lap", { player: doer, course: "wyrm-advanced", laps: 3, count: 3 });
+  assert.equal(doer.getAttribute("league:task-progress")["complete-10-laps-of-the-varlamore-agility-course"], 9);
+  emit("agility:lap", { player: doer, course: "wyrm-advanced", laps: 4, count: 1 });
+  assert.ok(completed(doer).includes("complete-10-laps-of-the-varlamore-agility-course"));
+  // Yama's stepping stones: a stone is a lap.
+  assert.deepEqual(trigger("jump-on-yama-s-stepping-stones-666-times"), { kind: "agility-laps", courses: ["yama-stepping-stones"], count: 666 });
+  for (let stone = 1; stone < 666; stone++) emit("agility:lap", { player: doer, course: "yama-stepping-stones", laps: stone, count: 1 });
+  assert.ok(!completed(doer).includes("jump-on-yama-s-stepping-stones-666-times"));
+  emit("agility:lap", { player: doer, course: "yama-stepping-stones", laps: 666, count: 1 });
+  assert.ok(completed(doer).includes("jump-on-yama-s-stepping-stones-666-times"), "the 666th stone");
+
+  // Eating and drinking: the food's item, a potion by its name (any dose), a food's restore.
+  assert.deepEqual(trigger("eat-an-onion"), { kind: "eat", items: ["Onion"], count: 1 });
+  assert.deepEqual(trigger("eat-a-rabbit").items, ["Cooked rabbit"], "the description's cooked rabbit");
+  assert.equal(trigger("drink-a-cup-of-tea-in-auburn-valley"), undefined, "a place is no item");
+  emit("food:eaten", { player: doer, itemId: itemId("Onion"), heal: 0, restores: 1 });
+  assert.ok(completed(doer).includes("eat-an-onion"), "food:eaten by the item");
+  assert.ok(!completed(doer).includes("eat-a-piece-of-food-that-restores-at-least-6-hitpoints"), "an onion restores 1");
+  emit("food:eaten", { player: doer, itemId: itemId("Trout"), heal: 0, restores: 7 });
+  assert.ok(completed(doer).includes("eat-a-piece-of-food-that-restores-at-least-6-hitpoints"), "what it restores, at full health too");
+  emit("potions:drunk", { player: doer, itemId: itemId("Strength potion(3)"), name: "Strength potion" });
+  assert.ok(completed(doer).includes("drink-a-strength-potion"));
+
+  const main = character("plain-doer", "main");
+  emit("mining:success", { player: main, itemId: itemId("Tin ore") });
+  assert.deepEqual(main.getAttribute("league:task-progress") ?? {}, {}, "a main character counts nothing");
 });
 
 /** A real cache NPC dying to `player` through the death hook. */

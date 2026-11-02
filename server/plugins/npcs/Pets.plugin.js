@@ -662,6 +662,8 @@ function awardPet(player, itemId) {
     return false;
   }
   recordOwnership(player, pet);
+  // "pets:obtained" { player, itemId, skill }: a new pet (a league's "Obtain any Skilling Pet"); `skill` a skilling pet's.
+  pluginApi?.emitCustomEvent?.("pets:obtained", { player, itemId: pet.itemId, skill: pet.skill?.getName?.() ?? null });
   const following = player.getAttribute?.(CURRENT_PET_ATTRIBUTE)?.isRegistered?.() === true;
   if (following && player.getInventory().isFull()) {
     // OSRS then loses the pet to Probita; the owned record lets her return it.

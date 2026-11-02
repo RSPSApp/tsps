@@ -33,10 +33,14 @@ function assign(player, index) {
     if (current.found && player.getInventory().contains(part)) {
       const I = H.core.ItemIdentifiers, sack = I[`HUNTERS_LOOT_SACK_${master[2].toUpperCase()}_`];
       if (!C.exchange(player, [[part,1]], [[sack,1]])) { player.getInventory().full(); return; }
-      const amount = (player.getSkillManager().getMaxLevel(H.core.Skill.HUNTER)+5)*master[3];
-      player.getSkillManager().addExperiences(H.core.Skill.HUNTER,amount);
+      // Content may change the rumour's XP ("hunter:rumour-reward" { player, tier, xp }, a league relic's double).
+      const reward = { player, tier: master[2], xp: (player.getSkillManager().getMaxLevel(H.core.Skill.HUNTER)+5)*master[3] };
+      H.api?.emitCustomEvent?.("hunter:rumour-reward", reward);
+      player.getSkillManager().addExperiences(H.core.Skill.HUNTER,reward.xp);
       s.completed++; s.previous = current.task; delete s.assignments[index];
       player.sendMessage(`Rumour completed! You have completed ${s.completed} rumours.`);
+      // "hunter:rumour-completed" { player, completed }: one more (a league's "Complete 10 Hunter Rumours").
+      H.api?.emitCustomEvent?.("hunter:rumour-completed", { player, completed: s.completed });
     } else { player.sendMessage(`Your active rumour is ${task.name}. Bring back ${H.core.ItemDefinition.forId(part).getName()}.`); return; }
   }
   const blocked = Object.values(s.assignments).map(a=>a.task);
@@ -96,7 +100,10 @@ function cascade(player, skill, rows) {
 }
 function sackRewards(player,tier) {
   const I=H.core.ItemIdentifiers,s=state(player),rows=loot[tier],rewards=[];
-  for(let i=0;i<({basic:5,adept:7,expert:9,master:11})[tier];i++) {
+  // Content may change the sack's loot rolls ("hunter:sack-rolls" { player, tier, rolls }, a league relic's double); not its rare rolls.
+  const request={player,tier,rolls:({basic:5,adept:7,expert:9,master:11})[tier]};
+  H.api?.emitCustomEvent?.("hunter:sack-rolls",request);
+  for(let i=0;i<request.rolls;i++) {
     const count=rows.length+(tier==='basic'?1:2),which=C.roll(0,count-1);
     let id,amount;
     if(which<rows.length){const r=rows[which];id=I[r[0]];if(r[4])id=H.core.ItemDefinition.forId(id).getNoteId();amount=C.roll(r[2],r[3]);}

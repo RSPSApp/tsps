@@ -7,7 +7,7 @@
  * levels, XP and burn levels, are plugins/skills/data/cooking.json. See docs/cooking.md.
  */
 const Common = require("./Common.Cooking");
-const { pauseForLevelUp } = require("../SkillActions");
+const { pauseForLevelUp, actionInterval } = require("../SkillActions");
 
 /** Ticks from the choice (or the arrival) to the first food, then to the second, then each after. */
 const FIRST_COOK_TICKS = 2;
@@ -290,7 +290,9 @@ function cookTick(task) {
     if (task.cycle < session.nextCookTick) {
       continue;
     }
-    session.nextCookTick = task.cycle + (session.cooked === 0 ? SECOND_COOK_TICKS : COOK_INTERVAL_TICKS);
+    // Content may cook faster ("skills:action-interval", a league relic's 2-tick pace).
+    const pace = session.cooked === 0 ? SECOND_COOK_TICKS : COOK_INTERVAL_TICKS;
+    session.nextCookTick = task.cycle + actionInterval(Common.api, player, Common.core.Skill.COOKING, "cook", pace);
     if (session.cooked === 0) Common.sendVarbit(player, BUSY_VARBIT, 0);
     session.cooked++;
     session.remaining--;
@@ -330,6 +332,8 @@ function cookOne(player, session) {
     Common.api.emitCustomEvent("skills:produced", { player, skill: Skill.COOKING, itemId: cookable.cooked, amount: 1, xp: cookable.xp, kind: "cook" });
   } else {
     player.getInventory().addItem(new Item(session.cookable.burnt, 1));
+    // "cooking:burnt" { player, rawId, itemId }: the food burnt (a league's "Burn Some Food").
+    Common.api.emitCustomEvent("cooking:burnt", { player, rawId: session.cookable.raw, itemId: session.cookable.burnt });
     Common.spam(player, burnMessage(cookable));
     countCook(player, true);
   }

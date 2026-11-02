@@ -41,7 +41,9 @@ Agility.register({
   getItemOnGroundManager: () => ({
     registerLocation: (player, item, position, privateArea, options) => groundItems.push({ item, position, options }),
     ownedBy: () => floorStacks,
+    inventoryCapacity: () => 1,
   }),
+  onGroundItemPickup: (handler) => { hooks.pickup = handler; },
   persistAttribute: (key, value) => { hooks.persisted[key] = value; },
   onObjectRoute: (handler) => hooks.route.push(handler),
   onObjectFirstClick: (ids, handler) => ids.forEach((id) => hooks.click.set(id, handler)),
@@ -769,6 +771,50 @@ test("diaries reroll missed marks at Seers' and Ardougne and shorten cooldowns a
   assert.equal(cooldown("rellekka", [0, 0.33], ["fremennik:hard"]), 2);
   assert.equal(cooldown("rellekka", [0, 0], ["fremennik:medium"]), 3);
   assert.equal(cooldown("seers", [0, 0], ["kandarin:hard"]), 3, "Kandarin rerolls only");
+});
+
+test("agility:mark-chance may set a lap's mark chance; unanswered, the course's own stands", () => {
+  assert.equal(markCount("draynor", 10, [0.5]), 0);
+  hooks.answers["agility:mark-chance"] = (request) => {
+    assert.equal(request.course, "draynor");
+    assert.ok(Math.abs(request.chance - 2 / 6) < 1e-9, "asked with the course's chance");
+    request.chance = 0.6;
+  };
+  try {
+    assert.equal(markCount("draynor", 10, [0.5]), 1);
+  } finally {
+    delete hooks.answers["agility:mark-chance"];
+  }
+});
+
+test("a course mark picked up finishes a lap only when agility:mark-taken says so, with its items", () => {
+  const player = createPlayer(3101, 3278, 3, 10);
+  const added = [];
+  const inventory = player.getInventory();
+  player.getInventory = () => ({ ...inventory, getAddableAmount: (item) => item.getAmount(), adds: (id, amount) => added.push([id, amount]) });
+  player.setAttribute("agility.progress", { course: "draynor", index: 2 });
+  const mark = { getItem: () => ({ getId: () => MARK_OF_GRACE }), getgoesGlobal: () => false, getDespawnDelay: () => 1000 };
+  const pickUp = (groundItem = mark, location = { x: 3101, y: 3278, z: 3 }) => hooks.pickup({ player, groundItem, groundItemId: MARK_OF_GRACE, clickType: 1, location, handled: false });
+  hooks.events.length = 0;
+  pickUp();
+  assert.deepEqual(hooks.events.find((event) => event.name === "agility:mark-taken")?.payload.course, "draynor");
+  assert.deepEqual(player.getAttribute("agility.progress"), { course: "draynor", index: 2 }, "unanswered: nothing but the pick-up");
+  assert.equal(player.getAttribute("agility.laps")?.draynor, undefined);
+  hooks.answers["agility:mark-taken"] = (request) => {
+    request.completesLap = true;
+    request.items.push([995, 10]);
+  };
+  try {
+    hooks.events.length = 0;
+    pickUp({ ...mark, getgoesGlobal: () => true });
+    assert.equal(hooks.events.length, 0, "a dropped mark is not a course's");
+    pickUp();
+    assert.equal(player.getAttribute("agility.laps").draynor, 1);
+    assert.equal(player.getAttribute("agility.progress"), null);
+    assert.deepEqual(added, [[995, 10]]);
+  } finally {
+    delete hooks.answers["agility:mark-taken"];
+  }
 });
 
 test("a player's course marks stop ageing while they're logged out; dropped marks don't (Wiki: Mark of Grace)", () => {

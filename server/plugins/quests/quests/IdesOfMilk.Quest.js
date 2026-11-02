@@ -533,11 +533,19 @@ module.exports = function registerIdesOfMilkQuest(api) {
     if (quest.getStage(player) === 0) quest.setStage(player, STAGE_ACCEPTED);
   }
 
+  /** The transcript carries the recommendation box unconditionally; live only shows it under level 15. */
+  function warnBeforeStart(event) {
+    if (String(event.prompt).includes("Start The Ides of Milk quest") &&
+        (event.player.getSkillManager().getCombatLevel?.() ?? 15) < 15) {
+      event.warning = "Before starting this quest, be aware that your combat level is lower than the recommended level of 15.";
+    }
+  }
+
   /** The transcript's item/stage side effects, keyed by message/action id. */
   function handleAction(event) {
     const { player, stepId } = event;
     if (event.npcId && ![CASSIUS_NPC_ID, SETH_NPC_ID, GILLIE_NPC_ID, BULL_NPC_ID].includes(event.npcId)) return;
-    if (stepId === "bkgpn5" && (player.getSkillManager().getCombatLevel?.() ?? 15) >= 15) event.handled = true;
+    if (stepId === "bkgpn5") { event.handled = true; return; }
     if (stepId === "y7Vpgm") {
       grantItem(player, BOOK_ITEM_ID);
       event.box = { items: [BOOK_ITEM_ID] };
@@ -938,6 +946,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:menu", warnBeforeStart);
   api.onCustomEvent("npc-dialogue:condition", handleConditionStep);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("door:toggle", claimBullGate);

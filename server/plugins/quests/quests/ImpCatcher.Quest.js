@@ -17,10 +17,10 @@ module.exports = function registerImpCatcherQuest(api) {
   const STAGE_COMPLETE = 2;
 
   const REQUIRED_ITEMS = [
-    { itemId: ItemIdentifiers.BLACK_BEAD, label: "1 Black bead" },
-    { itemId: ItemIdentifiers.RED_BEAD, label: "1 Red bead" },
-    { itemId: ItemIdentifiers.WHITE_BEAD, label: "1 White bead" },
-    { itemId: ItemIdentifiers.YELLOW_BEAD, label: "1 Yellow bead" },
+    { itemId: ItemIdentifiers.BLACK_BEAD, label: "1 Black Bead." },
+    { itemId: ItemIdentifiers.RED_BEAD, label: "1 Red Bead." },
+    { itemId: ItemIdentifiers.WHITE_BEAD, label: "1 White Bead." },
+    { itemId: ItemIdentifiers.YELLOW_BEAD, label: "1 Yellow Bead." },
   ];
 
   /** Hand-in actions: "finishing up" and the start-with-all-beads branch. */
@@ -110,23 +110,35 @@ module.exports = function registerImpCatcherQuest(api) {
     if (stage >= STAGE_COMPLETE) {
       return [
         "<str>I have spoken to Wizard Mizgog.</str>",
-        "<str>I collected all four of his missing beads.</str>",
-        "<str>He rewarded me with an Amulet of Accuracy.</str>",
         "",
+        "<str>I have collected all the beads.</str>",
+        "",
+        "<str>Wizard Mizgog thanked me for finding his beads and gave me an</str>",
+        "<str>Amulet of Accuracy.</str>",
         "<col=ff0000>QUEST COMPLETE!</col>",
       ];
     }
     if (stage >= STAGE_STARTED) {
+      if (hasAllBeads(player)) {
+        return [
+          "<str>I have spoken to Wizard Mizgog.</str>",
+          "",
+          "I have collected all the missing beads and need to return",
+          "them to <col=800000>Wizard Mizgog</col>.",
+        ];
+      }
       const lines = [
-        "I have spoken to <col=800000>Wizard Mizgog</col>.",
+        "<str>I have spoken to Wizard Mizgog.</str>",
         "",
-        "I need to collect these items by killing imps:",
+        "I need to collect some items by killing <col=800000>Imps</col>, I can",
+        "find Imps all over the kingdom.",
+        "",
       ];
       for (const requirement of REQUIRED_ITEMS) {
         lines.push(
           player.getInventory().getAmount(requirement.itemId) > 0
             ? `<str>${requirement.label}</str>`
-            : requirement.label,
+            : `<col=800000>${requirement.label}</col>`,
         );
       }
       return lines;

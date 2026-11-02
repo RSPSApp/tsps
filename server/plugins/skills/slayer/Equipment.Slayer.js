@@ -5,15 +5,20 @@
  * - A monster that punishes the unprotected (banshees without earmuffs, dust devils without a
  *   facemask...) lands its hit, at its unprotected max, and drains stats.
  * - Kurask and turoth only take damage from leaf-bladed weapons, broad ammunition and Magic Dart.
+ * Content may give a Slayer helmet's protection without one ("slayer:helmet", a league relic).
  */
 const GEAR = require("../data/slayer-gear.json");
 
 let core = null;
+let api = null;
+/** The protection every Slayer helmet gives (data/slayer-gear.json). */
+const HELMET = "Slayer helmet";
 const byName = new Map();
 const immuneNames = new Set(GEAR.immune.names);
 
-function init(api) {
-  core = api.core;
+function init(pluginApi) {
+  api = pluginApi;
+  core = pluginApi.core;
   for (const monster of GEAR.monsters) for (const name of monster.names) byName.set(name, monster);
 }
 
@@ -29,7 +34,15 @@ function equippedNames(player) {
 
 function protectedFrom(player, monster) {
   const names = equippedNames(player);
-  return monster.protection.some((prefix) => names.some((name) => name.startsWith(prefix)));
+  if (monster.protection.some((prefix) => names.some((name) => name.startsWith(prefix)))) return true;
+  return monster.protection.includes(HELMET) && helmetGiven(player);
+}
+
+/** Whether content gives the player a Slayer helmet's effects without one ("slayer:helmet", a league relic). */
+function helmetGiven(player) {
+  const request = { player, worn: null };
+  api?.emitCustomEvent("slayer:helmet", request);
+  return request.worn === "imbued" || request.worn === "plain";
 }
 
 /** The monster's rule when it attacks this player unprotected, or null. */

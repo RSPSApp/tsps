@@ -35,6 +35,7 @@ export interface NpcInteractionView {
     secondClick?: NpcInteractionViewAction;
     thirdClick?: NpcInteractionViewAction;
     fourthClick?: NpcInteractionViewAction;
+    fifthClick?: NpcInteractionViewAction;
 }
 
 export class NpcInteractionManager {
@@ -163,6 +164,7 @@ export class NpcInteractionManager {
             this.setViewAction(row, 2, definition.getSecondClick());
             this.setViewAction(row, 3, definition.getThirdClick());
             this.setViewAction(row, 4, definition.getFourthClick());
+            this.setViewAction(row, 5, definition.getFifthClick());
             byNpcId.set(row.npcId, row);
         }
 
@@ -198,11 +200,12 @@ export class NpcInteractionManager {
 
     private static clickProperty(
         clickType: number
-    ): "firstClick" | "secondClick" | "thirdClick" | "fourthClick" | null {
+    ): "firstClick" | "secondClick" | "thirdClick" | "fourthClick" | "fifthClick" | null {
         if (clickType === 1) return "firstClick";
         if (clickType === 2) return "secondClick";
         if (clickType === 3) return "thirdClick";
         if (clickType === 4) return "fourthClick";
+        if (clickType === 5) return "fifthClick";
         return null;
     }
 

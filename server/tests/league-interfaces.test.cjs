@@ -291,8 +291,8 @@ test("Demonic Pacts' relics come from the cache: nothing is sent and the catalog
   // The relic flow works on the cache's ids: a slot click, then the pick.
   assert.equal(hooks[`button:${uid(SIDE_PANEL, 44)}`]({ player: pacts }), true);
   assert.equal(hooks[`button:${uid(655, 22)}`]({ player: pacts, slot: 0 }), true);
-  assert.deepEqual(pacts.sent.scripts.at(-2)[1].slice(-2), [first.struct, catalog.tiers[0].passiveStruct]);
-  assert.equal(hooks[`button:${uid(655, 50)}`]({ player: pacts }), true);
+  assert.deepEqual(pacts.sent.scripts.at(-2)[1].slice(-4), [first.struct, catalog.tiers[0].passiveStruct, first.description, catalog.tiers[0].passive], "rev 237: the structs, then the relic's and the tier's texts");
+  assert.equal(hooks[`button:${uid(655, 51)}`]({ player: pacts }), true, "confirm_button, the one with an op in this cache");
   assert.equal(pacts.sent.varbits.get(10049), 1, "tier 1's pick");
   assert.equal(query("league:has-relic", { player: pacts, relic: first.key }).active, true);
 });

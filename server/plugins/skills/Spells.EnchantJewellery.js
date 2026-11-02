@@ -3,7 +3,7 @@
  * piece of that jewellery in the inventory, in its own slot, then repeats every 7 ticks while
  * more of it is carried (Wiki); a cast clicked during the 3-tick delay waits for it.
  */
-const { pauseForLevelUp } = require("./SkillActions");
+const { pauseForLevelUp, actionInterval } = require("./SkillActions");
 
 let core;
 let pluginApi;
@@ -11,6 +11,9 @@ const spells = new Map();
 
 /** Wiki Enchant_jewellery: "if uninterrupted it will automatically cast it again every 7 ticks". */
 const REPEAT_TICKS = 7;
+/** A cast's own cooldown, 3 ticks. */
+const CAST_TICKS = 3;
+const TICK_MS = 600;
 const COOLDOWN_ATTRIBUTE = "enchant-jewellery:next-cast-at";
 const SHARED_CAST_ATTRIBUTE = "magic:next-cast-at";
 /** Rings, necklaces, bracelets and silver amulets: human_cast_enchantring, enchant_ring (rsprox). */
@@ -82,12 +85,21 @@ function keepEnchanting(player, spell, itemId, wait) {
     execute() {
       if (!player.isRegistered() || player.getHitpoints() <= 0) return this.stop();
       if (this.levelUpPaused || --remaining > 0) return;
-      remaining = REPEAT_TICKS;
+      remaining = repeatTicks(player);
       if (!enchant(player, spell, itemId)) this.stop();
     }
   })();
   repeats.set(player, task);
   core.TaskManager.submit(task);
+}
+
+/** Ticks between repeated casts, and a cast's cooldown; content may cast faster ("skills:action-interval", a league relic's 2-tick pace). */
+function repeatTicks(player) {
+  return actionInterval(pluginApi, player, core.Skill.MAGIC, "enchant", REPEAT_TICKS);
+}
+
+function castTicks(player) {
+  return actionInterval(pluginApi, player, core.Skill.MAGIC, "enchant", CAST_TICKS);
 }
 
 function stopEnchanting(player) {
@@ -128,7 +140,7 @@ function handleSpellOnItem(event) {
     return;
   }
   // Register the loop before the cast so its first XP drop can pause it too.
-  keepEnchanting(player, spell, itemId, REPEAT_TICKS);
+  keepEnchanting(player, spell, itemId, repeatTicks(player));
   if (!enchant(player, spell, itemId)) {
     stopEnchanting(player);
     return;
@@ -263,7 +275,7 @@ module.exports = function attach(api) {
     equipmentRequired() { return []; }
     startCast() {}
     usesSharedCastDelay() { return true; }
-    getCastCooldown() { return { attribute: COOLDOWN_ATTRIBUTE, duration: 1800 }; }
+    getCastCooldown(player) { return { attribute: COOLDOWN_ATTRIBUTE, duration: castTicks(player) * TICK_MS }; }
   }
   for (const data of ENCHANT_SPELLS) spells.set(data.name.toLowerCase(), new JewellerySpell(data));
   api.onSpellOnItem(handleSpellOnItem);

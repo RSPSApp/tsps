@@ -260,6 +260,8 @@ function addDecoration(player, site, wood) {
   State.set(player, site, { decorations });
   Shared.addXp(player, "FLETCHING", wood.decorationXp * Math.max(0, 1 - DATA.wrongAnimalXpPenalty * wrongAnimals(player, site)));
   if (decorations >= MAX_DECORATIONS) {
+    // "vale-totems:decorated" { player, wood }: a totem fully decorated (a league's "Fully decorate a Maple totem").
+    Shared.api().emitCustomEvent("vale-totems:decorated", { player, wood: wood.name });
     if (questActive(player) && site === QUEST_SITE) {
       Shared.statementThenPlayer(player, "You add the final decoration to the totem.", "There we go! I's say that's the totem finished!");
     } else {

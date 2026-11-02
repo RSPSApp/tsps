@@ -146,6 +146,44 @@ test("Pirate note renders the captured handwriting and the first dig summons the
   q.call('onPlayerLogout', { player: p }); assert.ok(q.removed.includes(q.spawned[0]));
 });
 
+test("Pirate's Treasure crate packing uses the captured message boxes and Luthas pays with his line", () => {
+  const q = register('PiratesTreasure', 'pirates_treasure'), p = player();
+  q.quest.setStage(p, 1);
+  const crate = core.ObjectIdentifiers.CRATE_15;
+  const interactions = { getInteractions: () => ['Search', 'Fill'] };
+
+  // An empty crate: captured game message, not "The crate has 0 bananas inside."
+  q.call('onObjectInteraction', { player: p, objectId: crate, clickType: 1, definition: interactions });
+  assert.deepEqual(p.messages, ['The crate is completely empty.']);
+
+  // Without Luthas's employment the crate refuses the banana (rsprox 4287).
+  p.items.set(1963, 1);
+  q.call('onItemOnObject', { player: p, objectId: crate, itemId: 1963 });
+  assert.deepEqual(p.messages, ['The crate is completely empty.', 'Why would I want to do that?']);
+  assert.equal(p.items.get(1963), 1);
+
+  // A single banana is a message box, not game chat.
+  p.attributes.set('pirates-treasure.employment', 1);
+  q.call('onItemOnObject', { player: p, objectId: crate, itemId: 1963 });
+  assert.equal(p.attributes.get('pirates-treasure.bananas'), 1);
+  const boxes = () => p.packets.filter(([method, , uid]) => method === 'sendString' && uid === ((229 << 16) | 3))
+    .map(([, text]) => text);
+  assert.deepEqual(boxes(), ['You pack a banana into the crate.']);
+
+  // Filling the last nine completes the crate: the captured wording is "fill".
+  p.items.set(1963, 9);
+  q.call('onObjectInteraction', { player: p, objectId: crate, clickType: 2, definition: interactions });
+  assert.equal(p.attributes.get('pirates-treasure.bananas'), 10);
+  assert.equal(p.items.get(1963), 0);
+  assert.deepEqual(boxes(), ['You pack a banana into the crate.', 'You fill the crate with bananas.']);
+
+  // Paying for the full crate: dialogue action then the captured game message.
+  q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.LUTHAS, stepId: '1YHx0E' });
+  assert.equal(p.attributes.get('pirates-treasure.bananas'), 0);
+  assert.deepEqual(p.messages, ['The crate is completely empty.', 'Why would I want to do that?', 'Luthas hands you 30 coins.']);
+  assert.equal(p.items.get(995), 30);
+});
+
 test('Prince Ali key can be made at a furnace without Osman and Leela accepts the prepared player at state20', () => {
   const q = register('PrinceAliRescue', 'prince_ali_rescue'), p = player(); q.quest.setStage(p, 20);
   p.items.set(2423, 1); p.items.set(2349, 1);
@@ -381,6 +419,26 @@ test('the customs officer lets worn Karamja gloves pass for half the fare, as th
   assert.equal(answer('If the player is wearing Karamja gloves and has 15 coins:'), true);
   assert.equal(answer('If the player has 30 coins:'), false, 'the gloves answer first');
   q.tick(9);
+});
+
+test("the customs officer's Charm free passage needs the Ring of Charos(a) worn", () => {
+  const q = register('PiratesTreasure', 'pirates_treasure'), p = player();
+  const answer = (text) => q.hooks.get('onNpcDialogueCondition')[0]({
+    player: p, npcId: core.NpcIdentifiers.CUSTOMS_OFFICER, text,
+  });
+  const wearRing = (id) => {
+    p.getEquipment = () => ({ get: () => ({ getId: () => id }), getItems: () => [], refreshItems() {} });
+  };
+  assert.equal(answer('If the player has the Ring of Charos(a) equipped:'), false);
+  wearRing(core.ItemIdentifiers.RING_OF_CHAROS);
+  assert.equal(answer('If the player has the Ring of Charos(a) equipped:'), false, 'the unactivated ring does not charm');
+  wearRing(core.ItemIdentifiers.RING_OF_CHAROS_A_);
+  assert.equal(answer('If the player has the Ring of Charos(a) equipped:'), true);
+  p.items.set(995, 0);
+  const charm = { player: p, npcId: core.NpcIdentifiers.CUSTOMS_OFFICER, stepId: 'upG45P' };
+  q.emit('npc-dialogue:action', charm);
+  assert.equal(charm.handled, true);
+  assert.equal(p.items.get(995), 0, 'the Charm route is free');
 });
 
 test('Corsair vine ladder preserves the side used on its one-tick climb', () => {

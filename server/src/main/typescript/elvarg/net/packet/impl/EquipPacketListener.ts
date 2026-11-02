@@ -98,6 +98,15 @@ export class EquipPacketListener {
       return;
     }
 
+    // Equipping from the inventory is a hard interruption (osrs-docs: Entity
+    // Interactions), so it ends any player follow that was running.
+    const following = player.getFollowing?.();
+    if (following) {
+      player.setFollowing(null);
+      if (player.getInteractingMobile?.() === following) player.setMobileInteraction(null);
+      if (player.getPositionToFace?.()?.equals?.(following.getLocation())) player.setPositionToFace(null);
+    }
+
     if (
       player.getInterfaceId() > 0 &&
       player.getInterfaceId() !== Equipment.EQUIPMENT_SCREEN_INTERFACE_ID &&

@@ -219,6 +219,27 @@ test("boosted drops: the rule names the source's items at the tier's rate, for t
   assert.equal(dkRex.pattern.test("Dragon axe"), true);
 });
 
+test("boosted drops: Demonic Pacts' page, its own rows and the earlier leagues' rows it leaves out", () => {
+  const PACTS = 6;
+  const rule = (player, source) => {
+    const request = { player, npc: null, npcId: null, source, rules: [] };
+    ask("npc-drops:chance", request);
+    return request.rules[0] ?? null;
+  };
+  const whip = rule(character("dp1", "league", 1, PACTS), "Abyssal demon");
+  assert.equal(whip.multiplier, 2, "Demonic Pacts tier 1: 2x");
+  assert.equal(whip.pattern.test("Abyssal whip"), true, "a row every league lists");
+  assert.equal(rule(character("dp4", "league", 4, PACTS), "Abyssal demon").multiplier, 5, "5x from tier 4");
+  assert.equal(rule(character("dp1b", "league", 1, PACTS), "Araxxor").pattern.test("Amulet of rancour"), true, "a Raging Echoes row the page keeps");
+  assert.equal(rule(character("dp1c", "league", 1, PACTS), "Vardorvis").pattern.test("Leviathan's lure"), true, "every DT2 boss drops every axe piece");
+  assert.equal(rule(character("dp1d", "league", 1, PACTS), "Yama").pattern.test("Oathplate chest"), true, "a Demonic Pacts row");
+  assert.equal(rule(character("dp1e", "league", 1, PACTS), "Branda the Fire Queen").pattern.test("Giantsoul amulet"), true);
+  assert.equal(rule(character("re1", "league", 1, ECHOES), "Yama"), null, "not on Raging Echoes' page");
+  assert.equal(rule(character("dp1f", "league", 1, PACTS), "Obor"), null, "Misthalin is not in Demonic Pacts");
+  assert.equal(rule(character("tr1", "league", 1), "Obor").pattern.test("Hill giant club"), true, "still Trailblazer Reloaded's");
+  assert.equal(rule(character("dp1g", "league", 1, PACTS), "Scurrius"), null, "a Raging Echoes row the page leaves out");
+});
+
 test("boosted drops: the other rollers' uniques (superior Slayer monsters, Treasure Trails caskets)", () => {
   const rule = (player, source) => {
     const request = { player, source, rules: [] };

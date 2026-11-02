@@ -134,6 +134,17 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   const SILVERLIGHT_ITEM_ID = ItemIdentifiers.SILVERLIGHT; // 2402
   const DYED_SILVERLIGHT_ITEM_ID = ItemIdentifiers.SILVERLIGHT_2; // 6745
   const DARKLIGHT_ITEM_ID = ItemIdentifiers.DARKLIGHT; // 6746
+  /** Every form of the sword: having any of them means Reen has nothing to replace. */
+  const SILVERLIGHT_FORMS = [SILVERLIGHT_ITEM_ID, DYED_SILVERLIGHT_ITEM_ID, DARKLIGHT_ITEM_ID];
+  /**
+   * Black mushroom ink dyes desert clothing (Wiki, Black mushroom ink). The message follows the
+   * captured goblin mail dye ("You dye the goblin mail black.", synth_sound 2392).
+   */
+  const BLACK_DYEABLE_CLOTHING = new Map([
+    [ItemIdentifiers.DESERT_SHIRT, { result: ItemIdentifiers.BLACK_DESERT_SHIRT, name: "desert shirt" }], // 1833 -> 6750
+    [ItemIdentifiers.DESERT_ROBE, { result: ItemIdentifiers.BLACK_DESERT_ROBE, name: "desert robe" }], // 1835 -> 6752
+  ]);
+  const DYE_SOUND = 2392;
   const DEMONIC_SIGIL_MOULD_ITEM_ID = ItemIdentifiers.DEMONIC_SIGIL_MOULD; // 6747
   const DEMONIC_SIGIL_ITEM_ID = ItemIdentifiers.DEMONIC_SIGIL; // 6748
   const DEMONIC_TOME_ITEM_ID = ItemIdentifiers.DEMONIC_TOME; // 6749
@@ -143,9 +154,9 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   const SILVER_BAR_ITEM_ID = ItemIdentifiers.SILVER_BAR; // 2355
 
   const BLACK_MUSHROOM_OBJECT_ID = ObjectIdentifiers.BLACK_MUSHROOMS; // 6311
-  // The surface agrith kilns are the objects normal play clicks (capture 3333:
-  // 10242 at 3467,3123). Their map children 6327-6330 are separate underground
-  // placements, so they stay searchable but are not the correct kiln.
+  // The four agrith kilns in Uzer: 10242 at 3467,3123, 10243 at 3478,3082, 10244 at
+  // 3472,3092 and 10245 at 3500,3084. Each shows a "Look-in" child (10246-10248) only
+  // at stage 60; otherwise their children are the optionless 6327-6330.
   const SURFACE_KILN_OBJECT_IDS = [10242, 10243, 10244, 10245]; // agrith_kiln_1..4
   const KILN_OBJECT_IDS = new Set([
     ...SURFACE_KILN_OBJECT_IDS,
@@ -154,9 +165,12 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     ObjectIdentifiers.BROKEN_KILN_3, // 6329
     ObjectIdentifiers.BROKEN_KILN_4, // 6330
   ]);
-  /** The kiln Josef hid the tome in (capture 3333, surface Uzer). */
-  const CORRECT_KILN_OBJECT_ID = 10242; // agrith_kiln_1
-  const CORRECT_KILN_TILE = { x: 3467, y: 3123 };
+  /**
+   * Josef hid the tome in a kiln picked when the golem tells you about it: varbit 1378
+   * agrith_kiln holds 0-3 and the tome is in agrith_kiln_{value + 1} (capture 572: 0->2 and
+   * the tome in agrith_kiln_3; capture 3333: left at 0 and the tome in agrith_kiln_1).
+   */
+  const KILN_COUNT = SURFACE_KILN_OBJECT_IDS.length;
 
   // ============================================================================
   // Stages and state
@@ -302,6 +316,8 @@ module.exports = function registerShadowOfTheStormQuest(api) {
 
   // Action/message step ids.
   const MSG_REEN_GIVES_SWORD = "Kh2EP0";
+  const MSG_DYE_PICK_MUSHROOM = "E-w57a"; // to-uzer-dyeing-silverlight-black
+  const MSG_DYE_SLICE = "iGN0Yu";
   const MSG_ESCORT_THRONE = "SzrKim";
   const MSG_DAVE_RETURNS = "vzuhlL";
   const MSG_TANYA_KILLED = "iWR7Wz";
@@ -335,8 +351,15 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     hasItem(player, itemId) ||
     (player.getEquipment().getItems() || []).some((item) => item && item.getId?.() === itemId);
 
+  const bankedItem = (player, itemId) =>
+    player.getBanks?.()?.some((bank) => bank && bank.getAmount(itemId) > 0) === true;
+
+  /** Carried or worn, as the ritual needs it. */
   const hasSilverlight = (player) =>
     ownsItem(player, SILVERLIGHT_ITEM_ID) || ownsItem(player, DYED_SILVERLIGHT_ITEM_ID);
+  /** Carried, worn or banked in any form, so Reen never hands out a second sword. */
+  const ownsSilverlight = (player) =>
+    SILVERLIGHT_FORMS.some((itemId) => ownsItem(player, itemId) || bankedItem(player, itemId));
   const hasDyedSilverlight = (player) => ownsItem(player, DYED_SILVERLIGHT_ITEM_ID);
 
   function silverlightEquipped(player) {
@@ -361,8 +384,15 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     player.setAttribute(HELPERS_ATTRIBUTE, bits);
   }
 
-  function kilnProgress(player) {
+  /** The kiln (0-3) holding this player's tome. */
+  function hiddenKiln(player) {
     return Number(player.getAttribute(KILN_ATTRIBUTE)) || 0;
+  }
+
+  function hideTome(player) {
+    const kiln = Math.floor(Math.random() * KILN_COUNT);
+    player.setAttribute(KILN_ATTRIBUTE, kiln);
+    player.getPacketSender().sendVarbit(VARBIT_AGRITH_KILN, kiln);
   }
 
   function packedIncantation(player) {
@@ -434,7 +464,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       VARBIT_CONVINCED_GOLEM,
       bits & BIT_GOLEM ? 3 : bits & BIT_GOLEM_REPROGRAMMED ? 2 : 0
     );
-    packet.sendVarbit(VARBIT_AGRITH_KILN, kilnProgress(player));
+    packet.sendVarbit(VARBIT_AGRITH_KILN, hiddenKiln(player));
     for (let index = 0; index < VARBIT_INCANTATION_WORDS.length; index++) {
       packet.sendVarbit(VARBIT_INCANTATION_WORDS[index], wordAt(player, index));
     }
@@ -748,8 +778,8 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   function answerCondition({ player, npcId, stepId, text }) {
     if (!stepId) return null;
 
-    if (COND_REF_START.has(stepId)) return hasSilverlight(player);
-    if (COND_REF_LOST.has(stepId)) return !hasSilverlight(player);
+    if (COND_REF_START.has(stepId)) return ownsSilverlight(player);
+    if (COND_REF_LOST.has(stepId)) return !ownsSilverlight(player);
 
     if (stepId === COND_NOT_ENOUGH_BLACK) return countBlackClothing(player) < 3;
     if (stepId === COND_BLACK_UNDYED) {
@@ -824,7 +854,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   // ============================================================================
 
   function restoreSilverlight(player) {
-    if (hasSilverlight(player)) return;
+    if (ownsSilverlight(player)) return;
     giveItem(player, SILVERLIGHT_ITEM_ID, "Reen hands you a shining silver sword.");
   }
 
@@ -1183,6 +1213,15 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     const { player, stepId } = event;
     if (!player || !stepId) return;
 
+    // Capture 572/3333: only the slice line shows, in an item box with the dyed sword.
+    if (stepId === MSG_DYE_PICK_MUSHROOM) {
+      event.handled = true;
+      return;
+    }
+    if (stepId === MSG_DYE_SLICE) {
+      event.box = { items: [DYED_SILVERLIGHT_ITEM_ID] };
+      return;
+    }
     if (stepId === MSG_REEN_GIVES_SWORD) {
       restoreSilverlight(player);
       return; // leave the wiki message to play
@@ -1277,6 +1316,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       return;
     }
     if (GOLEM_NPC_IDS.has(npcId) && text === "Did you see anything happen last night?" && stage === STAGE_MATTHEW_TOLD) {
+      hideTome(player);
       setStage(player, STAGE_GOLEM_TOLD);
     }
   }
@@ -1377,7 +1417,8 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     }
     if (!hasItem(player, SILVERLIGHT_ITEM_ID)) return;
     if (reagentId !== undefined && !hasItem(player, reagentId)) return;
-    player.getInventory().deleteNumber(SILVERLIGHT_ITEM_ID, 1);
+    // Wiki: dyeing takes every Silverlight carried and leaves one dyed sword.
+    player.getInventory().deleteNumber(SILVERLIGHT_ITEM_ID, player.getInventory().getAmount(SILVERLIGHT_ITEM_ID));
     if (reagentId !== undefined) player.getInventory().deleteNumber(reagentId, 1);
     player.getInventory().adds(DYED_SILVERLIGHT_ITEM_ID, 1);
     startTranscript(api, player, NpcIdentifiers.FATHER_REEN, PAGE, "to-uzer-dyeing-silverlight-black");
@@ -1403,9 +1444,25 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     dyeSilverlight(player);
   }
 
+  function dyeClothing(player, clothingId) {
+    const { result, name } = BLACK_DYEABLE_CLOTHING.get(clothingId);
+    if (!hasItem(player, BLACK_DYE_ITEM_ID) || !hasItem(player, clothingId)) return;
+    player.getInventory().deleteNumber(BLACK_DYE_ITEM_ID, 1);
+    player.getInventory().deleteNumber(clothingId, 1);
+    player.getInventory().adds(result, 1);
+    player.getPacketSender().sendSoundEffect(DYE_SOUND, 1, 0);
+    player.sendMessage(`You dye the ${name} black.`);
+  }
+
   function handleItemOnItem(event) {
     const { player, usedItemId, usedWithItemId } = event;
     const ids = [usedItemId, usedWithItemId];
+    const clothingId = ids.find((id) => BLACK_DYEABLE_CLOTHING.has(id));
+    if (clothingId !== undefined && ids.includes(BLACK_DYE_ITEM_ID)) {
+      event.handled = true;
+      dyeClothing(player, clothingId);
+      return;
+    }
     if (!ids.includes(SILVERLIGHT_ITEM_ID)) return;
     const reagentId = ids.includes(BLACK_MUSHROOM_ITEM_ID)
       ? BLACK_MUSHROOM_ITEM_ID
@@ -1474,14 +1531,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       player.sendMessage("You don't know what you are looking for.");
       return;
     }
-    const correct = objectId === CORRECT_KILN_OBJECT_ID &&
-      location?.x === CORRECT_KILN_TILE.x && location?.y === CORRECT_KILN_TILE.y;
-    kilnSearchCorrect.set(player, correct);
-    if (!correct && kilnProgress(player) < 3) {
-      const progress = kilnProgress(player) + 1;
-      player.setAttribute(KILN_ATTRIBUTE, progress);
-      player.getPacketSender().sendVarbit(VARBIT_AGRITH_KILN, progress);
-    }
+    kilnSearchCorrect.set(player, objectId === SURFACE_KILN_OBJECT_IDS[hiddenKiln(player)]);
     startTranscript(api, player, NpcIdentifiers.MATTHEW, PAGE, "infiltrating-the-wizards-searching-kilns");
   }
 

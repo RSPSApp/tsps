@@ -11,6 +11,7 @@ const { Inventory } = require("../dist/game/model/container/impl/Inventory");
 const { Bank } = require("../dist/game/model/container/impl/Bank");
 const { World } = require("../dist/game/World");
 const { PlayerStatus } = require("../dist/game/model/PlayerStatus");
+const { EquipPacketListener } = require("../dist/net/packet/impl/EquipPacketListener");
 
 const TRIDENT = 11907;
 const LAVA_BATTLESTAFF = 3053;
@@ -23,7 +24,7 @@ const LAVA_BATTLESTAFF_PLACEHOLDER = 90053;
 const DEFINITIONS = {
   995: { name: "Coins", stackable: true },
   13204: { name: "Platinum token", stackable: true },
-  [TRIDENT]: { name: "Trident of the seas", examine: "This trident has a charge." },
+  [TRIDENT]: { name: "Trident of the seas", examine: "This trident has a charge.", equipSlot: 3 },
   [LAVA_BATTLESTAFF]: { name: "Lava battlestaff", placeholder: LAVA_BATTLESTAFF_PLACEHOLDER },
   [MYSTIC_LAVA_STAFF]: { name: "Mystic lava staff" },
   [LAVA_BATTLESTAFF_NOTE]: { name: "Lava battlestaff", stackable: true, noteOf: LAVA_BATTLESTAFF },
@@ -43,6 +44,7 @@ ItemDefinition.forId = (id) => {
     isSellable: () => true,
     getValue: () => 100,
     getGrandExchangeValue: () => 500,
+    getEquipmentType: () => ({ getSlot: () => def.equipSlot ?? -1 }),
   };
 };
 
@@ -177,6 +179,27 @@ const withdrawOp = (player, buttonNum, option, slot = 0, itemId = 995) => Bank.h
 });
 const depositOp = (player, buttonNum, option, slot = 0, itemId = 995) => Bank.handleWidgetAction(player, {
   groupId: Bank.SIDE_INTERFACE_ID, childId: Bank.SIDE_ITEMS_CHILD, buttonNum, option, slot, itemId,
+});
+
+test("as captured: Wield (op 9) on a bank inventory item equips it with the bank kept open", () => {
+  const player = createPlayer();
+  const attributes = new Map();
+  player.setAttribute = (key, value) => attributes.set(key, value);
+  player.getInventory().add(new Item(TRIDENT, 1), false);
+  player.getInventory().add(new Item(995, 10), false);
+  const equipped = [];
+  const original = EquipPacketListener.equip;
+  EquipPacketListener.equip = (_player, id, slot, interfaceId) => equipped.push([id, slot, interfaceId]);
+  try {
+    depositOp(player, 9, "Wield", 0, TRIDENT);
+    depositOp(player, 9, undefined, 1, 995);
+  } finally {
+    EquipPacketListener.equip = original;
+  }
+  assert.deepEqual(equipped, [[TRIDENT, 0, Inventory.INTERFACE_ID]], "only the equipable item is equipped");
+  assert.equal(attributes.get(EquipPacketListener.PRESERVE_INTERFACE_ON_EQUIP_ATTRIBUTE), Bank.MAIN_INTERFACE_ID);
+  assert.equal(player.getBank().getAmount(TRIDENT), 0, "nothing is deposited");
+  assert.equal(player.getBank().getAmount(995), 0);
 });
 
 test("Deposit-X still moves a partial noted stack", () => {

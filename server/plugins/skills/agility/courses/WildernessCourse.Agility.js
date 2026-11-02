@@ -1,6 +1,7 @@
 const { ObjectIds } = require("../../../../src/main/typescript/elvarg/util/IdEnums");
 const { Anim } = require("../Constants.Agility");
 const { balance } = require("../Steps.Agility");
+const { pipe } = require("../shortcuts/Builders.Agility");
 
 const STEPPING_STONES = 6;
 
@@ -28,16 +29,8 @@ module.exports = {
       level: 52,
       xp: 12.5,
       route: [3004, 3937, 0],
-      steps: ({ pos }) => [
-        { anim: Anim.SQUEEZE_PIPE },
-        { wait: 1 },
-        { move: [pos.x, pos.y + 5], speed: [0, 90], ticks: 3, dir: "north" },
-        { wait: 1 },
-        { move: [pos.x, pos.y + 12], speed: [0, 90], ticks: 3, dir: "north" },
-        { anim: Anim.SQUEEZE_PIPE },
-        { wait: 2 },
-        { tele: [pos.x, pos.y + 13, 0] },
-      ],
+      // rsprox 449-461: crawl to 3940, unseen to 3947, crawl to 3950.
+      steps: ({ pos }) => pipe([pos.x, pos.y + 3], [pos.x, pos.y + 13], [pos.x, pos.y + 10]),
     },
     {
       object: ObjectIds.ROPESWING_6,

@@ -18,7 +18,7 @@
  */
 module.exports = function registerGrandTreeQuest(api) {
   const { Skill, Location, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "The Grand Tree";
   const VARP_GRAND_TREE = 150;
@@ -274,6 +274,20 @@ module.exports = function registerGrandTreeQuest(api) {
     if (stage >= STAGE_FOUND_JOURNAL) return "searching-glough-s-cupboard-imprisoned";
     if (stage >= STAGE_SPOKEN_PRISONER) return "human-sabotage-interrogating-the-prisoner-when-talking-to-charlie-again";
     return "human-sabotage-interrogating-the-prisoner";
+  }
+
+  /**
+   * Captain Errdo's "Glider" at the top of the tree while Glough's prisoner is escaping: the quest
+   * isn't complete, so the glider plugin would refuse, but this is the flight out. It plays the
+   * same escape as Talk-to.
+   */
+  function fleeOnGlider(request) {
+    const { player, npc } = request;
+    if (request.handled || !CAPTAIN_ERRDO_IDS.has(npc?.getId?.())) return;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_RELEASED || stage >= STAGE_LUMBER_ORDER || npc.getLocation().getZ() !== 3) return;
+    request.handled = startTranscript(api, player, npc.getId(), PAGE,
+      "searching-glough-s-cupboard-imprisoned-fleeing-the-grand-tree", null, npc);
   }
 
   /**
@@ -799,6 +813,7 @@ module.exports = function registerGrandTreeQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:line", handleLine);
+  api.onCustomEvent("gnome-gliders:glider", fleeOnGlider);
   api.onObjectInteraction("Cupboard", { Open: searchCupboard, Search: searchCupboard });
   api.onObjectInteraction("Closed chest", { Open: openChest });
   api.onItemOnObject(useKeyOnChest);

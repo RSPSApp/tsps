@@ -15,7 +15,7 @@
  * random x coordinate the trackers' riddle and the ballista read.
  */
 module.exports = function registerTreeGnomeVillageQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers, Location } = api.core;
+  const { Skill, ItemIdentifiers, NpcIdentifiers, Location, Task, TaskManager } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Tree Gnome Village";
@@ -565,6 +565,33 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     syncWarlord(player);
   }
 
+  /**
+   * The quest's warlord fights from where he was talking and gives up past his combat follow
+   * distance (his definition's), as no NPC chases forever. He was spawned with no wander radius,
+   * which the movement coordinator never leashes, so he followed players across the map.
+   */
+  class WarlordLeashTask extends Task {
+    constructor(player, fighter) {
+      super(1, fighter, false);
+      this.player = player;
+      this.fighter = fighter;
+      this.home = fighter.getLocation().clone();
+    }
+
+    execute() {
+      const { player, fighter } = this;
+      if (warlordsByPlayer.get(player) !== fighter || !fighter.isRegistered()) {
+        this.stop();
+        return;
+      }
+      const leash = fighter.getCurrentDefinition().getCombatFollowDistance();
+      if (fighter.getLocation().getDistance(this.home) > leash || player.getLocation().getDistance(this.home) > leash * 2) {
+        this.stop();
+        clearWarlord(player);
+      }
+    }
+  }
+
   function handleWarlordThreat(request) {
     const { player, npc, npcId, text } = request;
     if (!KHAZARD_WARLORD_NPC_IDS.has(npcId) || !npc?.getLocation
@@ -585,6 +612,7 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
       if (!fighter) return;
       warlordsByPlayer.set(player, fighter);
       syncWarlord(player);
+      TaskManager.submit(new WarlordLeashTask(player, fighter));
       fighter.getCombat().attack(player);
     };
   }

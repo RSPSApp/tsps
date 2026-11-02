@@ -4,7 +4,6 @@ type WidgetClickMeta = {
     widget: Widget;
     option: string;
     target?: string;
-    hasDropAction: boolean;
     itemId?: number;
     slot?: number;
 };

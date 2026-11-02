@@ -110,11 +110,15 @@ function hops(...tiles) {
 /**
  * Squeezes through a pipe in two crawls, via its middle tile, as captured (rsprox: the Edgeville,
  * Taverley and Yanille dungeon pipes): each half moves from cycle 30 to 126 and lands 4 ticks
- * later with the pipe's sound; the second half starts a tick after the first lands.
+ * later with the pipe's sound; the second half starts a tick after the first lands. The crawl
+ * replays with each half, so the squeeze pose (no weapon in hand) lasts the whole way. A long pipe
+ * passes `resume`, the tile its second half starts from: the player is moved there unseen a tick
+ * after the first half lands, and crawls on the tick after (rsprox 449-461, the Wilderness course).
  */
-function pipe(middle, to) {
+function pipe(middle, to, resume = null) {
   const half = (tile) => ({ move: tile, anim: Anim.SQUEEZE_PIPE, delay: 30, speed: [30, 126], ticks: 4 });
-  return [half(middle), { sound: PIPE_SOUND }, { wait: 1 }, half(to), { sound: PIPE_SOUND }];
+  const skip = resume ? [{ tele: resume }, { wait: 1 }] : [];
+  return [half(middle), { sound: PIPE_SOUND }, { wait: 1 }, ...skip, half(to), { sound: PIPE_SOUND }];
 }
 
 /** Ducks under a wall: vanish into the tunnel and emerge at `to`. */

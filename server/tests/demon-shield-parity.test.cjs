@@ -32,7 +32,7 @@ function register(name, key) {
     spawnNpc: (definition) => {
       let area = null, transform = -1, hp = 7, location = new core.Location(definition.x, definition.y, definition.z);
       const index = actorIndex++;
-      const npc = { definition, getId: () => definition.id, getOwner: () => definition.owner,
+      const npc = { definition, getId: () => (transform !== -1 ? transform : definition.id), getOwner: () => definition.owner,
         getLocation: () => location,
         getMovementQueue: () => ({ addSteps: value => { location = value; } }),
         getDefinition: () => core.NpcDefinition.forId(definition.id),
@@ -257,25 +257,52 @@ test('Shield full certificate opens the captured readable modal and Phoenix comp
 });
 
 
-test('Delrith timeout restores combat without taking over the camera again', () => {
+test('a weakened Delrith left too long is gone until the player leaves the circle and comes back', () => {
   const q = register('DemonSlayer', 'demon_slayer'), p = player(); q.quest.setStage(p, 29);
   const originalCycle = core.World.processCycle;
   try {
     q.areas[0].process(p);
     q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.DENATH_4, stepId: 'xjQ9zZ' });
-  q.tick(6);
+    q.tick(6);
     const line = { player: p, text: "I've got to get out of here..." };
     q.emit('npc-dialogue:line', line); line.after();
-    q.call('onNpcBeforeDeath', { npc: q.spawned.at(-1) });
+    const delrith = q.spawned.at(-1);
+    q.call('onNpcBeforeDeath', { npc: delrith });
     q.tick(4); p.packets.length = 0;
     core.World.processCycle += 100;
+    const spawnedBefore = q.spawned.length;
     p.getArea().process(p);
-    assert.equal(q.spawned.at(-1).getId(), core.NpcIdentifiers.DELRITH);
-    assert.equal(p.packets.some(([method]) => method.startsWith('sendCamera')), false);
+    assert.ok(q.removed.includes(delrith), 'the weakened Delrith is gone');
+    q.areas[0].process(p);
+    assert.equal(q.spawned.length, spawnedBefore, 'no Delrith returns while the player stays');
+    assert.equal(p.packets.some(([method]) => method === 'sendCameraMoveTo' || method === 'sendCameraLookAt'), false,
+      'the summoning camera does not start again');
+    q.areas[0].postLeave(p);
+    q.areas[0].process(p);
+    assert.ok(q.spawned.length > spawnedBefore, 'coming back starts the summoning again');
     q.call('onPlayerLogout', { player: p });
   } finally { core.World.processCycle = originalCycle; }
 });
 
+test('a hit landing on the weakened Delrith leaves him at 1 hitpoint, and neither side can attack', () => {
+  const q = register('DemonSlayer', 'demon_slayer'), p = player(); q.quest.setStage(p, 29);
+  q.areas[0].process(p);
+  q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.DENATH_4, stepId: 'xjQ9zZ' });
+  q.tick(6);
+  const line = { player: p, text: "I've got to get out of here..." };
+  q.emit('npc-dialogue:line', line); line.after();
+  const delrith = q.spawned.at(-1);
+  const first = { npc: delrith, preventDeath: false };
+  q.call('onNpcBeforeDeath', first);
+  assert.equal(first.preventDeath, true);
+  assert.equal(delrith.getId(), core.NpcIdentifiers.WEAKENED_DELRITH);
+  const late = { npc: delrith, preventDeath: false };
+  q.call('onNpcBeforeDeath', late);
+  assert.equal(late.preventDeath, true, 'a queued hit cannot kill the weakened form');
+  assert.equal(p.getArea().canAttack(p, delrith), false);
+  assert.equal(p.getArea().canAttack(delrith, p), false);
+  q.call('onPlayerLogout', { player: p });
+});
 
 test('Demon Slayer drain wire state stays 0 through Prysin, becomes 1 on pouring, then 2 on pickup', () => {
   const q = register('DemonSlayer', 'demon_slayer'), p = player(); q.quest.setStage(p, 1);
@@ -458,4 +485,13 @@ test("Champions' Guild door turns away entrants under 32 Quest Points through th
   assert.equal(door(3363), false);
   assert.equal(condition('If the player does not have at least 32 quest points:'), false);
   assert.equal(condition('If the player has at least 32 quest points:'), true);
+});
+
+test('the summoners speak with the captured chatheads (1843)', () => {
+  const q = register('DemonSlayer', 'demon_slayer'), p = player();
+  const one = { player: p, text: "Who's that?", step: { speaker: 'Dark wizard' } };
+  const all = { player: p, text: 'Arise, Delrith!', step: { speaker: 'Dark wizards' } };
+  q.emit('npc-dialogue:line', one); q.emit('npc-dialogue:line', all);
+  assert.deepEqual([one.speakerId, one.expression], [core.NpcIdentifiers.DARK_WIZARD_7, 571], 'chatshock1 on qip_ds_young_dark_wizard1');
+  assert.deepEqual([all.speakerId, all.expression], [core.NpcIdentifiers.DARK_WIZARD_8, 567], 'chathap1 on qip_ds_young_dark_wizard2');
 });

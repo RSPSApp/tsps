@@ -627,6 +627,65 @@ test('Bartenders let exactly 2 coins free a full-bag slot at all three pubs and 
   }
 });
 
+test("Yanille's real Greenman's Ale dialogue charges ten coins and supplies one ale safely", () => {
+  const { cleanup } = registerBartendersDispatch();
+  registerRealDialogues();
+  try {
+    const I = core.ItemIdentifiers;
+    const player = realPlayer();
+    const buy = () => buyAt(player, core.NpcIdentifiers.BARTENDER_9, "Can I have some Greenman's Ale?", 'Dragon Inn');
+    const bought = () => player.messages.filter(message => message === "You buy a pint of Greenman's Ale.").length;
+    const amount = () => player.items.get(I.GREENMANS_ALE) ?? 0;
+
+    assert.equal(core.CacheDefinitions.getItem(I.GREENMANS_ALE).name, "Greenman's ale");
+    player.items.set(I.COINS, 25);
+    buy();
+    buy();
+    assert.equal(amount(), 2, 'each completed transcript buys exactly one ale');
+    assert.equal(player.items.get(I.COINS), 5);
+    assert.equal(bought(), 2, 'the canonical purchase message is preserved once per success');
+
+    for (const coins of [0, 9]) {
+      player.items.set(I.COINS, coins);
+      buy();
+      assert.equal(amount(), 2, 'not enough money supplies no ale');
+      assert.equal(player.items.get(I.COINS), coins);
+      assert.equal(bought(), 2, 'refusal must not print the success message');
+    }
+
+    player.full = true;
+    player.items.set(I.COINS, 11);
+    buy();
+    assert.equal(amount(), 2);
+    assert.equal(player.items.get(I.COINS), 11, 'a full bag with remaining coins is unchanged');
+    assert.equal(bought(), 2);
+    assert.match(player.messages.at(-1), /free inventory slot/);
+
+    player.items.set(I.COINS, 10);
+    buy();
+    assert.equal(amount(), 3, 'the exact price frees the coin stack slot');
+    assert.equal(player.items.get(I.COINS), 0);
+    assert.equal(bought(), 3);
+
+    player.full = false;
+    player.items.set(I.COINS, 20);
+    player.failAddId = I.GREENMANS_ALE;
+    buy();
+    assert.equal(amount(), 3);
+    assert.equal(player.items.get(I.COINS), 20, 'failed delivery refunds the ten coins');
+    assert.equal(bought(), 3);
+
+    const event = { player, stepId: 'x6UKzD', kind: 'message', pages: [{ page: 'Hetty' }], handled: false };
+    for (const hook of PluginManager.customEventHooks.get('npc-dialogue:action') ?? []) {
+      if (hook.pluginName === 'BartendersTest') hook.handler(event);
+    }
+    assert.equal(event.handled, false, 'the same step id on another page is not a purchase');
+    assert.equal(player.items.get(I.COINS), 20);
+  } finally {
+    cleanup();
+  }
+});
+
 test('Baraek sells fur for 20 coins or the 18-coin fallback, with safe inventory and coin checks', () => {
   const { cleanup } = registerBaraekDispatch();
   const cleanupDialogues = registerRealDialoguesScoped();

@@ -68,6 +68,21 @@ interface QueuedMap {
     locVersion?: number;
     /** A door/loc rebuild of the drawn instance scene (applyInstanceScene applies it). */
     instance?: boolean;
+    /** The loc reload batch it belongs to; applyReadyMaps applies the batch's squares together. */
+    batch?: LocReloadBatch;
+}
+
+/**
+ * Squares one LocUpdates flush rebuilds. Their builds finish at different times, so they are held
+ * until the last one is done and then applied in the same frame: a gate whose closed and open
+ * leaves sit in two squares (Guidor's, x 3264 / 3262-3263) swapped one square at a time (#1826).
+ */
+export interface LocReloadBatch {
+    /** Squares whose builds have not finished (or been dropped) yet. */
+    remaining: number;
+    readonly ready: QueuedMap[];
+    /** The map load epoch the batch started in; a scene reset since drops it. */
+    epoch?: number;
 }
 
 const SKY_BLEND_PER_FRAME = 0.15;
@@ -368,8 +383,16 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         }
     }
 
-    /** Rebuilds a square after a loc change: just its door or loc geometry when that is all that changed. */
-    queueLocReload(mapX: number, mapY: number, group: LocReloadGroup): void {
+    /**
+     * Rebuilds a square after a loc change: just its door or loc geometry when that is all that
+     * changed. A square in a `batch` is applied with the batch's other squares.
+     */
+    queueLocReload(mapX: number, mapY: number, group: LocReloadGroup, batch?: LocReloadBatch): void {
+        if (batch) {
+            batch.epoch ??= this.mapLoadEpoch;
+            // A square that isn't built here leaves the batch's others to apply without it.
+            if (!this.osrsClient.loadedCache || this.instanceActive) this.settleLocReloadBatch(batch);
+        }
         if (!this.osrsClient.loadedCache) return;
         if (this.instanceActive) {
             // Only the drawn instance scene reloads in place, and only one group of it.
@@ -379,7 +402,15 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             return;
         }
         const partial = this.mapManager.getMap(mapX, mapY) && group !== "full" ? group : undefined;
-        void this.loadMapData(mapX, mapY, undefined, partial);
+        const load = this.loadMapData(mapX, mapY, undefined, partial, batch);
+        if (batch) void load.finally(() => this.settleLocReloadBatch(batch));
+    }
+
+    /** One square of `batch` has been built or dropped; the last one queues them all at once. */
+    private settleLocReloadBatch(batch: LocReloadBatch): void {
+        if (--batch.remaining > 0) return;
+        if (batch.epoch !== this.mapLoadEpoch || this.instanceActive) return;
+        for (const map of batch.ready) this.mapsToLoad.push({ ...map, batch });
     }
 
     /**
@@ -427,6 +458,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         mapY: number,
         streamGeneration?: number,
         partial?: "door" | "loc",
+        batch?: LocReloadBatch,
     ): Promise<void> {
         const epoch = this.mapLoadEpoch;
         this.locUpdates.applyGamemode();
@@ -464,7 +496,9 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
                 return;
             }
             mapData.minimapInput = input;
-            this.mapsToLoad.push({ mapData, streamGeneration, locVersion });
+            const queued = { mapData, streamGeneration, locVersion };
+            if (batch) batch.ready.push(queued);
+            else this.mapsToLoad.push(queued);
         } catch (error) {
             if ((error as Error)?.name === "AbortError" || epoch !== this.mapLoadEpoch || this.instanceActive) return;
             console.error(`[webgpu] map load failed for (${mapX}, ${mapY})`, error);
@@ -701,6 +735,11 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             if (performance.now() - startedAt > MAP_APPLY_BUDGET_MS) break;
             const queued = this.mapsToLoad.peekFront();
             if (!queued) break;
+            if (queued.batch) {
+                // Its squares go up together, in this frame or a later one.
+                if (!this.applyLocReloadBatch(world, queued.batch, frameCount)) break;
+                continue;
+            }
             const { mapData } = queued;
             const { mapX, mapY } = mapData;
             if (queued.streamGeneration !== undefined && !this.mapManager.isMapInTargetGrid(mapX, mapY)) {
@@ -717,44 +756,75 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             }
             if (!mapData.doorOnly && !mapData.locOnly && !WebGPUMapSquare.prepareLoad(this.device, mapData)) break;
             this.mapsToLoad.shift();
-            const existing = this.mapManager.getMap(mapX, mapY);
-            if (mapData.doorOnly || mapData.locOnly) {
-                // A door-only/loc-only build only replaces that group of a resident square;
-                // if the square is gone (pruned or never applied) rebuild it whole.
-                if (!existing) {
-                    this.queueLocReload(mapX, mapY, "full");
-                    continue;
-                }
-                existing.refreshPartial(mapData, this.osrsClient.seqTypeLoader, getClientCycle() | 0);
-                world.uploadMapTextures(mapData.loadedTextures);
-                if (mapData.locOnly) {
-                    this.ui?.registerMinimapData(mapData);
-                    this.overlays?.onMapLocsRefreshed(mapX, mapY);
-                }
-                this.locUpdates.applied(mapX, mapY);
-                continue;
-            }
-            if (queued.locVersion !== undefined) this.locUpdates.applied(mapX, mapY);
-            // Foreground groups publish together; per-upload fades would reveal squares separately.
-            const timeLoaded = existing ? existing.timeLoaded : -1;
-            if (existing) {
-                this.mapManager.removeMap(mapX, mapY);
-            }
-            const square = WebGPUMapSquare.load(
-                this.device,
-                world,
-                mapData,
-                timeLoaded,
-                frameCount,
-            );
-            square.initAnimatedLocs(mapData, this.osrsClient.seqTypeLoader, getClientCycle() | 0);
-            world.uploadMapTextures(mapData.loadedTextures);
-            this.mapManager.addMap(mapX, mapY, square);
-            configureWorldEntityOverlayMap(this, square);
-            this.actors?.onMapAdded(square, mapData);
-            this.overlays?.onMapAdded(square, mapData);
-            this.ui?.registerMinimapData(mapData);
+            this.applyQueuedMap(world, queued, frameCount);
         }
+    }
+
+    /**
+     * Applies the batch's squares at the front of the queue in one frame, once every whole-square
+     * build among them is uploaded; false while one is still uploading.
+     */
+    private applyLocReloadBatch(world: WorldResources, batch: LocReloadBatch, frameCount: number): boolean {
+        const members: QueuedMap[] = [];
+        for (let next = this.mapsToLoad.peekAt(0); next?.batch === batch; next = this.mapsToLoad.peekAt(members.length)) {
+            members.push(next);
+        }
+        // Built before a later loc change: the reload LocUpdates queued for that replaces it.
+        const current = members.filter(({ mapData, locVersion }) =>
+            locVersion === undefined || this.locUpdates.isCurrent(mapData.mapX, mapData.mapY, locVersion));
+        let uploaded = true;
+        for (const { mapData } of current) {
+            if (!mapData.doorOnly && !mapData.locOnly && !WebGPUMapSquare.prepareLoad(this.device, mapData)) uploaded = false;
+        }
+        if (!uploaded) return false;
+        for (const queued of members) {
+            this.mapsToLoad.shift();
+            if (current.includes(queued)) this.applyQueuedMap(world, queued, frameCount);
+            else WebGPUMapSquare.cancelPreparedLoad(queued.mapData);
+        }
+        return true;
+    }
+
+    private applyQueuedMap(world: WorldResources, queued: QueuedMap, frameCount: number): void {
+        const { mapData } = queued;
+        const { mapX, mapY } = mapData;
+        const existing = this.mapManager.getMap(mapX, mapY);
+        if (mapData.doorOnly || mapData.locOnly) {
+            // A door-only/loc-only build only replaces that group of a resident square;
+            // if the square is gone (pruned or never applied) rebuild it whole.
+            if (!existing) {
+                this.queueLocReload(mapX, mapY, "full");
+                return;
+            }
+            existing.refreshPartial(mapData, this.osrsClient.seqTypeLoader, getClientCycle() | 0);
+            world.uploadMapTextures(mapData.loadedTextures);
+            if (mapData.locOnly) {
+                this.ui?.registerMinimapData(mapData);
+                this.overlays?.onMapLocsRefreshed(mapX, mapY);
+            }
+            this.locUpdates.applied(mapX, mapY);
+            return;
+        }
+        if (queued.locVersion !== undefined) this.locUpdates.applied(mapX, mapY);
+        // Foreground groups publish together; per-upload fades would reveal squares separately.
+        const timeLoaded = existing ? existing.timeLoaded : -1;
+        if (existing) {
+            this.mapManager.removeMap(mapX, mapY);
+        }
+        const square = WebGPUMapSquare.load(
+            this.device,
+            world,
+            mapData,
+            timeLoaded,
+            frameCount,
+        );
+        square.initAnimatedLocs(mapData, this.osrsClient.seqTypeLoader, getClientCycle() | 0);
+        world.uploadMapTextures(mapData.loadedTextures);
+        this.mapManager.addMap(mapX, mapY, square);
+        configureWorldEntityOverlayMap(this, square);
+        this.actors?.onMapAdded(square, mapData);
+        this.overlays?.onMapAdded(square, mapData);
+        this.ui?.registerMinimapData(mapData);
     }
 
     private updateSkyColor(deltaFrames: number = 1): void {

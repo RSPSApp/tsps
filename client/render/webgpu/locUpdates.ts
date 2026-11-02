@@ -22,7 +22,7 @@ import { matchingLocSlotIds, shapeSlotOverride, suppressShapeSlotAt } from "../l
 import { getMapSquareId } from "../../rs/map/MapFileIndex";
 import { LOC_OVERRIDE_KEEP_ID, LOC_OVERRIDE_REMOVED, locOverrideIdFromChange } from "../../rs/scene/LocOverride";
 import type { LocChangeOptions, RegionReplacementEvent } from "../../game/GameRenderer";
-import type { WebGPURenderer } from "./WebGPURenderer";
+import type { LocReloadBatch, WebGPURenderer } from "./WebGPURenderer";
 
 type Tile = { x: number; y: number };
 /** Which geometry a reload rebuilds. */
@@ -371,10 +371,12 @@ export class LocUpdates {
         this.pending.set(id, { x: mapX | 0, y: mapY | 0 });
         this.flushTimer ??= setTimeout(() => {
             this.flushTimer = undefined;
-            const batch = Array.from(this.pending.values());
+            const maps = Array.from(this.pending.values());
             this.pending.clear();
-            for (const map of batch) {
-                this.r.queueLocReload(map.x, map.y, this.dirty.get(getMapSquareId(map.x, map.y)) ?? "full");
+            // Squares changed together (a gate across a square edge) are applied together.
+            const batch: LocReloadBatch | undefined = maps.length > 1 ? { remaining: maps.length, ready: [] } : undefined;
+            for (const map of maps) {
+                this.r.queueLocReload(map.x, map.y, this.dirty.get(getMapSquareId(map.x, map.y)) ?? "full", batch);
             }
         }, RENDER_CONSTANTS.LOC_RELOAD_FLUSH_DELAY_MS);
     }

@@ -723,7 +723,7 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | 2 | Woodsman | partial: Fletching batches, log burning, Hunter catches, impling loot doubled and noted (`hunter:impling-loot`), double rumour XP and sack loot rolls (`hunter:rumour-reward`, `hunter:sack-rolls`), whistles that keep their charges (`quetzals:whistle-charge`); not the trap's herb or tree seed (the Wiki gives no list or chances) |
 | 3 | Bank Heist | done |
 | 3 | Evil Eye | done: the Wiki's 60 bosses and raids by area, each on the entrance tile the server's own data gives (`league-evil-eye.json`), with the league's area-teleport cast (no recording of the eye in use) |
-| 3 | Map of Alacrity | the item only |
+| 3 | Map of Alacrity | partial: 57 of the Wiki map's 141 shortcuts, those the server has with a side the pin and the data agree on (`league-map-of-alacrity.json`, which lists the rest and why), the Agility level and the Wiki's quest notes; the league's area-teleport cast |
 | 4 | Transmute | its toggles and item only, no spells |
 | 4 | Conniving Clues | done |
 | 4 | Butler's Bell | the item only |
@@ -1048,7 +1048,7 @@ Animal Wrangler's Hunter and cooking ones) do not.
 
 ### The item and teleport relics
 
-Their teleports share the standard animation (Demonic Pacts' Evil eye: the
+Their teleports share the standard animation (Demonic Pacts' Evil eye and Map of alacrity: the
 league's area-teleport cast, `league:teleport-cast`), their item's Wilderness limit, and the league's
 areas: a destination in an area the character has not unlocked is refused (`league:area-at`
 and `league:areas`, answered by the league's area unlocks; with nobody answering, everywhere is
@@ -1096,6 +1096,13 @@ open). Each item remembers its last destination. The menus' grouping and wording
   dungeon's surface: `plugins/modes/data/league-evil-eye.json` takes each tile from the server's
   own lair, raid or teleport data (its `source`), checked open on the cache's map. A boss's own
   requirements (kill counts, keys, tasks) are met or refused at its entrance.
+- **Map of Alacrity** (Demonic Pacts tier 3): the Map of alacrity's Read (an area submenu) lists
+  an area's Agility shortcuts, Last-destination repeats the last; from any Wilderness level, in
+  unlocked areas, with the shortcut's Agility level (current) and the Wiki's quest notes (Shadows
+  of Custodia, The Final Dawn; `quest:is-complete`). The shortcut keeps its own requirements. The
+  Wiki's "less favourable side" is read as the end of the server's shortcut nearest the Wiki's
+  pin: `plugins/modes/data/league-map-of-alacrity.json` keeps the 57 shortcuts the server has
+  where that end is clear and open, and lists the other 84 rows and why.
 - **Total Recall** (Raging Echoes tier 6): the Crystal of Echoes' Save-memory keeps the place,
   Hitpoints (up to 127, as live), Prayer and special attack energy; Teleport-back returns there
   from any Wilderness level and sets the three back; Check-memories says what is kept (ours). Not

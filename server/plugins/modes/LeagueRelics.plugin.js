@@ -71,6 +71,7 @@ module.exports = {
     require("./leaguerelics/FlowState.LeagueRelics")(api);
     require("./leaguerelics/FlaskOfFervour.LeagueRelics")(api);
     require("./leaguerelics/EvilEye.LeagueRelics")(api);
+    require("./leaguerelics/MapOfAlacrity.LeagueRelics")(api);
     require("./leaguerelics/Hotfoot.LeagueRelics").late(api);
   },
 };

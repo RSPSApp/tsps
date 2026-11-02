@@ -38,6 +38,7 @@ const CULLING_SPREE = { 5: 3 };
 const FLOW_STATE = { 6: 1 };
 const RELOADED = { 6: 2 };
 const EVIL_EYE = { 2: 2 };
+const MAP_OF_ALACRITY = { 2: 3 };
 const EXECUTIONER = { 7: 1 };
 const FLASK_OF_FERVOUR = { 7: 3 };
 
@@ -1011,9 +1012,11 @@ test("Woodsman: a quetzal whistle keeps its charge (quetzals:whistle-charge)", (
   for (const player of others(who)) assert.equal(kept(player), false);
 });
 
-// ---- Evil Eye: destinations by area (data/league-evil-eye.json) ----
+// ---- Evil Eye and Map of Alacrity: destinations by area (data/league-evil-eye.json, league-map-of-alacrity.json) ----
 
 const EVIL_EYE_DATA = require("../plugins/modes/data/league-evil-eye.json");
+const ALACRITY_DATA = require("../plugins/modes/data/league-map-of-alacrity.json");
+const SHORTCUTS = require("../plugins/skills/data/agility-shortcuts.json").shortcuts;
 const DP_CAST = require("../plugins/modes/data/league-areas.json").leagues[DP].teleportCast;
 
 /** The league's answers the relics ask (`league:areas`, `league:area-at`, `league:teleport-cast`), set for one test. */
@@ -1081,9 +1084,9 @@ function area(data, name) {
   return data.areas.find((entry) => entry.name === name);
 }
 
-test("Evil Eye: the data's areas are the item's submenus, every destination a real tile, named once", () => {
+test("Evil Eye and Map of Alacrity: the data's areas are the items' submenus, every destination a real tile, named once", () => {
   const areaIds = require("../plugins/modes/data/league-areas.json").leagues[DP].areas;
-  for (const [itemId, data] of [[I.EVIL_EYE, EVIL_EYE_DATA]]) {
+  for (const [itemId, data] of [[I.EVIL_EYE, EVIL_EYE_DATA], [I.MAP_OF_ALACRITY, ALACRITY_DATA]]) {
     const definition = core.CacheDefinitions.getItem(itemId);
     assert.deepEqual(data.areas.map((entry) => entry.name), definition.subops[0].filter(Boolean), "the cache's subops, in order");
     const names = new Set();
@@ -1099,8 +1102,14 @@ test("Evil Eye: the data's areas are the item's submenus, every destination a re
       }
     }
   }
+  for (const destination of ALACRITY_DATA.areas.flatMap((entry) => entry.destinations)) {
+    const shortcut = SHORTCUTS.find((entry) => entry.name === destination.shortcut);
+    assert.ok(shortcut, `${destination.name}: the server's ${destination.shortcut}`);
+    assert.equal(shortcut.level, destination.level, `${destination.name}: the shortcut's own level`);
+  }
   const relics = Common.catalog(DP).tiers[2].relics;
   assert.equal(relics[1].key, Common.data.effects.evilEye.key);
+  assert.equal(relics[2].key, Common.data.effects.mapOfAlacrity.key);
 });
 
 test("Evil Eye: Teleport's area submenu, carried or worn, lists its destinations; a pick casts the league's teleport to the tile, and Last-destination goes back", () => {
@@ -1157,8 +1166,8 @@ test("Evil Eye: a destination in an area not unlocked is refused, from the menu 
   });
 });
 
-test("Evil Eye: from above level 20 of the Wilderness, where a standard teleport is refused", () => {
-  for (const [picks, itemId, option, data] of [[EVIL_EYE, I.EVIL_EYE, "Teleport", EVIL_EYE_DATA]]) {
+test("Evil Eye and Map of Alacrity: from above level 20 of the Wilderness, where a standard teleport is refused", () => {
+  for (const [picks, itemId, option, data] of [[EVIL_EYE, I.EVIL_EYE, "Teleport", EVIL_EYE_DATA], [MAP_OF_ALACRITY, I.MAP_OF_ALACRITY, "Read", ALACRITY_DATA]]) {
     const player = character(`deep-${itemId}`, "league", picks);
     player.getSkillManager().setCurrentLevel(Skill.AGILITY, 99).setMaxLevel(Skill.AGILITY, 99);
     const wilderness = area(data, "Wilderness");
@@ -1174,8 +1183,40 @@ test("Evil Eye: from above level 20 of the Wilderness, where a standard teleport
   }
 });
 
-test("Evil Eye: nothing for a character without the relic, another league's or a main character", () => {
-  for (const [picks, itemId, option] of [[EVIL_EYE, I.EVIL_EYE, "Teleport"]]) {
+test("Map of Alacrity: Read lists an area's shortcuts; one above the Agility level, or behind the Wiki's quest, is refused", () => {
+  const player = character("alacrity", "league", MAP_OF_ALACRITY);
+  const kandarin = area(ALACRITY_DATA, "Kandarin");
+  const target = kandarin.destinations.find((destination) => destination.level > 1);
+  const skills = player.getSkillManager();
+  skills.setCurrentLevel(Skill.AGILITY, target.level - 1).setMaxLevel(Skill.AGILITY, target.level - 1);
+  withLeague({}, () => {
+    assert.equal(click(player, I.MAP_OF_ALACRITY, "Read", { subOp: ALACRITY_DATA.areas.indexOf(kandarin) }).handled, true);
+    const before = player.getLocation().clone();
+    pick(player, target.name);
+    assert.equal(player.sent.messages.at(-1), Common.message("agilityTooLow", { level: target.level }));
+    for (let tick = 0; tick < 30; tick++) core.TaskManager.process();
+    assert.ok(player.getLocation().equals(before), "stayed");
+
+    skills.setCurrentLevel(Skill.AGILITY, target.level).setMaxLevel(Skill.AGILITY, target.level);
+    click(player, I.MAP_OF_ALACRITY, "Read", { subOp: ALACRITY_DATA.areas.indexOf(kandarin) });
+    pick(player, target.name);
+    assert.ok(ticksTo(player, target) > 0, `landed on ${target.name}`);
+    relocate(player, new Location(3200, 3200, 0));
+    click(player, I.MAP_OF_ALACRITY, "Last-destination");
+    assert.ok(ticksTo(player, target) > 0, "Last-destination");
+
+    const varlamore = area(ALACRITY_DATA, "Varlamore");
+    const behindQuest = varlamore.destinations.find((destination) => destination.quest);
+    skills.setCurrentLevel(Skill.AGILITY, 99).setMaxLevel(Skill.AGILITY, 99);
+    custom["quest:is-complete"] = [(query) => { if (query.name === behindQuest.quest) query.complete = false; }];
+    click(player, I.MAP_OF_ALACRITY, "Read", { subOp: ALACRITY_DATA.areas.indexOf(varlamore) });
+    pick(player, behindQuest.name);
+    assert.equal(player.sent.messages.at(-1), Common.message("questNeeded", { quest: behindQuest.quest }));
+  });
+});
+
+test("Evil Eye and Map of Alacrity: nothing for a character without the relic, another league's or a main character", () => {
+  for (const [picks, itemId, option] of [[EVIL_EYE, I.EVIL_EYE, "Teleport"], [MAP_OF_ALACRITY, I.MAP_OF_ALACRITY, "Read"]]) {
     const who = cases(picks);
     for (const player of others(who)) {
       const count = prompts.length;

@@ -260,11 +260,10 @@ export class PlayerDesignController {
             case COMP_CONFIRM:
                 return confirm();
             default:
-                this.syncPlayerDesignAppearanceToUi(pa);
-                return true;
+                return false;
         }
 
-        // Always suppress server widget ops for this interface (client-only).
+        // Appearance controls edit locally; other ops (such as pronouns) reach the server.
         if (!changed) {
             this.syncPlayerDesignAppearanceToUi(pa);
             return true;
@@ -276,6 +275,7 @@ export class PlayerDesignController {
             this.deps.getControlledPlayerServerId(),
         );
         if (localIdx !== undefined) {
+            pa.pronouns = this.deps.playerEcs.getAppearance(localIdx)?.pronouns ?? pa.pronouns;
             this.deps.playerEcs.setAppearance(localIdx, pa);
             try {
                 this.deps.playerEcs.ensureBaseForIndex(localIdx, {

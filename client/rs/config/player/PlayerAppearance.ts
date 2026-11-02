@@ -12,6 +12,7 @@ export class PlayerAppearance {
     readonly compositionItems = new Map<number,number>();
     // 0 male, 1 female
     gender: Gender;
+    pronouns: number;
     // hair, torso, legs, feet, skin (indices into palettes; Phase A uses defaults)
     colors: number[];
     // equip slots (head, cape, amulet, weapon, torso, shield, legs, gloves, boots, ring, ammo, ...)
@@ -35,6 +36,7 @@ export class PlayerAppearance {
         firstPersonArmsOnly: boolean = false,
     ) {
         this.gender = gender;
+        this.pronouns = gender;
         this.colors = colors;
         this.kits = kits;
         this.equip = equip ?? new Array(14).fill(-1);

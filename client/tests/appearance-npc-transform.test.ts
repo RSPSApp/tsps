@@ -26,4 +26,15 @@ const ringAppearance = decodeAppearanceBinary(new Uint8Array([
     0, 0, 46, 204,
 ]));
 assert.strictEqual(ringAppearance?.equipment[9], 11980);
-console.log("npc-transform appearance decode passed");
+
+
+for (const pronouns of [0, 1, 2]) {
+    const payload = bytes.slice();
+    // Native tail follows three empty actions, before this fixture's ammo extension.
+    payload[40] = pronouns;
+    const decoded = decodeAppearanceBinary(payload);
+    assert.strictEqual(decoded?.gender, 0);
+    assert.strictEqual(decoded?.pronouns, pronouns);
+}
+
+console.log("npc-transform and pronoun appearance decode passed");

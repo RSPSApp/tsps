@@ -14,7 +14,7 @@ const button = (component) => (DESIGNER << 16) | component;
 
 before(async () => {
   await CachePipeline.initialize();
-  MakeOverMage.register(new Proxy({ core: { CacheDefinitions }, getCombatFactory: () => ({}) }, { get: (t, k) => (k in t ? t[k] : () => {}) }));
+  MakeOverMage.register(new Proxy({ core: { CacheDefinitions, Appearance: require("../dist/game/model/Appearance").Appearance }, getCombatFactory: () => ({}) }, { get: (t, k) => (k in t ? t[k] : () => {}) }));
 });
 
 function designer(look) {

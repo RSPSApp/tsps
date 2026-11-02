@@ -110,11 +110,12 @@ function omnishopHarness(shop = 'forestry_shop') {
     onInterfaceActionButton(ids, fn) { for (const id of [ids].flat()) buttons.set(id, fn); },
   };
   require('../plugins/interface/Omnishop.plugin').register(api);
-  const messages = [], attributes = new Map(), varps = new Map();
+  const messages = [], scripts = [], attributes = new Map(), varps = new Map();
   let interfaceId = -1;
   const sender = new Proxy({}, { get: (_, key) => (...args) => {
     if (key === 'getVarp') return varps.get(args[0]) ?? 0;
     if (key === 'sendConfig') varps.set(args[0], args[1]);
+    if (key === 'sendInterfaceScript') scripts.push(args);
     return sender;
   } });
   const player = {
@@ -134,13 +135,14 @@ function omnishopHarness(shop = 'forestry_shop') {
   };
   api.emitCustomEvent('omnishop:open', { player, shop, handled: false });
   return {
-    inventory, player, messages, api, core,
+    inventory, player, messages, scripts, api, core,
     buy(row, op = 2) {
       const index = stock.indexOf(core.CacheDefinitions.getDbRowId(row));
       assert.ok(index >= 0, row);
       click('omnishop_main:list', { slot: index * 12, action: op });
     },
     sell(id) { click('omnishop_side:items', { slot: inventory.getSlotForItemId(id), action: 2 }); },
+    selectSide(id) { click('omnishop_side:items', { slot: inventory.getSlotForItemId(id), action: 1 }); },
   };
 }
 
@@ -229,4 +231,59 @@ test('native Mixology refunds retain the default 40% for each owned currency', (
     ['omnishop_currency_mixology_aga', 1120],
     ['omnishop_currency_mixology_lye', 1480],
   ]) assert.equal(balances.get(h.core.CacheDefinitions.getDbRowId(name)), expected, name);
+});
+
+test('mixed saved and item currency previews only inventory items actually spent', () => {
+  for (const savedOak of [6, 10]) {
+    const h = omnishopHarness('forestry_shop_uim');
+    const stored = new Map([
+      [h.core.CacheDefinitions.getDbRowId('forestry_shop_currency_log_oak'), savedOak],
+      [h.core.CacheDefinitions.getDbRowId('forestry_shop_currency_log_willow'), 5],
+    ]);
+    h.api.onCustomEvent('omnishop:currency', (event) => {
+      if (!stored.has(event.currency)) return;
+      const saved = stored.get(event.currency);
+      event.balance = saved + h.inventory.getAmount(event.itemId);
+      event.inventoryCost = (amount) => Math.max(0, amount - saved);
+      event.set = (value) => {
+        const spent = event.balance - value;
+        const fromStorage = Math.min(saved, spent);
+        stored.set(event.currency, saved - fromStorage);
+        h.inventory.delete(event.itemId, spent - fromStorage);
+      };
+    });
+    h.inventory.adds(28134, 21);
+    h.inventory.adds(1522, 4);
+    while (h.inventory.getFreeSlots()) h.inventory.adds(1351, 1);
+    h.buy('forestry_shop_stock_1');
+    const fits = savedOak === 6;
+    assert.equal(h.inventory.getAmount(28159), fits ? 1 : 0);
+    assert.equal(h.inventory.getAmount(28134), fits ? 1 : 21);
+    assert.equal(h.inventory.getAmount(1522), fits ? 0 : 4);
+    assert.equal(stored.get(h.core.CacheDefinitions.getDbRowId('forestry_shop_currency_log_oak')), fits ? 0 : 10);
+  }
+});
+
+test('owner sale checks update the side panel and reject previously offered sales', () => {
+  const h = omnishopHarness('forestry_shop_uim');
+  let allowed = true;
+  h.api.onCustomEvent('omnishop:can-sell', (event) => {
+    assert.equal(event.shop, 'forestry_shop_uim');
+    assert.equal(event.stock, 'forestry_shop_stock_27');
+    assert.equal(event.itemId, 28613);
+    event.cancel = !allowed;
+  });
+  h.inventory.adds(28613, 1);
+  h.selectSide(28613);
+  assert.equal(h.scripts.findLast(([id]) => id === 7253)[1][4], 1);
+  allowed = false;
+  h.sell(28613);
+  assert.equal(h.inventory.getAmount(28613), 1, 'changing mode invalidates an earlier sale offer');
+  assert.equal(h.inventory.getAmount(28134), 0);
+  h.selectSide(28613);
+  assert.equal(h.scripts.findLast(([id]) => id === 7253)[1][4], -1, 'the side panel hides Sell');
+  allowed = true;
+  h.sell(28613);
+  assert.equal(h.inventory.getAmount(28613), 0);
+  assert.equal(h.inventory.getAmount(28134), 2000);
 });

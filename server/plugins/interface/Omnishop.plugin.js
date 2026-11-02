@@ -11,7 +11,8 @@
  * - "omnishop:currency" { player, shop, currency, itemId, balance, set }: a currency's owner
  *   answers with `balance` and a `set(value)` function. A currency with no obj has no other
  *   source; one with an obj is that item in the inventory unless its owner claims it (GotR's
- *   abyssal pearls are a saved balance).
+ *   abyssal pearls are a saved balance). A mixed wallet can supply `inventoryCost(amount)`:
+ *   the number of `itemId` removed from inventory when that much currency is spent.
  * - "omnishop:describe" { player, shop, stock, description }: the info panel's text, which the
  *   cache doesn't carry.
  * - "omnishop:can-buy" { player, shop, stock, itemId, cancel, unlock }: before each unit is
@@ -19,6 +20,8 @@
  *   inventory space.
  * - "omnishop:purchase" { player, shop, stock, itemId, handled }: once a unit is paid for;
  *   `handled` means the owner gave something else (an unlock), so no item is handed over.
+ * - "omnishop:can-sell" { player, shop, stock, itemId, cancel }: the owner can refuse a sale;
+ *   the same check controls whether the side panel offers Sell.
  *
  * As live OSRS sends it (rsprox captures; Mixology Rewards in 1107, 4210, 4234, 4235; the
  * Boat Emporium in rev 241):
@@ -195,7 +198,10 @@ function wallet(player, shop, currency) {
   const request = { player, shop: shop.name, currency, itemId: obj > 0 ? obj : -1, balance: null, set: null };
   pluginApi.emitCustomEvent("omnishop:currency", request);
   if (typeof request.set === "function") {
-    return { balance: Number(request.balance) || 0, set: request.set };
+    return {
+      balance: Number(request.balance) || 0, set: request.set,
+      paymentItemId: obj, inventoryCost: request.inventoryCost,
+    };
   }
   if (obj > 0) {
     const inventory = player.getInventory();
@@ -303,7 +309,9 @@ function buyOne(player, shop, entry) {
   if (check.unlock !== true) {
     const preview = new core.Inventory(player).setItems(inventory.getCopiedItems());
     for (const { cost, wallet: held } of wallets) {
-      if (held.itemId > 0) preview.deleted(held.itemId, cost.amount, false);
+      if (typeof held.inventoryCost === "function") {
+        if (held.paymentItemId > 0) preview.deleted(held.paymentItemId, held.inventoryCost(cost.amount), false);
+      } else if (held.itemId > 0) preview.deleted(held.itemId, cost.amount, false);
     }
     if (preview.getAddableAmount(new core.Item(itemId, entry.amount)) < entry.amount) {
       player.sendMessage(MESSAGE.NO_SPACE);
@@ -391,11 +399,20 @@ function stockFor(shop, itemId) {
     ?? shop.stock.find((entry) => entry.itemId === itemId) ?? null;
 }
 
+function canSell(player, shop, entry) {
+  if (!entry?.sellable) return false;
+  const request = {
+    player, shop: shop.name, stock: cache().getDbRowName(entry.row), itemId: entry.itemId, cancel: false,
+  };
+  pluginApi.emitCustomEvent("omnishop:can-sell", request);
+  return !request.cancel;
+}
+
 function sell(player, shop, slot, quantity) {
   const inventory = player.getInventory();
   const item = inventory.getItems()[slot];
   const entry = item ? stockFor(shop, item.getId()) : null;
-  if (!entry?.sellable) {
+  if (!canSell(player, shop, entry)) {
     player.sendMessage(MESSAGE.NOT_SELLABLE);
     return;
   }
@@ -432,7 +449,7 @@ function selectSide(player, shop, slot) {
   const sender = player.getPacketSender();
   sender.sendConfig(varp(VARP.SIDE_SELECTED), slot);
   sender.sendInterfaceScript(SCRIPT.SIDE_INFO_SETUP, [
-    slot, shop.row, 1, 0, entry?.sellable ? 1 : -1, entry ? entry.index : -1,
+    slot, shop.row, 1, 0, canSell(player, shop, entry) ? 1 : -1, entry ? entry.index : -1,
     entry ? description(player, shop, entry) : core.ItemDefinition.forId(item.getId())?.getExamine?.() ?? "",
   ]);
 }

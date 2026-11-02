@@ -148,6 +148,27 @@ test("it stays scenery for a player two tiles off, or one it has become tolerant
   assert.equal(near.getId(), 5936, "crabs can only be fought while aggressive (Wiki)");
 });
 
+test("::aggro keeps crabs waking for a player past tolerance (issue #1860)", () => {
+  const AggressionToggle = require("../plugins/npcs/AggressionToggle.plugin");
+  const commands = new Map();
+  const toggleApi = PluginManager.createApi("AggressionToggle");
+  toggleApi.registerCommand = (name, handler) => commands.set(name, handler);
+  AggressionToggle.register(toggleApi);
+  const crab = createCrab(5936, 1750, 3471);
+  const player = createPlayer(1750, 3470, { tolerant: true, npcs: [crab] });
+  player.sendMessage = () => {};
+  commands.get("aggro")({ player });
+  track({ player });
+  runTicks();
+  assert.equal(crab.getId(), 5935, "the crab rises although the player is tolerant");
+  commands.get("aggro")({ player });
+  watched.clear();
+  const next = createCrab(5936, 1750, 3471);
+  track({ player: Object.assign(player, { getLocalNpcs: () => [next] }) });
+  runTicks();
+  assert.equal(next.getId(), 5936, "toggled off, tolerance applies again");
+});
+
 test("a giant rock crab wakes with the crab's hitpoints, not the boulder's", () => {
   const crab = createCrab(2262, 2700, 3700);
   wake(crab, createPlayer(2700, 3701));

@@ -88,6 +88,8 @@ function setup(pluginPath) {
       hooks.custom.set(name, list);
     },
     emitCustomEvent(name, event) {
+      // Priest in Peril is a Shades of Mort'ton start requirement.
+      if (name === 'quest:is-complete' && event.key === 'priest_in_peril') event.complete = true;
       for (const fn of hooks.custom.get(name) ?? []) fn(event);
     },
   }, { get(target, key) { return target[key] ?? (() => {}); } });

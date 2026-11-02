@@ -164,7 +164,7 @@ test('scythe cleaves three forward tiles across NPCs and players in multi with a
       applyStyleDamage: (hit, max) => { hit.max = max; hit.damage = max; } },
     DamageFormulas: { calculateMaxMeleeHit: () => 48 },
     PendingHit: class { constructor(a, target) { this.target = target; this.damage = 48; } getTotalDamage() { return this.damage ?? 0; } setTotalDamage(value) { this.damage = value; } },
-  }, getAreaManager: () => ({ inMulti: () => multi }), onServerStartup: (fn) => fn(), onItemAction() {}, onItemOnItem() {},
+  }, getAreaManager: () => ({ inMulti: () => multi }), onServerStartup: (fn) => fn(), onItemAction() {}, onItemOnItem() {}, persistAttribute() {}, onItemOnObject() {}, onObjectInteraction() {}, onPlayerLogin() {},
     registerCombatMethodResolver: (value) => { resolver = value; } });
   const actor = (x, y, player = false, size = 1) => {
     const value = { getLocation: () => loc(x, y), isNpc: () => !player, isPlayer: () => player,
@@ -210,7 +210,7 @@ test('scythe queue caps a corrupted victim across every hit before awarding XP',
     let resolver;
     delete require.cache[require.resolve('../plugins/items/ScytheOfVitur.plugin')];
     require('../plugins/items/ScytheOfVitur.plugin').register({ core, getAreaManager: () => ({ inMulti: () => false }),
-      onServerStartup: (handler) => handler(), onItemAction() {}, onItemOnItem() {},
+      onServerStartup: (handler) => handler(), onItemAction() {}, onItemOnItem() {}, persistAttribute() {}, onItemOnObject() {}, onObjectInteraction() {}, onPlayerLogin() {},
       registerCombatMethodResolver: (value) => { resolver = value; } });
     const hits = resolver.resolve(source).hits(source, victim);
     assert.deepEqual(hits.map((hit) => hit.getTotalDamage()), [48, 24, 12]);

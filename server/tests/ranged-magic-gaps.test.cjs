@@ -76,7 +76,7 @@ test("NPC ranged defences retain the Wiki light/standard/heavy split and cache r
   const npc = {
     isPlayer: () => false, isNpc: () => true, getAsNpc: () => npc,
     getDefenceLevel: () => 99, getCurrentLevel: () => 99, getCurrentDefinition: () => definition,
-    getRollFactor: () => 1,
+    getRollFactor: () => 1, getDefenceRollFactor: () => 1,
     getDefenceBonus: (index, type) => NPC.prototype.getDefenceBonus.call(npc, index, type),
   };
   const rolls = ["light", "standard", "heavy"].map((type) => core.AccuracyFormulasDpsCalc.defenseRangedRoll(npc, type));

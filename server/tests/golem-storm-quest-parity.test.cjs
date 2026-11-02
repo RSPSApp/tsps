@@ -114,7 +114,7 @@ function setup(register, options = {}) {
       adds(id, count) { inventory.set(id, (inventory.get(id) ?? 0) + count); },
     }),
     getEquipment: () => ({ getItems: () => [] }),
-    getSkillManager: () => ({ getCurrentLevel: () => 99, addExperiences() {} }),
+    getSkillManager: () => ({ getCurrentLevel: () => 99, getMaxLevel: () => 99, addExperiences() {} }),
     getLocation: () => location,
     moveTo(value) { location = value; },
     getPrivateArea: () => player?.__area ?? null,
@@ -308,7 +308,7 @@ test('Shadow of the Storm: requirement refusal and shared portal teleports', () 
     definition: { getActions: () => ['Talk-to'] },
   });
   assert.equal(h.quest.getStage(h.player), 0);
-  assert.ok(h.messages.includes('You need to complete The Golem and Demon Slayer before you can start Shadow of the Storm.'));
+  assert.ok(h.messages.includes('You need 30 Crafting, The Golem and Demon Slayer before you can start Shadow of the Storm.'));
 
   h.quest.setStage(h.player, 40);
   h.hooks.objects[0]({ player: h.player, objectId: 6310 });

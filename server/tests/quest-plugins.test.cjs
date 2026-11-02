@@ -3491,8 +3491,9 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
     destination: null,
   };
   route(lobbyRoute);
-  assert.deepEqual(lobbyRoute.destination, { x: 2327, y: 7362, z: 0 },
-    'the lobby door routes around its clipped approach tile while staying on the source side');
+  // 7361 carries only the door's own wall edge, so it is the approach tile on the source side.
+  assert.deepEqual(lobbyRoute.destination, { x: 2327, y: 7361, z: 0 },
+    'the lobby door routes to the first clear tile on the source side');
   attributes.set('quest.the_blood_moon_rises.castle-room', 34);
   const northLobbyVanesculaRoute = {
     player, objectId: 61576, clickType: 1,

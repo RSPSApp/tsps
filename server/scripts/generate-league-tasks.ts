@@ -402,6 +402,13 @@ function itemSetNamed(text: string): string[][] | null {
   return itemSetsByName().get(setKey(base)) ?? null;
 }
 
+/** Key chests as tasks name them -> the key chests plugin's names (their place only says where they are). */
+const KEY_CHESTS: Array<[RegExp, string[]]> = [
+  [/^Open the Crystal Chest in Taverley$/i, ["Crystal chest"]],
+  [/^Open the Enhanced Crystal Chest in Prifddinas$/i, ["Elven Crystal Chest"]],
+  [/^Open (?:\d+ of )?either Larran's Small Chest or Larran's Big Chest$/i, ["Larran's small chest", "Larran's big chest"]],
+];
+
 /** Minigame completions and the monster their plugin credits for each (combat-achievements:kill). */
 const MINIGAME_COMPLETIONS: Array<[RegExp, string[]]> = [
   [/^Complete The Gauntlet in Prifddinas(?: \d+ times)?$/i, ["Crystalline Hunllef"]],
@@ -584,6 +591,12 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   // no NPC dies).
   if ((match = /^Help the Spirit Anglers defeat Tempoross(?: (\d+) times)?\.?$/i.exec(description))) {
     return { trigger: { kind: "tempoross", count: match[1] ? Number(match[1]) : 1 } };
+  }
+  // A key chest opened ("Open 15 of either Larran's Small Chest or Larran's Big Chest").
+  const keyChest = KEY_CHESTS.find(([pattern]) => pattern.test(description.replace(/\.$/, "")));
+  if (keyChest) {
+    const times = /^Open (\d+) of /i.exec(description);
+    return { trigger: { kind: "open-chest", chests: keyChest[1], count: times ? Number(times[1]) : 1 } };
   }
   // "Defeat 25 Superior slayer monsters", "Defeat a Superior slayer monster": superiors killed.
   if ((match = /^Defeat (an?|\d+) Superior slayer monsters?\.?$/i.exec(description))) {

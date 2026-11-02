@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "pet", "tempoross"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "pet", "tempoross", "open-chest"]);
   // The agility plugin's course keys (and Yama's stepping stones, the Leagues lair's own course).
   const courseDir = path.join(__dirname, "../plugins/skills/agility/courses");
   const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
@@ -575,6 +575,10 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("defeat-the-kraken-boss-50-times"), { kind: "kill", npcs: ["Kraken"], count: 50 });
   assert.deepEqual(trigger("defeat-tempoross-1-time"), { kind: "tempoross", count: 1 });
   assert.deepEqual(trigger("defeat-the-doom-of-mokhiatl"), { kind: "kill", npcs: ["Doom of Mokhaiotl"], count: 1, credited: true });
+
+  // Key chests by the key chests plugin's names.
+  assert.deepEqual(trigger("open-15-larran-s-chests"), { kind: "open-chest", chests: ["Larran's small chest", "Larran's big chest"], count: 15 });
+  assert.deepEqual(trigger("open-the-enhanced-crystal-chest").chests, ["Elven Crystal Chest"]);
 
   // Group encounters as their plugins credit them.
   assert.deepEqual(trigger("defeat-the-moons-of-peril-25-times"), { kind: "kill", npcs: ["Moons of Peril"], count: 25, credited: true });

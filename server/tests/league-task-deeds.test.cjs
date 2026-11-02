@@ -425,3 +425,18 @@ test("tempoross: subdued, as the real fight rewards it (no NPC dies)", (t) => {
   assert.ok(f.messages.some((text) => /Tempoross kill count/.test(text)), `the real reward: ${f.messages}`);
   assert.ok(done(f, "defeat-tempoross-1-time"));
 });
+
+test("open-chest: a key chest opened by the real KeyChests (Open the Crystal Chest)", async (t) => {
+  const f = pactsCharacter(t);
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const Data = require("../plugins/objects/keychests/Data.KeyChests");
+  const chest = Data.get().chests.find((each) => each.name === "Crystal chest");
+  const loc = new core.GameObject(chest.locId, new core.Location(1667, 3136, 0), 10, 0, null);
+  core.ObjectManager.register(loc, true);
+  t.after(() => core.ObjectManager.deregister(loc, true));
+  f.player.getInventory().add(new core.Item(chest.keyId), true);
+  const option = core.ObjectDefinition.forId(chest.locId).getInteractions().find(Boolean);
+  await send(f, { type: "object_option", id: chest.locId, x: 1667, y: 3136, action: option }, 8);
+  assert.equal(f.player.getInventory().getAmount(chest.keyId), 0, `the key used: ${f.messages}`);
+  assert.ok(done(f, "open-the-crystal-chest"));
+});

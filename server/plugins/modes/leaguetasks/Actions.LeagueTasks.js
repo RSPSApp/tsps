@@ -38,7 +38,8 @@
  * - `prayer { prayers, count }`: a prayer switched on, `prayer:activated` { prayerId }, named as
  *   PrayerHandler's PrayerData names it ("Protect from Melee").
  * - `pet { skilling, count }`: a new pet, a skilling pet's if `skilling`, `pets:obtained` { skill }.
- * - `tempoross { count }`: Tempoross subdued, `tempoross:subdued`.
+ * - `tempoross { count }`: Tempoross subdued, `tempoross:subdued`; `open-chest { chests, count }`: a
+ *   key chest opened, by its name, `chests:opened`.
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -318,6 +319,7 @@ const EVENT_KINDS = new Map([
   ["pest-control", (trigger, event) => trigger.boats.includes(event.boat)],
   ["pet", (trigger, event) => !trigger.skilling || !!event.skill],
   ["tempoross", () => true],
+  ["open-chest", (trigger, event) => trigger.chests.some((chest) => key(chest) === key(event.chest))],
 ]);
 
 function onEvent(kind) {
@@ -367,6 +369,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("pest-control:won", onEvent("pest-control"));
   api.onCustomEvent("pets:obtained", onEvent("pet"));
   api.onCustomEvent("tempoross:subdued", onEvent("tempoross"));
+  api.onCustomEvent("chests:opened", onEvent("open-chest"));
   api.onCustomEvent("farming:check-health", checkedHealth);
   api.onCustomEvent("collection-log:new-item", logged);
   api.onCustomEvent("world:picked", picked);

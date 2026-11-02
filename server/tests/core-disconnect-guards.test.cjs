@@ -668,6 +668,18 @@ test('an accepted logout leaves the world on the same tick with the logout sourc
   });
 });
 
+test('a server-side logout (content\'s log out buttons) tells the client as the logout button does', () => {
+  const { player, sent } = stubLoggedInPlayer('edgeexit');
+  player.setRegistered(true);
+  withDisconnectEvents((events) => {
+    Player.prototype.requestLogout.call(player);
+    assert.deepEqual(sent, [['logout']], 'the logout response and close, so the browser and RuneLite leave');
+    World.process();
+    assert.equal(World.getRemovePlayerQueue().includes(player), false, 'removed this tick');
+    assert.deepEqual(events.map((event) => event.source), ['logout']);
+  });
+});
+
 test('a player removed in combat stays in the world and fires disconnect only on leaving', () => {
   let ready = false;
   const { player } = stubLoggedInPlayer('edgexlog', { readyToLeaveWorld: () => ready });

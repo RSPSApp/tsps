@@ -548,7 +548,8 @@ export class Player extends Mobile {
                 const points = (restoreDue ? 1 : 0) + (rapidRestoreDue ? 1 : 0);
                 for (const skill of Skill.values()) {
                     if (skill === Skill.HITPOINTS || skill === Skill.PRAYER) continue;
-                    const max = skills.getMaxLevel(skill);
+                    // Up to the resting level: the base, or above it with a permanent boost.
+                    const max = skills.getRestingLevel(skill);
                     if (skills.getCurrentLevel(skill) < max) skills.increaseCurrentLevel(skill, points, max);
                 }
             }
@@ -626,16 +627,20 @@ export class Player extends Mobile {
     }
 
     /**
-     
-    Requests a logout by sending the logout packet to the client. This leads to
-    the connection being closed, which then adds the player to the remove
-    characters queue.
-    */
+     * Logs the player out from the server's side (content's "log out" buttons, a newer login of
+     * the same account): queued for removal, and a connected client told as an accepted logout
+     * button tells it (the logout response, then the socket closes), so the browser and the
+     * official client through the gateway both return to the login screen. (The old packet 109
+     * reached no client: legacy packets are no-ops.)
+     */
     requestLogout() {
         if (!World.getRemovePlayerQueue().includes(this)) {
             World.getRemovePlayerQueue().push(this);
         }
-        this.getPacketSender().sendLogout();
+        if (World.isPlayerSessionConnected(this)) {
+            this.setDisconnectSource("logout");
+            this.getSession().logout();
+        }
     }
 
     onLogout() {

@@ -151,6 +151,33 @@ export function processWidgetClickInput(
                 if (dragOnly && clickHits.slice(0, i).some((below: any) => offersMenuOp(below, getWidgetFlags, getWidgetOpMask))) {
                     continue;
                 }
+                // OSRS fires onClick on the widgets under the mouse and runs the top menu entry,
+                // so a widget with a press script but no op of its own (a button's face graphic:
+                // the Demonic Pacts tree's Apply Changes buttons, script 8190's onClick 9125 over
+                // the container whose op is Apply Changes) runs its onClick and lets the click
+                // reach the widget beneath that offers the op.
+                const clickOnly =
+                    hasHandlers &&
+                    !!(w.eventHandlers?.onClick || w.onClick) &&
+                    !hasActions &&
+                    !hasOnOpHandler &&
+                    !hasInventoryItem &&
+                    !isPauseButtonWidget &&
+                    !hasSpellAction &&
+                    !(!isDynamicWidget && hasTransmitOps && !opsCleared);
+                if (clickOnly && clickHits.slice(0, i).some((below: any) => offersMenuOp(below, getWidgetFlags, getWidgetOpMask))) {
+                    const scaleX = w._absScaleX ?? 1;
+                    const scaleY = w._absScaleY ?? 1;
+                    const pressCtx: Partial<ScriptEvent> = {
+                        mouseX: ((input.leftClickX - (w._absX ?? w.x ?? 0)) / scaleX) | 0,
+                        mouseY: ((input.leftClickY - (w._absY ?? w.y ?? 0)) / scaleY) | 0,
+                        opIndex: 1,
+                    };
+                    if (w.eventHandlers?.onClick) deps.getCs2Vm().invokeEventHandler(w, "onClick", pressCtx);
+                    else deps.executeScriptListener(w, w.onClick, pressCtx);
+                    widgetManager?.invalidateAll?.();
+                    continue;
+                }
                 if (hasHandlers) {
                     widgetInteraction.clickedWidget = w;
                     widgetInteraction.clickedWidgetParent = widgetInteraction.resolveClickedWidgetParent(w);

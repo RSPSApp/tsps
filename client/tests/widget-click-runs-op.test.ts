@@ -6,12 +6,12 @@ import assert from "node:assert/strict";
 
 import { processWidgetClickInput } from "../game/widgets/input/widgetClickInput";
 
-function click(widget: any): string[] {
+function click(widget: any, beneath: any[] = []): string[] {
     const fired: string[] = [];
     const deps = {
         getCs2Vm: () => ({
-            invokeEventHandler: (_widget: any, eventType: string) => {
-                fired.push(eventType);
+            invokeEventHandler: (target: any, eventType: string) => {
+                fired.push(target.name ? `${target.name}.${eventType}` : eventType);
                 return true;
             },
         }),
@@ -23,7 +23,7 @@ function click(widget: any): string[] {
     } as any;
     const frame = {
         input: { leftClickX: 10, leftClickY: 10 },
-        collectFromAllRoots: () => [widget],
+        collectFromAllRoots: () => [...beneath, widget],
         getWidgetFlags: () => 0,
     } as any;
     const widgetManager = {
@@ -46,7 +46,7 @@ function click(widget: any): string[] {
         frame,
         widgetManager,
         widgetInteraction,
-        () => ({ option: widget.actions?.[0] ?? "", target: "", opIndex: 1 }),
+        (w: any) => ({ option: w.actions?.[0] ?? "", target: "", opIndex: 1 }),
         true,
     );
     return fired;
@@ -79,5 +79,13 @@ assert.deepEqual(
     ["onOp"],
     "onOp alone (a tab): still runs",
 );
+
+// The tree's buttons as built: a container with the op (Apply Changes, onOp 9376) and, drawn
+// over it, a face graphic with only a press script (onClick 9125). The press plays and the
+// container's op runs, as OSRS's left-click (onClick, then the top menu entry) does.
+const container = button({ name: "container", actions: ["Apply Changes"], eventHandlers: { onOp: {} } });
+const face = button({ name: "face", childIndex: 4, eventHandlers: { onClick: {} } });
+assert.deepEqual(click(face, [container]), ["face.onClick", "container.onOp"]);
+assert.deepEqual(click(face), ["face.onClick"], "with nothing beneath offering an op, the press alone");
 
 console.log("widget click runs op passed");

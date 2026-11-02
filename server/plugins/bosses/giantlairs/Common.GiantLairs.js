@@ -9,7 +9,7 @@ const OBOR_UNLOCKED_ATTRIBUTE = "giant-lairs:obor-unlocked";
 const OBOR_CHESTS_ATTRIBUTE = "giant-lairs:obor-chests-opened";
 const BRYOPHYTA_UNLOCKED_ATTRIBUTE = "giant-lairs:bryophyta-unlocked";
 const BRYOPHYTA_CHESTS_ATTRIBUTE = "giant-lairs:bryophyta-chests-opened";
-const BURY_WITHOUT_ASKING_ATTRIBUTE = "giant-lairs:bury-without-asking";
+const { BURY_WITHOUT_ASKING_ATTRIBUTE } = require("../../skills/PrayerBones");
 
 /** Per lair: its gate is unlocked for good / how many of its chests were opened. */
 const UNLOCKED_ATTRIBUTE = { obor: OBOR_UNLOCKED_ATTRIBUTE, bryophyta: BRYOPHYTA_UNLOCKED_ATTRIBUTE };

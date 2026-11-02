@@ -16,6 +16,7 @@ import { Cs2Vm } from "../rs/cs2/Cs2Vm";
 import { Opcodes } from "../rs/cs2/Opcodes";
 import { Script } from "../rs/cs2/Script";
 import { WidgetManager } from "../widgets/WidgetManager";
+import { GIANT_BONES } from "../runelite/api/gameval/ItemID";
 
 // Inspect on the ToA obelisk must send object option 1, not an examine packet.
 const obeliskMenu = new MenuState();
@@ -30,6 +31,14 @@ const examineObelisk = obeliskEntries.find((entry) => entry.option === "Examine"
 assert.equal(obeliskMenu.opcodes[inspectObelisk.menuStateIndex!], MenuOpcode.GameObjectFirstOption);
 assert.equal(obeliskMenu.opcodes[examineObelisk.menuStateIndex!], MenuOpcode.ExamineObject);
 assert.equal(chooseDefaultMenuEntry(obeliskEntries, {}), inspectObelisk);
+
+const groundItemMenu = new MenuState();
+const groundItemEntries = worldEntriesToSimple([
+    { option: "Bury", targetType: MenuTargetType.OBJ, targetId: GIANT_BONES,
+      targetName: "Giant bones", targetLevel: -1, mapX: 30, mapY: 31, actionIndex: 2 },
+], { menuState: groundItemMenu });
+const buryGiantBones = groundItemEntries[0];
+assert.equal(groundItemMenu.opcodes[buryGiantBones.menuStateIndex!], MenuOpcode.GroundItemThirdOption);
 
 let clickThroughs = 0;
 const inputBridge = new UIInputBridge();

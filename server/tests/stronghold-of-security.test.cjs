@@ -247,12 +247,20 @@ test("as captured: the ladder down warns, then climbs; floor 2 completes the Var
 });
 
 test("as captured: portals need the floor done (or the Wiki's combat level); entrance, up-ladders and the bone chain", () => {
-  const low = createPlayer({ combat: 20 });
-  Travel.usePortal({ player: low, object: { getId: () => 20786 } });
-  assert.deepEqual(low.log, ["You must have completed this level to take this shortcut."]);
-  const high = createPlayer({ combat: 26 });
-  Travel.usePortal({ player: high, object: { getId: () => 20786 } });
-  assert.deepEqual(high.log, ["You enter the portal to be whisked through to the treasure room.", "move 1914,5222,0"]);
+  // Wiki: floors 1-3 let a high enough combat level take the portal even before the reward is
+  // claimed (floor 1 from 26, floor 2 from 51, floor 3 from 76). That is the "first portal right
+  // away" in issue #1811, not a bug; below the level it is refused.
+  for (const floor of Data.FLOORS.slice(0, 3)) {
+    const below = createPlayer({ combat: floor.portalCombat - 1 });
+    Travel.usePortal({ player: below, object: { getId: () => floor.portal } });
+    assert.deepEqual(below.log, ["You must have completed this level to take this shortcut."], `floor ${floor.name} below ${floor.portalCombat}`);
+    const at = createPlayer({ combat: floor.portalCombat });
+    Travel.usePortal({ player: at, object: { getId: () => floor.portal } });
+    assert.deepEqual(at.log, [
+      "You enter the portal to be whisked through to the treasure room.",
+      `move ${floor.treasure.join(",")}`,
+    ], `floor ${floor.name} at ${floor.portalCombat}`);
+  }
   const death = createPlayer({ combat: 126 });
   Travel.usePortal({ player: death, object: { getId: () => 23922 } });
   assert.deepEqual(death.log, ["You must have completed this level to take this shortcut."], "floor 4: only once done");

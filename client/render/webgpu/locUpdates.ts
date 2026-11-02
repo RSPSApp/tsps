@@ -20,6 +20,7 @@ import { LocModelType } from "../../rs/config/loctype/LocModelType";
 import { isDoorLocType } from "../loc/SceneLocs";
 import { matchingLocSlotIds, shapeSlotOverride, suppressShapeSlotAt } from "../loc/LocSlots";
 import { getMapSquareId } from "../../rs/map/MapFileIndex";
+import { LOC_OVERRIDE_KEEP_ID, LOC_OVERRIDE_REMOVED, locOverrideIdFromChange } from "../../rs/scene/LocOverride";
 import type { LocChangeOptions, RegionReplacementEvent } from "../../game/GameRenderer";
 import type { WebGPURenderer } from "./WebGPURenderer";
 
@@ -103,9 +104,9 @@ export class LocUpdates {
         return matchingLocSlotIds(square.getLocIdsAtLocal(level, lx, ly), typeRots, shape, rotation);
     }
 
-    /** The override that removes one cache loc at a tile (`newId: 0`, keyed by its id). */
+    /** The override that removes one cache loc at a tile (`LOC_OVERRIDE_REMOVED`, keyed by its id). */
     private suppressLocAt(tile: Tile, level: number, id: number): void {
-        this.r.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${id | 0}`, { newId: 0 });
+        this.r.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${id | 0}`, { newId: LOC_OVERRIDE_REMOVED });
     }
 
     /** Gamemode world loc/terrain changes, re-applied before every map build (streaming2.ts). */
@@ -140,7 +141,7 @@ export class LocUpdates {
         } else {
             const moved = newTile && ((newTile.x | 0) !== (oldTile.x | 0) || (newTile.y | 0) !== (oldTile.y | 0));
             this.r.locOverrides.set(`${oldTile.x},${oldTile.y},${level},${oldId}`, {
-                newId: newId | 0,
+                newId: locOverrideIdFromChange(newId),
                 newRotation: overrideRotation,
                 moveToX: moved ? newTile!.x | 0 : undefined,
                 moveToY: moved ? newTile!.y | 0 : undefined,
@@ -201,14 +202,14 @@ export class LocUpdates {
         rotation: number,
     ): boolean {
         if (this.r.instanceActive) {
-            if (shapeSlotOverride(this.r.locOverrides, tile.x, tile.y, level, shape)?.newId === 0) return false;
+            if (shapeSlotOverride(this.r.locOverrides, tile.x, tile.y, level, shape)?.newId === LOC_OVERRIDE_REMOVED) return false;
             suppressShapeSlotAt(this.r.locOverrides, tile.x, tile.y, level, shape);
             return true;
         }
         let changed = false;
         const recorded = new Set(added.replacedIds ?? []);
         for (const id of recorded) {
-            if (this.r.locOverrides.get(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`)?.newId === 0) continue;
+            if (this.r.locOverrides.get(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`)?.newId === LOC_OVERRIDE_REMOVED) continue;
             this.suppressLocAt(tile, level, id);
             changed = true;
         }
@@ -282,7 +283,7 @@ export class LocUpdates {
         });
         if (!onAddedLoc) {
             this.r.locOverrides.set(matchKey, {
-                newId: -1,
+                newId: LOC_OVERRIDE_KEEP_ID,
                 newRotation: rotation & 0x3,
                 seqId: animId | 0,
                 seqRandomStart: false,

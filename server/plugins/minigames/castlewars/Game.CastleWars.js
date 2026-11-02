@@ -64,6 +64,7 @@ function setVar(player, id, value, varbit = false) {
 }
 
 function closeOverlay(player) {
+  for (const varbit of Object.values(data.TEAM_PLAYING_VARBIT)) setVar(player, varbit, 0, true);
   sentVars.delete(player);
   player.getPacketSender().closeSubInterface(data.OVERLAY_HUD_UID);
 }

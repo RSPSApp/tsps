@@ -2,6 +2,7 @@
 // bots that occasionally walk, chat, and emote. No PvP or economy behaviors -
 // this exists purely to generate realistic player-update load.
 // Enabled via `--stressTest[=count]` (see Server.ts), off by default.
+const { initPvpTierLoadouts } = require("./behaviours/pvp/PvpTierLoadouts.PlayerBots");
 const { Animation } = require("../../src/main/typescript/elvarg/game/model/Animation");
 const { Location } = require("../../src/main/typescript/elvarg/game/model/Location");
 const { Task } = require("../../src/main/typescript/elvarg/game/task/Task");
@@ -82,6 +83,7 @@ function findWalkableTile(RegionManager, bounds) {
 module.exports = {
   name: "StressTestBots",
   register(api) {
+    initPvpTierLoadouts(api);
     const requestedCount = parseStressBotCount();
     if (requestedCount <= 0) {
       return;

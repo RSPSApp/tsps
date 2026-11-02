@@ -12,6 +12,25 @@ const { SkillManager } = require("../dist/game/content/skill/SkillManager");
 const sender = new Proxy({}, { get: (_, name) => (name === "then" ? undefined : () => sender) });
 const skills = new SkillManager({ getPacketSender: () => sender });
 
+test("combat levels retain the fractional base until the final round down", () => {
+  const cases = [
+    [[1, 1, 99, 65, 99, 1, 99], 64],
+    [[50, 1, 99, 65, 99, 1, 99], 64],
+    [[1, 1, 99, 65, 1, 1, 99], 64],
+    [[50, 1, 99, 65, 1, 1, 1], 64],
+    [[1, 1, 1, 10, 99, 1, 1], 50],
+    [[1, 1, 99, 66, 99, 1, 99], 64],
+    [[1, 1, 99, 66, 99, 2, 99], 65],
+    [[1, 1, 99, 66, 99, 3, 99], 65],
+    [[1, 1, 1, 10, 1, 1, 1], 3],
+    [[99, 99, 99, 99, 99, 99, 99], 126],
+  ];
+  for (const [levels, expected] of cases) {
+    assert.equal(SkillManager.calculateCombatLevel(levels), expected, levels.join(","));
+    assert.equal(SkillManager.prototype.getCombatLevel.call({ skills: { maxLevel: levels } }), expected);
+  }
+});
+
 test("lowering a skill takes effect on the first call (issue #101)", () => {
   for (const level of [99, 1]) {
     skills

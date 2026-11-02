@@ -375,6 +375,12 @@ export class CombatPoisonData {
     CombatPoisonData.types.set(ItemIdentifiers.AMETHYST_ARROW_P_, PoisonType.VERY_WEAK);
     CombatPoisonData.types.set(ItemIdentifiers.AMETHYST_ARROW_P_PLUS_, PoisonType.WEAK);
     CombatPoisonData.types.set(ItemIdentifiers.AMETHYST_ARROW_P_PLUS_PLUS_, PoisonType.MILD);
+    CombatPoisonData.types.set(ItemIdentifiers.DRAGON_BOLTS_P_, PoisonType.VERY_WEAK);
+    CombatPoisonData.types.set(ItemIdentifiers.DRAGON_BOLTS_P_PLUS_, PoisonType.WEAK);
+    CombatPoisonData.types.set(ItemIdentifiers.DRAGON_BOLTS_P_PLUS_PLUS_, PoisonType.MILD);
+    CombatPoisonData.types.set(ItemIdentifiers.AMETHYST_DART_P_, PoisonType.VERY_WEAK);
+    CombatPoisonData.types.set(ItemIdentifiers.AMETHYST_DART_P_PLUS_, PoisonType.WEAK);
+    CombatPoisonData.types.set(ItemIdentifiers.AMETHYST_DART_P_PLUS_PLUS_, PoisonType.MILD);
 
     CombatPoisonData.types.set(ItemIdentifiers.TOXIC_BLOWPIPE, PoisonType.VENOM);
     // Note: Abyssal tentacle has no poison/venom effect in OSRS - do not add it here.

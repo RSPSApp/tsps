@@ -67,7 +67,7 @@ const EQUIPMENT_TAB = [80, 387];
 const EQUIPMENT_TAB_INDEX = 4;
 const SWITCH_TAB_SCRIPT = 915;
 const HIDDEN_TABS = [
-  [77, 320], [78, 629], [79, 149], [81, 541], [83, 7], [84, 109], [86, 182], [87, 116], [88, 216], [89, 239],
+  [77, 320], [78, 629], [79, 149], [81, 541], [83, 707], [84, 109], [86, 182], [87, 116], [88, 216], [89, 239],
 ];
 const COMBAT_TAB = 76;
 const MAGIC_TAB = 82;
@@ -209,7 +209,11 @@ function restoreTabs(player) {
   sender.sendTabInterface(0, 593);
   sender.sendTabInterface(6, player.getSpellbook().getInterfaceId());
   sender.sendTabInterface(EQUIPMENT_TAB[0], EQUIPMENT_TAB[1]);
-  for (const [slot, group] of HIDDEN_TABS) sender.sendTabInterface(slot, group);
+  for (const [slot, group] of HIDDEN_TABS) {
+    sender.sendTabInterface(slot, group);
+    sender.sendGameframeTabSetup(group);
+    api.emitCustomEvent("gameframe:tab-mounted", { player, group });
+  }
   player.getInventory().refreshItems();
   player.getEquipment().refreshItems();
 }

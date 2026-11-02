@@ -22,7 +22,7 @@ const { clearMovementRequest, queueRouteAndFlagAppearance } = require("../../bot
 const { getPvpProfile } = require("../../bots/behaviours/pvp/PvpProfileRegistry.PlayerBots");
 const { applyGeneratedPvpLoadout } = require("../../bots/behaviours/policies/PvpLoadoutPolicy.PlayerBots");
 const { buildRoamingPvpMetadata } = require("../../bots/behaviours/pvp/PvpAssignment.PlayerBots");
-const { buildStyle, pickTierChoice, tierCombatLevel, TIER_PROFILE_IDS } = require("../../bots/behaviours/pvp/PvpTierLoadouts.PlayerBots");
+const { initPvpTierLoadouts, buildStyle, pickTierChoice, tierCombatLevel, TIER_PROFILE_IDS } = require("../../bots/behaviours/pvp/PvpTierLoadouts.PlayerBots");
 const { isFoodItem } = require("../../items/Food.plugin");
 const Entry = require("./Entry.BountyHunter");
 const Coffer = require("./Coffer.BountyHunter");
@@ -357,6 +357,7 @@ function startTask() {
 module.exports = function attachBots(pluginApi, state) {
   api = pluginApi;
   core = pluginApi.core;
+  initPvpTierLoadouts(pluginApi);
   bh = state;
   api.onCustomEvent("bounty-hunter:entered-lobby", populate);
   api.onCustomEvent("bounty-hunter:target-assigned", huntTarget);

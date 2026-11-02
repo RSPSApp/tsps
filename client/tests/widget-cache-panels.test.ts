@@ -8,6 +8,7 @@ import { encodeWidgetRunScript } from "../../server/src/main/typescript/elvarg/n
 {
     const { createCacheVm } = require('../scripts/cache/cs2-sweep');
     const { vm: cacheVm } = createCacheVm();
+    cacheVm.context.getStatLevel = cacheVm.context.getStatBase = cacheVm.context.getStatBoosted = () => 99;
     const wm = cacheVm.context.widgetManager;
     wm.rootInterface = 161;
     wm.onLoadListener = (_id: number, widget: any) => cacheVm.runScriptEvent({ args: widget.onLoad, widget });
@@ -172,6 +173,43 @@ import { encodeWidgetRunScript } from "../../server/src/main/typescript/elvarg/n
     World.getRemoveNPCQueue().splice(0);
     checkCastleHud(ZAMORAK, 0);
     checkCastleHud(SARADOMIN, 0);
+
+    // The cache itself grants free runes only with a pouch and an active Castle Wars team.
+    const pouchInventory = new Inventory(28);
+    cacheVm.context.inventories.set(93, pouchInventory);
+    for (const [name, book, free] of [
+        ['Wind Strike', 0, true], ['Ice Barrage', 1, true], ['Humidify', 2, true],
+        ['Energy Transfer', 2, true], ['Vengeance Other', 2, true], ['Vengeance', 2, true],
+        ['Spellbook Swap', 2, true], ['Magic Imbue', 2, false],
+    ] as const) {
+        const definition = core.CacheDefinitions.getSpellByName(name);
+        const params = core.CacheDefinitions.getItem(definition.itemId).params;
+        cacheVm.context.varManager.setServerVarbit(4070, book);
+        cacheVm.runScriptEvent({ args: spellbook.onLoad, widget: spellbook });
+        const spell = wm.getWidgetByUid(definition.widgetId);
+        const checkAvailable = (available: boolean) => {
+            for (const widget of wm.getGroup(218).widgetsByFileId.values()) {
+                cacheVm.invokeEventHandler(widget, 'onInvTransmit');
+                cacheVm.invokeEventHandler(widget, 'onVarTransmit');
+            }
+            assert.equal(cacheVm.lastError, null);
+            if (available) assert.equal(cacheVm.context.varManager.getVarbit(144) | cacheVm.context.varManager.getVarbit(154), 1);
+            assert.equal(spell.spriteId, params.get(available ? 597 : 598), `${name}: free availability ${available}`);
+        };
+        pouchInventory.setSlot(0, -1, 0);
+        checkAvailable(false);
+        pouchInventory.setSlot(0, game.data.RUNE_POUCH, 1);
+        for (const team of [SARADOMIN, ZAMORAK]) {
+            game.setTeamId(player, team);
+            game.gameArea.process(player);
+            checkAvailable(free);
+            pouchInventory.setSlot(0, -1, 0);
+            checkAvailable(false);
+            pouchInventory.setSlot(0, game.data.RUNE_POUCH, 1);
+            game.closeOverlay(player);
+            checkAvailable(false);
+        }
+    }
 
     // The server's autocast selector key must populate the native Ancient spell chooser.
     const { Autocasting } = require(serverModules + '/game/content/combat/magic/Autocasting');

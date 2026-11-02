@@ -5,6 +5,7 @@ import { matchingLocSlotIds } from "../render/loc/LocSlots";
 import { LocUpdates } from "../render/webgpu/locUpdates";
 import { onLocAddChange } from "../render/render/locs";
 import { onLocDel } from "../render/render/locs2";
+import { LOC_OVERRIDE_REMOVED } from "../rs/scene/LocOverride";
 
 /**
  * Issue #1748: a fire's LOC_ADD_CHANGE erased the tile's paving at the Grand Exchange. The
@@ -85,7 +86,7 @@ const tileKey = (id: number) => `${TILE.x},${TILE.y},0,${id}`;
     square.ids.push(CACHE_LOC);
     square.typeRots.push(10);
     updates.onLocAddChange(FIRE, TILE, 0, 10, 0);
-    assert.deepEqual(renderer.locOverrides.get(tileKey(CACHE_LOC)), { newId: 0 }, "the same-slot loc is replaced");
+    assert.deepEqual(renderer.locOverrides.get(tileKey(CACHE_LOC)), { newId: LOC_OVERRIDE_REMOVED }, "the same-slot loc is replaced");
     updates.onLocDel(TILE, 0, 10, 0);
     assert.equal(renderer.locOverrides.has(tileKey(CACHE_LOC)), false, "removing the fire restores it");
 
@@ -97,7 +98,7 @@ const tileKey = (id: number) => `${TILE.x},${TILE.y},0,${id}`;
     square.ids.push(CACHE_LOC);
     square.typeRots.push(10);
     updates.onLocAddChange(DYNAMIC, TILE, 0, 10, 0);
-    assert.deepEqual(renderer.locOverrides.get(tileKey(CACHE_LOC)), { newId: 0 });
+    assert.deepEqual(renderer.locOverrides.get(tileKey(CACHE_LOC)), { newId: LOC_OVERRIDE_REMOVED });
     advanceToBuiltScene(square);
     updates.onLocAddChange(DYNAMIC, TILE, 0, 10, 0);
     assert.deepEqual(
@@ -105,7 +106,7 @@ const tileKey = (id: number) => `${TILE.x},${TILE.y},0,${id}`;
         [CACHE_LOC],
         "a replay keeps the replacements the first add recorded",
     );
-    assert.deepEqual(renderer.locOverrides.get(tileKey(CACHE_LOC)), { newId: 0 }, "the original suppression is kept");
+    assert.deepEqual(renderer.locOverrides.get(tileKey(CACHE_LOC)), { newId: LOC_OVERRIDE_REMOVED }, "the original suppression is kept");
     assert.equal(renderer.locOverrides.has(tileKey(DYNAMIC)), false, "the dynamic id is never suppressed");
     updates.onLocDel(TILE, 0, 10, 0);
     assert.equal(renderer.locOverrides.has(tileKey(CACHE_LOC)), false, "deleting after a replay restores the cache loc");
@@ -151,7 +152,7 @@ const tileKey = (id: number) => `${TILE.x},${TILE.y},0,${id}`;
     square.ids.push(CACHE_LOC);
     square.typeRots.push(10);
     onLocAddChange(host, FIRE, TILE, 0, 10, 0);
-    assert.deepEqual(host.locOverrides.get(tileKey(CACHE_LOC)), { newId: 0 });
+    assert.deepEqual(host.locOverrides.get(tileKey(CACHE_LOC)), { newId: LOC_OVERRIDE_REMOVED });
 
     onLocDel(host, TILE, 0, 10, 0);
     assert.equal(host.locOverrides.has(tileKey(CACHE_LOC)), false, "the replaced loc comes back");
@@ -161,7 +162,7 @@ const tileKey = (id: number) => `${TILE.x},${TILE.y},0,${id}`;
     // Replay after the build, then delete: the cache loc is still restored.
     const before = reloads.length;
     onLocAddChange(host, DYNAMIC, TILE, 0, 10, 0);
-    assert.deepEqual(host.locOverrides.get(tileKey(CACHE_LOC)), { newId: 0 });
+    assert.deepEqual(host.locOverrides.get(tileKey(CACHE_LOC)), { newId: LOC_OVERRIDE_REMOVED });
     advanceToBuiltScene(square);
     onLocAddChange(host, DYNAMIC, TILE, 0, 10, 0);
     assert.equal(reloads.length, before + 1, "a replay with its suppressions in place needs no rebuild");
@@ -184,7 +185,7 @@ const tileKey = (id: number) => `${TILE.x},${TILE.y},0,${id}`;
         scheduleLocGeometryUpdate: () => {},
     };
     onLocDel(host, { x: 3200, y: 3200 }, 0, 10, 0);
-    assert.deepEqual(host.locOverrides.get("3200,3200,0,1276"), { newId: 0 }, "the chopped tree is removed");
+    assert.deepEqual(host.locOverrides.get("3200,3200,0,1276"), { newId: LOC_OVERRIDE_REMOVED }, "the chopped tree is removed");
     assert.equal(host.locOverrides.has(`3200,3200,0,${PAVING}`), false, "the paving beside it stays");
 }
 

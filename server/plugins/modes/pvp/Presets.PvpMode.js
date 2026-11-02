@@ -418,16 +418,7 @@ function presetCombatLevel(preset) {
   if (stats.length < 7) {
     return null;
   }
-  const [attack, defence, strength, hp, ranged, prayer, magic] = stats.map((level) =>
-    Math.max(1, Math.floor(Number(level) || 1))
-  );
-  const base = Math.floor((defence + hp + Math.floor(prayer / 2)) * 0.2535) + 1;
-  const level = base + Math.max(
-    (attack + strength) * 0.325,
-    Math.floor(ranged * 1.5) * 0.325,
-    Math.floor(magic * 1.5) * 0.325
-  );
-  return Math.min(126, Math.max(3, Math.floor(level)));
+  return presetWearer(preset).getSkillManager().getCombatLevel();
 }
 
 function renderPresetLists(player) {

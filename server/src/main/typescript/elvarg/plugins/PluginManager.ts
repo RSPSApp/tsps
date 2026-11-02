@@ -2399,6 +2399,7 @@ export class PluginManager {
       Priority: require(`${model}/Priority`).Priority,
       Projectile: require(`${model}/Projectile`).Projectile,
       Skill: require(`${model}/Skill`).Skill,
+      SkillManager: require("../game/content/skill/SkillManager").SkillManager,
       Item: require(`${model}/Item`).Item,
       Flag: require(`${model}/Flag`).Flag,
       Appearance: require(`${model}/Appearance`).Appearance,

@@ -13,6 +13,7 @@ const { HitMask } = require("../dist/game/content/combat/hit/HitMask");
 const { Equipment } = require("../dist/game/model/container/impl/Equipment");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { ItemIdentifiers: I } = require("../dist/util/ItemIdentifiers");
+const { WeaponInterfaces } = require("../dist/game/content/combat/WeaponInterfaces");
 
 // Real core, with the pieces that touch a live world replaced by recorders.
 const drains = [];
@@ -33,7 +34,7 @@ const core = {
   },
   DamageFormulas: { sourceMaxHit: () => sourceMax },
   PluginManager: { modifyRangedMaxHit: (_a, _t, maxHit) => maxHit },
-  Projectile: { createProjectile: () => ({ sendProjectile() {} }) },
+  Projectile: { createProjectile: () => ({ withAngle() { return this; }, withProgress() { return this; }, sendProjectile() {} }) },
   Sounds: { sendSound() {} },
 };
 const api = {
@@ -53,12 +54,19 @@ function fakePlayer({ weapon, ammo = Ammunition.RUNE_ARROW, rangedWeapon, specia
     isSpecialActivated: () => state.activated,
     getCombatSpecial: () => state.special,
     getCombat: () => ({ getAmmunition: () => ammo, getRangedWeapon: () => rangedWeapon }),
+    getWeapon: () => rangedWeapon === RangedWeapon.BALLISTA ? WeaponInterfaces.BALLISTA : WeaponInterfaces.SHORTBOW,
     getEquipment: () => ({
+      getItems: () => {
+        const items = new Array(14).fill(null).map(() => ({ getId: () => 0 }));
+        items[Equipment.WEAPON_SLOT] = { getId: () => weapon };
+        return items;
+      },
       get: (slot) => slot === Equipment.WEAPON_SLOT
         ? { getId: () => weapon }
         : { getId: () => 0, getDefinition: () => ({ getBonuses: () => ({ 11: ammoStrength }) }) },
     }),
     getSkillManager: () => ({ getCurrentLevel: () => rangedLevel }),
+    getLocation: () => ({ getDistance: () => 1 }),
     performAnimation: () => { state.animations++; },
     performGraphic: () => {},
     state,
@@ -66,7 +74,7 @@ function fakePlayer({ weapon, ammo = Ammunition.RUNE_ARROW, rangedWeapon, specia
   return player;
 }
 
-const target = { getLocation: () => ({}) };
+const target = { getLocation: () => ({}), performGraphic: () => {} };
 
 function shoot(attacker, accurate, startingDamage = 0) {
   rolledBounds = [];

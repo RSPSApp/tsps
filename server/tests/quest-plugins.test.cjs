@@ -15936,10 +15936,27 @@ test('Priest in Peril unlocks the mausoleum Holy barrier only after completion',
     moveTo: (location) => moves.push([location.getX(), location.getY(), location.getZ()]),
     sendMessage: (text) => messages.push(text),
   };
-  for (stage of [0, 10, 50, quest.completionValue - 1]) {
+  for (stage of [0, 10, 46]) {
     assert.equal(pass({ player, objectId: api.core.ObjectIdentifiers.HOLY_BARRIER }), true);
     assert.deepEqual(moves, [], 'unfinished quests cannot cross');
     assert.match(messages.at(-1), /complete Priest in Peril/);
+  }
+  // Once Drezel holds the barrier (stage 50 on), he stops the player himself.
+  const runtime = require('../plugins/quests/QuestRuntime');
+  const played = [];
+  const startTranscript = runtime.startTranscript;
+  runtime.startTranscript = (...args) => { played.push(args[4]); return true; };
+  try {
+    require('../plugins/quests/quests/PriestInPeril.Quest')(api);
+    const stop = objects.get('Holy barrier')['Pass-through'];
+    for (stage of [50, quest.completionValue - 1]) {
+      assert.equal(stop({ player, objectId: api.core.ObjectIdentifiers.HOLY_BARRIER }), true);
+      assert.deepEqual(moves, [], 'unfinished quests cannot cross');
+      assert.equal(played.at(-1),
+        'after-drezel-is-freed-and-the-vampyre-is-sealed-attempting-to-pass-the-holy-barrier-before-securing-the-barrier');
+    }
+  } finally {
+    runtime.startTranscript = startTranscript;
   }
   for (stage of [quest.completionValue, quest.completionValue + 1]) {
     assert.equal(pass({ player, objectId: api.core.ObjectIdentifiers.HOLY_BARRIER }), true);

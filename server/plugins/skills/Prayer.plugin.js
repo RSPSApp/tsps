@@ -17,6 +17,7 @@
 const DATA = require("./data/bones.json");
 const ASHES = require("./data/ashes.json");
 const { pauseForLevelUp } = require("./SkillActions");
+const { BURY_WITHOUT_ASKING_ATTRIBUTE } = require("./PrayerBones");
 
 const BURY_DELAY_MS = 1200; // Two OSRS game ticks.
 const BURY_ANIMATION = 827; // human_pickupfloor
@@ -31,6 +32,9 @@ let api = null;
 let bones = null;
 let ashes = null;
 const burials = new WeakMap();
+const BULL_BONES_XP = 40;
+const BURY_CONFIRMATION = "Bury the bones? (This grants Prayer XP)";
+const BURY_OPTIONS = ["Yes.", "Yes, and don't ask again.", "No."];
 
 /**
  * world.json `pluginConfig` `"Prayer:sequentialBurying": true` (overridable in world.local.json)
@@ -53,6 +57,7 @@ function rowsByItemId(rows) {
 
 /** The bone rows by item id. */
 function boneFor(itemId) {
+  if (itemId === api.core.ItemIdentifiers.BULL_BONES) return { xp: BULL_BONES_XP, restore: 0 };
   if (!bones) bones = rowsByItemId(DATA.bones);
   return bones.get(itemId) ?? null;
 }
@@ -99,7 +104,54 @@ function buryRequest(request) {
 
 /** "prayer:bone": the bone's row for `itemId`. */
 function boneRequest(request) {
-  if (request) request.bone = boneFor(request.itemId);
+  if (request) request.bone = request.itemId === api.core.ItemIdentifiers.BULL_BONES ? null : boneFor(request.itemId);
+}
+
+function isBullBones(event) {
+  return (event.groundItemId ?? event.groundItem?.getItem?.()?.getId?.()) === api.core.ItemIdentifiers.BULL_BONES;
+}
+
+function takeBullBones(event) {
+  if (!isBullBones(event)) return false;
+  event.handled = true;
+  event.player.sendMessage("I don't think those will fit in my backpack...");
+  return true;
+}
+
+function preventBullBoneTransfer(event) {
+  if (event?.itemId !== api.core.ItemIdentifiers.BULL_BONES) return;
+  event.allow = false;
+}
+
+function preventBullBoneTelegrab(event) {
+  if (event?.groundItem?.getItem?.()?.getId?.() === api.core.ItemIdentifiers.BULL_BONES) event.allow = false;
+}
+
+function buryBullBones(event) {
+  if (!isBullBones(event)) return false;
+  event.handled = true;
+  const bury = () => {
+    const { player, groundItem } = event;
+    if (groundItem.isPendingRemoval?.()) return;
+    api.core.ItemOnGroundManager.deregister(groundItem);
+    player.performAnimation(new api.core.Animation(BURY_ANIMATION));
+    api.core.Sounds.sendSound(player, api.core.Sound.BURY_BONES);
+    player.getSkillManager().addExperiences(api.core.Skill.PRAYER, BULL_BONES_XP);
+  };
+  if (event.player.getAttribute(BURY_WITHOUT_ASKING_ATTRIBUTE) === true) {
+    bury();
+    return true;
+  }
+  const [yes, always, no] = BURY_OPTIONS;
+  api.sendMultiChatboxPrompt(event.player, BURY_CONFIRMATION,
+    yes, () => { event.player.getPacketSender().sendInterfaceRemoval(); bury(); },
+    always, () => {
+      event.player.setAttribute(BURY_WITHOUT_ASKING_ATTRIBUTE, true);
+      event.player.getPacketSender().sendInterfaceRemoval();
+      bury();
+    },
+    no, () => event.player.getPacketSender().sendInterfaceRemoval());
+  return true;
 }
 
 function stopBurial({ player }) {
@@ -263,6 +315,11 @@ module.exports = {
     api = pluginApi;
     api.onItemFirstAction(buryBone);
     api.onItemFirstAction(scatterAshes);
+    api.persistAttribute(BURY_WITHOUT_ASKING_ATTRIBUTE);
+    api.onGroundItemPickup(takeBullBones);
+    api.onGroundItemClick(api.core.ItemIdentifiers.BULL_BONES, 3, buryBullBones);
+    api.onCustomEvent("ground-items:take", preventBullBoneTransfer);
+    api.onCustomEvent("magic:can-telekinetic-grab", preventBullBoneTelegrab);
     api.onCustomEvent("prayer:bury", buryRequest);
     api.onCustomEvent("prayer:bone", boneRequest);
     api.onCanUseItem(interruptBurialForItem);

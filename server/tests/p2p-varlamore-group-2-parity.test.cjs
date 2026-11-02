@@ -790,8 +790,15 @@ test('TP judgement: the crest goes back (24), the letter (26) and its paper (28)
   p.manager.advance(); h.tick(2);
   const live = () => h.npcs.filter(npc => !npc.removed).map(npc => npc.id);
   for (const id of [12903, 12905, 12907, 12909, 12911, 12915, 12891, 12893]) assert.ok(live().includes(id), `actor ${id}`);
-  h.tick(6); assert.equal(p.text, ''); h.tick(1); assert.equal(p.text, 'Velam, step forward.');
+  const ennius = h.npcs.find(npc => npc.id === 12893);
+  h.tick(2); assert.deepEqual([ennius.getLocation().x, ennius.getLocation().y], [1682, 3156]);
+  for (const x of [1681, 1680, 1679]) {
+    h.tick(1);
+    assert.deepEqual([ennius.getLocation().x, ennius.getLocation().y], [x, 3156], 'captured approach walks one tile each tick');
+  }
+  h.tick(1); assert.equal(p.text, ''); h.tick(1); assert.equal(p.text, 'Velam, step forward.');
   p.manager.advance(); h.tick(3); assert.match(p.text, /found to be a traitor/);
+  assert.deepEqual([ennius.getLocation().x, ennius.getLocation().y], [1679, 3158], 'Ennius stands beside Velam before the execution');
   h.continueUntil(p, () => p.text === "For you, this is the only thing that's right."); p.manager.advance();
   h.tick(1); assert.ok(h.npcs.find(npc => npc.id === 12909).animations.includes(836));
   h.tick(6); assert.equal(p.text, 'The rest of you are dismissed.');
@@ -835,7 +842,16 @@ test('TP Teomat: Itzla (40, 42), Metzli and the attack (44), eight cultists (46)
   assert.equal(p.messages.at(-1), 'Enemies Defeated: 8/8');
   h.tick(3); assert.equal(h.quest.getStage(p), 46); assert.equal(p.varbits.get(11123), 2);
   h.tick(8); assert.equal(p.text, 'What happened?!');
-  h.continueUntil(p, () => p.text === "Of course, my Prince. We'll go at once."); p.manager.advance();
+  const unrelated = { player: p, npcId: N.PRINCE_ITZLA_ARKAN_3, step: { speaker: 'Guard' },
+    pages: [{ page: 'Another quest' }], speakerId: 397, text: 'Unrelated guard speech' };
+  h.emit('npc-dialogue:line', unrelated);
+  assert.equal(unrelated.speakerId, 397, 'scene heads do not change another transcript');
+  for (const [index, expected] of [12897, 12928, 12897, 12928, 12897, 12928].entries()) {
+    assert.equal(p.log.filter(row => row[0] === 'sendNpcHeadOnInterface').at(-1)[1], expected,
+      'aftermath uses the captured scene actor head rather than a global same-name NPC');
+    if (index < 5) p.manager.advance();
+  }
+  assert.equal(p.text, "Of course, my Prince. We'll go at once."); p.manager.advance();
   assert.equal(h.quest.getStage(p), 48); assert.equal(p.varbits.get(11123), 1);
   h.tick(6); assert.equal(p.text, 'Well... this has been a bit of a mess.');
   h.continueUntil(p, () => p.text.startsWith("However, let's not worry")); assert.equal(h.quest.getStage(p), 50);

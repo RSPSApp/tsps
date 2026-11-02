@@ -17,8 +17,17 @@ class NpcSyncTest {
         assertEquals(Triple(ROOT_X + 3, ROOT_Z + 2, false), Triple(main.npc.x, main.npc.z, main.npc.onDeck))
     }
 
+    @Test
+    fun `a spawn direction is renumbered from tsps's south-west origin to the game's north-west one`() {
+        // tsps 1 (south) is the game's 6: Lumbridge's bankers faced the wall in RuneLite (#1826).
+        val faced = (0..7).map { tsps ->
+            (NpcSync().decode(TspsPacket(TspsServerPacket.NPC_INFO, frame(worldView = null, dx = 0, dz = 0, direction = tsps))).changes.single() as NpcSync.Change.Added).direction
+        }
+        assertEquals(listOf(5, 6, 7, 3, 4, 0, 1, 2), faced)
+    }
+
     /** tsps's NPC_INFO with no NPCs yet and one added: no block, small deltas. */
-    private fun frame(worldView: Int?, dx: Int, dz: Int): ByteArray {
+    private fun frame(worldView: Int?, dx: Int, dz: Int, direction: Int = 0): ByteArray {
         val bits = StringBuilder()
         fun write(width: Int, value: Int) = bits.append(Integer.toBinaryString(value).padStart(32, '0').takeLast(width))
         write(8, 0)
@@ -29,7 +38,7 @@ class NpcSyncTest {
         write(1, 0)
         write(5, dz)
         write(5, dx)
-        write(3, 0)
+        write(3, direction)
         write(16, TYPE)
         write(16, 0xFFFF)
         while (bits.length % 8 != 0) bits.append('0')

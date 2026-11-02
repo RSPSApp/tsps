@@ -12,7 +12,11 @@
  * - Thawed, the icefiends vanish and the demon attacks every 3 ticks: a snow boulder (ranged)
  *   or Ice Burst (magic), each hitting the 3x3 around its target. Praying against one makes it
  *   use only that one.
- * - All damage to it is a third, but fire spells deal 250% and demonbane weapons aren't cut.
+ * - All damage to it is a third, but fire spells deal 250% and demonbane weapons and spells
+ *   aren't cut; its demonbane vulnerability is 115% (Ice demon, Changes, 22 July 2026).
+ * - Lighting gives 32 points and each kindling 36, up to about 6,050 in a normal raid and 6,480
+ *   in a solo Challenge Mode. The Wiki's Challenge Mode sequence (28 lit, 28, 28 and 21 added, 28
+ *   lit) comes to 6,480 at 48 and 48, as recording 3389 pays (1,392 for lighting 28).
  * - It drops fiendish ashes, 7 stinkhorn mushrooms, 7 endarkened juice and 5 cicely for each
  *   raider.
  *
@@ -33,23 +37,32 @@
  *   (anim 1580, sound 532, range 10), gone 2 ticks after, and the demon walks out a tile a
  *   tick. It turns hostile (7585) 8 ticks after the thaw and attacks the tick after.
  * - It stands still and every 3 ticks picks a raider at random (anim 69):
- *   - the boulder: projectile 1324 (from 51 to 60 client cycles within 3 tiles, else 90;
- *     heights 350 to 10, angle 8; sound 1440, range 10) on the target's tile, landing as
- *     gfx 1325 (height 10) with sound 1021 (range 6);
- *   - Ice Burst: projectile 366 (51 to 60 cycles, heights 325 to 10, angle 8; sound 171,
- *     range 10), landing 2 ticks later as gfx 363 (height 10) on the 3x3, centre first then
- *     NW/SE, N/S, NE/SW, E/W 3 cycles apart, with sound 170 (range 6). Damage lands with the
- *     impact; "<col=ef1020>You have been frozen!</col>" comes 2 ticks later, and a freeze can
- *     be renewed by the next burst 3 ticks on.
+ *   - the boulder: projectile 1324 (from 51 to 60 client cycles up to 2 tiles from the edge of
+ *     the demon's 2x2, else 90; heights 350 to 10, angle 8; sound 1440, range 10) on the target's
+ *     tile, landing as gfx 1325 (height 10) with sound 1021 (range 6);
+ *   - Ice Burst: projectile 366 (51 to 60 cycles, or 30 from 1 tile; heights 325 to 10, angle 8;
+ *     sound 171, range 10), landing 2 ticks later (1 from 1 tile) as gfx 363 (height 10) on the
+ *     3x3, centre first then NW/SE, N/S, NE/SW, E/W 3 cycles apart, with sound 170 (range 6).
+ *     Damage lands with the impact. 2 ticks later, if the player is still on the 3x3 and the
+ *     burst didn't splash: "<col=ef1020>You have been frozen!</col>" (10 of 12 hits; the other
+ *     two had walked off), every time, so bursts 3 ticks apart renew it (3282 ticks 6815-6827).
+ *   - The freeze: the first step comes 9 ticks after the last message (3282 tick 6827 to 6836,
+ *     3285 tick 16169 to 16178; 3285 tick 15454 to 15464 was 10).
+ * - Firemaking XP (recordings at 15x, as the Wiki's sapling XP is there): lighting about 100,
+ *   whatever the kindling (28, 22, 10, 8; 3285 fell 2 with each later lighting, unexplained);
+ *   fuelling (820 ticks 3336, 3462) 3 a kindling, anim 832, sound 2066 at the brazier.
+ * - Hits: through a protection prayer up to 17 at the base scale in 3282 and 3285 (magic) and
+ *   17 at the base scale in 820 (missiles, 33 scaled); without one 25 (820, 49 scaled). Fitted:
+ *   a prayer lets 2/3 through and Ice Burst's base is 26. Grid Master worlds, so not certain.
  * - Dying: anim 67; it goes 5 ticks later, the drops are left on its tile and the storm loc
- *   is taken away.
- * Not on the Wiki (to check against a capture): the tiles; 5 Firemaking XP a kindling; the
- *   attacks' max hits (30 and 25 at the base scale); protection prayers letting 50% (missiles)
- *   and 33% (magic) through; a freeze lasting 3 ticks; fuelling (anim 832; never recorded).
+ *   is taken away (loc 29733, which is nothing to see).
+ * Not on the Wiki (to check against a capture): the boulder's base of 30 (no hit above 24 at the
+ *   base scale recorded).
  */
 
 const Shared = require("./Shared.ChambersOfXeric");
 const Raid = require("./RaidState.ChambersOfXeric");
+const Achievements = require("./CombatAchievements.ChambersOfXeric");
 
 const NPC = { FROZEN: 7584, DEMON: 7585, ICEFIEND: 7586 };
 const OBJECT = { BRAZIER: 29747, LIT_BRAZIER: 29748, STORM: 29876 };
@@ -59,9 +72,18 @@ const KINDLING_CAP = 28;
 /** The storm in hundredths of a percent; per lit brazier and tick, BASE + PER_KINDLING x its kindling. */
 const STORM = { MAX: 10000, THAW_BASE: 15, THAW_PER_KINDLING: 2, REGROW: 17, HEADBAR: 7, HEADBAR_WIDTH: 100 };
 const BURN_TICKS = 8;
-const POINTS = { LIGHT: 32, KINDLING: 36, CAP: 6050 };
-const FIRE_SPELLS = ["FIRE_STRIKE", "FIRE_BOLT", "FIRE_BLAST", "FIRE_WAVE", "FIRE_SURGE", "FLAMES_OF_ZAMORAK"];
+const POINTS = {
+  normal: { LIGHT: 32, KINDLING: 36, CAP: 6050 },
+  challenge: { LIGHT: 48, KINDLING: 48, CAP: 6480 },
+};
+const XP = { LIGHT: 100, FUEL_PER_KINDLING: 3 };
+const FIRE_SPELLS = ["FIRE_STRIKE", "FIRE_BOLT", "FIRE_BLAST", "FIRE_WAVE", "FIRE_SURGE"];
+const DEMONBANE_SPELLS = ["INFERIOR_DEMONBANE", "SUPERIOR_DEMONBANE", "DARK_DEMONBANE"];
 const DEMONBANE = new Set([2402, 6746, 19675, 29577, 29589, 29591]);
+const DEMONBANE_VULNERABILITY_ATTRIBUTE = "combat:demonbane-vulnerability";
+const DEMONBANE_VULNERABILITY = 1.15;
+/** rsprox captures: anim 67 to gone. */
+const DYING_TICKS = 5;
 const ANIM = { LIGHT: 3687, FUEL: 832, STEAL: 1582, ICEFIEND_DEATH: 1580, CAST: 69 };
 const SOUND = {
   LIGHT: 2066, STEAL: 531, THAW: 1930, ICEFIEND_DEATH: 532,
@@ -73,7 +95,7 @@ const PROJECTILE = {
   BURST: { id: 366, startHeight: 81, endHeight: 3 },
   DELAY: 51, ANGLE: 8,
 };
-const ATTACK = { SPEED: 3, BOULDER_MAX: 30, BURST_MAX: 25, FREEZE_TICKS: 3, FREEZE_DELAY: 2 };
+const ATTACK = { SPEED: 3, BOULDER_MAX: 30, BURST_MAX: 26, PRAYER_LETS_THROUGH: 2 / 3, FREEZE_TICKS: 9, FREEZE_DELAY: 2 };
 const FROZEN_MESSAGE = "<col=ef1020>You have been frozen!</col>";
 const NEED_MESSAGE = "You need a tinderbox and some suitable kindling to light the brazier.";
 /** Ice Burst's 3x3 by the client cycles each tile's graphic waits: centre, NW/SE, N/S, NE/SW, E/W. */
@@ -87,7 +109,7 @@ const THAW = { WALK_AFTER: 1, ICEFIENDS_GONE: 3, HOSTILE_AFTER: 8 };
 const DEMON_TILES = [
   [{ x: 3271, y: 5365 }, { x: 3272, y: 5365 }, { x: 3278, y: 5365 }],
   [{ x: 3310, y: 5368 }, { x: 3310, y: 5367 }, { x: 3310, y: 5361 }],
-  [{ x: 3349, y: 5362 }, { x: 3348, y: 5362 }, { x: 3342, y: 5363 }],
+  [{ x: 3349, y: 5362 }, { x: 3348, y: 5362 }, { x: 3342, y: 5362 }],
 ];
 const BRAZIER_TILES = [
   [{ x: 3272, y: 5362 }, { x: 3275, y: 5364 }, { x: 3275, y: 5367 }, { x: 3272, y: 5369 }],
@@ -101,14 +123,23 @@ const ICEFIEND_TILES = [
 ];
 
 let fireSpells = null;
+let demonbaneSpells = null;
+
+function spellSet(names) {
+  const { CombatSpells } = Shared.core();
+  return new Set(names.map((name) => CombatSpells[name]).filter(Boolean));
+}
 
 function isFireSpell(spell) {
   if (!spell) return false;
-  if (!fireSpells) {
-    const { CombatSpells } = Shared.core();
-    fireSpells = new Set(FIRE_SPELLS.map((name) => CombatSpells[name]).filter(Boolean));
-  }
+  fireSpells ??= spellSet(FIRE_SPELLS);
   return fireSpells.has(spell);
+}
+
+function isDemonbaneSpell(spell) {
+  if (!spell) return false;
+  demonbaneSpells ??= spellSet(DEMONBANE_SPELLS);
+  return demonbaneSpells.has(spell);
 }
 
 /** Wiki (Mod Ash): a normal skill roll, 8% at level 1 to 78% at 99. */
@@ -126,9 +157,22 @@ function stormFill(left) {
   return Math.max(0, Math.floor((left * STORM.HEADBAR_WIDTH) / STORM.MAX));
 }
 
-/** The boulder's flight in client cycles: 60 within 3 tiles, 30 more for each 3 beyond. */
+/** Tiles from the edge of the demon's 2x2 to a tile. */
+function edgeDistance(demon, at) {
+  const from = demon.getLocation();
+  const dx = Math.max(from.getX() - at.getX(), at.getX() - from.getX() - 1, 0);
+  const dy = Math.max(from.getY() - at.getY(), at.getY() - from.getY() - 1, 0);
+  return Math.max(dx, dy);
+}
+
+/** The boulder's flight in client cycles, by tiles from the demon's far side (its edge + 1). */
 function boulderCycles(distance) {
   return 60 + 30 * Math.max(0, Math.floor((distance - 1) / 3));
+}
+
+/** Ice Burst's flight in client cycles, by tiles from the demon's edge. */
+function burstCycles(edge) {
+  return edge <= 1 ? 30 : 60;
 }
 
 class IceDemonRoom extends Raid.Room {
@@ -139,6 +183,10 @@ class IceDemonRoom extends Raid.Room {
     this.icefiends = new Map();
     this.kindlingPoints = 0;
     this.attackWait = 0;
+    /** For the Combat Achievements: who prayed against the boulder, who was hurt, who finished it. */
+    this.prayedMissiles = new Set();
+    this.hurt = new Set();
+    this.fireFinisher = null;
   }
 
   load() {
@@ -149,6 +197,7 @@ class IceDemonRoom extends Raid.Room {
     ObjectManager.register(this.storm, true);
     this.demon = this.spawnNpc(NPC.FROZEN, this.storm.getLocation().clone());
     this.demon?.setPositionToFace(this.tile(faceAt.x, faceAt.y, 2));
+    this.demon?.setAttribute(DEMONBANE_VULNERABILITY_ATTRIBUTE, DEMONBANE_VULNERABILITY);
     this.stormLeft = STORM.MAX;
     const count = Math.min(this.raid.scale, 4);
     for (const index of Shared.shuffle([0, 1, 2, 3]).slice(0, count)) {
@@ -214,8 +263,13 @@ class IceDemonRoom extends Raid.Room {
     player.getInventory().delete(KINDLING, have);
     const lit = Shared.replaceObject(this.map, object, OBJECT.LIT_BRAZIER);
     this.braziers.set(index, { object: lit, kindling: have, burn: BURN_TICKS });
-    Shared.addXp(player, "FIREMAKING", have * 5);
-    this.kindlingRewards(player, have, POINTS.LIGHT);
+    Shared.addXp(player, "FIREMAKING", XP.LIGHT);
+    this.kindlingRewards(player, have, true);
+  }
+
+  /** ::coxclear: the storm is gone and the demon can be fought. */
+  devFinish() {
+    this.defreeze();
   }
 
   fuel(player, index) {
@@ -225,13 +279,16 @@ class IceDemonRoom extends Raid.Room {
     player.getInventory().delete(KINDLING, amount);
     brazier.kindling += amount;
     Shared.animate(player, ANIM.FUEL);
-    Shared.addXp(player, "FIREMAKING", amount * 5);
-    this.kindlingRewards(player, amount, 0);
+    Shared.areaSound(this.raiders(), SOUND.LIGHT, brazier.object.getLocation(), { range: 4 });
+    Shared.addXp(player, "FIREMAKING", amount * XP.FUEL_PER_KINDLING);
+    this.kindlingRewards(player, amount, false);
   }
 
-  /** Wiki: 36 a kindling and 32 a lighting, up to about 6,050 in a normal raid. */
-  kindlingRewards(player, kindling, bonus) {
-    const points = Math.max(0, Math.min(POINTS.CAP - this.kindlingPoints, kindling * POINTS.KINDLING + bonus));
+  /** Points for kindling burnt, and for lighting; their numbers and cap go by the raid's mode. */
+  kindlingRewards(player, kindling, lighting) {
+    const rates = this.raid.challenge ? POINTS.challenge : POINTS.normal;
+    const earned = kindling * rates.KINDLING + (lighting ? rates.LIGHT : 0);
+    const points = Math.max(0, Math.min(rates.CAP - this.kindlingPoints, earned));
     this.kindlingPoints += points;
     this.raid.addPoints(player, points);
   }
@@ -278,6 +335,7 @@ class IceDemonRoom extends Raid.Room {
   /** Every 3 ticks it attacks a raider in the room at random, from where it stands. */
   fight() {
     if (!this.demon?.isRegistered() || this.demon.getHitpoints() <= 0) return;
+    for (const player of this.raiders()) if (Shared.isProtected(player, "ranged")) this.prayedMissiles.add(player);
     if (--this.attackWait > 0) return;
     const targets = this.raiders().filter((player) => player.getHitpoints() > 0);
     if (!targets.length) {
@@ -288,7 +346,7 @@ class IceDemonRoom extends Raid.Room {
     this.attack(Shared.randomOf(targets));
   }
 
-  /** Wiki: a third of all damage, except fire spells (250%) and demonbane weapons. */
+  /** Wiki: a third of all damage, except fire spells (250%) and demonbane weapons and spells. */
   modifyHit(npc, hit) {
     if (npc !== this.demon) return;
     const attacker = hit.getAttacker?.();
@@ -297,11 +355,18 @@ class IceDemonRoom extends Raid.Room {
     const spell = player.getCombat().getPreviousCast?.() ?? player.getCombat().getSelectedSpell?.();
     const magic = hit.getCombatType?.() === Shared.core().CombatType.MAGIC;
     const weapon = player.getEquipment().getItems()[Shared.core().Equipment.WEAPON_SLOT]?.getId?.();
+    const fire = magic && isFireSpell(spell);
     let factor = 1 / 3;
-    if (magic && isFireSpell(spell)) factor = 2.5;
-    else if (!magic && DEMONBANE.has(weapon)) factor = 1;
+    if (fire) factor = 2.5;
+    else if (magic ? isDemonbaneSpell(spell) : DEMONBANE.has(weapon)) factor = 1;
     for (const part of hit.getHits()) part.setDamage(Math.floor(part.getDamage() * factor));
     hit.updateTotalDamage();
+    if (hit.getTotalDamage() >= npc.getHitpoints()) this.fireFinisher = fire ? player : null;
+  }
+
+  /** A hit from the demon on a raider: remembered for Cryo No More. */
+  noteHurt(player, hit) {
+    if (hit.getHits().some((part) => part.getDamage() > 0)) this.hurt.add(player);
   }
 
   /** It attacks with the style its target prays against, or either. */
@@ -314,8 +379,10 @@ class IceDemonRoom extends Raid.Room {
     Shared.animate(demon, ANIM.CAST);
     const stats = demon.getDefinition().getStats();
     const scaled = (base, level) => Math.floor((base * (level + 9)) / (390 + 9));
+    const edge = edgeDistance(demon, at);
+    const prayerMultiplier = ATTACK.PRAYER_LETS_THROUGH;
     if (style === "ranged") {
-      const cycles = boulderCycles(demon.getLocation().getDistance(at));
+      const cycles = boulderCycles(edge + 1);
       this.projectile(at, PROJECTILE.BOULDER, cycles);
       Shared.areaSound(this.raiders(), SOUND.BOULDER, demon.getLocation(), { range: 10 });
       Shared.later(this.raid, Math.ceil(cycles / 30), () => {
@@ -323,14 +390,15 @@ class IceDemonRoom extends Raid.Room {
         Shared.graphicAt(this.raiders(), GFX.BOULDER_HIT, at, { height: 10 });
         Shared.areaSound(this.raiders(), SOUND.BOULDER_HIT, at, { range: 6 });
         for (const player of this.inBlast(at)) {
-          Shared.strike(demon, player, "ranged", scaled(ATTACK.BOULDER_MAX, stats[3]), 0, { prayerMultiplier: 0.5 });
+          this.noteHurt(player, Shared.strike(demon, player, "ranged", scaled(ATTACK.BOULDER_MAX, stats[3]), 0, { prayerMultiplier }));
         }
       });
       return;
     }
-    this.projectile(at, PROJECTILE.BURST, 60);
+    const cycles = burstCycles(edge);
+    this.projectile(at, PROJECTILE.BURST, cycles);
     Shared.areaSound(this.raiders(), SOUND.BURST, demon.getLocation(), { range: 10 });
-    Shared.later(this.raid, 2, () => {
+    Shared.later(this.raid, cycles / 30, () => {
       if (!demon.isRegistered()) return;
       const { Location } = Shared.core();
       const viewers = this.raiders();
@@ -339,8 +407,12 @@ class IceDemonRoom extends Raid.Room {
       }
       Shared.areaSound(viewers, SOUND.BURST_HIT, at, { range: 6 });
       for (const player of this.inBlast(at)) {
-        const hit = Shared.strike(demon, player, "magic", scaled(ATTACK.BURST_MAX, stats[4]), 0, { prayerMultiplier: 0.33 });
-        if (hit.isAccurate?.() !== false) Shared.later(player, ATTACK.FREEZE_DELAY, () => freeze(player));
+        const hit = Shared.strike(demon, player, "magic", scaled(ATTACK.BURST_MAX, stats[4]), 0, { prayerMultiplier });
+        this.noteHurt(player, hit);
+        if (hit.isAccurate?.() === false) continue;
+        Shared.later(player, ATTACK.FREEZE_DELAY, () => {
+          if (this.inBlast(at).includes(player)) freeze(player);
+        });
       }
     });
   }
@@ -365,32 +437,41 @@ class IceDemonRoom extends Raid.Room {
     if (npc !== this.demon) return;
     this.stage = "dead";
     this.completed = true;
-    // rsprox captures: the storm goes with the demon, 5 ticks after it starts dying.
-    Shared.later(this.raid, 5, () => {
+    // rsprox captures: the storm goes with the demon, 5 ticks after it starts dying. This hook
+    // comes when the NPC's death delay is over.
+    const dying = npc.getCurrentDefinition?.()?.getDeathTicks?.() ?? DYING_TICKS;
+    Shared.later(this.raid, Math.max(0, DYING_TICKS - dying), () => {
       if (this.storm) Shared.core().ObjectManager.deregister(this.storm, true);
       this.storm = null;
     });
+    this.awardAchievements(killer);
     // Wiki: the drop is for each raider; the killer has theirs from its drop table.
     const { Item, ItemOnGroundManager } = Shared.core();
     const at = npc.getLocation().clone();
     for (const player of this.raiders()) {
       if (player === killer) continue;
       for (const [id, amount] of [[25766, 1], [20910, 7], [20911, 7], [20912, 5]]) {
-        ItemOnGroundManager.registerLocation(player, new Item(id, amount), at);
+        ItemOnGroundManager.registerLocation(player, new Item(id, amount), at, undefined, { public: true });
       }
     }
+  }
+
+  /** Kill-credit is the killer's (Wiki, Blizzard Dodger: out-damaging the others secures it). */
+  awardAchievements(killer) {
+    if (this.fireFinisher) Achievements.complete(this.fireFinisher, "Kill It with Fire");
+    if (!killer) return;
+    if (!this.prayedMissiles.has(killer)) Achievements.complete(killer, "Blizzard Dodger");
+    if (!this.hurt.has(killer)) Achievements.complete(killer, "Cryo No More");
   }
 }
 
 Raid.registerRoom("ICE_DEMON", IceDemonRoom);
 
-/** Ice Burst's freeze: short, and renewed by any burst that finds the player no longer frozen. */
+/** Ice Burst's freeze: renewed by every burst that catches the player, with its message. */
 function freeze(player) {
   if (!player.isRegistered?.() || player.getHitpoints() <= 0) return;
   const { TimerKey } = Shared.core();
-  const timers = player.getTimers();
-  if (timers.has(TimerKey.FREEZE)) return;
-  timers.registers(TimerKey.FREEZE, ATTACK.FREEZE_TICKS);
+  player.getTimers().registers(TimerKey.FREEZE, ATTACK.FREEZE_TICKS);
   player.getMovementQueue().reset();
   player.sendMessage(FROZEN_MESSAGE);
 }
@@ -484,4 +565,4 @@ module.exports = function registerCoxIceDemon(api) {
   Raid.onRaidArea("canAttack", frozenDemon);
 };
 
-Object.assign(module.exports, { IceDemonRoom, lightChance, thawRate, stormFill, boulderCycles, BURST_TILES });
+Object.assign(module.exports, { IceDemonRoom, lightChance, thawRate, stormFill, boulderCycles, burstCycles, BURST_TILES });

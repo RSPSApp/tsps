@@ -240,6 +240,7 @@ function loaderFixture() {
         getPlayerRawPlane: () => 0,
         loadSceneData: WebGPURenderer.prototype.loadSceneData,
         cancelObsoleteSceneBuilds: WebGPURenderer.prototype.cancelObsoleteSceneBuilds,
+        applyQueuedMap: WebGPURenderer.prototype.applyQueuedMap,
     };
     return { renderer, resolve, reject, mapId, maps, leaveTarget: () => { target = false; } };
 }

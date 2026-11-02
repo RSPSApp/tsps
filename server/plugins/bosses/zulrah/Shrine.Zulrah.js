@@ -25,6 +25,7 @@ const Fight = require("./Fight.Zulrah");
 const { MeleeSnakeling, MagicSnakeling } = require("./Hazards.Zulrah");
 
 const DAMAGE_CAP = 50;
+const BOSS_NAME = "Zulrah";
 const HALBERD_REACH = 2;
 const CAPPED_DAMAGE = [45, 50];
 const FREE_RETRIEVALS = 50;
@@ -168,6 +169,7 @@ function onZulrahDeath({ npc }) {
   player.sendMessage(`Your Zulrah kill count is: <col=ff0000>${kills}</col>.`);
   if (!best || ticks < best) {
     player.setAttribute(Shared.ATTR.BEST_TIME, ticks);
+    Shared.api().emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
     player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col> (new personal best)`);
   } else {
     player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col>. Personal best: ${formatTicks(best)}`);

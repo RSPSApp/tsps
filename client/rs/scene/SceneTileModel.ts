@@ -475,3 +475,37 @@ export class SceneTileModel {
         }
     }
 }
+
+/** Tile-relative [x, y] of each model vertex index, 0-1 with y pointing north. */
+const TILE_VERTEX_POSITIONS: readonly (readonly [number, number])[] = [
+    [0, 0],
+    [0, 0], [0.5, 0], [1, 0], [1, 0.5], [1, 1], [0.5, 1], [0, 1], [0, 0.5],
+    [0.5, 0.25], [0.75, 0.5], [0.5, 0.75], [0.25, 0.5],
+    [0.25, 0.25], [0.75, 0.25], [0.75, 0.75], [0.25, 0.75],
+];
+
+/**
+ * The overlay part of a tile shape as triangles, resolving rotation the way the constructor does.
+ * Takes the shape as stored in terrain data, which is one below the model's own shape index.
+ */
+export function getOverlayShapeTriangles(
+    overlayShape: number,
+    rotation: number,
+): [number, number][][] {
+    const vertices = tileShapeVertexIndices[overlayShape + 1].map((index) => {
+        if ((index & 1) === 0 && index <= 8) return ((index - rotation - rotation - 1) & 7) + 1;
+        if (index > 8 && index <= 12) return ((index - 9 - rotation) & 3) + 9;
+        if (index > 12 && index <= 16) return ((index - 13 - rotation) & 3) + 13;
+        return index;
+    });
+    const faces = tileShapeFaces[overlayShape + 1];
+    const triangles: [number, number][][] = [];
+    for (let i = 0; i < faces.length; i += 4) {
+        if (faces[i] !== 1) continue;
+        triangles.push(faces.slice(i + 1, i + 4).map((face) => {
+            const [x, y] = TILE_VERTEX_POSITIONS[vertices[face < 4 ? (face - rotation) & 3 : face]];
+            return [x, y] as [number, number];
+        }));
+    }
+    return triangles;
+}

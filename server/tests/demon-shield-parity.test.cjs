@@ -32,7 +32,7 @@ function register(name, key) {
     spawnNpc: (definition) => {
       let area = null, transform = -1, hp = 7, location = new core.Location(definition.x, definition.y, definition.z);
       const index = actorIndex++;
-      const npc = { definition, getId: () => definition.id, getOwner: () => definition.owner,
+      const npc = { definition, getId: () => (transform !== -1 ? transform : definition.id), getOwner: () => definition.owner,
         getLocation: () => location,
         getMovementQueue: () => ({ addSteps: value => { location = value; } }),
         getDefinition: () => core.NpcDefinition.forId(definition.id),
@@ -40,7 +40,8 @@ function register(name, key) {
         getNpcTransformationId: () => transform, setNpcTransformationId: (value) => { transform = value; },
         getArea: () => area, setArea: (value) => { area = value; },
         isPlayer: () => false, isNpc: () => true, getAsNpc: () => npc, getIndex: () => index,
-        getCombat: () => ({ reset() {} }), isRegistered: () => false, performAnimation() {},
+        getCombat: () => ({ reset() {}, attack() {} }), isRegistered: () => false, performAnimation() {},
+        forceChat() {}, setPositionToFace() {}, getMovementCoordinator: () => ({ setRadius() {} }),
       };
       spawned.push(npc); return npc;
     },
@@ -90,7 +91,7 @@ function player() {
     getForceMovement: () => forceMovement, setForceMovement: value => { forceMovement = value; },
     setUntargetable() {}, setNpcTransformationId: (value) => { transform = value; },
     getNpcTransformationId: () => transform, performAnimation() {}, performGraphic() {},
-    getCombat: () => ({ reset() {} }),
+    getCombat: () => ({ reset() {} }), forceChat() {},
   };
   return p;
 }
@@ -98,9 +99,18 @@ const choose = (prompt, label) => {
   const index = prompt.options.indexOf(label); assert.ok(index >= 0, `missing choice ${label}`); prompt.options[index + 1]();
 };
 
+test("Demon Slayer's coin is only taken for Aris, not another NPC's 'Okay, here you go.'", () => {
+  const q = register('DemonSlayer', 'demon_slayer'), p = player(); p.items.set(995, 10);
+  // Biohazard's repeat Chemist transcript has the same spoken line.
+  const chemist = { player: p, npcId: core.NpcIdentifiers.CHEMIST, text: 'Okay, here you go.' };
+  q.emit('npc-dialogue:line', chemist);
+  assert.equal(chemist.after, undefined); assert.equal(p.items.get(995), 10);
+});
+
 test('Demon Slayer keeps the captured incantation in dialogue and preserves sibling varbits', () => {
   const q = register('DemonSlayer', 'demon_slayer'), p = player(); p.items.set(995, 2);
-  q.emit('npc-dialogue:choice', { player: p, npcId: core.NpcIdentifiers.ARIS, option: 'Yes.' });
+  const pay = { player: p, npcId: core.NpcIdentifiers.ARIS, text: 'Okay, here you go.' };
+  q.emit('npc-dialogue:line', pay); assert.equal(p.items.get(995), 2); pay.after();
   assert.equal(p.items.get(995), 1); assert.equal(q.quest.getStage(p), 0);
   p.attributes.set('demon-slayer:incantation', [4, 2, 1, 3, 0]);
   const line = { player: p, npcId: core.NpcIdentifiers.ARIS, text: '[word 1]... [word 2]... [word 3]... [word 4]... [word 5]!' };
@@ -135,10 +145,24 @@ test('Delrith needs five word choices; failure resets him and the learned order 
   assert.equal(q.spawned.at(-1).getId(), core.NpcIdentifiers.DELRITH, 'the demon remains visible without Silverlight equipped');
   const weaken = () => q.call('onNpcBeforeDeath', { npc: q.spawned.at(-1), preventDeath: false });
   const banish = () => q.namedNpc.get('Weakened Delrith:Banish')({ player: p, npc: q.spawned.at(-1) });
-  weaken(); banish(); for (let i = 0; i < 5; i++) choose(q.prompts.at(-1), 'Carlem');
+  const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
+  const manager = new DialogueManager(p); p.getDialogueManager = () => manager;
+  // Capture 1843: each word is said overhead a tick after it is picked; the next menu follows.
+  const said = [];
+  p.forceChat = (text) => said.push(text);
+  const pick = (word) => { choose(q.prompts.at(-1), word); q.tick(4); };
+  weaken(); banish(); for (let i = 0; i < 5; i++) pick('Carlem');
   assert.equal(q.quest.getStage(p), 29); assert.equal(q.spawned.at(-1).getId(), core.NpcIdentifiers.DELRITH);
-  weaken(); banish(); for (const word of ['Gabindo', 'Camerinthum', 'Aber', 'Purchai', 'Carlem']) choose(q.prompts.at(-1), word);
-  q.tick(10);
+  weaken();
+  const hitOnWeakened = { npc: q.spawned.at(-1), preventDeath: false };
+  q.call('onNpcBeforeDeath', hitOnWeakened);
+  assert.equal(hitOnWeakened.preventDeath, true, 'the weakened form is banished, never killed');
+  said.length = 0;
+  banish(); for (const word of ['Gabindo', 'Camerinthum', 'Aber', 'Purchai', 'Carlem']) pick(word);
+  assert.deepEqual(said, ['Gabindo...', 'Camerinthum...', 'Aber...', 'Purchai...', 'Carlem!']);
+  q.tick(16);
+  assert.equal(q.quest.getStage(p), 29, 'completion waits for Continue on the second box');
+  manager.advance();
   assert.equal(q.quest.getStage(p), 30); assert.equal(q.quest.varbitValue(30, p), 3); assert.equal(p.attributes.get('quest.points'), 3);
   assert.equal(q.hooks.has('onPlayerProcess'), false);
 });
@@ -211,6 +235,7 @@ test('Wally vision uses the private historical actor and restores the player on 
     const q = register('DemonSlayer', 'demon_slayer'), p = player();
     const original = new core.Location(3204, 3424, 0); p.moveTo(original);
     q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.ARIS, stepId: 'OzuYrk' });
+    q.tick(5);
     assert.ok(p.getPrivateArea()); assert.equal(p.getNpcTransformationId(), 5092);
     assert.equal(p.getLocation().getX(), 3225); assert.equal(p.getLocation().getY(), 3371);
     const line = { player: p, npcId: core.NpcIdentifiers.ARIS, text: 'Die, foul demon!' };
@@ -257,30 +282,58 @@ test('Shield full certificate opens the captured readable modal and Phoenix comp
 });
 
 
-test('Delrith timeout restores combat without taking over the camera again', () => {
+test('a weakened Delrith left too long is gone until the player leaves the circle and comes back', () => {
   const q = register('DemonSlayer', 'demon_slayer'), p = player(); q.quest.setStage(p, 29);
   const originalCycle = core.World.processCycle;
   try {
     q.areas[0].process(p);
     q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.DENATH_4, stepId: 'xjQ9zZ' });
-  q.tick(6);
+    q.tick(6);
     const line = { player: p, text: "I've got to get out of here..." };
     q.emit('npc-dialogue:line', line); line.after();
-    q.call('onNpcBeforeDeath', { npc: q.spawned.at(-1) });
+    const delrith = q.spawned.at(-1);
+    q.call('onNpcBeforeDeath', { npc: delrith });
     q.tick(4); p.packets.length = 0;
     core.World.processCycle += 100;
+    const spawnedBefore = q.spawned.length;
     p.getArea().process(p);
-    assert.equal(q.spawned.at(-1).getId(), core.NpcIdentifiers.DELRITH);
-    assert.equal(p.packets.some(([method]) => method.startsWith('sendCamera')), false);
+    assert.ok(q.removed.includes(delrith), 'the weakened Delrith is gone');
+    q.areas[0].process(p);
+    assert.equal(q.spawned.length, spawnedBefore, 'no Delrith returns while the player stays');
+    assert.equal(p.packets.some(([method]) => method === 'sendCameraMoveTo' || method === 'sendCameraLookAt'), false,
+      'the summoning camera does not start again');
+    q.areas[0].postLeave(p);
+    q.areas[0].process(p);
+    assert.ok(q.spawned.length > spawnedBefore, 'coming back starts the summoning again');
     q.call('onPlayerLogout', { player: p });
   } finally { core.World.processCycle = originalCycle; }
 });
 
+test('a hit landing on the weakened Delrith leaves him at 1 hitpoint, and neither side can attack', () => {
+  const q = register('DemonSlayer', 'demon_slayer'), p = player(); q.quest.setStage(p, 29);
+  q.areas[0].process(p);
+  q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.DENATH_4, stepId: 'xjQ9zZ' });
+  q.tick(6);
+  const line = { player: p, text: "I've got to get out of here..." };
+  q.emit('npc-dialogue:line', line); line.after();
+  const delrith = q.spawned.at(-1);
+  const first = { npc: delrith, preventDeath: false };
+  q.call('onNpcBeforeDeath', first);
+  assert.equal(first.preventDeath, true);
+  assert.equal(delrith.getId(), core.NpcIdentifiers.WEAKENED_DELRITH);
+  const late = { npc: delrith, preventDeath: false };
+  q.call('onNpcBeforeDeath', late);
+  assert.equal(late.preventDeath, true, 'a queued hit cannot kill the weakened form');
+  assert.equal(p.getArea().canAttack(p, delrith), false);
+  assert.equal(p.getArea().canAttack(delrith, p), false);
+  q.call('onPlayerLogout', { player: p });
+});
 
 test('Demon Slayer drain wire state stays 0 through Prysin, becomes 1 on pouring, then 2 on pickup', () => {
   const q = register('DemonSlayer', 'demon_slayer'), p = player(); q.quest.setStage(p, 1);
   const wireDrain = () => p.packets.findLast(([method, id]) => method === 'sendVarbit' && id === 2568)?.[2];
-  q.emit('npc-dialogue:choice', { player: p, npcId: core.NpcIdentifiers.SIR_PRYSIN, stepId: 'vc9k5u' });
+  const lastPrysinLine = { player: p, npcId: core.NpcIdentifiers.SIR_PRYSIN, text: 'I gave the other to the wizard Traiborn.' };
+  q.emit('npc-dialogue:line', lastPrysinLine); assert.equal(q.quest.getStage(p), 1); lastPrysinLine.after();
   assert.equal(q.quest.getStage(p), 2);
   assert.equal(p.attributes.get('demon_slayer.drain'), undefined);
   q.call('onPlayerLogin', { player: p }); assert.equal(wireDrain(), 0);
@@ -299,6 +352,7 @@ test('Demon Slayer drain wire state stays 0 through Prysin, becomes 1 on pouring
 test('Demon Slayer vision preserves every recorded camera target and both rates', () => {
   const q = register('DemonSlayer', 'demon_slayer'), p = player();
   q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.ARIS, stepId: 'OzuYrk' });
+  q.tick(5);
   const show = (text, phase = 'before') => {
     const event = { player: p, npcId: core.NpcIdentifiers.ARIS, text };
     q.emit('npc-dialogue:line', event); event[phase]?.(); return event;
@@ -384,6 +438,7 @@ test('the native Wally dialogue waits for the charge and sword-pose camera trans
   p.getDialogueManager = () => manager;
   require('../plugins/quests/QuestRuntime').startTranscript(q.api, p, core.NpcIdentifiers.ARIS, 'Demon Slayer', 'starting-demon-slayer',
     steps => steps[2].options[0].steps[15].options[3].steps.slice(1, 10));
+  q.tick(5);
   assert.match(manager.getCurrent().getText(), /^Wally managed/);
   manager.advance(); assert.equal(manager.getCurrent(), undefined);
   q.tick(7); assert.equal(manager.getCurrent(), undefined);
@@ -400,6 +455,7 @@ test('the native Wally dialogue waits for the charge and sword-pose camera trans
 test('Wally charge reaches its camera target while the teleport placement is still pending', () => {
   const q = register('DemonSlayer', 'demon_slayer'), p = player();
   q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.ARIS, stepId: 'OzuYrk' });
+  q.tick(5);
   p.isNeedsPlacement = () => true;
   p.getMovementQueue = () => ({ reset() { return this; }, setBlockMovement() {},
     addSteps() { throw new Error('ordinary steps are rejected during placement'); } });
@@ -458,4 +514,57 @@ test("Champions' Guild door turns away entrants under 32 Quest Points through th
   assert.equal(door(3363), false);
   assert.equal(condition('If the player does not have at least 32 quest points:'), false);
   assert.equal(condition('If the player has at least 32 quest points:'), true);
+});
+
+test('the summoners speak with the captured chatheads (1843)', () => {
+  const q = register('DemonSlayer', 'demon_slayer'), p = player();
+  const one = { player: p, text: "Who's that?", step: { speaker: 'Dark wizard' } };
+  const all = { player: p, text: 'Arise, Delrith!', step: { speaker: 'Dark wizards' } };
+  q.emit('npc-dialogue:line', one); q.emit('npc-dialogue:line', all);
+  assert.deepEqual([one.speakerId, one.expression], [core.NpcIdentifiers.DARK_WIZARD_7, 571], 'chatshock1 on qip_ds_young_dark_wizard1');
+  assert.deepEqual([all.speakerId, all.expression], [core.NpcIdentifiers.DARK_WIZARD_8, 567], 'chathap1 on qip_ds_young_dark_wizard2');
+});
+
+test('a Delrith timeout outside the circle lets him return at once; inside, after one real exit (AreaManager)', () => {
+  const { AreaManager } = require('../dist/game/model/areas/AreaManager');
+  const originalCycle = core.World.processCycle;
+  const q = register('DemonSlayer', 'demon_slayer');
+  const circle = q.areas[0];
+  AreaManager.areas.push(circle);
+  const run = (timeoutTile) => {
+    const p = player(); q.quest.setStage(p, 29);
+    Object.assign(p, { getMultiIcon: () => 0, setMultiIcon() {} });
+    const at = (x, y) => { p.moveTo(new core.Location(x, y, 0)); AreaManager.process(p); };
+    at(3227, 3369);
+    q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.DENATH_4, stepId: 'xjQ9zZ' });
+    q.tick(6);
+    const line = { player: p, text: "I've got to get out of here..." };
+    q.emit('npc-dialogue:line', line); line.after();
+    q.call('onNpcBeforeDeath', { npc: q.spawned.at(-1), preventDeath: false });
+    at(...timeoutTile);
+    core.World.processCycle += 100;
+    at(...timeoutTile);
+    return { p, at, spawned: q.spawned.length };
+  };
+  try {
+    // Outside the public circle (y < 3362) but still in the private scene: no mark to clear.
+    const outside = run([3227, 3361]);
+    assert.equal(outside.p.getArea(), null, 'the timeout ends the private scene');
+    outside.at(3227, 3369);
+    assert.equal(q.spawned.length, outside.spawned + 4, 'the first return summons him again');
+    q.call('onPlayerLogout', { player: outside.p });
+
+    // Inside the circle: he stays gone until the player has left it once.
+    const inside = run([3227, 3369]);
+    assert.equal(inside.p.getArea(), circle, 'the player is back in the public circle');
+    inside.at(3228, 3370);
+    assert.equal(q.spawned.length, inside.spawned, 'staying in the circle summons nothing');
+    inside.at(3227, 3361);
+    inside.at(3227, 3369);
+    assert.equal(q.spawned.length, inside.spawned + 4, 'leaving and coming back summons him');
+    q.call('onPlayerLogout', { player: inside.p });
+  } finally {
+    core.World.processCycle = originalCycle;
+    AreaManager.areas.splice(AreaManager.areas.indexOf(circle), 1);
+  }
 });

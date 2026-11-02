@@ -30,6 +30,7 @@ const SPAWN_IDLE_TICKS = 200;
 const teamByPlayer = new WeakMap();
 const sentVars = new WeakMap();
 const braceletEffect = new WeakSet();
+const flagHeldSince = new WeakMap();
 const barricades = new Set();
 const objectSwaps = [];
 let teamVars;
@@ -185,8 +186,19 @@ function restoreObjects() {
 /** Castle Wars stairs change floor immediately, so another click can follow on the next tick. */
 function climbTo(player, to) {
   const destination = new core.Location(to[0], to[1], to[2]);
+  if (!canEnterRespawn(player, destination)) return;
   player.getMovementQueue().reset();
   player.moveTo(destination);
+}
+
+/** Standards cannot be taken into either team's supply room. Exits remain usable. */
+function canEnterRespawn(player, destination) {
+  const entering = Object.values(data.TEAM_DATA).some((team) => team.respawnBounds.inside(destination));
+  if (entering && getCarriedFlagTeam(player)) {
+    player.sendMessage("You cannot take a standard into the respawn room.");
+    return false;
+  }
+  return true;
 }
 
 // --- Equipment and game items ------------------------------------------------------------
@@ -238,6 +250,10 @@ function clearCastleWarsItems(player, ids = data.CLEANUP_ITEM_IDS) {
 
 /** A worn Castle wars bracelet spends a charge as the game starts, and is active for that game. */
 function chargeBracelet(player) {
+  if (game.spendStoredBraceletCharge?.(player)) {
+    braceletEffect.add(player);
+    return;
+  }
   const { HANDS_SLOT } = core.Equipment;
   const next = data.BRACELET_NEXT[player.getEquipment().getSlot(HANDS_SLOT)];
   if (next === undefined) {
@@ -293,6 +309,7 @@ function carryFlag(player, flagTeam) {
   player.getCombat().setCastSpell(null);
   flagStatus[flagTeam] = 1;
   flagCarriers[flagTeam] = player;
+  flagHeldSince.set(player, Date.now());
   player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(getTeamData(flagTeam).bannerId, 1));
   refreshPlayerAppearance(player, true);
   if (process.env.CW_BOT_DEBUG === "1") {
@@ -722,6 +739,7 @@ function endGame() {
     setTeamId(player, null);
     closeOverlay(player);
     player.getPacketSender().sendPlayerOption(data.ATTACK_OPTION_SLOT, "", false);
+    player.getPacketSender().sendPlayerOption(data.TAKE_FROM_OPTION_SLOT, "", false);
     returnToLobby(player);
   }
   // Bots that missed the start sit in the lobby or a waiting room instead of the game area;
@@ -852,6 +870,7 @@ module.exports = function createCastleWarsGame(registry) {
     resetIdleTicks,
     swapObject,
     climbTo,
+    canEnterRespawn,
     refreshPlayerAppearance,
     equipTeamColours,
     clearWeaponSlot,
@@ -865,6 +884,7 @@ module.exports = function createCastleWarsGame(registry) {
     updateFlagStand,
     restoreFlagToBase,
     carryFlag,
+    flagHeldSince,
     dropCarriedFlag,
     trackBarricade,
     teamBarricadeCount,

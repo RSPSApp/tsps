@@ -404,8 +404,8 @@ test("Destroy goes through the shared confirmation, worded as live (rsprox 448, 
 });
 
 test("the shared destroy prompt shows the lines the bag gives it, and its own for other items", () => {
-  const strings = [];
-  const sender = new Proxy({}, { get: (_, name) => (...args) => { if (name === "sendString") strings.push(args[0]); return sender; } });
+  const scripts = [];
+  const sender = new Proxy({}, { get: (_, name) => (...args) => { if (name === "sendClientScript") scripts.push(args); return sender; } });
   let policy;
   delete require.cache[require.resolve("../plugins/interface/DestroyItem.plugin")];
   require("../plugins/interface/DestroyItem.plugin").register({
@@ -417,11 +417,11 @@ test("the shared destroy prompt shows the lines the bag gives it, and its own fo
   p.getPacketSender = () => sender;
   const bag = bagWith(OPEN_BAG);
   policy({ player: p, item: bag, itemId: OPEN_BAG, slot: 0, dropToGround: true, handled: false });
-  assert.deepEqual(strings.slice(-2), ["Are you sure you want to destroy the bag?", "The bag is empty. Are you sure you want to destroy it?"]);
+  assert.deepEqual(scripts.at(-1).slice(-2), ["Are you sure you want to destroy the bag?", "The bag is empty. Are you sure you want to destroy it?"]);
   const untradeable = item(UNIDENTIFIED_MINERALS);
   untradeable.isDropable = () => false;
   policy({ player: p, item: untradeable, itemId: UNIDENTIFIED_MINERALS, slot: 1, dropToGround: true, handled: false });
-  assert.deepEqual(strings.slice(-2), ["Are you sure you want to destroy this item?", "This item will be destroyed permanently."]);
+  assert.deepEqual(scripts.at(-1).slice(-2), ["Are you sure you want to destroy this item?", "This item will be destroyed permanently."]);
 });
 
 test("a confirmed Destroy in the Wilderness drops coins and noted items, not food or vials of water; elsewhere all is lost (Wiki)", () => {

@@ -35,6 +35,29 @@ test('the shipped world.json has f2p zones covering the spawn', () => {
     x >= zone.minX && x <= zone.maxX && y >= zone.minY && y <= zone.maxY));
 });
 
+test('shipped Rellekka and Hosidius crab coasts allow multicombat without PvP', () => {
+  const { AreaManager } = require('../dist/game/model/areas/AreaManager');
+  const { Wilderness } = require('../dist/game/content/wilderness/Wilderness');
+  const { Location } = require('../dist/game/model/Location');
+  const families = require('../data/definitions/dormant-npcs.json').families;
+  const ids = names => new Set(families.filter(family => names.includes(family.name))
+    .flatMap(family => [...family.dormant, ...Object.values(family.awake)]));
+  const rock = ids(['Rock Crab']), sand = ids(['Sand Crab']);
+  const spawns = require('../data/definitions/npc-spawns.json').filter(spawn =>
+    (rock.has(spawn.id) && spawn.x >= 2600 && spawn.x <= 2800 && spawn.y >= 3670 && spawn.y <= 3770)
+    || (sand.has(spawn.id) && spawn.x >= 1600 && spawn.x <= 1900 && spawn.y >= 3350 && spawn.y <= 3650));
+  assert.ok(spawns.length >= 150, 'exercise the actual coastal crab population');
+  for (const { x, y } of spawns) {
+    const location = new Location(x, y, 0);
+    assert.equal(AreaManager.inMulti({ getArea: () => null, getLocation: () => location }), true, `${x},${y}`);
+    assert.equal(Wilderness.isPvpArea(location), false, 'PvE multi does not enable player killing');
+    assert.equal(Wilderness.isMulti(x, y, 1), false, 'coastal tags apply only to the surface');
+  }
+  for (const [x, y] of [[2677, 3711], [2704, 3728], [2736, 3712], [1700, 3589], [1800, 3050]]) {
+    assert.equal(Wilderness.isMulti(x, y, 0), false, `preserve the single-combat side at ${x},${y}`);
+  }
+});
+
 test('allow hooks: first answer wins, no answer is null', () => {
   const api = PluginManager.createApi('MembersHookTest');
   // Experience gains also carry a multiplier (a league profile's rate), so the answer is a pair.

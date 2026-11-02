@@ -131,6 +131,7 @@ function defineAreas() {
       player.getPacketSender().sendSubInterface(data.OVERLAY_HUD_UID, data.STATUS_OVERLAY_INTERFACE[game.getTeamId(player)], 1);
       sendGameVars(player, game.getTeamId(player));
       player.getPacketSender().sendPlayerOption(data.ATTACK_OPTION_SLOT, "Attack", true);
+      player.getPacketSender().sendPlayerOption(data.TAKE_FROM_OPTION_SLOT, "Take-from", false);
     }
 
     postLeave(character, logout) {
@@ -139,6 +140,7 @@ function defineAreas() {
         return;
       }
       player.getPacketSender().sendPlayerOption(data.ATTACK_OPTION_SLOT, "", false);
+      player.getPacketSender().sendPlayerOption(data.TAKE_FROM_OPTION_SLOT, "", false);
       game.closeOverlay(player);
       player.getPacketSender().sendEntityHintRemoval(true);
       game.clearCastleWarsItems(player);
@@ -313,6 +315,12 @@ function keepItemsOnDeath(event) {
   }
 }
 
+function preventBonesOnDeath(event) {
+  if (game.castleWarsAreas.has(event.player?.getArea?.())) {
+    event.allow = false;
+  }
+}
+
 function allowBountyHunterWeapons(event) {
   if (event.attacker?.getArea?.() === game.gameArea && event.target?.getArea?.() === game.gameArea) event.allowed = true;
 }
@@ -323,6 +331,7 @@ module.exports = function attachCastleWarsAreas(api, castleWars) {
   data = castleWars.data;
   registerAreas(api);
   api.onCustomEvent("bounty-hunter:weapon-area", allowBountyHunterWeapons);
+  api.onCustomEvent("player:death-bones", preventBonesOnDeath);
   api.onServerStartup(setUpCastle);
   api.onPlayerLogin(restoreLoginInsideCastleWars);
   api.onCanEquip(protectTeamColours);

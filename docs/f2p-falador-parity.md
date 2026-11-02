@@ -33,6 +33,18 @@ The 12 Quest point requirement is enforced; the low-combat warning is advisory. 
 
 Listening uses animations 4195/4552 and advances only after the final overheard line, then stands with 4197. Speaker portraits are preserved rather than flattened to the witch. The banquet warning stores each player's pending crossing separately. Normal cabbage starts a private sabotage scene; a Draynor cabbage is retained and refused. The scene includes the throw animation/graphic, both cabbage projectiles, cauldron bubbles and morph, actors and their recorded ambient walks, fades, camera and timed dialogue transitions. Progress advances on returning from the scene, not when using the cabbage. Logout restores the original hole tile and controls. The recorded post-quest Sir Amik greeting is supplied without replacing active Wanted! dialogue.
 
+**Capture coverage.** No capture available today shows the main route: Sir Amik's start, the dossier, first listening, the cabbage scene and the hand-in. The `20260817T005704` capture cited above is not in the rsprox database or on this machine, so those timings cannot be re-checked and that route is compared only with the Wiki. Rsprox 469 (rev 233, varp 130 already 4 at login and never changing) is a post-quest fortress visit, ticks 2963–6051, and proves these legs:
+
+- Sturdy door and every other fortress passage: the player crosses between the passage's own tile and the tile across its edge, not past it. Each crossing opens the passage for two ticks (loc 38848 on its tile, open leaf 2340 or 17142 across it at rotation +1) with sound 46 or 2410.
+- Main doors 73/74 at x 3007: "You can't open this door."
+- Banquet door: guard 4775 warns from the west side only. Going in makes the nearest Black Knight shout "Die, intruder!" and attack (tick 4697).
+- Sturdy door warning head is guard 4774.
+- Grill after the quest: 4195, then 4552 two ticks later with the first line, then 4197 after "Purrr....".
+
+Rsprox 1581 (rev 225) and 2977 (rev 231) prove the completed journal text and the overview's start sentence. Rsprox 552 (rev 227) has nothing for this quest; its Sir Amik lines are Recipe for Disaster.
+
+**Known differences left in place.** Generated dialogue, from the Wiki, differs from 469: after "Yes, but I work here!" the capture has one box, "I might be new here but I can tell that's not true! You're not even wearing proper uniform!", where the data has two, and the sturdy-door branch lacks the player's line. It also has "scar ing" for "scaring". The disguised guard line in 469 (King Arthur, tick 4193) is the King's Ransom variant, so "Hey! Get back on duty!" stays Wiki-only. The Wiki's black-armour disguise passes the sturdy door and gets "Good day to you."; its "please go on through" at the banquet door is not played because the generated text holds an unresolved `[sir/madam]` template. Banquet entry happens on picking the option rather than two ticks later after the player's line. Fortress knights spawn as 517 where 469 shows 11953.
+
 ## Verification and evidence limits
 
 From `server/`: `node --test tests/f2p-falador-parity.test.cjs` covers the milestones, native boxes, interrupted scenes, all three fittings, item revalidation, anvil access, crate exhaustion, prior-contact skip and one-time rewards.

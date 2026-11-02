@@ -124,6 +124,15 @@ export function sendChat(
     } as any);
 }
 
+export function sendClanChat(text: string, clanType: number): void {
+    const filtered = sanitizeChatText(String(text ?? ""));
+    if (filtered) send({ type: "clan_chat", payload: { text: filtered, clanType: clanType | 0 } } as any);
+}
+
+export function sendClanChannelAction(action: "kick" | "ban" | "mute", name: string, value = 0): void {
+    send({ type: "clan_channel_action", payload: { action, name, value: value | 0 } } as any);
+}
+
 export function sendFriendsChatAction(payload: FriendsChatAction): void {
     send({ type: "friends_chat_action", payload } as any);
 }

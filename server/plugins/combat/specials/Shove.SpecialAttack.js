@@ -24,7 +24,7 @@ module.exports = function registerShoveSpecialAttack(api) {
     }
 
     start(character, target) {
-      const rules = { attacker: character, target, allow: true, chain: false, animate: true, attackDelay: character.getBaseAttackSpeed() + 1 };
+      const rules = { attacker: character, target, allow: true, chain: false, animate: true, freezeImmunityTicks: 10, attackDelay: character.getBaseAttackSpeed() + 1 };
       api.emitCustomEvent("combat:shove-rules", rules);
       if (!rules.allow) {
         cancelShove(character);
@@ -62,7 +62,7 @@ module.exports = function registerShoveSpecialAttack(api) {
       target.performAnimation(STUN_ANIMATION);
       if (rules.chain) target.getTimers().cancel(TimerKey.STUN_IMMUNITY);
       CombatFactory.stun(target, 3, true);
-      if (!rules.chain) target.getTimers().registers(TimerKey.FREEZE_IMMUNITY, 10);
+      if (!rules.chain && rules.freezeImmunityTicks > 0) target.getTimers().registers(TimerKey.FREEZE_IMMUNITY, rules.freezeImmunityTicks);
 
       const direction = ShoveCombatMethod.getDirection(character, target);
       if (direction != null) {

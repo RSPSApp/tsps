@@ -67,6 +67,31 @@ test("time played is the saved total plus this session, in minutes, kept over a 
   assert.ok(hooks.persisted.includes(PLAY_TIME));
 });
 
+test("the account query reads saved and live milliseconds without changing the private display or counter", t => {
+  t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
+  const player = createPlayer({ [PLAY_TIME]: 90_123, [DISPLAYED]: false });
+  const query = () => {
+    const request = { player };
+    hooks["account:play-time"](request);
+    return request.milliseconds;
+  };
+  assert.equal(query(), 90_123, "offline saved total");
+  hooks.login({ player });
+  const sent = structuredClone(player.sent);
+  t.mock.timers.tick(61_234);
+  assert.equal(query(), 151_357, "includes the current session at millisecond precision");
+  assert.equal(player.getAttribute(PLAY_TIME), 90_123, "read does not flush or double count");
+  assert.equal(player.getAttribute(DISPLAYED), false);
+  assert.deepEqual(player.sent, sent, "no display, reminder or packet side effects");
+  hooks.logout({ player });
+  t.mock.timers.tick(600_000);
+  assert.equal(query(), 151_357, "logged-out time is excluded");
+  hooks.login({ player });
+  t.mock.timers.tick(1000);
+  assert.equal(query(), 152_357, "a new session starts from the saved total");
+  hooks.logout({ player });
+});
+
 test("opening the summary sends the time first, as captured", () => {
   const player = createPlayer();
   hooks.login({ player });

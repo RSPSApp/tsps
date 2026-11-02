@@ -240,3 +240,82 @@ test('targeted Lunar magic cannot consume items or grant XP while transformed an
   assert.deepEqual(amounts(), [0, 1, 0, 0, 0]);
   assert.equal(p.getSkillManager().getExperience(core.Skill.MAGIC), xp + 83);
 });
+
+test('an observer gets fresh flag, weapon and movement appearance when a player re-enters view', (t) => {
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { createPlayerSyncState } = require('../dist/net/protocol/ClientProtocol');
+  const observer = new PlayerSession(null), p = player(t, [core.ItemIdentifiers.VERACS_FLAIL]);
+  p.setIndex(2); p.setUsername("cwappearance");
+  observer.playerSyncState = createPlayerSyncState(1, { x: 2400, y: 3100, level: 0 });
+  observer.playerSyncState.lastTiles.set(2, { x: 2401, y: 3100, level: 0 });
+  const first = observer.createPlayerView(p).appearance;
+  p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.SARADOMIN_BANNER));
+  p.getUpdateFlag().reset();
+  assert.equal(observer.createPlayerView(p).appearance, first, 'known unchanged players reuse the cached payload');
+  observer.playerSyncState.lastTiles.delete(2);
+  const returned = observer.createPlayerView(p);
+  assert.equal(returned.appearanceDirty, true);
+  assert.notDeepEqual(returned.appearance, first, 'newly visible players encode current gear and stance');
+});
+
+test('Lanthus accepts noted bracelets with confirmation, persists charges, and consumes one per match', (t) => {
+  let use, choice;
+  const defaults = new Map(), countdowns = [];
+  const api = {
+    ...PluginManager.createApi('CastleWarsBraceletTest'),
+    getAreaManager: () => ({ areas: [] }), getBonusManager: () => ({ update() {} }),
+    getObjectManager: () => ({ register() {}, deregister() {} }), getRegionManager: () => core.RegionManager,
+    getTaskManager: () => ({ submit(task) { if (task.onComplete) countdowns.push(task); }, cancelTasks() {} }), getWorld: () => core.World,
+    emitCustomEvent() {}, persistAttribute: (key, value) => defaults.set(key, value),
+    onItemOnNpc: handler => { use = handler; },
+    sendMultiChatboxPrompt: (_p, _title, ...pairs) => { choice = pairs; },
+  };
+  const match = Game(api);
+  require('../plugins/minigames/castlewars/Bracelet.CastleWars')(api, match);
+  const p = player(t, [core.ItemIdentifiers.CASTLE_WARS_BRACELET_3_]), opponent = player(t);
+  const noted = core.ItemDefinition.forId(core.ItemIdentifiers.CASTLE_WARS_BRACELET_3_).getNoteId();
+  p.getInventory().adds(noted, 2);
+  const event = { player: p, target: { getDefinition: () => ({ getName: () => 'Lanthus' }) }, itemId: noted };
+  use(event);
+  assert.equal(event.handled, true);
+  assert.equal(p.getInventory().getAmount(noted), 2, 'prompt has not consumed anything');
+  choice[1]();
+  assert.equal(p.getInventory().getAmount(noted), 0);
+  assert.equal(p.getAttribute('castlewars:bracelet-charges'), 6);
+  assert.equal(defaults.get('castlewars:bracelet-charges'), 0);
+  assert.equal(defaults.get('castlewars:bracelet-auto-charge'), true);
+  t.mock.method(p, 'smartMove', () => {}); t.mock.method(opponent, 'smartMove', () => {});
+  match.waitingAreas = {
+    [match.TEAM.SARADOMIN]: { getPlayers: () => [p] },
+    [match.TEAM.ZAMORAK]: { getPlayers: () => [opponent] },
+  };
+  match.gameArea = { getPlayers: () => [] }; match.lobbyArea = { getPlayers: () => [] };
+  match.beginStartCountdown(); countdowns.at(-1).execute();
+  assert.equal(p.getAttribute('castlewars:bracelet-charges'), 5);
+  assert.equal(match.hasBraceletEffect(p), true);
+  assert.equal(p.getEquipment().getSlot(core.Equipment.HANDS_SLOT), core.ItemIdentifiers.CASTLE_WARS_BRACELET_3_, 'only one charge source is spent');
+  match.showBraceletCharges(p); choice[1]();
+  match.clearBraceletEffect(p); countdowns[0].onComplete();
+  assert.equal(p.getAttribute('castlewars:bracelet-charges'), 5, 'disabled stored charges remain');
+  assert.equal(p.getEquipment().getSlot(core.Equipment.HANDS_SLOT), core.ItemIdentifiers.CASTLE_WARS_BRACELET_2_);
+  assert.equal(match.hasBraceletEffect(p), true, 'a worn bracelet still works');
+});
+
+test('bandages heal 10%, restore 30% run, and apply the patient bracelet bonus once before rounding', (t) => {
+  let heal, teammate;
+  const healer = player(t), patient = player(t);
+  const match = { isPlaying: () => true, getTeamId: () => 'sara', hasBraceletEffect: p => p === patient };
+  const api = { core, onItemAction: (_name, actions) => { heal = actions.Heal; }, onItemOnPlayer: fn => { teammate = fn; } };
+  require('../plugins/minigames/castlewars/Bandages.CastleWars')(api, match);
+  for (const p of [healer, patient]) {
+    p.getSkillManager().setMaxLevels(core.Skill.HITPOINTS, 99).setCurrentLevels(core.Skill.HITPOINTS, 40);
+    p.setRunEnergy(25); p.setPoisonDamage(6);
+  }
+  healer.getInventory().adds(core.ItemIdentifiers.BANDAGES, 2);
+  heal({ player: healer });
+  assert.equal(healer.getHitpoints(), 49); assert.equal(healer.getRunEnergy(), 55);
+  assert.equal(healer.getPoisonDamage(), 0);
+  teammate({ player: healer, target: patient, itemId: core.ItemIdentifiers.BANDAGES });
+  assert.equal(patient.getHitpoints(), 54, 'the bracelet belongs to the recipient');
+  assert.equal(patient.getRunEnergy(), 55); assert.equal(patient.getPoisonDamage(), 0);
+});

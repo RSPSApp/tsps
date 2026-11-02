@@ -160,7 +160,7 @@ function complete(player, taskRef, { silent = false } = {}) {
     for (const each of unlocked) announceUnlock(player, each);
     popup(player, task);
   }
-  pluginApi?.emitCustomEvent("combat-achievements:completed", { player, task: { id: task.id, name: task.name, tier: task.tier } });
+  pluginApi?.emitCustomEvent("combat-achievements:completed", { player, silent, task: { id: task.id, name: task.name, tier: task.tier } });
   return true;
 }
 

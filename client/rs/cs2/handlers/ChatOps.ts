@@ -27,10 +27,16 @@
  * The 7th value of the four history ops is the timestamp string proc 4742 affixes to a line
  * when chat_gettimestamps != 0 (setting 119 "Chat timestamps"); the 8th is its epoch seconds.
  */
-import { sendChat, sendChatFilter, sendPrivateMessage, sendReportAbuse } from "../../../network/ServerConnection";
+import { LISTENED_CLAN_TYPE, OWN_CLAN_TYPE } from "../../../common/social/Clans";
+import { sendChat, sendChatFilter, sendClanChat, sendPrivateMessage, sendReportAbuse } from "../../../network/ServerConnection";
 import { chatHistory, formatChatTimestamp } from "../ChatHistory";
 import { Opcodes } from "../Opcodes";
 import type { HandlerMap } from "./HandlerTypes";
+
+/** What chat_send passes to chat_sendclan for a clan the player belongs to. */
+const CLAN_CHAT_TYPE = 3;
+/** chat_send's guest line (`///`, chatbox mode 3). */
+const GUEST_CHAT_TYPE = 4;
 
 export function registerChatOps(handlers: HandlerMap): void {
     // CHAT_GETFILTER_PUBLIC (5000): Returns public chat mode
@@ -164,11 +170,20 @@ export function registerChatOps(handlers: HandlerMap): void {
     });
 
     // CHAT_SENDCLAN (5010): Used by the modern Clan channels, which are separate
-    // from the legacy Chat-channel system implemented here.
-    // Pops: message (string), chatType (int), clanIndex (int)
+    // from the legacy Chat-channel system implemented here. chat_send passes chatType 3
+    // with clan type 0 for the player's own clan (rsprox 322: MessagePublic type=3, clanType=0).
+    // Pops: message (string), chatType (int), clanType (int)
     handlers.set(Opcodes.CHAT_SENDCLAN, (ctx) => {
-        ctx.stringStackSize--;
-        ctx.intStackSize -= 2;
+        const message = ctx.stringStack[--ctx.stringStackSize];
+        const clanType = ctx.intStack[--ctx.intStackSize];
+        const chatType = ctx.intStack[--ctx.intStackSize];
+        if (clanType === OWN_CLAN_TYPE && chatType === CLAN_CHAT_TYPE && message?.trim()) {
+            sendClanChat(message, OWN_CLAN_TYPE);
+            ctx.varManager.setVarcString(335, "");
+        } else if (clanType === OWN_CLAN_TYPE && chatType === GUEST_CHAT_TYPE && message?.trim()) {
+            sendClanChat(message, LISTENED_CLAN_TYPE);
+            ctx.varManager.setVarcString(335, "");
+        }
     });
 
     // CHAT_PLAYERNAME (5015): Returns local player's name

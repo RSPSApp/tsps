@@ -135,7 +135,7 @@ const MORPHABLE_PET_NPC_IDS = new Set([
     7892, 7893, 3566, 5008, 12014, 12015, 12016, 13683, 13684, 6635, 10651, 11812, 11813, 11846, 11847, 11848, 11849, 11850,
 ]);
 
-const CASTLE_WARS_BARRICADE_IDS = new Set([5722, 5724]);
+const CASTLE_WARS_BARRICADE_IDS = new Set([5722, 5724, 15582, 15584]);
 
 export function getNpcMenuActions(npcType: NpcType): string[] {
     const actions = [...(npcType.actions ?? [])];

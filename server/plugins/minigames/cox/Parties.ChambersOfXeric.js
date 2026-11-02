@@ -9,6 +9,9 @@
  * the preferred size, combat level and skill total are only shown, never enforced; Challenge
  * Mode is a party setting that can't change once the party is inside; a leader leaving hands
  * the party to the highest-ranked raider who can kick, or else disbands it.
+ * rsprox captures 820, 843 and 3389: the party also has a scale (a number of players to scale the
+ * raid by, 0 for none) and a map layout (Small, Large or Full; Challenge Mode is always Full).
+ * The maker's last scale and layout are remembered for their next party.
  */
 
 const Shared = require("./Shared.ChambersOfXeric");
@@ -24,8 +27,15 @@ class Party {
     this.preferredSize = 0;
     this.preferredCombat = 0;
     this.preferredTotal = 0;
+    this.scaling = Number(leader.getAttribute(Shared.ATTR.LAST_SCALING)) || 0;
+    this.layoutPool = Number(leader.getAttribute(Shared.ATTR.LAST_LAYOUT)) || Shared.LAYOUT_POOL.SMALL;
     this.challenge = false;
     this.raid = null;
+  }
+
+  /** The layout the raid will generate: Challenge Mode's is always the full one. */
+  get layout() {
+    return this.challenge ? Shared.LAYOUT_POOL.FULL : this.layoutPool;
   }
 
   isLeader(player) {

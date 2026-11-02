@@ -7,6 +7,7 @@
  * kill rolls the drop table in data/grotesque-guardians.json (Wiki, Drops), including Noon.
  */
 const Common = require("./Common.GrotesqueGuardians");
+const BOSS_NAME = "Grotesque Guardians";
 
 function countedKills(player) {
   const request = { player, monster: Common.data.kill.monster };
@@ -48,6 +49,7 @@ function guardianDeath({ npc, killer }) {
     const previous = Number(player.getAttribute(Common.BEST_ATTRIBUTE)) || 0;
     const best = previous > 0 ? Math.min(previous, ticks) : ticks;
     player.setAttribute(Common.BEST_ATTRIBUTE, best);
+    if (!previous || ticks < previous) Common.api.emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
     lines.push(Common.message("duration", { time: Common.formatTicks(ticks), best: Common.formatTicks(best) }));
   }
   Common.later(1, () => lines.forEach((line) => player.sendMessage(line)));

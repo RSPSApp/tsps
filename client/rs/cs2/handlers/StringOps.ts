@@ -210,9 +210,10 @@ export function registerStringOps(handlers: HandlerMap): void {
         const days = ctx.intStack[--ctx.intStackSize];
         // date = (11745 + days) * 86400000 and format "d-MMM-yyyy".
         const date = new Date((11745 + days) * 86_400_000);
-        const day = date.getDate();
-        const month = MONTHS[date.getMonth()] ?? "Jan";
-        const year = date.getFullYear();
+        // A whole UTC day: local fields would show the day before behind UTC.
+        const day = date.getUTCDate();
+        const month = MONTHS[date.getUTCMonth()] ?? "Jan";
+        const year = date.getUTCFullYear();
         ctx.pushString(`${day}-${month}-${year}`);
     });
 

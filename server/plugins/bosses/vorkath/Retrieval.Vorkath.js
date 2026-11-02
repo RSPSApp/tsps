@@ -21,6 +21,7 @@ const Area = require("./Area.Vorkath");
 const StorageDeaths = require("../../items/storage/Events.StorageItems");
 
 const ATTR = "vorkath:retrieval";
+const OWNER = "vorkath";
 const MAX_STACK = 2147483647;
 const FEE = 100000;
 const INV = 525;
@@ -125,7 +126,8 @@ function sendContents(player, lot) {
 
 function open(player) {
   const lot = held(player);
-  player.__retrievalOpen = ATTR;
+  // The interface is shared (the Theatre of Blood's chest): whichever opened it answers its clicks.
+  player.__retrievalOwner = OWNER;
   const sender = player.getPacketSender();
   sender.sendInterfaceRemoval();
   sender.sendConfig(VARP.if2, 0);
@@ -178,18 +180,19 @@ function takeAll(player, lot) {
   finishTaking(player, lot);
 }
 
-/** Others' retrieval chests share this interface: a click that isn't for Torfinn's lot passes on. */
 function button({ player }) {
-  if (!isOpen(player)) return false;
+  if (player.__retrievalOwner !== undefined && player.__retrievalOwner !== OWNER) return false;
+  if (!isOpen(player)) return;
   const lot = held(player);
-  if (!lot || player.__retrievalOpen !== ATTR) return false;
+  if (!lot) return false;
   if (!lot.paid) pay(player, lot);
   else takeAll(player, lot);
 }
 
 function clickItem(event) {
   const { player } = event;
-  if (!isOpen(player) || player.__retrievalOpen !== ATTR) return false;
+  if (player.__retrievalOwner !== undefined && player.__retrievalOwner !== OWNER) return false;
+  if (!isOpen(player)) return;
   const lot = held(player);
   const entry = lot?.items[Number.isInteger(event.slot) ? event.slot : -1];
   if (!entry) return;

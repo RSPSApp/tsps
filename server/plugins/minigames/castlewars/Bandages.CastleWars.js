@@ -18,9 +18,9 @@ let core;
 
 function bandage(healer, patient) {
   const maxHitpoints = patient.getSkillManager().getMaxLevel(core.Skill.HITPOINTS);
-  const multiplier = game.hasBraceletEffect(healer) ? BRACELET_HEAL_MULTIPLIER : 1;
+  const multiplier = game.hasBraceletEffect(patient) ? BRACELET_HEAL_MULTIPLIER : 1;
   healer.getInventory().delete(core.ItemIdentifiers.BANDAGES, 1);
-  patient.heal(Math.floor(Math.floor(maxHitpoints * HEAL_FRACTION) * multiplier));
+  patient.heal(Math.min(18, Math.floor(maxHitpoints * HEAL_FRACTION * multiplier)));
   patient.setRunEnergy(Math.min(MAX_RUN_ENERGY, patient.getRunEnergy() + RUN_ENERGY_RESTORE));
   patient.setPoisonDamage(0);
 }

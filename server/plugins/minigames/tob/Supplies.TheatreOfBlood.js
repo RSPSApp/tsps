@@ -11,6 +11,12 @@
  * amount> (varbit 12272), Buy-All, Buy-X and Examine.
  * Not captured (our wording): "You open the chest. It glimmers with rewards inside." and the
  * buy messages.
+ * Entry Mode (Wiki, Bandages (Theatre of Blood), Theatre of Blood/Entry Mode): the chest holds ten
+ * bandages for the player, not carried over; each wipe also hands the team three. A bandage heals 20
+ * and 20% run energy, restores prayer (the Wiki's "variable amount": our amount is a super restore's
+ * less a little), cures poison, gives a stamina potion's effect and boosts Attack, Strength and
+ * Defence by 15% + 4, Ranged by 10% + 4 and Magic by 4. Hard Mode's points are fewer: Wiki gives "an
+ * average of 15", "the highest is 18", by Sotetseg, so a band lower here (fitted to those two).
  */
 
 const Shared = require("./Shared.TheatreOfBlood");
@@ -34,6 +40,9 @@ const ONION = 1957;
 const ITEMS_UID = (INTERFACE.SUPPLIES << 16) | 8;
 const OPS = { VALUE: 1, BUY_ONE: 2, BUY_LAST: 3, BUY_ALL: 4, BUY_X: 5, EXAMINE: 10 };
 const FLAGS = (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 10);
+const BANDAGES_PER_CHEST = 10;
+const BANDAGES_PER_WIPE = 3;
+const BANDAGE = { HEAL: 20, RUN: 20, STAMINA_MS: 120_000 };
 
 function memberOf(player) {
   const raid = Raid.raidOf(player);
@@ -67,14 +76,60 @@ function openChest(event) {
 /** Search: the supplies, or the onion for someone who died in both rooms. */
 function searchChest(event) {
   const { player } = event;
-  if (!chestRoom(player)) return false;
+  const room = chestRoom(player);
+  if (!room) return false;
   const member = memberOf(player);
+  if (room.raid.isEntry) {
+    takeBandages(player, member, room);
+    return true;
+  }
   if (member.onion) {
     member.onion = false;
     giveOne(player, ONION);
     return true;
   }
   openSupplies(player);
+  return true;
+}
+
+/** Each player's own ten, per chest. */
+function takeBandages(player, member, room) {
+  const taken = (member.bandagesTaken ??= {});
+  let left = BANDAGES_PER_CHEST - (taken[room.key] ?? 0);
+  let given = 0;
+  while (left > 0 && giveOne(player, Shared.ITEM.BANDAGES)) {
+    left--;
+    given++;
+  }
+  taken[room.key] = BANDAGES_PER_CHEST - left;
+  player.sendMessage(given > 0 ? `You take ${given} bandage${given === 1 ? "" : "s"}.` : "The chest is empty, or your inventory is full.");
+}
+
+function entryWipe({ player }) {
+  for (let i = 0; i < BANDAGES_PER_WIPE; i++) if (!giveOne(player, Shared.ITEM.BANDAGES)) break;
+}
+
+/** Heal: as a shark, prayer, stamina, super combat and ranging potion at once. */
+function useBandage(event) {
+  const { player } = event;
+  const { Skill } = Shared.core();
+  const inventory = player.getInventory();
+  if (!inventory.contains(Shared.ITEM.BANDAGES)) return true;
+  inventory.delete(Shared.ITEM.BANDAGES, 1);
+  const skills = player.getSkillManager();
+  player.heal(BANDAGE.HEAL);
+  player.setRunEnergy(Math.min(100, player.getRunEnergy() + BANDAGE.RUN));
+  const prayer = skills.getMaxLevel(Skill.PRAYER);
+  skills.setCurrentLevel(Skill.PRAYER, Math.min(prayer, skills.getCurrentLevel(Skill.PRAYER) + Math.floor(prayer / 4) + 7), true);
+  const boost = (skill, amount) => {
+    const max = skills.getMaxLevel(skill) + amount;
+    skills.setCurrentLevel(skill, Math.min(max, Math.max(skills.getCurrentLevel(skill), skills.getMaxLevel(skill)) + amount), true);
+  };
+  for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) boost(skill, Math.floor(skills.getMaxLevel(skill) * 0.15) + 4);
+  boost(Skill.RANGED, Math.floor(skills.getMaxLevel(Skill.RANGED) * 0.1) + 4);
+  boost(Skill.MAGIC, 4);
+  player.setPoisonDamage?.(0);
+  Shared.api().emitCustomEvent("potions:apply-stamina", { player, durationMs: BANDAGE.STAMINA_MS });
   return true;
 }
 
@@ -124,6 +179,7 @@ function buy(player, entry, amount) {
       break;
     }
     member.supplyPoints -= entry.cost;
+    Shared.api().emitCustomEvent("tob:supplies-bought", { raid: Raid.raidOf(player), player });
     Shared.api().emitCustomEvent("persistence:save", { player, reason: "reward-shop" });
     if (entry.id === STAMINA) member.staminaBought = true;
   }
@@ -167,6 +223,8 @@ module.exports = function registerTheatreSupplies(api) {
   Shared.onObject(api, OBJECT.SUPPLY_CHEST, openChest);
   Shared.onObject(api, OBJECT.SUPPLY_CHEST_OPEN, searchChest);
   api.onInterfaceActionButton(ITEMS_UID, clickSupply);
+  api.onItemAction("Bandages", { Heal: useBandage });
+  api.onCustomEvent("tob:entry-wipe", entryWipe);
 };
 
-Object.assign(module.exports, { STOCK, ONION, openChest, searchChest, clickSupply, buy });
+Object.assign(module.exports, { STOCK, ONION, openChest, searchChest, clickSupply, buy, takeBandages, entryWipe, useBandage, BANDAGES_PER_CHEST, BANDAGES_PER_WIPE });

@@ -476,7 +476,9 @@ export class PlayerSession {
 
   private createPlayerView(player: Player, forceAppearance = false): PlayerView {
     const location = player.getLocation();
-    const dirty = forceAppearance || player.getUpdateFlag().flagged(Flag.APPEARANCE);
+    // Equipment may have changed while this player was outside the observer's view.
+    const dirty = forceAppearance || !this.playerSyncState?.lastTiles.has(player.getIndex())
+      || player.getUpdateFlag().flagged(Flag.APPEARANCE);
     const cached = this.appearanceCache.get(player.getIndex());
     let payload = cached?.player === player && !dirty ? cached.payload : undefined;
     if (!payload) {

@@ -13,6 +13,9 @@ const cases = [['CONFUSE','ATTACK',5],['WEAKEN','STRENGTH',5],['CURSE','DEFENCE'
 before(async () => {
   await CachePipeline.initialize(process.cwd());
   require('../plugins/combat/StandardCurses.plugin').register(PluginManager.createApi('StandardCursesTest'));
+  PluginManager.createApi('CurseAccuracyTest').onCombatHitRoll(event => {
+    if (event.attacker.getAttribute?.('standard-curses-test:accurate')) event.forceAccurate=true;
+  });
   PluginManager.createApi('UtilityEffectVetoTest').onCustomEvent('magic:utility-effect-check', event => {
     if (event.attacker?.getAttribute?.('standard-curses-test:veto')) event.allowed=false;
     if (event.attacker?.getAttribute?.('standard-curses-test:handled')) event.handled=true;
@@ -21,7 +24,7 @@ before(async () => {
 
 function player(t) {
   const p = new Player(null);
-  t.mock.method(p, 'getSession', () => ({ sendClientPacket: () => true }));
+  t.mock.method(p, 'getSession', () => ({ sendClientPacket: () => true, write() {} }));
   p.messages=[];t.mock.method(p,'sendMessage',text=>p.messages.push(text));
   for (const skill of [core.Skill.ATTACK,core.Skill.STRENGTH,core.Skill.DEFENCE]) {
     p.getSkillManager().setMaxLevel(skill,100);
@@ -38,6 +41,75 @@ function npc(t,level=100) {
 function cast(name,attacker,target,accurate=true) {
   core.CombatSpells[name].finishCast(attacker,target,accurate,0);
 }
+
+function paidCast(t,name,target) {
+  let cycle=10;t.mock.method(core.World,'getProcessCycle',()=>cycle);t.mock.method(Date,'now',()=>cycle*600);
+  t.mock.method(core.Sounds,'sendSound',()=>{});
+  const p=player(t),spell=core.CombatSpells[name],method=new core.MagicCombatMethod();
+  p.getSkillManager().setMaxLevel(core.Skill.MAGIC,99).setCurrentLevels(core.Skill.MAGIC,99,false);
+  p.setAttribute('standard-curses-test:accurate',true);
+  for(const rune of spell.itemsRequired(p))p.getInventory().add(new core.Item(rune.getId(),rune.getAmount()*10));
+  const select=()=>{p.getCombat().setTarget(target);p.getCombat().setCastSpell(spell);};select();
+  return {p,spell,target,method,select,next(){cycle++;},hit(){return method.hits(p,target)[0];},impact(hit){method.handleAfterHitEffects(hit);}};
+}
+
+test('all six curses refuse lowered NPC/player stats before rune payment, until the affected stat fully recovers',t=>{
+  for(const [name,stat,percent] of cases)for(const pvp of [false,true]){
+    const target=pvp?player(t):npc(t).value,skill=core.Skill[stat],levels=pvp?target.getSkillManager():target;
+    const f=paidCast(t,name,target),maximum=levels.getMaxLevel(skill);
+    assert.equal(f.method.canAttack(f.p,target),true,name);f.method.start(f.p,target);
+    const hit=f.hit();assert.equal(hit.isAccurate(),true);f.impact(hit);
+    assert.equal(levels.getCurrentLevel(skill),maximum-Math.floor(maximum*percent/100),name);
+    f.next();const inventory=JSON.stringify(f.p.getInventory().getItems()),xp=f.p.getSkillManager().getSkills().experience[core.Skill.MAGIC.getIndex()];
+    assert.equal(f.method.canPursue(f.p,target),false,name+' preview');f.select();
+    assert.equal(f.method.canAttack(f.p,target),false,name+' paid cast');
+    assert.equal(JSON.stringify(f.p.getInventory().getItems()),inventory,name+' preserves runes');
+    assert.equal(f.p.getSkillManager().getSkills().experience[core.Skill.MAGIC.getIndex()],xp,name+' preserves XP');
+    assert.ok(f.p.messages.some(message=>message.includes('already weakened.')));
+    if(pvp)levels.setCurrentLevels(skill,maximum-1,false);else levels.setCurrentLevels(skill,maximum-1);
+    f.select();assert.equal(f.spell.canCast(f.p,false),false,'partial recovery is not enough');
+    if(pvp)levels.setCurrentLevels(skill,maximum,false);else levels.setCurrentLevels(skill,maximum);
+    f.select();assert.equal(f.spell.canCast(f.p,false),true,'full recovery permits another curse');
+  }
+});
+
+test('paid curses retain splash XP, impact-race protection, unrelated-stat casts and new-target selection',t=>{
+  const {value:target}=npc(t),f=paidCast(t,'CURSE',target),skill=core.Skill.DEFENCE;
+  f.p.setAttribute('standard-curses-test:accurate',false);
+  t.mock.method(core.AccuracyFormulasDpsCalc,'rollAccuracy',()=>false);
+  assert.equal(f.method.canAttack(f.p,target),true);f.method.start(f.p,target);const missed=f.hit();
+  assert.equal(missed.isAccurate(),false);f.impact(missed);assert.equal(target.getCurrentLevel(skill),100);
+  assert.equal(f.p.getSkillManager().getSkills().experience[core.Skill.MAGIC.getIndex()],29);
+  f.next();f.select();assert.equal(f.spell.canCast(f.p,false),true,'a splash permits another cast');
+  f.p.setAttribute('standard-curses-test:accurate',true);
+  assert.equal(f.method.canAttack(f.p,target),true);f.method.start(f.p,target);const hit=f.hit();
+  assert.equal(hit.isAccurate(),true);target.setCurrentLevels(skill,99);f.impact(hit);
+  assert.equal(target.getCurrentLevel(skill),99,'an in-flight curse cannot stack on an intervening drain');
+  f.next();f.p.getCombat().setCastSpell(core.CombatSpells.CONFUSE);
+  for(const rune of core.CombatSpells.CONFUSE.itemsRequired(f.p))f.p.getInventory().add(new core.Item(rune.getId(),rune.getAmount()));
+  assert.equal(core.CombatSpells.CONFUSE.canCast(f.p,false),true,'a different unaffected stat remains eligible');
+  f.p.getCombat().setTarget(npc(t).value);f.p.getCombat().setCastSpell(f.spell);
+  assert.equal(f.spell.canCast(f.p,false),true,'a new healthy target is independent of the old target');
+});
+
+test('native spell-on-NPC targeting rejects a repeated paid Curse on real cached combat stats',t=>{
+  new (require('../dist/game/definition/loader/impl/NpcDefinitionLoader').NpcDefinitionLoader)().load();
+  const {NPCOptionPacketListener}=require('../dist/net/packet/impl/NPCOptionPacketListener');
+  const target=new NPC(core.NpcIdentifiers.LESSER_DEMON,new core.Location(3201,3200));
+  const f=paidCast(t,'CURSE',target);f.p.setRegistered(true);f.p.setLocation(new core.Location(3200,3200));
+  assert.equal(target.getCurrentDefinition().getName(),'Lesser demon');
+  assert.ok(target.getMaxLevel(core.Skill.DEFENCE)>=20);
+  core.World.getNpcs().add(target);t.after(()=>core.World.getNpcs().remove(target));
+  assert.equal(NPCOptionPacketListener.castSpell(f.p,target.getIndex(),f.spell.spellId()),true);
+  assert.equal(f.p.getCombat().getTarget(),target);
+  assert.equal(f.method.canAttack(f.p,target),true);f.method.start(f.p,target);f.impact(f.hit());f.next();
+  assert.ok(target.getCurrentLevel(core.Skill.DEFENCE)<target.getMaxLevel(core.Skill.DEFENCE));
+  const inventory=JSON.stringify(f.p.getInventory().getItems()),xp=f.p.getSkillManager().getSkills().experience[core.Skill.MAGIC.getIndex()];
+  assert.equal(NPCOptionPacketListener.castSpell(f.p,target.getIndex(),f.spell.spellId()),true,'the native click selects the target');
+  assert.equal(f.method.canAttack(f.p,target),false,'the cast gate refuses before payment');
+  assert.equal(JSON.stringify(f.p.getInventory().getItems()),inventory);
+  assert.equal(f.p.getSkillManager().getSkills().experience[core.Skill.MAGIC.getIndex()],xp);
+});
 
 for(const [name,skill,percent] of cases) test(name+' drains the actual NPC level without changing other stats or its definition',t=>{
   const attacker=player(t),{value,definition}=npc(t);

@@ -21,6 +21,7 @@ OrnamentKits.register({
     GameConstants: { DEFINITIONS_DIRECTORY: path.join(__dirname, "..", "data", "definitions") },
     ItemIdentifiers: ItemIds,
     Barrows,
+    Item: require("../dist/game/model/Item").Item,
   },
   onItemOnItem: (handler) => { itemOnItem = handler; },
   onItemAction: (handler) => { itemAction = handler; },
@@ -61,7 +62,9 @@ function createPlayer(items) {
 
 test("the ornament table maps every cosmetic variant to its base", () => {
   const kits = OrnamentKits._test.loadKits();
-  assert.equal(kits.length, 101);
+  assert.equal(kits.length, 108);
+  const holyScythe = kits.find((entry) => entry.name === "Holy ornament kit" && entry.base === 22325);
+  assert.deepEqual([holyScythe.kit, holyScythe.result, holyScythe.refund], [25742, 25736, true]);
   const runeDefender = kits.find((entry) => entry.name === "Rune defender ornament kit");
   assert.deepEqual([runeDefender.kit, runeDefender.base, runeDefender.result], [23227, 8850, 23230]);
   const dragonHelm = kits.find((entry) => entry.name === "Dragon full helm ornament kit");
@@ -115,6 +118,26 @@ test("reverting swaps the id back without refunding the kit", () => {
   assert.deepEqual(ornamented.getMeta(), { barrows: { remaining: 500 } });
   assert.equal(items.length, 1, "the kit is not returned");
   assert.match(player.messages[0], /revert the rune defender ornament kit/);
+});
+
+test("dismantling a Theatre weapon gives its kit back, and refuses untouched when the kit can't fit", () => {
+  const holy = item(ItemIds.HOLY_GHRAZI_RAPIER);
+  const added = [];
+  let space = 0;
+  const player = createPlayer([holy]);
+  const inventory = player.getInventory();
+  player.getInventory = () => ({ ...inventory, getAddableAmount: () => space, add: (kit) => added.push(kit.getId()) });
+  const full = { player, item: holy, itemId: holy.getId(), option: "Dismantle", handled: false };
+  itemAction(full);
+  assert.equal(full.handled, true);
+  assert.equal(holy.getId(), ItemIds.HOLY_GHRAZI_RAPIER, "a full inventory leaves the rapier as it was");
+  assert.deepEqual(added, [], "and no kit is lost");
+  assert.match(player.messages.at(-1), /inventory space/);
+  space = 1;
+  const roomy = { player, item: holy, itemId: holy.getId(), option: "Dismantle", handled: false };
+  itemAction(roomy);
+  assert.equal(holy.getId(), ItemIds.GHRAZI_RAPIER);
+  assert.deepEqual(added, [ItemIds.HOLY_ORNAMENT_KIT]);
 });
 
 test("a kit applies to a degraded Barrows piece, and Echo Ahrim's reverts to its stage", () => {
@@ -210,6 +233,7 @@ test("the makeover interface previews styles and colours, keeps them on Confirm 
     core: { CacheDefinitions, Appearance, Equipment: { HEAD_SLOT: 0 }, Graphic: class {},
       Task: class { constructor() {} stop() { this.stopped = true; } }, TaskManager: { submit: (task) => tasks.push(task) } },
     onNpcInteraction() {},
+    onNpcDialogueCondition() {},
     onInterfaceActionButton: (uid, handler) => buttons.set(uid, handler),
     onCustomEvent: (name, handler) => { if (name === "interface:closed") closed = handler; },
   });

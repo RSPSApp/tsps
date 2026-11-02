@@ -124,6 +124,9 @@ export interface EditModePluginConfig {
     rotation: number;
     /** Floor overlay the terrain and path tools paint with. */
     overlayId: number;
+    /** Tile shape and rotation painted by the terrain tool and Paint overlay; 0 fills the tile. */
+    overlayShape: number;
+    overlayRotation: number;
     /** Height level edited by pointer, placement, and terrain tools. */
     heightLevel: number;
     /** Show every height level, or heightLevel and everything below it. */
@@ -242,6 +245,8 @@ export interface EditModeHost {
         rotation: number,
     ): void;
     onLocDel(tile: { x: number; y: number }, level: number, shape: number, rotation: number): void;
+    /** Brings back what onLocDel suppressed in this slot. */
+    restoreLoc?(tile: { x: number; y: number }, level: number, shape: number, rotation: number): void;
     getLocPlacementShape?(locId: number): number;
     getLocName(locId: number): string;
     getNpcName(npcTypeId: number): string;

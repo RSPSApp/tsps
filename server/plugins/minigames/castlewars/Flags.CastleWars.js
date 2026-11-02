@@ -10,6 +10,7 @@
 let game;
 let core;
 let data;
+const FLAG_HOLD_MS = 3 * 60 * 1000;
 
 function freeHands(player) {
   if (game.getCarriedFlagTeam(player)) {
@@ -121,11 +122,31 @@ function dropFlagOnUnequip(event) {
   }
 }
 
+function takeFrom(event) {
+  if (event.option !== data.TAKE_FROM_OPTION_SLOT || !game.isPlaying(event.player)) return;
+  event.handled = true;
+  const { player, target } = event;
+  if (player.getArea() !== game.gameArea || target.getArea() !== game.gameArea || !game.isPlaying(target) || game.getTeamId(player) !== game.getTeamId(target)) return;
+  const flagTeam = game.getCarriedFlagTeam(target);
+  if (!flagTeam || flagTeam === game.getTeamId(player)) return;
+  if (Date.now() - (game.flagHeldSince.get(target) ?? Date.now()) < FLAG_HOLD_MS) {
+    player.sendMessage("Your teammate must hold the standard for three minutes before you can take it.");
+    return;
+  }
+  const from = player.getLocation(), to = target.getLocation();
+  if (from.getZ() !== to.getZ() || player.getPrivateArea() !== target.getPrivateArea()
+    || Math.abs(from.getX() - to.getX()) + Math.abs(from.getY() - to.getY()) > 1
+    || !core.RegionManager.canMovestart(from, to, 1, 1, player.getPrivateArea()) || !freeHands(player)) return;
+  game.clearWeaponSlot(target);
+  game.carryFlag(player, flagTeam);
+}
+
 module.exports = function attachCastleWarsFlags(api, castleWars) {
   game = castleWars;
   core = api.core;
   data = castleWars.data;
   api.onObjectInteraction(useFlagObject);
+  api.onPlayerOption(takeFrom);
   api.onCanEquip(dropFlagForWeapon);
   api.onCanUnequip(dropFlagOnUnequip);
   game.inGameProcessors.push(returnOwnFlagInCastle);

@@ -21,6 +21,11 @@ module.exports = {
     require("./tob/Verzik.TheatreOfBlood")(api);
     require("./tob/Rewards.TheatreOfBlood")(api);
     require("./tob/InfoBoard.TheatreOfBlood")(api);
+    require("./tob/Stats.TheatreOfBlood")(api);
+    require("./tob/CombatAchievements.TheatreOfBlood")(api);
+    require("./tob/EscapeCrystal.TheatreOfBlood")(api);
+    require("./tob/Spectate.TheatreOfBlood")(api);
+    require("./tob/Books.TheatreOfBlood")(api);
     require("./tob/Commands.TheatreOfBlood")(api);
   },
 };

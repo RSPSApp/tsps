@@ -1,6 +1,14 @@
-/** Black Knights' Fortress: revision 240 capture 20260817T005704 and the OSRS Wiki. */
+/**
+ * Black Knights' Fortress, from the OSRS Wiki and captures.
+ * The fortress as it stands after the quest (guards, doors, walls, grill, main door) follows rsprox
+ * 469; the completed journal follows rsprox 1581 and 2977. No available capture shows the quest
+ * being done. The sabotage timings came from revision 240 capture 20260817T005704, which is not in
+ * the rsprox database and cannot be re-checked.
+ */
+const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
+
 module.exports = function registerBlackKnightsFortressQuest(api) {
-  const { Location, Equipment, Animation, Graphic, CountdownTask, TaskManager, TemplatedInstanceArea, StatementDialogue, Item, WorldDefinition, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Location, Equipment, Animation, Graphic, CountdownTask, TaskManager, TemplatedInstanceArea, StatementDialogue, Item, WorldDefinition, World, GameObject, ObjectManager, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
 
   const { registerQuest, startTranscript, QUEST_POINTS_ATTRIBUTE } = require("../QuestRuntime");
 
@@ -13,7 +21,9 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     NpcIdentifiers.FORTRESS_GUARD_4,
     NpcIdentifiers.FORTRESS_GUARD_5,
   ]);
-  const FORTRESS_GUARD_DIALOGUE_NPC_ID = NpcIdentifiers.FORTRESS_GUARD_2;
+  /** The guards whose heads speak at the sturdy door and the banquet door (rsprox 469). */
+  const STURDY_DOOR_GUARD_NPC_ID = NpcIdentifiers.FORTRESS_GUARD_3;
+  const BANQUET_DOOR_GUARD_NPC_ID = NpcIdentifiers.FORTRESS_GUARD_4;
   const FORTRESS_WITCH_NPC_ID = NpcIdentifiers.WITCH_5;
 
   const VARP_BLACK_KNIGHTS_FORTRESS = 130;
@@ -25,6 +35,9 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
   const DOSSIER_ITEM_ID = ItemIdentifiers.DOSSIER;
   const BRONZE_MED_HELM_ITEM_ID = ItemIdentifiers.BRONZE_MED_HELM;
   const IRON_CHAINBODY_ITEM_ID = ItemIdentifiers.IRON_CHAINBODY;
+  const BLACK_FULL_HELM_ITEM_ID = ItemIdentifiers.BLACK_FULL_HELM;
+  const BLACK_PLATEBODY_ITEM_ID = ItemIdentifiers.BLACK_PLATEBODY;
+  const BLACK_LEG_ITEM_IDS = new Set([ItemIdentifiers.BLACK_PLATELEGS, ItemIdentifiers.BLACK_PLATESKIRT]);
   const CABBAGE_ITEM_ID = ItemIdentifiers.CABBAGE;
   const DRAYNOR_MANOR_CABBAGE_ITEM_ID = ItemIdentifiers.CABBAGE_3;
   const COINS_ITEM_ID = ItemIdentifiers.COINS;
@@ -62,11 +75,33 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
   const GUARDED_STURDY_DOOR_LOC_ID = ObjectIdentifiers.STURDY_DOOR_2;
   const SECRET_WALL_LOC_ID = ObjectIdentifiers.WALL_8;
   const LISTENING_GRILL_LOC_ID = ObjectIdentifiers.GRILL;
+  const MAIN_DOOR_LOC_IDS = new Set([ObjectIdentifiers.LARGE_DOOR_3, ObjectIdentifiers.LARGE_DOOR_4]);
+  const MAIN_DOOR_X = 3007;
+  const MAIN_DOOR_Y_MIN = 3515;
+  const MAIN_DOOR_Y_MAX = 3516;
   const CABBAGE_HOLE_LOC_ID = ObjectIdentifiers.HOLE_2;
   const PASSAGE_LOC_IDS = new Set([
     FORTRESS_ENTRANCE_DOOR_LOC_ID, BANQUET_HALL_DOOR_LOC_ID,
     GUARDED_STURDY_DOOR_LOC_ID, SECRET_WALL_LOC_ID,
   ]);
+
+  /** A door's or wall's rotation -> the tile across its edge from its own tile (rsprox 469). */
+  const PASSAGE_ACROSS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+  const WALL_SHAPE = 0;
+  /** While open, the passage's tile holds this and the open leaf stands across it, for two ticks. */
+  const OPEN_PASSAGE_LOC_ID = 38848;
+  const OPEN_DOOR_LOC_ID = 2340;
+  const OPEN_WALL_LOC_ID = 17142;
+  const PASSAGE_SHUT_TICKS = 2;
+  const DOOR_SOUND = 46;
+  const WALL_SOUND = 2410;
+
+  const BANQUET_KNIGHT_NAME = "Black Knight";
+  const BANQUET_KNIGHT_RANGE = 8;
+
+  const LISTEN_ANIMATION = 4195;
+  const LISTENING_ANIMATION = 4552;
+  const STOP_LISTENING_ANIMATION = 4197;
 
   const START_HOOK = "quest:black-knights-fortress:start";
   const DOSSIER_ACTION_IDS = new Set(["RQQGDa", "kI0dT0"]);
@@ -78,11 +113,13 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
   const V_RETURN = "returning-to-sir-amik-varze";
   const V_GUARD_DISGUISED = "infiltrating-the-fortress-talking-to-the-guards-while-wearing-a-disguise";
   const V_GUARD_NOT_DISGUISED = "infiltrating-the-fortress-talking-to-the-guards-while-not-wearing-a-disguise";
+  const V_GUARD_BLACK_KNIGHT = "infiltrating-the-fortress-talking-to-the-guards-while-disguised-as-a-black-knight";
   const V_DOOR_MAIN = "infiltrating-the-fortress-trying-to-open-the-sturdy-door-while-not-wearing-a-disguise";
   /** The cat's head has its own rig: the human chat animations leave it broken (rsprox 469). */
   const BLACK_CAT_CHATHEAD_ANIMATION = 567;
   const V_DOOR_MEETING = "sabotaging-the-potion-interrupting-the-black-knights-meeting";
   const V_GRILL = "listen-at-grill";
+  const V_GRILL_RUINED = "sabotaging-the-potion-listen-at-grill-after-ruining-the-potion";
   const V_CABBAGE_BEFORE = "sabotaging-the-potion-using-any-item-on-the-hole-or-a-cabbage-before-overhearing-the-witch";
   const V_CABBAGE_NORMAL = "sabotaging-the-potion-using-a-normal-cabbage-on-the-hole";
   const V_CABBAGE_DRAYNOR = "sabotaging-the-potion-using-a-draynor-cabbage-on-the-hole";
@@ -92,6 +129,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
 
   /** Which side of the banquet door the player is standing on, for the warning. */
   const pendingCross = new WeakMap();
+  const BANQUET_GOING_IN_LINE = "I don't care. I'm going in anyway.";
   const reading = new WeakSet();
   const scenes = new WeakMap();
   const SCENE_ATTRIBUTE = "black-knights-fortress:cutscene";
@@ -99,18 +137,40 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
 
   const hasItem = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
 
-  const isDisguised = (player) =>
+  const isGuardDisguised = (player) =>
     player.getEquipment().get(Equipment.HEAD_SLOT)?.getId?.() === BRONZE_MED_HELM_ITEM_ID &&
     player.getEquipment().get(Equipment.BODY_SLOT)?.getId?.() === IRON_CHAINBODY_ITEM_ID;
+
+  /** The Wiki's alternative disguise: black full helm, platebody and platelegs or plateskirt. */
+  const isBlackKnightDisguised = (player) =>
+    player.getEquipment().get(Equipment.HEAD_SLOT)?.getId?.() === BLACK_FULL_HELM_ITEM_ID &&
+    player.getEquipment().get(Equipment.BODY_SLOT)?.getId?.() === BLACK_PLATEBODY_ITEM_ID &&
+    BLACK_LEG_ITEM_IDS.has(player.getEquipment().get(Equipment.LEG_SLOT)?.getId?.());
+
+  const isDisguised = (player) => isGuardDisguised(player) || isBlackKnightDisguised(player);
+
+  function guardVariant(player) {
+    if (isBlackKnightDisguised(player)) return V_GUARD_BLACK_KNIGHT;
+    return isGuardDisguised(player) ? V_GUARD_DISGUISED : V_GUARD_NOT_DISGUISED;
+  }
 
   function buildJournal(player, questHandle) {
     const stage = questHandle.getStage(player);
     if (stage >= STAGE_COMPLETE) {
+      // Verbatim, including the stray strike tags (rsprox 1581, 2977).
       return [
-        "<str>Sir Amik asked me to investigate the Black Knights.</str>",
-        "<str>I discovered and sabotaged their invincibility potion.</str>",
+        "<str>Sir Amik Varze asked me to investigate the Black Knights'",
+        "<str><str>Fortress. I sneaked inside disguised as a Guard.",
+        "<str>I eavesdropped on a Witch and the Black Knight Captain and",
+        "<str>discovered that their <str>invincibility potion could be destroyed",
+        "<str>with a normal cabbage.",
+        "<str>I found a cabbage, and used it to destroy the potion, <str>then",
+        "<str>claimed my reward for a job well done.",
         "",
-        "<col=ff0000>QUEST COMPLETE!</col>",
+        "<col=ff0000>QUEST COMPLETE!",
+        "<col=800000>Reward:",
+        "3 Quest Points",
+        "2500gp",
       ];
     }
     if (stage >= STAGE_RETURN_TO_AMIK) {
@@ -141,8 +201,8 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
       ];
     }
     return [
-      "I can start this quest by speaking to <col=800000>Sir Amik Varze</col>",
-      "on the upper floor of <col=800000>Falador Castle</col>.",
+      "I can start this quest by talking to <col=800000>Sir Amik Varze</col>",
+      "in the <col=800000>White Knights' Castle</col>.",
       "",
       "I need at least <col=800000>12 Quest Points</col>.",
     ];
@@ -152,28 +212,64 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     return startTranscript(api, player, npcId, page, variant, select);
   }
 
-  /** Steps the player one tile through a door, landing on the opposite side. */
-  function crossDoor(player, location) {
-    const pos = player.getLocation();
-    const dx = pos.getX() - location.x;
-    const dy = pos.getY() - location.y;
-    if (Math.abs(dx) > Math.abs(dy)) {
-      player.moveTo(new Location(location.x - Math.sign(dx), pos.getY(), location.z ?? pos.getZ()));
-    } else {
-      player.moveTo(new Location(pos.getX(), location.y - Math.sign(dy), location.z ?? pos.getZ()));
-    }
+  /** A passage is crossed between its own tile and the one across its edge. */
+  function passageTiles(object) {
+    const tile = object.getLocation();
+    const [dx, dy] = PASSAGE_ACROSS[object.getFace() & 3];
+    return { x: tile.getX(), y: tile.getY(), z: tile.getZ(), acrossX: tile.getX() + dx, acrossY: tile.getY() + dy };
   }
 
-  // These walls can be operated from their own tile; route to a side so crossing keeps its direction.
+  function placePassageLoc(id, x, y, z, face) {
+    const loc = new GameObject(id, new Location(x, y, z), WALL_SHAPE, face, null);
+    ObjectManager.register(loc, true);
+    return loc;
+  }
+
+  /** Opens the passage for two ticks, as captured, and walks the player one tile through it. */
+  function crossDoor(player, object) {
+    if (ObstacleRunner.isBusy(player)) return;
+    const { x, y, z, acrossX, acrossY } = passageTiles(object);
+    const pos = player.getLocation();
+    const onAcross = pos.getX() === acrossX && pos.getY() === acrossY;
+    const id = object.getId();
+    const face = object.getFace();
+    const isWall = id === SECRET_WALL_LOC_ID;
+    placePassageLoc(OPEN_PASSAGE_LOC_ID, x, y, z, face);
+    const leaf = placePassageLoc(isWall ? OPEN_WALL_LOC_ID : OPEN_DOOR_LOC_ID, acrossX, acrossY, z, (face + 1) & 3);
+    player.getPacketSender().sendSound(isWall ? WALL_SOUND : DOOR_SOUND, 1, 0);
+    TaskManager.submit(new CountdownTask(leaf, PASSAGE_SHUT_TICKS, () => {
+      ObjectManager.deregister(leaf, true);
+      placePassageLoc(id, x, y, z, face);
+    }));
+    ObstacleRunner.run({ player }, [{ walk: [onAcross ? [x, y] : [acrossX, acrossY]] }]);
+  }
+
+  // Route to whichever of the passage's two tiles is on the player's side. In line with the
+  // passage either side may be the reachable one, so the ordinary object route picks.
   function routeFortressPassage(event) {
     if (!PASSAGE_LOC_IDS.has(event.objectId)) return;
-    const tile = event.object.getLocation();
-    const face = event.object.getFace();
-    const axis = (face & 1) === 0 ? "x" : "y";
+    const { x, y, z, acrossX, acrossY } = passageTiles(event.object);
     const from = event.sourceLocation;
-    const centre = axis === "x" ? tile.getX() : tile.getY();
-    const side = Math.sign(from[axis] - centre) || (face === 0 || face === 3 ? 1 : -1);
-    event.destination = { x: tile.getX(), y: tile.getY(), z: tile.getZ(), [axis]: centre + side };
+    const side = acrossX !== x ? Math.sign(from.x - x) * (acrossX - x) : Math.sign(from.y - y) * (acrossY - y);
+    if (side === 0) return;
+    event.destination = side > 0 ? { x: acrossX, y: acrossY, z } : { x, y, z };
+  }
+
+  /** Walking in on the meeting: the nearest knight in the room shouts and attacks (rsprox 469, tick 4697). */
+  function alertBanquetKnight(player, door) {
+    const doorTile = door.getLocation();
+    let nearest = null;
+    let nearestDistance = BANQUET_KNIGHT_RANGE + 1;
+    for (const npc of World.getNpcs()) {
+      if (npc?.getDefinition?.()?.getName?.() !== BANQUET_KNIGHT_NAME) continue;
+      const at = npc.getLocation();
+      if (at.getZ() !== doorTile.getZ() || at.getX() < doorTile.getX()) continue;
+      const distance = Math.max(Math.abs(at.getX() - doorTile.getX()), Math.abs(at.getY() - doorTile.getY()));
+      if (distance < nearestDistance) { nearest = npc; nearestDistance = distance; }
+    }
+    if (!nearest) return;
+    nearest.forceChat("Die, intruder!");
+    nearest.getCombat().attack(player);
   }
 
   // Sir Amik Varze's transcript variant by stage.
@@ -187,10 +283,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
       return { page: BKF_PAGE, variant: V_START };
     }
     if (FORTRESS_GUARD_NPC_IDS.has(npcId)) {
-      return {
-        page: BKF_PAGE,
-        variant: isDisguised(player) ? V_GUARD_DISGUISED : V_GUARD_NOT_DISGUISED,
-      };
+      return { page: BKF_PAGE, variant: guardVariant(player) };
     }
     return null;
   }
@@ -210,8 +303,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     if (!FORTRESS_GUARD_NPC_IDS.has(event.npcId)) return;
     const action = String(event.definition?.getActions?.()[event.clickType - 1] ?? "").toLowerCase();
     if (action !== "talk-to") return;
-    const variant = isDisguised(event.player) ? V_GUARD_DISGUISED : V_GUARD_NOT_DISGUISED;
-    if (playVariant(pluginApi, event.player, event.npcId, BKF_PAGE, variant)) event.handled = true;
+    if (playVariant(pluginApi, event.player, event.npcId, BKF_PAGE, guardVariant(event.player))) event.handled = true;
   }
 
   // "Yes." on "Start the Black Knights' Fortress quest?" carries this slug.
@@ -285,6 +377,9 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
 
   function handleLine(event) {
     const { player, npcId, text } = event;
+    if (event.step?.player === BANQUET_GOING_IN_LINE && pendingCross.has(player)) {
+      event.after = () => crossBanquetDoor(player);
+    }
     if (npcId === SIR_AMIK_VARZE_NPC_ID && String(text).startsWith("Good luck! Let me know how you get on.")) event.before = () => {
       if (quest.getStage(player) === 0 && (Number(player.getAttribute(QUEST_POINTS_ATTRIBUTE)) || 0) >= 12) {
         quest.setStage(player, STAGE_INVESTIGATE);
@@ -297,10 +392,11 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
       event.text = "Yeth, Mithtreth.";
       event.after = () => {
         if (quest.getStage(player) === STAGE_INVESTIGATE) quest.setStage(player, STAGE_SABOTAGE);
-        player.performAnimation(new Animation(4197));
+        player.performAnimation(new Animation(STOP_LISTENING_ANIMATION));
       };
     }
     if (text === "...not to merntion the trees!") event.text = "...not to mention the trees!";
+    if (text === "Purrr....") event.after = () => player.performAnimation(new Animation(STOP_LISTENING_ANIMATION));
     const state = scenes.get(player);
     if (!state) return;
     if (text === "My potion!") event.after = () => state.witch?.performAnimation(new Animation(860));
@@ -483,10 +579,10 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
 
     if (objectId === FORTRESS_ENTRANCE_DOOR_LOC_ID) {
       if (!action.includes("open")) return;
-      if (pos.getY() >= loc.y || isDisguised(player)) {
-        crossDoor(player, loc);
+      if (pos.getY() > loc.y || isDisguised(player)) {
+        crossDoor(player, event.object);
       } else {
-        playVariant(pluginApi, player, FORTRESS_GUARD_DIALOGUE_NPC_ID, BKF_PAGE, V_DOOR_MAIN);
+        playVariant(pluginApi, player, STURDY_DOOR_GUARD_NPC_ID, BKF_PAGE, V_DOOR_MAIN);
       }
       event.handled = true;
       return;
@@ -495,10 +591,10 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     if (objectId === BANQUET_HALL_DOOR_LOC_ID) {
       if (!action.includes("open")) return;
       if (pos.getX() >= loc.x) {
-        crossDoor(player, loc);
+        crossDoor(player, event.object);
       } else {
-        pendingCross.set(player, loc);
-        playVariant(pluginApi, player, FORTRESS_GUARD_DIALOGUE_NPC_ID, BKF_PAGE, V_DOOR_MEETING);
+        pendingCross.set(player, event.object);
+        playVariant(pluginApi, player, BANQUET_DOOR_GUARD_NPC_ID, BKF_PAGE, V_DOOR_MEETING);
       }
       event.handled = true;
       return;
@@ -506,7 +602,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
 
     if (objectId === GUARDED_STURDY_DOOR_LOC_ID) {
       if (!action.includes("open")) return;
-      crossDoor(player, loc);
+      crossDoor(player, event.object);
       event.handled = true;
       return;
     }
@@ -514,34 +610,45 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     if (objectId === SECRET_WALL_LOC_ID) {
       if (!action.includes("push")) return;
       player.sendMessage("You push against the wall. You find a secret passage.");
-      crossDoor(player, loc);
+      crossDoor(player, event.object);
       event.handled = true;
       return;
     }
 
     // Listening grill: only while investigating the weapon.
     if (!action.includes("listen")) return;
-    if (quest.getStage(player) >= STAGE_RETURN_TO_AMIK) {
-      playVariant(api, player, FORTRESS_WITCH_NPC_ID, BKF_PAGE, "sabotaging-the-potion-listen-at-grill-after-ruining-the-potion");
-      event.handled = true;
-      return;
-    }
     if (quest.getStage(player) < STAGE_INVESTIGATE) { event.handled = true; return; }
-    player.performAnimation(new Animation(4195));
+    const variant = quest.getStage(player) >= STAGE_RETURN_TO_AMIK ? V_GRILL_RUINED : V_GRILL;
+    player.performAnimation(new Animation(LISTEN_ANIMATION));
     TaskManager.submit(new CountdownTask(player, 2, () => {
       if (player.isRegistered?.() === false) return;
-      player.performAnimation(new Animation(4552));
-      playVariant(pluginApi, player, FORTRESS_WITCH_NPC_ID, BKF_PAGE, V_GRILL);
+      player.performAnimation(new Animation(LISTENING_ANIMATION));
+      playVariant(pluginApi, player, FORTRESS_WITCH_NPC_ID, BKF_PAGE, variant);
     }));
     event.handled = true;
   }
 
-  // "I don't care. I'm going in anyway." walks through the banquet door.
+  // The fortress's main doors never open, from either side (rsprox 469, ticks 3807 and 4350).
+  function handleMainDoor(event) {
+    if (!MAIN_DOOR_LOC_IDS.has(event.objectId)) return;
+    const { x, y } = event.location;
+    if (x !== MAIN_DOOR_X || y < MAIN_DOOR_Y_MIN || y > MAIN_DOOR_Y_MAX) return;
+    event.player.sendMessage("You can't open this door.");
+    event.handled = true;
+  }
+
+  // Backing out of the guard's warning forgets the door; going in anyway waits for that line.
   function handleBanquetChoice({ player, option }) {
-    const location = pendingCross.get(player);
-    if (!location) return;
-    if (String(option ?? "").toLowerCase().includes("going in anyway") && player.getLocation().isWithinDistance(new Location(location.x, location.y, location.z ?? 0), 2)) crossDoor(player, location);
+    if (!String(option ?? "").toLowerCase().includes("going in anyway")) pendingCross.delete(player);
+  }
+
+  // "I don't care. I'm going in anyway." walks through the banquet door once continued past.
+  function crossBanquetDoor(player) {
+    const door = pendingCross.get(player);
     pendingCross.delete(player);
+    if (!door || !player.getLocation().isWithinDistance(door.getLocation(), 2)) return;
+    crossDoor(player, door);
+    alertBanquetKnight(player, door);
   }
 
   function handleItemOnHole(event) {
@@ -571,6 +678,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
   }
 
   pluginApi = api;
+  ObstacleRunner.init(api);
   quest = registerQuest(api, {
     key: "black_knights_fortress",
     name: "Black Knights' Fortress",
@@ -595,6 +703,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
   api.onCustomEvent("npc-dialogue:menu", warnBeforeStart);
   api.onItemAction(handleDossierRead);
   api.onObjectRoute(routeFortressPassage);
+  api.onBeforeObjectInteraction(handleMainDoor);
   api.onObjectInteraction(handleFortressObjectInteraction);
   api.onCustomEvent("npc-dialogue:choice", handleBanquetChoice);
   api.onItemOnObject(handleItemOnHole);

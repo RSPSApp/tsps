@@ -17,7 +17,7 @@
  *                                       and `claimed`: whether its rewards were claimed from Ghommal
  *   api.emitCustomEvent("combat-achievements:open", { player, collectionLogCategory? })
  *                                       the account summary's row; a collection log boss's button
- * and it emits "combat-achievements:completed" { player, task: { id, name, tier } }.
+ * and it emits "combat-achievements:completed" { player, silent, task: { id, name, tier } }.
  *
  *   ::ca complete <task name|id>   finish a task through the real path
  *   ::ca kc <monster> <n>           set a monster's kill count

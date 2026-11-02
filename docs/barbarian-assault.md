@@ -82,6 +82,14 @@ Queen-gated armour until the player has a Queen kill. The stock and prices are a
 `shops.json` row keeps only its canonical empty stock and the Commander Connad
 binding, so reimporting the canonical data cannot erase the minigame shop.
 
+High gambles cost 500 points from one chosen role, using the same balances as
+the reward shop and role upgrades. Points cannot be combined across roles.
+The old `barbarian-assault:honour` aggregate is no longer spendable or persisted:
+it duplicated role earnings without recording shop purchases or role upgrades,
+so converting it would restore points players have already spent. Existing
+per-role balances are retained. Legacy honour events credit the last played role
+(Attacker if none has been played), rather than a second wallet.
+
 ## Supplies
 
 Everything the arena hands out carries the untradeable and `barbarian-assault:arena`

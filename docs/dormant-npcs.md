@@ -26,6 +26,20 @@ Diagonal counts as next to.
 3. It stands still while it rises: 1316 lasts 74 client cycles, so 3 ticks.
 4. Then it attacks. Whether each crab may attack (single-way or multi) is the normal combat rules' call.
 
+**Coastal multicombat.** The shipped `world.json` covers Rellekka's rock-crab
+coast and the Hosidius/Crabclaw Isle sand-crab coast with surface-only
+`multi-combat` tags. Their edges use the live-game measurements in
+[Multi-Lines at 694b258744a4dcb2c9d19b18a7aae38875eb9113](https://github.com/tsbreuer/Multi-Lines/blob/694b258744a4dcb2c9d19b18a7aae38875eb9113/src/main/java/com/tsbreuer/multilines/MultiLinesData.json),
+whose [author describes mapping non-Wilderness zones](https://github.com/tsbreuer/Multi-Lines/blob/694b258744a4dcb2c9d19b18a7aae38875eb9113/README.md).
+Java rectangles exclude their maximum edges; world-zone maxima are inclusive.
+The converted rectangles preserve exactly the source's 22,253 tiles and cover
+all 34 Rellekka and 125 Hosidius/island crab spawns in this checkout.
+
+These are community measurements, not a replayed native boundary capture.
+Other crab locations and explicit custom world-zone lists retain their existing
+configuration. In particular, the Wiki identifies Outer Fortis sand crabs as
+[single-combat and non-aggressive](https://oldschool.runescape.wiki/w/Sand_Crab).
+
 **Resting** (every family):
 1. Out of combat for 20 ticks, a crab walks back to where it lay.
 2. Back home, or after 10 more ticks, it sinks (seq 1314; a wyrm's 8269).
@@ -62,5 +76,9 @@ The 20 ticks aren't documented anywhere: they're an estimate, kept in the data f
 **Logging out isn't leaving.** The state is the persisted attribute `npc-aggression:tolerance`.
 
 **Exceptions.** Monsters whose definition doesn't build tolerance stay aggressive, as before.
+
+**`::aggro`** (`plugins/npcs/AggressionToggle.plugin.js`) is a cheat with no live equivalent: it toggles the saved attribute `npc-aggression:ignore-tolerance`, and while it's on, monsters stay aggressive after the ten minutes, crabs included (they ask the same `onNpcAggressionTolerance` hook). Administrators can run it; a world opens it to everyone with `"commands:permissions": { "aggro": "NONE" }`.
+
+**Wake range.** The Wiki only says crabs "attack when walked by", which is what stepping next to one does; the range stays at one tile.
 
 Before this, the timer started at login and never reset, so ten minutes after logging in every tolerance-building monster everywhere stopped being aggressive. The old rock crab plugin worked around that by keeping rock crabs aggressive forever. Crabs now follow tolerance like everything else, and walking well away and back resets it.

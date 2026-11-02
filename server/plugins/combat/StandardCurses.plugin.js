@@ -16,6 +16,17 @@ function initialize(pluginApi) {
   }
 }
 
+function disabled(event) {
+  const curse = spells.get(event.spellId);
+  if (event.disabled === true || !curse) return;
+  const target = event.player.getCombat().getTarget();
+  const stats = target?.isNpc?.() ? target.getAsNpc()
+    : target?.isPlayer?.() ? target.getAsPlayer().getSkillManager() : null;
+  if (!stats || stats.getCurrentLevel(curse.skill) >= stats.getMaxLevel(curse.skill)) return;
+  event.player.sendMessage(`The spell has no effect because the ${target.isNpc() ? 'NPC' : 'player'} is already weakened.`);
+  event.disabled = true;
+}
+
 function applyCurse(event) {
   if (!event.allowed || event.handled) return;
   const curse = spells.get(event.spell?.spellId?.());
@@ -51,6 +62,7 @@ module.exports = {
   name: 'Standard Curses',
   register(api) {
     initialize(api);
+    api.onSpellDisabled(disabled);
     api.onCustomEvent('magic:utility-effect', applyCurse);
   },
 };

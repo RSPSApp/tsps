@@ -156,7 +156,13 @@ function travel(player, entry, destination, answer = null) {
     if (entry.mesbox) player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, entry.mesbox)));
   });
   if (entry.fade) at(animTick + 1, () => player.getPacketSender().sendVarbit(MINIMAP_STATE_VARBIT, MINIMAP_OFF));
-  at(moveTick, () => player.moveTo(new core.Location(destination[0], destination[1], destination[2])));
+  at(moveTick, () => {
+    const landing = new core.Location(destination[0], destination[1], destination[2]);
+    player.moveTo(landing);
+    if (player.getLocation().equals(landing)) pluginApi.emitCustomEvent("loc-teleports:arrived", {
+      player, objectId: entry.id, location: { x: entry.x, y: entry.y, z: entry.z },
+    });
+  });
   if (entry.fade) {
     at(moveTick + 1, () => {
       player.getPacketSender().sendVarbit(MINIMAP_STATE_VARBIT, 0);

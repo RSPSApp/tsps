@@ -3,6 +3,7 @@ package gateway.session
 import gateway.coverage.DropCounter
 import gateway.down.ActorBlocks
 import gateway.down.BlockReader
+import gateway.down.Clans
 import gateway.down.GroundItems
 import gateway.down.Interfaces
 import gateway.down.Items
@@ -72,12 +73,13 @@ class GatewaySession(
     private val groundItems = GroundItems(::send)
     private val stockMarket = StockMarket(::send)
     private val social = Social(::send)
+    private val clans = Clans(::send)
     private val worldUpdates = World(::send, boats::deckAt, boats::sessionWorld)
     private val trade by lazy { Trade(::send, { tsps.send(it) }, items::carried) }
 
     /** Everything that turns tsps messages into OSRS packets, asked in turn. */
     private val translators: List<(TspsPacket) -> Boolean> by lazy {
-        listOf(interfaces::handle, items::handle, groundItems::handle, social::handle, worldUpdates::handle, trade::handle)
+        listOf(interfaces::handle, items::handle, groundItems::handle, social::handle, clans::handle, worldUpdates::handle, trade::handle)
     }
     private val interfaces = Interfaces(varps, InterfaceTree(context.enums), stockMarket, items::scriptInventories, context.components::exists, ::send)
     private val upstream =

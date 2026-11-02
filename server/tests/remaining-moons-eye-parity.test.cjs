@@ -122,7 +122,7 @@ function player() {
     getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill.getIndex(), amount]), addExperience: (skill, amount) => xp.push([skill.getIndex(), amount]), getCombatLevel: () => p.combat ?? 3, getCurrentLevel: () => p.magic ?? 99, getMaxLevel: () => p.level ?? 99 }),
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement(value) { p.blocked = value; return this; }, addSteps(to) { location = to; return this; }, isBlockMovement: () => Boolean(p.blocked) }),
     setUntargetable: value => { p.untargetable = value; }, setForceMovement: movement => { p.forceMovement = movement; }, getLocation: () => location, moveTo: to => { location = to; },
-    getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; }, getIndex: () => p.index,
+    getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; }, getIndex: () => p.index, getInterfaceId: () => -1,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: damage => { p.damage = damage; } }) }),
     getUsername: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,

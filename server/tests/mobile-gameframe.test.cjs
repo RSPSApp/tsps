@@ -55,7 +55,7 @@ test('handshake decodes the mobile client type byte', () => {
   ]);
 });
 
-function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAccount = false, root = 161 } = {}) {
+function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAccount = false, root = 161, config = {} } = {}) {
   const hooks = {}, events = [], packets = [];
   const player = {
     getLocation: () => ({ wilderness }),
@@ -66,6 +66,7 @@ function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAc
     getPacketSender: () => ({
       sendRootInterface: id => packets.push(['root', id]),
       sendInterfaceFlags: (...args) => packets.push(['flags', ...args]),
+      sendString: (text, uid) => packets.push(['text', uid, text]),
     }),
   };
   require('../plugins/interface/WelcomeScreen.plugin').register({
@@ -77,6 +78,7 @@ function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAc
     onPlayerDisconnect: fn => { hooks.disconnect = fn; },
     onPlayerLogout: fn => { hooks.logout = fn; },
     emitCustomEvent: name => events.push(name),
+    getPluginConfig: (key, fallback) => key in config ? config[key] : fallback,
     log() {},
   });
   hooks.login({ player, isNewAccount: newAccount });
@@ -89,13 +91,20 @@ test('welcome screen waits for synchronous login initialization and restores the
     assert.deepEqual(h.packets, [], 'login initializes the frame before the root swap microtask');
     assert.equal(h.hooks['player:gameframe-bootstrap'], undefined, 'core does not delegate bootstrap control to Welcome');
     await Promise.resolve();
-    assert.deepEqual(h.packets, [['root', 378], ['flags', (378 << 16) | 72, 2]]);
+    assert.deepEqual(h.packets, [['root', 378], ['flags', (378 << 16) | 72, 2],
+      ['text', (378 << 16) | 6, 'Welcome to Old School RuneScape!']]);
     assert.deepEqual(h.events, ['welcome-screen:shown']);
     h.hooks.play({ player: h.player });
     h.hooks.play({ player: h.player });
-    assert.deepEqual(h.packets.slice(2).map(row => row[1]), encodeGameframeBootstrap('WelcomeTester', root));
+    assert.deepEqual(h.packets.slice(3).map(row => row[1]), encodeGameframeBootstrap('WelcomeTester', root));
     assert.deepEqual(h.events, ['welcome-screen:shown', 'gameframe:ready']);
   }
+});
+
+test('the message of the week scroll takes the world config text', async () => {
+  const h = welcomeHarness({ config: { 'WelcomeScreen:messageOfTheWeek': 'Double XP this weekend!' } });
+  await Promise.resolve();
+  assert.deepEqual(h.packets.find(row => row[0] === 'text'), ['text', (378 << 16) | 6, 'Double XP this weekend!']);
 });
 
 test('new, mobile, bot and Wilderness logins keep the immediate gameframe', async () => {
@@ -134,7 +143,7 @@ test('real login bootstraps before snapshots and completes recovery before deskt
     core,
     onPlayerLogin: fn => { hooks.login = fn; },
     onInterfaceActionButton: (_id, fn) => { hooks.play = fn; },
-    onPlayerLogout() {}, onPlayerDisconnect() {}, log() {},
+    onPlayerLogout() {}, onPlayerDisconnect() {}, log() {}, getPluginConfig: (_key, fallback) => fallback,
     emitCustomEvent: name => order.push(name),
   });
   t.mock.method(World, 'refreshActiveRegions', () => {});

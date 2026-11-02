@@ -169,7 +169,7 @@ import { buildGroundItemGeometry } from "../ground/GroundItemMeshBuilder";
 import { type MinimapIcon, SdMapData } from "../loader/SdMapData";
 import { SdMapDataLoader } from "../loader/SdMapDataLoader";
 import { SdMapLoaderInput } from "../loader/SdMapLoaderInput";
-import { isDoorLocType } from "../loc/SceneLocs";
+import { isDoorLoc } from "../loc/SceneLocs";
 import {
     DynamicNpcAnimLoader,
     DynamicNpcFrameGeometry,
@@ -213,9 +213,10 @@ export function onLocDel(host: WebGLOsrsRendererHost, tile: { x: number; y: numb
                       });
 
             if (wasAdded) {
-                // The object the server added is gone. Its add never removed the cache scenery
-                // here, and whatever it did replace comes back.
+                // Deleting a replay of the cache loc removes that loc; only scenery replaced
+                // by a different added id comes back.
                 for (const id of added.replacedIds ?? []) {
+                    if ((id | 0) === (added.locId | 0)) continue;
                     host.locOverrides.delete(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`);
                 }
             } else if (deletedLoc && (deletedLoc.id | 0) >= 0) {
@@ -236,7 +237,7 @@ export function onLocDel(host: WebGLOsrsRendererHost, tile: { x: number; y: numb
                     : deletedLoc && (deletedLoc.id | 0) >= 0
                       ? host.osrsClient.locTypeLoader.load(deletedLoc.id | 0)
                       : undefined;
-            const group = locType ? (isDoorLocType(locType) ? "door" : "loc") : "full";
+            const group = locType ? (isDoorLoc(locType, host.osrsClient.varManager, host.osrsClient.locTypeLoader) ? "door" : "loc") : "full";
             if (host.instanceActive) host.scheduleInstanceLocUpdate(group);
             else host.scheduleLocGeometryUpdate(mapX, mapY, group);
         } catch (err) {
@@ -369,7 +370,7 @@ export function reloadLocAnimationTile(host: WebGLOsrsRendererHost, tile: { x: n
         const mapX = Math.floor((tile.x | 0) / 64);
         const mapY = Math.floor((tile.y | 0) / 64);
         const locType = host.osrsClient.locTypeLoader.load(locId | 0);
-        const group = locType && isDoorLocType(locType) ? "door" : "loc";
+        const group = locType && isDoorLoc(locType, host.osrsClient.varManager, host.osrsClient.locTypeLoader) ? "door" : "loc";
         // In an instance this rebuilds only the scene's locs, as a loc change does: rebuilding
         // the whole scene for every animation (Tempoross' cannons fire every 2 ticks) kept
         // superseding the build in flight, so new fires and the electrified cannon took

@@ -21,6 +21,8 @@
 const Shared = require("./Shared.TombsOfAmascut");
 
 const ATTR_STORED = "toa:retrieval";
+/** gravestone_retrieval is shared (Vorkath's, the Theatre of Blood's): whichever opened it answers its clicks. */
+const OWNER = "tombs-of-amascut";
 const CHEST_NAME = "toa_lobby_gravestone_chest";
 const INV = 525;
 const SLOTS = 120;
@@ -99,7 +101,7 @@ function sendContents(player, lot) {
 
 function open(player) {
   const lot = lotOf(player);
-  player.__retrievalOpen = ATTR_STORED;
+  player.__retrievalOwner = OWNER;
   const sender = player.getPacketSender();
   sender.sendInterfaceRemoval();
   sender.sendConfig(VARP.if2, 0);
@@ -149,9 +151,8 @@ function finishTaking(player, lot) {
   sendContents(player, lot);
 }
 
-/** Others' retrieval chests share this interface: a click that isn't for this lot passes on. */
 function button({ player }) {
-  if (!isOpen(player) || player.__retrievalOpen !== ATTR_STORED) return false;
+  if (player.__retrievalOwner !== OWNER || !isOpen(player)) return false;
   const lot = lotOf(player);
   if (!lot) return;
   if (!lot.paid) {
@@ -164,7 +165,7 @@ function button({ player }) {
 
 function clickItem(event) {
   const { player } = event;
-  if (!isOpen(player) || player.__retrievalOpen !== ATTR_STORED) return false;
+  if (player.__retrievalOwner !== OWNER || !isOpen(player)) return false;
   const lot = lotOf(player);
   const entry = lot?.items[Number.isInteger(event.slot) ? event.slot : -1];
   if (!entry) return;

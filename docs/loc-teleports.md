@@ -7,6 +7,18 @@ Ladders, stairs, caves, holes and tunnels that did nothing in tsps (or went the 
 - **Plugin:** `server/plugins/world/LocTeleports.plugin.js` plays the entries.
 - **Sync:** `server/scripts/sync-loc-teleports.cjs` writes the data from the captures. Its rules are in `server/scripts/loc-teleport-matching.cjs`, and its lasting decisions in `server/plugins/world/data/loc-teleport-sync.json`.
 
+After the move completes, the plugin emits `loc-teleports:arrived` with `{ player, objectId, location: { x, y, z } }`; `location` is the clicked loc's placement. Blocked or cancelled travel does not emit it. Achievement diaries uses this completed-entry event for entering the H.A.M. Hideout, rather than awarding the task when the entrance is clicked.
+
+### H.A.M. entrance (#1852)
+
+`HamTrapdoor.Thieving.js` owns the entrance's lock. Closed `Open` refuses entry; `Pick-Lock` retries until success or interruption. Success opens the per-player multiloc; its `Climb-down` then uses the existing captured transport and completes the [Lumbridge & Draynor easy task](https://oldschool.runescape.wiki/w/Lumbridge_%26_Draynor_Diary#Easy). Arrival relocks it, and `Close` also resets the open state. Walking, another world action, logout, death or displacement cancels picking without a delayed reward.
+
+The current cache places multiloc `ham_multi_trapdoor` (5492) at (3166, 3252, 0). Varbit 235 selects closed 5490 (`Open`, `Pick-Lock`) or open 5491 (`Climb-down`, `Close`). Normal-world [capture 3199](https://rsprox.net/download/3199), revision 232, shows animation 537 while picking, 536 on success, varbit 235 opening, and a separate option 1 climb to (3149, 9652, 0) that resets the trapdoor. Leagues V [capture 1723](https://rsprox.net/download/1723), revision 227, also shows automatic retries, 0.5 base XP on failure, 3.8 on success, occasional numb-finger level drain, and the diary message after entry.
+
+The entrance's own [Wiki chart (revision 15334244)](https://oldschool.runescape.wiki/w/Trapdoor_%28H.A.M._Hideout%29?oldid=15334244) gives low/high 10/250 without a lockpick and 60/254 with one. The [published interpolation (revision 15325744)](https://oldschool.runescape.wiki/w/Module:Skilling_success_chart?oldid=15325744) rounds the level-scaled value and adds one, then divides by 256. There is no repeated-failure scaling. These are entrance data, separate from jail door 5501. A normal lockpick or its [hair-clip substitute](https://oldschool.runescape.wiki/w/Hair_clip) supplies the tool bonus without being required or consumed.
+
+Remaining timing/parity limits: the [Wiki's normal unlock duration is nine ticks](https://oldschool.runescape.wiki/w/Tick_manipulation?oldid=15374930#H.A.M._Trapdoor), used here for each attempt. Its failure retry interval is not separately published: capture 1723 has seven-tick retries in Leagues V, while overlapping manual clicks in normal capture 3199 prevent calibration. No Leagues timing is assumed to be a normal-world interval. Tick manipulation is not implemented. The secondary numb-finger trigger is still unknown and omitted; capture 1723 includes failed attempts above level one that do not drain a level, so unconditional draining would be incorrect.
+
 ## The captures
 
 The capture index lists every loc option that moved the player, per loc and clicked tile:

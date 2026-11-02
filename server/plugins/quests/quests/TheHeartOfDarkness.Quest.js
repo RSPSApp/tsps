@@ -275,7 +275,7 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
   /** A statement the player can't continue (a held moment under a fade). */
   function heldStatement(player, text) {
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-      new ActionDialogue(0, { execute: () => StatementDialogue.send(player, text, false) })
+      new ActionDialogue(0, { execute: () => StatementDialogue.send(player, text, false) }, true)
     ));
   }
 

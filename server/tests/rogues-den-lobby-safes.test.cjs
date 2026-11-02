@@ -36,6 +36,12 @@ before(async () => {
 
   const { PluginManager } = require('../dist/plugins/PluginManager');
   core = PluginManager.getCoreApi();
+  const startup = [];
+  require('../plugins/objects/Doors.plugin').register({
+    ...PluginManager.createApi('RoguesDenLobbyDoorsRegression'),
+    onServerStartup: handler => startup.push(handler),
+  });
+  for (const start of startup) start();
   require('../plugins/minigames/RoguesDen.plugin').register(
     PluginManager.createApi('RoguesDenLobbySafeRegression'),
   );
@@ -83,18 +89,52 @@ function retries(tasks) {
 }
 
 function crack(player) {
-  new ObjectActionPacketListener().executeAction(player, LOBBY_SAFE, ...SAFE_AT, 1);
-  // Scenery interactions resolve on the cycle after the walk arrives, so advance two cycles.
-  player.getMovementQueue().process();
-  for (let i = 0; i < 2; i++) {
-    player.getMovementQueue().process();
-    core.TaskManager.processWalkTo(player.getIndex());
-  }
+  clickLobbyObject(player, LOBBY_SAFE, SAFE_AT);
 }
 
 function runTask(task) {
   for (let i = 0; i < task.getDelay(); i++) task.tick();
 }
+
+function clickLobbyObject(player, id, at) {
+  player.setNeedsPlacement(false);
+  assert.equal(player.getLocation().getZ(), at[2]);
+  new ObjectActionPacketListener().executeAction(player, id, at[0], at[1], 1);
+  // Scenery interactions resolve on the cycle after the walk arrives.
+  player.getMovementQueue().process();
+  for (let tick = 0; tick < 2; tick++) {
+    player.getMovementQueue().process();
+    core.TaskManager.processWalkTo(player.getIndex());
+  }
+}
+
+test('the pub trapdoor reaches a lobby whose ordinary door opens instead of exiting the Den', t => {
+  const player = account(t);
+  const data = require('../plugins/minigames/data/rogues-den.json');
+  player.moveTo(new Location(...data.lobby.pubTile));
+  clickLobbyObject(player, data.ids.objects.trapdoor, data.lobby.trapdoorTile);
+  assert.ok(player.getLocation().equals(new Location(...data.lobby.entryTile)));
+  clickLobbyObject(player, data.ids.objects.pubDoor, [3061, 4984, 1]);
+  assert.equal(player.getLocation().getZ(), 1, 'opening the lobby door does not return to the pub');
+  const openDoor = core.MapObjects.get(7260, new Location(3061, 4983, 1), null);
+  assert.ok(openDoor, 'the shared door handler swaps the real cache Open/Close pair');
+  assert.equal(openDoor.getFace(), 0, 'capture 3131 opens the door southward at rotation 0');
+  const route = new core.RsmodRouteFinding().findRoute({ level: 1,
+    srcX: 3061, srcY: 4985, srcSize: 1, destX: 3061, destY: 4982, privateArea: null, moveNear: false });
+  assert.equal(route.success, true, 'the lobby can be reached through the open doorway');
+  const at = openDoor.getLocation();
+  player.moveTo(new Location(3061, 4982, 1));
+  clickLobbyObject(player, 7260, [at.x, at.y, at.z]);
+  assert.equal(player.getLocation().getZ(), 1, 'closing from the lobby stays underground');
+  assert.ok(core.MapObjects.get(7259, new Location(3061, 4984, 1), null));
+});
+
+test('the separate lobby passageway still returns to the pub', t => {
+  const player = account(t);
+  player.moveTo(new Location(3061, 4985, 1));
+  clickLobbyObject(player, 7258, [3061, 4986, 1]);
+  assert.ok(player.getLocation().equals(new Location(2906, 3537, 0)));
+});
 
 const xpOf = (player) => player.getSkillManager().getExperience(core.Skill.THIEVING);
 const coins = (player) => player.getInventory().getAmount(COINS);

@@ -23,6 +23,7 @@ const data = require("../plugins/minigames/barbarianassault/Data.BarbarianAssaul
 const Items = require("../plugins/minigames/barbarianassault/Items.BarbarianAssault");
 const Match = require("../plugins/minigames/barbarianassault/Match.BarbarianAssault");
 const Shop = require("../plugins/minigames/barbarianassault/Shop.BarbarianAssault");
+const Points = require("../plugins/minigames/barbarianassault/Points.BarbarianAssault");
 const BarbarianAssault = require("../plugins/minigames/BarbarianAssault.plugin");
 
 const { Ammunition } = require("../dist/game/content/combat/ranged/RangedData");
@@ -191,6 +192,103 @@ test("the reward shop stock comes from the plugin source, not shops.json", () =>
     assert.ok(entry, `plugin source stocks ${expected.id}`);
     assert.equal(entry.price, expected.price);
     assert.equal(entry.amount, 100);
+  }
+});
+
+test("shop purchases cannot leave a second balance for high gambles", () => {
+  const player = createPlayer("shop-spender");
+  Points.setQueenKilled(player, true);
+  for (const role of data.ROLES) Points.award(player, role, 500);
+  player.setAttribute("barbarian-assault:honour", 2000); // A pre-fix save's duplicated total.
+  assert.equal(Points.roleCurrency.remove(player, 375), true);
+  assert.deepEqual(data.ROLES.map((role) => Points.points(player, role)), [125, 125, 125, 125]);
+  assert.equal(Points.highGamble(player, () => 0).reason, "points");
+  assert.equal(Points.roleCurrency.remove(player, 125), true);
+  assert.equal(Points.honourOf(player), 0);
+  assert.equal(Points.highGamble(player, () => 0).allowed, false);
+});
+
+test("role upgrades and gambles spend the same role balance", () => {
+  const player = createPlayer("role-spender");
+  Points.setQueenKilled(player, true);
+  Points.award(player, data.ROLE.ATTACKER, 700);
+  assert.equal(Points.upgradeRole(player, data.ROLE.ATTACKER), true);
+  assert.equal(Points.honourOf(player), 500);
+  assert.equal(Points.highGamble(player, () => 1).allowed, true);
+  assert.equal(Points.points(player, data.ROLE.ATTACKER), 0);
+  assert.equal(Points.upgradeRole(player, data.ROLE.ATTACKER), false);
+});
+
+test("gambling debits only the chosen role and cannot spend it twice", () => {
+  const player = createPlayer("gambler");
+  Points.setQueenKilled(player, true);
+  for (const role of data.ROLES) Points.award(player, role, 500);
+  assert.equal(Points.highGamble(player, () => 1, data.ROLE.HEALER).allowed, true);
+  assert.deepEqual(data.ROLES.map((role) => Points.points(player, role)), [500, 500, 500, 0]);
+  assert.equal(Points.highGamble(player, () => 0, data.ROLE.HEALER).reason, "points");
+  assert.equal(player.getAttribute("barbarian-assault:high-gambles"), 1);
+  assert.equal(Points.roleCurrency.remove(player, 100), false);
+});
+
+test("a high gamble cannot combine points from different roles or use a legacy-only save", () => {
+  const player = createPlayer("split-points");
+  Points.setQueenKilled(player, true);
+  player.setAttribute("barbarian-assault:honour", 2000);
+  assert.equal(Points.highGamble(player, () => 0).allowed, false);
+  Points.award(player, data.ROLE.ATTACKER, 300);
+  Points.award(player, data.ROLE.HEALER, 300);
+  assert.equal(Points.highGamble(player, () => 0).reason, "points");
+  assert.equal(Points.honourOf(player), 600);
+  assert.equal(player.getAttribute("barbarian-assault:high-gambles"), undefined);
+});
+
+test("the high-gamble prompt lets the player choose the paying role", () => {
+  const player = createPlayer("role-choice");
+  Points.setQueenKilled(player, true);
+  Points.award(player, data.ROLE.HEALER, 500);
+  const previous = api.sendMultiChatboxPrompt;
+  let choices;
+  api.sendMultiChatboxPrompt = (_player, _title, ...options) => { choices = options; };
+  try {
+    Points.highGamblePrompt(player);
+    assert.equal(Points.honourOf(player), 500, "opening the prompt spends nothing");
+    assert.equal(choices.length, data.ROLES.length * 2);
+    const healer = choices.indexOf("Healer (500)");
+    assert.ok(healer >= 0);
+    choices[healer + 1]();
+    assert.equal(Points.points(player, data.ROLE.HEALER), 0);
+    assert.equal(player.getAttribute("barbarian-assault:high-gambles"), 1);
+  } finally {
+    api.sendMultiChatboxPrompt = previous;
+  }
+});
+
+test("legacy honour events credit one capped role balance, not a second wallet", () => {
+  const player = createPlayer("honour-event");
+  Points._test.addLegacyHonour({ player, points: 500 });
+  assert.equal(Points.points(player, data.ROLE.ATTACKER), 500);
+  Points.award(player, data.ROLE.HEALER, 4990);
+  Points._test.addLegacyHonour({ player, points: 20 });
+  assert.equal(Points.points(player, data.ROLE.HEALER), 5000);
+  assert.equal(Points.honourOf(player), 5500);
+});
+
+test("a Queen victory records the kill and pays the role bonus only once", () => {
+  const handlers = new Map();
+  Points.attach({ ...api, onCustomEvent: (name, handler) => handlers.set(name, handler) });
+  const previous = api.emitCustomEvent;
+  api.emitCustomEvent = (name, event) => handlers.get(name)?.(event);
+  try {
+    const { match, players: [player] } = createMatch([data.ROLE.HEALER]);
+    match.wave = 10;
+    match.queenSpawned = true;
+    match.queenDied();
+    assert.equal(Points.queenKills(player), 1);
+    assert.equal(Points.points(player, data.ROLE.HEALER), 80);
+    assert.equal(Points.honourOf(player), 95, "80 in the played role and 5 in each other role");
+  } finally {
+    api.emitCustomEvent = previous;
+    Points.attach(api);
   }
 });
 

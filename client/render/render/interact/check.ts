@@ -1241,6 +1241,11 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                                 );
                             }
 
+                            // Lower-priority NPCs sit beneath overlapping player actions.
+                            const npcType = host.getEffectiveNpcType(interactId);
+                            if (npcType?.drawPriority !== NpcDrawPriority.DRAW_PRIORITY_FIRST) {
+                                addNpcMenuEntries(interactId, npcServerId, npcEcsId, worldTileX, worldTileY);
+                            }
                             // Players on the same coords
                             const hitMapId = hit.mapId | 0;
                             const hitMapX = (hitMapId >> 8) & 0xff;

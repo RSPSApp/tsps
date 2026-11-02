@@ -267,8 +267,8 @@ test('native drop/destroy of a completed stack leaves the boost closed and permi
   const slot = p.getInventory().getSlotForItemId(b.part);
   require('../dist/net/packet/impl/DropItemPacketListener').DropItemPacketListener.drop(p, b.part, core.Inventory.INTERFACE_ID, slot);
   if (p.getAttribute('destroy-item:pending')) {
-    PM.emitInterfaceActionClick({ player: p, buttonId: (30005 << 16) | 11, action: 1, slot: -1, itemId: -1,
-      groupId: 30005, childId: 11, handled: false });
+    PM.emitInterfaceActionClick({ player: p, buttonId: 584 << 16, action: 1, slot: -1, itemId: -1,
+      groupId: 584, childId: 0, handled: false });
   }
   assert.equal(p.getInventory().getAmount(b.part), 0);
   assert.equal(common.slots(p)[0].collected, b.amount);

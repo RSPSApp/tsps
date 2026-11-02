@@ -46,11 +46,16 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   DOOR_48_OPEN: 2003, // closed O.DOOR_48 (2002); same models, cache-derived
   LARGE_DOOR_100_OPEN: 39252, // Sins of the Father Arboretum; capture 1637
   LARGE_DOOR_101_OPEN: 39254,
+  GUIDOR_GATE_LEFT_OPEN: 2052, // guidorgatelopen
+  GUIDOR_GATE_RIGHT_OPEN: 2053, // guidorgateropen
+  MORT_MYRE_GATE_LEFT_OPEN: 1574, // inacmetalgateopenr, capture 1638
+  MORT_MYRE_GATE_RIGHT_OPEN: 1573, // inacmetalgateopenl, capture 1638
 });
 
 let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
 let DOUBLE_DOOR_ID_FAMILIES, DOUBLE_DOOR_FAMILY_IDS_BY_ID, DORGESH_CITY_DOOR_IDS;
 let SPECIAL_DOUBLE_DOOR_PAIRS, SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID, SPECIAL_DOUBLE_DOOR_OPEN_IDS_BY_CLOSED_ID;
+let PASS_THROUGH_GATES;
 
 function defineDoorData({ ObjectIdentifiers: O }) {
   // Doors with no open variant in the cache: OSRS opens them by rotating the same loc
@@ -312,6 +317,34 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LARGE_DOOR_7, O.LARGE_DOOR_8],
     [O.LARGE_DOOR_9, O.LARGE_DOOR_10],
   ]);
+  // Gates that let the player through and shut behind them, never staying open. Each leaf is
+  // [id, x, y, z, face] of a shape-0 wall loc; crossX/crossY is the boundary the player crosses.
+  PASS_THROUGH_GATES = Object.freeze([
+    // Guidor's gate, south-east Varrock (rsprox 1663, 3218, 3220): on Open the leaves swing to the
+    // south edges of the two tiles west, the player steps through, and the gate shuts two ticks
+    // later. Live also puts a solid inviswall where the closed leaves stood; it is left out, as
+    // the step here moves after it would be placed and the gate has nothing to guard.
+    Object.freeze({
+      closed: [[O.GATE_42, 3264, 3405, 0, 0], [O.GATE_43, 3264, 3406, 0, 0]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.GUIDOR_GATE_LEFT_OPEN, 3263, 3405, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.GUIDOR_GATE_RIGHT_OPEN, 3262, 3405, 0, 3],
+      ],
+      crossX: 3264,
+      closeTicks: 2,
+    }),
+    // Mort Myre: capture 1638 ticks 1014/1016. Both Open-only leaves close behind the player.
+    Object.freeze({
+      closed: [[O.GATE_73, 3443, 3458, 0, 3], [O.GATE_72, 3444, 3458, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_LEFT_OPEN, 3443, 3457, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_RIGHT_OPEN, 3444, 3457, 0, 2],
+      ],
+      crossY: 3458,
+      closeTicks: 2,
+      openSoundId: 71,
+    }),
+  ]);
   DOUBLE_DOOR_FAMILY_IDS_BY_ID = new Map(
     DOUBLE_DOOR_ID_FAMILIES.flatMap((familyIds) =>
       familyIds.map((id) => [id, familyIds])
@@ -356,6 +389,8 @@ let DOOR_CATALOG = null;
 // where both leaves stand side by side, so a lone one stays a single door.
 const SAME_MODEL_DOUBLE_DOOR_IDS = new Set();
 const OPEN_OBJECT_STATES = new Map();
+/** Pass-through gates swung open right now, by anchor key. */
+const OPEN_PASS_THROUGH_GATES = new Set();
 const RUNTIME_DOUBLE_DOOR_RECORDS = [];
 const PRIVATE_AREA_IDS = new WeakMap();
 let nextPrivateAreaId = 0;
@@ -1195,12 +1230,68 @@ function handleDoubleDoor(player, object, objectId, location) {
   return true;
 }
 
+function passThroughGateAt(objectId, x, y, z) {
+  return PASS_THROUGH_GATES.find((gate) =>
+    gate.closed.some(([id, gx, gy, gz]) => id === objectId && gx === x && gy === y && gz === z)) ?? null;
+}
+
+function wallLoc([id, x, y, z, face], privateArea) {
+  return new core.GameObject(id, cloneLocation(x, y, z), 0, face, privateArea);
+}
+
+function swapLocs(remove, add, privateArea) {
+  for (const leaf of remove) core.ObjectManager.deregister(wallLoc(leaf, privateArea), true);
+  for (const leaf of add) core.ObjectManager.register(wallLoc(leaf, privateArea), true);
+}
+
+/** The player crosses on the clicked row or column, from whichever side they stand on. */
+function stepThroughGate(player, gate, x, y, z) {
+  const destination = gate.crossX != null
+    ? cloneLocation(player.getLocation().getX() < gate.crossX ? gate.crossX : gate.crossX - 1, y, z)
+    : cloneLocation(x, player.getLocation().getY() < gate.crossY ? gate.crossY : gate.crossY - 1, z);
+  const queue = player.getMovementQueue();
+  queue.reset();
+  queue.addSteps(destination);
+}
+
+/** Opens a pass-through gate, steps the player across it and shuts it again (see PASS_THROUGH_GATES). */
+function handlePassThroughGate(player, objectId, location) {
+  const x = location?.getX?.() ?? location?.x;
+  const y = location?.getY?.() ?? location?.y;
+  const z = location?.getZ?.() ?? location?.z ?? 0;
+  const gate = passThroughGateAt(objectId, x, y, z);
+  if (!gate) return false;
+  const privateArea = player.getPrivateArea?.() ?? null;
+  const anchorKey = doorStateKey(`pass-through:${gate.closed[0].slice(1).join(",")}`, privateArea);
+  // Someone else's opening: step through it while it stands open.
+  if (OPEN_PASS_THROUGH_GATES.has(anchorKey)) {
+    stepThroughGate(player, gate, x, y, z);
+    return true;
+  }
+
+  swapLocs(gate.closed, gate.opened, privateArea);
+  OPEN_PASS_THROUGH_GATES.add(anchorKey);
+  // Captured: the opening sound only; the gate shuts silently (1636, 1663, 3220).
+  core.Sounds.sendSound(player, gate.openSoundId == null ? core.Sound.GATE_OPEN : new core.Sound(gate.openSoundId, 1, 0, 0));
+  stepThroughGate(player, gate, x, y, z);
+
+  const task = new core.Task(gate.closeTicks, anchorKey);
+  task.execute = () => {
+    task.stop();
+    OPEN_PASS_THROUGH_GATES.delete(anchorKey);
+    swapLocs(gate.opened, gate.closed, privateArea);
+  };
+  core.TaskManager.submit(task);
+  return true;
+}
+
 function toggleDoor({ player, object, objectId, definition, location, clickType }) {
   if (!player || !object || !location) return false;
   if (DORGESH_CITY_DOOR_IDS.has(objectId) || DORGESH_CITY_DOOR_IDS.has(definition?.id)) return false;
   const request = { player, object, objectId, definition, location, clickType, handled: false };
   api.emitCustomEvent("door:toggle", request);
   if (request.handled) return true;
+  if (handlePassThroughGate(player, objectId, location)) return true;
   if (handleCompositeDoor(player, object, objectId)) return true;
   if (handleWoodenGate(player, object, objectId, location)) return true;
   if (handleDoubleDoor(player, object, objectId, location)) return true;
@@ -1225,6 +1316,23 @@ function requestDoorOpen(event) {
   if (clickType < 1) return;
   event.handled = toggleDoor({ player: event.player, object: event.object, objectId, definition,
     location: { x: location.getX(), y: location.getY(), z: location.getZ() }, clickType });
+}
+
+// Read the shared world's current leaves without changing the door or its auto-close timer.
+function readDoorState(event) {
+  const requested = event.objects ?? [];
+  const current = new Set(requested);
+  for (const state of OPEN_OBJECT_STATES.values()) {
+    if (state.closed[0]?.privateArea) continue;
+    const replaced = requested.filter(object => state.closed.some(snapshot =>
+      (object.getPrivateArea() ?? null) === (snapshot.privateArea ?? null) &&
+      object.getId() === snapshot.id && object.getType() === snapshot.type && object.getFace() === snapshot.face &&
+      locationKey(object.getLocation()) === locationKey(snapshot.location)));
+    if (!replaced.length) continue;
+    for (const object of replaced) current.delete(object);
+    for (const snapshot of state.current) current.add(objectFromSnapshot(snapshot));
+  }
+  event.objects = [...current];
 }
 
 function routeWallDoor(event) {
@@ -1264,6 +1372,7 @@ module.exports = {
     api.onRegionLoaded(({ regionId }) => reapplyOpenDoorsForRegion(regionId));
     api.onServerStartup(registerWallDoorRoutes);
     api.onCustomEvent("door:open", requestDoorOpen);
+    api.onCustomEvent("door:state", readDoorState);
   },
   __internals: { OPEN_OBJECT_STATES, RUNTIME_DOUBLE_DOOR_RECORDS },
 };

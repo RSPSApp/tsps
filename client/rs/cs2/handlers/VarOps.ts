@@ -66,7 +66,7 @@ export function registerVarOps(handlers: HandlerMap): void {
     // We store these in ClanChannel.parameters for architectural simplicity
     // Returns -1 if the key doesn't exist (matching OSRS behavior)
     handlers.set(Opcodes.GET_VARCLAN, (ctx, intOp) => {
-        const value = ctx.clanChannel?.parameters?.get(intOp);
+        const value = ctx.clanVars?.get(intOp) ?? ctx.clanChannel?.parameters?.get(intOp);
         ctx.pushInt(value ?? -1);
     });
 

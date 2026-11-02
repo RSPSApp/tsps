@@ -26,6 +26,7 @@ const Strangle = require("./Strangle.Vardorvis");
 const CombatAchievements = require("./CombatAchievements.Vardorvis");
 
 const MELEE_PRAYER = "PROTECT_FROM_MELEE";
+const BOSS_NAME = "Vardorvis";
 
 class Fight {
   constructor(session, boss) {
@@ -255,6 +256,7 @@ class Fight {
     const best = Common.count(player, bestKey);
     if (!best || ticks < best) {
       player.setAttribute(bestKey, ticks);
+      Common.api.emitCustomEvent("boss:personal-best", { player, boss: `${awakened ? "Awakened " : ""}${BOSS_NAME}`, ticks });
       player.sendMessage(`Fight duration: <col=ff0000>${Common.formatTicks(ticks)}</col> (new personal best)`);
     } else {
       player.sendMessage(`Fight duration: <col=ff0000>${Common.formatTicks(ticks)}</col>. Personal best: ${Common.formatTicks(best)}`);

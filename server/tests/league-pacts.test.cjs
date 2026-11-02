@@ -24,6 +24,7 @@ const uid = (group, child) => (group << 16) | child;
 let core;
 let Common;
 let Interface;
+let Points;
 const hooks = {};
 const custom = {};
 let worldLeague = 6;
@@ -63,6 +64,7 @@ before(async () => {
   require("../plugins/modes/LeaguePacts.plugin").register(api);
   Common = require("../plugins/modes/leaguepacts/Common.LeaguePacts");
   Interface = require("../plugins/modes/leaguepacts/Interface.LeaguePacts");
+  Points = require("../plugins/modes/leaguepacts/Points.LeaguePacts");
 });
 
 function character(name, profile = "league") {
@@ -133,19 +135,46 @@ test("the tree is the cache's: 132 nodes, linked both ways, each effect a mapped
   assert.equal(new Set(Object.values(pactsData.effects)).size, Object.keys(pactsData.effects).length, "one varbit per effect");
 });
 
-test("a new Demonic Pacts character: the tutorial's point and two free resets, sent at login", () => {
+test("a new Demonic Pacts character: no point yet, two free resets (both flagged), sent at login in the recorded order", () => {
   const pacts = character("pactnew");
-  assert.equal(Common.earned(pacts), 1);
+  assert.equal(Common.earned(pacts), 0, "the tutorial's two points are its pact tasks (237/01098)");
   assert.equal(Common.resets(pacts), 2);
-  assert.equal(pacts.sent.varps.get(varp("talent_points_earned")), 1);
+  assert.equal(pacts.sent.varps.get(varp("talent_points_earned")), 0);
   assert.equal(pacts.sent.varps.get(varp("talent_points_spent")), 0);
   assert.equal(pacts.sent.varbits.get(varbit("talent_resets_available")), 2);
   assert.equal(pacts.sent.varbits.get(varbit("talent_free_reset_1")), 1);
+  assert.equal(pacts.sent.varbits.get(varbit("talent_free_reset_2")), 1);
+  assert.equal(pacts.sent.varbits.get(varbit("talent_huey_pact_reset")), 0);
   assert.equal(pacts.sent.varbits.get(varbit("talent_regen_ammo_chance")), 0, "every effect varbit, zero");
+  // 237/01170, 238/01223: earned, the free resets' and the Hueycoatl's flags, the resets, spent, the unlock varps, the effects.
+  const tree = new Set([varp("talent_points_earned"), varp("talent_points_spent"), ...Common.ids.unlocked]);
+  const flags = new Set(["talent_free_reset_1", "talent_huey_pact_reset", "talent_free_reset_2", "talent_resets_available"].map(varbit));
+  const order = pacts.sent.order
+    .filter(([kind, id]) => (kind === "varp" && tree.has(id)) || (kind === "varbit" && (flags.has(id) || id === varbit("talent_regen_ammo_chance"))))
+    .map(([kind, id]) => (kind === "varp" ? CacheDefinitions.getVarpName?.(id) ?? id : id));
+  assert.deepEqual(order.slice(0, 6), [
+    CacheDefinitions.getVarpName?.(varp("talent_points_earned")) ?? varp("talent_points_earned"),
+    varbit("talent_free_reset_1"), varbit("talent_huey_pact_reset"), varbit("talent_free_reset_2"), varbit("talent_resets_available"),
+    CacheDefinitions.getVarpName?.(varp("talent_points_spent")) ?? varp("talent_points_spent"),
+  ]);
+  assert.equal(order.at(-1), varbit("talent_regen_ammo_chance"), "the effects last");
 });
 
+test("the tutorial's two pact tasks give its two points with their lines: 'Demonic Pact' for the first, plural after", () => {
+  const pacts = character("pacttutorial");
+  for (const id of ["open-the-leagues-menu", "complete-the-leagues-tutorial"]) {
+    for (const handler of custom["league:complete-task"]) handler({ player: pacts, id });
+  }
+  assert.equal(Common.earned(pacts), 2);
+  const lines = pacts.sent.messages.filter((line) => line.includes("Demonic Pact"));
+  assert.deepEqual(lines, [
+    "<col=229628>Congratulations, you've earned a Demonic Pact! You now have 1 Demonic Pact to spend.</col>",
+    "<col=229628>Congratulations, you've earned a Demonic Pact! You now have 2 Demonic Pacts to spend.</col>",
+  ], "237/01098 (its second line said 1: the central pact was bought in between)");
+});
 test("View Demonic Pacts opens the tree as captured; a bought node pays, sets its bit and effect, plays the unlock, and the tree comes back", () => {
   const pacts = character("pactbuyer");
+  pacts.setAttribute(Common.POINTS_ATTRIBUTE, 1);
   pacts.sent.order.length = 0;
   assert.equal(hooks[`button:${uid(SIDE_PANEL, 32)}`]({ player: pacts }), true);
   const shown = pacts.sent.order.filter(([kind]) => ["removal", "sub", "flags", "script"].includes(kind));
@@ -236,9 +265,9 @@ test("a pact task gives a point with the captured line; sharing an effect adds u
   hooks.onNpcDeath({ killer: pacts, npc: { getCurrentDefinition: () => ({ getName: () => "Hill Giant" }), getMaxHitpoints: () => 10 }, npcId: 0, location: { x: 0, y: 0, z: 0 } });
   const lines = pacts.sent.messages.slice(-2);
   assert.match(lines[0], /^Congratulations, you've completed an easy task: .*Defeat a Hill Giant/);
-  assert.equal(lines[1], "<col=229628>Congratulations, you've earned a Demonic Pact! You now have 2 Demonic Pacts to spend.</col>", "after the task's own line");
-  assert.equal(Common.earned(pacts), 2);
-  assert.equal(pacts.sent.varps.get(varp("talent_points_earned")), 2);
+  assert.equal(lines[1], "<col=229628>Congratulations, you've earned a Demonic Pact! You now have 1 Demonic Pact to spend.</col>", "after the task's own line");
+  assert.equal(Common.earned(pacts), 1);
+  assert.equal(pacts.sent.varps.get(varp("talent_points_earned")), 1);
 
   const sameEffect = Common.nodes.filter((node) => node.varbit === "talent_regen_ammo_chance").map((node) => node.index);
   pacts.setAttribute(Common.POINTS_ATTRIBUTE, 60);
@@ -263,6 +292,7 @@ test("a pact task gives a point with the captured line; sharing an effect adds u
 
 test("the panel's reset: the captured message and Yes / No; Yes clears every pact and effect and uses a reset", () => {
   const pacts = character("pactresetter");
+  pacts.setAttribute(Common.POINTS_ATTRIBUTE, 1);
   buyNode(pacts, 0);
   openTree(pacts);
   assert.equal(hooks[`button:${uid(TREE, 20)}`]({ player: pacts, scriptTrigger: true, argsData: [] }), true);
@@ -280,16 +310,33 @@ test("the panel's reset: the captured message and Yes / No; Yes clears every pac
   assert.equal(Interface.reset(pacts), false, "nothing to reset");
 });
 
-test("the Hueycoatl's kill credit gives one reset, once", () => {
+test("reset tasks: the Hueycoatl's first kill and the unique-echo-boss tasks give their point, then a reset with the captured line, once", () => {
   const pacts = character("pacthuey");
-  for (const handler of custom["combat-achievements:kill"]) handler({ player: pacts, monster: "The Hueycoatl" });
+  const complete = (id) => { for (const handler of custom["league:complete-task"]) handler({ player: pacts, id }); };
+  complete("defeat-hueycoatl-1-time");
+  assert.equal(Common.earned(pacts), 1, "the task's point (237/04052)");
   assert.equal(Common.resets(pacts), 3);
   assert.equal(pacts.sent.varbits.get(varbit("talent_huey_pact_reset")), 1);
-  assert.equal(pacts.sent.messages.at(-1), "<col=229628>Yama has noticed that you've defeated the mighty Hueycoatl and awards you 1 pact reset point.");
-  for (const handler of custom["combat-achievements:kill"]) handler({ player: pacts, monster: "The Hueycoatl" });
-  assert.equal(Common.resets(pacts), 3, "once");
+  assert.equal(pacts.sent.varbits.get(varbit("talent_resets_available")), 3);
+  assert.deepEqual(pacts.sent.messages.slice(-2), [
+    "<col=229628>Congratulations, you've earned a Demonic Pact! You now have 1 Demonic Pact to spend.</col>",
+    "<col=229628>Congratulations, you've earned a Full Pact reset! You now have 3 Full Pact resets</col>",
+  ], "237/01158's order: the point, then the reset");
+  // The kill credit alone gives nothing any more: the task is the reset.
+  for (const handler of custom["combat-achievements:kill"] ?? []) handler({ player: pacts, monster: "The Hueycoatl" });
+  assert.equal(Common.resets(pacts), 3);
+  for (const id of ["defeat-1-unique-echo-boss", "defeat-2-unique-echo-bosses", "defeat-3-unique-echo-bosses"]) complete(id);
+  assert.equal(Common.resets(pacts), 6, "two free, the Hueycoatl's, three from echo bosses (Wiki)");
+  complete("defeat-4-unique-echo-bosses");
+  assert.equal(Common.resets(pacts), 6, "the fourth gives a point only");
+  assert.equal(Common.earned(pacts), 5);
+  Points.grantReset(pacts, "defeat-hueycoatl-1-time");
+  assert.equal(Common.resets(pacts), 6, "once a task");
+  const credited = character("pacthueyold");
+  credited.setAttribute(Common.REWARDS_ATTRIBUTE, { ...Common.rewards(credited), hueycoatl: true });
+  Points.grantReset(credited, "defeat-hueycoatl-1-time");
+  assert.equal(Common.resets(credited), 2, "a character the old kill credit gave the reset to keeps just that one");
 });
-
 test("nobody but a Demonic Pacts character has pacts", () => {
   worldLeague = 5;
   const echoes = character("echoesnopacts");
@@ -303,4 +350,60 @@ test("nobody but a Demonic Pacts character has pacts", () => {
   const query = { player: echoes, effect: "talent_regen_ammo_chance" };
   for (const handler of custom["league:pact-effect"]) handler(query);
   assert.equal(query.value, 0);
+});
+
+test("every node is reachable from the central pact, and Apply Changes stops at an unlinked node", () => {
+  const seen = new Set([pactsData.rootNode]);
+  const queue = [pactsData.rootNode];
+  while (queue.length) for (const link of Common.nodes[queue.shift()].links) if (!seen.has(link)) { seen.add(link); queue.push(link); }
+  assert.equal(seen.size, 132, "the cache's tree is one piece from node 0");
+
+  const pacts = character("pactunlinked");
+  pacts.setAttribute(Common.POINTS_ATTRIBUTE, 5);
+  const linked = Common.nodes[0].links[0];
+  const far = Common.nodes.find((node) => node.index !== 0 && !node.links.includes(0) && !node.links.includes(linked)).index;
+  const after = Common.nodes[linked].links.find((link) => link !== 0 && !Common.nodes[0].links.includes(link));
+  openTree(pacts);
+  hooks[`button:${uid(TREE, 11)}`]({ player: pacts, scriptTrigger: true, argsData: trigger(4, 0, linked * 2, far * 2, after * 2) });
+  assert.deepEqual(Common.pacts(pacts), [0, linked], "the ones before it bought, it and the rest refused");
+  assert.equal(pacts.sent.messages.at(-1), "That pact is not linked to one you have.");
+  assert.equal(pacts.sent.varps.get(varp("talent_points_spent")), 2);
+  assert.equal(Common.spendable(pacts), 3);
+
+  const first = character("pactnoroot");
+  first.setAttribute(Common.POINTS_ATTRIBUTE, 2);
+  openTree(first);
+  hooks[`button:${uid(TREE, 11)}`]({ player: first, scriptTrigger: true, argsData: trigger(2, linked * 2, 0) });
+  assert.deepEqual(Common.pacts(first), [], "the first pact must be the central one, even with it later in the selection");
+});
+
+test("the cap: 40 spent whatever is earned, the points past it kept", () => {
+  const pacts = character("pactcap");
+  pacts.setAttribute(Common.POINTS_ATTRIBUTE, 44);
+  assert.equal(Common.spendable(pacts), 40);
+  const order = [];
+  const seen = new Set([0]);
+  const queue = [0];
+  while (queue.length && order.length < 41) {
+    const index = queue.shift();
+    order.push(index);
+    for (const link of Common.nodes[index].links) if (!seen.has(link)) { seen.add(link); queue.push(link); }
+  }
+  for (const index of order) Interface.buy(pacts, index);
+  assert.equal(Common.pacts(pacts).length, 40);
+  assert.equal(Common.spendable(pacts), 0);
+  assert.equal(pacts.sent.messages.at(-1), "You cannot spend more than 40 pact points.");
+  Interface.reset(pacts);
+  assert.equal(Common.spendable(pacts), 40, "a reset gives the 40 back, the 44 still earned");
+  assert.equal(Common.earned(pacts), 44);
+});
+
+test("nobody else gets a pact point or reset from the pact and reset tasks", () => {
+  worldLeague = 5;
+  const echoes = character("echoesresettask");
+  worldLeague = 6;
+  for (const handler of custom["league:task-completed"]) handler({ player: echoes, league: 5, id: "defeat-hueycoatl-1-time", pactTask: true });
+  assert.equal(Common.earned(echoes), 0);
+  assert.equal(Common.resets(echoes), 0);
+  assert.equal(echoes.sent.varbits.has(varbit("talent_resets_available")), false);
 });

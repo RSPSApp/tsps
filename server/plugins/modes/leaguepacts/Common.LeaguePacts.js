@@ -9,11 +9,11 @@ const path = require("path");
 
 /** The pacts bought: node indices in buying order. */
 const PACTS_ATTRIBUTE = "league:pacts";
-/** Pact points earned (the tutorial's, the pact tasks', Yama's extras). */
+/** Pact points earned (the pact tasks', the tutorial's two among them). */
 const POINTS_ATTRIBUTE = "league:pact-points";
 /** Full resets left. */
 const RESETS_ATTRIBUTE = "league:pact-resets";
-/** One-off grants already given: { hueycoatl: true }. */
+/** One-off grants already given: { freeReset, secondFreeReset, hueycoatl, resetTasks: [task ids] }. */
 const REWARDS_ATTRIBUTE = "league:pact-rewards";
 
 const BITS_PER_VARP = 32;
@@ -167,18 +167,25 @@ function unlockBits(list) {
   return values;
 }
 
-/** Everything the client reads for the tree: points, the unlock bits, each effect's value, the resets. */
+/**
+ * Everything the client reads for the tree, in the recorded login order (237/01170, 238/01223):
+ * the points earned, the free resets' and the Hueycoatl's flags, the resets, the points spent, the
+ * unlock bits, then each effect's value.
+ */
 function sendState(player) {
   const sender = player.getPacketSender();
   const owned = pacts(player);
+  const given = rewards(player);
   sender.sendConfig(ids.varps.earned, earned(player));
+  sender.sendVarbit(ids.varbits.freeReset, given.freeReset ? 1 : 0);
+  sender.sendVarbit(ids.varbits.hueycoatlReset, given.hueycoatl ? 1 : 0);
+  // A character that joined before the second flag was kept got both free resets at once.
+  sender.sendVarbit(ids.varbits.secondFreeReset, (given.secondFreeReset ?? given.freeReset) ? 1 : 0);
+  sender.sendVarbit(ids.varbits.resets, resets(player));
   sender.sendConfig(ids.varps.spent, owned.length);
   unlockBits(owned).forEach((value, slot) => sender.sendConfig(ids.unlocked[slot], value));
   const values = effects(player);
   for (const [name, id] of effectVarbits) sender.sendVarbit(id, values.get(name) ?? 0);
-  sender.sendVarbit(ids.varbits.resets, resets(player));
-  sender.sendVarbit(ids.varbits.freeReset, rewards(player).freeReset ? 1 : 0);
-  sender.sendVarbit(ids.varbits.hueycoatlReset, rewards(player).hueycoatl ? 1 : 0);
 }
 
 /** A shield, by name (the cache has no category plugins can read for it): shields, bucklers, wards, the Toktz-ket-xil, Dinh's bulwark. */

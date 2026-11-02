@@ -1,10 +1,25 @@
 /**
- * Where pact points and resets come from (data `start`, Wiki Demonic_Pacts_League/Demonic_Pacts):
- * a new character's tutorial point and two free resets, a point for each pact task completed
- * (LeagueTasks' `league:task-completed`, after the task's own line, as captured: the earned varp,
- * then the green line), and a reset for the Hueycoatl's kill credit. Every login resends the tree's
- * varps and varbits. Other plugins ask `league:pacts` { player } and `league:pact-effect`
- * { player, effect } (an effect varbit's gameval name -> value).
+ * Where pact points and resets come from (data `start` and `resetTasks`; Wiki
+ * Demonic_Pacts_League/Demonic_Pacts; recordings 237/01098, 01158, 04052, 238/01219):
+ *
+ * - A new character has no point and the two free resets (both flagged: talent_free_reset_1, _2).
+ * - Every pact task (the catalog's `pactTask`, 79 of them; LeagueTasks' `league:task-completed`,
+ *   after the task's own line) adds a point: the earned varp, then the green line with the points
+ *   left to spend ("Demonic Pact" for the first point earned, as 237/01098 shows, plural after).
+ *   The tutorial's two points are two of them, Open the Leagues Menu and Complete the Leagues
+ *   Tutorial, as recorded. The Wiki's 44 come from the tasks a character can reach (three regions,
+ *   Varlamore, Karamja and the general ones); 40 can be spent (Common.spendable).
+ * - A reset task (data `resetTasks`) adds a reset after its point: talent_resets_available and the
+ *   "Full Pact reset" line (237/01158, Defeat 3 unique Echo Bosses). The Hueycoatl's first kill is
+ *   one (Wiki, 23 April 2026; it also sets talent_huey_pact_reset), and three come from echo bosses
+ *   (Wiki): ours, the 1, 2 and 3 unique-echo-boss tasks. Each reset task pays once.
+ *
+ * Every login resends the tree's varps and varbits (Common.sendState). Other plugins ask
+ * `league:pacts` { player } and `league:pact-effect` { player, effect } (an effect varbit's
+ * gameval name -> value).
+ *
+ * Not here: live's one-off grants for tasks done before the 23 April change (the
+ * talent_extra_retro_* flags, 237/01167): a character here earns those points from the tasks.
  */
 const Common = require("./Common.LeaguePacts");
 
@@ -13,7 +28,7 @@ function joined({ player, league }) {
   const { start } = Common.data;
   player.setAttribute(Common.POINTS_ATTRIBUTE, start.points);
   player.setAttribute(Common.RESETS_ATTRIBUTE, start.resets);
-  player.setAttribute(Common.REWARDS_ATTRIBUTE, { ...Common.rewards(player), freeReset: true });
+  player.setAttribute(Common.REWARDS_ATTRIBUTE, { ...Common.rewards(player), freeReset: true, secondFreeReset: true });
 }
 
 function login({ player, league }) {
@@ -23,38 +38,31 @@ function login({ player, league }) {
 
 /** One pact point: the earned varp, then the captured line with the points left to spend. */
 function grantPoint(player) {
-  player.setAttribute(Common.POINTS_ATTRIBUTE, Common.earned(player) + 1);
-  player.getPacketSender().sendConfig(Common.ids.varps.earned, Common.earned(player));
-  player.sendMessage(Common.message("earned", { count: Common.spendable(player) }));
+  const earned = Common.earned(player) + 1;
+  player.setAttribute(Common.POINTS_ATTRIBUTE, earned);
+  player.getPacketSender().sendConfig(Common.ids.varps.earned, earned);
+  player.sendMessage(Common.message(earned === 1 ? "firstEarned" : "earned", { count: Common.spendable(player) }));
 }
 
-function taskCompleted({ player, league, pactTask }) {
-  if (pactTask !== true || Number(league) !== Common.data.league) return;
-  grantPoint(player);
-}
-
-/** The Hueycoatl's kill credit, once: a reset point (237/01167: the varbit, the resets, the line). */
-function hueycoatlCredit(player) {
-  if (!player || !Common.isPacts(player) || Common.rewards(player).hueycoatl) return;
-  player.setAttribute(Common.REWARDS_ATTRIBUTE, { ...Common.rewards(player), hueycoatl: true });
+/** One reset from a reset task, once a task: the resets varbit, then the captured line. */
+function grantReset(player, taskId) {
+  const given = Common.rewards(player);
+  const done = Array.isArray(given.resetTasks) ? given.resetTasks : [];
+  const hueycoatl = taskId === Common.data.resetTasks.hueycoatl;
+  // A character credited for the Hueycoatl before its reset was the task's has had that reset.
+  if (done.includes(taskId) || (hueycoatl && given.hueycoatl)) return;
+  player.setAttribute(Common.REWARDS_ATTRIBUTE, { ...given, resetTasks: [...done, taskId], ...(hueycoatl ? { hueycoatl: true } : {}) });
   player.setAttribute(Common.RESETS_ATTRIBUTE, Common.resets(player) + 1);
   const sender = player.getPacketSender();
-  sender.sendVarbit(Common.ids.varbits.hueycoatlReset, 1);
+  if (hueycoatl) sender.sendVarbit(Common.ids.varbits.hueycoatlReset, 1);
   sender.sendVarbit(Common.ids.varbits.resets, Common.resets(player));
-  player.sendMessage(Common.message("hueycoatlReset"));
+  player.sendMessage(Common.message("resetEarned", { count: Common.resets(player) }));
 }
 
-function npcName(npc) {
-  return npc?.getCurrentDefinition?.()?.getName?.() ?? npc?.getDefinition?.()?.getName?.() ?? null;
-}
-
-function npcDeath({ killer, npc }) {
-  if (npcName(npc) === Common.data.hueycoatl) hueycoatlCredit(killer);
-}
-
-/** `combat-achievements:kill` { player, monster }: the credit the Hueycoatl's own plugin gives each player. */
-function creditedKill({ player, monster }) {
-  if (monster === Common.data.hueycoatl) hueycoatlCredit(player);
+function taskCompleted({ player, league, id, pactTask }) {
+  if (Number(league) !== Common.data.league) return;
+  if (pactTask === true) grantPoint(player);
+  if (Common.data.resetTasks.tasks.includes(id)) grantReset(player, id);
 }
 
 /** `league:pacts` { player } -> pacts (node indices), earned, spendable, resets. */
@@ -80,10 +88,8 @@ module.exports = function attach(api) {
   api.onCustomEvent("league:joined", joined);
   api.onCustomEvent("league:login", login);
   api.onCustomEvent("league:task-completed", taskCompleted);
-  api.onNpcDeath(npcDeath);
-  api.onCustomEvent("combat-achievements:kill", creditedKill);
   api.onCustomEvent("league:pacts", answerPacts);
   api.onCustomEvent("league:pact-effect", answerEffect);
 };
 
-Object.assign(module.exports, { grantPoint, hueycoatlCredit });
+Object.assign(module.exports, { grantPoint, grantReset });

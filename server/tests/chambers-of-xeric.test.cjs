@@ -47,7 +47,10 @@ function fakeApi() {
   return {
     core: PluginManager.getCoreApi(),
     emitCustomEvent(name, payload) {
-      if (name === 'friends-chat:channel') {
+      if (name === 'side-channels:replace-chat-channel') {
+        payload.player.sideChannelGroup = payload.group;
+        payload.onMount?.();
+      } else if (name === 'friends-chat:channel') {
         const key = payload.key ?? [...channels].find(([, channel]) => channel.members.has(payload.player))?.[0];
         payload.channel = key ? channelView(key) : null;
         payload.ranks = RANKS;
@@ -350,7 +353,7 @@ test('a raid: in, started by the leader, points, a safe death, and out', () => {
   ticks(3 + 2);
   assert.ok(raid.players.has(leader));
   assert.equal(raid.roomAt(leader.location)?.key, 'RAID_START');
-  assert.ok(leader.subs.some(([uid, id]) => uid === Shared.CHAT_CHANNEL_TAB_UID && id === Shared.INTERFACE.PARTY_TAB));
+  assert.equal(leader.sideChannelGroup, Shared.INTERFACE.PARTY_TAB);
 
   const passage = { getLocation: () => leader.location, getFace: () => 0 };
   assert.equal(raid.rooms[0].canPass(leader, passage), false, 'not past the first room before the start');

@@ -12,8 +12,9 @@ const core = PluginManager.getCoreApi();
 const I = core.ItemIdentifiers, N = core.NpcIdentifiers, O = core.ObjectIdentifiers;
 const noop = () => {};
 
-function harness() {
-  const hooks = {}, events = {}, tasks = [], transcripts = [], objects = [], npcs = [];
+function harness({ npcDrops = false } = {}) {
+  const hooks = {}, events = {}, eventCounts = new Map(), tasks = [], transcripts = [], objects = [], npcs = [];
+  const groundDrops = [];
   class PrivateArea {
     constructor() { this.entities = []; this.destroyed = false; }
     add(actor) { this.entities.push(actor); actor.setArea(this); }
@@ -31,7 +32,10 @@ function harness() {
       MapObjects: { get: (id, location) => new core.GameObject(id, location, 0, id === O.GATE_319 || id === O.GATE_322 ? 1 : 0, null) } },
     persistAttribute: noop,
     onCustomEvent: (name, handler) => (events[name] ??= []).push(handler),
-    emitCustomEvent: (name, event) => (events[name] ?? []).forEach(handler => handler(event)),
+    emitCustomEvent: (name, event) => {
+      eventCounts.set(name, (eventCounts.get(name) ?? 0) + 1);
+      (events[name] ?? []).forEach(handler => handler(event));
+    },
     registerNpcCombatMethodProvider: (ids, method) => { api.combat = method; },
     spawnNpc: definition => {
       let area, at = new core.Location(definition.x, definition.y, definition.z);
@@ -41,13 +45,19 @@ function harness() {
         setCombatXpMultiplier: value => { npc.xpMultiplier = value; }, setPositionToFace: noop, performAnimation: noop, performGraphic: noop, forceChat: noop };
       npcs.push(npc); return npc;
     },
+    getItemOnGroundManager: () => ({ registerLocation: (player, item) => groundDrops.push({ player, item }) }),
     removeNpc: npc => { npc.removed = true; },
   }, { get: (target, key) => target[key] ?? ((handler) => (hooks[key] ??= []).push(handler)) });
+  if (npcDrops) {
+    require('../plugins/skills/Prayer.plugin').register(api);
+    require('../plugins/items/bonecrusher/Crushing.Bonecrusher')(api);
+    require('../plugins/npcs/NpcDrops.plugin').register(api);
+  }
   const original = runtime.startTranscript;
   runtime.startTranscript = (...args) => { transcripts.push(args); return true; };
   try { require('../plugins/quests/quests/IdesOfMilk.Quest')(api); }
   finally { runtime.startTranscript = original; }
-  return { api, hooks, tasks, transcripts, objects, npcs, quest: runtime.getRegisteredQuests().at(-1),
+  return { api, hooks, tasks, transcripts, objects, npcs, groundDrops, eventCounts, quest: runtime.getRegisteredQuests().at(-1),
     emit: (name, event) => (events[name] ?? []).forEach(handler => handler(event)),
     line(player, npcId, text) { const event = { player, npcId, text }; this.emit('npc-dialogue:line', event); event.before?.(); },
     action(player, npcId, stepId) { const event = { player, npcId, stepId }; this.emit('npc-dialogue:action', event); return event; },
@@ -63,7 +73,7 @@ function player() {
     sendString: (text, id) => { strings.set(id, text); return packet; },
     sendObject: object => { objectsSent.push(object); return packet; },
     sendGraphic: (graphic, at) => { graphics.push([at.getX(), at.getY()]); return packet; } }, { get: (target, key) => target[key] ?? (() => packet) });
-  const inventory = { getAmount: id => items.get(id) ?? 0, getFreeSlots: () => p.full ? 0 : 28,
+  const inventory = { getAmount: id => items.get(id) ?? 0, contains: id => (items.get(id) ?? 0) > 0, getFreeSlots: () => p.full ? 0 : 28,
     isFull: () => Boolean(p.full), adds: (id, amount) => items.set(id, (items.get(id) ?? 0) + amount),
     deleteNumber: (id, amount) => { assert.ok((items.get(id) ?? 0) >= amount); items.set(id, items.get(id) - amount); },
     get: () => p.lamp, deleteAtSlot: () => { p.lamp = null; } };
@@ -76,7 +86,9 @@ function player() {
     getArea: () => area, setArea: value => { area = value; },
     getHitpoints: () => p.hp ?? 10, getCombat: () => ({ reset: noop, getHitQueue: () => ({ addPendingDamage: hits => damage.push(...hits) }) }),
     performAnimation: animation => animations.push(animation.getId()), sendMessage: text => messages.push(text),
-    getSkillManager: () => ({ getMaxLevel: () => p.maxHp ?? 10, getCombatLevel: () => 99, getExperience: () => p.xp ?? 0, addExperience: (skill, amount) => { p.xp = (p.xp ?? 0) + amount; } }),
+    getSkillManager: () => ({ getMaxLevel: () => p.maxHp ?? 10, getCombatLevel: () => 99, getExperience: () => p.xp ?? 0,
+      addExperience: (skill, amount) => { p.xp = (p.xp ?? 0) + amount; },
+      addExperiences: (skill, amount) => { p.prayerXp = (p.prayerXp ?? 0) + amount; } }),
   };
   return p;
 }
@@ -163,6 +175,30 @@ test('killing Brutus during the quest restores the gates before the field tears 
   h.hooks.onNpcDeath[0]({ killer: p, npc: h.npcs[0], npcId: N.BRUTUS });
   assert.equal(h.quest.getStage(p), 20);
   assert.deepEqual(p.objectsSent.map(object => object.getId()).sort((a, b) => a - b), [O.GATE_18, O.GATE_20, O.GATE_319, O.GATE_322]);
+});
+
+test('quest Bull claims its kill before drop consumers while postquest Brutus keeps his drops', () => {
+  const h = harness({ npcDrops: true }), p = player(); h.quest.setStage(p, 18); h.action(p, N.BULL, 'mKQNRL'); h.tick(2);
+  p.items.set(I.BONECRUSHER, 1); p.setAttribute('bonecrusher:charges', 1);
+  const npc = h.npcs[0];
+  for (const death of h.hooks.onNpcDeath) death({ killer: p, npc, npcId: N.BRUTUS });
+  assert.equal(h.quest.getStage(p), 20, 'the quest death handler still advances the quest');
+  assert.deepEqual(h.groundDrops, [], 'NpcDrops exits before rolling or placing Brutus loot');
+  assert.equal(p.getAttribute('bonecrusher:charges'), 1, 'no roll event reaches the bonecrusher');
+  assert.equal(h.eventCounts.get('npc-drops:roll') ?? 0, 0);
+  assert.equal(h.eventCounts.get('npc-drops:generated') ?? 0, 0);
+  assert.equal(p.prayerXp ?? 0, 0, 'quest Bull bones award no Prayer XP');
+
+  const completed = player(); h.quest.setStage(completed, 22); h.action(completed, N.BULL, 'mKQNRL'); h.tick(2);
+  completed.items.set(I.BONECRUSHER, 1); completed.setAttribute('bonecrusher:charges', 1);
+  const postquestNpc = h.npcs.at(-1);
+  for (const death of h.hooks.onNpcDeath) death({ killer: completed, npc: postquestNpc, npcId: N.BRUTUS });
+  const droppedIds = h.groundDrops.map(({ item }) => item.getId());
+  assert.ok(droppedIds.includes(I.RAW_T_BONE_STEAK), 'completed-quest Brutus keeps his guaranteed steak');
+  assert.equal(completed.getAttribute('bonecrusher:charges'), 0, 'postquest Bull bones reach the crusher');
+  assert.equal(completed.prayerXp, 20);
+  assert.equal(h.eventCounts.get('npc-drops:roll'), 1);
+  assert.equal(h.eventCounts.get('npc-drops:generated'), 1);
 });
 
 test('the bull tag has one game message and one continued message box', () => {

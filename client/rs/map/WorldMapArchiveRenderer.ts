@@ -394,23 +394,17 @@ function decodeWorldMapData1Geography(data: WorldMapData1Record, bytes: Int8Arra
 
 /**
  * Rev 241: a region of chunks is one file per map area, holding only the chunks that area has
- * entries for, chunk by chunk (x, then y), each chunk's 8x8 tiles read with its own planes.
+ * entries for, each chunk's 8x8 tiles read with its own planes. The file follows the composite
+ * map's order, which is not the chunks' x/y order (the Stronghold of Security's floors are laid
+ * out this way), so read it in that order.
  */
 function decodeHeaderlessChunkRegion(entries: WorldMapData1Record[], bytes: Int8Array): void {
     const buffer = new ByteBuffer(bytes);
-    const byChunk = new Map<number, WorldMapData1Record>();
     for (const entry of entries) {
         createWorldMapDataArrays(entry);
-        byChunk.set((entry.chunkX << 3) | entry.chunkY, entry);
-    }
-    for (let chunkX = 0; chunkX < 8; chunkX++) {
-        for (let chunkY = 0; chunkY < 8; chunkY++) {
-            const entry = byChunk.get((chunkX << 3) | chunkY);
-            if (!entry) continue;
-            for (let x = 0; x < 8; x++) {
-                for (let y = 0; y < 8; y++) {
-                    readTile(entry, chunkX * 8 + x, chunkY * 8 + y, buffer);
-                }
+        for (let x = 0; x < 8; x++) {
+            for (let y = 0; y < 8; y++) {
+                readTile(entry, entry.chunkX * 8 + x, entry.chunkY * 8 + y, buffer);
             }
         }
     }

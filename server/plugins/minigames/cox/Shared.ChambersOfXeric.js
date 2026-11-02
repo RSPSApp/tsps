@@ -60,7 +60,6 @@ const INTERFACE = {
   PRIVATE_STORAGE: 271,
   SHARED_STORAGE: 550,
   REWARDS: 539,
-  FRIENDS_CHAT: 7,
 };
 
 const VARBIT = {
@@ -144,7 +143,6 @@ const ATTR = {
 
 /** rsprox captures: the points overlay (513) opens on toplevel_osrs_stretch:overlay_atmosphere. */
 const OVERLAY_UID = (161 << 16) | 1;
-const CHAT_CHANNEL_TAB_UID = (161 << 16) | 83;
 const MAIN_MODAL_UID = (161 << 16) | 16;
 
 const EVENT = { OP1: 1 << 1, OP2: 1 << 2, OP3: 1 << 3, OP4: 1 << 4, OP5: 1 << 5, CONTINUE: 1 << 0 };
@@ -564,7 +562,7 @@ function displayName(player) {
 module.exports = {
   bind, core, api,
   OUTSIDE, MOUNT_QUIDAMORTEM, OBJECT, NPC, INTERFACE, VARBIT, VARP, SCRIPT, BOARD_ROWS, MAX_RAIDERS,
-  MAX_POINTS, PARTY_SKILLS, ATTR, OVERLAY_UID, CHAT_CHANNEL_TAB_UID, MAIN_MODAL_UID, EVENT,
+  MAX_POINTS, PARTY_SKILLS, ATTR, OVERLAY_UID, MAIN_MODAL_UID, EVENT,
   LAYOUT_POOL, LAYOUT_NAMES, isRaidItem, loc, inBox, onMount, cycle, later, repeat, statement, options, raidMessage, fadeMove, sound,
   channelOf, channelByKey, joinChannel, leaveChannel, formatTicks, displayName,
   balanceWalk, crossFire, random, randomOf, shuffle, gfx, graphicAt, areaSound, healSplat, damage, isProtected, projectile, walkStraight, styleMethod, strike,

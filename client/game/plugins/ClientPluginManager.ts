@@ -126,6 +126,12 @@ export interface WidgetOverlay {
     /** Draw after widget content and tooltips, immediately before the context menu. */
     drawBeforeMenu?: boolean;
     /**
+     * The device rects the next draw will cover, when the overlay can tell before drawing. A
+     * changed overlay then redraws only those rects and the ones it covered before, instead
+     * of the whole UI; without it (or returning undefined) a change redraws everything.
+     */
+    coverage?(): { x: number; y: number; w: number; h: number }[] | undefined;
+    /**
      * Draw just after the side-panel anchor widget instead of above the whole widget tree.
      * Used by overlays that sit over the side panel (status bars) so tooltips still win.
      */

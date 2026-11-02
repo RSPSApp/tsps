@@ -48,11 +48,18 @@ const FLAGS_OP1_2 = (1 << 1) | (1 << 2);
 
 const SCRIPT_ACCOUNT_SUMMARY_SET_TIME_ID = 3970;
 const VARBIT_ACCOUNT_SUMMARY_DISPLAY_PLAYTIME = 12933;
+const VARBIT_ACCOUNT_SUMMARY_PLAYTIME_REMIND_DISABLE = 12962;
+/** Milliseconds online in earlier sessions; the Time Played row adds this session (rsprox 3276). */
+const PLAY_TIME_ATTRIBUTE = "account-summary:play-time";
+const PLAY_TIME_DISPLAY_ATTRIBUTE = "account-summary:play-time-displayed";
+const PLAY_TIME_REMIND_DISABLE_ATTRIBUTE = "account-summary:play-time-remind-disabled";
+const PLAY_TIME_PROMPT = "Are you sure you want to display your time played?";
 const sessionStartByPlayer = new WeakMap();
-const playtimeRevealedByPlayer = new WeakMap();
 let pluginApi;
 
 function mountSideJournalContent(player, groupId, tabIndex) {
+  // As captured (rsprox 3276): the time goes first, the summary opens on it.
+  if (groupId === INTERFACE_CHARACTER_SUMMARY_ID) sendPlayTime(player);
   player.getPacketSender().sendSubInterface(SIDE_JOURNAL_TAB_CONTAINER_UID, groupId);
   player.getPacketSender().sendVarbit(VARBIT_SIDE_JOURNAL_SELECTED_TAB, tabIndex);
   // Other journal content (the Leagues tab) learns its panel was replaced.
@@ -86,9 +93,72 @@ function mountRequested(event) {
   event.mounted = true;
 }
 
-function sessionMinutes(player) {
-  const start = sessionStartByPlayer.get(player) ?? Date.now();
-  return Math.max(0, Math.floor((Date.now() - start) / 60000));
+/** Milliseconds online: the saved total plus this session. */
+function playTime(player) {
+  const saved = Number(player.getAttribute(PLAY_TIME_ATTRIBUTE)) || 0;
+  const start = sessionStartByPlayer.get(player);
+  return saved + (start === undefined ? 0 : Math.max(0, Date.now() - start));
+}
+
+/** Moves the session so far into the saved total, so a save always holds it. */
+function flushPlayTime(player) {
+  if (!sessionStartByPlayer.has(player)) return;
+  player.setAttribute(PLAY_TIME_ATTRIBUTE, playTime(player));
+  sessionStartByPlayer.set(player, Date.now());
+}
+
+function sendPlayTime(player) {
+  flushPlayTime(player);
+  player.getPacketSender().sendInterfaceScript(SCRIPT_ACCOUNT_SUMMARY_SET_TIME_ID, [
+    ACCOUNT_SUMMARY_CONTENTS_UID,
+    ACCOUNT_SUMMARY_ENTRY_LIST_UID,
+    Math.floor(playTime(player) / 60000),
+  ]);
+}
+
+function displayPlayTime(player, displayed) {
+  player.setAttribute(PLAY_TIME_DISPLAY_ATTRIBUTE, displayed);
+  player.getPacketSender().sendVarbit(VARBIT_ACCOUNT_SUMMARY_DISPLAY_PLAYTIME, displayed ? 1 : 0);
+  sendPlayTime(player);
+}
+
+/** rsprox 3276: showing the row asks first, unless "don't ask me again" was chosen; hiding never asks. */
+function togglePlayTime(player) {
+  if (player.getAttribute(PLAY_TIME_DISPLAY_ATTRIBUTE)) {
+    displayPlayTime(player, false);
+    return;
+  }
+  if (player.getAttribute(PLAY_TIME_REMIND_DISABLE_ATTRIBUTE)) {
+    displayPlayTime(player, true);
+    return;
+  }
+  const { DialogueChainBuilder, OptionDialogue } = pluginApi.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new OptionDialogue(0, {
+      executeOption(option) {
+        player.getPacketSender().sendInterfaceRemoval();
+        const choice = Number(option);
+        if (choice === 2) {
+          player.setAttribute(PLAY_TIME_REMIND_DISABLE_ATTRIBUTE, true);
+          player.getPacketSender().sendVarbit(VARBIT_ACCOUNT_SUMMARY_PLAYTIME_REMIND_DISABLE, 1);
+        }
+        if (choice === 1 || choice === 2) displayPlayTime(player, true);
+      },
+    }, "Yes", "Yes and don't ask me again", "No").setTitle(PLAY_TIME_PROMPT),
+  ));
+}
+
+function startPlayTime({ player }) {
+  sessionStartByPlayer.set(player, Date.now());
+  const sender = player.getPacketSender();
+  sender.sendVarbit(VARBIT_ACCOUNT_SUMMARY_DISPLAY_PLAYTIME, player.getAttribute(PLAY_TIME_DISPLAY_ATTRIBUTE) ? 1 : 0);
+  sender.sendVarbit(VARBIT_ACCOUNT_SUMMARY_PLAYTIME_REMIND_DISABLE, player.getAttribute(PLAY_TIME_REMIND_DISABLE_ATTRIBUTE) ? 1 : 0);
+  sendPlayTime(player);
+}
+
+function stopPlayTime({ player }) {
+  flushPlayTime(player);
+  sessionStartByPlayer.delete(player);
 }
 
 module.exports = {
@@ -96,9 +166,11 @@ module.exports = {
   register(api) {
     pluginApi = api;
     api.onCustomEvent("side-journal:mount", mountRequested);
-    api.onPlayerLogin(({ player }) => {
-      sessionStartByPlayer.set(player, Date.now());
-    });
+    api.persistAttribute(PLAY_TIME_ATTRIBUTE, 0);
+    api.persistAttribute(PLAY_TIME_DISPLAY_ATTRIBUTE, false);
+    api.persistAttribute(PLAY_TIME_REMIND_DISABLE_ATTRIBUTE, false);
+    api.onPlayerLogin(startPlayTime);
+    api.onPlayerLogout(stopPlayTime);
 
     api.onInterfaceActionButton(
       [SIDE_JOURNAL_SUMMARY_ICON_UID, SIDE_JOURNAL_QUEST_ICON_UID, SIDE_JOURNAL_DIARY_ICON_UID],
@@ -147,17 +219,9 @@ module.exports = {
           // The collection log plugin owns the log (plugins/achievements/collectionlog/).
           pluginApi?.emitCustomEvent("collection-log:open", { player });
           return true;
-        case ROW_PLAYTIME: {
-          const revealed = !playtimeRevealedByPlayer.get(player);
-          playtimeRevealedByPlayer.set(player, revealed);
-          player.getPacketSender().sendVarbit(VARBIT_ACCOUNT_SUMMARY_DISPLAY_PLAYTIME, revealed ? 1 : 0);
-          player.getPacketSender().sendInterfaceScript(SCRIPT_ACCOUNT_SUMMARY_SET_TIME_ID, [
-            ACCOUNT_SUMMARY_CONTENTS_UID,
-            ACCOUNT_SUMMARY_ENTRY_LIST_UID,
-            sessionMinutes(player),
-          ]);
+        case ROW_PLAYTIME:
+          togglePlayTime(player);
           return true;
-        }
         case ROW_COMBAT_TASKS:
           // Combat Achievements own their screens (plugins/achievements/combatachievements/).
           pluginApi?.emitCustomEvent("combat-achievements:open", { player });

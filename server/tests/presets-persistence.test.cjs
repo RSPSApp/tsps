@@ -605,4 +605,8 @@ test('preset combat levels in the list match the skill manager formula', () => {
       `${preset.getName()} shows its combat level`
     );
   }
+  for (const attack of [1, 50]) {
+    assert.equal(presets._test.presetCombatLevel({ getStats: () => [attack, 1, 99, 65, 99, 1, 99] }), 64,
+      "preset list level matches SkillManager");
+  }
 });

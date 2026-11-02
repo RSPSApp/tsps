@@ -35,6 +35,7 @@ const SEA_SONG = 147;
 const SEA_JINGLE = 171;
 const MINIMAP_STATE_VARBIT = "minimap_state";
 const MINIMAP_OFF = 2;
+const BUSY_VARBIT = "busy";
 /** Side tabs the ship at sea closes (combat to magic, logout to music), with the group each gets back. */
 const SHIP_TABS = [[77, 320], [78, 629], [79, 149], [80, 387], [86, 182], [87, 116], [88, 216], [89, 239]];
 const COMBAT_TAB = 76;
@@ -77,6 +78,11 @@ function sender(player) {
 function setMinimap(player, off) {
   const id = Common.core.CacheDefinitions.getVarbitId(MINIMAP_STATE_VARBIT);
   if (id != null) sender(player).sendVarbit(id, off ? MINIMAP_OFF : 0);
+}
+
+function setBusy(player, busy) {
+  const id = Common.core.CacheDefinitions.getVarbitId(BUSY_VARBIT);
+  if (id != null) sender(player).sendVarbit(id, busy ? 1 : 0);
 }
 
 function fade(player, out) {
@@ -199,6 +205,7 @@ function galleon(player, trip) {
 function fadeTrip(player, trip) {
   const out = sender(player);
   const [minimapOff, minimapOn] = trip.minimap ?? [];
+  const [busyOn, busyOff] = trip.busy ?? [];
   const land = () => {
     if (!Common.travelling(player)) return;
     player.moveTo(Common.toLocation(trip.to));
@@ -214,6 +221,7 @@ function fadeTrip(player, trip) {
     Common.end(player);
     hold(player, false);
     if (minimapOn != null) setMinimap(player, false);
+    if (busyOff != null) setBusy(player, false);
   };
   const steps = {
     [trip.teleport]: land,
@@ -227,6 +235,10 @@ function fadeTrip(player, trip) {
   if (minimapOff != null) {
     const previous = steps[minimapOff];
     steps[minimapOff] = () => { previous?.(); setMinimap(player, true); };
+  }
+  if (busyOn != null) {
+    const previous = steps[busyOn];
+    steps[busyOn] = () => { previous?.(); setBusy(player, true); };
   }
   runTicks(player, steps);
 }

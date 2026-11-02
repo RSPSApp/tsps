@@ -11,6 +11,8 @@ export const TILE_FLAG_FORCE_LOWEST_PLANE = 0x8;
 
 export interface TileFlagMapSquare extends MapSquare {
     getTileRenderFlag(level: number, tileX: number, tileY: number): number;
+    /** How high a ground item stands on the tile's loc, in model units; 0 on open ground. */
+    getObjSurfaceHeight?: (level: number, tileX: number, tileY: number) => number;
     isBridgeSurface?: (level: number, tileX: number, tileY: number) => boolean;
 }
 

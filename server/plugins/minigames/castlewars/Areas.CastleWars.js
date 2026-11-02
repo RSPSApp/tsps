@@ -129,6 +129,7 @@ function defineAreas() {
       }
       player.setAttribute(game.TRANSITION_KEY, false);
       player.getPacketSender().sendSubInterface(data.OVERLAY_HUD_UID, data.STATUS_OVERLAY_INTERFACE[game.getTeamId(player)], 1);
+      sendGameVars(player, game.getTeamId(player));
       player.getPacketSender().sendPlayerOption(data.ATTACK_OPTION_SLOT, "Attack", true);
     }
 
@@ -197,12 +198,17 @@ function sendGameVars(player, teamId) {
   for (const team of [SARADOMIN, ZAMORAK]) {
     game.setVar(player, data.SCORE_VARBIT[team], game.score[team], true);
     game.setVar(player, data.FLAG_VARBIT[team], game.flagStatus[team], true);
+    game.setVar(player, data.TEAM_PLAYING_VARBIT[team], team === teamId ? 1 : 0, true);
   }
   for (const [status, varbit] of Object.entries(data.TEAM_VARBIT)) {
     game.setVar(player, data.TEAM_HUD_VARBIT[teamId][status], game.getTeamVar(teamId, varbit), true);
   }
   game.setVar(player, data.STANDARD_WORLD_VARBIT, 0, true);
-  game.setVar(player, data.BARRICADE_COUNT_VARBIT, game.teamBarricadeCount(teamId), true);
+  const count = game.teamBarricadeCount(teamId);
+  const limit = game.getBarricadeLimit?.() ?? data.MAX_BARRICADES;
+  game.setVar(player, data.BARRICADE_COUNT_VARBIT, count, true);
+  // Native scripts hardcode /10; only a configured practice cap needs server-owned text.
+  player.getPacketSender().sendString(`${count}/${limit} Barricades`, data.BARRICADE_TEXT_UID[teamId], limit !== data.MAX_BARRICADES);
   game.setVar(player, data.TIMER_VARP, game.gameMinutesLeft());
 }
 

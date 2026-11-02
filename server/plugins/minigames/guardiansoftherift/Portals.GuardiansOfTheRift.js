@@ -105,7 +105,10 @@ function stepThrough(player, tile, visible) {
 
 function enterPortal({ player, objectId }) {
   if (!Shared.isLoc(objectId, "gotr_agility_portal_top") || !Shared.inTemple(player.getLocation())) return false;
-  if (!Game.isPlaying(player)) return true;
+  if (!Game.isPlaying(player)) {
+    player.sendMessage("There's no need to do that right now.");
+    return true;
+  }
   stepThrough(player, MINE_TILE, 1);
   return true;
 }

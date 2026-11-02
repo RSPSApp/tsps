@@ -24,6 +24,7 @@ const { PlayerRights } = require("../../../src/main/typescript/elvarg/game/model
 const { buildRoamingPvpMetadata } = require("../../bots/behaviours/pvp/PvpAssignment.PlayerBots");
 const { applyGeneratedPvpLoadout } = require("../../bots/behaviours/policies/PvpLoadoutPolicy.PlayerBots");
 const {
+  initPvpTierLoadouts,
   TIER_BANDS,
   TIER_PROFILE_IDS,
   pickTierChoice: pickSharedTierChoice,
@@ -2177,6 +2178,7 @@ module.exports = function attachCastleWarsBots(registry, castleWars) {
   api = registry;
   game = castleWars;
   core = api.core;
+  initPvpTierLoadouts(api);
   routes = buildRoutes(core, game.TEAM);
   // A dedicated task, not the area's inGameProcessors: the world strides idle player
   // bots (seconds between turns), far too slow for one-hop-per-tick route steps.

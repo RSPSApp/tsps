@@ -83,7 +83,7 @@ module.exports = function registerSocialTools(ctx) {
 
   tool(
     "clan_chat_setup",
-    "Set up the player's own clan chat through its setup screen: name it (which also joins it), set who may enter, talk and kick, or disable it.",
+    "Set up the player's own clan chat through its setup screen: name it, set who may enter, talk and kick, or disable it. While the channel is on, changes reach it after 100 ticks; joining is separate.",
     {
       player,
       name: z.string().min(1).max(12).optional(),

@@ -6,6 +6,22 @@ The [player page](https://oldschool.runescape.wiki/w/New_character) lists Follow
 
 Presence is single-world: friend snapshots resolve currently registered players in this server's `World` and send world 1 for visible online friends. Cross-world presence and the live OSRS behavior of the right-click Follow action's edge cases remain outside this implementation.
 
+## The chat-channel against live
+
+Text, message types and timing come from rsprox recordings (rev 227-238), covered by `tests/chat-channel.test.cjs`:
+
+- **Joining:** "Attempting to join chat-channel..." at once, the answer a tick later (763). Asking while already in a channel gets "Please wait until you are logged out of your previous chat-channel." (3266). The rejoin at login shows the same lines (763). Plugin and bot joins are immediate.
+- **Setup:** enabling a disabled channel is immediate, says "Your chat-channel has now been enabled!" and how to join, and doesn't join it (749, 754). While a channel is on, name, rank and disable changes are saved at once and reach the channel 100 ticks after the first one, with one notice for that window (type 30; 754). Until then the channel keeps its old setup, even empty, so a join in the meantime gets it (753). Friends and ignores apply at once; no capture shows otherwise.
+- **Disabling:** when the delay ends the owner gets "Your chat-channel has now been disabled!" and members "You have been removed from this channel." (754).
+- **Refusals** are type 11 notifications. No capture holds the talk rank refusal, the kick refusals or the full-channel text, so those are ours.
+- **Attacking:** nothing stops a player attacking someone in their channel; no recording or Wiki page shows such a rule, and the attack option "right-click for clanmates" assumes they can be attacked. Bots are still held back from their own channel, which is ours, for recruits.
+
+## The social tab
+
+The tab is the cache's tab bar `side_channels` (707) with its content in 707:7, as live mounts it (4186). A click on 707:2-5 sets varbit 13071 and mounts 7, 701 (Your Clan), 702 (Guest Clan) or 76 (Grouping) (2528; rev 227's buttons sit one component later, 75). The choice is saved. `SideChannels.plugin.js` does this; a plugin that needs the first tab, like the Chambers of Xeric party (500), uses `side-channels:replace-chat-channel`. That the first tab keeps showing the party when clicked is an assumption.
+
+The Clan system isn't implemented. Login sends varbits 933 and 12164 = 1, so both clan tabs say "No current clan" (script 4288), and typing `//` gets the client script's own refusal. In Grouping, the activity list works in the client, while its Teleport button and PvP Arena have no server side: no capture shows what they send.
+
 ## Public chat and autochat
 
 Public chat arrives as the CHAT packet (kind byte 0 public, 1 game, 2 friends chat, 3 public autochat) and

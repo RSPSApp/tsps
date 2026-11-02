@@ -21,6 +21,28 @@ const ASSISTANTS = ["Barfy Bill", "Tarquin", "Sigurd", "Hari", "Marten", "Lara",
 const SHAPE_CHANCES = [[32, 100], [48, 150], [64, 200], [72, 225], [80, 250], [96, 300], [112, 350], [112, 350]];
 const CHOP_CHANCES = [[70, 200], [96, 296], [144, 360], [128, 496]];
 // shortcut: the Wiki only charts bronze through black tree rolls; higher axes fell the tree on their first attempt.
+/** Ticks from the Chop-down click to the first swing (rsprox 4005: the swing 3 ticks after the click lands). */
+const CHOP_DELAY_TICKS = 3;
+const TREE_FALL_SOUND = 2734;
+/** The ride (rsprox 4005, every ride): the river loop, played on rowing start, and the ride's camera variables. */
+const RIDE_SOUND = 2728;
+const RIDE_SOUND_LOOPS = 16;
+const RIDE_VARBITS = ["fov_clamp", "draw_distance_max_override"];
+const RIDE_TILE = [1817, 4515];
+/** Rowing faces west (face_angle 512). */
+const RIDE_FACE = [1816, 4515];
+const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
+/**
+ * The river scenery drifting past (rsprox 4005): each steps one tile north per tick, ignoring the map, to
+ * `endY`; one tick after reaching it it is deleted and, `respawn.delay` ticks later, comes back at
+ * `respawn.at` to drift again. scenery_2 stops at 4523 and stays for the rest of the ride.
+ */
+const RIDE_SCENERY = [
+  { name: "canoeing_bullrush", at: [1820, 4516], endY: 4522, respawn: { at: [1820, 4501], delay: 3 } },
+  { name: "canoeing_bullrush_leaf", at: [1819, 4516], endY: 4522, respawn: { at: [1819, 4505], delay: 3 } },
+  { name: "canoeing_scenery_1", at: [1822, 4516], endY: 4522, respawn: { at: [1821, 4500], delay: 0 } },
+  { name: "canoeing_scenery_2", at: [1821, 4503], endY: 4523 },
+];
 const jobs = new WeakMap();
 let core;
 let api;
@@ -153,6 +175,7 @@ function chop({ player, object }) {
       }
       player.performAnimation(new core.Animation(-1));
       setVar(player, station.state, 9);
+      player.getPacketSender().sendSound(TREE_FALL_SOUND, 1, 0);
       player.getPacketSender().sendObjectAnimation(object, new core.Animation(core.CacheDefinitions.getSeqId("canoeing_station_animations")));
       later(player, 1, (job) => {
         setVar(player, station.state, 10);
@@ -160,7 +183,7 @@ function chop({ player, object }) {
       });
     });
   }
-  attempt();
+  later(player, CHOP_DELAY_TICKS, attempt);
 }
 
 function shape({ player, object }) {
@@ -225,6 +248,7 @@ function paddle({ player, object }) {
 }
 
 function sceneEnded(player, scene, logout) {
+  for (const name of RIDE_VARBITS) setVar(player, name, 0);
   const back = player.getAttribute(RETURN_ATTRIBUTE);
   if (back) player.moveTo(new core.Location(...back));
   player.setAttribute(RETURN_ATTRIBUTE, null);
@@ -249,6 +273,21 @@ function arrive(player, from, to, type) {
   if (from.id === 1 && to.id === 4 && type.id === 4) api.emitCustomEvent("diary:task", { player, diary: "lumbridge-draynor", task: "travel-from-lumbridge-to-edgeville-on-a-waka-can" });
 }
 
+/** One drifting piece of river scenery; see RIDE_SCENERY. */
+function drift(scene, piece, [x, y]) {
+  if (scenes.get(scene.owner) !== scene) return;
+  const npc = scenes.actor(scene, core.CacheDefinitions.getNpcId(piece.name), [x, y, 0]);
+  if (!npc) return;
+  npc.setFlag(IGNORE_CLIPPING_FLAG, true);
+  npc.getMovementQueue().addSteps(new core.Location(x, piece.endY, 0));
+  if (!piece.respawn) return;
+  scenes.later(scene, piece.endY - y + 1, () => {
+    scenes.removeActor(scene, npc);
+    if (piece.respawn.delay > 0) scenes.later(scene, piece.respawn.delay, () => drift(scene, piece, piece.respawn.at));
+    else drift(scene, piece, piece.respawn.at);
+  });
+}
+
 function travel(player, from, to, type) {
   if (!usable(player, from) || !canTravel(from, to, type) || state(player, from) !== type.id + 10) return;
   startJob(player);
@@ -257,16 +296,14 @@ function travel(player, from, to, type) {
   scenes.fade(player, true);
   later(player, 2, () => {
     const scene = scenes.open(player, "canoe", [[1792, 1855, 4480, 4543, 0]]);
-    player.moveTo(new core.Location(1817, 4515, 0));
+    player.moveTo(new core.Location(...RIDE_TILE, 0));
     scenes.controls(player, true, true);
+    for (const name of RIDE_VARBITS) setVar(player, name, 1);
     player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId("canoeing_rowing")));
-    scenes.face(player, [1818, 4515]);
+    scenes.face(player, RIDE_FACE);
     scenes.camera(player, [1812, 4515, 255], [1817, 4515, 255], { rate: 100, rate2: 100 });
-    const actors = [["canoeing_bullrush", 1820, 4516], ["canoeing_bullrush_leaf", 1819, 4516], ["canoeing_scenery_1", 1822, 4516], ["canoeing_scenery_2", 1821, 4503]];
-    for (const [name, x, y] of actors) {
-      const npc = scenes.actor(scene, core.CacheDefinitions.getNpcId(name), [x, y, 0]);
-      npc?.getMovementQueue().addSteps(new core.Location(x, y + 24, 0));
-    }
+    player.getPacketSender().sendSoundEffect(RIDE_SOUND, RIDE_SOUND_LOOPS, 0, 255);
+    for (const piece of RIDE_SCENERY) drift(scene, piece, piece.at);
     scenes.later(scene, 1, () => scenes.fade(player, false));
     scenes.later(scene, 22, () => scenes.fade(player, true));
     scenes.later(scene, 26, () => arrive(player, from, to, type));
@@ -368,4 +405,4 @@ function attach(pluginApi) {
 }
 
 module.exports = attach;
-module.exports._test = { stations, TYPES, chance, canTravel, chop, shape, carve, float, paddle, select, logout, restore, state, axeFor, storeAxe, answerStoredAxe };
+module.exports._test = { stations, TYPES, RIDE_SCENERY, RIDE_FACE, CHOP_DELAY_TICKS, chance, canTravel, chop, shape, carve, float, paddle, select, logout, restore, state, axeFor, storeAxe, answerStoredAxe };

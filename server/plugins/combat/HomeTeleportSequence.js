@@ -14,7 +14,7 @@
  *  25  animation reset again
  *
  * Until tick 21 the cast is interrupted by most actions (Wiki): walking or combat ends it,
- * and no cooldown starts.
+ * and no cooldown starts. The cast never starts from a moving player in the first place.
  */
 
 const BUSY_VARBIT = 12393;
@@ -67,6 +67,11 @@ function interrupted(core, player, start) {
 /** The standard cast; a league's own animation set (LeagueAreaUnlocks) passes another. */
 const DEFAULT_CAST = { steps: STEPS, lockTick: LOCK_TICK, landTick: LAND_TICK };
 
+/** The long cast only starts while the player stands still; a moving click never begins it. */
+function standingStill(player) {
+  return (player.getMovementQueue?.()?.size?.() ?? 0) === 0;
+}
+
 /** { steps: [{ tick, animation, graphic?, height?, sound? }], lockTick, landTick } as a cast. */
 function castOf(definition) {
   if (!definition) return DEFAULT_CAST;
@@ -77,11 +82,18 @@ function castOf(definition) {
 
 /**
  * Starts the cast toward `destination`; `onArrival` runs on landing (where the spell starts its
- * cooldown). Returns the task, which is stopped early if the cast is interrupted. `cast` is the
- * animation set to play, the standard one unless given (see castOf).
+ * cooldown). Returns the task, which is stopped early if the cast is interrupted, or null when
+ * the player is moving (the long cast only starts from a standstill). `cast` is the animation set
+ * to play, the standard one unless given (see castOf).
  */
 function startHomeTeleport(core, player, destination, onArrival, cast = DEFAULT_CAST) {
   const { steps: STEPS, lockTick: LOCK_TICK, landTick: LAND_TICK } = cast;
+  // OSRS: the home teleport does not stop the player's walk, it simply cannot be cast
+  // while moving. Refuse the click without clearing the route or playing tick 0.
+  if (!standingStill(player)) {
+    player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+    return null;
+  }
   const start = player.getLocation().clone();
   reset(core, player);
   player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);

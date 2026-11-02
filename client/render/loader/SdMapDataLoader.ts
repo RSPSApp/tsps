@@ -16,6 +16,7 @@ import { VarManager } from "../../rs/config/vartype/VarManager";
 import { getMapIndexFromTile, getMapSquareId } from "../../rs/map/MapFileIndex";
 import { Model } from "../../rs/model/Model";
 import { Scene } from "../../rs/scene/Scene";
+import { collectObjSurfaceHeights } from "../../rs/scene/ObjSurfaceHeights";
 import { LocLoadType } from "../../rs/scene/SceneBuilder";
 import { SceneTile } from "../../rs/scene/SceneTile";
 import { getIdFromTag } from "../../rs/scene/entity/EntityTag";
@@ -1828,7 +1829,8 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                     const typeRots: number[] = [];
                     const pushLoc = (id: number, flags: number): void => {
                         const locId = id | 0;
-                        if (!(locId > 0)) return;
+                        // Loc id 0 is a real loc (a multiloc, rebuilt when its varp changes).
+                        if (!(locId >= 0)) return;
                         const packedTypeRot =
                             ((((flags | 0) >> 6) & 0x3) << 6) | ((flags | 0) & 0x3f);
                         const packed = packedTypeRot & 0xff;
@@ -2210,7 +2212,10 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
 
         if (mapProfileEnabled) console.timeEnd(`load map ${mapX},${mapY}`);
 
+        const objSurfaceHeights = collectObjSurfaceHeights(scene);
+
         const transferables = [
+            ...objSurfaceHeights.flat().map((buf) => buf.buffer),
             ...scene.tileRenderFlags.flat().map((buf) => buf.buffer),
             ...scene.tileOverlays.flat().map((buf) => buf.buffer),
             ...(sceneBuf.groundMaterials?.flat().map((column) => column.buffer) ?? []),
@@ -2322,6 +2327,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                 renderPosX,
                 renderPosY,
                 tileRenderFlags: scene.tileRenderFlags,
+                objSurfaceHeights,
                 tileOverlays: scene.tileOverlays,
                 groundMaterials: sceneBuf.groundMaterials,
                 groundColors: sceneBuf.groundColors,

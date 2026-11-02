@@ -15,9 +15,16 @@
  * (2408) and ball (2407) are world ground spawns from the data definitions; this
  * plugin only consumes/reads them. The basement boxes supply in-quest leather
  * gloves; the east-room boxes are reachable straight after the ladder, so the
- * pair can be found before the electric gate. Nora garden detection remains
- * unimplemented until canonical hedge/visibility rules are established. The
- * cache item is named SHED_KEY
+ * pair can be found before the electric gate.
+ *
+ * Nora walks the garden's middle row, 2904-2929 on y 3463, a tile a tick, and waits two
+ * ticks at the east end (rsprox 2963, 3246, 3249). The hedges' cache clipping decides what she
+ * can see: the tall stretches block sight and the low ones don't. No recording shows a catch, so
+ * looking only the way she's walking is inferred from the Wiki's route around the hedges with
+ * run energy to spare; the catch's lines, curse animation, teleport to the boy, lost ball and
+ * repeated steps are the Wiki's.
+ *
+ * The cache item is named SHED_KEY
  * (4186) but the quest's shed key is 2411, exposed here as
  * ItemIdentifiers.KEY_9; the cupboard open state is not swapped in the world.
  */
@@ -27,6 +34,12 @@ module.exports = function registerWitchsHouseQuest(api) {
     Skill,
     Item,
     Location,
+    Area,
+    Boundary,
+    Animation,
+    CountdownTask,
+    RegionManager,
+    TaskManager,
     ItemIdentifiers,
     NpcIdentifiers,
     ObjectIdentifiers,
@@ -93,6 +106,18 @@ module.exports = function registerWitchsHouseQuest(api) {
   const BALL_SPAWN_TILE = { x: 2935, y: 3460, z: 0 };
   const BASEMENT_TILE = { x: 2907, y: 9876, z: 0 };
   const GROUND_FLOOR_TILE = { x: 2907, y: 3476, z: 0 };
+
+  const NORA_NPC_ID = NpcIdentifiers.NORA_T_HAGG;
+  const NORA_ROW = 3463;
+  const NORA_WEST_X = 2904;
+  const NORA_EAST_X = 2929;
+  const NORA_EAST_WAIT_TICKS = 2;
+  /** human_castcurse: the Wiki gives her spell the curse animation. */
+  const NORA_CAST_ANIMATION = 718;
+  const CAUGHT_CAST_TICKS = 2;
+  const CAUGHT_TELEPORT_TICKS = 4;
+  /** Beside the Boy (2928,3456). */
+  const CAUGHT_TILE = { x: 2929, y: 3456, z: 0 };
 
   const START_HOOK = "quest:witch-s-house:start";
   const COMPLETE_ACTION_ID = "uyv8q6";
@@ -282,6 +307,7 @@ module.exports = function registerWitchsHouseQuest(api) {
 
   function searchFountain(event) {
     const { player } = event;
+    if (caughtPlayers.has(player)) return;
     if (held(player, SHED_KEY_ITEM_ID)) {
       startTranscript(api, player, BOY_NPC_ID, PAGE, "getting-past-the-witch-searching-the-fountain-in-the-garden-searching-the-fountain-again-whilst-holding-the-key");
       return;
@@ -542,6 +568,92 @@ module.exports = function registerWitchsHouseQuest(api) {
     );
   }
 
+  // --- Nora and the garden
+
+  const noraPatrol = { direction: 1, wait: 0 };
+  const caughtPlayers = new WeakSet();
+
+  function walkNora(npc) {
+    if (noraPatrol.wait > 0) {
+      noraPatrol.wait--;
+      return;
+    }
+    const queue = npc.getMovementQueue();
+    if (queue.size() > 0) return;
+    const x = npc.getLocation().getX();
+    if (x >= NORA_EAST_X && noraPatrol.direction > 0) {
+      noraPatrol.direction = -1;
+      noraPatrol.wait = NORA_EAST_WAIT_TICKS - 1;
+      return;
+    }
+    if (x <= NORA_WEST_X) noraPatrol.direction = 1;
+    queue.walkStep(noraPatrol.direction, 0);
+  }
+
+  /** Only a player on the quest's way through the garden; the back door opens at this stage. */
+  function noraHunts(player) {
+    const stage = quest.getStage(player);
+    return stage >= STAGE_UNLOCKED_BACK_DOOR && stage < STAGE_COMPLETE;
+  }
+
+  function noraSees(npc, player) {
+    const from = npc.getLocation();
+    const to = player.getLocation();
+    if (noraPatrol.wait === 0 && (to.getX() - from.getX()) * noraPatrol.direction < 0) return false;
+    return RegionManager.canProjectileMove(from.getX(), from.getY(), to.getX(), to.getY(), to.getZ(), 1, 1, null);
+  }
+
+  /** Back to the start: the magnet and mouse again, and the ball is gone (Wiki). */
+  function sendToBoy(player) {
+    caughtPlayers.delete(player);
+    player.getMovementQueue().setBlockMovement(false);
+    if (player.isRegistered?.() === false) return;
+    player.moveTo(new Location(CAUGHT_TILE.x, CAUGHT_TILE.y, CAUGHT_TILE.z));
+    player.getInventory().deleteNumber(BALL_ITEM_ID, player.getInventory().getAmount(BALL_ITEM_ID));
+    const stage = quest.getStage(player);
+    if (stage >= STAGE_UNLOCKED_BACK_DOOR && stage < STAGE_DEFEATED_EXPERIMENT) quest.setStage(player, STAGE_STARTED);
+  }
+
+  function catchPlayer(npc, player) {
+    caughtPlayers.add(player);
+    noraPatrol.wait = CAUGHT_TELEPORT_TICKS;
+    player.getMovementQueue().setBlockMovement(true).reset();
+    npc.setPositionToFace(player.getLocation());
+    npc.forceChat("Stop! Thief!");
+    TaskManager.submit(new CountdownTask(npc, CAUGHT_CAST_TICKS, () => {
+      npc.forceChat("Klarata... Sepptento... Valkan!");
+      npc.performAnimation(new Animation(NORA_CAST_ANIMATION));
+    }));
+    TaskManager.submit(new CountdownTask(npc, CAUGHT_TELEPORT_TICKS, () => sendToBoy(player)));
+  }
+
+  class WitchsGarden extends Area {
+    constructor() {
+      // The row Nora walks and the paths around its hedges, as far as the shed door.
+      super([new Boundary(2901, 2933, 3460, 3466, 0)]);
+    }
+
+    getName() {
+      return "WitchsGarden";
+    }
+
+    postEnter(mobile) {
+      if (!mobile.isNpc?.() || mobile.getId() !== NORA_NPC_ID) return;
+      const npc = mobile.getAsNpc();
+      npc.setScriptedMovement(true);
+      npc.getMovementCoordinator?.().setRadius(0);
+    }
+
+    process(mobile) {
+      if (!mobile.isNpc?.() || mobile.getId() !== NORA_NPC_ID) return;
+      const npc = mobile.getAsNpc();
+      walkNora(npc);
+      for (const player of this.getPlayers()) {
+        if (!caughtPlayers.has(player) && noraHunts(player) && noraSees(npc, player)) catchPlayer(npc, player);
+      }
+    }
+  }
+
   function handleLogout({ player }) {
     if (!player) return;
     const experiment = experimentByPlayer.get(player);
@@ -570,6 +682,7 @@ module.exports = function registerWitchsHouseQuest(api) {
     onReward: grantReward,
   });
 
+  api.registerArea(new WitchsGarden());
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);

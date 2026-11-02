@@ -212,6 +212,23 @@ test("a sale whose payment wouldn't fit is refused, unless selling frees the slo
   assert.equal(player.getInventory().getAmount(COINS), 5 * Math.floor(200 * 0.85));
 });
 
+test("a specialist shop buys an item it lists at 0 stock, which then depletes back to 0", () => {
+  loadShops(0);
+  const player = createPlayer();
+  ShopManager.open(player, AXE_SHOP);
+  assert.deepEqual(stockOf(), [[BRONZE_AXE, 2], [STEEL_AXE, 0]]);
+  for (let tick = 0; tick < 200; tick++) ShopManager.restockAll();
+  assert.deepEqual(stockOf(), [[BRONZE_AXE, 2], [STEEL_AXE, 0]], "no restock above a base of 0");
+
+  player.getInventory().add(new Item(STEEL_AXE, 1), false);
+  sell(player, 0);
+  assert.equal(player.getInventory().getAmount(COINS), Math.floor(200 * 0.85));
+  assert.deepEqual(stockOf(), [[BRONZE_AXE, 2], [STEEL_AXE, 1]]);
+
+  for (let tick = 0; tick < 100; tick++) ShopManager.restockAll();
+  assert.deepEqual(stockOf(), [[BRONZE_AXE, 2], [STEEL_AXE, 0]], "keeps its slot once depleted");
+});
+
 test("every general store buys items it doesn't stock and restocks its own", () => {
   const player = openShop(10000, GENERAL_STORE);
   player.getInventory().add(new Item(STEEL_AXE, 1), false);

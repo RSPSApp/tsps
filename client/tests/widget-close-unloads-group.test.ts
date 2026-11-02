@@ -131,7 +131,30 @@ manager.openSubInterface(MAIN_MODAL, SHOP);
 assert.equal(manager.getWidgetByUid(loadingLayer)!.hidden, true, "if_sethide on a closed interface does not reach its next open");
 setHide(loadingLayer, false);
 assert.equal(manager.getWidgetByUid(loadingLayer)!.hidden, false, "if_sethide after a reopen changes the reopened widget");
+
+const textUid = (SHOP << 16) | 5;
+const textWidget = manager.getWidgetByUid(textUid)!;
+textWidget.text = 'Server text';
+manager.setServerOwnedWidget(textUid, true);
+for (const opcode of [Opcodes.CC_SETTEXT, Opcodes.IF_SETTEXT]) {
+    vm.activeWidget = textWidget;
+    vm.stringStackSize = vm.intStackSize = 0;
+    vm.pushString('Cache text');
+    if (opcode === Opcodes.IF_SETTEXT) vm.pushInt(textUid);
+    handlers.get(opcode)!(context, 0, null);
+    assert.equal(textWidget.text, 'Server text', 'both CS2 text setters respect server ownership');
+    assert.equal(vm.intStackSize + vm.stringStackSize, 0, 'skipped setters still consume their operands');
+}
+manager.setServerOwnedWidget(textUid, false);
+vm.pushString('Cache text');
+handlers.get(Opcodes.CC_SETTEXT)!(context, 0, null);
+assert.equal(textWidget.text, 'Cache text', 'explicit release restores cache text updates');
 manager.closeSubInterface(MAIN_MODAL);
+
+manager.openSubInterface(MAIN_MODAL, SHOP);
+manager.setServerOwnedWidget(textUid, true);
+manager.clear();
+assert.equal(manager.isServerOwnedWidget(textUid), false, 'a client reset clears text ownership');
 
 // The real loader hands out its decoded group until the group unloads.
 const loader = new WidgetLoader({ getIndex: () => { throw new Error("no cache"); } } as never);

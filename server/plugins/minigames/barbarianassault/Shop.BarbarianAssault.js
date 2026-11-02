@@ -68,10 +68,7 @@ function commanderTalk({ player }) {
       checkPoints({ player });
       commanderTalk({ player });
     },
-    "High gamble", () => {
-      Points.highGamble(player);
-      commanderTalk({ player });
-    },
+    "High gamble", () => Points.highGamblePrompt(player),
     "Cancel", () => {},
   );
 }

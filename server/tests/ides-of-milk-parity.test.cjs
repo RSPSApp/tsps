@@ -5,6 +5,7 @@ const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 before(async () => {
   await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
+  core.RegionManager.init();
 });
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const runtime = require('../plugins/quests/QuestRuntime');
@@ -16,20 +17,23 @@ function harness({ npcDrops = false } = {}) {
   const hooks = {}, events = {}, eventCounts = new Map(), tasks = [], transcripts = [], objects = [], npcs = [];
   const groundDrops = [];
   class PrivateArea {
-    constructor() { this.entities = []; this.destroyed = false; }
+    constructor(boundaries) { this.boundaries = boundaries; this.entities = []; this.destroyed = false; }
     add(actor) { this.entities.push(actor); actor.setArea(this); }
     enter(actor) { this.add(actor); }
     leave(actor, logout) { this.postLeave(actor, logout); }
     postLeave(actor) { this.entities = this.entities.filter(value => value !== actor); actor.setArea(null); this.destroy(); }
     destroy() { this.destroyed = true; }
     isDestroyed() { return this.destroyed; }
+    getObjects() { return objects.filter(object => object.getArea() === this); }
+    getBoundaries() { return this.boundaries; }
   }
   const api = new Proxy({
     core: { ...core, PrivateArea, TaskManager: {
       submit: task => { task.setRunning(true); tasks.push(task); },
       cancelTasks: key => tasks.filter(task => task.key === key).forEach(task => task.stop()),
     }, ObjectManager: { register: object => objects.push(object) },
-      MapObjects: { get: (id, location) => new core.GameObject(id, location, 0, id === O.GATE_319 || id === O.GATE_322 ? 1 : 0, null) } },
+      MapObjects: { getType: core.MapObjects.getType.bind(core.MapObjects),
+        get: (id, location) => new core.GameObject(id, location, 0, id === O.GATE_319 || id === O.GATE_322 ? 1 : 0, null) } },
     persistAttribute: noop,
     onCustomEvent: (name, handler) => (events[name] ??= []).push(handler),
     emitCustomEvent: (name, event) => {
@@ -40,8 +44,10 @@ function harness({ npcDrops = false } = {}) {
     spawnNpc: definition => {
       let area, at = new core.Location(definition.x, definition.y, definition.z);
       const npc = { ...definition, getId: () => definition.id, getArea: () => area, setArea: value => { area = value; },
+        getSize: () => 3, isPlayer: () => false,
+        getMovementQueue: () => ({ reset() { return this; }, setBlockMovement: noop }),
         getHitpoints: () => 58, getLocation: () => at, moveTo: value => { at = value; },
-        getCombat: () => ({ reset: noop }), getDefinition: () => ({ getRespawn: () => 36 }),
+        getCombat: () => ({ reset: noop, getTarget: () => area?.player }), getDefinition: () => ({ getRespawn: () => 36 }),
         setCombatXpMultiplier: value => { npc.xpMultiplier = value; }, setPositionToFace: noop, performAnimation: noop, performGraphic: noop, forceChat: noop };
       npcs.push(npc); return npc;
     },
@@ -289,7 +295,7 @@ test('charge dashes four tiles on its facing axis and allows a two-tile sidestep
   for (const [at, target, dodge, end] of [
     [[3260, 3290], [3260, 3289], [3258, 3289], [3260, 3286]],
     [[3260, 3290], [3260, 3289], [3261, 3291], [3260, 3286]],
-    [[3260, 3286], [3263, 3287], [3263, 3289], [3264, 3286]],
+    [[3260, 3286], [3259, 3287], [3259, 3289], [3256, 3286]],
   ]) {
     const { h, p, npc, arena, method } = fight();
     npc.moveTo(new core.Location(...at, 0)); p.moveTo(new core.Location(...target, 0));
@@ -298,6 +304,70 @@ test('charge dashes four tiles on its facing axis and allows a two-tile sidestep
     assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], end);
     assert.equal(p.damage.length, 0);
   }
+});
+
+test('Brutus rejects charges whose swept 3x3 body would hit the real arena fences', () => {
+  for (const [label, at, target] of [
+    ['east fence', [3261, 3287], [3264, 3288]],
+    ['north pen fence', [3262, 3291], [3263, 3294]],
+    ['diagonal west fence', [3244, 3285], [3243, 3286]],
+    ['southern instance edge', [3260, 3267], [3261, 3266]],
+  ]) {
+    const { h, p, npc, arena, method } = fight();
+    npc.moveTo(new core.Location(...at, 0)); p.moveTo(new core.Location(...target, 0));
+    arena.meleeRemaining = 0; arena.nextSpecial = 'charge';
+    const speech = []; npc.forceChat = text => speech.push(text);
+    assert.equal(method.nextAttack(npc, p), 'stomp', `${label}: no wall-crossing charge is selected`);
+    method.start(npc, p); h.tick(4);
+    assert.deepEqual(speech, ['*snorts*']);
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], at, `${label}: no truncated dash`);
+  }
+});
+
+test('a charge can pass through the field plant while distant blocked charges restore melee reach', () => {
+  const { h, p, npc, arena, method } = fight();
+  npc.moveTo(new core.Location(3257, 3286, 0)); p.moveTo(new core.Location(3258, 3289, 0));
+  assert.ok(core.MapObjects.get(1393, new core.Location(3257, 3289, 0), null), 'native plant lies in the sweep');
+  assert.equal(core.RegionManager.canMove(3257, 3286, 3257, 3290, 0, 3, 3, arena), false, 'ordinary walking collides with the plant');
+  arena.meleeRemaining = 0; arena.nextSpecial = 'charge';
+  assert.equal(method.nextAttack(npc, p), 'charge');
+  method.start(npc, p); h.tick(4);
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [3257, 3290], 'interior scenery does not shorten the dash');
+  const blocked = fight();
+  blocked.npc.moveTo(new core.Location(3261, 3287, 0)); blocked.p.moveTo(new core.Location(3265, 3288, 0));
+  assert.equal(blocked.method.nextAttack(blocked.npc, blocked.p), null);
+  assert.equal(blocked.method.attackDistance(blocked.npc), 1, 'the normal combat cycle must pursue instead of attacking from sixteen tiles');
+});
+
+test('a valid sidestep cannot pull Brutus out of his charge windup', () => {
+  const { MovementQueue } = require('../dist/game/model/movement/MovementQueue');
+  const { CombatRange } = require('../dist/game/content/combat/CombatRange');
+  const { PathFinder } = require('../dist/game/model/movement/path/PathFinder');
+  const { h, p, npc, arena, method } = fight();
+  Object.assign(npc, {
+    isNpc: () => true, getPrivateArea: () => arena, getAsNpc: () => npc,
+    getMovementSteps: () => 1, getTimers: () => ({ has: () => false }),
+    isNeedsPlacement: () => false, getFollowing: () => null,
+    setLocation: npc.moveTo, setWalkingDirection: noop, setRunningDirection: noop,
+    hasFlag: () => false, canWalkThroughNPCs: () => false,
+  });
+  Object.assign(p, { isPlayer: () => true, isNpc: () => false,
+    getSize: () => 1, getPrivateArea: () => arena });
+  const movement = new MovementQueue(npc);
+  npc.getMovementQueue = () => movement;
+  npc.moveTo(new core.Location(3261, 3287, 0)); p.moveTo(new core.Location(3262, 3286, 0));
+  arena.meleeRemaining = 0; arena.nextSpecial = 'charge';
+  assert.equal(method.nextAttack(npc, p), 'charge');
+  method.start(npc, p);
+  assert.equal(core.RegionManager.canMove(3262, 3286, 3264, 3286, 0, 1, 1, arena), true);
+  p.moveTo(new core.Location(3264, 3286, 0));
+  assert.equal(CombatRange.canReach(npc, method, p), false, 'the sidestep would request pursuit');
+  movement.setPursuitCheckpoint(PathFinder.naiveEntityDestination(npc, p));
+  movement.process();
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [3261, 3287], 'hold the telegraphed origin');
+  h.tick(4);
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [3261, 3283], 'land at the original charge endpoint');
+  assert.equal(movement.getMobility().canMove(), true, 'ordinary pursuit resumes after the charge');
 });
 
 test('postquest kills preserve the private field and Ring restarts respawn without spawning duplicates', () => {

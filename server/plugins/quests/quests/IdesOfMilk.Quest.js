@@ -24,6 +24,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
     Task,
     TaskManager,
     ObjectIdentifiers,
+    RegionManager,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, openBook } = require("../QuestRuntime");
 
@@ -178,14 +179,42 @@ module.exports = function registerIdesOfMilkQuest(api) {
       [cornerX, cornerY - dy], [cornerX, cornerY - 2 * dy]];
   }
 
+  function chargeDestination(npc, target) {
+    const at = npc.getLocation(), size = npc.getSize();
+    const deltaX = target.getX() - at.getX() - 1, deltaY = target.getY() - at.getY() - 1;
+    // The recording's charge is cardinal; choose the facing axis before the four-tile dash.
+    const dx = Math.abs(deltaX) > Math.abs(deltaY) ? Math.sign(deltaX) : 0;
+    const dy = dx ? 0 : Math.sign(deltaY) || 1;
+    const end = new Location(at.getX() + 4 * dx, at.getY() + 4 * dy, at.getZ());
+    // Keep the whole bull in its private field, including at the instance's southern edge.
+    if (!npc.getArea().getBoundaries().some(boundary => boundary.inside(end) &&
+        boundary.inside(end.transform(size - 1, size - 1)))) return null;
+    // Walls on the entering edge, including their diagonal corners; furniture may be crossed.
+    const wallMask = dx > 0 ? 0xc1 : dx < 0 ? 0x1c : dy > 0 ? 0x70 : 0x7;
+    for (let step = 1; step <= 4; step++) {
+      for (let offset = 0; offset < size; offset++) {
+        const x = at.getX() + step * dx + (dx > 0 ? size - 1 : 0) + (dy ? offset : 0);
+        const y = at.getY() + step * dy + (dy > 0 ? size - 1 : 0) + (dx ? offset : 0);
+        const clipping = RegionManager.getClipping(x, y, at.getZ(), npc.getArea());
+        if ((clipping & wallMask) !== 0 || ((clipping & 0x100) !== 0 &&
+            MapObjects.getType(new Location(x, y, at.getZ()), 9, npc.getArea()))) return null;
+      }
+    }
+    return end;
+  }
+
   class BrutusCombat extends MeleeCombatMethod {
-    attackDistance(npc) { return npc.getArea() instanceof BullArena ? 16 : super.attackDistance(npc); }
+    attackDistance(npc) {
+      return npc.getArea() instanceof BullArena && this.nextAttack(npc, npc.getCombat().getTarget())
+        ? 16 : super.attackDistance(npc);
+    }
     nextAttack(npc, player) {
       const arena = npc.getArea();
       if (!(arena instanceof BullArena) || !player) return null;
       const at = npc.getLocation(), target = player.getLocation();
       const distance = Math.max(at.getX() - target.getX(), target.getX() - at.getX() - 2, at.getY() - target.getY(), target.getY() - at.getY() - 2);
-      return arena.stompsRemaining > 0 ? "stomp" : distance > 1 ? "charge" : arena.meleeRemaining > 0 ? null : arena.nextSpecial;
+      const attack = arena.stompsRemaining > 0 ? "stomp" : distance > 1 ? "charge" : arena.meleeRemaining > 0 ? null : arena.nextSpecial;
+      return attack === "charge" && !chargeDestination(npc, target) ? (distance > 1 ? null : "stomp") : attack;
     }
     attackSpeed(npc) {
       return npc.getArea() instanceof BullArena ? (this.nextAttack(npc, npc.getCombat().getTarget()) ? 8 : 5) : super.attackSpeed(npc);
@@ -202,6 +231,8 @@ module.exports = function registerIdesOfMilkQuest(api) {
       }
       const charge = arena.special === "charge";
       const aimed = player.getLocation().clone();
+      const end = charge ? chargeDestination(npc, aimed) : null;
+      if (charge) npc.getMovementQueue().reset().setBlockMovement(true);
       if (!charge && arena.stompsRemaining === 0) {
         arena.stompTiles = stompTiles(at, aimed);
         arena.stompsRemaining = quest.isComplete(player) ? 3 : 1 + Math.floor(Math.random() * 3);
@@ -216,13 +247,8 @@ module.exports = function registerIdesOfMilkQuest(api) {
       npc.setPositionToFace(aimed);
       npc.forceChat(charge ? "*growls*" : "*snorts*");
       npc.performAnimation(new Animation(charge ? ANIMATION.charge : ANIMATION.stomp, charge ? 60 : 30));
-      const deltaX = aimed.getX() - at.getX() - 1, deltaY = aimed.getY() - at.getY() - 1;
-      // The recording's charge is cardinal; choose the facing axis before the four-tile dash.
-      const dx = Math.abs(deltaX) > Math.abs(deltaY) ? Math.sign(deltaX) : 0;
-      const dy = dx ? 0 : Math.sign(deltaY) || 1;
-      const end = new Location(Math.max(3241, Math.min(3265, at.getX() + 4 * dx)),
-        Math.max(3266, Math.min(3293, at.getY() + 4 * dy)), 0);
       later(arena, charge && quest.isComplete(player) ? 3 : 4, () => {
+        if (charge) npc.getMovementQueue().setBlockMovement(false);
         if (arena.isDestroyed() || npc.getHitpoints() <= 0 || player.getArea() !== arena) return;
         const current = player.getLocation();
         const underBull = current.getX() >= at.getX() && current.getX() <= at.getX() + 2 &&

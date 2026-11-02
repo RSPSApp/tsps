@@ -42,6 +42,8 @@ References: [Romeo & Juliet](https://oldschool.runescape.wiki/w/Romeo_%26_Juliet
 
 Both ordinary completion and the precollected-beads start play the full checking conversation. The fast route writes varp160=1 when accepting at t3801. After the bead-handover message at3823, the ritual has no Continue button: fade/camera/jingle133, wizard4285 at+5, four beads consumed and client stage2 at+7, graphic714(height100)/sound1633 at+8, amulet1478 and875MagicXP at+17, then1QP/completion at+19 with jingle153. Pending/issued flags recover interrupted rewards exactly once. General postquest dialogue and trading another full bead set for an amulet stay available, with no further XP or points. Grayzag's in-progress taunt is selected.
 
+Recording 3202 (rev 232, main game) rechecks the post-quest menu: "Got any more quests?" gives "No, everything is good with the world today.", the spell option gives "I don't think so, the type of magic I study involves years of meditation and research.", and the amulet option asks for "one of each coloured bead again... Black, white, yellow and red." The no-beads reply and "Very well. See you soon!" match the transcript. The journal now follows [the wiki journal transcript](https://oldschool.runescape.wiki/w/Transcript:Imp_Catcher/Journal) at every stage, including the all-four-beads branch.
+
 References: [Imp Catcher](https://oldschool.runescape.wiki/w/Imp_Catcher), [Amulet of accuracy](https://oldschool.runescape.wiki/w/Amulet_of_accuracy).
 
 ## Verification and limits

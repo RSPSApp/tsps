@@ -66,6 +66,10 @@ module.exports = function registerPiratesTreasureQuest(api) {
   const GLOVES_FARE = 15;
   const GARDENER_SHOUT = "First moles, now this! Take this, vandal!";
 
+  /** Packing a banana into the crate: captured animation and sound (rsprox 4287). */
+  const PACK_BANANA_ANIMATION = 832;
+  const PACK_BANANA_SOUND = 2739;
+
   const EMPLOYMENT_ATTRIBUTE = "pirates-treasure.employment";
   const BANANA_ATTRIBUTE = "pirates-treasure.bananas";
   const RUM_ATTRIBUTE = "pirates-treasure.rum";
@@ -626,11 +630,16 @@ module.exports = function registerPiratesTreasureQuest(api) {
   function payForBananas(player) {
     if (attr(player, BANANA_ATTRIBUTE) < 10) return;
     player.getInventory().adds(COINS_ITEM_ID, 30);
+    player.sendMessage("Luthas hands you 30 coins.");
     setAttr(player, BANANA_ATTRIBUTE, 0);
     if (attr(player, RUM_ATTRIBUTE) === 1) setAttr(player, RUM_ATTRIBUTE, 2);
   }
 
   function packBanana(player) {
+    if (!isEmployed(player, 1)) {
+      player.sendMessage("Why would I want to do that?");
+      return;
+    }
     const stored = attr(player, BANANA_ATTRIBUTE);
     if (stored >= 10) {
       player.sendMessage("The crate is already full.");
@@ -639,10 +648,16 @@ module.exports = function registerPiratesTreasureQuest(api) {
     if (!hasItem(player, BANANA_ITEM_ID)) return;
     player.getInventory().deleteNumber(BANANA_ITEM_ID, 1);
     setAttr(player, BANANA_ATTRIBUTE, stored + 1);
-    player.sendMessage("You pack a banana into the crate.");
+    player.performAnimation(new Animation(PACK_BANANA_ANIMATION));
+    player.getPacketSender().sendSoundEffect(PACK_BANANA_SOUND);
+    StatementDialogue.send(player, "You pack a banana into the crate.");
   }
 
   function fillCrate(player) {
+    if (!isEmployed(player, 1)) {
+      player.sendMessage("Why would I want to do that?");
+      return;
+    }
     const stored = attr(player, BANANA_ATTRIBUTE);
     if (stored >= 10) {
       player.sendMessage("The crate is already full.");
@@ -656,10 +671,19 @@ module.exports = function registerPiratesTreasureQuest(api) {
     const packed = Math.min(carried, 10 - stored);
     player.getInventory().deleteNumber(BANANA_ITEM_ID, packed);
     setAttr(player, BANANA_ATTRIBUTE, stored + packed);
-    StatementDialogue.send(player, "You pack all your bananas into the crate.");
+    player.performAnimation(new Animation(PACK_BANANA_ANIMATION));
+    player.getPacketSender().sendSoundEffect(PACK_BANANA_SOUND);
+    // Captured: filling the crate to capacity says "fill", otherwise "pack all".
+    StatementDialogue.send(player, stored + packed >= 10
+      ? "You fill the crate with bananas."
+      : "You pack all your bananas into the crate.");
   }
 
   function stashRum(player) {
+    if (!isEmployed(player, 1)) {
+      player.sendMessage("Why would I want to do that?");
+      return;
+    }
     if (quest.getStage(player) !== STAGE_STARTED) return;
     if (attr(player, RUM_ATTRIBUTE) >= 1) {
       player.sendMessage("There's already some rum in here...");
@@ -674,6 +698,7 @@ module.exports = function registerPiratesTreasureQuest(api) {
   function searchPlantationCrate(player) {
     const bananas = attr(player, BANANA_ATTRIBUTE), rum = attr(player, RUM_ATTRIBUTE) === 1;
     if (rum && bananas === 0) player.sendMessage("There is some rum in here, although with no bananas to cover it. It is a little obvious.");
+    else if (bananas === 0) player.sendMessage("The crate is completely empty.");
     else player.sendMessage(bananas >= 10 ? "The crate is full of bananas." : `The crate has ${bananas} banana${bananas === 1 ? "" : "s"} inside.`);
     if (rum && bananas > 0) player.sendMessage("There is also some rum stashed in here too.");
   }

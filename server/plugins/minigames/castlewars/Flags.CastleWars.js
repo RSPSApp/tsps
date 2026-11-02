@@ -67,7 +67,8 @@ function pickupDroppedFlag(player, flagTeam) {
   if (game.flagStatus[flagTeam] !== 2) {
     return;
   }
-  if (flagTeam === game.getTeamId(player) && game.isInsideCastle(player, flagTeam)) {
+  if (flagTeam === game.getTeamId(player) && (game.isInsideCastle(player, flagTeam)
+    || game.catapultReturnTeam(game.getDroppedFlagObject(flagTeam)) === flagTeam)) {
     game.restoreFlagToBase(flagTeam, "return");
     player.sendMessage(`Returned the ${game.getTeamData(flagTeam).name.toLowerCase()} flag!`);
     return;

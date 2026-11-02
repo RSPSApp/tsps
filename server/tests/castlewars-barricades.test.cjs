@@ -330,10 +330,11 @@ test('issue 1929: a player cannot cut diagonally past a barricade', (t) => {
   assert.equal(step(1, 1), true);
 });
 
-test("issue 1929: a standard dropped on tunnel rocks or a catapult's battlements goes home", (t) => {
+test("issue 1929: a standard dropped on tunnel rocks, or your own on catapult battlements, goes home", (t) => {
   const { SARADOMIN } = data.TEAM;
   const dropAt = (x, y) => {
     const carrier = playerAt(t, x, y, 0);
+    game.setTeamId(carrier, SARADOMIN);
     game.carryFlag(carrier, SARADOMIN);
     game.dropCarriedFlag(carrier);
     const result = { status: game.flagStatus[SARADOMIN], dropped: game.getDroppedFlagObject(SARADOMIN) };

@@ -205,6 +205,8 @@ function consumeBone(player, itemId, slot, bone) {
   inventory.deleteAtSlot(slot, 1);
   spam(player, DIG_MESSAGE);
   award(player, itemId, bone, 1);
+  // "prayer:buried" { player, itemId }: a bone buried by hand (a league's "Bury 6 bones").
+  api.emitCustomEvent("prayer:buried", { player, itemId });
   return true;
 }
 

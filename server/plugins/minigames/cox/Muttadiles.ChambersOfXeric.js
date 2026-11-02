@@ -311,12 +311,16 @@ Raid.registerRoom("MUTTADILES", MuttadileRoom);
 function fly(area, npc, player, flight) {
   const { Projectile } = Shared.core();
   const from = Projectile.centreOf(npc);
-  const end = flight.end + 5 * from.getDistance(player.getLocation());
+  const distance = from.getDistance(player.getLocation());
+  let end = flight.end + 5 * distance;
+  // The magic one (61 to 56 + 5 a tile) would land before it leaves up close: give it 10 a tile (#1862).
+  if (end <= flight.start + 1) end = flight.start + 5 + 10 * distance;
   new Projectile(from, player.getLocation(), player, flight.id, flight.start, end, flight.startHeight, flight.endHeight, area)
     .withAngle(flight.angle)
     .withProgress(flight.progress)
     .sendProjectile();
-  return Math.max(1, Math.floor(end / 30));
+  // On the tick it lands, not the one before (#1862).
+  return Projectile.ticksToLand(end);
 }
 
 function roomOf(player) {

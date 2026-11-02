@@ -267,7 +267,7 @@ function completeLap(player, course) {
     player.getPacketSender().sendVarbit(HIGHLIGHTED_COURSE_VARBIT, 0);
     player.getPacketSender().sendClientScript(END_LAP_SCRIPT, lapClock(), Math.max(1, reward.count | 0) - 1);
   }
-  pluginApi.emitCustomEvent("agility:lap", { player, course: course.key, laps: laps[course.key] });
+  pluginApi.emitCustomEvent("agility:lap", { player, course: course.key, laps: laps[course.key], count: Math.max(1, reward.count | 0) });
   if (course.diaryTask) {
     pluginApi.emitCustomEvent("diary:task", { player, ...course.diaryTask });
   }
@@ -332,6 +332,10 @@ function rollMarkOfGrace(player, course) {
   if (marks.overlevelPenalty !== false && unboosted >= marks.level + MARK_OVERLEVEL_THRESHOLD) {
     chance *= MARK_OVERLEVELLED_MULTIPLIER;
   }
+  // Content may set the lap's mark chance ("agility:mark-chance", a league relic's fixed 33%).
+  const request = { player, course: course.key, chance };
+  pluginApi.emitCustomEvent("agility:mark-chance", request);
+  if (Number.isFinite(request.chance)) chance = request.chance;
   if (Math.random() >= chance && Math.random() >= diaryBonusChance(player, marks.rerolls)) return;
   const short = Math.random() < diaryBonusChance(player, marks.shortCooldown);
   player.setAttribute(MARK_COOLDOWN_ATTRIBUTE, minute + (short ? MARK_SHORT_COOLDOWN_MINUTES : MARK_COOLDOWN_MINUTES));
@@ -350,8 +354,58 @@ function rollMarkOfGrace(player, course) {
 
 /** The player's course marks on the floor; dropped marks go public and age as usual. */
 function spawnedMarks(username) {
-  return ItemOnGroundManager.ownedBy(username).filter((item) => item.getItem().getId() === core.ItemIds.MARK_OF_GRACE
-    && !item.getgoesGlobal() && item.getDespawnDelay() === MARK_DESPAWN_TICKS);
+  return ItemOnGroundManager.ownedBy(username).filter(isCourseMark);
+}
+
+function isCourseMark(groundItem) {
+  return groundItem.getItem().getId() === core.ItemIds.MARK_OF_GRACE && !groundItem.getgoesGlobal()
+    && groundItem.getDespawnDelay() === MARK_DESPAWN_TICKS;
+}
+
+/** The course whose mark tiles hold `location`. */
+function courseOfMark({ x, y, z }) {
+  return COURSES.find((course) => course.marks?.tiles.some((tile) => tile[0] === x && tile[1] === y && tile[2] === z)) ?? null;
+}
+
+/**
+ * A course mark picked up (one the inventory has room for). Content may make it finish a lap of
+ * its course ("agility:mark-taken", a league relic): the lap is recorded and paid as the last
+ * obstacle would, and `items` go to the inventory (the floor when it has no room).
+ */
+function takeMark(event) {
+  const { player, groundItem } = event;
+  if (!isCourseMark(groundItem) || ItemOnGroundManager.inventoryCapacity(player, groundItem.getItem()) <= 0) return;
+  const course = courseOfMark(event.location);
+  if (!course) return;
+  const request = { player, course: course.key, completesLap: false, items: [] };
+  pluginApi.emitCustomEvent("agility:mark-taken", request);
+  if (!request.completesLap) return;
+  player.setAttribute(PROGRESS_ATTRIBUTE, null);
+  completeLap(player, course);
+  for (const [itemId, amount] of request.items) {
+    const item = new core.Item(itemId, amount);
+    const added = Math.min(amount, player.getInventory().getAddableAmount(item));
+    if (added > 0) player.getInventory().adds(itemId, added);
+    if (amount > added) ItemOnGroundManager.registerLocation(player, new core.Item(itemId, amount - added), player.getLocation().clone());
+  }
+}
+
+/**
+ * An obstacle's own find (`gives`: { item (an ItemIdentifiers name), amount, message }, Prifddinas's portal shard): its line,
+ * then the item to the inventory, the floor for what has no room. Content may change the amount
+ * first ("agility:course-item" { player, course, itemId, amount }, a league relic's tenfold shards).
+ */
+function giveCourseItem(player, course, gives) {
+  const itemId = core.ItemIdentifiers[gives.item];
+  const request = { player, course: course?.key ?? null, itemId, amount: gives.amount };
+  pluginApi.emitCustomEvent("agility:course-item", request);
+  const amount = Math.max(0, request.amount | 0);
+  if (amount <= 0) return;
+  if (gives.message) player.sendMessage(gives.message);
+  const item = new core.Item(itemId, amount);
+  const added = Math.min(amount, player.getInventory().getAddableAmount(item));
+  if (added > 0) player.getInventory().adds(itemId, added);
+  if (amount > added) ItemOnGroundManager.registerLocation(player, new core.Item(itemId, amount - added), player.getLocation().clone());
 }
 
 function pauseMarksOnLogout({ player }) {
@@ -388,6 +442,9 @@ function finishObstacle(player, obstacle, success, completed, fail = obstacle.fa
     player.getPacketSender().sendRunEnergy();
   }
   obstacle.onSuccess?.(player);
+  if (obstacle.gives != null) {
+    giveCourseItem(player, obstacle.course, obstacle.gives);
+  }
   if (obstacle.takes != null) {
     takeAll(player, obstacle.takes);
   }
@@ -497,7 +554,8 @@ function attemptObstacle(player, context, entry) {
     onFinish: (completed) => {
       finishObstacle(player, obstacle, success, completed, fail, lapStart);
       if (completed && success) {
-        pluginApi.emitCustomEvent("agility:obstacle", { player, objectId, location: context.obj });
+        // A shortcut's own name (agility-shortcuts.json's, "Stepping stone (Shilo Village)"); a course obstacle has none.
+        pluginApi.emitCustomEvent("agility:obstacle", { player, objectId, location: context.obj, shortcut: obstacle.course ? null : obstacle.name ?? null });
       }
       if (completed && success && obstacle.skipTo != null) {
         skipAhead(player, obstacle, context);
@@ -628,6 +686,7 @@ module.exports = {
     api.onPlayerLogout(finishObstacleOnLogout);
     api.onPlayerLogout(pauseMarksOnLogout);
     api.onPlayerLogin(resumeMarksOnLogin);
+    api.onGroundItemPickup(takeMark);
 
     api.log("registered", {
       courses: COURSES.length,
@@ -636,3 +695,5 @@ module.exports = {
     });
   },
 };
+
+module.exports.giveCourseItem = giveCourseItem;

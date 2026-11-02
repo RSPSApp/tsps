@@ -207,6 +207,9 @@ function openChest(player, run, random) {
     Common.addXp(player, "THIEVING", room.chestXp);
   }
   loot(player, run, Common.rollChestArtefact(run.room, random), random);
+  // "pyramid-plunder:chest-searched" { player, room }: a room's Grand Gold Chest searched (a league's
+  // "Search the Golden Chest in Room 8").
+  Common.getApi()?.emitCustomEvent?.("pyramid-plunder:chest-searched", { player, room: run.room });
 }
 
 /** The sceptre roll comes first: finding it ends the run, then the artefact follows outside. */

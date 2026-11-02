@@ -215,6 +215,35 @@ test('Imp Catcher fast-start plays the check, timed ritual, separate stage/rewar
   h.action(p,5005,'jxPdQz');assert.equal(p.items.get(I.AMULET_OF_ACCURACY),2);assert.equal(p.xp.length,1);
 });
 
+test('Imp Catcher journal follows the wiki journal transcript at every stage', () => {
+  const h = harness('ImpCatcher'), p = player(), quest = h.quest;
+  assert.deepEqual(quest.buildJournal(p, quest), [
+    "I can start this quest by talking to",
+    "<col=800000>Wizard Mizgog</col> in the",
+    "<col=800000>Wizards' Tower</col>.",
+    "",
+    "There aren't any requirements for this quest.",
+  ]);
+  quest.setStage(p, 1);
+  const collecting = quest.buildJournal(p, quest);
+  assert.equal(collecting[0], "<str>I have spoken to Wizard Mizgog.</str>");
+  assert.equal(collecting[2], "I need to collect some items by killing <col=800000>Imps</col>, I can");
+  assert.equal(collecting[3], "find Imps all over the kingdom.");
+  assert.ok(collecting.includes("<col=800000>1 Black Bead.</col>"));
+  for (const id of [I.RED_BEAD, I.BLACK_BEAD, I.WHITE_BEAD, I.YELLOW_BEAD]) p.items.set(id, 1);
+  const ready = quest.buildJournal(p, quest);
+  assert.deepEqual(ready.slice(2), [
+    "I have collected all the missing beads and need to return",
+    "them to <col=800000>Wizard Mizgog</col>.",
+  ]);
+  quest.setStage(p, 2);
+  assert.deepEqual(quest.buildJournal(p, quest).slice(-3), [
+    "<str>Wizard Mizgog thanked me for finding his beads and gave me an</str>",
+    "<str>Amulet of Accuracy.</str>",
+    "<col=ff0000>QUEST COMPLETE!</col>",
+  ]);
+});
+
 test('Rune Mysteries complete short-route dialogue round trip gives the package, tea and final talisman once', () => {
   const h=harness('RuneMysteries'),p=player();h.quest.setStage(p,1);p.items.set(I.AIR_TALISMAN,1);
   h.talk(p,5034);continueToMenu(h,p);h.choose(p,'Okay, here you are.');continueToMenu(h,p);h.choose(p,"Actually, I'm not interested.");continueToMenu(h,p);h.choose(p,'Yes, certainly.');

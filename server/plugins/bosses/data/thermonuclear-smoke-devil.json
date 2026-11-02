@@ -16,8 +16,7 @@
   "combat": {
     "attackSpeed": 2,
     "attackDistance": 8,
-    "maxHit": 8,
-    "hitDelayTicks": 2
+    "maxHit": 8
   },
   "anims": {
     "attack": 3847,

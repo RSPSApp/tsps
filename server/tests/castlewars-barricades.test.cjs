@@ -37,7 +37,7 @@ before(() => {
   const api = {
     core,
     getAreaManager: () => ({}),
-    getBonusManager: () => ({}),
+    getBonusManager: () => ({ update() {} }),
     getObjectManager: () => ({ register() {}, deregister() {} }),
     getRegionManager: () => RegionManager,
     getTaskManager: () => ({ submit() {} }),
@@ -63,6 +63,8 @@ before(() => {
   game.getTeamId = () => data.TEAM.SARADOMIN;
   game.swapObject = (...args) => swaps.push(args);
   game.gameArea = { getPlayers: () => [] };
+  game.getBarricadePlayerPriority = () => false;
+  game.hasPracticeBots = () => false;
   Barricades(api, game);
   require('../plugins/combat/specials/Shove.SpecialAttack')(PluginManager.createApi('Castle Wars shove regression'));
   Tunnels(api, game);
@@ -103,6 +105,49 @@ test('the energy-barrier exit and nonblocking map objects allow immediate barric
     assert.equal(World.getAddNPCQueue().includes(npc), false);
     assert.equal(inventory.getItems()[0].getId(), -1, 'the first barricade was consumed');
     assert.equal(inventory.getItems()[2].getId(), core.ItemIdentifiers.BARRICADE, 'the clicked last barricade stays put');
+  }
+});
+
+test('practice menu priority selects native variants through burning, extinguishing and removal', (t) => {
+  let playerPriority = false;
+  let practice = true;
+  t.mock.method(game, 'getBarricadePlayerPriority', () => playerPriority);
+  t.mock.method(game, 'hasPracticeBots', () => practice);
+  for (const team of Object.values(data.TEAM)) {
+    t.mock.method(game, 'getTeamId', () => team);
+    for (const [isPractice, enabled] of [[true, false], [true, true], [false, false], [false, true]]) {
+      practice = isPractice;
+      playerPriority = enabled;
+      const p = playerAt(t, 2427, 3078);
+      const inventory = p.getInventory();
+      inventory.adds(core.ItemIdentifiers.TINDERBOX, 1);
+      inventory.adds(core.ItemIdentifiers.BUCKET_OF_WATER, 1);
+      const npc = deployed(t, p);
+      const standardId = data.BARRICADE_NPC[team];
+      const barricadeFirst = isPractice && !enabled;
+      const expected = barricadeFirst ? (team === data.TEAM.SARADOMIN ? core.NpcIdentifiers.BARRICADE : core.NpcIdentifiers.BARRICADE_3) : standardId;
+      assert.equal(npc.getId(), expected);
+      const definition = core.CacheDefinitions.getNpc(npc.getId());
+      const standard = core.CacheDefinitions.getNpc(standardId);
+      assert.equal(definition.drawPriority, barricadeFirst ? 0 : 1);
+      assert.deepEqual(definition.modelIds, standard.modelIds);
+      assert.deepEqual(definition.actions, standard.actions);
+      assert.equal(npc.hasFlag(core.NPC.BLOCKS_PLAYERS_FLAG), true);
+      assert.equal(game.isBarricade(npc), true);
+      p.moveTo(npc.getLocation().transform(-1, 0));
+      itemOnNpc({ player: p, target: npc, itemId: core.ItemIdentifiers.TINDERBOX, slot: inventory.getSlotForItemId(core.ItemIdentifiers.TINDERBOX), handled: false });
+      assert.equal(npc.getNpcTransformationId(), expected + 1);
+      assert.equal(core.CacheDefinitions.getNpc(expected + 1).drawPriority, barricadeFirst ? 0 : 1);
+      itemOnNpc({ player: p, target: npc, itemId: core.ItemIdentifiers.BUCKET_OF_WATER, slot: inventory.getSlotForItemId(core.ItemIdentifiers.BUCKET_OF_WATER), handled: false });
+      assert.equal(npc.getNpcTransformationId(), -1);
+      assert.equal(npc.getId(), expected, 'extinguishing restores the selected priority variant');
+      inventory.adds(core.ItemIdentifiers.EXPLOSIVE_POTION, 1);
+      itemOnNpc({ player: p, target: npc, itemId: core.ItemIdentifiers.EXPLOSIVE_POTION, slot: inventory.getSlotForItemId(core.ItemIdentifiers.EXPLOSIVE_POTION), handled: false });
+      assert.equal(game.isBarricade(npc), false, 'explosion releases either variant');
+      assert.equal(npc.hasFlag(core.NPC.BLOCKS_PLAYERS_FLAG), false);
+      World.getRemoveNPCQueue().splice(0);
+      World.getNpcs().remove(npc);
+    }
   }
 });
 
@@ -252,6 +297,67 @@ test('solid tunnel rocks and stepping stones refuse barricades', (t) => {
     setup({ player: p, slot: 0 });
     assert.match(p.messages.at(-1), /can't set up a barricade here/);
     assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.BARRICADE), amount);
+  }
+});
+
+test('issue 1929: mined-away tunnel rock tiles still refuse barricades; the tile beside them does not', (t) => {
+  t.mock.method(RegionManager, 'blocked', () => false);
+  // Every tile of all four 2x2 patches, as a player stands there once the rocks are cleared.
+  for (const [x, y] of [[2401, 9494], [2409, 9503], [2400, 9512], [2391, 9501]]) {
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      const p = playerAt(t, x + dx, y + dy, 0);
+      setup({ player: p, slot: 0 });
+      assert.match(p.messages.at(-1) ?? '', /can't set up a barricade here/, `${x + dx},${y + dy}`);
+      assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.BARRICADE), 3);
+    }
+  }
+  deployed(t, playerAt(t, 2401, 9493, 0));
+});
+
+test('issue 1929: a player cannot cut diagonally past a barricade', (t) => {
+  const walker = playerAt(t, 2405, 3110, 0);
+  const north = deployed(t, playerAt(t, 2405, 3111, 0));
+  const east = deployed(t, playerAt(t, 2406, 3110, 0));
+  const step = (dx, dy) => walker.getMovementQueue().canWalkTo(walker.getLocation().transform(dx, dy), walker.getLocation());
+  assert.equal(step(1, 1), false, 'between the north and east barricades');
+  assert.equal(step(-1, 1), false, 'past the north barricade');
+  assert.equal(step(1, -1), false, 'past the east barricade');
+  assert.equal(step(-1, -1), true, 'no barricade beside the south-west step');
+  game.releaseBarricade(north);
+  assert.equal(step(1, 1), false, 'one barricade beside the step is enough');
+  assert.equal(step(-1, 1), true);
+  game.releaseBarricade(east);
+  assert.equal(step(1, 1), true);
+});
+
+test("issue 1929: a standard dropped on tunnel rocks or a catapult's battlements goes home", (t) => {
+  const { SARADOMIN } = data.TEAM;
+  const dropAt = (x, y) => {
+    const carrier = playerAt(t, x, y, 0);
+    game.carryFlag(carrier, SARADOMIN);
+    game.dropCarriedFlag(carrier);
+    const result = { status: game.flagStatus[SARADOMIN], dropped: game.getDroppedFlagObject(SARADOMIN) };
+    game.restoreFlagToBase(SARADOMIN);
+    return result;
+  };
+  // RuneHQ: "if you die on the stepping stones or under the rockslide, it will return to your base."
+  // Rocks 4437 stand at 2391,9501 in the cache map; the same holds once they are mined away.
+  const rockTiles = [[2391, 9501], [2392, 9502], [2401, 9494], [2402, 9495], [2409, 9503], [2400, 9512]];
+  // The reporter's battlement tiles beside each catapult, and their mirrors.
+  const battlements = [[2383, 3116], [2384, 3116], [2385, 3116], [2387, 3118], [2387, 3119],
+    [2412, 3088], [2412, 3089], [2414, 3091], [2415, 3091], [2416, 3091]];
+  for (const [x, y] of [...rockTiles, ...battlements]) {
+    const { status, dropped } = dropAt(x, y);
+    assert.equal(status, 0, `${x},${y} sends it home`);
+    assert.equal(dropped, null, `${x},${y} leaves nothing on the floor`);
+  }
+  t.mock.method(core.MapObjects, 'get', () => null);
+  assert.equal(dropAt(2392, 9502).status, 0, 'mined-away rocks still send it home');
+  // The rest of the catapult deck, and the tunnel beside the rocks, drop it as usual.
+  for (const [x, y] of [[2383, 3118], [2385, 3120], [2413, 3087], [2393, 9502], [2401, 9493]]) {
+    const { status, dropped } = dropAt(x, y);
+    assert.equal(status, 2, `${x},${y} drops it`);
+    assert.deepEqual([dropped.getLocation().getX(), dropped.getLocation().getY()], [x, y]);
   }
 });
 

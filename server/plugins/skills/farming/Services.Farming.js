@@ -200,6 +200,8 @@ function takeBinStep(player, work) {
     if (bin.tier === ROTTEN_TOMATO_TIER || inventory.contains(Data.itemId("Bucket"))) {
         if (bin.tier !== ROTTEN_TOMATO_TIER) inventory.deleteNumber(Data.itemId("Bucket"), 1);
         inventory.addItem(new core.Item(Data.itemId(COMPOST_NAMES[bin.tier])));
+        // "farming:bin-taken" { player, itemId }: a bucket filled from the bin (or a rotten tomato taken).
+        core.PluginManager.emitCustomEvent("farming:bin-taken", { player, itemId: Data.itemId(COMPOST_NAMES[bin.tier]) });
     } else {
         // Choose from the live inventory at output time; ordinary buckets always have priority.
         const bucket = binBottomless(player, bin);
@@ -270,7 +272,7 @@ function farmingItemPair(event) {
     const names = [core.CacheDefinitions.getItem(a).name, core.CacheDefinitions.getItem(b).name];
     if (([a, b].includes(core.ItemIdentifiers.HAY_SACK) && names.includes("Bronze spear")) || ([a, b].includes(core.ItemIdentifiers.HAY_SACK_2) && names.includes("Watermelon"))) {
         event.handled = true;
-        if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) < 23) { player.sendMessage("You need level 23 Farming."); return; }
+        if (!Patches.hasLevel(player, Patches.SCARECROW_LEVEL, "scarecrow")) return;
         inventory.deleteNumber(a, 1); inventory.deleteNumber(b, 1);
         const finished = names.includes("Watermelon");
         inventory.addItem(new core.Item(finished ? Data.itemId("Scarecrow") : core.ItemIdentifiers.HAY_SACK_2));
@@ -281,7 +283,7 @@ function farmingItemPair(event) {
     if (crop && (a === Data.itemId("Filled plant pot") || b === Data.itemId("Filled plant pot"))) {
         event.handled = true;
         if (!Patches.requireTool(player, "Gardening trowel")) return;
-        if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) < crop.level) { player.sendMessage(`You need level ${crop.level} Farming.`); return; }
+        if (!Patches.hasLevel(player, crop.level, "seedling")) return;
         inventory.deleteNumber(crop.seed, 1);
         inventory.deleteNumber(Data.itemId("Filled plant pot"), 1);
         inventory.addItem(new core.Item(crop.seedling));

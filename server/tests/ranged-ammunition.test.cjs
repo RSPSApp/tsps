@@ -131,6 +131,56 @@ function roll(value, fn) {
 
 const shot = (harness, rollValue, pos = POS) => roll(rollValue, () => Factory.decrementAmmo(harness.player, pos, 1));
 
+test('bot shots cannot create farmable ammunition, including double shots and plugin-owned ammo', (t) => {
+  const { registerBotEvents } = require('../plugins/bots/runtime/RegisterBotEvents.PlayerBots');
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  const events = new Map();
+  registerBotEvents({
+    api: {
+      getWorld: () => ({}),
+      getItemOnGroundManager: () => ItemOnGroundManager,
+      onCustomEvent: (name, handler) => events.set(name, handler),
+      onPlayerDisconnect() {},
+      onPlayerLogout() {},
+      onPlayerDeathItemDrop() {},
+      onPlayerAttack() {},
+      onObjectInteraction() {},
+      onPlayerProcess() {},
+      onPlayerDefeated() {},
+    },
+  });
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => events.get(name)?.(event));
+  const scheduled = [];
+  t.mock.method(TaskManager, 'submit', task => scheduled.push(task));
+  drops.length = 0;
+  for (const [itemId, rangedWeapon, amount] of [
+    [Items.RUNE_ARROW, RangedWeapon.MAGIC_SHORTBOW, 1],
+    [Items.DRAGONSTONE_BOLTS_E_, RangedWeapon.RUNE_CROSSBOW, 1],
+    [Items.DRAGON_ARROW, RangedWeapon.DARK_BOW, 2],
+  ]) {
+    const bot = ammoHarness({ itemId, rangedWeapon });
+    bot.player.isPlayerBot = () => true;
+    for (const delay of [0, 3]) roll(0.50, () => Factory.decrementAmmo(bot.player, POS, amount, delay));
+    assert.deepEqual(drops, [], 'bot shots never drop ammunition for players to collect');
+    assert.deepEqual(scheduled, [], 'no delayed bot ammunition drops are queued');
+    assert.equal(bot.ammo().getAmount(), 5, 'the bot can keep fighting');
+  }
+
+  const human = ammoHarness();
+  human.player.isPlayerBot = () => false;
+  shot(human, 0.50);
+  assert.equal(human.ammo().getAmount(), 4);
+  assert.deepEqual(drops, [{ id: Items.BRONZE_ARROW, amount: 1, position: POS }], 'players still recover fired ammo');
+
+  const pluginAmmo = t.mock.method(PluginManager, 'decrementRangedAmmo', () => true);
+  const bot = ammoHarness();
+  bot.player.isPlayerBot = () => true;
+  Factory.decrementAmmo(bot.player, POS, 1);
+  assert.equal(pluginAmmo.mock.callCount(), 0, 'bot shots are saved before quiver or other plugin ammo can drop');
+  Factory.decrementAmmo(human.player, POS, 1);
+  assert.equal(pluginAmmo.mock.callCount(), 1, 'players still reach plugin-owned ammunition handlers');
+});
+
 test('fired ammo breaks 20% of the time and otherwise lands where the target stood', () => {
   drops.length = 0;
   const broken = ammoHarness();

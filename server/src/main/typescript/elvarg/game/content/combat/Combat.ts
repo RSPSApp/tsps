@@ -406,12 +406,15 @@ export class Combat {
         if (!movement.getMobility().canMove()) {
             this.trace(`bail=immobile:${movement.getMobility().constructor.name}`, target);
             state.mobilityBlocked = true;
-            // A frozen player's attack on a target out of reach ends there, as live answers it.
+            // A frozen player's attack on a target out of reach ends there, as live answers it,
+            // still turned to the target for that tick (rsprox 2238 OpPlayer, 3391 OpNpc).
             if (this.character.isPlayer() && this.character.getTimers().has(TimerKey.FREEZE)) {
                 if (this.character.getAsPlayer().isPlayerBot?.() !== true) {
                     this.character.getAsPlayer().sendMessage("I can't reach that!");
                 }
+                const current = this.target === target && this.generation === state.generation;
                 this.cancelIfCurrent(target, state.generation);
+                if (current) this.character.faceMobileBriefly(target);
             }
             return;
         }
@@ -758,6 +761,9 @@ export class Combat {
         if (!this.character.isNpc()) return false;
         const npc = this.character.getAsNpc();
         if (Number(npc.getAttribute("arceuus:dark-lure-until") ?? 0) > World.getProcessCycle()) return false;
+        // "combat:no-retreat": an NPC content moves about its arena (a raid boss teleported by its own
+        // specials) never gives up on its target for being far from where it spawned.
+        if (npc.hasFlag("combat:no-retreat")) return false;
         if (!npc.getCurrentDefinition().doesRetreat()) return false;
         const coordinator = npc.getMovementCoordinator();
         if (coordinator.getCoordinateState() === CoordinateState.RETREATING ||
@@ -873,6 +879,7 @@ export class Combat {
         // perform it themselves - many through super.start() first - so the arm stays open across
         // the whole call, and the seq left standing when it returns is the one that is measured.
         this.expectAttackAnimation();
+        PluginManager.emitCustomEvent("combat:attack-started", { attacker: this.character, target });
         method.start(this.character, target);
         this.measureAnimationCycle = -1;
         const hits = method.hits(this.character, target);

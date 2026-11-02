@@ -68,10 +68,8 @@ const SUPREME_DISTANCE = DATA.combat.supremeDistance;
 /** Wiki: Prime's AoE hits the 3x3 around his target; Supreme's the 6x6 (radius 3). */
 const PRIME_SPLASH_RADIUS = DATA.combat.primeSplashRadius;
 const SUPREME_SPLASH_RADIUS = DATA.combat.supremeSplashRadius;
-/** Captured hit delays: Prime 3 ticks, Supreme 2, Rex 1 (melee). */
+/** Rex's melee hit delay; Prime's and Supreme's land with their projectile (#1862). */
 const HIT_DELAY = Object.freeze({
-  prime: DATA.combat.hitDelayPrime,
-  supreme: DATA.combat.hitDelaySupreme,
   rex: DATA.combat.hitDelayRex,
 });
 /** Wiki max hits; the engine rolls the definition's (identical) values. */

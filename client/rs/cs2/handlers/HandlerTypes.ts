@@ -292,6 +292,7 @@ export interface HandlerContext {
 
     // Player appearance
     getPlayerGender?: () => number;
+    getPlayerPronouns?: () => number;
 
     /** Minimap zoom and icon display state used by minimap CS2 opcodes. */
     getMinimapZoom?: () => number;

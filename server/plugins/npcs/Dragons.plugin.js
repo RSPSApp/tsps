@@ -45,6 +45,11 @@ const DRAGON_MELEE_ANIMATION = new Animation(80);
 const DRAGONFIRE_ANIMATION = new Animation(81);
 const DRAGONFIRE_PROJECTILE_ID = 393;
 const DRAGONFIRE_IMPACT_GFX = new Graphic(1);
+const DRAGONFIRE_DELAY = 40;
+
+// Breath lands 5 + 10 cycles a tile after launch, and hits when it does: a flat 40 -> 55
+// crossed a long-range dragon's 8 tiles in a third of a second, with the hit a tick early.
+const dragonfireEnd = (character, target) => Projectile.arrivalCycles(character, target, DRAGONFIRE_DELAY + 5, 10);
 
 class DragonCombatMethod extends CombatMethod {
   constructor({ longRange = false, prayerProtects = true } = {}) {
@@ -63,8 +68,8 @@ class DragonCombatMethod extends CombatMethod {
         character,
         target,
         DRAGONFIRE_PROJECTILE_ID,
-        40,
-        55,
+        DRAGONFIRE_DELAY,
+        dragonfireEnd(character, target),
         31,
         43
       ).sendProjectile();
@@ -91,7 +96,7 @@ class DragonCombatMethod extends CombatMethod {
     }
 
     const hit = new PendingHit(character, target, this, {
-      delay: 1,
+      delay: Projectile.ticksToLand(dragonfireEnd(character, target)),
       rollAccuracy: false,
     });
 

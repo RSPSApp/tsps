@@ -30,6 +30,8 @@ function setupBarricade({ player }) {
   if (
     RegionManager.blocked(location, player.getPrivateArea()) ||
     game.isSteppingStone(game.getLocationTile(location)) ||
+    // Not where a tunnel's rocks stand or would fall, even once mined away (issue 1929).
+    game.isTunnelRockTile?.(location) ||
     World.isNpcOccupyingTile(location, null, 1, player.getPrivateArea())
   ) {
     player.sendMessage("You can't set up a barricade here.");
@@ -40,7 +42,8 @@ function setupBarricade({ player }) {
     player.sendMessage(`Your team already has ${limit} barricades set up.`);
     return true;
   }
-  const barricade = new core.NPC(data.BARRICADE_NPC[teamId], location.clone());
+  const types = game.hasPracticeBots?.() && !game.getBarricadePlayerPriority?.() ? data.BARRICADE_FIRST_NPC : data.BARRICADE_NPC;
+  const barricade = new core.NPC(types[teamId], location.clone());
   barricade.setFlag("combat:no-retaliate");
   barricade.__skipDefaultRespawn = true;
   if (!World.getNpcs().add(barricade)) {

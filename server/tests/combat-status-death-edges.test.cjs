@@ -118,6 +118,61 @@ test('dying clears the actor cache; a later roll starts from fresh effective lev
   assert.equal(cache.has(entity), false, 'the dead actor no longer reuses its cached levels');
 });
 
+test('the dying event fires during the death animation, before respawning', t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerDeathTask } = require('../dist/game/task/impl/PlayerDeath');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const victim = new Player(null), killer = new Player(null);
+  const order = [];
+  t.mock.method(victim.getCombat(), 'getKiller', () => killer);
+  t.mock.method(victim, 'getPacketSender', () => ({ sendConfig() {}, sendInterfaceRemoval() {}, sendDestination() {} }));
+  t.mock.method(victim, 'sendMessage', () => {});
+  t.mock.method(victim, 'performAnimation', animation => {
+    assert.equal(animation.getId(), 836);
+    order.push('animation');
+  });
+  t.mock.method(victim, 'moveTo', () => order.push('respawn'));
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
+    assert.equal(name, 'player:dying');
+    assert.equal(event.player, victim);
+    assert.equal(event.killer, killer);
+    order.push('dying');
+  });
+  new PlayerDeathTask(victim).execute();
+  assert.deepEqual(order, ['animation', 'dying']);
+});
+
+test('attack-started observers run only after permission succeeds, for every combat style', t => {
+  const { Combat } = require('../dist/game/content/combat/Combat');
+  const { CanAttackResponse } = require('../dist/game/content/combat/CombatFactory');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const attacker = { isPlayer: () => false, isNpc: () => false, isSpecialActivated: () => false };
+  const target = { getCombat: () => ({ getAttacker: () => attacker }) };
+  const combat = new Combat(attacker);
+  const order = [];
+  let allowed = false;
+  t.mock.method(CombatFactory, 'canAttack', () => allowed ? CanAttackResponse.CAN_ATTACK : CanAttackResponse.CANT_ATTACK);
+  t.mock.method(combat, 'handleAttackDenied', () => {});
+  t.mock.method(combat, 'expectAttackAnimation', () => {});
+  t.mock.method(combat, 'attackTiming', () => ({}));
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
+    assert.equal(name, 'combat:attack-started');
+    assert.deepEqual(event, { attacker, target });
+    order.push('event');
+  });
+  for (const type of [CombatType.MELEE, CombatType.RANGED, CombatType.MAGIC]) {
+    const method = {
+      type: () => type, onCombatBegan() {}, finished() {}, hits: () => [],
+      start: () => order.push('attack'),
+    };
+    allowed = false;
+    assert.equal(combat.executeAttack(method, target, true, 0, false), false);
+    allowed = true;
+    assert.equal(combat.executeAttack(method, target, true, 0, false), true);
+  }
+  assert.deepEqual(order, ['event', 'attack', 'event', 'attack', 'event', 'attack']);
+});
+
 test('both player and NPC death clear their roll cache before the death task runs', () => {
   const { NPC } = require('../dist/game/entity/impl/npc/NPC');
   const { Player } = require('../dist/game/entity/impl/player/Player');

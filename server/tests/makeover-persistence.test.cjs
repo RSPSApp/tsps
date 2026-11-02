@@ -90,3 +90,53 @@ test('switching category restores the kept colour and selects it, not the discar
   assert.equal(p.getAppearance().getLook()[core.Appearance.TORSO_COLOUR], 3, 'the kept colour is worn');
   assert.equal(p.getPacketSender().getVarp(colourVarp), 3, 'and the panel selects it');
 });
+
+for (const pronouns of [0, 1, 2]) {
+  test(`pronouns ${pronouns}: designer and settings share saved state independently of body type`, (t) => {
+    const p = actor(t, FEMALE);
+    assert.equal(p.getAppearance().getPronouns(), 1, 'legacy saves follow their existing body type');
+    PM.emitCustomEvent('makeover-mage:open', { player: p });
+    const dropdown = core.CacheDefinitions.getComponentId('player_design:pronouns_buttons');
+    assert.equal(PM.emitInterfaceActionClick({ player: p, buttonId: dropdown, action: 1, slot: pronouns + 1 }), true);
+    assert.equal(p.getAppearance().getPronouns(), pronouns);
+    const appearance = p.getSession().createPlayerView(p, true).appearance;
+    assert.equal(appearance[0], 1, 'native appearance still uses body type B');
+    assert.equal(appearance[appearance.length - 17], pronouns, 'native textGender byte carries the choice');
+    assert.equal(p.getAppearance().getLook()[0], 1, 'pronouns do not change body type');
+    const q = actor(t, MALE);
+    PlayerSave.fromPlayer(p).applyToPlayer(q);
+    assert.equal(q.getAppearance().getPronouns(), pronouns, 'save/load keeps the independent choice');
+    assert.equal(q.getPacketSender().getVarbit(10988), 0);
+    const login = { player: q, isNewAccount: false };
+    PM.emitPlayerLogin({ ...login, username: q.getUsername() });
+    assert.equal(q.getPacketSender().getVarbit(10988), pronouns, 'login restores the native setting');
+    const next = (pronouns + 1) % 3;
+    q.setAttribute('settings:selected', 387);
+    assert.equal(PM.emitInterfaceActionClick({ player: q, buttonId: (134 << 16) | 29, action: 1, slot: next * 3 }), true);
+    assert.equal(q.getAppearance().getPronouns(), next);
+    assert.equal(q.getPacketSender().getVarbit(10988), next);
+    const transmitted = { player: q, varpId: 2855, value: pronouns << 24, handled: false };
+    PM.emitCustomEvent('player:varp-transmit', transmitted);
+    assert.equal(transmitted.handled, true);
+    assert.equal(q.getAppearance().getPronouns(), pronouns);
+    q.getAppearance().setPronouns(next);
+    q.getAppearance().setLook(0, 0);
+    assert.equal(q.getAppearance().getPronouns(), next, 'changing body type preserves an explicit choice');
+    for (const bad of [-1, 3, 1.5, '1']) q.getAppearance().setPronouns(bad);
+    assert.equal(q.getAppearance().getPronouns(), next, 'invalid values cannot alter the saved choice');
+  });
+}
+
+
+test('opening the designer retains a legacy pronoun default across native body changes', (t) => {
+  const p = actor(t, MALE);
+  PM.emitCustomEvent('makeover-mage:open', { player: p });
+  assert.equal(p.getAppearance().getPronouns(), 0);
+  assert.equal(PM.emitInterfaceActionClick({ player: p, buttonId: (679 << 16) | 69, action: 1, slot: -1 }), true);
+  assert.equal(p.getAppearance().getLook()[0], 1);
+  assert.equal(p.getAppearance().getPronouns(), 0);
+  assert.equal(p.getPacketSender().getVarbit(10988), 0);
+  const q = actor(t, FEMALE);
+  PlayerSave.fromPlayer(p).applyToPlayer(q);
+  assert.equal(q.getAppearance().getPronouns(), 0, 'the independent default survives save/load');
+});

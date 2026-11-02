@@ -70,8 +70,8 @@ export abstract class Spell {
         return MagicSpellbook.NORMAL;
     }
 
-    /** Extra per-spell cooldowns. */
-    protected getCastCooldown(): { attribute: string, duration: number } | null {
+    /** Extra per-spell cooldowns, for the casting player (content may shorten one per player). */
+    protected getCastCooldown(_player?: Player): { attribute: string, duration: number } | null {
         return null;
     }
 
@@ -170,7 +170,7 @@ export abstract class Spell {
         }
 
         const now = World.getProcessCycle();
-        const cooldown = this.getCastCooldown();
+        const cooldown = this.getCastCooldown(player);
         if ((this.usesSharedCastDelay() && Number(player.getAttribute(Spell.NEXT_CAST_AT) ?? 0) > now) ||
             (cooldown != null && Number(player.getAttribute(cooldown.attribute) ?? 0) > now)) {
             return false;

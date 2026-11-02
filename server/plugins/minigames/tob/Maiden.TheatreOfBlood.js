@@ -253,7 +253,8 @@ class MaidenRoom extends Raid.Room {
     const repeated = this.countRepeat(target);
     const { base, perNylo } = Shared.byMode(this.raid, BLACKSTORM);
     const maxHit = (base + perNylo * this.nylosAbsorbed) * (repeated ? REPEATS.multiplier : 1);
-    const hit = this.strike(maiden, target, "magic", maxHit, Math.max(1, ticks - 1), { accurate: true, prayerMultiplier: 0.5 });
+    // The captured flight stays; the hit lands on the tick it does (#1862).
+    const hit = this.strike(maiden, target, "magic", maxHit, ticks, { accurate: true, prayerMultiplier: 0.5 });
     const damage = hit.getTotalDamage();
     if (damage <= 0) return;
     if (repeated) target.sendMessage("You take additional damage from the repeated attacks.");

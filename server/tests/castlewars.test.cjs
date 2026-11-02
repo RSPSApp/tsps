@@ -54,12 +54,14 @@ function fakeArea(players = []) {
 function fakePlayer({ head = -1, cape = -1, inventory = [], bot = false } = {}) {
   const attributes = new Map();
   const state = {
-    messages: [], moves: [], logouts: 0,
+    messages: [], moves: [], logouts: 0, typed: [], statements: [],
     getEquipment: () => ({
       getSlot: (slot) => (slot === core.Equipment.HEAD_SLOT ? head : slot === core.Equipment.CAPE_SLOT ? cape : -1),
     }),
     getInventory: () => ({ getItems: () => inventory.map((id) => ({ getId: () => id })) }),
     sendMessage: (message) => state.messages.push(message),
+    getPacketSender: () => ({ sendTypedMessage: (type, message) => state.typed.push([type, message]) }),
+    getDialogueManager: () => ({ startDialogues: (chain) => state.statements.push(chain) }),
     smartMove: (location) => state.moves.push(location),
     moveTo: (location) => state.moves.push(location),
     isPlayerBot: () => bot,
@@ -168,7 +170,10 @@ test('capes block entry before the teleport', () => {
   enterPortal(player, core.ObjectIdentifiers.GUTHIX_PORTAL);
   assert.equal(game.getTeamId(player), null);
   assert.equal(player.moves.length, 0);
-  assert.deepEqual(player.messages, ["You can't wear capes in Castle Wars."]);
+  // rsprox 3233 (rev 232): the reason in chat, then the message box.
+  assert.deepEqual(player.messages, ["You can't wear capes in the arena."]);
+  assert.deepEqual(player.typed, [[115, 'Some items are stopping you from entering the Castle Wars waiting area. See the chat for details.']]);
+  assert.equal(player.statements.length, 1);
 });
 
 test('modern Castle Wars allows helmets when entering a portal', () => {
@@ -307,6 +312,7 @@ test('picking a tier populates both teams with the 12/6/5 mix plus the specialis
     };
     for (const bot of teamBots) {
       assert.equal(bot.getAttribute('castlewars:bot-tier'), 'veteran', `${bot.getUsername()} is the picked tier`);
+      assert.notEqual(bot.getAttribute(game.PRACTICE_MAXED_KEY), true, 'normal tier selection keeps its original stat band');
       const role = bot.getAttribute('castlewars:bot-role');
       assert.ok(role in roles, `${bot.getUsername()} has a real role`);
       roles[role] += 1;
@@ -392,18 +398,37 @@ test('practice menus join from every portal through the real prompt dispatcher w
     pick(player, '20');
     pick(player, 'Back');
     pick(player, 'Join practice');
-    pick(player, 'Veteran');
 
     assert.equal(MultiChatboxPrompt.getPending(player), null, 'joining closes the last prompt');
     assert.equal(moves.length, 1, 'the join action reaches the waiting room');
     assert.equal(game.getTeamId(player), expectedTeam);
     assert.equal(forms.at(-1), god, 'the original portal determines the waiting-room transformation');
-    assert.deepEqual(game.settings, { teamSize: 1, opponent: 'scorer', freezeSeconds: 10, barricades: 20 });
+    assert.deepEqual(game.settings, { teamSize: 1, opponent: 'scorer', freezeSeconds: 10, barricades: 20, botTier: 'maxed', barricadePlayerPriority: false });
     const bots = World.getAddPlayerQueue();
     assert.equal(bots.length, 1, '1 vs 1 uses the human and one opposing bot');
     assert.equal(game.getTeamId(bots[0]), game.opposingTeam(expectedTeam));
     assert.equal(bots[0].getAttribute(game.BOT_ROLE_KEY), 'scorer');
     assert.equal(bots[0].getAttribute(game.BOT_TIER_KEY), 'veteran');
+    assert.equal(bots[0].getAttribute(game.PRACTICE_MAXED_KEY), true);
+  }
+});
+
+test('Lanthus maxed practice fills both sides with complementary selected roles', () => {
+  Settings(registry, game);
+  const player = fakePlayer();
+  const pick = (text) => {
+    const option = prompt.options.find((entry) => entry.text.startsWith(text));
+    assert.ok(option, text);
+    option.pick();
+  };
+  Settings.openSettings({ player, requestedTeam: TEAM.SARADOMIN });
+  pick('Teams:'); pick('3 vs 3'); pick('Bots:'); pick('Scorer (magic defence)'); pick('Join practice');
+  const bots = World.getAddPlayerQueue();
+  assert.equal(bots.length, 5);
+  for (const bot of bots) {
+    assert.equal(bot.getAttribute(game.PRACTICE_MAXED_KEY), true);
+    assert.equal(bot.getAttribute(game.BOT_TIER_KEY), 'veteran');
+    assert.equal(bot.getAttribute(game.BOT_ROLE_KEY), game.getTeamId(bot) === TEAM.SARADOMIN ? 'defender' : 'scorer');
   }
 });
 
@@ -422,9 +447,10 @@ test('Lanthus can join practice directly, and a stale Join callback cannot chang
   Settings(registry, game);
   const player = fakePlayer();
   Settings.openSettings({ player });
+  prompt.options.find((option) => option.text.startsWith('Bots:')).pick();
+  prompt.options.find((option) => option.text === 'None').pick();
   const join = prompt.options.find((option) => option.text === 'Join practice').pick;
   join();
-  prompt.options.find((option) => option.text === 'None').pick();
   assert.equal(player.moves.length, 1, 'Lanthus uses the normal portal entry validation');
   assert.equal(World.getAddPlayerQueue().length, 0);
   game.waitingAreas[TEAM.ZAMORAK].players.push(player);

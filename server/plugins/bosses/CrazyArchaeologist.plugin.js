@@ -46,7 +46,7 @@ function combatClass(api) {
       if (this.attack === Attack.SPECIAL_ATTACK) {
         return [];
       }
-      const delay = this.attack === Attack.DEFAULT_MELEE_ATTACK ? 0 : 2;
+      const delay = this.attack === Attack.DEFAULT_MELEE_ATTACK ? 0 : this.landing ?? 2;
       return [new PendingHit(character, target, this, delay)];
     }
 
@@ -70,19 +70,23 @@ function combatClass(api) {
 
       if (this.attack === Attack.DEFAULT_RANGED_ATTACK) {
         character.performAnimation(RANGED_ATTACK_ANIM);
+        // A thrown book: 5 cycles a tile instead of a flat 65, with the impact and the
+        // hit on the tick it lands (#1862).
+        const end = Projectile.arrivalCycles(character, target, 45, 5);
+        this.landing = Projectile.ticksToLand(end);
         const projectile = Projectile.createProjectile(
           character,
           target,
           1259,
           40,
-          65,
+          end,
           31,
           43
         );
         projectile.sendProjectile();
         TaskManager.submit(
           new CrazyTask(
-            3,
+            this.landing,
             () => {
               target.performGraphic(RANGED_END_GFX);
             },

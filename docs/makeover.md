@@ -91,3 +91,33 @@ and Confirm. These are offline checks, not a live browser playthrough.
 Yrsa type 6 still needs its own registration and the dialogue lines from its capture (rec 102).
 Thessalia's Talk-to branch ("I'd like to change my top please." etc., rec 3219) is still the transcript dialogue and
 does not open the interface.
+
+
+## Saved pronouns
+
+The Makeover Mage's designer and All Settings > Pronouns share the saved
+`appearance:pronouns` attribute: 0 He/him, 1 She/her, 2 They/them. Old saves without
+an explicit choice keep the choice matching their existing body type; selecting
+pronouns or opening the designer retains that choice independently of subsequent body changes.
+
+Revision-241 cache evidence: setting 387 is struct 994 with enum 5500. Designer
+`player_design:pronouns_buttons` (679:78) sends slots 1..3. Script
+[6046](https://github.com/Joshua-F/osrs-dumps/blob/6e5033af6215963581a51b348f452320ff18f0f6/script/%5Bclientscript%2Cscript6046%5D.cs2)
+creates that dropdown through the native settings scripts. Script
+[settings_pronouns](https://github.com/Joshua-F/osrs-dumps/blob/6e5033af6215963581a51b348f452320ff18f0f6/script/%5Bproc%2Csettings_pronouns%5D.cs2)
+transmits varbit 10988 (settings_tracking, varp 2855 bits 24..25). Both native option clicks and browser varp transmissions update the same state.
+The designer consumes only its local appearance controls; its other native ops
+reach the server. Local colour/body previews retain the independent pronoun choice.
+Login and reopening the designer restore that setting.
+
+The native appearance block carries a separate `textGender` byte after its three
+action strings (`../runescape-client/Player.java`, `read`). The browser preserves
+that byte for clientscript opcodes 4123/4124, as the deob's `Huffman.java` does.
+Opcode 4105 still follows the body type and now reads its alternatives in their
+native stack order. Server transcript alternatives likewise use the saved
+pronouns, including neutral alternatives when the transcript provides one;
+authored dialogue without alternatives is unchanged.
+
+Behaviour: [OSRS Wiki, Gender](https://oldschool.runescape.wiki/w/Gender) and
+[Settings](https://oldschool.runescape.wiki/w/Settings). Pronouns can be changed
+through either interface without changing the character's body.

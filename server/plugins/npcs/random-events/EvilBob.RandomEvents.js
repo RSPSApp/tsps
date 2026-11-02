@@ -378,7 +378,7 @@ module.exports = function attach(api, Events) {
     const player = session.player;
     const magic = player.getSkillManager().getMaxLevel(api.core.Skill.MAGIC);
     const skill = magic >= MAGIC_XP_LEVEL && Math.random() < 0.5 ? api.core.Skill.MAGIC : api.core.Skill.FISHING;
-    Teleports.finish(session);
+    Teleports.finish(session, { completed: true });
     player.getSkillManager().addExperience(skill, ISLAND_XP, false);
     say(player, [
       { me: true, text: "Now what was that all about? Did any of that really happen?", anim: 555 },

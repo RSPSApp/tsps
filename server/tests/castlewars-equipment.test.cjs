@@ -275,7 +275,7 @@ test('Lanthus accepts noted bracelets with confirmation, persists charges, and c
   const p = player(t, [core.ItemIdentifiers.CASTLE_WARS_BRACELET_3_]), opponent = player(t);
   const noted = core.ItemDefinition.forId(core.ItemIdentifiers.CASTLE_WARS_BRACELET_3_).getNoteId();
   p.getInventory().adds(noted, 2);
-  const event = { player: p, target: { getDefinition: () => ({ getName: () => 'Lanthus' }) }, itemId: noted };
+  const event = { player: p, target: { getCurrentDefinition: () => ({ getName: () => 'Lanthus' }) }, itemId: noted };
   use(event);
   assert.equal(event.handled, true);
   assert.equal(p.getInventory().getAmount(noted), 2, 'prompt has not consumed anything');
@@ -294,11 +294,42 @@ test('Lanthus accepts noted bracelets with confirmation, persists charges, and c
   assert.equal(p.getAttribute('castlewars:bracelet-charges'), 5);
   assert.equal(match.hasBraceletEffect(p), true);
   assert.equal(p.getEquipment().getSlot(core.Equipment.HANDS_SLOT), core.ItemIdentifiers.CASTLE_WARS_BRACELET_3_, 'only one charge source is spent');
+  // Issue 1929: the game start says the bracelet took effect.
+  assert.deepEqual(p.messages.slice(-2), [
+    "Your Castle wars bracelet is active for this game: you deal 20% more damage to whoever carries your team's standard.",
+    'Lanthus used one of your stored bracelet charges. 5 charges left.',
+  ]);
+  assert.equal(opponent.messages.some((line) => /bracelet/.test(line)), false, 'no bracelet, no message');
   match.showBraceletCharges(p); choice[1]();
   match.clearBraceletEffect(p); countdowns[0].onComplete();
   assert.equal(p.getAttribute('castlewars:bracelet-charges'), 5, 'disabled stored charges remain');
   assert.equal(p.getEquipment().getSlot(core.Equipment.HANDS_SLOT), core.ItemIdentifiers.CASTLE_WARS_BRACELET_2_);
   assert.equal(match.hasBraceletEffect(p), true, 'a worn bracelet still works');
+  assert.equal(p.messages.at(-1), 'Your Castle wars bracelet has 2 charges left.');
+});
+
+test('a worn bracelet on its last charge crumbles at the game start, with a message', (t) => {
+  const countdowns = [];
+  const api = {
+    ...PluginManager.createApi('CastleWarsBraceletCrumbleTest'),
+    getAreaManager: () => ({ areas: [] }), getBonusManager: () => ({ update() {} }),
+    getObjectManager: () => ({ register() {}, deregister() {} }), getRegionManager: () => core.RegionManager,
+    getTaskManager: () => ({ submit(task) { if (task.onComplete) countdowns.push(task); }, cancelTasks() {} }), getWorld: () => core.World,
+    emitCustomEvent() {},
+  };
+  const match = Game(api);
+  const p = player(t, [core.ItemIdentifiers.CASTLE_WARS_BRACELET_1_]), opponent = player(t);
+  t.mock.method(p, 'smartMove', () => {}); t.mock.method(opponent, 'smartMove', () => {});
+  match.waitingAreas = {
+    [match.TEAM.SARADOMIN]: { getPlayers: () => [p] },
+    [match.TEAM.ZAMORAK]: { getPlayers: () => [opponent] },
+  };
+  match.gameArea = { getPlayers: () => [] }; match.lobbyArea = { getPlayers: () => [] };
+  match.endGame(); // the match phase is module state, left running by the test above
+  match.beginStartCountdown(); countdowns.at(-1).execute();
+  assert.equal(p.getEquipment().getSlot(core.Equipment.HANDS_SLOT), -1);
+  assert.equal(match.hasBraceletEffect(p), true);
+  assert.equal(p.messages.at(-1), 'Your Castle wars bracelet crumbles to dust.');
 });
 
 test('bandages heal 10%, restore 30% run, and apply the patient bracelet bonus once before rounding', (t) => {
@@ -312,10 +343,126 @@ test('bandages heal 10%, restore 30% run, and apply the patient bracelet bonus o
     p.setRunEnergy(25); p.setPoisonDamage(6);
   }
   healer.getInventory().adds(core.ItemIdentifiers.BANDAGES, 2);
-  heal({ player: healer });
+  assert.equal(heal({ player: healer, itemId: 25730 }), false, 'Theatre of Blood bandages belong to their own handler');
+  assert.equal(healer.getHitpoints(), 40);
+  assert.equal(healer.getInventory().getAmount(core.ItemIdentifiers.BANDAGES), 2);
+  heal({ player: healer, itemId: core.ItemIdentifiers.BANDAGES });
   assert.equal(healer.getHitpoints(), 49); assert.equal(healer.getRunEnergy(), 55);
   assert.equal(healer.getPoisonDamage(), 0);
   teammate({ player: healer, target: patient, itemId: core.ItemIdentifiers.BANDAGES });
   assert.equal(patient.getHitpoints(), 54, 'the bracelet belongs to the recipient');
   assert.equal(patient.getRunEnergy(), 55); assert.equal(patient.getPoisonDamage(), 0);
+});
+
+test('native Castle Wars supplies work with production plugin ordering and the canonical Lanthus morph', async (t) => {
+  const path = require('node:path');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const modulePath = require.resolve('../plugins/minigames/castlewars/Game.CastleWars');
+  let match;
+  require.cache[modulePath].exports = (api) => (match = Game(api));
+  const bots = process.env.DISABLE_PLAYER_BOTS;
+  process.env.DISABLE_PLAYER_BOTS = '1';
+  try {
+    // Preserve production content ordering without spawning unrelated background bots.
+    PluginManager.loadFromDirectory(path.resolve(__dirname, '../plugins'));
+  } finally {
+    require.cache[modulePath].exports = Game;
+    if (bots === undefined) delete process.env.DISABLE_PLAYER_BOTS;
+    else process.env.DISABLE_PLAYER_BOTS = bots;
+  }
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(2441, 3089);
+  core.RegionManager.loadMapFiles(2426, 3076);
+  match.endGame();
+  const actors = [];
+  function actor() {
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const session = new PlayerSession(channel);
+    const p = new Player(session, new core.Location(2440, 3089, 0));
+    session.setPlayer(p);
+    p.setIndex(1900 + actors.length);
+    p.setUsername(`cwsupply${actors.length}`);
+    p.setRegistered(true);
+    const connection = new ClientConnection(channel);
+    connection.player = p;
+    const h = { p, async send(packet) { await connection.dispatch([packet]); connection.processTurnPackets(); } };
+    actors.push(h);
+    return h;
+  }
+  const lanthus = PluginManager.spawnNpc({ id: 5721, x: 2441, y: 3089, z: 0, wanderRadius: 0 });
+  t.after(() => {
+    for (const { p } of actors) {
+      p.setRegistered(false);
+      core.TaskManager.cancelTasks(p.getIndex());
+    }
+    PluginManager.removeNpc(lanthus);
+  });
+  assert.equal(lanthus.getDefinition().getName(), 'null', 'the canonical spawn is a nameless parent');
+  async function choose(h, text) {
+    const prompt = core.MultiChatboxPrompt.getPending(h.p);
+    assert.ok(prompt, text);
+    const option = prompt.options.indexOf(text);
+    assert.ok(option >= 0, `${text} in ${prompt.options}`);
+    await h.send({ type: 'dialogue_continue', widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: option + 1 });
+  }
+
+  for (const [itemId, amount] of [[11079, 1], [11080, 2]]) {
+    const h = actor(), inventory = h.p.getInventory();
+    inventory.adds(itemId, amount);
+    const use = async () => {
+      await h.send({ type: 'item_on_npc', targetIndex: lanthus.getIndex(), itemId,
+        slot: inventory.getSlotForItemId(itemId), widgetId: 149 << 16 });
+      for (let i = 0; i < 3; i++) {
+        h.p.getMovementQueue().process();
+        core.TaskManager.processWalkTo(h.p.getIndex());
+      }
+    };
+    assert.equal(lanthus.getCurrentDefinition(h.p).getName(), 'Lanthus');
+    await use();
+    assert.match(core.MultiChatboxPrompt.getPending(h.p)?.title ?? '', /Deposit/);
+    assert.equal(inventory.getAmount(itemId), amount, 'confirmation does not take bracelets');
+    await choose(h, 'Cancel');
+    assert.equal(inventory.getAmount(itemId), amount);
+    await use();
+    await choose(h, 'Deposit');
+    assert.equal(inventory.getAmount(itemId), 0);
+    assert.equal(h.p.getAttribute('castlewars:bracelet-charges'), amount * 3);
+    assert.match(core.MultiChatboxPrompt.getPending(h.p).title, new RegExp(`${amount * 3} stored charges`));
+    const saved = PlayerSave.fromPlayer(h.p);
+    assert.equal(saved.attributes['castlewars:bracelet-charges'], amount * 3);
+    await choose(h, 'Done');
+  }
+
+  const healer = actor(), opponent = actors[1];
+  match.waitingAreas = {
+    [match.TEAM.SARADOMIN]: { getPlayers: () => [healer.p] },
+    [match.TEAM.ZAMORAK]: { getPlayers: () => [opponent.p] },
+  };
+  match.gameArea = { getPlayers: () => [healer.p, opponent.p] };
+  match.lobbyArea = { getPlayers: () => [] };
+  match.setTeamId(healer.p, match.TEAM.SARADOMIN);
+  match.setTeamId(opponent.p, match.TEAM.ZAMORAK);
+  const submit = core.TaskManager.submit;
+  let countdown;
+  core.TaskManager.submit = (task) => { if (task.onComplete) countdown = task; };
+  try { match.beginStartCountdown(); } finally { core.TaskManager.submit = submit; }
+  assert.ok(countdown);
+  countdown.execute();
+  assert.equal(match.hasBraceletEffect(opponent.p), true);
+  assert.equal(opponent.p.getAttribute('castlewars:bracelet-charges'), 5, 'one deposited charge is spent at match start');
+  healer.p.getMovementQueue().reset();
+  healer.p.setLocation(new core.Location(2426, 3076, 1));
+  healer.p.getSkillManager().setMaxLevels(core.Skill.HITPOINTS, 99, false).setCurrentLevels(core.Skill.HITPOINTS, 40);
+  healer.p.setRunEnergy(25);
+  healer.p.setPoisonDamage(6);
+  const inventory = healer.p.getInventory();
+  inventory.adds(core.ItemIdentifiers.BANDAGES, 1);
+  await healer.send({ type: 'widget_action', widgetId: 149 << 16, groupId: 149, childId: 0,
+    buttonNum: 2, itemId: core.ItemIdentifiers.BANDAGES, slot: inventory.getSlotForItemId(core.ItemIdentifiers.BANDAGES) });
+  assert.equal(healer.p.getHitpoints(), 49, 'the earlier Theatre of Blood handler must fall through');
+  assert.equal(healer.p.getRunEnergy(), 55);
+  assert.equal(healer.p.getPoisonDamage(), 0);
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.BANDAGES), 0);
 });

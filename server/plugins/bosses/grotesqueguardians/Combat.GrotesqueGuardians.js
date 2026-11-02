@@ -18,6 +18,18 @@ function hitDelay(style, distance) {
   return 0;
 }
 
+/** Cycles before a projectile shows. */
+const LAUNCH = 30;
+
+/**
+ * Where a projectile ends: on the hit's tick (30 cycles a tick), except that a 1-tick hit would
+ * end at its own launch (drawn for a cycle on the Guardian), so those fly 5 + 5 a tile (#1862).
+ */
+function flightEnd(style, distance) {
+  const end = hitDelay(style, distance) * 30;
+  return end > LAUNCH + 1 ? end : LAUNCH + 5 + 5 * distance;
+}
+
 /** Chebyshev distance from a tile to an NPC's footprint (0 inside it). */
 function distanceTo(location, npc) {
   const base = npc.getLocation();
@@ -70,8 +82,8 @@ function methods() {
     });
   }
 
-  function shoot(npc, target, id, delay) {
-    new Projectile(Projectile.centreOf(npc), target.getLocation(), target, id, 30, delay * 30, 70, 31, npc.getPrivateArea?.() ?? null).sendProjectile();
+  function shoot(npc, target, id, end) {
+    new Projectile(Projectile.centreOf(npc), target.getLocation(), target, id, LAUNCH, end, 70, 31, npc.getPrivateArea?.() ?? null).sendProjectile();
   }
 
   class DawnCombat extends CombatMethod {
@@ -93,7 +105,7 @@ function methods() {
       if (fight.attacks.dawn % dawn.stoneBall.every === 0) {
         npc.performAnimation(new Animation(ids.seqs.dawnStun));
         const tile = target.getLocation();
-        shoot(npc, target, ids.spotanims.stoneBall, 3);
+        shoot(npc, target, ids.spotanims.stoneBall, 3 * 30);
         Common.later(3, () => {
           if (fight.stopped) return;
           for (const player of fight.roof.players()) {
@@ -111,8 +123,10 @@ function methods() {
         return;
       }
       npc.performAnimation(new Animation(ids.seqs.dawnRanged));
-      const delay = hitDelay("ranged", distance);
-      shoot(npc, target, ids.spotanims.dawnRanged, delay);
+      // Both hits land with the projectile.
+      const end = flightEnd("ranged", distance);
+      const delay = Projectile.ticksToLand(end);
+      shoot(npc, target, ids.spotanims.dawnRanged, end);
       this.plan = [{ style: "ranged", delay, max: dawn.rangedMax }, { style: "ranged", delay, max: dawn.rangedMax }];
     }
 
@@ -157,8 +171,10 @@ function methods() {
           this.style = "ranged";
           npc.__ggLastStyle = "ranged";
           npc.performAnimation(new Animation(ids.seqs.enragedRanged));
-          const delay = hitDelay("ranged", distance);
-          shoot(npc, target, ids.spotanims.explosion, delay);
+          // Both orbs land with the projectile.
+          const end = flightEnd("ranged", distance);
+          const delay = Projectile.ticksToLand(end);
+          shoot(npc, target, ids.spotanims.explosion, end);
           const max = Math.floor(dusk.enragedMeleeMax * 0.6);
           this.plan = [{ style: "ranged", delay, max, fixed: true }, { style: "ranged", delay, max, nested: true }];
         }
@@ -202,4 +218,4 @@ function attach(api) {
   api.onCombatHitRoll(partialProtection);
 }
 
-module.exports = { attach, methods, hitDelay, distanceTo, nextEnragedStyle };
+module.exports = { attach, methods, hitDelay, flightEnd, distanceTo, nextEnragedStyle };

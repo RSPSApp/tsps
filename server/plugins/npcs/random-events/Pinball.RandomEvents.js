@@ -212,7 +212,7 @@ module.exports = function attach(api, Events) {
     }
     const roll = Math.floor(Math.random() * 10);
     const reward = GEM_TABLE.find(([, , limit]) => roll < limit);
-    if (!Teleports.finish(session)) return true;
+    if (!Teleports.finish(session, { completed: true })) return true;
     event.player.sendMessage(`You were awarded ${reward[3]}!`);
     Rewards.give(api, event.player, [{ id: reward[0], amount: reward[1] }]);
     return true;

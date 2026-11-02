@@ -122,11 +122,28 @@ test("the combat method is the captured typeless magic style", () => {
   assert.equal(method.type(), core.CombatType.MAGIC);
   assert.equal(method.attackDistance(), 8);
   assert.equal(method.attackSpeed(), 2);
-  assert.equal(Common.HIT_DELAY_TICKS, 2);
   // Max hit 8 comes from the engine (monsters-complete via NpcDefinition), not the
   // plugin: the PendingHit it creates rolls 0-8. The data record must agree with it.
   assert.equal(NpcDefinition.forId(Common.BOSS_ID).getMaxHit(), 8);
   assert.equal(Common.DATA.combat.maxHit, NpcDefinition.forId(Common.BOSS_ID).getMaxHit());
+});
+
+test("the hit lands with the legacy-shape projectile at any range (#1862)", (t) => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const sent = [];
+  t.mock.method(core.Projectile.prototype, "sendProjectile", function () { sent.push(this); });
+  const boss = core.NPC.create(Common.BOSS_ID, new Location(2364, 9448, 0));
+  for (const tiles of [1, 8]) {
+    const at = core.Projectile.centreOf(boss);
+    const player = new Player(null, new Location(at.getX() + tiles, at.getY(), 0));
+    const method = new (Fight.methodClass())();
+    method.start(boss, player);
+    const shot = sent.at(-1);
+    // sendProjectile turns the legacy shape (0/20, 43/31) into 51 -> 46 + 10 a tile.
+    assert.deepEqual([shot.delay, shot.speed, shot.startHeight, shot.endHeight], [0, 20, 43, 31]);
+    const end = 46 + 10 * shot.start.getDistance(shot.end);
+    assert.equal(method.hits(boss, player)[0].getDelay(), Math.ceil(end / 30), `${tiles} tiles`);
+  }
 });
 
 test("protection prayers do not reduce the boss hit", () => {

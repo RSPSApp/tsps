@@ -15,6 +15,7 @@ before(async () => {
   await CachePipeline.initialize(process.cwd());
   require("../plugins/combat/StandardBindings.plugin").register(PluginManager.createApi("FreezesBindingTest"));
   require("../plugins/combat/Freezes.plugin").register(PluginManager.createApi("FreezesTest"));
+  require("../dist/game/definition/ObjectDefinition").ObjectDefinition.init();
 });
 
 /** A registered player at (x, y) whose chat lines land in `messages`, typed lines as [type, text]. */
@@ -185,6 +186,80 @@ test("a frozen player still interacts with an NPC in reach, and cannot reach one
   assert.deepEqual(frozen.messages, ["You're stunned!"]);
 });
 
+/** The 0..2047 angle the client is sent for `player`'s face target. */
+function faceAngle(p) {
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  return PlayerSession.prototype.faceDirection.call(null, p.getLocation(), p.getPositionToFace());
+}
+
+/** Runs the one-tick tasks submitted while `fn` runs, after it returns. */
+function nextTick(t, fn) {
+  const tasks = [];
+  t.mock.method(core.TaskManager, "submit", (task) => { task.setRunning(true); tasks.push(task); });
+  fn();
+  return () => { for (const task of tasks) if (task.isRunning()) task.tick(); };
+}
+
+test("a frozen player who clicks a loc out of reach turns to its centre, every click (#1944)", (t) => {
+  // rsprox 2238: frozen at 3325,4763, each Exit click on the 4x2 portal 26646 at 3326,4749
+  // answers "I can't reach that!" with FaceAngle 1989; walk clicks while frozen send none.
+  const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
+  const frozen = player(t, 3325, 4763);
+  frozen.p.getTimers().registers(core.TimerKey.FREEZE, 10);
+  const portal = new GameObject(26646, new core.Location(3326, 4749, 0), 10, 0, null);
+  const queue = frozen.p.getMovementQueue();
+  let used = 0;
+  for (let click = 0; click < 2; click++) {
+    frozen.messages.length = 0;
+    frozen.p.getUpdateFlag().reset();
+    queue.walkToObject(portal, { execute: () => used++ }, 1);
+    assert.deepEqual(frozen.messages, ["I can't reach that!"]);
+    assert.equal(frozen.p.getUpdateFlag().flagged(core.Flag.FACE_POSITION), true, `click ${click}`);
+    assert.equal(faceAngle(frozen.p), 1989);
+  }
+  assert.equal(used, 0);
+  assert.equal(queue.points.length, 0);
+});
+
+test("a frozen player who clicks a loc out of reach mid-fight drops the fight to face it", (t) => {
+  const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
+  const frozen = player(t, 3325, 4763), opponent = player(t, 3325, 4764);
+  frozen.p.getTimers().registers(core.TimerKey.FREEZE, 10);
+  frozen.p.getCombat().setTarget(opponent.p);
+  frozen.p.setMobileInteraction(opponent.p);
+  frozen.p.getMovementQueue().walkToObject(new GameObject(26646, new core.Location(3326, 4749, 0), 10, 0, null), { execute() {} }, 1);
+  assert.equal(frozen.p.getCombat().getTarget(), null);
+  assert.equal(frozen.p.getInteractingMobile(), null);
+  assert.equal(faceAngle(frozen.p), 1989);
+});
+
+test("a frozen player who clicks an NPC out of reach faces it for that tick only", (t) => {
+  // rsprox 2238 (OpPlayer) and 3391 (OpNpc): FacePathingEntity on the click tick, cleared the next.
+  const { PathFinder } = require("../dist/game/model/movement/path/PathFinder");
+  const { RsmodRouteFinding } = require("../dist/game/model/movement/path/RsmodRouteFinding");
+  const previous = PathFinder.rsmodRouteFinding;
+  PathFinder.rsmodRouteFinding = new RsmodRouteFinding(() => 0);
+  t.after(() => { PathFinder.rsmodRouteFinding = previous; });
+  const frozen = player(t, 3240, 3561);
+  const queue = frozen.p.getMovementQueue();
+  t.mock.method(queue, "checkDestination", () => true);
+  t.mock.method(queue, "isInteractionTargetValid", () => true);
+  frozen.p.getTimers().registers(core.TimerKey.FREEZE, 10);
+  const npc = new core.NPC(core.NpcIdentifiers.MAN, new core.Location(3240, 3565));
+  const tick = nextTick(t, () => queue.walkToEntity(npc, () => {}));
+  assert.deepEqual(frozen.messages, ["I can't reach that!"]);
+  assert.equal(frozen.p.getInteractingMobile(), npc);
+  tick();
+  assert.equal(frozen.p.getInteractingMobile(), null);
+
+  // A new interaction before the next tick is left alone.
+  const other = new core.NPC(core.NpcIdentifiers.MAN, new core.Location(3240, 3562));
+  const later = nextTick(t, () => queue.walkToEntity(npc, () => {}));
+  frozen.p.setMobileInteraction(other);
+  later();
+  assert.equal(frozen.p.getInteractingMobile(), other);
+});
+
 test("a frozen player's attack on a player out of reach answers 'I can't reach that!' and stops", (t) => {
   // rsprox 2238: each Attack click on a player four tiles away while frozen gets that reply.
   let cycle = 500;
@@ -196,9 +271,13 @@ test("a frozen player's attack on a player out of reach answers 'I can't reach t
     const attacker = player(t, 3240, 3561), target = player(t, 3240, y);
     if (frozenTicks) attacker.p.getTimers().registers(core.TimerKey.FREEZE, frozenTicks);
     attacker.p.getCombat().setTarget(target.p);
-    attacker.p.getCombat().preMovementProcess();
+    const tick = nextTick(t, () => attacker.p.getCombat().preMovementProcess());
     cycle++;
     assert.deepEqual(attacker.messages.filter((m) => /reach/.test(m)), expected, `frozen=${frozenTicks} y=${y}`);
     assert.equal(attacker.p.getCombat().getTarget() === target.p, expected.length === 0, "the attack ends only when unreachable");
+    // Live still turns the attacker to the target on that tick (FacePathingEntity), then lets go.
+    assert.equal(attacker.p.getInteractingMobile(), target.p, `faces the target, frozen=${frozenTicks} y=${y}`);
+    tick();
+    assert.equal(attacker.p.getInteractingMobile() === target.p, expected.length === 0, "lets go only once it gave up");
   }
 });

@@ -49,6 +49,7 @@ export const enum ServerPacket {
 
 export type PlayerAppearance = {
   gender: number;
+  pronouns?: number;
   colors: number[];
   kits: number[];
   equip: number[];
@@ -2763,7 +2764,7 @@ export function encodePlayerAppearance(
   text("");
   text("");
   text("");
-  byte(0);
+  byte(appearance.pronouns ?? appearance.gender);
   int(appearance.equipQty?.[13] ?? 0);
   int(appearance.equip[13] ?? -1);
   int(appearance.equip[12] ?? -1);

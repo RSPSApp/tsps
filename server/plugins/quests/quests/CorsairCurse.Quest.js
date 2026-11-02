@@ -1005,7 +1005,8 @@ module.exports = function registerCorsairCurseQuest(api) {
   const ithoiSpells = [CombatSpells.WIND_STRIKE, CombatSpells.WATER_STRIKE, CombatSpells.EARTH_STRIKE, CombatSpells.FIRE_STRIKE, CombatSpells.CURSE].map((base, index) => {
     const spell = Object.create(base);
     spell.castAnimation = () => new Animation(index === 4 ? 11428 : 9144);
-    spell.castProjectile = (source, target) => Projectile.createProjectile(source, target, [91,94,97,100,109][index], 51, 90, 43, 31);
+    // An NPC spell's usual flight (51 -> 46 + 10 a tile), which MagicCombatMethod times the hit to; a flat 90 crossed the hut at one speed.
+    spell.castProjectile = (source, target) => Projectile.createProjectile(source, target, [91,94,97,100,109][index], 51, Projectile.arrivalCycles(source, target, Projectile.LEGACY_MAGIC_END_BASE), 43, 31);
     if (index < 4) spell.maximumHit = () => Math.min(6, base.maximumHit());
     else spell.spellEffect = (_source, target) => {
       if (!target.isPlayer()) return;

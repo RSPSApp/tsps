@@ -7,7 +7,7 @@
  * session, as do `remaining` running out and the player moving, dying or logging out.
  */
 const Core = require("./Core.Smithing");
-const { pauseForLevelUp } = require("../SkillActions");
+const { pauseForLevelUp, actionInterval } = require("../SkillActions");
 
 const SESSIONS = new Map();
 /** Other per-tick work (closing menus a player walked away from). */
@@ -69,7 +69,9 @@ function everyTick(fn) {
 
 function advance(player, session) {
   if (session.finishAt == null && tick >= session.nextCycle) {
-    session.nextCycle = tick + (typeof session.interval === "function" ? session.interval(player) : session.interval);
+    // Content may work faster ("skills:action-interval", by the session's type: a league relic's 2-tick smelting).
+    const pace = typeof session.interval === "function" ? session.interval(player) : session.interval;
+    session.nextCycle = tick + actionInterval(Core.api, player, session.skill ?? Core.Skill.SMITHING, session.type, pace);
     if (session.begin && !session.begin(player)) return false;
     session.finishAt = tick + session.finishDelay;
   }

@@ -41,7 +41,8 @@ function methodClass() {
     }
 
     hits(character, target) {
-      return [new PendingHit(character, target, this, Common.HIT_DELAY_TICKS)];
+      // Lands with the shot, which is sent in the legacy shape and flies 46 + 10 a tile (#1862).
+      return [new PendingHit(character, target, this, Projectile.arrivalTicks(character, target, Projectile.LEGACY_MAGIC_END_BASE))];
     }
 
     handleAfterHitEffects(hit) {

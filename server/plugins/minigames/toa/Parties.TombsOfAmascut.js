@@ -194,6 +194,13 @@ function currentParty(player) {
   return stateOf(player).current;
 }
 
+/** A party member's new Player after logging back in. */
+function rejoinParty(party, player, previous) {
+  party.players = party.players.map((member) => (member === previous ? player : member));
+  if (!party.players.includes(player)) party.players.push(player);
+  stateOf(player).current = party;
+}
+
 /** Drops a player from every lobby relationship, e.g. on leaving the lobby or logging out. */
 function forget(player) {
   const state = stateOf(player);
@@ -215,6 +222,7 @@ module.exports = {
   isListFull,
   listed,
   currentParty,
+  rejoinParty,
   forget,
   sendEmptyPartyOverlay,
   PRESET_COUNT,

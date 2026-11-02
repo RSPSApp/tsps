@@ -13,6 +13,19 @@ function hitDelay(style, distance) {
   return 1 + Math.floor((3 + distance) / 6);
 }
 
+/** Cycles before the projectile shows. */
+const LAUNCH = 30;
+
+/**
+ * Where the projectile ends: on the hit's tick (30 cycles a tick), except that a 1-tick hit
+ * would end at its own launch (drawn for a cycle on the Hydra), so those fly 5 + 10 (magic) or
+ * 5 (ranged) a tile instead (#1862).
+ */
+function flightEnd(style, distance) {
+  const end = hitDelay(style, distance) * 30;
+  return end > LAUNCH + 1 ? end : LAUNCH + 5 + (style === "magic" ? 10 : 5) * distance;
+}
+
 function combatClass() {
   const { CombatMethod, CombatType, PendingHit, Animation, Projectile } = Common.core;
   const { combat } = Common.data;
@@ -50,9 +63,11 @@ function combatClass() {
       this.style = kind;
       npc.performAnimation(new Animation((kind === "magic" ? ids.seqs.magic : ids.seqs.ranged)[fight.phase]));
       const distance = Common.distanceToFootprint(target.getLocation(), npc);
-      this.delay = hitDelay(kind, distance);
+      const end = flightEnd(kind, distance);
+      // The hit lands with the projectile.
+      this.delay = Projectile.ticksToLand(end);
       const projectile = kind === "magic" ? ids.spotanims.magic : ids.spotanims.ranged;
-      new Projectile(Projectile.centreOf(npc), target.getLocation(), target, projectile, 30, this.delay * 30, 80, 31, npc.getPrivateArea?.() ?? null).sendProjectile();
+      new Projectile(Projectile.centreOf(npc), target.getLocation(), target, projectile, LAUNCH, end, 80, 31, npc.getPrivateArea?.() ?? null).sendProjectile();
     }
 
     attackDistance() {
@@ -74,4 +89,4 @@ function attach(api) {
   api.registerNpcCombatMethodProvider(Common.phaseForms(), combatClass(), { singleton: false });
 }
 
-module.exports = { attach, combatClass, hitDelay };
+module.exports = { attach, combatClass, hitDelay, flightEnd };

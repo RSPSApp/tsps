@@ -298,7 +298,6 @@ export class WeaponProfiles {
         this.register({
             itemIds: [ItemIdentifiers.TWISTED_BOW],
             attackAnimation: 426,
-            attackSpeed: 5,
             hitDelays: [STANDARD_HIT],
             projectiles: [DEFAULT_PROJECTILE],
             fireSound: Sound.SHOOT_ARROW,
@@ -354,15 +353,9 @@ export class WeaponProfiles {
             // Wiki (Ascension crossbows): the chance to trigger enchanted bolt effects is reduced by 50%.
             boltEffectChanceMultiplier: 0.5,
         });
-        // Machetes, sickles and canes share the slash-sword/mace interfaces but swing one tick slower.
-        this.register({
-            itemIds: [975, 6313, 6315, 6317, 2961, 2963, 3899, 22433, 22435, 24693, 24695],
-            attackSpeed: 5,
-        });
-        this.register({
-            itemIds: [12373, 12374, 12375, 12376, 12377, 12378, 12379, 12380],
-            attackSpeed: 5,
-        });
+        // Machetes, sickles and canes need no entry here: the cache gives the gem machetes 4
+        // ticks and the rest 5, as the Wiki has them (docs/audits/weapons.md).
+
         // Wands (Wiki): the staff interface's styles at 4 ticks, a tick faster than staves; the cache has no speed for them.
         this.register({
             itemIds: [

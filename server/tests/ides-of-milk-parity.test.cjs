@@ -100,6 +100,21 @@ function player() {
   return p;
 }
 
+test('the low-combat recommendation is a start-menu warning, not a transcript box', () => {
+  const h = harness();
+  const low = player();
+  low.getSkillManager = () => ({ getCombatLevel: () => 3 });
+  const lowMenu = { player: low, prompt: 'Start The Ides of Milk quest?', warning: null };
+  h.emit('npc-dialogue:menu', lowMenu);
+  assert.equal(lowMenu.warning, 'Before starting this quest, be aware that your combat level is lower than the recommended level of 15.');
+  assert.equal(h.action(low, N.CASSIUS_2, 'bkgpn5').handled, true);
+
+  const high = player();
+  const highMenu = { player: high, prompt: 'Start The Ides of Milk quest?', warning: null };
+  h.emit('npc-dialogue:menu', highMenu);
+  assert.equal(highMenu.warning, null);
+});
+
 test('4153 quest states and Groats information follow the actual dialogue milestones', () => {
   const h = harness(), p = player();
   h.emit('npc-dialogue:hook', { player: p, npcId: N.CASSIUS_2, hook: 'quest:the-ides-of-milk:start' });

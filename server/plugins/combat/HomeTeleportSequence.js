@@ -42,6 +42,8 @@ function reset(core, player) {
 
 function playStep(core, player, step) {
   if (step.graphic !== undefined) player.performGraphic(graphic(core, step.graphic, step.height ?? 0));
+  // A graphic on the caster's tile rather than on the caster (map_anim), as Demonic Pacts' cast sends its own.
+  if (step.mapGraphic !== undefined) core.World.sendLocalGraphics(step.mapGraphic, player.getLocation());
   player.performAnimation(new core.Animation(step.animation));
   if (step.sound !== undefined) {
     const at = player.getLocation();

@@ -117,3 +117,49 @@ and the Concentrated Shot launch (rune javelin `205`, end `71` at 9 tiles, impac
 - The comp ogre bow still also fires metal arrows, which the Wiki doesn't list for it.
 - Heights are quarter-tiles (packet values are `height × 4`); the captured values used here
   (163/146, 155/146, 142/146, 155/177) are exact.
+
+# Magic and NPC projectiles (issue #1862)
+
+Projectiles "didn't align with the casting animation or travel toward the player". Two client
+bugs made projectiles hang over their caster, and many NPC attacks hit before their projectile
+arrived.
+
+## Client
+
+| Bug | Fix |
+| --- | --- |
+| A relog without a page load restarts the client clock. `ProjectileManager` only solves cycles past its last one, so every projectile sat on its caster and snapped to its target until the new clock passed the old (minutes). `resetWorld` cleared `renderer.projectileManager`, which the WebGPU renderer doesn't have. | `resetWorld` clears through `getProjectileManager()`, and `update()` starts over when the clock goes back. |
+| After a slow frame (a new area loading) the clock catches up up to 50 cycles at once; `update()` replayed 10 and dropped the rest, so the projectile fell behind and was removed mid-air. | Every elapsed cycle is replayed. |
+
+`client/tests/projectile-clock.test.ts` covers both; each fails on the old manager.
+
+## Hit timing
+
+Measured in the client: a hit queued N ticks out on a **player** shows its splat 30·N cycles
+after the projectile was sent; one on an **NPC** a tick later (`CombatFactory.hitProcessingDelay`).
+A projectile reaches its target at its end cycle. So an NPC's hit on a player lines up when
+N = `Projectile.ticksToLand(end)` = ceil(end / 30). Player spells and ranged already did.
+
+Fixed to hit when the projectile lands (projectile ids, heights and arcs unchanged; captured
+flights kept, only their hits moved):
+
+- Generic NPC magic (fixed 3 ticks) and ranged (1 tick with a flat 40 → 57 arrow, now
+  41 → 46 + 5/tile).
+- Dragonfire (flat 40 → 55, 1 tick; now 40 → 45 + 10/tile), wyrms, demonic gorillas, revenants,
+  Pest Control defilers and torchers, Surok, Ithoi, the Sourhog.
+- TzTok-Jad and JalTok-Jad: the hit (and the prayer read) stays at 3 ticks; the magic orb now
+  lands then, not 10 cycles a tile after.
+- God Wars generals and bodyguards, Vorkath, Sarachnis, Araxxor, Callisto/Artio, Venenatis/Spindel,
+  Chaos Elemental, Chaos Fanatic, both Archaeologists, Skotizo.
+- Nightmare husks, Nex's mages and blood reavers, Dagannoth Prime/Supreme, Spinolyps, Kraken,
+  Thermonuclear smoke devil, Kalphite Queen, Mimic minions.
+- Raids: Nylocas (all), Maiden's Blackstorm, CoX Skeletal Mystics, Deathly mage/ranger,
+  Muttadiles, Shamans, Olm's head shots, Vanguards, Tekton sparks, ToA agile scarabs.
+- Flights that ended at or before their launch (drawn on the caster): Growler/Balfrug and the
+  Vanguards' magic up close, Alchemical Hydra, Grotesque Guardians, Shellbane Gryphon and
+  Muttadile magic at 1 tick, Leviathan's 1-tick volley.
+
+Left as they are, on purpose: the Callisto/Artio orb (its knockback dodge is read at landing),
+the CoX Ice Demon burst up close (captured), the Fanatic and Archaeologist tile bombs, and the
+Kalphite Queen's flat 40 → 70 flight (`docs/kalphite-queen.md` wants captures first). Revenant
+and Sourhog impact graphics keep their captured cycle, which can be ahead of a long flight.

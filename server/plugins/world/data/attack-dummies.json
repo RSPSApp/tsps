@@ -1,0 +1,19 @@
+{
+  "$comment": "Dummies with 'Attack' (Wiki Dummy): Varrock, Burthorpe and Kualti Headquarters (Civitas) give 5 Attack experience a hit up to level 7, then none with the message; Prifddinas' and the Clan Hall's give none at all. A hit as recordings 237/01098 and 230/02965 play it on civitas_combat_dummy (53 attempts): the weapon's attack animation, synth 2500, 'You hit the dummy.' (spam) and varrock_heavybag_defend on the dummy; a hit every 2 ticks however fast the clicks; a ranged weapon is refused with the recorded message.",
+  "dummies": {
+    "1764": { "where": "Varrock", "experience": 5 },
+    "823": { "where": "Burthorpe", "experience": 5 },
+    "52645": { "where": "Kualti Headquarters, Civitas illa Fortis (civitas_combat_dummy)", "experience": 5 },
+    "36566": { "where": "Prifddinas", "experience": 0 },
+    "41652": { "where": "Clan Hall", "experience": 0 }
+  },
+  "maxLevel": 7,
+  "hitTicks": 2,
+  "sound": 2500,
+  "dummyAnimation": "varrock_heavybag_defend",
+  "messages": {
+    "hit": "You hit the dummy.",
+    "learned": "There is nothing more you can learn from hitting a dummy.",
+    "ranged": "You can't use ranged attacks on the dummy."
+  }
+}

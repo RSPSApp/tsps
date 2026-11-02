@@ -215,6 +215,31 @@ test("Prime splashes his 3x3 around the target", () => {
   assert.ok(!victims.includes(far));
 });
 
+test("Prime's, Supreme's and spinolyps' hits land with their projectiles (#1862)", (t) => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const sent = [];
+  t.mock.method(core.Projectile.prototype, "sendProjectile", function () { sent.push(this); });
+  t.mock.method(Hud, "engaged", () => {});
+  const byId = new Map();
+  for (const { ids, method } of combatProviders) for (const id of ids) byId.set(id, method);
+  for (const id of [Common.PRIME_ID, Common.SUPREME_ID, Common.SPINOLYP_IDS[0]]) {
+    const npc = core.NPC.create(id, new Location(2911, 4451, 0));
+    npc.getPlayersWithinDistance = () => [];
+    for (const tiles of [1, 9]) {
+      const at = core.Projectile.centreOf(npc);
+      const player = new Player(null, new Location(at.getX() - tiles, at.getY(), 0));
+      player.getPacketSender = () => new Proxy({}, { get: () => () => {} });
+      const method = new (byId.get(id))();
+      method.start(npc, player);
+      const shot = sent.at(-1);
+      // The legacy shape (0/20, 43/31) is sent as 51 -> 46 + 10 a tile.
+      assert.deepEqual([shot.delay, shot.speed, shot.startHeight, shot.endHeight], [0, 20, 43, 31]);
+      const end = 46 + 10 * shot.start.getDistance(shot.end);
+      assert.equal(method.hits(npc, player)[0].getDelay(), Math.ceil(end / 30), `${id} at ${tiles} tiles`);
+    }
+  }
+});
+
 test("Rex only reaches edge-adjacent tiles", () => {
   const base = new Location(2913, 4445, 0);
   assert.equal(Common.edgeDistance(base, 3, new Location(2912, 4445, 0)), 1);

@@ -40,6 +40,8 @@ export class WidgetInteractionController {
     clickedWidgetX: number = 0;
     clickedWidgetY: number = 0;
     clickedWidgetHandled: boolean = false;
+    /** A press-only widget the click passed through to the op beneath it: its onRelease fires on release too. */
+    pressedWidget: any = null;
 
     widgetDragDuration: number = 0;
     /** Client cycle (20ms) at which the current press started; drag dead time counts from it. */
@@ -137,6 +139,7 @@ export class WidgetInteractionController {
         this.clickedWidgetX = 0;
         this.clickedWidgetY = 0;
         this.clickedWidgetHandled = false;
+        this.pressedWidget = null;
         this.widgetDragDuration = 0;
         this.isDraggingWidget = false;
         this.dragClickX = 0;

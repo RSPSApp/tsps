@@ -181,7 +181,10 @@ export class WebRtcGameConnector {
       return;
     }
     if (message.type === "session-close") {
-      if (!state.channel) this.closePeer(sessionId);
+      // The browser drops signalling as soon as its channel opens, and that can reach us before
+      // the channel does. Once answered, a session that never opens ends on the negotiation timeout.
+      const signallingDone = state.remoteDescriptionSet && message.message === "browser_signalling_disconnected";
+      if (!state.channel && !signallingDone) this.closePeer(sessionId);
       return;
     }
     if (message.type === "session-error") {
@@ -280,8 +283,15 @@ export class WebRtcGameConnector {
     if (!state) return;
     this.peers.delete(sessionId);
     clearTimeout(state.timeout);
-    try { state.channel?.close(); } catch {}
-    try { state.peer.close(); } catch {}
+    // Closing the peer before the channel's close reaches the browser aborts SCTP, so the player
+    // sees an error and is pinned to the TURN relay. The channel closes once its buffer is sent.
+    const closeConnection = () => { try { state.peer.close(); } catch {} };
+    const channel = state.channel;
+    if (channel && channel.readyState !== "closed") {
+      channel.addEventListener("close", closeConnection, { once: true });
+      setTimeout(closeConnection, 10_000).unref?.();
+      try { channel.close(); } catch {}
+    } else closeConnection();
   }
 
   private send(message: Record<string, unknown>): void {

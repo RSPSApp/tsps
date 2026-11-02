@@ -786,6 +786,8 @@ export class ClientConnection {
               this.player, actionPacket.groupId, actionPacket.childId, actionPacket.slot
             )) {
               // Cache-native combat autocast controls reuse the existing spell state.
+            } else if (LunarSpells.handleWidgetAction(this.player, actionPacket.groupId, actionPacket.childId)) {
+              // Monster Examine's stats (522) close back to the spellbook.
             } else if (this.emitSpellCast(actionPacket)) {
               // Plugins own the self-cast spells they register for, by cache spell name.
             } else if (SpellTeleports.handleSelf(
@@ -796,6 +798,7 @@ export class ClientConnection {
             } else if (LunarSpells.handleSelf(
               this.player,
               this.resolveSpellName(actionPacket.widgetId, actionPacket.groupId, actionPacket.childId, actionPacket.itemId),
+              actionPacket.buttonNum || actionPacket.opId || 1,
             )) {
               // Lunar self-casts and teleports are identified by their cache spell name.
             } else if (CombatSpells.handleSelf(
@@ -881,6 +884,8 @@ export class ClientConnection {
             } else if (packet.varpId === 173) {
               this.player.setRunning(packet.value !== 0 && this.player.getRunEnergy() > 0);
               this.player.getPacketSender().sendRunStatus();
+              // "player:run-toggled" { player, running }: the run mode the player switched to.
+              PluginManager.emitCustomEvent("player:run-toggled", { player: this.player, running: this.player.isRunningReturn() });
             } else if (packet.varpId === 301 && (packet.value !== 0) !== this.player.isSpecialActivated()) {
               CombatSpecial.activate(this.player);
             }
@@ -1463,6 +1468,7 @@ export class ClientConnection {
     const displayEquipment = player.getEquipment().getItems();
     return {
       gender: look[Appearance.GENDER] ?? 0,
+      pronouns: player.getAppearance().getPronouns(),
       colors: [
         look[Appearance.HAIR_COLOUR],
         look[Appearance.TORSO_COLOUR],

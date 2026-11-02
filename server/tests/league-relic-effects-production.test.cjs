@@ -234,7 +234,8 @@ test("Friendly Forager: the pouch finds a herb on gathering, every 9 ticks, with
   const messages = [];
   who.relic.sendMessage = (text) => messages.push(text);
   itemActions.get("Forager's pouch").Check({ player: who.relic });
-  assert.match(messages.at(-1), /holds: .*guam/i);
+  assert.match(messages.at(-1), /^\d+ x Grimy /, "as recorded: the header, then a line per herb, as the item is named");
+  assert.ok(messages.includes("You look in your forager's pouch and see:"));
   const inPouch = total(who.relic);
   itemActions.get("Forager's pouch").Withdraw({ player: who.relic });
   assert.equal(total(who.relic), 0, "Withdraw empties it");
@@ -392,4 +393,18 @@ test("through the skills' own loops: a smithing session, a crafting loop and a p
   };
   assert.deepEqual(compost(forager.relic), [1, 0], "the fourth dose");
   for (const player of others(forager)) assert.deepEqual(compost(player), [0, 1], `${player.getUsername()} as usual`);
+});
+
+test("Friendly Forager: Demonic Pacts' pouch holds 100 of each herb (Wiki, 15 April 2026), Raging Echoes' 30", () => {
+  const guam = obj("unidentified_guam");
+  for (const [league, cap] of [[6, 100], [5, 30]]) {
+    const player = character(`pouch-cap-${league}`, "league", FORAGER, league);
+    player.getInventory().adds(I.FORAGERS_POUCH, 1);
+    const pouch = player.getInventory().getItems().find((item) => item?.getId() === I.FORAGERS_POUCH);
+    pouch.setMetaValue(FORAGER_STORE, { [guam]: cap - 10 });
+    player.getInventory().adds(guam, 20);
+    itemActions.get("Forager's pouch").Fill({ player });
+    assert.equal(pouch.getMetaValue(FORAGER_STORE)[guam], cap, `league ${league}: full`);
+    assert.equal(player.getInventory().getAmount(guam), 10, "the rest stay out");
+  }
 });

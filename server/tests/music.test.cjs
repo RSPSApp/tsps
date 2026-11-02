@@ -178,6 +178,18 @@ test('region-change unlock uses the cache row slot for archive song IDs', async 
   assert.deepEqual(player.attrs.get(Progress.UNLOCKED_TRACKS_ATTRIBUTE), [549]);
 });
 
+test('Varlamore regions play their area tracks', async () => {
+  await setup();
+  // Civitas illa Fortis, the Twilight Temple, the crypt below it and Ralos' Rise.
+  assert.equal(api.core.Music.forRegion(6704), 787, 'Civitas illa Fortis');
+  assert.equal(api.core.Music.forRegion(6706), 809, 'Twilight Temple');
+  assert.equal(api.core.Music.forRegion(6804), 787, 'the temple crypt');
+  assert.equal(api.core.Music.forRegion(5681), 766, "Ralos' Rise");
+  assert.equal(api.core.Music.forRegion(5679), 783, 'Avium Savannah');
+  assert.equal(api.core.Music.forRegion(5426), 822, 'Auburn Valley');
+  assert.equal(api.core.Music.forRegion(5165), 805, 'Aldarin');
+});
+
 test('playing a song selects its native Music DB row in the now-playing varp', async () => {
   await setup();
   const player = makePlayer();

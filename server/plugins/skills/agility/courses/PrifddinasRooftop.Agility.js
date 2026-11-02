@@ -179,6 +179,8 @@ module.exports = {
       },
       skipTo: (context) => PORTALS[portalAt(context)].skipTo,
       onSuccess: hidePortal,
+      // Every portal finds a crystal shard (Wiki, since its 1/3 became certain), as 237/01149 records it.
+      gives: { item: "CRYSTAL_SHARD", amount: 1, message: "You find a crystal shard on your way through the portal." },
     },
     {
       object: ObjectIds.LADDER_394,

@@ -64,6 +64,8 @@ export class NpcDefinition {
         return (type === "standard" ? undefined : this.rangedDefenceBonuses[type]) ?? this.stats[14] ?? 0;
     }
     private slayerLevel: number = 0;
+    /** The dump's first attack style ("stab", "crush", "ranged", ...); "" when unknown. */
+    private attackStyle: string = "";
     /** Retreat/leash max range; the Wiki's "almost always seven tiles". */
     private combatFollowDistance: number = 7;
     /** Where an aggressive NPC searches for a target, from its current south-west tile. */
@@ -270,6 +272,11 @@ export class NpcDefinition {
 
     public isMembers(): boolean {
         return this.members;
+    }
+
+    /** Monster Examine's "Main attack style". */
+    public getAttackStyle(): string {
+        return this.attackStyle;
     }
 
     public getAttackType(): CombatType {

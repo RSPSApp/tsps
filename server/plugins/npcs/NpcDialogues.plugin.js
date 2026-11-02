@@ -142,11 +142,11 @@ const GENDERED_ALTERNATIVE = /\[([^\[\]]*\/[^\[\]]*)\]/g;
 
 /** The address words the wiki templates use for each gender. */
 const MALE_ADDRESS_WORDS = new Set([
-  "sir", "sirrah", "mister", "master", "milord", "lord", "lad", "laddie", "man", "men", "boy", "boys",
+  "he", "him", "his", "himself", "sir", "sirrah", "mister", "master", "milord", "lord", "lad", "laddie", "man", "men", "boy", "boys",
   "brother", "fellow", "fella", "chap", "guy", "prince", "strongman", "craftsman", "monsieur",
 ]);
 const FEMALE_ADDRESS_WORDS = new Set([
-  "madam", "madame", "ma'am", "m'am", "miss", "lady", "milady", "m'lady", "mistress", "lass", "lassie",
+  "she", "her", "hers", "herself", "madam", "madame", "ma'am", "m'am", "miss", "lady", "milady", "m'lady", "mistress", "lass", "lassie",
   "woman", "women", "girl", "girls", "gal", "sister", "princess", "strongwoman", "craftswoman",
 ]);
 
@@ -159,11 +159,11 @@ function genderedForm(text) {
 }
 
 /** The alternative to show a player of this gender, or null to leave the group alone. */
-function pickAlternative(parts, name, male) {
+function pickAlternative(parts, name, pronouns) {
   if (parts.some((part) => PLAYER_NAME_ALTERNATIVE.test(part))) return name ?? null;
   const forms = parts.map((part) => ({ text: part, gender: genderedForm(part) }));
   if (!forms.some((form) => form.gender)) return null;
-  const wanted = male ? "male" : "female";
+  const wanted = pronouns === 0 ? "male" : pronouns === 1 ? "female" : null;
   const match = forms.find((form) => form.gender === wanted) ?? forms.find((form) => !form.gender);
   return (match ?? forms[0]).text;
 }
@@ -174,10 +174,11 @@ function formatPlayerText(text, player) {
   // "[player.]" keeps the sentence's closing period.
   if (name) out = out.replace(PLAYER_NAME_PLACEHOLDER, (_, period) => `${name}${period ?? ""}`);
   if (!out.includes("/")) return out;
-  const male = player?.getAppearance?.()?.isMale?.() !== false;
+  const appearance = player?.getAppearance?.();
+  const pronouns = appearance?.getPronouns?.() ?? (appearance?.isMale?.() === false ? 1 : 0);
   return out.replace(GENDERED_ALTERNATIVE, (whole, body) => {
     const parts = body.split("/").map((part) => part.trim());
-    return parts.length < 2 ? whole : pickAlternative(parts, name, male) ?? whole;
+    return parts.length < 2 ? whole : pickAlternative(parts, name, pronouns) ?? whole;
   });
 }
 

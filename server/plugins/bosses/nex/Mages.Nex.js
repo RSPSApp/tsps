@@ -35,6 +35,11 @@ function applyEffect(mage, player, damage) {
   }
 }
 
+/** Where a mage's projectile lands (its launch + 10 a tile), so the hit can share it. */
+function flightEnd(mage, target, projectile) {
+  return Common.core.Projectile.arrivalCycles(mage, target, projectile.start ?? 0);
+}
+
 function mageClass() {
   const { CombatMethod, CombatType, CombatFactory, PendingHit } = Common.core;
   return class NexMageCombat extends CombatMethod {
@@ -59,11 +64,14 @@ function mageClass() {
       const own = spec(mage);
       mage.performAnimation(Common.animation(Common.data.mages.anim));
       Common.areaSound(mage.__nexFight?.players() ?? [], mage.getLocation(), [own.sound, 0, 7]);
-      if (own.projectile) Common.projectile(mage, target, own.projectile);
+      if (own.projectile) Common.projectile(mage, target, { ...own.projectile, end: flightEnd(mage, target, own.projectile) });
     }
 
     hits(mage, target) {
-      const hit = new PendingHit(mage, target, this, Common.data.mages.hitDelay);
+      // Fumus' and Glacies' hits land with their projectile; Umbra and Cruor send none.
+      const own = spec(mage);
+      const delay = own.projectile ? Common.landsIn(flightEnd(mage, target, own.projectile)) : Common.data.mages.hitDelay;
+      const hit = new PendingHit(mage, target, this, delay);
       CombatFactory.applyStyleDamage(hit, Common.data.mages.maxHit, {});
       return [hit];
     }

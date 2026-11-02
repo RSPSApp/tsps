@@ -11,7 +11,7 @@ import { runWidgetJsOp } from "../../../widgets/custom/dynamicWidgets";
 import { ClientState } from "../../ClientState";
 import { ClickMode } from "../../InputManager";
 import type { WidgetInteractionController } from "../WidgetInteractionController";
-import { spellWidgetChildSlot } from "../SpellSelectionController";
+import { spellClickNeedsTarget, spellWidgetChildSlot } from "../SpellSelectionController";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
 import type { WidgetInputControllerDeps, WidgetInputFrame, WidgetInputState } from "./widgetInputTypes";
 import type { PrimaryWidgetAction } from "./widgetPrimaryAction";
@@ -150,6 +150,34 @@ export function processWidgetClickInput(
                 if (dragOnly && clickHits.slice(0, i).some((below: any) => offersMenuOp(below, getWidgetFlags, getWidgetOpMask))) {
                     continue;
                 }
+                // OSRS fires onClick on the widgets under the mouse and runs the top menu entry,
+                // so a widget with a press script but no op of its own (a button's face graphic:
+                // the Demonic Pacts tree's Apply Changes buttons, script 8190's onClick 9125 over
+                // the container whose op is Apply Changes) runs its onClick and lets the click
+                // reach the widget beneath that offers the op. "No op" is no op offered in the
+                // menu (no op text): the face also carries an onOp script, 9126, for ops it has none of.
+                const clickOnly =
+                    hasHandlers &&
+                    !!(w.eventHandlers?.onClick || w.onClick) &&
+                    !hasActions &&
+                    !hasInventoryItem &&
+                    !isPauseButtonWidget &&
+                    !hasSpellAction &&
+                    !(!isDynamicWidget && hasTransmitOps && !opsCleared);
+                if (clickOnly && clickHits.slice(0, i).some((below: any) => offersMenuOp(below, getWidgetFlags, getWidgetOpMask))) {
+                    const scaleX = w._absScaleX ?? 1;
+                    const scaleY = w._absScaleY ?? 1;
+                    const pressCtx: Partial<ScriptEvent> = {
+                        mouseX: ((input.leftClickX - (w._absX ?? w.x ?? 0)) / scaleX) | 0,
+                        mouseY: ((input.leftClickY - (w._absY ?? w.y ?? 0)) / scaleY) | 0,
+                        opIndex: 1,
+                    };
+                    if (w.eventHandlers?.onClick) deps.getCs2Vm().invokeEventHandler(w, "onClick", pressCtx);
+                    else deps.executeScriptListener(w, w.onClick, pressCtx);
+                    widgetInteraction.pressedWidget = w;
+                    widgetManager?.invalidateAll?.();
+                    continue;
+                }
                 if (hasHandlers) {
                     widgetInteraction.clickedWidget = w;
                     widgetInteraction.clickedWidgetParent = widgetInteraction.resolveClickedWidgetParent(w);
@@ -184,7 +212,7 @@ export function processWidgetClickInput(
                         // Only enter targeting mode if targetMask > 0 (spell needs a target)
                         // Teleport spells have targetMask === 0 and should cast immediately.
                         const targetMask = deps.getSpellSelection().getWidgetTargetMask(w);
-                        const needsTarget = targetMask > 0;
+                        const needsTarget = spellClickNeedsTarget(w, targetMask);
 
                         if (
                             !needsTarget &&
@@ -432,10 +460,13 @@ export function processWidgetClickInput(
                         handled = deps.getCs2Vm().invokeEventHandler(w, "onClick", clickCtx);
                     }
 
-                    // Fall back to onOp if onClick didn't handle it (tabs use onOp)
-                    if (!handled && w.eventHandlers?.onOp) {
+                    // OSRS: a left-click fires the widget's onClick and also runs the top menu
+                    // entry, so a widget that offers an op runs its onOp as well (the Demonic Pacts
+                    // tree's Apply Changes buttons, script 8190: onClick for the press, onOp for
+                    // the action). Without an op of its own, onOp is only the fallback (tabs).
+                    if ((!handled || hasActions) && w.eventHandlers?.onOp) {
                         invokedAnyHandler = true;
-                        handled = deps.getCs2Vm().invokeEventHandler(w, "onOp", clickCtx);
+                        handled = deps.getCs2Vm().invokeEventHandler(w, "onOp", clickCtx) || handled;
                     }
 
                     // Try legacy handlers

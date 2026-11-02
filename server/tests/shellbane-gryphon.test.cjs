@@ -337,3 +337,24 @@ test('the kill: its kill count and a second main-table roll', () => {
   assert.equal(extra.length, 1);
   assert.equal(extra[0][1].rolls, 1);
 });
+
+test('its ranged hit lands with a well-formed projectile at any range (#1862)', (t) => {
+  const sent = [];
+  t.mock.method(core.Projectile.prototype, 'sendProjectile', function () { sent.push(this); });
+  const { GryphonCombat } = Combat.methods();
+  for (const x of [3175, 3172, 3166]) {
+    const player = fakePlayer(x, 8873, { 1: 31398 });
+    const boss = fakeBoss();
+    const { fight } = newFight(player, () => 0);
+    boss.__sgCave = { fight };
+    const npc = { ...boss, getAsNpc: () => boss };
+    const method = new GryphonCombat();
+    method.start(npc, player);
+    assert.equal(method.style, 'ranged');
+    const shot = sent.at(-1);
+    assert.ok(shot.speed > shot.delay + 1, `from ${x} it is drawn as a flight`);
+    assert.equal(method.plan.delay, Math.ceil(shot.speed / 30), `from ${x}`);
+  }
+  assert.equal(Combat.flightEnd(1), 40);
+  assert.equal(Combat.flightEnd(4), 60);
+});

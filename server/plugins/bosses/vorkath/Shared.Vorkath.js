@@ -214,9 +214,12 @@ function sendShot(core, npc, target, projectileId, impactGfx, impactHeight = SHO
   return end;
 }
 
-/** Captured: the hit (or the freeze) lands floor(flight / 30) ticks after the attack. */
+/**
+ * The hit (or the freeze) lands on the first tick at or after the shot: a hit N ticks out splats
+ * 30N cycles after the send, so floor() splatted before the shot arrived (#1862; Projectile.ticksToLand).
+ */
 function shotHitDelay(end) {
-  return Math.floor((end ?? SHOT.base) / 30);
+  return Math.max(1, Math.ceil((end ?? SHOT.base) / 30));
 }
 
 /**

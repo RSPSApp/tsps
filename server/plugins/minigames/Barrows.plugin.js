@@ -327,6 +327,14 @@ function dig({ player }) {
     player.sendMessage("You dig into the ground, but find nothing.");
     return true;
   }
+  // A looted run ends as the next crypt is dug into: a new layout, no kills, the chest shut
+  // (237/04057: the spade's click resets them, not leaving the tunnels).
+  const run = player.getAttribute(ATTRIBUTE);
+  if (run?.looted) {
+    player.setAttribute(ATTRIBUTE, freshRun(run.chests));
+    updateOverlay(player, getRun(player));
+    player.getPacketSender().sendVarbit(CHEST_OPEN_VARBIT, 0);
+  }
   // Keep the animation on the mound for two ticks before changing planes.
   state.dig = { from: player.getLocation().clone(), to: brother.crypt, ticks: 2 };
   return true;
@@ -721,10 +729,9 @@ function processPlayer({ player }) {
   const phase = phaseOf(player);
   const run = player.getAttribute(ATTRIBUTE) ?? (phase !== "outside" ? getRun(player) : null);
   if (phase !== state.phase) {
-    if (state.phase === "tunnels" && phase !== "tunnels") {
-      cleanupNpcs(player, true);
-      if (run.looted) player.setAttribute(ATTRIBUTE, freshRun(run.chests));
-    }
+    // A looted run stays looted until the next crypt is dug into (dig), as live keeps it: a
+    // teleport out and back into the chest room (league Evil eye) finds it empty (237/04057).
+    if (state.phase === "tunnels" && phase !== "tunnels") cleanupNpcs(player, true);
     state.puzzle = null;
     state.phase = phase;
     syncMinimap(player, phase);
@@ -814,5 +821,5 @@ module.exports = {
     api.onPlayerLogout(cleanupPlayer);
     api.registerNpcCombatMethodProvider(Npcs.AHRIM_THE_BLIGHTED, AhrimCombat);
   },
-  _test: { searchChest, chestCount, phaseOf, syncMinimap },
+  _test: { searchChest, chestCount, phaseOf, syncMinimap, processPlayer, dig },
 };

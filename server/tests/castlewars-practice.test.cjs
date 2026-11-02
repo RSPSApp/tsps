@@ -83,6 +83,38 @@ test('selected ice duration caps the real freeze and immunity, while binds and o
   game.settings.freezeSeconds = 0;
 });
 
+test('Lanthus practice defaults to maxed bots, keeps tier choices and scopes menu priority to bot matches', (t) => {
+  const p = player(t);
+  Object.assign(game.settings, Settings._test.DEFAULTS);
+  const originalJoin = game.joinFromLobby;
+  let joined;
+  game.joinFromLobby = (...args) => { joined = args; };
+  try {
+    Settings.openSettings({ player: p });
+    pick('Join practice');
+    assert.equal(joined[2], 'veteran');
+    assert.equal(joined[4], true, 'maxed practice is explicit, separate from a normal Veteran tier');
+    Settings.openSettings({ player: p });
+    pick('More settings');
+    assert.ok(prompt.pairs.length <= 10, 'native menus support at most five options');
+    pick('Bot combat:'); pick('Novice'); pick('Back'); pick('Join practice');
+    assert.equal(joined[2], 'novice');
+    assert.equal(joined[4], false, 'an explicitly selected tier preserves its stat band');
+    Settings.openSettings({ player: p }); pick('More settings'); pick('Additional settings');
+    assert.equal(game.getBarricadePlayerPriority(), false);
+    pick('Barricade right-click:');
+    assert.equal(game.getBarricadePlayerPriority(), true);
+    t.mock.method(game.gameArea, 'getPlayers', () => []);
+    assert.equal(game.getBarricadePlayerPriority(), false, 'human-only matches retain standard priority');
+    pick('Back'); pick('Back'); pick('Reset defaults');
+    assert.equal(game.settings.botTier, 'maxed');
+    assert.equal(game.settings.barricadePlayerPriority, false);
+  } finally {
+    game.joinFromLobby = originalJoin;
+    Object.assign(game.settings, Settings._test.DEFAULTS);
+  }
+});
+
 test('Castle Wars Shove animates once, prevents instant chaining and keeps the normal attack delay', (t) => {
   const attacker = player(t), victim = player(t, 2427);
   attacker.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.ZAMORAKIAN_HASTA, 1));

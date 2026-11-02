@@ -524,3 +524,10 @@ test("dummy: a dummy hit through the real attack dummies plugin (Attack a dummy)
   assert.ok(f.messages.includes("You hit the dummy."), `hit: ${f.messages}`);
   assert.ok(done(f, "attack-a-dummy"));
 });
+
+test("gather-with: logs chopped with the axe named (Chop Some Logs With a Rune Axe), not another", async (t) => {
+  const f = pactsCharacter(t);
+  assert.ok(await chop(t, f, 1666, 3136) > 0, "the real Woodcutting with a rune axe");
+  assert.ok(done(f, "chop-some-logs-with-a-rune-axe"));
+  assert.ok(!done(f, "chop-some-logs-with-a-steel-axe"));
+});

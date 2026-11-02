@@ -1181,6 +1181,7 @@ function processWoodcuttingTick(activeSessions, currentTick) {
         petBase: state.tree.petBase,
         petRolled: petRoll.handled,
         logId: state.tree.logId,
+        axeId: state.axe?.id ?? null,
       });
       ClueNests.rollClueNests(player, state.tree);
     }

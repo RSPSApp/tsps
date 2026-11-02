@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "pet", "tempoross", "open-chest", "plant", "harvest", "foundry", "plunder-chest", "sepulchre-floor", "rumours", "random-event", "totem", "dummy"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "pet", "tempoross", "open-chest", "plant", "harvest", "foundry", "plunder-chest", "sepulchre-floor", "rumours", "random-event", "totem", "dummy", "gather-with"]);
   // The agility plugin's course keys (and Yama's stepping stones, the Leagues lair's own course).
   const courseDir = path.join(__dirname, "../plugins/skills/agility/courses");
   const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
@@ -605,6 +605,7 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.ok(!completed(doer).includes("fully-decorate-a-maple-totem-in-the-auburn-valley"), "another wood's totem");
   emit("vale-totems:decorated", { player: doer, wood: "maple" });
   assert.ok(completed(doer).includes("fully-decorate-a-maple-totem-in-the-auburn-valley"));
+  assert.deepEqual(trigger("mine-some-runite-ore-with-a-dragon-pickaxe"), { kind: "gather-with", skill: "mining", tools: ["Dragon pickaxe"], count: 1, items: ["Runite ore"], area: 11 });
   assert.deepEqual(trigger("complete-25-hunter-rumours"), { kind: "rumours", count: 25 });
   assert.deepEqual(trigger("floor-5-of-the-hallowed-sepulchre"), { kind: "sepulchre-floor", floor: 5, count: 1 });
 

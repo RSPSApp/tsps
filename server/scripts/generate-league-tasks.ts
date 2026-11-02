@@ -817,6 +817,19 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   }
   // A parenthesis with a space is a remark ("(not including Agility)"); one without is part of a name ("(c)", "(kp)").
   const clean = (text: string) => text.replace(/\s*\([^)]*\s[^)]*\)/g, "").replace(/\.$/, "").trim();
+  // "Chop any kind of logs using a steel axe", "Mine any ore using a Rune Pickaxe", "Mine some runite
+  // ore with a dragon pickaxe within the Wilderness": gathered with that tool (the success event's own
+  // axe or pickaxe), the item if one is named, in the league area if one follows.
+  if ((match = /^(Chop|Mine) (any kind of Woodcutting|any ore|some (.+?)) (?:using|with) an? ([A-Za-z]+ (?:axe|pickaxe))$/i.exec(leagueAreaOf(clean(description)).text))) {
+    const { area } = leagueAreaOf(clean(description));
+    const tool = itemNamed(match[4], items);
+    const what = match[3] ? itemNamed(match[3], items) : null;
+    if (!tool || (match[3] && !what)) return {};
+    const trigger: Trigger = { kind: "gather-with", skill: match[1].toLowerCase() === "chop" ? "woodcutting" : "mining", tools: [tool], count: 1 };
+    if (what) trigger.items = [what];
+    if (area !== null) trigger.area = area;
+    return { trigger };
+  }
   // A cache item set: "Equip a full set of Ahrim the Blighted's equipment" / "Equip full Blood moon
   // armour" (every piece at once), "Equip any piece of the Justiciar Armour set" / "a piece of
   // Sunfire Fanatic armour" (any one), "a full set of any Barrows equipment" (one whole set of them).

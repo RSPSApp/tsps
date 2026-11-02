@@ -289,6 +289,26 @@ test("take: a ground item picked up or telegrabbed where the task says (White be
   assert.ok(done(slepe, "telegrab-a-bloody-bracer"));
 });
 
+test("pickpocket-loot: an item in the pocket's loot (Pickpocket a Diamond From a TzHaar)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.THIEVING, 99);
+  skills.setCurrentLevel(core.Skill.THIEVING, 99);
+  f.player.getEquipment().setItem(core.Equipment.CAPE_SLOT, new core.Item(item("Fire cape"))); // the TzHaar's requirement
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const id = [...Array(20000).keys()].find((each) => core.CacheDefinitions.getNpc(each)?.name === "TzHaar-Hur" && (core.CacheDefinitions.getNpc(each).actions ?? []).includes("Pickpocket"));
+  const hur = core.NPC.create(id, new core.Location(1667, 3136, 0));
+  core.World.getNpcs().add(hur);
+  t.after(() => core.World.getNpcs().remove(hur));
+  const option = hur.getCurrentDefinition(f.player).getActions().findIndex((action) => action?.toLowerCase() === "pickpocket") + 1;
+  // Pickpocketing's own rolls: the success roll, then the table's last row, the uncut diamond.
+  const rolls = [0, 0.999];
+  t.mock.method(Math, "random", () => (new Error().stack.includes("Pickpocket.Thieving") ? rolls.shift() ?? 0.5 : 0.5));
+  await send(f, { type: "npc_option", index: hur.getIndex(), clickType: option }, 6);
+  assert.equal(f.player.getInventory().getAmount(item("Uncut diamond")), 1, `the real Thieving picks it: ${f.messages}`);
+  assert.ok(done(f, "pickpocket-a-diamond-from-a-tzhaar"));
+});
+
 /** An inventory item's option, as the client clicks it. */
 async function inventoryOption(f, name, option, optionIndex = 1, count = 4) {
   const id = item(name);

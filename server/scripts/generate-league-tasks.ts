@@ -1405,6 +1405,16 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     const item = wornNamed(match[1], items);
     return item ? { trigger: { kind: "equip", items: [item] } } : {};
   }
+  // "Pickpocket an uncut diamond from a TzHaar-Hur", "Pickpocket a gnome for a King Worm",
+  // "Pickpocket an elite clue scroll from a hero": that item in the pocket's loot
+  // (thieving:loot); a clue scroll is its tier's scroll or scroll box, as the pocket hands either.
+  if (/^Pickpocket /i.test(name) && ((match = /^Pickpocket (?:an? |some )?(.+?) from (?:an? |the )?(.+)$/i.exec(clean(description)))
+    || ((match = /^Pickpocket (?:an? |the )?(.+?) for (?:an? |some )?(.+)$/i.exec(clean(description))) && (match = [match[0], match[2], match[1]] as unknown as RegExpExecArray)))) {
+    const clue = /^(beginner|easy|medium|hard|elite|master) clue scroll$/i.exec(match[1]);
+    const loot = clue ? [`Clue scroll (${clue[1].toLowerCase()})`, `Scroll box (${clue[1].toLowerCase()})`].map((each) => items.get(each.toLowerCase()) ?? null) : [itemNamed(match[1], items)];
+    const npc = npcNamed(match[2], npcs);
+    if (npc && loot.length && loot.every(Boolean)) return { trigger: { kind: "pickpocket-loot", npcs: [npc], items: loot as string[], count: 1 } };
+  }
   // "Pickpocket a knight of varlamore 20 times": the NPC's pocket picked; the description's
   // alternatives stand for the name ("Pickpocket a Citizen": "Pickpocket a Man or a Woman").
   if ((match = /^Pickpocket (.+)$/i.exec(name))) {

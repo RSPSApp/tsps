@@ -6,6 +6,11 @@ const {
 } = require("../../interface/widgetGroup");
 
 const GROUP_ID = 30003;
+const PRESET_TABS = ["1 Defence", "Void", "Zerker", "Tank", "Max"];
+const TAB_BUTTON_START = 300;
+const TAB_LABEL_START = 310;
+const TAB_WIDTH = 80;
+const TAB_GAP = 4;
 
 // The root fills the modal slot it is mounted in (parent - 18 on both axes), so its size
 // follows the game window. Fixed mode is the smallest that ever gets, so the layout is
@@ -84,16 +89,19 @@ const BUTTON_WIDTH = Math.floor(
   (CONTENT_RIGHT - CONTENT_X - (BUTTON_COUNT - 1) * BUTTON_GAP) / BUTTON_COUNT
 );
 
-// One list for every preset: the predefined ones first, then the player's own slots.
+// Capacity for a category's predefined presets followed by the player's own slots.
 const PRESET_ROW_START = 200;
 // The combat level beside each row, right-aligned at the list's edge. Numbered below the
 // rows so the row's own (transparent) text does not hand it clicks; it paints through.
 const PRESET_LEVEL_START = 60;
 const PRESET_LEVEL_WIDTH = 30;
 const PRESET_LEVEL_RIGHT_GAP = 5;
-const GLOBAL_ROW_COUNT = 18;
+const PRESET_DATA = require("../data/pvp-presets-players.json");
+const GLOBAL_ROW_COUNT = PRESET_DATA.length;
 const CUSTOM_ROW_COUNT = 10;
-const PRESET_ROW_COUNT = GLOBAL_ROW_COUNT + CUSTOM_ROW_COUNT;
+const PRESET_ROW_COUNT = Math.max(...PRESET_TABS.map((tab) =>
+  PRESET_DATA.filter((preset) => (preset.tab ?? PRESET_TABS[0]) === tab).length
+)) + CUSTOM_ROW_COUNT;
 
 // The client sorts a parent's children by fileId and paints them in that order, so a
 // slot's background must number below its icon or it covers it.
@@ -162,6 +170,8 @@ const COMPONENT = {
   LIST_SCROLLBAR: 16,
   SELECTED_NAME: 30,
   SPELLBOOK: 31,
+  LIST_CONTENT_HEIGHT: 32,
+  TAB_BAR: 33,
   LOAD_BUTTON: 40,
   SAVE_BUTTON: 41,
   DEATH_BUTTON: 43,
@@ -179,6 +189,9 @@ const COLOUR_TEXT = 0xe8ded0;
 const COLOUR_MUTED = 0xc5b79b;
 const BUTTON_COLOUR = 0x2b241b;
 const BUTTON_HOVER_COLOUR = 0x3a3125;
+// RGB555-aligned shades so definitions and native colour updates display identically.
+const TAB_COLOUR = 0x282018;
+const TAB_ACTIVE_COLOUR = 0x201810;
 
 function buildPresetsWidgetGroup() {
   const { widgets, add } = createWidgetGroup(GROUP_ID);
@@ -199,6 +212,25 @@ function buildPresetsWidgetGroup() {
     width: MIN_MODAL.width,
     height: MIN_MODAL.height,
   });
+  const tabBar = add(COMPONENT.TAB_BAR, root, {
+    rawX: -12, rawY: 6, xPositionMode: 1,
+    rawWidth: PRESET_TABS.length * (TAB_WIDTH + TAB_GAP) - TAB_GAP,
+    rawHeight: BUTTON_HEIGHT,
+  });
+  PRESET_TABS.forEach((name, index) => {
+    add(TAB_BUTTON_START + index, tabBar, {
+      type: 3, rawX: index * (TAB_WIDTH + TAB_GAP), rawWidth: TAB_WIDTH, rawHeight: BUTTON_HEIGHT,
+      filled: true, color: index === 0 ? TAB_ACTIVE_COLOUR : TAB_COLOUR,
+      textColor: index === 0 ? TAB_ACTIVE_COLOUR : TAB_COLOUR,
+      mouseOverColor: TAB_ACTIVE_COLOUR, actions: ["Select"], flags: FLAG_OP1,
+    });
+    add(TAB_LABEL_START + index, tabBar, {
+      type: TYPE_TEXT, rawX: index * (TAB_WIDTH + TAB_GAP), rawWidth: TAB_WIDTH, rawHeight: BUTTON_HEIGHT,
+      fontId: FONT_BOLD, text: name, textColor: index === 0 ? 0xffffff : COLOUR_HEADER,
+      textShadowed: true, xTextAlignment: 1, yTextAlignment: 1,
+    });
+  });
+  add(COMPONENT.LIST_CONTENT_HEIGHT, root, { type: TYPE_TEXT, isHidden: true, hidden: true, text: String(LIST_CONTENT_HEIGHT) });
 
   const header = (component, parent, x, y, width, text) =>
     add(component, parent, {
@@ -421,6 +453,8 @@ function buildPresetsInterfaceDefinition() {
         viewComponent: COMPONENT.LIST_VIEW,
         scrollbarComponent: COMPONENT.LIST_SCROLLBAR,
         contentHeight: LIST_CONTENT_HEIGHT,
+        contentHeightComponent: COMPONENT.LIST_CONTENT_HEIGHT,
+        resetOnComponents: PRESET_TABS.map((_, index) => TAB_BUTTON_START + index),
       },
     ],
   };
@@ -428,6 +462,12 @@ function buildPresetsInterfaceDefinition() {
 
 module.exports = {
   GROUP_ID,
+  PRESET_TABS,
+  TAB_BUTTON_START,
+  TAB_LABEL_START,
+  TAB_COLOUR,
+  TAB_ACTIVE_COLOUR,
+  ROW_PITCH,
   COMPONENT,
   CONTENT_X,
   CONTENT_RIGHT,
@@ -437,6 +477,7 @@ module.exports = {
   // over its own background, a stat box's icon and level over its two halves, and a
   // button's label over its own button.
   LAYERED_COMPONENT_PAIRS: [
+    ...PRESET_TABS.map((_, index) => [TAB_BUTTON_START + index, TAB_LABEL_START + index]),
     ...EQUIPMENT_SLOTS.flatMap((slot) => [
       [EQUIPMENT_SLOT_START + slot, EQUIPMENT_BACKGROUND_START + slot],
       [EQUIPMENT_PLACEHOLDER_START + slot, EQUIPMENT_BACKGROUND_START + slot],

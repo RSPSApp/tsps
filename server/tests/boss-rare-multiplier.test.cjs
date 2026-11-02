@@ -1,5 +1,5 @@
 // Run after `yarn build`: node --test tests/boss-rare-multiplier.test.cjs
-// world.json pluginConfig "NpcDrops:bossRareMultiplier" makes a boss's rare drops that many times
+// world.json pluginConfig "NpcDrops:bossRareMultiplier" makes a boss's uniques that many times
 // likelier (docs/npc-drops.md).
 const assert = require("node:assert/strict");
 const { test, before, after } = require("node:test");
@@ -57,17 +57,17 @@ function dropsAt(table, roll, multiplier) {
 const table = (boss) => ({
   boss,
   entries: [
-    { item_id: 1, separate_roll: true, weight: 1, out_of: 400 },
+    { item_id: 1, separate_roll: true, weight: 1, out_of: 400, section: "Uniques" },
     { item_id: 2, separate_roll: true, weight: 1, out_of: 10 },
   ],
-  tertiary: [{ item_id: 3, weight: 1, out_of: 400 }],
+  tertiary: [{ item_id: 3, weight: 1, out_of: 400, section: "Uniques" }],
 });
 
 const mainTable = (boss) => ({
   boss,
   main_max_roll: 400,
   entries: [
-    { item_id: 10, name: "Rare", weight: 1, out_of: 400, section: "Weapons and armour" },
+    { item_id: 10, name: "Unique", weight: 1, out_of: 400, section: "Uniques" },
     { item_id: 11, name: "Common", weight: 399, out_of: 400, section: "Weapons and armour" },
   ],
 });
@@ -99,16 +99,27 @@ test("a boss's rare main roll is that many times likelier and common loot keeps 
   assert.deepEqual(dropsAt(mainTable(true), 0.5, 1000), [10, 11]);
 });
 
-test("a unique or pre-roll row counts as rare even when it is more common than 1/100", () => {
+test("unique separate and pre-roll rows are boosted even when more common than 1/100", () => {
   const unique = {
     boss: true,
     entries: [
       { item_id: 20, name: "Unique", separate_roll: true, weight: 1, out_of: 75, section: "Uniques" },
-      { item_id: 21, name: "Pre-roll", pre_roll: true, weight: 1, out_of: 75, section: "Pre-roll" },
+      { item_id: 21, name: "Pre-roll unique", pre_roll: true, weight: 1, out_of: 75, section: "Uniques" },
     ],
   };
   assert.deepEqual(dropsAt(unique, 1.5 / 75, 1), []);
   assert.deepEqual(dropsAt(unique, 1.5 / 75, 2), [20, 21]);
+});
+
+test("rarity and pre-roll placement alone never make an ordinary item a unique", () => {
+  config["NpcDrops:bossRareMultiplier"] = 1000;
+  for (const flags of [{}, { pre_roll: true }, { separate_roll: true }]) {
+    const entry = { item_id: 440, name: "Iron ore", weight: 1, out_of: 400, section: "Ores", ...flags };
+    assert.equal(NpcDrops.__internals.rareMultiplier({ boss: true }, entry), 1);
+  }
+  assert.equal(NpcDrops.__internals.rareMultiplier({ boss: true }, {
+    shared_table: "rareDrop", weight: 1, out_of: 400, section: "Uniques",
+  }), 1, "a shared table is not an individual unique");
 });
 
 test("a 'unique' row that is ordinary loot is not boosted", () => {
@@ -130,11 +141,29 @@ test("the Dagannoth Kings' 1/128 rings are boosted on the main roll", () => {
   config["NpcDrops:bossRareMultiplier"] = 1000;
   try {
     assert.equal(NpcDrops.__internals.rareMultiplier(rex, ring), 1000);
+    for (const name of ["Iron ore", "Steel bar", "Shark", "Rune axe", "Mithril 2h sword", "Prayer potion(2)"]) {
+      const entry = rex.entries.find((entry) => entry.name === name);
+      assert.ok(entry, name);
+      assert.equal(NpcDrops.__internals.rareMultiplier(rex, entry), 1, `${name} keeps its normal rate`);
+    }
     Math.random = () => 0.5;
     const drops = NpcDrops.__internals.rollTable(rex, null, null);
     assert.ok(drops.some((drop) => drop.itemId === 6737), "Berserker ring drops");
+    const ordinary = new Set(rex.entries.filter((entry) => !entry.always && !entry.pre_roll && !entry.separate_roll &&
+      !NpcDrops.__internals.isUniqueEntry(entry)).map((entry) => entry.item_id));
+    assert.ok(drops.filter((drop) => ordinary.has(drop.itemId)).length <= 1,
+      "the multiplier cannot turn the ordinary main table into many independent rewards");
   } finally {
     Math.random = random;
+  }
+});
+
+test("boss collection-log pets and jars qualify without relying on the section name", () => {
+  config["NpcDrops:bossRareMultiplier"] = 1000;
+  for (const itemId of [12643, 12827]) { // Pet dagannoth rex, Jar of dirt (cache collection-log items).
+    assert.equal(NpcDrops.__internals.rareMultiplier({ boss: true }, {
+      item_id: itemId, weight: 1, out_of: 3000, section: "Tertiary",
+    }), 1000);
   }
 });
 

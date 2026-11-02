@@ -85,6 +85,9 @@ function harness(name) {
         getArea: () => area, setArea: value => { area = value; }, isNpc: () => true, isPlayer: () => false, getAsNpc: () => npc,
         isRegistered: () => !npc.removed, setPositionToFace: target => { npc.faceTo = target; }, forceChat: text => { npc.said = text; },
         setScriptedMovement: value => { npc.scriptedMovement = value; },
+        setFlag: (flag, enabled = true) => { npc.flags ??= new Map(); if (enabled) npc.flags.set(flag, true); else npc.flags.delete(flag); },
+        hasFlag: flag => npc.flags?.has(flag) === true,
+        removeFlag: flag => npc.setFlag(flag, false),
         performAnimation: animation => npc.animations.push(animation.getId()), performGraphic: graphic => npc.graphics.push(graphic.id),
         getMovementQueue: () => queue,
         exactMove: (to, options) => { npc.exact = options; location = to; },
@@ -789,10 +792,42 @@ test('TP pub: Azali follows (9834=2) and the fountain scene sobers her (pub 2, 9
     'Azali walks the last two tiles instead of teleporting into the fountain');
   h.tick(3);
   assert.deepEqual([bather.getLocation().getX(), bather.getLocation().getY()], [1757, 3068], 'the walk reaches the fountain tile before the splash');
+  assert.equal(bather.hasFlag('movement:ignore-clipping'), true, "the walk carries the scene's scoped clipping bypass");
   h.tick(1); assert.ok(h.npcs.find(npc => npc.id === 12930).animations.includes(10942));
+  assert.equal(bather.hasFlag('movement:ignore-clipping'), false, 'the bypass ends with the walk, before the splash removes her');
   h.tick(6); assert.equal(p.varbits.get(9831), 2); assert.equal(p.varbits.get(9834), 3);
   h.tick(6); assert.equal(p.text, 'Oh boy...');
   h.continueUntil(p, () => p.text.startsWith('This day is the worst')); assert.equal(p.varbits.get(9831), 3); assert.equal(h.quest.getStage(p), 16);
+});
+
+test('TP fountain: production movement only reaches the clipped fountain tile inside the scene bypass', () => {
+  const { MovementQueue } = require('../dist/game/model/movement/MovementQueue');
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(1757, 3068);
+  let location = new core.Location(1755, 3068, 0), bypass = false;
+  const azali = {
+    getId: () => 12913, isPlayer: () => false, isNpc: () => true, getAsNpc: () => azali,
+    getLocation: () => location, setLocation: next => { location = next; },
+    getSize: () => 1, getPrivateArea: () => null,
+    getTimers: () => ({ has: () => false }), isNeedsPlacement: () => false,
+    getFollowing: () => null, getMovementSteps: () => 1,
+    hasFlag: flag => flag === MovementQueue.IGNORE_CLIPPING_FLAG && bypass,
+    canWalkThroughNPCs: () => false, setWalkingDirection: noop, setRunningDirection: noop,
+  };
+  const movement = new MovementQueue(azali);
+  assert.equal(movement.canWalkTo(new core.Location(1757, 3068, 0)), false, 'the real map clips the fountain tile');
+  movement.addSteps(new core.Location(1757, 3068, 0));
+  movement.process();
+  assert.deepEqual([location.getX(), location.getY()], [1756, 3068]);
+  movement.process();
+  assert.deepEqual([location.getX(), location.getY()], [1756, 3068], 'ordinary movement stops on the tile before the fountain');
+  assert.equal(movement.hasPendingWork(), true);
+  bypass = true; // what beginFountain sets on Azali for the last two tiles
+  movement.process();
+  assert.deepEqual([location.getX(), location.getY()], [1757, 3068], 'the scene bypass walks onto the fountain tile');
+  bypass = false; // what beginFountain clears before the splash
+  location = new core.Location(1755, 3068, 0);
+  assert.equal(movement.canWalkTo(new core.Location(1757, 3068, 0)), false, 'ordinary collision applies once the bypass ends');
 });
 
 test('TP Mezan prays against a style used four times, falls without dying and answers in the lobby', () => {

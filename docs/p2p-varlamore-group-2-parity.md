@@ -131,8 +131,11 @@ ticks2033–2040 supplies both legs; strike390 has delay5 and fall836 delay20.
 The aftermath uses its scene heads12897/12928 (ticks2392–2399); a global name
 lookup had selected generic Guard397. Those bindings apply only to this quest's
 owned aftermath. Azali's dunk sits at the capture's two tiles (1755→1757) but plays
-as the walk it stands for rather than the recording's 1541 teleport; splash10942
-waits for that walk, so it lands two ticks later than the capture.
+as the walk it stands for rather than the recording's 1541 teleport. The fountain tile itself is
+clipped and holds the fountain actor, so the last two tiles walk under the same scoped
+`movement:ignore-clipping` exemption the other scripted cutscene moves use; the flag is set only
+for that move and cleared before the splash. splash10942 waits for that walk, so it lands two
+ticks later than the capture.
 
 Quetzal travel uses the cache landing table and interface 874, with saved
 unlocks, locked-destination checks and a single flight at a time. The new camera

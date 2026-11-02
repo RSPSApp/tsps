@@ -175,6 +175,9 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const FOLLOW_REST_MAX_TICKS = 25;
   const FOUNTAIN_TILE = [1757, 3068];
   const FOUNTAIN_REACH = 2;
+  // The fountain tile itself is clipped, so the captured step onto it walks with the same
+  // cutscene clipping exemption the other scripted moves use.
+  const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
 
   // Mezan prays against a style used four times running (Wiki); his three prayer calls.
   const MEZAN_PRAYER_STREAK = 4;
@@ -985,8 +988,15 @@ module.exports = function registerTwilightPromiseQuest(api) {
         Scenes.fade(player, false);
         azali?.getMovementQueue().addSteps(new Location(1755, 3068, 0));
       });
-      Scenes.later(scene, 5, () => azali?.getMovementQueue().addSteps(new Location(1757, 3068, 0)));
+      Scenes.later(scene, 5, () => {
+        // The last two tiles walk into the fountain's own tile. The cache clips it and the
+        // fountain actor stands on it, so the walk takes the scripted clipping exemption;
+        // the earlier approach stays ordinary. The flag goes before the splash.
+        azali?.setFlag?.(IGNORE_CLIPPING_FLAG);
+        azali?.getMovementQueue().addSteps(new Location(1757, 3068, 0));
+      });
       Scenes.later(scene, 9, () => {
+        azali?.removeFlag?.(IGNORE_CLIPPING_FLAG);
         fountain?.performAnimation(new Animation(FOUNTAIN_SPLASH_ANIMATION));
         if (azali) Scenes.removeActor(scene, azali);
       });

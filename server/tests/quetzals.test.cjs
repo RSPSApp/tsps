@@ -12,9 +12,12 @@ const { Location } = require("../dist/game/model/Location");
 const { Item } = require("../dist/game/model/Item");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const { Inventory } = require("../dist/game/model/container/impl/Inventory");
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+const { PluginManager } = require("../dist/plugins/PluginManager");
 const Quetzals = require("../plugins/world/Quetzals.plugin");
 
-const { Common, Renu, Sites, Whistle, Pitri } = Quetzals._test;
+const { Common, Renu, Sites, Whistle, Pitri, Primio } = Quetzals._test;
 const obj = (name) => CacheDefinitions.getObjId(name);
 const varbitId = (name) => CacheDefinitions.getVarbitId(name);
 const varpId = (name) => CacheDefinitions.getVarpId(name);
@@ -561,4 +564,53 @@ test("a finished Twilight's Promise unlocks Renu at login, and an unfinished one
   assert.equal(finished.varbit("quetzal_camtorum"), 1, "a built site shows too");
   assert.equal(finished.varbit("quetzal_kastori"), 0, "an unbuilt one doesn't");
   completeQuests = new Set();
+});
+
+test("Primio's introduction and visit flags survive native saves without rewinding the shared quest stage", () => {
+  const nativeCore = PluginManager.getCoreApi();
+  Common.init({ ...api, core: { ...nativeCore, Task, TaskManager: api.core.TaskManager } });
+  PlayerSave.persistAttribute(Common.VARPS_ATTRIBUTE, null);
+  completeQuests = new Set(["children_of_the_sun"]);
+  const nativePlayer = () => {
+    const player = new Player(null, new Location(3281, 3413, 0));
+    player.setRegistered(true);
+    player.getSession = () => ({ sendClientPacket: () => true, write() {} });
+    return player;
+  };
+  try {
+    for (const state of [2, 3, 4]) {
+      const original = nativePlayer();
+      original.getPacketSender().sendVarbit(varbitId("vmq2"), 14);
+      Common.setVarbits(original, { vmq2_first_travel: state, varlamore_visited: state >= 3 ? 1 : 0, quetzal_last_destination: 7 });
+      const save = PlayerSave.fromPlayer(original);
+      save.attributes = JSON.parse(JSON.stringify(save.attributes));
+      const loaded = nativePlayer();
+      save.applyToPlayer(loaded);
+      const sender = loaded.getPacketSender();
+      sender.sendVarbit(varbitId("vmq2"), 50);
+      Common.restore({ player: loaded });
+      assert.equal(sender.getVarbit(varbitId("vmq2_first_travel")), state);
+      assert.equal(sender.getVarbit(varbitId("varlamore_visited")), state >= 3 ? 1 : 0);
+      assert.equal(sender.getVarbit(varbitId("vmq2")), 50, "restoring travel bits cannot overwrite Twilight's Promise");
+      assert.equal(sender.getVarbit(varbitId("quetzal_last_destination")), 7, "existing quetzal varp snapshots still restore");
+      const menus = dialogueStarts.length;
+      Primio.travel({ player: loaded, npcId: 12888 });
+      if (state === 2) {
+        assert.equal(dialogueStarts.at(-1).variant, "talking-in-varrock-talking-again-before-taking-the-first-trip");
+        Primio.acceptFirstTrip({ player: loaded, npcId: 12884, stepId: "Kectpl" });
+        loaded.setRegistered(false); tick(7);
+        assert.deepEqual(at(loaded.getLocation()), [3281, 3413, 0]);
+        assert.equal(sender.getVarbit(varbitId("varlamore_visited")), 0, "logging out before landing does not grant a visit");
+      }
+      else {
+        assert.equal(dialogueStarts.length, menus, "a returning visitor does not repeat the introduction");
+        tick(7);
+        assert.deepEqual(at(loaded.getLocation()), [1700, 3141, 0]);
+        assert.equal(sender.getVarbit(varbitId("quetzal_last_destination")), 7, "Primio leaves Renu's last destination unchanged");
+      }
+    }
+  } finally {
+    Common.init(api);
+    completeQuests = new Set();
+  }
 });

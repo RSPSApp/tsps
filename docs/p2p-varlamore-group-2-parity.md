@@ -124,6 +124,12 @@ Quetzal travel uses the cache landing table and interface 874, with saved
 unlocks, locked-destination checks and a single flight at a time. The new camera
 arc packet is encoded and decoded by the server and client together.
 
+Primio's Varrock service lands at (1700,3141,0), separately from Renu's Fortis
+table entry, matching the [pinned RuneLite transport data](https://github.com/Skretzo/shortest-path/blob/65314c02128302402c15c730328030a78ae28f44/src/main/resources/transports/transports.tsv)
+and the [April 2024 landing-site swap](https://oldschool.runescape.wiki/w/Quetzal_Transport_System#Changes).
+Its first-trip and visited varbits are saved individually alongside the quetzal
+snapshot; restoring the whole shared parent varp would overwrite Twilight's Promise progress.
+
 ## The Heart of Darkness (ticks 2423–4992)
 
 Native `vmq3` stages 0–76 cover the Queen's visit, inn payment and sleep,

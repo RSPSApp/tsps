@@ -137,5 +137,8 @@ native NPC movement for all 86 guard steps, real Player/PlayerSession/PacketSend
 and cached action menus for interruption at stages 16/18/20/22, earned stage-20
 logout with the actual saved location, legacy exit-position recovery, replacement actors after login, personal
 scenery isolation, global clipping/removal-state preservation and region replay.
+An independent native movement replay matches all 86 captured guard coordinates
+and six pause-facing targets. A real Player/MovementQueue can leave the listening
+point west or south, with both the route door 11780 and bandit door 50048 unchanged.
 No dev/game server or live browser run was performed. These are offline checks,
 not a claim of a fresh in-game quest completion or verified rendered sightlines.

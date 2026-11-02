@@ -22,7 +22,7 @@ try {
     const bytes = sent[0];
     // The argument block ends the packet: the length 2 and the two components, zigzag varints.
     const tail = bytes.slice(bytes.length - 5);
-    assert.deepEqual(tail, [4, 0xb0, 0x01, 0xbc, 0x01], "2, 88, 94 as zigzag varints");
+    assert.deepEqual(tail.slice(-3), [2, 88, 94], "2, 88, 94 as plain varints, as the real client writes them");
 } finally {
     writer.addNode = original;
     (state as any).socket = null;

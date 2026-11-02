@@ -97,10 +97,11 @@ function character(name, profile = "league") {
 const varbit = (name) => CacheDefinitions.getVarbitId(name);
 const varp = (name) => CacheDefinitions.getVarpId(name);
 /** if_triggeroplocal's ints as the client encodes them: zigzag varints. */
+/** Apply Changes' int array as the real client writes it: plain unsigned varints (RuneLite: [1, 126]). */
 function trigger(...ints) {
   const bytes = [];
   for (const int of ints) {
-    let value = (int << 1) ^ (int >> 31);
+    let value = int >>> 0;
     do {
       let byte = value & 0x7f;
       value >>>= 7;
@@ -165,6 +166,8 @@ test("View Demonic Pacts opens the tree as captured; a bought node pays, sets it
 
   pacts.sent.order.length = 0;
   assert.equal(hooks[`button:${uid(TREE, 11)}`]({ player: pacts, scriptTrigger: true, argsData: trigger(1, 0) }), true);
+  assert.deepEqual(trigger(1, 126), [1, 126], "the bytes RuneLite sent through the gateway for node 63");
+  assert.deepEqual(trigger(1, 212), [1, 0xd4, 0x01], "recorded as [1, -44, 1]");
   assert.deepEqual(Common.pacts(pacts), [0]);
   assert.deepEqual(pacts.sent.order.slice(0, 3), [
     ["varp", varp("talent_points_spent"), 1], ["varp", varp("combat_mastery_perm_0"), 1], ["varbit", varbit("talent_regen_ammo_chance"), 50],

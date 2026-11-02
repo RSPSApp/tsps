@@ -179,16 +179,26 @@ export function sendIfTriggerOpLocal(
         buf.writeByte(v & 0x7f);
     };
 
+    const writeUnsignedVarInt = (value: number) => {
+        let v = value >>> 0;
+        while ((v & ~0x7f) !== 0) {
+            buf.writeByte((v & 0x7f) | 0x80);
+            v >>>= 7;
+        }
+        buf.writeByte(v & 0x7f);
+    };
+
     const objectArgs = Array.isArray(args) ? args : [];
     for (let i = 0; i < objectArgs.length; i++) {
         const arg = objectArgs[i];
         if (typeof arg === "number" && Number.isFinite(arg)) {
             writeVarInt(arg);
         } else if (isCs2ArrayObject(arg) && arg.valueType === "int") {
-            // An int array ("*" in the signature): its length, then each element, as live sends
-            // the pact tree's Apply Changes (talent_tree:data_layer, recorded [2, 88, 94]).
-            writeVarInt(arg.length);
-            for (let j = 0; j < arg.length; j++) writeVarInt(arg.getInt(j));
+            // An int array ("*" in the signature): its length, then each element, as plain
+            // unsigned varints, as the real client sends the pact tree's Apply Changes
+            // (talent_tree:data_layer, recorded [2, 88, 94]; [1, -44, 1] is 212).
+            writeUnsignedVarInt(arg.length);
+            for (let j = 0; j < arg.length; j++) writeUnsignedVarInt(arg.getInt(j));
         } else if (typeof arg === "string") {
             buf.writeStringCp1252NullTerminated(arg);
         } else if (arg == null) {

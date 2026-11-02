@@ -7,7 +7,7 @@
  * varps and varbits Common sends.
  */
 const Common = require("./Common.LeaguePacts");
-const { triggerInts } = require("../../interface/widgetGroup");
+const { triggerInts, triggerVarints } = require("../../interface/widgetGroup");
 
 const BUSY_VARBIT = 12393;
 /** if_setevents bits: OP1, and IF_SCRIPT_TRIGGER (bit 23, as RSProx names it). */
@@ -151,8 +151,9 @@ function later(player, ticks, action) {
 function dataLayerTriggered(event) {
   const { player } = event;
   if (!event.scriptTrigger || !open.has(player) || !Common.isPacts(player)) return false;
-  // Apply Changes: the count, then each selected node's component (two per node).
-  const [count, ...components] = triggerInts(event.argsData);
+  // Apply Changes: one int array, its length then each selected node's component (two per node),
+  // as plain varints (triggerVarints: the real client's encoding).
+  const [count, ...components] = triggerVarints(event.argsData);
   const picked = components.slice(0, Math.max(0, count | 0));
   if (!picked.length || picked.some((component) => !Number.isInteger(component) || component < 0 || component % 2 !== 0)) return true;
   buyAll(player, picked.map((component) => component / 2));

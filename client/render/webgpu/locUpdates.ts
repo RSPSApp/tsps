@@ -17,7 +17,7 @@ import { getLocAnimationDurationMs } from "../render/locs2";
 import { applyGamemodeWorldLocs } from "../render/streaming";
 import { RENDER_CONSTANTS } from "../render/constants";
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
-import { isDoorLocType } from "../loc/SceneLocs";
+import { isDoorLoc } from "../loc/SceneLocs";
 import { matchingLocSlotIds, shapeSlotOverride, suppressShapeSlotAt } from "../loc/LocSlots";
 import { getMapSquareId } from "../../rs/map/MapFileIndex";
 import { LOC_OVERRIDE_KEEP_ID, LOC_OVERRIDE_REMOVED, locOverrideIdFromChange } from "../../rs/scene/LocOverride";
@@ -78,11 +78,12 @@ export class LocUpdates {
     private groupOf(...ids: number[]): LocReloadGroup {
         let doors = 0;
         let locs = 0;
+        const loader = this.r.osrsClient.locTypeLoader;
         for (const id of ids) {
             if ((id | 0) <= 0) continue;
-            const type = this.r.osrsClient.locTypeLoader.load(id | 0);
+            const type = loader.load(id | 0);
             if (!type) return "full";
-            if (isDoorLocType(type)) doors++;
+            if (isDoorLoc(type, this.r.osrsClient.varManager, loader)) doors++;
             else locs++;
         }
         if (doors > 0 && locs === 0) return "door";

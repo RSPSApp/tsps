@@ -911,6 +911,28 @@ test('Tree Gnome Stronghold main gate handles packet coordinates, opens both lea
   }
 });
 
+test('door:state reads both current gate leaves without changing their state or timer', () => {
+  const h = buildHarness();
+  try {
+    h.place(1558, 100, 100, 0); h.place(1560, 100, 101, 0);
+    const closed = [new GameObject(1558, new Location(100, 100, 0), 0, 0, null),
+      new GameObject(1560, new Location(100, 101, 0), 0, 0, null)];
+    const read = objects => { const event = { objects }; h.customHandlers.get('door:state')(event); return event.objects; };
+    assert.deepEqual(read(closed), closed, 'a closed gate retains its map leaves');
+    h.click(1558, 100, 100, 0);
+    const tasks = h.submitted.slice(), states = [...h.internals.OPEN_OBJECT_STATES.values()];
+    const snapshot = objects => objects.map(object => [object.getId(), object.getLocation().getX(), object.getLocation().getY(), object.getFace()]);
+    assert.deepEqual(snapshot(read(closed)), [[1559, 99, 100, 3], [1567, 98, 100, 3]], 'one canonical state returns each moved leaf once');
+    const other = new GameObject(1558, new Location(200, 200, 0), 0, 0, null);
+    const privateCopy = new GameObject(1558, new Location(100, 100, 0), 0, 0, new class extends PrivateArea {}());
+    assert.deepEqual(read([other, privateCopy]), [other, privateCopy], 'a location or private-area mismatch does not read this world gate');
+    assert.deepEqual(h.submitted, tasks, 'a read does not reschedule auto-close');
+    assert.deepEqual([...h.internals.OPEN_OBJECT_STATES.values()], states);
+    h.submitted.at(-1).execute();
+    assert.deepEqual(read(closed), closed, 'after auto-close the current view is closed again');
+  } finally { h.restore(); }
+});
+
 test('wooden gate swings hinge + extension panels open from a closed hinge click', () => {
   const h = buildHarness();
   try {

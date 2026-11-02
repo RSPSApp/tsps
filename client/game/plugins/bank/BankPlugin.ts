@@ -45,6 +45,12 @@ export class BankPlugin extends Plugin implements ClientPlugin {
     private readonly bankSearch: BankSearch;
     /** Bank item quantities by id, for one build's value searches. */
     private itemQuantities?: Map<number, number>;
+    /**
+     * Whether this build's value searches used a guide price that hadn't loaded yet. The searches
+     * hide the items whose price is unknown, so the build can look complete and empty at once; the
+     * bank has to lay out again when the prices arrive.
+     */
+    private searchPricesPending = false;
     /** The price table's revision when the title was built without some prices; it relays out when they arrive. */
     private pricesPendingAt?: number;
 
@@ -62,6 +68,7 @@ export class BankPlugin extends Plugin implements ClientPlugin {
 
     protected override async shutDown(): Promise<void> {
         this.itemQuantities = undefined;
+        this.searchPricesPending = false;
         this.pricesPendingAt = undefined;
         // Builds the title again, without the value.
         this.bankSearch.layoutBank();
@@ -95,7 +102,10 @@ export class BankPlugin extends Plugin implements ClientPlugin {
 
     /** BankPlugin.onScriptPostFired(BANKMAIN_BUILD). */
     private appendBankValue(): void {
-        const prices = this.containerPrices();
+        // The build's value searches have run by now; take what they needed before the next one.
+        const searchedPending = this.searchPricesPending;
+        this.searchPricesPending = false;
+        const prices = this.containerPrices(searchedPending);
         if (!prices) return;
         const title = this.client.getWidget(Bankmain.TITLE);
         if (!title) return;
@@ -110,8 +120,11 @@ export class BankPlugin extends Plugin implements ClientPlugin {
         }
     }
 
-    /** BankPlugin.getWidgetContainerPrices: the items the bank shows, at their quantities. */
-    private containerPrices(): { ge: number; ha: number } | undefined {
+    /**
+     * BankPlugin.getWidgetContainerPrices: the items the bank shows, at their quantities. The value
+     * searches can use prices for items this total skips as hidden, so `searchedPending` counts too.
+     */
+    private containerPrices(searchedPending: boolean): { ge: number; ha: number } | undefined {
         const bank = this.client.getItemContainer(BANK);
         const children = this.client.getWidget(Bankmain.ITEMS)?.children;
         if (!bank || !children) return undefined;
@@ -119,7 +132,7 @@ export class BankPlugin extends Plugin implements ClientPlugin {
         const size = Math.min(children.length, bankSize(bank.getSlots()));
         let ge = 0;
         let ha = 0;
-        let pending = false;
+        let pending = searchedPending;
         for (let i = 0; i < size; i++) {
             const child = children[i];
             const itemId = child?.itemId ?? -1;
@@ -144,6 +157,8 @@ export class BankPlugin extends Plugin implements ClientPlugin {
             }
         }
         const price = this.itemPrices(itemId);
+        // An unknown price reads as zero here, which can hide every item: remember to lay out again.
+        if (price.ge === undefined) this.searchPricesPending = true;
         return { quantity: this.itemQuantities.get(itemId) ?? 0, ge: price.ge ?? 0, ha: price.ha };
     }
 

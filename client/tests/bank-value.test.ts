@@ -172,6 +172,20 @@ async function main(): Promise<void> {
     assert.equal(title(), "Showing items: <col=ff0000>whip</col> (3M)", "only the whips' value");
     vm.context.varManager.setVarcString(359, "");
 
+    // A value search made while the guide prices load: the unknown prices read as zero and hide
+    // everything, so the bank lays out again once the prices arrive rather than staying empty.
+    guideTable = undefined;
+    revision++;
+    vm.context.varManager.setVarcString(359, "ge>1m");
+    build();
+    assert.deepEqual(shown(), [], "no guide price is known yet, so nothing matches");
+    guideTable = new Map([[WHIP, 1_500_000], [SHARK, 900]]);
+    revision++;
+    plugin.onClientTick();
+    assert.deepEqual(shown(), [WHIP], "the search matches once the prices arrive");
+    assert.equal(title(), "Showing items: <col=ff0000>ge>1m</col> (3M)");
+    vm.context.varManager.setVarcString(359, "");
+
     // A tag tab: Bank Tags' title, then the tab's value.
     bankTags.tagManager.addTag(WHIP, "melee", false);
     bankTags.tabManager.add(bankTags.tabManager.load("melee"));

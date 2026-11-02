@@ -19,6 +19,10 @@ request/response shaped, cache-derived data - searches, lists, lookups.
 Declared `scroll` regions can read their height from a hidden text component using
 `contentHeightComponent`, falling back to `contentHeight`. `resetOnComponents` lists
 buttons that return the view to the top while still sending their click to the server.
+Presets uses these for its category tabs; kit data's optional `tab` selects a section
+(`1 Defence` by default, or `Void`, `Zerker`, `Tank`, `Max`).
+The current kits use Defence 1, 42, 45 and above 45 for those first four sections;
+only kits with all seven combat stats at 99 belong to Max, regardless of their names.
 
 Rules for both:
 

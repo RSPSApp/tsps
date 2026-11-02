@@ -106,6 +106,7 @@ const ROLE_LOADOUTS = Object.freeze({
 // Combat tiers chosen in the lobby prompt (PvpTierLoadouts.PlayerBots): each pins a bot's
 // loadout and combat level band.
 const DEFAULT_BOT_TIER_KEY = "castlewars:bot-tier";
+const DEFAULT_PRACTICE_MAXED_KEY = "castlewars:practice-maxed";
 
 let api;
 let game;
@@ -290,6 +291,8 @@ function buildRoutes(core, teams) {
   const saraFlagOut = [
     ...saraThroughOwnDoor,
     ...islandBridgeEastToWest(),
+    walkStep(2385, 3134, 0),
+    doorStep([[O.DOOR_127, 2384, 3134, 0]], [2385, 3134, 0]),
     ...zamFlagRoomUp,
   ];
   // Saradomin: out of the start room to STAIRCASE_13, then over the island bridge to the
@@ -349,6 +352,8 @@ function buildRoutes(core, teams) {
   const zamFlagOut = [
     ...zamThroughOwnDoor,
     ...islandBridgeWestToEast(),
+    walkStep(2414, 3073, 0),
+    doorStep([[O.DOOR_125, 2415, 3073, 0]], [2414, 3073, 0]),
     walkStep(2421, 3073, 0),
     climbStep([2421, 3073, 0], [2421, 3074, 1]),
     ...saraFlagRoomUp,
@@ -891,11 +896,15 @@ function runDoorStep(ctx, state, step) {
   for (const [id, x, y, z] of step.leaves) {
     const object = core.MapObjects.get(id, new core.Location(x, y, z), null);
     if (object) {
+      if (ctx.nowMs < (state.nextDoorClickAt ?? 0)) return "running";
+      state.nextDoorClickAt = ctx.nowMs + DOOR_CLICK_INTERVAL_MS;
       if (process.env.CW_BOT_DEBUG === "1") {
         console.log(`[cw_bot] door_click ${player.getUsername?.()} leaf=${id}@${x},${y},${z} from=${location.getX()},${location.getY()}`);
       }
-      clickObject(player, object, openOptionIndex(object.getDefinition?.()));
-      break;
+      player.getMovementQueue().walkToObject(object, {
+        execute: () => clickObject(player, object, optionIndex(object.getDefinition?.(), "unlock", openOptionIndex(object.getDefinition?.()))),
+      });
+      return "running";
     }
   }
   advanceRoute(state);
@@ -1050,7 +1059,8 @@ function roleOf(player) {
  */
 function pickTierChoice(player, role, tier) {
   const style = role === ROLES.ARCHER ? "range" : (role === ROLES.MAGE || role === ROLES.DEFENDER) ? "magic" : null;
-  return pickSharedTierChoice(tier, { index: botNumber(player), style });
+  const maxed = player.getAttribute?.(game?.PRACTICE_MAXED_KEY ?? DEFAULT_PRACTICE_MAXED_KEY) === true;
+  return pickSharedTierChoice(maxed ? "veteran" : tier, { index: botNumber(player), style });
 }
 
 function preparePracticeLoadout(player, state, teamId) {
@@ -1096,7 +1106,8 @@ function ensureLoadout(player, state, teamId, nowMs) {
   // weapon slot, which ensureFlagWeapon keeps clear until the flag is actually picked up.
   // A lobby-chosen combat tier pins the loadout+archetype to its level band; without one,
   // archers and mages draw their fixed archetypes so the battlements crew keeps its style.
-  const tier = player.getAttribute(game.BOT_TIER_KEY ?? DEFAULT_BOT_TIER_KEY);
+  const maxed = player.getAttribute(game.PRACTICE_MAXED_KEY ?? DEFAULT_PRACTICE_MAXED_KEY) === true;
+  const tier = maxed ? "veteran" : player.getAttribute(game.BOT_TIER_KEY ?? DEFAULT_BOT_TIER_KEY);
   const tierChoice = pickTierChoice(player, state.role, tier);
   const forced = tierChoice ?? ROLE_LOADOUTS[state.role];
   const applied = applyGeneratedPvpLoadout(
@@ -1126,6 +1137,14 @@ function ensureLoadout(player, state, teamId, nowMs) {
     // Castle Wars food is the bandage table: the preset's sharks/karambwans would fill every
     // slot and leave no room to pick bandages up.
     stripFood(player);
+    if (maxed) {
+      const skills = player.getSkillManager();
+      for (const skill of [core.Skill.ATTACK, core.Skill.DEFENCE, core.Skill.STRENGTH, core.Skill.HITPOINTS,
+        core.Skill.RANGED, core.Skill.PRAYER, core.Skill.MAGIC, core.Skill.THIEVING]) {
+        skills.setExperiences(skill, core.SkillManager.getExperienceForLevel(99), false)
+          .setMaxLevels(skill, 99, false).setCurrentLevels(skill, 99);
+      }
+    }
     preparePracticeLoadout(player, state, teamId);
   }
   // Team colours go on even while the preset is deferred (the bot is in combat), and go on
@@ -1352,6 +1371,40 @@ function ensureFlagWeapon(player, role = ROLES.FLAG) {
   if (player.getEquipment().getSlot(core.Equipment.WEAPON_SLOT) > 0) {
     game.clearWeaponSlot(player);
   }
+}
+
+/** Replenishable arena supplies can make room; the native flag handler stows both hands. */
+function reserveFlagSpace(player) {
+  const inventory = player.getInventory();
+  const needed = [core.Equipment.WEAPON_SLOT, core.Equipment.SHIELD_SLOT]
+    .filter((slot) => player.getEquipment().getSlot(slot) > 0).length;
+  for (const id of [core.ItemIdentifiers.BANDAGES, core.ItemIdentifiers.EXPLOSIVE_POTION,
+    core.ItemIdentifiers.BUCKET_OF_WATER, core.ItemIdentifiers.BARRICADE]) {
+    while (inventory.getFreeSlots() < needed && inventory.contains(id)) {
+      inventory.deleteAtSlot(inventory.getSlotForItemId(id), 1);
+    }
+  }
+  return inventory.getFreeSlots() >= needed;
+}
+
+/** A loose own standard inside the castle is returned by the ordinary object interaction. */
+function recoverOwnFlag(ctx, state, teamId) {
+  const player = ctx.player;
+  if (game.flagStatus[teamId] !== 2 || !game.isInsideCastle(player, teamId)) return "failure";
+  const dropped = game.getDroppedFlagObject(teamId);
+  const location = dropped?.getLocation();
+  if (!location || location.getZ() !== player.getLocation().getZ()
+      || chebyshevDistance(location.getX(), location.getY(), player.getLocation().getX(), player.getLocation().getY()) > RECOVER_FLAG_RADIUS) return "failure";
+  if (ctx.nowMs >= (state.nextFlagClickAt ?? 0)) {
+    state.nextFlagClickAt = ctx.nowMs + FLAG_CLICK_INTERVAL_MS;
+    player.getCombat().reset();
+    player.getMovementQueue().walkToObject(dropped, {
+      execute: () => {
+        if (game.getDroppedFlagObject(teamId) === dropped) clickObject(player, dropped, 1);
+      },
+    });
+  }
+  return "running";
 }
 
 function findDoorObject(info) {
@@ -1749,12 +1802,12 @@ function flagCycle(ctx, state, teamId) {
         state.nextStandClickAt = nowMs + STAND_RETRY_MS;
         if (game.flagStatus[enemyTeam] === 0) {
           const stand = findStandObject(enemyTeam);
-          if (stand) {
+          if (stand && reserveFlagSpace(player)) {
             clickObject(player, stand, 1);
           }
         } else if (game.flagStatus[enemyTeam] === 2) {
           const dropped = findDroppedFlag(enemyTeam);
-          if (dropped) {
+          if (dropped && reserveFlagSpace(player)) {
             clickObject(player, dropped, 1);
           }
         }
@@ -1852,10 +1905,7 @@ function recoverEnemyFlag(ctx, state, teamId) {
   if (distance > 1) {
     return walkTowards(ctx, state, flagLocation.getX(), flagLocation.getY());
   }
-  // Capturing needs an empty weapon slot; the weapon is restored once the run is over.
-  if (player.getEquipment().getSlot(core.Equipment.WEAPON_SLOT) > 0) {
-    game.clearWeaponSlot(player);
-  }
+  if (!reserveFlagSpace(player)) return "failure";
   if (ctx.nowMs >= (state.nextFlagClickAt ?? 0)) {
     state.nextFlagClickAt = ctx.nowMs + FLAG_CLICK_INTERVAL_MS;
     clickObject(player, dropped, 1);
@@ -2144,7 +2194,10 @@ function controllerFor(player, teamId, role, nowMs) {
     startRoom.getX(),
     startRoom.getY(),
     startRoom.getZ(),
-    createBotTree(role, state, teamId, player)
+    new SelectorNode([
+      new ActionNode((ctx) => recoverOwnFlag(ctx, state, teamId)),
+      createBotTree(role, state, teamId, player),
+    ])
   );
   botControllers.set(player, controller);
   return controller;
@@ -2288,6 +2341,8 @@ module.exports._test = {
   ensureLoadout,
   preparePracticeLoadout,
   ensureFlagWeapon,
+  flagCycle,
+  processBot,
   tierCombatLevel,
   TIER_BANDS,
   TIER_PROFILE_IDS,

@@ -121,9 +121,13 @@ Ticks from the rift opening:
 | | C+2, C+18, C+27 | The Great Guardian says "Humans, I now have the power to close the rift. Thank you, brave ones.", "Now, for the final blow. Let the Scar be no more!", "Brace yourselves!" |
 | Rift closed | C+32 | `@mes_hl_gre@The Great Guardian successfully closed the rift!</col>`, the four reward lines (see Rewards), `gotr_player_has_finished_game` 1, jingle 292, "The Portal Guardians will keep their rifts open for another 30 seconds." Players stay in until they leave or the next game opens. |
 | Altars close | close +51 | "The Portal Guardians close their rifts."; the HUD's altars go to 0 |
+| Lobby | close +54 | "The rift will become active in 30 seconds."; the guardian stones go and `gotr_mining_count` goes to 0 (65 catalytic stones in the capture). Cells stay. |
 | Next game | close +104 | |
 
 - A game lasted about 860 ticks on the captured world.
+- **The open takes no items in the capture:** ten uncharged cells taken between games were all
+  still held after "The rift becomes active!" (twice). The Wiki: fragments, essence and portal
+  talismans go at the start of a new game; the plugin takes those and any stones, never cells.
 - `@mes_hl_gre@` is coloured by the chatbox's transparency: 229628 on a transparent chatbox
   (Leagues capture), 06600c on the opaque one (the same green Mastering Mixology captured).
 - **Loss (no capture):** the Wiki says the game fails at 0%. The plugin closes the rift without
@@ -329,7 +333,8 @@ Ticks from the rift opening:
 
   Each barrier has an invisible NPC on its tile (`gotr_barrier_npc_tier<n>[_large]`; the cache
   gives 50/100/200/400 hitpoints).
-- **Place-cell** (`human_pickupfloor`; the best charged cell held):
+- **Place-cell** (`human_pickupfloor`; the best charged cell held; before the open, an uncharged
+  cell on an inactive tile when no charged cell is held):
   - **Inactive tile:** the tile and barrier take the cell's tier, sound 5455 (tutorial capture).
     Wiki energy 17/20/24/30 of both kinds.
   - **A stronger cell:** "The strong cell is consumed as it <col=ff0000>strengthens</col> the
@@ -368,6 +373,11 @@ Ticks from the rift opening:
   - All guardians die at full power (Wiki). The HUD's "n/10" counts them.
 - **Players may place cells and assemble guardians in the lobby** (captured between games). Both
   the barriers and the guardians carry into the game.
+  - The capture: the tiles reset at the close, then players built weak barriers over the next 26
+    ticks and strengthened two of them to tiers 2 and 3, all before the next open.
+  - Wiki (13 November 2024): before the game begins an uncharged cell builds a weak barrier, and
+    this gives no experience. The plugin pays neither XP nor energy for cells placed before the
+    open (energy would be wiped by it anyway).
 - Once the quest is done, Temple of the Eye no longer spawns its owner-only Cordelia, Felix, Tamara
   and Great Guardian. The minigame's world spawns stand there.
 
@@ -467,14 +477,18 @@ Ticks from the rift opening:
 ## Existing code it touches
 
 - **Temple of the Eye (`plugins/quests/quests/TempleOfTheEye.Quest.js`)** runs the tutorial in
-  the same temple. Minigame handlers register first (plugins load by path) and step aside for
-  anyone who hasn't finished the quest, so the tutorial plays as before. Once the quest is done it
+  the same temple. Its handlers step aside for anyone who has finished the quest, so they can
+  run before the minigame's: GotR loads after Shopkeepers (`dependsOn`, for the pearl
+  currency), so after the quests and skills too. Once the quest is done it
   no longer spawns its owner-only Cordelia, Felix, Tamara and Great Guardian.
 - **Runecrafting (`plugins/skills/Runecrafting.plugin.js`):**
   - The essence pouches move to `runecrafting/Pouches.Runecrafting.js`.
   - It answers "runecrafting:altar-rune" so GotR crafts with its rune data.
   - Its XP table follows the Wiki.
-  - GotR's altar, exit-portal and pouch handlers only claim players in a game.
+  - GotR's altar, exit-portal and pouch handlers only claim players in a game. The altar and
+    exit portal are Runecrafting's own locs, so GotR claims them in `onBeforeObjectInteraction`
+    for a player on an altar trip; without guardian essence the click falls through to plain
+    Runecraft.
 - **Data:** the Great Guardian and the apprentices in `npc-spawns.json`, the fighters in
   `npc-combat-defs.json`, and Felix's old shop binding dropped from `shops.json`.
 - **`plugins/interface/data/minigame-teleports.json`** already lists Guardians of the Rift

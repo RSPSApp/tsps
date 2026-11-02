@@ -69,7 +69,6 @@ const ABSORB = ["small", "moderate", "high", "immense"];
 const STONE_VARIANT = "standard-dialogue-entering-a-portal-guardian-with-any-type-of-guardian-stone";
 /** The Great Guardian transcript's stone conditions, by step id. */
 const STEP = { ELEMENTAL: "c7UcIl", CATALYTIC: "YnTvsE", POLY_ONLY: "ufD52G" };
-const STONES = [Shared.ITEM.ELEMENTAL_STONE, Shared.ITEM.CATALYTIC_STONE, Shared.ITEM.POLYELEMENTAL_STONE, Shared.ITEM.POLYCATALYTIC_STONE];
 
 function byGuardian(objectId) {
   return ALTARS.find((altar) => Shared.loc(altar.guardian) === objectId) ?? null;
@@ -90,7 +89,7 @@ function isActive(altar) {
 }
 
 function holdsStones(player) {
-  return STONES.some((stone) => Shared.count(player, stone) > 0);
+  return Shared.STONES.some((stone) => Shared.count(player, stone) > 0);
 }
 
 function questDone(player, key) {
@@ -272,6 +271,18 @@ function findTalisman(player, altar, essence) {
   }
 }
 
+/**
+ * On a trip the altar and its exit portal are this game's, whatever loads first: they are the
+ * ordinary Runecrafting locs, whose own handlers would craft only rune/pure essence and send the
+ * player out to the ruins. Unclaimed clicks (no guardian essence) fall through to them.
+ */
+function claimTrip(event) {
+  if (!event.player?.__gotrTrip) return;
+  const option = String(event.option ?? "").toLowerCase();
+  const claim = option === "use" ? leaveAltar : option === "craft-rune" ? craft : null;
+  if (claim && claim(event)) event.handled = true;
+}
+
 // ------------------------------------------------------------------ the Guardians' looks
 
 /** Active Guardians play statue_runestone01_active, the rest the inactive loop (rsprox captures). */
@@ -315,8 +326,7 @@ module.exports = {
   ALTARS, isActive,
   attach(api) {
     attachGuardians(api);
-    api.onObjectInteraction("Portal", { Use: leaveAltar });
-    api.onObjectInteraction("Altar", { "Craft-rune": craft });
+    api.onBeforeObjectInteraction(claimTrip);
     api.onNpcDialogueCondition(answerCondition);
     api.onCustomEvent("pets:skilling-eligibility", excludeRiftGuardianRoll);
     Temple.allowAway(onTrip);

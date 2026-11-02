@@ -19,6 +19,7 @@ module.exports = {
     require("./league/Account.LeagueMode")(api);
     require("./league/Content.LeagueMode")(api);
     require("./league/Journal.LeagueMode")(api);
+    require("./league/Modals.LeagueMode")(api);
     require("./league/Panels.LeagueMode")(api);
     require("./league/Rank.LeagueMode")(api);
     require("./league/Statistics.LeagueMode")(api);
@@ -28,6 +29,7 @@ module.exports = {
     require("./league/Rewards.LeagueMode")(api);
     require("./league/Passives.LeagueMode")(api);
     require("./league/BoostedDrops.LeagueMode")(api);
+    require("./league/ShopStock.LeagueMode")(api);
     require("./league/Shattered.LeagueMode")(api);
     require("./league/Fragments.LeagueMode")(api);
     require("./league/FragmentDrops.LeagueMode")(api);

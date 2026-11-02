@@ -245,6 +245,20 @@ export function processWidgetReleaseInput(
             }
         }
 
+        // A press-only widget the click passed through (a button's face) is released too.
+        const pressed = widgetInteraction.pressedWidget;
+        if (pressed && pressed !== widgetInteraction.clickedWidget) {
+            const scaleX = pressed._absScaleX ?? 1;
+            const scaleY = pressed._absScaleY ?? 1;
+            const pressedCtx: Partial<ScriptEvent> = {
+                mouseX: ((mx - (pressed._absX ?? pressed.x ?? 0)) / scaleX) | 0,
+                mouseY: ((my - (pressed._absY ?? pressed.y ?? 0)) / scaleY) | 0,
+                opIndex: 1,
+            };
+            if (pressed.eventHandlers?.onRelease) deps.getCs2Vm().invokeEventHandler(pressed, "onRelease", pressedCtx);
+            else if (pressed.onRelease) deps.executeScriptListener(pressed, pressed.onRelease, pressedCtx);
+        }
+
         // The release above already dispatched a click or a drag. Do not replay
         // an earlier deferred action, and always clear held-item visuals.
         widgetInteraction.clearWidgetInteractionState();

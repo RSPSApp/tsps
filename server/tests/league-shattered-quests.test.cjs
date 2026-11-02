@@ -42,10 +42,10 @@ before(async () => {
   QuestRuntime = require("../plugins/quests/QuestRuntime");
 });
 
-test("every pack's quests are registered quests, but Recipe for Disaster's subquests and four miniquests", () => {
+test("every pack's quests are registered quests, but Recipe for Disaster's subquests and three miniquests", () => {
   const names = [...new Set(Object.values(data.packs).flatMap((pack) => pack.quests))];
   assert.deepEqual(names.filter((name) => !QuestRuntime.questNamed(name)).sort(), [
-    "Alfred Grimhand's Barcrawl", "Architectural Alliance", "Enter the Abyss",
+    "Alfred Grimhand's Barcrawl", "Architectural Alliance",
     "Freeing Awowogei", "Freeing Pirate Pete", "Freeing Sir Amik Varze", "Freeing Skrach Uglogwee",
     "Freeing the Goblin generals", "Freeing the Mountain Dwarf", "The Frozen Door",
   ], "the names docs/leagues.md and the data say are skipped");
@@ -177,4 +177,77 @@ test("a character's own inventory is kept through a pack's completion", () => {
   assert.equal(player.getInventory().getAmount(995), 1000, "its coins (Troll I's quests pay none)");
   assert.equal(player.getInventory().getAmount(1458), 1, "Troll Stronghold's law talisman joins them");
   assert.equal(QuestRuntime.questNamed("Death Plateau").isComplete(player), true);
+});
+
+test("league:complete-quests: Demonic Pacts' area lists, requirements first, unknown names left out", () => {
+  const player = new Player(null);
+  player.setUsername("area-quests");
+  const sender = new Proxy({}, { get: () => () => sender });
+  player.getPacketSender = () => sender;
+  player.sendMessage = () => {};
+  const order = [];
+  const shilo = QuestRuntime.questNamed("Shilo Village");
+  const potion = QuestRuntime.questNamed("Jungle Potion");
+  const karamja = require("../plugins/modes/data/league-areas.json").leagues["6"].quests["2"];
+  assert.deepEqual(karamja, ["Shilo Village", "Jungle Potion"], "the Wiki's Karamja list, the requirement under its quest");
+  const watch = (quest) => {
+    const complete = quest.complete.bind(quest);
+    quest.complete = (target, options) => (order.push(quest.name), complete(target, options));
+    return () => { delete quest.complete; };
+  };
+  const unwatch = [watch(shilo), watch(potion)];
+  try {
+    Unlocks._test.completeNamedQuests({ player, quests: [...karamja, "Recipe for Disaster/Freeing Pirate Pete"] });
+  } finally {
+    unwatch.forEach((fn) => fn());
+  }
+  assert.deepEqual(order, ["Jungle Potion", "Shilo Village"]);
+  assert.equal(shilo.isComplete(player), true);
+});
+
+test("league:complete-quests gives none of the quests' experience: Varlamore's, as live starts a Demonic Pacts character", () => {
+  const player = new Player(null);
+  player.setUsername("varlamore-quests");
+  const sender = new Proxy({}, { get: () => () => sender });
+  player.getPacketSender = () => sender;
+  player.sendMessage = () => {};
+  const varlamore = require("../plugins/modes/data/league-areas.json").leagues["6"].quests["21"];
+  // Unlocks' experience hook, as the plugin attaches it, on the real experience pipeline.
+  const hooks = PluginManager.canGainExperienceHooks;
+  const attached = hooks.length;
+  Unlocks(new Proxy({ core, onCanGainExperience: (handler) => hooks.push({ handler }) }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  const skills = player.getSkillManager();
+  const { Skill } = PluginManager.getCoreApi();
+  const before = ["SLAYER", "RUNECRAFTING", "HUNTER", "FISHING", "THIEVING"].map((name) => skills.getExperience(Skill[name]));
+  Unlocks._test.completeNamedQuests({ player, quests: varlamore });
+  assert.equal(QuestRuntime.questNamed("Perilous Moons").isComplete(player), true);
+  assert.deepEqual(["SLAYER", "RUNECRAFTING", "HUNTER", "FISHING", "THIEVING"].map((name) => skills.getExperience(Skill[name])), before,
+    "Perilous Moons' 40,000 Slayer and Twilight's Promise's Thieving held back");
+  hooks.length = attached;
+});
+
+test("league:complete-quests with items: false: Demonic Pacts' start quests hand no item (live's new character holds only the starter kit, 237/01098)", () => {
+  const startQuests = require("../plugins/modes/data/leagues.json").leagues["6"].startQuests;
+  const named = (quests) => quests.map((name) => QuestRuntime.questNamed(name)).filter(Boolean);
+  const fresh = (name) => {
+    const player = new Player(null);
+    player.setUsername(name);
+    const sender = new Proxy({}, { get: () => () => sender });
+    player.getPacketSender = () => sender;
+    player.sendMessage = () => {};
+    return player;
+  };
+  const held = (player) => player.getInventory().getValidItems().length
+    + player.getBanks().reduce((sum, bank) => sum + (bank?.getValidItems().length ?? 0), 0);
+  const player = fresh("start-quests");
+  Unlocks._test.completeNamedQuests({ player, quests: startQuests, items: false });
+  for (const task of tasks.splice(0)) (task.execute ?? task.run).call(task);
+  assert.ok(named(startQuests).every((quest) => quest.isComplete(player)), "every start quest complete");
+  assert.equal(held(player), 0, "no Air talisman, Elemental shield, Wolfbane or any other reward");
+  const { ItemIdentifiers: I } = core;
+  const rewarded = fresh("start-quests-items");
+  Unlocks._test.completeNamedQuests({ player: rewarded, quests: ["Rune Mysteries", "Elemental Workshop I", "Priest in Peril"] });
+  for (const id of [I.AIR_TALISMAN, I.ELEMENTAL_SHIELD, I.WOLFBANE]) {
+    assert.ok(rewarded.getInventory().getAmount(id) > 0, `a pack (items kept) still gives item ${id}`);
+  }
 });

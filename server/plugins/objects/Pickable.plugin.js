@@ -32,6 +32,7 @@ const PICKABLE_BY_NAME = new Map(PICKABLES.map((pickable) => [pickable.name, pic
 const picked = new Set();
 
 let TaskManager;
+let pluginApi;
 
 function plantKey(object) {
   const at = object.getLocation();
@@ -105,6 +106,8 @@ class PickTask extends Task {
     }
     player.getInventory().adds(pickable.item, 1);
     player.sendMessage(pickable.message);
+    // "world:picked" { player, itemId, plant }: something picked from a field (a league's "Pick 6 flax").
+    pluginApi?.emitCustomEvent?.("world:picked", { player, itemId: pickable.item, plant: pickable.name });
     Sounds.sendSound(player, Sound.PICK);
     if (Math.random() < pickable.deplete) deplete(object, pickable);
     else picked.delete(plantKey(object));
@@ -132,6 +135,7 @@ module.exports = {
   name: "Pickable",
   register(api) {
     TaskManager = api.getTaskManager();
+    pluginApi = api;
     for (const pickable of PICKABLES) {
       api.onObjectInteraction(pickable.name, { Pick: pick, pick: pick, "pick-flax": pick });
     }

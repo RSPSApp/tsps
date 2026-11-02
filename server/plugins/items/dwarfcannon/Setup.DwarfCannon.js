@@ -124,6 +124,8 @@ function nextPart(cannon) {
     Cannon.later(Data.SETUP_TICKS[cannon.stage], () => nextPart(cannon));
     return;
   }
+  // "dwarf-cannon:set-up" { player }: the last part on, the cannon standing whole.
+  Cannon.api.emitCustomEvent("dwarf-cannon:set-up", { player });
   Cannon.later(1, () => Ammo.loadFromInventory(cannon, Cannon.capacity(cannon.player)));
 }
 

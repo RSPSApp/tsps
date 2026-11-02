@@ -317,10 +317,23 @@ function makeBatch(player, recipe, via) {
   return true;
 }
 
+/**
+ * Ticks to the next batch: the recipe's, its tool's; content may make it faster
+ * ("skills:action-interval", a league relic's 2-tick pace), and a fletching knife's tick comes off
+ * after that, so the two stack.
+ */
 function interval(player, recipe) {
+  return SkillActions.actionInterval(api, player, core.Skill.FLETCHING, recipe.group, toolInterval(player, recipe), knifeSaving(player, recipe));
+}
+
+function toolInterval(player, recipe) {
   if (recipe.jewellersTicks && player.getInventory().contains(jewellersChiselId)) return recipe.jewellersTicks;
-  if (recipe.knifeBonus && carries(player, [fletchingKnifeId])) return recipe.ticks - 1;
   return recipe.ticks;
+}
+
+/** A carried or worn fletching knife's one tick off a knife recipe's pace (Wiki, Fletching knife). */
+function knifeSaving(player, recipe) {
+  return recipe.knifeBonus && carries(player, [fletchingKnifeId]) ? 1 : 0;
 }
 
 /** The animation (and the sound, with `startSound`) that opens the loop before the first batch. */

@@ -11,9 +11,11 @@ const Vault = require("./Vault.Farming");
 const Hespori = require("./Hespori.Farming");
 const Redwood = require("./Redwood.Farming");
 const Tools = require("./Tools.Farming");
-const { pauseForLevelUp } = require("../SkillActions");
+const { pauseForLevelUp, actionInterval } = require("../SkillActions");
 
 const FARM_ATTRIBUTE = "farming:state";
+/** Making and placing a scarecrow (Wiki, Scarecrow). */
+const SCARECROW_LEVEL = 23;
 const TROLL_HERB_PATCH = Data.CACHE.patches.find(p => p.type === "HERB" && p.x === 2826 && p.y === 3694 && p.z === 0);
 const FALADOR_FARM_PATCHES = new Set(Data.CACHE.patches.filter(p => p.z === 0
     && ["ALLOTMENT", "FLOWER", "HERB"].includes(p.type)
@@ -309,6 +311,10 @@ function workStep(player, work) {
     if (!again) WORK.delete(player);
     if (!work.action.endsWith("-bin")) syncPatch(player, work.patch);
 }
+/** Ticks between rake swings or harvest picks; content may make them faster ("skills:action-interval", a league relic's 2-tick pace). */
+function pace(player, kind, ticks) {
+    return actionInterval(core.PluginManager, player, core.Skill.FARMING, kind, ticks);
+}
 function rakeStep(player, work) {
     const state = stateFor(player, work.patch);
     if (work.swung && !rake(player, work.patch)) return false;
@@ -316,7 +322,7 @@ function rakeStep(player, work) {
     animate(player, ANIM.RAKE);
     sound(player, SOUND.RAKE);
     work.swung = true;
-    work.nextTick = workTick + RAKE_PERIOD;
+    work.nextTick = workTick + pace(player, "rake", RAKE_PERIOD);
     return true;
 }
 function rake(player, patch) {
@@ -326,6 +332,8 @@ function rake(player, patch) {
     state.weeds--;
     state.nextAt = Model.nextGrowth(Date.now(), Data.FORMULAS.growth.tickMinutes, farmFor(player).offset);
     award(player, 4, patch);
+    // "farming:raked" { player, patch, patchType }: a weed raked from the patch.
+    core.PluginManager.emitCustomEvent("farming:raked", { player, patch, patchType: patch.type });
     return state.weeds > 0;
 }
 function harvestStep(player, work) {
@@ -346,7 +354,7 @@ function harvestStep(player, work) {
             again = false;
         }
         if (!again) return false;
-        work.nextTick = work.swungAt + PICK_PERIOD;
+        work.nextTick = work.swungAt + pace(player, "harvest", PICK_PERIOD);
         if (workTick < work.nextTick) return true;
     }
     if (!canPick(player, work.patch)) return false;
@@ -358,6 +366,19 @@ function harvestStep(player, work) {
     work.nextTick = workTick + pick.delay;
     return true;
 }
+/**
+ * Whether the player has the Farming level `required` to plant, place or make a crop's item
+ * (`kind`: "plant", "scarecrow", "seedling"); else says the refusal. Content may waive it
+ * ("farming:level-rules" { player, kind, required, waived }, a league relic).
+ */
+function hasLevel(player, required, kind, refusal = `You need level ${required} Farming.`) {
+    if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) >= required) return true;
+    const rules = { player, kind, required, waived: false };
+    core.PluginManager.emitCustomEvent("farming:level-rules", rules);
+    if (rules.waived === true) return true;
+    player.sendMessage(refusal);
+    return false;
+}
 function plant(player, patch, id) {
     const crop = Data.SEEDS.get(id);
     const state = stateFor(player, patch);
@@ -368,7 +389,7 @@ function plant(player, patch, id) {
         player.sendMessage(`You can only plant ${crop.sapling ? saplingNoun(crop) : seedNoun(crop)}s in ${article(PATCH_NOUNS[crop.type] ?? "patch")}.`); return;
     }
     if (patch === TROLL_HERB_PATCH && crop.key === "GOUTWEED") { player.sendMessage("Regular goutweed cannot grow in this patch."); return; }
-    if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) < crop.level) { player.sendMessage(`You need level ${crop.level} Farming to plant that.`); return; }
+    if (!hasLevel(player, crop.level, "plant", `You need level ${crop.level} Farming to plant that.`)) return;
     const barbarian = farmFor(player).barbarian;
     const bareHanded = !crop.sapling && crop.type !== "GRAPES" && barbarian?.planting > 0 && !hasTool(player, "Seed dibber");
     if (!bareHanded && !requireTool(player, crop.sapling ? "Spade" : "Seed dibber")) return;
@@ -602,7 +623,7 @@ function healthCheck(player, patch) {
         : crop.type === "CACTUS" ? crop.name.toLowerCase() : crop.type === "BUSH" ? "bush" : "tree";
     spam(player, `You examine the ${noun} for signs of disease and find that it is in perfect health.`);
     Services.cropRewards(player, crop);
-    core.PluginManager.emitCustomEvent("farming:check-health", { player, crop: crop.key, patch });
+    core.PluginManager.emitCustomEvent("farming:check-health", { player, crop: crop.key, type: crop.type, patch, experience: crop.check });
 }
 function hasSpaceFor(player, state) {
     const crop = Data.CROPS.get(state.crop);
@@ -864,7 +885,7 @@ function itemOnObject(event) {
     else if (id === Data.itemId("Saltpetre") && patch.type === "GRAPES" && !state.crop && !state.compost && requireTool(player, "Gardening trowel")) {
         player.getInventory().deleteNumber(id, 1); state.compost = 1;
     } else if (id === Data.itemId("Scarecrow") && patch.type === "FLOWER" && !state.crop && !state.weeds && !state.scarecrow) {
-        if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) < 23) { player.sendMessage("You need level 23 Farming."); return; }
+        if (!hasLevel(player, SCARECROW_LEVEL, "scarecrow")) return;
         player.getInventory().deleteNumber(id, 1); state.scarecrow = true;
     } else if (id === Data.itemId("Plant pot")) fillPlantPot(player, patch, state, id);
     else player.sendMessage("Nothing interesting happens.");
@@ -1167,5 +1188,5 @@ function attach(api) {
     api.registerNpcCombatMethodProvider(core.NpcIdentifiers.HESPORI_2, Hespori.HesporiCombat, { singleton: false });
 }
 
-Object.assign(module.exports, { FARM_ATTRIBUTE, farmFor, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, noteSeedling, advanceTime, attach, tick: farmingTick, retrievalItems, startBinWork,
+Object.assign(module.exports, { FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, noteSeedling, advanceTime, attach, tick: farmingTick, retrievalItems, startBinWork,
     startClear, after, spam, sound });

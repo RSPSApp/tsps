@@ -10,6 +10,8 @@
 const fs = require("fs");
 const path = require("path");
 
+const SkillActions = require("../SkillActions");
+
 const CRAFTING_TASK_ATTRIBUTE = "crafting:task";
 /** The recipes: data/crafting.json, items by their ItemIdentifiers names. */
 const DATA = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "crafting.json"), "utf8"));
@@ -50,6 +52,11 @@ function actionsPerCycle(player, kind) {
   const request = { player, skill: core.Skill.CRAFTING, kind, actions: 1 };
   api.emitCustomEvent("skills:actions-per-cycle", request);
   return Math.max(1, request.actions | 0);
+}
+
+/** Ticks between a loop's items: `ticks` unless content makes it faster ("skills:action-interval", a league relic's 2-tick pace). */
+function actionInterval(player, kind, ticks) {
+  return SkillActions.actionInterval(api, player, core.Skill.CRAFTING, kind, ticks);
 }
 
 /**
@@ -151,6 +158,7 @@ function startMaking(player, {
 }) {
   stopCrafting(player);
   if (!has()) return;
+  const pace = actionInterval(player, kind, interval);
 
   const play = () => {
     animate(player, animation, sound);
@@ -172,7 +180,7 @@ function startMaking(player, {
       }
       const tick = ++this.ticks;
       if (tick === startTick) play();
-      if (tick < firstTick || (tick - firstTick) % interval !== 0) return;
+      if (tick < firstTick || (tick - firstTick) % pace !== 0) return;
       if (tick !== startTick) play();
       // Content may make several items in the one cycle ("skills:actions-per-cycle", by the loop's `kind`).
       const actions = actionsPerCycle(player, kind);
@@ -207,6 +215,7 @@ module.exports = {
   getCore,
   craftingLevel,
   actionsPerCycle,
+  actionInterval,
   produced,
   addCraftingXp,
   isMembersWorld,

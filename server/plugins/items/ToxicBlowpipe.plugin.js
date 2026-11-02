@@ -236,6 +236,8 @@ function chargeDarts(player, blowpipeItem, blowpipeSlot, dartItem) {
   BlowpipeState.addDarts(blowpipeItem, dartId, add);
   refreshBlowpipeState(player, blowpipeItem, blowpipeSlot);
   player.sendMessage(`You load ${add} ${getAmmoName(dartId)} into the blowpipe.`);
+  // "toxic-blowpipe:darts-loaded" { player, itemId, amount }: those darts loaded into it.
+  pluginApi.emitCustomEvent("toxic-blowpipe:darts-loaded", { player, itemId: dartId, amount: add });
 }
 
 function unloadBlowpipe(player, blowpipeItem, slot) {

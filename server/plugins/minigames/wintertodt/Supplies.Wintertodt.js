@@ -26,6 +26,7 @@ const Shared = require("./Shared.Wintertodt");
 const Round = require("./Round.Wintertodt");
 const Warmth = require("./Warmth.Wintertodt");
 const Woodcutting = require("../../skills/Woodcutting.plugin");
+const SkillActions = require("../../skills/SkillActions");
 
 const CHOP_TICKS = 3;
 /** The swing (animation and line) comes on tick 2, a tick before the first root. */
@@ -80,13 +81,15 @@ function chop(event) {
     player.sendMessage("Your inventory is too full to hold any more roots.");
     return true;
   }
+  // Content may pace the chops ("skills:action-interval", a league relic's 2 ticks).
+  const chopTicks = SkillActions.actionInterval(Shared.api(), player, Shared.core().Skill.WOODCUTTING, "roots", CHOP_TICKS);
   Shared.startAction(player, "chop", (ticks) => {
     if (!Round.isActive()) return false;
     if (ticks === SWING_TICK) {
       Shared.animate(player, axe.animationId);
       Shared.spam(player, "You swing your axe at the roots.");
     }
-    if (ticks % CHOP_TICKS !== 0) return true;
+    if (ticks % chopTicks !== 0) return true;
     Shared.animate(player, axe.animationId);
     if (Math.random() >= chopChance(player, axe)) return true;
     give(player, Shared.ITEM.BRUMA_ROOT);
@@ -116,12 +119,16 @@ function fletch(event) {
     player.sendMessage("Your hands are too cold to fletch here - move closer to the braziers.");
     return true;
   }
-  /** The first kindling keeps the full interval; the knife speeds up every one after it. */
-  let nextTick = FLETCH_TICKS - 1;
+  /**
+   * The first kindling keeps the full interval; the knife speeds up every one after it. Content may
+   * pace them ("skills:action-interval"), the knife's tick still coming off after (SkillActions).
+   */
+  const fletchTicks = (knife) => SkillActions.actionInterval(Shared.api(), player, Shared.core().Skill.FLETCHING, "roots", FLETCH_TICKS, knife ? FLETCH_TICKS - FLETCH_KNIFE_TICKS : 0);
+  let nextTick = fletchTicks(false) - 1;
   Shared.startAction(player, "fletch", (ticks) => {
     if (ticks < nextTick) return true;
     if (!fletchOne(player)) return false;
-    nextTick = ticks + (Shared.hasItem(player, Shared.ITEM.FLETCHING_KNIFE) ? FLETCH_KNIFE_TICKS : FLETCH_TICKS);
+    nextTick = ticks + fletchTicks(Shared.hasItem(player, Shared.ITEM.FLETCHING_KNIFE));
     if (slotOf(player, Shared.ITEM.BRUMA_ROOT) < 0) return false;
     Shared.animate(player, Shared.ANIM.FLETCH);
     return true;

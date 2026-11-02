@@ -2,6 +2,7 @@ import type { WidgetActionClientPayload } from "../types";
 import { send } from "../connection/send";
 import { state } from "../state";
 import { MAX_WIDGET_OPS } from "../../../widgets/WidgetFlags";
+import { isCs2ArrayObject } from "../../../rs/cs2/Cs2ArrayObject";
 
 export function sendWidgetOpen(groupId: number, opts: { modal?: boolean } = {}): void {
     if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return;
@@ -163,17 +164,37 @@ export function sendIfTriggerOpLocal(
     buf.writeIntLE(widgetUid | 0);
     buf.writeShortLE(itemId | 0);
 
+    const writeVarInt = (value: number) => {
+        // zigzag + LEB128-style varint.
+        let v = (((value | 0) << 1) ^ ((value | 0) >> 31)) >>> 0;
+        while ((v & ~0x7f) !== 0) {
+            buf.writeByte((v & 0x7f) | 0x80);
+            v >>>= 7;
+        }
+        buf.writeByte(v & 0x7f);
+    };
+
+    const writeUnsignedVarInt = (value: number) => {
+        let v = value >>> 0;
+        while ((v & ~0x7f) !== 0) {
+            buf.writeByte((v & 0x7f) | 0x80);
+            v >>>= 7;
+        }
+        buf.writeByte(v & 0x7f);
+    };
+
     const objectArgs = Array.isArray(args) ? args : [];
     for (let i = 0; i < objectArgs.length; i++) {
         const arg = objectArgs[i];
         if (typeof arg === "number" && Number.isFinite(arg)) {
-            // zigzag + LEB128-style varint.
-            let v = (((arg | 0) << 1) ^ ((arg | 0) >> 31)) >>> 0;
-            while ((v & ~0x7f) !== 0) {
-                buf.writeByte((v & 0x7f) | 0x80);
-                v >>>= 7;
-            }
-            buf.writeByte(v & 0x7f);
+            writeVarInt(arg);
+        } else if (isCs2ArrayObject(arg) && arg.valueType === "int") {
+            // An int array ("*" in the signature): its length as a plain unsigned varint, then
+            // each element zigzag-encoded like any int, as the real client sends the pact tree's
+            // Apply Changes (talent_tree:data_layer: node 63 recorded as [1, 126], nodes 44 and 47
+            // as [2, 88, 94]). Elements sent unsigned arrived as 63, which the server refused.
+            writeUnsignedVarInt(arg.length);
+            for (let j = 0; j < arg.length; j++) writeVarInt(arg.getInt(j));
         } else if (typeof arg === "string") {
             buf.writeStringCp1252NullTerminated(arg);
         } else if (arg == null) {

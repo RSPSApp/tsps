@@ -61,7 +61,7 @@
     "floor": [3022, 3045, 6037, 6061],
     "zalcano": [3031, 6048],
     "entrance": [3281, 6058],
-    "outside": [3282, 6060],
+    "outside": [3283, 6058], "_outside": "237/04057: leaving the prison lands here, east of the Teleport Platform (3282,6060 was a 3-tile pocket closed by lamps and trees)",
     "platform": [3033, 6068],
     "barrierNorth": [3034, 6063],
     "barrierSouth": [3034, 6061],

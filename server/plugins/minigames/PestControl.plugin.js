@@ -878,6 +878,8 @@ class PestControlMatch {
       const state = this.players.get(player);
       if (won && state.activity >= MIN_REWARD_ACTIVITY) {
         const commendations = commendationsFor(player, this.boat.points);
+        // "pest-control:won" { player, boat }: a game won and rewarded (a league's "Complete a game of Novice Pest Control").
+        pluginApi.emitCustomEvent("pest-control:won", { player, boat: this.boat.key });
         setPoints(player, getPoints(player) + commendations);
         const coins = player.getSkillManager().getCombatLevel() * 10;
         player.getInventory().adds(ItemIdentifiers.COINS, coins);

@@ -372,10 +372,10 @@ function timedEffectSkillIndexes(player) {
 }
 
 /**
- * Wiki: temporary boosts drop one point toward base every minute on a continuous cycle, which
- * Preserve stretches to 90 seconds. Prayer points are not covered, and Hitpoints above base
- * drop on the core's Hitpoints timer; lowered stats are restored by the core
- * (Player.processStatRestoration).
+ * Wiki: temporary boosts drop one point toward base (the core's resting level, with a permanent
+ * boost) every minute on a continuous cycle, which Preserve stretches to 90 seconds. Prayer points
+ * are not covered, and Hitpoints above base drop on the core's Hitpoints timer; lowered stats are
+ * restored by the core (Player.processStatRestoration).
  */
 function processBoostDecay(player) {
   // An area can hold temporary boosts indefinitely (Rogues' Den); the cycle resumes on leaving.
@@ -407,8 +407,9 @@ function processBoostDecay(player) {
       continue;
     }
     const current = getCurrentLevel(player, skill);
-    const base = getMaxLevel(player, skill);
-    if (current > base) {
+    // A permanent boost (the core's resting level) is where a boost stops decaying.
+    const resting = getSkillManager(player).getRestingLevel(skill);
+    if (current > resting) {
       setCurrentLevel(player, skill, current - 1);
     }
   }

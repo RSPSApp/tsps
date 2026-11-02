@@ -101,7 +101,20 @@ export class NPCOptionPacketListener {
     if (player.getDialogueManager().isActive()) npc.setMobileInteraction?.(player);
   }
 
+  /**
+   * An NPC's menu option done (not Attack): its handler, else the bank, else a plugin. One that
+   * something answered is `npc:operated` { player, npc, npcId, option } (the option lower-cased: a
+   * Talk-to that started a dialogue, a Pet), for whatever counts the deed itself.
+   */
   private static operate(player: any, npc: any, index: number, clickType: number, definition: any, option: string | undefined): void {
+    if (NPCOptionPacketListener.dispatch(player, npc, index, clickType, definition, option)) {
+      PluginManager.emitCustomEvent(NPCOptionPacketListener.OPERATED_EVENT, { player, npc, npcId: npc.getContentId(player), option });
+    }
+  }
+
+  public static readonly OPERATED_EVENT = "npc:operated";
+
+  private static dispatch(player: any, npc: any, index: number, clickType: number, definition: any, option: string | undefined): boolean {
     if (
       NpcInteractionManager.handle(
         player,
@@ -110,12 +123,12 @@ export class NPCOptionPacketListener {
         clickType
       )
     ) {
-      return;
+      return true;
     }
 
     if (option === "bank") {
       player.getBank(player.getCurrentBankTab()).open();
-      return;
+      return true;
     }
 
     const handled = PluginManager.emitNpcInteraction({
@@ -136,6 +149,7 @@ export class NPCOptionPacketListener {
     if (!handled) {
       player.sendMessage("Nothing interesting happens.");
     }
+    return handled;
   }
 
   public static castSpell(player: any, index: number, spellId: number): boolean {

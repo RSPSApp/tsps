@@ -1,6 +1,6 @@
 /** Forester campfire tending and the existing log-lighting loop. Evidence: docs/firemaking.md. */
 let ChatType, Skill, Equipment, Animation, Task, Location, Item, GameObject, MapObjects, RegionManager, Sound, Sounds, ItemIds, ObjectIds;
-const { pauseForLevelUp } = require("../SkillActions");
+const { pauseForLevelUp, actionInterval } = require("../SkillActions");
 
 const SESSION_MODE = Object.freeze({
   INVENTORY: "inventory",
@@ -403,6 +403,11 @@ function startFiremakingAttempt(player, log, source, activeSessions) {
   return true;
 }
 
+/** Ticks to the next log on a tended campfire; content may add faster ("skills:action-interval", a league relic's 2-tick pace). */
+function tendInterval(player) {
+  return actionInterval(pluginApi, player, Skill.FIREMAKING, "tend", TEND_INTERVAL_TICKS);
+}
+
 function startTendFire(player, log, object, activeSessions, amount = Infinity) {
   if (!player || !log || !object) {
     return false;
@@ -439,7 +444,7 @@ function startTendFire(player, log, object, activeSessions, amount = Infinity) {
     fireState: activeFires.get(object) ?? null,
     location: object.getLocation().clone(),
     privateArea: object.getPrivateArea(),
-    nextActionTick: sessionTick + TEND_INTERVAL_TICKS,
+    nextActionTick: sessionTick + tendInterval(player),
   });
 
   player.performAnimation(TENDING_ANIMATIONS.get(log.itemId));
@@ -589,7 +594,7 @@ function processFiremakingTick(activeSessions, currentTick) {
       if (currentTick < session.nextActionTick) {
         continue;
       }
-      session.nextActionTick = currentTick + TEND_INTERVAL_TICKS;
+      session.nextActionTick = currentTick + tendInterval(player);
       tendFire(player, session, activeSessions);
       continue;
     }
@@ -629,7 +634,8 @@ function processFiremakingTick(activeSessions, currentTick) {
     pluginApi.emitCustomEvent("firemaking:light-roll", light);
     if (!light.success) {
       player.performAnimation(LIGHT_FIRE_ANIMATION);
-      session.nextActionTick = currentTick + LIGHT_ATTEMPT_INTERVAL_TICKS;
+      // Content may light faster ("skills:action-interval", a league relic's 2-tick pace).
+      session.nextActionTick = currentTick + actionInterval(pluginApi, player, Skill.FIREMAKING, "light", LIGHT_ATTEMPT_INTERVAL_TICKS);
       continue;
     }
 

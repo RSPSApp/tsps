@@ -59,6 +59,7 @@ function startFlushing(player) {
 
 function openModal(player, panel) {
   Common.api.emitCustomEvent("league:send-content", { player });
+  Common.api.emitCustomEvent("league:modal-opening", { player, group: panel.group });
   const sender = player.getPacketSender();
   sender.sendInterfaceScript(Common.data.panels.modalSizeScript, panel.modalSize);
   sender.sendInterface(panel.group);

@@ -330,32 +330,35 @@ test('issue 1929: a player cannot cut diagonally past a barricade', (t) => {
   assert.equal(step(1, 1), true);
 });
 
-test('issue 1929: a standard never ends up inside tunnel rocks', (t) => {
+test("issue 1929: a standard dropped on tunnel rocks or a catapult's battlements goes home", (t) => {
   const { SARADOMIN } = data.TEAM;
-  // Rocks 4437 stand at 2391,9501 (2x2, an east-west tunnel) in the cache map.
-  const carrier = playerAt(t, 2392, 9502, 0);
-  game.carryFlag(carrier, SARADOMIN);
-  game.dropCarriedFlag(carrier);
-  const dropped = game.getDroppedFlagObject(SARADOMIN);
-  assert.equal(game.flagStatus[SARADOMIN], 2);
-  assert.deepEqual([dropped.getLocation().getX(), dropped.getLocation().getY()], [2393, 9502], 'a crushed carrier drops it on the open tile beside the rocks');
-  t.after(() => game.restoreFlagToBase(SARADOMIN));
-
-  // Mined away, the tile is open floor and the standard drops where the carrier stands.
+  const dropAt = (x, y) => {
+    const carrier = playerAt(t, x, y, 0);
+    game.carryFlag(carrier, SARADOMIN);
+    game.dropCarriedFlag(carrier);
+    const result = { status: game.flagStatus[SARADOMIN], dropped: game.getDroppedFlagObject(SARADOMIN) };
+    game.restoreFlagToBase(SARADOMIN);
+    return result;
+  };
+  // RuneHQ: "if you die on the stepping stones or under the rockslide, it will return to your base."
+  // Rocks 4437 stand at 2391,9501 in the cache map; the same holds once they are mined away.
+  const rockTiles = [[2391, 9501], [2392, 9502], [2401, 9494], [2402, 9495], [2409, 9503], [2400, 9512]];
+  // The reporter's battlement tiles beside each catapult, and their mirrors.
+  const battlements = [[2383, 3116], [2384, 3116], [2385, 3116], [2387, 3118], [2387, 3119],
+    [2412, 3088], [2412, 3089], [2414, 3091], [2415, 3091], [2416, 3091]];
+  for (const [x, y] of [...rockTiles, ...battlements]) {
+    const { status, dropped } = dropAt(x, y);
+    assert.equal(status, 0, `${x},${y} sends it home`);
+    assert.equal(dropped, null, `${x},${y} leaves nothing on the floor`);
+  }
   t.mock.method(core.MapObjects, 'get', () => null);
-  assert.equal(game.unburiedTiles(new core.Location(2392, 9502, 0)), null);
-  const buried = new core.Location(2391, 9501, 0);
-  game.moveDroppedFlag(SARADOMIN, [buried]);
-  assert.ok(game.getDroppedFlagObject(SARADOMIN).getLocation().equals(buried));
-
-  // Then the tunnel collapses on it: it comes out on the nearest open tile.
-  const wall = new core.GameObject(core.ObjectIdentifiers.CAVE_WALL, new core.Location(2390, 9500, 0), 0, 0, null);
-  const p = playerAt(t, 2389, 9501, 0);
-  p.getInventory().add(new core.Item(core.ItemIdentifiers.EXPLOSIVE_POTION));
-  blastWall({ player: p, object: wall, itemSlot: p.getInventory().getSlotForItemId(core.ItemIdentifiers.EXPLOSIVE_POTION) });
-  assert.match(p.messages.at(-1), /collapsed the tunnel/);
-  const moved = game.getDroppedFlagObject(SARADOMIN).getLocation();
-  assert.deepEqual([moved.getX(), moved.getY()], [2390, 9501]);
+  assert.equal(dropAt(2392, 9502).status, 0, 'mined-away rocks still send it home');
+  // The rest of the catapult deck, and the tunnel beside the rocks, drop it as usual.
+  for (const [x, y] of [[2383, 3118], [2385, 3120], [2413, 3087], [2393, 9502], [2401, 9493]]) {
+    const { status, dropped } = dropAt(x, y);
+    assert.equal(status, 2, `${x},${y} drops it`);
+    assert.deepEqual([dropped.getLocation().getX(), dropped.getLocation().getY()], [x, y]);
+  }
 });
 
 test('lighting your own tile steps sideways; right-click Burn never consumes supplies', (t) => {

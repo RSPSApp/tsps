@@ -343,6 +343,22 @@ function isSteppingStone(tile) {
   );
 }
 
+/**
+ * The battlements beside each catapult: a standard dropped on one goes home, as on the stepping
+ * stones. RSPS-only data from the issue 1929 reporter's play on the original game (2383,3116,
+ * 2384,3116, 2387,3118, 2387,3119 and 2412,3088, 2412,3089, 2414,3091, 2415,3091), plus each
+ * side's mirror so both catapults match. No capture or Wiki text covers it. The decks are bridge
+ * tiles, so they sit on plane 0 here.
+ */
+const CATAPULT_RETURN_TILES = new Set([
+  "2383,3116", "2384,3116", "2385,3116", "2387,3118", "2387,3119",
+  "2412,3088", "2412,3089", "2414,3091", "2415,3091", "2416,3091",
+]);
+
+function isCatapultReturnTile(tile) {
+  return tile.z === 0 && CATAPULT_RETURN_TILES.has(`${tile.x},${tile.y}`);
+}
+
 function isInsideCastle(player, teamId) {
   const { x, y, z } = getLocationTile(player);
   if (z < 0 || z > 3) return false;
@@ -363,19 +379,16 @@ function carriedTeamOf(player) {
   return null;
 }
 
-/** Put the dropped standard on the floor where the player stands, or beside the rocks burying it. */
+/** Put the dropped standard on the floor where the player stands. */
 function placeDroppedFlag(flagTeam, player) {
   // One standard per team: remove whatever drop a previous life left behind, so repeated
   // deaths in the same spot cannot stack flag objects.
   removeDroppedFlagObject(flagTeam);
-  // A carrier crushed by a collapsing tunnel dies inside the rocks; the standard comes out
-  // beside them rather than out of everyone's reach (issue 1929).
-  const location = game.unburiedTiles?.(player.getLocation())?.[0] ?? player.getLocation();
   const otherTeam = opposingTeam(flagTeam);
   const otherDrop = droppedFlagObjects[otherTeam];
   // The client has one scenery slot per tile. Returning the dropper's own standard
   // keeps the enemy standard available instead of hiding one beneath the other.
-  if (otherDrop?.getLocation().equals(location)) {
+  if (otherDrop?.getLocation().equals(player.getLocation())) {
     const ownTeam = getTeamId(player);
     restoreFlagToBase(ownTeam, "overlap");
     if (flagTeam === ownTeam) return;
@@ -383,28 +396,18 @@ function placeDroppedFlag(flagTeam, player) {
   flagStatus[flagTeam] = 2;
   flagCarriers[flagTeam] = null;
   if (process.env.CW_BOT_DEBUG === "1") {
-    const tile = getLocationTile(location);
+    const tile = getLocationTile(player);
     console.log(`[cw_flag] drop ${flagTeam} by ${player.getUsername?.()} at ${tile.x},${tile.y},${tile.z}`);
   }
-  registerDroppedFlag(flagTeam, location, player.getPrivateArea());
-}
-
-function registerDroppedFlag(flagTeam, location, privateArea) {
-  const dropped = new core.GameObject(getTeamData(flagTeam).droppedFlagObjectId, location.clone(), 10, 0, privateArea);
+  const dropped = new core.GameObject(
+    getTeamData(flagTeam).droppedFlagObjectId,
+    player.getLocation().clone(),
+    10,
+    0,
+    player.getPrivateArea()
+  );
   droppedFlagObjects[flagTeam] = dropped;
   ObjectManager.register(dropped, true);
-}
-
-/** Moves a dropped standard to the first of `tiles` the other team's standard does not hold. */
-function moveDroppedFlag(flagTeam, tiles) {
-  const dropped = droppedFlagObjects[flagTeam];
-  const otherDrop = droppedFlagObjects[opposingTeam(flagTeam)];
-  const tile = tiles.find((candidate) => !otherDrop?.getLocation().equals(candidate));
-  if (!dropped || !tile) {
-    return;
-  }
-  removeDroppedFlagObject(flagTeam);
-  registerDroppedFlag(flagTeam, tile, dropped.getPrivateArea());
 }
 
 /**
@@ -427,7 +430,7 @@ function clearStrayDroppedFlags() {
   droppedFlagObjects[data.TEAM.ZAMORAK] = null;
 }
 
-/** Drops a carried flag where the carrier stands; dropped on the stepping stones, it goes home. */
+/** Drops a carried flag where the carrier stands; on the stepping stones, a catapult's battlements or a tunnel's rocks, it goes home. */
 function dropCarriedFlag(player) {
   // The equipment is authoritative for live carries; the tracked carrier covers deaths
   // whose item processing stripped the banner before this ran (bot deaths are handled
@@ -442,8 +445,10 @@ function dropCarriedFlag(player) {
   }
   clearWeaponSlot(player);
   const tile = getLocationTile(player);
-  if (tile && isSteppingStone(tile)) {
-    restoreFlagToBase(carriedFlagTeam, "stones");
+  // RuneHQ: "if you die on the stepping stones or under the rockslide, it will return to your
+  // base." The rockslide covers a tunnel's rock tiles, fallen or mined away (issue 1929).
+  if (tile && (isSteppingStone(tile) || isCatapultReturnTile(tile) || game.isTunnelRockTile?.(player.getLocation()))) {
+    restoreFlagToBase(carriedFlagTeam, "returns");
     return;
   }
   placeDroppedFlag(carriedFlagTeam, player);
@@ -913,9 +918,6 @@ module.exports = function createCastleWarsGame(registry) {
     isInsideCastle,
     getDroppedFlagObject: (flagTeam) => droppedFlagObjects[flagTeam] ?? null,
     removeDroppedFlagObject,
-    moveDroppedFlag,
-    // Filled in by Tunnels.CastleWars.js: open tiles beside the rocks when a tile is buried.
-    unburiedTiles: null,
     updateFlagStand,
     restoreFlagToBase,
     carryFlag,

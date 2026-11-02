@@ -70,7 +70,7 @@ function usePotion(t, handler, object) {
 const at = ([x, y]) => new core.Location(x, y, 0);
 const rocksAt = (id) => MapObjects.get(id, at(ANCHOR), null);
 
-test('issue 1929: rocks collapsing on a dropped standard keep their collision on every tile', (t) => {
+test('issue 1929: a carrier crushed under the rocks sends the standard home, and the rocks keep their collision', (t) => {
   const { SARADOMIN } = game.TEAM;
   const operations = [];
   const perform = ObjectManager.perform.bind(ObjectManager);
@@ -86,24 +86,22 @@ test('issue 1929: rocks collapsing on a dropped standard keep their collision on
 
     const carrier = playerAt(t, ...tile);
     game.carryFlag(carrier, SARADOMIN);
-    game.dropCarriedFlag(carrier);
-    assert.ok(game.getDroppedFlagObject(SARADOMIN).getLocation().equals(at(tile)), 'dropped where the carrier stood');
-
+    t.mock.method(game.gameArea, 'getPlayers', () => [carrier]);
     operations.length = 0;
     const p = usePotion(t, blastWall, MapObjects.get(core.ObjectIdentifiers.CAVE_WALL, at(WALL), null));
     assert.match(p.messages.at(-1), /collapsed the tunnel/);
+    game.dropCarriedFlag(carrier); // the death that follows
 
+    // RuneHQ: "if you die on the stepping stones or under the rockslide, it will return to your base."
+    assert.equal(game.flagStatus[SARADOMIN], 0, `crushed on ${tile}: the standard is safe`);
+    assert.equal(game.getDroppedFlagObject(SARADOMIN), null, 'nothing lies under the rocks');
     assert.ok(rocksAt(core.ObjectIdentifiers.ROCKS_21), 'the rocks are back');
     for (const covered of PATCH) {
-      assert.equal(RegionManager.blocked(at(covered), null), true, `standard dropped on ${tile}: ${covered} stays blocked`);
+      assert.equal(RegionManager.blocked(at(covered), null), true, `crushed on ${tile}: ${covered} stays blocked`);
     }
-    const moved = game.getDroppedFlagObject(SARADOMIN).getLocation();
-    assert.equal(PATCH.some(([x, y]) => moved.getX() === x && moved.getY() === y), false, 'the standard is outside the rocks');
     // No despawn may follow the rocks' spawn: a tile/type removal would delete them on clients.
     const rocksSpawn = operations.findIndex((op) => op.id === core.ObjectIdentifiers.ROCKS_21 && op.type === OperationType.SPAWN);
     assert.ok(rocksSpawn >= 0);
     assert.deepEqual(operations.slice(rocksSpawn + 1).filter((op) => op.type === OperationType.DESPAWN), []);
-
-    game.restoreFlagToBase(SARADOMIN);
   }
 });

@@ -134,6 +134,8 @@ function character(name, { league = 6, profile = "league", pacts = [] } = {}) {
     skills.setCurrentLevels(skill, 99, false);
   }
   hooks.onPlayerLogin({ player, username: name, isNewAccount: true, profile });
+  // A new Demonic Pacts character starts with the starter kit; these tests bring their own items.
+  player.getInventory().resetItems();
   worldLeague = 6;
   if (pacts.length) Common.save(player, pacts);
   return player;

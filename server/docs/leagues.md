@@ -1415,6 +1415,16 @@ levels and the starter kit (237/01098), no Air talisman, Elemental shield or Wol
 quests (`league:complete-quests` from the area unlocks) and Shattered Relics' packs keep their
 item rewards.
 
+**The starter kit** (leagues.json `starterKit`, obj gameval names): a new Demonic Pacts character
+starts with what live's holds at its first login (237/01098, in slot order): the Lumbridge kit
+(bronze axe, pickaxe, dagger and sword, tinderbox, small fishing net, shrimps, wooden shield,
+shortbow and 25 bronze arrows, 25 air, 15 mind, 6 water, 4 earth and 2 body runes, a bucket, a pot,
+bread) and a Dramen staff, nothing worn. Account gives it once, as the character joins: this world
+runs no Tutorial Island (world.json turns its plugin off), whose leaving is the only other kit. The
+Wiki has the Leagues Tutor hand out the Dramen staff (with a spade, an impling jar and two strange
+devices); with no Leagues Tutor here, the staff comes with the kit, as the recording shows it held.
+The other leagues have no recorded kit, so none.
+
 **Yama's Lair** (Demonic Pacts' start, `start` 1503, 5602; 237/01098): its 24 NPCs are world
 spawns from that recording (`npc-spawns.json`, source `rsprox:237/01098`); the Glowing portal's
 Leave (`YamaExit.LeagueAreaUnlocks.js`, `exit`) goes to Civitas through the shadow fade.

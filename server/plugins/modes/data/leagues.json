@@ -212,6 +212,13 @@
       "_xp": "Wiki Demonic_Pacts_League/Relics: 8x at tier 2, 12x at tier 4, 16x at tier 6.",
       "xpMultiplier": { "base": 5, "fromTier": { "2": 8, "4": 12, "6": 16 } },
       "startingLevels": { "HERBLORE": 3, "RUNECRAFTING": 5 },
+      "_starterKit": "A new character's inventory as live sends it at its first login (237/01098, in slot order): the Lumbridge starter kit and a Dramen staff; nothing worn. By obj gameval name.",
+      "starterKit": [
+        ["bronze_axe", 1], ["bronze_pickaxe", 1], ["tinderbox", 1], ["net", 1], ["shrimp", 1],
+        ["bronze_dagger", 1], ["bronze_sword", 1], ["wooden_shield", 1], ["shortbow", 1], ["bronze_arrow", 25],
+        ["airrune", 25], ["mindrune", 15], ["bucket_empty", 1], ["pot_empty", 1], ["bread", 1],
+        ["waterrune", 6], ["earthrune", 4], ["bodyrune", 2], ["dramen_staff", 1]
+      ],
       "_startQuests": "Wiki Demonic_Pacts_League, Auto-completed quests: completed for every character, with no experience (live's new character has only its starting levels, 237/01098). Listed dependents first: league:complete-quests completes the list in reverse, requirements first.",
       "startQuests": ["Twilight's Promise", "Perilous Moons", "Children of the Sun", "Desert Treasure II - The Fallen Empire", "Fairytale II - Cure a Queen", "Fairytale I - Growing Pains", "Lost City", "Nature Spirit", "Priest in Peril", "The Restless Ghost", "Eagles' Peak", "Elemental Workshop I", "Dragon Slayer I", "Druidic Ritual", "Rune Mysteries", "Learning the Ropes"],
       "_passives": "The tier structs' passive text in the rev 241 cache (struct 6436's tier enum, param 1020), as the relic interface shows it: tier 1 boosted drops x2, farming ticks every minute, minigame points x4, no run energy drain, clue scrolls as scroll boxes with saved step progress; tier 3 combat skills (Hitpoints and Prayer included) x1.5, Bigger and Badder free, Slayer task points x5 from the first task, superiors 1/50; tier 4 drops x5, minigame points x8. docs/leagues.md (Tier passives) lists the two left out.",

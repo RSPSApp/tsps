@@ -121,6 +121,8 @@ function character(name, { profile = "league", pacts = {} } = {}) {
   player.getPacketSender = () => sender;
   player.sendMessage = () => {};
   hooks.onPlayerLogin({ player, username: name, isNewAccount: true, profile });
+  // A new Demonic Pacts character starts with the starter kit; these tests bring their own items.
+  player.getInventory().resetItems();
   const skills = player.getSkillManager();
   for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.HITPOINTS, Skill.PRAYER]) {
     skills.setMaxLevels(skill, 99, false);

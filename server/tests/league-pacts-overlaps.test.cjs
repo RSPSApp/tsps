@@ -98,6 +98,8 @@ function character(name, { profile = "league", league = 6, effects = {} } = {}) 
   player.getPacketSender = () => sender;
   player.sendMessage = () => {};
   hooks.onPlayerLogin({ player, username: name, isNewAccount: true, profile });
+  // A new Demonic Pacts character starts with the starter kit; these tests bring their own items.
+  player.getInventory().resetItems();
   worldLeague = 6;
   const skills = player.getSkillManager();
   for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.RANGED, Skill.MAGIC, Skill.HITPOINTS, Skill.PRAYER]) {

@@ -139,6 +139,8 @@ function character(name, profile = "league") {
   const perform = player.performGraphic.bind(player);
   player.performGraphic = (graphic) => (sent.graphics.push(graphic.id), perform(graphic));
   hooks.onPlayerLogin({ player, username: name, isNewAccount: true, profile });
+  // A new Demonic Pacts character starts with the starter kit; these tests bring their own items.
+  player.getInventory().resetItems();
   return Object.assign(player, { sent });
 }
 

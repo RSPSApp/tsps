@@ -185,7 +185,7 @@ course's `marks` block:
   "The trapdoor opens..."), the guard's two lines on climbing down, the stepping-stone jump
   (`human_jump_stones`), the hurdles, the deathslide (by the teeth, 5 tiles a tick, its two
   messages and sounds) and the hand-in message.
-- **From the map, not captured:** the pipe crawl, the skull slope climb, and the tiles either side
+- **The pipe crawl follows capture 1849.** From the map, not captured: the skull slope climb, and the tiles either side
   of the trapdoor and the exit ladder.
 - **The deathslide's failure is a guess:** the Wiki says Agility, Strength and carried weight all
   count, with no formula; it fails on Agility alone here (never from 80), partway down onto the

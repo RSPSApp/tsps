@@ -6,7 +6,7 @@ const { Anim } = require("../Constants.Agility");
  * stepping stones, three rows of hurdles, a pipe, the skull slope and the deathslide, then the
  * stick handed to the Agility Trainer at the bottom: 730 XP with the stick's 380.
  * The stones, hurdles and deathslide follow rsprox captures 1849 and 1858 (rev 227, a Leagues
- * world); the pipe and skull slope's movement, the deathslide's failure and the stick's landing
+ * world), as does the pipe; the skull slope's movement, the deathslide's failure and the stick's landing
  * are guesses (docs/agility-courses.md).
  */
 const Loc = Object.freeze({
@@ -23,6 +23,7 @@ const Loc = Object.freeze({
 const STICK_TRAINER = 5927; // werewolf_trainer_stick
 const STICK = 4179; // waa_stick
 const JUMP_STONES = 1604; // human_jump_stones
+const PIPE_SOUND = 2489;
 
 /** The five stones, in order, each jumped onto from the tile before it. */
 const STONES = [[3538, 9875], [3538, 9877], [3540, 9877], [3540, 9879], [3540, 9881]];
@@ -71,12 +72,12 @@ function pipe(x) {
     level: 60,
     xp: 15,
     route: [x, 9904, 0],
+    // rsprox 1849: the crawl replays with each half, so the squeeze pose lasts the whole way.
     steps: [
-      { anim: Anim.SQUEEZE_PIPE },
-      { wait: 1 },
-      { move: [x, 9907, 0], speed: [0, 90], dir: "north", ticks: 3 },
-      { move: [x, 9910, 0], speed: [0, 90], dir: "north", ticks: 3 },
-      { anim: -1 },
+      { move: [x, 9907, 0], anim: Anim.SQUEEZE_PIPE, delay: 20, speed: [24, 120], dir: "north", ticks: 4 },
+      { sound: PIPE_SOUND, delay: 7 },
+      { move: [x, 9910, 0], anim: Anim.SQUEEZE_PIPE, speed: [0, 80], dir: "north", ticks: 3 },
+      { sound: PIPE_SOUND, delay: 10 },
     ],
   };
 }

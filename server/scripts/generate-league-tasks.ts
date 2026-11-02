@@ -412,6 +412,7 @@ const MINIGAME_COMPLETIONS: Array<[RegExp, string[]]> = [
   [/^Defeat the Moons of Peril(?: \d+ times)?$/i, ["Moons of Peril"]],
   [/^Defeat the Royal Titans(?: \d+ times)?$/i, ["Royal Titans"]],
   [/^Help the pyromancers defeat the Wintertodt(?: \d+ times)?$/i, ["Wintertodt"]],
+  [/^Defeat the Doom of Mokhaiotl at any delve level$/i, ["Doom of Mokhaiotl"]],
 ];
 const CONDITION_IN = (text: string) => /\b(?:in less than|in under|or less|without|solo)\b/i.test(text);
 
@@ -579,11 +580,16 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
       return { trigger: { kind: "kill", npcs: completion[1], count: times ? Number(times[1]) : 1, credited: true } };
     }
   }
+  // "Help the Spirit Anglers defeat Tempoross": Tempoross subdued (the minigame's tempoross:subdued;
+  // no NPC dies).
+  if ((match = /^Help the Spirit Anglers defeat Tempoross(?: (\d+) times)?\.?$/i.exec(description))) {
+    return { trigger: { kind: "tempoross", count: match[1] ? Number(match[1]) : 1 } };
+  }
   // "Defeat 25 Superior slayer monsters", "Defeat a Superior slayer monster": superiors killed.
   if ((match = /^Defeat (an?|\d+) Superior slayer monsters?\.?$/i.exec(description))) {
     return { trigger: { kind: "superior-kills", count: /^an?$/i.test(match[1]) ? 1 : Number(match[1]) } };
   }
-  if ((match = /^(?:Defeat|Kill) (\d+) (.+)$/.exec(name)) || (match = /^(?:Defeat|Kill) (?:a |an |the |some )?(.+?)(?: (\d+) [Tt]imes)?$/.exec(name))) {
+  if ((match = /^(?:Defeat|Kill) (\d+) (.+)$/.exec(name)) || (match = /^(?:Defeat|Kill) (?:a |an |the |some )?(.+?)(?: (\d+) [Tt]imes?)?$/.exec(name))) {
     const [, first, second] = match;
     const [named, count] = /^\d+$/.test(first) ? [second, Number(first)] : [first, second ? Number(second) : 1];
     // A league area as the place ("in Varlamore", "on Karamja", "within Morytania", "in the
@@ -597,7 +603,8 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     // A boss in its own lair ("Defeat Vorkath on Ungael 50 times", "Sarachnis in the Forthos
     // Dungeon", "the Giant Mole beneath Falador"): the place only says where it lives. A boss is a
     // Combat Achievements monster (enum 3970), and lives in one place.
-    const bossName = subject.replace(/^the /i, "").toLowerCase();
+    // "the Kraken Boss" is the Kraken.
+    const bossName = subject.replace(/^the /i, "").replace(/ boss$/i, "").toLowerCase();
     if (caMonsters().has(bossName)) {
       description = description.replace(/\s+(?:in|on|at|inside|beneath|under|underneath) (?:the )?[A-Z][^.]*?(?=(?: \d+ times?)?\.?$)/, "");
     }
@@ -607,7 +614,7 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     const condition = /\b(without|while|using|within|in under|with only|solo|duo|trio|wearing|wielding|less than|fewer than|must be|do not count)\b/i;
     const place = /\b(in|on|at|inside|near|from|outside|under|beneath)\b (?:the |an? )?[A-Z]/;
     if (condition.test(description) || place.test(description.replace(subject, "")) || place.test(subject)) return { unmapped: name };
-    const primary = npcNamed(subject, npcs);
+    const primary = npcNamed(subject, npcs) ?? (caMonsters().has(bossName) ? npcNamed(subject.replace(/ boss$/i, ""), npcs) : null);
     // The description may accept others for the same count: "Defeat Callisto or Artio 50 times",
     // "Defeat The Nightmare or Phosani's Nightmare 50 times combined". Every one must be a cache NPC.
     const accepted = alternativesOf(description).map((part) => npcNamed(part, npcs));

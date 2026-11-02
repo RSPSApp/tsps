@@ -417,3 +417,11 @@ test("equip in an area: worn there, also as the player walks in wearing it (Equi
   f.player.moveTo(new core.Location(2341, 3171, 0)); // Lletya
   assert.ok(done(f, "equip-a-dark-bow-in-tirannwn"), "crossing into Tirannwn wearing it");
 });
+
+test("tempoross: subdued, as the real fight rewards it (no NPC dies)", (t) => {
+  const f = pactsCharacter(t);
+  const { Fight } = require("../plugins/minigames/tempoross/Fight.Tempoross");
+  Fight.prototype.reward.call({}, f.player, 300);
+  assert.ok(f.messages.some((text) => /Tempoross kill count/.test(text)), `the real reward: ${f.messages}`);
+  assert.ok(done(f, "defeat-tempoross-1-time"));
+});

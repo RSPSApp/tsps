@@ -473,6 +473,8 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.ok(completed(doer).includes("equip-full-oathplate"), "every piece at once");
 
   assert.deepEqual(trigger("mine-5-tin-ore"), { kind: "produce", items: ["Tin ore"], count: 5 });
+  assert.deepEqual(trigger("chop-75-magic-logs"), { kind: "produce", items: ["Magic logs"], count: 75 }, "from Magic Trees is where the logs come from");
+  assert.deepEqual(trigger("pickpocket-a-master-farmer"), { kind: "pickpocket", npcs: ["Master Farmer"], count: 1 }, "pickpocket from a Master farmer");
   for (let i = 0; i < 4; i++) emit("mining:success", { player: doer, itemId: itemId("Tin ore") });
   assert.equal(doer.getAttribute("league:task-progress")["mine-5-tin-ore"], 4, "progress kept");
   assert.ok(!completed(doer).includes("mine-5-tin-ore"));

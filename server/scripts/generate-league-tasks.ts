@@ -837,6 +837,8 @@ function withoutRestatement(name: string, description: string): string {
   // on wearing it.
   // "Help the Shayzien house by dealing with 150 Lizardmen shaman": the kills, the house's only the reason.
   text = text.replace(/^Help the [A-Z][a-z]+ [Hh]ouse by dealing with /, "Defeat ");
+  // "Chop 75 Magic Logs from Magic Trees": the tree its logs come from.
+  if (/^Chop /i.test(name)) text = text.replace(/ from (?:an? )?([A-Za-z]+) [Tt]rees?(?=\.?$)/, (all, kind: string) => (new RegExp(`\\b${kind}\\b`, "i").test(name) ? "" : all));
   if (/^Equip /i.test(name)) text = text.replace(/(?:,\s*(?:purchased|bought|rewarded|caught|obtained|won)\b[^.]*| (?:purchased |bought |rewarded |obtained )?from (?:the )?[A-Z][^.,]*)(?=\.?$)/, "");
   return text;
 }
@@ -1327,7 +1329,7 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   // alternatives stand for the name ("Pickpocket a Citizen": "Pickpocket a Man or a Woman").
   if ((match = /^Pickpocket (.+)$/i.exec(name))) {
     const { count, subject } = countAndSubject(match[1]);
-    const said = /^(?:.*?\bpickpocket) (?:an? |the )?(.+?)(?: \d+ times)?$/i.exec(clean(description))?.[1] ?? subject;
+    const said = /^(?:.*?\bpickpocket) (?:from )?(?:an? |the )?(.+?)(?: \d+ times)?$/i.exec(clean(description))?.[1] ?? subject;
     const parts = said.split(/,\s*|\s+or\s+/).map((part) => part.replace(/^(?:an? |the )/i, "").trim()).filter(Boolean);
     if (parts.some((part) => PLACE.test(part.replace(/^[A-Z]/, "x")))) return {};
     const accepted = (parts.length > 1 ? parts : [subject]).map((part) => npcNamed(part, npcs));

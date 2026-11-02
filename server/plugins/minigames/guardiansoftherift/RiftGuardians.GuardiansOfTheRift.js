@@ -144,12 +144,16 @@ function dismissAll() {
   Game.setRiftGuardians(0);
 }
 
-/** A guardian goes for the nearest creature it can see: melee beside it, ranged within 7. */
+/**
+ * A guardian goes for the nearest creature it can see. Capture 1840: elementals only ever fight
+ * beside it with the melee sequences, catalytics only at range with the ranged ones.
+ */
 function guardianTurn(npc, now) {
   const from = Creatures.tileOf(npc);
   const target = Creatures.nearestCreature(from, Creatures.sizeOf(npc), SIGHT);
   if (!target) return;
-  if (target.gap > RANGED_REACH) {
+  const melee = Creatures.isElementalGuardian(npc);
+  if (target.gap > (melee ? 1 : RANGED_REACH)) {
     const at = Creatures.tileOf(target.npc);
     Creatures.route(npc, at.x, at.y);
     return;
@@ -158,7 +162,7 @@ function guardianTurn(npc, now) {
   if (now < npc.__gotrNextAttack) return;
   npc.__gotrNextAttack = now + ATTACK_TICKS;
   npc.setPositionToFace?.(target.npc.getLocation());
-  Creatures.animate(npc, target.gap <= 1 ? "rift_guardian_attack_melee" : "rift_guardian_attack_ranged");
+  Creatures.animate(npc, melee ? "rift_guardian_attack_melee" : "rift_guardian_attack_ranged");
   Creatures.hit(target.npc, MAX_HIT[npc.__gotrTier ?? 1]);
   Creatures.struckBy(target.npc, npc);
 }

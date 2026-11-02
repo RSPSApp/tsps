@@ -486,6 +486,56 @@ test("logging out on Barnaby's discounted crossing lands the player and releases
   assert.equal(player.getInventory().getAmount(ItemIdentifiers.COINS), 85);
 });
 
+test("Achilka's riverboat: fade, minimap and busy off on +1, Kastori with the captured message on +3, back on +5", () => {
+  const minimap = CacheDefinitions.getVarbitId("minimap_state");
+  const busy = CacheDefinitions.getVarbitId("busy");
+  const player = createPlayer({ at: new Location(1257, 3122, 0) });
+  const event = click(player, "Achilka", "Kastori", { gameval: "tlati_riverboat_owner_west" });
+  assert.equal(event.handled, true);
+  assert.deepEqual(player.sent.subs.at(-1).options.postScripts[0].args, [0, 255, 0, 0, 50]);
+  tick(1);
+  assert.equal(player.sent.varbits.get(minimap), 2);
+  assert.equal(player.sent.varbits.get(busy), 1);
+  tick(2);
+  assert.deepEqual(at(player), [1390, 3074, 0]);
+  assert.deepEqual(player.sent.spam, ["Achilka takes you along the river to Kastori."]);
+  tick(2);
+  assert.equal(player.sent.varbits.get(minimap), 0);
+  assert.equal(player.sent.varbits.get(busy), 0);
+  assert.deepEqual(player.sent.subs.at(-1).options.postScripts[0].args, [0, 0, 0, 255, 50]);
+  assert.equal(player.blocked, false);
+  tick(2);
+  assert.ok(player.sent.closed.includes((161 << 16) | 1));
+});
+
+test("every Achilka offers the other two stops; her transcript rides and hides the stop she stands at", () => {
+  const stops = { tlati_riverboat_owner_south: "Kastori", tlati_riverboat_owner_west: "Tal Teklan", tlati_riverboat_owner_north: "Gloomthorn Trail" };
+  for (const [gameval, stop] of Object.entries(stops)) {
+    const definition = CacheDefinitions.getNpc(npcId(gameval));
+    assert.equal(definition.name, "Achilka");
+    const others = Object.values(stops).filter((other) => other !== stop).sort();
+    assert.deepEqual(definition.actions.filter((action) => action && action !== "Talk-to").sort(), others, gameval);
+    for (const option of others) {
+      tasks = [];
+      const player = createPlayer();
+      assert.equal(click(player, "Achilka", option, { gameval }).handled, true, `${gameval} ${option}`);
+    }
+  }
+  const player = createPlayer();
+  const step = { player, stepId: "WjyUrt", handled: false };
+  for (const handler of hooks.events.get("npc-dialogue:action")) handler(step);
+  assert.equal(step.handled, true);
+  tick(7);
+  assert.deepEqual(at(player), [1400, 3246, 0]);
+  const west = npcId("tlati_riverboat_owner_west");
+  const ask = (name, text) => hooks.conditions.map((handler) => handler({
+    player, npcId: west, text, definition: { getName: () => name },
+  })).find((answer) => answer != null);
+  assert.equal(ask("Achilka", "If not already at Tal Teklan:"), false);
+  assert.equal(ask("Achilka", "If not already at Kastori:"), true);
+  assert.equal(ask("Hans", "If not already at Kastori:"), undefined);
+});
+
 test("every route's gamevals resolve in the cache", () => {
   for (const [name, route] of Object.entries(Common.data.routes)) {
     if (route.seq) assert.ok(CacheDefinitions.getSeqId(route.seq) != null, `${name}: ${route.seq}`);

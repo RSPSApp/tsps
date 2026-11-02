@@ -7,7 +7,7 @@ const FORM_GAMEVALS = { saradomin: "castlewars_rabbit", zamorak: "castlewars_imp
 const FORM_NAMES = { saradomin: "rabbit", zamorak: "imp", guthix: "sheep" };
 const TOPLEVEL = 161;
 // Cache gameframe mounts: chat, music, settings and logout remain available.
-const HIDDEN_TABS = [[76, 593], [77, 320], [78, 629], [79, 149], [80, 387], [81, 541], [82, 218], [83, 7], [84, 109], [88, 216]];
+const HIDDEN_TABS = [[76, 593], [77, 320], [78, 629], [79, 149], [80, 387], [81, 541], [82, 218], [83, 707], [84, 109], [88, 216]];
 const HIDDEN_GROUPS = new Set([...HIDDEN_TABS.map(([, group]) => group), 77]);
 const QUICK_PRAYER_DONE = { group: 77, child: 5 };
 const BLOCKED_ORB_COMPONENTS = ["orbs:prayerbutton", "orbs_osm:prayerbutton", "orbs:worldmap", "orbs_nomap:worldmap", "orbs_osm:worldmap"];
@@ -15,6 +15,7 @@ const COMBAT_VARPS = new Set([43, 172, 301]); // Native combat style, auto-retal
 const ACTIVITY_MESSAGE = "You can't do that while transformed in the Castle Wars waiting room.";
 
 let core;
+let pluginApi;
 let game;
 let blockedOrbs;
 const pending = new WeakMap();
@@ -57,7 +58,10 @@ function clearWaitingForm(player) {
     if (tab === 76) core.WeaponInterfaceManager.assign(player);
     else if (tab === 81) player.getQuickPrayers().handleWidgetAction(QUICK_PRAYER_DONE.group, QUICK_PRAYER_DONE.child);
     else if (tab === 82) sender.sendTabInterface(6, player.getSpellbook().getInterfaceId());
-    else sender.sendTabInterface(tab, group).sendGameframeTabSetup(group);
+    else {
+      sender.sendTabInterface(tab, group).sendGameframeTabSetup(group);
+      pluginApi.emitCustomEvent("gameframe:tab-mounted", { player, group });
+    }
   }
   player.getEquipment().refreshItems();
   player.getInventory().refreshItems();
@@ -111,6 +115,7 @@ function clearOnLogout({ player }) {
 
 module.exports = function attachCastleWarsWaitingRoom(api, castleWars) {
   core = api.core;
+  pluginApi = api;
   game = castleWars;
   blockedOrbs = new Set(BLOCKED_ORB_COMPONENTS.map((name) => core.CacheDefinitions.getComponentId(name)).filter(Number.isInteger));
   Object.assign(game, { prepareWaitingForm, applyWaitingForm, clearWaitingForm, isWaitingTransformed: (player) => transformed.has(player) });

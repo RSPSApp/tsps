@@ -283,6 +283,20 @@ export function buildRegionPack(
     return pack;
 }
 
+/** MapRegionReplacementManager.MAX_PACKET_PAYLOAD: the server refuses a bigger region and keeps the cache's. */
+export const MAX_REGION_PACK_PAYLOAD = 0xfffd;
+
+/** Regions the server would refuse to load, with the size it would measure them at. */
+export function oversizedRegionPacks(
+    packs: readonly { regionId: number; data: Uint8Array }[],
+): { regionId: number; payload: number }[] {
+    return packs.flatMap(({ regionId, data }) => {
+        const { objectData, terrainData } = parseRegionPack(data);
+        const payload = 7 + terrainData.length + objectData.length;
+        return payload > MAX_REGION_PACK_PAYLOAD ? [{ regionId, payload }] : [];
+    });
+}
+
 /** Decode the same complete region pack consumed by the server replacement manager. */
 export function parseRegionPack(pack: Uint8Array): ParsedRegionPack {
     if (pack.length < 28) throw new Error("Truncated region pack");

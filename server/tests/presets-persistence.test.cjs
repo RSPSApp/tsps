@@ -511,8 +511,7 @@ test("dropping a preset item destroys it without the confirmation interface", ()
       getPacketSender: () => {
         const sender = {
           sendChatboxInterface: () => sender,
-          sendItemOnInterface: () => sender,
-          sendString: () => sender,
+          sendClientScript: () => sender,
         };
         return sender;
       },
@@ -604,5 +603,9 @@ test('preset combat levels in the list match the skill manager formula', () => {
       expected,
       `${preset.getName()} shows its combat level`
     );
+  }
+  for (const attack of [1, 50]) {
+    assert.equal(presets._test.presetCombatLevel({ getStats: () => [attack, 1, 99, 65, 99, 1, 99] }), 64,
+      "preset list level matches SkillManager");
   }
 });

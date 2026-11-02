@@ -32,6 +32,7 @@ const DROPS_FILE = "npc-drops.json";
 const SUBTABLES_FILE = "npc-drop-subtables.json";
 const OVERRIDES_FILE = "npc-drop-overrides.json";
 const CUSTOM_FILE = "npc-drops-custom.json";
+const MAX_STACK = 2147483647;
 const CURRENCY_IDS = new Set([995, 6529, 21555]);
 const RING_OF_WEALTH_TABLES = new Set(["rareDrop", "gem", "megaRare"]);
 /** Brimstone key, Larran's key. */
@@ -58,8 +59,14 @@ const QUEST_REQUIREMENT_NOTE = /^Quest requirement: WikiQuestDropRequirement\(qu
 const NPC_BOSS_PARAM = 1361;
 /** world.json pluginConfig: how many times likelier a boss's rare drops are (1, the default, is OSRS). */
 const BOSS_RARE_MULTIPLIER_CONFIG = "NpcDrops:bossRareMultiplier";
-/** Rarer than this is a rare drop for that multiplier: uniques, pets, jars, not the commons. */
-const RARE_CHANCE = 1 / 100;
+/** Unique-section rows more common than 1/10 are ordinary loot (such as essence). */
+const SPECIAL_MAX_CHANCE = 1 / 10;
+/** A table's own unique rows, which some bosses drop more often than 1/100. */
+const UNIQUE_SECTION = /unique/i;
+/** Collection-log boss tab and its category/item enum params; Data.CollectionLog uses the same cache schema. */
+const BOSS_LOG_STRUCT = 471;
+const LOG_CATEGORIES_PARAM = 683;
+const LOG_ITEMS_PARAM = 690;
 
 function lootingBagDrops(npc) {
   if (!Wilderness.isInLocation(npc?.getLocation?.())) return false;
@@ -74,6 +81,9 @@ const sharedTables = new Map();
 
 let itemOnGroundManager = null;
 let pluginApi = null;
+/** NPCs `npc-drop-overrides.json` marks as bosses the cache does not flag. */
+let bossNpcIds = new Set();
+let bossUniqueItemIds = null;
 let unusableSubtableRows = 0;
 let conditionalTertiarySkipped = 0;
 
@@ -157,6 +167,13 @@ function applyOverrides(dump, subtables, overrides) {
   for (const [name, table] of Object.entries(overrides.subtables ?? {})) subtables[name] ??= table;
 }
 
+/** `[min, max]`, equal for a fixed amount; both must fit an item stack. */
+function isDropQuantity(quantity) {
+  return Array.isArray(quantity) && quantity.length === 2
+    && Number.isInteger(quantity[0]) && quantity[0] >= 1
+    && Number.isInteger(quantity[1]) && quantity[1] >= quantity[0] && quantity[1] <= MAX_STACK;
+}
+
 /**
  * A world's own edits, saved by the browser host's NPC Drops tab to npc-drops-custom.json and
  * absent everywhere else. Rows are addressed by their position in the dump, so this runs before
@@ -176,6 +193,12 @@ function applyCustomDrops(dump, custom) {
       if (Number.isFinite(patch.weight) && patch.weight > 0) entry.weight = patch.weight;
       if (Number.isFinite(patch.out_of) && patch.out_of > 0) entry.out_of = patch.out_of;
       if (Number.isFinite(entry.weight) && entry.out_of > 0) entry.rarity = entry.weight / entry.out_of;
+      if (isDropQuantity(patch.quantity)) {
+        entry.quantity = patch.quantity;
+        // rollQuantity prefers these over `quantity`, so the edit would never roll.
+        delete entry.quantity_alternatives;
+        delete entry.quantity_selection;
+      }
     }
     for (const field of ["entries", "tertiary"]) {
       const removed = new Set((edits.removeEntries ?? []).filter((row) => row?.field === field).map((row) => row.index));
@@ -311,6 +334,7 @@ function correctAmoxliatl(table) {
 function loadDrops() {
   tablesByNpc.clear();
   sharedTables.clear();
+  bossUniqueItemIds = null;
   unusableSubtableRows = 0;
 
   const dump = readJson(DROPS_FILE);
@@ -328,8 +352,12 @@ function loadDrops() {
     return { npcs: 0, tables: 0, shared: 0, unusableSubtableRows: 0 };
   }
   const subtables = readJson(SUBTABLES_FILE) || {};
+  const overrides = readJson(OVERRIDES_FILE) || {};
   applyCustomDrops(dump, readJson(CUSTOM_FILE) || {});
-  applyOverrides(dump, subtables, readJson(OVERRIDES_FILE) || {});
+  applyOverrides(dump, subtables, overrides);
+  bossNpcIds = new Set(
+    Object.keys(overrides.bossNpcs ?? {}).map(Number).filter(Number.isInteger),
+  );
   applyWikiCorrections(tableById);
 
   // The source gives no distribution for these rows; keep this assumption visible.
@@ -473,19 +501,54 @@ function hits(entry, multiplier = 1) {
 }
 
 function isBoss(npcId) {
-  return Number.isInteger(pluginApi?.core?.CacheDefinitions?.getNpc(npcId)?.params?.get?.(NPC_BOSS_PARAM));
+  if (npcId === null || npcId === undefined || npcId === "") return false;
+  const id = Number(npcId);
+  if (!Number.isInteger(id) || id < 0) return false;
+  if (bossNpcIds.has(id)) return true;
+  return Number.isInteger(pluginApi?.core?.CacheDefinitions?.getNpc(id)?.params?.get?.(NPC_BOSS_PARAM));
+}
+
+/** Boss uniques whose Wiki drop section is ordinary equipment (the Dagannoth rings, for example). */
+function isBossLogItem(itemId) {
+  if (!bossUniqueItemIds) {
+    const { CacheDefinitions } = pluginApi.core;
+    const items = new Set();
+    const categories = CacheDefinitions.getStructParams(BOSS_LOG_STRUCT).get(LOG_CATEGORIES_PARAM);
+    for (const category of CacheDefinitions.getEnumValues(Number(categories)).values()) {
+      const itemEnum = CacheDefinitions.getStructParams(Number(category)).get(LOG_ITEMS_PARAM);
+      for (const item of CacheDefinitions.getEnumValues(Number(itemEnum)).values()) items.add(Number(item));
+    }
+    bossUniqueItemIds = items;
+  }
+  return bossUniqueItemIds.has(itemId);
+}
+
+function isUniqueItem(entry) {
+  if (!Number.isInteger(entry.item_id) || entry.always || entry.shared_table || entry.nothing) return false;
+  return UNIQUE_SECTION.test(entry.section || "") || isBossLogItem(entry.item_id);
+}
+
+/** Rarity alone does not make supplies, equipment or a shared drop table a boss unique. */
+function isUniqueEntry(entry) {
+  const outOf = Number(entry.out_of);
+  const weight = Number.isInteger(entry.weight) ? entry.weight : 1;
+  const chance = outOf > 0 ? weight / outOf : 0;
+  if (!(chance > 0 && chance < SPECIAL_MAX_CHANCE)) return false;
+  // An ordered access may contain a pool of uniques; never boost a pool with ordinary supplies.
+  return Array.isArray(entry.entries)
+    ? entry.entries.length > 0 && entry.entries.every(isUniqueItem)
+    : isUniqueItem(entry);
 }
 
 /**
- * How many times likelier an independent roll (pre-roll, separate or tertiary) is: the world's
- * boss rare multiplier for a boss table's entries rarer than RARE_CHANCE, otherwise 1. The main
- * table is left alone, since raising one weight there only crowds out the others.
+ * How many times likelier a rare roll is on a boss table: the world's boss rare multiplier,
+ * otherwise 1. Used for independent rolls directly and by rollOnce to split rares out of the
+ * weighted main roll (see there for why).
  */
 function rareMultiplier(table, entry) {
-  const weight = Number.isInteger(entry.weight) ? entry.weight : 1;
-  if (!table.boss || !(weight / Number(entry.out_of) < RARE_CHANCE)) return 1;
+  if (!table?.boss) return 1;
   const multiplier = Number(pluginApi?.getPluginConfig(BOSS_RARE_MULTIPLIER_CONFIG, 1));
-  return Number.isFinite(multiplier) && multiplier > 1 ? multiplier : 1;
+  return Number.isFinite(multiplier) && multiplier > 1 && isUniqueEntry(entry) ? multiplier : 1;
 }
 
 /** The NPC's name (its current definition's), or the cache's name for `npcId`, for plugins that boost by source. */
@@ -608,7 +671,8 @@ function resolveEntry(entry, player, context = null) {
  * One weighted roll among `entries` out of `outOf` (the pool, which may hold an empty part):
  * each entry's weight is multiplied by its chance rules and the pool grows by what was added, so
  * a boosted rarity moves from w/N to mw/(N + (m-1)w) and the other entries keep their weights.
- * The world's boss rare multiplier stays out of weighted rolls (it only raises independent rolls).
+ * The world's boss rare multiplier is applied by rollOnce, which rolls those entries on their
+ * own instead of growing this pool.
  */
 function rollWeighted(entries, outOf, rules) {
   let total = Number.isInteger(outOf) && outOf > 0 ? outOf : entries.reduce((sum, entry) => sum + entry.weight, 0);
@@ -633,6 +697,7 @@ function rollWeighted(entries, outOf, rules) {
 function rollOnce(table, entries, player, first = true, context = null, rules = []) {
   const drops = [];
   const main = [];
+  const boostedMain = [];
   const separateGroups = new Map();
   let preRollHit = false;
 
@@ -654,7 +719,8 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
         drops.push(...resolveEntry(entry, player, context));
       }
     } else if (Number.isFinite(entry.weight) && entry.weight > 0) {
-      main.push(entry);
+      if (rareMultiplier(table, entry) > 1) boostedMain.push(entry);
+      else main.push(entry);
     }
   }
 
@@ -663,9 +729,20 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
     if (entry) drops.push(...resolveEntry(entry, player, context));
   }
 
-  if (!preRollHit && main.length > 0) {
-    const entry = rollWeighted(main, table.main_max_roll, rules);
-    if (entry) drops.push(...resolveEntry(entry, player, context));
+  if (!preRollHit) {
+    // A boosted rare on the main roll is rolled on its own rather than given a bigger weight
+    // in the pool: a bigger weight there only takes chance from the other rows, and at high
+    // multipliers it would make the boss's common loot almost never drop. This keeps every
+    // common row at its OSRS rate and can drop a rare alongside the main roll.
+    for (const entry of boostedMain) {
+      if (hits(entry, entryMultiplier(table, entry, rules))) {
+        drops.push(...resolveEntry(entry, player, context));
+      }
+    }
+    if (main.length > 0) {
+      const entry = rollWeighted(main, table.main_max_roll, rules);
+      if (entry) drops.push(...resolveEntry(entry, player, context));
+    }
   }
 
   return drops;
@@ -717,7 +794,8 @@ function questItemVerdicts(player, npc, table) {
 function rollTable(table, player, npc, context = killContext(player, npc), source = sourceName(npc)) {
   const chance = chanceRules(player, npc, source);
   const questVerdicts = questItemVerdicts(player, npc, table);
-  const selected = OrderedRewards.select(table, player, pluginApi, Math.random, rate => entryMultiplier(table, rate, chance));
+  const selected = OrderedRewards.select(table, player, pluginApi, Math.random,
+    (rate, stage) => entryMultiplier(table, { ...stage, ...rate }, chance));
   const drops = [];
   const entries = Array.isArray(table.entries) ? table.entries : [];
   for (const entry of entries) {
@@ -892,7 +970,8 @@ module.exports = {
     // `source` names the roll for npc-drops:chance when there is no NPC to name it (a chest).
     api.onCustomEvent("npc-drops:roll-table", (request) => {
       ensureDrops();
-      let table = request.table ?? tableForNpc(request.npcId);
+      const npcId = Number.isInteger(request.npcId) ? request.npcId : request.npc?.getId?.() ?? null;
+      let table = request.table ?? tableForNpc(npcId);
       if (table && typeof request.entryFilter === "function") {
         table = {
           ...table,
@@ -900,9 +979,12 @@ module.exports = {
           tertiary: (table.tertiary || []).filter(request.entryFilter),
         };
       }
+      // A plugin's own table rolled for a boss (the Grotesque Guardians' Dusk) is that boss's
+      // loot too, so it takes the boss rare multiplier like the NPC's dumped table.
+      if (table && !table.boss && isBoss(npcId)) table = { ...table, boss: true };
       if (!table) return;
       const npc = request.npc ?? null;
-      const source = request.source ?? sourceName(npc, request.npcId);
+      const source = request.source ?? sourceName(npc, npcId);
       request.drops.push(...rollTable(table, request.player, npc, killContext(request.player, npc), source));
     });
     // "npc-drops:place" { player, drops, location }: drops rolled elsewhere, put down as a kill's.
@@ -950,5 +1032,5 @@ module.exports = {
   _test: { loadDrops, tablesByNpc, sharedTables },
 
   // Exposed for the smoke test.
-  __internals: { loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops },
+  __internals: { loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier },
 };

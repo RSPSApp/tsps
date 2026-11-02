@@ -114,7 +114,6 @@ const LEVEL_DIFFERENCE_MESSAGES = [
   "Your level difference is too great.",
   "You need to move deeper into the Wilderness.",
 ];
-const CLAN_CHAT_MESSAGES = ["You cannot attack a player who is in your clan chat."];
 
 function combatLevelOf(player) {
   const cached = combatLevels.get(player);
@@ -479,10 +478,8 @@ function canAttack(attacker, target, method) {
     return attackerInWild || targetInWild ? false : null;
   }
 
-  if (shareClanChat(attacker, target)) {
-    sendThrottled(attacker, CLAN_CHAT_MESSAGES);
-    return false;
-  }
+  // Only bots: OSRS has no rule against attacking someone in your chat-channel.
+  if (attacker.isPlayerBot?.() && shareClanChat(attacker, target)) return false;
 
   if (!canAttackByWildernessLevel(attacker, target)) {
     sendThrottled(attacker, LEVEL_DIFFERENCE_MESSAGES);

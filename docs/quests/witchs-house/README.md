@@ -19,7 +19,7 @@ A fresh playthrough from the Boy north of Taverley to quest complete passed: eve
 
 Newest first. One line each, linked to its issue or PR when there is one.
 
-- **open** Canonical Nora detection is unimplemented (existing item; tracked in [#728](https://github.com/RSPSApp/tsps/issues/728)).
+- **closed** Nora patrols and catches players in the garden (#1763). No recording shows a catch: the row and timing are from rsprox 2963, 3246 and 3249 and the lines, teleport and lost ball from the Wiki, while looking only the way she walks is inferred. A simulated route around the hedges reaches the fountain from any point of her patrol, walking or running.
 - **open** The Diary ground spawn (2408, at 2903,3471) has `respawn: 30` in `ground-items.json`. After it is taken it reappears 30 ticks later, so a player can carry several. The quest consumes all diaries on completion, so nothing breaks, but live OSRS behaviour is unverified; check against an RSProx capture before changing the spawn.
 - **open** After completion the front door (2861) refuses entry with "It would be rude to break into this house." (`WitchsHouse.Quest.js`, `handleObjectInteraction`). Unverified against live OSRS whether the house stays closed after the quest.
 - **open** Not checked by this run: the Boy's below-level-10 combat variant, the other shapeshifter death paths, the cupboard/box full-inventory paths, and reading the diary before the mouse step.

@@ -206,7 +206,7 @@ test('Count coffin controls the private fight, garlic stats, timed regeneration 
   }
   const p = player(); let target;
   p.getCombat = () => ({ getTarget: () => target, getAutocastSpell: () => ({}) });
-  p.getPacketSender = () => ({ sendObject: object => objects.push(object.getId()) });
+  p.getPacketSender = () => ({ sendObject: object => objects.push(object.getId()), sendObjectRemoval: () => objects.push('removed') });
   const api = new Proxy({
     core: { ...core, PrivateArea, World: { getProcessCycle: () => cycle }, TaskManager: { submit: task => tasks.push(task) } },
     getWorld: () => ({ getAddNPCQueue: () => [] }),
@@ -236,6 +236,9 @@ test('Count coffin controls the private fight, garlic stats, timed regeneration 
   tasks.find(task => task.getDelay() === 4).execute();
   assert.equal(spawned[0].definition.id, N.COUNT_DRAYNOR_2);
   assert.deepEqual(spawned[0].anims, [3114]);
+  assert.deepEqual(objects, [O.COFFIN_9, 'removed'], 'the rising Count holds the coffin, so the loc goes (rsprox 1710, 3275)');
+  tasks.find(task => task.getDelay() === 8).execute();
+  assert.deepEqual(objects, [O.COFFIN_9, 'removed', O.COFFIN_46]);
   tasks.find(task => task.getDelay() === 9).execute();
   const count = target = spawned[1];
   assert.equal(count.definition.id, N.COUNT_DRAYNOR);

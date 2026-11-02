@@ -158,6 +158,11 @@ export class GroundItemMeshes {
         this.builtHashes.delete(mapId);
     }
 
+    /** The locs under this map's items were rebuilt: the next update rebuilds its items on them. */
+    onMapLocsRefreshed(mapId: number): void {
+        this.builtHashes.delete(mapId);
+    }
+
     /**
      * Port of updateGroundItemMeshes (draw3.ts): group stacks per map, hash, rebuild changed
      * maps, and return true while sparse models are still pending so the client retries.

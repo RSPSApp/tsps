@@ -22,6 +22,10 @@ const OP1_FLAGS = 1 << 1;
 const VARPS_ATTRIBUTE = "quetzals:varps";
 /** The site varbits live in quetzals_1-3; quetzals_unlocked holds a bit per built site. */
 const PERSISTED_VARPS = ["quetzals_1", "quetzals_2", "quetzals_3", "quetzals_unlocked"];
+const VARLAMORE_VISITED = "varlamore_visited";
+const FIRST_TRIP_STATE = "vmq2_first_travel";
+// These share their parent varp with Twilight's Promise; save only the travel bits.
+const PERSISTED_VARBITS = [VARLAMORE_VISITED, FIRST_TRIP_STATE];
 const UNLOCKED_VARP = "quetzals_unlocked";
 const BASE_APPEARANCE = "quetzal_base_appearance";
 const LAST_DESTINATION = "quetzal_last_destination";
@@ -107,6 +111,11 @@ function save(player) {
     const value = id == null ? 0 : sender.getVarp(id);
     if (value !== 0) snapshot[id] = value;
   }
+  for (const name of PERSISTED_VARBITS) {
+    const id = varbitId(name);
+    const value = id == null ? 0 : sender.getVarbit(id);
+    if (value !== 0) (snapshot.varbits ??= {})[id] = value;
+  }
   player.setAttribute(VARPS_ATTRIBUTE, Object.keys(snapshot).length ? snapshot : null);
 }
 
@@ -126,6 +135,11 @@ function restore({ player }) {
   const sender = player.getPacketSender();
   for (const [id, value] of Object.entries(snapshot)) {
     if (Number.isInteger(value)) sender.sendConfig(Number(id), value);
+  }
+  for (const name of PERSISTED_VARBITS) {
+    const id = varbitId(name);
+    const value = snapshot.varbits?.[id];
+    if (id != null && Number.isInteger(value)) sender.sendVarbit(id, value);
   }
 }
 
@@ -319,6 +333,7 @@ module.exports = {
   siteBuilt, markBuilt, siteUsable, renuUnlocked, fade, minimap, busy, later, timeline, endTimeline, box, message,
   questComplete, menu, openMenu, clickedSite, closeMenu,
   VARPS_ATTRIBUTE, SITE_VARBITS, BASE_APPEARANCE, LAST_DESTINATION, MAIN_MODAL, OVERLAY_ATMOSPHERE_UID,
+  VARLAMORE_VISITED, FIRST_TRIP_STATE,
   get api() { return api; },
   get core() { return core; },
   get data() { return data; },

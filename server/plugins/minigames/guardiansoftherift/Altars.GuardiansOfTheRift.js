@@ -69,7 +69,6 @@ const ABSORB = ["small", "moderate", "high", "immense"];
 const STONE_VARIANT = "standard-dialogue-entering-a-portal-guardian-with-any-type-of-guardian-stone";
 /** The Great Guardian transcript's stone conditions, by step id. */
 const STEP = { ELEMENTAL: "c7UcIl", CATALYTIC: "YnTvsE", POLY_ONLY: "ufD52G" };
-const STONES = [Shared.ITEM.ELEMENTAL_STONE, Shared.ITEM.CATALYTIC_STONE, Shared.ITEM.POLYELEMENTAL_STONE, Shared.ITEM.POLYCATALYTIC_STONE];
 
 function byGuardian(objectId) {
   return ALTARS.find((altar) => Shared.loc(altar.guardian) === objectId) ?? null;
@@ -90,7 +89,7 @@ function isActive(altar) {
 }
 
 function holdsStones(player) {
-  return STONES.some((stone) => Shared.count(player, stone) > 0);
+  return Shared.STONES.some((stone) => Shared.count(player, stone) > 0);
 }
 
 function questDone(player, key) {
@@ -130,7 +129,12 @@ function travel(player, altar, going, message) {
     if (Records.setting(player, "gotr_colourful_fade_disabled") !== 1) {
       player.getPacketSender().sendClientScript(Shared.SCRIPT.REMOVE_PORTAL);
     }
-    Shared.later(1, () => player.isRegistered() && overlay(player, altar, false));
+    Shared.later(1, () => {
+      if (!player.isRegistered()) return;
+      overlay(player, altar, false);
+      // The Guardians may have changed while the player was away.
+      if (!going) animateGuardians([player]);
+    });
   });
 }
 
@@ -155,7 +159,10 @@ function refuse(player, altar) {
 function enter({ player, objectId }) {
   const altar = byGuardian(objectId);
   if (!altar || !Shared.inTemple(player.getLocation()) || !Shared.questComplete(player)) return false;
-  if (!Game.isPlaying(player)) return true;
+  if (!Game.isPlaying(player)) {
+    player.sendMessage("There's no need to do that right now.");
+    return true;
+  }
   if (!isActive(altar)) {
     Shared.statement(player, "The Guardian is dormant. Its energy might return soon.");
     return true;
@@ -263,13 +270,25 @@ function chargeCell(player, altar) {
 }
 
 function findTalisman(player, altar, essence) {
-  if (Records.setting(player, altar.toggle) === 1 || Shared.count(player, altar.talisman) > 0) return;
+  if (Records.setting(player, altar.toggle) === 1) return;
   for (let i = 0; i < essence; i++) {
     if (Math.random() * TALISMAN_CHANCE >= 1) continue;
     player.getInventory().adds(Shared.obj(altar.talisman), 1);
     player.sendMessage("You discover a strange talisman during the runecrafting process!");
     return;
   }
+}
+
+/**
+ * On a trip the altar and its exit portal are this game's, whatever loads first: they are the
+ * ordinary Runecrafting locs, whose own handlers would craft only rune/pure essence and send the
+ * player out to the ruins. Unclaimed clicks (no guardian essence) fall through to them.
+ */
+function claimTrip(event) {
+  if (!event.player?.__gotrTrip) return;
+  const option = String(event.option ?? "").toLowerCase();
+  const claim = option === "use" ? leaveAltar : option === "craft-rune" ? craft : null;
+  if (claim && claim(event)) event.handled = true;
 }
 
 // ------------------------------------------------------------------ the Guardians' looks
@@ -315,8 +334,7 @@ module.exports = {
   ALTARS, isActive,
   attach(api) {
     attachGuardians(api);
-    api.onObjectInteraction("Portal", { Use: leaveAltar });
-    api.onObjectInteraction("Altar", { "Craft-rune": craft });
+    api.onBeforeObjectInteraction(claimTrip);
     api.onNpcDialogueCondition(answerCondition);
     api.onCustomEvent("pets:skilling-eligibility", excludeRiftGuardianRoll);
     Temple.allowAway(onTrip);

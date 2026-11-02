@@ -17,6 +17,7 @@ import { LocModelType } from "../rs/config/loctype/LocModelType";
 import { LocType } from "../rs/config/loctype/LocType";
 import { ModelData } from "../rs/model/ModelData";
 import { SceneBuilder, LocLoadType } from "../rs/scene/SceneBuilder";
+import { LOC_OVERRIDE_REMOVED } from "../rs/scene/LocOverride";
 import { getEditModeSceneLoadingStatus } from "../game/plugins/editmode/editModeLoadingScreen";
 import { isMapProfileEnabled } from "../render/render/mapLoadProfile";
 import CONSTRUCTION_ROOMS from "../../server/plugins/skills/construction/data/rooms.json";
@@ -441,7 +442,7 @@ function duplicateLocReplayIsIgnored(): void {
     onLocAddChange(host, 411, { x: 2431, y: 3076 }, 1, 10, 1);
     onLocAddChange(host, 411, { x: 2431, y: 3076 }, 1, 10, 1);
     assert.equal(refreshes, 1);
-    assert.deepEqual(host.locOverrides.get("2431,3076,1,16011"), { newId: 0 }, "the replaced loc is suppressed");
+    assert.deepEqual(host.locOverrides.get("2431,3076,1,16011"), { newId: LOC_OVERRIDE_REMOVED }, "the replaced loc is suppressed");
 
     host.locOverrides.clear();
     onLocAddChange(host, 411, { x: 2431, y: 3076 }, 1, 10, 1);
@@ -491,7 +492,7 @@ function instanceFurnitureReplacesOnlyItsHotspot(): void {
             builder.setLocOverride(tileX, tileY, plane, oldId, value.newId,
                 undefined, undefined, undefined, undefined, undefined, value.matchType);
         }
-        assert.equal((builder as any).getLocOverride(x, y, 1, 999, 22, 0)?.newId, 0,
+        assert.equal((builder as any).getLocOverride(x, y, 1, 999, 22, 0)?.newId, LOC_OVERRIDE_REMOVED,
             "the floor hotspot removal must survive the chair override");
         decode();
         assert.deepEqual(placements, [neighbor], "overlapping hotspot removals must not overwrite each other");
@@ -516,8 +517,8 @@ function instanceFurnitureReplacesOnlyItsHotspot(): void {
         builder.clearLocOverrides(); // Removing furniture rebuilds the saved house without its spawn.
         decode();
         assert.equal(placements.length, 2, "removing furniture must restore its template hotspot");
-        builder.setLocOverride(x, y, 0, -1, 0);
-        builder.setLocOverride(x, y, 1, -1, 0, undefined, undefined, undefined, undefined, undefined, 0);
+        builder.setLocOverride(x, y, 0, -1, LOC_OVERRIDE_REMOVED);
+        builder.setLocOverride(x, y, 1, -1, LOC_OVERRIDE_REMOVED, undefined, undefined, undefined, undefined, undefined, 0);
         decode();
         assert.equal(placements.length, 2, "other planes and object shapes must remain independent");
     }
@@ -557,7 +558,7 @@ function instanceFurnitureReplacesOnlyItsHotspot(): void {
         assert.equal(rebuilds, 1);
     }
     builder.clearLocOverrides();
-    builder.setLocOverride(2, 3, 0, -1, 0, undefined, undefined, undefined, undefined, undefined, 10);
+    builder.setLocOverride(2, 3, 0, -1, LOC_OVERRIDE_REMOVED, undefined, undefined, undefined, undefined, undefined, 10);
     placements.length = 0;
     builder.decodeLocs(scene, data, 0, 0, LocLoadType.NO_MODELS);
     assert.deepEqual(placements, [[0, 3, 3, 100, 10, 1]], "normal maps must retain the same replacement behavior");
@@ -683,7 +684,7 @@ for (const key of [
     "minimapIcons", "projectileRenderDebugCounts", "cachedLocIds", "cachedObjIds", "cachedNpcIds",
 ]) session[key] = new Map();
 session.mapsToLoad = new Denque();
-session.locOverrides.set("3200,3200,0,-1", { newId: 0, matchType: 0 });
+session.locOverrides.set("3200,3200,0,-1", { newId: LOC_OVERRIDE_REMOVED, matchType: 0 });
 session.addedLocs.set("3199,3200,0,0", { locId: 778, x: 3199, y: 3200, level: 0, shape: 0, rotation: 1 });
 clearSessionCaches(session);
 assert.equal(session.locOverrides.size, 0);

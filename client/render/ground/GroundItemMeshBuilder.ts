@@ -132,7 +132,7 @@ export function buildGroundItemGeometry(
         const info: ModelInfo = {
             sceneX,
             sceneZ,
-            heightOffset: 0,
+            heightOffset: map.getObjSurfaceHeight?.(heightSamplePlane, localX, localY) ?? 0,
             level: heightSamplePlane,
             planeCullLevel: basePlane,
             contourGround: ContourGroundType.CENTER_TILE,

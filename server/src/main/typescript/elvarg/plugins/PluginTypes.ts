@@ -39,6 +39,8 @@ export type PluginSocialPacketEvent = {
   player: any;
   handled: boolean;
   packet:
+    | { type: "clan_chat"; clanType: number; text: string }
+    | { type: "clan_channel_action"; action: "kick" | "ban" | "mute"; name: string; value: number }
     | { type: "friends_chat_action"; action: FriendsChatAction }
     | { type: "private_message"; recipient: string; text: string }
     | { type: "chat_filter"; publicMode: number; privateMode: number; tradeMode: number }
@@ -1490,6 +1492,7 @@ export interface PluginCoreApi {
   Priority: any;
   Projectile: any;
   Skill: any;
+  SkillManager: any;
   Item: any;
   Flag: any;
   Appearance: any;
@@ -1517,6 +1520,12 @@ export interface PluginCoreApi {
   Location: any;
   Mobile: any;
   encodePluginMessage: typeof import("../net/protocol/ClientProtocol").encodePluginMessage;
+  encodeChatMessage: typeof import("../net/protocol/ClientProtocol").encodeChatMessage;
+  encodeClanSettingsFull: typeof import("../net/protocol/ClientProtocol").encodeClanSettingsFull;
+  encodeClanChannelFull: typeof import("../net/protocol/ClientProtocol").encodeClanChannelFull;
+  encodeClanChannelDelta: typeof import("../net/protocol/ClientProtocol").encodeClanChannelDelta;
+  encodeClanSettingsDelta: typeof import("../net/protocol/ClientProtocol").encodeClanSettingsDelta;
+  encodeClanVar: typeof import("../net/protocol/ClientProtocol").encodeClanVar;
   MOBILE_CLIENT_ATTRIBUTE: typeof import("../net/protocol/ClientProtocol").MOBILE_CLIENT_ATTRIBUTE;
   XPDROPS_ENABLED_ATTRIBUTE: typeof import("../net/protocol/ClientProtocol").XPDROPS_ENABLED_ATTRIBUTE;
   encodeGameframeBootstrap: typeof import("../net/protocol/ClientProtocol").encodeGameframeBootstrap;

@@ -651,7 +651,10 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
                 if (!square) continue;
                 square.refreshPartial(partial, this.osrsClient.seqTypeLoader, getClientCycle() | 0);
                 world.uploadMapTextures(partial.loadedTextures);
-                if (partial.locOnly) this.ui?.registerMinimapData(partial);
+                if (partial.locOnly) {
+                    this.ui?.registerMinimapData(partial);
+                    this.overlays?.onMapLocsRefreshed(partial.mapX, partial.mapY);
+                }
                 this.locUpdates.applied(partial.mapX, partial.mapY);
             }
             return;
@@ -724,7 +727,10 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
                 }
                 existing.refreshPartial(mapData, this.osrsClient.seqTypeLoader, getClientCycle() | 0);
                 world.uploadMapTextures(mapData.loadedTextures);
-                if (mapData.locOnly) this.ui?.registerMinimapData(mapData);
+                if (mapData.locOnly) {
+                    this.ui?.registerMinimapData(mapData);
+                    this.overlays?.onMapLocsRefreshed(mapX, mapY);
+                }
                 this.locUpdates.applied(mapX, mapY);
                 continue;
             }

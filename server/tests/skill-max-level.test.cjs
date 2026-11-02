@@ -12,6 +12,25 @@ const { SkillManager } = require("../dist/game/content/skill/SkillManager");
 const sender = new Proxy({}, { get: (_, name) => (name === "then" ? undefined : () => sender) });
 const skills = new SkillManager({ getPacketSender: () => sender });
 
+test("combat levels retain the fractional base until the final round down", () => {
+  const cases = [
+    [[1, 1, 99, 65, 99, 1, 99], 64],
+    [[50, 1, 99, 65, 99, 1, 99], 64],
+    [[1, 1, 99, 65, 1, 1, 99], 64],
+    [[50, 1, 99, 65, 1, 1, 1], 64],
+    [[1, 1, 1, 10, 99, 1, 1], 50],
+    [[1, 1, 99, 66, 99, 1, 99], 64],
+    [[1, 1, 99, 66, 99, 2, 99], 65],
+    [[1, 1, 99, 66, 99, 3, 99], 65],
+    [[1, 1, 1, 10, 1, 1, 1], 3],
+    [[99, 99, 99, 99, 99, 99, 99], 126],
+  ];
+  for (const [levels, expected] of cases) {
+    assert.equal(SkillManager.calculateCombatLevel(levels), expected, levels.join(","));
+    assert.equal(SkillManager.prototype.getCombatLevel.call({ skills: { maxLevel: levels } }), expected);
+  }
+});
+
 test("lowering a skill takes effect on the first call (issue #101)", () => {
   for (const level of [99, 1]) {
     skills
@@ -1236,6 +1255,34 @@ test("sound lookup excludes Lost City IDs, altar switches use OSRS audio, and re
   const [region, tracks] = Object.entries(regions).find(([, tracks]) => tracks.length > 0);
   assert.equal(Music.forRegion(Number(region)), tracks[0]);
   assert.equal(Music.forRegion(-1), undefined);
+});
+
+test("the cache Shrine of Ralos Bask action restores Prayer without reducing boosts", async () => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
+  const core = PluginManager.getCoreApi(), interactions = new Map();
+  require("../plugins/objects/Altars.plugin").register({
+    core, onObjectInteraction: (name, actions) => interactions.set(name, actions),
+  });
+  const shrine = CacheDefinitions.getObject(core.ObjectIdentifiers.SHRINE_OF_RALOS);
+  assert.equal(shrine.name, "Shrine of Ralos");
+  assert.equal(shrine.actions[0], "Bask");
+  const bask = interactions.get(shrine.name)?.[shrine.actions[0]];
+  assert.equal(typeof bask, "function", "the real cache name/action has an altar handler");
+  for (const current of [0, 30, 70, 75]) {
+    const player = feedbackPlayer(core);
+    player.skills.setMaxLevel(Skill.PRAYER, 70, false);
+    player.skills.setCurrentLevels(Skill.PRAYER, current);
+    player.sent.length = 0;
+    assert.equal(bask({ player }), true);
+    assert.equal(player.skills.getCurrentLevel(Skill.PRAYER), Math.max(current, 70));
+    const restored = current < 70;
+    assert.deepEqual(player.messages, [restored ? "You recharge your Prayer points." : "You already have full Prayer points."]);
+    assert.deepEqual(player.animations, restored ? [645] : []);
+    assert.equal(player.sent.filter(([type, id]) => type === "sendSoundEffect" && id === 2674).length, restored ? 1 : 0);
+  }
 });
 
 test("Defence threshold changes update native prayer-unlock varbits", () => {

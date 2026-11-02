@@ -133,7 +133,10 @@ export class ShopDefinitionLoader extends DefinitionLoader {
             for (const entry of raw.originalStock as RawShopStockDefinition[]) {
                 const itemId = Number(entry?.id);
                 const amount = this.normalizeAmount(entry?.amount ?? 1);
-                if (!Number.isInteger(itemId) || itemId <= 0 || amount <= 0) {
+                // A listed stock of 0 is real: specialist shops (Gerrant's raw fish) show and
+                // buy items they start with none of.
+                const listedEmpty = Number(entry?.amount) === 0;
+                if (!Number.isInteger(itemId) || itemId <= 0 || (amount <= 0 && !listedEmpty)) {
                     continue;
                 }
                 const price = prices.get(itemId) ?? Number(entry?.price);

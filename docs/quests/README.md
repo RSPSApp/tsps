@@ -2,10 +2,10 @@
 # Quest test status
 
 Every quest the server registers, with the latest result recorded in its page here. How to
-test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
+test a quest is in [server/docs/agents/quest-testing.md](../../server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-191 quests · ✅ passed: 30 · ⚠️ passed with issues: 21 · 🔄 in progress: 7 · ❌ failed: 1 · 🔁 needs recheck: 10 · untested: 122
+191 quests · ✅ passed: 30 · ⚠️ passed with issues: 21 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 11 · untested: 120
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -116,7 +116,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Perilous Moons | untested |  |  |  |  |
 | [Pirate's Treasure](pirates-treasure/README.md) | ✅ passed | 2026-10-25 | community |  |  |
 | Plague City | untested |  |  |  |  |
-| Priest in Peril | untested |  |  |  |  |
+| [Priest in Peril](priest-in-peril/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 1 |
 | [Prince Ali Rescue](prince-ali-rescue/README.md) | ⚠️ passed with issues | 2026-10-29 | agent | grok-4.7 | 1 |
 | [Prying Times](prying-times/README.md) | untested |  |  |  |  |
 | [Rag and Bone Man I](rag-and-bone-man-i/README.md) | untested |  |  |  |  |
@@ -151,7 +151,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Tale of the Righteous](tale-of-the-righteous/README.md) | untested |  |  |  |  |
 | [Tears of Guthix](tears-of-guthix/README.md) | untested |  |  |  |  |
 | Temple of Ikov | untested |  |  |  |  |
-| [Temple of the Eye](temple-of-the-eye/README.md) | untested |  |  |  |  |
+| [Temple of the Eye](temple-of-the-eye/README.md) | 🔄 in progress | 2026-11-01 | agent MCP | Claude Opus 5.5 |  |
 | [The Ascent of Arceuus](the-ascent-of-arceuus/README.md) | ✅ passed |  | agent |  | 1 |
 | [The Blood Moon Rises](the-blood-moon-rises/README.md) | untested |  |  |  |  |
 | [The Corsair Curse](the-corsair-curse/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |

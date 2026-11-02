@@ -5,6 +5,7 @@ const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 before(async () => {
   await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
+  core.RegionManager.init();
 });
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const runtime = require('../plugins/quests/QuestRuntime');
@@ -12,42 +13,57 @@ const core = PluginManager.getCoreApi();
 const I = core.ItemIdentifiers, N = core.NpcIdentifiers, O = core.ObjectIdentifiers;
 const noop = () => {};
 
-function harness() {
-  const hooks = {}, events = {}, tasks = [], transcripts = [], objects = [], npcs = [];
+function harness({ npcDrops = false } = {}) {
+  const hooks = {}, events = {}, eventCounts = new Map(), tasks = [], transcripts = [], objects = [], npcs = [];
+  const groundDrops = [];
   class PrivateArea {
-    constructor() { this.entities = []; this.destroyed = false; }
+    constructor(boundaries) { this.boundaries = boundaries; this.entities = []; this.destroyed = false; }
     add(actor) { this.entities.push(actor); actor.setArea(this); }
     enter(actor) { this.add(actor); }
     leave(actor, logout) { this.postLeave(actor, logout); }
     postLeave(actor) { this.entities = this.entities.filter(value => value !== actor); actor.setArea(null); this.destroy(); }
     destroy() { this.destroyed = true; }
     isDestroyed() { return this.destroyed; }
+    getObjects() { return objects.filter(object => object.getArea() === this); }
+    getBoundaries() { return this.boundaries; }
   }
   const api = new Proxy({
     core: { ...core, PrivateArea, TaskManager: {
       submit: task => { task.setRunning(true); tasks.push(task); },
       cancelTasks: key => tasks.filter(task => task.key === key).forEach(task => task.stop()),
     }, ObjectManager: { register: object => objects.push(object) },
-      MapObjects: { get: (id, location) => new core.GameObject(id, location, 0, id === O.GATE_319 || id === O.GATE_322 ? 1 : 0, null) } },
+      MapObjects: { getType: core.MapObjects.getType.bind(core.MapObjects),
+        get: (id, location) => new core.GameObject(id, location, 0, id === O.GATE_319 || id === O.GATE_322 ? 1 : 0, null) } },
     persistAttribute: noop,
     onCustomEvent: (name, handler) => (events[name] ??= []).push(handler),
-    emitCustomEvent: (name, event) => (events[name] ?? []).forEach(handler => handler(event)),
+    emitCustomEvent: (name, event) => {
+      eventCounts.set(name, (eventCounts.get(name) ?? 0) + 1);
+      (events[name] ?? []).forEach(handler => handler(event));
+    },
     registerNpcCombatMethodProvider: (ids, method) => { api.combat = method; },
     spawnNpc: definition => {
       let area, at = new core.Location(definition.x, definition.y, definition.z);
       const npc = { ...definition, getId: () => definition.id, getArea: () => area, setArea: value => { area = value; },
+        getSize: () => 3, isPlayer: () => false,
+        getMovementQueue: () => ({ reset() { return this; }, setBlockMovement: noop }),
         getHitpoints: () => 58, getLocation: () => at, moveTo: value => { at = value; },
-        getCombat: () => ({ reset: noop }), getDefinition: () => ({ getRespawn: () => 36 }),
+        getCombat: () => ({ reset: noop, getTarget: () => area?.player }), getDefinition: () => ({ getRespawn: () => 36 }),
         setCombatXpMultiplier: value => { npc.xpMultiplier = value; }, setPositionToFace: noop, performAnimation: noop, performGraphic: noop, forceChat: noop };
       npcs.push(npc); return npc;
     },
+    getItemOnGroundManager: () => ({ registerLocation: (player, item) => groundDrops.push({ player, item }) }),
     removeNpc: npc => { npc.removed = true; },
   }, { get: (target, key) => target[key] ?? ((handler) => (hooks[key] ??= []).push(handler)) });
+  if (npcDrops) {
+    require('../plugins/skills/Prayer.plugin').register(api);
+    require('../plugins/items/bonecrusher/Crushing.Bonecrusher')(api);
+    require('../plugins/npcs/NpcDrops.plugin').register(api);
+  }
   const original = runtime.startTranscript;
   runtime.startTranscript = (...args) => { transcripts.push(args); return true; };
   try { require('../plugins/quests/quests/IdesOfMilk.Quest')(api); }
   finally { runtime.startTranscript = original; }
-  return { api, hooks, tasks, transcripts, objects, npcs, quest: runtime.getRegisteredQuests().at(-1),
+  return { api, hooks, tasks, transcripts, objects, npcs, groundDrops, eventCounts, quest: runtime.getRegisteredQuests().at(-1),
     emit: (name, event) => (events[name] ?? []).forEach(handler => handler(event)),
     line(player, npcId, text) { const event = { player, npcId, text }; this.emit('npc-dialogue:line', event); event.before?.(); },
     action(player, npcId, stepId) { const event = { player, npcId, stepId }; this.emit('npc-dialogue:action', event); return event; },
@@ -57,18 +73,19 @@ function harness() {
 }
 
 function player() {
-  const attributes = new Map(), items = new Map(), varbits = new Map(), strings = new Map(), animations = [], damage = [], messages = [], graphics = [], objectsSent = [];
+  const attributes = new Map(), items = new Map(), varbits = new Map(), strings = new Map(), animations = [], damage = [], messages = [], graphics = [], objectsSent = [], objectsRemoved = [];
   let area = null, location = new core.Location(3254, 3274, 0);
   const packet = new Proxy({ sendVarbit: (id, value) => { varbits.set(id, value); return packet; },
     sendString: (text, id) => { strings.set(id, text); return packet; },
     sendObject: object => { objectsSent.push(object); return packet; },
+    sendObjectRemoval: object => { objectsRemoved.push(object); return packet; },
     sendGraphic: (graphic, at) => { graphics.push([at.getX(), at.getY()]); return packet; } }, { get: (target, key) => target[key] ?? (() => packet) });
-  const inventory = { getAmount: id => items.get(id) ?? 0, getFreeSlots: () => p.full ? 0 : 28,
+  const inventory = { getAmount: id => items.get(id) ?? 0, contains: id => (items.get(id) ?? 0) > 0, getFreeSlots: () => p.full ? 0 : 28,
     isFull: () => Boolean(p.full), adds: (id, amount) => items.set(id, (items.get(id) ?? 0) + amount),
     deleteNumber: (id, amount) => { assert.ok((items.get(id) ?? 0) >= amount); items.set(id, items.get(id) - amount); },
     get: () => p.lamp, deleteAtSlot: () => { p.lamp = null; } };
   const p = { attributes, items, varbits, strings, animations, damage, messages,
-    graphics, objectsSent, getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
+    graphics, objectsSent, objectsRemoved, getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => inventory, getPacketSender: () => packet,
     getDialogueManager: () => ({ startDialogues: noop, reset: noop }),
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; } }), setUntargetable: noop,
@@ -76,7 +93,9 @@ function player() {
     getArea: () => area, setArea: value => { area = value; },
     getHitpoints: () => p.hp ?? 10, getCombat: () => ({ reset: noop, getHitQueue: () => ({ addPendingDamage: hits => damage.push(...hits) }) }),
     performAnimation: animation => animations.push(animation.getId()), sendMessage: text => messages.push(text),
-    getSkillManager: () => ({ getMaxLevel: () => p.maxHp ?? 10, getCombatLevel: () => 99, getExperience: () => p.xp ?? 0, addExperience: (skill, amount) => { p.xp = (p.xp ?? 0) + amount; } }),
+    getSkillManager: () => ({ getMaxLevel: () => p.maxHp ?? 10, getCombatLevel: () => 99, getExperience: () => p.xp ?? 0,
+      addExperience: (skill, amount) => { p.xp = (p.xp ?? 0) + amount; },
+      addExperiences: (skill, amount) => { p.prayerXp = (p.prayerXp ?? 0) + amount; } }),
   };
   return p;
 }
@@ -145,6 +164,8 @@ test('bull release is private, uses the captured bull and cleans up pending or a
   h.hooks.onPlayerLogout[0]({ player: p }); assert.equal(p.getArea(), null); assert.equal(h.npcs[0].removed, true);
   const pending = player(); h.quest.setStage(pending, 18); h.action(pending, N.BULL, 'mKQNRL');
   h.hooks.onPlayerLogout[0]({ player: pending }); h.tick(4); assert.equal(h.npcs.length, 1);
+  assert.deepEqual(pending.objectsRemoved, [], 'cancelled entry never hides world gates');
+  assert.deepEqual(pending.objectsSent, [], 'cancelled entry has no gate view to restore');
 });
 
 test('leaving a post-quest fight restores the cow-field gates so Brutus can be released again', () => {
@@ -152,17 +173,75 @@ test('leaving a post-quest fight restores the cow-field gates so Brutus can be r
   h.action(p, N.BULL, 'mKQNRL'); h.tick(4);
   h.hooks.onObjectInteraction[0]({ player: p, objectId: O.GATE_323 });
   assert.equal(p.getArea(), null, 'the exit gate ends the private field');
-  assert.deepEqual(p.objectsSent.map(object => [object.getId(), object.getLocation().getX(), object.getLocation().getY(), object.getFace()])
+  assert.deepEqual(p.objectsSent.slice(-4).map(object => [object.getId(), object.getLocation().getX(), object.getLocation().getY(), object.getFace()])
     .sort((a, b) => a[0] - b[0]),
   [[O.GATE_18, 3253, 3266, 0], [O.GATE_20, 3253, 3267, 0], [O.GATE_319, 3263, 3294, 1], [O.GATE_322, 3262, 3294, 1]],
   'each actionless private leaf is replaced by the map gate it hid, so "Release" is back');
+});
+
+test('private gates hide moved world leaves and restore the current world state on exit or logout', () => {
+  for (const initiallyOpen of [false, true]) for (const openOnExit of [false, true]) for (const logout of [false, true]) {
+    const h = harness(), p = player(); h.quest.setStage(p, 22);
+    let open = initiallyOpen;
+    const opened = [new core.GameObject(O.GATE_19, new core.Location(3252, 3266, 0), 0, 3, null),
+      new core.GameObject(O.GATE_25, new core.Location(3251, 3266, 0), 0, 3, null)];
+    h.api.onCustomEvent('door:state', event => {
+      if (open) event.objects = [...event.objects.filter(object => ![O.GATE_18, O.GATE_20].includes(object.getId())), ...opened];
+    });
+    h.action(p, N.BULL, 'mKQNRL'); h.tick(4);
+    const view = objects => objects.map(object => [object.getId(), object.getLocation().getX(), object.getLocation().getY(), object.getFace()]);
+    assert.deepEqual(view(p.objectsRemoved).slice(2), initiallyOpen
+      ? [[O.GATE_19, 3252, 3266, 3], [O.GATE_25, 3251, 3266, 3]]
+      : [[O.GATE_20, 3253, 3267, 0], [O.GATE_18, 3253, 3266, 0]], 'entry hides the leaves at their current world tiles');
+    open = openOnExit; p.objectsRemoved.length = 0;
+    if (logout) h.hooks.onPlayerLogout[0]({ player: p });
+    else h.hooks.onObjectInteraction[0]({ player: p, objectId: O.GATE_323 });
+    assert.equal(p.getArea(), null);
+    assert.deepEqual(p.objectsSent.slice(0, 4).map(object => object.getId()), [O.GATE_319, O.GATE_322, O.GATE_20, O.GATE_18],
+      'first replace the private identities with their map identities');
+    assert.deepEqual(p.objectsRemoved.map(object => object.getId()), [O.GATE_319, O.GATE_322, O.GATE_20, O.GATE_18],
+      'then clear the closed map slots before applying the world view');
+    assert.deepEqual(p.objectsSent.slice(4).map(object => object.getId()), openOnExit
+      ? [O.GATE_319, O.GATE_322, O.GATE_19, O.GATE_25]
+      : [O.GATE_319, O.GATE_322, O.GATE_20, O.GATE_18], 'exit reads the live world, including changes during the fight');
+    assert.ok(opened.every(object => object.getPrivateArea() === null), 'the world leaves remain shared');
+    p.objectsRemoved.length = 0;
+    h.action(p, N.BULL, 'mKQNRL'); h.tick(4);
+    assert.deepEqual(p.objectsRemoved.map(object => object.getId()), openOnExit
+      ? [O.GATE_319, O.GATE_322, O.GATE_19, O.GATE_25]
+      : [O.GATE_319, O.GATE_322, O.GATE_20, O.GATE_18], 're-entry hides the current view again');
+  }
 });
 
 test('killing Brutus during the quest restores the gates before the field tears down', () => {
   const h = harness(), p = player(); h.quest.setStage(p, 18); h.action(p, N.BULL, 'mKQNRL'); h.tick(2);
   h.hooks.onNpcDeath[0]({ killer: p, npc: h.npcs[0], npcId: N.BRUTUS });
   assert.equal(h.quest.getStage(p), 20);
-  assert.deepEqual(p.objectsSent.map(object => object.getId()).sort((a, b) => a - b), [O.GATE_18, O.GATE_20, O.GATE_319, O.GATE_322]);
+  assert.deepEqual(p.objectsSent.slice(-4).map(object => object.getId()).sort((a, b) => a - b), [O.GATE_18, O.GATE_20, O.GATE_319, O.GATE_322]);
+});
+
+test('quest Bull claims its kill before drop consumers while postquest Brutus keeps his drops', () => {
+  const h = harness({ npcDrops: true }), p = player(); h.quest.setStage(p, 18); h.action(p, N.BULL, 'mKQNRL'); h.tick(2);
+  p.items.set(I.BONECRUSHER, 1); p.setAttribute('bonecrusher:charges', 1);
+  const npc = h.npcs[0];
+  for (const death of h.hooks.onNpcDeath) death({ killer: p, npc, npcId: N.BRUTUS });
+  assert.equal(h.quest.getStage(p), 20, 'the quest death handler still advances the quest');
+  assert.deepEqual(h.groundDrops, [], 'NpcDrops exits before rolling or placing Brutus loot');
+  assert.equal(p.getAttribute('bonecrusher:charges'), 1, 'no roll event reaches the bonecrusher');
+  assert.equal(h.eventCounts.get('npc-drops:roll') ?? 0, 0);
+  assert.equal(h.eventCounts.get('npc-drops:generated') ?? 0, 0);
+  assert.equal(p.prayerXp ?? 0, 0, 'quest Bull bones award no Prayer XP');
+
+  const completed = player(); h.quest.setStage(completed, 22); h.action(completed, N.BULL, 'mKQNRL'); h.tick(2);
+  completed.items.set(I.BONECRUSHER, 1); completed.setAttribute('bonecrusher:charges', 1);
+  const postquestNpc = h.npcs.at(-1);
+  for (const death of h.hooks.onNpcDeath) death({ killer: completed, npc: postquestNpc, npcId: N.BRUTUS });
+  const droppedIds = h.groundDrops.map(({ item }) => item.getId());
+  assert.ok(droppedIds.includes(I.RAW_T_BONE_STEAK), 'completed-quest Brutus keeps his guaranteed steak');
+  assert.equal(completed.getAttribute('bonecrusher:charges'), 0, 'postquest Bull bones reach the crusher');
+  assert.equal(completed.prayerXp, 20);
+  assert.equal(h.eventCounts.get('npc-drops:roll'), 1);
+  assert.equal(h.eventCounts.get('npc-drops:generated'), 1);
 });
 
 test('the bull tag has one game message and one continued message box', () => {
@@ -253,7 +332,7 @@ test('charge dashes four tiles on its facing axis and allows a two-tile sidestep
   for (const [at, target, dodge, end] of [
     [[3260, 3290], [3260, 3289], [3258, 3289], [3260, 3286]],
     [[3260, 3290], [3260, 3289], [3261, 3291], [3260, 3286]],
-    [[3260, 3286], [3263, 3287], [3263, 3289], [3264, 3286]],
+    [[3260, 3286], [3259, 3287], [3259, 3289], [3256, 3286]],
   ]) {
     const { h, p, npc, arena, method } = fight();
     npc.moveTo(new core.Location(...at, 0)); p.moveTo(new core.Location(...target, 0));
@@ -262,6 +341,70 @@ test('charge dashes four tiles on its facing axis and allows a two-tile sidestep
     assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], end);
     assert.equal(p.damage.length, 0);
   }
+});
+
+test('Brutus rejects charges whose swept 3x3 body would hit the real arena fences', () => {
+  for (const [label, at, target] of [
+    ['east fence', [3261, 3287], [3264, 3288]],
+    ['north pen fence', [3262, 3291], [3263, 3294]],
+    ['diagonal west fence', [3244, 3285], [3243, 3286]],
+    ['southern instance edge', [3260, 3267], [3261, 3266]],
+  ]) {
+    const { h, p, npc, arena, method } = fight();
+    npc.moveTo(new core.Location(...at, 0)); p.moveTo(new core.Location(...target, 0));
+    arena.meleeRemaining = 0; arena.nextSpecial = 'charge';
+    const speech = []; npc.forceChat = text => speech.push(text);
+    assert.equal(method.nextAttack(npc, p), 'stomp', `${label}: no wall-crossing charge is selected`);
+    method.start(npc, p); h.tick(4);
+    assert.deepEqual(speech, ['*snorts*']);
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], at, `${label}: no truncated dash`);
+  }
+});
+
+test('a charge can pass through the field plant while distant blocked charges restore melee reach', () => {
+  const { h, p, npc, arena, method } = fight();
+  npc.moveTo(new core.Location(3257, 3286, 0)); p.moveTo(new core.Location(3258, 3289, 0));
+  assert.ok(core.MapObjects.get(1393, new core.Location(3257, 3289, 0), null), 'native plant lies in the sweep');
+  assert.equal(core.RegionManager.canMove(3257, 3286, 3257, 3290, 0, 3, 3, arena), false, 'ordinary walking collides with the plant');
+  arena.meleeRemaining = 0; arena.nextSpecial = 'charge';
+  assert.equal(method.nextAttack(npc, p), 'charge');
+  method.start(npc, p); h.tick(4);
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [3257, 3290], 'interior scenery does not shorten the dash');
+  const blocked = fight();
+  blocked.npc.moveTo(new core.Location(3261, 3287, 0)); blocked.p.moveTo(new core.Location(3265, 3288, 0));
+  assert.equal(blocked.method.nextAttack(blocked.npc, blocked.p), null);
+  assert.equal(blocked.method.attackDistance(blocked.npc), 1, 'the normal combat cycle must pursue instead of attacking from sixteen tiles');
+});
+
+test('a valid sidestep cannot pull Brutus out of his charge windup', () => {
+  const { MovementQueue } = require('../dist/game/model/movement/MovementQueue');
+  const { CombatRange } = require('../dist/game/content/combat/CombatRange');
+  const { PathFinder } = require('../dist/game/model/movement/path/PathFinder');
+  const { h, p, npc, arena, method } = fight();
+  Object.assign(npc, {
+    isNpc: () => true, getPrivateArea: () => arena, getAsNpc: () => npc,
+    getMovementSteps: () => 1, getTimers: () => ({ has: () => false }),
+    isNeedsPlacement: () => false, getFollowing: () => null,
+    setLocation: npc.moveTo, setWalkingDirection: noop, setRunningDirection: noop,
+    hasFlag: () => false, canWalkThroughNPCs: () => false,
+  });
+  Object.assign(p, { isPlayer: () => true, isNpc: () => false,
+    getSize: () => 1, getPrivateArea: () => arena });
+  const movement = new MovementQueue(npc);
+  npc.getMovementQueue = () => movement;
+  npc.moveTo(new core.Location(3261, 3287, 0)); p.moveTo(new core.Location(3262, 3286, 0));
+  arena.meleeRemaining = 0; arena.nextSpecial = 'charge';
+  assert.equal(method.nextAttack(npc, p), 'charge');
+  method.start(npc, p);
+  assert.equal(core.RegionManager.canMove(3262, 3286, 3264, 3286, 0, 1, 1, arena), true);
+  p.moveTo(new core.Location(3264, 3286, 0));
+  assert.equal(CombatRange.canReach(npc, method, p), false, 'the sidestep would request pursuit');
+  movement.setPursuitCheckpoint(PathFinder.naiveEntityDestination(npc, p));
+  movement.process();
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [3261, 3287], 'hold the telegraphed origin');
+  h.tick(4);
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [3261, 3283], 'land at the original charge endpoint');
+  assert.equal(movement.getMobility().canMove(), true, 'ordinary pursuit resumes after the charge');
 });
 
 test('postquest kills preserve the private field and Ring restarts respawn without spawning duplicates', () => {

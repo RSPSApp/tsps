@@ -19,6 +19,7 @@ before(async () => {
   const nativeApi = PluginManager.createApi('CastleWarsEquipmentNativeTest');
   const api = {
     core,
+    emitCustomEvent() {},
     getAreaManager: () => ({ areas: [], inside: (location, area) => area.getBoundaries().some((b) => b.inside(location)) }),
     getBonusManager: () => ({ update() {} }),
     getObjectManager: () => ({ register() {}, deregister() {} }),

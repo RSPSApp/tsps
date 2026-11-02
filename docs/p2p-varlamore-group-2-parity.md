@@ -120,9 +120,23 @@ Teomat attack and aftermath. The eight cultists are real combat targets; Mezan
 changes protection after a streak of attacks in one style. Progress and scene
 cleanup survive logout. Earlier stage values are migrated once.
 
+The judgement now includes Ennius's recorded approach: three westward steps to
+(1679,3156), then two northward steps beside Velam at (1679,3158). Recording1695
+ticks2033–2040 supplies both legs; strike390 has delay5 and fall836 delay20.
+The aftermath uses its scene heads12897/12928 (ticks2392–2399); a global name
+lookup had selected generic Guard397. Those bindings apply only to this quest's
+owned aftermath. Azali's two-tile fountain teleport at1541 is also in the
+recording, followed by splash10942/removal at1543, so that sequence is retained.
+
 Quetzal travel uses the cache landing table and interface 874, with saved
 unlocks, locked-destination checks and a single flight at a time. The new camera
 arc packet is encoded and decoded by the server and client together.
+
+Primio's Varrock service lands at (1700,3141,0), separately from Renu's Fortis
+table entry, matching the [pinned RuneLite transport data](https://github.com/Skretzo/shortest-path/blob/65314c02128302402c15c730328030a78ae28f44/src/main/resources/transports/transports.tsv)
+and the [April 2024 landing-site swap](https://oldschool.runescape.wiki/w/Quetzal_Transport_System#Changes).
+Its first-trip and visited varbits are saved individually alongside the quetzal
+snapshot; restoring the whole shared parent varp would overwrite Twilight's Promise progress.
 
 ## The Heart of Darkness (ticks 2423–4992)
 

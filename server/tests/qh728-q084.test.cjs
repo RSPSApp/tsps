@@ -582,12 +582,12 @@ test('real mould destruction refreshes presence after mutation and preserves an 
       inventory.setItem(0, new core.Item(I.LENS_MOULD, 1)); h.login();
       assert.equal(sender.getVarbit(3837), 1);
       DropItemPacketListener.drop(p, I.LENS_MOULD, Inventory.INTERFACE_ID, 0);
-      assert.equal(group, 30005, 'actual non-dropable mould opens registered destruction confirmation');
+      assert.equal(group, 584, 'actual non-dropable mould opens registered destruction confirmation');
       assert.equal(inventory.getAmount(I.LENS_MOULD), 1, 'showing confirmation does not remove the mould');
-      buttons.get((30005 << 16) | 12)({ player: p });
+      buttons.get(584 << 16)({ player: p, action: 0 });
       assert.equal(sender.getVarbit(3837), 1, 'cancelled destruction retains presence');
       DropItemPacketListener.drop(p, I.LENS_MOULD, Inventory.INTERFACE_ID, 0);
-      buttons.get((30005 << 16) | 11)({ player: p });
+      buttons.get(584 << 16)({ player: p, action: 1 });
       assert.equal(inventory.getAmount(I.LENS_MOULD), 0, 'actual confirmation mutates the real inventory');
       assert.equal(sender.getVarbit(3837), banked ? 1 : 0, 'post-discard event reads remaining inventory plus bank');
     }

@@ -663,7 +663,7 @@ class BarbarianAssaultMatch {
     this.queen = null;
     this.queenSpawned = true;
     for (const player of this.players.keys()) {
-      this.api.emitCustomEvent("barbarian-assault:queen-kill", { player });
+      this.api.emitCustomEvent("barbarian-assault:queen-kill", { player, awardPoints: false });
       player.sendMessage("The Penance Queen is dead!");
     }
     this.completeWave(true);

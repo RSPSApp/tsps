@@ -106,7 +106,9 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
 
     const [hideUi, setHideUi] = useState(false);
 
-    const [fps, setFps] = useState(0);
+    // The FPS readout is written straight into its element: as React state it re-rendered this
+    // whole tree (sidebar, HUD, canvas shell) four times a second for a number nothing else reads.
+    const fpsCounterRef = useRef<HTMLDivElement | null>(null);
 
     const [, forceStatsOverlayRefresh] = useState(0);
 
@@ -130,7 +132,11 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
             // Cap React FPS UI updates (~4Hz). Per-RAF setState was thrashing the tree.
             if (now - fpsUiLastMs.current >= 250) {
                 fpsUiLastMs.current = now;
-                setFps(Math.round(renderer.stats.frameTimeFps));
+                const fpsCounter = fpsCounterRef.current;
+                if (fpsCounter) {
+                    const fps = String(Math.round(renderer.stats.frameTimeFps));
+                    if (fpsCounter.textContent !== fps) fpsCounter.textContent = fps;
+                }
                 setCloseCameraActive(osrsClient.runeLite.pluginManager.getPlugin(FirstPersonPlugin)?.isActive() ?? false);
                 if (!hideUi && osrsClient.hoverOverlayEnabled) {
                     forceStatsOverlayRefresh(renderer.stats.frameCount | 0);
@@ -385,7 +391,7 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
                         )}
 
                         <div className="hud right-top">
-                            <div className="fps-counter content-text">{fps}</div>
+                            <div ref={fpsCounterRef} className="fps-counter content-text" />
 
                             {!hideUi && (
                                 <>

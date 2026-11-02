@@ -9,7 +9,6 @@ const OBOR_UNLOCKED_ATTRIBUTE = "giant-lairs:obor-unlocked";
 const OBOR_CHESTS_ATTRIBUTE = "giant-lairs:obor-chests-opened";
 const BRYOPHYTA_UNLOCKED_ATTRIBUTE = "giant-lairs:bryophyta-unlocked";
 const BRYOPHYTA_CHESTS_ATTRIBUTE = "giant-lairs:bryophyta-chests-opened";
-const BURY_WITHOUT_ASKING_ATTRIBUTE = "giant-lairs:bury-without-asking";
 
 /** Per lair: its gate is unlocked for good / how many of its chests were opened. */
 const UNLOCKED_ATTRIBUTE = { obor: OBOR_UNLOCKED_ATTRIBUTE, bryophyta: BRYOPHYTA_UNLOCKED_ATTRIBUTE };
@@ -49,7 +48,7 @@ const toLocation = ({ x, y, z }) => new core.Location(x, y, z ?? 0);
 
 module.exports = {
   init, later, toLocation,
-  UNLOCKED_ATTRIBUTE, CHESTS_ATTRIBUTE, BURY_WITHOUT_ASKING_ATTRIBUTE,
+  UNLOCKED_ATTRIBUTE, CHESTS_ATTRIBUTE,
   get api() { return api; },
   get core() { return core; },
   get data() { return data; },

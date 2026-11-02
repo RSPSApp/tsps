@@ -88,8 +88,9 @@ asks "Enter amount:". "Deposit loot" banks everything and "Dismiss" goes back to
 ## Destroy (captured, Wiki)
 Destroy asks first, through the shared destroy prompt: "Are you sure you want to destroy the bag?",
 then "If you destroy it, the contents will be lost." or, for an empty bag, "The bag is empty. Are you
-sure you want to destroy it?". Once confirmed in the Wilderness, the contents drop to the floor for
-anyone to see, except un-noted food, potions and vials of water, which are destroyed; noted items drop
+sure you want to destroy it?". The shared prompt uses native cache interface 584/script 814: 1/Y confirms,
+2/N cancels, and mouse clicks use the same guarded resume. Once confirmed in the Wilderness, the
+contents drop to the floor for anyone to see, except un-noted food, potions and vials of water, which are destroyed; noted items drop
 (Wiki). Anywhere else, including the Ferox Enclave, everything is lost.
 
 **Not done:** in recording 456 the server refused a destroy with "This doesn't seem like a good place

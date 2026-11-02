@@ -12,6 +12,45 @@ import { loadCache, loadCacheInfos, loadCacheList } from "../scripts/cache/load-
  * rev 241 by archive name with explicit geography references and headed files; from 241 by
  * fixed group ids, region-keyed geography (one file per area), headerless, with loc ids as ints.
  */
+test("a chunk region's geography follows the composite map's entry order, not chunk x/y order", () => {
+    // Each entry's chunk is 64 simple tiles (flags 1, then an underlay id). The Stronghold of
+    // Security lists its chunks out of x/y order; reading the file in x/y order puts every
+    // chunk's tiles under the wrong chunk and scrambles the map.
+    const chunks = [[5, 3], [5, 1], [4, 7], [0, 0]];
+    const bytes = new Int8Array(chunks.length * 64 * 3);
+    let offset = 0;
+    chunks.forEach((_, index) => {
+        for (let tile = 0; tile < 64; tile++) {
+            bytes[offset++] = 1;
+            bytes[offset++] = (1000 + index) >> 8;
+            bytes[offset++] = (1000 + index) & 0xff;
+        }
+    });
+    const entries = chunks.map(([chunkX, chunkY]) => ({
+        kind: 1,
+        minPlane: 0,
+        planes: 1,
+        regionXLow: 0,
+        regionYLow: 0,
+        chunkXLow: 0,
+        chunkYLow: 0,
+        regionX: 29,
+        regionY: 81,
+        chunkX,
+        chunkY,
+        groupId: 7505,
+        fileId: 18,
+        headerless: true,
+        geographyLoaded: false,
+    })) as any[];
+    F.decodeHeaderlessChunkRegion(entries, bytes);
+    entries.forEach((entry, index) => {
+        const tile = ((entry.chunkX * 8) << 6) | (entry.chunkY * 8);
+        assert.equal(entry.floorUnderlayIds[tile], 1000 + index, `chunk ${entry.chunkX},${entry.chunkY}`);
+        assert.equal(entry.geographyLoaded, true);
+    });
+});
+
 test("every world map area, composite map and geography file in the cache decodes", () => {
     const info = loadCacheList(loadCacheInfos()).latest;
     const cache = CacheSystem.fromFiles(info, loadCache(info).files);

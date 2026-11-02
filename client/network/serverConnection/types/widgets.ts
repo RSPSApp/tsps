@@ -35,6 +35,8 @@ export type WidgetServerPayload =
           action: "set_text";
           uid: number;
           text: string;
+          /** Explicit ownership survives cache scripts until released or the group unloads. */
+          serverOwned?: boolean;
       }
     | {
           action: "set_hidden";

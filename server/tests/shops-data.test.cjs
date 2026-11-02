@@ -29,3 +29,14 @@ test('the slayer equipment shop binds the masters on Trade; Rewards is an interf
   // The Rewards option opens the slayer_rewards interface (Slayer.plugin.js), not a shop.
   assert.equal(shops.some((shop) => shop.name === 'Slayer Rewards'), false);
 });
+
+test('the loader keeps stock rows listed at 0, so specialist shops buy them', () => {
+  const { ShopDefinitionLoader } = require('../dist/game/definition/loader/impl/ShopDefinitionLoader');
+  const definition = new ShopDefinitionLoader().toDefinition({
+    id: 999999, name: 'Zero stock test', currency: 'COINS',
+    originalStock: [{ id: 303, amount: 5 }, { id: 317, amount: 0 }, { id: 321, amount: 'x' }, { id: 0, amount: 0 }],
+  }, 'core');
+  assert.deepEqual(definition.getOriginalStock().map(({ id, amount }) => [id, amount]), [[303, 5], [317, 0]]);
+  const gerrant = shops.find((shop) => shop.name === "Gerrant's Fishy Business.");
+  assert.ok(gerrant.originalStock.some(({ id, amount }) => id === 317 && amount === 0), 'Gerrant lists raw shrimps at 0');
+});

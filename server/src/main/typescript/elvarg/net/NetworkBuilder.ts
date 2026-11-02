@@ -650,6 +650,8 @@ export class ClientConnection {
             }
           }
           continue;
+        case "clan_chat":
+        case "clan_channel_action":
         case "friends_chat_action":
         case "private_message":
         case "chat_filter":
@@ -799,12 +801,12 @@ export class ClientConnection {
               this.player,
               EffectSpells.forSpellName(this.resolveSpellName(
                 actionPacket.widgetId, actionPacket.groupId, actionPacket.childId, actionPacket.itemId,
-              ))?.spellId() ?? actionPacket.itemId ?? -1,
+              ))?.spellId() ?? -1,
             )) {
               // Utility and self-cast spells are represented by their cache item id.
             } else if (ArceuusSpells.handleSpell(
               this.player,
-              CacheDefinitions.getSpellName(actionPacket.widgetId, actionPacket.itemId ?? -1),
+              this.resolveSpellName(actionPacket.widgetId, actionPacket.groupId, actionPacket.childId, actionPacket.itemId),
             )) {
               // Arceuus self-cast spells are identified by their cache spell name.
             } else if (actionPacket.groupId === MAIN_INVENTORY_GROUP_ID && actionPacket.itemId != null && actionPacket.slot != null &&
@@ -1368,6 +1370,7 @@ export class ClientConnection {
   }
 
   private resolveSpellName(widgetId: number, groupId: number, childId: number, itemId?: number): string | undefined {
+    if (!CacheDefinitions.isSpellWidgetGroup(groupId)) return undefined;
     const packed = (groupId << 16) | (childId & 0xffff);
     return CacheDefinitions.getSpellName(widgetId, itemId ?? -1) ??
       CacheDefinitions.getSpellName(packed, itemId ?? -1) ??
@@ -1377,20 +1380,36 @@ export class ClientConnection {
   private groundItemAction(packet: Extract<ReturnType<typeof decodeClientPackets>[number], { type: "ground_item_action" }>): void {
     const player = this.player!;
     const option = packet.option?.toLowerCase() ?? "";
+    const actions = CacheDefinitions.getItem(packet.itemId)?.groundActions ?? [];
     if (option === "examine") {
       const definition = ItemDefinition.forId(packet.itemId);
       player.sendMessage(definition.getExamine() || definition.getName());
-    } else if (option === "take" || (!option && (player.getPrivateArea() || packet.optionIndex === 3 || packet.optionIndex == null))) {
-      // A named option other than Take is the item's own, even in a private area (giant
-      // bones' "Bury" is their op3, where Take usually sits).
+      return;
+    }
+    if (option === "take") {
       PickupItemPacketListener.pickup(player, packet.itemId, packet.x, packet.y, packet.stackId);
-    } else {
-      // A named option (the agent MCP) is resolved to its op number, as the client sends it.
-      const named = option
-        ? CacheDefinitions.getItem(packet.itemId)?.groundActions?.findIndex((action) => action?.toLowerCase() === option) ?? -1
-        : -1;
+      return;
+    }
+
+    if (option) {
+      const namedIndex = actions.findIndex((action) => action?.toLowerCase() === option);
+      if (namedIndex < 0) return;
+      // The name must match the cache, and a supplied op number must agree with it.
+      const index = packet.optionIndex ?? namedIndex + 1;
+      if (index !== namedIndex + 1) return;
       SecondGroundItemOptionPacketListener.interact(
-        player, packet.itemId, packet.x, packet.y, packet.optionIndex ?? (named >= 0 ? named + 1 : 2)
+        player, packet.itemId, packet.x, packet.y, index
+      );
+    } else {
+      const index = packet.optionIndex ?? 3;
+      const action = actions[index - 1];
+      if (action?.toLowerCase() === "take" || (index === 3 && !action)) {
+        PickupItemPacketListener.pickup(player, packet.itemId, packet.x, packet.y, packet.stackId);
+        return;
+      }
+      if (!action) return;
+      SecondGroundItemOptionPacketListener.interact(
+        player, packet.itemId, packet.x, packet.y, index
       );
     }
   }

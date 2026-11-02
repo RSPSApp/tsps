@@ -15,8 +15,8 @@
  * cache's repair interface requires each of its three tool/part combinations.
  */
 module.exports = function registerDwarfCannonQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers, Location } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { Skill, ItemIdentifiers, NpcIdentifiers, Location, Animation, CountdownTask, TaskManager, HitDamage, HitMask } = api.core;
+  const { registerQuest, refreshQuestList, startDialogue, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Dwarf Cannon";
   const LAWGOF_PAGE = "Captain Lawgof";
@@ -62,6 +62,19 @@ module.exports = function registerDwarfCannonQuest(api) {
   // Cache gamevals mcannon_railing1_fixed through mcannon_railing6_fixed.
   const RAILING_FIXED_VARBITS = [2240, 2241, 2242, 2243, 2244, 2245];
   const RAILS_REQUIRED = RAILING_FIXED_VARBITS.length;
+  // Cache seq 4190 mcannon_hammer_anim (5 ticks long). Unverified: no rsprox capture of a repair.
+  const RAILING_REPAIR_ANIMATION = 4190;
+  const RAILING_REPAIR_TICKS = 5;
+  // Unverified: neither the Wiki nor a capture gives the chance.
+  const RAILING_REPAIR_SUCCESS_CHANCE = 0.5;
+  const RAILING_FAIL_MAX_DAMAGE = 2;
+  const RAILING_FAIL_MESSAGES = [
+    "Your arm is getting tired.",
+    "You cut yourself on the rusty old railing.",
+    "You accidentally crush your hand in the railing.",
+    "You wrench your back trying to handle the railings.",
+  ];
+  const RAILING_FAIL_CRIES = ["Oooch!", "Ow!", "Urrrgh!", "Gah!"];
 
   const page = (p, variant) => ({ page: p, variant });
   const has = (player, itemId, quantity = 1) => player.getInventory().getAmount(itemId) >= quantity;
@@ -181,6 +194,12 @@ module.exports = function registerDwarfCannonQuest(api) {
     quest.setStage(player, STAGE_REPAIR_RAILINGS);
   }
 
+  /**
+   * Inspect on a broken railing, per the transcript variant
+   * fixing-the-railings-trying-to-fix-a-railing: the attempt, a hammering animation, then a
+   * random success or failure. No rsprox capture covers it, so the animation, its length and the
+   * success chance are unverified.
+   */
   function repairRailing(event) {
     const { player, objectId } = event;
     const stage = quest.getStage(player);
@@ -192,45 +211,81 @@ module.exports = function registerDwarfCannonQuest(api) {
       );
       return true;
     }
-    if (!has(player, ItemIdentifiers.RAILING)) {
-      player.sendMessage("I'm not going to be able to fix this without a new railing. Lawgof should have some spare ones.");
+    const railingIndex = objectId - 15590;
+    if (railingIndex < 0 || railingIndex >= RAILS_REQUIRED) return false;
+    if ((railingMask(player) & (1 << railingIndex)) !== 0) {
+      player.sendMessage("This railing is already fixed.");
       return true;
     }
+    player.sendMessage("This railing is broken and needs to be replaced.");
+    if (!has(player, ItemIdentifiers.RAILING)) {
+      startDialogue(api, player, { npcId: NpcIdentifiers.CAPTAIN_LAWGOF }, [
+        { player: ["I'm not going to be able to fix this without a new railing. Lawgof should have some spare ones."] },
+      ]);
+      return true;
+    }
+    // The transcript's spelling.
+    player.sendMessage("You attempt to repalce the broken railing...");
     if (!has(player, ItemIdentifiers.HAMMER)) {
       player.sendMessage("You will need a hammer to fix the railings.");
       return true;
     }
-    const railingIndex = objectId - 15590;
-    const railingMask = Number(player.getAttribute(RAILS_MASK_ATTRIBUTE)) || 0;
+    player.performAnimation(new Animation(RAILING_REPAIR_ANIMATION));
+    // Keyed to the player's index: walking away or fighting cancels the attempt.
+    TaskManager.submit(new CountdownTask(player.getIndex(), RAILING_REPAIR_TICKS, () => finishRailingRepair(player, railingIndex)));
+    return true;
+  }
+
+  function railingMask(player) {
+    return Number(player.getAttribute(RAILS_MASK_ATTRIBUTE)) || 0;
+  }
+
+  function finishRailingRepair(player, railingIndex) {
+    if (!player.isRegistered() || quest.getStage(player) !== STAGE_REPAIR_RAILINGS) return;
+    const mask = railingMask(player);
     const railingBit = 1 << railingIndex;
-    if (railingIndex < 0 || railingIndex >= RAILS_REQUIRED) return false;
-    if ((railingMask & railingBit) !== 0) {
-      player.sendMessage("This railing is already fixed.");
-      return true;
+    if ((mask & railingBit) !== 0 || !has(player, ItemIdentifiers.RAILING) || !has(player, ItemIdentifiers.HAMMER)) return;
+    if (Math.random() >= RAILING_REPAIR_SUCCESS_CHANCE) {
+      failRailingRepair(player);
+      return;
     }
     player.getInventory().deleteNumber(ItemIdentifiers.RAILING, 1);
-    player.setAttribute(RAILS_MASK_ATTRIBUTE, railingMask | railingBit);
+    player.setAttribute(RAILS_MASK_ATTRIBUTE, mask | railingBit);
     player.getPacketSender().sendVarbit(RAILING_FIXED_VARBITS[railingIndex], 1);
     const fixed = (Number(player.getAttribute(RAILS_ATTRIBUTE)) || 0) + 1;
     player.setAttribute(RAILS_ATTRIBUTE, fixed);
+    player.sendMessage("This railing is now fixed.");
     if (fixed >= RAILS_REQUIRED) {
-      player.sendMessage("This railing is now fixed. I've fixed all these railings now.");
       quest.setStage(player, STAGE_CHECK_WATCHTOWER);
-    } else {
-      player.sendMessage("This railing is now fixed.");
+      startDialogue(api, player, { npcId: NpcIdentifiers.CAPTAIN_LAWGOF }, [{ player: ["I've fixed all these railings now."] }]);
     }
-    return true;
+  }
+
+  /** The transcript's failure: one of four messages, 0-2 damage and one of four overhead cries. */
+  function failRailingRepair(player) {
+    player.sendMessage(pick(RAILING_FAIL_MESSAGES));
+    const damage = Math.floor(Math.random() * (RAILING_FAIL_MAX_DAMAGE + 1));
+    player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, damage > 0 ? HitMask.RED : HitMask.BLUE)]);
+    player.forceChat(pick(RAILING_FAIL_CRIES));
+  }
+
+  function pick(values) {
+    return values[Math.floor(Math.random() * values.length)];
   }
 
   function takeRemains({ player }) {
     const stage = quest.getStage(player);
     if (stage < STAGE_FIND_CAVE || stage >= STAGE_FIND_LOLLK) return true;
+    // finding-the-remains-picking-up-the-remains: both lines are the player's.
     if (has(player, ItemIdentifiers.DWARF_REMAINS)) {
-      player.sendMessage("What? Carrying one set of Dwarf remains is enough...");
+      startDialogue(api, player, { npcId: NpcIdentifiers.CAPTAIN_LAWGOF }, [
+        { player: ["What? Carrying one set of Dwarf remains is enough..."] },
+      ]);
       return true;
     }
     player.getInventory().adds(ItemIdentifiers.DWARF_REMAINS, 1);
     player.sendMessage("You take the dwarf remains.");
+    startDialogue(api, player, { npcId: NpcIdentifiers.CAPTAIN_LAWGOF }, [{ player: ["I had better take these remains."] }]);
     return true;
   }
 

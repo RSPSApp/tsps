@@ -1605,7 +1605,7 @@ export class CombatFactory {
         // BAD LOOP
         for (let d of rangedWeapon.getAmmunitionData()) {
             if (d == ammoData) {
-                if (ItemAliases.same(d.getItemId(), ammoSlotItem.getId())) {
+                if (Ammunition.getForItem(ammoSlotItem.getId()) === d) {
                     properReq = true;
                     break;
                 }

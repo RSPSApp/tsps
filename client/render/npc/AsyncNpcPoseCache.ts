@@ -20,6 +20,8 @@ export class AsyncNpcPoseCache {
     private readonly shownAt = new Map<string, number>();
     private readonly retryAt = new Map<string, number>();
     private context = "";
+    private loaderContext = "";
+    private generationSeen = -1;
     private generation = 0;
     private textures: Array<[number, number]> = [];
     private readonly active = new Map<string, { controller: AbortController; job: Job }>();
@@ -37,7 +39,13 @@ export class AsyncNpcPoseCache {
         private readonly gpuResident?: (key: string) => boolean) {}
 
     private syncContext(): void {
-        const context = `${this.loader.getContextKey()}:${this.pool.npcPoseGeneration}`;
+        // Twice per actor per frame: only build the string when either input moved.
+        const loaderContext = this.loader.getContextKey();
+        const generation = this.pool.npcPoseGeneration;
+        if (loaderContext === this.loaderContext && generation === this.generationSeen) return;
+        this.loaderContext = loaderContext;
+        this.generationSeen = generation;
+        const context = `${loaderContext}:${generation}`;
         if (context !== this.context) {
             this.cancel();
             this.context = context;

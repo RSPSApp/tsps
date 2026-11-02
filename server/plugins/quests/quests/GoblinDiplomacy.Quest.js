@@ -1,6 +1,6 @@
 /** Goblin Diplomacy: revision 240 capture 20260817T005704 and the OSRS Wiki. */
 module.exports = function registerGoblinDiplomacyQuest(api) {
-  const { Skill, Location, Animation, CountdownTask, TaskManager, TemplatedInstanceArea, StatementDialogue, ItemStatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Skill, Location, Animation, CountdownTask, TaskManager, TemplatedInstanceArea, StatementDialogue, ItemStatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, Direction } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
 
   const GENERAL_BENTNOZE_NPC_ID = NpcIdentifiers.GENERAL_BENTNOZE;
@@ -308,9 +308,10 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
     }));
   }
 
-  function actor(player, state, id, x, y) {
+  /** The generals stand east of Grubfoot and face west; he faces east, toward them and the camera. */
+  function actor(player, state, id, x, y, face = Direction.WEST) {
     const tile = state.area.sourceTile(x, y);
-    const npc = api.spawnNpc({ id, x: tile.getX(), y: tile.getY(), z: 0, face: 3, owner: player, ownerOnly: true, wanderRadius: 0 });
+    const npc = api.spawnNpc({ id, x: tile.getX(), y: tile.getY(), z: 0, face: face.getId(), owner: player, ownerOnly: true, wanderRadius: 0 });
     if (npc) state.area.add(npc);
     return npc;
   }
@@ -338,7 +339,7 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
       state.area.enter(player); player.moveTo(state.area.sourceTile(2944, 3504));
       actor(player, state, NpcIdentifiers.GENERAL_BENTNOZE_7, 2958, 3512);
       actor(player, state, NpcIdentifiers.GENERAL_WARTFACE_7, 2958, 3511);
-      state.grubfoot = actor(player, state, stage === STAGE_STARTED ? NpcIdentifiers.GRUBFOOT_5 : stage === STAGE_ORANGE_REJECTED ? NpcIdentifiers.GRUBFOOT_6 : NpcIdentifiers.GRUBFOOT_7, 2954, 3511);
+      state.grubfoot = actor(player, state, stage === STAGE_STARTED ? NpcIdentifiers.GRUBFOOT_5 : stage === STAGE_ORANGE_REJECTED ? NpcIdentifiers.GRUBFOOT_6 : NpcIdentifiers.GRUBFOOT_7, 2954, 3511, Direction.EAST);
     });
     later(player, state, 2, () => {
       const at = state.area.sourceTile(2961, 3514), look = state.area.sourceTile(2957, 3512);
@@ -353,18 +354,23 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
     if (object) player.getPacketSender().sendObjectAnimation(object, new Animation(animation));
   }
 
+  /**
+   * Grubfoot walks to the curtain, steps through it while it is open, changes, and walks back
+   * out. The curtain is a wall the walk queue cannot pass, so the step through it is an exact
+   * move, which glides him across and turns him the way he goes (west in, east out).
+   */
   function changeArmour(player, state, marker) {
     state.grubfoot?.getMovementQueue().addFirstStep(state.area.sourceTile(2954, 3511));
     later(player, state, 3, () => curtain(player, state, 4346));
-    later(player, state, 4, () => state.grubfoot?.moveTo(state.area.sourceTile(2953, 3511)));
+    later(player, state, 4, () => state.grubfoot?.exactMove(state.area.sourceTile(2953, 3511)));
     later(player, state, 5, () => curtain(player, state, 4347));
     later(player, state, 9, () => {
       if (state.grubfoot) api.removeNpc(state.grubfoot);
-      state.grubfoot = actor(player, state, state.stage === STAGE_STARTED ? NpcIdentifiers.GRUBFOOT_6 : state.stage === STAGE_ORANGE_REJECTED ? NpcIdentifiers.GRUBFOOT_7 : NpcIdentifiers.GRUBFOOT_5, 2953, 3511);
+      state.grubfoot = actor(player, state, state.stage === STAGE_STARTED ? NpcIdentifiers.GRUBFOOT_6 : state.stage === STAGE_ORANGE_REJECTED ? NpcIdentifiers.GRUBFOOT_7 : NpcIdentifiers.GRUBFOOT_5, 2953, 3511, Direction.EAST);
       curtain(player, state, 4346);
     });
-    later(player, state, 10, () => state.grubfoot?.moveTo(state.area.sourceTile(2954, 3511)));
-    later(player, state, 11, () => { state.grubfoot?.moveTo(state.area.sourceTile(2955, 3511)); curtain(player, state, 4347); });
+    later(player, state, 10, () => state.grubfoot?.exactMove(state.area.sourceTile(2954, 3511)));
+    later(player, state, 11, () => { state.grubfoot?.getMovementQueue().addFirstStep(state.area.sourceTile(2955, 3511)); curtain(player, state, 4347); });
     resume(player, state, 12, marker);
   }
 

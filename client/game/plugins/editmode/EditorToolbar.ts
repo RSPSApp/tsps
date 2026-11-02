@@ -249,6 +249,12 @@ export const createSaveIcon = (): SVGElement =>
 export const createRefreshIcon = (): SVGElement =>
     createActionIcon("M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16M16 16h5v5");
 
+export const createUndoIcon = (): SVGElement =>
+    createActionIcon("M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11");
+
+export const createRedoIcon = (): SVGElement =>
+    createActionIcon("M15 14l5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13");
+
 export const createRotateIcon = (): SVGElement =>
     createActionIcon("M20 11a8 8 0 0 0-14.8-4L3 9m0 0V4m0 5h5M4 13a8 8 0 0 0 14.8 4L21 15m0 0v5m0-5h-5");
 
@@ -263,6 +269,51 @@ export const createLayersIcon = (): SVGElement =>
 
 export const createPaintIcon = (): SVGElement =>
     createActionIcon("M14 4.5 19.5 10l-9.8 9.8a3 3 0 0 1-4.2-4.2L15.3 5.8M4 20h5");
+
+let overlayShapeClipCount = 0;
+
+/**
+ * One tile from above, north up. The part of the tile a shape's overlay covers shows the paint;
+ * the pale rest stands in for the underlay, so a shape reads even in a dark paint.
+ */
+export const createOverlayShapeIcon = (
+    triangles: readonly (readonly [number, number])[][],
+    color: string,
+    texture?: string,
+): SVGElement => {
+    const namespace = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(namespace, "svg");
+    svg.setAttribute("viewBox", "0 0 1 1");
+    svg.setAttribute("width", "26");
+    svg.setAttribute("height", "26");
+    svg.setAttribute("aria-hidden", "true");
+    const tile = document.createElementNS(namespace, "rect");
+    tile.setAttribute("width", "1");
+    tile.setAttribute("height", "1");
+    tile.setAttribute("fill", "#cbd5e1");
+    tile.setAttribute("fill-opacity", "0.35");
+    svg.appendChild(tile);
+    const clipPath = document.createElementNS(namespace, "clipPath");
+    clipPath.id = `overlay-shape-clip-${overlayShapeClipCount++}`;
+    for (const triangle of triangles) {
+        const polygon = document.createElementNS(namespace, "polygon");
+        polygon.setAttribute("points", triangle.map(([x, y]) => `${x},${1 - y}`).join(" "));
+        clipPath.appendChild(polygon);
+    }
+    svg.appendChild(clipPath);
+    const paint = document.createElementNS(namespace, texture ? "image" : "rect");
+    paint.setAttribute("width", "1");
+    paint.setAttribute("height", "1");
+    paint.setAttribute("clip-path", `url(#${clipPath.id})`);
+    if (texture) {
+        paint.setAttribute("href", texture);
+        paint.setAttribute("preserveAspectRatio", "none");
+    } else {
+        paint.setAttribute("fill", color);
+    }
+    svg.appendChild(paint);
+    return svg;
+};
 
 export const createOverlayIcon = (colorRgb = 0x64748b, texture?: string): SVGElement => {
     const namespace = "http://www.w3.org/2000/svg";

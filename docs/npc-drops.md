@@ -14,9 +14,9 @@ Loot that depends on where or what the NPC was rather than its table is added by
 
 Tertiary drops can be made likelier per kill on `npc-drops:tertiary-chance` { player, npc, npcId, rules }, emitted once per kill before the tertiary rolls (only when the table has any): a listener pushes `{ pattern, multiplier }`, and each entry whose name matches is that many times as likely. An imbued ring of wealth adds ×2 for clue scrolls in the Wilderness; Mortimer's clue tasks add theirs ([slayer.md](slayer.md)).
 
-Any entry can be made likelier per kill on `npc-drops:chance` { player, npc, npcId, source, rules }, emitted once per roll before anything is rolled: a listener pushes `{ pattern, multiplier }` as above (`pattern` needs only a `test(name)`), and every entry whose name matches - pre-roll, main roll, separate rolls, tertiary - is that many times as likely. `source` is the NPC's name, or what a `npc-drops:roll-table` request passed as `source` (a chest has no NPC). In the weighted rolls the entry's weight is multiplied and the pool grows by what was added, so w/N becomes mw/(N + (m-1)w) and the other entries keep their weights (1/512 at 5x is 5/516); the boss rare multiplier below still stays out of the weighted rolls. A league's boosted drops answer this ([server/docs/leagues.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/leagues.md)); rollers outside NpcDrops (superior Slayer monsters' uniques, Treasure Trails caskets) ask the same shape as `drops:chance` { player, source, rules }.
+Any entry can be made likelier per kill on `npc-drops:chance` { player, npc, npcId, source, rules }, emitted once per roll before anything is rolled: a listener pushes `{ pattern, multiplier }` as above (`pattern` needs only a `test(name)`), and every entry whose name matches - pre-roll, main roll, separate rolls, tertiary - is that many times as likely. `source` is the NPC's name, or what a `npc-drops:roll-table` request passed as `source` (a chest has no NPC). In the weighted rolls the entry's weight is multiplied and the pool grows by what was added, so w/N becomes mw/(N + (m-1)w) and the other entries keep their weights (1/512 at 5x is 5/516); the boss rare multiplier below rolls those entries on their own instead. A league's boosted drops answer this ([server/docs/leagues.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/leagues.md)); rollers outside NpcDrops (superior Slayer monsters' uniques, Treasure Trails caskets) ask the same shape as `drops:chance` { player, source, rules }.
 
-A boss's rare drops can be made likelier world-wide with `pluginConfig` `"NpcDrops:bossRareMultiplier"` ([world-configuration.md](world-configuration.md)). Tables of NPCs the cache marks as bosses (param 1361) get `boss: true` on load, and their pre-roll, separate and tertiary entries rarer than 1/100 roll that many times likelier, on top of any tertiary multiplier. The main weighted roll is left alone. Raid and other reward chests roll their own loot and are not affected.
+A boss's uniques can be made likelier world-wide with `pluginConfig` `"NpcDrops:bossRareMultiplier"` ([world-configuration.md](world-configuration.md)). Tables of NPCs the cache marks as bosses (param 1361), plus the bosses `npc-drop-overrides.json` lists under `bossNpcs`, get `boss: true` on load. An eligible row must be an individual item rarer than 1/10, and either be in a unique section or appear in the cache's boss collection-log tab (which includes rings, pets, jars and visages even when their drop sections are not called "Uniques"). Rarity or pre-roll placement alone never qualifies a row: ordinary supplies, equipment, clue scrolls and shared drop tables keep their rates. The cache lookup is independent of whether the Collection Log plugin is enabled. Eligible rows roll that many times likelier, on top of any tertiary multiplier. Pre-roll, separate and tertiary rows are rolled as before; a unique on the main weighted roll is rolled separately at its boosted chance, so ordinary main loot keeps its exact rate. Raid and other reward chests roll their own loot and are not affected.
 
 ## Regenerating
 
@@ -63,11 +63,13 @@ The browser host's **Content > NPC Drops** tab saves to `npc-drops-custom.json`,
 
 | Key | Does |
 | --- | --- |
-| `tables.<id>.setEntries` | dump row rates changed, keyed `field:index` |
+| `tables.<id>.setEntries` | dump row rates (`weight`, `out_of`) and `quantity` changed, keyed `field:index` |
 | `tables.<id>.removeEntries` | dump rows removed, by `{ field, index }` |
 | `tables.<id>.addEntries` / `addTertiary` | rows added |
 
 Rows are addressed by their position in the dump, so regenerating `npc-drops.json` can move a world's edits onto different rows. `hits()` only rolls whole-number `out_of` values, so independent rows keep whole-number rates; main rows may use fractional weights.
+
+`quantity` is `[min, max]`, whole numbers from 1, with `min` equal to `max` for a fixed amount; anything else is ignored and the row keeps its quantity. It replaces the row's conditional amounts (`quantity_alternatives`), such as more ashes at a preferred location, so the edited amount applies on every kill. Non-stackable items land as one ground item each, so a large quantity on an unnoted item floods the tile.
 
 ## The 2026-10-07 refresh
 

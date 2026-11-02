@@ -844,8 +844,9 @@ export class ShopManager {
         return removed;
     }
 
+    /** A shop buys what it lists, including items it lists at 0 (Gerrant's raw fish). */
     private static buysItem(shop: RuntimeShop, itemId: number): boolean {
-        return this.isGeneralStore(shop) || (shop.originalAmounts.get(itemId) ?? 0) > 0;
+        return this.isGeneralStore(shop) || shop.originalAmounts.has(itemId);
     }
 
     private static isBloodMoneyShopItem(itemId: number): boolean {

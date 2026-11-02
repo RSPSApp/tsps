@@ -619,3 +619,38 @@ test('the arena is multi-combat: several enemies may hit one player, the lobby a
   area.mock.restore();
   assert.equal(CombatFactory.canAttackPermission(second, target), CanAttackResponse.CAN_ATTACK);
 });
+
+test('ending and resetting a match clears both native Castle Wars team flags', t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  let resets = 0;
+  registry.emitCustomEvent = name => { if (name === 'castlewars:reset') resets++; };
+  t.after(() => { delete registry.emitCustomEvent; game.gameArea.players.length = 0; });
+  t.mock.method(World, 'getItems', () => []);
+  const participants = Object.values(TEAM).map((team, i) => {
+    const p = new Player(null, new core.Location(2400 + i, 3104));
+    const vars = new Map();
+    const sender = new Proxy({ sendVarbit(id, value) { vars.set(id, value); return sender; } },
+      { get: (target, key) => target[key] ?? (() => sender) });
+    t.mock.method(p, 'getPacketSender', () => sender);
+    t.mock.method(p, 'smartMove', () => {});
+    game.setTeamId(p, team);
+    game.waitingAreas[team].players.push(p);
+    return { p, vars, team };
+  });
+  game.beginStartCountdown();
+  submittedTasks.at(-1).execute();
+  assert.equal(game.getPhase(), game.PHASE.ACTIVE);
+  for (const { p, team } of participants) {
+    game.waitingAreas[team].players.length = 0;
+    game.gameArea.players.push(p);
+    game.setVar(p, team === TEAM.SARADOMIN ? 144 : 154, 1, true);
+  }
+  game.endGame();
+  assert.equal(game.getPhase(), game.PHASE.IDLE);
+  assert.equal(resets, 2, 'both start and end used the real match reset');
+  for (const { p, vars } of participants) {
+    assert.equal(game.getTeamId(p), null);
+    assert.equal(vars.get(144), 0);
+    assert.equal(vars.get(154), 0);
+  }
+});

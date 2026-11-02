@@ -57,7 +57,7 @@ function closed({ player, state }) {
   player.sendMessage(Shared.highlight(player, "gre", "The Great Guardian successfully closed the rift!"));
   player.sendMessage(`Amount of rifts you have closed: <col=ff0000>${Shared.formatNumber(rifts)}</col>.`);
   player.sendMessage(`Elemental energy attuned: ${red(elemental)}. Catalytic energy attuned: ${red(catalytic)}.`);
-  player.sendMessage(`Total elemental energy: ${red(total.elemental)}. Total catalytic energy: ${red(total.catalytic)}.`);
+  player.sendMessage(`Total elemental energy: ${red(total.elemental)}. Total catalytic energy:  ${red(total.catalytic)}.`);
   if (earned) awardXp(player);
   const pearls = awardPearls(player, state);
   Shared.api().emitCustomEvent("collection-log:count", { player, category: "Guardians of the Rift" });

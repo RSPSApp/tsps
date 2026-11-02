@@ -9,14 +9,14 @@
  * the latest value per component and property waits, and is applied when the interface loads.
  */
 export class HeldWidgetProperties {
-    private readonly byGroup = new Map<number, Map<string, { uid: number }>>();
+    private readonly byGroup = new Map<number, Map<string, { uid: number; serverOwned?: boolean }>>();
 
     get size(): number {
         return this.byGroup.size;
     }
 
     /** Holds a payload, replacing an earlier one for the same component and property. */
-    hold(payload: { action: string; uid: number }): void {
+    hold(payload: { action: string; uid: number; serverOwned?: boolean }): void {
         const groupId = (payload.uid >>> 16) & 0xffff;
         let held = this.byGroup.get(groupId);
         if (!held) {
@@ -24,6 +24,10 @@ export class HeldWidgetProperties {
             this.byGroup.set(groupId, held);
         }
         const key = `${payload.action}:${payload.uid | 0}`;
+        const previous = held.get(key);
+        if (payload.serverOwned === undefined && previous?.serverOwned !== undefined) {
+            payload = { ...payload, serverOwned: previous.serverOwned };
+        }
         // Re-inserting keeps arrival order for the latest value.
         held.delete(key);
         held.set(key, payload);

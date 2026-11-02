@@ -57,6 +57,17 @@ function powerUp(event) {
   return true;
 }
 
+const IDLE_FLOURISH_TICKS = 50;
+const IDLE_FLOURISH_SEQ = 9372;
+
+/** Capture 1840: the Guardian's idle flourish every 50 ticks while a game runs. */
+function idleFlourish() {
+  const clock = Game.clock();
+  if (clock === 0 || clock % IDLE_FLOURISH_TICKS !== 0) return;
+  const npc = Game.greatGuardian();
+  if (npc?.isRegistered()) npc.performAnimation(new (Shared.core().Animation)(IDLE_FLOURISH_SEQ));
+}
+
 function feed(player, npc) {
   if (!player.isRegistered() || !Game.isPlaying(player) || resting()) return;
   Shared.animate(player, "human_runecraft_walkmerge");
@@ -103,5 +114,6 @@ module.exports = {
   attach(api) {
     api.onNpcInteraction("The Great Guardian", { "Power-up": powerUp });
     api.onNpcDialogueCondition(answerCondition);
+    Game.on("tick", idleFlourish);
   },
 };

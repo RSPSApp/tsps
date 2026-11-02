@@ -75,7 +75,9 @@ module.exports = function registerMorrigansJavelinSpecialAttack(api) {
       CombatSpecial.drain(player, DRAIN);
       player.performAnimation(ANIMATION);
       Sounds.sendSound(character, Sound.THROW_DART);
-      Projectile.createProjectile(character, target, 1622, 30, 60, 40, 36).sendProjectile();
+      // Phantom Strike throws Morrigan's own javelin (SpotanimID.MORRIGANS_JAVELIN_TRAVEL 1620);
+      // 1622 is Araxxor's magic projectile.
+      Projectile.createProjectile(character, target, 1620, 30, 60, 40, 36).sendProjectile();
       MorrigansJavelinCombatMethod.decrementThrownWeapon(player, 1);
     }
 

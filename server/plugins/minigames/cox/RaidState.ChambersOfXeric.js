@@ -317,17 +317,22 @@ class Raid {
   /** The party tab replaces the chat-channel tab, and the points overlay goes up. */
   showRaidHud(player) {
     const sender = player.getPacketSender();
-    sender.sendSubInterface(Shared.CHAT_CHANNEL_TAB_UID, Shared.INTERFACE.PARTY_TAB, 1);
+    Shared.api().emitCustomEvent("side-channels:replace-chat-channel", {
+      player,
+      group: Shared.INTERFACE.PARTY_TAB,
+      onMount: () => {
+        sender.sendInterfaceFlagsRange((Shared.INTERFACE.PARTY_TAB << 16) | 14, 0, 0, Shared.EVENT.OP1);
+        this.refreshTab(player);
+      },
+    });
     sender.sendSubInterface(Shared.OVERLAY_UID, Shared.INTERFACE.OVERLAY, 1);
-    sender.sendInterfaceFlagsRange((Shared.INTERFACE.PARTY_TAB << 16) | 14, 0, 0, Shared.EVENT.OP1);
     sender.sendVarbit(Shared.VARBIT.TAB_ICON, 1).sendVarbit(Shared.VARBIT.TAB_ICON_2, 2);
     this.refreshPoints(player);
-    this.refreshTab(player);
   }
 
   hideRaidHud(player) {
     const sender = player.getPacketSender();
-    sender.sendSubInterface(Shared.CHAT_CHANNEL_TAB_UID, Shared.INTERFACE.FRIENDS_CHAT, 1);
+    Shared.api().emitCustomEvent("side-channels:replace-chat-channel", { player, group: null });
     sender.closeSubInterface(Shared.OVERLAY_UID);
     sender.sendVarbit(Shared.VARBIT.TAB_ICON, 0).sendVarbit(Shared.VARBIT.STAGE, 0);
     sender.sendConfig(Shared.VARP.RAID_STATE, 0);

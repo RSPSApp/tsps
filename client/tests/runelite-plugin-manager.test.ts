@@ -6,6 +6,7 @@ import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { EventBus } from "@runelite/client/eventbus/EventBus";
 import { Plugin } from "@runelite/client/plugins/Plugin";
 import { PluginManager } from "@runelite/client/plugins/PluginManager";
+import { ItemStatsPlugin } from "../game/plugins/itemstats/ItemStatsPlugin";
 
 class MemoryStorage implements ConfigStorage {
     private readonly values = new Map<string, string>();
@@ -28,6 +29,14 @@ class MemoryStorage implements ConfigStorage {
 
 async function main(): Promise<void> {
     const events: string[] = [];
+
+    class TestItemStatsPlugin extends ItemStatsPlugin {
+        static descriptor = ItemStatsPlugin.descriptor;
+
+        constructor() {
+            super({} as any);
+        }
+    }
 
     class TestPluginA extends Plugin {
         static descriptor = {
@@ -90,6 +99,25 @@ async function main(): Promise<void> {
 
     assert.equal(manager.getState(FailingPlugin), "failed");
     assert.equal(manager.getFailure(FailingPlugin), "nope");
+
+    const itemStatsStorage = new MemoryStorage();
+    const itemStatsBus = new EventBus();
+    const itemStatsConfig = new ConfigManager(itemStatsBus, itemStatsStorage);
+    const itemStatsManager = new PluginManager(itemStatsBus, itemStatsConfig);
+    itemStatsManager.loadCorePlugins([TestItemStatsPlugin]);
+    assert.equal(itemStatsManager.isEnabled(TestItemStatsPlugin), false, "Item Stats is disabled for new profiles");
+    await itemStatsManager.setPluginEnabled(TestItemStatsPlugin, true);
+    assert.equal(itemStatsManager.isEnabled(TestItemStatsPlugin), true, "Item Stats can be enabled");
+    await itemStatsManager.setPluginEnabled(TestItemStatsPlugin, false);
+    assert.equal(itemStatsManager.isEnabled(TestItemStatsPlugin), false, "Item Stats can be disabled again");
+
+    const optedInStorage = new MemoryStorage();
+    const optedInBus = new EventBus();
+    const optedInConfig = new ConfigManager(optedInBus, optedInStorage);
+    optedInConfig.setConfiguration("runelite", "itemstatsplugin", "true");
+    const optedInManager = new PluginManager(optedInBus, optedInConfig);
+    optedInManager.loadCorePlugins([TestItemStatsPlugin]);
+    assert.equal(optedInManager.isEnabled(TestItemStatsPlugin), true, "an existing enabled preference stays enabled");
 
     const pendingStarts: Array<() => void> = [];
     let ticks = 0;

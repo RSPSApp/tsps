@@ -5,6 +5,9 @@ const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 before(async () => {
   await require('../dist/game/cache/CachePipeline').CachePipeline.initialize();
+  require('../plugins/bots/behaviours/pvp/PvpTierLoadouts.PlayerBots').initPvpTierLoadouts({
+    core: require('../dist/plugins/PluginManager').PluginManager.getCoreApi(),
+  });
   require('../plugins/items/ItemDefinitionLoader.plugin').register({
     log() {}, onPlayerLogin() {}, registerContentEndpoint() {},
   });

@@ -3,18 +3,13 @@ import type { WidgetInputControllerDeps } from "./widgetInputTypes";
 import type { WidgetInteractionController } from "../WidgetInteractionController";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
 import { ClientState } from "../../ClientState";
-import {
-    chooseDefaultMenuEntry,
-    getShiftClickActionIndex,
-    type DefaultChoiceState,
-} from "../../../ui/menu/MenuEngine";
+import { chooseDefaultMenuEntry, type DefaultChoiceState } from "../../../ui/menu/MenuEngine";
 import {
     deriveMenuEntriesForWidget,
     getWidgetTargetLabelForMenu,
     hasNativeWidgetOperation,
     sanitizeText,
 } from "../../../widgets/menu/utils";
-import { resolveWidgetIdentifiers } from "../widgetActionPayload";
 
 export type PrimaryWidgetAction = {
     option: string;
@@ -37,11 +32,6 @@ export function createPrimaryWidgetActionResolver(
     const getPrimaryWidgetAction = (
         w: any,
     ): { option: string; target: string; slot?: number; itemId?: number; opIndex?: number } => {
-        const uid = typeof w?.uid === "number" ? w.uid | 0 : 0;
-        const ids = resolveWidgetIdentifiers(widgetManager, w);
-        const resolvedGroupId =
-            (ids?.groupId ??
-                (typeof w?.groupId === "number" ? w.groupId | 0 : (uid >>> 16) | 0)) | 0;
         // Prefer deriving options from the parent widget for dynamic children only when the parent
         // holds the ops (e.g., equipped item icons inside equipment slot components).
         // For dynamic children (fileId=-1), check if parent has menu ops.
@@ -110,30 +100,10 @@ export function createPrimaryWidgetActionResolver(
             // normalizeMenuEntries expects OSRS insertion order and would reverse widget ops
             // (e.g., minimap orbs), breaking primary click selection.
             const normalized = derived as any[];
-            const isShiftHeld = input.isShiftDown();
-            const hasSelection =
-                ClientState.isSpellSelected || ClientState.isItemSelected === 1;
-            // shift-click uses the item's configured shiftClickIndex (opcode 42) when enabled.
-            // Inventory shift-click drop only applies to the inventory interface (group 149).
-            let shiftClickActionIndex: number | undefined;
-            if (
-                isShiftHeld &&
-                deps.getSettings().shiftClickEnabled &&
-                (resolvedGroupId | 0) === 149 &&
-                typeof w?.itemId === "number" &&
-                (w.itemId | 0) > 0
-            ) {
-                try {
-                    const obj = deps.getObjTypeLoader()?.load?.(w.itemId | 0);
-                    const idx = getShiftClickActionIndex(obj);
-                    if (idx >= 0) shiftClickActionIndex = idx;
-                } catch {}
-            }
+            // Shift-click drop is already in the order (transformWidgetMenuEntries).
             const state: DefaultChoiceState = {
                 hasSelectedSpell: ClientState.isSpellSelected,
                 hasSelectedItem: ClientState.isItemSelected === 1,
-                isShiftHeld,
-                shiftClickActionIndex,
             };
             const chosen = chooseDefaultMenuEntry(normalized, state);
             const lower = String(chosen?.option || "").toLowerCase();
@@ -151,29 +121,6 @@ export function createPrimaryWidgetActionResolver(
                         : undefined;
             }
 
-            // Shift-click drop overrides the inventory item's primary option only when
-            // no spell/item selection is active.
-            if (
-                isShiftHeld &&
-                deps.getSettings().shiftClickEnabled &&
-                !hasSelection &&
-                (resolvedGroupId | 0) === 149
-            ) {
-                const dropEntry = Array.isArray(normalized)
-                    ? (normalized as any[]).find((e) => {
-                          const l = String(e?.option || "").toLowerCase();
-                          return l === "drop" || l === "destroy" || l === "release";
-                      })
-                    : undefined;
-                if (dropEntry?.option) {
-                    entryOption = String(dropEntry.option);
-                    entryTarget = dropEntry.target;
-                    entryOpIndex =
-                        typeof dropEntry.opIndex === "number"
-                            ? dropEntry.opIndex | 0
-                            : undefined;
-                }
-            }
         } catch {}
         const fallbackActionFromWidgetActions = (): string | undefined => {
             const actions: Array<string | null | undefined> = Array.isArray(w?.actions)

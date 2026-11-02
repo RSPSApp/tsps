@@ -57,6 +57,7 @@ module.exports = {
     TaskManager = api.getTaskManager();
     Presets.register(api);
     api.registerCommand("presets", openPresets, undefined, "Open the presets interface");
+    api.registerCommand("kits", openPresets, undefined, "Open the presets interface");
     api.onPlayerDefeated(openPresetsAfterDeath);
     api.onCustomEvent("prayer:unlocks-bypass", bypassPrayerUnlocks);
   },

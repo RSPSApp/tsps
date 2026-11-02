@@ -19,6 +19,9 @@ const routes = Bots._test.buildRoutes(core, TEAM);
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  require('../plugins/bots/behaviours/pvp/PvpTierLoadouts.PlayerBots').initPvpTierLoadouts({
+    core: require('../dist/plugins/PluginManager').PluginManager.getCoreApi(),
+  });
   RegionManager.init();
   RegionManager.loadMapFiles(2390, 3086);
 });

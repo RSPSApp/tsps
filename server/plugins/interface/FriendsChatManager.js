@@ -3,6 +3,8 @@ const { World } = require("../../src/main/typescript/elvarg/game/World");
 const { encodeChatMessage, encodeFriendsChatSnapshot } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 const { Misc } = require("../../src/main/typescript/elvarg/util/Misc");
 const { PlayerPunishment } = require("../../src/main/typescript/elvarg/util/PlayerPunishment");
+const { Task } = require("../../src/main/typescript/elvarg/game/task/Task");
+const { TaskManager } = require("../../src/main/typescript/elvarg/game/task/TaskManager");
 const FriendsChatRank = {
     Unranked: -1,
     Friend: 0,
@@ -22,6 +24,11 @@ const FRIENDS_CHAT_MESSAGE_TYPE = 9;
 const CHAT_FILTERS_ATTRIBUTE = "chat.filters";
 const CLAN_CHAT_ATTRIBUTE = "clan-chat:channel";
 const FRIENDS_CHAT_NOTIFICATION_TYPE = 11;
+const SETUP_NOTICE_MESSAGE_TYPE = 30;
+/** rsprox 754 and 753: setup changes reach the channel 100 ticks after the first one. */
+const SETUP_CHANGE_TICKS = 100;
+/** rsprox 763: a join is answered on the next tick. */
+const JOIN_DELAY_TICKS = 1;
 const MAIN_MODAL_TARGET_UID = (161 << 16) | 16;
 const SOCIAL_TAB_TARGET_UID = (161 << 16) | 85;
 const RANK_OPTIONS = [
@@ -75,6 +82,17 @@ function optionFromWidget(groupId, componentId, opId) {
         return RANK_OPTIONS[opId - 1];
     return undefined;
 }
+function afterTicks(ticks, action) {
+    TaskManager.submit(new (class extends Task {
+        constructor() {
+            super(ticks);
+        }
+        execute() {
+            this.stop();
+            action();
+        }
+    })());
+}
 function rankLabel(rank) {
     return RANK_OPTIONS[Math.max(-1, Math.min(7, rank)) + 1] ?? "Anyone";
 }
@@ -87,7 +105,7 @@ class FriendsChatManager {
         if (!bot.isPlayerBot() || owner.isPlayerBot())
             return false;
         if (!owner.getRelations().getFriendsChatChannelName()) {
-            this.gameMessage(owner, "Set up a clan chat first to recruit bots.");
+            this.gameMessage(owner, "Set up a chat-channel first to recruit bots.");
             return false;
         }
         if (!this.join(owner, owner.getUsername(), true))
@@ -104,6 +122,10 @@ class FriendsChatManager {
     static membershipByPlayer = new Map();
     static temporaryBans = new Map();
     static offlinePlayerIds = new Set();
+    /** Who has asked to join and is waiting for the answer, by player index. */
+    static pendingJoins = new Map();
+    /** Owner key -> the setup the channel takes when its delay ends. */
+    static pendingSetups = new Map();
     static onLogin(player) {
         this.offlinePlayerIds.delete(player.getIndex());
         const filters = player.getAttribute(CHAT_FILTERS_ATTRIBUTE);
@@ -114,13 +136,16 @@ class FriendsChatManager {
         this.sendSnapshot(player);
         this.refreshFriendWatchers(player.getLongUsername(), player);
         const lastOwner = player.getRelations().getFriendsChatLastOwner();
-        if (lastOwner)
-            this.join(player, lastOwner, false);
+        if (lastOwner) {
+            this.notification(player, "Attempting to join chat-channel...");
+            this.join(player, lastOwner, true);
+        }
     }
     static onLogout(player) {
         if (this.offlinePlayerIds.has(player.getIndex()))
             return;
         this.offlinePlayerIds.add(player.getIndex());
+        this.pendingJoins.delete(player.getIndex());
         const ownerKey = this.membershipByPlayer.get(player.getIndex());
         if (ownerKey)
             this.removeMember(ownerKey, player.getIndex());
@@ -130,7 +155,7 @@ class FriendsChatManager {
     static handleAction(player, action) {
         switch (action.action) {
             case "join":
-                this.join(player, action.name, true);
+                this.requestJoin(player, action.name);
                 return;
             case "leave":
                 this.leave(player, true);
@@ -193,7 +218,7 @@ class FriendsChatManager {
         const ownerKey = this.membershipByPlayer.get(player.getIndex());
         const channel = ownerKey ? this.channels.get(ownerKey) : undefined;
         if (!channel) {
-            this.gameMessage(player, "You are not currently in a chat-channel.");
+            this.notification(player, "You are not currently in a chat-channel.");
             return;
         }
         const text = this.cleanMessage(rawText, 160);
@@ -201,7 +226,7 @@ class FriendsChatManager {
             return;
         const rank = this.memberRank(channel.profile, player);
         if (rank !== FriendsChatRank.JagexModerator && rank < channel.profile.talkRank) {
-            this.gameMessage(player, "You are not a high enough rank to talk in this chat-channel.");
+            this.notification(player, "You are not a high enough rank to talk in this chat-channel.");
             return;
         }
         for (const member of channel.members.values()) {
@@ -230,7 +255,7 @@ class FriendsChatManager {
                 return true;
             }
             if (normalized === "join") {
-                this.requestName(player, "Enter the name of the chat-channel owner:", (name) => this.join(player, name, true));
+                this.requestName(player, "Enter the name of the chat-channel owner:", (name) => this.requestJoin(player, name));
                 return true;
             }
             if (normalized === "leave") {
@@ -256,22 +281,21 @@ class FriendsChatManager {
         const rank = rankFromOption(option);
         if (rank === undefined)
             return false;
-        const relations = player.getRelations();
-        if (componentId === 13) {
-            relations.setFriendsChatRanks(rank, relations.getFriendsChatTalkRank(), relations.getFriendsChatKickRank());
-        }
-        else if (componentId === 16) {
-            relations.setFriendsChatRanks(relations.getFriendsChatEntryRank(), rank, relations.getFriendsChatKickRank());
-        }
-        else if (componentId === 19) {
-            relations.setFriendsChatRanks(relations.getFriendsChatEntryRank(), relations.getFriendsChatTalkRank(), rank);
+        const setRanks = {
+            13: (relations) => relations.setFriendsChatRanks(rank, relations.getFriendsChatTalkRank(), relations.getFriendsChatKickRank()),
+            16: (relations) => relations.setFriendsChatRanks(relations.getFriendsChatEntryRank(), rank, relations.getFriendsChatKickRank()),
+            19: (relations) => relations.setFriendsChatRanks(relations.getFriendsChatEntryRank(), relations.getFriendsChatTalkRank(), rank),
+        }[componentId];
+        if (!setRanks)
+            return false;
+        if (this.setupIsLive(player)) {
+            this.changeSetup(player, setRanks);
         }
         else {
-            return false;
+            setRanks(player.getRelations());
+            this.persist(player);
+            this.syncSetupText(player);
         }
-        this.persist(player);
-        this.refreshOwnedChannel(player);
-        this.syncSetupText(player);
         return true;
     }
     static sendSnapshot(player) {
@@ -353,18 +377,36 @@ class FriendsChatManager {
             }
         }
     }
+    /** A player's own request to join, as the Join Chat button sends it. */
+    static requestJoin(player, rawOwnerName) {
+        const index = player.getIndex();
+        if (this.membershipByPlayer.has(index)) {
+            this.notification(player, "Please wait until you are logged out of your previous chat-channel.");
+            return;
+        }
+        if (this.pendingJoins.has(index))
+            return;
+        this.pendingJoins.set(index, player);
+        this.notification(player, "Attempting to join chat-channel...");
+        afterTicks(JOIN_DELAY_TICKS, () => {
+            if (this.pendingJoins.get(index) !== player)
+                return;
+            this.pendingJoins.delete(index);
+            this.join(player, rawOwnerName, true);
+        });
+    }
     static join(player, rawOwnerName, notify) {
         const ownerName = accountName(rawOwnerName);
         if (!ownerName) {
             if (notify)
-                this.gameMessage(player, "The chat-channel you tried to join does not exist.");
+                this.notification(player, "The channel you tried to join does not exist.");
             return false;
         }
         let channel = this.channels.get(ownerName.key);
         const profile = channel?.profile ?? this.loadOwnerProfile(ownerName);
         if (!profile?.channelName) {
             if (notify)
-                this.gameMessage(player, "The chat-channel you tried to join does not exist.");
+                this.notification(player, "The channel you tried to join does not exist.");
             return false;
         }
         const memberName = accountName(player.getUsername());
@@ -372,18 +414,18 @@ class FriendsChatManager {
         const privileged = rank === FriendsChatRank.JagexModerator;
         if (!privileged && profile.ignores.has(memberName.encoded)) {
             if (notify)
-                this.gameMessage(player, "You are not allowed to join this chat-channel.");
+                this.notification(player, "You are not allowed to join this user's chat-channel.");
             return false;
         }
         const bannedUntil = this.temporaryBans.get(ownerName.key)?.get(memberName.key) ?? 0;
         if (!privileged && bannedUntil > Date.now()) {
             if (notify)
-                this.gameMessage(player, "You are temporarily banned from this chat-channel.");
+                this.notification(player, "You are temporarily banned from this chat-channel.");
             return false;
         }
         if (!privileged && rank < profile.entryRank) {
             if (notify)
-                this.gameMessage(player, "You do not have a high enough rank to join this chat-channel.");
+                this.notification(player, "You do not have a high enough rank to join this chat-channel.");
             return false;
         }
         const previous = this.membershipByPlayer.get(player.getIndex());
@@ -403,13 +445,13 @@ class FriendsChatManager {
                 .sort((a, b) => this.memberRank(profile, a) - this.memberRank(profile, b))[0];
             if (!candidate) {
                 if (notify)
-                    this.gameMessage(player, "This chat-channel is currently full.");
+                    this.notification(player, "This chat-channel is currently full.");
                 return false;
             }
             candidate.getRelations().setFriendsChatLastOwner("");
             this.removeMember(ownerName.key, candidate.getIndex());
             this.sendSnapshot(candidate);
-            this.notification(candidate, "You have been removed from this chat-channel.");
+            this.notification(candidate, "You have been removed from this channel.");
         }
         channel.members.set(player.getIndex(), player);
         player.setAttribute(CLAN_CHAT_ATTRIBUTE, channel);
@@ -425,6 +467,7 @@ class FriendsChatManager {
     }
     static leave(player, notify) {
         const ownerKey = this.membershipByPlayer.get(player.getIndex());
+        this.pendingJoins.delete(player.getIndex());
         player.getRelations().setFriendsChatLastOwner("");
         this.persist(player);
         if (!ownerKey) {
@@ -434,7 +477,7 @@ class FriendsChatManager {
         this.removeMember(ownerKey, player.getIndex());
         this.sendSnapshot(player);
         if (notify)
-            this.notification(player, "You have left the chat-channel.");
+            this.notification(player, "You have left the channel.");
     }
     static kick(player, rawTargetName) {
         const ownerKey = this.membershipByPlayer.get(player.getIndex());
@@ -445,12 +488,12 @@ class FriendsChatManager {
         const kickerRank = this.memberRank(channel.profile, player);
         if (kickerRank !== FriendsChatRank.JagexModerator &&
             kickerRank < Math.max(FriendsChatRank.Corporal, channel.profile.kickRank)) {
-            this.gameMessage(player, "You are not a high enough rank to kick from this chat-channel.");
+            this.notification(player, "You are not a high enough rank to kick from this chat-channel.");
             return;
         }
         const target = Array.from(channel.members.values()).find((member) => member.getLongUsername() === targetName.encoded);
         if (!target || target === player || this.memberRank(channel.profile, target) >= kickerRank) {
-            this.gameMessage(player, "You can only kick chat-channel members with a lower rank.");
+            this.notification(player, "You can only kick chat-channel members with a lower rank.");
             return;
         }
         let bans = this.temporaryBans.get(ownerKey);
@@ -461,9 +504,9 @@ class FriendsChatManager {
         bans.set(targetName.key, Date.now() + KICK_BAN_MS);
         target.getRelations().setFriendsChatLastOwner("");
         this.persist(target);
+        this.notification(target, "You have been kicked from the channel.");
         this.removeMember(ownerKey, target.getIndex());
         this.sendSnapshot(target);
-        this.notification(target, "You have been kicked from the chat-channel.");
     }
     static removeMember(ownerKey, playerId) {
         const channel = this.channels.get(ownerKey);
@@ -474,7 +517,9 @@ class FriendsChatManager {
         channel.members.delete(playerId);
         this.membershipByPlayer.delete(playerId);
         if (channel.members.size === 0) {
-            this.channels.delete(ownerKey);
+            // A channel with a change on the way keeps its old setup until the change lands.
+            if (!this.pendingSetups.has(ownerKey))
+                this.channels.delete(ownerKey);
             this.temporaryBans.delete(ownerKey);
         }
         else {
@@ -507,43 +552,89 @@ class FriendsChatManager {
     static setOwnChannelName(player, rawName) {
         const name = channelName(rawName);
         if (!name) {
-            this.gameMessage(player, "Chat-channel names must contain 1 to 12 valid characters.");
+            this.notification(player, "Chat-channel names must contain 1 to 12 valid characters.");
             return;
         }
+        if (this.setupIsLive(player)) {
+            this.changeSetup(player, (relations) => relations.setFriendsChatChannelName(name));
+            return;
+        }
+        // rsprox 749, 754: switching a disabled channel on is immediate and doesn't join it.
         player.getRelations().setFriendsChatChannelName(name);
         this.persist(player);
-        const owner = accountName(player.getUsername());
-        const profile = this.profileFromPlayer(player, owner);
-        const channel = this.channels.get(owner.key);
-        if (channel)
-            channel.profile = profile;
-        else
-            this.channels.set(owner.key, { ownerKey: owner.key, profile, members: new Map() });
-        this.gameMessage(player, `Your chat-channel is now named ${name}.`);
         this.syncSetupText(player);
-        this.join(player, player.getUsername(), true);
+        this.notification(player, "Your chat-channel has now been enabled!");
+        this.notification(player, `Join your channel by clicking 'Join Chat' and typing: ${player.getUsername()}`);
     }
     static disableOwnChannel(player) {
+        if (this.setupIsLive(player))
+            this.changeSetup(player, (relations) => relations.setFriendsChatChannelName(""));
+    }
+    /** The channel is on, or is on until a change that is already on its way lands. */
+    static setupIsLive(player) {
+        const owner = accountName(player.getUsername());
+        return !!owner && (!!player.getRelations().getFriendsChatChannelName() || this.pendingSetups.has(owner.key));
+    }
+    /**
+     * Saves a setup change now, and has the channel take it when the delay ends. The channel
+     * keeps its old name and ranks until then, for whoever joins in the meantime (rsprox 753).
+     */
+    static changeSetup(player, change) {
         const owner = accountName(player.getUsername());
         if (!owner)
             return;
-        player.getRelations().setFriendsChatChannelName("");
+        const before = this.profileFromPlayer(player, owner);
+        const relations = player.getRelations();
+        change(relations);
         this.persist(player);
+        this.syncSetupText(player);
+        const firstChange = !this.pendingSetups.has(owner.key);
+        this.pendingSetups.set(owner.key, {
+            channelName: relations.getFriendsChatChannelName(),
+            entryRank: relations.getFriendsChatEntryRank(),
+            talkRank: relations.getFriendsChatTalkRank(),
+            kickRank: relations.getFriendsChatKickRank(),
+        });
+        if (!firstChange)
+            return;
+        if (!this.channels.has(owner.key))
+            this.channels.set(owner.key, { ownerKey: owner.key, profile: before, members: new Map() });
+        player.getSession().sendClientPacket(encodeChatMessage("game", "Changes will take effect on your friends channel in the next 60 seconds.", "", "", -1, SETUP_NOTICE_MESSAGE_TYPE));
+        afterTicks(SETUP_CHANGE_TICKS, () => this.applySetup(owner));
+    }
+    static applySetup(owner) {
+        const setup = this.pendingSetups.get(owner.key);
         const channel = this.channels.get(owner.key);
-        if (channel) {
-            const members = Array.from(channel.members.values());
+        this.pendingSetups.delete(owner.key);
+        if (!setup || !channel)
+            return;
+        channel.profile = { ...channel.profile, ...setup };
+        if (!setup.channelName) {
+            this.closeChannel(owner, channel);
+            return;
+        }
+        if (channel.members.size === 0) {
             this.channels.delete(owner.key);
             this.temporaryBans.delete(owner.key);
-            for (const member of members) {
-                member.setAttribute(CLAN_CHAT_ATTRIBUTE, null);
-                this.membershipByPlayer.delete(member.getIndex());
-                member.getRelations().setFriendsChatLastOwner("");
-                this.persist(member);
-                this.sendSnapshot(member);
-                this.notification(member, "This chat-channel has been disabled.");
-            }
+            return;
         }
-        this.syncSetupText(player);
+        this.broadcastChannel(owner.key);
+    }
+    static closeChannel(owner, channel) {
+        this.channels.delete(owner.key);
+        this.temporaryBans.delete(owner.key);
+        const online = this.onlinePlayer(owner);
+        if (online)
+            this.notification(online, "Your chat-channel has now been disabled!");
+        for (const member of channel.members.values()) {
+            member.setAttribute(CLAN_CHAT_ATTRIBUTE, null);
+            this.membershipByPlayer.delete(member.getIndex());
+            member.getRelations().setFriendsChatLastOwner("");
+            this.persist(member);
+            this.notification(member, "You have been removed from this channel.");
+            this.sendSnapshot(member);
+            this.memberRemoved?.(member, owner.key);
+        }
     }
     static openSetup(player) {
         player.getPacketSender().sendSubInterface(MAIN_MODAL_TARGET_UID, 94, 0);
@@ -552,7 +643,7 @@ class FriendsChatManager {
     static syncSetupText(player) {
         const relations = player.getRelations();
         player.getPacketSender()
-            .sendString(relations.getFriendsChatChannelName() || "Not set", (94 << 16) | 10)
+            .sendString(relations.getFriendsChatChannelName() || "Chat disabled", (94 << 16) | 10)
             .sendString(rankLabel(relations.getFriendsChatEntryRank()), (94 << 16) | 13)
             .sendString(rankLabel(relations.getFriendsChatTalkRank()), (94 << 16) | 16)
             .sendString(rankLabel(relations.getFriendsChatKickRank()), (94 << 16) | 19);
@@ -566,11 +657,11 @@ class FriendsChatManager {
         const channel = owner ? this.channels.get(owner.key) : undefined;
         if (!owner || !channel)
             return;
+        const { channelName: name, entryRank, talkRank, kickRank } = channel.profile;
         channel.profile = this.profileFromPlayer(player, owner);
-        if (!channel.profile.channelName) {
-            this.disableOwnChannel(player);
-            return;
-        }
+        // Friends and ignores apply at once; the setup waits for its delay.
+        if (this.pendingSetups.has(owner.key))
+            Object.assign(channel.profile, { channelName: name, entryRank, talkRank, kickRank });
         this.broadcastChannel(owner.key);
     }
     static loadOwnerProfile(owner) {

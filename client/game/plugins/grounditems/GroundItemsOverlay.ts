@@ -54,10 +54,30 @@ const contains = (r: Rect | undefined, x: number, y: number) => !!r && x >= r.x 
  * with prices, stacked 15 px apart per tile, despawn timers (text or pie), highlighted tiles and
  * the hotkey mode's hidden/highlight boxes.
  */
+/** The device rects each frame element paints, shared by draw() and coverage(). */
+const TEXT_HEIGHT = 16;
+const tileRect = (tile: Frame["tiles"][number]): Rect => bounds(tile.points, 2);
+const backgroundRect = (r: Rect): Rect => ({ x: r.x - 2, y: r.y - 2, w: r.w + 4, h: r.h + 4 });
+const boxRect = (box: Box): Rect => ({ x: box.rect.x - 1, y: box.rect.y - 1, w: box.rect.w + 3, h: box.rect.h + 3 });
+const pieRect = (pie: Pie): Rect => {
+    const r = TIMER_OVERLAY_DIAMETER / 2;
+    return { x: pie.x - r - 1, y: pie.y - r - 1, w: 2 * r + 2, h: 2 * r + 2 };
+};
+const textRect = (t: Text, width: number): Rect => ({ x: t.x - 2, y: t.y - TEXT_HEIGHT, w: width + 6, h: TEXT_HEIGHT + 6 });
+
+type LabelCacheEntry = { mode: string; quantity: number; gePrice: number; haPrice: number; text: string };
+
 export class GroundItemsOverlay implements WidgetOverlay {
     readonly drawBelowWidgets = true;
+    /** The frame signature() built, drawn (possibly more than once) by the following draw(). */
     private frame?: Frame;
     private readonly modelHeights = new Map<number, number>();
+    /**
+     * Each item's label as last formatted. The plugin rebuilds its items when the ground or the
+     * prices change, so a stale entry falls away with its item; the mode and the numbers the text
+     * reads are still checked, as the label is otherwise reformatted every frame for every item.
+     */
+    private readonly labels = new WeakMap<GroundItem, LabelCacheEntry>();
     /** The draw's font loader, for measuring labels while laying out the next frame. */
     private fontLoader?: WidgetOverlayDrawContext["fontLoader"];
 
@@ -68,38 +88,54 @@ export class GroundItemsOverlay implements WidgetOverlay {
         return this.frame.signature;
     }
 
+    /**
+     * Where the frame signature() built will draw, so a label that moved redraws its old and new
+     * rects rather than the whole UI. Unknown until a draw has supplied the font.
+     */
+    coverage(): Rect[] | undefined {
+        const frame = this.frame ?? (this.frame = this.build());
+        const font = frame.texts.length > 0 ? this.fontLoader?.(FONT) : undefined;
+        if (frame.texts.length > 0 && !font) return undefined;
+        const rects: Rect[] = [];
+        for (const tile of frame.tiles) rects.push(tileRect(tile));
+        for (const r of frame.backgrounds) rects.push(backgroundRect(r));
+        for (const box of frame.boxes) rects.push(boxRect(box));
+        for (const pie of frame.pies) rects.push(pieRect(pie));
+        for (const t of frame.texts) rects.push(textRect(t, font!.measure(t.text)));
+        return rects;
+    }
+
     draw(context: WidgetOverlayDrawContext): Rect[] {
-        const frame = this.frame ?? this.build();
-        this.frame = undefined;
+        const frame = this.frame ?? (this.frame = this.build());
         this.fontLoader = context.fontLoader;
         const glr = context.renderer as any;
         const rects: Rect[] = [];
         for (const tile of frame.tiles) {
             glr.drawPolygon?.(tile.points, TILE_FILL);
             glr.drawPolyline?.(tile.points, 2, argbToRgba(tile.color), true);
-            rects.push(bounds(tile.points, 2));
+            rects.push(tileRect(tile));
         }
         for (const r of frame.backgrounds) {
             glr.drawRect?.(r.x, r.y, r.w, r.h, BACKGROUND);
             strokeRect(glr, { x: r.x - 1, y: r.y - 1, w: r.w + 2, h: r.h + 2 }, BACKGROUND_OUTSIDE);
             strokeRect(glr, r, BACKGROUND_INSIDE);
-            rects.push({ x: r.x - 2, y: r.y - 2, w: r.w + 4, h: r.h + 4 });
+            rects.push(backgroundRect(r));
         }
         for (const box of frame.boxes) {
             drawItemBox(glr, box);
-            rects.push({ x: box.rect.x - 1, y: box.rect.y - 1, w: box.rect.w + 3, h: box.rect.h + 3 });
+            rects.push(boxRect(box));
         }
         for (const pie of frame.pies) {
             const r = TIMER_OVERLAY_DIAMETER / 2;
             const color = argbToRgba(pie.color);
             if (pie.progress > 0) glr.drawPolygon?.(sector(pie.x, pie.y, r, pie.progress), color);
             glr.drawPolyline?.(circle(pie.x, pie.y, r), 1, color, true);
-            rects.push({ x: pie.x - r - 1, y: pie.y - r - 1, w: 2 * r + 2, h: 2 * r + 2 });
+            rects.push(pieRect(pie));
         }
         for (const t of frame.texts) {
             const font = context.fontLoader(FONT);
             const w = font ? font.measure(t.text) : t.text.length * 7;
-            const h = 16;
+            const h = TEXT_HEIGHT;
             const alpha = ((t.color >>> 24) & 255) / 255;
             const rgb = t.color & 0xffffff;
             // The point is the text baseline, as Graphics.drawString takes it.
@@ -114,9 +150,25 @@ export class GroundItemsOverlay implements WidgetOverlay {
             } else {
                 draw(0, 0, rgb, true);
             }
-            rects.push({ x: t.x - 2, y: t.y - h, w: w + 6, h: h + 6 });
+            rects.push(textRect(t, w));
         }
         return rects;
+    }
+
+    private label(item: GroundItem, priceMode: string): string {
+        const cached = this.labels.get(item);
+        if (
+            cached &&
+            cached.mode === priceMode &&
+            cached.quantity === item.quantity &&
+            cached.gePrice === item.gePrice &&
+            cached.haPrice === item.haPrice
+        ) {
+            return cached.text;
+        }
+        const text = itemLabel(item, priceMode);
+        this.labels.set(item, { mode: priceMode, quantity: item.quantity, gePrice: item.gePrice, haPrice: item.haPrice, text });
+        return text;
     }
 
     private build(): Frame {
@@ -196,7 +248,7 @@ export class GroundItemsOverlay implements WidgetOverlay {
             }
             if (dontShowOverlay) continue;
 
-            const text = itemLabel(item, priceMode);
+            const text = this.label(item, priceMode);
             const p = scene.worldToScreen(cx, ground - (layerHeight + OFFSET_Z) / 128, cy);
             if (!p) continue;
             const textWidth = measure(text);

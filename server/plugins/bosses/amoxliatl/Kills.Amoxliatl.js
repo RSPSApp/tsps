@@ -11,6 +11,7 @@ const CombatAchievements = require("./CombatAchievements.Amoxliatl");
 const Scoreboard = require("./Scoreboard.Amoxliatl");
 
 const HUD_FADE_AFTER_REMOVAL_TICKS = 4;
+const BOSS_NAME = "Amoxliatl";
 
 function bossBeforeDeath(event) {
   const fight = event.npc?.__amoxliatlFight;
@@ -31,6 +32,7 @@ function bossDeath(event) {
   const ticks = fight.duration();
   const best = Number(player.getAttribute(Common.BEST_TICKS_ATTRIBUTE)) || 0;
   if (!best || ticks < best) player.setAttribute(Common.BEST_TICKS_ATTRIBUTE, ticks);
+  if (!best || ticks < best) Common.api.emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
   const duration = !best || ticks < best
     ? `Fight duration: <col=ff0000>${Common.formatTicks(ticks)}</col> (new personal best)`
     : `Fight duration: <col=ff0000>${Common.formatTicks(ticks)}</col>. Personal best: ${Common.formatTicks(best)}`;

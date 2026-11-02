@@ -13,6 +13,7 @@ const { World } = require('../dist/game/World');
 const Thieving = require('../plugins/skills/Thieving.plugin');
 const Pickpocket = require('../plugins/skills/thieving/Pickpocket.Thieving');
 const CoinPouch = require('../plugins/skills/thieving/CoinPouch.Thieving');
+const HamTrapdoor = require('../plugins/skills/thieving/HamTrapdoor.Thieving');
 const DATA = require('../plugins/skills/data/pickpocketing.json');
 
 /**
@@ -53,6 +54,7 @@ Thieving.register({
     onNpcsInteraction: (names, actions) => names.forEach((name) => Object.keys(actions).forEach((action) => interactions.push([name, action]))),
     onNpcInteraction: (name, actions) => interactions.push([name, Object.keys(actions)[0]]),
     onObjectInteraction: () => {},
+    onBeforeObjectInteraction: () => {},
     onItemAction: () => {},
     emitCustomEvent: (name, request) => {
         if (name === 'thieving:success') log.push(name);
@@ -65,6 +67,17 @@ Thieving.register({
     log: () => {},
 });
 Sounds.sendSound = () => {};
+
+test('the H.A.M. entrance uses its own published curve without repeat-failure scaling', () => {
+    const chance = HamTrapdoor._test.successChance;
+    assert.equal(chance(1, false), 11 / 256);
+    assert.equal(chance(99, false), 251 / 256);
+    assert.equal(chance(1, true), 61 / 256);
+    assert.equal(chance(99, true), 255 / 256);
+    assert.equal(chance(50, false), 131 / 256);
+    assert.equal(chance(50, true), 158 / 256);
+    assert.equal(chance(200, false), 1);
+});
 
 // Item names for the fake definitions: the data file's items plus the gear the plugin checks.
 const NAMES = new Map([

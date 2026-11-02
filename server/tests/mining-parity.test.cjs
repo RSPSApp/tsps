@@ -254,9 +254,34 @@ test("each pickaxe swings its own animation", () => {
     [ItemIds.BLACK_PICKAXE]: 3873, [ItemIds.MITHRIL_PICKAXE]: 629, [ItemIds.ADAMANT_PICKAXE]: 628,
     [ItemIds.RUNE_PICKAXE]: 624, [ItemIds.DRAGON_PICKAXE]: 7139, [ItemIds.CRYSTAL_PICKAXE]: 8347,
     [ItemIds.INFERNAL_PICKAXE]: 4482, [ItemIds.ECHO_PICKAXE]: 8347,
+    // Cosmetic and uncharged variants: their own cache sequences.
+    [ItemIds.GILDED_PICKAXE]: 8313, [ItemIds.DRAGON_PICKAXE_3]: 642, [ItemIds._3RD_AGE_PICKAXE]: 7283,
+    [ItemIds.DRAGON_PICKAXE_OR_]: 8346, [ItemIds.DRAGON_PICKAXE_OR__3]: 8887, [ItemIds.DRAGON_PICKAXE_OR__5]: 11833,
+    [ItemIds.INFERNAL_PICKAXE_OR_]: 11831, [ItemIds.INFERNAL_PICKAXE_OR__3]: 11832,
+    [ItemIds.INFERNAL_PICKAXE_UNCHARGED_]: 4482, [ItemIds.INFERNAL_PICKAXE_UNCHARGED__2]: 11831,
+    [ItemIds.INFERNAL_PICKAXE_UNCHARGED__4]: 11832, [ItemIds.CRYSTAL_PICKAXE_INACTIVE_]: 8347,
   };
   for (const pickaxe of Mining.PICKAXES) {
     assert.equal(pickaxe.animation.getId(), expected[pickaxe.id], `pickaxe ${pickaxe.id}`);
+  }
+});
+
+test("every pickaxe variant can mine, and its wall swings are cache sequences (3rd age pickaxe, issue 1883)", () => {
+  const variants = [
+    ItemIds._3RD_AGE_PICKAXE, ItemIds.GILDED_PICKAXE, ItemIds.DRAGON_PICKAXE_3, ItemIds.DRAGON_PICKAXE_OR_,
+    ItemIds.DRAGON_PICKAXE_OR__3, ItemIds.DRAGON_PICKAXE_OR__5, ItemIds.INFERNAL_PICKAXE_OR_, ItemIds.INFERNAL_PICKAXE_OR__3,
+    ItemIds.INFERNAL_PICKAXE_UNCHARGED_, ItemIds.INFERNAL_PICKAXE_UNCHARGED__2, ItemIds.INFERNAL_PICKAXE_UNCHARGED__4,
+    ItemIds.CRYSTAL_PICKAXE_INACTIVE_,
+  ];
+  for (const id of variants) {
+    const found = Mining.findBestPickaxe(createPlayer({ pickaxe: id }));
+    assert.equal(found?.id, id, `pickaxe ${id}`);
+    assert.ok(core.CacheDefinitions.getSeqName(found.animation.getId()), `swing of ${id}`);
+    for (const kind of ["wall", "sang"]) {
+      const name = found.walls?.[kind]
+        ?? (kind === "wall" ? `human_mining_${found.key}_pickaxe_wall` : `sang_mining_wall_${found.key}_pickaxe`);
+      assert.notEqual(core.CacheDefinitions.getSeqId(name), null, `${kind} swing ${name}`);
+    }
   }
 });
 

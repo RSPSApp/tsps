@@ -95,6 +95,8 @@ export type SdMapData = {
     renderPosY?: number;
 
     tileRenderFlags: Uint8Array[][];
+    /** Where ground items stand on a loc: see collectObjSurfaceHeights. */
+    objSurfaceHeights?: Int16Array[][];
     tileOverlays?: Int16Array[][];
     /** Per-level, per-tile HD ground recipe grid, same [level][x][y] indexing as tileRenderFlags. */
     groundMaterials?: Uint8Array[][];

@@ -3,6 +3,7 @@ import type { Ray } from "../../../game/math/Raycast";
 import type { SdMapData } from "../../loader/SdMapData";
 import type { WebGPUMapSquare } from "../WebGPUMapSquare";
 import type { WebGPURenderer } from "../WebGPURenderer";
+import { getMapSquareId } from "../../../rs/map/MapFileIndex";
 import { RENDER_CONSTANTS } from "../../render/constants";
 import { ClickCrossLayer } from "./ClickCrossLayer";
 import { GroundItemLabelLayer } from "./GroundItemLabelLayer";
@@ -253,6 +254,10 @@ export class WebGPUOverlays {
 
     onMapRemoved(mapX: number, mapY: number): void {
         this.groundMeshes?.onMapRemoved(mapX, mapY);
+    }
+
+    onMapLocsRefreshed(mapX: number, mapY: number): void {
+        this.groundMeshes?.onMapLocsRefreshed(getMapSquareId(mapX, mapY));
     }
 
     registerHitsplat(event: HitsplatEventPayload): void {

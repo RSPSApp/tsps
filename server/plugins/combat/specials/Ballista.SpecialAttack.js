@@ -1,8 +1,11 @@
 module.exports = function registerBallistaSpecialAttack(api) {
-  const { Animation, CombatFactory, CombatSpecial, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds, WeaponProfiles } = api.core;
+  const { Animation, CombatFactory, CombatSpecial, Graphic, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds, WeaponProfiles } = api.core;
 
   const DRAIN = 65;
   const ANIMATION = new Animation(7222);
+  /** The ballista's impact burst (SpotanimID.BALLISTA_SPECIAL). */
+  const IMPACT_GRAPHIC = 344;
+  const IMPACT_HEIGHT = 177;
 
   class BallistaCombatMethod extends RangedCombatMethod {
     hits(character, target) {
@@ -29,8 +32,32 @@ module.exports = function registerBallistaSpecialAttack(api) {
       const player = character.getAsPlayer();
       CombatSpecial.drain(player, DRAIN);
       character.performAnimation(ANIMATION);
-      Sounds.sendSound(character, Sound.SHOOT_CROSSBOW);
-      Projectile.createProjectile(player, target, 1301, 70, 30, 43, 31).sendProjectile();
+      Sounds.sendSound(character, Sound.MAGIC_LONGBOW_SPECIAL);
+
+      // Concentrated Shot is an ordinary javelin with +25% accuracy and damage: the same
+      // projectile as the equipped ammunition, on the ballista's own trajectory, then its
+      // burst where it lands. A hardcoded dragon javelin (1301) showed the wrong model, and
+      // an end before the start made it vanish at the player after one cycle.
+      const profile = WeaponProfiles.ranged(player);
+      const shot = profile?.projectiles?.[0] ?? { delay: 42, lengthAdjustment: 2, stepMultiplier: 3, startHeight: 38.75, endHeight: 44.25, angle: 14, progress: 120 };
+      const distance = character.getLocation().getDistance(target.getLocation());
+      const end = RangedCombatMethod.projectileEnd(shot, distance);
+      const ammo = player.getCombat().getAmmunition();
+      const projectileId = profile?.projectileId ?? ammo?.getProjectileId() ?? 205;
+      const projectile = Projectile.createProjectile(
+        player,
+        target,
+        projectileId,
+        shot.delay,
+        end,
+        shot.startHeight,
+        shot.endHeight,
+      );
+      if (shot.angle != null) projectile.withAngle(shot.angle);
+      if (shot.progress != null) projectile.withProgress(shot.progress);
+      projectile.sendProjectile();
+      target.performGraphic(new Graphic(IMPACT_GRAPHIC, end, IMPACT_HEIGHT));
+
       CombatFactory.decrementAmmo(player, target.getLocation(), 1);
     }
   }

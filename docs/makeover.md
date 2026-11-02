@@ -1,9 +1,10 @@
-# The makeover interface (Thessalia)
+# The makeover interface
 
 `server/plugins/npcs/Makeover.plugin.js` runs the makeover interface (516 `makeover`) that clothes,
 hair and shoe providers open, and wires Thessalia's "Makeover" option (Varrock clothes shop,
-npc `thessalia` 534 shown as `thessalia_normal` 10477). `openMakeover(player, type)` is exported
-for the other providers.
+npc `thessalia` 534 shown as `thessalia_normal` 10477), plus the Falador Hairdresser's Haircut and
+Shave options and their canonical Talk-to branches. `openMakeover(player, type)` is exported
+for other providers.
 
 Sources:
 - rsprox captures (<https://rsprox.net/database>):
@@ -80,7 +81,13 @@ Each style row gives `player_kit_id_type_a` / `player_kit_id_type_b`; the player
 
 ## Other providers
 
-The Falador hairdresser (`hairdresser` 1305: op4, and Talk-to "I'd like a haircut please." / "I'd like a shave please.") would open type 0 / 1,
-and Yrsa type 6; both need their own registration and the dialogue lines from their captures (rec 3241, 102).
+The Falador hairdresser (`hairdresser` 1305) opens type 0 / 1 through Haircut / Shave or Talk-to
+"I'd like a haircut please." / "I'd like a shave please." (rec 3241). His generated head-equipment
+conditions use the same actual head-slot check as the interface; the two existing transcript
+actions open the selected category after closing the dialogue. No generated dialogue is edited.
+Native Player/ClientConnection checks cover both routes, worn/removed helmets, preview cancellation
+and Confirm. These are offline checks, not a live browser playthrough.
+
+Yrsa type 6 still needs its own registration and the dialogue lines from its capture (rec 102).
 Thessalia's Talk-to branch ("I'd like to change my top please." etc., rec 3219) is still the transcript dialogue and
 does not open the interface.

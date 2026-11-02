@@ -310,25 +310,11 @@ export class SkillManager {
         const prayer = levels[Skill.PRAYER.getIndex()];
         const ranged = levels[Skill.RANGED.getIndex()];
         const magic = levels[Skill.MAGIC.getIndex()];
-        let combatLevel = 3;
-        combatLevel = Math.floor((defence + hp + Math.floor(prayer / 2)) * 0.2535) + 1;
+        const base = (defence + hp + Math.floor(prayer / 2)) * 0.25;
         const melee = (attack + strength) * 0.325;
         const ranger = Math.floor(ranged * 1.5) * 0.325;
         const mage = Math.floor(magic * 1.5) * 0.325;
-        if (melee >= ranger && melee >= mage) {
-            combatLevel = Math.floor(combatLevel + melee);
-        } else if (ranger >= melee && ranger >= mage) {
-            combatLevel = Math.floor(combatLevel + ranger);
-        } else if (mage >= melee && mage >= ranger) {
-            combatLevel = Math.floor(combatLevel + mage);
-        }
-        if (combatLevel > 126) {
-            return 126;
-        }
-        if (combatLevel < 3) {
-            return 3;
-        }
-        return combatLevel;
+        return Math.min(126, Math.max(3, Math.floor(base + Math.max(melee, ranger, mage))));
     }
 
     private applyMinimumSkill(skill: Skill, minLevel: number, minExperience?: number): boolean {

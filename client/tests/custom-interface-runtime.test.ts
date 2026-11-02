@@ -76,12 +76,13 @@ for (const component of [4, 5, 6, 8, 10, 12, 13, 20, 21, 22, 23, 100, 101, 102, 
     widgets.set(uid(component), { uid: uid(component), width: 200, height: 88, scrollY: 0 });
 }
 
+const invalidatedScrolls: number[] = [];
 const widgetManager = {
     getWidgetByUid: (id: number) => widgets.get(id),
     getInterfaceParentContainerUid: () => (1 << 16) | 16,
     invalidateWidgetRender: () => {},
     invalidateWidget: () => {},
-    invalidateScroll: () => {},
+    invalidateScroll: (widget: { uid: number }) => invalidatedScrolls.push(widget.uid),
 } as any;
 
 let requestedUrl = "";
@@ -409,6 +410,58 @@ async function main(): Promise<void> {
     runtime.handleSetText(partUid(5), "[]");
     assert.equal(widgets.get(partUid(4)).text, "2", "a part can be replaced on its own");
     runtime.onInterfaceClosed(PART_GROUP);
+
+    const SCROLL_GROUP = 30110;
+    const scrollUid = (component: number) => (SCROLL_GROUP << 16) | component;
+    setCustomInterface({ groupId: SCROLL_GROUP, widgets: [], scroll: [{
+        viewComponent: 1, scrollbarComponent: 2, contentHeight: 500,
+        contentHeightComponent: 3, resetOnComponents: [4],
+    }, {
+        viewComponent: 5, contentHeight: 500, contentHeightComponent: 6, resetOnComponents: [4],
+    }] });
+    widgets.set(scrollUid(1), { uid: scrollUid(1), width: 100, height: 100, scrollY: 75 });
+    widgets.set(scrollUid(2), { uid: scrollUid(2), width: 16, height: 100 });
+    widgets.set(scrollUid(3), { uid: scrollUid(3), text: "240" });
+    widgets.set(scrollUid(5), { uid: scrollUid(5), width: 100, height: 100, scrollY: 75 });
+    widgets.set(scrollUid(6), { uid: scrollUid(6), text: "240" });
+    invalidatedScrolls.length = 0;
+    assert.equal(runtime.onInterfaceOpened(SCROLL_GROUP), true);
+    assert.ok(invalidatedScrolls.includes(scrollUid(5)), "dynamic height redraws a view without a scrollbar");
+    const scrollView = widgets.get(scrollUid(1));
+    assert.equal(scrollView.scrollHeight, 240, "server text controls scroll height");
+    scrollView.scrollY = 75;
+    assert.equal(runtime.handleWidgetClick(SCROLL_GROUP + 1, 4), false);
+    assert.equal(scrollView.scrollY, 75, "another group's button does not reset this view");
+    assert.equal(runtime.handleWidgetClick(SCROLL_GROUP, 7), false);
+    assert.equal(scrollView.scrollY, 75, "only declared buttons reset scrolling");
+    invalidatedScrolls.length = 0;
+    assert.equal(runtime.handleWidgetClick(SCROLL_GROUP, 4), false, "the tab click still reaches the server");
+    assert.equal(scrollView.scrollY, 0, "tab changes reset the scrolling view");
+    assert.equal(widgets.get(scrollUid(5)).scrollY, 0, "one button can reset multiple regions");
+    assert.ok(invalidatedScrolls.includes(scrollUid(5)), "reset redraws a view without a scrollbar");
+    widgets.get(scrollUid(3)).text = "40";
+    widgets.get(scrollUid(6)).text = "40";
+    widgets.get(scrollUid(5)).scrollY = 75;
+    scrollView.scrollY = 75;
+    invalidatedScrolls.length = 0;
+    runtime.tick();
+    assert.equal(widgets.get(scrollUid(5)).scrollY, 0, "dynamic shrink works without a scrollbar");
+    assert.ok(invalidatedScrolls.includes(scrollUid(5)), "dynamic shrink redraws the scrolling view");
+    assert.equal(scrollView.scrollHeight, 100, "short content fills the view without blank scrolling");
+    assert.equal(scrollView.scrollY, 0, "shrinking content clamps the existing scroll position");
+    widgets.get(scrollUid(3)).text = "200";
+    scrollView.scrollY = 175;
+    runtime.tick();
+    assert.equal(scrollView.scrollY, 100, "shrinking overflow clamps to its remaining range");
+    widgets.get(scrollUid(3)).text = "0";
+    runtime.tick();
+    assert.equal(scrollView.scrollHeight, 100, "zero content height is valid and fills the viewport");
+    for (const invalid of ["invalid", "", " ", "-1", "Infinity"]) {
+        widgets.get(scrollUid(3)).text = invalid;
+        runtime.tick();
+        assert.equal(scrollView.scrollHeight, 500, "invalid dynamic heights use the declared fallback");
+    }
+    runtime.onInterfaceClosed(SCROLL_GROUP);
 
     console.log("custom-interface-runtime.test.ts: all tests passed");
 }

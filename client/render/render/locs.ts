@@ -42,6 +42,7 @@ import type { OverlayFloorType } from "../../rs/config/floortype/OverlayFloorTyp
 import { LocModelLoader } from "../../rs/config/loctype/LocModelLoader";
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
 import { matchingLocSlotIds, shapeSlotOverride, suppressShapeSlotAt } from "../loc/LocSlots";
+import { LOC_OVERRIDE_REMOVED, locOverrideIdFromChange } from "../../rs/scene/LocOverride";
 import { NpcModelLoader } from "../../rs/config/npctype/NpcModelLoader";
 import { NpcDrawPriority, NpcType } from "../../rs/config/npctype/NpcType";
 import { PlayerAppearance } from "../../rs/config/player/PlayerAppearance";
@@ -307,7 +308,7 @@ export function onLocChange(host: WebGLOsrsRendererHost,
                 // Regular map loc override
                 const overrideKey = `${oldTile.x},${oldTile.y},${level},${oldId}`;
                 host.locOverrides.set(overrideKey, {
-                    newId: newId | 0,
+                    newId: locOverrideIdFromChange(newId),
                     newRotation: overrideRotation,
                     moveToX:
                         newTile &&
@@ -496,7 +497,7 @@ function reconcileAdded(
     rotation: number,
 ): boolean {
     if (host.instanceActive) {
-        if (shapeSlotOverride(host.locOverrides, tile.x, tile.y, level, shape)?.newId === 0) {
+        if (shapeSlotOverride(host.locOverrides, tile.x, tile.y, level, shape)?.newId === LOC_OVERRIDE_REMOVED) {
             return false;
         }
         suppressShapeSlotAt(host.locOverrides, tile.x, tile.y, level, shape);
@@ -505,14 +506,14 @@ function reconcileAdded(
     let changed = false;
     const recorded = new Set(added.replacedIds ?? []);
     for (const id of recorded) {
-        if (host.locOverrides.get(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`)?.newId === 0) continue;
-        host.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`, { newId: 0 });
+        if (host.locOverrides.get(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`)?.newId === LOC_OVERRIDE_REMOVED) continue;
+        host.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`, { newId: LOC_OVERRIDE_REMOVED });
         changed = true;
     }
     // The built index also holds the dynamic object itself; only other ids are cache locs.
     for (const id of addChangeSlotIds(host, tile, level, shape, rotation)) {
         if ((id | 0) === (added.locId | 0) || recorded.has(id)) continue;
-        host.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`, { newId: 0 });
+        host.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`, { newId: LOC_OVERRIDE_REMOVED });
         recorded.add(id);
         changed = true;
     }
@@ -582,7 +583,7 @@ export function onLocAddChange(host: WebGLOsrsRendererHost,
                 suppressShapeSlotAt(host.locOverrides, tile.x, tile.y, level, shape);
             } else {
                 for (const id of replaced) {
-                    host.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`, { newId: 0 });
+                    host.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`, { newId: LOC_OVERRIDE_REMOVED });
                 }
             }
 

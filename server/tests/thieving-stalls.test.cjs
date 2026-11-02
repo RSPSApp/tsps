@@ -39,6 +39,7 @@ const testApi = {
     onPlayerLogin: (handler) => lifecycle.login = handler,
     onPlayerLogout: (handler) => lifecycle.logout = handler,
     onObjectInteraction: (name, actions) => hooks.set(name, actions),
+    onBeforeObjectInteraction() {},
     emitCustomEvent: (name, request) => events.push([name, request]),
 };
 Thieving.register(testApi);

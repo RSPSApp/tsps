@@ -5,6 +5,18 @@ const z = require('zod');
 const { FrameUpdater } = require('../dist/util/FrameUpdater');
 
 const frameUpdater = new FrameUpdater();
+
+test('text ownership transitions are sent even when the text stays the same', () => {
+  const updates = new FrameUpdater();
+  const uid = (58 << 16) | 15;
+  assert.equal(updates.shouldUpdate('0/20 Barricades', uid, true), true);
+  assert.equal(updates.shouldUpdate('0/20 Barricades', uid), false);
+  assert.equal(updates.shouldUpdate('0/20 Barricades', uid, false), true);
+  assert.equal(updates.shouldUpdate('0/20 Barricades', uid), false);
+  assert.equal(updates.shouldUpdate('0/20 Barricades', uid, true), true);
+  updates.clearGroup(58);
+  assert.equal(updates.shouldUpdate('0/20 Barricades', uid, true), true, 'remount resends ownership with the text');
+});
 const player = {
   getLocation: () => ({ getX: () => 3222, getY: () => 3218, getZ: () => 0 }),
   getHitpoints: () => 10,

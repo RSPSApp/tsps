@@ -15,6 +15,7 @@ import { DialogueChainBuilder } from "../../../model/dialogues/builders/Dialogue
 import { OptionDialogue } from "../../../model/dialogues/entries/impl/OptionDialogue";
 import { DialogueOption } from "../../../model/dialogues/DialogueOption";
 import { PluginManager } from "../../../../plugins/PluginManager";
+import { CacheDefinitions } from "../../../cache/CacheDefinitions";
 
 /** A cast's animation and graphic on the caster (cache ids). */
 type CastVisuals = { animation: number; graphic?: number };
@@ -49,8 +50,8 @@ const CASTS = {
 const castOf = (spell: keyof typeof CASTS): CastVisuals => CASTS[spell];
 
 class LunarSpell extends Spell {
-    constructor(readonly data: SpellData) { super(); }
-    spellId(): number { return this.data.spellId ?? 0; }
+    constructor(readonly data: SpellData, private readonly name?: string) { super(); }
+    spellId(): number { return this.data.spellId ?? CacheDefinitions.getSpellByName(this.name ?? "")?.widgetId ?? 0; }
     levelRequired(): number { return this.data.level; }
     baseExperience(): number { return this.data.experience; }
     itemsRequired(): Item[] { return this.data.runes; }
@@ -92,7 +93,7 @@ export class LunarSpells {
         ["vengeance", new LunarSpell({ level: 94, experience: 112, runes: [rune(9075, 4), rune(557, 10), rune(560, 2)] })],
         ["dream", new LunarSpell({ level: 79, experience: 82, runes: [rune(9075, 2), rune(556, 5), rune(563)] })],
         ["heal group", new LunarSpell({ level: 95, experience: 124, runes: [rune(9075, 4), rune(557, 15), rune(565, 3)] })],
-        ["spellbook swap", new LunarSpell({ level: 96, experience: 130, runes: [rune(9075, 3), rune(563, 2), rune(560)], cast: castOf("spellbook swap") })],
+        ["spellbook swap", new LunarSpell({ level: 96, experience: 130, runes: [rune(9075, 3), rune(564, 2), rune(563)], cast: castOf("spellbook swap") }, "spellbook swap")],
     ]);
 
     private static readonly TELEPORTS = new Map<string, LunarTeleport>([
@@ -163,7 +164,7 @@ export class LunarSpells {
         if (key === "astral contact") key = "npc contact";
         const definitions: Record<string, SpellData> = {
             "bake pie": { level: 65, experience: 60, runes: [rune(9075), rune(554, 5), rune(555, 4)], cast: castOf("bake pie") },
-            "humidify": { level: 68, experience: 65, runes: [rune(9075), rune(555, 3), rune(563)], cast: castOf("humidify") },
+            "humidify": { level: 68, experience: 65, runes: [rune(9075), rune(555, 3), rune(554)], cast: castOf("humidify") },
             "hunter kit": { level: 71, experience: 70, runes: [rune(9075, 2), rune(554, 2), rune(563)], cast: castOf("hunter kit") },
             "plank make": { level: 86, experience: 90, runes: [rune(9075, 2), rune(557, 15), rune(561)], cast: castOf("plank make") },
             "magic imbue": { level: 82, experience: 86, runes: [rune(9075, 2), rune(554, 7), rune(556, 7)] },
@@ -171,7 +172,7 @@ export class LunarSpells {
         };
         const data = definitions[key];
         if (!data) return false;
-        if (key === "npc contact") return new LunarSpell(data).cast(player, () => this.openNpcContact(player));
+        if (key === "npc contact") return new LunarSpell(data, key).cast(player, () => this.openNpcContact(player));
         const inventory = player.getInventory();
         const items = inventory.getValidItems();
         const has = (ids: readonly number[]) => items.some(item => ids.includes(item.getId()));
@@ -202,7 +203,7 @@ export class LunarSpells {
             player.sendMessage("You do not have any logs to turn into planks.");
             return true;
         }
-        const spell = new LunarSpell(data);
+        const spell = new LunarSpell(data, key);
         return spell.cast(player, () => {
             if (key === "bake pie") {
                 let cookingExperience = 0;
@@ -238,7 +239,7 @@ export class LunarSpells {
     public static handlePlayerTarget(player: Player, target: Player, name: string | undefined): boolean {
         const key = name?.trim().toLowerCase() ?? "";
         const definitions: Record<string, SpellData> = {
-            "energy transfer": { level: 91, experience: 100, runes: [rune(9075, 3), rune(557, 2), rune(563)] },
+            "energy transfer": { level: 91, experience: 100, runes: [rune(9075, 3), rune(563, 2), rune(561)] },
             "heal other": { level: 92, experience: 101, runes: [rune(9075, 3), rune(557), rune(565, 3)] },
             "vengeance other": { level: 93, experience: 108, runes: [rune(9075, 3), rune(557, 10), rune(560, 2)], cast: castOf("vengeance other"), spellId: EffectSpells.VENGEANCE_OTHER.spellId() },
             "stat spy": { level: 75, experience: 76, runes: [rune(9075, 2), rune(557, 5), rune(563)] },
@@ -247,7 +248,7 @@ export class LunarSpells {
         };
         const data = definitions[key];
         if (!data || target === player || !this.acceptsAid(target) || !player.getLocation().isWithinDistance(target.getLocation(), 10)) return false;
-        const spell = new LunarSpell(data);
+        const spell = new LunarSpell(data, key);
         if (key === "energy transfer") {
             if (player.getSpecialPercentage() < 100) {
                 player.sendMessage("You need a full special attack bar to cast Energy Transfer.");

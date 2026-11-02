@@ -1,4 +1,5 @@
 import { mat4, vec2 } from "gl-matrix";
+import { objSurfaceHeightAt } from "../rs/scene/ObjSurfaceHeights";
 import PicoGL, {
     DrawCall,
     App as PicoApp,
@@ -419,6 +420,8 @@ export class WebGLMapSquare {
     private npcIndexBuffer?: GpuIndexBuffer;
     private npcVertexArray?: VertexArray;
     drawCallNpc?: DrawCallRange;
+
+    objSurfaceHeights?: Int16Array[][];
 
     npcEntityIds: number[] = [];
     npcIdleFrames: AnimationFrames[] = [];
@@ -1052,6 +1055,7 @@ export class WebGLMapSquare {
             mapData.tileLocTypeRotByLevel,
             mapData.tilePresenceByLevel,
         );
+        mapSquare.objSurfaceHeights = mapData.objSurfaceHeights;
         mapSquare.tileOverlays = mapData.tileOverlays;
         // Initialize occupancy counters to match initial flags
         for (const c of occInit) {
@@ -1210,6 +1214,10 @@ export class WebGLMapSquare {
 
     getLocalTileSpan(): number {
         return Math.max(0, (this.heightMapSize | 0) - (this.borderSize | 0) * 2);
+    }
+
+    getObjSurfaceHeight(level: number, tileX: number, tileY: number): number {
+        return objSurfaceHeightAt(this.objSurfaceHeights, level, tileX + this.borderSize, tileY + this.borderSize);
     }
 
     getTileRenderFlag(level: number, tileX: number, tileY: number): number {
@@ -1915,6 +1923,7 @@ export class WebGLMapSquare {
         }
 
         this.refreshLocSceneMetadata(mapData);
+        this.objSurfaceHeights = mapData.objSurfaceHeights;
         this.clearLocGeometry();
 
         const loadTime = time ?? this.timeLoaded;

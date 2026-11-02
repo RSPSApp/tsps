@@ -28,6 +28,8 @@ const AREA_CHANCE = 0.5;
 const LARGE_BRAZIER_CHANCE = 0.25;
 const PYROMANCER_DAMAGE = { min: 7, max: 13 };
 const STANDARD_FALLOFF = 3;
+/** The going-out and breaking sounds carry 2 tiles (captures). */
+const BRAZIER_SOUND_RADIUS = 2;
 
 const COLD_MESSAGE = "The cold of the Wintertodt seeps into your bones.";
 const AREA_MESSAGE = "The freezing cold attack of the Wintertodt's magic hits you.";
@@ -88,6 +90,7 @@ function smallBrazierAttack(index, ctx) {
     c.brazierTargeted = false;
     if (!ctx.isActive() || c.brazier !== Shared.BRAZIER.LIT) return;
     Corners.setBrazier(index, Shared.BRAZIER.UNLIT);
+    Effects.areaSound(Shared.SOUND.BRAZIER_OUT, c.corner.brazier, BRAZIER_SOUND_RADIUS);
     ctx.broadcast();
     for (const player of ctx.players()) {
       if (Shared.actionOf(player) !== `feed:${index}`) continue;
@@ -110,6 +113,7 @@ function largeBrazierAttack(index, ctx) {
     c.brazierTargeted = false;
     if (!ctx.isActive() || c.brazier !== Shared.BRAZIER.LIT) return;
     Corners.setBrazier(index, Shared.BRAZIER.BROKEN);
+    Effects.areaSound(Shared.SOUND.BRAZIER_BREAK, c.corner.brazier, BRAZIER_SOUND_RADIUS);
     ctx.broadcast();
     for (const player of ctx.players()) {
       if (Shared.distance(player.getLocation(), centre) > 2) continue;

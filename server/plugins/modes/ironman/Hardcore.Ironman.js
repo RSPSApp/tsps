@@ -16,6 +16,7 @@ function death(event) {
   Common.setMode(player, "ironman");
   Common.api.emitCustomEvent("persistence:save", { player, reason: "hardcore-death" });
   player.sendMessage(Common.message("hardcoreDeath"));
+  Common.api.emitCustomEvent("ironman:hardcore-death", { player });
 }
 
 module.exports = function attach(api) {

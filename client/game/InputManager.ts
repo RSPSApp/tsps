@@ -637,6 +637,8 @@ export class InputManager {
         this.writeIndex = (this.writeIndex + 1) & 0x7f;
         this.idleTime = 0;
         this.lastInputTimeMs = this.nowMs();
+        // Typed text (a paste, the mobile keyboard) is keyboard input.
+        this.lastKeyTimeMs = this.lastInputTimeMs;
     }
 
     /**
@@ -656,6 +658,7 @@ export class InputManager {
         }
         this.idleTime = 0;
         this.lastInputTimeMs = this.nowMs();
+        this.lastKeyTimeMs = this.lastInputTimeMs;
     }
 
     /** Read next character from queue (OSRS: readChar) */

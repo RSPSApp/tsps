@@ -9,6 +9,9 @@ import { inject } from "@runelite/client/plugins/PluginInjector";
 import { IdleNotifierConfig } from "../game/plugins/idlenotifier/IdleNotifierConfig";
 import { IdleNotifierPlugin } from "../game/plugins/idlenotifier/IdleNotifierPlugin";
 import { IDLE_NOTIFIER_ANIMATIONS } from "../game/plugins/idlenotifier/idleAnimations";
+import { InputManager } from "../game/InputManager";
+import { ChatPastePlugin } from "../game/plugins/chatpaste/ChatPastePlugin";
+import { ClientImpl } from "../runelite/impl/ClientImpl";
 import { SkillId } from "../rs/skill/skills";
 
 // --- Config: RuneLite's group and keys ----------------------------------------------------------
@@ -213,5 +216,61 @@ state.animation = -1;
 plugin.onGameStateChanged(new GameStateChanged(GameState.LOGIN_SCREEN));
 for (let i = 0; i < 20; i++) tick();
 assert.ok(!sent.includes("You are now idle!"), "no idle after the login screen");
+void plugin.stop();
+
+// --- Injected typing (a paste, the mobile keyboard) counts as keyboard input (#1941 review) ----
+{
+    let ms = 0;
+    const input = new InputManager();
+    (input as any).nowMs = () => ms;
+    const listeners = new Map<string, (e: Event) => void>();
+    const paste = new ChatPastePlugin(input, {
+        addEventListener: (type: string, fn: any) => void listeners.set(type, fn),
+        removeEventListener: (type: string) => void listeners.delete(type),
+    } as any);
+    void paste.start();
+    const pasteText = (text: string) => listeners.get("paste")!({
+        clipboardData: { getData: () => text },
+        target: { tagName: "CANVAS" },
+        preventDefault: () => {},
+    } as unknown as Event);
+    const adapter = new ClientImpl({ inputManager: input } as any);
+    ms = 500;
+    pasteText("hello");
+    assert.equal(adapter.getKeyboardIdleTicks(), 0, "a paste resets keyboard idle");
+    ms = 1000;
+    input.enqueueTypedChar("a".charCodeAt(0));
+    assert.equal(adapter.getKeyboardIdleTicks(), 0, "mobile keyboard text too");
+    ms = 1500;
+    input.enqueueOsrsKeyPress(84, "Enter");
+    assert.equal(adapter.getKeyboardIdleTicks(), 0, "and injected Enter/Backspace");
+    ms = 1700;
+    assert.equal(adapter.getKeyboardIdleTicks(), 10, "200 ms later: 10 client ticks");
+
+    // Idle Notifier's gate: while text is being pasted, no idle notification.
+    const pasted: string[] = [];
+    const typingClient = { ...client, getKeyboardIdleTicks: () => adapter.getKeyboardIdleTicks() } as Client;
+    const typing = new IdleNotifierPlugin(typingClient, { notify: (m) => pasted.push(m) });
+    typing.now = () => clock;
+    void typing.start();
+    const typingTick = (busy: boolean) => {
+        clock += 600;
+        ms += 600;
+        if (busy) pasteText("gz");
+        typing.onGameTick();
+    };
+    state.animation = AnimationID.HUMAN_WOODCUTTING_RUNE_AXE;
+    typingTick(false);
+    state.animation = -1;
+    for (let i = 0; i < 20; i++) typingTick(true);
+    assert.deepEqual(pasted, [], "pasting every tick keeps you active");
+    state.animation = AnimationID.HUMAN_WOODCUTTING_RUNE_AXE;
+    typingTick(false);
+    state.animation = -1;
+    for (let i = 0; i < 20; i++) typingTick(false);
+    assert.deepEqual(pasted, ["You are now idle!"], "and stopping lets it notify");
+    void typing.stop();
+    void paste.stop();
+}
 
 console.log("idle-notifier-plugin: ok");

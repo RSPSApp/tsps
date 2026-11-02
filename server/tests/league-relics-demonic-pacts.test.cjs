@@ -725,6 +725,23 @@ test("Executioner (Demonic Pacts): the axe finishes an NPC under 20%, but never 
   for (const player of [who.without, who.main]) assert.equal(struck(player, npc("Goblin")), 0);
 });
 
+test("Executioner (Demonic Pacts): the axe reaches 6 tiles for its owner, the shared profile's 5 otherwise", () => {
+  const who = cases(EXECUTIONER);
+  const reach = (attacker, combatType = core.CombatType.RANGED, distance = 5) => {
+    const event = { attacker, target: {}, combatType, manualCast: false, distance };
+    hooks.onCombatAttackDistance(event);
+    return event.distance;
+  };
+  for (const player of [who.relic, ...others(who)]) player.getEquipment().set(core.Equipment.WEAPON_SLOT, new core.Item(I.SAGES_AXE, 1));
+  assert.equal(reach(who.relic), 6);
+  assert.equal(reach(who.relic, core.CombatType.RANGED, 7), 8, "a tile more on top of what else sets it");
+  assert.equal(reach(who.relic, core.CombatType.RANGED, 10), 10, "never past 10");
+  assert.equal(reach(who.relic, core.CombatType.MELEE, 1), 1);
+  for (const player of others(who)) assert.equal(reach(player), 5);
+  who.relic.getEquipment().set(core.Equipment.WEAPON_SLOT, new core.Item(I.RUNE_THROWNAXE, 1));
+  assert.equal(reach(who.relic, core.CombatType.RANGED, 4), 4, "another weapon");
+});
+
 test("Flask of Fervour: everything restored, hits on the player 0 for four ticks, three minutes of cooldown cut by big hits", () => {
   const who = cases(FLASK_OF_FERVOUR);
   const flask = itemActions.get("Flask of fervour");

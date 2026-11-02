@@ -733,7 +733,7 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | 6 | Culling Spree | partial: free perks, elite clues per superior, a 50% second superior (`slayer:superior-again`), the Slayer helmet (i)'s boosts and protection unworn (`slayer:helmet`); not the three-task choice with a chosen count (no capture), nor the helmet uses that read the worn item (Nex's gas, the equipment screen) |
 | 7 | Flow State | partial: a 2-tick pace for Fishing, Mining, Woodcutting, Cooking, Firemaking (lighting, campfire tending), bone offering, Fletching, smelting, Crafting, Farming (raking, harvesting), alchemy, Superheat Item and enchanting (`skills:action-interval`), with a fletching knife's tick off after it (1 tick); not the minigames (Wintertodt, Tempoross, stealing valuables), nor diabolic worms (no Fishing spot uses them here) |
 | 7 | Reloaded | done (a pick from tiers 1 to 6) |
-| 8 | Executioner | done but for the 6-tile range (the axe's weapon profile is every league's) |
+| 8 | Executioner | done: the execute (never Yama) and the axe's 6 tiles of reach for its owner (`onCombatAttackDistance`; Trailblazer Reloaded's stays 5) |
 | 8 | Minion | the item only (no thrall imps) |
 | 8 | Flask of Fervour | done but for PvP damage, impact graphics and its cooldown varp |
 
@@ -829,7 +829,8 @@ These relics have their effects (`leaguerelics/*.LeagueRelics.js`, numbers in th
   weapon profile and never used up (a ranged ammo handler). Its requirement in item-gameplay.json
   is 0 (Wiki: no requirements). A ranged hit on an NPC under 20% of its hitpoints (after the hits
   already queued) deals the rest of them (`onCombatHitDamage`), for the relic's owner only. The
-  Kraken's ranged reduction applies afterwards as to any hit.
+  Kraken's ranged reduction applies afterwards as to any hit. Demonic Pacts' owner reaches a tile
+  further, 6 (`onCombatAttackDistance`, the effect's `reach`), as the shared profile stays 5.
 
 ### Raging Echoes' combat relics
 

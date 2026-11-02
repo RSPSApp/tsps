@@ -74,6 +74,9 @@ before(async () => {
   require("../plugins/combat/effects/InquisitorsArmour.EquipmentEffects")(forward);
   require("../plugins/items/VoidEquipment.plugin").register({ core, registerCombatEffectiveLevelModifier: EquipmentEffects.registerCombatEffectiveLevelModifier,
     registerMagicDamageBonusModifier: () => {}, onCustomEvent: () => {}, onPlayerLogin: () => {} });
+  require("../plugins/items/SlayerHelmet.plugin").register({ ...forward, core,
+    emitCustomEvent: (name, request) => { if (name === "slayer:on-task") request.onTask = true; },
+    onItemOnItem() {}, onItemAction() {}, onCustomEvent() {} });
   const { CombatSpecial } = require("../dist/game/content/combat/CombatSpecial");
   require("../plugins/combat/specials/DragonDagger.SpecialAttack")({ core, registerCombatSpecial: CombatSpecial.register, emitCustomEvent: () => {} });
   Common = require("../plugins/modes/leaguepacts/Common.LeaguePacts");
@@ -299,4 +302,18 @@ test("Executioner's ranged reach is not the melee range pacts': a ranged attack'
   const melee = { attacker: holder, combatType: core.CombatType.MELEE, distance: 1 };
   hooks.onCombatAttackDistance(melee);
   assert.equal(melee.distance, 2, "a two-hander's melee reach doubles");
+});
+
+test("the melee damage pacts and a slayer helmet on task each apply once: the pacts' % then the helmet's x7/6", () => {
+  const { holder, others } = cast("overlap-slayer", { talent_percentage_melee_damage: 2 });
+  const target = new NPC(HILL_GIANT, new Location(3200, 3201, 0));
+  for (const player of [holder, ...others]) {
+    equip(player, core.Equipment.WEAPON_SLOT, ITEMS.whip);
+    equip(player, core.Equipment.HEAD_SLOT, I().SLAYER_HELMET);
+    player.getCombat().getTarget = () => target;
+  }
+  const base = formula(holder.getBonusManager().getOtherBonus()[core.BonusManager.STRENGTH]);
+  assert.equal(EquipmentEffects.applyMeleeHitModifiers(others[1], 600), 700, "the helmet on task: x7/6");
+  assert.equal(core.DamageFormulas.calculateMaxMeleeHit(holder), Math.floor((Math.floor((base * 102) / 100) * 7) / 6), "+2%, then x7/6");
+  for (const other of others) assert.equal(core.DamageFormulas.calculateMaxMeleeHit(other), Math.floor((base * 7) / 6));
 });

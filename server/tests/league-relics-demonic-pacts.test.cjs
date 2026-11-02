@@ -438,6 +438,12 @@ test("Larcenist: sure pickpockets, ten times the pouches, loot noted and tenfold
   }
 });
 
+test("Larcenist: guards never catch the relic's owner at a stall (thieving:stall-watch)", () => {
+  const who = cases(LARCENIST);
+  assert.equal(emit("thieving:stall-watch", { player: who.relic, object: {}, unseen: false }).unseen, true);
+  for (const player of others(who)) assert.equal(emit("thieving:stall-watch", { player, object: {}, unseen: false }).unseen, false);
+});
+
 test("Soul Harvest: dropped bones and ashes become soul shards in the inventory (while toggled), crops come as shards", () => {
   const who = cases(SOUL_HARVEST);
   const drops = [{ itemId: I.BIG_BONES, amount: 1, noted: false }, { itemId: I.COINS, amount: 5, noted: false }, { itemId: I.VILE_ASHES, amount: 1, noted: false }];

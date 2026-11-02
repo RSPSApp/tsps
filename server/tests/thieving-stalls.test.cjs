@@ -157,8 +157,23 @@ test('visible guards catch and attack thieves, preventing loot, XP, pets and dep
     assert.ok(!who.messages.includes("You've been caught stealing!"));
     assert.equal(who.items.length, 0);
     assert.equal(who.xp.length, 0);
-    assert.equal(events.length, 0);
+    assert.deepEqual(events.map(([name]) => name), ['thieving:stall-watch'], 'only the watch asked');
     assert.ok(!depleted.has(stall));
+});
+
+test('content may keep a thief unseen (thieving:stall-watch): no guard catches them', () => {
+    const emit = testApi.emitCustomEvent;
+    testApi.emitCustomEvent = (name, request) => { if (name === 'thieving:stall-watch') request.unseen = true; emit(name, request); };
+    try {
+        const who = player(), stall = object();
+        const guard = npc('Guard', { attackable: true });
+        click(who, stall);
+        advance();
+        assert.deepEqual([guard.attacks, guard.chats], [[], []]);
+        assert.equal(who.items.length, 1);
+    } finally {
+        testApi.emitCustomEvent = emit;
+    }
 });
 
 test('the owner calls a nearby guard even if that guard cannot see the thief', () => {

@@ -3,9 +3,9 @@
  * relic: every pickpocket succeeds, the coin pouch limit is ten times as high, pickpockets and
  * stall thefts repeat themselves, stalls never run out for the relic's owner, and what both give
  * is noted and multiplied by 10 (coins as ten pouches; an item that neither stacks nor notes, and
- * a clue, once: as the other Thieving relics).
- * Not here: guards that never catch a stall thief, and the tenfold Varlamore house valuables
- * (Thieving asks no hook for either).
+ * a clue, once: as the other Thieving relics). No guard (nor the stall's owner, whose shout sends
+ * them) catches the relic's owner at a stall (`thieving:stall-watch`).
+ * Not here: the tenfold Varlamore house valuables (house thieving is not on the server).
  */
 const Common = require("./Common.LeagueRelics");
 
@@ -48,6 +48,10 @@ function stallLoot({ player, method, itemId }) {
   inventory.adds(noted, amount);
 }
 
+function unseen(watch) {
+  if (active(watch.player)) watch.unseen = true;
+}
+
 module.exports = function attach(api) {
   effect = Common.data.effects.larcenist;
   api.onCustomEvent("thieving:pickpocket-target", pickpocketTarget);
@@ -55,4 +59,5 @@ module.exports = function attach(api) {
   api.onCustomEvent("thieving:done", again);
   api.onCustomEvent("thieving:deplete-stall", keepStall);
   api.onCustomEvent("thieving:success", stallLoot);
+  api.onCustomEvent("thieving:stall-watch", unseen);
 };

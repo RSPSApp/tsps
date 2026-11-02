@@ -886,7 +886,7 @@ const restoredArmed = new EditModePlugin({
 });
 assert.equal(restoredArmed.getConfig().active, false);
 
-// Entering the preview arms the tools, so Esc has something to exit.
+// Entering the preview arms the tools.
 plugin.setConfig({ enabled: true, active: false });
 plugin.setScenePreview(true);
 assert.equal(plugin.getConfig().active, true);

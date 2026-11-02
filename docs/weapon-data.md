@@ -85,9 +85,9 @@ From the most specific source to the least:
 - **Per attack type:** `attackAnim` is one animation for every style, or one per attack type: the Soulreaper axe has `{"slash": 10171, "crush": 10172}` (`ancient_axe_slash` / `ancient_axe_crush`).
 - **Against NPCs:** the cache has separate animations for some ranged attacks on NPCs, named `..._pvn`. A style's `npcAnimation`, or a profile's `npcAttackAnimation`, is used when the target is an NPC; the plain one when it's a player. The captures (all on NPCs) show the `_pvn` ones. There's no capture of these attacks on players, so the plain ones stay there.
 
-Every weapon's resolved animation, and every type's style animations, are audited against the
-Wiki's combat styles and the cache's sequence names in [audits/weapons.md](audits/weapons.md)
-(`yarn audit:weapons`). It records the types still without a capture.
+Every weapon's resolved animation, and every type's style animations, were reviewed against the
+Wiki's combat styles and the cache's sequence names in [audits/weapons.md](audits/weapons.md).
+It records the types still without a capture.
 
 ### From rsprox captures
 

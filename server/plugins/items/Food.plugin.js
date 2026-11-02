@@ -335,7 +335,7 @@ function eat(event) {
   for (const line of after) player.sendMessage(line);
   countBite(player);
   const heal = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS) - hitpointsBefore;
-  pluginApi.emitCustomEvent("food:eaten", { player, itemId, heal, meta });
+  pluginApi.emitCustomEvent("food:eaten", { player, itemId, heal, meta, hitpointsBefore });
 }
 
 module.exports = {

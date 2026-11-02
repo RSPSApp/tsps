@@ -143,6 +143,7 @@ export class PlayerDeathTask extends Task {
 
                     // Perform death animation..
                     this.player.performAnimation(new Animation(836));
+                    PluginManager.emitCustomEvent("player:dying", { player: this.player, killer: this.killer ?? null });
 
                     // Retribution hits our killer, unless the killing blow was rebounded
                     // damage - recoil, vengeance or another Retribution (Wiki: Retribution).

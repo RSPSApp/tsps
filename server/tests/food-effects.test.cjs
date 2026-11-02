@@ -218,6 +218,9 @@ test("eating a shark: animation, the messages, the food-eaten varp, 3 ticks on b
   player.give(0, id("SHARK"));
   player.eat(0);
   assert.equal(player.hp, 70);
+  const eaten = customEvents.findLast(event => event.name === "food:eaten").request;
+  assert.equal(eaten.hitpointsBefore, 50, "eating observers receive the HP before healing");
+  assert.equal(eaten.heal, 20);
   assert.equal(player.slots[0], null);
   assert.deepEqual(player.messages, ["You eat the shark.", "It heals some health."]);
   assert.equal(player.varps.get(4518), 1, "tracking_food_eaten");
@@ -230,6 +233,7 @@ test("eating a shark: animation, the messages, the food-eaten varp, 3 ticks on b
   full.give(0, id("SHARK"));
   full.eat(0);
   assert.deepEqual(full.messages, ["You eat the shark."], "no heal line at full Hitpoints");
+  assert.equal(customEvents.findLast(event => event.name === "food:eaten").request.hitpointsBefore, 99);
 });
 
 test("a karambwan follows food in the same tick; a fast pie's 1-tick delay ends sooner", () => {

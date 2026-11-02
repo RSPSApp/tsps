@@ -82,6 +82,7 @@ function siteToHotspot(site, loadouts) {
     roamRadius: pvp.roam,
     lingerMs: pvp.lingerMs,
     maxSimultaneousFights: pvp.maxFights,
+    smiteOnly: pvp.smiteOnly === true,
     combatLevelRange: pvp.combat ? { min: pvp.combat[0], max: pvp.combat[1] } : undefined,
     allowedProfiles: pvp.profiles ?? listPvpProfiles().map((profile) => profile.id),
     allowedLoadouts,

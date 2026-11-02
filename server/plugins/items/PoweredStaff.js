@@ -148,7 +148,8 @@ function definePoweredStaff(api, config) {
       hits(character, target) {
         const spell = spellFor(character.getAsPlayer());
         const delay = config.hitDelay ? config.hitDelay(character, target) : MagicCombatMethod.hitDelay(character, target, spell);
-        const hit = new PendingHit(character, target, this, delay).setSpell(spell);
+        // The built-in spell is never the staff's special (the resolver steps aside for that).
+        const hit = new PendingHit(character, target, this, { delay, ordinary: true }).setSpell(spell);
         spell.onHitCalc(hit);
         config.onHitCalc?.(hit);
         if (config.impact) sendImpact(character, target, hit.isAccurate());

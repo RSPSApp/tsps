@@ -306,3 +306,58 @@ test("Condemn covers both sceptres and rolls 1.5 times (Wiki)", () => {
   assert.equal(registered.traits.damageMultiplier, 1.5);
   assert.equal(registered.traits.accuracyMultiplier, 1.5);
 });
+
+test("an armed Soul Rend lends nothing to an explicitly cast spell (PR #1947 review)", async () => {
+  const path = require("node:path");
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { CombatFactory } = require("../dist/game/content/combat/CombatFactory");
+  const { CombatSpecial } = require("../dist/game/content/combat/CombatSpecial");
+  const { CombatSpells } = require("../dist/game/content/combat/magic/CombatSpells");
+  const { DamageFormulas } = require("../dist/game/content/combat/formula/DamageFormulas");
+  const { Skill } = require("../dist/game/model/Skill");
+  require("../plugins/combat/specials/EyeOfAyak.SpecialAttack")({
+    core, registerCombatSpecial: (definition) => CombatSpecial.register(definition), emitCustomEvent: () => {},
+  });
+
+  const player = new Player(null, new Location(3200, 3200, 0));
+  player.getPacketSender = () => new Proxy({}, { get: () => () => {} });
+  player.getSkillManager().setMaxLevel(Skill.MAGIC, 99).setCurrentLevel(Skill.MAGIC, 99, false);
+  const staff = staffItem(I.EYE_OF_AYAK, EyeOfAyak._test.CHARGES_KEY, 10);
+  player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT] = staff;
+  CombatSpecial.assign(player);
+  const target = core.NPC.create(3106, new Location(3203, 3200, 0));
+  target.setHitpoints(1000); // a hit is capped at the target's hitpoints
+  player.getCombat().setTarget?.(target);
+  const surge = CombatSpells.FIRE_SURGE.getSpell();
+
+  const ceiling = (armed) => {
+    player.setSpecialActivated(armed);
+    player.getCombat().setCastSpell(surge);
+    const method = CombatFactory.getMethod(player);
+    assert.equal(method, CombatFactory.MAGIC_COMBAT, "the explicit spell owns the attack");
+    const original = Math.random;
+    Math.random = () => 0.999999; // the roll's ceiling: always accurate, the top damage
+    try {
+      return method.hits(player, target)[0].getTotalDamage();
+    } finally {
+      Math.random = original;
+    }
+  };
+  const unarmed = ceiling(false);
+  const armed = ceiling(true);
+  assert.ok(unarmed > 0);
+  assert.equal(armed, unarmed, "Soul Rend's 1.3 stays with Soul Rend");
+  assert.equal(player.isSpecialActivated(), true, "the special stays armed for the next attack");
+  assert.equal(player.getSpecialPercentage(), 100, "no energy is spent");
+  assert.equal(EyeOfAyak._test.staff.chargesOf(staff), 10, "no charge is spent");
+
+  // Soul Rend's own paid hit keeps its multiplier: the bounds read the armed special.
+  player.setSpecialActivated(true);
+  player.getCombat().setCastSpell(EyeOfAyak._test.staff.spellFor(player));
+  const special = DamageFormulas.sourceHitBounds(player, core.CombatType.MAGIC, target).maximum;
+  player.setSpecialActivated(false);
+  const plain = DamageFormulas.sourceHitBounds(player, core.CombatType.MAGIC, target).maximum;
+  assert.equal(special, Math.floor(plain * 1.3));
+});

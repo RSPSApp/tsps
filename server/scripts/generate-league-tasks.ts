@@ -332,7 +332,7 @@ function alternativesOf(description: string): string[] {
 }
 
 /** The cache names a trigger may name, each checked before it is written. */
-interface Names { npcs: Map<string, string>; quests: Map<string, string>; items: Map<string, string> }
+interface Names { npcs: Map<string, string>; quests: Map<string, string>; items: Map<string, string>; homes?: Map<string, string[]> }
 
 /** A condition in a task's description (where, how, how fast): not a plain count of the deed. */
 const CONDITION = /\b(without|while|using|within|in under|with only|solo|duo|trio|wearing|wielding|less than|fewer than|must be|do not count|at once|in one|at the same time|in a row|whilst|before|after)\b/i;
@@ -546,6 +546,7 @@ function leagueAreaOf(text: string): { area: number | null; text: string } {
   return { area: null, text };
 }
 
+
 /**
  * What a description says that is only the deed itself, not a condition: "whilst fishing" after a
  * catch, "from Essence at the Fire Altar" after a rune crafted (a rune is only crafted at its altar,
@@ -569,8 +570,40 @@ function potionNamed(text: string, items: Map<string, string>): string | null {
   return null;
 }
 
+/** The combat levels of the cache NPCs of a name that have an Attack option. */
+let attackable: Map<string, Set<number>> | null = null;
+function attackLevels(name: string): Set<number> {
+  if (!attackable) {
+    attackable = new Map();
+    for (let id = 0; id < CacheDefinitions.getCounts().npcs; id++) {
+      const npc: any = CacheDefinitions.getNpc(id);
+      if (!npc?.name || !(npc.actions ?? []).includes("Attack")) continue;
+      const key = npc.name.toLowerCase();
+      (attackable.get(key) ?? attackable.set(key, new Set()).get(key)!).add(Number(npc.combatLevel));
+    }
+  }
+  return attackable.get(name.toLowerCase()) ?? new Set();
+}
+
+/** A place name as two spellings of it compare: lower-cased, without "the", a parenthesis or a plural. */
+const placeKey = (text: string) => text.toLowerCase().replace(/\s*\(.*$/, "").replace(/^the /, "").replace(/s$/, "").trim();
+
+/**
+ * "Defeat a X in the P" without "in the P" when every location the Wiki gives X (its page's
+ * location lines) is P; otherwise unchanged.
+ */
+function withoutOnlyHome(description: string, homes?: Map<string, string[]>): string {
+  const match = /^((?:Defeat|Kill|Slay) (?:an? |the |some |\d+ )?(.+?))\s+(?:in|on|at|inside|within|beneath|underneath|under) (?:the )?(.+?)((?: \d+ times)?\.?)$/.exec(description);
+  const known = match ? homes?.get(match[2].toLowerCase()) : undefined;
+  if (!match || !known?.length || !known.every((home) => placeKey(home) === placeKey(match[3]))) return description;
+  // And the name is that one monster's: every cache NPC of the name one can attack is of one level
+  // (the duck called "Drake" cannot be attacked).
+  if (attackLevels(match[2]).size !== 1) return description;
+  return `${match[1]}${match[4]}`;
+}
+
 function deriveTrigger(name: string, rawDescription: string, names: Names): { trigger?: Trigger; unmapped?: string } {
-  const { npcs, quests, items } = names;
+  const { npcs, quests, items, homes } = names;
   let description = withoutRestatement(name, rawDescription);
   let match: RegExpExecArray | null;
   if ((match = /^Reach Level (\d+) ([A-Za-z]+)$/.exec(name)) && SKILLS[match[2].toLowerCase()]) {
@@ -677,6 +710,9 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     if (caMonsters().has(bossName)) {
       description = description.replace(/\s+(?:in|on|at|inside|beneath|under|underneath) (?:the )?[A-Z][^.]*?(?=(?: \d+ times?)?\.?$)/, "");
     }
+    // A monster the Wiki has in that one place only ("Defeat a Drake in the Karuulm Slayer Dungeon":
+    // every location line of its page is the dungeon) is killed there whatever the task adds.
+    description = withoutOnlyHome(description, homes);
     // A condition in the description (where, how, how fast) is not a plain kill count: a place
     // ("in the Fremennik Province", "on Ungael") needs the area unlocks, which do not exist yet.
     // "(must be of one difficulty, normal and awakened together do not count)" is one too.
@@ -1128,6 +1164,53 @@ async function wikitextOf(league: League, options: { from?: string; save?: strin
   return text;
 }
 
+/**
+ * The monsters a kill task names before a place ("Defeat a [[Drake]] in the [[Karuulm Slayer
+ * Dungeon]]"): their Wiki pages, read for where they live.
+ */
+function homePagesOf(wikitext: string): string[] {
+  const pages: string[] = [];
+  for (const [, description] of wikitext.matchAll(/\{\{(?:DPL|REL|TRL)TaskRow\|[^|]*\|([^\n]*?)\|s=/g)) {
+    const subject = /^(?:Defeat|Kill|Slay) (?:an? |the |some |\d+ )?\[\[([^\]|#]+)/.exec(description);
+    if (subject && /\b(?:in|on|at|inside|within|beneath|underneath|under)\b (?:the )?(?:\[\[|[A-Z])/.test(description.slice(subject.index + subject[0].length))) pages.push(subject[1].trim());
+  }
+  return pages;
+}
+
+/**
+ * Where the Wiki says a monster lives: each {{LocLine}}'s location (its first link), else its
+ * infobox's. A monster that lives in one place only is killed there whatever a task adds.
+ */
+function homesOf(wikitext: string): string[] {
+  const firstLink = (text: string) => /\[\[([^\]|#]+)/.exec(text)?.[1].trim() ?? text.replace(/\(.*$/, "").trim();
+  const lines = [...wikitext.matchAll(/\{\{LocLine\b[\s\S]*?\|\s*location\s*=([^|\n]*)/g)].map((match) => firstLink(match[1]));
+  if (lines.length) return lines;
+  const infobox = /^\|\s*location\s*=(.*)$/m.exec(wikitext);
+  return infobox ? [firstLink(infobox[1])] : [];
+}
+
+/** A Wiki page by its title, following a redirect; saved as <dir>/<kind>/<title>.wikitext like the task pages. */
+async function wikiPageOf(kind: string, page: string, options: { from?: string; save?: string }): Promise<string> {
+  const file = `${page.replace(/ /g, "_").replace(/\//g, "_")}.wikitext`;
+  if (options.from) return fs.readFileSync(path.join(options.from, kind, file), "utf8");
+  let title = page;
+  let text = "";
+  for (let hop = 0; hop < 3; hop++) {
+    const url = `https://oldschool.runescape.wiki/w/${encodeURIComponent(title.replace(/ /g, "_")).replace(/%2F/g, "/")}?action=raw`;
+    const response = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(60_000) });
+    if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+    text = await response.text();
+    const redirect = /^#REDIRECT\s*\[\[([^\]#|]+)/i.exec(text);
+    if (!redirect) break;
+    title = redirect[1].trim();
+  }
+  if (options.save) {
+    fs.mkdirSync(path.join(options.save, kind), { recursive: true });
+    fs.writeFileSync(path.join(options.save, kind, file), text);
+  }
+  return text;
+}
+
 function serialise(output: Record<string, unknown>): string {
   // Each task on its own line, so the file diffs by task.
   const leagues = output.leagues as Record<string, { tasks: Task[]; [key: string]: unknown }>;
@@ -1151,14 +1234,19 @@ async function main() {
   for (const league of LEAGUES) if (league.fromCache) league.points = cachePoints();
   const npcs = npcNames();
   const quests = questNames();
-  const names: Names = { npcs, quests, items: itemNames() };
+  const names: Names = { npcs, quests, items: itemNames(), homes: new Map() };
 
   const rows = new Map<League, WikiRow[]>();
+  const rawPages = new Map<League, string>();
   for (const league of LEAGUES) {
     const wikitext = await wikitextOf(league, options);
+    rawPages.set(league, wikitext);
     rows.set(league, templateCalls(wikitext, league.template).map(parseRow));
   }
   const areas = areaIds(cache, rows);
+  // The homes of the monsters the kill tasks name before a place, by lower-cased page title.
+  const homePages = [...new Set(LEAGUES.flatMap((league) => homePagesOf(rawPages.get(league)!)))].sort();
+  for (const page of homePages) names.homes!.set(page.toLowerCase(), homesOf(await wikiPageOf("npcs", page, options)));
 
   const output: Record<string, unknown> = {
     $comment: "Generated by server/scripts/generate-league-tasks.ts (yarn generate:league-tasks) from the OSRS Wiki's Trailblazer_Reloaded_League/Tasks, Raging_Echoes_League/Tasks and Demonic_Pacts_League/Tasks pages and the rev 241 cache; never edit by hand (docs/leagues.md, Tasks). A task's position in its league's list is its completion bit for the client (script 9470): its `position` where the league is `fromCache` (Demonic Pacts, whose list is the cache's own, in the cache's order; `pactTask` marks the tasks that award a pact point), else its index; saves hold the string ids. `category` is the cache's where the current league's task table (118) has the task by name, else a rule in the generator (`categorySource`). `points` are the league's tier points; `areas` the client's area enum (3412) ids by the Wiki's region names. `trigger` is a derived, verified award trigger (docs/leagues.md lists the kinds); tasks without one await a mapping in league-task-triggers.json.",

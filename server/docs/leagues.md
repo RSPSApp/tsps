@@ -1561,7 +1561,10 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   description lists join it: "Defeat Callisto or Artio 50 times", "Defeat The Nightmare or
   Phosani's Nightmare 50 times combined"; "in the Fremennik Province", "on Ungael", "without
   leaving" or Raging Echoes' "must be of one difficulty" leave the task unmapped, the places
-  until the area unlocks exist, even for a boss with one home), a quest only when
+  until the area unlocks exist, even for a boss with one home; a monster whose every location line
+  on its Wiki page is the task's place, and whose name the cache gives one attackable monster, is
+  killed there whatever the task adds: "Defeat a Drake in the Karuulm Slayer Dungeon", the pages
+  saved as `<dir>/npcs/<page>.wikitext`), a quest only when
   `plugins/quests/quests` registers that name, and a level only for a known skill; its report
   lists the kill tasks it could not map. To map more: add a kind (a trigger kind is a few lines in Triggers.LeagueTasks),
   a rule in the generator, or an entry in the overlay; or have the plugin that knows the deed emit

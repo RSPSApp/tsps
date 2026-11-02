@@ -517,6 +517,9 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("defeat-vorkath-50-times"), { kind: "kill", npcs: ["Vorkath"], count: 50 });
   assert.deepEqual(trigger("defeat-sarachnis-50-times"), { kind: "kill", npcs: ["Sarachnis"], count: 50 });
   assert.equal(trigger("defeat-vorkath-15-times-without-leaving"), undefined, "its condition still stands");
+  // A monster the Wiki has in one place only: the place only says where it lives.
+  assert.deepEqual(trigger("defeat-a-drake"), { kind: "kill", npcs: ["Drake"], count: 1 }, "every Drake the Wiki lists is in the Karuulm Slayer Dungeon");
+  assert.equal(trigger("defeat-a-snake-in-karamja").area, 2, "a monster of many homes keeps its place");
 
   // Fires, burnt food and bones: the logs or bones named, any bones for "Remains of any kind".
   assert.deepEqual(trigger("burn-100-willow-logs"), { kind: "burn", items: ["Willow logs"], count: 100 });

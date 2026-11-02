@@ -619,6 +619,10 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   if ((match = /^Hand in a sword with at least (\d+) quality in Giants' Foundry\.?$/i.exec(description))) {
     return { trigger: { kind: "foundry", quality: Number(match[1]), count: 1 } };
   }
+  // "Complete a Hunter Rumour", "Complete 25 Hunter Rumours" ("Hunters' Rumours"): rumours handed in.
+  if ((match = /^Complete (an?|\d+) Hunter(?:'?s'?)? Rumours?\.?$/i.exec(description))) {
+    return { trigger: { kind: "rumours", count: /^an?$/i.test(match[1]) ? 1 : Number(match[1]) } };
+  }
   // "Complete floor 3 of the Hallowed Sepulchre in Darkmeyer": that floor done.
   if ((match = /^Complete floor (\d) of the Hallowed Sepulchre in Darkmeyer\.?$/i.exec(description))) {
     return { trigger: { kind: "sepulchre-floor", floor: Number(match[1]), count: 1 } };

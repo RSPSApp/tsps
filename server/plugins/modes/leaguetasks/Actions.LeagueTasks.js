@@ -44,7 +44,7 @@
  *   (`farming:harvest`, a patch emptied), `foundry { quality?, count }`
  *   (`giants-foundry:sword-handed-in`), `plunder-chest { room, count }`
  *   (`pyramid-plunder:chest-searched`), `sepulchre-floor { floor, count }`
- *   (`hallowed-sepulchre:floor-completed`).
+ *   (`hallowed-sepulchre:floor-completed`), `rumours { count }` (`hunter:rumour-completed`).
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -330,6 +330,7 @@ const EVENT_KINDS = new Map([
   // A successful sword: a ruined one (quality 0) counts for neither.
   ["plunder-chest", (trigger, event) => Number(event.room) === trigger.room],
   ["sepulchre-floor", (trigger, event) => Number(event.floor) === trigger.floor],
+  ["rumours", () => true],
   ["foundry", (trigger, event) => Number(event.quality) > 0 && (!(trigger.quality > 0) || Number(event.quality) >= trigger.quality)],
 ]);
 
@@ -386,6 +387,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("giants-foundry:sword-handed-in", onEvent("foundry"));
   api.onCustomEvent("pyramid-plunder:chest-searched", onEvent("plunder-chest"));
   api.onCustomEvent("hallowed-sepulchre:floor-completed", onEvent("sepulchre-floor"));
+  api.onCustomEvent("hunter:rumour-completed", onEvent("rumours"));
   api.onCustomEvent("farming:check-health", checkedHealth);
   api.onCustomEvent("collection-log:new-item", logged);
   api.onCustomEvent("world:picked", picked);

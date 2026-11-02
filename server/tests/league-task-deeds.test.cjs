@@ -485,3 +485,20 @@ test("sepulchre-floor: a floor credited by the real Hallowed Sepulchre run (Comp
   assert.ok(done(f, "floor-3-of-the-hallowed-sepulchre"));
   assert.ok(!done(f, "floor-4-of-the-hallowed-sepulchre"));
 });
+
+test("rumours: a Hunter rumour handed in to the real guild hunter (Complete a Hunter Rumour)", (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.HUNTER, 99);
+  skills.setCurrentLevel(core.Skill.HUNTER, 99);
+  const Rumours = require("../plugins/skills/hunter/Rumours.Hunter");
+  const [taskKey, task] = Object.entries(Rumours.tasks).find(([, each]) => each.part && core.ItemIdentifiers[each.part]);
+  const s = Rumours.state(f.player);
+  s.unlocked = true;
+  s.assignments[0] = { task: taskKey, found: true };
+  f.player.getInventory().add(new core.Item(core.ItemIdentifiers[task.part]), true);
+  Rumours.assign(f.player, 0);
+  assert.ok(f.messages.some((text) => /Rumour completed/.test(text)), `the real rumour: ${f.messages}`);
+  assert.ok(done(f, "complete-a-hunter-rumour"));
+  assert.equal(f.player.getAttribute("league:task-progress")["complete-10-hunter-rumours"], 1);
+});

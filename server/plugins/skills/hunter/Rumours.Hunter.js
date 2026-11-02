@@ -37,6 +37,8 @@ function assign(player, index) {
       player.getSkillManager().addExperiences(H.core.Skill.HUNTER,amount);
       s.completed++; s.previous = current.task; delete s.assignments[index];
       player.sendMessage(`Rumour completed! You have completed ${s.completed} rumours.`);
+      // "hunter:rumour-completed" { player, completed }: one more (a league's "Complete 10 Hunter Rumours").
+      H.api?.emitCustomEvent?.("hunter:rumour-completed", { player, completed: s.completed });
     } else { player.sendMessage(`Your active rumour is ${task.name}. Bring back ${H.core.ItemDefinition.forId(part).getName()}.`); return; }
   }
   const blocked = Object.values(s.assignments).map(a=>a.task);

@@ -60,7 +60,8 @@ test("an existing cache repairs both manifests and publishes every file without 
         assert.equal(JSON.parse(fs.readFileSync(path.join(root, directory, "caches.json")))[0].name, target);
     }
     assert.equal(fs.readFileSync(path.join(root, "public", target, "main_file_cache.idx0"), "utf8"), "cache bytes");
-    assert.equal(fs.statSync(path.join(root, "public", target)).mode & 0o777, 0o755);
+    // Windows has no POSIX directory modes: chmod is a no-op and stat reports 0o666.
+    if (process.platform !== "win32") assert.equal(fs.statSync(path.join(root, "public", target)).mode & 0o777, 0o755);
     assert.ok(fs.existsSync(path.join(root, "public", oldTarget, "main_file_cache.dat2")));
     // Re-running also repairs an independently stale public manifest.
     manifest(path.join(root, "public"), oldTarget);

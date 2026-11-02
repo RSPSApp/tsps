@@ -1650,7 +1650,7 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   count }` (no category: the whole log, "Obtain 15 unique Collection Log slots"; a clue tier's
   Treasure Trails slots: "Fill 15 slots in the Hard Clue section", "Gain 10
   unique items from Reward casket (easy)") asked of the log's `collection-log:slots` when
-  `collection-log:new-item` fills one and at login, `check-health { types | crops, count }` from
+  `collection-log:slot-filled` fills one and at login, `check-health { types | crops, count }` from
   `farming:check-health` (its crop type, or a cactus by its crop), `slayer-tasks { count }` from
   Slayer's `slayer:task-completed`, `superior-kills { count }` from `slayer:superior-killed` (on
   task or off), `temple-trek { difficulty, count }` from `temple-trekking:completed` (its own

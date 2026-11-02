@@ -308,7 +308,7 @@ test("a custom shop's npcInteractions bind its NPC, over shops.json on the same 
   };
   const readFileSync = fs.readFileSync;
   t.mock.method(fs, "readFileSync", (file, ...args) => {
-    const name = Object.keys(files).find((candidate) => String(file).endsWith(`/${candidate}`));
+    const name = Object.keys(files).find((candidate) => require("node:path").basename(String(file)) === candidate);
     return name ? JSON.stringify(files[name]) : readFileSync(file, ...args);
   });
   assert.deepEqual([...shopkeepers()], [["1:3", 100], ["2:3", null], ["3:3", 7], ["4:1", 8]],

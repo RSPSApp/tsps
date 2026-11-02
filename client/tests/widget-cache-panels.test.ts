@@ -221,6 +221,9 @@ import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdat
     player.moveTo(new core.Location(2423, 3076, 1));
     setUp!({ player, slot: 0 });
     checkCastleHud(ZAMORAK, 1);
+    // The configured cap only applies while practice bots are in the game.
+    const hasPracticeBots = game.hasPracticeBots;
+    game.hasPracticeBots = () => true;
     game.settings.barricades = 20;
     checkCastleHud(SARADOMIN, 1);
     checkCastleHud(ZAMORAK, 1);
@@ -238,6 +241,7 @@ import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdat
     extra.forEach(npc => game.releaseBarricade(npc));
     checkCastleHud(ZAMORAK, 1);
     game.settings.barricades = 10;
+    game.hasPracticeBots = hasPracticeBots;
     checkCastleHud(ZAMORAK, 1);
     assert.equal(wm.isServerOwnedWidget((59 << 16) | 15), false, 'normal mode releases cache text ownership');
     game.removeBarricade(first);
@@ -280,6 +284,7 @@ import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdat
     }
     checkCastleHud(ZAMORAK, 1);
     const remaining = [...World.getNpcs()].filter((npc: any) => game.isBarricade(npc));
+    game.hasPracticeBots = () => true;
     game.settings.barricades = 20;
     game.resetMatchState();
     castleStates[SARADOMIN] = castleStates[ZAMORAK] = [100, 0, 0, 0, 0];
@@ -288,6 +293,7 @@ import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdat
     checkCastleHud(ZAMORAK, 0);
     checkCastleHud(SARADOMIN, 0);
     game.settings.barricades = 10;
+    game.hasPracticeBots = hasPracticeBots;
     checkCastleHud(SARADOMIN, 0);
 
     // The cache itself grants free runes only with a pouch and an active Castle Wars team.

@@ -457,7 +457,7 @@ test('Native18 primary spawn rows: Zembo, docks Korel and Sarim Will/Anne', () =
   const spawns = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/definitions/npc-spawns.json'), 'utf8'));
   const row = (x, y, name) => spawns.find((entry) => entry.name === name && entry.x === x && entry.y === y);
 
-  assert.deepEqual(row(2927, 3143, 'Zembo'), { level: 0, name: 'Zembo', x: 2927, y: 3143, id: 13655 });
+  assert.deepEqual(row(2927, 3143, 'Zembo'), { level: 0, name: 'Zembo', x: 2927, y: 3143, id: 13655, wanderRadius: 2 });
   assert.equal(spawns.some((entry) => entry.id === 3205 && entry.x === 2925 && entry.y === 3143), false,
     'the stale Surok transition row is gone');
   assert.equal(CacheDefinitions.getNpc(13655)?.name, 'Zembo');

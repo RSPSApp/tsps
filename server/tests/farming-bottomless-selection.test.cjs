@@ -33,7 +33,8 @@ function prepare(t, { empty = false } = {}) {
         selected.setMetaValue('farming:charges', 4).setMetaValue('farming:tier', 2);
     }
     player.getInventory().add(first, false).add(selected, false);
-    return { player, first: player.getInventory().forSlot(0), selected: player.getInventory().forSlot(1) };
+    // Read the slots live: filling commits a planned copy of the inventory, so the items are replaced.
+    return { player, get first() { return player.getInventory().forSlot(0); }, get selected() { return player.getInventory().forSlot(1); } };
 }
 function useOnPatch(f, type = 'HERB') {
     const patch = Data.CACHE.patches.find(p => p.type === type), farm = Patches.farmFor(f.player);

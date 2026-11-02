@@ -117,6 +117,8 @@ function snapshot() {
 }
 
 // Registers real quest plugin sources into the real PluginManager hook arrays.
+const START_QUESTS = new Set(['zogre_flesh_eaters', 'priest_in_peril']);
+
 function registerQuestPlugin(name, pluginName, questKey) {
   const before = snapshot();
   const customEvents = new Set();
@@ -179,7 +181,14 @@ function registerQuestPlugin(name, pluginName, questKey) {
       hooks.push({ pluginName, handler });
       PluginManager.customEventHooks.set(eventName, hooks);
     };
-    if (key === 'emitCustomEvent') return (eventName, payload) => PluginManager.emitCustomEvent(eventName, payload);
+    if (key === 'emitCustomEvent') return (eventName, payload) => {
+      // Zogre Flesh Eaters and Priest in Peril are the start requirements.
+      if (eventName === 'quest:is-complete' && START_QUESTS.has(payload?.key)) {
+        payload.complete = true;
+        return;
+      }
+      PluginManager.emitCustomEvent(eventName, payload);
+    };
     if (key === 'spawnNpc') return (def) => {
       const npc = { def, getId: () => def.id, getOwner: () => def.owner, isRegistered: () => true };
       spawned.push(npc);

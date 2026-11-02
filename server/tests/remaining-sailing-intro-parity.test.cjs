@@ -265,6 +265,8 @@ test('Pandemonium uses the captured varbit stages and the real raft cargo route'
 test('Crab Quest uses 5/25/30/45/47/50/55/60/63 and hands in all seven shells', () => {
   const h = setup();
   const quest = load(h, 'CrabQuest.Quest.js');
+  // Pandemonium is a start requirement; load it after Crab Quest so hooks.npcs[0] stays the Crab's.
+  load(h, 'Pandemonium.Quest.js').setStage(h.player, 50);
   assert.equal(quest.startedValue, 5);
   assert.equal(quest.completionValue, 63);
   h.emit('npc-dialogue:hook', { npcId: h.core.NpcIdentifiers.CRAB_9, hook: 'quest:crab-quest:start' });

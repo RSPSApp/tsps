@@ -111,6 +111,7 @@ function setup() {
     getDialogueManager: () => ({ isActive: () => false, getCurrent: () => null, startDialogues(chain) { dialogueStarts.push(chain); }, reset() {} }),
     getSkillManager: () => ({
       getCurrentLevel: (skill) => levels.get(skill) ?? 99,
+      getMaxLevel: (skill) => levels.get(skill) ?? 99,
       getCombatLevel: () => combat,
     }),
     getLocation: () => location,

@@ -78,6 +78,7 @@ test('Cook exchanges the captured ingredients box, then rewards only after the f
   start(h, p, N.COOK_7, 'quest:cook-s-assistant:start');
   const message = h.action(p, N.COOK_7, 'qPWhXs');
   assert.deepEqual(message.box.items, [I.POT_OF_FLOUR, I.BUCKET_OF_MILK]);
+  message.after(); // the ingredients leave on continuing past the box
   assert.equal(h.quest.getStage(p), 1);
   assert.equal(p.xp.length, 0);
   const last = h.line(p, N.COOK_7, "Maybe, but I won't be holding my breath.");

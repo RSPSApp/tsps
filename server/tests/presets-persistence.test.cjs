@@ -511,8 +511,7 @@ test("dropping a preset item destroys it without the confirmation interface", ()
       getPacketSender: () => {
         const sender = {
           sendChatboxInterface: () => sender,
-          sendItemOnInterface: () => sender,
-          sendString: () => sender,
+          sendClientScript: () => sender,
         };
         return sender;
       },

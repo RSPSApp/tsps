@@ -93,11 +93,12 @@ export class LocAnimated {
      * through each keyframe; otherwise it is the keyframe itself, as `frame` is.
      */
     drawFrame(): number {
+        if (!this.seqType) return this.anim.baseFrame ?? 0;
         const starts = this.anim.frameStarts;
         const frame = this.frame | 0;
         if (!starts) return frame;
         const start = starts[frame] ?? 0;
-        const steps = Math.max(1, (starts[frame + 1] ?? this.anim.frames.length) - start);
+        const steps = Math.max(1, (starts[frame + 1] ?? this.anim.baseFrame ?? this.anim.frames.length) - start);
         // Steps are spread evenly through the keyframe (SdMapDataLoader.smoothedFrameRuns).
         const step = Math.floor(((this.frameCycle | 0) * steps) / this.frameLength);
         return start + Math.min(step, steps - 1);

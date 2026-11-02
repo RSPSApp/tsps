@@ -8,4 +8,6 @@ export type AnimationFrames = {
      * holds one blended frame per client cycle, and keyframe i's run starts at frameStarts[i].
      */
     frameStarts?: number[];
+    /** The unanimated model OSRS draws after a one-shot loc sequence ends. */
+    baseFrame?: number;
 };

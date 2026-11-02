@@ -1655,8 +1655,11 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   overlaps), or the tiles the cache's walls, fences and shores enclose around the page's map point
   (with what they surround; an island in open sea its box); every place must hold one of its page's
   map points, or every spawn of the NPCs it lists. The pages are saved as
-  `<dir>/places/<page>.wikitext`, and a place is at most 64 boxes. A trigger with a `place` counts
-  only deeds done, and kills made, inside it. `enter { place }`: the player inside it, each of its
+  `<dir>/places/<page>.wikitext`, and a place is at most 192 boxes. A trigger with a `place` counts
+  only deeds done, and kills made, inside it: a kill ("in the Wilderness Resource Area"), a
+  produce ("Cook 20 Sharks in Darkmeyer", "Craft a Lava Rune at the Fire Altar"; the name's and the
+  description's place must agree) or a theft ("Steal a Chisel from a crafting stall in Keldagrim";
+  "Thieve" is "Steal"). `enter { place }`: the player inside it, each of its
   boxes a zone (`onZoneEnter`, so a step, a teleport or a login there counts): "Enter the X" or
   "Visit X" whose description names the same place ("in the Kebos Lowlands", where it lies, says
   nothing more). A place without such bounds stays unmapped.

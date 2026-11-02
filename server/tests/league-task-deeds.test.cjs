@@ -191,6 +191,37 @@ test("kill with a place: a death inside its bounds counts, elsewhere not (Defeat
   assert.ok(done(there, "defeat-a-runite-golem"));
 });
 
+/** A raw shark cooked on a fire beside the player through the real Cooking (at 99, never burnt). */
+async function cookShark(t, f) {
+  const at = f.player.getLocation();
+  core.RegionManager.loadMapFiles(at.getX(), at.getY());
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.COOKING, 99);
+  skills.setCurrentLevel(core.Skill.COOKING, 99);
+  const fire = new core.GameObject(core.ObjectIdentifiers.FIRE, new core.Location(at.getX() + 1, at.getY(), 0), 10, 0, null);
+  core.ObjectManager.register(fire, true);
+  t.after(() => core.ObjectManager.deregister(fire, true));
+  f.player.getInventory().add(new core.Item(item("Raw shark")), true);
+  await send(f, { type: "item_on_object", itemId: item("Raw shark"), slot: 0, widgetId: 149 << 16, objectId: fire.getId(), x: at.getX() + 1, y: at.getY() }, 10);
+  return f.player.getInventory().getAmount(item("Shark"));
+}
+
+test("produce with a place: a shark cooked in Darkmeyer counts for its task, outside its walls not", async (t) => {
+  const at = (x, y) => {
+    const f = pactsCharacter(t);
+    f.player.setAttribute("league:areas", [21, 2, 5]); // Varlamore, Karamja and Morytania unlocked
+    f.player.moveTo(new core.Location(x, y, 0));
+    f.player.needsPlacement = false;
+    return f;
+  };
+  const there = at(3606, 3361);
+  assert.equal(await cookShark(t, there), 1, `the real Cooking cooks it: ${there.messages}`);
+  assert.equal((there.player.getAttribute("league:task-progress") ?? {})["cook-20-sharks-in-darkmeyer"], 1, "inside the city's walls");
+  const away = at(3580, 3360);
+  assert.equal(await cookShark(t, away), 1, `cooked west of the walls: ${away.messages}`);
+  assert.equal((away.player.getAttribute("league:task-progress") ?? {})["cook-20-sharks-in-darkmeyer"], undefined, "outside Darkmeyer");
+});
+
 /** An inventory item's option, as the client clicks it. */
 async function inventoryOption(f, name, option, optionIndex = 1, count = 4) {
   const id = item(name);

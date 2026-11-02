@@ -526,6 +526,9 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("enter-the-crafting-guild"), { kind: "enter", place: "crafting-guild" });
   assert.deepEqual(trigger("defeat-a-runite-golem"), { kind: "kill", npcs: ["Runite Golem"], count: 1, place: "resource-area" });
   assert.equal(catalog.places["wizards-guild"].source, "the Wiki's outline");
+  assert.deepEqual(trigger("cook-20-sharks-in-darkmeyer"), { kind: "produce", items: ["Shark"], count: 20, place: "darkmeyer-city" });
+  assert.deepEqual(trigger("steal-a-chisel"), { kind: "steal", stalls: ["Crafting Stall"], count: 1, items: ["Chisel"], place: "keldagrim" });
+  assert.equal(trigger("craft-some-pottery-in-sophanem"), undefined, "pottery is a skill's products, no one item");
 
   // Fires, burnt food and bones: the logs or bones named, any bones for "Remains of any kind".
   assert.deepEqual(trigger("burn-100-willow-logs"), { kind: "burn", items: ["Willow logs"], count: 100 });

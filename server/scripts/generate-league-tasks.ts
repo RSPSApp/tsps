@@ -568,12 +568,12 @@ type Rect = [number, number, number, number];
  */
 interface PlaceDef {
   key: string; names: string[]; page: string;
-  wikiPolygon?: true; slayerArea?: string; server?: { rects: Rect[]; from: string }; flood?: { from?: [number, number, number]; centre?: true; cap: number; bbox?: true };
+  wikiPolygon?: true; slayerArea?: string; server?: { rects?: Rect[]; polygon?: Array<[number, number]>; from: string }; flood?: { from?: [number, number, number]; centre?: true; cap: number; bbox?: true };
   spawns?: string[];
 }
 interface Place { name: string; page: string; source: string; rects: Rect[] }
 /** A place is at most this many boxes: each is a zone the runtime watches every tick (docs/leagues.md, Tasks). */
-const MAX_PLACE_RECTS = 64;
+const MAX_PLACE_RECTS = 192;
 
 const PLACE_DEFS: PlaceDef[] = [
   // The Wiki's own outlines.
@@ -587,9 +587,23 @@ const PLACE_DEFS: PlaceDef[] = [
   // The server's Slayer areas.
   { key: "taverley-dungeon", names: ["Taverley Dungeon"], page: "Taverley_Dungeon", slayerArea: "Taverley Dungeon" },
   { key: "brimhaven-dungeon", names: ["Brimhaven Dungeon"], page: "Brimhaven_Dungeon", slayerArea: "Brimhaven Dungeon", spawns: ["Wild dog#112", "Steel dragon#275"] },
-  { key: "darkmeyer", names: ["Darkmeyer"], page: "Darkmeyer", slayerArea: "Darkmeyer" },
   // The cache's walls around the Wiki's point.
   { key: "crafting-guild", names: ["Crafting Guild"], page: "Crafting_Guild", flood: { cap: 400 } },
+  { key: "farming-guild", names: ["Farming Guild"], page: "Farming_Guild", flood: { cap: 1500 } },
+  { key: "myths-guild", names: ["Myths' Guild"], page: "Myths'_Guild", flood: { from: [2457, 2848, 0], cap: 800 } },
+  { key: "tree-gnome-stronghold", names: ["Tree Gnome Stronghold"], page: "Tree_Gnome_Stronghold", flood: { cap: 12000 } },
+  { key: "tree-gnome-village", names: ["Tree Gnome Village"], page: "Tree_Gnome_Village_(location)", flood: { cap: 3000 } },
+  { key: "darkmeyer-city", names: ["Darkmeyer"], page: "Darkmeyer", flood: { cap: 3000 } },
+  { key: "necropolis", names: ["Necropolis"], page: "Necropolis", flood: { cap: 3000 } },
+  { key: "sophanem", names: ["Sophanem"], page: "Sophanem", flood: { cap: 3000 } },
+  { key: "piscatoris-fishing-colony", names: ["Piscatoris Fishing Colony"], page: "Piscatoris_Fishing_Colony", flood: { cap: 3000 } },
+  { key: "fire-altar", names: ["Fire Altar"], page: "Fire_Altar", flood: { cap: 1000 } },
+  { key: "cosmic-altar", names: ["Cosmic Altar in Zanaris", "Cosmic Altar"], page: "Cosmic_Altar", flood: { cap: 1000 } },
+  { key: "keldagrim", names: ["Keldagrim"], page: "Keldagrim", server: { rects: [[2790, 10100, 2940, 10215]], from: "the Keldagrim plugin's city zone" } },
+  { key: "port-phasmatys", names: ["Port Phasmatys"], page: "Port_Phasmatys", flood: { cap: 3000 } },
+  { key: "harmony-island", names: ["Harmony Island"], page: "Harmony_Island", flood: { cap: 3000, bbox: true } },
+  { key: "mos-le-harmless", names: ["Mos Le'Harmless"], page: "Mos_Le'Harmless", flood: { cap: 15000, bbox: true } },
+  { key: "ferox-enclave", names: ["Ferox Enclave"], page: "Ferox_Enclave", server: { polygon: require("../plugins/areas/ferox/Bounds.FeroxEnclave").BOUNDARY, from: "the FeroxEnclave plugin's outline" } },
 ];
 
 /** The places' saved Wiki pages (`--from <dir>/places`, `--save`), read before the triggers are derived. */
@@ -751,11 +765,13 @@ function resolvePlaces() {
       const rects = others.reduce((kept: Rect[], other) => kept.flatMap((rect) => withoutRect(rect, other)), area.boxes.map(([minX, minY, maxX, maxY]) => [minX, minY, maxX, maxY] as Rect));
       Object.assign(place, { rects, source: `Slayer area ${def.slayerArea}` });
     } else if (def.server) {
-      Object.assign(place, { rects: def.server.rects, source: def.server.from });
+      Object.assign(place, { rects: def.server.rects ?? polygonRects(def.server.polygon!), source: def.server.from });
     } else if (def.flood) {
       const middle = (axis: 0 | 1) => Math.floor(points.reduce((sum, point) => sum + point[axis], 0) / points.length);
       const from = def.flood.from ?? (!points.length ? null : def.flood.centre ? [middle(0), middle(1), 0] as [number, number, number] : [points[0][0], points[0][1], 0] as [number, number, number]);
       if (!from) throw new Error(`place ${def.key}: no map point to flood from`);
+      // A start of our own only beside the page's point, where that is a wall.
+      if (def.flood.from && !points.some(([x, y]) => Math.abs(x - from[0]) <= 3 && Math.abs(y - from[1]) <= 3)) throw new Error(`place ${def.key}: ${from.join(",")} is not by the page's point`);
       Object.assign(place, { rects: floodRects(from, def.flood.cap, def.key, def.flood.bbox), source: def.flood.bbox ? `the shores around ${from.join(",")}` : `the cache's walls around ${from.join(",")}` });
     }
     if (def.spawns) {
@@ -1153,17 +1169,20 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   // "Steal some bread" ("from a bakery stall"), "Steal From a Gem Stall", "Steal from a Fur Stall in
   // Kandarin": a theft from that stall (a cache loc of the name), of that item if one is named, in
   // that league area if one follows. Any other place, or a stall the cache doesn't name, is left out.
-  if (/^Steal /i.test(name)) {
-    const { area, text } = leagueAreaOf(clean(description));
-    const theft = /^Steal (?:(?:some |an? |the )?(.+?) )?from (?:an? |the )?(.+? [Ss]tall)$/i.exec(text);
+  if (/^(?:Steal|Thieve) /i.test(name)) {
+    const { area, text: unplaced } = leagueAreaOf(clean(description));
+    const spot = placeOf(unplaced);
+    const text = spot.text;
+    const theft = /^(?:Steal|Thieve) (?:(?:some |an? |the )?(.+?) )?from (?:an? |the )?(.+? [Ss]tall)$/i.exec(text);
     if (!theft || PLACE.test(theft[2])) return {};
     const stall = stallNamed(theft[2]);
     const what = theft[1] ? (itemNamed(countAndSubject(theft[1]).subject, items) ?? itemNamed(`${countAndSubject(theft[1]).subject}s`, items)) : null;
     if (!stall || (theft[1] && !what)) return {};
-    const count = countAndSubject(name.replace(/^Steal /i, "")).count;
+    const count = countAndSubject(name.replace(/^(?:Steal|Thieve) /i, "")).count;
     const trigger: Trigger = { kind: "steal", stalls: [stall], count };
     if (what) trigger.items = [what];
     if (area !== null) trigger.area = area;
+    if (spot.place) trigger.place = spot.place;
     return { trigger };
   }
   // "Pick 6 flax", "Pick some Sweetcorn from a Field": that crop picked from a field (the server's
@@ -1284,8 +1303,13 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   if (verb && forms) {
     // A trailing league region ("Chop 100 Maples in Tirannwn", "Catch 50 Karambwan on Karamja") is
     // counted only there (`area`, as kill tasks); any other place is no plain count.
-    const named = leagueAreaOf(verb[2]);
-    const said = leagueAreaOf(clean(description));
+    // So is a named place the server has the bounds of ("Cook 20 Sharks in Darkmeyer", "Craft a
+    // Lava Rune at the Fire Altar"); the name's and the description's must be the same one.
+    const namedSpot = placeOf(leagueAreaOf(verb[2]).text), saidSpot = placeOf(leagueAreaOf(clean(description)).text);
+    if (namedSpot.place && saidSpot.place && namedSpot.place !== saidSpot.place) return {};
+    const spot = namedSpot.place ?? saidSpot.place;
+    const named = { ...leagueAreaOf(verb[2]), text: namedSpot.text };
+    const said = { ...leagueAreaOf(clean(description)), text: saidSpot.text };
     const area = named.area ?? said.area;
     const { count, subject } = countAndSubject(named.text);
     const lowerVerb = verb[1].toLowerCase();
@@ -1293,7 +1317,10 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     const restDescription = said.text.split(" ").slice(1).join(" ");
     if (PLACE.test(subject) || PLACE.test(restDescription.replace(new RegExp(subject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), "").replace(new RegExp(describedSubject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), ""))) return {};
     if (CONDITION.test(said.text)) return {};
-    const withArea = (trigger: Trigger) => ({ trigger: area === null ? trigger : { ...trigger, area } });
+    // A skill's page for the subject ("Craft some [[Crafting#Pottery|Pottery]]") is that skill's
+    // products, no one item.
+    if (SKILLS[describedSubject.toLowerCase()]) return {};
+    const withArea = (trigger: Trigger) => ({ trigger: { ...trigger, ...(area === null ? {} : { area }), ...(spot ? { place: spot } : {}) } });
     // The name's subject, else the description's ("Clean a Grimy Guam": "a grimy guam leaf";
     // "Mine 10 Silver": "10 silver ore").
     for (const candidate of [subject, describedSubject]) {

@@ -668,7 +668,6 @@ try {
     const nativeManager = { ...client.widgetManager, invalidateAll: () => undefined };
     const nativeDeps = {
         getCs2Vm: () => ({ invokeEventHandler: (widget: any) => { nativeActions.push({ widget, option: "Make" }); return true; } }),
-        getSettings: () => ({ shiftClickEnabled: false }),
         getSpellSelection: () => ({ getWidgetTargetMask: () => 0 }),
         getTransmitCycles: () => ({ cycleCntr: 0 }),
         handleTradeWidgetAction: () => false,

@@ -879,18 +879,10 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
         }
 
         try {
-            // Check shift state at click time for shift-click drop
-            const isShiftHeld = inputManager?.shiftDown === true;
-            let actionOption = meta.option;
-
-            // OSRS shift-click drop: if shift held and item has Drop action, use Drop
-            if (isShiftHeld && meta.hasDropAction) {
-                actionOption = "Drop";
-            }
-
+            // Shift-click drop is already the top entry (transformWidgetMenuEntries).
             hook({
                 widget: meta.widget,
-                option: actionOption,
+                option: meta.option,
                 target: meta.target,
                 source: "primary",
                 cursorX: clickX,
@@ -1294,15 +1286,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         clickPrimaryResolveMs += performance.now() - clickPrimaryResolveStartMs;
                     }
 
-                    // Check if widget has a Drop action (for shift-click drop)
                     const clickMetaStartMs = profileWidgetRender ? performance.now() : 0;
-                    const hasDropAction =
-                        interaction.isInventoryItem &&
-                        !!widgetActions &&
-                        widgetActions.some(
-                            (a: any) =>
-                                a && typeof a === "string" && a.trim().toLowerCase() === "drop",
-                        );
 
                     // PERF: Update cached metadata object in-place instead of creating new
                     const slot =
@@ -1317,7 +1301,6 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                             widget: w,
                             option: primaryOptionText,
                             target: primaryTarget,
-                            hasDropAction,
                             itemId,
                             slot,
                         };
@@ -1326,7 +1309,6 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         meta.widget = w;
                         meta.option = primaryOptionText;
                         meta.target = primaryTarget;
-                        meta.hasDropAction = hasDropAction;
                         meta.itemId = itemId;
                         meta.slot = slot;
                     }

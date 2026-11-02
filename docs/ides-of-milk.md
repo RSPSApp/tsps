@@ -44,6 +44,26 @@ Quest kills suppress normal loot, return the player from the private field, and 
 
 Cowbell charging, worn actions, Ring sounds and milking are documented in [the Lumbridge/Vampyre evidence notes](f2p-lumbridge-vampyre.md#cowbell-amulet-follow-up).
 
+## 2026-11-02 audit
+
+A fresh account replayed the complete 4153 route. The captured state sequence, first-sample
+damage, private bull field, Brutus identity and Hitpoints, rewards and post-quest hand-outs
+all matched. Three presentation issues were fixed:
+
+- **Low-combat warning:** the transcript's recommendation box is unconditional, but live
+  sends it only below combat 15 and before the start menu. The quest now sets the shared
+  start-menu warning and consumes the transcript box, matching the other recommended-combat
+  quests. A low-level account sees the box before "Start The Ides of Milk quest?".
+- **Gillie's line:** 4153 says "I'm sure he'll **be** happy to share some information with
+  you"; the wiki transcript has "he'll he happy". The dumper correction and regenerated
+  export carry the captured wording.
+- **Chat-heads:** the captured Cassius, Gillie, Seth and Duke animations are in
+  `plugins/quests/data/chathead-animations.json`, together with Professor Oddenstein's
+  captured post-quest lines from 3209.
+
+The lamp's exact confirmation text, alternate full-inventory branches and every combat roll
+remain outside this run's evidence.
+
 ## Verification and limits
 
 From `server/`, after building:

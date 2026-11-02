@@ -1354,10 +1354,10 @@ test('COTS door scene spawns the waiting bandits inside the house', () => {
   const event = { player: p, objectId: core.ObjectIdentifiers.DOOR_695, location: { x: 3259, y: 3400 }, handled: false };
   h.emit('door:toggle', event);
   assert.equal(event.handled, true);
-  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3263, 3401]);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3259, 3398], 'player stays outside the captured window');
   const spawned = h.npcs.slice(before);
   assert.equal(spawned.length, 5, 'bag guard and four bandits appear for the eavesdrop');
   assert.deepEqual(spawned.map(npc => npc.getId()).sort(), [N.GUARD_186, N.BANDIT_16, N.BANDIT_17, N.BANDIT_18, N.BANDIT_19].sort());
   assert.deepEqual(spawned.map(npc => [npc.getLocation().getX(), npc.getLocation().getY()]).sort(),
-    [[3265, 3403], [3266, 3401], [3266, 3405], [3268, 3402], [3268, 3404]].sort());
+    [[3260, 3400], [3261, 3398], [3261, 3402], [3263, 3399], [3263, 3401]].sort());
 });

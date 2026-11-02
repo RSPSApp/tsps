@@ -72,11 +72,10 @@ marker, so a new native stage 20/22 is never reinterpreted as old progress.
   entrances are outside this quest's mandatory route.
 - Vanstrom uses the real stats, enrage, lightning, pets, darkness and orb
   mechanics; exact damage prayer interactions/animations are approximated.
-- Children's tail uses captured checkpoints joined by a real RegionManager
+- Children's tail uses captured corners joined by a real RegionManager
   collision route to the bandit door; it is still waypoint-based (spotted at
-  1 tile, fail past 14) rather than a client line-of-sight simulation. Cell
-  bars are not spawned as custom scenery; captured actors, teleports and
-  walking are.
+  1 tile, fail past 14) rather than a client line-of-sight simulation.
+  The cell walls and gate use the captured personal scenery replacements.
 - Camera tracks use the captured move/look coordinates and reset ticks, but
   dialogue-driven shot changes are scheduled by tick offset rather than bound
   to individual line confirmations, so a very fast/slow reader sees them at a
@@ -97,3 +96,49 @@ region-load resync, the collision-valid tail-to-door route, canonical crypt land
 crypt gate, Carl follow/look-back too-close/far/retry, persisted-checkpoint vs
 proximity/relog/logout cleanup, all captured Carl NPC steps walkable/connected and the first look-back wall hides the captured position, the captured Continue stairs gate, and the
 132/138 finale with a single tome reward.
+
+
+## Children of the Sun: issue #1830 correction
+
+The official RSProx 1.0.5 decoder's full transcriber and `BuildArea` mapping were
+checked against recording [1637](https://rsprox.net/download/1637), revision 226.1.
+Compressed recording SHA-256:
+`205845251c65c0674168a6de877cc19f7174d65f8c39aa756e2a8151de2787a0`.
+Uncompressed recording SHA-256:
+`d8bb6476c210cf18a2592c74f523175b29928d373109c102d3c46eb3e5570181`.
+Raw account-bearing captures stay outside Git.
+
+- Guard 57357/12661 starts at (3228,3430), follows 86 walk steps and finishes
+  at (3259,3400). Its mapped corners and look-back coordinates replace the old
+  route, whose (3240,3411) checkpoint was behind closed door 11780. That failed
+  segment discarded the whole route and triggered repeated teleport recovery.
+  Stalled walks now retry their queue without placement. The cache's normal
+  rotation speed 32 and walk fallback handle turns; no animation definitions change.
+- At tick 7968, the house actors are at (3260,3400), (3261,3398), (3263,3399),
+  (3263,3401), (3261,3402). The player's final listening point is (3259,3398),
+  outside the window. The plugin places the player directly at that listening point;
+  the capture's preceding five-step approach is not replayed.
+- Eavesdrop camera coordinates use the same mapped area. The roof-cell camera
+  coordinates already matched the recording and remain unchanged. The missing
+  five cutaway walls (44066) and gate (50053) are now personal overlays; the gate
+  changes position three ticks later, as captured. Cutaway 44066 has real models
+  and no clipping. Cleanup restores base objects and leaves shared clipping and
+  map-removal state unchanged, including subsequent region reloads.
+- Cutscene Tobyn 12649 has no cached Talk-to option. Closing the cell dialogue now
+  restores normal interactive roof actors after one tick, preserving earned stage
+  18; login does the same. Deferred closes only affect their original scene.
+- The cell exit teleports directly to mapped (3203,3474,2). The old raw-instance
+  source (10172,3399,2) was incorrectly used as an interim destination and could
+  be saved by an immediate logout. Login recovers an already-earned stage 20+
+  save at that exact legacy coordinate, without changing its stage or rewards.
+
+Validation: both full existing parity suites pass (92 tests). New regressions use
+native NPC movement for all 86 guard steps, real Player/PlayerSession/PacketSender
+and cached action menus for interruption at stages 16/18/20/22, earned stage-20
+logout with the actual saved location, legacy exit-position recovery, replacement actors after login, personal
+scenery isolation, global clipping/removal-state preservation and region replay.
+An independent native movement replay matches all 86 captured guard coordinates
+and six pause-facing targets. A real Player/MovementQueue can leave the listening
+point west or south, with both the route door 11780 and bandit door 50048 unchanged.
+No dev/game server or live browser run was performed. These are offline checks,
+not a claim of a fresh in-game quest completion or verified rendered sightlines.

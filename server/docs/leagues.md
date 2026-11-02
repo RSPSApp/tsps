@@ -1570,7 +1570,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   task or off), `temple-trek { difficulty, count }` from `temple-trekking:completed` (its own
   difficulty), `pest-control { boats, count }` from `pest-control:won` (a rewarded win; "or
   higher" the harder boats too), `prayer { prayers, count }` from `prayer:activated` (PrayerData's
-  names; a prayer the server lacks is left out), and `eat-heal { heal }` from `food:eaten`'s `restores` (what
+  names; a prayer the server lacks is left out), `pet { skilling, count }` from Pets'
+  `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
+  told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what
   the food restores, at full health too): "Eat / Drink a X" by the description's item or else the
   name's, a place ("in Auburn Valley", "from a bird bath") none. The generator derives them from the
   name and the Wiki's description, read with its links' targets (a set an equip task names is the

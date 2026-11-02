@@ -396,3 +396,10 @@ test("prayer: a prayer switched on by the real PrayerHandler (Use the Protect fr
   assert.ok(done(f, "use-the-protect-from-melee-prayer"));
   assert.ok(!done(f, "use-the-piety-prayer"));
 });
+
+test("pet: a skilling pet awarded by the real Woodcutting (Obtain any Skilling Pet)", async (t) => {
+  const f = pactsCharacter(t);
+  assert.ok(await chop(t, f, 1666, 3136) > 0);
+  assert.ok((f.player.getAttribute("pets.owned") ?? []).length > 0, "a roll of 0 also awards the Beaver");
+  assert.ok(done(f, "obtain-a-skilling-pet"));
+});

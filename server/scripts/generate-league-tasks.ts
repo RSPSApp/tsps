@@ -730,6 +730,9 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     const prayer = PRAYER_NAMES.get(match[1].toLowerCase());
     return prayer ? { trigger: { kind: "prayer", prayers: [prayer], count: 1 } } : {};
   }
+  // "Obtain any Skilling Pet": a new pet of a skill's. (A boss pet is not told apart from the other
+  // pets that have no skill, so "Obtain any Boss Pet" is left out.)
+  if (/^Obtain any Skilling Pet\.?$/i.test(description)) return { trigger: { kind: "pet", skilling: true, count: 1 } };
   // "1 Easy Clue Scroll", "25 Elite Clue Scrolls": a reward casket of that tier opened.
   if ((match = /^(\d+) (Beginner|Easy|Medium|Hard|Elite|Master) Clue Scrolls?$/i.exec(name))) {
     return { trigger: { kind: "clue", tier: match[2].toLowerCase(), count: Number(match[1]) } };

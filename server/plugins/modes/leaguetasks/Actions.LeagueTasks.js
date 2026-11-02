@@ -37,6 +37,7 @@
  *   `pest-control { boats, count }` (`pest-control:won`).
  * - `prayer { prayers, count }`: a prayer switched on, `prayer:activated` { prayerId }, named as
  *   PrayerHandler's PrayerData names it ("Protect from Melee").
+ * - `pet { skilling, count }`: a new pet, a skilling pet's if `skilling`, `pets:obtained` { skill }.
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -313,6 +314,7 @@ const EVENT_KINDS = new Map([
   ["superior-kills", () => true],
   ["temple-trek", (trigger, event) => trigger.difficulty === event.difficulty],
   ["pest-control", (trigger, event) => trigger.boats.includes(event.boat)],
+  ["pet", (trigger, event) => !trigger.skilling || !!event.skill],
 ]);
 
 function onEvent(kind) {
@@ -358,6 +360,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("slayer:superior-killed", onEvent("superior-kills"));
   api.onCustomEvent("temple-trekking:completed", onEvent("temple-trek"));
   api.onCustomEvent("pest-control:won", onEvent("pest-control"));
+  api.onCustomEvent("pets:obtained", onEvent("pet"));
   api.onCustomEvent("farming:check-health", checkedHealth);
   api.onCustomEvent("collection-log:new-item", logged);
   api.onCustomEvent("world:picked", picked);

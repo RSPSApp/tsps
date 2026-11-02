@@ -444,7 +444,8 @@ export class LunarSpells {
     public static handlePlayerTarget(player: Player, target: Player, name: string | undefined): boolean {
         const key = name?.trim().toLowerCase() ?? "";
         if (!["energy transfer", "heal other", "vengeance other", "stat spy"].includes(key)) return false;
-        if (target === player || !this.acceptsAid(target) || !player.getLocation().isWithinDistance(target.getLocation(), 10)) return false;
+        if (target === player || !this.acceptsAid(target) || !this.sameInstance(player, target) ||
+            !player.getLocation().isWithinDistance(target.getLocation(), 10)) return false;
         this.interrupt(player);
         if (key === "vengeance other") return this.castVengeanceOther(player, target);
         const spell = this.SPELLS.get(key)!;
@@ -505,7 +506,7 @@ export class LunarSpells {
     }
 
     public static handleNpcTarget(player: Player, target: any, name: string | undefined): boolean {
-        if (name?.trim().toLowerCase() !== "monster examine" || !target ||
+        if (name?.trim().toLowerCase() !== "monster examine" || !target || !this.sameInstance(player, target) ||
             !player.getLocation().isWithinDistance(target.getLocation(), 10)) return false;
         this.interrupt(player);
         return this.SPELLS.get("monster examine")!.cast(player, () => {
@@ -625,8 +626,17 @@ export class LunarSpells {
     private static forNearbyPlayers(player: Player, distance: number, effect: (target: Player) => void): void {
         World.getPlayers().forEach(target => {
             if (target && target !== player && this.acceptsAid(target) && target.getHitpoints() > 0 &&
+                this.sameInstance(player, target) &&
                 player.getLocation().isWithinDistance(target.getLocation(), distance)) effect(target);
         });
+    }
+
+    /**
+     * Whether `target` shares the caster's private world: players in separate instances (solo
+     * Colosseum runs, raids) can stand on the same coordinates without seeing each other.
+     */
+    private static sameInstance(player: Player, target: any): boolean {
+        return (player.getPrivateArea() ?? null) === (target.getPrivateArea?.() ?? null);
     }
 
     private static acceptsAid(player: Player): boolean {

@@ -33,6 +33,7 @@ function caster(slots) {
   return {
     items, experience, messages: [],
     getIndex: () => 1,
+    getPrivateArea: () => null,
     getPacketSender: () => ({ sendSoundEffect() {} }),
     isRegistered: () => true,
     performAnimation() {}, performGraphic() {},
@@ -107,7 +108,7 @@ function fighter({ hp = 99, special = 100, run = 100 } = {}) {
   const state = { hp, special, run, messages: [] };
   const sink = { updateSpecialAttackOrb: () => sink, sendRunEnergy: () => sink };
   return Object.assign(state, {
-    getIndex: () => 2, isRegistered: () => true, performAnimation() {}, performGraphic() {},
+    getIndex: () => 2, isRegistered: () => true, performAnimation() {}, performGraphic() {}, getPrivateArea: () => null,
     getAttribute: () => null,
     getLocation: () => ({ isWithinDistance: () => true }),
     getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences() {} }),

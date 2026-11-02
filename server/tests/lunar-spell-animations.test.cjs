@@ -40,6 +40,7 @@ function caster(extra = {}) {
     graphics: [],
     attributes: new Map(),
     getIndex: () => 1,
+    getPrivateArea: () => null,
     performAnimation(animation) { this.animations.push(animation.getId()); },
     performGraphic(graphic) { this.graphics.push(graphic.getId()); },
     getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences() {} }),

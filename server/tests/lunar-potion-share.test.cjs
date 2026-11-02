@@ -93,3 +93,46 @@ test("the spell isn't paid for when the share is refused", (t) => {
   assert.deepEqual(caster.messages, ["There is nobody nearby to share your potion with."]);
   assert.equal(caster.prayer(), 0);
 });
+
+/** A private world (as PrivateArea is: an area with its own objects), e.g. one solo Colosseum run. */
+const instance = (name) => ({ name, getObjects: () => [], getName: () => name });
+const { World } = require("../dist/game/World");
+
+/** Casts Stat Restore Pot Share for `caster` with `others` as the world's players, paying always. */
+function castShare(t, caster, others) {
+  caster.player.getSkillManager().setMaxLevel(Skill.DEFENCE, 99);
+  t.mock.method(World, "getPlayers", () => [caster.player, ...others.map((other) => other.player)]);
+  t.mock.method(Spell.prototype, "canCast", () => true);
+  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => { if (name === "potions:share") share(event); });
+  return LunarSpells.handleItemTarget(caster.player, potion(caster), 0, "Stat Restore Pot Share");
+}
+
+test("a player on the same tile in another instance is not a recipient", (t) => {
+  const caster = drinker(t, core.ItemIdentifiers.PRAYER_POTION_4_), stranger = drinker(t);
+  caster.player.setArea(instance("run A"));
+  stranger.player.setArea(instance("run B"));
+  assert.equal(caster.player.getLocation().equals(stranger.player.getLocation()), true, "same coordinates");
+  castShare(t, caster, [stranger]);
+  assert.deepEqual(caster.messages, ["There is nobody nearby to share your potion with."]);
+  assert.equal(stranger.prayer(), 0);
+  assert.equal(caster.prayer(), 0);
+  assert.equal(potion(caster), core.ItemIdentifiers.PRAYER_POTION_4_);
+});
+
+test("a player in the same instance still shares", (t) => {
+  const caster = drinker(t, core.ItemIdentifiers.PRAYER_POTION_4_), partner = drinker(t), run = instance("run A");
+  caster.player.setArea(run);
+  partner.player.setArea(run);
+  castShare(t, caster, [partner]);
+  assert.equal(partner.prayer(), 31);
+  assert.equal(caster.prayer(), 31);
+  assert.equal(potion(caster), core.ItemIdentifiers.PRAYER_POTION_3_);
+});
+
+test("a targeted Lunar spell ignores a player in another instance", (t) => {
+  const caster = drinker(t), stranger = drinker(t);
+  caster.player.setArea(instance("run A"));
+  stranger.player.setArea(instance("run B"));
+  t.mock.method(Spell.prototype, "canCast", () => { throw new Error("must not cast"); });
+  assert.equal(LunarSpells.handlePlayerTarget(caster.player, stranger.player, "Heal Other"), false);
+});

@@ -533,6 +533,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   const tutorialLocs = new Map();
   const scenePhases = new WeakMap(); // the running temple scene: "vision", "rift" or "rift-open"
   const tutorialActions = new WeakMap();
+  const assemblingGuardian = new WeakSet();
   const tutorialFights = new WeakMap();
   const incantationPlaying = new WeakSet();
 
@@ -2241,6 +2242,10 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
 
   /** A guardian rising from a pile (capture 1693): scrape, carve, then the cell's power. */
   function assembleGuardian(player, objectId, cellId, cellName, xp, npcKey, npcId, done) {
+    // One at a time: a second click would otherwise spend a cell taken in the meantime.
+    if (assemblingGuardian.has(player)) return;
+    assemblingGuardian.add(player);
+    const progress = tutorialProgress(player);
     const pile = objectId === ESSENCE_PILE_CATALYTIC_OBJECT_ID
       ? { ...CATALYTIC_PILE_TILE, face: 3 }
       : { ...ELEMENTAL_PILE_TILE, face: 0 };
@@ -2256,7 +2261,9 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       sender.sendSound(SOUND_CARVE, 2, 0);
     });
     Scenes.later(player, 5, () => {
-      if (!player.isRegistered() || !inTutorial(player) || !has(player, cellId)) return;
+      assemblingGuardian.delete(player);
+      if (!player.isRegistered() || !inTutorial(player) || tutorialProgress(player) !== progress) return;
+      if (spawns.get(player)?.has(npcKey) || !has(player, cellId)) return;
       take(player, cellId);
       player.sendMessage(`The powers of the ${cellName} cell extend into the essence. A Guardian comes to life.`);
       sender.sendSound(SOUND_GUARDIAN_LIVES, 1, 0);
@@ -2913,6 +2920,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   function handleLogout({ player }) {
     if (!player) return;
     Scenes.cancel(player);
+    assemblingGuardian.delete(player);
     stopTutorialAction(player);
     tutorialFights.delete(player);
     clearTutorialLocs(player);

@@ -966,6 +966,76 @@ test('Temple of the Eye: essence lost after the first workbench round can be mad
   assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 30, 'without moving the step on');
 });
 
+test('Temple of the Eye: repeated Assemble clicks raise one guardian from one cell', () => {
+  const at = (x, y) => ({ x, y, z: 0 });
+  const setup = (progress, cellId) => {
+    const h = harness('TempleOfTheEye'), p = player();
+    h.quest.setStage(p, 115);
+    p.attrs.set('temple-of-the-eye:stage-schema', 2);
+    p.attrs.set('temple-of-the-eye:tutorial', progress);
+    p.items.set(I.CHISEL, 1);
+    p.items.set(cellId, 1);
+    return { h, p, risen: () => p.messages.filter(text => /comes to life/.test(text)).length };
+  };
+  const pile = (h, p, id = O.ESSENCE_PILE_ELEMENTAL_, x = 2466) => h.object(p, id, at(x, 5714), 1, ['Assemble']);
+
+  { // The review's case: a second click, then a new cell from the table before it would finish.
+    const { h, p, risen } = setup(15, I.WEAK_CELL);
+    pile(h, p);
+    h.tick(4);
+    pile(h, p);
+    h.tick(1);
+    assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 20);
+    h.finish(p);
+    h.object(p, O.WEAK_CELLS, at(2466, 5710), 1, ['Take', 'Take-chisel']);
+    assert.equal(p.items.get(I.WEAK_CELL), 1);
+    h.tick(6);
+    assert.equal(p.items.get(I.WEAK_CELL), 1, 'the new cell is kept');
+    assert.equal(risen(), 1);
+    assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 20);
+    pile(h, p, O.ESSENCE_PILE_CATALYTIC_, 2459);
+    h.tick(6);
+    assert.equal(risen(), 2, 'the other pile still works');
+    assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 25);
+  }
+  { // The other pile, clicked while the first is under way.
+    const { h, p, risen } = setup(15, I.WEAK_CELL);
+    pile(h, p);
+    h.tick(2);
+    pile(h, p, O.ESSENCE_PILE_CATALYTIC_, 2459);
+    h.tick(8);
+    assert.equal(risen(), 1);
+  }
+  { // The medium guardian goes the same way.
+    const { h, p, risen } = setup(55, I.MEDIUM_CELL);
+    pile(h, p);
+    h.tick(4);
+    pile(h, p);
+    h.tick(8);
+    assert.equal(risen(), 1);
+    assert.equal(p.attrs.get('temple-of-the-eye:tutorial'), 60);
+  }
+  { // A cell lost mid-assembly doesn't leave the piles shut.
+    const { h, p, risen } = setup(15, I.WEAK_CELL);
+    pile(h, p);
+    p.items.set(I.WEAK_CELL, 0);
+    h.tick(6);
+    assert.equal(risen(), 0);
+    p.items.set(I.WEAK_CELL, 1);
+    pile(h, p);
+    h.tick(6);
+    assert.equal(risen(), 1);
+  }
+  { // Nor does a logout.
+    const { h, p, risen } = setup(15, I.WEAK_CELL);
+    pile(h, p);
+    for (const fn of h.hooks.onPlayerLogout ?? []) fn({ player: p });
+    pile(h, p);
+    h.tick(6);
+    assert.equal(risen(), 1);
+  }
+});
+
 test('Temple of the Eye: Tamara replaces altar items that cannot be made again', () => {
   const steps = [
     [40, I.CATALYTIC_GUARDIAN_STONE], // dropped before the first power-up

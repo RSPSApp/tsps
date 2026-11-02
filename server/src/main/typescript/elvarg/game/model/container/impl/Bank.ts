@@ -121,11 +121,11 @@ export class Bank extends ItemContainer {
     /** Capture (bankside:items op9): Wear/Wield on a bank inventory item equips it, bank open. */
     public static readonly SIDE_EQUIP_OP = 9;
     /**
-     * if3: one bit per inventory slot whose op 9 is the item's own second op (Wield/Wear).
-     * Cache script 2576 labels op 9 from it while bank_hidesideops (10079) is off; live sends it
-     * with the inventory (if3 = 1 << 27 for a weapon in the last slot).
+     * if2: one bit per inventory slot whose op 9 is its equip op. Cache script 2576 labels op 9
+     * from it while bank_hidesideops (10079) is off: oc_iop(obj, param 148), whose default is 2
+     * (Wield/Wear; a slayer ring sets 1, its Wear). if3 (263) gives op 1 instead (Eat/Drink).
      */
-    public static readonly SIDE_WEAR_OPS_VARP = 263;
+    public static readonly SIDE_WEAR_OPS_VARP = 262;
 
     constructor(public player: Player) {
         super(player, Bank.INITIAL_TAB_SLOTS);
@@ -718,7 +718,7 @@ export class Bank extends ItemContainer {
         player.getPacketSender().sendEnterAmountPrompt("Enter amount:");
     }
 
-    /** The if3 mask: the inventory slots holding something that can be worn. */
+    /** The if2 mask: the inventory slots holding something that can be worn. */
     public static sideWearOpsMask(player: Player): number {
         let mask = 0;
         player.getInventory().getItems().forEach((item, slot) => {

@@ -24,6 +24,9 @@ const api = {
   core: { ...PluginManager.getCoreApi(), TaskManager: { submit: (task) => { task.setRunning(true); submitted.push(task); } } },
   emitCustomEvent: (name, payload) => (handlers.get(name) ?? []).forEach((handler) => handler(payload)),
   onCustomEvent: (name, handler) => handlers.set(name, [...(handlers.get(name) ?? []), handler]),
+  persistAttribute() {},
+  onGroundItemPickup() {},
+  onGroundItemClick() {},
   onItemFirstAction() {},
   onItemOnObject() {},
   onCanUseItem() {},
@@ -58,6 +61,11 @@ test("prayer:bone gives the bone's row, and nothing for other items", () => {
   const logs = { itemId: CacheDefinitions.getObjId("logs"), bone: null };
   api.emitCustomEvent("prayer:bone", logs);
   assert.equal(logs.bone, null);
+  for (const name of ["bull_bones", "giant_bones"]) {
+    const groundOnly = { itemId: CacheDefinitions.getObjId(name), bone: null };
+    api.emitCustomEvent("prayer:bone", groundOnly);
+    assert.equal(groundOnly.bone, null, name);
+  }
 });
 
 test("only the Chaos Temple's altar takes bones", () => {

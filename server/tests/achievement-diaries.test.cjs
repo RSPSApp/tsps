@@ -282,3 +282,158 @@ test("the Elite Karamja Diary doubles Tokkul, and only that diary's elite tier d
   assert.equal(tokkul(8032), 16064);
   assert.equal(tokkul(0), 0);
 });
+
+test('diary tasks follow successful native gameplay actions', async t => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+  const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
+  const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { NPCDeathTask } = require('../dist/game/task/impl/NPCDeathTask');
+  await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  new NpcDefinitionLoader().load();
+  const core = PluginManager.getCoreApi(), pending = [], observed = [], npcs = [], credits = [];
+  core.ObjectDefinition.init();
+  const scheduler = { submit(task) { task.setRunning(true); pending.push(task); } };
+  const api = { ...PluginManager.createApi('DiaryGameplayTest'),
+    core: { ...core, TaskManager: scheduler, ObjectManager: { register() {}, deregister() {} } },
+    getTaskManager: () => scheduler,
+  };
+  api.onCustomEvent('thieving:done', event => observed.push(event));
+  api.onCustomEvent('diary:task', event => credits.push(event));
+  Diaries.register(api);
+  require('../plugins/skills/Thieving.plugin').register(api);
+  require('../plugins/skills/Runecrafting.plugin').register(api);
+  t.mock.method(Math, 'random', () => 0);
+  let index = 1000;
+  t.after(() => { for (const npc of npcs) core.World.getNpcs().remove(npc); core.World.getRemoveNPCQueue().splice(0); });
+  function actor(x, y, z = 0) {
+    const player = new Player(null, new core.Location(x, y, z));
+    player.setIndex(index++); player.setUsername('diary-test'); player.setRegistered(true); player.setNeedsPlacement(false);
+    player.getSession = () => ({ sendClientPacket: () => true, write() {} });
+    player.getSkillManager().setCurrentLevels(core.Skill.THIEVING, 99);
+    return player;
+  }
+  function spawn(id, x, y, z = 0) {
+    const npc = PluginManager.spawnNpc({ id, x, y, z, wanderRadius: 0 }, 'DiaryGameplayTest');
+    assert.ok(npc); npcs.push(npc); return npc;
+  }
+  function advance(count = 1) {
+    for (let tick = 0; tick < count; tick++) for (const task of [...pending]) if (task.isRunning()) task.tick();
+  }
+  const completed = (player, diary, task) => Progress.doneTasks(player, Data.BY_KEY.get(diary)).has(task);
+  const TEA = 'steal-from-the-tea-stall-in-varrock';
+  const PICKPOCKET = 'pickpocket-a-man-or-woman-in-lumbridge';
+  const ZOMBIE = 'kill-a-zombie-in-draynor-sewers';
+  const SEDRIDOR = 'have-sedridor-teleport-you-to-the-essence-mine';
+
+  await t.test('Varrock tea theft credits the diary only when delayed loot arrives', () => {
+    const player = actor(3268, 3410);
+    const object = new core.GameObject(core.ObjectIdentifiers.TEA_STALL, new core.Location(3269, 3410, 0), 10, 1, null);
+    assert.equal(object.getDefinition().getName(), 'Tea stall');
+    assert.equal(PluginManager.emitObjectInteraction({ player, object, objectId: object.getId(), location: { x: 3269, y: 3410, z: 0 }, clickType: 2, handled: false }), true);
+    assert.equal(completed(player, 'varrock', TEA), false);
+    advance();
+    assert.equal(player.getInventory().contains(core.ItemIdentifiers.CUP_OF_TEA), true, 'real stall producer awarded tea');
+    assert.equal(observed.at(-1).kind, 'stall');
+    assert.equal(completed(player, 'varrock', TEA), true);
+    assert.equal(player.getPacketSender().getVarbit(6319), 1);
+  });
+
+  await t.test('both Man and Woman count on every Lumbridge castle floor', () => {
+    for (const z of [0, 1, 2]) for (const id of [core.NpcIdentifiers.MAN_5, core.NpcIdentifiers.WOMAN_9]) {
+      const player = actor(3209, 3219, z), npc = spawn(id, 3210, 3219, z);
+      const name = npc.getCurrentDefinition(player).getName();
+      assert.ok(['Man', 'Woman'].includes(name));
+      assert.equal(PluginManager.emitNpcInteraction({ player, npc, npcId: id, clickType: 3, handled: false }), true);
+      advance();
+      assert.equal(observed.at(-1).succeeded, true, 'real pickpocket outcome succeeded');
+      assert.equal(completed(player, 'lumbridge', PICKPOCKET), true, `${name} on floor ${z}`);
+      assert.equal(player.getPacketSender().getVarbit(6311), 1);
+    }
+  });
+
+  await t.test('all three Draynor sewer Zombie spawns count through NPCDeathTask', () => {
+    for (const [id, x, y] of [[core.NpcIdentifiers.ZOMBIE_14, 3086, 9674], [core.NpcIdentifiers.ZOMBIE_31, 3088, 9672], [core.NpcIdentifiers.ZOMBIE_33, 3096, 9672]]) {
+      assert.equal(CacheDefinitions.getNpc(id).name, 'Zombie');
+      const player = actor(x - 1, y), npc = spawn(id, x, y);
+      npc.__skipDefaultRespawn = true;
+      npc.getCombat().addDamage(player, npc.getMaxHitpoints()); npc.setHitpoints(0);
+      const death = new NPCDeathTask(npc); death.execute();
+      assert.equal(completed(player, 'lumbridge', ZOMBIE), false, 'starting the death animation is not yet a kill');
+      death.execute();
+      assert.equal(completed(player, 'lumbridge', ZOMBIE), true, `Zombie ${id}`);
+      assert.equal(player.getPacketSender().getVarbit(6311), 1);
+    }
+  });
+
+  await t.test('Sedridor parent morph credits the essence teleport once on tick four', () => {
+    const player = actor(3104, 9571);
+    player.setAttribute('quest.rune_mysteries.stage', 6); player.getPacketSender().sendConfig(63, 6);
+    const npc = spawn(5034, 3103, 9571); // Cache's nameless Sedridor parent, resolved through varp 63.
+    assert.equal(npc.getCurrentDefinition(player).getName(), 'Archmage Sedridor');
+    assert.equal(PluginManager.emitNpcInteraction({ player, npc, npcId: npc.getContentId(player), clickType: 3, handled: false }), true);
+    PluginManager.emitNpcInteraction({ player, npc, npcId: npc.getContentId(player), clickType: 3, handled: false });
+    advance(3);
+    assert.equal(completed(player, 'lumbridge', SEDRIDOR), false);
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3104, 9571]);
+    advance();
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2913, 4832]);
+    assert.equal(completed(player, 'lumbridge', SEDRIDOR), true);
+    assert.equal(player.getPacketSender().getVarbit(6311), 1);
+    advance(5);
+    assert.equal(player.getPacketSender().getVarbit(6311), 1);
+    assert.equal(credits.filter(event => event.player === player && event.task === SEDRIDOR).length, 1, 'repeated clicks during travel do not duplicate credit');
+  });
+
+  await t.test('tea from Kourend and attempts whose final inventory slot fills do not count', () => {
+    for (const [x, y, fillDuringAttempt] of [[1648, 3683, false], [3269, 3410, true]]) {
+      const player = actor(x - 1, y);
+      const object = new core.GameObject(core.ObjectIdentifiers.TEA_STALL, new core.Location(x, y, 0), 10, 1, null);
+      PluginManager.emitObjectInteraction({ player, object, objectId: object.getId(), location: { x, y, z: 0 }, clickType: 2, handled: false });
+      if (fillDuringAttempt) for (let slot = 0; slot < 28; slot++) player.getInventory().setItem(slot, new core.Item(core.ItemIdentifiers.CABBAGE));
+      advance();
+      assert.equal(player.getInventory().contains(core.ItemIdentifiers.CUP_OF_TEA), !fillDuringAttempt);
+      assert.equal(completed(player, 'varrock', TEA), false);
+    }
+  });
+
+  await t.test('a successful Varrock pickpocket and a failed Lumbridge pickpocket do not count', sub => {
+    for (const [x, y, fails] of [[3234, 3398, false], [3210, 3219, true]]) {
+      const player = actor(x - 1, y), npc = spawn(core.NpcIdentifiers.MAN_5, x, y);
+      if (fails) sub.mock.method(Math, 'random', () => 0.999);
+      PluginManager.emitNpcInteraction({ player, npc, npcId: npc.getId(), clickType: 3, handled: false });
+      advance();
+      assert.equal(observed.at(-1).succeeded, !fails);
+      assert.equal(completed(player, 'lumbridge', PICKPOCKET), false);
+    }
+  });
+
+  await t.test('a Varrock sewer Zombie does not count as a Draynor sewer kill', () => {
+    const player = actor(3121, 9658), npc = spawn(core.NpcIdentifiers.ZOMBIE_32, 3122, 9658);
+    assert.equal(npc.getCurrentDefinition(player).getName(), 'Zombie');
+    npc.__skipDefaultRespawn = true;
+    npc.getCombat().addDamage(player, npc.getMaxHitpoints()); npc.setHitpoints(0);
+    const death = new NPCDeathTask(npc); death.execute(); death.execute();
+    assert.equal(completed(player, 'lumbridge', ZOMBIE), false);
+  });
+
+  for (const reason of ['quest incomplete', 'blocked', 'cancelled', 'death', 'logout', 'other wizard']) {
+    await t.test(`Sedridor task is not awarded when ${reason}`, sub => {
+      const player = actor(3104, 9571);
+      if (reason !== 'quest incomplete') {
+        player.setAttribute('quest.rune_mysteries.stage', 6); player.getPacketSender().sendConfig(63, 6);
+      }
+      const npc = spawn(reason === 'other wizard' ? core.NpcIdentifiers.AUBURY_3 : 5034, 3103, 9571);
+      if (reason === 'blocked') sub.mock.method(core.TeleportHandler, 'checkReqs', () => false);
+      PluginManager.emitNpcInteraction({ player, npc, npcId: npc.getContentId(player), clickType: reason === 'other wizard' ? 4 : 3, handled: false });
+      if (reason === 'cancelled') for (const task of pending) if (task.key === player) task.stop();
+      if (reason === 'death') PluginManager.emitPlayerDeath({ player });
+      if (reason === 'logout') player.setRegistered(false);
+      advance(4);
+      assert.equal(completed(player, 'lumbridge', SEDRIDOR), false);
+      assert.equal(credits.some(event => event.player === player && event.task === SEDRIDOR), false);
+      assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], reason === 'other wizard' ? [2913, 4832] : [3104, 9571]);
+    });
+  }
+});

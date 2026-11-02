@@ -33,10 +33,13 @@ Two optional local services are Java; neither is needed to run the server.
 | `yarn bridge` | the in-game Quest Helper panel, from the upstream Java helper | **Java 21**, then the one-time build in [`tools/quest-helper-bridge`](tools/quest-helper-bridge/README.md) |
 | `yarn gateway` | the official OSRS client through RSProx, playing on this server | [`gateway/README.md`](gateway/README.md) |
 
-The bridge also needs `QUEST_HELPER_TOKEN` (any 24+ characters) in `.env`; without it the panel
-reports that the engine has not been started, while Tutorial Island and Recipe for Disaster still
-work because the server answers those itself. A separate single-client RuneLite 1.13.3 demo lives
-in [`tools/runelite-gateway`](tools/runelite-gateway/README.md).
+The bridge and server need the same `QUEST_HELPER_TOKEN` (at least 24 characters) in `.env`.
+Without it, the panel reports that the server token is missing. Tutorial Island and Recipe for
+Disaster still work because the server answers those itself. `QUEST_HELPER_URL` can point the
+server at a bridge outside loopback, such as `http://quest-helper:16471`; it must be an HTTP(S)
+URL without credentials, query parameters or a fragment. The default is
+`http://127.0.0.1:${QUEST_HELPER_PORT:-16471}`. A separate single-client RuneLite 1.13.3 demo
+lives in [`tools/runelite-gateway`](tools/runelite-gateway/README.md).
 
 ## Publish your world
 

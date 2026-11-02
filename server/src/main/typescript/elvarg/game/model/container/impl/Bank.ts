@@ -118,6 +118,14 @@ export class Bank extends ItemContainer {
     /** Ops 1-10, drag depth 1, drop target. */
     public static readonly TAB_BUTTON_FLAGS = 0x7fe | (1 << 17) | (1 << 20);
     public static readonly EXAMINE_OP = 11;
+    /** Capture (bankside:items op9): Wear/Wield on a bank inventory item equips it, bank open. */
+    public static readonly SIDE_EQUIP_OP = 9;
+    /**
+     * if2: one bit per inventory slot whose op 9 is its equip op. Cache script 2576 labels op 9
+     * from it while bank_hidesideops (10079) is off: oc_iop(obj, param 148), whose default is 2
+     * (Wield/Wear; a slayer ring sets 1, its Wear). if3 (263) gives op 1 instead (Eat/Drink).
+     */
+    public static readonly SIDE_WEAR_OPS_VARP = 262;
 
     constructor(public player: Player) {
         super(player, Bank.INITIAL_TAB_SLOTS);
@@ -710,6 +718,30 @@ export class Bank extends ItemContainer {
         player.getPacketSender().sendEnterAmountPrompt("Enter amount:");
     }
 
+    /** The if2 mask: the inventory slots holding something that can be worn. */
+    public static sideWearOpsMask(player: Player): number {
+        let mask = 0;
+        player.getInventory().getItems().forEach((item, slot) => {
+            if (item && item.getId() > 0 && ItemDefinition.forId(item.getId()).getEquipmentType().getSlot() >= 0) mask |= 1 << slot;
+        });
+        return mask;
+    }
+
+    /** Re-labels the bank inventory's Wield/Wear ops; sent before the inventory, which rebuilds them. */
+    public static sendSideOps(player: Player): void {
+        if (!Bank.isOpen(player)) return;
+        player.getPacketSender().sendConfig(Bank.SIDE_WEAR_OPS_VARP, Bank.sideWearOpsMask(player));
+    }
+
+    /** Capture: the item moves to worn (synth_sound 2238) and the bank stays open. */
+    private static equipFromSide(player: Player, itemId: number, slot: number): void {
+        if (ItemDefinition.forId(itemId).getEquipmentType().getSlot() < 0) return;
+        const { EquipPacketListener } = require("../../../../net/packet/impl/EquipPacketListener") as
+            typeof import("../../../../net/packet/impl/EquipPacketListener");
+        player.setAttribute(EquipPacketListener.PRESERVE_INTERFACE_ON_EQUIP_ATTRIBUTE, Bank.MAIN_INTERFACE_ID);
+        EquipPacketListener.equip(player, itemId, slot, Inventory.INTERFACE_ID);
+    }
+
     public static handleWidgetAction(player: Player, packet: {
         groupId: number;
         childId: number;
@@ -777,6 +809,10 @@ export class Bank extends ItemContainer {
             const event = { player, item, slot: packet.slot, op: packet.buttonNum, option: packet.option, handled: false };
             getPluginManager().emitCustomEvent(Bank.INVENTORY_OP_EVENT, event);
             if (event.handled) return true;
+            if (packet.buttonNum === Bank.SIDE_EQUIP_OP) {
+                Bank.equipFromSide(player, item.getId(), packet.slot);
+                return true;
+            }
             if (Bank.asksAmount("deposit", packet.buttonNum, packet.option, player.getBankCustomQuantity(), player.getBankQuantityMode())) {
                 const itemId = item.getId();
                 const slot = packet.slot;
@@ -1152,6 +1188,7 @@ export class Bank extends ItemContainer {
         const sender = player.getPacketSender();
         const varps = {
             548: 1,
+            [Bank.SIDE_WEAR_OPS_VARP]: Bank.sideWearOpsMask(player),
             [Bank.LOCKED_SLOTS_VARP]: Bank.MAX_SLOTS - Bank.getCapacity(player),
         };
         const varbits: Record<number, number> = {

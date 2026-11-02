@@ -115,6 +115,7 @@ module.exports = {
     api.onObjectInteraction("Altar", { "Pray-at": prayerAltar, Pray: prayerAltar });
     api.onObjectInteraction("Chaos altar", { "Pray-at": prayAtChaosAltar });
     api.onObjectInteraction("Shrine", { "Pray-at": prayAtShrine });
+    api.onObjectInteraction("Shrine of Ralos", { Bask: prayerAltar });
     api.onObjectInteraction("Altar of the Occult", {
       Venerate: venerateOccultAltar,
       Standard: standardSpellbook,

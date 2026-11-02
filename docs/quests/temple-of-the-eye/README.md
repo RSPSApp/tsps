@@ -40,6 +40,10 @@ Fixed for #1814:
 - The chant's op-less portal (43767) outlived its scene and covered the basement's Enter portal
   (43765, tote above 90), which nothing handled either.
 
+For #1858, queued Continues could reach the incantation's overhead chant before its newly spawned
+cast entered native NPC sync, closing the dialogue while leaving stage 90 and cutscene controls
+active. The scene now holds for one sync tick before starting its unchanged transcript.
+
 Known gaps:
 
 - Other players on the same step are visible (shared map, not an instance).
@@ -51,6 +55,12 @@ Known gaps:
   essence at the Mind altar's step, and Tamara replaces stones or a medium cell (with our wording).
 
 ## Runs
+
+- **2026-11-02, offline native checkpoints (stages 85 and 90):** real Player, ClientConnection,
+  quest/dialogue dispatch, NPC spawning and local sync. Paced and same-tick queued Continues reach
+  stage 100; the four actors chant, the portal opens, and controls return. Bank/dialogue replacement
+  releases the old controls and leaves stage 90 retryable; a new private scene keeps its controls.
+  Logout cancels the deferred start. This is not a fresh quest or live browser playthrough.
 
 - **2026-11-01, MCP (partial natural run):** stage 0 to 130 by real clicks, travel by `::tele`. The
   amulet talk, the wrong and right riddle answers, the declined incantation, the vision and rift

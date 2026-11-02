@@ -108,8 +108,9 @@ export function processWidgetClickInput(
                 const targetMask = (flags >>> 11) & 0x3f;
                 const hasSpellAction =
                     targetMask > 0 &&
-                    !!sanitizeText((w as any).spellActionName ?? (w as any).targetVerb);
+                    !!sanitizeText((w as any).spellActionName || (w as any).targetVerb);
                 const isDynamicWidget = ((w as any).fileId | 0) === -1;
+                const canDrag = widgetInteraction.isWidgetDraggable(w);
                 const hasHandlers = !!(
                     w.eventHandlers?.onClick ||
                     w.eventHandlers?.onClickRepeat ||
@@ -124,9 +125,7 @@ export function processWidgetClickInput(
                     hasActions ||
                     hasInventoryItem ||
                     // OSRS: any widget can be a drag source if it has drag listener or implicit drag
-                    w.eventHandlers?.onDrag ||
-                    w.onDrag ||
-                    w.isDraggable ||
+                    canDrag ||
                     isPauseButtonWidget ||
                     // IF_SETEVENTS transmit bits can make otherwise-empty STATIC widgets
                     // clickable (e.g., server-authoritative tab controls). For dynamic children,
@@ -139,7 +138,7 @@ export function processWidgetClickInput(
                 // the gravestone window's corner handle lies over its Close button.
                 const dragOnly =
                     hasHandlers &&
-                    !!(w.isDraggable || w.eventHandlers?.onDrag || w.onDrag) &&
+                    canDrag &&
                     !hasActions &&
                     !hasOnOpHandler &&
                     !hasInventoryItem &&
@@ -170,8 +169,15 @@ export function processWidgetClickInput(
                     const clickGroupId = (w.groupId ?? w.uid >>> 16) | 0;
                     const clickChildId = (w.fileId ?? w.uid & 0xffff) | 0;
                     const isSpellbookWidget = clickGroupId === 218 && clickChildId > 0;
+                    // Any other static button with a verb and targets, such as clan creation's Invite.
+                    // One with an op1 keeps that as its left-click, as OSRS does.
+                    const isTargetButton =
+                        (w.childIndex ?? -1) < 0 &&
+                        !w.actions?.[0] &&
+                        !!w.targetVerb &&
+                        deps.getSpellSelection().getWidgetTargetMask(w) > 0;
 
-                    if (isSpellbookWidget) {
+                    if (isSpellbookWidget || isTargetButton) {
                         // Get targetVerb from widget or use "Cast" as fallback for spell widgets
                         let targetVerb = w.targetVerb || w.spellActionName;
 

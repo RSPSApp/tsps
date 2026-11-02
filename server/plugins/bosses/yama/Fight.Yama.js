@@ -24,6 +24,7 @@ const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
 
 const SUCCESS_VARP = 4701;
 const BEST_TICKS_ATTRIBUTE = "yama:best-ticks";
+const BOSS_NAME = "Yama";
 const LOC_SHAPE = 10;
 /** Read by demonbane weapons and spells (Wiki: Yama 120%). */
 const DEMONBANE_VULNERABILITY_ATTRIBUTE = "combat:demonbane-vulnerability";
@@ -278,6 +279,7 @@ class Fight {
     const best = Common.count(player, BEST_TICKS_ATTRIBUTE);
     if (!best || ticks < best) {
       player.setAttribute(BEST_TICKS_ATTRIBUTE, ticks);
+      Common.api.emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
       player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col> (new personal best)`);
     } else {
       player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col>. Personal best: ${formatTicks(best)}`);

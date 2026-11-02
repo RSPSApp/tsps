@@ -349,3 +349,16 @@ test("every collection-log pet with a drop source is summonable", () => {
   for (const table of tables.values()) for (const entry of table.tertiary || []) check(entry, table.table_id);
   for (const entry of require("../plugins/bosses/data/grotesque-guardians.json").drops.tertiary) check(entry, "grotesque_guardians");
 });
+
+test("a newly earned item is told as collection-log:new-item, by any route, and a silent one isn't", () => {
+  const heard = [];
+  const listeners = customEvents.get("collection-log:new-item") ?? [];
+  customEvents.set("collection-log:new-item", [...listeners, ({ itemId }) => heard.push(itemId)]);
+  const player = createPlayer();
+  Progress.obtain(player, ZULRAH_SCALES, 109, { silent: true });
+  assert.deepEqual(heard, []);
+  Progress.obtain(player, CARPENTERS_BOOTS, 1);
+  Progress.obtain(player, CARPENTERS_BOOTS, 1);
+  assert.deepEqual(heard, [CARPENTERS_BOOTS], "once, when it's new");
+  customEvents.set("collection-log:new-item", listeners);
+});

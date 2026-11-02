@@ -30,7 +30,7 @@
  * house scene are taken from live recordings (RSProx 1637, revision 226.1):
  * the delegation walks west into the square and stops in formation, the guard's
  * route is the captured one with its eight-tick stops, and the four bandits and
- * the bag guard are waiting inside the house when the player enters.
+ * the bag guard are waiting inside the house while the player listens outside its window.
  *
  * Source: OSRS Wiki "Children of the Sun" page, quick guide and transcript; guard
  * varbit checkpoints, guard posts and the tail route cross-checked against cache
@@ -40,7 +40,7 @@
  * Rewards per the OSRS Wiki: 1 Quest point and access to Varlamore. No XP, no item.
  *
  * Gaps: the tail is a walk along the captured route with pauses at the hiding
- * spots, not a cutscene - there is no line-of-sight or turn-to-look check, only
+ * spots, not a cutscene - there is no line-of-sight or facing-sensitive spotting check, only
  * "stepped within one tile" (spotted) and "fell more than 14 tiles behind" (too
  * far). The delegation, eavesdrop and roof cell camera tracks use the captured
  * coordinates and resets. Multi-speaker cutscene lines share the speaking NPC's
@@ -49,7 +49,7 @@
  * quest NPCs are per-player owner-only spawns because none exist in npc-spawns.json.
  */
 module.exports = function registerChildrenOfTheSunQuest(api) {
-  const { Location, NpcIdentifiers, ObjectIdentifiers, PathFinder, RegionManager } = api.core;
+  const { Location, NpcIdentifiers, ObjectIdentifiers, PathFinder, RegionManager, GameObject, ObjectManager, MapObjects } = api.core;
   const { registerQuest, refreshQuestList } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
   const Scenes = createQuestScenes(api);
@@ -150,17 +150,33 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
   // The suspicious guard's route (RSProx 1637, ticks 7806-7964), with the
   // stops the capture shows at each corner.
   const TAIL_WAYPOINTS = [
-    { x: 3225, y: 3429 },
-    { x: 3236, y: 3428, pause: 8 },
-    { x: 3239, y: 3428 },
-    { x: 3240, y: 3411, pause: 8 },
-    { x: 3239, y: 3401 },
-    { x: 3236, y: 3400, pause: 8 },
-    { x: 3232, y: 3388, pause: 8 },
-    { x: 3240, y: 3388 },
-    { x: 3246, y: 3395 },
-    { x: 3250, y: 3396, pause: 8 },
-    { x: 3256, y: 3399, pause: 2 }, // house approach beside the bandit door
+    { x: 3228, y: 3430 },
+    { x: 3236, y: 3430 },
+    { x: 3237, y: 3429 },
+    { x: 3239, y: 3429, pause: 8, face: [3237, 3429] },
+    { x: 3241, y: 3429 },
+    { x: 3242, y: 3428 },
+    { x: 3242, y: 3424 },
+    { x: 3243, y: 3423 },
+    { x: 3243, y: 3412, pause: 8, face: [3243, 3414] },
+    { x: 3243, y: 3410 },
+    { x: 3242, y: 3409 },
+    { x: 3242, y: 3402 },
+    { x: 3241, y: 3401 },
+    { x: 3239, y: 3401, pause: 8, face: [3241, 3401] },
+    { x: 3237, y: 3401 },
+    { x: 3235, y: 3399 },
+    { x: 3235, y: 3390 },
+    { x: 3236, y: 3389 },
+    { x: 3243, y: 3389, pause: 8, face: [3241, 3389] },
+    { x: 3248, y: 3389 },
+    { x: 3249, y: 3390 },
+    { x: 3249, y: 3396 },
+    { x: 3250, y: 3397 },
+    { x: 3253, y: 3397, pause: 8, face: [3251, 3397] },
+    { x: 3255, y: 3397 },
+    { x: 3258, y: 3400 },
+    { x: 3259, y: 3400, pause: 2, face: [3269, 3400] },
   ];
   const TAIL_FAIL_DISTANCE = 14;
   const TAIL_SPOTTED_DISTANCE = 1;
@@ -195,13 +211,13 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
   const EAVESDROP_BAG_GUARD_ID = NpcIdentifiers.GUARD_186; // 12662, the visible sibling
   const EAVESDROP_BANDIT_IDS = [NpcIdentifiers.BANDIT_16, NpcIdentifiers.BANDIT_17, NpcIdentifiers.BANDIT_18, NpcIdentifiers.BANDIT_19];
   const EAVESDROP_SPAWNS = [
-    { key: "eavesdrop-guard", id: EAVESDROP_BAG_GUARD_ID, x: 3265, y: 3403 },
-    { key: "eavesdrop-bandit-1", id: EAVESDROP_BANDIT_IDS[0], x: 3266, y: 3401 },
-    { key: "eavesdrop-bandit-2", id: EAVESDROP_BANDIT_IDS[1], x: 3268, y: 3402 },
-    { key: "eavesdrop-bandit-3", id: EAVESDROP_BANDIT_IDS[2], x: 3268, y: 3404 },
-    { key: "eavesdrop-bandit-4", id: EAVESDROP_BANDIT_IDS[3], x: 3266, y: 3405 },
+    { key: "eavesdrop-guard", id: EAVESDROP_BAG_GUARD_ID, x: 3260, y: 3400 },
+    { key: "eavesdrop-bandit-1", id: EAVESDROP_BANDIT_IDS[0], x: 3261, y: 3398 },
+    { key: "eavesdrop-bandit-2", id: EAVESDROP_BANDIT_IDS[1], x: 3263, y: 3399 },
+    { key: "eavesdrop-bandit-3", id: EAVESDROP_BANDIT_IDS[2], x: 3263, y: 3401 },
+    { key: "eavesdrop-bandit-4", id: EAVESDROP_BANDIT_IDS[3], x: 3261, y: 3402 },
   ];
-  const EAVESDROP_PLAYER_TILE = { x: 3263, y: 3401 };
+  const EAVESDROP_PLAYER_TILE = { x: 3259, y: 3398 };
   const EAVESDROP_KEYS = EAVESDROP_SPAWNS.map((spawn) => spawn.key);
 
   // Captured cell scene: the roof is dressed as a cell, the bandit and the
@@ -214,7 +230,21 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
   const CELL_TOBYN_TILE = { x: 3203, y: 3473 };
   const CELL_ITZLA_TILE = { x: 3205, y: 3473 };
   const CELL_ITZLA_BARS = { x: 3204, y: 3470 };
-  const CELL_INSTANCE_TILE = { x: 10172, y: 3399, z: 2 };
+  // Old scene code briefly used this raw instance source as a destination; a logout could save it.
+  const LEGACY_CELL_EXIT = { x: 10172, y: 3399, z: 2 };
+  // Captured cell cutaways (1637, tick 8102); 44066 has cutaway wall models and no clipping.
+  const CELL_CUTAWAY_OBJECT_ID = 44066;
+  const CELL_WALL_OBJECT_ID = 23818;
+  const CELL_GATE_OBJECT_ID = ObjectIdentifiers.GATE_287; // 50053, the non-interactive scene gate
+  const CELL_SCENERY = [
+    [CELL_CUTAWAY_OBJECT_ID, 3207, 3471, 0, 0],
+    [CELL_CUTAWAY_OBJECT_ID, 3207, 3470, 1, 0],
+    [CELL_CUTAWAY_OBJECT_ID, 3206, 3470, 9, 0],
+    [CELL_CUTAWAY_OBJECT_ID, 3206, 3469, 1, 0],
+    [CELL_CUTAWAY_OBJECT_ID, 3205, 3469, 9, 0],
+    [CELL_GATE_OBJECT_ID, 3205, 3471, 0, 1],
+    [CELL_WALL_OBJECT_ID, 3205, 3468, 0, 1],
+  ];
 
   // Condition step ids on the "Children of the Sun" page.
   const F2P_CONDITION_IDS = new Set(["i6hlqM", "uSwN8S"]);
@@ -250,9 +280,10 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     [46, null],
   ];
   const CAMERA_EAVESDROP = [
-    [1, [3257, 3399, 490], [3265, 3403, 290]],
-    [9, [3268, 3398, 340], [3265, 3406, 300]],
-    [30, null],
+    [1, [3252, 3396, 490], [3260, 3400, 290]],
+    [8, [3263, 3395, 340], [3260, 3403, 300]],
+    [16, [3252, 3396, 490], [3260, 3400, 290]],
+    [19, null],
   ];
   // Played while the interrogation runs in the roof cell (RSProx 1637, 8103).
   const CAMERA_CELL = [
@@ -287,6 +318,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
   const doorGuards = new WeakMap();
   /** One-shot "already marked enough" decision for the marking transcript. */
   const markRejections = new WeakMap();
+  const cellScenery = new WeakMap();
 
   let quest;
 
@@ -463,6 +495,37 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     removeTracked(player, "cell-bandit");
     removeTracked(player, "cell-tobyn");
     removeTracked(player, "cell-itzla");
+    const objects = cellScenery.get(player);
+    cellScenery.delete(player);
+    for (const object of objects?.values() ?? []) {
+      ObjectManager.deregister(object, true);
+      const original = MapObjects.getType(object.getLocation(), object.getType(), null);
+      if (original) player.getPacketSender().sendObject(original);
+    }
+  }
+
+  function setCellScenery(player, objects, [id, x, y, type, rotation]) {
+    const original = MapObjects.getType(new Location(x, y, 2), type, null);
+    if (original?.getId() === id && original.getFace() === rotation) return;
+    const object = new GameObject(id, new Location(x, y, 2), type, rotation, null).setOwner(player);
+    ObjectManager.register(object, true);
+    objects.set(`${x},${y},${type}`, object);
+  }
+
+  function recoverCellScene(player) {
+    resetCamera(player);
+    removeCellScene(player);
+    player.moveTo(new Location(ROOF_LANDING.x, ROOF_LANDING.y, ROOF_LANDING.z));
+    ensureRoofNpcs(player);
+  }
+
+  function handleInterfaceClosed({ player }) {
+    const objects = cellScenery.get(player);
+    if (!player || quest.getStage(player) !== STAGE_CELL || !objects) return;
+    // Normal line transitions immediately open their next chatbox; a cancelled scene does not.
+    later(player, 1, () => {
+      if (quest.getStage(player) === STAGE_CELL && cellScenery.get(player) === objects && !Scenes.chatOpen(player)) recoverCellScene(player);
+    });
   }
 
   function removeDelegation(player) {
@@ -500,7 +563,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     for (const key of EAVESDROP_KEYS) removeTracked(player, key);
   }
 
-  /** The bandits wait inside the house; the player steps just inside the door. */
+  /** The bandits wait inside the house; the player listens outside its window. */
   function enterEavesdropScene(player) {
     for (const spawn of EAVESDROP_SPAWNS) {
       spawnTracked(player, spawn.key, {
@@ -520,6 +583,14 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     removeTracked(player, "tobyn-roof");
     removeTracked(player, "itzla");
     removeCellScene(player);
+    const objects = new Map();
+    cellScenery.set(player, objects);
+    for (const placement of CELL_SCENERY) setCellScenery(player, objects, placement);
+    later(player, 3, () => {
+      if (cellScenery.get(player) !== objects) return;
+      setCellScenery(player, objects, [CELL_CUTAWAY_OBJECT_ID, 3205, 3471, 0, 1]);
+      setCellScenery(player, objects, [CELL_GATE_OBJECT_ID, 3205, 3472, 0, 2]);
+    });
     spawnTracked(player, "cell-bandit", { id: CELL_BANDIT_ID, ...CELL_BANDIT_TILE, z: 2, wanderRadius: 0 });
     spawnTracked(player, "cell-tobyn", { id: CELL_TOBYN_ID, ...CELL_TOBYN_TILE, z: 2, wanderRadius: 0 });
     const itzla = spawnTracked(player, "cell-itzla", { id: CELL_ITZLA_ID, ...CELL_ITZLA_TILE, z: 2, wanderRadius: 0 });
@@ -534,11 +605,8 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
   function leaveCellScene(player) {
     resetCamera(player);
     removeCellScene(player);
-    player.moveTo(new Location(CELL_INSTANCE_TILE.x, CELL_INSTANCE_TILE.y, CELL_INSTANCE_TILE.z));
-    later(player, 1, () => {
-      player.moveTo(new Location(ROOF_LANDING.x, ROOF_LANDING.y, ROOF_LANDING.z));
-      ensureRoofNpcs(player);
-    });
+    player.moveTo(new Location(ROOF_LANDING.x, ROOF_LANDING.y, ROOF_LANDING.z));
+    ensureRoofNpcs(player);
   }
 
   function ensureQuestNpcs(player) {
@@ -548,7 +616,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     if (stage >= STAGE_DELEGATION && stage < STAGE_TAILING) ensureDelegation(player, false);
     else removeDelegation(player);
     if (stage >= STAGE_MARKING && stage < STAGE_ROOF) ensureGuards(player);
-    if (stage === STAGE_CELL) { enterCellScene(player); return; }
+    if (stage === STAGE_CELL) { recoverCellScene(player); return; }
     if (stage >= STAGE_ROOF && !quest.isComplete(player)) {
       ensureRoofNpcs(player);
       if (stage >= STAGE_ITZLA_LEFT) removeTracked(player, "itzla");
@@ -572,7 +640,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     doorGuards.delete(player);
   }
 
-  /** Adjacent four-way route between captured checkpoints on the real map. */
+  /** Adjacent route between captured corners on the real map, including diagonal steps. */
   function walkableTailTile(x, y) {
     try {
       return !RegionManager.blocked(new Location(x, y, 0), null);
@@ -589,7 +657,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     for (let index = 0; index < queue.length; index++) {
       const [x, y] = queue[index];
       if (`${x},${y}` === goalKey) break;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
         const nx = x + dx, ny = y + dy;
         const key = `${nx},${ny}`;
         if (parent.has(key) || Math.abs(nx - from.x) > 30 || Math.abs(ny - from.y) > 30) continue;
@@ -618,6 +686,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
       const segment = tailSegment(from, to);
       if (!segment) { tailRouteCache = null; return null; }
       if (to.pause) segment[segment.length - 1].pause = to.pause;
+      if (to.face) segment[segment.length - 1].face = to.face;
       route.push(...segment);
     }
     tailRouteCache = route;
@@ -639,6 +708,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     });
     player.setAttribute(TAIL_FAIL_ATTRIBUTE, 0);
     if (!npc) return;
+    npc.setScriptedMovement?.(true);
     tailSessions.set(player, {
       npc,
       route: buildTailRoute() ?? TAIL_WAYPOINTS.slice(1),
@@ -709,6 +779,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     if (npc.getMovementQueue().hasPendingWork()) {
       if (session.stuck > 8) {
         npc.getMovementQueue().reset();
+        session.stuck = 0;
       } else {
         return;
       }
@@ -721,18 +792,22 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
       return;
     }
     if (guard.getX() !== target.x || guard.getY() !== target.y) {
-      if (session.stuck > 8) npc.moveTo(new Location(target.x, target.y, 0));
-      else npc.getMovementQueue().addFirstStep(new Location(target.x, target.y, 0));
+      npc.setPositionToFace?.(null);
+      npc.getMovementQueue().addFirstStep(new Location(target.x, target.y, 0));
       return;
     }
     session.stuck = 0;
     session.index++;
     if (target.pause) {
+      if (target.face) npc.setPositionToFace(new Location(target.face[0], target.face[1], 0));
       session.pauseTicks = target.pause;
       return;
     }
     const next = session.route[session.index];
-    if (next) npc.getMovementQueue().addFirstStep(new Location(next.x, next.y, 0));
+    if (next) {
+      npc.setPositionToFace?.(null);
+      npc.getMovementQueue().addFirstStep(new Location(next.x, next.y, 0));
+    }
   }
 
   function handlePlayerProcess({ player }) {
@@ -992,6 +1067,9 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
 
   function handleLogin({ player }) {
     migrateLegacyStage(player);
+    if (quest.getStage(player) >= STAGE_LEFT_CELL && player.getLocation().equals(new Location(LEGACY_CELL_EXIT.x, LEGACY_CELL_EXIT.y, LEGACY_CELL_EXIT.z))) {
+      player.moveTo(new Location(ROOF_LANDING.x, ROOF_LANDING.y, ROOF_LANDING.z));
+    }
     ensureQuestNpcs(player);
     syncGuardVarbits(player);
     refreshQuestList(player);
@@ -1011,6 +1089,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     removeGuards(player);
     removeDelegation(player);
     removeEavesdropScene(player);
+    removeCellScene(player);
     const tracked = trackedNpcs.get(player);
     if (tracked) {
       for (const npc of tracked.values()) api.removeNpc(npc);
@@ -1122,6 +1201,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("quest:stage-changed", handleStageChanged);
   api.onCustomEvent("door:toggle", handleDoorToggle);
+  api.onCustomEvent("interface:closed", handleInterfaceClosed);
   api.onNpcInteraction("Guard", { Mark: markGuard, Unmark: unmarkGuard });
   api.onPlayerProcess(handlePlayerProcess);
   api.onPlayerLogin(handleLogin);

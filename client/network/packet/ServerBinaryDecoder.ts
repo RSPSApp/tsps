@@ -13,7 +13,9 @@ import {
 } from "../../common/instance/InstanceTypes";
 import { SERVER_PACKET_LENGTHS, ServerPacketId } from "../../common/packets/ServerPacketId";
 import type { ProjectileLaunch } from "../../common/projectiles/ProjectileLaunch";
+import type { ClanChannelDeltaEvent, ClanSettingsDeltaUpdate, KeyedClanChannel } from "../../common/social/Clans";
 import type { FriendsChatSnapshot } from "../../common/social/FriendsChat";
+import type { ClanSettings } from "../../rs/cs2/handlers/HandlerTypes";
 import type { WorldEntityBuildArea } from "../../common/worldentity/WorldEntityTypes";
 
 /** Camera easing ids, in the order the server encodes them (ClientProtocol CAMERA_EASINGS). */
@@ -1159,6 +1161,10 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 7: "clan",
                 9: "channel",
                 11: "game",
+                41: "clan",
+                43: "game",
+                44: "clan",
+                46: "game",
                 101: "trade",
             };
             const text = reader.readString();
@@ -1228,6 +1234,134 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 });
             }
             return { type: "friends_chat", payload: { channel, friends, ignores } };
+        }
+
+        case ServerPacketId.CLAN_SETTINGS_FULL: {
+            const clanType = reader.readSignedByte();
+            if (!reader.readBoolean()) {
+                return { type: "clan_settings", payload: { clanType, settings: null } };
+            }
+            reader.readInt(); // updateNum: a full update always replaces
+            reader.readInt(); // creationTime: no client script reads it
+            const name = reader.readString();
+            const allowGuests = reader.readBoolean();
+            const rankTalk = reader.readSignedByte();
+            const rankKick = reader.readSignedByte();
+            const currentOwnerSlot = reader.readSignedShort();
+            const replacementOwnerSlot = reader.readSignedShort();
+            const settings: ClanSettings = {
+                name,
+                allowGuests,
+                rankTalk,
+                rankKick,
+                rankLootshare: 0,
+                coinshare: false,
+                currentOwnerSlot,
+                replacementOwnerSlot,
+                memberNames: [],
+                memberRanks: [],
+                memberExtraInfo: [],
+                memberJoinDays: [],
+                memberMuted: [],
+                bannedNames: [],
+                parameters: new Map(),
+            };
+            const memberCount = reader.readShort();
+            for (let i = 0; i < memberCount; i++) {
+                settings.memberNames.push(reader.readString());
+                settings.memberRanks.push(reader.readSignedByte());
+                settings.memberMuted.push(reader.readBoolean());
+                settings.memberExtraInfo.push(reader.readInt());
+                settings.memberJoinDays.push(reader.readShort());
+            }
+            const bannedCount = reader.readShort();
+            for (let i = 0; i < bannedCount; i++) settings.bannedNames.push(reader.readString());
+            const settingCount = reader.readShort();
+            for (let i = 0; i < settingCount; i++) {
+                const id = reader.readShort();
+                settings.parameters!.set(id, reader.readInt());
+            }
+            return { type: "clan_settings", payload: { clanType, settings } };
+        }
+
+        case ServerPacketId.CLAN_SETTINGS_DELTA: {
+            const clanType = reader.readSignedByte();
+            reader.readInt(); // updateNum: every delta applies, in order
+            const updates: ClanSettingsDeltaUpdate[] = [];
+            const count = reader.readShort();
+            for (let i = 0; i < count; i++) {
+                const kind = reader.readByte();
+                if (kind === 1) {
+                    updates.push({ type: "add_member", name: reader.readString(), joinRuneDay: reader.readShort() });
+                } else if (kind === 2) {
+                    updates.push({ type: "delete_member", index: reader.readShort() });
+                } else if (kind === 3) {
+                    updates.push({ type: "member_rank", index: reader.readShort(), rank: reader.readSignedByte() });
+                } else if (kind === 4) {
+                    updates.push({ type: "member_muted", index: reader.readShort(), muted: reader.readBoolean() });
+                } else if (kind === 5) {
+                    updates.push({
+                        type: "member_extra_info",
+                        index: reader.readShort(),
+                        value: reader.readInt(),
+                        startBit: reader.readByte(),
+                        endBit: reader.readByte(),
+                    });
+                } else {
+                    updates.push({ type: "int_setting", setting: reader.readShort(), value: reader.readInt() });
+                }
+            }
+            return { type: "clan_settings_delta", payload: { clanType, updates } };
+        }
+
+        case ServerPacketId.CLAN_VAR:
+            return { type: "clan_var", payload: { id: reader.readShort(), value: reader.readInt() } };
+
+        case ServerPacketId.CLAN_CHANNEL_FULL: {
+            const clanType = reader.readSignedByte();
+            if (!reader.readBoolean()) {
+                return { type: "clan_channel", payload: { clanType, channel: null } };
+            }
+            const key = reader.readInt();
+            const updateNum = reader.readInt();
+            const channel: KeyedClanChannel = {
+                key,
+                updateNum,
+                name: reader.readString(),
+                rankTalk: reader.readSignedByte(),
+                rankKick: reader.readSignedByte(),
+                userNames: [],
+                userRanks: [],
+                userWorlds: [],
+            };
+            const userCount = reader.readShort();
+            for (let i = 0; i < userCount; i++) {
+                channel.userNames.push(reader.readString());
+                channel.userRanks.push(reader.readSignedByte());
+                channel.userWorlds.push(reader.readShort());
+            }
+            return { type: "clan_channel", payload: { clanType, channel } };
+        }
+
+        case ServerPacketId.CLAN_CHANNEL_DELTA: {
+            const clanType = reader.readSignedByte();
+            const key = reader.readInt();
+            const updateNum = reader.readInt();
+            const eventCount = reader.readShort();
+            const events: ClanChannelDeltaEvent[] = [];
+            for (let i = 0; i < eventCount; i++) {
+                if (reader.readByte() === 1) {
+                    events.push({
+                        type: "add",
+                        name: reader.readString(),
+                        rank: reader.readSignedByte(),
+                        world: reader.readShort(),
+                    });
+                } else {
+                    events.push({ type: "delete", index: reader.readShort() });
+                }
+            }
+            return { type: "clan_channel_delta", payload: { clanType, key, updateNum, events } };
         }
 
         case ServerPacketId.CHAT_FILTER_SETTINGS:

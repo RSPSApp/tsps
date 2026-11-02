@@ -87,6 +87,10 @@ export type CustomInterfaceDeclaration = {
         viewComponent: number;
         scrollbarComponent?: number;
         contentHeight?: number;
+        /** Hidden text component containing the current content height in pixels. */
+        contentHeightComponent?: number;
+        /** Buttons that reset this container to its first row without consuming the click. */
+        resetOnComponents?: number[];
     }>;
     status?: {
         component: number;
@@ -426,6 +430,17 @@ export class CustomInterfaceRuntime {
     }
 
     handleWidgetClick(groupId: number, childId: number): boolean {
+        if (groupId === this.declaration?.groupId) {
+            for (const region of this.declaration.scroll ?? []) {
+                if (!region.resetOnComponents?.includes(childId)) continue;
+                const view = this.widget(region.viewComponent);
+                if (view) {
+                    view.scrollY = 0;
+                    this.deps.widgetManager.invalidateScroll(view);
+                }
+                this.refreshScrollbar(region.viewComponent, region.scrollbarComponent);
+            }
+        }
         const search = this.declaration?.search;
         if (!search) {
             return false;
@@ -861,9 +876,19 @@ export class CustomInterfaceRuntime {
             if (!view) {
                 continue;
             }
-            if (region.contentHeight !== undefined) {
-                view.scrollWidth = Math.max(0, view.width | 0);
-                view.scrollHeight = Math.max(view.height | 0, region.contentHeight | 0);
+            const text = region.contentHeightComponent === undefined ? undefined : this.widget(region.contentHeightComponent)?.text;
+            const dynamicHeight = text?.trim() ? Number(text) : NaN;
+            const contentHeight = Number.isFinite(dynamicHeight) && dynamicHeight >= 0 ? dynamicHeight : region.contentHeight;
+            if (contentHeight !== undefined) {
+                const scrollWidth = Math.max(0, view.width | 0);
+                const scrollHeight = Math.max(view.height | 0, contentHeight | 0);
+                const scrollY = Math.max(0, Math.min(view.scrollY | 0, scrollHeight - (view.height | 0)));
+                if (view.scrollWidth !== scrollWidth || view.scrollHeight !== scrollHeight || view.scrollY !== scrollY) {
+                    view.scrollWidth = scrollWidth;
+                    view.scrollHeight = scrollHeight;
+                    view.scrollY = scrollY;
+                    this.deps.widgetManager.invalidateScroll(view);
+                }
             }
             this.initializeScrollView(region.viewComponent, region.scrollbarComponent);
             this.refreshScrollbar(region.viewComponent, region.scrollbarComponent);

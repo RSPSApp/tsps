@@ -39,6 +39,7 @@ export class CacheDefinitions {
     private static readonly SPELL_NAME_PARAM_ID = 601;
     private static spellNamesByWidget?: Map<number, string>;
     private static spellsByName?: Map<string, { widgetId: number; itemId: number }>;
+    private static spellWidgetGroups?: Set<number>;
     private static state?: {
         npcs: ArchivedTypeLoader<NpcType>;
         varbits: ArchiveVarBitTypeLoader;
@@ -120,6 +121,11 @@ export class CacheDefinitions {
         const state = this.getState(), registry = state.archives;
         const before = { npc: registry.ids("npc"), loc: registry.ids("loc"), obj: registry.ids("obj") };
         registry.replace(bundles);
+        if (before.obj.length > 0 || registry.ids("obj").length > 0) {
+            this.spellNamesByWidget = undefined;
+            this.spellsByName = undefined;
+            this.spellWidgetGroups = undefined;
+        }
         state.npcs.clearArchivedCache();
         state.objects.clearArchivedCache();
         state.objArchives.clearArchivedCache();
@@ -532,38 +538,47 @@ export class CacheDefinitions {
         };
     }
 
+    private static ensureSpellMetadata(): void {
+        if (this.spellNamesByWidget && this.spellsByName && this.spellWidgetGroups) return;
+
+        const spellNamesByWidget = new Map<number, string>();
+        const spellsByName = new Map<string, { widgetId: number; itemId: number }>();
+        const spellWidgetGroups = new Set<number>();
+        for (let id = 0; id < this.getState().items.getCount(); id++) {
+            const params = this.getItem(id).params;
+            const widgetId = params?.get(this.SPELL_WIDGET_PARAM_ID);
+            const spellName = params?.get(this.SPELL_NAME_PARAM_ID);
+            if (typeof widgetId !== "number" || typeof spellName !== "string") continue;
+
+            spellNamesByWidget.set(widgetId, spellName);
+            spellWidgetGroups.add(widgetId >>> 16);
+            const normalizedName = spellName.toLowerCase();
+            if (!spellsByName.has(normalizedName)) {
+                spellsByName.set(normalizedName, { widgetId, itemId: id });
+            }
+        }
+        this.spellNamesByWidget = spellNamesByWidget;
+        this.spellsByName = spellsByName;
+        this.spellWidgetGroups = spellWidgetGroups;
+    }
+
     static getSpellName(widgetId: number, itemId: number): string | undefined {
         if (itemId > 0 && itemId < this.getState().items.getCount()) {
             const name = this.getItem(itemId).params?.get(this.SPELL_NAME_PARAM_ID);
             if (typeof name === "string") return name;
         }
-        if (!this.spellNamesByWidget) {
-            this.spellNamesByWidget = new Map();
-            for (let id = 0; id < this.getState().items.getCount(); id++) {
-                const params = this.getItem(id).params;
-                const widget = params?.get(this.SPELL_WIDGET_PARAM_ID);
-                const name = params?.get(this.SPELL_NAME_PARAM_ID);
-                if (typeof widget === "number" && typeof name === "string") {
-                    this.spellNamesByWidget.set(widget, name);
-                }
-            }
-        }
-        return this.spellNamesByWidget.get(widgetId);
+        this.ensureSpellMetadata();
+        return this.spellNamesByWidget!.get(widgetId);
+    }
+
+    static isSpellWidgetGroup(groupId: number): boolean {
+        this.ensureSpellMetadata();
+        return this.spellWidgetGroups!.has(groupId);
     }
 
     /** The spellbook widget and spell item a client sends for the spell with this name. */
     static getSpellByName(name: string): { widgetId: number; itemId: number } | undefined {
-        if (!this.spellsByName) {
-            this.spellsByName = new Map();
-            for (let id = 0; id < this.getState().items.getCount(); id++) {
-                const params = this.getItem(id).params;
-                const widgetId = params?.get(this.SPELL_WIDGET_PARAM_ID);
-                const spellName = params?.get(this.SPELL_NAME_PARAM_ID);
-                if (typeof widgetId === "number" && typeof spellName === "string" && !this.spellsByName.has(spellName.toLowerCase())) {
-                    this.spellsByName.set(spellName.toLowerCase(), { widgetId, itemId: id });
-                }
-            }
-        }
-        return this.spellsByName.get(name.trim().toLowerCase());
+        this.ensureSpellMetadata();
+        return this.spellsByName!.get(name.trim().toLowerCase());
     }
 }

@@ -11,7 +11,9 @@ const QuestRuntime = require("../plugins/quests/QuestRuntime");
 const Gliders = require("../plugins/world/GnomeGliders.plugin");
 
 const tasks = [];
+const gliderRequests = [];
 Gliders.register({
+  emitCustomEvent: (name, event) => { if (name === "gnome-gliders:glider") gliderRequests.forEach((fn) => fn(event)); },
   getTaskManager: () => ({ submit: (task) => { task.setRunning(true); tasks.push(task); } }),
   persistAttribute() {},
   onNpcInteraction() {},
@@ -126,6 +128,20 @@ test("from the Grand Tree (plane 3) to Varrock, and a stray Captain Errdo far fr
   const flight = ticks(player, () => Gliders._test.chooseDestination({ player, buttonId: (138 << 16) | 10 }));
   assert.deepEqual(flight[0].slice(1, 2), ["varp 153=3"], "pilot_journey 3 = from 0 to 3, as captured");
   assert.equal(Gliders._test.openMap({ player, ...pilot("Captain Errdo", 2918, 3057) }), false);
+});
+
+test("content can take a pilot's Glider before the quest check (The Grand Tree's escape)", () => {
+  completed = new Set();
+  const player = createPlayer();
+  const claim = (request) => { request.handled = true; request.claimed = true; };
+  gliderRequests.push(claim);
+  try {
+    assert.equal(Gliders._test.openMap({ player, ...pilot("Captain Errdo", 2464, 3501, 3) }), true);
+    assert.deepEqual(player.log, [], "no map and no refusal message");
+  } finally {
+    gliderRequests.splice(gliderRequests.indexOf(claim), 1);
+    completed = new Set(["The Grand Tree"]);
+  }
 });
 
 test("The Grand Tree is needed; Feldip Hills and Ape Atoll stay shut without their quests", () => {

@@ -90,6 +90,7 @@ function announceTierComplete(player, diary, tier) {
   if (!player.isRegistered() || !isTierComplete(player, diary, tier)) return;
   const data = diary.tiers[tier];
   player.getPacketSender().sendVarbit(data.completeVarbit, data.completeValue ?? 1);
+  api.emitCustomEvent("diary:tier-complete", { player, diary: diary.name, tier });
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
     new core.StatementDialogue(0, `Congratulations! You have completed all of the ${tier} tasks in the ${diary.name} area. Speak to ${diary.npcAt} to claim your reward.`),
     new core.EndDialogue(1),

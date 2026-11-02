@@ -15,10 +15,13 @@
  *     cell, +22 overcharged, Runecraft XP 190/260;
  *   - otherwise "The weak cell is consumed as it <col=ff0000>recharges</col> the barrier.", sound
  *     5428, both energies +2/+5/+9 (weak/medium/strong), Runecraft XP 30/100/180 (250 overcharged).
- * - At the close every tile goes back to gotr_cell_tile_inactive and the barriers go.
+ * - At the close every tile goes back to gotr_cell_tile_inactive and the barriers go; players
+ *   build and strengthen barriers again straight away, through the grace and the lobby.
  * Wiki: placing gives 17/20/24/30 of both energies, recharging restores 10/25/50/100 health; a
  * barrier's NPC has the cache's 50/100/200/400 hitpoints; a destroyed barrier leaves a broken tile
  * that 12 guardian fragments repair for 25 of each energy; at 60% power every barrier takes 50.
+ * Wiki (13 November 2024): before the game begins an uncharged cell builds a weak barrier, and
+ * barriers built then give no experience. Energy before the open would be wiped by it, so none.
  */
 
 const Shared = require("./Shared.GuardiansOfTheRift");
@@ -229,17 +232,25 @@ function takeChisel({ player, objectId }) {
 
 // ------------------------------------------------------------------ placing cells
 
+/** Before the game an uncharged cell builds a weak barrier on an inactive tile (Wiki). */
+function pregameCell(player, tile) {
+  if (Game.isRunning() || tile.tier !== 0 || Shared.count(player, Shared.ITEM.UNCHARGED_CELL) <= 0) return null;
+  return Shared.ITEM.UNCHARGED_CELL;
+}
+
 function placeCell(event) {
   const { player } = event;
   const tile = eventTile(event);
   if (!tile || !Shared.questComplete(player) || !Game.isPlaying(player)) return false;
-  const tier = bestCell(player);
-  if (tier === 0) {
+  let tier = bestCell(player);
+  const item = tier > 0 ? Shared.ITEM.CELLS[tier - 1] : pregameCell(player, tile);
+  if (!item) {
     Shared.itemStatement(player, Shared.ITEM.CELLS[0], "You need a charged cell to place on the tile.");
     return true;
   }
+  if (tier === 0) tier = 1;
   const inventory = player.getInventory();
-  inventory.delete(Shared.obj(Shared.ITEM.CELLS[tier - 1]), 1);
+  inventory.delete(Shared.obj(item), 1);
   inventory.refreshItems();
   Shared.animate(player, "human_pickupfloor");
   const cell = CELL[tier];
@@ -266,6 +277,7 @@ function placeCell(event) {
 }
 
 function reward(player, energy, xp) {
+  if (!Game.isRunning()) return;
   Game.addEnergy(player, "elemental", energy);
   Game.addEnergy(player, "catalytic", energy);
   Shared.addXp(player, "RUNECRAFTING", xp);
@@ -274,7 +286,7 @@ function reward(player, energy, xp) {
 /** Wiki: recharging a full barrier pays up to 2,500 XP and 450 energy a game. */
 function rewardCapped(player, energy, xp) {
   const state = Game.stateOf(player);
-  if (!state) return;
+  if (!state || !Game.isRunning()) return;
   state.fullRecharge ??= { xp: 0, energy: 0 };
   const paidEnergy = Math.max(0, Math.min(energy, FULL_HEALTH_CAP.energy - state.fullRecharge.energy));
   const paidXp = Math.max(0, Math.min(xp, FULL_HEALTH_CAP.xp - state.fullRecharge.xp));

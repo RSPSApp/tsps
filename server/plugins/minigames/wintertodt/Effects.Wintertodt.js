@@ -49,9 +49,16 @@ function graphic(id, tile, { delay = 0, height = 0 } = {}) {
   }
 }
 
+/** A sound heard within `radius` tiles of a tile. */
+function areaSound(id, tile, radius) {
+  for (const player of viewers()) {
+    player.getPacketSender().sendAreaSound(id, tile.x, tile.y, 0, 1, 0, radius);
+  }
+}
+
 /** The bolt the storm throws at whatever it attacks, landing in `end` client cycles. */
 function stormBolt(to, end) {
   projectile(Shared.STORM_SOURCE, to, Shared.PROJECTILE.STORM_BOLT, { end });
 }
 
-module.exports = { setViewers, tempLoc, snowfall, projectile, graphic, stormBolt };
+module.exports = { setViewers, tempLoc, snowfall, projectile, graphic, areaSound, stormBolt };

@@ -1,7 +1,9 @@
 {
-  "$comment": "Prayer's bones and the Ectofuntus bonemeal they grind into (docs/prayer-bones.md). Names are obj gamevals. xp: burying, from each bone's OSRS Wiki page (SkillManager retains fractional experience in tenths). restore: Prayer points given back when buried in the Catacombs of Kourend or with a dragonbone necklace (Wiki, Dragonbone necklace). bonemeal: what the Ectofuntus grinder makes of it (Wiki, Bonemeal). crush: false for bones the bonecrusher leaves (tertiary drops, Wiki). level: Prayer needed to bury or worship with it.",
+  "$comment": "Prayer's bones and the Ectofuntus bonemeal they grind into (docs/prayer-bones.md). Names are obj gamevals. xp: burying, from each bone's OSRS Wiki page (SkillManager retains fractional experience in tenths). restore: Prayer points given back when buried in the Catacombs of Kourend or with a dragonbone necklace (Wiki, Dragonbone necklace). bonemeal: what the Ectofuntus grinder makes of it (Wiki, Bonemeal). groundOnly: bones handled on the ground but not in inventory, altars or the Ectofuntus. crush: false for bones the bonecrusher leaves (tertiary drops, Wiki). level: Prayer needed to bury or worship with it.",
   "bones": [
     { "obj": "bones", "xp": 4.5, "restore": 1, "bonemeal": "pot_bonemeal" },
+    { "obj": "bull_bones", "xp": 40, "restore": 0, "groundOnly": true },
+    { "obj": "giant_bones", "xp": 150, "restore": 0, "groundOnly": true },
     { "obj": "bones_burnt", "xp": 4.5, "restore": 1, "bonemeal": "pot_bonemeal_burnt" },
     { "obj": "wolf_bones", "xp": 4.5, "restore": 1, "bonemeal": "pot_bonemeal_wolf" },
     { "obj": "bat_bones", "xp": 5.3, "restore": 1, "bonemeal": "pot_bonemeal_bat" },

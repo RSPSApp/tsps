@@ -337,6 +337,7 @@ GauntletRun.prototype.completionMessages = function completionMessages(now) {
   Scoreboard.recordGlobal(this.mode, "completion", total);
   const stats = statsOf(player);
   const name = this.corrupted ? "Corrupted Gauntlet" : "Gauntlet";
+  if (best) Shared.api()?.emitCustomEvent?.("boss:personal-best", { player, boss: name, ticks: total });
   return [
     `Challenge duration: ${RED(Scoreboard.formatTicks(total))}.${best ? " (new personal best)" : ` Personal best: ${Scoreboard.formatTicks(stats.bestTicks[this.mode])}`}`,
     `Preparation time: ${RED(Scoreboard.formatTicks(prep))}. Hunllef kill time: ${RED(Scoreboard.formatTicks(kill))}.`,

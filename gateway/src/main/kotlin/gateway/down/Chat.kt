@@ -22,8 +22,9 @@ class TspsChatMessage(
 
     /**
      * Messages OSRS sends as MESSAGE_GAME: game (0), broadcast (14), filtered (105), trade and
-     * challenge requests (101, 103), and the other system types. Private and friends-chat
-     * types have their own packets.
+     * challenge requests (101, 103), and the other system types, among them the clan channel
+     * notices 43 and 46 (rsprox 763 has the intro notice as MESSAGE_GAME type 43). Private,
+     * friends-chat and clan chat types have their own packets.
      */
     val isGameMessage: Boolean get() = !isPublic && type !in SOCIAL_TYPES
 
@@ -33,7 +34,7 @@ class TspsChatMessage(
     companion object {
         private const val NO_PLAYER = 0xFFFF
 
-        /** Private in/out, mod private, friends chat and clan types, which M6 maps. */
+        /** Private in/out, mod private, friends chat and clan chat. */
         private val SOCIAL_TYPES = setOf(3, 6, 7, 9, 41, 44)
 
         fun decode(packet: TspsPacket): TspsChatMessage {

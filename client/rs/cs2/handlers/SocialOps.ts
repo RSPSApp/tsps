@@ -259,9 +259,4 @@ export function registerSocialOps(handlers: HandlerMap): void {
         ctx.intStackSize--; // pop ascending boolean
         /* no-op - add rank comparator to friends chat */
     });
-
-    // === Clan Profile ===
-    handlers.set(Opcodes.CLANPROFILE_FIND, (ctx) => {
-        ctx.pushInt(0); // not found
-    });
 }

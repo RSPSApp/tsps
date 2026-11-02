@@ -33,6 +33,7 @@ const handlers = new Map();
 const firstActions = [];
 const groundClicks = [];
 const groundPickups = [];
+const persistedAttributes = [];
 let prompt;
 let burialTasks = [];
 let membersWorld = true;
@@ -49,7 +50,7 @@ const api = {
   },
   emitCustomEvent: (name, payload) => (handlers.get(name) ?? []).forEach((handler) => handler(payload)),
   onCustomEvent: (name, handler) => handlers.set(name, [...(handlers.get(name) ?? []), handler]),
-  persistAttribute() {},
+  persistAttribute: (...args) => persistedAttributes.push(args),
   onItemFirstAction(handler) { firstActions.push(handler); },
   onGroundItemClick(itemId, option, handler) { groundClicks.push({ itemId, option, handler }); },
   onGroundItemPickup(handler) { groundPickups.push(handler); },
@@ -132,12 +133,17 @@ const bury = (who, itemId, extra = {}) => {
   return request.handled;
 };
 
-test("every bone and bonemeal in the data is a real obj, and every bone's bonemeal has a worship row", () => {
+test("every bone and bonemeal in the data is a real obj, and each inventory bone has a worship row", () => {
   const bonemeal = new Set(DATA.bonemeal.map((row) => row.obj));
   for (const row of [...DATA.bones, ...DATA.bonemeal]) {
     assert.ok(Number.isInteger(CacheDefinitions.getObjId(row.obj)), row.obj);
   }
-  for (const row of DATA.bones) assert.ok(bonemeal.has(row.bonemeal), `${row.obj} -> ${row.bonemeal}`);
+  for (const row of DATA.bones.filter((bone) => !bone.groundOnly)) assert.ok(bonemeal.has(row.bonemeal), `${row.obj} -> ${row.bonemeal}`);
+});
+
+test("the shared ground-bury preference keeps its saved key and false default", () => {
+  const preference = persistedAttributes.filter(([key]) => key === "giant-lairs:bury-without-asking");
+  assert.deepEqual(preference, [["giant-lairs:bury-without-asking", false]]);
 });
 
 test("worship gives four times the burying experience, as the Wiki's tables do", () => {
@@ -156,7 +162,7 @@ test("burying preserves a bone's fractional experience, and restores nothing out
   assert.equal(bury(who, Items.COINS), false);
 });
 
-test("bull bones bury for 40 Prayer XP but stay out of altar and Ectofuntus bone handling", () => {
+test("bull bones remain eligible for Prayer bury events but stay out of altar and Ectofuntus handling", () => {
   const who = player();
   assert.equal(bury(who, Items.BULL_BONES), true);
   assert.equal(who.xp.get(Skill.PRAYER), 40);
@@ -165,6 +171,39 @@ test("bull bones bury for 40 Prayer XP but stay out of altar and Ectofuntus bone
   assert.equal(bone.bone, null);
   assert.equal(bury(who, Items.BULL_BONES, { crushed: true, scale: 0.5 }), true);
   assert.equal(who.xp.get(Skill.PRAYER), 60);
+});
+
+test("giant bones remain eligible for Prayer bury events but stay out of inventory, altar and Ectofuntus handling", () => {
+  const id = CacheDefinitions.getObjId("giant_bones");
+  const who = player({ inventory: { [id]: 1, [Items.BONECRUSHER]: 1 } });
+  const inventoryBurial = firstActions[0]({ player: who, itemId: id, slot: 0 });
+  assert.equal(inventoryBurial, false);
+  const altarBone = { itemId: id, bone: "unset" };
+  api.emitCustomEvent("prayer:bone", altarBone);
+  assert.equal(altarBone.bone, null);
+  assert.equal(bury(who, id), true);
+  assert.equal(who.xp.get(Skill.PRAYER), 150);
+
+  who.performAnimation = () => {};
+  who.sendMessage = (text) => who.messages.push(text);
+  const removed = { value: false };
+  api.core.ItemOnGroundManager = { deregister() { removed.value = true; } };
+  const groundPlayer = player();
+  groundPlayer.performAnimation = () => {};
+  const groundItem = { getItem: () => ({ getId: () => id }), isPendingRemoval: () => removed.value };
+  const pickup = { player: who, groundItem, groundItemId: id, handled: false };
+  assert.equal(groundPickups.at(-1)(pickup), true);
+  assert.deepEqual(who.messages, ["I don't think those will fit in my backpack..."]);
+  const telegrab = { groundItem, allow: true };
+  api.emitCustomEvent("magic:can-telekinetic-grab", telegrab);
+  assert.equal(telegrab.allow, false);
+  const click = groundClicks.find(({ itemId }) => itemId === id);
+  assert.ok(click);
+  click.handler({ player: groundPlayer, groundItem, groundItemId: id, handled: false });
+  assert.equal(prompt[1], "Bury the bones? (This grants Prayer XP)");
+  prompt[3]();
+  assert.equal(groundPlayer.xp.get(Skill.PRAYER), 150);
+  assert.equal(removed.value, true);
 });
 
 test("bull bones cannot be picked up and their ground Bury uses the giant-bones confirmation", () => {
@@ -185,13 +224,14 @@ test("bull bones cannot be picked up and their ground Bury uses the giant-bones 
   api.emitCustomEvent("ground-items:take", telegrab);
   assert.equal(telegrab.allow, false, "the shared ground transfer guard rejects Telegrab");
 
-  const click = groundClicks.at(-1);
+  const click = groundClicks.find(({ itemId }) => itemId === Items.BULL_BONES);
   assert.equal(click.itemId, Items.BULL_BONES);
   assert.equal(click.option, 3);
   const event = { player: who, groundItem, groundItemId: Items.BULL_BONES, handled: false };
   click.handler(event);
   assert.equal(event.handled, true);
   assert.equal(prompt[1], "Bury the bones? (This grants Prayer XP)");
+  assert.deepEqual([prompt[2], prompt[4], prompt[6]], ["Yes", "No", "Yes, don't ask me again"]);
   prompt[3]();
   assert.equal(registered, true);
   assert.equal(who.xp.get(Skill.PRAYER), 40);
@@ -207,12 +247,12 @@ test("cancelled and stale Bull-bone burial prompts leave the ground item and awa
   api.core.ItemOnGroundManager = { deregister(item) { items.add(item); } };
   const groundItem = { getItem: () => ({ getId: () => Items.BULL_BONES }), isPendingRemoval: () => items.has(groundItem) };
 
-  groundClicks.at(-1).handler({ player: who, groundItem, groundItemId: Items.BULL_BONES, handled: false });
-  prompt[7]();
+  groundClicks.find(({ itemId }) => itemId === Items.BULL_BONES).handler({ player: who, groundItem, groundItemId: Items.BULL_BONES, handled: false });
+  prompt[5]();
   assert.equal(who.xp.get(Skill.PRAYER), undefined, "No cancels the burial");
   assert.equal(items.has(groundItem), false);
 
-  groundClicks.at(-1).handler({ player: who, groundItem, groundItemId: Items.BULL_BONES, handled: false });
+  groundClicks.find(({ itemId }) => itemId === Items.BULL_BONES).handler({ player: who, groundItem, groundItemId: Items.BULL_BONES, handled: false });
   items.add(groundItem);
   prompt[3]();
   assert.equal(who.xp.get(Skill.PRAYER), undefined, "a bone removed before confirmation gives no XP");
@@ -225,15 +265,15 @@ test("bull-bone confirmation preference skips future prompts", () => {
   api.core.ItemOnGroundManager = { deregister(item) { removed.add(item); } };
   const groundItem = () => ({ getItem: () => ({ getId: () => Items.BULL_BONES }), isPendingRemoval: () => removed.has(item) });
   let item = groundItem();
-  groundClicks.at(-1).handler({ player: who, groundItem: item, groundItemId: Items.BULL_BONES, handled: false });
+  groundClicks.find(({ itemId }) => itemId === Items.BULL_BONES).handler({ player: who, groundItem: item, groundItemId: Items.BULL_BONES, handled: false });
   assert.ok(prompt, "the first ground burial asks");
-  prompt[5]();
+  prompt[7]();
   assert.equal(who.getAttribute("giant-lairs:bury-without-asking"), true);
   assert.equal(who.xp.get(Skill.PRAYER), 40);
 
   prompt = null;
   item = groundItem();
-  groundClicks.at(-1).handler({ player: who, groundItem: item, groundItemId: Items.BULL_BONES, handled: false });
+  groundClicks.find(({ itemId }) => itemId === Items.BULL_BONES).handler({ player: who, groundItem: item, groundItemId: Items.BULL_BONES, handled: false });
   assert.equal(who.xp.get(Skill.PRAYER), 80);
   assert.equal(prompt, null, "the saved preference avoids later prompts");
 });
@@ -281,6 +321,19 @@ test("the bonecrusher crushes bull bones for 20 or 40 base Prayer XP", () => {
   assert.equal(who.getAttribute("bonecrusher:charges"), 0);
 });
 
+test("the bonecrusher crushes giant bones for half experience and one charge each", () => {
+  const giantBones = CacheDefinitions.getObjId("giant_bones");
+  const who = player({ inventory: { [Items.BONECRUSHER]: 1 } });
+  who.setAttribute("bonecrusher:charges", 2);
+  assert.deepEqual(kill(who, [{ itemId: giantBones, amount: 1 }]), []);
+  assert.equal(who.xp.get(Skill.PRAYER), 75);
+  assert.equal(who.getAttribute("bonecrusher:charges"), 1);
+
+  assert.deepEqual(kill(who, [{ itemId: giantBones, amount: 1 }]), []);
+  assert.equal(who.xp.get(Skill.PRAYER), 150);
+  assert.equal(who.getAttribute("bonecrusher:charges"), 0);
+});
+
 test("Bull bones bury on a free-to-play world", () => {
   membersWorld = false;
   const who = player();
@@ -289,7 +342,7 @@ test("Bull bones bury on a free-to-play world", () => {
   api.core.ItemOnGroundManager = { deregister() { removed.value = true; } };
   who.setAttribute("giant-lairs:bury-without-asking", true);
   const groundItem = { getItem: () => ({ getId: () => Items.BULL_BONES }), isPendingRemoval: () => removed.value };
-  groundClicks.at(-1).handler({ player: who, groundItem, groundItemId: Items.BULL_BONES, handled: false });
+  groundClicks.find(({ itemId }) => itemId === Items.BULL_BONES).handler({ player: who, groundItem, groundItemId: Items.BULL_BONES, handled: false });
   assert.equal(removed.value, true);
   assert.equal(who.xp.get(Skill.PRAYER), 40);
 });

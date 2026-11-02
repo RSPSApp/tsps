@@ -13,7 +13,6 @@ module.exports = {
     require("./giantlairs/Lair.GiantLairs")(api);
     require("./giantlairs/Obor.GiantLairs")(api);
     require("./giantlairs/Bryophyta.GiantLairs")(api);
-    require("./giantlairs/GiantBones.GiantLairs")(api);
     require("./giantlairs/CombatAchievements.GiantLairs")(api);
   },
 };

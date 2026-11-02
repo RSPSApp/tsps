@@ -2,6 +2,7 @@ import { markWidgetInteractionDirty } from "../../widgets/WidgetInteraction";
 import { EMOTE_SHORTCUT_SCRIPT_ID, isEmoteShortcut } from "./EmoteShortcuts";
 import { GAMEFRAME_LAYOUT_SETTING, GAMEFRAME_317_OPTION, GAMEFRAME_317_FIXED_OPTION, SETTINGS_GET_SELECTED_SCRIPT, VARP_GAMEFRAME_317 } from "../../common/ui/gameframeLayout";
 import type { FriendsChatAction } from "../../common/social/FriendsChat";
+import type { ClanChannel, ClanSettings } from "./handlers/HandlerTypes";
 import type { WidgetManager, WidgetNode } from "../../widgets/WidgetManager";
 import type { TypeLoader } from "../config/TypeLoader";
 import type { DbRepository } from "../config/db/DbRepository";
@@ -209,6 +210,16 @@ export interface Cs2Context {
     clanRank?: number;
     friendsChatMinKick?: number;
     sendFriendsChatAction?: (action: FriendsChatAction) => void;
+
+    // Clans: the player's own, the one listened to as a guest, and which of them the
+    // activeclan* commands read (activeclansettings_find_* and activeclanchannel_find_* pick).
+    clanSettings?: ClanSettings | null;
+    clanChannel?: ClanChannel | null;
+    listenedClanSettings?: ClanSettings | null;
+    listenedClanChannel?: ClanChannel | null;
+    activeClanSettingsIsListened?: boolean;
+    activeClanChannelIsListened?: boolean;
+    clanVars?: Map<number, number>;
 
     // Stats/skills (indices 0-22 for OSRS skills)
     getStatLevel?: (skillId: number) => number;
@@ -902,6 +913,25 @@ export class Cs2Vm {
                 return vm.context.friendsChatMinKick ?? 0;
             },
             sendFriendsChatAction: (action) => vm.context.sendFriendsChatAction?.(action),
+            get clanSettings() {
+                return vm.context.activeClanSettingsIsListened
+                    ? vm.context.listenedClanSettings
+                    : vm.context.clanSettings;
+            },
+            get clanChannel() {
+                return vm.context.activeClanChannelIsListened
+                    ? vm.context.listenedClanChannel
+                    : vm.context.clanChannel;
+            },
+            get clanVars() {
+                return vm.context.clanVars;
+            },
+            selectClanSettings: (listened) => {
+                vm.context.activeClanSettingsIsListened = listened;
+            },
+            selectClanChannel: (listened) => {
+                vm.context.activeClanChannelIsListened = listened;
+            },
 
             // Event context (for magic argument substitution)
             get eventContext() {

@@ -239,6 +239,12 @@ export class ClientState {
     private static keybindStates: Map<number, boolean> = new Map();
 
     /**
+     * Shift-click drop (OSRS Client.shiftClickDrop), set by CS2 setshiftclickdrop: the login
+     * script (876, via 7431) passes the "Shift click to drop items" varbit (11556) on desktop.
+     */
+    static shiftClickDrop: boolean = false;
+
+    /**
      * Check if a keybind is currently pressed
      * Key 82 = Ctrl key
      */

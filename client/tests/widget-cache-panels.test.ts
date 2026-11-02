@@ -5,7 +5,10 @@ import ts from "typescript";
 import { Inventory } from "../rs/inventory/Inventory";
 import { deriveRawMenuEntriesForWidget } from "../widgets/menu/utils";
 import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
-import { encodeWidgetRunScript, encodeWidgetSetText } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
+import { encodeWidgetRunScript, encodeWidgetSetText, decodeClientPacket } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
+import { InputManager } from "../game/InputManager";
+import { processWidgetKeyboardInput } from "../game/widgets/input/widgetKeyboardInput";
+import { createPacket, ClientPacket, queuePacket, flushPackets, setPacketSocket } from "../network/packet";
 import { WidgetTransmitProcessor } from "../game/widgets/WidgetTransmitProcessor";
 import { getTransmitCycles, markVarTransmit, resetTransmitCycles } from "../game/TransmitCycles";
 import { markWidgetInteractionDirty } from "../widgets/WidgetInteraction";
@@ -356,3 +359,108 @@ import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdat
 }
 
 console.log("Cache panel scripts retain inventory items, 64-bit prices and native Castle Wars HUD state");
+
+// Actual cache key listeners -> native resume packet -> real PlayerSession/DestroyItem policy.
+async function nativeDestroyConfirmation() {
+    const previousDirectory = process.cwd();
+    const serverRoot = path.resolve(__dirname, '../../server');
+    process.chdir(serverRoot);
+    const serverModules = serverRoot + '/src/main/typescript/elvarg';
+    const { PluginManager } = require(serverModules + '/plugins/PluginManager');
+    const { Player } = require(serverModules + '/game/entity/impl/player/Player');
+    const { PlayerSession } = require(serverModules + '/net/PlayerSession');
+    const { ClientConnection } = require(serverModules + '/net/NetworkBuilder');
+    const { DropItemPacketListener } = require(serverModules + '/net/packet/impl/DropItemPacketListener');
+    const core = PluginManager.getCoreApi();
+    const { vm } = require('../scripts/cache/cs2-sweep').createCacheVm();
+    const wm = vm.context.widgetManager;
+    const scriptErrors: unknown[] = [];
+    vm.logError = (error: unknown) => scriptErrors.push(error);
+    // Use the production callback, including its native pausebutton repeat guard.
+    const source = ts.createSourceFile('OsrsClient.ts', fs.readFileSync(path.resolve(__dirname, '../game/OsrsClient.ts'), 'utf8'), ts.ScriptTarget.Latest, true);
+    let resumeCallback = '';
+    const findCallback = (node: ts.Node) => {
+        if (ts.isPropertyAssignment(node) && node.name.getText(source) === 'sendResumePauseButton') resumeCallback = node.initializer.getText(source);
+        ts.forEachChild(node, findCallback);
+    };
+    findCallback(source);
+    assert.ok(resumeCallback);
+    const callback = ts.transpile(`const resume = ${resumeCallback}`, { target: ts.ScriptTarget.ES2020 });
+    vm.context.sendResumePauseButton = new Function('self', 'createPacket', 'ClientPacketId', 'queuePacket', `${callback}; return resume;`)
+        ({ widgetManager: wm }, createPacket, ClientPacket, queuePacket);
+    wm.setRootInterface(161);
+    wm.openSubInterface((161 << 16) | 96, 162);
+    const channel = { kind: 'test', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const session = new PlayerSession(channel);
+    const player = new Player(session);
+    player.setIndex(101); player.setUsername('destroykeys'); player.setRegistered(true);
+    const send = session.sendClientPacket.bind(session);
+    session.sendClientPacket = (frame: Uint8Array) => {
+        const message = decodeServerPacket(frame) as any;
+        const payload = message.payload;
+        if (message.type === 'widget') {
+            if (payload.action === 'set_hidden') wm.getWidgetByUid(payload.uid).hidden = payload.hidden;
+            if (payload.action === 'open_sub') wm.openSubInterface(payload.targetUid, payload.groupId, payload.type);
+            if (payload.action === 'close_sub') wm.closeSubInterface(payload.targetUid);
+        }
+        if (message.type === 'runClientScript') vm.run(vm.context.loadScript(payload.scriptId),
+            payload.args.filter((arg: any) => typeof arg === 'number'), payload.args.filter((arg: any) => typeof arg === 'string'));
+        return send(frame);
+    };
+    require(serverRoot + '/plugins/interface/DestroyItem.plugin').register(PluginManager.createApi('destroy-keyboard-test'));
+    const connection = new ClientConnection(channel); connection.player = player;
+    const outgoing: any[] = [];
+    (globalThis as any).WebSocket ??= { OPEN: 1 };
+    setPacketSocket({ readyState: 1, send: (frame: Uint8Array) => outgoing.push(decodeClientPacket(Buffer.from(frame))) } as any);
+    const open = () => {
+        player.getInventory().setItem(0, new core.Item(11941, 1));
+        DropItemPacketListener.drop(player, 11941, core.Inventory.INTERFACE_ID, 0);
+        assert.equal(player.getPacketSender().isChatboxInterface(584), true);
+        assert.equal(wm.getWidgetByUid((584 << 16) | 5).itemId, 11941);
+        assert.equal(wm.getWidgetByUid((584 << 16) | 6).text, 'Looting bag');
+        assert.equal(vm.lastError, null);
+    };
+    const key = (value: string) => {
+        const input = new InputManager();
+        input.onKeyDown({ key: value, keyCode: value.toUpperCase().charCodeAt(0), code: value === '1' || value === '2' ? `Digit${value}` : `Key${value.toUpperCase()}`, preventDefault() {} } as any);
+        processWidgetKeyboardInput({ getCs2Vm: () => vm, getVarManager: () => vm.context.varManager,
+            getPendingInputDialogAction: () => null, getPendingTradeQuantityAction: () => null,
+            getCustomInterfaces: () => ({ handleSearchKeyEvents: () => false }),
+        } as any, { input, mx: 0, my: 0, allRoots: wm.getAllGroupRoots(161), visibleMap: new Map(),
+            getStaticChildren: (uid: number) => wm.getStaticChildrenByParentUid(uid) } as any, wm);
+        flushPackets();
+        assert.deepEqual(scriptErrors, [], 'native keyboard scripts run without errors');
+    };
+    const resume = async (action: number) => {
+        assert.deepEqual(scriptErrors, [], 'native mouse and keyboard scripts run without errors');
+        assert.deepEqual(outgoing, [{ type: 'dialogue_continue', widgetId: 584 << 16, childIndex: action }]);
+        await connection.dispatch(outgoing.splice(0)); connection.processTurnPackets();
+    };
+    try {
+        for (const [value, action] of [['1', 1], ['y', 1], ['Y', 1], ['2', 0], ['n', 0], ['N', 0]] as const) {
+            open(); key(value); await resume(action);
+            assert.equal(player.getInventory().getAmount(11941), action === 1 ? 0 : 1, `${value} selects the intended option`);
+            await connection.dispatch([{ type: 'dialogue_continue', widgetId: 584 << 16, childIndex: 1 }]);
+            connection.processTurnPackets();
+            assert.equal(player.getInventory().getAmount(11941), action === 1 ? 0 : 1, 'a replay after closing cannot destroy an item');
+        }
+        for (const [component, action] of [[1, 1], [3, 0]]) {
+            open(); vm.invokeEventHandler(wm.getWidgetByUid((584 << 16) | component), 'onOp', { opIndex: 1 });
+            flushPackets(); await resume(action);
+            assert.equal(player.getInventory().getAmount(11941), action === 1 ? 0 : 1, 'mouse clicks use the same guarded resume');
+        }
+        open(); key('x'); assert.deepEqual(outgoing, [], 'unrelated keys do not confirm');
+        await connection.dispatch([{ type: 'dialogue_continue', widgetId: 584 << 16, childIndex: 2 }]); connection.processTurnPackets();
+        assert.equal(player.getInventory().getAmount(11941), 1, 'invalid resume options cannot destroy');
+        player.getInventory().setItem(0, new core.Item(995, 10)); key('1'); await resume(1);
+        assert.equal(player.getInventory().getAmount(995), 10, 'a changed inventory slot is left intact');
+        open(); player.getPacketSender().sendInterfaceRemoval();
+        await connection.dispatch([{ type: 'dialogue_continue', widgetId: 584 << 16, childIndex: 1 }]); connection.processTurnPackets();
+        assert.equal(player.getInventory().getAmount(11941), 1, 'a closed or replaced chat interface invalidates confirmation');
+    } finally {
+        session.flushPackets(); setPacketSocket(null); player.setRegistered(false);
+        process.chdir(previousDirectory);
+    }
+}
+nativeDestroyConfirmation().then(() => console.log('Native destroy confirmation keyboard and mouse routing passed'))
+    .catch(error => { console.error(error); process.exitCode = 1; });

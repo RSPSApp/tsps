@@ -7,7 +7,10 @@ The diary framework lives in `server/plugins/achievements/diaries/`, and its dat
 - the reward lamps;
 - an admin command.
 
-**What's not here yet:** no task is wired to gameplay. Follow-up PRs make existing plugins complete tasks, one diary at a time, and add the reward items' effects.
+Gameplay integrations are added per action through `diary:task`. `Actions.AchievementDiaries.js`
+handles successful Varrock tea thefts, Lumbridge pickpockets and Draynor sewer Zombie kills;
+Runecrafting credits Sedridor's essence-mine teleport on its final travel tick. Other content
+plugins also emit task completions directly; the catalogue alone does not wire an action.
 
 ## Completing tasks from a plugin
 

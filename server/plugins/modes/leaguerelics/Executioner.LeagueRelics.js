@@ -1,12 +1,14 @@
 /**
  * Executioner (https://oldschool.runescape.wiki/w/Executioner_(Trailblazer_Reloaded_League)),
  * Trailblazer Reloaded's tier 8 relic: the Sage's axe it grants is a thrown weapon with no
- * bonuses, 5 tiles of reach (7 on long range), never used up, whose hit on an NPC under 20% of its
+ * bonuses, 5 tiles of reach (7 on long range: its dart styles' Longrange, the profile's
+ * `longRangeFightType`, adds the 2), never used up, whose hit on an NPC under 20% of its
  * hitpoints takes the rest of them. The axe is a ranged weapon in core's table (it flies as a rune
  * thrown axe: the cache has no spotanim of its own); the execute is the relic's. Demonic Pacts'
  * Executioner (tier 8) is the same axe, sparing Yama (the effect's `spared`), reaching 6 tiles
- * (the effect's `reach`, Wiki): the shared weapon profile's reach, raised for that league's owner
- * as combat asks it (`onCombatAttackDistance`), so Trailblazer Reloaded's axe keeps its 5.
+ * (8 on long range; the effect's `reach`, Wiki): the shared weapon profile's reach, raised for
+ * that league's owner as combat asks it (`onCombatAttackDistance`), so Trailblazer Reloaded's
+ * axe keeps its 5.
  */
 const Common = require("./Common.LeagueRelics");
 
@@ -58,7 +60,7 @@ function reach(event) {
 module.exports = function attach(api) {
   core = api.core;
   effect = Common.data.effects.executioner;
-  api.registerWeaponProfile({ itemIds: [...axeIds()], attackDistance: effect.attackDistance, longRangeDistance: effect.longRangeDistance });
+  api.registerWeaponProfile({ itemIds: [...axeIds()], attackDistance: effect.attackDistance, longRangeFightType: core.FightType[effect.longRangeFightType] });
   api.registerRangedAmmoHandler(ammo);
   api.onCombatHitDamage(execute);
   api.onCombatAttackDistance(reach);

@@ -592,8 +592,15 @@ test("Executioner: the Sage's axe is a thrown weapon that is never used up and f
   const who = cases(EXECUTIONER);
   const axe = core.ItemIdentifiers.SAGES_AXE;
   const profile = registered.profiles.find((entry) => entry.itemIds?.includes(axe));
-  assert.deepEqual([profile?.attackDistance, profile?.longRangeDistance], [5, 7]);
+  assert.deepEqual([profile?.attackDistance, profile?.longRangeFightType], [5, core.FightType.DART_LONGRANGE], "Longrange adds its 2: 7");
   wield(who.relic, axe);
+  core.WeaponProfiles.register(profile);
+  const fightType = who.relic.getFightType();
+  who.relic.setFightType(core.FightType.DART_LONGRANGE);
+  assert.equal(core.WeaponProfiles.attackDistance(who.relic, 0), 7, "Longrange: 7 tiles");
+  who.relic.setFightType(core.FightType.DART_RAPID);
+  assert.equal(core.WeaponProfiles.attackDistance(who.relic, 0), 5);
+  who.relic.setFightType(fightType);
   assert.equal(core.RangedWeapon.getFor(who.relic), core.RangedWeapon.SAGES_AXE, "a ranged weapon of core's table");
   assert.equal(core.Ammunition.getFor(who.relic).getItemId(), axe, "its own ammunition");
   assert.equal(core.CombatFactory.getMethod(who.relic).type(), core.CombatType.RANGED);

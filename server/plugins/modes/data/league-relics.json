@@ -123,7 +123,7 @@
     "soulStealer": { "league": 4, "key": "soul-stealer", "minimumHitFraction": 0.1, "restoreChance": 0.5, "restoreFraction": 0.1 },
     "weaponMaster": { "league": 4, "key": "weapon-master", "minimumHitFraction": 0.2, "regenPercent": 30, "sacrificeHitpoints": 25 },
     "executioner": {
-      "league": [4, 6], "key": "executioner", "items": ["SAGES_AXE", "SAGES_AXE_2"], "executeBelowFraction": 0.2, "attackDistance": 5, "longRangeDistance": 7,
+      "league": [4, 6], "key": "executioner", "items": ["SAGES_AXE", "SAGES_AXE_2"], "executeBelowFraction": 0.2, "attackDistance": 5, "longRangeFightType": "DART_LONGRANGE", "_longRange": "The axe takes the dart styles (item-gameplay.json); their Longrange adds 2 tiles: 7, and Demonic Pacts' 8 (Wiki).",
       "_spared": "Demonic Pacts' axe 'will not work against Yama' (Wiki, cache text): no execute on an NPC of these names.", "spared": { "6": ["Yama"] },
       "_reach": "Each league's axe reach where it differs from `attackDistance` (Wiki: Demonic Pacts' axe 'has an attack range of 6 tiles').", "reach": { "6": 6 }
     },

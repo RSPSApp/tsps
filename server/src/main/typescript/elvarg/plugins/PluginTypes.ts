@@ -1460,6 +1460,7 @@ export interface PluginCoreApi {
   Ammunition: any;
   WeaponProfiles: any;
   FightStyle: any;
+  FightType: any;
   WeaponInterfaceManager: any;
   PrayerHandler: any;
   PrayerData: any;

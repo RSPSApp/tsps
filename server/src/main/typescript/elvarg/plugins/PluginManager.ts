@@ -2381,6 +2381,7 @@ export class PluginManager {
       Ammunition: require(`${combat}/ranged/RangedData`).Ammunition,
       WeaponProfiles: require(`${combat}/WeaponProfile`).WeaponProfiles,
       FightStyle: require(`${combat}/FightStyle`).FightStyle,
+      FightType: require(`${combat}/FightType`).FightType,
       WeaponInterfaceManager: require(`${combat}/WeaponInterfaceManager`).WeaponInterfaceManager,
       PrayerHandler: require("../game/content/PrayerHandler").PrayerHandler,
       PrayerData: require("../game/content/PrayerHandler").PrayerData,

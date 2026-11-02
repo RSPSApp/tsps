@@ -18,7 +18,7 @@
  * (the cat page has no post-quest variant).
  */
 module.exports = function registerGertrudesCatQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers } = api.core;
+  const { Skill, ItemIdentifiers, NpcIdentifiers, Task, TaskManager } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Gertrude's Cat";
@@ -34,6 +34,11 @@ module.exports = function registerGertrudesCatQuest(api) {
   /** The transcript calls her "Fluffs"; the cache names the NPC "Gertrude's cat". */
   const FLUFFS_SPEAKER = "Fluffs";
   const RAN_OFF_ACTION_ID = "9c0VXK"; // "Fluffs has run off home with her offsping."
+  /**
+   * The scene's two purrs take about 4 ticks. A scene cut short (another dialogue, an actor out of
+   * view) never reaches its last step, and no event says it closed, so the kitten goes after this.
+   */
+  const KITTEN_LINGER_TICKS = 8;
   /** player -> the kitten actor purring beside Fluffs. */
   const returnedKittens = new WeakMap();
   /** player -> the Fluffs the kitten was handed to, for her overhead line. */
@@ -289,9 +294,25 @@ module.exports = function registerGertrudesCatQuest(api) {
     const kitten = at
       ? api.spawnNpc({ id: LOST_KITTEN_NPC_ID, x: at.getX(), y: at.getY() - 1, z: at.getZ(), owner: player, ownerOnly: true, wanderRadius: 0 })
       : null;
-    if (kitten) returnedKittens.set(player, kitten);
+    if (kitten) {
+      returnedKittens.set(player, kitten);
+      TaskManager.submit(new KittenExpiryTask(player, kitten));
+    }
     if (!startTranscript(api, player, FLUFFS_NPC_ID, PAGE, RETURN_KITTEN_VARIANT, null, fluffs ?? null)) {
       removeKitten(player);
+    }
+  }
+
+  class KittenExpiryTask extends Task {
+    constructor(player, kitten) {
+      super(KITTEN_LINGER_TICKS, kitten, false);
+      this.player = player;
+      this.kitten = kitten;
+    }
+
+    execute() {
+      this.stop();
+      if (returnedKittens.get(this.player) === this.kitten) removeKitten(this.player);
     }
   }
 

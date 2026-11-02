@@ -1,4 +1,69 @@
+import { ClientState } from "../../ClientState";
+
 /** Place a tooltip in renderer-canvas pixels relative to the pointer. */
+const itemStatsTooltipBounds = new WeakMap<object, { x: number; y: number; w: number; h: number }>();
+
+/** Stores the Item Stats panel bounds so another tooltip can avoid covering it. */
+export function setItemStatsTooltipBounds(owner: object, bounds: { x: number; y: number; w: number; h: number } | undefined): void {
+    if (bounds) itemStatsTooltipBounds.set(owner, bounds);
+    else itemStatsTooltipBounds.delete(owner);
+}
+
+export function getItemStatsTooltipBounds(owner: object): { x: number; y: number; w: number; h: number } | undefined {
+    return itemStatsTooltipBounds.get(owner);
+}
+
+export function scaleTooltipRect(
+    rect: { x: number; y: number; w: number; h: number },
+    scale: number | { x: number; y: number },
+): { x: number; y: number; w: number; h: number } {
+    const scaleX = typeof scale === "number" ? scale : scale.x;
+    const scaleY = typeof scale === "number" ? scale : scale.y;
+    return { x: rect.x * scaleX, y: rect.y * scaleY, w: rect.w * scaleX, h: rect.h * scaleY };
+}
+
+export function currentInteractionActionText(client: any): string {
+    if (ClientState.isSpellSelected) {
+        const spellName = selectedSpellDisplayName();
+        if (spellName) return `${cleanActionText(ClientState.selectedSpellActionName) || "Cast"} ${spellName}`;
+    }
+    const entries: any[] = Array.isArray(client?.menuActiveSimpleEntries) ? client.menuActiveSimpleEntries : [];
+    const topEntry = entries.find((entry) => String(entry?.option ?? "").trim() &&
+        String(entry.option).trim().toLowerCase() !== "cancel");
+    return topEntry
+        ? `${cleanActionText(topEntry.option)} ${cleanActionText(topEntry.target ?? "")}`.trim()
+        : "";
+}
+
+export function isHighAlchemySpellSelected(): boolean {
+    if (!ClientState.isSpellSelected) return false;
+    return [
+        ClientState.selectedSpellName,
+        ClientState.selectedSpellSourceWidget?.opBase,
+        ClientState.selectedSpellSourceWidget?.dataText,
+        ClientState.selectedSpellSourceWidget?.name,
+        ClientState.selectedSpellSourceWidget?.text,
+    ].some((candidate) => normalizeText(String(candidate ?? "")).includes("high level alchemy"));
+}
+
+function selectedSpellDisplayName(): string {
+    for (const candidate of [
+        ClientState.selectedSpellName,
+        ClientState.selectedSpellSourceWidget?.opBase,
+        ClientState.selectedSpellSourceWidget?.dataText,
+        ClientState.selectedSpellSourceWidget?.name,
+        ClientState.selectedSpellSourceWidget?.text,
+    ]) {
+        const clean = cleanActionText(candidate);
+        if (clean) return clean;
+    }
+    return "";
+}
+
+function cleanActionText(text: unknown): string {
+    return String(text ?? "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+}
+
 export function positionTooltip(
     pointerX: number,
     pointerY: number,

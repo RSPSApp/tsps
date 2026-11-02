@@ -49,7 +49,7 @@ function setup(module) {
     getSkillManager: () => ({ getCurrentLevel: () => 99, getCombatLevel: () => 99, addExperiences() {} }),
     sendMessage: (message) => messages.push(message),
     isPlayer: () => true, isNpc: () => false, isRegistered: () => true,
-    getUsername: () => 'QH parity',
+    getUsername: () => 'QH parity', getDisplayName: () => 'QH parity',
   };
   return { api, quest, player, items, attributes, varbits, messages, itemOnObject };
 }
@@ -180,7 +180,7 @@ function sceneSetup() {
     getBanks: () => [], getEquipment: () => ({ getItems: () => equipment, get: () => null }),
     getLocation: () => location, moveTo: (value) => { location = value; },
     getArea: () => area, setArea: (value) => { area = value; }, getPrivateArea: () => area instanceof core.PrivateArea ? area : null,
-    getPacketSender: () => sender, getUsername: () => 'Scene tester', getIndex: () => 1,
+    getPacketSender: () => sender, getUsername: () => 'Scene tester', getDisplayName: () => 'Scene tester', getIndex: () => 1,
     getSkillManager: () => ({ getCurrentLevel: () => 99, getCombatLevel: () => 99, addExperiences() {} }),
     getMovementQueue: () => movement, setUntargetable() {}, getCombat: () => ({ reset() {} }),
     getForceMovement: () => null, setForceMovement() {}, isRunningReturn: () => false, setRunning() {},
@@ -245,7 +245,7 @@ function knightsSetup() {
     getInventory: () => inventory, performAnimation() {}, getEquipment: () => ({ get: () => null }), getBanks: () => [],
     getPacketSender: () => sender, getLocation: () => location, moveTo: (value) => { location = value; },
     getSkillManager: () => ({ getCurrentLevel: () => 99, getCombatLevel: () => 99, addExperiences() {} }),
-    getUsername: () => 'Knight recovery', getAppearance: () => ({ isMale: () => true }), isRegistered: () => true,
+    getUsername: () => 'Knight recovery', getDisplayName: () => 'Knight recovery', getAppearance: () => ({ isMale: () => true }), isRegistered: () => true,
     getFrameUpdater: () => ({ clear() {} }), performAnimation() {}, performGraphic() {},
   };
   const manager = new DialogueManager(player);

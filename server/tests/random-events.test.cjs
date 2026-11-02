@@ -175,7 +175,7 @@ function harness(t, members = true) {
       getAttribute: key => p.attributes.get(key), setAttribute(key, value) {
         if (value == null) p.attributes.delete(key); else p.attributes.set(key, value);
       }, getNpcTransformationId: () => p.transformation ?? -1,
-      getLocation: () => p.location, getUsername: () => 'Player', busy: () => !!p.isBusy,
+      getLocation: () => p.location, getUsername: () => 'Player', getDisplayName: () => 'Player', busy: () => !!p.isBusy,
       getCombat: () => ({ getTarget: () => p.target, getAttacker: () => p.attacker }),
       getCombatFollowing: () => p.combatFollowing,
       getPrivateArea: () => p.privateArea, getArea: () => p.area,

@@ -125,7 +125,7 @@ function player() {
     getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; }, getIndex: () => p.index, getInterfaceId: () => -1,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: damage => { p.damage = damage; } }) }),
-    getUsername: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
+    getUsername: () => 'Parity', getDisplayName: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
     performAnimation: a => p.animations.push(a.getId()), performGraphic: noop, sendMessage: text => p.messages.push(text),
   }; p.manager = new DialogueManager(p); return p;
 }
@@ -1149,7 +1149,7 @@ test('Temple tower apprentices spawn on the captured first-floor tiles reachable
       setPathX() { return this; }, setPathY() { return this; }, syncDestinationFlagToRoute() { return this; },
       addCheckpoint(tile) { checkpoints.push(tile); return this; } };
     const entity = { getMovementQueue: () => queue, getLocation: () => new Location(3113, 3163, 1), getSize: () => 1,
-      getPrivateArea: () => null, isPlayer: () => true, getAsPlayer: () => ({ getUsername: () => 'parity' }) };
+      getPrivateArea: () => null, isPlayer: () => true, getAsPlayer: () => ({ getUsername: () => 'parity', getDisplayName: () => 'parity' }) };
     return PathFinder.calculateRoute(entity, 1, dx, dy, 0, 0, 0, 0, false);
   };
   assert.equal(RegionManager.blocked(new Location(3113, 3163, 1), null), false);
@@ -1182,7 +1182,7 @@ test('Wizards Tower basement ladder 2148 reaches the 2147 ground-floor ladder th
       setPathX() { return this; }, setPathY() { return this; }, syncDestinationFlagToRoute() { return this; },
       addCheckpoint(tile) { checkpoints.push(tile); return this; } };
     const entity = { getMovementQueue: () => queue, getLocation: () => new Location(sx, sy, 0), getSize: () => 1,
-      getPrivateArea: () => null, isPlayer: () => true, getAsPlayer: () => ({ getUsername: () => 'parity' }) };
+      getPrivateArea: () => null, isPlayer: () => true, getAsPlayer: () => ({ getUsername: () => 'parity', getDisplayName: () => 'parity' }) };
     const steps = PathFinder.calculateRoute(entity, 1, dx, dy, 0, 0, 0, 0, false);
     return { steps, last: checkpoints.at(-1) };
   };

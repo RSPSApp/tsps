@@ -92,7 +92,7 @@ function captain({ level = 99 } = {}) {
     isNpc: () => false,
     isRegistered: () => true,
     getAsPlayer: () => player,
-    getUsername: () => "captain",
+    getUsername: () => "captain", getDisplayName: () => "captain",
     sendMessage: (message) => sent.push(["sendMessage", message]),
     forceChat: (text) => { said.push(text); return player; },
     performAnimation() {},

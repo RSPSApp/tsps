@@ -58,7 +58,7 @@ function createPlayer(name) {
   });
   const player = {
     messages,
-    getUsername: () => name,
+    getUsername: () => name, getDisplayName: () => name,
     getIndex: () => player.index,
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),

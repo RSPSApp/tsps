@@ -94,7 +94,7 @@ function playerFixture(inventory = inventoryFixture()) {
     varbits,
     xp,
     equipment,
-    getUsername: () => 'qh728-q040',
+    getUsername: () => 'qh728-q040', getDisplayName: () => 'qh728-q040',
     getAttribute: (key) => attributes.get(key),
     setAttribute(key, value) { attributes.set(key, value); },
     getInventory: () => inventory,

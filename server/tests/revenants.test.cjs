@@ -361,6 +361,7 @@ function caver(name, at = new Location(3200, 10100, 0)) {
   const p = player({ at });
   p.name = name;
   p.getUsername = () => name;
+  p.getDisplayName = () => name;
   p.getHitpoints = () => 99;
   p.isRegistered = () => true;
   p.getPacketSender = () => ({ sendEntityHint() {}, sendPositionalHint() {}, clearHintArrow() {}, sendSound() {} });

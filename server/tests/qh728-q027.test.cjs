@@ -84,7 +84,7 @@ function playerFixture(inventory = inventoryFixture()) {
     performAnimation(animation) { animations.push(animation.getId?.() ?? animation.id); },
     forceChat(text) { chats.push(text); return player; },
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (damage) => hits.push(...damage) }) }),
-    getUsername: () => 'qh728-q027',
+    getUsername: () => 'qh728-q027', getDisplayName: () => 'qh728-q027',
     getAttribute: (key) => attributes.get(key),
     setAttribute(key, value) { attributes.set(key, value); },
     getInventory: () => inventory,

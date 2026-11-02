@@ -69,7 +69,7 @@ function playerFixture(inventory = inventoryFixture()) {
     inventory,
     messages,
     configs,
-    getUsername: () => 'qh728-q017',
+    getUsername: () => 'qh728-q017', getDisplayName: () => 'qh728-q017',
     getAttribute: (key) => attributes.get(key),
     setAttribute(key, value) { attributes.set(key, value); },
     getInventory: () => activeInventory,

@@ -45,7 +45,7 @@ function player(items = [], attrs = [], skillLevel = 99) {
     getPacketSender: () => packet,
     getLocation: () => new core.Location(3210, 3220),
     getBanks: () => [],
-    getUsername: () => 'QH basics',
+    getUsername: () => 'QH basics', getDisplayName: () => 'QH basics',
     getUpdateFlag: () => ({ flag: noop }),
     messages: [],
     xp: [],

@@ -140,7 +140,7 @@ function makePlayer(attrs = new Map()) {
     inventory,
     xp,
     messages,
-    getUsername: () => 'qh728-q026',
+    getUsername: () => 'qh728-q026', getDisplayName: () => 'qh728-q026',
     getAttribute: (key) => attrs.get(key),
     setAttribute(key, value) { attrs.set(key, value); },
     getPacketSender: () => sender,

@@ -36,7 +36,7 @@ test("target hints track distant tiles, switch to nearby players, and clear when
     clearHintArrow: () => hints.push(null),
   }, { get: (object, key) => object[key] ?? (() => {}) });
   let at = location(3510, 4140);
-  const target = { getLocation: () => at, getUsername: () => 'BhBot1', getIndex: () => 1 };
+  const target = { getLocation: () => at, getUsername: () => 'BhBot1', getDisplayName: () => 'BhBot1', getIndex: () => 1 };
   let assigned = target;
   const locals = [];
   const viewer = { getLocation: () => location(3330, 3970), getLocalPlayers: () => locals, getPacketSender: () => sender };

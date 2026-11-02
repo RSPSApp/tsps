@@ -203,7 +203,7 @@ function player(level = 99, current = 99) {
     getPrivateArea: () => area, getHitpoints: () => 99, performAnimation: noop,
     setUntargetable: value => { p.untargetable = value; },
 
-    getUsername: () => 'Parity',
+    getUsername: () => 'Parity', getDisplayName: () => 'Parity',
     sendMessage: text => p.messages.push(text),
     setEnteredAmountAction(action) { p.amountAction = action; },
     getEnteredAmountAction() { return p.amountAction; },

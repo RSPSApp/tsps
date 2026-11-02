@@ -101,7 +101,7 @@ function harness(questModule, completedQuests = new Set()) {
       attributes, items, bankItems, varbits, configs, strings, messages, xp, cameras,
       getAttribute: (key) => attributes.get(key),
       setAttribute: (key, value) => attributes.set(key, value),
-      getUsername: () => 'Tester',
+      getUsername: () => 'Tester', getDisplayName: () => 'Tester',
       getInventory: () => inventory,
       getBank: () => ({ getAmount: (id) => bankItems.get(id) ?? 0 }),
       getPacketSender: () => sender,
@@ -916,7 +916,7 @@ test('Royal Trouble: the captured heavy-box ledge is walk-reachable by cache Pat
   };
   const fake = {
     isPlayer: () => true,
-    getAsPlayer: () => ({ getUsername: () => 'parity', isPlayerBot: () => false }),
+    getAsPlayer: () => ({ getUsername: () => 'parity', getDisplayName: () => 'parity', isPlayerBot: () => false }),
     getLocation: () => new core.Location(2612, 10278, 0),
     getSize: () => 1,
     getPrivateArea: () => null,

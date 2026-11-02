@@ -129,7 +129,7 @@ function player(stage = 0) {
     getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill.getIndex(), amount]), getMaxLevel: () => 99, getCurrentLevel: () => 99 }),
     getMovementQueue: () => ({ isMovings: () => false, followX: -1, followY: -1, reset() { return this; }, addSteps(to) { location = to; return this; }, setBlockMovement() { return this; } }),
     getLocation: () => location, moveTo: to => { location = to; }, getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; },
-    isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true, getUsername: () => 'q018', getIndex: () => p.index,
+    isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true, getUsername: () => 'q018', getDisplayName: () => 'q018', getIndex: () => p.index,
     setUntargetable: noop, setPositionToFace: noop, performAnimation: noop, sendMessage: value => messages.push(value),
     getCombat: () => ({ reset: noop }), getHitpoints: () => 99,
     isTeleportingReturn: () => false, isPlayerBot: () => false, isDyingReturn: () => false,

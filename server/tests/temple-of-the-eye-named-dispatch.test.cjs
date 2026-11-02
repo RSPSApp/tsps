@@ -66,7 +66,7 @@ function playerFixture() {
     inventory,
     messages,
     log,
-    getUsername: () => 'tote-dispatch',
+    getUsername: () => 'tote-dispatch', getDisplayName: () => 'tote-dispatch',
     getAttribute: key => attributes.get(key),
     setAttribute(key, value) { attributes.set(key, value); },
     getInventory: () => inventory,

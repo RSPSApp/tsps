@@ -101,7 +101,7 @@ function player() {
       getCurrentLevel: () => 99, getMaxLevel: () => 99 }),
     getLocation: () => p.location ?? new core.Location(3045, 3236, 0), moveTo: location => { p.location = location; },
     getLocalNpcs: () => p.localNpcs,
-    getUsername: () => 'EntranaTest', sendMessage: text => p.messages.push(text),
+    getUsername: () => 'EntranaTest', getDisplayName: () => 'EntranaTest', sendMessage: text => p.messages.push(text),
     performAnimation: a => p.animations.push(a.getId()), isRegistered: () => true, isPlayerBot: () => false,
     isPlayer: () => true,
   };

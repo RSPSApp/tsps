@@ -8,9 +8,11 @@
  *
  *   { style: "MELEE" | "RANGED" | "MAGIC", anim, sound?, maxHit?, minHit?, npcGfx?: [id, height],
  *     projectile?: { id, start, base, perTile, angle, progress, startHeight, endHeight },
- *     targetGfx?: { id, delay?: number | "impact", height? }, room?: true, accuracyAs?: style }
+ *     targetGfx?: { id, delay?: number | "impact", height? }, room?: true, accuracyAs?: style,
+ *     alwaysHits?: true }
  *
- * `maxHit` defaults to the NPC's own; `room` hits every player in the chamber.
+ * `maxHit` defaults to the NPC's own; `room` hits every player in the chamber; `alwaysHits` skips
+ * the accuracy roll (K'ril's prayer smash always lands 35-49, Wiki).
  */
 const Common = require("./Common.GodWars");
 
@@ -108,7 +110,7 @@ function createMethod({ choose, reach = 1, onHit = null }) {
       for (const [victim, end] of this.landing) {
         // A hit N ticks out splats 30N cycles after the send: the first tick at or after landing (#1862).
         const delay = attack.hitDelay ?? (attack.projectile ? Common.core.Projectile.ticksToLand(end) : 0);
-        const hit = new PendingHit(npc, victim, this, delay);
+        const hit = new PendingHit(npc, victim, this, attack.alwaysHits ? { delay, rollAccuracy: false } : delay);
         CombatFactory.applyStyleDamage(hit, maxHit, { minHit: attack.minHit ?? 0, bypassProtectionPrayer: attack.throughPrayer === true });
         hits.push(hit);
       }

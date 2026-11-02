@@ -476,3 +476,12 @@ test("plunder-chest: a room's Grand Gold Chest searched in a real Pyramid Plunde
   assert.ok(done(f, "room-1-of-pyramid-plunder"), `the room 1 chest: ${f.messages}`);
   assert.ok(!done(f, "room-2-of-pyramid-plunder"));
 });
+
+test("sepulchre-floor: a floor credited by the real Hallowed Sepulchre run (Complete floor 3)", (t) => {
+  const f = pactsCharacter(t);
+  const { Run } = require("../plugins/minigames/hallowedsepulchre/Run.HallowedSepulchre");
+  Run.prototype.credit.call({ player: f.player, floorNumber: 3, floorSpent: 100, floor: { xp: 1 } }, false);
+  assert.ok(f.messages.some((text) => /3/.test(text)), `credited: ${f.messages}`);
+  assert.ok(done(f, "floor-3-of-the-hallowed-sepulchre"));
+  assert.ok(!done(f, "floor-4-of-the-hallowed-sepulchre"));
+});

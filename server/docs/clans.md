@@ -177,7 +177,9 @@ Wiki's:
   Setting 96 and not being an Ironman decide who gets a drop. **Ours:** 16 to 64 balloons, a 50% chance, the
   whole stack dropping, and that they fill the main room.
 - Coffer: the side panel 697 for deposits; Ironmen can't deposit, 50m a transaction, and a withdrawal tells
-  members. **Ours:** the wording.
+  members. **Ours:** the wording. clans.json and the player's save commit separately, so each transfer is
+  journalled in the clan under a number the player's save carries with its inventory. At login, a number
+  above the saved one is undone: a crash loses the transfer rather than duplicating or destroying coins.
 - Piano: 698 and script 4321. Entertain sends each clicked note, from enum 3799, to the hall; Play-quietly
   doesn't; Background-music unlocks Rhapsody. **Keyboard keys play only for the player**: they stay in the
   client's script and send nothing.

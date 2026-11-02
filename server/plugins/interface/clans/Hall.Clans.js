@@ -31,13 +31,23 @@ const DEPOSIT_X = 9;
 const DEPOSIT_ALL = 10;
 const MAX_TRANSACTION = 50000000; // Wiki: Clan Hall
 const MAX_COINS = 2147483647;
+/**
+ * The last coffer transfer this player's save includes. clans.json and the player's save commit
+ * separately, so each transfer is journalled in the clan under the player's next number, and the
+ * number moves in the same snapshot as the inventory. At login a journalled number above the saved
+ * one means the player's save never got the transfer, so the coffer gives it back.
+ */
+const COFFER_SEQUENCE_ATTRIBUTE = "clans:coffer-sequence";
 
+let api = null;
 let core = null;
 const halls = new Map();
 const hallOfPlayer = new Map();
 
-function init(apiCore) {
-  core = apiCore;
+function init(pluginApi) {
+  api = pluginApi;
+  core = pluginApi.core;
+  pluginApi.persistAttribute(COFFER_SEQUENCE_ATTRIBUTE, 0);
 }
 
 function hallFor(clan) {
@@ -153,10 +163,72 @@ function openCoffer(player, clan) {
 }
 
 function sendCofferToAll(clan) {
-  Store.save();
   for (const member of clan.members) {
     const online = Core.onlinePlayer(member.account);
     if (online) Core.sendVarClan(online, COFFER_VAR, coins(clan));
+  }
+}
+
+/**
+ * Writes the coffer and its journal entry before anything of the player's changes, so a failed
+ * write moves nothing. The caller moves the coins straight after, with no chance of a save between.
+ */
+function commitTransfer(player, clan, delta) {
+  const { coffer, cofferJournal } = clan;
+  const sequence = (player.getAttribute(COFFER_SEQUENCE_ATTRIBUTE) ?? 0) + 1;
+  clan.coffer = coins(clan) + delta;
+  clan.cofferJournal = [...(cofferJournal ?? []), { account: Core.accountOf(player), sequence, delta }];
+  try {
+    Store.save();
+  } catch (error) {
+    clan.coffer = coffer;
+    clan.cofferJournal = cofferJournal;
+    console.error("[clans] Couldn't save a coffer transfer", error);
+    player.sendMessage("The coffer can't be used right now. Please try again.");
+    return false;
+  }
+  player.setAttribute(COFFER_SEQUENCE_ATTRIBUTE, sequence);
+  return true;
+}
+
+/** Not long to wait: the sooner the save has it, the less a crash could undo. */
+function finishTransfer(player, clan) {
+  api.emitCustomEvent("persistence:save", { player, reason: "clan-coffer" });
+  sendCofferToAll(clan);
+}
+
+function plainCoinSlot(inventory) {
+  return inventory.getItems().findIndex((item) => item?.getId() === core.ItemIdentifiers.COINS && item.isTradeable() && item.getMeta() == null);
+}
+
+/** The coffer as if this transfer never happened. If others have since spent a deposit, it's made up from the depositor's coins. */
+function undoTransfer(player, clan, delta) {
+  const inventory = player.getInventory();
+  const undone = coins(clan) - delta;
+  clan.coffer = Math.max(0, Math.min(MAX_COINS, undone));
+  if (undone > MAX_COINS) inventory.forceAdd(player, new core.Item(core.ItemIdentifiers.COINS, undone - MAX_COINS));
+  const slot = plainCoinSlot(inventory);
+  if (undone < 0 && slot >= 0) {
+    const taken = Math.min(-undone, inventory.getItems()[slot].getAmount());
+    inventory.deletedItem(new core.Item(core.ItemIdentifiers.COINS, taken), slot, true);
+  }
+}
+
+/** At login: anything journalled that the save holds is settled, and anything it doesn't is undone. */
+function recoverCoffer(player) {
+  const account = Core.accountOf(player);
+  const saved = player.getAttribute(COFFER_SEQUENCE_ATTRIBUTE) ?? 0;
+  for (const clan of Store.all()) {
+    const journal = clan.cofferJournal ?? [];
+    const mine = journal.filter((entry) => entry.account === account);
+    if (mine.length === 0) continue;
+    clan.cofferJournal = journal.filter((entry) => entry.account !== account);
+    const lost = mine.filter((entry) => entry.sequence > saved);
+    for (const { delta } of lost.reverse()) undoTransfer(player, clan, delta);
+    Store.save();
+    if (lost.length === 0) continue;
+    sendCofferToAll(clan);
+    player.sendMessage("The server restarted before your coffer transfer was saved, so it was undone.");
   }
 }
 
@@ -171,16 +243,16 @@ function deposit(player, clan, amount) {
   }
   const inventory = player.getInventory();
   // Not a preset's coins: the coffer would hand them back as ordinary ones.
-  const slot = inventory.getItems().findIndex((item) => item?.getId() === core.ItemIdentifiers.COINS && item.isTradeable() && item.getMeta() == null);
+  const slot = plainCoinSlot(inventory);
   const carried = slot < 0 ? 0 : inventory.getItems()[slot].getAmount();
   const moved = Math.min(amount, carried, MAX_COINS - coins(clan), MAX_TRANSACTION);
   if (moved <= 0) {
     player.sendMessage(carried <= 0 ? "You have no coins to deposit." : "The coffer can't hold any more.");
     return;
   }
+  if (!commitTransfer(player, clan, moved)) return;
   inventory.deletedItem(new core.Item(core.ItemIdentifiers.COINS, moved), slot, true);
-  clan.coffer = coins(clan) + moved;
-  sendCofferToAll(clan);
+  finishTransfer(player, clan);
 }
 
 function withdraw(player, clan, amount) {
@@ -203,9 +275,9 @@ function withdraw(player, clan, amount) {
     player.sendMessage("You need more inventory space for that.");
     return;
   }
-  clan.coffer = coins(clan) - moved;
+  if (!commitTransfer(player, clan, -moved)) return;
   inventory.adds(core.ItemIdentifiers.COINS, moved);
-  sendCofferToAll(clan);
+  finishTransfer(player, clan);
   // Wiki: a withdrawal notifies the members.
   const notice = `${player.getUsername()} has withdrawn ${moved.toLocaleString("en-GB")} coins from the coffer.`;
   for (const member of clan.members) Core.onlinePlayer(member.account)?.sendMessage(notice);
@@ -259,4 +331,4 @@ function reset() {
   hallOfPlayer.clear();
 }
 
-module.exports = { clickCoffer, enterGuest, enterOwn, hallOf, init, leave, reset, sendOut, useCoffer };
+module.exports = { clickCoffer, enterGuest, enterOwn, hallOf, init, leave, recoverCoffer, reset, sendOut, useCoffer };

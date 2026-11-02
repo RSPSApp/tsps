@@ -61,6 +61,7 @@ function later(ticks, action) {
 function login({ player }) {
   Formation.startSession(player);
   Contents.restoreOffer(player);
+  Hall.recoverCoffer(player);
   showRecruitOption(player);
   let clan = Core.clanOf(player);
   if (clan) {
@@ -422,7 +423,7 @@ function attachUnits(api) {
   Management.init(Settings.open);
   Guests.init(api.core, later, Settings.openAsGuest, Screens.interestNames, Settings.runeDateText);
   Broadcasts.init(api.core);
-  Hall.init(api.core);
+  Hall.init(api);
   Screens.init(api.core, Settings.open, enumEntries, Management.showRankPopup, Settings.runeDateText);
   Core.setMembershipListeners(Broadcasts.joined, Broadcasts.left);
   Formation.init(api);

@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](../../server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-191 quests · ✅ passed: 30 · ⚠️ passed with issues: 21 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 11 · untested: 120
+191 quests · ✅ passed: 29 · ⚠️ passed with issues: 17 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 16 · untested: 120
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -22,12 +22,12 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Another Slice of H.A.M.](another-slice-of-ham/README.md) | 🔄 in progress |  | agent |  |  |
 | [At First Light](at-first-light/README.md) | ⚠️ passed with issues |  | agent |  | 1 |
 | [Bear Your Soul](bear-your-soul/README.md) | 🔄 in progress | 2026-10-31 | agent | DeepSeek V4.1 Flash |  |
-| [Below Ice Mountain](below-ice-mountain/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
+| [Below Ice Mountain](below-ice-mountain/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 6 |
 | [Beneath Cursed Sands](beneath-cursed-sands/README.md) | untested |  |  |  |  |
 | Between a Rock... | untested |  |  |  |  |
 | [Big Chompy Bird Hunting](big-chompy-bird-hunting/README.md) | ✅ passed | 2026-10-23 | agent |  | 1 |
 | [Biohazard](biohazard/README.md) | 🔄 in progress |  | agent |  | 2 |
-| [Black Knights' Fortress](black-knights-fortress/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
+| [Black Knights' Fortress](black-knights-fortress/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 7 |
 | [Bone Voyage](bone-voyage/README.md) | ✅ passed |  | agent |  |  |
 | [Cabin Fever](cabin-fever/README.md) | 🔄 in progress | 2026-10-31 | agent | DeepSeek V4.1 Flash | 1 |
 | [Children of the Sun](children-of-the-sun/README.md) | 🔁 needs recheck | 2026-10-30 | agent | grok-4.7 | 6 |
@@ -35,7 +35,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Clock Tower](clock-tower/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
 | Cold War | untested |  |  |  |  |
 | [Contact!](contact/README.md) | untested |  |  |  |  |
-| [Cook's Assistant](cooks-assistant/README.md) | ✅ passed | 2026-10-29 | agent | claude-opus-5-5 |  |
+| [Cook's Assistant](cooks-assistant/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 1 |
 | Crab Quest | untested |  |  |  |  |
 | Creature of Fenkenstrain | untested |  |  |  |  |
 | [Current Affairs](current-affairs/README.md) | untested |  |  |  |  |
@@ -45,7 +45,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Death Plateau](death-plateau/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
 | [Death to the Dorgeshuun](death-to-the-dorgeshuun/README.md) | untested |  |  |  |  |
 | Defender of Varrock | untested |  |  |  |  |
-| [Demon Slayer](demon-slayer/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
+| [Demon Slayer](demon-slayer/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 8 |
 | [Desert Treasure I](desert-treasure-i/README.md) | untested |  |  |  |  |
 | [Desert Treasure II - The Fallen Empire](desert-treasure-ii/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 9 |
 | [Devious Minds](devious-minds/README.md) | untested |  |  |  |  |
@@ -54,7 +54,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Dragon Slayer II | untested |  |  |  |  |
 | Dream Mentor | untested |  |  |  |  |
 | [Druidic Ritual](druidic-ritual/README.md) | ✅ passed | 2026-10-22 | agent |  |  |
-| [Dwarf Cannon](dwarf-cannon/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 | 2 |
+| [Dwarf Cannon](dwarf-cannon/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 | 3 |
 | [Eadgar's Ruse](eadgars-ruse/README.md) | untested |  |  |  |  |
 | Eagles' Peak | untested |  |  |  |  |
 | [Elemental Workshop I](elemental-workshop-i/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
@@ -198,7 +198,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Waterfall Quest](waterfall-quest/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 3 |
 | [What Lies Below](what-lies-below/README.md) | untested |  |  |  |  |
 | [While Guthix Sleeps](while-guthix-sleeps/README.md) | untested |  |  |  |  |
-| [Witch's House](witchs-house/README.md) | ⚠️ passed with issues | 2026-10-30 | agent | claude-haiku-5-5 | 6 |
+| [Witch's House](witchs-house/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 | 5 |
 | [Witch's Potion](witchs-potion/README.md) | ✅ passed | 2026-10-25 | community |  |  |
 | [X Marks the Spot](x-marks-the-spot/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
 | [Zogre Flesh Eaters](zogre-flesh-eaters/README.md) | ❌ failed |  | agent |  | 1 |

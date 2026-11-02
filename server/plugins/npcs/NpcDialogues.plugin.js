@@ -13,7 +13,8 @@
  * an `after` callback run once the player continues
  * past it. A message step's "npc-dialogue:action" (`kind: "message"`) can set
  * `box: { items }` (one or two item ids) to show it as an item box, as OSRS shows
- * hand-outs, instead of a chat message. "npc-dialogue:start" plays a named variant on demand
+ * hand-outs, instead of a chat message, and `after` to run once the player continues past
+ * that box. "npc-dialogue:start" plays a named variant on demand
  * and returns an optional request.cancel handle scoped to that playback's chain/chatbox.
  * Speech, choices, random alternatives and named shops run through existing systems; a shop
  * with versions emits "npc-dialogue:shop" ({ player, npcId, target, shops, shop }) to pick one.
@@ -686,7 +687,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     if (cancelled) return;
     const { step, rest, record } = menu;
     context.currentMenu = menu;
-    const notice = { player, npcId, definition, prompt: step.prompt || "Select an Option", warning: null };
+    const notice = { player, npcId, definition, prompt: step.prompt || "Select an option", warning: null };
     api.emitCustomEvent("npc-dialogue:menu", notice);
     const warned = context.warnedMenus ??= new WeakSet();
     if (notice.warning && !warned.has(step)) {
@@ -733,7 +734,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     if (!pairs.length) return run(rest, record);
     playedAny = true;
     manager.reset();
-    if (!presentOwned(() => api.sendMultiChatboxPrompt(player, formatPlayerText(step.prompt || "Select an Option", player), ...pairs))) {
+    if (!presentOwned(() => api.sendMultiChatboxPrompt(player, formatPlayerText(step.prompt || "Select an option", player), ...pairs))) {
       unavailable();
     }
   }
@@ -959,7 +960,10 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
               : second === undefined
                 ? new ItemStatementDialogue(0, first, text)
                 : new DoubleItemStatementDialogue(0, first, second, text));
-            box.add(new ActionDialogue(1, { execute: () => run(rest, currentRecord) }));
+            box.add(new ActionDialogue(1, { execute: () => {
+              message.after?.();
+              run(rest, currentRecord);
+            } }));
             startChain(box);
             return;
           }

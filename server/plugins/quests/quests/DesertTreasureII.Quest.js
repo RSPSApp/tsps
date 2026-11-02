@@ -3847,7 +3847,7 @@ module.exports = function registerDesertTreasureII(api) {
         if (!has(p, I.KNIFE_5)) p.getInventory().adds(I.KNIFE_5, 1);
         p.setAttribute(SUCELLUS_CELL_PROGRESS, 4);
       };
-      if (event.text === "sigh*" && event.player.getAttribute(SUCELLUS_CELL_ESCAPED)) event.after = () => {
+      if (event.text === "*sigh*" && event.player.getAttribute(SUCELLUS_CELL_ESCAPED)) event.after = () => {
         event.player.setAttribute(SUCELLUS_ASSASSIN_GONE, true);
         event.player.setAttribute(SUCELLUS_PRISON_PROGRESS, 22);
         api.emitCustomEvent("dt2:sucellus-prison-start", { player: event.player, area: event.player.getAttribute(SUCELLUS_AREA) });

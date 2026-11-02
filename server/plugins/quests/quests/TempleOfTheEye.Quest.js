@@ -1634,16 +1634,34 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
         return;
       case "DLPFdT":
       case "XJ8F74":
-      case "itFyK-": // "Incantation cutscene begins below."
+      case "itFyK-": { // "Incantation cutscene begins below."
         if (stageOf(player) !== STAGE_RIDDLE_DONE && stageOf(player) !== STAGE_INCANTATION_READY) return;
+        Scenes.cancel(player);
         incantationPlaying.add(player);
         setStage(player, STAGE_INCANTATION_READY);
         syncSpawns(player);
         Scenes.controls(player, true, true);
         camera(player, [3107, 9563, 550], [3104, 9573, 250]);
         event.handled = true;
-        event.steps = variantSteps("enter-the-gate-incantation-cutscene");
+        // Publish the new cast in native NPC sync before queued Continues can reach its overhead chant.
+        Scenes.hold(player);
+        const manager = player.getDialogueManager();
+        const held = manager.getCurrent();
+        const area = player.getPrivateArea();
+        const interfaceId = player.getInterfaceId();
+        Scenes.later(player, 1, () => {
+          if (!player.isRegistered()) return;
+          if (manager.getCurrent() !== held || player.getInterfaceId() !== interfaceId
+            || player.getPrivateArea() !== area || stageOf(player) !== STAGE_INCANTATION_READY) {
+            incantationPlaying.delete(player);
+            syncSpawns(player);
+            if (player.getPrivateArea() === area) endScene(player);
+            return;
+          }
+          play(player, npcId, "enter-the-gate-incantation-cutscene");
+        });
         return;
+      }
       case "I_aoEy": // "Temple of the Eye cutscene continues below."
         if (stageOf(player) !== STAGE_INCANTATION_READY) return;
         event.handled = true;

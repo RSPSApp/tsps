@@ -20,7 +20,7 @@
     "again": "Now please enter that number again."
   },
   "_guardTitles": "The keypad's title for each \"bank-pin:guard\" feature. Recorded: grand-exchange (rsprox 3250), bond (1375). Anything else shows the bank's title, uncalibrated.",
-  "guardTitles": { "grand-exchange": "Grand Exchange", "bond": "Old School Bonds" },
+  "guardTitles": { "grand-exchange": "Grand Exchange", "bond": "Old School Bonds", "clan-info": "Clan Info" },
   "_guardShops": "shops.json ids of the point shops the Wiki lists: 1449 Last Man Standing, 1450 Leagues, 1459 PvP Arena, 1465 Speedrunning, 1481 Events.",
   "guardShops": { "1449": "lms-shop", "1450": "leagues-shop", "1459": "pvp-arena-rewards", "1465": "speedrun-shop", "1481": "events-shop" },
   "delays": [3, 7],

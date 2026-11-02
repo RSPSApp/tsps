@@ -634,7 +634,7 @@ export function registerClientOps(handlers: HandlerMap): void {
     });
 
     handlers.set(Opcodes.SETSHIFTCLICKDROP, (ctx) => {
-        ctx.intStackSize--; // pop enabled
+        ClientState.shiftClickDrop = ctx.intStack[--ctx.intStackSize] === 1;
     });
 
     handlers.set(Opcodes.SETREMOVEROOFS, (ctx) => {

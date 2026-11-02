@@ -1,3 +1,4 @@
+import { LISTENED_CLAN_TYPE, OWN_CLAN_TYPE } from "../common/social/Clans";
 import type { MinimapGeometry, SceneGeometry } from "./scene/SceneGeometry";
 import { vec3 } from "gl-matrix";
 import { closeOpenModal } from "./widgets/input/widgetKeyboardInput";
@@ -84,6 +85,7 @@ import {
     subscribeCombat,
     subscribeDisconnect,
     subscribeGroundItems,
+    subscribeClans,
     subscribeFriendsChat,
     subscribeHandshake,
     subscribeInventory,
@@ -248,6 +250,8 @@ import {
     getTransmitCycles,
     isTransmitProcessingNeeded,
     markChatTransmit,
+    markClanChannelTransmit,
+    markClanSettingsTransmit,
     markClanTransmit,
     markFriendTransmit,
     markInvTransmit,
@@ -355,7 +359,8 @@ import {
     fetchContent,
 } from "../network/serverConnection/contentApi";
 import { resolveWidgetIdentifiers, inferWidgetOpId } from "./widgets/widgetActionPayload";
-import { isPauseButtonWidget } from "../widgets/menu/utils";
+import { isPauseButtonWidget, setMenuObjTypeLookup } from "../widgets/menu/utils";
+import { INVENTORY } from "../runelite/api/gameval/InterfaceID";
 import { RenderDataWorkerPool } from "./worker/RenderDataWorkerPool";
 import { WorldMapController, type WorldMapRenderedIcon } from "./worldMap/WorldMapController";
 import type { WorldMapViewport } from "./worldMap/WorldMapTypes";
@@ -548,13 +553,12 @@ export class OsrsClient {
     deviceOptions: Map<number, number> = new Map([[DEVICE_OPTION_SCREEN_BRIGHTNESS, loadScreenBrightness()]]);
 
     // Client-side gameplay/UI preferences that affect input semantics.
-    // Exposed for UI semantics (e.g., Shift-click Drop, tap-to-drop, left-click menu).
+    // Exposed for UI semantics (e.g., tap-to-drop, left-click menu). Shift-click drop is
+    // ClientState.shiftClickDrop.
     settings: {
-        shiftClickEnabled: boolean;
         leftClickOpensMenu: boolean;
         tapToDrop: boolean;
     } = {
-        shiftClickEnabled: true,
         leftClickOpensMenu: false,
         tapToDrop: false,
     };
@@ -1052,6 +1056,7 @@ export class OsrsClient {
     private groundItemMeshesPending = false;
     private unsubscribeChatMessages?: () => void;
     private unsubscribeFriendsChat?: () => void;
+    private unsubscribeClans?: () => void;
     private unsubscribeSkills?: () => void;
     private unsubscribeRunEnergy?: () => void;
     private unsubscribeNotifications?: () => void;
@@ -1284,6 +1289,14 @@ export class OsrsClient {
         setMenuTransform((entries, context) =>
             this.clientPlugins.transformMenuEntries(entries, context),
         );
+        setMenuObjTypeLookup((itemId) => this.objTypeLoader?.load(itemId));
+        // An inventory item's top entry follows Shift (shift-click drop), and the mouseover text
+        // reads it from the drawn inventory, so redraw it when Shift changes under a still mouse.
+        this.inputManager.onShiftChanged = () => {
+            const widgetManager = this.widgetManager;
+            if (!widgetManager?.isGroupLoaded(INVENTORY)) return;
+            widgetManager.invalidateWidgetRender(widgetManager.getGroupRoot(INVENTORY), "shift");
+        };
         if (editMode) {
             document.title = "Edit Mode - RSPS.app";
             this.loadEditModePlugin();
@@ -1563,7 +1576,6 @@ export class OsrsClient {
             getPlayerDesign: () => this.playerDesign,
             getObjTypeLoader: () => this.objTypeLoader,
             getInventory: () => this.inventory,
-            getSettings: () => this.settings,
             getMinimapZoomEnabled: () => this.minimapZoomEnabled,
             getMenuOpen: () => this.menuOpen,
             getMenuJustClosed: () => this.menuJustClosed,
@@ -2801,6 +2813,9 @@ export class OsrsClient {
                 const text = typeof payload.text === "string" ? payload.text : String(payload.text);
                 const w = this.widgetManager?.getWidgetByUid(uid);
                 if (w) {
+                    if (typeof payload.serverOwned === "boolean") {
+                        this.widgetManager.setServerOwnedWidget(uid, payload.serverOwned);
+                    }
                     if (!this.customInterfaces.handleSetText(uid, text)) {
                         w.text = text;
                         markWidgetInteractionDirty(w);
@@ -3326,6 +3341,18 @@ export class OsrsClient {
                 this.cs2Vm.context.friendsChatMinKick = channel?.minKickRank ?? 0;
                 markFriendTransmit();
                 markClanTransmit();
+            });
+        } catch {}
+        try {
+            this.unsubscribeClans = subscribeClans((clans) => {
+                const context = this.cs2Vm.context;
+                context.clanSettings = clans.settings.get(OWN_CLAN_TYPE) ?? null;
+                context.clanChannel = clans.channels.get(OWN_CLAN_TYPE) ?? null;
+                context.listenedClanSettings = clans.settings.get(LISTENED_CLAN_TYPE) ?? null;
+                context.listenedClanChannel = clans.channels.get(LISTENED_CLAN_TYPE) ?? null;
+                context.clanVars = clans.vars;
+                markClanSettingsTransmit();
+                markClanChannelTransmit();
             });
         } catch {}
         // Subscribe to loot notifications and display via CS2 notification system
@@ -8586,6 +8613,7 @@ export class OsrsClient {
             this.unsubscribeGroundItems,
             this.unsubscribeChatMessages,
             this.unsubscribeFriendsChat,
+            this.unsubscribeClans,
             this.unsubscribeSkills,
             this.unsubscribeRunEnergy,
             this.unsubscribeNotifications,

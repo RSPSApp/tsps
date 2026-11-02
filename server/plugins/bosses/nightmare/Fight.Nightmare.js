@@ -447,6 +447,7 @@ class Fight {
     const duration = kill.duration.replace("[team]", team === 1 ? "Solo" : String(team)).replace("[time]", Common.formatTicks(ticks));
     if (!best || ticks < best) {
       player.setAttribute(bestKey, ticks);
+      Common.api.emitCustomEvent("boss:personal-best", { player, boss: this.phosani ? "Phosani's Nightmare" : "The Nightmare", ticks });
       player.sendMessage(duration + kill.best);
     } else {
       player.sendMessage(duration + kill.personalBest.replace("[time]", Common.formatTicks(best)));

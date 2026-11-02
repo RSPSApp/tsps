@@ -13,6 +13,7 @@ const fs = require("fs");
 const path = require("path");
 const Common = require("./Common.PhantomMuspah");
 const Scoreboard = require("./Scoreboard.PhantomMuspah");
+const BOSS_NAME = "Phantom Muspah";
 
 const UNTRADEABLE_DROP = (name) => `<col=ef1020>Untradeable drop: ${name}</col>`;
 
@@ -40,6 +41,7 @@ function onMuspahDeath({ npc, killer }) {
   const best = Common.count(player, Common.BEST_TICKS_ATTRIBUTE);
   if (!best || ticks < best) {
     player.setAttribute(Common.BEST_TICKS_ATTRIBUTE, ticks);
+    Common.api.emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
     player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col> (new personal best)`);
   } else {
     player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col>. Personal best: ${formatTicks(best)}`);

@@ -10,6 +10,7 @@
  *   api.emitCustomEvent("collection-log:count", { player, category: "Zulrah", amount? })
  *   answer "collection-log:category-count" { player, category, struct, count } with a kept count
  *   api.emitCustomEvent("collection-log:open", { player, category? })  open it, at a category by name
+ * and it emits "collection-log:new-item" { player, itemId } for an item newly earned, from any source.
  *
  *   ::clog <item name|id> [amount]   obtain through the real path
  *   ::clog count <category> <n>      set a category's count

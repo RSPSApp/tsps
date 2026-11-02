@@ -213,9 +213,10 @@ export function onLocDel(host: WebGLOsrsRendererHost, tile: { x: number; y: numb
                       });
 
             if (wasAdded) {
-                // The object the server added is gone. Its add never removed the cache scenery
-                // here, and whatever it did replace comes back.
+                // Deleting a replay of the cache loc removes that loc; only scenery replaced
+                // by a different added id comes back.
                 for (const id of added.replacedIds ?? []) {
+                    if ((id | 0) === (added.locId | 0)) continue;
                     host.locOverrides.delete(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`);
                 }
             } else if (deletedLoc && (deletedLoc.id | 0) >= 0) {

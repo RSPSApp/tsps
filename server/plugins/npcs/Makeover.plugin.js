@@ -54,6 +54,8 @@ const BUTTON_LAST_SLOT = 10;
 const FLAGS_OP1 = 1 << 1;
 
 const HAT_REFUSAL = "You should take off your hat if you want to get a haircut!";
+// Both transcript actions target "Hairstyles"; their step ids distinguish hair from facial hair.
+const HAIRDRESSER_ACTIONS = new Map([["y_6KP5", TYPE_HAIR], ["vKrD--", TYPE_FACIAL_HAIR]]);
 
 /** Captured messages on Confirm; the clothes categories had none in any capture. */
 const APPLIED_MESSAGES = {
@@ -302,6 +304,30 @@ function thessaliaMakeover({ player }) {
   return true;
 }
 
+function haircut({ player }) {
+  return openMakeover(player, TYPE_HAIR);
+}
+
+function shave({ player }) {
+  return openMakeover(player, TYPE_FACIAL_HAIR);
+}
+
+function hairdresserCondition({ player, npcId, text }) {
+  if (npcId !== core.NpcIdentifiers.HAIRDRESSER) return null;
+  if (text === "If the player is wearing an item on their head:") return hasHat(player);
+  if (text === "If the player is wearing nothing on their head:") return !hasHat(player);
+  return null;
+}
+
+function hairdresserAction(event) {
+  if (event.npcId !== core.NpcIdentifiers.HAIRDRESSER) return;
+  const type = HAIRDRESSER_ACTIONS.get(event.stepId);
+  if (type === undefined) return;
+  event.handled = true;
+  event.player.getPacketSender().sendInterfaceRemoval();
+  openMakeover(event.player, type);
+}
+
 function init(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
@@ -317,6 +343,9 @@ module.exports = {
   register(pluginApi) {
     init(pluginApi);
     pluginApi.onNpcInteraction("Thessalia", { Makeover: thessaliaMakeover });
+    pluginApi.onNpcInteraction("Hairdresser", { Haircut: haircut, Shave: shave });
+    pluginApi.onNpcDialogueCondition(hairdresserCondition);
+    pluginApi.onCustomEvent("npc-dialogue:action", hairdresserAction);
     pluginApi.onInterfaceActionButton(ids().itemArea, previewStyle);
     pluginApi.onInterfaceActionButton(ids().colours, previewColour);
     pluginApi.onInterfaceActionButton(ids().select, apply);

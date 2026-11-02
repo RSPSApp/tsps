@@ -38,7 +38,9 @@ function index() {
   bonesById = new Map();
   bonemealById = new Map();
   for (const row of DATA.bonemeal) bonemealById.set(gameval("obj", row.obj), row);
-  for (const row of DATA.bones) bonesById.set(gameval("obj", row.obj), gameval("obj", row.bonemeal));
+  for (const row of DATA.bones) {
+    if (!row.groundOnly) bonesById.set(gameval("obj", row.obj), gameval("obj", row.bonemeal));
+  }
 }
 
 /** The bonemeal pot a bone grinds into, or null. */

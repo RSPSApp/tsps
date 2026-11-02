@@ -25,7 +25,6 @@ const Common = require("../plugins/bosses/giantlairs/Common.GiantLairs");
 const Lair = require("../plugins/bosses/giantlairs/Lair.GiantLairs");
 const Obor = require("../plugins/bosses/giantlairs/Obor.GiantLairs");
 const Bryophyta = require("../plugins/bosses/giantlairs/Bryophyta.GiantLairs");
-const GiantBones = require("../plugins/bosses/giantlairs/GiantBones.GiantLairs");
 
 // The data is loaded when the plugins register (before()).
 let DATA = null;
@@ -200,7 +199,7 @@ test("the data: every id as the cache names it, Bryophyta no longer in the open 
   assert.equal(npc(DATA.bryophyta.growthling), "Growthling");
   assert.equal(loc(DungeonCommon.data.brassKeyDoor.door), "Door");
   assert.equal(item(DungeonCommon.data.brassKeyDoor.key), "Brass key");
-  assert.equal(item(DATA.giantBones.item), "Giant bones");
+  assert.equal(item(CacheDefinitions.getObjId("giant_bones")), "Giant bones");
   const spawns = fs.readFileSync(path.resolve(__dirname, "../data/definitions/npc-spawns.json"), "utf8");
   assert.ok(!spawns.includes('"name":"Bryophyta"'), "she lives only in each player's lair");
 });
@@ -437,25 +436,6 @@ test("as captured: the logs give a bronze axe once, then grow it back", () => {
   runTicks(DATA.bryophyta.logs.returnTicks);
   assert.equal(placed.at(-1).id, DATA.bryophyta.logs.withAxe);
   session.end();
-});
-
-test("as captured: giant bones can't be taken; Bury asks, then buries them for 150 Prayer XP", () => {
-  const player = createPlayer();
-  const groundItem = { getItem: () => ({ getId: () => 30898 }), isPendingRemoval: () => false, setPendingRemoval() {} };
-  const take = { player, groundItem, groundItemId: 30898, handled: false };
-  GiantBones.take(take);
-  assert.equal(take.handled, true);
-  assert.deepEqual(player.log, ["I don't think those will fit in my backpack..."]);
-
-  player.log.length = 0;
-  GiantBones.bury({ player, groundItem, groundItemId: 30898, handled: false });
-  assert.equal(lastPrompt().title, "Bury the bones? (This grants Prayer XP)");
-  choose(lastPrompt(), "Yes, and don't ask again.");
-  assert.ok(player.log.includes("anim 827"));
-  assert.ok(player.log.some((line) => line.startsWith("xp ") && line.endsWith(" 150")));
-  prompts.length = 0;
-  GiantBones.bury({ player, groundItem, groundItemId: 30898, handled: false });
-  assert.equal(prompts.length, 0, "not asked again");
 });
 
 test("the area's diary tasks: the obstacle pipe, a task from Vannaka, an Earth warrior beneath Edgeville", () => {

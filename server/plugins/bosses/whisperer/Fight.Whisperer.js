@@ -1,6 +1,7 @@
 const Common = require('./Common.Whisperer');
 const Specials = require('./Specials.Whisperer');
 const Rewards = require('./Rewards.Whisperer');
+const BOSS_NAME = 'Whisperer';
 class Fight {
   constructor(session, boss) {
     this.session = session;
@@ -488,6 +489,8 @@ function onDeath({ npc }) {
   const best = Number(player.getAttribute(Common.BEST_ATTRIBUTE)) || 0;
   if (!best || ticks < best)
     player.setAttribute(Common.BEST_ATTRIBUTE, ticks);
+  if (!best || ticks < best)
+    Common.api.emitCustomEvent('boss:personal-best', { player, boss: BOSS_NAME, ticks });
   require('./Records.Whisperer').won(fight);
   const duration = value => `${Math.floor(value * .6 / 60)}:${String(Math.floor(value * .6) % 60).padStart(2, '0')}`;
   player.sendMessage(`Fight duration: <col=ff0000>${duration(ticks)}</col>${!best || ticks < best ? ' (new personal best)' : `. Personal best: ${duration(best)}`}`);

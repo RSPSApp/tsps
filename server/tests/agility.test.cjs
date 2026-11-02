@@ -1227,3 +1227,24 @@ test("Agility Pyramid blocks slide out over two ticks, wait two, and slide back:
   assert.deepEqual([east.npc, east.home, east.dir], [5788, [3372, 2847, 1], [1, 0]]);
   assert.deepEqual([north.npc, north.home, north.dir], [5787, [3366, 2845, 3], [0, 1]]);
 });
+
+test("course pipes replay the squeeze with every crawl, so no weapon shows on the way", () => {
+  const SQUEEZE_PIPE = 749; // human_doublepipesqueeze: both hands empty
+  const pipes = [
+    ["gnome", ObjectIds.OBSTACLE_PIPE_10, { x: 2484, y: 3430, z: 0 }],
+    ["wilderness", ObjectIds.OBSTACLE_PIPE_9, { x: 3004, y: 3937, z: 0 }],
+    ["werewolf", 11657, { x: 3538, y: 9904, z: 0 }],
+  ];
+  for (const [key, object, pos] of pipes) {
+    const course = COURSES.find((entry) => entry.key === key);
+    const obstacle = course.obstacles.find((entry) => entry.object === object);
+    const steps = typeof obstacle.steps === "function" ? obstacle.steps({ player: null, obj: pos, pos }) : obstacle.steps;
+    const moves = steps.filter((step) => step.move);
+    assert.ok(moves.length >= 2, `${key}: the pipe is crawled in two halves`);
+    for (const move of moves) assert.equal(move.anim, SQUEEZE_PIPE, `${key}: the crawl to ${move.move} squeezes`);
+  }
+  // rsprox 449-461: the Wilderness pipe skips unseen from 3940 to 3947 between its halves.
+  const wildy = COURSES.find((entry) => entry.key === "wilderness").obstacles.find((entry) => entry.object === ObjectIds.OBSTACLE_PIPE_9);
+  const route = wildy.steps({ player: null, obj: null, pos: { x: 3004, y: 3937, z: 0 } }).filter((step) => step.move || step.tele).map((step) => (step.move ?? step.tele)[1]);
+  assert.deepEqual(route, [3940, 3947, 3950]);
+});

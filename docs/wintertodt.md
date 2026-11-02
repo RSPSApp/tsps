@@ -260,8 +260,8 @@ None reach the safe area by the doors. Its outline is Near-Reality's polygon.
 | Attack | What happens |
 | --- | --- |
 | Standard | "The cold of the Wintertodt seeps into your bones.", with a 10-tick cooldown. It interrupts fletching and feeding, not chopping (Wiki). |
-| Small brazier | Snowfall (26690) on the brazier's centre, with bolt 501 and graphic 502. 4 ticks later the brazier goes out and anyone feeding it gets "The brazier has gone out.". |
-| Large brazier | Snowfall on the centre and its four sides. 4 ticks later the brazier breaks, and everyone within 2 tiles of its centre takes brazier damage: "The brazier is broken and shrapnel damages you.". |
+| Small brazier | Snowfall (26690) on the brazier's centre, with bolt 501 and graphic 502. 4 ticks later the brazier goes out, with area sound 2300 (range 2) on its south-west tile, and anyone feeding it gets "The brazier has gone out.". |
+| Large brazier | Snowfall on the centre and its four sides. 4 ticks later the brazier breaks, with area sound 2299 (range 2) on its south-west tile, and everyone within 2 tiles of its centre takes brazier damage: "The brazier is broken and shrapnel damages you.". |
 | Pyromancer | Snowfall on her. 3 ticks later she takes 7-13. |
 | Area | Varbit 5354 pulses for the target. Snowfall goes on their tile and the four diagonals, with bolt 501. 3 ticks later spot projectiles 1310 and graphics 1311/502 land. 3 ticks after that, icicle 29324 and snow 29325 stay 7 ticks, and anyone in the 3x3 takes area damage ("The freezing cold attack of the Wintertodt's magic hits you."), as does a pyromancer in it. The target's 3x3 must have no collision at all and not overlap another area attack (Wiki: not next to an obstacle). |
 

@@ -317,35 +317,39 @@ test('Shadow of the Storm: requirement refusal and shared portal teleports', () 
   assert.deepEqual([h.player.getLocation().x, h.player.getLocation().y, h.player.getLocation().z], [2721, 4911, 0]);
 });
 
-test('Shadow of the Storm: surface kiln 10242 is the tome and wrong kilns only raise 1378', () => {
-  const h = setup((api) => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api));
-  const I = h.core.ItemIdentifiers;
-  h.quest.setStage(h.player, 60);
+test('Shadow of the Storm: the golem hides the tome in a random kiln, set in 1378', () => {
+  const KILNS = [[10242, 3467, 3123], [10243, 3478, 3082], [10244, 3472, 3092], [10245, 3500, 3084]];
+  const random = Math.random;
+  try {
+    for (let kiln = 0; kiln < KILNS.length; kiln++) {
+      const h = setup((api) => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api));
+      const I = h.core.ItemIdentifiers;
+      h.quest.setStage(h.player, 50);
+      // As captured (572): the golem's answer sets agrith_kiln to the tome's kiln.
+      Math.random = () => (kiln + 0.5) / KILNS.length;
+      h.emit('npc-dialogue:choice', { npcId: h.core.NpcIdentifiers.CLAY_GOLEM, option: 'Did you see anything happen last night?' });
+      assert.equal(h.quest.getStage(h.player), 60);
+      assert.equal(h.varbits.get(1378), kiln, 'the hidden kiln is sent in agrith_kiln');
 
-  h.setLocation(3467, 3123);
-  h.transcripts.length = 0;
-  h.hooks.objects[0]({ player: h.player, objectId: 10242, location: new h.core.Location(3467, 3123, 0) });
-  assert.equal(h.transcripts.at(-1)?.variant, 'infiltrating-the-wizards-searching-kilns');
-  assert.equal(h.hooks.conditions[0]({ player: h.player, stepId: '3DMFjV' }), true,
-    'the capture surface kiln is the correct search');
-  h.emit('npc-dialogue:condition', { stepId: '3DMFjV' });
-  assert.equal(h.inventory.get(I.DEMONIC_TOME), 1, 'the native surface kiln gives the tome');
-  assert.equal(h.quest.getStage(h.player), 60, 'searching does not advance the quest stage');
+      for (const [index, [objectId, x, y]] of KILNS.entries()) {
+        h.setLocation(x, y);
+        h.transcripts.length = 0;
+        h.hooks.objects[0]({ player: h.player, objectId, location: new h.core.Location(x, y, 0) });
+        assert.equal(h.transcripts.at(-1)?.variant, 'infiltrating-the-wizards-searching-kilns');
+        assert.equal(h.hooks.conditions[0]({ player: h.player, stepId: '3DMFjV' }), index === kiln,
+          `agrith_kiln ${kiln}: kiln ${objectId} ${index === kiln ? 'holds' : 'does not hold'} the tome`);
+      }
+      assert.equal(h.varbits.get(1378), kiln, 'wrong searches leave agrith_kiln alone');
 
-  h.inventory.delete(I.DEMONIC_TOME);
-  h.setLocation(3478, 3082);
-  h.hooks.objects[0]({ player: h.player, objectId: 10243, location: new h.core.Location(3478, 3082, 0) });
-  assert.equal(h.varbits.get(1378), 1, 'the next surface kiln only raises the wrong-search counter');
-  assert.equal(h.hooks.conditions[0]({ player: h.player, stepId: '3DMFjV' }), false,
-    'wrong surface kilns are not the tome');
-  assert.equal(h.inventory.get(I.DEMONIC_TOME) ?? 0, 0);
-
-  h.setLocation(2733, 4904);
-  h.hooks.objects[0]({ player: h.player, objectId: 6327, location: new h.core.Location(2733, 4904, 0) });
-  assert.equal(h.varbits.get(1378), 2, 'the underground child remains a wrong search');
-  assert.equal(h.hooks.conditions[0]({ player: h.player, stepId: '3DMFjV' }), false,
-    'the underground kiln is not another correct target');
-  assert.equal(h.quest.getStage(h.player), 60, 'wrong kilns do not advance the quest');
+      const [objectId, x, y] = KILNS[kiln];
+      h.hooks.objects[0]({ player: h.player, objectId, location: new h.core.Location(x, y, 0) });
+      h.emit('npc-dialogue:condition', { stepId: '3DMFjV' });
+      assert.equal(h.inventory.get(I.DEMONIC_TOME), 1, 'the hidden kiln gives the tome');
+      assert.equal(h.quest.getStage(h.player), 60, 'searching does not advance the quest stage');
+    }
+  } finally {
+    Math.random = random;
+  }
 });
 
 test('Shadow of the Storm: first-ritual camera, BOOM, portal loc and Tanya actors', () => {
@@ -684,4 +688,47 @@ test('Shadow: real PrivateArea destruction removes scene items but keeps the wor
   assert.equal(ItemOnGroundManager.getGroundItem('shadow-audit', 6748, new Location(3100, 3100, 0), null), null, 'scene-owned item is cleaned up');
   assert.ok(ItemOnGroundManager.getGroundItem('shadow-audit', 6748, new Location(3100, 3101, 0), null), 'world-owned item survives');
   ItemOnGroundManager.deregister(worldSigil);
+});
+
+test('Shadow of the Storm: black mushroom ink dyes desert clothing and every Silverlight carried', () => {
+  const h = setup((api) => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api));
+  const I = h.core.ItemIdentifiers;
+  h.inventory.set(I.BLACK_DYE, 2);
+  h.inventory.set(I.DESERT_SHIRT, 1);
+  h.inventory.set(I.DESERT_ROBE, 1);
+  h.hooks.itemOnItem[0]({ player: h.player, usedItemId: I.BLACK_DYE, usedWithItemId: I.DESERT_SHIRT });
+  h.hooks.itemOnItem[0]({ player: h.player, usedItemId: I.DESERT_ROBE, usedWithItemId: I.BLACK_DYE });
+  assert.equal(h.inventory.get(I.BLACK_DESERT_SHIRT), 1);
+  assert.equal(h.inventory.get(I.BLACK_DESERT_ROBE), 1);
+  assert.equal(h.inventory.get(I.DESERT_SHIRT), 0);
+  assert.equal(h.inventory.get(I.DESERT_ROBE), 0);
+  assert.equal(h.inventory.get(I.BLACK_DYE), 0, 'each dye uses one ink');
+  assert.deepEqual(h.messages.slice(-2), ['You dye the desert shirt black.', 'You dye the desert robe black.']);
+
+  // Wiki: dyeing takes every Silverlight carried and leaves a single dyed sword.
+  h.quest.setStage(h.player, 30);
+  h.inventory.set(I.SILVERLIGHT, 2);
+  h.inventory.set(I.BLACK_MUSHROOM, 1);
+  h.hooks.itemOnItem[0]({ player: h.player, usedItemId: I.BLACK_MUSHROOM, usedWithItemId: I.SILVERLIGHT });
+  assert.equal(h.inventory.get(I.SILVERLIGHT), 0);
+  assert.equal(h.inventory.get(I.SILVERLIGHT_2), 1);
+});
+
+test('Shadow of the Storm: Reen only replaces Silverlight the player owns in no form', () => {
+  const h = setup((api) => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api));
+  const I = h.core.ItemIdentifiers;
+  const banked = new Map();
+  h.player.getBanks = () => [{ getAmount: (id) => banked.get(id) ?? 0 }];
+  h.quest.setStage(h.player, 30);
+  for (const form of [I.SILVERLIGHT, I.SILVERLIGHT_2, I.DARKLIGHT]) {
+    banked.clear();
+    banked.set(form, 1);
+    h.emit('npc-dialogue:action', { npcId: h.core.NpcIdentifiers.FATHER_REEN, stepId: 'Kh2EP0' });
+    assert.equal(h.inventory.get(I.SILVERLIGHT) ?? 0, 0, `a banked ${form} is not replaced`);
+    assert.equal(h.hooks.conditions[0]({ player: h.player, stepId: 'fllvV0' }), false, 'a banked sword is not lost');
+  }
+  banked.clear();
+  assert.equal(h.hooks.conditions[0]({ player: h.player, stepId: 'fllvV0' }), true);
+  h.emit('npc-dialogue:action', { npcId: h.core.NpcIdentifiers.FATHER_REEN, stepId: 'Kh2EP0' });
+  assert.equal(h.inventory.get(I.SILVERLIGHT), 1, 'a lost sword is handed back');
 });

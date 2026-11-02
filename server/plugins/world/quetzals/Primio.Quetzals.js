@@ -10,8 +10,7 @@
 const Common = require("./Common.Quetzals");
 const Renu = require("./Renu.Quetzals");
 
-const VARLAMORE_VISITED = "varlamore_visited";
-const FIRST_TRIP_STATE = "vmq2_first_travel";
+const { VARLAMORE_VISITED, FIRST_TRIP_STATE } = Common;
 const CHILDREN_OF_THE_SUN = "children_of_the_sun";
 const FIRST_TRIP_VARIANT = "talking-in-varrock-talking-to-take-the-first-trip";
 const REPEAT_FIRST_TRIP_VARIANT = "talking-in-varrock-talking-again-before-taking-the-first-trip";
@@ -22,7 +21,8 @@ const REGULUS_FORTIS_ID = 12885;
 const PRIMIO_VARROCK_ID = 12888;
 const PRIMIO_FORTIS_ID = 12889;
 const VARROCK_LANDING = { id: 0, x: 3281, y: 3413, z: 0 };
-const FORTIS_SITE = 1;
+// Primio's landing, distinct from Renu's Fortis entry in the transport-system table.
+const FORTIS_LANDING = { id: 1, x: 1700, y: 3141, z: 0 };
 
 function startFirstTripMenu(player, firstTime) {
   if (Common.varbit(player, FIRST_TRIP_STATE) < 2) Common.setVarbits(player, { [FIRST_TRIP_STATE]: 2 });
@@ -57,8 +57,7 @@ function arriveInFortis(player) {
 
 function destinationForNpc(npcId) {
   if (npcId === PRIMIO_VARROCK_ID || npcId === REGULUS_VARROCK_ID) {
-    const fortis = Common.siteById(FORTIS_SITE);
-    return fortis ? { site: fortis, firstTrip: true } : null;
+    return { site: FORTIS_LANDING, firstTrip: true };
   }
   if (npcId === PRIMIO_FORTIS_ID || npcId === REGULUS_FORTIS_ID) return { site: VARROCK_LANDING, firstTrip: false };
   return null;
@@ -87,8 +86,7 @@ function acceptFirstTrip(event) {
   if (event.stepId !== FIRST_TRIP_ACTION || event.npcId !== REGULUS_VARROCK_ID) return;
   event.handled = true;
   event.end = true;
-  const fortis = Common.siteById(FORTIS_SITE);
-  if (fortis) Renu.fly(event.player, fortis, { recordDestination: false, onLand: () => arriveInFortis(event.player) });
+  Renu.fly(event.player, FORTIS_LANDING, { recordDestination: false, onLand: () => arriveInFortis(event.player) });
 }
 
 function finishWelcome(event) {

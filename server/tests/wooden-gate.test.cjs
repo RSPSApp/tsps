@@ -911,6 +911,28 @@ test('Tree Gnome Stronghold main gate handles packet coordinates, opens both lea
   }
 });
 
+test('door:state reads both current gate leaves without changing their state or timer', () => {
+  const h = buildHarness();
+  try {
+    h.place(1558, 100, 100, 0); h.place(1560, 100, 101, 0);
+    const closed = [new GameObject(1558, new Location(100, 100, 0), 0, 0, null),
+      new GameObject(1560, new Location(100, 101, 0), 0, 0, null)];
+    const read = objects => { const event = { objects }; h.customHandlers.get('door:state')(event); return event.objects; };
+    assert.deepEqual(read(closed), closed, 'a closed gate retains its map leaves');
+    h.click(1558, 100, 100, 0);
+    const tasks = h.submitted.slice(), states = [...h.internals.OPEN_OBJECT_STATES.values()];
+    const snapshot = objects => objects.map(object => [object.getId(), object.getLocation().getX(), object.getLocation().getY(), object.getFace()]);
+    assert.deepEqual(snapshot(read(closed)), [[1559, 99, 100, 3], [1567, 98, 100, 3]], 'one canonical state returns each moved leaf once');
+    const other = new GameObject(1558, new Location(200, 200, 0), 0, 0, null);
+    const privateCopy = new GameObject(1558, new Location(100, 100, 0), 0, 0, new class extends PrivateArea {}());
+    assert.deepEqual(read([other, privateCopy]), [other, privateCopy], 'a location or private-area mismatch does not read this world gate');
+    assert.deepEqual(h.submitted, tasks, 'a read does not reschedule auto-close');
+    assert.deepEqual([...h.internals.OPEN_OBJECT_STATES.values()], states);
+    h.submitted.at(-1).execute();
+    assert.deepEqual(read(closed), closed, 'after auto-close the current view is closed again');
+  } finally { h.restore(); }
+});
+
 test('wooden gate swings hinge + extension panels open from a closed hinge click', () => {
   const h = buildHarness();
   try {
@@ -1930,6 +1952,99 @@ test('Death Plateau equipment door swings open after the quest unlocks it', () =
   } finally { h.restore(); }
 });
 
+
+test('Mort Myre gate swings through its captured leaves and closes after passage from either side', async () => {
+  await initializeMapCollisionOnce();
+  RegionManager.loadMapFiles(3443, 3458, true);
+  const definitions = new Map([3506, 3507, 1573, 1574].map(id => [id, CacheDefinitions.getObject(id)]));
+  const h = buildHarness({ cacheObjects: definitions, objectManager: ObjectManager, realMapObjects: true });
+  const at = (id, x, y) => MapObjects.get(id, new Location(x, y, 0), null);
+  const closed = [[3507, 3443, 3458, 3], [3506, 3444, 3458, 3]];
+  const opened = [[1574, 3443, 3457, 0], [1573, 3444, 3457, 2]];
+  try {
+    for (const [id, x, y] of closed) for (const fromNorth of [true, false]) {
+      const object = at(id, x, y), steps = [];
+      assert.ok(object, 'both original cache leaves are closed before each crossing');
+      assert.equal(RegionManager.canMove(x, 3458, x, 3457, 0, 1, 1, null), false);
+      const player = {
+        getPrivateArea: () => null,
+        getLocation: () => new Location(x, fromNorth ? 3458 : 3457, 0),
+        getMovementQueue: () => ({ reset() {}, addSteps: tile => steps.push([tile.getX(), tile.getY()]) }),
+      };
+      assert.equal(h.handlers.get('Gate').Open({ player, object, objectId: id,
+        definition: object.getDefinition(), location: object.getLocation(), clickType: 1 }), true);
+      assert.deepEqual(steps, [[x, fromNorth ? 3457 : 3458]], 'pass to the opposite side on the clicked column');
+      for (const [openId, ox, oy, face] of opened) assert.equal(at(openId, ox, oy)?.getFace(), face);
+      for (const [closedId, cx, cy] of closed) assert.equal(at(closedId, cx, cy), null);
+      assert.equal(RegionManager.canMove(x, 3458, x, 3457, 0, 1, 1, null), true);
+      assert.equal(RegionManager.canMove(x, 3457, x, 3458, 0, 1, 1, null), true);
+      assert.equal(h.sounds.at(-1)[1].getId(), 71, 'capture 1638 opening sound');
+      const close = h.submitted.at(-1);
+      assert.equal(close.getDelay(), 2);
+      close.setRunning(true);
+      close.tick();
+      assert.ok(at(1574, 3443, 3457), 'remains open on the first tick');
+      close.tick();
+      for (const [closedId, cx, cy, face] of closed) assert.equal(at(closedId, cx, cy)?.getFace(), face);
+      for (const [openId, ox, oy] of opened) assert.equal(at(openId, ox, oy), null);
+      assert.equal(RegionManager.canMove(x, 3458, x, 3457, 0, 1, 1, null), false);
+    }
+  } finally {
+    for (const task of h.submitted) if (task.isRunning()) task.execute();
+    for (const [id, x, y] of [...closed, ...opened]) {
+      const object = at(id, x, y);
+      if (object) ObjectManager.deregister(object, true);
+    }
+    for (const [id, x, y, face] of closed) ObjectManager.register(new GameObject(id, new Location(x, y, 0), 0, face, null), true);
+    h.restore();
+  }
+});
+
+test('pass-through gates preserve east-west crossing and isolate private copies from the world', async () => {
+  await initializeMapCollisionOnce();
+  RegionManager.loadMapFiles(3264, 3405, true);
+  const definitions = new Map([2050, 2051, 2052, 2053].map(id => [id, CacheDefinitions.getObject(id)]));
+  const h = buildHarness({ cacheObjects: definitions, objectManager: ObjectManager, realMapObjects: true });
+  const areas = [new PrivateArea(), new PrivateArea()];
+  const closed = [[2050, 3264, 3405, 0], [2051, 3264, 3406, 0]];
+  const opened = [[2052, 3263, 3405, 3], [2053, 3262, 3405, 3]];
+  const worldClosed = () => closed.every(([id, x, y]) => MapObjects.get(id, new Location(x, y, 0), null));
+  try {
+    for (const [index, area] of [...areas, null].entries()) {
+      const steps = [], fromWest = index !== 1, [id, x, y] = closed[index === 1 ? 1 : 0];
+      const object = MapObjects.get(id, new Location(x, y, 0), null);
+      const player = { getPrivateArea: () => area,
+        getLocation: () => new Location(fromWest ? 3263 : 3264, y, 0),
+        getMovementQueue: () => ({ reset() {}, addSteps: tile => steps.push([tile.getX(), tile.getY()]) }),
+      };
+      assert.equal(h.handlers.get('Gate').Open({ player, object, objectId: id,
+        definition: object.getDefinition(), location: object.getLocation(), clickType: 1 }), true);
+      assert.deepEqual(steps, [[fromWest ? 3264 : 3263, y]]);
+      if (area) {
+        assert.deepEqual(area.getObjects().map(object => object.getId()).sort(), [2052, 2053]);
+        assert.ok(worldClosed(), 'a private crossing leaves both public cache leaves closed');
+      }
+    }
+    assert.equal(h.submitted.length, 3, 'each private copy and the world gets its own close timer');
+    assert.equal(new Set(h.submitted.map(task => task.key)).size, 3);
+    h.submitted[0].execute();
+    assert.deepEqual(areas[0].getObjects().map(object => object.getId()).sort(), [2050, 2051]);
+    assert.deepEqual(areas[1].getObjects().map(object => object.getId()).sort(), [2052, 2053]);
+    assert.equal(worldClosed(), false, 'closing one copy does not close the public gate');
+    h.submitted[1].execute();
+    h.submitted[2].execute();
+    assert.ok(worldClosed());
+  } finally {
+    for (const task of h.submitted) if (task.isRunning()) task.execute();
+    for (const area of areas) area.destroy();
+    for (const [id, x, y] of [...closed, ...opened]) {
+      const object = MapObjects.get(id, new Location(x, y, 0), null);
+      if (object) ObjectManager.deregister(object, true);
+    }
+    for (const [id, x, y, face] of closed) ObjectManager.register(new GameObject(id, new Location(x, y, 0), 0, face, null), true);
+    h.restore();
+  }
+});
 
 test('Elena’s cabinet house opens into its nameless cache door variant', async () => {
   await initializeMapCollisionOnce();

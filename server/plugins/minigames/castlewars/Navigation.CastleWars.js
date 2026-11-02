@@ -12,14 +12,10 @@ let game;
 let core;
 let data;
 
-// Cache-nameless locs: castlewars_castlebattlements_saradomin, oldcastlebattlements,
-// and castlewars_castlebattlements_zamorak. Only the stair/ladder rails are removed.
-const CASTLE_RAIL_IDS = new Set([4410, 1622, 4908]);
+// Cache-nameless inner-ladder rails. Keep the staircase battlements and their collision intact.
+const CASTLE_RAIL_IDS = new Set([4410, 4908]);
 const CASTLE_RAIL_TILES = [
-  [2419, 3079], [2419, 3080], [2419, 3081], [2420, 3079], [2420, 3080],
-  [2420, 3074], [2422, 3074],
-  [2380, 3128], [2380, 3127], [2380, 3126], [2379, 3128], [2379, 3127],
-  [2379, 3133], [2377, 3133],
+  [2420, 3074], [2422, 3074], [2379, 3133], [2377, 3133],
 ];
 
 function removeCastleRails() {

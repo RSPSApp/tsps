@@ -86,6 +86,9 @@ export type WidgetOverlayDrawContext = {
     itemImage?(itemId: number, quantity: number, outline: number): HTMLCanvasElement | undefined;
     /** Where a movable overlay of this size (layout units) draws this frame; nothing while the HUD is hidden. */
     place(overlay: WidgetOverlay, width: number, height: number): OverlayPlacement | undefined;
+    /** HUD text scale on each canvas axis, including touch-display adjustments. */
+    overlayTextScale?(): { x: number; y: number };
+    inputScale?(): { x: number; y: number };
 };
 
 /**

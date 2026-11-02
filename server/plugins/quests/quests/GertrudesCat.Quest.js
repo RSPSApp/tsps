@@ -18,7 +18,7 @@
  * (the cat page has no post-quest variant).
  */
 module.exports = function registerGertrudesCatQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers } = api.core;
+  const { Skill, ItemIdentifiers, NpcIdentifiers, Task, TaskManager } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Gertrude's Cat";
@@ -27,6 +27,22 @@ module.exports = function registerGertrudesCatQuest(api) {
   const SHILOP_NPC_ID = NpcIdentifiers.SHILOP;
   const WILOUGH_NPC_ID = NpcIdentifiers.WILOUGH;
   const FLUFFS_NPC_ID = NpcIdentifiers.GERTRUDES_CAT_2;
+  /** lostkitten: the kitten as an actor beside Fluffs once it is handed back. */
+  const LOST_KITTEN_NPC_ID = NpcIdentifiers.KITTEN; // 3498
+  const RETURN_KITTEN_VARIANT = "making-seasoned-sardines-returning-the-kitten-to-fluffs";
+  const KITTEN_SPEAKER = "Fluffs' kitten";
+  /** The transcript calls her "Fluffs"; the cache names the NPC "Gertrude's cat". */
+  const FLUFFS_SPEAKER = "Fluffs";
+  const RAN_OFF_ACTION_ID = "9c0VXK"; // "Fluffs has run off home with her offsping."
+  /**
+   * The scene's two purrs take about 4 ticks. A scene cut short (another dialogue, an actor out of
+   * view) never reaches its last step, and no event says it closed, so the kitten goes after this.
+   */
+  const KITTEN_LINGER_TICKS = 8;
+  /** player -> the kitten actor purring beside Fluffs. */
+  const returnedKittens = new WeakMap();
+  /** player -> the Fluffs the kitten was handed to, for her overhead line. */
+  const returningFluffs = new WeakMap();
   const CRATE_NPC_ID = NpcIdentifiers.CRATE;
   const QUEST_NPC_IDS = new Set([...GERTRUDE_NPC_IDS, SHILOP_NPC_ID, WILOUGH_NPC_ID, FLUFFS_NPC_ID]);
 
@@ -260,7 +276,7 @@ module.exports = function registerGertrudesCatQuest(api) {
     if (itemId === FLUFFS_KITTEN_ITEM_ID && stage === STAGE_GAVE_SARDINE) {
       player.getInventory().deleteNumber(FLUFFS_KITTEN_ITEM_ID, 1);
       quest.setStage(player, STAGE_RESCUED);
-      player.sendMessage("Fluffs purrs and runs home with her kitten.");
+      returnKitten(player, event.target);
       event.handled = true;
       return;
     }
@@ -268,6 +284,68 @@ module.exports = function registerGertrudesCatQuest(api) {
       player.sendMessage("Fluffs is not interested right now.");
       event.handled = true;
     }
+  }
+
+  /** The Wiki's return scene: Fluffs and her kitten purr, then run off home together. */
+  function returnKitten(player, fluffs) {
+    removeKitten(player);
+    if (fluffs) returningFluffs.set(player, fluffs);
+    const at = fluffs?.getLocation?.();
+    const kitten = at
+      ? api.spawnNpc({ id: LOST_KITTEN_NPC_ID, x: at.getX(), y: at.getY() - 1, z: at.getZ(), owner: player, ownerOnly: true, wanderRadius: 0 })
+      : null;
+    if (kitten) {
+      returnedKittens.set(player, kitten);
+      TaskManager.submit(new KittenExpiryTask(player, kitten));
+    }
+    if (!startTranscript(api, player, FLUFFS_NPC_ID, PAGE, RETURN_KITTEN_VARIANT, null, fluffs ?? null)) {
+      removeKitten(player);
+    }
+  }
+
+  class KittenExpiryTask extends Task {
+    constructor(player, kitten) {
+      super(KITTEN_LINGER_TICKS, kitten, false);
+      this.player = player;
+      this.kitten = kitten;
+    }
+
+    execute() {
+      this.stop();
+      if (returnedKittens.get(this.player) === this.kitten) removeKitten(this.player);
+    }
+  }
+
+  function removeKitten(player) {
+    returningFluffs.delete(player);
+    const kitten = returnedKittens.get(player);
+    if (!kitten) return;
+    returnedKittens.delete(player);
+    api.removeNpc(kitten);
+  }
+
+  /** The return scene's purrs are said by the Fluffs it was handed to and the kitten actor. */
+  function bindKittenLine(request) {
+    if (request.step?.presentation !== "overhead") return;
+    const speaker = request.step?.speaker;
+    const actor = speaker === KITTEN_SPEAKER ? returnedKittens.get(request.player)
+      : speaker === FLUFFS_SPEAKER ? returningFluffs.get(request.player) : undefined;
+    if (speaker !== KITTEN_SPEAKER && speaker !== FLUFFS_SPEAKER) return;
+    if (!returningFluffs.has(request.player) && !returnedKittens.has(request.player)) return;
+    if (actor) request.actors = [actor];
+    else request.skip = true;
+  }
+
+  /** The transcript's closing line is an action step, which the dialogue runtime doesn't show. */
+  function handleKittenRanOff(event) {
+    if (event.stepId !== RAN_OFF_ACTION_ID) return;
+    removeKitten(event.player);
+    event.player.sendMessage(String(event.text ?? ""));
+    event.handled = true;
+  }
+
+  function handleKittenLogout({ player }) {
+    removeKitten(player);
   }
 
   /** The stage-appropriate wiki flavour for a Fluffs click ("pick-up" / "stroke"). */
@@ -359,6 +437,9 @@ module.exports = function registerGertrudesCatQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:action", handleKittenRanOff);
+  api.onCustomEvent("npc-dialogue:line", bindKittenLine);
+  api.onPlayerLogout(handleKittenLogout);
   api.onNpcInteraction(handleFluffsInteraction);
   api.onItemOnNpc(handleItemOnCat);
   api.onItemOnItem(handleItemOnItem);

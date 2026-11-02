@@ -204,7 +204,11 @@ function sendGameVars(player, teamId) {
     game.setVar(player, data.TEAM_HUD_VARBIT[teamId][status], game.getTeamVar(teamId, varbit), true);
   }
   game.setVar(player, data.STANDARD_WORLD_VARBIT, 0, true);
-  game.setVar(player, data.BARRICADE_COUNT_VARBIT, game.teamBarricadeCount(teamId), true);
+  const count = game.teamBarricadeCount(teamId);
+  const limit = game.getBarricadeLimit?.() ?? data.MAX_BARRICADES;
+  game.setVar(player, data.BARRICADE_COUNT_VARBIT, count, true);
+  // Native scripts hardcode /10; only a configured practice cap needs server-owned text.
+  player.getPacketSender().sendString(`${count}/${limit} Barricades`, data.BARRICADE_TEXT_UID[teamId], limit !== data.MAX_BARRICADES);
   game.setVar(player, data.TIMER_VARP, game.gameMinutesLeft());
 }
 

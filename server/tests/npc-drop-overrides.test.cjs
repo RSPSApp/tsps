@@ -96,6 +96,63 @@ test("npc-drops-custom.json re-rates and removes dump rows and adds rows, ahead 
   assert.equal(entries[1].weight, 2, "the world's own row wins");
 });
 
+test("npc-drops-custom.json sets a dump row's quantity to a fixed amount or a range", (t) => {
+  const { __internals } = require("../plugins/npcs/NpcDrops.plugin");
+  const row = (item_id) => ({ item_id, name: `Item ${item_id}`, quantity: [1, 1], weight: 128, out_of: 128 });
+  const table = { main_max_roll: 128, entries: [row(1), row(2)], tertiary: [row(3)] };
+  __internals.applyCustomDrops({ tables: { goblin: table }, npcs: {} }, {
+    tables: {
+      goblin: {
+        setEntries: {
+          "entries:0": { quantity: [7, 7], weight: 64 },
+          "entries:1": { quantity: [20, 83] },
+          "tertiary:0": { quantity: [2, 4] },
+        },
+      },
+    },
+  });
+  assert.deepEqual(table.entries[0].quantity, [7, 7]);
+  assert.deepEqual(table.entries[1].quantity, [20, 83]);
+  assert.equal(table.entries[0].weight, 64, "a rate edit on the same row still applies");
+  assert.deepEqual(table.tertiary[0].quantity, [2, 4]);
+  assert.equal(table.entries[1].weight, 128, "a quantity edit leaves the rate alone");
+
+  const amount = (random) => {
+    t.mock.method(Math, "random", () => random);
+    const [drop] = __internals.rollOnce(table, [table.entries[1]], null);
+    Math.random.mock.restore();
+    return drop.amount;
+  };
+  assert.equal(amount(0), 20);
+  assert.equal(amount(0.999), 83);
+});
+
+test("a quantity edit replaces the row's conditional alternatives, which would otherwise win the roll", (t) => {
+  const { __internals } = require("../plugins/npcs/NpcDrops.plugin");
+  const entry = {
+    item_id: 25766, name: "Malicious ashes", quantity: [1, 1], weight: 128, out_of: 128,
+    quantity_selection: "unknown",
+    quantity_alternatives: [{ quantity: [1, 1] }, { quantity: [2, 2], condition: { type: "preferred_method", location: "Chasm of Fire" } }],
+  };
+  const table = { main_max_roll: 128, entries: [entry], tertiary: [] };
+  __internals.applyCustomDrops({ tables: { demon: table }, npcs: {} }, { tables: { demon: { setEntries: { "entries:0": { quantity: [50, 50] } } } } });
+  assert.equal(entry.quantity_alternatives, undefined);
+  assert.equal(entry.quantity_selection, undefined);
+  t.mock.method(Math, "random", () => 0);
+  assert.equal(__internals.rollOnce(table, table.entries, null)[0].amount, 50);
+});
+
+test("an unusable quantity edit leaves the row as it was", () => {
+  const { __internals } = require("../plugins/npcs/NpcDrops.plugin");
+  for (const quantity of [[0, 3], [5, 1], [1.5, 2], [1], [1, 2, 3], ["3", "3"], 5, null, [1, 2147483648]]) {
+    const alternatives = [{ quantity: [1, 1] }];
+    const entry = { item_id: 1, name: "Item 1", quantity: [2, 3], weight: 1, out_of: 128, quantity_alternatives: alternatives };
+    __internals.applyCustomDrops({ tables: { goblin: { entries: [entry] } }, npcs: {} }, { tables: { goblin: { setEntries: { "entries:0": { quantity } } } } });
+    assert.deepEqual(entry.quantity, [2, 3], JSON.stringify(quantity));
+    assert.equal(entry.quantity_alternatives, alternatives, JSON.stringify(quantity));
+  }
+});
+
 test("a fractional main weight stays on the main table", (t) => {
   const { __internals } = require("../plugins/npcs/NpcDrops.plugin");
   t.mock.method(Math, "random", () => 0);

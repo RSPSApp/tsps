@@ -31,9 +31,10 @@ module.exports = function registerDemonSlayerQuest(api) {
   const FADE_UID = (161 << 16) | 1;
   const FADE_INTERFACE = 174;
   const FADE_SCRIPT = 948;
+  /** [id, x, y, the table tile it faces while chanting] (capture 1843). */
   const SUMMONERS = [
-    [NpcIdentifiers.DARK_WIZARD_7, 3226, 3371], [NpcIdentifiers.DARK_WIZARD_8, 3229, 3371],
-    [NpcIdentifiers.DARK_WIZARD_9, 3226, 3368], [DENATH_NPC_ID, 3229, 3368],
+    [NpcIdentifiers.DARK_WIZARD_7, 3226, 3371, 3228, 3369], [NpcIdentifiers.DARK_WIZARD_8, 3229, 3371, 3227, 3369],
+    [NpcIdentifiers.DARK_WIZARD_9, 3226, 3368, 3228, 3370], [DENATH_NPC_ID, 3229, 3368, 3227, 3370],
   ];
   const ANIMATION = {
     wally: 4603, sword: 4604, chant: 4617, summoned: 4623, banished: 4624, tableExplosion: 4622, pour: 827,
@@ -69,6 +70,10 @@ module.exports = function registerDemonSlayerQuest(api) {
   const PRYSIN_CASE_APPROACH_TILE = new Location(3204, 3470, 0);
   const PRYSIN_CASE_FACE_TILE = new Location(3204, 3468, 0);
   const PRYSIN_WANDER_RADIUS = 1;
+  const SUMMONER_CHATHEADS = Object.freeze({
+    "Dark wizards": { npcId: NpcIdentifiers.DARK_WIZARD_8, expression: 567 }, // chathap1
+    "Dark wizard": { npcId: NpcIdentifiers.DARK_WIZARD_7, expression: 571 }, // chatshock1
+  });
   /** Temple of the Eye's stage attribute. Its tower stages (6-25) give Traiborn
    * dialogue of their own, so Demon Slayer must not shadow him there. */
   const TEMPLE_OF_THE_EYE_STAGE_ATTRIBUTE = "quest.temple_of_the_eye.stage";
@@ -86,6 +91,8 @@ module.exports = function registerDemonSlayerQuest(api) {
   const ROVIN_KEY_ITEM_ID = ItemIdentifiers.SILVERLIGHT_KEY_2;
   const PRYSIN_KEY_ITEM_ID = ItemIdentifiers.SILVERLIGHT_KEY_3;
   const SILVERLIGHT_ITEM_ID = ItemIdentifiers.SILVERLIGHT;
+  /** Shadow of the Storm dyes the sword (6745) and turns it into Darklight (6746): still the sword. */
+  const SILVERLIGHT_FORMS = [SILVERLIGHT_ITEM_ID, ItemIdentifiers.SILVERLIGHT_2, ItemIdentifiers.DARKLIGHT];
   const BONES_ITEM_ID = ItemIdentifiers.BONES;
   const COINS_ITEM_ID = ItemIdentifiers.COINS;
   const BUCKET_OF_WATER_ITEM_ID = ItemIdentifiers.BUCKET_OF_WATER;
@@ -134,6 +141,7 @@ module.exports = function registerDemonSlayerQuest(api) {
   /** The stone circle south of Varrock where Delrith is summoned (owner-only fight). */
   const DELRITH_ZONE = { minX: 3220, maxX: 3235, minY: 3362, maxY: 3377, levels: [0] };
   const DELRITH_WANDER_RADIUS = 2;
+  const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
   const WEAKENED_DELRITH_TICKS = 100;
 
   let quest;
@@ -142,6 +150,10 @@ module.exports = function registerDemonSlayerQuest(api) {
 
   /** player -> { delrith, weakened, weakenedExpiresAt }; owner-only instanced fight. */
   const demonEncounters = new WeakMap();
+  /** Players whose weakened Delrith slipped away: he returns once they leave the circle and come back. */
+  const delrithEscaped = new WeakSet();
+  /** The public stone circle (DELRITH_ZONE); its leave is what clears delrithEscaped. */
+  let delrithCircle;
   const visions = new WeakMap();
   const prysinsAtCase = new WeakSet();
 
@@ -186,8 +198,10 @@ module.exports = function registerDemonSlayerQuest(api) {
     }
     canTeleport() { return false; }
     canAttack(attacker, target) {
-      if (this.vision || demonEncounters.get(this.owner)?.summoning) return false;
-      if (target === demonEncounters.get(this.owner)?.weakened) return false;
+      const fight = demonEncounters.get(this.owner);
+      if (this.vision || fight?.summoning) return false;
+      // Live: combat stops when Delrith weakens; he is banished by the incantation alone.
+      if (fight?.weakened && (attacker === fight.weakened || target === fight.weakened)) return false;
       if (attacker === this.owner && target.getId?.() === DELRITH_NPC_ID && !silverlightEquipped(attacker)) {
         startTranscript(api, attacker, ARIS_NPC_ID, "Demon Slayer", "the-final-battle-attempting-to-attack-delrith-without-silverlight");
         return false;
@@ -279,6 +293,9 @@ module.exports = function registerDemonSlayerQuest(api) {
 
   const bankHasItem = (player, itemId) =>
     player.getBanks?.()?.some((bank) => bank && bank.getAmount(itemId) > 0) === true;
+
+  /** Sir Prysin replaces Silverlight only when the player has it in no form. */
+  const ownsSilverlight = (player) => SILVERLIGHT_FORMS.some((itemId) => ownsItem(player, itemId));
 
   function incantationOrder(player) {
     let order = player.getAttribute(INCANTATION_ATTRIBUTE);
@@ -520,8 +537,8 @@ module.exports = function registerDemonSlayerQuest(api) {
       if (value.includes("key from captain rovin")) return hasItem(player, ROVIN_KEY_ITEM_ID);
       if (value.includes("key from wizard traiborn")) return hasItem(player, TRAIBORN_KEY_ITEM_ID);
       if (value.includes("key from the drain")) return hasItem(player, PRYSIN_KEY_ITEM_ID);
-      if (value.includes("does not have silverlight")) return !ownsItem(player, SILVERLIGHT_ITEM_ID);
-      if (value.includes("has silverlight")) return ownsItem(player, SILVERLIGHT_ITEM_ID);
+      if (value.includes("does not have silverlight")) return !ownsSilverlight(player);
+      if (value.includes("has silverlight")) return ownsSilverlight(player);
       if (value.includes("does not have at least 500 coins")) {
         return inventory.getAmount(COINS_ITEM_ID) < 500;
       }
@@ -628,8 +645,17 @@ module.exports = function registerDemonSlayerQuest(api) {
       };
       if (text.startsWith("By reciting the correct magical incantation")) event.after = () => closeVision(event.player);
     }
-    if (event.step?.speaker === "Dark wizards") event.speakerId = NpcIdentifiers.DARK_WIZARD_8;
+    // Capture 1843: the summoners' lines show qip_ds_young_dark_wizard2 (chathap1) for the
+    // group and qip_ds_young_dark_wizard1 (chatshock1) for "Who's that?". The cache's first
+    // "Dark wizard" (510) has no chathead.
+    const summonerHead = SUMMONER_CHATHEADS[event.step?.speaker];
+    if (summonerHead) {
+      event.speakerId = summonerHead.npcId;
+      event.expression = summonerHead.expression;
+    }
     const fight = demonEncounters.get(event.player);
+    // Capture 1843: all four summoners chant the group line overhead too; on Denath's laugh they
+    // stop chanting and turn to Delrith, and on "Who's that?" the young wizards turn to the player.
     if (fight?.summoning && text === "Arise, Delrith!") {
       event.before = () => fight.actors.forEach((actor) => actor.forceChat(text));
     }
@@ -643,8 +669,12 @@ module.exports = function registerDemonSlayerQuest(api) {
       };
     }
     if (fight?.summoning && text === "Who's that?") {
-      event.before = () => fight.actors.slice(0, -1).forEach((actor) => actor.setPositionToFace(event.player.getLocation()));
+      event.before = () => fight.actors
+        .filter((actor) => actor.getId?.() !== DENATH_NPC_ID)
+        .forEach((actor) => actor.setPositionToFace(event.player.getLocation().clone()));
     }
+    // Capture 1843 (10135-10145): Denath walks off east, the young wizards spread out and the
+    // first one attacks the player at once, whatever their level.
     if (fight?.summoning && text.startsWith("I've got to get out of here")) {
       event.before = () => {
         event.player.getPacketSender().sendCameraMoveTo(3226, 3383, 1000, { rate: 1, rate2: 1 });
@@ -863,7 +893,7 @@ module.exports = function registerDemonSlayerQuest(api) {
         return;
       }
       if (stepId === SILVERLIGHT_MESSAGE_ID) {
-        if (!ownsItem(player, SILVERLIGHT_ITEM_ID) && hasAllKeys(player)) {
+        if (!ownsSilverlight(player) && hasAllKeys(player)) {
           player.getInventory().deleteNumber(TRAIBORN_KEY_ITEM_ID, 1);
           player.getInventory().deleteNumber(ROVIN_KEY_ITEM_ID, 1);
           player.getInventory().deleteNumber(PRYSIN_KEY_ITEM_ID, 1);
@@ -881,7 +911,7 @@ module.exports = function registerDemonSlayerQuest(api) {
       if (stepId === PRYSIN_SELL_SILVERLIGHT_ACTION_ID) {
         if (
           player.getInventory().getAmount(COINS_ITEM_ID) >= 500 &&
-          !ownsItem(player, SILVERLIGHT_ITEM_ID) &&
+          !ownsSilverlight(player) &&
           !player.getInventory().isFull()
         ) {
           player.getInventory().deleteNumber(COINS_ITEM_ID, 500);
@@ -917,7 +947,7 @@ module.exports = function registerDemonSlayerQuest(api) {
   // The lost-Silverlight branch of the pre-fight dialogue gives it back.
   function restoreSilverlightCondition({ player, npcId, stepId }) {
     if (!PRYSIN_NPC_IDS.has(npcId) || stepId !== PRYSIN_LOST_SILVERLIGHT_CONDITION_ID) return;
-    if (ownsItem(player, SILVERLIGHT_ITEM_ID) || player.getInventory().isFull()) return;
+    if (ownsSilverlight(player) || player.getInventory().isFull()) return;
     player.getInventory().adds(SILVERLIGHT_ITEM_ID, 1);
     if (quest.getStage(player) < STAGE_SILVERLIGHT) quest.setStage(player, STAGE_SILVERLIGHT);
     player.sendMessage("Sir Prysin returns Silverlight.");
@@ -969,9 +999,17 @@ module.exports = function registerDemonSlayerQuest(api) {
       tracked.weakenedExpiresAt !== undefined &&
       World.getProcessCycle() >= tracked.weakenedExpiresAt
     ) {
-      pluginApi.removeNpc(tracked.weakened);
-      tracked.weakened = null;
-      demonEncounters.set(player, tracked);
+      // Wiki: taken too long, Delrith is gone until the player leaves and comes back. The fight's
+      // private scene reaches past the circle; a player outside it has already left. One inside
+      // is put straight back in the circle, so the exit that clears the mark is the one seen.
+      const inCircle = inDelrithZone(player.getLocation());
+      clearDemonEncounter(player);
+      if (inCircle && delrithCircle) {
+        delrithEscaped.add(player);
+        delrithCircle.enter(player);
+        player.setArea(delrithCircle);
+      }
+      return;
     }
     ensureDelrith(player);
   }
@@ -989,6 +1027,7 @@ module.exports = function registerDemonSlayerQuest(api) {
    */
   function ensureDelrith(player) {
     if (!player || player.isPlayerBot?.() === true || quest.getStage(player) !== STAGE_SILVERLIGHT) return;
+    if (delrithEscaped.has(player)) return;
     const tracked = demonEncounters.get(player);
     if (tracked?.summoning || tracked?.delrith || tracked?.weakened || tracked?.banished) return;
     if (tracked) { summonDelrith(player); return; }
@@ -997,9 +1036,13 @@ module.exports = function registerDemonSlayerQuest(api) {
     const fight = { arena, actors: [], summoning: true };
     demonEncounters.set(player, fight);
     setSceneControls(player, true);
-    for (const [id, x, y] of SUMMONERS) {
+    for (const [id, x, y, faceX, faceY] of SUMMONERS) {
       const actor = api.spawnNpc({ id, x, y, z: 0, wanderRadius: 0, owner: player, ownerOnly: true });
-      if (actor) { arena.enter(actor); actor.performAnimation(new Animation(ANIMATION.chant)); fight.actors.push(actor); }
+      if (!actor) continue;
+      arena.enter(actor);
+      actor.setPositionToFace?.(new Location(faceX, faceY, 0));
+      actor.performAnimation(new Animation(ANIMATION.chant));
+      fight.actors.push(actor);
     }
     player.getPacketSender().sendSong(SONG_DELRITH);
     player.getPacketSender().sendCameraMoveTo(3224, 3376, 475, { rate: 232, rate2: 232 });
@@ -1042,7 +1085,14 @@ module.exports = function registerDemonSlayerQuest(api) {
       player.getPacketSender().sendSound(SOUND.delrithRising, 1, 10).sendSound(SOUND.delrithArrives, 1, 0);
       player.getPacketSender().sendCameraLookAt(3227, 3369, 400, { rate: 1, rate2: 1 });
     });
-    later(tracked, 12, () => tracked.delrith?.getMovementQueue().addSteps(new Location(3227, 3368, 0)));
+    // Live: Delrith walks off the altar to 3227,3367 before "Who's that?". He rises on the 2x2
+    // table, whose clipping blocks every step his 2x2 footprint takes, so these two steps go
+    // over it, as an NPC walks the map without collision (MovementQueue IGNORE_CLIPPING_FLAG).
+    later(tracked, 12, () => {
+      tracked.delrith?.setFlag?.(IGNORE_CLIPPING_FLAG, true);
+      tracked.delrith?.getMovementQueue().addSteps(new Location(3227, 3368, 0));
+    });
+    later(tracked, 15, () => tracked.delrith?.setFlag?.(IGNORE_CLIPPING_FLAG, false));
     later(tracked, 13, () => {
       tracked.delrith?.getMovementQueue().addSteps(new Location(3227, 3367, 0));
       player.getPacketSender().sendCameraMoveTo(3226, 3375, 500, { rate: 232, rate2: 232 });
@@ -1090,7 +1140,10 @@ module.exports = function registerDemonSlayerQuest(api) {
     setSceneControls(player, false);
   }
 
-  /** Delrith never dies: killing him swaps in the weakened form to be banished. */
+  /**
+   * Delrith never dies: killing him swaps in the weakened form to be banished, and a hit
+   * already on its way to the weakened form (its id is then 5080) leaves him at 1 hitpoint.
+   */
   function handleDelrithBeforeDeath(event) {
     const npc = event?.npc;
     const owner = npc?.getOwner?.();
@@ -1167,26 +1220,42 @@ module.exports = function registerDemonSlayerQuest(api) {
     }
     const options = [];
     for (const word of INCANTATION_WORDS) {
-      options.push(word, () => speakIncantationWord(player, npc, [...selected, word]));
+      options.push(word, () => sayIncantationWord(player, npc, [...selected, word]));
     }
     api.sendMultiChatboxPrompt(player, "Select a word", ...options);
   }
 
-  /** The chosen word is said aloud in a chatbox with no Continue, then the next menu opens. */
-  function speakIncantationWord(player, npc, selected) {
+  /**
+   * Capture 1843 (10178-10209): a tick after a word is picked, the player says it overhead
+   * ("Gabindo...", the last with "!") and in a chatbox with no Continue; the next "Select a word",
+   * or the vortex after the last, comes three ticks after that.
+   */
+  function sayIncantationWord(player, npc, selected) {
     const tracked = demonEncounters.get(player);
-    if (tracked?.weakened !== npc) return;
+    if (!tracked || tracked.weakened !== npc) return;
     const spoken = selected.at(-1) + (selected.length === INCANTATION_WORDS.length ? "!" : "...");
-    player.forceChat(spoken);
-    player.getDialogueManager().reset();
-    new PlayerDialogue(0, spoken).send(player);
-    player.getPacketSender().sendString("", PLAYER_DIALOGUE_CONTINUE_UID).sendInterfaceFlagsRange(PLAYER_DIALOGUE_CONTINUE_UID, -1, -1, 0);
-    later(tracked, INCANTATION_WORD_TICKS, () => promptIncantation(player, npc, selected));
+    player.getPacketSender().sendInterfaceRemoval();
+    later(tracked, 1, () => {
+      player.forceChat(spoken);
+      player.getDialogueManager().reset();
+      new PlayerDialogue(0, spoken).send(player);
+      player.getPacketSender().sendString("", PLAYER_DIALOGUE_CONTINUE_UID).sendInterfaceFlagsRange(PLAYER_DIALOGUE_CONTINUE_UID, -1, -1, 0);
+      later(tracked, INCANTATION_WORD_TICKS, () => promptIncantation(player, npc, selected));
+    });
+  }
+
+  function inDelrithZone(location) {
+    return DELRITH_ZONE.levels.includes(location.getZ()) &&
+      location.getX() >= DELRITH_ZONE.minX && location.getX() <= DELRITH_ZONE.maxX &&
+      location.getY() >= DELRITH_ZONE.minY && location.getY() <= DELRITH_ZONE.maxY;
   }
 
   class DelrithArea extends Area {
     process(mobile) {
       if (mobile.isPlayer()) handlePlayerProcess({ player: mobile });
+    }
+    postLeave(mobile) {
+      if (mobile.isPlayer?.()) delrithEscaped.delete(mobile);
     }
     canAttack(attacker, target) {
       if (target.getId?.() !== DELRITH_NPC_ID || !attacker.isPlayer()) return null;
@@ -1253,7 +1322,8 @@ module.exports = function registerDemonSlayerQuest(api) {
   api.onGroundItemPickup(handleSewerKeyPickup);
 
   // Delrith: owner-only summon in the stone circle, weaken then banish.
-  api.registerArea(new DelrithArea([new Boundary(DELRITH_ZONE.minX, DELRITH_ZONE.maxX, DELRITH_ZONE.minY, DELRITH_ZONE.maxY, 0)]));
+  delrithCircle = new DelrithArea([new Boundary(DELRITH_ZONE.minX, DELRITH_ZONE.maxX, DELRITH_ZONE.minY, DELRITH_ZONE.maxY, 0)]);
+  api.registerArea(delrithCircle);
   api.onNpcBeforeDeath(handleDelrithBeforeDeath);
   api.onNpcInteraction("Weakened Delrith", { Banish: banishWeakenedDelrith });
 

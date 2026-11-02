@@ -2,11 +2,26 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {QuestHelperRuntime}=require('../plugins/quests/questhelper/Runtime.QuestHelper');
 const {tutorialResult}=require('../plugins/quests/questhelper/Tutorial.QuestHelper');
-test('loopback bridge accepts bounded real-sized results and rejects oversized expansion',async()=>{
+test('bridge accepts bounded real-sized results and rejects oversized expansion',async()=>{
  const {QuestHelperHttp}=require('../plugins/quests/questhelper/Http.QuestHelper');
  const make=size=>new QuestHelperHttp({token:'x'.repeat(24),fetchImpl:async()=>new Response(JSON.stringify({value:'x'.repeat(size)}))});
  assert.equal((await make(800000).catalog()).value.length,800000);
  await assert.rejects(make(4*1024*1024).catalog(),/limit/);
+});
+test('Quest Helper bridge accepts a configured service URL and rejects unsafe URLs',async()=>{
+  const {QuestHelperHttp}=require('../plugins/quests/questhelper/Http.QuestHelper');
+  let requested;
+  const bridge=new QuestHelperHttp({url:'http://quest-helper:16471/',token:'x'.repeat(24),fetchImpl:async(url)=>{requested=url;return new Response('{}');}});
+  await bridge.catalog();assert.equal(requested,'http://quest-helper:16471/catalog');
+  const prefixed=new QuestHelperHttp({url:'https://quest-helper.internal/api/',port:0,token:'x'.repeat(24),fetchImpl:async(url)=>{requested=url;return new Response('{}');}});
+  await prefixed.catalog();assert.equal(requested,'https://quest-helper.internal/api/catalog');
+  for(const url of ['file:///tmp/helper','http://user:pass@quest-helper','http://quest-helper/?secret=x','http://quest-helper/#fragment','not a URL'])
+    assert.throws(()=>new QuestHelperHttp({url,token:'x'.repeat(24)}),/Invalid Quest Helper URL/);
+  assert.throws(()=>new QuestHelperHttp({port:0,token:'x'.repeat(24)}),/Invalid helper port/);
+});
+test('Quest Helper reports missing server credentials without requiring a local launcher',async()=>{
+  const {QuestHelperHttp}=require('../plugins/quests/questhelper/Http.QuestHelper');
+  await assert.rejects(new QuestHelperHttp({token:undefined}).catalog(),/set QUEST_HELPER_TOKEN for the server and bridge/);
 });
 test('helper plugin exposes the loader register contract',()=>{
  const plugin=require('../plugins/quests/QuestHelper.plugin');

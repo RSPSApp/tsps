@@ -1,24 +1,27 @@
 export class Frame126 {
     id: number;
     currentState: string;
+    serverOwned?: boolean;
 
-    constructor(s: string, id: number) {
+    constructor(s: string, id: number, serverOwned?: boolean) {
         this.currentState = s;
         this.id = id;
+        this.serverOwned = serverOwned;
     }
 }
 
 export class FrameUpdater {
     public interfaceTextMap = new Map<number, Frame126>();
-    shouldUpdate(text: string, id: number): boolean {
+    shouldUpdate(text: string, id: number, serverOwned?: boolean): boolean {
         if (!this.interfaceTextMap.has(id)) {
-            this.interfaceTextMap.set(id, new Frame126(text, id));
+            this.interfaceTextMap.set(id, new Frame126(text, id, serverOwned));
         } else {
             let t = this.interfaceTextMap.get(id);
-            if (text === t.currentState) {
+            if (text === t.currentState && (serverOwned === undefined || serverOwned === t.serverOwned)) {
                 return false;
             }
             t.currentState = text;
+            if (serverOwned !== undefined) t.serverOwned = serverOwned;
         }
         return true;
     }

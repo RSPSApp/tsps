@@ -857,6 +857,12 @@ module.exports = function registerNatureSpiritQuest(api) {
     const option = actionOf(event);
     if (objectId === GROTTO_ID && option.includes("enter")) {
       event.handled = true;
+      // Before the ritual, trying the entrance summons Filliman outside instead.
+      if (quest.getStage(player) < STAGE_PERFORMED_RITUAL) {
+        player.sendMessage("You prepare to enter the Druid's grotto.");
+        ensureQuestNpcs(player);
+        return;
+      }
       player.moveTo(new Location(GROTTO_INTERIOR.x, GROTTO_INTERIOR.y, GROTTO_INTERIOR.z));
       if (quest.getStage(player) >= STAGE_PERFORMED_RITUAL && quest.getStage(player) < STAGE_FULL_TRANSFORM) {
         quest.setStage(player, STAGE_ENTERED_GROTTO);

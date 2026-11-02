@@ -225,7 +225,7 @@ test('each tab button selects its tab, as live does', () => {
 test('the tab is kept across logins, and the default needs no second mount', () => {
   const { hooks, sent, someone } = panel();
   hooks.custom.get('player:bootstrap-complete')({ player: someone });
-  assert.deepEqual(sent, [['varbit', 933, 1], ['varbit', 12164, 1]], 'no clan, and no second mount');
+  assert.deepEqual(sent, [], 'no second mount');
   someone.setAttribute('side-channels:tab', 1);
   hooks.custom.get('gameframe:tab-mounted')({ player: someone, group: 707 });
   assert.deepEqual(sent.at(-1), ['mount', 707, 7, 701]);

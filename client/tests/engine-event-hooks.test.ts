@@ -195,6 +195,7 @@ for (const consumer of ["none", "filter", "handler"] as const) {
     const manager: any = {
         rootInterface: 161, interfaceParents: new Map(), beginBatch() {}, endBatch() {},
         getWidgetByUid: () => label,
+        isServerOwnedWidget: () => false,
         invalidateAll: () => fullRepaints++,
         invalidateWidgetRender: (widget: any) => dirtyWidgets.push(widget.uid),
     };

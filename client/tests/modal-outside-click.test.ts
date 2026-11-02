@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { getWorldClickBlockingWidgetAtPoint } from "../game/widgets/interaction/widgetClickProbe";
 import { isCloseOnOutsideClickModalTarget } from "../game/widgets/gameframePanes";
 import { WidgetManager } from "../widgets/WidgetManager";
+import { createCacheVm } from "../scripts/cache/cs2-sweep";
 
 // OSRS mounts the bank (and other main modals) into the gameframe's mainmodal
 // pane, which in the standard layout is the whole 512x334 viewport. The pane is
@@ -91,6 +92,29 @@ assert.ok(
     getWorldClickBlockingWidgetAtPoint(mainModal, null, 487, 329),
     "the last pixel of the mounted interface still captures the click",
 );
+
+// Cannon repair is IF1: component 0 is the painted background, not a stretch container.
+const cached = createCacheVm().vm.context.widgetManager;
+cached.getGroup(409);
+const cannon = managerFor(MAIN_MODAL, 409, true);
+const rootWidget = cannon.getInputRoots()[0];
+const baseChildren = cannon.getStaticChildrenByParentUid;
+const baseWidget = cannon.getWidgetByUid;
+cannon.getInputRoots = () => [rootWidget];
+cannon.getAllGroupRoots = (group: number) => cached.getAllGroupRoots(group);
+cannon.getStaticChildrenByParentUid = (uid: number) => (uid >>> 16) === 409
+    ? cached.getStaticChildrenByParentUid(uid) : baseChildren(uid);
+cannon.getWidgetByUid = (uid: number) => (uid >>> 16) === 409
+    ? cached.getWidgetByUid(uid) : baseWidget(uid);
+assert.equal(cached.getWidgetByUid(409 << 16)?.type, 3);
+assert.ok(getWorldClickBlockingWidgetAtPoint(cannon, null, 250, 40),
+    "the native repair background blocks world walking even between its buttons");
+for (const [child, x, y] of [[1, 30, 120], [2, 90, 120], [3, 160, 120], [7, 380, 270], [8, 350, 150], [9, 300, 260]]) {
+    assert.equal(getWorldClickBlockingWidgetAtPoint(cannon, null, x, y)?.uid, (409 << 16) | child,
+        `native repair component ${child} receives its click`);
+}
+assert.equal(getWorldClickBlockingWidgetAtPoint(cannon, null, 520, 340), null,
+    "clicks outside the repair interface still reach the world");
 
 // Only the gameframe's main and side modal panes close on an outside click. The
 // chatbox (dialogue) and display modal panes do not, and neither does an overlay

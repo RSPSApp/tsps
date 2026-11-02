@@ -57,7 +57,7 @@ export function getWorldClickBlockingWidgetAtPoint(
         const group = parent.group | 0;
         const rootUid = group << 16;
         const hasContent = hits.some(
-            (hit) => hit !== widget && hit?.uid !== rootUid &&
+            (hit) => hit !== widget && (hit?.uid !== rootUid || hit?.type !== 0) &&
                 (((hit?.uid ?? 0) >>> 16) & 0xffff) === group,
         );
         if (!hasContent) hostsWithoutContent.add((widget.uid ?? 0) | 0);

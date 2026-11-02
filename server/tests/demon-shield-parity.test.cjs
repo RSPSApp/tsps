@@ -32,7 +32,7 @@ function register(name, key) {
     spawnNpc: (definition) => {
       let area = null, transform = -1, hp = 7, location = new core.Location(definition.x, definition.y, definition.z);
       const index = actorIndex++;
-      const npc = { definition, getId: () => definition.id, getOwner: () => definition.owner,
+      const npc = { definition, getId: () => (transform !== -1 ? transform : definition.id), getOwner: () => definition.owner,
         getLocation: () => location,
         getMovementQueue: () => ({ addSteps: value => { location = value; } }),
         getDefinition: () => core.NpcDefinition.forId(definition.id),
@@ -135,9 +135,15 @@ test('Delrith needs five word choices; failure resets him and the learned order 
   assert.equal(q.spawned.at(-1).getId(), core.NpcIdentifiers.DELRITH, 'the demon remains visible without Silverlight equipped');
   const weaken = () => q.call('onNpcBeforeDeath', { npc: q.spawned.at(-1), preventDeath: false });
   const banish = () => q.namedNpc.get('Weakened Delrith:Banish')({ player: p, npc: q.spawned.at(-1) });
-  weaken(); banish(); for (let i = 0; i < 5; i++) choose(q.prompts.at(-1), 'Carlem');
+  // Capture 1843: each word is said overhead a tick after it is picked; the next menu follows.
+  const said = [];
+  p.forceChat = (text) => said.push(text);
+  const pick = (word) => { choose(q.prompts.at(-1), word); q.tick(4); };
+  weaken(); banish(); for (let i = 0; i < 5; i++) pick('Carlem');
   assert.equal(q.quest.getStage(p), 29); assert.equal(q.spawned.at(-1).getId(), core.NpcIdentifiers.DELRITH);
-  weaken(); banish(); for (const word of ['Gabindo', 'Camerinthum', 'Aber', 'Purchai', 'Carlem']) choose(q.prompts.at(-1), word);
+  said.length = 0;
+  weaken(); banish(); for (const word of ['Gabindo', 'Camerinthum', 'Aber', 'Purchai', 'Carlem']) pick(word);
+  assert.deepEqual(said, ['Gabindo...', 'Camerinthum...', 'Aber...', 'Purchai...', 'Carlem!']);
   q.tick(10);
   assert.equal(q.quest.getStage(p), 30); assert.equal(q.quest.varbitValue(30, p), 3); assert.equal(p.attributes.get('quest.points'), 3);
   assert.equal(q.hooks.has('onPlayerProcess'), false);
@@ -257,25 +263,52 @@ test('Shield full certificate opens the captured readable modal and Phoenix comp
 });
 
 
-test('Delrith timeout restores combat without taking over the camera again', () => {
+test('a weakened Delrith left too long is gone until the player leaves the circle and comes back', () => {
   const q = register('DemonSlayer', 'demon_slayer'), p = player(); q.quest.setStage(p, 29);
   const originalCycle = core.World.processCycle;
   try {
     q.areas[0].process(p);
     q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.DENATH_4, stepId: 'xjQ9zZ' });
-  q.tick(6);
+    q.tick(6);
     const line = { player: p, text: "I've got to get out of here..." };
     q.emit('npc-dialogue:line', line); line.after();
-    q.call('onNpcBeforeDeath', { npc: q.spawned.at(-1) });
+    const delrith = q.spawned.at(-1);
+    q.call('onNpcBeforeDeath', { npc: delrith });
     q.tick(4); p.packets.length = 0;
     core.World.processCycle += 100;
+    const spawnedBefore = q.spawned.length;
     p.getArea().process(p);
-    assert.equal(q.spawned.at(-1).getId(), core.NpcIdentifiers.DELRITH);
-    assert.equal(p.packets.some(([method]) => method.startsWith('sendCamera')), false);
+    assert.ok(q.removed.includes(delrith), 'the weakened Delrith is gone');
+    q.areas[0].process(p);
+    assert.equal(q.spawned.length, spawnedBefore, 'no Delrith returns while the player stays');
+    assert.equal(p.packets.some(([method]) => method === 'sendCameraMoveTo' || method === 'sendCameraLookAt'), false,
+      'the summoning camera does not start again');
+    q.areas[0].postLeave(p);
+    q.areas[0].process(p);
+    assert.ok(q.spawned.length > spawnedBefore, 'coming back starts the summoning again');
     q.call('onPlayerLogout', { player: p });
   } finally { core.World.processCycle = originalCycle; }
 });
 
+test('a hit landing on the weakened Delrith leaves him at 1 hitpoint, and neither side can attack', () => {
+  const q = register('DemonSlayer', 'demon_slayer'), p = player(); q.quest.setStage(p, 29);
+  q.areas[0].process(p);
+  q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.DENATH_4, stepId: 'xjQ9zZ' });
+  q.tick(6);
+  const line = { player: p, text: "I've got to get out of here..." };
+  q.emit('npc-dialogue:line', line); line.after();
+  const delrith = q.spawned.at(-1);
+  const first = { npc: delrith, preventDeath: false };
+  q.call('onNpcBeforeDeath', first);
+  assert.equal(first.preventDeath, true);
+  assert.equal(delrith.getId(), core.NpcIdentifiers.WEAKENED_DELRITH);
+  const late = { npc: delrith, preventDeath: false };
+  q.call('onNpcBeforeDeath', late);
+  assert.equal(late.preventDeath, true, 'a queued hit cannot kill the weakened form');
+  assert.equal(p.getArea().canAttack(p, delrith), false);
+  assert.equal(p.getArea().canAttack(delrith, p), false);
+  q.call('onPlayerLogout', { player: p });
+});
 
 test('Demon Slayer drain wire state stays 0 through Prysin, becomes 1 on pouring, then 2 on pickup', () => {
   const q = register('DemonSlayer', 'demon_slayer'), p = player(); q.quest.setStage(p, 1);
@@ -458,4 +491,57 @@ test("Champions' Guild door turns away entrants under 32 Quest Points through th
   assert.equal(door(3363), false);
   assert.equal(condition('If the player does not have at least 32 quest points:'), false);
   assert.equal(condition('If the player has at least 32 quest points:'), true);
+});
+
+test('the summoners speak with the captured chatheads (1843)', () => {
+  const q = register('DemonSlayer', 'demon_slayer'), p = player();
+  const one = { player: p, text: "Who's that?", step: { speaker: 'Dark wizard' } };
+  const all = { player: p, text: 'Arise, Delrith!', step: { speaker: 'Dark wizards' } };
+  q.emit('npc-dialogue:line', one); q.emit('npc-dialogue:line', all);
+  assert.deepEqual([one.speakerId, one.expression], [core.NpcIdentifiers.DARK_WIZARD_7, 571], 'chatshock1 on qip_ds_young_dark_wizard1');
+  assert.deepEqual([all.speakerId, all.expression], [core.NpcIdentifiers.DARK_WIZARD_8, 567], 'chathap1 on qip_ds_young_dark_wizard2');
+});
+
+test('a Delrith timeout outside the circle lets him return at once; inside, after one real exit (AreaManager)', () => {
+  const { AreaManager } = require('../dist/game/model/areas/AreaManager');
+  const originalCycle = core.World.processCycle;
+  const q = register('DemonSlayer', 'demon_slayer');
+  const circle = q.areas[0];
+  AreaManager.areas.push(circle);
+  const run = (timeoutTile) => {
+    const p = player(); q.quest.setStage(p, 29);
+    Object.assign(p, { getMultiIcon: () => 0, setMultiIcon() {} });
+    const at = (x, y) => { p.moveTo(new core.Location(x, y, 0)); AreaManager.process(p); };
+    at(3227, 3369);
+    q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.DENATH_4, stepId: 'xjQ9zZ' });
+    q.tick(6);
+    const line = { player: p, text: "I've got to get out of here..." };
+    q.emit('npc-dialogue:line', line); line.after();
+    q.call('onNpcBeforeDeath', { npc: q.spawned.at(-1), preventDeath: false });
+    at(...timeoutTile);
+    core.World.processCycle += 100;
+    at(...timeoutTile);
+    return { p, at, spawned: q.spawned.length };
+  };
+  try {
+    // Outside the public circle (y < 3362) but still in the private scene: no mark to clear.
+    const outside = run([3227, 3361]);
+    assert.equal(outside.p.getArea(), null, 'the timeout ends the private scene');
+    outside.at(3227, 3369);
+    assert.equal(q.spawned.length, outside.spawned + 4, 'the first return summons him again');
+    q.call('onPlayerLogout', { player: outside.p });
+
+    // Inside the circle: he stays gone until the player has left it once.
+    const inside = run([3227, 3369]);
+    assert.equal(inside.p.getArea(), circle, 'the player is back in the public circle');
+    inside.at(3228, 3370);
+    assert.equal(q.spawned.length, inside.spawned, 'staying in the circle summons nothing');
+    inside.at(3227, 3361);
+    inside.at(3227, 3369);
+    assert.equal(q.spawned.length, inside.spawned + 4, 'leaving and coming back summons him');
+    q.call('onPlayerLogout', { player: inside.p });
+  } finally {
+    core.World.processCycle = originalCycle;
+    AreaManager.areas.splice(AreaManager.areas.indexOf(circle), 1);
+  }
 });

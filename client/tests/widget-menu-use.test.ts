@@ -4,7 +4,11 @@ import { ClientState } from "../game/ClientState";
 import { widgetEntriesToSimple } from "../ui/menu/MenuBridge";
 import { MenuState } from "../ui/menu/MenuState";
 import { chooseDefaultMenuEntry } from "../ui/menu/MenuEngine";
-import { deriveMenuEntriesForWidget } from "../widgets/menu/utils";
+import { deriveMenuEntriesForWidget, setMenuObjTypeLookup } from "../widgets/menu/utils";
+import { InputManager } from "../game/InputManager";
+import { registerClientOps } from "../rs/cs2/handlers/ClientOps";
+import type { HandlerMap } from "../rs/cs2/handlers/HandlerTypes";
+import { Opcodes } from "../rs/cs2/Opcodes";
 import { buildWidgetActionPayload } from "../game/widgets/widgetActionPayload";
 import { createPrimaryWidgetActionResolver } from "../game/widgets/input/widgetPrimaryAction";
 
@@ -138,7 +142,7 @@ for (const widget of [
     }
     const manager = {getWidgetFlags:allOpsVisible,getWidgetOpMask:()=>0,getWidgetByUid:noWidgetLookup};
     const resolvePrimary = createPrimaryWidgetActionResolver({
-        getSpellSelection:()=>({getWidgetTargetMask:()=>0}),getSettings:()=>({shiftClickEnabled:false}),
+        getSpellSelection:()=>({getWidgetTargetMask:()=>0}),
     } as any,{isShiftDown:()=>false} as any,manager as any,{} as any);
     const primary = resolvePrimary(widget);
     assert.equal(primary.option,'Inspect','the actual primary input owner must not replace Inspect with Use');
@@ -181,3 +185,65 @@ console.log('native widget Inspect operation and separate Examine paths passed')
     ]);
 }
 console.log('native Inspect submenu dispatch passed');
+
+// Shift-click drop (#1826): the CS2 setting decides, and with Shift held the item's shift-click
+// op is the top entry, so the mouseover text, the right-click menu and the left click agree.
+{
+    const handlers: HandlerMap = new Map();
+    registerClientOps(handlers);
+    const setShiftClickDrop = (enabled: number) =>
+        handlers.get(Opcodes.SETSHIFTCLICKDROP)!({ intStack: [enabled], intStackSize: 1 } as any, 0 as any);
+    // ObjType.getShiftClickIndex: Drop (op5) by default, -1 for items that opt out.
+    const shiftIndex: Record<number, number> = { 385: 4, 4151: -1 };
+    setMenuObjTypeLookup((itemId) => ({ getShiftClickIndex: () => shiftIndex[itemId] ?? -1 }));
+    const inv = (itemId: number, name: string, actions: (string | null)[]) =>
+        ({ uid: 149 << 16, parentUid: 149 << 16, fileId: -1, childIndex: 3, itemId, name, actions, targetVerb: "Use" });
+    const shark = inv(385, "Shark", [null, "Eat", null, null, null, null, "Drop"]);
+    const whip = inv(4151, "Abyssal whip", [null, null, "Wield", null, null, null, "Drop"]);
+    const options = (w: any) => deriveMenuEntriesForWidget(w, false, allOpsVisible, noWidgetLookup).map((e) => e.option);
+    const manager = { getWidgetFlags: allOpsVisible, getWidgetOpMask: () => 0, getWidgetByUid: noWidgetLookup };
+    const primary = createPrimaryWidgetActionResolver({ getSpellSelection: () => ({ getWidgetTargetMask: () => 0 }) } as any,
+        {} as any, manager as any, {} as any);
+
+    const input = new InputManager();
+    let shiftChanges = 0;
+    input.onShiftChanged = () => shiftChanges++;
+    // A key handler (chat, a plugin) consuming Shift must not hide it from the menus.
+    input.addKeyHandler({ onKeyDown: () => true });
+    const key = (keyCode: number, shiftKey: boolean) =>
+        ({ keyCode, shiftKey, repeat: false, key: "Shift", code: "ShiftLeft", preventDefault() {} }) as any;
+
+    setShiftClickDrop(1);
+    assert.deepEqual(options(shark), ["Eat", "Use", "Drop", "Cancel"], "Shift up: the normal order");
+    input.onKeyDown(key(16, true));
+    assert.equal(ClientState.isShiftPressed(), true, "consumed Shift keydown still records keybind 81");
+    assert.equal(shiftChanges, 1, "Shift going down asks for the inventory to be redrawn");
+    assert.deepEqual(options(shark), ["Drop", "Eat", "Use", "Cancel"], "Shift held: Drop is the top entry");
+    assert.deepEqual([primary(shark).option, primary(shark).opIndex], ["Drop", 7], "and the left click");
+    assert.deepEqual(options(whip), ["Wield", "Use", "Drop", "Cancel"], "an item with no shift-click op keeps its order");
+    const notInventory = { ...shark, uid: 15 << 16, parentUid: 15 << 16 };
+    assert.equal(options(notInventory)[0], "Eat", "shift-click drop is the inventory's only");
+    ClientState.selectedItemId = 1511;
+    ClientState.isItemSelected = 1;
+    assert.equal(options(shark)[0], "Eat", "not while an item is selected");
+    ClientState.clearItemSelection();
+    setShiftClickDrop(0);
+    assert.deepEqual(options(shark), ["Eat", "Use", "Drop", "Cancel"], "setting off: Shift changes nothing");
+    assert.equal(primary(shark).option, "Eat");
+    setShiftClickDrop(1);
+    (input as any).onKeyUp(key(16, false));
+    assert.equal(ClientState.isShiftPressed(), false);
+    assert.equal(shiftChanges, 2);
+    assert.equal(options(shark)[0], "Eat");
+    // Shift released outside the window: the next mouse event's modifiers resync it.
+    input.onKeyDown(key(16, true));
+    (input as any).element = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 10, height: 10 }), width: 10, height: 10 };
+    (globalThis as any).document ??= { pointerLockElement: null };
+    (input as any).onMouseMove({ shiftKey: false, clientX: 1, clientY: 1 });
+    assert.equal(ClientState.isShiftPressed(), false, "mouse events keep keybind 81 in sync");
+    assert.equal(input.isShiftDown(), false);
+    assert.equal(shiftChanges, 4);
+    setMenuObjTypeLookup(undefined);
+    setShiftClickDrop(0);
+}
+console.log("inventory shift-click drop passed");

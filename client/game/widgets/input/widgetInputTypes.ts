@@ -54,7 +54,6 @@ export type WidgetInputControllerDeps = {
     getPlayerDesign: () => PlayerDesignController;
     getObjTypeLoader: () => ObjTypeLoader | undefined;
     getInventory: () => Inventory;
-    getSettings: () => { shiftClickEnabled: boolean };
     getMinimapZoomEnabled: () => boolean;
     getMenuOpen: () => boolean;
     getMenuJustClosed: () => boolean;

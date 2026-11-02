@@ -9,6 +9,7 @@
     "34": { "name": "Show chat effects", "varp": 171 },
     "35": { "name": "Split friends private chat", "varp": 287, "script": 83 },
     "37": { "name": "Enable profanity filter", "varp": 1074 },
+    "51": { "name": "Shift click to drop items", "varbit": 11556, "default": 1 },
     "119": { "name": "Chat timestamps", "varbit": 12384, "script": 4586 },
     "54": { "name": "Modern Layout - Side panel can be closed by the hotkeys", "varbit": 4611 },
     "55": { "name": "Player Attack options", "varp": 1107 },

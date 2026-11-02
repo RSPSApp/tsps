@@ -577,3 +577,23 @@ test('the volume sliders get the transmit-trigger event at login, so the client 
   const sliders = flags.filter(([group]) => group === 116).map(([, component, from, to, value]) => [component, from, to, value]);
   assert.deepEqual(sliders.sort((a, b) => a[0] - b[0]), [95, 109, 123, 137].map((component) => [component, -1, -1, 1 << 23]));
 });
+
+test('"Shift click to drop items" (setting 51) starts on and is a plain toggle', () => {
+  assert.equal(CacheDefinitions.getVarbitId('desktop_shiftclickdrop_enabled'), 11556);
+  const { player, click, logins } = allSettings('search');
+  const restore = logins.find((login) => login.name === 'restoreSettings');
+  restore({ player });
+  assert.ok(player.sent.includes('varbit 11556=1'), 'a fresh account has shift-click drop on');
+  const ids = [];
+  for (const [, categoryId] of [...CacheDefinitions.getEnumValues(422)].sort(([a], [b]) => a - b)) {
+    const category = CacheDefinitions.getStructParams(Number(categoryId));
+    for (const [, structId] of [...CacheDefinitions.getEnumValues(Number(category.get(745)))].sort(([a], [b]) => a - b))
+      ids.push(CacheDefinitions.getStructParams(Number(structId)).get(1077));
+  }
+  const row = ids.indexOf(51);
+  assert.ok(row >= 0, 'the setting is in the search results');
+  assert.equal(click(CLICKZONE, row).at(-1), 'varbit 11556=0', 'the first click turns it off');
+  player.sent.length = 0;
+  restore({ player });
+  assert.ok(player.sent.includes('varbit 11556=0') && !player.sent.includes('varbit 11556=1'), 'login keeps it off');
+});

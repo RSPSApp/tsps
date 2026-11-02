@@ -1,5 +1,6 @@
 import { ClientState } from "../../game/ClientState";
 import { MenuTargetType } from "../../rs/MenuEntry";
+import { getShiftClickActionIndex } from "../../ui/menu/MenuEngine";
 import { applyMenuTransform } from "../../ui/menu/menuTransforms";
 import { isDropTarget, isPauseButton, shouldShowMenuOption } from "../WidgetFlags";
 
@@ -255,12 +256,44 @@ export function isPauseButtonWidget(
 // 1. The transmit flag for that action is set (bits 1-10), OR
 // 2. The widget has an onOp handler
 const INVENTORY_GROUP_ID = 149;
+/** Cache script 7779 (enum 4303) puts inventory ops 1-5 in widget ops 2, 3, 4, 6 and 7. */
+const INVENTORY_OBJ_OP_WIDGET_OPS = [2, 3, 4, 6, 7];
+
+let lookupObjType: ((itemId: number) => any) | undefined;
+
+/** Installed once by the client: item definitions, for each item's shift-click op. */
+export function setMenuObjTypeLookup(next: ((itemId: number) => any) | undefined): void {
+    lookupObjType = next;
+}
+
+/**
+ * OSRS shift-click drop: with the setting on and Shift held, an inventory item's shift-click
+ * op (ObjType.getShiftClickIndex, Drop unless the item names another or none) is its top entry,
+ * so the mouseover text, the right-click menu and the left click all give it. Not while an item
+ * or spell is selected.
+ */
+function applyShiftClickDrop<T extends { option: string; opIndex?: number }>(itemId: number, entries: T[]): T[] {
+    if (!ClientState.shiftClickDrop || !ClientState.isShiftPressed()) return entries;
+    if (ClientState.isSpellSelected || ClientState.isItemSelected === 1) return entries;
+    let obj: any;
+    try {
+        obj = lookupObjType?.(itemId);
+    } catch {
+        return entries;
+    }
+    const index = getShiftClickActionIndex(obj);
+    if (index < 0) return entries;
+    const widgetOp = INVENTORY_OBJ_OP_WIDGET_OPS[index];
+    const at = entries.findIndex((e) => e.opIndex === widgetOp);
+    if (at <= 0) return entries;
+    return [entries[at], ...entries.slice(0, at), ...entries.slice(at + 1)];
+}
 
 /**
  * An inventory item's menu as the client plugins order it (e.g. a swapped left-click). `menu`
  * is true for the opened right-click menu, which plugins may extend.
  */
-export function transformWidgetMenuEntries<T extends { option: string }>(
+export function transformWidgetMenuEntries<T extends { option: string; opIndex?: number }>(
     w: any,
     entries: T[],
     menu: boolean = false,
@@ -271,6 +304,7 @@ export function transformWidgetMenuEntries<T extends { option: string }>(
         return applyMenuTransform(entries as any, { surface: "widget", menu, widgetId: uid,
             childIndex: w?.childIndex ?? -1, itemId }) as unknown as T[];
     }
+    entries = applyShiftClickDrop(itemId, entries);
     return applyMenuTransform(entries as any, {
         surface: "inventory",
         menu,

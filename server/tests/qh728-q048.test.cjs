@@ -43,10 +43,11 @@ runtime.startTranscript = (api, player, npcId, page, variant) => {
 };
 
 function setup() {
+  const tasks = [], spawned = [];
   const core = {
     ...PluginManager.getCoreApi(),
     CountdownTask: class { constructor(player, ticks, run) { Object.assign(this, { player, ticks, run }); } },
-    TaskManager: { submit() {}, cancelTasks() {} },
+    TaskManager: { submit(task) { tasks.push(task); }, cancelTasks() {} },
     MultiChatboxPrompt: { getPending: () => null },
   };
   const hooks = { variants: [], conditions: [], objects: [], itemOnNpc: [], itemOnItem: [], npcs: [], login: [] };
@@ -63,6 +64,8 @@ function setup() {
     onPlayerLogin(fn) { hooks.login.push(fn); },
     onCustomEvent(name, fn) { const list = events.get(name) ?? []; list.push(fn); events.set(name, list); },
     emitCustomEvent(name, event) { for (const fn of events.get(name) ?? []) fn(event); },
+    spawnNpc(definition) { const npc = { definition, removed: false }; spawned.push(npc); return npc; },
+    removeNpc(npc) { npc.removed = true; },
   }, { get(target, key) { return target[key] ?? (() => {}); } });
 
   require('../plugins/quests/quests/GertrudesCat.Quest')(api);
@@ -107,7 +110,7 @@ function setup() {
 
   const fire = (name, payload = {}) => api.emitCustomEvent(name, { player, ...payload });
   return {
-    core, quest, player, attrs, configs, varbits, inventory, messages, hooks,
+    core, quest, player, attrs, configs, varbits, inventory, messages, hooks, tasks, spawned,
     fire,
     xp, jingles: () => jingles,
     variant(npcId) {
@@ -247,7 +250,10 @@ test('mandatory route: pay, milk, seasoned sardine, all Lumber Yard crates, kitt
   h.quest.setStage(h.player, 4);
 
   h.npc(N.CRATE, crateSpawns[0].x, crateSpawns[0].y);
+  transcripts.length = 0;
   h.itemOnNpc(I.FLUFFS_KITTEN, N.GERTRUDES_CAT_2);
+  assert.deepEqual(transcripts.at(-1), { npcId: N.GERTRUDES_CAT_2, page: "Gertrude's Cat",
+    variant: 'making-seasoned-sardines-returning-the-kitten-to-fluffs' }, 'the Wiki scene plays, not a made-up message');
   assert.equal(h.quest.getStage(h.player), 5);
   assert.equal(h.configs.get(180), 5);
   assert.equal(h.inventory.getAmount(I.FLUFFS_KITTEN), 0);
@@ -519,3 +525,21 @@ test('real NpcDialogues resolves Wilough on the Gertrude page at stage 2 and kee
   assert.ok(talk(realPlayer(5), N.WILOUGH).some((text) => text.includes('Hello youngster!')));
 });
 
+
+
+test('the returned kitten goes even when the scene is cut short', () => {
+  useActualTranscripts = false;
+  const h = setup();
+  const I = h.core.ItemIdentifiers, N = h.core.NpcIdentifiers;
+  h.quest.setStage(h.player, 4);
+  h.inventory.adds(I.FLUFFS_KITTEN, 1);
+  const fluffs = { getId: () => N.GERTRUDES_CAT_2, getLocation: () => new h.core.Location(3306, 3513, 1) };
+  for (const fn of h.hooks.itemOnNpc) fn({ player: h.player, npcId: N.GERTRUDES_CAT_2, itemId: I.FLUFFS_KITTEN, target: fluffs, handled: false });
+  const kitten = h.spawned.at(-1);
+  assert.ok(kitten && !kitten.removed, 'the kitten joins Fluffs');
+  // No closing step: only the expiry task can remove it.
+  const expiry = h.tasks.find((task) => task.constructor.name === 'KittenExpiryTask');
+  assert.ok(expiry, 'an expiry is scheduled');
+  expiry.execute();
+  assert.equal(kitten.removed, true);
+});

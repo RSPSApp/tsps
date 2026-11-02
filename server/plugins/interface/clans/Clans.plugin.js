@@ -286,6 +286,13 @@ function wearsVexillum(player) {
   return player.getEquipment().getItems?.().some((item) => Screens.isVexillum(item?.getId?.())) ?? false;
 }
 
+/** The answer can come long after asking: a ban, a full clan or a change of rank ends the invitation. */
+function invitationStands(player, target, clan) {
+  const inviter = Core.memberOf(clan, Core.accountOf(player));
+  return !!inviter && inviter.rank >= Core.permissionRank(clan, Core.SETTING_RECRUIT)
+    && !Core.clanOf(target) && !Core.isBanned(clan, target.getUsername()) && clan.members.length < Core.MAX_MEMBERS;
+}
+
 /** Live: at the hub, or anywhere with a vexillum on for a clan that is recruiting (Wiki: Clan). */
 function recruitClanMember(player, target) {
   const clan = Core.clanOf(player);
@@ -325,8 +332,10 @@ function recruitClanMember(player, target) {
         target.getPacketSender().sendInterfaceRemoval();
         if (Number(option) !== 1) {
           player.sendMessage(`${target.getUsername()} has declined your invitation.`);
-        } else if (!Core.clanOf(target) && clan.members.length < Core.MAX_MEMBERS && Core.clanOf(player) === clan) {
+        } else if (invitationStands(player, target, clan)) {
           Core.addMember(clan, target);
+        } else {
+          target.sendMessage("That invitation is no longer open.");
         }
       },
     }, "Yes.", "No.").setTitle(`Join ${clan.name}?`),

@@ -303,6 +303,7 @@ function askApplyMinimum(player, clan, key, title) {
   player.setEnteredAmountAction({
     acceptsZero: true,
     execute(value) {
+      if (!canRecruit(player, clan)) return;
       clan[key] = value;
       Store.save();
     },

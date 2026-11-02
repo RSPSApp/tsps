@@ -187,6 +187,13 @@ function fitsChest(item) {
   return item.isTradeable() && item.getMeta() == null;
 }
 
+/** The rank can rise while the screen is up. Taking back and closing stay open, so nothing is stuck. */
+function stillDepositing(player, { clan }) {
+  if (allowed(player, clan, DEPOSIT_SETTING)) return true;
+  player.sendMessage("You are not a high enough rank to deposit in this chest.");
+  return false;
+}
+
 function offerableAmount(inventory, id) {
   return inventory.getItems().reduce((sum, item) => (item?.getId() === id && fitsChest(item) ? sum + item.getAmount() : sum), 0);
 }
@@ -219,7 +226,7 @@ function offer(player, slot, op) {
   }
   const held = offerableAmount(inventory, id);
   amountFor(player, op, held, (amount) => {
-    if (offerOf(player) !== state) return;
+    if (offerOf(player) !== state || !stillDepositing(player, state)) return;
     const stack = state.items.find((entry) => entry.id === id);
     const wanted = Math.min(amount, offerableAmount(inventory, id), MAX_STACK - (stack?.amount ?? 0));
     if (wanted <= 0 || (!stack && state.items.length >= OFFER_SIZE)) return;
@@ -253,7 +260,7 @@ function giveBack(player, id, amount) {
 
 function confirm(player) {
   const state = offerOf(player);
-  if (!state || state.items.length === 0) return;
+  if (!state || state.items.length === 0 || !stillDepositing(player, state)) return;
   const { hall } = state;
   const stacks = new Set(hall.chest.map((entry) => entry.id));
   for (const { id } of state.items) stacks.add(id);

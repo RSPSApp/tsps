@@ -1344,6 +1344,115 @@ test('guest rules changed during the join delay apply too', () => {
   assert.match(self.messages.at(-1), /does not allow guests/);
 });
 
+// ---------------------------------------------------------------- answers that arrive after a change
+
+/** Member at rank 100, with what they're about to answer allowed at 100 and raised to 125 before they do. */
+function administrator() {
+  const three = clanOfThree();
+  three.clan.members[1].rank = 100;
+  return three;
+}
+
+const raise = (clan, setting) => (clan.permissions = { ...clan.permissions, [setting]: 125 });
+const clickSlot = (self, groupId, childId, slot) => { for (const handler of hooks.clicks) handler({ player: self, groupId, childId, slot }); };
+
+test('a rank popup answered after Assign member ranks rises changes nothing', () => {
+  const { member, clan } = administrator();
+  clan.permissions = { ...clan.permissions, 14: 100 };
+  clickSlot(member, 693, 11, 2);
+  member.amountAction.execute(91);
+  assert.equal(clan.members[2].rank, 90, 'allowed, it applies');
+  clickSlot(member, 693, 11, 2);
+  raise(clan, 14);
+  member.amountAction.execute(51);
+  assert.equal(clan.members[2].rank, 90, 'not once raised');
+  assert.equal(JSON.parse(fs.readFileSync(process.env.TSPS_CLANS_FILE, 'utf8')).clans[0].members[2].rank, 90, 'nor saved');
+});
+
+test('an expel from that popup still goes by the expel permission', () => {
+  const { member, clan } = administrator();
+  clan.permissions = { ...clan.permissions, 14: 100, 15: 100 };
+  clickSlot(member, 693, 11, 2);
+  raise(clan, 15);
+  member.amountAction.execute(129);
+  assert.equal(clan.members.length, 3);
+  clickSlot(member, 693, 11, 2);
+  clan.permissions = { ...clan.permissions, 15: 100, 14: 125 };
+  member.amountAction.execute(129);
+  assert.equal(clan.members.length, 2, 'Assign member ranks does not govern it');
+});
+
+test('permission rows answered after Permission access rises change nothing', () => {
+  const { member, clan } = administrator();
+  const PERMISSIONS = require('../plugins/interface/clans/data/permissions.json');
+  clan.permissions = { ...clan.permissions, 12: 100 };
+  const rankRow = PERMISSIONS.find((row) => row.minRank === 100 && row.setting !== null && row.setting !== 12 && !row.special);
+  clickSlot(member, 706, 12, PERMISSIONS.indexOf(rankRow));
+  raise(clan, 12);
+  member.amountAction.execute(101);
+  assert.equal(CoreClans().permissionRank(clan, rankRow.setting), 100, 'a rank row');
+  clan.permissions = { ...clan.permissions, 12: 100 };
+  const valueRow = PERMISSIONS.find((row) => row.struct === 3109);
+  const before = CoreClans().settingValue(clan, 31);
+  clickSlot(member, 706, 12, PERMISSIONS.indexOf(valueRow));
+  raise(clan, 12);
+  member.amountAction.execute(5);
+  assert.equal(CoreClans().settingValue(clan, 31), before, 'a value row');
+});
+
+test('a rename answered after losing ownership changes nothing', () => {
+  const { owner, clan } = clanOfThree();
+  clickGroup(owner, 690, 11);
+  clan.members[0].rank = 125;
+  owner.syntaxAction.execute('Renamed');
+  assert.equal(clan.name, 'Blur');
+});
+
+test('interests and the outfit answered after their permission rises change nothing', () => {
+  const { member, clan } = administrator();
+  clan.permissions = { ...clan.permissions, 13: 100, 25: 100 };
+  clickGroup(member, 690, 14);
+  const interests = CoreClans().settingValue(clan, 7);
+  clickSlot(member, 691, 7, 5);
+  raise(clan, 13);
+  member.amountAction.execute(1);
+  assert.equal(CoreClans().settingValue(clan, 7), interests);
+  clickGroup(member, 690, 5);
+  const outfit = CoreClans().settingValue(clan, 11);
+  raise(clan, 25);
+  member.amountAction.execute(outfit + 1);
+  assert.equal(CoreClans().settingValue(clan, 11), outfit);
+});
+
+test('an application minimum answered after Recruitment rises changes nothing', () => {
+  const { member, clan } = administrator();
+  clan.permissions = { ...clan.permissions, 17: 100 };
+  pause(member, 699, 1, 5);
+  raise(clan, 17);
+  member.amountAction.execute(50);
+  assert.equal(clan.applyMinCombat ?? 0, 0);
+});
+
+test('a Recruit invitation accepted after a ban or the inviter\'s demotion is no longer open', () => {
+  const { owner, member, clan } = administrator();
+  clan.permissions = { ...clan.permissions, 17: 100 };
+  const target = player('Target');
+  hooks.playerOption({ player: member, target, option: 5 });
+  clan.banned = ['Target'];
+  answer(target, 1);
+  assert.equal(CoreClans().clanOf(target), undefined, 'banned');
+  assert.equal(target.messages.at(-1), 'That invitation is no longer open.');
+  clan.banned = [];
+  hooks.playerOption({ player: member, target, option: 5 });
+  raise(clan, 17);
+  answer(target, 1);
+  assert.equal(CoreClans().clanOf(target), undefined, 'demoted');
+  clan.permissions = { ...clan.permissions, 17: 100 };
+  hooks.playerOption({ player: owner, target, option: 5 });
+  answer(target, 1);
+  assert.equal(CoreClans().clanOf(target), clan, 'otherwise still joins');
+});
+
 test('a deleted clan leaves its viewers with nothing', () => {
   const { clan } = clanOfThree();
   const self = player('Guest');
@@ -2246,6 +2355,24 @@ test("a preset's coins don't go in the coffer", () => {
   clickGroup(owner, 697, 10);
   assert.equal(clan.coffer ?? 0, 0);
   assert.equal(owner.bag[0].getAmount(), 1000);
+});
+
+test('the chest stops taking offers when its rank rises while open, and the offer still comes back', () => {
+  const { member, clan } = clanOfThree();
+  inHall(member);
+  member.bag.push(carried(995, 100), carried(4151, 1));
+  clan.permissions = { ...clan.permissions, 94: 0 };
+  openChest(member);
+  op(member, 266, 0, 0, 5);
+  assert.equal(member.invs[92][0].amount, 100);
+  clan.permissions = { ...clan.permissions, 94: 125 };
+  op(member, 266, 0, 0, 5);
+  assert.match(member.messages.at(-1), /high enough rank/);
+  assert.equal(member.invs[92][1], null, 'no more offered');
+  op(member, 783, 17);
+  assert.equal(member.area.chest.length, 0, 'nor confirmed');
+  hooks.custom.get('interface:closed')({ player: member, interfaceId: 783 });
+  assert.equal(member.bag.find((item) => item.getId() === 995).getAmount(), 100);
 });
 
 test('the lever costs 1,000 and needs its rank; balloons drop a stack and leave after two minutes', () => {

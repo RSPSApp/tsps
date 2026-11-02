@@ -134,6 +134,7 @@ function openInterests(player, clan) {
   setEditing(player, current);
   const sender = player.getPacketSender();
   popupAnswer(player, () => {
+    if (!allowed(player, clan, PROFILE_SETTING)) return;
     Core.setSettingValue(clan, INTERESTS_SETTING, interestEdits.get(player) ?? current);
     Core.refreshClan(clan);
     openSettings(player);
@@ -171,6 +172,7 @@ function openOutfit(player, clan) {
   const sender = player.getPacketSender();
   // script4432 answers with the edited value itself.
   popupAnswer(player, (value) => {
+    if (!allowed(player, clan, ICONS_SETTING)) return;
     Core.setSettingValue(clan, OUTFIT_SETTING, value);
     for (const member of clan.members) {
       const online = Core.onlinePlayer(member.account);

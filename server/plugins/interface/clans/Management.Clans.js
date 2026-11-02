@@ -154,6 +154,7 @@ function chooseMemberRank(player, clan, target, rank) {
     player.sendMessage(`You have expelled ${target.name} from the clan.`);
     return;
   }
+  if (own.rank < Core.permissionRank(clan, Core.SETTING_ASSIGN_RANKS)) return;
   if (!ASSIGNABLE_RANKS.includes(rank) || rank > highestAssignable(own.rank)) return;
   Core.setMemberRank(clan, target, rank);
 }
@@ -189,6 +190,11 @@ function rowFloor(clan, row) {
   return Math.max(atLeast, row.minRank ?? -1);
 }
 
+function canEditPermissions(player, clan) {
+  const own = memberFor(clan, player);
+  return !!own && own.rank >= Core.permissionRank(clan, Core.SETTING_PERMISSIONS);
+}
+
 /** The popup's answer comes from the client, so it's checked here as well as offered there. */
 function askRowRank(player, clan, row, title, popupUid, afterSet = () => {}) {
   const own = memberFor(clan, player);
@@ -200,7 +206,7 @@ function askRowRank(player, clan, row, title, popupUid, afterSet = () => {}) {
   }
   showRankPopup(player, title, current, rowFloor(clan, row), own.rank, false, popupUid, (rank) => {
     const now = memberFor(clan, player);
-    if (!now || !PERMISSION_RANKS.has(rank) || rank < rowFloor(clan, row) || rank > now.rank) return;
+    if (!canEditPermissions(player, clan) || !PERMISSION_RANKS.has(rank) || rank < rowFloor(clan, row) || rank > now.rank) return;
     Core.setRowRank(clan, row, rank);
     afterSet();
   });
@@ -210,7 +216,7 @@ function clickPermission(player, clan, index) {
   const row = PERMISSIONS[index];
   const own = memberFor(clan, player);
   if (!row || !own) return;
-  if (own.rank < Core.permissionRank(clan, Core.SETTING_PERMISSIONS)) {
+  if (!canEditPermissions(player, clan)) {
     player.sendMessage("You are not a high enough rank to change the clan's permissions.");
     return;
   }
@@ -226,8 +232,13 @@ const GUESTS_LISTEN_STRUCT = 2957;
 const GUEST_RULE_STRUCTS = { 2958: "combat", 2959: "total", 2960: "qp", 2961: "iron" };
 const VALUE_STRUCTS = { 3109: 31, 854: 101, 4247: 65, 4678: 98, 4239: 66, 4240: 67, 4241: 68, 4238: 69, 4571: 111, 4570: 110, 4572: 112 };
 
-function askRowValue(player, row, onValue) {
-  player.setEnteredAmountAction({ acceptsZero: true, execute: onValue });
+function askRowValue(player, clan, row, onValue) {
+  player.setEnteredAmountAction({
+    acceptsZero: true,
+    execute(value) {
+      if (canEditPermissions(player, clan)) onValue(value);
+    },
+  });
   player.getPacketSender().sendEnterAmountPrompt(`${row.label}:`);
 }
 
@@ -239,11 +250,11 @@ function clickSpecialRow(player, clan, row) {
   }
   const rule = GUEST_RULE_STRUCTS[row.struct];
   if (rule) {
-    askRowValue(player, row, (value) => Core.setGuestRules(clan, { ...Core.guestRules(clan), [rule]: value }));
+    askRowValue(player, clan, row, (value) => Core.setGuestRules(clan, { ...Core.guestRules(clan), [rule]: value }));
     return;
   }
   const setting = VALUE_STRUCTS[row.struct];
-  if (setting) askRowValue(player, row, (value) => Core.setSettingValue(clan, setting, value));
+  if (setting) askRowValue(player, clan, row, (value) => Core.setSettingValue(clan, setting, value));
 }
 
 function clickPermissions(player, clan, event) {

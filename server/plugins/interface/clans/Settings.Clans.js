@@ -199,6 +199,7 @@ function askRename(player, clan) {
 }
 
 function rename(player, clan, name) {
+  if (!isOwner(player, clan)) return;
   if (!name || name.length > MAX_NAME_LENGTH || !/^[a-z0-9 _-]+$/i.test(name)) {
     player.sendMessage(`Clan names are up to ${MAX_NAME_LENGTH} letters, numbers and spaces.`);
     return;

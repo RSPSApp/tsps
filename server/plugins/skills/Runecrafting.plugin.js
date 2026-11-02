@@ -612,7 +612,13 @@ function teleportToEssenceMine(player, wizard) {
   const at = player.getLocation();
   player.setAttribute(ESSENCE_MINE_RETURN_ATTRIBUTE, [at.getX(), at.getY(), at.getZ()]);
   player.getPacketSender().sendInterfaceRemoval();
-  travel(player, ESSENCE_TELEPORT_TICKS, RUNE_ESSENCE_MINE.clone());
+  travel(player, ESSENCE_TELEPORT_TICKS, RUNE_ESSENCE_MINE.clone(), {
+    [ESSENCE_TELEPORT_TICKS]: () => {
+      if (wizard?.getCurrentDefinition?.(player)?.getName() === "Archmage Sedridor") {
+        pluginApi.emitCustomEvent("diary:task", { player, diary: "lumbridge", task: "have-sedridor-teleport-you-to-the-essence-mine" });
+      }
+    },
+  });
   if (wizard) {
     wizard.forceChat?.(ESSENCE_TELEPORT_LINE);
     wizard.setPositionToFace?.(at);

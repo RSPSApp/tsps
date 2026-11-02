@@ -178,23 +178,52 @@ function amountFor(player, op, held, onAmount) {
   }
 }
 
+/**
+ * The chest holds only an id and an amount, so an item with state is refused rather than stripped of
+ * it: a preset's untradeable, unbankable and preset flags (Item.isTradeable checks the instance), or
+ * a degrading item's charges.
+ */
+function fitsChest(item) {
+  return item.isTradeable() && item.getMeta() == null;
+}
+
+function offerableAmount(inventory, id) {
+  return inventory.getItems().reduce((sum, item) => (item?.getId() === id && fitsChest(item) ? sum + item.getAmount() : sum), 0);
+}
+
+/** By slot, as inventory.delete(id) would take the first of that id, which could be a preset. */
+function removeOffered(inventory, id, amount, clickedSlot) {
+  const fits = (item) => item?.getId() === id && fitsChest(item);
+  let left = amount;
+  while (left > 0) {
+    const items = inventory.getItems();
+    const slot = fits(items[clickedSlot]) ? clickedSlot : items.findIndex(fits);
+    if (slot < 0) break;
+    const taken = Math.min(left, items[slot].getAmount());
+    inventory.deletedItem(new core.Item(id, taken), slot, false);
+    left -= taken;
+  }
+  inventory.refreshItems();
+  return amount - left;
+}
+
 function offer(player, slot, op) {
   const state = offerOf(player);
   const inventory = player.getInventory();
   const item = inventory.getItems()[slot];
   if (!state || !item || item.getId() < 0) return;
   const id = item.getId();
-  if (core.ItemDefinition.forId(id)?.isTradeable?.() === false) {
+  if (!fitsChest(item)) {
     player.sendMessage("That item can't go in the chest.");
     return;
   }
-  const held = inventory.getAmount(id);
+  const held = offerableAmount(inventory, id);
   amountFor(player, op, held, (amount) => {
     if (offerOf(player) !== state) return;
     const stack = state.items.find((entry) => entry.id === id);
-    const moved = Math.min(amount, inventory.getAmount(id), MAX_STACK - (stack?.amount ?? 0));
-    if (moved <= 0 || (!stack && state.items.length >= OFFER_SIZE)) return;
-    inventory.delete(id, moved);
+    const wanted = Math.min(amount, offerableAmount(inventory, id), MAX_STACK - (stack?.amount ?? 0));
+    if (wanted <= 0 || (!stack && state.items.length >= OFFER_SIZE)) return;
+    const moved = removeOffered(inventory, id, wanted, slot);
     if (stack) stack.amount += moved;
     else state.items.push({ id, amount: moved });
     saveOffer(player, state.items);

@@ -214,7 +214,7 @@ function wearColours(player, clan) {
       const id = item?.getId?.();
       const wanted = cloaks().includes(id) ? cloakFor(clan) : isVexillum(id) ? vexillumFor(clan) : id;
       if (wanted !== id) {
-        container.setItem(slot, new core.Item(wanted, item.getAmount()));
+        container.setItem(slot, new core.Item(wanted, item.getAmount(), item.getMeta()));
         changed = true;
       }
     });

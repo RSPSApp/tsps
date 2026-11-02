@@ -26,8 +26,8 @@ let hooks;
 let online;
 let nextIndex = 1;
 
-function carried(id, amount) {
-  return { amount, getId: () => id, getAmount() { return this.amount; } };
+function carried(id, amount, meta = null) {
+  return { amount, getId: () => id, getAmount() { return this.amount; }, getMeta: () => meta, isTradeable: () => id !== UNTRADEABLE && meta?.untradeable !== true };
 }
 
 function player(name) {
@@ -58,6 +58,11 @@ function player(name) {
         const item = self.bag.find((entry) => entry.getId() === id);
         if (item) item.amount += amount;
         else self.bag.push(carried(id, amount));
+      },
+      deletedItem(item, slot) {
+        const held = self.bag[slot];
+        held.amount -= item.amount;
+        if (held.amount <= 0) self.bag.splice(slot, 1);
       },
       forceAdd(owner, item) {
         this.adds(item.id, item.amount);
@@ -1504,6 +1509,8 @@ function pocket(self, coins) {
   const held = { coins };
   self.getInventory = () => ({
     getAmount: () => held.coins,
+    getItems: () => (held.coins > 0 ? [carried(995, held.coins)] : []),
+    deletedItem: (item) => (held.coins -= item.amount),
     getFreeSlots: () => 28,
     delete: (id, amount) => (held.coins -= amount),
     adds: (id, amount) => (held.coins += amount),
@@ -2156,6 +2163,34 @@ test('the op on the offer uses the screen\'s chosen quantity, and X prompts', ()
   op(owner, 266, 0, 0, 4);
   owner.amountAction.execute(20);
   assert.equal(owner.invs[92][0].amount, 120);
+});
+
+test('the chest refuses an item with metadata, and takes only plain ones of the same id', () => {
+  const { owner } = clanOfThree();
+  inHall(owner);
+  const preset = { untradeable: true, unbankable: true, preset: true };
+  owner.bag.push(carried(4151, 1, preset), carried(4151, 1));
+  openChest(owner);
+  op(owner, 266, 0, 0, 2);
+  assert.match(owner.messages.at(-1), /can't go in the chest/);
+  assert.equal(owner.invs[92][0], null);
+  op(owner, 266, 0, 1, 5);
+  assert.deepEqual(owner.invs[92][0], { id: 4151, amount: 1 }, 'all: the one that fits');
+  assert.equal(owner.bag.length, 1);
+  assert.equal(owner.bag[0].getMeta(), preset, 'the preset stayed');
+  owner.bag.push(carried(1319, 1, { charges: 5 }));
+  op(owner, 266, 0, 1, 2);
+  assert.match(owner.messages.at(-1), /can't go in the chest/, 'nor one with charges');
+});
+
+test("a preset's coins don't go in the coffer", () => {
+  const { owner, clan } = clanOfThree();
+  owner.bag.push(carried(995, 1000, { untradeable: true }));
+  inHall(owner);
+  hooks.objects['Clan Coffer'].Use({ player: owner });
+  clickGroup(owner, 697, 10);
+  assert.equal(clan.coffer ?? 0, 0);
+  assert.equal(owner.bag[0].getAmount(), 1000);
 });
 
 test('the lever costs 1,000 and needs its rank; balloons drop a stack and leave after two minutes', () => {

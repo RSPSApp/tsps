@@ -170,13 +170,15 @@ function deposit(player, clan, amount) {
     return;
   }
   const inventory = player.getInventory();
-  const carried = inventory.getAmount(core.ItemIdentifiers.COINS);
+  // Not a preset's coins: the coffer would hand them back as ordinary ones.
+  const slot = inventory.getItems().findIndex((item) => item?.getId() === core.ItemIdentifiers.COINS && item.isTradeable() && item.getMeta() == null);
+  const carried = slot < 0 ? 0 : inventory.getItems()[slot].getAmount();
   const moved = Math.min(amount, carried, MAX_COINS - coins(clan), MAX_TRANSACTION);
   if (moved <= 0) {
     player.sendMessage(carried <= 0 ? "You have no coins to deposit." : "The coffer can't hold any more.");
     return;
   }
-  inventory.delete(core.ItemIdentifiers.COINS, moved);
+  inventory.deletedItem(new core.Item(core.ItemIdentifiers.COINS, moved), slot, true);
   clan.coffer = coins(clan) + moved;
   sendCofferToAll(clan);
 }

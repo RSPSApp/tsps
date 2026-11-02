@@ -19,6 +19,7 @@ const CHEST = 46248;
 const OFFER_ATTRIBUTE = 'clans:chest-offer';
 const OP_ALL = 5;
 const COINS = 995;
+const WHIP = 4151;
 
 let core;
 let PlayerSave;
@@ -99,4 +100,32 @@ test('part of an offer taken back leaves only the rest in the save', () => {
   assert.deepEqual(PlayerSave.fromPlayer(player).attributes[OFFER_ATTRIBUTE], [{ id: COINS, amount: 99 }]);
   Contents.playerGone(player);
   assert.equal(player.getInventory().getAmount(COINS), 100);
+});
+
+test('a preset keeps its restrictions: the chest refuses it, and a plain one of the same id goes instead', () => {
+  const { Item } = require('../dist/game/model/Item');
+  const player = offering('presets', 100);
+  Contents.clickChest({ player, groupId: 783, childId: 17 });
+  const inventory = player.getInventory();
+  const whip = new Item(WHIP, 1);
+  whip.setMetaValue(Item.UNTRADEABLE_META, true);
+  whip.setMetaValue(Item.UNBANKABLE_META, true);
+  whip.setMetaValue(Item.PRESET_META, true);
+  inventory.setItem(0, whip);
+  inventory.setItem(1, new Item(WHIP, 1));
+
+  Contents.clickChest({ player, groupId: 266, childId: 0, slot: 0, action: OP_ALL });
+  assert.equal(inventory.getItems()[0].isTradeable(), false, 'still there, still restricted');
+  assert.equal(inventory.getAmount(WHIP), 2, 'and nothing moved');
+
+  Contents.clickChest({ player, groupId: 266, childId: 0, slot: 1, action: OP_ALL });
+  assert.equal(inventory.getItems()[0].getId(), WHIP, 'the preset stayed in its slot');
+  assert.equal(inventory.getItems()[0].getMetaValue(Item.PRESET_META), true);
+  assert.equal(inventory.getItems()[1].getId(), -1);
+  assert.deepEqual(PlayerSave.fromPlayer(player).attributes[OFFER_ATTRIBUTE], [{ id: WHIP, amount: 1 }]);
+
+  Contents.playerGone(player);
+  const restored = inventory.getItems().filter((item) => item.getId() === WHIP);
+  assert.equal(restored.filter((item) => item.isTradeable()).length, 1, 'the plain one back');
+  assert.equal(restored.filter((item) => item.getMetaValue(Item.UNBANKABLE_META) === true).length, 1, 'and the preset unchanged');
 });

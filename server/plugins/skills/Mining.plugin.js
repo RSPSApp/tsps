@@ -71,6 +71,30 @@ const PICKAXES = [
   { id: ItemIds.DRAGON_PICKAXE, key: "dragon", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(7139) },
   { id: ItemIds.CRYSTAL_PICKAXE, key: "crystal", requiredLevel: 71, attemptIntervalTicks: 3, fastRollChance: 1 / 4, animation: new Animation(8347) },
   { id: ItemIds.INFERNAL_PICKAXE, key: "infernal", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(4482) },
+  // Cosmetic and uncharged variants mine as their base tool; `key` and `animation` are each one's own cache
+  // sequences (human_mining_<key>_pickaxe*). `walls` names the wall swings where the cache orders the words differently.
+  { id: ItemIds.GILDED_PICKAXE, key: "gilded", requiredLevel: 41, attemptIntervalTicks: 3, animation: new Animation(8313) },
+  {
+    id: ItemIds.DRAGON_PICKAXE_3, key: "dragon_pretty", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(642),
+    walls: { wall: "human_mining_dragon_pickaxe_pretty_wall", sang: "sang_mining_wall_dragon_pickaxe_pretty" },
+  },
+  { id: ItemIds._3RD_AGE_PICKAXE, key: "3a", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(7283) },
+  { id: ItemIds.DRAGON_PICKAXE_OR_, key: "zalcano", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(8346) },
+  {
+    id: ItemIds.DRAGON_PICKAXE_OR__3, key: "trailblazer_no_infernal", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(8887),
+    walls: { wall: "human_mining_trailblazer_pickaxe_no_infernal_wall", sang: "sang_mining_wall_trailblazer_pickaxe_no_infernal" },
+  },
+  {
+    id: ItemIds.DRAGON_PICKAXE_OR__5, key: "trailblazer_reloaded_no_infernal", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(11833),
+    walls: { wall: "human_mining_trailblazer_reloaded_pickaxe_no_infernal_wall", sang: "sang_mining_wall_trailblazer_reloaded_pickaxe_no_infernal" },
+  },
+  { id: ItemIds.INFERNAL_PICKAXE_OR_, key: "trailblazer", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(11831) },
+  { id: ItemIds.INFERNAL_PICKAXE_OR__3, key: "trailblazer_reloaded", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(11832) },
+  // Out of charges, the infernal and crystal pickaxes mine like a dragon pickaxe.
+  { id: ItemIds.INFERNAL_PICKAXE_UNCHARGED_, key: "infernal", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(4482) },
+  { id: ItemIds.INFERNAL_PICKAXE_UNCHARGED__2, key: "trailblazer", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(11831) },
+  { id: ItemIds.INFERNAL_PICKAXE_UNCHARGED__4, key: "trailblazer_reloaded", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(11832) },
+  { id: ItemIds.CRYSTAL_PICKAXE_INACTIVE_, key: "crystal", requiredLevel: 61, attemptIntervalTicks: 3, fastRollChance: 1 / 6, animation: new Animation(8347) },
   // The league's Echo pickaxe (Wiki): a crystal pickaxe with no requirement that always rolls every 2 ticks; `rank` places it above the crystal one.
   { id: ItemIds.ECHO_PICKAXE, key: "crystal", requiredLevel: 1, rank: 72, attemptIntervalTicks: 2, animation: new Animation(8347) },
 ];
@@ -219,7 +243,7 @@ const swingAnimations = new Map();
 
 /** The pickaxe's swing at this rock: its own, or its wall swing at a wall rock (`swing`). */
 function swingAnimation(pickaxe, rock) {
-  const sequence = rock.swing && SWING_SEQUENCES[rock.swing](pickaxe.key);
+  const sequence = rock.swing && (pickaxe.walls?.[rock.swing] ?? SWING_SEQUENCES[rock.swing](pickaxe.key));
   if (!sequence) return pickaxe.animation;
   if (!swingAnimations.has(sequence)) {
     const id = pluginApi.core.CacheDefinitions.getSeqId(sequence);

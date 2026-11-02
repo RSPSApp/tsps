@@ -726,7 +726,7 @@ test("skills:action-interval: unanswered, a loop keeps its own pace; never under
   assert.equal(actionInterval(null, player, Skill.MINING, "mine", 4), 4);
 });
 
-test("Executioner (Demonic Pacts): the axe finishes an NPC under 20%, but never Yama", () => {
+test("Executioner (Demonic Pacts): the axe finishes an NPC under 20%, but never Yama or the Gemstone Crab", () => {
   const who = cases(EXECUTIONER);
   const npc = (name) => ({ isNpc: () => true, isPlayer: () => false, getHitpoints: () => 10, getMaxHitpoints: () => 100, getDefinition: () => ({ getName: () => name }) });
   const struck = (attacker, target) => {
@@ -737,6 +737,7 @@ test("Executioner (Demonic Pacts): the axe finishes an NPC under 20%, but never 
   for (const player of [who.relic, ...others(who)]) player.getEquipment().set(core.Equipment.WEAPON_SLOT, new core.Item(I.SAGES_AXE, 1));
   assert.equal(struck(who.relic, npc("Goblin")), 10);
   assert.equal(struck(who.relic, npc("Yama")), 0);
+  assert.equal(struck(who.relic, npc("Gemstone Crab")), 0);
   for (const player of [who.without, who.main]) assert.equal(struck(player, npc("Goblin")), 0);
 });
 

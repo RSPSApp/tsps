@@ -5,7 +5,7 @@
  * `longRangeFightType`, adds the 2), never used up, whose hit on an NPC under 20% of its
  * hitpoints takes the rest of them. The axe is a ranged weapon in core's table (it flies as a rune
  * thrown axe: the cache has no spotanim of its own); the execute is the relic's. Demonic Pacts'
- * Executioner (tier 8) is the same axe, sparing Yama (the effect's `spared`), reaching 6 tiles
+ * Executioner (tier 8) is the same axe, sparing Yama and the Gemstone Crab (the effect's `spared`), reaching 6 tiles
  * (8 on long range; the effect's `reach`, Wiki): the shared weapon profile's reach, raised for
  * that league's owner as combat asks it (`onCombatAttackDistance`), so Trailblazer Reloaded's
  * axe keeps its 5.

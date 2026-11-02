@@ -435,7 +435,7 @@ class XarpusRoom extends Raid.Room {
       const was = this.lastTiles.get(player);
       this.lastTiles.set(player, at);
       if (this.pools.has(key(at))) this.hurt(player, this.poolDamage(), "GREEN", "stood in Xarpus' poison.");
-      else if (was && this.pools.has(key(midpoint(was, at)))) {
+      else if (was && this.pools.has(key(passedOver(was, at, player.getWalkingDirection?.())))) {
         // Wiki: running over a pool hurts a tick late.
         this.later(1, () => this.hurt(player, this.poolDamage(), "GREEN", "stood in Xarpus' poison."));
       }
@@ -550,11 +550,24 @@ class XarpusRoom extends Raid.Room {
 
 const centreTile = () => Shared.loc({ ...CENTRE, z: PLANE });
 
-/** The tile a two-tile run step passes over; the start itself for anything else. */
-function midpoint(from, to) {
+const NOWHERE = { x: -1, y: -1 };
+
+/**
+ * The tile a two-tile run step passed over: its first step, from the tick's walking direction, so a
+ * mixed run ((2,1): east then north-east, or north-east then east) is judged by where it really went.
+ * Without a direction only a straight run has one answer, its middle.
+ */
+function passedOver(from, to, walking) {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
-  if (Math.max(Math.abs(dx), Math.abs(dy)) !== 2 || dx % 2 !== 0 || dy % 2 !== 0) return { x: -1, y: -1 };
+  if (Math.max(Math.abs(dx), Math.abs(dy)) !== 2) return NOWHERE;
+  const stepX = walking?.getX?.() ?? 0;
+  const stepY = walking?.getY?.() ?? 0;
+  if ((walking?.getId?.() ?? -1) >= 0) {
+    const first = { x: from.x + stepX, y: from.y + stepY };
+    if (Math.max(Math.abs(to.x - first.x), Math.abs(to.y - first.y)) === 1) return first;
+  }
+  if (dx % 2 !== 0 || dy % 2 !== 0) return NOWHERE;
   return { x: from.x + dx / 2, y: from.y + dy / 2 };
 }
 
@@ -588,4 +601,4 @@ module.exports = function registerXarpus(api) {
   Raid.registerRoom("XARPUS", XarpusRoom);
 };
 
-Object.assign(module.exports, { XarpusRoom, QUADRANTS, EXHUMED, ringTiles });
+Object.assign(module.exports, { passedOver, XarpusRoom, QUADRANTS, EXHUMED, ringTiles });

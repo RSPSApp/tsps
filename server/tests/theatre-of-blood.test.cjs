@@ -866,7 +866,7 @@ test('the escape crystal: inactive by default, fires on a hit only once armed an
   assert.equal(EscapeCrystal.afkFires(solo), false, 'armed, just active');
   solo.lastInputCycle = Shared.cycle() - 100;
   assert.equal(EscapeCrystal.afkFires(solo), true, 'armed and idle past the default 30 seconds');
-  EscapeCrystal.hitTaken({ player: solo, hit: { getTotalDamage: () => 0 } });
+  EscapeCrystal.damageApplied({ target: Object.assign(solo, { getAsPlayer: () => solo }), hit: { getDamage: () => 0 } });
   assert.equal(solo.inventory.contains(Shared.ITEM.ESCAPE_CRYSTAL), false, 'a zero hit counts, as the Wiki says');
   ticks(2);
   assert.equal(Raid.raidOf(solo), null);
@@ -918,4 +918,49 @@ test('Sinhaza shrouds: earned from 100 Normal or Hard completions, taken from th
   Stats.changeShroud({ player, item: cape });
   assert.equal(cape.getId(), 22494, 'round again');
   assert.equal(Stats.shroudCondition({ player, text: "If the player hasn't earned any Sinhaza shrouds:", pages: [{ page: 'Someone else' }] }), undefined, 'other pages are left alone');
+});
+
+test('the escape crystal answers direct damage as it is applied (a room hazard), once a tick', () => {
+  const { Mobile } = require('../dist/game/entity/impl/Mobile');
+  const { HitDamage } = require('../dist/game/content/combat/hit/HitDamage');
+  const { HitMask } = require('../dist/game/content/combat/hit/HitMask');
+  PluginManager.customEventHooks.delete('combat:damage-apply');
+  PluginManager.createApi('TobCrystalTest').onCustomEvent('combat:damage-apply', EscapeCrystal.damageApplied);
+  try {
+    const { raid, players: [solo] } = startRaid(['Crystal2']);
+    solo.inventory.setItem(0, new Item(Shared.ITEM.ESCAPE_CRYSTAL, 2));
+    Object.assign(solo, {
+      isNpc: () => false, setHitpoints(value) { solo.hp = value; }, getRights: () => PluginManager.getCoreApi().PlayerRights.PLAYER,
+      lastInputCycle: Shared.cycle() - 100, __tobLoginCycle: -1000,
+    });
+    solo.setAttribute(EscapeCrystal.ATTR.AFK, true);
+    // What Shared.damage queues reaches Mobile.decrementHealth, which announces it.
+    Mobile.prototype.decrementHealth.call(solo, new HitDamage(7, HitMask.RED));
+    Mobile.prototype.decrementHealth.call(solo, new HitDamage(7, HitMask.RED));
+    assert.equal(solo.inventory.getAmount(Shared.ITEM.ESCAPE_CRYSTAL), 1, 'one crystal for the tick\'s hits');
+    ticks(2);
+    assert.equal(Raid.raidOf(solo), null, 'out of the raid');
+    raid.dispose();
+  } finally {
+    PluginManager.customEventHooks.delete('combat:damage-apply');
+  }
+});
+
+test('Xarpus judges a run by the tile it really passed over, mixed runs included', () => {
+  const { passedOver } = require('../plugins/minigames/tob/Xarpus.TheatreOfBlood');
+  const { Direction } = require('../dist/game/model/Direction');
+  const from = { x: 3164, y: 4381 };
+  assert.deepEqual(passedOver(from, { x: 3166, y: 4382 }, Direction.EAST), { x: 3165, y: 4381 }, 'east, then north-east');
+  assert.deepEqual(passedOver(from, { x: 3166, y: 4382 }, Direction.NORTH_EAST), { x: 3165, y: 4382 }, 'north-east, then east');
+  assert.deepEqual(passedOver(from, { x: 3166, y: 4381 }, Direction.NONE), { x: 3165, y: 4381 }, 'a straight run without a direction');
+  assert.deepEqual(passedOver(from, { x: 3165, y: 4381 }, Direction.EAST), { x: -1, y: -1 }, 'a walk passes over nothing');
+});
+
+test('a Nylocas hit thrown a tick before its form changed still counts', () => {
+  const { launchedAt } = require('../plugins/minigames/tob/Nylocas.TheatreOfBlood');
+  const now = Shared.cycle();
+  // Launched at now - 3 with a delay of 2 lands at now (CombatFactory: launch + delay + one NPC tick).
+  const hit = { getDelay: () => 2, getTarget: () => ({ isNpc: () => true }) };
+  assert.equal(launchedAt(hit), now - 3);
+  assert.ok(launchedAt(hit) < now - 2, 'before a form change at now - 2');
 });

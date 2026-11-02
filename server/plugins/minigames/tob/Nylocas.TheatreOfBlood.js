@@ -610,7 +610,7 @@ class NylocasRoom extends Raid.Room {
     }
     const hitStyle = styleOfHit(hit);
     if (!hitStyle || hitStyle === (state.style ?? state.form)) return;
-    if (hitStyle === state.previous && Shared.cycle() - hit.getDelay() < state.changedAt) return;
+    if (hitStyle === state.previous && launchedAt(hit) < state.changedAt) return;
     const damage = hit.getTotalDamage?.() ?? 0;
     clearHit(hit);
     if (!player) return;
@@ -655,6 +655,15 @@ function besideSupport(nylo, support) {
   const dx = Math.max(to.getX() - (at.getX() + size - 1), at.getX() - (to.getX() + supportSize - 1), 0);
   const dy = Math.max(to.getY() - (at.getY() + size - 1), at.getY() - (to.getY() + supportSize - 1), 0);
   return dx + dy === 1;
+}
+
+/**
+ * The cycle a hit was thrown: CombatFactory.addPendingHit lands an NPC's hit at the launch cycle plus
+ * its delay plus one processing tick (`hitProcessingDelay`).
+ */
+function launchedAt(hit) {
+  const { CombatFactory } = Shared.core();
+  return Shared.cycle() - hit.getDelay() - (CombatFactory.hitProcessingDelay?.(hit) ?? 1);
 }
 
 function styleOfHit(hit) {
@@ -777,4 +786,4 @@ function styleKey(style) {
   return style === "ranged" ? "RANGED" : style === "magic" ? "MAGIC" : "MELEE";
 }
 
-Object.assign(module.exports, { NylocasRoom, IDS, IDS_BY_MODE, SUPPORTS, LANES, styleOfHit });
+Object.assign(module.exports, { launchedAt, NylocasRoom, IDS, IDS_BY_MODE, SUPPORTS, LANES, styleOfHit });

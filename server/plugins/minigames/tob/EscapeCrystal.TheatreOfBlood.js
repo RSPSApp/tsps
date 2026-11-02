@@ -154,18 +154,27 @@ function afkFires(player) {
   return (now - (player.lastInputCycle ?? 0)) * SECONDS_PER_TICK >= delayOf(player);
 }
 
-function ringFires(player, hit) {
+function ringFires(player, damage) {
   if (!player.getAttribute(ATTR.RING) || !wears(player)) return false;
   const { Skill } = Shared.core();
   const max = player.getSkillManager().getMaxLevel(Skill.HITPOINTS);
-  const after = player.getHitpoints() - (hit?.getTotalDamage?.() ?? 0);
+  const after = player.getHitpoints() - damage;
   return after > 0 && after <= max * RING_OF_LIFE_FRACTION;
 }
 
-function hitTaken({ player, hit }) {
+/**
+ * Every damage as it's applied ("combat:damage-apply" { target, hit: HitDamage }): ordinary combat
+ * hits and direct ones alike (the rooms' hazards, poison). Once a crystal fires, the rest of the
+ * tick's hits don't use another.
+ */
+function damageApplied({ target, hit }) {
+  if (!target?.isPlayer?.()) return;
+  const player = target.getAsPlayer?.() ?? target;
+  if (player.__tobEscapedCycle === Shared.cycle()) return;
   const raid = raidIn(player);
   if (!raid || raid.member(player).jailed || !raid.players.includes(player)) return;
-  if (afkFires(player) || ringFires(player, hit)) escape(player, raid);
+  const damage = Math.max(0, hit?.getDamage?.() ?? 0);
+  if ((afkFires(player) || ringFires(player, damage)) && escape(player, raid)) player.__tobEscapedCycle = Shared.cycle();
 }
 
 /** Wiki: a logout in the raid with a crystal uses it; the player returns outside. */
@@ -181,7 +190,7 @@ module.exports = function registerTheatreEscapeCrystal(api) {
   api.onPlayerLogin(loggedIn);
   api.onItemAction("Escape crystal", { Teleport: teleport, "Auto-afk": toggleAfk, Configure: configure });
   api.onItemOnPlayer(useOnPlayer);
-  api.onPlayerHitModify(hitTaken);
+  api.onCustomEvent("combat:damage-apply", damageApplied);
 };
 
-Object.assign(module.exports, { ATTR, teleport, toggleAfk, configure, useOnPlayer, hitTaken, afkFires, ringFires, usedOnLogin, wears, usesUp, delayOf });
+Object.assign(module.exports, { ATTR, teleport, toggleAfk, configure, useOnPlayer, damageApplied, afkFires, ringFires, usedOnLogin, wears, usesUp, delayOf });

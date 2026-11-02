@@ -81,9 +81,15 @@ function revertItem(event) {
     return;
   }
   if (barrowsBase == null) {
+    // Wiki (Holy ghrazi rapier and friends): these kits come back when dismantled, so it must fit first.
+    const kit = entry.refund ? new core.Item(entry.kit, 1) : null;
+    if (kit && event.player.getInventory().getAddableAmount(kit) < 1) {
+      event.player.sendMessage("You don't have enough inventory space to do that.");
+      event.handled = true;
+      return;
+    }
     event.item.setId(entry.base);
-    // Wiki (Holy ghrazi rapier and friends): these kits come back when dismantled.
-    if (entry.refund) event.player.getInventory().add(new core.Item(entry.kit, 1), false);
+    if (kit) event.player.getInventory().add(kit, false);
   } else {
     event.item.setId(Barrows.stageItemId(barrowsBase, Barrows.stageOf(itemId) ?? 0));
   }

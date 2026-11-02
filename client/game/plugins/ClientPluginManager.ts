@@ -244,6 +244,11 @@ export interface ClientPlugin {
     onHealthBar?(event: HealthBarEvent): void;
     /** A clientscript finished, nested calls included (RuneLite's ScriptPostFired). */
     onScriptFinished?(scriptId: number): void;
+    /**
+     * A clientscript is about to run, before pre-script listeners such as Bank Tags' (RuneLite's
+     * ScriptPreFired with a subscriber priority above theirs).
+     */
+    onScriptPreFired?(scriptId: number): void;
     /** A clientscript ran `runelite_callback`. */
     onScriptCallback?(event: ScriptCallbackEvent): void;
     /** A widget was dropped on another; return true to keep the drag from the server. */
@@ -452,6 +457,10 @@ export class ClientPluginManager {
 
     onScriptFinished(scriptId: number): void {
         for (const plugin of this.implementing("onScriptFinished")) plugin.onScriptFinished!(scriptId);
+    }
+
+    onScriptPreFired(scriptId: number): void {
+        for (const plugin of this.implementing("onScriptPreFired")) plugin.onScriptPreFired!(scriptId);
     }
 
     onScriptCallback(event: ScriptCallbackEvent): void {

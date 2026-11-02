@@ -1827,6 +1827,9 @@ export class OsrsClient {
                 applyWildernessHudLayout(self.widgetManager, self.varManager, scriptId);
                 self.clientPlugins.onScriptFinished(scriptId);
             },
+            onScriptPre: (scriptId: number) => {
+                self.clientPlugins.onScriptPreFired(scriptId);
+            },
             clientRevision: 235,
             // Canvas dimensions as defined by the renderer's current UI layout space.
             get canvasWidth() {

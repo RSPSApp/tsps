@@ -329,3 +329,12 @@ test("item sets from the cache: a piece, the whole set, one whole Barrows set (V
   assert.ok(done(f, "equip-full-veracs-armour-set"));
   assert.ok(done(f, "equip-any-full-barrows-armour-set"));
 });
+
+test("a minigame completed as its plugin credits it: the Fight Cave won, not a Jad dying elsewhere", (t) => {
+  const f = pactsCharacter(t);
+  kill(f, "TzTok-Jad");
+  assert.equal((f.player.getAttribute("league:task-kills") ?? {})["complete-the-fight-caves-5-times"], undefined, "a TzTok-Jad death alone (TzHaar-Ket-Rak's Challenges) is no completion");
+  const FightCaves = require("../plugins/minigames/tzhaar/CombatAchievements.TzhaarFightCaves");
+  FightCaves.finish(f.player, true);
+  assert.equal(f.player.getAttribute("league:task-kills")["complete-the-fight-caves-5-times"], 1, "the cave won");
+});

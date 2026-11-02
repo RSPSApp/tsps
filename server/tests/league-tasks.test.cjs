@@ -559,6 +559,11 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.equal(trigger("equip-any-full-barrows-armour-set").sets.length, 6);
   assert.ok(!trigger("equip-a-piece-of-any-barrows-armour-set").items.includes("Ahrim's staff"), "a weapon is no armour");
 
+  // Minigame completions: the monster their plugin credits, credited events only.
+  assert.deepEqual(trigger("complete-the-inferno-5-times"), { kind: "kill", npcs: ["TzKal-Zuk"], count: 5, credited: true });
+  assert.deepEqual(trigger("complete-tombs-of-amascut").npcs, ["Tombs of Amascut", "XM: Tombs of Amascut"]);
+  assert.equal(trigger("complete-the-corrupted-gauntlet-in-4-30"), undefined, "a time is a condition");
+
   // Laps: the agility plugin's course keys; a lap reward of several laps counts them all.
   assert.deepEqual(trigger("complete-10-laps-of-the-varlamore-agility-course"), { kind: "agility-laps", courses: ["wyrm-basic", "wyrm-advanced"], count: 10 }, "either Colossal Wyrm course");
   assert.deepEqual(trigger("complete-the-shayzien-basic-agility-course").courses, ["shayzien-basic"], "the name's course where the link's is both");

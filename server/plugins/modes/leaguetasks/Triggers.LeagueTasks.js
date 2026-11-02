@@ -12,7 +12,8 @@
  * boss (Artio counts as Callisto). Within one tick, a task takes the larger of the two counts, so
  * a kill reported both ways counts once and several kills in one tick all count. A kill with an
  * `area` counts only on the areas plugin's map there (`league:area-at`; the death's tile, or the
- * player's for a credited kill).
+ * player's for a credited kill); one marked `credited` (a minigame's completion) only the credited
+ * event, not a death of the same name.
  */
 const Common = require("./Common.LeagueTasks");
 const Complete = require("./Complete.LeagueTasks");
@@ -209,7 +210,10 @@ function credit(player, type, name, source, amount, tile = null) {
   const tasks = indexOf(type).kills.get(String(name ?? "").toLowerCase());
   if (!tasks || !(amount > 0)) return;
   const done = new Set(Common.completedIds(player));
-  const open = tasks.filter((task) => !done.has(task.id) && inArea(task, type, tile ?? tileOf(player)));
+  // A `credited` task (a minigame's completion: "Complete the TzHaar Fight Cave") counts only the
+  // credited event: the same NPC can die elsewhere (TzTok-Jad in TzHaar-Ket-Rak's Challenges).
+  const open = tasks.filter((task) => !done.has(task.id) && inArea(task, type, tile ?? tileOf(player))
+    && !(task.trigger.credited && source !== "events"));
   if (!open.length) return;
   const tick = Common.core.World.getProcessCycle?.() ?? 0;
   let perTask = tickCredit.get(player);

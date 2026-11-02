@@ -17,6 +17,7 @@ const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const { RsmodRouteFinding } = require("../dist/game/model/movement/path/RsmodRouteFinding");
 const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
 const { PlayerSession } = require("../dist/net/PlayerSession");
+const { encodeSound } = require("../dist/net/protocol/ClientProtocol");
 const npcSpawns = require("../data/definitions/npc-spawns.json");
 
 const { choose, isNetwork, refusals, toEntry, requirementFor } = require("../scripts/loc-teleport-matching.cjs");
@@ -617,21 +618,34 @@ test("a failed native H.A.M. attempt retries; an optional lockpick improves the 
   const player = nativeHamPlayer();
   player.setLocation(new core.Location(3166, 3251, 0));
   const animations = [];
+  const sounds = [];
+  const sound = (id) => encodeSound(id, { loops: 1, delay: 0 });
+  const send = player.getSession().sendClientPacket.bind(player.getSession());
+  player.getSession().sendClientPacket = (frame) => {
+    if (frame[0] === sound(0)[0]) sounds.push(Buffer.from(frame));
+    return send(frame);
+  };
   player.performAnimation = (animation) => animations.push(animation.getId());
   new ObjectActionPacketListener().executeAction(player, 5492, 3166, 3252, 5);
   for (let tick = 0; tick < 5 && !animations.length; tick++) nativeTicks(player, 1);
   assert.deepEqual(animations, [537]);
+  // Normal capture 3199: 2402 on click T13124, again with 537 at T13125.
+  assert.deepEqual(sounds, [sound(2402), sound(2402)]);
   nativeTicks(player, 7);
   assert.equal(thievingXp(player), 0, "no outcome before the nine-tick attempt");
   nativeTicks(player, 1);
   assert.equal(thievingXp(player), 0.5);
   assert.equal(player.getPacketSender().getVarbit(235), 0);
   assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.THIEVING), 1, "no invented numb-finger roll");
+  assert.deepEqual(sounds, [sound(2402), sound(2402), sound(2581)], "failure does not duplicate the next retry sound");
   player.getInventory().add(new core.Item(core.ItemIdentifiers.LOCKPICK, 1), false);
-  nativeTicks(player, 9);
+  nativeTicks(player, 1);
+  assert.deepEqual(sounds, [sound(2402), sound(2402), sound(2581), sound(2402)], "one sound with the automatic retry animation");
+  nativeTicks(player, 8);
   assert.deepEqual(animations, [537, 537, 536]);
   assert.equal(player.getPacketSender().getVarbit(235), 1);
   assert.equal(thievingXp(player), 4.3);
+  assert.deepEqual(sounds, [sound(2402), sound(2402), sound(2581), sound(2402), sound(52)]);
   assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.LOCKPICK), 1, "the tool is not consumed");
   assert.equal(DiaryProgress.doneTasks(player, DiaryData.BY_KEY.get("lumbridge")).size, 0);
   new ObjectActionPacketListener().executeAction(player, 5492, 3166, 3252, 2);

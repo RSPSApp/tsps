@@ -1733,7 +1733,14 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   comes from ("Amy's Saw from Mahogany Homes", "a Pearl fishing rod, purchased from Alry"), the
   tree logs come from ("Chop 75 Magic Logs from Magic Trees"); a produce task's
   trailing league region is its `area`; a subject the name doesn't resolve is taken from the
-  description: "Clean a Grimy Guam" is the guam leaf; a tree chopped is its logs; a boss "in" its
+  description: "Clean a Grimy Guam" is the guam leaf, "Equip an Enchanted Slayer Staff" its "Slayer's
+  staff (e)", "a pair of Dragon Claws"; a linked subject whose title is no cache name is what the
+  linked page's infobox names (`<dir>/subjects/<page>.wikitext`, the redirect followed), when every
+  cache entry of that name, less banknotes and placeholders, is one of the page's ids: "Mithril
+  Grapple" would be the Mith grapple but the unfinished grapple shares the name, "Red chinchompa
+  (Hunter)" is the Carnivorous chinchompa, "Granite" any of its three weights, "the Webweaver" either
+  Webweaver bow (no Chompy bird hat rank is one: every rank's hat has the one name); "Chop down an
+  arctic pine tree" is its logs; "Ferment" makes wine; a tree chopped is its logs; a boss "in" its
   own lair, a Combat Achievements monster, is just its kills: "Defeat Vorkath on Ungael 50 times";
   a minigame or group encounter completed is the monster its plugin credits (also the Moons of
   Peril, the Royal Titans, the Wintertodt), `credited` so a death of the same name

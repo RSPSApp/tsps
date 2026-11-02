@@ -480,6 +480,15 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("convert-an-item-into-at-least-500-coins"), { kind: "alch", coins: 500, count: 1 });
   assert.deepEqual(trigger("use-the-bank-in-nardah"), { kind: "bank", place: "nardah-bank", count: 1 });
   assert.deepEqual(trigger("use-the-bank-on-lunar-isle"), { kind: "bank", place: "lunar-isle", count: 1 });
+  // A subject the cache spells otherwise: the item or NPC its linked page's infobox names, every cache
+  // entry of that name one of the page's ids (the Chompy bird hats, every rank's one name, are none).
+  assert.deepEqual(trigger("catch-150-red-chinchompas-in-kandarin"), { kind: "hunt", npcs: ["Carnivorous chinchompa"], count: 150, area: 4 });
+  assert.deepEqual(trigger("mine-30-chunks-of-granite"), { kind: "produce", items: ["Granite (500g)", "Granite (2kg)", "Granite (5kg)"], count: 30, area: 6 });
+  assert.deepEqual(trigger("equip-the-webweaver"), { kind: "equip", items: ["Webweaver bow (u)", "Webweaver bow"] });
+  assert.deepEqual(trigger("equip-an-enchanted-slayer-staff"), { kind: "equip", items: ["Slayer's staff (e)"] });
+  assert.equal(trigger("equip-a-marksman-chompy-hat"), undefined);
+  assert.equal(trigger("create-a-mithril-grapple"), undefined, "the unfinished grapple is a Mith grapple too");
+  assert.deepEqual(trigger("chop-down-an-arctic-pine-tree"), { kind: "produce", items: ["Arctic pine logs"], count: 1 });
   assert.deepEqual(trigger("worship-the-ectofuntus"), { kind: "deed", event: "ectofuntus:worshipped", count: 1 });
   assert.deepEqual(trigger("load-a-blowpipe-with-dragon-darts"), { kind: "deed", event: "toxic-blowpipe:darts-loaded", count: 1, items: ["Dragon dart"] });
   assert.deepEqual(trigger("switch-to-the-lunar-spellbook"), { kind: "deed", event: "magic:spellbook-changed", count: 1, where: { spellbook: "lunar" } });

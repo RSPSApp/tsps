@@ -334,7 +334,7 @@ function alternativesOf(description: string): string[] {
 }
 
 /** The cache names a trigger may name, each checked before it is written. */
-interface Names { npcs: Map<string, string>; quests: Map<string, string>; items: Map<string, string>; homes?: Map<string, string[]>; sets?: Map<string, string[][]>; npcIds?: Map<string, number[]> }
+interface Names { npcs: Map<string, string>; quests: Map<string, string>; items: Map<string, string>; homes?: Map<string, string[]>; sets?: Map<string, string[][]>; npcIds?: Map<string, number[]>; subjects?: Map<string, string[]> }
 
 /** A condition in a task's description (where, how, how fast): not a plain count of the deed. */
 const CONDITION = /\b(without|while|using|within|in under|with only|solo|duo|trio|wearing|wielding|less than|fewer than|must be|do not count|at once|in one|at the same time|in a row|whilst|before|after)\b/i;
@@ -540,7 +540,7 @@ function countAndSubject(rest: string): { count: number; subject: string } {
  */
 const PRODUCE_VERBS: Record<string, string[]> = {
   catch: ["Raw ", ""], snare: [""], chop: [""], mine: [""], cook: ["", "Cooked "], craft: [""], fletch: [""], smelt: [""], smith: [""],
-  make: [""], create: [""], brew: [""], clean: [""], cut: [""], spin: [""],
+  make: [""], create: [""], brew: [""], clean: [""], cut: [""], spin: [""], ferment: [""],
 };
 
 /** The Combat Achievements' monsters by plain name (enum 3970: "Hueycoatl, The" is "hueycoatl"). */
@@ -1567,10 +1567,16 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
     }
   }
   // "Equip a Tyras helm": the cache item worn. A group ("an Elemental Staff", "a Dragon weapon") is no item.
+  // A name the cache spells otherwise is the description's, as it stands ("Equip an Enchanted Slayer
+  // Staff": "an Slayer's staff (e)"; "a pair of Dragon Claws"), or the versions its page names, any
+  // one worn ("Equip the Webweaver": Webweaver bow, charged or not).
   if ((match = /^Equip (?:a |an |the |some |your )?(.+)$/i.exec(name))) {
     if (PLACE.test(clean(description).replace(/^Equip (?:a |an |the |some |your )?/i, "").replace(match[1], ""))) return {};
-    const item = wornNamed(match[1], items);
-    return item ? { trigger: { kind: "equip", items: [item] } } : {};
+    const said = /^Equip (?:a pair of |an? |the |some |your )?(.+?)\.?$/i.exec(description)?.[1] ?? "";
+    const item = wornNamed(match[1], items) ?? wornNamed(said, items);
+    if (item) return { trigger: { kind: "equip", items: [item] } };
+    const versions = names.subjects?.get(said.toLowerCase());
+    return versions ? { trigger: { kind: "equip", items: versions } } : {};
   }
   // "Pickpocket an uncut diamond from a TzHaar-Hur", "Pickpocket a gnome for a King Worm",
   // "Pickpocket an elite clue scroll from a hero": that item in the pocket's loot
@@ -1628,13 +1634,14 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
         const fish = itemNamed(made, items, ["Raw "]) ?? (/^Raw /i.test(made) ? itemNamed(made, items) : null);
         if (fish) return withArea({ kind: "produce", items: [fish], count });
         // "Red chinchompa (Hunter)s": the link's target, plural after it.
-        const creature = npcNamed(made.replace(/ \(Hunter\)s?$/i, ""), npcs);
+        // ... or the NPC its page names ("Red chinchompa (Hunter)": the Carnivorous chinchompa).
+        const creature = npcNamed(made.replace(/ \(Hunter\)s?$/i, ""), npcs) ?? npcNamed(made.replace(/ \(Hunter\)s$/i, " (Hunter)"), npcs);
         if (creature) return withArea({ kind: "hunt", npcs: [creature], count });
         continue;
       }
       if (lowerVerb === "chop") {
         // A tree chopped is its logs ("Chop 100 Maples", "100 Maple tree"): never a "tree" item.
-        const tree = made.replace(/\s+trees?$/i, "").replace(/s$/i, "");
+        const tree = made.replace(/^down (?:an? )?/i, "").replace(/\s+trees?$/i, "").replace(/s$/i, "");
         const logs = itemNamed(/logs?$/i.test(made) ? made : `${tree} logs`, items);
         if (logs) return withArea({ kind: "produce", items: [logs], count });
         continue;
@@ -1642,6 +1649,9 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
       // Something cooked is cooked: the description's "raw" is what goes on the fire.
       const what = lowerVerb === "cook" ? made.replace(/^raw /i, "") : made;
       const item = itemNamed(what, items, forms) ?? (/^(make|create|brew)$/.test(lowerVerb) ? potionNamed(what, items) : null);
+      // A page of several items, any of them made ("Mine 15 Granite": its three weights; "30 chunks of").
+      const versions = item ? null : names.subjects?.get(what.replace(/^chunks? of /i, "").toLowerCase());
+      if (versions) return withArea({ kind: "produce", items: versions, count });
       if (item && !(lowerVerb === "cook" && /^Raw /.test(item))) return withArea({ kind: "produce", items: [item], count });
     }
     return {};
@@ -1784,6 +1794,29 @@ function setListsOf(wikitext: string): string[][] {
  * Where the Wiki says a monster lives: each {{LocLine}}'s location (its first link), else its
  * infobox's. A monster that lives in one place only is killed there whatever a task adds.
  */
+/**
+ * The pages a task's deed links its subject to where the link's title is no cache item or NPC
+ * ("Create a [[Mithril Grapple]]", "Catch 150 [[Red chinchompa (Hunter)]]s"), saved as
+ * `<dir>/subjects/<page>.wikitext` (the redirect followed: Mithril Grapple is Mith grapple's page).
+ */
+const SUBJECT_LINK = /^(?:Equip|Make|Create|Craft|Mine|Catch|Chop|Fletch|Blow|Smith|Cook|Brew|Successfully \w+|Trap|Snare|Smelt|Cut)(?: (?:either|any|a|an|the|some|\d+|pair of|chunks of))* \[\[([^\]|#]+)/i;
+function subjectPagesOf(wikitext: string, names: Names): string[] {
+  const pages: string[] = [];
+  for (const [, description] of wikitext.matchAll(/\{\{(?:DPL|REL|TRL)TaskRow\|[^|]*\|([^\n]*?)\|s=/g)) {
+    const title = SUBJECT_LINK.exec(description)?.[1].trim();
+    if (title && !names.items.has(title.toLowerCase()) && !names.npcs.has(title.toLowerCase())) pages.push(title.replace(/^./, (first) => first.toUpperCase()));
+  }
+  return pages;
+}
+
+/** The in-game names an item, monster or NPC page's infoboxes give (`|name = Mith grapple`, `|name1 = Granite (500g)`). */
+function infoboxNames(wikitext: string, templates: string[]): string[] {
+  // "{{Infobox Item\n|name = ..." opens on its own line.
+  const text = wikitext.replace(/\{\{(Infobox [A-Za-z]+)[ \t]*\r?\n/g, "{{$1");
+  return [...new Set(templates.flatMap((template) => templateCalls(text, template)).flatMap((args) => args
+    .map((arg) => /^\s*name\d*\s*=\s*(.+?)\s*$/s.exec(arg)?.[1]).filter((name): name is string => !!name)))];
+}
+
 /** The NPC pages the talk and pet tasks link to ("Talk to a [[Gladiator (Fortis Colosseum)]]"), saved as `<dir>/npcs/<page>.wikitext`. */
 function operatedPagesOf(wikitext: string): string[] {
   const pages: string[] = [];
@@ -1798,6 +1831,23 @@ function operatedPagesOf(wikitext: string): string[] {
 /** Every NPC id an NPC page's infoboxes give (`|id = 7668, 14183`, `|id1 = 12834`). */
 function npcIdsOf(wikitext: string): number[] {
   return [...wikitext.matchAll(/^\|\s*id\d*\s*=([^\n]*)$/gm)].flatMap((match) => match[1].split(",").map((id) => Number(id.trim()))).filter(Number.isInteger);
+}
+
+/** The cache items of a name, less banknotes and bank placeholders. */
+function itemIdsNamed(name: string): number[] {
+  const ids: number[] = [];
+  for (let id = 0; id < CacheDefinitions.getCounts().items; id++) {
+    const item = CacheDefinitions.getItem(id);
+    if (item?.name?.toLowerCase() === name.toLowerCase() && !(item.noteTemplate >= 0) && !(item.placeholderTemplate >= 0)) ids.push(id);
+  }
+  return ids;
+}
+
+/** The cache NPCs of a name. */
+function npcIdsNamed(name: string): number[] {
+  const ids: number[] = [];
+  for (let id = 0; id < CacheDefinitions.getCounts().npcs; id++) if (CacheDefinitions.getNpc(id)?.name?.toLowerCase() === name.toLowerCase()) ids.push(id);
+  return ids;
 }
 
 /** The cache NPCs of a name whose menu has the option ("Talk-to", "Pet"). */
@@ -1895,6 +1945,25 @@ async function main() {
   // The homes of the monsters the kill tasks name before a place, by lower-cased page title.
   const homePages = [...new Set(LEAGUES.flatMap((league) => homePagesOf(rawPages.get(league)!)))].sort();
   for (const page of homePages) names.homes!.set(page.toLowerCase(), homesOf(await wikiPageOf("npcs", page, options)));
+  // A deed's subject linked by a title that is no cache name: the item or NPC its page's infobox names,
+  // when that is one cache name ("Mithril Grapple" is the Mith grapple, "Red chinchompa (Hunter)" the
+  // Carnivorous chinchompa); a page of several (Granite's three weights) names them all.
+  names.subjects = new Map();
+  for (const page of [...new Set(LEAGUES.flatMap((league) => subjectPagesOf(rawPages.get(league)!, names)))].sort()) {
+    const text = await wikiPageOf("subjects", page, options);
+    // Every cache entry of the name (unnoted, no placeholder) must be one of the page's ids: a name
+    // the cache gives other things too ("Chompy bird hat", every rank's; "Mith grapple", the
+    // unfinished one's) is no one subject.
+    const ids = npcIdsOf(text);
+    const items = infoboxNames(text, ["Infobox Item", "Infobox Bonuses"]).map((each) => names.items.get(each.toLowerCase())).filter((each): each is string => !!each)
+      .filter((each) => itemIdsNamed(each).every((id) => ids.includes(id)));
+    const npcs = infoboxNames(text, ["Infobox Monster", "Infobox NPC"]).map((each) => names.npcs.get(each.toLowerCase())).filter((each): each is string => !!each)
+      .filter((each) => npcIdsNamed(each).every((id) => ids.includes(id)));
+    const key = page.toLowerCase();
+    if (new Set(items).size === 1 && !npcs.length) names.items.set(key, items[0]);
+    else if (new Set(npcs).size === 1 && !items.length) names.npcs.set(key, npcs[0]);
+    else if (items.length > 1 && !npcs.length) names.subjects.set(key, [...new Set(items)]);
+  }
   // The ids of the NPCs the talk and pet tasks link to, by lower-cased page title.
   names.npcIds = new Map();
   for (const page of [...new Set(LEAGUES.flatMap((league) => operatedPagesOf(rawPages.get(league)!)))].sort()) names.npcIds.set(page.toLowerCase(), npcIdsOf(await wikiPageOf("npcs", page, options)));

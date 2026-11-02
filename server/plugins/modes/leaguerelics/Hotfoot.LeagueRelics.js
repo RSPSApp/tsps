@@ -14,8 +14,12 @@
  * relics) it swaps the request's item for the cooked fish or bar, so a relic that banks or
  * doubles the harvest (Endless Harvest) handles the processed item; last, it hands what nobody
  * stored to the inventory in place of the raw item.
- * Not here: Agility XP while running (the Wiki gives no rate: "based on your Agility level", and no
- * Demonic Pacts recording has the boots), and termites finishing a lap or doubled (the Colossal
+ * Running in the boots pays Agility XP (Wiki, Searing boots): 10 + floor(Agility level x 2/3) for
+ * every 10 ticks in which the player moved 2 tiles (a run step; a diagonal pair around an object
+ * nets less and doesn't count), before the league's rates; the base level, and the count kept
+ * across stops, are ours ("roughly every 10 ticks"). A tick task per owner, from login or the
+ * unlock, watches the tile.
+ * Not here: termites finishing a lap or doubled (the Colossal
  * Wyrm courses give no termites: their spawn rate is unknown, the Wiki says, and its course page
  * is marked out of date).
  */
@@ -108,6 +112,41 @@ function minigamePoints(request) {
   if (multiplier && active(request.player)) request.points *= multiplier;
 }
 
+/** Owners whose run is being watched: their last tile and the run ticks counted. */
+const runners = new WeakMap();
+
+/** One tick of an owner's run: a 2-tile move in the boots counts; every 10th pays. */
+function runTick(player) {
+  const watch = runners.get(player);
+  const here = player.getLocation();
+  const moved = watch.last && watch.last.getZ() === here.getZ()
+    && Math.max(Math.abs(here.getX() - watch.last.getX()), Math.abs(here.getY() - watch.last.getY())) === effect.runStepTiles;
+  watch.last = here.clone();
+  if (!moved || !wearsBoots(player)) return;
+  if (++watch.ticks < effect.runXpTicks) return;
+  watch.ticks = 0;
+  const level = player.getSkillManager().getMaxLevel(core.Skill.AGILITY);
+  player.getSkillManager().addExperiences(core.Skill.AGILITY, effect.runXpBase + Math.floor((level * effect.runXpLevelFraction[0]) / effect.runXpLevelFraction[1]));
+}
+
+function watchRuns(player) {
+  if (runners.has(player) || !active(player)) return;
+  runners.set(player, { last: null, ticks: 0 });
+  const next = () => core.TaskManager.submit(new core.CountdownTask(player, 1, () => {
+    if (!player.isRegistered?.() || !active(player)) {
+      runners.delete(player);
+      return;
+    }
+    runTick(player);
+    next();
+  }));
+  next();
+}
+
+function watchFromEvent({ player }) {
+  watchRuns(player);
+}
+
 module.exports = function attach(pluginApi) {
   api = pluginApi;
   core = api.core;
@@ -120,7 +159,13 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("agility:mark-taken", markTaken);
   api.onCustomEvent("agility:course-item", courseItem);
   api.onCustomEvent("minigame:points", minigamePoints);
+  api.onCustomEvent("league:login", watchFromEvent);
+  api.onCustomEvent("league:relic-unlocked", watchFromEvent);
 };
+
+module.exports.runTick = runTick;
+module.exports.watchRuns = watchRuns;
+module.exports.runners = runners;
 
 /** The last `storage:gather` listener: attached after every other gathering relic. */
 module.exports.late = function attachLate(pluginApi) {

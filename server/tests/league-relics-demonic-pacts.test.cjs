@@ -1671,3 +1671,42 @@ test("Hotfoot: the Brimhaven Agility Arena's tickets and vouchers come twofold (
   assert.equal(points(relic, "brimhaven-agility-arena"), 2 * points(forager, "brimhaven-agility-arena"));
   assert.equal(points(relic, "pest-control"), points(forager, "pest-control"), "another minigame's are its own");
 });
+
+test("Hotfoot: running in the searing boots pays 10 + floor(Agility x 2/3) XP every 10 run ticks; walking or no boots pays nothing", () => {
+  const Hotfoot = require("../plugins/modes/leaguerelics/Hotfoot.LeagueRelics");
+  const who = cases(HOTFOOT);
+  const player = who.relic;
+  player.getSkillManager().setMaxLevels(Skill.AGILITY, 99, false);
+  player.getEquipment().set(core.Equipment.FEET_SLOT, new core.Item(I.SEARING_BOOTS, 1));
+  Hotfoot.runners.set(player, { last: null, ticks: 0 });
+  let x = 3200;
+  const step = (tiles, dy = 0) => {
+    x += tiles;
+    player.setLocation(new Location(x, 3200 + dy, 0));
+    Hotfoot.runTick(player);
+  };
+  step(0);
+  const before = xp(player, Skill.AGILITY);
+  for (let tick = 0; tick < 9; tick++) step(2);
+  for (let tick = 0; tick < 5; tick++) step(1);
+  assert.equal(xp(player, Skill.AGILITY), before, "nine run ticks and some walking: not yet");
+  step(2);
+  assert.equal(xp(player, Skill.AGILITY) - before, magicRateFor(player, Skill.AGILITY, 10 + 66), "the tenth: 76 at 99 Agility, at the league's rate");
+  player.getEquipment().set(core.Equipment.FEET_SLOT, new core.Item(-1, 0));
+  const unshod = xp(player, Skill.AGILITY);
+  for (let tick = 0; tick < 12; tick++) step(2);
+  assert.equal(xp(player, Skill.AGILITY), unshod, "no boots, no XP");
+  for (const other of [who.without, who.main]) {
+    other.getEquipment().set(core.Equipment.FEET_SLOT, new core.Item(I.SEARING_BOOTS, 1));
+    Hotfoot.watchRuns(other);
+    assert.equal(Hotfoot.runners.has(other), false, "nothing watches a character without the relic");
+  }
+});
+
+/** The XP `base` XP of `skill` brings a fresh league character (the league's rates). */
+function magicRateFor(player, skill, base) {
+  const control = character(`${player.getUsername()}-rate`, "league", {});
+  const before = xp(control, skill);
+  control.getSkillManager().addExperiences(skill, base);
+  return xp(control, skill) - before;
+}

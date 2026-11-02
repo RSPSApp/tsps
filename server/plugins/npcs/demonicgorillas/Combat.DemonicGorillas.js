@@ -23,9 +23,9 @@ function projectileEnd(spec, distance) {
   return spec.delay + spec.cyclesPerTile * Math.max(1, distance);
 }
 
-/** The tick the hit lands on, with the projectile. */
+/** The tick the hit lands on, with the projectile: rounded up, as rounding down hit before it landed. */
 function hitDelay(end) {
-  return Math.max(1, Math.floor(end / 30));
+  return core.Projectile.ticksToLand(end);
 }
 
 /** A third of the hitpoints, rounded down: a boulder alone never kills. */

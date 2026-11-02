@@ -11688,6 +11688,21 @@ test('Surok requires real combat spells and the opposite element for surges', ()
   f.spellEffects(effect);assert.equal(effect.allowed,false,'blood damage must not heal off Surok');
 });
 
+test('Surok Fire Surge damage lands with its projectile, not at the cast', () => {
+ for (const [tiles, landsAt] of [[1, 6], [5, 8]]) {
+  const {api}=mockApi(),sent=[],damage=[];
+  const surge={castAnimation:()=>null,castProjectile:()=>({sendProjectile:()=>sent.push(true)})};
+  api.core={...api.core,CombatSpells:Object.assign(Object.create(api.core.CombatSpells),{FIRE_SURGE:surge})};
+  const f=require('../plugins/quests/wgs/Surok.WhileGuthixSleeps')({api});
+  const p={getHitpoints:()=>99,getSize:()=>1,getPrayerActive:()=>[],getLocation:()=>new api.core.Location(4145,4850+tiles,2),
+   getCombat:()=>({getHitQueue:()=>({addPendingDamage:hits=>damage.push(...hits)})})};
+  const a=new f.SurokArea(p);a.boss={getHitpoints:()=>450,getSize:()=>1,performAnimation(){},getLocation:()=>new api.core.Location(4145,4850,2)};a.started=true;
+  for(let tick=1;tick<landsAt;tick++)a.process(p);
+  assert.equal(sent.length,1,'cast on tick 5');assert.equal(damage.length,0,`${tiles} tiles: still in flight`);
+  a.process(p);assert.equal(damage.length,1,`${tiles} tiles: queued on tick ${landsAt}, shown the tick after (46 + 10 a tile)`);
+ }
+});
+
 test('Surok explosive can only be alchemised after telegrab at its actual position', () => {
   const { api } = mockApi(), f = require('../plugins/quests/wgs/Surok.WhileGuthixSleeps')({api});
   const player={sendMessage(){}},position=new api.core.Location(4143,4850,2),fight={explosive:{position,grabbed:false}};
@@ -14786,9 +14801,9 @@ test('all four Surok elemental surges launch from his reachable tile', () => {
  const {api}=mockApi(),created=[],L=api.core.Location;
  api.core={...api.core,PrivateArea:class{enter(){}},CombatSpells:{...api.core.CombatSpells,FIRE_SURGE:{castAnimation:()=>null,castProjectile:()=>null}}};
  const location=new L(4145,4850,2),combat={getLastAttack:()=>({reset(){}})};
- const npc=(id)=>({getId:()=>id,getLocation:()=>location,getHitpoints:()=>1,getCombat:()=>combat,performAnimation(){},forceChat(){},setMaxHitpoints(){return this;},setHitpoints(){return this;},setScriptedMovement(){},getMovementQueue:()=>({setBlockMovement(){}})});
+ const npc=(id)=>({getId:()=>id,getLocation:()=>location,getSize:()=>1,getHitpoints:()=>1,getCombat:()=>combat,performAnimation(){},forceChat(){},setMaxHitpoints(){return this;},setHitpoints(){return this;},setScriptedMovement(){},getMovementQueue:()=>({setBlockMovement(){}})});
  api.spawnNpc=spec=>{created.push(spec);return npc(spec.id);};
- const player={getLocation:()=>new L(4135,4850,2),getHitpoints:()=>99,getPrayerActive:()=>[],getCombat:()=>({getHitQueue:()=>({addPendingDamage(){}})})};
+ const player={getLocation:()=>new L(4135,4850,2),getSize:()=>1,getHitpoints:()=>99,getPrayerActive:()=>[],getCombat:()=>({getHitQueue:()=>({addPendingDamage(){}})})};
  const f=require('../plugins/quests/wgs/Surok.WhileGuthixSleeps')({api});
  const room=new f.SurokArea(player);room.boss=npc(13482);room.enemies.add(room.boss);room.started=true;room.specials=2;room.specialAt=1;room.nextAttack=0;room.process(player);
  assert.equal(created.length,4);for(const spell of created){assert.ok([13505,13506,13507,13508].includes(spell.id));assert.deepEqual([spell.x,spell.y,spell.z],[4145,4850,2]);}

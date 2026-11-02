@@ -281,18 +281,22 @@ class VanguardRoom extends Raid.Room {
     const from = Projectile.centreOf(npc);
     const tiles = this.volleyTiles(npc, target);
     const end = form.end + form.endPerTile * from.getDistance(target.getLocation());
-    const lands = Math.floor(end / 30);
     tiles.forEach((tile, index) => {
       const flight = form.flights[index % form.flights.length];
-      new Projectile(from, tile, index === 0 ? target : null, flight.id, flight.start, end, form.startHeight, 1, this.map)
+      // Up close the magic's 21 + 25 a tile ends before its 45 start: 10 a tile from then instead (#1862).
+      const flightEnd = end > flight.start + 1 ? end : flight.start + 5 + 10 * from.getDistance(tile);
+      new Projectile(from, tile, index === 0 ? target : null, flight.id, flight.start, flightEnd, form.startHeight, 1, this.map)
         .withAngle(flight.angle)
         .withProgress(form.progress)
         .sendProjectile();
+      // Hits on the tick the projectile lands, not the one before (#1862).
+      const hitIn = Projectile.ticksToLand(flightEnd);
       for (const player of this.raiders()) {
-        if (player.getLocation().equals(tile)) Shared.strike(npc, player, form.style, max, lands, { prayerMultiplier: 1 / 3 });
+        if (player.getLocation().equals(tile)) Shared.strike(npc, player, form.style, max, hitIn, { prayerMultiplier: 1 / 3 });
       }
     });
-    Shared.later(this.raid, lands, () => {
+    // The impacts show with the hits on the target's tile (#1862).
+    Shared.later(this.raid, Projectile.ticksToLand(end), () => {
       tiles.forEach((tile, index) => {
         Shared.graphicAt(this.raiders(), form.impact.gfx, tile, { delay: form.impact.gfxDelay });
         Shared.areaSound(this.raiders(), form.impact.sound, tile, { delay: index * 3, range: 8 });

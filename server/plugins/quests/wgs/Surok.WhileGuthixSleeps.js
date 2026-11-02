@@ -1,6 +1,6 @@
 /** Wiki Surok encounter; warriors and elemental spell targets use the live cache models. */
 module.exports=function registerSurok({api,stage,advance,held,give,play}){
- const {PrivateArea,Boundary,Location,HitDamage,HitMask,Animation,CombatFactory,CombatType,CombatSpells,Item,ItemOnGroundManager}=api.core;
+ const {PrivateArea,Boundary,Location,HitDamage,HitMask,Animation,CombatFactory,CombatType,CombatSpells,Item,ItemOnGroundManager,Projectile}=api.core;
  const GUARD=13566,LADDER=53370,LADDER_TOP=53371,SUROK=13482,SQUALL=13565,REVEALED=13549,FALLEN=13551;
  const STRONG=13484,AGILE=13483,SURGES=[13505,13506,13507,13508],OPPOSITES=['wind','fire','water','earth'];
  const LIT_EXPLOSIVE=29573,TELEORB=29536,ROBES=[29566,29568,29570];
@@ -20,11 +20,12 @@ module.exports=function registerSurok({api,stage,advance,held,give,play}){
   n.setScriptedMovement(true);n.getMovementQueue().setBlockMovement(true);f.enter(n);f.enemies.add(n);return n;
  }
  class SurokArea extends PrivateArea{
-  constructor(player){super([new Boundary(4126,4152,4840,4861,2)]);this.player=player;this.enemies=new Set();this.ticks=0;this.attacks=0;this.specialAt=random(7,8);this.nextAttack=5;this.specials=0;this.started=false;}
+  constructor(player){super([new Boundary(4126,4152,4840,4861,2)]);this.player=player;this.enemies=new Set();this.ticks=0;this.attacks=0;this.specialAt=random(7,8);this.nextAttack=5;this.specials=0;this.started=false;this.incoming=[];}
   isMulti(){return true;}
   canAttack(a,b){return a===this.player&&this.enemies.has(b)&&b!==this.fallen&&b!==this.intro?null:false;}
   process(m){
    if(m!==this.player)return;this.ticks++;
+   const due=this.incoming.filter(d=>d.at<=this.ticks);this.incoming=this.incoming.filter(d=>d.at>this.ticks);for(const d of due)damage(this.player,d.n);
    for(const n of this.enemies)n.getCombat().getLastAttack().reset();
    if(this.explosive&&this.ticks>=this.explosive.expires){explode(this);}
    for(const n of [...this.enemies]){
@@ -43,11 +44,14 @@ module.exports=function registerSurok({api,stage,advance,held,give,play}){
    this.nextAttack=this.ticks+5;
    const b=this.boss,p=this.player;b.performAnimation(CombatSpells.FIRE_SURGE.castAnimation());
    CombatSpells.FIRE_SURGE.castProjectile(b,p)?.sendProjectile();
-   damage(p,p.getPrayerActive()[api.core.PrayerHandler.PROTECT_FROM_MAGIC]?random(0,10):random(0,42));
+   // Lands with the surge (51 -> 46 + 10 a tile), not as it is cast; the prayer is still read at the cast.
+   land(this,Projectile.ticksToLand(Projectile.arrivalCycles(b,p,Projectile.LEGACY_MAGIC_END_BASE)),p.getPrayerActive()[api.core.PrayerHandler.PROTECT_FROM_MAGIC]?random(0,10):random(0,42));
    if(++this.attacks>=this.specialAt){this.attacks=0;this.specialAt=random(7,8);special(this);}
   }
   postLeave(m,logout){if(m===this.player){for(const n of [...this.enemies])remove(this,n);clearExplosive(this);fights.delete(m);if(logout)m.moveTo(loc(4142,4854,1));}super.postLeave(m,logout);}
  }
+ // Damage queued now shows next tick; `ticks` out, it waits in the area until the tick before.
+ function land(f,ticks,n){if(ticks<=1)damage(f.player,n);else f.incoming.push({at:f.ticks+ticks-1,n});}
  function clearExplosive(f){if(!f.explosive)return;if(f.explosive.ground)ItemOnGroundManager.deregister(f.explosive.ground);f.player.getInventory().deleteNumber(LIT_EXPLOSIVE,1);f.explosive=null;}
  function explode(f){clearExplosive(f);damage(f.player,random(45,55));f.player.sendMessage('The lit explosive detonates!');}
  function special(f){

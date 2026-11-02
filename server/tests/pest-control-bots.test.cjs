@@ -726,3 +726,37 @@ test("void equipment needs 42 combat stats and 22 Prayer; Confirm does nothing o
   buttonHandlers.get(CONFIRM_UID)({ player, buttonId: CONFIRM_UID, slot: 31 });
   assert.equal(Rewards.getPoints(player), 10, "no seal without the interface open");
 });
+
+test("a defiler's and a torcher's shots hit as they land, scaled by distance (#1862)", () => {
+  const { DefilerCombatMethod, TorcherCombatMethod } = plugin._test;
+  const { Projectile, DamageFormulas, AccuracyFormulasDpsCalc } = api.core;
+  const originalCreate = Projectile.createProjectile;
+  const originalBounds = DamageFormulas.sourceHitBounds;
+  const originalAccuracy = AccuracyFormulasDpsCalc.rollAccuracy;
+  AccuracyFormulasDpsCalc.rollAccuracy = () => false;
+  const sent = [];
+  Projectile.createProjectile = (_source, _victim, id, delay, end) => ({ sendProjectile: () => sent.push({ id, delay, end }) });
+  DamageFormulas.sourceHitBounds = () => ({ minimum: 0, maximum: 0 });
+  try {
+    for (const [Method, id, perTile] of [[DefilerCombatMethod, 656, 5], [TorcherCombatMethod, 647, 10]]) {
+      for (const tiles of [1, 6]) {
+        const mobile = (x) => ({
+          isPlayer: () => false, isNpc: () => true, isRegistered: () => true, getHitpoints: () => 50,
+          getLocation: () => new Location(2656 + x, 2600, 0), getSize: () => 1, getAttackAnim: () => -1,
+        });
+        const pest = mobile(0);
+        const target = mobile(tiles);
+        const method = new Method();
+        sent.length = 0;
+        method.start(pest, target);
+        const end = 67 + perTile * tiles;
+        assert.deepEqual(sent, [{ id, delay: 62, end }], `${id} at ${tiles} tiles`);
+        assert.equal(method.hits(pest, target)[0].getDelay(), Projectile.ticksToLand(end), `${id} at ${tiles} tiles`);
+      }
+    }
+  } finally {
+    Projectile.createProjectile = originalCreate;
+    DamageFormulas.sourceHitBounds = originalBounds;
+    AccuracyFormulasDpsCalc.rollAccuracy = originalAccuracy;
+  }
+});

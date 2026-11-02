@@ -139,7 +139,8 @@ class MysticsRoom extends Raid.Room {
       .withAngle(0)
       .withProgress(96)
       .sendProjectile();
-    const lands = Math.floor(end / 30);
+    // On the tick the projectile lands, not the one before (#1862).
+    const lands = Projectile.ticksToLand(end);
     const max = Monsters.maxHitFor(npc, BASE.FIRE + Math.floor(this.raid.scale / 4), Monsters.LEVELS.MAGIC);
     const hit = Shared.strike(npc, player, "magic", max, lands, { prayerMultiplier: 0.5 });
     const landed = hit.isAccurate?.() !== false;

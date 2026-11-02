@@ -25,6 +25,9 @@ const MOLT_GRAPHIC = 1055;
 const MAGIC_PROJECTILE = 280;
 const MAGIC_IMPACT = 281;
 const RANGED_PROJECTILE = 289;
+// Both styles' flight (cycles); docs/kalphite-queen.md asks for captures before changing it.
+const PROJECTILE_DELAY = 40;
+const PROJECTILE_END = 70;
 // Cache kalphite_update_* attack sequences.
 const ATTACK_ANIMATION = Object.freeze({
   crawlingMelee: 6241,
@@ -107,14 +110,15 @@ function defineTypes() {
     }
 
     hits(character, target) {
-      const delay = this.attackType === core.CombatType.MELEE ? 1 : 2;
+      // Projectile hits land with the flight's end (70 cycles: 3 ticks), not before it (#1862).
+      const delay = this.attackType === core.CombatType.MELEE ? 1 : core.Projectile.ticksToLand(PROJECTILE_END);
       const hits = [createHit(character, target, this, delay)];
       if (!target.isPlayer?.() || this.attackType === core.CombatType.MELEE) {
         return hits;
       }
 
       if (this.attackType === core.CombatType.RANGED) {
-        core.Projectile.createProjectile(character, target, RANGED_PROJECTILE, 40, 70, 43, 31).sendProjectile();
+        core.Projectile.createProjectile(character, target, RANGED_PROJECTILE, PROJECTILE_DELAY, PROJECTILE_END, 43, 31).sendProjectile();
         for (const player of character.getAsNpc().getPlayersWithinDistance(10)) {
           if (core.CombatFactory.canAttackSecondaryTarget(character, target, player, 1)) {
             hits.push(createHit(character, player, this, delay));
@@ -127,7 +131,7 @@ function defineTypes() {
       let current = target;
       const hitTargets = new Set([target]);
       while (current) {
-        core.Projectile.createProjectile(previous, current, MAGIC_PROJECTILE, 40, 70, 43, 31).sendProjectile();
+        core.Projectile.createProjectile(previous, current, MAGIC_PROJECTILE, PROJECTILE_DELAY, PROJECTILE_END, 43, 31).sendProjectile();
         const next = character.getAsNpc().getPlayersWithinDistance(10).find((player) =>
           !hitTargets.has(player) && core.CombatFactory.canAttackSecondaryTarget(character, current, player, 1)
         );

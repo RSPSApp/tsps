@@ -512,7 +512,8 @@ class OlmRoom extends Raid.Room {
       .withAngle(angle)
       .withProgress(0)
       .sendProjectile();
-    return Math.max(1, Math.floor(finish / 30));
+    // On the tick it lands, not the one before (#1862), as the bombs already wait.
+    return Projectile.ticksToLand(finish);
   }
 
   /** A head sound: from the head's face, range 13-15, 10-12 client cycles in. */

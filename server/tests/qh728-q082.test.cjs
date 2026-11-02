@@ -112,7 +112,7 @@ function makePlayer() {
 
 let firstHarness = null;
 
-function harness() {
+function harness({ nativeActors = false, player = makePlayer() } = {}) {
   const custom = new Map();
   const variants = [];
   const conditions = [];
@@ -123,6 +123,7 @@ function harness() {
   const itemOnItem = [];
   const groundPickups = [];
   const logins = [];
+  const logouts = [];
   const deaths = [];
   const spawned = [];
   const removed = [];
@@ -175,6 +176,7 @@ function harness() {
     onItemOnItem: (handler) => itemOnItem.push(handler),
     onGroundItemPickup: (handler) => groundPickups.push(handler),
     onPlayerLogin: (handler) => logins.push(handler),
+    onPlayerLogout: (handler) => logouts.push(handler),
     onNpcDeath: (handler) => deaths.push(handler),
     onCustomEvent(key, handler) {
       const handlers = custom.get(key) ?? [];
@@ -189,7 +191,13 @@ function harness() {
       for (const handler of custom.get(key) ?? []) handler(event);
     },
     registerArea(next) { area = next; },
-    spawnNpc({ id, x, y, z }) {
+    spawnNpc(definition) {
+      const { id, x, y, z } = definition;
+      if (nativeActors) {
+        const npc = core.PluginManager.spawnNpc(definition);
+        spawned.push(npc);
+        return npc;
+      }
       const npc = {
         id,
         location: new core.Location(x, y, z),
@@ -199,7 +207,10 @@ function harness() {
       spawned.push(npc);
       return npc;
     },
-    removeNpc: (npc) => removed.push(npc),
+    removeNpc(npc) {
+      removed.push(npc);
+      if (nativeActors) core.PluginManager.removeNpc(npc);
+    },
   }, { get: (target, key) => (key in target ? target[key] : noop) });
 
   // Use the actual prerequisite registrations so a misspelled saved key cannot pass.
@@ -214,8 +225,8 @@ function harness() {
   require(root + '/plugins/quests/quests/NatureSpirit.Quest')(api);
   const quest = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'nature_spirit');
   const h = {
-    player: makePlayer(), custom, variants, conditions, objectHooks, itemOnNpc, itemOnObject,
-    itemActions, itemOnItem, groundPickups, logins, deaths, spawned, removed, registered,
+    player, custom, variants, conditions, objectHooks, itemOnNpc, itemOnObject,
+    itemActions, itemOnItem, groundPickups, logins, logouts, deaths, spawned, removed, registered,
     deregistered, worldObjects, quest, get area() { return area; },
   };
   if (!firstHarness) firstHarness = h;
@@ -511,4 +522,90 @@ test('Filliman repeat talk selects the ghostspeak conversation before the mirror
   assert.equal(condition(h, N.FILLIMAN_TARLOCK, text), false);
   assert.equal(condition(h, N.FILLIMAN_TARLOCK, 'Without wearing a ghostspeak amulet:'), true);
   assert.equal(h.quest.getStage(h.player), 20);
+});
+
+test('native early grotto clicks keep Filliman reachable, recover via the exit and preserve later entry', async t => {
+  const { PluginManager } = core;
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3440, 3337);
+  core.RegionManager.loadMapFiles(3441, 9736);
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const session = new PlayerSession(channel);
+  const player = new Player(session); session.setPlayer(player);
+  player.setIndex(101); player.setUsername('grottoearly'); player.setRegistered(true);
+  player.setLocation(new core.Location(3440, 3336, 0)); player.needsPlacement = false;
+  player.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(GHOSTSPEAK, 1));
+  const h = harness({ nativeActors: true, player });
+  const connection = new ClientConnection(channel); connection.player = player;
+  const hookStart = PluginManager.objectInteractionHooks.length;
+  const views = [];
+  const previousSync = PluginManager.customEventHooks.get('network:sync-views');
+  const api = PluginManager.createApi('nature-spirit-native-test');
+  for (const handler of h.objectHooks) api.onObjectInteraction(handler);
+  api.onCustomEvent('network:sync-views', event => { if (event.player === player) views.push(event.npcs); });
+  t.after(() => {
+    for (const handler of h.logouts) handler({ player });
+    for (const npc of h.spawned) PluginManager.removeNpc(npc);
+    PluginManager.objectInteractionHooks.length = hookStart;
+    if (previousSync) PluginManager.customEventHooks.set('network:sync-views', previousSync);
+    else PluginManager.customEventHooks.delete('network:sync-views');
+    core.TaskManager.cancelTasks(player.getIndex()); player.setRegistered(false); session.flushPackets();
+  });
+  const position = () => [player.getLocation().x, player.getLocation().y, player.getLocation().z];
+  const click = async (id, x, y) => {
+    await connection.dispatch([{ type: 'object_option', id, x, y, clickType: 1 }]);
+    connection.processTurnPackets();
+    for (let tick = 0; tick < 8; tick++) {
+      core.World.processCycle++; core.TaskManager.process();
+      player.getMovementQueue().process(); core.TaskManager.processWalkTo(player.getIndex());
+    }
+    publish(); player.needsPlacement = false; // The next input follows the placement's sync.
+  };
+  let tick = 0;
+  const publish = () => {
+    const live = h.spawned.filter(npc => npc.isRegistered());
+    for (const npc of live) npc.needsPlacement = false;
+    core.World.updateLocalNpcs(player, live);
+    session.flush(++tick); session.flush(++tick);
+    return views.at(-1).map(npc => npc.typeId);
+  };
+  h.quest.setStage(player, 5);
+  await click(O.GROTTO, 3440, 3337);
+  assert.ok(player.getLocation().y < 4000, 'before the swamp gate, Enter does not move underground');
+  assert.deepEqual(publish(), [], 'no Filliman is granted before the required gate progression');
+  emit(h, 'door:toggle', { objectId: O.GATE_72 });
+  assert.equal(h.quest.getStage(player), 10);
+  await click(O.GROTTO, 3440, 3337);
+  assert.ok(player.getLocation().y < 4000, 'early Enter summons Filliman instead of leaving him in another scene');
+  assert.deepEqual(publish(), [N.FILLIMAN_TARLOCK], 'the owner actually receives Filliman in native session views');
+  await click(O.GROTTO, 3440, 3337);
+  assert.equal(h.spawned.filter(npc => npc.isRegistered()).length, 1, 'repeat Enter does not duplicate Filliman');
+  assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'finding-filliman-talking-to-filliman');
+  assert.equal(h.quest.getStage(player), 20, 'the still-reachable ghost advances the existing dialogue');
+
+  // Players saved underground by the old handler can leave and resume at the entrance.
+  player.moveTo(new core.Location(3441, 9736, 0)); player.needsPlacement = false;
+  await click(O.GROTTO_3, 3442, 9733);
+  assert.deepEqual(position(), [3443, 3338, 0]);
+  await click(O.GROTTO, 3440, 3337);
+  assert.deepEqual(publish(), [N.FILLIMAN_TARLOCK]);
+  for (const handler of h.logouts) handler({ player });
+  assert.equal(h.spawned.filter(npc => npc.isRegistered()).length, 0);
+  for (const handler of h.logins) handler({ player });
+  await click(O.GROTTO, 3440, 3337);
+  assert.deepEqual(publish(), [N.FILLIMAN_TARLOCK], 'relogin restores exactly one usable owner actor');
+  h.quest.setStage(player, 60);
+  await click(O.GROTTO, 3440, 3337);
+  assert.deepEqual(position(), [3441, 9736, 0]);
+  assert.equal(h.quest.getStage(player), 65);
+  assert.deepEqual(publish(), [N.NATURE_SPIRIT], 'ritual entry still publishes the inside spirit');
+  h.quest.setStage(player, 110);
+  await click(O.GROTTO_3, 3442, 9733);
+  await click(O.GROTTO, 3440, 3337);
+  assert.deepEqual(position(), [3441, 9736, 0]);
+  assert.equal(h.quest.getStage(player), 110, 'post-quest entry cannot lower progress');
 });

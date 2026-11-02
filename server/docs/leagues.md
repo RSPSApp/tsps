@@ -140,7 +140,8 @@ relics are the first askers; nothing changes when nobody answers):
 | `storage:gather`, `storage:room` (extended) | Mining, Woodcutting, Fishing | the existing `{ player, itemId, amount, stored }` now carries `skill` and the resource's `xp`, so a listener can bank or double what a skill gathered; `storage:room` carries `skill` too, so a relic answers room only for its own skill's resource (and for what its tool's mode turns it into) |
 | `mining:attempt`, `woodcutting:attempt`, `fishing:attempt` | the skill, after its success roll | `{ player, ..., success }`: a listener may turn a miss into a hit (Fishing then lands the best fish the player can) |
 | `mining:deplete-rock` | Mining | `{ player, object, rock, handled }`: handled keeps the rock standing |
-| `fishing:tool`, `fishing:interval` | Fishing | `{ player, variants, variant }` when no tool was found; `{ player, ticks }` before each catch roll |
+| `fishing:tool`, `fishing:interval` | Fishing | `{ player, variants, variant }` when no tool was found (a `variant` with `baitless` fishes without bait and uses none); `{ player, ticks }` before each catch roll |
+| `woodcutting:tool`, `mining:tool` | Woodcutting (`findBestUsableAxe`, so `woodcutting:axe` without an `itemId` too), Mining (`findBestPickaxe`, so `mining:best-pickaxe` too) | `{ player, axes, axe }` / `{ player, pickaxes, pickaxe }` when the player holds none they can use: a listener may stand in for one (the lists are the skill's own, best first) |
 | `cooking:cooked`, `smithing:bar-for-ore`, `crafting:cut-gem`, `fletching:shafts` | Cooking, Smelting, Gems, Fletching | lookups: what a raw item, ore, uncut gem or log turns into and the XP |
 | `hunter:catch-chance`, `hunter:rewards`, `hunter:lure-interval`, `hunter:jar-kept` | Hunter | `{ player, npcId, chance }` in the shared roll; `{ player, kind, npcId, rewards, xp }` for a trap's catch; `{ player, kind, ticks }` between an idle trap's looks; `{ player, kept }` for an impling jar |
 | `thieving:loot`, `thieving:done`, `thieving:deplete-stall`; `pouchLimit` and `alwaysSucceeds` on `thieving:pickpocket-target` | Thieving | `{ player, npc, target, loot }` before the loot is handed over; `{ player, kind, npc \| object, succeeded, again }` after a pickpocket or theft (again repeats the click a tick later, while neither the player nor the NPC has moved); `{ player, object, handled }` before a stall empties |
@@ -707,7 +708,7 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | Tier | Relic | State |
 | --- | --- | --- |
 | 1 | Endless Harvest | done (Trailblazer Reloaded's unit; banking by toggle, resources never deplete) |
-| 1 | Barbarian Gathering | partial: second chance, Strength/Agility XP, bare-handed fishing; not bare-handed mining or woodcutting, baitless fishing, the Knapsack's storage |
+| 1 | Barbarian Gathering | partial: second chance, Strength/Agility XP, bare hands that fish without bait (`fishing:tool`) and chop and mine as the crystal axe and pickaxe (`woodcutting:tool`, `mining:tool`); not the Knapsack's storage (a container of its own, its options and lines unrecorded) |
 | 1 | Abundance | done |
 | 2 | Hotfoot | partial: cooked fish, smelted ore, laps counted twice with +25% XP, no failures, a 33% mark chance on the nine rooftop courses (`agility:mark-chance`; the mark cooldown still runs), a picked-up course mark finishing the lap with 10,000 coins (`agility:mark-taken`); not the Agility XP for running (the Wiki gives no rate), termites finishing a lap or doubled, or the tenfold shards (the Colossal Wyrm courses give no termites, Prifddinas no shards) |
 | 2 | Friendly Forager | done (Raging Echoes' unit, plus Herblore at once; the recorded lines) |

@@ -357,7 +357,10 @@ function findBestPickaxe(player) {
       return pickaxe;
     }
   }
-  return null;
+  // Content may stand in for the pickaxe ("mining:tool", a league relic's bare hands).
+  const request = { player, pickaxes: PICKAXES_DESC, pickaxe: null };
+  pluginApi?.emitCustomEvent("mining:tool", request);
+  return request.pickaxe;
 }
 
 function stopMining(activeSessions, player, resetAnim = true) {

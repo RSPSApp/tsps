@@ -717,3 +717,45 @@ test("Hotfoot: a picked-up course mark finishes a lap, counted twice and paid, w
   pickUp(elsewhere, [3200, 3200, 0]);
   assert.equal(laps(elsewhere), 0, "a mark off every course's mark tiles finishes nothing");
 });
+
+test("Barbarian Gathering: bare hands chop and mine as the crystal axe and pickaxe, at any level; without it, no tool", () => {
+  const Woodcutting = require("../plugins/skills/Woodcutting.plugin");
+  const Mining = require("../plugins/skills/Mining.plugin");
+  Woodcutting.register(skillApi());
+  Mining.register(skillApi());
+  const who = cases(BARBARIAN_GATHERING);
+  const axe = Woodcutting.findBestUsableAxe(who.relic);
+  const crystalAxe = Woodcutting.AXES.find((entry) => entry.id === I.CRYSTAL_AXE);
+  assert.deepEqual([axe.id, axe.tier, axe.animationId, axe.requiredLevel, axe.requiredAgility], [null, crystalAxe.tier, crystalAxe.animationId, 1, 1],
+    "the crystal axe's cut chance and swing, no item and no requirement");
+  const pickaxe = Mining.findBestPickaxe(who.relic);
+  const crystalPickaxe = Mining.PICKAXES.find((entry) => entry.id === I.CRYSTAL_PICKAXE);
+  assert.deepEqual([pickaxe.id, pickaxe.key, pickaxe.attemptIntervalTicks, pickaxe.requiredLevel], [null, "crystal", crystalPickaxe.attemptIntervalTicks, 1]);
+
+  who.relic.getInventory().add(new core.Item(I.BRONZE_AXE, 1));
+  assert.equal(Woodcutting.findBestUsableAxe(who.relic).id, I.BRONZE_AXE, "a held axe is used before bare hands");
+  for (const player of others(who)) {
+    assert.equal(Woodcutting.findBestUsableAxe(player), null);
+    assert.equal(Mining.findBestPickaxe(player), null);
+  }
+});
+
+test("Barbarian Gathering: bare hands fish a bait spot with no bait, and use none; a held rod still takes bait", () => {
+  const Fishing = require("../plugins/skills/Fishing.plugin");
+  Fishing.register(skillApi());
+  const who = cases(BARBARIAN_GATHERING);
+  const tool = Fishing.TOOLS.FISHING_ROD;
+  for (const player of Object.values(who)) player.getSkillManager().setCurrentLevel(Skill.FISHING, 99, false).setMaxLevels(Skill.FISHING, 99, false);
+  const hands = Fishing.hasToolRequirements(who.relic, tool);
+  assert.equal(hands?.baitless, true, "no rod and no bait: bare hands");
+  who.relic.getInventory().add(new core.Item(I.FISHING_BAIT, 5));
+  Fishing.landCatch(who.relic, tool, hands, [tool.fish.at(-1)]);
+  assert.equal(who.relic.getInventory().getAmount(I.FISHING_BAIT), 5, "the hands use no bait");
+
+  who.relic.getInventory().add(new core.Item(I.FISHING_ROD, 1));
+  const rod = Fishing.hasToolRequirements(who.relic, tool);
+  assert.equal(rod.baitless, undefined);
+  Fishing.landCatch(who.relic, tool, rod, [tool.fish.at(-1)]);
+  assert.equal(who.relic.getInventory().getAmount(I.FISHING_BAIT), 4, "a rod's cast takes its bait");
+  for (const player of others(who)) assert.equal(Fishing.hasToolRequirements(player, tool), null);
+});

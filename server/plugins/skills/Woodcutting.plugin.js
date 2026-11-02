@@ -669,7 +669,10 @@ function findBestUsableAxe(player) {
     }
   }
 
-  return null;
+  // Content may stand in for the axe ("woodcutting:tool", a league relic's bare hands).
+  const request = { player, axes: AXES_BEST_FIRST, axe: null };
+  pluginApi?.emitCustomEvent("woodcutting:tool", request);
+  return request.axe;
 }
 
 // Bots only ever get the standard bronze-to-dragon axes.

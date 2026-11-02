@@ -252,7 +252,8 @@
     "barbarianGathering": {
       "league": 6, "key": "barbarian-gathering", "skills": ["MINING", "WOODCUTTING", "FISHING"],
       "secondChance": 0.5, "bonusXpFraction": 0.1, "bonusSkills": ["STRENGTH", "AGILITY"],
-      "_hands": "Bare hands fish as the spot's best tool (its crystal version where one exists), at any level; mining and chopping bare-handed need a tool hook the skills do not have yet."
+      "handTools": { "WOODCUTTING": "CRYSTAL_AXE", "MINING": "CRYSTAL_PICKAXE" },
+      "_hands": "Bare hands fish as the spot's best tool (its crystal version where one exists) with no bait, and chop and mine as the crystal axe and pickaxe (Wiki), at any level and with no Agility requirement. They are no item: a task naming the tool is not done with them (ours)."
     },
     "abundance": {
       "league": 6, "key": "abundance", "levelBoost": 10, "extraXp": 2, "coinsPerXp": 2,

@@ -14,6 +14,7 @@ before(() => CachePipeline.initialize(require('node:path').resolve(__dirname, '.
 function fixture(t, bossRareMultiplier = 1) {
     const player = new Player(null), handlers = new Map();
     const api = new Proxy({
+        core: { CacheDefinitions: require('../dist/game/cache/CacheDefinitions').CacheDefinitions },
         persistAttribute() {}, getItemOnGroundManager: () => ({}),
         getPluginConfig: (key, fallback) => key === "NpcDrops:bossRareMultiplier" ? bossRareMultiplier : fallback,
         onCustomEvent(name, fn) { if (!handlers.has(name)) handlers.set(name, []); handlers.get(name).push(fn); },
@@ -103,7 +104,7 @@ test('rejected commit never returns an outcome and adjusted clue probabilities r
 });
 
 test('boss rare multiplier applies equally to flat, ordered and exclusive-group accesses', t => {
-    const f = fixture(t, 2), row = { item_id: 995, name: 'Rare', quantity: [1, 1], weight: 1, out_of: 200 };
+    const f = fixture(t, 2), row = { item_id: 995, name: 'Unique', section: 'Uniques', quantity: [1, 1], weight: 1, out_of: 200 };
     const table = { table_id: 'rare_boss', boss: true, main_max_roll: 1, entries: [], tertiary: [] };
     const ordered = { ...table, reward_chain: { type: 'ordered_exclusive', state_domain: 'forgotten_four',
         stages: [{ weight: 1, out_of: 200, main_max_roll: 1, entries: [row] }] } };
@@ -114,25 +115,53 @@ test('boss rare multiplier applies equally to flat, ordered and exclusive-group 
     for (const variant of [ordered, grouped]) assert.ok(!has(f.roll([.011, 0], variant), 995), 'exact boosted miss boundary');
 });
 
-test('ordered common accesses and scaled common endpoints remain unboosted', t => {
+test('ordered ordinary accesses and their scaled endpoints remain unboosted at any rarity', t => {
     const f = fixture(t, 2), entry = { item_id: 995, quantity: [1, 1], weight: 1 };
     const stage = { weight: 1, out_of: 100, main_max_roll: 1, entries: [entry] };
     const table = { table_id: 'threshold_boss', boss: true, entries: [], tertiary: [], reward_chain:
         { type: 'ordered_exclusive', state_domain: 'forgotten_four', stages: [stage] } };
-    assert.ok(!has(f.roll([.015], table), 995), '1/100 is not rare');
+    assert.ok(!has(f.roll([.015], table), 995), 'ordinary coins are not unique');
+    stage.out_of = 200;
+    assert.ok(!has(f.roll([.008], table), 995), 'rarer coins still are not unique');
     stage.out_of = 200; stage.record_first_received = { state_key: 'received' };
     stage.source_scaling = { execution: 'documented_base_and_endpoint', known_endpoint: { kill_count: 300, weight: 1, out_of: 50 },
         after_first_received: { weight: 1, out_of: 200 } };
     f.api.onCustomEvent('combat-achievements:count', event => { event.total = 300; });
-    assert.ok(!has(f.roll([.03], table), 995), 'the selected 1/50 endpoint is not rare');
+    assert.ok(!has(f.roll([.03], table), 995), 'the selected endpoint does not turn supplies into uniques');
 });
 
 test('exclusive groups combine boss and tertiary modifiers and saturate without multiple outcomes', t => {
-    const f = fixture(t, 2), row = id => ({ item_id: id, name: 'Clue', quantity: [1, 1], weight: 1, out_of: 200 });
+    const f = fixture(t, 2), row = id => ({ item_id: id, name: 'Unique', section: 'Uniques', quantity: [1, 1], weight: 1, out_of: 200 });
     const table = { table_id: 'group_boss', boss: true, entries: [], tertiary_groups: [{ type: 'exclusive', entries: [row(555), row(556)] }] };
-    f.api.onCustomEvent('npc-drops:tertiary-chance', event => { event.rules.push({ pattern: /^Clue$/, multiplier: 3 }); });
+    f.api.onCustomEvent('npc-drops:tertiary-chance', event => { event.rules.push({ pattern: /^Unique$/, multiplier: 3 }); });
     assert.equal(f.roll([.02], table)[0]?.itemId, 555, 'both modifiers apply before exclusive selection');
     const saturated = fixture(t, 1000);
     assert.equal(saturated.roll([.75], table).length, 1, 'large supported config still returns exactly one outcome');
     assert.throws(() => Rewards.group([{ weight: 1, out_of: 1 }, { weight: 1, out_of: 1 }], () => 1), /exceed one/);
+});
+
+test('a scaled ordered unique keeps its classification and a mixed pool is never boosted', t => {
+    const f = fixture(t, 2);
+    const row = { item_id: 6737, quantity: [1, 1], weight: 1 };
+    const stage = { weight: 1, out_of: 200, main_max_roll: 1, entries: [row],
+        record_first_received: { state_key: 'received' }, source_scaling: {
+            execution: 'documented_base_and_endpoint', known_endpoint: { kill_count: 300, weight: 1, out_of: 50 },
+            after_first_received: { weight: 1, out_of: 200 },
+        } };
+    const table = { table_id: 'unique_pool', boss: true, entries: [], reward_chain: {
+        type: 'ordered_exclusive', state_domain: 'forgotten_four', stages: [stage],
+    } };
+    f.api.onCustomEvent('combat-achievements:count', event => { event.total = 300; });
+    assert.ok(has(f.roll([.03, 0], table), 6737), 'the selected 1/50 unique access is boosted');
+    stage.entries.push({ item_id: 440, quantity: [1, 1], weight: 1 });
+    stage.main_max_roll = 2;
+    assert.ok(!has(f.roll([.008, 0], table), 6737), 'an ordinary item in the pool prevents boosting the entire access');
+});
+
+test('ordinary exclusive rows retain tertiary modifiers without the boss unique boost', t => {
+    const f = fixture(t, 1000), row = { item_id: 555, name: 'Clue', quantity: [1, 1], weight: 1, out_of: 200 };
+    const table = { table_id: 'ordinary_group', boss: true, entries: [], tertiary_groups: [{ type: 'exclusive', entries: [row] }] };
+    f.api.onCustomEvent('npc-drops:tertiary-chance', event => { event.rules.push({ pattern: /^Clue$/, multiplier: 3 }); });
+    assert.ok(has(f.roll([.01], table), 555));
+    assert.ok(!has(f.roll([.02], table), 555), 'the chance is 3/200, not 3000/200');
 });

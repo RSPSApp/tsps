@@ -19,6 +19,8 @@ function completeRoom({ player }) {
     return true;
   }
   raid.room.start();
+  // Skipped, not fought: nothing of the fight stays behind.
+  for (const npc of [...raid.room.npcs]) raid.room.despawn(npc);
   raid.room.complete();
   return true;
 }

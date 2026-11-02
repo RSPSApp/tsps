@@ -3,44 +3,62 @@
 /**
  * Wave 4: Sotetseg, and the Shadow Realm's maze.
  *
- * Wiki (Sotetseg; "Theatre of Blood/Strategies", Sotetseg):
- * - It stands still (4000 hitpoints) and attacks every 5 ticks: a horn lunge on someone beside
- *   it for up to 45 (22 through Protect from Melee), landing a tick late; or a red ball. A ball
- *   is a successful hit of up to 50, fully blocked by the right prayer; one that isn't turns
- *   protection prayers off for 3 seconds. The first ball (magic) splits into two more aimed at
- *   others, one magic (red) and one ranged (grey).
- * - After 10 balls, a big slow ball at one player; the damage is shared by everyone within the
- *   3x3 round them and kills a lone target with two or more in the room (121 and up, to 188).
- * - At 66.6% and 33.3% it chooses a player ("Sotetseg chooses you...") for the Shadow Realm;
- *   the rest are pulled to the other end of the arena and its attacks stop. The runner follows a
- *   red path to the portal, taking 1-3 every 7 ticks. The others see the runner's tile glow red
- *   and must follow the same path: a wrong tile hurts them and anyone beside them for 6.67% of
- *   their hitpoints + 15 every tick. Once someone reaches the fourth row, a tornado follows the
- *   path hitting anyone it catches (in the realm instead, for a solo runner). Clearing the maze
- *   restores its Defence.
- * Cache: Sotetseg (8387 waiting, 8388 fighting), the tornado (8389), the maze floors 33033
- * (light grey), 33034 (dark grey), 33035 (red), 33036 (wrong tile), the portal 33037.
- * RuneLite (gameval): its projectiles (1604 big ball, 1606 magic, 1607 ranged), the big
- * ball's impact (1605) and the realm's drain (1608).
- * Captured: the attack animations (8138 melee, 8139 the balls) and sounds, the ball splitting
- * into a magic and a ranged one off the player it hits, the big ball, the projectiles' timing
- * and arcs, a wrong maze tile's explosion and zap. Estimates: half-and-half melee or magic
- * beside it, the maze generator, the realm's tiles and the arena tiles the others are pulled
- * to, the runner's return tile, the tornado's 35-45, the solo big ball's 70.
- * Estimates: the big ball's damage between the Wiki's 121 (two players) and 188 (five); where
- * the portal stands.
+ * Wiki (Sotetseg; "Theatre of Blood/Strategies", Sotetseg; Hard and Entry Mode pages):
+ * - It stands still and attacks every 5 ticks: a horn lunge on someone beside it for up to 45 (22 through
+ *   Protect from Melee; Entry 20), landing a tick late; or a red ball. A ball is a successful hit of up to
+ *   50 (Entry 22), fully blocked by the right prayer; one that isn't turns protection prayers off for 3
+ *   seconds. The first ball (magic) splits into two more aimed at others, one magic and one ranged.
+ * - After 10 balls, a big slow ball at one player; the damage is shared by everyone within the 3x3 round
+ *   them and kills a lone target with two or more in the room (121 and up, to 188). Entry: 15 solo, about
+ *   80 in a group. Hard: two big balls, one after the other.
+ * - At 66.6% and 33.3% it chooses a player for the Shadow Realm; the rest are pulled to the other end of
+ *   the arena and its attacks stop. The runner follows a red path to the portal, taking 1-3 every 7 ticks.
+ *   The others see the runner's tile glow red and must follow the same path: a wrong tile hurts them and
+ *   anyone beside them for 6.67% of their hitpoints + 15 (Entry 11) every tick. Once someone reaches the
+ *   fourth row, a tornado follows the path hitting anyone it catches, gone again if they step back (in the
+ *   realm instead, for a solo runner).
+ * - Hard: all but one go to the realm, the maze divided among them by party order; the tornado also runs in
+ *   the realm once the last runner, or the one left behind, is past the third row.
+ * - Clearing the maze restores its Defence.
+ * Cache: the ids per mode, the maze floors (33033 light, 33034 dark, 33035 red, 33036 wrong), the arena's and
+ * realm's tiles, the portal (33037, standing at 3357,4330), Hard's section tiles (41750-41753: red for the
+ * viewer whose varbit 12269 is that section's 1-4, dark for the rest).
+ * Captured (Entry 101, 554; Normal 554, 1837; Hard 1837, 1852):
+ * - The path's shape: a column on every second row, up to 5 tiles from the last, joined on the row between.
+ * - Sections by rows; Hard's wrong tiles in the realm; the tile the tornado starts on, a tile a tick.
+ * - Teleports: a white fade, moved 3 ticks later, faded in the tick after; the return tile and those of the
+ *   ones pulled away; Sotetseg back in its waiting form through the maze; the light floor from the start.
+ * - The animations, projectiles and sounds, the big ball's message (only to its target, unlike the Wiki's
+ *   wording); the hitpoints each mode's kills show.
+ * - Hitpoints: Normal is the Wiki's; Hard took 4500/5250/6000 for 3/4/5 players (1.5x the Wiki's infobox;
+ *   its Hard Mode page says only that enemies "have more health"); Entry 560 solo, 1064 for two.
+ * Estimates: half-and-half melee or magic beside it, the tornado's 35-45, the solo big ball's 70, the big
+ * ball between the Wiki's 121 and 188, sections for three runners, Entry's hitpoints for three or more,
+ * the maze ending as the first runner takes the portal (1 Hard sample), every Hard big ball's size.
+ * Captures show smaller big balls (35 each for a Normal duo sharing): the Wiki decides.
  */
 
 const Shared = require("./Shared.TheatreOfBlood");
 const Raid = require("./RaidState.TheatreOfBlood");
 
-const NPC = { WAITING: 8387, FIGHTING: 8388, TORNADO: 8389 };
-const OBJECT = { LIGHT: 33033, DARK: 33034, RED: 33035, WRONG: 33036, PORTAL: 33037 };
+const NPC_BY_MODE = {
+  entry: { WAITING: 10864, FIGHTING: 10865, TORNADO: 10866 },
+  normal: { WAITING: 8387, FIGHTING: 8388, TORNADO: 8389 },
+  hard: { WAITING: 10867, FIGHTING: 10868, TORNADO: 10869 },
+};
+const NPC = NPC_BY_MODE.normal;
+const OBJECT = { LIGHT: 33033, DARK: 33034, RED: 33035, WRONG: 33036, PORTAL: 33037, SECTION_BASE: 41750 };
 const SPAWN = { x: 3277, y: 4326, z: 0 };
 const MAZE = { minX: 3273, maxX: 3286, minY: 4310, maxY: 4324, z: 0 };
-const REALM = { minX: 3354, maxX: 3367, minY: 4311, maxY: 4325, z: 3, start: { x: 3360, y: 4309, z: 3 }, portal: { x: 3357, y: 4328, z: 3 } };
+const REALM = { minX: 3354, maxX: 3367, minY: 4311, maxY: 4325, z: 3, start: { x: 3360, y: 4309, z: 3 } };
 const PULLED_TO = { x: 3274, y: 4307, z: 0 };
 const RETURN = { x: 3275, y: 4327, z: 0 };
+/** Row of the maze a tornado starts past: the fourth (index 3). */
+const TORNADO_ROW = 3;
+/** Client varbit tob_sotetseg_hard_tiles_visible: which section a Hard runner's client shows red. */
+const VARBIT_SECTION = 12269;
+/** Captured: rows in each section by how many run (2 and 4 runners; 3 is an estimate). */
+const SECTION_ROWS = { 1: [15], 2: [7, 8], 3: [5, 5, 5], 4: [4, 4, 4, 3] };
 
 const ANIMATION = { MELEE: 8138, MAGIC: 8139 };
 const GRAPHIC = { BIG_BALL: 1604, BIG_IMPACT: 1605, MAGIC: 1606, RANGED: 1607, DRAIN: 1608, ZAP: 1603, EXPLOSION: 505 };
@@ -53,31 +71,60 @@ const PROJECTILE = {
   /** From a wrong maze tile to whoever it hurts. */
   ZAP: { delay: 0, duration: 15, perTile: 0, startHeight: 0, endHeight: 16, angle: 64, progress: 64 },
 };
-const SOUND = { BALL: 3539, MELEE: 4015, WRONG_TILE: 3970 };
+const SOUND = { BALL: 3539, BALL_DELAY: 10, MELEE: 4015, WRONG_TILE: 3970 };
+const MESSAGE = {
+  CHOSEN: "<col=7f7f7f>Sotetseg chooses you...</col>",
+  BIG_BALL: "<col=bf0000>A large ball of energy is shot your way...</col>",
+};
+/** Captured: the fade to white, then the move, then the fade in. Going in takes 3 and 4 ticks, coming back 1 and 2. */
+const TELEPORT = { inMove: 3, inFade: 4, outMove: 1, outFade: 2, fadeIn: 255 };
 
 const ATTACK_TICKS = 5;
-const MELEE = { max: 45, prayerMultiplier: 0.5 };
-const BALL = { max: 50, prayerBlockSeconds: 3, beforeBig: 10 };
-const BIG_BALL = { solo: 70, duo: 121, perPlayer: 67 / 3 };
+const MELEE = { max: { entry: 20, normal: 45 }, prayerMultiplier: 0.5 };
+const BALL = { max: { entry: 22, normal: 50 }, prayerBlockSeconds: 3, beforeBig: 10 };
+/** Wiki: Normal and Hard from 121 for two to 188 for five; Entry 15 solo and "around 80". */
+const BIG_BALL = {
+  entry: { solo: 15, group: 80, perPlayer: 0 },
+  normal: { solo: 70, group: 121, perPlayer: 67 / 3 },
+  count: { hard: 2, normal: 1, entry: 1 },
+};
 const MAZE_PHASES = [0.666, 0.333];
 const REALM_DRAIN = { every: 7, min: 1, max: 3 };
-const WRONG_TILE = { share: 0.0667, flat: 15 };
+const WRONG_TILE = { share: 0.0667, flat: { entry: 11, normal: 15 } };
 const TORNADO = { min: 35, max: 45 };
+/** Captured for one and two players in Entry, and three to five in Hard; see the header. */
+const HITPOINTS = { entry: { 1: 560, 2: 1064, 3: 1680, 4: 1960, 5: 2240 }, normal: 4000, hard: 4000 };
+/** A Timely Snack: big balls survived unshared. */
+const SNACKS_NEEDED = 3;
 
 const key = (tile) => `${tile.x},${tile.y}`;
 
 class SotetsegRoom extends Raid.Room {
   onBuild() {
-    this.sotetseg = this.spawn(NPC.WAITING, SPAWN, { scripted: true, face: Shared.facing("SOUTH") });
-    this.sotetseg?.getMovementQueue().setBlockMovement(true);
+    this.ids = NPC_BY_MODE[this.raid.mode] ?? NPC;
+    this.sotetseg = this.spawn(this.ids.WAITING, SPAWN, { scale: false, scripted: true, face: Shared.facing("SOUTH") });
+    if (this.sotetseg) {
+      const table = HITPOINTS[this.raid.mode] ?? HITPOINTS.normal;
+      const hitpoints = typeof table === "object"
+        ? table[Math.max(1, Math.min(5, this.raid.size))]
+        : Math.floor(table * Shared.MODES[this.raid.mode].hitpoints(this.raid.size));
+      this.sotetseg.setMaxHitpoints?.(hitpoints);
+      this.sotetseg.setHitpoints(hitpoints);
+      this.sotetseg.getMovementQueue().setBlockMovement(true);
+    }
     this.maze = null;
     this.mazesDone = 0;
+    this.bigBallsLeft = 0;
+    this.snacks = 0;
+    this.sharedWithAll = false;
+    // Captured: the arena's floor is light from the moment a party arrives.
+    this.setMazeFloor(OBJECT.LIGHT);
   }
 
   onStart() {
     const npc = this.sotetseg;
     if (!npc) return;
-    npc.setNpcTransformationId?.(NPC.FIGHTING);
+    npc.setNpcTransformationId?.(this.ids.FIGHTING);
     this.ticks = 0;
     this.balls = 0;
   }
@@ -95,6 +142,11 @@ class SotetsegRoom extends Raid.Room {
       this.complete();
       return;
     }
+    if (this.deathCount > 0 && !this.deathNoted) {
+      this.deathNoted = true;
+      this.raid.failTask("A Timely Snack", "Someone died.");
+      this.raid.failTask("Harder Mode I", "Someone died.");
+    }
     if (this.maze) {
       this.tickMaze();
       return;
@@ -108,7 +160,11 @@ class SotetsegRoom extends Raid.Room {
   }
 
   onComplete() {
-    if (this.maze) this.endMaze(false);
+    if (this.maze) this.endMaze();
+    if (this.deathCount === 0 && this.snacks >= SNACKS_NEEDED && this.raid.taskLive("A Timely Snack")) this.raid.completeTask("A Timely Snack");
+    if (this.raid.taskLive("Perfect Sotetseg")) this.raid.completeTask("Perfect Sotetseg");
+    if (this.raid.taskLive("Harder Mode I")) this.raid.completeTask("Harder Mode I");
+    if (this.sharedWithAll) this.raid.completeTask("Just To Be Safe");
   }
 
   // -------------------------------------------------------------- attacks
@@ -123,13 +179,18 @@ class SotetsegRoom extends Raid.Room {
     if (Shared.distanceTo(npc, target.getLocation()) <= 1 && Math.random() < 0.5) {
       npc.performAnimation(new Animation(ANIMATION.MELEE));
       Shared.areaSound(this.area, npc, SOUND.MELEE, 30);
-      this.strike(npc, target, "melee", MELEE.max, 1, { prayerMultiplier: MELEE.prayerMultiplier });
+      const hit = this.strike(npc, target, "melee", Shared.byMode(this.raid, MELEE.max), 1, { prayerMultiplier: MELEE.prayerMultiplier });
+      this.noteHit(target, "melee", hit.getTotalDamage());
       return;
     }
     npc.performAnimation(new Animation(ANIMATION.MAGIC));
-    Shared.areaSound(this.area, npc, SOUND.BALL);
-    if (this.balls >= BALL.beforeBig) {
+    Shared.areaSound(this.area, npc, SOUND.BALL, SOUND.BALL_DELAY);
+    if (this.bigBallsLeft === 0 && this.balls >= BALL.beforeBig) {
       this.balls = 0;
+      this.bigBallsLeft = Shared.byMode(this.raid, BIG_BALL.count);
+    }
+    if (this.bigBallsLeft > 0) {
+      this.bigBallsLeft--;
       this.bigBall(target, fighters);
       return;
     }
@@ -160,7 +221,8 @@ class SotetsegRoom extends Raid.Room {
   /** Blocked by the right prayer; otherwise it hits and turns protection prayers off. */
   ballLands(player, style) {
     if (Shared.isProtected(player, style)) return;
-    Shared.damage(player, Shared.random(1, BALL.max));
+    Shared.damage(player, Shared.random(1, Shared.byMode(this.raid, BALL.max)));
+    this.noteHit(player, style, 1);
     const { PrayerHandler } = Shared.core();
     for (const prayer of [PrayerHandler.PROTECT_FROM_MAGIC, PrayerHandler.PROTECT_FROM_MISSILES, PrayerHandler.PROTECT_FROM_MELEE]) {
       PrayerHandler.deactivatePrayer(player, prayer);
@@ -168,18 +230,35 @@ class SotetsegRoom extends Raid.Room {
     player.getCombat().getPrayerBlockTimer().start(BALL.prayerBlockSeconds);
   }
 
+  /** Perfect Sotetseg and Harder Mode I, as the captures word them. */
+  noteHit(player, style, damage) {
+    if (damage <= 0) return;
+    const name = Shared.displayName(player);
+    this.raid.failTask("Harder Mode I", `${name} got hit by Sotetseg's ${style} attack.`);
+    if (!Shared.isProtected(player, style)) this.raid.failTask("Perfect Sotetseg", `${name} got hit by Sotetseg's ${style} attack and didn't pray against it.`);
+  }
+
   bigBall(target, fighters) {
-    for (const player of fighters) player.sendMessage(`<col=ef1020>${Shared.displayName(target)} has discovered a large ball of energy coming their way...</col>`);
+    target.sendMessage(MESSAGE.BIG_BALL);
     const ticks = Shared.projectile(this.area, this.sotetseg, target, GRAPHIC.BIG_BALL, PROJECTILE.BIG_BALL);
-    const present = fighters.length;
     this.later(ticks, () => {
-      if (this.maze || !this.fighters().includes(target)) return;
-      const sharing = this.fighters().filter((player) => Shared.distanceTo(target, player.getLocation()) <= 1);
-      const total = present <= 1 ? BIG_BALL.solo : Math.round(BIG_BALL.duo + (present - 2) * BIG_BALL.perPlayer);
+      const present = this.fighters();
+      if (this.maze || !present.includes(target)) return;
+      const sharing = present.filter((player) => Shared.distanceTo(target, player.getLocation()) <= 1);
+      const damage = Shared.byMode(this.raid, BIG_BALL);
+      const total = present.length <= 1 ? damage.solo : Math.round(damage.group + (present.length - 2) * damage.perPlayer);
       const each = Math.ceil(total / Math.max(1, sharing.length));
       for (const player of sharing) {
         player.performGraphic(Shared.gfx(GRAPHIC.BIG_IMPACT));
         Shared.damage(player, each);
+      }
+      if (sharing.length > 1) {
+        const reason = "The ball was split between at least two team members.";
+        this.raid.failTask("A Timely Snack", reason);
+        this.raid.failTask("Harder Mode I", reason);
+        if (sharing.length === present.length) this.sharedWithAll = true;
+      } else {
+        this.snacks++;
       }
     });
   }
@@ -189,22 +268,32 @@ class SotetsegRoom extends Raid.Room {
   startMaze() {
     const fighters = this.fighters();
     if (fighters.length === 0) return;
-    const runner = Shared.randomOf(fighters);
+    const { Animation } = Shared.core();
+    // Hard: all but one, kept in party order (the orbs' order). Otherwise one.
+    const left = this.raid.isHard && fighters.length > 1 ? Shared.randomOf(fighters) : null;
+    const runners = this.raid.isHard ? fighters.filter((player) => player !== left) : [Shared.randomOf(fighters)];
     const path = generatePath();
+    const sections = this.raid.isHard ? sectionsOf(runners.length) : null;
     this.maze = {
-      runner, path, pathKeys: new Set(path.map(key)), realTiles: new Set(path.map((tile) => key(toReal(tile)))),
-      glow: null, wrong: new Set(), tornado: null, tornadoStep: 0, drain: 0, solo: fighters.length === 1, objects: [],
+      runners, path, sections, solo: fighters.length === 1,
+      pathKeys: new Set(path.map(key)), realTiles: new Set(path.map((tile) => key(toReal(tile)))),
+      glows: new Map(), wrong: new Map(), tornadoes: new Map(), drain: 0,
     };
-    this.setMazeFloor(OBJECT.DARK);
-    for (const tile of path) this.maze.objects.push(this.placeObject(OBJECT.RED, tile, 22, 0));
-    this.maze.objects.push(this.placeObject(OBJECT.PORTAL, REALM.portal, 10, 0));
+    this.sotetseg.setNpcTransformationId?.(this.ids.WAITING);
+    this.sotetseg.performAnimation(new Animation(ANIMATION.MAGIC));
+    this.later(TELEPORT.inMove, () => {
+      if (!this.maze) return;
+      this.setMazeFloor(OBJECT.DARK);
+      for (const tile of path) this.placeObject(sections ? OBJECT.SECTION_BASE + sections[tile.y - REALM.minY] : OBJECT.RED, tile, 22, 0);
+    });
     for (const player of fighters) {
+      const slot = runners.indexOf(player);
+      const text = slot >= 0 ? MESSAGE.CHOSEN : "";
       player.getCombat().reset?.();
-      player.getPacketSender().sendClientScript(Shared.SCRIPT.FADE_WHITE, player === runner ? "<col=c0c0c0>Sotetseg chooses you...</col>" : "");
-      this.later(2, () => {
-        player.moveTo(Shared.loc(player === runner ? REALM.start : PULLED_TO));
-        Shared.fade(player, 200, "");
-      });
+      player.getPacketSender().sendClientScript(Shared.SCRIPT.FADE_WHITE, text);
+      if (slot >= 0 && sections) player.getPacketSender().sendVarbit(VARBIT_SECTION, slot + 1);
+      this.later(TELEPORT.inMove, () => player.moveTo(Shared.loc(slot >= 0 ? REALM.start : PULLED_TO)));
+      this.later(TELEPORT.inFade, () => Shared.fade(player, TELEPORT.fadeIn, text));
     }
   }
 
@@ -216,19 +305,24 @@ class SotetsegRoom extends Raid.Room {
 
   tickMaze() {
     const maze = this.maze;
-    const runner = maze.runner;
-    if (!this.raid.players.includes(runner) || this.raid.member(runner).jailed || runner.getHitpoints() <= 0) {
-      this.endMaze(false);
+    const alive = maze.runners.filter((runner) => this.raid.players.includes(runner) && !this.raid.member(runner).jailed && runner.getHitpoints() > 0);
+    if (alive.length === 0) {
+      this.endMaze();
       return;
     }
     if (++maze.drain >= REALM_DRAIN.every) {
       maze.drain = 0;
-      runner.performGraphic(Shared.gfx(GRAPHIC.DRAIN));
-      this.later(2, () => Shared.damage(runner, Shared.random(REALM_DRAIN.min, REALM_DRAIN.max)));
+      for (const runner of alive) {
+        runner.performGraphic(Shared.gfx(GRAPHIC.DRAIN));
+        this.later(2, () => Shared.damage(runner, Shared.random(REALM_DRAIN.min, REALM_DRAIN.max)));
+      }
     }
-    this.mirrorRunner(runner);
-    this.punishWrongTiles(runner);
-    this.tickTornado(runner);
+    for (const runner of alive) this.mirrorRunner(runner);
+    const arena = this.fighters().filter((player) => !alive.includes(player) && Shared.tileOf(player).z === MAZE.z);
+    this.punishWrongTiles(arena, MAZE.z, (at) => at.z === MAZE.z && inBox(at, MAZE) && !maze.realTiles.has(key(at)));
+    // Hard: the realm has wrong tiles of its own (captured); the Normal runner's are free.
+    if (this.raid.isHard) this.punishWrongTiles(alive, REALM.z, (at) => at.z === REALM.z && inBox(at, REALM) && !maze.pathKeys.has(key(at)));
+    this.tickTornadoes(alive, arena);
   }
 
   /** The runner's tile glows red on the real maze. */
@@ -237,29 +331,32 @@ class SotetsegRoom extends Raid.Room {
     const at = Shared.tileOf(runner);
     if (at.z !== REALM.z || !inBox(at, REALM)) return;
     const real = toReal(at);
-    if (maze.glow && key(maze.glow) === key(real)) return;
-    if (maze.glow) this.placeObject(OBJECT.DARK, maze.glow, 22, 0);
-    maze.glow = real;
+    const glow = maze.glows.get(runner);
+    if (glow && key(glow) === key(real)) return;
+    if (glow) this.placeObject(OBJECT.DARK, glow, 22, 0);
+    maze.glows.set(runner, real);
     this.placeObject(OBJECT.RED, real, 22, 0);
   }
 
-  /** Off the path in the real maze: the player and anyone beside them take a share of their hitpoints. */
-  punishWrongTiles(runner) {
+  /** Off the path: the player and anyone beside them take a share of their hitpoints. */
+  punishWrongTiles(players, plane, offPath) {
     const maze = this.maze;
-    const players = this.fighters().filter((player) => player !== runner);
-    for (const wrong of [...maze.wrong]) {
-      if (!players.some((player) => key(Shared.tileOf(player)) === wrong)) {
-        maze.wrong.delete(wrong);
-        const [x, y] = wrong.split(",").map(Number);
-        this.placeObject(OBJECT.DARK, { x, y, z: 0 }, 22, 0);
-      }
+    const standing = new Set(players.map((player) => tileKey(Shared.tileOf(player))));
+    for (const [wrong, tile] of [...maze.wrong]) {
+      if (tile.z !== plane || standing.has(wrong)) continue;
+      maze.wrong.delete(wrong);
+      this.placeObject(OBJECT.DARK, tile, 22, 0);
     }
+    const flat = Shared.byMode(this.raid, WRONG_TILE.flat);
     for (const player of players) {
       const at = Shared.tileOf(player);
-      if (at.z !== 0 || !inBox(at, MAZE) || maze.realTiles.has(key(at))) continue;
-      const fresh = !maze.wrong.has(key(at));
+      if (!offPath(at)) continue;
+      const reason = `${Shared.displayName(player)} stood on an incorrect tile.`;
+      this.raid.failTask("Perfect Sotetseg", reason);
+      this.raid.failTask("Harder Mode I", reason);
+      const fresh = !maze.wrong.has(tileKey(at));
       if (fresh) {
-        maze.wrong.add(key(at));
+        maze.wrong.set(tileKey(at), at);
         this.placeObject(OBJECT.WRONG, at, 22, 0);
         Shared.areaSound(this.area, at, SOUND.WRONG_TILE);
         Shared.graphicAt(this.area, GRAPHIC.EXPLOSION, at, { height: 10 });
@@ -267,66 +364,96 @@ class SotetsegRoom extends Raid.Room {
       for (const other of players) {
         if (Shared.distanceTo(player, other.getLocation()) > 1) continue;
         if (fresh) Shared.projectile(this.area, at, other, GRAPHIC.ZAP, PROJECTILE.ZAP);
-        Shared.damage(other, Math.floor(other.getHitpoints() * WRONG_TILE.share) + WRONG_TILE.flat);
+        Shared.damage(other, Math.floor(other.getHitpoints() * WRONG_TILE.share) + flat);
       }
     }
   }
 
-  /** From the fourth row on, a tornado follows the path (in the realm for a solo runner). */
-  tickTornado(runner) {
+  /**
+   * From the fourth row on, a tornado follows the path, a tile a tick, and leaves if they step back.
+   * In the arena for those left there; in the realm for a solo runner and, in Hard, when the last
+   * runner or the one left in the arena is past the third row.
+   */
+  tickTornadoes(runners, arena) {
     const maze = this.maze;
-    const players = maze.solo ? [runner] : this.fighters().filter((player) => player !== runner);
-    const toTile = maze.solo ? (tile) => tile : toReal;
-    if (!maze.tornado) {
-      const triggered = players.some((player) => {
-        const at = Shared.tileOf(player);
-        const box = maze.solo ? REALM : MAZE;
-        return at.z === box.z && inBox(at, box) && at.y >= box.minY + 3;
-      });
-      if (!triggered) return;
-      const start = toTile(maze.path[0]);
-      maze.tornado = this.spawn(NPC.TORNADO, { x: start.x - 1, y: start.y - 1, z: start.z }, { scale: false, scripted: true });
-      maze.tornadoStep = 0;
-      return;
+    const past = (player, box) => {
+      const at = Shared.tileOf(player);
+      return at.z === box.z && inBox(at, box) && at.y >= box.minY + TORNADO_ROW;
+    };
+    const arenaPast = arena.some((player) => past(player, MAZE));
+    this.tickTornado("arena", arena, toReal, arenaPast);
+    if (maze.solo) {
+      this.tickTornado("realm", runners, (tile) => tile, runners.some((player) => past(player, REALM)));
+    } else if (this.raid.isHard) {
+      const last = maze.runners[maze.runners.length - 1];
+      this.tickTornado("realm", runners, (tile) => tile, arenaPast || (runners.includes(last) && past(last, REALM)));
     }
-    const tornado = maze.tornado;
-    for (const player of players) {
-      if (Shared.distanceTo(tornado, player.getLocation()) <= 0) Shared.damage(player, Shared.random(TORNADO.min, TORNADO.max));
-    }
-    if (++maze.tornadoStep >= maze.path.length) {
-      this.despawn(tornado);
-      maze.tornado = null;
-      return;
-    }
-    const next = toTile(maze.path[maze.tornadoStep]);
-    Shared.walkStraight(tornado, { x: next.x - 1, y: next.y - 1, z: next.z });
   }
 
-  /** The runner takes the portal home; the maze is over and its Defence comes back. */
+  tickTornado(where, players, toTile, triggered) {
+    const maze = this.maze;
+    let entry = maze.tornadoes.get(where);
+    if (!triggered) {
+      if (entry?.npc) this.despawn(entry.npc);
+      maze.tornadoes.delete(where);
+      return;
+    }
+    if (!entry) {
+      const start = toTile(maze.path[0]);
+      entry = { npc: this.spawn(this.ids.TORNADO, { x: start.x - 1, y: start.y - 1, z: start.z }, { scale: false, scripted: true }), step: 0 };
+      maze.tornadoes.set(where, entry);
+    }
+    if (!entry.npc) return;
+    for (const player of players) {
+      if (Shared.distanceTo(entry.npc, player.getLocation()) > 0) continue;
+      Shared.damage(player, Shared.random(TORNADO.min, TORNADO.max));
+      const name = Shared.displayName(player);
+      this.raid.failTask("Perfect Sotetseg", `${name} got hit by the tornado.`);
+      this.raid.failTask("Harder Mode I", `${name} got hit by the tornado.`);
+    }
+    if (++entry.step >= maze.path.length) {
+      this.despawn(entry.npc);
+      entry.npc = null;
+      return;
+    }
+    const next = toTile(maze.path[entry.step]);
+    Shared.walkStraight(entry.npc, { x: next.x - 1, y: next.y - 1, z: next.z });
+  }
+
+  /** A runner takes the portal home; the maze is over for all of them and its Defence comes back. */
   leaveRealm(player) {
-    if (!this.maze || this.maze.runner !== player) return false;
-    this.endMaze(true);
+    if (!this.maze || !this.maze.runners.includes(player)) return false;
+    this.endMaze();
     return true;
   }
 
-  endMaze(cleared) {
+  endMaze() {
     const maze = this.maze;
     this.maze = null;
     this.mazesDone++;
-    if (maze.tornado) this.despawn(maze.tornado);
-    const { ObjectManager } = Shared.core();
-    for (const object of maze.objects) ObjectManager.deregister(object, true);
-    this.setMazeFloor(OBJECT.LIGHT);
-    if (this.sotetseg) Shared.restoreDefence(this.sotetseg);
-    const runner = maze.runner;
-    if (cleared || this.raid.players.includes(runner)) {
+    for (const { npc } of maze.tornadoes.values()) if (npc) this.despawn(npc);
+    for (const tile of maze.path) this.placeObject(OBJECT.DARK, tile, 22, 0);
+    for (const tile of maze.wrong.values()) this.placeObject(OBJECT.DARK, tile, 22, 0);
+    this.later(TELEPORT.outMove, () => this.setMazeFloor(OBJECT.LIGHT));
+    if (this.sotetseg) {
+      this.sotetseg.setNpcTransformationId?.(this.ids.FIGHTING);
+      Shared.restoreDefence(this.sotetseg);
+    }
+    // Captured: it attacks again the tick after the runner is back.
+    this.ticks = ATTACK_TICKS - TELEPORT.outMove - 1;
+    for (const runner of maze.runners) {
+      if (!this.raid.players.includes(runner) || this.raid.member(runner).jailed) continue;
       runner.getPacketSender().sendClientScript(Shared.SCRIPT.FADE_WHITE, "");
-      this.later(2, () => {
+      this.later(TELEPORT.outMove, () => {
         if (Shared.tileOf(runner).z === REALM.z) runner.moveTo(Shared.loc(RETURN));
-        Shared.fade(runner, 200, "");
       });
+      this.later(TELEPORT.outFade, () => Shared.fade(runner, TELEPORT.fadeIn, ""));
     }
   }
+}
+
+function tileKey(tile) {
+  return `${tile.x},${tile.y},${tile.z}`;
 }
 
 function inBox(tile, box) {
@@ -338,32 +465,32 @@ function toReal(tile) {
   return { x: MAZE.minX + (tile.x - REALM.minX), y: MAZE.minY + (tile.y - REALM.minY), z: 0 };
 }
 
+/** Each of the maze's rows' section, by how many run: index by row, value 0 to 3. */
+function sectionsOf(runners) {
+  const rows = SECTION_ROWS[Math.max(1, Math.min(4, runners))];
+  return rows.flatMap((count, section) => Array(count).fill(section));
+}
+
 /**
- * The maze (our generator): from a random tile on the bottom row, sideways up to five tiles then up
- * two or four rows, until the top; one more tile above the top row to the portal.
+ * The maze, as every captured one: eight columns, one for each even row, each up to 5 tiles from the last;
+ * the odd row between runs from one column to the next. The top row's column leads on to the portal.
  */
 function generatePath(random = Math.random) {
   const width = REALM.maxX - REALM.minX + 1;
-  const height = REALM.maxY - REALM.minY + 1;
+  const rows = REALM.maxY - REALM.minY + 1;
   const pick = (min, max) => min + Math.floor(random() * (max - min + 1));
   const tiles = [];
   const add = (x, y) => tiles.push({ x: REALM.minX + x, y: REALM.minY + y, z: REALM.z });
   let x = pick(0, width - 1);
   add(x, 0);
-  let y = 1;
-  while (y < height - 1) {
+  for (let y = 1; y < rows; y += 2) {
     const nextX = pick(Math.max(0, x - 5), Math.min(width - 1, x + 5));
     const step = nextX > x ? 1 : -1;
     for (let cx = x; cx !== nextX + step; cx += step) add(cx, y);
-    const nextY = Math.min(height - 1, y + (random() < 0.5 ? 2 : 4));
-    for (let cy = y; cy < nextY; cy++) add(nextX, cy);
+    add(nextX, y + 1);
     x = nextX;
-    y = nextY;
   }
-  add(x, height - 1);
-  add(x, height);
-  const seen = new Set();
-  return tiles.filter((tile) => (seen.has(key(tile)) ? false : (seen.add(key(tile)), true)));
+  return tiles;
 }
 
 function enterPortal(event) {

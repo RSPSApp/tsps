@@ -16,6 +16,7 @@
 const Shared = require("./Shared.TheatreOfBlood");
 const Parties = require("./Parties.TheatreOfBlood");
 const Raid = require("./RaidState.TheatreOfBlood");
+const Stats = require("./Stats.TheatreOfBlood");
 
 const { INTERFACE, SCRIPT, VARP, VARBIT } = Shared;
 const { RIGHTS } = Parties;
@@ -49,8 +50,10 @@ const ATTR = {
   VIEWING: "tob:viewing",
   WARNED: "tob:death-warning",
   NO_CRYSTAL_PROMPT: "tob:no-crystal-prompt",
+  MET_STRANGER: "tob:met-stranger",
 };
 const ESCAPE_CRYSTALS = [Shared.ITEM.ESCAPE_CRYSTAL];
+const HARD_LOCKED = "Everyone in your party must have completed the Theatre of Blood in Normal Mode to attempt Hard Mode.";
 
 // ---------------------------------------------------------------- the HUD in Ver Sinhaza
 
@@ -117,7 +120,7 @@ function rowText(party, viewer) {
     const name = Shared.displayName(member);
     return i === 0 && party.has(viewer) ? `<col=ffffff>${name}</col>` : name;
   });
-  return `${names.join("|")}|${party.members.length}|${party.preferredSize}|${party.preferredCombat}|${Shared.MODES[party.mode].name}|${party.age()}|`;
+  return `${names.join("|")}|${party.members.length}|${party.preferredSize}|${party.preferredCombat}|${Shared.MODES[party.mode].name}|${party.age()}`;
 }
 
 function openOverview(player) {
@@ -173,8 +176,7 @@ function memberLine(player) {
   const skills = player.getSkillManager();
   const levels = [Skill.ATTACK, Skill.STRENGTH, Skill.RANGED, Skill.MAGIC, Skill.DEFENCE, Skill.HITPOINTS, Skill.PRAYER]
     .map((skill) => skills.getMaxLevel(skill));
-  const completions = Number(player.getAttribute("tob:completions")) || 0;
-  return `${Shared.displayName(player)}|${skills.getCombatLevel()}|${levels.join("|")}|${completions}|`;
+  return `${Shared.displayName(player)}|${skills.getCombatLevel()}|${levels.join("|")}|${Stats.completionsOf(player, "normal")}`;
 }
 
 function openInformation(player, party) {
@@ -189,7 +191,28 @@ function openInformation(player, party) {
   if (party.has(player) || party.applicants.includes(player)) {
     for (const applicant of party.applicants) sender.sendClientScript(SCRIPT.PARTY_APPLICANT, memberLine(applicant));
   }
-  sender.sendClientScript(SCRIPT.PARTY_FOOTER, party.rightsOf(player), party.preferredSize, party.preferredCombat, 0);
+  sender.sendClientScript(SCRIPT.PARTY_FOOTER, party.rightsOf(player), party.preferredSize, party.preferredCombat, Shared.MODES[party.mode].index);
+}
+
+/**
+ * Captured (227/01764 tick 24404): "Select a mode. Currently set to Normal Mode." with the three
+ * modes, then party information again. Wiki: Hard Mode needs everyone to have a Normal Mode
+ * completion (our wording for the refusal; no capture has one).
+ */
+function chooseMode(player, party) {
+  const set = (mode) => {
+    if (mode === "hard" && !party.members.every(Stats.canPlayHard)) {
+      player.sendMessage(HARD_LOCKED);
+    } else {
+      party.mode = mode;
+    }
+    refreshParty(party);
+    openInformation(player, party);
+  };
+  Shared.options(player, `Select a mode. Currently set to ${Shared.MODES[party.mode].name} Mode.`,
+    "Entry Mode.", () => set("entry"),
+    "Normal Mode.", () => set("normal"),
+    "Hard Mode.", () => set("hard"));
 }
 
 function viewedParty(player) {
@@ -310,9 +333,8 @@ function clickInformation(event) {
       party.preferredCombat = value;
       refreshParty(party);
     });
-  } else if (slot === INFO_BUTTON.MODE) {
-    player.sendMessage("Only Normal Mode is available.");
-    openInformation(player, party);
+  } else if (slot === INFO_BUTTON.MODE && leader) {
+    chooseMode(player, party);
   } else if (slot >= INFO_BUTTON.MEMBER_FIRST && slot < INFO_BUTTON.ACCEPT_FIRST && leader) {
     const member = party.members[slot - INFO_BUTTON.MEMBER_FIRST];
     if (!member) {
@@ -346,9 +368,39 @@ function resumeButton(event) {
 
 // ---------------------------------------------------------------- the notice board and entrance
 
+/**
+ * Captured (234/03285 tick 23906) and Transcript:Mysterious Stranger: someone who hasn't spoken to
+ * the Mysterious Stranger is called over instead ("Hey. Over here."). Someone with a completion has.
+ */
+function hasMetStranger(player) {
+  if (player.getAttribute(ATTR.MET_STRANGER)) return true;
+  const request = { player, complete: false };
+  Shared.api().emitCustomEvent("tob:has-completion", request);
+  return request.complete;
+}
+
+function callOver(player) {
+  Shared.npcSay(player, Shared.NPC.MYSTERIOUS_STRANGER, "Hey. Over here.");
+}
+
 function readNoticeBoard({ player }) {
+  if (!hasMetStranger(player)) {
+    callOver(player);
+    return true;
+  }
   openOverview(player);
   return true;
+}
+
+/**
+ * The first conversation (Transcript:Mysterious Stranger, 227/00101 tick 22597): remembered, so
+ * the board opens. The quest unit plays the conversation (its first, or the Wiki's initial lines for
+ * someone without its requirement); this only notes it was held.
+ */
+function talkToStranger({ player, npcId }) {
+  if (!Shared.inVerSinhaza(player.getLocation()) || player.getAttribute(ATTR.MET_STRANGER)) return false;
+  player.setAttribute(ATTR.MET_STRANGER, true);
+  return false;
 }
 
 function hasEscapeCrystal(player) {
@@ -363,8 +415,14 @@ function useEntrance(event) {
   const { player } = event;
   const party = Parties.partyOf(player);
   if (!party) {
+    if (!hasMetStranger(player)) {
+      callOver(player);
+      return true;
+    }
     Shared.options(player, "You are not in a party...",
       "Form or join a party", () => openOverview(player),
+      "Observe a specific party", () => Shared.api().emitCustomEvent("tob:observe", { player, recent: false }),
+      "Observe recent party", () => Shared.api().emitCustomEvent("tob:observe", { player, recent: true }),
       "Cancel", () => {});
     return true;
   }
@@ -375,7 +433,7 @@ function useEntrance(event) {
   if (!player.getAttribute(ATTR.WARNED)) {
     const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = Shared.core();
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-      new StatementDialogue(0, "<col=ff0000>Warning:</col> The Theatre of Blood is <col=ff0000>dangerous.</col> Once you enter, you are at <col=ff0000>risk of death</col>. The only method of escape is to resign or defeat the Theatre. <col=ff0000>Teleporting is restricted</col>, and <col=ff0000>logging out is considered a death</col>. Your <col=ff0000>items will be lost</col> if the whole party dies."),
+      new StatementDialogue(0, "<col=7f0000>Warning:</col> The Theatre of Blood is <col=7f0000>dangerous</col>. Once you enter, you are at <col=7f0000>risk of death</col>. The only method of escape is to resign or defeat the Theatre. <col=7f0000>Teleporting is restricted</col>, and <col=7f0000>logging out is considered a death</col>. Your <col=7f0000>items will be lost</col> if the whole party dies."),
       new StatementDialogue(1, "You will not see the warning again should you accept."),
       new ActionDialogue(2, {
         execute: () => Shared.options(player, "Accept the warning and proceed?",
@@ -397,7 +455,8 @@ function askAboutCrystals(player, party) {
     enterTheatre(player, party);
     return;
   }
-  Shared.options(player, "<col=ff0000>Only escape crystals can teleport out of the Theatre.</col>",
+  // Captured (227/01764, 234/03299) in the crystal's former name, "Verzik's crystals".
+  Shared.options(player, "Only escape crystals can teleport out of the Theatre.",
     "Go and buy escape crystals.", () => Shared.core().ShopManager.open(player, MYSTERIOUS_STRANGER_SHOP),
     "Enter the Theatre without any escape crystals.", () => enterTheatre(player, party),
     "Enter the Theatre, and don't ask this again.", () => {
@@ -411,9 +470,13 @@ function enterTheatre(player, party) {
     party.raid.enter(player);
     return;
   }
-  Shared.options(player, `Is your party ready? (Members: ${party.members.length})`,
+  Shared.options(player, `Is your party ready? Members: ${party.members.length}. Mode: ${Shared.MODES[party.mode].name}.`,
     "Yes, let's go!", () => {
       if (party.raid || !party.isLeader(player)) return;
+      if (party.mode === "hard" && !party.members.every(Stats.canPlayHard)) {
+        player.sendMessage(HARD_LOCKED);
+        return;
+      }
       Raid.begin(player)?.enter(player);
     },
     "Cancel.", () => {});
@@ -434,11 +497,12 @@ module.exports = function registerTheatreLobby(api) {
   Shared.bind(api);
   api.persistAttribute(ATTR.WARNED);
   api.persistAttribute(ATTR.NO_CRYSTAL_PROMPT);
+  api.persistAttribute(ATTR.MET_STRANGER);
+  api.onNpcInteraction("Mysterious Stranger", { "Talk-to": talkToStranger });
   api.onZoneEnter(Shared.VER_SINHAZA, enterVerSinhaza);
   api.onZoneExit(Shared.VER_SINHAZA, leaveVerSinhaza);
   api.onPlayerLogout(logoutFromLobby);
   Shared.onObject(api, Shared.OBJECT.NOTICE_BOARD, readNoticeBoard);
-  api.onCustomEvent("tob:normal-party", readNoticeBoard);
   Shared.onObject(api, Shared.OBJECT.ENTRANCE, useEntrance);
   api.onInterfaceActionClick(resumeButton);
   api.onInterfaceActionButton(LIST_ROW_UIDS, selectRow);

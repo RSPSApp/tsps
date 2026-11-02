@@ -673,6 +673,55 @@
    "base": 4710,
    "result": 30568,
    "name": "Echo ahrim's ornament kit"
+  },
+  {
+   "kit": 25742,
+   "base": 22324,
+   "result": 25734,
+   "name": "Holy ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 25742,
+   "base": 22325,
+   "result": 25736,
+   "name": "Holy ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 25742,
+   "base": 22486,
+   "result": 25738,
+   "name": "Holy ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 25742,
+   "base": 22323,
+   "result": 25731,
+   "name": "Holy ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 25742,
+   "base": 22481,
+   "result": 25733,
+   "name": "Holy ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 25744,
+   "base": 22325,
+   "result": 25739,
+   "name": "Sanguine ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 25744,
+   "base": 22486,
+   "result": 25741,
+   "name": "Sanguine ornament kit",
+   "refund": true
   }
  ]
 }

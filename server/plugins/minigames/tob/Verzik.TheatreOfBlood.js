@@ -1,68 +1,94 @@
 "use strict";
 
 /**
- * Wave 6: Verzik Vitur, in three phases.
+ * Wave 6: Verzik Vitur, in three phases, in each of the raid's three modes.
  *
- * Wiki (Verzik Vitur; "Theatre of Blood/Strategies", Verzik Vitur):
- * - The leader talks to her to start. Phase 1 (2000 hitpoints, every 14 ticks): only the
- *   Dawnbringer's special attack hurts her properly - other hits are capped at 10 (melee) and 3
- *   (ranged, magic). Her blast hits anyone not behind a pillar for up to 137 (half through
- *   Protect from Magic); otherwise it hits the pillar, which collapses after several blasts for
- *   up to 70 on anyone beside it.
- * - Phase 2 (3500, every 4 ticks): she flies to the middle, bringing every pillar down. She
- *   body-slams anyone under her (a stun, up to 50); throws urns at everyone's tiles (up to 44,
- *   halved by Protect from Missiles); chains a lightning ball through the team in a random order
- *   (small hits, then 48+ on the last; she takes 15-20 if she's in the way); and calls nylocas:
- *   one per player, which chase and explode for up to 63 and can only be hurt by their own
- *   style, plus a purple ball that hits its tile for up to 78 and becomes a Nylocas Athanatos,
- *   healing her until a poisoned weapon makes it poison her instead. Below 35% she adds blood
- *   spells that heal her, and calls two Nylocas Matomenos now and then; for the first three
- *   seconds hits on her heal her, and she absorbs the ones left over at the next call.
- * - Phase 3 (3500, every 7 ticks): she walks. Her melee hits everyone beside her target for up
- *   to 63; her ranged and magic up to 33 (half through prayer). After every four attacks a
- *   special, in turn: nylocas, webs, safe spots, a green ball. Below 20% she attacks every 5
- *   ticks and sends a purple tornado after each player: half their hitpoints (at least 5),
- *   healing her for three times that.
- * Cache: her forms (8369-8375), varp 1748 giving her Talk-to (14795), the pillars (object 32687,
- * NPC 8379 with 185 hitpoints; 8377/8378 collapsing), the web (8376 with object 32734), the
- * nylocas (8381-8383), Athanatos (8384), Matomenos (8385), the tornado (8386), the skeleton
- * holding the Dawnbringer (32741, searched 32742) in Xarpus' room.
- * RuneLite (gameval): her animations (8109 phase 1 blast, 8111 off the throne, 8112-8118 phase
- * 2, 8119-8128 phase 3, 8052/8104 the pillars) and graphics (1580-1602).
- * Captured: her attack and phase-change timing, the projectiles' timing and arcs, phase 2's
- * sounds, her lines ("You think you can defeat me?", "Behold my true nature!", "I'm not
- * finished with you just yet!"). Estimates: her tiles, the pillars', the blast on a pillar
- * (40-60), the phase 2 attack
- * order (urns, every fifth a lightning ball, nylocas every fifth ball), where nylocas appear,
- * their 25-tick fuse and falloff (63/26/8), Athanatos' 50-tick life and heals (9-11 every 4
- * ticks, 70-75 poison), the blood spell's max (29), the Matomenos' tiles, the phase 3 web spin
- * (35 ticks; webs explode after 12 ticks for up to 40), the safe spots' 80 damage, the green
- * ball's bounces, the lines she says.
+ * Wiki (Verzik Vitur; "Theatre of Blood/Strategies", Verzik Vitur; Hard and Entry Mode pages):
+ * - Anyone in the party talks to her to start (captured: 554, 1852, whoever isn't the leader too).
+ *   Phase 1 (every 14 ticks): only the Dawnbringer hurts her properly - other hits are capped at
+ *   10 (melee) and 3 (ranged, magic). Her blast hits anyone not behind a pillar (half through
+ *   Protect from Magic); a pillar sheltering someone takes one blast instead, however many hide
+ *   there, and collapses for up to 70 on anyone beside it. Hard Mode: rubble round a pillar each
+ *   time it's hit (up to 35 and a stun).
+ * - Phase 2 (every 4 ticks): she flies to the middle, bringing every pillar down. She slams anyone
+ *   beside her (up to 50, a stun, three tiles back) and stomps anyone under her (up to 80, "always
+ *   a successful hit"); throws urns at everyone's tiles (up to 44, halved by Protect from Missiles;
+ *   Hard: 20% more, and a pool for 16 ticks, 9-10 damage and poison); sends a lightning ball hopping
+ *   through the team, up to four hops (small hits, then 48; alone, 48 at once, 25 in insulated
+ *   boots; 15-20 on her if she's in the way); and calls nylocas with a purple ball (up to 78 on
+ *   its tile, then a Nylocas Athanatos healing her until a poisoned weapon makes it poison her).
+ *   After every third lightning ball, a 25% chance of another call unless an Athanatos lives. At
+ *   35% she calls Matomenos (two, one with one player alive), then uses a blood spell 75% of the
+ *   time (Mod Ash: up to 45 round its target, halved by prayer, healing half of the total). For
+ *   three seconds after the call hits on her heal her. She absorbs the Matomenos left at the next
+ *   call; Hard: they also explode at whoever's near.
+ * - Phase 3 (every 7 ticks): she walks. Melee hits everyone beside her for up to 63; ranged and magic
+ *   up to 33 on everyone (half through prayer, worked out as they land). After four attacks a special,
+ *   in turn: nylocas, webs, safe spots, a green ball. Below 20%: every 5 ticks, 34 max, a tornado
+ *   after each player (half their hitpoints, at least 5, healing her for three times that; a new one
+ *   16 ticks after it hits). Hard: a new target at every special; safe spots hit three times with
+ *   three tiles each; the green ball kills outright with two or more players alive, unless passed
+ *   on (then 89, 74 and 49 for 1, 2 and 3 passes); at 5% she heals 30% of her hitpoints, once.
+ * Cache: her forms per mode, the Talk-to forms (8369 by varp 1748 -> 14795, 10847 by varp 3057 ->
+ * 14797, 10830 has it itself), the arena's floor (x 3154-3182, y 4303-4322; y 4323 and her throne are
+ * solid and x 3154-3182, y 4302 is a wall with the three door tiles 3167-3169).
+ * Captured (1852 Hard 2868 and 7450; 3299, 554 Normal; 101 and 554 Entry; tiles from the Verzik
+ * anchor with the instance offset a multiple of 8): every id, animation, projectile, sound and
+ * message here; attack and phase-change timing; tiles of her, the pillars, the Matomenos, the
+ * nylocas' five spawn points; the attacks' rotation; Hard's nylocas changing style every 3 ticks;
+ * the door (47336 until the fight, then 33028); 26209 blocking a falling pillar's 5x5.
+ * Estimates: Entry's damage beyond the Infobox's; web and rubble stuns; which player's nylocas
+ * spawns where; the Hard Matomenos' explosion; the safe-spot damage on Hard (the Wiki's 80).
+ * A fit from few samples: Entry's hitpoints by team (solo 101, duo 554).
  */
 
 const Shared = require("./Shared.TheatreOfBlood");
 const Raid = require("./RaidState.TheatreOfBlood");
 
-const NPC = {
-  WAITING: 8369, PHASE1: 8370,
-  /** Her Talk-to form (verzik_initial_base, through varp 1748): who speaks in her dialogue. */
-  SPEAKER: 14795, TO_PHASE2: 8371, PHASE2: 8372, TO_PHASE3: 8373, PHASE3: 8374, DEAD: 8375,
-  WEB: 8376, PILLAR: 8379, COLLAPSING: 8377, FADING: 8378,
-  NYLOS: { melee: 8381, ranged: 8382, magic: 8383 }, ATHANATOS: 8384, MATOMENOS: 8385, TORNADO: 8386,
+/** Her forms and minions by mode. Captured: all three modes share the pillars' 8377-8379. */
+const NPC_BY_MODE = {
+  normal: {
+    WAITING: 8369, SPEAKER: 14795, PHASE1: 8370, TO_PHASE2: 8371, PHASE2: 8372, TO_PHASE3: 8373, PHASE3: 8374, DEAD: 8375,
+    WEB: 8376, NYLOS: { melee: 8381, ranged: 8382, magic: 8383 }, ATHANATOS: 8384, MATOMENOS: 8385, TORNADO: 8386,
+  },
+  entry: {
+    WAITING: 10830, SPEAKER: 10830, PHASE1: 10831, TO_PHASE2: 10832, PHASE2: 10833, TO_PHASE3: 10834, PHASE3: 10835, DEAD: 10836,
+    WEB: 10837, NYLOS: { melee: 10841, ranged: 10842, magic: 10843 }, ATHANATOS: 10844, MATOMENOS: 10845, TORNADO: 10846,
+  },
+  hard: {
+    WAITING: 10847, SPEAKER: 14797, PHASE1: 10848, TO_PHASE2: 10849, PHASE2: 10850, TO_PHASE3: 10851, PHASE3: 10852, DEAD: 10853,
+    WEB: 10854, NYLOS: { melee: 10858, ranged: 10859, magic: 10860 }, ATHANATOS: 10861, MATOMENOS: 10862, TORNADO: 10863,
+  },
 };
-const OBJECT = { PILLAR: 32687, WEB: 32734, SKELETON: 32741, SKELETON_SEARCHED: 32742 };
+const PILLAR_NPC = { STANDING: 8379, COLLAPSING: 8377, FADING: 8378 };
+const OBJECT = {
+  PILLAR: 32687, WEB: 32734, SKELETON: 32741, SKELETON_SEARCHED: 32742,
+  /** The door south of the arena, open then shut for the fight; the throne as she falls. */
+  DOOR_OPEN: 47336, DOOR_SHUT: 33028, THRONE_FALLING: 32737,
+  /** The 5x5 a pillar blocks as it falls; a Hard Mode urn's pool. */
+  RUBBLE_BLOCK: 26209, POOL: 41747,
+};
 const { DAWNBRINGER } = Shared.ITEM;
 
 const ANIMATION = {
   P1_BLAST: 8109, OFF_THRONE: 8111, P2_SPAWN: 8112, P2_ATTACK: 8114, P2_BOUNCE: 8116, P2_HEAL: 8117,
   P2_DEATH: 8118, P3_SPAWN: 8119, P3_MELEE: 8123, P3_MAGIC: 8124, P3_RANGED: 8125, P3_DOTS: 8126,
   P3_WEBS: 8127, P3_DEATH: 8128, PILLAR_COLLAPSE: 8052, PILLAR_FADE: 8104, KNOCKBACK: 8043,
+  ATHANATOS_SPAWN: 8079, MATOMENOS_SPAWN: 8098,
+  /** As it explodes, by the style it shows. */
+  NYLO_EXPLODE: { melee: 8006, ranged: 8000, magic: 7992 },
 };
 const GRAPHIC = {
   BLAST: 1580, BLAST_PLAYER: 1581, BLAST_PILLAR: 1582, URN: 1583, URN_LAND: 1584, LIGHTNING: 1585,
-  PURPLE: 1586, ATHANATOS_HEAL: 1587, ATHANATOS_POISON: 1588, ATHANATOS_POISONED: 1590,
-  BLOOD: 1591, BLOOD_LAND: 1592, P3_RANGED: 1593, P3_MAGIC: 1594, DOT: 1595, DOT_BLAST: 1596,
+  PURPLE: 1586, ATHANATOS_HEAL: 1587, ATHANATOS_POISON: 1588, ATHANATOS_LAND: 1589, ATHANATOS_POISONED: 1590,
+  ATHANATOS_BURST: 184, BLOOD: 1591, BLOOD_LAND: 1592, P3_RANGED: 1593, P3_MAGIC: 1594, DOT: 1595, DOT_BLAST: 1596,
   DOT_SAFE: 1597, GREEN_BALL: 1598, BLAST_HIT: 1600, WEB: 1601, TORNADO_HIT: 1602, STUN: 80,
+  RUBBLE: 1435, RUBBLE_MARK: 1447, RUBBLE_LAND: 1436,
+};
+const SOUND = {
+  BLAST_HIT: 3887, URN_LAND: 1021, LIGHTNING: 1715, LIGHTNING_HIT: 581, LIGHTNING_HIT_2: 1583, PURPLE: 205,
+  ATHANATOS_LAND: 360, ATHANATOS_LAND_2: 684, GLOBULE: 167, POISON_BURST: 1930, POISON_BURST_2: 3423, BLOOD: 106,
+  GREEN_LAND: 1418, TORNADO_HIT: 860, DEATH: 4008,
 };
 /**
  * As captured: launch cycle, flight per tile, arc (angle), start offset (progress) and heights.
@@ -73,8 +99,9 @@ const PROJECTILE = {
   BLAST_PILLAR: { delay: 20, duration: 0, perTile: 15, startHeight: 100, endHeight: 37, angle: 20, progress: 0 },
   URN: { delay: 21, duration: -3, perTile: 18, minDuration: 39, startHeight: 70, endHeight: 0, angle: 12, progress: 128 },
   LIGHTNING: { delay: 21, duration: -3, perTile: 18, minDuration: 39, startHeight: 70, endHeight: 24, angle: 12, progress: 128 },
-  /** Lightning passed on from one player to the next. */
+  /** Lightning passed on from one player to the next, or into Verzik (1852 tick 3318). */
   LIGHTNING_BOUNCE: { delay: 0, duration: -6, perTile: 18, minDuration: 30, startHeight: 24, endHeight: 24, angle: 32, progress: 0 },
+  LIGHTNING_INTO_HER: { delay: 0, duration: 30, perTile: 0, startHeight: 24, endHeight: 65, angle: 32, progress: 0 },
   BLOOD: { delay: 21, duration: -3, perTile: 18, minDuration: 39, startHeight: 70, endHeight: 24, angle: 8, progress: 128 },
   PURPLE: { delay: 21, duration: -60, perTile: 60, minDuration: 159, startHeight: 70, endHeight: 1, angle: 0, progress: 64 },
   P3_RANGED: { delay: 62, duration: 0, perTile: 15, maxDuration: 117, startHeight: 100, endHeight: 25, angle: 20, progress: 100 },
@@ -82,6 +109,8 @@ const PROJECTILE = {
   WEB: { duration: 0, perTile: 15, startHeight: 87, endHeight: 0, angle: 15, progress: 0 },
   DOT_BLAST: { delay: 261, duration: 144, perTile: 0, startHeight: 250, endHeight: 30, angle: 50, progress: 0 },
   GREEN_BALL: { delay: 62, duration: 180, perTile: 0, startHeight: 100, endHeight: 30, angle: 20, progress: 100 },
+  GREEN_PASSED: { delay: 9, duration: 180, perTile: 0, startHeight: 30, endHeight: 30, angle: 20, progress: 100 },
+  RUBBLE: { delay: 0, duration: 120, perTile: 0, startHeight: 200, endHeight: 0, angle: 0, progress: 0 },
 };
 /** The Athanatos' globules leave 0-5 cycles in and all land 22 cycles in. */
 const GLOBULE = { lands: 22, maxDelay: 5, startHeight: 5, endHeight: 70, angle: 2, progress: 0 };
@@ -92,6 +121,7 @@ const ANIMATION_SOUNDS = {
   [ANIMATION.P2_ATTACK]: [[1514, 0]],
   [ANIMATION.P2_BOUNCE]: [[1514, 0], [1021, 0], [3201, 30]],
   [ANIMATION.P2_HEAL]: [[684, 0]],
+  [ANIMATION.P3_DEATH]: [[SOUND.DEATH, 0]],
 };
 
 const BASE = { x: 3136, y: 4288 };
@@ -99,52 +129,132 @@ const at = (x, y) => ({ x: BASE.x + x, y: BASE.y + y, z: 0 });
 const THRONE = at(30, 35);
 const PHASE2_TILE = at(31, 25);
 const PHASE3_TILE = at(29, 23);
-const WEB_CENTRE = at(29, 22);
+/** Captured: she stands at (3165, 4309) for her webs in every sample. */
+const WEB_CENTRE = at(29, 21);
 const PILLARS = [at(25, 18), at(37, 18), at(25, 24), at(37, 24), at(25, 30), at(37, 30)];
-const MATOMENOS_TILES = [at(38, 24), at(26, 24)];
-const ARENA = { minX: 3155, maxX: 3181, minY: 4303, maxY: 4322 };
-const ARRIVAL_STEPS = 5;
+const PILLAR_SIZE = 3;
+/** Captured: left first, right too with two players alive (3299 tick 6243; 1852 tick 7884). */
+const MATOMENOS_TILES = [at(27, 26), at(35, 26)];
+/** Captured over 30 calls: (3167, 4320) by far the most often; which player gets which is an estimate. */
+const NYLO_TILES = [at(31, 32), at(41, 31), at(21, 27), at(40, 27), at(32, 27)];
+/** Cache: the floor. */
+const ARENA = { minX: 3154, maxX: 3182, minY: 4303, maxY: 4322 };
+/** Captured: 47336 here until the fight, then 33028. */
+const DOOR_TILES = [{ x: 3167, y: 4302, z: 0 }, { x: 3168, y: 4302, z: 0 }, { x: 3169, y: 4302, z: 0 }];
 
-const P1 = { every: 14, first: 19, max: 137, prayer: 0.5, pillar: [40, 60], capMelee: 10, capOther: 3, collapse: 70 };
-const P2 = {
-  every: 4, healBelow: 0.35, bounceMax: 50, stun: 7, urnMax: 44, urnPrayer: 0.5, lightning: [4, 8],
-  lightningLast: [45, 48], lightningVerzik: [15, 20], purpleMax: 78, bloodMax: 29, shieldTicks: 5,
-  matomenosEvery: 7,
+/** Wiki's hitpoints for Normal and Hard; for Entry the cache's, which a solo raid has exactly (101). */
+const PHASE_HITPOINTS = { normal: [2000, 3500, 3500], entry: [300, 400, 600] };
+/**
+ * Entry's team multiplier. Captured: 1 solo (101), 1.9 with two (554: 570, 762). Wiki's Infobox: 4 at
+ * the top (1200, 1600, 2400). Three and four players between them (estimate).
+ */
+const ENTRY_TEAM = { 1: 1, 2: 1.9, 3: 2.6, 4: 3.3, 5: 4 };
+
+/**
+ * Damage. Wiki for Normal. Hard: urns 20% more. Entry: the Infobox's 60, 50, 16, 16, ~34, 36 and 20;
+ * the rest scaled from Normal by 16/44 (estimate).
+ */
+const DAMAGE = {
+  normal: {
+    blast: 137, collapse: 70, urn: 44, slam: 50, stomp: 80, lightning: [4, 8], lightningLast: [45, 48], insulated: 25,
+    purple: 78, blood: 45, nylo: [63, 26, 8], melee: 63, ranged: 33, magic: 33, enraged: 34, heal: [9, 11], poison: [70, 75],
+    webs: 40, dots: 80,
+  },
+  hard: {
+    blast: 137, collapse: 70, urn: 53, slam: 50, stomp: 80, lightning: [4, 8], lightningLast: [45, 48], insulated: 25,
+    purple: 78, blood: 45, nylo: [63, 26, 8], melee: 63, ranged: 33, magic: 33, enraged: 34, heal: [9, 11], poison: [70, 75],
+    webs: 40, dots: 80,
+  },
+  entry: {
+    blast: 60, collapse: 50, urn: 16, slam: 16, stomp: 34, lightning: [1, 3], lightningLast: [14, 16], insulated: 9,
+    purple: 28, blood: 16, nylo: [23, 9, 3], melee: 36, ranged: 20, magic: 20, enraged: 20, heal: [6, 7], poison: [25, 30],
+    webs: 15, dots: 29,
+  },
 };
-const P3 = { every: 7, enraged: 5, enrageBelow: 0.2, melee: 63, ranged: 33, magic: 33, prayer: 0.5, specialEvery: 4 };
-const NYLO = { fuse: 25, falloff: [63, 26, 8] };
-const ATHANATOS = { life: 50, every: 4, heal: [9, 11], poison: [70, 75] };
-const WEBS = { spin: 35, life: 12, max: 40, freeze: 20 };
-const DOTS = { ticks: 13, damage: 80 };
-const GREEN = { bounces: 3, bounceMax: 15, near: 2, share: 0.74 };
-const TORNADO = { min: 5, heal: 3, respawn: 15 };
+
+const P1 = {
+  every: 14, first: 19, prayer: 0.5, pillar: [40, 60], capMelee: 10, capOther: 3,
+  /** Captured: a pillar falls 4 ticks after the hit that breaks it, fades at +4 and goes at +6. */
+  fallsAfter: 4, fadesAfter: 4, gonePastFade: 2, block: 5, pushed: 2,
+};
+/** Hard: rubble at 0, 1, 3 and 4 ticks from the pillar's hit (1852 tick 2918), landing 3 ticks on. */
+const RUBBLE = { waves: [[0, 5], [1, 4], [3, 4], [4, 4]], reach: 3, lands: 3, max: 35, stun: 5, markDelay: 0, landDelay: 90 };
+const P2 = {
+  every: 4, firstAttack: 3, healBelow: 0.35, stun: 5, knockback: 3, urnPrayer: 0.5, lightningHer: [15, 20], lightningHops: 4,
+  /** Captured: the first lightning is her sixth attack, then every fifth. */
+  firstLightning: 6, lightningEvery: 5,
+  /** Captured: the first call came as attack 1-4. Wiki: then 25% after every third ball. */
+  firstCall: [1, 4], recallEvery: 3, recallChance: 0.25,
+  /** Wiki: "very high chance" of a slam with someone beside her (estimate). */
+  slamChance: 0.9,
+  /** Captured: Matomenos every 44 ticks, her next attack 12 after each call. */
+  matomenosEvery: 44, afterMatomenos: 12,
+  /** Wiki: three seconds. Mod Ash: 75%. */
+  shieldTicks: 5, bloodChance: 0.75, bloodReach: 1, lightningChance: 0.5,
+};
+const POOL = { lasts: 13, damage: [9, 10], poison: 4 };
+/** Hard: the Matomenos' explosion, a share of its hitpoints on anyone within reach (estimate). */
+const MATOMENOS_BLAST = { reach: 2, share: 0.25 };
+const P3 = {
+  every: 7, enraged: 5, enrageBelow: 0.2, prayer: 0.5, specialEvery: 4, firstAttack: 6,
+  /** Hard: once, at 5%, heals 30% (Wiki). */
+  lastStandBelow: 0.05, lastStandHeal: 0.3,
+  /** Wiki: another target after 10 seconds out of her reach. */
+  retargetAfter: 17,
+};
+/** Captured (normal, hard): the fuse. Hard's nylocas have none and change style every 3 ticks. */
+const NYLO = { fuse: 25, styleEvery: 3, gone: 3, order: ["melee", "ranged", "magic"] };
+const ATHANATOS = { every: 4, firstAt: 2 };
+/**
+ * Captured: webs fly from 3 ticks after her animation, three a tick for 28 ticks, and her next
+ * attack is 40 after it. Each lasts about 18 ticks from its launch (1852, 3299). Wiki: 10 hitpoints.
+ */
+const WEBS = { startsAfter: 3, ticks: 28, perTick: 3, next: 40, lasts: 18, freeze: 20, walkAtMost: 12, knockback: 4, knockedWithin: 3, araneaEvery: 8 };
+/**
+ * Captured: strikes land 14 ticks in (Hard 14, 17 and 20), the tiles shown at these ticks, and her
+ * next attack 21 after (Hard 27).
+ */
+const DOTS = {
+  strikes: { normal: [14], hard: [14, 17, 20] }, next: { normal: 21, hard: 27 }, shownAt: [0, 2, 5, 8, 11, 14, 17],
+  extraFlight: { 14: 0, 17: 90, 20: 180 }, spotsPerPlayer: { normal: 1, hard: 3 },
+};
+/** Wiki: passes to someone beside the target; 74% at most; Hard's 89, 74 and 49. Captured: 12 ticks to her next attack. */
+const GREEN = { passes: 3, near: 1, share: 0.74, next: 12, hard: { 1: 89, 2: 74, 3: 49 }, launchAfter: 0 };
+const TORNADO = { min: 5, heal: 3, respawn: 16, reachesWithin: 5, atLeast: 4 };
 const SPECIALS = ["nylocas", "webs", "dots", "green"];
+const LINES = {
+  FIRST: ["Now that was quite the show! I haven't been that entertained in a long time.", "Of course, you know I can't let you leave here alive. Time for your final performance..."],
+  AGAIN: ["Back again for more? I admire your perseverance. Shall we begin?"],
+  START: "Oh I'm going to enjoy this...",
+};
 
 const key = (tile) => `${tile.x},${tile.y}`;
-const STYLE_OF_NYLO = { [NPC.NYLOS.melee]: "melee", [NPC.NYLOS.ranged]: "ranged", [NPC.NYLOS.magic]: "magic" };
 
 class VerzikRoom extends Raid.Room {
   onBuild() {
-    this.verzik = this.spawn(NPC.WAITING, THRONE, { scripted: true, face: Shared.facing("SOUTH") });
+    this.ids = Shared.byMode(this.raid, NPC_BY_MODE);
+    this.damages = Shared.byMode(this.raid, DAMAGE);
+    this.verzik = this.spawn(this.ids.WAITING, THRONE, { scale: false, scripted: true, face: Shared.facing("SOUTH") });
+    this.setPhaseHitpoints(0);
     this.verzik?.getMovementQueue().setBlockMovement(true);
     this.phase = 0;
     this.pillars = [];
     for (const tile of PILLARS) {
       const object = this.placeObject(OBJECT.PILLAR, tile, 10, 0);
-      const npc = this.spawn(NPC.PILLAR, tile, { scale: false, scripted: true });
-      if (npc) this.pillars.push({ npc, object, tile });
+      const npc = this.spawn(PILLAR_NPC.STANDING, tile, { scale: false, scripted: true });
+      if (npc) this.pillars.push({ npc, object, tile, falling: false });
     }
+    this.doors = DOOR_TILES.map((tile) => this.placeObject(OBJECT.DOOR_OPEN, tile, 10, 0));
     this.minions = new Set();
     this.webs = new Map();
+    this.pools = new Map();
+    this.matomenos = [];
+    this.ticks = 0;
   }
 
-  /** Each arrival walks five steps into the room (estimate). */
+  /** Captured: arrivals walk from south of the door to (3168, 4303), where the map here starts them. */
   onArrive(player) {
     const member = this.raid.member(player);
-    player.sendMessage("Welcome to the final fight.");
-    const from = Shared.tileOf(player);
-    player.getMovementQueue().reset();
-    player.getMovementQueue().addSteps(Shared.loc({ ...from, y: from.y + ARRIVAL_STEPS }));
     if (this.isStarted()) this.joinFight(member);
   }
 
@@ -153,44 +263,49 @@ class VerzikRoom extends Raid.Room {
     member.roomStats(this.key).fought = true;
   }
 
-  /** Talk-to, by the leader: the fight starts for everyone in the room. */
+  /** Her hitpoints for a phase (0-2), as RaidState's scale has none for her later forms. */
+  setPhaseHitpoints(phase) {
+    const npc = this.verzik;
+    if (!npc) return;
+    const { raid } = this;
+    const base = Shared.byMode(raid, PHASE_HITPOINTS)[phase];
+    const share = raid.isEntry ? ENTRY_TEAM[Math.min(raid.size, Shared.MAX_PARTY_SIZE)] ?? 1 : Shared.MODES[raid.mode].hitpoints(raid.size);
+    const hitpoints = Math.max(1, Math.floor(base * share));
+    npc.setMaxHitpoints?.(hitpoints);
+    npc.setHitpoints(hitpoints);
+  }
+
+  /** Talk-to: captured (554, 1852), any member can start her, not only the leader. */
   talk(player) {
     if (this.isStarted() || this.isCompleted()) return;
-    const raid = this.raid;
-    if (!raid.party.isLeader(player)) {
-      Shared.npcSay(player, NPC.SPEAKER, `Your leader ${Shared.displayName(raid.party.leader)} must speak to me, not you!`);
-      return;
-    }
-    const { DialogueChainBuilder, NpcDialogue, EndDialogue } = Shared.core();
+    const { completionsOf } = require("./Stats.TheatreOfBlood");
+    const veteran = Object.keys(Shared.MODES).some((mode) => completionsOf(player, mode) > 0);
+    const lines = veteran ? LINES.AGAIN : LINES.FIRST;
+    const { DialogueChainBuilder, NpcDialogue, ActionDialogue } = Shared.core();
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-      new NpcDialogue(0, NPC.SPEAKER, "Now that was quite the show! I haven't been that entertained in a long time."),
-      new NpcDialogue(1, NPC.SPEAKER, "Of course, you know I can't let you leave here alive. Time for your final performance..."),
-      new EndDialogue(2),
+      ...lines.map((line, index) => new NpcDialogue(index, this.ids.SPEAKER, line)),
+      new ActionDialogue(lines.length, { execute: () => this.confirmStart(player) }),
     ));
-    Shared.later(player, 1, () => this.confirmStart(player));
   }
 
   confirmStart(player) {
     const ready = () => {
       if (this.isStarted()) return;
-      Shared.npcSay(player, NPC.SPEAKER, "Oh I'm going to enjoy this...");
       this.start();
+      Shared.npcSay(player, this.ids.PHASE1, LINES.START);
     };
-    const waitForDialogue = () => {
-      if (player.getDialogueManager().isActive()) {
-        Shared.later(player, 1, waitForDialogue);
-        return;
-      }
-      Shared.options(player, "Is your party ready to fight?", "Yes, let's begin.", ready, "No, don't start yet.", () => {});
-    };
-    waitForDialogue();
+    Shared.options(player, "Is your party ready to fight?", "Yes, let's begin.", ready, "No, don't start yet.", () => {});
   }
 
   onStart() {
     for (const player of this.roomPlayers()) this.joinFight(this.raid.member(player));
-    this.verzik.setNpcTransformationId(NPC.PHASE1);
+    this.verzik.setNpcTransformationId(this.ids.PHASE1);
     this.phase = 1;
     this.ticks = 0;
+    const { ObjectManager } = Shared.core();
+    for (const door of this.doors) ObjectManager.deregister(door, true);
+    this.objects = this.objects.filter((object) => !this.doors.includes(object));
+    this.doors = DOOR_TILES.map((tile) => this.placeObject(OBJECT.DOOR_SHUT, tile, 10, 0));
     this.raid.refreshHealthBars();
   }
 
@@ -207,6 +322,7 @@ class VerzikRoom extends Raid.Room {
     this.tickPillars();
     this.tickMinions();
     this.tickWebs();
+    this.tickPools();
     if (this.transition) return;
     if (this.verzik.getHitpoints() <= 0) {
       this.endPhase();
@@ -228,14 +344,31 @@ class VerzikRoom extends Raid.Room {
     else if (this.phase === 3) this.die();
   }
 
+  /** Captured: the throne falls as the room is won, and the treasure room stands 5 ticks later. */
   onComplete() {
     for (const minion of [...this.minions]) this.despawn(minion);
     this.minions.clear();
     for (const web of [...this.webs.values()]) this.removeWeb(web);
+    this.clearPools();
     const exit = this.def.exit;
-    if (exit) this.placeObject(exit.id, exit, exit.type, exit.face);
-    const { countCompletion } = require("./Rewards.TheatreOfBlood");
-    for (const player of this.raid.players) countCompletion(player);
+    if (exit) {
+      const throne = this.placeObject(OBJECT.THRONE_FALLING, exit, exit.type, exit.face);
+      this.later(5, () => {
+        Shared.core().ObjectManager.deregister(throne, true);
+        this.objects = this.objects.filter((object) => object !== throne);
+        this.placeObject(exit.id, exit, exit.type, exit.face);
+      });
+    }
+    for (const task of ["Perfect Verzik", "Pop It", "Nylo Sniper", "Harder Mode III"]) {
+      if (this.raid.taskLive(task)) this.raid.completeTask(task);
+    }
+  }
+
+  /** Hurts a player with one of her attacks: anything but a prayed spider-form attack fails the task. */
+  hurt(player, amount, attack, mask) {
+    if (amount <= 0) return;
+    Shared.damage(player, amount, mask);
+    this.raid.failTask("Perfect Verzik", `${Shared.displayName(player)} was hit by Verzik Vitur's ${attack}.`);
   }
 
   // -------------------------------------------------------------- phase 1
@@ -245,76 +378,151 @@ class VerzikRoom extends Raid.Room {
     const { Animation } = Shared.core();
     const npc = this.verzik;
     npc.performAnimation(new Animation(ANIMATION.P1_BLAST));
-    const hitPillars = new Map();
     this.later(2, () => {
+      const sheltering = new Set();
       for (const player of this.fighters()) {
         const pillar = this.pillarCovering(player);
         if (pillar) {
-          hitPillars.set(pillar, (hitPillars.get(pillar) ?? 0) + 1);
+          sheltering.add(pillar);
           continue;
         }
         const ticks = Shared.projectile(this.area, npc, player, GRAPHIC.BLAST, PROJECTILE.BLAST);
+        Shared.areaSound(this.area, player, SOUND.BLAST_HIT, ticks * 30);
         this.later(ticks, () => {
           if (this.phase !== 1 || !this.fighters().includes(player)) return;
           player.performGraphic(Shared.gfx(GRAPHIC.BLAST_PLAYER));
-          const damage = Shared.random(0, P1.max);
-          Shared.damage(player, Shared.isProtected(player, "magic") ? Math.floor(damage * P1.prayer) : damage);
+          const damage = Shared.random(0, this.damages.blast);
+          this.hurt(player, Shared.isProtected(player, "magic") ? Math.floor(damage * P1.prayer) : damage, "powerful magic attack");
         });
       }
-      // The pillar sheltering the fewest gets the blast (estimate).
-      const pillar = [...hitPillars.entries()].sort((a, b) => a[1] - b[1])[0]?.[0];
-      if (!pillar) return;
-      const ticks = Shared.projectile(this.area, npc, pillar.npc, GRAPHIC.BLAST, PROJECTILE.BLAST_PILLAR);
-      this.later(ticks, () => {
-        if (!this.pillars.includes(pillar)) return;
-        pillar.npc.performGraphic(Shared.gfx(GRAPHIC.BLAST_PILLAR));
-        pillar.npc.setHitpoints(Math.max(0, pillar.npc.getHitpoints() - Shared.random(...P1.pillar)));
-      });
+      // Captured (1852 tick 2971): one blast per pillar with someone behind it.
+      for (const pillar of sheltering) this.blastPillar(pillar);
     });
   }
 
-  /** Behind a pillar: it stands between Verzik and the player. */
+  blastPillar(pillar) {
+    const ticks = Shared.projectile(this.area, this.verzik, pillar.npc, GRAPHIC.BLAST, PROJECTILE.BLAST_PILLAR);
+    pillar.npc.performGraphic(Shared.gfx(GRAPHIC.BLAST_PILLAR, { delay: ticks * 30 }));
+    this.later(ticks, () => {
+      if (!this.pillars.includes(pillar)) return;
+      pillar.npc.setHitpoints(Math.max(0, pillar.npc.getHitpoints() - Shared.random(...P1.pillar)));
+      if (this.raid.isHard) this.dropRubble(pillar);
+    });
+  }
+
+  /** Behind a pillar: it stands on the straight line from her middle to the player. */
   pillarCovering(player) {
     const tile = Shared.tileOf(player);
-    if (Shared.lineOfSight(this.verzik, player, this.area)) return null;
-    let best = null;
+    const size = this.verzik.getSize?.() ?? 1;
+    const from = this.verzik.getLocation();
+    const fromX = from.getX() + size / 2;
+    const fromY = from.getY() + size / 2;
+    const toX = tile.x + 0.5;
+    const toY = tile.y + 0.5;
+    const steps = Math.ceil(Math.max(Math.abs(toX - fromX), Math.abs(toY - fromY)) * 4);
     for (const pillar of this.pillars) {
-      const distance = Shared.distanceTo(pillar.npc, tile);
-      if (distance <= 4 && (!best || distance < best.distance)) best = { pillar, distance };
+      for (let step = 0; step <= steps; step++) {
+        const x = fromX + ((toX - fromX) * step) / steps;
+        const y = fromY + ((toY - fromY) * step) / steps;
+        if (x >= pillar.tile.x && x < pillar.tile.x + PILLAR_SIZE && y >= pillar.tile.y && y < pillar.tile.y + PILLAR_SIZE) return pillar;
+      }
     }
-    return best?.pillar ?? null;
+    return null;
+  }
+
+  /** Hard: rubble round the pillar just hit. */
+  dropRubble(pillar) {
+    for (const [delay, count] of RUBBLE.waves) {
+      this.later(delay, () => {
+        if (this.phase !== 1) return;
+        for (let i = 0; i < count; i++) this.dropRubbleAt(this.rubbleTile(pillar));
+      });
+    }
+  }
+
+  rubbleTile(pillar) {
+    for (let tries = 0; tries < 16; tries++) {
+      const tile = {
+        x: Shared.random(pillar.tile.x - RUBBLE.reach, pillar.tile.x + PILLAR_SIZE - 1 + RUBBLE.reach),
+        y: Shared.random(pillar.tile.y - RUBBLE.reach, pillar.tile.y + PILLAR_SIZE - 1 + RUBBLE.reach),
+        z: 0,
+      };
+      if (inArena(tile) && Shared.floorFree(this.area, tile)) return tile;
+    }
+    return null;
+  }
+
+  dropRubbleAt(tile) {
+    if (!tile) return;
+    Shared.projectile(this.area, { x: tile.x - 1, y: tile.y - 1, z: 0 }, tile, GRAPHIC.RUBBLE, PROJECTILE.RUBBLE);
+    Shared.graphicAt(this.area, GRAPHIC.RUBBLE_MARK, tile, { delay: RUBBLE.markDelay });
+    Shared.graphicAt(this.area, GRAPHIC.RUBBLE_LAND, tile, { delay: RUBBLE.landDelay });
+    Shared.areaSound(this.area, tile, SOUND.URN_LAND, RUBBLE.landDelay);
+    this.later(RUBBLE.lands, () => {
+      for (const player of this.fighters()) {
+        if (key(Shared.tileOf(player)) !== key(tile)) continue;
+        this.hurt(player, Shared.random(0, RUBBLE.max), "falling rubble");
+        this.stun(player, RUBBLE.stun);
+      }
+    });
+  }
+
+  stun(player, ticks) {
+    Shared.core().CombatFactory.stunTicks(player, ticks, true, { graphic: Shared.gfx(GRAPHIC.STUN, { height: 96 }) });
   }
 
   tickPillars() {
-    for (const pillar of [...this.pillars]) {
-      if (pillar.npc.getHitpoints() > 0 && pillar.npc.isRegistered()) continue;
-      this.collapse(pillar);
+    for (const pillar of this.pillars) {
+      if (pillar.falling || (pillar.npc.getHitpoints() > 0 && pillar.npc.isRegistered())) continue;
+      pillar.falling = true;
+      this.later(P1.fallsAfter, () => this.collapse(pillar));
     }
   }
 
-  /** It comes down on anyone beside it. */
-  collapse(pillar) {
+  /** It comes down on anyone beside it; while it falls, its 5x5 can't be walked on. */
+  collapse(pillar, closing = false) {
+    if (!this.pillars.includes(pillar)) return;
     this.pillars = this.pillars.filter((entry) => entry !== pillar);
+    if (!closing) this.raid.failTask("No-Pillar", "A pillar collapsed.");
     const { Animation, ObjectManager } = Shared.core();
     ObjectManager.deregister(pillar.object, true);
+    this.objects = this.objects.filter((object) => object !== pillar.object);
     this.despawn(pillar.npc);
-    const rubble = this.spawn(NPC.COLLAPSING, { x: pillar.tile.x - 1, y: pillar.tile.y - 1, z: 0 }, { scale: false, scripted: true });
+    const corner = { x: pillar.tile.x - 1, y: pillar.tile.y - 1, z: 0 };
+    const rubble = this.spawn(PILLAR_NPC.COLLAPSING, corner, { scale: false, scripted: true });
     rubble?.performAnimation(new Animation(ANIMATION.PILLAR_COLLAPSE));
-    this.later(1, () => {
-      for (const player of this.fighters()) {
-        if (rubble && Shared.distanceTo(rubble, player.getLocation()) > 1) continue;
-        Shared.damage(player, Shared.random(Math.floor(P1.collapse / 2), P1.collapse));
-        player.sendMessage("The collapsing pillar greatly harms you.");
-      }
-      this.later(1, () => {
-        rubble?.setNpcTransformationId(NPC.FADING);
-        rubble?.performAnimation(new Animation(ANIMATION.PILLAR_FADE));
-        this.later(2, () => this.despawn(rubble));
+    for (const player of this.fighters()) {
+      if (!rubble || Shared.distanceTo(rubble, player.getLocation()) > 1) continue;
+      this.hurt(player, Shared.random(Math.floor(this.damages.collapse / 2), this.damages.collapse), "collapsing pillar");
+      this.stun(player, P2.stun);
+      this.pushOff(player, corner);
+    }
+    const blocks = [];
+    for (let dx = 0; dx < P1.block; dx++) {
+      for (let dy = 0; dy < P1.block; dy++) blocks.push(this.placeObject(OBJECT.RUBBLE_BLOCK, { x: corner.x + dx, y: corner.y + dy, z: 0 }, 10, 0));
+    }
+    this.later(P1.fadesAfter, () => {
+      rubble?.setNpcTransformationId(PILLAR_NPC.FADING);
+      rubble?.performAnimation(new Animation(ANIMATION.PILLAR_FADE));
+      this.later(P1.gonePastFade, () => {
+        this.despawn(rubble);
+        for (const block of blocks) ObjectManager.deregister(block, true);
+        this.objects = this.objects.filter((object) => !blocks.includes(object));
       });
     });
   }
 
-  /** Phase 1's caps: only the Dawnbringer's special hurts her properly. */
+  /** Wiki: pushed a few tiles away from a falling pillar. */
+  pushOff(player, corner) {
+    const from = Shared.tileOf(player);
+    const middle = { x: corner.x + 2, y: corner.y + 2 };
+    const dx = Math.sign(from.x - middle.x);
+    const dy = Math.sign(from.y - middle.y) || (dx === 0 ? -1 : 0);
+    const to = { x: from.x + dx * P1.pushed, y: from.y + dy * P1.pushed, z: 0 };
+    if (inArena(to) && Shared.floorFree(this.area, to)) player.moveTo(Shared.loc(to));
+  }
+
+  /** Phase 1's caps; hits while she's immune; heals during the Matomenos' call. */
   modifyHit(npc, hit) {
     if (npc === this.verzik) {
       this.modifyVerzikHit(hit);
@@ -324,14 +532,17 @@ class VerzikRoom extends Raid.Room {
       this.onlyStyle(npc, hit, npc.__verzikNylo.style);
       return;
     }
-    if (npc.getId() === NPC.ATHANATOS) this.hitAthanatos(npc, hit);
+    if (npc.__athanatos) this.hitAthanatos(npc, hit);
   }
 
   modifyVerzikHit(hit) {
     const parts = hit.getHits?.() ?? [];
+    const attacker = hit.getAttacker?.();
     if (this.phase === 1) {
-      const dawnbringer = hit.getCombatMethod?.()?.constructor?.name === "DawnbringerCombatMethod";
-      if (!dawnbringer) {
+      const special = hit.getCombatMethod?.()?.constructor?.name === "DawnbringerCombatMethod";
+      if (special) attacker?.sendMessage?.("The spell strikes to the heart of Verzik Vitur's shield!");
+      // Captured (101 tick 27065): the Dawnbringer's plain spell goes past the cap too.
+      if (!special && !wielding(attacker, DAWNBRINGER)) {
         const cap = styleOf(hit) === "melee" ? P1.capMelee : P1.capOther;
         for (const part of parts) part.setDamage(Math.min(cap, part.getDamage()));
       }
@@ -340,6 +551,14 @@ class VerzikRoom extends Raid.Room {
       const damage = parts.reduce((sum, part) => sum + part.getDamage(), 0);
       for (const part of parts) part.setDamage(0);
       Shared.heal(this.verzik, damage);
+    } else if (this.phase === 3) {
+      if (attacker?.isPlayer?.() && styleOf(hit) === "melee") {
+        this.raid.failTask("Harder Mode III", `${Shared.displayName(attacker)} attacked Verzik Vitur with a melee weapon.`);
+      }
+      if (this.immune) {
+        for (const part of parts) part.setDamage(0);
+        attacker?.sendMessage?.("Verzik Vitur is currently immune!");
+      }
     }
     hit.updateTotalDamage?.();
   }
@@ -354,23 +573,32 @@ class VerzikRoom extends Raid.Room {
     npc.performAnimation(new Animation(ANIMATION.OFF_THRONE));
     this.raid.refreshHealthBars();
     for (const player of this.roomPlayers()) this.takeDawnbringer(player);
-    this.later(3, () => {
-      npc.setNpcTransformationId(NPC.TO_PHASE2);
+    // Captured: her next form 4 ticks on, her line a tick later, in the middle 13 after the form.
+    this.later(4, () => {
+      npc.setNpcTransformationId(this.ids.TO_PHASE2);
       npc.performAnimation(new Animation(ANIMATION.P2_SPAWN));
-      npc.setHitpoints(npc.getMaxHitpoints());
-      for (const pillar of [...this.pillars]) this.collapse(pillar);
-      npc.forceChat("You think you can defeat me?");
-      this.later(1, () => Shared.walkStraight(npc, { x: PHASE2_TILE.x - 1, y: PHASE2_TILE.y - 1, z: 0 }));
-      this.later(14, () => {
+      this.setPhaseHitpoints(1);
+      for (const pillar of [...this.pillars]) this.collapse(pillar, true);
+      if (this.raid.taskLive("No-Pillar")) this.raid.completeTask("No-Pillar");
+      this.later(1, () => {
+        npc.forceChat("You think you can defeat me?");
+        Shared.walkStraight(npc, { x: PHASE2_TILE.x - 1, y: PHASE2_TILE.y - 1, z: 0 });
+      });
+      this.later(13, () => {
         npc.getMovementQueue().reset();
         npc.moveTo(Shared.loc(PHASE2_TILE));
-        npc.setNpcTransformationId(NPC.PHASE2);
-        npc.setHitpoints(npc.getMaxHitpoints());
+        npc.setNpcTransformationId(this.ids.PHASE2);
+        this.setPhaseHitpoints(1);
         npc.setPositionToFace(Shared.loc({ ...PHASE2_TILE, y: PHASE2_TILE.y - 5 }));
         this.ticks = 0;
-        this.attackCounter = -1;
+        this.nextAttack = P2.firstAttack;
+        this.attackCount = 0;
         this.lightnings = 0;
+        this.callAt = Shared.random(...P2.firstCall);
+        this.called = false;
+        this.recall = false;
         this.healing = false;
+        this.nextMatomenos = 0;
         this.matomenos = [];
         this.transition = false;
         this.raid.refreshHealthBars();
@@ -378,57 +606,67 @@ class VerzikRoom extends Raid.Room {
     });
   }
 
-  /** The Dawnbringer falls apart once her shield is gone (our wording). */
+  /** Wiki and captured: the Dawnbringer falls apart once her shield is gone. */
   takeDawnbringer(player) {
     if (Shared.removeDawnbringer(player)) player.sendMessage("The weapon falls apart in your hand as Verzik's shield is destroyed.");
   }
 
   tickPhase2() {
-    if (this.ticks % P2.every !== 0) return;
     const npc = this.verzik;
-    const fighters = this.fighters();
-    if (fighters.length === 0) return;
-    if (!this.healing && npc.getHitpoints() / npc.getMaxHitpoints() <= P2.healBelow) {
+    if (!this.healing && npc.getHitpoints() / Math.max(1, npc.getMaxHitpoints()) <= P2.healBelow) {
       this.healing = true;
-      this.attackCounter = 0;
       this.callMatomenos();
       return;
     }
-    const under = fighters.filter((player) => this.underVerzik(player));
-    if (under.length) {
-      this.bounce(under);
-      return;
-    }
-    if (!this.healing) {
-      if (this.attackCounter === 4) {
-        this.attackCounter = 0;
-        this.lightnings++;
-        this.lightning();
-      } else if (this.attackCounter === -1 || this.lightnings === 5) {
-        this.lightnings = 0;
-        this.attackCounter = 0;
-        this.animate(ANIMATION.P2_ATTACK);
-        this.purpleBall();
-        this.callNylocas();
-      } else {
-        this.attackCounter++;
-        this.urns();
-      }
-      return;
-    }
-    if (this.attackCounter > 0 && this.attackCounter % P2.matomenosEvery === 0) {
+    if (this.healing && this.ticks >= this.nextMatomenos) {
       this.callMatomenos();
-    } else {
-      const roll = Math.random();
-      if (roll >= 0.25) this.bloodSpell();
-      else if (roll >= 0.15) this.lightning();
+      return;
+    }
+    if (this.ticks < this.nextAttack) return;
+    this.nextAttack = this.ticks + P2.every;
+    if (this.fighters().length === 0) return;
+    this.attackCount++;
+    if (this.bodySlam()) return;
+    if (this.healing) {
+      if (Math.random() < P2.bloodChance) this.bloodSpell();
+      else if (Math.random() < P2.lightningChance) this.lightning();
       else this.urns();
+      return;
     }
-    this.attackCounter++;
+    if (this.attackCount >= P2.firstLightning && (this.attackCount - P2.firstLightning) % P2.lightningEvery === 0) {
+      this.lightnings++;
+      this.lightning();
+      if (this.lightnings % P2.recallEvery === 0 && Math.random() < P2.recallChance) this.recall = true;
+      return;
+    }
+    const firstCall = !this.called && this.attackCount >= this.callAt;
+    if (firstCall || (this.recall && !this.athanatosAlive())) {
+      this.called = true;
+      this.recall = false;
+      this.animate(ANIMATION.P2_ATTACK);
+      this.purpleBall();
+      this.callNylocas();
+      return;
+    }
+    this.urns();
   }
 
-  underVerzik(player) {
-    return Shared.distanceTo(this.verzik, player.getLocation()) <= 1;
+  athanatosAlive() {
+    return [...this.minions].some((minion) => minion.__athanatos);
+  }
+
+  /** A stomp on anyone under her (always) or a slam on one of those beside her (usually). */
+  bodySlam() {
+    const fighters = this.fighters();
+    const under = fighters.filter((player) => Shared.distanceTo(this.verzik, player.getLocation()) === 0);
+    const beside = fighters.filter((player) => Shared.distanceTo(this.verzik, player.getLocation()) === 1);
+    const slammed = beside.length && Math.random() < P2.slamChance ? Shared.randomOf(beside) : null;
+    if (!under.length && !slammed) return false;
+    if (under.length) this.verzik.forceChat("There's nothing under there for you!");
+    this.animate(ANIMATION.P2_BOUNCE);
+    for (const player of under) this.bounce(player, this.damages.stomp);
+    if (slammed) this.bounce(slammed, this.damages.slam);
+    return true;
   }
 
   animate(id) {
@@ -437,29 +675,25 @@ class VerzikRoom extends Raid.Room {
     for (const [sound, delay] of ANIMATION_SOUNDS[id] ?? []) Shared.areaSound(this.area, this.verzik, sound, delay);
   }
 
-  /** A body slam: stunned, hurt and thrown back two tiles. */
-  bounce(players) {
-    if (Math.random() < 0.25) this.verzik.forceChat("There's nothing under there for you!");
-    this.animate(ANIMATION.P2_BOUNCE);
-    const { TimerKey, Animation } = Shared.core();
+  /** Stunned, hurt and thrown back three tiles. */
+  bounce(player, max) {
+    const { Animation } = Shared.core();
+    this.raid.failTask("Attack, Step, Wait", `${Shared.displayName(player)} was bounced by Verzik Vitur.`);
     const centre = this.centre();
-    for (const player of players) {
-      player.getMovementQueue().reset();
-      player.getTimers().registers(TimerKey.STUN, P2.stun);
-      this.later(1, () => {
-        player.performGraphic(Shared.gfx(GRAPHIC.STUN, { height: 96 }));
-        Shared.damage(player, Shared.random(0, P2.bounceMax));
-        const from = Shared.tileOf(player);
-        const dx = Math.sign(from.x - centre.x);
-        const dy = Math.sign(from.y - centre.y) || (dx === 0 ? -1 : 0);
-        const to = { x: from.x + dx * 2, y: from.y + dy * 2, z: 0 };
-        player.performAnimation(new Animation(ANIMATION.KNOCKBACK));
-        if (Shared.floorFree(this.area, to)) this.later(1, () => player.moveTo(Shared.loc(to)));
-      });
-    }
+    player.getMovementQueue().reset();
+    this.later(1, () => {
+      this.stun(player, P2.stun);
+      this.hurt(player, Shared.random(0, max), "body slam");
+      const from = Shared.tileOf(player);
+      const dx = Math.sign(from.x - centre.x);
+      const dy = Math.sign(from.y - centre.y) || (dx === 0 ? -1 : 0);
+      const to = { x: from.x + dx * P2.knockback, y: from.y + dy * P2.knockback, z: 0 };
+      player.performAnimation(new Animation(ANIMATION.KNOCKBACK));
+      if (inArena(to) && Shared.floorFree(this.area, to)) this.later(1, () => player.moveTo(Shared.loc(to)));
+    });
   }
 
-  /** Urns at everyone's tiles; whoever's still there is hit. */
+  /** Urns at everyone's tiles; whoever's still there is hit. Hard: each leaves a pool. */
   urns() {
     this.animate(ANIMATION.P2_ATTACK);
     for (const player of this.fighters()) {
@@ -467,38 +701,76 @@ class VerzikRoom extends Raid.Room {
       const ticks = Shared.projectile(this.area, this.verzik, tile, GRAPHIC.URN, PROJECTILE.URN);
       this.later(ticks, () => {
         Shared.graphicAt(this.area, GRAPHIC.URN_LAND, tile);
+        Shared.areaSound(this.area, tile, SOUND.URN_LAND);
+        if (this.raid.isHard && this.phase === 2) this.placePool(tile);
         if (!this.fighters().includes(player) || key(Shared.tileOf(player)) !== key(tile)) return;
-        const damage = Shared.random(0, P2.urnMax);
-        Shared.damage(player, Shared.isProtected(player, "ranged") ? Math.floor(damage * P2.urnPrayer) : damage);
+        const damage = Shared.random(0, this.damages.urn);
+        this.hurt(player, Shared.isProtected(player, "ranged") ? Math.floor(damage * P2.urnPrayer) : damage, "urn");
       });
     }
   }
 
-  /** A lightning ball through the team in a random order; Verzik takes it if she's in the way. */
+  placePool(tile) {
+    const old = this.pools.get(key(tile));
+    if (old) this.removePool(old);
+    const pool = { tile, object: this.placeObject(OBJECT.POOL, tile, 10, 0), until: this.ticks + POOL.lasts };
+    this.pools.set(key(tile), pool);
+  }
+
+  removePool(pool) {
+    this.pools.delete(key(pool.tile));
+    Shared.core().ObjectManager.deregister(pool.object, true);
+    this.objects = this.objects.filter((object) => object !== pool.object);
+  }
+
+  clearPools() {
+    for (const pool of [...this.pools.values()]) this.removePool(pool);
+  }
+
+  /** Wiki: standing in a pool hurts every tick and poisons. */
+  tickPools() {
+    if (this.pools.size === 0) return;
+    const { CombatFactory } = Shared.core();
+    for (const pool of [...this.pools.values()]) {
+      if (this.ticks >= pool.until) this.removePool(pool);
+    }
+    for (const player of this.fighters()) {
+      if (!this.pools.has(key(Shared.tileOf(player)))) continue;
+      this.hurt(player, Shared.random(...POOL.damage), "pool of poison", "GREEN");
+      CombatFactory.poisonEntity(player, POOL.poison);
+    }
+  }
+
+  /** A lightning ball hopping through the team in a random order; Verzik takes it if she's in the way. */
   lightning() {
     const order = Shared.shuffle(this.fighters());
     if (order.length === 0) return;
     this.animate(ANIMATION.P2_ATTACK);
+    Shared.areaSound(this.area, this.verzik, SOUND.LIGHTNING, PROJECTILE.LIGHTNING.delay);
     this.sendLightning(this.verzik, order[0], 1, order);
   }
 
   sendLightning(from, to, index, order) {
     const ticks = Shared.projectile(this.area, from, to, GRAPHIC.LIGHTNING, from === this.verzik ? PROJECTILE.LIGHTNING : PROJECTILE.LIGHTNING_BOUNCE);
     this.later(ticks, () => {
-      if (this.phase !== 2 || this.transition) return;
-      if (to === this.verzik) {
-        Shared.damage(this.verzik, Shared.random(...P2.lightningVerzik));
+      if (this.phase !== 2 || this.transition || !this.fighters().includes(to)) return;
+      Shared.areaSound(this.area, to, SOUND.LIGHTNING_HIT);
+      Shared.areaSound(this.area, to, SOUND.LIGHTNING_HIT_2);
+      const next = order.slice(index).find((player) => this.fighters().includes(player));
+      if (!next || index >= P2.lightningHops) {
+        const damage = Shared.random(...this.damages.lightningLast);
+        this.hurt(to, wearing(to, Shared.core().ItemIdentifiers.INSULATED_BOOTS) ? Math.min(this.damages.insulated, damage) : damage, "lightning");
         return;
       }
-      if (!this.fighters().includes(to)) return;
-      if (index >= order.length) {
-        Shared.damage(to, Shared.random(...P2.lightningLast));
+      this.hurt(to, Shared.random(...this.damages.lightning), "lightning");
+      if (this.verzikBetween(Shared.tileOf(to), Shared.tileOf(next))) {
+        const into = Shared.projectile(this.area, to, this.verzik, GRAPHIC.LIGHTNING, PROJECTILE.LIGHTNING_INTO_HER);
+        this.later(into, () => {
+          if (this.phase === 2 && !this.transition) Shared.damage(this.verzik, Shared.random(...P2.lightningHer));
+        });
         return;
       }
-      Shared.damage(to, Shared.random(...P2.lightning));
-      const next = order[index];
-      if (this.verzikBetween(Shared.tileOf(to), Shared.tileOf(next))) this.sendLightning(to, this.verzik, index + 1, order);
-      else this.sendLightning(to, next, index + 1, order);
+      this.sendLightning(to, next, order.indexOf(next) + 1, order);
     });
   }
 
@@ -525,11 +797,18 @@ class VerzikRoom extends Raid.Room {
     if (!target) return;
     const tile = Shared.tileOf(target);
     const ticks = Shared.projectile(this.area, this.verzik, tile, GRAPHIC.PURPLE, PROJECTILE.PURPLE);
+    Shared.areaSound(this.area, this.verzik, SOUND.PURPLE, PROJECTILE.PURPLE.delay);
     this.later(ticks, () => {
       if (this.phase !== 2 || this.transition) return;
-      if (this.fighters().includes(target) && key(Shared.tileOf(target)) === key(tile)) Shared.damage(target, Shared.random(0, P2.purpleMax));
-      const athanatos = this.spawn(NPC.ATHANATOS, { x: tile.x - 1, y: tile.y - 1, z: 0 }, { scripted: true });
+      if (this.fighters().includes(target) && key(Shared.tileOf(target)) === key(tile)) this.hurt(target, Shared.random(0, this.damages.purple), "purple ball");
+      Shared.graphicAt(this.area, GRAPHIC.ATHANATOS_LAND, tile);
+      Shared.areaSound(this.area, tile, SOUND.ATHANATOS_LAND);
+      Shared.areaSound(this.area, tile, SOUND.ATHANATOS_LAND_2);
+      const athanatos = this.spawn(this.ids.ATHANATOS, { x: tile.x - 1, y: tile.y - 1, z: 0 }, { scale: false, scripted: true });
       if (!athanatos) return;
+      const { Animation } = Shared.core();
+      athanatos.performAnimation(new Animation(ANIMATION.ATHANATOS_SPAWN));
+      athanatos.setMobileInteraction(this.verzik);
       athanatos.__athanatos = { age: 0, poisoned: false };
       this.minions.add(athanatos);
     });
@@ -542,7 +821,7 @@ class VerzikRoom extends Raid.Room {
     if (poisonedWeapon(attacker, styleOf(hit))) {
       if (!npc.__athanatos.poisoned) {
         npc.__athanatos.poisoned = true;
-        npc.performGraphic(Shared.gfx(GRAPHIC.ATHANATOS_POISONED));
+        npc.performGraphic(Shared.gfx(GRAPHIC.ATHANATOS_POISONED, { height: 64 }));
       }
       return;
     }
@@ -552,63 +831,80 @@ class VerzikRoom extends Raid.Room {
     attacker.getCombat().reset();
   }
 
-  /** One nylocas per player, a few tiles from them away from Verzik, chasing them. */
+  /** One nylocas per player, from the room's spawn points, chasing them. */
   callNylocas() {
-    const centre = this.centre();
-    for (const player of this.fighters()) {
-      const from = Shared.tileOf(player);
-      const dx = Math.sign(from.x - centre.x);
-      const dy = Math.sign(from.y - centre.y);
-      let tile = null;
-      for (let distance = 11; distance >= 2 && !tile; distance--) {
-        const candidate = { x: from.x + dx * distance, y: from.y + dy * distance, z: 0 };
-        if (inArena(candidate) && Shared.floorFree(this.area, candidate)) tile = candidate;
-      }
-      if (!tile) continue;
-      const style = Shared.randomOf(["melee", "ranged", "magic"]);
-      const nylo = this.spawn(NPC.NYLOS[style], tile, { scripted: true });
-      if (!nylo) continue;
+    this.fighters().forEach((player, index) => {
+      const style = Shared.randomOf(NYLO.order);
+      const nylo = this.spawn(this.ids.NYLOS[style], NYLO_TILES[index % NYLO_TILES.length], { scale: false, scripted: true });
+      if (!nylo) return;
       nylo.__verzikNylo = { style, target: player, age: 0 };
       this.minions.add(nylo);
-    }
+    });
   }
 
+  /** Captured: the wrong style bounces off. */
   onlyStyle(npc, hit, style) {
     const hitStyle = styleOf(hit);
     if (!hitStyle || hitStyle === style) return;
     for (const part of hit.getHits?.() ?? []) part.setDamage(0);
     hit.updateTotalDamage?.();
-    hit.getAttacker?.()?.sendMessage?.(`You can only damage the ${npcName(npc)} with ${style}.`);
+    hit.getAttacker?.()?.sendMessage?.("Your attack is absorbed by the nylocas and bounced right off!");
   }
 
-  /** Blood: heals her for half the damage; Protect from Magic stops it. */
+  /** Blood: on everyone round its target; prayer halves it (Mod Ash); she heals half the total. */
   bloodSpell() {
     const target = Shared.randomOf(this.fighters());
     if (!target) return;
     this.animate(ANIMATION.P2_ATTACK);
+    Shared.areaSound(this.area, this.verzik, SOUND.BLOOD, PROJECTILE.BLOOD.delay);
     const ticks = Shared.projectile(this.area, this.verzik, target, GRAPHIC.BLOOD, PROJECTILE.BLOOD);
-    const blocked = Shared.isProtected(target, "magic");
+    const prayed = new Set(this.fighters().filter((player) => Shared.isProtected(player, "magic")));
     this.later(ticks, () => {
-      if (!this.fighters().includes(target) || blocked) return;
-      const damage = Shared.random(0, P2.bloodMax);
-      if (damage <= 0) return;
-      target.performGraphic(Shared.gfx(GRAPHIC.BLOOD_LAND));
-      Shared.damage(target, damage);
-      Shared.heal(this.verzik, Math.floor(damage / 2));
+      if (this.phase !== 2 || this.transition) return;
+      const centre = target.getLocation();
+      let total = 0;
+      for (const player of this.fighters()) {
+        if (Shared.distanceTo(player, centre) > P2.bloodReach) continue;
+        const damage = Shared.random(0, this.damages.blood);
+        const dealt = prayed.has(player) ? Math.floor(damage / 2) : damage;
+        if (dealt <= 0) continue;
+        player.performGraphic(Shared.gfx(GRAPHIC.BLOOD_LAND));
+        this.hurt(player, dealt, "blood spell");
+        total += dealt;
+      }
+      Shared.heal(this.verzik, Math.floor(total / 2));
     });
   }
 
-  /** Two Matomenos (one with a single player left); she absorbs what's left of the last two. */
+  /** Two Matomenos (one with a single player left); she absorbs what's left of the last ones. */
   callMatomenos() {
     this.animate(ANIMATION.P2_HEAL);
     this.shieldUntil = Shared.cycle() + P2.shieldTicks;
+    this.nextMatomenos = this.ticks + P2.matomenosEvery;
+    this.nextAttack = this.ticks + P2.afterMatomenos;
     for (const old of this.matomenos) {
-      if (old.isRegistered() && old.getHitpoints() > 0) Shared.heal(this.verzik, old.getHitpoints());
+      if (old.isRegistered() && old.getHitpoints() > 0) this.absorb(old);
       this.minions.delete(old);
       this.despawn(old);
     }
     const count = this.fighters().length > 1 ? 2 : 1;
-    this.matomenos = MATOMENOS_TILES.slice(0, count).map((tile) => this.spawn(NPC.MATOMENOS, tile, { scripted: true })).filter(Boolean);
+    const { Animation } = Shared.core();
+    this.matomenos = MATOMENOS_TILES.slice(0, count).map((tile) => this.spawn(this.ids.MATOMENOS, tile, { scale: !this.raid.isEntry, scripted: true })).filter(Boolean);
+    for (const nylo of this.matomenos) {
+      nylo.performAnimation(new Animation(ANIMATION.MATOMENOS_SPAWN));
+      nylo.__matomenos = true;
+      this.minions.add(nylo);
+    }
+  }
+
+  /** She heals what it had left; on Hard it also blows up at whoever's near. */
+  absorb(nylo) {
+    const left = nylo.getHitpoints();
+    Shared.heal(this.verzik, left);
+    if (!this.raid.isHard) return;
+    for (const player of this.fighters()) {
+      if (Shared.distanceTo(nylo, player.getLocation()) <= MATOMENOS_BLAST.reach) this.hurt(player, Math.floor(left * MATOMENOS_BLAST.share), "exploding Matomenos");
+    }
   }
 
   // -------------------------------------------------------------- minions
@@ -622,57 +918,98 @@ class VerzikRoom extends Raid.Room {
       if (minion.__verzikNylo) this.tickNylo(minion);
       else if (minion.__athanatos) this.tickAthanatos(minion);
       else if (minion.__tornado) this.tickTornado(minion);
+      else if (minion.__matomenos) this.tickMatomenos(minion);
     }
+  }
+
+  /** Captured: they walk at the nearest player. */
+  tickMatomenos(nylo) {
+    const target = this.nearestFighter(nylo);
+    if (target) this.walkAt(nylo, target);
+  }
+
+  nearestFighter(actor) {
+    let best = null;
+    let distance = Infinity;
+    for (const player of this.fighters()) {
+      const away = Shared.distanceTo(actor, player.getLocation());
+      if (away < distance) {
+        best = player;
+        distance = away;
+      }
+    }
+    return best;
+  }
+
+  walkAt(npc, target) {
+    if (Shared.frozen(npc)) return;
+    const tile = Shared.tileOf(target);
+    Shared.core().PathFinder.calculateWalkRoute(npc, tile.x, tile.y);
+    npc.setMobileInteraction(target);
   }
 
   tickNylo(nylo) {
     const state = nylo.__verzikNylo;
     state.age++;
+    if (this.raid.isHard && state.age % NYLO.styleEvery === 0) {
+      state.style = NYLO.order[(NYLO.order.indexOf(state.style) + 1) % NYLO.order.length];
+      nylo.setNpcTransformationId(this.ids.NYLOS[state.style]);
+    }
+    if (Shared.frozen(nylo)) {
+      this.raid.failTask("Pop It", "A Nylocas was frozen.");
+      return;
+    }
+    if (!this.fighters().includes(state.target)) state.target = this.nearestFighter(nylo);
     const target = state.target;
-    const near = target && this.fighters().includes(target) && Shared.distanceTo(nylo, target.getLocation()) <= 1;
-    if (near || state.age >= NYLO.fuse) {
+    const near = target && Shared.distanceTo(nylo, target.getLocation()) <= 1;
+    if (near) {
+      this.raid.failTask("Nylo Sniper", `${Shared.displayName(target)} got too close to a Nylocas.`);
       this.explodeNylo(nylo);
       return;
     }
-    if (target && this.fighters().includes(target)) {
-      const at = Shared.tileOf(target);
-      Shared.core().PathFinder.calculateWalkRoute(nylo, at.x, at.y);
-      nylo.setMobileInteraction(target);
+    if (!this.raid.isHard && state.age >= NYLO.fuse) {
+      this.explodeNylo(nylo);
+      return;
     }
+    if (target) this.walkAt(nylo, target);
   }
 
+  /** Captured: the damage comes with the animation, and it's gone 3 ticks later. */
   explodeNylo(nylo) {
+    const { Animation } = Shared.core();
     this.minions.delete(nylo);
+    nylo.performAnimation(new Animation(ANIMATION.NYLO_EXPLODE[nylo.__verzikNylo.style]));
+    nylo.getMovementQueue().reset();
     for (const player of this.fighters()) {
-      const distance = Shared.distanceTo(nylo, player.getLocation());
-      const damage = NYLO.falloff[Math.max(0, distance - 1)] ?? 0;
-      if (distance < 4 && damage > 0) Shared.damage(player, damage);
+      const damage = this.damages.nylo[Math.max(0, Shared.distanceTo(nylo, player.getLocation()) - 1)] ?? 0;
+      if (damage <= 0) continue;
+      this.raid.failTask("Pop It", `${Shared.displayName(player)} was hit by one of Verzik Vitur's exploding Nylocas.`);
+      this.hurt(player, damage, "exploding Nylocas");
     }
-    nylo.setHitpoints(0);
+    this.later(NYLO.gone, () => {
+      if (nylo.isRegistered()) this.despawn(nylo);
+    });
   }
 
   tickAthanatos(npc) {
     const state = npc.__athanatos;
     state.age++;
-    npc.setMobileInteraction(this.verzik);
-    if (state.age >= ATHANATOS.life) {
-      Shared.heal(this.verzik, npc.getHitpoints());
-      this.minions.delete(npc);
-      npc.setHitpoints(0);
-      return;
-    }
-    if (state.age % ATHANATOS.every !== 0 || this.transition) return;
+    if ((state.age - ATHANATOS.firstAt) % ATHANATOS.every !== 0 || this.transition) return;
     const poisoned = state.poisoned;
     const delay = Shared.random(0, GLOBULE.maxDelay);
     const ticks = Shared.projectile(this.area, npc, this.verzik, poisoned ? GRAPHIC.ATHANATOS_POISON : GRAPHIC.ATHANATOS_HEAL,
       { ...GLOBULE, delay, duration: GLOBULE.lands - delay, perTile: 0 });
     if (poisoned) {
       this.minions.delete(npc);
-      this.later(ticks, () => Shared.damage(this.verzik, Shared.random(...ATHANATOS.poison), "GREEN"));
+      Shared.graphicAt(this.area, GRAPHIC.ATHANATOS_BURST, npc.getLocation(), { height: 10 });
+      Shared.areaSound(this.area, npc, SOUND.POISON_BURST);
+      Shared.areaSound(this.area, npc, SOUND.POISON_BURST_2, 20);
+      this.later(ticks, () => Shared.damage(this.verzik, Shared.random(...this.damages.poison), "GREEN"));
       npc.setHitpoints(0);
       return;
     }
-    this.later(ticks, () => Shared.heal(this.verzik, Shared.random(...ATHANATOS.heal)));
+    Shared.areaSound(this.area, npc, SOUND.GLOBULE);
+    this.later(ticks, () => Shared.heal(this.verzik, Shared.random(...this.damages.heal)));
   }
 
   // -------------------------------------------------------------- phase 3
@@ -681,24 +1018,40 @@ class VerzikRoom extends Raid.Room {
     const npc = this.verzik;
     this.transition = true;
     this.phase = 3;
-    for (const old of this.matomenos ?? []) this.despawn(old);
+    for (const old of this.matomenos ?? []) {
+      this.minions.delete(old);
+      this.despawn(old);
+    }
     this.matomenos = [];
+    for (const minion of [...this.minions]) {
+      if (!minion.__athanatos) continue;
+      this.minions.delete(minion);
+      this.despawn(minion);
+    }
+    this.clearPools();
+    if (this.raid.taskLive("Attack, Step, Wait")) this.raid.completeTask("Attack, Step, Wait");
     npc.getMovementQueue().reset();
     this.animate(ANIMATION.P2_DEATH);
     this.raid.refreshHealthBars();
-    this.later(1, () => {
-      npc.setNpcTransformationId(NPC.TO_PHASE3);
+    // Captured (101, 1852): her next form 2 ticks on, her true one 4 after, her first attack 6 after.
+    this.later(2, () => {
+      npc.setNpcTransformationId(this.ids.TO_PHASE3);
+      npc.moveTo(Shared.loc(PHASE3_TILE));
       this.animate(ANIMATION.P3_SPAWN);
-      this.later(2, () => {
-        npc.setNpcTransformationId(NPC.PHASE3);
-        npc.setHitpoints(npc.getMaxHitpoints());
-        npc.moveTo(Shared.loc(PHASE3_TILE));
+      this.later(4, () => {
+        npc.setNpcTransformationId(this.ids.PHASE3);
+        this.setPhaseHitpoints(2);
         npc.forceChat("Behold my true nature!");
         this.ticks = 0;
         this.attacks = 0;
         this.special = 0;
+        this.nextAttack = P3.firstAttack;
         this.busyUntil = 0;
+        this.awayFor = 0;
+        this.immune = false;
         this.enraged = false;
+        this.lastStood = false;
+        this.webWalk = null;
         this.transition = false;
         npc.getMovementQueue().setBlockMovement(false);
         this.raid.refreshHealthBars();
@@ -708,26 +1061,55 @@ class VerzikRoom extends Raid.Room {
 
   tickPhase3() {
     const npc = this.verzik;
-    if (!this.enraged && npc.getHitpoints() / npc.getMaxHitpoints() <= P3.enrageBelow) {
+    const share = npc.getHitpoints() / Math.max(1, npc.getMaxHitpoints());
+    if (this.raid.isHard && !this.lastStood && share <= P3.lastStandBelow) {
+      this.lastStood = true;
+      npc.forceChat("You think this is over?!");
+      Shared.heal(npc, Math.floor(npc.getMaxHitpoints() * P3.lastStandHeal));
+    }
+    if (!this.enraged && share <= P3.enrageBelow) {
       this.enraged = true;
+      this.nextAttack = Math.max(this.nextAttack, this.ticks + P3.enraged);
       npc.forceChat("I'm not finished with you just yet!");
       for (const player of this.fighters()) this.sendTornado(player);
     }
-    if (Shared.cycle() < this.busyUntil) return;
+    if (this.webWalk) {
+      this.tickWebWalk();
+      return;
+    }
+    if (this.ticks < this.busyUntil) return;
     const fighters = this.fighters();
-    if (!this.target || !fighters.includes(this.target)) this.target = Shared.randomOf(fighters);
-    const target = this.target;
-    if (!target) return;
-    this.chase(target);
-    if (this.ticks % (this.enraged ? P3.enraged : P3.every) !== 0) return;
+    if (fighters.length === 0) return;
+    this.pickTarget(fighters);
+    this.chase(this.target);
+    if (this.ticks < this.nextAttack) return;
+    const pace = this.enraged ? P3.enraged : P3.every;
+    this.nextAttack = this.ticks + pace;
     if (this.attacks === P3.specialEvery) {
       this.attacks = 0;
+      if (this.raid.isHard) this.target = Shared.randomOf(fighters.filter((player) => player !== this.target)) ?? this.target;
       const special = SPECIALS[this.special++ % SPECIALS.length];
       this[`special_${special}`]();
-      if (special !== "nylocas") return;
+      // Captured: the nylocas come with an ordinary attack, one that doesn't count towards the next special.
+      if (special === "nylocas") this.autoAttack(this.target);
+      return;
     }
     this.attacks++;
-    this.autoAttack(target);
+    this.autoAttack(this.target);
+  }
+
+  /** The same target until they've been out of her reach too long, or they're gone. */
+  pickTarget(fighters) {
+    if (!this.target || !fighters.includes(this.target)) {
+      this.target = Shared.randomOf(fighters);
+      this.awayFor = 0;
+    }
+    if (Shared.distanceTo(this.verzik, this.target.getLocation()) <= 1) {
+      this.awayFor = 0;
+    } else if (++this.awayFor > P3.retargetAfter) {
+      this.target = Shared.randomOf(fighters.filter((player) => player !== this.target)) ?? this.target;
+      this.awayFor = 0;
+    }
   }
 
   /** She walks after her target until it's within reach of her melee. */
@@ -750,63 +1132,85 @@ class VerzikRoom extends Raid.Room {
     if (reach && Math.random() < 0.5) {
       this.animate(ANIMATION.P3_MELEE);
       for (const player of fighters) {
-        if (Shared.distanceTo(player, target.getLocation()) > 1 || Shared.distanceTo(npc, player.getLocation()) !== 1) continue;
-        this.strike(npc, player, "melee", P3.melee, 1, { prayerMultiplier: 0 });
+        if (Shared.distanceTo(npc, player.getLocation()) !== 1) continue;
+        const hit = this.strike(npc, player, "melee", this.damages.melee, 1, { prayable: false, accurate: true });
+        if (hit.getTotalDamage() > 0) this.failPerfect(player, "melee attack");
       }
       return;
     }
     const style = Math.random() < 0.5 ? "magic" : "ranged";
+    const max = this.enraged ? this.damages.enraged : this.damages[style];
     this.animate(style === "magic" ? ANIMATION.P3_MAGIC : ANIMATION.P3_RANGED);
-    for (const player of this.fighters()) {
+    for (const player of fighters) {
       const ticks = style === "magic"
         ? Shared.projectile(this.area, npc, player, GRAPHIC.P3_MAGIC, PROJECTILE.P3_MAGIC)
         : Shared.projectile(this.area, npc, player, GRAPHIC.P3_RANGED, PROJECTILE.P3_RANGED);
-      this.strike(npc, player, style, P3[style], Math.max(1, ticks - 1), { prayerMultiplier: P3.prayer });
+      // Wiki (2 August 2018): the damage is worked out as it lands.
+      this.later(Math.max(0, ticks - 1), () => {
+        if (this.phase !== 3 || !this.fighters().includes(player)) return;
+        const hit = this.strike(npc, player, style, max, 1, { prayerMultiplier: P3.prayer });
+        if (!Shared.isProtected(player, style) && hit.getTotalDamage() > 0) this.failPerfect(player, `${style} attack`);
+      });
     }
+  }
+
+  failPerfect(player, attack) {
+    this.raid.failTask("Perfect Verzik", `${Shared.displayName(player)} was hit by Verzik Vitur's ${attack}.`);
   }
 
   special_nylocas() {
     this.callNylocas();
   }
 
-  /** To the middle, players beside her thrown back, then webs spun at the team. */
+  /** To the middle, immune on the way; then players beside her thrown back, and webs spun at the team. */
   special_webs() {
+    this.immune = true;
+    this.webWalk = { started: this.ticks };
+    Shared.walkStraight(this.verzik, WEB_CENTRE);
+  }
+
+  tickWebWalk() {
+    const npc = this.verzik;
+    const there = key(Shared.tileOf(npc)) === key(WEB_CENTRE);
+    if (!there && this.ticks - this.webWalk.started < WEBS.walkAtMost) return;
+    if (!there) npc.moveTo(Shared.loc(WEB_CENTRE));
+    this.webWalk = null;
+    this.immune = false;
+    this.spinWebs();
+  }
+
+  spinWebs() {
     const npc = this.verzik;
     const { Animation } = Shared.core();
-    this.busyUntil = Shared.cycle() + WEBS.spin;
-    npc.setNpcTransformationId(NPC.TO_PHASE3);
-    Shared.walkStraight(npc, WEB_CENTRE);
-    const centre = () => this.centre();
-    const spin = () => {
-      npc.setNpcTransformationId(NPC.PHASE3);
-      npc.getMovementQueue().setBlockMovement(true);
-      for (const player of this.fighters()) {
-        if (Shared.distanceTo(npc, player.getLocation()) > 3) continue;
-        const from = Shared.tileOf(player);
-        const c = centre();
-        const to = { x: from.x + Math.sign(from.x - c.x) * 4, y: from.y + Math.sign(from.y - c.y) * 4, z: 0 };
-        player.performAnimation(new Animation(ANIMATION.KNOCKBACK));
-        if (inArena(to) && Shared.floorFree(this.area, to)) player.moveTo(Shared.loc(to));
-      }
-      this.animate(ANIMATION.P3_WEBS);
-      const players = this.fighters();
-      for (let i = 0; i < WEBS.spin - 10 && players.length; i++) {
-        this.later(i + 3, () => {
-          const target = players[Math.floor(i / 3) % players.length];
-          if (!this.fighters().includes(target)) return;
-          const end = Shared.tileOf(target);
-          this.shootWeb(end);
-          for (let extra = 0; extra < 2; extra++) {
-            this.shootWeb({ x: end.x + Shared.random(-3, 3), y: end.y + Shared.random(-3, 3), z: 0 });
-          }
-        });
-      }
-      this.later(WEBS.spin - 3, () => {
-        npc.getMovementQueue().setBlockMovement(false);
-        this.target = Shared.randomOf(this.fighters().filter((player) => player !== this.target)) ?? this.target;
+    npc.getMovementQueue().reset();
+    npc.getMovementQueue().setBlockMovement(true);
+    this.busyUntil = this.ticks + WEBS.next;
+    this.nextAttack = this.busyUntil;
+    const centre = this.centre();
+    for (const player of this.fighters()) {
+      if (Shared.distanceTo(npc, player.getLocation()) > WEBS.knockedWithin) continue;
+      const from = Shared.tileOf(player);
+      const to = { x: from.x + Math.sign(from.x - centre.x) * WEBS.knockback, y: from.y + Math.sign(from.y - centre.y) * WEBS.knockback, z: 0 };
+      player.performAnimation(new Animation(ANIMATION.KNOCKBACK));
+      if (inArena(to) && Shared.floorFree(this.area, to)) player.moveTo(Shared.loc(to));
+    }
+    this.animate(ANIMATION.P3_WEBS);
+    const players = this.fighters();
+    for (let i = 0; i < WEBS.ticks && players.length; i++) {
+      this.later(WEBS.startsAfter + i, () => {
+        const target = players[Math.floor(i / 3) % players.length];
+        if (!this.fighters().includes(target)) return;
+        const end = Shared.tileOf(target);
+        this.shootWeb(end);
+        for (let extra = 1; extra < WEBS.perTick; extra++) {
+          this.shootWeb({ x: end.x + Shared.random(-3, 3), y: end.y + Shared.random(-3, 3), z: 0 });
+        }
       });
-    };
-    this.later(3, spin);
+    }
+    this.later(WEBS.next, () => {
+      npc.getMovementQueue().setBlockMovement(false);
+      this.target = Shared.randomOf(this.fighters().filter((player) => player !== this.target)) ?? this.target;
+    });
   }
 
   shootWeb(tile) {
@@ -814,39 +1218,45 @@ class VerzikRoom extends Raid.Room {
     this.webs.set(key(tile), null);
     const ticks = Shared.projectile(this.area, this.verzik, tile, GRAPHIC.WEB, { ...PROJECTILE.WEB, delay: Shared.random(0, WEB_MAX_DELAY) });
     this.later(ticks, () => {
-      if (this.phase !== 3) {
+      if (this.phase !== 3 || this.transition) {
         this.webs.delete(key(tile));
         return;
       }
-      const object = this.placeObject(OBJECT.WEB, tile, 10, 0);
-      const npc = this.spawn(NPC.WEB, tile, { scale: false, scripted: true });
-      this.webs.set(key(tile), { tile, object, npc, age: 0, stuck: new Set() });
+      const object = this.placeObject(OBJECT.WEB, tile, 10, Shared.random(0, 3));
+      const npc = this.spawn(this.ids.WEB, tile, { scale: false, scripted: true });
+      this.webs.set(key(tile), { tile, object, npc, age: ticks, stuck: new Set() });
     });
   }
 
-  /** Stepping on a web holds the player; attacking it frees them, and it bursts after 12 ticks. */
+  /** Stepping on a web holds the player; attacking it frees them, and it bursts when its time is up. */
   tickWebs() {
-    const { TimerKey } = Shared.core();
+    const { TimerKey, ItemIdentifiers } = Shared.core();
     for (const web of [...this.webs.values()]) {
       if (!web) continue;
       web.age++;
       const onIt = this.fighters().filter((player) => key(Shared.tileOf(player)) === key(web.tile));
       if (!web.npc?.isRegistered() || web.npc.getHitpoints() <= 0) {
-        for (const player of onIt) this.freeFromWeb(player, "The web crumbles under your attack and you are released safely.");
+        for (const player of web.stuck) this.freeFromWeb(player, "You slash the web apart.");
         this.removeWeb(web);
         continue;
       }
       for (const player of onIt) {
         if (web.stuck.has(player)) continue;
+        if (wearing(player, ItemIdentifiers.ARANEA_BOOTS) && this.ticks >= (player.__verzikAraneaAt ?? 0)) {
+          player.__verzikAraneaAt = this.ticks + WEBS.araneaEvery;
+          player.sendMessage("Your Aranea boots let you avoid the spider-based attack.");
+          continue;
+        }
         web.stuck.add(player);
         player.getMovementQueue().reset();
         player.getTimers().registers(TimerKey.FREEZE, WEBS.freeze);
-        player.sendMessage("You're stuck in the web!");
+        player.sendMessage("The sticky web grips your ankles.");
       }
-      if (web.age < WEBS.life) continue;
-      for (const player of onIt) {
-        this.freeFromWeb(player, "The web explodes and you are released.");
-        Shared.damage(player, Shared.random(0, WEBS.max));
+      if (web.age < WEBS.lasts) continue;
+      for (const player of web.stuck) {
+        if (!this.fighters().includes(player)) continue;
+        this.freeFromWeb(player, "The webs grate against your skin as they snap against your ankles.");
+        this.hurt(player, Shared.random(0, this.damages.webs), "web");
       }
       this.removeWeb(web);
     }
@@ -863,88 +1273,127 @@ class VerzikRoom extends Raid.Room {
     if (!web) return;
     this.webs.delete(key(web.tile));
     Shared.core().ObjectManager.deregister(web.object, true);
+    this.objects = this.objects.filter((object) => object !== web.object);
     this.despawn(web.npc);
   }
 
-  /** Safe spots: one player per spot is spared; everyone else takes the blast. */
+  /** Safe spots: one player per spot per strike; everyone else takes the blast. Hard: three strikes. */
   special_dots() {
     const npc = this.verzik;
-    this.busyUntil = Shared.cycle() + DOTS.ticks;
+    const mode = this.raid.isHard ? "hard" : "normal";
+    const strikes = DOTS.strikes[mode];
+    this.busyUntil = this.ticks + DOTS.next[mode];
+    this.nextAttack = this.busyUntil;
+    this.immune = true;
     npc.getMovementQueue().reset();
     this.animate(ANIMATION.P3_DOTS);
     const fighters = this.fighters();
-    const dots = [];
-    while (dots.length < fighters.length) {
-      const tile = { x: Shared.random(ARENA.minX, ARENA.maxX), y: Shared.random(ARENA.minY, ARENA.maxY), z: 0 };
-      if (!Shared.covers(npc, tile) && Shared.floorFree(this.area, tile) && !dots.some((dot) => key(dot) === key(tile))) dots.push(tile);
+    const spots = this.pickSpots(fighters.length * DOTS.spotsPerPlayer[mode]);
+    const window = { enraged: this.enraged, hurt: false, players: fighters.length };
+    this.dotsWindow = window;
+    const lastStrike = strikes[strikes.length - 1];
+    for (const shownAt of DOTS.shownAt) {
+      if (shownAt >= lastStrike) break;
+      this.later(shownAt, () => spots.forEach((spot) => Shared.graphicAt(this.area, GRAPHIC.DOT, spot)));
     }
-    const show = () => dots.forEach((dot) => Shared.graphicAt(this.area, GRAPHIC.DOT, dot));
-    show();
-    this.later(5, show);
-    this.later(10, show);
-    this.later(9, () => {
-      for (const player of this.fighters()) Shared.projectile(this.area, npc, player, GRAPHIC.DOT_BLAST, PROJECTILE.DOT_BLAST);
-    });
-    this.later(DOTS.ticks, () => {
-      const safe = new Set();
-      for (const dot of dots) {
-        const player = this.fighters().find((candidate) => !safe.has(candidate) && key(Shared.tileOf(candidate)) === key(dot));
-        if (player) safe.add(player);
+    for (const player of fighters) {
+      for (const strike of strikes) {
+        Shared.projectile(this.area, npc, player, GRAPHIC.DOT_BLAST, { ...PROJECTILE.DOT_BLAST, duration: PROJECTILE.DOT_BLAST.duration + DOTS.extraFlight[strike] });
       }
-      for (const player of this.fighters()) {
-        if (safe.has(player)) {
-          player.performGraphic(Shared.gfx(GRAPHIC.DOT_SAFE));
-          player.sendMessage("The power resonating here protects you from the blast.");
-        } else {
-          player.performGraphic(Shared.gfx(GRAPHIC.BLAST_HIT, { height: 96 }));
-          Shared.damage(player, DOTS.damage);
-        }
-      }
-    });
+    }
+    for (const strike of strikes) {
+      this.later(strike, () => {
+        if (this.phase !== 3) return;
+        this.strikeSpots(spots, window);
+        if (strike !== lastStrike) return;
+        this.immune = false;
+        this.dotsWindow = null;
+        if (window.enraged && !window.hurt && this.fighters().length >= 2) this.raid.completeTask("Team Work Makes the Dream Work");
+      });
+    }
   }
 
-  /** The green ball bounces to the nearest teammate; with nobody near, it lands hard. */
+  pickSpots(count) {
+    const spots = [];
+    for (let tries = 0; tries < count * 16 && spots.length < count; tries++) {
+      const tile = { x: Shared.random(ARENA.minX, ARENA.maxX), y: Shared.random(ARENA.minY, ARENA.maxY), z: 0 };
+      if (!Shared.covers(this.verzik, tile) && Shared.floorFree(this.area, tile) && !spots.some((spot) => key(spot) === key(tile))) spots.push(tile);
+    }
+    return spots;
+  }
+
+  /** A spot holds one player and is used up by that strike; two on one spot both take it. */
+  strikeSpots(spots, window) {
+    const safe = new Set();
+    for (const spot of [...spots]) {
+      const standing = this.fighters().filter((player) => key(Shared.tileOf(player)) === key(spot));
+      if (standing.length !== 1) continue;
+      safe.add(standing[0]);
+      spots.splice(spots.indexOf(spot), 1);
+    }
+    for (const player of this.fighters()) {
+      if (safe.has(player)) {
+        player.performGraphic(Shared.gfx(GRAPHIC.DOT_SAFE));
+        player.sendMessage("The power resonating here protects you from the blast.");
+      } else {
+        window.hurt = true;
+        player.performGraphic(Shared.gfx(GRAPHIC.BLAST_HIT, { height: 96 }));
+        this.hurt(player, this.damages.dots, "power blast");
+      }
+    }
+  }
+
+  /** The green ball goes to whoever's beside its target, until it has been passed on enough. */
   special_green() {
     const first = Shared.randomOf(this.fighters());
     if (!first) return;
+    this.busyUntil = 0;
+    this.nextAttack = this.ticks + GREEN.next;
     this.animate(ANIMATION.P3_RANGED);
-    this.later(2, () => this.bounceGreen(this.verzik, first, 0));
+    first.sendMessage("<col=0a721f>Verzik Vitur fires a powerful projectile in your direction...</col>");
+    this.bounceGreen(this.verzik, first, { passes: 0, visited: new Set(), lethal: this.raid.isHard && this.fighters().length >= 2 });
   }
 
-  bounceGreen(from, target, bounces) {
-    const ticks = Shared.projectile(this.area, from, target, GRAPHIC.GREEN_BALL, bounces === 0 ? PROJECTILE.GREEN_BALL : { delay: 9, duration: 180, perTile: 0, startHeight: 30, endHeight: 30, angle: 20, progress: 100 });
+  bounceGreen(from, target, ball) {
+    const ticks = Shared.projectile(this.area, from, target, GRAPHIC.GREEN_BALL, from === this.verzik ? PROJECTILE.GREEN_BALL : PROJECTILE.GREEN_PASSED);
     this.later(ticks, () => {
       if (this.phase !== 3 || !this.fighters().includes(target)) return;
-      let closest = null;
-      let distance = Infinity;
-      for (const player of this.fighters()) {
-        if (player === target) continue;
-        const d = Shared.distanceTo(player, target.getLocation());
-        if (d < distance) {
-          closest = player;
-          distance = d;
-        }
-      }
-      if (!closest || distance > GREEN.near || bounces >= GREEN.bounces) {
-        target.performGraphic(Shared.gfx(GRAPHIC.BLAST_HIT, { height: 96 }));
-        const { Skill } = Shared.core();
-        const level = target.getSkillManager().getMaxLevel(Skill.HITPOINTS);
-        Shared.damage(target, Shared.random(1, Math.floor(level * GREEN.share)));
+      Shared.areaSound(this.area, target, SOUND.GREEN_LAND);
+      ball.visited.add(target);
+      const beside = this.fighters().filter((player) => player !== target && Shared.distanceTo(player, target.getLocation()) <= GREEN.near);
+      const next = beside.find((player) => !ball.visited.has(player));
+      if (next && ball.passes < GREEN.passes) {
+        ball.passes++;
+        this.raid.completeTask("Pass It On", [target]);
+        this.bounceGreen(target, next, ball);
         return;
       }
-      Shared.damage(target, Shared.random(0, GREEN.bounceMax));
-      this.bounceGreen(target, closest, bounces + 1);
+      if (ball.passes >= GREEN.passes && !ball.lethal) return;
+      this.greenLands(target, ball);
+      // Wiki: passed back to someone it has already been to, the sender takes it too.
+      if (beside.length && ball.passes < GREEN.passes && !next) this.greenLands(beside[0], ball);
     });
+  }
+
+  greenLands(player, ball) {
+    const { Skill } = Shared.core();
+    player.performGraphic(Shared.gfx(GRAPHIC.BLAST_HIT, { height: 96 }));
+    if (ball.lethal) {
+      this.hurt(player, ball.passes === 0 ? player.getHitpoints() : GREEN.hard[ball.passes], "green ball");
+      return;
+    }
+    const level = player.getSkillManager().getMaxLevel(Skill.HITPOINTS);
+    this.hurt(player, Shared.random(1, Math.floor(level * GREEN.share)), "green ball");
   }
 
   /** Below 20%: a tornado after each player. */
   sendTornado(player) {
     const from = Shared.tileOf(player);
     for (let tries = 0; tries < 32; tries++) {
-      const tile = { x: from.x + Shared.random(-5, 5), y: from.y + Shared.random(-5, 5), z: 0 };
+      const tile = { x: from.x + Shared.random(-TORNADO.reachesWithin, TORNADO.reachesWithin), y: from.y + Shared.random(-TORNADO.reachesWithin, TORNADO.reachesWithin), z: 0 };
       const distance = Math.max(Math.abs(tile.x - from.x), Math.abs(tile.y - from.y));
-      if (distance < 4 || !inArena(tile) || !Shared.floorFree(this.area, tile)) continue;
-      const tornado = this.spawn(NPC.TORNADO, tile, { scale: false, scripted: true });
+      if (distance < TORNADO.atLeast || !inArena(tile) || !Shared.floorFree(this.area, tile)) continue;
+      const tornado = this.spawn(this.ids.TORNADO, tile, { scale: false, scripted: true });
       if (!tornado) return;
       tornado.__tornado = { target: player };
       this.minions.add(tornado);
@@ -963,12 +1412,14 @@ class VerzikRoom extends Raid.Room {
       this.minions.delete(tornado);
       this.despawn(tornado);
       target.performGraphic(Shared.gfx(GRAPHIC.TORNADO_HIT));
+      Shared.areaSound(this.area, target, SOUND.TORNADO_HIT);
       const damage = Math.max(TORNADO.min, Math.floor(target.getHitpoints() / 2));
-      Shared.damage(target, damage);
+      this.hurt(target, damage, "tornado");
+      if (this.dotsWindow) this.dotsWindow.hurt = true;
       Shared.heal(this.verzik, damage * TORNADO.heal);
       target.sendMessage("Verzik Vitur saps your health and powers up!");
       this.later(TORNADO.respawn, () => {
-        if (this.phase === 3 && this.isStarted()) this.sendTornado(target);
+        if (this.phase === 3 && this.isStarted() && !this.transition) this.sendTornado(target);
       });
       return;
     }
@@ -978,18 +1429,23 @@ class VerzikRoom extends Raid.Room {
 
   // -------------------------------------------------------------- the end
 
+  /** Captured: her animation, the dead form 2 ticks on (2 tiles in), the room won 8 ticks on. */
   die() {
     const npc = this.verzik;
     this.transition = true;
+    this.immune = false;
+    this.webWalk = null;
     npc.getMovementQueue().reset();
     npc.getMovementQueue().setBlockMovement(true);
     for (const minion of [...this.minions]) this.despawn(minion);
     this.minions.clear();
     this.animate(ANIMATION.P3_DEATH);
     this.raid.refreshHealthBars();
-    this.later(3, () => {
-      npc.setNpcTransformationId(NPC.DEAD);
-      this.later(5, () => {
+    this.later(2, () => {
+      const tile = Shared.tileOf(npc);
+      npc.setNpcTransformationId(this.ids.DEAD);
+      npc.moveTo(Shared.loc({ x: tile.x + 2, y: tile.y + 2, z: 0 }));
+      this.later(6, () => {
         this.despawn(npc);
         this.verzik = null;
         this.complete();
@@ -1002,6 +1458,18 @@ class VerzikRoom extends Raid.Room {
     const size = this.verzik.getSize?.() ?? 1;
     return { x: at.x + Math.floor(size / 2), y: at.y + Math.floor(size / 2) };
   }
+}
+
+/** Who's wielding, for the Dawnbringer's plain spell. */
+function wielding(player, id) {
+  if (!player?.isPlayer?.()) return false;
+  const { Equipment } = Shared.core();
+  return player.getEquipment().getItems()[Equipment.WEAPON_SLOT]?.getId() === id;
+}
+
+function wearing(player, id) {
+  const { Equipment } = Shared.core();
+  return player.getEquipment().getItems()[Equipment.FEET_SLOT]?.getId() === id;
 }
 
 function inArena(tile) {
@@ -1017,10 +1485,6 @@ function styleOf(hit) {
   return null;
 }
 
-function npcName(npc) {
-  return npc.getCurrentDefinition?.()?.getName?.() ?? "Nylocas";
-}
-
 /** A poisoned melee weapon, or poisoned ammunition (or thrown weapon) for ranged. */
 function poisonedWeapon(player, style) {
   const { CombatPoisonData, Equipment } = Shared.core();
@@ -1031,16 +1495,28 @@ function poisonedWeapon(player, style) {
 }
 
 function roomOf(player) {
+  if (!player?.isPlayer?.()) return null;
   const raid = Raid.raidOf(player);
   const room = raid?.room;
   return room instanceof VerzikRoom && raid.member(player).roomKey === room.key ? room : null;
 }
 
+/**
+ * Talk-to on her waiting form. Taken by the NPC itself: in Normal and Hard Mode that form's own
+ * name is null, and the name and option come from the form varp 1748 or 3057 picks in the client.
+ */
 function talkToVerzik(event) {
   const room = roomOf(event.player);
-  if (!room) return false;
+  if (!room || event.handled || event.npc !== room.verzik || room.phase !== 0) return;
   room.talk(event.player);
-  return true;
+  event.handled = true;
+}
+
+/** The Dawnbringer's special works only on Verzik's shield. */
+function allowDawnbringer(event) {
+  if (event.specialId !== "dawnbringer") return;
+  const room = roomOf(event.attacker);
+  if (room && room.phase === 1 && event.target === room.verzik) event.allow = true;
 }
 
 /** The skeleton in Xarpus' room holds the Dawnbringer once Xarpus is beaten. */
@@ -1074,8 +1550,9 @@ function searchSkeleton(event) {
 module.exports = function registerVerzik(api) {
   Shared.bind(api);
   Raid.registerRoom("VERZIK", VerzikRoom);
-  api.onNpcInteraction("Verzik Vitur", { "Talk-to": talkToVerzik });
+  api.onBeforeNpcInteraction(talkToVerzik);
+  api.onCustomEvent("combat-special:can-use", allowDawnbringer);
   Shared.onObject(api, OBJECT.SKELETON, searchSkeleton);
 };
 
-Object.assign(module.exports, { VerzikRoom, PILLARS, NPC, DAWNBRINGER, poisonedWeapon });
+Object.assign(module.exports, { VerzikRoom, PILLARS, NPC_BY_MODE, DAWNBRINGER, poisonedWeapon });

@@ -499,6 +499,22 @@ function canEat(player, itemId) {
   return pluginApi.emitCanEat(player, itemId) !== false;
 }
 
+/**
+ * Why `player` may not drink a dose of `entry` here, as the drink path decides it (the canDrink
+ * hooks, the potion's area, food permission, content unlocks, its own canUse); null when they may.
+ */
+function drinkRefusal(player, entry) {
+  const itemId = entry.itemId;
+  if (!canDrink(player, itemId)) return "You cannot use potions here.";
+  if (entry.potion.area && !inArea(player, entry.potion.area)) return AREA_MESSAGES[entry.potion.area] ?? "You cannot use that here.";
+  if (entry.potion.requiresFoodPermission && !canEat(player, itemId)) return "You cannot eat here.";
+  const permission = { player, itemId, allowed: true, message: null };
+  pluginApi.emitCustomEvent("potions:validate-drink", permission);
+  if (permission.allowed === false) return permission.message ?? "You cannot use that here.";
+  if (entry.potion.canUse && !entry.potion.canUse(player)) return "You need more than 50 Hitpoints to drink this potion.";
+  return null;
+}
+
 function registerPotion(definition) {
   if (!definition || typeof definition.effect !== "function") {
     return;
@@ -1399,9 +1415,21 @@ function sharePotion(request) {
       : "This spell can only be cast on stat-boosting potions.";
     return;
   }
+  // Every drinker passes the rules a normal drink does (a duel's No Drinks among them).
+  const refusal = drinkRefusal(player, entry);
+  if (refusal) {
+    request.message = refusal;
+    return;
+  }
+  // Only the other players' doses come out of the potion, so the spell needs one of them (Wiki).
+  const eligible = targets.filter((target) => drinkRefusal(target, entry) === null);
+  if (eligible.length === 0) {
+    request.message = "There is nobody nearby to share your potion with.";
+    return;
+  }
   request.valid = true;
   request.apply = () => {
-    const sharers = targets.slice(0, entry.doses);
+    const sharers = eligible.slice(0, entry.doses);
     let current = entry;
     for (const target of sharers) {
       current.potion.effect(target);

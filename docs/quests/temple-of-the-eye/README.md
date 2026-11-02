@@ -47,6 +47,8 @@ Known gaps:
 - `npc-dialogues.json`: Persten's "Yes." teleport menu has an empty branch (a jump the parser left
   behind). The quest handles the choice itself; the dumper should be fixed upstream.
 - Stage 25 is set on teleport here; capture 3994 sets it just before the teleport prompt.
+- No capture loses tutorial items, so recovery is ours: the rock and workbench reopen for lost
+  essence at the Mind altar's step, and Tamara replaces stones or a medium cell (with our wording).
 
 ## Runs
 

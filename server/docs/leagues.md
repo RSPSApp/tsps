@@ -1568,7 +1568,11 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   `farming:check-health` (its crop type, or a cactus by its crop), and `eat-heal { heal }` from `food:eaten`'s `restores` (what
   the food restores, at full health too): "Eat / Drink a X" by the description's item or else the
   name's, a place ("in Auburn Valley", "from a bird bath") none. The generator derives them from the
-  name and the Wiki's description, read with its links' targets (an equip-all slot may be "either
+  name and the Wiki's description, read with its links' targets (a set an equip task names is the
+  cache's item set, enum 1034's pieces as the Grand Exchange's set exchange reads them: "a full set
+  of Ahrim the Blighted's equipment" every piece, "any piece of the Justiciar Armour set" any,
+  "a full set of any Barrows equipment" one whole Barrows set (`equip-any-set { sets }`), and a
+  Barrows "piece of armour" is no weapon; an equip-all slot may be "either
   some platelegs or a plateskirt"; a worn item is as the cache spells it, "Seer's Ring" the Seers
   ring, "vambs" vambraces; what only restates the deed is
   dropped first: "whilst fishing", a rune's "from Essence at the Fire Altar"; a produce task's

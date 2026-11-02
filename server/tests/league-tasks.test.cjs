@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set"]);
   // The agility plugin's course keys (and Yama's stepping stones, the Leagues lair's own course).
   const courseDir = path.join(__dirname, "../plugins/skills/agility/courses");
   const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
@@ -553,6 +553,11 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("equip-a-full-rune-set"), { kind: "equip-all", items: ["Rune platebody", "Rune full helm", ["Rune platelegs", "Rune plateskirt"]] });
   assert.deepEqual(trigger("equip-a-full-blue-dragonhide-set").items, ["Blue d'hide body", "Blue d'hide chaps", "Blue d'hide vambraces"]);
   assert.deepEqual(trigger("equip-a-seer-s-ring"), { kind: "equip", items: ["Seers ring"] });
+
+  // The cache's item sets (enum 1034): every piece, any piece, or one whole Barrows set.
+  assert.deepEqual(trigger("equip-full-dharoks-armour-set").items, ["Dharok's helm", "Dharok's platebody", "Dharok's platelegs", "Dharok's greataxe"]);
+  assert.equal(trigger("equip-any-full-barrows-armour-set").sets.length, 6);
+  assert.ok(!trigger("equip-a-piece-of-any-barrows-armour-set").items.includes("Ahrim's staff"), "a weapon is no armour");
 
   // Laps: the agility plugin's course keys; a lap reward of several laps counts them all.
   assert.deepEqual(trigger("complete-10-laps-of-the-varlamore-agility-course"), { kind: "agility-laps", courses: ["wyrm-basic", "wyrm-advanced"], count: 10 }, "either Colossal Wyrm course");

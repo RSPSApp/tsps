@@ -3,7 +3,8 @@
  * kind listens to the events the skills and content already emit, so no task is named here.
  *
  * - `equip { items }`: any of the items worn, `equip-all { items }` every one of them at once (an
- *   entry that is a list takes any of its items), on
+ *   entry that is a list takes any of its items), `equip-any-set { sets }` every piece of one of the
+ *   sets, on
  *   `equipment:changed` (every worn-items refresh) and at login.
  * - `produce { items, count }`: that many of the items made or gathered, whatever the skill:
  *   `skills:produced` { itemId, amount } (cooking, crafting, fletching, herblore, smithing),
@@ -60,7 +61,7 @@ function indexOf(type) {
   const entry = { equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [], collectionLog: [], checkHealth: new Map() };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
-    if (trigger?.kind === "equip" || trigger?.kind === "equip-all") entry.equip.push(task);
+    if (trigger?.kind === "equip" || trigger?.kind === "equip-all" || trigger?.kind === "equip-any-set") entry.equip.push(task);
     else if (trigger?.kind === "produce") for (const item of trigger.items ?? []) add(entry.produce, item, task);
     else if (trigger?.kind === "hunt") for (const npc of trigger.npcs ?? []) add(entry.hunt, npc, task);
     else if (trigger?.kind === "pickpocket") for (const npc of trigger.npcs ?? []) add(entry.pickpocket, npc, task);
@@ -147,7 +148,9 @@ function checkWorn(player) {
   for (const task of tasks) {
     // An equip-all slot may take either of several ("either some platelegs or a plateskirt").
     const wears = (item) => (Array.isArray(item) ? item.some((each) => worn.has(key(each))) : worn.has(key(item)));
-    if (task.trigger.kind === "equip-all" ? task.trigger.items.every(wears) : task.trigger.items.some(wears)) Complete.complete(player, task.id, type);
+    const { kind, items, sets } = task.trigger;
+    const met = kind === "equip-any-set" ? sets.some((set) => set.every(wears)) : kind === "equip-all" ? items.every(wears) : items.some(wears);
+    if (met) Complete.complete(player, task.id, type);
   }
 }
 

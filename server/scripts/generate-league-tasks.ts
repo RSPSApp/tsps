@@ -371,6 +371,37 @@ function wornNamed(text: string, items: Map<string, string>): string | null {
   return null;
 }
 
+/**
+ * The cache's item sets (enum 1034: set item -> an enum of its pieces, as the Grand Exchange's set
+ * exchange reads them), keyed by a plain name: "ahrim's" (Ahrim's armour set), "rockshell",
+ * "bloodmoon", "hueycoatlhide", "mystic" (several sets: Mystic set (light), (blue)...).
+ */
+let itemSets: Map<string, string[][]> | null = null;
+const ITEM_SET_ENUM = 1034;
+const setKey = (text: string) => text.toLowerCase().replace(/[^a-z']/g, "");
+function itemSetsByName(): Map<string, string[][]> {
+  if (itemSets) return itemSets;
+  itemSets = new Map();
+  for (const [setItem, piecesEnum] of CacheDefinitions.getEnumValues(ITEM_SET_ENUM)) {
+    const name = CacheDefinitions.getItem(Number(setItem))?.name;
+    if (!name) continue;
+    const base = name.replace(/\s*\((?:lg|sk|light|blue|dark|dusk|f)\)$/i, "").replace(/ (?:armour |robes )?set$/i, "").replace(/ set$/i, "");
+    const pieces = [...CacheDefinitions.getEnumValues(Number(piecesEnum))]
+      .filter(([slot]) => Number(slot) >= 0).map(([, item]) => CacheDefinitions.getItem(Number(item))?.name).filter((piece): piece is string => !!piece);
+    if (!pieces.length) continue;
+    const key = setKey(base);
+    itemSets.set(key, [...(itemSets.get(key) ?? []), pieces]);
+  }
+  return itemSets;
+}
+
+/** A set a task names ("Ahrim the Blighted's equipment", "Rockshell armour", "Blood moon armour"): its sets' pieces, or null. */
+function itemSetNamed(text: string): string[][] | null {
+  const base = text.replace(/,.*$/, "").replace(/^(?:the |any )/i, "").replace(/ (?:equipment|armou?r|robes|outfit|gear)(?: set)?$/i, "")
+    .replace(/^([A-Z][a-z]+) the [A-Z][a-z]+'s$/, "$1's");
+  return itemSetsByName().get(setKey(base)) ?? null;
+}
+
 /** A stall by a cache loc's name ("Bakery stall"), or null. */
 let stallNames: Map<string, string> | null = null;
 function stallNamed(text: string): string | null {
@@ -649,6 +680,30 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   }
   // A parenthesis with a space is a remark ("(not including Agility)"); one without is part of a name ("(c)", "(kp)").
   const clean = (text: string) => text.replace(/\s*\([^)]*\s[^)]*\)/g, "").replace(/\.$/, "").trim();
+  // A cache item set: "Equip a full set of Ahrim the Blighted's equipment" / "Equip full Blood moon
+  // armour" (every piece at once), "Equip any piece of the Justiciar Armour set" / "a piece of
+  // Sunfire Fanatic armour" (any one), "a full set of any Barrows equipment" (one whole set of them).
+  if (/^Equip /i.test(name) && !/ in | while /i.test(clean(description))) {
+    const said = clean(description).replace(/^Equip /i, "").replace(/,.*$/, "");
+    let set: RegExpExecArray | null;
+    if ((set = /^(?:a )?full (?:set of )?(?:the )?(.+)$/i.exec(said))) {
+      if (/^any barrows/i.test(set[1])) {
+        const barrows = ["ahrim's", "dharok's", "guthan's", "karil's", "torag's", "verac's"].map((key) => itemSetsByName().get(key)?.[0]);
+        if (barrows.every(Boolean)) return { trigger: { kind: "equip-any-set", sets: barrows as string[][] } };
+      }
+      const sets = itemSetNamed(set[1]);
+      if (sets && sets.length === 1) return { trigger: { kind: "equip-all", items: sets[0] } };
+    } else if ((set = /^(?:any |a )?piece of (?:the )?(?:any )?(.+?)(?: set)?$/i.exec(said))) {
+      if (/^barrows armour$/i.test(set[1])) {
+        // A piece of armour: the sets' weapons (the staff, the greataxe...) are no armour.
+        const barrows = ["ahrim's", "dharok's", "guthan's", "karil's", "torag's", "verac's"].flatMap((key) => itemSetsByName().get(key)?.[0] ?? [])
+          .filter((piece) => !/(?:staff|greataxe|warspear|crossbow|hammers|flail)$/i.test(piece));
+        if (barrows.length) return { trigger: { kind: "equip", items: [...new Set(barrows)] } };
+      }
+      const sets = itemSetNamed(set[1]);
+      if (sets) return { trigger: { kind: "equip", items: [...new Set(sets.flat())] } };
+    }
+  }
   // "Steal some bread" ("from a bakery stall"), "Steal From a Gem Stall", "Steal from a Fur Stall in
   // Kandarin": a theft from that stall (a cache loc of the name), of that item if one is named, in
   // that league area if one follows. Any other place, or a stall the cache doesn't name, is left out.

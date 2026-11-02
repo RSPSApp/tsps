@@ -311,3 +311,21 @@ test("equip-all: a set worn at once, a slot taking either (Equip a Full Bronze S
   assert.equal(f.player.getEquipment().getItems().filter((each) => each && each.getId() >= 0).length, 3, `the real Equipment wears them: ${f.messages}`);
   assert.ok(done(f, "equip-a-full-bronze-set"));
 });
+
+test("item sets from the cache: a piece, the whole set, one whole Barrows set (Verac's, worn for real)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  for (const skill of [core.Skill.ATTACK, core.Skill.DEFENCE]) {
+    skills.setMaxLevel(skill, 99);
+    skills.setCurrentLevel(skill, 99);
+  }
+  const pieces = ["Verac's helm", "Verac's brassard", "Verac's plateskirt", "Verac's flail"];
+  for (const name of pieces) f.player.getInventory().add(new core.Item(item(name)), true);
+  await inventoryOption(f, "Verac's flail", "Wield", 2, 2);
+  assert.ok(!done(f, "equip-a-piece-of-any-barrows-armour-set"), "the flail is no armour");
+  await inventoryOption(f, "Verac's helm", "Wear", 2, 2);
+  assert.ok(done(f, "equip-a-piece-of-any-barrows-armour-set"), `the helm is: ${f.messages}`);
+  for (const name of pieces.slice(1, 3)) await inventoryOption(f, name, "Wear", 2, 2);
+  assert.ok(done(f, "equip-full-veracs-armour-set"));
+  assert.ok(done(f, "equip-any-full-barrows-armour-set"));
+});

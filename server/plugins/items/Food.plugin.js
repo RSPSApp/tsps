@@ -338,7 +338,7 @@ function eat(event) {
   // `heal` is what it healed (nothing at full health); `restores` what the food restores.
   const maxHp = player.getSkillManager().getMaxLevel(core.Skill.HITPOINTS);
   const restores = food.outcomes ? heal : healAmount(food.heal?.max ?? food.heal, maxHp, () => 0, baseLevels(player));
-  pluginApi.emitCustomEvent("food:eaten", { player, itemId, heal, restores, meta });
+  pluginApi.emitCustomEvent("food:eaten", { player, itemId, hitpointsBefore, heal, restores, meta });
 }
 
 module.exports = {

@@ -3,6 +3,7 @@
 const { PvpProfileId } = require("../../pvp/PvpProfileRegistry.PlayerBots");
 const { isVisibleRealPlayer } = require("../../pvp/PvpTargetFilters.PlayerBots");
 const { EatFoodActionNode } = require("../actions/EatFoodActionNode.PlayerBots");
+const { getWildernessHotspot } = require("../../pvp/WildernessHotspotRegistry.PlayerBots");
 
 const PROTECTION_DURATION_MS = 10_000;
 const RUNNING = Object.freeze({ handled: false, status: "running" });
@@ -28,6 +29,9 @@ class ReplenishAfterKillNode {
 
     pvp.replenishAfterKillPending = false;
     this.eatFoodActionNode.tick(context);
+    if (getWildernessHotspot(pvp.hotspotId)?.smiteOnly === true) {
+      return RUNNING;
+    }
 
     const profileId = pvp.profileId;
     if (profileId !== PvpProfileId.VETERAN && profileId !== PvpProfileId.ELITE) {

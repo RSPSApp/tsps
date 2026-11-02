@@ -206,7 +206,8 @@ function askRowRank(player, clan, row, title, popupUid, afterSet = () => {}) {
   }
   showRankPopup(player, title, current, rowFloor(clan, row), own.rank, false, popupUid, (rank) => {
     const now = memberFor(clan, player);
-    if (!canEditPermissions(player, clan) || !PERMISSION_RANKS.has(rank) || rank < rowFloor(clan, row) || rank > now.rank) return;
+    if (!canEditPermissions(player, clan) || Core.rowRank(clan, row) > now.rank) return;
+    if (!PERMISSION_RANKS.has(rank) || rank < rowFloor(clan, row) || rank > now.rank) return;
     Core.setRowRank(clan, row, rank);
     afterSet();
   });

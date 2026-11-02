@@ -1400,6 +1400,40 @@ test('permission rows answered after Permission access rises change nothing', ()
   assert.equal(CoreClans().settingValue(clan, 31), before, 'a value row');
 });
 
+test('a permission row raised above the editor while their popup is open stays where it is', () => {
+  const { member, clan } = administrator();
+  const PERMISSIONS = require('../plugins/interface/clans/data/permissions.json');
+  const row = PERMISSIONS.find((entry) => entry.minRank === 100 && entry.setting !== null && entry.setting !== 12 && !entry.special);
+  clan.permissions = { ...clan.permissions, 12: 100, [row.setting]: 100 };
+  clickSlot(member, 706, 12, PERMISSIONS.indexOf(row));
+  raise(clan, row.setting);
+  member.amountAction.execute(101);
+  assert.equal(CoreClans().permissionRank(clan, row.setting), 125);
+  assert.equal(JSON.parse(fs.readFileSync(process.env.TSPS_CLANS_FILE, 'utf8')).clans[0].permissions?.[row.setting] ?? 125, 125, 'nor saved lower');
+});
+
+test('a rename answered inside the 7 days changes nothing', () => {
+  const { owner, clan } = clanOfThree();
+  clickGroup(owner, 690, 11);
+  clan.renamedAt = Date.now();
+  owner.syntaxAction.execute('Renamed');
+  assert.equal(clan.name, 'Blur');
+  assert.match(owner.messages.at(-1), /every 7 days/);
+});
+
+test('a Recruit invitation accepted while forming a clan is no longer open', () => {
+  const owner = player('Owner');
+  createClan(owner);
+  const [founder] = founders(1);
+  hooks.playerOption({ player: owner, target: founder, option: 5 });
+  const invitation = founder.dialogue;
+  startForming(founder);
+  founder.dialogue = invitation;
+  answer(founder, 1);
+  assert.equal(CoreClans().clanOf(founder), undefined);
+  assert.equal(founder.messages.at(-1), 'That invitation is no longer open.');
+});
+
 test('a rename answered after losing ownership changes nothing', () => {
   const { owner, clan } = clanOfThree();
   clickGroup(owner, 690, 11);

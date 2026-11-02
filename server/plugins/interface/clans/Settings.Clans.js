@@ -184,22 +184,24 @@ function clickLeave(player, clan) {
   });
 }
 
+function renamedRecently(player, clan) {
+  if (Date.now() - (clan.renamedAt ?? 0) >= RENAME_COOLDOWN_MS) return false;
+  player.sendMessage("A clan can only be renamed once every 7 days.");
+  return true;
+}
+
 function askRename(player, clan) {
   if (!isOwner(player, clan)) {
     player.sendMessage("To report this clan's name, use Report at the bottom of the screen.");
     return;
   }
-  const waited = Date.now() - (clan.renamedAt ?? 0);
-  if (waited < RENAME_COOLDOWN_MS) {
-    player.sendMessage("A clan can only be renamed once every 7 days.");
-    return;
-  }
+  if (renamedRecently(player, clan)) return;
   player.setEnteredSyntaxAction({ execute: (text) => rename(player, clan, String(text ?? "").trim()) });
   player.getPacketSender().sendEnterInputPrompt("Enter your clan's new name:");
 }
 
 function rename(player, clan, name) {
-  if (!isOwner(player, clan)) return;
+  if (!isOwner(player, clan) || renamedRecently(player, clan)) return;
   if (!name || name.length > MAX_NAME_LENGTH || !/^[a-z0-9 _-]+$/i.test(name)) {
     player.sendMessage(`Clan names are up to ${MAX_NAME_LENGTH} letters, numbers and spaces.`);
     return;

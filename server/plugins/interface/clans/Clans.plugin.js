@@ -290,7 +290,8 @@ function wearsVexillum(player) {
 function invitationStands(player, target, clan) {
   const inviter = Core.memberOf(clan, Core.accountOf(player));
   return !!inviter && inviter.rank >= Core.permissionRank(clan, Core.SETTING_RECRUIT)
-    && !Core.clanOf(target) && !Core.isBanned(clan, target.getUsername()) && clan.members.length < Core.MAX_MEMBERS;
+    && !Core.clanOf(target) && !Formation.isForming(target) && !Core.isBanned(clan, target.getUsername())
+    && clan.members.length < Core.MAX_MEMBERS;
 }
 
 /** Live: at the hub, or anywhere with a vexillum on for a clan that is recruiting (Wiki: Clan). */

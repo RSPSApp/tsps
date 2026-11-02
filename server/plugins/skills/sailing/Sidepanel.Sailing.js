@@ -110,7 +110,7 @@ function clearBoatVarps(player) {
 /** Mounts the sidepanel on the combat tab, with the varbits bundled so its onLoad sees them. */
 function openSidepanel(player, type, varbits, varps) {
   const sender = player.getPacketSender();
-  sender.sendInterfaceScript(SCRIPT_SIDEPANEL_INIT, [player.getUsername(), 1, "", 1]);
+  sender.sendInterfaceScript(SCRIPT_SIDEPANEL_INIT, [player.getDisplayName(), 1, "", 1]);
   sender.sendInterfaceScript(SCRIPT_SIDEBUTTON_SWITCH, [0]);
   sender.sendSubInterface(COMBAT_TAB_UID, SIDEPANEL_GROUP, 1, { varbits, varps });
   sender.sendInterfaceFlagsRange(

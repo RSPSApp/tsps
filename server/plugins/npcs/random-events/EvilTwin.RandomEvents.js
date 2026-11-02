@@ -123,7 +123,7 @@ module.exports = function attach(api, Events) {
     talk(active, { teleport, leave }) {
       const { player } = active;
       say(player, [{ npc: active.definition.id,
-        text: `Hello ${player.getUsername()}. I've got a message for you from Molly. She needs your help urgently. Will you assist her now?`,
+        text: `Hello ${player.getDisplayName()}. I've got a message for you from Molly. She needs your help urgently. Will you assist her now?`,
         anim: 568 }], {
         title: "What would you like to say?",
         options: [

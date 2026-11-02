@@ -114,7 +114,7 @@ function stoneBroke({ npc }) {
   const ranked = [...stone.damage].sort((a, b) => b[1] - a[1]);
   const winner = ranked[0] && (ranked.length === 1 || ranked[0][1] > ranked[1][1]) ? ranked[0][0] : null;
   if (winner && stone.damage.size > 1) {
-    for (const occupant of house.getPlayers()) occupant.sendMessage(`${winner.getUsername()} dealt the most damage to the stone!`);
+    for (const occupant of house.getPlayers()) occupant.sendMessage(`${winner.getDisplayName()} dealt the most damage to the stone!`);
   }
   Prizes.award(house, "stone", winner);
   finish(house, stone);

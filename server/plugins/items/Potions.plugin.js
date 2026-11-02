@@ -1363,7 +1363,7 @@ function handlePotionDrink(player, itemId, slot) {
     const restorative = /restore|prayer|energy|stamina|antipoison|antidote|antifire|guthix rest/i.test(entry.potion.name);
     if ((share.type === "restore") === restorative) {
       entry.potion.effect(share.target);
-      share.target.sendMessage(`${player.getUsername()} shares their ${entry.potion.name}.`);
+      share.target.sendMessage(`${player.getDisplayName()} shares their ${entry.potion.name}.`);
       player.setAttribute("lunar:potion-share", null);
     }
   }

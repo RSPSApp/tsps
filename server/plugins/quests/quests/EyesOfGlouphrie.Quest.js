@@ -629,7 +629,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     if (!request?.player || typeof request.text !== "string") return;
     if (!isBrimstail(request.npcId) && !isHazelmere(request.npcId)) return;
     if (!request.text.includes("[player name]")) return;
-    request.text = request.text.replace(/\[player name\]/gi, String(request.player.getUsername()));
+    request.text = request.text.replace(/\[player name\]/gi, String(request.player.getDisplayName()));
   }
 
   // ==========================================================================

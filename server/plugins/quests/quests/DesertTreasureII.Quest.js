@@ -3964,7 +3964,7 @@ module.exports = function registerDesertTreasureII(api) {
     let owned = spawned.get(p);
     if (!owned) spawned.set(p, owned = {});
     owned.vaultPursuer = npc;
-    npc.forceChat?.(`${p.getUsername()}! Hand over the medallion!`);
+    npc.forceChat?.(`${p.getDisplayName()}! Hand over the medallion!`);
     p.getPacketSender().sendEntityHint?.(npc);
   }
   function removeVaultPursuer(p) {

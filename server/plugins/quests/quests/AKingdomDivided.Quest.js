@@ -1260,7 +1260,7 @@ module.exports = function registerAKingdomDividedQuest(api) {
     let text = String(event.text ?? "");
     const stage = stageOf(player);
     if (text.includes("[player name]")) {
-      text = text.replace(/\[player name\]/gi, String(player.getUsername?.() ?? ""));
+      text = text.replace(/\[player name\]/gi, String(player.getDisplayName?.() ?? player.getUsername?.() ?? ""));
       event.text = text;
     }
 

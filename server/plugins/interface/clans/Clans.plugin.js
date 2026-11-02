@@ -311,7 +311,7 @@ function recruitClanMember(player, target) {
     return;
   }
   if (Core.isBanned(clan, target.getUsername())) {
-    player.sendMessage(`${target.getUsername()} is banned from your clan.`);
+    player.sendMessage(`${target.getDisplayName()} is banned from your clan.`);
     return;
   }
   if (clan.members.length >= Core.MAX_MEMBERS) {
@@ -319,21 +319,21 @@ function recruitClanMember(player, target) {
     return;
   }
   if (Core.clanOf(target) || Formation.isForming(target)) {
-    player.sendMessage(`${target.getUsername()} is already in a clan.`);
+    player.sendMessage(`${target.getDisplayName()} is already in a clan.`);
     return;
   }
   if (target.getAttribute("accept-aid") === false) {
-    player.sendMessage(`${target.getUsername()} is not accepting aid.`);
+    player.sendMessage(`${target.getDisplayName()} is not accepting aid.`);
     return;
   }
   const { DialogueChainBuilder, OptionDialogue } = core;
-  player.sendMessage(`Inviting ${target.getUsername()} to join your clan...`);
+  player.sendMessage(`Inviting ${target.getDisplayName()} to join your clan...`);
   target.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new OptionDialogue(0, {
       executeOption(option) {
         target.getPacketSender().sendInterfaceRemoval();
         if (Number(option) !== 1) {
-          player.sendMessage(`${target.getUsername()} has declined your invitation.`);
+          player.sendMessage(`${target.getDisplayName()} has declined your invitation.`);
         } else if (invitationStands(player, target, clan)) {
           Core.addMember(clan, target);
         } else {

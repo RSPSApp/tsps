@@ -109,7 +109,7 @@ function leaveServantHouse(player, house) {
 function enterServantHouse(player, house) {
   if (house.owner !== player) {
     const runtime = house.owner && runtimes.get(house.owner);
-    if (runtime?.npc && house.save.servant?.greet) runtime.npc.forceChat(`Welcome to ${house.owner.getUsername()}'s house!`);
+    if (runtime?.npc && house.save.servant?.greet) runtime.npc.forceChat(`Welcome to ${house.owner.getDisplayName()}'s house!`);
     return;
   }
   if (!definition(house.save)) return;

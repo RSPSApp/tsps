@@ -94,7 +94,7 @@ module.exports = function attach(api, Events) {
         if (speaker) active.speaker = npc;
       });
       const voice = active.speaker ?? active.npc;
-      voice.forceChat(`Greetings from the frog ${active.royal.title}, ${player.getUsername()}!`);
+      voice.forceChat(`Greetings from the frog ${active.royal.title}, ${player.getDisplayName()}!`);
       player.getPacketSender().sendSound(CROAK_SOUND, 1, 0);
       overheads(active, voice);
     },
@@ -129,7 +129,7 @@ module.exports = function attach(api, Events) {
 
   function overheads(active, voice) {
     const { player } = active;
-    const name = player.getUsername();
+    const name = player.getDisplayName();
     const { title } = active.royal;
     const task = new (class extends api.core.Task {
       constructor() { super(OVERHEAD_TICKS, player); }
@@ -194,7 +194,7 @@ module.exports = function attach(api, Events) {
         Flow.chat(api, {
           player,
           npcId: active.royal.npcId,
-          lines: [`Thank you so much, ${player.getUsername()}. I must return to my fairytale kingdom. But take this as a reward. You can exchange it at the Varrock clothes store for a costume.`],
+          lines: [`Thank you so much, ${player.getDisplayName()}. I must return to my fairytale kingdom. But take this as a reward. You can exchange it at the Varrock clothes store for a costume.`],
           onEnd: () => royalLeaves(active),
         });
       });

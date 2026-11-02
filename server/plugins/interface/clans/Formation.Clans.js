@@ -77,9 +77,9 @@ function isForming(player) {
 function showPanel(player, formation) {
   const sender = player.getPacketSender();
   if (formation.name) sender.sendClientScript(UPDATE_NAME_SCRIPT, PANEL_ROOT, uid(NAME_BUTTON), NAME_BUTTON_ENUM, formation.name);
-  const names = formation.players.map((other) => other.getUsername());
+  const names = formation.players.map((other) => other.getDisplayName());
   while (names.length < FOUNDERS_NEEDED) names.push("");
-  sender.sendClientScript(LIST_PLAYERS_SCRIPT, CONTENTS, ...names, player.getUsername());
+  sender.sendClientScript(LIST_PLAYERS_SCRIPT, CONTENTS, ...names, player.getDisplayName());
 }
 
 function mountPanel(player, formation) {
@@ -163,23 +163,23 @@ function invite(player, target) {
     return;
   }
   if (Core.clanOf(target) || formationOf.has(target)) {
-    player.sendMessage(`${target.getUsername()} is already in a clan.`);
+    player.sendMessage(`${target.getDisplayName()} is already in a clan.`);
     return;
   }
   if (target.getDialogueManager?.()?.isActive?.()) {
-    player.sendMessage(`${target.getUsername()} is busy at the moment.`);
+    player.sendMessage(`${target.getDisplayName()} is busy at the moment.`);
     return;
   }
-  player.sendMessage(`Inviting ${target.getUsername()} to found your clan...`);
+  player.sendMessage(`Inviting ${target.getDisplayName()} to found your clan...`);
   const { DialogueChainBuilder, OptionDialogue } = core;
   target.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new OptionDialogue(0, {
       executeOption(option) {
         target.getPacketSender().sendInterfaceRemoval();
         if (Number(option) === 1) accept(formation, target);
-        else player.sendMessage(`${target.getUsername()} has declined your invitation.`);
+        else player.sendMessage(`${target.getDisplayName()} has declined your invitation.`);
       },
-    }, "Yes.", "No.").setTitle(`Help ${player.getUsername()} form a clan?`),
+    }, "Yes.", "No.").setTitle(`Help ${player.getDisplayName()} form a clan?`),
   ));
 }
 
@@ -200,9 +200,9 @@ function refusal(formation, today) {
   if (Store.byName(name)) return "That name is taken.";
   if (founder.getAttribute(LAST_CREATED_DAY_ATTRIBUTE) === today) return "You can only create one clan per day.";
   const inClan = players.find((player) => Core.clanOf(player));
-  if (inClan) return `${inClan.getUsername()} is already in a clan.`;
+  if (inClan) return `${inClan.getDisplayName()} is already in a clan.`;
   const tooNew = players.find((player) => minutesPlayed(player) < MINUTES_NEEDED);
-  if (tooNew) return `${tooNew.getUsername()} has not spent 25 hours in-game yet.`;
+  if (tooNew) return `${tooNew.getDisplayName()} has not spent 25 hours in-game yet.`;
   return null;
 }
 

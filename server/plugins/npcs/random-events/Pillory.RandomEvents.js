@@ -85,7 +85,7 @@ module.exports = function attach(api, Events) {
     nags: GUARD_LINES,
     goodbye: "Maybe later.",
     linger: true,
-    otherPlayerLine: owner => `I'm here to arrest ${owner.getUsername()}.`,
+    otherPlayerLine: owner => `I'm here to arrest ${owner.getDisplayName()}.`,
     leavingLine: () => "Hmmph!",
     talk(active, { teleport, valid, leave }) {
       const { player } = active;

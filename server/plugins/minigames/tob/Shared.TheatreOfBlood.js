@@ -318,7 +318,7 @@ function facing(name) {
 }
 
 function displayName(player) {
-  return player.getUsername();
+  return player.getDisplayName();
 }
 
 /** "him" or "her", as the theatre's messages about another member say it. */

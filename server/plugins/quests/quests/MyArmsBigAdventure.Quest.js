@@ -511,7 +511,7 @@ module.exports = function registerMyArmsBigAdventureQuest(api) {
     if (!OWN_NPC_IDS.has(request.npcId)) return;
     let text = request.text;
     if (/\[player name\]|<player name>/i.test(text)) {
-      const name = String(request.player.getUsername());
+      const name = String(request.player.getDisplayName());
       text = text.replace(/\[player name\]/gi, name).replace(/<player name>/gi, name);
     }
     if (text.includes("[location of player-owned house]")) {

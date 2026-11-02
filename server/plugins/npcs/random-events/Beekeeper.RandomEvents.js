@@ -73,7 +73,7 @@ module.exports = function attach(api, Events) {
         player,
         npcId: active.definition.id,
         title: NPC_CHAT_TITLE,
-        lines: [`I'm sorry to bother you, ${player.getUsername()}, but I need some help with a bee hive.`],
+        lines: [`I'm sorry to bother you, ${player.getDisplayName()}, but I need some help with a bee hive.`],
         options: [
           ["Ooh, a bee hive. I'll help you.", () => Flow.chat(api, {
             player,
@@ -108,7 +108,7 @@ module.exports = function attach(api, Events) {
       player,
       npcId: N.BEE_KEEPER,
       pages: [
-        { text: `Ah, ${player.getUsername()}. I'm sorry to drag you away like this, but I need some help building a new hive for my bees.` },
+        { text: `Ah, ${player.getDisplayName()}. I'm sorry to drag you away like this, but I need some help building a new hive for my bees.` },
         { player: true, text: "What do you expect me to do?" },
         { text: REMINDER },
         { player: true, text: "Oh, very well. Let's take a look..." },

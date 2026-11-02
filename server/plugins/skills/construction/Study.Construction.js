@@ -99,7 +99,7 @@ function readLog(event) {
   const house = House.houseFor(event.player);
   if (!house) return false;
   const player = event.player;
-  Menu.openMenu(player, `The Exploits of ${house.owner?.getUsername() ?? player.getUsername()}`, LOGS, index => {
+  Menu.openMenu(player, `The Exploits of ${house.owner?.getDisplayName() ?? player.getDisplayName()}`, LOGS, index => {
     if (LOGS[index] === "Collection log") api.emitCustomEvent("collection-log:open", { player });
     else player.sendMessage("Nothing interesting happens.");
   });

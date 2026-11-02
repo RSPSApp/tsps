@@ -530,7 +530,7 @@ module.exports = function registerObservatoryQuest(api) {
       };
     }
     if (!request.text.includes("[player name]")) return;
-    request.text = request.text.replace(/\[player name\]/gi, request.player.getUsername());
+    request.text = request.text.replace(/\[player name\]/gi, request.player.getDisplayName());
   }
 
   function handleLogin({ player }) {

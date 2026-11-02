@@ -101,7 +101,7 @@ function found(player, house, hunt) {
     }));
   }
   for (const occupant of house.getPlayers()) {
-    if (occupant !== player) occupant.sendMessage(`${player.getUsername()} has found the treasure fairy!`);
+    if (occupant !== player) occupant.sendMessage(`${player.getDisplayName()} has found the treasure fairy!`);
     occupant.getInventory().delete(STONE, occupant.getInventory().getAmount(STONE));
   }
   Prizes.award(house, "treasure", player);

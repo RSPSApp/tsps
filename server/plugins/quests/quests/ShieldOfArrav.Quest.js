@@ -626,7 +626,7 @@ module.exports = function registerShieldOfArravQuest(api) {
     if (!request?.player || typeof request.text !== "string") return;
     if (!RELDO_NPC_IDS.has(request.npcId)) return;
     if (!request.text.includes("[player name]")) return;
-    request.text = request.text.replace(/\[player name\]/gi, request.player.getUsername());
+    request.text = request.text.replace(/\[player name\]/gi, request.player.getDisplayName());
   }
 
   function handleLogin({ player }) {
@@ -712,15 +712,15 @@ module.exports = function registerShieldOfArravQuest(api) {
     if (!target?.getInventory || !hasItem(player, itemId)) return;
     const label = itemId === KEY_ID ? "key" : itemId === CROSSBOW_ID ? "crossbow" : "certificate";
     event.handled = true;
-    api.sendMultiChatboxPrompt(player, `Drop your ${label} for ${target.getUsername()} to take?`,
+    api.sendMultiChatboxPrompt(player, `Drop your ${label} for ${target.getDisplayName()} to take?`,
       "Yes", () => {
         if (!hasItem(player, itemId)) return;
         const location = player.getLocation().clone();
         if (player.getPrivateArea() !== target.getPrivateArea() || !target.getLocation().isWithinDistance(location, 1)) return;
         groundItems.registerLocation(target, new Item(itemId, 1), location);
         player.getInventory().deleteNumber(itemId, 1);
-        player.sendMessage(`${target.getUsername()} can now take the item from the ground.`);
-        target.sendMessage(`<col=ef1020>${player.getUsername()} has dropped something for you to take.</col>`);
+        player.sendMessage(`${target.getDisplayName()} can now take the item from the ground.`);
+        target.sendMessage(`<col=ef1020>${player.getDisplayName()} has dropped something for you to take.</col>`);
       },
       "No", () => {});
   }

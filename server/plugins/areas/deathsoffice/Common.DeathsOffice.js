@@ -155,7 +155,7 @@ function chatLineClasses() {
     }
 
     send(player) {
-      show(player, 217, (sender, head) => sender.sendPlayerHeadOnInterface(head), player.getUsername(), this);
+      show(player, 217, (sender, head) => sender.sendPlayerHeadOnInterface(head), player.getDisplayName(), this);
     }
   }
   ChatLines = { DeathLine, PlayerLine };

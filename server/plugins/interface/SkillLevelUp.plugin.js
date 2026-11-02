@@ -129,7 +129,7 @@ function showLevelUp({ player, skill, oldLevel, newLevel }) {
   const name = skill.getName();
   if (newLevel >= MAX_LEVEL) {
     celebrate(player, `Congratulations, you've reached the highest possible ${name} level of ${MAX_LEVEL}.`, LEVELUP_99_ANIM);
-    pluginApi.core.World.sendMessage(`<shad=15536940>News: ${player.getUsername()} has just achieved the highest possible level in ${name}!`);
+    pluginApi.core.World.sendMessage(`<shad=15536940>News: ${player.getDisplayName()} has just achieved the highest possible level in ${name}!`);
   } else {
     celebrate(player, `Congratulations, you've just advanced your ${name} level. You are now level ${newLevel}.`, LEVELUP_ANIM);
   }

@@ -196,7 +196,7 @@ function takeHelm(player, boat) {
   }
   setVarbit(player, VARBIT.SIDEPANEL_PLAYER_AT_HELM, 1);
   setVarbit(player, VARBIT.SIDEPANEL_HELM_STATUS, HELM_STATUS.NAVIGATING);
-  sender.sendInterfaceScript(SCRIPT_HELM_UPDATE, ["", 0, player.getUsername(), 1]);
+  sender.sendInterfaceScript(SCRIPT_HELM_UPDATE, ["", 0, player.getDisplayName(), 1]);
 }
 
 function leaveHelm(player, boat) {
@@ -238,7 +238,7 @@ function crewTakesHelm(player, boat, npc) {
   boat.heading = boat.angle;
   steerByClicks(player, boat);
   setVarbit(player, VARBIT.SIDEPANEL_HELM_STATUS, HELM_STATUS_CREW);
-  player.getPacketSender().sendInterfaceScript(SCRIPT_HELM_UPDATE, ["", 0, player.getUsername(), 1]);
+  player.getPacketSender().sendInterfaceScript(SCRIPT_HELM_UPDATE, ["", 0, player.getDisplayName(), 1]);
 }
 
 /**

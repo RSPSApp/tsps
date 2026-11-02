@@ -87,7 +87,7 @@ function isMined(star) {
 
 /** The first Mine on a newly landed star: the discovery, before any mining (captures). */
 function discover(player, star) {
-  star.discoveredBy = player.getUsername();
+  star.discoveredBy = player.getDisplayName();
   Common.sendLastMined(player, star);
   Common.markMined(player);
   Common.setBonusDust(player, DATA.mining.bonusDust);

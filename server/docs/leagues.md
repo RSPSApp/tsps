@@ -137,6 +137,8 @@ relics are the first askers; nothing changes when nobody answers):
 | `combat:status-apply` | core `CombatFactory.poisonEntity` (poison, venom), DragonfireProtection (dragonfire) | `{ target, kind, allow }`; `allow = false` and the status never takes |
 | `combat-special:cost` | core `CombatSpecial` (the energy check and the drain) | `{ player, specialId, cost, available, allow, phase }`; `phase` is "check" or "drain"; `allow` lets a short player use it |
 | `combat-special:regenerate` | core `RestoreSpecialAttackTask` | `{ player, amount }` a restore cycle (the cycle length is the lightbearer modifier's) |
+| `registerMeleeStrengthBonusModifier` | core `DamageFormulas.calculateMaxMeleeHit` | `(entity, strengthBonus) -> strengthBonus`: added to the worn melee strength bonus before the max-hit formula (Demonic Pacts' prayer-bonus and Strength-level pacts) |
+| `registerRestingLevelModifier` | core `SkillManager.getRestingLevel`, read by `Player.processStatRestoration` and Potions' boost decay | `(player, skill, level) -> level`: a permanent boost; restoration climbs to it, decay stops at it (Demonic Pacts' Defence pact) |
 | `skills:experience-gained` | core `SkillManager.addExperience`, after the gain | `{ player, skill, experience, multiplied }` |
 | `storage:gather`, `storage:room` (extended) | Mining, Woodcutting, Fishing | the existing `{ player, itemId, amount, stored }` now carries `skill` and the resource's `xp`, so a listener can bank or double what a skill gathered; `storage:room` carries `skill` too, so a relic answers room only for its own skill's resource (and for what its tool's mode turns it into) |
 | `mining:attempt`, `woodcutting:attempt`, `fishing:attempt` | the skill, after its success roll | `{ player, ..., success }`: a listener may turn a miss into a hit (Fishing then lands the best fish the player can) |
@@ -1295,7 +1297,8 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   `effect` [effect id, value]. The table names no varbit, and the ids are not the varbits' order,
   so the data's `effects` maps each of the 73 effect ids to the `talent_*` varbit its text
   describes; the recordings confirm 18 of them (237/01098, 01158). A node's value adds to its
-  effect's varbit (`talent_prayer_pen_all` 15 -> 30 -> 75). Each node costs one point.
+  effect's varbit (`talent_prayer_pen_all` 25 -> 50 -> 75). Each node costs one point. The node
+  values are the numbers the texts show, and the Wiki's agree with every one.
 - **The screen**, as recorded (237/01098, 01102, 01149): View Demonic Pacts (656:32) closes the main
   modal, runs `league_border_pulse_stop` (3186) on the mastery highlight, mounts `talent_tree` (647)
   in the floater, sends its events (frame 647:5 slot 11 OP1, data_layer 647:11 IF_SCRIPT_TRIGGER,
@@ -1316,15 +1319,20 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   reset your pacts, this opportunity might not arise again.", then "Reset Pacts?" Yes / No; Yes
   uses a reset and clears the bits, the points spent and every effect varbit: "Demonic Pacts have
   been reset, you have N points to spend." Without a reset or a pact our own line says why.
-- **Points and resets** (Wiki): a new character gets the tutorial's first point (237/01098 sets
-  `talent_points_earned` on the Leagues-tab page, silently) and two free resets
-  (`talent_free_reset_1`); every pact task (the catalog's `pactTask`, 79) adds a point on
-  `league:task-completed`, after the task's own line: the earned varp, then "Congratulations,
-  you've earned a Demonic Pact! You now have N Demonic Pacts to spend." in 229628 (plural even at 1,
-  as recorded); the Hueycoatl's kill credit (its death or `combat-achievements:kill`) adds a reset
-  once, with `talent_huey_pact_reset` and its line (237/01167). Saved in `league:pacts` (node
-  indices), `league:pact-points`, `league:pact-resets` and `league:pact-rewards`; every login
-  resends the varps and varbits.
+- **Points and resets** (Wiki; 237/01098, 01158, 04052, 238/01219): a new character has no point
+  and the two free resets, both flagged (`talent_free_reset_1`, `_2`). Every pact task (the
+  catalog's `pactTask`, 79) adds a point on `league:task-completed`, after the task's own line: the
+  earned varp, then "Congratulations, you've earned a Demonic Pact! You now have N Demonic Pacts to
+  spend." in 229628 ("1 Demonic Pact" for the first point earned, as 237/01098 shows; plural
+  otherwise, even at 1). The tutorial's two points are two of these tasks, Open the Leagues Menu and
+  Complete the Leagues Tutorial, as recorded. A reset task (data `resetTasks`) adds a reset after
+  its point: `talent_resets_available`, then "Congratulations, you've earned a Full Pact reset! You
+  now have N Full Pact resets" (237/01158, Defeat 3 unique Echo Bosses). The Hueycoatl's first kill
+  is one since 23 April 2026 (Wiki; it also sets `talent_huey_pact_reset`), and three come from
+  echo bosses (Wiki; ours: the 1, 2 and 3 unique-echo-boss tasks, 3 being the recorded one). Each
+  pays once. Saved in `league:pacts` (node indices), `league:pact-points`, `league:pact-resets` and
+  `league:pact-rewards`; every login resends the tree in the recorded order (237/01170, 238/01223):
+  earned, the free-reset and Hueycoatl flags, the resets, spent, the unlock varps, the effects.
 - **The tutorial's pacts page** runs the recorded walkthrough in the tree (647:14): three steps, the
   last waiting for the central pact; the tree comes back with two more, then the next page.
 - **The effects** (`leaguepacts/General|Melee|Ranged|Magic.LeaguePacts.js`; each unit's head
@@ -1341,15 +1349,25 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   14 Melee, 15 Ranged); General has the +% accuracy pact. PvP (Wiki): stat boosts, attack speed
   and melee range apply against players; Thorns, Echoes, Blindbag, reflect and the hit-forcing
   pacts do not.
-- **Effects approximated** (the units' heads say how): the permanent Defence boost is invisible
-  in the skills tab (no per-skill boost floor in the restore code); off-hands are any shield-slot
-  item but the named shields; strength from prayer bonus and Strength level scales the max hit
-  rather than the bonus; min-hit pacts act only on hits past accuracy; the fire burn bounce uses
-  Burning claws' burn; Regenerate does not reach Dizana's quiver, salamander tar, the charged bows
-  without modelled charges, or the rune pouch (no event adds a rune to it).
-- **Not here yet:** the echo bosses' three resets, the second free reset live gave later ("Yama has
-  taken kindly...", 238/01219, on a schedule not recorded), and Yama's one-off extra points
-  (Obsidian cape, echo item, moons item, Deep Delve: 237/01167's `talent_extra_retro_*`).
+- **Readings of ours** (the units' heads list every one): off-hands are shield-slot items that are
+  not shields, and shields go by name (the cache's category 18 agrees but for the crystal shield,
+  and plugins cannot read it); min-hit pacts act only on hits past accuracy; the fire burn bounce
+  uses Burning claws' burn; a Regenerate proc saves the whole cast's runes; the crossbow pact's
+  echo chance is a roll of its own; which three unique-echo-boss tasks give a reset; PvP beyond
+  what the Wiki names (it says stat boosts, attack speed and melee range apply and Thorns, Echoes
+  and Blindbag never do).
+- **The core hooks** the pacts need, generic: `registerMeleeStrengthBonusModifier` (the prayer-bonus
+  and Strength-level pacts add melee strength bonus as the max hit is worked out, so specials and
+  the hit modifiers after it scale it) and `registerRestingLevelModifier` (the Defence pact's
+  permanent, visible boost: decay and restoration settle at base + boost, as 237/01170 and
+  238/01219 show Defence 114 with 99 and 15). Both are in the generic hooks table under Events.
+- **Not here:** echo bosses (their reset tasks have no trigger yet), live's second free reset given
+  later to characters that already played ("Yama has taken kindly...", 238/01219) and its one-off
+  points for tasks done before 23 April (`talent_extra_retro_*`, 237/01167): a character here
+  earns those from the tasks. Regenerate does not reach the abyssal tentacle (Wiki, 6 May 2026),
+  the Gauntlet's crystal and corrupted bow and staff (Wiki, 23 April), Dizana's quiver, salamander
+  tar, the charged bows without modelled charges, or the rune pouch (no event adds a rune to it):
+  none of them spends charges through `combat:consume-charge` here.
 
 ## Areas
 

@@ -82,7 +82,8 @@ function buy(player, index) {
  * Buys the nodes Apply Changes sent, in the order selected, each through the usual checks (a later
  * node may link to an earlier one of the same selection): for each, as recorded (238: payload
  * [2, 88, 94]), the spent varp, its unlock bit and its effect; then, once, the unlock, the tree
- * closed and back five ticks on. A node refused stops the rest, with its reason.
+ * closed and back five ticks on. A node refused stops the rest, with its reason (ours: the client
+ * offers only linked nodes, so live's answer to an unlinked one was never recorded).
  */
 function buyAll(player, indices) {
   const bought = [];

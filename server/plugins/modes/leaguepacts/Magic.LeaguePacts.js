@@ -43,6 +43,10 @@
  *   to up to 2 other attackable targets within a tile of it (our reading: the burn bounces, not the hit).
  * - talent_earth_reduce_defence (onCombatHitResolved): a landed earth spell lowers the target's
  *   Defence and Magic (an NPC's magic defence level) by 2.
+ *
+ * PvP: the Wiki names none of these; they all act on players too (ours), the max-hit and speed
+ * ones as its stat boosts and attack speed. Ours as well: the water spells' +20% grows linearly
+ * with the hitpoints fraction; the air rune prayer is one roll a proc.
  */
 const Common = require("./Common.LeaguePacts");
 

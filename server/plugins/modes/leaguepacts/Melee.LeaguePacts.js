@@ -26,7 +26,8 @@
  * - 43 talent_light_weapon_doublehit: a melee attack (not a special) with a weapon under 1kg is
  *   followed by an ordinary melee hit of its own accuracy rolled from 40% of the max hit (at least
  *   1), with the same delay; on `onPlayerDealtDamage` (once per attack: the first hit queued that
- *   cycle). Not limited in PvP: the Wiki names only Thorns, Echoes and Blindbag.
+ *   cycle). Ours: "40% of your base max hit" read as 40% of the max hit rolled, and the hit
+ *   works against players too (the Wiki names Thorns, Echoes and Blindbag as off in PvP, not this).
  * - 44 talent_free_random_weapon_attack_chance (N% per heavy-weapon attack, not a special), 72
  *   talent_unique_blindbag_chance (+2% per unique heavy melee weapon in the inventory, up to 10%)
  *   and 68 talent_unique_blindbag_damage (+N% Blindbag max hit per unique one, up to 10%): Blindbag

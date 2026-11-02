@@ -1,7 +1,14 @@
 /**
  * Demonic Pacts' general pact effects (Wiki Demonic_Pacts_League/Demonic_Pacts; the texts are the
- * cache's talent_tree column 2, the values its effect column). Each is the summed value of the
- * character's pacts for that effect (Common.effect), nothing for anyone else.
+ * cache's talent_tree column 2, the values its effect column, which the Wiki's numbers match; the
+ * recordings 237/01158, 01163, 01170 and 238/01219, 01223 for the Defence boost). Each is the
+ * summed value of the character's pacts for that effect (Common.effect), nothing for anyone else.
+ *
+ * PvP (Wiki): "Stat boosts, attack speed increases, and melee range increases apply, but effects
+ * like Thorns, Echoes, and Blindbag do not work against players." Here accuracy (12), Defence
+ * (13), the off-hand's stats (16), Regenerate (1) and free specials (24) apply; prayer penetration
+ * (40), the max accuracy roll (57) and the style swap (76) do not (ours: the Wiki names neither);
+ * special energy from range (62) does (ours).
  *
  * - 1 `talent_regen_ammo_chance`, Regenerate: a value% chance that what a cast, a shot or a charged
  *   weapon spends is not spent. Runes: the whole cast's runes (`magic:spell-cost` says which,
@@ -35,10 +42,11 @@
  *   through. A target whose prayer the core keeps (PrayerHandler) takes that share of the part the
  *   prayer would take off (the rest still reduced as the core reduces it); for
  *   one whose plugin keeps it (demonic gorillas ask the hit's bypass) the hit bypasses the prayer on
- *   value% of rolls - the same damage on average. Not against players (Wiki: pacts are limited in PvP).
+ *   value% of rolls - the same damage on average. Not against players (ours, see PvP above).
  * - 57 `talent_max_accuracy_roll_from_range`: 5% of attacks, +5% a tile of distance (edge to edge,
  *   as combat reach counts it), roll the maximum attack roll against a random defence roll
- *   (onCombatHitRoll, once per attack); a failed max roll leaves the ordinary roll. Not against players.
+ *   (onCombatHitRoll, once per attack); a failed max roll leaves the ordinary roll. Not against
+ *   players (ours). Ours too: an echo or extra hit on a later tick rolls it again, as it does 62.
  * - 61 `talent_prayer_restore_no_overhead`: a task per character with the pact restores a Prayer point
  *   every 15 ticks, a tick less per 7 worn prayer bonus (at least 1), when no protection prayer is on
  *   at that tick. Started at login and on the unlock, it ends with the pact.

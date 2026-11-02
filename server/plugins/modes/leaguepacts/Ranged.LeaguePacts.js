@@ -54,8 +54,11 @@
  * - 82 talent_crossbow_double_accuracy_roll: a crossbow attack rolls accuracy a second time when
  *   the first misses (onCombatHitRoll: one roll of ours, then the core's).
  *
- * PvP (Wiki): stat boosts and attack speed apply; echoes, the extra throw, crossbow max hits
- * and the second accuracy roll work against NPCs only.
+ * PvP (Wiki): stat boosts and attack speed apply; echoes never hit a player. Ours: the extra
+ * throw, crossbow max hits and the second accuracy roll work against NPCs only too.
+ *
+ * Ours, beside the readings above: an echo's max hit is the ordinary ranged max hit; the
+ * crossbow pact's echo chance is its own roll, not added to the Regenerate one's.
  */
 const Common = require("./Common.LeaguePacts");
 

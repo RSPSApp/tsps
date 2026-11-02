@@ -574,6 +574,72 @@ test('one invisible ghast keeps one visible copy through repeat attacks, death a
   }
 });
 
+test('a filled druid pouch spends a charge to reveal an attacking ghast instead of food or damage', () => {
+  const player = makePlayer();
+  const h = harness({ player });
+  player.setLocation(new core.Location(3440, 3345, 0));
+  const ghast = {
+    getId: () => N.GHAST,
+    getLocation: () => new core.Location(3441, 3345, 0),
+  };
+  player.localNpcs = [ghast];
+  h.quest.setStage(player, 90);
+  const visibleGhasts = () => h.spawned.filter((npc) => npc.getId() === N.GHAST_2);
+  const random = Math.random;
+  try {
+    Math.random = () => 0.9; // never ignored, never a miss
+    h.clock.tick = 0;
+    h.area.process(player); // the first pass only schedules the attempt
+    player.inventory.adds(I.SHRIMPS, 1);
+    player.inventory.adds(FILLED_POUCH, 3);
+
+    // Food in the pack: one charge reveals the ghast, and the food survives.
+    h.clock.tick = 20;
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 2, 'the pouch spends one charge');
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 1, 'the protected food is not rotted');
+    assert.equal(player.inventory.getAmount(I.ROTTEN_FOOD), 0);
+    assert.equal(player.damage.length, 0, 'a revealed attacker deals no damage');
+    assert.equal(visibleGhasts().length, 1);
+
+    // The revealed source keeps attacking through its one form: no second charge or copy.
+    h.clock.tick = 60;
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 2, 'no charge is spent on a ghast already visible');
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 1);
+    assert.equal(visibleGhasts().length, 1);
+
+    // No food either: the pouch still protects, spending the next charge on a fresh reveal.
+    death(h, h.spawned.at(-1));
+    player.inventory.deleteNumber(I.SHRIMPS, 1);
+    h.clock.tick = 100;
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 1, 'the pouch spends a charge with no food to rot');
+    assert.equal(player.damage.length, 0, 'no food does not mean damage while the pouch is charged');
+    assert.equal(visibleGhasts().length, 2, 'the dead form is replaced by a fresh reveal');
+
+    // The last charge goes the same way and leaves the empty pouch behind.
+    death(h, h.spawned.at(-1));
+    player.inventory.adds(I.SHRIMPS, 1);
+    h.clock.tick = 140;
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 0);
+    assert.equal(player.inventory.getAmount(EMPTY_POUCH), 1, 'the spent pouch becomes the empty pouch');
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 1);
+    assert.equal(visibleGhasts().length, 3);
+
+    // An empty pouch is no protection: the food rots again.
+    death(h, h.spawned.at(-1));
+    h.clock.tick = 180;
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 0, 'without a charged pouch the food rots');
+    assert.equal(player.inventory.getAmount(I.ROTTEN_FOOD), 1);
+    assert.equal(visibleGhasts().length, 4);
+  } finally {
+    Math.random = random;
+  }
+});
+
 test('login replays the saved stage in varp 307, including a fresh stage 0', () => {
   const h = harness();
   const p = h.player;

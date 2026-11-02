@@ -19,7 +19,8 @@
  * Nature Spirit blesses the silver sickle and hands over the druid pouch, the
  * blessed sickle blooms swamp plants into pouch charges, and the swamp's invisible
  * ghasts attack players (rotting food, or 1-3 damage with none) and become visible
- * when they land a hit. Using a filled pouch on one reveals it too.
+ * when they land a hit. A filled pouch spends a charge to reveal an attacker instead,
+ * so its food stays fresh; using a filled pouch on one reveals it too.
  */
 module.exports = function registerNatureSpiritQuest(api) {
   const {
@@ -399,11 +400,13 @@ module.exports = function registerNatureSpiritQuest(api) {
   }
 
   /**
-   * A ghast's attack: 7/10 miss, else rot one food item or hit 1-3 when there is none. A hit
-   * makes the ghast visible, as live does; the kill then counts towards the quest like any
-   * pouch-revealed one. The Wiki gives the roll but neither the interval nor the exact retreat,
-   * so one player sees an attempt every 12-30 ticks and the ghast stays where it was. Once the
-   * form has appeared the source keeps attacking through it, never spawning a second copy.
+   * A ghast's attack: a filled druid pouch spends a charge to reveal the attacker instead
+   * (so no food is rotted and no damage is taken), else 7/10 miss, else rot one food item
+   * or hit 1-3 when there is none. A hit makes the ghast visible, as live does; the kill
+   * then counts towards the quest like any pouch-revealed one. The Wiki gives the roll but
+   * neither the interval nor the exact retreat, so one player sees an attempt every 12-30
+   * ticks and the ghast stays where it was. Once the form has appeared the source keeps
+   * attacking through it, never spawning a second copy.
    */
   function ghastAttack(player, ghast) {
     const cycle = World.getProcessCycle();
@@ -411,6 +414,13 @@ module.exports = function registerNatureSpiritQuest(api) {
       + Math.floor(Math.random() * (GHAST_ATTACK_MAX_DELAY - GHAST_ATTACK_MIN_DELAY + 1)));
     if (easyMorytaniaDiary(player) && Math.random() < GHAST_DIARY_IGNORE_CHANCE) return;
     if (Math.random() < GHAST_MISS_CHANCE) return;
+    // The filled pouch is the defence the Wiki documents: it spends a charge to reveal the
+    // ghast, which costs neither food nor health. revealGhast() spends nothing when the
+    // source is already visible to this player, so repeat attacks cannot burn charges.
+    if (held(player, DRUID_POUCH_FILLED_ITEM_ID) && revealGhast(player, ghast)) {
+      visibleGhastFor(player, ghast)?.performAnimation?.(new Animation(GHAST_ATTACK_ANIMATION));
+      return;
+    }
     if (!rotFood(player)) {
       player.getCombat().getHitQueue().addPendingDamage([
         new HitDamage(1 + Math.floor(Math.random() * 3), HitMask.RED),

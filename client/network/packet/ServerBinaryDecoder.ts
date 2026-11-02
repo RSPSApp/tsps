@@ -1650,6 +1650,46 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             };
         }
 
+        case ServerPacketId.REGION_REPLACEMENT_COMPRESSED: {
+            const regionId = reader.readShort();
+            const allowReload = reader.readBoolean();
+            const terrainLength = reader.readInt();
+            const objectLength = reader.readInt();
+            // Matches the server encoder's raw region budget.
+            if (terrainLength <= 0 || objectLength < 0 || terrainLength + objectLength > 16 * 1024 * 1024) {
+                throw new RangeError(`Region replacement ${regionId} has invalid section lengths`);
+            }
+            const pako = require("pako");
+            const raw = new Uint8Array(terrainLength + objectLength);
+            let length = 0;
+            const inflater = new pako.Inflate({ chunkSize: 16384 });
+            inflater.onData = (part: Uint8Array) => {
+                if (length + part.length > raw.length) {
+                    throw new RangeError(`Region replacement ${regionId} exceeds its declared length`);
+                }
+                raw.set(part, length);
+                length += part.length;
+            };
+            inflater.push(reader.readBytes(reader.remaining), true);
+            if (inflater.err || !inflater.ended) {
+                throw new RangeError(`Region replacement ${regionId} has invalid compressed data`);
+            }
+            if (length !== raw.length) {
+                throw new RangeError(
+                    `Region replacement ${regionId} inflated to ${length} bytes, expected ${raw.length}`,
+                );
+            }
+            return {
+                type: "region_replacement",
+                payload: {
+                    regionId,
+                    allowReload,
+                    terrainData: raw.subarray(0, terrainLength),
+                    objectData: objectLength > 0 ? raw.subarray(terrainLength) : undefined,
+                },
+            };
+        }
+
         case ServerPacketId.SET_INTERACTION_MODE: {
             const worldId = reader.readSignedShort();
             const tileMode = reader.readByte() & 0xff;

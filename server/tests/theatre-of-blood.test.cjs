@@ -964,3 +964,39 @@ test('a Nylocas hit thrown a tick before its form changed still counts', () => {
   assert.equal(launchedAt(hit), now - 3);
   assert.ok(launchedAt(hit) < now - 2, 'before a form change at now - 2');
 });
+
+test('Xarpus: a mixed run over a pool still hurts after the engine clears the step for sync', () => {
+  const { Direction } = require('../dist/game/model/Direction');
+  require('../plugins/minigames/tob/Xarpus.TheatreOfBlood')(hooks.api);
+  const { raid, players: [runner] } = startRaid(['Runner1']);
+  const room = raid.buildRoom('XARPUS');
+  const member = raid.member(runner);
+  member.roomKey = 'XARPUS';
+  member.inFight = true;
+  room.stage = 'started';
+  room.phase = 'poison';
+  room.xarpus = { getLocation: () => new Location(3168, 4387, 1), getSize: () => 5, getHitpoints: () => 100, getMaxHitpoints: () => 100 };
+  // The raid already ticked this turn, from an NPC; the player's own area call comes after.
+  raid.lastCycle = Shared.cycle();
+  room.pools.set('3165,4381', {});
+  const hurts = [];
+  room.hurt = (player, amount, mask, reason) => hurts.push(reason);
+  let walking = Direction.NONE;
+  runner.getWalkingDirection = () => walking;
+  // Turn 1: standing at (3164,4381); the player's own area call records where they are.
+  runner.location = new Location(3164, 4381, 1);
+  raid.area.process(runner);
+  // Turn 2: the run east then north-east to (3166,4382), then the player's area call, then sync's reset.
+  runner.location = new Location(3166, 4382, 1);
+  walking = Direction.EAST;
+  raid.area.process(runner);
+  walking = Direction.NONE;
+  // Turn 3: the room ticks first, from an NPC, with the direction gone.
+  room.tickFloor();
+  ticks(2);
+  assert.deepEqual(hurts, ["stood in Xarpus' poison."], 'the crossed pool hurts a tick late');
+  room.tickFloor();
+  ticks(2);
+  assert.equal(hurts.length, 1, 'once');
+  raid.dispose();
+});

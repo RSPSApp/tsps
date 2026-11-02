@@ -169,7 +169,9 @@ class XarpusRoom extends Raid.Room {
     this.phase = "waiting";
     this.exhumed = [];
     this.pools = new Map();
+    /** Per player: where they stood after their last move, and the pool tile a run crossed since. */
     this.lastTiles = new Map();
+    this.crossed = new Map();
     this.absorbed = 0;
     this.uplift = 0;
     this.aim = null;
@@ -427,15 +429,29 @@ class XarpusRoom extends Raid.Room {
     this.later(POOL_ANIMATE_DELAY, () => this.animateObject(pool, ANIMATION.SPLAT));
   }
 
+  /**
+   * Right after a player's own movement (RaidState's area), the tile a run step passed over, kept until
+   * the floor's next tick. The room ticks at the start of the next turn, by when the step's direction
+   * has been cleared for sync, so it can't work this out itself.
+   */
+  onPlayerMoved(player) {
+    const at = Shared.tileOf(player);
+    const was = this.lastTiles.get(player);
+    this.lastTiles.set(player, at);
+    if (!was || (was.x === at.x && was.y === at.y)) return;
+    const over = passedOver(was, at, player.getWalkingDirection?.());
+    if (this.pools.has(key(over))) this.crossed.set(player, over);
+  }
+
   /** The pools and, once it flies, the pebbles under Xarpus, every tick. */
   tickFloor() {
     const npc = this.xarpus;
     for (const player of this.fighters()) {
       const at = Shared.tileOf(player);
-      const was = this.lastTiles.get(player);
-      this.lastTiles.set(player, at);
+      const crossed = this.crossed.get(player);
+      this.crossed.delete(player);
       if (this.pools.has(key(at))) this.hurt(player, this.poolDamage(), "GREEN", "stood in Xarpus' poison.");
-      else if (was && this.pools.has(key(passedOver(was, at, player.getWalkingDirection?.())))) {
+      else if (crossed && this.pools.has(key(crossed))) {
         // Wiki: running over a pool hurts a tick late.
         this.later(1, () => this.hurt(player, this.poolDamage(), "GREEN", "stood in Xarpus' poison."));
       }

@@ -87,8 +87,14 @@ function areaClass() {
       super.postLeave(mobile, logout);
     }
 
+    /**
+     * The raid ticks once a turn, on its first mobile (an NPC, before players move). A player's own
+     * call comes after their movement, while the step's direction is still set: rooms that need what a
+     * player stepped over read it then (`onPlayerMoved`).
+     */
     process(mobile) {
       this.raid.processOnce();
+      if (mobile.isPlayer?.()) this.raid.room?.onPlayerMoved?.(mobile.getAsPlayer());
     }
 
     canTeleport(player) {

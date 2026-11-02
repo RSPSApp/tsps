@@ -178,6 +178,25 @@ const tileKey = (id: number) => `${TILE.x},${TILE.y},0,${id}`;
     assert.equal(host.locOverrides.has(tileKey(CACHE_LOC)), false, "deleting after a replay restores the cache loc");
 }
 
+// Castle Wars tunnels: DEL full rocks -> ADD half rocks -> DEL half rocks before a rebuild.
+for (const backend of ["WebGL", "WebGPU"]) {
+    const square = stubSquare([4437], [10]);
+    const host: any = {
+        addedLocs: new Map(), locOverrides: new Map(), locSpawns: new Map(), instanceActive: false,
+        osrsClient: { locTypeLoader: { load: () => ({ seqId: -1, name: "Rocks" }) } },
+        getLocIdsAtTileAllLevels: () => square.ids.map((id) => ({ id, level: 0, typeRot: 10 })),
+        mapManager: { getMapForWorldTile: () => square, getMap: () => square, loadingMapIds: new Set() },
+        scheduleLocGeometryUpdate() {}, queueLocReload() {},
+    };
+    const updates = backend === "WebGPU" ? new LocUpdates(host) : null;
+    const del = () => updates ? updates.onLocDel(TILE, 0, 10, 0) : onLocDel(host, TILE, 0, 10, 0);
+    const add = () => updates ? updates.onLocAddChange(4438, TILE, 0, 10, 0) : onLocAddChange(host, 4438, TILE, 0, 10, 0);
+    del(); add(); add(); del();
+    assert.deepEqual(host.locOverrides.get(tileKey(4437)), { newId: LOC_OVERRIDE_REMOVED }, `${backend}: full rocks stay removed after the half pile clears`);
+    assert.equal(host.addedLocs.size, 0);
+    updates?.dispose();
+}
+
 // WebGL delete of a cache loc suppresses exactly that loc, not every loc of its shape.
 {
     const host: any = {

@@ -594,8 +594,9 @@ function syncKickOption(player) {
 
 function kickGuest(event) {
   if (event.option !== HOUSE_KICK_OPTION) return;
-  event.handled = true;
   const house = houseFor(event.player);
+  if (!house) return;
+  event.handled = true;
   if (!house || house.isDestroyed() || house.owner !== event.player || event.target === event.player
     || houseFor(event.target) !== house || !house.getPlayers().includes(event.target)) return;
   exitHouse(event.target);

@@ -131,6 +131,7 @@ function defineAreas() {
       player.getPacketSender().sendSubInterface(data.OVERLAY_HUD_UID, data.STATUS_OVERLAY_INTERFACE[game.getTeamId(player)], 1);
       sendGameVars(player, game.getTeamId(player));
       player.getPacketSender().sendPlayerOption(data.ATTACK_OPTION_SLOT, "Attack", true);
+      player.getPacketSender().sendPlayerOption(data.TAKE_FROM_OPTION_SLOT, "Take-from", false);
     }
 
     postLeave(character, logout) {
@@ -139,6 +140,7 @@ function defineAreas() {
         return;
       }
       player.getPacketSender().sendPlayerOption(data.ATTACK_OPTION_SLOT, "", false);
+      player.getPacketSender().sendPlayerOption(data.TAKE_FROM_OPTION_SLOT, "", false);
       game.closeOverlay(player);
       player.getPacketSender().sendEntityHintRemoval(true);
       game.clearCastleWarsItems(player);

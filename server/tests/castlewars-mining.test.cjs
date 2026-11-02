@@ -21,6 +21,7 @@ before(() => {
   game = require('../plugins/minigames/castlewars/Game.CastleWars')(api);
   game.isPlaying = () => playing;
   game.requirePlaying = () => playing;
+  game.gameArea = { getPlayers: () => [] };
   Tunnels(api, game);
   rockHooks = [...PluginManager.objectHooksByName.get('Rocks')];
 });
@@ -181,4 +182,18 @@ test('walking, logout, match end or replacement of the rocks interrupts mining',
     playing = true;
     if (!m.full()) core.ObjectManager.register(m.original, true);
   }
+});
+
+test('a pickaxe collapses a cleared tunnel through the native cave-wall option without consuming the tool', (t) => {
+  const m = miner(t, { id: core.ItemIdentifiers.RUNE_PICKAXE, level: 41 });
+  m.click(); tick(6);
+  assert.equal(m.full(), null); assert.equal(m.half(), null);
+  const wall = core.MapObjects.get(core.ObjectIdentifiers.CAVE_WALL, new core.Location(2400, 9493, 0), null);
+  assert.ok(wall, 'collapse wall is supplied by the cache');
+  new ObjectActionPacketListener().executeAction(m.p, wall.getId(), 2400, 9493, 1);
+  m.p.getMovementQueue().process(); core.TaskManager.processWalkTo(m.p.getIndex());
+  tick(3);
+  assert.ok(m.full(), 'mining the cave wall restores the full rock pile');
+  assert.equal(m.p.getInventory().getAmount(core.ItemIdentifiers.RUNE_PICKAXE), 1);
+  assert.equal(game.getTeamVar(game.TEAM.SARADOMIN, game.TEAM_VARBIT.TUNNEL_NS_CLEAR), 0);
 });

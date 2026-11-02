@@ -171,6 +171,7 @@ test('runRoute walks within one tile and only climbs from the right floor', () =
   const climbs = [];
   const fakeCore = Object.freeze({
     ...core,
+    MapObjects: { get: () => ({}) },
     PathFinder: {
       calculateWalkRoute: (player, x, y) => {
         walks.push([x, y]);
@@ -180,6 +181,7 @@ test('runRoute walks within one tile and only climbs from the right floor', () =
   });
   const fakeGame = {
     TEAM: data.TEAM,
+    data: { CLIMB_ROUTES: { 1: [[[5, 5, 1], [5, 5, 0]]] } },
     BOT_KEY: {},
     BOT_ROLE_KEY: 'castlewars:bot-role',
     inGameProcessors: [],
@@ -188,10 +190,11 @@ test('runRoute walks within one tile and only climbs from the right floor', () =
   };
   Bots({ core: fakeCore, onCustomEvent: () => {}, onPlayerLogout: () => {} }, fakeGame);
 
+  let pending;
   const location = { current: new core.Location(10, 11, 0) };
   const player = {
     getLocation: () => location.current,
-    getMovementQueue: () => ({ size: () => 0 }),
+    getMovementQueue: () => ({ size: () => 0, walkToObject: (_object, action) => { pending = action; } }),
   };
   const state = {
     route: [{ type: 'walk', x: 10, y: 10, z: 0 }],
@@ -219,7 +222,10 @@ test('runRoute walks within one tile and only climbs from the right floor', () =
   state.cursor = 0;
   state.routeActive = false;
   assert.equal(Bots._test.runRoute({ player, nowMs: 4000 }, state), 'running');
-  assert.deepEqual(climbs, [[5, 5, 0]], 'standing by the stair starts the climb');
+  assert.deepEqual(climbs, [], 'a nearby bot must pass the normal object reach check');
+  assert.ok(pending);
+  pending.execute();
+  assert.deepEqual(climbs, [[5, 5, 0]], 'the native route callback starts the climb');
 
   location.current = new core.Location(5, 5, 0);
   assert.equal(Bots._test.runRoute({ player, nowMs: 4100 }, state), 'done', 'landing on the destination finishes the climb');
@@ -245,6 +251,8 @@ test('a lobby tier pins each bot to a loadout archetype inside its combat band',
     assert.ok(level >= band.min && level <= band.max, `${tier} attacker sits at level ${level}`);
     const archer = pickTierChoice({ getUsername: () => 'CWBotS3' }, ROLES.ARCHER, tier);
     assert.ok(archer.tags.includes('range'), `${tier} archer keeps a ranged loadout`);
+    const defender = pickTierChoice({ getUsername: () => 'CWBotS3' }, ROLES.DEFENDER, tier);
+    assert.ok(defender.tags.includes('magic'), `${tier} defender keeps a magic loadout`);
     const mage = pickTierChoice({ getUsername: () => 'CWBotS3' }, ROLES.MAGE, tier);
     assert.ok(mage.tags.includes('magic'), `${tier} mage keeps a magic loadout`);
   }

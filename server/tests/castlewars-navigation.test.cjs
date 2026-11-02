@@ -13,6 +13,8 @@ const attachFlags = require('../plugins/minigames/castlewars/Flags.CastleWars');
 const attachDoors = require('../plugins/minigames/castlewars/Doors.CastleWars');
 const attachNavigation = require('../plugins/minigames/castlewars/Navigation.CastleWars');
 const attachAreas = require('../plugins/minigames/castlewars/Areas.CastleWars');
+let playerOption;
+let namedInteractions;
 let game, registry, objectHandler, routeHandlers, customHandlers, startup, equip, unequip;
 
 before(() => {
@@ -21,6 +23,7 @@ before(() => {
 });
 
 beforeEach(() => {
+  namedInteractions = new Map();
   routeHandlers = []; customHandlers = new Map(); startup = [];
   registry = {
     core,
@@ -28,7 +31,8 @@ beforeEach(() => {
     getObjectManager: () => ({ register() {}, deregister() {} }),
     getRegionManager: () => core.RegionManager, getWorld: () => core.World,
     getTaskManager: () => ({ submit() {}, cancelTasks() {} }),
-    onObjectInteraction: (...args) => { if (args.length === 1) objectHandler = args[0]; },
+    onObjectInteraction: (...args) => { if (args.length === 1) objectHandler = args[0]; else namedInteractions.set(args[0], args[1]); },
+    onPlayerOption: handler => { playerOption = handler; },
     onCanEquip: handler => { equip = handler; }, onCanUnequip: handler => { unequip = handler; },
     onObjectRoute: handler => routeHandlers.push(handler),
     onCustomEvent: (name, handler) => customHandlers.set(name, handler),
@@ -318,4 +322,68 @@ test('staircase battlements block the gaps while both castles retain their climb
   }
   for (const wall of stairWalls) assert.equal(core.MapObjects.get(wall.getId(), wall.getLocation(), null), wall, 'retain the cache wall geometry and collision');
   assert.equal(removed.length, 4, 'only the separate inner-ladder rails are removed');
+});
+
+test('standards cannot enter either respawn room through barriers or fixed climbs', () => {
+  attachNavigation(registry, game);
+  for (const [team, barrierId, from, to] of [
+    [game.TEAM.ZAMORAK, core.ObjectIdentifiers.ENERGY_BARRIER_2, [2373, 3126, 1], [2373, 3127, 1]],
+    [game.TEAM.SARADOMIN, core.ObjectIdentifiers.ENERGY_BARRIER, [2422, 3076, 1], [2423, 3076, 1]],
+  ]) {
+    const p = player(team, from);
+    game.carryFlag(p, game.opposingTeam(team));
+    assert.equal(game.canEnterRespawn(p, new core.Location(...to)), false);
+    game.climbTo(p, to);
+    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], from);
+    const object = new core.GameObject(barrierId, new core.Location(...to), 0, 0, null);
+    objectHandler({ player: p, object, handled: false });
+    assert.match(p.messages.at(-1), /standard.*respawn/);
+    assert.equal(game.canEnterRespawn(p, new core.Location(...from)), true, 'outside destinations stay usable');
+    game.restoreFlagToBase(game.opposingTeam(team));
+    game.clearWeaponSlot(p);
+    assert.equal(game.canEnterRespawn(p, new core.Location(...to)), true);
+  }
+});
+
+test('Take-from transfers only an adjacent teammate enemy standard after three minutes and resets the timer', (t) => {
+  t.mock.method(core.RegionManager, 'canMovestart', () => true);
+  const carrier = player(), taker = player(game.TEAM.SARADOMIN, [2401, 3100, 0]);
+  game.carryFlag(carrier, game.TEAM.ZAMORAK);
+  const take = () => playerOption({ player: taker, target: carrier, option: game.data.TAKE_FROM_OPTION_SLOT });
+  take();
+  assert.equal(game.getCarriedFlagTeam(carrier), game.TEAM.ZAMORAK);
+  game.flagHeldSince.set(carrier, Date.now() - 180001);
+  taker.setLocation(new core.Location(2402, 3100, 0)); take();
+  assert.equal(game.getCarriedFlagTeam(carrier), game.TEAM.ZAMORAK, 'distance is checked server-side');
+  taker.setLocation(new core.Location(2401, 3100, 0)); take();
+  assert.equal(game.getCarriedFlagTeam(carrier), null);
+  assert.equal(game.getCarriedFlagTeam(taker), game.TEAM.ZAMORAK);
+  assert.ok(Date.now() - game.flagHeldSince.get(taker) < 1000);
+});
+
+test('repeated stale side-door clicks cannot overwrite its closed leaf and a new match can reopen it', () => {
+  game.requirePlaying = () => true;
+  attachDoors(registry, game);
+  const swaps = []; game.swapObject = (...args) => swaps.push(args);
+  const p = player(game.TEAM.SARADOMIN, [2416, 3073, 0]);
+  const object = new core.GameObject(core.ObjectIdentifiers.DOOR_125, new core.Location(2415, 3073, 0), 0, 0, null);
+  const event = { player: p, object, objectId: object.getId() };
+  namedInteractions.get('Door').Unlock(event);
+  namedInteractions.get('Door').Unlock(event);
+  assert.equal(swaps.length, 1);
+  customHandlers.get('castlewars:reset')({});
+  namedInteractions.get('Door').Unlock(event);
+  assert.equal(swaps.length, 2, 'reset forgets the previous game open-door state');
+});
+
+test('the house Kick route leaves option 7 available outside a house', () => {
+  const api = PluginManager.createApi('CastleWarsHouseOptionTest');
+  const hooks = new Map();
+  const stub = new Proxy({ core, persistAttribute() {}, onCustomEvent: (name, fn) => hooks.set(name, fn),
+    getPluginConfig: (_key, fallback) => fallback }, { get: (target, name) => name in target ? target[name] : () => {} });
+  require('../plugins/skills/construction/Core.Construction').init(stub);
+  require('../plugins/skills/construction/House.Construction').attach(stub);
+  const route = { player: player(), target: player(), option: 7, handled: false };
+  hooks.get('player:option-route')(route);
+  assert.equal(route.handled, false, 'Castle Wars Take-from reaches its normal player-option handler');
 });

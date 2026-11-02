@@ -35,7 +35,7 @@ type Call = [string, ...unknown[]];
 }
 
 {
-    for (const id of [5722, 5724]) {
+    for (const id of [5722, 5724, 15582, 15584]) {
         const actions = ["", "Attack", "Burn", "", ""];
         assert.deepEqual(getNpcMenuOptions({ id, actions } as any).map(({ option, actionIndex }) => [option, actionIndex]),
             [["Attack", 1]], "Castle Wars barricades require explicit item use to burn");

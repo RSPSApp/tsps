@@ -176,7 +176,7 @@ export class LocUpdates {
         // hotspot was placed. In the main world the server removes what it replaces, so only the
         // exact (shape, rotation) slot goes: the GE's paving is NORMAL locs of another rotation,
         // and matching by shape alone erased a floor tile per fire (issue #1748).
-        const derived = this.r.instanceActive ? [] : this.locSlotIdsAt(tile, level, shape, rotation);
+        const derived = this.r.instanceActive ? [] : this.locSlotIdsAt(tile, level, shape, rotation).filter((id) => this.r.locOverrides.get(`${tile.x},${tile.y},${level},${id}`)?.newId !== LOC_OVERRIDE_REMOVED);
         // A different object taking over the same slot inherits what its predecessor replaced.
         const replaced = Array.from(new Set([...(existing?.replacedIds ?? []), ...derived]));
         this.r.addedLocs.set(key, { locId, x: tile.x, y: tile.y, level, shape, rotation, replacedIds: replaced });
@@ -216,6 +216,8 @@ export class LocUpdates {
         // The built index also holds the dynamic object itself; only other ids are cache locs.
         for (const id of this.locSlotIdsAt(tile, level, shape, rotation)) {
             if ((id | 0) === (locId | 0) || recorded.has(id)) continue;
+        // An explicit server deletion must survive removal of the replacement.
+        if (this.r.locOverrides.get(`${tile.x},${tile.y},${level},${id}`)?.newId === LOC_OVERRIDE_REMOVED) continue;
             this.suppressLocAt(tile, level, id);
             recorded.add(id);
             changed = true;
@@ -240,7 +242,7 @@ export class LocUpdates {
             return;
         }
         // A cache object was removed: suppress that one loc so it disappears (e.g. a chopped tree).
-        const deleted = this.locSlotIdsAt(tile, level, shape, rotation);
+        const deleted = this.locSlotIdsAt(tile, level, shape, rotation).filter((id) => this.r.locOverrides.get(`${tile.x},${tile.y},${level},${id}`)?.newId !== LOC_OVERRIDE_REMOVED);
         if (deleted.length > 0) {
             for (const id of deleted) this.suppressLocAt(tile, level, id);
             this.reloadTile(tile, this.groupOf(deleted[0]));

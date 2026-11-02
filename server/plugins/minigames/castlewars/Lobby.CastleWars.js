@@ -76,10 +76,12 @@ function castleWarsBotUsername(teamId, index) {
 function populateCastleWarsBots(teamId, tier) {
   const opposingTeam = game.opposingTeam(teamId);
   const settings = game.settings ?? { teamSize: BOTS_PER_TEAM, opponent: "mixed" };
+  if (settings.opponent === "none") return;
+  const ownRole = settings.opponent === "scorer" ? "defender" : settings.opponent === "defender" ? "scorer" : null;
   for (let index = 0; index < settings.teamSize; index++) {
     const role = BOT_ROLE_MIX[index % BOT_ROLE_MIX.length];
     // The joining human occupies one slot in practice teams.
-    if (index > 0) spawnCastleWarsBot(teamId, role, castleWarsBotUsername(teamId, index), tier);
+    if (index > 0) spawnCastleWarsBot(teamId, ownRole ?? role, castleWarsBotUsername(teamId, index), tier);
     spawnCastleWarsBot(opposingTeam, settings.opponent === "mixed" ? role : settings.opponent, castleWarsBotUsername(opposingTeam, index), tier);
   }
 }

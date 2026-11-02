@@ -10,6 +10,7 @@ module.exports = {
     CoinPouch.register(api);
     require("./thieving/Blackjacking.Thieving")(api);
     Stalls(api);
+    require("./thieving/HamTrapdoor.Thieving")(api);
   },
 };
 

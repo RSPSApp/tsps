@@ -613,6 +613,7 @@ test('a frozen player climbs a ladder in reach, and gets "I can\'t reach that!" 
     getCombat: () => ({ setCastSpell: noop, reset: noop, isAnimationStalled: () => false }),
     getSkillManager: () => ({ stopSkillable: noop }),
     setFollowing: noop, setCombatFollowing: noop, setPositionToFace: (location) => faces.push(location),
+    forcePositionToFace: (location) => faces.push(location),
     setDirection: noop, setWalkingDirection: noop, setRunningDirection: noop,
     isRunningReturn: () => false, sendMessage: (message) => messages.push(message),
     performAnimation: (animation) => events.push(['anim', animation.getId()]),
@@ -659,7 +660,9 @@ test('a frozen player climbs a ladder in reach, and gets "I can\'t reach that!" 
   assert.deepEqual(messages, ["I can't reach that!"]);
   assert.deepEqual(events, []);
   assert.equal(location.y, 96);
-  assert.deepEqual(faces, [], 'an unreachable frozen object click does not rotate the player');
+  // rsprox 2238: each of those clicks still sends a FaceAngle towards the loc (issue #1944).
+  const face = faces.at(-1);
+  assert.deepEqual(face && [face.x, face.y, face.z], [100, 100, 0], 'an unreachable frozen object click turns the player to the loc');
   assert.equal(queue.points.length, 0, 'nothing is queued to walk once the freeze ends');
 
   // A stun on top of the freeze still stops the climb, even in reach.

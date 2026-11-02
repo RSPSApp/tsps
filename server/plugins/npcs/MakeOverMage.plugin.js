@@ -26,6 +26,10 @@ const DESIGN_COLOUR_ARROWS = [[46, 47], [50, 51], [54, 55], [58, 59], [62, 63]];
 const DESIGN_BODY_TYPE_A = 68;
 const DESIGN_BODY_TYPE_B = 69;
 const DESIGN_CONFIRM = 74;
+const PRONOUN_DROPDOWN_UID = (MAKEOVER_INTERFACE_ID << 16) | 78;
+const PRONOUN_SETTING_ID = 387;
+const PRONOUN_VARBIT = 10988; // settings_transmit_pronouns, varp 2855 bits 24..25
+const PRONOUN_TRANSMIT_VARP = 2855;
 
 let core;
 const MAIN_MODAL_TARGET_UID = (161 << 16) | 16;
@@ -47,7 +51,12 @@ function openMakeoverInterface(player) {
   player.getPacketSender().sendInterfaceRemoval();
   player.setInterfaceId?.(MAKEOVER_INTERFACE_ID);
   player.getAppearance?.().setCanChangeAppearance?.(true);
+  // Freeze a legacy body-derived default before either client starts editing the body.
+  const appearance = player.getAppearance();
+  appearance.setPronouns(appearance.getPronouns());
+  syncPronouns({ player });
   player.getPacketSender().sendSubInterface(MAIN_MODAL_TARGET_UID, MAKEOVER_INTERFACE_ID, 0);
+  player.getPacketSender().sendInterfaceFlagsRange(PRONOUN_DROPDOWN_UID, 1, 3, OP1);
   for (const component of MAKEOVER_BUTTONS) {
     player.getPacketSender().sendInterfaceFlagsRange((MAKEOVER_INTERFACE_ID << 16) | component, NO_SLOT, NO_SLOT, OP1);
   }
@@ -126,6 +135,32 @@ function clickDesign({ player, buttonId }) {
   return true;
 }
 
+function syncPronouns({ player }) {
+  player.getPacketSender().sendVarbit(PRONOUN_VARBIT, player.getAppearance().getPronouns());
+}
+
+function choosePronouns(player, value) {
+  if (!Number.isInteger(value) || value < 0 || value > 2) return false;
+  player.getAppearance().setPronouns(value);
+  syncPronouns({ player });
+  return true;
+}
+
+function chooseDesignerPronouns({ player, slot }) {
+  if (player.getInterfaceId() !== MAKEOVER_INTERFACE_ID || !player.getAppearance().getCanChangeAppearance()) return false;
+  return choosePronouns(player, slot - 1);
+}
+
+function chooseSettingPronouns(request) {
+  if (request.settingId === PRONOUN_SETTING_ID) request.handled = choosePronouns(request.player, request.option);
+}
+
+/** The browser runs settings_pronouns locally and transmits this varp. */
+function transmitPronouns(request) {
+  if (request.varpId !== PRONOUN_TRANSMIT_VARP) return;
+  request.handled = choosePronouns(request.player, (request.value >>> 24) & 3);
+}
+
 function canOpenMakeover(player, combatFactory) {
   return !player.busy?.() &&
     !combatFactory.inCombat(player) &&
@@ -152,6 +187,11 @@ module.exports = {
   register(api) {
     core = api.core;
     api.onInterfaceActionButton(MAKEOVER_BUTTON_UIDS, clickDesign);
+    api.persistAttribute(core.Appearance.PRONOUNS_ATTRIBUTE, -1);
+    api.onPlayerLogin(syncPronouns);
+    api.onInterfaceActionButton(PRONOUN_DROPDOWN_UID, chooseDesignerPronouns);
+    api.onCustomEvent("settings:option-chosen", chooseSettingPronouns);
+    api.onCustomEvent("player:varp-transmit", transmitPronouns);
     const CombatFactory = api.getCombatFactory();
     // A new account designs its character first, as in OSRS (there is no welcome screen for it).
     // The login hook runs just before the gameframe is sent: mount the modal after it.

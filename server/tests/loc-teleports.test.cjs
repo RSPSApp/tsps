@@ -16,12 +16,16 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const { RsmodRouteFinding } = require("../dist/game/model/movement/path/RsmodRouteFinding");
 const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
+const { PlayerSession } = require("../dist/net/PlayerSession");
 const npcSpawns = require("../data/definitions/npc-spawns.json");
 
 const { choose, isNetwork, refusals, toEntry, requirementFor } = require("../scripts/loc-teleport-matching.cjs");
 const LocTeleports = require("../plugins/world/LocTeleports.plugin");
 const data = require("../plugins/world/data/loc-teleports.json");
 const decisions = require("../plugins/world/data/loc-teleport-sync.json");
+const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
+const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
+const DiaryProgress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
 
 let core;
 const hooks = {};
@@ -32,15 +36,17 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   core = PluginManager.getCoreApi();
   core.RegionManager.init();
+  Diaries.register(PluginManager.createApi("LocArrivalDiaries"));
+  const native = PluginManager.createApi("LocArrivalTeleports");
   LocTeleports.register({
     core,
     persistAttribute() {},
-    onObjectInteraction: (handler) => (hooks.object = handler),
+    onObjectInteraction: (handler) => { hooks.object = handler; native.onObjectInteraction(handler); },
     onObjectRoute: (handler) => (hooks.route = handler),
     onItemOnObject: (handler) => (hooks.itemOnObject = handler),
     onCustomEvent: (name, handler) => (hooks[name] = handler),
     sendMultiChatboxPrompt: (player, title, ...pairs) => prompts.push({ title, options: pairs.filter((_, i) => i % 2 === 0), pick: (text) => pairs[pairs.indexOf(text) + 1]() }),
-    emitCustomEvent: (name, payload) => emitted.push([name, payload]),
+    emitCustomEvent: (name, payload) => { emitted.push([name, payload]); PluginManager.emitCustomEvent(name, payload); },
   });
 });
 
@@ -526,6 +532,105 @@ function locAt(id, x, y, z) {
   assert.ok(object, `loc ${id} at ${x},${y},${z}`);
   return object;
 }
+
+test("entering the H.A.M. hideout through the native object route credits the diary once, on arrival", () => {
+  const diary = DiaryData.BY_KEY.get("lumbridge");
+  const task = "enter-the-h-a-m-hideout";
+  const player = new Player(new PlayerSession({
+    kind: "test", isOpen: () => true, send: () => true,
+    close() {}, onData() {}, onError() {}, onClose() {},
+  }));
+  player.setUsername("ham-arrival").setIndex(1500);
+  player.setRegistered(true);
+  player.setLocation(new core.Location(3163, 3252, 0));
+  const messages = [];
+  player.sendMessage = (text) => messages.push(text);
+  locAt(5492, 3166, 3252, 0);
+  const closed = core.ObjectDefinition.forPlayer(5492, player);
+  assert.equal(closed.id, 5490);
+  assert.equal(closed.getInteractions()[0], "Open");
+  assert.equal(closed.getInteractions()[4], "Pick-Lock");
+  const start = player.getLocation().clone();
+  new ObjectActionPacketListener().executeAction(player, 5492, 3166, 3252, 1);
+  let walked = false;
+  let landed = false;
+  for (let tick = 0; tick < 15; tick++) {
+    assert.equal(DiaryProgress.doneTasks(player, diary).has(task), landed, "credit follows the actual move");
+    core.World.processCycle++;
+    player.getMovementQueue().process();
+    if (player.getLocation().getY() < 9000 && !player.getLocation().equals(start)) walked = true;
+    core.TaskManager.processRemainingWalkTo();
+    core.TaskManager.process();
+    const at = player.getLocation();
+    landed = at.getX() === 3149 && at.getY() === 9652 && at.getZ() === 0;
+  }
+  assert.equal(walked, true, "walks through the real cache collision before operating the trapdoor");
+  assert.equal(landed, true);
+  assert.equal(DiaryProgress.doneTasks(player, diary).has(task), true);
+  assert.equal(player.getPacketSender().getVarbit(6311), 1, "the native diary tab count updates");
+  assert.equal(messages.filter((line) => line.includes("Achievement Diary")).length, 1);
+
+  player.moveTo(start);
+  new ObjectActionPacketListener().executeAction(player, 5492, 3166, 3252, 1);
+  for (let tick = 0; tick < 15; tick++) {
+    core.World.processCycle++;
+    player.getMovementQueue().process();
+    core.TaskManager.processRemainingWalkTo();
+    core.TaskManager.process();
+  }
+  assert.equal(player.getPacketSender().getVarbit(6311), 1);
+  assert.equal(messages.filter((line) => line.includes("Achievement Diary")).length, 1, "re-entry does not duplicate credit");
+});
+
+test("H.A.M. diary credit requires the exact entrance and landing, and a completed move", () => {
+  const diary = DiaryData.BY_KEY.get("lumbridge");
+  const entrance = locAt(5492, 3166, 3252, 0);
+  const done = (visit) => DiaryProgress.doneTasks(visit.player, diary).size;
+  for (const { before, after } of [
+    { before: (visit) => visit.player.getMovementQueue().setBlockMovement(true) },
+    { after: (visit) => { visit.player.isRegistered = () => false; } },
+    { after: (visit) => visit.player.setLocation(new core.Location(3163, 3252, 0)) },
+  ]) {
+    const visit = explorer([3166, 3251, 0]);
+    before?.(visit);
+    hooks.object({ player: visit.player, object: entrance, clickType: 1, handled: false });
+    after?.(visit);
+    runTicks(visit, 3);
+    assert.equal(done(visit), 0, "blocked, logged-out or interrupted travel gives no diary credit");
+  }
+  const other = explorer([3077, 3492, 0]);
+  hooks.object({ player: other.player, object: locAt(12266, 3077, 3493, 0), clickType: 1, handled: false });
+  runTicks(other, 6);
+  assert.equal(other.player.getLocation().getY(), 9893, "another real trapdoor route still works");
+  assert.equal(done(other), 0, "entering another trapdoor does not count");
+
+  const failedMove = explorer([3166, 3251, 0]);
+  failedMove.player.moveTo = () => {};
+  hooks.object({ player: failedMove.player, object: entrance, clickType: 1, handled: false });
+  runTicks(failedMove, 3);
+  assert.equal(done(failedMove), 0, "an unsuccessful move does not emit an arrival");
+
+  const lock = explorer([3166, 3251, 0]);
+  hooks.object({ player: lock.player, object: entrance, clickType: 5, handled: false });
+  runTicks(lock, 3);
+  assert.equal(done(lock), 0, "a lock-picking click without entry is not the diary task");
+
+  for (const change of [
+    { objectId: 6434 },
+    { location: { x: 3165, y: 3252, z: 0 } },
+    { at: [3149, 9652, 1] },
+    { at: [3166, 3251, 0] },
+    { privateArea: {} },
+  ]) {
+    const visit = explorer(change.at ?? [3149, 9652, 0]);
+    if (change.privateArea) visit.player.getPrivateArea = () => change.privateArea;
+    PluginManager.emitCustomEvent("loc-teleports:arrived", {
+      player: visit.player, objectId: change.objectId ?? 5492,
+      location: change.location ?? { x: 3166, y: 3252, z: 0 },
+    });
+    assert.equal(done(visit), 0, "other objects, placements, planes, destinations and private copies do not count");
+  }
+});
 
 test("the Tlati dragon nest cave plays as captured: crawl, sound and fade, then in on tick 4", () => {
   // Captured: crawl animation and sound 2454 two ticks after arriving, the fade out with them,

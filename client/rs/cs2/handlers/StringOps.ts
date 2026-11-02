@@ -158,7 +158,8 @@ export function registerStringOps(handlers: HandlerMap): void {
     // === Text formatting ===
     handlers.set(Opcodes.ESCAPE, (ctx) => {
         const str = ctx.stringStack[--ctx.stringStackSize] ?? "";
-        ctx.pushString(str.replace(/</g, "&lt;").replace(/>/g, "&gt;"));
+        // The client's escapeBrackets: <lt> and <gt>, which the fonts draw as < and >.
+        ctx.pushString(str.replace(/[<>]/g, (c: string) => (c === "<" ? "<lt>" : "<gt>")));
     });
 
     handlers.set(Opcodes.REMOVETAGS, (ctx) => {

@@ -3,6 +3,7 @@ import { BugReportPlugin } from "../../../game/plugins/bugreport/BugReportPlugin
 import { VoiceChatPlugin } from "../../../game/plugins/voice/VoiceChatPlugin";
 import { AnimationSmoothingPlugin } from "../../../game/plugins/animationsmoothing/AnimationSmoothingPlugin";
 import { AttackTimerPlugin } from "../../../game/plugins/attacktimer/AttackTimerPlugin";
+import { BankPlugin } from "../../../game/plugins/bank/BankPlugin";
 import { BankTagsPlugin } from "../../../game/plugins/banktags/BankTagsPlugin";
 import { CameraPlugin } from "../../../game/plugins/camera/CameraPlugin";
 import { QuestHelperPlugin } from "../../../game/plugins/questhelper/QuestHelperPlugin";
@@ -69,6 +70,8 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     ItemStatsPlugin,
     ItemRarityPlugin,
     BankTagsPlugin,
+    // After Bank Tags: its tag tab title is set before the value joins it.
+    BankPlugin,
     NotesPlugin,
     NpcIndicatorsPlugin,
     ObjectIndicatorsPlugin,

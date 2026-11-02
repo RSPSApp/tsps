@@ -77,4 +77,8 @@ The 20 ticks aren't documented anywhere: they're an estimate, kept in the data f
 
 **Exceptions.** Monsters whose definition doesn't build tolerance stay aggressive, as before.
 
+**`::aggro`** (`plugins/npcs/AggressionToggle.plugin.js`) is a cheat with no live equivalent: it toggles the saved attribute `npc-aggression:ignore-tolerance`, and while it's on, monsters stay aggressive after the ten minutes, crabs included (they ask the same `onNpcAggressionTolerance` hook). Administrators can run it; a world opens it to everyone with `"commands:permissions": { "aggro": "NONE" }`.
+
+**Wake range.** The Wiki only says crabs "attack when walked by", which is what stepping next to one does; the range stays at one tile.
+
 Before this, the timer started at login and never reset, so ten minutes after logging in every tolerance-building monster everywhere stopped being aggressive. The old rock crab plugin worked around that by keeping rock crabs aggressive forever. Crabs now follow tolerance like everything else, and walking well away and back resets it.

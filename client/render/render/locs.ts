@@ -170,7 +170,7 @@ import { buildGroundItemGeometry } from "../ground/GroundItemMeshBuilder";
 import { type MinimapIcon, SdMapData } from "../loader/SdMapData";
 import { SdMapDataLoader } from "../loader/SdMapDataLoader";
 import { SdMapLoaderInput } from "../loader/SdMapLoaderInput";
-import { isDoorLocType } from "../loc/SceneLocs";
+import { isDoorLoc } from "../loc/SceneLocs";
 import {
     DynamicNpcAnimLoader,
     DynamicNpcFrameGeometry,
@@ -219,8 +219,8 @@ export function onLocChange(host: WebGLOsrsRendererHost,
             const hasUnknownLocType =
                 ((oldId | 0) > 0 && oldLocType === undefined) ||
                 ((newId | 0) > 0 && newLocType === undefined);
-            const oldIsDoor = oldLocType !== undefined && isDoorLocType(oldLocType);
-            const newIsDoor = newLocType !== undefined && isDoorLocType(newLocType);
+            const oldIsDoor = oldLocType !== undefined && isDoorLoc(oldLocType, host.osrsClient.varManager, host.osrsClient.locTypeLoader);
+            const newIsDoor = newLocType !== undefined && isDoorLoc(newLocType, host.osrsClient.varManager, host.osrsClient.locTypeLoader);
             // Keeping doors and ordinary locs in separate GPU groups lets us
             // match the game's partial loc-update behaviour. A change that
             // crosses those groups retains the conservative full rebuild.
@@ -544,7 +544,7 @@ export function onLocAddChange(host: WebGLOsrsRendererHost,
                     host.scheduleWorldEntityLocRebuild(deckView.id);
                 } else {
                     const locType = host.osrsClient.locTypeLoader.load(locId | 0);
-                    const group = locType && isDoorLocType(locType) ? "door" : "loc";
+                    const group = locType && isDoorLoc(locType, host.osrsClient.varManager, host.osrsClient.locTypeLoader) ? "door" : "loc";
                     // An instance builds the new loc from extraLocs.
                     if (host.instanceActive) host.scheduleInstanceLocUpdate(group);
                     else host.scheduleLocGeometryUpdate(mapX, mapY, group);

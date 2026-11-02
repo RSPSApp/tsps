@@ -1624,8 +1624,12 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
 
   function camera(player, move, look, rates = { rate: 232, rate2: 100 }) {
     const area = currentSceneArea(player);
+    // Camera points are always source-map tiles. Translate them against the scene origin
+    // even when a look target sits just outside the copied square (the arrival camera
+    // looks at y=5626, six tiles south of the temple's y=5632 origin); the client still
+    // needs an instance coordinate or it waits for unavailable terrain.
     const at = (point) => {
-      if (!area || !area.coversSource({ x: point[0], y: point[1] })) return point;
+      if (!area) return point;
       const tile = area.sourceTile(point[0], point[1], 0);
       return [tile.getX(), tile.getY(), point[2]];
     };

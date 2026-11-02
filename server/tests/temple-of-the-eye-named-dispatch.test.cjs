@@ -442,6 +442,19 @@ async function nativeIncantation(t, burst = false, interrupt = null, startStage 
   t.after(() => PluginManager.removeNpc(sedridor));
   const manager = player.getDialogueManager(), lines = [], chants = [], portals = [];
   let heldContinues = 0;
+  // Capture the arrival camera: its look target is just south of the temple's copied square.
+  const cameraMoves = [], cameraLooks = [];
+  const packetSender = player.getPacketSender();
+  const sendCameraMoveTo = packetSender.sendCameraMoveTo;
+  const sendCameraLookAt = packetSender.sendCameraLookAt;
+  packetSender.sendCameraMoveTo = (x, y, height, rates) => {
+    cameraMoves.push([x, y, height]);
+    return sendCameraMoveTo.call(packetSender, x, y, height, rates);
+  };
+  packetSender.sendCameraLookAt = (x, y, height, rates) => {
+    cameraLooks.push([x, y, height]);
+    return sendCameraLookAt.call(packetSender, x, y, height, rates);
+  };
   const registerObject = core.ObjectManager.register;
   t.mock.method(core.ObjectManager, 'register', function(object, ...args) {
     const result = registerObject.call(this, object, ...args);
@@ -532,6 +545,17 @@ async function nativeIncantation(t, burst = false, interrupt = null, startStage 
   assert.equal(core.World.getObjects().includes(portals[0]), false, 'entering the temple removed the cutscene portal');
   assert.ok(packets.length > 0, 'actual native NPC/player sync and UI packets were encoded');
   assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+
+  // The arrival move and look both belong to the instance. The look target (y=5626) is
+  // six tiles outside the copied y=5632 square; it must still be translated.
+  const temple = player.getPrivateArea();
+  assert.ok(temple, 'the temple instance is still active at the arrival checkpoint');
+  const arrivalIndex = cameraMoves.findIndex(([x, y, height]) =>
+    x === temple.getBaseX() + 31 && y === temple.getBaseY() + 4 && height === 550);
+  assert.ok(arrivalIndex >= 0, 'arrival camera move is translated into the instance');
+  assert.deepEqual(cameraLooks[arrivalIndex], [temple.getBaseX() + 31, temple.getBaseY() - 6, 300],
+    'arrival camera look is translated even though it is outside the copied square');
+
   if (holdSpace) assert.ok(heldContinues > 0, 'Continues reached the waiting chant');
 }
 

@@ -245,7 +245,7 @@ module.exports = function registerPiratesTreasureQuest(api) {
       if (stepId === "GGmLiT" || value.includes("has 30 coins")) {
         return !wearsKaramjaGloves(player) && coins >= FARE;
       }
-      if (value.includes("ring of charos")) return false;
+      if (value.includes("ring of charos")) return wearsRingOfCharos(player);
     }
 
     if (SAIL_FARE_CONDITION_IDS.has(stepId)) {
@@ -509,6 +509,12 @@ module.exports = function registerPiratesTreasureQuest(api) {
   function wearsKaramjaGloves(player) {
     const gloves = player.getEquipment?.()?.getItems?.()?.[Equipment.HANDS_SLOT];
     return /^Karamja gloves/.test(gloves?.getDefinition?.()?.getName?.() ?? "");
+  }
+
+  /** The customs officer's free-passage option needs the Ring of Charos(a) worn. */
+  function wearsRingOfCharos(player) {
+    const ring = player.getEquipment?.()?.get?.(Equipment.RING_SLOT);
+    return [ItemIdentifiers.RING_OF_CHAROS, ItemIdentifiers.RING_OF_CHAROS_A_].includes(ring?.getId?.());
   }
 
   /** The Pay-fare transcript: worn Karamja gloves halve the 30-coin fare. */

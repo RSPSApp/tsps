@@ -421,6 +421,24 @@ test('the customs officer lets worn Karamja gloves pass for half the fare, as th
   q.tick(9);
 });
 
+test("the customs officer's Charm free passage needs the Ring of Charos(a) worn", () => {
+  const q = register('PiratesTreasure', 'pirates_treasure'), p = player();
+  const answer = (text) => q.hooks.get('onNpcDialogueCondition')[0]({
+    player: p, npcId: core.NpcIdentifiers.CUSTOMS_OFFICER, text,
+  });
+  assert.equal(answer('If the player has the Ring of Charos(a) equipped:'), false);
+  p.getEquipment = () => ({
+    get: () => ({ getId: () => core.ItemIdentifiers.RING_OF_CHAROS_A_ }),
+    getItems: () => [], refreshItems() {},
+  });
+  assert.equal(answer('If the player has the Ring of Charos(a) equipped:'), true);
+  p.items.set(995, 0);
+  const charm = { player: p, npcId: core.NpcIdentifiers.CUSTOMS_OFFICER, stepId: 'upG45P' };
+  q.emit('npc-dialogue:action', charm);
+  assert.equal(charm.handled, true);
+  assert.equal(p.items.get(995), 0, 'the Charm route is free');
+});
+
 test('Corsair vine ladder preserves the side used on its one-tick climb', () => {
   const q = register('CorsairCurse', 'the_corsair_curse'), p = player();
   for (const [outside, inside] of [[2862, 9006], [2860, 9004]]) {

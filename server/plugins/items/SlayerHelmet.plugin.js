@@ -11,6 +11,8 @@
  * turns it back into its parts. A scroll of imbuing on a black mask or helmet
  * makes its (i) form instead; a charged mask keeps its charges.
  *
+ * Content may give a player the (i) or plain helmet's effects without one ("slayer:helmet").
+ *
  * Assembling needs the Malevolent masquerade unlock (varbit slayer_helm_unlocked, bought
  * in the Slayer Rewards interface). Reinforced goggles are not required.
  */
@@ -41,10 +43,18 @@ function itemName(itemId) {
   return String(pluginApi.core.ItemDefinition.forId(itemId)?.getName?.() ?? "").toLowerCase();
 }
 
-/** "melee" for a mask/helmet, "all" for an imbued one, null otherwise. */
+/**
+ * "melee" for a mask/helmet, "all" for an imbued one, null otherwise. Without one, content may
+ * give its effects ("slayer:helmet" { player, worn }: set `worn` to "imbued" or "plain", a league
+ * relic's).
+ */
 function slayerHeadwear(player) {
   const name = headName(player);
-  if (!name.includes("slayer helmet") && !name.includes("black mask")) return null;
+  if (!name.includes("slayer helmet") && !name.includes("black mask")) {
+    const request = { player, worn: null };
+    pluginApi.emitCustomEvent("slayer:helmet", request);
+    return request.worn === "imbued" ? "all" : request.worn === "plain" ? "melee" : null;
+  }
   return name.includes("(i)") ? "all" : "melee";
 }
 

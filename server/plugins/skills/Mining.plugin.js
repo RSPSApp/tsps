@@ -9,7 +9,7 @@ const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemI
 const InfernalPickaxe = require("./mining/InfernalPickaxe.Mining");
 const CrystalPickaxe = require("./mining/CrystalPickaxe.Mining");
 const ClueGeodes = require("./mining/ClueGeodes.Mining");
-const { pauseForLevelUp } = require("./SkillActions");
+const { pauseForLevelUp, actionInterval } = require("./SkillActions");
 
 // rsprox recordings: a mined-out rock becomes "rocks1"/"rocks2" (the digit of the rock's own gameval,
 // copperrock2 -> rocks2) and the miner is sent a respawn timer by the cache's add_overlaytimer_loc.
@@ -381,7 +381,10 @@ function findBestPickaxe(player) {
       return pickaxe;
     }
   }
-  return null;
+  // Content may stand in for the pickaxe ("mining:tool", a league relic's bare hands).
+  const request = { player, pickaxes: PICKAXES_DESC, pickaxe: null };
+  pluginApi?.emitCustomEvent("mining:tool", request);
+  return request.pickaxe;
 }
 
 function stopMining(activeSessions, player, resetAnim = true) {
@@ -659,7 +662,8 @@ class MiningTask extends Task {
       if (this.cycle < state.nextRollTick) {
         continue;
       }
-      state.nextRollTick = this.cycle + rollInterval(pickaxe);
+      // Content may mine faster ("skills:action-interval", a league relic's 2-tick pace).
+      state.nextRollTick = this.cycle + actionInterval(pluginApi, player, Skill.MINING, "mine", rollInterval(pickaxe));
       ROLL_READY_TICKS.set(player, state.nextRollTick);
       player.performAnimation(swingAnimation(state.pickaxe, state.rock));
 
@@ -707,7 +711,7 @@ class MiningTask extends Task {
       pluginApi.emitCustomEvent("pets:skilling-roll", petRoll);
       deliverOre(player, pendingOre);
       if (kept && !state.rock.outcomes) mineExtraOre(player, state.rock, outcome);
-      pluginApi.emitCustomEvent("mining:success", { player, skill: Skill.MINING, petBase: state.rock.petBase, itemId: oreId, petRolled: petRoll.handled });
+      pluginApi.emitCustomEvent("mining:success", { player, skill: Skill.MINING, petBase: state.rock.petBase, itemId: oreId, petRolled: petRoll.handled, pickaxeId: state.pickaxe?.id ?? null });
       if (state.rock.infinite || state.rock.depletionTicks) {
         if (inventoryBlocks(player, state.rock.oreId)) {
           inventoryFull(player, state.rock.oreId);

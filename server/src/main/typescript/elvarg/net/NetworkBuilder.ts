@@ -875,6 +875,8 @@ export class ClientConnection {
             } else if (packet.varpId === 173) {
               this.player.setRunning(packet.value !== 0 && this.player.getRunEnergy() > 0);
               this.player.getPacketSender().sendRunStatus();
+              // "player:run-toggled" { player, running }: the run mode the player switched to.
+              PluginManager.emitCustomEvent("player:run-toggled", { player: this.player, running: this.player.isRunningReturn() });
             } else if (packet.varpId === 301 && (packet.value !== 0) !== this.player.isSpecialActivated()) {
               CombatSpecial.activate(this.player);
             }

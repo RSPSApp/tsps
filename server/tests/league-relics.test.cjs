@@ -155,15 +155,16 @@ test("View Relics opens the interface with its click events; a slot click record
   const league = character("viewer");
   assert.equal(hooks[`button:${uid(SIDE_PANEL, 44)}`]({ player: league }), true);
   assert.deepEqual(league.sent.subs.at(-1)[1], RELICS, "opened as the main modal");
-  assert.deepEqual(league.sent.flags.slice(-2), [[uid(RELICS, 22), 0, 23, 2], [uid(RELICS, 6), 10, 20, 2]], "if_setevents as captured");
+  assert.deepEqual(league.sent.flags.slice(-3), [[uid(RELICS, 22), 0, 23, 2], [uid(RELICS, 6), 10, 20, 2], [uid(RELICS, 38), -1, -1, 1 << 23]], "if_setevents as captured (rev 237: the toggles take IF_SCRIPT_TRIGGER)");
   assert.equal(hooks[`button:${uid(RELICS, 22)}`]({ player: league, slot: 9 }), true);
   assert.equal(league.sent.varbits.get(10048), 9, "tier 4, slot 1");
   const [script, args] = league.sent.scripts.at(-2);
   assert.equal(script, 3193);
-  assert.equal(args.length, 21);
-  assert.deepEqual(args.slice(0, 3), [uid(RELICS, 14), uid(RELICS, 23), uid(RELICS, 27)]);
-  assert.deepEqual(args.slice(18), [2, 204000 + 100 + 9, 204000 + 20 + 3], "state, the relic's struct, the tier's passive struct");
-  assert.deepEqual(league.sent.scripts.at(-1), [3181, [uid(RELICS, 7), uid(RELICS, 52), 0, 1]]);
+  assert.equal(args.length, 23, "rev 237's signature: 18 components, the state, two structs, two texts");
+  assert.deepEqual(args.slice(0, 3), [uid(RELICS, 14), uid(RELICS, 23), uid(RELICS, 26)]);
+  assert.deepEqual(args.slice(18, 21), [0, 204000 + 100 + 9, 204000 + 20 + 3], "state (0: the points don't reach the tier), the relic's struct, the tier's passive struct");
+  assert.ok(typeof args[21] === "string" && args[21].length > 0 && typeof args[22] === "string", "the relic's description and the tier's passive text");
+  assert.deepEqual(league.sent.scripts.at(-1), [3181, [uid(RELICS, 7), uid(RELICS, 53), 0, 1]], "the tooltip is 655:53 in this cache");
   assert.equal(hooks[`button:${uid(RELICS, 22)}`]({ player: league, slot: 24 }), false, "no such slot");
 
   const main = character("mainview", "main");
@@ -173,18 +174,33 @@ test("View Relics opens the interface with its click events; a slot click record
   const forger = character("forger");
   givePoints(forger, 500);
   assert.equal(hooks[`button:${uid(RELICS, 22)}`]({ player: forger, slot: 0 }), false, "a slot click without View Relics is ignored");
-  assert.equal(hooks[`button:${uid(RELICS, 50)}`]({ player: forger }), false, "so is a confirm");
+  assert.equal(hooks[`button:${uid(RELICS, 51)}`]({ player: forger }), false, "so is a confirm");
   assert.equal(forger.getAttribute("league:relics"), undefined);
   hooks[`button:${uid(SIDE_PANEL, 44)}`]({ player: forger });
-  assert.equal(hooks[`button:${uid(RELICS, 50)}`]({ player: forger }), true);
+  assert.equal(hooks[`button:${uid(RELICS, 51)}`]({ player: forger }), true);
   assert.equal(forger.sent.messages.at(-1), "Select a relic to unlock first.", "confirm with nothing viewed");
   assert.equal(forger.getAttribute("league:relics"), undefined);
+});
+
+test("the relic view's state: 1 for the character's own relic (its toggles unlocked), 4 for another of a chosen tier, 2 to choose, 0 out of reach", () => {
+  const league = character("states");
+  givePoints(league, 500);
+  league.setAttribute("league:relics", { 0: 2 });
+  hooks[`button:${uid(SIDE_PANEL, 44)}`]({ player: league });
+  const state = (slot) => {
+    hooks[`button:${uid(RELICS, 22)}`]({ player: league, slot });
+    return league.sent.scripts.filter(([script]) => script === 3193).at(-1)[1][18];
+  };
+  assert.equal(state(1), 1, "tier 1 slot 2: the character's own (live: 1, 237/01104)");
+  assert.equal(state(0), 4, "another relic of that tier");
+  assert.equal(state(3), 2, "tier 2, affordable and open");
+  assert.equal(state(21), 0, "tier 8, out of reach");
 });
 
 test("a pick needs the tier's points, an empty tier and (for an item) a bank; then it is permanent", () => {
   const league = character("picker");
   const view = (slot) => hooks[`button:${uid(RELICS, 22)}`]({ player: league, slot });
-  const confirm = () => hooks[`button:${uid(RELICS, 50)}`]({ player: league });
+  const confirm = () => hooks[`button:${uid(RELICS, 51)}`]({ player: league });
   hooks[`button:${uid(SIDE_PANEL, 44)}`]({ player: league });
 
   view(11); // tier 4, slot 3: Superior Sorcerer

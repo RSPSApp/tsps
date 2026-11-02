@@ -124,7 +124,9 @@ function character(name, profile, picks = {}, leagueType = 4) {
   player.setRegistered(true);
   player.setNeedsPlacement(false); // in the world, as after the login's first tick
   player.interfaces = [];
-  const sender = new Proxy({}, { get: (_, key) => (key === "sendInterface" ? (id) => { player.interfaces.push(id); return sender; } : () => sender) });
+  const sender = new Proxy({}, { get: (_, key) => (key === "sendInterface" ? (id) => { player.interfaces.push(id); return sender; }
+    // A typed line (the farming spam) joins the game messages in the order it was sent.
+    : key === "sendTypedMessage" ? (_type, text) => { player.messages.push(text); return sender; } : () => sender) });
   player.getPacketSender = () => sender;
   player.getSession = () => ({ sendClientPacket: () => true });
   player.messages = [];
@@ -413,14 +415,18 @@ function farmer(player, patch, state = null) {
   return farm.patches[Data.patchKey(patch)];
 }
 
+/** Plants and lets the seed take root: three farming ticks after the dibbing, as captured. */
 function plant(player, patch, seedId) {
   player.getInventory().add(new Item(seedId, 1), false);
   farming.onItemOnObject({ player, object: { getId: () => patch.id }, location: { x: patch.x, y: patch.y, z: patch.z },
     itemId: seedId, itemSlot: player.getInventory().getSlotForItemId(seedId) });
+  for (let i = 0; i < 3; i++) Patches.tick();
 }
 
+/** One pick: the herb patch's swing on the click, its harvest the next farming tick, as captured. */
 function pick(player, patch) {
   farming.onObjectInteraction({ player, object: { getId: () => patch.id }, location: { x: patch.x, y: patch.y, z: patch.z }, clickType: 1 });
+  Patches.tick();
 }
 
 function mockScenery(t) {
@@ -482,7 +488,7 @@ test("Overgrown: 75% to keep the seed, crops never die; the vault opens the seed
   Math.random = () => 0.5;
   plant(who.relic, patch, guam);
   assert.equal(amount(who.relic, guam), 1, "a 50 keeps the seed (75%)");
-  assert.deepEqual(who.relic.messages.slice(-2), ["You plant the guam.", "Botanical allows you to keep your guam seed."], "after the planting's own line");
+  assert.deepEqual(who.relic.messages.slice(-2), ["You plant a guam seed in the herb patch.", "Botanical allows you to keep your guam seed."], "after the planting's own line");
   assert.equal(state.status, "growing", "no instant growth");
   assert.equal(state.undying, true);
 

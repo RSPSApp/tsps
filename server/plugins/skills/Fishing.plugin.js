@@ -552,7 +552,8 @@ function hasToolRequirements(player, tool) {
     return null;
   }
 
-  if ((tool.bait.length > 0 && findBait(player, tool) === undefined) || (tool.vessel && !tool.vessel.ready(player))) {
+  // A stand-in tool may fish without bait (`baitless`, a league relic's bare hands).
+  if ((tool.bait.length > 0 && !variant.baitless && findBait(player, tool) === undefined) || (tool.vessel && !tool.vessel.ready(player))) {
     if (tool.noBaitStatement) statement(player, tool.noBaitStatement);
     else player.sendMessage("You do not have the required bait.");
     return null;
@@ -668,7 +669,7 @@ function landCatch(player, tool, variant, caught) {
   }
 
   // Bait and feathers are only used up by a catch, one per cast.
-  const bait = findBait(player, tool);
+  const bait = variant.baitless ? undefined : findBait(player, tool);
   if (bait !== undefined) {
     useBait(player, bait);
   }

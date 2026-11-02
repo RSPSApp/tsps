@@ -29,6 +29,7 @@ before(async () => {
       invigorate = actions.Invigorate;
     },
     onPlayerDeath: (handler) => { resetOnDeath = handler; },
+    emitCustomEvent() {},
   });
 });
 

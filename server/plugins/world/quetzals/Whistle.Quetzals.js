@@ -149,7 +149,10 @@ function fly(player, whistle, site) {
     },
     [LAND_TICKS]: () => {
       Common.minimap(player, false);
-      setCharges(player, whistle, chargesOf(player, whistle) - 1);
+      // Content may keep the charge ("quetzals:whistle-charge" { player, itemId, kept }, a league relic).
+      const charge = { player, itemId: whistle.id, kept: false };
+      Common.api?.emitCustomEvent("quetzals:whistle-charge", charge);
+      if (!charge.kept) setCharges(player, whistle, chargesOf(player, whistle) - 1);
       player.moveTo(new core.Location(site.x, site.y, site.z));
     },
     [ARRIVE_TICKS]: () => {

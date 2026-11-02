@@ -266,6 +266,10 @@ export class MagicOnItemPacketListener {
       // Content may lower the level, waive the runes, keep the item or cast again on what is left (a league relic).
       requiredLevel, freeRunes: false, keepItem: false, recast: false };
     PluginManager.emitCustomEvent("magic:alchemy-policy", policy);
+    // Content may cast faster ("skills:action-interval", a league relic's 2-tick pace), from the pace the policy settled on.
+    const pace = { player, skill: Skill.MAGIC, kind: "alchemy", ticks: policy.castTicks };
+    PluginManager.emitCustomEvent("skills:action-interval", pace);
+    policy.castTicks = Math.max(1, pace.ticks | 0);
     if (player.getSkillManager().getCurrentLevel(Skill.MAGIC) < policy.requiredLevel) {
       player.sendMessage(`You need a Magic level of ${policy.requiredLevel} to cast this spell.`);
       return;
@@ -327,6 +331,9 @@ export class MagicOnItemPacketListener {
     if (policy.keepItem !== true) inventory.deleteAtSlot(slot, 1);
     if (!payment.free) this.consumeRunes(player, runes);
     player.setAttribute(MagicOnItemPacketListener.ALCH_NEXT_CAST_ATTRIBUTE, now + policy.castTicks);
+    // "magic:item-spell-cast" { player, spell }: an alchemy cast on an item (a league's "Cast Low
+    // Level Alchemy"); combat casts report "magic:cast-committed" instead.
+    PluginManager.emitCustomEvent("magic:item-spell-cast", { player, spell });
 
     player.performAnimation(new Animation(isHighAlch
       ? MagicOnItemPacketListener.HIGH_ALCH_ANIMATION
@@ -334,7 +341,8 @@ export class MagicOnItemPacketListener {
     Sounds.sendSound(player, isHighAlch ? Sound.HIGH_ALCHEMY : Sound.LOW_ALCHEMY);
     if (policy.coins > 0) inventory.adds(ItemIdentifiers.COINS, policy.coins);
     payment.commit?.();
-    PluginManager.emitCustomEvent("magic:alchemy-completed", { player, itemId, spellId });
+    // `coins`: what the cast paid (a league's "Convert an item into at least 500 coins").
+    PluginManager.emitCustomEvent("magic:alchemy-completed", { player, itemId, spellId, coins: policy.coins });
     player.performGraphic(new Graphic(isHighAlch
       ? MagicOnItemPacketListener.HIGH_ALCH_GRAPHIC
       : MagicOnItemPacketListener.LOW_ALCH_GRAPHIC, GraphicHeight.HIGH));

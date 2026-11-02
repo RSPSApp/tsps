@@ -1,0 +1,48 @@
+{
+  "$comment": "Butler's Bell (Demonic Pacts tier 4; leaguerelics/ButlersBell.LeagueRelics.js). The jobs are the cache's butlers_bell_actions rows (table 226: action_id, raw_noun, processed_noun, processed_xp, xp_skill, gather_base_rate per minute); a processing job runs at half the rate (Wiki). `gather` and `process` are each job's weighted rolls per item, from the Wiki's drop tables (Butler's_Bell_(Demonic_Pacts_League)#Drops, Jagex's weightings per gather), by ItemIdentifiers name. `lines` are the Wiki transcript's (Transcript:Demon_butler_(Butler's_Bell)), with its [sir/madam/neutral] alternatives; `noInstances` is the bell's (Wiki, Butler's bell (item) trivia). No recording of the bell exists.",
+  "npc": "league_butler",
+  "bell": "Butler's bell",
+  "npcName": "Demon butler",
+  "table": "butlers_bell_actions",
+  "columns": { "action": "action_id", "raw": "raw_noun", "processed": "processed_noun", "xp": "processed_xp", "skill": "xp_skill", "rate": "gather_base_rate" },
+  "processRateDivisor": 2,
+  "jobs": {
+    "1": {
+      "gather": [["LOGS", 20], ["OAK_LOGS", 30], ["TEAK_LOGS", 40], ["MAHOGANY_LOGS", 10]],
+      "process": [["PLANK", 20], ["OAK_PLANK", 30], ["TEAK_PLANK", 40], ["MAHOGANY_PLANK", 10]]
+    },
+    "2": {
+      "gather": [["CLAY", 6], ["IRON_ORE", 50], ["MITHRIL_ORE", 30], ["ADAMANTITE_ORE", 10], ["RUNITE_ORE", 4]],
+      "process": [["SOFT_CLAY", 6], ["STEEL_BAR", 50], ["MITHRIL_BAR", 30], ["ADAMANTITE_BAR", 10], ["RUNITE_BAR", 4]]
+    },
+    "3": {
+      "gather": [["RAW_SALMON", 260], ["RAW_TUNA", 210], ["RAW_LOBSTER", 180], ["RAW_SWORDFISH", 135], ["RAW_MONKFISH", 95], ["RAW_SHARK", 80], ["RAW_MANTA_RAY", 25], ["RAW_ANGLERFISH", 15]],
+      "process": [["SALMON", 260], ["TUNA", 210], ["LOBSTER", 180], ["SWORDFISH", 135], ["MONKFISH", 95], ["SHARK", 80], ["MANTA_RAY", 25], ["ANGLERFISH", 15]]
+    },
+    "4": {
+      "gather": [["GRIMY_TARROMIN", 217], ["GRIMY_HARRALANDER", 196], ["GRIMY_RANARR_WEED", 65], ["GRIMY_IRIT_LEAF", 130], ["GRIMY_AVANTOE", 130], ["GRIMY_KWUARM", 65], ["GRIMY_CADANTINE", 65], ["GRIMY_LANTADYME", 65], ["GRIMY_DWARF_WEED", 67]],
+      "process": [["TARROMIN_POTION_UNF_", 217], ["HARRALANDER_POTION_UNF_", 196], ["RANARR_POTION_UNF_", 65], ["IRIT_POTION_UNF_", 130], ["AVANTOE_POTION_UNF_", 130], ["KWUARM_POTION_UNF_", 65], ["CADANTINE_POTION_UNF_", 65], ["LANTADYME_POTION_UNF_", 65], ["DWARF_WEED_POTION_UNF_", 67]]
+    },
+    "5": {
+      "gather": [["FLAX", 1]],
+      "process": [["BOW_STRING", 1]]
+    }
+  },
+  "lines": {
+    "greeting": "[Yes, sir/Yes, madam/Yes]?",
+    "newJob": "I have a new job for you.",
+    "show": "Show me what you've collected so far.",
+    "nothing": "Nothing.",
+    "nothingSaid": "Nothing. As you were.",
+    "excellent": "[Excellent choice, sir/Excellent choice, madam/Excellent choice].",
+    "collectFirst": "[Apologies, sir,/Apologies, madam,/Apologies,] but you will need to collect the resources I have already procured before I commence work on anything new.",
+    "processTitle": "Process the {raw} into {processed}?",
+    "processYes": "Yes, process them. <col=3366ff>({rate}/Minute)</col>",
+    "processNo": "No, just give me the raw materials. <col=3366ff>({rate}/Minute)</col>",
+    "started": "Certainly. I'll start right away.",
+    "nothingYet": "I am afraid I have not managed to collect anything new [just yet, sir/just yet, madam/just yet].",
+    "useVoice": "[Sorry, sir,/Sorry, madam,/Sorry,] but may find it easier to communicate verbally, instead of using the bell.",
+    "noInstances": "You can't use that inside instances"
+  },
+  "_ours": "Not in any source, so ours: the job menu lists the jobs by the cache's raw_noun in action_id order under the default title; the butler stands beside the player who rang (the random events' tile) and leaves when they log out or he is out of their view; the collection goes to the bank (the Wiki's interface shows thousands of bars, which no inventory holds; what the bank cannot take stays with him) and its XP is shared as it is collected."
+}

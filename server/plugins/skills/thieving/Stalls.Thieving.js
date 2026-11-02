@@ -263,8 +263,14 @@ function hiddenFromGuards(nearby, player) {
   return nearby.some((npc) => npc.getHitpoints() > 0 && npc.getLocation().equals(player.getLocation()));
 }
 
-/** A stall always succeeds unless a guard or its owner can see the thief. */
-function caughtStealing(player, stall) {
+/**
+ * A stall always succeeds unless a guard or its owner can see the thief. Content may keep the
+ * thief from being caught ("thieving:stall-watch" { player, object, unseen }, a league relic).
+ */
+function caughtStealing(player, stall, object) {
+  const watch = { player, object, unseen: false };
+  pluginApi.emitCustomEvent("thieving:stall-watch", watch);
+  if (watch.unseen === true) return false;
   const nearby = core.World.getNpcsNear(player.getLocation(), LOOKOUT_RADIUS, player.getPrivateArea());
   const guarding = (npc) => {
     const name = String(npc.getDefinition().getName() ?? "").toLowerCase();
@@ -454,7 +460,7 @@ function handleStealFromStall(event) {
   player.setPositionToFace(event.object.getLocation());
   const attempt = stall.attemptMessage;
   if (attempt) spam(player, attempt);
-  if (caughtStealing(player, stall)) return;
+  if (caughtStealing(player, stall, event.object)) return;
   player.getClickDelay().reset();
   player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId("human_pickuptable")));
   player.getPacketSender().sendSound(THIEVING_SOUND, 10, 0);

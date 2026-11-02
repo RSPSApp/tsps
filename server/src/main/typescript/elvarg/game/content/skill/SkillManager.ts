@@ -442,6 +442,28 @@ export class SkillManager {
         return cap === undefined ? level : Math.max(1, Math.min(level, cap));
     }
 
+    /** Plugins that raise a skill's resting level above its base (a permanent boost). */
+    private static readonly restingLevelModifiers: Array<(player: unknown, skill: Skill, level: number) => number> = [];
+
+    /** A plugin's permanent boost: the level decay and natural restoration settle a skill at. */
+    public static registerRestingLevelModifier(modifier: (player: unknown, skill: Skill, level: number) => number): void {
+        if (typeof modifier === "function") SkillManager.restingLevelModifiers.push(modifier);
+    }
+
+    /**
+     * The level a skill rests at: its base level, raised by a permanent boost (a plugin's resting
+     * level modifier). Boosts decay down to it and drained levels restore up to it.
+     */
+    public getRestingLevel(skill: Skill): number {
+        const base = this.getMaxLevel(skill);
+        let level = base;
+        for (const modifier of SkillManager.restingLevelModifiers) {
+            const next = modifier(this.player, skill, level);
+            if (Number.isFinite(next)) level = Math.floor(next);
+        }
+        return Math.max(base, level);
+    }
+
     /** Temporary, unsaved caps on base levels, by skill index (a minigame's handicap, say). */
     private readonly levelCaps = new Map<number, number>();
 

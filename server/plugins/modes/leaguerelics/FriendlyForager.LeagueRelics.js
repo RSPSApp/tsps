@@ -1,12 +1,14 @@
 /**
  * Friendly Forager (https://oldschool.runescape.wiki/w/Friendly_Forager_(Raging_Echoes_League)),
  * Raging Echoes' tier 2 relic: the Forager's pouch, carried or worn, finds a grimy herb (one the
- * player could clean at their Herblore level + 25, of a kind it has room for, 30 of each) when
+ * player could clean at their Herblore level + 25, of a kind it has room for, 30 of each, 100 in
+ * Demonic Pacts) when
  * they gather with Woodcutting, Fishing, Mining or Hunter, at most once every 9 ticks, with the
  * herb's cleaning XP (ours: the Wiki says "a small amount"). Its Check, Fill and Withdraw (as
  * notes) options manage the herbs, which it keeps itself (live shares them with the herb sack).
  * In Herblore, a secondary ingredient has a 90% chance not to be used and a potion is made with
- * four doses instead of three.
+ * four doses instead of three. Demonic Pacts' pouch (tier 2) also makes every Herblore item at once
+ * (the effect's `leagueBatch`).
  */
 const Common = require("./Common.LeagueRelics");
 
@@ -55,7 +57,12 @@ function herbs() {
 }
 
 function herbName(itemId) {
-  return core.ItemDefinition.forId(itemId)?.getName?.()?.toLowerCase?.() ?? "herbs";
+  return core.ItemDefinition.forId(itemId)?.getName?.() ?? "Herbs";
+}
+
+/** How many of each herb the player's pouch holds: the league's own (Demonic Pacts' 100), else 30. */
+function herbCap(player) {
+  return effect.leagueHerbCap?.[Common.leagueOf(player)] ?? effect.herbCap;
 }
 
 /** A gathering action: a herb the pouch has room for and the player could clean at level + 25. A minigame's reward (a `source`, the rumour sack) is not gathering. */
@@ -67,14 +74,14 @@ function find({ player, source, method }) {
   if (cycle < (nextFind.get(player) ?? 0)) return;
   const level = player.getSkillManager().getCurrentLevel(core.Skill.HERBLORE) + effect.levelRange;
   const contents = stored(pouch);
-  const candidates = herbs().filter((herb) => herb.level <= level && (contents[herb.grimyId] ?? 0) < effect.herbCap);
+  const candidates = herbs().filter((herb) => herb.level <= level && (contents[herb.grimyId] ?? 0) < herbCap(player));
   if (candidates.length === 0) return;
   const herb = candidates[Math.floor(Math.random() * candidates.length)];
   contents[herb.grimyId] = (contents[herb.grimyId] ?? 0) + 1;
   pouch.setMetaValue(POUCH_STORE_META, contents);
   nextFind.set(player, cycle + effect.cooldownTicks);
   if (herb.xp > 0) player.getSkillManager().addExperiences(core.Skill.HERBLORE, herb.xp);
-  player.getPacketSender().sendTypedMessage?.(core.ChatType.SPAM, Common.message("foragerFound", { herb: herbName(herb.grimyId) }));
+  player.getPacketSender().sendTypedMessage?.(core.ChatType.SPAM, Common.message("foragerFound"));
 }
 
 function check(event) {
@@ -86,7 +93,8 @@ function check(event) {
     player.sendMessage(Common.message("foragerEmpty"));
     return;
   }
-  player.sendMessage(Common.message("foragerHolds", { herbs: contents.map(([id, amount]) => `${amount} x ${herbName(Number(id))}`).join(", ") }));
+  player.sendMessage(Common.message("foragerHolds"));
+  for (const [id, amount] of contents) player.sendMessage(Common.message("foragerHoldsHerb", { amount, herb: herbName(Number(id)) }));
 }
 
 /** Every grimy herb in the inventory the pouch knows and has room for goes in. */
@@ -99,7 +107,7 @@ function fill(event) {
   const inventory = player.getInventory();
   let moved = 0;
   for (const id of known) {
-    const room = effect.herbCap - (contents[id] ?? 0);
+    const room = herbCap(player) - (contents[id] ?? 0);
     const amount = Math.min(room, inventory.getAmount(id));
     if (amount <= 0) continue;
     inventory.deleteNumber(id, amount);
@@ -187,6 +195,14 @@ function mix(request) {
   if (Number.isInteger(fourDose)) request.productId = fourDose;
 }
 
+/** A league's batch (`leagueBatch`, Demonic Pacts' Herblore all at once), as the production relics answer. */
+function allAtOnce(request) {
+  if (!active(request.player)) return;
+  const batch = effect.leagueBatch?.[Common.leagueOf(request.player)];
+  const actions = batch ? Common.batchActions(batch, request) : null;
+  if (actions) request.actions = Math.max(request.actions, actions);
+}
+
 module.exports = function attach(pluginApi) {
   api = pluginApi;
   core = api.core;
@@ -194,6 +210,7 @@ module.exports = function attach(pluginApi) {
   for (const name of effect.triggers) api.onCustomEvent(name, find);
   api.onItemAction(effect.toolName, { Check: check, Fill: fill, Withdraw: withdraw });
   api.onCustomEvent("herblore:mix", mix);
+  api.onCustomEvent("skills:actions-per-cycle", allAtOnce);
 };
 
 module.exports.POUCH_STORE_META = POUCH_STORE_META;

@@ -644,7 +644,7 @@ export class ShopManager {
             }
         }
 
-        const removed = this.removeStock(shop, itemId, quantity);
+        const removed = this.takeStock(player, shop, itemId, quantity);
         if (removed <= 0) {
             return;
         }
@@ -823,6 +823,22 @@ export class ShopManager {
             Math.min(Number.MAX_SAFE_INTEGER, current + quantity)
         );
         return true;
+    }
+
+    /**
+     * Takes a purchase out of the stock: what was bought. Content may keep the shop's own stock
+     * ("shop:keep-stock" { player, shopId, itemId, amount, keep }, a league's shops that never
+     * deplete): then only stock above the shop's own amount (what players sold it) goes.
+     */
+    private static takeStock(player: any, shop: RuntimeShop, itemId: number, amount: number): number {
+        const request = { player, shopId: shop.definition.getId(), itemId, amount, keep: false };
+        PluginManager.emitCustomEvent("shop:keep-stock", request);
+        if (!request.keep) return this.removeStock(shop, itemId, amount);
+        const current = shop.stock.get(itemId) ?? 0;
+        const taken = Math.min(current, this.normalizeAmount(amount));
+        const surplus = Math.max(0, current - (shop.originalAmounts.get(itemId) ?? 0));
+        if (Math.min(taken, surplus) > 0) this.removeStock(shop, itemId, Math.min(taken, surplus));
+        return taken;
     }
 
     private static removeStock(shop: RuntimeShop, itemId: number, amount: number): number {

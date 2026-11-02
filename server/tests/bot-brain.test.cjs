@@ -1878,6 +1878,13 @@ test('sites split each mode\'s count over the tiers and the registry only assign
     assert.deepEqual([...getWildernessHotspot(site.id).allowedLoadouts], tagged, `${site.id} gears from its '${site.pvp.style}' loadouts`);
     assert.equal(getWildernessHotspot(site.id).targetBots, site.bots, site.id);
   }
+  const { siteToHotspot } = require('../plugins/bots/behaviours/pvp/WildernessHotspotRegistry.PlayerBots')._test;
+  const pure = sitesFile.sites.find((entry) => entry.pvp?.style === 'pure');
+  const listed = (ids) => siteToHotspot({ ...pure, pvp: { ...pure.pvp, loadouts: ids } }, loadouts).allowedLoadouts;
+  assert.deepEqual(listed(['initiate_pure', 'f2p_rune_pure', 'initiate_pure']), ['initiate_pure', 'f2p_rune_pure'],
+    'pvp.loadouts replaces the style tags, f2p groups included, once each');
+  assert.throws(() => listed(['initiate_pure', 'no_such_group']), /unknown loadout no_such_group/);
+  assert.throws(() => listed([]), /at least one loadout/);
   const player = fakePlayer();
   assert.equal(registry.pickActivity(player, 0, { allowed: ['combat_training'] })?.id, 'combat_training');
   assert.equal(registry.pickActivity(player, 0, { allowed: ['combat_training'], avoid: 'combat_training' }), null);

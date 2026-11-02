@@ -289,8 +289,9 @@ handler (`api.emitItemOnObject`). Food the bot's Cooking level cannot cook is le
 
 Configured in the same file, under `"pvp"`: `botPool` (how many `WildyBot` names exist),
 `activeRegionBotsPerRegion` / `activeRegionInset` (regional spread around players). Sites with a
-`pvp` block define hotspots: `bots` sets their population, `pvp.combat` their level band, and
-`pvp.style` selects matching tags from `pvp-bot-loadouts.json`.
+`pvp` block define hotspots: `bots` sets their population and `pvp.combat` their level band.
+`pvp.loadouts` lists the loadout groups from `pvp-bot-loadouts.json` the site's bots wear. Without
+it, `pvp.style` picks every group tagged with that style (f2p groups only for the `f2p` style).
 
 Regional bots fill attackable regions around players. Town PvP regions use the full regional
 target (48 by default); levelled Wilderness regions use one third, rounded up (16 by default).

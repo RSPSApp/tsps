@@ -723,7 +723,7 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | 2 | Friendly Forager | done (Raging Echoes' unit, plus Herblore at once; the recorded lines) |
 | 2 | Woodsman | partial: Fletching batches, log burning, Hunter catches, impling loot doubled and noted (`hunter:impling-loot`), double rumour XP and sack loot rolls (`hunter:rumour-reward`, `hunter:sack-rolls`), whistles that keep their charges (`quetzals:whistle-charge`); not the trap's herb or tree seed (the Wiki gives no list or chances) |
 | 3 | Bank Heist | done |
-| 3 | Evil Eye | done: the Wiki's 60 bosses and raids by area, each on the entrance tile the server's own data gives (`league-evil-eye.json`), with the league's area-teleport cast (no recording of the eye in use) |
+| 3 | Evil Eye | partial: the Wiki's 60 bosses and raids by area, each on the entrance tile the server's own data gives (`league-evil-eye.json`), with the eye's recorded cast (evil_eye_cast01, leagues_6_evil_eye, the move 4 ticks on, varp league_default_teleport_last_destination; 237/04057); not live's menus (interface 187 "Select a region", locked areas struck through, "Evil Eye teleports - <area>" with live's labels and Back): the recordings give only five areas' lists |
 | 3 | Map of Alacrity | partial: 57 of the Wiki map's 141 shortcuts, those the server has with a side the pin and the data agree on (`league-map-of-alacrity.json`, which lists the rest and why), the Agility level and the Wiki's quest notes; the league's area-teleport cast |
 | 4 | Transmute | done: Alchemic Divergence and Convergence (218:199, 218:200) move up to 10 of an item a tier along the cache's `transmutation` table, 10 Magic XP each, no level or runes, every 5 ticks, a stack cast on again while its slot holds it, noted stays noted, to the bank by toggle, loose items in place with a slot each (237/01102, 01106, 238/04211); the alchemy spell while toggled off; the ledger's endless nature runes and its scroll for an item used on it; not Divergence on a top tier (unrecorded), the ledger's Read (nothing says what it shows), or which skilling pauses the casts |
 | 4 | Conniving Clues | done |
@@ -1049,8 +1049,8 @@ Animal Wrangler's Hunter and cooking ones) do not.
 
 ### The item and teleport relics
 
-Their teleports share the standard animation (Demonic Pacts' Evil eye and Map of alacrity: the
-league's area-teleport cast, `league:teleport-cast`), their item's Wilderness limit, and the league's
+Their teleports share the standard animation (Demonic Pacts' Map of alacrity: the league's
+area-teleport cast, `league:teleport-cast`; the Evil eye: its own recorded cast), their item's Wilderness limit, and the league's
 areas: a destination in an area the character has not unlocked is refused (`league:area-at`
 and `league:areas`, answered by the league's area unlocks; with nobody answering, everywhere is
 open). Each item remembers its last destination. The menus' grouping and wording are ours.
@@ -1096,7 +1096,13 @@ open). Each item remembers its last destination. The menus' grouping and wording
   only in unlocked areas (the submenu's area and the tile's own). The Wiki's pins often mark a
   dungeon's surface: `plugins/modes/data/league-evil-eye.json` takes each tile from the server's
   own lair, raid or teleport data (its `source`), checked open on the cache's map. A boss's own
-  requirements (kill counts, keys, tasks) are met or refused at its entrance.
+  requirements (kill counts, keys, tasks) are met or refused at its entrance. The cast is the
+  eye's own, as 237/04057 records it: evil_eye_cast01 and spotanim leagues_6_evil_eye a tick after
+  the pick, the move four ticks later, and varp league_default_teleport_last_destination set to the
+  tile (packed z << 28 | x << 14 | y). Live's menus are interface 187's (script 217): "Select a
+  region" with locked areas struck through, then "Evil Eye teleports - <area>" with live's own
+  labels ("Barrows Chest", "Fight Caves", "TzHaar-Ket-Rak", ...) and Back; only five areas' lists
+  are recorded, so the chatbox menus and the Wiki's names stay for now.
 - **Map of Alacrity** (Demonic Pacts tier 3): the Map of alacrity's Read (an area submenu) lists
   an area's Agility shortcuts, Last-destination repeats the last; from any Wilderness level, in
   unlocked areas, with the shortcut's Agility level (current) and the Wiki's quest notes (Shadows

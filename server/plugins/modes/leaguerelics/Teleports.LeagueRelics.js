@@ -101,8 +101,9 @@ function leagueCast(player) {
 /**
  * Teleports to `destination` { label, location, wildernessLevel?, remember? } for item `key`,
  * remembering it as the item's last destination on arrival (not with `remember: false`, a
- * destination that needs its own arrival, the house). `onArrival` runs after. With `cast`, the
- * league's area-teleport cast plays (interrupted as a home teleport is) where the league has one.
+ * destination that needs its own arrival, the house). `onArrival` runs after. With `cast` true, the
+ * league's area-teleport cast plays (interrupted as a home teleport is) where the league has one; a
+ * cast definition ({ steps, lockTick, landTick }, an item's own recorded cast) plays instead.
  */
 function go(player, key, destination, { wildernessLevel = ANY_WILDERNESS_LEVEL, onArrival = null, cast = false } = {}) {
   const { TeleportHandler, TeleportType } = Common.core;
@@ -121,7 +122,7 @@ function go(player, key, destination, { wildernessLevel = ANY_WILDERNESS_LEVEL, 
     }
     onArrival?.();
   };
-  const definition = cast ? leagueCast(player) : null;
+  const definition = cast === true ? leagueCast(player) : cast || null;
   if (definition) startHomeTeleport(Common.core, player, location, arrived, castOf(definition));
   else TeleportHandler.teleport(player, location, TeleportType.NORMAL, false, arrived);
   return true;
@@ -206,9 +207,10 @@ function subOption(event) {
  * id): Teleport (or its area submenu) lists an area's destinations, Last-destination repeats the
  * last. A destination needs its area unlocked (and its tile's: `areaOpen`), its Agility `level`
  * (current, boosted) and its `quest` completed (`quest:is-complete` by name; unanswered, no bar);
- * any Wilderness level, with the league's area-teleport cast.
+ * any Wilderness level, with the league's area-teleport cast, or the item's own `cast` (a cast
+ * definition), and with `lastVarp` the varp sent the destination's packed tile as the cast starts.
  */
-function areaTeleports({ key, title, areas }) {
+function areaTeleports({ key, title, areas, cast = true, lastVarp = null }) {
   const byName = new Map(areas.flatMap((area) => area.destinations.map((destination) => [destination.name, { area, destination }])));
 
   function refusal(player, area, destination) {
@@ -232,7 +234,10 @@ function areaTeleports({ key, title, areas }) {
       return false;
     }
     const location = new Common.core.Location(destination.x, destination.y, destination.z ?? 0);
-    return go(player, key, { label: destination.name, location }, { cast: true });
+    const went = go(player, key, { label: destination.name, location }, { cast });
+    // The varp holds the tile as live packs one: plane << 28 | x << 14 | y.
+    if (went && lastVarp !== null) player.getPacketSender().sendConfig(lastVarp, ((location.getZ() << 28) | (location.getX() << 14) | location.getY()) >>> 0);
+    return went;
   }
 
   function areaMenu(player, area) {

@@ -1119,7 +1119,7 @@ test("Evil Eye and Map of Alacrity: the data's areas are the items' submenus, ev
   assert.equal(relics[2].key, Common.data.effects.mapOfAlacrity.key);
 });
 
-test("Evil Eye: Teleport's area submenu, carried or worn, lists its destinations; a pick casts the league's teleport to the tile, and Last-destination goes back", () => {
+test("Evil Eye: Teleport's area submenu, carried or worn, lists its destinations; a pick casts the eye's recorded teleport to the tile, and Last-destination goes back", () => {
   const who = cases(EVIL_EYE);
   const player = who.relic;
   const varlamore = area(EVIL_EYE_DATA, "Varlamore");
@@ -1128,10 +1128,14 @@ test("Evil Eye: Teleport's area submenu, carried or worn, lists its destinations
     assert.equal(click(player, I.EVIL_EYE, "Teleport", { subOp: EVIL_EYE_DATA.areas.indexOf(varlamore) }).handled, true);
     assert.equal(prompts.at(-1).title, "Varlamore");
     pick(player, target.name);
+    const lastVarp = core.CacheDefinitions.getVarpId("league_default_teleport_last_destination");
+    assert.equal(player.sent.configs.get(lastVarp), (target.x << 14) | target.y, "the tile, packed as live sends it");
     core.TaskManager.process();
     core.TaskManager.process();
-    assert.equal(player.getAnimation()?.getId(), DP_CAST.steps[0].animation, "the league's area-teleport cast");
-    assert.ok(ticksTo(player, target) > 0, `landed on ${target.name}`);
+    assert.equal(player.getAnimation()?.getId(), core.CacheDefinitions.getSeqId("evil_eye_cast01"), "the eye's own cast (237/04057)");
+    const landed = ticksTo(player, target);
+    assert.ok(landed > 0, `landed on ${target.name}`);
+    assert.ok(landed <= 4, "the move four ticks after the cast");
 
     relocate(player, new Location(3200, 3200, 0));
     assert.equal(click(player, I.EVIL_EYE, "Last-destination").handled, true);

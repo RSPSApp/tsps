@@ -317,6 +317,8 @@
     },
     "evilEye": {
       "league": 6, "key": "evil-eye", "toolName": "Evil eye",
+      "cast": { "tick": 1, "landTick": 5, "animation": "evil_eye_cast01", "graphic": "leagues_6_evil_eye", "lastVarp": "league_default_teleport_last_destination" },
+      "_cast": "237/04057 (ticks 2476-2481, 2546-2551, 2865-2870): the destination picked, evil_eye_cast01 and spotanim leagues_6_evil_eye the next tick, the move four ticks after it; varp league_default_teleport_last_destination takes the tile (58189278 = 3551,9694,0) as the cast starts. lockTick: ours, the cast's own tick.",
       "_destinations": "plugins/modes/data/league-evil-eye.json: the Wiki's bosses and raids by area, each on a tile the server's own data gives (leaguerelics/EvilEye.LeagueRelics.js)."
     },
     "mapOfAlacrity": {

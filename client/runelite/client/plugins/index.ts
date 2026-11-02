@@ -4,6 +4,7 @@ import { VoiceChatPlugin } from "../../../game/plugins/voice/VoiceChatPlugin";
 import { AnimationSmoothingPlugin } from "../../../game/plugins/animationsmoothing/AnimationSmoothingPlugin";
 import { AttackTimerPlugin } from "../../../game/plugins/attacktimer/AttackTimerPlugin";
 import { BankTagsPlugin } from "../../../game/plugins/banktags/BankTagsPlugin";
+import { CombatLevelPlugin } from "../../../game/plugins/combatlevel/CombatLevelPlugin";
 import { CameraPlugin } from "../../../game/plugins/camera/CameraPlugin";
 import { QuestHelperPlugin } from "../../../game/plugins/questhelper/QuestHelperPlugin";
 import { FirstPersonPlugin } from "../../../game/plugins/firstperson/FirstPersonPlugin";
@@ -71,6 +72,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     ItemPricesPlugin,
     ItemRarityPlugin,
     BankTagsPlugin,
+    CombatLevelPlugin,
     NotesPlugin,
     NpcIndicatorsPlugin,
     ObjectIndicatorsPlugin,

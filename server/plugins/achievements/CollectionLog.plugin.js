@@ -9,7 +9,7 @@
  *   api.emitCustomEvent("collection-log:obtain", { player, itemId, amount?, ensure?, silent? })
  *   api.emitCustomEvent("collection-log:count", { player, category: "Zulrah", amount? })
  *   answer "collection-log:category-count" { player, category, struct, count } with a kept count
- *   ask "collection-log:slots" { player, category } -> count: the category's slots filled
+ *   ask "collection-log:slots" { player, category? } -> count: the category's slots filled (all, with none)
  *   hear "collection-log:new-item" { player, itemId }: a slot filled
  *   api.emitCustomEvent("collection-log:open", { player, category? })  open it, at a category by name
  *
@@ -32,6 +32,11 @@ function categoriesNamed(name) {
 /** "collection-log:slots" { player, category } -> count: the category's slots filled ("Hard Treasure Trails"). */
 function slotsQuery(query) {
   if (!query?.player) return;
+  // No category: every slot filled, as the log's own total counts them.
+  if (query.category == null) {
+    query.count = Progress.uniqueCount(query.player);
+    return;
+  }
   const category = categoriesNamed(query.category)[0];
   if (!category) return;
   query.count = category.items.filter((itemId) => Progress.obtained(query.player, itemId) > 0).length;

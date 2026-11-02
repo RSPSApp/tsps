@@ -549,6 +549,7 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
 
   // The clue tiers' collection log slots: "Fill 15 slots" and "Gain 10 unique items from Reward casket".
   assert.deepEqual(trigger("fill-15-hard-clue-collection-log-slots"), { kind: "collection-log", category: "Hard Treasure Trails", count: 15 });
+  assert.deepEqual(trigger("100-collection-log-slots"), { kind: "collection-log", count: 100 }, "the whole log's slots");
   assert.deepEqual(trigger("gain-a-unique-item-from-a-master-clue"), { kind: "collection-log", category: "Master Treasure Trails", count: 1 });
 
   // Health checks: the crop type, a cactus by its crop; a place other than its only one is left out.

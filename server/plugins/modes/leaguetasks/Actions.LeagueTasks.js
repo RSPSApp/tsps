@@ -298,7 +298,7 @@ function checkCollectionLog(player, type) {
   const slots = new Map();
   for (const task of tasks) {
     if (done.has(task.id)) continue;
-    const { category } = task.trigger;
+    const category = task.trigger.category ?? null;
     if (!slots.has(category)) {
       const query = { player, category, count: null };
       Common.api.emitCustomEvent("collection-log:slots", query);

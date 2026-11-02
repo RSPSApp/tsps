@@ -1562,7 +1562,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   `thieving:success` (a stall: its loc name, the item if named; a place other than a league area,
   or a stall no loc names, is left out), `pick { plants, count }` and `pick-each { plants: { plant:
   count } }` from Pickable's `world:picked` (Wheat for its grain), `collection-log { category,
-  count }` (a clue tier's Treasure Trails slots: "Fill 15 slots in the Hard Clue section", "Gain 10
+  count }` (no category: the whole log, "Obtain 15 unique Collection Log slots"; a clue tier's
+  Treasure Trails slots: "Fill 15 slots in the Hard Clue section", "Gain 10
   unique items from Reward casket (easy)") asked of the log's `collection-log:slots` when
   `collection-log:new-item` fills one and at login, `check-health { types | crops, count }` from
   `farming:check-health` (its crop type, or a cactus by its crop), `slayer-tasks { count }` from

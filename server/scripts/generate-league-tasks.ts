@@ -769,6 +769,10 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     const item = [said.subject, named.subject].map((subject) => itemNamed(subject, items) ?? itemNamed(subject, items, ["", "Cooked "]) ?? (kind === "drink" ? itemNamed(`${subject}(4)`, items) : null)).find(Boolean);
     return item ? { trigger: { kind, items: [item.replace(/\(\d\)$/, "")], count: Math.max(named.count, said.count) } } : {};
   }
+  // "Obtain 15 unique Collection Log slots": that many slots filled, any category.
+  if ((match = /^Obtain (\d+) unique Collection Log slots\.?$/i.exec(description))) {
+    return { trigger: { kind: "collection-log", count: Number(match[1]) } };
+  }
   // "Fill 15 slots in the Hard Clue section of the Collection Log", "Gain 10 unique items from
   // Reward casket (easy)": that many of the tier's Treasure Trails collection log slots filled.
   if ((match = /^Fill (\d+) slots in the (Beginner|Easy|Medium|Hard|Elite|Master) Clue section of the Collection Log\.?$/i.exec(description))

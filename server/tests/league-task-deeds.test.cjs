@@ -280,6 +280,8 @@ test("collection-log: a tier's Treasure Trails slots filled, as the real log kee
   assert.ok(!done(f, "fill-5-easy-clue-collection-log-slots"));
   for (const itemId of easy.items.slice(1, 5)) PM.emitCustomEvent("collection-log:obtain", { player: f.player, itemId, silent: true });
   assert.ok(done(f, "fill-5-easy-clue-collection-log-slots"), "the fifth");
+  assert.ok(done(f, "5-collection-log-slots"), "five of the whole log too");
+  assert.ok(!done(f, "15-collection-log-slots"));
   PM.emitCustomEvent("collection-log:obtain", { player: f.player, itemId: easy.items[0], silent: true });
   assert.ok(!done(f, "gain-10-unique-items-from-easy-clues"), "a slot already filled is no new one");
 });

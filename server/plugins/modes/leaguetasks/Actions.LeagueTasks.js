@@ -49,7 +49,8 @@
  *   `totem { woods, count }` (`vale-totems:decorated`), `dummy { count }` (`dummies:hit`),
  *   `gather-with { skill, tools, items?, count }` (`woodcutting:success`'s axeId, `mining:success`'s pickaxeId),
  *   `teleport { spells, count }` (`spell:teleport-arrival`, by SpellTeleports' lower-cased name),
- *   `rifts { count }` (`guardians-of-the-rift:rift-closed`'s own total of rifts closed).
+ *   `rifts { count }` (`guardians-of-the-rift:rift-closed`'s own total of rifts closed),
+ *   `tob { modes, count }` (`tob:completed`, a raid of one of the modes).
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -350,6 +351,7 @@ const EVENT_KINDS = new Map([
   ["gather-with", (trigger, event) => trigger.skill === event.gatherSkill
     && trigger.tools.some((tool) => key(tool) === key(itemName(event.toolId)))
     && (!trigger.items || trigger.items.some((each) => key(each) === key(itemName(event.itemId))))],
+  ["tob", (trigger, event) => trigger.modes.includes(event.mode)],
   ["teleport", (trigger, event) => trigger.spells.includes(String(event.name ?? "").toLowerCase())],
   ["foundry", (trigger, event) => Number(event.quality) > 0 && (!(trigger.quality > 0) || Number(event.quality) >= trigger.quality)],
 ]);
@@ -440,6 +442,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("dummies:hit", onEvent("dummy"));
   api.onCustomEvent("spell:teleport-arrival", onEvent("teleport"));
   api.onCustomEvent("guardians-of-the-rift:rift-closed", riftClosed);
+  api.onCustomEvent("tob:completed", onEvent("tob"));
   // Gathered with a tool: the logs or ore and the axe or pickaxe the success events carry.
   const gatheredWith = onEvent("gather-with");
   api.onCustomEvent("woodcutting:success", (event) => gatheredWith({ ...event, gatherSkill: "woodcutting", toolId: event.axeId, itemId: event.logId }));

@@ -986,6 +986,12 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   if ((match = /^Fully decorate an? ([A-Za-z]+) totem in (?:the Vale Totems|the Auburn Valley)\.?$/i.exec(description))) {
     return { trigger: { kind: "totem", woods: [match[1].toLowerCase()], count: 1 } };
   }
+  // "Complete the Theatre of Blood on normal or hard mode 25 times": raids finished in those modes
+  // (the raid's tob:completed); a condition ("without any party member dying") is no count.
+  if ((match = /^Complete the Theatre of Blood on (Entry|Normal|Hard)(?: [Mm]ode)?(?: or (Entry|Normal|Hard))? [Mm]ode(?: (\d+) times)?\.?$/i.exec(description))) {
+    const modes = [match[1], match[2]].filter(Boolean).map((mode) => mode.toLowerCase());
+    return { trigger: { kind: "tob", modes, count: match[3] ? Number(match[3]) : 1 } };
+  }
   // "Guardians of the Rift 10 Rifts closed" ("Close the Rift in the Temple of the Eye 10 times"):
   // the minigame's own count of rifts closed.
   if ((match = /^Guardians of the Rift (\d+) Rifts? closed$/i.exec(name)) && /^Close the Rift in the Temple of the Eye(?: \(location\))?(?: \d+ times)?\.?$/i.test(description)) {

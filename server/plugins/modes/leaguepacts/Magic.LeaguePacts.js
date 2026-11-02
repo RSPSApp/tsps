@@ -15,8 +15,10 @@
  * - talent_firerune_regen_damage_boost (same; onCombatHitDamage): N per fire rune is added to the
  *   next landed magic hitsplat. The regen is rolled as the cast pays, so the next hit is that cast's.
  * - talent_earthrune_regen_defence_boost (same): Defence +N per earth rune for 30 ticks, the boost at
- *   most 20% of the base level; a retrigger resets the time. Expiry takes back only what is still above base.
- * - talent_regen_magic_level_boost (same, any rune): Magic +1 a proc for 30 ticks, at most N, retrigger resets.
+ *   most 20% of the base level; a retrigger resets the time. Expiry takes back only what is still
+ *   above the resting level (base, plus talent_defence_boost's permanent boost).
+ * - talent_regen_magic_level_boost (same, any rune): Magic +1 a Regenerate proc (a cast's runes come
+ *   one event per rune id; the boost counts the cast's `first`) for 30 ticks, at most N, retrigger resets.
  * - talent_regen_stave_charges_water/_fire/_air/_earth (`league:pact-regenerated`, charge from a
  *   POWERED_STAFF weapon): one rune of that element into the inventory (skipped when it has no room:
  *   no plugin event adds to the rune pouch). These runes do not chain into the rune pacts above.
@@ -317,7 +319,7 @@ function expireBoost(player, key, skill) {
   if (!held) return;
   boosts.get(player).delete(key);
   const current = skills(player).getCurrentLevel(skill);
-  const above = Math.max(0, current - skills(player).getMaxLevel(skill));
+  const above = Math.max(0, current - skills(player).getRestingLevel(skill));
   const back = Math.min(held.amount, above);
   if (back > 0) skills(player).setCurrentLevel(skill, current - back, true);
 }
@@ -348,7 +350,7 @@ function boost(player, key, skill, increase, cap) {
 }
 
 /** A combat spell's regenerated runes: the element pacts by rune, Magic by proc. */
-function runesRegenerated(player, itemId, amount) {
+function runesRegenerated(player, itemId, amount, first) {
   const elements = runeElements.get(itemId) ?? [];
   const prayerChance = elements.includes("air") ? Common.effect(player, "talent_airrune_regen_prayer_restore") : 0;
   if (prayerChance && Math.random() * 100 < prayerChance) {
@@ -364,7 +366,7 @@ function runesRegenerated(player, itemId, amount) {
     boost(player, "defence", core.Skill.DEFENCE, amount * earth, cap);
   }
   const magicCap = Common.effect(player, "talent_regen_magic_level_boost");
-  if (magicCap) boost(player, "magic", core.Skill.MAGIC, 1, magicCap);
+  if (magicCap && first) boost(player, "magic", core.Skill.MAGIC, 1, magicCap);
 }
 
 /** A powered staff's regenerated charge: one rune of each charge pact's element. */
@@ -379,10 +381,10 @@ function chargeRegenerated(player, itemId) {
 }
 
 /** `league:pact-regenerated`: a rune's id in `itemId`; a charge names its weapon in `weaponId` (General's shape). */
-function regenerated({ player, kind, itemId, weaponId, amount = 1, combat }) {
+function regenerated({ player, kind, itemId, weaponId, amount = 1, combat, first = true }) {
   if (!isPlayer(player)) return;
   loadSpells();
-  if (kind === "rune" && combat) runesRegenerated(player, itemId, Math.max(1, Math.floor(amount)));
+  if (kind === "rune" && combat) runesRegenerated(player, itemId, Math.max(1, Math.floor(amount)), first !== false);
   else if (kind === "charge") chargeRegenerated(player, weaponId ?? itemId);
 }
 

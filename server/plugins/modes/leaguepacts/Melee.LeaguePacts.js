@@ -9,9 +9,11 @@
  *   Each node's +10% accuracy in all combat styles is General.LeaguePacts.js's, summed with the rest.
  * - 73 talent_melee_strength_prayer_bonus (+50% of the worn prayer bonus) and 77
  *   talent_multi_hit_str_increase (+20% of the current Strength level, with a weapon under 1kg or
- *   one-handed) add melee strength. Approximation: no hook adds strength bonus at roll time (the
- *   bonus providers run only on equip, so a boosted Strength level would go stale), so the max hit
- *   is scaled by (strength + 64 + extra) / (strength + 64) in the melee hit modifier.
+ *   one-handed) add to the melee strength bonus as the max hit is worked out
+ *   (registerMeleeStrengthBonusModifier), so the max-hit formula, a special's multiplier and the
+ *   hit modifiers after it (Dharok's, the salve's, the slayer helmet's) all see it, as they see the
+ *   worn bonus. Each rounded down (ours); 77 reads the current (boosted) Strength level (ours: the
+ *   text says "your Strength level"), and an empty hand is no melee weapon (ours).
  * - 25 talent_distance_melee_minhit (+N min hit, +N per tile past the first), 67
  *   talent_overheal_consumption_boost (5 overhealed hitpoints spent for +5 min hit) and 70
  *   talent_percentage_melee_maxhit_distance (+N% max hit, +N% more per 3 tiles) change the roll's
@@ -28,7 +30,8 @@
  * - 44 talent_free_random_weapon_attack_chance (N% per heavy-weapon attack, not a special), 72
  *   talent_unique_blindbag_chance (+2% per unique heavy melee weapon in the inventory, up to 10%)
  *   and 68 talent_unique_blindbag_damage (+N% Blindbag max hit per unique one, up to 10%): Blindbag
- *   puts a random heavy melee weapon from the inventory in the weapon slot (bonuses recounted),
+ *   puts a random heavy melee weapon from the inventory (not the Dramen staff: Wiki, 6 May 2026) in
+ *   the weapon slot (bonuses recounted),
  *   rolls an ordinary melee hit with it and puts the weapon back; the hit may Blindbag again (a
  *   guard stops a chain at MAX_BLINDBAG_CHAIN). A "melee weapon" is a weapon-slot item with a melee
  *   attack or strength bonus above its ranged attack bonus. No animation or graphic: none recorded.
@@ -43,13 +46,15 @@
  *   damage landing (`combat:damage-apply`) from a wearer of a ring of recoil or suffering:
  *   approximation, a vengeance at the same time is counted as well). Thorns is reflected damage
  *   (no XP, respects `combat:recoil-immune`) and never hits players.
- * - 23 talent_shield_reflect: with a shield, 0.1% per Defence level (current) that an NPC's hit is
+ * - 23 talent_shield_reflect: with a shield, 0.1% per Defence level (current, with
+ *   talent_defence_boost's visible boost) that an NPC's hit is
  *   reflected whole: the player takes 0 and the attacker the damage (`onPlayerHitModify`, after
  *   protection prayers). Ours: not against players, as Thorns.
  * - 75 talent_shield_block_heal: an attack dealing 0 with Dinh's bulwark (a two-handed shield) or
  *   an off-hand (a shield-slot item that is not a shield) heals 2 (`league:pact-heal`) and restores
- *   2 Prayer. A "shield" is a shield-slot item named a shield, buckler, ward or Toktz-ket-xil, or
- *   the bulwark: the cache has no shield category.
+ *   2 Prayer. Shields and off-hands are Common's (a shield by name: shield, buckler, ward,
+ *   Toktz-ket-xil, the bulwark; an off-hand any other shield-slot item); ours, as no category
+ *   plugins can read tells them apart (the cache's category 18 agrees but for the crystal shield).
  */
 const Common = require("./Common.LeaguePacts");
 
@@ -97,7 +102,8 @@ const REFLECT_CHANCE_PER_LEVEL = 0.001;
 const THORNS_SECOND_FRACTION = 0.5;
 const BLOCK_HEAL = 2;
 const BLOCK_PRAYER = 2;
-const SHIELD_NAME = /shield|buckler|\bward\b|toktz-ket-xil|bulwark/i;
+/** Heavy melee weapons that are no Blindbag weapon (Wiki, 6 May 2026). */
+const NOT_BLINDBAG_WEAPONS = new Set(["Dramen staff"]);
 const RECOIL_RING_NAME = /recoil|suffering/i;
 const PACT_HEAL_EVENT = "league:pact-heal";
 const RANGED_ECHO_EVENT = "league:pact-ranged-echo";
@@ -133,21 +139,8 @@ const isLight = (item) => item !== null && item.getWeight() < LIGHT_WEIGHT;
 const isHeavy = (item) => item !== null && item.getWeight() >= LIGHT_WEIGHT;
 const isTwoHanded = (item) => item !== null && item.isDoubleHanded();
 
-function isShieldItem(item) {
-  return item !== null && SHIELD_NAME.test(item.getName() ?? "");
-}
-
-/** A shield in the shield slot, or a two-handed shield (Dinh's bulwark) wielded. */
-function hasShield(player) {
-  const held = weapon(player);
-  return isShieldItem(slotDefinition(player, core.Equipment.SHIELD_SLOT)) || (isTwoHanded(held) && isShieldItem(held));
-}
-
-function hasTwoHandedShieldOrOffhand(player) {
-  const held = weapon(player);
-  const offhand = slotDefinition(player, core.Equipment.SHIELD_SLOT);
-  return (isTwoHanded(held) && isShieldItem(held)) || (offhand !== null && !isShieldItem(offhand));
-}
+const hasShield = (player) => Common.hasShield(player);
+const hasTwoHandedShieldOrOffhand = (player) => Common.twoHandedShield(player) || Common.hasOffhand(player);
 
 function isMeleeWeapon(item) {
   if (item === null || item.getEquipmentType?.()?.getSlot?.() !== core.Equipment.WEAPON_SLOT) return false;
@@ -162,7 +155,7 @@ function heavyWeaponsCarried(player) {
   const ids = new Set();
   for (const item of player.getInventory().getItems()) {
     const each = definition(item);
-    if (isHeavy(each) && isMeleeWeapon(each)) ids.add(each.getId());
+    if (isHeavy(each) && isMeleeWeapon(each) && !NOT_BLINDBAG_WEAPONS.has(each.getName())) ids.add(each.getId());
   }
   return [...ids];
 }
@@ -186,25 +179,28 @@ function distanceHeal(player, other) {
   if (chance(value(player, "distanceHealing"))) heal(player, distance(player, other));
 }
 
-/** 14, 73, 77: the melee max hit with the strength the pacts add, then the damage %. */
-function meleeMaxHit(entity, maxHit) {
-  if (!entity?.isPlayer?.()) return maxHit;
+/** 73, 77: the melee strength bonus the pacts add, at roll time. */
+function meleeStrengthBonus(entity, strengthBonus) {
+  if (!entity?.isPlayer?.()) return strengthBonus;
   const prayer = value(entity, "prayerStrength");
   const strength = value(entity, "strengthLevel");
-  const percent = value(entity, "meleeDamage");
-  if (!prayer && !strength && !percent) return maxHit;
-  const { BonusManager, Skill } = core;
+  if (!prayer && !strength) return strengthBonus;
   let extra = 0;
-  const other = entity.getBonusManager().getOtherBonus();
-  if (prayer) extra += Math.floor(Math.max(0, other[BonusManager.PRAYER]) * PRAYER_STRENGTH_FRACTION * prayer);
+  if (prayer) {
+    const worn = Number(entity.getBonusManager().getOtherBonus()[core.BonusManager.PRAYER]) || 0;
+    extra += Math.floor(Math.max(0, worn) * PRAYER_STRENGTH_FRACTION * prayer);
+  }
   const held = weapon(entity);
   if (strength && held !== null && (isLight(held) || !isTwoHanded(held))) {
-    extra += Math.floor(entity.getSkillManager().getCurrentLevel(Skill.STRENGTH) * STRENGTH_LEVEL_FRACTION * strength);
+    extra += Math.floor(entity.getSkillManager().getCurrentLevel(core.Skill.STRENGTH) * STRENGTH_LEVEL_FRACTION * strength);
   }
-  const base = other[BonusManager.STRENGTH] + 64;
-  let scaled = extra > 0 && base > 0 ? Math.floor((maxHit * (base + extra)) / base) : maxHit;
-  if (percent) scaled = Math.floor((scaled * (100 + percent)) / 100);
-  return scaled;
+  return strengthBonus + extra;
+}
+
+/** 14: +1% melee max hit a node. */
+function meleeMaxHit(entity, maxHit) {
+  const percent = value(entity, "meleeDamage");
+  return percent ? Math.floor((maxHit * (100 + percent)) / 100) : maxHit;
 }
 
 /** The overheal 67 spends: 5 hitpoints above the base level, if there are. */
@@ -438,6 +434,7 @@ function damageApply({ target, hit }) {
 module.exports = function attach(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
+  api.registerMeleeStrengthBonusModifier(meleeStrengthBonus);
   api.registerMeleeHitModifier(meleeMaxHit);
   api.onCustomEvent("combat:hit-rolled", rolled);
   api.onCombatAttackDistance(attackDistance);
@@ -448,4 +445,4 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("combat:damage-apply", damageApply);
 };
 
-module.exports._test = { distance, hasShield, hasTwoHandedShieldOrOffhand, isMeleeWeapon, heavyWeaponsCarried, thornsDamage, derived, MAX_BLINDBAG_CHAIN };
+module.exports._test = { meleeStrengthBonus, meleeMaxHit, distance, hasShield, hasTwoHandedShieldOrOffhand, isMeleeWeapon, heavyWeaponsCarried, thornsDamage, derived, MAX_BLINDBAG_CHAIN };

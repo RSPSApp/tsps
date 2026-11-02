@@ -61,6 +61,10 @@ before(async () => {
     registerCommand: (name, handler) => (hooks[`command:${name}`] = handler),
     onInterfaceActionButton: (ids, handler) => { for (const id of [].concat(ids)) on(`button:${id}`)(handler); },
     registerMeleeHitModifier: (modifier) => (modifiers.meleeHit ??= []).push(modifier),
+    registerMeleeStrengthBonusModifier: (modifier) => {
+      (modifiers.meleeStrength ??= []).push(modifier);
+      require("../dist/game/content/combat/EquipmentEffects").registerMeleeStrengthBonusModifier(modifier);
+    },
     registerMeleeAttackAccuracyModifier: (modifier) => (modifiers.meleeAccuracy ??= []).push(modifier),
     registerRangedAttackAccuracyModifier: (modifier) => (modifiers.rangedAccuracy ??= []).push(modifier),
     registerMagicAttackAccuracyModifier: (modifier) => (modifiers.magicAccuracy ??= []).push(modifier),
@@ -183,32 +187,35 @@ test("+1% melee max hit per melee damage pact", () => {
   for (const other of others) assert.equal(modified(modifiers.meleeHit, other, 100), 100);
 });
 
-test("melee strength: +50% of the prayer bonus; +20% of Strength with a light or one-handed weapon", () => {
+test("melee strength: +50% of the prayer bonus and +20% of Strength (light or one-handed) join the strength bonus at roll time", () => {
   const prayer = cast("pact-prayer", { [effect("melee_strength_prayer_bonus")]: 1 });
-  for (const player of [prayer.holder, ...prayer.others]) {
+  const setBonuses = (player, strength, prayerBonus = 0) => {
     const other = player.getBonusManager().getOtherBonus();
-    other[core.BonusManager.STRENGTH] = 36;
-    other[core.BonusManager.PRAYER] = 10;
-  }
-  assert.equal(modified(modifiers.meleeHit, prayer.holder, 100), 105, "+5 strength on 100 (36 + 64)");
-  for (const other of prayer.others) assert.equal(modified(modifiers.meleeHit, other, 100), 100);
+    other[core.BonusManager.STRENGTH] = strength;
+    other[core.BonusManager.PRAYER] = prayerBonus;
+  };
+  for (const player of [prayer.holder, ...prayer.others]) setBonuses(player, 36, 11);
+  assert.equal(modified(modifiers.meleeStrength, prayer.holder, 36), 41, "+50% of 11 prayer bonus, rounded down: +5");
+  for (const other of prayer.others) assert.equal(modified(modifiers.meleeStrength, other, 36), 36, "nobody else");
+  assert.equal(modified(modifiers.meleeHit, prayer.holder, 100), 100, "no max-hit scaling any more: the bonus is in the formula");
+  // The core's formula sees it: 99 Strength, no prayer, accurate style (+8): (107 * (41 + 64) + 320) / 640 = 18.
+  for (const player of [prayer.holder, ...prayer.others]) player.getFightType = () => ({ getStyle: () => core.FightStyle.ACCURATE });
+  assert.equal(core.DamageFormulas.calculateMaxMeleeHit(prayer.holder), 18);
+  assert.equal(core.DamageFormulas.calculateMaxMeleeHit(prayer.others[0]), 17, "(107 * 100 + 320) / 640 without it");
+  setBonuses(prayer.holder, 36, -4);
+  assert.equal(modified(modifiers.meleeStrength, prayer.holder, 36), 36, "a negative prayer bonus adds nothing");
 
   const strength = cast("pact-strength", { [effect("multi_hit_str_increase")]: 1 });
-  const setStrength = (player) => (player.getBonusManager().getOtherBonus()[core.BonusManager.STRENGTH] = 36);
   wield(strength.holder, ITEMS.runeScimitar);
-  setStrength(strength.holder);
-  assert.equal(modified(modifiers.meleeHit, strength.holder, 100), 119, "20% of 99 is 19, one-handed");
+  assert.equal(modified(modifiers.meleeStrength, strength.holder, 36), 55, "one-handed: 20% of 99 is 19");
   wield(strength.holder, ITEMS.godsword);
-  setStrength(strength.holder);
-  assert.equal(modified(modifiers.meleeHit, strength.holder, 100), 100, "a heavy two-hander");
+  assert.equal(modified(modifiers.meleeStrength, strength.holder, 36), 36, "a heavy two-hander");
   wield(strength.holder, ITEMS.whip);
-  setStrength(strength.holder);
   strength.holder.getSkillManager().setCurrentLevel(Skill.STRENGTH, 118, false);
-  assert.equal(modified(modifiers.meleeHit, strength.holder, 100), 123, "the boosted level: 23");
+  assert.equal(modified(modifiers.meleeStrength, strength.holder, 36), 59, "the boosted level: 23");
   for (const other of strength.others) {
     wield(other, ITEMS.whip);
-    setStrength(other);
-    assert.equal(modified(modifiers.meleeHit, other, 100), 100);
+    assert.equal(modified(modifiers.meleeStrength, other, 36), 36);
   }
 });
 
@@ -536,4 +543,13 @@ test("recoil from a ring of recoil lands with 1% of the wearer's defence bonuses
     equip(other, core.Equipment.RING_SLOT, ITEMS.ringOfRecoil);
     assert.equal(recoil(other), 5);
   }
+});
+
+test("Blindbag: the Dramen staff is no Blindbag weapon (Wiki, 6 May 2026)", () => {
+  const DRAMEN_STAFF = 772;
+  const { holder } = cast("pact-dramen", { [effect("free_random_weapon_attack_chance")]: 1 });
+  holder.getInventory().add(new core.Item(DRAMEN_STAFF, 1));
+  assert.deepEqual(Melee._test.heavyWeaponsCarried(holder), [], "1.8kg and a melee weapon, but left out");
+  holder.getInventory().add(new core.Item(ITEMS.elderMaul, 1));
+  assert.deepEqual(Melee._test.heavyWeaponsCarried(holder), [ITEMS.elderMaul]);
 });

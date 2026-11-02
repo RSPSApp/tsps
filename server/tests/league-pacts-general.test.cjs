@@ -36,6 +36,7 @@ const AIR_RUNE = 556;
 const FIRE_RUNE = 554;
 const RUNE_ARROW = 892;
 const DRAGON_DEFENDER = 12954;
+const RUNE_KITESHIELD = 1201;
 const HILL_GIANT = 2098;
 
 /** Node indices of the cache's tree for each effect used here. */
@@ -75,6 +76,8 @@ before(async () => {
     registerMagicAttackAccuracyModifier: (modifier) => mine("magicAccuracy", modifier),
     registerMeleeDefenseModifier: (modifier) => mine("meleeDefence", modifier),
     registerMagicDefenseModifier: (modifier) => mine("magicDefence", modifier),
+    // The plugin's own attach registers it with the core; the second attach only captures it.
+    registerRestingLevelModifier: (modifier) => (attachingGeneral ? mine("resting", modifier) : SkillManager.registerRestingLevelModifier(modifier)),
     registerBonusProvider: (provider) => mine("bonuses", provider),
     registerRangedAmmoHandler: () => {},
     registerRangedCombatModifier: () => {},
@@ -220,17 +223,66 @@ test("accuracy adds up: each small damage node's +10% beside the accuracy pact, 
   }
 });
 
-test("Defence: +value levels in the melee and ranged defence level, 30% of it in the magic one", () => {
+test("Defence: a visible, permanent boost of value levels; decay and restoration rest at it; a reset takes it back", () => {
   const { pacts, others } = cast("defence", [NODES.defence5, NODES.defence15]);
-  assert.equal(modifiers.meleeDefence(pacts, 100), 120);
-  assert.equal(modifiers.magicDefence(pacts, 100), 106);
+  const level = (player) => player.getSkillManager().getCurrentLevel(Skill.DEFENCE);
+  for (const player of [pacts, ...others]) emit("league:pact-unlocked", { player, node: NODES.defence15, effect: "talent_defence_boost" });
+  assert.equal(level(pacts), 119, "99 + 5 + 15, shown in the skills tab (237/01170: 114 with 15)");
+  assert.equal(pacts.getSkillManager().getRestingLevel(Skill.DEFENCE), 119);
+  assert.equal(modifiers.meleeDefence, undefined, "no roll-time Defence: the rolls read the boosted level");
+  assert.equal(modifiers.magicDefence, undefined);
   for (const other of others) {
-    assert.equal(modifiers.meleeDefence(other, 100), 100);
-    assert.equal(modifiers.magicDefence(other, 100), 100);
+    assert.equal(level(other), 99, "nobody else");
+    assert.equal(other.getSkillManager().getRestingLevel(Skill.DEFENCE), 99);
+  }
+  // A drained level climbs back to the boost, not to the base, a point a restore.
+  pacts.getSkillManager().setCurrentLevel(Skill.DEFENCE, 117, false);
+  let cycle = 0;
+  const restore = (player) => { cycle += 1000; player.processStatRestoration(cycle); };
+  restore(pacts);
+  restore(pacts);
+  assert.equal(level(pacts), 118);
+  restore(pacts);
+  restore(pacts);
+  assert.equal(level(pacts), 119, "and no further");
+  // Buying again (a login after one) adds only what changed.
+  emit("league:pact-unlocked", { player: pacts, node: NODES.defence5, effect: "talent_defence_boost" });
+  assert.equal(level(pacts), 119);
+  // A reset takes the boost back; a level drained below the base stays where it is.
+  Common.save(pacts, []);
+  emit("league:pacts-reset", { player: pacts });
+  assert.equal(level(pacts), 99, "237/01158: 99 after the reset");
+  Common.save(pacts, [NODES.defence15]);
+  emit("league:pact-unlocked", { player: pacts, node: NODES.defence15, effect: "talent_defence_boost" });
+  pacts.getSkillManager().setCurrentLevel(Skill.DEFENCE, 60, false);
+  Common.save(pacts, []);
+  emit("league:pacts-reset", { player: pacts });
+  assert.equal(level(pacts), 60);
+});
+
+test("Defence: boost decay stops at the resting level", () => {
+  const potions = require("../plugins/items/Potions.plugin");
+  potions.register(new Proxy({ core, persistAttribute() {}, emitCustomEvent: () => {} }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  const { pacts, others } = cast("defencedecay", [NODES.defence15]);
+  for (const player of [pacts, ...others]) {
+    emit("league:pact-unlocked", { player, node: NODES.defence15, effect: "talent_defence_boost" });
+    player.getSkillManager().setCurrentLevel(Skill.DEFENCE, 118, false);
+  }
+  const decay = (player, times) => {
+    for (let i = 0; i < times; i++) {
+      player.setAttribute("potions:boost-cycle", 1);
+      potions._test.processBoostDecay(player);
+    }
+  };
+  decay(pacts, 10);
+  assert.equal(pacts.getSkillManager().getCurrentLevel(Skill.DEFENCE), 114, "a super defence's 118 decays to 99 + 15, not 99");
+  for (const other of others) {
+    decay(other, 25);
+    assert.equal(other.getSkillManager().getCurrentLevel(Skill.DEFENCE), 99);
   }
 });
 
-test("off-hand: a shield-slot item gives +5 melee and ranged strength and +2% magic damage", () => {
+test("off-hand: a shield-slot item that is not a shield gives +5 melee and ranged strength and +2% magic damage", () => {
   const { pacts, others } = cast("offhand", [NODES.offhand]);
   const bonuses = (player) => {
     const event = { player, bonuses: new Array(14).fill(0) };
@@ -238,6 +290,8 @@ test("off-hand: a shield-slot item gives +5 melee and ranged strength and +2% ma
     return event.bonuses.slice(10);
   };
   assert.deepEqual(bonuses(pacts), [0, 0, 0, 0], "nothing in the shield slot");
+  pacts.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(RUNE_KITESHIELD, 1));
+  assert.deepEqual(bonuses(pacts), [0, 0, 0, 0], "a shield is no off-hand (the block-heal pact names them apart)");
   for (const player of [pacts, ...others]) player.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(DRAGON_DEFENDER, 1));
   assert.deepEqual(bonuses(pacts), [5, 5, 2, 0]);
   for (const other of others) assert.deepEqual(bonuses(other), [0, 0, 0, 0]);

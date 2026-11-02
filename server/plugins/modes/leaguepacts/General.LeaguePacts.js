@@ -10,18 +10,23 @@
  *   `ranged:ammo-saving` (quivers, thrown weapons, chinchompas, blowpipe scales). Charges:
  *   `combat:consume-charge`. Each proc then emits `league:pact-regenerated` { player, kind "rune" |
  *   "ammo" | "charge", itemId (the rune or ammunition, -1 for a charge), amount, combat, spell?,
- *   spellId?, weaponId? }, one per rune id for a cast.
+ *   spellId?, weaponId?, first? }, one per rune id for a cast (`first` on the cast's first, so a
+ *   once-a-proc effect acts once). Ours: a proc saves the whole cast's runes (the text: "generate
+ *   an additional resource spent").
  * - 12 `talent_all_style_accuracy`: +value% to the three attack rolls (the accuracy modifiers),
  *   summed with the small damage nodes' "+10% accuracy in all combat styles" each (7, 14, 15), so
  *   every pact's accuracy adds up.
- * - 13 `talent_defence_boost`: +value Defence levels in the defence rolls (the melee defence
- *   modifier, which the ranged roll shares, and 30% of it in the magic one). Approximated: the boost
- *   is invisible (the skills tab keeps the base level) and is added after the prayer multiplier; a
- *   visible permanent boost needs Potions' boost decay (processBoostDecay) and the core's
- *   restoration to accept a per-skill floor.
- * - 16 `talent_offhand_stat_boost`: with an item in the shield slot, +5 melee strength, +5 ranged
- *   strength and +2% magic damage (a bonus provider, so the equipment stats show it). Approximated:
- *   the cache does not tell an off-hand from a shield, so any shield-slot item counts.
+ * - 13 `talent_defence_boost`: a permanent, visible Defence boost of value levels, as recorded
+ *   (237/01170 and 238/01223 log in at Defence 114 with 99 and 15; 238/01219 keeps 114 through 27
+ *   stat updates; 237/01158 shows 109, 118 with a potion, 99 after the reset): the current level
+ *   rises by the boost, and the core's resting level (registerRestingLevelModifier) is base + boost,
+ *   so boost decay stops there and natural restoration climbs back to it. Every roll reads the
+ *   current level, so nothing more is added in them. A pact change (a buy, a reset, a login after
+ *   one) moves the current level by the difference, kept in `league:pact-defence-applied`; a
+ *   reset leaves a drained level as it is (ours).
+ * - 16 `talent_offhand_stat_boost`: with an off-hand (Common.hasOffhand: a shield-slot item that
+ *   is not a shield, as the block-heal pact's text tells them apart), +5 melee strength, +5 ranged
+ *   strength and +2% magic damage (a bonus provider, so the equipment stats show it).
  * - 18 `talent_overhealing_via_talents`: `league:pact-heal` { player, amount } heals, up to base
  *   Hitpoints plus value% of it with this pact (the base otherwise), and sets `healed`. Every pact
  *   heal goes through it; the core's Hitpoints timer brings an overheal down.
@@ -60,8 +65,8 @@ const PRAYER_RESTORE = "talent_prayer_restore_no_overhead";
 const DISTANCE_SPEC = "talent_restore_sa_energy_from_distance";
 const STYLE_SWAP = "talent_max_hit_style_swap";
 
-/** The magic defence roll is 70% Magic, 30% Defence (AccuracyFormulasDpsCalc.defenseMagicRoll). */
-const MAGIC_DEFENCE_SHARE = 3 / 10;
+/** The Defence the boost already added to the current level (13), saved with that level. */
+const DEFENCE_APPLIED_ATTRIBUTE = "league:pact-defence-applied";
 /** BonusManager's "other" bonuses start at 10 in the bonus array (melee, ranged, magic damage, prayer). */
 const OTHER_BONUSES = 10;
 const OFFHAND_MELEE_STRENGTH = 5;
@@ -148,8 +153,10 @@ function castCommitted({ player, spell, runesSaved }) {
   if (!runesSaved || saved.spell !== spell) return;
   const spellId = spell?.spellId?.();
   const spellName = typeof spell?.name === "string" ? spell.name : undefined;
+  let first = true;
   for (const [itemId, amount] of saved.runes) {
-    emitRegenerated({ player, kind: "rune", itemId, amount, combat: saved.combat, spell, spellId, spellName });
+    emitRegenerated({ player, kind: "rune", itemId, amount, combat: saved.combat, spell, spellId, spellName, first });
+    first = false;
   }
 }
 
@@ -188,18 +195,32 @@ function accuracy(entity, roll) {
   return percent > 0 ? Math.floor((roll * (100 + percent)) / 100) : roll;
 }
 
-function meleeDefence(entity, level) {
-  return level + value(entity, DEFENCE_BOOST);
+/** 13: the level Defence rests at, base plus the boost. */
+function restingLevel(player, skill, level) {
+  if (skill !== core.Skill.DEFENCE) return level;
+  return level + value(player, DEFENCE_BOOST);
 }
 
-function magicDefence(entity, level) {
-  return level + Math.floor(value(entity, DEFENCE_BOOST) * MAGIC_DEFENCE_SHARE);
+/**
+ * 13: the current Defence moved by what the boost changed since it was last applied. A rise adds
+ * it; a fall takes it back only down to the new resting level (a drained level stays drained).
+ */
+function applyDefenceBoost(player) {
+  if (!player?.isPlayer?.()) return;
+  const boost = value(player, DEFENCE_BOOST);
+  const applied = Number(player.getAttribute(DEFENCE_APPLIED_ATTRIBUTE)) || 0;
+  if (boost === applied) return;
+  const skills = player.getSkillManager();
+  const { DEFENCE } = core.Skill;
+  const current = skills.getCurrentLevel(DEFENCE);
+  const delta = boost - applied;
+  const next = delta > 0 ? current + delta : Math.max(current + delta, Math.min(current, skills.getMaxLevel(DEFENCE) + boost));
+  player.setAttribute(DEFENCE_APPLIED_ATTRIBUTE, boost);
+  if (next !== current) skills.setCurrentLevel(DEFENCE, Math.max(1, next), true);
 }
 
 function offhandBonuses({ player, bonuses }) {
-  if (value(player, OFFHAND) <= 0) return;
-  const shield = player.getEquipment().getItems()[core.Equipment.SHIELD_SLOT];
-  if (!shield || shield.getId() <= 0) return;
+  if (value(player, OFFHAND) <= 0 || !Common.hasOffhand(player)) return;
   bonuses[OTHER_BONUSES + core.BonusManager.STRENGTH] += OFFHAND_MELEE_STRENGTH;
   bonuses[OTHER_BONUSES + core.BonusManager.RANGED_STRENGTH] += OFFHAND_RANGED_STRENGTH;
   bonuses[OTHER_BONUSES + core.BonusManager.MAGIC_STRENGTH] += OFFHAND_MAGIC_DAMAGE;
@@ -352,6 +373,7 @@ function startPrayerRestore(player) {
 
 function refresh(player) {
   if (!player) return;
+  applyDefenceBoost(player);
   core.BonusManager.update(player);
   startPrayerRestore(player);
 }
@@ -375,8 +397,8 @@ module.exports = function attach(pluginApi) {
   api.registerMeleeAttackAccuracyModifier(accuracy);
   api.registerRangedAttackAccuracyModifier(accuracy);
   api.registerMagicAttackAccuracyModifier(accuracy);
-  api.registerMeleeDefenseModifier(meleeDefence);
-  api.registerMagicDefenseModifier(magicDefence);
+  api.persistAttribute(DEFENCE_APPLIED_ATTRIBUTE, 0);
+  api.registerRestingLevelModifier(restingLevel);
   api.registerBonusProvider({ apply: offhandBonuses });
   api.onCustomEvent("league:pact-heal", pactHeal);
   api.onCustomEvent("combat-special:cost", specialCost);

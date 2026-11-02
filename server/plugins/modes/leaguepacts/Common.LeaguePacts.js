@@ -86,7 +86,6 @@ function loadNodes() {
   if (nodes.length > ids.unlocked.length * BITS_PER_VARP) throw new Error(`league pacts: ${nodes.length} nodes exceed the unlock varps`);
 }
 
-/** Whether the character plays the league the tree belongs to. */
 /**
  * Whether the character plays the league the tree belongs to. A character's league is fixed once
  * it joins, and the effects ask on every roll, so the answer is kept per player for the session
@@ -182,6 +181,39 @@ function sendState(player) {
   sender.sendVarbit(ids.varbits.hueycoatlReset, rewards(player).hueycoatl ? 1 : 0);
 }
 
+/** A shield, by name (the cache has no category plugins can read for it): shields, bucklers, wards, the Toktz-ket-xil, Dinh's bulwark. */
+const SHIELD_NAME = /shield|buckler|\bward\b|toktz-ket-xil|bulwark/i;
+
+function slotDefinition(player, slot) {
+  const item = player?.getEquipment?.()?.getItems?.()[slot];
+  const id = Number(item?.getId?.() ?? -1);
+  return id > 0 ? core.ItemDefinition.forId(id) : null;
+}
+
+function isShield(definition) {
+  return definition != null && SHIELD_NAME.test(definition.getName?.() ?? "");
+}
+
+/** A two-handed shield (Dinh's bulwark) wielded. */
+function twoHandedShield(player) {
+  const held = slotDefinition(player, core.Equipment.WEAPON_SLOT);
+  return held !== null && held.isDoubleHanded() && isShield(held);
+}
+
+/** A shield worn: one in the shield slot, or a two-handed one wielded (Thorns, reflect). */
+function hasShield(player) {
+  return isShield(slotDefinition(player, core.Equipment.SHIELD_SLOT)) || twoHandedShield(player);
+}
+
+/**
+ * An off-hand: a shield-slot item that is not a shield (a defender, a book). The block-heal pact
+ * names "a two-handed shield or an off-hand", so a shield is not one; the off-hand pact reads it the same.
+ */
+function hasOffhand(player) {
+  const offhand = slotDefinition(player, core.Equipment.SHIELD_SLOT);
+  return offhand !== null && !isShield(offhand);
+}
+
 /**
  * Tiles between two footprints (adjacent 1, overlapping 0),
  * or Infinity when either has no tile or they stand on different planes. The pacts' distances.
@@ -206,7 +238,7 @@ function uid(group, child) {
 }
 
 module.exports = {
-  init, isPacts, forgetLeague, distance, pacts, earned, resets, rewards, spendable, effects, effect, save, unlockBits, sendState, message, uid,
+  init, isPacts, forgetLeague, distance, slotDefinition, isShield, twoHandedShield, hasShield, hasOffhand, pacts, earned, resets, rewards, spendable, effects, effect, save, unlockBits, sendState, message, uid,
   PACTS_ATTRIBUTE, POINTS_ATTRIBUTE, RESETS_ATTRIBUTE, REWARDS_ATTRIBUTE,
   get nodes() { return nodes; },
   get ids() { return ids; },

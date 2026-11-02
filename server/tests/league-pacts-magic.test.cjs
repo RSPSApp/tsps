@@ -55,6 +55,7 @@ before(async () => {
     setWorldProfile: (profile) => GameConstants.setWorldProfile(profile),
     registerCommand: (name, handler) => (hooks[`command:${name}`] = handler),
     registerMagicDamageBonusModifier: (modifier) => (modifiers.magicDamage = modifier),
+    registerRestingLevelModifier: (modifier) => SkillManager.registerRestingLevelModifier(modifier),
     registerMagicAttackAccuracyModifier: (modifier) => (modifiers.magicAccuracy = modifier),
     registerMeleeAttackAccuracyModifier: (modifier) => (modifiers.meleeAccuracy = modifier),
     registerRangedAttackAccuracyModifier: (modifier) => (modifiers.rangedAccuracy = modifier),
@@ -417,4 +418,25 @@ test("Regenerated powered staff charges also give a water, fire, air and earth r
     regen(other, "charge", I().TRIDENT_OF_THE_SEAS, 1);
     assert.equal(other.getInventory().getAmount(I().WATER_RUNE), 0);
   }
+});
+
+test("Magic's boost is +1 a Regenerate proc, not a rune type: a cast's runes come one event each", () => {
+  const { pacts } = cast("magicregenproc", "talent_regen_magic_level_boost");
+  // One proc of a three-rune cast, as General emits it (238: the event per rune id, `first` on the first).
+  query("league:pact-regenerated", { player: pacts, kind: "rune", itemId: I().DEATH_RUNE, amount: 4, combat: true, first: true });
+  query("league:pact-regenerated", { player: pacts, kind: "rune", itemId: I().BLOOD_RUNE, amount: 2, combat: true, first: false });
+  query("league:pact-regenerated", { player: pacts, kind: "rune", itemId: I().WATER_RUNE, amount: 6, combat: true, first: false });
+  assert.equal(level(pacts, core.Skill.MAGIC), 100);
+  ticks(31);
+});
+
+test("an earth-rune Defence boost on top of the permanent Defence pact expires back to the pact's level", () => {
+  const { pacts } = cast("earthondefence", "talent_earthrune_regen_defence_boost", ["talent_defence_boost", 1]);
+  query("league:pact-unlocked", { player: pacts, node: 0, effect: "talent_defence_boost" });
+  const boosted = 99 + Common.effect(pacts, "talent_defence_boost");
+  assert.equal(level(pacts, core.Skill.DEFENCE), boosted);
+  regen(pacts, "rune", I().EARTH_RUNE, 5);
+  assert.equal(level(pacts, core.Skill.DEFENCE), boosted + 5);
+  ticks(31);
+  assert.equal(level(pacts, core.Skill.DEFENCE), boosted, "only the earth runes' 5 taken back");
 });

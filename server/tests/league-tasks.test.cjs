@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control"]);
   // The agility plugin's course keys (and Yama's stepping stones, the Leagues lair's own course).
   const courseDir = path.join(__dirname, "../plugins/skills/agility/courses");
   const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
@@ -569,6 +569,12 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("complete-the-inferno-5-times"), { kind: "kill", npcs: ["TzKal-Zuk"], count: 5, credited: true });
   assert.deepEqual(trigger("complete-tombs-of-amascut").npcs, ["Tombs of Amascut", "XM: Tombs of Amascut"]);
   assert.equal(trigger("complete-the-corrupted-gauntlet-in-4-30"), undefined, "a time is a condition");
+
+  // Slayer, Temple Trekking and Pest Control completions.
+  assert.deepEqual(trigger("complete-200-slayer-tasks"), { kind: "slayer-tasks", count: 200 });
+  assert.deepEqual(trigger("defeat-25-superior-slayer-creatures"), { kind: "superior-kills", count: 25 });
+  assert.deepEqual(trigger("complete-a-medium-temple-trek"), { kind: "temple-trek", difficulty: "medium", count: 1 });
+  assert.deepEqual(trigger("complete-a-game-of-intermediate-pest-control").boats, ["intermediate", "veteran"]);
 
   // Laps: the agility plugin's course keys; a lap reward of several laps counts them all.
   assert.deepEqual(trigger("complete-10-laps-of-the-varlamore-agility-course"), { kind: "agility-laps", courses: ["wyrm-basic", "wyrm-advanced"], count: 10 }, "either Colossal Wyrm course");

@@ -553,6 +553,10 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   if ((match = /^Reach Total Level (\d+)$/.exec(name))) return { trigger: { kind: "total-level", level: Number(match[1]) } };
   if ((match = /^Reach Base Level (\d+)$/.exec(name))) return { trigger: { kind: "base-level", level: Number(match[1]) } };
   if ((match = /^Reach Combat Level (\d+)$/.exec(name))) return { trigger: { kind: "combat-level", level: Number(match[1]) } };
+  // "Defeat 25 Superior slayer monsters", "Defeat a Superior slayer monster": superiors killed.
+  if ((match = /^Defeat (an?|\d+) Superior slayer monsters?\.?$/i.exec(description))) {
+    return { trigger: { kind: "superior-kills", count: /^an?$/i.test(match[1]) ? 1 : Number(match[1]) } };
+  }
   if ((match = /^(?:Defeat|Kill) (\d+) (.+)$/.exec(name)) || (match = /^(?:Defeat|Kill) (?:a |an |the |some )?(.+?)(?: (\d+) [Tt]imes)?$/.exec(name))) {
     const [, first, second] = match;
     const [named, count] = /^\d+$/.test(first) ? [second, Number(first)] : [first, second ? Number(second) : 1];
@@ -694,6 +698,16 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     if (kind === "cactus") return { trigger: { kind: "check-health", crops: ["CACTUS"], count } };
     if (/\bin\b/i.test(kind) || !types[kind]) return {};
     return { trigger: { kind: "check-health", types: [types[kind]], count } };
+  }
+  // "Complete 1 Slayer task", "Complete 200 Slayer Tasks": Slayer tasks done (from any master).
+  if ((match = /^Complete (\d+) Slayer tasks?\.?$/i.exec(description))) return { trigger: { kind: "slayer-tasks", count: Number(match[1]) } };
+  // "Complete an Easy Temple Trek": a trek of that difficulty finished.
+  if ((match = /^Complete an? (Easy|Medium|Hard) Temple Trek\.?$/i.exec(description))) return { trigger: { kind: "temple-trek", difficulty: match[1].toLowerCase(), count: 1 } };
+  // "Complete a game of Novice Pest Control or higher", "... of Veteran Pest Control": a game won on that boat (or a harder one).
+  if ((match = /^Complete a game of (Novice|Intermediate|Veteran) Pest Control( or higher)?\.?$/i.exec(description))) {
+    const boats = ["novice", "intermediate", "veteran"];
+    const from = boats.indexOf(match[1].toLowerCase());
+    return { trigger: { kind: "pest-control", boats: match[2] ? boats.slice(from) : [boats[from]], count: 1 } };
   }
   // "1 Easy Clue Scroll", "25 Elite Clue Scrolls": a reward casket of that tier opened.
   if ((match = /^(\d+) (Beginner|Easy|Medium|Hard|Elite|Master) Clue Scrolls?$/i.exec(name))) {

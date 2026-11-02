@@ -338,3 +338,43 @@ test("a minigame completed as its plugin credits it: the Fight Cave won, not a J
   FightCaves.finish(f.player, true);
   assert.equal(f.player.getAttribute("league:task-kills")["complete-the-fight-caves-5-times"], 1, "the cave won");
 });
+
+test("slayer: a task completed by the real Slayer plugin; a superior killed (on task or off)", (t) => {
+  const f = pactsCharacter(t);
+  const Tasks = require("../plugins/skills/slayer/Tasks.Slayer");
+  const Data = require("../plugins/skills/slayer/Data.Slayer");
+  const master = [...Data.get().masters.values()].find((each) => each.names.includes("Turael"));
+  const assigned = Tasks.assign(f.player, master, () => 0);
+  assert.ok(!assigned?.refused && Tasks.current(f.player), `the real Slayer assigns one: ${assigned?.refused}`);
+  Tasks.complete(f.player, Tasks.current(f.player));
+  assert.ok(done(f, "complete-1-slayer-task"));
+  assert.equal(f.player.getAttribute("league:task-progress")["complete-200-slayer-tasks"], 1);
+  kill(f, "Crushing hand");
+  assert.ok(done(f, "defeat-a-superior-slayer-creature"), "the real Superiors' death handler");
+});
+
+test("pest-control: a real match won on the novice boat (Novice or higher, not Intermediate)", (t) => {
+  const f = pactsCharacter(t);
+  const plugin = require("../plugins/minigames/PestControl.plugin");
+  const boat = plugin._test.BOATS.find((each) => each.key === "novice");
+  const match = new plugin._test.PestControlMatch(boat, [f.player], () => {});
+  match.players.get(f.player).activity = 100;
+  match.finish(true, "won");
+  assert.ok(f.messages.some((text) => /Void Knight commendation points/.test(text)), `rewarded: ${f.messages}`);
+  assert.ok(done(f, "complete-a-game-of-novice-pest-control"));
+  assert.ok(!done(f, "complete-a-game-of-intermediate-pest-control"));
+});
+
+test("temple-trek: a real trek rewarded, by its companion's difficulty (Complete a Hard Temple Trek)", (t) => {
+  const f = pactsCharacter(t);
+  const Common = require("../plugins/minigames/templetrekking/Common.TempleTrekking");
+  const Trek = require("../plugins/minigames/templetrekking/Trek.TempleTrekking");
+  const follower = Common.data.followers.find((entry) => entry.difficulty === "hard");
+  const trek = new Trek.Trek(f.player, follower);
+  trek.route = 0;
+  t.mock.method(Common, "itemStatement", () => {});
+  t.mock.method(trek, "finish", () => {});
+  trek.reward();
+  assert.ok(done(f, "complete-a-hard-temple-trek"));
+  assert.ok(!done(f, "complete-an-easy-temple-trek"), "a trek of its own difficulty only");
+});

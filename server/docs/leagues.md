@@ -1565,7 +1565,11 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   count }` (a clue tier's Treasure Trails slots: "Fill 15 slots in the Hard Clue section", "Gain 10
   unique items from Reward casket (easy)") asked of the log's `collection-log:slots` when
   `collection-log:new-item` fills one and at login, `check-health { types | crops, count }` from
-  `farming:check-health` (its crop type, or a cactus by its crop), and `eat-heal { heal }` from `food:eaten`'s `restores` (what
+  `farming:check-health` (its crop type, or a cactus by its crop), `slayer-tasks { count }` from
+  Slayer's `slayer:task-completed`, `superior-kills { count }` from `slayer:superior-killed` (on
+  task or off), `temple-trek { difficulty, count }` from `temple-trekking:completed` (its own
+  difficulty), `pest-control { boats, count }` from `pest-control:won` (a rewarded win; "or
+  higher" the harder boats too), and `eat-heal { heal }` from `food:eaten`'s `restores` (what
   the food restores, at full health too): "Eat / Drink a X" by the description's item or else the
   name's, a place ("in Auburn Valley", "from a bird bath") none. The generator derives them from the
   name and the Wiki's description, read with its links' targets (a set an equip task names is the

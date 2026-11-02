@@ -409,6 +409,8 @@ function complete(player, task) {
   const xp = Math.floor(Number(player.getAttribute(TASK_XP_ATTRIBUTE)) || 0);
   player.sendMessage(fill(COMPLETE, { amount: killedAmount(task), name: task.task?.displayName ?? "", xp: xp.toLocaleString("en-US") }));
   clear(player);
+  // "slayer:task-completed" { player, master }: a task done (a league's "Complete 1 Slayer task").
+  api.emitCustomEvent("slayer:task-completed", { player, master: task.masterId });
   if (task.masterId === MORTIMER) {
     completeMortimer(player, task.modifier);
     return;

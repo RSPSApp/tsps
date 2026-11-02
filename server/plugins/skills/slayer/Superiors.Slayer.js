@@ -156,7 +156,10 @@ function normalIdOf(superior) {
 
 /** A superior's Slayer XP off task (on task, the task's kill gave it). */
 function npcKilled({ killer, npc }) {
-  if (!killer?.isPlayer?.() || !isSuperior(npc) || onTaskKills.has(npc)) return;
+  if (!killer?.isPlayer?.() || !isSuperior(npc)) return;
+  // "slayer:superior-killed" { player, npc }: a superior killed, on task or off (a league's "Defeat 25 Superior slayer monsters").
+  api.emitCustomEvent("slayer:superior-killed", { player: killer, npc });
+  if (onTaskKills.has(npc)) return;
   const hitpoints = (npc.getCurrentDefinition?.() ?? npc.getDefinition()).getHitpoints();
   killer.getSkillManager().addExperiences(core.Skill.SLAYER, hitpoints * DATA.xpPerHitpoint);
 }

@@ -32,6 +32,9 @@
  *   log (`collection-log:slots`) when one fills (`collection-log:new-item`) and at login.
  * - `check-health { types | crops, count }`: a grown crop's health checked, by the farming
  *   plugin's crop type (FRUIT_TREE, TREE, CALQUAT...) or crop (CACTUS), `farming:check-health`.
+ * - `slayer-tasks { count }` (`slayer:task-completed`), `superior-kills { count }`
+ *   (`slayer:superior-killed`), `temple-trek { difficulty, count }` (`temple-trekking:completed`),
+ *   `pest-control { boats, count }` (`pest-control:won`).
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -58,7 +61,7 @@ function add(map, name, task) {
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [], collectionLog: [], checkHealth: new Map() };
+  const entry = { equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [], collectionLog: [], checkHealth: new Map(), events: new Map() };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (trigger?.kind === "equip" || trigger?.kind === "equip-all" || trigger?.kind === "equip-any-set") entry.equip.push(task);
@@ -76,6 +79,7 @@ function indexOf(type) {
     else if (trigger?.kind === "pick") for (const plant of trigger.plants ?? []) add(entry.pick, plant, task);
     else if (trigger?.kind === "pick-each") entry.pickEach.push(task);
     else if (trigger?.kind === "collection-log") entry.collectionLog.push(task);
+    else if (EVENT_KINDS.has(trigger?.kind)) add(entry.events, trigger.kind, task);
     else if (trigger?.kind === "check-health") {
       for (const cropType of trigger.types ?? []) add(entry.checkHealth, `type:${cropType}`, task);
       for (const crop of trigger.crops ?? []) add(entry.checkHealth, `crop:${crop}`, task);
@@ -300,6 +304,24 @@ function checkedHealth({ player, type, crop }) {
   count(player, "checkHealth", `crop:${crop}`);
 }
 
+/** Kinds counted once per event, a filter on the event's payload (temple-trek's difficulty, pest-control's boat). */
+const EVENT_KINDS = new Map([
+  ["slayer-tasks", () => true],
+  ["superior-kills", () => true],
+  ["temple-trek", (trigger, event) => trigger.difficulty === event.difficulty],
+  ["pest-control", (trigger, event) => trigger.boats.includes(event.boat)],
+]);
+
+function onEvent(kind) {
+  return (event) => {
+    const player = event?.player;
+    const type = player ? Common.leagueOf(player) : null;
+    if (type === null) return;
+    const accepts = EVENT_KINDS.get(kind);
+    countTasks(player, type, (indexOf(type).events.get(kind) ?? []).filter((task) => accepts(task.trigger, event)));
+  };
+}
+
 function lapped({ player, course, count: laps }) {
   if (player) count(player, "laps", course, Number(laps ?? 1) || 1);
 }
@@ -323,6 +345,10 @@ module.exports = function attach(api) {
   api.onCustomEvent("treasure-trails:casket-opened", casket);
   api.onCustomEvent("agility:lap", lapped);
   api.onCustomEvent("food:eaten", ate);
+  api.onCustomEvent("slayer:task-completed", onEvent("slayer-tasks"));
+  api.onCustomEvent("slayer:superior-killed", onEvent("superior-kills"));
+  api.onCustomEvent("temple-trekking:completed", onEvent("temple-trek"));
+  api.onCustomEvent("pest-control:won", onEvent("pest-control"));
   api.onCustomEvent("farming:check-health", checkedHealth);
   api.onCustomEvent("collection-log:new-item", logged);
   api.onCustomEvent("world:picked", picked);

@@ -791,7 +791,7 @@ export class WidgetsOverlay implements Overlay {
      * the same combination or it renders at 1x into a device-pixel buffer, i.e. half size
      * on a 2x display. __uiRenderScale is the same source choose-option.ts uses.
      */
-    private getOverlayTextScale(): { x: number; y: number } {
+    getOverlayTextScale(): { x: number; y: number } {
         const renderScale = (this.overlayCanvas as any)?.__uiRenderScale;
         const base = typeof renderScale === "number" && renderScale > 0 ? renderScale : 1;
         return { x: base * this.overlayScaleX, y: base * this.overlayScaleY };
@@ -1174,6 +1174,15 @@ export class WidgetsOverlay implements Overlay {
             sprite: (id: number) => (glr.canvas as any).__textureCache?.getSpriteById(id),
             itemImage: (itemId: number, quantity: number, outline: number) =>
                 this.ctx.getItemIconCanvas?.()?.(itemId, quantity, outline, 0, 0),
+            overlayTextScale: () => this.getOverlayTextScale(),
+            inputScale: () => {
+                const canvas = glr.canvas as any;
+                const x = Number(canvas?.__uiInputScaleX), y = Number(canvas?.__uiInputScaleY);
+                return {
+                    x: Number.isFinite(x) && x > 0 ? x : this.overlayScaleX,
+                    y: Number.isFinite(y) && y > 0 ? y : this.overlayScaleY,
+                };
+            },
             place: (overlay: WidgetOverlay, width: number, height: number) =>
                 this.ctx.getGameContext?.()?.osrsClient?.clientPlugins?.placeOverlay(overlay, width, height, {
                     w: glr.width,

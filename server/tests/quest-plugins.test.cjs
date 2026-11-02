@@ -14723,31 +14723,37 @@ test('manor front doors close after entry and the back door crosses both ways', 
   assert.deepEqual(open(O.DOOR_15, 3123, 3361, 3, tile(3123, 3361)), [3123, 3360]);
 });
 
-test('fortress sturdy doors and secret walls can be crossed and recrossed from their own tile', () => {
+test('fortress sturdy doors and secret walls can be crossed and recrossed from their own tile', (t) => {
   const { api, handlers, quest, player, tile } = questScene('BlackKnightsFortress');
   const { ObjectIdentifiers: O, GameObject } = api.core;
+  const walks = [];
+  t.mock.method(require('../plugins/skills/agility/ObstacleRunner.Agility.js'), 'run', (_, steps) => walks.push(steps[0].walk[0]));
   for (const stage of [1, 2, 3]) {
     quest.setStage(player, stage);
-    for (const [id, x, y, face, option] of [
-      [O.STURDY_DOOR_2, 3025, 3511, 2, 'Open'],
-      [O.WALL_8, 3016, 3517, 3, 'Push'],
-      [O.WALL_8, 3030, 3510, 3, 'Push'],
+    for (const [id, x, y, face, option, axis, across] of [
+      [O.STURDY_DOOR_2, 3025, 3511, 2, 'Open', 'x', 1],
+      [O.WALL_8, 3016, 3517, 3, 'Push', 'y', -1],
+      [O.WALL_8, 3030, 3510, 3, 'Push', 'y', -1],
     ]) {
       const object = new GameObject(id, tile(x, y, 1), 0, face);
-      const axis = face === 2 ? 'x' : 'y';
-      for (const side of [-1, 0, 1]) {
-        const from = { x, y, z: 1, [axis]: (axis === 'x' ? x : y) + side };
+      const centre = axis === 'x' ? x : y;
+      for (const side of [-1, 1]) {
+        const from = { x, y, z: 1, [axis]: centre + side };
         player.moveTo(tile(from.x, from.y, from.z));
         const route = { player, object, objectId: id, sourceLocation: from };
         handlers.route.forEach((h) => h(route));
+        assert.equal(route.destination[axis], side === across ? centre + across : centre, 'routes to its own side');
         player.moveTo(tile(route.destination.x, route.destination.y, 1));
         const event = { player, object, objectId: id, location: { x, y, z: 1 }, clickType: 1,
           definition: { getInteractions: () => [option] } };
         handlers.object.forEach((h) => h(event));
-        const direction = side || (face === 2 ? -1 : 1);
-        assert.equal(player.getLocation()[axis === 'x' ? 'getX' : 'getY'](), (axis === 'x' ? x : y) - direction);
         assert.equal(event.handled, true);
+        const [walkX, walkY] = walks.at(-1);
+        assert.equal(axis === 'x' ? walkX : walkY, side === across ? centre : centre + across, 'walks through to the other side');
       }
+      const inLine = { player, object, objectId: id, sourceLocation: { x, y, z: 1 } };
+      handlers.route.forEach((h) => h(inLine));
+      assert.equal(inLine.destination, undefined, 'in line with the passage, the ordinary object route picks the reachable side');
     }
   }
 });

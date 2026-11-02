@@ -1619,6 +1619,10 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   from the attack dummies' `dummies:hit`, `gather-with { skill, tools, items?, count, area? }` from
   `woodcutting:success`'s `axeId` and `mining:success`'s `pickaxeId` ("Chop any kind of logs using
   a steel axe"),
+  `teleport { spells, count }` from `spell:teleport-arrival` (a teleport spell landed, by
+  SpellTeleports' name: "Cast Kourend Castle Teleport", "Teleport to Civitas illa Fortis" with its
+  spellbook, "Teleport Using Law Runes" every one whose runes have a law rune; the Lunar and Arceuus
+  books' teleports name no arrival, Home Teleport is its own),
   `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what

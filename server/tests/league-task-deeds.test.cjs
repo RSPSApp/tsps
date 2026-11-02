@@ -222,6 +222,20 @@ test("produce with a place: a shark cooked in Darkmeyer counts for its task, out
   assert.equal((away.player.getAttribute("league:task-progress") ?? {})["cook-20-sharks-in-darkmeyer"], undefined, "outside Darkmeyer");
 });
 
+test("teleport: a teleport spell cast and landed (Teleport to Civitas illa Fortis)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.MAGIC, 99);
+  skills.setCurrentLevel(core.Skill.MAGIC, 99);
+  for (const [rune, amount] of [["Law rune", 2], ["Earth rune", 1], ["Fire rune", 1]]) f.player.getInventory().add(new core.Item(item(rune), amount), true);
+  assert.equal(core.SpellTeleports.handleSelf(f.player, "Civitas illa Fortis Teleport"), true);
+  assert.equal(f.player.getInventory().getAmount(item("Law rune")), 0, `the real cast pays its runes: ${f.messages}`);
+  assert.ok(!done(f, "teleport-to-civitas-illa-fortis"), "not until it lands");
+  await ticks(f, 8);
+  assert.ok(done(f, "teleport-to-civitas-illa-fortis"), `landed at ${f.player.getLocation()}`);
+  assert.ok(done(f, "teleport-using-law-runes"), "a law rune teleport too");
+});
+
 /** An inventory item's option, as the client clicks it. */
 async function inventoryOption(f, name, option, optionIndex = 1, count = 4) {
   const id = item(name);

@@ -887,6 +887,42 @@ function withoutOnlyHome(description: string, homes?: Map<string, string[]>): st
   return `${match[1]}${match[4]}`;
 }
 
+/** SpellTeleports' teleport spells (the Normal and Ancient books): name, spellbook and runes. */
+let teleportSpells: Array<{ name: string; book: string; runes: number[] }> | null = null;
+function teleportSpellList() {
+  if (teleportSpells) return teleportSpells;
+  const { SpellTeleports } = require(path.resolve(__dirname, "../src/main/typescript/elvarg/game/content/combat/magic/SpellTeleports"));
+  const { MagicSpellbook } = require(path.resolve(__dirname, "../src/main/typescript/elvarg/game/model/MagicSpellbook"));
+  teleportSpells = SpellTeleports.getTeleportDestinations().map((spell: any) => ({
+    name: spell.name, book: spell.spellbook === MagicSpellbook.ANCIENT ? "ancient" : spell.spellbook === MagicSpellbook.NORMAL ? "standard" : "other",
+    runes: spell.runes.map((rune: any) => rune.getId()),
+  }));
+  return teleportSpells!;
+}
+
+/** The teleport spells a task names: "Cast X Teleport", "Teleport to X using the standard spellbook", "... that uses Law Runes". */
+function teleportOf(name: string, description: string, items: Map<string, string>): string[] | null {
+  const spells = teleportSpellList();
+  let match: RegExpExecArray | null;
+  if ((match = /^Cast (?:the )?(.+? Teleport)$/i.exec(name))) {
+    const said = /^Cast the (?:spell )?(.+? Teleport)(?: spell)?$/i.exec(description)?.[1];
+    const spell = spells.find((each) => each.name === match![1].toLowerCase());
+    return spell && (!said || said.toLowerCase() === spell.name) ? [spell.name] : null;
+  }
+  if ((match = /^Teleport to (.+)$/i.exec(name)) && (match = /^Teleport to (.+?) using the (standard|ancient) spellbook$/i.exec(description))) {
+    const spell = spells.find((each) => each.name === `${match![1].toLowerCase()} teleport` && each.book === match![2].toLowerCase());
+    return spell ? [spell.name] : null;
+  }
+  if ((match = /^Cast any teleport spell that uses ([A-Za-z]+ Runes?)$/i.exec(description))) {
+    const rune = items.get(match[1].replace(/s$/i, "").toLowerCase());
+    if (!rune) return null;
+    const id = [...Array(CacheDefinitions.getCounts().items).keys()].find((each) => CacheDefinitions.getItem(each)?.name === rune);
+    const using = spells.filter((spell) => spell.runes.includes(id!)).map((spell) => spell.name);
+    return using.length ? using : null;
+  }
+  return null;
+}
+
 function deriveTrigger(name: string, rawDescription: string, names: Names): { trigger?: Trigger; unmapped?: string } {
   const { npcs, quests, items, homes } = names;
   let description = withoutRestatement(name, rawDescription);
@@ -1240,6 +1276,11 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     if (parts.length === 1) return { trigger: { kind: "pick", plants: [parts[0]!.item], count: parts[0]!.count } };
     return { trigger: { kind: "pick-each", plants: Object.fromEntries(parts.map((part) => [part!.item, part!.count])) } };
   }
+  // "Cast Kourend Castle Teleport", "Teleport to Civitas illa Fortis" ("using the standard
+  // spellbook"), "Teleport Using Law Runes" ("any teleport spell that uses Law Runes"): a teleport
+  // spell that lands (spell:teleport-arrival), as SpellTeleports names its Normal and Ancient ones.
+  const teleport = teleportOf(name, clean(description), items);
+  if (teleport) return { trigger: { kind: "teleport", spells: teleport, count: 1 } };
   // "Cast Ice Burst" ("Cast the Ice Burst spell"), "Cast Low Level Alchemy", "Cast a Wave Spell" ("any
   // wave spell": the four): a spell whose cost is paid (magic:cast-committed). Combat spells and the
   // alchemies only, the spells the server names when they are cast; a teleport, a place ("outside

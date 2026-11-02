@@ -489,7 +489,7 @@ test("Flow State: every listed skill's loop paces at 2 ticks (skills:action-inte
   ];
   for (const [skill, kind] of loops) {
     assert.equal(pace(who.relic, skill, kind, 5), 2, `${kind} with the relic`);
-    assert.equal(pace(who.relic, skill, kind, 1), 1, `${kind}: a faster pace stays (a fletching knife's, a recipe's)`);
+    assert.equal(pace(who.relic, skill, kind, 1), 1, `${kind}: a faster pace stays (a recipe's own)`);
     for (const player of others(who)) assert.equal(pace(player, skill, kind, 5), 5, `${kind} without it`);
   }
   assert.equal(pace(who.relic, Skill.SMITHING, "smith", 5), 5, "anvil work is not smelting");
@@ -542,26 +542,31 @@ test("Flow State: Crafting's make-many loop asks for its pace and makes an item 
   for (const player of others(who)) assert.deepEqual(made(player), [2, 5, 8, 11], "the loop's own 3 ticks");
 });
 
-test("Flow State: Fletching's knife on logs asks for its pace: shafts every 2 ticks (3 without)", () => {
+test("Flow State: Fletching's knife on logs asks for its pace: shafts every 2 ticks (3 without); a fletching knife's tick stacks, 1 tick", () => {
   const Fletching = require("../plugins/skills/fletching/Shared.Fletching");
   const api = skillApi();
   Fletching.init(api);
   const who = cases(FLOW_STATE);
-  const cut = (player) => {
-    player.getInventory().add(new core.Item(I.KNIFE, 1)).add(new core.Item(I.LOGS, 3));
+  const cut = (player, knife) => {
+    player.getInventory().resetItems?.();
+    player.getInventory().add(new core.Item(knife, 1)).add(new core.Item(I.LOGS, 3));
     let menu = null;
     const sender = player.getPacketSender();
     player.getPacketSender = () => new Proxy(sender, { get: (target, key) => (key === "sendCreationMenu" ? (value) => (menu = value, sender) : target[key]) });
-    Fletching.handlePair(player, I.KNIFE, I.LOGS);
+    Fletching.handlePair(player, knife, I.LOGS);
     menu.execute(I.ARROW_SHAFT, 3);
-    let seen = 0;
-    return ticksOf(api.tasks.at(-1), 12, () => {
+    let seen = player.getInventory().getAmount(I.ARROW_SHAFT);
+    const at = ticksOf(api.tasks.at(-1), 12, () => {
       const shafts = player.getInventory().getAmount(I.ARROW_SHAFT);
       return shafts !== seen && (seen = shafts, true);
     });
+    player.getPacketSender = () => sender;
+    return at;
   };
-  assert.deepEqual(cut(who.relic), [2, 4, 6]);
-  for (const player of others(who)) assert.deepEqual(cut(player), [2, 5, 8], "the logs group's own 3 ticks");
+  assert.deepEqual(cut(who.relic, I.KNIFE), [2, 4, 6]);
+  for (const player of others(who)) assert.deepEqual(cut(player, I.KNIFE), [2, 5, 8], "the logs group's own 3 ticks");
+  assert.deepEqual(cut(who.relic, I.FLETCHING_KNIFE), [2, 3, 4], "the knife's tick off the relic's 2");
+  for (const player of others(who)) assert.deepEqual(cut(player, I.FLETCHING_KNIFE), [2, 4, 6], "the knife's own 2 ticks");
 });
 
 test("Flow State: bones offered on an altar repeat every 2 ticks (4 without)", () => {

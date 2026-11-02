@@ -87,6 +87,13 @@ export abstract class Mobile extends Entity {
     public animation: Animation;
     public graphic: Graphic;
     private following: Mobile;
+    /**
+     * Increments on every moveTo/smartMove. A follower records the leader's counter when the
+     * follow starts, so a teleport (including a change of plane) ends the chase instead of the
+     * follower pathing to wherever the leader landed.
+     */
+    private teleportSerial = 0;
+    private followedTeleportSerial = -1;
 
     private attributes: Map<Object, Object> | null = null;
 
@@ -162,6 +169,7 @@ export abstract class Mobile extends Entity {
     }
 
     private notifyTeleport(target: Location): void {
+        this.teleportSerial++;
         const following = this.getFollowing();
         if (this.isPlayer() && following) {
             this.setFollowing(null);
@@ -846,6 +854,16 @@ export abstract class Mobile extends Entity {
             return;
         }
         this.following = following;
+        this.followedTeleportSerial = following?.getTeleportSerial?.() ?? -1;
+    }
+
+    getTeleportSerial(): number {
+        return this.teleportSerial;
+    }
+
+    /** The leader's teleport counter when this actor started following it. */
+    getFollowedTeleportSerial(): number {
+        return this.followedTeleportSerial;
     }
 
     getCombatFollowing(): Mobile | null {

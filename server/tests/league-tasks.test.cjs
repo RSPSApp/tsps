@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "pet", "tempoross", "open-chest", "plant", "harvest", "foundry", "plunder-chest", "sepulchre-floor", "rumours", "random-event", "totem", "dummy", "gather-with", "enter", "teleport", "rifts", "tob", "emote", "take", "pickpocket-loot", "bird-nest", "buy", "alch"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log", "check-health", "equip-any-set", "slayer-tasks", "superior-kills", "temple-trek", "pest-control", "prayer", "pet", "tempoross", "open-chest", "plant", "harvest", "foundry", "plunder-chest", "sepulchre-floor", "rumours", "random-event", "totem", "dummy", "gather-with", "enter", "teleport", "rifts", "tob", "emote", "take", "pickpocket-loot", "bird-nest", "buy", "alch", "kill-each"]);
   // The agility plugin's course keys (and Yama's stepping stones, the Leagues lair's own course).
   const courseDir = path.join(__dirname, "../plugins/skills/agility/courses");
   const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
@@ -182,6 +182,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
           // A credited completion is a name a plugin credits through combat-achievements:kill, not an NPC's.
           for (const npc of task.trigger.npcs) (task.trigger.credited ? creditedNames : npcNames).add(npc);
         }
+        if (task.trigger.kind === "kill-each") for (const npc of Object.keys(task.trigger.npcs)) npcNames.add(npc);
         if (task.trigger.kind === "level") assert.ok(Skill[task.trigger.skill] instanceof Skill, task.id);
         // A named place: the catalog's own bounds, boxes of tiles.
         if (task.trigger.place !== undefined) assert.ok(catalog.places[task.trigger.place]?.rects.every((rect) => rect.length === 4 && rect[0] <= rect[2] && rect[1] <= rect[3]), `${task.id}: place ${task.trigger.place}`);
@@ -538,6 +539,7 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   // A monster the Wiki has in one place only: the place only says where it lives.
   assert.deepEqual(trigger("defeat-a-drake"), { kind: "kill", npcs: ["Drake"], count: 1 }, "every Drake the Wiki lists is in the Karuulm Slayer Dungeon");
   assert.equal(trigger("defeat-a-snake-in-karamja").area, 2, "a monster of many homes keeps its place");
+  assert.deepEqual(trigger("defeat-a-moss-fire-and-hill-giant-in-kourend"), { kind: "kill-each", npcs: { "Moss giant": 1, "Fire giant": 1, "Hill Giant": 1 }, area: 20 });
   assert.deepEqual(trigger("defeat-the-grotesque-guardians-50-times"), { kind: "kill", npcs: ["Dusk"], count: 50 }, "the Combat Achievements plugin's NPC for the monster");
   assert.deepEqual(trigger("defeat-150-lizardmen-shaman"), { kind: "kill", npcs: ["Lizardman shaman"], count: 150 }, "helping the house is dealing with them");
   // A named place the server knows the bounds of.

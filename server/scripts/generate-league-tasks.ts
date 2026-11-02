@@ -1079,6 +1079,16 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
   if ((match = /^Defeat (an?|\d+) Superior slayer monsters?\.?$/i.exec(description))) {
     return { trigger: { kind: "superior-kills", count: /^an?$/i.test(match[1]) ? 1 : Number(match[1]) } };
   }
+  // "Defeat a Moss giant, Fire giant & Hill Giant in Kourend": one of each, in the league area that follows.
+  if (/^(?:Defeat|Kill) /i.test(name) && (match = /^(?:Defeat|Kill) an? (.+?), (.+?) (?:&|and) (.+?)$/i.exec(leagueAreaOf(description.replace(/\.$/, "")).text))) {
+    const each = [match[1], match[2], match[3]].map((part) => npcNamed(part.replace(/^an? /i, ""), npcs));
+    if (each.every(Boolean) && new Set(each).size === 3) {
+      const { area } = leagueAreaOf(description.replace(/\.$/, ""));
+      const trigger: Trigger = { kind: "kill-each", npcs: Object.fromEntries(each.map((npc) => [npc!, 1])) };
+      if (area !== null) trigger.area = area;
+      return { trigger };
+    }
+  }
   // "Enter the Crafting Guild", "Visit Ferox Enclave": the player inside a place the server knows
   // the bounds of (where its guild, dungeon or island lies, "in the Kebos Lowlands", says nothing more).
   if ((match = /^(?:Enter|Visit) (.+)$/.exec(name))) {

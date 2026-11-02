@@ -339,6 +339,20 @@ test("pickpocket-loot: an item in the pocket's loot (Pickpocket a Diamond From a
   assert.ok(done(f, "pickpocket-a-diamond-from-a-tzhaar"));
 });
 
+test("kill-each: one death of each NPC, in the task's area (Defeat a Moss, Fire & Hill Giant in Kourend)", (t) => {
+  const f = pactsCharacter(t);
+  f.player.setAttribute("league:areas", [21, 2, 20]); // Varlamore, Karamja and Kourend unlocked
+  f.player.moveTo(new core.Location(1640, 3670, 0)); // Kourend Castle's grounds
+  f.player.needsPlacement = false;
+  kill(f, "Moss giant");
+  kill(f, "Moss giant");
+  kill(f, "Fire giant");
+  assert.ok(!done(f, "defeat-a-moss-fire-and-hill-giant-in-kourend"), "no Hill Giant yet");
+  assert.deepEqual(f.player.getAttribute("league:task-kills")["defeat-a-moss-fire-and-hill-giant-in-kourend"], { "Moss giant": 1, "Fire giant": 1 });
+  kill(f, "Hill Giant");
+  assert.ok(done(f, "defeat-a-moss-fire-and-hill-giant-in-kourend"));
+});
+
 /** An inventory item's option, as the client clicks it. */
 async function inventoryOption(f, name, option, optionIndex = 1, count = 4) {
   const id = item(name);

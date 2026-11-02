@@ -1696,6 +1696,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   boxes a zone (`onZoneEnter`, so a step, a teleport or a login there counts): "Enter the X" or
   "Visit X" whose description names the same place ("in the Kebos Lowlands", where it lies, says
   nothing more). A place without such bounds stays unmapped.
+- **One of each**: `kill-each { npcs: { name: count }, area? }`, that many deaths of each NPC,
+  counted per NPC in `league:task-kills` ("Defeat a Moss giant, Fire giant & Hill Giant in Kourend",
+  every one a cache NPC, the league area that follows).
 - **Kills in a league area**: a kill task whose place is a league area ("Defeat a Snake in
   Karamja", "on Karamja", "within Morytania", "in the Fremennik Province", "in Varlamore
   underground") gets `area`, the areas plugin's id (`league-areas.json`; the task list's own enum

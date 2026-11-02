@@ -30,7 +30,7 @@ const plainName = (name) => String(name ?? "").toLowerCase().replace(/^the /, ""
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { kills: new Map(), levels: [], levelUps: [], quests: new Map(), experience: [], experienceBySkill: new Map(), diaries: [], achievements: [] };
+  const entry = { kills: new Map(), killEach: new Map(), levels: [], levelUps: [], quests: new Map(), experience: [], experienceBySkill: new Map(), diaries: [], achievements: [] };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (!trigger) continue;
@@ -39,6 +39,11 @@ function indexOf(type) {
       for (const npc of trigger.npcs ?? [trigger.npc]) {
         const key = String(npc).toLowerCase();
         entry.kills.set(key, (entry.kills.get(key) ?? []).concat(task));
+      }
+    } else if (trigger.kind === "kill-each") {
+      for (const npc of Object.keys(trigger.npcs)) {
+        const key = npc.toLowerCase();
+        entry.killEach.set(key, (entry.killEach.get(key) ?? []).concat(task));
       }
     } else if (LEVEL_KINDS.has(trigger.kind)) {
       entry.levels.push(task);
@@ -253,12 +258,36 @@ function inArea(task, type, tile) {
   return query.area === task.trigger.area;
 }
 
+/**
+ * `kill-each { npcs: { name: count } }`: that many deaths of each NPC, counted per NPC in the task's
+ * kills entry ({ name: kills }), in its area or place.
+ */
+function creditEach(player, type, name, tile) {
+  const tasks = indexOf(type).killEach.get(String(name ?? "").toLowerCase());
+  if (!tasks) return;
+  const done = new Set(Common.completedIds(player));
+  const progress = { ...killsOf(player) };
+  const reached = [];
+  for (const task of tasks) {
+    if (done.has(task.id) || !inArea(task, type, tile)) continue;
+    const wanted = Object.entries(task.trigger.npcs).find(([npc]) => npc.toLowerCase() === String(name).toLowerCase());
+    const counts = { ...(progress[task.id] && typeof progress[task.id] === "object" ? progress[task.id] : {}) };
+    counts[wanted[0]] = Math.min(Number(wanted[1]), (Number(counts[wanted[0]]) || 0) + 1);
+    progress[task.id] = counts;
+    if (Object.entries(task.trigger.npcs).every(([npc, need]) => (Number(counts[npc]) || 0) >= Number(need))) reached.push(task);
+  }
+  player.setAttribute(Common.KILLS_ATTRIBUTE, progress);
+  for (const task of reached) Complete.complete(player, task.id, type);
+}
+
 function npcDeath(event) {
   const player = event?.killer;
   if (!player?.isPlayer?.() && !player?.getPacketSender) return;
   const type = Common.leagueOf(player);
   const at = event.location ? { x: Number(event.location.x ?? event.location.getX?.()), y: Number(event.location.y ?? event.location.getY?.()) } : tileOf(event.npc);
-  if (type !== null) credit(player, type, npcName(event.npc), "deaths", 1, at);
+  if (type === null) return;
+  credit(player, type, npcName(event.npc), "deaths", 1, at);
+  creditEach(player, type, npcName(event.npc), at ?? tileOf(player));
 }
 
 /** `combat-achievements:kill` { player, monster, amount? }: a credited kill, from a death or a scripted ending. */

@@ -1687,7 +1687,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   an item into 500 coins or more"),
   `bank { place, count }` from the bank's `bank:opened` (opened inside the place: "Use the Bank in
   Nardah" inside the Nardah bank page's square, "Bank at Mount Quidamortem" inside its bank's outline,
-  "Use the Bank on Lunar Isle" anywhere on the island, which has one bank),
+  "Use the Bank on Lunar Isle" anywhere on the island, which has one bank, "Use the Bank Chest inside
+  Fortis Colosseum" in the lobby under it, the box round the walls around the Bank chest page's pin
+  for it: a page's location lines, `{{ObjectLocLine|x:..,y:..}}`, are map points too),
   `npc-op { npcs, option, count }` from the NPC option listener's new `npc:operated` { player, npc,
   npcId, option } (a menu option something answered: a Talk-to that started a dialogue, a Pet;
   "Nothing interesting happens" is none): "Talk to a Gladiator (Fortis Colosseum)", "Talk to Ilfeen in

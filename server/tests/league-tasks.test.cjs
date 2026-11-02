@@ -480,6 +480,7 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("convert-an-item-into-at-least-500-coins"), { kind: "alch", coins: 500, count: 1 });
   assert.deepEqual(trigger("use-the-bank-in-nardah"), { kind: "bank", place: "nardah-bank", count: 1 });
   assert.deepEqual(trigger("use-the-bank-on-lunar-isle"), { kind: "bank", place: "lunar-isle", count: 1 });
+  assert.deepEqual(trigger("use-the-bank-chest-inside-fortis-colosseum"), { kind: "bank", place: "fortis-colosseum-lobby", count: 1 });
   // A subject the cache spells otherwise: the item or NPC its linked page's infobox names, every cache
   // entry of that name one of the page's ids (the Chompy bird hats, every rank's one name, are none).
   assert.deepEqual(trigger("catch-150-red-chinchompas-in-kandarin"), { kind: "hunt", npcs: ["Carnivorous chinchompa"], count: 150, area: 4 });

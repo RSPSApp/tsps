@@ -661,6 +661,9 @@ const PLACE_DEFS: PlaceDef[] = [
   { key: "nardah-bank", names: ["Nardah bank"], page: "Nardah_bank", wikiPolygon: true },
   { key: "lletya-bank", names: ["Lletya bank"], page: "Lletya_bank", wikiPolygon: true },
   { key: "neitiznot-bank", names: ["Neitiznot bank"], page: "Neitiznot_bank", wikiPolygon: true },
+  // The Fortis Colosseum's lobby, under the Colosseum, round its bank chest (the Bank chest page's
+  // pin for it, 1805,9501, in its wall: the box round the lobby holds it).
+  { key: "fortis-colosseum-lobby", names: ["Fortis Colosseum lobby", "Fortis Colosseum bank"], page: "Bank_chest", flood: { from: [1805, 9502, 0], cap: 1500, bbox: true } },
   // The server's Slayer areas.
   { key: "taverley-dungeon", names: ["Taverley Dungeon"], page: "Taverley_Dungeon", slayerArea: "Taverley Dungeon" },
   { key: "brimhaven-dungeon", names: ["Brimhaven Dungeon"], page: "Brimhaven_Dungeon", slayerArea: "Brimhaven Dungeon", spawns: ["Wild dog#112", "Steel dragon#275"] },
@@ -690,7 +693,7 @@ const placePages = new Map<string, string>();
 /** The places' bounds by key, filled by `resolvePlaces`; only the places a trigger names are written. */
 const places = new Map<string, Place>();
 
-/** Every {{Map}} point on a page: its pins ("x,y" and "x:y" arguments) and its centre (x=, y=; "x:3008,y:3150"). */
+/** Every {{Map}} point on a page: its pins ("x,y" and "x:y" arguments) and its centre (x=, y=; "x:3008,y:3150"), then its location lines' pins. */
 function mapPoints(wikitext: string): Array<[number, number]> {
   const points: Array<[number, number]> = [];
   for (const [call] of wikitext.matchAll(/\{\{Map\|[^{}]*\}\}/g)) {
@@ -699,6 +702,15 @@ function mapPoints(wikitext: string): Array<[number, number]> {
     if (x && y) points.push([Math.floor(Number(x.split("=")[1])), Math.floor(Number(y.split("=")[1]))]);
     for (const arg of args) {
       const pair = /^(?:x:)?(\d{3,5})(?:\.\d+)?\s*[,:]\s*(?:y:)?(\d{3,5})(?:\.\d+)?$/.exec(arg);
+      if (pair) points.push([Number(pair[1]), Number(pair[2])]);
+    }
+  }
+  // Then the pins of its location lines ({{ObjectLocLine|...|x:1805,y:9501}}: where each copy of an
+  // object stands, the Bank chest page's chests).
+  const lines = wikitext.replace(/\{\{((?:Object)?LocLine)[ \t]*\r?\n/g, "{{$1");
+  for (const args of ["ObjectLocLine", "LocLine"].flatMap((template) => templateCalls(lines, template))) {
+    for (const arg of args) {
+      const pair = /^\s*x:(\d{3,5}),y:(\d{3,5})\s*$/.exec(arg);
       if (pair) points.push([Number(pair[1]), Number(pair[2])]);
     }
   }
@@ -868,7 +880,7 @@ function resolvePlaces() {
       if (!from) throw new Error(`place ${def.key}: no map point to flood from`);
       // A start of our own only beside the page's point, where that is a wall.
       if (def.flood.from && !points.some(([x, y]) => Math.abs(x - from[0]) <= 3 && Math.abs(y - from[1]) <= 3)) throw new Error(`place ${def.key}: ${from.join(",")} is not by the page's point`);
-      Object.assign(place, { rects: floodRects(from, def.flood.cap, def.key, def.flood.bbox), source: def.flood.bbox ? `the shores around ${from.join(",")}` : `the cache's walls around ${from.join(",")}` });
+      Object.assign(place, { rects: floodRects(from, def.flood.cap, def.key, def.flood.bbox), source: def.flood.bbox ? `the box round the walls and shores around ${from.join(",")}` : `the cache's walls around ${from.join(",")}` });
     }
     if (def.spawns) {
       for (const spec of def.spawns) {
@@ -1141,8 +1153,8 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
   // Quidamortem"): the bank opened (bank:opened) inside that town's bank (its own page's bounds), or
   // inside the place itself where that holds one bank only ("on Lunar Isle"). Name and description must
   // name the same place.
-  if ((match = /^(?:Use the )?Bank (?:at|in|on|inside) (?:the )?(.+)$/i.exec(name))) {
-    const said = /^(?:Open your Bank using the Bank|Use the Bank) (?:at|in|on|inside) (?:the )?(.+?)\.?$/i.exec(description);
+  if ((match = /^(?:Use the )?Bank(?: Chest)? (?:at|in|on|inside) (?:the )?(.+)$/i.exec(name))) {
+    const said = /^(?:Open your Bank using the Bank|Use the Bank(?: Chest)?) (?:at|in|on|inside) (?:the )?(.+?)\.?$/i.exec(description);
     if (!said || said[1].toLowerCase() !== match[1].toLowerCase()) return {};
     const place = placeNamed(`${match[1]} bank`) ?? placeNamed(match[1]);
     return place ? { trigger: { kind: "bank", place, count: 1 } } : {};

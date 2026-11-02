@@ -41,7 +41,7 @@ function fixture() {
   };
   const sender = new Proxy({}, { get: (_, name) => (...args) => (sent.push([name, ...args]), sender) });
   const skills = { level: 1, xp: 0, getCurrentLevel() { return this.level; }, addExperiences(skill, xp) { this.xp += xp; } };
-  const player = { getUsername: () => "Tester", getInventory: () => inventory, getSkillManager: () => skills, getEquipment: () => ({ getItems: () => worn }),
+  const player = { getUsername: () => "Tester", getDisplayName: () => "Tester", getInventory: () => inventory, getSkillManager: () => skills, getEquipment: () => ({ getItems: () => worn }),
     getPacketSender: () => sender, getLocation: () => position, getPrivateArea: () => null, isPlayer: () => true,
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     sendMessage: message => sent.push(["message", message]), performAnimation: value => sent.push(["animation", value]),

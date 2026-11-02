@@ -85,7 +85,7 @@ function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
     location: new Location(2387, 5982, 0), area: null, messages: [], spam: [], boxes: [], anims: [], graphics: [],
     varbits: new Map(), scripts: [], subs: [], xp: {}, songs: [], forced: [], registered: true,
     inventory: container(),
-    getIndex: () => 1, getUsername: () => 'Tester',
+    getIndex: () => 1, getUsername: () => 'Tester', getDisplayName: () => 'Tester',
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => p.registered,
     getLocation: () => p.location,
     moveTo(location) { p.location = location; },

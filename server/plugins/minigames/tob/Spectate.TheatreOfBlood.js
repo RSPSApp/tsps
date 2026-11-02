@@ -47,7 +47,7 @@ function raidOfName(name) {
   const wanted = String(name ?? "").trim().toLowerCase();
   for (const raid of Raid.raids.values()) {
     if (raid.over) continue;
-    if ([...raid.players, ...raid.spectators].some((player) => Shared.displayName(player).toLowerCase() === wanted)) return raid;
+    if ([...raid.players, ...raid.spectators].some((player) => Shared.displayName(player).toLowerCase() === wanted || player.getUsername().toLowerCase() === wanted)) return raid;
   }
   return null;
 }

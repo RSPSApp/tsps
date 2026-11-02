@@ -261,7 +261,7 @@ function setup() {
     moveTo: (value) => { location = value; },
     getPrayerActive: () => ({ [realCore.PrayerHandler.PROTECT_FROM_MELEE]: prayerOn }),
     sendMessage: (text) => messages.push(text),
-    getUsername: () => 'qh728-q032',
+    getUsername: () => 'qh728-q032', getDisplayName: () => 'qh728-q032',
     getIndex: () => 1,
     getPrivateArea: () => null,
     isRegistered: () => online,

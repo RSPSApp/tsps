@@ -304,7 +304,7 @@ function withdraw(player, clan, amount) {
   inventory.adds(core.ItemIdentifiers.COINS, moved);
   finishTransfer(player, clan);
   // Wiki: a withdrawal notifies the members.
-  const notice = `${player.getUsername()} has withdrawn ${moved.toLocaleString("en-GB")} coins from the coffer.`;
+  const notice = `${player.getDisplayName()} has withdrawn ${moved.toLocaleString("en-GB")} coins from the coffer.`;
   for (const member of clan.members) Core.onlinePlayer(member.account)?.sendMessage(notice);
 }
 

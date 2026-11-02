@@ -1433,7 +1433,7 @@ function sharePotion(request) {
     let current = entry;
     for (const target of sharers) {
       current.potion.effect(target);
-      target.sendMessage(`${player.getUsername()} shares a dose of ${entry.potion.name} with you.`);
+      target.sendMessage(`${player.getDisplayName()} shares a dose of ${entry.potion.name} with you.`);
       const next = POTION_BY_ITEM_ID.get(current.replacementId);
       player.getInventory().setItem(slot, new Item(current.replacementId, current.replacementId === NO_EMPTY_ITEM ? 0 : 1, item.getMeta()));
       if (!next) break;

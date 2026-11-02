@@ -110,7 +110,7 @@ function player() {
     getArea: () => area, setArea: value => { area = value; },
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement(value) { p.blocked = value; return this; } }),
     setUntargetable: value => { p.untargetable = value; },
-    getIndex: () => 1, getAsPlayer: () => p, getUsername: () => 'ShadowsTest',
+    getIndex: () => 1, getAsPlayer: () => p, getUsername: () => 'ShadowsTest', getDisplayName: () => 'ShadowsTest',
     isPlayer: () => true, isPlayerBot: () => false, isRegistered: () => true,
     sendMessage: text => p.messages.push(text),
   };

@@ -230,7 +230,7 @@ test("the party panel's buttons follow the cache: Accept 36-43, Decline 44-51, i
     const sender = new Proxy({}, { get: (_, key) => key === 'getVarbit' ? () => 0 : () => sender });
     return {
       name, messages: [],
-      getUsername: () => name,
+      getUsername: () => name, getDisplayName: () => name,
       getAttribute: (key) => attributes.get(key),
       setAttribute: (key, value) => attributes.set(key, value),
       sendMessage(message) { this.messages.push(message); },

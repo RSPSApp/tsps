@@ -75,7 +75,7 @@ function fakePlayer({ at = new Location(3085, 3233, 0), level = 70 } = {}) {
   const timers = new Map();
   const p = {
     location: at, messages: [], spam: [], sounds: [], anims: [], xp: {}, chats: [], graphics: [], inventory: container(),
-    getIndex: () => id, getUsername: () => `Tester${id}`, isPlayer: () => true, isRegistered: () => true,
+    getIndex: () => id, getUsername: () => `Tester${id}`, getDisplayName: () => `Tester${id}`, isPlayer: () => true, isRegistered: () => true,
     getLocation: () => p.location,
     getAttribute: () => null, setAttribute() {},
     getInventory: () => p.inventory,

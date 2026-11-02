@@ -174,7 +174,7 @@ function player() {
     getLocation: () => location, moveTo: to => { location = to; },
     getArea: () => null, getPrivateArea: () => null, setArea: noop, getIndex: () => p.index, getSpellbook: () => p.spellbook ?? core.MagicSpellbook.NORMAL,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true, getHitpoints: () => 99, performAnimation: animation => (p.animations ??= []).push(animation.getId()),
-    getUsername: () => p.username ?? 'Parity', getAppearance: () => ({ isMale: () => true }),
+    getUsername: () => p.username ?? 'Parity', getDisplayName: () => p.username ?? 'Parity', getAppearance: () => ({ isMale: () => true }),
     setPositionToFace: noop, forceChat: noop, sendMessage: text => p.messages.push(text),
   };
   p.manager = new DialogueManager(p);
@@ -763,7 +763,7 @@ test('real ItemOnGroundManager respawns a captured bottle after four ticks', () 
   };
   const packet = new Proxy({}, { get: () => () => packet });
   const realPlayer = {
-    username, getUsername: () => username, isPlayerBot: () => false,
+    username, getUsername: () => username, getDisplayName: () => username, isPlayerBot: () => false,
     getLocation: () => position, getPrivateArea: () => null,
     getInventory: () => inventory, getMovementQueue: () => ({ reset() {} }), getSize: () => 1,
     getLastItemPickup: () => ({ reset() {} }), getSession: () => ({ getChannel: () => ({ readyState: 1 }) }),

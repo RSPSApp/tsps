@@ -18,13 +18,13 @@ function leagueCommand({ player, parts }) {
   if (!who) return true;
   const type = Common.leagueOf(who);
   if (type === null) {
-    player.sendMessage(Common.message("notLeague", { name: who.getUsername() }));
+    player.sendMessage(Common.message("notLeague", { name: who.getDisplayName() }));
     return true;
   }
   const query = { player: who, points: 0, tasks: 0 };
   Common.api.emitCustomEvent("league:points", query);
   player.sendMessage(Common.message("status", {
-    name: who.getUsername(), league: Common.league(type).name, points: query.points, tasks: query.tasks,
+    name: who.getDisplayName(), league: Common.league(type).name, points: query.points, tasks: query.tasks,
   }));
   return true;
 }
@@ -36,13 +36,13 @@ function leagueTaskCommand({ player, parts }) {
     return true;
   }
   if (Common.leagueOf(player) === null) {
-    player.sendMessage(Common.message("notLeague", { name: player.getUsername() }));
+    player.sendMessage(Common.message("notLeague", { name: player.getDisplayName() }));
     return true;
   }
   const catalogTask = { player, id, found: false, completed: false };
   Common.api.emitCustomEvent("league:complete-task", catalogTask);
   if (catalogTask.found) {
-    player.sendMessage(Common.message(catalogTask.completed ? "taskCompleted" : "taskRepeat", { id, name: player.getUsername() }));
+    player.sendMessage(Common.message(catalogTask.completed ? "taskCompleted" : "taskRepeat", { id, name: player.getDisplayName() }));
     return true;
   }
   const points = Number(parts[2]);
@@ -53,7 +53,7 @@ function leagueTaskCommand({ player, parts }) {
   const name = parts.slice(3).join(" ").trim() || id;
   const award = { player, id, points, name, awarded: false };
   Common.api.emitCustomEvent("league:award-task", award);
-  player.sendMessage(Common.message(award.awarded ? "taskAwarded" : "taskRepeat", { id, points, name: player.getUsername() }));
+  player.sendMessage(Common.message(award.awarded ? "taskAwarded" : "taskRepeat", { id, points, name: player.getDisplayName() }));
   return true;
 }
 

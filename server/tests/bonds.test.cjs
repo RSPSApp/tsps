@@ -85,7 +85,7 @@ function makePlayer(name) {
   return {
     messages: [],
     attributes: new Map(),
-    getUsername: () => name,
+    getUsername: () => name, getDisplayName: () => name,
     sendMessage(message) {
       this.messages.push(message);
     },

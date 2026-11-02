@@ -101,7 +101,7 @@ function createPlayer({ level = 99, xp = 13034431 } = {}) {
   return {
     messages,
     inventory,
-    getUsername: () => "Tester",
+    getUsername: () => "Tester", getDisplayName: () => "Tester",
     getIndex: () => 1,
     isPlayerBot: () => false,
     getHitpoints: () => 99,

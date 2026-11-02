@@ -100,7 +100,7 @@ function setup(register, options = {}) {
     sendInterfaceRemoval() { if (options.realDialogue) player.getDialogueManager().reset(); return sender; },
   }, { get(target, key) { return target[key] ?? (() => sender); } });
   const player = {
-    getUsername: () => 'parity-test',
+    getUsername: () => 'parity-test', getDisplayName: () => 'parity-test',
     getAppearance: () => ({ isMale: () => true }),
     getAttribute: (key) => attrs.get(key),
     setAttribute(key, value) { attrs.set(key, value); },

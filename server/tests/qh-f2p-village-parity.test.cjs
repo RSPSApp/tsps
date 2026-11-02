@@ -56,7 +56,7 @@ function player() {
   const p = { attributes, items, messages: [],
     getAttribute: (key) => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => inventory, getBanks: () => [{ getAmount: () => 0 }],
-    getPacketSender: () => packet, getUsername: () => 'Parity',
+    getPacketSender: () => packet, getUsername: () => 'Parity', getDisplayName: () => 'Parity',
     getLocation: () => new core.Location(3210, 3220, 0),
     getSkillManager: () => ({ getCombatLevel: () => 3, addExperiences() {} }),
     sendMessage: (message) => p.messages.push(message),
@@ -193,7 +193,7 @@ function realPlayer() {
     getLocation: () => location, moveTo: (to) => { location = to; },
     getArea: () => null, getPrivateArea: () => null, setArea() {}, getIndex: () => p.index,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
-    getUsername: () => 'HarlowTest', setPositionToFace() {}, forceChat() {},
+    getUsername: () => 'HarlowTest', getDisplayName: () => 'HarlowTest', setPositionToFace() {}, forceChat() {},
     performAnimation: (animation) => p.animations.push(animation?.getId?.() ?? animation), sendMessage: (text) => p.messages.push(text),
     getAppearance: () => ({ isMale: () => true }),
   };

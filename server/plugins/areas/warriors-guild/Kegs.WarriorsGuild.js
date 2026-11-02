@@ -64,8 +64,8 @@ function pickUpKeg({ player, objectId }) {
     player.setRenderAnimations(BALANCE_ANIMATIONS);
     const jimmy = Guild.npcNear(player, Guild.NPCS.JIMMY);
     jimmy?.forceChat(current.kegs <= 3
-      ? `Ya got no chance o' beatin' me ${player.getUsername()}!`
-      : `No one's stronger than me, 'speshly not ${player.getUsername()}!`);
+      ? `Ya got no chance o' beatin' me ${player.getDisplayName()}!`
+      : `No one's stronger than me, 'speshly not ${player.getDisplayName()}!`);
   });
 }
 
@@ -91,7 +91,7 @@ function loseBalance(player, state) {
   }
   if (state.kegs >= 5) {
     Guild.npcNear(player, Guild.NPCS.JIMMY)
-      ?.forceChat(`Wow! That'sh bery impr....imp...impresh.... good ${player.getUsername()}! Equalsh my record!`);
+      ?.forceChat(`Wow! That'sh bery impr....imp...impresh.... good ${player.getDisplayName()}! Equalsh my record!`);
   }
 }
 

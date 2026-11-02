@@ -33,7 +33,7 @@ let api;
 let core;
 
 function playerName(player) {
-  return player.getUsername?.() ?? "friend";
+  return player.getDisplayName?.() ?? "friend";
 }
 
 /** The first juice held, in winter..summer order, or null. */

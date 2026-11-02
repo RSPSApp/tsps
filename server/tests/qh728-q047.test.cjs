@@ -169,7 +169,7 @@ function player() {
     getMovementQueue: () => ({ reset() { return this; }, addSteps(to) { location = to; return this; }, setBlockMovement() { return this; } }),
     getLocation: () => location, moveTo: to => { location = to; }, getArea: () => null, getPrivateArea: () => null, setArea: noop,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
-    getUsername: () => 'q047', getIndex: () => p.index, setUntargetable: noop, setPositionToFace: noop,
+    getUsername: () => 'q047', getDisplayName: () => 'q047', getIndex: () => p.index, setUntargetable: noop, setPositionToFace: noop,
     performAnimation: noop, sendMessage: value => messages.push(value), getCombat: () => ({ reset: noop }),
     getHitpoints: () => 99,
   };

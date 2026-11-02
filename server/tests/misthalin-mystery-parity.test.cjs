@@ -84,7 +84,7 @@ function player() {
     setUntargetable: value => { p.untargetable = value; }, getLocation: () => location, moveTo: to => { location = to; },
     getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; }, getIndex: () => p.index,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
-    getUsername: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
+    getUsername: () => 'Parity', getDisplayName: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
     performAnimation: a => p.animations.push(a.getId()), sendMessage: text => p.messages.push(text),
   }; p.manager = new DialogueManager(p); return p;
 }

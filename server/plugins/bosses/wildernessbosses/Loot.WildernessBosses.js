@@ -102,7 +102,7 @@ function itemName(id) {
 function announce(lair, player, drop) {
   const what = drop.amount > 1 ? `${drop.amount.toLocaleString("en-US")} x ${itemName(drop.itemId)}` : itemName(drop.itemId);
   const bones = drop.itemId === BIG_BONES || drop.itemId === BONES;
-  const text = `<col=${DROP_COLOUR}>${player.getUsername()} received a drop: ${what}</col>${bones ? "" : ` <col=${BOSS_COLOUR}>(${lair.boss})</col>`}`;
+  const text = `<col=${DROP_COLOUR}>${player.getDisplayName()} received a drop: ${what}</col>${bones ? "" : ` <col=${BOSS_COLOUR}>(${lair.boss})</col>`}`;
   const listeners = lairPlayersOf(lair.key);
   for (const other of listeners.length > 0 ? listeners : [player]) other.sendMessage(text);
 }

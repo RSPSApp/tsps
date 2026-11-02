@@ -218,7 +218,7 @@ function collect({ player, npc, definition }) {
   }
   const { DialogueChainBuilder, NpcDialogue } = core;
   const npcId = definition?.getId?.() ?? npc?.getId?.();
-  const line = MESSAGE.nothing.replace("[name]", player.getUsername?.() ?? "");
+  const line = MESSAGE.nothing.replace("[name]", player.getDisplayName?.() ?? "");
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new NpcDialogue(0, npcId, line)));
   return true;
 }

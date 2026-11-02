@@ -105,7 +105,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     };
     return {
       counts, attrs, levels, baseLevels, experience, configs, equipment, banks, setSize(n) { size = n; },
-      isRegistered: () => true, getHitpoints: () => 99, busy: () => false, getUsername: () => "hunter-test",
+      isRegistered: () => true, getHitpoints: () => 99, busy: () => false, getUsername: () => "hunter-test", getDisplayName: () => "hunter-test",
       getInventory: () => inv, getSkillManager: () => skillManager,
       getBank: (tab = 0) => banks[tab], getCurrentBankTab: () => 0,
       getEquipment: () => ({ getItems: () => [...equipment].map(([slot,id])=>new core.Item(id,1)), get: slot => new core.Item(equipment.get(slot)??-1,1),set(slot,item){equipment.set(slot,item.getId());},refreshItems(){} }),
@@ -683,7 +683,7 @@ function feedbackPlayer(core) {
     getInventory: () => inventory, getEquipment: () => ({ contains: () => false }), getPacketSender: () => sender,
     getMovementQueue: () => ({ size: () => 0 }), getForceMovement: () => null,
     isRegistered: () => true, getHitpoints: () => 99,
-    getUsername: () => "feedback-test", getIndex: () => 1, isPlayerBot: () => false,
+    getUsername: () => "feedback-test", getDisplayName: () => "feedback-test", getIndex: () => 1, isPlayerBot: () => false,
     performAnimation: a => animations.push(a.getId()), performGraphic: g => graphics.push(g.getId()), sendMessage: m => messages.push(m),
     getClickDelay: () => ({ elapsedTime: () => true, reset() {} }),
     getSkill: () => activeSkill, setSkill(value) { activeSkill = value; }, setCreationMenu() {},

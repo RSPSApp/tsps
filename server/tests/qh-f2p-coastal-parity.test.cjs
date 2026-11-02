@@ -83,7 +83,7 @@ function player() {
     getLocation: () => new core.Location(3228, 3369, 0),
     getPacketSender: () => new Proxy({}, { get: () => () => undefined }),
     getDialogueManager: () => manager,
-    getUsername: () => 'QuestTester',
+    getUsername: () => 'QuestTester', getDisplayName: () => 'QuestTester',
     getAppearance: () => ({ isMale: () => true }),
     getSkillManager: () => ({ getCombatLevel: () => 20 }),
     sendMessage: (message) => messages.push(message),

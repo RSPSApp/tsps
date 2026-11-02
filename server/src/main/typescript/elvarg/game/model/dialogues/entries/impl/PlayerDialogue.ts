@@ -31,7 +31,7 @@ export class PlayerDialogue extends Dialogue {
             .sendChatboxInterface(PlayerDialogue.GROUP_ID)
             .sendPlayerHeadOnInterface(PlayerDialogue.HEAD_UID)
             .sendInterfaceAnimation(PlayerDialogue.HEAD_UID, typeof expression === "number" ? expression : expression.getExpression())
-            .sendString(player.getUsername(), PlayerDialogue.NAME_UID);
+            .sendString(player.getDisplayName(), PlayerDialogue.NAME_UID);
         PlayerDialogue.sendChatText(player, text, PlayerDialogue.TEXT_UID, PlayerDialogue.CONTINUE_UID);
     }
 }

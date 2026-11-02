@@ -113,7 +113,7 @@ function copied({ player, sequence }) {
   const score = (show.scores.get(player) ?? 0) + 1;
   show.scores.set(player, score);
   if (score < WIN) return player.sendMessage(`You copy the jester. (${score}/${WIN})`);
-  for (const occupant of house.getPlayers()) occupant.sendMessage(`${player.getUsername()} has copied the jester ten times and wins!`);
+  for (const occupant of house.getPlayers()) occupant.sendMessage(`${player.getDisplayName()} has copied the jester ten times and wins!`);
   Prizes.award(house, "mime", player);
   end(house, show);
 }

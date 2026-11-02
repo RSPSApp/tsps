@@ -69,7 +69,7 @@ function player() {
   const p = { attributes, items, bank, packets, messages,
     getAttribute: (key) => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => inventory, getBanks: () => [{ getAmount: (id) => bank.get(id) || 0 }],
-    getLocation: () => location, getUsername: () => 'QuestTester', getPacketSender: () => packet,
+    getLocation: () => location, getUsername: () => 'QuestTester', getDisplayName: () => 'QuestTester', getPacketSender: () => packet,
     getSkillManager: () => ({ getCombatLevel: () => 20, addExperiences() {} }),
     sendMessage: (message) => messages.push(message), isPlayer: () => true, isNpc: () => false,
     getAsPlayer: () => p, getIndex: () => index,
@@ -254,7 +254,7 @@ function realDispatchPlayer(shieldStage, ds2Stage, heroesStage, extra = {}) {
       reset() {}, isActive: () => false, getCurrent: () => null, advance() {},
     }),
     getFrameUpdater: () => ({ clear() {} }),
-    getUsername: () => 'RealDispatch', getLocation: () => new core.Location(3209, 3495, 0),
+    getUsername: () => 'RealDispatch', getDisplayName: () => 'RealDispatch', getLocation: () => new core.Location(3209, 3495, 0),
     getIndex: () => 101, isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p,
     getPrivateArea: () => null, getArea: () => null, moveTo() {}, sendMessage() {},
   };

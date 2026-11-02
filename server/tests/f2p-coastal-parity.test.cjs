@@ -87,7 +87,7 @@ function player() {
     getInventory: () => inventory, getBanks: () => [{ getAmount: (id) => bank.get(id) || 0 }],
     getEquipment: () => ({ getItems: () => equipment, get: () => null, refreshItems() {} }), getLocation: () => location,
     getSpellbook: () => ({ getInterfaceId: () => 938 }),
-    getPrivateArea: () => area instanceof core.PrivateArea ? area : null, getUsername: () => 'QuestTester', getPacketSender: () => packet,
+    getPrivateArea: () => area instanceof core.PrivateArea ? area : null, getUsername: () => 'QuestTester', getDisplayName: () => 'QuestTester', getPacketSender: () => packet,
     getFrameUpdater: () => ({ clear() {} }),
     getDialogueManager: () => ({ reset() {}, startDialogues() {}, isActive: () => false }),
     getSkillManager: () => ({ getCombatLevel: () => 20, getCurrentLevel: () => 1, addExperiences: (skill, amount) => xp.push([skill.getIndex(), amount]) }),

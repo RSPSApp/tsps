@@ -60,7 +60,7 @@ function createPlayer() {
   const attributes = {};
   const player = {
     varbits, strings, scripts, sounds, messages, attributes, interfaceId: -1,
-    getUsername: () => "alice",
+    getUsername: () => "alice", getDisplayName: () => "alice",
     sendMessage: (message) => messages.push(message),
     isSearchingBank: () => false,
     getPacketSender: () => sender,

@@ -231,7 +231,7 @@ function player({ realWire = false } = {}) {
     getLocalNpcs: () => p.localNpcs,
     getPrivateArea: () => null,
     moveTo: location => moves.push([location.getX(), location.getY(), location.getZ()]),
-    getUsername: () => 'Q054',
+    getUsername: () => 'Q054', getDisplayName: () => 'Q054',
     getSession: () => ({ sendClientPacket: noop }),
     sendMessage: text => p.messages.push(text),
     isRegistered: () => true,

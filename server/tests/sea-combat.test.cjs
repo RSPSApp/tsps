@@ -97,7 +97,7 @@ function captain({ sailing = 99, ranged = 99 } = {}) {
     isNpc: () => false,
     isRegistered: () => true,
     getAsPlayer: () => player,
-    getUsername: () => "One Signal",
+    getUsername: () => "One Signal", getDisplayName: () => "One Signal",
     sendMessage: (message) => sent.push(["sendMessage", message]),
     forceChat: (text) => { said.push(text); return player; },
     performAnimation: (anim) => anims.push(anim.getId()),

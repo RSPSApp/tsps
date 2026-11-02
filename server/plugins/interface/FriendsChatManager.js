@@ -2,6 +2,7 @@ const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameCon
 const { World } = require("../../src/main/typescript/elvarg/game/World");
 const { encodeChatMessage, encodeFriendsChatSnapshot } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 const { Misc } = require("../../src/main/typescript/elvarg/util/Misc");
+const { DisplayNames } = require("../../src/main/typescript/elvarg/game/entity/impl/player/DisplayNames");
 const { PlayerPunishment } = require("../../src/main/typescript/elvarg/util/PlayerPunishment");
 const { Task } = require("../../src/main/typescript/elvarg/game/task/Task");
 const { TaskManager } = require("../../src/main/typescript/elvarg/game/task/TaskManager");
@@ -54,6 +55,14 @@ function accountName(value) {
     if (encoded <= 0n)
         return undefined;
     return { key, display: Misc.formatText(key.replace(/ /g, "_")), encoded };
+}
+/** The account a player typed or clicked by its display name (or its login name, when it shows that). */
+function typedAccount(value) {
+    return accountName(DisplayNames.resolve(String(value ?? "")) ?? "");
+}
+/** The name others see for an account, given its key; `fallback` when it hasn't chosen one. */
+function shownName(key, fallback) {
+    return DisplayNames.entryOf(key)?.name ?? fallback;
 }
 function channelName(value) {
     const name = String(value ?? "").trim().replace(/\s+/g, " ");
@@ -173,11 +182,12 @@ class FriendsChatManager {
         }
     }
     static handlePrivateMessage(player, rawRecipient, rawText) {
-        const recipientName = accountName(rawRecipient);
+        const recipientName = typedAccount(rawRecipient);
         const text = this.cleanMessage(rawText, 160);
-        if (!recipientName || !text || !this.allowChat(player, text))
+        if (!text || !this.allowChat(player, text))
             return;
-        if (!player.getRelations().hasFriend(recipientName.encoded)) {
+        // No account: a name nobody has, or the login name of a player who shows another name now.
+        if (!recipientName || !player.getRelations().hasFriend(recipientName.encoded)) {
             this.gameMessage(player, "Please add that player to your friends list first.");
             return;
         }
@@ -203,8 +213,8 @@ class FriendsChatManager {
         const text = this.cleanMessage(rawText, 160);
         if (!text || !recipient?.getRelations?.().canReceivePrivateMessageFrom(sender))
             return false;
-        recipient.getSession().sendClientPacket(encodeChatMessage("private_in", text, sender.getUsername(), "", sender.getIndex(), 3));
-        sender.getSession().sendClientPacket(encodeChatMessage("private_out", text, recipient.getUsername(), "", recipient.getIndex(), 6));
+        recipient.getSession().sendClientPacket(encodeChatMessage("private_in", text, sender.getDisplayName(), "", sender.getIndex(), 3));
+        sender.getSession().sendClientPacket(encodeChatMessage("private_out", text, recipient.getDisplayName(), "", recipient.getIndex(), 6));
         return true;
     }
     static setChatFilters(player, publicMode, privateMode, tradeMode) {
@@ -234,7 +244,7 @@ class FriendsChatManager {
                 member.getRelations().hasIgnore(player.getLongUsername())) {
                 continue;
             }
-            member.getSession().sendClientPacket(encodeChatMessage("channel", text, player.getUsername(), channel.profile.channelName, player.getIndex(), FRIENDS_CHAT_MESSAGE_TYPE));
+            member.getSession().sendClientPacket(encodeChatMessage("channel", text, player.getDisplayName(), channel.profile.channelName, player.getIndex(), FRIENDS_CHAT_MESSAGE_TYPE));
         }
     }
     static handleWidgetAction(player, groupId, componentId, rawOption, rawOpId) {
@@ -311,15 +321,18 @@ class FriendsChatManager {
             });
             const visible = online?.getRelations().canReceivePrivateMessageFrom(player) === true;
             return {
-                name: online?.getUsername() ?? display,
-                previousName: "",
+                name: online?.getDisplayName() ?? shownName(display, display),
+                previousName: DisplayNames.previousNameOf(display),
                 world: visible ? 1 : 0,
                 rank: relations.getFriendRank(encoded),
                 isOnline: visible,
             };
         }).sort((a, b) => Number(b.isOnline) - Number(a.isOnline) || a.name.localeCompare(b.name));
         const ignores = relations.getIgnoreList()
-            .map((encoded) => ({ name: Misc.formatName(Misc.longToString(encoded)), previousName: "" }))
+            .map((encoded) => {
+                const display = Misc.formatName(Misc.longToString(encoded));
+                return { name: shownName(display, display), previousName: DisplayNames.previousNameOf(display) };
+            })
             .sort((a, b) => a.name.localeCompare(b.name));
         const snapshot = { friends, ignores };
         const ownerKey = this.membershipByPlayer.get(player.getIndex());
@@ -327,13 +340,13 @@ class FriendsChatManager {
         if (channel) {
             snapshot.channel = {
                 name: channel.profile.channelName,
-                owner: channel.profile.ownerName,
+                owner: shownName(channel.ownerKey, channel.profile.ownerName),
                 minKickRank: channel.profile.kickRank,
                 localRank: this.memberRank(channel.profile, player),
                 members: Array.from(channel.members.values())
                     .filter((member) => !this.offlinePlayerIds.has(member.getIndex()))
                     .map((member) => ({
-                    name: member.getUsername(),
+                    name: member.getDisplayName(),
                     world: 1,
                     rank: this.memberRank(channel.profile, member),
                 }))
@@ -343,9 +356,11 @@ class FriendsChatManager {
         player.getSession().sendClientPacket(encodeFriendsChatSnapshot(snapshot));
     }
     static handleRelationAction(player, action) {
-        const target = accountName(action.name);
-        if (!target)
+        const target = typedAccount(action.name);
+        if (!target) {
+            this.gameMessage(player, "Unable to find a player with that name.");
             return;
+        }
         const relations = player.getRelations();
         if (action.action === "add_friend")
             relations.addFriend(target.encoded);
@@ -392,7 +407,7 @@ class FriendsChatManager {
             if (this.pendingJoins.get(index) !== player)
                 return;
             this.pendingJoins.delete(index);
-            this.join(player, rawOwnerName, true);
+            this.join(player, DisplayNames.resolve(String(rawOwnerName ?? "")) ?? "", true);
         });
     }
     static join(player, rawOwnerName, notify) {
@@ -482,7 +497,7 @@ class FriendsChatManager {
     static kick(player, rawTargetName) {
         const ownerKey = this.membershipByPlayer.get(player.getIndex());
         const channel = ownerKey ? this.channels.get(ownerKey) : undefined;
-        const targetName = accountName(rawTargetName);
+        const targetName = typedAccount(rawTargetName);
         if (!ownerKey || !channel || !targetName)
             return;
         const kickerRank = this.memberRank(channel.profile, player);
@@ -564,7 +579,7 @@ class FriendsChatManager {
         this.persist(player);
         this.syncSetupText(player);
         this.notification(player, "Your chat-channel has now been enabled!");
-        this.notification(player, `Join your channel by clicking 'Join Chat' and typing: ${player.getUsername()}`);
+        this.notification(player, `Join your channel by clicking 'Join Chat' and typing: ${player.getDisplayName()}`);
     }
     static disableOwnChannel(player) {
         if (this.setupIsLive(player))
@@ -746,6 +761,29 @@ class FriendsChatManager {
                 this.sendSnapshot(player);
             }
         });
+    }
+    /**
+     * A player's display name changed: whoever lists them, as a friend or as ignored, or shares a
+     * channel with them sees the new one. Every rename reaches them, so the official client can
+     * always match the entry by the name just given up.
+     */
+    static onDisplayNameChanged(player) {
+        if (this.offlinePlayerIds.has(player.getIndex()))
+            return;
+        this.sendSnapshot(player);
+        const renamed = player.getLongUsername();
+        World.getPlayers().forEach((other) => {
+            if (other && other !== player && !this.offlinePlayerIds.has(other.getIndex()) &&
+                (other.getRelations().hasFriend(renamed) || other.getRelations().hasIgnore(renamed))) {
+                this.sendSnapshot(other);
+            }
+        });
+        const ownerKey = this.membershipByPlayer.get(player.getIndex());
+        if (ownerKey)
+            this.broadcastChannel(ownerKey);
+        const owned = accountName(player.getUsername())?.key;
+        if (owned && owned !== ownerKey)
+            this.broadcastChannel(owned);
     }
     static broadcastChannel(ownerKey) {
         const channel = this.channels.get(ownerKey);

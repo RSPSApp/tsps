@@ -1881,7 +1881,7 @@ function onSkill(player, skill, { petBase, petChance, rolls = 1, runeId, npcId, 
   if (!hit) return false;
   if (!ownsPetFamily(player, pet)) {
     World.sendMessage(
-      `@dre@${player.getUsername()} just found a stray ${getPetDisplayName(pet)} while ${normalizeSkillName(skill)}!`
+      `@dre@${player.getDisplayName()} just found a stray ${getPetDisplayName(pet)} while ${normalizeSkillName(skill)}!`
     );
   }
   awardPet(player, pet.itemId);

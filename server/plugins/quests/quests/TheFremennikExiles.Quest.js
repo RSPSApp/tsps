@@ -1711,7 +1711,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     if (!DIALOGUE_NPC_IDS.has(npcId)) return;
 
     if (text.includes("[Fremennik name]")) {
-      event.text = text.split("[Fremennik name]").join(player.getUsername?.() ?? "");
+      event.text = text.split("[Fremennik name]").join(player.getDisplayName?.() ?? "");
     }
     const gendered = [
       ["[He/She]", "He", "She"],

@@ -249,7 +249,7 @@ export class PlayerDeathTask extends Task {
 
         // Handle defeat..
         if (killer && !dropped && !pluginHandledDrop) {
-            killer.sendMessage(`${player.getUsername()} had no valuable items to be dropped.`);
+            killer.sendMessage(`${player.getDisplayName()} had no valuable items to be dropped.`);
         }
 
         // Reset items

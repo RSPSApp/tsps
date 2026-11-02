@@ -246,7 +246,7 @@ function visitHouse(player, name, location = nearbyHouseLocation(player)) {
   if (!house.enterHouse(player, false)) { exitHouse(player); return; }
   lastVisited.set(player, owner.getUsername());
   player.getPacketSender().sendVarbit(HOUSE_LOCKED_VARBIT, house.save.locked ? 1 : 0);
-  player.sendMessage("Welcome to " + owner.getUsername() + "'s house.");
+  player.sendMessage("Welcome to " + owner.getDisplayName() + "'s house.");
 }
 
 function promptVisit({ player, objectId }) {

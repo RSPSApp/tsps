@@ -33,6 +33,7 @@ function player(name) {
     texts: () => lines.join('\n'),
     getIndex: () => index,
     getUsername: () => name,
+    getDisplayName: () => name,
     getLongUsername: () => Misc.stringToLongBigInt(name.toLowerCase()),
     getHostAddress: () => '127.0.0.1',
     getRights: () => ({ getId: () => 0 }),
@@ -247,3 +248,129 @@ test('a raid party stands in for the chat-channel tab until it ends', () => {
   replace({ player: someone, group: null });
   assert.deepEqual(sent.at(-1), ['mount', 707, 7, 7]);
 });
+
+// Display names (DisplayNames, ::displayname): lists, PMs and channels show them and take them typed.
+const { DisplayNames } = require('../dist/game/entity/impl/player/DisplayNames');
+const FRIENDS_CHAT_UPDATE = 121;
+
+/** The latest friends/ignores/channel snapshot a player was sent, as text. */
+function lastSnapshot(who, sent) {
+  return sent.filter(([to, packet]) => to === who && packet[0] === FRIENDS_CHAT_UPDATE).map(([, packet]) => packet.toString('latin1')).pop() ?? '';
+}
+
+function withDisplayNames(run) {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-display-names-'));
+  process.env[DisplayNames.FILE_ENV] = path.join(dir, 'display-names.json');
+  DisplayNames.reset();
+  try {
+    run();
+  } finally {
+    delete process.env[DisplayNames.FILE_ENV];
+    DisplayNames.reset();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** A player whose display name follows DisplayNames, and whose packets are kept in `sent`. */
+function named(name, sent) {
+  const self = player(name);
+  self.getDisplayName = () => DisplayNames.nameOf(name);
+  const session = self.getSession();
+  self.getSession = () => ({ sendClientPacket: (packet) => { sent.push([self, packet]); return session.sendClientPacket(packet); } });
+  return self;
+}
+
+test('friends and ignores show display names and the name given up, and refresh on a change', () => withDisplayNames(() => {
+  const sent = [];
+  const alice = named('Alice', sent);
+  const bob = named('Bob', sent);
+  Manager.handleAction(alice, { action: 'add_friend', name: 'Bob' });
+  assert.match(lastSnapshot(alice, sent), /Bob/);
+  DisplayNames.set('Bob', 'Zed', Date.now(), 35 * 86400000);
+  Manager.onDisplayNameChanged(bob);
+  const snapshot = lastSnapshot(alice, sent);
+  assert.match(snapshot, /Zed/, 'the new name');
+  assert.match(snapshot, /Bob/, 'the previous name, still held');
+  // Offline friends and ignores read the registry too.
+  online.splice(online.indexOf(bob), 1);
+  Manager.handleAction(alice, { action: 'remove_friend', name: 'Zed' });
+  Manager.handleAction(alice, { action: 'add_ignore', name: 'Zed' });
+  assert.ok(alice.getRelations().hasIgnore(bob.getLongUsername()));
+  assert.match(lastSnapshot(alice, sent), /Zed/);
+}));
+
+test('a renamed player is found by their display name or held names, not a login name no longer held', () => withDisplayNames(() => {
+  const sent = [];
+  const alice = named('Alice', sent);
+  const bob = named('Bob', sent);
+  const carol = named('Carol', sent);
+  const day = 86400000;
+  DisplayNames.set('Carol', 'Recent', Date.now(), 35 * day);
+  Manager.handleAction(alice, { action: 'add_friend', name: 'carol' });
+  assert.ok(alice.getRelations().hasFriend(carol.getLongUsername()), 'a login name is a held name for 35 days');
+  DisplayNames.set('Bob', 'Zed', Date.now() - 80 * day, 35 * day);
+  DisplayNames.set('Bob', 'Zed Two', Date.now() - 40 * day, 35 * day);
+  Manager.handleAction(alice, { action: 'add_friend', name: 'bob' });
+  assert.match(alice.texts(), /Unable to find a player with that name\./);
+  assert.equal(alice.getRelations().getFriendList().length, 1);
+  Manager.handleAction(alice, { action: 'add_friend', name: 'zed_two' });
+  assert.ok(alice.getRelations().hasFriend(bob.getLongUsername()));
+  Manager.handlePrivateMessage(alice, 'bob', 'hello');
+  assert.match(alice.texts(), /Please add that player to your friends list first\./);
+  Manager.handlePrivateMessage(alice, 'Zed Two', 'hi zed');
+  assert.match(bob.texts(), /Alice/);
+  assert.match(alice.texts(), /Zed Two/, 'the sender sees the name the recipient shows');
+}));
+
+test('a channel shows its owner and members by display name, and is joined and kicked by it', () => withDisplayNames(() => {
+  const sent = [];
+  const owner = named('Owner', sent);
+  const member = named('Member', sent);
+  DisplayNames.set('Owner', 'Big Boss', Date.now(), 35 * 86400000);
+  DisplayNames.set('Member', 'Minion', Date.now(), 35 * 86400000);
+  Manager.setOwnChannelName(owner, 'Blur');
+  assert.match(owner.texts(), /typing: Big Boss/);
+  Manager.handleAction(owner, { action: 'join', name: 'Big Boss' });
+  Manager.handleAction(member, { action: 'join', name: 'big_boss' });
+  runTicks(2);
+  assert.equal(Manager.channelOf(member)?.name, 'Blur');
+  const snapshot = lastSnapshot(member, sent);
+  assert.match(snapshot, /Big Boss/);
+  assert.match(snapshot, /Minion/);
+  assert.doesNotMatch(snapshot, /Member/);
+  Manager.handleChat(member, 'hi all');
+  assert.match(owner.texts(), /Minion/);
+  // The rejoin at login goes by the login name the channel saved, whatever the owner shows.
+  assert.equal(member.getRelations().getFriendsChatLastOwner(), 'Owner');
+  Manager.kick(owner, 'Minion');
+  assert.match(member.texts(), /You have been kicked from the channel\./);
+}));
+
+test('players who only ignore the renamed player are told of every rename, each with the name just left', () => withDisplayNames(() => {
+  const sent = [];
+  const day = 86400000;
+  const ignorer = named('Ignorer', sent);
+  const watcher = named('Watcher', sent);
+  const stranger = named('Stranger', sent);
+  const bob = named('Bob', sent);
+  Manager.handleAction(ignorer, { action: 'add_ignore', name: 'Bob' });
+  Manager.handleAction(watcher, { action: 'add_friend', name: 'Bob' });
+  const snapshots = (who) => sent.filter(([to, packet]) => to === who && packet[0] === FRIENDS_CHAT_UPDATE).length;
+  const before = { ignorer: snapshots(ignorer), watcher: snapshots(watcher), stranger: snapshots(stranger) };
+  // A cooldown of 0 days lets the renames follow each other.
+  DisplayNames.set('Bob', 'Zed', Date.now(), 35 * day);
+  Manager.onDisplayNameChanged(bob);
+  assert.equal(snapshots(ignorer), before.ignorer + 1);
+  assert.match(lastSnapshot(ignorer, sent), /Zed\0Bob\0/);
+  DisplayNames.set('Bob', 'Yew', Date.now(), 35 * day);
+  Manager.onDisplayNameChanged(bob);
+  assert.equal(snapshots(ignorer), before.ignorer + 2);
+  assert.match(lastSnapshot(ignorer, sent), /Yew\0Zed\0/);
+  // Friends hear of each rename once; players with no relation to Bob hear nothing.
+  assert.equal(snapshots(watcher), before.watcher + 2);
+  assert.match(lastSnapshot(watcher, sent), /Yew\0Zed\0/);
+  assert.equal(snapshots(stranger), before.stranger);
+}));

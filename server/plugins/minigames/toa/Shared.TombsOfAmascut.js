@@ -448,7 +448,7 @@ function formatTicks(ticks) {
 }
 
 function displayName(player) {
-  return player.getUsername();
+  return player.getDisplayName();
 }
 
 /** Whether a tile is walkable for this raid (its own objects included). */

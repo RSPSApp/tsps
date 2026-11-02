@@ -982,7 +982,7 @@ export class Combat {
             case CanAttackResponse.TARGET_IN_COMBAT:
                 if (!player) return;
                 player.sendMessage(target.isPlayer()
-                    ? `Someone else is already fighting ${target.getAsPlayer().getUsername()}.`
+                    ? `Someone else is already fighting ${target.getAsPlayer().getDisplayName()}.`
                     : "Someone else is fighting that.");
                 break;
             case CanAttackResponse.LEVEL_DIFFERENCE_TOO_GREAT:

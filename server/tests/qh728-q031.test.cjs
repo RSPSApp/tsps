@@ -152,7 +152,7 @@ function player() {
     isRegistered: () => true,
     isPlayer: () => true,
     getAsPlayer: () => p,
-    getUsername: () => 'qh728-q031',
+    getUsername: () => 'qh728-q031', getDisplayName: () => 'qh728-q031',
     getIndex: () => 1,
     sendMessage: message => messages.push(message),
   };

@@ -486,7 +486,7 @@ export class LunarSpells {
         return spell.cast(player, () => {
             const stats = Skill.values().map(skill => `${skill.getName()}: ${target.getSkillManager().getCurrentLevel(skill)}`).join(", ");
             player.sendMessage(stats);
-            target.sendMessage(`${player.getUsername()} is reading your skill stats!`);
+            target.sendMessage(`${player.getDisplayName()} is reading your skill stats!`);
         });
     }
 

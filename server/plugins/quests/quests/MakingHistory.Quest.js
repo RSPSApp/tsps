@@ -1001,7 +1001,7 @@ module.exports = function registerMakingHistoryQuest(api) {
       MELINA_NPC_IDS.has(npcId);
     if (!ours) return;
     if (request.text.includes("[player name]")) {
-      request.text = request.text.replace(/\[player name\]/gi, String(request.player.getUsername()));
+      request.text = request.text.replace(/\[player name\]/gi, String(request.player.getDisplayName()));
     }
   }
 

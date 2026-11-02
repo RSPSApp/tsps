@@ -516,7 +516,7 @@ module.exports = function registerRecruitmentDriveQuest(api) {
   /** The room's automatic lines cannot be skipped by holding Space. */
   function tableLine(player, attempt, step, ticks, next) {
     const { ActionDialogue, DialogueChainBuilder, NpcDialogue } = api.core;
-    const text = step.text.replace("[player name]", player.getUsername());
+    const text = step.text.replace("[player name]", player.getDisplayName());
     attempt.showing = true;
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
       new ActionDialogue(0, { execute: () => {

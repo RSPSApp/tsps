@@ -489,7 +489,7 @@ module.exports = function registerForsakenTowerQuest(api) {
     if (!QUEST_NPC_IDS.has(request.npcId)) return;
     let text = request.text;
     if (text.includes("[player name]")) {
-      text = text.replace(/\[player name\]/gi, String(request.player.getUsername()));
+      text = text.replace(/\[player name\]/gi, String(request.player.getDisplayName()));
     }
     if (/\[laddie\/lass/i.test(text)) {
       const female = request.player.getAppearance?.()?.getLook?.()[GENDER_LOOK_SLOT] === 1;

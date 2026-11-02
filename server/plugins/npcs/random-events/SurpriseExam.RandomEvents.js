@@ -106,7 +106,7 @@ module.exports = function attach(api, Events) {
         player,
         npcId: definition.id,
         title: "What would you like to say?",
-        lines: [`Hey, ${player.getUsername()}, the teacher wants you to come to school for a test.`],
+        lines: [`Hey, ${player.getDisplayName()}, the teacher wants you to come to school for a test.`],
         options: [
           ["Sure, I fancy an exam.", () => Flow.chat(api, {
             player,
@@ -135,7 +135,7 @@ module.exports = function attach(api, Events) {
     Flow.chat(api, {
       player,
       npcId: N.MR_MORDAUT,
-      lines: [`Ah, it's you ${player.getUsername()}. You've been slacking in your studies, so it's time for an exam.`,
+      lines: [`Ah, it's you ${player.getDisplayName()}. You've been slacking in your studies, so it's time for an exam.`,
         "There are two types of question. One type requires you to find the next object in a pattern.",
         "In the second type I will present you with fifteen cards and a hint. Discover three cards related to the hint, select them and confirm.",
         questionLine(session)],

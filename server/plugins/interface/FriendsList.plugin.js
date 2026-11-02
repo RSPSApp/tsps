@@ -37,6 +37,11 @@ function sendPrivateMessage(event) {
   event.sent = FriendsChatManager.deliverPrivateMessage(sender, recipient, text);
 }
 
+/** "display-names:changed" ({ player, previous, name }). */
+function showChangedDisplayName({ player }) {
+  if (player) FriendsChatManager.onDisplayNameChanged(player);
+}
+
 /**
  * OSRS has no rule against attacking someone in your chat-channel. Only bots are held back,
  * since a recruited bot shouldn't pick its owner's channel as a target.
@@ -58,6 +63,7 @@ module.exports = {
     api.onCustomEvent("friends-chat:channel", describeChannel);
     api.onCustomEvent("friends-chat:join", joinChannel);
     api.onCustomEvent("friends-chat:leave", leaveChannel);
+    api.onCustomEvent("display-names:changed", showChangedDisplayName);
     api.persistAttribute(CHAT_FILTERS_ATTRIBUTE);
     api.onCanAttack(keepRecruitedBotsFriendly);
 

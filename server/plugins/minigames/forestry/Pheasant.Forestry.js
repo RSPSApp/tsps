@@ -210,7 +210,7 @@ function talk({ player, npc }) {
   }
   const [hello, ask, yes, no, explain] = Common.data.messages.forester;
   const id = P().npcs.forester;
-  Common.chat(player, id, [["player", hello], ["npc", ask.replace("{name}", player.getUsername())]], () => {
+  Common.chat(player, id, [["player", hello], ["npc", ask.replace("{name}", player.getDisplayName())]], () => {
     Common.menu(player,
       [yes, () => Common.chat(player, id, [["player", yes], ["npc", explain]])],
       [no, () => Common.chat(player, id, [["player", no]])]);

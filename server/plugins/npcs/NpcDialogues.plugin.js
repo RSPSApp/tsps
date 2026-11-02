@@ -170,7 +170,7 @@ function pickAlternative(parts, name, pronouns) {
 
 function formatPlayerText(text, player) {
   let out = String(text ?? "");
-  const name = player?.getUsername?.();
+  const name = player?.getDisplayName?.();
   // "[player.]" keeps the sentence's closing period.
   if (name) out = out.replace(PLAYER_NAME_PLACEHOLDER, (_, period) => `${name}${period ?? ""}`);
   if (!out.includes("/")) return out;

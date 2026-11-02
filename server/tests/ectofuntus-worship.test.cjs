@@ -70,6 +70,11 @@ test("bat bonemeal awards 21.2 XP per worship, retaining tenths across repeated 
   assert.equal(Common.tokens(h.p), 25);
 });
 
+test("ground-only bones have no Ectofuntus bonemeal mapping", () => {
+  assert.equal(Common.bonemealFor(obj("bull_bones")), null);
+  assert.equal(Common.bonemealFor(obj("giant_bones")), null);
+});
+
 test("normal worship and item-use retain the captured swaps, rewards and feedback (377)", () => {
   const h = player({ meal: "pot_bonemeal_big", count: 3 });
   const beforeSlots = h.p.getInventory().getItems().slice(0, 6).map(item => item.getId());

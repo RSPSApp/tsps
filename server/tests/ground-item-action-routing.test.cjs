@@ -15,10 +15,14 @@ const { PrivateArea } = require('../dist/game/model/areas/impl/PrivateArea');
 const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
 const { PickupItemPacketListener } = require('../dist/net/packet/impl/PickupItemPacketListener');
 const { SecondGroundItemOptionPacketListener } = require('../dist/net/packet/impl/SecondGroundItemOptionPacketListener');
+const { GameConstants } = require('../dist/game/GameConstants');
 
 let core;
 let nextIndex = 9000;
+let experienceMultiplier;
 before(async () => {
+  experienceMultiplier = GameConstants.EXPERIENCE_MULTIPLIER;
+  GameConstants.EXPERIENCE_MULTIPLIER = 1;
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   PluginManager.loadFromDirectory(path.resolve(__dirname, '../plugins'));
   core = PluginManager.getCoreApi();
@@ -26,7 +30,10 @@ before(async () => {
   core.RegionManager.loadMapFiles(3222, 3218);
   PluginManager.emitServerStartup({});
 });
-after(() => PluginManager.emitServerShutdown({}));
+after(() => {
+  GameConstants.EXPERIENCE_MULTIPLIER = experienceMultiplier;
+  PluginManager.emitServerShutdown({});
+});
 
 function actor(t, privateArea = false) {
   const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };

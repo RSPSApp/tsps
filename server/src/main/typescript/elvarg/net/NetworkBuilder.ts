@@ -790,6 +790,7 @@ export class ClientConnection {
             } else if (LunarSpells.handleSelf(
               this.player,
               this.resolveSpellName(actionPacket.widgetId, actionPacket.groupId, actionPacket.childId, actionPacket.itemId),
+              actionPacket.buttonNum || actionPacket.opId || 1,
             )) {
               // Lunar self-casts and teleports are identified by their cache spell name.
             } else if (CombatSpells.handleSelf(

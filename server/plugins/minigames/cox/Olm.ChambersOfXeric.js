@@ -155,8 +155,8 @@ const WATER_GOURD = 20801;
 const EMPTY_GOURD = 20800;
 /** Wiki: the spells that douse, by their names in CombatSpells; autocast first when it is one. */
 const DOUSING_SPELLS = ["Water Surge", "Water Wave", "Water Blast", "Water Bolt", "Water Strike", "Ice Barrage", "Ice Blitz", "Ice Burst", "Ice Rush"];
-/** Humidify's level and runes (astral, 3 water, law), which LunarSpells keeps to itself. */
-const HUMIDIFY = { LEVEL: 68, RUNES: [[9075, 1], [555, 3], [563, 1]], ANIMATION: 6294, PROJECTILE: 1669 };
+/** Humidify's level and runes (astral, 3 water, fire; its cache spell obj), which LunarSpells keeps to itself. */
+const HUMIDIFY = { LEVEL: 68, RUNES: [[9075, 1], [555, 3], [554, 1]], ANIMATION: 6294, PROJECTILE: 1669 };
 const DOUSE_REACH = 10;
 /** The Fire's Douse is its op1 (cache). */
 const DOUSE_OP = 1;

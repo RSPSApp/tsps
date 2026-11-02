@@ -11949,7 +11949,7 @@ test('WGS restores native Slayer and Warriors Guild replacement states on login'
 test('Astral Contact and its former name use one astral, one cosmic and two air runes', () => {
  const {Spell}=PluginManager.getCoreApi(),{LunarSpells}=require('../dist/game/content/combat/magic/LunarSpells');
  const original=Spell.prototype.canCast,emit=PluginManager.emitCustomEvent;let costs,chain,xp=0;
- const player={getSkillManager:()=>({getMaxLevel:()=>99,addExperiences:(s,n)=>xp+=n}),performAnimation(){},performGraphic(){},getDialogueManager:()=>({startDialogues:c=>chain=c})};
+ const player={getIndex:()=>1,getSkillManager:()=>({getMaxLevel:()=>99,addExperiences:(s,n)=>xp+=n}),performAnimation(){},performGraphic(){},getDialogueManager:()=>({startDialogues:c=>chain=c})};
  try {
   Spell.prototype.canCast=function(){costs=this.itemsRequired().map(i=>[i.getId(),i.getAmount()]);return true;};PluginManager.emitCustomEvent=()=>{};
   for(const name of ['Astral Contact','NPC Contact']){

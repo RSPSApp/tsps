@@ -39,6 +39,7 @@ function caster(extra = {}) {
     animations: [],
     graphics: [],
     attributes: new Map(),
+    getIndex: () => 1,
     performAnimation(animation) { this.animations.push(animation.getId()); },
     performGraphic(graphic) { this.graphics.push(graphic.getId()); },
     getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences() {} }),
@@ -88,10 +89,13 @@ test("the registered Cure Me handler casts with its own animation and graphic", 
   assert.deepEqual(player.graphics, [spotanim("quest_lunar_cure_me_spot")]);
 });
 
-test("String Jewellery casts with its own animation and graphic", () => {
-  const amulet = { getId: () => 1635, setId() {} };
-  const player = caster({ getInventory: () => ({ getItems: () => [amulet], refreshItems() {} }) });
-  castable(() => LunarSpells.handleItemTarget(player, 1635, 0, "String Jewellery"));
+test("String Jewellery casts from the spellbook with its own animation and graphic", () => {
+  // Gold amulet (u) -> Gold amulet; the spell has no target (op 1, Cast).
+  let id = 1673;
+  const amulet = { getId: () => id, setId(next) { id = next; } };
+  const player = caster({ getInventory: () => ({ getValidItems: () => [amulet], refreshItems() {} }) });
+  castable(() => LunarSpells.handleSelf(player, "String Jewellery"));
+  assert.equal(id, 1692);
   assert.deepEqual(player.animations, [seq("lunar_human_magic_summon1")]);
   assert.deepEqual(player.graphics, [spotanim("quest_lunar_spellbook_string_jewelery_spot_anim")]);
 });

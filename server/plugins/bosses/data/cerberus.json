@@ -35,11 +35,12 @@
       "soulMelee": "spectre_melee_proj"
     }
   },
+  "_outside": "Each arena's outside: where its portcullis puts a player leaving, beside its Iron Winch on the winch's one open side, in the Key Master's hall (the cache's collision; no recording of the portcullis). The tiles once here were walls.",
   "arenas": [
     {
       "name": "west",
       "winch": [1291, 1254],
-      "outside": [1292, 1254],
+      "outside": [1292, 1253],
       "spawn": [1238, 1250],
       "entry": [1240, 1226],
       "bounds": [1224, 1256, 1225, 1270]
@@ -47,7 +48,7 @@
     {
       "name": "north",
       "winch": [1307, 1269],
-      "outside": [1307, 1268],
+      "outside": [1309, 1269],
       "spawn": [1302, 1314],
       "entry": [1304, 1290],
       "bounds": [1288, 1320, 1289, 1334]
@@ -55,7 +56,7 @@
     {
       "name": "east",
       "winch": [1328, 1254],
-      "outside": [1327, 1254],
+      "outside": [1328, 1253],
       "spawn": [1366, 1250],
       "entry": [1368, 1226],
       "bounds": [1352, 1384, 1225, 1270]

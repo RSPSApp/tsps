@@ -301,7 +301,7 @@ test('the portcullis leads out beside the winch, the cave back to Taverley Dunge
   westArena();
   const player = fakePlayer(1240, 1226);
   assert.equal(Lair.leaveArena({ player, objectId: Common.ids.locs.portcullis, location: { x: 1239, y: 1225, z: 0 } }), true);
-  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [1292, 1254]);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [1292, 1253], "the hall side of the winch");
   assert.equal(Lair.leaveArena({ player, objectId: 1, location: { x: 1239, y: 1225, z: 0 } }), false);
   assert.equal(Lair.leaveLair({ player, objectId: Common.ids.locs.caves[1] }), true);
   assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2873, 9847]);

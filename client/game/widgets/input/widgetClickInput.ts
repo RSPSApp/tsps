@@ -426,10 +426,13 @@ export function processWidgetClickInput(
                         handled = deps.getCs2Vm().invokeEventHandler(w, "onClick", clickCtx);
                     }
 
-                    // Fall back to onOp if onClick didn't handle it (tabs use onOp)
-                    if (!handled && w.eventHandlers?.onOp) {
+                    // OSRS: a left-click fires the widget's onClick and also runs the top menu
+                    // entry, so a widget that offers an op runs its onOp as well (the Demonic Pacts
+                    // tree's Apply Changes buttons, script 8190: onClick for the press, onOp for
+                    // the action). Without an op of its own, onOp is only the fallback (tabs).
+                    if ((!handled || hasActions) && w.eventHandlers?.onOp) {
                         invokedAnyHandler = true;
-                        handled = deps.getCs2Vm().invokeEventHandler(w, "onOp", clickCtx);
+                        handled = deps.getCs2Vm().invokeEventHandler(w, "onOp", clickCtx) || handled;
                     }
 
                     // Try legacy handlers

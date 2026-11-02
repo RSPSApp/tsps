@@ -16,6 +16,10 @@ Row data is a separate resource, registered with
 `api.registerContentEndpoint(name, handler)` and served at `/api/<name>`. Use it for
 request/response shaped, cache-derived data - searches, lists, lookups.
 
+Declared `scroll` regions can read their height from a hidden text component using
+`contentHeightComponent`, falling back to `contentHeight`. `resetOnComponents` lists
+buttons that return the view to the top while still sending their click to the server.
+
 Rules for both:
 
 - Read-only and public. Anything player-specific or privileged stays on the game socket,

@@ -575,12 +575,13 @@ export class PacketSender {
       return this;
   }
 
-  public sendString(string: string, id: number): PacketSender {
+  /** Explicit ownership prevents browser cache scripts rewriting the widget; false releases it. */
+  public sendString(string: string, id: number, serverOwned?: boolean): PacketSender {
     const safeText = String(string ?? "");
-    if (!this.player.getFrameUpdater().shouldUpdate(safeText, id)) {
+    if (!this.player.getFrameUpdater().shouldUpdate(safeText, id, serverOwned)) {
       return this;
     }
-    this.player.getSession().sendClientPacket(encodeWidgetSetText(id, safeText));
+    this.player.getSession().sendClientPacket(encodeWidgetSetText(id, safeText, serverOwned));
     return this;
   }
 

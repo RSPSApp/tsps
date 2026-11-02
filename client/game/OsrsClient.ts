@@ -2801,6 +2801,9 @@ export class OsrsClient {
                 const text = typeof payload.text === "string" ? payload.text : String(payload.text);
                 const w = this.widgetManager?.getWidgetByUid(uid);
                 if (w) {
+                    if (typeof payload.serverOwned === "boolean") {
+                        this.widgetManager.setServerOwnedWidget(uid, payload.serverOwned);
+                    }
                     if (!this.customInterfaces.handleSetText(uid, text)) {
                         w.text = text;
                         markWidgetInteractionDirty(w);

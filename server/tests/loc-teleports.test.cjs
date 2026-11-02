@@ -26,6 +26,7 @@ const decisions = require("../plugins/world/data/loc-teleport-sync.json");
 const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
 const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const DiaryProgress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
+const Thieving = require("../plugins/skills/Thieving.plugin");
 
 let core;
 const hooks = {};
@@ -37,6 +38,7 @@ before(async () => {
   core = PluginManager.getCoreApi();
   core.RegionManager.init();
   Diaries.register(PluginManager.createApi("LocArrivalDiaries"));
+  Thieving.register(PluginManager.createApi("HamEntranceThieving"));
   const native = PluginManager.createApi("LocArrivalTeleports");
   LocTeleports.register({
     core,
@@ -533,9 +535,7 @@ function locAt(id, x, y, z) {
   return object;
 }
 
-test("entering the H.A.M. hideout through the native object route credits the diary once, on arrival", () => {
-  const diary = DiaryData.BY_KEY.get("lumbridge");
-  const task = "enter-the-h-a-m-hideout";
+function nativeHamPlayer() {
   const player = new Player(new PlayerSession({
     kind: "test", isOpen: () => true, send: () => true,
     close() {}, onData() {}, onError() {}, onClose() {},
@@ -543,6 +543,28 @@ test("entering the H.A.M. hideout through the native object route credits the di
   player.setUsername("ham-arrival").setIndex(1500);
   player.setRegistered(true);
   player.setLocation(new core.Location(3163, 3252, 0));
+  return player;
+}
+
+function nativeTicks(player, count) {
+  for (let tick = 0; tick < count; tick++) {
+    core.World.processCycle++;
+    core.TaskManager.process();
+    player.getMovementQueue().process();
+    core.TaskManager.processRemainingWalkTo();
+    player.resetUpdating();
+  }
+}
+
+const thievingXp = (player) => player.getSkillManager().getSkills().experience[core.Skill.THIEVING.getIndex()];
+
+test("the native H.A.M. route requires unlocking, then credits actual entry once and relocks", (t) => {
+  const random = Math.random;
+  Math.random = () => 0;
+  t.after(() => { Math.random = random; });
+  const diary = DiaryData.BY_KEY.get("lumbridge");
+  const task = "enter-the-h-a-m-hideout";
+  const player = nativeHamPlayer();
   const messages = [];
   player.sendMessage = (text) => messages.push(text);
   locAt(5492, 3166, 3252, 0);
@@ -552,34 +574,95 @@ test("entering the H.A.M. hideout through the native object route credits the di
   assert.equal(closed.getInteractions()[4], "Pick-Lock");
   const start = player.getLocation().clone();
   new ObjectActionPacketListener().executeAction(player, 5492, 3166, 3252, 1);
+  nativeTicks(player, 15);
+  assert.ok(player.getLocation().getY() < 9000, "closed Open cannot bypass the lock");
+  assert.equal(DiaryProgress.doneTasks(player, diary).has(task), false);
+  assert.ok(messages.includes("This trapdoor is locked."));
+
+  player.setLocation(start);
+  new ObjectActionPacketListener().executeAction(player, 5492, 3166, 3252, 5);
   let walked = false;
-  let landed = false;
-  for (let tick = 0; tick < 15; tick++) {
-    assert.equal(DiaryProgress.doneTasks(player, diary).has(task), landed, "credit follows the actual move");
-    core.World.processCycle++;
-    player.getMovementQueue().process();
+  for (let tick = 0; tick < 30; tick++) {
+    nativeTicks(player, 1);
     if (player.getLocation().getY() < 9000 && !player.getLocation().equals(start)) walked = true;
-    core.TaskManager.processRemainingWalkTo();
-    core.TaskManager.process();
-    const at = player.getLocation();
-    landed = at.getX() === 3149 && at.getY() === 9652 && at.getZ() === 0;
+    assert.equal(DiaryProgress.doneTasks(player, diary).has(task), false, "unlocking is not entering");
   }
   assert.equal(walked, true, "walks through the real cache collision before operating the trapdoor");
-  assert.equal(landed, true);
+  assert.equal(player.getPacketSender().getVarbit(235), 1);
+  assert.equal(core.ObjectDefinition.forPlayer(5492, player).getInteractions()[0], "Climb-down");
+  assert.equal(thievingXp(player), 3.8);
+  new ObjectActionPacketListener().executeAction(player, 5492, 3166, 3252, 1);
+  nativeTicks(player, 5);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], [3149, 9652, 0]);
+  assert.equal(player.getPacketSender().getVarbit(235), 0, "entry relocks the per-player trapdoor");
   assert.equal(DiaryProgress.doneTasks(player, diary).has(task), true);
   assert.equal(player.getPacketSender().getVarbit(6311), 1, "the native diary tab count updates");
   assert.equal(messages.filter((line) => line.includes("Achievement Diary")).length, 1);
 
-  player.moveTo(start);
+  player.setLocation(start);
+  new ObjectActionPacketListener().executeAction(player, 5492, 3166, 3252, 5);
+  nativeTicks(player, 30);
   new ObjectActionPacketListener().executeAction(player, 5492, 3166, 3252, 1);
-  for (let tick = 0; tick < 15; tick++) {
-    core.World.processCycle++;
-    player.getMovementQueue().process();
-    core.TaskManager.processRemainingWalkTo();
-    core.TaskManager.process();
-  }
+  nativeTicks(player, 15);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], [3149, 9652, 0], "actually enters a second time");
+  assert.equal(thievingXp(player), 7.6, "both unlocks completed");
   assert.equal(player.getPacketSender().getVarbit(6311), 1);
   assert.equal(messages.filter((line) => line.includes("Achievement Diary")).length, 1, "re-entry does not duplicate credit");
+});
+
+test("a failed native H.A.M. attempt retries; an optional lockpick improves the level-one roll", (t) => {
+  const random = Math.random;
+  Math.random = () => 0.2; // Fails 11/256 bare-handed, succeeds 61/256 with a lockpick.
+  t.after(() => { Math.random = random; });
+  const player = nativeHamPlayer();
+  player.setLocation(new core.Location(3166, 3251, 0));
+  const animations = [];
+  player.performAnimation = (animation) => animations.push(animation.getId());
+  new ObjectActionPacketListener().executeAction(player, 5492, 3166, 3252, 5);
+  for (let tick = 0; tick < 5 && !animations.length; tick++) nativeTicks(player, 1);
+  assert.deepEqual(animations, [537]);
+  nativeTicks(player, 7);
+  assert.equal(thievingXp(player), 0, "no outcome before the nine-tick attempt");
+  nativeTicks(player, 1);
+  assert.equal(thievingXp(player), 0.5);
+  assert.equal(player.getPacketSender().getVarbit(235), 0);
+  assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.THIEVING), 1, "no invented numb-finger roll");
+  player.getInventory().add(new core.Item(core.ItemIdentifiers.LOCKPICK, 1), false);
+  nativeTicks(player, 9);
+  assert.deepEqual(animations, [537, 537, 536]);
+  assert.equal(player.getPacketSender().getVarbit(235), 1);
+  assert.equal(thievingXp(player), 4.3);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.LOCKPICK), 1, "the tool is not consumed");
+  assert.equal(DiaryProgress.doneTasks(player, DiaryData.BY_KEY.get("lumbridge")).size, 0);
+  new ObjectActionPacketListener().executeAction(player, 5492, 3166, 3252, 2);
+  nativeTicks(player, 3);
+  assert.equal(player.getPacketSender().getVarbit(235), 0, "the real open variant's Close relocks it");
+  assert.equal(core.ObjectDefinition.forPlayer(5492, player).getInteractions()[4], "Pick-Lock");
+});
+
+test("native H.A.M. picking cancels on movement, another action, logout, death or a movement hold", (t) => {
+  const random = Math.random;
+  Math.random = () => 0;
+  t.after(() => { Math.random = random; });
+  for (const cancel of [
+    (player) => { player.getMovementQueue().walkToReset(); player.setLocation(new core.Location(3165, 3251, 0)); },
+    (player) => new ObjectActionPacketListener().executeAction(player, 5492, 3166, 3252, 1),
+    (player) => PluginManager.emitCustomEvent("player:world-input", { player, kind: "item_option" }),
+    (player) => player.setRegistered(false),
+    (player) => player.getSkillManager().setCurrentLevels(core.Skill.HITPOINTS, 0, false),
+    (player) => player.getSkillManager().setCurrentLevels(core.Skill.THIEVING, 0, false),
+    (player) => player.getMovementQueue().setBlockMovement(true),
+  ]) {
+    const player = nativeHamPlayer();
+    player.setLocation(new core.Location(3166, 3251, 0));
+    new ObjectActionPacketListener().executeAction(player, 5492, 3166, 3252, 5);
+    nativeTicks(player, 3);
+    cancel(player);
+    nativeTicks(player, 20);
+    assert.equal(player.getPacketSender().getVarbit(235), 0);
+    assert.equal(player.getSkillManager().getExperience(core.Skill.THIEVING), 0);
+    assert.equal(DiaryProgress.doneTasks(player, DiaryData.BY_KEY.get("lumbridge")).size, 0);
+  }
 });
 
 test("H.A.M. diary credit requires the exact entrance and landing, and a completed move", () => {

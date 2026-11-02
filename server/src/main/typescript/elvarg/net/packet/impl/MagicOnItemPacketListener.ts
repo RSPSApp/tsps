@@ -341,7 +341,8 @@ export class MagicOnItemPacketListener {
     Sounds.sendSound(player, isHighAlch ? Sound.HIGH_ALCHEMY : Sound.LOW_ALCHEMY);
     if (policy.coins > 0) inventory.adds(ItemIdentifiers.COINS, policy.coins);
     payment.commit?.();
-    PluginManager.emitCustomEvent("magic:alchemy-completed", { player, itemId, spellId });
+    // `coins`: what the cast paid (a league's "Convert an item into at least 500 coins").
+    PluginManager.emitCustomEvent("magic:alchemy-completed", { player, itemId, spellId, coins: policy.coins });
     player.performGraphic(new Graphic(isHighAlch
       ? MagicOnItemPacketListener.HIGH_ALCH_GRAPHIC
       : MagicOnItemPacketListener.LOW_ALCH_GRAPHIC, GraphicHeight.HIGH));

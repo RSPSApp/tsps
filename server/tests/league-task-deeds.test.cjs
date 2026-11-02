@@ -394,6 +394,28 @@ test("cast: a spell whose cost is paid, named by the server's registries (Cast L
   assert.ok(done(f, "cast-low-level-alchemy"));
 });
 
+test("alch: an alchemy paying at least the coins (Convert an item into at least 500 coins)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.MAGIC, 99);
+  skills.setCurrentLevel(core.Skill.MAGIC, 99);
+  const inventory = f.player.getInventory();
+  inventory.add(new core.Item(item("Nature rune"), 2), true);
+  inventory.add(new core.Item(item("Fire rune"), 10), true);
+  const spell = core.CacheDefinitions.getSpellByName("High Level Alchemy");
+  const { MagicOnItemPacketListener } = require("../dist/net/packet/impl/MagicOnItemPacketListener");
+  const alch = async (name) => {
+    f.player.setAttribute(MagicOnItemPacketListener.ALCH_NEXT_CAST_ATTRIBUTE, 0); // the last cast's delay over
+    inventory.add(new core.Item(item(name)), true);
+    await send(f, { type: "widget_target", sourceWidgetId: spell.widgetId, sourceItemId: spell.itemId, sourceSlot: -1, targetWidgetId: 149 << 16, targetItemId: item(name), targetSlot: inventory.getSlotForItemId(item(name)) }, 6);
+  };
+  await alch("Bronze dagger");
+  assert.ok(inventory.getAmount(core.ItemIdentifiers.COINS) > 0, `the real alchemy pays: ${f.messages}`);
+  assert.ok(!done(f, "convert-an-item-into-at-least-500-coins"), "a bronze dagger is worth less");
+  await alch("Rune dagger");
+  assert.ok(done(f, "convert-an-item-into-at-least-500-coins"), `a rune dagger is not: ${inventory.getAmount(core.ItemIdentifiers.COINS)} coins`);
+});
+
 test("cast: a combat spell's cost paid is its cast (Cast Ice Burst)", (t) => {
   const f = pactsCharacter(t);
   const skills = f.player.getSkillManager();

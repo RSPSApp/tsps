@@ -1018,6 +1018,11 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
   if ((match = /^Fully decorate an? ([A-Za-z]+) totem in (?:the Vale Totems|the Auburn Valley)\.?$/i.exec(description))) {
     return { trigger: { kind: "totem", woods: [match[1].toLowerCase()], count: 1 } };
   }
+  // "Cast the High Level Alchemy or Low Level Alchemy spell to convert an item into 500 coins or
+  // more": an alchemy paying that much (magic:alchemy-completed's coins).
+  if ((match = /^Cast the (?:High|Low) Level Alchemy or (?:High|Low) Level Alchemy spell to convert an item into ([\d,]+) coins or more\.?$/i.exec(description))) {
+    return { trigger: { kind: "alch", coins: Number(match[1].replace(/,/g, "")), count: 1 } };
+  }
   // "Purchase a Celestial ring from Dusuri's Star Shop", "Purchase an Uncut onyx from TzHaar-Hur-Lek's
   // Ore and Gem Store": that item bought from that shop (ShopManager's shop:purchase), the shop and
   // its stock as data/definitions/shops.json has them (an item's uncharged form is the one sold).

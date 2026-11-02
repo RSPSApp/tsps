@@ -1640,6 +1640,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   `buy { items, shops, count }` from ShopManager's `shop:purchase` (that item bought from a shop of
   that name in `shops.json`, every variant of it: "Purchase an Uncut onyx from TzHaar-Hur-Lek's Ore
   and Gem Store"; an item's uncharged form is the one sold),
+  `alch { coins, count }` from `magic:alchemy-completed`'s new `coins` (what the cast paid: "convert
+  an item into 500 coins or more"),
   `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what

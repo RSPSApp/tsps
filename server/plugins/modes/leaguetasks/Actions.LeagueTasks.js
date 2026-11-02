@@ -55,7 +55,8 @@
  *   picked up by hand, "pickup", or by Telekinetic Grab, "telegrab"), `pickpocket-loot { npcs, items,
  *   count }` (`thieving:loot`, the pocket's loot holding one of the items), `bird-nest { count }`
  *   (`woodcutting:nest-drop`, a nest from a tree), `buy { items, shops, count }` (`shop:purchase`, that
- *   item bought from one of those shops, by their names).
+ *   item bought from one of those shops, by their names), `alch { coins, count }`
+ *   (`magic:alchemy-completed`, an alchemy paying at least that many coins).
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -357,6 +358,7 @@ const EVENT_KINDS = new Map([
     && trigger.tools.some((tool) => key(tool) === key(itemName(event.toolId)))
     && (!trigger.items || trigger.items.some((each) => key(each) === key(itemName(event.itemId))))],
   ["bird-nest", () => true],
+  ["alch", (trigger, event) => Number(event.coins) >= Number(trigger.coins)],
   ["buy", (trigger, event) => trigger.shops.includes(event.shopName) && trigger.items.some((each) => key(each) === key(itemName(event.itemId)))],
   ["pickpocket-loot", (trigger, event) => trigger.npcs.some((npc) => key(npc) === key(event.target))
     && (event.loot ?? []).some((entry) => trigger.items.some((each) => key(each) === key(itemName(Number(entry?.id ?? entry?.itemId)))))],
@@ -459,6 +461,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("thieving:loot", onEvent("pickpocket-loot"));
   api.onCustomEvent("woodcutting:nest-drop", onEvent("bird-nest"));
   api.onCustomEvent("shop:purchase", onEvent("buy"));
+  api.onCustomEvent("magic:alchemy-completed", onEvent("alch"));
   // Gathered with a tool: the logs or ore and the axe or pickaxe the success events carry.
   const gatheredWith = onEvent("gather-with");
   api.onCustomEvent("woodcutting:success", (event) => gatheredWith({ ...event, gatherSkill: "woodcutting", toolId: event.axeId, itemId: event.logId }));

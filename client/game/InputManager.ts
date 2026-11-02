@@ -216,6 +216,9 @@ export class InputManager {
     idleTime: number = 0;
     /** Timestamp of last click */
     clickTime: number = 0;
+    /** Monotonic timestamp of the last key press, in ms (RuneLite's keyboard idle ticks). */
+    private lastKeyTimeMs: number =
+        typeof performance !== "undefined" ? performance.now() : Date.now();
 
     /**
      * Monotonic timestamp of last user input (mouse/key/touch/wheel), in ms.
@@ -724,6 +727,11 @@ export class InputManager {
         return typeof performance !== "undefined" ? performance.now() : Date.now();
     }
 
+    /** Milliseconds since the last key press. */
+    getKeyboardIdleMs(): number {
+        return Math.max(0, this.nowMs() - this.lastKeyTimeMs);
+    }
+
     /**
      * OSRS AFK logout window is 5 minutes (300s). CS2 scripts query remaining time in ms.
      */
@@ -1144,6 +1152,7 @@ export class InputManager {
         event.preventDefault();
         this.idleTime = 0;
         this.lastInputTimeMs = this.nowMs();
+        this.lastKeyTimeMs = this.lastInputTimeMs;
 
         // A held Shift/Ctrl/Alt auto-repeats keydown. It is already held; queueing each repeat as a
         // key press re-ran every onKey script and redrew all widgets many times a second (#845).

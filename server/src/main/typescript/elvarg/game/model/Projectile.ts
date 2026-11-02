@@ -64,17 +64,35 @@ export class Projectile {
 
     /**
      * Cycles (20ms) between a projectile being sent and it landing, at the engine's usual
-     * 10 per tile on top of the launch delay. Flat lifetimes make a projectile cross a
-     * boss's whole range as fast as it crosses one tile, which reads as teleporting.
+     * 10 per tile (or `perTile`) on top of the launch delay. Flat lifetimes make a projectile
+     * cross a boss's whole range as fast as it crosses one tile, which reads as teleporting.
      */
-    public static arrivalCycles(from: Mobile | Location, to: Mobile | Location, delay: number = 40): number {
-        return delay + Projectile.locationOf(from).getDistance(Projectile.locationOf(to)) * 10;
+    public static arrivalCycles(from: Mobile | Location, to: Mobile | Location, delay: number = 40, perTile: number = 10): number {
+        return delay + Projectile.locationOf(from).getDistance(Projectile.locationOf(to)) * perTile;
     }
 
-    /** The same arrival, in game ticks, for lining a hitsplat up with the projectile. */
-    public static arrivalTicks(from: Mobile | Location, to: Mobile | Location, delay: number = 40): number {
-        return Math.ceil(Projectile.arrivalCycles(from, to, delay) / 30);
+    /**
+     * The same arrival, in game ticks, for lining a hitsplat up with the projectile: a hit
+     * queued this many ticks out shows its splat on the first tick after the projectile lands.
+     */
+    public static arrivalTicks(from: Mobile | Location, to: Mobile | Location, delay: number = 40, perTile: number = 10): number {
+        return Math.ceil(Projectile.arrivalCycles(from, to, delay, perTile) / 30);
     }
+
+    /**
+     * Ticks to queue a hit on a player so its splat shows when a projectile ending at `endCycle`
+     * lands: a hit N ticks out shows 30 * N cycles after the projectile was sent, and the
+     * projectile reaches its target at the end cycle (#1862).
+     */
+    public static ticksToLand(endCycle: number): number {
+        return Math.max(1, Math.ceil(endCycle / 30));
+    }
+
+    /**
+     * The end the legacy magic shape (delay 0, speed 20, heights 43/31) is normalised to in
+     * sendProjectile: launched at 51 and landing at 46 + 10 per tile.
+     */
+    public static readonly LEGACY_MAGIC_END_BASE = 46;
 
     private static locationOf(at: Mobile | Location): Location {
         return at instanceof Location ? at : Projectile.centreOf(at);
@@ -147,7 +165,7 @@ export class Projectile {
         ) {
             const distance = this.start.getDistance(this.end);
             resolvedDelay = 51;
-            resolvedSpeed = resolvedDelay - 5 + distance * 10;
+            resolvedSpeed = Projectile.LEGACY_MAGIC_END_BASE + distance * 10;
         }
 
         let recipients = 0;

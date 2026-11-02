@@ -48,7 +48,8 @@
  *   `random-event { events, count }` (`random-events:completed`, by the event's kind),
  *   `totem { woods, count }` (`vale-totems:decorated`), `dummy { count }` (`dummies:hit`),
  *   `gather-with { skill, tools, items?, count }` (`woodcutting:success`'s axeId, `mining:success`'s pickaxeId),
- *   `teleport { spells, count }` (`spell:teleport-arrival`, by SpellTeleports' lower-cased name).
+ *   `teleport { spells, count }` (`spell:teleport-arrival`, by SpellTeleports' lower-cased name),
+ *   `rifts { count }` (`guardians-of-the-rift:rift-closed`'s own total of rifts closed).
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -78,10 +79,11 @@ function add(map, name, task) {
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { enter: new Map(), equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [], collectionLog: [], checkHealth: new Map(), events: new Map(), prayer: new Map() };
+  const entry = { enter: new Map(), rifts: [], equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [], collectionLog: [], checkHealth: new Map(), events: new Map(), prayer: new Map() };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (trigger?.kind === "enter") entry.enter.set(trigger.place, (entry.enter.get(trigger.place) ?? []).concat(task));
+    else if (trigger?.kind === "rifts") entry.rifts.push(task);
     else if (trigger?.kind === "equip" || trigger?.kind === "equip-all" || trigger?.kind === "equip-any-set") entry.equip.push(task);
     else if (trigger?.kind === "produce") for (const item of trigger.items ?? []) add(entry.produce, item, task);
     else if (trigger?.kind === "hunt") for (const npc of trigger.npcs ?? []) add(entry.hunt, npc, task);
@@ -382,6 +384,13 @@ function watchPlaces(api) {
   }
 }
 
+/** `rifts { count }`: Guardians of the Rift's own count of rifts closed (`rifts`) reaches the count. */
+function riftClosed({ player, rifts }) {
+  const type = player ? Common.leagueOf(player) : null;
+  if (type === null) return;
+  for (const task of indexOf(type).rifts) if (Number(rifts) >= Number(task.trigger.count)) Complete.complete(player, task.id, type);
+}
+
 function prayed({ player, prayerId }) {
   const name = Common.core.PrayerData?.prayerData?.get?.(prayerId)?.name;
   if (player && name) count(player, "prayer", name);
@@ -430,6 +439,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("vale-totems:decorated", onEvent("totem"));
   api.onCustomEvent("dummies:hit", onEvent("dummy"));
   api.onCustomEvent("spell:teleport-arrival", onEvent("teleport"));
+  api.onCustomEvent("guardians-of-the-rift:rift-closed", riftClosed);
   // Gathered with a tool: the logs or ore and the axe or pickaxe the success events carry.
   const gatheredWith = onEvent("gather-with");
   api.onCustomEvent("woodcutting:success", (event) => gatheredWith({ ...event, gatherSkill: "woodcutting", toolId: event.axeId, itemId: event.logId }));

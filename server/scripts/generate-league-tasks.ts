@@ -986,6 +986,12 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   if ((match = /^Fully decorate an? ([A-Za-z]+) totem in (?:the Vale Totems|the Auburn Valley)\.?$/i.exec(description))) {
     return { trigger: { kind: "totem", woods: [match[1].toLowerCase()], count: 1 } };
   }
+  // "Guardians of the Rift 10 Rifts closed" ("Close the Rift in the Temple of the Eye 10 times"):
+  // the minigame's own count of rifts closed.
+  if ((match = /^Guardians of the Rift (\d+) Rifts? closed$/i.exec(name)) && /^Close the Rift in the Temple of the Eye(?: \(location\))?(?: \d+ times)?\.?$/i.test(description)) {
+    const times = / (\d+) times\.?$/i.exec(description);
+    if (Number(times?.[1] ?? 1) === Number(match[1])) return { trigger: { kind: "rifts", count: Number(match[1]) } };
+  }
   // "Attack a dummy": any dummy hit (the attack dummies plugin's).
   if (/^Attack a dummy\.?$/i.test(description)) return { trigger: { kind: "dummy", count: 1 } };
   // A random event completed (the random events plugin's `random-events:completed`).

@@ -236,6 +236,15 @@ test("teleport: a teleport spell cast and landed (Teleport to Civitas illa Forti
   assert.ok(done(f, "teleport-using-law-runes"), "a law rune teleport too");
 });
 
+test("rifts: Guardians of the Rift's own count of rifts closed (Guardians of the Rift 1 Rift closed)", (t) => {
+  const f = pactsCharacter(t);
+  const Rewards = require("../plugins/minigames/guardiansoftherift/Rewards.GuardiansOfTheRift");
+  Rewards.closed({ player: f.player, state: { elemental: 0, catalytic: 0 } });
+  assert.ok(f.messages.some((text) => /closed the rift/.test(text)), `the real close: ${f.messages}`);
+  assert.ok(done(f, "guardians-of-the-rift-1-rift-closed"));
+  assert.ok(!done(f, "guardians-of-the-rift-10-rifts-closed"), "one of ten");
+});
+
 /** An inventory item's option, as the client clicks it. */
 async function inventoryOption(f, name, option, optionIndex = 1, count = 4) {
   const id = item(name);

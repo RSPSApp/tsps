@@ -1623,6 +1623,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   SpellTeleports' name: "Cast Kourend Castle Teleport", "Teleport to Civitas illa Fortis" with its
   spellbook, "Teleport Using Law Runes" every one whose runes have a law rune; the Lunar and Arceuus
   books' teleports name no arrival, Home Teleport is its own),
+  `rifts { count }` from Guardians of the Rift's `guardians-of-the-rift:rift-closed` (its own total
+  of rifts closed reaching the count: "Guardians of the Rift 10 Rifts closed"),
   `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what

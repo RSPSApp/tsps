@@ -53,7 +53,8 @@
  *   `tob { modes, count }` (`tob:completed`, a raid of one of the modes), `emote { slots, count }`
  *   (`player:emote`, by the emote tab's slot), `take { items, source, count }` (`ground-items:taken`,
  *   picked up by hand, "pickup", or by Telekinetic Grab, "telegrab"), `pickpocket-loot { npcs, items,
- *   count }` (`thieving:loot`, the pocket's loot holding one of the items).
+ *   count }` (`thieving:loot`, the pocket's loot holding one of the items), `bird-nest { count }`
+ *   (`woodcutting:nest-drop`, a nest from a tree).
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -354,6 +355,7 @@ const EVENT_KINDS = new Map([
   ["gather-with", (trigger, event) => trigger.skill === event.gatherSkill
     && trigger.tools.some((tool) => key(tool) === key(itemName(event.toolId)))
     && (!trigger.items || trigger.items.some((each) => key(each) === key(itemName(event.itemId))))],
+  ["bird-nest", () => true],
   ["pickpocket-loot", (trigger, event) => trigger.npcs.some((npc) => key(npc) === key(event.target))
     && (event.loot ?? []).some((entry) => trigger.items.some((each) => key(each) === key(itemName(Number(entry?.id ?? entry?.itemId)))))],
   ["take", (trigger, event) => trigger.source === event.source && trigger.items.some((each) => key(each) === key(itemName(event.itemId)))],
@@ -453,6 +455,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("player:emote", onEvent("emote"));
   api.onCustomEvent("ground-items:taken", onEvent("take"));
   api.onCustomEvent("thieving:loot", onEvent("pickpocket-loot"));
+  api.onCustomEvent("woodcutting:nest-drop", onEvent("bird-nest"));
   // Gathered with a tool: the logs or ore and the axe or pickaxe the success events carry.
   const gatheredWith = onEvent("gather-with");
   api.onCustomEvent("woodcutting:success", (event) => gatheredWith({ ...event, gatherSkill: "woodcutting", toolId: event.axeId, itemId: event.logId }));

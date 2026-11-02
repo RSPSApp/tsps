@@ -144,6 +144,21 @@ test("produce with an area: logs chopped in Varlamore count for Varlamore's task
 });
 
 
+test("bird-nest: a nest falls from a tree being chopped (Obtain a Bird Nest)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.WOODCUTTING, 99);
+  skills.setCurrentLevel(core.Skill.WOODCUTTING, 99);
+  f.player.getInventory().add(new core.Item(item("Rune axe")), true);
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const tree = new core.GameObject(core.ObjectIdentifiers.MAGIC_TREE, new core.Location(1667, 3136, 0), 10, 0, null);
+  core.ObjectManager.register(tree, true);
+  t.after(() => core.ObjectManager.deregister(tree, true));
+  t.mock.method(Math, "random", () => 0); // every roll succeeds, the nest's too
+  await send(f, { type: "object_option", id: tree.getId(), x: 1667, y: 3136, action: "Chop down" }, 12);
+  assert.ok(done(f, "obtain-a-bird-nest"), `the real Woodcutting drops a nest: ${f.messages}`);
+});
+
 /** A real NPC of the cache's name dying to the player through the engine's death task. */
 function kill(f, name) {
   const { NPC } = require("../dist/game/entity/impl/npc/NPC");

@@ -1003,6 +1003,11 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
   if ((match = /^Fully decorate an? ([A-Za-z]+) totem in (?:the Vale Totems|the Auburn Valley)\.?$/i.exec(description))) {
     return { trigger: { kind: "totem", woods: [match[1].toLowerCase()], count: 1 } };
   }
+  // "Obtain a bird nest whilst cutting down trees": a nest from a tree (Woodcutting's
+  // woodcutting:nest-drop).
+  if (/^Obtain a Bird Nest$/i.test(name) && /^Obtain an? birds? nest (?:whilst|while) cutting down trees\.?$/i.test(description)) {
+    return { trigger: { kind: "bird-nest", count: 1 } };
+  }
   // "Use the Fortis Salute emote": that emote performed (the emotes plugin's player:emote, by its
   // slot; the names are its locked emotes', plugins/interface/data/emotes.json).
   if ((match = /^Use the (.+) emote$/i.exec(name)) && new RegExp(`^Use the ${match[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} emote\\.?$`, "i").test(description)) {

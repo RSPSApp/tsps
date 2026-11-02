@@ -1635,6 +1635,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   `pickpocket-loot { npcs, items, count }` from Thieving's `thieving:loot` (that item in the
   pocket's loot: "Pickpocket an uncut diamond from a TzHaar-Hur", "a gnome for a King Worm"; a clue
   scroll is its tier's scroll or scroll box, as the pocket hands either),
+  `bird-nest { count }` from Woodcutting's `woodcutting:nest-drop` ("Obtain a bird nest whilst
+  cutting down trees"),
   `pet { skilling, count }` from Pets'
   `pets:obtained` (a skilling pet has its skill; "any Boss Pet" is left out, a boss pet being
   told apart from no other pet without a skill), and `eat-heal { heal }` from `food:eaten`'s `restores` (what

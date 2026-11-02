@@ -5,6 +5,9 @@ import { AnimationSmoothingPlugin } from "../../../game/plugins/animationsmoothi
 import { AttackTimerPlugin } from "../../../game/plugins/attacktimer/AttackTimerPlugin";
 import { BankPlugin } from "../../../game/plugins/bank/BankPlugin";
 import { BankTagsPlugin } from "../../../game/plugins/banktags/BankTagsPlugin";
+import { BoostsPlugin } from "../../../game/plugins/boosts/BoostsPlugin";
+import { ChatNotificationsPlugin } from "../../../game/plugins/chatnotifications/ChatNotificationsPlugin";
+import { ChatPastePlugin } from "../../../game/plugins/chatpaste/ChatPastePlugin";
 import { CombatLevelPlugin } from "../../../game/plugins/combatlevel/CombatLevelPlugin";
 import { CameraPlugin } from "../../../game/plugins/camera/CameraPlugin";
 import { QuestHelperPlugin } from "../../../game/plugins/questhelper/QuestHelperPlugin";
@@ -16,6 +19,8 @@ import { GroundItemsConfig } from "../../../game/plugins/grounditems/GroundItems
 import { GroundItemsPlugin } from "../../../game/plugins/grounditems/GroundItemsPlugin";
 import { GroundMarkerPlugin } from "../../../game/plugins/groundmarkers/GroundMarkerPlugin";
 import { HdPlugin } from "../../../game/plugins/hd/HdPlugin";
+import { IdleNotifierPlugin } from "../../../game/plugins/idlenotifier/IdleNotifierPlugin";
+import { ImplingsPlugin } from "../../../game/plugins/implings/ImplingsPlugin";
 import { InteractHighlightConfig } from "../../../game/plugins/interacthighlight/InteractHighlightConfig";
 import { InteractHighlightPlugin } from "../../../game/plugins/interacthighlight/InteractHighlightPlugin";
 import { InventoryTagsPlugin } from "../../../game/plugins/inventorytags/InventoryTagsPlugin";
@@ -35,8 +40,11 @@ import { FairyRingPlugin } from "../../../game/plugins/fairyring/FairyRingPlugin
 import { PestControlPlugin } from "../../../game/plugins/pestcontrol/PestControlPlugin";
 import { SpellbookPlugin } from "../../../game/plugins/tabreorder/SpellbookPlugin";
 import {
+    AntifireTimerPlugin,
     FreezeTimerPlugin,
     PoisonTimerPlugin,
+    StaminaTimerPlugin,
+    TeleblockTimerPlugin,
 } from "../../../game/plugins/statustimer/StatusTimerPlugin";
 import { LegacyTileMarkersConfig } from "../../../game/plugins/tilemarkers/migrateTileMarkers";
 import { TileMarkersPlugin } from "../../../game/plugins/tilemarkers/TileMarkersPlugin";
@@ -76,15 +84,23 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     CombatLevelPlugin,
     NotesPlugin,
     NpcIndicatorsPlugin,
+    ImplingsPlugin,
     ObjectIndicatorsPlugin,
     SplitPrivateChatPlugin,
+    ChatNotificationsPlugin,
+    ChatPastePlugin,
     AnimationSmoothingPlugin,
     AttackTimerPlugin,
     VengeanceTimerPlugin,
     PoisonTimerPlugin,
     FreezeTimerPlugin,
+    AntifireTimerPlugin,
+    TeleblockTimerPlugin,
+    StaminaTimerPlugin,
     WeatherPlugin,
     StatusBarsPlugin,
+    BoostsPlugin,
+    IdleNotifierPlugin,
     OpponentInfoPlugin,
     SpellbookPlugin,
     PrayerPlugin,

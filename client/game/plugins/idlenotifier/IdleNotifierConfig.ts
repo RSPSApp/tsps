@@ -1,0 +1,132 @@
+import { ConfigGroup, ConfigItem } from "@runelite/client/config/ConfigItem";
+
+/**
+ * RuneLite 1.13.5 IdleNotifierConfig: group, keys, names and defaults as in RuneLite. Its
+ * Notification items are on/off switches here. The idle logout and six hour logout warnings are
+ * left out: this server logs nobody out for either.
+ */
+export const IdleNotifierConfig = ConfigGroup("idlenotifier", {
+    animationIdle: ConfigItem({
+        keyName: "animationidle",
+        name: "Idle animation notifications",
+        description: "Configures if idle animation notifications are enabled.",
+        position: 1,
+        default: true,
+    }),
+    interactionIdle: ConfigItem({
+        keyName: "interactionidle",
+        name: "Idle interaction notifications",
+        description: "Configures if idle interaction notifications are enabled e.g. combat, fishing.",
+        position: 2,
+        default: true,
+    }),
+    movementIdle: ConfigItem({
+        keyName: "movementidle",
+        name: "Idle movement notifications",
+        description: "Configures if idle movement notifications are enabled e.g. running, walking.",
+        position: 3,
+        default: false,
+    }),
+    getIdleNotificationDelay: ConfigItem({
+        keyName: "timeout",
+        name: "Idle notification delay",
+        description: "The notification delay after the player is idle.",
+        position: 5,
+        units: "ms",
+        default: 5000,
+    }),
+    getHitpointsNotification: ConfigItem({
+        keyName: "hitpointsNotification",
+        name: "Hitpoints notification",
+        description: "Configures if hitpoints notifications are enabled.",
+        position: 6,
+        default: false,
+    }),
+    getHitpointsThreshold: ConfigItem({
+        keyName: "hitpoints",
+        name: "Hitpoints threshold",
+        description: "The amount of hitpoints to send a notification at.",
+        position: 7,
+        range: { min: 1 },
+        default: 1,
+    }),
+    getPrayerNotification: ConfigItem({
+        keyName: "prayerNotification",
+        name: "Prayer notification",
+        description: "Configures if prayer notifications are enabled.",
+        position: 8,
+        default: false,
+    }),
+    getPrayerThreshold: ConfigItem({
+        keyName: "prayer",
+        name: "Prayer threshold",
+        description: "The amount of prayer points to send a notification at.",
+        position: 9,
+        range: { min: 1 },
+        default: 1,
+    }),
+    getLowEnergyNotification: ConfigItem({
+        keyName: "lowEnergyNotification",
+        name: "Low energy notification",
+        description: "Configures if low energy notifications are enabled.",
+        position: 10,
+        default: false,
+    }),
+    getLowEnergyThreshold: ConfigItem({
+        keyName: "lowEnergy",
+        name: "Low energy threshold",
+        description: "The amount of energy points remaining to send a notification at.",
+        position: 11,
+        units: "%",
+        range: { max: 99 },
+        default: 0,
+    }),
+    getHighEnergyNotification: ConfigItem({
+        keyName: "highEnergyNotification",
+        name: "High energy notification",
+        description: "Configures if high energy notifications are enabled.",
+        position: 12,
+        default: false,
+    }),
+    getHighEnergyThreshold: ConfigItem({
+        keyName: "highEnergy",
+        name: "High energy threshold",
+        description: "The amount of energy points reached to send a notification.",
+        position: 13,
+        units: "%",
+        range: { min: 1, max: 100 },
+        default: 100,
+    }),
+    getOxygenNotification: ConfigItem({
+        keyName: "oxygenNotification",
+        name: "Oxygen notification",
+        description: "Configures if oxygen notifications are enabled.",
+        position: 14,
+        default: false,
+    }),
+    getOxygenThreshold: ConfigItem({
+        keyName: "oxygen",
+        name: "Oxygen threshold",
+        description: "The amount of remaining oxygen to send a notification at.",
+        position: 15,
+        units: "%",
+        range: { min: 1 },
+        default: 1,
+    }),
+    getSpecNotification: ConfigItem({
+        keyName: "specNotification",
+        name: "Spec notification",
+        description: "Configures if special attack notifications are enabled.",
+        position: 16,
+        default: false,
+    }),
+    getSpecEnergyThreshold: ConfigItem({
+        keyName: "spec",
+        name: "Spec threshold",
+        description: "The amount of special attack energy reached to send a notification at.",
+        position: 17,
+        units: "%",
+        range: { min: 1 },
+        default: 1,
+    }),
+});

@@ -287,8 +287,8 @@ export class ItemOnGroundManager {
 
     /** `goesGlobal: false` keeps the stack owner-only; `despawnDelay` replaces {@link DESPAWN_DELAY}. */
     public static registerLocation(player: Player, item: Item, position: Location, privateArea = player.getPrivateArea(),
-        options: { goesGlobal?: boolean; despawnDelay?: number } = {}): ItemOnGround {
-        let i = new ItemOnGround(State.SEEN_BY_PLAYER, player.getUsername(), position, item, options.goesGlobal ?? true,
+        options: { goesGlobal?: boolean; despawnDelay?: number; public?: boolean } = {}): ItemOnGround {
+        let i = new ItemOnGround(options.public ? State.SEEN_BY_EVERYONE : State.SEEN_BY_PLAYER, player.getUsername(), position, item, options.goesGlobal ?? true,
             -1, privateArea);
         if (options.despawnDelay != null) i.setDespawnDelay(options.despawnDelay);
         this.register(i);

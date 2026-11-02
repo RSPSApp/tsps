@@ -15,6 +15,7 @@ Combat Achievements live in `server/plugins/achievements/combatachievements/`. T
 | Gauntlet / Corrupted | counts, speed, 3-2-1, Perfect Hunllef, Defence Doesn't Matter, Egniol Diet, Wolf Puncher, perfected armour |
 | Fight Caves | count, speed, Facing Jad Head-on, No Time for a Drink, the Tz-Kih, Yt-MejKot and Yt-HurKot tasks, A Near Miss! |
 | Inferno | count, speed, Half-Way There, The Floor Is Lava, Nibblers Begone!, Wasn't Even Close, Budget Setup, Nibbler Chaser, Facing Jad Head-on II, Jad? What Are You Doing Here?, No Luck Required, Playing with Jads |
+| Chambers of Xeric | counts per mode, deathless raids, Solo, Trio and 5-scale speed tasks, Dust Seeker, Putting It Olm on the Line, and every room task: the Ice Demon, Crabs, Tightrope, Tekton, Muttadile, Vanguards, Vasa, Vespula, Guardian and Shaman tasks, Perfect Olm, A Not So Special Lizard |
 | Tombs of Amascut | counts per mode and Entry-or-above, raid level, deathless raid level, Hardcore Raiders/Tombs, Resourceful Raider, the three speed runners |
 | Doom of Mokhaiotl | depth (3, 8, 16), Doom Crawler, Doom Chaser, Doom Racer; count = delves completed |
 | Fortis Colosseum | count, speed (total of every wave), One-off, Reinforcements |
@@ -25,7 +26,7 @@ Combat Achievements live in `server/plugins/achievements/combatachievements/`. T
 | Araxxor | count, the three speed tasks (N kills in 10:00 in one stay), Perfect Araxxor (I and II), Relaxxor, Let it seep in, Araxyte Betrayal, Arachnid Lover, Swimming in Venom |
 | Skotizo | counts, Demonic Weakening, Demonbane Weaponry, Up for the Challenge, Demon Evasion, Precise Positioning |
 
-That's 305 of the 655 tasks: Easy 27/41, Medium 40/64, Hard 40/89, Elite 83/166, Master 64/173, Grandmaster 51/122. Most of the rest belong to content this server doesn't have yet (the Chambers of Xeric, the Theatre of Blood, the Nightmare, the Desert Treasure II bosses) or need a boss's own mechanics reported (ToA's rooms, Doom's grubs, the GWD instances).
+That's 345 of the 655 tasks: Easy 27/41, Medium 40/64, Hard 40/89, Elite 95/166, Master 84/173, Grandmaster 59/122. Most of the rest belong to content this server doesn't have yet (the Theatre of Blood, the Nightmare, the Desert Treasure II bosses) or need a boss's own mechanics reported (ToA's rooms, Doom's grubs, the GWD instances).
 
 From another plugin:
 

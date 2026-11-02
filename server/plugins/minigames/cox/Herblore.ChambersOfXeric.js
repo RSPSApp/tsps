@@ -11,12 +11,12 @@
  *   Buchu: revitalisation, prayer enhance or Xeric's aid. Noxifer with cicely: antipoison.
  * - The strength made is the best the Herblore level allows (weak / normal / strong levels below);
  *   an overload made from stronger potions than the level allows comes out weaker.
- * Not on the Wiki (to check against a capture): mixing is a make-X choice of every potion the inventory allows, one each tick
- *   (anim 363, sound 2608), cleaning one every 2 ticks (sound 3923); the messages.
+ * Not on the Wiki, and no capture cleans a herb or mixes a potion (the raid potions in them are
+ *   all boss drops): mixing is a make-X choice of every potion the inventory allows, one each
+ *   tick (anim 363, sound 2608), cleaning one every 2 ticks (sound 3923); the messages.
  */
 
 const Shared = require("./Shared.ChambersOfXeric");
-const Raid = require("./RaidState.ChambersOfXeric");
 const Supplies = require("./Supplies.ChambersOfXeric");
 
 const WATER_GOURD = 20801;
@@ -129,8 +129,7 @@ function mixOne(player, outcome) {
   const others = recipe.take.slice(1).filter((id) => id !== WATER_GOURD).map(itemName);
   const joined = others.length > 1 ? `${others.slice(0, -1).join(", ")} and ${others.at(-1)}` : others[0];
   player.sendMessage(`You mix your ${recipe.potion.herb.name} together with your ${joined} into a potion perfectly!`);
-  const raid = Raid.raidOf(player);
-  if (raid) Supplies.recordMade(raid, Supplies.supplyKey(recipe.outcome), player);
+  Supplies.credit(player, recipe.outcome);
   return true;
 }
 

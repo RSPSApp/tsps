@@ -15,13 +15,23 @@
  * - The shared storage only takes raid items (cache enum 1666: raid items and their tools).
  * - Items left in a private storage are kept, and taken out at the storage unit by the bank
  *   chest on the mountain, which must be emptied before entering again.
- * Not on the Wiki (to check against a capture): the interfaces - private 271 (inventory 583; 4 size, 5 to shared, 6 items,
- *   9 withdraw all, 10 deposit all / bank all), shared 550 (inventory 582; 4 size, 5 to private,
- *   7 items), and their side panel 551 (1 the inventory, varbit 3459 private or shared) -
- *   withdraw / deposit 1, 5, 10, All, X; one unit being built at a time ("Someone else is
+ * Wiki (Tiny storage unit, Creation Menu): four rows on keys 1-4, one per tier.
+ * Cache (raids_storage_private/_shared/_side and their scripts): private 271 (inventory 583; 4
+ *   capacity, 5 to shared, 6 items, 9 withdraw all, 10 deposit all / bank all), shared 550
+ *   (inventory 582; 4 capacity, 5 to private, 7 items), side panel 551 (1 the inventory, 8
+ *   dismiss; varbits 3459 private or shared, 5509 warning dismissed), withdraw / store 1, 5, 10,
+ *   All, X. The shared list draws one child per row of enum 1666, so a click's slot is that row,
+ *   not a place in the store. Ops: tiny Private, Build; others Shared, Private, Upgrade; massive
+ *   no Upgrade. The creation menu is poh_furniture_creation (458) filled by the script that takes
+ *   an item instead of a furniture row (7988, poh_furniture_creation_entry_old), since table 110
+ *   has no rows for these units; items 21037-21039 and 24660 are their icons. No client script
+ *   calls 7988: the server does.
+ * No capture opens or builds a unit (only 29769's LocAddChange appears in any recording), so the
+ *   rest stays unchecked: which rows the menu lists once a tier is built (here always all four,
+ *   so the keys hold), which icon variant each row uses (21038/21040 are both medium, 21039/
+ *   21041/21042 large, 24660-24663 massive), one unit being built at a time ("Someone else is
  *   already building a storage unit."), done 2 ticks later.
- * Not like OSRS: the creation menu is a chatbox choice (the cache's furniture menu has no
- *   rows for these units).
+ * Items keep their meta in a store (a raid potion's maker, see Supplies).
  */
 
 const Shared = require("./Shared.ChambersOfXeric");
@@ -39,35 +49,43 @@ const MOUNT_UNIT = 30107;
 const PLANK = 21036;
 /** Wiki (Kindling): it can't be stored since December 2023. */
 const KINDLING = 20799;
-const HAMMERS = [2347, 13353, 13339, 25644, 21028, 21031, 22370];
+/** A hammer, Imcando hammer (and off-hand), dragon warhammer and elder maul, ornamented ones too. */
+const HAMMERS = [2347, 25644, 29775, 13576, 26710, 28035, 21003, 27100];
 const BUILD_ANIM = 3676;
+const BUILD_MENU = { INTERFACE: 458, CONTENTS: 2, ENTRY_SCRIPT: 7988, LIST_SCRIPT: 1406 };
 
-/** The tiers: their object, level, and personal / shared space. Tier 0 is the unbuilt unit. */
+/** The tiers: their object, menu icon, level, and personal / shared space. Tier 0 is the unbuilt unit. */
 const TIERS = [
   { object: 29769, name: "Tiny storage unit", level: 0, personal: 25, shared: 0 },
-  { object: 29770, name: "Small storage unit", level: 30, personal: 30, shared: 250 },
-  { object: 29779, name: "Medium storage unit", level: 60, personal: 60, shared: 500 },
-  { object: 29780, name: "Large storage unit", level: 90, personal: 90, shared: 1000 },
-  { object: 37978, name: "Massive storage unit", level: 99, personal: 120, shared: 1500 },
+  { object: 29770, icon: 21037, name: "Small storage unit", level: 30, personal: 30, shared: 250 },
+  { object: 29779, icon: 21038, name: "Medium storage unit", level: 60, personal: 60, shared: 500 },
+  { object: 29780, icon: 21039, name: "Large storage unit", level: 90, personal: 90, shared: 1000 },
+  { object: 37978, icon: 24660, name: "Massive storage unit", level: 99, personal: 120, shared: 1500 },
 ];
 const PLANKS_PER_TIER = 2;
 const XP_PER_TIER = 150;
 const POINTS_PER_TIER = 100;
 const UNIT_IDS = new Set(TIERS.map((tier) => tier.object));
 
-/** Cache enum 1666: what the shared storage takes. */
-const SHARED_RANGES = [[307, 307], [590, 590], [952, 952], [1265, 1265], [1267, 1267], [1349, 1349], [1351, 1351],
-  [1523, 1523], [2347, 2347], [5341, 5341], [5343, 5343], [10010, 10010], [20800, 20801], [20853, 20853],
-  [20855, 20868], [20870, 20883], [20901, 20996], [21036, 21036], [25754, 25765]];
+function idRange(from, to) {
+  return Array.from({ length: to - from + 1 }, (_, index) => from + index);
+}
+
+/** Cache enum 1666 in its order: what the shared storage takes, and the rows it draws. */
+const SHARED_ITEMS = [20853, ...idRange(20855, 20868), ...idRange(20870, 20883), 21036, ...idRange(20901, 20912),
+  20800, 20801, ...idRange(20913, 20996), ...idRange(25754, 25765),
+  590, 307, 10010, 1351, 1265, 1349, 1267, 5341, 5343, 952, 2347, 1523];
+const SHARED_ITEM_SET = new Set(SHARED_ITEMS);
 
 const ATTR_PRIVATE = "cox:private-storage";
 const ATTR_DISMISSED = "cox:storage-warning-dismissed";
 const ATTR_VIEW = "cox:storage-view";
+const ATTR_BUILD_MENU = "cox:storage-build-menu";
 
 const uid = (group, component) => (group << 16) | component;
 
 function sharedItem(id) {
-  return SHARED_RANGES.some(([from, to]) => id >= from && id <= to);
+  return SHARED_ITEM_SET.has(id);
 }
 
 function definition(id) {
@@ -76,10 +94,13 @@ function definition(id) {
 
 // ---------------------------------------------------------------- the stores
 
-/** A store of items: a list of { id, amount } with a size. Stackables stack, others take a slot each. */
-function addTo(list, size, id, amount) {
-  const stackable = definition(id)?.isStackable?.() === true || definition(id)?.isNoted?.() === true;
-  if (stackable) {
+function stacks(id) {
+  return definition(id)?.isStackable?.() === true || definition(id)?.isNoted?.() === true;
+}
+
+/** A store of items: a list of { id, amount, meta? } with a size. Stackables stack, others take a slot each. */
+function addTo(list, size, id, amount, meta = null) {
+  if (stacks(id)) {
     const existing = list.find((entry) => entry.id === id);
     if (existing) {
       existing.amount += amount;
@@ -91,22 +112,30 @@ function addTo(list, size, id, amount) {
   }
   const room = Math.max(0, size - list.length);
   const added = Math.min(room, amount);
-  for (let i = 0; i < added; i++) list.push({ id, amount: 1 });
+  for (let i = 0; i < added; i++) list.push(meta ? { id, amount: 1, meta } : { id, amount: 1 });
   return added;
+}
+
+/** Takes up to `amount` of an item out of a store, `first` before the rest; returns the pieces. */
+function pullFrom(list, id, amount, first = null) {
+  const entries = list.filter((entry) => entry.id === id && entry !== first).reverse();
+  if (first && list.includes(first)) entries.unshift(first);
+  const pieces = [];
+  let left = amount;
+  for (const entry of entries) {
+    if (left <= 0) break;
+    const out = Math.min(entry.amount, left);
+    entry.amount -= out;
+    left -= out;
+    pieces.push({ id, amount: out, meta: entry.meta ?? null });
+    if (entry.amount <= 0) list.splice(list.indexOf(entry), 1);
+  }
+  return pieces;
 }
 
 /** Takes up to `amount` of an item out of a store; returns how many came out. */
 function takeFrom(list, id, amount) {
-  let taken = 0;
-  for (let index = list.length - 1; index >= 0 && taken < amount; index--) {
-    const entry = list[index];
-    if (entry.id !== id) continue;
-    const out = Math.min(entry.amount, amount - taken);
-    entry.amount -= out;
-    taken += out;
-    if (entry.amount <= 0) list.splice(index, 1);
-  }
-  return taken;
+  return pullFrom(list, id, amount).reduce((sum, piece) => sum + piece.amount, 0);
 }
 
 function countIn(list, id) {
@@ -158,11 +187,12 @@ function sendSide(player, privateView) {
 function openPrivate(player, size) {
   const sender = player.getPacketSender();
   const items = privateItems(player);
+  const noSharedSpace = size === -1 || tierOf(Raid.raidOf(player)) === 0;
   if (size === -1) clearRaidItems(player);
   player.setAttribute(ATTR_VIEW, { kind: "private", size: size === -1 ? 120 : size, mount: size === -1 });
   sender.sendInterfaceSet(Shared.INTERFACE.PRIVATE_STORAGE, SIDE_INTERFACE);
   sender.sendString(size === -1 ? "N/A" : String(size), uid(Shared.INTERFACE.PRIVATE_STORAGE, COMPONENT.PRIVATE.SIZE));
-  sender.sendInterfaceDisplayState(uid(Shared.INTERFACE.PRIVATE_STORAGE, COMPONENT.PRIVATE.TO_SHARED), size === -1);
+  sender.sendInterfaceDisplayState(uid(Shared.INTERFACE.PRIVATE_STORAGE, COMPONENT.PRIVATE.TO_SHARED), noSharedSpace);
   sender.sendInterfaceFlagsRange(uid(Shared.INTERFACE.PRIVATE_STORAGE, COMPONENT.PRIVATE.ITEMS), 0, Math.max(items.length, 1) + 120,
     Shared.EVENT.OP1 | Shared.EVENT.OP2 | Shared.EVENT.OP3 | Shared.EVENT.OP4 | Shared.EVENT.OP5 | (1 << 10));
   sendSide(player, true);
@@ -228,18 +258,37 @@ function deposit(player, slot, amount) {
     return;
   }
   const store = view.kind === "private" ? privateItems(player) : sharedStore(view.raid);
-  const wanted = Math.min(amount, inventoryAmount(player, id));
-  const stored = addTo(store, view.size, id, wanted);
+  const stored = stacks(id) ? depositStack(inventory, store, view.size, item, amount) : depositEach(inventory, store, view.size, slot, amount);
   if (stored <= 0) {
     player.sendMessage(view.kind === "private" ? "Not enough space in your private storage." : "The shared storage is full.");
     return;
   }
-  inventory.delete(id, stored);
   if (view.kind === "shared") refreshShared(view.raid);
   else refresh(player);
 }
 
-function withdraw(player, id, amount) {
+function depositStack(inventory, store, size, item, amount) {
+  const id = item.getId();
+  const stored = addTo(store, size, id, Math.min(amount, inventory.getAmount(id)), item.getMeta());
+  if (stored > 0) inventory.delete(id, stored);
+  return stored;
+}
+
+/** Item by item, the clicked one first, so each keeps its own meta. */
+function depositEach(inventory, store, size, slot, amount) {
+  const items = inventory.getItems();
+  const id = items[slot].getId();
+  const slots = [slot, ...items.flatMap((item, index) => (item?.getId() === id && index !== slot ? [index] : []))];
+  let stored = 0;
+  for (const from of slots) {
+    if (stored >= amount || addTo(store, size, id, 1, items[from].getMeta()) === 0) break;
+    inventory.deleteAtSlot(from, 1, false);
+    stored++;
+  }
+  return stored;
+}
+
+function withdraw(player, id, amount, first = null) {
   const view = viewOf(player);
   if (!view) return;
   const { Item } = Shared.core();
@@ -252,8 +301,7 @@ function withdraw(player, id, amount) {
     player.sendMessage("Not enough space in your inventory.");
     return;
   }
-  const taken = takeFrom(store, id, wanted);
-  inventory.add(new Item(id, taken), true);
+  for (const piece of pullFrom(store, id, wanted, first)) inventory.add(new Item(piece.id, piece.amount, piece.meta), true);
   if (view.kind === "shared") refreshShared(view.raid);
   else refresh(player);
 }
@@ -270,16 +318,16 @@ function clickStoredItem(event) {
   const { player } = event;
   const view = viewOf(player);
   if (!view) return true;
-  const store = view.kind === "private" ? privateItems(player) : sharedStore(view.raid);
-  const entry = store[event.slot ?? -1];
+  const slot = event.slot ?? -1;
+  const entry = view.kind === "private" ? privateItems(player)[slot] : sharedStore(view.raid).find((held) => held.id === SHARED_ITEMS[slot]);
   if (!entry) return true;
   const op = event.opId ?? event.action;
   if (op === 10) {
     player.sendMessage(definition(entry.id)?.getExamine?.() ?? "");
     return true;
   }
-  if (op === 5) askAmount(player, (amount) => withdraw(player, entry.id, amount));
-  else withdraw(player, entry.id, AMOUNT_BY_OP[op] ?? 1);
+  if (op === 5) askAmount(player, (amount) => withdraw(player, entry.id, amount, entry));
+  else withdraw(player, entry.id, AMOUNT_BY_OP[op] ?? 1, entry);
   return true;
 }
 
@@ -304,7 +352,7 @@ function withdrawAll({ player }) {
     player.sendMessage("There's nothing to withdraw.");
     return true;
   }
-  for (const entry of [...items]) withdraw(player, entry.id, entry.amount);
+  for (const entry of [...items]) withdraw(player, entry.id, entry.amount, entry);
   if (privateItems(player).length > 0) player.sendMessage("Not enough space in your inventory.");
   return true;
 }
@@ -334,7 +382,7 @@ function depositOrBankAll({ player }) {
 
 function switchToShared({ player }) {
   const raid = Raid.raidOf(player);
-  if (raid) openShared(player, raid);
+  if (raid && tierOf(raid) > 0) openShared(player, raid);
   return true;
 }
 
@@ -357,24 +405,44 @@ function hasHammer(player) {
   return HAMMERS.some((id) => player.getInventory().contains(id) || weapon === id);
 }
 
-/** The build / upgrade choices: every tier above the raid's, with the planks it takes from here. */
+function buildMenuRow(tier, built, planks) {
+  return `${tier.name}|${built ? "Built" : `Mallignum root plank: ${planks}`}<br><br><br>`;
+}
+
+/** The creation menu: one row per tier on its Wiki key, with the planks it takes from here. */
 function openCreation(player, raid) {
   if (!hasHammer(player)) {
     Shared.statement(player, "You need a hammer to build anything here.");
     return;
   }
+  const { Skill } = Shared.core();
+  const construction = player.getSkillManager().getCurrentLevel(Skill.CONSTRUCTION);
   const current = tierOf(raid);
-  const choices = TIERS.map((tier, index) => ({ tier, index })).filter(({ index }) => index > current);
-  if (choices.length === 0) {
-    player.sendMessage("The storage units can't be upgraded any further.");
-    return;
-  }
-  const pairs = [];
-  for (const { tier, index } of choices.slice(0, 4)) {
+  const held = inventoryAmount(player, PLANK);
+  const sender = player.getPacketSender();
+  sender.sendInterface(BUILD_MENU.INTERFACE);
+  TIERS.forEach((tier, index) => {
+    if (index === 0) return;
+    const built = index <= current;
     const planks = (index - current) * PLANKS_PER_TIER;
-    pairs.push(`${tier.name} (${planks} planks, Construction ${tier.level})`, () => build(player, raid, index));
-  }
-  Shared.options(player, "Build which storage unit?", ...pairs);
+    const canBuild = !built && construction >= tier.level && held >= planks;
+    sender.sendClientScript(BUILD_MENU.ENTRY_SCRIPT, index, tier.icon, tier.level, buildMenuRow(tier, built, planks), canBuild ? 1 : 0);
+  });
+  sender.sendClientScript(BUILD_MENU.LIST_SCRIPT, TIERS.length - 1, 0);
+  sender.sendInterfaceFlagsRange(uid(BUILD_MENU.INTERFACE, BUILD_MENU.CONTENTS), 1, TIERS.length - 1, 1);
+  player.setAttribute(ATTR_BUILD_MENU, raid);
+}
+
+/** A row chosen: the menu's script resumes with its one-based index (as the POH's menu does). */
+function chooseBuild(event) {
+  const { player } = event;
+  if (event.groupId !== BUILD_MENU.INTERFACE || event.childId !== BUILD_MENU.CONTENTS) return;
+  const raid = player.getAttribute(ATTR_BUILD_MENU);
+  if (!raid) return;
+  event.handled = true;
+  player.setAttribute(ATTR_BUILD_MENU, null);
+  player.getPacketSender().sendInterfaceRemoval();
+  if (TIERS[event.action] && Raid.raidOf(player) === raid) build(player, raid, event.action);
 }
 
 function build(player, raid, index) {
@@ -476,6 +544,7 @@ module.exports = function registerCoxStorage(api) {
   api.persistAttribute(ATTR_PRIVATE);
   api.persistAttribute(ATTR_DISMISSED);
   Shared.onObjectIds(api, [...UNIT_IDS, MOUNT_UNIT], useUnit);
+  api.onInterfaceActionClick(chooseBuild);
   api.onInterfaceActionButton(uid(Shared.INTERFACE.PRIVATE_STORAGE, COMPONENT.PRIVATE.ITEMS), clickStoredItem);
   api.onInterfaceActionButton(uid(Shared.INTERFACE.SHARED_STORAGE, COMPONENT.SHARED.ITEMS), clickStoredItem);
   api.onInterfaceActionButton(uid(SIDE_INTERFACE, COMPONENT.SIDE.ITEMS), clickInventoryItem);
@@ -487,5 +556,5 @@ module.exports = function registerCoxStorage(api) {
 };
 
 Object.assign(module.exports, {
-  TIERS, sharedItem, addTo, takeFrom, privateItems, openPrivate, openShared, deposit, withdraw, build, canEnter, findUnits,
+  TIERS, sharedItem, addTo, pullFrom, takeFrom, privateItems, openPrivate, openShared, deposit, withdraw, build, canEnter, findUnits,
 });

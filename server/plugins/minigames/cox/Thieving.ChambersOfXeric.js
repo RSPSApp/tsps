@@ -16,20 +16,27 @@
  *   the raiders get a batch of endarkened juice, stinkhorn mushrooms and cicely.
  * rsprox captures (recording 3389):
  * - Opening: the open-chest animation, and the tick after sound 52 (range 5), "Some cavern
- *   grubs have hatched; you take them." and the hatched chest (29745), locked again about 12
- *   ticks later. A full stack: "You don't have space to take any more grubs from the chest."
- *   in a message box.
+ *   grubs have hatched; you take them." and the hatched chest (29745), locked again 11-15 ticks
+ *   later (26 chests). A full stack: "You don't have space to take any more grubs from the
+ *   chest." in a message box.
  * - Depositing: 832 and sound 3637 (range 5), every grub held, no message; the trough fills
  *   (29874) the tick after.
  * - The scavenger's hunger is headbar 7 (100 to 0 as it eats what it needs). It eats every 3
- *   ticks (7496); fed, it walks aside the tick after, yawns 7 ticks later (7497, "Yawwwwwn!",
- *   sound 1734), sleeps (7603) at 14 and from 21 shows gfx 277 with sound 869 every 8 ticks.
- * Not on the Wiki (to check against a capture): the scavenger's tiles (by the room's version
- *   and turn) and where it sleeps; how much it eats at once (min(5, grubs/6), at least 1); the
- *   poison chests (gfx 184, locked again 10 ticks later) and the bats' chest (29743); Thieving
- *   XP 40 / 60 / 73 by grubs; the creature keeper's body giving his journal.
- * Not from a source: the batch on clearing (7 / 7 / 5, as the Ice Demon's) and the XP for 4
- *   grubs (as 3).
+ *   ticks (7496), an eighth of the trough each time (3, 6, 5, 5, 4, 4, 3 from 28, 53, 47, 42, 37,
+ *   33, 29). Fed, it walks 3 tiles aside the tick after, away from the trough, leaving the batch
+ *   on the tile it stood on; it yawns 7 ticks after being fed (7497, "Yawwwwwn!", sound 1734),
+ *   sleeps (7603) at 14 and from 21 shows gfx 277 with sound 869 every 8 ticks.
+ * - The trough's points stopped at the Wiki's 4,500 (3,220, then 1,280 of the next 28 grubs).
+ * - Thieving XP (at 15x, as the Wiki's sapling XP is there): 60 for 2 grubs, 73.3 for 3.
+ * - The scavenger's tiles: its 2x2 is beside the trough's long side whatever the room's turn;
+ *   the north version's fits the recording exactly (a 15 of 15 chest fit); the bed is 3 tiles
+ *   straight on, so the other two versions' beds are derived from that one.
+ * Wiki (Chambers of Xeric/Strategies, Resources obtained within the raid): the batch at the solo
+ *   scale is 5 juice, 5 mushrooms, 4 cicely. Recording 3389, a Challenge Mode, shows 5 / 5 / 3.
+ * Not on the Wiki (to check against a capture): the poison chests (gfx 184, locked again 10 ticks
+ *   later) and the bats' chest (29743), neither opened in the recording; Thieving XP 40 for 1
+ *   grub; the creature keeper's body giving his journal; hunger's rate once it returns.
+ * Not from a source: the XP for 4 grubs (as 3).
  */
 
 const Shared = require("./Shared.ChambersOfXeric");
@@ -42,18 +49,20 @@ const ITEM = { GRUBS: 20885, JOURNAL: 20886, PSYKK_BAT: 20883, LOCKPICKS: [1523,
 const GRUB_CAP = 28;
 const POINTS_PER_GRUB = 115;
 const HUNGER_TICKS = 100;
-const HUNGER = { HEADBAR: 7, WIDTH: 100, EAT_EVERY: 3 };
+const HUNGER = { HEADBAR: 7, WIDTH: 100, EAT_EVERY: 3, TROUGH_SHARE: 8 };
 /** Ticks from being fed: the yawn, sleep, and the snoring from then every 8 ticks. */
 const SLEEP = { YAWN: 7, ASLEEP: 14, SNORE: 21, SNORE_EVERY: 8 };
 const POISON_CHESTS = 3;
-const GRUB_XP = [40, 60, 73, 73];
-const CLEAR_REWARD = [[20910, 7], [20911, 7], [20912, 5]];
+const GRUB_XP = [40, 60, 73.3, 73.3];
+const CLEAR_REWARD = [[20910, 5], [20911, 5], [20912, 4]];
+/** rsprox captures: from hatched to locked again. */
+const RELOCK_TICKS = [11, 15];
 
-/** Cache tiles by version: where the scavenger stands by the room's turn (0-3), then where it sleeps. */
+/** Cache tiles by version: the south-west of the scavenger's 2x2, and of where it sleeps. */
 const SCAVENGER_TILES = [
-  [{ x: 3271, y: 5390 }, { x: 3272, y: 5390 }, { x: 3272, y: 5391 }, { x: 3271, y: 5391 }, { x: 3271, y: 5394 }],
-  [{ x: 3318, y: 5397 }, { x: 3319, y: 5397 }, { x: 3319, y: 5398 }, { x: 3318, y: 5398 }, { x: 3321, y: 5398 }],
-  [{ x: 3350, y: 5397 }, { x: 3351, y: 5397 }, { x: 3351, y: 5398 }, { x: 3350, y: 5398 }, { x: 3351, y: 5394 }],
+  { at: { x: 3271, y: 5390 }, bed: { x: 3271, y: 5393 } },
+  { at: { x: 3318, y: 5397 }, bed: { x: 3321, y: 5397 } },
+  { at: { x: 3350, y: 5397 }, bed: { x: 3350, y: 5394 } },
 ];
 
 /** Wiki (Mod Ash): 39% at 1 to 61% at 99, +21 points with a lockpick. */
@@ -88,8 +97,7 @@ class ThievingRoom extends Raid.Room {
     const chests = Shared.shuffle(this.templateObjects(OBJECT.CHEST));
     this.batChest = chests[0] ? key(chests[0].getLocation()) : null;
     this.poisonChests = new Set(chests.slice(1, 1 + POISON_CHESTS).map((chest) => key(chest.getLocation())));
-    const variant = this.record.variant;
-    const at = SCAVENGER_TILES[variant][this.record.rotation];
+    const { at } = SCAVENGER_TILES[this.record.variant];
     this.scavenger = this.spawnNpc(NPC.SCAVENGER, this.tile(at.x, at.y, 2), { scale: false });
     this.blockScavenger(true);
     const raiders = this.raid.scale;
@@ -128,10 +136,10 @@ class ThievingRoom extends Raid.Room {
       }
     }
     if (this.fed || !this.scavenger) return;
-    this.scavenger.showHeadbar(HUNGER.HEADBAR, { fill: Math.max(0, Math.floor((HUNGER.WIDTH * (this.needed - this.eaten)) / this.needed)) });
+    this.scavenger.showHeadbar(HUNGER.HEADBAR, { fill: Math.max(0, Math.round((HUNGER.WIDTH * (this.needed - this.eaten)) / this.needed)) });
     if (this.ticks++ % HUNGER.EAT_EVERY !== 0) return;
     if (this.trough.grubs > 0) {
-      const amount = Math.max(1, Math.min(5, Math.floor(this.trough.grubs / 6), this.trough.grubs));
+      const amount = Math.max(1, Math.floor(this.trough.grubs / HUNGER.TROUGH_SHARE));
       this.trough.grubs -= amount;
       this.eaten += amount;
       this.hunger = 0;
@@ -144,7 +152,12 @@ class ThievingRoom extends Raid.Room {
       return;
     }
     // Wiki: hunger returns after 60 seconds without food.
-    if ((this.hunger += 4) >= HUNGER_TICKS && this.eaten > 0) this.eaten--;
+    if ((this.hunger += HUNGER.EAT_EVERY) >= HUNGER_TICKS && this.eaten > 0) this.eaten--;
+  }
+
+  /** ::coxclear: the scavenger has had enough. */
+  devFinish() {
+    this.fallAsleep();
   }
 
   fallAsleep() {
@@ -152,8 +165,13 @@ class ThievingRoom extends Raid.Room {
     this.completed = true;
     const npc = this.scavenger;
     this.blockScavenger(false);
-    const bed = SCAVENGER_TILES[this.record.variant][4];
+    const { bed } = SCAVENGER_TILES[this.record.variant];
+    const { Item, ItemOnGroundManager } = Shared.core();
     Shared.later(this.raid, 1, () => {
+      const left = npc.getLocation().clone();
+      for (const player of this.raiders()) {
+        for (const [id, amount] of CLEAR_REWARD) ItemOnGroundManager.registerLocation(player, new Item(id, amount), left, undefined, { public: true });
+      }
       Shared.animate(npc, -1);
       Shared.walkStraight(npc, this.tile(bed.x, bed.y, 2));
     });
@@ -175,10 +193,6 @@ class ThievingRoom extends Raid.Room {
       return true;
     };
     Shared.later(this.raid, SLEEP.SNORE, () => snore() && Shared.repeat(this.raid, SLEEP.SNORE_EVERY, snore));
-    const { Item, ItemOnGroundManager } = Shared.core();
-    for (const player of this.raiders()) {
-      for (const [id, amount] of CLEAR_REWARD) ItemOnGroundManager.registerLocation(player, new Item(id, amount), player.getLocation().clone());
-    }
   }
 
   deposit(player, object) {
@@ -218,7 +232,6 @@ class ThievingRoom extends Raid.Room {
       return false;
     }
     Shared.animate(player, 536);
-    Shared.sound(player, 2402);
     const lockpick = ITEM.LOCKPICKS.some((id) => Shared.has(player, id));
     if (Math.random() >= openChance(Shared.level(player, "THIEVING"), lockpick)) return true;
     Shared.later(player, 1, () => this.openChest(player, object, at));
@@ -233,7 +246,7 @@ class ThievingRoom extends Raid.Room {
       Shared.sound(player, 2655);
       player.sendMessage("The chest contained some nicely cooked bats.");
       Shared.give(player, ITEM.PSYKK_BAT, bats);
-      for (let i = 0; i < bats; i++) Supplies.recordMade(this.raid, Supplies.supplyKey(ITEM.PSYKK_BAT), player);
+      Supplies.credit(player, ITEM.PSYKK_BAT, bats);
       return;
     }
     if (this.chests.has(at)) return;
@@ -256,7 +269,7 @@ class ThievingRoom extends Raid.Room {
     player.sendMessage("Some cavern grubs have hatched; you take them.");
     Shared.give(player, ITEM.GRUBS, amount);
     Shared.addXp(player, "THIEVING", GRUB_XP[amount - 1] ?? GRUB_XP[0]);
-    this.chests.set(at, { object: Shared.replaceObject(this.map, object, OBJECT.CHEST_GRUBS), relockAt: this.raid.ticks + 12 });
+    this.chests.set(at, { object: Shared.replaceObject(this.map, object, OBJECT.CHEST_GRUBS), relockAt: this.raid.ticks + Shared.random(...RELOCK_TICKS) });
   }
 }
 

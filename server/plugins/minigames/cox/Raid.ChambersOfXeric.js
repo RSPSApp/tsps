@@ -63,6 +63,25 @@ function climbSteps(event) {
   return true;
 }
 
+/** rsprox capture 2528: the leader's new layout, before the raid has begun. */
+function reloadRaid(event) {
+  const { player } = event;
+  const raid = inside(player);
+  if (!raid) return false;
+  if (raid.stage !== Raid.STAGE.WAITING) {
+    player.sendMessage("The raid has already begun.");
+    return true;
+  }
+  if (!raid.party.isLeader(player)) {
+    player.sendMessage("Only the party leader can reload the raid.");
+    return true;
+  }
+  Shared.options(player, "Reload the raid to generate a new layout?",
+    "Yes, reload the raid.", () => raid.reload(player),
+    "No, keep the existing layout.", () => {});
+  return true;
+}
+
 /** Through a passage to its far side, if the room lets you on. */
 function enterPassage(event) {
   const { player, object } = event;
@@ -191,7 +210,7 @@ module.exports = function registerCoxRaid(api) {
   api.persistAttribute(Shared.ATTR.INSIDE);
   api.onInterfaceActionButton(uid(TAB.REFRESH), refreshTab);
   api.onInterfaceActionButton(uid(TAB.START), startRaid);
-  api.onObjectInteraction("Steps", { Climb: climbSteps });
+  api.onObjectInteraction("Steps", { Climb: climbSteps, Reload: reloadRaid });
   api.onObjectInteraction("Passage", { Enter: enterPassage });
   api.onObjectInteraction("Hole", { Enter: enterHole });
   api.onObjectInteraction("Rope", { "Climb-up": climbRope });

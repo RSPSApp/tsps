@@ -9,12 +9,14 @@
  *   Make party and View party. Making a party needs a chat-channel and the rank of Recruit.
  * - The party page (507) lists the channel's members on the mountain (script 1517: name,
  *   combat, total, kill count, 23 skills), then its header (script 1524: title, your state -
- *   0 outsider, 1 member, 2 leader - advertised, adverts left). Its buttons: Join/Leave,
- *   Advertise/Delist, Disband, Refresh, Back, the three preferences, Challenge Mode, and a
- *   large raid (not offered).
+ *   0 outsider, 1 member, 2 leader - advertised, adverts left).
+ * - rsprox captures 820, 843, 3389 and enum 1539: its buttons are Join/Leave, Advertise/Delist,
+ *   Disband, Refresh, Back, the three preferences, Scaling ("Set the number of players to scale
+ *   the raid by (or 0 to clear it):"), Challenge Mode, and Map Layout ("How large of a layout to
+ *   generate?" Small, Large or Full). Fifteen adverts are left in every capture (the cache has
+ *   raids_daily_adverts); they are taken here as a daily allowance (estimate).
  * - The entrance warns once, then lets a party member in; the raid is built on first entry,
  *   and no one can enter once it has started.
- * Not ported: choosing which layouts a party gets, or a daily advert quota; OSRS has neither.
  */
 
 const Shared = require("./Shared.ChambersOfXeric");
@@ -29,11 +31,10 @@ const BOARD_BUTTON = { REFRESH: 0, MAKE: 1 };
 const PARTY = { BUTTONS: 3, LAST_BUTTON: 10 };
 const PARTY_BUTTON = {
   JOIN_LEAVE: 0, ADVERTISE: 1, DISBAND: 2, REFRESH: 3, BACK: 4,
-  SIZE: 5, COMBAT: 6, TOTAL: 7, CHALLENGE: 8, LARGE: 9,
+  SIZE: 5, COMBAT: 6, TOTAL: 7, SCALING: 8, CHALLENGE: 9, LAYOUT: 10,
 };
 const ATTR_VIEWING = "cox:viewing-party";
-/** OSRS has no advert quota; the page still shows a number of adverts left. */
-const ADVERTS_LEFT = 99;
+const ADVERTS_PER_DAY = 15;
 
 const uid = (group, component) => (group << 16) | component;
 
@@ -107,6 +108,15 @@ function viewListedParty(event) {
 
 // ---------------------------------------------------------------- the party page
 
+function todayNumber() {
+  return Math.floor(Date.now() / 86400000);
+}
+
+function advertsLeft(player) {
+  const adverts = player.getAttribute(Shared.ATTR.ADVERTS);
+  return adverts?.day === todayNumber() ? Math.max(0, ADVERTS_PER_DAY - adverts.used) : ADVERTS_PER_DAY;
+}
+
 function killCount(player, challenge) {
   return Number(player.getAttribute(challenge ? Shared.ATTR.CHALLENGE_KILLS : Shared.ATTR.KILLS)) || 0;
 }
@@ -131,11 +141,13 @@ function openParty(player, party) {
   }
   const state = !viewerChannel ? 0 : party.isLeader(player) ? 2 : 1;
   sender.sendClientScript(Shared.SCRIPT.PARTY_HEADER, `Raiding Party of ${party.leader} (${members.length})`,
-    state, party.isAdvertised() ? 1 : 0, ADVERTS_LEFT);
+    state, party.isAdvertised() ? 1 : 0, advertsLeft(player));
   sender.sendInterfaceFlagsRange(uid(Shared.INTERFACE.PARTY, PARTY.BUTTONS), 0, PARTY.LAST_BUTTON, Shared.EVENT.CONTINUE);
   sender.sendVarbit(Shared.VARBIT.PREFERRED_SIZE, party.preferredSize)
     .sendVarbit(Shared.VARBIT.PREFERRED_COMBAT, party.preferredCombat)
-    .sendVarbit(Shared.VARBIT.PREFERRED_TOTAL, party.preferredTotal);
+    .sendVarbit(Shared.VARBIT.PREFERRED_TOTAL, party.preferredTotal)
+    .sendVarbit(Shared.VARBIT.SCALING, party.scaling)
+    .sendVarbit(Shared.VARBIT.LAYOUT_POOL, party.layout);
 }
 
 /** Refreshes the page for everyone in the channel who has it open. */
@@ -185,8 +197,11 @@ function joinOrLeave(player) {
 function toggleAdvert(player) {
   const party = ownParty(player);
   if (!party) return;
+  const left = advertsLeft(player);
   if (party.isAdvertised()) Parties.delist(party);
+  else if (left <= 0) player.sendMessage("You have used all of your adverts for today.");
   else if (!Parties.advertise(party)) player.sendMessage("The advertised parties list is currently full!");
+  else player.setAttribute(Shared.ATTR.ADVERTS, { day: todayNumber(), used: ADVERTS_PER_DAY - left + 1 });
   openParty(player, party);
 }
 
@@ -218,6 +233,8 @@ function askPreference(player, title, max, apply) {
   if (!editable(player)) return;
   player.getPacketSender().sendInterfaceRemoval();
   player.setEnteredAmountAction({
+    // "(or 0 to clear it)".
+    acceptsZero: true,
     execute: function setPreference(amount) {
       const party = editable(player);
       if (!party) return;
@@ -228,12 +245,40 @@ function askPreference(player, title, max, apply) {
   player.getPacketSender().sendEnterAmountPrompt(title);
 }
 
+/** The maker's next party starts from these (rsprox captures: varp 4064 is kept over a login). */
+function rememberSettings(player, party) {
+  // The remembered party type has a value of its own for Challenge Mode (capture 3389: 3).
+  const partyType = party.challenge ? 3 : party.layoutPool;
+  player.setAttribute(Shared.ATTR.LAST_SCALING, party.scaling);
+  player.setAttribute(Shared.ATTR.LAST_LAYOUT, party.layoutPool);
+  player.getPacketSender().sendVarbit(Shared.VARBIT.REMEMBER_SCALING, party.scaling)
+    .sendVarbit(Shared.VARBIT.REMEMBER_PARTY_TYPE, partyType);
+}
+
+function settingChanged(player, party) {
+  rememberSettings(player, party);
+  refreshPartyViewers(party);
+  openParty(player, party);
+}
+
 function toggleChallenge(player) {
   const party = editable(player);
   if (!party) return;
   party.challenge = !party.challenge;
-  refreshPartyViewers(party);
-  openParty(player, party);
+  settingChanged(player, party);
+}
+
+function chooseLayout(player) {
+  if (!editable(player)) return;
+  const pick = (pool) => () => {
+    const party = editable(player);
+    if (!party) return;
+    party.layoutPool = pool;
+    settingChanged(player, party);
+  };
+  const { SMALL, LARGE, FULL } = Shared.LAYOUT_POOL;
+  Shared.options(player, "How large of a layout to generate?",
+    Shared.LAYOUT_NAMES[SMALL], pick(SMALL), Shared.LAYOUT_NAMES[LARGE], pick(LARGE), Shared.LAYOUT_NAMES[FULL], pick(FULL));
 }
 
 function clickPartyButton(event) {
@@ -258,8 +303,14 @@ function clickPartyButton(event) {
     case PARTY_BUTTON.TOTAL:
       askPreference(player, "Set a preferred skill total (or 0 to clear it):", 99 * Shared.PARTY_SKILLS.length, (party, value) => { party.preferredTotal = value; });
       break;
+    case PARTY_BUTTON.SCALING:
+      askPreference(player, "Set the number of players to scale the raid by (or 0 to clear it):", Shared.MAX_RAIDERS, (party, value) => {
+        party.scaling = value;
+        rememberSettings(player, party);
+      });
+      break;
     case PARTY_BUTTON.CHALLENGE: toggleChallenge(player); break;
-    case PARTY_BUTTON.LARGE: player.sendMessage("Large raids are not available."); break;
+    case PARTY_BUTTON.LAYOUT: chooseLayout(player); break;
     default: break;
   }
   return true;
@@ -329,6 +380,9 @@ module.exports = function registerCoxLobby(api) {
   api.persistAttribute(Shared.ATTR.WARNED);
   api.persistAttribute(Shared.ATTR.KILLS);
   api.persistAttribute(Shared.ATTR.CHALLENGE_KILLS);
+  api.persistAttribute(Shared.ATTR.LAST_SCALING, 0);
+  api.persistAttribute(Shared.ATTR.LAST_LAYOUT, 0);
+  api.persistAttribute(Shared.ATTR.ADVERTS);
   api.onObjectInteraction("Recruiting board", { Read: readBoard });
   api.onObjectInteraction("Chambers of Xeric", { Enter: enterChambers });
   api.onInterfaceActionButton(uid(Shared.INTERFACE.RECRUITING_BOARD, BOARD.BUTTONS), clickBoardButton);

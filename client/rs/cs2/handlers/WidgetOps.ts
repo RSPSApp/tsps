@@ -1575,6 +1575,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.CC_SETTEXT, (ctx, intOp) => {
         const text = ctx.stringStack[--ctx.stringStackSize];
         const w = getTargetWidget(ctx, intOp);
+        if (w && ctx.widgetManager.isServerOwnedWidget(w.uid)) return;
         if (w) {
             // PERF: Only invalidate if value actually changed
             if (w.text !== text) {
@@ -1589,6 +1590,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         // Pop order: widget first (top of intStack), then text (from stringStack)
         const w = getWidgetFromStack(ctx);
         const text = ctx.stringStack[--ctx.stringStackSize];
+        if (w && ctx.widgetManager.isServerOwnedWidget(w.uid)) return;
         if (w) {
             // PERF: Only invalidate if value actually changed
             if (w.text !== text) {

@@ -40,6 +40,7 @@ function buildData(core) {
     WAITING_ROOM_INTERFACE: 131, // interface.castlewars_waitingroom
     STATUS_OVERLAY_INTERFACE: { [TEAM.SARADOMIN]: 58, [TEAM.ZAMORAK]: 59 }, // interface.castlewars_status_overlay_*
     EJECT_TEXT_UID: { [TEAM.SARADOMIN]: (58 << 16) | 26, [TEAM.ZAMORAK]: (59 << 16) | 25 },
+    BARRICADE_TEXT_UID: { [TEAM.SARADOMIN]: (58 << 16) | 15, [TEAM.ZAMORAK]: (59 << 16) | 15 },
     // Scores, flag states and the timer are drawn by the cache's own scripts (887/888/2375),
     // so the server only feeds the vars they read.
     TIMER_VARP: 380, // seconds until start in the waiting room, minutes remaining in game

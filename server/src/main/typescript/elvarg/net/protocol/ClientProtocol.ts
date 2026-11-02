@@ -1917,10 +1917,12 @@ export function encodeTriggerOnDialogAbort(): Buffer {
   return encodeServerPacket(ServerPacketId.TRIGGER_ONDIALOGABORT, Buffer.alloc(0));
 }
 
-export function encodeWidgetSetText(uid: number, text: string): Buffer {
+export function encodeWidgetSetText(uid: number, text: string, serverOwned?: boolean): Buffer {
   const id = Buffer.alloc(4);
   id.writeInt32BE(uid | 0);
-  return encodeServerPacket(ServerPacketId.WIDGET_SET_TEXT, Buffer.concat([id, string(text)]));
+  return encodeServerPacket(ServerPacketId.WIDGET_SET_TEXT, Buffer.concat([
+    id, string(text), serverOwned === undefined ? Buffer.alloc(0) : Buffer.from([serverOwned ? 1 : 0]),
+  ]));
 }
 
 export function encodeWidgetSetHidden(uid: number, hidden: boolean): Buffer {

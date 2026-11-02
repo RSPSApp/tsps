@@ -356,10 +356,7 @@ test("confirming destroy re-checks the drop policy and refuses an untradeable bo
     sendChatboxInterface() {
       return this;
     },
-    sendItemOnInterface() {
-      return this;
-    },
-    sendString() {
+    sendClientScript() {
       return this;
     },
     sendInterfaceRemoval() {},
@@ -377,7 +374,7 @@ test("confirming destroy re-checks the drop policy and refuses an untradeable bo
   };
   assert.equal(emitItemDropPolicy(drop), true, "dropping opens the destroy confirmation");
 
-  yesHandler({ player });
+  yesHandler({ player, action: 1 });
   assert.equal(deleted, 0, "the confirmed destroy must not delete the bond");
   assert.ok(player.messages.some((message) => message.includes("cannot be dropped or destroyed")));
 });

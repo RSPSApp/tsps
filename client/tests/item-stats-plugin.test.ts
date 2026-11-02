@@ -20,6 +20,10 @@ import { buildCombatStatGroups } from "../game/plugins/itemstats/itemStatsPresen
 import { BANKMAIN, INVENTORY } from "../runelite/api/gameval/InterfaceID";
 
 async function main(): Promise<void> {
+const scaledPosition = positionTooltip(800, 600, 1600, 1200, 360, 240,
+    { x: 760, y: 700, w: 160, h: 40 }, 2);
+assert.ok(scaledPosition.x >= 4 && scaledPosition.y >= 4);
+assert.ok(scaledPosition.x + 360 <= 1596 && scaledPosition.y + 240 <= 1196);
 const item = (params: Record<number, number>) => ({ params: { get: (key: number) => params[key] } });
 
 const helm = item({ 1564: 0, 0: 5, 5: 10, 10: 2, 11: 1, 189: 3, 299: 4 });
@@ -231,6 +235,20 @@ assert.deepEqual(positionTooltip(140, 90, 765, 503, 190, 170, screenshotActionBo
 }, "screenshot panel moves below action text instead of sitting at (45,55)");
 const estimatedActionBounds = fallbackInteractionBounds(174, 68, 765, 503);
 assert.deepEqual(estimatedActionBounds, { x: 150, y: 100, w: 240, h: 52 });
+assert.deepEqual(fallbackInteractionBounds(500, 500, 2000, 1200, { x: 1.5, y: 2 }), {
+    x: 464, y: 564, w: 360, h: 104,
+}, "fallback reserve scales by axis");
+assert.deepEqual(findInteractionTextBounds([{
+    text: "Wield item", _absX: 100, _absY: 100, _absWidth: 180, _absHeight: 30,
+}, {
+    text: "+ options", _absX: 500, _absY: 250, _absWidth: 90, _absHeight: 20,
+}], "Wield item", { x: 1.5, y: 2 }), {
+    x: 100, y: 100, w: 490, h: 170,
+}, "option grouping thresholds scale on each axis");
+assert.deepEqual(findMouseoverTimerBounds([{
+    onTimer: [4725], children: [{ text: "Long touch hint", _absX: 0, _absY: 0, _absWidth: 900, _absHeight: 120 }],
+}], undefined, { x: 1.5, y: 2 }), { x: 0, y: 0, w: 900, h: 120 },
+"timer text size limits scale on each axis");
 assert.deepEqual(positionTooltip(174, 68, 765, 503, 190, 170, estimatedActionBounds), {
     x: 79, y: 160,
 }, "without measured bounds, reserve both action lines below the cursor");
@@ -279,7 +297,7 @@ const testClient: any = {
 };
 const hitPlugin = new ItemStatsPlugin(testClient);
 const itemDefinitions = new Map<number, any>([
-    [100, { name: "Bronze axe", params: { get: (key: number) => key === 1564 ? 3 : undefined } }],
+    [100, { name: "Bronze axe", params: { get: (key: number) => key === 1564 ? 3 : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].includes(key) ? 2 : undefined } }],
     [200, { name: "Bronze axe (noted)", noteTemplate: 1, note: 100 }],
     [201, { name: "Bronze axe (placeholder)", placeholderTemplate: 1, placeholder: 100 }],
 ]);
@@ -326,6 +344,64 @@ assert.equal(hitPlugin.widgetOverlay.signature(), visibleSignature,
     "a stale canvas menu mirror does not suppress stats after OsrsClient closes the menu");
 testClient.renderer.canvas.__ui.menu.open = false;
 assert.equal(hitPlugin.widgetOverlay.signature(), visibleSignature, "show again after both menus close");
+
+// Draw using device-pixel input coordinates at DPR 2. HUD scale changes the tooltip
+// dimensions, not the pointer or measured interaction bounds.
+const rects: { x: number; y: number; w: number; h: number }[] = [];
+let canvasHeight = 1000;
+const drawContext: any = {
+    renderer: { canvas: { width: 1800, get height() { return canvasHeight; } }, drawRect: (x: number, y: number, w: number, h: number) => rects.push({ x, y, w, h }) },
+    fontLoader: () => undefined,
+    overlayTextScale: () => ({ x: activeScale, y: activeScale }),
+    inputScale: () => ({ x: inputScaleX, y: inputScaleY }),
+};
+let activeScale = 1;
+let inputScaleX = 1;
+let inputScaleY = 1;
+testClient.inputManager.mouseX = 900;
+testClient.inputManager.mouseY = 500;
+hitWidget._absX = 880; hitWidget._absY = 480; hitWidget._absWidth = 40; hitWidget._absHeight = 40;
+hitWidget.x = 880; hitWidget.y = 480; hitWidget.width = 40; hitWidget.height = 40;
+labelWidget._absX = 860; labelWidget._absY = 540; labelWidget._absWidth = 140; labelWidget._absHeight = 32;
+optionWidget._absX = 860; optionWidget._absY = 560;
+for (const scale of [1, 1.25, 2]) {
+    activeScale = scale;
+    rects.length = 0;
+    const covered = hitPlugin.widgetOverlay.draw(drawContext);
+    const panel = covered[0];
+    assert.ok(panel, `panel draws at ${scale}x`);
+    assert.ok(panel.x < 900 && panel.x + panel.w > 900, "tooltip stays centered near the device-pixel pointer");
+    assert.ok(panel.y >= 572 || panel.y + panel.h <= 532, "tooltip avoids the interaction text bounds");
+    assert.ok(panel.x >= 2 && panel.y >= 2 && panel.x + panel.w <= 1798 && panel.y + panel.h <= 998,
+        "tooltip remains inside the device-pixel viewport");
+}
+// Touch UI: the main-canvas pointer gets overlayScale only, while tooltip geometry
+// gets UI render scale multiplied by the overlay's non-uniform scale.
+activeScale = 3; // UI scale 2 × overlay X scale 1.5
+inputScaleX = 1.5;
+inputScaleY = 1.25;
+canvasHeight = 2000;
+labelWidget._absX = 1280; labelWidget._absY = 700; labelWidget._absWidth = 210; labelWidget._absHeight = 50;
+optionWidget._absX = 1280; optionWidget._absY = 730;
+rects.length = 0;
+const touchPanel = hitPlugin.widgetOverlay.draw(drawContext)[0];
+assert.ok(touchPanel && touchPanel.x < 1350 && touchPanel.x + touchPanel.w > 1350,
+    "touch pointer uses overlay scale once, without UI-scale multiplication");
+assert.ok(touchPanel.y >= 750 || touchPanel.y + touchPanel.h <= 690,
+    "touch tooltip avoids measured bounds already expressed in overlay space");
+assert.ok(touchPanel.x + touchPanel.w <= 1798 && touchPanel.y + touchPanel.h <= 1998,
+    "non-uniform touch scale stays clamped to the viewport");
+assert.notEqual(hitPlugin.widgetOverlay.signature(), visibleSignature,
+    "scale changes participate in the tooltip redraw signature");
+testClient.menuOpen = true;
+assert.deepEqual(hitPlugin.widgetOverlay.draw(drawContext), [], "tooltip hides while a context menu is open");
+testClient.menuOpen = false;
+hitWidget._absX = 1300; hitWidget._absY = 650; hitWidget._absWidth = 50; hitWidget._absHeight = 50;
+hitWidget.x = 1300; hitWidget.y = 650; hitWidget.width = 50; hitWidget.height = 50;
+testClient.inputManager.mouseX = 1325;
+testClient.inputManager.mouseY = 665;
+labelWidget._absX = 1304; labelWidget._absY = 704; labelWidget._absWidth = 196; labelWidget._absHeight = 40;
+optionWidget._absX = 1304; optionWidget._absY = 726;
 
 // A bank item can overlap the bank header geometrically while sitting outside
 // the bank's scroll viewport. Nested container scissoring narrows it again.

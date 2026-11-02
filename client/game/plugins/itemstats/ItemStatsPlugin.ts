@@ -37,9 +37,10 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
     private hovered?: { itemId: number; x: number; y: number; w: number; h: number };
     private interactionBounds?: { x: number; y: number; w: number; h: number };
     private signatureValue = "";
+    private lastTextScale = { x: 1, y: 1 };
 
     readonly widgetOverlay: WidgetOverlay = {
-        signature: () => this.snapshot(),
+        signature: () => this.snapshot(this.lastTextScale),
         draw: (context) => this.draw(context),
     };
 
@@ -52,7 +53,8 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
         return readItemStats(this.loadBaseItem(itemId));
     }
 
-    private snapshot(): string {
+    private snapshot(textScale = { x: 1, y: 1 }): string {
+        this.lastTextScale = textScale;
         const client: any = this.client;
         const manager = client.widgetManager;
         if (!this.isStarted() || !manager || client.gameState !== GameState.LOGGED_IN) {
@@ -96,15 +98,17 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
             if (ww > 0 && wh > 0) hovered = { itemId: id, x: wx, y: wy, w: ww, h: wh };
         }
         this.hovered = hovered;
-        this.interactionBounds = hovered ? this.interactionTextBounds() : undefined;
+        this.interactionBounds = hovered ? this.interactionTextBounds(textScale) : undefined;
         const wornSignature = this.currentWornSignature();
         return this.signatureValue = hovered
-            ? `${hovered.itemId}:${hovered.x}:${hovered.y}:${x}:${y}:${JSON.stringify(this.interactionBounds ?? null)}:${wornSignature}`
+            ? `${hovered.itemId}:${hovered.x}:${hovered.y}:${x}:${y}:${textScale.x}:${textScale.y}:${JSON.stringify(this.interactionBounds ?? null)}:${wornSignature}`
             : "";
     }
 
     private draw(context: WidgetOverlayDrawContext): { x: number; y: number; w: number; h: number }[] {
-        this.snapshot();
+        const { x: scaleX, y: scaleY } = context.overlayTextScale?.() ?? { x: 1, y: 1 };
+        const { x: inputScaleX, y: inputScaleY } = context.inputScale?.() ?? { x: 1, y: 1 };
+        this.snapshot({ x: scaleX, y: scaleY });
         const hovered = this.hovered;
         if (!hovered) return [];
         const canonicalId = this.canonicalItemId(hovered.itemId);
@@ -171,52 +175,55 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
         // The widget manager's 765x503 layout is not the screen-space clamp here.
         const canvasW = context.renderer.canvas.width;
         const canvasH = context.renderer.canvas.height;
-        const horizontalPadding = 8;
-        const minimumWidth = Math.min(176, Math.max(1, canvasW - 4));
-        const valueWidth = Math.max(30, ...groups.flatMap((group) => group.rows.map(({ value }) => measure(value))));
-        const desiredWidth = Math.max(minimumWidth, measure(title), ...groups.map(({ title: heading }) => measureHeading(heading)), ...groups.flatMap((group) => group.rows.map(({ label }) => measure(label) + valueWidth + 22))) + horizontalPadding * 2;
+        const horizontalPadding = 8 * scaleX;
+        const fit = (text: string, width: number, measureText = measure) => fitText(text, width, (value) => measureText(value) * scaleX);
+        const minimumWidth = Math.min(176 * scaleX, Math.max(1, canvasW - 4));
+        const valueWidth = Math.max(30 * scaleX, ...groups.flatMap((group) => group.rows.map(({ value }) => measure(value) * scaleX)));
+        const desiredWidth = Math.max(minimumWidth, measure(title) * scaleX, ...groups.map(({ title: heading }) => measureHeading(heading) * scaleX), ...groups.flatMap((group) => group.rows.map(({ label }) => measure(label) * scaleX + valueWidth + 22 * scaleX))) + horizontalPadding * 2;
         const width = Math.max(1, Math.min(desiredWidth, canvasW - 4));
-        const height = Math.max(1, 28 + groups.reduce((sum, group) => sum + 17 + group.rows.length * 15, 0));
-        const clippedValueWidth = Math.min(valueWidth, Math.max(1, width - horizontalPadding * 2 - 36));
-        const clippedLabelWidth = Math.max(1, width - clippedValueWidth - 30);
+        const height = Math.max(1, (28 + groups.reduce((sum, group) => sum + 17 + group.rows.length * 15, 0)) * scaleY);
+        const clippedValueWidth = Math.min(valueWidth, Math.max(1, width - horizontalPadding * 2 - 36 * scaleX));
+        const clippedLabelWidth = Math.max(1, width - clippedValueWidth - 30 * scaleX);
         // Keep the panel under the hovered item, centered on its interaction point.
         const pointerX = Number((this.client as any).inputManager?.mouseX);
         const pointerY = Number((this.client as any).inputManager?.mouseY);
-        const anchorX = Number.isFinite(pointerX) ? pointerX : hovered.x + hovered.w / 2;
-        const anchorY = Number.isFinite(pointerY) ? pointerY : hovered.y + hovered.h;
+        const anchorX = Number.isFinite(pointerX) ? pointerX * inputScaleX : hovered.x + hovered.w / 2;
+        const anchorY = Number.isFinite(pointerY) ? pointerY * inputScaleY : hovered.y + hovered.h;
         const interactionBounds = this.interactionBounds ?? fallbackInteractionBounds(
             anchorX,
             anchorY,
             canvasW,
             canvasH,
+            { x: scaleX, y: scaleY },
         );
-        const position = positionTooltip(anchorX, anchorY, canvasW, canvasH, width, height, interactionBounds);
+        const position = positionTooltip(anchorX, anchorY, canvasW, canvasH, width, height, interactionBounds, { x: scaleX, y: scaleY });
         const { x, y } = position;
         context.renderer.drawRect(x, y, width, height, TOOLTIP_BACKGROUND);
-        context.renderer.drawRect(x, y, width, 1, TOOLTIP_BORDER);
-        context.renderer.drawRect(x, y + height - 1, width, 1, TOOLTIP_BORDER);
-        drawTextGL(context.renderer, context.fontLoader, fitText(title, width - 16, measure), x + 8, y + 4, width - 16, 16, FONT_PLAIN_12, 0xffd36a, 0, 0, true);
-        context.renderer.drawRect(x + 8, y + 22, width - 16, 1, TOOLTIP_BORDER);
-        let rowY = y + 26;
+        context.renderer.drawRect(x, y, width, scaleY, TOOLTIP_BORDER);
+        context.renderer.drawRect(x, y + height - scaleY, width, scaleY, TOOLTIP_BORDER);
+        drawTextGL(context.renderer, context.fontLoader, fit(title, width - 16 * scaleX), x + 8 * scaleX, y + 4 * scaleY, width - 16 * scaleX, 16 * scaleY, FONT_PLAIN_12, 0xffd36a, 0, 0, true, 1, undefined, scaleX, scaleY);
+        context.renderer.drawRect(x + 8 * scaleX, y + 22 * scaleY, width - 16 * scaleX, scaleY, TOOLTIP_BORDER);
+        let rowY = y + 26 * scaleY;
         for (const group of groups) {
-            drawTextGL(context.renderer, context.fontLoader, fitText(group.title, width - 16, measureHeading), x + 8, rowY, width - 16, 15, FONT_BOLD_12, 0xffd36a, 0, 0, true);
-            rowY += 16;
+            drawTextGL(context.renderer, context.fontLoader, fit(group.title, width - 16 * scaleX, measureHeading), x + 8 * scaleX, rowY, width - 16 * scaleX, 15 * scaleY, FONT_BOLD_12, 0xffd36a, 0, 0, true, 1, undefined, scaleX, scaleY);
+            rowY += 16 * scaleY;
             for (const { label, value, delta } of group.rows) {
                 const color = delta === undefined ? WHITE : delta > 0 ? 0x77ff77 : delta < 0 ? 0xff7777 : WHITE;
-                drawTextGL(context.renderer, context.fontLoader, fitText(label, clippedLabelWidth, measure), x + horizontalPadding, rowY, clippedLabelWidth, 15, FONT_PLAIN_12, WHITE, 0, 0, true);
-                drawTextGL(context.renderer, context.fontLoader, fitText(value, clippedValueWidth, measure), x + width - clippedValueWidth - horizontalPadding, rowY, clippedValueWidth, 15, FONT_PLAIN_12, color, 2, 0, true);
-                rowY += 15;
+                drawTextGL(context.renderer, context.fontLoader, fit(label, clippedLabelWidth), x + horizontalPadding, rowY, clippedLabelWidth, 15 * scaleY, FONT_PLAIN_12, WHITE, 0, 0, true, 1, undefined, scaleX, scaleY);
+                drawTextGL(context.renderer, context.fontLoader, fit(value, clippedValueWidth), x + width - clippedValueWidth - horizontalPadding, rowY, clippedValueWidth, 15 * scaleY, FONT_PLAIN_12, color, 2, 0, true, 1, undefined, scaleX, scaleY);
+                rowY += 15 * scaleY;
             }
         }
         return [{ x, y, w: width, h: height }];
     }
 
-    private interactionTextBounds(): { x: number; y: number; w: number; h: number } | undefined {
+    private interactionTextBounds(scale = { x: 1, y: 1 }): { x: number; y: number; w: number; h: number } | undefined {
         const client: any = this.client;
         const manager = client.widgetManager;
         const timerBounds = findMouseoverTimerBounds(
             manager?.getActiveTimerWidgets?.() ?? [],
             (uid) => manager?.getStaticChildrenByParentUid?.(uid) ?? [],
+            scale,
         );
         if (timerBounds) return timerBounds;
 
@@ -230,7 +237,7 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
         const rootGroup = Number(manager?.rootInterface);
         if (Number.isInteger(rootGroup) && rootGroup >= 0) groups.add(rootGroup);
         const widgets = [...groups].flatMap((group) => manager?.getWidgetsForGroup?.(group) ?? []);
-        const actualBounds = findInteractionTextBounds(widgets, actionText);
+        const actualBounds = findInteractionTextBounds(widgets, actionText, scale);
         return actualBounds;
     }
 

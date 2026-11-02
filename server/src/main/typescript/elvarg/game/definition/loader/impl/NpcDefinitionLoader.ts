@@ -26,6 +26,7 @@ type CombatStats = {
     elementalWeaknessType?: number;
     elementalWeaknessPercent?: number;
     attackType?: CombatType;
+    attackStyle?: string;
     slayerLevel?: number;
     attackBonuses?: {
         melee?: number;
@@ -210,6 +211,8 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             elementalWeaknessType: weaknessType,
             elementalWeaknessPercent: weaknessType ? weaknessPercent : 0,
             attackType: NpcDefinitionLoader.resolveAttackType(monster.attack_type),
+            attackStyle: Array.isArray(monster.attack_type) && monster.attack_type.length > 0
+                ? String(monster.attack_type[0]).toLowerCase() : undefined,
             slayerLevel:
                 monster.slayer_monster === true && monster.slayer_level > 0
                     ? monster.slayer_level
@@ -417,6 +420,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
                     attributes: stat.attributes ?? definition.getAttributes(),
                     members: stat.members ?? definition.isMembers(),
                     attackType: stat.attackType ?? definition.getAttackType(),
+                    attackStyle: stat.attackStyle ?? definition.getAttackStyle(),
                     slayerLevel: stat.slayerLevel ?? definition.getSlayerLevel(),
                 });
                 applied++;

@@ -70,6 +70,10 @@ before(async () => {
   require("../plugins/modes/LeaguePacts.plugin").register(api);
   require("../plugins/combat/effects/ObsidianArmour.EquipmentEffects")(api);
   require("../plugins/combat/effects/DharoksArmour.EquipmentEffects")(api);
+  require("../plugins/combat/effects/SalveAmulet.EquipmentEffects")({ ...forward, onCustomEvent: () => {}, registerMagicDamageBonusModifier: () => {} });
+  require("../plugins/combat/effects/InquisitorsArmour.EquipmentEffects")(forward);
+  require("../plugins/items/VoidEquipment.plugin").register({ core, registerCombatEffectiveLevelModifier: EquipmentEffects.registerCombatEffectiveLevelModifier,
+    registerMagicDamageBonusModifier: () => {}, onCustomEvent: () => {}, onPlayerLogin: () => {} });
   const { CombatSpecial } = require("../dist/game/content/combat/CombatSpecial");
   require("../plugins/combat/specials/DragonDagger.SpecialAttack")({ core, registerCombatSpecial: CombatSpecial.register, emitCustomEvent: () => {} });
   Common = require("../plugins/modes/leaguepacts/Common.LeaguePacts");
@@ -238,4 +242,61 @@ test("PvP: stat boosts apply against players; Thorns, Echoes and Blindbag never 
   }
   assert.equal(queued.length, 0, "no Blindbag on a player");
   assert.equal(echoes.length, 0, "no Ranged echo on a player");
+});
+
+const I = () => core.ItemIdentifiers;
+const undead = () => ({ isNpc: () => true, getAsNpc() { return this; }, getCurrentDefinition: () => ({ hasAttribute: (name) => name === "undead" }) });
+
+test("the melee damage pacts and a salve amulet each apply once, in the core's order: the pacts' % then the salve's x7/6", () => {
+  const { holder, others } = cast("overlap-salve", { talent_percentage_melee_damage: 3 });
+  for (const player of [holder, ...others]) {
+    equip(player, core.Equipment.WEAPON_SLOT, ITEMS.whip);
+    equip(player, core.Equipment.AMULET_SLOT, I().SALVE_AMULET);
+    const target = undead();
+    player.getCombat().getTarget = () => target;
+  }
+  const worn = holder.getBonusManager().getOtherBonus()[core.BonusManager.STRENGTH];
+  const base = formula(worn);
+  assert.notEqual(Math.floor((base * 7) / 6), base, "the salve shows in the max hit");
+  assert.equal(core.DamageFormulas.calculateMaxMeleeHit(holder), Math.floor((Math.floor((base * 103) / 100) * 7) / 6), "+3% (three nodes), then x7/6");
+  for (const other of others) assert.equal(core.DamageFormulas.calculateMaxMeleeHit(other), Math.floor((base * 7) / 6), "the salve alone");
+});
+
+test("Inquisitor's crush bonus and the strength pacts: the pact's strength in the formula, the set's +2.5% on the result", () => {
+  const { holder, others } = cast("overlap-inquisitor", { talent_melee_strength_prayer_bonus: 1 });
+  for (const player of [holder, ...others]) {
+    equip(player, core.Equipment.WEAPON_SLOT, ITEMS.elderMaul);
+    for (const [slot, id] of [[core.Equipment.HEAD_SLOT, I().INQUISITORS_GREAT_HELM], [core.Equipment.BODY_SLOT, I().INQUISITORS_HAUBERK], [core.Equipment.LEG_SLOT, I().INQUISITORS_PLATESKIRT]]) equip(player, slot, id);
+    player.getFightType = () => ({ getStyle: () => core.FightStyle.ACCURATE, getBonusType: () => core.BonusManager.ATTACK_CRUSH });
+    player.getBonusManager().getOtherBonus()[core.BonusManager.PRAYER] = 10;
+  }
+  const worn = holder.getBonusManager().getOtherBonus()[core.BonusManager.STRENGTH];
+  assert.equal(EquipmentEffects.applyMeleeHitModifiers(others[1], 1000), 1025, "the full set with crush: +2.5% (Wiki)");
+  assert.equal(core.DamageFormulas.calculateMaxMeleeHit(holder), Math.floor(formula(worn + 5) * 1.025), "+5 strength (50% of 10), then x1.025");
+  for (const other of others) assert.equal(core.DamageFormulas.calculateMaxMeleeHit(other), Math.floor(formula(worn) * 1.025));
+});
+
+test("Void's +10% effective Strength and the Strength-level pact: both in the formula, once each", () => {
+  const { holder, others } = cast("overlap-void", { talent_multi_hit_str_increase: 1 });
+  for (const player of [holder, ...others]) {
+    equip(player, core.Equipment.WEAPON_SLOT, ITEMS.whip);
+    for (const [slot, id] of [[core.Equipment.HEAD_SLOT, I().VOID_MELEE_HELM], [core.Equipment.BODY_SLOT, I().VOID_KNIGHT_TOP],
+      [core.Equipment.LEG_SLOT, I().VOID_KNIGHT_ROBE], [core.Equipment.HANDS_SLOT, I().VOID_KNIGHT_GLOVES]]) equip(player, slot, id);
+  }
+  const worn = holder.getBonusManager().getOtherBonus()[core.BonusManager.STRENGTH];
+  const voidFormula = (bonus) => Math.floor((Math.floor((107 * 110) / 100) * (bonus + 64) + 320) / 640);
+  assert.notEqual(voidFormula(worn), formula(worn), "Void's boost shows in the max hit");
+  assert.equal(core.DamageFormulas.calculateMaxMeleeHit(holder), voidFormula(worn + 19), "effective level 117, strength bonus + 19");
+  for (const other of others) assert.equal(core.DamageFormulas.calculateMaxMeleeHit(other), voidFormula(worn));
+});
+
+test("Executioner's ranged reach is not the melee range pacts': a ranged attack's distance is left to the relic", () => {
+  const { holder } = cast("overlap-executioner", { talent_melee_range_multiplier: 1, talent_melee_range_conditional_boost: 1 });
+  equip(holder, core.Equipment.WEAPON_SLOT, ITEMS.elderMaul);
+  const ranged = { attacker: holder, combatType: core.CombatType.RANGED, distance: 6 };
+  hooks.onCombatAttackDistance(ranged);
+  assert.equal(ranged.distance, 6, "the axe's 6 stays 6: no doubling, no 7");
+  const melee = { attacker: holder, combatType: core.CombatType.MELEE, distance: 1 };
+  hooks.onCombatAttackDistance(melee);
+  assert.equal(melee.distance, 2, "a two-hander's melee reach doubles");
 });

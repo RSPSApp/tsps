@@ -596,6 +596,7 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   // Pyramid Plunder: a room's Grand Gold Chest.
   assert.deepEqual(trigger("room-8-of-pyramid-plunder-25-times"), { kind: "plunder-chest", room: 8, count: 25 });
 
+  assert.deepEqual(trigger("complete-a-ribbiting-tale"), { kind: "quest", name: "The Ribbiting Tale of a Lily Pad Labour Dispute" }, "the description's full name");
   assert.deepEqual(trigger("complete-25-hunter-rumours"), { kind: "rumours", count: 25 });
   assert.deepEqual(trigger("floor-5-of-the-hallowed-sepulchre"), { kind: "sepulchre-floor", floor: 5, count: 1 });
 

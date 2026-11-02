@@ -672,7 +672,9 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   if ((match = /^Complete (?:the )?(.+)$/.exec(name))) {
     // "Complete the Observatory Quest" is the quest "Observatory Quest"; "Complete Gertrude's Cat quest" is "Gertrude's Cat";
     // "Complete the Vale Totems miniquest" is the miniquest "Vale Totems".
-    const quest = quests.get(plainName(match[1])) ?? quests.get(plainName(match[1].replace(/ (?:[Mm]ini)?[Qq]uest$/, "")));
+    const quest = quests.get(plainName(match[1])) ?? quests.get(plainName(match[1].replace(/ (?:[Mm]ini)?[Qq]uest$/, "")))
+      // The description may give the quest's full name the task shortens ("Complete a Ribbiting Tale").
+      ?? quests.get(plainName(description.replace(/^Complete /i, "").replace(/\.$/, "")));
     if (quest) return { trigger: { kind: "quest", name: quest } };
   }
   // "Obtain 25 Million Agility XP", "... XP in a combat skill" (the description's list), "... in any

@@ -1791,7 +1791,7 @@ function flagCycle(ctx, state, teamId) {
         if (location.getZ() === dropLocation.getZ() && chebyshevDistance(location.getX(), location.getY(), dropLocation.getX(), dropLocation.getY()) <= 1) {
           if (nowMs >= state.nextStandClickAt) {
             state.nextStandClickAt = nowMs + FLAG_CLICK_INTERVAL_MS;
-            clickObject(player, ownDropped, 1);
+            if (reserveFlagSpace(player)) clickObject(player, ownDropped, 1);
           }
           return "running";
         }

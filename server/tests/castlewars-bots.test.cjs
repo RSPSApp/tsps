@@ -342,6 +342,26 @@ test('a full scorer inventory makes room for both hands through the native flag 
   assert.equal(player.getEquipment().getSlot(core.Equipment.SHIELD_SLOT), -1);
 });
 
+test('a full scorer can retrieve its own standard near the enemy stand', (t) => {
+  const { game, actor } = nativeBotGame(t);
+  const stand = game.getTeamData(TEAM.ZAMORAK).standLocation;
+  core.RegionManager.loadMapFiles(stand.getX(), stand.getY());
+  const at = [stand.getX(), stand.getY() - 1, stand.getZ()];
+  const player = actor(TEAM.SARADOMIN, at);
+  const carrier = actor(TEAM.ZAMORAK, at);
+  game.carryFlag(carrier, TEAM.SARADOMIN);
+  game.dropCarriedFlag(carrier);
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.MASTER_WAND, 1));
+  player.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(core.ItemIdentifiers.SPECTRAL_SPIRIT_SHIELD, 1));
+  for (let index = 0; index < 28; index++) player.getInventory().adds(core.ItemIdentifiers.BANDAGES, 1);
+  const state = { role: 'scorer', flagMode: 'out', route: [], cursor: 0, nextStandClickAt: 0 };
+  Bots._test.flagCycle({ player, nowMs: 1000 }, state, TEAM.SARADOMIN);
+  assert.equal(game.getCarriedFlagTeam(player), TEAM.SARADOMIN);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.BANDAGES), 26);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.MASTER_WAND), 1);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.SPECTRAL_SPIRIT_SHIELD), 1);
+});
+
 test('defenders safe a nearby own flag at the castle entrance before attacking', (t) => {
   const { game, actor, turns } = nativeBotGame(t);
   core.RegionManager.loadMapFiles(2425, 3085);

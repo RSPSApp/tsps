@@ -1564,7 +1564,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   until the area unlocks exist, even for a boss with one home; a monster whose every location line
   on its Wiki page is the task's place, and whose name the cache gives one attackable monster, is
   killed there whatever the task adds: "Defeat a Drake in the Karuulm Slayer Dungeon", the pages
-  saved as `<dir>/npcs/<page>.wikitext`), a quest only when
+  saved as `<dir>/npcs/<page>.wikitext`; a Combat Achievements monster no NPC is named after is the
+  NPCs that plugin counts for it, its `monsters.json` `npcs`: the Grotesque Guardians are Dusk;
+  "Help the Shayzien house by dealing with 150 Lizardmen shaman" is their kills), a quest only when
   `plugins/quests/quests` registers that name, and a level only for a known skill; its report
   lists the kill tasks it could not map. To map more: add a kind (a trigger kind is a few lines in Triggers.LeagueTasks),
   a rule in the generator, or an entry in the overlay; or have the plugin that knows the deed emit

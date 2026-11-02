@@ -307,6 +307,8 @@ const singulars = (name: string) => {
   if (/ies$/.test(name)) forms.push(name.replace(/ies$/, "y"));
   if (/(ch|sh|x|s)es$/.test(name)) forms.push(name.replace(/es$/, ""));
   if (/s$/.test(name)) forms.push(name.replace(/s$/, ""));
+  // "Lizardmen shaman": a -men plural before its noun.
+  if (/men\b/.test(name)) forms.push(...forms.map((form) => form.replace(/men\b/, "man")));
   return forms;
 };
 
@@ -504,6 +506,8 @@ function caMonsters(): Map<string, string> {
   return caMonsterNames;
 }
 const CA_MONSTER_ENUM = 3970;
+/** The Combat Achievements plugin's NPCs for a monster no NPC is named after (its data/monsters.json `npcs`). */
+const CA_MONSTER_NPCS: Record<string, string[]> = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../plugins/achievements/combatachievements/data/monsters.json"), "utf8")).npcs;
 
 /** A diary's name in a task to the diaries plugin's key (plugins/achievements/diaries). */
 /** Agility course names as tasks give them (without "Rooftop") -> the agility plugin's course keys. */
@@ -831,6 +835,8 @@ function withoutRestatement(name: string, description: string): string {
   // Where something worn comes from ("Equip Amy's Saw from Mahogany Homes", "a Pearl fishing rod,
   // purchased from Alry on Molch Island", "a Golden tench, caught by aerial fishing"): no condition
   // on wearing it.
+  // "Help the Shayzien house by dealing with 150 Lizardmen shaman": the kills, the house's only the reason.
+  text = text.replace(/^Help the [A-Z][a-z]+ [Hh]ouse by dealing with /, "Defeat ");
   if (/^Equip /i.test(name)) text = text.replace(/(?:,\s*(?:purchased|bought|rewarded|caught|obtained|won)\b[^.]*| (?:purchased |bought |rewarded |obtained )?from (?:the )?[A-Z][^.,]*)(?=\.?$)/, "");
   return text;
 }
@@ -975,7 +981,7 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     const place = placeNamed(match[1]);
     return place && said && placeNamed(said[1]) === place ? { trigger: { kind: "enter", place } } : {};
   }
-  if ((match = /^(?:Defeat|Kill) (\d+) (.+)$/.exec(name)) || (match = /^(?:Defeat|Kill) (?:a |an |the |some )?(.+?)(?: (\d+) [Tt]imes?)?$/.exec(name))) {
+  if ((match = /^(?:Defeat|Kill) (\d+) (.+)$/.exec(name)) || (match = /^(?:Defeat|Kill) (?:[Aa] |[Aa]n |[Tt]he |[Ss]ome )?(.+?)(?: (\d+) [Tt]imes?)?$/.exec(name))) {
     const [, first, second] = match;
     const [named, count] = /^\d+$/.test(first) ? [second, Number(first)] : [first, second ? Number(second) : 1];
     // A league area as the place ("in Varlamore", "on Karamja", "within Morytania", "in the
@@ -1006,7 +1012,15 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     const condition = /\b(without|while|using|within|in under|with only|solo|duo|trio|wearing|wielding|less than|fewer than|must be|do not count)\b/i;
     const place = /\b(in|on|at|inside|near|from|outside|under|beneath)\b (?:the |an? )?[A-Z]/;
     if (condition.test(description) || place.test(description.replace(subject, "")) || place.test(subject)) return { unmapped: name };
+    // A Combat Achievements monster that is no NPC of its name is the NPCs its plugin counts for it
+    // ("Grotesque Guardians": Dusk, whose death ends the fight).
+    const counted = caMonsters().has(bossName) ? CA_MONSTER_NPCS[caMonsters().get(bossName)!] : undefined;
     const primary = npcNamed(subject, npcs) ?? (caMonsters().has(bossName) ? npcNamed(subject.replace(/ boss$/i, ""), npcs) : null);
+    if (!primary && counted?.length && counted.every((npc) => npcs.has(npc.toLowerCase())) && !alternativesOf(description).length) {
+      const trigger: Trigger = area === null ? { kind: "kill", npcs: counted, count } : { kind: "kill", npcs: counted, count, area };
+      if (spot.place) trigger.place = spot.place;
+      return { trigger };
+    }
     // The description may accept others for the same count: "Defeat Callisto or Artio 50 times",
     // "Defeat The Nightmare or Phosani's Nightmare 50 times combined". Every one must be a cache NPC.
     const accepted = alternativesOf(description).map((part) => npcNamed(part, npcs));

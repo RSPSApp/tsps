@@ -522,6 +522,8 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   // A monster the Wiki has in one place only: the place only says where it lives.
   assert.deepEqual(trigger("defeat-a-drake"), { kind: "kill", npcs: ["Drake"], count: 1 }, "every Drake the Wiki lists is in the Karuulm Slayer Dungeon");
   assert.equal(trigger("defeat-a-snake-in-karamja").area, 2, "a monster of many homes keeps its place");
+  assert.deepEqual(trigger("defeat-the-grotesque-guardians-50-times"), { kind: "kill", npcs: ["Dusk"], count: 50 }, "the Combat Achievements plugin's NPC for the monster");
+  assert.deepEqual(trigger("defeat-150-lizardmen-shaman"), { kind: "kill", npcs: ["Lizardman shaman"], count: 150 }, "helping the house is dealing with them");
   // A named place the server knows the bounds of.
   assert.deepEqual(trigger("enter-the-crafting-guild"), { kind: "enter", place: "crafting-guild" });
   assert.deepEqual(trigger("defeat-a-runite-golem"), { kind: "kill", npcs: ["Runite Golem"], count: 1, place: "resource-area" });

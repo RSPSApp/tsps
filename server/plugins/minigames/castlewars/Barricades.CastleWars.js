@@ -40,7 +40,8 @@ function setupBarricade({ player }) {
     player.sendMessage(`Your team already has ${limit} barricades set up.`);
     return true;
   }
-  const barricade = new core.NPC(data.BARRICADE_NPC[teamId], location.clone());
+  const types = game.hasPracticeBots?.() && !game.getBarricadePlayerPriority?.() ? data.BARRICADE_FIRST_NPC : data.BARRICADE_NPC;
+  const barricade = new core.NPC(types[teamId], location.clone());
   barricade.setFlag("combat:no-retaliate");
   barricade.__skipDefaultRespawn = true;
   if (!World.getNpcs().add(barricade)) {

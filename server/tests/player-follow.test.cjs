@@ -120,16 +120,22 @@ test('a leader teleport ends the follow silently instead of pathing after them',
 });
 
 test('a leader changing plane ends the follow', async (t) => {
-  const follower = actor(t, 3240, 3218);
-  const leader = actor(t, 3242, 3218);
-  follow(follower, leader);
-  tick(follower, 2);
+  const moves = [
+    ['teleport', (p) => p.moveTo(new core.Location(3242, 3218, 1))],
+    ['direct', (p) => p.setLocation(new core.Location(3242, 3218, 1))],
+  ];
+  for (const [name, move] of moves) {
+    const follower = actor(t, 3240, 3218);
+    const leader = actor(t, 3242, 3218);
+    follow(follower, leader);
+    tick(follower, 2);
 
-  leader.p.moveTo(new core.Location(3242, 3218, 1));
-  tick(follower, 1);
+    move(leader.p);
+    tick(follower, 1);
 
-  assert.equal(follower.p.getFollowing(), null);
-  assert.equal(follower.p.getInteractingMobile(), null);
+    assert.ok(!follower.p.getFollowing(), `${name}: follow should stop`);
+    assert.equal(follower.p.getInteractingMobile(), null, `${name}: interaction should clear`);
+  }
 });
 
 test('a leader that logs out ends the follow', async (t) => {

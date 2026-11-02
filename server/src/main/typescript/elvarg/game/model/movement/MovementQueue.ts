@@ -839,7 +839,8 @@ export class MovementQueue {
         // the follow there, rather than walking the follower to wherever the leader landed.
         if (
             playerFollowingPlayer &&
-            following.getTeleportSerial() != this.character.getFollowedTeleportSerial()
+            (following.getLocation().getZ() != this.character.getLocation().getZ() ||
+                following.getTeleportSerial() != this.character.getFollowedTeleportSerial())
         ) {
             this.character.setFollowing(null);
             this.character.setMobileInteraction(null);

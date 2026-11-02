@@ -735,7 +735,7 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | 7 | Reloaded | done (a pick from tiers 1 to 6) |
 | 8 | Executioner | done: the execute (never Yama) and the axe's 6 tiles of reach for its owner (`onCombatAttackDistance`; Trailblazer Reloaded's stays 5) |
 | 8 | Minion | the item only (no thrall imps) |
-| 8 | Flask of Fervour | done but for PvP damage, impact graphics and its cooldown varp |
+| 8 | Flask of Fervour | done but for its cooldown varp (the buff bar reads it against the map_clock varp, which the server never sends): explosions 1, 3 and 5 ticks on with the recorded impacts (237/01158), 30% to players the area lets the owner fight |
 
 ### Not in this cache
 

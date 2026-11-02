@@ -3,20 +3,24 @@
  * tier 8 relic. The flask (from the cache's relic struct), Activated: hitpoints, prayer and special
  * attack energy to full and poison cured (237/01164 clears the poison varp), with the recording's
  * line, animation, graphic and sound; for the next 2.4 seconds (four ticks) every hit on the
- * player is 0 (`combat:damage-apply`), and three explosions (ours: one every two ticks, from the
- * first) each deal 60% of the base Prayer level as a typeless hit to every attackable NPC within
- * three tiles, Yama spared. Then three minutes of cooldown, a tick (0.6 seconds) shorter for every
- * 10 damage one of the player's hits deals; Activate or Check meanwhile says how long is left
- * ("on cooldown for another N seconds!", 237/01164), and its end says the flask is ready.
- * Not here: the explosions on players in PvP (30%), the impact map graphics, and the cooldown
- * varp (league_relic_flask_of_fervour_cooldown: live sends it in map_clock ticks, which this
- * server does not keep).
+ * player is 0 (`combat:damage-apply`), and three explosions (1, 3 and 5 ticks after, 237/01158)
+ * each deal 60% of the base Prayer level as a typeless hit to every attackable NPC within three
+ * tiles, Yama spared, and 30% of it to every player there the area lets the owner fight (PvP),
+ * each with the recording's impact graphics on the 8 lines out to three tiles. Then three minutes
+ * of cooldown, a tick (0.6 seconds) shorter for every 10 damage one of the player's hits deals;
+ * Activate or Check meanwhile says how long is left ("on cooldown for another N seconds!",
+ * 237/01164), and its end says the flask is ready.
+ * Not here: the cooldown varp (league_relic_flask_of_fervour_cooldown, the buff bar's): live sends
+ * it as the map_clock varp's tick it ends on, and this server never sends map_clock, so the bar
+ * would read the raw tick.
  */
 const Common = require("./Common.LeagueRelics");
 
 /** When the flask may be used again (ms since the epoch); 0 when it may. */
 const READY_AT_ATTRIBUTE = "league:flask-of-fervour-ready-at";
 const TICK_MS = 600;
+/** The 8 lines the impacts run along. */
+const DIRECTIONS = [[0, 1], [1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1]];
 
 let api;
 let core;
@@ -60,11 +64,14 @@ function scheduleReady(player) {
   core.TaskManager.submit(task);
 }
 
+function near(player, other) {
+  const here = player.getLocation();
+  return other.getLocation().getZ() === here.getZ() && other.getLocation().isWithinDistance(here, effect.radius);
+}
+
 function enemiesAround(player) {
   const { CombatFactory, CanAttackResponse, TimerKey } = core;
-  const here = player.getLocation();
-  return player.getLocalNpcs().filter((npc) => npc.getHitpoints() > 0
-    && npc.getLocation().getZ() === here.getZ() && npc.getLocation().isWithinDistance(here, effect.radius)
+  return player.getLocalNpcs().filter((npc) => npc.getHitpoints() > 0 && near(player, npc)
     && !effect.spared.includes(npc.getDefinition?.()?.getName?.())
     && CombatFactory.validTarget(player, npc)
     && npc.getCurrentDefinition().isAttackable()
@@ -72,13 +79,36 @@ function enemiesAround(player) {
     && CombatFactory.canAttackByPolicy(player, npc) === CanAttackResponse.CAN_ATTACK);
 }
 
-function explode(player) {
-  const { HitDamage, HitMask, Skill } = core;
-  const damage = Math.floor(player.getSkillManager().getMaxLevel(Skill.PRAYER) * effect.prayerFraction);
-  if (damage <= 0) return;
-  for (const npc of enemiesAround(player)) {
-    npc.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, HitMask.RED).setSource(player)]);
+/** Players within reach the area lets the owner fight (the Wilderness, PvP worlds). */
+function playersAround(player) {
+  const { CombatFactory, CanAttackResponse } = core;
+  return (player.getLocalPlayers?.() ?? []).filter((other) => other !== player && other.getHitpoints() > 0 && near(player, other)
+    && CombatFactory.validTarget(player, other)
+    && CombatFactory.canAttackByPolicy(player, other) === CanAttackResponse.CAN_ATTACK);
+}
+
+/** The impact graphics: on the 8 lines out from the player's tile, one per tile out to the radius (237/01158). */
+function impacts(player) {
+  const { Graphic, Location } = core;
+  const id = core.CacheDefinitions.getSpotanimId(effect.impact);
+  const here = player.getLocation();
+  for (const [dx, dy] of DIRECTIONS) {
+    effect.impactDelays.forEach((delay, step) => {
+      const at = new Location(here.getX() + dx * (step + 1), here.getY() + dy * (step + 1), here.getZ());
+      player.getPacketSender().sendGlobalGraphic(new Graphic(id, delay), at);
+    });
   }
+}
+
+function strike(player, victim, damage) {
+  if (damage > 0) victim.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED).setSource(player)]);
+}
+
+function explode(player) {
+  const prayer = player.getSkillManager().getMaxLevel(core.Skill.PRAYER);
+  impacts(player);
+  for (const npc of enemiesAround(player)) strike(player, npc, Math.floor(prayer * effect.prayerFraction));
+  for (const other of playersAround(player)) strike(player, other, Math.floor(prayer * effect.pvpPrayerFraction));
 }
 
 function activate(event) {

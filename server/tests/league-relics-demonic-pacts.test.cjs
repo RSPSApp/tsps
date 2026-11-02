@@ -775,6 +775,55 @@ test("Flask of Fervour: everything restored, hits on the player 0 for four ticks
   }
 });
 
+test("Flask of Fervour: three explosions 1, 3 and 5 ticks on, with the recording's impacts; 60% of Prayer to NPCs, 30% to players in PvP", (t) => {
+  const who = cases(FLASK_OF_FERVOUR);
+  const flask = itemActions.get("Flask of fervour");
+  const tasks = [];
+  t.mock.method(core.TaskManager, "submit", (task) => tasks.push(task));
+  t.mock.method(core.CombatFactory, "validTarget", () => true);
+  const wilderness = new Set();
+  t.mock.method(core.CombatFactory, "canAttackByPolicy", (attacker, target) =>
+    (target.isPlayer?.() && !wilderness.has(target) ? core.CanAttackResponse.CANT_ATTACK_IN_AREA : core.CanAttackResponse.CAN_ATTACK));
+  const victim = (name, at, isPlayer = false) => {
+    const pending = [];
+    return {
+      pending, isPlayer: () => isPlayer, getHitpoints: () => 50, getLocation: () => at,
+      getDefinition: () => ({ getName: () => name }), getCurrentDefinition: () => ({ isAttackable: () => true }),
+      getTimers: () => ({ has: () => false }),
+      getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => pending.push(...hits.map((hit) => hit.getDamage())) }) }),
+    };
+  };
+  const here = who.relic.getLocation();
+  const goblin = victim("Goblin", new Location(here.getX() + 3, here.getY(), 0));
+  const far = victim("Goblin", new Location(here.getX() + 4, here.getY(), 0));
+  const yama = victim("Yama", new Location(here.getX() + 1, here.getY(), 0));
+  const rival = victim("rival", new Location(here.getX(), here.getY() - 2, 0), true);
+  const bystander = victim("bystander", new Location(here.getX(), here.getY() + 1, 0), true);
+  wilderness.add(rival);
+  who.relic.getLocalNpcs = () => [goblin, far, yama];
+  who.relic.getLocalPlayers = () => [who.relic, rival, bystander];
+  const graphics = [];
+  const sender = who.relic.getPacketSender();
+  who.relic.getPacketSender = () => new Proxy(sender, { get: (target, key) => (key === "sendGlobalGraphic"
+    ? (graphic, at) => (graphics.push([graphic.id, graphic.delay, at.getX() - here.getX(), at.getY() - here.getY()]), sender) : target[key]) });
+  who.relic.getSkillManager().setMaxLevels(Skill.PRAYER, 99, false);
+  flask.Activate({ player: who.relic, handled: false });
+  const explosions = tasks.filter((task) => task.getDelay() < 10).sort((a, b) => a.getDelay() - b.getDelay());
+  assert.deepEqual(explosions.map((task) => task.getDelay()), [1, 3, 5]);
+  assert.equal(graphics.length, 0, "nothing on the Activate tick");
+  for (const task of explosions) task.execute();
+  assert.deepEqual([goblin.pending, rival.pending], [[59, 59, 59], [29, 29, 29]]);
+  assert.deepEqual([far.pending, yama.pending, bystander.pending], [[], [], []], "out of reach, spared, not in PvP");
+  const impact = core.CacheDefinitions.getSpotanimId("leagues_6_sigil_of_life_impact");
+  assert.equal(graphics.length, 72, "8 lines of 3, three times");
+  const first = graphics.slice(0, 24);
+  assert.ok(first.every(([id]) => id === impact));
+  assert.deepEqual(first.filter(([, , dx, dy]) => dx === 1 && dy === 1).map(([, delay]) => delay), [20]);
+  assert.deepEqual(first.filter(([, , dx, dy]) => dx === -2 && dy === 0).map(([, delay]) => delay), [30]);
+  assert.deepEqual(first.filter(([, , dx, dy]) => dx === 0 && dy === -3).map(([, delay]) => delay), [40]);
+  who.relic.getPacketSender = () => sender;
+});
+
 /** The Agility plugin, attached to a test api: its ground-item pickup hook and the marks it lays kept for the test. */
 function agility() {
   const pickups = [];

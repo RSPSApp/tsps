@@ -314,8 +314,9 @@
     "flaskOfFervour": {
       "league": 6, "key": "flask-of-fervour", "toolName": "Flask of fervour", "tool": "FLASK_OF_FERVOUR",
       "cooldownTicks": 300, "cooldownCutPerTenDamage": 1, "_cooldownCut": "0.6s (one tick) off the cooldown for every 10 damage of one hit (Wiki).",
-      "explosions": 3, "explosionTicks": [0, 2, 4], "radius": 3, "prayerFraction": 0.6, "pvpPrayerFraction": 0.3, "immuneTicks": 4, "spared": ["Yama"],
-      "_explosionTicks": "ours: three explosions over the 2.4 seconds (four ticks), one every two.",
+      "explosions": 3, "explosionTicks": [1, 3, 5], "radius": 3, "prayerFraction": 0.6, "pvpPrayerFraction": 0.3, "immuneTicks": 4, "spared": ["Yama"],
+      "_explosionTicks": "237/01158: the impacts land 1, 3 and 5 ticks after the Activate tick.",
+      "impactDelays": [20, 30, 40], "_impactDelays": "237/01158: each explosion's impact map_anims, on the 8 lines out from the player's tile, at 1, 2 and 3 tiles with these client-cycle delays.",
       "animation": "vengeance_spell_anim_nostalling", "graphic": "leagues_6_sigil_of_life", "impact": "leagues_6_sigil_of_life_impact", "sound": 165,
       "messages": {
         "used": "<col=FE206A>Your Flask of fervour unleashes its power. The Sigil has lost power for 3 minutes.",

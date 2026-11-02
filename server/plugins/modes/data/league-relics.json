@@ -358,6 +358,10 @@
         "_source": "237/01102 (nothing, on a bronze bar; noRoom), 238/04211 (lowest: an item box showing the item cast on)."
       }
     },
+    "butlersBell": {
+      "league": 6, "key": "butler-s-bell",
+      "_data": "plugins/modes/data/league-butlers-bell.json: the jobs' weighted tables and the transcript's lines (leaguerelics/ButlersBell.LeagueRelics.js)."
+    },
     "arcaneGrimoire": {
       "item": "Arcane grimoire",
       "options": { "change": "Change Spellbook", "previous": "Previous Spellbook", "check": "Check Previous" },

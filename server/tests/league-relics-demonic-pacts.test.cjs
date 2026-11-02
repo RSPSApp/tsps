@@ -42,6 +42,7 @@ const MAP_OF_ALACRITY = { 2: 3 };
 const EXECUTIONER = { 7: 1 };
 const FLASK_OF_FERVOUR = { 7: 3 };
 const TRANSMUTE = { 3: 1 };
+const BUTLERS_BELL = { 3: 3 };
 
 let core;
 let I;
@@ -1381,4 +1382,107 @@ test("Transmute: the spells are left alone for a character without the relic, an
     assert.equal(castOn(player, "Alchemic Divergence", 0).handled, false);
     assert.equal(player.getInventory().getAmount(I.UNCUT_SAPPHIRE_2), 10);
   }
+});
+
+const Butler = () => require("../plugins/modes/leaguerelics/ButlersBell.LeagueRelics");
+
+/** Dialogue chains a player was shown: each a list of [kind, text or options]. */
+function dialogues(t, player) {
+  const shown = [];
+  t.mock.method(player, "getDialogueManager", () => ({
+    startDialogues: (builder) => shown.push([...builder.getDialogues().values()].map((entry) => {
+      if (entry instanceof core.OptionDialogue) return ["options", entry.getOptions(), entry];
+      if (entry instanceof core.ActionDialogue) return ["action", null, entry];
+      return [entry.constructor.name, entry.text ?? entry.getText?.() ?? null, entry];
+    })),
+  }));
+  return shown;
+}
+
+test("Butler's Bell: work accrues by the minute, offline too: 8 ore a minute, half that as bars with 10 XP each, the fraction carried", (t) => {
+  const player = cases(BUTLERS_BELL).relic;
+  const now = Date.now();
+  player.setAttribute(Butler().STORE_ATTRIBUTE, null);
+  player.setAttribute(Butler().JOB_ATTRIBUTE, { action: 2, processing: false, since: now - 60 * 60_000, xp: 0 });
+  Butler().catchUp(player, now);
+  const total = (store) => store.reduce((sum, [, amount]) => sum + amount, 0);
+  assert.equal(total(player.getAttribute(Butler().STORE_ATTRIBUTE)), 480, "an hour of ore");
+  assert.ok(player.getAttribute(Butler().STORE_ATTRIBUTE).every(([name]) => ["CLAY", "IRON_ORE", "MITHRIL_ORE", "ADAMANTITE_ORE", "RUNITE_ORE"].includes(name)));
+  player.setAttribute(Butler().STORE_ATTRIBUTE, null);
+  player.setAttribute(Butler().JOB_ATTRIBUTE, { action: 2, processing: true, since: now - 90_000, xp: 0 });
+  Math.random = () => 0.99;
+  Butler().catchUp(player, now);
+  assert.deepEqual(player.getAttribute(Butler().STORE_ATTRIBUTE), [["RUNITE_BAR", 6]], "4 a minute; the last weight on a high roll");
+  const job = player.getAttribute(Butler().JOB_ATTRIBUTE);
+  assert.equal(job.xp, 60);
+  assert.equal(job.since, now, "90 seconds is 6 bars exactly");
+  Butler().catchUp(player, now + 10_000);
+  assert.equal(player.getAttribute(Butler().STORE_ATTRIBUTE)[0][1], 6, "not a whole bar yet");
+  const before = xp(player, Skill.SMITHING);
+  Butler().collect(player);
+  assert.equal(banked(player, I.RUNITE_BAR), 6);
+  assert.deepEqual(player.getAttribute(Butler().STORE_ATTRIBUTE), []);
+  assert.equal(xp(player, Skill.SMITHING) - before, (() => {
+    const control = character("smith-control", "league", {});
+    const start = xp(control, Skill.SMITHING);
+    control.getSkillManager().addExperiences(Skill.SMITHING, 60);
+    return xp(control, Skill.SMITHING) - start;
+  })(), "10 XP a bar, at the league's rate");
+});
+
+test("Butler's Bell: flax is 50 a minute, bow strings 25; logs and herbs rolled on the Wiki's tables", (t) => {
+  const player = cases(BUTLERS_BELL).relic;
+  const now = Date.now();
+  for (const [action, processing, item, count] of [[5, false, "FLAX", 50], [5, true, "BOW_STRING", 25], [1, false, "TEAK_LOGS", 10], [4, true, "IRIT_POTION_UNF_", 5]]) {
+    player.setAttribute(Butler().STORE_ATTRIBUTE, null);
+    player.setAttribute(Butler().JOB_ATTRIBUTE, { action, processing, since: now - 60_000, xp: 0 });
+    Math.random = () => (action === 5 ? 0 : 0.6);
+    Butler().catchUp(player, now);
+    assert.deepEqual(player.getAttribute(Butler().STORE_ATTRIBUTE), [[item, count]]);
+  }
+});
+
+test("Butler's Bell: the bell is refused in an instance with the Wiki's line; nothing for a character without the relic", (t) => {
+  const who = cases(BUTLERS_BELL);
+  const bell = itemActions.get("Butler's bell");
+  t.mock.method(who.relic, "getPrivateArea", () => ({}));
+  const event = { player: who.relic, handled: false };
+  bell.Ring(event);
+  assert.equal(event.handled, true);
+  assert.equal(who.relic.sent.messages.at(-1), "You can't use that inside instances");
+  for (const player of others(who)) {
+    const other = { player, handled: false };
+    assert.equal(bell.Ring(other), false);
+    assert.equal(other.handled, false);
+  }
+});
+
+test("Butler's Bell: Talk-to, as the transcript: a new job from the cache's five, process or not with both rates, and collect first", (t) => {
+  const player = cases(BUTLERS_BELL).relic;
+  const npc = { getId: () => 15636 };
+  Butler().butlers.set(player, npc);
+  player.setAttribute(Butler().STORE_ATTRIBUTE, null);
+  player.setAttribute(Butler().JOB_ATTRIBUTE, null);
+  const shown = dialogues(t, player);
+  assert.equal(Butler().talk({ player, npc }), true);
+  const [greeting, options] = shown[0];
+  assert.equal(greeting[0], "NpcDialogue");
+  assert.deepEqual(options[1], ["I have a new job for you.", "Nothing."], "nothing to show yet");
+  options[2].execute(1);
+  const jobs = shown[1][1];
+  assert.deepEqual(jobs[1], ["Logs", "Ore", "Fish", "Herbs", "Flax"]);
+  jobs[2].execute(3);
+  const choice = shown[2][0];
+  assert.deepEqual(choice[1], ["Yes, process them. <col=3366ff>(7/Minute)</col>", "No, just give me the raw materials. <col=3366ff>(14/Minute)</col>"]);
+  choice[2].execute(2);
+  assert.deepEqual({ ...player.getAttribute(Butler().JOB_ATTRIBUTE), since: 0 }, { action: 3, processing: false, since: 0, xp: 0 });
+  player.setAttribute(Butler().STORE_ATTRIBUTE, [["RAW_SHARK", 3]]);
+  Butler().talk({ player, npc });
+  assert.deepEqual(shown[4][1][1], ["I have a new job for you.", "Show me what you've collected so far.", "Nothing."]);
+  shown[4][1][2].execute(1);
+  assert.equal(shown[5].length, 3, "said, the butler's apology, then the collection");
+  shown[5][2][2].send(player);
+  assert.equal(banked(player, I.RAW_SHARK), 3);
+  assert.equal(Butler().talk({ player: cases(BUTLERS_BELL).without, npc }), false, "not their butler");
+  Butler().butlers.delete(player);
 });

@@ -17,12 +17,29 @@ Reproduce either with:
 ```bash
 cd server
 TS_NODE_COMPILER_OPTIONS='{"target":"es2020"}' node node_modules/ts-node/dist/bin.js \
-  scripts/audit-weapons.ts --wiki wiki.json --names AnimationID.java --out ../docs/audits/weapon-census.csv
+  scripts/audit-weapons.ts --out ../docs/audits/weapon-census.csv
 ```
 
-`wiki.json` is the Wiki's two bucket queries (`infobox_bonuses`, `infobox_item`; 5,427 stat rows
-and 16,947 item pages) and `AnimationID.java` is RuneLite's gameval sequence names. Neither is
-committed; see [Method](#method).
+The audit reads two dumps from [RSPSApp/osrsreboxed-db](https://github.com/RSPSApp/osrsreboxed-db),
+imported into `server/data/definitions/` and never edited here:
+
+- `weapon-stats.json`: the Wiki's equipment-stat rows for the weapon and two-handed slots, by
+  item id (1,273 items from 5,427 stat rows and 16,947 item pages);
+- `sequence-names.json`: RuneLite's gameval sequence names for cache revision 241 (15,160),
+  with its license in `sequence-names.LICENSE`.
+
+Regenerate them there and copy them over:
+
+```bash
+cd ../osrsreboxed-db
+python -m scripts.weapons.update      # docs/weapon-stats.json
+python -m scripts.sequences.update    # docs/sequence-names.json, docs/sequence-names.LICENSE
+cp docs/weapon-stats.json docs/sequence-names.json docs/sequence-names.LICENSE \
+  ../tsps/server/data/definitions/
+```
+
+After a cache bump, pass the new revision's RuneLite gameval commit to
+`scripts.sequences.update --ref`. See [Method](#method).
 
 ## Scope
 
@@ -57,9 +74,10 @@ Three sources, in the order the server itself uses them:
    `WeaponProfiles.attackSpeed` / `meleeAttackDistance` / `attackDistance` / `attackAnimation`
    against a stand-in player, so a profile override is measured, not inferred.
 3. **The OSRS Wiki.** `bucket('infobox_bonuses')` for the 14 bonuses, slot, attack speed, attack
-   range and combat style, joined to item ids through `bucket('infobox_item')`. The Wiki does
-   **not** publish attack animation ids, so the animation half is checked structurally (below)
-   and the ids are named with RuneLite's gameval `AnimationID.java`, which is the game's own
+   range and combat style, joined to item ids through `bucket('infobox_item')`, as dumped by
+   osrsreboxed-db into `weapon-stats.json`. The Wiki does **not** publish attack animation ids,
+   so the animation half is checked structurally (below) and the ids are named from
+   `sequence-names.json`, RuneLite's gameval `AnimationID.java`, which is the game's own
    sequence names for the same cache revision (`HUMAN_SWORD_SLASH = 390`, ...).
 
 An animation check has four parts:

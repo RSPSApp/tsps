@@ -1,12 +1,13 @@
-// Audits every weapon in the cache against the OSRS Wiki's equipment stats table (the
-// `infobox_bonuses` bucket): the 14 equipment bonuses, attack speed, attack range, the
-// two-handed slot and the combat style that picks the weapon type.
+// Audits every weapon in the cache against the OSRS Wiki's equipment stats table: the 14
+// equipment bonuses, attack speed, attack range, the two-handed slot and the combat style that
+// picks the weapon type.
 //
-//   yarn audit:weapons --wiki wiki.json --names AnimationID.java --out ../docs/audits/weapon-census.csv
+//   yarn audit:weapons --out ../docs/audits/weapon-census.csv
 //
-// `wiki.json` is `{ "bonuses": [...], "items": [...] }` from the Wiki's bucket API (see
-// docs/audits/weapons.md for the query). `--names` is RuneLite's gameval AnimationID.java,
-// which names the cache's sequences (the Wiki does not publish attack animation ids).
+// Both inputs are osrsreboxed-db dumps in data/definitions: weapon-stats.json (the Wiki's
+// `infobox_bonuses` rows by item id, `python -m scripts.weapons.update`) and
+// sequence-names.json (RuneLite's gameval names for the cache's sequences, `python -m
+// scripts.sequences.update`; the Wiki does not publish attack animation ids).
 import * as fs from "fs";
 import path = require("path");
 
@@ -23,14 +24,11 @@ import { readCategoryNumbers } from "./combat-style-table";
 
 const WEAPON_SLOT = 3;
 
-/** The Wiki's stat column -> index in ItemDefinition.getBonuses(). */
+/** weapon-stats.json's bonus -> index in ItemDefinition.getBonuses(). */
 const STAT_COLUMNS: Array<[string, number]> = [
-    ["stab_attack_bonus", 0], ["slash_attack_bonus", 1], ["crush_attack_bonus", 2],
-    ["magic_attack_bonus", 3], ["range_attack_bonus", 4],
-    ["stab_defence_bonus", 5], ["slash_defence_bonus", 6], ["crush_defence_bonus", 7],
-    ["magic_defence_bonus", 8], ["range_defence_bonus", 9],
-    ["strength_bonus", 10], ["ranged_strength_bonus", 11],
-    ["magic_damage_bonus", 12], ["prayer_bonus", 13],
+    ["attack_stab", 0], ["attack_slash", 1], ["attack_crush", 2], ["attack_magic", 3], ["attack_ranged", 4],
+    ["defence_stab", 5], ["defence_slash", 6], ["defence_crush", 7], ["defence_magic", 8], ["defence_ranged", 9],
+    ["melee_strength", 10], ["ranged_strength", 11], ["magic_damage", 12], ["prayer", 13],
 ];
 
 const STAT_NAMES = ["stab", "slash", "crush", "magic", "range", "dstab", "dslash", "dcrush", "dmagic", "drange", "str", "rstr", "mdmg", "prayer"];
@@ -48,7 +46,11 @@ const WIKI_STYLE_CATEGORY: Record<string, string> = {
     "flail": "slashflail", "extending chain mace": "extending_chainmace",
 };
 
-type Wiki = { bonuses: any[]; items: any[] };
+/** One weapon-stats.json entry: a Wiki field the page leaves empty is absent. */
+type WikiStats = {
+    page: string; slot: string; combat_style?: string; attack_speed?: number; attack_range?: number;
+    bonuses: Record<string, number>;
+};
 type ItemRow = Record<string, any> & { id: number; name: string };
 
 function argValue(flag: string): string | undefined {
@@ -56,37 +58,8 @@ function argValue(flag: string): string | undefined {
     return index >= 0 ? process.argv[index + 1] : undefined;
 }
 
-/** RuneLite's gameval AnimationID: `public static final int HUMAN_SWORD_SLASH = 390;`. */
-function loadSeqNames(file: string | undefined): Map<number, string> {
-    const names = new Map<number, string>();
-    if (!file) return names;
-    for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
-        const match = /int\s+([A-Z0-9_]+)\s*=\s*(\d+)\s*;/.exec(line);
-        if (match && !names.has(Number(match[2]))) names.set(Number(match[2]), match[1]);
-    }
-    return names;
-}
-
-/** Item id -> the Wiki's `infobox_bonuses` row for it, joined through `infobox_item`'s ids. */
-function wikiRows(wiki: Wiki): Map<number, any> {
-    const bySub = new Map<string, any>();
-    const byPage = new Map<string, any[]>();
-    for (const row of wiki.bonuses) {
-        bySub.set(row.page_name_sub ?? row.page_name, row);
-        if (!byPage.has(row.page_name)) byPage.set(row.page_name, []);
-        byPage.get(row.page_name)!.push(row);
-    }
-    const rows = new Map<number, any>();
-    for (const item of wiki.items) {
-        const row = bySub.get(item.page_name_sub ?? item.page_name)
-            ?? (byPage.get(item.page_name)?.length === 1 ? byPage.get(item.page_name)![0] : undefined);
-        if (!row) continue;
-        for (const id of item.item_id ?? []) {
-            const itemId = Number(id);
-            if (Number.isInteger(itemId) && !rows.has(itemId)) rows.set(itemId, row);
-        }
-    }
-    return rows;
+function readDefinition<T>(definitions: string, file: string): T {
+    return JSON.parse(fs.readFileSync(path.join(definitions, file), "utf8"));
 }
 
 function weaponSlotItems(): ItemRow[] {
@@ -117,16 +90,16 @@ function csv(value: unknown): string {
 }
 
 async function main() {
-    const wikiFile = argValue("--wiki");
-    if (!wikiFile) throw new Error("usage: audit-weapons --wiki <wiki.json> [--names <AnimationID.java>] [--out <csv>]");
-    const names = loadSeqNames(argValue("--names"));
     await CachePipeline.initialize(path.resolve(__dirname, ".."));
     // The loader overlays data/definitions/item-gameplay.json on the cache (weapon type, attack
     // animation, requirements); it is what the running server uses.
     require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
 
     const definitions = path.resolve(__dirname, "..", "data", "definitions");
-    const styles = JSON.parse(fs.readFileSync(path.join(definitions, "item-combat-styles.json"), "utf8"));
+    const styles = readDefinition<any>(definitions, "item-combat-styles.json");
+    const wikiStats = readDefinition<Record<string, WikiStats>>(definitions, "weapon-stats.json");
+    const names = new Map(Object.entries(readDefinition<Record<string, string>>(definitions, "sequence-names.json"))
+        .map(([id, name]) => [Number(id), name]));
     const fightTypeNames = new Map<FightType, string>();
     for (const key of Object.keys(styles.fightTypes)) fightTypeNames.set((FightType as any)[key], key);
     const configs = CacheIndexDat2.fromStore(IndexType.DAT2.configs, CachePipeline.getStore());
@@ -134,14 +107,11 @@ async function main() {
     const seqIds = new Set<number>();
     for (const file of configs.getArchive(ConfigType.DAT2.seqs).files) seqIds.add(file.id);
 
-    const wiki = JSON.parse(fs.readFileSync(wikiFile, "utf8")) as Wiki;
-    const wikiById = wikiRows(wiki);
-
     const header = ["id", "name", "type", "wiki_style", "wiki_page", "bonuses", "wiki_bonuses", "cache_bonuses",
         "speed", "cache_speed", "wiki_speed", "range", "cache_range", "wiki_range", "two_handed", "wiki_two_handed",
         "animations", "flags"];
     const lines: string[] = [];
-    const findings: string[][] = [];
+    const findings: unknown[][] = [];
     const counts = { weaponSlotItems: 0, weapons: 0, untyped: 0, noWiki: 0, stats: 0, cacheStats: 0, speed: 0, speedOverride: 0, range: 0, twoHanded: 0, style: 0, noAnimation: 0, animationNotInCache: 0, animationOverrides: 0 };
     counts.weaponSlotItems = weaponSlotItems().length;
 
@@ -151,7 +121,7 @@ async function main() {
         const type: string | undefined = (def.getWeaponInterface() as any)?.getName?.();
         if (!type) counts.untyped += 1;
         const weapon: any = type ? (WeaponInterfaces as any)[type] : undefined;
-        const wikiRow = wikiById.get(item.id);
+        const wikiRow: WikiStats | undefined = wikiStats[String(item.id)];
         const fightTypes: FightType[] = weapon?.getFightType() ?? [];
 
         const first = fightTypes[0] ?? null;
@@ -197,7 +167,7 @@ async function main() {
             wikiStyle = String(wikiRow.combat_style ?? "");
             const diffs: string[] = [];
             for (const [column, index] of STAT_COLUMNS) {
-                const expected = Number(wikiRow[column] ?? 0);
+                const expected = wikiRow.bonuses[column] ?? 0;
                 const actual = Number(bonuses[index] ?? 0);
                 if (expected !== actual) diffs.push(`${STAT_NAMES[index]}=${actual} (wiki ${expected})`);
             }
@@ -205,18 +175,18 @@ async function main() {
                 counts.stats += 1;
                 if (def.hasCacheBonuses()) counts.cacheStats += 1;
             }
-            wikiSpeed = wikiRow.weapon_attack_speed === undefined ? undefined : Number(wikiRow.weapon_attack_speed);
+            wikiSpeed = wikiRow.attack_speed;
             if (wikiSpeed !== undefined && wikiSpeed !== speed) {
                 counts.speed += 1;
                 if (def.getAttackSpeed() !== speed) counts.speedOverride += 1;
                 flags.push(`speed=${speed} (cache ${def.getAttackSpeed()}, wiki ${wikiSpeed})`);
             }
-            wikiRange = wikiRow.weapon_attack_range === undefined ? undefined : Number(wikiRow.weapon_attack_range);
+            wikiRange = wikiRow.attack_range;
             if (wikiRange !== undefined && !magic && wikiRange !== range && !(wikiRange === 0 && !ranged)) {
                 counts.range += 1;
                 flags.push(`range=${range} (cache ${def.getAttackRange()}, wiki ${wikiRange})`);
             }
-            const slot = String(wikiRow.equipment_slot ?? "").toLowerCase();
+            const slot = wikiRow.slot.toLowerCase();
             wikiTwoHanded = slot === "2h" ? true : slot === "weapon" ? false : undefined;
             if (wikiTwoHanded !== undefined && wikiTwoHanded !== twoHanded) {
                 counts.twoHanded += 1;
@@ -234,8 +204,8 @@ async function main() {
         }
 
         const row = [
-            item.id, item.name, type ?? "", wikiStyle, wikiRow?.page_name_sub ?? wikiRow?.page_name ?? "",
-            bonuses.join(","), wikiRow ? STAT_COLUMNS.map(([column]) => Number(wikiRow[column] ?? 0)).join(",") : "",
+            item.id, item.name, type ?? "", wikiStyle, wikiRow?.page ?? "",
+            bonuses.join(","), wikiRow ? STAT_COLUMNS.map(([column]) => wikiRow.bonuses[column] ?? 0).join(",") : "",
             def.hasCacheBonuses() ? "cache" : "item-gameplay.json",
             String(speed), def.getAttackSpeed(), wikiSpeed ?? "", String(range), def.getAttackRange(), wikiRange ?? "",
             String(twoHanded), wikiTwoHanded ?? "",

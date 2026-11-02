@@ -106,7 +106,6 @@ const ROLE_LOADOUTS = Object.freeze({
 // Combat tiers chosen in the lobby prompt (PvpTierLoadouts.PlayerBots): each pins a bot's
 // loadout and combat level band.
 const DEFAULT_BOT_TIER_KEY = "castlewars:bot-tier";
-const DEFAULT_PRACTICE_MAXED_KEY = "castlewars:practice-maxed";
 
 let api;
 let game;
@@ -1059,7 +1058,7 @@ function roleOf(player) {
  */
 function pickTierChoice(player, role, tier) {
   const style = role === ROLES.ARCHER ? "range" : (role === ROLES.MAGE || role === ROLES.DEFENDER) ? "magic" : null;
-  const maxed = player.getAttribute?.(game?.PRACTICE_MAXED_KEY ?? DEFAULT_PRACTICE_MAXED_KEY) === true;
+  const maxed = player.getAttribute?.(game?.PRACTICE_MAXED_KEY) === true;
   return pickSharedTierChoice(maxed ? "veteran" : tier, { index: botNumber(player), style });
 }
 
@@ -1106,7 +1105,7 @@ function ensureLoadout(player, state, teamId, nowMs) {
   // weapon slot, which ensureFlagWeapon keeps clear until the flag is actually picked up.
   // A lobby-chosen combat tier pins the loadout+archetype to its level band; without one,
   // archers and mages draw their fixed archetypes so the battlements crew keeps its style.
-  const maxed = player.getAttribute(game.PRACTICE_MAXED_KEY ?? DEFAULT_PRACTICE_MAXED_KEY) === true;
+  const maxed = player.getAttribute(game.PRACTICE_MAXED_KEY) === true;
   const tier = maxed ? "veteran" : player.getAttribute(game.BOT_TIER_KEY ?? DEFAULT_BOT_TIER_KEY);
   const tierChoice = pickTierChoice(player, state.role, tier);
   const forced = tierChoice ?? ROLE_LOADOUTS[state.role];

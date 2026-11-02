@@ -1238,9 +1238,10 @@ test('Primio opens the canonical first-trip menu and flies both ways only after 
   // selected tail of the canonical first-trip transcript.
   require('../plugins/npcs/NpcDialogues.plugin').register(h.api);
   h.action(p, N.REGULUS_CENTO_2, 'Kectpl');
+  h.action(p, N.REGULUS_CENTO_2, 'Kectpl');
   assert.equal(h.tasks.length, baselineTasks + 1, 'the canonical accepted menu action starts the flight');
   h.tick(4);
-  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [1697, 3140, 0]);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [1700, 3141, 0]);
   assert.equal(p.varbits.get(9650), 1, 'the first arrival records Varlamore visited');
   assert.equal(p.varbits.get(9652), 3, 'the captured first-trip state advances on landing');
   assert.equal(starts.at(-1).npcId, N.REGULUS_CENTO_3);
@@ -1264,7 +1265,7 @@ test('Primio opens the canonical first-trip menu and flies both ways only after 
   h.tick(3);
   h.namedNpcs.get('Primio').Travel({ player: p, npcId: N.PRIMIO_2 });
   h.tick(4);
-  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [1697, 3140, 0]);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [1700, 3141, 0]);
   assert.equal(p.varbits.get(9652), 4, 'later Fortis trips keep the completed first-trip state');
   assert.equal(starts.length, 3, 'repeat flights do not replay the initial menu or arrival dialogue');
 });

@@ -48,6 +48,9 @@ export class WebgpuUiPresentation {
         this.attach(this.hudFxCanvas);
         const osrsClient = renderer.osrsClient;
         this.loadingMessageOverlay = new LoadingMessageOverlay(osrsClient.stateMachine);
+        this.loadingMessageOverlay.setSceneLoadingSource(
+            () => !renderer.mapManager.isViewSquareReady(renderer.stats.frameCount),
+        );
         this.systemUpdateOverlay = new SystemUpdateOverlay({
             getChatboxRect: () => getChatboxScreenRect({ osrsClient }),
         });

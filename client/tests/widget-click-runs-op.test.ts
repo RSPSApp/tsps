@@ -84,8 +84,12 @@ assert.deepEqual(
 // over it, a face graphic with only a press script (onClick 9125). The press plays and the
 // container's op runs, as OSRS's left-click (onClick, then the top menu entry) does.
 const container = button({ name: "container", actions: ["Apply Changes"], eventHandlers: { onOp: {} } });
-const face = button({ name: "face", childIndex: 4, eventHandlers: { onClick: {} } });
+// As the live client shows it (widgets 647:34933 and 34934): the face also carries onOp (script
+// 9126) and onRelease, but no op text, so it offers no menu entry.
+const face = button({ name: "face", childIndex: 2, eventHandlers: { onClick: {}, onOp: {}, onRelease: {} } });
 assert.deepEqual(click(face, [container]), ["face.onClick", "container.onOp"]);
 assert.deepEqual(click(face), ["face.onClick"], "with nothing beneath offering an op, the press alone");
+const pressOnly = button({ name: "press", childIndex: 2, eventHandlers: { onClick: {} } });
+assert.deepEqual(click(pressOnly, [container]), ["press.onClick", "container.onOp"], "a face without onOp too");
 
 console.log("widget click runs op passed");

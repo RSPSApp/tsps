@@ -155,12 +155,12 @@ export function processWidgetClickInput(
                 // so a widget with a press script but no op of its own (a button's face graphic:
                 // the Demonic Pacts tree's Apply Changes buttons, script 8190's onClick 9125 over
                 // the container whose op is Apply Changes) runs its onClick and lets the click
-                // reach the widget beneath that offers the op.
+                // reach the widget beneath that offers the op. "No op" is no op offered in the
+                // menu (no op text): the face also carries an onOp script, 9126, for ops it has none of.
                 const clickOnly =
                     hasHandlers &&
                     !!(w.eventHandlers?.onClick || w.onClick) &&
                     !hasActions &&
-                    !hasOnOpHandler &&
                     !hasInventoryItem &&
                     !isPauseButtonWidget &&
                     !hasSpellAction &&
@@ -175,6 +175,7 @@ export function processWidgetClickInput(
                     };
                     if (w.eventHandlers?.onClick) deps.getCs2Vm().invokeEventHandler(w, "onClick", pressCtx);
                     else deps.executeScriptListener(w, w.onClick, pressCtx);
+                    widgetInteraction.pressedWidget = w;
                     widgetManager?.invalidateAll?.();
                     continue;
                 }

@@ -202,6 +202,13 @@ test("as captured: Wield (op 9) on a bank inventory item equips it with the bank
   assert.equal(player.getBank().getAmount(995), 0);
 });
 
+test("as captured (if3): the bank inventory labels Wield/Wear on the slots holding something wearable", () => {
+  const player = createPlayer();
+  player.getInventory().add(new Item(995, 10), false);
+  player.getInventory().add(new Item(TRIDENT, 1), false);
+  assert.equal(Bank.sideWearOpsMask(player), 1 << 1);
+});
+
 test("Deposit-X still moves a partial noted stack", () => {
   const player = createPlayer();
   player.getInventory().add(new Item(LAVA_BATTLESTAFF_NOTE, 7), false);

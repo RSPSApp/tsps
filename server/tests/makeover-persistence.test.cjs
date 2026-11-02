@@ -126,3 +126,17 @@ for (const pronouns of [0, 1, 2]) {
     assert.equal(q.getAppearance().getPronouns(), next, 'invalid values cannot alter the saved choice');
   });
 }
+
+
+test('opening the designer retains a legacy pronoun default across native body changes', (t) => {
+  const p = actor(t, MALE);
+  PM.emitCustomEvent('makeover-mage:open', { player: p });
+  assert.equal(p.getAppearance().getPronouns(), 0);
+  assert.equal(PM.emitInterfaceActionClick({ player: p, buttonId: (679 << 16) | 69, action: 1, slot: -1 }), true);
+  assert.equal(p.getAppearance().getLook()[0], 1);
+  assert.equal(p.getAppearance().getPronouns(), 0);
+  assert.equal(p.getPacketSender().getVarbit(10988), 0);
+  const q = actor(t, FEMALE);
+  PlayerSave.fromPlayer(p).applyToPlayer(q);
+  assert.equal(q.getAppearance().getPronouns(), 0, 'the independent default survives save/load');
+});

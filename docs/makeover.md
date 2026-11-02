@@ -98,7 +98,7 @@ does not open the interface.
 The Makeover Mage's designer and All Settings > Pronouns share the saved
 `appearance:pronouns` attribute: 0 He/him, 1 She/her, 2 They/them. Old saves without
 an explicit choice keep the choice matching their existing body type; selecting
-pronouns then makes that choice independent of subsequent body changes.
+pronouns or opening the designer retains that choice independently of subsequent body changes.
 
 Revision-241 cache evidence: setting 387 is struct 994 with enum 5500. Designer
 `player_design:pronouns_buttons` (679:78) sends slots 1..3. Script

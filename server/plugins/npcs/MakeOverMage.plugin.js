@@ -51,6 +51,9 @@ function openMakeoverInterface(player) {
   player.getPacketSender().sendInterfaceRemoval();
   player.setInterfaceId?.(MAKEOVER_INTERFACE_ID);
   player.getAppearance?.().setCanChangeAppearance?.(true);
+  // Freeze a legacy body-derived default before either client starts editing the body.
+  const appearance = player.getAppearance();
+  appearance.setPronouns(appearance.getPronouns());
   syncPronouns({ player });
   player.getPacketSender().sendSubInterface(MAIN_MODAL_TARGET_UID, MAKEOVER_INTERFACE_ID, 0);
   player.getPacketSender().sendInterfaceFlagsRange(PRONOUN_DROPDOWN_UID, 1, 3, OP1);

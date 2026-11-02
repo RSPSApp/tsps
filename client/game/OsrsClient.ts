@@ -4762,6 +4762,9 @@ export class OsrsClient {
             // Sync equipment inventory only for local player
             const isLocalPlayer = serverId === this.controlledPlayerServerId;
             const pa = this.buildPlayerAppearanceFromPayload(appearance, isLocalPlayer);
+            if (isLocalPlayer && this.widgetManager.getInterfaceParentContainerUid(679) !== undefined) {
+                this.playerDesign?.preserveDraftAppearance(pa);
+            }
             this.playerEcs.setAppearance(ecsIndex, pa);
             // Keep the dedicated icon array in lockstep with the decoded
             // appearance for remote players as well as the local player.

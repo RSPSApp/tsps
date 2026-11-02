@@ -1583,7 +1583,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   trailing league region is its `area`; a subject the name doesn't resolve is taken from the
   description: "Clean a Grimy Guam" is the guam leaf; a tree chopped is its logs; a boss "in" its
   own lair, a Combat Achievements monster, is just its kills: "Defeat Vorkath on Ungael 50 times";
-  a minigame completed is the monster its plugin credits, `credited` so a death of the same name
+  a minigame or group encounter completed is the monster its plugin credits (also the Moons of
+  Peril, the Royal Titans, the Wintertodt), `credited` so a death of the same name
   elsewhere is none: the Gauntlets' Hunllefs, the Fight Cave's TzTok-Jad, the Inferno's TzKal-Zuk,
   Tombs of Amascut's normal and expert raids) ("[[Oathplate chest|chest]]" is
   the Oathplate chest): "Equip a/an X" and the description's list ("either A, B or C" any one, "A,

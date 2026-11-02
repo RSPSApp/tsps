@@ -378,3 +378,10 @@ test("temple-trek: a real trek rewarded, by its companion's difficulty (Complete
   assert.ok(done(f, "complete-a-hard-temple-trek"));
   assert.ok(!done(f, "complete-an-easy-temple-trek"), "a trek of its own difficulty only");
 });
+
+test("a group encounter as its plugin credits it: a Wintertodt round subdued", (t) => {
+  const f = pactsCharacter(t);
+  require("../plugins/minigames/wintertodt/CombatAchievements.Wintertodt").subdued(f.player, 500, 1);
+  assert.ok(done(f, "defeat-the-wintertodt-1-time"));
+  assert.equal(f.player.getAttribute("league:task-kills")["defeat-the-wintertodt-10-times"], 1);
+});

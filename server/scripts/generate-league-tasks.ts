@@ -409,6 +409,9 @@ const MINIGAME_COMPLETIONS: Array<[RegExp, string[]]> = [
   [/^Complete the TzHaar Fight Cave in Mor Ul Rek(?: \d+ times)?$/i, ["TzTok-Jad"]],
   [/^Complete the Inferno in Mor Ul Rek(?: \d+ times)?$/i, ["TzKal-Zuk"]],
   [/^Complete Tombs of Amascut on normal or Expert(?: \d+ times)?$/i, ["Tombs of Amascut", "XM: Tombs of Amascut"]],
+  [/^Defeat the Moons of Peril(?: \d+ times)?$/i, ["Moons of Peril"]],
+  [/^Defeat the Royal Titans(?: \d+ times)?$/i, ["Royal Titans"]],
+  [/^Help the pyromancers defeat the Wintertodt(?: \d+ times)?$/i, ["Wintertodt"]],
 ];
 const CONDITION_IN = (text: string) => /\b(?:in less than|in under|or less|without|solo)\b/i.test(text);
 
@@ -553,6 +556,18 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   if ((match = /^Reach Total Level (\d+)$/.exec(name))) return { trigger: { kind: "total-level", level: Number(match[1]) } };
   if ((match = /^Reach Base Level (\d+)$/.exec(name))) return { trigger: { kind: "base-level", level: Number(match[1]) } };
   if ((match = /^Reach Combat Level (\d+)$/.exec(name))) return { trigger: { kind: "combat-level", level: Number(match[1]) } };
+  // A minigame or group encounter completed, as its plugin credits it (combat-achievements:kill): the
+  // Moons of Peril's chest, the Royal Titans, the Wintertodt, the Gauntlet's and the
+  // Corrupted Gauntlet's Hunllef, the TzHaar Fight Cave's TzTok-Jad, the Inferno's TzKal-Zuk, Tombs of
+  // Amascut's normal and expert raids. Their place only says where they are; a time or other
+  // condition is left out.
+  if (!CONDITION_IN(description)) {
+    const completion = MINIGAME_COMPLETIONS.find(([pattern]) => pattern.test(description.replace(/\.$/, "")));
+    if (completion) {
+      const times = / (\d+) times$/i.exec(description.replace(/\.$/, ""));
+      return { trigger: { kind: "kill", npcs: completion[1], count: times ? Number(times[1]) : 1, credited: true } };
+    }
+  }
   // "Defeat 25 Superior slayer monsters", "Defeat a Superior slayer monster": superiors killed.
   if ((match = /^Defeat (an?|\d+) Superior slayer monsters?\.?$/i.exec(description))) {
     return { trigger: { kind: "superior-kills", count: /^an?$/i.test(match[1]) ? 1 : Number(match[1]) } };
@@ -589,17 +604,6 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     const names = [...new Set([primary, ...accepted].filter((npc): npc is string => npc !== null))];
     if (!names.length) return { unmapped: name };
     return { trigger: area === null ? { kind: "kill", npcs: names, count } : { kind: "kill", npcs: names, count, area } };
-  }
-  // A minigame completed, as its plugin credits it (combat-achievements:kill): the Gauntlet's and the
-  // Corrupted Gauntlet's Hunllef, the TzHaar Fight Cave's TzTok-Jad, the Inferno's TzKal-Zuk, Tombs of
-  // Amascut's normal and expert raids. Their place only says where they are; a time or other
-  // condition is left out.
-  if (/^Complete /i.test(name) && !CONDITION_IN(description)) {
-    const completion = MINIGAME_COMPLETIONS.find(([pattern]) => pattern.test(description.replace(/\.$/, "")));
-    if (completion) {
-      const times = / (\d+) times$/i.exec(description.replace(/\.$/, ""));
-      return { trigger: { kind: "kill", npcs: completion[1], count: times ? Number(times[1]) : 1, credited: true } };
-    }
   }
   if ((match = /^Complete (?:the )?(.+)$/.exec(name))) {
     // "Complete the Observatory Quest" is the quest "Observatory Quest"; "Complete Gertrude's Cat quest" is "Gertrude's Cat";

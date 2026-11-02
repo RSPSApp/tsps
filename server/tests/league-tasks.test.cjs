@@ -191,8 +191,8 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     try { cacheNames.add(CacheDefinitions.getNpc(id)?.name); } catch { break; }
   }
   for (const name of npcNames) assert.ok(cacheNames.has(name), `a cache NPC is called "${name}"`);
-  const crediting = require("fs").readdirSync(path.join(__dirname, "../plugins/minigames"), { recursive: true })
-    .filter((file) => String(file).endsWith(".js")).map((file) => require("fs").readFileSync(path.join(__dirname, "../plugins/minigames", String(file)), "utf8"))
+  const crediting = ["minigames", "bosses"].flatMap((dir) => require("fs").readdirSync(path.join(__dirname, "../plugins", dir), { recursive: true })
+    .filter((file) => String(file).endsWith(".js")).map((file) => require("fs").readFileSync(path.join(__dirname, "../plugins", dir, String(file)), "utf8")))
     .filter((text) => text.includes("combat-achievements:kill")).join("\n");
   for (const name of creditedNames) assert.ok(crediting.includes(`"${name}"`), `a minigame credits "${name}"`);
 });
@@ -569,6 +569,10 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("complete-the-inferno-5-times"), { kind: "kill", npcs: ["TzKal-Zuk"], count: 5, credited: true });
   assert.deepEqual(trigger("complete-tombs-of-amascut").npcs, ["Tombs of Amascut", "XM: Tombs of Amascut"]);
   assert.equal(trigger("complete-the-corrupted-gauntlet-in-4-30"), undefined, "a time is a condition");
+
+  // Group encounters as their plugins credit them.
+  assert.deepEqual(trigger("defeat-the-moons-of-peril-25-times"), { kind: "kill", npcs: ["Moons of Peril"], count: 25, credited: true });
+  assert.equal(trigger("defeat-the-royal-titans-solo"), undefined, "without any other player joining is a condition");
 
   // Slayer, Temple Trekking and Pest Control completions.
   assert.deepEqual(trigger("complete-200-slayer-tasks"), { kind: "slayer-tasks", count: 200 });

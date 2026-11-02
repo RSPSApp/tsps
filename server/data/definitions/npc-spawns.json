@@ -1,4 +1,5 @@
 [
+  {"level":0,"name":"Friendly Forester","x":3096,"y":3238,"id":12119,"wanderRadius":0},
   {"level":0,"name":"Fishing spot","wanderRadius":0,"x":2694,"y":2706,"id":5234},
   {"level":0,"name":"Bird","x":2696,"y":2709,"id":5241},
   {"level":0,"name":"Bird","x":2713,"y":2697,"id":5241},

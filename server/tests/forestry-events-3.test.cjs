@@ -26,6 +26,9 @@ before(() => {
   const api = {
     core,
     persistAttribute() {},
+    onNpcDialogueVariant() {},
+    onNpcDialogueCondition() {},
+    onItemOnNpc() {},
     onObjectInteraction() {},
     onNpcInteraction: (name, actions) => {
       if (typeof name === 'function') (hooks.anyNpc ??= []).push(name);

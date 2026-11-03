@@ -185,3 +185,14 @@ test('One real Antos rescue transcript completes Ariadna and the quest at stage 
   drain(p, 300);
   assert.equal(h.quest.getStage(p), 24);
 });
+
+test('Shadows of Custodia start sends the captured message and scroll metadata', () => {
+  const h = harness(), p = player();
+  (h.events['quest:is-complete'] ??= []).push((event) => { event.complete = true; });
+  h.emit('npc-dialogue:hook', { player: p, hook: 'quest:shadows-of-custodia:start' });
+  assert.equal(h.quest.getStage(p), 2);
+  assert.ok(p.messages.includes("You've started a new quest: <col=0ab0ff>Shadows of Custodia</col>"));
+  assert.equal(h.quest.completionJingleId, 153);
+  assert.equal(h.quest.completionMessageColor, '0ab0ff');
+  assert.equal(h.quest.scrollItemId, 31081);
+});

@@ -721,7 +721,7 @@ function registerQuest(api, def) {
       }
       if (options.scroll !== false) player.getPacketSender().sendJingle(def.completionJingleId ?? QUEST_COMPLETE_JINGLE, 0);
       if (options.announce !== false) {
-        player.sendMessage(`Congratulations, you've completed a quest: <col=081190>${def.name}</col>`);
+        player.sendMessage(`Congratulations, you've completed a quest: <col=${def.completionMessageColor ?? "081190"}>${def.name}</col>`);
       }
       if (options.scroll !== false) showCompletedScroll(player, quest, points | 0);
       api.emitCustomEvent?.("quest:completed", { player, key: def.key, quest });

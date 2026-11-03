@@ -171,6 +171,7 @@ module.exports = function registerScrambledQuest(api) {
   const DRAGON_EGG_ITEM_ID = ItemIdentifiers.DRAGON_EGG;
   const JAGUAR_EGG_ITEM_ID = ItemIdentifiers.JAGUAR_EGG;
   const PET_EGG_ITEM_ID = ItemIdentifiers.EGG_4; // 30970
+  const SCRAMBLED_EGG_SCROLL_ITEM_ID = 30972; // SCRAMBLED_EGG_DUMMY, the completed-scroll icon (capture 3072)
   const ALANS_BONES_ITEM_ID = ItemIdentifiers.ALANS_BONES; // 30973
   const DAMIANA_LEAVES_ITEM_ID = ItemIdentifiers.DAMIANA_LEAVES; // 30977
   const DAMIANA_WATER_ITEM_ID = ItemIdentifiers.DAMIANA_WATER; // 30979
@@ -1345,14 +1346,16 @@ module.exports = function registerScrambledQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
+    completionJingleId: 154,
+    completionMessageColor: "0ab0ff",
     xpRewards: [
       { skillId: Skill.CONSTRUCTION.getIndex(), amount: 5000, label: "Construction" },
       { skillId: Skill.COOKING.getIndex(), amount: 5000, label: "Cooking" },
       { skillId: Skill.SMITHING.getIndex(), amount: 5000, label: "Smithing" },
     ],
-    scrollItemId: PET_EGG_ITEM_ID,
-    rewardItemLabel: "An egg (talk to the egg on the wall)",
-    otherRewards: ["Alan's bones can be picked up south of the temple"],
+    scrollItemId: SCRAMBLED_EGG_SCROLL_ITEM_ID,
+    rewardItemLabel: "Your very own egg",
+    otherRewards: [],
     buildJournal,
     onReward: grantReward,
   });

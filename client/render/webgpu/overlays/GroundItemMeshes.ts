@@ -272,8 +272,8 @@ export class GroundItemMeshes {
             }
         }
 
-        // Alpha batch switches pipeline; the main renderer already drew map/actor alpha, so
-        // ground-item alpha is drawn last with the alpha pipeline.
+        // Alpha batch switches pipeline; the main renderer already drew the maps' alpha, and
+        // draws the actors' alpha (loot beams, spot animations) after this.
         let alphaSet = false;
         for (const mesh of this.maps.values()) {
             if (mesh.alpha.ranges.length === 0) continue;

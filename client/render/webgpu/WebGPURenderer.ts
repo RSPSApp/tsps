@@ -1103,6 +1103,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
                     visible[i].drawAlpha(pass, roofPlaneLimit, this.frameScenery);
                 }
             }
+            this.overlays?.drawGroundItems(pass);
             this.actors?.drawAlpha(pass);
             this.overlays?.drawWorld(pass);
             this.editorOverlays.draw(pass, this.frameScenery);

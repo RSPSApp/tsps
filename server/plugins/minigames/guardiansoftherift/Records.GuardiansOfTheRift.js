@@ -48,33 +48,52 @@ function setPoints(player, elemental, catalytic) {
 /** Players already checked for a saved pearl balance this session. */
 const balanceChecked = new WeakSet();
 
-/** Gives `amount` of an item: the inventory if it fits, else the bank. */
+/**
+ * Gives up to `amount` of an item, the inventory first and then the bank, and returns how many
+ * each one took. A full bank refuses what it can't hold without saying so, so it is counted.
+ */
 function giveOrBank(player, itemId, amount) {
   const { Item, Bank } = Shared.core();
   const inventory = player.getInventory();
+  const held = inventory.getAmount(itemId);
   const fits = Math.min(amount, inventory.getAddableAmount(new Item(itemId, amount)));
   if (fits > 0) {
     inventory.adds(itemId, fits);
     inventory.refreshItems();
   }
-  if (amount > fits) player.getBank(Bank.getTabForItem(player, itemId)).add(new Item(itemId, amount - fits), false);
-  return amount > fits;
+  const given = { inventory: inventory.getAmount(itemId) - held, bank: 0 };
+  if (amount > given.inventory) {
+    const bank = player.getBank(Bank.getTabForItem(player, itemId));
+    const banked = bank.getAmount(itemId);
+    bank.add(new Item(itemId, amount - given.inventory), false);
+    given.bank = bank.getAmount(itemId) - banked;
+  }
+  return given;
 }
 
 /**
  * For a while pearls were a saved balance rather than the item (issue 1986 reverted it: they are
- * the abyssal_pearl item, as on live). A balance left from then comes back as pearls, once.
+ * the abyssal_pearl item, as on live). A balance left from then comes back as pearls. Whatever
+ * doesn't fit stays saved and is tried again at the next login.
  */
 function restoreSavedPearls(player) {
   if (!player || balanceChecked.has(player)) return 0;
   balanceChecked.add(player);
   const saved = number(player, PEARLS_ATTRIBUTE);
   if (saved <= 0) return 0;
-  player.setAttribute(PEARLS_ATTRIBUTE, 0);
-  const banked = giveOrBank(player, Shared.obj(Shared.ITEM.PEARL), saved);
-  player.sendMessage?.(`Your ${Shared.formatNumber(saved)} abyssal pearls have been returned to your ${banked ? "bank" : "inventory"}.`);
-  Shared.api().emitCustomEvent("persistence:save", { player, reason: "guardians-of-the-rift-pearl-restore" });
-  return saved;
+  const given = giveOrBank(player, Shared.obj(Shared.ITEM.PEARL), saved);
+  const returned = given.inventory + given.bank;
+  const waiting = saved - returned;
+  if (returned > 0) {
+    player.setAttribute(PEARLS_ATTRIBUTE, waiting);
+    const place = given.bank === 0 ? "inventory" : given.inventory === 0 ? "bank" : "inventory and bank";
+    player.sendMessage?.(`Your ${Shared.formatNumber(returned)} abyssal pearls have been returned to your ${place}.`);
+    Shared.api().emitCustomEvent("persistence:save", { player, reason: "guardians-of-the-rift-pearl-restore" });
+  }
+  if (waiting > 0) {
+    player.sendMessage?.(`${Shared.formatNumber(waiting)} abyssal pearls are waiting for you: make room in your inventory or bank and log in again.`);
+  }
+  return returned;
 }
 
 /** Abyssal pearls: the item in the inventory (Wiki: Felix and Cordelia take them from it). */

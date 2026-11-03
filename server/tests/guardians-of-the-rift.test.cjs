@@ -493,6 +493,52 @@ test('pearls are the abyssal pearl item; a balance saved before the revert comes
   assert.equal(hooks.currencies.has('ABYSSAL PEARLS'), false, 'no saved-balance currency any more');
 });
 
+test('a saved pearl balance with no room in the inventory or bank stays saved until the next login', () => {
+  const { Item } = PluginManager.getCoreApi();
+  const pearl = Shared.obj(Shared.ITEM.PEARL);
+  const AXE = 1351;
+  /** The real containers: the bank's refusal when it's full is what lost the pearls. */
+  const nativePlayer = (saved) => {
+    const player = new Player(null);
+    const messages = [];
+    const sender = new Proxy({ sendMessage: (text) => (messages.push(text), sender) }, { get: (target, key) => target[key] ?? (() => sender) });
+    player.getPacketSender = () => sender;
+    player.setAttribute(Records.PEARLS_ATTRIBUTE, saved);
+    return { player, messages };
+  };
+  const fill = (player, inventorySlots) => {
+    for (let i = 0; i < inventorySlots; i++) player.getInventory().add(new Item(AXE, 1), false);
+    const bank = player.getBank(0);
+    for (let id = 1; bank.getFreeSlots() > 0; id++) if (id !== pearl) bank.add(new Item(id, 1), false);
+  };
+  const saves = [];
+  const listener = (event) => saves.push(event);
+  (hooks.custom['persistence:save'] ??= []).push(listener);
+  try {
+    const full = nativePlayer(500);
+    fill(full.player, 28);
+    assert.equal(full.player.getInventory().getFreeSlots(), 0);
+    assert.equal(full.player.getBank(0).getFreeSlots(), 0);
+    Records.login({ player: full.player });
+    assert.equal(full.player.getInventory().getAmount(pearl) + full.player.getBank(0).getAmount(pearl), 0);
+    assert.equal(full.player.getAttribute(Records.PEARLS_ATTRIBUTE), 500, 'nothing delivered, nothing cleared');
+    assert.equal(saves.length, 0, 'no save of a cleared balance');
+    assert.ok(full.messages.includes('500 abyssal pearls are waiting for you: make room in your inventory or bank and log in again.'));
+    assert.ok(!full.messages.some((message) => message.includes('returned')));
+
+    // The next login, with one inventory slot free, delivers them.
+    const next = nativePlayer(full.player.getAttribute(Records.PEARLS_ATTRIBUTE));
+    fill(next.player, 27);
+    Records.login({ player: next.player });
+    assert.equal(next.player.getInventory().getAmount(pearl), 500);
+    assert.equal(next.player.getAttribute(Records.PEARLS_ATTRIBUTE), 0);
+    assert.equal(saves.length, 1);
+    assert.ok(next.messages.includes('Your 500 abyssal pearls have been returned to your inventory.'));
+  } finally {
+    hooks.custom['persistence:save'] = hooks.custom['persistence:save'].filter((handler) => handler !== listener);
+  }
+});
+
 test('spending pearls takes the item, and a short price changes nothing', () => {
   const player = fakePlayer();
   Records.addPearls(player, 500);

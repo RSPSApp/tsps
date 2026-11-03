@@ -5,6 +5,12 @@ const DESCENT_OF_DARKNESS = { multiplier: 1.3, minimum: 5, cap: Infinity };
 const HIT_COUNT = 2;
 const DRAIN = 55;
 const SPECIAL_ID = "dark_bow";
+const DRAGON_PROJECTILE = 1099;
+const SHADOW_PROJECTILE = 1101;
+const BROAD_SHADOW_PROJECTILE = 1102;
+const DRAGON_IMPACT = 1100;
+const SHADOW_IMPACT = 1103;
+const GRAPHIC_HEIGHT = 96;
 
 function isDragonArrow(player) {
   const { Ammunition } = core;
@@ -31,9 +37,8 @@ function rollDescent({ attacker, target, damage, accurate }) {
 }
 
 function buildDarkBowSpecialAttack(core) {
-  const { Ammunition, Animation, CombatFactory, CombatSpecial, CombatType, DamageFormulas, Equipment, Graphic, GraphicHeight, ItemIdentifiers, PendingHit, PluginManager, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds, WeaponProfiles } = core;
+  const { Ammunition, Animation, CombatFactory, CombatPosition, CombatSpecial, Graphic, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds, WeaponProfiles } = core;
   const ANIMATION = new Animation(426);
-  const GRAPHIC = new Graphic(1100, GraphicHeight.HIGH);
 
   class DarkBowCombatMethod extends RangedCombatMethod {
     hits(character, target) {
@@ -54,27 +59,35 @@ function buildDarkBowSpecialAttack(core) {
     }
 
     start(character, target) {
-      let player = character.getAsPlayer();
+      const player = character.getAsPlayer();
       CombatSpecial.drain(player, DRAIN);
       player.performAnimation(ANIMATION);
+      const ammo = player.getCombat().getAmmunition();
+      const launch = ammo.getDoubleStartGraphic();
+      if (launch) player.performGraphicInSlot(1, new Graphic(launch.getId(), 0, GRAPHIC_HEIGHT));
       // Descent of Dragons / Descent of Darkness (rsprox 273: 3731 then 3733 for dragon arrows).
       Sounds.sendSound(character, Sound.DARK_BOW_DOUBLEFIRE);
-      Sounds.sendSound(character, isDragonArrow(player) ? Sound.DARK_BOW_DRAGON_SPECIAL : Sound.DARK_BOW_SHADOW_SPECIAL);
-      let projectileId = 1099;
-      if (!isDragonArrow(player)) {
-        projectileId = 1101;
+      const dragon = isDragonArrow(player);
+      Sounds.sendSound(character, dragon ? Sound.DARK_BOW_DRAGON_SPECIAL : Sound.DARK_BOW_SHADOW_SPECIAL);
+      const projectileId = dragon ? DRAGON_PROJECTILE : ammo === Ammunition.BROAD_ARROW ? BROAD_SHADOW_PROJECTILE : SHADOW_PROJECTILE;
+      const distance = CombatPosition.distance(character, target);
+      // RSProx 273/2510: the visible arrow travels inside each special effect.
+      const flights = [
+        { end: 46 + (target.isNpc() ? 5 : 6) * distance, angle: 5 },
+        { end: 55 + 10 * distance, angle: 25 },
+      ];
+      for (const { end, angle } of flights) {
+        for (const id of [projectileId, ammo.getProjectileId()]) {
+          Projectile.createProjectile(player, target, id, 41, end, 40, 36)
+            .withAngle(angle).withProgress(11).sendProjectile();
+        }
       }
-      Projectile.createProjectile(player, target, projectileId, 40, 70, 43, 31).sendProjectile();
-      Projectile.createProjectile(character, target, projectileId, 33, 74, 48, 31).sendProjectile();
+      target.performGraphic(new Graphic(dragon ? DRAGON_IMPACT : SHADOW_IMPACT, flights[1].end, GRAPHIC_HEIGHT));
       CombatFactory.decrementAmmo(player, target.getLocation(), HIT_COUNT);
     }
 
     attackSpeed(character) {
       return super.attackSpeed(character) + 1;
-    }
-
-    handleAfterHitEffects(hit) {
-      hit.getTarget().performGraphic(GRAPHIC);
     }
   }
 

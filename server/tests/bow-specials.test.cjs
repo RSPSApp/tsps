@@ -256,6 +256,75 @@ test("Descent leaves ordinary dark bow shots alone and drains 55% once per shot"
   assert.deepEqual(drains, [55]);
 });
 
+test("Descent draws the equipped arrows inside both special projectiles and uses its matching impact", () => {
+  const { Location } = core;
+  const method = CombatSpecial.getById("dark_bow").getCombatMethod();
+  for (const [ammo, effect, launchId, impactId] of [
+    [Ammunition.DRAGON_ARROW, 1099, 1111, 1100],
+    [Ammunition.SEEKING_DRAGON_ARROW, 1099, 1111, 1100],
+    [Ammunition.RUNE_ARROW, 1101, 1109, 1103],
+    [Ammunition.BROAD_ARROW, 1102, 1112, 1103],
+  ]) {
+    projectiles.length = 0;
+    const attacker = fakePlayer({ weapon: I.DARK_BOW, rangedWeapon: RangedWeapon.DARK_BOW, special: "dark_bow", ammo });
+    attacker.getLocation = () => new Location(3200, 3200, 0);
+    const impacts = [];
+    const victim = { getLocation: () => new Location(3200, 3209, 0), isNpc: () => true, performGraphic: (gfx) => impacts.push(gfx) };
+    method.start(attacker, victim);
+    assert.deepEqual(attacker.state.slotGraphics.map(({ slot, graphic }) => [slot, graphic.getId(), graphic.getDelay(), graphic.getHeight()]), [[1, launchId, 0, 96]]);
+    assert.deepEqual(projectiles.map(({ args, angle, progress }) => [args[2], args[3], args[4], args[5], args[6], angle, progress]), [
+      [effect, 41, 91, 40, 36, 5, 11],
+      [ammo.getProjectileId(), 41, 91, 40, 36, 5, 11],
+      [effect, 41, 145, 40, 36, 25, 11],
+      [ammo.getProjectileId(), 41, 145, 40, 36, 25, 11],
+    ], "dragon fields from RSProx 273 tick497; shadow variants use their cache effect and equipped arrow");
+    assert.deepEqual(impacts.map((gfx) => [gfx.getId(), gfx.getDelay(), gfx.getHeight()]), [[impactId, 145, 96]], "one impact is sent at firing with the second arrow's delay");
+    method.handleAfterHitEffects({ getTarget: () => victim });
+    method.handleAfterHitEffects({ getTarget: () => victim });
+    assert.equal(impacts.length, 1, "hits do not replace the delayed impact or reread changed ammunition");
+  }
+});
+
+test("Descent serializes both captured player-target flight arcs at different distances", () => {
+  const { Location } = core;
+  const { PacketSender } = require("../dist/net/packet/PacketSender");
+  for (const [distance, ends] of [[3, [64, 85]], [4, [70, 95]]]) {
+    projectiles.length = 0;
+    const attacker = fakePlayer({ weapon: I.DARK_BOW, rangedWeapon: RangedWeapon.DARK_BOW, special: "dark_bow", ammo: Ammunition.DRAGON_ARROW });
+    attacker.getLocation = () => new Location(3200, 3200, 0);
+    const victim = { getLocation: () => new Location(3200 + distance, 3200, 0), isNpc: () => false, performGraphic() {} };
+    CombatSpecial.getById("dark_bow").getCombatMethod().start(attacker, victim);
+    const sent = [];
+    const sender = new PacketSender({ getSession: () => ({ sendClientPacket: (packet) => { sent.push(packet); return true; } }) });
+    for (const { args, angle, progress } of projectiles) {
+      sender.sendProjectile(attacker.getLocation(), victim.getLocation(), 0, args[4], args[2], args[5], args[6], null, args[3], angle, progress);
+    }
+    assert.equal(sent.length, 4);
+    for (let i = 0; i < sent.length; i++) {
+      const packet = sent[i].subarray(sent[i].length - 29);
+      assert.equal(packet.readUInt16BE(7), 160, "rev229 source height40 in current packet units");
+      assert.equal(packet.readUInt16BE(14), 144, "rev229 target height36 in current packet units");
+      assert.equal(packet[16], i < 2 ? 5 : 25);
+      assert.equal(packet.readUInt16BE(17), 11);
+      assert.equal(packet.readUInt16BE(19), 41);
+      assert.equal(packet.readUInt16BE(21), ends[i < 2 ? 0 : 1], "RSProx2510 ticks456/683");
+    }
+  }
+});
+
+test("Descent measures its flights in combat coordinates across boat decks", (t) => {
+  const { Location, CombatPosition } = core;
+  t.mock.method(CombatPosition, "distance", () => 4);
+  projectiles.length = 0;
+  const attacker = fakePlayer({ weapon: I.DARK_BOW, rangedWeapon: RangedWeapon.DARK_BOW, special: "dark_bow", ammo: Ammunition.DRAGON_ARROW });
+  attacker.getLocation = () => new Location(16000, 16000, 0);
+  const impacts = [];
+  const victim = { getLocation: () => new Location(3200, 3200, 0), isNpc: () => true, performGraphic: (gfx) => impacts.push(gfx) };
+  CombatSpecial.getById("dark_bow").getCombatMethod().start(attacker, victim);
+  assert.deepEqual(projectiles.map(({ args }) => args[4]), [66, 66, 95, 95], "world range determines the flight, not distant local deck tiles");
+  assert.equal(impacts[0].getDelay(), 95);
+});
+
 test("Concentrated Shot costs 65%, drained once, with 25% more accuracy and damage", () => {
   const shot = CombatSpecial.getById("ballista");
   assert.equal(shot.getDrainAmount(), 65);

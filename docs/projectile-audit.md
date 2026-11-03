@@ -116,6 +116,40 @@ NPC/player targets. Player-target alignment applies the captured projectile arri
 existing scheduler; the recordings above only show NPC targets. No live gameplay, browser
 rendering or PvP/PID timing was tested.
 
+## Dark bow Descent graphics (issue #2022)
+
+Descent omitted the equipped arrows' draw-back graphic and visible arrow projectiles,
+used flat flights for both special effects, and played the dragon impact after each
+hit even when firing ordinary arrows. The special now sends the equipped ammunition's
+double-arrow launch in actor slot 1 at height 96, pairs each special effect with its
+visible arrow, and sends one matching impact at the second arrow's landing delay.
+
+The [OSRS Wiki](https://oldschool.runescape.wiki/w/Dark_bow#Special_attack) describes
+dragon heads with dragon/seeking dragon arrows and shrouded arrows otherwise. Live
+[RSProx 273](https://rsprox.net/download/273), revision 229, tick 497, records the
+dragon launch `1111`, paired projectiles `1099`/`1120`, and impact `1100` delayed to
+cycle 145 at height 96. At nine tiles the low flight runs 41→91 and the high flight
+41→145, with angles 5/25, progress 11 and projectile heights 40/36. Revision 229
+projectiles quantize those heights to multiples of four; the current packet sends
+160/144 for the same measurements.
+
+[RSProx 2510](https://rsprox.net/download/2510), revision 229, ticks 456/683/940,
+repeats both projectile pairs against players. The first flight ends at `46 + 6 × tiles`
+(64 at three tiles, 70 at four), and the second at `55 + 10 × tiles` (85/95).
+The NPC recording's first flight matches `46 + 5 × tiles`; the target-specific
+distance formula is inferred from those samples rather than a capture at every range.
+
+The active revision-241 cache confirms `darkbow_dragon_head_flying_projanim` 1099,
+`darkbow_dragon_head_flying_impact_anim` 1100, `darkbow_generic_smoke_arrow_flight` 1101,
+`darkbow_broadarrow_smoke_arrow_flight` 1102, and `darkbow_smoke_arrow_impact` 1103.
+Ordinary/broad arrows use those smoke effects and their own visible arrow. No captured
+non-dragon Descent was found, so applying the same trajectories, launch height and
+impact delay to those variants is an inference from the shared weapon and cache names.
+
+Offline tests cover dragon, seeking dragon, rune and broad ammunition, packet fields at
+the captured distances and the delayed impact remaining unchanged after hits. No live
+gameplay or browser rendering was checked. Existing hit scheduling is unchanged.
+
 ## Verification
 
 ```

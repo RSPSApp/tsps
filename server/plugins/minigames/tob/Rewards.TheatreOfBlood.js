@@ -25,7 +25,10 @@
  * Estimates (the Wiki gives no formula): each death costs a fifth of a player's share - of the
  * unique chance (averaged over the team), of the unique weighting (with damage dealt), of the
  * common amounts (averaged) and of their tertiary odds; Rewards Chest varbit values (0 empty,
- * 1 loot waiting); loot left behind is kept on the player rather than lost on logout.
+ * 1 loot waiting); loot left behind is kept on the player rather than lost on logout, and a
+ * later raid adds its roll to it instead of replacing it (the Wiki only says logout loses it).
+ * Collection log: opening the loot interface logs what is in it (as the Tombs' sarcophagus
+ * does); Lil' Zik is logged through the pet delivery.
  */
 
 const Shared = require("./Shared.TheatreOfBlood");
@@ -183,8 +186,51 @@ function lootOf(player) {
 }
 
 function setLoot(player, loot) {
+  // A stack that has been partly taken cannot still have more logged than it now holds;
+  // otherwise the next raid's extra copies of it would be under-counted.
+  for (const entry of loot) {
+    if (entry.loggedAmount !== undefined) entry.loggedAmount = Math.min(entry.loggedAmount, entry.amount);
+  }
   player.setAttribute(ATTR_LOOT, loot.length > 0 ? loot : null);
   player.getPacketSender().sendVarbit(CLAIM_CHEST.varbit, loot.length > 0 ? 1 : 0);
+}
+
+/**
+ * A new raid's roll added to whatever is still unclaimed. The Wiki only says unclaimed loot is
+ * lost on logging out, and says nothing about starting another raid, so it is never dropped
+ * here. The same item merges into one stack; `loggedAmount` keeps how much of it the collection
+ * log has already seen, so a later roll of the same item is still logged.
+ */
+function mergeLoot(existing, rolled) {
+  const merged = existing.map((entry) => ({ ...entry }));
+  for (const entry of rolled) {
+    const same = merged.find((other) => other.id === entry.id);
+    if (same) same.amount += entry.amount;
+    else merged.push({ ...entry });
+  }
+  return merged;
+}
+
+/**
+ * The chest's loot reaches the collection log when the interface is opened, as the Tombs' loot
+ * does. Lil' Zik is left to the pet delivery (`npc-drops:roll`), which already logs it, so it
+ * is not counted twice. `loggedAmount` is marked, so reopening a part-claimed chest adds
+ * nothing while a later raid's extra copies still count.
+ */
+function logLoot(player) {
+  const loot = lootOf(player);
+  let changed = false;
+  const { LIL_ZIK } = Shared.core().ItemIdentifiers;
+  for (const entry of loot) {
+    const seen = Math.min(entry.amount, Number(entry.loggedAmount) || 0);
+    const amount = entry.amount - seen;
+    if (amount > 0 && entry.id !== LIL_ZIK) Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId: entry.id, amount });
+    if (entry.loggedAmount !== entry.amount) {
+      entry.loggedAmount = entry.amount;
+      changed = true;
+    }
+  }
+  if (changed) player.setAttribute(ATTR_LOOT, loot);
 }
 
 // ------------------------------------------------------------------ the vault
@@ -196,7 +242,8 @@ class RewardsRoom extends Raid.Room {
     this.opened = new Set();
     this.chests = [];
     const { loot, uniqueWinner, uniqueId } = rollRaid(raid);
-    for (const [player, items] of loot) setLoot(player, items);
+    // Never erase an earlier raid's unclaimed loot (see mergeLoot).
+    for (const [player, items] of loot) setLoot(player, mergeLoot(lootOf(player), items));
     this.uniqueSlot = uniqueWinner ? this.slots.get(uniqueWinner) : -1;
     raid.players.forEach((player, slot) => {
       const chest = CHESTS[slot];
@@ -256,6 +303,7 @@ class RewardsRoom extends Raid.Room {
 function openLoot(player) {
   // Includes persisted rewards recovered outside the Theatre, not only this raid's chest.
   claimPetLoot(player);
+  logLoot(player);
   const loot = lootOf(player);
   if (loot.length === 0) {
     player.sendMessage("Your reward chest is empty.");
@@ -429,4 +477,4 @@ module.exports = function registerTheatreRewards(api) {
   api.onInterfaceActionButton(ITEMS_UID, clickLootItem);
 };
 
-Object.assign(module.exports, { RewardsRoom, rollRaid, standing, lootOf, setLoot, CHESTS, ATTR_LOOT, LOOT_BY_MODE });
+Object.assign(module.exports, { RewardsRoom, rollRaid, standing, lootOf, setLoot, mergeLoot, logLoot, openLoot, CHESTS, ATTR_LOOT, LOOT_BY_MODE });

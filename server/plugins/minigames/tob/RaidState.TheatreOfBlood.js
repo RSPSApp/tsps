@@ -725,6 +725,9 @@ class Raid {
     member.deaths++;
     member.roomStats(room.key).deaths++;
     member.deathTile = Shared.tileOf(player);
+    // A room can take something off the dead before the jail: Verzik's Dawnbringer is dropped
+    // for the rest of the party (Wiki: "drop instantly on death so other players can use it").
+    room.onMemberDied?.(player, member);
     this.tellDeath(player);
     Shared.fade(player, 255, "If your party survives the wave, you will respawn.");
     this.jail(player, room);
@@ -785,12 +788,28 @@ class Raid {
     player.sendMessage("You feel refreshed as your health is replenished.");
   }
 
-  /** The raid fails once every member is jailed (or away after dying). */
+  /**
+   * Members actually in the current fight: those who crossed its barrier and those already dead
+   * in it. A party member who never entered, or was left behind at the barrier's "they will be
+   * abandoned", has no business keeping a wipe alive.
+   */
+  fightMembers() {
+    const room = this.room;
+    if (!room) return [];
+    return this.players.filter((player) => {
+      const member = this.member(player);
+      return member.jailed || (member.roomKey === room.key && member.inFight);
+    });
+  }
+
+  /** The raid fails once every member in the fight is jailed. */
   checkWipe() {
-    if (this.over || this.players.length === 0) return;
-    if (this.players.some((player) => !this.member(player).jailed)) return;
+    if (this.over) return;
+    const inFight = this.fightMembers();
+    if (inFight.length === 0 || inFight.some((player) => !this.member(player).jailed)) return;
     Shared.later(this, WIPE_DELAY, () => {
-      if (this.over || !this.players.every((player) => this.member(player).jailed)) return;
+      const waiting = this.fightMembers();
+      if (this.over || waiting.length === 0 || waiting.some((player) => !this.member(player).jailed)) return;
       if (this.isEntry) this.retryRoom();
       else this.fail();
     });
@@ -806,6 +825,8 @@ class Raid {
     if (!room) return;
     const rebuilt = this.buildRoom(room.key);
     for (const player of this.players) {
+      // Someone who never reached this room stays where they are instead of being pulled in.
+      if (this.member(player).roomKey !== room.key) continue;
       this.release(player, rebuilt);
       this.restore(player);
       this.arrive(player, rebuilt);
@@ -819,8 +840,12 @@ class Raid {
     this.failed = true;
     const Retrieval = require("./Retrieval.TheatreOfBlood");
     for (const player of [...this.players]) {
-      Retrieval.storeAfterWipe(player, { free: this.isEntry });
-      player.sendMessage("A magical chest has retrieved some of your items. You can collect them from it outside the Theatre of Blood.");
+      // Only the dead have items to retrieve. A member who never joined the fight keeps
+      // theirs: a wipe in a room they aren't in must not take anything off them.
+      if (this.member(player).jailed) {
+        Retrieval.storeAfterWipe(player, { free: this.isEntry });
+        player.sendMessage("A magical chest has retrieved some of your items. You can collect them from it outside the Theatre of Blood.");
+      }
       this.leave(player, "Your party has failed.", { heal: true });
     }
   }
@@ -990,6 +1015,11 @@ function styleMethod(style) {
  * leaves only an onion. Performance here is a player's share of the damage dealt in those two
  * rooms against the team's average, a band lower per death (an estimate: the Wiki gives the
  * bands, not how they're judged).
+ *
+ * Hard Mode's chest gives fewer points (Wiki, "Theatre of Blood/Hard Mode": "they give less
+ * points than normal mode - assuming no deaths before or during Sotetseg, the player will
+ * usually have an average of 15 points, though the highest is 18"). A band lower is our fit to
+ * that line, since the Wiki gives no rule (estimate).
  */
 const SUPPLY_BANDS = [[6, 9], [8, 11], [10, 13]];
 const SUPPLY_ROOMS = { BLOAT: ["MAIDEN", "BLOAT"], SOTETSEG: ["NYLOCAS", "SOTETSEG"] };
@@ -1000,6 +1030,7 @@ function supplyGrade(raid, player, keys) {
   const share = average > 0 ? damageOf(player) / average : 1;
   let grade = share >= 1.25 ? 2 : share <= 0.75 ? 0 : 1;
   for (const key of keys) grade -= raid.member(player).roomStats(key).deaths;
+  if (raid.isHard) grade--;
   return Math.max(0, grade);
 }
 

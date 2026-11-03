@@ -4,7 +4,7 @@ import type { ObjectSpawn } from "./hostProtocol/objectSpawnsMessage";
 export const LOC_SHAPE_NORMAL = 10;
 export const LOC_SHAPE_FLOOR_DECORATION = 22;
 
-export type EditModeTool = "select" | "place" | "delete" | "terrain" | "path" | "wall";
+export type EditModeTool = "select" | "place" | "delete" | "terrain" | "path" | "wall" | "fill";
 
 /** Reference editor fallback for a dirt path; overlay 2 is water in this cache. */
 export const DEFAULT_PATH_OVERLAY_ID = 1;
@@ -70,6 +70,13 @@ export interface EditModeTile {
     tileX: number;
     tileY: number;
     plane: number;
+}
+
+/** One region's floor overlays on every plane, indexed (plane * 64 + x) * 64 + y; overlay 0 is none. */
+export interface EditModeRegionOverlays {
+    overlays: Uint16Array;
+    shapes: Uint8Array;
+    rotations: Uint8Array;
 }
 
 export interface EditModeBuildingProfile {
@@ -276,6 +283,8 @@ export interface EditModeHost {
     /** Samples terrain at an exact tile vertex; undefined when its map is unavailable. */
     getTerrainOverlay?(tile: EditModeTile): number | undefined;
     getTerrainHeight?(tile: EditModeTile): number | undefined;
+    /** Overlay, shape and rotation of every tile in a region with the edits applied; undefined when it is not loaded. */
+    getRegionOverlays?(regionId: number, edits: readonly EditModeEdit[]): EditModeRegionOverlays | undefined;
     /** Rebuilds edited map squares from their persisted base data. */
     refreshEditedRegions?(regionIds: readonly number[], edits: readonly EditModeEdit[]): void;
     /** Pulls server-side region replacements and object spawns into the scene. */

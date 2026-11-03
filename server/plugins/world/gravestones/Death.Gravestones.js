@@ -31,6 +31,10 @@ function makesGrave(player, killer) {
   return Common.ironmanMode(player) !== "ultimate";
 }
 
+function queryMakesGrave(query) {
+  query.makesGrave = !query.playerKill && makesGrave(query.player, null);
+}
+
 function takeDeathDrops(event) {
   const { player, killer, location } = event;
   if (!makesGrave(player, killer)) return;
@@ -56,6 +60,7 @@ function takeDeathDrops(event) {
 function attach(api) {
   Common.bind(api);
   api.onPlayerDeathDrops(takeDeathDrops);
+  api.onCustomEvent("gravestones:makes-grave", queryMakesGrave);
 }
 
 module.exports = { attach, makesGrave };

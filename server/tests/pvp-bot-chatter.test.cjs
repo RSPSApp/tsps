@@ -585,3 +585,46 @@ test('NPC fights, dead bots, and teleporting bots do not produce PvP chatter', t
   h.process(bot);
   assert.deepEqual(bot.messages, []);
 });
+
+for (const [name, botDamage, humanDamage, otherDamage, canEngage, taunts] of [
+  ['bot keeps highest-damage credit', 80, 20, 0, true, []],
+  ['human earns highest-damage credit', 20, 80, 0, true, ['You stole my kill!']],
+  ['equal damage keeps the original bot credit', 20, 20, 0, true, []],
+  ['a different human receives credit', 10, 20, 80, true, []],
+  ['credited human cannot be engaged', 20, 80, 0, false, []],
+]) {
+  test(`stolen-kill reaction: ${name}`, t => {
+    const { Player } = require('../dist/game/entity/impl/player/Player');
+    const { Location } = require('../dist/game/model/Location');
+    const { Wilderness } = require('../dist/game/content/wilderness/Wilderness');
+    const { AvengeOpponentPolicy } = require('../plugins/bots/behaviours/policies/AvengeOpponentPolicy.PlayerBots');
+    const player = (username, bot = false, x = 3200) => {
+      const who = new Player(null, new Location(x, 3600, 0));
+      who.setUsername(username); who.setPlayerBot(bot); who.setRegistered(true);
+      return who;
+    };
+    const bot = player('bot', true), human = player('human'), victim = player('victim', true);
+    const other = player('other-human', false, 3220);
+    assert.equal(Wilderness.isIn(victim), true);
+    const combat = victim.getCombat();
+    combat.addDamage(bot, botDamage); combat.addDamage(human, humanDamage);
+    if (otherDamage) combat.addDamage(other, otherDamage);
+    // PlayerDeathTask snapshots contributions before clearing this victim's map.
+    victim.__recentDeathDamagerEntries = combat.getRecentDamagerEntries();
+    const killer = combat.getKiller(true);
+    assert.equal(killer, otherDamage ? other : botDamage >= humanDamage ? bot : human);
+    assert.deepEqual(combat.getRecentDamagerEntries(), []);
+    const state = { pvp: {}, autonomy: { allowedAutonomousModes: ['pvp'] } };
+    const policy = new AvengeOpponentPolicy({
+      botStatesByName: new Map([[bot.getUsername(), state]]),
+      api: { getAreaManager: () => ({}), getCombatFactory: () => ({}) },
+    });
+    const engage = t.mock.method(policy, 'engageImmediately', () => canEngage);
+    const lines = [];
+    t.mock.method(bot, 'forceChat', line => lines.push(line));
+    policy.handle({ killer, victim, nowMs: 1000 });
+    assert.equal(engage.mock.callCount(), 1, 'the same human contribution still triggers the reaction');
+    assert.deepEqual(engage.mock.calls[0].arguments, [bot, state, human, 1000]);
+    assert.deepEqual(lines, taunts);
+  });
+}

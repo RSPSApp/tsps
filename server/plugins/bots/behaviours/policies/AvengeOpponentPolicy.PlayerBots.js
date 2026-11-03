@@ -224,7 +224,7 @@ class AvengeOpponentPolicy {
         Number(this.config.pjObserveDistanceTiles ?? 12)
       );
       if (target) {
-        if (this.engageImmediately(bot, state, target, nowMs)) {
+        if (this.engageImmediately(bot, state, target, nowMs) && target === killer) {
           bot.forceChat?.("You stole my kill!");
         }
       }

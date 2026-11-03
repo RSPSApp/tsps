@@ -89,7 +89,11 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // uniquely named open partner; keep their IDs while swinging the panels.
     O.DOOR_99, O.GATE_57,
     // The Champions' Guild door (1805): its id+1 is an unrelated nameless loc.
-    O.DOOR_45]);
+    O.DOOR_45,
+    // Holy Grail: Merlin's workshop door in Camelot (24, merlinworkshop) and the Draynor Manor
+    // whistle-room door (22, whistledoor) are Open-only; their id+1 are a clock spindle and the
+    // sacks, and their same-model Close locs (1536, none for 22) belong to other doors.
+    O.DOOR_3, O.DOOR_4]);
   // Single doors the pairing below can't find: the open variant is not closedId + 1 (e.g. Large
   // door 1517 -> 1520, same models), or it has no "Close" (DOOR_181, the open Keldagrim door on
   // the way to the Blast Furnace, shares DOOR_180's model but offers no option). Witch's House's

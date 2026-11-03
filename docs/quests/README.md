@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](../../server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-191 quests · ✅ passed: 27 · ⚠️ passed with issues: 18 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 17 · untested: 120
+191 quests · ✅ passed: 27 · ⚠️ passed with issues: 19 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 17 · untested: 119
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -81,7 +81,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Hazeel Cult](hazeel-cult/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
 | Heroes' Quest | untested |  |  |  |  |
 | [His Faithful Servants](his-faithful-servants/README.md) | untested |  |  |  |  |
-| Holy Grail | untested |  |  |  |  |
+| [Holy Grail](holy-grail/README.md) | ⚠️ passed with issues | 2026-11-02 | agent | claude-opus-5-5 | 5 |
 | [Horror from the Deep](horror-from-the-deep/README.md) | 🔄 in progress |  | agent |  |  |
 | Icthlarin's Little Helper | untested |  |  |  |  |
 | Imp Catcher | untested |  |  |  |  |

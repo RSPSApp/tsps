@@ -94,9 +94,12 @@ function tileOn(line, along) {
 }
 
 /**
- * A crossing from the player's side: `approach` is where the click walks the player to, `path`
- * the tiles they are then carried over (the rope starts on the platform's edge and walks its
- * first tile, the bars end on the far platform; rsprox 1735, 1863).
+ * A crossing from the player's side: `approach` is where the obstacle starts, `path` the tiles
+ * the player is then carried over (the rope starts on the platform's edge and walks its first
+ * tile, the bars end on the far platform; rsprox 1735, 1863). `entry`, when given, is where a
+ * click walks the player to: the bars' first tile is blocked, so the player walks to the platform
+ * beside it and is stepped onto it (rsprox 1735 1251-1252: 2782,9547, then a forced step onto
+ * 2781,9546).
  */
 function crossing(line, player) {
   const pos = player.getLocation();
@@ -116,7 +119,7 @@ function crossing(line, player) {
     return { dir, approach: tileOn(line, first - dir), path: [tileOn(line, first), ...path] };
   }
   if (line.kind === "MONKEY_BARS") {
-    return { dir, approach: tileOn(line, first), path: [...path, tileOn(line, first + dir * 8)] };
+    return { dir, approach: tileOn(line, first), entry: tileOn(line, first - dir), path: [...path, tileOn(line, first + dir * 8)] };
   }
   return { dir, approach: tileOn(line, first), path };
 }
@@ -314,7 +317,8 @@ function useObstacle(event) {
 
 /**
  * Clicks from far away walk to the obstacle's approach tile on the player's side: the near end
- * of its gap (the rope: the platform's edge before it). The rope swing hangs over a gap nobody
+ * of its gap (the rope: the platform's edge before it; the bars: the platform beside their first
+ * tile, which can't be walked onto). The rope swing hangs over a gap nobody
  * can stand in, so it is walked to two tiles before the rope, where the captures show players
  * arriving.
  */
@@ -331,7 +335,8 @@ function routeToObstacle(event) {
     event.destination = { x: at.getX(), y: at.getY(), z: at.getZ() };
     return;
   }
-  const [x, y] = crossing(line, event.player).approach;
+  const route = crossing(line, event.player);
+  const [x, y] = route.entry ?? route.approach;
   event.destination = { x, y, z: at.getZ() };
 }
 

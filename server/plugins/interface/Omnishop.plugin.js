@@ -10,8 +10,10 @@
  * - "omnishop:open" { player, shop } opens a shop by its DB row name (`mixology_rewards`).
  * - "omnishop:currency" { player, shop, currency, itemId, balance, set }: a currency's owner
  *   answers with `balance` and a `set(value)` function. A currency with no obj has no other
- *   source; one with an obj is that item in the inventory unless its owner claims it. A mixed wallet can supply `inventoryCost(amount)`:
- *   the number of `itemId` removed from inventory when that much currency is spent.
+ *   source; one with an obj is that item in the inventory unless its owner claims it. A mixed
+ *   wallet can supply `inventoryCost(amount)`: the number of `itemId` removed from inventory
+ *   when that much currency is spent, and `refundItemId`: the inventory item a refund is paid
+ *   in, so a sale checks there is room for it.
  * - "omnishop:describe" { player, shop, stock, description }: the info panel's text, which the
  *   cache doesn't carry.
  * - "omnishop:can-buy" { player, shop, stock, itemId, cancel, unlock }: before each unit is
@@ -19,6 +21,9 @@
  *   inventory space.
  * - "omnishop:purchase" { player, shop, stock, itemId, handled }: once a unit is paid for;
  *   `handled` means the owner gave something else (an unlock), so no item is handed over.
+ * - "omnishop:units" { player, shop, stock, single }: a transaction-multiplier-0 row buys one
+ *   unit an order; its owner sets `single` false where live buys the clicked amount (the
+ *   Agility Arena Store's Agility XP, rsprox 75, 1863, 4308).
  * - "omnishop:can-sell" { player, shop, stock, itemId, cancel }: the owner can refuse a sale;
  *   the same check controls whether the side panel offers Sell.
  *
@@ -199,6 +204,7 @@ function wallet(player, shop, currency) {
     return {
       balance: Number(request.balance) || 0, set: request.set,
       paymentItemId: obj, inventoryCost: request.inventoryCost,
+      refundItemId: Number.isInteger(request.refundItemId) && request.refundItemId > 0 ? request.refundItemId : -1,
     };
   }
   if (obj > 0) {
@@ -329,8 +335,15 @@ function buyOne(player, shop, entry) {
   return true;
 }
 
+function singleUnit(player, shop, entry) {
+  const request = { player, shop: shop.name, stock: cache().getDbRowName(entry.row), single: true };
+  pluginApi.emitCustomEvent("omnishop:units", request);
+  return request.single !== false;
+}
+
 function buy(player, shop, entry, quantity) {
-  const units = entry.single ? 1 : entry.maxPurchase > 0 ? Math.min(quantity, entry.maxPurchase) : quantity;
+  const units = entry.single && singleUnit(player, shop, entry) ? 1
+    : entry.maxPurchase > 0 ? Math.min(quantity, entry.maxPurchase) : quantity;
   for (let unit = 0; unit < units; unit++) if (!buyOne(player, shop, entry)) break;
   pluginApi.emitCustomEvent("persistence:save", { player, reason: "omnishop" });
 }
@@ -421,11 +434,13 @@ function sell(player, shop, slot, quantity) {
     preview.deleteAtSlot(slot, 1, false);
     let fits = true;
     for (const { cost, wallet: held } of payments) {
-      if (!held || (held.itemId > 0 && preview.getAddableAmount(new core.Item(held.itemId, cost.refund)) < cost.refund)) {
+      // A refund paid into the inventory needs room there: the currency's item, or what a custom wallet pays in.
+      const refundId = held ? (held.itemId > 0 ? held.itemId : held.refundItemId ?? -1) : -1;
+      if (!held || (refundId > 0 && preview.getAddableAmount(new core.Item(refundId, cost.refund)) < cost.refund)) {
         fits = false;
         break;
       }
-      if (held.itemId > 0) preview.add(new core.Item(held.itemId, cost.refund), false);
+      if (refundId > 0) preview.add(new core.Item(refundId, cost.refund), false);
     }
     if (!fits) {
       player.sendMessage(MESSAGE.NO_SPACE);

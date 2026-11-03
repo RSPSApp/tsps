@@ -24,6 +24,7 @@ const GemBag = require("../plugins/items/storage/GemBag.StorageItems");
 const FishBarrel = require("../plugins/items/storage/FishBarrel.StorageItems");
 const LogBasket = require("../plugins/items/storage/LogBasket.StorageItems");
 const TackleBox = require("../plugins/items/storage/TackleBox.StorageItems");
+const ForestryKit = require("../plugins/items/storage/ForestryKit.StorageItems");
 const Smithing = require("../plugins/skills/Smithing.plugin");
 const Superheat = require("../plugins/skills/smithing/Superheat.Smithing");
 
@@ -361,6 +362,89 @@ test("the tackle box opens as captured, stores only tackle, and gives up bait bu
   option(player, box, "Empty");
   assert.equal(player.messages.at(-1), TackleBox.MESSAGE.EMPTIED);
   assert.equal(player.getInventory().getAmount(Items.FISHING_BAIT), 50);
+});
+
+function kitClick(player, childId, action = 1, slot = -1, groupId = 823) {
+  return PluginManager.emitInterfaceActionClick({
+    player, buttonId: (groupId << 16) | childId, groupId, childId, action, slot, itemId: -1, handled: false,
+  });
+}
+
+test("the Forestry kit opens as captured and stores enum 817's items, but no outfit without a pouch", () => {
+  const kit = new Item(Items.FORESTRY_KIT, 1);
+  const player = createPlayer([kit, new Item(Items.ANIMA_INFUSED_BARK, 40), ...items(Items.OAK_LEAVES, 3), new Item(Items.LUMBERJACK_TOP, 1), new Item(Items.LOGS, 1)]);
+  option(player, kit, "Fill");
+  assert.deepEqual(Storage.contents(player, family("forestry-kit")), [
+    { id: Items.ANIMA_INFUSED_BARK, amount: 40 }, { id: Items.OAK_LEAVES, amount: 3 },
+  ]);
+  assert.equal(player.getInventory().getAmount(Items.LUMBERJACK_TOP), 1, "the clothes pouch isn't installed");
+  assert.equal(player.getInventory().getAmount(Items.LOGS), 1);
+
+  option(player, kit, "Fill");
+  assert.equal(player.messages.at(-1), ForestryKit.MESSAGE.NOTHING, "captured line with nothing to store");
+
+  option(player, kit, "View");
+  assert.equal(player.interfaceId, 823);
+  assert.deepEqual(player.log.slice(0, 6), [
+    `inv 814 10 ${Items.ANIMA_INFUSED_BARK}x40,${Items.OAK_LEAVES}x3`,
+    "script 917 [-1,-3]",
+    "open 161:16 823 0",
+    "open 161:74 822 0",
+    "flags 823:21 0-252 1150",
+    "flags 822:0 0-27 1180734",
+  ]);
+
+  kitClick(player, 12);
+  assert.equal(player.getPacketSender().getVarbit(14985), 1, "Withdraw-5 selects quantity 1 (5)");
+  kitClick(player, 21, 1, 0);
+  assert.equal(player.getInventory().getAmount(Items.ANIMA_INFUSED_BARK), 5);
+  kitClick(player, 21, 5, 1);
+  assert.equal(player.getInventory().getAmount(Items.OAK_LEAVES), 3, "op 5 withdraws all");
+  const leaves = player.getInventory().getItems().findIndex((item) => item.getId() === Items.OAK_LEAVES);
+  kitClick(player, 0, 2, leaves, 822);
+  assert.equal(player.getInventory().getAmount(Items.OAK_LEAVES), 2, "op 2 deposits one");
+  kitClick(player, 16);
+  assert.equal(Storage.total(player, family("forestry-kit")), 0);
+  assert.equal(player.getInventory().getAmount(Items.ANIMA_INFUSED_BARK), 40);
+});
+
+test("a carried or worn Forestry kit, or a forestry basket, takes earned leaves and bark", () => {
+  assert.equal(gather(createPlayer([]), Items.ANIMA_INFUSED_BARK, 4), 0, "no kit: it goes to the pack");
+  const carried = createPlayer([new Item(Items.FORESTRY_KIT, 1)]);
+  assert.equal(gather(carried, Items.ANIMA_INFUSED_BARK, 4), 4);
+  const worn = createPlayer([]);
+  worn.getEquipment().getItems()[Equipment.CAPE_SLOT] = new Item(Items.FORESTRY_KIT, 1);
+  assert.equal(gather(worn, Items.LEAVES, 2), 2);
+  const basket = createPlayer([new Item(Items.FORESTRY_BASKET, 1)]);
+  assert.equal(gather(basket, Items.ANIMA_INFUSED_BARK, 3), 3);
+  assert.equal(gather(basket, Items.YEW_LOGS, 1), 0, "a closed basket takes no logs");
+  assert.equal(storedAmount(carried, Items.ANIMA_INFUSED_BARK), 4, "the Forestry Shop can spend kit bark");
+});
+
+test("the forestry basket's Forestry kit sub-options reach the kit, and Dismantle takes it apart", () => {
+  const basket = new Item(Items.FORESTRY_BASKET, 1);
+  const player = createPlayer([basket, new Item(Items.ANIMA_INFUSED_BARK, 10), new Item(Items.OAK_LOGS, 1)]);
+  option(player, basket, "Fill", { subOpId: 1 });
+  assert.equal(Storage.amountOf(player, family("forestry-kit"), Items.ANIMA_INFUSED_BARK), 10);
+  assert.equal(Storage.total(player, family("log-basket")), 0, "the kit sub-option doesn't fill the basket");
+  option(player, basket, "View", { subOpId: 1 });
+  assert.equal(player.interfaceId, 823);
+
+  option(player, basket, "Configure", { subOpId: 2 });
+  assert.equal(basket.getId(), Items.LOG_BASKET);
+  assert.equal(player.getInventory().getAmount(Items.FORESTRY_KIT), 1);
+  assert.equal(player.getInventory().getAmount(Items.STURDY_HARNESS), 1);
+  assert.equal(Storage.amountOf(player, family("forestry-kit"), Items.ANIMA_INFUSED_BARK), 10, "the kit keeps its contents");
+});
+
+test("the Forestry kit's contents go with the last kit or forestry basket destroyed", () => {
+  const player = createPlayer([new Item(Items.FORESTRY_BASKET, 1)]);
+  Storage.store(player, family("forestry-kit"), Items.LEAVES, 5);
+  PluginManager.emitCustomEvent("destroy-item:destroyed", { player, itemId: Items.FORESTRY_KIT, amount: 1 });
+  assert.equal(Storage.total(player, family("forestry-kit")), 5, "the basket still holds a kit");
+  player.getInventory().getItems().length = 0;
+  PluginManager.emitCustomEvent("destroy-item:destroyed", { player, itemId: Items.FORESTRY_BASKET, amount: 1 });
+  assert.equal(Storage.total(player, family("forestry-kit")), 0);
 });
 
 test("destroying the last container of a family loses its contents", () => {

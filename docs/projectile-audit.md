@@ -87,6 +87,35 @@ These match the captures or the Wiki, so they were left alone:
   (`3987`), **bone bolts** (`696`), **chinchompas** (`908/909/1272`), **atlatl** (`2795`),
   **salamanders** and the NPC projectile specs already captured in their plugins.
 
+## Magic shortbow Snapshot (issue #2021)
+
+Snapshot used the ordinary glowing-arrow launch graphic (`250`) immediately at height 100,
+and both travel arrows ended at cycle 57 despite starting at cycles 40 and 33. The dedicated
+Snapshot graphic is now `256`, in actor slot 1 at height 92 with a 30-cycle delay. Its two
+arrows start at cycles 20 and 50, end at `30 + 3 × tiles` and `50 + 3 × tiles`, and use angle
+15, progress 11 and heights 163/146. PacketSender multiplies projectile heights by four,
+so the plugin supplies 40.75/36.5. Each hit is queued for the first tick at or after its
+projectile lands, accounting for the core's extra processing tick against NPCs.
+
+Evidence:
+
+- The [OSRS Wiki](https://oldschool.runescape.wiki/w/Magic_shortbow#Special_attack) describes
+  Snapshot's two arrows in rapid succession.
+- [RSProx recording 412](https://rsprox.net/download/412), revision 231, normal world:
+  ticks 92 and 99 show sequence `snapshot (1074)`, slot-1 graphic
+  `sp_attack_snapshot_spotanim (256)` delayed 30 cycles at height 92, and both captured
+  projectile shapes at distances one and two. Both NPC hits appear two ticks after each
+  activation. [Recording 4008](https://rsprox.net/download/4008), revision 237, Pest Control,
+  repeats the projectile shapes at distances two and four.
+- The active revision-241 cache confirms travel `249` (model 3473, no sequence), launch
+  `250` (model 3473, sequence 366), Snapshot `256` (model 3473, sequence 1075) and attack
+  sequence `1074` (58 cycles).
+
+Offline regressions exercise the plugin, serialized projectile fields and hit scheduling for
+NPC/player targets. Player-target alignment applies the captured projectile arrival to the
+existing scheduler; the recordings above only show NPC targets. No live gameplay, browser
+rendering or PvP/PID timing was tested.
+
 ## Verification
 
 ```

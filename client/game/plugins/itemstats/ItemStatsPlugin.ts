@@ -21,6 +21,7 @@ import {
     findInteractionTextBounds,
     findMouseoverTimerBounds,
     positionTooltip,
+    setItemStatsTooltipBounds,
 } from "./tooltipPosition";
 
 const ITEM_GROUPS = [INVENTORY, WORNITEMS, BANKMAIN] as const;
@@ -56,6 +57,10 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
         this.client = client ?? inject<OsrsClient>(CLIENT_TOKEN);
     }
 
+    protected async shutDown(): Promise<void> {
+        setItemStatsTooltipBounds(this.client, undefined);
+    }
+
     onConfigChanged(event: ConfigChanged): void {
         if (event.getGroup() === ItemStatsConfig.group) this.signatureValue = "";
     }
@@ -70,6 +75,7 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
         const manager = client.widgetManager;
         if (!this.isStarted() || !manager || client.gameState !== GameState.LOGGED_IN) {
             this.hovered = undefined;
+            setItemStatsTooltipBounds(this.client, undefined);
             return this.signatureValue = "";
         }
         // Widget bounds and InputManager coordinates have historically shared this
@@ -81,6 +87,7 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
         const menuOpen = client.menuOpen === true;
         if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || menuOpen) {
             this.hovered = undefined;
+            setItemStatsTooltipBounds(this.client, undefined);
             return this.signatureValue = "";
         }
         let hovered: typeof this.hovered;
@@ -109,6 +116,7 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
             if (ww > 0 && wh > 0) hovered = { itemId: id, x: wx, y: wy, w: ww, h: wh };
         }
         this.hovered = hovered;
+        if (!hovered) setItemStatsTooltipBounds(this.client, undefined);
         this.interactionBounds = hovered ? this.interactionTextBounds(textScale) : undefined;
         const wornSignature = this.currentWornSignature();
         return this.signatureValue = hovered
@@ -121,10 +129,16 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
         const { x: inputScaleX, y: inputScaleY } = context.inputScale?.() ?? { x: 1, y: 1 };
         this.snapshot({ x: scaleX, y: scaleY });
         const hovered = this.hovered;
-        if (!hovered) return [];
+        if (!hovered) {
+            setItemStatsTooltipBounds(this.client, undefined);
+            return [];
+        }
         const canonicalId = this.canonicalItemId(hovered.itemId);
         const item: any = this.client.objTypeLoader?.load(canonicalId);
-        if (!item) return [];
+        if (!item) {
+            setItemStatsTooltipBounds(this.client, undefined);
+            return [];
+        }
         const stats = this.getItemStats(canonicalId);
         const comparison = this.compareItem(canonicalId);
         const title = String(item.name ?? `Item ${canonicalId}`);
@@ -207,7 +221,10 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
             ...(rune.providesElement ? [{ label: "Provides element", value: capitalize(rune.rune) }] : []),
             { label: "Spell charge capacity", value: "Not recorded" },
         ] });
-        if (groups.length === 0) return [];
+        if (groups.length === 0) {
+            setItemStatsTooltipBounds(this.client, undefined);
+            return [];
+        }
         const font = context.fontLoader(FONT_PLAIN_12);
         const headingFont = context.fontLoader(FONT_BOLD_12) ?? font;
         const measure = (text: string) => {
@@ -267,7 +284,9 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
                 rowY += lineHeight;
             }
         }
-        return [{ x, y, w: width, h: height }];
+        const bounds = { x, y, w: width, h: height };
+        setItemStatsTooltipBounds(this.client, bounds);
+        return [bounds];
     }
 
     private interactionTextBounds(textScale: { x: number; y: number }): { x: number; y: number; w: number; h: number } | undefined {

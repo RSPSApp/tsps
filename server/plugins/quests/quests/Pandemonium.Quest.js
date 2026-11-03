@@ -420,8 +420,9 @@ module.exports = function registerPandemoniumQuest(api) {
 
   function tutorialCamera(player, scene) {
     const boat = scene.boat;
-    const move = { x: boat.deckBaseX - 8, y: boat.deckBaseY + 3 };
-    const look = { x: boat.deckBaseX + 12, y: boat.deckBaseY - 2 };
+    // Camera packets address the main world, where the deck is rendered.
+    const move = boat.deckTileToWorld(boat.deckBaseX - 8, boat.deckBaseY + 3);
+    const look = boat.deckTileToWorld(boat.deckBaseX + 12, boat.deckBaseY - 2);
     player.getPacketSender()
       .sendCameraMoveTo(move.x, move.y, 550, { rate: 232, rate2: 100, heightRelative: false })
       .sendCameraLookAt(look.x, look.y, 350, { rate: 232, rate2: 100, heightRelative: false });
@@ -519,9 +520,11 @@ module.exports = function registerPandemoniumQuest(api) {
     const scene = tutorialScenes.get(player);
     if (!scene) return;
     tutorialScenes.delete(player);
+    Scenes.cancel(player);
+    Scenes.closeFade(player);
     if (scene.will) api.removeNpc(scene.will);
     if (scene.anne) api.removeNpc(scene.anne);
-    StaticShips.leave(player);
+    if (StaticShips.isAboard(player, scene.staticShip)) StaticShips.leave(player);
     StaticShips.dispose(scene.staticShip);
     Scenes.controls(player, false);
     player.getPacketSender().sendCameraReset();
@@ -687,6 +690,12 @@ module.exports = function registerPandemoniumQuest(api) {
     if (name !== "Will" && name !== "Anne") return false;
     if (quest.isComplete(player)) return false; // no post-quest variant in the dump
     const stage = quest.getStage(player);
+    if (stage >= STAGE_BOARDED && stage <= STAGE_SALVAGE_READY
+      && !StaticShips.isAboard(player, tutorialScene(player)?.staticShip)) {
+      endTutorialShip(player);
+      startTranscript(api, player, npcId, PAGE, WILL_BACK_AT_PORT_VARIANT);
+      return true;
+    }
     if (stage === 0 || stage === STAGE_STARTED || stage === STAGE_INTERVIEW_DONE) {
       // The two short "after starting"/"after being offered" variants lose their jump
       // targets (and the offer variant its boarding action) in the dump, so the full
@@ -775,7 +784,8 @@ module.exports = function registerPandemoniumQuest(api) {
 
   function boardShip(player) {
     player.setAttribute(STAGE_VERSION_ATTRIBUTE, STAGE_VERSION);
-    if (!startTutorialShip(player)) return;
+    const stage = quest.getStage(player);
+    if (!startTutorialShip(player, { atWreck: stage >= STAGE_ARRIVED && stage <= STAGE_SALVAGE_READY })) return;
     if (quest.getStage(player) < STAGE_BOARDED) quest.setStage(player, STAGE_BOARDED);
   }
 
@@ -814,7 +824,7 @@ module.exports = function registerPandemoniumQuest(api) {
       case GO_BACK_TO_SHIP_ACTION_ID:
         event.handled = true;
         boardShip(player);
-        quest.setStage(player, STAGE_SAILING);
+        if (quest.getStage(player) < STAGE_SAILING) quest.setStage(player, STAGE_SAILING);
         return;
       case PUSH_OVERBOARD_ACTION_ID:
         event.handled = true;
@@ -988,6 +998,9 @@ module.exports = function registerPandemoniumQuest(api) {
     player.setAttribute(TUTORIAL_HELM_ATTRIBUTE, true);
     scene.boat.helmPlayerId = player.getIndex();
     scene.boat.moveMode = sailingContent.MOVE_MODE.STOPPED;
+    Scenes.cancel(player);
+    Scenes.closeFade(player);
+    player.getPacketSender().sendCameraTarget({ worldEntity: scene.boat.entityIndex });
     return true;
   }
 
@@ -1039,6 +1052,10 @@ module.exports = function registerPandemoniumQuest(api) {
   /** Follow a collision-checked route between the captured start and wreck positions. */
   function watchTutorialVoyages() {
     for (const [player, scene] of tutorialScenes) {
+      if (!StaticShips.isAboard(player, scene.staticShip)) {
+        endTutorialShip(player);
+        continue;
+      }
       if (!scene.voyageStarted || scene.arrived) continue;
       if (player.isRegistered?.() === false) continue;
       if (scene.headingTicks > 0) scene.headingTicks--;
@@ -1075,9 +1092,11 @@ module.exports = function registerPandemoniumQuest(api) {
   }
 
   function tutorialWreckCamera(player, boat) {
+    const move = boat.deckTileToWorld(boat.deckBaseX - 6, boat.deckBaseY + 1);
+    const look = boat.deckTileToWorld(boat.deckBaseX + 14, boat.deckBaseY - 4);
     player.getPacketSender()
-      .sendCameraMoveTo(boat.deckBaseX - 6, boat.deckBaseY + 1, 550, { rate: 232, rate2: 100, heightRelative: false })
-      .sendCameraLookAt(boat.deckBaseX + 14, boat.deckBaseY - 4, 350, { rate: 232, rate2: 100, heightRelative: false });
+      .sendCameraMoveTo(move.x, move.y, 550, { rate: 232, rate2: 100, heightRelative: false })
+      .sendCameraLookAt(look.x, look.y, 350, { rate: 232, rate2: 100, heightRelative: false });
   }
 
   function handleObjectInteraction(event) {

@@ -283,19 +283,32 @@ test("a currency with a unit uses OSRS's wording: costs, buy-back and too few", 
 });
 
 
-test("Baba Yaga's Trade opens her post-Lunar Diplomacy shop", () => {
+test("Trade on an NPC with shop versions opens the version the player's progress unlocks", () => {
+  const Shopkeepers = require("../plugins/npcs/Shopkeepers.plugin");
   const shops = require("../data/definitions/shops.json");
-  const BabaYaga = require("../plugins/npcs/BabaYaga.plugin");
+  const nameOf = (id) => shops.find((shop) => shop.id === id).name;
   const opened = [];
-  let actions;
-  BabaYaga.register({
-    core: { ShopManager: { open: (...args) => opened.push(args) } },
-    onNpcInteraction: (name, handlers) => { if (name === "Baba Yaga") actions = handlers; },
-  });
-  const player = {};
-  actions.Trade({ player });
-  assert.equal(opened[0][0], player);
-  assert.match(shops.find(({ id }) => id === opened[0][1]).name, /^Baba Yaga's Magic Shop\. \(After Lunar Diplomacy\)$/);
+  let picked = null;
+  let handler;
+  const api = {
+    core: { ShopManager: { open: (player, shopId) => opened.push(shopId) } },
+    registerItemShopCurrency() {}, registerShopCurrency() {}, persistAttribute() {}, registerNpcInteraction() {},
+    onNpcInteraction: (fn) => { handler = fn; },
+    emitCustomEvent: (name, request) => { if (name === "npc-dialogue:shop") request.shop = picked; },
+  };
+  Shopkeepers.register(api);
+  assert.ok([...Shopkeepers.sharedTraders().get("3837:3")].length >= 2, "Baba Yaga's Trade is shared by two versions");
+  const trade = (npcId, clickType = 3) => { const event = { player: {}, npcId, clickType, handled: false }; handler(event); return event.handled; };
+
+  picked = "Baba Yaga's Magic Shop. (After Lunar Diplomacy)";
+  assert.equal(trade(3837), true);
+  assert.equal(nameOf(opened.pop()), picked);
+  picked = null;
+  assert.equal(trade(5250), true, "no version applies: Daga's Default shop");
+  assert.equal(nameOf(opened.pop()), "Daga's Scimitar Smithy (Default)");
+  assert.equal(trade(3837), false, "no version and no Default: Baba Yaga stays shut");
+  assert.equal(trade(822), false, "an NPC with one shop keeps its fixed binding");
+  assert.equal(opened.length, 0);
 });
 
 test("a custom shop's npcInteractions bind its NPC, over shops.json on the same option", (t) => {

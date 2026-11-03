@@ -97,16 +97,21 @@ module.exports = function registerDesertTreasureIQuest(api) {
   const ICE_PATH_GATE_IDS = new Set([6461, 6462]); // icegate_left/right_small on the ice path
   const ICE_LEDGE_ID = ObjectIdentifiers.ICE_LEDGE;
   const ICE_LEDGE_TOP_ID = 6456;
-  // Pyramid descent: entrance ladder 6497 -> floors 3, 2, 1 -> ground ladder
-  // 6500 -> the ancient temple door 6553. The 6545/6547 ids are side doors,
-  // not the route QH uses.
-  const PYRAMID_ENTRANCE_ID = 6497;
+  // The generic 6400-tile search joins the top to the basement; these cache pairs own the route.
+  // Land beside the clipped ladder anchors, where the return ladder can be used.
+  const PYRAMID_ENTRANCE_ID = ObjectIdentifiers.LADDER_69;
   const PYRAMID_LADDER_DOWN = new Map([
-    [6498, { from: [2909, 4964, 3], to: new Location(2845, 4964, 2) }],
-    [6499, { from: [2846, 4973, 2], to: new Location(2782, 4973, 1) }],
-    [6500, { from: [2784, 4941, 1], to: new Location(3232, 9293, 0) }],
+    [ObjectIdentifiers.LADDER_70, { from: [2909, 4964, 3], to: new Location(2844, 4964, 2) }],
+    [ObjectIdentifiers.LADDER_71, { from: [2846, 4973, 2], to: new Location(2781, 4973, 1) }],
+    [ObjectIdentifiers.LADDER_72, { from: [2784, 4941, 1], to: new Location(3231, 9293, 0) }],
   ]);
-  const PYRAMID_ENTRANCE_LANDING = new Location(2913, 4953, 3);
+  const PYRAMID_LADDER_UP = new Map([
+    [ObjectIdentifiers.LADDER_76, { from: [2913, 4953, 3], to: new Location(3232, 2897, 0) }],
+    [ObjectIdentifiers.LADDER_75, { from: [2845, 4964, 2], to: new Location(2908, 4964, 3) }],
+    [ObjectIdentifiers.LADDER_74, { from: [2782, 4973, 1], to: new Location(2845, 4973, 2) }],
+    [ObjectIdentifiers.LADDER_73, { from: [3232, 9293, 0], to: new Location(2783, 4941, 1) }],
+  ]);
+  const PYRAMID_ENTRANCE_LANDING = new Location(2912, 4953, 3);
   const PYRAMID_DOOR_ID = 6553;
   const PYRAMID_DOOR_LANDING = new Location(3234, 9323, 0);
   const PYRAMID_OBELISK_IDS = new Set([6482, 6485, 6488, 6491]);
@@ -1089,11 +1094,12 @@ module.exports = function registerDesertTreasureIQuest(api) {
       if (quest.getStage(player) < STAGE_ENTERED) quest.setStage(player, STAGE_ENTERED);
       return true;
     }
-    const ladder = PYRAMID_LADDER_DOWN.get(objectId);
+    const ladder = PYRAMID_LADDER_DOWN.get(objectId) ?? PYRAMID_LADDER_UP.get(objectId);
     if (ladder && location.x === ladder.from[0] && location.y === ladder.from[1]
       && location.z === ladder.from[2]) {
       player.moveTo(ladder.to.clone());
-      if (quest.getStage(player) < STAGE_ENTERED) quest.setStage(player, STAGE_ENTERED);
+      if (PYRAMID_LADDER_DOWN.has(objectId) && quest.getStage(player) >= STAGE_PLACED
+        && quest.getStage(player) < STAGE_ENTERED) quest.setStage(player, STAGE_ENTERED);
       return true;
     }
     if (objectId === PYRAMID_DOOR_ID && location.x === 3234 && location.y === 9324 && location.z === 0) {
@@ -1101,6 +1107,15 @@ module.exports = function registerDesertTreasureIQuest(api) {
       return true;
     }
     return false;
+  }
+
+  /** Claim the pyramid before Ladders guesses an adjacent-plane or underground destination. */
+  function claimPyramidClimb(event) {
+    if (event.handled || (event.objectId !== PYRAMID_ENTRANCE_ID
+      && !PYRAMID_LADDER_DOWN.has(event.objectId) && !PYRAMID_LADDER_UP.has(event.objectId))) return;
+    const location = event.object?.getLocation?.();
+    if (!location) return;
+    event.handled = handlePyramidObject({ ...event, location: { x: location.getX(), y: location.getY(), z: location.getZ() } });
   }
 
   /** The Smoke Dungeon's east gate is named "Gate", so Doors asks quests first. */
@@ -1187,7 +1202,7 @@ module.exports = function registerDesertTreasureIQuest(api) {
       event.handled = stepOffIceLedge(event) === true;
       return;
     }
-    if (objectId === PYRAMID_ENTRANCE_ID || PYRAMID_LADDER_DOWN.has(objectId)
+    if (objectId === PYRAMID_ENTRANCE_ID || PYRAMID_LADDER_DOWN.has(objectId) || PYRAMID_LADDER_UP.has(objectId)
       || objectId === PYRAMID_DOOR_ID) {
       event.handled = handlePyramidObject(event);
       return;
@@ -1411,6 +1426,7 @@ module.exports = function registerDesertTreasureIQuest(api) {
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("door:toggle", handleDoorToggle);
+  api.onCustomEvent("ladders:climb", claimPyramidClimb);
   api.onNpcDeath(handleNpcDeath);
   api.onNpcBeforeDeath(handleNpcBeforeDeath);
   api.onItemOnNpc(handleItemOnNpc);

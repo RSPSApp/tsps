@@ -930,7 +930,7 @@ test('NPC spell targeting requires explicit area permission for actionless puzzl
     getPrivateArea:()=>privateArea,getOwner:()=>null,getContentId:()=>1};
   const spell={canCastOnTarget:()=>valid,canCast:()=>true,spellId:()=>1,castSound:()=>null,
     startCast(){},baseExperience:()=>0};
-  const player={getHitpoints:()=>99,busy:()=>false,getArea:()=>null,getPrivateArea:()=>privateArea,
+  const player={sendMessage(){},getHitpoints:()=>99,busy:()=>false,getArea:()=>null,getPrivateArea:()=>privateArea,
     getLocation:()=>({getX:()=>1,getY:()=>1,getZ:()=>0,isWithinDistance:()=>true}),isPlayer:()=>true,getSize:()=>1,
     getMovementQueue:()=>({reset(){}}),getCombat:()=>({castSpellOn:(target,chosen)=>{assert.equal(target,npc);assert.equal(chosen,spell);casts++;}})};
   World.getNpcs=()=>({capacityReturn:()=>10,get:()=>npc});CombatSpells.getCombatSpell=()=>spell;

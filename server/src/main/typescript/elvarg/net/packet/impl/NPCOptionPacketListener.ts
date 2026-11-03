@@ -200,6 +200,7 @@ export class NPCOptionPacketListener {
         !spell.canCastOnTarget(player, npc) || !spell.canCast(player, false)) return false;
 
     let consumed = false;
+    let consumptionAttempted = false;
     const event = {
       player,
       npc,
@@ -209,6 +210,7 @@ export class NPCOptionPacketListener {
       spellId: spell.spellId(),
       location: { x: targetLocation.getX(), y: targetLocation.getY(), z: targetLocation.getZ() },
       consumeRunes: () => {
+        consumptionAttempted = true;
         if (consumed || !spell.canCast(player, true)) return false;
         consumed = true;
         player.setPositionToFace(targetLocation);
@@ -221,6 +223,11 @@ export class NPCOptionPacketListener {
       },
       handled: false,
     };
-    return PluginManager.emitSpellOnNpc(event) && consumed;
+    const handled = PluginManager.emitSpellOnNpc(event);
+    // A scripted cast may already have refused with its own resource/cooldown feedback.
+    if (!handled && !consumptionAttempted && !npc.getCurrentDefinition?.(player)?.isAttackable?.()) {
+      player.sendMessage("You can't attack this npc.");
+    }
+    return handled && consumed;
   }
 }

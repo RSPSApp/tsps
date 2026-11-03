@@ -26,7 +26,7 @@
 module.exports = function registerTrollStrongholdQuest(api) {
   const {
     Skill, Location, GameObject, ObjectManager, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers,
-    World, TaskManager, CountdownTask, Sound, Sounds,
+    World, TaskManager, CountdownTask, Sound, Sounds, Area, Boundary,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
   const { startDialogue } = require("../../npcs/NpcDialogues.plugin.js");
@@ -78,6 +78,8 @@ module.exports = function registerTrollStrongholdQuest(api) {
   // Dad's challenge starts once the step through the entrance has landed.
   const ARENA_CHALLENGE_DELAY_TICKS = 2;
   const ARENA_SEARCH_RADIUS = 24;
+  // Inside the arena's walls, where Dad and his spectators stand (the arena's multi-combat zone).
+  const TROLL_ARENA = { minX: 2896, maxX: 2927, minY: 3595, maxY: 3630, z: 0 };
   const ARENA_SPECTATOR_IDS = new Set([
     NpcIdentifiers.TROLL_SPECTATOR, NpcIdentifiers.TROLL_SPECTATOR_2, NpcIdentifiers.TROLL_SPECTATOR_3,
     NpcIdentifiers.TROLL_SPECTATOR_4, NpcIdentifiers.TROLL_SPECTATOR_5, NpcIdentifiers.TROLL_SPECTATOR_6,
@@ -462,6 +464,35 @@ module.exports = function registerTrollStrongholdQuest(api) {
     event.handled = true;
   }
 
+  const refusesRefight = (player, npc) => player?.isPlayer?.() && npc?.isNpc?.()
+    && npc.getId() === DAD_NPC_ID && dadDefeated(player);
+
+  /**
+   * The troll arena keeps a player who has beaten Dad from fighting him again by any route:
+   * a combat spell cast on him is refused like the Attack option (attackDad), and the combat
+   * permission refuses whatever else would start the fight. Dad's own attacks, and the
+   * scripted killing blow, are untouched.
+   */
+  function createArenaArea() {
+    class TrollArena extends Area {
+      getName() {
+        return "Troll arena";
+      }
+
+      canCastOnNpc(player, npc) {
+        if (!refusesRefight(player, npc)) return null;
+        player.sendMessage(DAD_REFIGHT_MESSAGE);
+        return false;
+      }
+
+      canAttack(attacker, target) {
+        return refusesRefight(attacker, target) ? false : null;
+      }
+    }
+    const { minX, maxX, minY, maxY, z } = TROLL_ARENA;
+    return new TrollArena([new Boundary(minX, maxX, minY, maxY, z)]);
+  }
+
   /**
    * Doors' arena gates ask before opening. Walking in sets off Dad's challenge;
    * he won't let anyone out through the north gate who hasn't defeated him.
@@ -761,6 +792,7 @@ module.exports = function registerTrollStrongholdQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onNpcInteraction("Dad", { "Talk-to": talkToDad });
   api.onNpcAttackOption(attackDad);
+  api.registerArea(createArenaArea());
   api.onNpcBeforeDeath(spareDad);
   api.onNpcInteraction("Twig", { Pickpocket: pickpocketTwig });
   api.onNpcInteraction("Berry", { Pickpocket: pickpocketBerry });

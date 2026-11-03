@@ -13,6 +13,9 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
 const { RegionManager } = require('../dist/game/collision/RegionManager');
+const { World } = require('../dist/game/World');
+const { CombatSpells } = require('../dist/game/content/combat/magic/CombatSpells');
+const { NPCOptionPacketListener } = require('../dist/net/packet/impl/NPCOptionPacketListener');
 const runtime = require('../plugins/quests/QuestRuntime');
 const core = PluginManager.getCoreApi();
 const noop = () => {};
@@ -91,7 +94,7 @@ function makePlayer() {
 }
 
 function harness() {
-  const events = {}, variants = [], conditions = [], npcDeath = [], logins = [], attackOptions = [], beforeDeath = [];
+  const events = {}, variants = [], conditions = [], npcDeath = [], logins = [], attackOptions = [], beforeDeath = [], areas = [];
   const objectActions = new Map(), npcActions = new Map();
   const objectManager = { deregistered: [], registered: [] };
   const testCore = Object.create(core);
@@ -116,6 +119,7 @@ function harness() {
     onNpcDeath: handler => npcDeath.push(handler),
     onNpcAttackOption: handler => attackOptions.push(handler),
     onNpcBeforeDeath: handler => beforeDeath.push(handler),
+    registerArea: area => areas.push(area),
     onNpcsInteraction: (names, actions) => names.forEach(name => npcActions.set(name, actions)),
     onPlayerLogin: handler => logins.push(handler),
     onInterfaceActionButton: noop,
@@ -126,7 +130,7 @@ function harness() {
   (events['quest:is-complete'] ??= []).push(event => { if (event.key === 'death_plateau') event.complete = true; });
   require('../plugins/quests/quests/TrollStronghold.Quest')(api);
   return {
-    events, variants, conditions, npcDeath, logins, objectActions, npcActions, objectManager, attackOptions, beforeDeath,
+    events, variants, conditions, npcDeath, logins, objectActions, npcActions, objectManager, attackOptions, beforeDeath, areas,
     quest: runtime.getRegisteredQuests().at(-1),
   };
 }
@@ -291,6 +295,60 @@ test('Dad surrenders instead of dying, then will not fight or talk', () => {
 
   assert.equal(h.npcActions.get('Dad')['Talk-to']({ player: p, npcId: K.DAD }), true);
   assert.ok(p.messages.includes("He doesn't seem interested in talking right now."));
+});
+
+test('a combat spell on a surrendered Dad is refused like Attack (native spell route)', () => {
+  const h = harness();
+  const p = makePlayer();
+  const arena = h.areas.find(area => area.getName() === 'Troll arena');
+  assert.ok(arena, 'the quest registers the troll arena');
+  let cast = null;
+  Object.assign(p, {
+    getHitpoints: () => 99,
+    busy: () => false,
+    getArea: () => arena,
+    isPlayer: () => true,
+    getSize: () => 1,
+    getMovementQueue: () => ({ reset() {} }),
+    getCombat: () => ({ castSpellOn: (target, spell) => { cast = [target, spell]; } }),
+  });
+  const dad = {
+    getId: () => K.DAD,
+    isNpc: () => true,
+    isPlayer: () => false,
+    getContentId: () => K.DAD,
+    getSize: () => 3,
+    getLocation: () => new core.Location(2911, 3612, 0),
+    getPrivateArea: () => null,
+    getOwner: () => null,
+    getHitpoints: () => 120,
+    getCurrentDefinition: () => ({ isAttackable: () => true }),
+    getArea: () => arena,
+  };
+  p.setLocation(2909, 3612);
+  const spell = { canCastOnTarget: () => true };
+  const originalNpcs = World.getNpcs;
+  const originalSpell = CombatSpells.getCombatSpell;
+  World.getNpcs = () => ({ capacityReturn: () => 1, get: () => dad });
+  CombatSpells.getCombatSpell = () => spell;
+  try {
+    h.quest.setStage(p, 10);
+    assert.equal(NPCOptionPacketListener.castSpell(p, 0, 1), true, 'a challenger may still cast on Dad');
+    assert.deepEqual(cast, [dad, spell]);
+    assert.equal(arena.canAttack(p, dad), null);
+    assert.equal(arena.canAttack(dad, p), null, 'Dad may attack a challenger');
+
+    cast = null;
+    h.quest.setStage(p, 20);
+    assert.equal(NPCOptionPacketListener.castSpell(p, 0, 1), false, 'no spell once he has surrendered');
+    assert.equal(cast, null, 'the cast never reaches combat or the runes');
+    assert.ok(p.messages.includes("You don't need to fight him again."));
+    assert.equal(arena.canAttack(p, dad), false, 'the combat permission refuses every other route');
+    assert.equal(arena.canAttack(dad, p), null, 'Dad still fights new challengers');
+  } finally {
+    World.getNpcs = originalNpcs;
+    CombatSpells.getCombatSpell = originalSpell;
+  }
 });
 
 test('cave and stronghold handoffs are registered and scoped', () => {

@@ -124,9 +124,10 @@ test('Sheep starts through Yes even with 20 balls and plays the captured final d
   start(h, p, N.FRED_THE_FARMER, 'quest:sheep-shearer:start');
   h.action(p, N.FRED_THE_FARMER, 'sheep-shearer:finish-handover');
   assert.equal(h.quest.getStage(p), 1);
-  assert.equal(p.items.get(I.BALL_OF_WOOL), 1);
+  assert.equal(p.items.get(I.BALL_OF_WOOL), 21, 'rsprox 1718: the wool leaves with the reward, not at the box');
   h.action(p, N.FRED_THE_FARMER, 'MW-4c0');
   assert.equal(h.quest.getStage(p), 21);
+  assert.equal(p.items.get(I.BALL_OF_WOOL), 1);
   assert.equal(p.items.get(I.COINS), 60);
   assert.equal(h.quest.scrollItemId, I.SHEARS);
   h.action(p, N.FRED_THE_FARMER, 'MW-4c0');
@@ -165,6 +166,24 @@ test('shearing makes a sheep bald for 50 ticks and never yields wool twice', () 
   assert.equal(p.items.get(I.WOOL), 2);
 });
 
+test('Vampyre Slayer journal follows the rewritten Wiki journal at every stage', () => {
+  const h = harness('VampyreSlayer'), p = player();
+  const text = () => h.quest.buildJournal(p, h.quest).join(' ').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ');
+  assert.match(text(), /^I can start this quest by talking to Morgan at his home in Draynor Village\.$/);
+  h.quest.setStage(p, 1);
+  assert.match(text(), /Morgan suggested I begin by seeking out Dr Harlow, a retired vampyre hunter, at the Blue Moon Inn in Varrock\.$/);
+  h.quest.setStage(p, 2);
+  assert.match(text(), /unless I buy him a Beer first\.$/);
+  assert.ok(h.quest.buildJournal(p, h.quest)[0].startsWith('<str>'), 'the Morgan entry is struck through');
+  p.setAttribute('vampyre-slayer:stake-received', true); p.items.set(I.STAKE, 1);
+  assert.match(text(), /along with a Hammer\. Most General Stores should stock a Hammer\. Dr Harlow also suggested I carry some Garlic on me\. Morgan might have some\.$/);
+  p.items.set(I.STAKE, 0);
+  assert.match(text(), /If I lose it, I'll need to ask Dr Harlow for another\./);
+  h.quest.setStage(p, 3);
+  assert.match(text(), /to kill him for good\. QUEST COMPLETE!$/);
+  assert.ok(h.quest.buildJournal(p, h.quest).every(line => line.replace(/<[^>]*>/g, '').length <= 58));
+});
+
 test('Harlow requests beer before advancing, then exchanges one beer for one stake', () => {
   const h = harness('VampyreSlayer'), p = player(); p.items.set(I.BEER, 1);
   start(h, p, N.MORGAN, 'quest:vampyre-slayer:start');
@@ -186,8 +205,14 @@ test('the Count regenerates without both tools; the correct killing blow consume
   const h = harness('VampyreSlayer'), p = player(); h.quest.setStage(p, 2);
   const npc = { getId: () => N.COUNT_DRAYNOR, getCombat: () => ({ getKiller: () => p }), getDefinition: () => ({ getHitpoints: () => 35 }), setHitpoints: hp => { npc.hp = hp; } };
   const death = { npc }; h.hooks.onNpcBeforeDeath[0](death);
-  assert.equal(death.preventDeath, true); assert.equal(npc.hp, 35);
+  assert.equal(death.preventDeath, true);
+  assert.equal(npc.hp, 20, 'rsprox 1710: the Count regenerates with a heal of 20, not to full');
   p.items.set(I.STAKE, 1); p.items.set(I.HAMMER, 1);
+  const kill = { npc }; h.hooks.onNpcBeforeDeath[0](kill);
+  assert.equal(kill.preventDeath, undefined);
+  assert.deepEqual(p.animations, [], 'the hammering waits for the tick after the last hit');
+  const hammer = h.tasks.at(-1); assert.equal(hammer.getDelay(), 1); hammer.execute();
+  assert.deepEqual(p.animations, [806]);
   h.hooks.onNpcDeath[0]({ npcId: N.COUNT_DRAYNOR, npc, killer: p });
   assert.equal(h.quest.getStage(p), 3);
   assert.equal(p.items.get(I.STAKE), 0); assert.equal(p.items.get(I.HAMMER), 1);
@@ -218,6 +243,7 @@ test('Count coffin controls the private fight, garlic stats, timed regeneration 
       const npc = { definition, hp: 35, anims: [],
         getId: () => definition.id, getHitpoints: () => npc.hp, getMaxHitpoints: () => 35,
         heal: hp => { npc.hp = Math.min(35, npc.hp + hp); },
+        setHitpoints: hp => { npc.hp = hp; },
         performAnimation: anim => npc.anims.push(anim.getId()),
         setCombatXpMultiplier: amount => { npc.xpRate = amount; },
         getCurrentDefinition: () => ({ getStats: () => stats }),
@@ -232,24 +258,29 @@ test('Count coffin controls the private fight, garlic stats, timed regeneration 
   assert.equal(hooks.onPlayerProcess, undefined, 'the encounter never polls every player');
   const coffin = new core.GameObject(O.COFFIN_46, new core.Location(3077, 9775, 0), 10, 3, null);
   hooks.onObjectFirstClick({ player: p, object: coffin });
+  assert.deepEqual(objects, [], 'rsprox 3275, 1710: the lid opens two ticks after the player arrives');
+  tasks.find(task => task.getDelay() === 1).execute();
   assert.deepEqual(objects, [O.COFFIN_9]);
   assert.equal(spawned.length, 0, 'the Count rises four ticks after opening');
-  tasks.find(task => task.getDelay() === 4).execute();
+  tasks.find(task => task.getDelay() === 5).execute();
   assert.equal(spawned[0].definition.id, N.COUNT_DRAYNOR_2);
   assert.deepEqual(spawned[0].anims, [3114]);
   assert.deepEqual(objects, [O.COFFIN_9, 'removed'], 'the rising Count holds the coffin, so the loc goes (rsprox 1710, 3275)');
-  tasks.find(task => task.getDelay() === 8).execute();
-  assert.deepEqual(objects, [O.COFFIN_9, 'removed', O.COFFIN_46]);
   tasks.find(task => task.getDelay() === 9).execute();
+  assert.deepEqual(objects, [O.COFFIN_9, 'removed', O.COFFIN_46]);
+  tasks.find(task => task.getDelay() === 10).execute();
   const count = target = spawned[1];
   assert.equal(count.definition.id, N.COUNT_DRAYNOR);
   assert.equal(count.definition.owner, p); assert.equal(count.definition.ownerOnly, true);
+  assert.equal(count.target, undefined, 'the rising Count does not swing on its spawn tick');
+  tasks.find(task => task.getDelay() === 11).execute();
   assert.equal(count.target, p); assert.equal(count.xpRate, 0.025);
   assert.deepEqual(removed, [spawned[0]]);
   assert.deepEqual(count.anims, [3115]);
   p.items.set(I.GARLIC, 1);
   hooks.onCombatHitRoll({ attacker: p, target: count, combatType: core.CombatType.MELEE });
-  assert.equal(count.hp, 25); assert.deepEqual(count.override.stats, [20, 15, 0, 1, 1]);
+  assert.equal(count.hp, 25, 'garlic drains 10 Hitpoints'); assert.deepEqual(count.override.stats, [20, 15, 0, 1, 1]);
+  assert.equal(count.override.maxHit, undefined, 'rsprox 3275, 1710: the weakened Count still hits 3');
   assert.equal(hooks.registerMeleeHitModifier(p, 6), 7);
   hooks.onCombatHitRoll({ attacker: p, target: count, combatType: core.CombatType.MELEE });
   assert.equal(count.hp, 25, 'garlic never repeats during its active effect');

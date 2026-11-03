@@ -138,8 +138,8 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Shadow of the Storm | untested |  |  |  |  |
 | Shadows of Custodia | untested |  |  |  |  |
 | [Sheep Herder](sheep-herder/README.md) | untested |  |  |  |  |
-| [Sheep Shearer](sheep-shearer/README.md) | ⚠️ passed with issues | 2026-10-29 | agent | grok-4.7 | 1 |
-| [Shield of Arrav](shield-of-arrav/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
+| [Sheep Shearer](sheep-shearer/README.md) | ⚠️ passed with issues | 2026-11-03 | agent | claude-opus-5-5 | 4 |
+| [Shield of Arrav](shield-of-arrav/README.md) | ⚠️ passed with issues | 2026-11-03 | agent | claude-opus-5-5 | 7 |
 | Shilo Village | untested |  |  |  |  |
 | [Sins of the Father](sins-of-the-father/README.md) | untested |  |  |  |  |
 | [Skippy and the Mogres](skippy-and-the-mogres/README.md) | ✅ passed | 2026-10-31 | agent | deepseek-v4.1-flash | 1 |
@@ -192,7 +192,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Twilight's Promise](twilights-promise/README.md) | untested |  |  |  |  |
 | Underground Pass | untested |  |  |  |  |
 | Vale Totems | untested |  |  |  |  |
-| [Vampyre Slayer](vampyre-slayer/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
+| [Vampyre Slayer](vampyre-slayer/README.md) | ⚠️ passed with issues | 2026-11-03 | agent | claude-opus-5-5 | 3 |
 | [Wanted!](wanted/README.md) | untested |  |  |  |  |
 | Watchtower | untested |  |  |  |  |
 | [Waterfall Quest](waterfall-quest/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 3 |

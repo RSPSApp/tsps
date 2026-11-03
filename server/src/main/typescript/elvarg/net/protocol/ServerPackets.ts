@@ -210,7 +210,8 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.SKILLS_DELTA]: -1,
 
     [ServerPacketId.COMBAT_STATE]: -1,
-    [ServerPacketId.RUN_ENERGY]: 2, // percent(1) + running(1)
+    // percent(1) + running(1) + units(2) + weight kg(2 signed) + stamina ticks(2) + stamina active(2)
+    [ServerPacketId.RUN_ENERGY]: 10,
     [ServerPacketId.HITSPLAT]: -1,
     [ServerPacketId.SPOT_ANIM]: -1,
     [ServerPacketId.PROJECTILES]: -2,

@@ -20,6 +20,8 @@ export class GameConstants {
     // Java server runs at ~600ms per cycle; mirror that here.
     public static readonly GAME_ENGINE_PROCESSING_CYCLE_RATE: number = 600;
     public static readonly QUEUED_LOOP_THRESHOLD: number = 150;
+    /** OSRS run energy is 0-10,000 units; the orb shows only the whole percentage. */
+    public static readonly RUN_ENERGY_MAX_UNITS: number = 10_000;
     // OSRS wiki documents that pets auto-teleport when stuck/too far; use the
     // existing follow break range from Java follow behavior as the auto-teleport
     // threshold for pets in this server.

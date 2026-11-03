@@ -443,6 +443,8 @@ function applyStaminaRequest({player,energy=20,durationMs=STAMINA_DURATION_MS}) 
   restoreRunEnergy(player, request.energy);
   player.setAttribute(ATTR_STAMINA_END, Date.now() + request.durationMs);
   player.setAttribute(ATTR_STAMINA_ACC, 0);
+  // Send the effect's remaining time now, so the orb/plugin know before the next running tick.
+  player.getPacketSender().sendRunEnergy();
 }
 
 function applyDivine(player, baseEffect, affectedSkills, { damage = 10 } = {}) {
@@ -1192,6 +1194,7 @@ GOURD_STRENGTHS.forEach((strength, tier) => {
     (player) => getCurrentLevel(player, Skill.HITPOINTS) >= 50);
 });
 
+/** Wiki: the stamina effect only slows the drain; MovementQueue applies the 30% modifier. */
 function processStamina(player) {
   const endsAt = player.getAttribute(ATTR_STAMINA_END);
   if (!Number.isFinite(endsAt)) {
@@ -1201,32 +1204,30 @@ function processStamina(player) {
   if (Date.now() >= endsAt) {
     player.setAttribute(ATTR_STAMINA_END, null);
     player.setAttribute(ATTR_STAMINA_ACC, 0);
-    return;
-  }
-
-  if (!player.isRunningReturn() || !player.getMovementQueue().isMovings()) {
-    return;
-  }
-
-  let acc = Number(player.getAttribute(ATTR_STAMINA_ACC));
-  if (!Number.isFinite(acc)) {
-    acc = 0;
-  }
-  acc += 0.7;
-
-  let gained = 0;
-  while (acc >= 1) {
-    acc -= 1;
-    if (player.getRunEnergy() < 100) {
-      player.setRunEnergy(player.getRunEnergy() + 1);
-      gained++;
-    }
-  }
-
-  player.setAttribute(ATTR_STAMINA_ACC, acc);
-
-  if (gained > 0) {
+    // Clear the client's stamina marker even if the player is standing still at full energy.
     player.getPacketSender().sendRunEnergy();
+  }
+}
+
+/** Wiki: with a stamina potion active, run energy drains at 30% of its normal rate. */
+function staminaDrainModifier(entity, amount) {
+  if (!entity?.isPlayer?.()) {
+    return amount;
+  }
+  const endsAt = Number(entity.getAsPlayer().getAttribute(ATTR_STAMINA_END));
+  return Number.isFinite(endsAt) && Date.now() < endsAt ? Math.floor(amount * 0.3) : amount;
+}
+
+/** Tells the client how long the stamina effect has left, so the run orb and Run Energy plugin agree. */
+function staminaStatus(entity, status) {
+  if (!entity?.isPlayer?.()) {
+    return;
+  }
+  const endsAt = Number(entity.getAsPlayer().getAttribute(ATTR_STAMINA_END));
+  const remainingMs = endsAt - Date.now();
+  if (Number.isFinite(endsAt) && remainingMs > 0) {
+    status.staminaTicks = Math.max(1, Math.ceil(remainingMs / 600));
+    status.staminaMultiplier = 1;
   }
 }
 
@@ -1617,6 +1618,7 @@ module.exports = {
     applyMenaphiteRemedy, processMenaphite, applyPrayerRegeneration, processPrayerRegeneration, clearPrayerRegeneration,
     applyRankFrothyPotion, applyFoulChunkyPotion, applyRancidSlimyPotion, applyJarOfCongealedBlood,
     processBoostDecay, notePreserveActivated, curePoisonAndVenom, pauseTimedEffects, resumeTimedEffects,
+    processStamina, staminaDrainModifier, staminaStatus,
     findPotionEntry: (itemId) => POTION_BY_ITEM_ID.get(itemId) ?? null,
     registerCopy,
     cureFromHealthOrb,
@@ -1625,6 +1627,8 @@ module.exports = {
     return POTION_BY_ITEM_ID.get(itemId)?.potion?.name ?? null;
   },
   register(api) {
+    api.registerRunEnergyDrainModifier(staminaDrainModifier);
+    api.registerRunEnergyStatusModifier(staminaStatus);
     api.onCustomEvent("potions:apply-stamina", applyStaminaRequest);
     api.onCustomEvent("potions:dose-family", answerDoseFamily);
     api.onCustomEvent("potions:register-copy", registerCopy);

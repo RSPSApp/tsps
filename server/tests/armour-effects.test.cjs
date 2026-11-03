@@ -491,6 +491,12 @@ test("the equipment panel shows weight and set effects and re-renders on an equi
   const { api } = buildApi();
   Graceful.register(api);
   EquipmentStats.register(api);
+  // The panel reads Player's carried weight, which asks PluginManager for graceful's slot weights.
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  if (!PluginManager.customEventHooks.get("equipment:weights")?.length) {
+    Graceful.register(PluginManager.createApi("GracefulOutfit"));
+  }
 
   const sent = [];
   const messages = [];
@@ -511,6 +517,7 @@ test("the equipment panel shows weight and set effects and re-renders on an equi
     }),
     getEquipment: () => ({ getItems: () => items }),
     getInventory: () => ({ getItems: () => [] }),
+    getCarriedWeightGrams() { return Player.prototype.getCarriedWeightGrams.call(this); },
     getWeapon: () => null,
     getBaseAttackSpeed: () => 4,
     getCombat: () => ({ getTarget: () => null }),

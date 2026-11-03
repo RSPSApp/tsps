@@ -2719,3 +2719,182 @@ test('Book of Knowledge grants 15 times the level and keeps itself when XP is bl
   assert.equal(p.xp.get(Skill.values()[0]), 150);
   assert.equal(p.slots[slot], undefined);
 });
+
+test('native random-event followers and Count Check use real movement, account mode and Bank PIN status', async t => {
+  const path = require('node:path');
+  const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+  const { RegionManager } = require('../dist/game/collision/RegionManager');
+  const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const core = PluginManager.getCoreApi();
+  await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  new NpcDefinitionLoader().load(); RegionManager.init(); RegionManager.loadMapFiles(3222, 3218);
+  t.mock.method(core.WorldDefinition, 'isMembersWorld', () => true);
+  require('../plugins/interface/BankPin.plugin').register(PluginManager.createApi('native-random-bank-pin'));
+  require('../plugins/modes/Ironman.plugin').register(PluginManager.createApi('native-random-ironman'));
+  const api = PluginManager.createApi('native-random-events');
+  Plugin.register(api);
+  JekyllPlugin.register(PluginManager.createApi('native-random-jekyll'));
+  PlantPlugin.register(PluginManager.createApi('native-random-plant'));
+  Events.initialize(api);
+  t.after(() => Events.shutdown());
+  const Pin = require('../plugins/interface/bankpin/Common.BankPin');
+  let index = 1900;
+  function actor(test, mode = 'none', pin = false) {
+    const channel = { kind: 'test', isOpen: () => true, send: () => true, close() {}, onData() {}, onClose() {}, onError() {} };
+    const session = new PlayerSession(channel), p = new Player(session); session.setPlayer(p);
+    p.setUsername('native-random-' + index++);
+    p.setLocation(new Location(3222, 3218, 0)); p.setNeedsPlacement(false); p.setRunning(false);
+    const connection = new ClientConnection(channel); connection.player = p;
+    session.setTurnPacketProcessor(() => connection.processTurnPackets());
+    // Keep account-file login/logout I/O outside this offline world fixture.
+    test.mock.method(p, 'onAdd', () => {}); test.mock.method(p, 'onRemove', () => {});
+    assert.equal(core.World.getPlayers().add(p), true); core.World.refreshActiveRegions();
+    const messages = []; p.sendMessage = text => messages.push(text);
+    api.emitCustomEvent('ironman:set-mode', { player: p, mode });
+    if (pin) p.setAttribute(Pin.ATTRIBUTES.hash, Pin.hash(p, '1234'));
+    test.after(() => {
+      Events.logoutCleanup({ player: p }); core.TaskManager.cancelTasks(p.getIndex());
+      core.World.getPlayers().remove(p); core.World.refreshActiveRegions();
+    });
+    return { p, connection, session, messages };
+  }
+  const catalog = [];
+  function spawn(f, kind) {
+    const entry = typeof kind === 'string' ? catalog.find(row => row.kind === kind) : kind;
+    assert.ok(entry, kind);
+    Events.spawnCommand({ player: f.p, parts: ['randevt', String(entry.index)] });
+    const active = Events.activeFor(f.p);
+    assert.ok(active, f.messages.join('\n'));
+    active.npc.setNeedsPlacement(false); // Initial NPC sync has placed it.
+    return active.npc;
+  }
+  function turn() {
+    core.World.process();
+  }
+  async function talk(f, npc) {
+    await f.connection.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: 1 }]);
+    f.connection.processTurnPackets();
+    for (let tick = 0; tick < 5; tick++) turn(f, npc);
+  }
+  // Discover the real command's current catalog; membership changes its numeric indices.
+  const catalogOwner = actor(t);
+  Events.spawnCommand({ player: catalogOwner.p, parts: ['randevt', 'help'] });
+  const lastIndex = Number(/\(0-(\d+);/.exec(catalogOwner.messages.at(-1))[1]);
+  for (let index = 0; index <= lastIndex; index++) {
+    Events.spawnCommand({ player: catalogOwner.p, parts: ['randevt', String(index)] });
+    const active = Events.activeFor(catalogOwner.p);
+    if (active) catalog.push({ index, kind: active.definition.kind, stationary: active.definition.stationary === true });
+  }
+  Events.logoutCleanup({ player: catalogOwner.p }); core.World.getPlayers().remove(catalogOwner.p);
+  core.World.refreshActiveRegions();
+  assert.ok(['genie', 'countcheck', 'beekeeper'].every(kind => catalog.some(row => row.kind === kind)));
+  for (const entry of catalog.filter(row => !row.stationary)) {
+    await t.test(`${entry.kind}/${entry.index} actually follows a walking owner in World ticks and native sync`, async test => {
+      const f = actor(test), npc = spawn(f, entry), origin = npc.getLocation().clone();
+      f.p.getMovementQueue().requestWalk(new Location(3228, 3218, 0));
+      for (let tick = 0; tick < 10; tick++) turn(f, npc);
+      assert.ok(f.p.getLocation().equals(new Location(3228, 3218, 0)));
+      assert.ok(npc.getLocation().getDistance(origin) >= 3, 'the actual NPC movement tick consumed its follow route');
+      assert.ok(npc.getLocation().getDistance(f.p.getLocation()) <= 1);
+      assert.equal(npc.getFollowing(), f.p);
+      assert.ok(f.p.getLocalNpcs().includes(npc), 'the world visibility pass keeps the invitation in view');
+      const tile = f.session.npcSyncState.lastTiles.get(npc.getIndex());
+      assert.deepEqual(tile, { x: npc.getLocation().getX(), y: npc.getLocation().getY(), level: 0 }, 'native NPC_INFO encoded the walked tile');
+      const dismiss = npc.getCurrentDefinition(f.p).getActions().indexOf('Dismiss') + 1;
+      assert.ok(dismiss > 0, 'the cache supplies the Dismiss option');
+      await f.connection.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: dismiss }]);
+      f.connection.processTurnPackets();
+      for (let tick = 0; tick < 5; tick++) turn();
+      assert.equal(npc.isRegistered(), false, 'dismissal removes the actual invitation from world scheduling');
+      const retiredTile = npc.getLocation().clone();
+      f.p.getMovementQueue().requestWalk(new Location(3222, 3218, 0));
+      for (let tick = 0; tick < 8; tick++) turn();
+      assert.ok(npc.getLocation().equals(retiredTile), 'retired NPCs no longer move with the owner');
+    });
+  }
+  for (const entry of catalog.filter(row => row.stationary)) await t.test(`${entry.kind} keeps its stationary event policy`, test => {
+    const f = actor(test), npc = spawn(f, entry), at = npc.getLocation().clone();
+    f.p.getMovementQueue().requestWalk(new Location(3228, 3218, 0));
+    for (let tick = 0; tick < 10; tick++) turn();
+    assert.equal(npc.getFollowing() == null, true);
+    assert.ok(npc.getLocation().equals(at));
+  });
+  for (const [mode, pin, lamps] of [['none', false, 0], ['none', true, 1], ['ironman', false, 0], ['ultimate', false, 1]]) {
+    await t.test(`Count Check: ${mode}, configured PIN=${pin}, rewards ${lamps} lamp`, async test => {
+      const f = actor(test, mode, pin), outsider = actor(test), npc = spawn(f, 'countcheck');
+      const status = { player: f.p, set: false }; api.emitCustomEvent('bank-pin:status', status);
+      assert.equal(status.set, pin, 'the real BankPin owner answers its configured state');
+      await talk(outsider, npc);
+      assert.equal(outsider.p.getInventory().getAmount(I.LAMP), 0, 'another player cannot take this event');
+      await talk(f, npc);
+      assert.equal(f.p.getInventory().getAmount(I.LAMP), lamps);
+      if (!lamps) assert.equal(Events.activeFor(f.p), null, 'a failed check still retires the invitation');
+      f.p.getDialogueManager().reset();
+      await talk(f, npc);
+      assert.equal(f.p.getInventory().getAmount(I.LAMP), lamps, 'repeat interaction cannot award again');
+    });
+  }
+  await t.test('Count Check settles a real pending PIN and does not accept one still in its waiting period', async test => {
+    for (const matured of [false, true]) {
+      const f = actor(test), npc = spawn(f, 'countcheck');
+      f.p.setAttribute(Pin.ATTRIBUTES.pendingHash, Pin.hash(f.p, '1234'));
+      f.p.setAttribute(Pin.ATTRIBUTES.pendingAt, Pin.now() + (matured ? -1 : 86_400_000));
+      await talk(f, npc);
+      assert.equal(Boolean(f.p.getAttribute(Pin.ATTRIBUTES.hash)), matured);
+      assert.equal(f.p.getInventory().getAmount(I.LAMP), matured ? 1 : 0);
+      Events.logoutCleanup({ player: f.p }); core.World.getPlayers().remove(f.p);
+      core.World.refreshActiveRegions();
+    }
+  });
+  await t.test('the actual cache Beekeeper drag/Confirm bytes complete the native session and reward once', async test => {
+    const { decodeClientPackets } = require('../dist/net/protocol/ClientProtocol');
+    RegionManager.loadMapFiles(1927, 5044);
+    test.mock.method(Math, 'random', () => 0.99);
+    const f = actor(test), npc = spawn(f, 'beekeeper');
+    async function input(packets) {
+      f.connection.inject(packets); await f.connection.idle(); f.connection.processTurnPackets();
+    }
+    async function advanceDialogue() {
+      for (let pages = 0; pages < 16 && f.p.getDialogueManager().isActive(); pages++) {
+        const dialogue = f.p.getDialogueManager().getCurrent();
+        const group = dialogue instanceof core.PlayerDialogue ? 217 : 231;
+        await input([{ type: 'dialogue_continue', widgetId: (group << 16) | 5, childIndex: -1 }]);
+      }
+      assert.equal(f.p.getDialogueManager().isActive(), false);
+    }
+    await talk(f, npc); await advanceDialogue();
+    const returnTile = f.p.getLocation().clone();
+    assert.ok(core.MultiChatboxPrompt.getPending(f.p));
+    await input([{ type: 'dialogue_continue', widgetId: (219 << 16) | 1, childIndex: 1 }]);
+    await advanceDialogue();
+    const stay = Teleports.sessionOf(f.p);
+    assert.equal(stay?.kind, 'beekeeper'); assert.equal(f.p.getInterfaceId(), 420);
+    assert.deepEqual(stay.data.slots, [1, 2, 3, 4, 0, 0, 0, 0]);
+    // Rev241 cache DOM/InputManager drag completion and Confirm emitted these IF_BUTTOND/IF_BUTTON1 bytes.
+    const packets = [
+      '01ffff0f00a401ffffff7f000a01a4ffff', '01ffff1100a401ffffff7f000b01a4ffff',
+      '01ffff1300a401ffffff7f000c01a4ffff', '01ffff1500a401ffffff7f000d01a4ffff',
+      '1701a40016ffffffff',
+    ].map(hex => decodeClientPackets(Buffer.from(hex, 'hex')));
+    for (const packet of packets) await input(packet);
+    assert.deepEqual(stay.data.slots, [0, 0, 0, 0, 1, 2, 3, 4]);
+    assert.equal(stay.data.state, 'talking'); assert.equal(f.p.getInterfaceId(), -1);
+    assert.match(f.p.getDialogueManager().getCurrent().getText(), /That's perfect!/);
+    await input(packets.at(-1)); // A double Confirm while the success dialogue is open.
+    await advanceDialogue();
+    for (let tick = 0; tick < 3; tick++) turn();
+    const rewards = () => [25129, 25131, 25133, 25135, 25137, I.LAMP].map(id => f.p.getInventory().getAmount(id));
+    const received = rewards();
+    assert.equal(received.slice(0, 5).reduce((sum, amount) => sum + amount, 0), 1);
+    assert.equal(received[5], 1);
+    assert.equal(Teleports.sessionOf(f.p), undefined);
+    assert.ok(f.p.getLocation().equals(returnTile), 'returns to the actual invitation-acceptance tile');
+    await input(packets.at(-1));
+    for (let tick = 0; tick < 3; tick++) turn();
+    assert.deepEqual(rewards(), received, 'a stale Confirm after return cannot award again');
+  });
+});

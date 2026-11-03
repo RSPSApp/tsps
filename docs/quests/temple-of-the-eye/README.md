@@ -71,6 +71,13 @@ copy; `::tele`/logout during them recovers at the matching start tile.
 - Persten is pulled into the rift on the "dragged into the rift" action, and the creatures appear
   when the transcript says they do.
 
+For #1978, the vision plays its opening like capture 1693 (ticks 4609-4633). The chatbox is held
+on arrival; 11 ticks later the player walks seven tiles south to the Mysterious Stone (2400,5731)
+while the camera slowly pans to it (2403,5728), and the voices start 24 ticks after arrival. Before,
+the voices started at once, the player never moved, and the pan ran on "And with you, Zachariah",
+which carried the camera away from the player. Live returns the player to the temple on "Jas!"
+(level 1 of the vision's build area); here it is still on Persten's "[player name]?".
+
 Known gaps:
 
 - Other players on the same step are visible (shared map, not an instance).
@@ -83,6 +90,14 @@ Known gaps:
 
 ## Runs
 
+- **2026-11-03, #1978 vision walk, real web client + MCP:** stage 100 by command, the three
+  apprentices and Persten by real clicks, chatbox Continues clicked in the browser client. Before
+  the fix the player stood at 2400,5738 while the camera panned to the stone on the second voice
+  line. After it, the player waits 10 ticks, walks 2400,5738 to 2400,5731 one tile a tick and is
+  beside the stone in frame when "Saradomin be with you." opens on tick 24; every voice line, the
+  return to the temple and the rift transcript continued. The reported freeze did not reproduce
+  on main before the fix: Continue clicks on the real link advanced the vision (missed clicks just
+  above the link look like a freeze). The rest of the quest was not replayed.
 - **2026-11-02, #1906 instances and tutorial fixes:** offline native checkpoints take the quest
   from stage 90 through the temple instance, the vision return, the tutorial instance, the third
   power-up back in the temple and the tower exit; the Felix repeat, weak-cell replacement and

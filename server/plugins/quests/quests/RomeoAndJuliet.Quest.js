@@ -1,6 +1,6 @@
 /** Romeo & Juliet: captured handovers, potion effects and private scenes. See docs/f2p-varrock-parity.md. */
 module.exports = function registerRomeoAndJulietQuest(api) {
-  const { Animation, Graphic, Location, World, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers } = api.core;
+  const { Animation, Graphic, PathFinder, Location, World, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
 
   const ROMEO_NPC_ID = NpcIdentifiers.ROMEO;
@@ -306,7 +306,11 @@ module.exports = function registerRomeoAndJulietQuest(api) {
       if(text==="Right...bottoms up!")current?.performAnimation(new Animation(3284));
       if(text==="Urk!")current?.performAnimation(new Animation(836));
       if(text==="What's all that screaming?") { actor(scene,DRAUL_NPC_ID,3158,3427);camera(player,scene,[3156,3421,425],[3157,3426,125],5); }
-      if(text==="Hi Romeo...I'm Phillipa!") {const cousin=actor(scene,PHILLIPA_NPC_ID,2331,4645);cousin?.getMovementQueue().addSteps(scene.sourceTile(2325,4644));}
+      // Straight queued steps cross the crypt's walls before reaching these scripted destinations.
+      if(text==="Hi Romeo...I'm Phillipa!") {
+        const cousin=actor(scene,PHILLIPA_NPC_ID,2331,4645),to=scene.sourceTile(2325,4644);
+        if(cousin)PathFinder.calculateWalkRoute(cousin,to.getX(),to.getY());
+      }
     };
     if(scene.kind==="crypt"&&text==="Oh, be quiet...")event.after=()=>{
       frozenDialogue(player);
@@ -321,7 +325,9 @@ module.exports = function registerRomeoAndJulietQuest(api) {
       later(scene,16,()=>resume(player,ROMEO_NPC_ID,CRYPT_VARIANT,text));
     };
     if(scene.kind==="crypt"&&text==="Ohhh, ok then...")event.after=()=>{
-      frozenDialogue(player);scene.actors.get(ROMEO_NPC_ID)?.getMovementQueue().addSteps(scene.sourceTile(2323,4643));
+      frozenDialogue(player);
+      const romeo=scene.actors.get(ROMEO_NPC_ID),to=scene.sourceTile(2323,4643);
+      if(romeo)PathFinder.calculateWalkRoute(romeo,to.getX(),to.getY());
       later(scene,1,()=>camera(player,scene,[2322,4639,300],[2328,4654,25]));
       later(scene,14,()=>resume(player,ROMEO_NPC_ID,CRYPT_VARIANT,text));
     };

@@ -74,7 +74,7 @@ function makePlayer() {
   };
 }
 
-function harness() {
+function harness({ shieldOfArrav = false } = {}) {
   const custom = new Map();
   const variants = [];
   const conditions = [];
@@ -100,6 +100,7 @@ function harness() {
     getItemOnGroundManager: () => ({ registerLocation: (_player, item, at) => grounds.push([item.getId(), at.getX(), at.getY()]) }),
   }, { get: (target, key) => (key in target ? target[key] : noop) });
   require(root + '/plugins/quests/quests/PriestInPeril.Quest')(api);
+  if (shieldOfArrav) require(root + '/plugins/quests/quests/ShieldOfArrav.Quest')(api);
   const quest = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'priest_in_peril');
   const player = makePlayer();
   const h = { areas, grounds, custom, variants, conditions, named, itemOnObject, npcInteraction, deaths, statements, quest, player };
@@ -146,6 +147,41 @@ const CELL_GATE = [O.CELL_GATE_7, 3415, 3489, 2];
 const COFFIN = [O.COFFIN_7, 3413, 3486, 2];
 const WELL = [O.WELL_6, 3423, 9890, 0];
 const MAUSOLEUM = new core.Location(3440, 9895, 0);
+
+test('joining or completing Shield of Arrav cannot hide Priest in Peril at King Roald', () => {
+  const h = harness({ shieldOfArrav: true });
+  for (const shieldStage of [0, 3, 4, 5, 6, 7]) {
+    h.player.attrs.set('quest.shield_of_arrav.stage', shieldStage);
+    for (const npcId of [N.KING_ROALD, N.KING_ROALD_3, N.KING_ROALD_5, N.KING_ROALD_6, N.KING_ROALD_7]) {
+      assert.equal(h.talk(npcId), 'starting-the-quest', `Shield stage ${shieldStage}, NPC ${npcId}`);
+      assert.equal(h.stage(), 0, 'offering the quest does not accept it');
+    }
+  }
+  h.player.items.set(I.CERTIFICATE, 1);
+  assert.equal(h.talk(N.KING_ROALD), 'starting-the-quest', 'a leftover certificate after completion cannot block it');
+  h.player.attrs.set(STAGE, 20);
+  assert.equal(h.talk(N.KING_ROALD), 'you-killed-a-dog-talking-to-king-roald-about-the-now-dead-dog');
+  assert.equal(h.stage(), 30, 'the resumed Priest dialogue still updates the quest');
+});
+
+test('unfinished Shield of Arrav hand-ins keep priority without advancing Priest in Peril', () => {
+  const h = harness({ shieldOfArrav: true });
+  for (const shieldStage of [4, 6]) {
+    h.player.attrs.set('quest.shield_of_arrav.stage', shieldStage);
+    for (const itemId of [I.CERTIFICATE, I.BROKEN_SHIELD, I.BROKEN_SHIELD_2, I.HALF_CERTIFICATE, I.HALF_CERTIFICATE_2]) {
+      h.player.items.clear();
+      h.player.items.set(itemId, 1);
+      h.player.attrs.set(STAGE, 20);
+      assert.deepEqual(h.talk(N.KING_ROALD), { page: 'Shield of Arrav', variant:
+        itemId === I.CERTIFICATE ? 'finishing-up-talking-to-king-roald-with-a-full-certificate'
+          : 'finishing-up-talking-to-king-roald-without-a-full-certificate' });
+      assert.equal(h.stage(), 20, 'a different quest winning cannot report the guardian kill');
+    }
+  }
+  h.player.items.clear();
+  assert.equal(h.talk(N.KING_ROALD), 'you-killed-a-dog-talking-to-king-roald-about-the-now-dead-dog');
+  assert.equal(h.stage(), 30, 'without a hand-in Priest in Peril regains the conversation');
+});
 
 test('the route sends live varp 302 values from start to completion', () => {
   const h = harness();

@@ -64,6 +64,29 @@ export function applyForcedLandscapeSize(
     return size;
 }
 
+type LockableOrientation = ScreenOrientation & {
+    lock?: (orientation: "landscape") => Promise<void>;
+    unlock?: () => void;
+};
+
+function screenOrientation(): LockableOrientation | undefined {
+    try {
+        return window.screen?.orientation as LockableOrientation | undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * Lets go of a landscape lock taken by this hook. A native lock keeps excluding portrait until
+ * unlocked, so without this an upright phone stays landscape after Portrait Mode is turned on.
+ */
+function releaseLandscapeLock(): void {
+    try {
+        screenOrientation()?.unlock?.();
+    } catch {}
+}
+
 export function getForcedLandscapeRotation(
     chatInputFocused: boolean,
     currentRotation: boolean,
@@ -162,18 +185,21 @@ export function useSafariLandscapeLock(enabled: boolean = true): MobileLandscape
         const tryLockLandscape = () => {
             if (allowPortrait) return;
             try {
-                const orientation = window.screen?.orientation as
-                    | (ScreenOrientation & {
-                          lock?: (orientation: "landscape") => Promise<void>;
-                      })
-                    | undefined;
+                const orientation = screenOrientation();
                 if (!orientation || typeof orientation.lock !== "function") {
                     return;
                 }
-                orientation.lock("landscape").catch(() => {});
+                orientation
+                    .lock("landscape")
+                    .then(() => {
+                        // Portrait Mode was turned on while the request was pending.
+                        if (isPortraitModeEnabled()) releaseLandscapeLock();
+                    })
+                    .catch(() => {});
             } catch {}
         };
 
+        if (allowPortrait) releaseLandscapeLock();
         scheduleApply();
         tryLockLandscape();
 

@@ -159,6 +159,29 @@ const COMBAT_AUTO_RETALIATE_CHILD = 32;
  * the older bar, now under a container the cache keeps hidden. 67 is the offhand bar.
  */
 const COMBAT_SPECIAL_ATTACK_CHILDREN = new Set([41, 57]);
+/**
+ * The special-attack orb on the desktop and mobile HUDs. It only sends its native Use button:
+ * rev 241's CS2 predicts %sa_attack (varp 301) locally, so the button is what makes the server
+ * decide, as live does.
+ */
+const SPECIAL_ATTACK_ORB_COMPONENTS = [
+  "orbs:specbutton",
+  "orbs_nomap:specbutton",
+  "orbs_osm:specbutton",
+  "orbs_osm_nomap:specbutton",
+];
+let specialAttackOrbIds: Set<number> | undefined;
+
+function isSpecialAttackOrb(widgetId: number): boolean {
+  if (!CachePipeline.isInitialized()) return false;
+  specialAttackOrbIds ??= new Set(
+    SPECIAL_ATTACK_ORB_COMPONENTS
+      .map((name) => CacheDefinitions.getComponentId(name))
+      .filter((id): id is number => id !== null),
+  );
+  return specialAttackOrbIds.has(widgetId);
+}
+
 const WORLD_INTERACTIONS = new Set([
   "move",
   "teleport",
@@ -780,6 +803,8 @@ export class ClientConnection {
               );
             } else if (actionPacket.groupId === COMBAT_INTERFACE && COMBAT_SPECIAL_ATTACK_CHILDREN.has(actionPacket.childId)) {
               CombatSpecial.activate(this.player);
+            } else if (actionPacket.buttonNum === 1 && isSpecialAttackOrb(actionPacket.widgetId)) {
+              CombatSpecial.activate(this.player);
             } else if (WeaponInterfaceManager.handleStyleButton(this.player, actionPacket.groupId, actionPacket.childId)) {
               BonusManager.update(this.player);
             } else if (Autocasting.handleWidgetAction(
@@ -886,14 +911,6 @@ export class ClientConnection {
               this.player.getPacketSender().sendRunStatus();
               // "player:run-toggled" { player, running }: the run mode the player switched to.
               PluginManager.emitCustomEvent("player:run-toggled", { player: this.player, running: this.player.isRunningReturn() });
-            } else if (packet.varpId === 301) {
-              // The web client's special attack orb is a CS2 handler that toggles varp 301
-              // locally and sends the new value, unlike live, whose orb sends an interface
-              // button and lets the server decide. The client's value can lag the server by a
-              // tick (a special that just swung turns the bar off), so a click would send 0
-              // while the server is already off and be ignored. Treat every 301 packet as the
-              // orb click it is: toggle the server's state, as live's button does.
-              CombatSpecial.activate(this.player);
             }
             this.player.applyAudioSettingFromClient(packet.varpId, packet.value);
           }

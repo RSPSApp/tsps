@@ -479,7 +479,8 @@ export abstract class ItemContainer {
       const existing = this.items.find((held) => held.getId() === item.getId() && (!(this instanceof Bank) || held.getAmount() > 0) &&
         JSON.stringify(held.getMeta() ?? null) === meta);
       if (existing) return Math.min(requested, Math.max(0, MAX_STACK_AMOUNT - existing.getAmount()));
-      if (this instanceof Bank && this.items.some((held) => held.getId() === item.getId() && held.getAmount() === 0)) {
+      if (this instanceof Bank && this.items.some((held) =>
+        held.getAmount() === 0 && Bank.sharesPlaceholder(held.getId(), item.getId()))) {
         return Math.min(requested, MAX_STACK_AMOUNT);
       }
       return this.getFreeSlots() > 0 ? Math.min(requested, MAX_STACK_AMOUNT) : 0;
@@ -501,12 +502,18 @@ export abstract class ItemContainer {
     ) {
       let slot = -1;
       let emptyBankSlot = -1;
+      let familyBankSlot = -1;
       for (let i = 0; i < this.capacity(); i++) {
-        if (this.items[i].getId() !== item.getId()) {
+        if (this instanceof Bank && this.items[i].getAmount() === 0) {
+          if (this.items[i].getId() === item.getId()) {
+            if (emptyBankSlot === -1) emptyBankSlot = i;
+          } else if (familyBankSlot === -1
+            && Bank.sharesPlaceholder(this.items[i].getId(), item.getId())) {
+            familyBankSlot = i;
+          }
           continue;
         }
-        if (this instanceof Bank && this.items[i].getAmount() === 0) {
-          if (emptyBankSlot === -1) emptyBankSlot = i;
+        if (this.items[i].getId() !== item.getId()) {
           continue;
         }
         if (
@@ -518,7 +525,9 @@ export abstract class ItemContainer {
         }
       }
       if (slot == -1) {
-        slot = emptyBankSlot >= 0 ? emptyBankSlot : this.getEmptySlot();
+        slot = emptyBankSlot >= 0 ? emptyBankSlot
+          : familyBankSlot >= 0 ? familyBankSlot
+          : this.getEmptySlot();
       }
       if (slot == -1) {
         if (this.getPlayer() != null) {
@@ -656,12 +665,13 @@ export abstract class ItemContainer {
     ) {
       return this;
     }
-    // Only items with a cache placeholder leave one.
-    let leavePlaceHolder =
-      toContainer instanceof Inventory &&
-      this instanceof Bank &&
-      this.getPlayer().isPlaceholders() &&
-      getItemDefinition().forId(item.getId()).getPlaceholderId() >= 0;
+    // Only items with a cache placeholder, or a family shared through one, leave one.
+    let placeholderBankId = -1;
+    let leavePlaceHolder = false;
+    if (toContainer instanceof Inventory && this instanceof Bank && this.getPlayer().isPlaceholders()) {
+      placeholderBankId = Bank.placeholderBankId(item.getId());
+      leavePlaceHolder = placeholderBankId >= 0;
+    }
     if (item.getAmount() > this.getAmount(item.getId())) {
       item.setAmount(this.getAmount(item.getId()));
     }
@@ -677,6 +687,9 @@ export abstract class ItemContainer {
         if (!leavePlaceHolder) {
           this.items[slot].setId(-1);
           this.items[slot].setMeta(null);
+        } else if (this.items[slot].getId() !== placeholderBankId) {
+          this.items[slot].setId(placeholderBankId);
+          this.items[slot].setMeta(null);
         }
       }
     } else {
@@ -688,6 +701,9 @@ export abstract class ItemContainer {
         }
         if (!leavePlaceHolder) {
           this.items[slot].setId(-1);
+          this.items[slot].setMeta(null);
+        } else if (this.items[slot].getId() !== placeholderBankId) {
+          this.items[slot].setId(placeholderBankId);
           this.items[slot].setMeta(null);
         }
         this.items[slot].setAmount(0);

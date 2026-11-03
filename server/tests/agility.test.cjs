@@ -425,6 +425,47 @@ test("native Lizardman Canyon handholds enter and leave both crossings at level 
   }
 });
 
+test("the native Draynor River Lum stone routes to this shore and finishes across the river", () => {
+  const { RegionManager } = require("../dist/game/collision/RegionManager");
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  const DRAYNOR_STONE = 16533;
+  const stoneTile = [3151, 3363, 0];
+  const west = [3149, 3363, 0], east = [3154, 3363, 0];
+  RegionManager.init();
+  RegionManager.loadMapFiles(...stoneTile);
+  const object = MapObjects.get(DRAYNOR_STONE, new Location(...stoneTile), null);
+  assert.ok(object, "the active cache places a single clickable stone in the river");
+  assert.equal(object.getDefinition().getName(), "Stepping stone");
+  assert.equal(object.getDefinition().getActions()[0], "Jump-onto");
+  assert.equal(RegionManager.blocked(new Location(...stoneTile), null), true, "the stone is not a walking destination");
+  for (const shore of [west, east]) assert.equal(RegionManager.blocked(new Location(...shore), null), false);
+
+  for (const [from, approach, to] of [[west, west, east], [east, east, west], [[3147, 3363, 0], west, east], [[3156, 3363, 0], east, west]]) {
+    const player = createPlayer(...from, 31);
+    const landings = [], moveTo = player.moveTo;
+    player.moveTo = location => {
+      landings.push([location.getX(), location.getY(), location.getZ()]);
+      return moveTo(location);
+    };
+    const route = { player, object, objectId: DRAYNOR_STONE, clickType: 1, destination: null };
+    hooks.route.forEach(handler => handler(route));
+    assert.deepEqual(route.destination, { x: approach[0], y: approach[1], z: approach[2] }, "approach stays on the near shore");
+    assert.notEqual(operate(player, DRAYNOR_STONE, stoneTile), false);
+    assert.deepEqual(landings, [stoneTile, to], "the crossing uses the actual stone before reaching shore");
+    assert.deepEqual(tileOf(player), to, "one click completes the crossing");
+    assert.equal(player.state.xp, 3);
+    assert.equal(player.state.blocked, false);
+    assert.equal(player.getAttribute("agility.obstacle") ?? null, null);
+  }
+
+  const underLevel = createPlayer(...west, 30);
+  assert.notEqual(operate(underLevel, DRAYNOR_STONE, stoneTile), false);
+  assert.deepEqual(tileOf(underLevel), west);
+  assert.equal(underLevel.state.xp, 0);
+  assert.equal(underLevel.state.blocked, false);
+  assert.match(underLevel.state.messages.at(-1), /31.*Agility|Agility.*31/);
+});
+
 test("a crossing's via tiles are walked in travel order, both ways", () => {
   const [crossing] = build({
     name: "Test stones", object: ObjectIds.STILE, level: 1,

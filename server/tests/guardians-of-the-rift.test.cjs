@@ -1357,7 +1357,8 @@ test('below 300 energy the close says so, with no points, no XP and no rift coun
   assert.ok(!player.messages.some((message) => message.includes('bonus Runecraft XP')));
 });
 
-test('Check counts the points and searches; Search takes one reward every 3 ticks until they run out', () => {
+test('Check counts the points and searches; Search takes one reward every 3 ticks until they run out', t => {
+  t.mock.method(Math, 'random', () => 0.5); // Pearl rewards can fund extra searches; test points alone.
   const player = fakePlayer();
   Records.setPoints(player, 2, 3);
   Records.addSearches(player, 4001);

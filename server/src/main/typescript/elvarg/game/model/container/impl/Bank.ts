@@ -1177,6 +1177,7 @@ export class Bank extends ItemContainer {
             return this;
         }
         const opening = !Bank.isOpen(this.getPlayer());
+        if (opening) this.getPlayer().setNoteWithdrawal(false);
 
         // Update player status
         this.getPlayer().setStatus(PlayerStatus.BANKING);
@@ -1318,6 +1319,11 @@ export class Bank extends ItemContainer {
             return this;
         }
 
+        if (to instanceof Inventory && this.getPlayer().isPlaceholders()
+                && item.getAmount() >= this.getItems()[slot].getAmount()
+                && item.getDefinition().getPlaceholderId() < 0) {
+            this.getPlayer().sendMessage("That item cannot leave a placeholder.");
+        }
         this.deleteItemContainer(item, slot, to instanceof Inventory ? false : refresh, to);
 
 

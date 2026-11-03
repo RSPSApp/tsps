@@ -21,7 +21,7 @@ const INVENTORY_SIZE = 28;
 function setup() {
   const hooks = {
     custom: new Map(), variants: [], conditions: [], login: [], itemOnItem: [],
-    itemOnObject: [], itemOnNpc: [], itemAction: [], objects: [],
+    itemOnObject: [], itemOnNpc: [], itemAction: [], objects: [], startup: [], worldObjects: [],
   };
   const core = PluginManager.getCoreApi();
   const api = new Proxy({
@@ -45,6 +45,7 @@ function setup() {
     onNpcBeforeDeath() {},
     onNpcHitModify() {},
     onPlayerLogin: (fn) => hooks.login.push(fn),
+    onServerStartup: (fn) => hooks.startup.push(fn),
     onPlayerLogout() {},
     onPlayerDeath() {},
     spawnNpc(def) {
@@ -61,7 +62,7 @@ function setup() {
     },
     removeNpc() {},
     getWorld: () => ({ getNpcs: () => [] }),
-    getObjectManager: () => ({ register() {} }),
+    getObjectManager: () => ({ register: (object) => hooks.worldObjects.push(object) }),
     getItemOnGroundManager: () => ({ registerLocation() {} }),
   }, { get(target, key) { return target[key] ?? (() => {}); } });
   require('../plugins/quests/quests/WhatLiesBelow.Quest')(api);
@@ -146,6 +147,13 @@ test('What Lies Below completion dispatch sends cache varbit 3523 = 150 and surv
   assert.equal(legacy.quest.isComplete(legacy.player), true);
   assert.equal(legacy.varbits.get(VARBIT_SUROK_QUEST), 150);
   assert.equal(legacy.items.get(I.BEACON_RING) ?? 0, 0, 'replay does not grant rewards again');
+});
+
+test('What Lies Below startup and login use the cached statue without adding another', () => {
+  const h = setup();
+  for (const startup of h.hooks.startup) startup({});
+  for (let repeat = 0; repeat < 2; repeat++) for (const login of h.hooks.login) login({ player: h.player });
+  assert.deepEqual(h.hooks.worldObjects, [], 'the cache already supplies the Tunnel of Chaos statue');
 });
 
 test('What Lies Below Surok hand-in consumes the infused wand and bowl', () => {

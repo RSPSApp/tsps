@@ -14,6 +14,7 @@
       "mazeGuardianComplete": "magictraining_guard_maze_complete"
     },
     "locs": {
+      "entranceDoor": "magictraining_temple_door",
       "telekineticPortal": "magictraining_teledoor",
       "telekineticWalls": "magictraining_miniwall",
       "telekineticFinish": "magictraining_mini_statue_pitfall",

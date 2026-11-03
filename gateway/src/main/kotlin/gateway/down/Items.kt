@@ -158,7 +158,7 @@ class Items(
 /**
  * Ground items. tsps sends every stack the player can see, keyed by its own stack id, with
  * absolute tiles and tick timers; the client gets OBJ_ADD/DEL/COUNT for the ones in its
- * scene, and the whole scene again after a rebuild clears it.
+ * scene, replacing any retained stacks when the scene rebuilds.
  */
 class GroundItems(private val send: (OutgoingGameMessage) -> Unit) {
     private class Stack(
@@ -183,8 +183,12 @@ class GroundItems(private val send: (OutgoingGameMessage) -> Unit) {
         this.tick = tick
     }
 
-    /** A rebuild: the client has dropped every obj, so the new scene's stacks go again. */
+    /** The client retains objs in overlapping tiles: remove them before resending the scene. */
     fun rebuild(zoneX: Int, zoneZ: Int) {
+        for (id in shown) {
+            val stack = stacks.getValue(id)
+            send(ObjDelSpecific(stack.item, stack.quantity, stack.level, stack.x, stack.z))
+        }
         sceneX = (zoneX - SCENE_RADIUS_ZONES) shl 3
         sceneZ = (zoneZ - SCENE_RADIUS_ZONES) shl 3
         shown.clear()

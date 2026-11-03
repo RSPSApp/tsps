@@ -60,7 +60,6 @@
 module.exports = function registerWhatLiesBelowQuest(api) {
   const {
     Bank,
-    GameObject,
     Item,
     ItemIdentifiers,
     Location,
@@ -151,9 +150,6 @@ module.exports = function registerWhatLiesBelowQuest(api) {
   const TUNNEL_PORTAL_OBJECT_ID = ObjectIdentifiers.PORTAL_60; // 23095 "Portal", Use
   const CHAOS_ALTAR_OBJECT_ID = ObjectIdentifiers.ALTAR_55; // 34769 chaos runecraft altar
 
-  const STATUE_TILE = { x: 3284, y: 3469, z: 0 }; // wiki: Statue (Tunnel of Chaos)
-  const STATUE_TYPE = 10;
-  const STATUE_FACE = 0;
   const SUROK_TILE = { x: 3210, y: 3495, z: 0 }; // Varrock Palace Library
   const KING_SPAWN_TILE = { x: 3209, y: 3495, z: 0 };
   const TUNNEL_ENTRY_TILE = { x: 3179, y: 5190, z: 0 };
@@ -1095,7 +1091,7 @@ module.exports = function registerWhatLiesBelowQuest(api) {
 
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
-    if (objectId === STATUE_OBJECT_ID) {
+    if ((event.definition?.id ?? objectId) === STATUE_OBJECT_ID) {
       event.handled = true;
       handleStatueExcavate(player);
       return;
@@ -1206,14 +1202,6 @@ module.exports = function registerWhatLiesBelowQuest(api) {
   function installWorld() {
     if (worldInstalled) return;
     worldInstalled = true;
-    const statue = new GameObject(
-      STATUE_OBJECT_ID,
-      new Location(STATUE_TILE.x, STATUE_TILE.y, STATUE_TILE.z),
-      STATUE_TYPE,
-      STATUE_FACE,
-      null
-    );
-    api.getObjectManager().register(statue, true);
     ensureQuestSpawns();
   }
 

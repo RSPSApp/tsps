@@ -55,7 +55,7 @@ const EMOTES = [
     { sequence: 870, loop: 12059 },
     { sequence: 868, loop: 12058 },
     { sequence: 8917, loop: 12064 },
-    { sequence: 1708 },
+    { sequence: 1708, graphic: "hw07_arm_from_the_ground_spotanim" },
     { sequence: 7131, loop: 12062 },
     { skillcape: true },
     { airGuitar: true },
@@ -66,7 +66,7 @@ const EMOTES = [
     { sequence: 8541, loop: 12063 },
     { sequence: 9208 },
     { sequence: 10031, loop: 12065 },
-    { sequence: 10503 },
+    { sequence: 10503, graphic: "hw23_emote_bat_spotanim" },
     { sequence: 10796, loop: 10797 },
     { sequence: 10053, loop: 10061, loopFirst: true },
     { sequence: 10051, loop: 10052, loopFirst: true },
@@ -204,7 +204,10 @@ function resolveEmote(player, slot, action, api) {
     }
 
     const loopSelected = emote.loopFirst ? action === 1 : action === 2;
-    return { sequence: loopSelected && emote.loop ? emote.loop : emote.sequence };
+    return {
+        sequence: loopSelected && emote.loop ? emote.loop : emote.sequence,
+        graphic: emote.graphic ? api.core.CacheDefinitions.getSpotanimId(emote.graphic) : undefined,
+    };
 }
 
 function performEmote({ player, slot, action }) {

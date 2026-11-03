@@ -97,7 +97,7 @@ function ticks(count = 140) {
 }
 const sent = (player, name) => player.sent.filter(([sentName]) => sentName === name).map(([, ...args]) => args);
 const lastMenu = player => sent(player, "sendCreationMenu").at(-1)?.[0];
-const statementText = player => player.statements.at(-1)?.getDialogues?.()?.[0]?.text ?? player.statements.at(-1)?.dialogues?.[0]?.text;
+const statementText = player => player.statements.at(-1)?.getDialogues().get(0)?.getText();
 
 for (const [label, component, quantity] of [["1", 3, 1], ["5", 4, 5], ["10", 5, 10], ["X", 6, 3], ["All", 7, 27]]) {
   test(`${label} remains selected after making items and reopening the anvil`, () => {
@@ -376,12 +376,12 @@ test("too low a level is a message box; impure iron is lost", (t) => {
 });
 
 test("ore used on a furnace opens the Smelt menu; sand opens molten glass", () => {
-  const player = furnaceWith([[I.IRON_ORE, 1]]);
+  const player = furnaceWith([[I.IRON_ORE, 2]]);
   const event = { player, itemId: I.IRON_ORE, object: furnace };
   itemOnObject(event);
   assert.equal(event.handled, true);
   assert.equal(lastMenu(player).getTitle(), "What would you like to smelt?");
-  assert.equal(player.items.get(I.IRON_ORE), 1);
+  assert.equal(player.items.get(I.IRON_ORE), 2);
 
   const glass = furnaceWith([[I.BUCKET_OF_SAND, 1], [I.SODA_ASH, 1]]);
   itemOnObject({ player: glass, itemId: I.BUCKET_OF_SAND, object: furnace });
@@ -391,6 +391,58 @@ test("ore used on a furnace opens the Smelt menu; sand opens molten glass", () =
   assert.equal(glass.items.get(I.MOLTEN_GLASS), 1);
   assert.equal(glass.items.get(I.BUCKET), 1);
   assert.equal(glass.xpSkill, Skill.CRAFTING);
+});
+
+test('using the only ore on a furnace smelts an unambiguous single bar without a quantity menu', t => {
+  t.mock.method(Math, 'random', () => 0);
+  for (const [ore, bar] of [[I.IRON_ORE, I.IRON_BAR], [I.SILVER_ORE, I.SILVER_BAR], [I.GOLD_ORE, I.GOLD_BAR]]) {
+    const player = furnaceWith([[ore, 1]]);
+    const event = { player, itemId: ore, object: furnace };
+    itemOnObject(event);
+    assert.equal(event.handled, true);
+    assert.equal(lastMenu(player), undefined);
+    assert.equal(player.items.get(ore), 1, 'the normal smelting delay is preserved');
+    ticks(6);
+    assert.equal(player.items.get(ore), 0);
+    assert.equal(player.items.get(bar), 1);
+    ticks(6);
+    assert.equal(player.items.get(bar), 1);
+  }
+});
+
+test('single-ore shortcuts preserve ordinary Smelt, mixed ores, coal bags and level requirements', () => {
+  const ordinary = furnaceWith([[I.IRON_ORE, 1]]);
+  objects.get('Furnace').Smelt({ player: ordinary });
+  assert.ok(lastMenu(ordinary), 'left-click Smelt retains its menu');
+  for (const ingredients of [[[I.IRON_ORE, 1], [I.COAL, 2]], [[I.GOLD_ORE, 1], [I.SILVER_ORE, 1]]]) {
+    const player = furnaceWith(ingredients);
+    itemOnObject({ player, itemId: ingredients[0][0], object: furnace });
+    assert.ok(lastMenu(player), 'multiple ores retain their menu');
+  }
+  const extras = furnaceWith([[I.IRON_ORE, 1], [I.STEEL_BAR, 1], [I.AMMO_MOULD, 1]]);
+  itemOnObject({ player: extras, itemId: I.IRON_ORE, object: furnace });
+  assert.ok(lastMenu(extras).getItems().includes(I.STEEL_CANNONBALL), 'other furnace products remain a choice');
+  const perfect = furnaceWith([[I.PERFECT_GOLD_ORE, 1]]);
+  itemOnObject({ player: perfect, itemId: I.PERFECT_GOLD_ORE, object: furnace });
+  assert.deepEqual(lastMenu(perfect).getItems(), [I.PERFECT_GOLD_BAR], 'quest-specific off-menu recipes retain their path');
+  const bag = furnaceWith([[I.IRON_ORE, 1]]);
+  const api = require('../plugins/skills/smithing/Core.Smithing').api;
+  const emit = api.emitCustomEvent;
+  api.emitCustomEvent = (name, event) => {
+    if (name === 'storage:amount' && event.itemId === I.COAL) event.amount = 2;
+    else emit(name, event);
+  };
+  try {
+    itemOnObject({ player: bag, itemId: I.IRON_ORE, object: furnace });
+    assert.ok(lastMenu(bag), 'stored coal keeps the iron/steel choice');
+  } finally { api.emitCustomEvent = emit; }
+  const low = furnaceWith([[I.GOLD_ORE, 1]]);
+  low.level = 1;
+  itemOnObject({ player: low, itemId: I.GOLD_ORE, object: furnace });
+  ticks(6);
+  assert.equal(low.items.get(I.GOLD_ORE), 1);
+  assert.equal(low.items.get(I.GOLD_BAR) ?? 0, 0);
+  assert.match(statementText(low), /Smithing level of 40/);
 });
 
 test("blurite needs The Knight's Sword", () => {

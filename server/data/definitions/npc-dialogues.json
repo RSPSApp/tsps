@@ -185688,8 +185688,14 @@
                       "text": "Can you take me somewhere?",
                       "steps": [
                         {
-                          "type": "call",
-                          "branch": "_XETMT"
+                          "type": "jump",
+                          "id": "wLO-lr",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "OrFwXC"
+                            }
+                          ]
                         }
                       ]
                     },
@@ -185732,7 +185738,49 @@
               ]
             },
             {
-              "text": "Can you take me somewhere?"
+              "text": "Can you take me somewhere?",
+              "steps": [
+                {
+                  "player": "Can you take me somewhere?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Veos",
+                  "text": "Where would you like to go?"
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Travel to Port Sarim.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "V8_0V_"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Travel to Land's End.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "tuBGd7"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Stay where you are.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "yhqLyv"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             },
             {
               "text": "Could you give me some advice on Kourend?"
@@ -185930,8 +185978,14 @@
                       "text": "Can you take me somewhere?",
                       "steps": [
                         {
-                          "type": "call",
-                          "branch": "_XETMT"
+                          "type": "jump",
+                          "id": "wLO-lr",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "OrFwXC"
+                            }
+                          ]
                         }
                       ]
                     },
@@ -185974,7 +186028,49 @@
               ]
             },
             {
-              "text": "Can you take me somewhere?"
+              "text": "Can you take me somewhere?",
+              "steps": [
+                {
+                  "player": "Can you take me somewhere?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Veos",
+                  "text": "Where would you like to go?"
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Travel to Port Sarim.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "V8_0V_"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Travel to Land's End.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "tuBGd7"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Stay where you are.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "yhqLyv"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             },
             {
               "text": "Could you tell me more about Kourend?",
@@ -186020,8 +186116,13 @@
                       "steps": [
                         {
                           "type": "jump",
-                          "reference": "above",
-                          "id": "Olm_MO"
+                          "id": "Olm_MO",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "OrFwXC"
+                            }
+                          ]
                         }
                       ]
                     },
@@ -187109,8 +187210,14 @@
                       "text": "Can you take me somewhere?",
                       "steps": [
                         {
-                          "type": "call",
-                          "branch": "_XETMT"
+                          "type": "jump",
+                          "id": "wLO-lr",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "OrFwXC"
+                            }
+                          ]
                         }
                       ]
                     },
@@ -187153,7 +187260,49 @@
               ]
             },
             {
-              "text": "Can you take me somewhere?"
+              "text": "Can you take me somewhere?",
+              "steps": [
+                {
+                  "player": "Can you take me somewhere?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Veos",
+                  "text": "Where would you like to go?"
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Travel to Port Sarim.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "V8_0V_"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Travel to Land's End.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "tuBGd7"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Stay where you are.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "yhqLyv"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             },
             {
               "text": "Could you tell me more about Kourend?",
@@ -187199,8 +187348,13 @@
                       "steps": [
                         {
                           "type": "jump",
-                          "reference": "above",
-                          "id": "Olm_MO"
+                          "id": "Olm_MO",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "OrFwXC"
+                            }
+                          ]
                         }
                       ]
                     },
@@ -187378,8 +187532,14 @@
                       "text": "Can you take me somewhere?",
                       "steps": [
                         {
-                          "type": "call",
-                          "branch": "_XETMT"
+                          "type": "jump",
+                          "id": "wLO-lr",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "OrFwXC"
+                            }
+                          ]
                         }
                       ]
                     },
@@ -187427,7 +187587,49 @@
               ]
             },
             {
-              "text": "Can you take me somewhere?"
+              "text": "Can you take me somewhere?",
+              "steps": [
+                {
+                  "player": "Can you take me somewhere?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Veos",
+                  "text": "Where would you like to go?"
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Travel to Port Sarim.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "V8_0V_"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Travel to Land's End.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "tuBGd7"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Stay where you are.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "yhqLyv"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             },
             {
               "text": "Could you tell me more about Kourend?",
@@ -187473,8 +187675,13 @@
                       "steps": [
                         {
                           "type": "jump",
-                          "reference": "above",
-                          "id": "Olm_MO"
+                          "id": "Olm_MO",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "OrFwXC"
+                            }
+                          ]
                         }
                       ]
                     },
@@ -187691,8 +187898,14 @@
                       "text": "Can you take me somewhere?",
                       "steps": [
                         {
-                          "type": "call",
-                          "branch": "_XETMT"
+                          "type": "jump",
+                          "id": "wLO-lr",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "OrFwXC"
+                            }
+                          ]
                         }
                       ]
                     },
@@ -187740,7 +187953,49 @@
               ]
             },
             {
-              "text": "Can you take me somewhere?"
+              "text": "Can you take me somewhere?",
+              "steps": [
+                {
+                  "player": "Can you take me somewhere?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Veos",
+                  "text": "Where would you like to go?"
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Travel to Port Sarim.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "V8_0V_"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Travel to Land's End.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "tuBGd7"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Stay where you are.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "yhqLyv"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             },
             {
               "text": "Could you tell me more about Kourend?",
@@ -187786,8 +188041,13 @@
                       "steps": [
                         {
                           "type": "jump",
-                          "reference": "above",
-                          "id": "Olm_MO"
+                          "id": "Olm_MO",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "OrFwXC"
+                            }
+                          ]
                         }
                       ]
                     },
@@ -187896,6 +188156,69 @@
       ]
     },
     "branches": {
+      "jump-dc74c714105e5265": [
+        {
+          "player": "Can you take me somewhere?"
+        },
+        {
+          "type": "line",
+          "speaker": "Veos",
+          "text": "Where would you like to go?"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Travel to Port Sarim.",
+              "steps": [
+                {
+                  "player": "I'd like to travel to Port Sarim, please."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Veos",
+                  "text": "As you wish, I hope you don't get seasick, it is a long voyage."
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Travel to Land's End.",
+              "steps": [
+                {
+                  "player": "I'd like to travel to Land's End, please."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Veos",
+                  "text": "As you wish, I hope you don't get seasick, it is a long voyage."
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Stay where you are.",
+              "steps": [
+                {
+                  "player": "Actually I'd like to stay here."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Veos",
+                  "text": "As you wish."
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            }
+          ]
+        }
+      ],
       "jump-9b3e8ab0597f29c5": [
         {
           "player": "Could you tell me more about Kourend?"
@@ -187938,8 +188261,13 @@
               "steps": [
                 {
                   "type": "jump",
-                  "reference": "above",
-                  "id": "Olm_MO"
+                  "id": "Olm_MO",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-dc74c714105e5265"
+                    }
+                  ]
                 }
               ]
             },
@@ -188010,8 +188338,13 @@
               "steps": [
                 {
                   "type": "jump",
-                  "reference": "below",
-                  "id": "wLO-lr"
+                  "id": "wLO-lr",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-dc74c714105e5265"
+                    }
+                  ]
                 }
               ]
             },
@@ -188165,11 +188498,10 @@
           "id": "M9w-_K"
         }
       ],
-      "_XETMT": [
+      "OrFwXC": [
         {
-          "type": "jump",
-          "reference": "below",
-          "id": "wLO-lr"
+          "type": "call",
+          "branch": "jump-dc74c714105e5265"
         }
       ],
       "rGSm3M": [
@@ -188177,6 +188509,36 @@
           "type": "jump",
           "reference": "below",
           "id": "Ahzob8"
+        }
+      ],
+      "V8_0V_": [
+        {
+          "player": "I'd like to travel to Port Sarim, please."
+        },
+        {
+          "type": "line",
+          "speaker": "Veos",
+          "text": "As you wish, I hope you don't get seasick, it is a long voyage."
+        }
+      ],
+      "tuBGd7": [
+        {
+          "player": "I'd like to travel to Land's End, please."
+        },
+        {
+          "type": "line",
+          "speaker": "Veos",
+          "text": "As you wish, I hope you don't get seasick, it is a long voyage."
+        }
+      ],
+      "yhqLyv": [
+        {
+          "player": "Actually I'd like to stay here."
+        },
+        {
+          "type": "line",
+          "speaker": "Veos",
+          "text": "As you wish."
         }
       ]
     }
@@ -1207950,10 +1208312,8 @@
                       "text": "I'd like to travel to Land's End, please.",
                       "steps": [
                         {
-                          "player": "I'd like to travel to Land's End, please."
-                        },
-                        {
-                          "npc": "As you wish, I hope you don't get seasick, it is a long voyage."
+                          "type": "call",
+                          "branch": "jF5wsL"
                         }
                       ]
                     },
@@ -1208118,9 +1208478,8 @@
                       "text": "Travel to Land's End.",
                       "steps": [
                         {
-                          "type": "jump",
-                          "reference": "above",
-                          "id": "WR75kE"
+                          "type": "call",
+                          "branch": "jF5wsL"
                         }
                       ]
                     },
@@ -1208128,9 +1208487,10 @@
                       "text": "Stay where you are.",
                       "steps": [
                         {
-                          "type": "jump",
-                          "reference": "above",
-                          "id": "jJqd2w"
+                          "player": "Actually I'd like to stay here."
+                        },
+                        {
+                          "npc": "As you wish."
                         }
                       ]
                     }
@@ -1208627,9 +1208987,13 @@
               "text": "Travel to Land's End.",
               "steps": [
                 {
-                  "type": "jump",
-                  "reference": "above",
-                  "id": "WR75kE"
+                  "player": "I'd like to travel to Land's End, please."
+                },
+                {
+                  "npc": "As you wish, I hope you don't get seasick, it is a long voyage."
+                },
+                {
+                  "type": "end"
                 }
               ]
             },
@@ -1208637,9 +1209001,13 @@
               "text": "Stay where you are.",
               "steps": [
                 {
-                  "type": "jump",
-                  "reference": "above",
-                  "id": "jJqd2w"
+                  "player": "Actually I'd like to stay here."
+                },
+                {
+                  "npc": "As you wish."
+                },
+                {
+                  "type": "end"
                 }
               ]
             }
@@ -1208792,6 +1209160,14 @@
               ]
             }
           ]
+        }
+      ],
+      "jF5wsL": [
+        {
+          "player": "I'd like to travel to Land's End, please."
+        },
+        {
+          "npc": "As you wish, I hope you don't get seasick, it is a long voyage."
         }
       ]
     }

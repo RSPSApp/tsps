@@ -425,6 +425,32 @@ test("native Lizardman Canyon handholds enter and leave both crossings at level 
   }
 });
 
+test("the native Draynor underwall tunnel crosses both ways in one click (rsprox 4001)", () => {
+  const core = PluginManager.getCoreApi();
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3067, 3257);
+  for (const [id, tile, from, to] of [
+    [19032, [3067, 3257, 0], [3066, 3257, 0], [3070, 3257, 0]],
+    [19036, [3069, 3257, 0], [3070, 3257, 0], [3066, 3257, 0]],
+  ]) {
+    const object = core.MapObjects.get(id, new Location(...tile), null);
+    assert.equal(object?.getDefinition().getActions()[0], "Climb-into");
+    const player = createPlayer(...from, 42);
+    const route = { player, object, objectId: id, clickType: 1, destination: null };
+    hooks.route.forEach(handler => handler(route));
+    assert.deepEqual(route.destination, { x: from[0], y: from[1], z: 0 });
+    operate(player, id, tile);
+    assert.deepEqual(tileOf(player), to);
+    assert.ok(player.state.animations.includes(844));
+    assert.equal(player.state.xp, 0);
+    assert.equal(player.state.blocked, false);
+    const low = createPlayer(...from, 41);
+    operate(low, id, tile);
+    assert.deepEqual(tileOf(low), from);
+    assert.match(low.state.messages.at(-1), /42/);
+  }
+});
+
 test("the native Draynor River Lum stone routes to this shore and finishes across the river", () => {
   const { RegionManager } = require("../dist/game/collision/RegionManager");
   const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");

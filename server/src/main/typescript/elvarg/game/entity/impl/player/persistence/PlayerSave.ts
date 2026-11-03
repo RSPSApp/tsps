@@ -573,7 +573,9 @@ export class PlayerSave {
         lookIndices.forEach((lookIndex, idx) => {
             const [min, max] = lookRanges[idx];
             const candidate = PlayerSave.toFiniteInt(raw[lookIndex], defaults[lookIndex]);
-            sanitized[lookIndex] = PlayerSave.isSelectableKit(candidate, idx + (gender === 1 ? 7 : 0))
+            // -1 is "no kit": the jaw is optional (clean-shaven, and females have no beard kit).
+            const noJaw = lookIndex === Appearance.BEARD && candidate === -1;
+            sanitized[lookIndex] = noJaw || PlayerSave.isSelectableKit(candidate, idx + (gender === 1 ? 7 : 0))
                 ? candidate
                 : PlayerSave.clamp(candidate, min, max);
         });

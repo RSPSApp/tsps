@@ -145,6 +145,11 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   const SPADE_ITEM_ID = ItemIdentifiers.SPADE; // 952
 
   const DRAYNOR_GRAVE_OBJECT_ID = ObjectIdentifiers.GRAVESTONE_8; // 12125 at 3106,3384
+  const DRAYNOR_GRAVE_TILE = new Location(3106, 3384, 0);
+  const NUFF_HANDOVER_LINES = [
+    "I believe he now resides in the Dark Wizard's tower near Falador,",
+    "Well not to worry, I have a copy of it here.",
+  ];
   // 12004 is the static gap at 2397,4379; 11999 is the placed loc at 2399,4379
   // whose varbit-1803 transform is 12041 "A gap through the wall". Object click
   // events carry the placed id, and 11999 has no generated identifier.
@@ -269,6 +274,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
 
   function giveSymptomsList(player) {
     if (!held(player, SYMPTOMS_LIST_ITEM_ID)) player.getInventory().adds(SYMPTOMS_LIST_ITEM_ID, 1);
+    return held(player, SYMPTOMS_LIST_ITEM_ID);
   }
 
   function rollNatureItems(player) {
@@ -351,12 +357,9 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     if (stage >= STAGE_DIAGNOSED) return "after-fairytale-part-1";
     if (stage >= STAGE_HAS_SYMPTOMS_LIST) {
       if (held(player, SYMPTOMS_LIST_ITEM_ID)) return null;
-      giveSymptomsList(player);
       return "entering-zanaris-talking-to-fairy-nuff-again";
     }
     if (stage >= STAGE_GARDENERS_REPORTED) {
-      giveSymptomsList(player);
-      advance(player, STAGE_HAS_SYMPTOMS_LIST);
       return "entering-zanaris-talking-to-fairy-nuff";
     }
     return null;
@@ -456,6 +459,15 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   // ==========================================================================
   // Dialogue events
   // ==========================================================================
+
+  function handleNuffDialogueLine(event) {
+    if (!FAIRY_NUFF_NPC_IDS.has(event.npcId) || !NUFF_HANDOVER_LINES.some(line => event.text.startsWith(line))) return;
+    event.after = () => {
+      const stage = quest.getStage(event.player);
+      if (stage < STAGE_GARDENERS_REPORTED || stage >= STAGE_DIAGNOSED) return;
+      if (giveSymptomsList(event.player)) advance(event.player, STAGE_HAS_SYMPTOMS_LIST);
+    };
+  }
 
   function handleDialogueChoice({ player, npcId, option }) {
     if (option !== GARDENER_QUESTION) return;
@@ -611,16 +623,35 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   }
 
   /** The Draynor skull is dug from the manor grave, quest or no quest. */
-  function handleSpadeOnGrave(event) {
-    if (event.itemId !== SPADE_ITEM_ID || event.objectId !== DRAYNOR_GRAVE_OBJECT_ID) return;
-    const { player } = event;
-    event.handled = true;
+  function digDraynorGrave(player) {
+    const at = player.getLocation();
+    if (!at.isWithinDistance(DRAYNOR_GRAVE_TILE, 1)) return false;
+    if (!api.core.MapObjects.get(DRAYNOR_GRAVE_OBJECT_ID, DRAYNOR_GRAVE_TILE, player.getPrivateArea())) return false;
     if (held(player, DRAYNOR_SKULL_ITEM_ID)) {
       player.sendMessage("You dig the grave but find nothing.");
-      return;
+      return true;
+    }
+    if (player.getBanks().some(bank => bank?.getAmount(DRAYNOR_SKULL_ITEM_ID) > 0)) {
+      player.sendMessage("I think I've already stored the skull in my bank.");
+      return true;
+    }
+    if (player.getInventory().getFreeSlots() === 0) {
+      player.getInventory().full();
+      return true;
     }
     player.getInventory().adds(DRAYNOR_SKULL_ITEM_ID, 1);
     player.sendMessage("You dig the grave and find a skull.");
+    return true;
+  }
+
+  function handleSpadeDig({ player }) {
+    return digDraynorGrave(player);
+  }
+
+  function handleSpadeOnGrave(event) {
+    if (event.itemId !== SPADE_ITEM_ID || event.objectId !== DRAYNOR_GRAVE_OBJECT_ID) return;
+    if (!Location.isSameTile(event.location, DRAYNOR_GRAVE_TILE)) return;
+    event.handled = digDraynorGrave(event.player);
   }
 
   /** Only magic secateurs can harm the Tanglefoot (wiki: no other weapon). */
@@ -783,12 +814,14 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:choice", handleDialogueChoice);
+  api.onCustomEvent("npc-dialogue:line", handleNuffDialogueLine);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:condition", handleConditionEvent);
   api.onCustomEvent("npc-dialogue:action", handleActionEvent);
   api.onNpcInteraction(handleNpcInteraction);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleSpadeOnGrave, { noted: false });
+  api.onItemAction("Spade", { Dig: handleSpadeDig });
   api.onNpcHitModify(handleNpcHitModify);
   api.onNpcDeath(handleNpcDeath);
   api.onZoneEnter(GROVE_ZONE, handleZoneEnter);

@@ -53,3 +53,85 @@ test("name rules pick the material within a slot or weapon type", () => {
   assert.equal(pick(rules.slots.legs, "Granite legs"), 2238);
   assert.equal(pick(rules.slots.legs, "Bronze plateskirt"), 2242);
 });
+
+const { PluginManager } = require('../dist/plugins/PluginManager');
+const core = PluginManager.getCoreApi();
+const { ClientPacketId } = require('../dist/net/protocol/NativeClientPackets');
+
+function wornAction(t, group, slot, itemId) {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { decodeClientPackets } = require('../dist/net/protocol/ClientProtocol');
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  player.setIndex(2165); player.setRegistered(true); player.setNeedsPlacement(false);
+  const item = new core.Item(itemId, 1);
+  player.getEquipment().setItem(slot, item);
+  const connection = new ClientConnection(channel); connection.player = player;
+  // Tab387 is shared by gameframe layouts; screen84 has its own equipment components.
+  const widgetId = core.CacheDefinitions.getComponentId(`${group === 387 ? 'wornitems' : 'equipment'}:slot${slot}`);
+  assert.equal(widgetId >>> 16, group);
+  const messages = []; player.sendMessage = message => messages.push(message);
+  t.after(() => { player.setRegistered(false); core.TaskManager.cancelTasks(player.getIndex()); });
+  return { player, item, messages, async click(op) {
+    const packet = Buffer.alloc(9);
+    packet[0] = ClientPacketId[`IF_BUTTON${op}`];
+    packet.writeInt32BE(widgetId, 1);
+    packet.writeUInt16BE(0xffff, 5); packet.writeUInt16BE(item.getId(), 7);
+    const decoded = decodeClientPackets(packet);
+    assert.equal(decoded.length, 1); assert.equal(decoded[0].buttonNum, op);
+    assert.equal(decoded[0].option, undefined, 'the native packet has no option text');
+    await connection.dispatch(decoded, true); connection.processTurnPackets();
+  } };
+}
+
+for (const group of [387, 84]) {
+  for (const [name, itemId, slot, op, option] of [
+    ['shield Activate', core.ItemIdentifiers.DRAGONFIRE_SHIELD, core.Equipment.SHIELD_SLOT, 2, 'Activate'],
+    ['shield Check', core.ItemIdentifiers.DRAGONFIRE_SHIELD, core.Equipment.SHIELD_SLOT, 3, 'Check'],
+    ['tentacle Check', core.ItemIdentifiers.ABYSSAL_TENTACLE, core.Equipment.WEAPON_SLOT, 2, 'Check'],
+    ['unsupported shield op', core.ItemIdentifiers.DRAGONFIRE_SHIELD, core.Equipment.SHIELD_SLOT, 10, undefined],
+  ]) {
+    test(`${group}: an unhandled ${name} leaves the item worn`, async t => {
+      const f = wornAction(t, group, slot, itemId);
+      assert.equal(core.CacheDefinitions.getItem(itemId).params.get(451 + op - 2), option);
+      await f.click(op);
+      assert.equal(f.player.getEquipment().getItems()[slot], f.item);
+      assert.equal(f.player.getInventory().getAmount(itemId), 0);
+    });
+  }
+  test(`${group}: explicit Remove still unequips shields and weapons`, async t => {
+    for (const [id, slot] of [[core.ItemIdentifiers.DRAGONFIRE_SHIELD, core.Equipment.SHIELD_SLOT],
+      [core.ItemIdentifiers.ABYSSAL_TENTACLE, core.Equipment.WEAPON_SLOT]]) {
+      const f = wornAction(t, group, slot, id);
+      await f.click(1);
+      assert.equal(f.player.getEquipment().getItems()[slot].getId(), -1);
+      assert.equal(f.player.getInventory().getAmount(id), 1);
+    }
+  });
+  test(`${group}: handled Giantsoul Check and jewellery teleport retain plugin behavior`, async t => {
+    const Giantsoul = require('../plugins/items/GiantsoulAmulet.plugin');
+    Giantsoul.register(PluginManager.createApi(`equipment-giantsoul-${group}`));
+    require('../plugins/items/Jewellery.plugin').register(PluginManager.createApi(`equipment-jewellery-${group}`));
+    const amulet = wornAction(t, group, core.Equipment.AMULET_SLOT, core.ItemIdentifiers.GIANTSOUL_AMULET);
+    amulet.item.setMetaValue(Giantsoul.CHARGES_META_KEY, 3);
+    assert.equal(core.CacheDefinitions.getItem(amulet.item.getId()).params.get(454), 'Check');
+    await amulet.click(5);
+    assert.match(amulet.messages.at(-1), /3 charges left/);
+    assert.equal(amulet.player.getEquipment().getItems()[core.Equipment.AMULET_SLOT], amulet.item);
+    const glory = wornAction(t, group, core.Equipment.AMULET_SLOT, core.ItemIdentifiers.AMULET_OF_GLORY_4_);
+    const teleports = [];
+    t.mock.method(core.TeleportHandler, 'checkReqs', () => true);
+    t.mock.method(core.TeleportHandler, 'teleport', (_player, target, _type, _warn, onArrival) => {
+      teleports.push([target.getX(), target.getY()]); onArrival?.();
+    });
+    assert.equal(core.CacheDefinitions.getItem(glory.item.getId()).params.get(451), 'Edgeville');
+    await glory.click(2);
+    assert.deepEqual(teleports, [[3087, 3496]]);
+    assert.equal(glory.player.getEquipment().getItems()[core.Equipment.AMULET_SLOT], glory.item);
+    assert.equal(glory.item.getId(), core.ItemIdentifiers.AMULET_OF_GLORY_3_);
+    assert.equal(glory.player.getInventory().getAmount(core.ItemIdentifiers.AMULET_OF_GLORY_3_), 0);
+  });
+}

@@ -751,7 +751,7 @@ export class ClientConnection {
                   subOpId: actionPacket.subOpId,
                   handled: false,
                 });
-              if (!itemActionHandled) {
+              if (!itemActionHandled && actionPacket.buttonNum === 1) {
                 EquipPacketListener.unequip(this.player, equipmentSlot);
               }
             } else if (Bank.handleWidgetAction(this.player, actionPacket)) {

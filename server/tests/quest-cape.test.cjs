@@ -224,7 +224,7 @@ test('Quest point cape skillcape emote requires every quest and uses its cache a
   slots[api.core.Equipment.CAPE_SLOT] = cape;
   const player = { getEquipment: () => ({ getItems: () => slots }) };
   answers.quests = true;
-  assert.deepEqual(resolveSkillcapeEmote(player, api), { sequence: 4945, graphic: 816 });
+  assert.deepEqual(resolveSkillcapeEmote(player, api), { sequence: 4945, graphic: 816, stallTicks: 15 });
   answers.quests = false;
   assert.equal(resolveSkillcapeEmote(player, api), undefined);
   answers.quests = true;

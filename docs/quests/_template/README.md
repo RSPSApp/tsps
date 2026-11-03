@@ -8,7 +8,7 @@ model: claude-opus-5-5    # the model that ran it (agents), else leave empty
 commit: 0123456789ab      # the main commit whose quest code the run tested
 cache: osrs-241_2026-10-20
 start: fresh              # fresh | checkpoint (say from which stage under Runs)
-travel: travel_to         # travel_to | walk_to | manual; never ::tele after the start
+travel: travel_to         # travel_to | travel_to (walks skipped) | walk_to | manual; never ::tele after the start
 ---
 
 # Quest Name

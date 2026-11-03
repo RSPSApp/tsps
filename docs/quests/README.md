@@ -54,7 +54,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Dragon Slayer II | untested |  |  |  |  |
 | Dream Mentor | untested |  |  |  |  |
 | [Druidic Ritual](druidic-ritual/README.md) | ✅ passed | 2026-10-22 | agent |  |  |
-| [Dwarf Cannon](dwarf-cannon/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 | 3 |
+| [Dwarf Cannon](dwarf-cannon/README.md) | ⚠️ passed with issues | 2026-11-03 | agent | claude-opus-5-5 | 6 |
 | [Eadgar's Ruse](eadgars-ruse/README.md) | untested |  |  |  |  |
 | Eagles' Peak | untested |  |  |  |  |
 | [Elemental Workshop I](elemental-workshop-i/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
@@ -81,7 +81,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Hazeel Cult](hazeel-cult/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
 | Heroes' Quest | untested |  |  |  |  |
 | [His Faithful Servants](his-faithful-servants/README.md) | untested |  |  |  |  |
-| [Holy Grail](holy-grail/README.md) | ⚠️ passed with issues | 2026-11-02 | agent | claude-opus-5-5 | 5 |
+| [Holy Grail](holy-grail/README.md) | 🔁 needs recheck | 2026-11-02 | agent | claude-opus-5-5 | 5 |
 | [Horror from the Deep](horror-from-the-deep/README.md) | 🔄 in progress |  | agent |  |  |
 | Icthlarin's Little Helper | untested |  |  |  |  |
 | Imp Catcher | untested |  |  |  |  |

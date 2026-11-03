@@ -12,12 +12,10 @@
  * 70 Saba, 72 climbing boots, 73 met Dunstan, 75 spiked boots, 77 map, 78 scouted,
  * 80 complete.
  *
- * shortcut: the dice game still resolves at its 60-coin minimum as a straight win;
- * implement the gambling interface when extending the dice game. The optional
- * Transcendent archer detour is not wired.
+ * shortcut: the optional Transcendent archer detour is not wired.
  */
 module.exports = function registerDeathPlateauQuest(api) {
-  const { Skill, Item, Location, Boundary, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Skill, Item, Location, Boundary, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, CacheDefinitions } = api.core;
   const { registerQuest, refreshQuestList, getRegisteredQuests, startTranscript } = require("../QuestRuntime");
 
   const DENULTH_NPC_IDS = new Set([NpcIdentifiers.DENULTH, NpcIdentifiers.DENULTH_2]);
@@ -56,6 +54,8 @@ module.exports = function registerDeathPlateauQuest(api) {
   const BLURBERRY_SPECIAL_ITEM_ID = ItemIdentifiers.BLURBERRY_SPECIAL;
   const PREMADE_BLURBERRY_ITEM_ID = ItemIdentifiers.PREMADE_BLURB_SP;
   const DRUNK_ATTRIBUTE = "death-plateau:harold-drunk";
+  const GAMBLE_BANK_ATTRIBUTE = "death-plateau:harold-coins";
+  const GAMBLE_IOU_ATTRIBUTE = "death-plateau:harold-owes-iou";
   const CERTIFICATE_DELIVERED_ATTRIBUTE = "death-plateau:certificate-delivered";
   const CERTIFICATE_ISSUED_ATTRIBUTE = "death-plateau:certificate-issued";
   const PUZZLE_ATTRIBUTE = "death-plateau:stone-balls";
@@ -103,9 +103,14 @@ module.exports = function registerDeathPlateauQuest(api) {
   const GIVE_BLURBERRY_STEP_ID = "VZS4Rq";
   const GIVE_CERTIFICATE_STEP_ID = "jmuuX8";
 
-  /** The transcript's gamble stake (wiki: 60-1000 coins) and its missing interface. */
-  const GAMBLE_STAKE = 60;
+  const GAMBLE_IOU_MINIMUM = 60;
+  const GAMBLE_MAXIMUM = 1000;
+  // Wiki quick guide: a 101-coin win immediately bankrupts Harold.
+  const HAROLD_STARTING_COINS = 100;
   const GAMBLING_INTERFACE = "Gambling";
+  const GAMBLE_GROUP = CacheDefinitions.getInterfaceId("death_dice");
+  const GAMBLE_FINISH_VARIANT = "finding-the-combination-finishing-a-gamble";
+  const gambles = new WeakMap();
   const TENZING_SUPPLY_AMOUNT = 10;
 
   let quest;
@@ -122,6 +127,116 @@ module.exports = function registerDeathPlateauQuest(api) {
     const itemId = quest.getStage(player) >= STAGE_COMBINATION ? COMBINATION_ITEM_ID : IOU_ITEM_ID;
     if (!held(player, itemId)) player.getInventory().adds(itemId, 1);
     if (quest.getStage(player) < STAGE_IOU) quest.setStage(player, STAGE_IOU);
+    if (held(player, itemId)) player.setAttribute(GAMBLE_IOU_ATTRIBUTE, false);
+  }
+
+  const gambleComponent = name => CacheDefinitions.getComponentId(`death_dice:death_gamble_${name}`);
+  const gambleBank = player => player.getAttribute(GAMBLE_BANK_ATTRIBUTE) ?? HAROLD_STARTING_COINS;
+  const canGamble = player => quest.getStage(player) >= STAGE_ALE && quest.getStage(player) < STAGE_IOU;
+  const atGamble = (player, gamble) => {
+    const location = player.getLocation();
+    return location.x === gamble.x && location.y === gamble.y && location.z === gamble.z;
+  };
+
+  function enterWager(player) {
+    player.getPacketSender().sendInterfaceRemoval();
+    const gamble = { phase: "input", ...player.getLocation() };
+    gambles.set(player, gamble);
+    const input = { acceptsZero: true, acceptsNegative: true, execute(amount) {
+      if (gambles.get(player) !== gamble || gamble.phase !== "input" || player.getEnteredAmountAction() !== input || !canGamble(player) || !atGamble(player, gamble)) return;
+      if (!Number.isSafeInteger(amount) || amount < 0) amount = 0;
+      gamble.amount = amount;
+      gamble.phase = "offer";
+      const variant = player.getAttribute(DRUNK_ATTRIBUTE) === true
+        ? "finding-the-combination-talking-to-harold-after-giving-him-a-blurberry-special"
+        : "finding-the-combination-talking-to-harold-after-learning-his-weakness";
+      // Resume the canonical validation and pre-roll lines after the amount prompt.
+      startTranscript(api, player, HAROLD_NPC_ID, "Death Plateau", variant, steps => {
+        const branch = steps.find(step => step.type === "choice")?.options.find(option => option.text === "Would you like to gamble?")?.steps ?? [];
+        return branch.slice(branch.findIndex(step => step.type === "input") + 1);
+      });
+    } };
+    player.setEnteredAmountAction(input);
+    player.getPacketSender().sendEnterAmountPrompt("Enter amount:");
+  }
+
+  function openGamble(player) {
+    const gamble = gambles.get(player);
+    if (!gamble || gamble.phase !== "offer" || !canGamble(player) || !atGamble(player, gamble)) return;
+    const amount = gamble.amount;
+    if (amount < 1 || amount > GAMBLE_MAXIMUM || !held(player, COINS_ITEM_ID, amount)) return;
+    player.getPacketSender().sendInterfaceRemoval();
+    gamble.phase = "roll";
+    gamble.bank = gambleBank(player);
+    gamble.drunk = player.getAttribute(DRUNK_ATTRIBUTE) === true;
+    gamble.harold = [rollDie(), rollDie()];
+    // Harold's warning: leaving after his first roll forfeits the stake.
+    player.getInventory().deleteNumber(COINS_ITEM_ID, amount);
+    player.setAttribute(GAMBLE_BANK_ATTRIBUTE, gamble.bank + amount);
+    const sender = player.getPacketSender();
+    sender.sendInterface(GAMBLE_GROUP);
+    sender.sendString(player.getDisplayName(), gambleComponent("playername"));
+    sender.sendString(String(amount), gambleComponent("player_stake"));
+    sender.sendString(String(amount), gambleComponent("harold_stake"));
+    for (const side of ["harold", "player"]) {
+      for (let pile = 1; pile <= 10; pile++) sender.sendInterfaceDisplayState(gambleComponent(`${side}_gold${pile}`), pile !== 1);
+      sender.sendItemOnInterfaces(gambleComponent(`${side}_gold1`), COINS_ITEM_ID, amount);
+      sender.sendInterfaceAngle(gambleComponent(`${side}_gold1`), 149, 1698, 445);
+    }
+    sender.sendInterfaceDisplayState(gambleComponent("result"), true);
+    sender.sendInterfaceDisplayState(gambleComponent("continue"), true);
+    sender.sendInterfaceDisplayState(gambleComponent("roll"), false);
+    for (let die = 1; die <= 2; die++) {
+      sender.sendInterfaceAnimation(gambleComponent(`harold_dice${die}`), CacheDefinitions.getSeqId(`dice_roll_${gamble.harold[die - 1]}`));
+      sender.sendInterfaceAnimation(gambleComponent(`player_dice${die}`), CacheDefinitions.getSeqId("dice_idle"));
+    }
+  }
+
+  const rollDie = () => Math.floor(Math.random() * 6) + 1;
+
+  function gambleClick(event) {
+    const { player, buttonId } = event;
+    if ((buttonId >>> 16) !== GAMBLE_GROUP) return;
+    const roll = buttonId === gambleComponent("roll_button");
+    const next = buttonId === gambleComponent("continue_button");
+    if (!roll && !next) return;
+    event.handled = true;
+    const gamble = gambles.get(player);
+    if (!gamble || player.getInterfaceId() !== GAMBLE_GROUP || !canGamble(player) || !atGamble(player, gamble)) return;
+    if (roll && gamble.phase === "roll") {
+      gamble.phase = "result";
+      const dice = [rollDie(), rollDie()];
+      const total = dice[0] + dice[1], opponent = gamble.harold[0] + gamble.harold[1];
+      // shortcut: no OSRS tie capture is available; refund equal totals until verified.
+      gamble.draw = !gamble.drunk && total === opponent;
+      gamble.won = gamble.drunk || total > opponent;
+      gamble.outOfMoney = gamble.won && gamble.amount > gamble.bank && gamble.amount >= GAMBLE_IOU_MINIMUM;
+      if (gamble.won || gamble.draw) {
+        const winnings = gamble.won ? Math.min(gamble.amount, gamble.bank) : 0;
+        player.getInventory().forceAdd(player, new Item(COINS_ITEM_ID, gamble.amount + winnings));
+        player.setAttribute(GAMBLE_BANK_ATTRIBUTE, gamble.bank - winnings);
+      }
+      if (gamble.outOfMoney) player.setAttribute(GAMBLE_IOU_ATTRIBUTE, true);
+      const sender = player.getPacketSender();
+      for (let die = 1; die <= 2; die++) sender.sendInterfaceAnimation(gambleComponent(`player_dice${die}`), CacheDefinitions.getSeqId(`dice_roll_${dice[die - 1]}`));
+      sender.sendString(gamble.draw ? "It's a draw!" : gamble.won ? "You win!" : "You lose!", gambleComponent("result"));
+      sender.sendInterfaceDisplayState(gambleComponent("result"), false);
+      sender.sendInterfaceDisplayState(gambleComponent("roll"), true);
+      sender.sendInterfaceDisplayState(gambleComponent("continue"), false);
+    } else if (next && gamble.phase === "result") {
+      gamble.phase = "outro";
+      player.getPacketSender().sendInterfaceRemoval();
+      if (!gamble.draw) startTranscript(api, player, HAROLD_NPC_ID, "Death Plateau", GAMBLE_FINISH_VARIANT);
+    }
+  }
+
+  function closeGamble({ player, interfaceId }) {
+    if (interfaceId !== GAMBLE_GROUP) return;
+    if (gambles.get(player)?.phase !== "outro") gambles.delete(player);
+  }
+
+  function forgetGamble({ player }) {
+    gambles.delete(player);
   }
 
   const mapReceived = player => player.getAttribute(MAP_RECEIVED_ATTRIBUTE) === true || quest.getStage(player) >= STAGE_MAP || hasMap(player);
@@ -237,6 +352,10 @@ module.exports = function registerDeathPlateauQuest(api) {
       return "finding-the-combination-talking-to-eohric";
     }
     if (npcId === HAROLD_NPC_ID) {
+      if (stage >= STAGE_ALE && stage < STAGE_COMBINATION && !held(player, IOU_ITEM_ID) && !hasCombination(player) && player.getAttribute(GAMBLE_IOU_ATTRIBUTE) === true) {
+        gambles.set(player, { phase: "outro", won: true, outOfMoney: true, drunk: player.getAttribute(DRUNK_ATTRIBUTE) === true });
+        return GAMBLE_FINISH_VARIANT;
+      }
       if (stage >= STAGE_IOU) {
         if (!hasCombination(player) && !held(player, IOU_ITEM_ID)) return "finding-the-combination-talking-to-harold-after-losing-the-iou";
         return player.getAttribute(DRUNK_ATTRIBUTE) === true
@@ -302,16 +421,21 @@ module.exports = function registerDeathPlateauQuest(api) {
       return null;
     }
     const has = (itemId, amount = 1) => held(player, itemId, amount);
+    const gamble = gambles.get(player);
+    if (npcId === HAROLD_NPC_ID) {
+      if (value === "if harold is not drunk and harold wins:") return !!gamble && !gamble.drunk && !gamble.won;
+      if (value === "if harold is not drunk and the player wins:") return !!gamble && !gamble.drunk && gamble.won;
+      if (value === "if harold still has money:") return !!gamble && !gamble.outOfMoney;
+      if (value === "if harold is out of money:") return !!gamble?.outOfMoney;
+      if (value.includes("if the player enters 0")) return gamble?.amount === 0;
+      if (value.includes("if the player enters more than they are holding")) return gamble?.amount > player.getInventory().getAmount(COINS_ITEM_ID);
+      if (value.includes("if the player enters more than 1000")) return gamble?.amount > GAMBLE_MAXIMUM;
+    }
     if (value === "if harold is drunk:") return player.getAttribute(DRUNK_ATTRIBUTE) === true;
     if (value === "if harold is not drunk:") return player.getAttribute(DRUNK_ATTRIBUTE) !== true;
     if (value.includes("does not have an asgarnian ale")) return !has(ASGARNIAN_ALE_ITEM_ID);
     if (value.includes("has an asgarnian ale")) return has(ASGARNIAN_ALE_ITEM_ID);
     if (value.includes("does not have a blurberry special")) return !has(BLURBERRY_SPECIAL_ITEM_ID) && !has(PREMADE_BLURBERRY_ITEM_ID);
-    // The gamble's amount dialogue is unimplemented (see handleAction): the plugin
-    // stakes the wiki minimum, so the three "enters N" guards never apply.
-    if (value.includes("if the player enters 0")) return false;
-    if (value.includes("if the player enters more than they are holding")) return false;
-    if (value.includes("if the player enters more than 1000")) return false;
     if (value.includes("has not yet read the iou")) return quest.getStage(player) < STAGE_COMBINATION;
     if (value.includes("has read the iou")) return quest.getStage(player) >= STAGE_COMBINATION;
     if (value.includes("has the boots and an iron bar")) return hasBoots(player) && has(IRON_BAR_ITEM_ID);
@@ -350,24 +474,14 @@ module.exports = function registerDeathPlateauQuest(api) {
   function handleAction(request) {
     const { player, npcId, stepId, step, action, target, kind } = request;
 
-    // The wiki "Enter amount:" step has no input dialogue in this server; the
-    // gamble is resolved a few lines later, so let the branch carry on.
     if (npcId === HAROLD_NPC_ID && step?.type === "input") {
-      request.handled = true;
+      request.handled = request.end = true;
+      if (canGamble(player)) enterWager(player);
       return;
     }
-    // No Gambling interface exists: a player covering the minimum stake wins the
-    // dice game outright and Harold writes the IOU to read.
     if (npcId === HAROLD_NPC_ID && action === "open_interface" && target === GAMBLING_INTERFACE) {
-      if (player.getInventory().getAmount(COINS_ITEM_ID) >= GAMBLE_STAKE) {
-        player.getInventory().deleteNumber(COINS_ITEM_ID, GAMBLE_STAKE);
-        player.sendMessage("Harold has given you an IOU scribbled on some paper.");
-        giveIou(player);
-      } else {
-        player.sendMessage("You do not have that much money!");
-      }
-      request.handled = true;
-      request.end = true;
+      request.handled = request.end = true;
+      openGamble(player);
       return;
     }
     if (DENULTH_NPC_IDS.has(npcId) && COMPLETE_ACTION_IDS.has(stepId)) {
@@ -611,6 +725,8 @@ module.exports = function registerDeathPlateauQuest(api) {
   });
 
   api.persistAttribute(DRUNK_ATTRIBUTE);
+  api.persistAttribute(GAMBLE_BANK_ATTRIBUTE, HAROLD_STARTING_COINS);
+  api.persistAttribute(GAMBLE_IOU_ATTRIBUTE, false);
   api.persistAttribute(CERTIFICATE_DELIVERED_ATTRIBUTE);
   api.persistAttribute(CERTIFICATE_ISSUED_ATTRIBUTE, false);
   api.persistAttribute(PUZZLE_ATTRIBUTE);
@@ -629,6 +745,10 @@ module.exports = function registerDeathPlateauQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onInterfaceActionClick(gambleClick);
+  api.onCustomEvent("interface:closed", closeGamble);
   api.onCustomEvent("door:toggle", guardQuestDoors);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(forgetGamble);
+  api.onPlayerDisconnect(forgetGamble);
 };

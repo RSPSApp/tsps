@@ -104,7 +104,7 @@ type Call = [string, ...unknown[]];
             for (const playerHit of [false, true]) {
                 const attacks = overlappingMenu(id, playerHit);
                 assert.equal(attacks.length, 2);
-                assert.equal(attacks[0].targetType, playerHit || id >= 15582 ? MenuTargetType.PLAYER : MenuTargetType.NPC,
+                assert.equal(attacks[0].targetType, id >= 15582 ? MenuTargetType.PLAYER : MenuTargetType.NPC,
                     `native overlap order for ${id}, player hit ${playerHit}`);
                 assert.equal(attacks.find((entry: any) => entry.targetType === MenuTargetType.NPC).actionIndex, 1,
                     "both priority variants keep the native second NPC operation");

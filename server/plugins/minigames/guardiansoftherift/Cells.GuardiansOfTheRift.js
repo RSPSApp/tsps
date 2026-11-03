@@ -57,7 +57,10 @@ const SURGE_DAMAGE = 50;
 /** Wiki: recharging a barrier at full health stops paying past this much a game. */
 const FULL_HEALTH_CAP = { xp: 2500, energy: 450 };
 
-const DROP_DESTROYS = [Shared.ITEM.UNCHARGED_CELL, ...Shared.ITEM.CELLS, ...Shared.ITEM.PORTAL_TALISMANS];
+/** The game's items with a Drop option (cache); fragments and stones have Destroy instead. */
+const DROP_DESTROYS = [Shared.ITEM.ESSENCE, Shared.ITEM.UNCHARGED_CELL, ...Shared.ITEM.CELLS, ...Shared.ITEM.PORTAL_TALISMANS];
+/** OSRS's heal hitsplat (Wiki: recharging shows one on the barrier). */
+const HEAL_SPLAT = 6;
 
 /** Each tile's state: tier 0 inactive, 1-4; broken; the barrier loc and NPC standing on it. */
 const tiles = TILES.map((tile) => ({ ...tile, tier: 0, broken: false, loc: null, npc: null }));
@@ -113,6 +116,13 @@ function raiseBarrier(tile) {
     }
   }
   tileLoc(tile);
+}
+
+/** A heal splat on the barrier's NPC, so its health bar shows what the cell did. */
+function showHeal(tile, amount) {
+  const { HitDamage, HitMask } = Shared.core();
+  if (!tile.npc?.isRegistered?.() || amount <= 0) return;
+  tile.npc.addTickHit(new HitDamage(amount, HitMask.GREEN).setSplatTypes(HEAL_SPLAT, HEAL_SPLAT));
 }
 
 function lowerBarrier(tile) {
@@ -257,17 +267,22 @@ function placeCell(event) {
   if (tile.tier === 0) {
     tile.tier = tier;
     raiseBarrier(tile);
+    showHeal(tile, tile.npc?.getHitpoints?.() ?? 0);
     Shared.sound(player, SOUND.PLACE);
     reward(player, cell.place, cell.xp);
   } else if (tier > tile.tier) {
     tile.tier = tier;
+    const before = tile.npc?.getHitpoints?.() ?? 0;
     raiseBarrier(tile);
+    showHeal(tile, (tile.npc?.getHitpoints?.() ?? 0) - before);
     Shared.sound(player, SOUND.STRENGTHEN);
     player.sendMessage(`The ${cell.name} cell is consumed as it <col=ff0000>strengthens</col> the barrier.`);
     reward(player, cell.strengthen, cell.xp + STRENGTHEN_BONUS_XP);
   } else {
     const full = tile.npc && tile.npc.getHitpoints() >= tile.npc.getMaxHitpoints();
+    const before = tile.npc?.getHitpoints?.() ?? 0;
     tile.npc?.heal(cell.heal);
+    showHeal(tile, (tile.npc?.getHitpoints?.() ?? 0) - before);
     Shared.sound(player, SOUND.RECHARGE);
     player.sendMessage(`The ${cell.name} cell is consumed as it <col=ff0000>recharges</col> the barrier.`);
     if (full) rewardCapped(player, cell.recharge, cell.xp);
@@ -317,15 +332,20 @@ function repair(event) {
   return true;
 }
 
-/** Cells and talismans don't survive being dropped (rsprox captures). */
+/**
+ * Essence, cells and talismans don't survive being dropped (rsprox captures; Wiki: "The Guardian
+ * essence is destroyed as you drop it."). A stack goes whole; essence goes one at a time.
+ */
 function dropDestroys(event) {
-  const { player, itemId } = event;
+  const { player, itemId, slot } = event;
   const name = DROP_DESTROYS.find((item) => Shared.obj(item) === itemId);
   if (!name || Shared.count(player, name) <= 0) return;
   event.handled = true;
-  const amount = Shared.count(player, name);
-  player.getInventory().delete(itemId, amount);
-  player.getInventory().refreshItems();
+  const inventory = player.getInventory();
+  if (Shared.core().ItemDefinition.forId(itemId)?.isStackable?.()) inventory.delete(itemId, Shared.count(player, name));
+  else if (inventory.getItems()[slot]?.getId?.() === itemId) inventory.deleteAtSlot(slot, 1);
+  else inventory.delete(itemId, 1);
+  inventory.refreshItems();
   const itemName = Shared.core().ItemDefinition.forId(itemId).getName();
   Shared.spam(player, `The ${itemName} is destroyed as you drop it.`);
   Shared.sound(player, SOUND.DROP);

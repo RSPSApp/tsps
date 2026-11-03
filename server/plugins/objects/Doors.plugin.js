@@ -28,7 +28,7 @@ const DOOR_NAMES = new Set([
   "Glass door", "Magic door", "Metal door", "Mind Door", "Mithril door", "Tent door", "Wall",
   "Gate", "Metal gate", "Doorway", "Tree Door", "Storeroom Door", "Ardougne Wall Door",
   "Vitur door", "Myrmel door", "Shadum door", "Jovkai door", "Chained door", "Trapdoor",
-  "Longhall door", "Prison door",
+  "Longhall door", "Prison door", "Arena Entrance", "Arena Exit",
   // Pollnivneach curtains: closed 1533 "Open" -> open 1534 "Close" (closed id + 1, cache-derived).
   "Curtain",
 ]);
@@ -50,6 +50,10 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   GUIDOR_GATE_RIGHT_OPEN: 2053, // guidorgateropen
   MORT_MYRE_GATE_LEFT_OPEN: 1574, // inacmetalgateopenr, capture 1638
   MORT_MYRE_GATE_RIGHT_OPEN: 1573, // inacmetalgateopenl, capture 1638
+  ARENA_ENTRANCE_OPEN: 3784, // troll_stronghold_arena_entrance_inactive
+  ARENA_EXIT_OPEN: 3787, // troll_stronghold_arena_exit_inactive
+  PRISON_DOOR_9_OPEN: 3781, // troll_stronghold_prison_door_open, capture 740
+  GRUM_DOOR_OPEN: 1542, // Grum's Gold Exchange; capture 465
 });
 
 let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
@@ -113,9 +117,7 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.GATE_301, O.GATE_302],
     // The Lassar cistern gate opens into its actionless, same-model cache variant.
     [O.GATE_268, O.GATE_269],
-    // Tree Gnome Stronghold doors: 1967/1968 open into the cache's nameless 1969/1970.
-    [O.TREE_DOOR, 1969],
-    [O.TREE_DOOR_2, 1970],
+    // The Grand Tree's doors (O.TREE_DOOR, O.TREE_DOOR_2) open in place: GrandTree.plugin.js.
     // Troll Stronghold's cache has an action-less open loc 3811 with the same
     // model as closed 3810, so it cannot be paired by the normal action scan.
     [O.STOREROOM_DOOR, O.STOREROOM_DOOR + 1],
@@ -347,6 +349,48 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       crossY: 3458,
       closeTicks: 2,
       openSoundId: 71,
+    }),
+    // Troll arena entrance, west wall (Troll Stronghold). No capture: both leaves take the
+    // cache's one inactive leaf and swing out to the tile west, laid out like Mort Myre's.
+    Object.freeze({
+      closed: [[O.ARENA_ENTRANCE, 2897, 3618, 0, 0], [O.ARENA_ENTRANCE_2, 2897, 3619, 0, 0]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.ARENA_ENTRANCE_OPEN, 2896, 3618, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.ARENA_ENTRANCE_OPEN, 2896, 3619, 0, 1],
+      ],
+      crossX: 2897,
+      closeTicks: 2,
+    }),
+    // Troll arena exit, north wall. No capture; Mort Myre's layout, as above.
+    Object.freeze({
+      closed: [[O.ARENA_EXIT, 2916, 3629, 0, 3], [O.ARENA_EXIT_2, 2917, 3629, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.ARENA_EXIT_OPEN, 2916, 3628, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.ARENA_EXIT_OPEN, 2917, 3628, 0, 2],
+      ],
+      crossY: 3629,
+      closeTicks: 2,
+    }),
+    // Troll Stronghold prison door (capture 740 ticks 1470-1473): an "Unlock" loc the quest opens
+    // through door:open. The leaf swings to the tile west and shuts two ticks later; the inviswall
+    // live puts on the doorway is left out, as for Guidor's gate.
+    Object.freeze({
+      closed: [[O.PRISON_DOOR_9, 2848, 10107, 1, 0]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.PRISON_DOOR_9_OPEN, 2847, 10107, 1, 1]],
+      crossX: 2848,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
+    // Grum's Gold Exchange, Port Sarim (capture 465 ticks 9416-9421 in, 9476-9479 out): DOOR_5 has
+    // no Close partner. Open puts the open leaf on the north edge of the tile inside, the player
+    // steps through and the door shuts two ticks later. Live also puts loc 38848 on the door's
+    // own edge; it is left out as for Guidor's gate, because it blocks the step.
+    Object.freeze({
+      closed: [[O.DOOR_5, 3016, 3246, 0, 0]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.GRUM_DOOR_OPEN, 3015, 3246, 0, 1]],
+      crossX: 3016,
+      closeTicks: 2,
+      openSoundId: 62, // the door sound, as captured
     }),
   ]);
   DOUBLE_DOOR_FAMILY_IDS_BY_ID = new Map(
@@ -1308,6 +1352,11 @@ function requestDoorOpen(event) {
   const objectId = event.object.getId();
   const location = event.object.getLocation();
   const definition = core.ObjectDefinition.forPlayer(objectId, event.player) ?? event.object.getDefinition();
+  // A pass-through gate may have no "Open" of its own (the troll prison door is "Unlock").
+  if (handlePassThroughGate(event.player, objectId, location)) {
+    event.handled = true;
+    return;
+  }
   const area = event.player.getPrivateArea?.() ?? null;
   const existing = [...OPEN_OBJECT_STATES.values()].some(state => state.current?.some(snapshot =>
     snapshot.id === objectId && locationKey(snapshot.location) === locationKey(location)

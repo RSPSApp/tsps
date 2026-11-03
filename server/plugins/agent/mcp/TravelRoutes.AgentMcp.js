@@ -259,4 +259,37 @@ function toLegs(steps) {
   return legs;
 }
 
-module.exports = { planTravel, toLegs, indexTransports, unmetRequirements, key, BLOCKED };
+// skipWalks: tiles walked either side of an area change, so its enter and leave hooks run on a
+// real step; and the shortest stretch worth moving over in one hop instead of walking.
+const SKIP_MARGIN = 3;
+const MIN_SKIP = 5;
+
+/**
+ * A walk leg's tiles split into stretches to skip and stretches to walk, as steps from tiles[0]:
+ * `{ skip: i }` moves straight to tiles[i]; `{ walk: i }` walks to it. A walk covers `margin`
+ * tiles either side of every change of `areaAt` (an Area's hooks, a multi-combat or wilderness
+ * edge) and every tile `unsafe` marks; a skip shorter than `minSkip` is walked instead.
+ */
+function skipPlan(tiles, { areaAt, unsafe = () => false, margin = SKIP_MARGIN, minSkip = MIN_SKIP }) {
+  const last = tiles.length - 1;
+  const areas = tiles.map(areaAt);
+  const walk = tiles.map(unsafe);
+  for (let i = 1; i <= last; i++) {
+    if (areas[i] === areas[i - 1]) continue;
+    for (let j = Math.max(0, i - margin); j <= Math.min(last, i + margin - 1); j++) walk[j] = true;
+  }
+  const steps = [];
+  for (let at = 0; at < last;) {
+    let end = at + 1;
+    const skipping = !walk[end];
+    while (end < last && !walk[end + 1] === skipping) end++;
+    const kind = skipping && end - at >= minSkip ? "skip" : "walk";
+    const previous = steps[steps.length - 1];
+    if (kind === "walk" && previous && "walk" in previous) previous.walk = end;
+    else steps.push({ [kind]: end });
+    at = end;
+  }
+  return steps;
+}
+
+module.exports = { planTravel, toLegs, indexTransports, unmetRequirements, skipPlan, key, BLOCKED };

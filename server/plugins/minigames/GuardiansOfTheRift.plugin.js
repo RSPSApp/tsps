@@ -8,7 +8,7 @@
 module.exports = {
   name: "GuardiansOfTheRift",
   members: true,
-  // Records owns the "ABYSSAL PEARLS" shop currency, replacing Shopkeepers' item handler.
+  // Abyssal pearls are Shopkeepers' item currency for the Temple Supplies shop.
   dependsOn: ["Shopkeepers"],
   register(api) {
     require("./guardiansoftherift/Shared.GuardiansOfTheRift").bind(api);

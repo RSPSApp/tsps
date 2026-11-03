@@ -38,7 +38,8 @@ const GREAT_GUARDIAN = { x: 3613, y: 9501, size: 5 };
 const ATTACK_TICKS = 4;
 const HIT_CHANCE = 0.6;
 const TELEPORT_GRAPHIC = "abyssal_demon_teleport";
-const MIN_BATCH = 2;
+/** Ours, raised from 2 (issue 1986: small games were far easier than live). */
+const MIN_BATCH = 4;
 const MAX_BATCH = 22;
 const PLAYERS_PER_CREATURE = 30;
 
@@ -46,7 +47,7 @@ const creatures = new Map();
 let api = null;
 let nextBatch = 0;
 
-/** Ours: two for a quiet world, up to 22 as on the captured world of hundreds. */
+/** Ours: four for a quiet world, up to 22 as on the captured world of hundreds. */
 function batchSize(players) {
   return Math.max(MIN_BATCH, Math.min(MAX_BATCH, Math.round(players / PLAYERS_PER_CREATURE) + MIN_BATCH));
 }
@@ -191,7 +192,15 @@ function creatureTurn(npc, state, now) {
   npc.setPositionToFace?.(Shared.location(at));
   animate(npc, kind.attack);
   if (target) hit(target, kind.maxHit);
-  else Game.addPower(-kind.drain);
+  else Game.addPower(-drainOf(kind));
+}
+
+/**
+ * A hit on the Great Guardian takes the same share of its power whatever the game's size: the
+ * maximum is 250 stones a player (Wiki), so the drain scales with it (1/2/3 stones solo).
+ */
+function drainOf(kind) {
+  return Math.max(kind.drain, Math.round((kind.drain * Game._game.maxPower) / Game.maxPowerFor(1)));
 }
 
 function tick({ phase }) {
@@ -236,7 +245,7 @@ function nearestCreature(from, fromSize, range) {
 }
 
 module.exports = {
-  KINDS, batchSize, pickKind, gap, tileOf, sizeOf, hit, isElementalGuardian, animate, route, struckBy, nearestCreature, creatures, clear,
+  KINDS, batchSize, pickKind, drainOf, gap, tileOf, sizeOf, hit, isElementalGuardian, animate, route, struckBy, nearestCreature, creatures, clear,
   attach(pluginApi) {
     api = pluginApi;
     Game.on("attack", attackBegins);

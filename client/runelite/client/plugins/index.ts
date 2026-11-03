@@ -25,6 +25,7 @@ import { InteractHighlightConfig } from "../../../game/plugins/interacthighlight
 import { InteractHighlightPlugin } from "../../../game/plugins/interacthighlight/InteractHighlightPlugin";
 import { InventoryTagsPlugin } from "../../../game/plugins/inventorytags/InventoryTagsPlugin";
 import { ItemStatsPlugin } from "../../../game/plugins/itemstats/ItemStatsPlugin";
+import { ItemPricesPlugin } from "../../../game/plugins/itemprices/ItemPricesPlugin";
 import { ItemRarityPlugin } from "../../../game/plugins/itemrarity/ItemRarityPlugin";
 import { MenuSwapperPlugin } from "../../../game/plugins/menuswapper/MenuSwapperPlugin";
 import { NotesConfig } from "../../../game/plugins/notes/NotesPlugin";
@@ -77,6 +78,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     // After Menu Swapper: its "Inventory tag" submenu joins the swapped menu.
     InventoryTagsPlugin,
     ItemStatsPlugin,
+    ItemPricesPlugin,
     ItemRarityPlugin,
     BankTagsPlugin,
     // After Bank Tags: its tag tab title is set before the value joins it.

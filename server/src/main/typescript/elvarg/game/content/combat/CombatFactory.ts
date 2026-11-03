@@ -13,6 +13,7 @@ import { HitMask } from "./hit/HitMask";
 import { PendingHit } from "./hit/PendingHit";
 import { CombatSpells } from "./magic/CombatSpells";
 import { ArceuusSpells } from "./magic/ArceuusSpells";
+import { Autocasting } from "./magic/Autocasting";
 import { CombatMethod } from "./method/CombatMethod";
 import { MagicCombatMethod } from "./method/impl/MagicCombatMethod";
 import { MeleeCombatMethod } from "./method/impl/MeleeCombatMethod";
@@ -157,7 +158,7 @@ export class CombatFactory {
                 return special.getCombatMethod();
             }
 
-            if (player.getCombat().getAutocastSpell() != null && player.getEquipment().hasStaffEquipped()) {
+            if (Autocasting.isActive(player)) {
                 return CombatFactory.MAGIC_COMBAT;
             }
 
@@ -690,10 +691,20 @@ export class CombatFactory {
         )) {
             // An always-multi NPC (a boss's summoned minion) never ties up the one it fights: a
             // player a hellhound is biting may still attack its master in a singles lair.
+            // Free NPCs fighting each other (NpcRivalries) don't tie one up against a player
+            // either, or the single-combat Battlefront, where soldiers are always fighting the
+            // lizardmen, would keep every lizardman from players. An owned NPC (a thrall) still
+            // ties up what it fights.
+            const npcBrawl = (mobile: Mobile, by: Mobile | null) =>
+                by != null && by.isNpc() && by.getAsNpc().getOwner() == null && mobile.isNpc() &&
+                (attacker.isPlayer() || target.isPlayer());
             const lockedBy = (mobile: Mobile) => {
                 const by = mobile.getCombat().getAttacker();
-                return by != null && !(by.isNpc() && by.getAsNpc().isMultiCombat());
+                return by != null && !(by.isNpc() && by.getAsNpc().isMultiCombat()) && !npcBrawl(mobile, by);
             };
+            const hitQueueFree = (mobile: Mobile, except: Mobile) => mobile.isNpc() && except.isPlayer()
+                ? mobile.getCombat().getHitQueue().isEmptyButFreeNpcs(except)
+                : mobile.getCombat().getHitQueue().isEmpty(except);
             if (
                 ServerPerf.measurePhase("combat.process.can_attack.attacker_busy", () =>
                     (
@@ -711,7 +722,7 @@ export class CombatFactory {
             if (
                 ServerPerf.measurePhase("combat.process.can_attack.target_busy", () =>
                     (CombatFactory.isBeingAttacked(target) && target.getCombat().getAttacker() != attacker && lockedBy(target)) ||
-                    !target.getCombat().getHitQueue().isEmpty(attacker)
+                    !hitQueueFree(target, attacker)
                 )
             ) {
                 return CanAttackResponse.TARGET_IN_COMBAT;
@@ -1421,8 +1432,15 @@ export class CombatFactory {
             attacker.isPlayer() &&
             AreaManager.inMulti(attacker) &&
             AreaManager.inMulti(target);
+        // An NPC fighting another NPC (NpcRivalries) turns on a player who hits it.
+        const npcLeavesNpcFight =
+            target.isNpc() &&
+            attacker.isPlayer() &&
+            currentTarget != null &&
+            currentTarget.isNpc() &&
+            currentTarget.getAsNpc().getOwner() == null;
 
-        if (!hasActiveDifferentTarget || npcCanRetargetInMulti) {
+        if (!hasActiveDifferentTarget || npcCanRetargetInMulti || npcLeavesNpcFight) {
             let auto_ret = false;
             if (target.isPlayer()) {
                 // combat:no-retaliate: a player mid-action that ignores hits (chopping an Ent trunk).

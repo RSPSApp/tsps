@@ -3,9 +3,9 @@
 /**
  * What a player keeps between games: the rifts closed (varp total_gotr_kills), the elemental and
  * catalytic energy banked for the Rewards Guardian ("Total elemental energy" in the end-of-game
- * messages), the times they've searched the rift, the abyssal-pearl balance that is the
- * minigame's shop currency, and the permanent gotr_perm_0 settings (talisman toggles, the
- * colourful fade, the needle and Cordelia's contact).
+ * messages), the times they've searched the rift, and the permanent gotr_perm_0 settings
+ * (talisman toggles, the colourful fade, the needle and Cordelia's contact). Abyssal pearls are
+ * the inventory item; the helpers here count, give and take them.
  *
  * Varps aren't saved here, so each one is an attribute re-sent at login.
  */
@@ -16,14 +16,8 @@ const RIFTS_CLOSED_ATTRIBUTE = "guardians-of-the-rift:rifts-closed";
 const ELEMENTAL_POINTS_ATTRIBUTE = "guardians-of-the-rift:elemental-points";
 const CATALYTIC_POINTS_ATTRIBUTE = "guardians-of-the-rift:catalytic-points";
 const SEARCHES_ATTRIBUTE = "guardians-of-the-rift:searches";
-/**
- * Abyssal pearls are the minigame's reward currency (Wiki: Guardians of the Rift#Rewards).
- * The shop currency's own attribute name, so Shopkeepers' point-currency convention and the
- * Omnishop both read the same saved balance.
- */
+/** The old saved pearl balance, read once to give the pearls back as items. */
 const PEARLS_ATTRIBUTE = "shop-currency:Abyssal pearls";
-/** The name ShopManager registers for shops whose currency is "Abyssal pearls". */
-const PEARL_CURRENCY = "ABYSSAL PEARLS";
 /** Permanent varbits by gameval name. */
 const SETTINGS_ATTRIBUTE = "guardians-of-the-rift:settings";
 
@@ -51,84 +45,75 @@ function setPoints(player, elemental, catalytic) {
   player.setAttribute(CATALYTIC_POINTS_ATTRIBUTE, Math.max(0, catalytic));
 }
 
-/** Players already checked for the old inventory item this session. */
-const legacyChecked = new WeakSet();
+/** Players already checked for a saved pearl balance this session. */
+const balanceChecked = new WeakSet();
 
 /**
- * Before pearls were a saved balance they were the abyssal_pearl item in the inventory or bank.
- * Move every legacy stack into the balance and take the items in the same operation, then ask
- * persistence for one snapshot: an upgraded account keeps the currency it had earned.
+ * Gives up to `amount` of an item, the inventory first and then the bank, and returns how many
+ * each one took. A full bank refuses what it can't hold without saying so, so it is counted.
  */
-function migrateLegacyPearls(player) {
-  if (!player || legacyChecked.has(player)) return 0;
-  legacyChecked.add(player);
-  const pearl = Shared.obj(Shared.ITEM.PEARL);
-  const note = Shared.core().ItemDefinition.forId(pearl)?.getNoteId?.() ?? -1;
-  const ids = note > 0 ? [pearl, note] : [pearl];
-
-  let converted = 0;
-  const inventory = player.getInventory?.();
-  if (inventory) {
-    let removed = 0;
-    for (const id of ids) {
-      const held = Number(inventory.getAmount?.(id) ?? 0);
-      if (held <= 0) continue;
-      inventory.delete(id, held);
-      removed += held;
-    }
-    if (removed > 0) {
-      inventory.refreshItems?.();
-      converted += removed;
-    }
+function giveOrBank(player, itemId, amount) {
+  const { Item, Bank } = Shared.core();
+  const inventory = player.getInventory();
+  const held = inventory.getAmount(itemId);
+  const fits = Math.min(amount, inventory.getAddableAmount(new Item(itemId, amount)));
+  if (fits > 0) {
+    inventory.adds(itemId, fits);
+    inventory.refreshItems();
   }
-
-  const searchTab = Shared.core().Bank?.BANK_SEARCH_TAB_INDEX ?? -1;
-  for (const [tab, bank] of (player.getBanks?.() ?? []).entries()) {
-    if (!bank || tab === searchTab) continue;
-    let removed = 0;
-    for (const id of ids) {
-      const held = Number(bank.getAmount?.(id) ?? 0);
-      if (held <= 0) continue;
-      bank.delete(id, held);
-      removed += held;
-    }
-    if (removed > 0) {
-      bank.refreshItems?.();
-      converted += removed;
-    }
+  const given = { inventory: inventory.getAmount(itemId) - held, bank: 0 };
+  if (amount > given.inventory) {
+    const bank = player.getBank(Bank.getTabForItem(player, itemId));
+    const banked = bank.getAmount(itemId);
+    bank.add(new Item(itemId, amount - given.inventory), false);
+    given.bank = bank.getAmount(itemId) - banked;
   }
-
-  if (converted > 0) {
-    addPearls(player, converted);
-    player.sendMessage?.(`Your ${Shared.formatNumber(converted)} abyssal pearls are now kept in your currency balance.`);
-    Shared.api().emitCustomEvent("persistence:save", { player, reason: "guardians-of-the-rift-pearl-migration" });
-  }
-  return converted;
+  return given;
 }
 
+/**
+ * For a while pearls were a saved balance rather than the item (issue 1986 reverted it: they are
+ * the abyssal_pearl item, as on live). A balance left from then comes back as pearls. Whatever
+ * doesn't fit stays saved and is tried again at the next login.
+ */
+function restoreSavedPearls(player) {
+  if (!player || balanceChecked.has(player)) return 0;
+  balanceChecked.add(player);
+  const saved = number(player, PEARLS_ATTRIBUTE);
+  if (saved <= 0) return 0;
+  const given = giveOrBank(player, Shared.obj(Shared.ITEM.PEARL), saved);
+  const returned = given.inventory + given.bank;
+  const waiting = saved - returned;
+  if (returned > 0) {
+    player.setAttribute(PEARLS_ATTRIBUTE, waiting);
+    const place = given.bank === 0 ? "inventory" : given.inventory === 0 ? "bank" : "inventory and bank";
+    player.sendMessage?.(`Your ${Shared.formatNumber(returned)} abyssal pearls have been returned to your ${place}.`);
+    Shared.api().emitCustomEvent("persistence:save", { player, reason: "guardians-of-the-rift-pearl-restore" });
+  }
+  if (waiting > 0) {
+    player.sendMessage?.(`${Shared.formatNumber(waiting)} abyssal pearls are waiting for you: make room in your inventory or bank and log in again.`);
+  }
+  return returned;
+}
+
+/** Abyssal pearls: the item in the inventory (Wiki: Felix and Cordelia take them from it). */
 function pearls(player) {
-  migrateLegacyPearls(player);
-  return number(player, PEARLS_ATTRIBUTE);
-}
-
-/** Sets the balance outright: a shop's price is a target, so a retry can't take twice. */
-function setPearls(player, value) {
-  const next = Math.max(0, Math.trunc(Number(value) || 0));
-  player.setAttribute(PEARLS_ATTRIBUTE, next);
-  return next;
+  return Shared.count(player, Shared.ITEM.PEARL);
 }
 
 function addPearls(player, amount) {
-  return setPearls(player, pearls(player) + Math.max(0, Math.trunc(Number(amount) || 0)));
+  const value = Math.max(0, Math.trunc(Number(amount) || 0));
+  if (value > 0) giveOrBank(player, Shared.obj(Shared.ITEM.PEARL), value);
+  return pearls(player);
 }
 
 /** Takes `amount` pearls if the whole price is there; a refused purchase changes nothing. */
 function spendPearls(player, amount) {
   const price = Math.max(0, Math.trunc(Number(amount) || 0));
-  const balance = pearls(player);
   if (price <= 0) return true;
-  if (balance < price) return false;
-  setPearls(player, balance - price);
+  if (pearls(player) < price) return false;
+  player.getInventory().delete(Shared.obj(Shared.ITEM.PEARL), price);
+  player.getInventory().refreshItems();
   return true;
 }
 
@@ -158,24 +143,16 @@ function setSetting(player, varbit, value) {
 }
 
 function login({ player }) {
-  migrateLegacyPearls(player);
+  restoreSavedPearls(player);
   Shared.setVarp(player, Shared.VARP.RIFTS_CLOSED, riftsClosed(player));
   for (const [varbit, value] of Object.entries(settings(player))) Shared.setVarbit(player, varbit, Number(value) || 0);
 }
 
-/** The balance as the shop layer's currency handler sees it. */
-const pearlCurrency = {
-  name: "Abyssal pearls",
-  amount: pearls,
-  add: addPearls,
-  remove: (player, value) => spendPearls(player, value),
-};
-
 module.exports = {
   RIFTS_CLOSED_ATTRIBUTE, ELEMENTAL_POINTS_ATTRIBUTE, CATALYTIC_POINTS_ATTRIBUTE, SEARCHES_ATTRIBUTE,
-  SETTINGS_ATTRIBUTE, PEARLS_ATTRIBUTE, PEARL_CURRENCY, pearlCurrency,
-  riftsClosed, addRiftClosed, points, setPoints, pearls, setPearls, addPearls, spendPearls,
-  migrateLegacyPearls, login,
+  SETTINGS_ATTRIBUTE, PEARLS_ATTRIBUTE,
+  riftsClosed, addRiftClosed, points, setPoints, pearls, addPearls, spendPearls,
+  restoreSavedPearls, login,
   searches, addSearches, setting, setSetting,
   attach(api) {
     api.persistAttribute(RIFTS_CLOSED_ATTRIBUTE, 0);
@@ -184,9 +161,6 @@ module.exports = {
     api.persistAttribute(SEARCHES_ATTRIBUTE, 0);
     api.persistAttribute(PEARLS_ATTRIBUTE, 0);
     api.persistAttribute(SETTINGS_ATTRIBUTE, {});
-    // Own the currency Shopkeeper's point-currency convention would otherwise create. This
-    // plugin loads after Shopkeepers (dependsOn) so its handler is the one left registered.
-    api.registerShopCurrency(PEARL_CURRENCY, pearlCurrency);
     api.onPlayerLogin(login);
   },
 };

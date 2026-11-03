@@ -58,6 +58,24 @@ what the route finder can see: an NPC whose step the *map* refuses is released b
 bounds the case that path deliberately exempts - a pursuit blocked by another *entity*, invisible to
 the pathfinder, which keeps its checkpoint so the queue never empties.
 
+## Safespots (#1952)
+
+Both NPC releases above have one exception: an NPC whose target is **fighting it** keeps that
+target (`Combat.isSafespotted`). Fighting it means the target's own combat target is the NPC, or
+the target hit it within the attacker window (6 s). That is a safespot - a player shooting or
+casting over an obstacle the NPC can't walk round - and live keeps such an NPC facing its target
+and trying its step every cycle. Dropping it on the first refused step made it reset, walk home
+and come back between the player's hits ("NPCs lose aggro when safespotting").
+
+A target that stops fighting is let go as before, so nothing is held in combat by an engagement
+neither side is pursuing; the dormancy and `inCombat` concerns above are unchanged.
+
+`tests/safespot-combat.test.cjs` runs both halves on the real map with a walk-only wall (projectiles
+pass), plus the player side of the same report: a spell cast by hand with an autocast spell
+remembered but no staff (Entrana, the Tree spirit) cast once and then fell back to melee, which
+walked the player round the obstacle. `Autocasting.isActive` (a spell and a staff) now decides
+whether combat carries on after a cast.
+
 ## Sources
 
 Dropping an interaction that cannot be reached, answered with `I can't reach that!`, is the rule

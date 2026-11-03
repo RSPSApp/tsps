@@ -116,6 +116,11 @@ function prayAt(event) {
   });
 }
 
+/** "mage-arena:cape-received" { player, received }: whether the statues have given this account a god cape. */
+function capeReceived(query) {
+  if (query?.player) query.received = query.player.getAttribute(CAPE_RECEIVED_ATTRIBUTE) === true;
+}
+
 module.exports = function registerStatues(pluginApi) {
   api = pluginApi;
   core = api.core;
@@ -123,6 +128,7 @@ module.exports = function registerStatues(pluginApi) {
   api.onObjectInteraction("Statue of Saradomin", { "Pray-at": prayAt });
   api.onObjectInteraction("Statue of Zamorak", { "Pray-at": prayAt });
   api.onObjectInteraction("Statue of Guthix", { "Pray-at": prayAt });
+  api.onCustomEvent("mage-arena:cape-received", capeReceived);
 };
 
 Object.assign(module.exports, {

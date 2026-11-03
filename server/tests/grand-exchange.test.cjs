@@ -10,6 +10,11 @@ const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
 const { GameConstants } = require('../dist/game/GameConstants');
 const { Item } = require('../dist/game/model/Item');
 const { Inventory } = require('../dist/game/model/container/impl/Inventory');
+const { Player } = require('../dist/game/entity/impl/player/Player');
+const { PlayerStatus } = require('../dist/game/model/PlayerStatus');
+const { ClientConnection } = require('../dist/net/NetworkBuilder');
+const { PacketSender } = require('../dist/net/packet/PacketSender');
+const { encodeRunClientScript, encodeTriggerOnDialogAbort, encodeWidgetCloseSub } = require('../dist/net/protocol/ClientProtocol');
 const plugin = require('../plugins/interface/GrandExchange.plugin');
 const {
   price,
@@ -336,12 +341,12 @@ test('an unlimited item never runs out', () => {
   assert.equal(remainingLimit(p, UNLIMITED, 0), Infinity);
 });
 
-function exchange(t, config = {}) {
+function exchange(t, config = {}, realSender = null) {
   const hooks = {};
   const buttons = [];
   const messages = [];
   const timers = [];
-  const sender = new Proxy({}, { get: (_, key) => (...args) => {
+  const sender = realSender ?? new Proxy({}, { get: (_, key) => (...args) => {
     if (key === 'sendMessage') messages.push(args[0]);
     return sender;
   } });
@@ -581,4 +586,163 @@ test('an aborted sale returns the items without tax', t => {
   click(24);
   assert.equal(inventory.getAmount(PRICED), 10);
   assert.equal(inventory.getAmount(995), 0);
+});
+
+const GE_MODAL = (161 << 16) | 16;
+
+// The GE through the real PacketSender, recording what actually reaches the client.
+function promptExchange(t) {
+  const frames = [];
+  const sender = new PacketSender(null);
+  const f = exchange(t, {}, sender);
+  sender.player = f.p;
+  let interfaceId = 465;
+  t.mock.method(CacheDefinitions, 'getVarbit', () => ({ baseVar: 1, startBit: 0, endBit: 30 }));
+  Object.assign(f.p, {
+    getSession: () => ({ sendClientPacket: frame => frames.push(Buffer.from(frame)), write() {} }),
+    getEnteredAmountAction: () => f.p.amountAction,
+    getEnteredSyntaxAction: () => f.p.syntaxAction,
+    getInterfaceId: () => interfaceId,
+    setInterfaceId: id => { interfaceId = id; },
+    getDialogueManager: () => ({ isActive: () => false, reset() {} }),
+    getFrameUpdater: () => ({ shouldUpdate: () => true, clearGroup() {} }),
+  });
+  sender.sendSubInterface(GE_MODAL, 465, 0);
+  // A buy offer, with its item search up and unanswered.
+  f.click(7, 3);
+  return { ...f, sender, frames };
+}
+
+// The same offer past its search, with "How many would you like to trade?" up and unanswered.
+function countPromptExchange(t) {
+  const f = promptExchange(t);
+  f.p.syntaxAction.execute(String(PRICED));
+  f.click(34, 7);
+  return { ...f, answer: f.p.amountAction };
+}
+
+const ABORT = encodeTriggerOnDialogAbort();
+const aborts = frames => frames.filter(frame => frame.equals(ABORT)).length;
+const abortsBeforeClose = frames => {
+  const abort = frames.findIndex(frame => frame.equals(ABORT));
+  const close = frames.findIndex(frame => frame.equals(encodeWidgetCloseSub(GE_MODAL)));
+  return abort >= 0 && close > abort;
+};
+
+for (const route of ['sendInterfaceRemoval', 'closeInterruptibleInterfaces']) {
+  test(`closing the GE by ${route} aborts the open count prompt and drops its answer`, t => {
+    const { p, sender, frames, answer } = countPromptExchange(t);
+    assert.ok(frames.some(frame => frame.equals(encodeRunClientScript(108, ['How many would you like to trade?']))),
+      'meslayer_mode7 opened the prompt');
+    assert.equal(typeof answer.execute, 'function');
+    frames.length = 0;
+    sender[route]();
+    assert.equal(aborts(frames), 1);
+    assert.ok(abortsBeforeClose(frames));
+    assert.equal(p.amountAction, null);
+    assert.equal(p.syntaxAction, null);
+    frames.length = 0;
+    sender[route]();
+    assert.equal(aborts(frames), 0, 'no prompt left to abort');
+  });
+
+  // RSProx 960 (rev 235), cycles 2869-2875: the abort, then if_closesub ge_offers.
+  test(`closing the GE by ${route} aborts its open item search first`, t => {
+    const { p, sender, frames } = promptExchange(t);
+    assert.equal(typeof p.syntaxAction.execute, 'function');
+    frames.length = 0;
+    sender[route]();
+    assert.equal(aborts(frames), 1);
+    assert.ok(abortsBeforeClose(frames));
+    assert.equal(p.syntaxAction, null);
+  });
+}
+
+test('Back in the GE aborts an open prompt along with its answer', t => {
+  const { p, click, frames } = countPromptExchange(t);
+  frames.length = 0;
+  click(4);
+  assert.equal(aborts(frames), 1);
+  assert.equal(p.amountAction, null);
+});
+
+test('a prompt answered before Back has nothing left to abort', t => {
+  const { p, click, frames, answer } = countPromptExchange(t);
+  answer.execute(1);
+  p.setEnteredAmountAction(null);
+  frames.length = 0;
+  click(4);
+  assert.equal(aborts(frames), 0);
+});
+
+// A prompt opened with no interface at all, through core's own close routes.
+function promptWithNoInterface(arm) {
+  const frames = [];
+  const player = {
+    amount: null,
+    syntax: null,
+    status: PlayerStatus.NONE,
+    interfaceId: -1,
+    dialogueManager: { isActive: () => false },
+    getSession: () => ({ sendClientPacket: frame => frames.push(Buffer.from(frame)), write() {} }),
+    getEnteredAmountAction: () => player.amount,
+    setEnteredAmountAction: action => { player.amount = action; },
+    getEnteredSyntaxAction: () => player.syntax,
+    setEnteredSyntaxAction: action => { player.syntax = action; },
+    getAttribute: () => undefined,
+    getInterfaceId: () => -1,
+    setInterfaceId() {},
+    getStatus: () => player.status,
+    getDialogueManager: () => player.dialogueManager,
+  };
+  player.packetSender = new PacketSender(player);
+  player.getPacketSender = () => player.packetSender;
+  arm(player);
+  frames.length = 0;
+  return { player, frames };
+}
+const armCount = player => {
+  player.setEnteredAmountAction({ execute() {} });
+  player.getPacketSender().sendEnterAmountPrompt('Enter amount:');
+};
+const armText = player => {
+  player.setEnteredSyntaxAction({ execute() {} });
+  player.getPacketSender().sendEnterInputPrompt('Enter a name:');
+};
+
+for (const [kind, arm] of [['count', armCount], ['text', armText]]) {
+  test(`walking aborts a ${kind} prompt opened with no interface`, () => {
+    const { player, frames } = promptWithNoInterface(arm);
+    Player.prototype.closeInterruptibleInterfaces.call(player);
+    assert.equal(aborts(frames), 1);
+    assert.equal(player.amount, null);
+    assert.equal(player.syntax, null);
+  });
+
+  test(`IF_CLOSE aborts a ${kind} prompt opened with no interface`, async () => {
+    const { player, frames } = promptWithNoInterface(arm);
+    const connection = new ClientConnection({ kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onError() {}, onClose() {} });
+    connection.player = player;
+    await connection.dispatch([{ type: 'interface_close' }], true);
+    assert.equal(aborts(frames), 1);
+    assert.equal(player.amount, null);
+    assert.equal(player.syntax, null);
+  });
+
+  test(`a trade or duel keeps its ${kind} prompt when the player walks`, () => {
+    for (const status of [PlayerStatus.TRADING, PlayerStatus.DUELING]) {
+      const { player, frames } = promptWithNoInterface(arm);
+      player.status = status;
+      Player.prototype.closeInterruptibleInterfaces.call(player);
+      assert.equal(frames.length, 0);
+      assert.ok(player.amount || player.syntax);
+    }
+  });
+}
+
+test('walking with no prompt and nothing open sends nothing', () => {
+  const { player, frames } = promptWithNoInterface(() => {});
+  Player.prototype.closeInterruptibleInterfaces.call(player);
+  assert.equal(frames.length, 0);
 });

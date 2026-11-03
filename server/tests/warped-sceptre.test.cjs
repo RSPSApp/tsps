@@ -53,7 +53,7 @@ function playerWithRunes({ chaos = 2, earth = 5, freeSlots = 28 } = {}) {
   const varbits = new Map();
   const messages = [];
   const items = [];
-  const state = { amountAction: null, prompt: null, dialogue: null };
+  const state = { amountAction: null, prompt: null, dialogue: null, aborts: 0 };
   return {
     items, state,
     getEnteredAmountAction: () => state.amountAction,
@@ -73,6 +73,7 @@ function playerWithRunes({ chaos = 2, earth = 5, freeSlots = 28 } = {}) {
     getPacketSender: () => ({
       sendVarbit: (id, value) => varbits.set(id, value),
       sendEnterAmountPrompt: (title) => { state.prompt = title; },
+      abortInputPrompt: () => { state.aborts++; state.amountAction = null; },
       sendInterfaceRemoval() {},
     }),
     sendMessage: (message) => messages.push(message),
@@ -395,6 +396,17 @@ test("busy varbit follows prompts and results and clears on cancellation (captur
   itemActions.get("Warped sceptre").Uncharge({ player, item: sceptre });
   assert.equal(player.varbits.get(12393), 1);
   customEvents.get("interface:close")({ player });
+  assert.equal(player.varbits.get(12393), 0);
+});
+
+test("walking away aborts the charge prompt; answering it does not", () => {
+  const { sceptre, player } = openCharge();
+  player.state.amountAction.execute(0);
+  assert.equal(player.state.aborts, 0);
+  itemActions.get("Warped sceptre (uncharged)").Charge({ player, item: sceptre });
+  customEvents.get("player:world-input")({ player });
+  assert.equal(player.state.aborts, 1);
+  assert.equal(player.state.amountAction, null);
   assert.equal(player.varbits.get(12393), 0);
 });
 

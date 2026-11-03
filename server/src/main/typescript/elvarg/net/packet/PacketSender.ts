@@ -403,6 +403,26 @@ export class PacketSender {
     return this.sendClientScript(110, title, 0);
   }
 
+  /** An amount or text action is armed: a chatbox prompt or item search, or a popup waiting on its answer. */
+  public hasInputPrompt(): boolean {
+    return !!(this.player.getEnteredAmountAction?.() || this.player.getEnteredSyntaxAction?.());
+  }
+
+  /**
+   * Drops an unanswered chatbox prompt and the action waiting on its answer. Capture (RSProx 960,
+   * rev 235): closing the GE over its item search sends trigger_ondialogabort first. It runs
+   * meslayer_ondialogabort (138), which closes the prompt without answering; meslayer_close (101)
+   * would resume a count prompt with 0.
+   */
+  public abortInputPrompt(): this {
+    if (this.hasInputPrompt()) {
+      this.player.getSession().sendClientPacket(encodeTriggerOnDialogAbort());
+    }
+    this.player.setEnteredAmountAction?.(null);
+    this.player.setEnteredSyntaxAction?.(null);
+    return this;
+  }
+
   public sendExit(): PacketSender {
     const out = new PacketBuilder(62);
     this.player.getSession().write(out);
@@ -796,13 +816,7 @@ export class PacketSender {
     // A no-op here can leave stale inventory context active client-side, which
     // affects default left-click item actions (e.g. "Drop" appearing as primary).
     this.player.setStatus?.(PlayerStatus.NONE);
-    // Capture: closing the bank under an unanswered "Enter amount:" sends trigger_ondialogabort
-    // first, so the client's meslayer_ondialogabort drops the prompt along with its answer.
-    if (this.player.getEnteredAmountAction?.()) {
-      this.player.getSession().sendClientPacket(encodeTriggerOnDialogAbort());
-    }
-    this.player.setEnteredAmountAction?.(null);
-    this.player.setEnteredSyntaxAction?.(null);
+    this.abortInputPrompt();
     this.player.getDialogueManager?.()?.reset?.();
     this.player.setAttribute?.("destroy-item:pending", -1);
     this.player.setInterfaceId?.(-1);

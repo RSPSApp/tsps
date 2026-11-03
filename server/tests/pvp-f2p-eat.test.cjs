@@ -223,7 +223,7 @@ test('a combo food can save a low-HP bot while normal food is on cooldown', () =
 
 
 function prayerHarness({ prayer = 99, defence = 99, confidenceTier = 2 } = {}) {
-  const player = new Player(null);
+  const player = new Player(null, new core.Location(3243, 3526));
   const sender = new Proxy({}, { get: () => () => sender });
   player.getPacketSender = () => sender;
   player.sendMessage = () => {};
@@ -345,13 +345,67 @@ test('Edgeville Smite respects the level threshold and depleted prayer points', 
   assert.equal(drained.player.getPrayerActive()[PrayerHandler.SMITE], true);
 });
 
+test('Edgeville visitors use Smite regardless of missing, stale or different spawn assignments', () => {
+  for (const [x, y] of [[3036, 3486], [3090, 3490], [3068, 3531], [3135, 3583]]) {
+    for (const hotspotId of [null, 'edge_mains', 'varrock_ditch']) {
+      for (const confidenceTier of [1, 2, 3, 4]) {
+        const f = prayerHarness({ prayer: 52, confidenceTier });
+        f.player.setLocation(new core.Location(x, y));
+        f.state.pvp.hotspotId = hotspotId;
+        f.node.resolveProtectionPrayer = () => assert.fail('location must override the spawn assignment');
+        f.player.getPrayerActive()[PrayerHandler.PROTECT_FROM_MELEE] = true;
+        f.review();
+        assert.deepEqual(PrayerHandler.OVERHEAD_PRAYERS.filter(id => f.player.getPrayerActive()[id]),
+          [PrayerHandler.SMITE], `${x},${y}/${hotspotId}/${confidenceTier}`);
+      }
+    }
+  }
+});
+
+test('the location rule stops at Edgeville region boundaries and the surface plane', () => {
+  const { usesSmiteOnlyPrayers } = require('../plugins/bots/behaviours/pvp/WildernessHotspotRegistry.PlayerBots');
+  const f = prayerHarness();
+  for (const [x, y, z, expected] of [[3008, 3456, 0, true], [3135, 3583, 0, true],
+    [3007, 3490, 0, false], [3136, 3490, 0, false], [3090, 3455, 0, false],
+    [3090, 3584, 0, false], [3090, 3490, 1, false]]) {
+    f.player.setLocation(new core.Location(x, y, z));
+    assert.equal(usesSmiteOnlyPrayers(f.player, f.state), expected, `${x},${y},${z}`);
+  }
+});
+
+test('idle Edgeville visitors immediately clear existing protection without disabling other prayers', () => {
+  const { ReplenishAfterKillNode } = require('../plugins/bots/behaviours/nodes/pvp/ReplenishAfterKillNode.PlayerBots');
+  for (const prayerId of PrayerHandler.PROTECTION_PRAYERS) {
+    const f = prayerHarness();
+    f.player.setLocation(new core.Location(3090, 3531));
+    PrayerHandler.activatePrayerPrayerId(f.player, PrayerHandler.PIETY);
+    PrayerHandler.activatePrayerPrayerId(f.player, PrayerHandler.PROTECT_ITEM);
+    PrayerHandler.activatePrayerPrayerId(f.player, prayerId);
+    assert.equal(PrayerHandler.isActivated(f.player, prayerId), true);
+    Object.assign(f.state.pvp, { replenishPrayerId: prayerId, replenishPrayerUntil: Date.now() + 10000,
+      nextPrayerReviewAt: Date.now() + 10000 });
+    const node = Object.create(ReplenishAfterKillNode.prototype);
+    node.PrayerHandler = PrayerHandler;
+    node.eatFoodActionNode = { tick() { assert.fail('idle cleanup must not eat'); } };
+    node.tick(f);
+    assert.deepEqual(PrayerHandler.PROTECTION_PRAYERS.filter(id => f.player.getPrayerActive()[id]), []);
+    assert.equal(f.player.getPrayerActive()[PrayerHandler.PIETY], true);
+    assert.equal(f.player.getPrayerActive()[PrayerHandler.PROTECT_ITEM], true);
+    assert.equal(f.state.pvp.replenishPrayerId, null);
+    assert.equal(f.state.pvp.replenishPrayerUntil, 0);
+    assert.equal(f.state.pvp.nextPrayerReviewAt, 0, 'the next combat review can enable Smite immediately');
+  }
+});
+
 test('post-kill protection is disabled at Edgeville and retained at other sites', () => {
   const { ReplenishAfterKillNode } = require('../plugins/bots/behaviours/nodes/pvp/ReplenishAfterKillNode.PlayerBots');
   const { getEnabledWildernessHotspots } = require('../plugins/bots/behaviours/pvp/WildernessHotspotRegistry.PlayerBots');
   const spots = getEnabledWildernessHotspots().filter(spot => spot.smiteOnly);
-  for (const site of [...spots, { id: 'varrock_ditch', smiteOnly: false }]) {
+  for (const site of [...spots, { id: 'varrock_ditch', smiteOnly: false },
+    { id: null, smiteOnly: true, location: new core.Location(3090, 3531) }]) {
     for (const profileId of ['veteran', 'elite']) {
       const f = prayerHarness();
+      if (site.location) f.player.setLocation(site.location);
       Object.assign(f.state.pvp, { hotspotId: site.id, profileId, replenishAfterKillPending: true });
       const node = Object.create(ReplenishAfterKillNode.prototype);
       node.PrayerHandler = PrayerHandler;

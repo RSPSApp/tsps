@@ -344,7 +344,7 @@ This is an optional server customization, not a bug fix or implementation of mis
 Adopting it replaces the existing PvP chatter and applies a Smite-only overhead prayer policy
 at the three existing Edgeville sites: `edge_low`, `edge_mid` and `edge_mains`.
 
-Random chatter occurs every 9–24 seconds during active player-versus-bot or bot-versus-bot
+Random chatter occurs every 15–30 seconds during active player-versus-bot or bot-versus-bot
 fights. Greetings, protection-prayer complaints, high-HP eating reactions, kills and deaths
 have independent 50% reaction chances. Eating reactions use HP before healing and include
 exactly 75% of maximum HP. Prayer complaints only respond to Protect from Melee, Missiles
@@ -355,8 +355,23 @@ A scheduled task checks tracked fights each game tick and removes idle, dead and
 participants. The Edgeville sites set `pvp.smiteOnly: true`: bots at every difficulty use
 Smite when their Prayer level and points allow it, and do not select protection overheads
 during combat or post-kill replenishing. Novices still omit offensive combat prayers.
-Other sites retain their existing prayer choices. This setting is a server policy choice,
-not an OSRS parity requirement.
+The `pvp.smiteOnlyRegions` list also applies the policy by location to roaming and recruited
+PvP bots visiting Edgeville, regardless of their spawn assignment. Existing protection
+prayers clear on the next brain turn, including while idle. Other sites retain their usual
+prayer choices outside these regions. This is a server policy choice, not an OSRS parity
+requirement.
+
+Messages from different bots sharing a fight are staggered by at least one second and
+appear on the next eligible game tick; unrelated fights remain independent. Random chatter
+cooldowns start when a line is displayed. Queued lines are discarded when they no longer
+apply. Strength-level questions only roll against melee opponents and Range-level questions
+against ranged opponents, using the opponent's current style when the line is displayed.
+
+The expanded line pools cover fight starts, mid-fight chatter, prayers, high-HP eating,
+kills and deaths. The exported `getRandomLine(category, data)` selector accepts `chatter`,
+`start`, `prayer`, `safing`, `kill`, `death` or `rng`. For `rng`, `isSplash: true`
+selects "Nice splash" and `isZero: true` selects "0-0-0-0 nice RNG"; splash takes priority.
+Unmatched data uses the random RNG pool.
 
 ## Test tiers
 

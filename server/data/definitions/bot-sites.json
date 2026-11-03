@@ -54,6 +54,7 @@
   "pvp": {
     "botPool": 845,
     "activeRegionBotsPerRegion": 16,
-    "activeRegionInset": 1
+    "activeRegionInset": 1,
+    "smiteOnlyRegions": ["0:47:54", "0:48:54", "0:47:55", "0:48:55"]
   }
 }

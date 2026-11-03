@@ -901,6 +901,11 @@ export class Combat {
         } else if (!bypass && timing.minimumDelay > 0) {
             this.nextAttackCycle = Math.max(this.nextAttackCycle, cycle + (timing.minimumDelay | 0));
             this.sendAttackTimer();
+        } else if (specialTraits?.bypassAttackDelay === true && specialTraits.attackSpeedTicks != null) {
+            // A bypassing special (Quick Smash) armed before the target was clicked: keep any
+            // cooldown already running and leave at least its own delay after it.
+            this.extendAttackDelay(PluginManager.emitAttackSpeed(this.character, target, method.type(),
+                specialTraits.attackSpeedTicks));
         }
         this.lastAttackTarget = target;
 

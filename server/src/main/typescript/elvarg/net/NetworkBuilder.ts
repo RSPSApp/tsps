@@ -886,7 +886,13 @@ export class ClientConnection {
               this.player.getPacketSender().sendRunStatus();
               // "player:run-toggled" { player, running }: the run mode the player switched to.
               PluginManager.emitCustomEvent("player:run-toggled", { player: this.player, running: this.player.isRunningReturn() });
-            } else if (packet.varpId === 301 && (packet.value !== 0) !== this.player.isSpecialActivated()) {
+            } else if (packet.varpId === 301) {
+              // The web client's special attack orb is a CS2 handler that toggles varp 301
+              // locally and sends the new value, unlike live, whose orb sends an interface
+              // button and lets the server decide. The client's value can lag the server by a
+              // tick (a special that just swung turns the bar off), so a click would send 0
+              // while the server is already off and be ignored. Treat every 301 packet as the
+              // orb click it is: toggle the server's state, as live's button does.
               CombatSpecial.activate(this.player);
             }
             this.player.applyAudioSettingFromClient(packet.varpId, packet.value);

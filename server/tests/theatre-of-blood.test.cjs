@@ -42,7 +42,7 @@ function fakeApiBase() {
     },
     persistAttribute() {},
     onObjectInteraction() {},
-    onInterfaceActionButton() {},
+    onInterfaceActionButton: (uid, handler) => { (hooks.buttons ??= {})[uid] = handler; },
     onZoneEnter() {},
     onZoneExit() {},
     onPlayerLogout: (handler) => (hooks.logout ??= []).push(handler),
@@ -98,7 +98,7 @@ function fakePlayer(name) {
   const index = nextIndex++;
   const p = {
     name, location: new Location(3667, 3219, 0), area: null, hp: 99, blocked: false, untargetable: false, render: null,
-    messages: [], scripts: [], interfaces: [], subs: new Map(), statements: [], texts: {}, sounds: [], songs: [],
+    messages: [], scripts: [], interfaces: [], inventories: [], subs: new Map(), statements: [], texts: {}, sounds: [], songs: [],
     inventory: fakeContainer(28), equipment: fakeContainer(14),
     getUsername: () => name, getDisplayName: () => name,
     getIndex: () => index,
@@ -153,7 +153,7 @@ function fakePlayer(name) {
         sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); return sender; },
         sendInterfaceFlagsRange: () => sender,
         sendInterfaceFlags: () => sender,
-        sendInventory: () => sender,
+        sendInventory: (inv, size, items) => { p.inventories.push({ inv, size, items }); return sender; },
         sendString: (text, uid) => { p.texts[uid] = text; return sender; },
         sendEnterAmountPrompt: () => sender,
         sendJingle: () => sender,
@@ -747,6 +747,36 @@ test("unclaimed vault loot is lost on logging out, but Lil' Zik is still deliver
   assert.deepEqual(Rewards.lootOf(solo), [], 'nothing is left to claim');
   assert.ok(hooks.custom.some((entry) => entry.name === 'npc-drops:roll' && entry.payload.drops.some((drop) => drop.itemId === I.LIL_ZIK)),
     'the pet goes to the pet delivery');
+});
+
+test('a seven-item Hard roll shows six; the bulk buttons act on those and the seventh moves into view', () => {
+  const Rewards = require('../plugins/minigames/tob/Rewards.TheatreOfBlood');
+  const I = PluginManager.getCoreApi().ItemIdentifiers;
+  const TAKE_ALL = (23 << 16) | 8;
+  const DISCARD_ALL = (23 << 16) | 10;
+  const solo = fakePlayer('SevenSlots');
+  // The reviewer's roll: three commons, the clue, the dust and both kits.
+  const seven = () => [565, 445, 452, I.CLUE_SCROLL_ELITE_, I.SANGUINE_DUST, I.SANGUINE_ORNAMENT_KIT, I.HOLY_ORNAMENT_KIT]
+    .map((id) => ({ id, amount: 1 }));
+  const lastSent = () => solo.inventories.at(-1);
+  Rewards.setLoot(solo, seven());
+  Rewards.openLoot(solo);
+  assert.equal(lastSent().size, 6, 'inventory 612 has six slots (cache)');
+  assert.deepEqual(lastSent().items.map((item) => item.id), seven().slice(0, 6).map((entry) => entry.id), 'the first six are shown');
+  assert.ok(solo.messages.some((text) => /More rewards are waiting/.test(text)), 'the player is told more are waiting');
+
+  hooks.buttons[DISCARD_ALL]({ player: solo });
+  choose('<col=ff0000>DESTROY!');
+  assert.deepEqual(Rewards.lootOf(solo).map((entry) => entry.id), [I.HOLY_ORNAMENT_KIT], 'Discard-all destroys only what was shown');
+  assert.deepEqual(lastSent().items.map((item) => item.id), [I.HOLY_ORNAMENT_KIT], 'the hidden kit comes into view');
+
+  // Bank-all goes through the same takeAll; the fake player has no bank to drive it with.
+  Rewards.setLoot(solo, seven());
+  hooks.buttons[TAKE_ALL]({ player: solo });
+  const left = Rewards.lootOf(solo).map((entry) => entry.id);
+  assert.ok(left.includes(I.HOLY_ORNAMENT_KIT), 'Take-all leaves the unshown kit in the chest');
+  assert.deepEqual(lastSent().items.map((item) => item.id), left.slice(0, 6), 'what is left is shown, the kit with it');
+  assert.ok(left.length <= 6, 'the six shown were taken, so nothing is hidden any more');
 });
 
 test('the vault loot reaches the collection log once, and the category answers the ToB counts', () => {

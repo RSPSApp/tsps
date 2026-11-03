@@ -24,6 +24,10 @@
  * Captured: the loot interface (23), "Your completed Theatre of Blood count is: N.".
  * Estimates: the chests' tiles and order (party slot), their facing, the player's opening
  * animation (536), inventory 612 for the loot.
+ * Inventory 612 has six slots in the cache, but a Hard Mode roll in the target time can hold
+ * seven items (three commons, the clue, the dust and both kits). The Wiki gives no rule, so the
+ * interface shows the first six; Bank-all, Take-all and Discard-all act on those, and the rest
+ * move into view as slots empty (our handling; the line saying so is our wording).
  * Estimates (the Wiki gives no formula): each death costs a fifth of a player's share - of the
  * unique chance (averaged over the team), of the unique weighting (with damage dealt), of the
  * common amounts (averaged) and of their tertiary odds; Rewards Chest varbit values (0 empty,
@@ -327,8 +331,14 @@ function claimPetLoot(player) {
   return consumed;
 }
 
+/** What the six slots show; anything after them waits until slots empty. */
+function shown(loot) {
+  return loot.slice(0, LOOT_SLOTS);
+}
+
 function sendLoot(player, loot) {
-  player.getPacketSender().sendInventory(LOOT_INVENTORY, LOOT_SLOTS, loot.map(({ id, amount }) => ({ id, amount })));
+  player.getPacketSender().sendInventory(LOOT_INVENTORY, LOOT_SLOTS, shown(loot).map(({ id, amount }) => ({ id, amount })));
+  if (loot.length > LOOT_SLOTS) player.sendMessage("More rewards are waiting in the chest. Take some to make room for them.");
 }
 
 function bankFor(player, id) {
@@ -372,11 +382,9 @@ function take(player, entry, destination) {
 }
 
 function takeAll(player, destination) {
-  const left = [];
-  for (const entry of lootOf(player)) {
-    entry.amount -= take(player, entry, destination);
-    if (entry.amount > 0) left.push(entry);
-  }
+  const loot = lootOf(player);
+  for (const entry of shown(loot)) entry.amount -= take(player, entry, destination);
+  const left = loot.filter((entry) => entry.amount > 0);
   setLoot(player, left);
   sendLoot(player, left);
 }
@@ -398,8 +406,11 @@ function clickDiscardAll({ player }) {
   if (lootOf(player).length === 0) return;
   Shared.options(player, "Are you sure you want to destroy the items?",
     "<col=ff0000>DESTROY!", () => {
-      setLoot(player, []);
-      sendLoot(player, []);
+      // Only what the player could see; anything waiting behind it comes into view.
+      const left = lootOf(player).slice(LOOT_SLOTS);
+      setLoot(player, left);
+      if (left.length > 0) openLoot(player);
+      else sendLoot(player, left);
     },
     "Cancel", () => openLoot(player));
 }

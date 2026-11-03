@@ -35,6 +35,16 @@ cp docs/object-examines.json ../tsps/server/data/definitions/object-examines.jso
 
 A multi-loc's text can be recorded under the variant the player sees (a farming patch's growing state, as the captures show). So when the id the client sent has no text, the examine answers from the player's variant.
 
+## NPC examines
+
+NPCs work the same way through `NpcDefinition.getExamine()`. Attackable NPCs take their text from `monsters-complete.json`, which only lists Infobox Monster pages. Every other NPC (shopkeepers, quest NPCs, the Wise Old Man) comes from the generated **`npc-examines.json`**, which is dumped from the Wiki's `infobox_npc` bucket:
+
+```sh
+cd ../osrsreboxed-db
+python -m scripts.examines.update --kind npc   # writes docs/npc-examines.json
+cp docs/npc-examines.json ../tsps/server/data/definitions/npc-examines.json
+```
+
 ## Not modelled
 
 - **The message type:** OSRS sends examines as their own chat type (`loc_examine`); here they're sent as game messages.

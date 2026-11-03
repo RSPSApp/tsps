@@ -841,6 +841,14 @@ test('the Challenge Timeboard keeps the five fastest Challenge Mode times and sa
   // The global bests are by team size; Solo keeps 100 ticks and team 2 its faster 50.
   assert.ok(board.includes('Solo: 1:00.00'), board);
   assert.ok(board.includes('2: 0:30.00'), board);
+  // Cache 229 clips its 80px text widget: every page keeps to four lines, and Read pages through them.
+  const pages = Timeboard.pages();
+  assert.ok(pages.length > 1, 'the board spans several pages');
+  for (const page of pages) assert.ok(page.split('<br>').length <= Timeboard.PAGE_LINES, page);
+  const reader = fakePlayer('Reader');
+  assert.equal(Timeboard.readBoard({ player: reader, objectId: Timeboard.LOC, option: 'Read' }), true);
+  const shown = [...reader.statements[0].getDialogues().values()].map((dialogue) => dialogue.getText?.()).filter(Boolean);
+  assert.deepEqual(shown, pages, 'one message box per page, in order');
 
   // rsprox 3389: in the completion messages the notice comes after the target-time line and
   // before "Congratulations".

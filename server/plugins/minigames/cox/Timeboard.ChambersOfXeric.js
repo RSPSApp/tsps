@@ -118,25 +118,43 @@ function formatTicks(ticks) {
   return `${minutes}:${pad(seconds)}.${pad(centis % 100)}`;
 }
 
-/** The board's text: this world's five, then the best of every team size (a guessed layout). */
-function text() {
+/**
+ * Cache 229: the message box's text widget is 80px tall at 15px a line, in a 96px clip with no
+ * scroll, so a page holds four lines. Each section starts its own page.
+ */
+const PAGE_LINES = 4;
+
+function paginate(lines) {
+  const pages = [];
+  for (let i = 0; i < lines.length; i += PAGE_LINES) pages.push(lines.slice(i, i + PAGE_LINES).join("<br>"));
+  return pages;
+}
+
+/** The board's pages: this world's five, then the best of every team size (a guessed layout). */
+function pages() {
   const data = records();
-  const lines = [TITLE, ""];
-  lines.push("This world:");
-  if (data.world.length === 0) lines.push("  No Challenge Mode raids have been completed yet.");
+  const world = [`${TITLE} - this world:`];
+  if (data.world.length === 0) world.push("No Challenge Mode raids have been completed yet.");
   data.world.forEach((entry, index) => {
-    lines.push(`  ${index + 1}. ${entry.leader || "Unknown"} - ${bracket(entry.size)} - ${formatTicks(entry.ticks)}`);
+    world.push(`${index + 1}. ${entry.leader || "Unknown"} - ${bracket(entry.size)} - ${formatTicks(entry.ticks)}`);
   });
-  lines.push("", "Best by team size:");
-  for (const key of ["Solo", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11-15", "16-23", "24+"]) {
-    lines.push(`  ${key}: ${data.global[key] > 0 ? formatTicks(data.global[key]) : "-"}`);
+  const best = (key) => `${key}: ${data.global[key] > 0 ? formatTicks(data.global[key]) : "-"}`;
+  const sizes = ["Solo", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11-15", "16-23", "24+"];
+  const team = ["Best by team size:"];
+  for (let i = 0; i < sizes.length; i += 2) {
+    team.push(sizes.slice(i, i + 2).map(best).join("     "));
   }
-  return lines.join("<br>");
+  return [...paginate(world), ...paginate(team)];
+}
+
+/** The whole board as one string (tests). */
+function text() {
+  return pages().join("<br>");
 }
 
 function readBoard(event) {
   if (event.objectId !== LOC || event.option !== "Read") return false;
-  Shared.statement(event.player, text());
+  Shared.statement(event.player, pages());
   return true;
 }
 
@@ -155,4 +173,4 @@ module.exports = function registerCoxTimeboard(api) {
   Shared.onObjectIds(api, [LOC], readBoard);
 };
 
-Object.assign(module.exports, { LOC, TOP, TITLE, MADE_IT, bracket, qualifies, insert, record, text, formatTicks, readBoard, setFile, reset });
+Object.assign(module.exports, { LOC, TOP, TITLE, MADE_IT, PAGE_LINES, bracket, qualifies, insert, record, pages, text, formatTicks, readBoard, setFile, reset });

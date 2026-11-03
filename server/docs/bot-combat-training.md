@@ -294,7 +294,7 @@ Configured in the same file, under `"pvp"`: `botPool` (how many `WildyBot` names
 it, `pvp.style` picks every group tagged with that style (f2p groups only for the `f2p` style).
 
 Regional bots fill attackable regions around players: `activeRegionBotsPerRegion` in each one
-(16 by default), whether it is levelled Wilderness or a town on a PvP world.
+(48 by default), whether it is levelled Wilderness or a town on a PvP world.
 Hotspot bots count towards that region's target. Persistent Wilderness clusters are smaller:
 12 low-level, 10 mid-level and 14 main bots at Edgeville, 40 at Varrock Ditch, and 4 each at
 Green Dragons and the Revenant Caves entrance. Safe tiles and buildings still cannot spawn bots.

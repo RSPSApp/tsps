@@ -75,4 +75,31 @@ const vm = new Cs2Vm({
 vm.execute(root);
 assert.deepEqual(completed, [386, 865], "nested layout completion must be observable");
 
+// Native pvp_icons creates and updates the K/D text from the server's varbits.
+{
+    const { createCacheVm } = require("../scripts/cache/cs2-sweep");
+    const native = createCacheVm();
+    const manager = native.vm.context.widgetManager;
+    const vars = native.vm.context.varManager;
+    const group = manager.loadGroup(90);
+    assert.equal(native.vm.invokeEventHandler(group.root, "onLoad"), true);
+    const kd = manager.getDynamicChildrenByParent((90 << 16) | 26)[0];
+    assert.ok(kd?.eventHandlers?.onVarTransmit, "the cache installs the native K/D listener");
+    for (const varp of [1105, 1320, 718]) {
+        assert.ok(kd.varTransmitTriggers.includes(varp), `native K/D updates when varp ${varp} changes`);
+    }
+    function update(toggle: number, inside: number, kills: number, deaths: number) {
+        vars.setVarbit(4143, toggle);
+        vars.setVarbit(5963, inside);
+        vars.setVarbit(8376, kills);
+        vars.setVarbit(8375, deaths);
+        assert.equal(native.vm.invokeEventHandler(kd, "onVarTransmit"), true);
+        return kd.text;
+    }
+    assert.equal(update(1, 1, 9, 2), "Kills: 9<br>Deaths: 2<br>K/D Ratio: 4.5");
+    assert.equal(update(0, 1, 9, 2), "", "turning the board toggle off clears the text");
+    assert.equal(update(1, 0, 9, 2), "", "the native overlay clears outside Wilderness");
+    assert.equal(update(1, 1, 9, 0), "Kills: 9<br>Deaths: 0<br>K/D Ratio: 0.0");
+}
+
 console.log("wilderness HUD layout tests passed");

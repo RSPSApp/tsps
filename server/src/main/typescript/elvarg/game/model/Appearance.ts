@@ -77,7 +77,7 @@ export class Appearance {
             this.look[Appearance.HANDS] = 68;
             this.look[Appearance.LEGS] = 77;
             this.look[Appearance.FEET] = 80;
-            this.look[Appearance.BEARD] = 57;
+            this.look[Appearance.BEARD] = -1;
         }
         this.look[Appearance.HAIR_COLOUR] = 2;
         this.look[Appearance.TORSO_COLOUR] = 14;

@@ -10,6 +10,7 @@ import type { CustomInterfaceRuntime } from "../../widgets/custom/CustomInterfac
 import type { PlayerDesignController } from "./PlayerDesignController";
 import type { WidgetInteractionController } from "./WidgetInteractionController";
 import {
+    handleWidgetActionCloseButton,
     handleWidgetActionPauseButton,
     handleWidgetActionTargeting,
     type SelectedSpellInfo,
@@ -197,6 +198,10 @@ export class WidgetActionRouter {
             if (handleWidgetActionTargeting(this.deps, event, groupId | 0, childId | 0)) {
                 return;
             }
+        }
+
+        if (handleWidgetActionCloseButton(this.deps, event)) {
+            return;
         }
 
         if (handleWidgetActionPauseButton(this.deps, event)) {

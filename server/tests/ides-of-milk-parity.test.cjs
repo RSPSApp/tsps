@@ -602,3 +602,29 @@ test('the charge survives real combat validation before its facing recovery', ()
     assert.equal(f.npc.getMovementQueue().getMobility().canMove(), true);
   } finally { f.close(); }
 });
+
+test('Brutus counts once through Combat Achievements and answers the stored best', () => {
+  const Kills = require('../plugins/achievements/combatachievements/Kills.CombatAchievements');
+  const originalCycle = core.World.getProcessCycle;
+  let cycle = 100;
+  core.World.getProcessCycle = () => cycle;
+  const { h, p, npc } = fight(22);
+  try {
+    require('../plugins/achievements/combatachievements/Data.CombatAchievements')(h.api);
+    Kills(h.api);
+    cycle = 130;
+    for (const handler of h.hooks.onNpcDeath) handler({ killer: p, npc });
+    const count = { player: p, monster: 'Brutus' };
+    h.emit('combat-achievements:count', count);
+    assert.equal(count.total, 1);
+    assert.ok(p.messages.some(text => text.includes('Your Brutus kill count is: <col=ff0000>1</col>')));
+    assert.ok(p.messages.some(text => text.includes('0:18.00') && text.includes('new personal best')));
+    const best = { player: p, monster: 'Brutus', best: null };
+    h.emit('combat-achievements:personal-best', best);
+    assert.equal(best.best, 30);
+    assert.equal(p.getAttribute('ides-of-milk:brutus-best-ticks'), 30);
+  } finally {
+    h.hooks.onPlayerLogout[0]({ player: p });
+    core.World.getProcessCycle = originalCycle;
+  }
+});

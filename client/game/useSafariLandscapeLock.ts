@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import {
     checkMobile,
     isMobileChatKeyboardFocused,
     shouldFreezeViewportForVirtualKeyboard,
 } from "../common/utils/DeviceUtil";
+import { isPortraitModeEnabled, subscribePortraitModeEnabled } from "./plugins/portraitmode/PortraitLayout";
 
 interface MobileLandscapeLockState {
     enabled: boolean;
@@ -67,7 +68,10 @@ export function getForcedLandscapeRotation(
     chatInputFocused: boolean,
     currentRotation: boolean,
     portraitLayout: boolean | undefined,
+    allowPortrait: boolean = false,
 ): boolean | undefined {
+    // Portrait mode lays the game out upright, so nothing is ever turned sideways.
+    if (allowPortrait) return false;
     if (!chatInputFocused) return undefined;
     return portraitLayout ?? currentRotation;
 }
@@ -77,11 +81,14 @@ export function getForcedLandscapeRotation(
  * When the device is physically portrait, CSS-rotates the app 90° and remaps
  * input (via documentElement dataset flags). Also tries Screen Orientation lock
  * when the browser allows it (often after a user gesture / in installed PWAs).
+ * While the Portrait Mode plugin is on, the app is never rotated or locked: an
+ * upright phone gets the portrait gameframe instead (plugins/portraitmode).
  *
  * Dataset attribute names keep the historical `iosSafariForceLandscape*` keys
  * so InputManager / DeviceUtil continue to work unchanged.
  */
 export function useSafariLandscapeLock(enabled: boolean = true): MobileLandscapeLockState {
+    const allowPortrait = useSyncExternalStore(subscribePortraitModeEnabled, isPortraitModeEnabled);
     const [rotated, setRotated] = useState(false);
     const isPhone = checkMobile();
     const active = enabled && isPhone;
@@ -111,6 +118,7 @@ export function useSafariLandscapeLock(enabled: boolean = true): MobileLandscape
                 chatInputFocused,
                 root.dataset.iosSafariForceLandscapeRotated === "1",
                 portraitLayout,
+                allowPortrait,
             );
             const preserveRotation = targetRotation !== undefined;
             if (targetRotation !== undefined) {
@@ -152,6 +160,7 @@ export function useSafariLandscapeLock(enabled: boolean = true): MobileLandscape
         };
 
         const tryLockLandscape = () => {
+            if (allowPortrait) return;
             try {
                 const orientation = window.screen?.orientation as
                     | (ScreenOrientation & {
@@ -203,7 +212,7 @@ export function useSafariLandscapeLock(enabled: boolean = true): MobileLandscape
             delete root.dataset.iosSafariForceLandscape;
             delete root.dataset.iosSafariForceLandscapeRotated;
         };
-    }, [active]);
+    }, [active, allowPortrait]);
 
     return {
         enabled: active,

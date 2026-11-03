@@ -17,6 +17,7 @@ import { getNpcMenuOptions } from "../../menu/WorldMenuBuilder";
 import { stripTags } from "../npcindicators/npcMatching";
 import { RS_TO_RADIANS } from "../../../rs/MathConstants";
 import { MOBILE_ROOT_INTERFACE } from "../../../rs/cs2/ClientType";
+import { isMobilePortraitLayoutActive } from "../portraitmode/PortraitLayout";
 import { menuAction } from "../../../ui/menu/MenuAction";
 import { MenuOpcode } from "../../../ui/menu/MenuState";
 import type { SimpleMenuEntry } from "../../../ui/menu/MenuEngine";
@@ -499,6 +500,8 @@ export class TouchControlsPlugin extends Plugin implements ClientPlugin {
      */
     private canMove(): boolean {
         if (!this.client.isLoggedIn()) return false;
+        // Turning the phone upright hides the stick mid-drag; let go of it.
+        if (isMobilePortraitLayoutActive()) return false;
         const active = typeof document === "undefined" ? undefined : document.activeElement;
         if (active?.matches?.("input, textarea, select, [contenteditable='true']")) return false;
         if (this.client.isWidgetTextInputActive?.()) return false;
@@ -540,7 +543,9 @@ export class TouchControlsPlugin extends Plugin implements ClientPlugin {
         // On/Off beat detection and the ?touch= query override; Default keeps both.
         const padOn =
             this.padMode === PadMode.ON ? true : this.padMode === PadMode.OFF ? false : this.touchDevice;
-        const visible = this.isEnabled() && padOn && this.client.isLoggedIn();
+        // The portrait layout has no room for the stick beside its bottom HUD; tap-to-walk only.
+        const visible = this.isEnabled() && padOn && this.client.isLoggedIn() &&
+            !isMobilePortraitLayoutActive();
         const action = visible && this.focus && this.canMove()
             ? { kind: this.focus.kind, options: this.menuOrder(this.focus) } : undefined;
         const stonesInset = visible ? this.stonesInset() : 0;

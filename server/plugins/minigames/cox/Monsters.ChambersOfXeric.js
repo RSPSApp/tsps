@@ -18,7 +18,10 @@
  * - The Great Olm: head 800 + 400 x k, claws 600 + 300 x k, k = min(n-1, 50) - 3 x (min(n, 50)/8);
  *   the right (mage) claw's Magic halved.
  * Not from a source: max hits grow with the scaled offence ((level + 9) ratio), as a max hit
- * follows effective strength; the Wiki gives them at the base scale only.
+ * follows effective strength; the Wiki gives them at the base scale only. Where the Wiki gives a
+ * Challenge Mode max hit too (the Guardian: 20 Normal, 33 Challenge Mode), that value is the
+ * mode's base, grown from the Challenge Mode base offence; deriving it from the Normal max hit
+ * gave 29, as the Wiki's own DPS calculator does.
  */
 
 /** Base stats, in NpcDefinition.getStats order: levels att/str/def/rng/mag, accuracy 5 melee 7 magic 9 ranged, defences 10-14 stab/slash/crush/magic/ranged. */
@@ -30,7 +33,7 @@ const MONSTERS = [
   { name: "Great Olm (Head (Normal))", ids: [7551, 7554], hp: 800, stats: [250, 250, 150, 250, 250, 0, 0, 60, 0, 60, 200, 200, 200, 200, 50], maxHit: 27 },
   { name: "Great Olm (Left claw (Normal))", ids: [7552, 7555], hp: 600, stats: [250, 250, 175, 250, 175, 0, 0, 60, 0, 60, 50, 50, 50, 200, 200], maxHit: 0 },
   { name: "Great Olm (Right claw (Normal))", ids: [7550, 7553], hp: 600, stats: [250, 250, 175, 250, 87, 0, 0, 60, 0, 60, 200, 200, 200, 50, 200], maxHit: 0 },
-  { name: "Guardian (Chambers of Xeric)", ids: [7569, 7570, 7571, 7572], hp: 250, stats: [140, 140, 100, 1, 1, 0, 0, 0, 0, 0, 80, 180, -10, 0, 0], maxHit: 20 },
+  { name: "Guardian (Chambers of Xeric)", ids: [7569, 7570, 7571, 7572], hp: 250, stats: [140, 140, 100, 1, 1, 0, 0, 0, 0, 0, 80, 180, -10, 0, 0], maxHit: 20, maxHitChallenge: 33 },
   { name: "Ice demon", ids: [7584, 7585], hp: 140, stats: [1, 1, 160, 390, 390, 0, 0, 0, 0, 0, 70, 70, 110, 40, 140], maxHit: 0 },
   { name: "Lizardman shaman (Chambers of Xeric)", ids: [7573, 7574], hp: 190, stats: [130, 130, 210, 130, 130, 58, 0, 0, 0, 56, 102, 160, 150, 160, 0], maxHit: 65 },
   { name: "Muttadile (Large)", ids: [7561, 7563], hp: 250, stats: [250, 250, 220, 250, 250, 88, 0, 0, 0, 82, -5, 82, 60, 75, 0], maxHit: 72 },
@@ -131,8 +134,27 @@ function scale(id, raidInputs) {
     hp = ID.OLM_HEAD.has(id) ? 800 + 400 * k : 600 + 300 * k;
     if (ID.OLM_MAGE_CLAW.has(id)) stats[LEVELS.MAGIC] = Math.trunc(stats[LEVELS.MAGIC] / 2);
   }
-  const maxHit = base.maxHit > 0 ? Math.floor((base.maxHit * (offensive + 9)) / (baseOffensive + 9)) : 0;
+  const maxHit = maxHitAt(base, inputs.challenge, baseOffensive, offensive);
   return { hitpoints: hp, stats, maxHit };
+}
+
+/**
+ * The Wiki's max hit for the mode: its Challenge Mode value when it gives one, else its Normal one.
+ * The Guardian is the only monster where the two do not follow the same formula (20 and 33).
+ */
+function modeMaxHit(base, challenge) {
+  return challenge && base.maxHitChallenge != null ? base.maxHitChallenge : base.maxHit;
+}
+
+/**
+ * Grows a max hit given at its mode's base scale with the scaled offence, as a max hit follows it.
+ * The Guardian's 33 is given at 140 x 1.5, so a Challenge Mode max hit grows from there.
+ */
+function maxHitAt(base, challenge, baseOffensive, offensive) {
+  const given = modeMaxHit(base, challenge);
+  if (!(given > 0)) return 0;
+  const baseline = challenge && base.maxHitChallenge != null ? addPercent(baseOffensive, CM_PERCENT) : baseOffensive;
+  return Math.floor((given * (offensive + 9)) / (baseline + 9));
 }
 
 /**

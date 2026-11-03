@@ -2,6 +2,7 @@ import type { Camera } from "../../Camera";
 import type { ObjectSpawn } from "./hostProtocol/objectSpawnsMessage";
 import { waterArea, generateIslandEdits } from "./IslandGenerator";
 import { buildPathCorners, createPathTiles } from "./PathGenerator";
+import { fillOverlay, MAX_FILL_TILES, type OverlayFillResult } from "./OverlayFill";
 import { generateBuildingEdits, type BuildingShape, type BuildingStyle } from "./BuildingGenerator";
 import { parseEditorLocation, regionBounds, regionIdOf } from "./EditorCoordinates";
 import { adjustHeightBytes, cornerVertex, heightToByte, type TileCorner } from "./TerrainHeight";
@@ -15,6 +16,7 @@ import {
     type EditModePluginConfig,
     type EditModePluginPersistence,
     type EditModePluginState,
+    type EditModeRegionOverlays,
     type EditModeSearchKind,
     type EditModeDefinitionSummary,
     type EditModeSelection,
@@ -58,6 +60,7 @@ const TOOLS: ReadonlySet<string> = new Set<EditModeTool>([
     "terrain",
     "path",
     "wall",
+    "fill",
 ]);
 /** Terrain data has room for this many overlay shapes (opcodes 2-49, four rotations each). */
 export const OVERLAY_SHAPE_COUNT = 12;
@@ -185,6 +188,10 @@ export class EditModePlugin {
     private searchToken = 0;
     private worldLoadToken = 0;
     private readonly spawnedNpcs = new Map<string, number>();
+    /** Decoded overlays per region, valid for one edit list; the fill preview reads them on every move. */
+    private regionOverlays = new Map<number, EditModeRegionOverlays | undefined>();
+    private regionOverlaysEdits?: readonly EditModeEdit[];
+    private noticeListener?: (message: string) => void;
     private version = 0;
 
     constructor(persistence?: EditModePluginPersistence) {
@@ -999,6 +1006,42 @@ export class EditModePlugin {
         this.pointerTileListener = listener;
     }
 
+    /** Told why a click did nothing, e.g. a fill on a tile with no overlay. */
+    setNoticeListener(listener: ((message: string) => void) | undefined): void {
+        this.noticeListener = listener;
+    }
+
+    /** The fill tool's work at a tile: the overlay there and everything joined to it, repainted. */
+    private overlayFill(tile: EditModeTile): OverlayFillResult {
+        const host = this.host;
+        if (!host?.getRegionOverlays) return { error: "unloaded" };
+        if (this.regionOverlaysEdits !== this.config.edits) {
+            this.regionOverlays.clear();
+            this.regionOverlaysEdits = this.config.edits;
+        }
+        return fillOverlay(tile, this.config.overlayId, (regionId) => {
+            if (!this.regionOverlays.has(regionId)) {
+                this.regionOverlays.set(regionId, host.getRegionOverlays!(regionId, this.config.edits));
+            }
+            return this.regionOverlays.get(regionId);
+        });
+    }
+
+    private fillAt(tile: EditModeTile): void {
+        this.host?.clearTerrainPreview?.();
+        const fill = this.overlayFill(tile);
+        if ("edits" in fill) {
+            this.commitEdits(fill.edits);
+            return;
+        }
+        this.noticeListener?.({
+            "unloaded": "That tile's map region has not loaded",
+            "no-overlay": "Nothing to fill: this tile has no overlay",
+            "same-overlay": "This area already has the chosen overlay",
+            "too-large": `Too big to fill: the area is over ${MAX_FILL_TILES.toLocaleString()} tiles`,
+        }[fill.error]);
+    }
+
     generateBuilding(style: BuildingStyle, floors: number, shape: BuildingShape): void {
         const range = this.getSelectionRange();
         if (!range || range.maxX - range.minX < 2 || range.maxY - range.minY < 2) return;
@@ -1213,6 +1256,11 @@ export class EditModePlugin {
 
         if (this.config.tool === "wall") {
             this.extendWall(tile);
+            return;
+        }
+
+        if (this.config.tool === "fill") {
+            this.fillAt(tile);
             return;
         }
 
@@ -1837,6 +1885,12 @@ export class EditModePlugin {
                 return;
             }
             host?.clearTerrainPreview?.();
+            return;
+        }
+        if (this.config.tool === "fill") {
+            const fill = this.handlesCanvasInput() && tile ? this.overlayFill(tile) : undefined;
+            if (fill && "edits" in fill) host?.setTerrainPreview?.(fill.edits);
+            else host?.clearTerrainPreview?.();
             return;
         }
         if (this.config.tool === "wall") {

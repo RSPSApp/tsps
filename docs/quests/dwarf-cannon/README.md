@@ -13,7 +13,7 @@ travel: travel_to
 
 # Dwarf Cannon
 
-The latest run is scripted and unwatched: [route.cjs](route.cjs) plays the whole quest over the
+The latest run is scripted and unwatched: [route.cjs](https://github.com/RSPSApp/tsps/blob/main/docs/quests/dwarf-cannon/route.cjs) plays the whole quest over the
 agent MCP from a fresh account, checks Quest Helper's step before each leg and the stage after
 it, and finishes with the rewards, a repeat talk and a relog. It passed from stage 0 to 11 with
 no quest code changes. The railing failure's stat drain (the sources disagree), headless Quest
@@ -94,7 +94,7 @@ Newest first.
 - **Start:** fresh account; declared setup `::master`, `::maxgear melee`, then `::tele` to
   (2567, 3458) beside Captain Lawgof (the only teleport). Baseline: varp 0 = 0, quest points
   varp 101 = 0, empty inventory.
-- **Route:** scripted with [route.cjs](route.cjs), unwatched, Quest Helper `06da90f` headless
+- **Route:** scripted with [route.cjs](https://github.com/RSPSApp/tsps/blob/main/docs/quests/dwarf-cannon/route.cjs), unwatched, Quest Helper `06da90f` headless
   through the bridge. Before each leg the script asserts the helper's step names it; after it,
   the saved stage and varp 0. Talk to Lawgof (Yes.), inspect the six railings (failures
   retried), report back, `travel_to` up the southern watchtower's ladders and take the remains,

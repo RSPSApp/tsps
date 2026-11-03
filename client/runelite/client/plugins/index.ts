@@ -8,12 +8,19 @@ import { BankTagsPlugin } from "../../../game/plugins/banktags/BankTagsPlugin";
 import { BoostsPlugin } from "../../../game/plugins/boosts/BoostsPlugin";
 import { ChatNotificationsPlugin } from "../../../game/plugins/chatnotifications/ChatNotificationsPlugin";
 import { ChatPastePlugin } from "../../../game/plugins/chatpaste/ChatPastePlugin";
+import { ChatFilterPlugin } from "../../../game/plugins/chatfilter/ChatFilterPlugin";
+import { MouseHighlightPlugin } from "../../../game/plugins/mousehighlight/MouseHighlightPlugin";
+import { RegenMeterPlugin } from "../../../game/plugins/regenmeter/RegenMeterPlugin";
+import { RunEnergyPlugin } from "../../../game/plugins/runenergy/RunEnergyPlugin";
+import { TimestampPlugin } from "../../../game/plugins/timestamp/TimestampPlugin";
+import { WikiPlugin } from "../../../game/plugins/wiki/WikiPlugin";
 import { CombatLevelPlugin } from "../../../game/plugins/combatlevel/CombatLevelPlugin";
 import { CameraPlugin } from "../../../game/plugins/camera/CameraPlugin";
 import { QuestHelperPlugin } from "../../../game/plugins/questhelper/QuestHelperPlugin";
 import { FirstPersonPlugin } from "../../../game/plugins/firstperson/FirstPersonPlugin";
 import { TouchControlsPlugin } from "../../../game/plugins/touchcontrols/TouchControlsPlugin";
 import { GameFrame317Plugin } from "../../../game/plugins/gameframe317/GameFrame317Plugin";
+import { PortraitModePlugin } from "../../../game/plugins/portraitmode/PortraitModePlugin";
 import { GpuPlugin } from "../../../game/plugins/gpu/GpuPlugin";
 import { GroundItemsConfig } from "../../../game/plugins/grounditems/GroundItemsConfig";
 import { GroundItemsPlugin } from "../../../game/plugins/grounditems/GroundItemsPlugin";
@@ -58,6 +65,7 @@ import { GuidePlugin } from "../../../game/plugins/optimalquestguide/GuidePlugin
 import { ShortestPathPlugin } from "../../../game/plugins/shortestpath/ShortestPathPlugin";
 import type { LegacyConfigMigration } from "../../impl/LegacyConfigMigration";
 import { migrateGroundItemsConfig } from "../../../game/plugins/grounditems/migrateGroundItems";
+import { TooltipPlugin } from "../ui/overlay/tooltip/TooltipOverlay";
 import { ConfigPlugin } from "./config/ConfigPlugin";
 import type { PluginClass } from "./Plugin";
 
@@ -68,6 +76,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     HdPlugin,
     FirstPersonPlugin,
     TouchControlsPlugin,
+    PortraitModePlugin,
     GameFrame317Plugin,
     GroundItemsPlugin,
     InteractHighlightPlugin,
@@ -91,6 +100,8 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     SplitPrivateChatPlugin,
     ChatNotificationsPlugin,
     ChatPastePlugin,
+    TimestampPlugin,
+    ChatFilterPlugin,
     AnimationSmoothingPlugin,
     AttackTimerPlugin,
     VengeanceTimerPlugin,
@@ -102,6 +113,8 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     WeatherPlugin,
     StatusBarsPlugin,
     BoostsPlugin,
+    RegenMeterPlugin,
+    RunEnergyPlugin,
     IdleNotifierPlugin,
     OpponentInfoPlugin,
     SpellbookPlugin,
@@ -118,6 +131,10 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     ShortestPathPlugin,
     // After VoiceChatPlugin: while voice chat holds the chatbox Report button, its clicks are voice's.
     BugReportPlugin,
+    MouseHighlightPlugin,
+    WikiPlugin,
+    // Last: draws the tooltips the plugins above add (RuneLite's TooltipOverlay).
+    TooltipPlugin,
 ];
 
 /** Legacy `osrs.plugin.*.v1` localStorage blobs to fold into rl.config. */

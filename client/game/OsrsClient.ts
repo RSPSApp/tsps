@@ -3,6 +3,7 @@ import type { MinimapGeometry, SceneGeometry } from "./scene/SceneGeometry";
 import { vec3 } from "gl-matrix";
 import { closeOpenModal } from "./widgets/input/widgetKeyboardInput";
 import { getNpcMenuActions } from "./menu/WorldMenuBuilder";
+import { handleCommandShortcut } from "./chat/commandShortcuts";
 
 import { directionToDelta } from "../common/Direction";
 import { ChatMessageType } from "../common/chat/ChatMessageType";
@@ -305,7 +306,7 @@ import type { GraphicsDefaults } from "../rs/config/defaults/GraphicsDefaults";
 import { interactionModes } from "./InteractionModes";
 import { RuneLite } from "../runelite/client/RuneLite";
 import { notifyActorGraphic, notifyActorHitsplat, notifyActorHealth } from "./ActorEventHooks";
-import { dispatchMenuAction } from "../ui/menu/menuEvents";
+import { dispatchMenuAction, menuClickListeners, type MenuActionData } from "../ui/menu/menuEvents";
 import { setMenuTransform } from "../ui/menu/menuTransforms";
 import { ResolveTilePlaneFn } from "./scene/PlaneResolver";
 import {
@@ -1148,6 +1149,7 @@ export class OsrsClient {
         document.addEventListener(
             "keydown",
             (event) => {
+                if (handleCommandShortcut(event, this.isLoggedIn())) return;
                 // Capture build-menu chat before tab shortcuts, plugin handlers,
                 // or focus on a non-input component can swallow the event.
                 const constructionOpen = this.widgetManager?.rootInterface === 458 ||
@@ -2337,6 +2339,9 @@ export class OsrsClient {
         this.cs2Vm.scriptCallbackListeners.add((_script, eventName) =>
             this.clientPlugins.onScriptCallback({ eventName, vm: this.cs2Vm }),
         );
+        const menuClick = (action: MenuActionData) => this.clientPlugins.onMenuOptionClicked(action);
+        menuClickListeners.add(menuClick);
+        this.serverSubscriptions.push(() => menuClickListeners.delete(menuClick));
 
         this.initCustomInterfaces();
         this.initWidgetInteractionController();
@@ -2588,6 +2593,11 @@ export class OsrsClient {
                     // after processWidgetTransmits has already run this tick.
                     markChatTransmit();
                 } catch {}
+            },
+            overheadChatText: (serverId, text) => {
+                const ecsIndex = this.playerEcs.getIndexForServerId(serverId | 0);
+                const name = ecsIndex === undefined ? "" : (this.playerEcs.getName(ecsIndex) ?? "");
+                return this.clientPlugins.overheadChatText(name, text);
             },
             resolveTilePlane: this.resolvePlayerPlane,
             onInteractionIndex: (serverId, interactionIndex) => {

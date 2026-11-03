@@ -249,6 +249,9 @@ class VerzikRoom extends Raid.Room {
     this.webs = new Map();
     this.pools = new Map();
     this.matomenos = [];
+    // Dawnbringers lying on the floor, for pickup by any member of the party (see
+    // dropDawnbringerAt).
+    this.looseDawnbringers = new Set();
     this.ticks = 0;
   }
 
@@ -261,6 +264,51 @@ class VerzikRoom extends Raid.Room {
   joinFight(member) {
     member.inFight = true;
     member.roomStats(this.key).fought = true;
+  }
+
+  /**
+   * Wiki/Mod Kieren: the Dawnbringer "is supposed to drop instantly on death so other players
+   * can use it". A death therefore leaves it on the floor before the jail takes the player.
+   */
+  onMemberDied(player) {
+    if (this.phase !== 1 || !this.isStarted()) return;
+    if (Shared.takeDawnbringer(player)) this.dropDawnbringerAt(Shared.tileOf(player));
+  }
+
+  /**
+   * A dropped Dawnbringer lies in the room for any party member to pick up, which is how OSRS
+   * moves it between players ("it is mandatory for teammates to drop the staff for another
+   * player to perform the special attack"). It is not tradeable, so an ordinary public ground
+   * item would only be visible to its owner (ItemOnGroundManager.canSee); a static spawn is the
+   * core's flag for a floor item everyone in the area can see. The room removes it when phase
+   * 1 ends, when she dies, or when the room is destroyed.
+   */
+  dropDawnbringerAt(tile) {
+    const { Item, ItemOnGround, ItemOnGroundManager, GroundItemState } = Shared.core();
+    const ground = new ItemOnGround(GroundItemState.SEEN_BY_EVERYONE, null, Shared.loc(tile), new Item(DAWNBRINGER, 1), false, -1, this.area, true);
+    ItemOnGroundManager.register(ground);
+    this.looseDawnbringers.add(ground);
+    return ground;
+  }
+
+  /** Takes one off the player and leaves it where they stood. */
+  dropDawnbringer(player) {
+    if (!Shared.takeDawnbringer(player)) return false;
+    this.dropDawnbringerAt(Shared.tileOf(player));
+    return true;
+  }
+
+  clearLooseDawnbringers() {
+    const { ItemOnGroundManager } = Shared.core();
+    for (const ground of [...this.looseDawnbringers]) {
+      if (!ground.isPendingRemoval()) ItemOnGroundManager.deregister(ground);
+    }
+    this.looseDawnbringers.clear();
+  }
+
+  destroy() {
+    this.clearLooseDawnbringers();
+    super.destroy();
   }
 
   /** Her hitpoints for a phase (0-2), as RaidState's scale has none for her later forms. */
@@ -348,7 +396,7 @@ class VerzikRoom extends Raid.Room {
   onComplete() {
     for (const minion of [...this.minions]) this.despawn(minion);
     this.minions.clear();
-    for (const web of [...this.webs.values()]) this.removeWeb(web);
+    this.clearWebs();
     this.clearPools();
     const exit = this.def.exit;
     if (exit) {
@@ -573,6 +621,7 @@ class VerzikRoom extends Raid.Room {
     npc.performAnimation(new Animation(ANIMATION.OFF_THRONE));
     this.raid.refreshHealthBars();
     for (const player of this.roomPlayers()) this.takeDawnbringer(player);
+    this.clearLooseDawnbringers();
     // Captured: her next form 4 ticks on, her line a tick later, in the middle 13 after the form.
     this.later(4, () => {
       npc.setNpcTransformationId(this.ids.TO_PHASE2);
@@ -1147,7 +1196,7 @@ class VerzikRoom extends Raid.Room {
         : Shared.projectile(this.area, npc, player, GRAPHIC.P3_RANGED, PROJECTILE.P3_RANGED);
       // Wiki (2 August 2018): the damage is worked out as it lands.
       this.later(Math.max(0, ticks - 1), () => {
-        if (this.phase !== 3 || !this.fighters().includes(player)) return;
+        if (this.phase !== 3 || this.transition || !this.fighters().includes(player)) return;
         const hit = this.strike(npc, player, style, max, 1, { prayerMultiplier: P3.prayer });
         if (!Shared.isProtected(player, style) && hit.getTotalDamage() > 0) this.failPerfect(player, `${style} attack`);
       });
@@ -1230,6 +1279,7 @@ class VerzikRoom extends Raid.Room {
 
   /** Stepping on a web holds the player; attacking it frees them, and it bursts when its time is up. */
   tickWebs() {
+    if (this.transition) return;
     const { TimerKey, ItemIdentifiers } = Shared.core();
     for (const web of [...this.webs.values()]) {
       if (!web) continue;
@@ -1277,6 +1327,15 @@ class VerzikRoom extends Raid.Room {
     this.despawn(web.npc);
   }
 
+  /** Her death takes the webs with it: they stop holding and hurting the party. */
+  clearWebs() {
+    for (const web of [...this.webs.values()]) {
+      if (!web) continue;
+      for (const player of web.stuck) this.freeFromWeb(player, "The webs crumble away.");
+      this.removeWeb(web);
+    }
+  }
+
   /** Safe spots: one player per spot per strike; everyone else takes the blast. Hard: three strikes. */
   special_dots() {
     const npc = this.verzik;
@@ -1303,7 +1362,7 @@ class VerzikRoom extends Raid.Room {
     }
     for (const strike of strikes) {
       this.later(strike, () => {
-        if (this.phase !== 3) return;
+        if (this.phase !== 3 || this.transition) return;
         this.strikeSpots(spots, window);
         if (strike !== lastStrike) return;
         this.immune = false;
@@ -1357,7 +1416,7 @@ class VerzikRoom extends Raid.Room {
   bounceGreen(from, target, ball) {
     const ticks = Shared.projectile(this.area, from, target, GRAPHIC.GREEN_BALL, from === this.verzik ? PROJECTILE.GREEN_BALL : PROJECTILE.GREEN_PASSED);
     this.later(ticks, () => {
-      if (this.phase !== 3 || !this.fighters().includes(target)) return;
+      if (this.phase !== 3 || this.transition || !this.fighters().includes(target)) return;
       Shared.areaSound(this.area, target, SOUND.GREEN_LAND);
       ball.visited.add(target);
       const beside = this.fighters().filter((player) => player !== target && Shared.distanceTo(player, target.getLocation()) <= GREEN.near);
@@ -1439,6 +1498,10 @@ class VerzikRoom extends Raid.Room {
     npc.getMovementQueue().setBlockMovement(true);
     for (const minion of [...this.minions]) this.despawn(minion);
     this.minions.clear();
+    // In-flight hazards (auto-attacks, the green ball, the yellow strikes, webs) all check
+    // `transition`; the webs are also taken off the floor here.
+    this.clearWebs();
+    this.clearLooseDawnbringers();
     this.animate(ANIMATION.P3_DEATH);
     this.raid.refreshHealthBars();
     this.later(2, () => {
@@ -1519,6 +1582,29 @@ function allowDawnbringer(event) {
   if (room && room.phase === 1 && event.target === room.verzik) event.allow = true;
 }
 
+/**
+ * Dropping the Dawnbringer in her room during phase 1 leaves it on the floor for a teammate,
+ * as OSRS players pass it. Anywhere else it crumbles (Wiki trivia: "destroyed when you attempt
+ * to do anything with it outside of Verzik's room").
+ */
+function dropDawnbringerItem(event) {
+  if (event.itemId !== DAWNBRINGER) return;
+  const room = roomOf(event.player);
+  if (room && room.phase === 1 && room.dropDawnbringer(event.player)) {
+    event.handled = true;
+    return;
+  }
+  Shared.removeDawnbringer(event.player);
+  event.handled = true;
+}
+
+/** Only a live phase-1 raid in her room may pick the loose staff up. */
+function pickupDawnbringer(event) {
+  if (event.groundItemId !== DAWNBRINGER) return;
+  const room = roomOf(event.player);
+  if (!room || room.phase !== 1) event.handled = true;
+}
+
 /** The skeleton in Xarpus' room holds the Dawnbringer once Xarpus is beaten. */
 function searchSkeleton(event) {
   const { player } = event;
@@ -1552,7 +1638,9 @@ module.exports = function registerVerzik(api) {
   Raid.registerRoom("VERZIK", VerzikRoom);
   api.onBeforeNpcInteraction(talkToVerzik);
   api.onCustomEvent("combat-special:can-use", allowDawnbringer);
+  api.onItemDropPolicy(dropDawnbringerItem);
+  api.onGroundItemPickup(pickupDawnbringer);
   Shared.onObject(api, OBJECT.SKELETON, searchSkeleton);
 };
 
-Object.assign(module.exports, { VerzikRoom, PILLARS, NPC_BY_MODE, DAWNBRINGER, poisonedWeapon });
+Object.assign(module.exports, { VerzikRoom, PILLARS, NPC_BY_MODE, DAWNBRINGER, poisonedWeapon, dropDawnbringerItem, pickupDawnbringer });

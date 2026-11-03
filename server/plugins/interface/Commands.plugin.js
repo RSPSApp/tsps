@@ -84,7 +84,7 @@ module.exports = {
   register(api) {
     pluginApi = api;
     api.registerCustomInterface(buildInterface());
-    api.registerCommand("commands", openCommands, undefined, "Search available commands (optional search text)");
+    api.registerCommand("commands", openCommands, undefined, "Search available commands (Ctrl+/, optional search text)");
   },
   _test: { GROUP_ID, COMPONENT, uid },
 };

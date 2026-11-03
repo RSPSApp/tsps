@@ -39,6 +39,7 @@ The rooms' set-up is covered by `server/tests/chambers-of-xeric.test.cjs`. A who
 | `Scavengers.*` | Scavenger rooms and the large room's shortcut. |
 | `Olm.*` | The Great Olm's chamber. |
 | `Rewards.*` | Completion, the ancient chest, Captain Rimor's capes. |
+| `Timeboard.*` | The Challenge Timeboard: the world's five fastest Challenge Mode times, the best by team size, the board's Read. |
 | `CombatAchievements.*` | The tasks the raid's end decides; rooms finish their own through its `complete`. |
 | `Commands.*` | Developer commands. |
 
@@ -151,6 +152,8 @@ The rooms' set-up is covered by `server/tests/chambers-of-xeric.test.cjs`. A who
 - The shared storage takes the items of cache enum 1666 only. Kindling can't be stored (since December 2023).
 - Raid-only items left in private storage are gone once outside; anything else waits in the mountain's unit, which must be emptied before entering again.
 - Interfaces (unverified): private 271 (inventory 583), shared 550 (inventory 582), side panel 551. Withdraw/deposit 1, 5, 10, All, X.
+- The private storage's list (271:6) can be dragged to rearrange it, as the Tackle box's grid can: a drop swaps the two slots, and a drop on an empty slot moves the item to the end. No capture drags one.
+- Ultimate Ironmen can build and upgrade the unit but cannot store anything in it (Wiki); a normal account is unaffected. The refusal's wording isn't in a capture.
 - Building opens the creation menu (458), by the Wiki's key list. No recording opens it, so its rows and icons are a best reading of the cache (items 21037-21042, 24660-24663).
 
 **Resource rooms** (Wiki for levels and XP, unverified timings):
@@ -194,10 +197,11 @@ The rooms' set-up is covered by `server/tests/chambers-of-xeric.test.cjs`. A who
 ## The Great Olm
 
 `Olm.ChambersOfXeric.js`, a room registered for the chamber (`raid.olmRoom`):
-- The mystical barrier ("Pass" asks, "Quick-pass" doesn't; no way back) wakes it; it rises on a random side with a power (acid, flame, crystal), never the same twice in a row.
+- The mystical barrier ("Pass" asks, "Quick-pass" doesn't; no way back) wakes it; it rises on a random side with a power (acid, flame, crystal), never the same twice in a row. Its head and claws are spawned in their dormant forms as it starts to rise and transformed into their risen forms 6 ticks later, as live does (7551/7552/7550 to 7554/7555/7553).
 - The head attacks every 4 ticks through the Wiki's rotation (standard / empty / Crystal Burst / ... / Swap, plus the infinity sign in the last phase), facing the zone with most players and catching up a skipped standard attack.
 - Standard attacks (1 in 5 to switch style, prayer lets 20% through), spheres, phase attacks (1 in 3, 1 in 2 in the last phase, preferring unused ones), claw specials, Life Siphon in the final stand.
 - Phases: 3 + raiders/8 claw phases. Both claws down: falling crystals, then it rises on the other side. In the last one the claws must fall within 34 ticks of each other, then the final stand.
+- A Lightning hit blocks protection prayers for 5 ticks; a prayer tried while it holds is told "You've been injured and can't use that prayer!" (only in the Olm's chamber; the engine keeps its own line elsewhere).
 - Its death shatters the exit crystal and turns the crystal by the steps into the ancient chest.
 
 ## Rewards
@@ -207,8 +211,16 @@ The rooms' set-up is covered by `server/tests/chambers-of-xeric.test.cjs`. A who
 - The chest's light (5456): 2 for a unique's finder, 1 for common loot (the CM runs).
 - Challenge Mode within the Wiki's target time: +5,000 points each, the kit (1/75) and dust (1/400) rolls.
 - Uniques by the Wiki: 1% per 8,676 points, 570,000 a roll, the 2026 weights, the receiver by personal points (left raiders' uniques discarded), olmlet 1/53. Otherwise two different commons scaled by points (a third of herbs as seeds), the ancient tablet, elite clue 1/12; the dark journal if not banked.
-- The ancient chest opens interface 539 (Take, Take-all, Bank-all, Discard-all); unclaimed loot is placed on the ground on leaving.
+- The ancient chest opens interface 539 (Take, Take-all, Bank-all, Discard-all); unclaimed loot is placed on the ground on leaving. `raids_client_needsrewardbook` (varbit 5457) is set as the chest opens and cleared as the rewards close, not when the loot is claimed (rsprox 3389: it stays set after a claim).
 - Captain Rimor's Claim-cape gives the cape for the Challenge Mode count.
+
+## The Challenge Timeboard
+
+`Timeboard.ChambersOfXeric.js`:
+- The board is the "Score board" (32544, Read, "See challenge mode scores here.") on Mount Quidamortem by the entrance, at (1224, 3565) and (1243, 3563) (Wiki; the cache places the same loc there).
+- It keeps this world's five fastest Challenge Mode times with the team leader, and the best time for each of the Wiki's team sizes (Solo, 2-10, 11-15, 16-23, 24+). Records are saved in `data/saves/cox-timeboard.json`.
+- A team whose time makes the five is told "Your team has made it onto this world's Challenge Timeboard!" (rsprox 3389, word for word), after the target-time message and before the completion one.
+- The cache has no interface for the board and no recording reads it, so the Read text is a guessed layout: a message box listing the five times and the best of each team size.
 
 ## Developer commands
 
@@ -218,7 +230,7 @@ The rooms' set-up is covered by `server/tests/chambers-of-xeric.test.cjs`. A who
 | `::coxlayout` | The raid's layout and the room you're in. |
 | `::coxpoints <amount>` | Points for you in your raid. |
 | `::coxnext` | To the next floor's start (or the Olm's chamber). |
-| `::coxclear` | Completes the room you're in: a puzzle's own ending (the Ice Demon just thaws), or its monsters go and its exit opens. The raid earns no Combat Achievements after it (nor after `::coxnext`). |
+| `::coxclear` | Completes the room you're in: a puzzle's own ending (the Ice Demon just thaws), or its monsters go and its exit opens; in the Olm's chamber it kills the Olm, so a scripted run can reach the chest. The raid earns no Combat Achievements after it (nor after `::coxnext`). |
 
 The raid is also in `::teleports` under Minigames.
 
@@ -330,7 +342,7 @@ Recording 3389.
 
 All five recordings (820 a long multi-player fight, 3389 a quick solo one).
 
-- It rises 7 ticks after the barrier is passed, with "The Great Olm rises with the power of <col=00ff00>acid</col>." (flame ff0000, crystal ff00ff) at once, the rising animations a tick later, risen at 6 and attacking at 7 (at 10 on later rises). All three powers are used before any repeats.
+- It rises 7 ticks after the barrier is passed, with "The Great Olm rises with the power of <col=00ff00>acid</col>." (flame ff0000, crystal ff00ff) at once, the rising locs and the parts' dormant NPCs (7551/7552/7550) with them, the rising animations a tick later, the risen ids (7554/7555/7553) at 6 and attacking at 7 (at 10 on later rises). All three powers are used before any repeats.
 - Head projectiles leave 32 cycles in from height 340-360: magic 1339 (sound 3749), ranged 1340 (1784), spheres 1341/1343/1345 landing at 180 cycles (1784), acid 1354, the burn 1349 (585), fire walls 1347 (3750), bombs 1357 (exploding 11 ticks after the throw, gfx 40, sound 1021). Targeted falling crystals come every 2 ticks (projectile 1352, gfx 1353, sound 3821, "The falling crystal shatters into you.").
 - A claw falls (7352 / 7370), its cave 2 ticks later; with the right claw down the left grips (7363). The last claw down: the head falls 4 ticks later, its cave at 6, and it rises across the chamber at 38.
 - Fire walls: 1348s are thrown at once, the blocking loc 26209 comes at 2 ticks and the NPCs at 4. Douse is the fire NPC's real op1 (all 8 captured douses), reach 10: it plays the raider's castable water or ice spell without using runes, and the loc goes a tick later. Using a watering can or water gourd on it, or casting on it, work too (Wiki).
@@ -367,15 +379,22 @@ All five recordings.
 | Boss attack bases where the Wiki says "varies" | the room units |
 | The Olm's rising/transition timings, special timings and damage ranges not on the Wiki | `Olm.ChambersOfXeric` |
 | Reward interface's Bank-all, Take-all and Discard-all components | `Rewards.ChambersOfXeric` |
+| The Timeboard's Read layout (no cache interface, no capture) | `Timeboard.ChambersOfXeric` |
+| The Timeboard's five-entry cut and its team-size brackets beyond the Wiki's | `Timeboard.ChambersOfXeric` |
 
-**Derived, not from a source** (to check): max hits grown with scaled offence (a Guardian comes to 29 in Challenge Mode, where the Wiki says 33); Vespula grounded 33 ticks; tightrope barrier tile turn; the team-size names between Solo and 24+.
+**Derived, not from a source** (to check): Vespula grounded 33 ticks; tightrope barrier tile turn; the team-size names between Solo and 24+.
 
-**Known differences:** the reward book's varbit (5457) isn't cleared when the chest's interface closes; the Olm's NPCs spawn in their risen forms rather than turning into them.
+**Known differences:** none remain from the ones listed before this change: the Guardian's Challenge Mode max hit is the Wiki's 33, the chest clears its reward-book varbit as it closes, the Olm's parts rise from their dormant forms, and Lightning's block has its own line.
 
-**Not built:** the Challenge Timeboard (live also says "Your team has made it onto this world's Challenge Timeboard!"), private-storage drag reorder, ironman storage rules.
+**Not built:** the Timeboard's own cache-style interface; its records, message and Read exist, and Read shows a guessed message-box layout.
 
 ## Checking it
 
-With the agent MCP on: make a party through the board (`resume_pausebutton` as `dialogue_continue` on 499:3 and 507:3), enter, start from 500:14, then walk each room's passages. `set_npc_hitpoints` shortens a fight and `::coxclear` finishes a puzzle.
+With the agent MCP on: make a party through the board (`resume_pausebutton` as `dialogue_continue` on 499:3 and 507:3), enter, start from 500:14, then walk each room's passages. `set_npc_hitpoints` shortens a fight and `::coxclear` finishes a puzzle (and, in the Olm's chamber, the Olm). Traps found driving it:
+
+- The board's and party page's buttons come back as `dialogue_continue` (the pause-button packet), but the in-raid party tab's as `widget_action` (500:14, `buttonNum` 1).
+- `::coxnext` three times reaches the Olm's chamber entrance from the first room; the barrier's "Pass" asks, then `dialogue_continue` and "Yes". The Olm rises 7 ticks after passing and the chest appears 6 ticks after it dies; the chest is 21 tiles from the barrier, so walk up to it.
+- `::coxclear` in the chamber kills the Olm, whether or not it has risen.
+- Everything the raid prints on completion (the Timeboard notice included) is a friendschatnotification, so read a second raider's messages too.
 
 To rebuild a recording's layout, group its `NpcInfo` spawns by `x >> 5, z >> 5` and plane. The text decode doesn't print a rebuild's zones.

@@ -82,6 +82,8 @@
   "combat": {
     "maxHit": 35,
     "enragedMaxHit": 55,
+    "empoweredMaxHit": 52,
+    "_empoweredMaxHit": "the Wiki's infobox: max hit 35 default, 52 empowered (an incorrect vent raises its damage by up to 50%)",
     "attackSpeed": 6,
     "enragedAttackSpeed": 4,
     "attackDistance": 10,
@@ -138,6 +140,7 @@
     "killCount": "Your Alchemical Hydra kill count is: <col=ff0000>{kills}</col>.",
     "weakened": "The chemicals neutralise the Alchemical Hydra's defences!",
     "empowered": "The chemicals are absorbed by the Alchemical Hydra; empowering it further!",
-    "_unverified": "noTask, doorLocked, weakened and empowered have no capture behind them"
+    "roar": "Roaaaaaaaaaaar!",
+    "_unverified": "noTask, doorLocked, weakened and empowered have no capture behind them; roar is the Wiki's overhead for the correct vent"
   }
 }

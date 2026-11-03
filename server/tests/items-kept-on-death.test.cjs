@@ -129,6 +129,7 @@ test('the Items Kept on Death interface shows what a death keeps, and prices the
   require('../plugins/interface/ItemsKeptOnDeath.plugin').register({
     core: PluginManager.getCoreApi(),
     getPrayerHandler: () => ({ isActivated: () => false, PROTECT_ITEM: 0 }),
+    emitCustomEvent() {},
     onInterfaceActionButton: (uid, handler) => handlers.set(uid, handler),
   });
   const items = [I.RUNE_PLATEBODY, I.RUNE_PLATELEGS, I.RUNE_KITESHIELD, I.MAX_CAPE, I.BERSERKER_RING, I.RANGER_BOOTS]
@@ -156,6 +157,76 @@ test('the Items Kept on Death interface shows what a death keeps, and prices the
   const risk = [I.RUNE_PLATEBODY, I.RUNE_PLATELEGS, I.RUNE_KITESHIELD]
     .reduce((sum, id) => sum + new Item(id, 1).getDefinition().getGrandExchangeValue(), 0);
   assert.equal(sent.strings[0], `Guide risk value:<br><col=ffffff>${risk.toLocaleString()}</col>`);
+});
+
+test('the death preview does not protect unkept untradeables that a PvM grave takes', (t) => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const handlers = new Map();
+  const custom = new Map();
+  let gravesEnabled = true;
+  const api = {
+    core: PluginManager.getCoreApi(),
+    getPrayerHandler: () => ({ isActivated: player => player.getPrayerActive()[0], PROTECT_ITEM: 0 }),
+    getPluginConfig: (key, fallback) => key === 'Gravestones:enabled' ? gravesEnabled : fallback,
+    onInterfaceActionButton: (uid, handler) => handlers.set(uid, handler),
+    onPlayerDeathDrops() {},
+    onCustomEvent: (name, handler) => custom.set(name, handler),
+    emitCustomEvent: (name, query) => custom.get(name)?.(query),
+  };
+  custom.set('ironman:mode', query => { query.mode = query.player.ironmanMode; });
+  require('../plugins/world/gravestones/Death.Gravestones').attach(api);
+  require('../plugins/interface/ItemsKeptOnDeath.plugin').register(api);
+  const items = [I.RANGER_BOOTS, I.BERSERKER_RING, I.DRAGON_BOOTS, I.ABYSSAL_WHIP,
+    I.RUNE_DEFENDER, I.ADAMANT_DEFENDER, I.MITHRIL_DEFENDER, I.STEEL_DEFENDER, I.IRON_DEFENDER, I.BRONZE_DEFENDER]
+    .map(id => new Item(id, 1));
+  assert.ok(items.slice(4).every(item => !item.isTradeable()), 'defenders are untradeable in the active cache');
+  let sent;
+  const sender = {
+    sendSubInterface() { return sender; },
+    sendInterfaceScript(id, args, _varps, _varbits, inventories) { sent = { id, args, inventories }; return sender; },
+    sendInterfaceFlagsRange() { return sender; },
+    sendString() { return sender; },
+  };
+  const untradeableStates = () => sent.inventories[584].slots
+    .filter(slot => items.slice(4).some(item => item.getId() === slot.itemId))
+    .map(slot => sent.inventories[468].slots[slot.slot].itemId);
+  for (const [skulled, protectItem, count] of [[false, false, 3], [false, true, 4], [true, true, 1], [true, false, 0]]) {
+    const player = {
+      ...fakePlayer({ items, skulled, protectItem }),
+      setInterfaceId() {}, getInterfaceId: () => 4, getPacketSender: () => sender,
+    };
+    handlers.get((387 << 16) | 5)({ player });
+    assert.equal(sent.args[5], count);
+    assert.deepEqual(sent.args.slice(6, 6 + count), PlayerDeathTask.getItemsToKeep(player).map(item => item.getId()));
+    assert.ok(sent.inventories[468].slots.every(slot => slot.itemId === 1991),
+      'the six extra untradeables must not add protected icons to the selected kept slots');
+    assert.equal(sent.inventories[584].slots.length, items.length - count);
+
+    handlers.get((4 << 16) | 12)({ player, action: 2 });
+    assert.deepEqual(untradeableStates(), new Array(6).fill(323), 'the existing PvP preview stays unchanged');
+  }
+  const player = {
+    ...fakePlayer({ items }),
+    setInterfaceId() {}, getInterfaceId: () => 4, getPacketSender: () => sender,
+  };
+  for (const exception of ['ultimate', 'bot', 'config-disabled', 'plugin-disabled']) {
+    player.ironmanMode = exception === 'ultimate' ? 'ultimate' : null;
+    player.isPlayerBot = () => exception === 'bot';
+    gravesEnabled = exception !== 'config-disabled';
+    if (exception === 'plugin-disabled') custom.delete('gravestones:makes-grave');
+    handlers.get((387 << 16) | 5)({ player });
+    assert.deepEqual(untradeableStates(), new Array(6).fill(323), `${exception}: without a grave, core returns these untradeables`);
+  }
+
+  require('../plugins/world/gravestones/Death.Gravestones').attach(api);
+  const keep = PluginManager.emitShouldKeepItemOnDeath;
+  t.after(() => { PluginManager.emitShouldKeepItemOnDeath = keep; });
+  PluginManager.emitShouldKeepItemOnDeath = (owner, item) => item === items[4] ? true : keep(owner, item);
+  handlers.get((387 << 16) | 5)({ player });
+  assert.equal(sent.args[5], 4, 'an always-kept hook adds a legitimate protected item beyond the normal three');
+  assert.ok(sent.args.slice(6).includes(items[4].getId()));
+  assert.ok(!sent.inventories[584].slots.some(slot => slot.itemId === items[4].getId()), 'the always-kept item has no lost marker');
+  assert.deepEqual(untradeableStates(), new Array(5).fill(1991), 'the other unprotected defenders still go to the grave');
 });
 
 test('the Bounty Hunter risk skull counts what a death drops, by Grand Exchange price', () => {
@@ -309,10 +380,21 @@ test('ordinary preview matches completed death across skull and Protect Item sta
     for (const [filename, entry] of previousModules) require.cache[filename] = entry;
   });
   const hooks = {}, buttons = new Map(), spawned = [], scheduled = [];
+  const custom = new Map(), graveQueries = [];
   const api = {
     core,
     getPluginConfig: (_key, fallback) => fallback,
-    emitCustomEvent() {}, // no tutorial, ironman, discount or persistence plugins in this fixture
+    onCustomEvent: (name, handler) => {
+      const handlers = custom.get(name) ?? [];
+      handlers.push(handler);
+      custom.set(name, handlers);
+    },
+    emitCustomEvent: (name, payload) => {
+      const handlers = custom.get(name) ?? [];
+      if (name === 'gravestones:makes-grave') assert.equal(handlers.length, 1, 'real grave query registered once');
+      for (const handler of handlers) handler(payload);
+      if (name === 'gravestones:makes-grave') graveQueries.push({ ...payload });
+    }, // other optional events have no tutorial, ironman, discount or persistence listeners here
     spawnNpc: definition => { const npc = { definition }; spawned.push(npc); return npc; },
     removeNpc: npc => { const index = spawned.indexOf(npc); if (index >= 0) spawned.splice(index, 1); },
     onPlayerDeathDrops: handler => { hooks.drops = handler; },
@@ -320,7 +402,7 @@ test('ordinary preview matches completed death across skull and Protect Item sta
   // Use the same real death/grave modules as Gravestones.register, without unrelated UI/login hooks.
   require('../plugins/world/gravestones/Death.Gravestones').attach(api);
   const Grave = require('../plugins/world/gravestones/Grave.Gravestones');
-  require(previewPath).register({ core, getPrayerHandler: () => PrayerHandler,
+  require(previewPath).register({ ...api, getPrayerHandler: () => PrayerHandler,
     onInterfaceActionButton: (component, handler) => buttons.set(component, handler) });
   const submit = core.TaskManager.submit;
   core.TaskManager.submit = task => { scheduled.push(task); }; // no live scheduler; timer/message tasks are stopped below
@@ -361,7 +443,13 @@ test('ordinary preview matches completed death across skull and Protect Item sta
     const lost = sourceOrder.filter(id => !row.kept.includes(id));
     const paddedKept = [...row.kept];
     while (paddedKept.length < 4) paddedKept.push(-1);
+    const queryStart = graveQueries.length;
     assert.equal(buttons.get((387 << 16) | 5)({ player }), true);
+    assert.equal(graveQueries.length, queryStart + 1, 'preview dispatched one real grave query');
+    const query = graveQueries.at(-1);
+    assert.equal(query.player, player);
+    assert.equal(query.playerKill, false);
+    assert.equal(query.makesGrave, true, 'registered grave callback confirms ordinary PvM grave');
     // Snapshot every 972 argument, including both full inventory-state payloads.
     assert.deepEqual(sent.scripts, [[972, [Number(row.skull), Number(row.prayer), 0, 0, '', row.kept.length, ...paddedKept], undefined, undefined, {
       584: { capacity: 50, slots: lost.map((itemId, slot) => ({ slot, itemId, quantity: 1 })) },

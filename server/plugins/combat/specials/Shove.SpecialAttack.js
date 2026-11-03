@@ -1,9 +1,8 @@
 module.exports = function registerShoveSpecialAttack(api) {
-  const { Animation, CombatFactory, CombatMethod, CombatSpecial, CombatType, Direction, DuelRule, Graphic, GraphicHeight, ItemIdentifiers, PendingHit, RegionManager, Sound, Sounds, Task, TaskManager, TimerKey } = api.core;
+  const { Animation, CombatFactory, CombatMethod, CombatSpecial, CombatType, Direction, DuelRule, ItemIdentifiers, PendingHit, RegionManager, Sound, Sounds, Task, TaskManager, TimerKey } = api.core;
 
   const DRAIN = 25;
   const ANIMATION = new Animation(1064);
-  const GRAPHIC = new Graphic(263, GraphicHeight.HIGH);
   const STUN_ANIMATION = new Animation(424);
 
   // A blocked Shove spends no energy and turns the special off, so an immune
@@ -56,7 +55,6 @@ module.exports = function registerShoveSpecialAttack(api) {
       CombatSpecial.drain(character, DRAIN);
       if (rules.animate) {
         character.performAnimation(ANIMATION);
-        character.performGraphic(GRAPHIC);
       }
       Sounds.sendSound(character, Sound.DRAGON_SPEAR_SPECIAL);
       target.performAnimation(STUN_ANIMATION);

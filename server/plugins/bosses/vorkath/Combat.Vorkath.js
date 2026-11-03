@@ -283,7 +283,7 @@ function combatClass() {
         const ranged = this.attack === Shared.Attack.RANGED;
         const delay = Shared.shotHitDelay(this.shotEnd);
         const hit = new core.PendingHit(character, target, this, delay);
-        hit.setTotalDamage(Math.min(ranged ? Shared.RANGED_MAX : Shared.MAGIC_MAX, hit.getTotalDamage()));
+        hit.setTotalDamage(Math.min(ranged ? Shared.rangedMaxForNpc(character) : Shared.MAGIC_MAX, hit.getTotalDamage()));
         return [hit];
       }
       const variant = this.attack ?? Shared.Attack.DRAGONFIRE;

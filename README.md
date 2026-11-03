@@ -2,6 +2,10 @@
 
 A browser-based Old School RuneScape private server with a TypeScript/WebGL client and TypeScript game server.
 
+In game, `::home` teleports to the world's configured spawn using the usual teleport restrictions.
+`::staff` shows online staff and their ranks in a scroll. Press `Ctrl+;` to open `::teleports`
+or `Ctrl+/` to open `::commands` while playing; page text fields keep their normal keyboard behavior.
+
 ## Packages
 
 - [`client/`](client/) — browser client (Forked from [xRSPS](https://github.com/xrsps/xrsps-typescript))

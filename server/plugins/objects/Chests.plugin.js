@@ -2,9 +2,9 @@
  * Generic household chests: "Open" swaps a closed chest for its open loc, "Shut"/"Close" swaps
  * it back, and searching an open one finds nothing. Only the cache's generic chest family is
  * paired, by gameval name (chestclosed -> chestopen, chestclosed_khazard -> chestopen_khazard),
- * so a special chest (Barrows, raids, key chests, quests) never matches. Plugins with their own
- * "Chest" handlers load first. The Wiki quotes no chest messages; the search line follows the
- * crate one in ScenerySearch.
+ * so special Barrows, raid and key chests never match. General and quest "Chest" handlers load
+ * first. Key and raid chest ids are outside this family, so those members-only plugins are not
+ * load dependencies. The Wiki quotes no chest messages; the search line follows ScenerySearch.
  */
 const GENERIC_CLOSED = /^chestclosed(?:_|$)/;
 
@@ -48,7 +48,7 @@ function searchChest(event) {
 
 module.exports = {
   name: "Chests",
-  dependsOn: ["Quests", "KeyChests", "Clans", "TheatreOfBlood", "RandomEvents", "GiantLairs"],
+  dependsOn: ["Quests", "Clans", "RandomEvents", "GiantLairs"],
   register(api) {
     core = api.core;
     api.onObjectInteraction("Closed chest", { Open: openChest });

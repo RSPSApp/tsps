@@ -494,5 +494,211 @@ async function nativeDestroyConfirmation() {
         process.chdir(previousDirectory);
     }
 }
+// The cache orb's onOp predicts varp 301 locally, but a click is a native widget operation.
+// Forwarding the prediction as well made one click both a varp toggle and a button.
+async function nativeSpecialOrbSendsOneServerAuthoritativeInput() {
+    const previousDirectory = process.cwd();
+    const serverRoot = path.resolve(__dirname, '../../server');
+    process.chdir(serverRoot);
+    try {
+        const serverModules = serverRoot + '/src/main/typescript/elvarg';
+        require(serverModules + '/Server').Server.installProductionPathResolver();
+        const { CachePipeline } = require(serverModules + '/game/cache/CachePipeline');
+        await CachePipeline.initialize(serverRoot);
+        const { PluginManager } = require(serverModules + '/plugins/PluginManager');
+        const { Player } = require(serverModules + '/game/entity/impl/player/Player');
+        const { PlayerSession } = require(serverModules + '/net/PlayerSession');
+        const { ClientConnection } = require(serverModules + '/net/NetworkBuilder');
+        const { CombatSpecial } = require(serverModules + '/game/content/combat/CombatSpecial');
+        const { WeaponInterfaceManager } = require(serverModules + '/game/content/combat/WeaponInterfaceManager');
+        const { decodeClientPackets } = require(serverModules + '/net/protocol/ClientProtocol');
+        const core = PluginManager.getCoreApi();
+        require(serverRoot + '/plugins/items/ItemDefinitionLoader.plugin').register({
+            log() {}, onPlayerLogin() {}, registerContentEndpoint() {},
+        });
+        require(serverRoot + '/plugins/combat/specials/DragonWarhammer.SpecialAttack')({
+            core, registerCombatSpecial: CombatSpecial.register,
+        });
+
+        const { createCacheVm } = require('../scripts/cache/cs2-sweep');
+        const { vm } = createCacheVm();
+        const wm = vm.context.widgetManager;
+        wm.rootInterface = 161;
+        const equipped = new Inventory(14);
+        equipped.setSlot(3, core.ItemIdentifiers.DRAGON_WARHAMMER, 1);
+        vm.context.inventories = new Map([[94, equipped]]);
+        vm.context.varManager.setVarp(300, 1000);
+        wm.onLoadListener = (_id: number, widget: any) => vm.runScriptEvent({ args: widget.onLoad, widget });
+        const mountOrb = (name: string, root: number) => {
+            wm.rootInterface = root;
+            const uid = core.CacheDefinitions.getComponentId(name);
+            assert.ok(uid, `the active cache names ${name}`);
+            wm.getGroup(uid >>> 16);
+            const widget = wm.getWidgetByUid(uid);
+            const parent = wm.getWidgetByUid(widget.parentUid);
+            vm.runScriptEvent({ args: parent.onLoad, widget: parent });
+            assert.equal(vm.lastError, null);
+            assert.deepEqual(widget.actions, ['Use'], `${name} exposes Use`);
+            return widget;
+        };
+        const orb = mountOrb('orbs:specbutton', 161);
+
+        const source = ts.createSourceFile('OsrsClient.ts', fs.readFileSync(path.resolve(__dirname, '../game/OsrsClient.ts'), 'utf8'), ts.ScriptTarget.Latest, true);
+        let varpCallback = '';
+        const findVarpCallback = (node: ts.Node) => {
+            if (ts.isBinaryExpression(node) && node.left.getText(source) === 'this.varManager.onVarpChange') {
+                varpCallback = node.right.getText(source);
+            }
+            ts.forEachChild(node, findVarpCallback);
+        };
+        findVarpCallback(source);
+        assert.ok(varpCallback, 'the production varp callback is present');
+
+        const { state } = require('../network/serverConnection/state');
+        const { sendVarpTransmit } = require('../network/serverConnection/outgoing/movement');
+        const { TRANSMIT_VARPS } = require('../common/vars');
+        const { setPacketSocket, flushPackets } = require('../network/packet');
+        const { WidgetActionRouter } = require('../game/widgets/WidgetActionRouter');
+        (globalThis as any).WebSocket ??= { OPEN: 1 };
+        const frames: Buffer[] = [];
+        const socket: any = { readyState: 1, send: (frame: any) => frames.push(Buffer.from(frame)) };
+        state.socket = socket;
+        setPacketSocket(socket);
+        const client: any = { cs2Vm: vm, varManager: vm.context.varManager, applyAudioVarpChange() {}, setRoofsHidden() {} };
+        const body = ts.transpileModule('module.exports = (' + varpCallback + ');', {
+            compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS },
+        }).outputText;
+        vm.onVarpChange = () => {};
+        const installVarpCallback = (transmitted = TRANSMIT_VARPS) => {
+            const exported: any = { exports: null };
+            new Function(
+                'TRANSMIT_VARPS', 'sendVarpTransmit', 'isServerConnected', 'markVarTransmit',
+                'VARP_OPTION_RUN', 'VARP_OPTION_ATTACK_PRIORITY_PLAYER', 'VARP_OPTION_ATTACK_PRIORITY_NPC', 'module', body,
+            ).call(client, transmitted, sendVarpTransmit, () => true, () => {}, 173, 1107, 1306, exported);
+            vm.context.varManager.onVarpChange = exported.exports;
+        };
+        installVarpCallback();
+        const { processWidgetClickInput } = require('../game/widgets/input/widgetClickInput');
+        const interaction: any = {
+            clickedWidget: null, clickedWidgetParent: null, clickedWidgetHandled: false,
+            resolveClickedWidgetParent: () => null, handleTradeRequestChatClick: () => false,
+            isWidgetDraggable: () => false,
+        };
+
+        const deps: any = new Proxy({
+            getWidgetManager: () => wm,
+            getCs2Vm: () => vm,
+            getVarManager: () => vm.context.varManager,
+            getCustomInterfaces: () => ({ handleWidgetClick: () => false, rowIdAt: () => undefined, handleWidgetOp() {} }),
+            getWidgetInteraction: () => interaction,
+            getTransmitCycles: () => ({ cycleCntr: 1 }),
+            getSpellSelection: () => ({ getWidgetTargetMask: () => 0 }),
+            handleTradeWidgetAction: () => false,
+            buildWidgetActionPayload: (event: any) => router.buildWidgetActionPayload(event),
+            resolveTransmitFlagWidget: (widget: any, payload: any) => router.resolveTransmitFlagWidget(widget, payload),
+            executeScriptListener: (widget: any, args: any[], context: any) =>
+                vm.runScriptEvent({ args, widget, ...context }),
+        }, { get: (target: any, key: any) => target[key] ?? (() => undefined) });
+        const router = new WidgetActionRouter(deps);
+        const click = (widget: any, primary = false) => {
+            frames.length = 0;
+            interaction.clickedWidget = null;
+            interaction.clickedWidgetParent = null;
+            interaction.clickedWidgetHandled = false;
+            if (primary) {
+                processWidgetClickInput(deps, { cachedHoverHits: null }, {
+                    input: { leftClickX: 10, leftClickY: 10 },
+                    collectFromAllRoots: () => [widget],
+                    getWidgetFlags: (target: any) => wm.getWidgetFlags(target),
+                }, wm, interaction, (target: any) => ({ option: target.actions[0], target: '', opIndex: 1 }), true);
+            } else {
+                router.handleWidgetAction({ widget, option: widget.actions[0], opIndex: 1, source: 'menu' });
+            }
+            assert.equal(vm.lastError, null);
+            flushPackets();
+            return frames.flatMap(frame => decodeClientPackets(Buffer.from(frame)));
+        };
+
+        const channel = {
+            kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+            send: () => true, close() {}, onData() {}, onError() {}, onClose() {},
+        };
+        const session = new PlayerSession(channel);
+        const player = new Player(session);
+        player.setIndex(321);
+        player.setUsername('orbbrowser');
+        player.setRegistered(true);
+        player.needsPlacement = false;
+        player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.DRAGON_WARHAMMER, 1));
+        WeaponInterfaceManager.assign(player);
+        const connection = new ClientConnection(channel);
+        connection.player = player;
+
+        const layouts: [string, number][] = [
+            ['orbs:specbutton', 548], ['orbs:specbutton', 161], ['orbs:specbutton', 164],
+            ['orbs_osm:specbutton', 165], ['orbs_nomap:specbutton', 161], ['orbs_osm_nomap:specbutton', 165],
+        ];
+        for (const [name, root] of layouts) {
+            const widget = mountOrb(name, root);
+            for (const primary of [false, true]) {
+                const label = `${name} root${root} ${primary ? 'primary' : 'menu'}`;
+                const first = click(widget, primary);
+                assert.deepEqual(first.map((message: any) => message.type), ['widget_action'], `${label} sends only the native operation`);
+                assert.equal(first[0].widgetId, widget.uid);
+                assert.equal(first[0].buttonNum, 1);
+                assert.equal(vm.context.varManager.getVarp(301), 1, `${label} predicts locally`);
+                await connection.dispatch(first, true);
+                assert.equal(player.isSpecialActivated(), true, `${label} activates once`);
+                await connection.dispatch(click(widget, primary), true);
+                assert.equal(vm.context.varManager.getVarp(301), 0);
+                assert.equal(player.isSpecialActivated(), false, `${label} cancels once`);
+            }
+        }
+
+        // The previous web bundle forwards 301 AND emits the native button. Recreate its
+        // actual callback policy; the prediction must not become a second command.
+        mountOrb('orbs:specbutton', 161);
+        installVarpCallback(new Set([...TRANSMIT_VARPS, 301]));
+        const legacyOn = click(orb);
+        assert.deepEqual(legacyOn.map((message: any) => message.type), ['varp_transmit', 'widget_action']);
+        await connection.dispatch(legacyOn, true);
+        assert.equal(player.isSpecialActivated(), true, 'the previous bundle activates once');
+        await connection.dispatch(click(orb), true);
+        assert.equal(player.isSpecialActivated(), false, 'the previous bundle cancels once');
+        installVarpCallback();
+
+        // A special just swung server-side, while the client's prediction is still on.
+        vm.context.varManager.setVarp(301, 1);
+        const stale = click(orb, true);
+        assert.equal(vm.context.varManager.getVarp(301), 0);
+        assert.deepEqual(stale.map((message: any) => message.type), ['widget_action']);
+        await connection.dispatch(stale, true);
+        assert.equal(player.isSpecialActivated(), true, 'the native click re-arms despite stale prediction');
+        await connection.dispatch(click(orb), true);
+        assert.equal(player.isSpecialActivated(), false);
+
+        wm.getGroup(593);
+        const bar = wm.getWidgetByUid((593 << 16) | 57);
+        for (const primary of [false, true]) {
+            const barOn = click(bar, primary);
+            assert.deepEqual(barOn.map((message: any) => message.type), ['widget_action'],
+                'the weapon special bar keeps its single native input');
+            await connection.dispatch(barOn, true);
+            assert.equal(player.isSpecialActivated(), true);
+            await connection.dispatch(click(bar, primary), true);
+            assert.equal(player.isSpecialActivated(), false);
+        }
+
+        player.setRegistered(false);
+        core.TaskManager.cancelTasks(player.getIndex());
+        setPacketSocket(null);
+        state.socket = null;
+    } finally {
+        process.chdir(previousDirectory);
+    }
+}
+
 nativeDestroyConfirmation().then(() => console.log('Native destroy confirmation keyboard and mouse routing passed'))
+    .then(() => nativeSpecialOrbSendsOneServerAuthoritativeInput())
+    .then(() => console.log('Native special orb and bar send one server-authoritative input'))
     .catch(error => { console.error(error); process.exitCode = 1; });

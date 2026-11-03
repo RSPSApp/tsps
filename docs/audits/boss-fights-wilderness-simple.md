@@ -2,7 +2,7 @@
 
 An audit of the six implemented fights in this cluster against the OSRS Wiki (the page and its
 `/Strategies` subpage) and, where a recording existed, the rsprox captures. Source order is the one
-in [server/docs/agents/sources.md](../../server/docs/agents/sources.md): the Wiki for behaviour,
+in [server/docs/agents/sources.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/sources.md): the Wiki for behaviour,
 the cache for ids, captures as first-hand evidence for what live sends.
 
 Recordings used (all decoded into `%USERPROFILE%\.rsprox\binary` with

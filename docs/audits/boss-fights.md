@@ -14,7 +14,7 @@ quest bosses live in the quest plugins and are listed separately in [Quest bosse
    hit, attack speed and range, attack mix, special cadence, damage tables, effect durations,
    messages, animations, projectiles and respawn.
 2. **Then rsprox.** Recordings are found with the search API (NPC id, animation, graphics, loc,
-   interface, varbit, text), downloaded and decoded per [RSPROX - DECODING.md](../../RSPROX%20-%20DECODING.md),
+   interface, varbit, text), downloaded and decoded using the [packet-capture guidance](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/sources.md#packet-captures),
    and read tick by tick. A recording only ever confirms or corrects what the Wiki says; it never
    overrides the Wiki on gameplay intent.
 3. **Then the cache.** Ids are checked against rev 241 (`server/caches`), never guessed.

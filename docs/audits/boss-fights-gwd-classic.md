@@ -2,7 +2,7 @@
 
 An audit of six classic boss clusters against the OSRS Wiki (the boss page and its `/Strategies`
 subpage) and, where a recording existed, the rsprox captures. Source order is the one in
-[server/docs/agents/sources.md](../../server/docs/agents/sources.md): the Wiki for behaviour, the
+[server/docs/agents/sources.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/sources.md): the Wiki for behaviour, the
 cache for ids, captures as first-hand evidence of what live sends.
 
 Recordings used (all decoded from `%USERPROFILE%\.rsprox\binary`):
@@ -35,7 +35,7 @@ the Wiki's 150 is what the code keeps.
 `plugins/bosses/godwars/Zamorak.GodWars.js` rolled the special through the ordinary accuracy roll,
 so it could miss. The Wiki (`K'ril Tsutsaroth/Strategies`, "Prayer Smash") says:
 
-> "He will yell {{Overhead|YARRRRRRR!}} when using his prayer smash, **always** dealing 35-49 damage
+> "He will yell `{{Overhead|YARRRRRRR!}}` when using his prayer smash, **always** dealing 35-49 damage
 > and draining his target's current prayer points by half, rounded down."
 
 and the boss page adds "as well as draining half of the player's current prayer points, rounded

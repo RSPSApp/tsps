@@ -4,8 +4,8 @@ The native adapter reads the implementation in
 `server/plugins/quests/quests/RecipeForDisaster.Quest.js`. It never changes game
 state. The RuneLite helpers remain available in the Java source, but their
 instanced council coordinates and native conversation stages do not match this
-server. In particular, the server council is at Lumbridge Castle (3236–3240,
-3219–3220), and several conversation phases have no persisted native equivalent.
+server. In particular, the server council is in the frozen dining room (1862–1866,
+5343–5352), reached through the large doors in Lumbridge Castle, and several conversation phases have no persisted native equivalent.
 
 Implementation plan:
 

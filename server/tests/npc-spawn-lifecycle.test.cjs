@@ -12,6 +12,8 @@ const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
 
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+const { Gamevals, GamevalKind } = require("../dist/game/cache/Gamevals");
 const { RegionManager } = require("../dist/game/collision/RegionManager");
 const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
 const { NpcSpawnDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcSpawnDefinitionLoader");
@@ -25,6 +27,7 @@ const { NPCDeathTask } = require("../dist/game/task/impl/NPCDeathTask");
 const { NPCRespawnTask } = require("../dist/game/task/impl/NPCRespawnTask");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { ServerPerf } = require("../dist/util/ServerPerf");
+const { NpcIdentifiers } = require("../dist/util/NpcIdentifiers");
 
 const MAN = 3106;
 const SMOKE_DEVIL = 498;
@@ -106,6 +109,27 @@ test("login and a bot's registration activate nearby NPCs", () => {
   spawnFile([{ id: MAN, x: 3222, y: 3218 }], false);
   World.registerPlayerPosition({ getLocation: () => new Location(3222, 3218, 0), isPlayerBot: () => true });
   assert.equal(live(MAN).length, 1);
+});
+
+test("Death Plateau's wounded soldier stays seated at the road fork", (t) => {
+  const woundedSoldier = NpcIdentifiers.SOLDIER_8;
+  const row = require("../data/definitions/npc-spawns.json").find(spawn => spawn.id === woundedSoldier);
+  assert.ok(row, "the canonical wounded soldier spawn exists");
+  const gamevals = new Gamevals();
+  assert.equal(gamevals.namesOf(GamevalKind.NPC).get(woundedSoldier), "death_ig_solider_wounded");
+  const definition = CacheDefinitions.getNpc(woundedSoldier);
+  assert.equal(gamevals.namesOf(GamevalKind.SEQ).get(definition.idleSeqId), "wounded_sitting");
+  assert.equal(definition.walkSeqId, definition.idleSeqId, "walking cannot replace the seated pose");
+
+  spawnFile([row]);
+  const [soldier] = live(woundedSoldier);
+  assert.ok(soldier, "the real loader activates the canonical spawn");
+  t.mock.method(World, "isLocationActive", () => true);
+  t.mock.method(Math, "random", () => 0.1);
+  const steps = t.mock.method(soldier.getMovementQueue(), "addSteps");
+  for (let tick = 0; tick < 100; tick++) soldier.getMovementCoordinator().process();
+  assert.equal(steps.mock.callCount(), 0, "a visible wounded soldier never attempts to wander");
+  assert.equal(soldier.getMovementCoordinator().getRadius(), 0);
 });
 
 test("extended NPC view distances preload their full view and wander margin", () => {

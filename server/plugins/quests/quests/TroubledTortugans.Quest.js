@@ -755,7 +755,8 @@ module.exports = function registerTroubledTortugansQuest(api) {
       return true;
     }
     player.performAnimation(new Animation(axe.animationId));
-    if (player.getInventory().isFull() && !held(player, JATOBA_LOGS_ITEM_ID)) return true;
+    // Jatoba logs don't stack, so a full bag can't take another even when one is already held.
+    if (player.getInventory().isFull()) return true;
     player.getInventory().adds(JATOBA_LOGS_ITEM_ID, 1);
     player.sendMessage("You get some jatoba logs.");
     return true;

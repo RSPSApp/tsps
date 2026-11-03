@@ -562,6 +562,23 @@ test('Troubled Tortugans follows the Quest Helper stages through repairs, tracki
   assert.equal(h.quest.getStage(h.player), 34);
 });
 
+test('Troubled Tortugans jatoba chopping gives no log or message on a full bag', () => {
+  const h = makeHarness('../plugins/quests/quests/TroubledTortugans.Quest');
+  const I = h.core.ItemIdentifiers;
+  const chop = h.hooks.namedObjects.get('Jatoba tree')['Chop down'];
+  h.inventory.set(I.BRONZE_AXE, 1);
+  h.inventory.set(I.JATOBA_LOGS, 1);
+  for (let slot = 0; slot < 26; slot++) h.inventory.set(1000 + slot, 1);
+  assert.equal(chop({ player: h.player, objectId: 58555 }), true);
+  assert.equal(h.inventory.get(I.JATOBA_LOGS), 1, 'non-stackable logs cannot fit a full bag even when one is held');
+  assert.equal(h.messages.includes('You get some jatoba logs.'), false);
+
+  h.inventory.delete(1000);
+  chop({ player: h.player, objectId: 58555 });
+  assert.equal(h.inventory.get(I.JATOBA_LOGS), 2);
+  assert.ok(h.messages.includes('You get some jatoba logs.'));
+});
+
 test('Troubled Tortugans Shieldbane fight and final hand-in complete once', () => {
   const h = makeHarness('../plugins/quests/quests/TroubledTortugans.Quest');
   const N = h.core.NpcIdentifiers;

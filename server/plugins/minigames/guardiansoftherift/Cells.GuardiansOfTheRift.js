@@ -318,8 +318,9 @@ function repair(event) {
   const { player } = event;
   const tile = eventTile(event);
   if (!tile || !tile.broken || !Game.isPlaying(player)) return false;
+  // rsprox capture (solo): a mesbox without enough fragments; with them, the game message below.
   if (Shared.count(player, Shared.ITEM.FRAGMENTS) < REPAIR_FRAGMENTS) {
-    Shared.itemStatement(player, Shared.ITEM.FRAGMENTS, `You need ${REPAIR_FRAGMENTS} guardian fragments to repair the cell tile.`);
+    Shared.statement(player, `It looks like you'll need ${REPAIR_FRAGMENTS} guardian fragments to repair this.`);
     return true;
   }
   player.getInventory().delete(Shared.obj(Shared.ITEM.FRAGMENTS), REPAIR_FRAGMENTS);
@@ -327,6 +328,7 @@ function repair(event) {
   Shared.animate(player, "human_pickupfloor");
   tile.broken = false;
   tileLoc(tile);
+  player.sendMessage("The magical power of the guardian essence restores the cell tile. It can now fit a charged cell again.");
   Game.addEnergy(player, "elemental", REPAIR_ENERGY);
   Game.addEnergy(player, "catalytic", REPAIR_ENERGY);
   return true;

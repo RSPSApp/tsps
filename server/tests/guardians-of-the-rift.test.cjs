@@ -942,7 +942,13 @@ test('crafting guardian essence makes runes, a stone each, the XP and charges on
   const pure = fakePlayer('Pure');
   attackPhase(pure);
   pure.__gotrTrip = EARTH;
-  assert.equal(claimed(pure, Shared.loc(EARTH.altar), 'Craft-rune'), false, 'without guardian essence Runecrafting crafts');
+  pure.inventory.add(Shared.obj('blankrune_high'), 5);
+  assert.equal(claimed(pure, Shared.loc(EARTH.altar), 'Craft-rune'), false, 'pure essence: Runecrafting crafts');
+  const empty = fakePlayer('Empty');
+  attackPhase(empty);
+  empty.__gotrTrip = EARTH;
+  assert.equal(claimed(empty, Shared.loc(EARTH.altar), 'Craft-rune'), true);
+  assert.equal(empty.messages.at(-1), 'You do not have any guardian essence to bind here.', 'no essence at all (capture)');
 });
 
 test('a portal talisman opens its dormant Guardian and shatters; Toggle-talisman flips its varbit', () => {
@@ -1114,7 +1120,7 @@ test('the surge hits every barrier for 50; a broken tile takes 12 fragments to r
   assert.equal(player.varbit(Shared.VARBIT.ELEMENTAL_EARNED), before + 25);
 });
 
-test('assembling a guardian: the captured steps, the pile energy, and nothing past ten', () => {
+test('assembling a guardian: the captured steps, the pile energy, and the limit', () => {
   const player = fakePlayer();
   openGame(player);
   const pile = { player, objectId: Shared.loc('gotr_guardian_spawn_east') };
@@ -1137,12 +1143,35 @@ test('assembling a guardian: the captured steps, the pile energy, and nothing pa
   assert.equal(player.xpBySkill.Runecrafting, 250);
   assert.equal(player.inventory.getAmount(CELL(4)), 0);
 
-  for (let i = 0; i < 9; i++) RiftGuardians.guardians.add(fakeNpc({ id: Shared.npc('gotr_guardian_air'), x: 0, y: 0 }));
+  // The limit reached while assembling: the cell is spent and the energy comes, but no guardian.
   player.inventory.add(CELL(1), 1);
   hooks.objects['Essence pile (elemental)'].Assemble(pile);
+  RiftGuardians.guardians.add(fakeNpc({ id: Shared.npc('gotr_guardian_air'), x: 0, y: 0 }));
   ticks(5);
   assert.equal(player.messages.at(-1), 'The powers of the cell extend into the essence, but no guardian forms.');
   assert.equal(Game.stateOf(player).elemental, 45 + 6, 'the energy still comes');
+
+  // At the limit already (solo capture: 2): refused at the pile, nothing taken.
+  player.inventory.add(CELL(1), 1);
+  const xp = player.xpBySkill.Crafting;
+  hooks.objects['Essence pile (elemental)'].Assemble(pile);
+  assert.equal(player.messages.at(-1), 'There are already enough rift guardians in the room.');
+  ticks(5);
+  assert.equal(player.inventory.getAmount(CELL(1)), 1, 'the cell is kept');
+  assert.equal(player.xpBySkill.Crafting, xp, 'no XP');
+});
+
+test('the rift guardian limit: 2 solo (capture), one more a player, 10 at most (Wiki)', () => {
+  const player = fakePlayer();
+  openGame(player);
+  assert.equal(Game.riftGuardianCap(), 2);
+  assert.equal(player.lastHud()[8], 2, 'the HUD shows the limit');
+  const others = Array.from({ length: 30 }, (_, i) => fakePlayer(`Other ${i}`));
+  for (const other of others.slice(0, 3)) Game._game.players.set(other, Game.stateOf(player));
+  assert.equal(Game.riftGuardianCap(), 5);
+  for (const other of others) Game._game.players.set(other, Game.stateOf(player));
+  assert.equal(Game.riftGuardianCap(), 10);
+  for (const other of others) Game._game.players.delete(other);
 });
 
 test('at full power every rift guardian goes, and the close resets the tiles', () => {
@@ -1159,13 +1188,19 @@ test('at full power every rift guardian goes, and the close resets the tiles', (
 
 // ------------------------------------------------------------------ phase 5: creatures
 
-test('creature batches: four on a quiet world, up to 22 as on the captured busy world; mostly leeches', () => {
-  assert.equal(Creatures.batchSize(1), 4);
-  assert.equal(Creatures.batchSize(450), 19);
-  assert.equal(Creatures.batchSize(2000), 22);
-  assert.equal(Creatures.pickKind({ leech: 0.7, walker: 0.2, guardian: 0.1 }, 0.5), 'leech');
-  assert.equal(Creatures.pickKind({ leech: 0.7, walker: 0.2, guardian: 0.1 }, 0.85), 'walker');
-  assert.equal(Creatures.pickKind({ leech: 0.7, walker: 0.2, guardian: 0.1 }, 0.95), 'guardian');
+test('creature batches grow through the game, as captured solo and on a busy world', () => {
+  // Captured solo: 1, 2, 2, 2, 3, 4, 4, 4; a world of hundreds: 15, 16, 19, 20, 18, 20, 22, 24, 26.
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7].map((wave) => Creatures.batchSize(1, wave)), [1, 1, 2, 2, 3, 3, 4, 4]);
+  assert.deepEqual([0, 4, 8].map((wave) => Creatures.batchSize(353, wave)), [15, 20, 25]);
+  assert.equal(Creatures.batchSize(2000, 40), 30, 'at most 30');
+  const count = (kinds, kind) => kinds.filter((k) => k === kind).length;
+  assert.deepEqual(Creatures.batchKinds(1, 0, false), ['leech']);
+  assert.equal(count(Creatures.batchKinds(1, 3, false), 'guardian'), 0, 'solo: no abyssal guardians before the fifth wave');
+  assert.equal(count(Creatures.batchKinds(1, 4, false), 'guardian'), 1);
+  const busy = Creatures.batchKinds(353, 0, false);
+  assert.equal(count(busy, 'walker'), 2, 'a busy first batch has two walkers');
+  assert.equal(count(busy, 'leech'), 13, 'mostly leeches');
+  assert.ok(count(Creatures.batchKinds(353, 2, false), 'guardian') >= 1, 'busy: guardians from the third');
   assert.equal(Creatures.gap({ x: 3604, y: 9505 }, 1, { x: 3605, y: 9502 }, 3), 1, 'touching a 3x3 barrier');
   assert.equal(Creatures.gap({ x: 3615, y: 9522 }, 1, { x: 3613, y: 9501 }, 5), 17);
 });
@@ -1177,13 +1212,15 @@ test('the attack sends a batch out of the rift, and one every 76 ticks after', (
   const before = hooks.npcsSpawned.length;
   ticks(1);
   const first = hooks.npcsSpawned.slice(before);
-  assert.equal(first.length, 4);
+  assert.equal(first.length, 1, 'solo: one leech first');
   assert.ok(first.every((npc) => npc.flags.has('combat:no-regen')));
   assert.ok(first.every((npc) => npc.y >= 9522 && npc.y <= 9525), 'out of the rift');
   ticks(75);
-  assert.equal(hooks.npcsSpawned.length - before, 4);
+  assert.equal(hooks.npcsSpawned.length - before, 1);
   ticks(1);
-  assert.equal(hooks.npcsSpawned.length - before, 8);
+  assert.equal(hooks.npcsSpawned.length - before, 2);
+  ticks(76);
+  assert.equal(hooks.npcsSpawned.length - before, 4, 'the third batch is two');
 });
 
 test('a creature beside a barrier hits it; with none standing it drains the Great Guardian', () => {
@@ -1212,7 +1249,7 @@ test('a creature beside a barrier hits it; with none standing it drains the Grea
     walker.x = 3615; walker.y = 9506;
     Game._game.power = 100;
     ticks(4);
-    assert.equal(Game._game.power, 98, 'a walker drains 2');
+    assert.equal(Game._game.power, 97, 'a walker drains 3 (solo captures: splat 5-6)');
   } finally {
     Math.random = random;
   }
@@ -1272,14 +1309,20 @@ function rift(player, option) {
   return hooks.objects['<col=ffff00>Rewards Guardian</col>'][option]({ player, objectId: Shared.loc('gotr_reward_rift') });
 }
 
-test('points need 300 energy in the game, like the XP', () => {
+test('below 300 energy the close says so, with no points, no XP and no rift counted (capture)', () => {
   const player = fakePlayer();
   openGame(player);
   Game.stateOf(player).elemental = 150;
   Game.stateOf(player).catalytic = 140;
+  const rifts = Records.riftsClosed(player);
   Game.setPower(100);
   ticks(32);
-  assert.ok(player.messages.includes('Elemental energy attuned: <col=ef1020>0</col>. Catalytic energy attuned: <col=ef1020>0</col>.'));
+  const close = player.messages.slice(player.messages.findIndex((m) => m.includes('successfully closed the rift')));
+  assert.deepEqual(close.slice(1), [
+    'You did not contribute enough to attune any elemental or catalytic energy.',
+    'The Portal Guardians will keep their rifts open for another 30 seconds.',
+  ]);
+  assert.equal(Records.riftsClosed(player), rifts);
   assert.ok(!player.messages.some((message) => message.includes('bonus Runecraft XP')));
 });
 
@@ -1450,7 +1493,9 @@ test('Craft-rune with no essence still charges an uncharged cell, and upgrades a
   assert.equal(player.inventory.getAmount(CELL(3)), 1);
   assert.equal(player.inventory.getAmount(UNCHARGED()), 1);
   assert.ok(player.messages.includes('Your cell absorbs a high amount of excess energy.'));
-  assert.equal(claimed(player, Shared.loc(EARTH.altar), 'Craft-rune'), false, 'a strong cell held: nothing to charge');
+  assert.equal(claimed(player, Shared.loc(EARTH.altar), 'Craft-rune'), true, 'a strong cell held: nothing to charge');
+  assert.equal(player.messages.at(-1), 'You do not have any guardian essence to bind here.', 'as captured at the nature altar');
+  assert.equal(player.inventory.getAmount(UNCHARGED()), 1, 'the uncharged cell stays');
 
   const weak = fakePlayer('Weak');
   attackPhase(weak);
@@ -1523,9 +1568,10 @@ test('leaving and rejoining keeps the mining count, so the 250 still stops the X
 test("a hit on the Great Guardian drains the same share of a bigger game's power", () => {
   const player = fakePlayer();
   openGame(player);
-  assert.equal(Creatures.drainOf(Creatures.KINDS.walker), 2, 'solo: 2 of 250');
+  assert.equal(Creatures.drainOf(Creatures.KINDS.leech), 1, 'solo: 1 of 250');
+  assert.equal(Creatures.drainOf(Creatures.KINDS.walker), 3, 'solo: 3 of 250');
   Game._game.maxPower = Game.maxPowerFor(10);
-  assert.equal(Creatures.drainOf(Creatures.KINDS.walker), 20, 'ten players: 20 of 2,500');
+  assert.equal(Creatures.drainOf(Creatures.KINDS.walker), 30, 'ten players: 30 of 2,500');
 });
 
 test('recharging a barrier shows a heal splat, so its health bar shows', () => {
@@ -1549,10 +1595,21 @@ test('the Great Guardian sleeps after the close and wakes as the rift opens', ()
   World.getNpcs = () => [guardian];
   try {
     Game.setPower(100);
-    ticks(32);
-    assert.equal(guardian.animations.at(-1), Shared.seq('portal_guardian_sleep'));
-    ticks(8);
-    assert.equal(guardian.animations.at(-1), Shared.seq('portal_guardian_sleep_loop'));
+    const closedRift = () => player.messages.some((m) => m.includes('successfully closed the rift'));
+    for (let i = 0; i < 40 && !closedRift(); i++) ticks(1);
+    assert.ok(closedRift());
+    assert.ok(!guardian.animations.includes(Shared.seq('portal_guardian_sleep')), 'not on the close itself');
+    // Live: 3 ticks after the close. ticks() runs Game.tick outside the task loop, so a
+    // Shared.later(3) from it lands on the second tick here (the server's tick is itself a task).
+    ticks(1);
+    assert.ok(!guardian.animations.includes(Shared.seq('portal_guardian_sleep')));
+    ticks(1);
+    assert.equal(guardian.animations.at(-1), Shared.seq('portal_guardian_sleep'), 'later(3) after the close');
+    ticks(1);
+    assert.equal(guardian.animations.at(-1), Shared.seq('portal_guardian_sleep_loop'), 'then the loop every tick');
+    const loops = guardian.animations.length;
+    ticks(3);
+    assert.equal(guardian.animations.length, loops + 3);
     Game.skip();
     ticks(60);
     Game.skip();
@@ -1602,4 +1659,117 @@ test("the intricate pouch's box shows what was inside; Atlax's diary has a Read 
   const box = [...player.statements.at(-1).dialogues.values()][0];
   assert.notEqual(box.itemId, Shared.obj('gotr_intricate_pouch'));
   assert.equal(typeof hooks.items["Atlax's diary"]?.Read, 'function');
+});
+
+// ------------------------------------------------------------------ issue 1986: the live captures
+
+test("Atlax's diary: the captured 24 pages in indexed_book (680), with a contents page that jumps", () => {
+  const Diary = require('../plugins/minigames/data/atlax-diary');
+  const QuestRuntime = require('../plugins/quests/QuestRuntime');
+  assert.equal(Diary.spreads.length, 12, '24 pages');
+  assert.equal(Diary.spreads[0][1][2], 'We arrived at the site today.');
+  assert.equal(Diary.spreadOf('Bennath 15th'), 0);
+  assert.equal(Diary.spreadOf('Bennath 23rd'), 10);
+
+  const buttons = new Map();
+  const api = new Proxy({ core: PluginManager.getCoreApi() }, {
+    get: (target, key) => (key in target ? target[key]
+      : key === 'onInterfaceActionButton' ? (ids, handler) => ids.forEach((id) => buttons.set(id, handler))
+        : () => {}),
+  });
+  QuestRuntime.registerQuestWidgets(api);
+  const strings = new Map();
+  const hidden = new Map();
+  const player = fakePlayer();
+  const packet = {
+    sendInterface: (id) => { player.interfaces.push(id); return packet; },
+    sendString: (text, uid) => { strings.set(uid & 0xffff, text); return packet; },
+    sendInterfaceDisplayState: (uid, hide) => { hidden.set(uid & 0xffff, hide); return packet; },
+    sendInterfaceScript: () => packet,
+  };
+  player.getPacketSender = () => packet;
+  hooks.items["Atlax's diary"].Read({ player });
+  assert.equal(player.interfaces.at(-1), 680);
+  assert.ok(player.animations.includes(Shared.seq('human_readbook')));
+  assert.equal(strings.get(6), "Atlax's Diary");
+  assert.equal(strings.get(45), '<u>Entries</u>');
+  assert.equal(strings.get(79), 'Bennath 15th', 'a contents entry in its index component');
+  assert.equal(hidden.get(79), false);
+  assert.equal(hidden.get(77), true, 'no entry on the first line');
+  assert.equal(strings.get(63), 'We arrived at the site today.');
+  assert.equal(hidden.get(108), true, 'no previous page on the first spread');
+  assert.equal(hidden.get(9), true, 'no index button on the contents');
+
+  const click = (child) => buttons.get((680 << 16) | child)({ player, buttonId: (680 << 16) | child });
+  click(110);
+  assert.equal(strings.get(10), '3');
+  assert.equal(strings.get(45), "battle, but now there's just a");
+  assert.equal(hidden.get(9), false, 'the index button past the contents');
+  click(9);
+  assert.equal(strings.get(10), '1');
+  click(87);
+  assert.equal(strings.get(61), '<u>Bennath 23rd</u>', 'the last entry opens its spread');
+  assert.equal(strings.get(10), '21');
+});
+
+test('a loss: the captured lines, then the Great Guardian sleeps a tick later', () => {
+  const player = fakePlayer();
+  openGame(player);
+  const guardian = fakeNpc({ id: Shared.npc(Shared.NPC.GREAT_GUARDIAN), x: 3613, y: 9501 });
+  const { World } = Shared.core();
+  const getNpcs = World.getNpcs;
+  World.getNpcs = () => [guardian];
+  try {
+    Game._game.phase = Game.PHASE.ATTACK;
+    Game.addPower(-Game._game.power);
+    assert.deepEqual(player.messages.slice(-2), [
+      '<col=ef1020>The Great Guardian was defeated!</col>',
+      'The Portal Guardians will keep their rifts open for another 30 seconds.',
+    ]);
+    assert.ok(!guardian.animations.includes(Shared.seq('portal_guardian_sleep')));
+    ticks(1);
+    assert.equal(guardian.animations.at(-1), Shared.seq('portal_guardian_sleep'), 'no death animation, just sleep');
+  } finally {
+    World.getNpcs = getNpcs;
+  }
+});
+
+test('a creature hitting the Great Guardian shows splat 17 without a health bar', () => {
+  const player = fakePlayer();
+  openGame(player);
+  const guardian = fakeNpc({ id: Shared.npc(Shared.NPC.GREAT_GUARDIAN), x: 3613, y: 9501 });
+  const shown = [];
+  guardian.showHitsplat = (damage, splat, health) => shown.push({ damage, splat, health });
+  const { World } = Shared.core();
+  const getNpcs = World.getNpcs;
+  World.getNpcs = () => [guardian];
+  try {
+    Game._game.phase = Game.PHASE.ATTACK;
+    Game._game.power = 100;
+    const leech = fakeNpc({ id: Shared.npc('gotr_abyssal_leech'), x: 3615, y: 9506 });
+    Creatures.creatures.set(leech, { kind: 'leech', nextAttack: 0, attacker: null });
+    ticks(1);
+    assert.equal(Game._game.power, 99);
+    assert.ok([1, 2].includes(shown.at(-1).damage), 'a leech shows 1-2');
+    assert.deepEqual(shown.at(-1).splat, { mine: 17, others: 17 });
+    assert.equal(shown.at(-1).health, false);
+  } finally {
+    World.getNpcs = getNpcs;
+    Creatures.clear();
+  }
+});
+
+test('repairing a broken tile: the captured refusal and success lines', () => {
+  const player = fakePlayer();
+  openGame(player);
+  const tile = Cells.tiles[2];
+  tile.broken = true;
+  const repair = () => hooks.objects['Cell tile (broken)'].Repair({ player, objectId: Shared.loc('gotr_cell_tile_broken_repairable'), location: { x: tile.x, y: tile.y } });
+  repair();
+  assert.match(statementText(player), /It looks like you'll need 12 guardian fragments to repair this\./);
+  player.inventory.add(Shared.obj(Shared.ITEM.FRAGMENTS), 13);
+  repair();
+  assert.equal(player.messages.at(-1), 'The magical power of the guardian essence restores the cell tile. It can now fit a charged cell again.');
+  assert.equal(player.inventory.getAmount(Shared.obj(Shared.ITEM.FRAGMENTS)), 1);
+  assert.equal(tile.broken, false);
 });

@@ -40,13 +40,22 @@ function awarded(player, points) {
   return award.points;
 }
 
+/**
+ * rsprox capture (a player with 2 and 2 energy): below the 300 the close says only that, with no
+ * rift counted, no totals and no XP.
+ */
 function closed({ player, state }) {
   // A close is paid once: a duplicated event can't pay the XP or points twice.
   if (!state || state.closedPaid) return;
   state.closedPaid = true;
   const earned = state.elemental + state.catalytic >= Shared.REWARD_ENERGY;
-  const elemental = earned ? awarded(player, pointsFor(state.elemental)) : 0;
-  const catalytic = earned ? awarded(player, pointsFor(state.catalytic)) : 0;
+  if (!earned) {
+    player.sendMessage(Shared.highlight(player, "gre", "The Great Guardian successfully closed the rift!"));
+    player.sendMessage("You did not contribute enough to attune any elemental or catalytic energy.");
+    return;
+  }
+  const elemental = awarded(player, pointsFor(state.elemental));
+  const catalytic = awarded(player, pointsFor(state.catalytic));
   const banked = Records.points(player);
   Records.setPoints(player, banked.elemental + elemental, banked.catalytic + catalytic);
   const total = Records.points(player);
@@ -56,7 +65,7 @@ function closed({ player, state }) {
   player.sendMessage(`Amount of rifts you have closed: <col=ff0000>${Shared.formatNumber(rifts)}</col>.`);
   player.sendMessage(`Elemental energy attuned: ${red(elemental)}. Catalytic energy attuned: ${red(catalytic)}.`);
   player.sendMessage(`Total elemental energy: ${red(total.elemental)}. Total catalytic energy:  ${red(total.catalytic)}.`);
-  if (earned) awardXp(player);
+  awardXp(player);
   Shared.api().emitCustomEvent("collection-log:count", { player, category: "Guardians of the Rift" });
   Shared.api().emitCustomEvent("guardians-of-the-rift:rift-closed", { player, elemental, catalytic, rifts });
 }

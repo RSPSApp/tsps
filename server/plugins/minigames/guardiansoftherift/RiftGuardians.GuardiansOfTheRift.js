@@ -12,10 +12,13 @@
  *   walks out; +5: the cell is used up, "The powers
  *   of the weak cell extend into the essence. A Guardian comes to life.", sound 956, 80 Crafting
  *   XP, the cell's Runecraft XP (30 weak, 250 overcharged) and the pile's energy (6/15/27/45).
- *   With ten guardians up: "The powers of the cell extend into the essence, but no guardian forms."
+ *   A limit reached during the assembly: "The powers of the cell extend into the essence, but no
+ *   guardian forms."
+ * - At the limit already: "There are already enough rift guardians in the room." and nothing is
+ *   taken (solo capture, limit 2).
  * - Without a charged cell: objectbox with a weak cell, "You will need a charged cell to power any
  *   rift guardians you create from this essence pile."
- * - The HUD counts the guardians up to the cap of 10.
+ * - The HUD counts the guardians against the limit: 2 solo, 10 on a busy world (Game.riftGuardianCap).
  * Wiki: a chisel is needed; the guardian's kind follows the pile and the cell (weak air or mind,
  * medium water or chaos, strong earth or death, overcharged fire or blood); every guardian and
  * creature dies at 100% power.
@@ -66,6 +69,10 @@ function assemble(event) {
   const { player, objectId } = event;
   const pile = pileFor(objectId);
   if (!pile || !Shared.inTemple(player.getLocation()) || !Shared.questComplete(player) || !Game.isPlaying(player)) return false;
+  if (alive() >= Game.riftGuardianCap()) {
+    player.sendMessage("There are already enough rift guardians in the room.");
+    return true;
+  }
   if (Shared.count(player, "chisel") <= 0) {
     Shared.itemStatement(player, "chisel", "You need a chisel to carve the essence into a guardian.");
     return true;
@@ -102,7 +109,7 @@ function finish(player, pile) {
   Shared.addXp(player, "CRAFTING", CRAFTING_XP);
   Shared.addXp(player, "RUNECRAFTING", Cells.CELL[tier].xp);
   Game.addEnergy(player, pile.type, GUARDIAN_ENERGY[tier]);
-  if (alive() >= Shared.RIFT_GUARDIAN_CAP) {
+  if (alive() >= Game.riftGuardianCap()) {
     player.sendMessage("The powers of the cell extend into the essence, but no guardian forms.");
     return;
   }

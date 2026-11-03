@@ -503,7 +503,7 @@ test('a carrier whose banner was stripped before the drop hook still drops the f
   game.restoreFlagToBase(TEAM.ZAMORAK);
 });
 
-test('Castle Wars deaths keep gear, drop flags and supplies but no bones; other deaths still drop bones', (t) => {
+test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other deaths still drop bones', (t) => {
   const { PlayerDeathTask } = require('../dist/game/task/impl/PlayerDeath');
   const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');
   let deathPolicy;

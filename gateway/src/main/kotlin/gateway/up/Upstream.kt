@@ -138,7 +138,11 @@ class Upstream(
                         if (message.clanType == OWN_CLAN) send(TspsClientPacket.clanChat(OWN_CLAN, message.message)) else DropCounter.up(message)
                     message.type == GUEST_CLAN_CHAT_TYPE -> send(TspsClientPacket.clanChat(GUEST_CLAN, message.message))
                     else ->
-                        PUBLIC_CHAT_KINDS[message.type]?.let { send(TspsClientPacket.chat(it, message.message, publicChatStyle(message))) } ?: DropCounter.up(message)
+                        PUBLIC_CHAT_KINDS[message.type]?.let {
+                            // Native chat_send prepends a routing slash only for Friends Chat.
+                            val text = if (message.type == 2) message.message.removePrefix("/") else message.message
+                            send(TspsClientPacket.chat(it, text, publicChatStyle(message)))
+                        } ?: DropCounter.up(message)
                 }
             is ClanChannelKickUser -> clanChannelAction(message, message.clanId, KICK_USER, message.name)
             is AffinedClanSettingsAddBannedFromChannel -> clanChannelAction(message, message.clanId, BAN_USER, message.name)

@@ -45,6 +45,22 @@ class UpstreamClanTest {
     }
 
     @Test
+    fun `the cache friends chat prefix is removed exactly once`() {
+        for (text in listOf("/hello", "/ hello", "//literal slash")) {
+            upstream.handle(MessagePublic(2, 0, 0, text, null, -1))
+            assertArrayEquals(TspsWriter().u8(2).string(text.removePrefix("/")).varByte(CHAT), sent.last())
+        }
+    }
+
+    @Test
+    fun `public and clan text retain literal slashes`() {
+        upstream.handle(MessagePublic(0, 0, 0, "/literal slash", null, -1))
+        assertArrayEquals(TspsWriter().u8(0).string("/literal slash").varByte(CHAT), sent.last())
+        upstream.handle(MessagePublic(3, 0, 0, "/literal slash", null, 0))
+        assertArrayEquals(TspsWriter().u8(4).u8(0).string("/literal slash").varByte(CHAT), sent.last())
+    }
+
+    @Test
     fun `channel ops become CLAN_CHANNEL_ACTION by name`() {
         upstream.handle(ClanChannelKickUser("Bob", 0, 3))
         upstream.handle(AffinedClanSettingsAddBannedFromChannel("Bob", 0, 4))

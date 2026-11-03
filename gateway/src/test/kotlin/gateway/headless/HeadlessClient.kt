@@ -263,13 +263,13 @@ class HeadlessClient(private val host: String, private val port: Int) {
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
 
-        /** OPPLAYER2 (tsps's Trade with). */
-        fun playerOp2(index: Int) =
+        /** OPPLAYER4: Trade with, and what clicking a trade request in the chatbox sends. */
+        fun playerOp4(index: Int) =
             sendFixed(
-                OPPLAYER2,
+                OPPLAYER4,
                 Unpooled.buffer().toJagByteBuf().apply {
-                    p2Alt1(index)
-                    p1Alt2(0)
+                    p2Alt3(index)
+                    p1Alt3(0)
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
 
@@ -434,7 +434,7 @@ class HeadlessClient(private val host: String, private val port: Int) {
         const val JS5_BLOCK = 512
         const val LOGIN_OK = 2
         const val MOVE_GAMECLICK = 55
-        const val OPPLAYER2 = 35
+        const val OPPLAYER4 = 26
         const val IF_BUTTOND = 46
         const val OPLOC1_V2 = 72
         const val IF_SCRIPT_TRIGGER = 17

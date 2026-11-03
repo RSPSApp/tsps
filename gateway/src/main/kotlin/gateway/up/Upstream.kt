@@ -1,6 +1,7 @@
 package gateway.up
 
 import gateway.coverage.DropCounter
+import gateway.session.PlayerOps
 import gateway.session.VarpMirror
 import gateway.tsps.TspsClientPacket
 import gateway.down.ChatStyle
@@ -162,7 +163,7 @@ class Upstream(
             }
             is ClickWorldMap -> send(WorldOps.worldMapClick(message.level, message.x, message.z))
             is Teleport -> send(WorldOps.teleport(message.level, message.x, message.z))
-            is OpPlayer -> send(TspsClientPacket.playerOp(message.op, message.index))
+            is OpPlayer -> send(TspsClientPacket.playerOp(PlayerOps.toTsps(message.op), message.index))
             is OpNpcV2 -> if (message.op in 1..5) send(TspsClientPacket.npcOp(message.op, message.index)) else DropCounter.up(message)
             is OpNpc6 -> send(TspsClientPacket.examineNpc(message.id))
             is OpLocV2 -> if (message.op in 1..5) send(WorldOps.loc(message.op, message.id, message.x, message.z)) else DropCounter.up(message)

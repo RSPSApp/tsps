@@ -16,10 +16,11 @@ const Cooking = require("../plugins/skills/Cooking.plugin");
 before(() => CachePipeline.initialize());
 
 const noop = () => {};
+const submittedCookingTasks = [];
 const hooks = { object: {}, itemOnObject: [], itemOnItem: [], custom: {} };
 Cooking.register(new Proxy({
   core,
-  getTaskManager: () => ({ submit: noop }),
+  getTaskManager: () => ({ submit: task => submittedCookingTasks.push(task) }),
   emitCustomEvent: (name, request) => { if (name === "quest:is-complete") request.complete = true; },
   onObjectInteraction: (name, actions) => { hooks.object[name] = actions; },
   onItemOnObject: (handler, filter) => hooks.itemOnObject.push({ handler, filter }),
@@ -427,4 +428,104 @@ test("wine's success chance is the Wiki's: about 60% at 35, sure at 68; stacks r
   let rolls = 0;
   assert.equal(successes(32, 0.5, () => (rolls++ % 2 === 0 ? 0 : 1)), 8 * 2 + 1, "15 batches of 2 and 2 jugs left over");
   assert.equal(rolls, 17);
+});
+
+// Native cache, Player/inventory, named cooker dispatch and the registered cooking
+// task consume the same canonical row used by range menus and gathering plugins.
+test('Brutus t-bone steaks cook on native ranges and fires with the correct level, products and XP', async t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { SkillManager } = require('../dist/game/content/skill/SkillManager');
+  core.ObjectDefinition.init();
+  core.RegionManager.init();
+  Cooking._test.activeSessions.clear(); // legacy recording fixtures above never tick their cook sessions
+  Cooking.register(PluginManager.createApi('NativeSteakCooking'));
+  const cookTask = submittedCookingTasks.find(task => Number.isInteger(task.cycle));
+  assert.ok(cookTask, 'the original registration submitted its actual cooking runner');
+  core.TaskManager.submit(cookTask);
+  t.after(() => cookTask.stop());
+  const raw = obj('raw_tbone_steak'), cooked = obj('tbone_steak'), burnt = obj('tbone_steak_burned');
+  assert.deepEqual([raw, cooked, burnt], [33106, 33109, 33112]);
+  const rangeId = core.CacheDefinitions.getLocId('fai_varrock_range');
+  const fireId = core.CacheDefinitions.getLocId('fire');
+  const range = new core.GameObject(rangeId, new core.Location(3222, 3218), 10, 0);
+  const fire = new core.GameObject(fireId, new core.Location(3224, 3218), 10, 0);
+  assert.equal(range.getDefinition().getName(), 'Range');
+  assert.ok(range.getDefinition().getActions().includes('Cook'));
+  assert.equal(fire.getDefinition().getName(), 'Fire');
+  for (const object of [range, fire]) core.MapObjects.add(object);
+  t.after(() => { for (const object of [range, fire]) core.MapObjects.remove(object); });
+  let index = 2800;
+  function actor(t, level, object, item = raw, amount = 1) {
+    const p = new Player(new PlayerSession({ kind: 'test', isOpen: () => true, send: () => true }))
+      .setUsername(`steakcook${index}`).setIndex(index++);
+    p.setRegistered(true); p.setLocation(object.getLocation().clone().add(-1, 0)); p.setNeedsPlacement(false);
+    const skills = p.getSkillManager();
+    skills.setCurrentLevel(core.Skill.COOKING, level, false).setMaxLevels(core.Skill.COOKING, level, false)
+      .setExperience(core.Skill.COOKING, SkillManager.getExperienceForLevel(level));
+    p.getInventory().adds(item, amount);
+    const experience = skills.getExperience(core.Skill.COOKING);
+    t.after(() => { p.setRegistered(false); Cooking._test.activeSessions.delete(p); core.TaskManager.cancelTasks(p.getIndex()); });
+    return { p, experience };
+  }
+  const xpGained = ({ p, experience }) => p.getSkillManager().getExperience(core.Skill.COOKING) - experience;
+  const successXp = 90 * core.GameConstants.EXPERIENCE_MULTIPLIER;
+  function use(p, object, item = raw) {
+    return PluginManager.emitItemOnObject({ player: p, object, objectId: object.getId(), itemId: item,
+      item: p.getInventory().get(0), slot: 0, handled: false });
+  }
+  function tick(roll) {
+    const previous = Math.random;
+    Math.random = () => roll;
+    try { for (let n = 0; n < 3; n++) core.TaskManager.process(); }
+    finally { Math.random = previous; }
+  }
+  for (const object of [range, fire]) {
+    const name = object.getDefinition().getName();
+    await t.test(`${name}: level 13 succeeds for 90 XP and can also burn for 0 XP`, t => {
+      const good = actor(t, 13, object);
+      assert.equal(use(good.p, object), true);
+      assert.equal(Cooking.isCookingActive(good.p), true, 'the raw steak reaches the ordinary cooking session');
+      tick(0.99);
+      assert.equal(good.p.getInventory().getAmount(raw), 0);
+      assert.equal(good.p.getInventory().getAmount(cooked), 1);
+      assert.equal(xpGained(good), successXp, '90 base XP passes through the real skill manager and world rate');
+      const failed = actor(t, 13, object);
+      assert.equal(use(failed.p, object), true); tick(0);
+      assert.equal(failed.p.getInventory().getAmount(raw), 0);
+      assert.equal(failed.p.getInventory().getAmount(burnt), 1);
+      assert.equal(xpGained(failed), 0);
+    });
+  }
+  await t.test('level 12 refuses without consuming raw steak or awarding XP', t => {
+    const f = actor(t, 12, range), { p } = f;
+    assert.equal(use(p, range), true);
+    assert.equal(p.getDialogueManager().getCurrent().getText(), 'You need a Cooking level of 13 to cook a t-bone steak.');
+    tick(0.99); assert.equal(p.getInventory().getAmount(raw), 1); assert.equal(xpGained(f), 0);
+    assert.equal(Cooking.isCookingActive(p), false);
+  });
+  await t.test('49 can still burn, while 50 stops burning on either cooker', t => {
+    for (const object of [range, fire]) {
+      const low = actor(t, 49, object); use(low.p, object); tick(0);
+      assert.equal(low.p.getInventory().getAmount(burnt), 1);
+      const high = actor(t, 50, object); use(high.p, object); tick(0);
+      assert.equal(high.p.getInventory().getAmount(cooked), 1);
+      assert.equal(xpGained(high), successXp);
+    }
+  });
+  await t.test('range Cook menus include steak alongside other food; noted steaks remain excluded', t => {
+    const { p } = actor(t, 99, range, raw, 2);
+    p.getInventory().adds(obj('raw_trout'), 1);
+    const definition = range.getDefinition();
+    assert.equal(PluginManager.emitObjectInteraction({ player: p, object: range, objectId: rangeId, definition,
+      location: { x: 3222, y: 3218, z: 0 }, clickType: definition.getActions().indexOf('Cook') + 1, handled: false }), true);
+    assert.ok(p.getCreationMenu(), 'steak and trout are both offered in the mixed-food menu');
+    assert.deepEqual(p.getCreationMenu().getItems(), [cooked, obj('trout')]);
+    p.getCreationMenu().execute(cooked, 1); tick(0);
+    assert.equal(p.getInventory().getAmount(cooked), 1);
+    const note = obj('cert_raw_tbone_steak'), noted = actor(t, 99, range, note);
+    assert.equal(use(noted.p, range, note), false);
+    tick(0.99); assert.equal(noted.p.getInventory().getAmount(note), 1);
+    assert.equal(Cooking.isCookingActive(noted.p), false);
+  });
 });

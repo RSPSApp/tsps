@@ -301,6 +301,8 @@ test('lazy combat damage tracking preserves contributors, killer selection and r
   assert.equal(combat.damageMapContains(a), false);
   combat.addDamage(b, 1);
   assert.equal(combat.getKiller(false), b);
+  combat.removeDamager(b);
+  assert.equal(combat.getKiller(false), null, 'a dead attacker no longer wins a later kill');
 });
 
 test('lazy timers preserve reads, extension, ticking, cancellation and mutable access', () => {

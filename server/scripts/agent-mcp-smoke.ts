@@ -277,7 +277,8 @@ const sessionHooks: Record<string, any> = {};
 const previousMcpFlag = process.env.AGENT_MCP;
 process.env.AGENT_MCP = "0";
 agentPlugin.register({ core, onServerShutdown() {}, onPlayerLogin() {}, onPlayerLogout() {},
-    onCustomEvent: (name: string, handler: any) => { sessionHooks[name] = handler; }, emitCustomEvent() {} });
+    onCustomEvent: (name: string, handler: any) => { sessionHooks[name] = handler; }, emitCustomEvent() {},
+    getAreaManager: () => ({ get: () => null }) });
 process.env.AGENT_MCP = "1";
 rights = "MODERATOR";
 agentPlugin._test.grantDeveloperRights({ player });

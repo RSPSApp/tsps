@@ -1,7 +1,3 @@
-const { Animation } = require("../../src/main/typescript/elvarg/game/model/Animation");
-const { Graphic } = require("../../src/main/typescript/elvarg/game/model/Graphic");
-const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
-
 const EMOTES_GROUP_ID = 216;
 const EMOTE_CONTENTS_UID = (EMOTES_GROUP_ID << 16) | 2;
 const WELCOME_PLAY_BUTTON_UID = (378 << 16) | 72;
@@ -76,41 +72,42 @@ const EMOTES = [
     { sequence: 10051, loop: 10052, loopFirst: true },
 ];
 
+// Gameplay stalls, not sequence lengths: https://oldschool.runescape.wiki/w/Skill_Cape_(emote)#Emote_durations
 const SKILLCAPE_ROWS = [
-    [[9747, 9748], 4959, 823],
-    [[9750, 9751], 4981, 828],
-    [[9753, 9754], 4961, 824],
-    [[9756, 9757], 4973, 832],
-    [[9759, 9760], 4979, 829],
-    [[9762, 9763], 4939, 813],
-    [[9765, 9766], 4947, 817],
-    [[9768, 9769], 4971, 833],
-    [[9771, 9772], 4977, 830],
-    [[9774, 9775], 4969, 835],
-    [[9777, 9778], 4965, 826],
-    [[9780, 9781], 4949, 818],
-    [[9783, 9784], 4937, 812],
-    [[9786, 9787], 4967, 827],
-    [[9789, 9790], 4953, 820],
-    [[9792, 9793], 4941, 814],
-    [[9795, 9796], 4943, 815],
-    [[9798, 9799], 4951, 819],
-    [[9801, 9802], 4955, 821],
-    [[9804, 9805], 4975, 831],
-    [[9807, 9808], 4957, 822],
-    [[9810, 9811], 4963, 825],
-    [[9948, 9949], 5158, 907],
-    [[13069, 19476], 2709],
+    [[9747, 9748], 4959, 823, 6],
+    [[9750, 9751], 4981, 828, 15],
+    [[9753, 9754], 4961, 824, 8],
+    [[9756, 9757], 4973, 832, 9],
+    [[9759, 9760], 4979, 829, 10],
+    [[9762, 9763], 4939, 813, 5],
+    [[9765, 9766], 4947, 817, 10],
+    [[9768, 9769], 4971, 833, 6],
+    [[9771, 9772], 4977, 830, 7],
+    [[9774, 9775], 4969, 835, 14],
+    [[9777, 9778], 4965, 826, 5],
+    [[9780, 9781], 4949, 818, 13],
+    [[9783, 9784], 4937, 812, 13],
+    [[9786, 9787], 4967, 827, 5],
+    [[9789, 9790], 4953, 820, 12],
+    [[9792, 9793], 4941, 814, 8],
+    [[9795, 9796], 4943, 815, 20],
+    [[9798, 9799], 4951, 819, 12],
+    [[9801, 9802], 4955, 821, 25],
+    [[9804, 9805], 4975, 831, 7],
+    [[9807, 9808], 4957, 822, 20],
+    [[9810, 9811], 4963, 825, 10],
+    [[9948, 9949], 5158, 907, 12],
+    [[13069, 19476], 2709, undefined, 32],
     [[13221, 13222, 14204, 14205], 4751],
     [[13280, 13342, 13329, 21186, 13331, 13333, 13335, 13337, 20760, 21284,
         21285, 24133, 21776, 24232, 21780, 24233, 21784, 24234, 21898, 24135,
-        24134, 24855, 27363, 27365, 28902, 28906], 7121, 1286],
+        24134, 24855, 27363, 27365, 28902, 28906], 7121, 1286, 8],
 ];
 
 const SKILLCAPE_EMOTES = new Map();
-for (const [itemIds, sequence, graphic] of SKILLCAPE_ROWS) {
+for (const [itemIds, sequence, graphic, stallTicks] of SKILLCAPE_ROWS) {
     for (const itemId of itemIds) {
-        SKILLCAPE_EMOTES.set(itemId, { sequence, graphic });
+        SKILLCAPE_EMOTES.set(itemId, { sequence, graphic, stallTicks });
     }
 }
 
@@ -169,11 +166,12 @@ function questCapeReady(player, api) {
 }
 
 function resolveSkillcapeEmote(player, api) {
+    const { Equipment } = api.core;
     const cape = player.getEquipment().getItems()[Equipment.CAPE_SLOT];
     if (!cape) return undefined;
     const items = api.core.ItemIdentifiers;
     if (cape.getId() === items.QUEST_POINT_CAPE || cape.getId() === items.QUEST_POINT_CAPE_T_) {
-        return questCapeReady(player, api) ? { sequence: 4945, graphic: 816 } : undefined;
+        return questCapeReady(player, api) ? { sequence: 4945, graphic: 816, stallTicks: 15 } : undefined;
     }
     if ([items.MUSIC_CAPE, items.MUSIC_CAPE_T_, items.MUSIC_CAPE_2, items.MUSIC_CAPE_T__2].includes(cape.getId())) {
         const request = { player, unlocked: false };
@@ -209,12 +207,64 @@ function resolveEmote(player, slot, action, api) {
     return { sequence: loopSelected && emote.loop ? emote.loop : emote.sequence };
 }
 
+function performEmote({ player, slot, action }) {
+    const { Animation, Graphic, Equipment } = api.core;
+    const CombatFactory = api.getCombatFactory();
+    if (!Number.isInteger(slot) || slot < 0 || slot > LAST_EMOTE_SLOT) {
+        return false;
+    }
+
+    if (player.getCombat().isAnimationStalled() || player.busy() || CombatFactory.inCombat(player)) {
+        player.sendMessage("You cannot do this right now.");
+        return true;
+    }
+
+    const lock = LOCKS[slot];
+    if (lock && !isUnlocked(player, lock)) {
+        api.core.StatementDialogue.send(player, lock.message);
+        return true;
+    }
+
+    const emote = resolveEmote(player, slot, action, api);
+    if (!emote) {
+        if (EMOTES[slot].airGuitar) {
+            player.sendMessage("You need the Music cape to perform Air Guitar.");
+            return true;
+        }
+        const cape = player.getEquipment().getItems()[Equipment.CAPE_SLOT];
+        const items = api.core.ItemIdentifiers;
+        if (cape && (cape.getId() === items.QUEST_POINT_CAPE || cape.getId() === items.QUEST_POINT_CAPE_T_)) {
+            player.sendMessage("You need to complete every quest before performing the Quest point cape emote.");
+            return true;
+        }
+        player.sendMessage(
+            "You need to be wearing a skillcape in order to perform that emote.",
+        );
+        return true;
+    }
+
+    const permission = { player, slot, sequence: emote.sequence, allow: true };
+    api.emitCustomEvent("player:can-emote", permission);
+    if (permission.allow === false) return true;
+    player.getSkillManager().stopSkillable();
+    player.getMovementQueue().reset();
+    player.setFollowing(null);
+    player.performAnimation(new Animation(emote.sequence));
+    if (emote.stallTicks) player.getCombat().setAnimationStall(emote.stallTicks);
+    // Quest actions may depend on a real emote at the player's current
+    // tile. Emit only after the normal busy/combat/slot gates pass.
+    api.emitCustomEvent("player:emote", { player, slot, sequence: emote.sequence });
+    if (emote.graphic !== undefined) {
+        player.performGraphic(new Graphic(emote.graphic));
+    }
+    return true;
+}
+
 module.exports = {
     name: "Emotes",
     _test: { questCapeReady, resolveSkillcapeEmote, resolveEmote },
     register(pluginApi) {
         api = pluginApi;
-        const CombatFactory = api.getCombatFactory();
         api.persistAttribute(UNLOCKED_ATTRIBUTE, []);
         api.onCustomEvent("emotes:unlock", unlockEmote);
         api.onPlayerLogin(restoreUnlocks);
@@ -237,55 +287,7 @@ module.exports = {
             if (group === EMOTES_GROUP_ID) queueMicrotask(() => enableEmoteActions(player));
         });
 
-        api.onInterfaceActionButton(EMOTE_CONTENTS_UID, ({ player, slot, action }) => {
-            if (!Number.isInteger(slot) || slot < 0 || slot > LAST_EMOTE_SLOT) {
-                return false;
-            }
-
-            if (player.busy() || CombatFactory.inCombat(player)) {
-                player.sendMessage("You cannot do this right now.");
-                return true;
-            }
-
-            const lock = LOCKS[slot];
-            if (lock && !isUnlocked(player, lock)) {
-                api.core.StatementDialogue.send(player, lock.message);
-                return true;
-            }
-
-            const emote = resolveEmote(player, slot, action, api);
-            if (!emote) {
-                if (EMOTES[slot].airGuitar) {
-                    player.sendMessage("You need the Music cape to perform Air Guitar.");
-                    return true;
-                }
-                const cape = player.getEquipment().getItems()[Equipment.CAPE_SLOT];
-                const items = api.core.ItemIdentifiers;
-                if (cape && (cape.getId() === items.QUEST_POINT_CAPE || cape.getId() === items.QUEST_POINT_CAPE_T_)) {
-                    player.sendMessage("You need to complete every quest before performing the Quest point cape emote.");
-                    return true;
-                }
-                player.sendMessage(
-                    "You need to be wearing a skillcape in order to perform that emote.",
-                );
-                return true;
-            }
-
-            const permission = { player, slot, sequence: emote.sequence, allow: true };
-            api.emitCustomEvent("player:can-emote", permission);
-            if (permission.allow === false) return true;
-            player.getSkillManager().stopSkillable();
-            player.getMovementQueue().reset();
-            player.setFollowing(null);
-            player.performAnimation(new Animation(emote.sequence));
-            // Quest actions may depend on a real emote at the player's current
-            // tile. Emit only after the normal busy/combat/slot gates pass.
-            api.emitCustomEvent("player:emote", { player, slot, sequence: emote.sequence });
-            if (emote.graphic !== undefined) {
-                player.performGraphic(new Graphic(emote.graphic));
-            }
-            return true;
-        });
+        api.onInterfaceActionButton(EMOTE_CONTENTS_UID, performEmote);
 
         api.log("registered");
     },

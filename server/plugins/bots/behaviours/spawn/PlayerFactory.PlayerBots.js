@@ -25,9 +25,7 @@ const MALE_RANGES = {
 
 const FEMALE_RANGES = {
   head: [45, 54],
-  // The server's own female sheet uses jaw 57; the old 292-306 range rendered a head that
-  // popped off the body during attack and block animations.
-  beard: [57, 57],
+  beard: [-1, -1], // No beard; kit 57 is a torso, not a jaw.
   chest: [56, 60],
   arms: [61, 65],
   hands: [67, 68],

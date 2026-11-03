@@ -368,6 +368,7 @@ export class ItemOnGroundManager {
         if (item.getState() === State.SEEN_BY_PLAYER) return this.isOwner(player.getUsername(), item);
         return this.isOwner(player.getUsername(), item)
             || item.isStaticSpawn()
+            || item.getOwner() == null
             || (item.getItem().isTradeable() && item.getItem().isDropable());
     }
 

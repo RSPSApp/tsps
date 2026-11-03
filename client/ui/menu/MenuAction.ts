@@ -89,7 +89,11 @@ export function setNpcExamineIdResolver(
     npcExamineIdResolver = resolver;
 }
 
-function clearSpellSelectionWithHandler(): void {
+/**
+ * Clears the spell selection the way OSRS clearWidgetSelection does: through the client, which runs
+ * the spell's onTargetLeave (the script that takes its outline off) before forgetting it.
+ */
+export function clearSpellSelectionWithHandler(): void {
     if (clearSpellSelectionHandler) {
         try {
             clearSpellSelectionHandler();
@@ -775,7 +779,7 @@ function nativeMenuAction(
         queuePacket(pkt);
 
         // Clear any modal/overlay state
-        ClientState.isSpellSelected = false;
+        clearSpellSelectionWithHandler();
         ClientState.isItemSelected = 0;
 
         // Note: Also closes interfaces locally and clears meslayerContinueWidget -

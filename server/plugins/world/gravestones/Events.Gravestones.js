@@ -4,6 +4,8 @@
  * What other plugins (Death's Office) ask of a player's death storage. The emitter reads the
  * answer back from the payload.
  *
+ * - `gravestones:makes-grave` { player, playerKill } -> makesGrave: whether this death makes
+ *   a grave (handled by Death.Gravestones); default false if the plugin is disabled.
  * - `gravestones:state` { player } -> grave ({ items, fee, officeFee } or null), office
  *   (120 slots of { id, amount, fee } or null), coffer, style, metDeath, inTutorial, ironman.
  * - `gravestones:expire` { player }: the grave collapses now (Death collecting it early).

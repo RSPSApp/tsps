@@ -102,9 +102,10 @@ function buildHarness({ cacheObjects, objectManager: suppliedObjectManager, real
     world.set(tileKey(id, x, y, 0), object);
   };
 
-  const click = (id, x, y, face, action = 'Open', name = 'Gate', type = 0, privateArea = null, z = 0) => {
+  const steps = [];
+  const click = (id, x, y, face, action = 'Open', name = 'Gate', type = 0, privateArea = null, z = 0, from = null) => {
     const object = new GameObject(id, new Location(x, y, z), type, face, privateArea);
-    const location = object.getLocation();
+    const location = from ? new Location(from[0], from[1], z) : object.getLocation();
     const player = {
       getUsername: () => 'tester',
       isPlayerBot: () => false,
@@ -115,6 +116,7 @@ function buildHarness({ cacheObjects, objectManager: suppliedObjectManager, real
       isNeedsPlacement: () => false,
       isAllowRegionChangePacket: () => false,
       getPacketSender: () => ({}),
+      getMovementQueue: () => ({ reset: () => {}, addSteps: (to) => steps.push([to.getX(), to.getY()]) }),
     };
     ops.length = 0;
     handlers.get(name)[action]({ player, object, objectId: id, clickType: action === 'Open' ? 1 : 2, location: { x, y, z } });
@@ -128,7 +130,7 @@ function buildHarness({ cacheObjects, objectManager: suppliedObjectManager, real
     CacheDefinitions.getCounts = originalGetCounts;
   };
 
-  return { place, click, sounds, ops, submitted, handlers, routes, customHandlers, internals: plugin.__internals, regionLoaded: (regionId) => regionLoaded({ regionId }), visibleObjectIds, setDoorToggleHandler: (handler) => { doorToggleHandler = handler; }, restore };
+  return { place, click, sounds, ops, steps, submitted, handlers, routes, customHandlers, internals: plugin.__internals, regionLoaded: (regionId) => regionLoaded({ regionId }), visibleObjectIds, setDoorToggleHandler: (handler) => { doorToggleHandler = handler; }, restore };
 }
 
 test('shared wall-door reach masks cover every operation and preserve other object routing', () => {
@@ -860,19 +862,19 @@ test('Kourend Crypt cached Large doors keep their real double-leaf geometry and 
 });
 
 
-test('Tree Gnome Stronghold doors use their nameless open variants and restore on auto-close', () => {
+test("Grum's Gold Exchange door swings onto the tile inside, steps the player through and shuts", () => {
   const h = buildHarness();
   try {
-    for (const [closed, open, x, face, openX, openFace] of [
-      [1967, 1969, 2464, 0, 2463, 1], [1968, 1970, 2466, 2, 2467, 3],
-    ]) {
-      assert.deepEqual(h.click(closed, x, 3492, face, 'Open', 'Tree Door', 10), [
-        ['deregister', closed, x, 3492, face], ['register', open, openX, 3492, openFace],
+    for (const [from, to] of [[[3016, 3246], [3015, 3246]], [[3015, 3246], [3016, 3246]]]) {
+      assert.deepEqual(h.click(59, 3016, 3246, 0, 'Open', 'Door', 0, null, 0, from), [
+        ['deregister', 59, 3016, 3246, 0], ['register', 1542, 3015, 3246, 1],
       ]);
-      h.submitted.at(-1).execute();
-      assert.deepEqual(h.ops.splice(0), [
-        ['deregister', open, openX, 3492, openFace], ['register', closed, x, 3492, face],
-      ]);
+      assert.deepEqual(h.steps.splice(0), [to]);
+      assert.equal(h.sounds.at(-1)[1].getId(), 62);
+      const shut = h.submitted.at(-1);
+      assert.equal(shut.getDelay?.() ?? shut.delay, 2);
+      shut.execute();
+      assert.deepEqual(h.ops.splice(0), [['deregister', 1542, 3015, 3246, 1], ['register', 59, 3016, 3246, 0]]);
     }
   } finally {
     h.restore();

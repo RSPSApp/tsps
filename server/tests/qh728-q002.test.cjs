@@ -361,6 +361,7 @@ test('Another Slice of H.A.M.: stage 0 to completion through registered handlers
   assert.equal(h.lastVariant(), 'the-goblin-generals');
   assert.deepEqual([h.getLocation().getX(), h.getLocation().getY(), h.getLocation().getZ()], [2445, 5425, 0]);
   h.emit('npc-dialogue:action', { npcId: N.GENERAL_WARTFACE, stepId: '0MCjvB' });
+  assert.equal(h.quest.getStage(h.player), 6, 'the ambush cutscene is live stage 6');
   assert.ok(h.spawned.some((npc) => npc.getId() === N.H_A_M_ARCHER));
   assert.ok(h.spawned.some((npc) => npc.getId() === N.H_A_M_MAGE));
 
@@ -371,7 +372,7 @@ test('Another Slice of H.A.M.: stage 0 to completion through registered handlers
   for (const npcId of [N.H_A_M_ARCHER, N.H_A_M_MAGE]) {
     for (const fn of h.hooks.npcDeath) fn({ killer: h.player, npcId, npc: { getId: () => npcId } });
   }
-  assert.equal(h.quest.getStage(h.player), 6);
+  assert.equal(h.quest.getStage(h.player), 7, 'both snipers dead is live stage 7');
   assert.ok(h.spawned.some((npc) => npc.getId() === N.GENERAL_WARTFACE));
 
   // Stage 8: the kidnap scene gives the ancient mace and sends the player to the swamp.
@@ -445,17 +446,19 @@ test('Another Slice of H.A.M.: stage 0 to completion through registered handlers
   assert.equal(h.quest.getStage(h.player), 9);
 
   h.emit('ladders:climb', { objectId: 23376, handled: false });
-  assert.equal(h.quest.getStage(h.player), 10);
+  assert.equal(h.quest.getStage(h.player), 9, 'the descent stays at live stage 9');
   assert.equal(h.lastVariant(), 'climbing-down-to-the-railway');
   assert.ok(h.spawned.some((npc) => npc.getId() === N.SIGMUND_8));
 
-  // Stage 10: only the ancient mace special breaks Sigmund's prayer.
+  // Stage 9 in the railway: only the ancient mace special breaks Sigmund's prayer,
+  // and landing it is what starts live stage 10.
   h.setWeapon(h.I.ANCIENT_MACE);
   h.setSpecial(false);
   assert.equal(h.hitSigmund(), 0, 'ordinary hits are absorbed by the prayer');
-  assert.equal(h.quest.getStage(h.player), 10);
+  assert.equal(h.quest.getStage(h.player), 9);
   h.setSpecial(true);
   assert.equal(h.hitSigmund(), 10, 'the ancient mace special lands');
+  assert.equal(h.quest.getStage(h.player), 10, 'the special starts live stage 10');
   h.advance();
   assert.equal(h.lastVariant(), 'attacking-him-with-the-ancient-mace-special');
   for (const fn of h.hooks.npcDeath) fn({ killer: h.player, npcId: N.SIGMUND_8, npc: { getId: () => N.SIGMUND_8 } });
@@ -491,9 +494,9 @@ test('Another Slice of H.A.M.: lost ancient mace is reclaimed from the generals 
   assert.equal(h.inventory.get(h.I.ANCIENT_MACE), 1);
 });
 
-test('Another Slice of H.A.M.: stage 6 generals work outside the outpost', () => {
+test('Another Slice of H.A.M.: stage 7 generals work outside the outpost', () => {
   const h = setup();
-  h.quest.setStage(h.player, 6);
+  h.quest.setStage(h.player, 7);
   h.setLocation(2955, 3507, 0);
   h.talk('General Wartface', h.N.GENERAL_WARTFACE);
   assert.equal(h.lastVariant(), 'upon-defeating-the-two-h-a-m-members');
@@ -543,13 +546,13 @@ test('Another Slice of H.A.M.: stage-3 railway exits use the captured doorway de
 
 test('Another Slice of H.A.M.: full bag keeps the kidnap stage retryable until the mace fits', () => {
   const h = setup();
-  h.quest.setStage(h.player, 6);
+  h.quest.setStage(h.player, 7);
   for (let id = 1000; id < 1028; id++) h.inventory.set(id, 1);
   assert.equal(h.player.getInventory().isFull(), true);
 
   h.talk('General Wartface', h.N.GENERAL_WARTFACE);
   h.emit('npc-dialogue:action', { npcId: h.N.GENERAL_WARTFACE, stepId: 'oG2C9L' });
-  assert.equal(h.quest.getStage(h.player), 6, 'no stage advance without the mace');
+  assert.equal(h.quest.getStage(h.player), 7, 'no stage advance without the mace');
   assert.equal(h.inventory.get(h.I.ANCIENT_MACE) ?? 0, 0);
   assert.ok(h.messages.some((text) => text.includes('free inventory space')));
 
@@ -616,7 +619,7 @@ test('Another Slice of H.A.M.: stage 9 login/re-entry restores crate, lure and t
   assert.deepEqual([h.getLocation().getX(), h.getLocation().getY(), h.getLocation().getZ()], [2396, 5553, 0]);
   assert.equal(h.lastVariant(), 'the-under-underground');
   h.emit('ladders:climb', { objectId: 23376, handled: false });
-  assert.equal(h.quest.getStage(h.player), 10, 'engaged distraction opens the final ladder');
+  assert.equal(h.quest.getStage(h.player), 9, 'engaged distraction opens the final ladder at stage 9');
 });
 
 test('Another Slice of H.A.M.: real inventory reclaims atomically with the last coin slot, without free replays', () => {
@@ -726,7 +729,7 @@ test('Another Slice of H.A.M.: real NPC combat targets and permission survive di
     for (const death of h.hooks.npcDeath) death({ npcId: h.N.GUARD_86, npc: guard, killer: sergeant });
     assert.equal(h.attrs.get('another-slice-of-ham:guard-defeated'), true);
     h.emit('ladders:climb', { objectId: 23376, handled: false });
-    assert.equal(h.quest.getStage(h.player), 10);
+    assert.equal(h.quest.getStage(h.player), 9, 'the descent keeps stage 9');
   } finally {
     for (const logout of h.hooks.logout) logout({ player: h.player });
     for (const npc of h.spawned) h.core.World.markNpcCombatActive(npc, false);
@@ -817,7 +820,7 @@ test('Another Slice of H.A.M.: Sigmund and the H.A.M. members are named interact
   sigmund['Talk-to']({ player: h.player, npcId: h.N.SIGMUND_8 });
   assert.ok(h.messages.some((text) => text.includes("ancient mace's special attack")));
 
-  h.quest.setStage(h.player, 5);
+  h.quest.setStage(h.player, 6);
   for (const [name, npcId] of [['H.A.M. Archer', h.N.H_A_M_ARCHER], ['H.A.M. Mage', h.N.H_A_M_MAGE]]) {
     const member = h.hooks.npcNamed.get(name);
     assert.ok(member?.['Talk-to'], `${name} has a Talk-to interaction`);
@@ -881,3 +884,86 @@ test('Another Slice of H.A.M.: a dropped cleaned artefact goes back into its dig
   assert.equal(h.inventory.get(h.I[spot.dirty]), 1, 're-digging recovers the artefact');
 });
 
+test('Another Slice of H.A.M.: the city doorway enters the usable station floor, not the sealed captured landing', () => {
+  const h = setup({ locTeleports: true });
+
+  // Stage 2 (digging): the captured 2488,5536 landing is a one-tile room cut off
+  // from the dig tunnel, so the quest's doorway must use the station floor.
+  h.quest.setStage(h.player, 2);
+  h.setLocation(2695, 5277, 1);
+  const digging = h.dispatchObject({ objectId: 23052, x: 2695, y: 5277, z: 1 });
+  assert.equal(digging.handled, true, 'the quest claims the doorway before LocTeleports');
+  assert.deepEqual([h.getLocation().getX(), h.getLocation().getY(), h.getLocation().getZ()], [2513, 5556, 0]);
+
+  // Stage 8-10: the staircase is closed; the message must not drop the player on
+  // the sealed landing and LocTeleports must not run on the same click.
+  h.quest.setStage(h.player, 8);
+  h.setLocation(2695, 5277, 1);
+  const kidnapped = h.dispatchObject({ objectId: 23052, x: 2695, y: 5277, z: 1 });
+  assert.equal(kidnapped.handled, true);
+  assert.equal(h.lastVariant(), 'upon-defeating-the-two-h-a-m-members-attempting-to-enter-the-rail-station-via-dorgesh-kaan');
+  assert.deepEqual([h.getLocation().getX(), h.getLocation().getY(), h.getLocation().getZ()], [2695, 5277, 1]);
+
+  // After completion the station is open again.
+  h.quest.setStage(h.player, 11);
+  h.setLocation(2695, 5277, 1);
+  const complete = h.dispatchObject({ objectId: 23052, x: 2695, y: 5277, z: 1 });
+  assert.equal(complete.handled, true);
+  assert.deepEqual([h.getLocation().getX(), h.getLocation().getY(), h.getLocation().getZ()], [2513, 5556, 0]);
+});
+
+test('Another Slice of H.A.M.: the train ladder climbs to the station floor, not the sealed stub', () => {
+  const h = setup();
+  h.quest.setStage(h.player, 10);
+  h.setLocation(2544, 5509, 0);
+  const event = { player: h.player, objectId: 23504, handled: false };
+  for (const handler of h.hooks.custom.get('ladders:climb')) handler(event);
+  assert.equal(event.handled, true);
+  assert.deepEqual([h.getLocation().getX(), h.getLocation().getY(), h.getLocation().getZ()], [2513, 5556, 0]);
+});
+
+test('Another Slice of H.A.M.: handed-in artefacts keep their varbit at 2 through a relog', () => {
+  const h = setup();
+  h.quest.setStage(h.player, 2);
+  h.inventory.set(h.I.SPECIMEN_BRUSH, 1);
+
+  // Hand in the fifth dig spot; Quest Helper reads slice_artifact_5 == 2.
+  handInArtefact(h, SPOTS[4]);
+  assert.equal(h.varbits.get(3555), 2, 'hand-in sets the delivered value');
+
+  // Dig (not hand in) another spot; that one stays at the dug value.
+  h.hooks.itemOnObject[0]({ player: h.player, itemId: h.I.TROWEL, objectId: SPOTS[0].objectId, handled: false });
+  assert.equal(h.varbits.get(3551), 1);
+
+  // Login re-sends every artifact varbit; the delivered one must not fall back to 1.
+  for (const login of h.hooks.login) login({ player: h.player });
+  assert.equal(h.varbits.get(3555), 2, 'relog keeps the handed-in spot at 2');
+  assert.equal(h.varbits.get(3551), 1, 'dug-but-not-handed-in stays at 1');
+  assert.equal(h.varbits.get(3552), 0, 'undug stays at 0');
+});
+
+test('Another Slice of H.A.M.: live stage values put the ambush at 6, the deaths at 7 and the special at 10', () => {
+  const h = setup();
+  const { N } = h;
+
+  // Varbit 3550 on the OSRS Wiki: 6 is the Goblin Village ambush cutscene, 7 is
+  // after both H.A.M. members are dead, and 10 starts when the mace special lands.
+  h.quest.setStage(h.player, 5);
+  h.talk('General Wartface', N.GENERAL_WARTFACE);
+  h.emit('npc-dialogue:action', { npcId: N.GENERAL_WARTFACE, stepId: '0MCjvB' });
+  assert.equal(h.quest.getStage(h.player), 6, 'the ambush cutscene sets stage 6');
+
+  assert.notEqual(h.answer(N.GENERAL_WARTFACE, 'oG2C9L'), true, 'generals do not hand over the mace at 6');
+  for (const npcId of [N.H_A_M_ARCHER, N.H_A_M_MAGE]) {
+    for (const fn of h.hooks.npcDeath) fn({ killer: h.player, npcId, npc: { getId: () => npcId } });
+  }
+  assert.equal(h.quest.getStage(h.player), 7, 'the second sniper death sets stage 7');
+
+  // The descent leaves the fight at 9; the ancient mace special starts 10.
+  h.quest.setStage(h.player, 9);
+  h.attrs.set('quest.another_slice_of_ham.sigmund-exposed', true);
+  h.setWeapon(h.I.ANCIENT_MACE);
+  h.setSpecial(true);
+  assert.equal(h.hitSigmund(), 10, 'the mace special lands at stage 9');
+  assert.equal(h.quest.getStage(h.player), 10, 'the landed special sets stage 10');
+});

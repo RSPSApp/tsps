@@ -97,7 +97,8 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
   const STAGE_ARTEFACTS = 3;
   const STAGE_SCRIBE = 4;
   const STAGE_VILLAGE = 5;
-  const STAGE_SNIPERS_DEAD = 6;
+  const STAGE_AMBUSH = 6; // the Goblin Village ambush cutscene is over, snipers alive
+  const STAGE_SNIPERS_DEAD = 7;
   const STAGE_KIDNAPPED = 8;
   const STAGE_TUNNEL = 9;
   const STAGE_RAILWAY = 10;
@@ -105,6 +106,7 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
 
   const SPOTS_ATTRIBUTE = "quest.another_slice_of_ham.spots"; // bitmask of dug spots
   const HANDED_IN_ATTRIBUTE = "quest.another_slice_of_ham.handed-in";
+  const DELIVERED_ATTRIBUTE = "quest.another_slice_of_ham.delivered"; // bitmask of spots handed to Tegdak
   const ZANIK_AT_DIG_ATTRIBUTE = "quest.another_slice_of_ham.zanik-at-dig";
   const MACE_ATTRIBUTE = "quest.another_slice_of_ham.received-mace";
   const SPECIAL_ATTRIBUTE = "quest.another_slice_of_ham.mace-special-used";
@@ -246,7 +248,6 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
   // ==========================================================================
 
   const STATION_LANDING = new Location(2513, 5556, 0);
-  const STATION_BOTTOM = new Location(2512, 5533, 0);
   const CITY_LANDING = new Location(2696, 5277, 1);
   const VILLAGE_LANDING = new Location(2955, 3507, 0);
   const INSTANCE_LANDING = new Location(2445, 5425, 0);
@@ -384,6 +385,19 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
     return Number(player.getAttribute(HANDED_IN_ATTRIBUTE)) || 0;
   }
 
+  /**
+   * Bitmask of the artefacts Tegdak has taken. Saves written before the mask existed only
+   * carry the count, so it is recovered as the first N spots (the order is cosmetic there).
+   */
+  function deliveredSpots(player) {
+    const mask = Number(player.getAttribute(DELIVERED_ATTRIBUTE));
+    if (Number.isFinite(mask)) return mask;
+    const count = Math.min(handedIn(player), DIG_SPOTS.length);
+    let legacy = 0;
+    for (let index = 0; index < count; index++) legacy |= DIG_SPOTS[index].bit;
+    return legacy;
+  }
+
   function snipersDead(player) {
     return Number(player.getAttribute(SNIPERS_ATTRIBUTE)) || 0;
   }
@@ -519,8 +533,11 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
   function syncQuestVarbits(player) {
     const sender = player.getPacketSender();
     const spots = dugSpots(player);
+    const delivered = deliveredSpots(player);
     for (let index = 0; index < ARTIFACT_VARBITS.length; index++) {
-      sender.sendVarbit(ARTIFACT_VARBITS[index], (spots >> index) & 1 ? 1 : 0);
+      // slice_artifact_N: 0 undug, 1 dug, 2 handed to Tegdak (Quest Helper reads 2).
+      const value = (delivered >> index) & 1 ? 2 : (spots >> index) & 1 ? 1 : 0;
+      sender.sendVarbit(ARTIFACT_VARBITS[index], value);
     }
     sender.sendVarbit(VARBIT_ZANIK_AT_DIG, player.getAttribute(ZANIK_AT_DIG_ATTRIBUTE) === true ? 1 : 0);
     sender.sendVarbit(VARBIT_RECEIVED_MACE, player.getAttribute(MACE_ATTRIBUTE) === true ? 1 : 0);
@@ -835,7 +852,7 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
     const { player, npcId } = event;
     if (npcId !== SIGMUND_NPC_ID) return false;
     const stage = stageOf(player);
-    if (stage !== STAGE_RAILWAY) return false;
+    if (stage !== STAGE_TUNNEL && stage !== STAGE_RAILWAY) return false;
     if (!sigmundExposed(player)) {
       // The railway descent cutscene is the canonical exposure; replay it if a
       // client/relog dropped the player into the fight without it.
@@ -855,7 +872,7 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
     const { player, npcId } = event;
     if (npcId !== HAM_ARCHER_NPC_ID && npcId !== HAM_MAGE_NPC_ID) return false;
     const stage = stageOf(player);
-    if (stage !== STAGE_VILLAGE && stage !== STAGE_SNIPERS_DEAD) return false;
+    if (stage !== STAGE_AMBUSH && stage !== STAGE_SNIPERS_DEAD) return false;
     player.sendMessage("The H.A.M. member is too busy fighting the goblins to talk.");
     return true;
   }
@@ -928,8 +945,12 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
     if (spot && pendingHandIn.get(player)?.conditionId === stepId) {
       pendingHandIn.delete(player);
       if (hasItem(player, spot.clean)) {
+        const delivered = deliveredSpots(player);
+        const count = handedIn(player);
         player.getInventory().deleteNumber(spot.clean, 1);
-        player.setAttribute(HANDED_IN_ATTRIBUTE, handedIn(player) + 1);
+        player.setAttribute(HANDED_IN_ATTRIBUTE, count + 1);
+        player.setAttribute(DELIVERED_ATTRIBUTE, delivered | spot.bit);
+        player.getPacketSender().sendVarbit(spot.varbit, 2);
       }
     }
   }
@@ -974,6 +995,7 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
         return;
       case VILLAGE_CUTSCENE_END_ACTION_ID:
         if (!GENERAL_NPC_IDS.has(npcId) || stageOf(player) !== STAGE_VILLAGE) return;
+        setStage(player, STAGE_AMBUSH);
         spawnSnipers(player);
         player.sendMessage("Kill the two H.A.M. members on the tower.");
         return;
@@ -1171,7 +1193,8 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
   function wieldAncientMace(event) {
     const { player } = event;
     if (stageOf(player) < STAGE_KIDNAPPED) return false;
-    if (stageOf(player) === STAGE_RAILWAY && !specialUsed(player) && !maceHinted.has(player)) {
+    if ((stageOf(player) === STAGE_RAILWAY || (stageOf(player) === STAGE_TUNNEL && sigmundExposed(player)))
+        && !specialUsed(player) && !maceHinted.has(player)) {
       maceHinted.add(player);
       player.sendMessage("The ancient mace's special attack can strip Sigmund's prayer protection.");
     }
@@ -1203,7 +1226,7 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
   }
 
   function handleSniperDeath(player, npcId) {
-    if (stageOf(player) !== STAGE_VILLAGE) return;
+    if (stageOf(player) !== STAGE_AMBUSH) return;
     const bit = npcId === HAM_ARCHER_NPC_ID ? 1 : 2;
     player.setAttribute(SNIPERS_ATTRIBUTE, snipersDead(player) | bit);
     forgetTracked(player, npcId === HAM_ARCHER_NPC_ID ? "archer" : "mage");
@@ -1215,7 +1238,8 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
   }
 
   function handleSigmundDeath(player) {
-    if (stageOf(player) !== STAGE_RAILWAY) return;
+    const stage = stageOf(player);
+    if (stage !== STAGE_TUNNEL && stage !== STAGE_RAILWAY) return;
     if (!specialUsed(player)) {
       // A poison/recoil/death that bypassed the hit modifier must not skip the
       // mace objective: put him back and keep the showdown retryable.
@@ -1234,7 +1258,8 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
     const attacker = hit?.getAttacker?.();
     if (!attacker?.isPlayer?.()) return;
     const player = attacker.getAsPlayer?.() ?? attacker;
-    if (stageOf(player) !== STAGE_RAILWAY) {
+    const stage = stageOf(player);
+    if (stage !== STAGE_TUNNEL && stage !== STAGE_RAILWAY) {
       zeroHit(hit);
       return;
     }
@@ -1255,6 +1280,7 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
     }
     if (hit.isAccurate?.() === false) return;
     player.setAttribute(SPECIAL_ATTRIBUTE, true);
+    setStage(player, STAGE_RAILWAY);
     // Deferred a tick: the chat is not opened from inside the hit pipeline.
     const { CountdownTask, TaskManager } = api.core;
     TaskManager.submit(new CountdownTask(player, 1, () => {
@@ -1311,7 +1337,8 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
     }
     clearTunnel(player);
     player.moveTo(RAILWAY_LANDING);
-    setStage(player, STAGE_RAILWAY);
+    // Stage 10 is the special, not the descent: Quest Helper's stage 9 still owns the
+    // showdown and stage 10 starts at "untie Zanik" once the prayer is broken.
     player.setAttribute(SIGMUND_EXPOSED_ATTRIBUTE, true);
     player.setAttribute(ZANIK_UNTIED_ATTRIBUTE, false);
     player.setAttribute(TRAIN_OPEN_ATTRIBUTE, false);
@@ -1356,7 +1383,10 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
       return;
     }
     if (objectId === DOORWAY_CITY_OBJECT_ID) {
-      if (stageOf(player) < STAGE_KIDNAPPED || stageOf(player) >= STAGE_COMPLETE) return; // Captured transport belongs to LocTeleports.
+      // Before the quest the captured doorway is the ordinary station entrance.
+      if (stageOf(player) === 0) return;
+      // During the quest the station belongs to the quest's own teleports: the captured
+      // landing (2488,5536) is a one-tile room in this cache, cut off from the dig tunnel.
       event.handled = true;
       enterStation(player);
       return;
@@ -1374,7 +1404,8 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
     if (objectId === DOORWAY_TUNNEL_FAR_OBJECT_ID) return;
     if (objectId === TIED_ZANIK_OBJECT_ID) {
       event.handled = true;
-      if (stageOf(player) === STAGE_RAILWAY) handleUntie(player);
+      const stage = stageOf(player);
+      if (stage === STAGE_TUNNEL || stage === STAGE_RAILWAY) handleUntie(player);
       return;
     }
   }
@@ -1404,7 +1435,9 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
       case LADDER_TRAIN_OBJECT_ID:
         if (stageOf(player) < STAGE_RAILWAY) return;
         event.handled = true;
-        player.moveTo(STATION_BOTTOM);
+        // The captured station bottom (2512,5533) is a sealed stub in this cache; the
+        // station floor the dig and the city doorway use is STATION_LANDING.
+        player.moveTo(STATION_LANDING);
         return;
       default:
         return;
@@ -1421,14 +1454,14 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
     refreshQuestList(player);
     spawnOldak(player);
     const stage = stageOf(player);
-    if (stage === STAGE_VILLAGE) spawnSnipers(player);
+    if (stage === STAGE_AMBUSH) spawnSnipers(player);
     if (stage === STAGE_SNIPERS_DEAD) spawnInstanceGenerals(player);
     const at = player.getLocation();
     if (stage === STAGE_TUNNEL && at.getX() >= 2393 && at.getX() <= 2414 && at.getY() >= 5525 && at.getY() <= 5560) {
       spawnTunnelNpcs(player);
       if (player.getAttribute(HIDING_ATTRIBUTE) === true) hideBehindCrate(player);
     }
-    if (stage === STAGE_RAILWAY) {
+    if (sigmundExposed(player) && (stage === STAGE_TUNNEL || stage === STAGE_RAILWAY)) {
       player.setAttribute(SIGMUND_EXPOSED_ATTRIBUTE, true);
       if (player.getAttribute(ZANIK_UNTIED_ATTRIBUTE) === undefined) player.setAttribute(ZANIK_UNTIED_ATTRIBUTE, false);
       if (player.getAttribute(TRAIN_OPEN_ATTRIBUTE) === undefined) player.setAttribute(TRAIN_OPEN_ATTRIBUTE, false);
@@ -1455,7 +1488,7 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
       `${complete || done ? "<str>" : ""}${text}${complete || done ? "</str>" : ""}`;
     return [
       line("Negotiate the Dorgesh-Kaan - Keldagrim train agreement and clear the Lumbridge tunnel.", stage >= STAGE_STARTED),
-      line("Expose and fight Sigmund in the tunnel.", stage >= STAGE_RAILWAY && sigmundExposed(player)),
+      line("Expose and fight Sigmund in the tunnel.", stage >= STAGE_TUNNEL && sigmundExposed(player)),
       line("Use the ancient mace's special attack in the showdown.", specialUsed(player)),
       "",
     ];
@@ -1479,7 +1512,7 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
         "<col=ff0000>QUEST COMPLETE!</col>",
       ];
     }
-    if (stage >= STAGE_RAILWAY) {
+    if (stage >= STAGE_RAILWAY || (stage >= STAGE_TUNNEL && sigmundExposed(player))) {
       return [
         "<str>Sigmund has Zanik tied to the train tracks in the new tunnel.</str>",
         "Defeat <col=800000>Sigmund</col> and untie <col=800000>Zanik</col>!",

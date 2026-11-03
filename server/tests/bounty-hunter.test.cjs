@@ -207,6 +207,16 @@ test("real Bounty Hunter deaths return humans to the lobby and honour Skully's l
     const task = new PlayerDeathTask(victim);
     task.execute(); task.execute(); task.execute();
   }
+  function chestValues(t, player) {
+    const scripts = [];
+    const record = (...args) => { scripts.push(args); return player.getPacketSender(); };
+    t.mock.method(player.getPacketSender(), 'sendInterfaceScript', record);
+    t.mock.method(player.getPacketSender(), 'sendClientScript', record);
+    return (expected) => {
+      assert.deepEqual(scripts.slice(-5), expected.map((value, tab) => [8013, tab, value]), 'all five native key labels are refreshed or cleared');
+      assert.equal(scripts.at(-6)?.[0], 8006, 'create the cache dynamic text children before setting their values');
+    };
+  }
   await t.test('human respawn is saved in Fort Daimon after target cleanup without making death safe', (t) => {
     const victim = fighter(t), killer = fighter(t);
     victim.setAttribute('ironman:mode', 'hardcore');
@@ -310,6 +320,63 @@ test("real Bounty Hunter deaths return humans to the lobby and honour Skully's l
     assert.equal(p.getInventory().getAmount(I.FIRE_RUNE), 7);
     tab(1);
     assert.equal(keys.chestItems(p).length, 0, 'repeated empty-tab clicks never replay consumed keys');
+  });
+  await t.test('native key tabs show active and unopened loot values, clearing every absent tab on reopen', (t) => {
+    const p = fighter(t, false, new core.Location(3168, 3498));
+    const values = chestValues(t, p), I = core.ItemIdentifiers;
+    p.getInventory().addItem(keys.createKey([new core.Item(I.COINS, 887_654)], 0));
+    p.getInventory().addItem(keys.createKey([new core.Item(I.COINS, 1_234_567)], 3));
+    assert.equal(keys.openKey(p, 0), true);
+    keys._test.open(p);
+    values(['887K', '', '', '1M', '']);
+    p.getPacketSender().sendInterfaceRemoval();
+    p.getInventory().deleteAtSlot(p.getInventory().getSlotForItemId(keys.KEY_IDS[3]), 1);
+    keys._test.open(p);
+    values(['887K', '', '', '', '']);
+    assert.equal(keys.chestItems(p)[0].amount, 887_654, 'opening and refreshing labels never changes stored loot');
+  });
+  await t.test('key tab values refresh after partial withdrawal, discard, depletion and opening the next key', (t) => {
+    const p = fighter(t, false, new core.Location(3168, 3498));
+    const values = chestValues(t, p), I = core.ItemIdentifiers;
+    const tabs = (742 << 16) | 4, items = (742 << 16) | 5;
+    const click = (buttonId, slot, action) => PluginManager.emitInterfaceActionClick({ player: p, buttonId, slot, action, handled: false });
+    p.getInventory().addItem(keys.createKey([new core.Item(I.COINS, 100)], 0));
+    p.getInventory().addItem(keys.createKey([new core.Item(I.COINS, 2_147_483_647)], 1));
+    assert.equal(keys.openKey(p, 0), true);
+    keys._test.open(p);
+    values(['100', '2147M', '', '', '']);
+    assert.equal(click(items, 0, 3), true); // Take-10
+    values(['90', '2147M', '', '', '']);
+    assert.equal(click(items, 0, 8), true); // Destroy-X
+    const discard = p.getEnteredAmountAction();
+    discard.execute(20);
+    values(['70', '2147M', '', '', '']);
+    p.getPacketSender().sendInterfaceRemoval();
+    discard.execute(20);
+    assert.equal(keys.chestItems(p)[0].amount, 70, 'a stale closed-chest prompt cannot change the loot or its next label');
+    keys._test.open(p);
+    values(['70', '2147M', '', '', '']);
+    assert.equal(click(items, 0, 5), true); // Take-All
+    values(['', '2147M', '', '', '']);
+    assert.equal(click(tabs, 1, 1), true);
+    values(['', '2147M', '', '', '']);
+    assert.equal(keys.countKeys(p), 0, 'the next key is consumed only when actually opened');
+    assert.equal(click(items, 28, 9), true); // Destroy-All on tab 1
+    values(['', '', '', '', '']);
+  });
+  await t.test('native key labels keep whole K/M boundaries and values above signed int32 in strings', (t) => {
+    const p = fighter(t), values = chestValues(t, p), I = core.ItemIdentifiers;
+    for (const [amount, expected] of [[999, '999'], [1000, '1K'], [999_999, '999K'], [1_000_000, '1M']]) {
+      keys.setChestItems(p, [{ id: I.COINS, amount, meta: null }]);
+      keys._test.open(p);
+      values([expected, '', '', '', '']);
+    }
+    keys.setChestItems(p, [
+      { id: I.COINS, amount: 2_000_000_000, meta: null },
+      { id: I.COINS, amount: 1_500_000_000, meta: null },
+    ]);
+    keys._test.open(p);
+    values(['3500M', '', '', '', '']);
   });
   for (const scenario of [
     { name: 'enabled keys collect a human victim', enabled: true },

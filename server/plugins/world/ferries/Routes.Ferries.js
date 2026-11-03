@@ -172,6 +172,13 @@ function answerHere(event) {
   return gameval ? gameval !== conditions[event.text] : undefined;
 }
 
+/** Veos's ordinary Sarim menu remains usable when quest plugins are disabled. */
+function answerVeosMembership({ definition, text }) {
+  if (definition?.getName?.() !== "Veos") return null;
+  if (text === "If the player is on a free-to-play world:") return !Common.core.WorldDefinition.isMembersWorld();
+  return null;
+}
+
 function lineEntries(event) {
   return Common.data.lines.filter((entry) => entry.npc === definitionName(event));
 }
@@ -211,6 +218,7 @@ function attach(api) {
   api.onObjectInteraction(locOption);
   api.onNpcDialogueCondition(answerEntrana);
   api.onNpcDialogueCondition(answerHere);
+  api.onNpcDialogueCondition(answerVeosMembership);
   api.onCustomEvent("npc-dialogue:action", transcriptStep);
   api.onCustomEvent("npc-dialogue:choice", rememberChoice);
   api.onCustomEvent("npc-dialogue:line", sailAfterLine);

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { test, beforeEach, afterEach } = require('node:test');
+const { test, before, beforeEach, afterEach } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 
@@ -12,6 +12,11 @@ const { DisplayNames } = require('../dist/game/entity/impl/player/DisplayNames')
 const { GameConstants } = require('../dist/game/GameConstants');
 const { ClientConnection } = require('../dist/net/NetworkBuilder');
 const { World } = require('../dist/game/World');
+const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+const { PluginManager } = require('../dist/plugins/PluginManager');
+const { Player } = require('../dist/game/entity/impl/player/Player');
+const { PlayerSession } = require('../dist/net/PlayerSession');
+const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
 const DisplayName = require('../plugins/commands/DisplayName.plugin');
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -26,6 +31,9 @@ let command;
 let config;
 let prompts;
 let events;
+let interfaceHookCount;
+
+before(() => CachePipeline.initialize(path.resolve(__dirname, '..')));
 
 /** Accounts with a save; the keys are what the login screen makes of a name. */
 function persistence(...names) {
@@ -72,11 +80,15 @@ beforeEach(() => {
   config = {};
   prompts = [];
   events = [];
+  interfaceHookCount = PluginManager.interfaceActionClickHooks.length;
+  const api = PluginManager.createApi('DisplayNameTest');
   DisplayName.register({
+    ...api,
     getPluginConfig: (key, fallback) => (key in config ? config[key] : fallback),
     registerCommand: (name, handler) => { assert.equal(name, 'displayname'); command = handler; },
-    emitCustomEvent: (name, payload) => events.push({ name, ...payload }),
+    emitCustomEvent: (type, payload) => events.push({ type, ...payload }),
     sendMultiChatboxPrompt: (who, title, yes, onYes, no, onNo) => {
+      if (who instanceof Player) return api.sendMultiChatboxPrompt(who, title, yes, onYes, no, onNo);
       prompts.push({ title, answer: (option) => (option === yes ? onYes : onNo)(who) });
       return true;
     },
@@ -84,11 +96,76 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  PluginManager.interfaceActionClickHooks.splice(interfaceHookCount);
   GameConstants.PLAYER_PERSISTENCE = originalPersistence;
   World.getPlayerByName = originalGetPlayerByName;
   delete process.env[DisplayNames.FILE_ENV];
   DisplayNames.reset();
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+function nativePlayer(t) {
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const who = new Player(new PlayerSession(channel)).setUsername('Alice').setIndex(201);
+  const connection = new ClientConnection(channel);
+  connection.player = who;
+  const scripts = [], messages = [], sender = who.getPacketSender();
+  t.mock.method(sender, 'sendClientScript', (id, ...args) => { scripts.push([id, ...args]); return sender; });
+  t.mock.method(sender, 'sendMessage', text => { messages.push(text); return sender; });
+  return { who, scripts, messages, async input(packet) {
+    await connection.dispatch([packet]);
+    connection.processTurnPackets();
+  } };
+}
+
+const openNameChanger = f => f.input({ type: 'widget_action', widgetId: (109 << 16) | 51,
+  groupId: 109, childId: 51, buttonNum: 1, opId: 1, itemId: -1, slot: -1 });
+const answerNameChange = (f, childIndex) => f.input({ type: 'dialogue_continue',
+  widgetId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex });
+
+test('the Account Name Changer routes native input through confirmation, persistence and social notification', async t => {
+  const f = nativePlayer(t);
+  await openNameChanger(f);
+  assert.deepEqual(f.scripts.at(-1), [110, 'Enter a new display name:', 0]);
+  assert.ok(f.who.getEnteredSyntaxAction());
+  await f.input({ type: 'dialogue_input', value: '  Queen_of   Art ' });
+  assert.equal(f.who.getEnteredSyntaxAction(), null, 'the native input is consumed');
+  assert.deepEqual(MultiChatboxPrompt.getPending(f.who), {
+    title: 'Change your display name to Queen of Art?', options: ['Yes', 'No'] });
+  assert.equal(f.who.getDisplayName(), 'Alice', 'nothing changes before Yes');
+  await answerNameChange(f, 1);
+  await answerNameChange(f, 1);
+  assert.equal(f.who.getDisplayName(), 'Queen of Art');
+  assert.equal(f.who.getUsername(), 'Alice', 'the login account is unchanged');
+  assert.equal(events.length, 1, 'duplicate confirmation cannot repeat the change');
+  assert.equal(events[0].type, 'display-names:changed');
+  DisplayNames.reset();
+  assert.equal(DisplayNames.nameOf('Alice'), 'Queen of Art', 'the registry reloads the new name');
+  await openNameChanger(f);
+  await f.input({ type: 'dialogue_input', value: 'Second' });
+  assert.equal(f.messages.at(-1), 'You can change your display name again in 28 days.');
+  assert.equal(MultiChatboxPrompt.getPending(f.who), null);
+});
+
+test('native Name Changer rejects invalid/taken names and leaves cancellation unchanged', async t => {
+  const f = nativePlayer(t);
+  for (const [value, problem] of [['Bob!', 'Display names can only use letters, numbers and spaces.'],
+    ['Carol', 'That name is not available.']]) {
+    await openNameChanger(f);
+    await f.input({ type: 'dialogue_input', value });
+    assert.equal(f.messages.at(-1), problem);
+    assert.equal(MultiChatboxPrompt.getPending(f.who), null);
+  }
+  await openNameChanger(f);
+  await f.input({ type: 'dialogue_input', value: '' });
+  assert.equal(MultiChatboxPrompt.getPending(f.who), null);
+  await openNameChanger(f);
+  await f.input({ type: 'dialogue_input', value: 'Wonderland' });
+  await answerNameChange(f, 2);
+  assert.equal(f.who.getDisplayName(), 'Alice');
+  assert.equal(DisplayNames.entryOf('Alice'), undefined);
+  assert.equal(events.length, 0);
 });
 
 test('an account shows its login name until it picks another', () => {
@@ -204,7 +281,7 @@ test('::displayname asks first, then changes the name and tells the social plugi
   assert.equal(alice.getDisplayName(), 'Queen of Art');
   assert.equal(DisplayNames.nameOf('alice'), 'Queen of Art');
   assert.equal(alice.last(), 'Your display name is now Queen of Art.');
-  assert.deepEqual(events, [{ name: 'display-names:changed', player: alice, previous: 'Alice', name: 'Queen of Art' }]);
+  assert.deepEqual(events, [{ type: 'display-names:changed', player: alice, previous: 'Alice', name: 'Queen of Art' }]);
 });
 
 test('answering No changes nothing', () => {

@@ -682,6 +682,11 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       if (stage >= STAGE_RITUAL_DONE) return "performing-the-ritual-talking-to-matthew-again";
       if (stage >= STAGE_RITUAL) return "performing-the-ritual-talking-to-matthew";
       if (stage >= STAGE_BOOK_SHOWN) {
+        // Returning prepared hands the first ritual to Denath. Matthew's readiness
+        // reminder deliberately ends here, so replaying it cannot assemble the circle.
+        if (inRitualCircle(player) && hasItem(player, DEMONIC_SIGIL_ITEM_ID) && hasDyedSilverlight(player)) {
+          return "performing-the-ritual";
+        }
         return "infiltrating-the-wizards-talking-to-matthew-again-after-showing-him-the-book";
       }
       if (stage >= STAGE_MATTHEW_TOLD) return "infiltrating-the-wizards-returning-to-matthew";

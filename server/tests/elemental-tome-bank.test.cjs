@@ -46,6 +46,67 @@ function withdraw(p,item,amount=1,tab=0) {
   Bank.withdraw(p,item.getId(),p.getBank(tab).getItems().indexOf(item),amount,tab);
   return p.getInventory().getValidItems().filter(held=>Common.getDefinition(held.getId()));
 }
+
+for (const [tab, charges, search] of [[0,99,false],[1,150,true]]) {
+  test(`a changed charged tome refills its original placeholder in tab ${tab}${search ? ' while searching' : ''}`,t=>{
+    const {p}=fixture(t);
+    p.setPlaceholders(true);
+    const item=book(p,core.ItemIdentifiers.TOME_OF_FIRE,100,core.ItemIdentifiers.BURNT_PAGE,1,tab);
+    const bank=p.getBank(tab), slot=bank.getItems().indexOf(item);
+    assert.ok(item.getDefinition().getPlaceholderId()>0,'the charged item has a native cache placeholder');
+    const [taken]=withdraw(p,item,1,tab);
+    const placeholder=bank.getItems()[slot];
+    assert.equal(placeholder.getAmount(),0);
+    Common.set(taken,Common.getDefinition(taken.getId()),charges,core.ItemIdentifiers.BURNT_PAGE);
+    if(search)Bank.search(p,'tome');
+    Bank.deposits(p,taken.getId(),p.getInventory().getItems().indexOf(taken),1);
+    assert.equal(bank.getValidItems().length,1,'a new charge count cannot leave the old placeholder behind');
+    assert.equal(bank.getItems()[slot].getAmount(),1);
+    assert.deepEqual(Common.read(bank.getItems()[slot]),{charges,pageId:core.ItemIdentifiers.BURNT_PAGE});
+    assert.notEqual(bank.getItems()[slot],placeholder,'refilling does not revive the removed stack identity');
+    assert.equal(p.getInventory().getAmount(taken.getId()),0);
+    const restored=new Player(null);
+    PlayerSave.fromPlayer(p).applyToPlayer(restored);
+    assert.deepEqual(Common.read(restored.getBank(tab).getItems()[slot]),{charges,pageId:core.ItemIdentifiers.BURNT_PAGE});
+  });
+}
+
+test('a full bank accepts changed item metadata into its reserved placeholder',t=>{
+  const {p}=fixture(t);
+  p.setPlaceholders(true);
+  const item=book(p,core.ItemIdentifiers.TOME_OF_FIRE,100,core.ItemIdentifiers.BURNT_PAGE);
+  const [taken]=withdraw(p,item);
+  Common.set(taken,Common.getDefinition(taken.getId()),99,core.ItemIdentifiers.BURNT_PAGE);
+  handlers.set(Bank.CAPACITY_EVENT,event=>{event.capacity=1;});
+  t.after(()=>handlers.delete(Bank.CAPACITY_EVENT));
+  assert.equal(p.getBank(0).getFreeSlots(),0);
+  assert.equal(p.getBank(0).getAddableAmount(taken),1,'capacity planning recognizes a reusable empty placeholder');
+  assert.equal(p.getBank(0).canTake(taken),true);
+  Bank.deposits(p,taken.getId(),p.getInventory().getItems().indexOf(taken),1);
+  assert.equal(p.getInventory().getAmount(taken.getId()),0);
+  assert.equal(p.getBank(0).getValidItems().length,1);
+  assert.equal(Common.read(p.getBank(0).getItems()[0]).charges,99);
+});
+
+test('an existing live matching charge stack takes priority over a stale placeholder',t=>{
+  const {p}=fixture(t);
+  p.setPlaceholders(true);
+  const item=book(p,core.ItemIdentifiers.TOME_OF_FIRE,100,core.ItemIdentifiers.BURNT_PAGE);
+  const [taken]=withdraw(p,item);
+  Common.set(taken,Common.getDefinition(taken.getId()),99,core.ItemIdentifiers.BURNT_PAGE);
+  const bank=p.getBank(0), placeholder=bank.getItems()[0];
+  const same=taken.clone(), different=taken.clone();
+  Common.set(different,Common.getDefinition(different.getId()),80,core.ItemIdentifiers.BURNT_PAGE);
+  bank.setItem(1,same);bank.setItem(2,different);
+  Bank.deposits(p,taken.getId(),p.getInventory().getItems().indexOf(taken),1);
+  assert.equal(bank.getItems()[0],placeholder);
+  assert.equal(placeholder.getAmount(),0,'an earlier empty placeholder cannot split an existing live stack');
+  assert.equal(bank.getItems()[1],same);
+  assert.equal(same.getAmount(),2);
+  assert.equal(bank.getItems()[2],different);
+  assert.equal(different.getAmount(),1);
+  assert.deepEqual([Common.read(same).charges,Common.read(different).charges],[99,80]);
+});
 test('bank exposes an event for actual successfully withdrawn inventory instances', () => {
   assert.equal(Bank.WITHDRAWN_ITEMS_EVENT, 'bank:withdrawn-items');
 });

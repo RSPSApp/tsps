@@ -1582,6 +1582,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
     const npc = api.spawnNpc({ id: ANCIENT_GUARDIAN_NPC_ID,
       x: tile.getX(), y: tile.getY(), z: 0, wanderRadius: 0, owner: player, ownerOnly: true });
     if (npc) {
+      npc.setFlag("combat:no-regen");
       area.add(npc);
       guardians.set(player, npc);
     }

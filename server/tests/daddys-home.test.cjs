@@ -143,6 +143,7 @@ function give(player, itemId, amount = 1) {
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   customEvents = new Map();
+  const nativeApi = PluginManager.createApi('DaddysHomeNativeDialogue');
   api = {
     core: {
       ...PluginManager.getCoreApi(),
@@ -150,7 +151,10 @@ before(async () => {
       TaskManager: { submit() {} },
     },
     persistAttribute() {},
-    onBeforeNpcInteraction: (handler) => handlers.beforeNpc.push(handler),
+    onBeforeNpcInteraction: (handler) => {
+      handlers.beforeNpc.push(handler);
+      nativeApi.onBeforeNpcInteraction(handler);
+    },
     onObjectInteraction: (handler) => handlers.objects.push(handler),
     onItemAction: (name, actions) => {
       if (typeof name === 'function') handlers.objects.push(name);
@@ -176,6 +180,100 @@ before(async () => {
   assert.ok(quest, "Daddy's Home registers");
   // The construction plugin answers this in production; the test grants it.
   customEvents.set('construction:grant-house', [(event) => { event.granted = true; }]);
+});
+
+function nativeYarlo(t, furniture, stage = 2) {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const player = new Player(null, new api.core.Location(HOUSE.x, HOUSE.y, HOUSE.z));
+  t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+  player.setIndex(1);
+  quest.setStage(player, stage);
+  player.setAttribute('daddys-home:furniture', furniture.slice());
+  const npc = api.core.NPC.create(api.core.NpcIdentifiers.OLD_MAN_YARLO, new api.core.Location(3240, 3395));
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
+    close() {}, onData() {}, onError() {}, onClose() {} };
+  const connection = new ClientConnection(channel);
+  connection.player = player;
+  const resume = async (group, childIndex = -1) => {
+    const widgetId = childIndex > 0 ? api.core.OptionDialogue.OPTIONS_WIDGET_ID : (group << 16) | 5;
+    await connection.dispatch([{ type: 'dialogue_continue', widgetId, childIndex }]);
+    connection.processTurnPackets();
+  };
+  return {
+    player,
+    resume,
+    talk() {
+      assert.equal(PluginManager.emitNpcInteraction({ player, npc, npcId: npc.getId(), npcIndex: 2,
+        clickType: 1, location: { x: 3240, y: 3395, z: 0 }, handled: false }), true);
+    },
+    async read() {
+      const lines = [];
+      for (let index = 0; index < 12; index++) {
+        const current = player.getDialogueManager().getCurrent();
+        if (!current || current instanceof api.core.OptionDialogue || current instanceof api.core.ActionDialogue) return lines;
+        lines.push(current.getText());
+        await resume(current instanceof api.core.PlayerDialogue ? 217 : 231);
+      }
+      assert.fail('Yarlo dialogue must end or reach its next choice');
+    },
+  };
+}
+
+test('native Yarlo partial-removal dialogue groups the remaining furniture with its room descriptions', async (t) => {
+  const fixture = nativeYarlo(t, [1, 1, 1, 1, 1, 2, 1]);
+  const expected = [
+    "Ah, young man, how's the redecoration coming on?",
+    "I've been removing the old furniture.",
+    'You still need to remove: - A broken stool in the kitchen - A broken stool in the bedroom - A broken chair in the bedroom',
+    '- A broken table in the kitchen - A broken table in the bedroom - The rotten carpet',
+  ];
+  for (let visit = 0; visit < 2; visit++) {
+    fixture.talk();
+    assert.deepEqual(await fixture.read(), expected);
+    assert.equal(fixture.player.getDialogueManager().isActive(), false);
+    assert.equal(quest.getStage(fixture.player), 2);
+    assert.deepEqual(fixture.player.getAttribute('daddys-home:furniture'), [1, 1, 1, 1, 1, 2, 1]);
+  }
+});
+
+test('native Yarlo lists just the final furniture and cancellation cannot advance the quest', async (t) => {
+  const fixture = nativeYarlo(t, [2, 2, 2, 2, 2, 1, 1]);
+  fixture.talk();
+  await fixture.resume(231);
+  fixture.player.getPacketSender().sendInterfaceRemoval();
+  await fixture.resume(217);
+  assert.equal(fixture.player.getDialogueManager().isActive(), false);
+  assert.equal(quest.getStage(fixture.player), 2);
+  fixture.talk();
+  assert.deepEqual(await fixture.read(), [
+    "Ah, young man, how's the redecoration coming on?",
+    "I've been removing the old furniture.",
+    'You still need to remove: - The old campbed - The rotten carpet',
+  ]);
+});
+
+test('native Yarlo advances from all-removed furniture only after the briefing finishes', async (t) => {
+  const fixture = nativeYarlo(t, [2, 2, 2, 2, 2, 2, 2], 3);
+  fixture.talk();
+  const lines = await fixture.read();
+  assert.ok(lines.some((line) => line.includes("I've finished removing all the old furniture.")));
+  assert.ok(fixture.player.getDialogueManager().getCurrent() instanceof api.core.OptionDialogue);
+  assert.equal(quest.getStage(fixture.player), 3);
+  const chooseSkip = async () => {
+    await fixture.resume(api.core.OptionDialogue.OPTIONS_WIDGET_ID >>> 16, 2);
+  };
+  await chooseSkip();
+  await fixture.resume(231); // Finish the skip response and begin the furniture briefing.
+  fixture.player.getPacketSender().sendInterfaceRemoval();
+  await fixture.resume(231);
+  assert.equal(quest.getStage(fixture.player), 3, 'an abandoned briefing cannot unlock building');
+  fixture.talk();
+  await fixture.read();
+  await chooseSkip();
+  await fixture.read();
+  assert.equal(quest.getStage(fixture.player), 5);
+  assert.deepEqual(fixture.player.getAttribute('daddys-home:furniture'), [2, 2, 2, 2, 2, 2, 2]);
 });
 
 test('Marlo starts the miniquest on the Wiki dialogue route', () => {

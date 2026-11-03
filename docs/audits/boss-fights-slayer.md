@@ -2,7 +2,7 @@
 
 An audit of the six implemented Slayer-boss fights against the OSRS Wiki (page and `/Strategies`)
 and, where a recording existed, the rsprox captures. Source order is the one in
-[server/docs/agents/sources.md](../../server/docs/agents/sources.md): Wiki for behaviour, cache for
+[server/docs/agents/sources.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/sources.md): Wiki for behaviour, cache for
 ids, captures as first-hand evidence for what live sends.
 
 Recordings used (all decoded from `%USERPROFILE%\.rsprox\binary`):
@@ -43,7 +43,7 @@ it with the shield, as each phase reapplies the reduction. The data gained
 `combat.empoweredMaxHit: 52`.
 
 Also added: the Wiki's overhead on the correct vent — "The Hydra will
-{{overhead|Roaaaaaaaaaaar!}} when hit by the correct vent" — sent as a `forceChat` from
+`{{overhead|Roaaaaaaaaaaar!}}` when hit by the correct vent" — sent as a `forceChat` from
 `messages.roar` next to the existing (unverified) player message.
 
 ## Per boss

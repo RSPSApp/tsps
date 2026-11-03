@@ -181,6 +181,42 @@ async function nextLine(f) {
   await f.connection.dispatch([{ type: 'dialogue_continue', widgetId: (group << 16) | 5, childIndex: -1 }]);
   f.connection.processTurnPackets();
 }
+
+test('What Lies Below excavates and enters the actual cached statue through native object clicks', async t => {
+  const f = fixture(t), { player } = f;
+  core.RegionManager.init();
+  const tile = new core.Location(3283, 3468);
+  const parentId = core.CacheDefinitions.getLocId('surok_statuebase');
+  const statueId = core.CacheDefinitions.getLocId('surok_statuebase1');
+  const parent = core.MapObjects.get(parentId, tile, null);
+  assert.ok(parent, 'the cache provides one multiloc statue at the real southwest tile');
+  assert.equal(core.MapObjects.getPrivateArea(player, statueId, tile), parent,
+    'the visible statue resolves to the original multiloc');
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'what_lies_below');
+  player.setLocation(new core.Location(3282, 3468));
+  const clickStatue = async () => {
+    await f.connection.dispatch([{ type: 'object_option', id: statueId, x: tile.getX(), y: tile.getY(), clickType: 1 }]);
+    f.connection.processTurnPackets();
+    for (let tick = 0; tick < 4; tick++) {
+      core.TaskManager.processWalkTo(player.getIndex());
+      player.getMovementQueue().process();
+      core.TaskManager.process();
+    }
+  };
+  await clickStatue();
+  assert.ok(player.getDialogueManager().getCurrent(), 'the native parent reaches Anna\'s existing refusal');
+  assert.notEqual(player.getAttribute('what-lies-below:tunnel'), 1);
+  player.closeInterruptibleInterfaces();
+  quest.setStage(player, 30);
+  player.getInventory().add(new core.Item(core.ItemIdentifiers.BRONZE_PICKAXE));
+  await clickStatue();
+  for (let line = 0; line < 20 && player.getDialogueManager().getCurrent(); line++) await nextLine(f);
+  assert.equal(player.getAttribute('what-lies-below:tunnel'), 1, 'the existing excavation transcript opens the tunnel');
+  assert.equal(quest.getStage(player), 30, 'the optional shortcut does not advance the main quest');
+  player.closeInterruptibleInterfaces();
+  await clickStatue();
+  assert.ok(player.getLocation().equals(new core.Location(3179, 5190)), 'the opened shortcut is still enterable');
+});
 function journalLifecycle(kind, player) {
   const hook = PM[`${kind}Hooks`].find(hook => hook.pluginName === 'SideJournalDefaults');
   assert.ok(hook, `real journal ${kind} lifecycle`);
@@ -477,6 +513,86 @@ function nuffFixture(t, stage = 20) {
   const npcId = core.NpcIdentifiers.FAIRY_NUFF_2, npc = core.NPC.create(npcId, new core.Location(2386, 4727));
   return { ...f, quest, talk: () => PM.emitNpcInteraction({ player, npc, npcId, action: 'Talk-to', clickType: 1, handled: false }) };
 }
+
+const NATURE_ITEMS_ATTRIBUTE = 'quest.fairytale-i-growing-pains:nature-items';
+async function readNatureRecipe(f, quest, first = false) {
+  const npcId = core.NpcIdentifiers.MALIGNIUS_MORTIFER;
+  const npc = core.NPC.create(npcId, new core.Location(3000, 3275));
+  assert.equal(PM.emitNpcInteraction({ player: f.player, npc, npcId,
+    action: 'Talk-to', clickType: 1, handled: false }), true);
+  const choices = first ? ['I need help with fighting a Tanglefoot.'] : [
+    'I was asking you about fighting a Tanglefoot...', 'What did I need to take to the Nature Spirit again?'];
+  const lines = [];
+  for (let n = 0; n < 80; n++) {
+    const menu = MultiChatboxPrompt.getPending(f.player);
+    if (menu) {
+      const choice = choices.shift();
+      assert.ok(menu.options.includes(choice), `expected ${choice}, got ${JSON.stringify(menu)}`);
+      await choose(f, menu.options.indexOf(choice) + 1);
+    } else if (f.player.getDialogueManager().getCurrent()) {
+      lines.push(f.player.getDialogueManager().getCurrent().getText?.() ?? '');
+      await nextLine(f);
+    } else break;
+  }
+  assert.deepEqual(choices, []);
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined);
+  assert.equal(quest.getStage(f.player), 50);
+  return lines.join(' ').replace(/\s+/g, ' ');
+}
+
+for (const [first, names] of [[1, ['white berries', 'a mort myre pear', 'a mort myre stem']],
+  [29, ['a king worm', 'snape grass', 'a lime']]]) {
+  test(`Fairytale I native initial and reminder recipes match saved items ${first}-${first + 2}`, async t => {
+    const f = fixture(t), other = fixture(t);
+    f.player.setUsername(`nature${first}`);
+    const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'fairytale_i_growing_pains');
+    const originalRandom = core.Misc.randomInclusive;
+    let rolls = 0;
+    t.mock.method(core.Misc, 'randomInclusive', (min, max) => {
+      if (min === 1 && max === 29) { rolls++; return first; }
+      return originalRandom(min, max);
+    });
+    quest.setStage(f.player, 40);
+    f.player.getInventory().add(new core.Item(core.ItemIdentifiers.DRAYNOR_SKULL), false);
+    const positions = `${first},${first + 1},${first + 2}`;
+    const check = (text, player) => {
+      assert.doesNotMatch(text, /\[item\s*[123]\]/i);
+      for (const name of names) {
+        assert.ok(text.includes(name), `the native recipe names ${name}: ${text}`);
+        assert.ok(quest.buildJournal(player, quest).includes(name), `the journal agrees on ${name}`);
+      }
+      assert.equal(player.getAttribute(NATURE_ITEMS_ATTRIBUTE), positions);
+    };
+    check(await readNatureRecipe(f, quest, true), f.player);
+    assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 0);
+    check(await readNatureRecipe(f, quest), f.player);
+    const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+    PlayerSave.fromPlayer(f.player).applyToPlayer(other.player);
+    check(await readNatureRecipe(other, quest), other.player);
+    assert.equal(rolls, 1, 'reminders and save/load reuse the persisted recipe');
+    const foreign = fixture(t);
+    foreign.player.setUsername(`other${first}`);
+    quest.setStage(foreign.player, 50);
+    foreign.player.setAttribute(NATURE_ITEMS_ATTRIBUTE, first === 1 ? '29,30,31' : '1,2,3');
+    const foreignText = await readNatureRecipe(foreign, quest);
+    assert.ok(foreignText.includes(first === 1 ? 'snape grass' : 'white berries'));
+    assert.equal(f.player.getAttribute(NATURE_ITEMS_ATTRIBUTE), positions, 'another player cannot replace this recipe');
+  });
+}
+
+test('Fairytale I only substitutes Malignius recipe lines on its own transcript page', t => {
+  const f = fixture(t), text = 'Gather [item 1], [item 2] and [item 3].';
+  f.player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
+  for (const [page, npcId, speaker] of [
+    ['Another page', core.NpcIdentifiers.MALIGNIUS_MORTIFER, 'Malignius Mortifer'],
+    ['Fairytale I - Growing Pains', core.NpcIdentifiers.NATURE_SPIRIT, 'Nature Spirit'],
+    ['Fairytale I - Growing Pains', core.NpcIdentifiers.MALIGNIUS_MORTIFER, 'Player'],
+  ]) {
+    const event = { player: f.player, npcId, pages: [{ page }], step: { speaker }, text };
+    PM.emitCustomEvent('npc-dialogue:line', event);
+    assert.equal(event.text, text);
+  }
+});
 
 async function finishNuff(f) {
   for (let n = 0; f.player.getDialogueManager().getCurrent() && n < 60; n++) await nextLine(f);

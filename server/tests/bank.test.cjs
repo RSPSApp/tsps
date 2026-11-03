@@ -96,6 +96,43 @@ function createPlayer() {
   return player;
 }
 
+test("unsupported placeholders warn only when a successful withdrawal empties the stack", () => {
+  const player = createPlayer();
+  player.placeholders = true;
+  player.getBank().add(new Item(MYSTIC_LAVA_STAFF, 2), false);
+  Bank.withdraw(player, MYSTIC_LAVA_STAFF, 0, 1, 0);
+  assert.deepEqual(player.messages, []);
+  Bank.withdraw(player, MYSTIC_LAVA_STAFF, 0, 1, 0);
+  assert.deepEqual(player.messages, ["That item cannot leave a placeholder."]);
+  assert.equal(player.getInventory().getAmount(MYSTIC_LAVA_STAFF), 2);
+  assert.equal(player.getBank().contains(MYSTIC_LAVA_STAFF), false);
+  player.getBank().add(new Item(LAVA_BATTLESTAFF, 1), false);
+  Bank.withdraw(player, LAVA_BATTLESTAFF, 0, 1, 0);
+  assert.equal(player.messages.length, 1, "supported items leave their placeholder silently");
+  assert.equal(player.getBank().getItems()[0].getAmount(), 0);
+});
+
+test('a new bank opening resets noted withdrawal while an open-bank refresh preserves it', async t => {
+  const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+  await CachePipeline.initialize(process.cwd());
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const player = new Player(null);
+  player.setUsername('bankreset');
+  t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true }));
+  player.setNoteWithdrawal(true);
+  player.getBank(0).open();
+  assert.equal(player.withdrawAsNote(), false);
+  assert.equal(player.getPacketSender().getVarbit(3958), 0);
+  player.setNoteWithdrawal(true);
+  player.getBank(0).open();
+  assert.equal(player.withdrawAsNote(), true, 'refreshing the same bank does not reset the current selection');
+  player.getPacketSender().sendInterfaceRemoval();
+  assert.equal(Bank.isOpen(player), false);
+  player.getBank(0).open();
+  assert.equal(player.withdrawAsNote(), false);
+  assert.equal(player.getPacketSender().getVarbit(3958), 0);
+});
+
 test("depositing a note banks the item it notes, not the item before it", () => {
   const player = createPlayer();
   player.getInventory().add(new Item(LAVA_BATTLESTAFF_NOTE, 2), false);

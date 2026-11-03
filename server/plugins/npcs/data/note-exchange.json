@@ -22,7 +22,7 @@
     { "npc": "BILES", "gameval": "biles", "name": "Biles", "fee": 5, "members": true },
     {
       "npc": "ELDER_CHAOS_DRUID_2", "gameval": "wild_chaos_uncerter", "name": "Elder Chaos druid",
-      "converts": "The Elder Chaos druid converts your banknotes.", "fee": 50, "members": false, "accepts": "bury",
+      "converts": "The Elder Chaos druid converts your banknotes.", "fee": 50, "members": false, "accepts": "bury", "rememberX": true,
       "lines": { "notAccepted": "I only exchange items that can be offered as a sacrifice to The Dark Lord's altar." }
     },
     {

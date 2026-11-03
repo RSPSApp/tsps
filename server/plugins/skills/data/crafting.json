@@ -1492,9 +1492,19 @@
     ]
   },
   "strungAmulets": {
-    "$comment": "A ball of wool on the unstrung amulet, 4 XP (Wiki: amulet stringing).",
+    "$comment": "A ball of wool on unstrung jewellery, 4 XP (Wiki: ball of wool products).",
     "xp": 4,
     "pairs": [
+      [
+        "UNSTRUNG_SYMBOL",
+        "UNBLESSED_SYMBOL",
+        "symbol"
+      ],
+      [
+        "UNSTRUNG_EMBLEM",
+        "UNPOWERED_SYMBOL",
+        "symbol"
+      ],
       [
         "GOLD_AMULET_U_",
         "GOLD_AMULET"

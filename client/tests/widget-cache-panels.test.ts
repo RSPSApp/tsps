@@ -5,7 +5,9 @@ import ts from "typescript";
 import { Inventory } from "../rs/inventory/Inventory";
 import { deriveRawMenuEntriesForWidget } from "../widgets/menu/utils";
 import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
-import { encodeWidgetRunScript, encodeWidgetSetText, decodeClientPacket } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
+import { encodeWidgetRunScript, encodeWidgetSetText, encodeWidgetSetFlagsRange, decodeClientPacket } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
+import { buildWidgetActionPayload } from "../game/widgets/widgetActionPayload";
+import { shouldTransmitAction } from "../widgets/WidgetFlags";
 import { InputManager } from "../game/InputManager";
 import { processWidgetKeyboardInput } from "../game/widgets/input/widgetKeyboardInput";
 import { createPacket, ClientPacket, queuePacket, flushPackets, setPacketSocket } from "../network/packet";
@@ -140,6 +142,30 @@ import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdat
     const { World } = require(serverModules + '/game/World');
     const { RegionManager } = require(serverModules + '/game/collision/RegionManager');
     const core = PluginManager.getCoreApi();
+    let groupingOpened: ((event: any) => void) | undefined;
+    require(serverRoot + '/plugins/interface/MinigameTeleports.plugin').register({
+        core, persistAttribute() {}, onPlayerLogin() {}, onInterfaceActionClick() {},
+        onCustomEvent(name: string, handler: any) { if (name === 'interface:opened') groupingOpened = handler; },
+    });
+    wm.getGroup(76);
+    cacheVm.context.varManager.setVarcInt(64, 5); // Cache enum848: Castle Wars.
+    cacheVm.run(cacheVm.context.loadScript(435), [], []);
+    assert.equal(cacheVm.lastError, null);
+    const groupingTeleport = wm.getWidgetByUid((76 << 16) | 32).children[5];
+    assert.match(groupingTeleport.actions[0], /Castle Wars/);
+    assert.equal(shouldTransmitAction(wm.getWidgetFlags(groupingTeleport), 0), false, 'the cache alone has no transmit flag');
+    assert.ok(groupingOpened, 'the minigame plugin enables the button on each native mount');
+    groupingOpened({ groupId: 76, player: { getPacketSender: () => ({
+        sendInterfaceFlagsRange(uid: number, from: number, to: number, flags: number) {
+            const { payload } = decodeServerPacket(encodeWidgetSetFlagsRange(uid, from, to, flags)) as any;
+            for (let slot = payload.fromSlot; slot <= payload.toSlot; slot++) wm.setWidgetFlagsByKey(payload.uid, slot, payload.flags);
+        },
+    }) } });
+    assert.equal(shouldTransmitAction(wm.getWidgetFlags(groupingTeleport), 0), true);
+    assert.equal(shouldTransmitAction(wm.getWidgetFlags(wm.getWidgetByUid((76 << 16) | 32).children[0]), 0), false, 'no selection stays disabled');
+    assert.deepEqual(buildWidgetActionPayload(wm, { widget: groupingTeleport, opIndex: 1 }), {
+        widgetId: (76 << 16) | 32, groupId: 76, childId: 32, slot: 5, opId: 1,
+    });
     RegionManager.init();
     RegionManager.loadMapFiles(2426, 3080);
     let setUp: (event: any) => void;

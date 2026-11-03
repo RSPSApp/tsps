@@ -193,13 +193,13 @@ export class Bank extends ItemContainer {
         return Math.min(super.getFreeSlots() + Bank.MAX_SLOTS - this.items.length, this.roomLeft());
     }
 
-    /** Banked items always stack: a full bank still takes more of an item it holds (same metadata). */
+    /** A full bank accepts reserved placeholders or live stacks with matching metadata. */
     public canTake(item: Item): boolean {
         if (this.getFreeSlots() > 0) return true;
         const id = ItemDefinition.forId(item.getId()).unNote();
         const meta = JSON.stringify(item.getMeta() ?? null);
         return this.items.some((held) => held != null && held.getId() === id
-            && JSON.stringify(held.getMeta() ?? null) === meta);
+            && (held.getAmount() === 0 || JSON.stringify(held.getMeta() ?? null) === meta));
     }
 
     public isEmpty(): boolean {
@@ -1177,6 +1177,7 @@ export class Bank extends ItemContainer {
             return this;
         }
         const opening = !Bank.isOpen(this.getPlayer());
+        if (opening) this.getPlayer().setNoteWithdrawal(false);
 
         // Update player status
         this.getPlayer().setStatus(PlayerStatus.BANKING);
@@ -1318,6 +1319,11 @@ export class Bank extends ItemContainer {
             return this;
         }
 
+        if (to instanceof Inventory && this.getPlayer().isPlaceholders()
+                && item.getAmount() >= this.getItems()[slot].getAmount()
+                && item.getDefinition().getPlaceholderId() < 0) {
+            this.getPlayer().sendMessage("That item cannot leave a placeholder.");
+        }
         this.deleteItemContainer(item, slot, to instanceof Inventory ? false : refresh, to);
 
 

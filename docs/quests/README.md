@@ -2,22 +2,22 @@
 # Quest test status
 
 Every quest the server registers, with the latest result recorded in its page here. How to
-test a quest is in [server/docs/agents/quest-testing.md](../../server/docs/agents/quest-testing.md);
+test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-191 quests · ✅ passed: 28 · ⚠️ passed with issues: 15 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 26 · untested: 113
+191 quests · ✅ passed: 28 · ⚠️ passed with issues: 15 · 🔄 in progress: 12 · ❌ failed: 1 · 🔁 needs recheck: 27 · untested: 108
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
 | Quest | Status | Tested | By | Model | Open findings |
 | --- | --- | --- | --- | --- | --- |
-| [A Kingdom Divided](a-kingdom-divided/README.md) | untested |  |  |  |  |
-| [A Night at the Theatre](a-night-at-the-theatre/README.md) | untested |  |  |  |  |
+| [A Kingdom Divided](a-kingdom-divided/README.md) | 🔄 in progress | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
+| [A Night at the Theatre](a-night-at-the-theatre/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [A Porcine of Interest](a-porcine-of-interest/README.md) | ✅ passed | 2026-10-23 | agent |  | 1 |
 | [A Ruff Situation](a-ruff-situation/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 |  |
-| A Soul's Bane | untested |  |  |  |  |
-| [A Tail of Two Cats](a-tail-of-two-cats/README.md) | untested |  |  |  |  |
-| [A Taste of Hope](taste-of-hope/README.md) | untested |  |  |  |  |
+| [A Soul's Bane](a-souls-bane/README.md) | 🔄 in progress | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
+| [A Tail of Two Cats](a-tail-of-two-cats/README.md) | 🔄 in progress | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
+| [A Taste of Hope](taste-of-hope/README.md) | 🔄 in progress | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [Animal Magnetism](animal-magnetism/README.md) | untested |  |  |  |  |
 | [Another Slice of H.A.M.](another-slice-of-ham/README.md) | 🔄 in progress |  | agent |  |  |
 | [At First Light](at-first-light/README.md) | ⚠️ passed with issues |  | agent |  | 1 |

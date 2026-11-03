@@ -224,8 +224,17 @@ test('Corsair captured independent investigations and spoken transitions reach w
   const q = register('CorsairCurse', 'the_corsair_curse'), p = player();
   const wire = () => q.quest.varbitValue(q.quest.getStage(p), p);
   reachLine(q, p, 7956, "Sure, I'll try to help with your curse."); assert.equal(wire(), 5);
+  const ferryId = core.NpcIdentifiers.CAPTAIN_TOCK_3;
+  const ferries = () => q.spawned.filter(npc => npc.getId() === ferryId && !q.removed.includes(npc));
+  assert.equal(ferries().length, 1, 'accepting still spawns the travelling captain at Rimmington');
+  assert.equal(ferries()[0].definition.owner, p);
   q.emit('npc-dialogue:action', { player: p, stepId: '9srM-C' }); assert.equal(wire(), 10);
   q.emit('npc-dialogue:action', { player: p, stepId: 'GnY-u6' }); assert.equal(wire(), 15); q.tick(3);
+  assert.equal(ferries().length, 2, 'arrival still supplies both quest-owned ferry captains');
+  for (const ferry of ferries()) {
+    assert.equal(ferry.definition.wanderRadius, 0);
+    assert.equal(ferry.definition.ownerOnly, true);
+  }
   reachLine(q, p, 7961, "Okay, it doesn't sound like you know what's behind the curse. Thanks.");
   assert.equal(p.attributes.get('quest.the_corsair_curse.navigator'), 1);
   reachLine(q, p, 7976, "I'd hoped I could use my amazing Thieving skills");

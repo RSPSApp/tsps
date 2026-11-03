@@ -183,6 +183,34 @@ assert.deepEqual(decodeClientPacket(Buffer.from(sentPacket)), {
 const cacheInfo = loadCacheList(loadCacheInfos()).latest;
 const cache = CacheSystem.fromFiles(cacheInfo, loadCache(cacheInfo).files);
 const scripts = new ClientScriptLoader({ getCacheSystem: () => cache });
+
+// Native chat_send adds a slash for Friends Chat; the input script has already
+// removed the user's Clan/Guest/Group routing prefix before calling it.
+const nativeChatVm = new Cs2Vm({
+    loadScript: (id: number) => scripts.load(id),
+    varManager: {
+        getVarbit: () => 0, getVarcInt: () => 0,
+        setVarcInt() {}, setVarcString() {},
+    },
+    widgetManager: { beginBatch() {}, endBatch() {}, flushBatch() {} },
+} as any);
+const chatSend = scripts.load(5517);
+assert.ok(chatSend);
+for (const [type, clan, text, expected] of [
+    [2, -1, "hello channel", { type: "chat", text: "hello channel", messageType: "friends_chat" }],
+    [3, 0, "hello clan", { type: "clan_chat", text: "hello clan", clanType: 0 }],
+    [4, 0, "hello guest", { type: "clan_chat", text: "hello guest", clanType: -1 }],
+    [0, -1, "/literal slash", { type: "chat", text: "/literal slash", messageType: "public" }],
+] as const) {
+    sentPacket = undefined;
+    nativeChatVm.execute(chatSend, [type, clan, 0, -1], [text]);
+    assert.ok(sentPacket);
+    assert.deepEqual(decodeClientPacket(Buffer.from(sentPacket)), expected);
+}
+sentPacket = undefined;
+nativeChatVm.execute(chatSend, [3, 1, 0, -1], ["unsupported group chat"]);
+assert.equal(sentPacket, undefined, "unavailable Group Ironman must not fall back to public or clan chat");
+
 let commandBuffer = "";
 const commandVm = new Cs2Vm({
     loadScript: (id: number) => scripts.load(id),

@@ -110,17 +110,15 @@ module.exports = function registerClientOfKourendQuest(api) {
   ]);
   const NARRATOR_NPC_ID = PISCARILIUS_VEOS_NPC_ID; // the orb/quill narration chathead
   const PISCARILIUS_LANDING = new Location(1825, 3691, 0);
-  const PORT_SARIM_LANDING = new Location(3054, 3245, 0);
-  const LANDS_END_LANDING = new Location(1504, 3401, 0);
   const ZEAH_VISITED_VARBIT = 4897; // zeah_playerhasvisited, set by the boat ride
   const VEOS_SAIL_ACTION_ID = "WXJllC";
   const PORT_SARIM_DESTINATIONS = new Map([
-    ["I'd like to travel to Port Piscarilius, please.", PISCARILIUS_LANDING],
-    ["I'd like to travel to Land's End, please.", LANDS_END_LANDING],
+    ["I'd like to travel to Port Piscarilius, please.", "kourend-piscarilius"],
+    ["I'd like to travel to Land's End, please.", "kourend-landsend"],
   ]);
   const PISCARILIUS_DESTINATIONS = new Map([
-    ["Travel to Port Sarim.", PORT_SARIM_LANDING],
-    ["Travel to Land's End.", LANDS_END_LANDING],
+    ["Travel to Port Sarim.", "kourend-sarim"],
+    ["Travel to Land's End.", "kourend-landsend"],
   ]);
   const VEOS_DEPARTURE_LINES = new Set([
     "As you wish.",
@@ -476,10 +474,10 @@ module.exports = function registerClientOfKourendQuest(api) {
   function rememberSailChoice({ npcId, player, option }) {
     if (!PORT_SARIM_VEOS_NPC_IDS.has(npcId) && !isPiscariliusVeos(npcId)) return;
     travelPending.delete(player);
-    const destination = (isPiscariliusVeos(npcId)
+    const route = (isPiscariliusVeos(npcId)
       ? PISCARILIUS_DESTINATIONS
       : PORT_SARIM_DESTINATIONS).get(option);
-    if (destination) travelPending.set(player, { npcId, destination });
+    if (route) travelPending.set(player, { npcId, route });
   }
 
   function finishSailLine(event) {
@@ -488,10 +486,9 @@ module.exports = function registerClientOfKourendQuest(api) {
     if (!pending || pending.npcId !== npcId || !VEOS_DEPARTURE_LINES.has(text ?? "")) return;
     event.after = () => {
       travelPending.delete(player);
-      player.moveTo(new Location(
-        pending.destination.getX(), pending.destination.getY(), pending.destination.getZ(),
-      ));
-      if (pending.destination === PISCARILIUS_LANDING) {
+      const request = { player, route: pending.route, handled: false };
+      api.emitCustomEvent("ferries:travel", request);
+      if (request.handled === true && pending.route === "kourend-piscarilius") {
         player.getPacketSender().sendVarbit(ZEAH_VISITED_VARBIT, 1);
       }
     };

@@ -113,11 +113,13 @@ test('spell-on-NPC validates target and spell, consumes once, and preserves comb
   };
   let levelAndRunes = true, cooldownAndConsume = true, visible = true, attackable = false;
   let npcPrivateArea = null, areaVeto = false, handleSpell = true;
+  const messages = [];
   let canCastChecks = [], casts = 0, xp = 0, combatCasts = 0, hookCalls = 0, runeConsume = 0;
   const point = (x, y, z = 0) => ({ getX: () => x, getY: () => y, getZ: () => z, isWithinDistance(other, range) { return Math.max(Math.abs(x - other.getX()), Math.abs(y - other.getY())) <= range && z === other.getZ(); } });
   const loc = point(100, 100);
   let targetLoc = point(101, 100);
   const player = {
+    sendMessage: message => messages.push(message),
     getHitpoints: () => 10, busy: () => false,
     getLocation: () => loc, getPrivateArea: () => null, getArea: () => null,
     getMovementQueue: () => ({ reset() {} }), setPositionToFace() {},
@@ -176,9 +178,11 @@ test('spell-on-NPC validates target and spell, consumes once, and preserves comb
     assert.equal(NPCOptionPacketListener.castSpell(player, 0, 12345), false, 'unhandled target casts are not accepted');
     assert.equal(runeConsume, 1, 'unhandled targeted casts consume no runes');
     assert.equal(casts, 1, 'unhandled targeted casts do not animate');
+    assert.deepEqual(messages, ["You can't attack this npc."]);
     handleSpell = true;
 
     const before = { hooks: hookCalls, casts, runeConsume };
+    const previousMessages = messages.length;
     areaVeto = true;
     assert.equal(NPCOptionPacketListener.castSpell(player, 0, 12345), false, 'an area veto blocks scripted casting');
     areaVeto = false;
@@ -205,6 +209,7 @@ test('spell-on-NPC validates target and spell, consumes once, and preserves comb
     assert.equal(hookCalls, before.hooks + 1, 'cooldown is checked inside the consuming callback');
     assert.deepEqual({ casts, runeConsume }, { casts: before.casts, runeConsume: before.runeConsume }, 'rejected casts have no side effects');
 
+    assert.equal(messages.length, previousMessages, 'specific/spatial refusals and a scripted consumption failure do not add generic feedback');
     attackable = true;
     assert.equal(NPCOptionPacketListener.castSpell(player, 0, 12345), true);
     assert.equal(combatCasts, 1, 'ordinary attackable NPC spell casts retain the combat path');

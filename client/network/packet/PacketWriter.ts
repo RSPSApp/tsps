@@ -257,9 +257,11 @@ export class PacketWriter {
 
         this.bufferOffset = 0;
 
-        // Process packets from end of queue (like reference's last())
+        // Oldest first, as live's PacketWriter.flush does: it takes the deque's first()
+        // after addNode()'s addLast(). Sending a batch newest-first reverses a combo's
+        // order, so an equip queued before its special attack arrives after it.
         while (this.packetBufferNodes.length > 0) {
-            const node = this.packetBufferNodes[this.packetBufferNodes.length - 1];
+            const node = this.packetBufferNodes[0];
             const packetSize = node.index;
 
             // Check if packet fits in remaining buffer space
@@ -282,7 +284,7 @@ export class PacketWriter {
                     }
                     this.socket.send(packetData as Uint8Array<ArrayBuffer>);
                     this.bufferSize -= packetSize;
-                    this.packetBufferNodes.pop();
+                    this.packetBufferNodes.shift();
                     this.nodePool.release(node);
                     continue;
                 }
@@ -302,7 +304,7 @@ export class PacketWriter {
             this.bufferSize -= packetSize;
 
             // Remove and release node
-            this.packetBufferNodes.pop();
+            this.packetBufferNodes.shift();
             this.nodePool.release(node);
         }
 

@@ -638,6 +638,70 @@ test('Shadow: real five-word menus use reverse for first and direct tome order f
   assert.equal(loggedOut.player.getNpcViewDistance(), 15, 'logout restores normal NPC range');
 });
 
+test('Shadow of the Storm: the plane-2 exit portal still works once the quest is complete (#2158)', () => {
+  const h = setup((api) => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api), { prereqs: false });
+  const tile = () => [h.player.getLocation().x, h.player.getLocation().y, h.player.getLocation().z];
+
+  // Control: a player who has not reached the ritual group is not moved by it.
+  h.quest.setStage(h.player, 0);
+  h.setLocation(2720, 4884, 2);
+  h.hooks.objects[0]({ player: h.player, objectId: 6282 });
+  assert.deepEqual(tile(), [2720, 4884, 2], 'a pre-quest player is not moved');
+
+  // Completion leaves the player in the plane-2 dimension; the portal must let them out.
+  h.quest.setStage(h.player, 130);
+  h.setLocation(2720, 4900, 2);
+  h.hooks.objects[0]({ player: h.player, objectId: 6282 });
+  assert.deepEqual(tile(), [2721, 4911, 0], 'a finished player leaves through the exit portal');
+});
+
+test('Shadow of the Storm: Recipe for Disaster does not swallow the exit portal for a finished player (#2158)', () => {
+  // Real hook ordering: RFD registers its named "Portal" hook before Shadow's generic one.
+  for (const [name, modulePath] of [
+    ['RecipeForDisaster', '../plugins/quests/quests/RecipeForDisaster.Quest'],
+    ['ShadowOfTheStorm', '../plugins/quests/quests/ShadowOfTheStorm.Quest'],
+  ]) require(modulePath)(PluginManager.createApi(name));
+  const quests = runtime.getRegisteredQuests();
+  const rfd = quests.findLast((quest) => quest.key === 'recipe_for_disaster');
+  const shadow = quests.findLast((quest) => quest.key === 'shadow_of_the_storm');
+  const { Location } = PluginManager.getCoreApi();
+
+  const attrs = new Map(), messages = [];
+  let at = new Location(2720, 4900, 2);
+  const sender = new Proxy({}, { get: (target, key) => target[key] ?? (() => sender) });
+  const player = {
+    isPlayer: () => true, getAsPlayer: () => player,
+    getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
+    getPacketSender: () => sender, sendMessage: (text) => messages.push(text),
+    getLocation: () => at, moveTo: (to) => { at = to; },
+    getArea: () => null, getPrivateArea: () => null,
+    getInventory: () => ({ getAmount: () => 0, getFreeSlots: () => 28 }),
+  };
+  attrs.set('recipe-for-disaster:rescues', 255);
+  attrs.set('quest.points', 200);
+  rfd.setStage(player, 5);
+  shadow.setStage(player, 130);
+
+  const click = (location) => {
+    const event = {
+      player, object: {}, objectId: 6282, clickType: 1, location,
+      definition: { getName: () => 'Portal', getInteractions: () => ['Enter'] },
+    };
+    PluginManager.emitObjectInteraction(event);
+    return event.handled === true;
+  };
+
+  assert.equal(click(new Location(2720, 4884, 2)), true);
+  assert.deepEqual([at.x, at.y, at.z], [2721, 4911, 0], 'Shadow handles the exit after RFD declines');
+  assert.equal(messages.some((text) => /175 quest points/.test(text)), false, 'no RFD message at the Uzer portal');
+
+  // Control: the real RFD entry portal still shows the requirement message.
+  at = new Location(3209, 3218, 0);
+  assert.equal(click(new Location(3209, 3218, 0)), true);
+  assert.ok(messages.some((text) => /175 quest points/.test(text)), 'entry portal keeps its message');
+  assert.deepEqual([at.x, at.y, at.z], [3209, 3218, 0]);
+});
+
 test('Shadow: server completion 130 mirrors the native 7-bit varbit as 125 on login', () => {
   const h = setup((api) => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api));
   const quest = h.quest;

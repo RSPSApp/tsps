@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](../../server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-191 quests · ✅ passed: 28 · ⚠️ passed with issues: 15 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 20 · untested: 119
+191 quests · ✅ passed: 28 · ⚠️ passed with issues: 15 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 25 · untested: 114
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -23,7 +23,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [At First Light](at-first-light/README.md) | ⚠️ passed with issues |  | agent |  | 1 |
 | [Bear Your Soul](bear-your-soul/README.md) | 🔄 in progress | 2026-10-31 | agent | DeepSeek V4.1 Flash |  |
 | [Below Ice Mountain](below-ice-mountain/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 6 |
-| [Beneath Cursed Sands](beneath-cursed-sands/README.md) | untested |  |  |  |  |
+| [Beneath Cursed Sands](beneath-cursed-sands/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | Between a Rock... | untested |  |  |  |  |
 | [Big Chompy Bird Hunting](big-chompy-bird-hunting/README.md) | ✅ passed | 2026-10-23 | agent |  | 1 |
 | [Biohazard](biohazard/README.md) | 🔄 in progress |  | agent |  | 2 |
@@ -34,14 +34,14 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Client of Kourend](client-of-kourend/README.md) | ✅ passed | 2026-10-23 | agent |  | 1 |
 | [Clock Tower](clock-tower/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
 | Cold War | untested |  |  |  |  |
-| [Contact!](contact/README.md) | untested |  |  |  |  |
+| [Contact!](contact/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [Cook's Assistant](cooks-assistant/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 1 |
 | Crab Quest | untested |  |  |  |  |
 | Creature of Fenkenstrain | untested |  |  |  |  |
-| [Current Affairs](current-affairs/README.md) | untested |  |  |  |  |
+| [Current Affairs](current-affairs/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | Daddy's Home | untested |  |  |  |  |
 | [Darkness of Hallowvale](darkness-of-hallowvale/README.md) | untested |  |  |  |  |
-| [Death on the Isle](death-on-the-isle/README.md) | untested |  |  |  |  |
+| [Death on the Isle](death-on-the-isle/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [Death Plateau](death-plateau/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
 | [Death to the Dorgeshuun](death-to-the-dorgeshuun/README.md) | untested |  |  |  |  |
 | Defender of Varrock | untested |  |  |  |  |
@@ -141,7 +141,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Sheep Shearer](sheep-shearer/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 4 |
 | [Shield of Arrav](shield-of-arrav/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 7 |
 | Shilo Village | untested |  |  |  |  |
-| [Sins of the Father](sins-of-the-father/README.md) | untested |  |  |  |  |
+| [Sins of the Father](sins-of-the-father/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [Skippy and the Mogres](skippy-and-the-mogres/README.md) | ✅ passed | 2026-10-31 | agent | deepseek-v4.1-flash | 1 |
 | [Sleeping Giants](sleeping-giants/README.md) | ✅ passed |  | agent |  |  |
 | [Song of the Elves](song-of-the-elves/README.md) | untested |  |  |  |  |

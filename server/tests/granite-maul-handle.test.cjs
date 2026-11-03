@@ -184,6 +184,8 @@ test("both ornate forms pay 50% for Quick Smash, the plain and clamped mauls 60%
   assert.equal(special.getDrainAmountForWeaponId(CLAMPED), 60);
   assert.equal(special.getDrainAmountForWeaponId(HANDLED), 50);
   assert.equal(special.getDrainAmountForWeaponId(BOTH), 50);
+  // Wiki: Quick Smash gives no attack cooldown; the next attack may land next tick.
+  assert.equal(special.getTraits().attackSpeedTicks, 1);
 });
 
 test("Justine sells the handle for 15 Last Man Standing points", () => {

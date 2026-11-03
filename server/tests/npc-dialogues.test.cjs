@@ -1581,3 +1581,21 @@ test('dialogue alternatives follow saved pronouns independently of the body', ()
   assert.equal(formatPlayerText('[He/She/They] are ready.', player(2)), 'They are ready.');
   assert.equal(formatPlayerText('[Greetings, sir/Greetings, madam/Greetings]', player(2)), 'Greetings');
 });
+
+
+test('initial recovery rejects mutually exclusive prior menus instead of taking the first condition', () => {
+  const variant = 'forming-a-fellowship-capturing-a-spy-talking-to-akrisae-after-the-truth-serum-breaks';
+  assert.equal(collectMenuBefore(data['While Guthix Sleeps'], variant,
+    { initial: true, callerName: 'Akrisae' }), undefined);
+  const menu = { type: 'choice', options: [{ text: 'Old option', steps: [] }] };
+  const line = { type: 'line', speaker: 'Akrisae', text: 'Hello.' };
+  const record = { variants: {
+    'talking-first': [line, menu],
+    'talking-conditional': [line,
+      { type: 'condition', text: 'If available:', steps: [menu] },
+      { type: 'condition', text: 'If used:', steps: [menu] }],
+    'talking-again': [line],
+  } };
+  assert.equal(collectMenuBefore(record, 'talking-again',
+    { initial: true, callerName: 'Akrisae' }), undefined, 'ambiguity cannot fall back to an older menu');
+});

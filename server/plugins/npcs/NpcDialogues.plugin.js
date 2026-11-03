@@ -351,12 +351,16 @@ function topLevelMenu(steps, nested = false) {
   const direct = (steps ?? []).find(step => step.type === "choice" && step.options?.length);
   if (direct) return direct;
   if (!nested) return undefined;
-  for (const step of steps ?? []) {
-    if (step.type === "condition") {
-      const menu = topLevelMenu(step.steps, true);
-      if (menu) return menu;
+  const menus = [];
+  const visit = (nodes) => {
+    for (const step of nodes ?? []) {
+      if (step.type === "choice" && step.options?.length) menus.push(step);
+      else if (step.type === "condition") visit(step.steps);
     }
-  }
+  };
+  visit(steps);
+  // A recovered historical menu has no guard context: never choose among alternatives.
+  return menus.length === 1 ? menus[0] : menus.length > 1 ? null : undefined;
 }
 
 /** Named source actors establish menu ownership on pages shared by several NPCs. */
@@ -398,7 +402,8 @@ function collectMenuBefore(record, variantName, { initial = false, callerName } 
       if (speakers.size !== 1 || !speakers.has(actor)) continue;
     }
     const found = topLevelMenu(variants[keys[i]], initial);
-    if (found) menu = { step: found, rest: [], record: undefined };
+    if (found === null) menu = undefined; // An ambiguous nearer variant rules out older menus.
+    else if (found) menu = { step: found, rest: [], record: undefined };
   }
   return menu;
 }

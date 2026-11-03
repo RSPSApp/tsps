@@ -1,9 +1,9 @@
 /**
  * The Alchemical Hydra's combat method (Wiki: Alchemical Hydra/Strategies; stats from
  * monsters-complete): ranged and magic, switching every three basic attacks (every attack once
- * enraged), 35 at most and every 6 ticks, 55 and every 4 ticks enraged; the phase's special in
- * place of an attack when the count says so (Fight.AlchemicalHydra.js). Protection prayers block
- * its attacks entirely, as for any NPC.
+ * enraged), 35 at most and every 6 ticks, 55 and every 4 ticks enraged (52 while an incorrect
+ * vent has empowered it); the phase's special in place of an attack when the count says so
+ * (Fight.AlchemicalHydra.js). Protection prayers block its attacks entirely, as for any NPC.
  */
 const Common = require("./Common.AlchemicalHydra");
 
@@ -34,7 +34,7 @@ function combatClass() {
     hits(character, target) {
       if (!character || !target || !this.style) return [];
       const fight = character.getAsNpc?.()?.__hydraFight;
-      const max = fight?.enraged ? combat.enragedMaxHit : combat.maxHit;
+      const max = fight?.maxHit?.() ?? combat.maxHit;
       const hit = new PendingHit(character, target, this, this.delay);
       hit.setTotalDamage(Math.min(max, hit.getTotalDamage()));
       return [hit];

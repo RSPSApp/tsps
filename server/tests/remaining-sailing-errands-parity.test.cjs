@@ -271,6 +271,22 @@ test('Current Affairs audit passes matching answers and re-asks only misses', ()
   h.hooks.namedNpcs.get('Councillor Catherine')['Talk-to']({ player: h.player, npcId: N.COUNCILLOR_CATHERINE });
   assert.equal(h.quest.getStage(h.player), 30);
   assert.equal(h.varbits.get(18288), 1, 'audit-start varbit mirrors the quiz');
+  assert.equal(h.attrs.get('current-affairs:form-answers'), '00000000', 'the completed form stays saved for relog');
+  assert.equal(h.varbits.get(18290), 1, 'answer q1 stays published after the audit');
+  assert.equal(h.varbits.get(18298), 1, 'correctness c1 is published on the passing audit');
+});
+
+test('Current Affairs login restores the completed form answers, correctness and dialogue flags', () => {
+  const h = makeHarness('../plugins/quests/quests/CurrentAffairs.Quest', { Sailing: 22, Fishing: 10 });
+  h.quest.setStage(h.player, 45);
+  // Capture 3467's finishing answers, stored 0-based: 1,1,3,1,1,3,1,2.
+  h.attrs.set('current-affairs:form-answers', '00200201');
+  h.attrs.set('current-affairs:kit-bought', true);
+  h.hooks.logins[0]({ player: h.player });
+  assert.deepEqual([...Array(8)].map((_, i) => h.varbits.get(18290 + i)), [1, 1, 3, 1, 1, 3, 1, 2]);
+  assert.deepEqual([...Array(8)].map((_, i) => h.varbits.get(18298 + i)), [1, 1, 1, 1, 1, 1, 1, 1]);
+  assert.equal(h.varbits.get(18284), 1, 'form-dialogue flag survives login');
+  assert.equal(h.varbits.get(18286), 1, 'Harry chat flag survives login');
 });
 
 // ---------------------------------------------------------------------------

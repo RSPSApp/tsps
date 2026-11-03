@@ -14,6 +14,7 @@ import { QuestHelperPlugin } from "../../../game/plugins/questhelper/QuestHelper
 import { FirstPersonPlugin } from "../../../game/plugins/firstperson/FirstPersonPlugin";
 import { TouchControlsPlugin } from "../../../game/plugins/touchcontrols/TouchControlsPlugin";
 import { GameFrame317Plugin } from "../../../game/plugins/gameframe317/GameFrame317Plugin";
+import { PortraitModePlugin } from "../../../game/plugins/portraitmode/PortraitModePlugin";
 import { GpuPlugin } from "../../../game/plugins/gpu/GpuPlugin";
 import { GroundItemsConfig } from "../../../game/plugins/grounditems/GroundItemsConfig";
 import { GroundItemsPlugin } from "../../../game/plugins/grounditems/GroundItemsPlugin";
@@ -68,6 +69,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     HdPlugin,
     FirstPersonPlugin,
     TouchControlsPlugin,
+    PortraitModePlugin,
     GameFrame317Plugin,
     GroundItemsPlugin,
     InteractHighlightPlugin,

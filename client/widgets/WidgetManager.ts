@@ -3,7 +3,13 @@ import type { SeqTypeLoader } from "../rs/config/seqtype/SeqTypeLoader";
 import { WidgetLoader } from "./WidgetLoader";
 import type { WidgetNode } from "./WidgetNode";
 import { runCs1 } from "./cs1/runCs1";
-import { layoutSingleWidget, layoutWidgets } from "./layout/WidgetLayout";
+import { layoutSingleWidget, layoutWidgets, setWidgetLayoutAdjuster } from "./layout/WidgetLayout";
+import { isMobileMode } from "../common/utils/DeviceUtil";
+import {
+    adjustMobilePortraitWidget,
+    isPortraitModeEnabled,
+    setMobilePortraitLayoutActive,
+} from "../game/plugins/portraitmode/PortraitLayout";
 
 export type { WidgetNode };
 
@@ -642,7 +648,12 @@ export class WidgetManager {
      * @param height New height
      */
     resize(width: number, height: number): void {
-        const changed = this.canvasWidth !== width || this.canvasHeight !== height;
+        // Portrait Mode plugin: an upright phone rearranges the mobile gameframe (601).
+        const portrait = isMobileMode && isPortraitModeEnabled();
+        setWidgetLayoutAdjuster(portrait ? adjustMobilePortraitWidget : null);
+        const portraitChanged = setMobilePortraitLayoutActive(portrait && height > width);
+        const changed =
+            portraitChanged || this.canvasWidth !== width || this.canvasHeight !== height;
         this.canvasWidth = width;
         this.canvasHeight = height;
         if (changed) {

@@ -1,5 +1,6 @@
 let PrayerHandler;
 let core;
+let pluginApi;
 
 // OpenRune cache names: component.wornitems:deathkeep and interface.deathkeep.
 const OPEN_ITEMS_KEPT_ON_DEATH_BUTTON = (387 << 16) | 5;
@@ -41,8 +42,10 @@ function getItemsToKeep(player, settings) {
   return core.PlayerDeathTask.getItemsToKeep(player, getAmountToKeep(player, settings));
 }
 
-function getDeathItems(player, toKeep) {
+function getDeathItems(player, toKeep, settings) {
   const kept = new Set(toKeep);
+  const grave = { player, playerKill: settings.playerKill, makesGrave: false };
+  pluginApi.emitCustomEvent("gravestones:makes-grave", grave);
   const items = [];
   const states = [];
   let risk = 0;
@@ -56,7 +59,7 @@ function getDeathItems(player, toKeep) {
     }
 
     const tradeable = item.isTradeable();
-    const lostOnDeath = tradeable || item.isLostOnDeath();
+    const lostOnDeath = tradeable || item.isLostOnDeath() || grave.makesGrave;
     items.push({
       slot: items.length,
       itemId: item.getId(),
@@ -82,7 +85,7 @@ function getDeathItems(player, toKeep) {
 
 function open(player, settings = getSettings(player)) {
   const toKeep = getItemsToKeep(player, settings);
-  const deathItems = getDeathItems(player, toKeep);
+  const deathItems = getDeathItems(player, toKeep, settings);
   const keptItemIds = toKeep.map((item) => item.getId());
   while (keptItemIds.length < 4) keptItemIds.push(-1);
   player.setInterfaceId(ITEMS_KEPT_ON_DEATH_INTERFACE_ID);
@@ -145,6 +148,7 @@ module.exports = {
   name: "ItemsKeptOnDeath",
   register(api) {
     core = api.core;
+    pluginApi = api;
     PrayerHandler = api.getPrayerHandler();
     api.onInterfaceActionButton(OPEN_ITEMS_KEPT_ON_DEATH_BUTTON, openFromWornItems);
     api.onInterfaceActionButton(ITEMS_KEPT_SETTINGS_COMPONENT, toggleSetting);

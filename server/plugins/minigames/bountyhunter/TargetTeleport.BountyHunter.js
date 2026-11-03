@@ -137,8 +137,10 @@ function arenaRefusal(player) {
 function spellFor(player) {
   const { Item, ItemIdentifiers: Items } = core;
   const spellbook = player.getSpellbook();
+  const widget = core.CacheDefinitions.getSpellByName(SPELL_NAME);
+  if (!widget) throw new Error(`Missing cache spell: ${SPELL_NAME}`);
   const spell = new (class extends core.Spell {
-    spellId() { return -1; }
+    spellId() { return widget.widgetId; }
     levelRequired() { return LEVEL; }
     baseExperience() { return EXPERIENCE; }
     itemsRequired() { return [new Item(Items.LAW_RUNE, 1), new Item(Items.DEATH_RUNE, 1), new Item(Items.CHAOS_RUNE, 1)]; }

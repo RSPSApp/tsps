@@ -1359,6 +1359,15 @@ test('DOTI interruption cannot win Adala, and the finale rewards wait for the gu
   h.quest.complete(p); assert.equal(p.xp.length, 3);
 });
 
+test('DOTI login restores the captured finale fight varbit', () => {
+  const { h, p } = doti();
+  h.quest.setStage(p, 50);
+  p.attrs.set('death-on-the-isle:final-fight', 6);
+  p.varbits.delete(11258);
+  h.hooks.onPlayerLogin.forEach(fn => fn({ player: p }));
+  assert.equal(p.varbits.get(11258), 6, 'capture 1695 leaves doti_final_fight at 6 after completion');
+});
+
 test('Quetzals use cache destinations, reject closed or locked map clicks, and finish the captured flight once', () => {
   const h = harness('TwilightPromise'), p = player();
   const plugin = require('../plugins/world/Quetzals.plugin'); plugin.register(h.api);

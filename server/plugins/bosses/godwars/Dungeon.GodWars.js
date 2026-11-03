@@ -40,15 +40,17 @@ function inGodWars(player) {
   return Common.inDungeon(player.getLocation()) || area?.isGodWarsInstance === true || area?.isGodWarsArea === true;
 }
 
-/** Heals and resets the general and bodyguards of an empty shared chamber. */
+/** Heals and resets the general and bodyguards of an empty shared chamber (health and every stat). */
 function resetChamber(faction) {
+  const { Skill } = Common.core;
   const ids = new Set([faction.general, ...faction.bodyguards]);
+  const stats = [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.RANGED, Skill.MAGIC];
   Common.core.World.getNpcs().forEach((npc) => {
     if (!npc || !ids.has(npc.getId()) || npc.getPrivateArea() || npc.getHitpoints() <= 0) return;
     if (!Common.inBox(faction.room, npc.getLocation().getX(), npc.getLocation().getY(), npc.getLocation().getZ())) return;
     npc.getCombat().reset();
     npc.setHitpoints(npc.getMaxHitpoints());
-    npc.setDefenceLevel(npc.getCurrentDefinition().getStats()[2]);
+    for (const skill of stats) npc.setCurrentLevels(skill, npc.getMaxLevel(skill));
   });
 }
 
@@ -270,4 +272,4 @@ function attachDungeon(api) {
   api.registerCommand("essence", essenceCommand, Common.core.PlayerRights.ADMINISTRATOR, "Set God Wars essence: ::essence [amount] [god]");
 }
 
-module.exports = { attachDungeon, openOverlay, closeOverlay, inGodWars, chamberOccupants };
+module.exports = { attachDungeon, openOverlay, closeOverlay, inGodWars, chamberOccupants, resetChamber };

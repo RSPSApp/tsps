@@ -1,7 +1,7 @@
 import * as pako from "pako";
 
 import type { ObjectSpawn } from "./hostProtocol/objectSpawnsMessage";
-import type { EditModeEdit } from "./types";
+import type { EditModeEdit, EditModeRegionOverlays } from "./types";
 
 const MAP_SIZE = 64;
 const PLANE_COUNT = 4;
@@ -402,6 +402,40 @@ export function buildAreaClipboard(
     return JSON.stringify({ format: "elvarg-map-area", version: 1, origin: { x: bounds.minX, y: bounds.minY },
         width: bounds.maxX - bounds.minX + 1, height: bounds.maxY - bounds.minY + 1,
         planes: PLANE_COUNT, wideTerrain, tiles, objects });
+}
+
+/** Decodes each tile's overlay, shape and rotation from region terrain data, as the scene builder reads them. */
+export function readRegionOverlays(data: Uint8Array, wideTerrain: boolean): EditModeRegionOverlays {
+    const tileCount = PLANE_COUNT * MAP_SIZE * MAP_SIZE;
+    const result = {
+        overlays: new Uint16Array(tileCount),
+        shapes: new Uint8Array(tileCount),
+        rotations: new Uint8Array(tileCount),
+    };
+    const width = wideTerrain ? 2 : 1;
+    let offset = 0;
+    const read = (bytes = width): number => {
+        if (offset + bytes > data.length) throw new Error("Truncated region terrain data");
+        const value = bytes === 2 ? (data[offset] << 8) | data[offset + 1] : data[offset];
+        offset += bytes;
+        return value;
+    };
+    for (let index = 0; index < tileCount; index++) {
+        while (true) {
+            const opcode = read();
+            if (opcode === 0) break;
+            if (opcode === 1) {
+                read(1);
+                break;
+            }
+            if (opcode <= 49) {
+                result.overlays[index] = read();
+                result.shapes[index] = (opcode - 2) >> 2;
+                result.rotations[index] = (opcode - 2) & 3;
+            }
+        }
+    }
+    return result;
 }
 
 /** Compare complete previews to their original map, preserving ids needed for collision removal. */

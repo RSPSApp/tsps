@@ -148,3 +148,100 @@ test("every general's and bodyguard's projectile hit splats on the tick it lands
     Common.init({ core: previous });
   }
 });
+
+test("K'ril's prayer smash always lands 35-49 (Wiki: \"always dealing 35-49 damage\")", () => {
+  const previous = Common.core;
+  const applied = [];
+  const built = [];
+  const chain = { withAngle: () => chain, withProgress: () => chain, sendProjectile: () => {} };
+  Common.init({
+    core: {
+      ...previous,
+      CombatMethod: class {},
+      CombatType: { MELEE: "MELEE", RANGED: "RANGED", MAGIC: "MAGIC" },
+      CombatFactory: {
+        applyStyleDamage: (hit, maxHit, options) => applied.push({ hit, maxHit, options }),
+        inCombat: () => false,
+      },
+      PendingHit: class {
+        constructor(attacker, target, method, delayOrConfig) {
+          this.delay = typeof delayOrConfig === "number" ? delayOrConfig : delayOrConfig?.delay;
+          this.config = delayOrConfig;
+          built.push(this);
+        }
+      },
+      Animation: class {},
+      Graphic: class {},
+      Sound: class {},
+      Sounds: { sendSound: () => {} },
+      Misc: { randomInclusive: () => 0 },
+      PrayerHandler: { isActivated: () => true, PROTECT_FROM_MELEE: "melee" },
+      Projectile: { centreOf: () => ({ getDistance: () => 1 }), ticksToLand: () => 1, createProjectile: () => chain },
+    },
+  });
+  const providers = new Map();
+  const api = { registerNpcCombatMethodProvider: (id, Method) => providers.set(id, Method) };
+  try {
+    require("../plugins/bosses/godwars/Zamorak.GodWars").attachZamorak(api);
+    const general = Common.factionByKey("zamorak").general;
+    const Method = providers.get(general);
+    // The first roll picks melee over magic (non-zero), the second lands the one-in-nine smash.
+    let rolls = 0;
+    Common.init({ core: { ...Common.core, Misc: { randomInclusive: () => (rolls++ === 0 ? 1 : 0) } } });
+    const npc = {
+      getLocation: () => ({ getX: () => 2900, getY: () => 5300, getZ: () => 2 }),
+      getPlayersWithinDistance: () => [],
+      performAnimation: () => {}, performGraphic: () => {}, forceChat: () => {},
+      getDefinition: () => ({ getMaxHit: () => 30 }),
+    };
+    const target = { isPlayer: () => true, getLocation: () => ({ getX: () => 2901, getY: () => 5300, getZ: () => 2 }) };
+    const method = new Method();
+    method.start(npc, target);
+    assert.equal(method.attack.maxHit, 49);
+    assert.equal(method.attack.minHit, 35);
+    method.hits(npc, target);
+    assert.equal(built.length, 1);
+    assert.equal(built[0].config.rollAccuracy, false, "the smash skips the accuracy roll");
+    assert.equal(applied[0].maxHit, 49);
+    assert.equal(applied[0].options.minHit, 35);
+    assert.equal(applied[0].options.bypassProtectionPrayer, true, "it hits through Protect from Melee");
+  } finally {
+    Common.init({ core: previous });
+  }
+});
+
+test("an empty chamber resets the general's health and every drained stat, not just Defence", () => {
+  const previous = Common.core;
+  const skill = { ATTACK: "attack", STRENGTH: "strength", DEFENCE: "defence", RANGED: "ranged", MAGIC: "magic" };
+  const drained = new Map([
+    ["attack", 200], ["strength", 280], ["defence", 180], ["ranged", 300], ["magic", 60],
+  ]);
+  const npc = {
+    getId: () => 2215,
+    getPrivateArea: () => null,
+    getHitpoints: () => 90,
+    getMaxHitpoints: () => 255,
+    getLocation: () => at(2870, 5360, 2),
+    getCombat: () => ({ reset: () => {} }),
+    setHitpoints: (value) => { npc.hitpoints = value; },
+    getMaxLevel: (each) => ({ attack: 280, strength: 350, defence: 250, ranged: 350, magic: 80 })[each],
+    setCurrentLevels: (each, value) => drained.set(each, value),
+  };
+  Common.init({
+    core: {
+      ...previous,
+      Skill: skill,
+      World: { getNpcs: () => [npc] },
+    },
+  });
+  try {
+    const { resetChamber } = require("../plugins/bosses/godwars/Dungeon.GodWars");
+    resetChamber(Common.factionByKey("bandos"));
+    assert.equal(npc.hitpoints, 255, "healed to full");
+    assert.deepEqual(Object.fromEntries(drained), {
+      attack: 280, strength: 350, defence: 250, ranged: 350, magic: 80,
+    });
+  } finally {
+    Common.init({ core: previous });
+  }
+});

@@ -9,10 +9,18 @@
     pointer-events: none;
 }
 
+/* Portrait Mode: a smaller stick on the left, just above the minimap and orbs (--hud-inset is
+   the bottom HUD's height), and the action button above the side panel. */
+.touch-controls.portrait {
+    --stick-size: 84px;
+    --knob-size: 36px;
+    --stick-offset: 8px;
+}
+
 .touch-joystick {
     position: absolute;
     left: calc(var(--stick-offset) + env(safe-area-inset-left, 0px));
-    bottom: calc(var(--stick-offset) + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--hud-inset, 0px) + var(--stick-offset) + env(safe-area-inset-bottom, 0px));
     width: var(--stick-size);
     height: var(--stick-size);
     display: flex;
@@ -55,7 +63,7 @@
     position: absolute;
     top: calc(var(--stick-offset) + env(safe-area-inset-top, 0px));
     right: calc(var(--stones-inset, 0px) + var(--stick-offset) + env(safe-area-inset-right, 0px));
-    bottom: calc(var(--stick-offset) + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--hud-inset, 0px) + var(--stick-offset) + env(safe-area-inset-bottom, 0px));
     display: flex;
     flex-direction: column;
     justify-content: flex-end;

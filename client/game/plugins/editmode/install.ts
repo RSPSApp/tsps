@@ -66,7 +66,7 @@ import {
     type LocPlacementPreviewRenderer,
 } from "./LocPlacementPreviewOverlay";
 import { ModelImageCaptureOverlay } from "./ModelImageCaptureOverlay";
-import { buildAreaClipboard, buildRegionPack, parseRegionPack, buildObjectSpawnExport, objectSpawnEdits } from "./RegionPack";
+import { buildAreaClipboard, buildRegionPack, parseRegionPack, buildObjectSpawnExport, objectSpawnEdits, readRegionOverlays } from "./RegionPack";
 import {
     ZoneGroundOverlay,
     type ZoneGroundRect,
@@ -1854,8 +1854,19 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         copyArea: (bounds, edits) => buildAreaClipboard(
             bounds,
             (tileX, tileY) => buildEditorRegionPack(client, { tileX, tileY, plane: 0 }, sceneEdits(edits), editorRegionReplacements).data,
-            client.loadedCache?.info.game === "oldschool" && (client.loadedCache?.info.revision ?? 0) >= 209,
+            hasWideTerrain(client),
         ),
+        getRegionOverlays: (regionId, edits) => {
+            try {
+                // Objects play no part in overlays, so their edits are left out of the pack.
+                const pack = buildEditorRegionPack(client, {
+                    tileX: (regionId >> 8) << 6, tileY: (regionId & 0xff) << 6, plane: 0,
+                }, edits, editorRegionReplacements, false);
+                return readRegionOverlays(parseRegionPack(pack.data).terrainData, hasWideTerrain(client));
+            } catch {
+                return undefined;
+            }
+        },
         markMapEditsSaved: (packs, spawns) => {
             for (const pack of packs) {
                 const parsed = parseRegionPack(pack.data);
@@ -2204,6 +2215,11 @@ function reloadTile(renderer: TerrainHost, tile: EditModeTile): void {
     renderer.scheduleLocReload(mapId >> 8, mapId & 0xff);
 }
 
+/** Revision 209 widened terrain values to two bytes. */
+function hasWideTerrain(client: OsrsClient): boolean {
+    return client.loadedCache?.info.game === "oldschool" && (client.loadedCache?.info.revision ?? 0) >= 209;
+}
+
 function buildEditorRegionPack(
     client: OsrsClient,
     tile: EditModeTile,
@@ -2233,8 +2249,7 @@ function buildEditorRegionPack(
             objectData,
             terrainData,
             edits,
-            client.loadedCache?.info.game === "oldschool" &&
-                (client.loadedCache?.info.revision ?? 0) >= 209,
+            hasWideTerrain(client),
             includeObjectEdits,
         ),
     };

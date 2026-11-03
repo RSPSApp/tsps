@@ -343,9 +343,11 @@ export function getCanvasCssSize(canvas: HTMLCanvasElement): { width: number; he
 export function getOrientation(): "portrait" | "landscape" {
     if (typeof window === "undefined") return "landscape";
 
+    // The forced size is already rotated when the app is turned sideways; unrotated (portrait
+    // mode) it is the upright viewport.
     const forcedLandscape = getForcedLandscapeViewportSize();
     if (forcedLandscape) {
-        return "landscape";
+        return forcedLandscape.width < forcedLandscape.height ? "portrait" : "landscape";
     }
 
     // Use visualViewport if available (more accurate on mobile with keyboard open)

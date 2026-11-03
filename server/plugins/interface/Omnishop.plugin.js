@@ -21,6 +21,9 @@
  *   inventory space.
  * - "omnishop:purchase" { player, shop, stock, itemId, handled }: once a unit is paid for;
  *   `handled` means the owner gave something else (an unlock), so no item is handed over.
+ * - "omnishop:units" { player, shop, stock, single }: a transaction-multiplier-0 row buys one
+ *   unit an order; its owner sets `single` false where live buys the clicked amount (the
+ *   Agility Arena Store's Agility XP, rsprox 75, 1863, 4308).
  * - "omnishop:can-sell" { player, shop, stock, itemId, cancel }: the owner can refuse a sale;
  *   the same check controls whether the side panel offers Sell.
  *
@@ -333,8 +336,15 @@ function buyOne(player, shop, entry) {
   return true;
 }
 
+function singleUnit(player, shop, entry) {
+  const request = { player, shop: shop.name, stock: cache().getDbRowName(entry.row), single: true };
+  pluginApi.emitCustomEvent("omnishop:units", request);
+  return request.single !== false;
+}
+
 function buy(player, shop, entry, quantity) {
-  const units = entry.single ? 1 : entry.maxPurchase > 0 ? Math.min(quantity, entry.maxPurchase) : quantity;
+  const units = entry.single && singleUnit(player, shop, entry) ? 1
+    : entry.maxPurchase > 0 ? Math.min(quantity, entry.maxPurchase) : quantity;
   for (let unit = 0; unit < units; unit++) if (!buyOne(player, shop, entry)) break;
   pluginApi.emitCustomEvent("persistence:save", { player, reason: "omnishop" });
 }

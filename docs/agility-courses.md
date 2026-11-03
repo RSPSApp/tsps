@@ -368,8 +368,14 @@ course's `marks` block:
   lap count line, with the ticket's item box and jingle 71. The first tag is the Karamja medium
   task; the elite Karamja diary doubles a tag 1 time in 10. Karamja gloves 2-4 add 10% to obstacle
   XP (Wiki).
-- **Not done:** Pirate Jackie's ticket-for-XP exchange (345 XP a ticket, interface 819 in 75), so
-  29480 tickets can't be spent yet; broken-plank falls and the climbing ropes back up; the saw
+- **Pirate Jackie:** Trade and "I'd like to trade in my tickets" open the cache's Agility Arena
+  Store (omnishop `agilityarena_rewards_newshop`, interface 819 in 75, 1102, 1738, 1863, 4308):
+  345 Agility XP a ticket (379.5 with Karamja gloves 2+), Buy N spending N tickets; herbs noted;
+  the Graceful recolour swaps the six default pieces for the Agility Arena ones; the captured info
+  texts. The old-or-new shop question needs both tickets. Discontinued tickets (2996) used on her
+  become vouchers 1:1 (the Wiki gives no rate). The old Ticket Exchange is the shops.json one, at
+  its item values and without its tiered XP.
+- **Not done:** reverting the Agility Arena graceful at Jackie; broken-plank falls and the climbing ropes back up; the saw
   blades; fail rates for the clickable obstacles (the Wiki has no charts); the re-entry and
   world-hop locks. The north ledge's and west hand holds' animations are mirrored from the
   captured sides.

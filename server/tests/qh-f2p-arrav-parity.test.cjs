@@ -104,10 +104,13 @@ test('Charlie first-ask and payment conditions do not leak the location after fi
   }), null, 'conditions on other Charlie pages defer to their owner');
   assert.equal(variantFor(q, p, charlie).variant, 'black-arm-gang-talking-to-charlie-the-tramp');
   assert.equal(condition(q, p, charlie, 'If asking for the first time:'), true);
+  assert.equal(lastVarbit(p, 11510) ?? 0, 0, 'rsprox 1705: opening the talk does not set the met bit');
+  const met = { player: p, npcId: charlie, text: "You never know. You'll find a lady down there called Katrine. Speak to her. But whatever you do, don't upset her." };
+  q.emit('npc-dialogue:line', met); met.after();
+  assert.equal(lastVarbit(p, 11510), 1);
   variantFor(q, p, charlie);
   assert.equal(condition(q, p, charlie, 'If asking for the first time:'), false);
   assert.equal(condition(q, p, charlie, 'Otherwise:'), true);
-  assert.equal(lastVarbit(p, 11510), 1);
 
   const paid = player(); q.quest.setStage(paid, 3); paid.attributes.set('shield-of-arrav:black-arm-task', true); paid.items.set(995, 10);
   q.emit('npc-dialogue:action', { player: paid, npcId: charlie, stepId: '24Nlqb' });
@@ -120,6 +123,25 @@ test('Charlie first-ask and payment conditions do not leak the location after fi
   assert.equal(condition(q, paid, charlie, "If you haven't yet paid Charlie for the information:"), false);
   assert.equal(condition(q, paid, charlie, 'Asking again after already paying Charlie for the information:'), true);
   assert.equal(lastVarbit(paid, 11511), 1);
+});
+
+test("Charlie's 'Okay, here you go.' gift follows carried coins and takes exactly one", () => {
+  const q = register(), charlie = core.NpcIdentifiers.CHARLIE_THE_TRAMP;
+  const ask = (p, stepId) => q.hooks.get('onNpcDialogueCondition')[0]({ player: p, npcId: charlie, stepId, text: '', pages: [{ page: 'Shield of Arrav' }] });
+  const broke = player(); q.quest.setStage(broke, 2); broke.attributes.set('shield-of-arrav:reldo-directions', true);
+  assert.equal(ask(broke, 'Vd68yh'), false, 'no coins: not the "Hey, thanks a lot!" branch');
+  assert.equal(ask(broke, 'jyd1Up'), true, "no coins: 'Oh wait. I haven't got any, sorry.'");
+  const stale = { player: broke, npcId: charlie, stepId: 'SPAjYU' };
+  q.emit('npc-dialogue:action', stale);
+  assert.equal(stale.end, true, 'coins gone by the time the gift runs: the talk stops');
+
+  const p = player(); q.quest.setStage(p, 2); p.attributes.set('shield-of-arrav:reldo-directions', true); p.items.set(995, 5);
+  assert.equal(ask(p, 'Vd68yh'), true); assert.equal(ask(p, 'jyd1Up'), false);
+  const gift = { player: p, npcId: charlie, stepId: 'SPAjYU' };
+  q.emit('npc-dialogue:action', gift);
+  assert.equal(gift.handled, true); assert.notEqual(gift.end, true);
+  assert.equal(p.items.get(995), 4, 'the gift takes one coin');
+  assert.equal(p.attributes.get('shield-of-arrav.charlie-paid') ?? 0, 0, 'a gift is not the information payment');
 });
 
 test('quest start and completion mirror the current-cache quest-state varbit', () => {

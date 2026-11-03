@@ -91,6 +91,10 @@ module.exports = function registerShieldOfArravQuest(api) {
   const BARAEK_PAY_ACTIONS = new Set(["6ECylA", "5UTIVW"]);
   const CHARLIE_TEN_COIN_MESSAGES = new Set(["-YbdFO", "OfFGS6"]);
   const CHARLIE_FIVE_COIN_MESSAGES = new Set(["24Nlqb", "Fo_zeD", "DSC-L4", "7GfBwz"]);
+  /** "Okay, here you go." to Charlie's "Spare some change, guv?": a one-coin gift, not the hint payment. */
+  const CHARLIE_HAS_COINS_CONDITION = "Vd68yh";
+  const CHARLIE_NO_COINS_CONDITION = "jyd1Up";
+  const CHARLIE_GIFT_ACTION = "SPAjYU";
   const STRAVEN_HANDIN_ACTIONS = new Set(["XSi6qr"]);
   const STRAVEN_KEY_MESSAGE = "G02Ai7";
   const STRAVEN_LOST_KEY_MESSAGES = new Set(["zyd3U3", "xWwA_D"]);
@@ -349,8 +353,8 @@ module.exports = function registerShieldOfArravQuest(api) {
         return { page: PAGE, variant: "black-arm-gang-talking-to-charlie-the-tramp-after-accepting-katrine-s-task" };
       }
       if (stage >= STAGE_READ_BOOK && attr(player, DIRECTIONS_ATTRIBUTE)) {
+        // rsprox 1705: the met bit is set on "You never know..." (renderQuestLine), not here.
         charlieFirstAsk.set(player, !attr(player, CHARLIE_MET_ATTRIBUTE));
-        markCharlieMet(player);
         return { page: PAGE, variant: "black-arm-gang-talking-to-charlie-the-tramp" };
       }
       return null;
@@ -444,6 +448,8 @@ module.exports = function registerShieldOfArravQuest(api) {
     if (npcId === CHARLIE_NPC_ID) {
       if (value.includes("combat level is less than 10")) return player.getSkillManager().getCombatLevel() < 10;
       if (onShieldPage === false) return null;
+      if (stepId === CHARLIE_HAS_COINS_CONDITION) return coins(player) > 0;
+      if (stepId === CHARLIE_NO_COINS_CONDITION) return coins(player) <= 0;
       if (value.includes("haven't yet paid charlie") || value.includes("hasn't yet paid charlie")) {
         return charliePaid(player) < CHARLIE_FULL_PAYMENT;
       }
@@ -587,6 +593,18 @@ module.exports = function registerShieldOfArravQuest(api) {
     }
     if (stepId === BARAEK_COINS_MESSAGE) {
       event.box = { items: [COINS_ID] };
+      return;
+    }
+
+    if (npcId === CHARLIE_NPC_ID && stepId === CHARLIE_GIFT_ACTION) {
+      // Rechecked here: the coins may have gone since the condition was answered.
+      if (coins(player) <= 0) {
+        event.handled = true;
+        event.end = true;
+        return;
+      }
+      player.getInventory().deleteNumber(COINS_ID, 1);
+      event.handled = true;
       return;
     }
 

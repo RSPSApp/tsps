@@ -309,6 +309,13 @@ test("Trade on an NPC with shop versions opens the version the player's progress
   assert.equal(trade(3837), false, "no version and no Default: Baba Yaga stays shut");
   assert.equal(trade(822), false, "an NPC with one shop keeps its fixed binding");
   assert.equal(opened.length, 0);
+
+  assert.equal(trade(4280), true, "Ned's Trade opens his default rope shop");
+  assert.equal(nameOf(opened.pop()), "Ned's Handmade Rope (100% Wool) (Default)");
+  picked = "Ned's Handmade Rope (100% Wool) (Fremennik Isles)";
+  assert.equal(trade(4280), true);
+  assert.equal(nameOf(opened.pop()), picked);
+  assert.equal(trade(4280, 1), false, "Ned's Talk-to still belongs to his dialogue");
 });
 
 test("a custom shop's npcInteractions bind its NPC, over shops.json on the same option", (t) => {

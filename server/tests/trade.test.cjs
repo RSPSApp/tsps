@@ -68,7 +68,7 @@ function createPlayer(name, index) {
     getInterfaceId: () => interfaceId,
     setInterfaceId: (next) => { interfaceId = next; },
     isPlayerBot: () => false,
-    getFrameUpdater: () => ({ clear() {} }),
+    getFrameUpdater: () => ({ clear() {}, clearGroup() {} }),
     getAttribute: () => undefined,
   };
   player.inventory = new Inventory(player);
@@ -139,6 +139,60 @@ test("a second decline does not return items twice", () => {
 
   assert.equal(count(alice, LOBSTER), 3);
   assert.equal(count(bob, COINS), 500);
+});
+
+test("closing either trade screen cancels both offers by every interface-close route", (t) => {
+  const { PacketSender } = require("../dist/net/packet/PacketSender");
+  let closed;
+  require("../plugins/interface/Trading.plugin").register({
+    onCustomEvent: (name, handler) => { assert.equal(name, "interface:closed"); closed = handler; },
+  });
+  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => {
+    if (name === "interface:closed") closed(event);
+  });
+  for (const route of ["sendInterfaceRemoval", "closeInterruptibleInterfaces", "closeInterface"]) {
+    for (const confirm of [false, true]) {
+      const { alice, bob } = startTrade();
+      if (confirm) {
+        alice.getTrading().acceptTrade();
+        bob.getTrading().acceptTrade();
+      }
+      for (const player of [alice, bob]) {
+        const sender = new PacketSender(player);
+        player.getPacketSender = () => sender;
+      }
+      alice.getPacketSender()[route](alice.getInterfaceId());
+      for (const player of [alice, bob]) {
+        assert.equal(player.getTrading().getState(), 0, `${route}: ${confirm}`);
+        assert.equal(player.getTrading().getInteract(), null);
+        assert.equal(player.getTrading().getContainer().getValidItems().length, 0);
+        assert.equal(player.getStatus(), PlayerStatus.NONE);
+        assert.equal(player.getInterfaceId(), -1);
+      }
+      alice.getTrading().acceptTrade();
+      bob.getTrading().acceptTrade();
+      alice.getPacketSender()[route](confirm ? 334 : 335);
+      assert.equal(count(alice, LOBSTER), 3, 'repeated closes and stale accepts return nothing twice');
+      assert.equal(count(bob, COINS), 500);
+    }
+  }
+  const { alice, bob } = startTrade();
+  for (const player of [alice, bob]) {
+    const sender = new PacketSender(player);
+    sender.sendString = () => sender;
+    player.getPacketSender = () => sender;
+  }
+  closed({ player: alice, interfaceId: 231 });
+  assert.equal(alice.getTrading().getInteract(), bob, 'closing unrelated dialogue leaves the trade alone');
+  alice.getTrading().acceptTrade();
+  bob.getTrading().acceptTrade();
+  alice.getTrading().getButtonDelay().stop();
+  bob.getTrading().getButtonDelay().stop();
+  alice.getTrading().acceptTrade();
+  bob.getTrading().acceptTrade();
+  assert.equal(count(alice, COINS), 200, 'closing after completion does not return offers again');
+  assert.equal(count(bob, LOBSTER), 3);
+  assert.ok(!alice.messages.includes('Trade declined.'));
 });
 
 test("closing a trade after the other player's interface was closed still returns their items", () => {

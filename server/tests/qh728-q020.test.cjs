@@ -110,7 +110,13 @@ function harness() {
     onItemOnNpc: handler => itemOnNpc.push(handler),
     onItemOnItem: handler => itemOnItem.push(handler),
     onItemOnObject: handler => itemOnObject.push(handler),
-    onObjectInteraction: handler => objectInteraction.push(handler),
+    onObjectInteraction: (target, actions) => {
+      if (typeof target === 'function') objectInteraction.push(target);
+      else objectInteraction.push(event => {
+        if (core.ObjectDefinition.forId(event.objectId)?.getName() !== target) return;
+        actions[event.option ?? core.ObjectDefinition.forId(event.objectId)?.getActions()[event.clickType - 1]]?.(event);
+      });
+    },
     onNpcDeath: handler => npcDeaths.push(handler),
     onNpcBeforeDeath: handler => npcBeforeDeaths.push(handler),
     onPlayerLogin: handler => login.push(handler),
@@ -505,7 +511,7 @@ test('registered-dispatch chain reaches completion from a fresh stage 0 (not a l
   assert.equal(p.items.get(I.ANCIENT_STAFF), 1);
 });
 
-test('native pyramid ladders retain the diamond gate and pair every floor before generic fallback', async t => {
+test('native pyramid controls retain the diamond gate, exterior passage and paired floor ladders', async t => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const { PlayerSession } = require('../dist/net/PlayerSession');
   const { ClientConnection } = require('../dist/net/NetworkBuilder');
@@ -609,5 +615,170 @@ test('native pyramid ladders retain the diamond gate and pair every floor before
     const f = playerAt(11, 4); cleanup(test, f); await click(f, 6498, [2909, 4964, 3]);
     assert.equal(quest.getStage(f.player), 13);
     assert.deepEqual(position(f.player.getLocation()), [2844, 4964, 2]);
+  });
+
+  // RSProx3017 (rev231):6545->6546 and6547->6548, shape10/rotation1,
+  // sound62 and two ticks on the entrance tile before stepping to the other side.
+  const viewers = [];
+  t.mock.method(core.World, 'forEachNetworkPlayer', visit => viewers.forEach(visit));
+  function doorPlayer(test, stage = 11, placed = 4) {
+    const f = playerAt(stage, placed); cleanup(test, f);
+    f.packets = []; f.frames = [];
+    test.mock.method(f.player.getSession(), 'sendClientPacket', frame => { f.frames.push(frame); return true; });
+    const sender = f.player.getPacketSender();
+    for (const method of ['sendObject', 'sendObjectRemoval', 'sendSoundEffect']) {
+      const original = sender[method].bind(sender);
+      test.mock.method(sender, method, (...args) => {
+        f.packets.push([method, ...args]); return original(...args);
+      });
+    }
+    test.mock.method(f.player.getSession(), 'isTileInScene', () => true);
+    viewers.push(f.player);
+    test.after(() => {
+      PluginManager.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+      viewers.splice(viewers.indexOf(f.player), 1);
+    });
+    return f;
+  }
+  async function open(f, id, x, y) {
+    objectAt(id, [x, 2899, 0]);
+    f.player.setLocation(new core.Location(x, y, 0)); f.player.needsPlacement = false;
+    await f.connection.dispatch([{ type: 'object_option', id, x, y: 2899, clickType: 1, action: 'Open' }]);
+    f.connection.processTurnPackets();
+  }
+  function turn(...fixtures) {
+    core.World.processCycle++;
+    for (const f of fixtures) f.player.getMovementQueue().beginCycle();
+    core.TaskManager.process();
+    for (const f of fixtures) {
+      f.player.getMovementQueue().process(); core.TaskManager.processWalkTo(f.player.getIndex());
+    }
+  }
+  const owned = (f, id, x) => core.MapObjects.getPrivateArea(f.player, id, new core.Location(x, 2899, 0));
+  const added = f => f.packets.filter(row => row[0] === 'sendObject').map(row => row[1].getId());
+  for (const [id, openedId, x] of [[6545, 6546, 3233], [6547, 6548, 3232]]) {
+    for (const side of [-1, 1]) await t.test(`native Open${id} walks ${side < 0 ? 'north' : 'south'} and closes after two ticks`, async test => {
+      const f = doorPlayer(test), observer = doorPlayer(test, 0, 0);
+      f.player.setRunning(side < 0);
+      const at = new core.Location(x, 2899, 0), base = objectAt(id, [x, 2899, 0]);
+      const beforeClip = RegionManager.getClipping(x, 2899, 0, null);
+      assert.equal(core.ObjectDefinition.forId(id).getName(), 'Pyramid entrance');
+      assert.equal(core.CacheDefinitions.getObject(openedId).seqId, -1, 'no invented opening animation');
+      await open(f, id, x, 2899 + side);
+      turn(f);
+      assert.deepEqual(position(f.player.getLocation()), [x, 2899, 0]);
+      const leaf = owned(f, openedId, x);
+      assert.ok(leaf, 'the temporary opened leaf is registered for the acting player');
+      assert.equal(leaf.getOwner(), f.player);
+      assert.equal(leaf.getType(), 10); assert.equal(leaf.getFace(), 1);
+      assert.equal(core.MapObjects.get(id, at, null), base, 'the shared closed leaf is never removed');
+      assert.equal(owned(observer, openedId, x), null, 'an unready player gains no opened entrance');
+      assert.equal(RegionManager.getClipping(x, 2899, 0, null), beforeClip, 'global clipping stays intact');
+      assert.deepEqual(added(f), [openedId]); assert.deepEqual(added(observer), []);
+      const { encodeSound } = require('../dist/net/protocol/ClientProtocol');
+      assert.equal(f.packets.filter(row => row[0] === 'sendSoundEffect').length, 1);
+      assert.ok(f.frames.some(frame => frame.equals(encodeSound(62, { loops: 1, delay: 0 }))), 'native sound packet matches the capture');
+      const view = f.player.getSession().createPlayerView(f.player);
+      assert.deepEqual([view.x, view.y, view.level], [x, 2899, 0], 'native player sync sees the walked tile');
+      assert.equal(f.player.isNeedsPlacement(), false, 'passage is walking, not a teleport');
+      assert.equal(f.player.getForceMovement(), undefined);
+      turn(f);
+      assert.deepEqual(position(f.player.getLocation()), [x, 2899, 0]);
+      assert.ok(owned(f, openedId, x), 'the leaf stays open for the second tick');
+      turn(f);
+      assert.deepEqual(position(f.player.getLocation()), [x, 2899 - side, 0]);
+      assert.equal(owned(f, openedId, x), null);
+      assert.deepEqual(added(f), [openedId, id], 'the same shape/anchor is restored silently');
+      turn(f);
+      assert.equal(f.player.hasFlag('movement:ignore-clipping'), false);
+      assert.equal(quest.getStage(f.player), 12, 'opening does not enter the underground pyramid or advance the quest');
+      assert.equal(quest.getStage(observer.player), 0);
+    });
+  }
+  await t.test('native exterior Open refuses missing diamonds and unrelated Pyramid entrance objects', async test => {
+    for (const [stage, placed] of [[0, 0], [11, 3]]) {
+      const f = doorPlayer(test, stage, placed);
+      await open(f, 6547, 3232, 2900); turn(f);
+      assert.deepEqual(position(f.player.getLocation()), [3232, 2900, 0]);
+      assert.match(f.messages.at(-1), /powerful force prevents/);
+      assert.deepEqual(added(f), []); assert.equal(f.player.hasFlag('movement:ignore-clipping'), false);
+    }
+    const f = doorPlayer(test);
+    const object = new core.GameObject(6547, new core.Location(3200, 3200, 0), 10, 1);
+    assert.equal(PluginManager.emitObjectInteraction({ player: f.player, object, objectId: 6547,
+      clickType: 1, location: { x: 3200, y: 3200, z: 0 }, handled: false }), false);
+  });
+  await t.test('walking away and disconnecting restore owned leaves and never resume the cancelled passage', async test => {
+    const a = doorPlayer(test), b = doorPlayer(test);
+    await open(a, 6547, 3232, 2898); await open(b, 6547, 3232, 2900);
+    turn(a, b);
+    assert.ok(owned(a, 6548, 3232)); assert.ok(owned(b, 6548, 3232));
+    a.player.getMovementQueue().requestWalk(new core.Location(3232, 2898, 0));
+    assert.equal(a.player.hasFlag('movement:ignore-clipping'), false);
+    assert.equal(owned(a, 6548, 3232), null);
+    assert.ok(owned(b, 6548, 3232), 'A cancellation preserves B opening');
+    PluginManager.emitPlayerDisconnect({ player: b.player, username: b.player.getUsername() }); b.player.setRegistered(false);
+    assert.equal(owned(b, 6548, 3232), null);
+    assert.equal(b.player.hasFlag('movement:ignore-clipping'), false);
+    for (let tick = 0; tick < 5; tick++) turn(a);
+    assert.deepEqual(position(a.player.getLocation()), [3232, 2898, 0]);
+    assert.deepEqual(position(b.player.getLocation()), [3232, 2899, 0]);
+  });
+  await t.test('a distant native click approaches normally, replays the owned leaf and finishes the crossing', async test => {
+    const f = doorPlayer(test);
+    f.player.setRunning(false);
+    await open(f, 6547, 3232, 2904);
+    for (let tick = 0; tick < 12 && !owned(f, 6548, 3232); tick++) turn(f);
+    assert.deepEqual(position(f.player.getLocation()), [3232, 2899, 0]);
+    assert.ok(owned(f, 6548, 3232), 'the walk-to callback did not erase the scripted step');
+    f.packets.length = 0;
+    core.ObjectManager.onRegionChange(f.player, 3184, 2848);
+    assert.ok(added(f).includes(6548), 'a scene rebuild replays the owned opened leaf');
+    for (let tick = 0; tick < 4; tick++) turn(f);
+    assert.deepEqual(position(f.player.getLocation()), [3232, 2898, 0]);
+    assert.equal(owned(f, 6548, 3232), null);
+    assert.equal(f.player.hasFlag('movement:ignore-clipping'), false);
+  });
+  await t.test('the exterior passage connects to the separately gated native entrance ladder', async test => {
+    const f = doorPlayer(test);
+    await open(f, 6547, 3232, 2900);
+    for (let tick = 0; tick < 3; tick++) turn(f);
+    assert.deepEqual(position(f.player.getLocation()), [3232, 2898, 0]);
+    await f.connection.dispatch([{ type: 'object_option', id: 6497, x: 3233, y: 2897,
+      clickType: 1, action: 'Climb-down' }]);
+    f.connection.processTurnPackets();
+    assert.equal(f.player.hasFlag('movement:ignore-clipping'), false, 'another object route ends the passage exemption');
+    for (let tick = 0; tick < 6; tick++) turn(f);
+    assert.deepEqual(position(f.player.getLocation()), [2912, 4953, 3]);
+    assert.equal(quest.getStage(f.player), 13, 'the ladder alone advances entry progress');
+  });
+  await t.test('cancelling before opening and becoming movement-locked leave no passage behind', async test => {
+    const a = doorPlayer(test), b = doorPlayer(test);
+    await open(a, 6545, 3233, 2898);
+    a.player.getMovementQueue().requestWalk(new core.Location(3232, 2898, 0));
+    await open(b, 6547, 3232, 2900);
+    b.player.getMovementQueue().setBlockMovement(true);
+    for (let tick = 0; tick < 4; tick++) turn(a, b);
+    for (const f of [a, b]) {
+      assert.deepEqual(added(f), []);
+      assert.equal(f.player.hasFlag('movement:ignore-clipping'), false);
+      assert.equal(f.player.getMovementQueue().size(), 0);
+    }
+    assert.deepEqual(position(a.player.getLocation()), [3232, 2898, 0]);
+    assert.deepEqual(position(b.player.getLocation()), [3232, 2900, 0]);
+  });
+  await t.test('a relocated player is not pulled back and a pre-existing movement flag survives completion', async test => {
+    const a = doorPlayer(test), b = doorPlayer(test, 15, 0);
+    await open(a, 6545, 3233, 2898); turn(a);
+    a.player.setLocation(new core.Location(3220, 2900, 0)); turn(a);
+    assert.equal(owned(a, 6546, 3233), null);
+    assert.equal(a.player.hasFlag('movement:ignore-clipping'), false);
+    b.player.setFlag('movement:ignore-clipping', true);
+    await open(b, 6545, 3233, 2900);
+    for (let tick = 0; tick < 5; tick++) turn(b);
+    assert.deepEqual(position(a.player.getLocation()), [3220, 2900, 0]);
+    assert.deepEqual(position(b.player.getLocation()), [3233, 2898, 0]);
+    assert.equal(b.player.hasFlag('movement:ignore-clipping'), true);
+    assert.equal(quest.getStage(b.player), 15);
   });
 });

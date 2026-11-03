@@ -132,13 +132,13 @@ module.exports = function registerDaddysHomeQuest(api) {
 
   /** The seven pieces, in varbit order. */
   const PIECES = [
-    { key: "stool-1", name: "stool", planks: 1, nails: 2, xp: 29 },
-    { key: "stool-2", name: "stool", planks: 1, nails: 2, xp: 29 },
-    { key: "chair", name: "chair", planks: 2, nails: 2, xp: 58 },
-    { key: "table-1", name: "table", planks: 3, nails: 4, xp: 87 },
-    { key: "table-2", name: "table", planks: 3, nails: 4, xp: 87 },
-    { key: "bed", name: "bed", waxwood: 3, cloth: 2, xp: 207 },
-    { key: "carpet", name: "carpet", cloth: 3, xp: 45 },
+    { key: "stool-1", name: "stool", removalDescription: "A broken stool in the kitchen", planks: 1, nails: 2, xp: 29 },
+    { key: "stool-2", name: "stool", removalDescription: "A broken stool in the bedroom", planks: 1, nails: 2, xp: 29 },
+    { key: "chair", name: "chair", removalDescription: "A broken chair in the bedroom", planks: 2, nails: 2, xp: 58 },
+    { key: "table-1", name: "table", removalDescription: "A broken table in the kitchen", planks: 3, nails: 4, xp: 87 },
+    { key: "table-2", name: "table", removalDescription: "A broken table in the bedroom", planks: 3, nails: 4, xp: 87 },
+    { key: "bed", name: "bed", removalDescription: "The old campbed", waxwood: 3, cloth: 2, xp: 207 },
+    { key: "carpet", name: "carpet", removalDescription: "The rotten carpet", cloth: 3, xp: 45 },
   ];
 
   // Base loc id -> piece index. The carpet is twelve placements sharing one transform.
@@ -468,9 +468,9 @@ module.exports = function registerDaddysHomeQuest(api) {
 
   function describeRemaining(player) {
     const left = remainingFurniture(player);
-    const lines = left.slice(0, 3).map(({ piece }) => `- A broken ${piece.name}`);
+    const lines = [`You still need to remove: ${left.slice(0, 3).map(({ piece }) => `- ${piece.removalDescription}`).join(" ")}`];
     for (let index = 3; index < left.length; index += 3) {
-      lines.push(left.slice(index, index + 3).map(({ piece }) => `- A broken ${piece.name}`).join("  "));
+      lines.push(left.slice(index, index + 3).map(({ piece }) => `- ${piece.removalDescription}`).join(" "));
     }
     return lines;
   }

@@ -31,6 +31,12 @@ module.exports = function registerPriestInPerilQuest(api) {
     NpcIdentifiers.KING_ROALD_6,
     NpcIdentifiers.KING_ROALD_7,
   ]);
+  const SHIELD_OF_ARRAV_HAND_IN_STAGE = 4;
+  const SHIELD_OF_ARRAV_COMPLETE_STAGE = 7;
+  const SHIELD_OF_ARRAV_HAND_IN_ITEMS = [
+    ItemIdentifiers.CERTIFICATE, ItemIdentifiers.BROKEN_SHIELD, ItemIdentifiers.BROKEN_SHIELD_2,
+    ItemIdentifiers.HALF_CERTIFICATE, ItemIdentifiers.HALF_CERTIFICATE_2,
+  ];
   /** Both Drezels (cell 9804, mausoleum 9805) resolve to 9636; their tile tells them apart. */
   const DREZEL_NPC_ID = NpcIdentifiers.DREZEL;
   /** The world guardian 3487 resolves to the attackable 7620 at varp 302 values 0-2. */
@@ -340,10 +346,10 @@ module.exports = function registerPriestInPerilQuest(api) {
   }
 
   function kingRoaldVariant(stage, player) {
-    // Shield of Arrav also finishes at King Roald; defer to its handler once the
-    // player has joined a gang (otherwise its certificate branch is unreachable).
+    // Yield only when Shield of Arrav has a hand-in conversation to claim.
     const shieldStage = Number(player.getAttribute("quest.shield_of_arrav.stage")) || 0;
-    if (shieldStage >= 4) return null;
+    if (shieldStage >= SHIELD_OF_ARRAV_HAND_IN_STAGE && shieldStage < SHIELD_OF_ARRAV_COMPLETE_STAGE
+      && SHIELD_OF_ARRAV_HAND_IN_ITEMS.some((id) => held(player, id))) return null;
     if (stage >= STAGE_COMPLETE) {
       return { page: "King Roald", variant: "standard-dialogue-after-priest-in-peril" };
     }

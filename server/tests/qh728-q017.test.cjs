@@ -103,6 +103,9 @@ function registerQuestPlugin(name, pluginName, questKey) {
     itemOnObject: PluginManager.itemOnObjectHooks.length,
     itemAction: PluginManager.itemActionHooks.length,
     login: PluginManager.loginHooks.length,
+    interfaceAction: PluginManager.interfaceActionClickHooks.length,
+    logout: PluginManager.logoutHooks.length,
+    disconnect: PluginManager.disconnectHooks.length,
   };
   const customEvents = new Set();
   const persistedAttributes = new Map();
@@ -139,6 +142,9 @@ function registerQuestPlugin(name, pluginName, questKey) {
       }
     };
     if (key === 'onPlayerLogin') return (handler) => PluginManager.loginHooks.push({ pluginName, handler });
+    if (key === 'onInterfaceActionClick') return (handler) => PluginManager.interfaceActionClickHooks.push({ pluginName, handler });
+    if (key === 'onPlayerLogout') return (handler) => PluginManager.logoutHooks.push({ pluginName, handler });
+    if (key === 'onPlayerDisconnect') return (handler) => PluginManager.disconnectHooks.push({ pluginName, handler });
     if (key === 'onCustomEvent') return (eventName, handler) => {
       customEvents.add(eventName);
       const hooks = PluginManager.customEventHooks.get(eventName) ?? [];
@@ -160,6 +166,9 @@ function registerQuestPlugin(name, pluginName, questKey) {
       PluginManager.itemOnObjectHooks.length = before.itemOnObject;
       PluginManager.itemActionHooks.length = before.itemAction;
       PluginManager.loginHooks.length = before.login;
+      PluginManager.interfaceActionClickHooks.length = before.interfaceAction;
+      PluginManager.logoutHooks.length = before.logout;
+      PluginManager.disconnectHooks.length = before.disconnect;
       for (const eventName of customEvents) {
         const kept = (PluginManager.customEventHooks.get(eventName) ?? [])
           .filter((hook) => hook.pluginName !== pluginName);
@@ -211,6 +220,243 @@ function playLostIou(player, { drunk = false, read = false } = {}) {
   assert.equal(variant, 'finding-the-combination-talking-to-harold-after-losing-the-iou');
   return startVariant(player, N().HAROLD, variant);
 }
+
+test('Harold wagers use native NPC, amount, Roll and Continue dispatch', async (t) => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { quest } = registered, cache = core.CacheDefinitions;
+  const component = name => cache.getComponentId(`death_dice:death_gamble_${name}`);
+  assert.equal(cache.getInterfaceId('death_dice'), 99);
+  assert.equal(component('roll_button'), (99 << 16) | 28);
+  assert.equal(component('continue_button'), (99 << 16) | 30);
+  assert.equal(cache.getSeqId('dice_roll_1'), 1150);
+  assert.equal(cache.getSeqId('dice_roll_6'), 1155);
+  require('../plugins/npcs/NpcDialogues.plugin').register(PluginManager.createApi('HaroldNativeDialogueTest'));
+  core.RegionManager.loadMapFiles(2905, 3539);
+  const npc = PluginManager.spawnNpc({ id: N().HAROLD, x: 2905, y: 3539, z: 1, wanderRadius: 0 });
+  let index = 2200;
+
+  function actor(coins = 2000, drunk = false) {
+    const channel = { kind: 'test', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const session = new PlayerSession(channel), player = new Player(session, new core.Location(2904, 3539, 1));
+    session.setPlayer(player);
+    player.setUsername(`haroldtest${index}`);
+    player.setIndex(index++);
+    player.setRegistered(true);
+    player.needsPlacement = false;
+    quest.setStage(player, 50);
+    player.setAttribute('death-plateau:harold-drunk', drunk);
+    player.getInventory().adds(I().COINS, coins);
+    const connection = new ClientConnection(channel);
+    connection.player = player;
+    const messages = [], animations = [];
+    const sender = player.getPacketSender();
+    const message = sender.sendMessage.bind(sender), animation = sender.sendInterfaceAnimation.bind(sender);
+    sender.sendMessage = text => { messages.push(text); return message(text); };
+    sender.sendInterfaceAnimation = (uid, seq) => { animations.push({ uid, seq }); return animation(uid, seq); };
+    const send = async packet => { await connection.dispatch([packet]); connection.processTurnPackets(); };
+    const click = name => send(name === 'continue_button'
+      ? { type: 'dialogue_continue', widgetId: component(name), childIndex: -1 }
+      : { type: 'widget_action', widgetId: component(name), groupId: 99, childId: component(name) & 65535, buttonNum: 1 });
+    async function drain() {
+      for (let i = 0; i < 50; i++) {
+        if (player.getEnteredAmountAction() || player.getInterfaceId() === 99) return;
+        const menu = core.MultiChatboxPrompt.getPending(player);
+        if (menu) {
+          const option = menu.options.indexOf('Would you like to gamble?');
+          assert.ok(option >= 0, menu.options.join(', '));
+          await send({ type: 'dialogue_continue', widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: option + 1 });
+        } else if (player.getDialogueManager().isActive()) {
+          const group = sender.getChatboxGroupId();
+          await send({ type: 'dialogue_continue', widgetId: (group << 16) | (group === 229 ? 4 : 5), childIndex: -1 });
+        } else return;
+      }
+      assert.fail('Harold dialogue did not finish');
+    }
+    async function talk() {
+      await send({ type: 'npc_option', index: npc.getIndex(), clickType: 1 });
+      await drain();
+    }
+    async function wager(amount, finishPreamble = true) {
+      await talk();
+      assert.ok(player.getEnteredAmountAction(), 'native Enter amount prompt remains armed after the transcript action');
+      await send({ type: 'dialogue_amount', amount });
+      if (finishPreamble) await drain();
+    }
+    return { player, send, click, drain, talk, wager, messages, animations, coins: () => player.getInventory().getAmount(I().COINS) };
+  }
+
+  await t.test('sober loss debits the chosen stake once; Continue cannot skip Roll', async (t) => {
+    const f = actor(), rolls = [.99, .99, 0, 0];
+    t.mock.method(Math, 'random', () => rolls.shift() ?? 0);
+    await f.wager(60);
+    assert.equal(f.player.getInterfaceId(), 99);
+    assert.equal(f.coins(), 1940);
+    assert.equal(f.player.getAttribute('death-plateau:harold-coins'), 160);
+    await f.click('continue_button');
+    assert.equal(f.player.getInterfaceId(), 99);
+    await f.click('roll_button');
+    await f.click('roll_button');
+    assert.equal(f.coins(), 1940);
+    assert.ok(f.animations.some(a => a.uid === component('harold_dice1') && a.seq === 1155));
+    assert.ok(f.animations.some(a => a.uid === component('player_dice1') && a.seq === 1150));
+    await f.click('continue_button');
+    await f.drain();
+    await f.click('continue_button');
+    assert.equal(f.coins(), 1940);
+    assert.equal(quest.getStage(f.player), 50);
+    assert.ok(f.messages.includes('You give Harold his winnings.'));
+    assert.equal(f.player.getInventory().getAmount(I().IOU), 0);
+    assert.equal(registered.persistedAttributes.get('death-plateau:harold-coins'), 100);
+    assert.equal(registered.persistedAttributes.get('death-plateau:harold-owes-iou'), false);
+  });
+
+  await t.test('sober wins exhaust the same bankroll across repeat games and give one IOU', async (t) => {
+    const f = actor(), rolls = [0, 0, .99, .99, 0, 0, .99, .99];
+    t.mock.method(Math, 'random', () => rolls.shift() ?? 0);
+    await f.wager(60);
+    await f.click('roll_button');
+    assert.equal(f.coins(), 2060);
+    assert.equal(f.player.getAttribute('death-plateau:harold-coins'), 40);
+    await f.click('continue_button');
+    await f.drain();
+    assert.equal(quest.getStage(f.player), 50);
+    await f.wager(60);
+    await f.click('roll_button');
+    assert.equal(f.coins(), 2100, 'Harold can only pay his remaining40 coins');
+    assert.equal(f.player.getAttribute('death-plateau:harold-owes-iou'), true);
+    await f.click('continue_button');
+    await f.drain();
+    assert.equal(quest.getStage(f.player), 55);
+    assert.equal(f.player.getInventory().getAmount(I().IOU), 1);
+    assert.equal(f.player.getAttribute('death-plateau:harold-owes-iou'), false);
+    await f.click('roll_button');
+    assert.equal(f.coins(), 2100);
+  });
+
+  await t.test('Blurberry guarantees a win even on lower dice and 101 immediately earns the IOU', async (t) => {
+    const f = actor(1000, true), rolls = [.99, .99, 0, 0];
+    t.mock.method(Math, 'random', () => rolls.shift() ?? 0);
+    await f.wager(101);
+    await f.click('roll_button');
+    assert.equal(f.coins(), 1100);
+    f.player.getPacketSender().sendInterfaceRemoval();
+    PluginManager.emitPlayerDisconnect({ player: f.player, username: f.player.getUsername() });
+    const reloaded = actor(f.coins(), true);
+    for (const key of ['death-plateau:harold-coins', 'death-plateau:harold-owes-iou']) reloaded.player.setAttribute(key, f.player.getAttribute(key));
+    await reloaded.talk();
+    assert.equal(reloaded.player.getInventory().getAmount(I().IOU), 1, 'closing and reloading the saved attributes cannot erase the earned IOU');
+    assert.equal(quest.getStage(reloaded.player), 55);
+    assert.equal(reloaded.coins(), 1100);
+  });
+
+  await t.test('zero, negative, insufficient and over 1000 inputs do not wager', async () => {
+    for (const [coins, amount, expected] of [[2000, 0, 'offer some money'], [2000, -1, 'offer some money'], [50, 60, 'that much money'], [2000, 1001, null]]) {
+      const f = actor(coins);
+      await f.wager(amount);
+      assert.notEqual(f.player.getInterfaceId(), 99);
+      assert.equal(f.coins(), coins);
+      assert.equal(quest.getStage(f.player), 50);
+      if (expected) assert.ok(f.messages.some(m => m.includes(expected)), f.messages.join('\n'));
+      assert.ok(!f.player.getEnteredAmountAction());
+    }
+  });
+
+  await t.test('a sober tie refunds the wager and 1000 is accepted', async (t) => {
+    const f = actor(1000), rolls = [0, 0, 0, 0];
+    t.mock.method(Math, 'random', () => rolls.shift() ?? 0);
+    await f.wager(1000);
+    assert.equal(f.coins(), 0);
+    await f.click('roll_button');
+    assert.equal(f.coins(), 1000);
+    assert.equal(f.player.getAttribute('death-plateau:harold-coins'), 100);
+    await f.click('continue_button');
+    assert.equal(f.player.getInventory().getAmount(I().IOU), 0);
+    assert.equal(quest.getStage(f.player), 50);
+  });
+
+  await t.test('winning the last 100 exactly needs another qualifying win for an IOU; a full bag retries', async (t) => {
+    const f = actor(1000, true);
+    t.mock.method(Math, 'random', () => 0);
+    await f.wager(100);
+    await f.click('roll_button');
+    assert.equal(f.coins(), 1100);
+    assert.equal(f.player.getAttribute('death-plateau:harold-owes-iou'), undefined);
+    await f.click('continue_button');
+    await f.drain();
+    for (let slot = 1; slot < 28; slot++) f.player.getInventory().setItem(slot, new Item(I().SANDSTONE_1KG_, 1));
+    await f.wager(60);
+    await f.click('roll_button');
+    await f.click('continue_button');
+    await f.drain();
+    assert.equal(f.coins(), 1100);
+    assert.equal(f.player.getInventory().getAmount(I().IOU), 0);
+    assert.equal(f.player.getAttribute('death-plateau:harold-owes-iou'), true);
+    f.player.getInventory().deleteAtSlot(1, 1);
+    await f.talk();
+    assert.equal(f.player.getInventory().getAmount(I().IOU), 1);
+    assert.equal(f.player.getAttribute('death-plateau:harold-owes-iou'), false);
+  });
+
+  await t.test('a full coin stack preserves the winnings as an owned ground overflow', async (t) => {
+    const f = actor(2147483647, true);
+    t.mock.method(Math, 'random', () => 0);
+    await f.wager(101);
+    await f.click('roll_button');
+    assert.equal(f.coins(), 2147483647);
+    const ground = core.ItemOnGroundManager.getGroundItem(f.player.getUsername(), I().COINS, f.player.getLocation(), f.player.getPrivateArea());
+    assert.ok(ground);
+    assert.equal(ground.getItem().getAmount(), 100);
+    assert.equal(f.player.getAttribute('death-plateau:harold-coins'), 0);
+  });
+
+  await t.test('cancelling input is free; leaving after Harold rolls forfeits once', async () => {
+    const f = actor(1000);
+    await f.talk();
+    const stale = f.player.getEnteredAmountAction();
+    f.player.getPacketSender().sendInterfaceRemoval();
+    stale.execute(60);
+    await f.send({ type: 'dialogue_amount', amount: 60 });
+    assert.equal(f.coins(), 1000);
+    assert.notEqual(f.player.getInterfaceId(), 99);
+    await f.wager(60);
+    f.player.getPacketSender().sendInterfaceRemoval();
+    await f.click('roll_button');
+    await f.click('continue_button');
+    assert.equal(f.coins(), 940);
+    assert.equal(f.player.getAttribute('death-plateau:harold-coins'), 160);
+    assert.equal(f.player.getInventory().getAmount(I().IOU), 0);
+  });
+
+  await t.test('changing location or spending the stake during the preamble cannot debit it', async () => {
+    const moved = actor(1000);
+    await moved.talk();
+    moved.player.setLocation(new core.Location(2903, 3539, 1));
+    await moved.send({ type: 'dialogue_amount', amount: 60 });
+    assert.equal(moved.coins(), 1000);
+    assert.notEqual(moved.player.getInterfaceId(), 99);
+    const spent = actor(1000);
+    await spent.wager(60, false);
+    spent.player.getInventory().deleteNumber(I().COINS, 1000);
+    await spent.drain();
+    assert.equal(spent.coins(), 0);
+    assert.notEqual(spent.player.getInterfaceId(), 99);
+    assert.equal(spent.player.getAttribute('death-plateau:harold-coins'), undefined);
+  });
+
+  await t.test('a stale pending IOU cannot reopen gambling before or after its quest stages', () => {
+    for (const stage of [0, 40, 60, 80]) {
+      const f = actor();
+      quest.setStage(f.player, stage);
+      f.player.setAttribute('death-plateau:harold-owes-iou', true);
+      assert.notEqual(PluginManager.emitNpcDialogueVariant({ player: f.player, npcId: N().HAROLD }), 'finding-the-combination-finishing-a-gamble');
+      PluginManager.emitCustomEvent('npc-dialogue:action', { player: f.player, npcId: N().HAROLD, step: { type: 'input' } });
+      assert.ok(!f.player.getEnteredAmountAction());
+      assert.equal(f.coins(), 2000);
+    }
+  });
+});
 
 test('fresh login sends stage 0 and the start hook advances to the canonical 10 wire value', () => {
   const { quest } = registered;

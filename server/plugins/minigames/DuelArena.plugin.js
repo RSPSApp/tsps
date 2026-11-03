@@ -14,6 +14,7 @@ const { TaskManager } = require("../../src/main/typescript/elvarg/game/task/Task
 const { FLAG_OP1, TYPE_GRAPHIC, TYPE_TEXT, createWidgetGroup } = require("../interface/widgetGroup");
 const { EQUIPMENT_SLOTS, addEquipmentWidgets } = require("../modes/pvp/PresetsWidget.PvpMode");
 const Scoreboard = require("./duelarena/Scoreboard.DuelArena");
+const Hospital = require("./duelarena/Hospital.DuelArena");
 
 // Cache 237: confirmation group 756 and rule config varp 286.
 const ARENA = new Boundary(3326, 3383, 3197, 3295, 0);
@@ -799,6 +800,7 @@ module.exports = {
     api.onCanUnequip(canUnequip);
     api.onServerShutdown(shutdown);
     Scoreboard.attach(api);
+    Hospital.attach(api);
   },
   /** For server/tests/pvp-arena-scoreboard.test.cjs and server/tests/ironman.test.cjs. */
   _test: { accept, end, sessions, snapshot },

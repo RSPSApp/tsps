@@ -853,7 +853,7 @@ module.exports = {
     api.registerCommand("gecollect", openCollectionBox, undefined, "Open the Grand Exchange collection box");
 
     api.onNpcInteraction("Grand Exchange Clerk", { "Exchange": openGrandExchange });
-    api.onNpcsInteraction(["Banker", "Ashuelot Reis"], { "Collect": openCollectionBox });
+    api.onNpcsInteraction(["Banker", "Ashuelot Reis", "Fadli"], { "Collect": openCollectionBox });
 
     api.onObjectInteraction("Bank booth", { "Collect": openCollectionBox });
     api.onObjectInteraction("Grand Exchange booth", {

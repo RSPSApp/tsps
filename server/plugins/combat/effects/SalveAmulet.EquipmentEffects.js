@@ -8,6 +8,7 @@
  */
 const { Equipment } = require("../../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 const { asPlayer, wornName, targetHasAttribute, scale } = require("./GearChecks.EquipmentEffects");
+let weaponProfiles;
 
 const SALVES = new Map([
   ["salve amulet", { melee: [7, 6] }],
@@ -36,6 +37,11 @@ function rangedBoost(entity, value) {
   return salve ? scale(value, ...salve.ranged) : value;
 }
 
+function rangedDamageBoost(entity, value) {
+  const player = asPlayer(entity);
+  return player && weaponProfiles?.usesMeleeStrength(player) ? meleeBoost(entity, value) : rangedBoost(entity, value);
+}
+
 function magicAccuracyBoost(entity, value) {
   const salve = activeSalve(entity, "magic");
   return salve ? scale(value, 100 + salve.magicPercent, 100) : value;
@@ -53,10 +59,11 @@ function salveApplies(payload) {
 }
 
 module.exports = function registerSalveAmuletEffects(api) {
+  weaponProfiles = api.core?.WeaponProfiles;
   api.registerMeleeAttackAccuracyModifier(meleeBoost);
   api.registerMeleeHitModifier(meleeBoost);
   api.registerRangedAttackAccuracyModifier(rangedBoost);
-  api.registerRangedHitModifier(rangedBoost);
+  api.registerRangedHitModifier(rangedDamageBoost);
   api.registerMagicAttackAccuracyModifier(magicAccuracyBoost);
   api.registerMagicDamageBonusModifier(magicDamageBonus);
   api.onCustomEvent("salve:applies", salveApplies);

@@ -1474,6 +1474,7 @@ export interface PluginCoreApi {
   HitDamage: any;
   HitMask: any;
   RangedWeapon: any;
+  RangedWeaponType: any;
   Ammunition: any;
   WeaponProfiles: any;
   FightStyle: any;

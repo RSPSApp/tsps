@@ -6,6 +6,7 @@ export type SpecialAttackRounding = "floor" | "ceil";
 export const SpecialAttackMaximumHitSource = Object.freeze({
     Standard: "standard",
     PhysicalMelee: "physical_melee",
+    Ranged: "ranged",
     Magic: "magic",
     VisibleMagic: "visible_magic",
 } as const);

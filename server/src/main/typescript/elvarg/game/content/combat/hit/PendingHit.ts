@@ -26,6 +26,8 @@ type PendingHitConfig = {
     experience?: boolean;
     /** A pre-rolled damage value, still passing through damage hooks and the HP cap. */
     damage?: number;
+    /** Fixed status damage for direct application: no attack rolls, bonuses or roll-time procs. */
+    statusDamage?: boolean;
     /** Already-mitigated scripted damage may bypass ordinary protection prayers. */
     bypassProtectionPrayer?: boolean;
     /** Shared across one attack's hits on the same victim; applied after queue-time modifiers. */
@@ -123,11 +125,20 @@ export class PendingHit {
         try {
             // Defensive reactions are resolved when the hit lands, not when it is rolled:
             // a PendingHit only records the raw damage (already capped to the target's HP).
-            this.hits = Spell.withCastContext(attacker, this.spellContext, () =>
-                CombatFactory.duringHitRoll(() =>
-                    this.prepareHits(resolvedHitAmount, resolvedRollAccuracy,
-                        typeof delayOrConfig === "object" ? delayOrConfig?.damage : undefined,
-                        typeof delayOrConfig === "object" && delayOrConfig?.bypassProtectionPrayer === true)));
+            if (typeof delayOrConfig === "object" && delayOrConfig?.statusDamage === true) {
+                const amount = Math.max(0, Math.min(target.getHitpoints(), Math.floor(delayOrConfig.damage ?? 0)));
+                this.hits = [new HitDamage(amount, HitMask.RED)];
+                this.accurate = true;
+                this.totalDamage = amount;
+                this.experience = false;
+                this.protectionBypassed = true;
+            } else {
+                this.hits = Spell.withCastContext(attacker, this.spellContext, () =>
+                    CombatFactory.duringHitRoll(() =>
+                        this.prepareHits(resolvedHitAmount, resolvedRollAccuracy,
+                            typeof delayOrConfig === "object" ? delayOrConfig?.damage : undefined,
+                            typeof delayOrConfig === "object" && delayOrConfig?.bypassProtectionPrayer === true)));
+            }
         } finally {
             if (armed) attacker.setSpecialActivated(true);
         }

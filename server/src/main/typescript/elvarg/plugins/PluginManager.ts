@@ -2378,6 +2378,7 @@ export class PluginManager {
       HitDamage: require(`${combat}/hit/HitDamage`).HitDamage,
       HitMask: require(`${combat}/hit/HitMask`).HitMask,
       RangedWeapon: require(`${combat}/ranged/RangedData`).RangedWeapon,
+      RangedWeaponType: require(`${combat}/ranged/RangedData`).RangedWeaponType,
       Ammunition: require(`${combat}/ranged/RangedData`).Ammunition,
       WeaponProfiles: require(`${combat}/WeaponProfile`).WeaponProfiles,
       FightStyle: require(`${combat}/FightStyle`).FightStyle,

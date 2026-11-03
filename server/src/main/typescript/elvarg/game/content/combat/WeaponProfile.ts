@@ -42,6 +42,8 @@ export interface WeaponCombatProfile {
     /** Scales the enchanted bolt effects' chance (the Ascension crossbows halve it). */
     boltEffectChanceMultiplier?: number;
     rangedDefenceType?: "light" | "standard" | "heavy";
+    /** Ranged accuracy/prayers/stance, with visible Strength and melee strength equipment. */
+    rangedDamageSource?: "melee_strength";
 }
 
 // OSRS projectile types (server projanim config): an arrow ends at delay + lengthAdjustment +
@@ -86,6 +88,12 @@ export class WeaponProfiles {
 
     public static ranged(player: Player): WeaponCombatProfile {
         return this.get(player) ?? DEFAULT_RANGED;
+    }
+
+    public static usesMeleeStrength(player: Player): boolean {
+        // Scripted ranged attackers (boat cannons) can expose an empty equipment list.
+        const weapon = player.getEquipment().getItems()[Equipment.WEAPON_SLOT];
+        return weapon != null && this.get(player)?.rangedDamageSource === "melee_strength";
     }
 
     /**

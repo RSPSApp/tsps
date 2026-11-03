@@ -94,6 +94,9 @@ const magicBoost = boost("magic");
 
 /** Ranged damage: 23/20, plus what other gear adds to it (the dragon hunter crossbow's 5). */
 function rangedDamageBoost(entity, value) {
+  if (entity?.isPlayer?.() && pluginApi.core?.WeaponProfiles?.usesMeleeStrength(entity.getAsPlayer())) {
+    return meleeBoost(entity, value);
+  }
   if (!entity?.isPlayer?.() || !boostActive(entity.getAsPlayer(), "ranged")) return value;
   const bonus = { player: entity.getAsPlayer(), numerator: IMBUED_NUMERATOR };
   pluginApi.emitCustomEvent("slayer:imbued-ranged-bonus", bonus);

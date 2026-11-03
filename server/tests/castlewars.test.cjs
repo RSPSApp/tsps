@@ -392,8 +392,6 @@ test('practice menus join from every portal through the real prompt dispatcher w
     pick(player, 'Bots:');
     pick(player, 'Scorer (magic defence)');
     pick(player, 'More settings');
-    pick(player, 'Ice freeze:');
-    pick(player, '10 seconds');
     pick(player, 'Barricades per team:');
     pick(player, '20');
     pick(player, 'Back');
@@ -403,7 +401,7 @@ test('practice menus join from every portal through the real prompt dispatcher w
     assert.equal(moves.length, 1, 'the join action reaches the waiting room');
     assert.equal(game.getTeamId(player), expectedTeam);
     assert.equal(forms.at(-1), god, 'the original portal determines the waiting-room transformation');
-    assert.deepEqual(game.settings, { teamSize: 1, opponent: 'scorer', freezeSeconds: 10, barricades: 20, botTier: 'maxed', barricadePlayerPriority: false });
+    assert.deepEqual(game.settings, { teamSize: 1, opponent: 'scorer', barricades: 20, botTier: 'maxed' });
     const bots = World.getAddPlayerQueue();
     assert.equal(bots.length, 1, '1 vs 1 uses the human and one opposing bot');
     assert.equal(game.getTeamId(bots[0]), game.opposingTeam(expectedTeam));
@@ -705,7 +703,7 @@ test('ending and resetting a match clears both native Castle Wars team flags', t
   }
 });
 
-test('Lanthus freeze choices survive a practice start and cap Ice Barrage, movement and the overlay', t => {
+test('practice and human matches retain normal Ice Barrage movement and overlay timing after the custom controls are removed', t => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
   const realApi = PluginManager.createApi('CastleWarsPracticeFreezeTest');
@@ -719,7 +717,8 @@ test('Lanthus freeze choices survive a practice start and cap Ice Barrage, movem
     onPlayerProcess(handler) { syncTimer = handler; }, onPlayerLogout() {} });
   t.after(() => { game.endGame(); game.gameArea.players.length = 0; delete registry.emitCustomEvent; });
 
-  for (const [choice, ticks, practice] of [['10 seconds', 16, true], ['15 seconds', 25, true], ['Standard', 32, true], ['10 seconds', 32, false]]) {
+  const ticks = 32;
+  for (const practice of [true, false]) {
     const caster = new Player(null), victim = new Player(null);
     for (const p of [caster, victim]) {
       t.mock.method(p, 'getSession', () => ({ sendClientPacket: () => true }));
@@ -731,13 +730,13 @@ test('Lanthus freeze choices survive a practice start and cap Ice Barrage, movem
     const configs = new Map();
     t.mock.method(victim.getPacketSender(), 'sendConfig', (id, value) => configs.set(id, value));
     Settings.openSettings({ player: victim });
-    for (const text of ['More settings', 'Ice freeze:', choice]) {
-      const pending = MultiChatboxPrompt.getPending(victim);
-      const index = pending.options.findIndex(option => option.startsWith(text));
-      assert.notEqual(index, -1, `${text} is available`);
-      assert.equal(PluginManager.emitInterfaceActionClick({ player: victim,
-        buttonId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, groupId: 219, action: 1, slot: index + 1, handled: false }), true);
-    }
+    const pending = MultiChatboxPrompt.getPending(victim);
+    const index = pending.options.indexOf('More settings');
+    assert.notEqual(index, -1);
+    assert.equal(PluginManager.emitInterfaceActionClick({ player: victim,
+      buttonId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, groupId: 219, action: 1, slot: index + 1, handled: false }), true);
+    assert.deepEqual(MultiChatboxPrompt.getPending(victim).options,
+      ['Barricades per team: 10', 'Bot combat: Maxed (126)', 'Bracelet charges', 'Back']);
     caster.setPlayerBot(practice);
     caster.setAttribute(game.BOT_KEY, practice);
     for (const [p, team] of [[caster, TEAM.SARADOMIN], [victim, TEAM.ZAMORAK]]) {
@@ -755,7 +754,7 @@ test('Lanthus freeze choices survive a practice start and cap Ice Barrage, movem
     assert.equal(victim.getTimers().getTicks(core.TimerKey.FREEZE), ticks);
     assert.equal(victim.getMovementQueue().getMobility().canMove(), false);
     syncTimer({ player: victim });
-    assert.equal(configs.get(7998), Math.ceil(ticks * 0.6), 'the overlay receives the capped freeze duration');
+    assert.equal(configs.get(7998), Math.ceil(ticks * 0.6), 'the overlay receives the normal freeze duration');
     for (let i = 0; i < ticks; i++) victim.getTimers().process();
     assert.equal(victim.getTimers().has(core.TimerKey.FREEZE), false);
     assert.equal(victim.getMovementQueue().getMobility().canMove(), true);

@@ -174,9 +174,11 @@ export class SkillManager {
         if (newLevel > startingLevel) {
             let level = newLevel - startingLevel;
             this.skills.maxLevel[skill.getIndex()] += level;
-            // Publish the new current level and native stats before feedback hooks run. The
+            // The current level rises by the levels gained, as OSRS does: a level-up restores
+            // nothing else and keeps any boost or drain (issue #2040; rsprox 1098 shows Hitpoints
+            // 3/11 going to 4/12). Publish it and the native stats before feedback hooks run. The
             // message, graphic, pop-up and whether skilling stops belong to the SkillLevelUp plugin.
-            this.setCurrentLevels(skill, this.skills.maxLevel[skill.getIndex()]);
+            this.setCurrentLevels(skill, this.getCurrentLevel(skill) + level);
             PluginManager.emitPlayerLevelUp({
                 player: this.player,
                 skill,

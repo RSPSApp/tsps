@@ -1170,6 +1170,7 @@ function attach(api) {
     api.onCustomEvent("agent:advance-time", advanceTime);
     api.onCustomEvent("player:world-input", Hespori.hesporiInput);
     api.onCustomEvent("npc-dialogue:action", Hespori.reentryAction);
+    api.onCustomEvent("npc-dialogue:action", Services.gardenerProtection);
     api.onCustomEvent("interface:changed", Hespori.warningInterfaceChanged);
     api.onCustomEvent("player:world-input", cancelWork);
     api.onCustomEvent("npc-drops:generated", Hespori.hesporiLoot);

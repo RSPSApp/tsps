@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](../../server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-191 quests · ✅ passed: 27 · ⚠️ passed with issues: 19 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 17 · untested: 119
+191 quests · ✅ passed: 28 · ⚠️ passed with issues: 15 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 20 · untested: 119
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -138,8 +138,8 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Shadow of the Storm | untested |  |  |  |  |
 | Shadows of Custodia | untested |  |  |  |  |
 | [Sheep Herder](sheep-herder/README.md) | untested |  |  |  |  |
-| [Sheep Shearer](sheep-shearer/README.md) | ⚠️ passed with issues | 2026-11-03 | agent | claude-opus-5-5 | 4 |
-| [Shield of Arrav](shield-of-arrav/README.md) | ⚠️ passed with issues | 2026-11-03 | agent | claude-opus-5-5 | 7 |
+| [Sheep Shearer](sheep-shearer/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 4 |
+| [Shield of Arrav](shield-of-arrav/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 7 |
 | Shilo Village | untested |  |  |  |  |
 | [Sins of the Father](sins-of-the-father/README.md) | untested |  |  |  |  |
 | [Skippy and the Mogres](skippy-and-the-mogres/README.md) | ✅ passed | 2026-10-31 | agent | deepseek-v4.1-flash | 1 |
@@ -192,13 +192,13 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Twilight's Promise](twilights-promise/README.md) | untested |  |  |  |  |
 | Underground Pass | untested |  |  |  |  |
 | Vale Totems | untested |  |  |  |  |
-| [Vampyre Slayer](vampyre-slayer/README.md) | ⚠️ passed with issues | 2026-11-03 | agent | claude-opus-5-5 | 3 |
+| [Vampyre Slayer](vampyre-slayer/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 3 |
 | [Wanted!](wanted/README.md) | untested |  |  |  |  |
 | Watchtower | untested |  |  |  |  |
 | [Waterfall Quest](waterfall-quest/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 3 |
 | [What Lies Below](what-lies-below/README.md) | untested |  |  |  |  |
 | [While Guthix Sleeps](while-guthix-sleeps/README.md) | untested |  |  |  |  |
 | [Witch's House](witchs-house/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 | 5 |
-| [Witch's Potion](witchs-potion/README.md) | ✅ passed | 2026-10-25 | community |  |  |
-| [X Marks the Spot](x-marks-the-spot/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
+| [Witch's Potion](witchs-potion/README.md) | ✅ passed | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
+| [X Marks the Spot](x-marks-the-spot/README.md) | ✅ passed | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [Zogre Flesh Eaters](zogre-flesh-eaters/README.md) | ❌ failed |  | agent |  | 1 |

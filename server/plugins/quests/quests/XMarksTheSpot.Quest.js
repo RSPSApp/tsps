@@ -489,6 +489,10 @@ module.exports = function registerXMarksTheSpotQuest(api) {
   function handleLogin({ player }) {
     ensureVeos(player);
     if (quest.getStage(player) >= STAGE_COMPLETE) {
+      // Login bootstrap re-sends the stage as varbit 8063 and clobbers the reward
+      // bits in the same varp. Live completed accounts log in with 8065 (coins)
+      // set, so restore every captured reward flag here, not only on the hand-in.
+      player.getPacketSender().sendVarbit(COIN_REWARD_VARBIT, 1);
       mirrorLampState(player);
       syncClueBoxState(player);
     }

@@ -15,6 +15,14 @@ travel:
 
 Crate hiding, guard lure/combat and ladder 23376 reached stage 10 from a declared checkpoint. Progress survived relog.
 
+## Capture search
+
+RSProx database and issue #600 capture list checked on 2026-11-03: no full quest recording
+was found. Capture 1885 (rev 233) contains the Dorgesh-Kaan opening argument and its four
+options, but the player chose the market permission branch and `slice_quest` (997) stayed 0;
+3197/3188/3191/1694 contain only post-quest Ur-tag, Zanik and Oldak lines with 997 already 11.
+No start/completion message or stage progression was captured, so the quest was skipped.
+
 ## Findings
 
 - **fixed** Seven earlier integration failures repaired. [#1192](https://github.com/RSPSApp/tsps/pull/1192)

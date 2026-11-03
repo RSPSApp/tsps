@@ -163,6 +163,12 @@ test('resurfacing restores targetability and moves to a different spot', t => {
   assert.equal(s.npc.getLocation().equals(old), false);
 });
 
+test('the Wiki respawn of 16 ticks is applied to the Mole on startup', t => {
+  const s = scene(t);
+  s.hooks.onServerStartup();
+  assert.equal(NpcDefinition.forId(5779).getRespawn(), 16, 'wiki respawn');
+});
+
 test('a spade on the mole hill digs the player into the lair', t => {
   const s = scene(t);
   s.p.setLocation(new core.Location(2997, 3375, 0));

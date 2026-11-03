@@ -202,7 +202,10 @@ class HesporiCombat extends core.CombatMethod {
             const hit = new core.PendingHit(npc, target, this, 2 + index);
             const prayer = target.getPrayerActive()[ranged ? core.PrayerHandler.PROTECT_FROM_MISSILES : core.PrayerHandler.PROTECT_FROM_MAGIC];
             const damage = hit.isAccurate() ? Math.floor(Math.random() * (ranged ? 9 : 15)) : 0;
-            hit.setTotalDamage(Math.min(target.getHitpoints(), prayer ? Math.floor(damage / 4) : damage));
+            // Wiki: Protect from Missiles caps each spore at 2 (8+8 -> 2+2) and Protect from
+            // Magic caps the wave at 3; it is a cap, not a quarter of the roll.
+            const capped = prayer ? Math.min(damage, ranged ? 2 : 3) : damage;
+            hit.setTotalDamage(Math.min(target.getHitpoints(), capped));
             return hit;
         });
     }

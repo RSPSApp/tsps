@@ -89,16 +89,16 @@
     "radius": [0, 1, 2, 3, 99]
   },
   "messages": {
-    "_unverified": "noTask, devastating, spit/whirlwind/burst/corrosion stop, heavyEquipment and regains are the Wiki's; the rest have no capture",
+    "_unverified": "noTask, noLevel, devastating, heavyEquipment and regains are the Wiki's own wording, not a capture; the whirlwind, burst and corrosion lines are recorded (rsprox 3456), colours included",
     "noTask": "You can only fight the gryphon in this cave if you've been assigned to do so by a Slayer Master.",
     "noLevel": "You need a Slayer level of 51 to fight the Shellbane gryphon.",
-    "devastating": "<col=ff0000>The gryphon's attacks are devastating! You need some sort of protection!</col>",
+    "devastating": "<col=ff3045>The gryphon's attacks are devastating! You need some sort of protection!</col>",
     "heavyEquipment": "The gryphon tries to pick you up, but fails thanks to your heavy equipment.",
-    "regains": "<col=ff0000>The gryphon regains its focus and strikes!</col>",
-    "corroding": "<col=ff0000>Your armour has started to corrode.</col>",
-    "stopsCorroding": "<col=00ff00>Your armour stops corroding.</col>",
-    "whirlwind": "<col=ff0000>The gryphon aggressively flaps its wings...</col>",
-    "burst": "<col=ff0000>The whirlwinds explode outwards in a large gust of wind!</col>",
+    "regains": "<col=ff3045>The gryphon regains its focus and strikes!</col>",
+    "corroding": "<col=ff3045>Your armour has started to corrode!</col>",
+    "stopsCorroding": "<col=229628>Your armour stops corroding.</col>",
+    "whirlwind": "<col=ff3045>The gryphon aggressively flaps its wings...",
+    "burst": "<col=ff3045>The whirlwinds explode outwards in a large gust of wind!",
     "killCount": "Your Shellbane gryphon kill count is: <col=ff0000>{kills}</col>."
   }
 }

@@ -181,6 +181,42 @@ async function nextLine(f) {
   await f.connection.dispatch([{ type: 'dialogue_continue', widgetId: (group << 16) | 5, childIndex: -1 }]);
   f.connection.processTurnPackets();
 }
+
+test('What Lies Below excavates and enters the actual cached statue through native object clicks', async t => {
+  const f = fixture(t), { player } = f;
+  core.RegionManager.init();
+  const tile = new core.Location(3283, 3468);
+  const parentId = core.CacheDefinitions.getLocId('surok_statuebase');
+  const statueId = core.CacheDefinitions.getLocId('surok_statuebase1');
+  const parent = core.MapObjects.get(parentId, tile, null);
+  assert.ok(parent, 'the cache provides one multiloc statue at the real southwest tile');
+  assert.equal(core.MapObjects.getPrivateArea(player, statueId, tile), parent,
+    'the visible statue resolves to the original multiloc');
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'what_lies_below');
+  player.setLocation(new core.Location(3282, 3468));
+  const clickStatue = async () => {
+    await f.connection.dispatch([{ type: 'object_option', id: statueId, x: tile.getX(), y: tile.getY(), clickType: 1 }]);
+    f.connection.processTurnPackets();
+    for (let tick = 0; tick < 4; tick++) {
+      core.TaskManager.processWalkTo(player.getIndex());
+      player.getMovementQueue().process();
+      core.TaskManager.process();
+    }
+  };
+  await clickStatue();
+  assert.ok(player.getDialogueManager().getCurrent(), 'the native parent reaches Anna\'s existing refusal');
+  assert.notEqual(player.getAttribute('what-lies-below:tunnel'), 1);
+  player.closeInterruptibleInterfaces();
+  quest.setStage(player, 30);
+  player.getInventory().add(new core.Item(core.ItemIdentifiers.BRONZE_PICKAXE));
+  await clickStatue();
+  for (let line = 0; line < 20 && player.getDialogueManager().getCurrent(); line++) await nextLine(f);
+  assert.equal(player.getAttribute('what-lies-below:tunnel'), 1, 'the existing excavation transcript opens the tunnel');
+  assert.equal(quest.getStage(player), 30, 'the optional shortcut does not advance the main quest');
+  player.closeInterruptibleInterfaces();
+  await clickStatue();
+  assert.ok(player.getLocation().equals(new core.Location(3179, 5190)), 'the opened shortcut is still enterable');
+});
 function journalLifecycle(kind, player) {
   const hook = PM[`${kind}Hooks`].find(hook => hook.pluginName === 'SideJournalDefaults');
   assert.ok(hook, `real journal ${kind} lifecycle`);

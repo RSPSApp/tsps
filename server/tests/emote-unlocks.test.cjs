@@ -37,6 +37,32 @@ test('an unlocked base emote plays; a locked one shows its message and plays not
   assert.deepEqual(click(t, p, 22).said, ['This emote can be unlocked during the Lost Tribe quest.']);
 });
 
+for (const [name, slot, varbit, sequence, spotanim] of [
+  ['Zombie Hand', 41, 'emote_zombie_hand', 'hw07_arm_from_the_ground_emote', 'hw07_arm_from_the_ground_spotanim'],
+  ['Trick', 52, 'emote_trick', 'emote_trick', 'hw23_emote_bat_spotanim'],
+]) test(`${name} sends its cache graphic with the player animation only after unlocking`, (t) => {
+  const p = actor(t);
+  const played = [], graphics = [];
+  t.mock.method(p, 'performAnimation', animation => played.push(animation.getId()));
+  t.mock.method(p, 'performGraphic', graphic => graphics.push(graphic.getId()));
+  t.mock.method(core.StatementDialogue, 'send', () => {});
+  PM.emitInterfaceActionClick({player: p, buttonId: EMOTE_CONTENTS, slot, action: 1, handled: false});
+  assert.deepEqual(played, [], 'locked emotes do not animate');
+  assert.deepEqual(graphics, [], 'locked emotes do not spawn graphics');
+  PM.emitCustomEvent('emotes:unlock', {player: p, varbit});
+  for (const action of [1, 2]) {
+    played.length = graphics.length = 0;
+    PM.emitInterfaceActionClick({player: p, buttonId: EMOTE_CONTENTS, slot, action, handled: false});
+    assert.deepEqual(played, [core.CacheDefinitions.getSeqId(sequence)]);
+    assert.deepEqual(graphics, [core.CacheDefinitions.getSpotanimId(spotanim)]);
+  }
+  played.length = graphics.length = 0;
+  p.getCombat().setAnimationStall(5);
+  PM.emitInterfaceActionClick({player: p, buttonId: EMOTE_CONTENTS, slot, action: 1, handled: false});
+  assert.deepEqual(played, [], 'busy guard also blocks the player animation');
+  assert.deepEqual(graphics, [], 'busy guard also blocks the graphic');
+});
+
 test('emotes:unlock saves the varbit, sends it, and survives a save and login', (t) => {
   const p = actor(t);
   const request = {player: p, varbit: 'emote_glassbox', unlocked: false};

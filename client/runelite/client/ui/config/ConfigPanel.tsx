@@ -6,8 +6,10 @@ import {
     type ConfigSectionDef,
 } from "@runelite/client/config/ConfigItem";
 import { parseConfigValue } from "@runelite/client/config/ConfigManager";
+import { FontType } from "@runelite/client/config/FontType";
 import { Keybind } from "@runelite/client/config/Keybind";
 import type { ConfigManager } from "@runelite/client/config/ConfigManager";
+import { runeliteImage } from "../runeliteImages";
 
 const DEFAULT_SECTION = "";
 
@@ -68,11 +70,13 @@ function ConfigField({
     property,
     item,
     configManager,
+    onOpenFont,
 }: {
     descriptor: ConfigGroupDescriptor;
     property: string;
     item: ConfigItemDef;
     configManager: ConfigManager;
+    onOpenFont: (property: string) => void;
 }): JSX.Element {
     const key = item.keyName ?? property;
     const raw = configManager.getConfiguration(descriptor.group, key);
@@ -121,6 +125,24 @@ function ConfigField({
                 {label}
                 <KeybindButton value={value instanceof Keybind ? value : Keybind.NOT_SET} onChange={update} />
             </label>
+        );
+    }
+
+    if (item.fontType) {
+        // RuneLite's createFont: a button that opens the font's own panel.
+        return (
+            <div className="rl-sidebar-row rl-sidebar-value-row">
+                <span className="rl-sidebar-field">{label}</span>
+                <button
+                    type="button"
+                    className="rl-config-font-button"
+                    onClick={() => onOpenFont(property)}
+                    aria-label={`${item.name} settings`}
+                    title="Edit font"
+                >
+                    <img src={runeliteImage("config_edit_icon.png")} alt="" width={18} height={18} />
+                </button>
+            </div>
         );
     }
 
@@ -218,6 +240,82 @@ function ConfigField({
 }
 
 /**
+ * RuneLite's FontPanel for one FontType item: the font family, its size in points and bold.
+ * Each change is saved at once. Italic is not offered.
+ */
+function FontPanel({
+    descriptor,
+    property,
+    item,
+    configManager,
+    onBack,
+}: {
+    descriptor: ConfigGroupDescriptor;
+    property: string;
+    item: ConfigItemDef;
+    configManager: ConfigManager;
+    onBack: () => void;
+}): JSX.Element {
+    const load = (): FontType => {
+        const raw = configManager.getConfiguration(descriptor.group, item.keyName ?? property);
+        const value = parseConfigValue(item, raw ?? null);
+        return value instanceof FontType ? value : FontType.REGULAR;
+    };
+    const save = (font: FontType) => configManager.setConfigValue(descriptor, property, font);
+    const font = load();
+    return (
+        <div className="rl-config-font-panel">
+            <div className="rl-config-font-header">
+                <button type="button" className="rl-plugin-config-back" onClick={onBack} aria-label="Back" title="Back">
+                    <svg viewBox="0 0 12 20" aria-hidden="true">
+                        <path d="M8.4 3.1 3.9 10l4.5 6.9" />
+                    </svg>
+                </button>
+                <span className="rl-plugin-config-title">{item.name}</span>
+            </div>
+            <label className="rl-sidebar-field">
+                <span className="rl-config-label">
+                    <span>Font</span>
+                    <span className="rl-config-description">Configures the font.</span>
+                </span>
+                <select value={font.family} onChange={(event) => save(load().withFamily(event.target.value))}>
+                    {FontType.FAMILIES.map((family) => (
+                        <option key={family} value={family}>
+                            {family}
+                        </option>
+                    ))}
+                </select>
+            </label>
+            <label className="rl-sidebar-field">
+                <span className="rl-config-label">
+                    <span>Size</span>
+                    <span className="rl-config-description">Configures the font size.</span>
+                </span>
+                <input
+                    type="number"
+                    min={FontType.MIN_SIZE}
+                    max={FontType.MAX_SIZE}
+                    step={1}
+                    value={font.size}
+                    onChange={(event) => {
+                        const size = Number(event.target.value);
+                        if (event.target.value !== "" && Number.isFinite(size)) save(load().withSize(size));
+                    }}
+                />
+                <span className="rl-config-units">pt</span>
+            </label>
+            <label className="rl-sidebar-check">
+                <input type="checkbox" checked={font.bold} onChange={(event) => save(load().withBold(event.target.checked))} />
+                <span className="rl-config-label">
+                    <span>Bold</span>
+                    <span className="rl-config-description">Toggle bold styling for the font.</span>
+                </span>
+            </label>
+        </div>
+    );
+}
+
+/**
  * RuneLite's HotkeyButton: click, then press the key (with any modifiers) to bind it. Escape
  * cancels; Backspace or Delete clears it to "Not set".
  */
@@ -273,12 +371,29 @@ export function ConfigPanel({
         const sections = Object.entries(descriptor.sections ?? {});
         return new Set(sections.filter(([, section]) => section.closedByDefault).map(([id]) => id));
     });
+    // The FontType item whose FontPanel is open, which replaces the list as RuneLite's does.
+    const [fontProperty, setFontProperty] = useState<string>();
     const toggleSection = (id: string): void =>
         setClosed((current) => {
             const next = new Set(current);
             if (!next.delete(id)) next.add(id);
             return next;
         });
+
+    const fontItem = fontProperty !== undefined ? descriptor.items[fontProperty] : undefined;
+    if (fontProperty !== undefined && fontItem) {
+        return (
+            <div className="rl-config-panel">
+                <FontPanel
+                    descriptor={descriptor}
+                    property={fontProperty}
+                    item={fontItem}
+                    configManager={configManager}
+                    onBack={() => setFontProperty(undefined)}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="rl-config-panel">
@@ -306,6 +421,7 @@ export function ConfigPanel({
                             property={entry.property}
                             item={entry.item}
                             configManager={configManager}
+                            onOpenFont={setFontProperty}
                         />
                     ))}
                 </div>

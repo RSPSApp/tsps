@@ -5,7 +5,7 @@ import {
     SEED_VAULT, SEED_VAULT_DEPOSIT,
 } from "../../../runelite/api/gameval/InterfaceID";
 import { COINS, NATURERUNE, PLATINUM } from "../../../runelite/api/gameval/ItemID";
-import { FONT_PLAIN_12 } from "../../../ui/fonts";
+import { overlayFont } from "@runelite/client/ui/overlay/OverlayFonts";
 import { drawTextGL } from "../../../widgets/components/TextRenderer";
 import { ConfigManager } from "../../../runelite/client/config/ConfigManager";
 import { Plugin, type PluginDescriptor } from "../../../runelite/client/plugins/Plugin";
@@ -173,14 +173,17 @@ export class ItemPricesPlugin extends Plugin implements ClientPlugin {
         });
         if (!rows.length) return [];
         const { renderer, fontLoader } = context;
-        const font = fontLoader(FONT_PLAIN_12);
+        // TooltipManager's tooltip: the tooltip font, the rows growing with it.
+        const tooltipFont = overlayFont("tooltip");
+        const font = fontLoader(tooltipFont.id);
         const overlayScale = context.overlayTextScale?.() ?? { x: 1, y: 1 };
         const scaleX = finiteScale(overlayScale.x), scaleY = finiteScale(overlayScale.y);
         const inputScale = context.inputScale?.() ?? { x: 1, y: 1 };
         const inputScaleX = finiteScale(inputScale.x), inputScaleY = finiteScale(inputScale.y);
-        const measure = (s: string) => (font?.measure(s) ?? s.length * 7) * scaleX;
+        const textScaleX = scaleX * tooltipFont.scale, textScaleY = scaleY * tooltipFont.scale;
+        const measure = (s: string) => (font?.measure(s) ?? s.length * 7) * textScaleX;
         const canvasW = renderer.canvas.width, canvasH = renderer.canvas.height;
-        const rowHeight = 14 * scaleY;
+        const rowHeight = 14 * textScaleY;
         const maxRows = Math.floor((canvasH - 32 * scaleY) / rowHeight);
         if (canvasW <= 4 || maxRows <= 0) return [];
         const visibleRows = rows.slice(0, maxRows);
@@ -210,7 +213,7 @@ export class ItemPricesPlugin extends Plugin implements ClientPlugin {
         lines.forEach((line, index) => {
             const rowY = y + scaleY + index * rowHeight;
             drawTextGL(renderer, fontLoader, line, x + paddingX, rowY,
-                width - paddingX * 2, 12 * scaleY, FONT_PLAIN_12, WHITE, 0, 0, true, 1, undefined, scaleX, scaleY);
+                width - paddingX * 2, 12 * textScaleY, tooltipFont.id, WHITE, 0, 0, true, 1, undefined, textScaleX, textScaleY);
         });
         return [{ x, y, w: width, h: height }];
     }

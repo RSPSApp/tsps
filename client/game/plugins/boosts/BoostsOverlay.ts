@@ -1,7 +1,7 @@
 import { OverlayPosition } from "@runelite/client/ui/overlay/OverlayPosition";
 import { skillIconSprite } from "../../../rs/skill/skillIcons";
 import { SKILL_NAME, type SkillId } from "../../../rs/skill/skills";
-import { FONT_PLAIN_11, FONT_PLAIN_12 } from "../../../ui/fonts";
+import { type OverlayFont, overlayFont } from "@runelite/client/ui/overlay/OverlayFonts";
 import { drawTextGL } from "../../../widgets/components/TextRenderer";
 import type { OverlayMenuEntry, WidgetOverlay, WidgetOverlayDrawContext } from "../ClientPluginManager";
 import type { BoostsPlugin } from "./BoostsPlugin";
@@ -76,8 +76,9 @@ function drawIcon(context: WidgetOverlayDrawContext, entry: Entry, x: number, y:
 }
 
 function text(context: WidgetOverlayDrawContext, value: string, x: number, y: number, w: number, h: number,
-    color: number, xAlign: number, yAlign: number, sx: number, sy: number, font = FONT_PLAIN_11): void {
-    drawTextGL(context.renderer, context.fontLoader, value, x, y, w, h, font, color, xAlign, yAlign, true, 1, undefined, sx, sy);
+    color: number, xAlign: number, yAlign: number, sx: number, sy: number, font: OverlayFont): void {
+    drawTextGL(context.renderer, context.fontLoader, value, x, y, w, h, font.id, color, xAlign, yAlign, true, 1, undefined,
+        sx * font.scale, sy * font.scale);
 }
 
 function frame(context: WidgetOverlayDrawContext, r: Rect, sx: number, sy: number): void {
@@ -119,13 +120,16 @@ export class BoostsInfoBoxOverlay implements WidgetOverlay {
         const at = context.place(this, width, INFOBOX_SIZE);
         if (!at) return [];
         const { scaleX: sx, scaleY: sy } = at;
+        // InfoBoxComponent: the infobox font, as the boxes are at least its 32 px default size.
+        const font = overlayFont("infobox");
+        const textH = Math.round(12 * font.scale);
         const rects: Rect[] = [];
         list.forEach((entry, i) => {
             const r = { x: at.x + i * (INFOBOX_SIZE + INFOBOX_GAP) * sx, y: at.y, w: INFOBOX_SIZE * sx, h: INFOBOX_SIZE * sy };
             frame(context, r, sx, sy);
             const pad = ((INFOBOX_SIZE - INFOBOX_ICON) / 2) * sx;
             drawIcon(context, entry, r.x + pad, r.y + 2 * sy, INFOBOX_ICON * sx);
-            text(context, entry.text, r.x, r.y + r.h - 13 * sy, r.w, 12 * sy, entry.color, 1, 1, sx, sy);
+            text(context, entry.text, r.x, r.y + r.h - (textH + 1) * sy, r.w, textH * sy, entry.color, 1, 1, sx, sy, font);
             rects.push(r);
         });
         return rects;
@@ -173,25 +177,28 @@ export class BoostsPanelOverlay implements WidgetOverlay {
     draw(context: WidgetOverlayDrawContext): Rect[] {
         const lines = this.lines();
         if (lines.length === 0) return [];
-        const height = 2 * PANEL_BORDER + lines.length * LINE_HEIGHT;
+        // A TOP_LEFT panel: the interface font, its lines growing with it.
+        const panelFont = overlayFont("interface");
+        const lineHeight = Math.max(1, Math.round(LINE_HEIGHT * panelFont.scale));
+        const height = 2 * PANEL_BORDER + lines.length * lineHeight;
         const at = context.place(this, PANEL_WIDTH, height);
         if (!at) return [];
         const { scaleX: sx, scaleY: sy } = at;
         const r = { x: at.x, y: at.y, w: PANEL_WIDTH * sx, h: height * sy };
         frame(context, r, sx, sy);
-        const font = context.fontLoader(FONT_PLAIN_12);
+        const font = context.fontLoader(panelFont.id);
         const innerX = r.x + PANEL_BORDER * sx;
         const innerW = r.w - 2 * PANEL_BORDER * sx;
         lines.forEach(([left, right], i) => {
-            const y = r.y + (PANEL_BORDER + i * LINE_HEIGHT) * sy;
-            const h = LINE_HEIGHT * sy;
-            text(context, left, innerX, y, innerW, h, WHITE, 0, 1, sx, sy, FONT_PLAIN_12);
+            const y = r.y + (PANEL_BORDER + i * lineHeight) * sy;
+            const h = lineHeight * sy;
+            text(context, left, innerX, y, innerW, h, WHITE, 0, 1, sx, sy, panelFont);
             // Right-aligned, last part first.
             let end = innerX + innerW;
             for (let p = right.length - 1; p >= 0; p--) {
                 const [value, color] = right[p];
-                const w = (font ? font.measure(value) : value.length * 7) * sx;
-                text(context, value, end - w, y, w, h, color, 0, 1, sx, sy, FONT_PLAIN_12);
+                const w = (font ? font.measure(value) : value.length * 7) * panelFont.scale * sx;
+                text(context, value, end - w, y, w, h, color, 0, 1, sx, sy, panelFont);
                 end -= w;
             }
         });
@@ -222,16 +229,20 @@ export class CompactBoostsOverlay implements WidgetOverlay {
     draw(context: WidgetOverlayDrawContext): Rect[] {
         const list = this.entries();
         if (list.length === 0) return [];
-        const row = COMPACT_ICON + V_PADDING;
-        const width = COMPACT_ICON + H_PADDING + TEXT_WIDTH;
+        // A TOP_LEFT overlay: the interface font. Rows grow to fit it, and so does the text column.
+        const font = overlayFont("interface");
+        const rowHeight = Math.max(COMPACT_ICON, Math.round(16 * font.scale));
+        const textWidth = Math.round(TEXT_WIDTH * font.scale);
+        const row = rowHeight + V_PADDING;
+        const width = COMPACT_ICON + H_PADDING + textWidth;
         const at = context.place(this, width, list.length * row);
         if (!at) return [];
         const { scaleX: sx, scaleY: sy } = at;
         list.forEach((entry, i) => {
             const y = at.y + i * row * sy;
-            drawIcon(context, entry, at.x, y, COMPACT_ICON * sx);
-            text(context, entry.text, at.x + (COMPACT_ICON + H_PADDING) * sx, y, TEXT_WIDTH * sx, COMPACT_ICON * sy,
-                entry.color, 2, 1, sx, sy, FONT_PLAIN_12);
+            drawIcon(context, entry, at.x, y + ((rowHeight - COMPACT_ICON) / 2) * sy, COMPACT_ICON * sx);
+            text(context, entry.text, at.x + (COMPACT_ICON + H_PADDING) * sx, y, textWidth * sx, rowHeight * sy,
+                entry.color, 2, 1, sx, sy, font);
         });
         return [{ x: at.x, y: at.y, w: width * sx, h: list.length * row * sy }];
     }

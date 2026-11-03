@@ -420,3 +420,28 @@ test("a hit stops the lighting animation a tick before the fire catches (rsprox 
   assert.equal(h.objects.size, 1, 'the fire on tick 4');
   assert.deepEqual(h.messages, ['You attempt to light the logs.', 'The fire catches and the logs begin to burn.']);
 });
+
+test("the player steps off the log with the animation reset, and the fire catches a tick later behind them (rsprox 1035, 1098, 1108)", async t => {
+  const h = await campfireHarness(t);
+  const steps = [];
+  const faces = [];
+  let pending = 0;
+  // The step stays queued, as for a bot skipped by the process stride; it must not cancel the fire.
+  h.player.getMovementQueue = () => ({
+    size: () => pending,
+    canWalk: (dx, dy) => dx === -1 && dy === 0,
+    walkStep: (dx, dy) => { pending++; steps.push({ dx, dy, fires: h.objects.size, anim: h.animations.at(-1) }); },
+  });
+  h.player.setPositionToFace = target => faces.push({ target, fires: h.objects.size });
+  h.hooks.combine({ player: h.player, usedItemId: h.I.TINDERBOX, usedWithItemId: h.I.LOGS });
+  h.tick(3);
+  assert.deepEqual(steps, [{ dx: -1, dy: 0, fires: 0, anim: core.Animation.DEFAULT_RESET_ANIMATION.getId() }],
+    'one step west on the roll tick, with the reset and before the fire');
+  assert.deepEqual(faces, [], 'no turn yet');
+  h.tick(1);
+  assert.equal(h.objects.size, 1, 'the fire catches on the next tick');
+  assert.equal(steps.length, 1, 'no second step');
+  assert.equal(faces.length, 1, 'the player turns back to the fire with it');
+  assert.ok(faces[0].target.equals(h.loc));
+  assert.equal(h.messages.at(-1), 'The fire catches and the logs begin to burn.');
+});

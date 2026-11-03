@@ -19,7 +19,7 @@ before(async () => {
   game = {
     PHASE: { IDLE: 'idle' }, getPhase: () => 'idle', queueCounts: () => ({ a: queued, b: 0 }),
     gameArea: { getPlayers: () => [{ getAttribute: () => true }] }, TEAM: {}, inGameProcessors: [], isPlaying: (player) => playing && player?.getArea?.() === game.gameArea,
-    getCarriedFlagTeam: () => null, equipTeamColours() {}, refreshPlayerAppearance() {}, getTeamId: () => 'a', isBarricade: (npc) => npc.cade === true,
+    getCarriedFlagTeam: () => null, equipTeamColours() {}, refreshPlayerAppearance() {}, showBraceletCharges() {}, getTeamId: () => 'a', isBarricade: (npc) => npc.cade === true,
   };
   const api = PluginManager.createApi('CastleWarsPracticeTest');
   Settings({ ...api, sendMultiChatboxPrompt: (player, title, ...pairs) => { prompt = { player, title, pairs }; } }, game);
@@ -42,7 +42,7 @@ function pick(text) {
   prompt.pairs[index + 1]();
 }
 
-test('Lanthus settings choose team sizes, freeze limits and barricade caps, and reject stale callbacks', (t) => {
+test('Lanthus settings retain team sizes and barricade caps without the removed custom controls, and reject stale callbacks', (t) => {
   const p = player(t);
   const messages = [];
   t.mock.method(p, 'sendMessage', (m) => messages.push(m));
@@ -52,9 +52,7 @@ test('Lanthus settings choose team sizes, freeze limits and barricade caps, and 
   pick('1 vs 1');
   assert.equal(game.settings.teamSize, 1);
   pick('More settings');
-  pick('Ice freeze:');
-  pick('10 seconds');
-  assert.equal(game.settings.freezeSeconds, 10);
+  assert.deepEqual(prompt.pairs.filter((_, i) => i % 2 === 0), ['Barricades per team: 10', 'Bot combat: Maxed (126)', 'Bracelet charges', 'Back']);
   pick('Barricades per team:');
   pick('20');
   assert.equal(game.getBarricadeLimit(), 20);
@@ -67,23 +65,22 @@ test('Lanthus settings choose team sizes, freeze limits and barricade caps, and 
   queued = 0;
 });
 
-test('selected ice duration caps the real freeze and immunity, while binds and outside combat retain defaults', (t) => {
+test('practice and human games retain normal ice and bind durations and immunity', (t) => {
   const caster = player(t), victim = player(t, 2427);
   t.mock.method(victim, 'sendMessage', () => {});
-  for (const [seconds, kind, inside, expected] of [[10, 'ice', true, 16], [15, 'ice', true, 25], [0, 'ice', true, 32], [10, 'bind', true, 32], [10, 'ice', false, 32]]) {
-    game.settings.freezeSeconds = seconds;
-    playing = inside;
-    victim.getTimers().cancel(core.TimerKey.FREEZE);
-    victim.getTimers().cancel(core.TimerKey.FREEZE_IMMUNITY);
-    core.CombatFactory.freezeTicks(victim, 32, null, caster, kind);
-    assert.equal(victim.getTimers().getTicks(core.TimerKey.FREEZE), expected);
-    assert.equal(victim.getTimers().getTicks(core.TimerKey.FREEZE_IMMUNITY), expected + core.Misc.getTicks(3));
+  for (const practice of [true, false]) {
+    t.mock.method(game.gameArea, 'getPlayers', () => practice ? [{ getAttribute: () => true }] : []);
+    for (const [ticks, kind] of [[8, 'ice'], [16, 'ice'], [24, 'ice'], [32, 'ice'], [8, 'bind']]) {
+      victim.getTimers().cancel(core.TimerKey.FREEZE);
+      victim.getTimers().cancel(core.TimerKey.FREEZE_IMMUNITY);
+      core.CombatFactory.freezeTicks(victim, ticks, null, caster, kind);
+      assert.equal(victim.getTimers().getTicks(core.TimerKey.FREEZE), ticks);
+      assert.equal(victim.getTimers().getTicks(core.TimerKey.FREEZE_IMMUNITY), ticks + core.Misc.getTicks(3));
+    }
   }
-  playing = true;
-  game.settings.freezeSeconds = 0;
 });
 
-test('Lanthus practice defaults to maxed bots, keeps tier choices and scopes menu priority to bot matches', (t) => {
+test('Lanthus practice defaults to maxed bots, keeps tier choices and exposes bracelet charges directly', (t) => {
   const p = player(t);
   Object.assign(game.settings, Settings._test.DEFAULTS);
   const originalJoin = game.joinFromLobby;
@@ -100,15 +97,13 @@ test('Lanthus practice defaults to maxed bots, keeps tier choices and scopes men
     pick('Bot combat:'); pick('Novice'); pick('Back'); pick('Join practice');
     assert.equal(joined[2], 'novice');
     assert.equal(joined[4], false, 'an explicitly selected tier preserves its stat band');
-    Settings.openSettings({ player: p }); pick('More settings'); pick('Additional settings');
-    assert.equal(game.getBarricadePlayerPriority(), false);
-    pick('Barricade right-click:');
-    assert.equal(game.getBarricadePlayerPriority(), true);
-    t.mock.method(game.gameArea, 'getPlayers', () => []);
-    assert.equal(game.getBarricadePlayerPriority(), false, 'human-only matches retain standard priority');
-    pick('Back'); pick('Back'); pick('Reset defaults');
+    let braceletPlayer;
+    t.mock.method(game, 'showBraceletCharges', (player) => { braceletPlayer = player; });
+    Settings.openSettings({ player: p }); pick('More settings'); pick('Bracelet charges');
+    assert.equal(braceletPlayer, p);
+    pick('Back'); pick('Reset defaults');
     assert.equal(game.settings.botTier, 'maxed');
-    assert.equal(game.settings.barricadePlayerPriority, false);
+    assert.deepEqual(Object.keys(game.settings).sort(), ['barricades', 'botTier', 'opponent', 'teamSize']);
   } finally {
     game.joinFromLobby = originalJoin;
     Object.assign(game.settings, Settings._test.DEFAULTS);
@@ -224,15 +219,11 @@ test('the defender clears its pending barrage before a hasta special and can swi
   assert.equal(p.getEquipment().getSlot(core.Equipment.WEAPON_SLOT), core.ItemIdentifiers.KODAI_WAND);
 });
 
-test('human games ignore custom barricade and freeze limits, and Lanthus offers no bots', (t) => {
-  const p = player(t), victim = player(t, 2427);
+test('human games ignore custom barricade limits, and Lanthus offers no bots', (t) => {
+  const p = player(t);
   t.mock.method(game.gameArea, 'getPlayers', () => []);
   game.settings.barricades = 20;
-  game.settings.freezeSeconds = 10;
   assert.equal(game.getBarricadeLimit(), 10);
-  const event = { kind: 'ice', source: p, target: victim, ticks: 32 };
-  Settings._test.capFreeze(event);
-  assert.equal(event.ticks, 32);
   let joined;
   game.joinFromLobby = (...args) => { joined = args; };
   Settings.openSettings({ player: p });

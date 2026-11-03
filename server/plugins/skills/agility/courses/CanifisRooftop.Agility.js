@@ -1,12 +1,16 @@
 const { ObjectIds } = require("../../../../src/main/typescript/elvarg/util/IdEnums");
 const { Anim } = require("../Constants.Agility");
-const { gapJump, wallScramble, JUMP_DOWN_SOUND } = require("../Steps.Agility");
+const { gapJump, wallScramble, JUMP_DOWN_SOUND, WALL_JUMP_SOUND } = require("../Steps.Agility");
 
 /**
  * Canifis Rooftop. Steps, sounds and ticks follow rsprox captures 90, 91 and 1135 (Leagues V and
  * VI, rev 227 and 237; no main-game recording). XP is the Wiki's.
  */
 const TREE_SOUND = 1705;
+/** A failure's landing (rsprox 90): one knee (1332), the thud and the hurt. */
+const FALL_LANDING = 1332;
+const LAND_SOUND = 2455;
+const HURT_SOUND = 519;
 
 /** A gap: the rooftop jump, landing a tick later (see `gapJump`). */
 function gap(object, index, route, landing, xp, { settle = 1 } = {}) {
@@ -26,12 +30,19 @@ module.exports = {
   helper: 10, // the Agility helper's course (enum 3507: "Canifis Rooftops")
   lapXp: 240,
   petBase: 36842, // Giant squirrel base chance (Wiki)
+  diaryTask: {
+    diary: "morytania",
+    task: "complete-a-lap-of-the-canifis-agility-course",
+  },
   // 2/3 a lap, and no overlevel cut: a coding error in the game (Wiki: Mark of Grace).
   marks: {
     level: 40,
     chance: 2 / 3,
     overlevelPenalty: false,
-    tiles: [[3499, 3505, 2], [3488, 3500, 2], [3476, 3494, 3], [3478, 3483, 2], [3497, 3471, 3], [3514, 3478, 2]],
+    // The Wiki's five spots (Mark of grace spawns): the food shop (3506,3495, capture 91), the
+    // clothes shop (3501,3505, 90 and 91), the tannery (3490,3501, 90), the general store and
+    // the taxidermist; the last two aren't captured.
+    tiles: [[3506, 3495, 2], [3501, 3505, 2], [3490, 3501, 2], [3476, 3494, 3], [3478, 3483, 2]],
   },
   obstacles: [
     {
@@ -81,6 +92,26 @@ module.exports = {
         ...wallScramble([3481, 3499], [3479, 3499], "west"),
         { tele: [3479, 3499, 3] },
       ],
+      // The only gap that fails (Wiki, since 15 May 2024): 88.28% at 40, never from 64 (the Wiki's
+      // success chart, 175/300; Mod Ash: 69% at 1 to 118% at 99). Captured once (90, 44
+      // Agility): the same jump, then on the ground at 3482,3499 the tick after, 6 damage, no
+      // message. Up to 8 damage (an older Wiki revision); the lower bound is a guess.
+      fail: {
+        low: 175,
+        high: 300,
+        xp: 0,
+        steps: [
+          { face: [3479, 3499] },
+          { wait: 1 },
+          { sound: WALL_JUMP_SOUND, delay: 20 },
+          { move: [3481, 3499], anim: Anim.JUMP_SHORT, delay: 20, speed: [25, 30], dir: "west" },
+          { tele: [3482, 3499, 0] },
+          { anim: FALL_LANDING },
+          { sound: LAND_SOUND },
+          { sound: HURT_SOUND, delay: 20 },
+          { hit: [1, 8] },
+        ],
+      },
     },
     gap(ObjectIds.GAP_11, 5, [3478, 3493, 3], [3478, 3486, 2], 8),
     {

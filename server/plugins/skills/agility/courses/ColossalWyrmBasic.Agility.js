@@ -14,6 +14,9 @@ module.exports = {
   name: "Colossal Wyrm Agility Course (Basic)",
   helper: 22, // the Agility helper's course (enum 3507: "Colossal Wyrm Agility Course")
   lapXp: 601.6,
+  // varlamore_wyrm_agility_basic_progress: the obstacle the lap has reached, 1-6, and 0 with the
+  // lap (rsprox 1106).
+  progressVarbit: 11292,
   obstacles: [
     {
       object: Loc.START_LADDER,

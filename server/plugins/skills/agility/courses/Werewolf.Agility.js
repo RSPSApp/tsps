@@ -24,6 +24,9 @@ const STICK_TRAINER = 5927; // werewolf_trainer_stick
 const STICK = 4179; // waa_stick
 const JUMP_STONES = 1604; // human_jump_stones
 const PIPE_SOUND = 2489;
+/** rsprox 1849 and 1858: the grip line is a spam line; the yell comes two ticks later, with sound 1934. */
+const GRIP_MESSAGE = { spam: "You bravely cling on to the death slide by your teeth..." };
+const YELL = "WAAAAAARRRGGGHHHH!!!!!!";
 
 /** The five stones, in order, each jumped onto from the tile before it. */
 const STONES = [[3538, 9875], [3538, 9877], [3540, 9877], [3540, 9879], [3540, 9881]];
@@ -92,9 +95,10 @@ function deathslide() {
     { faceDir: "south" },
     { anim: Anim.ZIPLINE_GRIP },
     { sound: 1933 },
-    { msg: "You bravely cling on to the death slide by your teeth..." },
+    { msg: GRIP_MESSAGE },
     { wait: 2 },
     { anim: Anim.ZIPLINE_SLIDE },
+    { say: YELL },
     { sound: 1934, delay: 15 },
     ...slide,
     { sound: 1935 },
@@ -121,7 +125,7 @@ function deathslideEntry(object) {
     route: [3528, 9910, 0],
     precondition: helmetOff,
     steps: deathslide,
-    end: "... and land safely on your feet.",
+    end: { spam: "... and land safely on your feet." },
     // The Wiki gives no formula (Agility, Strength and weight all count; never failed from 80
     // Agility and Strength under 2 kg); this fails on Agility alone, partway down onto the spikes.
     fail: {
@@ -131,9 +135,10 @@ function deathslideEntry(object) {
       steps: [
         { anim: Anim.ZIPLINE_GRIP },
         { sound: 1933 },
-        { msg: "You bravely cling on to the death slide by your teeth..." },
+        { msg: GRIP_MESSAGE },
         { wait: 2 },
         { anim: Anim.ZIPLINE_SLIDE },
+        { say: YELL },
         { move: [3528, 9895, 0], speed: [0, 90], dir: "south", ticks: 3 },
         { anim: Anim.FREE_FALL },
         { wait: 1 },
@@ -150,6 +155,13 @@ module.exports = {
   helper: 14, // the Agility helper's course (enum 3507: "Werewolf Agility Course")
   lapXp: 730,
   petBase: 32597, // Giant squirrel base chance (Wiki)
+  // Marks since 8 May 2024 (Wiki), on the one tile between the stepping stones and the hurdles
+  // (Template:Mark of grace spawns). The Wiki gives no chance; the rooftop 2/6 gives its 10-15
+  // marks an hour at about 94 laps an hour.
+  marks: {
+    level: 60,
+    tiles: [[3540, 9888, 0]],
+  },
   obstacles: [
     ...STONES.map((_, index) => stone(index)),
     ...HURDLE_ROWS.flatMap((row, i) => hurdles(row, 6 + i)),
@@ -176,7 +188,7 @@ module.exports = {
       takes: STICK,
       // Without one, the trainer's own reminder (Wiki transcript, Agility Trainer).
       precondition: ({ player }) => (player.getInventory().getAmount(STICK) > 0 ? null : "Remember - no stick, no agility bonus!"),
-      end: "You give the stick to the werewolf.",
+      end: { spam: "You give the stick to the werewolf." }, // rsprox 1858, a spam line
     },
   ],
 };

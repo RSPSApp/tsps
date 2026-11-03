@@ -21,7 +21,10 @@ module.exports = {
   },
   marks: {
     level: 1,
-    tiles: [[3101, 3278, 3], [3091, 3275, 3], [3093, 3266, 3], [3098, 3259, 3]],
+    // The Wiki's four spots (Mark of grace spawns): the start roof (3098,3281, capture 1723),
+    // Diango's workshop, the Slayer shop and Ned's shop (3100,3257, capture 1718). The middle two
+    // aren't captured.
+    tiles: [[3098, 3281, 3], [3091, 3275, 3], [3093, 3266, 3], [3100, 3257, 3]],
   },
   obstacles: [
     {

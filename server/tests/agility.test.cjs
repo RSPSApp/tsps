@@ -70,7 +70,7 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
   let location = new Location(x, y, z);
   let forceMovement = null;
   const attributes = new Map();
-  const state = { xp: 0, messages: [], spam: [], varbits: new Map(), varbitLog: [], scripts: [], sounds: [], animations: [], hits: 0, blocked: false, walked: 0 };
+  const state = { xp: 0, otherXp: {}, messages: [], spam: [], varbits: new Map(), varbitLog: [], scripts: [], sounds: [], animations: [], hits: 0, blocked: false, walked: 0 };
   const player = {
     state,
     getRunEnergy: () => state.energy ?? 50,
@@ -99,7 +99,10 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
     getSkillManager: () => ({
       getCurrentLevel: (skill) => (skill === Skill.AGILITY ? boostedTo : skills[skill.getName?.().toLowerCase?.()] ?? 99),
       getMaxLevel: () => level,
-      addExperiences: (skill, amount) => { assert.equal(skill, Skill.AGILITY); state.xp += amount; },
+      addExperiences: (skill, amount) => {
+        if (skill === Skill.AGILITY) state.xp += amount;
+        else state.otherXp[skill.getName()] = (state.otherXp[skill.getName()] ?? 0) + amount;
+      },
       getExperience: () => state.xp,
     }),
     getPacketSender: () => ({
@@ -255,6 +258,10 @@ const LAP_ENDS = {
 const LAP_GEAR = { "shayzien-advanced": () => grappleGear() };
 /** Courses that need an item carried to finish a lap: Werewolf's stick, fetched on the way. */
 const LAP_ITEMS = { werewolf: [4179] };
+/** Courses whose obstacles can fail even at 99 (the Wilderness course, Wiki): the lap rolls every success. */
+const LAP_ALWAYS_SUCCEEDS = new Set(["wilderness"]);
+/** XP a lap pays in other skills (Barbarian Outpost's Strength, Wiki). */
+const LAP_OTHER_XP = { barbarian: { Strength: 41.3 } };
 /** The greegree form a course needs to finish a lap (Greegrees.plugin.js answers in game). */
 const LAP_FORMS = { "ape-atoll": "small-ninja-monkey" };
 
@@ -268,9 +275,12 @@ for (const course of COURSES) {
     groundItems.length = 0;
     const player = createPlayer(3200, 3200, 0, 99, { worn: LAP_GEAR[course.key]?.() ?? [], held: [...(LAP_ITEMS[course.key] ?? [])] });
     answerForm(LAP_FORMS[course.key]);
+    const random = Math.random;
+    if (LAP_ALWAYS_SUCCEEDS.has(course.key)) Math.random = () => 0;
     try {
       runLap(course, player);
     } finally {
+      Math.random = random;
       answerForm(null);
     }
 
@@ -282,6 +292,9 @@ for (const course of COURSES) {
     if (course.lapXp > 0) {
       assert.equal(Math.round(player.state.xp * 10) / 10, course.lapXp);
     }
+    assert.deepEqual(player.state.otherXp, LAP_OTHER_XP[course.key] ?? {});
+    const busy = player.state.varbitLog.filter(([id]) => id === 12393).map(([, value]) => value);
+    assert.ok(busy.length > 0 && busy.at(-1) === 0, "BUSY set while each obstacle plays and cleared after (rsprox 1788, 1885)");
     if (LAP_ENDS[course.key]) {
       assert.deepEqual(tileOf(player), LAP_ENDS[course.key]);
     }
@@ -290,7 +303,7 @@ for (const course of COURSES) {
     assert.ok([65535, Anim.LAND].includes(player.state.animations.at(-1)), "transient obstacle animation cleared");
     if (course.name.includes("Rooftop")) {
       assert.equal(player.state.energyUpdates, course.finalIndex, "energy updated after every successful rooftop obstacle");
-      assert.equal(player.state.energy, 50 + course.finalIndex);
+      assert.equal(player.state.energy, 50 + Math.floor(1.5 * course.finalIndex), "1.5% an obstacle (rsprox 339, 3154)");
     } else {
       assert.equal(player.state.energyUpdates, undefined, "no invented energy restore on other courses");
     }
@@ -821,13 +834,13 @@ test("agility:mark-chance may set a lap's mark chance; unanswered, the course's 
 });
 
 test("a course mark picked up finishes a lap only when agility:mark-taken says so, with its items", () => {
-  const player = createPlayer(3101, 3278, 3, 10);
+  const player = createPlayer(3098, 3281, 3, 10);
   const added = [];
   const inventory = player.getInventory();
   player.getInventory = () => ({ ...inventory, getAddableAmount: (item) => item.getAmount(), adds: (id, amount) => added.push([id, amount]) });
   player.setAttribute("agility.progress", { course: "draynor", index: 2 });
   const mark = { getItem: () => ({ getId: () => MARK_OF_GRACE }), getgoesGlobal: () => false, getDespawnDelay: () => 1000 };
-  const pickUp = (groundItem = mark, location = { x: 3101, y: 3278, z: 3 }) => hooks.pickup({ player, groundItem, groundItemId: MARK_OF_GRACE, clickType: 1, location, handled: false });
+  const pickUp = (groundItem = mark, location = { x: 3098, y: 3281, z: 3 }) => hooks.pickup({ player, groundItem, groundItemId: MARK_OF_GRACE, clickType: 1, location, handled: false });
   hooks.events.length = 0;
   pickUp();
   assert.deepEqual(hooks.events.find((event) => event.name === "agility:mark-taken")?.payload.course, "draynor");
@@ -919,12 +932,21 @@ const APE_ATOLL = () => COURSES.find((course) => course.key === "ape-atoll");
 const apeObstacle = (index) => APE_ATOLL().obstacles.find((obstacle) => obstacle.index === index);
 const APE_TILES = { 1: [2754, 2742, 0], 2: [2753, 2741, 0], 3: [2752, 2741, 2], 4: [2746, 2741, 0], 5: [2752, 2731, 0], 6: [2757, 2734, 0] };
 
+/** A human's slip line on each Ape Atoll obstacle (Wiki: the obstacles' pages). */
+const APE_HUMAN_SLIPS = {
+  1: "The rock is covered in slime and you slip into the water... ...you're not monkey enough to try this!",
+  2: "You reach for the tree trunk and lose your footing... ...you're not monkey enough to try this!",
+  3: "Your hands slip from the rung... ...you're not monkey enough to try this!",
+  4: "The hand holds are too small to hold onto... ...you're not monkey enough to try this!",
+  6: "You jump up to seize the vine... ...and lose your grip!",
+};
+
 test("Ape Atoll: as a human every obstacle slips and hurts, and the rope drops them at the stepping stone (Wiki)", () => {
   answerForm(null);
   for (const index of [1, 2, 3, 4, 6]) {
     const player = createPlayer(3200, 3200, 0, 99);
     operate(player, apeObstacle(index).object, APE_TILES[index]);
-    assert.ok(player.state.messages.includes("...you're not monkey enough to try this!"), `obstacle ${index}`);
+    assert.ok(player.state.messages.includes(APE_HUMAN_SLIPS[index]), `obstacle ${index}`);
     assert.equal(player.state.hits, 1, `obstacle ${index} hurts`);
     assert.equal(player.state.xp, 0);
     assert.ok(!player.getAttribute("agility.progress"), "no lap progress");

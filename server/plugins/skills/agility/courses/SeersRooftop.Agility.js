@@ -2,12 +2,22 @@ const { ObjectIds } = require("../../../../src/main/typescript/elvarg/util/IdEnu
 const { Anim } = require("../Constants.Agility");
 const { leap, balance } = require("../Steps.Agility");
 
+/**
+ * Seers' Village Rooftop. No rsprox capture exists (searched every obstacle loc id, the lap count
+ * line); the movement is a guess from the cache's locs. XP per obstacle is the Wiki's (course and
+ * Gap pages agree), adding up to the 570 lap with no bonus.
+ */
 module.exports = {
   key: "seers",
   name: "Seers' Village Rooftop",
   helper: 15, // the Agility helper's course (enum 3507: "Seers' Village Rooftops")
   lapXp: 570,
   petBase: 35205, // Giant squirrel base chance (Wiki)
+  // Kandarin Diary hard: "Complete a lap of the Seers' Village agility course."
+  diaryTask: {
+    diary: "kandarin",
+    task: "complete-a-lap-of-the-seers-village-agility-cour",
+  },
   // The Kandarin diary rerolls a miss: 5%, 10% or 15% for its easy, medium or hard tier (Wiki: Mark of Grace).
   marks: {
     level: 60,
@@ -16,7 +26,8 @@ module.exports = {
       { diary: "kandarin", tier: "medium", chance: 0.1 },
       { diary: "kandarin", tier: "easy", chance: 0.05 },
     ],
-    tiles: [[2725, 3494, 3], [2708, 3492, 2], [2712, 3478, 2], [2702, 3473, 3], [2699, 3462, 2]],
+    // The Wiki's spawn map (Template:Mark of grace spawns); planes from the roofs' obstacles.
+    tiles: [[2727, 3498, 3], [2707, 3493, 2], [2710, 3493, 2], [2712, 3481, 2], [2698, 3465, 2]],
   },
   obstacles: [
     {
@@ -61,7 +72,7 @@ module.exports = {
       object: ObjectIds.GAP_28,
       index: 4,
       level: 60,
-      xp: 20,
+      xp: 35,
       steps: ({ pos }) => [
         { face: [pos.x, pos.y - 3] },
         { anim: Anim.LEAP },
@@ -76,7 +87,7 @@ module.exports = {
       object: ObjectIds.GAP_29,
       index: 5,
       level: 60,
-      xp: 25,
+      xp: 15,
       steps: ({ pos }) => leap([2701, 3465, 2], { face: [pos.x, pos.y - 1] }),
     },
     {

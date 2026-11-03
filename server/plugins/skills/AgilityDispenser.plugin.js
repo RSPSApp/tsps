@@ -101,12 +101,21 @@ function lapStarted({ player, objectId }) {
 
 // ---------------------------------------------------------------- the dispenser
 
+/** Ring of wealth (i), uncharged and (i1)-(i5) (gameval RING_OF_WEALTH_I*). */
+const IMBUED_RINGS_OF_WEALTH = Object.freeze([12785, 20786, 20787, 20788, 20789, 20790]);
+
+/** Wiki (Agility dispenser): a worn ring of wealth (i) makes the medium clue 1/20 instead of 1/40. */
+function clueChance(player) {
+  const ring = player.getEquipment?.()?.getItems()[core().Equipment.RING_SLOT];
+  return IMBUED_RINGS_OF_WEALTH.includes(ring?.getId?.()) ? DATA.clueChance / 2 : DATA.clueChance;
+}
+
 /**
- * A medium clue on 1/40 laps, through the shared clue services (one per tier, banked ones count; a
- * scroll box after X Marks the Spot), or null.
+ * A medium clue on 1/40 laps (1/20 with a ring of wealth (i) worn), through the shared clue
+ * services (one per tier, banked ones count; a scroll box after X Marks the Spot), or null.
  */
 function rollClue(player) {
-  if (Math.floor(Math.random() * DATA.clueChance) !== 0) return null;
+  if (Math.floor(Math.random() * clueChance(player)) !== 0) return null;
   const allowed = { player, tier: "medium", allowed: null };
   api.emitCustomEvent("treasure-trails:can-receive", allowed);
   if (allowed.allowed === false) return null;

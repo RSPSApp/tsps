@@ -43,7 +43,7 @@ const OBJECTS = {
   TICKET_DISPENSER: 3608,
 };
 
-/** The 24 dispensers as the cache places them (8 of them are the darts version). */
+/** The 24 dispensers as the cache places them (6 of them are the darts version, 3581). */
 const DISPENSER_TILES = [
   { id: 3608, x: 2761, y: 9546 }, { id: 3608, x: 2772, y: 9546 }, { id: 3608, x: 2783, y: 9546 },
   { id: 3608, x: 2794, y: 9546 }, { id: 3608, x: 2805, y: 9546 },
@@ -57,17 +57,31 @@ const DISPENSER_TILES = [
   { id: 3608, x: 2794, y: 9590 },
 ];
 
-/** Walk-over traps: stepping on the tile rolls the obstacle. */
-const FLOOR_SPIKE_TILES = [[2772, 9551], [2772, 9552], [2799, 9568], [2800, 9568], [2761, 9573], [2761, 9574]];
-const PRESSURE_PAD_TILES = [[2799, 9557], [2800, 9557], [2799, 9579], [2800, 9579], [2772, 9584], [2772, 9585]];
-/** Spinning blades (3580) occupy these tiles; the tiles next to them are where a player is hit. */
-const BLADE_TILES = [
-  [2777, 9556], [2778, 9556], [2779, 9556],
-  [2782, 9573], [2782, 9574], [2782, 9575],
-  [2777, 9580], [2778, 9580], [2779, 9580],
+/**
+ * Walk-over traps, as spans of path tiles: `axis` is the way the path runs, `at` the path's other
+ * coordinate, `from`-`to` the tiles a player is caught on. Standing on any of them at a tick's end
+ * sets the trap off, and the player is jumped (the darts: walked) to the first tile past the span
+ * in the way they were going (rsprox 1735, 1738, 4308, 75). Floor spikes (3582) and pressure pads
+ * (3585) are the cache's own tiles. The spinning blades (3580, 1x3) stand beside the path, and the
+ * captures jump players over the three path tiles beside them (2777-2779 at y 9557 and 9579,
+ * 9573-9575 at x 2783). The darts fire on the middle two tiles of the three corridors that join
+ * two darts dispensers with nothing else between them (captured on 2777/2778, 2788 and 9573;
+ * 2789 and 9574 by symmetry).
+ */
+const TRAP_SPANS = [
+  { kind: "FLOOR_SPIKES", axis: "y", at: 2772, from: 9551, to: 9552 },
+  { kind: "FLOOR_SPIKES", axis: "x", at: 9568, from: 2799, to: 2800 },
+  { kind: "FLOOR_SPIKES", axis: "y", at: 2761, from: 9573, to: 9574 },
+  { kind: "PRESSURE_PAD", axis: "x", at: 9557, from: 2799, to: 2800 },
+  { kind: "PRESSURE_PAD", axis: "x", at: 9579, from: 2799, to: 2800 },
+  { kind: "PRESSURE_PAD", axis: "y", at: 2772, from: 9584, to: 9585 },
+  { kind: "SPINNING_BLADES", axis: "x", at: 9557, from: 2777, to: 2779 },
+  { kind: "SPINNING_BLADES", axis: "x", at: 9579, from: 2777, to: 2779 },
+  { kind: "SPINNING_BLADES", axis: "y", at: 2783, from: 9573, to: 9575 },
+  { kind: "DARTS", axis: "x", at: 9568, from: 2777, to: 2778 },
+  { kind: "DARTS", axis: "x", at: 9557, from: 2788, to: 2789 },
+  { kind: "DARTS", axis: "y", at: 2794, from: 9573, to: 9574 },
 ];
-/** Ticks between spinning-blade rolls, `ponytail:` the Wiki gives 5t to cross, so one roll a crossing. */
-const BLADE_COOLDOWN_TICKS = 5;
 const PRESSURE_PAD_COOLDOWN_TICKS = 8;
 const PRESSURE_PAD_USES = 2;
 
@@ -77,33 +91,42 @@ const OBSTACLE_XP = {
   ROPE_SWING: 20, PLANK: 6, PILLAR: 18, HAND_HOLDS: 22, PRESSURE_PAD: 26, FLOOR_SPIKES: 24,
   SPINNING_BLADES: 28, DARTS: 30,
 };
-/** Only these obstacles have an Agility requirement (Wiki). */
-const OBSTACLE_LEVEL = { PRESSURE_PAD: 20, FLOOR_SPIKES: 20, SPINNING_BLADES: 40, DARTS: 40 };
+/** Only these obstacles have an Agility requirement (Wiki: Brimhaven Agility Arena, Hand holds). */
+const OBSTACLE_LEVEL = { PRESSURE_PAD: 20, FLOOR_SPIKES: 20, HAND_HOLDS: 20, SPINNING_BLADES: 40, DARTS: 40 };
+/** Karamja gloves 2-4 add 10% to obstacle XP, but not to the tag XP (Wiki). */
+const GLOVES_XP_BONUS = 1.1;
 /** Floor spikes stop failing at 50 Agility (Wiki). */
 const FLOOR_SPIKES_NEVER_FAIL = 50;
 
-/** OSRS success-chart endpoints for dodging the darts: ~70.7% at 40, always at 99. */
-const DARTS_SUCCESS = { low: 130, high: 255 };
+/** Skilling success-chart endpoints from level 40 (Wiki: the Darts and Spinning blades pages). */
+const DARTS_SUCCESS = { low: 131, high: 255 };
+const BLADES_SUCCESS = { low: 153, high: 255 };
 
 const RECEIVED_MESSAGE = "You have received an Agility Arena Ticket and Brimhaven Voucher!";
+/** Every tag first sends the count line, worded like the courses' lap counts (rsprox 75, 1738, 1863). */
+const LAP_MESSAGE = (laps) => `Your Agility Arena lap count is: <col=ff0000>${laps}</col>.`;
+const LAPS_ATTRIBUTE = "brimhaven-agility-arena:laps";
+/** The tag's item box shows the old ticket (2996) at zoom 400, with jingle 71 (rsprox 75, 1863). */
+const TAG_BOX_ITEM = 2996;
+const TAG_JINGLE = 71;
+/** The Karamja Diary's medium task, done on a first tag (rsprox 75). */
+const DIARY_TASK = { diary: "karamja", task: "claim-a-ticket-from-the-agility-arena-in-brimhav" };
+/** The Elite Karamja Diary's chance of two tickets and vouchers per tag (Wiki). */
+const DIARY_DOUBLE_CHANCE = 0.1;
 const REPEAT_MESSAGE = "You can only get one ticket at a time, wait till the arrow moves again.";
 const INACTIVE_MESSAGE = "You can only get a ticket when the flashing arrow is above the pillar.";
 const BLADES_FAIL_MESSAGE = "You were hit by the spinning blades!";
 const DARTS_FAIL_MESSAGE = "You were hit by some darts, something on them makes you feel dizzy!";
 const FEE_MESSAGE = "You give Cap'n Izzy the 200 coin entrance fee.";
 
+/** tile -> the trap span covering it. */
 const TRAPS = new Map();
-for (const [x, y] of FLOOR_SPIKE_TILES) TRAPS.set(tileKey(x, y), "FLOOR_SPIKES");
-for (const [x, y] of PRESSURE_PAD_TILES) TRAPS.set(tileKey(x, y), "PRESSURE_PAD");
-
-/** Tiles one step off a blade tile, where the blades catch the player. */
-const BLADE_HITS = new Set();
-for (const [x, y] of BLADE_TILES) {
-  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-    BLADE_HITS.add(tileKey(x + dx, y + dy));
+for (const span of TRAP_SPANS) {
+  for (let along = span.from; along <= span.to; along++) {
+    const [x, y] = span.axis === "x" ? [along, span.at] : [span.at, along];
+    TRAPS.set(tileKey(x, y), span);
   }
 }
-for (const [x, y] of BLADE_TILES) BLADE_HITS.delete(tileKey(x, y));
 
 let api = null;
 let core = null;
@@ -128,10 +151,11 @@ function stateOf(player) {
     state = {
       taggedCycle: -1,
       lastTile: null,
+      /** The tile the player stood on at the end of the previous tick, to tell which way they go. */
+      lastAt: null,
       lastTrap: null,
       padUses: 0,
       padCooldownUntil: 0,
-      bladeCooldownUntil: 0,
     };
     sessions.set(player, state);
   }
@@ -159,6 +183,25 @@ function addXp(player, amount) {
   if (amount > 0) {
     player.getSkillManager().addExperiences(core.Skill.AGILITY, amount);
   }
+}
+
+function wearsBonusGloves(player) {
+  const slot = core.Equipment?.HANDS_SLOT;
+  if (slot == null) return false;
+  const gloves = player.getEquipment?.()?.get?.(slot);
+  return /^Karamja gloves [234]$/.test(gloves?.getDefinition?.()?.getName?.() ?? "");
+}
+
+/** An obstacle's (or trap's) XP, with the Karamja gloves bonus. */
+function addObstacleXp(player, kind) {
+  const xp = OBSTACLE_XP[kind] ?? 0;
+  addXp(player, wearsBonusGloves(player) ? xp * GLOVES_XP_BONUS : xp);
+}
+
+function diaryComplete(player, tier) {
+  const request = { player, diary: "karamja", tier, complete: null };
+  api.emitCustomEvent("diary:is-complete", request);
+  return request.complete === true;
 }
 
 /** Trap damage: floor(current HP * 5 / 100) + 2 (Wiki, Mod Ash). */
@@ -229,26 +272,48 @@ function isInArena(player) {
     && at.getY() >= ARENA.minY && at.getY() <= ARENA.maxY;
 }
 
-/** The ticket and voucher, plus the scaled XP and the announcement. */
+/**
+ * The ticket and voucher, plus the scaled XP, the count and the announcement. The ticket is the
+ * 2024 one (29480; 2996 is the discontinued ticket), as the captures' inventories show.
+ */
 function rewardTag(player) {
   const state = stateOf(player);
   state.taggedCycle = cycle.index;
   state.lastTrap = "TAG";
   const Items = core.ItemIdentifiers;
-  const award = { player, minigame: "brimhaven-agility-arena", points: 1 };
+  const count = diaryComplete(player, "elite") && random() < DIARY_DOUBLE_CHANCE ? 2 : 1;
+  const award = { player, minigame: "brimhaven-agility-arena", points: count };
   api.emitCustomEvent("minigame:points", award);
-  player.getInventory().forceAdd(player, new core.Item(Items.AGILITY_ARENA_TICKET, award.points));
+  const laps = (Number(player.getAttribute(LAPS_ATTRIBUTE)) || 0) + 1;
+  player.setAttribute(LAPS_ATTRIBUTE, laps);
+  player.sendMessage(LAP_MESSAGE(laps));
+  api.emitCustomEvent("diary:task", { player, ...DIARY_TASK });
+  player.getInventory().forceAdd(player, new core.Item(Items.AGILITY_ARENA_TICKET_3, award.points));
   player.getInventory().forceAdd(player, new core.Item(Items.BRIMHAVEN_VOUCHER, award.points));
   addXp(player, tagXp(agilityLevel(player)));
-  player.sendMessage(RECEIVED_MESSAGE);
+  // ponytail: the main game's wording for more than one is not recorded; the Leagues one is
+  // "You have received 1 Agility Arena Tickets and 8 Brimhaven Vouchers!" (rsprox 75).
+  const text = award.points === 1
+    ? RECEIVED_MESSAGE
+    : `You have received ${award.points} Agility Arena Tickets and ${award.points} Brimhaven Vouchers!`;
+  const sender = player.getPacketSender();
+  if (sender.sendTypedMessage && core.ChatType) sender.sendTypedMessage(core.ChatType.SPAM, text);
+  else player.sendMessage(text);
+  sender.sendJingle?.(TAG_JINGLE, 0);
+  if (core.ItemStatementDialogue && core.DialogueChainBuilder) {
+    player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
+      new core.ItemStatementDialogue(0, TAG_BOX_ITEM, text.replace(" and ", " and<br>")),
+    ));
+  }
 }
 
-function trapAt(x, y) {
+/** The trap span covering a tile, or null. */
+function trapSpanAt(x, y) {
   return TRAPS.get(tileKey(x, y)) ?? null;
 }
 
-function isBladeHit(x, y) {
-  return BLADE_HITS.has(tileKey(x, y));
+function trapAt(x, y) {
+  return trapSpanAt(x, y)?.kind ?? null;
 }
 
 module.exports = {
@@ -256,12 +321,13 @@ module.exports = {
   core: () => core,
   setRandom: (fn) => { random = fn; },
   CYCLE_TICKS, CYCLE_TASK_KEY, ARENA_PLANE, ARENA, HUT, ENTRY, ENTRY_FEE, PAID_ATTRIBUTE, NPC,
-  OBSTACLE_IDS, OBJECTS, DISPENSER_TILES, BLADE_TILES, OBSTACLE_XP, OBSTACLE_LEVEL,
-  DARTS_SUCCESS, FLOOR_SPIKES_NEVER_FAIL,
-  PRESSURE_PAD_COOLDOWN_TICKS, PRESSURE_PAD_USES, BLADE_COOLDOWN_TICKS,
+  OBSTACLE_IDS, OBJECTS, DISPENSER_TILES, TRAP_SPANS, OBSTACLE_XP, OBSTACLE_LEVEL,
+  DARTS_SUCCESS, BLADES_SUCCESS, FLOOR_SPIKES_NEVER_FAIL, GLOVES_XP_BONUS,
+  PRESSURE_PAD_COOLDOWN_TICKS, PRESSURE_PAD_USES, LAPS_ATTRIBUTE, LAP_MESSAGE,
   RECEIVED_MESSAGE, REPEAT_MESSAGE, INACTIVE_MESSAGE, BLADES_FAIL_MESSAGE,
   DARTS_FAIL_MESSAGE, FEE_MESSAGE,
   cycle, sessions, tileKey, stateOf, hasSession, clearState, agilityLevel, tagXp, addXp,
-  trapDamage, hit, drainAgility, successChance, roll, levelRefusal, activeTile, advanceCycle,
-  tick, sendArrow, isInArena, rewardTag, trapAt, isBladeHit,
+  addObstacleXp, wearsBonusGloves, trapDamage, hit, drainAgility, successChance, roll,
+  levelRefusal, activeTile, advanceCycle, tick, sendArrow, isInArena, rewardTag, trapAt,
+  trapSpanAt,
 };

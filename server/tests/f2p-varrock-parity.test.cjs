@@ -169,8 +169,12 @@ test('Romeo berries handed over in a closed conversation still make one potion a
 test('Juliet and crypt scenes use separate copied maps, retain potion until the last line, and clean up', () => {
   const h=harness('RomeoAndJuliet'),p=player();h.quest.setStage(p,50);p.items.set(I.CADAVA_POTION,1);p.moveTo(new core.Location(3158,3426,1));
   h.action(p,N.JULIET,'LEub3y');h.tick(3);const room=p.getArea();assert.ok(room instanceof core.TemplatedInstanceArea);assert.equal(room.getChunk(1,0,0).sourceChunkX,393);
+  for(let x=0;x<4;x++)for(let y=0;y<4;y++)assert.deepEqual(room.getChunk(0,x,y),{...room.getChunk(1,x,y),sourcePlane:0},'the balcony retains the ground floor beneath every copied upper-floor chunk');
+  const chunkCounts=scene=>scene.buildScenePalette(scene.baseChunkX,scene.baseChunkY).palette.map(plane=>plane.flat().filter(chunk=>chunk!==-1).length);
+  assert.deepEqual(chunkCounts(room),[16,16,0,0]);
   h.line(p,N.JULIET,'Poor Juliet...make preparations for her body to be placed in the Crypt...').after();assert.equal(h.quest.getStage(p),60);assert.equal(p.items.get(I.CADAVA_POTION),0);h.tick(3);assert.equal(p.getArea(),null);
   p.moveTo(new core.Location(3215,3418,0));h.action(p,N.ROMEO,'UCaOJi');h.tick(3);assert.equal(p.getArea().getChunk(0,0,0).sourceChunkX,290);
+  assert.deepEqual(chunkCounts(p.getArea()),[16,0,0,0],'the crypt still copies only its original ground-floor map');
   h.action(p,N.ROMEO,'PO2Wli');assert.equal(h.quest.getStage(p),60);h.tick(5);assert.equal(h.quest.getStage(p),100);assert.equal(p.attrs.get('quest.points'),5);assert.equal(p.varbits.get(1838),2);assert.equal(p.items.get(I.CADAVA_POTION),0);
   assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()],[3215,3418]);
 });

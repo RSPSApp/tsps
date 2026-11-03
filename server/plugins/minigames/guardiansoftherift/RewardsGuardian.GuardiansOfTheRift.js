@@ -20,6 +20,8 @@
 const Shared = require("./Shared.GuardiansOfTheRift");
 const Records = require("./Records.GuardiansOfTheRift");
 const DATA = require("../data/guardians-of-the-rift-rewards.json");
+const DIARY = require("../data/atlax-diary");
+const { openBook } = require("../../quests/QuestRuntime");
 
 const BIG_SEARCH = 5;
 const SEARCH_TICKS = 3;
@@ -118,16 +120,10 @@ function rollSearch(player) {
 
 // ------------------------------------------------------------------ giving
 
-/** Pearls are the saved shop currency, so a pearl roll never needs an inventory slot. */
-function isPearl(reward) {
-  return reward.item === Shared.ITEM.PEARL;
-}
-
 /** Free slots a set of rewards needs: none for a stack already held (a pet may need one). */
 function slotsNeeded(player, rewards) {
   const inventory = player.getInventory();
   return rewards.filter((reward) => {
-    if (isPearl(reward)) return false;
     const itemId = Shared.obj(reward.item);
     return !(Shared.core().ItemDefinition.forId(itemId)?.isStackable?.() && inventory.contains(itemId));
   }).length;
@@ -141,11 +137,8 @@ function give(player, reward) {
     Shared.api().emitCustomEvent("npc-drops:roll", event);
     if (event.drops.length === 0) return true;
   }
-  if (isPearl(reward)) Records.addPearls(player, reward.amount);
-  else {
-    player.getInventory().adds(itemId, reward.amount);
-    player.getInventory().refreshItems();
-  }
+  player.getInventory().adds(itemId, reward.amount);
+  player.getInventory().refreshItems();
   if (reward.once && ONCE_VARBITS[reward.item]) Records.setSetting(player, ONCE_VARBITS[reward.item], 1);
   Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId, amount: reward.amount });
   Shared.spam(player, `You found some loot: ${reward.amount} x ${itemName(itemId)}`);
@@ -291,9 +284,21 @@ function openPouch({ player }) {
     player.sendMessage("You need at least two free inventory spaces to open this pouch.");
     return true;
   }
+  const rewards = rollIntricate(player);
   inventory.delete(Shared.obj("gotr_intricate_pouch"), 1);
-  for (const reward of rollIntricate(player)) give(player, reward);
-  Shared.itemStatement(player, "gotr_intricate_pouch", "You open the intricate pouch and find something inside!");
+  for (const reward of rewards) give(player, reward);
+  // The box shows what was inside, not the pouch.
+  Shared.itemStatement(player, rewards[0].item, "You open the intricate pouch and find something inside!");
+  return true;
+}
+
+/** Atlax's diary: Read opens the book (Wiki: 24 pages). */
+function readDiary({ player }) {
+  if (DIARY.pages.length === 0) {
+    player.sendMessage("The diary's pages haven't been transcribed yet.");
+    return true;
+  }
+  openBook(player, DIARY.title, DIARY.pages);
   return true;
 }
 
@@ -303,5 +308,6 @@ module.exports = {
     api.onObjectInteraction("<col=ffff00>Rewards Guardian</col>", { Search: search, Check: check, "Big-search": bigSearch });
     api.onItemOnObject("Needle", "<col=ffff00>Rewards Guardian</col>", needleOnRift);
     api.onItemAction("Intricate pouch", { Open: openPouch });
+    api.onItemAction("Atlax's diary", { Read: readDiary });
   },
 };

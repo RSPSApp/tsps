@@ -60,10 +60,39 @@ function powerUp(event) {
 const IDLE_FLOURISH_TICKS = 50;
 const IDLE_FLOURISH_SEQ = 9372;
 
+/**
+ * Between games the Guardian sleeps (the cache's portal_guardian_sleep, _sleep_loop and _wakeup;
+ * no capture shows when, so the moments are ours): it sinks into sleep when the rift closes or it
+ * is defeated, stays asleep through the lobby, and wakes as the rift opens. The loop is sent again
+ * every few ticks so players who arrive in the lobby see it asleep too.
+ */
+const SLEEP_LOOP_TICKS = 8;
+/** The clock tick it fell asleep, or -1 while awake; the server starts in the lobby. */
+let asleepAt = 0;
+
+function guardianAnimation(name) {
+  const npc = Game.greatGuardian();
+  if (npc?.isRegistered()) npc.performAnimation(new (Shared.core().Animation)(Shared.seq(name)));
+}
+
+function fallAsleep() {
+  asleepAt = Game.clock();
+  guardianAnimation("portal_guardian_sleep");
+}
+
+function wakeUp() {
+  asleepAt = -1;
+  guardianAnimation("portal_guardian_wakeup");
+}
+
 /** Capture 1840: the Guardian's idle flourish every 50 ticks while a game runs. */
 function idleFlourish() {
   const clock = Game.clock();
-  if (clock === 0 || clock % IDLE_FLOURISH_TICKS !== 0) return;
+  if (asleepAt >= 0) {
+    if (clock > asleepAt && (clock - asleepAt) % SLEEP_LOOP_TICKS === 0) guardianAnimation("portal_guardian_sleep_loop");
+    return;
+  }
+  if (!Game.isRunning() || clock === 0 || clock % IDLE_FLOURISH_TICKS !== 0) return;
   const npc = Game.greatGuardian();
   if (npc?.isRegistered()) npc.performAnimation(new (Shared.core().Animation)(IDLE_FLOURISH_SEQ));
 }
@@ -115,5 +144,7 @@ module.exports = {
     api.onNpcInteraction("The Great Guardian", { "Power-up": powerUp });
     api.onNpcDialogueCondition(answerCondition);
     Game.on("tick", idleFlourish);
+    Game.on("ended", fallAsleep);
+    Game.on("open", wakeUp);
   },
 };

@@ -74,10 +74,11 @@ function assemble(event) {
     Shared.itemStatement(player, Shared.ITEM.CELLS[0], "You will need a charged cell to power any rift guardians you create from this essence pile.");
     return true;
   }
+  // Live holds the player until the guardian rises: walking away doesn't cancel an assembly.
+  if (!Shared.startAction(player, "assemble", (ticks) => step(player, pile, ticks), { locked: true })) return true;
   Shared.spam(player, "You scrape together what usable components you can find.");
   Shared.animate(player, "human_pickupfloor");
   player.getPacketSender().sendSoundEffect(SOUND.SCRAPE, 2, 0);
-  Shared.startAction(player, "assemble", (ticks) => step(player, pile, ticks));
   return true;
 }
 
@@ -101,7 +102,6 @@ function finish(player, pile) {
   Shared.addXp(player, "CRAFTING", CRAFTING_XP);
   Shared.addXp(player, "RUNECRAFTING", Cells.CELL[tier].xp);
   Game.addEnergy(player, pile.type, GUARDIAN_ENERGY[tier]);
-  Game.addContribution(player, 10);
   if (alive() >= Shared.RIFT_GUARDIAN_CAP) {
     player.sendMessage("The powers of the cell extend into the essence, but no guardian forms.");
     return;

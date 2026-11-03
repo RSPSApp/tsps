@@ -20,8 +20,8 @@ The interface draws itself from those tables. `server/plugins/interface/Omnishop
 | `omnishop:can-sell` | `{ player, shop, stock, itemId, cancel }` | the owner can refuse sales; checked again on a sale and when deciding whether the side panel offers Sell |
 
 A currency with an obj is that item in the inventory unless its owner claims it through
-`omnishop:currency`. Guardians of the Rift's abyssal pearls do: the cache's currency row still
-names the old item, but the shop reads and writes the saved pearl balance.
+`omnishop:currency` (to keep it as a saved balance instead). Guardians of the Rift's abyssal
+pearls are the item, so Felix's rows take them from the inventory.
 
 ## Protocol
 

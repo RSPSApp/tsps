@@ -86,7 +86,6 @@ test('point currencies persist on a player attribute', () => {
 test('the imported points shops have registered currencies', () => {
   const { handlers } = loadPlugin();
   for (const key of [
-    'ABYSSAL PEARLS',
     'BOUNTY HUNTER POINTS',
     'LAST MAN STANDING POINTS',
     'MAHOGANY HOMES POINTS',

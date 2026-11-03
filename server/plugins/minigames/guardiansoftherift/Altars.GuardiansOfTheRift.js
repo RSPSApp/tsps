@@ -114,14 +114,23 @@ function overlay(player, altar, on) {
   }
 }
 
-/** Into the altar (going) or back to the temple. */
-function travel(player, altar, going, message) {
+/**
+ * Into the altar (going) or back to the temple. `whileActive` trips (Enter, not a talisman) are
+ * checked again on the move: a Guardian that went dormant in the two ticks turns the player back.
+ */
+function travel(player, altar, going, message, whileActive = false) {
   player.getMovementQueue().reset();
   Shared.animate(player, null);
   overlay(player, altar, true);
   Shared.sound(player, PORTAL_SOUND);
   Shared.later(2, () => {
     if (!player.isRegistered()) return;
+    if (whileActive && !isActive(altar)) {
+      player.__gotrTrip = null;
+      overlay(player, altar, false);
+      Shared.statement(player, "The Guardian is dormant. Its energy might return soon.");
+      return;
+    }
     player.__gotrTrip = going ? altar : null;
     Shared.spam(player, message);
     const [x, y] = going ? altar.arrival : [RETURN_TILE.x, RETURN_TILE.y];
@@ -138,9 +147,9 @@ function travel(player, altar, going, message) {
   });
 }
 
-function enterAltar(player, altar) {
+function enterAltar(player, altar, whileActive = false) {
   player.__gotrTrip = altar;
-  travel(player, altar, true, `You step through the rift and find yourself at the ${altar.name} Altar.`);
+  travel(player, altar, true, `You step through the rift and find yourself at the ${altar.name} Altar.`, whileActive);
 }
 
 /** Who may refuse this player the rift, or null to let them in. */
@@ -164,10 +173,12 @@ function enter({ player, objectId }) {
     return true;
   }
   if (!isActive(altar)) {
+    // Holding the Guardian's portal talisman, Enter uses it: no need to use it on the Guardian.
+    if (Shared.count(player, altar.talisman) > 0) return useTalisman({ player, objectId, itemId: Shared.obj(altar.talisman) });
     Shared.statement(player, "The Guardian is dormant. Its energy might return soon.");
     return true;
   }
-  if (!refuse(player, altar)) enterAltar(player, altar);
+  if (!refuse(player, altar)) enterAltar(player, altar, true);
   return true;
 }
 
@@ -232,7 +243,8 @@ function craft(event) {
   const { player, objectId } = event;
   const altar = byAltar(objectId);
   const essence = Shared.count(player, Shared.ITEM.ESSENCE);
-  if (!altar || essence <= 0 || !Game.isPlaying(player)) return false;
+  if (!altar || !Game.isPlaying(player)) return false;
+  if (essence <= 0) return chargeOnly(player, altar);
   const rune = altarRune(player, objectId);
   if (!rune) return false;
   if (player.getSkillManager().getCurrentLevel(Shared.core().Skill.RUNECRAFTING) < rune.level) {
@@ -250,7 +262,6 @@ function craft(event) {
   Shared.graphic(player, "runecrafting", 92);
   Shared.sound(player, CRAFT_SOUND);
   Shared.addXp(player, "RUNECRAFTING", essence * rune.xp);
-  Game.addContribution(player, essence);
   // Wiki / Mod Elena (30 March 2022): guardian essence cannot award a Rift guardian.
   // Keep the success receipt for other consumers without an ordinary altar pet rate.
   Shared.api().emitCustomEvent("runecrafting:success", {
@@ -259,14 +270,40 @@ function craft(event) {
   return true;
 }
 
-/** One uncharged cell takes the altar's charge, while no charged cell is held (Wiki). */
+/** The charged cell held, 1-4, or 0. */
+function heldCell(player) {
+  const index = Shared.ITEM.CELLS.findIndex((cell) => Shared.count(player, cell) > 0);
+  return index + 1;
+}
+
+/**
+ * One uncharged cell takes the altar's charge (Wiki: charged as essence is). One charged cell at
+ * a time, but a weaker one is upgraded in its place (Wiki, 30 March 2022: "Cells can now be
+ * upgraded at a runic altar, without having to drop weaker cells"). True when a cell charged.
+ */
 function chargeCell(player, altar) {
-  if (Shared.count(player, Shared.ITEM.UNCHARGED_CELL) <= 0) return;
-  if (Shared.ITEM.CELLS.some((cell) => Shared.count(player, cell) > 0)) return;
+  if (Shared.count(player, Shared.ITEM.UNCHARGED_CELL) <= 0) return false;
+  const held = heldCell(player);
+  if (held >= altar.tier) return false;
   const inventory = player.getInventory();
+  if (held > 0) inventory.delete(Shared.obj(Shared.ITEM.CELLS[held - 1]), 1);
   inventory.delete(Shared.obj(Shared.ITEM.UNCHARGED_CELL), 1);
   inventory.adds(Shared.obj(Shared.ITEM.CELLS[altar.tier - 1]), 1);
   player.sendMessage(`Your cell absorbs a ${ABSORB[altar.tier - 1]} amount of excess energy.`);
+  return true;
+}
+
+/**
+ * Craft-rune with no guardian essence still charges an uncharged cell (Wiki: players imbue a
+ * cell between games, when the essence is gone). Nothing to charge falls through to Runecrafting.
+ */
+function chargeOnly(player, altar) {
+  if (!chargeCell(player, altar)) return false;
+  player.getInventory().refreshItems();
+  Shared.animate(player, "human_runecraft");
+  Shared.graphic(player, "runecrafting", 92);
+  Shared.sound(player, CRAFT_SOUND);
+  return true;
 }
 
 function findTalisman(player, altar, essence) {

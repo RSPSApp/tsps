@@ -107,7 +107,6 @@ function success(player, rock, pickaxe) {
   Shared.spam(player, essence ? "You manage to mine some guardian essence." : "You manage to mine some guardian fragments.");
   Shared.sound(player, SUCCESS_SOUND);
   count(player, amount);
-  Game.addContribution(player, amount);
   if (essence && inventory.getFreeSlots() <= 0) {
     tooFull(player);
     return false;

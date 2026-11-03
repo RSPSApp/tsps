@@ -13,10 +13,8 @@
  * 165 elemental and 407 catalytic energy gave 2 and 4.
  * Wiki: a point per 100 energy of each type, the remainder a chance of one more (73 energy is a
  * 73% chance); both the points and the XP need 300 energy in the game.
- *
- * Abyssal pearls are saved as the shop currency and paid here once per won game to each player
- * who made a valid contribution, scaled by contribution points and energy. A close that is
- * delivered twice pays nothing the second time.
+ * Abyssal pearls aren't paid here: they come from the Rewards Guardian's searches (Wiki). A close
+ * that is delivered twice pays nothing the second time.
  */
 
 const Shared = require("./Shared.GuardiansOfTheRift");
@@ -43,7 +41,7 @@ function awarded(player, points) {
 }
 
 function closed({ player, state }) {
-  // A close is paid once: a duplicated event can't pay the pearls, XP or points twice.
+  // A close is paid once: a duplicated event can't pay the XP or points twice.
   if (!state || state.closedPaid) return;
   state.closedPaid = true;
   const earned = state.elemental + state.catalytic >= Shared.REWARD_ENERGY;
@@ -59,22 +57,8 @@ function closed({ player, state }) {
   player.sendMessage(`Elemental energy attuned: ${red(elemental)}. Catalytic energy attuned: ${red(catalytic)}.`);
   player.sendMessage(`Total elemental energy: ${red(total.elemental)}. Total catalytic energy:  ${red(total.catalytic)}.`);
   if (earned) awardXp(player);
-  const pearls = awardPearls(player, state);
   Shared.api().emitCustomEvent("collection-log:count", { player, category: "Guardians of the Rift" });
-  Shared.api().emitCustomEvent("guardians-of-the-rift:rift-closed", { player, elemental, catalytic, rifts, pearls });
-}
-
-/**
- * The saved pearl balance's close payout (ours). `pearlsFor` has already refused an idle player:
- * standing in the game without a contribution scores nothing.
- */
-function awardPearls(player, state) {
-  const pearls = Game.pearlsFor(state);
-  if (pearls <= 0) return 0;
-  Records.addPearls(player, pearls);
-  player.sendMessage(`You have been awarded ${Shared.formatNumber(pearls)} abyssal pearl${pearls === 1 ? "" : "s"}.`);
-  Shared.api().emitCustomEvent("guardians-of-the-rift:pearls", { player, pearls });
-  return pearls;
+  Shared.api().emitCustomEvent("guardians-of-the-rift:rift-closed", { player, elemental, catalytic, rifts });
 }
 
 function awardXp(player) {
@@ -86,7 +70,7 @@ function awardXp(player) {
 }
 
 module.exports = {
-  pointsFor, awardPearls, closed,
+  pointsFor, closed,
   attach() {
     Game.on("closed", closed);
   },

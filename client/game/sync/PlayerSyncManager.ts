@@ -87,6 +87,8 @@ export class PlayerSyncManager {
         modIcon?: number;
         autoChat?: boolean;
     }) => void;
+    /** The text shown over a player's head for their chat (plugins may censor it). */
+    private readonly overheadChatText?: (serverId: number, text: string) => string;
     private readonly resolveTilePlane?: ResolveTilePlaneFn;
     private readonly onInteractionIndex?: (
         serverId: number,
@@ -116,6 +118,7 @@ export class PlayerSyncManager {
             modIcon?: number;
             autoChat?: boolean;
         }) => void;
+        overheadChatText?: (serverId: number, text: string) => string;
         resolveTilePlane?: ResolveTilePlaneFn;
         onInteractionIndex?: (serverId: number, interactionIndex: number | undefined) => void;
         onAppearanceUpdate?: (serverId: number, data: unknown) => void;
@@ -129,6 +132,7 @@ export class PlayerSyncManager {
         this.onHitsplat = opts.onHitsplat ? opts.onHitsplat : () => {};
         this.onHealthBar = opts.onHealthBar;
         this.onPublicChat = opts.onPublicChat;
+        this.overheadChatText = opts.overheadChatText;
         this.resolveTilePlane = opts.resolveTilePlane;
         this.onInteractionIndex = opts.onInteractionIndex;
         this.onAppearanceUpdate = opts.onAppearanceUpdate;
@@ -330,7 +334,7 @@ export class PlayerSyncManager {
             const color = typeof chat.color === "number" ? chat.color : 0;
             const effect = typeof chat.effect === "number" ? chat.effect : 0;
             this.playerEcs.setOverheadChat(ecsIndex, {
-                text: chat.text,
+                text: this.overheadChatText?.(serverId, chat.text) ?? chat.text,
                 color,
                 effect,
                 modIcon: -1,
@@ -357,7 +361,8 @@ export class PlayerSyncManager {
             if (ecsIndex === undefined) return;
             const style = this.publicChatStyles.get(serverId);
             this.playerEcs.setOverheadChat(ecsIndex, {
-                text: forced,
+                // Public chat arrives as forced chat styled by its message (publicChatStyles).
+                text: this.overheadChatText?.(serverId, forced) ?? forced,
                 color: style?.color ?? 0,
                 effect: style?.effect ?? 0,
                 modIcon: -1,

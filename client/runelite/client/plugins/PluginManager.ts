@@ -3,6 +3,7 @@ import type { ConfigGroupDescriptor } from "../config/ConfigItem";
 import { ConfigManager } from "../config/ConfigManager";
 import { EventBus } from "../eventbus/EventBus";
 import { ClientToolbar } from "../ui/ClientToolbar";
+import { TooltipManager, tooltipManager } from "../ui/overlay/tooltip/TooltipManager";
 import { type Plugin, type PluginClass, type PluginDescriptor } from "./Plugin";
 import { PluginInjector } from "./PluginInjector";
 
@@ -37,7 +38,8 @@ export class PluginManager {
             .provide(PluginManager, this)
             .provide(ConfigManager, configManager)
             .provide(EventBus, eventBus)
-            .provide(ClientToolbar, new ClientToolbar());
+            .provide(ClientToolbar, new ClientToolbar())
+            .provide(TooltipManager, tooltipManager);
     }
 
     getInjector(): PluginInjector {

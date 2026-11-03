@@ -305,7 +305,7 @@ import type { GraphicsDefaults } from "../rs/config/defaults/GraphicsDefaults";
 import { interactionModes } from "./InteractionModes";
 import { RuneLite } from "../runelite/client/RuneLite";
 import { notifyActorGraphic, notifyActorHitsplat, notifyActorHealth } from "./ActorEventHooks";
-import { dispatchMenuAction } from "../ui/menu/menuEvents";
+import { dispatchMenuAction, menuClickListeners, type MenuActionData } from "../ui/menu/menuEvents";
 import { setMenuTransform } from "../ui/menu/menuTransforms";
 import { ResolveTilePlaneFn } from "./scene/PlaneResolver";
 import {
@@ -2337,6 +2337,9 @@ export class OsrsClient {
         this.cs2Vm.scriptCallbackListeners.add((_script, eventName) =>
             this.clientPlugins.onScriptCallback({ eventName, vm: this.cs2Vm }),
         );
+        const menuClick = (action: MenuActionData) => this.clientPlugins.onMenuOptionClicked(action);
+        menuClickListeners.add(menuClick);
+        this.serverSubscriptions.push(() => menuClickListeners.delete(menuClick));
 
         this.initCustomInterfaces();
         this.initWidgetInteractionController();
@@ -2588,6 +2591,11 @@ export class OsrsClient {
                     // after processWidgetTransmits has already run this tick.
                     markChatTransmit();
                 } catch {}
+            },
+            overheadChatText: (serverId, text) => {
+                const ecsIndex = this.playerEcs.getIndexForServerId(serverId | 0);
+                const name = ecsIndex === undefined ? "" : (this.playerEcs.getName(ecsIndex) ?? "");
+                return this.clientPlugins.overheadChatText(name, text);
             },
             resolveTilePlane: this.resolvePlayerPlane,
             onInteractionIndex: (serverId, interactionIndex) => {

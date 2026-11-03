@@ -14,17 +14,18 @@ const itemActions = {};
 let resolver = null;
 DragonfireShield.register({
   core: {
-    Animation: class { constructor(id) { this.id = id; } },
+    Animation: class { constructor(id, delay) { this.id = id; this.delay = delay; } },
     CombatMethod: class {},
     Equipment,
     Flag: { APPEARANCE: "appearance" },
-    Graphic: class { constructor(id) { this.id = id; } },
+    Graphic: class { constructor(id, delay) { this.id = id; this.delay = delay; } },
     ItemIdentifiers: ItemIds,
   },
   persistAttribute() {},
   onPlayerLogin() {},
   onItemAction(name, actions) { itemActions[name] = actions; },
   onItemOnItem() {},
+  onCustomEvent() {},
   registerCombatMethodResolver(registered) { resolver = registered; },
 });
 
@@ -48,6 +49,8 @@ function createPlayer(shield = null) {
     configs: [],
     varbits: [],
     animations: [],
+    graphics: [],
+    sounds: [],
     deleted: [],
     special: false,
     getEquipment: () => ({ getItems: () => equipment, refreshItems() {} }),
@@ -56,14 +59,14 @@ function createPlayer(shield = null) {
     getPacketSender: () => ({
       sendConfig: (id, value) => player.configs.push([id, value]),
       sendVarbit: (id, value) => player.varbits.push([id, value]),
-      sendSoundEffect() { return this; },
+      sendSoundEffect(id) { player.sounds.push(id); return this; },
     }),
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     isSpecialActivated: () => player.special,
     setSpecialActivated: (value) => { player.special = value; },
     performAnimation: (animation) => player.animations.push(animation.id),
-    performGraphic() {},
+    performGraphic: (graphic) => player.graphics.push(graphic.id),
     sendMessage: (message) => player.messages.push(message),
     getAsPlayer: () => player,
   };
@@ -131,4 +134,47 @@ test("Bottled dragonbreath charges the shield to full and is used up", () => {
   assert.equal(DragonfireShield._test.charges(shield), 50);
   assert.deepEqual(player.deleted, [[ItemIds.BOTTLED_DRAGONBREATH, 1]]);
   assert.deepEqual(player.messages, ["You charge your shield using the bottled dragonbreath."]);
+});
+
+test("dragonfire on the worn uncharged shield charges it, with the live animation, graphic and sounds", () => {
+  const shield = item(ItemIds.DRAGONFIRE_SHIELD_2);
+  const player = createPlayer(shield);
+  const messages = [{ text: "Your shield absorbs most of the dragon fire!", spam: true }];
+  DragonfireShield._test.absorbDragonfire({ player, messages });
+  assert.equal(shield.getId(), ItemIds.DRAGONFIRE_SHIELD);
+  assert.equal(DragonfireShield._test.charges(shield), 1);
+  assert.deepEqual(messages.map((line) => line.text), [
+    "Your shield absorbs most of the dragon fire!",
+    "Your dragonfire shield glows more brightly.",
+  ]);
+  assert.deepEqual(player.animations, [6695]);
+  assert.deepEqual(player.graphics, [1160]);
+  assert.deepEqual(player.sounds, [3750, 3740]);
+});
+
+test("the charge graphic steps up every ten charges, and a full shield absorbs nothing", () => {
+  const graphicFor = (before) => {
+    const shield = item(ItemIds.DRAGONFIRE_SHIELD, { "dragonfire-shield": before });
+    const player = createPlayer(shield);
+    DragonfireShield._test.absorbDragonfire({ player, messages: [] });
+    return player.graphics[0];
+  };
+  assert.equal(graphicFor(9), 1160);
+  assert.equal(graphicFor(10), 1161);
+  assert.equal(graphicFor(49), 1164);
+
+  const full = item(ItemIds.DRAGONFIRE_SHIELD);
+  const player = createPlayer(full);
+  const messages = [];
+  DragonfireShield._test.absorbDragonfire({ player, messages });
+  assert.deepEqual(messages, [{ text: "Your dragonfire shield is already fully charged.", spam: true }]);
+  assert.deepEqual(player.animations, []);
+  assert.equal(DragonfireShield._test.charges(full), 50);
+});
+
+test("dragonfire with no dragonfire shield worn changes nothing", () => {
+  const player = createPlayer();
+  const messages = [];
+  DragonfireShield._test.absorbDragonfire({ player, messages });
+  assert.deepEqual(messages, []);
 });

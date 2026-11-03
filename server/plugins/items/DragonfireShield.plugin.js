@@ -1,8 +1,10 @@
 /**
  * Dragonfire shield (https://oldschool.runescape.wiki/w/Dragonfire_shield): charges, Inspect,
- * Check, Empty, Bottled dragonbreath and the Activate blast. Live behaviour from a rev 242 RSProx
+ * Check, Empty, Bottled dragonbreath, absorbing dragonfire and the Activate blast. Live behaviour from a rev 242 RSProx
  * recording; see docs/dragonfire-shield.md.
  */
+const { DRAGONFIRE_BREATH_EVENT } = require("../combat/DragonfireProtection");
+
 const CHARGES_META_KEY = "dragonfire-shield";
 const MAX_CHARGES = 50;
 const RECHARGE_ATTRIBUTE = "dragonfire-shield:recharge";
@@ -17,6 +19,10 @@ const BLAST_PROJECTILE = 1166; // qip_dragon_slayer_player_projanim
 const IMPACT_GRAPHIC = 1167; // qip_dragon_slayer_player_impact
 const VENT_ANIMATION = 6700; // qip_dragon_slayer_player_releasing_charge
 const VENT_GRAPHIC = 1168; // qip_dragon_slayer_player_releasing_charge
+const ABSORB_ANIMATION = 6695; // qip_dragon_slayer_player_absorbing_fire
+const CHARGE_GRAPHICS = [1160, 1161, 1162, 1163, 1164]; // qip_dragon_slayer_shield_charge_one .. _five
+const ABSORB_DELAY = 30; // Live: animation and graphic both delay 30
+const ABSORB_SOUNDS = [3750, 3740];
 const UNLEASH_SOUND = 3761;
 const IMPACT_SOUND = 161;
 const VENT_SOUND = 3760;
@@ -38,6 +44,9 @@ const COOL_DOWN_MESSAGE = "You must let the shield cool down before using it aga
 const VENT_MESSAGE = "You vent the shield's remaining charges harmlessly into the air.";
 const DRAGONBREATH_MESSAGE = "You charge your shield using the bottled dragonbreath.";
 const FULLY_CHARGED_MESSAGE = "Your dragonfire shield is already fully charged."; // Wiki
+const GLOW_MESSAGE = "Your dragonfire shield glows more brightly.";
+// Live has charge_one at 1 charge; the other four are assumed to follow in tens (11-20 -> two...).
+const CHARGES_PER_GRAPHIC = 10;
 
 let core = null;
 let chargedId = -1;
@@ -152,6 +161,24 @@ function chargeWithDragonbreath(event) {
   return true;
 }
 
+/** Any dragonfire breath on a worn shield adds a charge (Wiki), the uncharged shield included. */
+function absorbDragonfire({ player, messages }) {
+  const shield = player ? wornShield(player) : null;
+  if (!shield || !Array.isArray(messages)) return;
+  const current = charges(shield);
+  if (current >= MAX_CHARGES) {
+    messages.push({ text: FULLY_CHARGED_MESSAGE, spam: true });
+    return;
+  }
+  setCharges(shield, current + 1);
+  refresh(player);
+  messages.push({ text: GLOW_MESSAGE, spam: true });
+  const graphic = CHARGE_GRAPHICS[Math.min(CHARGE_GRAPHICS.length - 1, Math.floor(current / CHARGES_PER_GRAPHIC))];
+  player.performAnimation(new core.Animation(ABSORB_ANIMATION, ABSORB_DELAY));
+  player.performGraphic(new core.Graphic(graphic, ABSORB_DELAY));
+  for (const sound of ABSORB_SOUNDS) player.getPacketSender().sendSoundEffect(sound, 1, 0);
+}
+
 function blastMaxHit(target) {
   return target.isPlayer() && core.CombatEquipment.hasDragonProtectionGear(target.getAsPlayer())
     ? PROTECTED_MAX_HIT
@@ -257,6 +284,7 @@ module.exports = {
     api.onItemAction("Dragonfire shield", { Inspect: inspect, Check: inspect, Activate: activate, Empty: empty });
     api.onItemOnItem("Bottled dragonbreath", "Dragonfire shield", chargeWithDragonbreath, { noted: false });
     api.registerCombatMethodResolver({ resolve: resolveBlast });
+    api.onCustomEvent(DRAGONFIRE_BREATH_EVENT, absorbDragonfire);
   },
-  _test: { charges, setCharges, inspect, activate, empty, chargeWithDragonbreath, resolveBlast, MAX_CHARGES },
+  _test: { charges, setCharges, inspect, activate, empty, chargeWithDragonbreath, resolveBlast, absorbDragonfire, MAX_CHARGES },
 };

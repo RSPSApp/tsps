@@ -12,9 +12,10 @@ unhandled worn option says "Nothing interesting happens." and leaves the item wo
 
 ## Evidence
 
-A rev 242 RSProx recording of live OSRS (the user's own session, 3 November 2026), covering
-the DFS's inventory and worn options, a blast at a guard, Empty, Bottled dragonbreath and the
-tentacle's Check. The rsprox.net index has no attempts at these. Cache names from the pinned
+Two rev 242 RSProx recordings of live OSRS (the user's own sessions, 3 November 2026). The
+first covers the DFS's inventory and worn options, a blast at a guard, Empty, Bottled
+dragonbreath and the tentacle's Check; the second a dragonfire breath charging the emptied
+shield from 0 to 1. The rsprox.net index has no attempts at these. Cache names from the pinned
 [osrs-dumps snapshot](https://github.com/Joshua-F/osrs-dumps/tree/6e5033af6215963581a51b348f452320ff18f0f6/config).
 
 | Action | Live response |
@@ -28,6 +29,7 @@ tentacle's Check. The rsprox.net index has no attempts at these. Cache names fro
 | Recharge | varbit 6539 falls by 1 every 8 ticks (24 steps, 192 ticks; Mod Ash on the Wiki) |
 | DFS Empty (inventory) | `You vent the shield's remaining charges harmlessly into the air.`, seq 6700, spotanim 1168, sound 3760; the shield becomes uncharged |
 | Bottled dragonbreath on the uncharged shield | `You charge your shield using the bottled dragonbreath.`; Inspect then reports 50 |
+| Dragonfire on the worn uncharged shield (green dragon, second recording) | same tick as the breath: `Your shield absorbs most of the dragon fire!` then `Your dragonfire shield glows more brightly.` (both spam), seq 6695 delay 30, spotanim 1160 (`shield_charge_one`) delay 30, sounds 3750 then 3740; the worn shield becomes the charged one; 5 damage the next tick |
 | Tentacle Check (inventory op, worn op2) | `Your abyssal tentacle can perform 955 more attacks.` |
 
 From the [Wiki](https://oldschool.runescape.wiki/w/Dragonfire_shield): 50 charges at most, a
@@ -44,7 +46,15 @@ including misses, and becomes the kraken tentacle at none; the
   magic defence roll stands in.
 - Flight time beyond one tile: the recording only has a 1-tile blast. Each extra tile adds 5
   client cycles here.
-- Absorbing dragonfire for charges, the per-charge defence bonuses, and the targets the blast
-  does not work on (dragons, wyverns, some bosses) are not implemented.
+- Absorbing: only 0 -> 1 is captured. The other four charge graphics (1161-1164) are assumed
+  to follow in tens of charges after the absorb (11-20 -> two ... 41-50 -> five). At 50 the
+  Wiki's fully-charged message is sent and nothing plays; neither is captured. The brace stall
+  the Wiki mentions did not show in the capture and is not implemented.
+- Absorbing is wired to the shared dragonfire helper (`combat:dragonfire-breath` from
+  `DragonfireProtection.js`, used by chromatic and metallic dragons) and Elvarg. Vorkath, the
+  King Black Dragon and wyvern icy breath have their own breath code and do not send it yet.
+- The per-charge defence bonuses and the targets the blast does not work on (dragons,
+  wyverns, some bosses) are not implemented. Both shields' item data carry the full
+  50-charge bonuses today.
 - A tentacle's Check with 1,000+ charges: thousands separators assumed.
 - The tentacle's degrade message, if any.

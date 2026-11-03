@@ -11,6 +11,7 @@ const MAX_LENGTH = 12;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const COOLDOWN_DAYS_CONFIG = "DisplayName:cooldownDays";
 const HOLD_DAYS_CONFIG = "DisplayName:holdDays";
+const NAME_CHANGER_BUTTON = (109 << 16) | 51; // Account: "Name Changer" in the cache.
 
 let pluginApi = null;
 
@@ -80,15 +81,11 @@ function changeDisplayName(player, name) {
   pluginApi.emitCustomEvent("display-names:changed", { player, previous, name });
 }
 
-function displayNameCommand({ player, raw }) {
+function requestDisplayName(player, raw) {
   if (raw.includes("\r") || raw.includes("\n")) return true;
   const now = Date.now();
-  // Everything after the command word, which may have come as "::displayname" or "/displayname".
-  const name = cleanName(raw.replace(/^\S+/, ""));
-  if (!name) {
-    showDisplayName(player, now);
-    return true;
-  }
+  const name = cleanName(raw);
+  if (!name) return true;
   const problem = refusal(player, name, now);
   if (problem) {
     player.sendMessage(problem);
@@ -107,10 +104,25 @@ function displayNameCommand({ player, raw }) {
   return true;
 }
 
+function displayNameCommand({ player, raw }) {
+  if (raw.includes("\r") || raw.includes("\n")) return true;
+  // Everything after the command word, which may have come as "::displayname" or "/displayname".
+  const name = cleanName(raw.replace(/^\S+/, ""));
+  if (!name) showDisplayName(player, Date.now());
+  else requestDisplayName(player, name);
+  return true;
+}
+
+function openNameChanger({ player }) {
+  player.setEnteredSyntaxAction({ execute: name => requestDisplayName(player, name) });
+  player.getPacketSender().sendEnterInputPrompt("Enter a new display name:");
+}
+
 module.exports = {
   name: "DisplayName",
   register(api) {
     pluginApi = api;
     api.registerCommand("displayname", displayNameCommand, undefined, "Change the name other players see");
+    api.onInterfaceActionButton(NAME_CHANGER_BUTTON, openNameChanger);
   },
 };

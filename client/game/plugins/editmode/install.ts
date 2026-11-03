@@ -33,6 +33,7 @@ import {
 import { browserHostOrigin, browserHostWindow } from "./hostProtocol/origin";
 import { isBrowserHostClient, isMapEditorUrl } from "../../../config/clientEnv";
 import {
+    requestCustomNpcSpawnSnapshot,
     NPC_SPAWN_MESSAGE,
     NPC_SPAWN_REQUEST_MESSAGE,
     npcSpawnKey,
@@ -53,6 +54,7 @@ import { createBrowserEditModePluginPersistence } from "./BrowserEditModePluginP
 import { detectRectangularBuilding, type DetectedBuilding } from "./BuildingDetector";
 import { pickEditorTile, type EditorPickMap } from "./EditorTilePicking";
 import { EditModePlugin } from "./EditModePlugin";
+import { LiveNpcSpawns } from "./LiveNpcSpawn";
 import { mountEditorUi } from "./EditorUi";
 import { EditorWorldMap } from "./EditorWorldMap";
 import {
@@ -496,10 +498,16 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     let objectSpawnPreviewPending = false;
     // Persisted NPC spawns are loaded per region in both modes: the browser
     // host answers over messaging, the standalone editor fetches the file once.
-    type LoadedNpcSpawnEntry = { spawn: BrowserHostNpcSpawn; serverId: number };
+    type LoadedNpcSpawnEntry = { spawn: BrowserHostNpcSpawn; serverId: number; ambiguous?: boolean };
     const loadedNpcSpawnRegions = new Map<number, LoadedNpcSpawnEntry[]>();
     const pendingNpcSpawnRegions = new Set<number>();
     const hiddenNpcSpawnKeys = new Set<string>();
+    const liveNpcSpawns = new LiveNpcSpawns(
+        client.npcEcs,
+        (ecsId) => terrainHost(client)?.getNpcWorldTile(ecsId),
+        (spawn) => spawnStaticEditorNpc(client, spawn),
+        (serverId) => despawnEditorNpc(client, serverId),
+    );
     let gameNpcSpawns: BrowserHostNpcSpawn[] | undefined;
     let gameNpcSpawnsPromise: Promise<BrowserHostNpcSpawn[] | undefined> | undefined;
     let gameNpcSpawnsRetryAt = 0;
@@ -507,9 +515,12 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     const npcRuntimeReady = () => !!(client as unknown as { npcMovementSync?: unknown }).npcMovementSync;
     const findLoadedNpcSpawn = (serverId: number | undefined): LoadedNpcSpawnEntry | undefined => {
         if (serverId === undefined) return undefined;
+        const restored = liveNpcSpawns.source(serverId);
+        if (restored) return { spawn: restored, serverId };
         for (const entries of loadedNpcSpawnRegions.values()) {
             const entry = entries.find((candidate) => candidate.serverId === serverId);
-            if (entry) return entry;
+            if (entry) return { ...entry, ambiguous: entries.filter((candidate) =>
+                npcSpawnKey(candidate.spawn) === npcSpawnKey(entry.spawn)).length > 1 };
         }
         return undefined;
     };
@@ -592,17 +603,16 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
      * showing canonical spawns only and overwriting the patch on save.
      */
     const loadPersistedNpcSpawnEdits = async (): Promise<EditModeEdit[]> => {
-        if (isBrowserHostClient()) return [];
         if (persistedNpcSpawnEdits) return persistedNpcSpawnEdits;
-        const canonical = await loadStandaloneNpcSpawns();
-        if (!canonical) throw new Error("NPC spawns are not available yet");
         let records: NpcSpawnRecord[];
-        try {
+        let canonical: BrowserHostNpcSpawn[] = [];
+        if (isBrowserHostClient()) {
+            records = await requestCustomNpcSpawnSnapshot();
+        } else {
+            const loaded = await loadStandaloneNpcSpawns();
+            if (!loaded) throw new Error("NPC spawns are not available yet");
+            canonical = loaded;
             records = parseNpcSpawnRecords(await loadLocalEditorData("npc-spawns-custom"));
-        } catch (error) {
-            throw new Error(`Could not read the saved NPC spawn patch: ${
-                error instanceof Error ? error.message : String(error)
-            }`);
         }
         const canonicalKeys = new Set(canonical.map(npcSpawnKey));
         const removed = new Set<string>();
@@ -619,6 +629,9 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                     plane: record.plane,
                     shape: 0,
                     rotation: 0,
+                    ...(record.direction === undefined ? {} : { direction: record.direction }),
+                    ...(record.wanderRadius === undefined ? {} : { wanderRadius: record.wanderRadius }),
+                    ...(record.name === undefined ? {} : { npcName: record.name }),
                 });
                 continue;
             }
@@ -638,6 +651,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                     rotation: 0,
                     ...(record.wanderRadius === undefined ? {} : { wanderRadius: record.wanderRadius }),
                     ...(direction === undefined ? {} : { direction }),
+                    ...(record.name === undefined ? {} : { npcName: record.name }),
                 }
                 : {
                     kind: "npc",
@@ -649,6 +663,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                     rotation,
                     ...(record.wanderRadius === undefined ? {} : { wanderRadius: record.wanderRadius }),
                     ...(direction === undefined ? {} : { direction }),
+                    ...(record.name === undefined ? {} : { npcName: record.name }),
                 });
         }
         persistedNpcSpawnEdits = edits;
@@ -1561,13 +1576,13 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                 const npcServerId = client.npcEcs.getServerId(target.ecsId);
                 const spawnEntry = findLoadedNpcSpawn(npcServerId);
                 const edits = plugin.getConfig().edits;
-                const customEdit = edits.find((edit) =>
+                const customEdit = npcServerId >= EDITOR_NPC_SERVER_ID_BASE ? edits.find((edit) =>
                     edit.kind === "npc" &&
                     edit.locId === target.npcTypeId &&
                     edit.tileX === npcTile.x &&
                     edit.tileY === npcTile.y &&
                     edit.plane === target.plane,
-                );
+                ) : undefined;
                 const wanderEdit = edits.find((edit) =>
                     edit.kind === "npcWander" &&
                     edit.locId === target.npcTypeId &&
@@ -1584,7 +1599,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                     locName:
                         client.npcTypeLoader.load(target.npcTypeId)?.name ?? "",
                     ...(npcServerId > 0 ? { npcServerId } : {}),
-                    npcSource: customEdit ? "custom" as const : spawnEntry ? "spawn" as const : undefined,
+                    npcSource: spawnEntry?.ambiguous ? undefined
+                        : customEdit ? "custom" as const : spawnEntry ? "spawn" as const : undefined,
                     npcSpawn: spawnEntry?.spawn,
                     npcWanderRadius: customEdit
                         ? customEdit.wanderRadius ?? 5
@@ -1594,6 +1610,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
 
             return selectTileRange(tile, tile);
         },
+        resolveNpcSpawn: (selection) => liveNpcSpawns.resolve(selection),
         captureSelectionImage: () => {
             const renderer = terrainHost(client);
             const target = selectedModelTarget;
@@ -1953,6 +1970,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         hideNpcSpawn: (spawn) => {
             const key = npcSpawnKey(spawn);
             hiddenNpcSpawnKeys.add(key);
+            liveNpcSpawns.hide(spawn);
             for (const entries of loadedNpcSpawnRegions.values()) {
                 for (const entry of entries) {
                     if (npcSpawnKey(entry.spawn) !== key) continue;
@@ -1962,6 +1980,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         },
         showNpcSpawn: (spawn) => {
             hiddenNpcSpawnKeys.delete(npcSpawnKey(spawn));
+            liveNpcSpawns.show(spawn);
             for (const entries of loadedNpcSpawnRegions.values()) {
                 const entry = entries.find((candidate) => npcSpawnKey(candidate.spawn) === npcSpawnKey(spawn));
                 if (!entry) continue;

@@ -84,3 +84,66 @@ test("a removal after an addition in the same patch still drops it", () => {
   assert.ok(spawnAt(3250, 3250, 0), "an untouched canonical spawn stays");
   assert.equal(NpcSpawnDefinition.all().length, 5);
 });
+
+test("the live editor resolves exact spawn lineage and refuses stale or ambiguous NPCs", () => {
+  const { World } = require("../dist/game/World");
+  const { Location } = require("../dist/game/model/Location");
+  const { NpcSpawnLineage } = require("../dist/game/entity/impl/npc/NpcSpawnLineage");
+  const { encodePluginMessage } = require("../dist/net/protocol/ClientProtocol");
+  NpcSpawnDefinitionLoader.activateNear(new Location(3200, 3200, 0));
+  const npc = [...World.getNpcs()].find((candidate) =>
+    candidate.getRealId() === MAN && candidate.getSpawnPosition().equals(new Location(3200, 3200, 0)));
+  assert.ok(npc, "the real spawn loader registered the source NPC");
+  const originalLocation = npc.getLocation().clone();
+  const originalLineage = npc.getSpawnLineage();
+  const definitions = NpcSpawnDefinition.all().slice();
+  let receive, worldResource;
+  require("../plugins/world/EditModeApi.plugin.js").register({
+    core: { World, NpcSpawnDefinition, encodePluginMessage, Server },
+    registerContentEndpoint(name, handler) { assert.equal(name, "world"); worldResource = handler; },
+    onCustomEvent(name, handler) { assert.equal(name, "network:plugin-message"); receive = handler; },
+  });
+  const packets = [];
+  let local = [npc];
+  const player = {
+    getLocalNpcs: () => local,
+    getSession: () => ({ sendClientPacket: (packet) => packets.push(packet) }),
+  };
+  const request = (changes = {}) => {
+    packets.length = 0;
+    const event = { channel: "npc-editor", handled: false, player, data: {
+      type: "spawn", request: 1, index: npc.getIndex(), id: MAN, x: 3204, y: 3201, plane: 0,
+      ...changes,
+    } };
+    receive(event);
+    assert.equal(event.handled, true);
+    return packets.length ? JSON.parse(packets[0].subarray(3).toString("utf8")).data : undefined;
+  };
+  try {
+    npc.getLocation().setX(3204).setY(3201);
+    const reply = request();
+    assert.deepEqual(reply, { type: "spawn", request: 1, spawn: {
+      id: MAN, tileX: 3200, tileY: 3200, plane: 0, wanderRadius: 0, direction: 1,
+    } }, "the response uses the source tile even after the NPC wanders");
+    assert.equal(request({ x: 3200 }).spawn, undefined, "a stale position refuses the lookup");
+    assert.equal(request({ id: MAN + 1 }).spawn, undefined, "a reused index with another type is refused");
+    local = [];
+    assert.equal(request().spawn, undefined, "NPCs outside this player's actual local list are refused");
+    local = [npc];
+    npc.setSpawnLineage(new NpcSpawnLineage("plugin-temp"));
+    assert.equal(request().spawn, undefined, "matching type/position is insufficient for plugin NPCs");
+    npc.setSpawnLineage({ owner: "npc-spawns", isRetired: () => true });
+    assert.equal(request().spawn, undefined, "retired source instances cannot be edited");
+    npc.setSpawnLineage(originalLineage);
+    NpcSpawnDefinition.replace([...definitions, definitions.find((definition) =>
+      definition.getId() === MAN && definition.getPosition().equals(new Location(3200, 3200, 0)))]);
+    assert.equal(request().spawn, undefined, "duplicate source records cannot accidentally be removed together");
+    assert.equal(request({ index: -1 }), undefined, "invalid requests produce no response");
+    assert.equal(request({ x: 0x4000 }), undefined);
+    assert.equal(typeof worldResource, "function");
+  } finally {
+    npc.getLocation().setX(originalLocation.getX()).setY(originalLocation.getY()).setZ(originalLocation.getZ());
+    npc.setSpawnLineage(originalLineage);
+    NpcSpawnDefinition.replace(definitions);
+  }
+});

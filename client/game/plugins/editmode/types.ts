@@ -109,6 +109,10 @@ export interface EditModeEdit extends EditModeTile {
     wanderRadius?: number;
     /** Facing of a persisted spawn, preserved when it is moved or overridden. */
     direction?: number;
+    /** Description from a persisted NPC spawn, kept through replacement saves. */
+    npcName?: string;
+    /** Already rendered by the host's saved spawn source, rather than a new local placement. */
+    persistedNpc?: boolean;
 }
 
 export interface EditModePluginConfig {
@@ -191,6 +195,7 @@ export interface EditModePluginState {
     freeCamera: boolean;
     /** World rendered on the login screen. Never persisted. */
     scenePreview: boolean;
+    npcSpawnsReady: boolean;
     world: {
         loading: boolean;
         definition?: EditModeWorldDefinition;
@@ -216,6 +221,8 @@ export interface EditModeHost {
     getPointerLoc(): { locId: number; locName: string } | undefined;
     /** Selects and visually marks the topmost entity, or the ground tile. */
     selectPointer?(tile: EditModeTile): EditModeSelection;
+    /** The exact persisted origin of a selected live NPC, if it has one. */
+    resolveNpcSpawn?(selection: EditModeSelection): Promise<BrowserHostNpcSpawn | undefined>;
     /** One-off transparent PNG of the currently selected loc or NPC. */
     captureSelectionImage?(): Promise<string | undefined>;
     previewPointer?(tile: EditModeTile): void;

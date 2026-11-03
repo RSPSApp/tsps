@@ -81,6 +81,7 @@ const TOP_BAR_HEIGHT = EDITOR_TOP_BAR_HEIGHT;
 const TOP_BAR_CLEARANCE = EDITOR_TOP_BAR_CLEARANCE;
 /** The saved spawn patch only needs importing once per page, not per UI mount. */
 let persistedNpcSpawnsRequested = false;
+let persistedNpcSpawnsLoaded = false;
 
 function stopClientInput(element: HTMLElement): void {
     for (const eventName of ["mousedown", "click", "keydown", "keyup"] as const) {
@@ -996,10 +997,10 @@ class EditorChrome {
                 createActionButton("Duplicate NPC", createDuplicateIcon, () =>
                     this.plugin.duplicateSelection(), "C",
                 ),
-                createActionButton("Move NPC", createMoveIcon, () => this.plugin.moveSelection(), "M"),
-                createActionButton("Delete NPC", createTrashIcon, () =>
-                    this.plugin.deleteSelection(), "Del",
-                ),
+                ...(selection.npcSource === undefined || !this.plugin.getState().npcSpawnsReady ? [] : [
+                    createActionButton("Move NPC", createMoveIcon, () => this.plugin.moveSelection(), "M"),
+                    createActionButton("Delete NPC", createTrashIcon, () => this.plugin.deleteSelection(), "Del"),
+                ]),
             );
         }
         if (selection.kind === "loc" || selection.kind === "npc") {
@@ -1077,9 +1078,10 @@ class EditorChrome {
         this.selectionDetails.append(title, location, rotation);
         if (selection.kind === "npc") {
             const source = document.createElement("div");
-            source.textContent = selection.npcSource === "custom"
+            source.textContent = !this.plugin.getState().npcSpawnsReady ? "Saved NPC spawns are not available yet"
+                : selection.npcSource === "custom"
                 ? "Editor spawn"
-                : selection.npcSource === "spawn" ? "Game spawn" : "Live NPC";
+                : selection.npcSource === "spawn" ? "Game spawn" : "Live NPC — persistent edits unavailable";
             source.style.color = "#94a3b8";
             const row = document.createElement("label");
             Object.assign(row.style, {
@@ -1094,7 +1096,7 @@ class EditorChrome {
             input.step = "1";
             input.value = String(selection.npcWanderRadius ?? 5);
             input.title = "Tiles the NPC may wander from its spawn; 0 anchors it";
-            input.disabled = selection.npcSource === undefined;
+            input.disabled = selection.npcSource === undefined || !this.plugin.getState().npcSpawnsReady;
             Object.assign(input.style, {
                 width: "64px", height: "26px", padding: "2px 5px", color: "#fff", background: "#111318",
                 border: "1px solid rgba(255,255,255,0.2)", borderRadius: "4px", font: "12px sans-serif",
@@ -1225,8 +1227,8 @@ class EditorChrome {
         persistedNpcSpawnsRequested = true;
         try {
             const edits = await this.plugin.loadPersistedNpcSpawnEdits();
-            if (edits.length === 0) return;
-            if (this.plugin.importNpcSpawnEdits(edits)) {
+            persistedNpcSpawnsLoaded = true;
+            if (this.plugin.importNpcSpawnEdits(edits, !browserHostWindow())) {
                 this.savedNpcSpawnsKey = this.npcSpawnsKey();
                 this.syncSaveButton();
             }
@@ -1257,11 +1259,12 @@ class EditorChrome {
                     tileX: edit.tileX,
                     tileY: edit.tileY,
                     plane: edit.plane,
-                    ...(edit.kind === "npc"
+                    ...(edit.kind === "npc" && !edit.persistedNpc
                         ? { direction: edit.direction ?? quarterTurnToDirection(edit.rotation) }
                         : edit.direction === undefined ? {} : { direction: edit.direction }),
                     ...(edit.wanderRadius === undefined ? {} : { wanderRadius: edit.wanderRadius }),
                     ...(edit.kind === "npcDelete" ? { remove: true } : {}),
+                    ...(edit.npcName === undefined ? {} : { name: edit.npcName }),
                 }));
             const npcSpawnsDirty = this.npcSpawnsKey() !== this.savedNpcSpawnsKey;
             if (objectSpawns === undefined && exported.length === 0 && !world && !npcSpawnsDirty) {
@@ -1273,6 +1276,9 @@ class EditorChrome {
             const host = browserHostWindow();
             if (host && !host.closed) {
                 const hostOrigin = browserHostOrigin();
+                if ((npcSpawnsDirty || customNpcs.length) && !persistedNpcSpawnsLoaded) {
+                    throw new Error("NPC spawn data has not loaded. Reopen the editor and try again.");
+                }
                 if (objectSpawns !== undefined) host.postMessage(
                     { type: OBJECT_SPAWNS_MESSAGE, contents: formatObjectSpawns(objectSpawns) }, hostOrigin,
                 );
@@ -1288,7 +1294,7 @@ class EditorChrome {
                     this.plugin.markWorldDefinitionSaved();
                 }
                 if (npcSpawnsDirty || customNpcs.length) {
-                    host.postMessage({ type: CUSTOM_NPC_SPAWNS_MESSAGE, spawns: customNpcs }, hostOrigin);
+                    host.postMessage({ type: CUSTOM_NPC_SPAWNS_MESSAGE, spawns: customNpcs, replace: true }, hostOrigin);
                 }
                 const saved = [
                     objectSpawns !== undefined ? "object additions/deletions" : "",
@@ -1319,7 +1325,7 @@ class EditorChrome {
             }
             if (npcSpawnsDirty || customNpcs.length) {
                 FileSaver.saveAs(
-                    new Blob([formatCustomNpcSpawns(customNpcs.map(({ id, tileX: x, tileY: y, plane: level, direction, wanderRadius, remove }) => ({
+                    new Blob([formatCustomNpcSpawns(customNpcs.map(({ id, tileX: x, tileY: y, plane: level, direction, wanderRadius, remove, name }) => ({
                         id,
                         x,
                         y,
@@ -1327,6 +1333,7 @@ class EditorChrome {
                         ...(direction === undefined ? {} : { direction }),
                         ...(wanderRadius === undefined ? {} : { wanderRadius }),
                         ...(remove ? { remove: true } : {}),
+                        ...(name === undefined ? {} : { name }),
                     })))], { type: "application/json" }),
                     "npc-spawns-custom.json",
                 );

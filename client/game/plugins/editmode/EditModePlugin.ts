@@ -82,7 +82,7 @@ function npcKey(edit: EditModeEdit): string {
 function editKey(edit: EditModeEdit): string {
     return JSON.stringify([
         edit.kind, edit.locId, edit.tileX, edit.tileY, edit.plane,
-        edit.shape, edit.rotation, edit.wanderRadius, edit.direction,
+        edit.shape, edit.rotation, edit.wanderRadius, edit.direction, edit.npcName, edit.persistedNpc,
     ]);
 }
 
@@ -180,6 +180,8 @@ export class EditModePlugin {
     private buildingSelect = false;
     private preview?: EditModeEdit;
     private scenePreview = false;
+    private selectionRequest = 0;
+    private npcSpawnsReady = true;
     private world: EditModePluginState["world"] = { loading: false };
     private worldDefinitionDirty = false;
     private searchToken = 0;
@@ -210,6 +212,7 @@ export class EditModePlugin {
             search: this.search,
             freeCamera: this.freeCamera,
             scenePreview: this.scenePreview,
+            npcSpawnsReady: this.npcSpawnsReady,
             world: this.world,
             version: this.version,
         };
@@ -392,6 +395,7 @@ export class EditModePlugin {
     };
 
     setConfig(nextConfig: Partial<EditModePluginConfig>): void {
+        if (nextConfig.tool !== undefined || nextConfig.active === false || nextConfig.enabled === false) this.selectionRequest++;
         const wasActive = this.config.active;
         const previousTool = this.config.tool;
         if (nextConfig.tool !== undefined || nextConfig.locId !== undefined || nextConfig.placeKind !== undefined) {
@@ -484,19 +488,24 @@ export class EditModePlugin {
     }
 
     loadPersistedNpcSpawnEdits(): Promise<EditModeEdit[]> {
+        this.npcSpawnsReady = false;
+        this.commit();
         return this.host?.loadPersistedNpcSpawnEdits?.() ?? Promise.resolve([]);
     }
 
     /** Merges imported spawn edits once, replaying them into the preview. */
-    importNpcSpawnEdits(edits: readonly EditModeEdit[]): boolean {
+    importNpcSpawnEdits(edits: readonly EditModeEdit[], render = true): boolean {
+        this.npcSpawnsReady = true;
         const seen = new Set(this.config.edits.map(editKey));
-        const fresh = edits.filter((edit) => {
+        const imported = render ? [...edits] : edits.map((edit) => ({ ...edit, persistedNpc: true }));
+        // A full host snapshot preserves duplicate source records and their order.
+        const fresh = render ? imported.filter((edit) => {
             const key = editKey(edit);
             if (seen.has(key)) return false;
             seen.add(key);
             return true;
-        });
-        if (fresh.length === 0) return false;
+        }) : imported;
+        if (fresh.length === 0) { this.commit(); return false; }
         this.commitEdits(fresh);
         // Loaded from the host, not something the user did.
         this.undoStack.pop();
@@ -604,6 +613,7 @@ export class EditModePlugin {
         const selection = this.selection;
         if (!selection || selection.locId < 0) return;
         if (selection.kind === "npc") {
+            if (!this.npcSpawnsReady || selection.npcSource === undefined) return;
             this.setConfig({ tool: "place", placeKind: "npc", npcId: selection.locId });
             // The source NPC stays put until the destination click is applied.
             this.movingSelection = { ...selection };
@@ -695,15 +705,8 @@ export class EditModePlugin {
      * marker so saving keeps them gone.
      */
     private deleteNpcSelection(selection: EditModeSelection): void {
-        if (selection.npcSource === undefined) {
-            // A live server NPC (logged-in editing): hide it for this session only.
-            if (selection.npcServerId !== undefined) this.host?.despawnNpc(selection.npcServerId);
-            this.selection = undefined;
-            this.host?.clearSelectionHighlight?.();
-            this.commit();
-            return;
-        }
-        if (this.customNpcEditIndex(selection) >= 0) {
+        if (!this.npcSpawnsReady || selection.npcSource === undefined) return;
+        if (selection.npcSource === "custom" && this.customNpcEditIndex(selection) >= 0) {
             // A saved patch can hold a removal marker beside the replacement at
             // this tile (a canonical spawn moved away and back). Keep the marker:
             // it is what suppresses the canonical spawn, so dropping it would
@@ -740,7 +743,7 @@ export class EditModePlugin {
      */
     setSelectionWanderRadius(radius: number): void {
         const selection = this.selection;
-        if (!selection || selection.kind !== "npc" || selection.locId < 0) return;
+        if (!this.npcSpawnsReady || !selection || selection.kind !== "npc" || selection.locId < 0) return;
         if (selection.npcSource === undefined) return;
         const wanderRadius = Math.max(0, Math.min(255, Math.trunc(radius)));
         if (!Number.isFinite(wanderRadius)) return;
@@ -758,13 +761,14 @@ export class EditModePlugin {
                 this.removeEdits(indices);
                 this.commitEdits([{
                     kind: "npcWander",
-                    locId: selection.locId,
-                    tileX: selection.tileX,
-                    tileY: selection.tileY,
-                    plane: selection.plane,
+                    locId: selection.npcSpawn?.id ?? selection.locId,
+                    tileX: selection.npcSpawn?.tileX ?? selection.tileX,
+                    tileY: selection.npcSpawn?.tileY ?? selection.tileY,
+                    plane: selection.npcSpawn?.plane ?? selection.plane,
                     shape: 0,
                     rotation: 0,
                     wanderRadius,
+                    ...(selection.npcSpawn?.name === undefined ? {} : { npcName: selection.npcSpawn.name }),
                     ...(selection.npcSpawn?.direction === undefined
                         ? {}
                         : { direction: selection.npcSpawn.direction }),
@@ -779,10 +783,10 @@ export class EditModePlugin {
     private customNpcEditIndex(selection: EditModeSelection): number {
         return this.config.edits.findIndex((edit) =>
             edit.kind === "npc" &&
-            edit.locId === selection.locId &&
-            edit.tileX === selection.tileX &&
-            edit.tileY === selection.tileY &&
-            edit.plane === selection.plane,
+            edit.locId === (selection.npcSpawn?.id ?? selection.locId) &&
+            edit.tileX === (selection.npcSpawn?.tileX ?? selection.tileX) &&
+            edit.tileY === (selection.npcSpawn?.tileY ?? selection.tileY) &&
+            edit.plane === (selection.npcSpawn?.plane ?? selection.plane),
         );
     }
 
@@ -790,10 +794,10 @@ export class EditModePlugin {
     private npcEditIndicesAt(selection: EditModeSelection): number[] {
         return this.config.edits.flatMap((edit, index) =>
             (edit.kind === "npc" || edit.kind === "npcDelete" || edit.kind === "npcWander") &&
-            edit.locId === selection.locId &&
-            edit.tileX === selection.tileX &&
-            edit.tileY === selection.tileY &&
-            edit.plane === selection.plane
+            edit.locId === (selection.npcSpawn?.id ?? selection.locId) &&
+            edit.tileX === (selection.npcSpawn?.tileX ?? selection.tileX) &&
+            edit.tileY === (selection.npcSpawn?.tileY ?? selection.tileY) &&
+            edit.plane === (selection.npcSpawn?.plane ?? selection.plane)
                 ? [index]
                 : [],
         );
@@ -1036,7 +1040,8 @@ export class EditModePlugin {
         const host = this.host;
         if (!host) return;
         for (const edit of this.config.edits) {
-            if (edit.kind !== "npc" || (edit.tileX >> 6) !== mapX || (edit.tileY >> 6) !== mapY) {
+            if (edit.persistedNpc ||
+                edit.kind !== "npc" || (edit.tileX >> 6) !== mapX || (edit.tileY >> 6) !== mapY) {
                 continue;
             }
             const key = npcKey(edit);
@@ -1188,6 +1193,7 @@ export class EditModePlugin {
         if (!host || !tile) return;
 
         if (this.config.tool === "select") {
+            const request = ++this.selectionRequest;
             if (buildingSelect && host.selectBuilding) {
                 this.selection = host.selectBuilding(tile);
                 this.commit();
@@ -1197,6 +1203,31 @@ export class EditModePlugin {
             this.selection =
                 host.selectPointer?.(tile) ??
                 (loc ? { ...tile, ...loc } : { ...tile, locId: -1, locName: "" });
+            const selection = this.selection;
+            if (selection?.kind === "npc" && selection.npcSource !== undefined) {
+                const index = this.customNpcEditIndex(selection);
+                if (index >= 0 && this.config.edits[index].persistedNpc) {
+                    selection.npcSource = "spawn";
+                }
+            }
+            if (selection?.kind === "npc" && selection.npcSource === undefined && host.resolveNpcSpawn) {
+                // No editable selection until its exact persisted origin is known.
+                this.selection = undefined;
+                void host.resolveNpcSpawn(selection).then((spawn) => {
+                    if (request !== this.selectionRequest || !this.config.active || this.config.tool !== "select") return;
+                    const resolved = spawn ? {
+                        ...selection, locId: spawn.id, npcSpawn: spawn,
+                        npcSource: "spawn" as const, npcWanderRadius: spawn.wanderRadius,
+                    } : selection;
+                    this.selection = resolved;
+                    this.commit();
+                }).catch((error) => {
+                    if (request !== this.selectionRequest) return;
+                    console.warn("[edit-mode] NPC spawn lookup failed", error);
+                    this.selection = selection;
+                    this.commit();
+                });
+            }
             this.commit();
             return;
         }
@@ -1217,6 +1248,7 @@ export class EditModePlugin {
         }
 
         const placingNpc = this.config.tool === "place" && this.config.placeKind === "npc";
+        if (placingNpc && !this.npcSpawnsReady) return;
         if (this.config.tool === "place") this.clearPlacementPreview();
         const edit: EditModeEdit = {
             kind: this.config.tool !== "place" ? "delete" : placingNpc ? "npc" : "place",
@@ -1236,7 +1268,7 @@ export class EditModePlugin {
             this.movingSelection = undefined;
             this.selection = undefined;
             host.clearSelectionHighlight?.();
-            const customIndex = this.customNpcEditIndex(moving);
+            const customIndex = moving.npcSource === "custom" ? this.customNpcEditIndex(moving) : -1;
             // Moving a replacement away leaves the canonical spawn's removal
             // marker in place, exactly as deleting it does; otherwise the
             // original returns beside the moved copy.
@@ -1246,15 +1278,16 @@ export class EditModePlugin {
                     : this.npcEditIndicesAt(moving));
                 if (moving.npcWanderRadius !== undefined) edit.wanderRadius = moving.npcWanderRadius;
                 if (moving.npcSpawn?.direction !== undefined) edit.direction = moving.npcSpawn.direction;
+                if (moving.npcSpawn?.name !== undefined) edit.npcName = moving.npcSpawn.name;
                 const edits: EditModeEdit[] = [];
                 if (customIndex < 0) {
                     if (moving.npcSource === "spawn") {
                         edits.push({
                             kind: "npcDelete",
-                            locId: moving.locId,
-                            tileX: moving.tileX,
-                            tileY: moving.tileY,
-                            plane: moving.plane,
+                            locId: moving.npcSpawn?.id ?? moving.locId,
+                            tileX: moving.npcSpawn?.tileX ?? moving.tileX,
+                            tileY: moving.npcSpawn?.tileY ?? moving.tileY,
+                            plane: moving.npcSpawn?.plane ?? moving.plane,
                             shape: 0,
                             rotation: 0,
                         });
@@ -1460,6 +1493,7 @@ export class EditModePlugin {
     }
 
     private dispatch(edit: EditModeEdit): void {
+        if (edit.kind === "npc" && edit.persistedNpc) return;
         const host = this.host;
         if (!host) return;
 
@@ -1954,6 +1988,8 @@ export class EditModePlugin {
                     ...(edit.direction === undefined
                         ? {}
                         : { direction: toInt(edit.direction, 0, 0, 7) }),
+                    ...(typeof edit.npcName === "string" ? { npcName: edit.npcName } : {}),
+                    ...(edit.persistedNpc ? { persistedNpc: true } : {}),
                 })),
         };
     }
@@ -1968,6 +2004,7 @@ export class EditModePlugin {
             wallStart: this.wallStart,
             freeCamera: this.freeCamera,
             scenePreview: this.scenePreview,
+            npcSpawnsReady: this.npcSpawnsReady,
             world: this.world,
             version: this.version,
         };

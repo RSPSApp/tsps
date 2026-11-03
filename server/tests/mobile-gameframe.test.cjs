@@ -45,13 +45,13 @@ test('handshake decodes the mobile client type byte', () => {
   const frame = (payload) => Buffer.concat([Buffer.from([202, payload.length]), payload]);
 
   assert.deepEqual(decodeClientPackets(frame(mobile)), [
-    { type: 'handshake', name: 'Tester', clientType: 1 },
+    { type: 'handshake', name: 'Tester', clientType: 1, capabilities: 0 },
   ]);
   assert.deepEqual(decodeClientPackets(frame(desktop)), [
-    { type: 'handshake', name: 'Tester', clientType: 0 },
+    { type: 'handshake', name: 'Tester', clientType: 0, capabilities: 0 },
   ]);
   assert.deepEqual(decodeClientPackets(frame(legacy)), [
-    { type: 'handshake', name: 'Tester', clientType: 0 },
+    { type: 'handshake', name: 'Tester', clientType: 0, capabilities: 0 },
   ]);
 });
 

@@ -2135,6 +2135,36 @@
       "params": {"northY":3660,"southY":3657}
     },
     {
+      "name": "Handholds (Lizardman Canyon, east)",
+      "object": [27362,42009],
+      "at": [[1474,3687,0],[1471,3687,0]],
+      "level": 1,
+      "between": {
+        "ends": [[1475,3687,0],[1470,3687,0]],
+        "cross": {
+          "forward": [{"use":"climbOver","args":["to","CLIMB_ROCKS",2]}],
+          "back": [{"use":"climbOver","args":["to","CLIMB_WALL",2]}]
+        }
+      },
+      "note": "Wiki: Lizardman Canyon; handholds access the western canyon without favour since January 2024. Locs and walkable ends checked in osrs-241_2026-10-20.",
+      "unverified": "climb animation and duration (no live capture)"
+    },
+    {
+      "name": "Handholds (Lizardman Canyon, west)",
+      "object": [27362,42009],
+      "at": [[1459,3690,0],[1457,3690,0]],
+      "level": 1,
+      "between": {
+        "ends": [[1460,3690,0],[1456,3690,0]],
+        "cross": {
+          "forward": [{"use":"climbOver","args":["to","CLIMB_ROCKS",2]}],
+          "back": [{"use":"climbOver","args":["to","CLIMB_WALL",2]}]
+        }
+      },
+      "note": "Wiki: Lizardman Canyon; locs and walkable ends checked in osrs-241_2026-10-20.",
+      "unverified": "climb animation and duration (no live capture)"
+    },
+    {
       "name": "Crack (Catacombs of Kourend)",
       "object": 28892,
       "at": [1706,10077,0],

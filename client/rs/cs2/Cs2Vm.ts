@@ -181,6 +181,11 @@ export interface Cs2Context {
     varManager: VarManager;
     loadScript: (id: number) => Script | null;
     onScriptFinished?: (scriptId: number) => void;
+    /**
+     * A script is about to run, before the VM's own pre-script listeners (RuneLite's ScriptPreFired,
+     * higher priority first).
+     */
+    onScriptPre?: (scriptId: number) => void;
 
     /**
      * PARITY: OSRS Protocol Revision (e.g., 179, 220).
@@ -1464,6 +1469,7 @@ export class Cs2Vm {
 
     /** Execute a script - internal method that supports nesting */
     private executeInternal(script: Script, intArgs?: number[], objectArgs?: any[], longArgs?: bigint[]): void {
+        this.context.onScriptPre?.(script.id);
         for (const listener of this.scriptPreListeners) listener(script.id, this.sourceScriptEvent);
         this.traceScriptEnter(script);
         const rootScript = script;
@@ -1771,6 +1777,7 @@ export class Cs2Vm {
 
                         // RuneLite's ScriptPreFired: the args are still on the stacks, where a listener
                         // may read or change them (intStack[intStackSize - n]).
+                        this.context.onScriptPre?.(subScript.id);
                         for (const listener of this.scriptPreListeners) listener(subScript.id, null);
                         const subFrame = allocateFrameLocals(subScript);
                         for (let i = subScript.intArgCount - 1; i >= 0; i--) {

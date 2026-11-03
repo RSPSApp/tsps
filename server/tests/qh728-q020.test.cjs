@@ -73,6 +73,7 @@ function makePlayer() {
     getBanks: () => [],
     getSkillManager: () => ({
       getCurrentLevel: skill => levels.get(skill?.getIndex?.() ?? skill) ?? 99,
+      getMaxLevel: skill => levels.get(skill?.getIndex?.() ?? skill) ?? 99,
       addExperiences: (skill, amount) => {
         const id = skill?.getIndex?.() ?? skill;
         levels.set(id, (levels.get(id) ?? 0) + amount);

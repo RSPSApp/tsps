@@ -22,14 +22,11 @@ const LONGRANGE_EXTRA = 2;
 const CAST_ANIMATION = 1167;
 const CAST_GRAPHIC = { START: 665, PROJECTILE: 1040, END: 1042 };
 
+const { definePoweredStaff } = require("./PoweredStaff");
+
 let core = null;
 let api = null;
-let chargedIds = new Set();
-let unchargedByCharged = new Map();
-let chargedByUncharged = new Map();
-let SangCombatMethod = null;
-/** Each caster's built-in spell: its max hit reads their Magic level. */
-const spells = new WeakMap();
+let staff = null;
 /** Hits whose life leech proc already rolled, to heal when they land. */
 const proccedHits = new WeakSet();
 
@@ -37,45 +34,46 @@ function ids() {
   return core.ItemIdentifiers;
 }
 
-function weaponOf(player) {
-  return player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT] ?? null;
-}
-
 function isStaffId(id) {
-  const value = Number(id);
-  return chargedIds.has(value) || chargedByUncharged.has(value);
-}
-
-function wieldsStaff(player, chargedOnly = false) {
-  const id = Number(weaponOf(player)?.getId?.() ?? -1);
-  return chargedIds.has(id) || (!chargedOnly && chargedByUncharged.has(id));
+  return staff.isStaff(id);
 }
 
 function chargesOf(item) {
-  return Math.max(0, Math.min(MAX_CHARGES, Math.floor(Number(item?.getMetaValue?.(CHARGES_META_KEY)) || 0)));
+  return staff.chargesOf(item);
 }
 
 function baseMaxHit(player) {
   return Math.max(MIN_BASE_MAX_HIT, Math.floor(player.getSkillManager().getCurrentLevel(core.Skill.MAGIC) / 3));
 }
 
-function spellFor(player) {
-  let spell = spells.get(player);
-  if (spell) return spell;
-  const { CombatNormalSpell, Animation, Graphic, GraphicHeight, Projectile } = core;
-  spell = new CombatNormalSpell({
-    spellId: () => ids().SANGUINESTI_STAFF,
-    maximumHit: () => baseMaxHit(player),
+function look({ Animation, Graphic, GraphicHeight, Projectile }) {
+  return {
     castAnimation: () => new Animation(CAST_ANIMATION),
     startGraphic: () => new Graphic(CAST_GRAPHIC.START, GraphicHeight.HIGH),
     castProjectile: (cast, castOn) =>
       Projectile.createProjectile(cast, castOn, CAST_GRAPHIC.PROJECTILE, 0, 20, 43, 31),
     endGraphic: () => new Graphic(CAST_GRAPHIC.END),
-    baseExperience: () => 0,
-    levelRequired: () => 1,
+  };
+}
+
+function defineStaff() {
+  const I = ids();
+  return definePoweredStaff(api, {
+    name: "Sanguinesti staff",
+    chargesKey: CHARGES_META_KEY,
+    maxCharges: MAX_CHARGES,
+    pairs: [
+      [I.SANGUINESTI_STAFF, I.SANGUINESTI_STAFF_UNCHARGED_],
+      [I.HOLY_SANGUINESTI_STAFF, I.HOLY_SANGUINESTI_STAFF_UNCHARGED_],
+    ],
+    maxHit: baseMaxHit,
+    attackSpeed: ATTACK_SPEED,
+    range: ATTACK_RANGE,
+    spell: look,
+    onHitCalc: applyLifeLeech,
+    noChargesMessage: "Your Sanguinesti staff has no charges! You need to charge it with blood runes.",
+    ranOutMessage: "Your Sanguinesti staff has run out of charges.",
   });
-  spells.set(player, spell);
-  return spell;
 }
 
 /** Wiki: a successful hit has a 1/5 chance to deal 8 more; the heal lands with the hit. */
@@ -96,104 +94,24 @@ function onHitResolved({ attacker, hit }) {
   attacker.heal?.(Math.floor(Number(hit.getTotalDamage?.() ?? 0) / 2));
 }
 
-/** Takes a charge; an emptied staff becomes the uncharged one. */
-function useCharge(player) {
-  const { Flag } = core;
-  const staff = weaponOf(player);
-  // Content may spare the charge (a league relic): the same question every powered staff asks.
-  const consume = { player, itemId: staff.getId(), skip: false };
-  api.emitCustomEvent("combat:consume-charge", consume);
-  if (consume.skip) return;
-  const left = chargesOf(staff) - 1;
-  staff.setMetaValue(CHARGES_META_KEY, Math.max(0, left));
-  if (left > 0) return;
-  staff.setId(unchargedByCharged.get(staff.getId()));
-  player.getEquipment().refreshItems();
-  player.getUpdateFlag().flag(Flag.APPEARANCE);
-  player.sendMessage("Your Sanguinesti staff has run out of charges.");
-}
-
-function sangMethod() {
-  if (SangCombatMethod) return SangCombatMethod;
-  const { MagicCombatMethod, PendingHit } = core;
-
-  SangCombatMethod = new (class extends MagicCombatMethod {
-    canAttack(character, target) {
-      const player = character.getAsPlayer();
-      if (!wieldsStaff(player, true) || chargesOf(weaponOf(player)) <= 0) {
-        player.sendMessage("Your Sanguinesti staff has no charges! You need to charge it with blood runes.");
-        player.getCombat().reset();
-        return false;
-      }
-      // Its built-in spell is the only one it casts, whatever is selected or autocast.
-      player.getCombat().setCastSpell(spellFor(player));
-      useCharge(player);
-      return true;
-    }
-
-    canPursue(character) {
-      const player = character.getAsPlayer();
-      return wieldsStaff(player, true) && chargesOf(weaponOf(player)) > 0;
-    }
-
-    hits(character, target) {
-      const spell = spellFor(character.getAsPlayer());
-      // Wiki (Hit delay): powered staves land as spells do, by distance.
-      const hit = new PendingHit(character, target, this, MagicCombatMethod.hitDelay(character, target, spell));
-      spell.onHitCalc(hit);
-      applyLifeLeech(hit);
-      return [hit];
-    }
-
-    attackSpeed() {
-      return ATTACK_SPEED;
-    }
-
-    attackDistance(character) {
-      const { FightStyle } = core;
-      // Longrange is the powered staff's defensive style.
-      return ATTACK_RANGE + (character.getFightType?.()?.getStyle?.() === FightStyle.DEFENSIVE ? LONGRANGE_EXTRA : 0);
-    }
-
-    /** Keeps attacking: the staff casts on its own, unlike a single manual cast. */
-    finished(character) {
-      const combat = character.getCombat();
-      combat.setPreviousCast(spellFor(character.getAsPlayer()));
-      combat.setCastSpell(null);
-    }
-  })();
-  return SangCombatMethod;
-}
-
-function resolveSang(attacker) {
-  if (!attacker?.isPlayer?.()) return null;
-  return wieldsStaff(attacker.getAsPlayer()) ? sangMethod() : null;
-}
-
-function setCharges(player, staff, value) {
-  const clamped = Math.max(0, Math.min(MAX_CHARGES, Math.floor(value)));
-  staff.setMetaValue(CHARGES_META_KEY, clamped);
-  if (clamped > 0) {
-    staff.setId(chargedByUncharged.get(staff.getId()) ?? staff.getId());
-  } else {
-    staff.setId(unchargedByCharged.get(staff.getId()) ?? staff.getId());
-  }
-  player.getInventory().refreshItems();
+function setCharges(player, item, value) {
+  staff.setCharges(item, value);
+  player.getInventory?.().refreshItems?.();
 }
 
 /** Two blood runes a charge, as many as the inventory affords (Wiki). */
 function chargeStaff(event) {
   const { player, usedItem, usedWithItem, usedItemId, usedWithItemId } = event;
-  const staff = isStaffId(usedItemId) ? usedItem : isStaffId(usedWithItemId) ? usedWithItem : null;
-  if (!staff) {
+  const held = isStaffId(usedItemId) ? usedItem : isStaffId(usedWithItemId) ? usedWithItem : null;
+  if (!held) {
     return;
   }
-  const otherId = Number(staff === usedItem ? usedWithItemId : usedItemId);
+  const otherId = Number(held === usedItem ? usedWithItemId : usedItemId);
   if (otherId !== ids().BLOOD_RUNE) {
     return;
   }
   const inventory = player.getInventory();
-  const current = chargesOf(staff);
+  const current = chargesOf(held);
   if (current >= MAX_CHARGES) {
     player.sendMessage("Your Sanguinesti staff is already fully charged.");
     event.handled = true;
@@ -209,7 +127,7 @@ function chargeStaff(event) {
     return;
   }
   inventory.deleteNumber(ids().BLOOD_RUNE, affordable * BLOOD_RUNES_PER_CHARGE);
-  setCharges(player, staff, current + affordable);
+  setCharges(player, held, current + affordable);
   player.sendMessage(`You apply ${affordable.toLocaleString()} charge${affordable === 1 ? "" : "s"} to your Sanguinesti staff.`);
   event.handled = true;
 }
@@ -248,26 +166,20 @@ module.exports = {
   register(pluginApi) {
     api = pluginApi;
     core = api.core;
-    const I = core.ItemIdentifiers;
-    unchargedByCharged = new Map([
-      [I.SANGUINESTI_STAFF, I.SANGUINESTI_STAFF_UNCHARGED_],
-      [I.HOLY_SANGUINESTI_STAFF, I.HOLY_SANGUINESTI_STAFF_UNCHARGED_],
-    ]);
-    chargedIds = new Set(unchargedByCharged.keys());
-    chargedByUncharged = new Map([...unchargedByCharged].map(([charged, uncharged]) => [uncharged, charged]));
+    staff = defineStaff();
 
     api.onItemAction("Sanguinesti staff", { Check: checkCharges, Uncharge: uncharge });
     api.onItemAction("Holy sanguinesti staff", { Check: checkCharges, Uncharge: uncharge });
     api.onItemOnItem(chargeStaff, { noted: false });
     api.onCombatHitResolved(onHitResolved);
-    api.registerCombatMethodResolver({ resolve: resolveSang });
+    api.registerCombatMethodResolver(staff.resolver);
   },
   _test: {
     chargesOf,
     setCharges,
     applyLifeLeech,
     onHitResolved,
-    useCharge,
+    useCharge: (player) => staff.useCharge(player),
     chargeStaff,
     checkCharges,
     uncharge,

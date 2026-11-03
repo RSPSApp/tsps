@@ -3,7 +3,7 @@ import * as path from "path";
 import * as zlib from "zlib";
 import { CacheMaps } from "../cache/CacheMaps";
 import { Buffer as CollisionBuffer } from "./Buffer";
-import { encodeRegionReplacement } from "../../net/protocol/ClientProtocol";
+import { encodeCachedRegionReplacement, regionReplacementPacket, MAX_REGION_REPLACEMENT_PAYLOAD, type RegionReplacementPacket } from "../../net/protocol/ClientProtocol";
 
 export type ReplaceMapRegionSource = string | [string, string];
 
@@ -12,6 +12,8 @@ type RegionReplacement = {
   source: string;
   terrainData: Uint8Array;
   objectData: Uint8Array | null;
+  /** Encoded once: dense regions deflate, and a scene-window change re-sends them. */
+  packet: RegionReplacementPacket;
 };
 
 export type ReplaceMapRegionResult = {
@@ -23,9 +25,11 @@ export type ReplaceMapRegionResult = {
 };
 
 export class MapRegionReplacementManager {
-  // Region replacements use a three-byte variable-packet header, so the
-  // payload must leave room inside the browser transport's 64 KiB frame.
-  private static readonly MAX_PACKET_PAYLOAD = 0xfffd;
+  // Region replacements are encoded into a short packet, so the payload has to leave
+  // room inside the browser transport's 64 KiB frame. A region whose raw terrain and
+  // objects do not fit is deflated (see encodeRegionReplacement), which is why the check
+  // here is the encoded size rather than the raw size.
+  public static readonly MAX_PACKET_PAYLOAD = MAX_REGION_REPLACEMENT_PAYLOAD;
 
   private static replacements: Map<number, RegionReplacement> = new Map();
 
@@ -59,12 +63,9 @@ export class MapRegionReplacementManager {
     objectData: Uint8Array | null,
     source: string
   ): ReplaceMapRegionResult {
-    const payloadLength = 7 + terrainData.length + (objectData?.length ?? 0);
-    if (payloadLength > this.MAX_PACKET_PAYLOAD) {
-      throw new Error(
-        `region replacement is too large: region=${regionId} bytes=${payloadLength} max=${this.MAX_PACKET_PAYLOAD}`
-      );
-    }
+    // Encode once here so a region that could never be streamed (not even deflated) is
+    // rejected at load time instead of failing while a player's scene goes out.
+    const packet = regionReplacementPacket(regionId, true, terrainData, objectData);
     const objectCount = this.countObjectPlacements(objectData);
 
     this.replacements.set(regionId, {
@@ -72,6 +73,7 @@ export class MapRegionReplacementManager {
       source,
       terrainData: Uint8Array.from(terrainData),
       objectData: objectData ? Uint8Array.from(objectData) : null,
+      packet,
     });
 
     return {
@@ -235,12 +237,9 @@ export class MapRegionReplacementManager {
     if (!session || typeof session.sendClientPacket !== "function") {
       return false;
     }
-    return session.sendClientPacket(encodeRegionReplacement(
-      replacement.regionId,
-      allowReload,
-      replacement.terrainData,
-      replacement.objectData
-    ));
+    return session.sendClientPacket(
+      encodeCachedRegionReplacement(replacement.packet, allowReload)
+    );
   }
 
   private static computeVisibleRegionIds(

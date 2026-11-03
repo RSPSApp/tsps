@@ -62,7 +62,7 @@ function harness(name) {
         isNpc: () => true, isPlayer: () => false, getAsNpc: () => npc,
         isRegistered: () => !npc.removed, setPositionToFace: noop, faceTile: tile => { npc.facing = tile; return npc; }, forceChat: text => { npc.said = text; },
         performAnimation: animation => npc.animations.push(animation.getId()), performGraphic: graphic => npc.graphics.push(graphic.id),
-        getMovementQueue: () => ({ reset() { return this; }, addSteps: to => { npc.walkingTo = to; } }),
+        getMovementQueue: () => ({ reset() { return this; }, addSteps: to => { npc.walkingTo = to; }, addFirstStep: to => { npc.walkingTo = to; } }),
         exactMove: (to, options) => { npc.exact = options; location = to; },
         setFollowing: target => { npc.following = target; }, setMobileInteraction: noop, setNpcTransformationId: noop,
         setPet: noop, setOwner: noop, getOwner: () => definition.owner,
@@ -103,6 +103,15 @@ function harness(name) {
   }; return h;
 }
 
+// The temple, vision and tutorial scenes play in TemplatedInstanceArea copies. These map a
+// copy's tile back to the source map so the captured coordinates still read as captured.
+function sourceXY(p, x, y) {
+  const area = p.getPrivateArea?.();
+  if (!area || !Number.isInteger(area.sourceX)) return [x, y];
+  return [x - area.getBaseX() + area.sourceX, y - area.getBaseY() + area.sourceY];
+}
+const sourceAt = p => sourceXY(p, p.getLocation().getX(), p.getLocation().getY());
+
 function player() {
   const attrs = new Map(), items = new Map(), configs = new Map(), varbits = new Map(), log = [], xp = [];
   let location = new core.Location(3210, 3220, 0), area = null;
@@ -114,7 +123,11 @@ function player() {
     sendConfig(id, value) { configs.set(id, value); return packet; }, sendVarbit(id, value) { varbits.set(id, value); return packet; },
     sendString(text, uid) { if ([6, 3, 2].some(child => [217, 231, 229, 193].some(group => uid === (group << 16 | child)))) p.text = text; log.push(['text', uid, text]); return packet; },
     sendInterfaceRemoval() { p.manager.reset(); p.prompt = null; return packet; },
-  }, { get: (t, key) => t[key] ?? ((...args) => { log.push([key, ...args]); return packet; }) });
+  }, { get: (t, key) => t[key] ?? ((...args) => {
+    // Camera points are sent in the scene copy; log them as source-map tiles.
+    if (key === 'sendCameraMoveTo' || key === 'sendCameraLookAt') args.splice(0, 2, ...sourceXY(p, args[0], args[1]));
+    log.push([key, ...args]); return packet;
+  }) });
   const p = { setEnteredAmountAction: action => { p.amountAction = action; }, attrs, items, configs, varbits, log, xp, messages: [], animations: [], prompt: null, text: '', index: nextIndex++,
     getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value), getInventory: () => inv,
     getBanks: () => [{ getAmount: id => p.bank?.get(id) ?? 0 }], getEquipment: () => ({ get: () => null, getItems: () => [] }),
@@ -125,7 +138,7 @@ function player() {
     getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; }, getIndex: () => p.index, getInterfaceId: () => -1,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: damage => { p.damage = damage; } }) }),
-    getUsername: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
+    getUsername: () => 'Parity', getDisplayName: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
     performAnimation: a => p.animations.push(a.getId()), performGraphic: noop, sendMessage: text => p.messages.push(text),
   }; p.manager = new DialogueManager(p); return p;
 }
@@ -226,7 +239,8 @@ test('the captured chant opens an owner-only portal for the scene only, and neve
   assert.equal(h.quest.getStage(p), 95);
   assert.equal(p.attrs.get('temple-of-the-eye:basement-portal-open'), false);
   assert.equal(h.objects.includes(portal), false, 'the scene takes its portal with it');
-  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2399, 5651], 'the arrival stands on the template the camera points at');
+  assert.ok(p.getPrivateArea(), 'the arrival is inside the temple copy');
+  assert.deepEqual(sourceAt(p), [2399, 5651], 'the arrival stands on the template the camera points at');
 
   // A save from before the fix: flag still set, quest already past the scene.
   const stale = player();
@@ -408,8 +422,8 @@ test('Temple of the Eye follows varbit stages 5..125 through dialogue, items, al
   assert.ok(h.npcs.some(npc => npc.id === 11419 && !npc.removed && npc.owner === p), 'with its NPC');
   h.finish(p);
   finishTo(N.APPRENTICE_FELIX_4);
-  assert.ok(h.ground.some(([, item, tile]) => item.getId() === I.CHISEL && tile.getX() === 2465 && tile.getY() === 5708), 'the chisel lies by the tables');
-  assert.ok(h.ground.some(([, item, tile]) => item.getId() === I.BRONZE_PICKAXE && tile.getX() === 2461 && tile.getY() === 5708), 'and the pickaxe');
+  assert.ok(h.ground.some(([, item, tile]) => item.getId() === I.CHISEL && String(sourceXY(p, tile.getX(), tile.getY())) === '2465,5708'), 'the chisel lies by the tables');
+  assert.ok(h.ground.some(([, item, tile]) => item.getId() === I.BRONZE_PICKAXE && String(sourceXY(p, tile.getX(), tile.getY())) === '2461,5708'), 'and the pickaxe');
   p.items.set(I.CHISEL, 1);
   p.items.set(I.BRONZE_PICKAXE, 1);
   weakCell();
@@ -441,7 +455,7 @@ test('Temple of the Eye follows varbit stages 5..125 through dialogue, items, al
   assert.ok(p.messages.includes('Your cell absorbs a small amount of excess energy.'));
   h.object(p, O.PORTAL_40, at(2793, 4827), 1, ['Use']);
   h.tick(3);
-  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2461, 5720]);
+  assert.deepEqual(sourceAt(p), [2461, 5720]);
   finishTo(N.APPRENTICE_TAMARA_3);
   h.object(p, 43740, at(2463, 5734), 1, ['Place-cell']);
   assert.equal(tut(), 40);
@@ -490,7 +504,7 @@ test('Temple of the Eye follows varbit stages 5..125 through dialogue, items, al
   h.finish(p);
   powerUp();
   assert.equal(stage(), 120, 'the third power-up moves the quest, as captured');
-  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2398, 5669]);
+  assert.deepEqual(sourceAt(p), [2398, 5669]);
   assert.ok(p.log.some(row => row[0] === 'sendCameraMoveTo' && row[1] === 2386 && row[2] === 5663), 'final rift camera');
   h.finish(p);
   assert.ok(p.log.some(row => row[0] === 'sendCameraMoveTo' && row[1] === 2399 && row[2] === 5667 && row[3] === 820), 'rift close camera');
@@ -1149,7 +1163,7 @@ test('Temple tower apprentices spawn on the captured first-floor tiles reachable
       setPathX() { return this; }, setPathY() { return this; }, syncDestinationFlagToRoute() { return this; },
       addCheckpoint(tile) { checkpoints.push(tile); return this; } };
     const entity = { getMovementQueue: () => queue, getLocation: () => new Location(3113, 3163, 1), getSize: () => 1,
-      getPrivateArea: () => null, isPlayer: () => true, getAsPlayer: () => ({ getUsername: () => 'parity' }) };
+      getPrivateArea: () => null, isPlayer: () => true, getAsPlayer: () => ({ getUsername: () => 'parity', getDisplayName: () => 'parity' }) };
     return PathFinder.calculateRoute(entity, 1, dx, dy, 0, 0, 0, 0, false);
   };
   assert.equal(RegionManager.blocked(new Location(3113, 3163, 1), null), false);
@@ -1182,7 +1196,7 @@ test('Wizards Tower basement ladder 2148 reaches the 2147 ground-floor ladder th
       setPathX() { return this; }, setPathY() { return this; }, syncDestinationFlagToRoute() { return this; },
       addCheckpoint(tile) { checkpoints.push(tile); return this; } };
     const entity = { getMovementQueue: () => queue, getLocation: () => new Location(sx, sy, 0), getSize: () => 1,
-      getPrivateArea: () => null, isPlayer: () => true, getAsPlayer: () => ({ getUsername: () => 'parity' }) };
+      getPrivateArea: () => null, isPlayer: () => true, getAsPlayer: () => ({ getUsername: () => 'parity', getDisplayName: () => 'parity' }) };
     const steps = PathFinder.calculateRoute(entity, 1, dx, dy, 0, 0, 0, 0, false);
     return { steps, last: checkpoints.at(-1) };
   };

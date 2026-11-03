@@ -108,11 +108,11 @@ module.exports = function attach(api, Events) {
       name => `Come along with me, ${name}!`, name => `Hey ${name}! It's your lucky day!`],
     goodbye: "Maybe later.",
     linger: true,
-    otherPlayerLine: owner => `Sorry, it's ${owner.getUsername()} that's having the lucky day.`,
+    otherPlayerLine: owner => `Sorry, it's ${owner.getDisplayName()} that's having the lucky day.`,
     talk(active, { teleport, valid, leave }) {
       const { player } = active;
       chat(player, [{ npcId: active.definition.id, text:
-        `It's your lucky day, ${player.getUsername()}! You've got a chance to win big prizes in my quiz show. Would you like to play?` }],
+        `It's your lucky day, ${player.getDisplayName()}! You've got a chance to win big prizes in my quiz show. Would you like to play?` }],
       () => api.sendMultiChatboxPrompt(player, "What would you like to say?",
         "Yes please, I'm so excited!", () => chat(player, [{ text: "Yes please, I'm so excited!" }], () => {
           closeChat(player);
@@ -153,7 +153,7 @@ module.exports = function attach(api, Events) {
     Teleports.later(session, WELCOME_DELAY, () => host(session, WELCOME));
     Teleports.later(session, ODD_ONE_OUT_DELAY, () => host(session, ODD_ONE_OUT));
     Teleports.later(session, CONTESTANT_DELAY, () => host(session, ["Please welcome our newest contestant:",
-      `<col=800000>${player.getUsername()}<col=000000>!`, "Four questions right, and then you win!",
+      `<col=800000>${player.getDisplayName()}<col=000000>!`, "Four questions right, and then you win!",
       "You know the rules, so let's begin!"]));
     Teleports.later(session, FIRST_QUESTION_DELAY, () => question(session));
   }

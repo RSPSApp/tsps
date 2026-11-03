@@ -1246,7 +1246,7 @@ class EditorChrome {
             const oversized = oversizedRegionPacks(exported);
             if (oversized.length > 0) {
                 const regions = oversized.map(({ regionId, payload }) => `${regionId} (${payload.toLocaleString()} bytes)`).join(", ");
-                this.toast(`Not saved: over the ${MAX_REGION_PACK_PAYLOAD.toLocaleString()} byte region limit: ${regions}. Undo or edit fewer tiles.`);
+                this.toast(`Not saved: the map data does not fit the ${MAX_REGION_PACK_PAYLOAD.toLocaleString()} byte region packet even compressed: ${regions}. Undo or edit fewer tiles.`);
                 return;
             }
             const world = this.plugin.getWorldDefinitionForSave();

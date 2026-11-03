@@ -100,16 +100,31 @@ const makePlugin = () => {
     assert.deepEqual(Array.from(pack.terrainData.subarray(0, 3)), [2 + 1 * 4 + 3, 7, 0]);
 }
 
-// Saving checks the limit the server loads regions under: 7 + terrain + objects, exactly at the edge.
+// Saving checks the packet the server can stream: raw when the sections fit, deflated when not.
 {
-    const pack = (objects: number) => {
-        const terrain = new Uint8Array(64 * 64 * 4);
-        const data = buildRegionPack((50 << 8) | 50, 40000, 39999, new Uint8Array(objects), terrain, [], false, false);
+    const terrain = new Uint8Array(64 * 64 * 4);
+    const pack = (objects: Uint8Array) => {
+        const data = buildRegionPack((50 << 8) | 50, 40000, 39999, objects, terrain, [], false, false);
         return { regionId: (50 << 8) | 50, data };
     };
-    const fits = MAX_REGION_PACK_PAYLOAD - 7 - 64 * 64 * 4;
-    assert.deepEqual(oversizedRegionPacks([pack(fits)]), []);
-    assert.deepEqual(oversizedRegionPacks([pack(fits + 1)]), [{ regionId: (50 << 8) | 50, payload: MAX_REGION_PACK_PAYLOAD + 1 }]);
+    // 80 KB of zeros is far over the raw ceiling but deflates to almost nothing.
+    assert.deepEqual(oversizedRegionPacks([pack(new Uint8Array(80_000))]), []);
+    // The client must also be able to hold the expanded data, however well it compresses.
+    assert.throws(() => oversizedRegionPacks([pack(new Uint8Array(16 * 1024 * 1024))]), /16 MiB/);
+    // Random bytes can also exceed the compressed packet budget.
+    const random = new Uint8Array(80_000);
+    let seed = 123456789;
+    for (let index = 0; index < random.length; index++) {
+        seed ^= seed << 13;
+        seed ^= seed >>> 17;
+        seed ^= seed << 5;
+        seed >>>= 0;
+        random[index] = seed & 0xff;
+    }
+    const oversized = oversizedRegionPacks([pack(random)]);
+    assert.equal(oversized.length, 1);
+    assert.equal(oversized[0].regionId, (50 << 8) | 50);
+    assert.ok(oversized[0].payload > MAX_REGION_PACK_PAYLOAD, "reports the compressed payload it cannot send");
 }
 
 // Undo: a multi-tile action goes as one step, and what was underneath comes back.

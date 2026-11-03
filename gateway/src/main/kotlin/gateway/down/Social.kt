@@ -18,6 +18,11 @@ import net.rsprot.protocol.message.OutgoingGameMessage
 /**
  * Friends, ignores and the friends chat. tsps sends all three as one full snapshot on every
  * change; OSRS has a packet for each, and the friends chat only needs sending when it changed.
+ *
+ * An entry's first byte (rsprot's `added`) is the rename flag: with it set, the client finds the
+ * entry under its previous name and renames it, instead of adding a second one beside it. tsps
+ * sends a previous name only while a renamed player's old display name is still held for them, so
+ * the flag is set exactly when there is one.
  */
 class Social(private val send: (OutgoingGameMessage) -> Unit) {
     private var loaded = false
@@ -58,12 +63,17 @@ class Social(private val send: (OutgoingGameMessage) -> Unit) {
                         val rank = reader.u8()
                         val online = reader.u8() != 0
                         if (online) {
-                            UpdateFriendList.OnlineFriend(false, name, previous, world, rank, 0, "", WORLD_NAME, 0, 0)
+                            UpdateFriendList.OnlineFriend(previous != null, name, previous, world, rank, 0, "", WORLD_NAME, 0, 0)
                         } else {
-                            UpdateFriendList.OfflineFriend(false, name, previous, rank, 0, "")
+                            UpdateFriendList.OfflineFriend(previous != null, name, previous, rank, 0, "")
                         }
                     }
-                val ignores = List(reader.u16()) { UpdateIgnoreList.AddedIgnoredEntry(reader.string(), reader.string().ifEmpty { null }, "", false) }
+                val ignores =
+                    List(reader.u16()) {
+                        val name = reader.string()
+                        val previous = reader.string().ifEmpty { null }
+                        UpdateIgnoreList.AddedIgnoredEntry(name, previous, "", previous != null)
+                    }
                 send(UpdateFriendList(friends))
                 send(UpdateIgnoreList(ignores))
                 if (!loaded) {

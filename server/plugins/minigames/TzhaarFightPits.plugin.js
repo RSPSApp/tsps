@@ -145,7 +145,7 @@ function endGame(winner) {
   state.participants.clear();
   state.phase = "idle";
   if (!winner) return;
-  state.champion = winner.getUsername();
+  state.champion = winner.getDisplayName();
   if (state.defeatedLevels > 0) winner.getInventory().adds(Items.TOKKUL, state.defeatedLevels);
   champions.add(winner);
   winner.setSkullTimer(CHAMPION_SKULL_TICKS);

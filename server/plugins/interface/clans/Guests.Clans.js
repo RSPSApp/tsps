@@ -230,7 +230,7 @@ function toggleApplication(player, clan) {
   sender.sendVarbit(APPLYING_VARBIT, 1);
   for (const member of clan.members) {
     if (member.rank < Core.permissionRank(clan, Core.SETTING_RECRUIT)) continue;
-    Core.onlinePlayer(member.account)?.sendMessage(`${player.getUsername()} has applied to join your clan.`);
+    Core.onlinePlayer(member.account)?.sendMessage(`${player.getDisplayName()} has applied to join your clan.`);
   }
 }
 

@@ -150,7 +150,7 @@ function assign(a, b) {
     bh.skipped.delete(player);
     bh.lobbyTicks.set(player, 0);
     Hud.sendLobbyTimer(player, 0);
-    player.sendMessage(`You have been assigned a target: ${target.getUsername()}.`);
+    player.sendMessage(`You have been assigned a target: ${target.getDisplayName()}.`);
   }
   for (const [player, target] of [[a, b], [b, a]]) {
     api.emitCustomEvent("bounty-hunter:target-assigned", { player, target });

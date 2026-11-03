@@ -86,7 +86,7 @@ function makePlayer() {
       return id === undefined ? null : { getId: () => id };
     } }),
     getSkillManager: () => skillManager,
-    getUsername: () => 'rfd-test',
+    getUsername: () => 'rfd-test', getDisplayName: () => 'rfd-test',
     getPrivateArea: () => null,
     getPacketSender: () => sender,
     getDialogueManager: () => ({ isActive: () => false, getCurrent: () => null, startDialogues: noop, handleResume: noop, reset: noop }),

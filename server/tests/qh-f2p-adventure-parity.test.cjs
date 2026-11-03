@@ -119,7 +119,7 @@ function player() {
     setUntargetable: noop, getMovementQueue: () => ({ reset() { return this; }, setBlockMovement: noop, addSteps: noop }),
     performAnimation: noop, performGraphic: noop, sendMessage: text => p.messages.push(text),
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, getIndex: () => nextIndex++,
-    isRegistered: () => true, getUsername: () => 'QhParity', getAppearance: () => ({ isMale: () => true }),
+    isRegistered: () => true, getUsername: () => 'QhParity', getDisplayName: () => 'QhParity', getAppearance: () => ({ isMale: () => true }),
   };
   return p;
 }

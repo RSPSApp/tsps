@@ -104,7 +104,7 @@ function setup({ realWire = false, realTranscript = false } = {}) {
   }, { get(target, prop) { return prop in target ? target[prop] : () => sender; } });
 
   const player = {
-    getUsername: () => 'qh728-q084',
+    getUsername: () => 'qh728-q084', getDisplayName: () => 'qh728-q084',
     getAttribute: (key) => attributes.get(key),
     setAttribute(key, value) { attributes.set(key, value); },
     getInventory: () => inventory,

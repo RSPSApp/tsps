@@ -393,7 +393,7 @@ function showOptions(session, info = "") {
       const other = session.players.find(p => p !== player);
       player.getPacketSender().sendConfiguredInterface("duel-offer");
       player.setStatus(PlayerStatus.DUELING);
-      player.getPacketSender().sendString(other.getUsername(), uid(CACHE_OPTIONS, 6))
+      player.getPacketSender().sendString(other.getDisplayName(), uid(CACHE_OPTIONS, 6))
         .sendString(`Combat level: ${other.getSkillManager().getCombatLevel()}`, uid(CACHE_OPTIONS, 7))
         .sendString(info, uid(CACHE_OPTIONS, 83));
       for (const [i, skill] of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.HITPOINTS, Skill.RANGED, Skill.PRAYER, Skill.MAGIC].entries()) player.getPacketSender().sendString(String(other.getSkillManager().getMaxLevel(skill)), uid(CACHE_OPTIONS, 10 + i * 3));
@@ -416,7 +416,7 @@ function showOptions(session, info = "") {
     // (161:74), so the tabs stay up throughout instead of blinking out here and
     // back on at the start of the fight. Rule enforcement lives in the onCan* hooks.
     player.getPacketSender()
-      .sendString(`Dueling with: ${session.players.find(p => p !== player).getUsername()}`, uid(OPTIONS, UI.TITLE));
+      .sendString(`Dueling with: ${session.players.find(p => p !== player).getDisplayName()}`, uid(OPTIONS, UI.TITLE));
     player.setStatus(PlayerStatus.DUELING);
     if (info) player.sendMessage(info);
     renderStakes(player, session);
@@ -450,8 +450,8 @@ function request({ player, target }) {
     }
     showOptions(session);
   } else {
-    player.sendMessage(`You've sent a duel challenge to ${target.getUsername()}.`);
-    target.sendMessage(`${player.getUsername()} challenges you to a duel. Right-click them and choose Challenge to accept.`);
+    player.sendMessage(`You've sent a duel challenge to ${target.getDisplayName()}.`);
+    target.sendMessage(`${player.getDisplayName()} challenges you to a duel. Right-click them and choose Challenge to accept.`);
     if (!target.isPlayerBot()) return;
     const event = { player: target, challenger: player, accept: false };
     pluginApi.emitCustomEvent("duelarena:request", event);
@@ -477,7 +477,7 @@ function reportBlockedAcceptance(player, message, botMessage) {
   player.forceChat(botMessage);
   for (const opponent of sessions.get(player).players) {
     if (!opponent.isPlayerBot()) {
-      opponent.getPacketSender().sendPublicChat(botMessage, player.getUsername(), player.getIndex());
+      opponent.getPacketSender().sendPublicChat(botMessage, player.getDisplayName(), player.getIndex());
     }
   }
 }
@@ -563,7 +563,7 @@ function confirmText(player, other, status = "") {
   // Cache script 6193 builds and sizes the scrollable summary in component 53.
   player.getPacketSender().sendInterfaceScript(6193, [
     sessions.get(player).mask, presets.get(player) ?? -1, lastRules.get(player) ?? -1,
-    `${other.getUsername()}<br>Your stake: ${stakeText(player)}<br>Opponent stake: ${stakeText(other)}${status ? `<br>${status}` : ""}<br>Hitpoints and boosted stats will be restored.`,
+    `${other.getDisplayName()}<br>Your stake: ${stakeText(player)}<br>Opponent stake: ${stakeText(other)}${status ? `<br>${status}` : ""}<br>Hitpoints and boosted stats will be restored.`,
   ]);
 }
 class DuelCountdown extends Task {
@@ -639,7 +639,7 @@ function accept(player, session, botEvent = "duelarena:accept") {
   if (confirm) confirmText(other, player, "Your opponent has accepted.");
   else {
     renderAccept(player, true);
-    other.sendMessage(`${player.getUsername()} has accepted.`);
+    other.sendMessage(`${player.getDisplayName()} has accepted.`);
   }
   if (session.accepted.size === 2) {
     if (confirm) start(session); else showConfirm(session);

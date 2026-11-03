@@ -73,7 +73,7 @@ module.exports = function attach(api, Events) {
         player,
         npcId: active.definition.id,
         title: "What would you like to say?",
-        lines: [{ text: `You want play game of pinball, ${player.getUsername()}?`, expression: INVITE_EXPRESSION }],
+        lines: [{ text: `You want play game of pinball, ${player.getDisplayName()}?`, expression: INVITE_EXPRESSION }],
         options: [
           ["Yes, pinball is fun.", () => reply(player, "Yes, pinball is fun.", () => teleport({
             kind: "pinball",

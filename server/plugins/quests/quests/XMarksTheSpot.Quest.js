@@ -350,7 +350,7 @@ module.exports = function registerXMarksTheSpotQuest(api) {
     if (request.text.startsWith("You'll probably want a spade")) request.text = "You'll probably want a spade, I find they're pretty much always needed when it comes to hunting treasure. Check the general store if you don't have one.";
     let text = request.text;
     if (text.includes("[player name]")) {
-      text = text.replace(/\[player name\]/gi, String(request.player.getUsername()));
+      text = text.replace(/\[player name\]/gi, String(request.player.getDisplayName()));
     }
     if (text.includes("[scroll/orb]")) {
       text = text.replace(

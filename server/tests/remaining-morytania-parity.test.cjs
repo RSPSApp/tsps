@@ -174,7 +174,7 @@ function player() {
     getLocation: () => location, moveTo: to => { location = to; },
     getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; },
     getIndex: () => p.index, isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p,
-    isRegistered: () => true, isPlayerBot: () => false, getUsername: () => 'Parity',
+    isRegistered: () => true, isPlayerBot: () => false, getUsername: () => 'Parity', getDisplayName: () => 'Parity',
     getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
     performAnimation: noop, sendMessage: text => p.messages.push(text),
   };

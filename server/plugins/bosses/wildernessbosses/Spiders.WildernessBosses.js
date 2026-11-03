@@ -114,7 +114,12 @@ function shoot(npc, method, spider, target, kind) {
   target.performGraphic(new core.Graphic(shot.impact, end, shot.impactHeight));
   const prayer = kind === "ranged" ? PrayerHandler.PROTECT_FROM_MISSILES : PrayerHandler.PROTECT_FROM_MAGIC;
   const damage = prayerBlocks(target, prayer, npc) ? 0 : Common.randomBetween(0, spider[kind]);
-  Common.bossHit(npc, method, target, damage, Math.max(0, Math.floor(end / 30) - 1));
+  // Splat on the first tick at or after the shot lands; floor - 1 hit before it (#1862).
+  Common.bossHit(npc, method, target, damage, shotHitTicks(end));
+}
+
+function shotHitTicks(end) {
+  return core.Projectile.ticksToLand(end);
 }
 
 function bite(npc, method, spider, target) {
@@ -328,4 +333,4 @@ function attach(pluginApi) {
   for (const spider of Object.values(SPIDERS)) Common.FIGHTS.set(spider.key, { spawned, reset, playerTick });
 }
 
-module.exports = { attach, _test: { SPIDERS, WEB_PATTERN } };
+module.exports = { attach, _test: { SPIDERS, WEB_PATTERN, SHOT_SHAPE, shotHitTicks } };

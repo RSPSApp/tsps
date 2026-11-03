@@ -144,7 +144,7 @@ function playerFixture(inventory = inventoryFixture(), location = new core.Locat
     messages,
     varbits,
     xp,
-    getUsername: () => 'qh728-q071',
+    getUsername: () => 'qh728-q071', getDisplayName: () => 'qh728-q071',
     getAttribute: (key) => attributes.get(key),
     setAttribute(key, value) { attributes.set(key, value); },
     getInventory: () => inventory,

@@ -86,6 +86,7 @@ object TspsServerPacket {
     const val REGION_REPLACEMENT = 144
     const val SET_INTERACTION_MODE = 145
     const val RESET_INTERACTION_MODE = 146
+    const val REGION_REPLACEMENT_COMPRESSED = 147
     const val SHOP_OPEN = 150
     const val SHOP_SLOT = 151
     const val SHOP_CLOSE = 152
@@ -185,6 +186,7 @@ object TspsServerPacket {
             REGION_REPLACEMENT to -2,
             SET_INTERACTION_MODE to 4,
             RESET_INTERACTION_MODE to 2,
+            REGION_REPLACEMENT_COMPRESSED to -2,
             SHOP_OPEN to -2,
             SHOP_SLOT to -1,
             SHOP_CLOSE to 0,

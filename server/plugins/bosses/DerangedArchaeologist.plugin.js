@@ -196,8 +196,13 @@ function combatClass(apiCore) {
   function fireRanged(npc, target) {
     npc.performAnimation(RANGED_ANIM);
     npc.forceChat(AMBIENT_LINES[Misc.getRandom(AMBIENT_LINES.length - 1)]);
-    Projectile.createProjectile(npc, target, BOOK_PROJECTILE, 40, 65, 31, 43).sendProjectile();
-    afterTicks(3, target, () => target.performGraphic(RANGED_GFX));
+    // A thrown book: 5 cycles a tile over its 10-tile reach instead of a flat 65, with the
+    // impact and the hit on the tick it lands (#1862).
+    const end = Projectile.arrivalCycles(npc, target, 45, 5);
+    Projectile.createProjectile(npc, target, BOOK_PROJECTILE, 40, end, 31, 43).sendProjectile();
+    const landing = Projectile.ticksToLand(end);
+    afterTicks(landing, target, () => target.performGraphic(RANGED_GFX));
+    return landing;
   }
 
   function fireMelee(npc) {
@@ -208,7 +213,7 @@ function combatClass(apiCore) {
   return class DerangedArchaeologistCombat extends CombatMethod {
     hits(character, target) {
       if (this.attack === Attack.SPECIAL) return [];
-      return [new PendingHit(character, target, this, this.attack === Attack.MELEE ? 0 : 2)];
+      return [new PendingHit(character, target, this, this.attack === Attack.MELEE ? 0 : this.landing ?? 2)];
     }
 
     start(character, target) {
@@ -223,7 +228,7 @@ function combatClass(apiCore) {
         npc.setAttribute(SPECIAL_READY_ATTRIBUTE, World.getProcessCycle() + SPECIAL_COOLDOWN_TICKS);
         fireSpecial(npc, target);
       } else {
-        fireRanged(character, target);
+        this.landing = fireRanged(character, target);
       }
     }
 

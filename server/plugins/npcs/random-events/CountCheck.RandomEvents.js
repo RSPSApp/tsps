@@ -28,7 +28,7 @@ function definition(api) {
     goodbye: "Ahahahaha, ONE more person ignored me...",
     overheadAnimation: WAVE,
     leaveAnimation: BOW,
-    otherPlayerLine: owner => `I came to check ${owner.getUsername()}, not you.`,
+    otherPlayerLine: owner => `I came to check ${owner.getDisplayName()}, not you.`,
     leavingLine: () => "I must be leaving now.",
     talk(active, { serve, leave }) {
       const player = active.player, npcId = active.npc.getId();

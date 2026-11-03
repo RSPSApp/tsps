@@ -1827,6 +1827,9 @@ export class OsrsClient {
                 applyWildernessHudLayout(self.widgetManager, self.varManager, scriptId);
                 self.clientPlugins.onScriptFinished(scriptId);
             },
+            onScriptPre: (scriptId: number) => {
+                self.clientPlugins.onScriptPreFired(scriptId);
+            },
             clientRevision: 235,
             // Canvas dimensions as defined by the renderer's current UI layout space.
             get canvasWidth() {
@@ -8498,9 +8501,10 @@ export class OsrsClient {
             console.warn("[OsrsClient] Renderer clearMaps error:", err);
         }
 
-        // Clear projectiles
+        // Clear projectiles. Through the getter: the WebGPU renderer keeps its manager elsewhere,
+        // and one left holding the old client clock froze every projectile after a relog (#1862).
         try {
-            (this.renderer as any)?.projectileManager?.clear?.();
+            this.renderer?.getProjectileManager()?.clear();
         } catch (err) {
             console.warn("[OsrsClient] ProjectileManager clear error:", err);
         }

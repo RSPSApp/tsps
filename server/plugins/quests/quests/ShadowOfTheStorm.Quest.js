@@ -1327,7 +1327,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     if (!OWN_NPC_IDS.has(event.npcId)) return;
     let text = event.text;
     if (text.includes("[player name]")) {
-      text = text.replace(/\[player name\]/gi, String(event.player.getUsername()));
+      text = text.replace(/\[player name\]/gi, String(event.player.getDisplayName()));
     }
     if (text.includes("[him/her]") || text.includes("[his/her]") || text.includes("[He/She]")) {
       const male = event.player.getAppearance?.().isMale?.() !== false;

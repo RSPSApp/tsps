@@ -85,7 +85,7 @@ function makePlayer({ items = [], attrs = [], freeSlots = 28, levels = new Map()
       contains: id => bank.has(id),
       getAmount: id => (bank.has(id) ? 1 : 0),
     }],
-    getUsername: () => 'QH q076',
+    getUsername: () => 'QH q076', getDisplayName: () => 'QH q076',
     getUpdateFlag: () => ({ flag: noop }),
     sendMessage: message => p.messages.push(message),
     performAnimation: noop,

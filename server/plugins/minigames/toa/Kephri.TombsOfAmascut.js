@@ -984,6 +984,8 @@ module.exports = function registerKephri(api) {
 
 function registerScarabCombat(api) {
   const { CombatMethod, CombatType, Animation, Projectile, NpcIdentifiers } = api.core;
+  /** The agile scarab's spit: from 60 client cycles, 10 a tile; its hit waits for it (#1862). */
+  const spitEnd = (npc, target) => Projectile.arrivalCycles(npc, target, 60);
 
   class AgileScarabCombatMethod extends CombatMethod {
     type() {
@@ -1000,13 +1002,13 @@ function registerScarabCombat(api) {
 
     start(npc, target) {
       npc.performAnimation(new Animation(ANIMATION.AGILE_ATTACK));
-      Projectile.createProjectile(npc, target, PROJECTILE.SPIT, 60, Projectile.arrivalCycles(npc, target, 60), 10, 31).sendProjectile();
+      Projectile.createProjectile(npc, target, PROJECTILE.SPIT, 60, spitEnd(npc, target), 10, 31).sendProjectile();
     }
 
     hits(npc, target) {
       const room = kephriRoomOf(npc);
       if (!room) return [];
-      return [room.styledHit(npc, target, this, "ranged", AGILE_MAX_HIT, 1, { scale: false })];
+      return [room.styledHit(npc, target, this, "ranged", AGILE_MAX_HIT, Projectile.ticksToLand(spitEnd(npc, target)), { scale: false })];
     }
   }
 

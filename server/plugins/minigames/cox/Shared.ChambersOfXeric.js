@@ -583,7 +583,7 @@ function formatTicks(ticks, player = null) {
 }
 
 function displayName(player) {
-  return player.getUsername();
+  return player.getDisplayName();
 }
 
 module.exports = {

@@ -107,6 +107,8 @@ export abstract class Mobile extends Entity {
      * Fields
      */
     interactingMobile: any;
+    /** Bumped by every setMobileInteraction, so a delayed clear can tell it was overtaken. */
+    private interactionGeneration = 0;
     npcTransformationId = -1;
     poisonDamage: number = 0;
     /**
@@ -328,12 +330,27 @@ export abstract class Mobile extends Entity {
             this.facingDirection = previousDirection;
         }
         this.interactingMobile = mobile;
+        this.interactionGeneration++;
         const nextDirection = this.targetFacingDirection(mobile);
         if (nextDirection !== Direction.NONE) {
             this.facingDirection = nextDirection;
         }
         this.getUpdateFlag().flag(Flag.ENTITY_INTERACTION);
         return this;
+    }
+
+    /**
+     * Turns to `target` and lets go the next tick, as live answers a click it refuses: a frozen
+     * player told "I can't reach that!" faces the NPC or player on the click tick and clears it
+     * on the next (rsprox 2238 OpPlayer, 3391 OpNpc). Anything that sets an interaction in
+     * between keeps its own.
+     */
+    faceMobileBriefly(target: Mobile): void {
+        this.setMobileInteraction(target);
+        const generation = this.interactionGeneration;
+        TaskManager.submit(new MobileTask(1, () => {
+            if (this.interactionGeneration === generation) this.setMobileInteraction(null);
+        }));
     }
 
     performAnimation(animation: Animation) {

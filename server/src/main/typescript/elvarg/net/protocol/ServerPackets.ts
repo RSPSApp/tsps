@@ -119,6 +119,7 @@ export const enum ServerPacketId {
     REGION_REPLACEMENT = 144,
     SET_INTERACTION_MODE = 145, // OSRS set_interaction_mode: what tile/entity clicks do in a world
     RESET_INTERACTION_MODE = 146, // OSRS reset_interaction_mode: drops a world's own mode
+    REGION_REPLACEMENT_COMPRESSED = 147, // deflated REGION_REPLACEMENT payload; dense regions do not fit raw
 
     // ========================================
     // SHOP/TRADE (150-169)
@@ -267,6 +268,7 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.REBUILD_WORLDENTITY]: -2,
     [ServerPacketId.WORLDENTITY_INFO]: -1, // count(1) + per-entity updates + new spawns
     [ServerPacketId.REGION_REPLACEMENT]: -2,
+    [ServerPacketId.REGION_REPLACEMENT_COMPRESSED]: -2, // regionId(2) + flags(1) + lengths(8) + deflated data
     [ServerPacketId.SET_INTERACTION_MODE]: 4, // worldId(2) + tileMode(1) + entityMode(1)
     [ServerPacketId.RESET_INTERACTION_MODE]: 2, // worldId(2)
 

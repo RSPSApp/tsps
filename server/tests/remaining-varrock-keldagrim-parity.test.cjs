@@ -174,7 +174,7 @@ function player() {
     getLocation: () => location, moveTo: to => { location = to; },
     getArea: () => null, getPrivateArea: () => null, setArea: noop, getIndex: () => p.index, getSpellbook: () => p.spellbook ?? core.MagicSpellbook.NORMAL,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true, getHitpoints: () => 99, performAnimation: animation => (p.animations ??= []).push(animation.getId()),
-    getUsername: () => p.username ?? 'Parity', getAppearance: () => ({ isMale: () => true }),
+    getUsername: () => p.username ?? 'Parity', getDisplayName: () => p.username ?? 'Parity', getAppearance: () => ({ isMale: () => true }),
     setPositionToFace: noop, forceChat: noop, sendMessage: text => p.messages.push(text),
   };
   p.manager = new DialogueManager(p);
@@ -763,7 +763,7 @@ test('real ItemOnGroundManager respawns a captured bottle after four ticks', () 
   };
   const packet = new Proxy({}, { get: () => () => packet });
   const realPlayer = {
-    username, getUsername: () => username, isPlayerBot: () => false,
+    username, getUsername: () => username, getDisplayName: () => username, isPlayerBot: () => false,
     getLocation: () => position, getPrivateArea: () => null,
     getInventory: () => inventory, getMovementQueue: () => ({ reset() {} }), getSize: () => 1,
     getLastItemPickup: () => ({ reset() {} }), getSession: () => ({ getChannel: () => ({ readyState: 1 }) }),
@@ -1106,6 +1106,7 @@ test('real Mining task yields normal Barronite deposit XP/message and canonical 
   const rockObject = {
     getId: () => 41547, getLocation: () => new core.Location(2941, 5810, 0),
     getType: () => 10, getFace: () => 0, getPrivateArea: () => null,
+    isWithinInteractionDistance: () => true,
   };
   const {
     MapObjects,
@@ -1121,11 +1122,13 @@ test('real Mining task yields normal Barronite deposit XP/message and canonical 
       player: p, object: rockObject,
       definition: { getName: () => 'Barronite rocks' }, handled: false,
     });
-    h.tick(20);
-    assert.equal(h.tasks.length, 2, 'mining task + rock respawn task submitted');
+    for (let i = 0; i < 20 && !p.items.get(I.BARRONITE_DEPOSIT); i++) h.tick(1);
+    // Barronite keeps standing through its ores and runs out on its own 33-tick timer.
+    assert.equal(h.tasks.length, 1, 'mining task submitted, no respawn task yet');
     assert.equal(p.items.get(I.BARRONITE_DEPOSIT), 1);
     assert.equal(p.items.get(I.BARRONITE_SHARDS), undefined);
-    assert.ok(p.messages.includes('You manage to mine a barronite deposit.'));
+    assert.ok(p.log.some(([key, , text]) => key === 'sendTypedMessage' && text === 'You manage to mine a barronite deposit.'),
+      'the ore line is spam');
     assert.deepEqual(p.xp.at(-1), [core.Skill.MINING.getIndex(), 32]);
   } finally {
     MapObjects.get = originalGet;

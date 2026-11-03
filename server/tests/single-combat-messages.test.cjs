@@ -20,7 +20,7 @@ function mobile(kind, name) {
     getAsPlayer: () => self,
     getAsNpc: () => self,
     isMultiCombat: () => false,
-    getUsername: () => name,
+    getUsername: () => name, getDisplayName: () => name,
     getDueling: () => null,
     getArea: () => null,
     getPrivateArea: () => null,

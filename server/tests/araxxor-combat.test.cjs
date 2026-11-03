@@ -102,6 +102,22 @@ test("captured projectile flights land on the captured ticks", () => {
   for (const shape of [ranged, magic, drip]) assert.equal(Shared.landingTicks(Shared.projectileEnd(shape, 9)), 4);
 });
 
+test("her ranged and magic hits splat with the 120-cycle shot, not a tick before (#1862)", () => {
+  const { Projectile } = require("../dist/game/model/Projectile");
+  const Combat = require("../plugins/bosses/araxxor/Combat.Araxxor");
+  Combat.attach({
+    core: { Projectile, CombatMethod: class {}, CombatType: {}, NpcIdentifiers: { ARAXXOR: 13668 } },
+    getPrayerHandler: () => ({}),
+    onNpcHitModify: () => {},
+    registerNpcCombatMethodProvider: () => {},
+  });
+  for (const shape of [Shared.PROJECTILE.ranged, Shared.PROJECTILE.magic]) {
+    const ticks = Combat._test.shotTicks(shape);
+    assert.equal(ticks, Shared.DISTANT_HIT_TICKS);
+    assert.ok(ticks * 30 >= shape.end && (ticks - 1) * 30 < shape.end);
+  }
+});
+
 test("captured attack schedule: special on every seventh attack", () => {
   const specials = [];
   for (let attack = 1; attack <= 21; attack++) {

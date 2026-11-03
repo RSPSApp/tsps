@@ -48,6 +48,18 @@ the welcome screen. It defaults to `Welcome to Old School RuneScape!`. The text 
 }
 ```
 
+## Display names
+
+`pluginConfig` `"DisplayName:cooldownDays"` is how many days a player waits between
+[display name](display-names.md) changes (default `28`; `0` lets them change at any time).
+`"DisplayName:holdDays"` is how long a name given up stays held for its old owner (default `35`).
+
+```json
+{
+  "pluginConfig": { "DisplayName:cooldownDays": 7, "DisplayName:holdDays": 14 }
+}
+```
+
 ## Spawn point
 
 `spawn` sets the world tile where players start when they connect. The same location is used

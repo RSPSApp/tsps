@@ -100,7 +100,7 @@ function fakePlayer(name) {
     name, location: new Location(3667, 3219, 0), area: null, hp: 99, blocked: false, untargetable: false, render: null,
     messages: [], scripts: [], interfaces: [], subs: new Map(), statements: [], texts: {}, sounds: [], songs: [],
     inventory: fakeContainer(28), equipment: fakeContainer(14),
-    getUsername: () => name,
+    getUsername: () => name, getDisplayName: () => name,
     getIndex: () => index,
     isPlayer: () => true,
     isNpc: () => false,

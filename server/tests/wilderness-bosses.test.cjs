@@ -151,3 +151,22 @@ test('dying to a player since the last visit loses the fee to them', (t) => {
   Caves._test.playerDied({ player: away, killer });
   assert.equal(away.attributes[Common.FEE_PAID_ATTRIBUTE], true);
 });
+
+test('the bears\' crescent and the spiders\' shots splat when they land, not before (#1862)', () => {
+  const Bears = require('../plugins/bosses/wildernessbosses/Bears.WildernessBosses');
+  Bears.attach(api);
+  Spiders.attach(api);
+  const lands = (ticks, end) => ticks * 30 >= end && (ticks - 1) * 30 < end;
+  // Crescent: 30 + 6 per tile from the bear's middle, plus one.
+  for (const tiles of [1, 3, 8]) {
+    const end = Bears._test.RANGED.start + 6 * (tiles + 1);
+    assert.ok(lands(Bears._test.rangedHitTicks(end), end), `crescent at ${tiles} tiles`);
+  }
+  assert.equal(Bears._test.rangedHitTicks(42), 2);
+  // Spits and webs: 25 + 2 per tile; never a 0-tick hit.
+  for (const tiles of [3, 10]) {
+    const end = Spiders._test.SHOT_SHAPE.start + Spiders._test.SHOT_SHAPE.perTile * tiles;
+    assert.ok(lands(Spiders._test.shotHitTicks(end), end), `spider shot at ${tiles} tiles`);
+  }
+  assert.equal(Spiders._test.shotHitTicks(31), 2);
+});

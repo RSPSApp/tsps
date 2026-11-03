@@ -77,7 +77,7 @@ function makePlayer() {
       getExperience: skill => xp.get(skill) ?? 0,
       addExperience: (skill, amount) => { xp.set(skill, (xp.get(skill) ?? 0) + amount); return amount; },
     }),
-    getUsername: () => 'q083-test',
+    getUsername: () => 'q083-test', getDisplayName: () => 'q083-test',
     getPrivateArea: () => area,
     getArea: () => area,
     setArea: next => { area = next; },

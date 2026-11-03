@@ -169,3 +169,46 @@ test("Skotizo damage achievements still track positive hits only for their activ
   CombatAchievements.judge(fight);
   assert.equal(emitted.slice(before).some(({ payload }) => payload.task === "Demon Evasion"), false);
 });
+
+test("the hellfire burst's hit lands on the tick the projectile does (#1862)", () => {
+  const { Projectile } = require("../dist/game/model/Projectile");
+  const previous = Common.core;
+  const sent = [];
+  class FakeProjectile {
+    constructor(...args) { sent.push(args); }
+    withAngle() { return this; }
+    withProgress() { return this; }
+    sendProjectile() {}
+  }
+  FakeProjectile.ticksToLand = Projectile.ticksToLand;
+  Common.init({
+    core: {
+      ...previous,
+      Location,
+      Animation: class {},
+      Graphic: class {},
+      PendingHit: class { constructor(attacker, target, method, delay) { this.delay = delay; } },
+      Projectile: FakeProjectile,
+    },
+    emitCustomEvent: (name, payload) => emitted.push({ name, payload }),
+  });
+  try {
+    const fight = new Fight({ player: player(), area: null });
+    fight.boss = { getLocation: () => new Location(1690, 9880, 0), getSize: () => 5, performAnimation: () => {} };
+    for (const tiles of [1, 4, 9]) {
+      sent.length = 0;
+      const target = {
+        getLocation: () => new Location(1692 + tiles, 9882, 0),
+        performGraphicInSlot: () => {},
+        getPacketSender: () => ({ sendAreaSound: () => {} }),
+      };
+      const [hit] = fight.magic(target);
+      const end = sent[0][5];
+      assert.equal(end, Math.max(70, 30 + 10 * tiles), `${tiles} tiles: captured end`);
+      assert.equal(hit.delay, Projectile.ticksToLand(end), `${tiles} tiles`);
+      assert.ok(hit.delay * 30 >= end, `${tiles} tiles: no splat before the burst lands`);
+    }
+  } finally {
+    Common.init({ core: previous, emitCustomEvent: (name, payload) => emitted.push({ name, payload }) });
+  }
+});

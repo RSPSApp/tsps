@@ -208,7 +208,7 @@ test("no plain staff, mystic staff, wand or powered staff has a special attack",
     (item) =>
       !item.noted && item.equipmentType === "WEAPON" &&
       /battlestaff$|^Mystic \w+ staff$|^Staff of (air|water|earth|fire)$|\bwand$|^Trident of the|^(Holy )?Sanguinesti staff|^Tumeken's shadow/i.test(item.name ?? "") &&
-      !/Noose|Elder/.test(item.name),
+      !/Noose|Elder|^(Wand|Infused wand)$/.test(item.name),
   );
   assert.ok(plain.length > 40);
   for (const item of plain) {
@@ -217,8 +217,9 @@ test("no plain staff, mystic staff, wand or powered staff has a special attack",
 });
 
 test("every wand uses the staff styles: Bash trains Attack, Pound Strength, Focus Defence", () => {
+  // What Lies Below's Wand and Infused wand are quest items with no weapon category in the cache.
   const wands = rows.filter(
-    (item) => !item.noted && item.equipmentType === "WEAPON" && /\bwand\b/i.test(item.name ?? "") && !/Noose|Elder/.test(item.name),
+    (item) => !item.noted && item.equipmentType === "WEAPON" && /\bwand\b/i.test(item.name ?? "") && !/Noose|Elder|^(Wand|Infused wand)$/.test(item.name),
   );
   assert.ok(wands.length >= 8);
   for (const wand of wands) assert.equal(wand.weaponInterface, "STAFF", `${wand.name} (${wand.id})`);

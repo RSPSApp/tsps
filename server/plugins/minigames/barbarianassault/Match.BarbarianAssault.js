@@ -825,7 +825,7 @@ class BarbarianAssaultMatch {
     player.getInventory().delete(itemId, 1);
     const next = dose + 1 < data.HEALING_VIALS.length ? data.HEALING_VIALS[dose + 1] : data.ITEM.HEALING_VIAL_EMPTY;
     Items.give(player, next, 1);
-    player.sendMessage(`You heal ${target.getUsername?.() ?? "your teammate"}.`);
+    player.sendMessage(`You heal ${target.getDisplayName?.() ?? "your teammate"}.`);
     return true;
   }
 
@@ -852,8 +852,8 @@ class BarbarianAssaultMatch {
       target.sendMessage("You have no room for that egg.");
       return true;
     }
-    player.sendMessage(`You hand the ${data.EGG_LABEL[itemId]} egg to ${target.getUsername?.() ?? "your teammate"}.`);
-    target.sendMessage(`${player.getUsername?.() ?? "Your teammate"} hands you the ${data.EGG_LABEL[itemId]} egg.`);
+    player.sendMessage(`You hand the ${data.EGG_LABEL[itemId]} egg to ${target.getDisplayName?.() ?? "your teammate"}.`);
+    target.sendMessage(`${player.getDisplayName?.() ?? "Your teammate"} hands you the ${data.EGG_LABEL[itemId]} egg.`);
     return true;
   }
 
@@ -1178,7 +1178,7 @@ class BarbarianAssaultMatch {
       const others = [...this.players.values()].filter((entry) => entry.player !== player).slice(0, 4);
       for (let i = 0; i < 4; i++) {
         const entry = others[i];
-        const label = entry ? entry.player.getUsername?.() ?? "Player" : "-";
+        const label = entry ? entry.player.getDisplayName?.() ?? "Player" : "-";
         const hp = entry ? `${Math.max(0, entry.player.getHitpoints())}/${entry.player.getSkillManager?.().getMaxLevel?.(this.core.Skill.HITPOINTS) ?? 0}` : "-";
         send(`heal-name-${i}`, label, () => player.getPacketSender().sendString(label, (data.ROLE_INTERFACE[role] << 16) | (17 + i * 4)));
         send(`heal-hp-${i}`, hp, () => player.getPacketSender().sendString(`HP ${hp}`, (data.ROLE_INTERFACE[role] << 16) | (18 + i * 4)));

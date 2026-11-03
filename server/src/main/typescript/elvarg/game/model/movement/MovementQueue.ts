@@ -618,6 +618,19 @@ export class MovementQueue {
         if (this.isDynamicallyOccupied(next)) {
             return false;
         }
+        // The "full" flag is collision like a wall's: a diagonal step needs both tiles it
+        // cuts past free as well, so a player can't slip between two Castle Wars barricades
+        // (issue 1929). The NPC flag stays destination-only for NPCs.
+        const dx = next.getX() - source.getX();
+        const dy = next.getY() - source.getY();
+        if (this.character.isPlayer() && dx !== 0 && dy !== 0) {
+            const size = this.character.getSize();
+            const privateArea = this.character.getPrivateArea();
+            if (World.isPlayerBlockingNpcOnTile(source.transform(dx, 0), size, privateArea)
+                || World.isPlayerBlockingNpcOnTile(source.transform(0, dy), size, privateArea)) {
+                return false;
+            }
+        }
         return true;
     }
 
@@ -1217,6 +1230,22 @@ export class MovementQueue {
         };
     }
 
+    /**
+     * Faces the middle of the loc's rotated footprint, as live does (a fine coord of
+     * x * 128 + width * 64): half-tile coords give the same angle from the player's tile.
+     * Forced, since live re-sends the angle on each click even when it has not changed.
+     */
+    private faceObjectCentre(routeSpec: ReturnType<MovementQueue["buildObjectRouteSpec"]>): void {
+        const rotated = (routeSpec.reachAngle & 1) === 1;
+        const width = Math.max(1, rotated ? routeSpec.reachLength : routeSpec.reachWidth);
+        const length = Math.max(1, rotated ? routeSpec.reachWidth : routeSpec.reachLength);
+        this.player.forcePositionToFace(new Location(
+            routeSpec.objectX + (width - 1) / 2,
+            routeSpec.objectY + (length - 1) / 2,
+            this.player.getLocation().getZ()
+        ));
+    }
+
     /** The reach check respects shape, rotation and access flags, from the player's own tile. */
     private reachesObject(object: GameObject, routeSpec: ReturnType<MovementQueue["buildObjectRouteSpec"]>): boolean {
         return PathFinder.reachedObject(
@@ -1328,6 +1357,7 @@ export class MovementQueue {
             return;
         }
         if (frozen) {
+            this.player.faceMobileBriefly(entity);
             this.player.sendMessage("I can't reach that!");
             return;
         }
@@ -1537,6 +1567,11 @@ export class MovementQueue {
         const blocking = frozen ? this.getMobilityIgnoringFreeze() : mobility;
         if (!blocking.canMove() || (frozen && !this.reachesObject(object, routeSpec))) {
             if (blocking.canMove()) {
+                // The click replaces what the player was doing (a fight), as any loc click does,
+                // and live still turns them to the loc's centre on every one (rsprox 2238: a
+                // frozen player's clicks on a 4x2 portal each send FaceAngle 1989).
+                this.walkToReset();
+                this.faceObjectCentre(routeSpec);
                 this.player.sendMessage("I can't reach that!");
             } else {
                 blocking.sendMessage(this.player);

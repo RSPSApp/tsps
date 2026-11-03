@@ -268,7 +268,7 @@ function createMaledictus(api, core, { inCaves, surge }) {
   function announce(watchers, player, itemId, amount) {
     const name = core.ItemDefinition.forId(itemId).getName();
     const what = amount > 1 ? `${amount} x ${name}` : name;
-    const line = `<col=005f00>${player.getUsername()} received a drop: ${what}</col> <col=106f10>(${NAME})</col>`;
+    const line = `<col=005f00>${player.getDisplayName()} received a drop: ${what}</col> <col=106f10>(${NAME})</col>`;
     for (const watcher of watchers) watcher.sendMessage(line);
   }
 

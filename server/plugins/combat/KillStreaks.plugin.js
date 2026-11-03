@@ -204,7 +204,7 @@ function syncKillstreakGlow(player) {
 }
 
 function formatThresholdAnnouncement(player, tier, streak) {
-  const username = player?.getUsername?.() ?? "A player";
+  const username = player?.getDisplayName?.() ?? "A player";
   return `@red@[Killstreak] @whi@${username} has reached ${tier.messageColorTag}${tier.label}@whi@ status with ${streak} kills in a row!`;
 }
 

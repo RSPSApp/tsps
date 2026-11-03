@@ -14,7 +14,7 @@ function ironmanCommand({ player, parts }) {
     return true;
   }
   if (!mode) {
-    player.sendMessage(`${target.getUsername()}: ${Common.data.modes[Common.modeOf(target)].label}.`);
+    player.sendMessage(`${target.getDisplayName()}: ${Common.data.modes[Common.modeOf(target)].label}.`);
     return true;
   }
   if (!Common.data.modes[mode]) {
@@ -22,7 +22,7 @@ function ironmanCommand({ player, parts }) {
     return true;
   }
   Common.setMode(target, mode);
-  player.sendMessage(`${target.getUsername()} is now: ${Common.data.modes[mode].label}.`);
+  player.sendMessage(`${target.getDisplayName()} is now: ${Common.data.modes[mode].label}.`);
   if (target !== player) target.sendMessage(`Your account type is now: ${Common.data.modes[mode].label}.`);
   return true;
 }

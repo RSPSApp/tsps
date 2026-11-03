@@ -78,7 +78,7 @@ function fakePlayer(name, location = new Location(1234, 3566, 0)) {
   const p = {
     name, location, messages: [], scripts: [], interfaces: [], prompts: [], subs: [], statements: [],
     inventory: [],
-    getUsername: () => name,
+    getUsername: () => name, getDisplayName: () => name,
     getHitpoints: () => 99,
     getIndex: () => name.length,
     isPlayer: () => true,

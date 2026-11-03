@@ -238,7 +238,7 @@ function pugelBlow(event) {
   const victim = target.getAsPlayer();
   offBeam(victim, house, BEAM_FALL_OFF);
   victim.sendMessage("You have been knocked off the balance beam!");
-  attacker.getAsPlayer().sendMessage(`You knock ${victim.getUsername()} off the balance beam!`);
+  attacker.getAsPlayer().sendMessage(`You knock ${victim.getDisplayName()} off the balance beam!`);
 }
 
 /** onCombatAttackDistance: players at the two ends of the beam can reach each other. */

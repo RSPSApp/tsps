@@ -4,6 +4,7 @@ import { GameConstants } from "../game/GameConstants";
 import { World } from "../game/World";
 import { Player } from "../game/entity/impl/player/Player";
 import { PlayerSave } from "../game/entity/impl/player/persistence/PlayerSave";
+import { DisplayNames } from "../game/entity/impl/player/DisplayNames";
 import { Appearance } from "../game/model/Appearance";
 import { Flag } from "../game/model/Flag";
 import { Location } from "../game/model/Location";
@@ -321,6 +322,11 @@ export class NetworkBuilder {
 
 export class ClientConnection {
   private static readonly pendingNames = new Set<string>();
+
+  /** Whether a login with this name is between its checks and entering the world. */
+  public static isLoginPending(name: string): boolean {
+    return ClientConnection.pendingNames.has(Misc.formatNameForProtocol(DisplayNames.key(name)));
+  }
   /**
    * A logged-in connection that sends nothing for this long is dead: the client pings every 5 s
    * while the server talks. A phone that sleeps or changes network never closes its socket (a
@@ -780,6 +786,8 @@ export class ClientConnection {
               this.player, actionPacket.groupId, actionPacket.childId, actionPacket.slot
             )) {
               // Cache-native combat autocast controls reuse the existing spell state.
+            } else if (LunarSpells.handleWidgetAction(this.player, actionPacket.groupId, actionPacket.childId)) {
+              // Monster Examine's stats (522) close back to the spellbook.
             } else if (this.emitSpellCast(actionPacket)) {
               // Plugins own the self-cast spells they register for, by cache spell name.
             } else if (SpellTeleports.handleSelf(
@@ -790,6 +798,7 @@ export class ClientConnection {
             } else if (LunarSpells.handleSelf(
               this.player,
               this.resolveSpellName(actionPacket.widgetId, actionPacket.groupId, actionPacket.childId, actionPacket.itemId),
+              actionPacket.buttonNum || actionPacket.opId || 1,
             )) {
               // Lunar self-casts and teleports are identified by their cache spell name.
             } else if (CombatSpells.handleSelf(
@@ -1139,6 +1148,24 @@ export class ClientConnection {
       return;
     }
 
+    // A new account can't take a name another account shows or still holds (DisplayNames).
+    if (!credentials) {
+      let owner: string | undefined;
+      try {
+        owner = DisplayNames.ownerOf(typedName);
+      } catch (error) {
+        console.error(`[login] failed to read display names for ${typedName}`, error);
+        this.releasePendingName();
+        this.failLogin(8, "The login server is busy.");
+        return;
+      }
+      if (owner !== undefined && owner !== DisplayNames.key(typedName)) {
+        this.releasePendingName();
+        this.failLogin(3, "That name is not available. Please choose another.");
+        return;
+      }
+    }
+
     // A remembered login only signs in to a character that exists (its tokens live in its own save).
     if (tokenLogin && !save) {
       this.releasePendingName();
@@ -1228,6 +1255,11 @@ export class ClientConnection {
     const player = new Player(session, GameConstants.DEFAULT_LOCATION.clone());
     session.setPlayer(player);
     player.setUsername(pending.username);
+    try {
+      player.setDisplayName(DisplayNames.nameOf(pending.username));
+    } catch (error) {
+      console.error(`[login] failed to read the display name of ${pending.username}`, error);
+    }
     player.setProfile(pending.profile);
     player.setLongUsername(Misc.stringToLongBigInt(pending.username));
     player.setHostAddress(this.channel.remoteAddress);

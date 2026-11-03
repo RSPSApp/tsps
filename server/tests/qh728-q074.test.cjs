@@ -102,7 +102,7 @@ function makePlayer() {
     isPlayer: () => true,
     getAsPlayer: () => player,
     isRegistered: () => true,
-    getUsername: () => 'qh728-q074',
+    getUsername: () => 'qh728-q074', getDisplayName: () => 'qh728-q074',
   };
   return player;
 }
@@ -349,7 +349,7 @@ function runnerPlayer() {
     moveTo: noop,
     sendMessage(text) { messages.push(text); sequence.push(['message', text]); },
     forceChat(text) { overheads.push(['player', text]); sequence.push(['overhead', 'player', text]); },
-    getUsername: () => 'qh728-q074',
+    getUsername: () => 'qh728-q074', getDisplayName: () => 'qh728-q074',
     getIndex: () => 1,
     isPlayer: () => true,
     getAsPlayer: () => p,

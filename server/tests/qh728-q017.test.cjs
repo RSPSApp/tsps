@@ -69,7 +69,7 @@ function playerFixture(inventory = inventoryFixture()) {
     inventory,
     messages,
     configs,
-    getUsername: () => 'qh728-q017',
+    getUsername: () => 'qh728-q017', getDisplayName: () => 'qh728-q017',
     getAttribute: (key) => attributes.get(key),
     setAttribute(key, value) { attributes.set(key, value); },
     getInventory: () => activeInventory,
@@ -263,7 +263,7 @@ test('the natural lost-IOU transcript hands out a replacement IOU once for sober
     const player = playerFixture();
     const lines = playLostIou(player, { drunk });
 
-    assert.ok(lines.some((line) => line.text === (drunk ? 'hic*' : 'Hi.')), 'matching preamble');
+    assert.ok(lines.some((line) => line.text === (drunk ? '*hic*' : 'Hi.')), 'matching preamble');
     assert.ok(lines.some((line) => line.text === "I've lost the IOU you gave me."), 'lost-IOU line');
     assert.equal(player.inventory.getAmount(I().IOU), 1, 'one replacement IOU');
     assert.deepEqual(
@@ -282,7 +282,7 @@ test('the natural lost-IOU transcript hands out the combination once after the I
     const player = playerFixture();
     const lines = playLostIou(player, { drunk, read: true });
 
-    assert.ok(lines.some((line) => line.text === (drunk ? 'hic*' : 'Hi.')), 'matching preamble');
+    assert.ok(lines.some((line) => line.text === (drunk ? '*hic*' : 'Hi.')), 'matching preamble');
     assert.equal(player.inventory.getAmount(I().COMBINATION), 1, 'one combination');
     assert.equal(player.inventory.getAmount(I().IOU), 0, 'no replacement IOU');
     assert.deepEqual(

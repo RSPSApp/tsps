@@ -10,9 +10,9 @@
  *   api.emitCustomEvent("collection-log:count", { player, category: "Zulrah", amount? })
  *   answer "collection-log:category-count" { player, category, struct, count } with a kept count
  *   ask "collection-log:slots" { player, category? } -> count: the category's slots filled (all, with none)
- *   hear "collection-log:new-item" { player, itemId }: a slot filled
+ *   hear "collection-log:slot-filled" { player, itemId }: any slot filled, silent and ensured ones too
+ *   hear "collection-log:new-item" { player, itemId }: an item newly earned and announced, from any source
  *   api.emitCustomEvent("collection-log:open", { player, category? })  open it, at a category by name
- * and it emits "collection-log:new-item" { player, itemId } for an item newly earned, from any source.
  *
  *   ::clog <item name|id> [amount]   obtain through the real path
  *   ::clog count <category> <n>      set a category's count

@@ -136,6 +136,9 @@ class HeadlessClient(private val host: String, private val port: Int) {
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
 
+        /** CLOSE_MODAL: the client closed its modals itself, as on Escape. */
+        fun closeModal() = sendFixed(CLOSE_MODAL, ByteArray(0))
+
         /** MESSAGE_PUBLIC: plain public chat. */
         fun say(text: String, colour: Int = 0, effect: Int = 0) =
             sendVarByte(
@@ -446,6 +449,7 @@ class HeadlessClient(private val host: String, private val port: Int) {
         const val MESSAGE_PRIVATE = 50
         const val MESSAGE_PUBLIC = 49
         const val IF_BUTTONX = 38
+        const val CLOSE_MODAL = 41
         const val CLIENT_CHEAT = 84
         const val LOGIN_OK_PAYLOAD = 34
         const val OTP_NONE = 2

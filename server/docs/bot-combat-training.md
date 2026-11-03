@@ -289,8 +289,9 @@ handler (`api.emitItemOnObject`). Food the bot's Cooking level cannot cook is le
 
 Configured in the same file, under `"pvp"`: `botPool` (how many `WildyBot` names exist),
 `activeRegionBotsPerRegion` / `activeRegionInset` (regional spread around players). Sites with a
-`pvp` block define hotspots: `bots` sets their population, `pvp.combat` their level band, and
-`pvp.style` selects matching tags from `pvp-bot-loadouts.json`.
+`pvp` block define hotspots: `bots` sets their population and `pvp.combat` their level band.
+`pvp.loadouts` lists the loadout groups from `pvp-bot-loadouts.json` the site's bots wear. Without
+it, `pvp.style` picks every group tagged with that style (f2p groups only for the `f2p` style).
 
 Regional bots fill attackable regions around players. Town PvP regions use the full regional
 target (48 by default); levelled Wilderness regions use one third, rounded up (16 by default).
@@ -336,6 +337,26 @@ key according to the killer's settings. Human preset items keep their usual rest
 A wilderness bot's brain runs `pvp` with no rotation, so it only ever returns to `pvp`. The pvp
 loop reports progress while the bot fights or moves; before that, the brain's 3-minute stall check
 ended it and the bot was handed a random activity (WildyBots skilling in Lumbridge).
+
+### Optional PvP bot behavior update
+
+This is an optional server customization, not a bug fix or implementation of missing content.
+Adopting it replaces the existing PvP chatter and applies a Smite-only overhead prayer policy
+at the three existing Edgeville sites: `edge_low`, `edge_mid` and `edge_mains`.
+
+Random chatter occurs every 9–24 seconds during active player-versus-bot or bot-versus-bot
+fights. Greetings, protection-prayer complaints, high-HP eating reactions, kills and deaths
+have independent 50% reaction chances. Eating reactions use HP before healing and include
+exactly 75% of maximum HP. Prayer complaints only respond to Protect from Melee, Missiles
+or Magic; switching away from protection cancels a queued opening complaint. Death lines
+appear during the death animation.
+
+A scheduled task checks tracked fights each game tick and removes idle, dead and departed
+participants. The Edgeville sites set `pvp.smiteOnly: true`: bots at every difficulty use
+Smite when their Prayer level and points allow it, and do not select protection overheads
+during combat or post-kill replenishing. Novices still omit offensive combat prayers.
+Other sites retain their existing prayer choices. This setting is a server policy choice,
+not an OSRS parity requirement.
 
 ## Test tiers
 

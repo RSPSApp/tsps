@@ -425,7 +425,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
   }
 
   class QuestSourhogCombat extends CombatMethod {
-    constructor() { super(); this.spit = true; this.flight = 58; }
+    constructor() { super(); this.spit = true; this.flight = 58; this.landing = 58; }
     type() { return this.spit ? CombatType.RANGED : CombatType.MELEE; }
     attackSpeed() { return 5; }
     attackDistance() { return 7; }
@@ -441,12 +441,15 @@ module.exports = function registerPorcineOfInterestQuest(api) {
       }
       // shortcut: the capture has 58-cycle adjacent and 86-cycle four-tile flights; intermediate distances use the same linear travel rate until captured.
       this.flight = Math.max(58, 46 + distance * 10);
+      // Where it lands: PacketSender stretches a flight ending by launch + 1 (the adjacent 58) to 5 + 5 cycles a tile.
+      this.landing = this.flight > 58 ? this.flight : 62 + 5 * Projectile.centreOf(npc).getDistance(Projectile.centreOf(target));
       Projectile.createProjectile(npc, target, SOURHOG_ATTACK.projectile, 57, this.flight, 43, 45)
         .withAngle(16).withProgress(128).sendProjectile();
       target.getPacketSender().sendAreaSound(SOURHOG_ATTACK.spitSound, at.getX(), at.getY(), at.getZ(), 1, 57, 15);
     }
     hits(npc, target) {
-      const hit = new PendingHit(npc, target, this, this.spit ? Math.max(1, Math.floor(this.flight / 30)) : 0);
+      // The spit hits as it lands; rounding the flight down hit before it arrived.
+      const hit = new PendingHit(npc, target, this, this.spit ? Projectile.ticksToLand(this.landing) : 0);
       if (this.spit && hit.isAccurate()) {
         target.performGraphic(new Graphic(SOURHOG_ATTACK.impact, this.flight, 20));
         const at = target.getLocation();

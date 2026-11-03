@@ -484,6 +484,16 @@ export class PacketSender {
     return this;
   }
 
+  /**
+   * Mounts `interfaceId` in the magic tab's slot (161:82) in place of the spellbook, as live does
+   * for Monster Examine's stats (522); `sendTabInterface(6, ...)` puts the spellbook back.
+   */
+  public sendMagicTabInterface(interfaceId: number): this {
+    this.rememberSubInterface((161 << 16) | 82, interfaceId, 1);
+    this.player.getSession().sendClientPacket(encodeWidgetOpenSub((161 << 16) | 82, interfaceId));
+    return this;
+  }
+
   public sendSidebarInterface(interfaceId: number): PacketSender {
     this.player.getSession().sendClientPacket(encodeWidgetOpen(interfaceId, false));
     return this;
@@ -743,7 +753,7 @@ export class PacketSender {
   sendPrivateMessage(target: any, message: Uint8Array, size: number): this {
     const text = Misc.ucFirst(Misc.textUnpack(Array.from(message), size).toLowerCase());
     this.player.getSession().sendClientPacket(encodeChatMessage(
-      "private_in", text, target?.getUsername?.() ?? "", "", target?.getIndex?.() ?? 0
+      "private_in", text, target?.getDisplayName?.() ?? "", "", target?.getIndex?.() ?? 0
     ));
     return this;
   }

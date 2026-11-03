@@ -37,8 +37,6 @@ const ATTACK_SOUND = DATA.sounds.attack;
 /** Wiki: typeless magical ranged, speed 2, range 8. */
 const ATTACK_SPEED = DATA.combat.attackSpeed;
 const ATTACK_DISTANCE = DATA.combat.attackDistance;
-/** Fitted estimate: the captured projectile flies 32-56 cycles; the hit lands ~2 ticks on. */
-const HIT_DELAY_TICKS = DATA.combat.hitDelayTicks;
 
 let api = null;
 let core = null;
@@ -81,7 +79,7 @@ module.exports = {
   DATA, BOSS_ID, SMOKE_DEVIL_ID, CREVICE_OUTSIDE_ID, CREVICE_INSIDE_ID,
   LAIR, OUTSIDE_TILE, INSIDE_TILE,
   ANIM_ATTACK, PROJECTILE_ID, IMPACT_ID, ATTACK_SOUND,
-  ATTACK_SPEED, ATTACK_DISTANCE, HIT_DELAY_TICKS,
+  ATTACK_SPEED, ATTACK_DISTANCE,
   init, location, within, inLair, isBoss, onTask, playersInRoom,
   get api() { return api; },
   get core() { return core; },

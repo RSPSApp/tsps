@@ -106,7 +106,7 @@ function player() {
     attributes, items, varbits, messages, interfaces, scripts, camera, strings, slots, xpBySkill,
     get lastBuilder() { return lastBuilder; }, set lastBuilder(value) { lastBuilder = value; },
     get blockXp() { return blockXp; }, set blockXp(value) { blockXp = value; },
-    getUsername: () => 'Q6desert1',
+    getUsername: () => 'Q6desert1', getDisplayName: () => 'Q6desert1',
     getAttribute: key => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     setEnteredAmountAction: action => { p.amountAction = action; },

@@ -62,7 +62,7 @@ function levelIsTold(clan, level) {
 function levelUp({ player, skill, oldLevel, newLevel }) {
   const clan = clanFor(player);
   if (!clan) return;
-  const name = player.getUsername();
+  const name = player.getDisplayName();
   if (levelIsTold(clan, newLevel)) tell(clan, LEVEL_SETTING, `${name} has reached ${skill.getName()} level ${newLevel}.`);
   const skills = player.getSkillManager();
   const total = skills.getTotalLevel();
@@ -87,7 +87,7 @@ function experience({ player, skill, experience: gained }) {
   const step = Math.max(1, Core.settingValue(clan, POST_99_INTERVAL)) * MILLION;
   const reached = Math.floor(after / step) * step;
   if (reached > after - gained && reached > XP_AT_99) {
-    tell(clan, POST_99_XP_SETTING, `${player.getUsername()} has reached ${reached.toLocaleString("en-GB")} XP in ${skill.getName()}.`);
+    tell(clan, POST_99_XP_SETTING, `${player.getDisplayName()} has reached ${reached.toLocaleString("en-GB")} XP in ${skill.getName()}.`);
   }
 }
 
@@ -98,29 +98,29 @@ function formatTicks(ticks) {
 
 function personalBest({ player, boss, ticks }) {
   const clan = clanFor(player);
-  if (clan) tell(clan, PERSONAL_BEST_SETTING, `${player.getUsername()} has achieved a new ${boss} personal best: ${formatTicks(ticks)}`);
+  if (clan) tell(clan, PERSONAL_BEST_SETTING, `${player.getDisplayName()} has achieved a new ${boss} personal best: ${formatTicks(ticks)}`);
 }
 
 function diaryTier({ player, diary, tier }) {
   const clan = clanFor(player);
-  if (clan) tell(clan, DIARY_SETTING, `${player.getUsername()} has completed the ${tier} ${diary} diary.`);
+  if (clan) tell(clan, DIARY_SETTING, `${player.getDisplayName()} has completed the ${tier} ${diary} diary.`);
 }
 
 function hardcoreDeath({ player }) {
   const clan = clanFor(player);
-  if (clan) tell(clan, HARDCORE_DEATH_SETTING, `${player.getUsername()} has died as a Hardcore Ironman.`);
+  if (clan) tell(clan, HARDCORE_DEATH_SETTING, `${player.getDisplayName()} has died as a Hardcore Ironman.`);
 }
 
 function lootKey({ player, value }) {
   const clan = clanFor(player);
   if (clan && value >= Core.settingValue(clan, LOOT_KEY_MINIMUM_VALUE)) {
-    tell(clan, LOOT_KEY_SETTING, `${player.getUsername()} has opened a loot key worth ${value.toLocaleString("en-GB")} coins.`);
+    tell(clan, LOOT_KEY_SETTING, `${player.getDisplayName()} has opened a loot key worth ${value.toLocaleString("en-GB")} coins.`);
   }
 }
 
 function questCompleted({ player, quest }) {
   const clan = clanFor(player);
-  if (clan) tell(clan, QUEST_SETTING, `${player.getUsername()} has completed a quest: ${quest?.name ?? quest?.title ?? "a quest"}`);
+  if (clan) tell(clan, QUEST_SETTING, `${player.getDisplayName()} has completed a quest: ${quest?.name ?? quest?.title ?? "a quest"}`);
 }
 
 function combatTask({ player, task, silent }) {
@@ -130,14 +130,14 @@ function combatTask({ player, task, silent }) {
   if (!clan) return;
   const tier = TIERS[(task.tier ?? 1) - 1] ?? "";
   if ((task.tier ?? 1) < Core.settingValue(clan, TASK_THRESHOLD)) return;
-  tell(clan, COMBAT_TASK_SETTING, `CA_ID:${task.id}|${player.getUsername()} has completed ${tier === "elite" ? "an" : tier === "easy" ? "an" : "a"} ${tier} combat task: ${task.name}.`);
+  tell(clan, COMBAT_TASK_SETTING, `CA_ID:${task.id}|${player.getDisplayName()} has completed ${tier === "elite" ? "an" : tier === "easy" ? "an" : "a"} ${tier} combat task: ${task.name}.`);
 }
 
 function collectionLog({ player, itemId }) {
   const clan = clanFor(player);
   if (!clan) return;
   const name = core.ItemDefinition?.forId?.(Number(itemId))?.getName?.() ?? "an item";
-  tell(clan, COLLECTION_LOG_SETTING, `${player.getUsername()} received a new collection log item: ${name}`);
+  tell(clan, COLLECTION_LOG_SETTING, `${player.getDisplayName()} received a new collection log item: ${name}`);
 }
 
 function dropId(item) {
@@ -152,7 +152,7 @@ function dropLine(player, item, source, value) {
   const name = core.ItemDefinition?.forId?.(dropId(item))?.getName?.() ?? "an item";
   const amount = (item.amount ?? 1) > 1 ? `${item.amount.toLocaleString("en-GB")} x ` : "";
   const from = source ? ` from ${source}` : "";
-  return `${player.getUsername()} received a drop: ${amount}${name} (${value.toLocaleString("en-GB")} coins)${from}.`;
+  return `${player.getDisplayName()} received a drop: ${amount}${name} (${value.toLocaleString("en-GB")} coins)${from}.`;
 }
 
 /** What "npc-drops:roll" reports, read as CollectionLog.plugin.js does: once its handlers have edited it. */
@@ -177,7 +177,7 @@ function deathDrops({ player, killer, items }) {
   if (!clan) return;
   const value = items.reduce((sum, item) => sum + (core.ItemDefinition?.forId?.(item.getId())?.getValue?.() ?? 0) * item.getAmount(), 0);
   if (value < Core.settingValue(clan, PK_MINIMUM_VALUE)) return;
-  tell(clan, PK_SETTING, `${killer.getUsername()} has defeated ${player.getUsername()} and received (${value.toLocaleString("en-GB")} coins) worth of loot!`);
+  tell(clan, PK_SETTING, `${killer.getDisplayName()} has defeated ${player.getDisplayName()} and received (${value.toLocaleString("en-GB")} coins) worth of loot!`);
 }
 
 function joined(clan, name) {

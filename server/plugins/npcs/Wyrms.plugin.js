@@ -84,7 +84,8 @@ function methodFor(family) {
 
     hits(character, target) {
       const melee = this.type() === CombatType.MELEE;
-      const delay = melee ? 1 : Math.max(1, Math.floor(travelCycles(character, target) / 30));
+      // Magic hits as the projectile lands; rounding its flight down hit a tick early at most ranges.
+      const delay = melee ? 1 : Projectile.ticksToLand(travelCycles(character, target));
       const hit = new PendingHit(character, target, this, delay);
       // Rolled up to the NPC's max hit (the magic one), with protection prayers applied; melee's is lower.
       const rolledUpTo = character.getCurrentDefinition?.()?.getMaxHit?.() ?? 0;

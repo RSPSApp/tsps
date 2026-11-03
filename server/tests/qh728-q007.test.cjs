@@ -78,7 +78,7 @@ function setup({ stage = 0, completed = [], freeSlots = 28 } = {}) {
       messageSources.push(actionDispatchDepth > 0 ? 'action' : 'runner');
     },
     getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill, amount]) }),
-    getUsername: () => 'Q007',
+    getUsername: () => 'Q007', getDisplayName: () => 'Q007',
   };
 
   const handlers = {

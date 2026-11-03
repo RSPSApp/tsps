@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { SpellSelectionController, spellWidgetChildSlot } from "../game/widgets/SpellSelectionController";
+import { SpellSelectionController, spellClickNeedsTarget, spellWidgetChildSlot } from "../game/widgets/SpellSelectionController";
 import { ClickRegistry } from "../widgets/gl/click-registry";
 
 // Tapping High or Low Level Alchemy on mobile selects that spell (#1696). A tap selects through
@@ -51,6 +51,36 @@ import { ClickRegistry } from "../widgets/gl/click-registry";
     assert.equal(clicks.onPointerDown(10, 10), true);
     assert.equal(clicks.onPointerUp(10, 10), true, "a tap on the panel still cancels");
     assert.equal(cancels, 1);
+}
+
+// Clicking Humidify casts it (#1931). Its button has op1 "Cast" and a target mask for Olm's flame
+// walls; the click took the mask, entered targeting, and the next click cancelled it, so nothing
+// reached the server. Target-only spells (Wind Strike, High Level Alchemy) still select.
+{
+    const { createCacheVm } = require("../scripts/cache/cs2-sweep");
+    const { vm: cacheVm } = createCacheVm();
+    const wm = cacheVm.context.widgetManager;
+    wm.rootInterface = 161;
+    wm.onLoadListener = (_id: number, widget: any) => cacheVm.runScriptEvent({ args: widget.onLoad, widget });
+    wm.getGroup(218);
+    const spellbook = wm.getWidgetByUid(218 << 16);
+    const controller = new SpellSelectionController({
+        getWidgetManager: () => wm,
+        getObjTypeLoader: () => cacheVm.context.objTypeLoader,
+        getCs2Vm: () => cacheVm,
+        executeScriptListener: () => {},
+    });
+    for (const [book, child, name, targets] of [
+        [2, 115, "Humidify", false], [2, 116, "Moonclan Teleport", false],
+        [0, 11, "Wind Strike", true], [0, 47, "High Level Alchemy", true],
+    ] as const) {
+        cacheVm.context.varManager.setVarbit(4070, book);
+        cacheVm.runScriptEvent({ args: spellbook.onLoad, widget: spellbook });
+        const spell = wm.getWidgetByUid((218 << 16) | child);
+        assert.equal(spellClickNeedsTarget(spell, controller.getWidgetTargetMask(spell)), targets, name);
+    }
+    const humidify = wm.getWidgetByUid((218 << 16) | 115);
+    assert.ok(controller.getWidgetTargetMask(humidify) > 0, "Humidify keeps its flame-wall target");
 }
 
 console.log("Spell selection tap regression passed");

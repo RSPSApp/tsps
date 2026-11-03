@@ -10,6 +10,9 @@ import net.rsprot.buffer.JagByteBuf
 import net.rsprot.buffer.extensions.toJagByteBuf
 import net.rsprot.compression.HuffmanCodec
 import net.rsprot.crypto.cipher.NopStreamCipher
+import net.rsprot.protocol.game.incoming.clan.ClanChannelFullRequest
+import net.rsprot.protocol.game.incoming.clan.ClanSettingsFullRequest
+import net.rsprot.protocol.game.incoming.misc.user.CloseModal
 import net.rsprot.protocol.game.outgoing.clan.ClanChannelDelta
 import net.rsprot.protocol.game.outgoing.clan.ClanChannelFull
 import net.rsprot.protocol.game.outgoing.clan.ClanSettingsDelta
@@ -208,6 +211,55 @@ class ClansTest {
     fun `a settings delta before any full update is dropped`() {
         assertFalse(settingsDelta(1) { u16(1).u8(2).u16(0) })
         assertTrue(sent.isEmpty())
+    }
+
+    @Test
+    fun `a channel resync gets the channel as the deltas left it`() {
+        channelFull(updateNum = 5)
+        channelDelta(6) { u8(1).string("Cat").u8(0xFF).u16(1) }
+        channelDelta(7) { u8(2).u16(1) }
+        sent.clear()
+        // The client asks after a delta numbered past its count (one it missed).
+        assertTrue(clans.resync(ClanChannelFullRequest(OWN)))
+        val full = decode(sent.single() as ClanChannelFull).toString()
+        assertTrue(full.contains("key=$KEY, updateNum=7, clanName='PWJ'"), full)
+        assertTrue(full.contains("ClanMember(name='Ann'") && full.contains("ClanMember(name='Cat'"), full)
+        assertFalse(full.contains("Bob"), full)
+        // The next delta follows on from it.
+        sent.clear()
+        channelDelta(8) { u8(2).u16(0) }
+        assertEquals(7L, (sent.single() as ClanChannelDelta).updateNum)
+    }
+
+    @Test
+    fun `a settings resync gets the settings as the deltas left them`() {
+        settingsFull(7868)
+        settingsDelta(7869) {
+            u16(4)
+            u8(1).string("Cat").u16(8433)
+            u8(3).u16(1).u8(10)
+            u8(5).u16(0).i32(3).u8(0).u8(1)
+            u8(6).u16(8).i32(9000)
+        }
+        settingsDelta(7870) { u16(1).u8(4).u16(1).u8(1) }
+        sent.clear()
+        assertTrue(clans.resync(ClanSettingsFullRequest(OWN)))
+        val full = decode(sent.single() as ClanSettingsFull).toString()
+        assertTrue(full.contains("updateNum=7870, creationTime=27033842, clanName='PWJ'"), full)
+        // Ann's extra info 1599 (0b11000111111) with bits 0-1 set to 3, unchanged.
+        assertTrue(full.contains("AffinedClanMember(hash=0, name=Ann, rank=126, extraInfo=1599, joinRuneDay=7028, muted=true)"), full)
+        assertTrue(full.contains("AffinedClanMember(hash=0, name=Cat, rank=10, extraInfo=0, joinRuneDay=8433, muted=true)"), full)
+        assertTrue(full.contains("Eve"), full)
+        assertTrue(full.contains("value=9000"), full)
+    }
+
+    @Test
+    fun `a resync for a clan the gateway has nothing for sends nothing`() {
+        assertTrue(clans.resync(ClanChannelFullRequest(GUEST)))
+        assertTrue(clans.resync(ClanSettingsFullRequest(OWN)))
+        assertTrue(sent.isEmpty())
+        // Other client messages are Upstream's.
+        assertFalse(clans.resync(CloseModal))
     }
 
     @Test

@@ -26,8 +26,14 @@ const getPlayerCombatSpecial = (player: Player): any | null => {
 
 export class DamageFormulas {
     public static sourceHitBounds(entity: Mobile, attackType: CombatType, target?: Mobile): { minimum: number; maximum: number } {
-        if (attackType === CombatType.MAGIC && CombatSpecial.activeTraitsFor(entity)?.maximumHitSource === undefined) {
-            return DamageFormulas.getMagicHitBounds(entity, undefined, target);
+        const traits = attackType === CombatType.MAGIC ? CombatSpecial.activeTraitsFor(entity) : null;
+        if (attackType === CombatType.MAGIC && traits?.maximumHitSource === undefined) {
+            const bounds = DamageFormulas.getMagicHitBounds(entity, undefined, target);
+            // A magic special's damage traits scale the spell's max hit, as melee and ranged
+            // specials' do (Soul Rend's 1.3, Condemn's 1.5).
+            if (!traits || (traits.damageMultiplier === undefined && !traits.damageMultiplierStages?.length)) return bounds;
+            const maximum = DamageFormulas.applyDamageMultiplierTraits(bounds.maximum, traits, 1);
+            return { minimum: Math.min(bounds.minimum, maximum), maximum };
         }
         return { minimum: 0, maximum: DamageFormulas.sourceMaxHit(entity, attackType) };
     }

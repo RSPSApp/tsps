@@ -1,7 +1,7 @@
 // Run after `yarn build`: node --test tests/dorgeshuun-specials.test.cjs
 // Backstab (bone dagger) and Snipe (Dorgeshuun crossbow), from the Wiki: a guaranteed hit on a
 // target nobody, or another player, damaged last, and a Defence drain from its base level only.
-// Also the crossbow's ammunition: bronze, iron and bone bolts.
+// Also the crossbow's ammunition: bronze, blurite, iron and bone bolts.
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 
@@ -100,9 +100,9 @@ test("Backstab and Snipe lower an NPC's Defence by the damage, only from its bas
   }
 });
 
-test("the Dorgeshuun crossbow fires bronze, iron and bone bolts, and nothing else", () => {
+test("the Dorgeshuun crossbow fires bronze, blurite, iron and bone bolts, and nothing else", () => {
   const fired = RangedWeapon.DORGESHUUN_CROSSBOW.getAmmunitionData().map((ammo) => ammo.getItemId());
-  assert.deepEqual(fired, [ItemIdentifiers.BRONZE_BOLTS, ItemIdentifiers.IRON_BOLTS, ItemIdentifiers.BONE_BOLTS]);
+  assert.deepEqual(fired, [ItemIdentifiers.BRONZE_BOLTS, ItemIdentifiers.BLURITE_BOLTS, ItemIdentifiers.IRON_BOLTS, ItemIdentifiers.BONE_BOLTS]);
   const bone = Ammunition.getForItem(ItemIdentifiers.BONE_BOLTS);
   assert.equal(bone.getStrength(), 49);
   assert.equal(bone.getProjectileId(), 696, "dttd_bone_crossbowbolt_travel");

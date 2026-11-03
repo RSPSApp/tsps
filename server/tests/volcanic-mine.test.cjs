@@ -96,7 +96,7 @@ function fakePlayer({ mining = 99 } = {}) {
     location: new Location(3816, 3808, 0), area: null, messages: [], spam: [], sounds: [], chats: [], boxes: [], anims: [], hits: [],
     varbits: new Map(), subs: [], xp: {}, songs: [], said: [], blocked: false, hp: 99,
     inventory: container(),
-    getIndex: () => id, getUsername: () => `Tester${id}`,
+    getIndex: () => id, getUsername: () => `Tester${id}`, getDisplayName: () => `Tester${id}`,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
     getLocation: () => p.location, moveTo(l) { p.location = l; }, setLocation(l) { p.location = l; },
     getArea: () => p.area, setArea(a) { p.area = a; },

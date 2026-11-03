@@ -248,10 +248,17 @@ function clearCastleWarsItems(player, ids = data.CLEANUP_ITEM_IDS) {
   refreshPlayerAppearance(player, weaponChanged);
 }
 
-/** A worn Castle wars bracelet spends a charge as the game starts, and is active for that game. */
+/**
+ * A worn Castle wars bracelet spends a charge as the game starts, and is active for that game.
+ * The player is told it worked (issue 1929). RSPS-only wording: no rsprox recording covers a
+ * Castle Wars game and the Wiki quotes no message.
+ */
 function chargeBracelet(player) {
-  if (game.spendStoredBraceletCharge?.(player)) {
+  const stored = game.spendStoredBraceletCharge?.(player);
+  if (stored) {
     braceletEffect.add(player);
+    player.sendMessage(BRACELET_ACTIVE_MESSAGE);
+    player.sendMessage(`Lanthus used one of your stored bracelet charges. ${chargesLeft(stored.remaining)}`);
     return;
   }
   const { HANDS_SLOT } = core.Equipment;
@@ -262,6 +269,18 @@ function chargeBracelet(player) {
   player.getEquipment().setItem(HANDS_SLOT, new core.Item(next, next === -1 ? 0 : 1));
   braceletEffect.add(player);
   refreshPlayerAppearance(player);
+  player.sendMessage(BRACELET_ACTIVE_MESSAGE);
+  // BRACELET_NEXT runs (3) -> (2) -> (1) -> gone, so a bracelet's place in it gives its charges.
+  const braceletIds = Object.keys(data.BRACELET_NEXT).map(Number);
+  player.sendMessage(next === -1
+    ? "Your Castle wars bracelet crumbles to dust."
+    : `Your Castle wars bracelet has ${chargesLeft(braceletIds.length - braceletIds.indexOf(next))}`);
+}
+
+const BRACELET_ACTIVE_MESSAGE = "Your Castle wars bracelet is active for this game: you deal 20% more damage to whoever carries your team's standard.";
+
+function chargesLeft(count) {
+  return `${count} ${count === 1 ? "charge" : "charges"} left.`;
 }
 
 function hasBraceletEffect(player) {
@@ -322,6 +341,22 @@ function isSteppingStone(tile) {
     (tile.x >= 2418 && tile.x <= 2420 && tile.y >= 3122 && tile.y <= 3125) ||
     (tile.x >= 2377 && tile.x <= 2378 && tile.y >= 3084 && tile.y <= 3088)
   );
+}
+
+// Catapult corners from #1929/#1961; evidence limits are in server/docs/castle-wars-flags.md.
+const ZAMORAK_CATAPULT_RETURN_TILES = new Set([
+  "2383,3116", "2384,3116", "2385,3116", "2387,3118", "2387,3119",
+]);
+const SARADOMIN_CATAPULT_RETURN_TILES = new Set([
+  "2412,3088", "2412,3089", "2414,3091", "2415,3091", "2416,3091",
+]);
+
+function catapultReturnTeam(target) {
+  const tile = getLocationTile(target);
+  if (!tile || tile.z !== 0) return null;
+  const key = `${tile.x},${tile.y}`;
+  if (ZAMORAK_CATAPULT_RETURN_TILES.has(key)) return data.TEAM.ZAMORAK;
+  return SARADOMIN_CATAPULT_RETURN_TILES.has(key) ? data.TEAM.SARADOMIN : null;
 }
 
 function isInsideCastle(player, teamId) {
@@ -395,7 +430,7 @@ function clearStrayDroppedFlags() {
   droppedFlagObjects[data.TEAM.ZAMORAK] = null;
 }
 
-/** Drops a carried flag where the carrier stands; dropped on the stepping stones, it goes home. */
+/** Stones and rocks return any flag; catapult corners only return the carrier's own flag. */
 function dropCarriedFlag(player) {
   // The equipment is authoritative for live carries; the tracked carrier covers deaths
   // whose item processing stripped the banner before this ran (bot deaths are handled
@@ -410,8 +445,12 @@ function dropCarriedFlag(player) {
   }
   clearWeaponSlot(player);
   const tile = getLocationTile(player);
-  if (tile && isSteppingStone(tile)) {
-    restoreFlagToBase(carriedFlagTeam, "stones");
+  // RuneHQ: "if you die on the stepping stones or under the rockslide, it will return to your
+  // base." The rockslide covers a tunnel's rock tiles, fallen or mined away (issue 1929).
+  if (tile && (isSteppingStone(tile)
+    || (carriedFlagTeam === getTeamId(player) && catapultReturnTeam(player))
+    || game.isTunnelRockTile?.(player.getLocation()))) {
+    restoreFlagToBase(carriedFlagTeam, "returns");
     return;
   }
   placeDroppedFlag(carriedFlagTeam, player);
@@ -879,6 +918,7 @@ module.exports = function createCastleWarsGame(registry) {
     clearBraceletEffect,
     getCarriedFlagTeam,
     isInsideCastle,
+    catapultReturnTeam,
     getDroppedFlagObject: (flagTeam) => droppedFlagObjects[flagTeam] ?? null,
     removeDroppedFlagObject,
     updateFlagStand,

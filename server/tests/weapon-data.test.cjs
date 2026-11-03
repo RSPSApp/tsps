@@ -173,3 +173,51 @@ test("a weapon is two-handed when the cache also wears it in the shield slot", (
     assert.equal(ItemDefinition.forId(id).isDoubleHanded(), false, `${id} ${ItemDefinition.forId(id).getName()}`);
   }
 });
+
+// The combat tab draws each style's icon from cache dbtable 78's fourth column. Those ids are
+// sprites, not animations, but the partisan, banner and polestaff rows had them copied into
+// `animation`: a Keris partisan attacked with rat_attack (240), a mjolnir with
+// skeleton_trans_block (266). See docs/audits/weapons.md.
+const COMBAT_STYLE_ICON_IDS = new Set([128, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246,
+  247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270,
+  271, 272, 273, 274, 275, 276, 277, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291]);
+
+test("no weapon type attacks with a combat-tab icon id", () => {
+  for (const [name, weapon] of Object.entries(styles.weaponInterfaces)) {
+    for (const key of weapon.fightTypes) {
+      const animation = styles.fightTypes[key].animation;
+      assert.ok(!COMBAT_STYLE_ICON_IDS.has(animation),
+        `${name}.${key}: ${animation} is a style icon, not an animation`);
+    }
+  }
+});
+
+test("the audited weapon families animate with their own family", () => {
+  // The spear's animations: the Keris partisan is a spear (docs/audits/weapons.md).
+  assert.deepEqual(styles.weaponInterfaces.PARTISAN.fightTypes.map((key) => styles.fightTypes[key].animation),
+    [2080, 2080, 2082, 2080], "barrows_war_spear_stab/_crush");
+  // The banners' own animations, human_banner_spike 1428 and human_banner_block 1429.
+  assert.deepEqual(styles.weaponInterfaces.BANNER.fightTypes.map((key) => styles.fightTypes[key].animation),
+    [1428, 1428, 1428, 1429]);
+  // The abyssal bludgeon's abyssal_bludgeon_crush, not the godsword's smash.
+  assert.deepEqual(styles.weaponInterfaces.ABYSSAL_BLUDGEON.fightTypes.map((key) => styles.fightTypes[key].animation),
+    [3298, 3298, 3298]);
+  // The claws' dclaws_human_attack, not the axe's chop.
+  assert.deepEqual(styles.weaponInterfaces.CLAWS.fightTypes.map((key) => styles.fightTypes[key].animation),
+    [7527, 7527, 7527, 7527]);
+  // The plain scythe (the Scythe of Vitur carries its own 8056): human_scythe_sweep.
+  assert.deepEqual(styles.weaponInterfaces.SCYTHE.fightTypes.map((key) => styles.fightTypes[key].animation),
+    [440, 440, 440, 440]);
+  // The polestaff family has no animation of its own: the blunt pound, as the mace and warhammer.
+  assert.deepEqual(styles.weaponInterfaces.POLESTAFF.fightTypes.map((key) => styles.fightTypes[key].animation),
+    [401, 401, 401]);
+});
+
+test("gem machetes swing at the cache's 4 ticks, and the twisted bow at its 6", () => {
+  // The machete/sickle/cane override put the gem machetes a tick slow (5) against the cache and
+  // the Wiki (both 4); the twisted bow's override was 5 against the cache and the Wiki (both 6).
+  for (const id of [6313, 6315, 6317]) {
+    assert.equal(WeaponProfiles.attackSpeed(wielding(id, WeaponInterfaces.SCIMITAR), 4), 4, `${id}`);
+  }
+  assert.equal(WeaponProfiles.attackSpeed(wielding(20997, WeaponInterfaces.SHORTBOW), 4), 6);
+});

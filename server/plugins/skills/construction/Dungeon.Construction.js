@@ -327,7 +327,7 @@ function openChest(event) {
   player.getInventory().adds(COINS, coins);
   House.saveHouse(house);
   player.sendMessage(`You find ${coins.toLocaleString("en-US")} coins in the chest!`);
-  house.owner?.sendMessage(`${player.getUsername()} has won ${coins.toLocaleString("en-US")} coins from your treasure chest.`);
+  house.owner?.sendMessage(`${player.getDisplayName()} has won ${coins.toLocaleString("en-US")} coins from your treasure chest.`);
   return true;
 }
 

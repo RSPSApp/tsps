@@ -43,7 +43,9 @@ function methodClass() {
       for (const player of Common.playersAround(character, at, Common.SUPREME_SPLASH_RADIUS, Common.SUPREME_DISTANCE + Common.SUPREME_SPLASH_RADIUS)) {
         if (player !== target) victims.push(player);
       }
-      return victims.map((victim) => new PendingHit(character, victim, this, Common.HIT_DELAY.supreme));
+      // Every splash lands with the spine, which flies the legacy 46 + 10 a tile (#1862).
+      const delay = Projectile.arrivalTicks(character, target, Projectile.LEGACY_MAGIC_END_BASE);
+      return victims.map((victim) => new PendingHit(character, victim, this, delay));
     }
 
     handleAfterHitEffects(hit) {

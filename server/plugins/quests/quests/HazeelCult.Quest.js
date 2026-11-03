@@ -788,7 +788,7 @@ module.exports = function registerHazeelCultQuest(api) {
     if (!request?.player || typeof request.text !== "string") return;
     if (!CERIL_IDS.has(request.npcId)) return;
     if (!request.text.includes("[player name]")) return;
-    request.text = request.text.replace(/\[player name\]/gi, request.player.getUsername());
+    request.text = request.text.replace(/\[player name\]/gi, request.player.getDisplayName());
   }
 
   /** The armour hand-in's fake reward scroll (5 coins, no quest point), per the wiki. */

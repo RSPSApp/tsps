@@ -93,7 +93,7 @@ function makePlayer() {
       getCurrentLevel: (skill) => skills.get(skill) ?? 99,
       addExperiences: (skill, amount) => skills.set(skill, (skills.get(skill) ?? 0) + amount),
     }),
-    getUsername: () => 'qh728-q123',
+    getUsername: () => 'qh728-q123', getDisplayName: () => 'qh728-q123',
     getPrivateArea: () => null,
     getPacketSender: () => sender,
     getDialogueManager: () => ({ isActive: () => false, getCurrent: () => null, startDialogues: noop, handleResume: noop, reset: noop }),

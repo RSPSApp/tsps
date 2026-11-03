@@ -86,7 +86,7 @@ function harness() {
   const variants = [];
   const conditionAnswers = [];
   const spawned = [];
-  const completedQuests = new Set();
+  const completedQuests = new Set(['nature_spirit']); // the start requirement
 
   const api = new Proxy({
     core,

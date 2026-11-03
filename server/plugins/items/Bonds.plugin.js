@@ -252,15 +252,15 @@ function donateBond(event) {
     return;
   }
   if (target.getInventory().getFreeSlots() < 1) {
-    player.sendMessage(`${target.getUsername()} does not have enough inventory space.`);
+    player.sendMessage(`${target.getDisplayName()} does not have enough inventory space.`);
     return;
   }
   player.getInventory().deleteNumber(TRADEABLE_BOND, 1).refreshItems();
   target.getInventory().adds(UNTRADEABLE_BOND, 1);
   pluginApi.emitCustomEvent("persistence:save", { player, reason: "bond-transfer" });
   pluginApi.emitCustomEvent("persistence:save", { player: target, reason: "bond-transfer" });
-  player.sendMessage(`You give ${target.getUsername()} a bond.`);
-  target.sendMessage(`${player.getUsername()} gives you a bond.`);
+  player.sendMessage(`You give ${target.getDisplayName()} a bond.`);
+  target.sendMessage(`${player.getDisplayName()} gives you a bond.`);
   event.handled = true;
 }
 

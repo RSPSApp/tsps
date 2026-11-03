@@ -73,6 +73,7 @@ function makePlayer() {
     getEquipment: () => ({ get: () => null }),
     getSkillManager: () => ({
       getCurrentLevel: skill => skills.get(skill) ?? 99,
+      getMaxLevel: skill => skills.get(skill) ?? 99,
       getCombatLevel: () => skills.get('combat') ?? 3,
       addExperiences: (skill, amount) => skills.set(skill, (skills.get(skill) ?? 0) + amount),
     }),
@@ -117,6 +118,8 @@ function harness() {
     onCustomEvent: (key, handler) => (events[key] ??= []).push(handler),
     emitCustomEvent: (key, event) => (events[key] ?? []).forEach(handler => handler(event)),
   }, { get: (target, key) => target[key] ?? noop });
+  // Denulth's start also needs Death Plateau, asked over quest:is-complete.
+  (events['quest:is-complete'] ??= []).push(event => { if (event.key === 'death_plateau') event.complete = true; });
   require('../plugins/quests/quests/TrollStronghold.Quest')(api);
   return {
     events, variants, conditions, npcDeath, logins, objectActions, npcActions, objectManager,

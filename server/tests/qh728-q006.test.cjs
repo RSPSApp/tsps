@@ -62,7 +62,7 @@ function player(items = [], attrs = [], levels = {}) {
     getAsPlayer: () => p,
     moveTo: to => { location = to; p.moves.push([to.getX(), to.getY(), to.getZ()]); },
     getBanks: () => [],
-    getUsername: () => 'QH q006',
+    getUsername: () => 'QH q006', getDisplayName: () => 'QH q006',
     getUpdateFlag: () => ({ flag: noop }),
     messages: [],
     sendMessage(message) { p.messages.push(message); },

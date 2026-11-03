@@ -1878,6 +1878,13 @@ test('sites split each mode\'s count over the tiers and the registry only assign
     assert.deepEqual([...getWildernessHotspot(site.id).allowedLoadouts], tagged, `${site.id} gears from its '${site.pvp.style}' loadouts`);
     assert.equal(getWildernessHotspot(site.id).targetBots, site.bots, site.id);
   }
+  const { siteToHotspot } = require('../plugins/bots/behaviours/pvp/WildernessHotspotRegistry.PlayerBots')._test;
+  const pure = sitesFile.sites.find((entry) => entry.pvp?.style === 'pure');
+  const listed = (ids) => siteToHotspot({ ...pure, pvp: { ...pure.pvp, loadouts: ids } }, loadouts).allowedLoadouts;
+  assert.deepEqual(listed(['initiate_pure', 'f2p_rune_pure', 'initiate_pure']), ['initiate_pure', 'f2p_rune_pure'],
+    'pvp.loadouts replaces the style tags, f2p groups included, once each');
+  assert.throws(() => listed(['initiate_pure', 'no_such_group']), /unknown loadout no_such_group/);
+  assert.throws(() => listed([]), /at least one loadout/);
   const player = fakePlayer();
   assert.equal(registry.pickActivity(player, 0, { allowed: ['combat_training'] })?.id, 'combat_training');
   assert.equal(registry.pickActivity(player, 0, { allowed: ['combat_training'], avoid: 'combat_training' }), null);
@@ -2409,19 +2416,13 @@ test('a bot stows a KO weapon it has held for 15-20s without finishing the fight
   assert.equal(pvp.heldSpecWeaponId, 0, 'hold state cleared');
 });
 
-test('a bot only tells the opponent to stop praying while they have an overhead up', () => {
-  const { selectChatterLine } = require('../plugins/bots/behaviours/pvp/PvpChatter.PlayerBots');
-  const { PrayerHandler } = require('../dist/game/content/PrayerHandler');
-
-  const noPrayer = { getPrayerActive: () => ({}) };
+test('random bot chatter excludes event-only prayer reactions', () => {
+  const { selectChatterLine, CHATTER_LINES, PRAYER_LINES } = require('../plugins/bots/behaviours/pvp/PvpChatter.PlayerBots');
   for (let i = 0; i < 400; i++) {
-    assert.notEqual(selectChatterLine(noPrayer), 'stop praying');
+    const line = selectChatterLine();
+    assert.ok(CHATTER_LINES.includes(line));
+    assert.ok(!PRAYER_LINES.includes(line));
   }
-
-  const praying = { getPrayerActive: () => ({ [PrayerHandler.PROTECT_FROM_MELEE]: true }) };
-  let seen = false;
-  for (let i = 0; i < 400 && !seen; i++) seen = selectChatterLine(praying) === 'stop praying';
-  assert.ok(seen, 'the prayer taunt is in the pool when the opponent prays');
 });
 
 test('a stale bot index rebuilds without loading live maps and preserves bridge planes', () => {

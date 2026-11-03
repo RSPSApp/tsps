@@ -71,7 +71,10 @@ function edgeDistance(npc, target) {
   return Math.max(dx, dy);
 }
 
-/** Captured projectile flight: end cycle from travel, hit from the end. */
+/**
+ * Captured projectile flight: end cycle from travel, hit from the end. The hit (and the web's
+ * bind) lands on the first tick at or after the bolt; the old ceil - 1 landed before it (#1862).
+ */
 function sendShot(npc, target, kind) {
   const shape = PROJECTILE_SHAPE[kind];
   const id = PROJECTILE_ID[kind];
@@ -82,7 +85,11 @@ function sendShot(npc, target, kind) {
     from, target.getLocation(), target, id, shape.start,
     end, shape.startHeight, shape.endHeight, npc.getPrivateArea(),
   ).withSource(npc).withAngle(shape.angle).withProgress(shape.progress).sendProjectile();
-  return Common.landingTicks(end) - 1;
+  return shotTicks(end);
+}
+
+function shotTicks(end) {
+  return core.Projectile.ticksToLand(end);
 }
 
 function castSound(npc, soundId, delay = 0) {
@@ -377,7 +384,7 @@ function defineCombatMethod() {
       if (!state || !state.lastStyle) return [];
       const melee = state.lastStyle === "melee";
       if (melee) state.rangedStreak = false;
-      const hit = new PendingHit(character, target, this, melee ? 0 : (this.shotDelay ?? Common.landingTicks(Common.projectileEnd(PROJECTILE_SHAPE.ranged, 4)) - 1));
+      const hit = new PendingHit(character, target, this, melee ? 0 : (this.shotDelay ?? shotTicks(Common.projectileEnd(PROJECTILE_SHAPE.ranged, 4))));
       const rolled = hit.getTotalDamage();
       hit.setTotalDamage(Math.min(Common.MAX_HIT, rolled));
       // The heal reads the style from the hit, not from shared state: a ranged bolt
@@ -432,5 +439,5 @@ module.exports = {
   modifyHit,
   onBossDeath,
   defineCombatMethod,
-  _test: { stateOf, isAdjacent, edgeDistance, checkSpawns, spawnMinions, setCreateMinion: (fn) => { createMinion = fn; }, resetCreateMinion: () => { createMinion = (id, tile) => core.NPC.create(id, tile); } },
+  _test: { stateOf, isAdjacent, shotTicks, edgeDistance, checkSpawns, spawnMinions, setCreateMinion: (fn) => { createMinion = fn; }, resetCreateMinion: () => { createMinion = (id, tile) => core.NPC.create(id, tile); } },
 };

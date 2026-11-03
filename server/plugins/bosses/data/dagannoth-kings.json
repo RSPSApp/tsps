@@ -30,8 +30,6 @@
     "supremeDistance": 10,
     "primeSplashRadius": 1,
     "supremeSplashRadius": 3,
-    "hitDelayPrime": 3,
-    "hitDelaySupreme": 2,
     "hitDelayRex": 1,
     "maxHit": { "supreme": 30, "prime": 50, "rex": 26, "spinolyp": 10 },
     "respawnTicks": 150,

@@ -78,3 +78,73 @@ test("the count is of worn protection items, and Staff of Light counts for Sarad
   assert.equal(Common.godItemCount(player, Common.factionByKey("zamorak")), 2);
   assert.equal(Common.godItemCount(player, Common.factionByKey("armadyl")), 0);
 });
+
+test("every general's and bodyguard's projectile hit splats on the tick it lands (#1862)", () => {
+  const { Projectile } = require("../dist/game/model/Projectile");
+  const { Location } = require("../dist/game/model/Location");
+  const gods = { saradomin: "Saradomin", zamorak: "Zamorak", armadyl: "Armadyl", bandos: "Bandos" };
+  const sent = [];
+  const previous = Common.core;
+  const chain = { withAngle: () => chain, withProgress: () => chain, sendProjectile: () => {} };
+  Common.init({
+    core: {
+      ...previous,
+      CombatMethod: class {},
+      CombatType: { MELEE: "MELEE", RANGED: "RANGED", MAGIC: "MAGIC" },
+      CombatFactory: { applyStyleDamage: () => {} },
+      PendingHit: class { constructor(attacker, target, method, delay) { this.delay = delay; } },
+      Animation: class {},
+      Graphic: class {},
+      Sound: class {},
+      Sounds: { sendSound: () => {} },
+      Misc: { randomInclusive: () => 0 },
+      Projectile: {
+        centreOf: Projectile.centreOf,
+        ticksToLand: Projectile.ticksToLand,
+        createProjectile: (src, target, id, delay, end) => { sent.push({ id, delay, end }); return chain; },
+      },
+    },
+  });
+  const providers = new Map();
+  const api = { registerNpcCombatMethodProvider: (id, Method) => providers.set(id, Method) };
+  try {
+    for (const [key, name] of Object.entries(gods)) {
+      require(`../plugins/bosses/godwars/${name}.GodWars`)[`attach${name}`](api);
+      assert.ok(Common.factionByKey(key));
+    }
+    let checked = 0;
+    const flights = new Map();
+    for (const [npcId, Method] of providers) {
+      for (const tiles of [1, 4, 8]) {
+        sent.length = 0;
+        const npc = {
+          getLocation: () => new Location(2900, 5200, 0), getSize: () => 1,
+          performAnimation: () => {}, performGraphic: () => {}, forceChat: () => {},
+          getDefinition: () => ({ getMaxHit: () => 10 }),
+          __godwarsChamber: { area: { getPlayers: () => [] } },
+        };
+        const target = {
+          getLocation: () => new Location(2900 + tiles, 5200, 0), getSize: () => 1, getHitpoints: () => 99,
+          performGraphic: () => {}, isPlayer: () => true,
+        };
+        const method = new Method();
+        method.start(npc, target);
+        const hits = method.hits(npc, target);
+        if (sent.length === 0) continue;
+        const { id, delay, end } = sent[0];
+        assert.ok(end > delay + 1, `${npcId} at ${tiles} tiles: end ${end} after launch ${delay}`);
+        assert.equal(hits[0].delay, Projectile.ticksToLand(end), `${npcId} at ${tiles} tiles`);
+        flights.set(`${id}@${tiles}`, end);
+        checked++;
+      }
+    }
+    assert.ok(checked >= 30, `checked ${checked} flights`);
+    // Growler: captured 26 + 10 a tile, launched at 35 - next to her it would land before launch.
+    assert.equal(flights.get("1183@1"), 50);
+    assert.equal(flights.get("1183@4"), 66);
+    // K'ril's flames: the captured flat 56 lands on tick 2.
+    assert.equal(flights.get("1225@8"), 56);
+  } finally {
+    Common.init({ core: previous });
+  }
+});

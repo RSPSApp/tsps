@@ -11,11 +11,11 @@
  * - Ranger: the configured projectile (npc-combat-defs.json 8636 → 1574; NR-oracle
  *   value, triangulated as the lit fire arrow from bronze-tier strength and the
  *   orange streak, still awaiting a capture) on the canonical arrow shape (delay 41, 46 + 5/tile, heights
- *   43/31), hitsplat rounded to the visual landing. Max 12, speed 4, distance 6:
+ *   43/31), hitsplat on the tick it lands. Max 12, speed 4, distance 6:
  *   all the dump's (monsters-complete.json), unchanged.
  * - Mage: Earth Wave whole (CombatSpells.EARTH_WAVE: cast 164, flight 165, impact
  *   166; the Wiki green, max 16 from the dump) on the canonical magic shape
- *   (delay 51, 46 + 10/tile, heights 43/31), hitsplat rounded to the landing, the
+ *   (delay 51, 46 + 10/tile, heights 43/31), hitsplat on the tick it lands, the
  *   impact only on accurate hits as player spells do. Speed 4, distance 10.
  * The warrior needs none of this (melee) and stays on the engine default.
  */
@@ -34,9 +34,9 @@ function distance(attacker, target) {
   return attacker.getLocation().getDistance(target.getLocation());
 }
 
-/** Hit delay in ticks, rounded to the projectile's visual landing (30 cycles/tick). */
+/** Hit delay in ticks: the first tick at or after the projectile lands (rounding showed it early, #1862). */
 function landingDelay(endCycles) {
-  return Math.max(1, Math.round(endCycles / 30));
+  return Shared.core().Projectile.ticksToLand(endCycles);
 }
 
 function attackSpeedOf(character, fallback) {

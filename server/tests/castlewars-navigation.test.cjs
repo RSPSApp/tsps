@@ -59,8 +59,8 @@ function player(team = game.TEAM.SARADOMIN, at = [2400, 3100, 0]) {
 
 function clickFlag(p, team, dropped = false) {
   const td = game.getTeamData(team);
-  const object = new core.GameObject(dropped ? td.droppedFlagObjectId : td.safeStandId,
-    td.standLocation, dropped ? 10 : td.standType, 0, null);
+  const object = dropped ? game.getDroppedFlagObject(team) :
+    new core.GameObject(td.safeStandId, td.standLocation, td.standType, 0, null);
   const event = { player: p, object, handled: false };
   objectHandler(event);
   assert.equal(event.handled, true);
@@ -168,6 +168,71 @@ test('own dropped standards return during the pickup action without a free hand 
     assert.equal(defender.getEquipment().getSlot(core.Equipment.WEAPON_SLOT), core.ItemIdentifiers.RUNE_SCIMITAR);
     assert.equal(defender.getEquipment().getSlot(core.Equipment.SHIELD_SLOT), core.ItemIdentifiers.RUNE_KITESHIELD);
     assert.equal(defender.getInventory().getFreeSlots(), 0);
+  }
+});
+
+const CATAPULT_TILES = [
+  ['zamorak', [[2383, 3116], [2384, 3116], [2385, 3116], [2387, 3118], [2387, 3119]]],
+  ['saradomin', [[2412, 3088], [2412, 3089], [2414, 3091], [2415, 3091], [2416, 3091]]],
+];
+
+test('issue 1961: only a carrier dropping their own standard safes it on catapult tiles', () => {
+  for (const [, tiles] of CATAPULT_TILES) for (const [x, y] of tiles) {
+    for (const team of Object.values(game.TEAM)) {
+      for (const stripped of [false, true]) {
+        const owner = player(team, [x, y, 0]);
+        game.carryFlag(owner, team);
+        if (stripped) owner.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(-1, 0));
+        game.dropCarriedFlag(owner);
+        assert.equal(game.flagStatus[team], 0, `${team} own flag safes at ${x},${y}, stripped=${stripped}`);
+        assert.equal(game.getDroppedFlagObject(team), null);
+        assert.equal(game.getCarriedFlagTeam(owner), null);
+      }
+      const enemy = player(game.opposingTeam(team), [x, y, 0]);
+      game.carryFlag(enemy, team);
+      game.dropCarriedFlag(enemy);
+      assert.equal(game.flagStatus[team], 2, `${team} enemy-carried flag drops at ${x},${y}`);
+      assert.ok(game.getDroppedFlagObject(team).getLocation().equals(enemy.getLocation()));
+      game.restoreFlagToBase(team);
+    }
+  }
+});
+
+test('issue 1961: catapult drops return to their base owner or can be retaken by an attacker', () => {
+  for (const [baseTeam, tiles] of CATAPULT_TILES) for (const [x, y] of tiles) {
+    for (const flagTeam of Object.values(game.TEAM)) {
+      const attackerTeam = game.opposingTeam(flagTeam);
+      const carrier = player(attackerTeam, [x, y, 0]);
+      game.carryFlag(carrier, flagTeam);
+      game.dropCarriedFlag(carrier);
+      assert.equal(game.flagStatus[flagTeam], 2, 'a stolen flag stays dropped until pickup');
+      const attacker = player(attackerTeam, [x, y, 0]);
+      clickFlag(attacker, flagTeam, true);
+      assert.equal(game.getCarriedFlagTeam(attacker), flagTeam, 'an attacker can keep the dropped standard');
+      game.dropCarriedFlag(attacker);
+      // Pickup is allowed from beside the drop; its tile decides which base owns the corner.
+      const defender = player(flagTeam, [x + 1, y, 0]);
+      if (flagTeam === baseTeam) {
+        defender.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.RUNE_SCIMITAR));
+        for (let slot = 0; slot < 28; slot++) defender.getInventory().setItem(slot, new core.Item(core.ItemIdentifiers.BANDAGES));
+      }
+      clickFlag(defender, flagTeam, true);
+      assert.equal(game.flagStatus[flagTeam], flagTeam === baseTeam ? 0 : 1,
+        'only the flag owner at their own catapult returns it; the other flag can still be held');
+      assert.equal(game.getDroppedFlagObject(flagTeam), null);
+      game.clearWeaponSlot(defender);
+      game.restoreFlagToBase(flagTeam);
+    }
+  }
+});
+
+test('catapult flag returns do not extend to another plane or nearby deck tiles', () => {
+  for (const at of [[2383, 3116, 1], [2412, 3088, 1], [2383, 3118, 0], [2413, 3087, 0]]) {
+    const owner = player(game.TEAM.SARADOMIN, at);
+    game.carryFlag(owner, game.TEAM.SARADOMIN);
+    game.dropCarriedFlag(owner);
+    assert.equal(game.flagStatus[game.TEAM.SARADOMIN], 2, `${at} leaves the standard dropped`);
+    game.restoreFlagToBase(game.TEAM.SARADOMIN);
   }
 });
 

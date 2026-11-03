@@ -152,7 +152,7 @@ function guess(player, house, game, letters) {
   const shown = pattern(game);
   if (!shown.includes("_")) {
     player.getPacketSender().sendInterfaceRemoval();
-    tellHouse(house, `Hangman word: ${game.word}! ${player.getUsername()} is the winner!`);
+    tellHouse(house, `Hangman word: ${game.word}! ${player.getDisplayName()} is the winner!`);
     Prizes.award(house, "hangman", player);
     return end(house, game);
   }

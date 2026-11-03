@@ -52,19 +52,23 @@ function combatClass(api) {
       if (this.currentAttack !== ChaosElementalAttackType.DISCORD) {
         return [];
       }
-      return [new PendingHit(character, target, this, 2)];
+      return [new PendingHit(character, target, this, this.landing ?? 2)];
     }
 
     start(character, target) {
       this.selectAttack();
       character.performAnimation(new Animation(character.getAttackAnim()));
-      Projectile.createProjectile(character, target, this.currentAttack, 40, 70, 31, 43).sendProjectile();
+      // 10 cycles a tile over its 8-tile reach instead of a flat 70; the hit (or the special's
+      // effect) lands on the tick the orb does (#1862).
+      const end = Projectile.arrivalCycles(character, target, 45, 10);
+      this.landing = Projectile.ticksToLand(end);
+      Projectile.createProjectile(character, target, this.currentAttack, 40, end, 31, 43).sendProjectile();
 
       if (this.currentAttack !== ChaosElementalAttackType.DISCORD) {
         const queuedAttack = this.currentAttack;
         TaskManager.submit(
           new ChaosElementalTask(
-            SPECIAL_HIT_DELAY,
+            this.landing,
             () => applyChaosElementalSpecial(queuedAttack, character, target),
             target,
             false

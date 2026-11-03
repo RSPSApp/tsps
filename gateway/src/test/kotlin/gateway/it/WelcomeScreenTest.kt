@@ -1,5 +1,6 @@
 package gateway.it
 
+import gateway.headless.HeadlessClient
 import net.rsprox.protocol.game.outgoing.model.interfaces.IfCloseSub
 import net.rsprox.protocol.game.outgoing.model.interfaces.IfMoveSub
 import net.rsprox.protocol.game.outgoing.model.interfaces.IfOpenSub
@@ -15,8 +16,14 @@ class WelcomeScreenTest {
     private val modulus = LiveGateway.gateway.rsa.modulus
 
     @Test
-    fun `play on the welcome screen opens the gameframe`() {
-        val name = LiveGateway.newAccount("gwplay")
+    fun `play on the welcome screen opens the gameframe`() = leaveWelcomeScreen("gwplay") { it.button(WELCOME_SCREEN, PLAY_BUTTON) }
+
+    /** Live opens it as a modal, so Escape closes it in the client; that has to count as Play. */
+    @Test
+    fun `escape on the welcome screen opens the gameframe`() = leaveWelcomeScreen("gwesc") { it.closeModal() }
+
+    private fun leaveWelcomeScreen(prefix: String, leave: (HeadlessClient.Game) -> Unit) {
+        val name = LiveGateway.newAccount(prefix)
         LiveGateway.client().login(name, PASSWORD, modulus).game!!.use { it.expect<RebuildLoginV2>() }
 
         // tsps saves the account and frees the name a few ticks after the socket closes.
@@ -42,7 +49,7 @@ class WelcomeScreenTest {
             assertEquals(LOGIN_ROOT to WELCOME_SLOT, welcome.destinationInterfaceId to welcome.destinationComponentId)
             assertTrue(moved > 0, "the gameframe moves onto the login root")
 
-            it.button(WELCOME_SCREEN, PLAY_BUTTON)
+            leave(it)
             val closed = it.expect<IfCloseSub>(limit = 2_000)
             assertEquals(LOGIN_ROOT to WELCOME_SLOT, closed.interfaceId to closed.componentId)
             assertNotEquals(LOGIN_ROOT, it.expect<IfOpenTop>(limit = 10).interfaceId, "Play leaves the login root")

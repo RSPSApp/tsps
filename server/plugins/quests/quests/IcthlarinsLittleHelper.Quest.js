@@ -693,7 +693,6 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
       }
       return null;
     }
-    if (JEX_NPC_IDS.has(npcId)) return selectJexVariant(player, stage);
     if (SIAMUN_NPC_IDS.has(npcId)) {
       return stage >= STAGE_SOPHANEM && stage < STAGE_JAR_RETURNED
         ? "city-of-the-dead-talking-to-siamun"

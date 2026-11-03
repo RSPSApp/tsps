@@ -494,7 +494,7 @@ export class Combat {
             }
             if (this.character.isNpc() && state.routeRequested &&
                 !movement.wasBlockedByDynamicOccupancy()) {
-                this.cancelIfCurrent(target, generation);
+                if (!this.isSafespotted(target)) this.cancelIfCurrent(target, generation);
                 return;
             }
             if (movement.size() > 0) return;
@@ -809,6 +809,10 @@ export class Combat {
      * @return true when the interaction was dropped, so this cycle does nothing else.
      */
     private giveUpUnreachableTarget(target: Mobile, generation: number): boolean {
+        if (this.isSafespotted(target)) {
+            this.resetUnreachableTracking();
+            return false;
+        }
         const distance = this.character.getLocation().getDistance(target.getLocation());
         // The first cycle measured only records the starting gap; it is not progress.
         const closing = this.unreachableDistance >= 0 && distance < this.unreachableDistance;
@@ -827,6 +831,17 @@ export class Combat {
         this.resetUnreachableTracking();
         this.cancelIfCurrent(target, generation);
         return true;
+    }
+
+    /**
+     * An NPC whose target is fighting it from where it cannot be reached (a safespot) keeps it,
+     * facing it and trying its step every cycle, as live does; it does not reset and walk home
+     * between the target's hits. Fighting it means attacking it, or having hit it within the
+     * attacker window. A target that stops fighting is let go by the usual releases.
+     */
+    private isSafespotted(target: Mobile): boolean {
+        return this.character.isNpc() &&
+            (target.getCombat().getTarget() === this.character || this.attacker === target);
     }
 
     /** Every new engagement, and every actor with no engagement, starts with full patience. */

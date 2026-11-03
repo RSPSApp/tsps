@@ -16,6 +16,7 @@ import { MagicSpellbook } from "../../../../model/MagicSpellbook";
 import { Skill } from "../../../../model/Skill";
 import type { CombatSpell } from "../../magic/CombatSpell";
 import { Spell } from "../../magic/Spell";
+import { Autocasting } from "../../magic/Autocasting";
 
 
 export class MagicCombatMethod extends CombatMethod {
@@ -170,7 +171,7 @@ export class MagicCombatMethod extends CombatMethod {
         }
 
         // Set the current spell to the autocast spell if it's null.
-        if (character.getCombat().getCastSpell() == null) {
+        if (character.getCombat().getCastSpell() == null && Autocasting.isActive(character.getAsPlayer())) {
             character.getCombat().setCastSpell(character.getCombat().getAutocastSpell());
         }
 
@@ -261,7 +262,9 @@ export class MagicCombatMethod extends CombatMethod {
         // Update previousCastSpell so effects can be handled.
         const current = character.getCombat().getCastSpell();
         character.getCombat().setCastSpell(null);
-        if (character.getCombat().getAutocastSpell() === null) {
+        // A default spell kept without a staff isn't autocast: a hand cast still stops here,
+        // rather than falling back to melee and walking around a safespot to reach the target.
+        if (!Autocasting.isActive(character.getAsPlayer())) {
             // The same tick as the cast: keep its animation, which the reset would replace.
             character.getCombat().reset(false);
             // reset() clears the interaction; a resolved manual cast still faces its target.

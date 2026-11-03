@@ -53,6 +53,7 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   ARENA_ENTRANCE_OPEN: 3784, // troll_stronghold_arena_entrance_inactive
   ARENA_EXIT_OPEN: 3787, // troll_stronghold_arena_exit_inactive
   PRISON_DOOR_9_OPEN: 3781, // troll_stronghold_prison_door_open, capture 740
+  GRUM_DOOR_OPEN: 1542, // Grum's Gold Exchange; capture 465
 });
 
 let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
@@ -112,9 +113,7 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.GATE_301, O.GATE_302],
     // The Lassar cistern gate opens into its actionless, same-model cache variant.
     [O.GATE_268, O.GATE_269],
-    // Tree Gnome Stronghold doors: 1967/1968 open into the cache's nameless 1969/1970.
-    [O.TREE_DOOR, 1969],
-    [O.TREE_DOOR_2, 1970],
+    // The Grand Tree's doors (O.TREE_DOOR, O.TREE_DOOR_2) open in place: GrandTree.plugin.js.
     // Troll Stronghold's cache has an action-less open loc 3811 with the same
     // model as closed 3810, so it cannot be paired by the normal action scan.
     [O.STOREROOM_DOOR, O.STOREROOM_DOOR + 1],
@@ -377,6 +376,17 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       crossX: 2848,
       closeTicks: 2,
       openSoundId: 62,
+    }),
+    // Grum's Gold Exchange, Port Sarim (capture 465 ticks 9416-9421 in, 9476-9479 out): DOOR_5 has
+    // no Close partner. Open puts the open leaf on the north edge of the tile inside, the player
+    // steps through and the door shuts two ticks later. Live also puts loc 38848 on the door's
+    // own edge; it is left out as for Guidor's gate, because it blocks the step.
+    Object.freeze({
+      closed: [[O.DOOR_5, 3016, 3246, 0, 0]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.GRUM_DOOR_OPEN, 3015, 3246, 0, 1]],
+      crossX: 3016,
+      closeTicks: 2,
+      openSoundId: 62, // the door sound, as captured
     }),
   ]);
   DOUBLE_DOOR_FAMILY_IDS_BY_ID = new Map(

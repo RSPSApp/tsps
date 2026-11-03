@@ -704,3 +704,64 @@ test('ending and resetting a match clears both native Castle Wars team flags', t
     assert.equal(vars.get(154), 0);
   }
 });
+
+test('Lanthus freeze choices survive a practice start and cap Ice Barrage, movement and the overlay', t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  const realApi = PluginManager.createApi('CastleWarsPracticeFreezeTest');
+  t.mock.method(registry, 'sendMultiChatboxPrompt', realApi.sendMultiChatboxPrompt);
+  t.mock.method(registry, 'onCustomEvent', realApi.onCustomEvent);
+  registry.emitCustomEvent = realApi.emitCustomEvent;
+  t.mock.method(World, 'getItems', () => []);
+  Settings(registry, game);
+  let syncTimer;
+  require('../plugins/interface/FreezeTimer.plugin').register({ core, onCombatHitResolved() {}, onPlayerLogin() {},
+    onPlayerProcess(handler) { syncTimer = handler; }, onPlayerLogout() {} });
+  t.after(() => { game.endGame(); game.gameArea.players.length = 0; delete registry.emitCustomEvent; });
+
+  for (const [choice, ticks, practice] of [['10 seconds', 16, true], ['15 seconds', 25, true], ['Standard', 32, true], ['10 seconds', 32, false]]) {
+    const caster = new Player(null), victim = new Player(null);
+    for (const p of [caster, victim]) {
+      t.mock.method(p, 'getSession', () => ({ sendClientPacket: () => true }));
+      t.mock.method(p, 'getArea', () => game.gameArea);
+      t.mock.method(p, 'smartMove', () => {});
+      t.mock.method(p, 'requestLogout', () => {});
+      p.setLocation(new core.Location(2426, 3082, 1));
+    }
+    const configs = new Map();
+    t.mock.method(victim.getPacketSender(), 'sendConfig', (id, value) => configs.set(id, value));
+    Settings.openSettings({ player: victim });
+    for (const text of ['More settings', 'Ice freeze:', choice]) {
+      const pending = MultiChatboxPrompt.getPending(victim);
+      const index = pending.options.findIndex(option => option.startsWith(text));
+      assert.notEqual(index, -1, `${text} is available`);
+      assert.equal(PluginManager.emitInterfaceActionClick({ player: victim,
+        buttonId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, groupId: 219, action: 1, slot: index + 1, handled: false }), true);
+    }
+    caster.setPlayerBot(practice);
+    caster.setAttribute(game.BOT_KEY, practice);
+    for (const [p, team] of [[caster, TEAM.SARADOMIN], [victim, TEAM.ZAMORAK]]) {
+      game.setTeamId(p, team);
+      game.waitingAreas[team].players.push(p);
+    }
+    game.beginStartCountdown();
+    submittedTasks.at(-1).execute();
+    assert.equal(game.getPhase(), game.PHASE.ACTIVE);
+    for (const area of Object.values(game.waitingAreas)) area.players.length = 0;
+    game.gameArea.players.push(caster, victim);
+    assert.equal(game.hasPracticeBots(), practice);
+
+    core.CombatSpells.ICE_BARRAGE.getSpell().spellEffectOnHitCalc(caster, victim, 10);
+    assert.equal(victim.getTimers().getTicks(core.TimerKey.FREEZE), ticks);
+    assert.equal(victim.getMovementQueue().getMobility().canMove(), false);
+    syncTimer({ player: victim });
+    assert.equal(configs.get(7998), Math.ceil(ticks * 0.6), 'the overlay receives the capped freeze duration');
+    for (let i = 0; i < ticks; i++) victim.getTimers().process();
+    assert.equal(victim.getTimers().has(core.TimerKey.FREEZE), false);
+    assert.equal(victim.getMovementQueue().getMobility().canMove(), true);
+    syncTimer({ player: victim });
+    assert.equal(configs.get(7998), 0, 'the overlay clears when movement unlocks');
+    game.endGame();
+    game.gameArea.players.length = 0;
+  }
+});

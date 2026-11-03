@@ -41,3 +41,14 @@ float getHeightInterp(vec2 pos, uint plane) {
 
     return max(h0, h1);
 }
+
+// How far an actor vertex (local units, after its tile height and ground offset) is below the
+// floor under it, in tiles; groundOffset is the ground offset the actor took. OSRS paints an actor
+// after its floor, so a death or emote that sinks part of the model into the ground still shows
+// it, and so do legs reaching over higher ground than the actor stands on; a depth-tested floor
+// would hide them. Actor shaders keep such a vertex where it projects but take its depth from
+// actorFloorViewPos, so the floor no longer covers it and walls in front still do.
+float actorSunkTiles(vec4 localPos, uint plane, float groundOffset) {
+    float floorY = -getHeightInterp(localPos.xz, plane) + groundOffset;
+    return max(localPos.y - floorY, 0.0) / 128.0;
+}

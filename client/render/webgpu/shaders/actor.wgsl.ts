@@ -411,6 +411,25 @@ fn applyPriorityDepthBias(viewPos: vec4<f32>, priority: u32) -> vec4<f32> {
     return out;
 }
 
+/** height-map.glsl actorSunkTiles: how far an actor vertex is below the floor under it, in tiles. */
+fn actorSunkTiles(localPos: vec4<f32>, plane: u32, groundOffset: f32) -> f32 {
+    let floorY = -getHeightInterp(localPos.xz, plane) + groundOffset;
+    return max(localPos.y - floorY, 0.0) / 128.0;
+}
+
+/** priority-depth.glsl actorFloorViewPos: where the line of sight to a sunk vertex crosses its floor's level. */
+fn actorFloorViewPos(viewPos: vec4<f32>, sunkTiles: f32, worldToView: mat4x4<f32>, projection: mat4x4<f32>) -> vec4<f32> {
+    let ortho = projection[3][3] > 0.5;
+    let up = (worldToView * vec4<f32>(0.0, -1.0, 0.0, 0.0)).xyz;
+    let towardEye = select(-viewPos.xyz, vec3<f32>(0.0, 0.0, 1.0), ortho);
+    let rise = dot(towardEye, up);
+    if (sunkTiles <= 0.0 || rise <= 0.0) {
+        return viewPos;
+    }
+    let along = sunkTiles / rise;
+    return vec4<f32>(viewPos.xyz + towardEye * select(min(along, 0.999), along, ortho), viewPos.w);
+}
+
 fn actorTextureAnimation(vertex: Vertex) -> vec2<f32> {
     let material = getMaterial(vertex.textureId);
     let textureAnimation = vec2<f32>(f32(material.animU), f32(material.animV));
@@ -484,15 +503,26 @@ function placement(kind: ActorKind): string {
     var vertex = decodeVertex(a_vertex.x, a_vertex.y, a_vertex.z, scene.u_brightness, actorHslOverride);
     ${fraction}
     let poseLinear = IDENTITY3;`;
-    // player.vert.glsl: the equipment face layer biases projected depth only, keeping the
-    // original screen position and perspective.
+    // npc/player.vert.glsl: parts sunk below the floor take the floor's depth where they show
+    // (actorFloorViewPos), and the player's equipment face layer biases projected depth only;
+    // both keep the original screen position and perspective.
+    const sinks = player || kind === "npc";
+    const floorView = (pos: string) =>
+        `actorFloorViewPos(${pos}, sunkTiles, actorU.u_worldEntityTransform * scene.u_viewMatrix, scene.u_projectionMatrix)`;
     const clip = player
         ? `
-    let depthViewPos = applyPriorityDepthBias(viewPos, vertex.priority);
+    let depthViewPos = applyPriorityDepthBias(${floorView("viewPos")}, vertex.priority);
     let clip = scene.u_projectionMatrix * viewPos;
     let depthClip = scene.u_projectionMatrix * depthViewPos;
     let playerZ = depthClip.z * clip.w / depthClip.w;
     let clipPosition = vec4<f32>(clip.x, clip.y, (playerZ + clip.w) * 0.5, clip.w);`
+        : sinks
+        ? `
+    viewPos = applyPriorityDepthBias(viewPos, vertex.priority);
+    let clip = scene.u_projectionMatrix * viewPos;
+    let floorClip = scene.u_projectionMatrix * ${floorView("viewPos")};
+    let floorZ = floorClip.z * clip.w / floorClip.w;
+    let clipPosition = vec4<f32>(clip.x, clip.y, (floorZ + clip.w) * 0.5, clip.w);`
         : `
     viewPos = applyPriorityDepthBias(viewPos, vertex.priority);
     let clip = scene.u_projectionMatrix * viewPos;
@@ -507,7 +537,8 @@ ${info}${pose}
     ) + vec4<f32>(info.tilePos.x, 0.0, info.tilePos.y, 0.0);
 
     localPos.y -= getHeightInterp(info.tilePos, info.plane);
-    localPos.y ${player ? "+=" : "-="} actorU.u_modelYOffset;
+    localPos.y ${player ? "+=" : "-="} actorU.u_modelYOffset;${sinks ? `
+    let sunkTiles = actorSunkTiles(localPos, info.plane, ${player ? "" : "-"}actorU.u_modelYOffset);` : ""}
 
     localPos /= vec4<f32>(128.0, 128.0, 128.0, 1.0);
     localPos += vec4<f32>(actorU.u_mapPos.x * 64.0, 0.0, actorU.u_mapPos.y * 64.0, 0.0);

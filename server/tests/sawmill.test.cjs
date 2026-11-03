@@ -17,7 +17,11 @@ const { start, convert, useLogOnOperator, openPlankMenu, plankMaking, data, LAST
 
 const core = PluginManager.getCoreApi();
 const events = [];
-const api = { core, emitCustomEvent: (name, payload) => events.push({ name, ...payload }) };
+const sawdust = [];
+const api = { core, emitCustomEvent: (name, payload) => events.push({ name, ...payload }), getItemOnGroundManager: () => ({
+  getGroundItem: (owner, id, location, area) => sawdust.find(item => item.getItem().getId() === id && item.getPosition().equals(location) && item.getPrivateArea() === area),
+  register: item => sawdust.push(item),
+}) };
 const COINS = 995;
 const MAHOGANY_LOGS = 6332;
 const MAHOGANY_PLANK = 8782;
@@ -30,6 +34,7 @@ before(async () => {
 
 beforeEach(() => {
   events.length = 0;
+  sawdust.length = 0;
 });
 
 /** 28 slots; coins and vouchers stack, everything else takes a slot each. */
@@ -43,6 +48,8 @@ function createPlayer(slots) {
     said, inventory, attributes,
     menu: () => menu,
     isRegistered: () => true,
+    getLocation: () => new core.Location(3302, 3491),
+    getPrivateArea: () => null,
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getPacketSender: () => ({ sendCreationMenu: (value) => { menu = value; } }),
@@ -75,6 +82,24 @@ function createPlayer(slots) {
 const mahogany = () => data().planks.find((plank) => plank.name === "Mahogany");
 const logs = (count, from = 3) => Object.fromEntries(Array.from({ length: count }, (_, i) => [from + i, { id: MAHOGANY_LOGS, amount: 1 }]));
 const ids = (player) => player.inventory.map((item) => item?.id ?? -1);
+
+test('paid planks leave one public, unowned sawdust pile at the player’s feet', () => {
+  const player = createPlayer({ 1: { id: COINS, amount: 10000 }, ...logs(3) });
+  assert.equal(convert(player, 3101, mahogany(), 2), 2);
+  assert.equal(sawdust.length, 1);
+  const dust = sawdust[0];
+  assert.equal(dust.getItem().getId(), core.ItemIdentifiers.SAWDUST);
+  assert.equal(dust.getItem().getAmount(), 1);
+  assert.equal(dust.getState(), core.GroundItemState.SEEN_BY_EVERYONE);
+  assert.equal(dust.getOwner(), undefined, 'other players, including ironmen, may take it');
+  assert.ok(dust.getPosition().equals(player.getLocation()));
+  assert.equal(dust.getDespawnDelay(), 200, 'capture3225 shows199ticks remaining on the creation tick');
+  convert(player, 3101, mahogany(), 1);
+  assert.equal(sawdust.length, 1, 'an existing pile on that tile is reused');
+  sawdust.length = 0;
+  convert(player, 3101, mahogany(), 1);
+  assert.equal(sawdust.length, 0, 'no logs and no successful payment produce no sawdust');
+});
 
 test("the data: every log and plank as the cache names it; every operator has Buy-plank", () => {
   for (const plank of data().planks) {
@@ -205,4 +230,23 @@ test("Varrock diary: a normal plank, and 20 mahogany planks in one go", () => {
   convert(few, 3101, mahogany(), 19);
   const tasks = events.filter((event) => event.name === "diary:task").map((event) => event.task);
   assert.deepEqual(tasks, ["make-a-normal-plank-at-the-sawmill", "make-20-mahogany-planks-in-one-go"]);
+});
+
+test('a real paid conversion registers sawdust visible to its payer and another player', t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const nativeApi = PluginManager.createApi('SawmillNativeFloor');
+  start(nativeApi);
+  t.after(() => start(api));
+  const player = new Player(null, new core.Location(3302, 3491));
+  player.setUsername('sawmillpayer'); player.getSession = () => ({ sendClientPacket: () => true });
+  player.getInventory().adds(COINS, 3000); player.getInventory().adds(MAHOGANY_LOGS, 2);
+  const floor = core.World.getItems(), previous = floor.length;
+  t.after(() => floor.splice(previous));
+  assert.equal(convert(player, 3101, mahogany(), 2), 2);
+  const dust = core.ItemOnGroundManager.getGroundItem(null, core.ItemIdentifiers.SAWDUST, player.getLocation(), null);
+  assert.ok(dust, 'native floor registration contains the actual cache Sawdust item');
+  const other = new Player(null, player.getLocation().clone()); other.setUsername('sawmillobserver');
+  assert.equal(core.ItemOnGroundManager.canSee(player, dust), true);
+  assert.equal(core.ItemOnGroundManager.canSee(other, dust), true);
+  assert.equal(dust.isStaticSpawn(), false, 'the pile must retain its timed expiry');
 });

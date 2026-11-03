@@ -41,6 +41,25 @@ before(async () => {
 
 const loc = (x, y, z = 0) => new core.Location(x, y, z);
 
+test('the native entrance doorway opens and crosses in both directions', () => {
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3363, 3299);
+  const door = core.MapObjects.get(core.CacheDefinitions.getLocId('magictraining_temple_door'), loc(3363, 3299), null);
+  assert.equal(door?.getDefinition().getActions()[0], 'Enter');
+  const api = PluginManager.createApi('MageTrainingArenaDoorTest');
+  Lobby.attach(api);
+  for (const [start, end] of [[3298, 3300], [3300, 3298]]) {
+    const player = new (require('../dist/game/entity/impl/player/Player').Player)(null, loc(3363, start));
+    player.getSession = () => ({ sendClientPacket: () => true });
+    const animations = [];
+    player.getPacketSender().sendObjectAnimation = (object, animation) => animations.push([object, animation.getId()]);
+    const handled = PluginManager.emitObjectInteraction({ player, object: door, objectId: door.getId(), definition: door.getDefinition(), clickType: 1, handled: false });
+    assert.equal(handled, true);
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3363, end]);
+    assert.deepEqual(animations, [[door, core.CacheDefinitions.getSeqId('magictraining_light_door_open')]]);
+  }
+});
+
 function fakePlayer(x = 3363, y = 9644, z = 0) {
   let tile = loc(x, y, z);
   const items = new Map();

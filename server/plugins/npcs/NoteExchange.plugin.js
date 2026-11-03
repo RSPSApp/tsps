@@ -10,6 +10,7 @@ const path = require("path");
 const EXCHANGE_FIVE = 5;
 /** Ours (not captured). */
 const AMOUNT_PROMPT = "Enter amount:";
+const LAST_X_ATTRIBUTE = "note-exchange:last-x";
 
 let core;
 let DATA;
@@ -89,7 +90,9 @@ function askAmount(player, merchant, noteId, itemId) {
   player.getPacketSender().sendInterfaceRemoval();
   player.setEnteredAmountAction({
     execute: (amount) => {
-      if (Number.isSafeInteger(amount) && amount > 0) exchange(player, merchant, noteId, itemId, amount);
+      if (!Number.isSafeInteger(amount) || amount <= 0) return;
+      if (merchant.rememberX) player.setAttribute(LAST_X_ATTRIBUTE, amount);
+      exchange(player, merchant, noteId, itemId, amount);
     },
   });
   player.getPacketSender().sendEnterAmountPrompt(AMOUNT_PROMPT);
@@ -99,10 +102,12 @@ function askAmount(player, merchant, noteId, itemId) {
 function openMenu(player, merchant, noteId, itemId) {
   const { DialogueChainBuilder, OptionDialogue } = core;
   const notes = player.getInventory().getAmount(noteId);
+  const remembered = merchant.rememberX ? player.getAttribute(LAST_X_ATTRIBUTE) : 0;
+  const shortcut = Number.isSafeInteger(remembered) && remembered > 0 ? remembered : EXCHANGE_FIVE;
   const choose = (option) => {
     switch (Number(option)) {
       case 1: return exchange(player, merchant, noteId, itemId, 1);
-      case 2: return exchange(player, merchant, noteId, itemId, EXCHANGE_FIVE);
+      case 2: return exchange(player, merchant, noteId, itemId, shortcut);
       case 3: return exchange(player, merchant, noteId, itemId, notes);
       case 4: return askAmount(player, merchant, noteId, itemId);
       default: return player.getPacketSender().sendInterfaceRemoval();
@@ -112,7 +117,7 @@ function openMenu(player, merchant, noteId, itemId) {
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new OptionDialogue(0, { executeOption: choose },
       `Exchange 1 (${fee} coins).`,
-      `Exchange ${EXCHANGE_FIVE} (${EXCHANGE_FIVE * fee} coins).`,
+      `Exchange ${shortcut} (${shortcut * fee} coins).`,
       `Exchange all (${notes * fee} coins).`,
       "Exchange X.",
       "Cancel.",
@@ -139,6 +144,7 @@ module.exports = {
   _test: { exchangeable, accepts },
   register(api) {
     core = api.core;
+    api.persistAttribute(LAST_X_ATTRIBUTE, 0);
     api.onItemOnNpc(useOnMerchant);
   },
 };

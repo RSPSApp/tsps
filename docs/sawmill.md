@@ -60,5 +60,7 @@ The duplicate "Sawmill" shop, with the same stock and operators, is removed.
 - **Varrock easy:** "Make a normal plank at the Sawmill" (any wood plank made).
 - **Varrock medium:** "Make 20 Mahogany Planks in one go" (20 or more from one choice).
 
-## Not modelled
-The Sawdust (9468) that appeared on the floor once in a capture. It wasn't seen again, and it's likely unrelated.
+## Sawdust
+The [OSRS Wiki's Sawdust page](https://oldschool.runescape.wiki/w/Sawdust) says paid plank conversion leaves sawdust at the player's feet, available even to other ironmen. The active cache identifies this as `newsletter_sawdust` (9468), named Sawdust.
+
+Successful conversion leaves one public, unowned pile on the player's tile for 200 ticks. An existing public pile on that tile/private area is reused. In normal-world rsprox 1655, tick 152 makes one mahogany plank and creates quantity 1 with 199 ticks remaining; tick 163 makes two more planks without creating another pile while the first remains. A failed payment creates none. Capture 3225 independently shows the same public quantity and lifetime. These captures support existing-pile suppression; other possible conditions are unverified.

@@ -219,7 +219,8 @@
       "name": "Underwall tunnel (Draynor Village)",
       "object": [19032,19036],
       "level": 42,
-      "between": {"ends":[[3065,3260,0],[3070,3260,0]],"cross":[{"use":"tunnel","args":["to"]}]}
+      "note": "rsprox 4001, 2 April 2026: human_crawling (844) then the opposite landing one tick later; no diary requirement.",
+      "between": {"ends":[[3066,3257,0],[3070,3257,0]],"cross":[{"anim":"DARK_TUNNEL"},{"wait":1},{"tele":"to"}]}
     },
     {
       "name": "Stepping stone (Champions' Guild)",

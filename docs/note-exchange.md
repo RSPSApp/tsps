@@ -57,6 +57,8 @@ Otherwise the exchange menu opens (captured):
 
 "Exchange X." asks for an amount. The prompt text, "Enter amount:", is ours; no capture shows it.
 
+The Elder Chaos druid remembers the last positive X entered, saved per character. On later exchanges, that amount replaces the 5-item shortcut, including its 50-coins-per-item price; Exchange X remains available to change it. Notes, coins and inventory space still cap the exchange. This addresses the remembered-quantity report in #2095; the exact placement of the remembered amount in the OSRS menu has not been independently captured.
+
 ## The exchange
 
 The exchange is all done on the tick of the choice (captured):

@@ -132,6 +132,31 @@ test("Death Plateau's wounded soldier stays seated at the road fork", (t) => {
   assert.equal(soldier.getMovementCoordinator().getRadius(), 0);
 });
 
+for (const [name, parentName, childName, stage, pose] of [
+  ["crossroads", "corsair_captain_crossroads", "corsair_captain_1op", 0, "human_ready"],
+  ["post-quest", "corsair_captain_throne", "corsair_captain_throne_child", 60, "rd_sitting_at_bench"],
+]) test(`Captain Tock's ${name} base spawn does not slide around in its fixed pose`, (t) => {
+  const id = CacheDefinitions.getNpcId(parentName);
+  const row = require("../data/definitions/npc-spawns.json").find(spawn => spawn.id === id);
+  assert.ok(row, "the canonical captain spawn exists");
+  const definition = CacheDefinitions.getNpc(id);
+  assert.equal(CacheDefinitions.getSeqName(definition.walkSeqId), "human_ready", "the parent has a standing pose as its walk");
+  const visible = CacheDefinitions.resolveNpc(id, { getVarbit: () => stage, getVarp: () => 0 });
+  assert.equal(visible.id, CacheDefinitions.getNpcId(childName));
+  assert.equal(CacheDefinitions.getSeqName(visible.idleSeqId), pose);
+  assert.equal(CacheDefinitions.getSeqName(visible.walkSeqId), "human_walk_f", "the visible child keeps its real walk animation");
+
+  spawnFile([row]);
+  const [captain] = live(id);
+  assert.ok(captain, "the real loader activates the canonical spawn");
+  t.mock.method(World, "isLocationActive", () => true);
+  t.mock.method(Math, "random", () => 0.1);
+  const steps = t.mock.method(captain.getMovementQueue(), "addSteps");
+  for (let tick = 0; tick < 100; tick++) captain.getMovementCoordinator().process();
+  assert.equal(steps.mock.callCount(), 0, "the base captain must not attempt random walking");
+  assert.equal(captain.getMovementCoordinator().getRadius(), 0);
+});
+
 test("extended NPC view distances preload their full view and wander margin", () => {
   spawnFile([{ id: MAN, x: 3370, y: 3218 }], false);
   NpcSpawnDefinitionLoader.activateNear(new Location(3222, 3218, 0));

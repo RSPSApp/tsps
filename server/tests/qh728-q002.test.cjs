@@ -55,6 +55,7 @@ function setup(options = {}) {
   const spawned = [], removed = [], tasks = [], attacks = [];
   let tick = 0;
   const attrs = new Map(), inventory = new Map(), varbits = new Map(), messages = [];
+  const persisted = new Map(); // persistAttribute key -> default, as PlayerSave keeps them
   const xp = [];
   let location = new core.Location(2955, 3507, 0);
   let hitpoints = 100;
@@ -159,7 +160,7 @@ function setup(options = {}) {
       },
       ObjectManager: { register() {}, deregister() {} },
     },
-    persistAttribute() {},
+    persistAttribute(key, defaultValue) { persisted.set(key, defaultValue); },
     onNpcDialogueCondition(fn) { hooks.conditions.push(fn); },
     onCustomEvent(name, fn) { const list = hooks.custom.get(name) ?? []; list.push(fn); hooks.custom.set(name, list); },
     emitCustomEvent(name, event) {
@@ -255,7 +256,18 @@ function setup(options = {}) {
 
   return {
     core, I, N, hooks, quest, attrs, inventory, varbits, messages, xp, spawned, removed, attacks,
-    player, emit, talk, answer, enterZone, lastVariant, advance, dispatchObject,
+    player, emit, talk, answer, enterZone, lastVariant, advance, dispatchObject, persisted,
+    /** A save/load round trip: quest attributes that are not persisted are lost, defaults fill gaps. */
+    relog() {
+      for (const key of [...attrs.keys()]) {
+        if (key.startsWith('quest.another_slice_of_ham.') && !persisted.has(key)) attrs.delete(key);
+      }
+      for (const [key, value] of persisted) {
+        if (value !== undefined && attrs.get(key) === undefined) attrs.set(key, value);
+      }
+      varbits.clear();
+      for (const login of hooks.login) login({ player });
+    },
     setLocation(x, y, z = 0) { location = new core.Location(x, y, z); },
     getLocation() { return location; },
     setWeapon(id) { weapon = id === null ? null : { getId: () => id }; },
@@ -884,19 +896,19 @@ test('Another Slice of H.A.M.: a dropped cleaned artefact goes back into its dig
   assert.equal(h.inventory.get(h.I[spot.dirty]), 1, 're-digging recovers the artefact');
 });
 
-test('Another Slice of H.A.M.: the city doorway enters the usable station floor, not the sealed captured landing', () => {
+test('Another Slice of H.A.M.: the city doorway enters the dig floor during the quest and the captured platform after it', () => {
   const h = setup({ locTeleports: true });
 
-  // Stage 2 (digging): the captured 2488,5536 landing is a one-tile room cut off
-  // from the dig tunnel, so the quest's doorway must use the station floor.
+  // Stage 2 (digging): the captured 2488,5536 landing (recorded on a finished account) is
+  // the train platform, with no walkable link to the dig tunnel, so the quest uses the dig floor.
   h.quest.setStage(h.player, 2);
   h.setLocation(2695, 5277, 1);
   const digging = h.dispatchObject({ objectId: 23052, x: 2695, y: 5277, z: 1 });
   assert.equal(digging.handled, true, 'the quest claims the doorway before LocTeleports');
   assert.deepEqual([h.getLocation().getX(), h.getLocation().getY(), h.getLocation().getZ()], [2513, 5556, 0]);
 
-  // Stage 8-10: the staircase is closed; the message must not drop the player on
-  // the sealed landing and LocTeleports must not run on the same click.
+  // Stage 8-10: the staircase is closed; the message must not move the player and
+  // LocTeleports must not run on the same click.
   h.quest.setStage(h.player, 8);
   h.setLocation(2695, 5277, 1);
   const kidnapped = h.dispatchObject({ objectId: 23052, x: 2695, y: 5277, z: 1 });
@@ -904,22 +916,91 @@ test('Another Slice of H.A.M.: the city doorway enters the usable station floor,
   assert.equal(h.lastVariant(), 'upon-defeating-the-two-h-a-m-members-attempting-to-enter-the-rail-station-via-dorgesh-kaan');
   assert.deepEqual([h.getLocation().getX(), h.getLocation().getY(), h.getLocation().getZ()], [2695, 5277, 1]);
 
-  // After completion the station is open again.
+  // After completion the doorway is the captured station entrance again.
   h.quest.setStage(h.player, 11);
   h.setLocation(2695, 5277, 1);
   const complete = h.dispatchObject({ objectId: 23052, x: 2695, y: 5277, z: 1 });
-  assert.equal(complete.handled, true);
-  assert.deepEqual([h.getLocation().getX(), h.getLocation().getY(), h.getLocation().getZ()], [2513, 5556, 0]);
+  assert.equal(complete.handled, true, 'LocTeleports handles the completed doorway');
+  h.advance();
+  assert.deepEqual([h.getLocation().getX(), h.getLocation().getY(), h.getLocation().getZ()], [2488, 5536, 0]);
 });
 
-test('Another Slice of H.A.M.: the train ladder climbs to the station floor, not the sealed stub', () => {
+test('Another Slice of H.A.M.: the train ladder works from the stage-9 showdown and after the special', () => {
+  for (const [stage, exposed] of [[9, true], [10, true]]) {
+    const h = setup();
+    h.quest.setStage(h.player, stage);
+    h.attrs.set('quest.another_slice_of_ham.sigmund-exposed', exposed);
+    h.setLocation(2544, 5509, 0);
+    const event = { player: h.player, objectId: 23504, handled: false };
+    for (const handler of h.hooks.custom.get('ladders:climb')) handler(event);
+    assert.equal(event.handled, true, `stage ${stage} claims the train ladder`);
+    assert.deepEqual([h.getLocation().getX(), h.getLocation().getY(), h.getLocation().getZ()], [2512, 5533, 0]);
+  }
+});
+
+test('Another Slice of H.A.M.: leaving the stage-6 ambush can return to the tower', () => {
   const h = setup();
-  h.quest.setStage(h.player, 10);
-  h.setLocation(2544, 5509, 0);
-  const event = { player: h.player, objectId: 23504, handled: false };
-  for (const handler of h.hooks.custom.get('ladders:climb')) handler(event);
-  assert.equal(event.handled, true);
-  assert.deepEqual([h.getLocation().getX(), h.getLocation().getY(), h.getLocation().getZ()], [2513, 5556, 0]);
+  const { N } = h;
+  h.quest.setStage(h.player, 6);
+  h.attrs.set('quest.another_slice_of_ham.snipers-dead', 1); // archer dead, mage alive
+
+  // Died or teleported out: the generals in Goblin Village send the player back.
+  h.setLocation(2955, 3507, 0);
+  h.talk('General Wartface', N.GENERAL_WARTFACE);
+  assert.deepEqual([h.getLocation().getX(), h.getLocation().getY(), h.getLocation().getZ()], [2445, 5425, 0]);
+  assert.ok(h.spawned.some((npc) => npc.getId() === N.H_A_M_MAGE), 'the surviving mage is back on the tower');
+  assert.ok(!h.spawned.some((npc) => npc.getId() === N.H_A_M_ARCHER), 'the dead archer stays dead');
+  assert.equal(h.quest.getStage(h.player), 6);
+
+  // Oldak still offers the return teleport during the ambush.
+  h.talk('Oldak', N.OLDAK_3);
+  assert.equal(h.lastVariant(), 'talking-to-oldak-returning-to-oldak-again');
+});
+
+test('Another Slice of H.A.M.: an exposed stage-9 player returns to the railway without redoing the tunnel', () => {
+  const h = setup();
+  const { N } = h;
+  h.quest.setStage(h.player, 9);
+  h.attrs.set('quest.another_slice_of_ham.sigmund-exposed', true);
+  h.attrs.set('quest.another_slice_of_ham.guards-engaged', false);
+  h.attrs.set('another-slice-of-ham:guard-defeated', false);
+
+  // Died to Sigmund before the special: back through the cave zone and tunnel.
+  h.setLocation(3172, 9569, 0);
+  h.enterZone(0);
+  assert.deepEqual([h.getLocation().getX(), h.getLocation().getY(), h.getLocation().getZ()], [2396, 5553, 0]);
+  assert.ok(!h.spawned.some((npc) => npc.getId() === N.GUARD_86), 'no tunnel guards after exposure');
+  h.setLocation(2412, 5537, 0);
+  h.enterZone(1);
+  assert.notEqual(h.lastVariant(), 'the-distraction-if-the-guards-spot-the-player');
+
+  h.emit('ladders:climb', { objectId: 23376, handled: false });
+  assert.deepEqual([h.getLocation().getX(), h.getLocation().getY(), h.getLocation().getZ()], [2538, 5515, 0]);
+  assert.ok(h.spawned.some((npc) => npc.getId() === N.SIGMUND_8));
+  assert.equal(h.quest.getStage(h.player), 9);
+});
+
+test('Another Slice of H.A.M.: saves from the old stage order load on the live stages', () => {
+  const old6 = setup();
+  old6.quest.setStage(old6.player, 6);
+  old6.attrs.set('quest.another_slice_of_ham.snipers-dead', 3);
+  old6.relog();
+  assert.equal(old6.quest.getStage(old6.player), 7, 'old 6 with both snipers dead is live 7');
+  assert.ok(!old6.spawned.some((npc) => npc.getId() === old6.N.H_A_M_MAGE), 'no snipers respawn');
+
+  const old10 = setup();
+  old10.quest.setStage(old10.player, 10);
+  old10.attrs.set('quest.another_slice_of_ham.sigmund-exposed', true);
+  old10.relog();
+  assert.equal(old10.quest.getStage(old10.player), 9, 'old 10 before the special is live 9');
+  assert.ok(old10.spawned.some((npc) => npc.getId() === old10.N.SIGMUND_8), 'the showdown resumes');
+
+  const live10 = setup();
+  live10.quest.setStage(live10.player, 10);
+  live10.attrs.set('quest.another_slice_of_ham.sigmund-exposed', true);
+  live10.attrs.set('quest.another_slice_of_ham.mace-special-used', true);
+  live10.relog();
+  assert.equal(live10.quest.getStage(live10.player), 10, 'live 10 after the special is kept');
 });
 
 test('Another Slice of H.A.M.: handed-in artefacts keep their varbit at 2 through a relog', () => {
@@ -935,11 +1016,22 @@ test('Another Slice of H.A.M.: handed-in artefacts keep their varbit at 2 throug
   h.hooks.itemOnObject[0]({ player: h.player, itemId: h.I.TROWEL, objectId: SPOTS[0].objectId, handled: false });
   assert.equal(h.varbits.get(3551), 1);
 
-  // Login re-sends every artifact varbit; the delivered one must not fall back to 1.
-  for (const login of h.hooks.login) login({ player: h.player });
+  // A save/load round trip re-sends every artifact varbit; the delivered one must not fall back to 1.
+  h.relog();
   assert.equal(h.varbits.get(3555), 2, 'relog keeps the handed-in spot at 2');
   assert.equal(h.varbits.get(3551), 1, 'dug-but-not-handed-in stays at 1');
   assert.equal(h.varbits.get(3552), 0, 'undug stays at 0');
+});
+
+test('Another Slice of H.A.M.: saves with only the hand-in count recover a delivered mask', () => {
+  const h = setup();
+  h.quest.setStage(h.player, 2);
+  h.attrs.set('quest.another_slice_of_ham.spots', 0b111);
+  h.attrs.set('quest.another_slice_of_ham.handed-in', 2);
+  h.relog();
+  assert.equal(h.varbits.get(3551), 2);
+  assert.equal(h.varbits.get(3552), 2);
+  assert.equal(h.varbits.get(3553), 1, 'the third dug spot is not counted as delivered');
 });
 
 test('Another Slice of H.A.M.: live stage values put the ambush at 6, the deaths at 7 and the special at 10', () => {

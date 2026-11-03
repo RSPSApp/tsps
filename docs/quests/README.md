@@ -19,7 +19,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [A Tail of Two Cats](a-tail-of-two-cats/README.md) | 🔄 in progress | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [A Taste of Hope](taste-of-hope/README.md) | 🔄 in progress | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [Animal Magnetism](animal-magnetism/README.md) | untested |  |  |  |  |
-| [Another Slice of H.A.M.](another-slice-of-ham/README.md) | ✅ passed | 2026-11-03 | agent | DeepSeek V4.1 Flash | 4 |
+| [Another Slice of H.A.M.](another-slice-of-ham/README.md) | ✅ passed | 2026-11-03 | agent | DeepSeek V4.1 Flash | 3 |
 | [At First Light](at-first-light/README.md) | ⚠️ passed with issues |  | agent |  | 1 |
 | [Bear Your Soul](bear-your-soul/README.md) | 🔄 in progress | 2026-10-31 | agent | DeepSeek V4.1 Flash |  |
 | [Below Ice Mountain](below-ice-mountain/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 6 |

@@ -125,8 +125,8 @@ const TUNNEL_LANDING = { x: 2396, y: 5553, z: 0 };
 // The H.A.M. tunnel the cave zone teleports to, and the railway room the tunnel ladder drops to.
 const tunnelAt = (o) => o.z === 0 && o.x >= 2393 && o.x <= 2414 && o.y >= 5525 && o.y <= 5560;
 const RAILWAY_LANDING = { x: 2538, y: 5515, z: 0 };
-// The station landing captured from OSRS is 2488,5536 in this cache: a one-tile stub cut off
-// from the dig tunnel. The quest doorway and ladder deliberately use the dig floor instead.
+// The station landing captured from OSRS (on a finished account) is 2488,5536: the train platform,
+// with no walkable link to the dig tunnel. During the quest the doorway uses the dig floor instead.
 const STATION_CAPTURE_STUB = { x: 2488, y: 5536, z: 0 };
 
 // ---------- harness ----------
@@ -447,9 +447,9 @@ async function route() {
     await travel(TILE.CITY_DOORWAY);
     await objectOption(23052, 2695, 5277, "Enter");
     await waitFor("the station landing", (o) => o.x >= 2500 && o.x <= 2530 && o.y >= 5540 && o.y <= 5570 && o.z === 0, 10);
-    // This cache's captured station landing (2488,5536) is a sealed one-tile stub; the quest
-    // doorway intercepts stage 1-11 players and uses the dig floor. Recorded, not patched here.
-    finding(`captured station landing ${JSON.stringify(STATION_CAPTURE_STUB)} is cut off from the dig tunnel in this cache; the quest doorway lands at ${JSON.stringify(TILE.STATION_LANDING)}`);
+    // The captured landing (2488,5536) is the post-quest train platform; the quest doorway
+    // intercepts stage 1-10 players and uses the dig floor.
+    finding(`captured station landing ${JSON.stringify(STATION_CAPTURE_STUB)} is the post-quest platform, cut off from the dig tunnel; the quest doorway lands at ${JSON.stringify(TILE.STATION_LANDING)}`);
     await expectStage(1);
   });
 
@@ -722,7 +722,7 @@ async function route() {
     if (close.error) finding(`close_interface after completion: ${String(close.error).slice(0, 200)}`);
     await travel(TILE.RAILWAY_LADDER);
     await objectOption(23504, 2544, 5509, "Climb-up");
-    await waitFor("the station landing after the railway", (o) => o.x >= 2500 && o.x <= 2530 && o.y >= 5540 && o.y <= 5570, 12);
+    await waitFor("the station landing after the railway", (o) => o.x >= 2500 && o.x <= 2530 && o.y >= 5530 && o.y <= 5570, 12);
     await travel(TILE.WALL);
     await objectOption(23285, 2521, 5607, "Enter");
     await waitFor("Dorgesh-Kaan after the railway", (o) => o.x >= 2600 && o.z === 1, 12);

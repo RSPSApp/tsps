@@ -15,11 +15,12 @@ travel: travel_to
 
 The latest run is scripted and unwatched: [route.cjs](route.cjs) played the whole quest over
 the agent MCP from a fresh stage-0 account to completion, checking Quest Helper before each leg
-and varbit 3550 after it. Three quest bugs were fixed first: the station doorway and train
-ladder landed on the sealed captured station tile, handed-in artefacts reverted to the dug
-varbit, and the ambush/sniper/special stages were one behind live OSRS. The timed pass asserted
-stages 1-5 and 7-11, took 978.1s (16m18s), and finished with the rewards, a repeat talk and a
-relog.
+and varbit 3550 after it. Three quest bugs were fixed first: the station doorway landed on the
+captured post-quest platform, which has no link to the dig floor, handed-in artefacts reverted to
+the dug varbit, and the ambush/sniper/special stages were one behind live OSRS. The timed pass
+asserted stages 1-5 and 7-11, took 978.1s (16m18s), and finished with the rewards, a repeat talk
+and a relog. The review follow-ups in the findings below came after that run; they are covered
+by unit tests, and the full route has not been re-run on them.
 
 To re-run it (needs the Quest Helper bridge and a server with `AGENT_MCP=1`), from `server/`:
 
@@ -53,10 +54,23 @@ live varbit table and Quest Helper's pinned commit
 
 Newest first.
 
-- **open** The captured station landing is a sealed one-tile room in this cache:
-  `server/plugins/world/data/loc-teleports.json:445` sends doorway 23052 to (2488,5536), which
-  has no route to the dig floor. The quest plugin now claims the doorway and lands at
-  (2513,5556); correcting the capture belongs in the dumper, not generated data.
+- **fixed** Review follow-ups to `ed4f07f68`, fixed in `FOLLOWUP_COMMIT`:
+  - Stage 6 had no way back to the tower: the generals only moved a stage-5 player into the
+    instance, and Oldak's return dialogue skipped 6. A stage-6 player who died or left is now sent
+    back by the generals with the surviving snipers, and Oldak offers the return at 5-7.
+  - The delivered bitmask was never registered with `persistAttribute`, so a real logout lost it
+    and login fell back to the first N spots. It is now persisted (default 0); a save with a
+    hand-in count but no mask still recovers one.
+  - Stage 9 covers the tunnel and the showdown, so an exposed player who died to Sigmund was
+    sent through the tunnel guards, the distraction and the descent cutscene again, and the train
+    ladder ignored them. An exposed stage-9 player now goes straight back to the railway.
+  - Saves from the old order (6 with both snipers dead, 10 before the special) load as 7 and 9.
+  - The doorway and ladder landings: the flood fill over this cache's collision shows (2488,5536)
+    is a 296-tile platform (x 2479-2488) with no walkable link to the dig floor, not a one-tile
+    room, and the original ladder landing (2512,5533) shares the dig floor with (2513,5556). The
+    doorway capture (`loc-teleports.json:445`) comes from a finished account, so the quest now
+    claims the doorway only at stages 1-10 and leaves it to LocTeleports at 11. The ladder keeps
+    (2512,5533).
 - **open** Quest Helper cannot see Zanik as a follower:
   `AnotherSliceOfHam.java:154` gates the scribe and Oldak steps on `FollowerRequirement` /
   `NpcInteractingRequirement(SLICE_ZANIK_FOLLOWER)`, while the server models "following" only as
@@ -68,10 +82,10 @@ Newest first.
 - **open** `travel_to` reports `no-route` inside the swamp cave (for example 3172,9569 to
   3175,9569) and from the H.A.M. tunnel at (2396,5553). The route uses the cave rope, the tunnel
   ladder and the quest's cave zone instead. Not a quest bug.
-- **fixed** The Goblin Village doorway 23052 and the train ladder 23504 used the captured
-  (2488,5536) landing, so the station was unreachable during the quest. Both now land on
-  (2513,5556), the station floor the dig uses; the doorway plays the kidnap transcript at stages
-  8-10 and reopens at 11. Covered by the doorway and ladder tests. Fixed in `ed4f07f68`.
+- **fixed** The Goblin Village doorway 23052 used the captured (2488,5536) landing during the
+  quest, so the dig floor was unreachable. During the quest it now lands on (2513,5556), the
+  floor the dig uses, and plays the kidnap transcript at stages 8-10. Covered by the doorway
+  test. Fixed in `ed4f07f68`.
 - **fixed** Handing an artefact to Tegdak left its `slice_artifact_N` varbit at 1 (dug), so Quest
   Helper kept the hand-in step. The hand-in now sends 2 and persists a delivered bitmask, so
   login re-sends 2/1/0 for handed-in/dug/undug. Covered by the relog varbit test. Fixed in

@@ -22,11 +22,12 @@
  *
  * Stages (varbit 3550): 1 started, 2 digging (tools in hand), 3 six artefacts
  * handed in (Zanik at the dig, mace to the scribe), 4 scribe sent us to the
- * goblin generals, 5 teleported to Goblin Village (generals' cutscene, snipers
- * alive), 6 H.A.M. archer and mage dead, 8 Sigmund kidnapped Zanik (sergeants at
- * the Lumbridge Swamp, Alvijar back in the city), 9 in the swamp tunnel (cave
- * sergeants visible), 10 at the railway fighting Sigmund, 11 complete (the cache
- * DB's own completion value). 7 is unused.
+ * goblin generals, 5 teleported to Goblin Village (before the generals' cutscene),
+ * 6 the ambush cutscene is over (snipers alive), 7 H.A.M. archer and mage dead,
+ * 8 Sigmund kidnapped Zanik (sergeants at the Lumbridge Swamp, Alvijar back in the
+ * city), 9 in the swamp tunnel and then the railway showdown until the prayer
+ * breaks (cave sergeants visible), 10 the ancient mace special has landed (untie
+ * Zanik), 11 complete (the cache DB's own completion value).
  *
  * Rewards per the OSRS Wiki: 1 Quest point, 3,000 Mining and 3,000 Prayer XP,
  * the ancient mace, the ability to buy Goblin Village teleport spheres and free
@@ -248,6 +249,7 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
   // ==========================================================================
 
   const STATION_LANDING = new Location(2513, 5556, 0);
+  const STATION_BOTTOM = new Location(2512, 5533, 0);
   const CITY_LANDING = new Location(2696, 5277, 1);
   const VILLAGE_LANDING = new Location(2955, 3507, 0);
   const INSTANCE_LANDING = new Location(2445, 5425, 0);
@@ -387,11 +389,12 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
 
   /**
    * Bitmask of the artefacts Tegdak has taken. Saves written before the mask existed only
-   * carry the count, so it is recovered as the first N spots (the order is cosmetic there).
+   * carry the count (the mask loads as its 0 default), so it is recovered as the first N
+   * spots; the order is cosmetic there.
    */
   function deliveredSpots(player) {
-    const mask = Number(player.getAttribute(DELIVERED_ATTRIBUTE));
-    if (Number.isFinite(mask)) return mask;
+    const mask = Number(player.getAttribute(DELIVERED_ATTRIBUTE)) || 0;
+    if (mask !== 0 || handedIn(player) === 0) return mask;
     const count = Math.min(handedIn(player), DIG_SPOTS.length);
     let legacy = 0;
     for (let index = 0; index < count; index++) legacy |= DIG_SPOTS[index].bit;
@@ -432,6 +435,16 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
 
   function sigmundExposed(player) {
     return player.getAttribute(SIGMUND_EXPOSED_ATTRIBUTE) === true;
+  }
+
+  /**
+   * The railway showdown: stage 9 once the descent exposed Sigmund, then stage 10 after the
+   * mace special. A stage-9 player who has been exposed is past the tunnel and goes straight
+   * back to the railway.
+   */
+  function inShowdown(player) {
+    const stage = stageOf(player);
+    return stage === STAGE_RAILWAY || (stage === STAGE_TUNNEL && sigmundExposed(player));
   }
 
   function zanikUntied(player) {
@@ -582,6 +595,12 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
     else spawnTracked(player, "archer", { id: HAM_ARCHER_NPC_ID, ...TOWER_TILES[0], z: 2, wanderRadius: 0 });
     if (snipersDead(player) & 2) despawnTracked(player, "mage");
     else spawnTracked(player, "mage", { id: HAM_MAGE_NPC_ID, ...TOWER_TILES[1], z: 2, wanderRadius: 0 });
+  }
+
+  function returnToAmbush(player) {
+    player.moveTo(INSTANCE_LANDING);
+    spawnSnipers(player);
+    player.sendMessage("Kill the two H.A.M. members on the tower.");
   }
 
   function spawnInstanceGenerals(player) {
@@ -788,7 +807,7 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
       startTranscript(api, player, npcId, PAGE, "talking-to-oldak");
       return;
     }
-    if (stage === STAGE_VILLAGE || stage === STAGE_SNIPERS_DEAD) {
+    if (stage >= STAGE_VILLAGE && stage <= STAGE_SNIPERS_DEAD) {
       startTranscript(api, player, npcId, PAGE, "talking-to-oldak-returning-to-oldak-again");
       return;
     }
@@ -808,6 +827,11 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
     if (stage === STAGE_VILLAGE) {
       player.moveTo(INSTANCE_LANDING);
       startTranscript(api, player, npcId, PAGE, "the-goblin-generals");
+      return;
+    }
+    if (stage === STAGE_AMBUSH) {
+      // The cutscene has played; a player who died or left the tower goes back to it.
+      returnToAmbush(player);
       return;
     }
     if (stage === STAGE_SNIPERS_DEAD) {
@@ -1291,7 +1315,7 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
 
   function enterTunnel(player) {
     player.moveTo(TUNNEL_LANDING);
-    if (stageOf(player) === STAGE_TUNNEL) spawnTunnelNpcs(player);
+    if (stageOf(player) === STAGE_TUNNEL && !sigmundExposed(player)) spawnTunnelNpcs(player);
     startTranscript(api, player, GUARD_NPC_ID, PAGE, "the-under-underground");
   }
 
@@ -1305,7 +1329,7 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
   }
 
   function handleGuardZoneEnter({ player }) {
-    if (stageOf(player) !== STAGE_TUNNEL) return;
+    if (stageOf(player) !== STAGE_TUNNEL || sigmundExposed(player)) return;
     const location = player.getLocation();
     if (location.getY() >= 9000) return;
     if (player.getAttribute(HIDING_ATTRIBUTE) === true && location.equals(HIDING_TILE)) return;
@@ -1322,7 +1346,7 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
   }
 
   function descendToRailway(player) {
-    if (stageOf(player) === STAGE_RAILWAY) {
+    if (inShowdown(player)) {
       player.moveTo(RAILWAY_LANDING);
       player.setAttribute(SIGMUND_EXPOSED_ATTRIBUTE, true);
       if (player.getAttribute(ZANIK_UNTIED_ATTRIBUTE) === undefined) player.setAttribute(ZANIK_UNTIED_ATTRIBUTE, false);
@@ -1383,10 +1407,12 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
       return;
     }
     if (objectId === DOORWAY_CITY_OBJECT_ID) {
-      // Before the quest the captured doorway is the ordinary station entrance.
-      if (stageOf(player) === 0) return;
-      // During the quest the station belongs to the quest's own teleports: the captured
-      // landing (2488,5536) is a one-tile room in this cache, cut off from the dig tunnel.
+      // Outside the quest the captured doorway (LocTeleports) is the station entrance. Its
+      // landing (2488,5536) was recorded on a finished account: it is the train platform,
+      // which has no walkable link to the dig tunnel. During the quest the doorway leads to
+      // the dig floor instead; no in-quest capture of this doorway exists.
+      const stage = stageOf(player);
+      if (stage === 0 || stage >= STAGE_COMPLETE) return;
       event.handled = true;
       enterStation(player);
       return;
@@ -1433,11 +1459,9 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
         player.moveTo(INSTANCE_LANDING);
         return;
       case LADDER_TRAIN_OBJECT_ID:
-        if (stageOf(player) < STAGE_RAILWAY) return;
+        if (stageOf(player) < STAGE_RAILWAY && !inShowdown(player)) return;
         event.handled = true;
-        // The captured station bottom (2512,5533) is a sealed stub in this cache; the
-        // station floor the dig and the city doorway use is STATION_LANDING.
-        player.moveTo(STATION_LANDING);
+        player.moveTo(STATION_BOTTOM);
         return;
       default:
         return;
@@ -1448,8 +1472,20 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
   // Login
   // ==========================================================================
 
+  /**
+   * Saves from before the live stage order used 6 for "both snipers dead" and 10 for the
+   * railway descent. The current order never stores 6 with both snipers dead, nor 10
+   * without the mace special, so those pairs can only be old saves.
+   */
+  function migrateLegacyStage(player) {
+    const stage = stageOf(player);
+    if (stage === STAGE_AMBUSH && snipersDead(player) === 3) setStage(player, STAGE_SNIPERS_DEAD);
+    else if (stage === STAGE_RAILWAY && !specialUsed(player)) setStage(player, STAGE_TUNNEL);
+  }
+
   function handleLogin({ player }) {
     if (player?.isPlayerBot?.() === true) return;
+    migrateLegacyStage(player);
     syncQuestVarbits(player);
     refreshQuestList(player);
     spawnOldak(player);
@@ -1457,11 +1493,11 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
     if (stage === STAGE_AMBUSH) spawnSnipers(player);
     if (stage === STAGE_SNIPERS_DEAD) spawnInstanceGenerals(player);
     const at = player.getLocation();
-    if (stage === STAGE_TUNNEL && at.getX() >= 2393 && at.getX() <= 2414 && at.getY() >= 5525 && at.getY() <= 5560) {
+    if (stage === STAGE_TUNNEL && !sigmundExposed(player) && at.getX() >= 2393 && at.getX() <= 2414 && at.getY() >= 5525 && at.getY() <= 5560) {
       spawnTunnelNpcs(player);
       if (player.getAttribute(HIDING_ATTRIBUTE) === true) hideBehindCrate(player);
     }
-    if (sigmundExposed(player) && (stage === STAGE_TUNNEL || stage === STAGE_RAILWAY)) {
+    if (sigmundExposed(player) && inShowdown(player)) {
       player.setAttribute(SIGMUND_EXPOSED_ATTRIBUTE, true);
       if (player.getAttribute(ZANIK_UNTIED_ATTRIBUTE) === undefined) player.setAttribute(ZANIK_UNTIED_ATTRIBUTE, false);
       if (player.getAttribute(TRAIN_OPEN_ATTRIBUTE) === undefined) player.setAttribute(TRAIN_OPEN_ATTRIBUTE, false);
@@ -1592,6 +1628,7 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
 
   api.persistAttribute(SPOTS_ATTRIBUTE);
   api.persistAttribute(HANDED_IN_ATTRIBUTE);
+  api.persistAttribute(DELIVERED_ATTRIBUTE, 0);
   api.persistAttribute(ZANIK_AT_DIG_ATTRIBUTE);
   api.persistAttribute(MACE_ATTRIBUTE);
   api.persistAttribute(SPECIAL_ATTRIBUTE);

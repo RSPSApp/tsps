@@ -4,7 +4,7 @@ import { BANKMAIN, INVENTORY, WORNITEMS } from "../../../runelite/api/gameval/In
 import { GameState } from "../../../runelite/api/GameState";
 import { ConfigChanged } from "../../../runelite/api/events";
 import { ConfigManager } from "../../../runelite/client/config/ConfigManager";
-import { FONT_BOLD_12, FONT_PLAIN_12 } from "../../../ui/fonts";
+import { boldFont, overlayFont } from "@runelite/client/ui/overlay/OverlayFonts";
 import { drawTextGL } from "../../../widgets/components/TextRenderer";
 import type { OsrsClient } from "../../OsrsClient";
 import type { ClientPlugin, WidgetOverlay, WidgetOverlayDrawContext } from "../ClientPluginManager";
@@ -225,14 +225,18 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
             setItemStatsTooltipBounds(this.client, undefined);
             return [];
         }
-        const font = context.fontLoader(FONT_PLAIN_12);
-        const headingFont = context.fontLoader(FONT_BOLD_12) ?? font;
+        // TooltipManager's tooltip: the tooltip font (headings bold), the rows growing with it.
+        const tooltipFont = overlayFont("tooltip");
+        const headingType = boldFont(tooltipFont);
+        const textScaleX = scaleX * tooltipFont.scale, textScaleY = scaleY * tooltipFont.scale;
+        const font = context.fontLoader(tooltipFont.id);
+        const headingFont = context.fontLoader(headingType.id) ?? font;
         const measure = (text: string) => {
             const plain = text.replace(/<[^>]*>/g, "");
             return font?.measure(plain) ?? plain.length * 7;
         };
         const measureHeading = (text: string) => headingFont?.measure(text.replace(/<[^>]*>/g, "")) ?? measure(text);
-        const fit = (text: string, width: number, measureText = measure) => fitText(text, width, (value) => measureText(value) * scaleX);
+        const fit = (text: string, width: number, measureText = measure) => fitText(text, width, (value) => measureText(value) * textScaleX);
         // Mouse coordinates and GL draw calls use the renderer canvas pixel space.
         // The widget manager's 765x503 layout is not the screen-space clamp here.
         const canvasW = context.renderer.canvas.width;
@@ -242,12 +246,14 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
         const rowText = (row: ItemStatsRow) => `${row.label}: ${row.baseValue !== undefined
             ? row.changeValue !== undefined ? `${row.baseValue} (${row.changeValue})` : row.baseValue
             : row.value}`;
-        const desiredWidth = Math.max(minimumWidth, ...groups.map(({ title: heading }) => measureHeading(heading) * scaleX),
-            ...groups.flatMap((group) => group.rows.map((row) => measure(rowText(row)) * scaleX))) + horizontalPadding * 2;
+        const desiredWidth = Math.max(minimumWidth, ...groups.map(({ title: heading }) => measureHeading(heading) * textScaleX),
+            ...groups.flatMap((group) => group.rows.map((row) => measure(rowText(row)) * textScaleX))) + horizontalPadding * 2;
         const width = Math.max(1, Math.min(desiredWidth, canvasW - 4));
-        const lineHeight = 14 * scaleY;
+        const lineHeight = 14 * textScaleY;
         const sectionGap = 2 * scaleY;
-        const height = Math.max(1, (6 + groups.reduce((sum, group, index) => sum + (group.title ? 14 : 0) + group.rows.length * 14 + (index > 0 && group.title ? 2 : 0), 0)) * scaleY);
+        const lines = groups.reduce((sum, group) => sum + (group.title ? 1 : 0) + group.rows.length, 0);
+        const gaps = groups.filter((group, index) => index > 0 && group.title).length;
+        const height = Math.max(1, (6 + 2 * gaps) * scaleY + lines * lineHeight);
         // Keep the panel under the hovered item, centered on its interaction point.
         const pointerX = Number((this.client as any).inputManager?.mouseX);
         const pointerY = Number((this.client as any).inputManager?.mouseY);
@@ -274,13 +280,13 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
             const group = groups[groupIndex];
             if (group.title) {
                 if (groupIndex > 0) rowY += sectionGap;
-                drawTextGL(context.renderer, context.fontLoader, fit(group.title, width - 8 * scaleX, measureHeading), x + horizontalPadding, rowY, width - 8 * scaleX, lineHeight, FONT_BOLD_12, 0xff9040, 0, 0, true, 1, undefined, scaleX, scaleY);
+                drawTextGL(context.renderer, context.fontLoader, fit(group.title, width - 8 * scaleX, measureHeading), x + horizontalPadding, rowY, width - 8 * scaleX, lineHeight, headingType.id, 0xff9040, 0, 0, true, 1, undefined, textScaleX, textScaleY);
                 rowY += lineHeight;
             }
             for (const { label, value, delta, inverse, baseValue, changeValue } of group.rows) {
                 const fitted = formatItemStatsRow({ label, value, delta, inverse, baseValue, changeValue },
                     (plain) => fit(plain, width - horizontalPadding * 2));
-                drawTextGL(context.renderer, context.fontLoader, fitted, x + horizontalPadding, rowY, width - horizontalPadding * 2, lineHeight, FONT_PLAIN_12, WHITE, 0, 0, true, 1, undefined, scaleX, scaleY);
+                drawTextGL(context.renderer, context.fontLoader, fitted, x + horizontalPadding, rowY, width - horizontalPadding * 2, lineHeight, tooltipFont.id, WHITE, 0, 0, true, 1, undefined, textScaleX, textScaleY);
                 rowY += lineHeight;
             }
         }

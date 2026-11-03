@@ -24,6 +24,7 @@ import type { GameFrameDrawContext, WidgetOverlay } from "../../game/plugins/Cli
 import { captureAppendedRects, composeDrawAboveWidgets } from "../../widgets/gl/widgetsGl/glRenderOpts";
 import { Overlay, OverlayInitArgs, OverlayUpdateArgs, RenderPhase } from "./Overlay";
 import { isCurrentClientType, reportedClientType } from "../../rs/cs2/ClientType";
+import { overlayFontsVersion } from "../../runelite/client/ui/overlay/OverlayFonts";
 
 /**
  * The enhanced client's mouseover text setting, mouseover_text_disabled from rev 241 (it was
@@ -172,6 +173,8 @@ export class WidgetsOverlay implements Overlay {
     private lastWidgetOverlays: WidgetOverlay[] = [];
     /** Each overlay's signature and device rects as of its last draw, for partial overlay redraws. */
     private readonly lastOverlaySignatures = new WeakMap<WidgetOverlay, string>();
+    /** overlayFontsVersion() at the last pass. */
+    private lastOverlayFontsVersion = -1;
     private readonly lastOverlayRects = new WeakMap<WidgetOverlay, DirtyRect[]>();
     /** Device rects the above-widget overlays drew last. */
     private widgetOverlayRects: DirtyRect[] = [];
@@ -916,6 +919,10 @@ export class WidgetsOverlay implements Overlay {
                 this.lastOverlayRects,
                 (x, y, w, h) => this.clampRectToCanvas(x, y, w, h),
             );
+            // A changed overlay font (RuneLite settings) redraws every overlay in the new font.
+            const fontsVersion = overlayFontsVersion();
+            const overlayFontsChanged = fontsVersion !== this.lastOverlayFontsVersion;
+            this.lastOverlayFontsVersion = fontsVersion;
 
             // Force a full redraw only for root set changes.
             // The Choose Option menu is drawn as part of the shared widget overlay. When it is
@@ -929,6 +936,7 @@ export class WidgetsOverlay implements Overlay {
                 !!gameFrame ||
                 overlaySetChanged ||
                 overlayNeedsFullRedraw ||
+                overlayFontsChanged ||
                 // Before-menu overlays draw once a pass from inside the tree, clipped to the
                 // first dirty rect, so a partial pass could not put back the rest of them.
                 (beforeMenuOverlays.length > 0 &&

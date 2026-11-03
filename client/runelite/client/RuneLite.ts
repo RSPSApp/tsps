@@ -18,6 +18,7 @@ import { EventBus } from "./eventbus/EventBus";
 import { PluginManager } from "./plugins/PluginManager";
 import { ClientToolbar } from "./ui/ClientToolbar";
 import { OverlayRenderer } from "./ui/overlay/OverlayRenderer";
+import { bindOverlayFonts } from "./ui/overlay/OverlayFonts";
 import { CLIENT_TOKEN } from "./plugins/PluginInjector";
 import { CORE_PLUGINS, LEGACY_CONFIG_MIGRATIONS } from "./plugins";
 import { toRuneLiteGameState } from "../impl/GameStateMapping";
@@ -50,6 +51,7 @@ export class RuneLite {
         private readonly loadPlugins: boolean,
     ) {
         this.configManager = new ConfigManager(this.eventBus);
+        bindOverlayFonts(this.configManager);
         this.pluginManager = new PluginManager(this.eventBus, this.configManager);
         this.clientToolbar = this.pluginManager.getInjector().get(ClientToolbar);
         this.overlayRenderer = new OverlayRenderer(client, this.configManager);

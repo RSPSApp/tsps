@@ -89,7 +89,7 @@ module.exports = function attach(api, Events) {
         player,
         npcId: definition.id,
         title: "What would you like to say?",
-        lines: [`Hey, ${player.getUsername()}, would you like to come and perform in a mime show?`],
+        lines: [`Hey, ${player.getDisplayName()}, would you like to come and perform in a mime show?`],
         options: [
           ["Yeah, I'd love to do a mime show.", () => Flow.chat(api, {
             player,

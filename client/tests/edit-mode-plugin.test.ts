@@ -17,6 +17,11 @@ import { buildRegionPack, parseRegionPack } from "../game/plugins/editmode/Regio
 import { buildZoneGroundGeometry } from "../game/plugins/editmode/ZoneGroundOverlay";
 import { getNpcMenuOptions } from "../game/menu/WorldMenuBuilder";
 import { MenuOpcode } from "../ui/menu/MenuState";
+import { MenuState } from "../ui/menu/MenuState";
+import { ClientState } from "../game/ClientState";
+import { MenuTargetType } from "../rs/MenuEntry";
+import { checkInteractions } from "../render/render/interact/check";
+import { buildSimpleMenuEntries } from "../render/render/interact/menu";
 
 type Call = [string, ...unknown[]];
 
@@ -35,7 +40,7 @@ type Call = [string, ...unknown[]];
 }
 
 {
-    for (const id of [5722, 5724]) {
+    for (const id of [5722, 5724, 15582, 15584]) {
         const actions = ["", "Attack", "Burn", "", ""];
         assert.deepEqual(getNpcMenuOptions({ id, actions } as any).map(({ option, actionIndex }) => [option, actionIndex]),
             [["Attack", 1]], "Castle Wars barricades require explicit item use to burn");
@@ -45,6 +50,71 @@ type Call = [string, ...unknown[]];
         .map(({ option }) => option), ["Attack", "Extinguish"], "burning barricades retain Extinguish");
     assert.deepEqual(getNpcMenuOptions({ id: 1, actions: ["Burn"] } as any)
         .map(({ option }) => option), ["Burn"], "other NPC actions are unchanged");
+}
+
+// The native variants used by practice settings determine actor order in the shared
+// WebGL/WebGPU menu builder; no client Castle Wars override or cache modification is needed.
+{
+    const { createCacheVm } = require("../scripts/cache/cs2-sweep");
+    const { vm } = createCacheVm();
+    const npcTypes = vm.context.npcTypeLoader;
+    const previousOptions = new Map(ClientState.playerOptions);
+    const previous = { npcAttackOption: ClientState.npcAttackOption, playerAttackOption: ClientState.playerAttackOption,
+        localPlayerCombatLevel: ClientState.localPlayerCombatLevel, baseX: ClientState.baseX, baseY: ClientState.baseY };
+    ClientState.playerOptions.set(1, { option: "Attack", priority: true, opcode: 44 });
+    Object.assign(ClientState, { npcAttackOption: 2, playerAttackOption: 2, localPlayerCombatLevel: 126, baseX: 2368, baseY: 3072 });
+
+    function overlappingMenu(npcTypeId: number, playerHit: boolean) {
+        const tileX = 2427, tileY = 3078, mapId = ((tileX >> 6) << 8) | (tileY >> 6);
+        const localX = ((tileX & 63) << 7) + 64, localY = ((tileY & 63) << 7) + 64;
+        const input = { getInteractionMouseX: () => 100, getInteractionMouseY: () => 100,
+            dragX: -1, dragY: -1, pickX: -1, pickY: -1, leftClickX: -1, leftClickY: -1 };
+        const client: any = {
+            inputManager: input,
+            camera: { viewMatrix: new Float32Array(16), projectionMatrix: new Float32Array(16), containsScreenPoint: () => true },
+            menuOpenedFrame: -100, menuOpen: false, tooltips: true, isPointOverWidget: () => false,
+            clientPlugins: { shouldKeepWorldMenuOpen: () => false }, closeMenu() {},
+            hoveredTile: { tileX, tileY, plane: 0 }, npcTypeLoader: npcTypes, varManager: vm.context.varManager,
+            controlledPlayerServerId: 1, menuState: new MenuState(), settings: {}, menuActiveSimpleEntries: [],
+            npcEcs: { isActive: () => true, isLinked: () => true, getSize: () => 1, getMapId: () => mapId,
+                getX: () => localX, getY: () => localY, getNpcTypeId: () => npcTypeId, getServerId: () => 5,
+                getLevel: () => 0, queryByTile: () => [1] },
+            playerEcs: { getAllActiveIndices: () => [2], getServerIdForIndex: () => 2, getName: () => "Opponent",
+                getLevel: () => 0, getCombatLevel: () => 126, getTeam: (index: number) => index === 0 ? 1 : 2,
+                getIndexForServerId: () => 0, getX: () => (tileX << 7) + 64, getY: () => (tileY << 7) + 64 },
+        };
+        const canvas = {};
+        const host: any = {
+            osrsClient: client, stats: { frameCount: 100 }, app: { width: 900, height: 600, gl: { canvas } }, canvas,
+            cachedMenuEntries: [], cachedClientMenuEntries: [], cachedLocIds: new Set(), cachedObjIds: new Set(),
+            cachedNpcIds: new Set(), cachedPlayerIds: new Set(), boundToCssEvent: () => ({}),
+            computeTileAt: () => ({ tileX, tileY, plane: 0 }), isMouseInUIRegion: () => false,
+            screenToRay: () => ({}), getPlayerRawPlane: () => 0, getEffectiveNpcType: (id: number) => npcTypes.load(id),
+            updateInteractHighlightHoverTarget() {}, performWorldEntryAction() {},
+            sceneRaycaster: { raycast: () => [{ interactType: InteractType.NPC,
+                interactId: playerHit ? 0x8002 : npcTypeId, npcServerId: 5, npcEcsId: 1,
+                playerEcsIndex: playerHit ? 2 : undefined, tileX, tileY, mapId }] },
+            buildSimpleMenuEntries: (entries: any, options: any) => buildSimpleMenuEntries(host, entries, options),
+        };
+        checkInteractions(host);
+        return client.menuActiveSimpleEntries.filter((entry: any) => entry.option === "Attack");
+    }
+    try {
+        for (const id of [5722, 5723, 5724, 5725, 15582, 15583, 15584, 15585]) {
+            for (const playerHit of [false, true]) {
+                const attacks = overlappingMenu(id, playerHit);
+                assert.equal(attacks.length, 2);
+                assert.equal(attacks[0].targetType, id >= 15582 ? MenuTargetType.PLAYER : MenuTargetType.NPC,
+                    `native overlap order for ${id}, player hit ${playerHit}`);
+                assert.equal(attacks.find((entry: any) => entry.targetType === MenuTargetType.NPC).actionIndex, 1,
+                    "both priority variants keep the native second NPC operation");
+            }
+        }
+    } finally {
+        ClientState.playerOptions.clear();
+        for (const [slot, option] of previousOptions) ClientState.playerOptions.set(slot, option);
+        Object.assign(ClientState, previous);
+    }
 }
 
 {

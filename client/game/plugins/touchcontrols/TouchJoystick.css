@@ -1,25 +1,33 @@
 /* On-screen joystick. The wrapper is inert; only the stick base takes touches. */
 .touch-controls {
-    --stick-size: 120px;
-    --knob-size: 52px;
-    --stick-offset: 16px;
+    --stick-size: calc(72px * var(--touch-ui-scale, 1));
+    --knob-size: calc(31.2px * var(--touch-ui-scale, 1));
+    --stick-offset: calc(16px * var(--touch-ui-scale, 1));
     position: absolute;
     inset: 0;
     z-index: 12;
     pointer-events: none;
 }
 
+/* Portrait Mode: a smaller stick on the left, just above the minimap and orbs (--hud-inset is
+   the bottom HUD's height), and the action button above the side panel. */
+.touch-controls.portrait {
+    --stick-size: calc(50.4px * var(--touch-ui-scale, 1));
+    --knob-size: calc(21.6px * var(--touch-ui-scale, 1));
+    --stick-offset: calc(8px * var(--touch-ui-scale, 1));
+}
+
 .touch-joystick {
     position: absolute;
     left: calc(var(--stick-offset) + env(safe-area-inset-left, 0px));
-    bottom: calc(var(--stick-offset) + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--hud-inset, 0px) + var(--stick-offset) + env(safe-area-inset-bottom, 0px));
     width: var(--stick-size);
     height: var(--stick-size);
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.25);
+    border: calc(1.2px * var(--touch-ui-scale, 1)) solid rgba(255, 255, 255, 0.25);
     background: rgba(0, 0, 0, 0.25);
     opacity: 0.7;
     pointer-events: auto;
@@ -39,7 +47,7 @@
     height: var(--knob-size);
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.45);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 calc(2px * var(--touch-ui-scale, 1)) calc(6px * var(--touch-ui-scale, 1)) rgba(0, 0, 0, 0.4);
     pointer-events: none;
     transition: transform 0.12s ease-out;
 }
@@ -55,12 +63,12 @@
     position: absolute;
     top: calc(var(--stick-offset) + env(safe-area-inset-top, 0px));
     right: calc(var(--stones-inset, 0px) + var(--stick-offset) + env(safe-area-inset-right, 0px));
-    bottom: calc(var(--stick-offset) + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--hud-inset, 0px) + var(--stick-offset) + env(safe-area-inset-bottom, 0px));
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
     align-items: flex-end;
-    gap: 8px;
+    gap: calc(8px * var(--touch-ui-scale, 1));
     pointer-events: none;
 }
 
@@ -79,17 +87,17 @@
 
 .touch-action-button {
     flex-shrink: 0;
-    width: 84px;
-    height: 84px;
-    padding: 6px;
+    width: calc(84px * var(--touch-ui-scale, 1));
+    height: calc(84px * var(--touch-ui-scale, 1));
+    padding: calc(6px * var(--touch-ui-scale, 1));
     border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.35);
+    border: calc(2px * var(--touch-ui-scale, 1)) solid rgba(255, 255, 255, 0.35);
     background: rgba(0, 0, 0, 0.45);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    gap: calc(2px * var(--touch-ui-scale, 1));
     overflow: hidden;
 }
 
@@ -98,7 +106,7 @@
 }
 
 .touch-action-option-label {
-    font-size: 16px;
+    font-size: calc(16px * var(--touch-ui-scale, 1));
     line-height: 1.1;
 }
 
@@ -106,7 +114,7 @@
 .touch-action-target {
     color: #0ff;
     font-family: "OSRS Small", sans-serif;
-    font-size: 14px;
+    font-size: calc(14px * var(--touch-ui-scale, 1));
     line-height: 1.1;
     max-width: 100%;
     overflow: hidden;
@@ -126,7 +134,7 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 4px;
+    gap: calc(4px * var(--touch-ui-scale, 1));
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -137,16 +145,28 @@
 .touch-action-option {
     flex-shrink: 0;
     touch-action: pan-y;
-    padding: 10px 14px;
-    border-radius: 8px;
+    padding: calc(10px * var(--touch-ui-scale, 1)) calc(14px * var(--touch-ui-scale, 1));
+    border-radius: calc(8px * var(--touch-ui-scale, 1));
     border: 1px solid rgba(255, 255, 255, 0.3);
     background: rgba(0, 0, 0, 0.7);
-    font-size: 16px;
+    font-size: calc(16px * var(--touch-ui-scale, 1));
     text-align: left;
     white-space: nowrap;
 }
 
 .touch-action-option .touch-action-target {
     font-family: inherit;
-    font-size: 16px;
+    font-size: calc(16px * var(--touch-ui-scale, 1));
+}
+
+/* Keep each portrait control above its matching side when the HUD is swapped. */
+.portrait-left-handed .touch-controls.portrait .touch-joystick {
+    left: auto;
+    right: calc(var(--stick-offset) + env(safe-area-inset-right, 0px));
+}
+
+.portrait-left-handed .touch-controls.portrait .touch-action {
+    right: auto;
+    left: calc(var(--stick-offset) + env(safe-area-inset-left, 0px));
+    align-items: flex-start;
 }

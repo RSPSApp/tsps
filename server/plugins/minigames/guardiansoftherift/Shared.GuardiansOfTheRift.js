@@ -210,14 +210,25 @@ function repeat(ticks, action) {
 /**
  * One repeated action per player (mining, the workbench): starting another, moving, or
  * `stopAction` ends it. `step(ticks)` runs every tick and returns false to stop.
+ * A `locked` action (assembling a guardian) holds the player still and can't be cancelled by
+ * clicking away or starting another; only `stopAction(player, true)` (leaving the game) ends it.
+ * Returns false when a locked action is already running.
  */
-function startAction(player, name, step) {
+function startAction(player, name, step, { locked = false } = {}) {
+  if (player.__gotrAction?.locked) return false;
   stopAction(player);
   const origin = player.getLocation();
   let ticks = 0;
-  const action = { name, task: null };
+  const action = { name, task: null, locked };
+  if (locked) {
+    player.getMovementQueue().reset();
+    player.getMovementQueue().setBlockMovement(true);
+  }
   action.task = repeat(1, () => {
-    if (player.__gotrAction !== action || !player.isRegistered()) return false;
+    if (player.__gotrAction !== action || !player.isRegistered()) {
+      endAction(player, action);
+      return false;
+    }
     if (!player.getLocation().equals(origin) || step(++ticks) === false) {
       endAction(player, action);
       return false;
@@ -225,17 +236,22 @@ function startAction(player, name, step) {
     return true;
   });
   player.__gotrAction = action;
+  return true;
 }
 
 function endAction(player, action) {
+  if (action.locked && !action.released) {
+    action.released = true;
+    player.getMovementQueue().setBlockMovement(false);
+  }
   if (player.__gotrAction !== action) return;
   player.__gotrAction = null;
-  animate(player, null);
+  if (!action.locked) animate(player, null);
 }
 
-function stopAction(player) {
+function stopAction(player, force = false) {
   const action = player.__gotrAction;
-  if (!action) return;
+  if (!action || (action.locked && !force)) return;
   action.task?.stop();
   endAction(player, action);
 }

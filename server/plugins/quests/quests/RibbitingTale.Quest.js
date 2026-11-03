@@ -198,7 +198,7 @@ module.exports = function registerRibbitingTaleQuest(api) {
   }
   function freeze(player) {
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-      new ActionDialogue(0, { execute: () => StatementDialogue.send(player, "", false) })
+      new ActionDialogue(0, { execute: () => StatementDialogue.send(player, "", false) }, true)
     ));
   }
   class HopOff extends PrivateArea {

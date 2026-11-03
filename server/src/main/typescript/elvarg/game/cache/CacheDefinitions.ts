@@ -37,6 +37,9 @@ export interface ServerCustomItem {
 export class CacheDefinitions {
     private static readonly SPELL_WIDGET_PARAM_ID = 596;
     private static readonly SPELL_NAME_PARAM_ID = 601;
+    private static readonly SPELL_LEVEL_PARAM_ID = 604;
+    /** A spell obj's runes as (obj, count) param pairs: 365/366, 367/368, 369/370, 371/372. */
+    private static readonly SPELL_RUNE_PARAM_IDS = [[365, 366], [367, 368], [369, 370], [371, 372]] as const;
     private static spellNamesByWidget?: Map<number, string>;
     private static spellsByName?: Map<string, { widgetId: number; itemId: number }>;
     private static spellWidgetGroups?: Set<number>;
@@ -580,5 +583,19 @@ export class CacheDefinitions {
     static getSpellByName(name: string): { widgetId: number; itemId: number } | undefined {
         this.ensureSpellMetadata();
         return this.spellsByName!.get(name.trim().toLowerCase());
+    }
+
+    /** The Magic level and runes the cache's spell obj lists for the spell with this name. */
+    static getSpellRequirements(name: string): { level: number; runes: { id: number; amount: number }[] } | undefined {
+        const spell = this.getSpellByName(name);
+        if (!spell) return undefined;
+        const params = this.getItem(spell.itemId).params;
+        const runes: { id: number; amount: number }[] = [];
+        for (const [objParam, countParam] of this.SPELL_RUNE_PARAM_IDS) {
+            const id = params?.get(objParam), amount = params?.get(countParam);
+            if (typeof id === "number" && id > 0 && typeof amount === "number" && amount > 0) runes.push({ id, amount });
+        }
+        const level = params?.get(this.SPELL_LEVEL_PARAM_ID);
+        return { level: typeof level === "number" ? level : 0, runes };
     }
 }

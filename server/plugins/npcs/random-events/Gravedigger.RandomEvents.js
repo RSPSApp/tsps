@@ -93,7 +93,7 @@ module.exports = function attach(api, Events) {
     nags: NAGS,
     goodbye: "Maybe later.",
     linger: true,
-    otherPlayerLine: owner => `Sorry, I need help from ${owner.getUsername()}.`,
+    otherPlayerLine: owner => `Sorry, I need help from ${owner.getDisplayName()}.`,
     leavingLine: () => "Goodbye.",
     talk(active, { teleport, leave }) {
       const { player } = active;
@@ -101,7 +101,7 @@ module.exports = function attach(api, Events) {
         player,
         npcId: active.definition.id,
         title: "What would you like to say?",
-        lines: [{ text: `Can you come and help me, ${player.getUsername()}? I've got a problem with some graves.`,
+        lines: [{ text: `Can you come and help me, ${player.getDisplayName()}? I've got a problem with some graves.`,
           expression: INVITE_EXPRESSION }],
         options: [
           ["Okay, I'll help with your graves.", () => reply(player, "Okay, I'll help with your graves.",
@@ -138,7 +138,7 @@ module.exports = function attach(api, Events) {
     Flow.chat(api, {
       player,
       npcId: N.LEO,
-      lines: [{ text: `You have to help me, ${player.getUsername()}! I've put the wrong coffins into these graves.`,
+      lines: [{ text: `You have to help me, ${player.getDisplayName()}! I've put the wrong coffins into these graves.`,
         expression: PLEA_EXPRESSION }, { text: INSTRUCTION_LINE, expression: INSTRUCTION_EXPRESSION }],
       onEnd: () => showInstructions(player),
     });

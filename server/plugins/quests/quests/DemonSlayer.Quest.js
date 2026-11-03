@@ -1,6 +1,6 @@
 /** Demon Slayer. Capture evidence and remaining presentation gaps: docs/demon-slayer.md. */
 module.exports = function registerDemonSlayerQuest(api) {
-  const { Item, Location, World, Area, PrivateArea, Boundary, Animation, Graphic, NpcDialogue, DialogueChainBuilder, ActionDialogue, ForceMovement, ForceMovementTask, Task, TaskManager, StatementDialogue, GameObject, ObjectManager, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Item, Location, World, Area, PrivateArea, Boundary, Animation, Graphic, NpcDialogue, PlayerDialogue, DialogueChainBuilder, ActionDialogue, ForceMovement, ForceMovementTask, Task, TaskManager, StatementDialogue, ItemStatementDialogue, GameObject, ObjectManager, Music, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, startDialogue } = require("../QuestRuntime");
 
   const ARIS_NPC_ID = NpcIdentifiers.ARIS;
@@ -22,21 +22,58 @@ module.exports = function registerDemonSlayerQuest(api) {
   const VARBIT_DRAIN_KEY = 2568;
   const VARBIT_SILVERLIGHT_CASE = 2567;
   const VARBIT_SUMMONING_SEEN = 2569;
+  const VARBIT_DARK_WIZARDS_KILLED = 2572;
   const DENATH_NPC_ID = NpcIdentifiers.DENATH_4;
   const WALLY_NPC_ID = NpcIdentifiers.WALLY;
   const NPC_DIALOGUE_CONTINUE_UID = (231 << 16) | 5;
+  const PLAYER_DIALOGUE_CONTINUE_UID = (217 << 16) | 5;
+  /** The cutscene fade: interface 174 driven by clientscript 948 (capture 1723, 10409-10446). */
+  const FADE_UID = (161 << 16) | 1;
+  const FADE_INTERFACE = 174;
+  const FADE_SCRIPT = 948;
   /** [id, x, y, the table tile it faces while chanting] (capture 1843). */
   const SUMMONERS = [
     [NpcIdentifiers.DARK_WIZARD_7, 3226, 3371, 3228, 3369], [NpcIdentifiers.DARK_WIZARD_8, 3229, 3371, 3227, 3369],
     [NpcIdentifiers.DARK_WIZARD_9, 3226, 3368, 3228, 3370], [DENATH_NPC_ID, 3229, 3368, 3227, 3370],
   ];
-  /** Where Delrith stands once he has walked off the altar. */
-  const DELRITH_RISEN_TILE = [3227, 3367];
+  const ANIMATION = {
+    wally: 4603, sword: 4604, chant: 4617, summoned: 4623, banished: 4624, tableExplosion: 4622, pour: 827,
+    boneRitual: 4602, openCloset: 536, wardrobeGone: 4600,
+    caseOpens: 4596, prysinOpens: 4597, prysinTakes: 4598, prysinPresents: 4606, prysinHolds: 4607, prysinGives: 4608,
+  };
+  const GRAPHIC = { glint: 778, boneRitual: 777 };
+  const SOUND = {
+    coin: 2976, cut: 1678, wallyCharge: 2989, glint: 2990, pour: 2982, pourClink: 2983,
+    boneRitual: 2973, wardrobe: 2977, closet: 52, wardrobeGone: 2978, caseKey: 58, caseOpens: 50,
+    spell: 188, tableExplosion: 2988, delrithRising: 2974, delrithArrives: 2980,
+    delrithWeakened: 2985, vortex: 2981, vortexCloses: 2986,
+  };
+  const SONG_WALLY = 196;
+  const SONG_DELRITH = 195;
+  const DEMON_SLAYER_JINGLE = 152;
+  const RECOMMENDED_COMBAT_LEVEL = 15;
+  /** Fade lead-ins and the banishment's holds, in ticks (capture 1723 10409, 10441; 1843 10179-10225). */
+  const VISION_FADE_TICKS = 5;
+  const VISION_END_FADE_TICKS = 4;
+  const INCANTATION_WORD_TICKS = 3;
+  const VORTEX_TICKS = 16;
+  const WIZARDS_TILE = new Location(3227, 3367, 0);
+  const DENATH_TILE = new Location(3229, 3368, 0);
+  const DENATH_EXIT_TILE = new Location(3239, 3368, 0);
+  const STONE_TABLE_TILE = new Location(3227, 3369, 0);
+  const WIZARD_WANDER_RADIUS = 5;
+  /** Traiborn's wardrobe and Prysin's sword case; tiles and shapes from capture 1843 (9883, 10058). */
+  const WARDROBE_TILE = new Location(3111, 3163, 1);
+  const WARDROBE_TICKS = 14;
+  const SILVERLIGHT_CASE_LOC_ID = 17428;
+  const SILVERLIGHT_CASE_TILE = new Location(3204, 3469, 0);
+  const PRYSIN_CASE_APPROACH_TILE = new Location(3204, 3470, 0);
+  const PRYSIN_CASE_FACE_TILE = new Location(3204, 3468, 0);
+  const PRYSIN_WANDER_RADIUS = 1;
   const SUMMONER_CHATHEADS = Object.freeze({
     "Dark wizards": { npcId: NpcIdentifiers.DARK_WIZARD_8, expression: 567 }, // chathap1
     "Dark wizard": { npcId: NpcIdentifiers.DARK_WIZARD_7, expression: 571 }, // chatshock1
   });
-  const ANIMATION = { wally: 4603, sword: 4604, chant: 4617, summoned: 4623, banished: 4624 };
   /** Temple of the Eye's stage attribute. Its tower stages (6-25) give Traiborn
    * dialogue of their own, so Demon Slayer must not shadow him there. */
   const TEMPLE_OF_THE_EYE_STAGE_ATTRIBUTE = "quest.temple_of_the_eye.stage";
@@ -83,7 +120,8 @@ module.exports = function registerDemonSlayerQuest(api) {
   const INCANTATION_ATTRIBUTE = "demon-slayer:incantation";
 
   const QUEST_START_HOOK = "quest:demon-slayer:start";
-  const PRYSIN_INTRO_OPTION_ID = "vc9k5u";
+  const SILVERLIGHT_CASE_ACTION_ID = "Y03t9O";
+  const DRAIN_VARIANT = "searching-the-drain-near-the-palace-kitchen";
   const ROVIN_KEY_MESSAGE_ID = "E0eUno";
   const SPINACH_ROLL_MESSAGE_ID = "OZH22x";
   const BONES_SOME_MESSAGE_ID = "Sq4znF";
@@ -117,6 +155,7 @@ module.exports = function registerDemonSlayerQuest(api) {
   /** The public stone circle (DELRITH_ZONE); its leave is what clears delrithEscaped. */
   let delrithCircle;
   const visions = new WeakMap();
+  const prysinsAtCase = new WeakSet();
 
   function later(key, ticks, callback) {
     class SceneTask extends Task {
@@ -124,6 +163,23 @@ module.exports = function registerDemonSlayerQuest(api) {
       execute() { this.stop(); callback(); }
     }
     TaskManager.submit(new SceneTask());
+  }
+
+  function fade(player, out) {
+    player.getPacketSender().sendSubInterface(FADE_UID, FADE_INTERFACE, 1, {
+      postScripts: [{ scriptId: FADE_SCRIPT, args: out ? [0, 255, 0, 0, 50] : [0, 0, 0, 255, 50] }],
+    });
+  }
+
+  function blankChatbox(player) {
+    player.getDialogueManager().reset();
+    StatementDialogue.send(player, "", false);
+  }
+
+  function restoreAreaSong(player) {
+    const at = player.getLocation();
+    const track = Music.forRegion(((at.getX() >> 6) << 8) | (at.getY() >> 6));
+    if (track !== undefined) player.getPacketSender().sendSong(track);
   }
 
   function setSceneControls(player, active) {
@@ -161,7 +217,10 @@ module.exports = function registerDemonSlayerQuest(api) {
         if (this.vision) endVision(mobile);
         else clearDemonEncounter(mobile);
         setSceneControls(mobile, false);
-        if (!this.vision) mobile.getPacketSender().sendCameraReset();
+        if (!this.vision) {
+          mobile.getPacketSender().sendCameraReset();
+          restoreAreaSong(mobile);
+        }
       }
       super.postLeave(mobile, logout);
     }
@@ -170,16 +229,41 @@ module.exports = function registerDemonSlayerQuest(api) {
   function startVision(player) {
     if (visions.has(player)) return;
     const scene = new DemonSceneArea(player, true);
-    scene.enter(player);
     visions.set(player, scene);
-    player.moveTo(new Location(3225, 3371, 0));
-    player.setNpcTransformationId(WALLY_NPC_ID);
     setSceneControls(player, true);
-    player.getPacketSender().sendCameraMoveTo(3227, 3369, 300, { rate: 232, rate2: 232 });
-    player.getPacketSender().sendCameraLookAt(3229, 3367, 250, { rate: 232, rate2: 232 });
-    player.getPacketSender().sendCameraShake(1, 0, 10, 10);
-    player.getPacketSender().sendCameraShake(3, 0, 90, 1);
-    player.getPacketSender().sendSong(196);
+    blankChatbox(player);
+    fade(player, true);
+    later(scene, VISION_FADE_TICKS, () => {
+      scene.enter(player);
+      player.moveTo(new Location(3225, 3371, 0));
+      player.setNpcTransformationId(WALLY_NPC_ID);
+      player.getPacketSender().sendSong(SONG_WALLY);
+      player.getPacketSender().sendCameraMoveTo(3227, 3369, 300, { rate: 232, rate2: 232 });
+      player.getPacketSender().sendCameraLookAt(3229, 3367, 250, { rate: 232, rate2: 232 });
+      player.getPacketSender().sendCameraShake(1, 0, 10, 10);
+      player.getPacketSender().sendCameraShake(3, 0, 90, 1);
+      player.getPacketSender().sendSound(SOUND.cut, 1, 0);
+      fade(player, false);
+      resumeVision(player, "Wally managed to arrive at the stone circle just as Delrith was summoned by a cult of chaos druids...");
+    });
+  }
+
+  /** The vision's closing fade; the map returns under the black and the quest starts a tick later. */
+  function closeVision(player) {
+    const scene = visions.get(player);
+    blankChatbox(player);
+    fade(player, true);
+    later(scene, VISION_END_FADE_TICKS, () => {
+      scene.keepFade = true;
+      endVision(player);
+      later(player, 1, () => {
+        if (player.isRegistered?.() === false) return;
+        startQuest(player);
+        fade(player, false);
+        restoreAreaSong(player);
+        resumeVision(player, "Delrith will come forth from the stone circle again.");
+      });
+    });
   }
 
   function endVision(player) {
@@ -193,6 +277,7 @@ module.exports = function registerDemonSlayerQuest(api) {
     player.performAnimation(new Animation(-1));
     setSceneControls(player, false);
     player.getPacketSender().sendCameraReset();
+    if (!scene.keepFade) player.getPacketSender().closeSubInterface(FADE_UID);
     if (player.getArea() === scene) scene.leave(player, false);
     player.moveTo(scene.returnTile);
     scene.destroy();
@@ -473,15 +558,19 @@ module.exports = function registerDemonSlayerQuest(api) {
     return null;
   }
 
-  function visionTail(steps, text) {
+  // The scenes resume these transcripts; a normal Talk-to's page list starts with the NPC's own page.
+  const LAST_BONES_VARIANT = "getting-the-key-from-traiborn-returning-with-the-last-of-the-bones-to-traiborn";
+  const ALL_KEYS_VARIANT = "getting-the-key-from-traiborn-returning-to-sir-prysin-with-all-the-keys";
+
+  function transcriptTail(steps, text) {
     for (let index = 0; index < steps.length; index++) {
       if (steps[index].text === text) return steps.slice(index);
       for (const option of steps[index].options ?? []) {
-        const tail = visionTail(option.steps ?? [], text);
+        const tail = transcriptTail(option.steps ?? [], text);
         if (tail) return tail;
       }
       if (steps[index].steps) {
-        const tail = visionTail(steps[index].steps, text);
+        const tail = transcriptTail(steps[index].steps, text);
         if (tail) return tail;
       }
     }
@@ -490,12 +579,21 @@ module.exports = function registerDemonSlayerQuest(api) {
 
   function resumeVision(player, text) {
     startTranscript(api, player, ARIS_NPC_ID, "Demon Slayer", "starting-demon-slayer",
-      (steps) => visionTail(steps, text));
+      (steps) => transcriptTail(steps, text));
   }
 
   // The dump keeps wiki placeholders in a few spoken lines; render them.
   function renderDialogueLine(event) {
     const text = String(event.text || "");
+    if (text === "Okay, here you go." && (event.npcId === ARIS_NPC_ID || event.npcId === ARIS_LEGACY_NPC_ID) &&
+        quest.getStage(event.player) === 0) event.after = () => payAris(event.player);
+    if (text === "I gave the other to the wizard Traiborn." && PRYSIN_NPC_IDS.has(event.npcId)) {
+      event.after = () => {
+        const stage = quest.getStage(event.player);
+        if (stage >= STAGE_STARTED && stage < STAGE_KEY_HUNT) quest.setStage(event.player, STAGE_KEY_HUNT);
+      };
+    }
+    if (text.startsWith("Wings of dark and colour too") && event.npcId === TRAIBORN_NPC_ID) playBoneRitual(event);
     if (visions.has(event.player)) {
       if (text === "Die, foul demon!") event.before = () => {
         const player = event.player;
@@ -503,12 +601,14 @@ module.exports = function registerDemonSlayerQuest(api) {
         scene.running = player.isRunningReturn();
         player.moveTo(new Location(3225, 3363, 0));
         player.setRunning(true);
+        player.getPacketSender().sendSound(SOUND.cut, 1, 0);
         TaskManager.submit(new ForceMovementTask(player, 2, new ForceMovement(
           new Location(3225, 3363, 0), new Location(2, 4, 0), 0, 60, 0, 824)));
 
         later(scene, 4, () => {
           player.getMovementQueue().setBlockMovement(true);
           player.performAnimation(new Animation(ANIMATION.wally));
+          player.getPacketSender().sendSound(SOUND.wallyCharge, 1, 10);
         });
         event.player.getPacketSender().sendCameraLookAt(3227, 3367, 200, { rate: 2, rate2: 10 });
         event.player.getPacketSender().sendCameraLookAt(3227, 3367, 100, { rate: 1, rate2: 10 });
@@ -524,23 +624,27 @@ module.exports = function registerDemonSlayerQuest(api) {
         event.player.getPacketSender().sendCameraMoveTo(3227, 3369, 100, { rate: 2, rate2: 10 });
         event.player.getPacketSender().sendCameraShake(1, 0, 10, 5);
         event.player.getPacketSender().sendCameraShake(3, 0, 2, 50);
+        event.player.getPacketSender().sendSound(SOUND.cut, 1, 0);
       };
       if (text === "[word 1]... [word 2]... [word 3]... [word 4]... [word 5]!") event.after = () => {
         const scene = visions.get(event.player);
-        event.player.getDialogueManager().reset();
-        StatementDialogue.send(event.player, "", false);
+        blankChatbox(event.player);
+        fade(event.player, true);
         later(scene, 4, () => {
           if (visions.get(event.player) === scene) resumeVision(event.player, "I am the greatest demon slayer EVER!");
         });
       };
       if (text === "I am the greatest demon slayer EVER!") event.before = () => {
+        event.player.getPacketSender().closeSubInterface(FADE_UID);
         event.player.performAnimation(new Animation(ANIMATION.sword));
-        event.player.performGraphic(new Graphic(778));
+        event.player.performGraphic(new Graphic(GRAPHIC.glint));
+        event.player.getPacketSender().sendSound(SOUND.cut, 1, 0).sendSound(SOUND.glint, 1, 0).sendJingle(DEMON_SLAYER_JINGLE, 0);
         event.player.getPacketSender().sendCameraShake(1, 0, 0, 0);
         event.player.getPacketSender().sendCameraShake(3, 0, 0, 0);
         event.player.getPacketSender().sendCameraMoveTo(3225, 3363, 500, { rate: 232, rate2: 232 });
         event.player.getPacketSender().sendCameraLookAt(3227, 3367, 200, { rate: 232, rate2: 232 });
       };
+      if (text.startsWith("By reciting the correct magical incantation")) event.after = () => closeVision(event.player);
     }
     // Capture 1843: the summoners' lines show qip_ds_young_dark_wizard2 (chathap1) for the
     // group and qip_ds_young_dark_wizard1 (chatshock1) for "Who's that?". The cache's first
@@ -554,33 +658,30 @@ module.exports = function registerDemonSlayerQuest(api) {
     // Capture 1843: all four summoners chant the group line overhead too; on Denath's laugh they
     // stop chanting and turn to Delrith, and on "Who's that?" the young wizards turn to the player.
     if (fight?.summoning && text === "Arise, Delrith!") {
-      event.before = () => fight.actors.forEach((actor) => actor.forceChat?.(text));
+      event.before = () => fight.actors.forEach((actor) => actor.forceChat(text));
     }
     if (fight?.summoning && text.startsWith("Ha ha ha! At last you are free")) {
-      event.before = () => fight.actors.forEach((actor) => {
-        actor.performAnimation(new Animation(-1));
-        actor.setPositionToFace?.(new Location(...DELRITH_RISEN_TILE, 0));
-      });
+      event.before = () => {
+        for (const actor of fight.actors) {
+          actor.performAnimation(new Animation(-1));
+          actor.setPositionToFace(WIZARDS_TILE);
+        }
+        fight.delrith?.setPositionToFace(DENATH_TILE);
+      };
     }
     if (fight?.summoning && text === "Who's that?") {
       event.before = () => fight.actors
         .filter((actor) => actor.getId?.() !== DENATH_NPC_ID)
-        .forEach((actor) => actor.setPositionToFace?.(event.player.getLocation().clone()));
+        .forEach((actor) => actor.setPositionToFace(event.player.getLocation().clone()));
     }
+    // Capture 1843 (10135-10145): Denath walks off east, the young wizards spread out and the
+    // first one attacks the player at once, whatever their level.
     if (fight?.summoning && text.startsWith("I've got to get out of here")) {
-      event.before = () => event.player.getPacketSender().sendCameraMoveTo(3226, 3383, 1000, { rate: 1, rate2: 1 });
-      event.after = () => {
-        fight.summoning = false;
-        TaskManager.cancelTasks(fight);
-        for (const actor of fight.actors) actor.performAnimation(new Animation(-1));
-        if (fight.actors.at(-1)) api.removeNpc(fight.actors.pop());
-        // Capture 1843: the first young wizard turns on the player at once, whatever their level.
-        fight.actors.find((actor) => actor.getId?.() === NpcIdentifiers.DARK_WIZARD_7)
-          ?.getCombat?.()?.attack?.(event.player);
-        event.player.getPacketSender().sendVarbit(VARBIT_SUMMONING_SEEN, 1);
-        event.player.getPacketSender().sendCameraReset();
-        setSceneControls(event.player, false);
+      event.before = () => {
+        event.player.getPacketSender().sendCameraMoveTo(3226, 3383, 1000, { rate: 1, rate2: 1 });
+        fight.actors.at(-1)?.getMovementQueue().addSteps(DENATH_EXIT_TILE);
       };
+      event.after = () => endSummoning(event.player, fight);
     }
     if (event.npcId === TRAIBORN_NPC_ID && text.includes("[25-X]")) {
       const stage = quest.getStage(event.player);
@@ -596,19 +697,7 @@ module.exports = function registerDemonSlayerQuest(api) {
   }
 
   // Option choices that carry no action id in the dump but gate quest state.
-  function handleDialogueChoice({ player, npcId, option, stepId }) {
-    if ((npcId === ARIS_NPC_ID || npcId === ARIS_LEGACY_NPC_ID) &&
-        quest.getStage(player) === 0 && String(option).toLowerCase() === "yes.") {
-      if (hasItem(player, COINS_ITEM_ID)) player.getInventory().deleteNumber(COINS_ITEM_ID, 1);
-      return;
-    }
-    if (stepId === PRYSIN_INTRO_OPTION_ID && PRYSIN_NPC_IDS.has(npcId)) {
-      const stage = quest.getStage(player);
-      if (stage >= STAGE_STARTED && stage < STAGE_KEY_HUNT) {
-        quest.setStage(player, STAGE_KEY_HUNT);
-      }
-      return;
-    }
+  function handleDialogueChoice({ player, npcId, option }) {
     if (npcId !== TRAIBORN_NPC_ID) return;
     const text = String(option || "").toLowerCase();
     if (text === BONES_CHOICE_TEXT) {
@@ -630,11 +719,96 @@ module.exports = function registerDemonSlayerQuest(api) {
   function handleDialogueHook({ player, npcId, hook }) {
     if (hook !== QUEST_START_HOOK) return;
     if (npcId !== ARIS_NPC_ID && npcId !== ARIS_LEGACY_NPC_ID) return;
-    if (quest.getStage(player) >= STAGE_STARTED) return;
     endVision(player);
+    startQuest(player);
+  }
+
+  function startQuest(player) {
+    if (quest.getStage(player) >= STAGE_STARTED) return;
     quest.setStage(player, STAGE_STARTED);
     sendIncantation(player);
     player.sendMessage("You've started a new quest: <col=0ab0ff>Demon Slayer</col>");
+  }
+
+  /** The coin leaves as the player finishes saying "Okay, here you go." (capture 1723, 10369). */
+  function payAris(player) {
+    if (!hasItem(player, COINS_ITEM_ID)) return;
+    player.getInventory().deleteNumber(COINS_ITEM_ID, 1);
+    player.getPacketSender().sendSound(SOUND.coin, 1, 0);
+  }
+
+  function warnBeforeStart(event) {
+    if (String(event.prompt).includes("Start the Demon Slayer quest") && event.player.getSkillManager().getCombatLevel() < RECOMMENDED_COMBAT_LEVEL) {
+      event.warning = `Before starting this quest, be aware that your combat level is lower than the recommended level of ${RECOMMENDED_COMBAT_LEVEL}.`;
+    }
+  }
+
+  /** Traiborn's ritual: the wardrobe appears as he chants, and he hands the key over 4 ticks after Continue. */
+  function playBoneRitual(event) {
+    const { player, npc } = event;
+    const wardrobe = new GameObject(ObjectIdentifiers.WARDROBE_13, WARDROBE_TILE, 11, 3, null);
+    event.before = () => {
+      npc?.setPositionToFace(WARDROBE_TILE);
+      npc?.performAnimation(new Animation(ANIMATION.boneRitual));
+      npc?.performGraphic(new Graphic(GRAPHIC.boneRitual));
+      ObjectManager.register(wardrobe, true);
+      player.getPacketSender().sendSound(SOUND.boneRitual, 1, 0);
+    };
+    event.after = () => {
+      player.getDialogueManager().reset();
+      player.getPacketSender().sendSound(SOUND.wardrobe, 1, 0).sendInterfaceRemoval();
+      later(wardrobe, 2, () => {
+        npc?.performAnimation(new Animation(ANIMATION.openCloset));
+        player.getPacketSender().sendSound(SOUND.closet, 1, 0);
+      });
+      later(wardrobe, 4, () => {
+        wardrobe.performAnimation(new Animation(ANIMATION.wardrobeGone));
+        npc?.setMobileInteraction(player);
+        player.getPacketSender().sendSound(SOUND.wardrobeGone, 1, 0);
+        if (player.isRegistered?.() === false) return;
+        startTranscript(api, player, TRAIBORN_NPC_ID, "Demon Slayer", LAST_BONES_VARIANT, (steps) => transcriptTail(steps, "Traiborn hands you a key."), npc);
+      });
+      later(wardrobe, WARDROBE_TICKS, () => ObjectManager.deregister(wardrobe, true));
+    };
+  }
+
+  /** Prysin walks to the case, opens it and presents the sword (capture 1843, 10049-10066). */
+  function playSilverlightCase(event) {
+    const { player, npc, npcId } = event;
+    if (!npc || !hasAllKeys(player) || ownsItem(player, SILVERLIGHT_ITEM_ID) || prysinsAtCase.has(npc)) return false;
+    prysinsAtCase.add(npc);
+    const sender = player.getPacketSender();
+    const scene = {};
+    player.getDialogueManager().reset();
+    sender.sendInterfaceRemoval();
+    player.getMovementQueue().reset().setBlockMovement(true);
+    npc.getMovementCoordinator().setRadius(0);
+    npc.setMobileInteraction(null);
+    npc.getMovementQueue().reset().addSteps(PRYSIN_CASE_APPROACH_TILE);
+    later(scene, 2, () => { npc.moveTo(SILVERLIGHT_CASE_TILE); player.moveTo(PRYSIN_CASE_APPROACH_TILE); });
+    later(scene, 3, () => { npc.setPositionToFace(PRYSIN_CASE_FACE_TILE); player.setPositionToFace(PRYSIN_CASE_FACE_TILE); });
+    later(scene, 4, () => { npc.performAnimation(new Animation(ANIMATION.prysinOpens, 19)); sender.sendSound(SOUND.caseKey, 1, 19); });
+    later(scene, 9, () => {
+      new GameObject(SILVERLIGHT_CASE_LOC_ID, SILVERLIGHT_CASE_TILE, 4, 3, null).performAnimation(new Animation(ANIMATION.caseOpens));
+      sender.sendSound(SOUND.caseOpens, 1, 0);
+    });
+    later(scene, 12, () => {
+      sender.sendVarbit(VARBIT_SILVERLIGHT_CASE, 1);
+      npc.setNpcTransformationId(NpcIdentifiers.SIR_PRYSIN_2);
+      npc.performAnimation(new Animation(ANIMATION.prysinTakes));
+    });
+    later(scene, 15, () => { npc.setMobileInteraction(player); npc.performAnimation(new Animation(ANIMATION.prysinPresents)); });
+    later(scene, 16, () => npc.performAnimation(new Animation(ANIMATION.prysinHolds)));
+    later(scene, 17, () => {
+      prysinsAtCase.delete(npc);
+      npc.setNpcTransformationId(-1);
+      npc.performAnimation(new Animation(ANIMATION.prysinGives));
+      npc.getMovementCoordinator().setRadius(PRYSIN_WANDER_RADIUS);
+      player.getMovementQueue().setBlockMovement(false);
+      if (player.isRegistered?.() === false) return;
+      startTranscript(api, player, npcId, "Demon Slayer", ALL_KEYS_VARIANT, (steps) => transcriptTail(steps, "Sir Prysin hands you a very shiny sword."), npc);
+    });
+    return true;
   }
 
   // Key and bone hand-overs keyed off the transcript's message/action ids.
@@ -650,7 +824,7 @@ module.exports = function registerDemonSlayerQuest(api) {
       event.handled = true;
       player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ActionDialogue(0, {
         execute: () => StatementDialogue.send(player, "The wizards cast an evil spell...", false),
-      })));
+      }, true)));
       const fight = demonEncounters.get(player);
       later(fight, 14, () => {
         if (demonEncounters.get(player) === fight && fight.summoning) {
@@ -668,6 +842,7 @@ module.exports = function registerDemonSlayerQuest(api) {
         !player.getInventory().isFull()
       ) {
         player.getInventory().adds(ROVIN_KEY_ITEM_ID, 1);
+        event.box = { items: [ROVIN_KEY_ITEM_ID] };
       } else {
         event.handled = true;
       }
@@ -693,11 +868,9 @@ module.exports = function registerDemonSlayerQuest(api) {
         }
         player.getInventory().deleteNumber(BONES_ITEM_ID, available);
         quest.setStage(player, stage + available);
-        player.sendMessage(
-          `You give Traiborn ${available} set${available === 1 ? "" : "s"} of bones.`
-        );
+        event.text = `You give Traiborn ${available} set${available === 1 ? "" : "s"} of bones.`;
+        event.box = { statement: true };
         event.handled = true;
-        event.end = false;
         return;
       }
       if (stepId === TRAIBORN_KEY_MESSAGE_ID) {
@@ -708,6 +881,7 @@ module.exports = function registerDemonSlayerQuest(api) {
           !player.getInventory().isFull()
         ) {
           player.getInventory().adds(TRAIBORN_KEY_ITEM_ID, 1);
+          event.box = { items: [TRAIBORN_KEY_ITEM_ID] };
         }
         return; // leave "Traiborn hands you a key." to play
       }
@@ -715,6 +889,10 @@ module.exports = function registerDemonSlayerQuest(api) {
     }
 
     if (PRYSIN_NPC_IDS.has(npcId)) {
+      if (stepId === SILVERLIGHT_CASE_ACTION_ID) {
+        if (playSilverlightCase(event)) event.handled = true;
+        return;
+      }
       if (stepId === SILVERLIGHT_MESSAGE_ID) {
         if (!ownsSilverlight(player) && hasAllKeys(player)) {
           player.getInventory().deleteNumber(TRAIBORN_KEY_ITEM_ID, 1);
@@ -724,8 +902,10 @@ module.exports = function registerDemonSlayerQuest(api) {
           quest.setStage(player, STAGE_SILVERLIGHT);
           player.getPacketSender().sendVarbit(VARBIT_SILVERLIGHT_CASE, 1);
           player.performAnimation(new Animation(ANIMATION.sword));
-          player.performGraphic(new Graphic(778));
+          player.performGraphic(new Graphic(GRAPHIC.glint));
+          player.getPacketSender().sendSound(SOUND.glint, 1, 0);
           setDrainState(player, 3);
+          event.box = { items: [SILVERLIGHT_ITEM_ID] };
         }
         return; // leave the transcript's own message to play
       }
@@ -762,7 +942,7 @@ module.exports = function registerDemonSlayerQuest(api) {
     const choice = selectDialogueVariant({ player: event.player, npcId: TRAIBORN_NPC_ID });
     event.handled = true;
     startTranscript(api, event.player, TRAIBORN_NPC_ID, choice.page, choice.variant,
-      (steps) => steps[1].options[0].steps.slice(1));
+      (steps) => steps[1].options[0].steps.slice(1), event.target);
   }
 
   // The lost-Silverlight branch of the pre-fight dialogue gives it back.
@@ -778,19 +958,16 @@ module.exports = function registerDemonSlayerQuest(api) {
   function searchDrain(event) {
     if (!DRAIN_LOC_IDS.has(event.objectId)) return;
     const { player } = event;
-    const stage = quest.getStage(player);
-    if (stage < STAGE_KEY_HUNT) {
-      player.sendMessage("You can see a key in the drain, but you cannot quite reach it.");
-    } else if (stage >= STAGE_SILVERLIGHT || hasItem(player, PRYSIN_KEY_ITEM_ID)) {
-      player.sendMessage("Nothing interesting seems to have been dropped down here today.");
-    } else if (drainState(player) >= 2) {
-      player.sendMessage("The key has been washed into the sewer.");
-    } else {
-      player.sendMessage(
-        "You can see a key, but it is stuck just out of reach. Perhaps water could dislodge it."
-      );
-    }
+    if (keyIsInDrain(player)) startTranscript(api, player, ARIS_NPC_ID, "Demon Slayer", DRAIN_VARIANT);
+    else player.sendMessage("Nothing interesting seems to have been dropped down here today.");
     event.handled = true;
+  }
+
+  /** Wiki: outside the quest, and once washed down, the drain holds nothing. */
+  function keyIsInDrain(player) {
+    const stage = quest.getStage(player);
+    return stage >= STAGE_KEY_HUNT && stage < STAGE_SILVERLIGHT && drainState(player) !== 2 &&
+      !hasItem(player, PRYSIN_KEY_ITEM_ID) && !bankHasItem(player, PRYSIN_KEY_ITEM_ID);
   }
 
   function pourWaterOnDrain(event) {
@@ -806,9 +983,10 @@ module.exports = function registerDemonSlayerQuest(api) {
     player.getInventory().deleteNumber(event.itemId, 1);
     player.getInventory().adds(emptyContainer, 1);
     player.sendMessage("You pour the liquid down the drain.");
+    player.performAnimation(new Animation(ANIMATION.pour));
+    player.getPacketSender().sendSound(SOUND.pour, 1, 0).sendSound(SOUND.pourClink, 1, 0);
     event.handled = true;
-    if (hasItem(player, PRYSIN_KEY_ITEM_ID) || bankHasItem(player, PRYSIN_KEY_ITEM_ID)) return;
-    if (drainState(player) === 2) return;
+    if (!keyIsInDrain(player)) return;
     setDrainState(player, 2);
     ensureSewerKey(player);
     startTranscript(api, player, ARIS_NPC_ID, "Demon Slayer", "searching-the-drain-near-the-palace-kitchen-pouring-water-in-the-drain");
@@ -852,7 +1030,7 @@ module.exports = function registerDemonSlayerQuest(api) {
     if (!player || player.isPlayerBot?.() === true || quest.getStage(player) !== STAGE_SILVERLIGHT) return;
     if (delrithEscaped.has(player)) return;
     const tracked = demonEncounters.get(player);
-    if (tracked?.summoning || tracked?.delrith || tracked?.weakened) return;
+    if (tracked?.summoning || tracked?.delrith || tracked?.weakened || tracked?.banished) return;
     if (tracked) { summonDelrith(player); return; }
     const arena = new DemonSceneArea(player, false);
     arena.enter(player);
@@ -867,6 +1045,7 @@ module.exports = function registerDemonSlayerQuest(api) {
       actor.performAnimation(new Animation(ANIMATION.chant));
       fight.actors.push(actor);
     }
+    player.getPacketSender().sendSong(SONG_DELRITH);
     player.getPacketSender().sendCameraMoveTo(3224, 3376, 475, { rate: 232, rate2: 232 });
     player.getPacketSender().sendCameraLookAt(3227, 3369, 300, { rate: 232, rate2: 232 });
     player.getPacketSender().sendCameraMoveTo(3231, 3376, 475, { rate: 1, rate2: 1 });
@@ -877,11 +1056,15 @@ module.exports = function registerDemonSlayerQuest(api) {
     const tracked = demonEncounters.get(player);
     if (!tracked || tracked.delrith || tracked.weakened) return;
     if (tracked.summoning) {
-      const table = new GameObject(ObjectIdentifiers.STONE_TABLE_2, new Location(3227, 3369, 0), 10, 0, tracked.arena);
-      ObjectManager.register(table, true);
-      table.performAnimation(new Animation(4622));
-      later(tracked, 4, () => ObjectManager.register(new GameObject(ObjectIdentifiers.STONE_TABLE_4,
-        new Location(3227, 3369, 0), 10, 0, tracked.arena), true));
+      const placeTable = (id) => {
+        const table = new GameObject(id, STONE_TABLE_TILE, 10, 0, tracked.arena);
+        ObjectManager.register(table, true);
+        return table;
+      };
+      const table = placeTable(ObjectIdentifiers.STONE_TABLE_2);
+      later(tracked, 1, () => table.performAnimation(new Animation(ANIMATION.tableExplosion)));
+      later(tracked, 6, () => placeTable(ObjectIdentifiers.STONE_TABLE_3));
+      later(tracked, 11, () => placeTable(ObjectIdentifiers.STONE_TABLE_4));
     }
     const spawn = () => {
       if (demonEncounters.get(player) !== tracked || tracked.delrith || tracked.weakened) return;
@@ -893,12 +1076,14 @@ module.exports = function registerDemonSlayerQuest(api) {
       npc.performAnimation(new Animation(ANIMATION.summoned));
     };
     if (!tracked.summoning) { spawn(); return; }
+    player.getPacketSender().sendSound(SOUND.spell, 1, 0).sendSound(SOUND.tableExplosion, 1, 0);
     player.getPacketSender().sendCameraLookAt(3227, 3369, 100, { rate: 232, rate2: 232 });
     player.getPacketSender().sendCameraMoveTo(3227, 3365, 500, { rate: 232, rate2: 232 });
     later(tracked, 2, () => player.getPacketSender().sendCameraShake(0, 15));
     later(tracked, 3, () => player.getPacketSender().sendCameraShake(0, 0));
     later(tracked, 6, () => {
       spawn();
+      player.getPacketSender().sendSound(SOUND.delrithRising, 1, 10).sendSound(SOUND.delrithArrives, 1, 0);
       player.getPacketSender().sendCameraLookAt(3227, 3369, 400, { rate: 1, rate2: 1 });
     });
     // Live: Delrith walks off the altar to 3227,3367 before "Who's that?". He rises on the 2x2
@@ -916,8 +1101,21 @@ module.exports = function registerDemonSlayerQuest(api) {
     });
   }
 
+  /** Denath keeps walking off; the young wizards loosen up and the first turns on the player (1843, 10135). */
+  function endSummoning(player, fight) {
+    fight.summoning = false;
+    TaskManager.cancelTasks(fight);
+    const wizards = fight.actors.slice(0, -1);
+    for (const wizard of wizards) wizard.getMovementCoordinator().setRadius(WIZARD_WANDER_RADIUS);
+    wizards[0]?.getCombat().attack(player);
+    player.getPacketSender().sendVarbit(VARBIT_SUMMONING_SEEN, 1);
+    player.getPacketSender().sendCameraReset();
+    setSceneControls(player, false);
+  }
+
   function spawnWeakenedDelrith(player, npc) {
     const tracked = demonEncounters.get(player);
+    player.getPacketSender().sendSound(SOUND.delrithWeakened, 1, 0);
     npc.setNpcTransformationId(WEAKENED_DELRITH_NPC_ID);
     npc.setHitpoints(1);
     npc.getCombat().reset();
@@ -949,16 +1147,22 @@ module.exports = function registerDemonSlayerQuest(api) {
    */
   function handleDelrithBeforeDeath(event) {
     const npc = event?.npc;
-    if (!npc || (npc.getId?.() !== DELRITH_NPC_ID && npc.getId?.() !== WEAKENED_DELRITH_NPC_ID)) return;
-    const owner = npc.getOwner?.();
+    const owner = npc?.getOwner?.();
     if (!owner || quest.getStage(owner) !== STAGE_SILVERLIGHT) return;
     const tracked = demonEncounters.get(owner);
-    if (tracked?.weakened === npc) {
+    if (!tracked) return;
+    if (tracked.actors?.includes(npc)) {
+      tracked.wizardsKilled = (tracked.wizardsKilled ?? 0) + 1;
+      owner.getPacketSender().sendVarbit(VARBIT_DARK_WIZARDS_KILLED, tracked.wizardsKilled);
+      return;
+    }
+    // A hit already on its way can land on the weakened form; he is banished, never killed.
+    if (tracked.weakened === npc) {
       npc.setHitpoints(1);
       event.preventDeath = true;
       return;
     }
-    if (!tracked || tracked.delrith !== npc) return;
+    if (npc.getId?.() !== DELRITH_NPC_ID || tracked.delrith !== npc) return;
     spawnWeakenedDelrith(owner, npc);
     event.preventDeath = true;
   }
@@ -968,26 +1172,38 @@ module.exports = function registerDemonSlayerQuest(api) {
     if (!tracked || tracked.weakened !== npc) return;
     if (selected.every((word, index) => word === INCANTATION_WORDS[incantationOrder(player)[index]])) {
       tracked.weakenedExpiresAt = undefined;
+      tracked.banished = true;
+      setSceneControls(player, true);
       npc.performAnimation(new Animation(ANIMATION.banished));
+      player.getPacketSender().sendSound(SOUND.vortex, 1, 10);
+      player.getDialogueManager().reset();
       StatementDialogue.send(player, "Delrith is sucked into the vortex...", false);
-      later(tracked, 8, () => {
-        StatementDialogue.send(player, "...back into the dark dimension from which he came.", false);
-        later(tracked, 2, () => {
-          clearDemonEncounter(player);
-          player.getPacketSender().sendVarbit(VARBIT_SUMMONING_SEEN, 0);
-          player.moveTo(new Location(3226, 3368, 0));
-          player.performAnimation(new Animation(ANIMATION.sword));
-          player.performGraphic(new Graphic(778));
-          quest.complete(player);
-        });
+      later(tracked, VORTEX_TICKS, () => {
+        api.removeNpc(npc);
+        tracked.weakened = null;
+        player.getPacketSender().sendVarbit(VARBIT_SUMMONING_SEEN, 0);
+        player.getPacketSender().sendSound(SOUND.vortexCloses, 1, 0);
+        player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+          .add(new StatementDialogue(0, "...back into the dark dimension from which he came."))
+          .add(new ActionDialogue(1, { execute: () => finishBanishment(player) })));
       });
       return;
     }
-    player.sendMessage("The vortex collapses. That was the wrong incantation.");
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+      .add(new StatementDialogue(0, "The vortex collapses. That was the wrong incantation.")));
     npc.setNpcTransformationId(-1);
     npc.setHitpoints(npc.getDefinition().getHitpoints());
     tracked.weakened = null;
     tracked.delrith = npc;
+  }
+
+  function finishBanishment(player) {
+    clearDemonEncounter(player);
+    player.moveTo(new Location(3226, 3368, 0));
+    player.performAnimation(new Animation(ANIMATION.sword));
+    player.performGraphic(new Graphic(GRAPHIC.glint));
+    player.getPacketSender().sendSound(SOUND.glint, 1, 0);
+    quest.complete(player);
   }
 
   function banishWeakenedDelrith({ player, npc }) {
@@ -1011,17 +1227,21 @@ module.exports = function registerDemonSlayerQuest(api) {
   }
 
   /**
-   * Capture 1843: the player says each word picked overhead a tick later ("Gabindo...", the last
-   * with "!"); the next "Select a word" comes three ticks after that, and the vortex two.
+   * Capture 1843 (10178-10209): a tick after a word is picked, the player says it overhead
+   * ("Gabindo...", the last with "!") and in a chatbox with no Continue; the next "Select a word",
+   * or the vortex after the last, comes three ticks after that.
    */
   function sayIncantationWord(player, npc, selected) {
     const tracked = demonEncounters.get(player);
     if (!tracked || tracked.weakened !== npc) return;
-    const last = selected.length === INCANTATION_WORDS.length;
+    const spoken = selected.at(-1) + (selected.length === INCANTATION_WORDS.length ? "!" : "...");
     player.getPacketSender().sendInterfaceRemoval();
     later(tracked, 1, () => {
-      player.forceChat(`${selected.at(-1)}${last ? "!" : "..."}`);
-      later(tracked, last ? 2 : 3, () => promptIncantation(player, npc, selected));
+      player.forceChat(spoken);
+      player.getDialogueManager().reset();
+      new PlayerDialogue(0, spoken).send(player);
+      player.getPacketSender().sendString("", PLAYER_DIALOGUE_CONTINUE_UID).sendInterfaceFlagsRange(PLAYER_DIALOGUE_CONTINUE_UID, -1, -1, 0);
+      later(tracked, INCANTATION_WORD_TICKS, () => promptIncantation(player, npc, selected));
     });
   }
 
@@ -1055,6 +1275,8 @@ module.exports = function registerDemonSlayerQuest(api) {
     const tile = event.groundItem.getPosition();
     if (!tile.equals(SEWER_KEY_TILE)) return;
     setDrainState(event.player, 3);
+    event.player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+      .add(new ItemStatementDialogue(0, PRYSIN_KEY_ITEM_ID, "You pick up an old rusty key.")));
   }
 
   function ensureSewerKeyOnMapChange({ player }) {
@@ -1080,6 +1302,7 @@ module.exports = function registerDemonSlayerQuest(api) {
     questPoints: 3,
     scrollItemId: SILVERLIGHT_ITEM_ID,
     rewardItemLabel: "Silverlight",
+    completionJingleId: DEMON_SLAYER_JINGLE,
     buildJournal,
   });
 
@@ -1090,6 +1313,7 @@ module.exports = function registerDemonSlayerQuest(api) {
 
   api.onNpcDialogueVariant(selectDialogueVariant);
   api.onNpcDialogueCondition(answerDialogueCondition);
+  api.onCustomEvent("npc-dialogue:menu", warnBeforeStart);
   api.onCustomEvent("npc-dialogue:line", renderDialogueLine);
   api.onCustomEvent("npc-dialogue:choice", handleDialogueChoice);
   api.onCustomEvent("npc-dialogue:hook", handleDialogueHook);

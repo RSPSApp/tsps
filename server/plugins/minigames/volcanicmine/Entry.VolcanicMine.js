@@ -11,7 +11,7 @@ function paid(player) {
   return player.getAttribute(attributes.permanent) === true || player.getAttribute(attributes.paid) === true;
 }
 
-const name = (player) => player.getUsername();
+const name = (player) => player.getDisplayName();
 
 /** Pay: the recorded menu; the 3,000 option shown struck through when it can't be afforded. */
 function pay(player) {

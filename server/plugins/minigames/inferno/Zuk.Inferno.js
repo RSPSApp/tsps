@@ -51,8 +51,12 @@ const ROCKS_FALL_TICKS = 3;
 const FIRST_ATTACK_TICKS = 15;
 const ATTACK_TICKS = 10;
 const ENRAGED_ATTACK_TICKS = 7;
+/**
+ * Wiki: Zuk's projectile rolls 0..148, the average of his 128 magic and 169 ranged maxima.
+ * 251 is his melee maximum, which he never uses because he cannot be reached in melee.
+ */
+const ZUK_PROJECTILE_MAX = 148;
 const SUMMONS_ATTACK_DELAY = 8;
-const MAX_HIT = 251;
 // The ranger and mager timer: 45s after the fight starts, then every 3m30s. At 600 hitpoints
 // it gains 1m45s and is held until Zuk drops below 480.
 const FIRST_SET_TICKS = 75;
@@ -237,17 +241,20 @@ function strike(session, state) {
   const { zuk, glyph } = state;
   const { player } = session;
   zuk.performAnimation(new Animation(ZUK_ATTACK_ANIM));
+  const damage = core.Misc.randomInclusive(0, ZUK_PROJECTILE_MAX);
   if (shielded(player, glyph)) {
     Projectile.createProjectile(zuk, glyph, ZUK_PROJECTILE, 40, Projectile.arrivalCycles(zuk, glyph), 43, 31).sendProjectile();
     monsters.later(zuk, Projectile.arrivalTicks(zuk, glyph), () => {
-      if (alive(glyph)) glyph.performAnimation(new Animation(GLYPH_BLOCK_ANIM));
+      if (!alive(glyph)) return;
+      glyph.performAnimation(new Animation(GLYPH_BLOCK_ANIM));
+      // Wiki: the shield is destroyed after taking 600 damage; Zuk's own hits count.
+      glyph.setHitpoints(Math.max(0, glyph.getHitpoints() - damage));
     });
     return;
   }
   Projectile.createProjectile(zuk, player, ZUK_PROJECTILE, 40, Projectile.arrivalCycles(zuk, player), 43, 31).sendProjectile();
   monsters.later(zuk, Projectile.arrivalTicks(zuk, player), () => {
     if (player.getHitpoints() <= 0 || run.sessionOf(player) !== session) return;
-    const damage = core.Misc.randomInclusive(0, MAX_HIT);
     player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, damage > 0 ? HitMask.RED : HitMask.BLUE)]);
   });
 }

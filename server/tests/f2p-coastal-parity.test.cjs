@@ -87,7 +87,7 @@ function player() {
     getInventory: () => inventory, getBanks: () => [{ getAmount: (id) => bank.get(id) || 0 }],
     getEquipment: () => ({ getItems: () => equipment, get: () => null, refreshItems() {} }), getLocation: () => location,
     getSpellbook: () => ({ getInterfaceId: () => 938 }),
-    getPrivateArea: () => area instanceof core.PrivateArea ? area : null, getUsername: () => 'QuestTester', getPacketSender: () => packet,
+    getPrivateArea: () => area instanceof core.PrivateArea ? area : null, getUsername: () => 'QuestTester', getDisplayName: () => 'QuestTester', getPacketSender: () => packet,
     getFrameUpdater: () => ({ clear() {} }),
     getDialogueManager: () => ({ reset() {}, startDialogues() {}, isActive: () => false }),
     getSkillManager: () => ({ getCombatLevel: () => 20, getCurrentLevel: () => 1, addExperiences: (skill, amount) => xp.push([skill.getIndex(), amount]) }),
@@ -146,6 +146,44 @@ test("Pirate note renders the captured handwriting and the first dig summons the
   q.call('onPlayerLogout', { player: p }); assert.ok(q.removed.includes(q.spawned[0]));
 });
 
+test("Pirate's Treasure crate packing uses the captured message boxes and Luthas pays with his line", () => {
+  const q = register('PiratesTreasure', 'pirates_treasure'), p = player();
+  q.quest.setStage(p, 1);
+  const crate = core.ObjectIdentifiers.CRATE_15;
+  const interactions = { getInteractions: () => ['Search', 'Fill'] };
+
+  // An empty crate: captured game message, not "The crate has 0 bananas inside."
+  q.call('onObjectInteraction', { player: p, objectId: crate, clickType: 1, definition: interactions });
+  assert.deepEqual(p.messages, ['The crate is completely empty.']);
+
+  // Without Luthas's employment the crate refuses the banana (rsprox 4287).
+  p.items.set(1963, 1);
+  q.call('onItemOnObject', { player: p, objectId: crate, itemId: 1963 });
+  assert.deepEqual(p.messages, ['The crate is completely empty.', 'Why would I want to do that?']);
+  assert.equal(p.items.get(1963), 1);
+
+  // A single banana is a message box, not game chat.
+  p.attributes.set('pirates-treasure.employment', 1);
+  q.call('onItemOnObject', { player: p, objectId: crate, itemId: 1963 });
+  assert.equal(p.attributes.get('pirates-treasure.bananas'), 1);
+  const boxes = () => p.packets.filter(([method, , uid]) => method === 'sendString' && uid === ((229 << 16) | 3))
+    .map(([, text]) => text);
+  assert.deepEqual(boxes(), ['You pack a banana into the crate.']);
+
+  // Filling the last nine completes the crate: the captured wording is "fill".
+  p.items.set(1963, 9);
+  q.call('onObjectInteraction', { player: p, objectId: crate, clickType: 2, definition: interactions });
+  assert.equal(p.attributes.get('pirates-treasure.bananas'), 10);
+  assert.equal(p.items.get(1963), 0);
+  assert.deepEqual(boxes(), ['You pack a banana into the crate.', 'You fill the crate with bananas.']);
+
+  // Paying for the full crate: dialogue action then the captured game message.
+  q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.LUTHAS, stepId: '1YHx0E' });
+  assert.equal(p.attributes.get('pirates-treasure.bananas'), 0);
+  assert.deepEqual(p.messages, ['The crate is completely empty.', 'Why would I want to do that?', 'Luthas hands you 30 coins.']);
+  assert.equal(p.items.get(995), 30);
+});
+
 test('Prince Ali key can be made at a furnace without Osman and Leela accepts the prepared player at state20', () => {
   const q = register('PrinceAliRescue', 'prince_ali_rescue'), p = player(); q.quest.setStage(p, 20);
   p.items.set(2423, 1); p.items.set(2349, 1);
@@ -186,8 +224,17 @@ test('Corsair captured independent investigations and spoken transitions reach w
   const q = register('CorsairCurse', 'the_corsair_curse'), p = player();
   const wire = () => q.quest.varbitValue(q.quest.getStage(p), p);
   reachLine(q, p, 7956, "Sure, I'll try to help with your curse."); assert.equal(wire(), 5);
+  const ferryId = core.NpcIdentifiers.CAPTAIN_TOCK_3;
+  const ferries = () => q.spawned.filter(npc => npc.getId() === ferryId && !q.removed.includes(npc));
+  assert.equal(ferries().length, 1, 'accepting still spawns the travelling captain at Rimmington');
+  assert.equal(ferries()[0].definition.owner, p);
   q.emit('npc-dialogue:action', { player: p, stepId: '9srM-C' }); assert.equal(wire(), 10);
   q.emit('npc-dialogue:action', { player: p, stepId: 'GnY-u6' }); assert.equal(wire(), 15); q.tick(3);
+  assert.equal(ferries().length, 2, 'arrival still supplies both quest-owned ferry captains');
+  for (const ferry of ferries()) {
+    assert.equal(ferry.definition.wanderRadius, 0);
+    assert.equal(ferry.definition.ownerOnly, true);
+  }
   reachLine(q, p, 7961, "Okay, it doesn't sound like you know what's behind the curse. Thanks.");
   assert.equal(p.attributes.get('quest.the_corsair_curse.navigator'), 1);
   reachLine(q, p, 7976, "I'd hoped I could use my amazing Thieving skills");
@@ -326,6 +373,23 @@ test('Corsair Ithoi uses captured spells on five ticks and Curse deals no direct
   } finally { core.MagicCombatMethod.prototype.start=start;core.MagicCombatMethod.prototype.hits=hits;Math.random=random; }
 });
 
+test('Corsair Ithoi strikes land with their projectile at every range (#1862)', () => {
+  const q=register('CorsairCurse','the_corsair_curse'),Provider=q.hooks.get('registerNpcCombatMethodProvider')[0], method=new Provider();
+  const start=core.MagicCombatMethod.prototype.start,create=core.Projectile.createProjectile,random=Math.random;
+  let selected; const sent=[];
+  const mobile=(x)=>({getLocation:()=>new core.Location(x,2839,1),getSize:()=>1,isPlayer:()=>x!==2529});
+  const npc={...mobile(2529),getCombat:()=>({setCastSpell:value=>{selected=value},getSelectedSpell:()=>selected}),forceChat(){}};
+  core.MagicCombatMethod.prototype.start=()=>{}; core.Projectile.createProjectile=(_s,_t,id,delay,end)=>({id,delay,end});
+  try {
+    Math.random=()=>0;method.start(npc,{});
+    for(const tiles of [1,4,8]){
+      const target=mobile(2529+tiles),flight=selected.castProjectile(npc,target);
+      assert.deepEqual([flight.delay,flight.end],[51,46+10*tiles],`${tiles} tiles: 46 + 10 a tile`);
+      assert.equal(core.MagicCombatMethod.hitDelay(npc,target,selected),core.Projectile.ticksToLand(flight.end),`${tiles} tiles: hit as it lands`);
+    }
+  } finally { core.MagicCombatMethod.prototype.start=start;core.Projectile.createProjectile=create;Math.random=random; }
+});
+
 test('Ned sells captured quest rope for 15 coins or four wool, refusing missing payment and full inventory', () => {
   const q = register('PrinceAliRescue', 'prince_ali_rescue'), p = player(); q.quest.setStage(p, 20);
   const page = require('../data/definitions/npc-dialogues.json')['Prince Ali Rescue'];
@@ -383,6 +447,26 @@ test('the customs officer lets worn Karamja gloves pass for half the fare, as th
   q.tick(9);
 });
 
+test("the customs officer's Charm free passage needs the Ring of Charos(a) worn", () => {
+  const q = register('PiratesTreasure', 'pirates_treasure'), p = player();
+  const answer = (text) => q.hooks.get('onNpcDialogueCondition')[0]({
+    player: p, npcId: core.NpcIdentifiers.CUSTOMS_OFFICER, text,
+  });
+  const wearRing = (id) => {
+    p.getEquipment = () => ({ get: () => ({ getId: () => id }), getItems: () => [], refreshItems() {} });
+  };
+  assert.equal(answer('If the player has the Ring of Charos(a) equipped:'), false);
+  wearRing(core.ItemIdentifiers.RING_OF_CHAROS);
+  assert.equal(answer('If the player has the Ring of Charos(a) equipped:'), false, 'the unactivated ring does not charm');
+  wearRing(core.ItemIdentifiers.RING_OF_CHAROS_A_);
+  assert.equal(answer('If the player has the Ring of Charos(a) equipped:'), true);
+  p.items.set(995, 0);
+  const charm = { player: p, npcId: core.NpcIdentifiers.CUSTOMS_OFFICER, stepId: 'upG45P' };
+  q.emit('npc-dialogue:action', charm);
+  assert.equal(charm.handled, true);
+  assert.equal(p.items.get(995), 0, 'the Charm route is free');
+});
+
 test('Corsair vine ladder preserves the side used on its one-tick climb', () => {
   const q = register('CorsairCurse', 'the_corsair_curse'), p = player();
   for (const [outside, inside] of [[2862, 9006], [2860, 9004]]) {
@@ -412,6 +496,19 @@ test('X Marks preserves old saved stages, native clue/map interfaces, and captur
   const handin={player:p,npcId:8484,stepId:'HSuTNF'};q.emit('npc-dialogue:action',handin);assert.equal(p.items.get(23071),0);assert.equal(q.quest.varpValue(5,p),7);assert.deepEqual(handin.box.items,[23071]);
   q.emit('npc-dialogue:action',{player:p,npcId:8484,stepId:'03vD77'});assert.equal(q.quest.varpValue(6,p),8);assert.equal(p.items.get(995),200);assert.equal(p.items.get(23072),1);assert.equal(p.items.get(24361),1);
   q.emit('npc-dialogue:action',{player:p,npcId:8484,stepId:'03vD77'});assert.equal(p.items.get(995),200);
+});
+
+test('X Marks login restores the captured coin, lamp and clue-box reward flags', () => {
+  const q = register('XMarksTheSpot', 'x_marks_the_spot'), p = player();
+  q.quest.setStage(p, 6);
+  p.setAttribute('x-marks-the-spot:lamp-used', 1);
+  p.setAttribute('x-marks-the-spot:clue-box-state', 2);
+  p.packets.length = 0;
+  q.call('onPlayerLogin', { player: p });
+  const sent = (id) => p.packets.filter(([m, vid]) => m === 'sendVarbit' && vid === id).at(-1)?.[2];
+  assert.equal(sent(8065), 1, 'coin reward flag is restored, as completed captures log in with it');
+  assert.equal(sent(8066), 1, 'used lamp stays used');
+  assert.equal(sent(8258), 1, 'claimed clue box stays claimed');
 });
 
 test('Port Sarim Veos leaves once Cabin Boy Herbert takes over in A Kingdom Divided, as captured at akd 150', () => {

@@ -170,7 +170,7 @@ import { buildGroundItemGeometry } from "../ground/GroundItemMeshBuilder";
 import { type MinimapIcon, SdMapData } from "../loader/SdMapData";
 import { SdMapDataLoader } from "../loader/SdMapDataLoader";
 import { SdMapLoaderInput } from "../loader/SdMapLoaderInput";
-import { isDoorLocType } from "../loc/SceneLocs";
+import { isDoorLoc } from "../loc/SceneLocs";
 import {
     DynamicNpcAnimLoader,
     DynamicNpcFrameGeometry,
@@ -219,8 +219,8 @@ export function onLocChange(host: WebGLOsrsRendererHost,
             const hasUnknownLocType =
                 ((oldId | 0) > 0 && oldLocType === undefined) ||
                 ((newId | 0) > 0 && newLocType === undefined);
-            const oldIsDoor = oldLocType !== undefined && isDoorLocType(oldLocType);
-            const newIsDoor = newLocType !== undefined && isDoorLocType(newLocType);
+            const oldIsDoor = oldLocType !== undefined && isDoorLoc(oldLocType, host.osrsClient.varManager, host.osrsClient.locTypeLoader);
+            const newIsDoor = newLocType !== undefined && isDoorLoc(newLocType, host.osrsClient.varManager, host.osrsClient.locTypeLoader);
             // Keeping doors and ordinary locs in separate GPU groups lets us
             // match the game's partial loc-update behaviour. A change that
             // crosses those groups retains the conservative full rebuild.
@@ -513,6 +513,8 @@ function reconcileAdded(
     // The built index also holds the dynamic object itself; only other ids are cache locs.
     for (const id of addChangeSlotIds(host, tile, level, shape, rotation)) {
         if ((id | 0) === (added.locId | 0) || recorded.has(id)) continue;
+        // An explicit server deletion must survive removal of the replacement.
+        if (host.locOverrides.get(`${tile.x},${tile.y},${level},${id}`)?.newId === LOC_OVERRIDE_REMOVED) continue;
         host.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`, { newId: LOC_OVERRIDE_REMOVED });
         recorded.add(id);
         changed = true;
@@ -542,7 +544,7 @@ export function onLocAddChange(host: WebGLOsrsRendererHost,
                     host.scheduleWorldEntityLocRebuild(deckView.id);
                 } else {
                     const locType = host.osrsClient.locTypeLoader.load(locId | 0);
-                    const group = locType && isDoorLocType(locType) ? "door" : "loc";
+                    const group = locType && isDoorLoc(locType, host.osrsClient.varManager, host.osrsClient.locTypeLoader) ? "door" : "loc";
                     // An instance builds the new loc from extraLocs.
                     if (host.instanceActive) host.scheduleInstanceLocUpdate(group);
                     else host.scheduleLocGeometryUpdate(mapX, mapY, group);
@@ -574,7 +576,7 @@ export function onLocAddChange(host: WebGLOsrsRendererHost,
             // (issue #1748).
             const derived = host.instanceActive
                 ? []
-                : addChangeSlotIds(host, tile, level, shape, rotation);
+                : addChangeSlotIds(host, tile, level, shape, rotation).filter((id) => host.locOverrides.get(`${tile.x},${tile.y},${level},${id}`)?.newId !== LOC_OVERRIDE_REMOVED);
             // A different object taking over the same slot inherits what its predecessor replaced.
             const replaced = Array.from(new Set([...(existing?.replacedIds ?? []), ...derived]));
             host.addedLocs.set(key, { locId, x: tile.x, y: tile.y, level, shape, rotation, replacedIds: replaced });

@@ -166,7 +166,7 @@ function sendOverlay(game) {
     const sender = viewer.getPacketSender();
     for (let row = 0; row < MAX_PLAYERS; row++) {
       const [player, entry] = rows[row] ?? [];
-      sender.sendString(player ? player.getUsername() : "", (OVERLAY << 16) | PLAYER_TEXT[row]);
+      sender.sendString(player ? player.getDisplayName() : "", (OVERLAY << 16) | PLAYER_TEXT[row]);
       sender.sendString(player ? String(entry.shots) : "", (OVERLAY << 16) | SHOTS_TEXT[row]);
       sender.sendString(player ? String(entry.score) : "", (OVERLAY << 16) | SCORE_TEXT[row]);
       sender.sendString(player && game.winners?.includes(player) ? "Winner!" : "", (OVERLAY << 16) | WINNER_TEXT[row]);

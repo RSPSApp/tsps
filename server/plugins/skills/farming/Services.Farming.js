@@ -200,6 +200,8 @@ function takeBinStep(player, work) {
     if (bin.tier === ROTTEN_TOMATO_TIER || inventory.contains(Data.itemId("Bucket"))) {
         if (bin.tier !== ROTTEN_TOMATO_TIER) inventory.deleteNumber(Data.itemId("Bucket"), 1);
         inventory.addItem(new core.Item(Data.itemId(COMPOST_NAMES[bin.tier])));
+        // "farming:bin-taken" { player, itemId }: a bucket filled from the bin (or a rotten tomato taken).
+        core.PluginManager.emitCustomEvent("farming:bin-taken", { player, itemId: Data.itemId(COMPOST_NAMES[bin.tier]) });
     } else {
         // Choose from the live inventory at output time; ordinary buckets always have priority.
         const bucket = binBottomless(player, bin);
@@ -270,7 +272,7 @@ function farmingItemPair(event) {
     const names = [core.CacheDefinitions.getItem(a).name, core.CacheDefinitions.getItem(b).name];
     if (([a, b].includes(core.ItemIdentifiers.HAY_SACK) && names.includes("Bronze spear")) || ([a, b].includes(core.ItemIdentifiers.HAY_SACK_2) && names.includes("Watermelon"))) {
         event.handled = true;
-        if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) < 23) { player.sendMessage("You need level 23 Farming."); return; }
+        if (!Patches.hasLevel(player, Patches.SCARECROW_LEVEL, "scarecrow")) return;
         inventory.deleteNumber(a, 1); inventory.deleteNumber(b, 1);
         const finished = names.includes("Watermelon");
         inventory.addItem(new core.Item(finished ? Data.itemId("Scarecrow") : core.ItemIdentifiers.HAY_SACK_2));
@@ -281,7 +283,7 @@ function farmingItemPair(event) {
     if (crop && (a === Data.itemId("Filled plant pot") || b === Data.itemId("Filled plant pot"))) {
         event.handled = true;
         if (!Patches.requireTool(player, "Gardening trowel")) return;
-        if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) < crop.level) { player.sendMessage(`You need level ${crop.level} Farming.`); return; }
+        if (!Patches.hasLevel(player, crop.level, "seedling")) return;
         inventory.deleteNumber(crop.seed, 1);
         inventory.deleteNumber(Data.itemId("Filled plant pot"), 1);
         inventory.addItem(new core.Item(crop.seedling));
@@ -443,6 +445,9 @@ function farmingItemOnNpc(event) {
     inventory.deleteNumber(id, amount);
     inventory.addItem(noted);
 }
+function isGardenerPayment(action) {
+    return /^pay(?:$| \()/i.test(action ?? "");
+}
 function farmingNpc(event) {
     const { player, npc, definition } = event;
     const name = definition?.getName() ?? npc.getDefinition()?.getName() ?? "";
@@ -497,7 +502,7 @@ function farmingNpc(event) {
         Tools.open(player, npc);
         return;
     }
-    if (action !== "pay" && action !== "pay-fare" && action !== "talk-to") return;
+    if (!isGardenerPayment(action) && action !== "pay-fare" && action !== "talk-to") return;
     const pos = npc.getLocation();
     const patches = Data.CACHE.patches.filter(p => p.z === pos.getZ() && Math.abs(p.x - pos.getX()) <= GARDENER_RANGE && Math.abs(p.y - pos.getY()) <= GARDENER_RANGE);
     // A "Pay" option alone does not make an NPC a gardener: Bonzo (contest fee), Saniboch
@@ -510,7 +515,7 @@ function farmingNpc(event) {
         return c && (c.payment.length || Data.WOOD_TREES.has(c.type) || c.type === "FRUIT_TREE");
     });
     // Gardener NPCs advertise Pay; never hijack unrelated NPC conversations near a patch.
-    if (!definition?.getActions()?.some(option => option?.toLowerCase() === "pay")) return;
+    if (!definition?.getActions()?.some(isGardenerPayment)) return;
     event.handled = true;
     if (!relevant.length) {
         // Captured from the tree gardeners; the others keep the server's own line.
@@ -526,6 +531,14 @@ function farmingNpc(event) {
     });
     if (entries.length === 1) entries[0][1]();
     else Patches.choose(player, entries);
+}
+function gardenerProtection(event) {
+    if (event.action !== "farming:gardener-protect" || !event.npc) return;
+    const pay = event.definition?.getActions()?.findIndex(isGardenerPayment);
+    if (!(pay >= 0)) return;
+    const request = { ...event, clickType: pay + 1, handled: false };
+    farmingNpc(request);
+    event.handled = request.handled;
 }
 function gardenerSays(player, npc, text) {
     player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.NpcDialogue(0, npc.getId(), text)));
@@ -659,4 +672,4 @@ function farmingItemAction(event) {
     }
 }
 
-Object.assign(module.exports, { cropRewards, binValue, binAction, useBottomless, farmingItemPair, growSeedlings, waterContainers, humidified, farmingItemOnNpc, farmingNpc, farmingItemAction, storeTool, takeBinStep });
+Object.assign(module.exports, { cropRewards, binValue, binAction, useBottomless, farmingItemPair, growSeedlings, waterContainers, humidified, farmingItemOnNpc, farmingNpc, gardenerProtection, farmingItemAction, storeTool, takeBinStep });

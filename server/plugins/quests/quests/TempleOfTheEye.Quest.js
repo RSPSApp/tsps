@@ -107,9 +107,11 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     ItemIdentifiers,
     Location,
     NpcIdentifiers,
+    ObjectDefinition,
     ObjectIdentifiers,
     ObjectManager,
     Skill,
+    TemplatedInstanceArea,
   } = api.core;
   const { registerQuest, loadTranscripts, startTranscript } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
@@ -408,6 +410,12 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   const TAMARA_TEMPLE_TILE = { x: 2384, y: 5657, z: 0 };
   const CORDELIA_TEMPLE_TILE = { x: 2398, y: 5676, z: 0 };
   const VISION_TILE = { x: 2400, y: 5738, z: 0 };
+  // Capture 1693: 11 ticks after arriving the player walks seven tiles south to the stone while the
+  // camera pans after them; the voices start 24 ticks after arriving.
+  const VISION_STONE_TILE = { x: 2400, y: 5731, z: 0 };
+  const VISION_WALK_TICKS = 11;
+  const VISION_VOICES_TICKS = 24;
+  const VISION_VARIANT = "enter-the-gate-talking-to-wizard-persten-after-speaking-with-the-apprentices";
   const RIFT_SCENE_TILE = { x: 2398, y: 5669, z: 0 };
   const ARRIVAL_CAST = [
     { key: "arrival-persten", id: PERSTEN_CUTSCENE_NPC_ID, x: 2398, y: 5646, z: 0 },
@@ -458,6 +466,16 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   const WATER_GUARDIAN_LOC = { x: 2471, y: 5724, z: 0, face: 1 };
   const MIND_RETURN_TILE = { x: 2461, y: 5720, z: 0 };
   const WATER_RETURN_TILE = { x: 2470, y: 5725, z: 0 };
+
+  // Live copies these cache template squares into an instance; standing on the real squares
+  // puts the quest's temple, the Stone of Jas vision and the tutorial's arena in sight of one
+  // another. Each gets its own copy, so the vision is the stone in a void and the tutorial
+  // cannot show the other copies.
+  const TEMPLE_SCENE_SOURCE = { x: 2368, y: 5632, widthChunks: 8, heightChunks: 8 };
+  const VISION_SCENE_SOURCE = { x: 2368, y: 5696, widthChunks: 8, heightChunks: 8 };
+  const TUTORIAL_SCENE_SOURCE = { x: 2432, y: 5696, widthChunks: 8, heightChunks: 8 };
+  // Persten calls the player back from the vision here (the temple's markings).
+  const VISION_RETURN_TILE = { x: 2400, y: 5670, z: 0 };
 
   // Captured sequences, sounds and scripts (ids from rsprox 1693 and the minigame's own captures).
   const SEQ_TAKE_FROM_TABLE = 9401;
@@ -517,6 +535,8 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   const MIND_BRIEFED_ATTRIBUTE = "quest.temple_of_the_eye.mind-briefed";
   const MAGE_POSTQUEST_ATTRIBUTE = "quest.temple_of_the_eye.mage-postquest";
   const FELIX_POST_ATTRIBUTE = "quest.temple_of_the_eye.felix-post-cutscene";
+  const FELIX_CELLS_ATTRIBUTE = "temple-of-the-eye:felix-cells";
+  const FELIX_BENCH_ATTRIBUTE = "temple-of-the-eye:felix-bench";
 
   const ABYSS_TELEPORT_BIT = 1;
   const TOWER_TELEPORT_BIT = 2;
@@ -536,6 +556,120 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   const assemblingGuardian = new WeakSet();
   const tutorialFights = new WeakMap();
   const incantationPlaying = new WeakSet();
+  const sceneAreas = new Map(); // player -> { temple, vision, tutorial }
+  const sceneKinds = new Map(); // player -> "temple" | "vision" | "tutorial"
+
+  /** A private copy of one of the temple's cache squares (live's instance). */
+  class TempleSceneArea extends TemplatedInstanceArea {
+    constructor(owner, name, source) {
+      super(source.widthChunks, source.heightChunks);
+      this.owner = owner;
+      this.sceneName = name;
+      this.sourceX = source.x;
+      this.sourceY = source.y;
+      this.sourceWidth = source.widthChunks * 8;
+      this.sourceHeight = source.heightChunks * 8;
+      const sourceChunkX = source.x >> 3;
+      const sourceChunkY = source.y >> 3;
+      for (let plane = 0; plane < 4; plane++) {
+        for (let chunkX = 0; chunkX < source.widthChunks; chunkX++) {
+          for (let chunkY = 0; chunkY < source.heightChunks; chunkY++) {
+            this.setChunk(plane, chunkX, chunkY, {
+              sourceChunkX: sourceChunkX + chunkX,
+              sourceChunkY: sourceChunkY + chunkY,
+              sourcePlane: plane,
+              rotation: 0,
+            });
+          }
+        }
+      }
+    }
+    getName() { return this.sceneName; }
+    /** Whether a source-map tile belongs to this copy. */
+    coversSource(tile) {
+      return tile.x >= this.sourceX && tile.x < this.sourceX + this.sourceWidth
+        && tile.y >= this.sourceY && tile.y < this.sourceY + this.sourceHeight;
+    }
+    sourceTile(x, y, z = 0) { return this.tile(x - this.sourceX, y - this.sourceY, z); }
+    canTeleport() { return false; }
+  }
+
+  function sceneAreasFor(player) {
+    let scenes = sceneAreas.get(player);
+    if (!scenes) {
+      scenes = {};
+      sceneAreas.set(player, scenes);
+    }
+    return scenes;
+  }
+
+  function ensureSceneArea(player, kind) {
+    const scenes = sceneAreasFor(player);
+    let area = scenes[kind];
+    if (!area || area.isDestroyed()) {
+      const source = kind === "tutorial" ? TUTORIAL_SCENE_SOURCE
+        : kind === "vision" ? VISION_SCENE_SOURCE : TEMPLE_SCENE_SOURCE;
+      const name = kind === "tutorial" ? "Temple of the Eye (tutorial)"
+        : kind === "vision" ? "Temple of the Eye (vision)" : "Temple of the Eye";
+      area = new TempleSceneArea(player, name, source);
+      scenes[kind] = area;
+    }
+    return area;
+  }
+
+  function currentSceneKind(player) {
+    return sceneKinds.get(player) ?? null;
+  }
+
+  function currentSceneArea(player) {
+    const kind = currentSceneKind(player);
+    if (!kind) return null;
+    const area = sceneAreas.get(player)?.[kind];
+    return area && !area.isDestroyed() && player.getPrivateArea?.() === area ? area : null;
+  }
+
+  /** Swaps the player's copy; the caller moves them in afterwards. */
+  function switchScene(player, kind) {
+    if (!kind) return leaveScene(player);
+    if (currentSceneKind(player) === kind && currentSceneArea(player)) return currentSceneArea(player);
+    clearSpawns(player);
+    clearTutorialLocs(player);
+    const oldKind = currentSceneKind(player);
+    const old = sceneAreas.get(player)?.[oldKind];
+    if (old && !old.isDestroyed() && player.getPrivateArea?.() === old) old.leave(player, false);
+    sceneKinds.delete(player);
+    const area = ensureSceneArea(player, kind);
+    area.enter(player);
+    sceneKinds.set(player, kind);
+    return area;
+  }
+
+  function leaveScene(player) {
+    const kind = currentSceneKind(player);
+    clearSpawns(player);
+    clearTutorialLocs(player);
+    const area = sceneAreas.get(player)?.[kind];
+    if (area && !area.isDestroyed() && player.getPrivateArea?.() === area) area.leave(player, false);
+    sceneKinds.delete(player);
+  }
+
+  function destroyScenes(player) {
+    clearSpawns(player);
+    clearTutorialLocs(player);
+    const scenes = sceneAreas.get(player);
+    if (scenes) {
+      for (const area of Object.values(scenes)) if (area && !area.isDestroyed()) area.destroy();
+      sceneAreas.delete(player);
+    }
+    sceneKinds.delete(player);
+  }
+
+  /** A source-map tile in the player's current instance, or the tile unchanged outside one. */
+  function sceneLocation(player, tile) {
+    const area = currentSceneArea(player);
+    if (!area || !area.coversSource(tile)) return new Location(tile.x, tile.y, tile.z ?? 0);
+    return area.sourceTile(tile.x, tile.y, tile.z ?? 0);
+  }
 
   let quest = null;
   let transcripts = null;
@@ -776,7 +910,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   }
 
   function moveTo(player, tile) {
-    player.moveTo(new Location(tile.x, tile.y, tile.z));
+    player.moveTo(sceneLocation(player, tile));
   }
 
   /** The three riddle cards are cache interface 291; no custom interface is needed. */
@@ -864,11 +998,24 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     });
   }
 
+  function isSceneSourceTile(tile) {
+    for (const source of [TEMPLE_SCENE_SOURCE, VISION_SCENE_SOURCE, TUTORIAL_SCENE_SOURCE]) {
+      if (tile.x >= source.x && tile.x < source.x + source.widthChunks * 8
+        && tile.y >= source.y && tile.y < source.y + source.heightChunks * 8) return true;
+    }
+    return false;
+  }
+
   function setSpawn(player, key, definition, active) {
     let owned = spawns.get(player);
     if (!owned) {
       owned = new Map();
       spawns.set(player, owned);
+    }
+    // A scene NPC never stands on the real template map or in another copy: without the
+    // instance that owns its tile it would be an orphan only the owner can see.
+    if (active && isSceneSourceTile(definition) && !currentSceneArea(player)?.coversSource(definition)) {
+      active = false;
     }
     const existing = owned.get(key);
     if (!active) {
@@ -878,9 +1025,25 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       }
       return;
     }
-    if (existing) return;
-    const npc = api.spawnNpc({ ...definition, owner: player, ownerOnly: true });
-    if (npc) owned.set(key, npc);
+    const area = player.getPrivateArea?.() ?? null;
+    if (existing && existing.isRegistered?.() !== false) {
+      if (area && typeof area.add === "function" && existing.getPrivateArea?.() !== area) area.add(existing);
+      return;
+    }
+    if (existing) owned.delete(key);
+    const at = sceneLocation(player, definition);
+    const npc = api.spawnNpc({
+      ...definition,
+      x: at.getX(),
+      y: at.getY(),
+      z: at.getZ(),
+      owner: player,
+      ownerOnly: true,
+    });
+    if (npc) {
+      if (area && typeof area.add === "function") area.add(npc);
+      owned.set(key, npc);
+    }
   }
 
   function clearSpawns(player) {
@@ -900,6 +1063,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   function syncSpawns(player) {
     const stage = stageOf(player);
     const phase = scenePhases.get(player);
+    const inScene = currentSceneArea(player) !== null;
     setSpawn(
       player,
       "persten-alkharid",
@@ -932,18 +1096,20 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     ]) {
       setSpawn(player, key, { id, x: tile.x, y: tile.y, z: tile.z, wanderRadius: 0 }, stage >= STAGE_TRAIBORN && stage <= STAGE_INCANTATION_READY);
     }
-    setCast(player, ARRIVAL_CAST, stage === STAGE_PORTAL_OPEN);
+    setCast(player, ARRIVAL_CAST, inScene && stage === STAGE_PORTAL_OPEN);
     const exploring = stage === STAGE_TEMPLE || stage === STAGE_APPRENTICES;
+    // Persten is back with the player on the markings once the vision ends.
+    const afterVision = stage === STAGE_VISION && phase === "vision-ended";
     setSpawn(
       player,
       "persten-temple",
       { id: PERSTEN_TEMPLE_NPC_ID, x: PERSTEN_TEMPLE_TILE.x, y: PERSTEN_TEMPLE_TILE.y, z: PERSTEN_TEMPLE_TILE.z, wanderRadius: 0 },
-      exploring
+      inScene && (exploring || afterVision)
     );
     const felixTile = exploring ? FELIX_TEMPLE_TILE : FELIX_TUTORIAL_TILE;
     const tamaraTile = exploring ? TAMARA_TEMPLE_TILE : TAMARA_TUTORIAL_TILE;
     const cordeliaTile = exploring ? CORDELIA_TEMPLE_TILE : CORDELIA_TUTORIAL_TILE;
-    const inTemple = exploring || stage === STAGE_GUARDIAN;
+    const inTemple = inScene && (exploring || stage === STAGE_GUARDIAN);
     // Keyed by map so the move between the two temples replaces the spawn.
     const place = exploring ? "explore" : "tutorial";
     for (const other of exploring ? ["tutorial"] : ["explore"]) {
@@ -956,20 +1122,15 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       player,
       "great-guardian",
       { id: GREAT_GUARDIAN_NPC_ID, x: GREAT_GUARDIAN_TILE.x, y: GREAT_GUARDIAN_TILE.y, z: GREAT_GUARDIAN_TILE.z, wanderRadius: 0 },
-      stage === STAGE_GUARDIAN
+      inScene && stage === STAGE_GUARDIAN
     );
-    const riftScene = stage === STAGE_VISION && (phase === "rift" || phase === "rift-open" || phase === "rift-cleared");
+    const riftScene = inScene && stage === STAGE_VISION
+      && (phase === "rift" || phase === "rift-open" || phase === "rift-cleared");
     // Persten falls into the rift ("Persten!"); Cordelia then deals with what comes out.
     setCast(player, RIFT_CAST.filter(({ key }) => key !== "rift-persten"), riftScene);
     setCast(player, RIFT_CAST.filter(({ key }) => key === "rift-persten"), riftScene && phase === "rift");
-    setCast(player, RIFT_CREATURES, stage === STAGE_VISION && phase === "rift-open");
-    setSpawn(
-      player,
-      "vision-persten",
-      { id: PERSTEN_CUTSCENE_NPC_ID, x: VISION_TILE.x, y: VISION_TILE.y - 7, z: 0, wanderRadius: 0 },
-      stage === STAGE_VISION && phase === "vision-ending"
-    );
-    setCast(player, CLOSING_CAST, stage === STAGE_CLOSED);
+    setCast(player, RIFT_CREATURES, inScene && stage === STAGE_VISION && phase === "rift-open");
+    setCast(player, CLOSING_CAST, inScene && stage === STAGE_CLOSED);
     syncTutorialScene(player);
   }
 
@@ -1067,6 +1228,14 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     [TAMARA_TEMPLE_NPC_ID, { key: "tamara", bit: TAMARA_BIT }],
   ]);
 
+  // The transcript names the exploration repeats "<apprentice>-talking-to-apprentice-
+  // <apprentice>-again"; Felix's short "felix-again" key does not exist.
+  const TEMPLE_APPRENTICE_REPEATS = {
+    cordelia: "enter-the-gate-talking-to-apprentice-cordelia-talking-to-apprentice-cordelia-again",
+    felix: "enter-the-gate-talking-to-apprentice-felix-talking-to-apprentice-felix-again",
+    tamara: "enter-the-gate-talking-to-apprentice-tamara-talking-to-apprentice-tamara-again",
+  };
+
   function allTowerRiddlesSeen(player) {
     const seen = attributeNumber(player, TOWER_SEEN_ATTRIBUTE);
     return (seen & (CORDELIA_BIT | FELIX_BIT | TAMARA_BIT)) === (CORDELIA_BIT | FELIX_BIT | TAMARA_BIT);
@@ -1107,7 +1276,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     if (npcId === PERSTEN_TEMPLE_NPC_ID) {
       if (stage < STAGE_TEMPLE || stage >= STAGE_GUARDIAN) return null;
       return allTempleApprenticesSeen(player)
-        ? "enter-the-gate-talking-to-wizard-persten-after-speaking-with-the-apprentices"
+        ? VISION_VARIANT
         : "enter-the-gate-talking-to-persten-upon-arrival";
     }
     return null;
@@ -1221,9 +1390,18 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     const progress = tutorialProgress(player);
     if (progress === TUTORIAL_START) {
       setTutorialProgress(player, TUTORIAL_FELIX);
+      setFlag(player, FELIX_CELLS_ATTRIBUTE);
       return "guardians-of-the-rift-talking-to-felix";
     }
-    if (progress === TUTORIAL_FELIX) return "guardians-of-the-rift-talking-to-felix-talking-to-apprentice-felix-again";
+    if (progress === TUTORIAL_FELIX) {
+      // An older save can already stand at the Felix step without having heard his
+      // explanation; play it once instead of jumping straight to the "see Tamara" repeat.
+      if (!flag(player, FELIX_CELLS_ATTRIBUTE)) {
+        setFlag(player, FELIX_CELLS_ATTRIBUTE);
+        return "guardians-of-the-rift-talking-to-felix";
+      }
+      return "guardians-of-the-rift-talking-to-felix-talking-to-apprentice-felix-again";
+    }
     if (progress <= TUTORIAL_TAMARA) return "guardians-of-the-rift-talking-to-felix-talking-to-apprentice-felix-again";
     if (progress <= TUTORIAL_PILE_ONE) {
       setFlag(player, FELIX_POST_ATTRIBUTE);
@@ -1231,9 +1409,12 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       return "guardians-of-the-rift-talking-to-felix-after-placing-the-weak-cell";
     }
     if (progress === TUTORIAL_PILES) {
-      return player.getInventory().getAmount(GUARDIAN_FRAGMENTS_ITEM_ID) >= FRAGMENTS_A_ROUND
-        ? "guardians-of-the-rift-talking-to-felix-after-getting-guardian-fragments"
-        : "guardians-of-the-rift-after-assembling-the-second-essence-pile-talking-to-felix-again";
+      if (player.getInventory().getAmount(GUARDIAN_FRAGMENTS_ITEM_ID) >= FRAGMENTS_A_ROUND) {
+        setFlag(player, FELIX_BENCH_ATTRIBUTE);
+        Scenes.later(player, 1, () => player.isRegistered() && tutorialHint(player));
+        return "guardians-of-the-rift-talking-to-felix-after-getting-guardian-fragments";
+      }
+      return "guardians-of-the-rift-after-assembling-the-second-essence-pile-talking-to-felix-again";
     }
     if (progress === TUTORIAL_ESSENCE) {
       return flag(player, MIND_BRIEFED_ATTRIBUTE)
@@ -1257,13 +1438,14 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     }
     if (stage === STAGE_TEMPLE) {
       if (bitSet(player, TEMPLE_SEEN_ATTRIBUTE, apprentice.bit)) {
-        return `enter-the-gate-talking-to-apprentice-${name}-talking-to-apprentice-${name}-again`;
+        return TEMPLE_APPRENTICE_REPEATS[name];
       }
       setBit(player, TEMPLE_SEEN_ATTRIBUTE, apprentice.bit);
       player.getPacketSender().sendVarbit(TEMPLE_SEEN_VARBITS[apprentice.key], 1);
       if (allTempleApprenticesSeen(player)) setStage(player, STAGE_APPRENTICES);
       return `enter-the-gate-talking-to-apprentice-${name}`;
     }
+    if (stage < STAGE_GUARDIAN) return TEMPLE_APPRENTICE_REPEATS[name];
     return `enter-the-gate-talking-to-apprentice-${name}-again`;
   }
 
@@ -1403,18 +1585,18 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     ["Are we... underwater?", (player) => camera(player, [2399, 5645, 550], [2399, 5626, 300], { rate: 1, rate2: 0 })],
     ["Let me cast a locator spell!", (player) => camera(player, [2391, 5641, 720], [2403, 5634, 480])],
     ["It seems we're deep below the sea, just south of Morytania!", (player) => camera(player, [2391, 5641, 720], [2403, 5634, 480])],
-    ["And with you, Zachariah. So, it's really true?", (player) => camera(player, [2389, 5734, 760], [2403, 5728, 560], { rate: 1, rate2: 0 })],
     ["[player name]?", (player) => {
       if (stageOf(player) !== STAGE_VISION || scenePhases.get(player) !== "vision") return;
-      scenePhases.set(player, "vision-ending");
+      // Persten calls the player back: the vision ends at once, the player is back in the
+      // temple and the camera returns to them, as live cuts back to reality.
+      scenePhases.set(player, "vision-ended");
+      switchScene(player, "temple");
+      moveTo(player, VISION_RETURN_TILE);
       syncSpawns(player);
-      camera(player, [2388, 5734, 879], [2398, 5728, 679]);
+      player.getPacketSender().sendCameraReset();
     }],
     ["Huh... now that is a problem.", (player) => scene(player, "rift")],
-    ["Persten!", (player) => {
-      scene(player, "rift-open");
-      player.getPacketSender().sendSound(1629, 1, 0);
-    }],
+    ["Persten!", (player) => player.getPacketSender().sendSound(1629, 1, 0)],
     ["You don't belong in this temple, accursed filth!", (player) => {
       Scenes.later(player, 4, () => player.isRegistered() && scene(player, "rift-cleared"));
     }],
@@ -1446,8 +1628,20 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   }
 
   function camera(player, move, look, rates = { rate: 232, rate2: 100 }) {
-    player.getPacketSender().sendCameraMoveTo(move[0], move[1], move[2], rates)
-      .sendCameraLookAt(look[0], look[1], look[2], rates);
+    const area = currentSceneArea(player);
+    // Camera points are always source-map tiles. Translate them against the scene origin
+    // even when a look target sits just outside the copied square (the arrival camera
+    // looks at y=5626, six tiles south of the temple's y=5632 origin); the client still
+    // needs an instance coordinate or it waits for unavailable terrain.
+    const at = (point) => {
+      if (!area) return point;
+      const tile = area.sourceTile(point[0], point[1], 0);
+      return [tile.getX(), tile.getY(), point[2]];
+    };
+    const from = at(move);
+    const to = at(look);
+    player.getPacketSender().sendCameraMoveTo(from[0], from[1], from[2], rates)
+      .sendCameraLookAt(to[0], to[1], to[2], rates);
   }
 
   function endScene(player) {
@@ -1666,6 +1860,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
         if (stageOf(player) !== STAGE_INCANTATION_READY) return;
         event.handled = true;
         incantationPlaying.delete(player);
+        switchScene(player, "temple");
         moveTo(player, TEMPLE_ARRIVAL_TILE);
         setStage(player, STAGE_PORTAL_OPEN);
         Scenes.controls(player, true, true);
@@ -1675,6 +1870,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       case "MKvLzs": // "The cutscene ends." (the group is at the temple)
         if (stageOf(player) !== STAGE_PORTAL_OPEN) return;
         event.handled = true;
+        switchScene(player, "temple");
         moveTo(player, TEMPLE_EXPLORE_TILE);
         setStage(player, STAGE_TEMPLE);
         endScene(player);
@@ -1683,19 +1879,40 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
         if (stageOf(player) !== STAGE_APPRENTICES) return;
         event.handled = true;
         scenePhases.set(player, "vision");
+        switchScene(player, "vision");
         moveTo(player, VISION_TILE);
         setStage(player, STAGE_VISION);
         Scenes.controls(player, true, true);
         camera(player, [2389, 5734, 760], [2403, 5739, 560]);
+        walkToStone(player, npcId);
         return;
       case "9R5c1w":
       case "9kzaP8": // "Abyssal rift cutscene continues below."
         if (stageOf(player) !== STAGE_VISION) return;
         event.handled = true;
+        switchScene(player, "temple");
         moveTo(player, RIFT_SCENE_TILE);
         scene(player, "rift");
         camera(player, [2395, 5662, 470], [2401, 5675, 270]);
         event.steps = variantSteps("enter-the-gate-abyssal-rift-cutscene");
+        return;
+      case "9rf0HU": { // "Persten is dragged into the rift."
+        if (stageOf(player) !== STAGE_VISION || scenePhases.get(player) !== "rift") return;
+        event.handled = true;
+        const persten = spawns.get(player)?.get("rift-persten");
+        if (persten) {
+          const into = sceneLocation(player, { x: 2398, y: 5670, z: 0 });
+          persten.setPositionToFace(into);
+          persten.getMovementQueue().addFirstStep(into);
+        }
+        player.getPacketSender().sendSound(SOUND_PORTAL, 1, 0);
+        return;
+      }
+      case "U01fby": // "Abyssal creatures begin coming out of the rift."
+        if (stageOf(player) !== STAGE_VISION) return;
+        event.handled = true;
+        scene(player, "rift-open");
+        player.getPacketSender().sendSound(SOUND_RIFT_BEAM, 1, 0);
         return;
       case "dUuNRU": // the temple rumbles as the rift opens
         if (stageOf(player) !== STAGE_VISION) return;
@@ -1738,6 +1955,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       case "wd6dSZ": // "The player returns to the Wizards' Tower."
         if (stageOf(player) !== STAGE_CLOSED) return;
         event.handled = true;
+        leaveScene(player);
         moveTo(player, BASEMENT_LANDING_TILE);
         setStage(player, STAGE_FINAL);
         endScene(player);
@@ -1759,6 +1977,31 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       default:
         return;
     }
+  }
+
+  /**
+   * The vision's opening: the chatbox is held while the player walks up to the Mysterious Stone
+   * and the camera follows, then the voices pick up the transcript after the vision action.
+   */
+  function walkToStone(player, npcId) {
+    Scenes.hold(player);
+    const area = currentSceneArea(player);
+    const inVision = () => player.isRegistered() && stageOf(player) === STAGE_VISION
+      && scenePhases.get(player) === "vision" && currentSceneArea(player) === area;
+    Scenes.later(player, VISION_WALK_TICKS, () => {
+      if (!inVision()) return;
+      camera(player, [2389, 5734, 760], [2403, 5728, 560], { rate: 1, rate2: 0 });
+      player.getMovementQueue().setBlockMovement(false).requestWalk(sceneLocation(player, VISION_STONE_TILE), false);
+    });
+    // One tile a tick: the cutscene takes control back once the player reaches the stone.
+    const walkTicks = VISION_TILE.y - VISION_STONE_TILE.y;
+    Scenes.later(player, VISION_WALK_TICKS + walkTicks, () => {
+      if (inVision()) player.getMovementQueue().reset().setBlockMovement(true);
+    });
+    Scenes.later(player, VISION_VOICES_TICKS, () => {
+      if (!inVision()) return;
+      play(player, npcId, VISION_VARIANT, (steps) => steps.slice(steps.findIndex((step) => step.id === "Wc3Ys0") + 1));
+    });
   }
 
   function shakeRift(player) {
@@ -1948,8 +2191,8 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   // Object interactions
   // ---------------------------------------------------------------------------
 
-  function tutorialLocation(tile) {
-    return new Location(tile.x, tile.y, tile.z ?? 0);
+  function tutorialLocation(player, tile) {
+    return sceneLocation(player, tile);
   }
 
   /** What only this player sees of the tutorial: the barrier and the Guardians it has opened. */
@@ -1968,9 +2211,11 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       if (!definition && existing.__tutorialRestore) player.getPacketSender().sendObject(existing.__tutorialRestore);
     }
     if (!definition) return;
-    const object = new GameObject(definition.id, tutorialLocation(definition), definition.type ?? 10, definition.face ?? 0, null).setOwner(player);
+    const area = player.getPrivateArea?.() ?? null;
+    const object = new GameObject(definition.id, tutorialLocation(player, definition), definition.type ?? 10, definition.face ?? 0, area).setOwner(player);
+    if (area && typeof area.add === "function") area.add(object);
     if (definition.restoreId !== undefined) {
-      object.__tutorialRestore = new GameObject(definition.restoreId, tutorialLocation(definition), definition.type ?? 10, definition.face ?? 0, null);
+      object.__tutorialRestore = new GameObject(definition.restoreId, tutorialLocation(player, definition), definition.type ?? 10, definition.face ?? 0, area);
     }
     ObjectManager.register(object, true);
     locs.set(key, object);
@@ -1996,7 +2241,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
 
   /** The tile, barrier, opened Guardians, rift guardians and tools for the tutorial's progress. */
   function syncTutorialScene(player) {
-    if (!inTutorial(player)) {
+    if (!inTutorial(player) || !currentSceneArea(player)) {
       clearTutorialLocs(player);
       for (const key of ["barrier-npc", "creature", "guardian-elemental", "guardian-catalytic", "guardian-medium"]) setSpawn(player, key, null, false);
       setSpawn(player, "scene-guardian", null, false);
@@ -2034,7 +2279,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     ];
     for (const [itemId, tile, held] of tools) {
       if (held()) continue;
-      const location = tutorialLocation(tile);
+      const location = tutorialLocation(player, tile);
       if (manager.getGroundItem(player.getUsername(), itemId, location, player.getPrivateArea?.() ?? null)) continue;
       manager.registerLocation(player, new Item(itemId, 1), location);
     }
@@ -2043,8 +2288,11 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   function startTutorial(player) {
     scenePhases.delete(player);
     setSpawn(player, "scene-guardian", null, false);
+    switchScene(player, "tutorial");
     moveTo(player, TUTORIAL_ARRIVAL_TILE);
     setFlag(player, FELIX_POST_ATTRIBUTE, false);
+    setFlag(player, FELIX_CELLS_ATTRIBUTE, false);
+    setFlag(player, FELIX_BENCH_ATTRIBUTE, false);
     setTutorialProgress(player, TUTORIAL_START);
     setStage(player, STAGE_GUARDIAN);
     tutorialHint(player);
@@ -2057,7 +2305,8 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     const fight = { swings: 0 };
     tutorialFights.set(player, fight);
     const tick = () => {
-      if (tutorialFights.get(player) !== fight || !player.isRegistered() || !inTutorial(player)) {
+      if (tutorialFights.get(player) !== fight || !player.isRegistered() || !inTutorial(player)
+        || !currentSceneArea(player)) {
         if (tutorialFights.get(player) === fight) tutorialFights.delete(player);
         return;
       }
@@ -2082,8 +2331,9 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     const creature = owned.get("creature");
     if (!creature) return;
     const { PathFinder } = api.core;
-    if (tileGap(creature, CREATURE_ATTACK_TILE.x, CREATURE_ATTACK_TILE.y) > 0) {
-      PathFinder.calculateWalkRoute(creature, CREATURE_ATTACK_TILE.x, CREATURE_ATTACK_TILE.y);
+    const attackTile = sceneLocation(player, CREATURE_ATTACK_TILE);
+    if (tileGap(creature, attackTile.getX(), attackTile.getY()) > 0) {
+      PathFinder.calculateWalkRoute(creature, attackTile.getX(), attackTile.getY());
     } else {
       creature.performAnimation(new Animation(SEQ_LEECH_ATTACK));
     }
@@ -2105,7 +2355,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   function tutorialHint(player) {
     const sender = player.getPacketSender();
     sender.clearHintArrow();
-    if (!inTutorial(player)) return;
+    if (!inTutorial(player) || !currentSceneArea(player)) return;
     const owned = spawns.get(player);
     const npc = (key) => {
       const target = owned?.get(key);
@@ -2115,7 +2365,17 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       if (tileGap(player, at.getX(), at.getY()) > NPC_VIEW_TILES) sender.sendPositionalHint(at, 2, 128, at.getZ());
       else sender.sendEntityHint(target);
     };
-    const tile = (at, height = 128) => sender.sendPositionalHint(tutorialLocation(at), 2, height, at.z ?? 0);
+    const tile = (at, height = 128) => {
+      const location = tutorialLocation(player, at);
+      sender.sendPositionalHint(location, 2, height, at.z ?? 0);
+    };
+    // A multi-tile loc's arrow belongs over the middle of it, not its south-west corner.
+    const objectTile = (at, objectId, height = 128) => {
+      const definition = ObjectDefinition.forId(objectId);
+      const offsetX = (definition?.getSizeX?.() ?? 1) >> 1;
+      const offsetY = (definition?.getSizeY?.() ?? 1) >> 1;
+      return tile({ x: at.x + offsetX, y: at.y + offsetY, z: at.z ?? 0 }, height);
+    };
     const progress = tutorialProgress(player);
     const fragments = player.getInventory().getAmount(GUARDIAN_FRAGMENTS_ITEM_ID);
     const essence = player.getInventory().getAmount(GUARDIAN_ESSENCE_ITEM_ID);
@@ -2123,37 +2383,46 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     const uncharged = has(player, UNCHARGED_CELL_ITEM_ID);
     const medium = has(player, MEDIUM_CELL_ITEM_ID);
     const lost = lostAltarItems(player, progress).length > 0;
+    const pile = (at, id) => objectTile(at, id, 64);
     switch (progress) {
       case TUTORIAL_START: return npc("felix-tutorial");
-      case TUTORIAL_FELIX: return weak ? npc("tamara-tutorial") : tile(WEAK_CELLS_TILE);
+      case TUTORIAL_FELIX: return weak ? npc("tamara-tutorial") : objectTile(WEAK_CELLS_TILE, WEAK_CELLS_OBJECT_ID);
       case TUTORIAL_TAMARA: return tile(CELL_TILE, 32);
       case TUTORIAL_CELL:
         if (!flag(player, FELIX_POST_ATTRIBUTE)) return npc("felix-tutorial");
-        return weak ? tile(ELEMENTAL_PILE_TILE, 64) : tile(WEAK_CELLS_TILE);
-      case TUTORIAL_PILE_ONE: return weak ? tile(owned?.has("guardian-elemental") ? CATALYTIC_PILE_TILE : ELEMENTAL_PILE_TILE, 64) : tile(WEAK_CELLS_TILE);
+        return weak ? pile(ELEMENTAL_PILE_TILE, ESSENCE_PILE_ELEMENTAL_OBJECT_ID) : objectTile(WEAK_CELLS_TILE, WEAK_CELLS_OBJECT_ID);
+      case TUTORIAL_PILE_ONE: return weak
+        ? pile(owned?.has("guardian-elemental") ? CATALYTIC_PILE_TILE : ELEMENTAL_PILE_TILE,
+          owned?.has("guardian-elemental") ? ESSENCE_PILE_CATALYTIC_OBJECT_ID : ESSENCE_PILE_ELEMENTAL_OBJECT_ID)
+        : objectTile(WEAK_CELLS_TILE, WEAK_CELLS_OBJECT_ID);
       case TUTORIAL_PILES:
-        if (fragments >= FRAGMENTS_A_ROUND) return npc("felix-tutorial");
-        return tile(REMAINS_TILE);
+        if (fragments >= FRAGMENTS_A_ROUND) {
+          // Felix explains the workbench first; once he has, the arrow moves to it.
+          return flag(player, FELIX_BENCH_ATTRIBUTE)
+            ? objectTile(WORKBENCH_TILE, WORKBENCH_OBJECT_ID, 64)
+            : npc("felix-tutorial");
+        }
+        return objectTile(REMAINS_TILE, ObjectIdentifiers.GUARDIAN_REMAINS);
       case TUTORIAL_ESSENCE:
-        if (essence === 0 && fragments < FRAGMENTS_A_ROUND) return tile(REMAINS_TILE);
-        if (fragments > 0) return tile(WORKBENCH_TILE);
+        if (essence === 0 && fragments < FRAGMENTS_A_ROUND) return objectTile(REMAINS_TILE, ObjectIdentifiers.GUARDIAN_REMAINS);
+        if (fragments > 0) return objectTile(WORKBENCH_TILE, WORKBENCH_OBJECT_ID, 64);
         if (!flag(player, MIND_BRIEFED_ATTRIBUTE)) return npc("tamara-tutorial");
-        return uncharged ? tile(MIND_GUARDIAN_LOC) : tile(UNCHARGED_CELLS_TILE);
+        return uncharged ? objectTile(MIND_GUARDIAN_LOC, GUARDIAN_OF_MIND_OPEN_OBJECT_ID) : objectTile(UNCHARGED_CELLS_TILE, UNCHARGED_CELLS_OBJECT_ID);
       case TUTORIAL_MIND_STONES: return weak ? tile(CELL_TILE, 32) : npc("tamara-tutorial");
       case TUTORIAL_REPOWERED: return lost ? npc("tamara-tutorial") : npc("great-guardian");
       case TUTORIAL_POWERED_ONE:
-        if (fragments > 0 && fragments < FRAGMENTS_A_ROUND) return tile(REMAINS_TILE);
-        if (fragments >= FRAGMENTS_A_ROUND) return tile(WORKBENCH_TILE);
-        if (essence === 0) return tile(REMAINS_TILE);
-        return uncharged ? tile(WATER_GUARDIAN_LOC) : tile(UNCHARGED_CELLS_TILE);
+        if (fragments > 0 && fragments < FRAGMENTS_A_ROUND) return objectTile(REMAINS_TILE, ObjectIdentifiers.GUARDIAN_REMAINS);
+        if (fragments >= FRAGMENTS_A_ROUND) return objectTile(WORKBENCH_TILE, WORKBENCH_OBJECT_ID, 64);
+        if (essence === 0) return objectTile(REMAINS_TILE, ObjectIdentifiers.GUARDIAN_REMAINS);
+        return uncharged ? objectTile(WATER_GUARDIAN_LOC, GUARDIAN_OF_WATER_OPEN_OBJECT_ID) : objectTile(UNCHARGED_CELLS_TILE, UNCHARGED_CELLS_OBJECT_ID);
       case TUTORIAL_WATER_STONES: return lost ? npc("tamara-tutorial") : npc("great-guardian");
-      case TUTORIAL_POWERED_TWO: return medium ? tile(ELEMENTAL_PILE_TILE, 64) : npc("tamara-tutorial");
+      case TUTORIAL_POWERED_TWO: return medium ? pile(ELEMENTAL_PILE_TILE, ESSENCE_PILE_ELEMENTAL_OBJECT_ID) : npc("tamara-tutorial");
       case TUTORIAL_MEDIUM_GUARDIAN:
         if (!has(player, PORTAL_TALISMAN_WATER_ITEM_ID)) return npc("tamara-tutorial");
-        if (fragments > 0 && fragments < FRAGMENTS_A_ROUND) return tile(REMAINS_TILE);
-        if (fragments >= FRAGMENTS_A_ROUND) return tile(WORKBENCH_TILE);
-        if (essence === 0) return tile(REMAINS_TILE);
-        return uncharged ? tile(WATER_GUARDIAN_LOC) : tile(UNCHARGED_CELLS_TILE);
+        if (fragments > 0 && fragments < FRAGMENTS_A_ROUND) return objectTile(REMAINS_TILE, ObjectIdentifiers.GUARDIAN_REMAINS);
+        if (fragments >= FRAGMENTS_A_ROUND) return objectTile(WORKBENCH_TILE, WORKBENCH_OBJECT_ID, 64);
+        if (essence === 0) return objectTile(REMAINS_TILE, ObjectIdentifiers.GUARDIAN_REMAINS);
+        return uncharged ? objectTile(WATER_GUARDIAN_LOC, GUARDIAN_OF_WATER_OPEN_OBJECT_ID) : objectTile(UNCHARGED_CELLS_TILE, UNCHARGED_CELLS_OBJECT_ID);
       case TUTORIAL_WATER_STONES_TWO: return lost ? npc("tamara-tutorial") : tile(CELL_TILE, 32);
       case TUTORIAL_MEDIUM_CELL: return lost ? npc("tamara-tutorial") : npc("great-guardian");
       default: return undefined;
@@ -2287,7 +2556,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       sender.sendSound(SOUND_GUARDIAN_LIVES, 1, 0);
       player.getSkillManager().addExperiences(Skill.CRAFTING, PILE_CRAFTING_XP);
       player.getSkillManager().addExperiences(Skill.RUNECRAFTING, xp);
-      const pileLoc = new GameObject(objectId, tutorialLocation(pile), 10, pile.face, null);
+      const pileLoc = new GameObject(objectId, tutorialLocation(player, pile), 10, pile.face, player.getPrivateArea?.() ?? null);
       sender.sendObjectRemoval(pileLoc);
       Scenes.later(player, PILE_RESPAWN_TICKS, () => player.isRegistered() && sender.sendObject(pileLoc));
       // Live rises on the pile; here on its north edge (as the minigame does), so it can walk out.
@@ -2439,6 +2708,12 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     Scenes.later(player, 2, () => {
       if (!player.isRegistered()) return;
       player.sendMessage(message);
+      // The altars are real map; the tutorial's copy is re-entered on the way back.
+      const source = TUTORIAL_SCENE_SOURCE;
+      const returning = tile.x >= source.x && tile.x < source.x + source.widthChunks * 8
+        && tile.y >= source.y && tile.y < source.y + source.heightChunks * 8;
+      if (returning) switchScene(player, "tutorial");
+      else leaveScene(player);
       moveTo(player, tile);
       sender.sendClientScript(OVERLAY_REMOVE_SCRIPT);
       syncTutorialScene(player);
@@ -2467,6 +2742,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     const { player } = event;
     if (!player) return;
     if (stageOf(player) < STAGE_PORTAL_OPEN && !quest.isComplete(player)) return;
+    leaveScene(player);
     moveTo(player, BASEMENT_LANDING_TILE);
     event.handled = true;
   }
@@ -2478,17 +2754,23 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     const stage = stageOf(player);
     event.handled = true;
     if (quest.isComplete(player)) {
+      leaveScene(player);
       moveTo(player, MINIGAME_LOBBY_TILE);
     } else if (stage === STAGE_PORTAL_OPEN) {
+      switchScene(player, "temple");
       moveTo(player, TEMPLE_ARRIVAL_TILE);
       Scenes.controls(player, true, true);
       camera(player, [2399, 5636, 550], [2399, 5626, 300]);
       play(player, PERSTEN_TEMPLE_NPC_ID, "enter-the-gate-temple-of-the-eye-cutscene");
     } else if (stage === STAGE_TEMPLE || stage === STAGE_APPRENTICES) {
+      switchScene(player, "temple");
       moveTo(player, TEMPLE_EXPLORE_TILE);
-    } else if (stage === STAGE_VISION || stage === STAGE_GUARDIAN) {
+      syncSpawns(player);
+    } else if (stage === STAGE_VISION) {
+      startTutorial(player);
+    } else if (stage === STAGE_GUARDIAN) {
+      switchScene(player, "tutorial");
       moveTo(player, TUTORIAL_ARRIVAL_TILE);
-      if (stage === STAGE_VISION) startTutorial(player);
       syncSpawns(player);
       tutorialHint(player);
     } else {
@@ -2503,7 +2785,9 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
    */
   function lostAltarItems(player, progress) {
     const needed = {
-      [TUTORIAL_MIND_STONES]: [CATALYTIC_GUARDIAN_STONE_ITEM_ID],
+      // A player who crafted the essence without taking an uncharged cell can't charge
+      // the barrier; Tamara replaces the weak cell they never made.
+      [TUTORIAL_MIND_STONES]: [CATALYTIC_GUARDIAN_STONE_ITEM_ID, WEAK_CELL_ITEM_ID],
       [TUTORIAL_REPOWERED]: [CATALYTIC_GUARDIAN_STONE_ITEM_ID],
       [TUTORIAL_WATER_STONES]: [ELEMENTAL_GUARDIAN_STONE_ITEM_ID],
       [TUTORIAL_POWERED_TWO]: [MEDIUM_CELL_ITEM_ID],
@@ -2622,9 +2906,10 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     return pointToTamara(event);
   }
 
-  /** The third power-up: tote 120, the untouched temple's map and the rift's end. */
+  /** The third power-up: tote 120, the temple's rift and its end. */
   function startClosingScene(player) {
     setTutorialProgress(player, TUTORIAL_CLOSED);
+    switchScene(player, "temple");
     moveTo(player, RIFT_SCENE_TILE);
     setStage(player, STAGE_CLOSED);
     tutorialHint(player);
@@ -2900,22 +3185,33 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
 
   /** A scene can't resume after a logout, and older saves stand in the minigame's own temple. */
   function recoverScene(player) {
+    destroyScenes(player);
     const location = player.getLocation();
     const stage = stageOf(player);
+    const inAllocation = location.getX() >= 8192;
+    const inLiveTemple = location.getX() >= LIVE_TEMPLE.minX && location.getX() <= LIVE_TEMPLE.maxX
+      && location.getY() >= LIVE_TEMPLE.minY && location.getY() <= LIVE_TEMPLE.maxY;
     if (stage === STAGE_PORTAL_OPEN) {
+      switchScene(player, "temple");
       setStage(player, STAGE_TEMPLE);
       moveTo(player, TEMPLE_EXPLORE_TILE);
     } else if (stage === STAGE_VISION) {
+      switchScene(player, "tutorial");
       setTutorialProgress(player, TUTORIAL_START);
       setStage(player, STAGE_GUARDIAN);
       moveTo(player, TUTORIAL_ARRIVAL_TILE);
     } else if (stage === STAGE_CLOSED) {
+      leaveScene(player);
       setStage(player, STAGE_FINAL);
       moveTo(player, BASEMENT_LANDING_TILE);
-    } else if (stage >= STAGE_TEMPLE && stage <= STAGE_GUARDIAN
-      && location.getX() >= LIVE_TEMPLE.minX && location.getX() <= LIVE_TEMPLE.maxX
-      && location.getY() >= LIVE_TEMPLE.minY && location.getY() <= LIVE_TEMPLE.maxY) {
-      moveTo(player, stage === STAGE_GUARDIAN ? TUTORIAL_ARRIVAL_TILE : TEMPLE_EXPLORE_TILE);
+    } else if (stage >= STAGE_TEMPLE && stage <= STAGE_GUARDIAN && (inAllocation || inLiveTemple)) {
+      if (stage === STAGE_GUARDIAN) {
+        switchScene(player, "tutorial");
+        moveTo(player, TUTORIAL_ARRIVAL_TILE);
+      } else {
+        switchScene(player, "temple");
+        moveTo(player, TEMPLE_EXPLORE_TILE);
+      }
     }
   }
 
@@ -2943,6 +3239,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     tutorialFights.delete(player);
     clearTutorialLocs(player);
     clearSpawns(player);
+    destroyScenes(player);
     const portal = basementPortalByPlayer.get(player);
     if (portal) ObjectManager.deregister(portal, true);
     basementPortalByPlayer.delete(player);
@@ -3125,6 +3422,8 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   api.persistAttribute(MIND_BRIEFED_ATTRIBUTE);
   api.persistAttribute(MAGE_POSTQUEST_ATTRIBUTE);
   api.persistAttribute(FELIX_POST_ATTRIBUTE);
+  api.persistAttribute(FELIX_CELLS_ATTRIBUTE, false);
+  api.persistAttribute(FELIX_BENCH_ATTRIBUTE, false);
 
   quest = registerQuest(api, {
     key: "temple_of_the_eye",

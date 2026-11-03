@@ -476,15 +476,15 @@ function giveItemCommand(core, { player, parts }) {
   }
   const given = inventory.getAmount(id) - before;
   if (given <= 0) {
-    player.sendMessage(`${target.getUsername()}'s inventory is full.`);
+    player.sendMessage(`${target.getDisplayName()}'s inventory is full.`);
     return true;
   }
   const gift = `${given} x ${ItemDefinition.forId(id)?.getName?.() ?? "item"}`;
   if (target !== player) {
-    target.sendMessage(`${player.getUsername()} gave you ${gift}.`);
+    target.sendMessage(`${player.getDisplayName()} gave you ${gift}.`);
   }
   const fit = given < amount ? `; only ${given} of ${amount} fit` : "";
-  player.sendMessage(`Gave ${target.getUsername()} ${gift} (${id})${fit}.`);
+  player.sendMessage(`Gave ${target.getDisplayName()} ${gift} (${id})${fit}.`);
   return true;
 }
 
@@ -528,9 +528,9 @@ function setLevelCommand({ player, parts }) {
   WeaponInterfaceManager.assign(target);
   target.getUpdateFlag().flag(Flag.APPEARANCE);
   if (target !== player) {
-    target.sendMessage(`${player.getUsername()} set your ${skill.getName()} level to ${level}.`);
+    target.sendMessage(`${player.getDisplayName()} set your ${skill.getName()} level to ${level}.`);
   }
-  player.sendMessage(`Set ${target.getUsername()}'s ${skill.getName()} level to ${level}.`);
+  player.sendMessage(`Set ${target.getDisplayName()}'s ${skill.getName()} level to ${level}.`);
   return true;
 }
 
@@ -886,7 +886,7 @@ module.exports = {
       cancelGlowCycle(target);
       applyGlowState(target, glowPreset, glowIntensity);
 
-      const targetLabel = target === player ? "You" : target.getUsername();
+      const targetLabel = target === player ? "You" : target.getDisplayName();
       const presetLabel =
         Object.keys(GLOW_PRESETS).find((key) => GLOW_PRESETS[key] === glowPreset && key !== "none") ??
         String(glowPreset);

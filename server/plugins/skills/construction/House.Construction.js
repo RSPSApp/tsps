@@ -246,7 +246,7 @@ function visitHouse(player, name, location = nearbyHouseLocation(player)) {
   if (!house.enterHouse(player, false)) { exitHouse(player); return; }
   lastVisited.set(player, owner.getUsername());
   player.getPacketSender().sendVarbit(HOUSE_LOCKED_VARBIT, house.save.locked ? 1 : 0);
-  player.sendMessage("Welcome to " + owner.getUsername() + "'s house.");
+  player.sendMessage("Welcome to " + owner.getDisplayName() + "'s house.");
 }
 
 function promptVisit({ player, objectId }) {
@@ -594,8 +594,9 @@ function syncKickOption(player) {
 
 function kickGuest(event) {
   if (event.option !== HOUSE_KICK_OPTION) return;
-  event.handled = true;
   const house = houseFor(event.player);
+  if (!house) return;
+  event.handled = true;
   if (!house || house.isDestroyed() || house.owner !== event.player || event.target === event.player
     || houseFor(event.target) !== house || !house.getPlayers().includes(event.target)) return;
   exitHouse(event.target);

@@ -12,6 +12,7 @@
       "id": "edge_low", "enabled": true, "x": 3073, "y": 3531, "radius": 5, "bots": 5,
       "pvp": {
         "style": "pure",
+        "smiteOnly": true,
         "combat": [55, 85],
         "profiles": ["novice", "standard", "veteran"],
         "weights": { "seek": 0.03, "bait": 0.32, "fight": 0.02, "escape": 0.63 },
@@ -22,6 +23,7 @@
       "id": "edge_mid", "enabled": true, "x": 3090, "y": 3531, "radius": 5, "bots": 5,
       "pvp": {
         "style": "mid",
+        "smiteOnly": true,
         "combat": [88, 100],
         "profiles": ["standard", "veteran"],
         "weights": { "seek": 0.03, "bait": 0.32, "fight": 0.02, "escape": 0.63 },
@@ -32,6 +34,7 @@
       "id": "edge_mains", "enabled": true, "x": 3108, "y": 3531, "radius": 5, "bots": 5,
       "pvp": {
         "style": "main",
+        "smiteOnly": true,
         "combat": [115, 126],
         "profiles": ["standard", "veteran", "elite"],
         "weights": { "seek": 0.03, "bait": 0.32, "fight": 0.02, "escape": 0.63 },
@@ -50,7 +53,8 @@
   ],
   "pvp": {
     "botPool": 845,
-    "activeRegionBotsPerRegion": 48,
-    "activeRegionInset": 1
+    "activeRegionBotsPerRegion": 16,
+    "activeRegionInset": 1,
+    "smiteOnlyRegions": ["0:47:54", "0:48:54", "0:47:55", "0:48:55"]
   }
 }

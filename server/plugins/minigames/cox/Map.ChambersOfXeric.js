@@ -21,8 +21,10 @@ const ROOM_TILES = Layout.ROOM_CHUNKS * 8;
 const WRAPPER = { chunkX: 416, chunkY: 647, plane: 0 };
 const OLM = { chunkX: 402, chunkY: 713, width: 5, height: 7, atChunkX: 0, atChunkY: 8 };
 /** The Olm chamber's entrance and middle, on the cache's map. */
-const OLM_TILES = { entrance: { x: 3232, y: 5720 }, centre: { x: 3232, y: 5734 } };
+const OLM_TILES = { entrance: { x: 3232, y: 5719 }, centre: { x: 3232, y: 5734 } };
 const PLANES = [0, 1, 2, 3];
+/** Upper Depths, Lower Depths, Fire in the Deep, and the silent track. */
+const MUSIC = { UPPER: 492, LOWER: 487, OLM: 493, SILENCE: 147 };
 
 /**
  * Tiles the raid binds rooms to, on the cache's map, by the room's version (west / north /
@@ -121,6 +123,17 @@ function mapClass() {
       return false;
     }
 
+    /**
+     * rsprox captures: Upper Depths on the top floor, Lower Depths below it, Fire in the Deep at
+     * the Olm; silence once the raid is complete.
+     */
+    getMusicTrack(player) {
+      if (this.raid?.completed) return MUSIC.SILENCE;
+      const location = player.getLocation();
+      if (this.inOlmChamber(location)) return MUSIC.OLM;
+      return location.getZ() === Layout.FLOOR_PLANES[0] ? MUSIC.UPPER : MUSIC.LOWER;
+    }
+
     postLeave(mobile, logout) {
       if (mobile.isPlayer?.()) this.raid?.playerLeftArea(mobile.getAsPlayer(), logout);
       super.postLeave(mobile, logout);
@@ -137,7 +150,7 @@ function mapClass() {
     /** A cache tile of a room's source, where it lands in the raid; size is the footprint there (x by y). */
     roomTile(room, x, y, size = 1, sizeY = size) {
       const localX = x - room.source.chunkX * 8;
-      const localY = y - room.source.chunkY * 8;
+      const localY = y - room.source.tileChunkY * 8;
       const [tx, ty] = rotateRoomTile(localX, localY, room.rotation, size, sizeY);
       return this.tile(room.gridX * ROOM_TILES + tx, room.gridY * ROOM_TILES + ty, room.plane);
     }

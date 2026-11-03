@@ -14,6 +14,10 @@ module.exports = function registerTzhaarMonsters(api) {
   const MEJKOT_MAX_HEAL = 10;
   const JAD_IMPACT_TICKS = 3;
   const JAD_ATTACK_RANGE = 15;
+  /** Wiki: Jad's magic blast hits 95; melee and ranged hit 97. */
+  const JAD_MAGIC_MAX = 95;
+  /** Wiki: a melee bite comes every 4 ticks, not his normal 8. */
+  const JAD_MELEE_SPEED = 4;
 
   // Tz-Kih drains prayer by the damage dealt plus one on every melee attack.
   class TzKihCombat extends MeleeCombatMethod {
@@ -133,7 +137,12 @@ module.exports = function registerTzhaarMonsters(api) {
     execute() {
       this.stop();
       if (this.jad.getHitpoints() <= 0 || this.target.getHitpoints() <= 0) return;
-      CombatFactory.addPendingHit(new PendingHit(this.jad, this.target, this.method, 0));
+      const hit = new PendingHit(this.jad, this.target, this.method, 0);
+      // Wiki: 97 melee/ranged but 95 magic. The cache's single max hit is 97, so clamp magic.
+      if (this.method.type() === CombatType.MAGIC) {
+        hit.setTotalDamage(Math.min(hit.getTotalDamage(), JAD_MAGIC_MAX));
+      }
+      CombatFactory.addPendingHit(hit);
     }
   }
 
@@ -145,13 +154,17 @@ module.exports = function registerTzhaarMonsters(api) {
         : Misc.getRandom(1) === 0 ? CombatType.RANGED : CombatType.MAGIC;
       if (this.style === CombatType.MELEE) {
         jad.performAnimation(JAD_MELEE_ANIM);
+        // The 8-tick speed was already set from his base; the bite is 4.
+        jad.getCombat().setAttackDelay(JAD_MELEE_SPEED);
         return;
       }
       jad.performAnimation(JAD_STYLES[this.style].anim);
       if (this.style === CombatType.RANGED) {
         target.delayedGraphic(JAD_ROCK_GRAPHIC, JAD_IMPACT_TICKS - 1);
       } else {
-        Projectile.createProjectile(jad, target, JAD_FIREBALL, 25, Projectile.arrivalCycles(jad, target), 110, 33)
+        // Lands as the impact rolls (3 ticks, 90 cycles), wherever the target stands: 10 cycles a
+        // tile reached it after the hit from beyond 5 tiles (#1862).
+        Projectile.createProjectile(jad, target, JAD_FIREBALL, 25, JAD_IMPACT_TICKS * 30 - 1, 110, 33)
           .sendProjectile();
       }
     }

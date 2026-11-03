@@ -612,7 +612,7 @@ function sailor(sailing = emptySailingState()) {
     isPlayer: () => true,
     isNpc: () => false,
     getAsPlayer: () => player,
-    getUsername: () => "alice",
+    getUsername: () => "alice", getDisplayName: () => "alice",
     sendMessage: (message) => messages.push(message),
     getLocation: () => location,
     setLocation: (next) => { location = next; return player; },

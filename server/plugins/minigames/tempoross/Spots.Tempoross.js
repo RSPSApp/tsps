@@ -14,6 +14,7 @@
  */
 
 const Shared = require("./Shared.Tempoross");
+const SkillActions = require("../../skills/SkillActions");
 const { coveOf, coveOfNpc } = require("./Cove.Tempoross");
 
 const { DATA, NPC, ITEM, ANIM, GFX, SOUND } = Shared;
@@ -192,6 +193,8 @@ function harpoonSpot(event) {
   player.setPositionToFace(tile);
   spam(player, "You start harpooning fish.");
   Shared.animate(player, ANIM.HARPOON);
+  // Content may pace the catches ("skills:action-interval", a league relic's 2 ticks).
+  const harpoonTicks = SkillActions.actionInterval(Shared.api(), player, Shared.core().Skill.FISHING, "tempoross", DATA.ticks.harpoon);
   Shared.startAction(player, "harpoon", (ticks) => {
     if (!npc.isRegistered() || !npc.getLocation().equals(tile) || fight.result) return false;
     // The tick after the catch that fills the inventory, as in capture 552.
@@ -199,7 +202,7 @@ function harpoonSpot(event) {
       inventoryFull(player);
       return false;
     }
-    if (ticks % DATA.ticks.harpoon !== 0) return true;
+    if (ticks % harpoonTicks !== 0) return true;
     Shared.animate(player, ANIM.HARPOON);
     if (Math.random() < catchChance(level, DATA.catch[harpoon.tier])) {
       catchFish(player, fight, harpoon, event.npcId === NPC.SPOT_SPECIAL);

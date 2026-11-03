@@ -10,7 +10,7 @@ const TOPLEVEL = 161;
 const HIDDEN_TABS = [[76, 593], [77, 320], [78, 629], [79, 149], [80, 387], [81, 541], [82, 218], [83, 707], [84, 109], [88, 216]];
 const HIDDEN_GROUPS = new Set([...HIDDEN_TABS.map(([, group]) => group), 77]);
 const QUICK_PRAYER_DONE = { group: 77, child: 5 };
-const BLOCKED_ORB_COMPONENTS = ["orbs:prayerbutton", "orbs_osm:prayerbutton", "orbs:worldmap", "orbs_nomap:worldmap", "orbs_osm:worldmap"];
+const BLOCKED_ORB_COMPONENTS = ["orbs:specbutton", "orbs_nomap:specbutton", "orbs_osm:specbutton", "orbs_osm_nomap:specbutton", "orbs:prayerbutton", "orbs_osm:prayerbutton", "orbs:worldmap", "orbs_nomap:worldmap", "orbs_osm:worldmap"];
 const COMBAT_VARPS = new Set([43, 172, 301]); // Native combat style, auto-retaliate and special controls.
 const ACTIVITY_MESSAGE = "You can't do that while transformed in the Castle Wars waiting room.";
 

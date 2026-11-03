@@ -1,0 +1,14 @@
+.mobile-combat-timer > img {
+    inset: 2px;
+    width: 22px;
+    height: 22px;
+}
+
+.mobile-combat-timer > :is(.status-timer-fallback, .vengeance-timer-fallback) {
+    font-size: 18px;
+}
+
+.mobile-combat-timer > :is(.status-timer-seconds, .vengeance-timer-seconds) {
+    font-size: 10px;
+    line-height: 11px;
+}

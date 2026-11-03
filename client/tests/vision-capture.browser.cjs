@@ -8,6 +8,9 @@
 //   [--clip-secs 5 --clip-fps 10 --clip-out clip.mp4]
 //   [--animation-smoothing on|off] [--check-animation-smoothing 1]
 //   [--check-mobile-keyboard 1] (use --url with ?mobile=1)
+//   [--check-mobile-combat-hud 1] (mobile client in Wilderness; checks rotation and captures each layout)
+//   [--check-responsive-gameframe 1] (desktop login, narrow/portrait/desktop switches without reloading)
+//   [--check-responsive-mobile-start 1] (phone-emulated login, disable emulation, then repeat resize switches)
 // VISION_CHROME_FLAGS is an optional JSON array for software rendering in CI.
 // --url defaults to this worktree's client (PORT in the root .env, see
 // docs/worktrees.md), then http://localhost:3000; VISION_CLIENT_URL overrides.
@@ -159,7 +162,7 @@ function createCdp(url) {
     async evaluate(expression) {
       // CDP wraps the value twice: { result: { result: { value } } }.
       const r = await this.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
-      if (r.result?.exceptionDetails) throw new Error(r.result.exceptionDetails.text || JSON.stringify(r.result.exceptionDetails));
+      if (r.result?.exceptionDetails) throw new Error(r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text || JSON.stringify(r.result.exceptionDetails));
       if (r.error) throw new Error(r.error.message || JSON.stringify(r.error));
       return r.result?.result?.value;
     },
@@ -202,6 +205,14 @@ async function tryBrowser(bin, viewport, budgetMs, targetHref) {
     await cdp.send("Page.enable");
     await cdp.send("Runtime.enable");
     await cdp.send("Log.enable");
+    if (arg("check-responsive-mobile-start", "0") === "1") {
+      cdp.desktopUserAgent = await cdp.evaluate("navigator.userAgent");
+      await cdp.send("Emulation.setUserAgentOverride", {
+        userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      });
+      await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 1 });
+      await cdp.send("Emulation.setDeviceMetricsOverride", { width: 375, height: 812, deviceScaleFactor: 2, mobile: true });
+    }
     await cdp.send("Page.navigate", { url: targetHref });
     // Probe on the secure page; poll briefly in case the document is mid-load.
     let webgpu = false;
@@ -376,6 +387,301 @@ async function main() {
           keyboard.hide();
         }
       })()`);
+    }
+
+    if (arg("check-responsive-gameframe", "0") === "1" || arg("check-responsive-mobile-start", "0") === "1") {
+      const mobileStart = arg("check-responsive-mobile-start", "0") === "1";
+      const initialRoot = await cdp.evaluate(`(${CLIENT_JS}).widgetManager.rootInterface`);
+      const desktopRoot = mobileStart ? 161 : initialRoot;
+      if (mobileStart ? initialRoot !== 601 : ![161, 164, 548].includes(initialRoot)) throw new Error("responsive check started on the wrong layout");
+      await cdp.evaluate(`(async () => {
+        const c = ${CLIENT_JS}, pm = c.runeLite.pluginManager;
+        await pm.setPluginEnabled(pm.getPlugins().find(p => pm.getDescriptor(p).name === "Portrait Mode"), true);
+        c.widgetManager.setWidgetFlagsByKey((12 << 16) | 13, 0, 0x7fe);
+      })()`);
+      const nativeChat = () => cdp.evaluate(`(() => {
+        const m = (${CLIENT_JS}).widgetManager;
+        const bar = m.getWidgetByUid((162 << 16) | 1), messages = m.getWidgetByUid((162 << 16) | 34);
+        return { barYMode: bar.yPositionMode, barY: bar._absY, messagesY: messages._absY };
+      })()`);
+      if (mobileStart) {
+        await cdp.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 800, deviceScaleFactor: 1, mobile: true });
+        await sleep(600);
+        const phoneRoot = await cdp.evaluate(`(${CLIENT_JS}).widgetManager.rootInterface`);
+        if (phoneRoot !== 601) throw new Error("phone emulation should still use the mobile layout at a larger size");
+        await cdp.send("Emulation.setUserAgentOverride", { userAgent: cdp.desktopUserAgent });
+        await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: false });
+        await cdp.send("Emulation.clearDeviceMetricsOverride");
+        const root = await waitFor(cdp, deadline, () => cdp.evaluate(`(${CLIENT_JS}).widgetManager.rootInterface`), value => value === desktopRoot);
+        if (root !== desktopRoot) throw new Error("disabling device emulation did not restore the desktop UI without reloading");
+        await sleep(600);
+        const chat = await nativeChat();
+        if (chat.barYMode !== 2 || chat.barY <= chat.messagesY) throw new Error("desktop frame retained the mobile chatbox arrangement: " + JSON.stringify(chat));
+        summary.mobileStart = { initialRoot, phoneRootAtDesktopSize: phoneRoot, desktopAfterDisablingEmulation: root, chat };
+      }
+      summary.responsiveGameframe = [];
+      for (const [width, height, root] of [[667, 375, 601], [375, 812, 601], [1280, 800, desktopRoot]]) {
+        await cdp.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });
+        const layout = await waitFor(cdp, deadline, () => cdp.evaluate(`(() => {
+          const c = ${CLIENT_JS}, m = c.widgetManager;
+          return { root: m.rootInterface, orbs: m.getContainerUidForGroup(${root === 601 ? 897 : 160}),
+            inventory: m.getContainerUidForGroup(149), flags: m.getServerSetFlags({ id: (12 << 16) | 13, childIndex: 0 }) };
+        })()`), value => value.root === root && value.orbs !== undefined && value.inventory !== undefined);
+        if (layout.root !== root || layout.orbs === undefined || layout.inventory === undefined) throw new Error("responsive layout did not switch: " + JSON.stringify(layout));
+        if (layout.flags !== 0x7fe) throw new Error("layout switch lost mounted interface flags");
+        await sleep(600);
+        const chat = await nativeChat();
+        if (chat.barYMode !== (root === 601 ? 0 : 2)) throw new Error("chatbox did not follow the active gameframe: " + JSON.stringify({ root, chat }));
+        summary.responsiveGameframe.push({ width, height, ...layout, chat });
+        if (out) {
+          const shot = await cdp.send("Page.captureScreenshot", { format: "png" });
+          const file = out.replace(/\.png$/, "") + "-" + width + "x" + height + ".png";
+          fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
+          fs.writeFileSync(file, Buffer.from(shot.result.data, "base64"));
+        }
+      }
+      // A resize can cross back before the server acknowledges the first request.
+      for (const width of [667, 1280, 667, 1280]) {
+        await cdp.send("Emulation.setDeviceMetricsOverride", { width, height: 800, deviceScaleFactor: 1, mobile: false });
+      }
+      await sleep(750);
+      const root = await waitFor(cdp, deadline, () => cdp.evaluate(`(${CLIENT_JS}).widgetManager.rootInterface`), value => value === desktopRoot);
+      if (root !== desktopRoot) throw new Error("rapid resize left the wrong gameframe active");
+    }
+
+    if (arg("check-mobile-combat-hud", "0") === "1") {
+      summary.timerPluginSwitch = await cdp.evaluate(`(async () => {
+        const c = ${CLIENT_JS}, pm = c.runeLite.pluginManager;
+        await pm.setPluginEnabled(pm.getPlugins().find(p => pm.getDescriptor(p).name === "Portrait Mode"), true);
+        const timers = pm.getPlugins().filter(p => pm.getDescriptor(p).name === "Timers");
+        if (timers.length !== 1 || pm.getPlugins().some(p => /^(Attack|Vengeance|Poison|Freeze|Antifire|Teleblock|Stamina) Timer$/.test(pm.getDescriptor(p).name))) throw new Error("all timers must share one plugin");
+        const plugin = timers[0];
+        const boosts = pm.getPlugins().find(p => pm.getDescriptor(p).name === "Boosts Information");
+        await pm.setPluginEnabled(boosts, true);
+        if (new URLSearchParams(location.search).has("timers")) {
+          if (JSON.parse(boosts.infoBoxOverlay.signature()).length !== 24) throw new Error("?timers must preview all 22 boostable skills and both restore timers");
+          await pm.setPluginEnabled(boosts, false);
+          if (boosts.infoBoxOverlay.signature() !== "" || boosts.panelOverlay.signature() !== "" || boosts.compactOverlay.signature() !== "") throw new Error("disabled Boosts must stay hidden with ?timers");
+          await pm.setPluginEnabled(boosts, true);
+        } else {
+          for (let skill = 0; skill < 24; skill++) boosts.onStatChanged({getSkill: () => skill, getLevel: () => 99, getBoostedLevel: () => 99});
+          boosts.onStatChanged({getSkill: () => 1, getLevel: () => 99, getBoostedLevel: () => 98});
+        }
+        if (new URLSearchParams(location.search).has("timers")) {
+          const count = () => document.querySelectorAll(".status-timer-infobox, .vengeance-timer-infobox").length;
+          const attackCount = () => {
+            const output = [];
+            plugin.appendLocalPlayerOverheads({ osrsClient: { playerEcs: {
+              getWorldViewId: () => -1, getX: () => 128, getY: () => 128, getLevel: () => 0,
+            } }, acquireOverheadTextEntry: () => ({}), makeActorGroupKey: () => 1, mapOverheadColor: () => 0xffff00,
+              resolvePlayerLogicalHeightTiles: () => 2 }, 0, output, 10, 2);
+            return output.length;
+          };
+          await pm.setPluginEnabled(plugin, false);
+          await new Promise(resolve => setTimeout(resolve, 300));
+          if (count() !== 0 || attackCount() !== 0) throw new Error("disabled Timers must hide everything even with ?timers");
+          if (c.runeLite.configManager.getConfiguration("runelite", "timersplugin") !== "false") throw new Error("timer switch was not saved");
+          await pm.setPluginEnabled(plugin, true);
+          await new Promise(resolve => setTimeout(resolve, 500));
+          if (count() !== 6 || attackCount() !== 1) throw new Error("enabled Timers must preview all six infoboxes and attack overhead");
+          return { disabledInfoboxes: 0, disabledAttack: 0, enabledInfoboxes: 6, enabledAttack: 1 };
+        }
+        await pm.setPluginEnabled(plugin, true);
+        return { enabled: true };
+      })()`);
+      summary.mobileCombatHud = [];
+      for (const [width, height, dpr] of [[667, 375, 2], [1320, 1340, 1], [1300, 1340, 1], [1300, 864, 1], [1200, 864, 1], [1100, 864, 1], [1000, 864, 1], [900, 864, 1], [864, 864, 1], [800, 864, 1], [375, 812, 2], [1920, 1080, 1], [667, 375, 2]]) {
+        await cdp.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: dpr, mobile: true });
+        await cdp.evaluate(`(() => {
+          const c = ${CLIENT_JS};
+          if (!new URLSearchParams(location.search).has("timers")) { c.varManager.setVarp(7996, 300); c.varManager.setVarp(7997, 1); }
+        })()`);
+        await sleep(1000);
+        const sidebar = await cdp.evaluate(`(async () => {
+          const c = ${CLIENT_JS}, portrait = matchMedia("(orientation: portrait)").matches;
+          const canvas = () => c.renderer.canvas.getBoundingClientRect();
+          const rail = () => document.querySelector(".rl-sidebar-rail").getBoundingClientRect();
+          const buttons = [...document.querySelectorAll(".rl-sidebar-rail-button")];
+          {
+            const panel = c.widgetManager.getWidgetByUid((601 << 16) | 111);
+            const buffer = c.renderer.canvas;
+            if (panel._absX < 0 || panel._absX + panel._absWidth > buffer.width + 1 || panel._absY + panel._absHeight > buffer.height + 1) throw new Error("mobile inventory clips outside the canvas: " + JSON.stringify({ width: innerWidth, height: innerHeight, canvas: {width: buffer.width, height: buffer.height}, panel: {x: panel._absX, y: panel._absY, w: panel._absWidth, h: panel._absHeight},
+              logical: {width: c.widgetManager.canvasWidth, height: c.widgetManager.canvasHeight},
+              parents: [19,20].map(id => { const w = c.widgetManager.getWidgetByUid((601 << 16) | id); return {id, x: w.x, width: w.width, rawWidth: w.rawWidth, scrollWidth: w.scrollWidth};}) }));
+            for (const id of [50, 111]) {
+              const w = c.widgetManager.getWidgetByUid((601 << 16) | id);
+              const gap = buffer.height - w._absY - w._absHeight;
+              const edge = 2 * buffer.height / c.widgetManager.canvasHeight;
+              if (gap < 0 || gap > edge + 1) throw new Error("mobile inventory and tab buttons must stay bottom-aligned: " + JSON.stringify({width: innerWidth, height: innerHeight, id, gap, edge}));
+            }
+          }
+          if (portrait) {
+            if (Math.abs(rail().top - canvas().bottom) > 1 || Math.abs(rail().right - canvas().right) > 1) throw new Error("portrait bar must sit below the full-width game");
+            if (Math.abs(buttons[buttons.length - 1].getBoundingClientRect().right - rail().right) > 1) throw new Error("portrait buttons must be right-aligned");
+            const handedness = document.querySelector(".portrait-handedness-toggle").getBoundingClientRect();
+            const inset = parseFloat(getComputedStyle(document.querySelector(".rl-sidebar-rail")).paddingLeft) || 0;
+            if (Math.abs(handedness.left - rail().left - inset) > 1) throw new Error("handedness toggle must sit at the far left of the portrait toolbar");
+          } else {
+            if (Math.abs(rail().left - canvas().right) > 1) throw new Error("landscape bar must return to the right edge");
+            if (getComputedStyle(document.querySelector(".portrait-handedness-toggle")).display !== "none") throw new Error("handedness toggle must only show in portrait");
+          }
+          if (!portrait && innerWidth === 1100 && innerHeight === 864) {
+            const pm = c.runeLite.pluginManager, m = c.widgetManager;
+            const p = pm.getPlugins().find(p => pm.getDescriptor(p).name === "Portrait Mode");
+            const panel = m.getWidgetByUid((601 << 16) | 111), bottomY = panel.y;
+            await pm.setPluginEnabled(p, false);
+            await new Promise(resolve => setTimeout(resolve, 250));
+            if (panel.y === bottomY) throw new Error("disabling Portrait Mode must restore native panel positioning immediately");
+            await pm.setPluginEnabled(p, true);
+            await new Promise(resolve => setTimeout(resolve, 250));
+            if (panel.y !== bottomY) throw new Error("re-enabling Portrait Mode must restore bottom alignment immediately");
+          }
+          if (portrait) {
+            const pm = c.runeLite.pluginManager;
+            const plugin = pm.getPlugins().find(p => pm.getDescriptor(p).name === "Portrait Mode");
+            await pm.setPluginEnabled(plugin, false);
+            await new Promise(resolve => setTimeout(resolve, 200));
+            if (rail().width > 40 || Math.abs(rail().left - canvas().right) > 1) throw new Error("disabling portrait must restore the side rail immediately");
+            await pm.setPluginEnabled(plugin, true);
+            await new Promise(resolve => setTimeout(resolve, 200));
+            if (Math.abs(rail().top - canvas().bottom) > 1) throw new Error("re-enabling portrait must restore the bottom rail immediately");
+          }
+          const width = canvas().width;
+          document.querySelector('.rl-sidebar-rail-button[aria-label="Configuration"]').click();
+          await new Promise(resolve => setTimeout(resolve, 200));
+          const drawer = document.querySelector(".rl-sidebar-panel").getBoundingClientRect();
+          if (portrait && (Math.abs(drawer.right - rail().right) > 1 || Math.abs(drawer.bottom - rail().top) > 1 || Math.abs(drawer.top) > 1)) throw new Error("portrait drawer must open from the right above the bar: " + JSON.stringify(drawer));
+          if (canvas().width !== width) throw new Error("opening the mobile drawer must not resize the canvas");
+          const result = { portrait, rail: { x: rail().x, y: rail().y, width: rail().width, height: rail().height }, drawer: { x: drawer.x, y: drawer.y, width: drawer.width, height: drawer.height } };
+          return result;
+        })()`);
+        if (out && sidebar.portrait) {
+          const shot = await cdp.send("Page.captureScreenshot", { format: "png" });
+          const file = out.replace(/\.png$/, "") + "-drawer.png";
+          fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
+          fs.writeFileSync(file, Buffer.from(shot.result.data, "base64"));
+        }
+        await cdp.evaluate(`(${CLIENT_JS}).sidebar.select(null)`);
+        await sleep(100);
+        if (sidebar.portrait) {
+          const handedness = () => cdp.evaluate(`(() => {
+            const c = ${CLIENT_JS}, m = c.widgetManager, button = document.querySelector(".portrait-handedness-toggle");
+            const rect = button.getBoundingClientRect();
+            return { left: button.getAttribute("aria-pressed") === "true", visible: rect.width > 0,
+              x: rect.x + rect.width / 2, y: rect.y + rect.height / 2,
+              mapX: m.getWidgetByUid((601 << 16) | 22)._absX,
+              stonesX: m.getWidgetByUid((601 << 16) | 50)._absX,
+              inventoryX: m.getWidgetByUid((601 << 16) | 111)._absX,
+              stickX: document.querySelector(".touch-joystick")?.getBoundingClientRect().x,
+              leftOpacity: button.querySelector('[data-hand="left"]').getAttribute("opacity"),
+              rightOpacity: button.querySelector('[data-hand="right"]').getAttribute("opacity"),
+              saved: c.runeLite.configManager.getConfiguration("portraitmode", "leftHanded") };
+          })()`);
+          const tapHandedness = async () => {
+            const p = await handedness();
+            await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: p.x, y: p.y }] });
+            await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+            await sleep(300);
+          };
+          if ((await handedness()).left) await tapHandedness();
+          const right = await handedness();
+          if (!right.visible || right.leftOpacity !== "0.25" || right.rightOpacity !== "1" || right.mapX >= right.inventoryX) throw new Error("right-handed portrait state is wrong: " + JSON.stringify(right));
+          await tapHandedness();
+          const left = await handedness();
+          if (!left.left || left.saved !== "true" || left.leftOpacity !== "1" || left.rightOpacity !== "0.25" || left.mapX <= left.inventoryX || left.stonesX <= left.inventoryX || (left.stickX !== undefined && left.stickX <= right.stickX)) throw new Error("portrait handedness did not swap immediately: " + JSON.stringify({right, left}));
+          if (out) {
+            const shot = await cdp.send("Page.captureScreenshot", { format: "png" });
+            fs.writeFileSync(out.replace(/\.png$/, "") + "-left-handed.png", Buffer.from(shot.result.data, "base64"));
+          }
+          const tabState = () => cdp.evaluate(`(() => {
+            const c = ${CLIENT_JS}, m = c.widgetManager, canvas = c.renderer.canvas, rect = canvas.getBoundingClientRect();
+            const w = id => m.getWidgetByUid((601 << 16) | id);
+            const toggle = w(103), rows = w(50), top = w(87), bottom = w(61), arrow = w(110);
+            return { height: rows.height, rawWidth: rows.rawWidth, top: top.y, bottom: bottom.y,
+              angle: arrow.spriteAngle, sprite: arrow.spriteId, option: toggle.actions[0],
+              x: rect.left + (toggle._absX + toggle._absWidth / 2) * rect.width / canvas.width,
+              y: rect.top + (toggle._absY + toggle._absHeight / 2) * rect.height / canvas.height };
+          })()`);
+          const tapToggle = async () => {
+            const p = await tabState();
+            await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: p.x, y: p.y }] });
+            await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+            await sleep(300);
+          };
+          if ((await tabState()).rawWidth === 58) await tapToggle();
+          const expanded = await tabState();
+          if (expanded.height !== 85 || expanded.angle !== 16384 || expanded.option !== "Show Less") throw new Error("portrait expanded toggle is wrong: " + JSON.stringify(expanded));
+          await tapToggle();
+          const folded = await tabState();
+          if (folded.height !== 58 || folded.bottom >= folded.top + 40 || folded.angle !== 16384 || folded.option !== "Show More" || folded.sprite === expanded.sprite) throw new Error("portrait touch toggle did not fold the top row over the bottom: " + JSON.stringify({expanded, folded}));
+          if (out) {
+            const shot = await cdp.send("Page.captureScreenshot", { format: "png" });
+            fs.writeFileSync(out.replace(/\.png$/, "") + "-folded.png", Buffer.from(shot.result.data, "base64"));
+          }
+          await tapToggle();
+          const restored = await tabState();
+          if (restored.height !== 85 || restored.bottom <= folded.bottom || restored.sprite !== expanded.sprite) throw new Error("Show More did not restore the portrait rows");
+          summary.portraitTabToggle = { expanded, folded, restored };
+          await cdp.evaluate(`(async () => {
+            const c = ${CLIENT_JS}, pm = c.runeLite.pluginManager;
+            const p = pm.getPlugins().find(p => pm.getDescriptor(p).name === "Portrait Mode");
+            await pm.setPluginEnabled(p, false);
+            await pm.setPluginEnabled(p, true);
+          })()`);
+          await sleep(300);
+          if (!(await handedness()).left) throw new Error("Portrait Mode must restore the saved handedness after re-enabling");
+          await tapHandedness();
+          const restoredHand = await handedness();
+          if (restoredHand.left || restoredHand.mapX !== right.mapX || restoredHand.inventoryX !== right.inventoryX) throw new Error("right-handed portrait positions were not restored");
+          summary.portraitHandedness = { right, left, restored: restoredHand };
+        }
+        if (out) {
+          const shot = await cdp.send("Page.captureScreenshot", { format: "png" });
+          const file = out.replace(/\.png$/, "") + "-" + width + "x" + height + ".png";
+          fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
+          fs.writeFileSync(file, Buffer.from(shot.result.data, "base64"));
+        }
+        const geometry = await cdp.evaluate(`(() => {
+          const c = ${CLIENT_JS}, canvas = c.renderer.canvas, rect = canvas.getBoundingClientRect();
+          const widget = (group, child) => {
+            const w = c.widgetManager.getWidgetByUid((group << 16) | child);
+            return { x: rect.left + w._absX * rect.width / canvas.width, y: rect.top + w._absY * rect.height / canvas.height,
+              width: w._absWidth * rect.width / canvas.width, height: w._absHeight * rect.height / canvas.height };
+          };
+          const pvp = widget(90, 44), chat = widget(601, 49), controls = widget(601, 41);
+          const timer = document.querySelector(".poison-timer-infobox")?.getBoundingClientRect();
+          if (!timer || !pvp.width) throw new Error("combat HUD is not visible");
+          if (timer.left < pvp.x + pvp.width + 2) throw new Error("poison overlaps the Wilderness indicator: " + JSON.stringify({ pvp, timer,
+            nodes: [0, 2, 43, 44].map(id => { const w = c.widgetManager.getWidgetByUid((90 << 16) | id); return { id, x: w.x, y: w.y, scrollX: w.scrollX, scrollY: w.scrollY, absX: w._absX, absY: w._absY }; }) }));
+          if (pvp.y < Math.max(chat.y + chat.height, controls.y + controls.height)) throw new Error("Wilderness row overlaps chat: " + JSON.stringify({ pvp, chat, controls }));
+          if (Math.abs(timer.top - pvp.y) > 2) throw new Error("native and plugin rows do not line up: " + JSON.stringify({ pvp, timer }));
+          const previews = [...document.querySelectorAll(".status-timer-infobox, .vengeance-timer-infobox")]
+            .sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+          if (new URLSearchParams(location.search).has("timers")) {
+            if (previews.length !== 6) throw new Error("enabled ?timers preview must show all six infoboxes");
+            let right = pvp.x + pvp.width;
+            for (const preview of previews) {
+              const box = preview.getBoundingClientRect();
+              if (box.left < right + 1 || box.right > rect.right) throw new Error("timer preview row overlaps or clips");
+              right = box.right;
+            }
+            if (document.querySelector(".vengeance-timer-seconds").textContent !== "0") throw new Error("inactive preview must show zero seconds");
+          }
+          const boosts = c.runeLite.overlayRenderer.drawn.find(p => p.overlay.movable?.name === "BoostsInfoBoxOverlay")?.bounds;
+          if (!boosts) throw new Error("Boosts overlay is missing");
+          const boost = { x: rect.left + boosts.x * rect.width / canvas.width, y: rect.top + boosts.y * rect.height / canvas.height,
+            width: boosts.w * rect.width / canvas.width, height: boosts.h * rect.height / canvas.height };
+          if (boost.x < rect.left - 1 || boost.x + boost.width > rect.right + 1) throw new Error("Boosts clip outside the resized canvas: " + JSON.stringify(boost));
+          if (boost.y < Math.max(pvp.y + pvp.height, timer.bottom) + 2) throw new Error("Boosts must always sit below the Wilderness and timer row: " + JSON.stringify({ boost, pvp, timer }));
+          const stick = document.querySelector(".touch-joystick");
+          const stickSize = stick ? parseFloat(getComputedStyle(stick).width) : null;
+          const scale = Math.max(1, rect.width / c.widgetManager.canvasWidth * 1.25);
+          if (Math.abs(timer.width - 28 * scale) > 0.2) throw new Error("timers must follow native mobile gameframe growth");
+          if (stickSize !== null && Math.abs(stickSize - (matchMedia("(orientation: portrait)").matches ? 50.4 : 72) * scale) > 0.2) throw new Error("joystick must keep its 40% reduction while following the gameframe scale");
+          return { pvp, timer: { x: timer.x, y: timer.y, width: timer.width, height: timer.height }, chat, controls, timerCount: previews.length, boost, stickSize };
+        })()`);
+        summary.mobileCombatHud.push({ width, height, ...geometry, sidebar });
+      }
     }
 
     if (arg("check-animation-smoothing", "0") === "1") {

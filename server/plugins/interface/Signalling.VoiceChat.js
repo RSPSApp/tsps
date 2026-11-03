@@ -24,7 +24,7 @@ function refreshPeers({ player }) {
     .map(other => [other, participants.get(other).broadcasting]));
   if (state.peers && peers.size === state.peers.size && [...peers].every(([other, broadcasting]) => state.peers.get(other) === broadcasting)) return;
   state.peers = peers;
-  send(player, { type: "peers", peers: [...peers].map(([other, broadcasting]) => ({ id: other.getIndex(), name: other.getUsername(), broadcasting })) });
+  send(player, { type: "peers", peers: [...peers].map(([other, broadcasting]) => ({ id: other.getIndex(), name: other.getDisplayName(), broadcasting })) });
 }
 
 function disconnectPlayer({ player }) {

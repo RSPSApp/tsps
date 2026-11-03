@@ -12,6 +12,7 @@
  *   remaining." with each cast.
  */
 const Common = require("./Common.RatBoneWeapons");
+const { definePoweredStaff } = require("../PoweredStaff");
 
 const MAX_CHARGES = 20000;
 const CHARGES_META_KEY = "bone-staff-charges";
@@ -26,8 +27,7 @@ const BUSY_VARBIT = 12393;
 
 let api = null;
 let core = null;
-let StaffMethod = null;
-const spells = new WeakMap();
+let staff = null;
 
 function chargesOf(item) {
   return Math.max(0, Math.min(MAX_CHARGES, Math.floor(Number(item?.getMetaValue?.(CHARGES_META_KEY)) || 0)));
@@ -38,7 +38,6 @@ function setCharges(item, value) {
 }
 
 const isStaff = (item) => item?.getId?.() === core.ItemIdentifiers.BONE_STAFF;
-const wieldsStaff = (player) => isStaff(Common.wielded(player));
 
 function maxHit(player) {
   return Math.floor(player.getSkillManager().getCurrentLevel(core.Skill.MAGIC) / 3) + 5 + Common.RAT_MAX_HIT_BONUS;
@@ -48,13 +47,8 @@ function flightCycles(from, to) {
   return PROJECTILE.start + Math.max(1, from.getLocation().getDistance(to.getLocation())) * PROJECTILE.perTile;
 }
 
-function spellFor(player) {
-  let spell = spells.get(player);
-  if (spell) return spell;
-  const { CombatNormalSpell, Animation, Graphic, Projectile } = core;
-  spell = new CombatNormalSpell({
-    spellId: () => core.ItemIdentifiers.BONE_STAFF,
-    maximumHit: () => maxHit(player),
+function look({ Animation, Graphic, Projectile }) {
+  return {
     castAnimation: () => new Animation(CAST.anim),
     startGraphic: () => new Graphic(CAST.gfx),
     castProjectile: (cast, castOn) => new Projectile(
@@ -62,82 +56,54 @@ function spellFor(player) {
       flightCycles(cast, castOn), PROJECTILE.startHeight, PROJECTILE.endHeight, cast.getPrivateArea(),
     ).withSource(cast).withAngle(PROJECTILE.angle).withProgress(PROJECTILE.progress),
     endGraphic: () => new Graphic(CAST.impact, 0, IMPACT_HEIGHT),
-    // Awarded on a successful hit by onHitResolved, not per cast like a spellbook spell's: the Wiki
-    // gives the bone staff 35 base XP unlike other powered staves, but none on a splash.
-    baseExperience: () => 0,
-    levelRequired: () => 1,
+  };
+}
+
+/** The captured cast's area sound, at the caster. */
+function castSound(player) {
+  const at = player.getLocation();
+  player.getPacketSender().sendAreaSound(CAST.sound, at.getX(), at.getY(), at.getZ());
+  return true;
+}
+
+/** Each cast says what is left: "Your weapon has N charges remaining." */
+function chargeUsed(player, item, left) {
+  player.sendMessage(`Your weapon has ${left.toLocaleString("en-US")} charges remaining.`);
+}
+
+function defineStaff() {
+  const id = core.ItemIdentifiers.BONE_STAFF;
+  return definePoweredStaff(api, {
+    name: "Bone staff",
+    chargesKey: CHARGES_META_KEY,
+    maxCharges: MAX_CHARGES,
+    // It has no uncharged version: an empty bone staff is still a bone staff.
+    pairs: [[id, id]],
+    maxHit,
+    attackSpeed: ATTACK_SPEED,
+    range: ATTACK_RANGE,
+    // Its 35 base experience is paid on a successful hit by onHitResolved, not per cast like a
+    // spellbook spell's: the Wiki gives the bone staff 35 base XP unlike other powered staves, but
+    // none on a splash.
+    spell: look,
+    canAttack: castSound,
+    chargeUsed,
+    noChargesMessage: "Your Bone staff has no charges left.",
   });
-  spells.set(player, spell);
-  return spell;
 }
 
 function useCharge(player) {
-  const staff = Common.wielded(player);
-  // Content may spare the charge (a league relic): the question every powered staff asks.
-  const consume = { player, itemId: staff.getId(), skip: false };
-  api.emitCustomEvent("combat:consume-charge", consume);
-  if (consume.skip) return;
-  const left = chargesOf(staff) - 1;
-  setCharges(staff, left);
-  player.sendMessage(`Your weapon has ${Math.max(0, left).toLocaleString("en-US")} charges remaining.`);
-}
-
-function staffMethod() {
-  if (StaffMethod) return StaffMethod;
-  const { MagicCombatMethod, PendingHit } = core;
-  StaffMethod = new (class extends MagicCombatMethod {
-    canAttack(character) {
-      const player = character.getAsPlayer();
-      if (chargesOf(Common.wielded(player)) <= 0) {
-        player.sendMessage("Your Bone staff has no charges left.");
-        player.getCombat().reset();
-        return false;
-      }
-      // The built-in spell is the only one it casts, whatever is selected or autocast.
-      player.getCombat().setCastSpell(spellFor(player));
-      const at = player.getLocation();
-      player.getPacketSender().sendAreaSound(CAST.sound, at.getX(), at.getY(), at.getZ());
-      useCharge(player);
-      return true;
-    }
-
-    canPursue(character) {
-      return chargesOf(Common.wielded(character.getAsPlayer())) > 0;
-    }
-
-    hits(character, target) {
-      const spell = spellFor(character.getAsPlayer());
-      const hit = new PendingHit(character, target, this, MagicCombatMethod.hitDelay(character, target, spell));
-      spell.onHitCalc(hit);
-      return [hit];
-    }
-
-    attackSpeed() {
-      return ATTACK_SPEED;
-    }
-
-    attackDistance(character) {
-      // Longrange is the powered staff's defensive style.
-      return ATTACK_RANGE + (character.getFightType?.()?.getStyle?.() === core.FightStyle.DEFENSIVE ? LONGRANGE_EXTRA : 0);
-    }
-
-    finished(character) {
-      const combat = character.getCombat();
-      combat.setPreviousCast(spellFor(character.getAsPlayer()));
-      combat.setCastSpell(null);
-    }
-  })();
-  return StaffMethod;
+  staff.useCharge(player);
 }
 
 /** Wiki: 35 base Magic experience on a successful hit. */
 function onHitResolved({ attacker, hit }) {
-  if (!attacker?.isPlayer?.() || !hit?.isAccurate?.() || hit.getCombatMethod?.() !== StaffMethod) return;
+  if (!attacker?.isPlayer?.() || !hit?.isAccurate?.() || hit.getCombatMethod?.() !== staff.method()) return;
   attacker.getAsPlayer().getSkillManager().addExperience(core.Skill.MAGIC, BASE_EXPERIENCE, true);
 }
 
 function resolveStaff(attacker) {
-  return attacker?.isPlayer?.() && wieldsStaff(attacker.getAsPlayer()) ? staffMethod() : null;
+  return staff.resolver.resolve(attacker);
 }
 
 /** Chaos runes on the staff: how many to add, up to what the inventory holds and the staff has room for. */
@@ -147,8 +113,8 @@ function charge(event) {
   const ids = [Number(event.usedItemId), Number(event.usedWithItemId)];
   if (!ids.includes(I.BONE_STAFF) || !ids.includes(I.CHAOS_RUNE)) return;
   event.handled = true;
-  const staff = isStaff(event.usedItem) ? event.usedItem : event.usedWithItem;
-  const room = MAX_CHARGES - chargesOf(staff);
+  const held = isStaff(event.usedItem) ? event.usedItem : event.usedWithItem;
+  const room = MAX_CHARGES - chargesOf(held);
   if (room <= 0) {
     player.sendMessage("Your Bone staff is already fully charged.");
     return;
@@ -160,10 +126,10 @@ function charge(event) {
     acceptsZero: true,
     execute: (amount) => {
       sender.sendVarbit(BUSY_VARBIT, 0);
-      const runes = Math.min(Math.max(0, Math.floor(Number(amount) || 0)), MAX_CHARGES - chargesOf(staff), player.getInventory().getAmount(I.CHAOS_RUNE));
-      if (runes <= 0 || !player.getInventory().getItems().includes(staff)) return;
+      const runes = Math.min(Math.max(0, Math.floor(Number(amount) || 0)), MAX_CHARGES - chargesOf(held), player.getInventory().getAmount(I.CHAOS_RUNE));
+      if (runes <= 0 || !player.getInventory().getItems().includes(held)) return;
       player.getInventory().deleteNumber(I.CHAOS_RUNE, runes);
-      setCharges(staff, chargesOf(staff) + runes);
+      setCharges(held, chargesOf(held) + runes);
       player.getInventory().refreshItems();
     },
   });
@@ -198,9 +164,10 @@ function uncharge({ player, item }) {
 function attach(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
+  staff = defineStaff();
   api.onItemAction("Bone staff", { Check: check, Uncharge: uncharge });
   api.onItemOnItem(charge, { noted: false });
-  api.registerCombatMethodResolver({ resolve: resolveStaff });
+  api.registerCombatMethodResolver(staff.resolver);
   api.onCombatHitResolved(onHitResolved);
 }
 

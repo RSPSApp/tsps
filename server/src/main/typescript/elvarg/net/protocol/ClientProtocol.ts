@@ -49,6 +49,7 @@ export const enum ServerPacket {
 
 export type PlayerAppearance = {
   gender: number;
+  pronouns?: number;
   colors: number[];
   kits: number[];
   equip: number[];
@@ -1044,6 +1045,8 @@ export const ChatType = {
   MODAUTOTYPER: 91,
   /** A server broadcast ("Lethal fog will soon fill the island! ..." in Last Man Standing). */
   BROADCAST: 14,
+  /** friendschatnotification: shown on the chat-channel tab as well (the Chambers of Xeric's raid messages). */
+  FRIENDS_CHAT_NOTIFICATION: 11,
   /** Filtered out with "Filter: on" (the Game tab's filter). */
   SPAM: 105,
   /** An NPC's overhead line, shown as "Name: text"; the NPC's name goes in `from`. */
@@ -1080,6 +1083,12 @@ function chatStyleBytes(style: ChatStyle | undefined): Buffer {
   return Buffer.from([style.colour & 0xff, style.effect & 0xff, ...(style.pattern ?? []).map((value) => value & 0xff)]);
 }
 
+const LEGACY_CHAT_COLOURS: Record<string, string> = {
+  red: "ff0000", gre: "00ff00", blu: "0000ff", yel: "ffff00", cya: "00ffff", mag: "ff00ff",
+  whi: "ffffff", bla: "000000", lre: "ff9040", dre: "800000", dbl: "000080",
+  or1: "ffb000", or2: "ff7000", or3: "ff3000", gr1: "c0ff00", gr2: "80ff00", gr3: "40ff00",
+};
+
 export function encodeChatMessage(
   messageType: "game" | "public" | "private_in" | "private_out" | "channel" | "clan" | "trade" | "server",
   text: string,
@@ -1101,6 +1110,11 @@ export function encodeChatMessage(
     server: 0,
   };
   const type = chatType ?? defaultTypes[messageType];
+  // Existing server content uses legacy colours; both clients render native font markup.
+  if (messageType === "game" || messageType === "server") {
+    text = text.replace(/@([a-z0-9]{3})@/g, (tag, colour) =>
+      LEGACY_CHAT_COLOURS[colour] ? `<col=${LEGACY_CHAT_COLOURS[colour]}>` : tag);
+  }
   const id = Buffer.alloc(2);
   id.writeUInt16BE(playerId & 0xffff);
   return encodeServerPacket(ServerPacketId.CHAT_MESSAGE, Buffer.concat([
@@ -1826,25 +1840,89 @@ export function encodeWorldEntityInfo(updates: WorldEntityUpdate[], spawns: Worl
   return encodeServerPacket(ServerPacketId.WORLDENTITY_INFO, out.toBuffer());
 }
 
+/**
+ * A REGION_REPLACEMENT travels in a short packet inside a 64 KiB frame, so its payload
+ * (region header + terrain + objects) stops at 0xfffd. Dense regions are over that from the
+ * cache's own bytes alone (Falador 12084 is 82,249), so anything that does not fit is
+ * deflated instead of refused. The client inflates it back to the same raw terrain/objects.
+ */
+export const MAX_REGION_REPLACEMENT_PAYLOAD = 0xfffd;
+
+/** regionId(2) + flags(1) + rawTerrainLength(4) + rawObjectLength(4) */
+const COMPRESSED_REGION_REPLACEMENT_HEADER = 11;
+
+/** A prepared replacement payload; byte 2 is the allowReload flag, so it can be flipped. */
+export type RegionReplacementPacket = { opcode: ServerPacketId; payload: Buffer };
+
+/**
+ * Builds the payload once. A dense region costs a deflate (~3 ms), so callers that send
+ * the same replacement to many players (or on every scene-window change) keep this and
+ * re-wrap it instead of re-encoding the terrain each time.
+ */
+export function regionReplacementPacket(
+  regionId: number,
+  allowReload: boolean,
+  terrainData: Uint8Array,
+  objectData: Uint8Array | null
+): RegionReplacementPacket {
+  const objects = objectData ?? new Uint8Array(0);
+  // Matches the decoder's bounded output buffer; check before copying or compressing.
+  if (terrainData.length === 0 || terrainData.length + objects.length > 16 * 1024 * 1024) {
+    throw new RangeError(`Region replacement ${regionId} has invalid section lengths`);
+  }
+  const payloadLength = 7 + terrainData.length + objects.length;
+  if (payloadLength <= MAX_REGION_REPLACEMENT_PAYLOAD) {
+    const payload = Buffer.allocUnsafe(payloadLength);
+    payload.writeUInt16BE(regionId & 0xffff, 0);
+    payload[2] = allowReload ? 1 : 0;
+    payload.writeUInt16BE(terrainData.length, 3);
+    payload.writeUInt16BE(objects.length, 5);
+    Buffer.from(terrainData).copy(payload, 7);
+    Buffer.from(objects).copy(payload, 7 + terrainData.length);
+    return { opcode: ServerPacketId.REGION_REPLACEMENT, payload };
+  }
+  const deflated = deflateSync(
+    Buffer.concat([Buffer.from(terrainData), Buffer.from(objects)]),
+    { level: 9 }
+  );
+  const compressedLength = COMPRESSED_REGION_REPLACEMENT_HEADER + deflated.length;
+  if (compressedLength > MAX_REGION_REPLACEMENT_PAYLOAD) {
+    throw new Error(
+      `Region replacement ${regionId} is too large to stream: ${payloadLength} bytes, ` +
+      `${compressedLength} compressed, max ${MAX_REGION_REPLACEMENT_PAYLOAD}`
+    );
+  }
+  const payload = Buffer.allocUnsafe(compressedLength);
+  payload.writeUInt16BE(regionId & 0xffff, 0);
+  payload[2] = allowReload ? 1 : 0;
+  payload.writeUInt32BE(terrainData.length, 3);
+  payload.writeUInt32BE(objects.length, 7);
+  deflated.copy(payload, COMPRESSED_REGION_REPLACEMENT_HEADER);
+  return { opcode: ServerPacketId.REGION_REPLACEMENT_COMPRESSED, payload };
+}
+
+/** Wraps a prepared payload into a frame, reusing it when the reload flag already matches. */
+export function encodeCachedRegionReplacement(
+  packet: RegionReplacementPacket,
+  allowReload: boolean
+): Buffer {
+  const flag = allowReload ? 1 : 0;
+  if (packet.payload[2] === flag) return encodeServerPacket(packet.opcode, packet.payload);
+  const payload = Buffer.from(packet.payload);
+  payload[2] = flag;
+  return encodeServerPacket(packet.opcode, payload);
+}
+
 export function encodeRegionReplacement(
   regionId: number,
   allowReload: boolean,
   terrainData: Uint8Array,
   objectData: Uint8Array | null
 ): Buffer {
-  const objects = objectData ?? new Uint8Array(0);
-  const payloadLength = 7 + terrainData.length + objects.length;
-  if (payloadLength > 0xffff) {
-    throw new Error(`Region replacement ${regionId} exceeds short packet length`);
-  }
-  const payload = Buffer.allocUnsafe(payloadLength);
-  payload.writeUInt16BE(regionId & 0xffff, 0);
-  payload[2] = allowReload ? 1 : 0;
-  payload.writeUInt16BE(terrainData.length, 3);
-  payload.writeUInt16BE(objects.length, 5);
-  Buffer.from(terrainData).copy(payload, 7);
-  Buffer.from(objects).copy(payload, 7 + terrainData.length);
-  return encodeServerPacket(ServerPacketId.REGION_REPLACEMENT, payload);
+  return encodeCachedRegionReplacement(
+    regionReplacementPacket(regionId, allowReload, terrainData, objectData),
+    allowReload
+  );
 }
 
 export type ShopSlotView = { slot: number; itemId: number; quantity: number; defaultQuantity?: number; priceEach?: number; sellPrice?: number };
@@ -2761,7 +2839,7 @@ export function encodePlayerAppearance(
   text("");
   text("");
   text("");
-  byte(0);
+  byte(appearance.pronouns ?? appearance.gender);
   int(appearance.equipQty?.[13] ?? 0);
   int(appearance.equip[13] ?? -1);
   int(appearance.equip[12] ?? -1);

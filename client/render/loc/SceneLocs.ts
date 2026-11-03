@@ -1,6 +1,7 @@
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
 import { LocType } from "../../rs/config/loctype/LocType";
 import { LocTypeLoader } from "../../rs/config/loctype/LocTypeLoader";
+import { VarManager } from "../../rs/config/vartype/VarManager";
 import { Model } from "../../rs/model/Model";
 import { Loc } from "../../rs/scene/Loc";
 import { Scene } from "../../rs/scene/Scene";
@@ -86,6 +87,25 @@ export function isDoorLocType(locType: LocType): boolean {
     }
 
     return hasDoorName || hasDoorAction;
+}
+
+/**
+ * Whether a loc, by its map or packet id, is drawn in the door geometry. A multiloc draws as the
+ * variant its varp or varbit picks (addLocEntities), so that variant decides: the Al Kharid toll
+ * gate's leaves are nameless 44598/44599 resolving to the "Gate" 44050/44052, so judging the raw
+ * id put the gate in a loc-only reload that left the closed leaves drawn under the open ones
+ * (issue #1706).
+ */
+export function isDoorLoc(
+    locType: LocType,
+    varManager: VarManager | undefined,
+    loader: LocTypeLoader,
+): boolean {
+    if (locType.transforms && varManager) {
+        const shown = locType.transform(varManager, loader);
+        return shown !== undefined && isDoorLocType(shown);
+    }
+    return isDoorLocType(locType);
 }
 
 export function isLowDetail(

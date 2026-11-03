@@ -244,9 +244,9 @@ export function closeOpenModal(
         }
     }
     if (!hasOpenModal) return false;
-    // Same IF_CLOSE packet MenuAction.ts already sends for MenuOpcode.WidgetClose (IF_CLOSE = 55,
-    // 0-byte payload, decodes server-side to {type: "interface_close"}, handled in
-    // NetworkBuilder.ts via Player.closeInterruptibleInterfaces()).
+    // IF_CLOSE (55): a 0-byte payload that decodes server-side to {type: "interface_close"},
+    // handled in NetworkBuilder.ts via Player.closeInterruptibleInterfaces(). Esc and IF1 close
+    // buttons (handleWidgetActionCloseButton) both close through here.
     queuePacket(createPacket(ClientPacket.IF_CLOSE));
     cs2Vm.deferIfClose();
     return true;

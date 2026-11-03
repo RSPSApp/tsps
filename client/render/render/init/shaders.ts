@@ -443,6 +443,9 @@ export async function initShaders(host: WebGLOsrsRendererHost, ): Promise<Progra
                     host.osrsClient.stateMachine,
                 );
                 host.overlayManager.add(host.loadingMessageOverlay, false);
+                host.loadingMessageOverlay.setSceneLoadingSource(
+                    () => !host.mapManager.isViewSquareReady(host.stats.frameCount),
+                );
                 host.loadingMessageOverlay.init({
                     app: host.app,
                     sceneUniforms: host.sceneUniformBuffer,

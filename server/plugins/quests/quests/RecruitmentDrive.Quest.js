@@ -8,8 +8,7 @@
  * shortlist scopes (Sir Ren Itchood, Ms. Hynn Terprett, Lady Table, Sir Tinley and
  * Sir Kuam Ferentse) and the completion reward.
  *
- * Stages (raw varp 496, "recruitmentdrive" in the cache varp dump; there is no
- * varbit breakdown of it - confirmed with scripts/lookup-gameval.ts):
+ * Stages (varbit 657, rd_main, in varp 496, recruitmentdrive):
  *   0 not started, 1 recommended by Sir Amik (meet Sir Tiffy),
  *   2 being tested (also the state after quitting or failing a room),
  *   3 all five tests passed (return to Sir Tiffy), 4 complete.
@@ -31,11 +30,6 @@
  *   - Sir Ren's "combination lock" is a five-option word prompt: the assigned
  *     word plus four decoys (OSRS's actual answer-entry UI is not in the
  *     transcript). No necklace item exists in the quest's item list or transcript.
- *   - Lady Table has no placed "Statue"/Touch objects in this cache (7303-7314
- *     are unplaced; 7290-7301 are unnamed visuals), so the missing-statue pick is
- *     the shortlist's chatbox prompt with four statue options. The answer is the
- *     fixed "Gold greataxe statue" (options shuffle each attempt) so the test is
- *     replayable.
  *   - Ms. Hynn Terprett's numeric-input riddles 1 and 2 are replaced by a four
  *     option chatbox prompt (the dialogue runtime has no input step); riddles 3-5
  *     use the transcript's own menus.
@@ -51,10 +45,10 @@
 module.exports = function registerRecruitmentDriveQuest(api) {
   const { Equipment, Item, ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill } =
     api.core;
-  const { refreshQuestList, registerQuest, startTranscript } = require("../QuestRuntime");
+  const { refreshQuestList, registerQuest, startTranscript, loadTranscripts } = require("../QuestRuntime");
 
   const PAGE = "Recruitment Drive";
-  const VARP_RECRUITMENT_DRIVE = 496; // "recruitmentdrive"
+  const VARBIT_RECRUITMENT_DRIVE = 657; // rd_main; preserve the statue layout in sibling bit 658
   const BLOCKED_KNIGHTS_QUEST_KEY = "black_knights_fortress";
   const DRUIDIC_RITUAL_QUEST_KEY = "druidic_ritual";
 
@@ -83,6 +77,7 @@ module.exports = function registerRecruitmentDriveQuest(api) {
   const REN_CLUES_ATTRIBUTE = "quest.recruitment-drive.ren-clues";
   const RIDDLE_ATTRIBUTE = "quest.recruitment-drive.riddle";
   const TABLE_STATE_ATTRIBUTE = "quest.recruitment-drive.table-state";
+  const TABLE_LAYOUT_ATTRIBUTE = "recruitment-drive:statue-layout";
   const TINLEY_STATE_ATTRIBUTE = "quest.recruitment-drive.tinley-state";
 
   const FALADOR_TILE = { x: 2998, y: 3373, z: 0 };
@@ -173,15 +168,15 @@ module.exports = function registerRecruitmentDriveQuest(api) {
     { correct: "Bucket A (32 degrees)" },
   ];
 
-  const TABLE_STATUES = [
-    "Bronze sword statue",
-    "Silver halberd statue",
-    "Gold greataxe statue",
-    "Gold mace statue",
-  ];
-  // The missing statue. Fixed for a deterministic, replayable test (the room has no
-  // real Statue objects to observe; see the header gap note).
-  const TABLE_ANSWER = "Gold greataxe statue";
+  const TABLE_LAYOUT_VARBIT = 658; // rd_room_order: the twelve placed rd_statue_multi locs
+  const TABLE_FIRST_LOC_ID = 7290;
+  const TABLE_STATUE_COUNT = 12;
+  const TABLE_LINE_TICKS = 3;
+  const TABLE_FADE_TICKS = 2;
+  const FADE_UID = (161 << 16) | 1;
+  const FADE_INTERFACE = 174;
+  const FADE_SCRIPT = 948;
+  const tableAttempts = new Map();
 
   const KUAM_VICTORY_CONDITION_IDS = ["DBOLHO", "crzBa_", "d7FuHu"];
   const LEYE_WEAPON_ITEM_IDS = [
@@ -352,6 +347,8 @@ module.exports = function registerRecruitmentDriveQuest(api) {
     player.setAttribute(WORD_ATTRIBUTE, null);
     player.setAttribute(REN_CLUES_ATTRIBUTE, 0);
     player.setAttribute(RIDDLE_ATTRIBUTE, null);
+    clearTableAttempt(player);
+    player.setAttribute(TABLE_LAYOUT_ATTRIBUTE, 0);
     player.setAttribute(TABLE_STATE_ATTRIBUTE, 0);
     player.setAttribute(TINLEY_STATE_ATTRIBUTE, 0);
     hynnAttempts.delete(player);
@@ -483,56 +480,121 @@ module.exports = function registerRecruitmentDriveQuest(api) {
     failTest(player);
   }
 
-  function startTableWait(player) {
-    const { CountdownTask, TaskManager } = api.core;
-    if (!CountdownTask || !TaskManager) return;
-    TaskManager.submit(
-      new CountdownTask(player, TABLE_WAIT_TICKS, () => {
-        if (player.isRegistered?.() === false) return;
-        if (quest.getStage(player) !== STAGE_TESTING || tableState(player) !== 1) return;
-        if (!nearLadyTable(player)) {
-          setTableState(player, 0);
-          return;
-        }
-        afterChatbox(player, () => {
-          if (quest.getStage(player) !== STAGE_TESTING || tableState(player) !== 1) return;
-          setTableState(player, 2);
-          startTranscript(api, player, LADY_TABLE_NPC_ID, PAGE, V_TABLE_AFTER);
-          afterChatbox(player, () => openTableStatuePrompt(player));
-        });
-      })
-    );
-  }
-
   function nearLadyTable(player) {
     const location = player.getLocation();
-    return Math.abs(location.getX() - 2458) <= 12 && Math.abs(location.getY() - 4981) <= 12;
+    return location.getZ() === 0 && location.getX() >= 2448 && location.getX() <= 2461 &&
+      location.getY() >= 4974 && location.getY() <= 4985;
   }
 
-  function openTableStatuePrompt(player) {
-    if (quest.getStage(player) !== STAGE_TESTING || hasTest(player, TEST_BIT_TABLE)) return;
-    if (!nearLadyTable(player)) return;
-    const statues = TABLE_STATUES.slice();
-    for (let i = statues.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [statues[i], statues[j]] = [statues[j], statues[i]];
-    }
-    const pairs = [];
-    for (const statue of statues) {
-      pairs.push(statue, () => chooseTableStatue(player, statue));
-    }
-    api.sendMultiChatboxPrompt(player, "Which statue was added?", ...pairs);
+  function tableLater(player, attempt, ticks, callback) {
+    api.core.TaskManager.submit(new api.core.CountdownTask(attempt, ticks, () => {
+      if (tableAttempts.get(player) !== attempt || player.isRegistered?.() === false ||
+          quest.getStage(player) !== STAGE_TESTING || !nearLadyTable(player)) return;
+      callback();
+    }));
   }
 
-  function chooseTableStatue(player, statue) {
-    if (statue === TABLE_ANSWER) {
+  function tableFade(player, out) {
+    player.getPacketSender().sendSubInterface(FADE_UID, FADE_INTERFACE, 1, {
+      postScripts: [{ scriptId: FADE_SCRIPT, args: out ? [0, 255, 0, 0, 50] : [0, 0, 0, 255, 50] }],
+    });
+  }
+
+  function clearTableAttempt(player) {
+    const attempt = tableAttempts.get(player);
+    if (!attempt) return;
+    tableAttempts.delete(player);
+    api.core.TaskManager.cancelTasks(attempt);
+    if (attempt.showing) {
+      player.getDialogueManager().reset();
+      player.getPacketSender().sendInterfaceRemoval();
+    }
+    player.getPacketSender().closeSubInterface(FADE_UID);
+    player.getMovementQueue().setBlockMovement(false);
+  }
+
+  /** The room's automatic lines cannot be skipped by holding Space. */
+  function tableLine(player, attempt, step, ticks, next) {
+    const { ActionDialogue, DialogueChainBuilder, NpcDialogue } = api.core;
+    const text = step.text.replace("[player name]", player.getDisplayName());
+    attempt.showing = true;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+      new ActionDialogue(0, { execute: () => {
+        new NpcDialogue(0, LADY_TABLE_NPC_ID, text).sendHeld(player);
+        tableLater(player, attempt, ticks, next);
+      } }, true)
+    ));
+  }
+
+  function startTable(player) {
+    if (quest.getStage(player) !== STAGE_TESTING || hasTest(player, TEST_BIT_TABLE) || tableAttempts.has(player)) return;
+    let layout = Number(player.getAttribute(TABLE_LAYOUT_ATTRIBUTE));
+    if (!Number.isInteger(layout) || layout < 1 || layout > TABLE_STATUE_COUNT) {
+      layout = 1 + Math.floor(Math.random() * TABLE_STATUE_COUNT);
+      player.setAttribute(TABLE_LAYOUT_ATTRIBUTE, layout);
+      setTableState(player, 0);
+    }
+    // Read the answer from the same multi-loc transforms the player sees, rather than a second table.
+    const statues = Array.from({ length: TABLE_STATUE_COUNT }, (_, i) => api.core.CacheDefinitions.getObject(TABLE_FIRST_LOC_ID + i).transforms);
+    const visible = statues.map((variants) => variants[layout < variants.length - 1 ? layout : variants.length - 1]);
+    const attempt = { answer: statues.map((variants) => variants[0]).find((id) => !visible.includes(id)), showing: false };
+    tableAttempts.set(player, attempt);
+    if (tableState(player) >= 2) {
+      player.getPacketSender().sendVarbit(TABLE_LAYOUT_VARBIT, 0);
+      return;
+    }
+    setTableState(player, 1);
+    player.getPacketSender().sendVarbit(TABLE_LAYOUT_VARBIT, layout);
+    player.getMovementQueue().reset().setBlockMovement(true);
+    const intro = loadTranscripts(api)[PAGE].variants[V_TABLE_ENTER];
+    const after = loadTranscripts(api)[PAGE].variants[V_TABLE_AFTER];
+    function introduce(index) {
+      const last = index === intro.length - 1;
+      tableLine(player, attempt, intro[index], last ? TABLE_WAIT_TICKS : TABLE_LINE_TICKS, () => {
+        if (!last) return introduce(index + 1);
+        tableLine(player, attempt, after[0], TABLE_LINE_TICKS, () => {
+          tableFade(player, true);
+          tableLater(player, attempt, TABLE_FADE_TICKS, () => {
+            player.getPacketSender().sendVarbit(TABLE_LAYOUT_VARBIT, 0);
+            tableFade(player, false);
+            tableLater(player, attempt, TABLE_FADE_TICKS, () => {
+              player.getPacketSender().closeSubInterface(FADE_UID);
+              player.getMovementQueue().setBlockMovement(false);
+              setTableState(player, 2);
+              attempt.showing = false;
+              player.getDialogueManager().reset();
+              startTranscript(api, player, LADY_TABLE_NPC_ID, PAGE, V_TABLE_AFTER, (steps) => steps.slice(1));
+            });
+          });
+        });
+      });
+    }
+    introduce(0);
+  }
+
+  class StatueRoom extends api.core.Area {
+    postEnter(mobile) {
+      if (mobile.isPlayer()) startTable(mobile.getAsPlayer());
+    }
+    postLeave(mobile) {
+      if (mobile.isPlayer()) clearTableAttempt(mobile.getAsPlayer());
+    }
+  }
+
+  function touchTableStatue({ player, objectId, definition }) {
+    if (quest.getStage(player) !== STAGE_TESTING || !nearLadyTable(player)) return false;
+    if (objectId < TABLE_FIRST_LOC_ID || objectId >= TABLE_FIRST_LOC_ID + TABLE_STATUE_COUNT) return false;
+    const attempt = tableAttempts.get(player);
+    if (tableState(player) !== 2 || !attempt || hasTest(player, TEST_BIT_TABLE)) return true;
+    if (definition.id === attempt.answer) {
       setTests(player, tests(player) | TEST_BIT_TABLE);
       setTableState(player, 3);
       playBranch(player, LADY_TABLE_NPC_ID, V_TABLE_TOUCH, "FjPTRa");
-      return;
+    } else {
+      playBranch(player, LADY_TABLE_NPC_ID, V_TABLE_TOUCH, "Hsk37b");
+      failTest(player);
     }
-    playBranch(player, LADY_TABLE_NPC_ID, V_TABLE_TOUCH, "Hsk37b");
-    failTest(player);
+    return true;
   }
 
   function startTinleyWait(player) {
@@ -628,15 +690,6 @@ module.exports = function registerRecruitmentDriveQuest(api) {
       return { page: PAGE, variant: V_HYNN_ENTER };
     }
     if (npcId === LADY_TABLE_NPC_ID) {
-      if (quest.getStage(player) === STAGE_TESTING && !hasTest(player, TEST_BIT_TABLE)) {
-        if (tableState(player) === 0) {
-          setTableState(player, 1);
-          startTableWait(player);
-          return { page: PAGE, variant: V_TABLE_ENTER };
-        }
-        if (tableState(player) === 1) return { page: PAGE, variant: V_TABLE_ENTER };
-        afterChatbox(player, () => openTableStatuePrompt(player));
-      }
       return { page: PAGE, variant: V_TABLE_TALK };
     }
     if (npcId === SIR_TINLEY_NPC_ID) {
@@ -834,6 +887,10 @@ module.exports = function registerRecruitmentDriveQuest(api) {
   function handleNpcInteraction(event) {
     const { player } = event;
     if (!player || event.handled) return;
+    if (event.npcId === LADY_TABLE_NPC_ID && tableAttempts.get(player)?.showing) {
+      event.handled = true;
+      return;
+    }
     if (quest.getStage(player) !== STAGE_TESTING || tinleyState(player) !== 2) return;
     if (!nearTinley(player)) {
       setTinleyState(player, 1);
@@ -889,6 +946,7 @@ module.exports = function registerRecruitmentDriveQuest(api) {
   }
 
   function handleLogout({ player }) {
+    clearTableAttempt(player);
     hynnAttempts.delete(player);
     clearFight(player);
   }
@@ -951,12 +1009,13 @@ module.exports = function registerRecruitmentDriveQuest(api) {
   api.persistAttribute(REN_CLUES_ATTRIBUTE);
   api.persistAttribute(RIDDLE_ATTRIBUTE);
   api.persistAttribute(TABLE_STATE_ATTRIBUTE);
+  api.persistAttribute(TABLE_LAYOUT_ATTRIBUTE, 0);
   api.persistAttribute(TINLEY_STATE_ATTRIBUTE);
 
   quest = registerQuest(api, {
     key: "recruitment_drive",
     name: "Recruitment Drive",
-    varpId: VARP_RECRUITMENT_DRIVE,
+    varbitId: VARBIT_RECRUITMENT_DRIVE,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
@@ -972,6 +1031,8 @@ module.exports = function registerRecruitmentDriveQuest(api) {
     onReward: grantReward,
   });
 
+  api.registerArea(new StatueRoom([new api.core.Boundary(2448, 2461, 4974, 4985, 0)]));
+  api.onObjectInteraction("Statue", { Touch: touchTableStatue });
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);

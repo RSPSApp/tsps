@@ -117,7 +117,9 @@ module.exports = {
   QUESTS,
   register(api) {
     require("./Equipment.Quests")(api);
+    require("./Shops.Quests")(api);
     require("./QuestRuntime").registerQuestWidgets(forPlayers(api));
+    require("./ChatheadAnimations.QuestRuntime")(forPlayers(api));
     for (const quest of questsForWorld(api.core)) {
       const questApi = forPlayers(api.withProfileLabel?.(`Quests/${quest}`) ?? api);
       require(`./quests/${quest}.Quest`)(questApi);

@@ -42,6 +42,10 @@ function makePlayer() {
   const moves = [];
   const configs = new Map();
   const varbits = new Map();
+  const animations = [];
+  const graphics = [];
+  const sounds = [];
+  let prayer = 50;
   let location = new core.Location(3442, 3340, 0);
   let wearingGhostspeak = true;
 
@@ -49,6 +53,7 @@ function makePlayer() {
     sendConfig(id, value) { configs.set(id, value); return sender; },
     sendVarbit(id, value) { varbits.set(id, value); return sender; },
     sendJingle(id) { jingles.push(id); return sender; },
+    sendSoundEffect(id, loops, delay) { sounds.push([id, loops, delay]); return sender; },
   }, { get: (target, key) => (key in target ? target[key] : () => sender) });
 
   const usedSlots = () => [...items.values()].filter((amount) => amount > 0).length;
@@ -58,6 +63,14 @@ function makePlayer() {
     containsNumber: (id) => inventory.getAmount(id) > 0,
     getFreeSlots: () => 28 - usedSlots(),
     isFull: () => usedSlots() >= 28,
+    getItems() {
+      return [...items.entries()].map(([id, amount]) => ({
+        getId: () => id,
+        getAmount: () => amount,
+        setId(next) { items.delete(id); items.set(next, amount); },
+      }));
+    },
+    refreshItems() {},
     adds(id, amount = 1) {
       items.set(id, inventory.getAmount(id) + amount);
       return inventory;
@@ -74,7 +87,7 @@ function makePlayer() {
   };
 
   const player = {
-    attrs, items, messages, xp, jingles, moves, configs, varbits, inventory,
+    attrs, items, messages, xp, jingles, moves, configs, varbits, inventory, damage: [], animations, graphics, sounds,
     localNpcs: [],
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
@@ -87,9 +100,19 @@ function makePlayer() {
     getSkillManager: () => ({
       addExperiences: (skill, amount) => xp.push([skill.getIndex(), amount]),
       getCombatLevel: () => 20,
+      getCurrentLevel: () => prayer,
+      getMaxLevel: () => 50,
+      setCurrentLevels: (_skill, level) => { prayer = level; },
+      updateSkill: noop,
     }),
     getPacketSender: () => sender,
+    getCombat: () => ({
+      getHitQueue: () => ({ addPendingDamage: (hits) => player.damage.push(...hits) }),
+    }),
     getLocation: () => location,
+    getPrivateArea: () => null,
+    performAnimation: animation => animations.push(animation.getId()),
+    performGraphic: graphic => graphics.push(graphic.getId()),
     setLocation: (next) => { location = next; },
     moveTo: (next) => moves.push([next.getX(), next.getY(), next.getZ()]),
     sendMessage: (message) => messages.push(message),
@@ -130,6 +153,7 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
   const registered = [];
   const deregistered = [];
   const worldObjects = [];
+  const clock = { tick: 0 };
   let area = null;
 
   class FakeGameObject {
@@ -150,7 +174,7 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
   const fakeCore = {
     ...core,
     TaskManager: { submit: noop, cancelTasks: noop },
-    World: { getObjects: () => worldObjects },
+    World: { getObjects: () => worldObjects, getProcessCycle: () => clock.tick },
     MapObjects: { mapObjects: new Map(), getHash: (x, y, z) => `${x},${y},${z}` },
     RegionManager: { loadMapFiles: noop },
     GameObject: FakeGameObject,
@@ -169,7 +193,13 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
     persistAttribute: noop,
     onNpcDialogueVariant: (handler) => variants.push(handler),
     onNpcDialogueCondition: (handler) => conditions.push(handler),
-    onObjectInteraction: (handler) => objectHooks.push(handler),
+    onObjectInteraction: (nameOrHandler, actions) => objectHooks.push(typeof nameOrHandler === 'function' ? nameOrHandler : (event) => {
+      const definition = core.CacheDefinitions.getObject(event.objectId);
+      if (definition.name !== nameOrHandler) return;
+      const option = event.option ?? event.definition?.getInteractions?.()?.[event.clickType - 1];
+      const action = Object.keys(actions).find(key => key.toLowerCase() === String(option).toLowerCase());
+      if (action && actions[action](event)) event.handled = true;
+    }),
     onItemOnNpc: (handler) => itemOnNpc.push(handler),
     onItemOnObject: (handler) => itemOnObject.push(handler),
     onItemAction: (handler) => itemActions.push(handler),
@@ -203,6 +233,8 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
         location: new core.Location(x, y, z),
         getId() { return id; },
         getLocation() { return this.location; },
+        performGraphic: noop,
+        getCombat: () => ({ attack: target => { npc.target = target; } }),
       };
       spawned.push(npc);
       return npc;
@@ -227,7 +259,7 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
   const h = {
     player, custom, variants, conditions, objectHooks, itemOnNpc, itemOnObject,
     itemActions, itemOnItem, groundPickups, logins, logouts, deaths, spawned, removed, registered,
-    deregistered, worldObjects, quest, get area() { return area; },
+    deregistered, worldObjects, quest, clock, get area() { return area; },
   };
   if (!firstHarness) firstHarness = h;
   return h;
@@ -396,10 +428,13 @@ test('mandatory source route reaches completion through the registered handlers'
   objectAction(h, { objectId: O.GROTTO, ...interaction(['Enter'], 1) });
   assert.equal(h.quest.getStage(p), 65);
   assert.deepEqual(p.moves.at(-1), [3441, 9736, 0]);
-  assert.ok(h.spawned.some((npc) => npc.getId() === N.NATURE_SPIRIT));
+  assert.ok(h.spawned.some((npc) => npc.getId() === N.FILLIMAN_TARLOCK && npc.getLocation().y > 9000));
   assert.ok(h.removed.some((npc) => npc.getId() === N.FILLIMAN_TARLOCK));
 
   assert.equal(variant(h, N.NATURE_SPIRIT), 'entering-filliman-s-grove-talking-to-filliman-inside-his-grove');
+  const transform = emit(h, 'npc-dialogue:line', { npcId: N.FILLIMAN_TARLOCK,
+    text: "I must complete the transformation now. Just stand there and watch the show, apparently it's quite good!" });
+  transform.after();
   assert.equal(h.quest.getStage(p), 70);
   assert.equal(variant(h, N.NATURE_SPIRIT), 'entering-filliman-s-grove-talking-to-filliman-inside-his-grotto-again');
 
@@ -426,9 +461,11 @@ test('mandatory source route reaches completion through the registered handlers'
   death(h, firstVisible);
   assert.equal(h.quest.getStage(p), 95);
 
+  h.clock.tick++;
   itemOnNpcAction(h, { npcId: N.GHAST, itemId: FILLED_POUCH, target: ghast });
   death(h, h.spawned.at(-1));
   assert.equal(h.quest.getStage(p), 100);
+  h.clock.tick++;
   itemOnNpcAction(h, { npcId: N.GHAST, itemId: FILLED_POUCH, target: ghast });
   death(h, h.spawned.at(-1));
   assert.equal(h.quest.getStage(p), 105);
@@ -453,6 +490,183 @@ test('mandatory source route reaches completion through the registered handlers'
     variant: 'standard-dialogue-after-priest-in-peril-after-nature-spirit',
   });
   assert.equal(variant(h, N.NATURE_SPIRIT), 'returning-to-filliman-s-grove-attempting-to-talk-to-him-again-before-he-disappears');
+});
+
+test('invisible ghasts in Mort Myre attack, rot food, and become visible', () => {
+  const player = makePlayer();
+  const h = harness({ player });
+  player.setLocation(new core.Location(3440, 3345, 0));
+  const ghast = {
+    getId: () => N.GHAST,
+    getLocation: () => new core.Location(3441, 3345, 0),
+  };
+  player.localNpcs = [ghast];
+  const random = Math.random;
+  try {
+    // First tick only schedules the first attempt; the roll happens on a later cycle.
+    h.clock.tick = 0;
+    h.area.process(player);
+    player.inventory.adds(I.SHRIMPS, 1);
+    h.clock.tick = 20;
+    Math.random = () => 0.9; // not ignored, not a miss
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 0, 'the attack rots the food');
+    assert.equal(player.inventory.getAmount(I.ROTTEN_FOOD), 1);
+    assert.equal(h.spawned.at(-1).getId(), N.GHAST_2, 'a ghast that lands a hit becomes visible');
+    assert.equal(player.damage.length, 0, 'rotting food replaces the damage');
+
+    // With nothing to rot the same roll deals 1-3 damage.
+    death(h, h.spawned.at(-1));
+    h.clock.tick = 200;
+    Math.random = () => 0.9;
+    h.area.process(player);
+    assert.equal(player.damage.length, 1);
+    assert.ok(player.damage[0].getDamage() >= 1 && player.damage[0].getDamage() <= 3);
+
+    // 7/10 of attempts miss: no rot, no damage, no visible ghast.
+    death(h, h.spawned.at(-1));
+    h.clock.tick = 400;
+    Math.random = () => 0.1;
+    const spawnedBefore = h.spawned.length;
+    player.inventory.adds(I.SHRIMPS, 1);
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 1);
+    assert.equal(player.damage.length, 1);
+    assert.equal(h.spawned.length, spawnedBefore);
+  } finally {
+    Math.random = random;
+  }
+});
+
+test('one invisible ghast keeps one visible copy through repeat attacks, death and logout', () => {
+  const player = makePlayer();
+  const h = harness({ player });
+  player.setLocation(new core.Location(3440, 3345, 0));
+  const ghast = {
+    getId: () => N.GHAST,
+    getLocation: () => new core.Location(3441, 3345, 0),
+  };
+  player.localNpcs = [ghast];
+  h.quest.setStage(player, 90);
+  const visibleGhasts = () => h.spawned.filter((npc) => npc.getId() === N.GHAST_2);
+  const random = Math.random;
+  try {
+    Math.random = () => 0.9; // never ignored, never a miss
+    h.clock.tick = 0;
+    h.area.process(player); // the first pass only schedules the attempt
+    player.inventory.adds(I.SHRIMPS, 3);
+
+    h.clock.tick = 20;
+    h.area.process(player);
+    assert.equal(visibleGhasts().length, 1);
+    const first = h.spawned.at(-1);
+
+    // The source stays in the player's local NPCs, so two more hits must reuse its one form.
+    assert.ok(player.localNpcs.includes(ghast));
+    h.clock.tick = 60;
+    h.area.process(player);
+    h.clock.tick = 100;
+    h.area.process(player);
+    assert.equal(visibleGhasts().length, 1, 'a revealed source does not spawn a second copy');
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 2, 'a revealed source does not keep rotting food alongside melee combat');
+
+    // Using the pouch on a source that is already visible costs nothing and adds no copy.
+    player.inventory.adds(FILLED_POUCH, 1);
+    h.clock.tick++;
+    itemOnNpcAction(h, { npcId: N.GHAST, itemId: FILLED_POUCH, target: ghast });
+    assert.equal(visibleGhasts().length, 1);
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 1, 'no charge is spent on a ghast already visible');
+
+    // The form dying counts once and frees the source to be revealed again.
+    death(h, first);
+    assert.equal(h.quest.getStage(player), 95);
+    death(h, first);
+    assert.equal(h.quest.getStage(player), 95, 'one form cannot count twice');
+
+    h.clock.tick++;
+    itemOnNpcAction(h, { npcId: N.GHAST, itemId: FILLED_POUCH, target: ghast });
+    const second = h.spawned.at(-1);
+    assert.equal(second.getId(), N.GHAST_2);
+    assert.notEqual(second, first, 'a dead form is replaced, not reused');
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 0);
+
+    // Logout removes the tracked form, so the next visit starts with nothing lingering.
+    for (const handler of h.logouts) handler({ player });
+    assert.ok(h.removed.includes(second), 'logout removes the visible form it tracked');
+    player.inventory.adds(FILLED_POUCH, 1);
+    itemOnNpcAction(h, { npcId: N.GHAST, itemId: FILLED_POUCH, target: ghast });
+    const third = h.spawned.at(-1);
+    assert.equal(third.getId(), N.GHAST_2);
+    assert.notEqual(third, second);
+  } finally {
+    Math.random = random;
+  }
+});
+
+test('a filled druid pouch spends a charge to reveal an attacking ghast instead of food or damage', () => {
+  const player = makePlayer();
+  const h = harness({ player });
+  player.setLocation(new core.Location(3440, 3345, 0));
+  const ghast = {
+    getId: () => N.GHAST,
+    getLocation: () => new core.Location(3441, 3345, 0),
+  };
+  player.localNpcs = [ghast];
+  h.quest.setStage(player, 90);
+  const visibleGhasts = () => h.spawned.filter((npc) => npc.getId() === N.GHAST_2);
+  const random = Math.random;
+  try {
+    Math.random = () => 0.9; // never ignored, never a miss
+    h.clock.tick = 0;
+    h.area.process(player); // the first pass only schedules the attempt
+    player.inventory.adds(I.SHRIMPS, 1);
+    player.inventory.adds(FILLED_POUCH, 3);
+
+    // Food in the pack: one charge reveals the ghast, and the food survives.
+    h.clock.tick = 20;
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 2, 'the pouch spends one charge');
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 1, 'the protected food is not rotted');
+    assert.equal(player.inventory.getAmount(I.ROTTEN_FOOD), 0);
+    assert.equal(player.damage.length, 0, 'a revealed attacker deals no damage');
+    assert.equal(visibleGhasts().length, 1);
+
+    // The revealed source keeps attacking through its one form: no second charge or copy.
+    h.clock.tick = 60;
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 2, 'no charge is spent on a ghast already visible');
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 1);
+    assert.equal(visibleGhasts().length, 1);
+
+    // No food either: the pouch still protects, spending the next charge on a fresh reveal.
+    death(h, h.spawned.at(-1));
+    player.inventory.deleteNumber(I.SHRIMPS, 1);
+    h.clock.tick = 100;
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 1, 'the pouch spends a charge with no food to rot');
+    assert.equal(player.damage.length, 0, 'no food does not mean damage while the pouch is charged');
+    assert.equal(visibleGhasts().length, 2, 'the dead form is replaced by a fresh reveal');
+
+    // The last charge goes the same way and leaves the empty pouch behind.
+    death(h, h.spawned.at(-1));
+    player.inventory.adds(I.SHRIMPS, 1);
+    h.clock.tick = 140;
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(FILLED_POUCH), 0);
+    assert.equal(player.inventory.getAmount(EMPTY_POUCH), 1, 'the spent pouch becomes the empty pouch');
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 1);
+    assert.equal(visibleGhasts().length, 3);
+
+    // An empty pouch is no protection: the food rots again.
+    death(h, h.spawned.at(-1));
+    h.clock.tick = 180;
+    h.area.process(player);
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 0, 'without a charged pouch the food rots');
+    assert.equal(player.inventory.getAmount(I.ROTTEN_FOOD), 1);
+    assert.equal(visibleGhasts().length, 4);
+  } finally {
+    Math.random = random;
+  }
 });
 
 test('login replays the saved stage in varp 307, including a fresh stage 0', () => {
@@ -522,6 +736,117 @@ test('Filliman repeat talk selects the ghostspeak conversation before the mirror
   assert.equal(condition(h, N.FILLIMAN_TARLOCK, text), false);
   assert.equal(condition(h, N.FILLIMAN_TARLOCK, 'Without wearing a ghostspeak amulet:'), true);
   assert.equal(h.quest.getStage(h.player), 20);
+});
+
+test('direct mirror use works after entering the swamp and still requires the mirror and ghostspeak', () => {
+  const h = harness(), p = h.player;
+  h.quest.setStage(p, 10);
+  assert.equal(itemOnNpcAction(h, {npcId: N.FILLIMAN_TARLOCK, itemId: MIRROR}).handled, false);
+  p.inventory.adds(MIRROR, 1);
+  p.setWearingGhostspeak(false);
+  itemOnNpcAction(h, {npcId: N.FILLIMAN_TARLOCK, itemId: MIRROR});
+  assert.equal(h.quest.getStage(p), 10);
+  p.setWearingGhostspeak(true);
+  assert.equal(itemOnNpcAction(h, {npcId: N.FILLIMAN_TARLOCK, itemId: MIRROR}).handled, true);
+  assert.equal(h.quest.getStage(p), 25);
+  assert.equal(p.inventory.getAmount(MIRROR), 1, 'showing the mirror does not consume it');
+});
+
+test('Bloom grows every adjacent plant once, charges Prayer once and observes the animation delay', () => {
+  const h = harness(), p = h.player, skills = p.getSkillManager();
+  h.quest.setStage(p, 90);
+  p.setLocation(new core.Location(3440, 3345, 0));
+  p.inventory.adds(BLESSED_SICKLE, 1);
+  plant(h, O.ROTTING_LOG, 3439, 3345);
+  plant(h, O.ROTTING_BRANCH, 3441, 3345);
+  plant(h, O.SMALL_BUSH, 3440, 3346);
+  plant(h, O.ROTTING_LOG, 3442, 3345); // outside the adjacent square
+  const random = Math.random;
+  try {
+    let rolls = 0;
+    Math.random = () => rolls++ === 0 ? 0.99 : 0.1;
+    itemAction(h, {itemId: BLESSED_SICKLE, option: 'Cast Bloom'});
+    assert.deepEqual(h.registered.map(o => o.getId()).sort((a, b) => a - b),
+      [O.FUNGI_ON_LOG, O.BUDDING_BRANCH, O.GOLDEN_PEAR_BUSH].sort((a, b) => a - b));
+    assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 44, 'one 1-6 Prayer roll covers the whole cast');
+    assert.deepEqual(p.animations, [1100]);
+    assert.deepEqual(p.graphics, [264]);
+    assert.deepEqual(p.sounds, [[1493, 35, 0]]);
+    itemAction(h, {itemId: BLESSED_SICKLE, option: 'Bloom'});
+    assert.equal(h.registered.length, 3);
+    assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 44, 'repeat input during the animation costs nothing');
+    h.clock.tick = 3;
+    skills.setCurrentLevels(core.Skill.PRAYER, 1);
+    rolls = 0;
+    itemAction(h, {itemId: BLESSED_SICKLE, option: 'Cast Bloom'});
+    assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 0, 'Prayer cannot go negative');
+    h.clock.tick = 6;
+    const before = h.registered.length;
+    itemAction(h, {itemId: BLESSED_SICKLE, option: 'Cast Bloom'});
+    assert.equal(h.registered.length, before, 'zero Prayer cannot grow plants');
+    skills.setCurrentLevels(core.Skill.PRAYER, 50);
+    Math.random = () => 0.99;
+    itemAction(h, {itemId: BLESSED_SICKLE, option: 'Cast Bloom'});
+    assert.equal(h.registered.length, before, 'each eligible plant can fail its growth roll');
+    assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 44, 'an unsuccessful cast still spends Prayer');
+  } finally { Math.random = random; }
+});
+
+test('transformation waits for its line, uses the green chathead and completion opens the finished grotto', () => {
+  const h = harness(), p = h.player;
+  h.quest.setStage(p, 65);
+  assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'entering-filliman-s-grove-talking-to-filliman-inside-his-grove');
+  assert.equal(h.quest.getStage(p), 65, 'selecting a dialogue cannot complete the transformation');
+  const line = emit(h, 'npc-dialogue:line', {npcId: N.FILLIMAN_TARLOCK,
+    text: "I must complete the transformation now. Just stand there and watch the show, apparently it's quite good!"});
+  line.after();
+  assert.equal(h.quest.getStage(p), 70);
+  const green = emit(h, 'npc-dialogue:line', {npcId: N.FILLIMAN_TARLOCK, text: 'Hmmm, good, the transformation is complete.'});
+  assert.equal(green.speakerId, N.NATURE_SPIRIT);
+  h.quest.setStage(p, 105);
+  p.setLocation(new core.Location(3441, 9736, 0));
+  emit(h, 'npc-dialogue:action', {npcId: N.NATURE_SPIRIT, stepId: 'b8LYWU'});
+  assert.deepEqual(p.moves.at(-1), [3441, 9736, 1]);
+  assert.equal(core.CacheDefinitions.getObject(O.ALTAR_OF_NATURE).actions[0], 'Pray-at');
+  p.getSkillManager().setCurrentLevels(core.Skill.PRAYER, 0);
+  objectAction(h, {objectId: O.ALTAR_OF_NATURE, option: 'Pray-at'});
+  assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 52);
+});
+
+test('pouch use is limited to one reveal per game tick across every invisible ghast variant', () => {
+  const h = harness(), p = h.player;
+  h.quest.setStage(p, 90);
+  p.inventory.adds(FILLED_POUCH, 3);
+  const ghast = x => ({getLocation: () => new core.Location(x, 3345, 0)});
+  itemOnNpcAction(h, {npcId: N.GHAST_3, itemId: FILLED_POUCH, target: ghast(3440)});
+  itemOnNpcAction(h, {npcId: N.GHAST_4, itemId: FILLED_POUCH, target: ghast(3441)});
+  assert.equal(h.spawned.length, 1);
+  assert.equal(p.inventory.getAmount(FILLED_POUCH), 2);
+  assert.equal(h.spawned[0].target, p, 'a revealed ghast engages the player');
+  h.clock.tick++;
+  itemOnNpcAction(h, {npcId: N.GHAST_4, itemId: FILLED_POUCH, target: ghast(3441)});
+  assert.equal(h.spawned.length, 2);
+  assert.equal(p.inventory.getAmount(FILLED_POUCH), 1);
+});
+
+test('native revealed ghasts keep separate source tiles and a mobile combat target', () => {
+  const h = harness({ nativeActors: true }), p = h.player;
+  h.quest.setStage(p, 90);
+  p.inventory.adds(FILLED_POUCH, 3);
+  try {
+    for (const [index, id] of [N.GHAST, N.GHAST_3, N.GHAST_4].entries()) {
+      h.clock.tick++;
+      const source = core.NPC.create(id, new core.Location(3440 + index, 3345, 0));
+      itemOnNpcAction(h, {npcId: id, itemId: FILLED_POUCH, target: source});
+      const visible = h.spawned.at(-1);
+      assert.equal(visible.getLocation().getX(), 3440 + index);
+      assert.ok(visible.getMovementCoordinator().getRadius() > 0, 'the real NPC is not pinned to its spawn');
+      assert.equal(visible.getCombat().getTarget(), p, 'normal NPC combat owns the revealed attack');
+    }
+    assert.equal(new Set(h.spawned.map(n => n.getLocation().getX())).size, 3);
+  } finally {
+    for (const handler of h.logouts) handler({player: p});
+  }
 });
 
 test('native early grotto clicks keep Filliman reachable, recover via the exit and preserve later entry', async t => {
@@ -602,10 +927,16 @@ test('native early grotto clicks keep Filliman reachable, recover via the exit a
   await click(O.GROTTO, 3440, 3337);
   assert.deepEqual(position(), [3441, 9736, 0]);
   assert.equal(h.quest.getStage(player), 65);
-  assert.deepEqual(publish(), [N.NATURE_SPIRIT], 'ritual entry still publishes the inside spirit');
+  assert.deepEqual(publish(), [N.FILLIMAN_TARLOCK], 'the inside actor stays a ghost until the transformation');
   h.quest.setStage(player, 110);
   await click(O.GROTTO_3, 3442, 9733);
   await click(O.GROTTO, 3440, 3337);
-  assert.deepEqual(position(), [3441, 9736, 0]);
+  assert.deepEqual(position(), [3441, 9736, 1]);
   assert.equal(h.quest.getStage(player), 110, 'post-quest entry cannot lower progress');
+  player.getSkillManager().setCurrentLevels(core.Skill.PRAYER, 0);
+  await click(O.ALTAR_OF_NATURE, 3441, 9740);
+  assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.PRAYER),
+    player.getSkillManager().getMaxLevel(core.Skill.PRAYER) + 2, 'the actual plane-1 altar restores and boosts Prayer');
+  await click(O.GROTTO_4, 3442, 9733);
+  assert.equal(player.getLocation().z, 0, 'the finished grotto has a working native exit');
 });

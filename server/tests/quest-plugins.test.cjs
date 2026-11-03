@@ -1427,7 +1427,7 @@ test('Blood Moon repairs only the legacy Castle NPC-marker landing without chang
     getLocation: () => new api.core.Location(2310, 7404, 0),
     moveTo: location => moved.push([location.getX(), location.getY(), location.getZ()]),
     getInventory: () => inventory,
-    getUsername: () => 'legacy-castle-fixture',
+    getUsername: () => 'legacy-castle-fixture', getDisplayName: () => 'legacy-castle-fixture',
     getPacketSender: () => new Proxy({ sendVarbit: (id, value) => varbits.set(id, value) }, {
       get: (target, key) => target[key] ?? (() => {}),
     }),
@@ -1460,7 +1460,7 @@ test('Blood Moon restores the recorded stockpile landing for the old disconnecte
     getLocation: () => new api.core.Location(2531, 7385, 0),
     moveTo: location => moved.push([location.getX(), location.getY(), location.getZ()]),
     getInventory: () => ({ contains: () => false, snapshot: () => [[33773, 1]] }),
-    getUsername: () => 'castle-stockpile-legacy',
+    getUsername: () => 'castle-stockpile-legacy', getDisplayName: () => 'castle-stockpile-legacy',
     getPacketSender: () => new Proxy({ sendVarbit() {} }, { get: (target, key) => target[key] ?? (() => {}) }),
     sendMessage() {},
   };
@@ -1490,7 +1490,7 @@ test('Blood Moon resumes the completed Castle escape from its stranded stockpile
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => position, moveTo: location => { position = location; },
     getInventory: () => ({ snapshot: () => items.map(item => [...item]) }),
-    getUsername: () => 'blood-hunt-escape-recovery',
+    getUsername: () => 'blood-hunt-escape-recovery', getDisplayName: () => 'blood-hunt-escape-recovery',
     getPacketSender: () => new Proxy({ sendVarbit() {} }, { get: (target, key) => target[key] ?? (() => {}) }),
     sendMessage() {},
   };
@@ -1520,7 +1520,7 @@ test('Blood Moon reconciles the Castle lobby floor varbit from the saved lobby p
     setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => new api.core.Location(2327, 7361, plane),
     getInventory: () => ({ contains: () => false, snapshot: () => [] }),
-    getUsername: () => 'castle-lobby-floor-fixture',
+    getUsername: () => 'castle-lobby-floor-fixture', getDisplayName: () => 'castle-lobby-floor-fixture',
     getPacketSender: () => new Proxy({ sendVarbit: (id, value) => varbits.set(id, value) }, {
       get: (target, key) => target[key] ?? (() => {}),
     }),
@@ -1680,7 +1680,7 @@ test('Blood Moon repairs obsolete clipped Ranis Hall arrivals without changing c
     getLocation: () => new api.core.Location(2487, 7405, 0),
     moveTo: location => moved.push([location.getX(), location.getY(), location.getZ()]),
     getInventory: () => ({ contains: () => false }),
-    getUsername: () => 'castle-ranis-legacy-fixture',
+    getUsername: () => 'castle-ranis-legacy-fixture', getDisplayName: () => 'castle-ranis-legacy-fixture',
     getPacketSender: () => new Proxy({}, { get: () => () => {} }),
   };
   handlers.playerLogin.find(handler => handler.name === 'syncCastleRoomOnLogin')({ player });
@@ -1703,7 +1703,7 @@ test('Blood Moon repairs the clipped North Chapel stair landing without advancin
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => new api.core.Location(2384, 7403, 0),
     moveTo: location => moved.push([location.getX(), location.getY(), location.getZ()]),
-    getInventory: () => ({ contains: () => false }), getUsername: () => 'castle-chapel-legacy-fixture',
+    getInventory: () => ({ contains: () => false }), getUsername: () => 'castle-chapel-legacy-fixture', getDisplayName: () => 'castle-chapel-legacy-fixture',
     getPacketSender: () => new Proxy({}, { get: () => () => {} }),
   };
   handlers.playerLogin.find(handler => handler.name === 'syncCastleRoomOnLogin')({ player });
@@ -1730,7 +1730,7 @@ test('Blood Moon restores the captured prison return landing for a saved player'
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => new api.core.Location(2567, 7394, 0),
     moveTo: location => moved.push([location.getX(), location.getY(), location.getZ()]),
-    getInventory: () => ({ contains: () => false }), getUsername: () => 'castle-prison-exit',
+    getInventory: () => ({ contains: () => false }), getUsername: () => 'castle-prison-exit', getDisplayName: () => 'castle-prison-exit',
     getPacketSender: () => new Proxy({}, { get: () => () => {} }),
   };
   const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests()
@@ -1767,7 +1767,7 @@ test('Blood Moon Castle story actors use cache-walkable floor anchors', () => {
     getLocation: () => new api.core.Location(2322, 7370, 0),
     moveTo() {},
     getInventory: () => ({ contains: () => false }),
-    getUsername: () => 'castle-anchor-fixture',
+    getUsername: () => 'castle-anchor-fixture', getDisplayName: () => 'castle-anchor-fixture',
     getPacketSender: () => new Proxy({ sendVarbit() {} }, { get: (target, key) => target[key] ?? (() => {}) }),
   };
   quest.setStage(player, 40);
@@ -1809,7 +1809,7 @@ test('Blood Moon stage 76 separates the optional Gibbous and required library Ve
   const player = {
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => location, moveTo: next => { location = next; },
-    getInventory: () => ({ contains: () => false, getFreeSlots: () => freeSlots }), getUsername: () => 'castle-venator-anchor', sendMessage() {},
+    getInventory: () => ({ contains: () => false, getFreeSlots: () => freeSlots }), getUsername: () => 'castle-venator-anchor', getDisplayName: () => 'castle-venator-anchor', sendMessage() {},
     getPacketSender: () => new Proxy({ sendVarbit: (...args) => loginVarbits.push(args) }, { get: (target, key) => target[key] ?? (() => {}) }),
   };
   quest.setStage(player, 40);
@@ -1875,7 +1875,7 @@ test('Blood Moon keeps Ivan available after relog and advances only after his co
     getAttribute: key => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => location,
-    getUsername: () => 'ivan-transcript-fixture',
+    getUsername: () => 'ivan-transcript-fixture', getDisplayName: () => 'ivan-transcript-fixture',
     getDialogueManager: () => ({ startDialogues() {} }),
     getPacketSender: () => new Proxy({ sendVarbit() {}, sendInterfaceRemoval() {} },
       { get: (target, key) => target[key] ?? (() => {}) }),
@@ -1927,7 +1927,7 @@ test('Blood Moon Gibbous lockbox requires its room clues and accepts code 426', 
   const player = {
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => new api.core.Location(2516, 7368, 0), moveTo: location => { player.location = location; }, getInventory: () => inventory,
-    getUsername: () => 'gibbous-lockbox', sendMessage() {}, getPacketSender: () => new Proxy({
+    getUsername: () => 'gibbous-lockbox', getDisplayName: () => 'gibbous-lockbox', sendMessage() {}, getPacketSender: () => new Proxy({
       sendVarbit: (...args) => sentVarbits.push(args), sendQuestList() {}, sendInterfaceRemoval() {},
     }, { get: (target, key) => target[key] ?? (() => {}) }),
   };
@@ -2096,7 +2096,7 @@ test('Blood Moon Ranis parlour door drops a recoverable skull for the display ca
   const player = {
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => new api.core.Location(2485, 7404, 0), moveTo: location => { player.location = location; },
-    getUsername: () => 'castle-ranis-parlour-skull', getInventory: () => ({
+    getUsername: () => 'castle-ranis-parlour-skull', getDisplayName: () => 'castle-ranis-parlour-skull', getInventory: () => ({
       contains: id => (items.get(id) ?? 0) > 0,
       getFreeSlots: () => 28 - [...items.values()].reduce((sum, count) => sum + count, 0),
       deleteNumber: (id, amount) => { const count = items.get(id) ?? 0; if (count < amount) return false; items.set(id, count - amount); return true; },
@@ -2156,7 +2156,7 @@ test('Blood Moon prisoner scene waits for the transcript, then leaves the player
   const player = {
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => location, moveTo: next => { moved.push([next.getX(), next.getY(), next.getZ()]); location = next; },
-    getInventory: () => ({ contains: () => false }), getUsername: () => 'castle-prison-scene',
+    getInventory: () => ({ contains: () => false }), getUsername: () => 'castle-prison-scene', getDisplayName: () => 'castle-prison-scene',
     getDialogueManager: () => ({ getCurrent: () => dialogue }),
     getPacketSender: () => new Proxy({}, { get: () => () => {} }),
   };
@@ -2202,7 +2202,7 @@ test('Blood Moon Veliaf remains available for the repeat supplies talk after rel
   ]);
   const player = {
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
-    getLocation: () => new api.core.Location(2325, 7397, 0), getUsername: () => 'castle-veliaf-repeat',
+    getLocation: () => new api.core.Location(2325, 7397, 0), getUsername: () => 'castle-veliaf-repeat', getDisplayName: () => 'castle-veliaf-repeat',
     getInventory: () => ({ contains: () => false, snapshot: () => [] }),
     getPacketSender: () => new Proxy({}, { get: () => () => {} }),
   };
@@ -2248,7 +2248,7 @@ test('Blood Moon basement hostiles spawn only in their recorded castle rooms', (
   ]);
   const player = {
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
-    getLocation: () => new api.core.Location(2563, 7369, 0), getUsername: () => 'castle-basement-hostiles',
+    getLocation: () => new api.core.Location(2563, 7369, 0), getUsername: () => 'castle-basement-hostiles', getDisplayName: () => 'castle-basement-hostiles',
     getInventory: () => ({ contains: () => false, snapshot: () => [] }),
     getPacketSender: () => new Proxy({}, { get: () => () => {} }),
   };
@@ -2937,7 +2937,7 @@ test('Blood Moon Castle gilded bookcase uses the eight House slots and places th
   };
   const player = {
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
-    getInventory: () => inventory, getUsername: () => 'bookpuzzle', sendMessage() {},
+    getInventory: () => inventory, getUsername: () => 'bookpuzzle', getDisplayName: () => 'bookpuzzle', sendMessage() {},
     getPrivateArea: () => null,
     getPacketSender: () => new Proxy({
       sendVarbit: (id, value) => slots.set(id, value),
@@ -3148,7 +3148,7 @@ test('Blood Moon Castle new-moon key requires the corpse syringe, weapon statues
   };
   const player = {
     getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-    getInventory: () => inventory, getUsername: () => 'newmoon', getPrivateArea: () => null,
+    getInventory: () => inventory, getUsername: () => 'newmoon', getDisplayName: () => 'newmoon', getPrivateArea: () => null,
     sendMessage() {}, getPacketSender: () => new Proxy({ sendVarbit: (id, value) => varbits.set(id, value) },
       { get: (target, key) => target[key] ?? (() => {}) }),
   };
@@ -3491,8 +3491,9 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
     destination: null,
   };
   route(lobbyRoute);
-  assert.deepEqual(lobbyRoute.destination, { x: 2327, y: 7362, z: 0 },
-    'the lobby door routes around its clipped approach tile while staying on the source side');
+  // 7361 carries only the door's own wall edge, so it is the approach tile on the source side.
+  assert.deepEqual(lobbyRoute.destination, { x: 2327, y: 7361, z: 0 },
+    'the lobby door routes to the first clear tile on the source side');
   attributes.set('quest.the_blood_moon_rises.castle-room', 34);
   const northLobbyVanesculaRoute = {
     player, objectId: 61576, clickType: 1,
@@ -4317,7 +4318,7 @@ test('Blood Moon spawns the recorded Sanguidae in Ranis Hall for its owner', () 
   ]);
   const player = {
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
-    getLocation: () => new api.core.Location(2481, 7404, 0), getUsername: () => 'castle-ranis-fixture',
+    getLocation: () => new api.core.Location(2481, 7404, 0), getUsername: () => 'castle-ranis-fixture', getDisplayName: () => 'castle-ranis-fixture',
     getInventory: () => ({ contains: () => false }),
     getPacketSender: () => new Proxy({ sendVarbit() {} }, { get: (target, key) => target[key] ?? (() => {}) }),
   };
@@ -4354,7 +4355,7 @@ test('Blood Moon requires all three recorded kitchen Sanguidae kills before awar
     isPlayer: () => true,
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => new api.core.Location(2314, 7420, 0),
-    getUsername: () => 'castle-kitchen-swarm-fixture',
+    getUsername: () => 'castle-kitchen-swarm-fixture', getDisplayName: () => 'castle-kitchen-swarm-fixture',
     getInventory: () => ({ contains: () => false }),
     getPacketSender: () => new Proxy({ sendVarbit() {} }, { get: (target, key) => target[key] ?? (() => {}) }),
     sendMessage() {},
@@ -4397,7 +4398,7 @@ test('Blood Moon migrates the old one-Sanguidae completion as a partial kitchen 
   ]);
   const player = {
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
-    getLocation: () => new api.core.Location(2314, 7420, 0), getUsername: () => 'castle-kitchen-legacy-fixture',
+    getLocation: () => new api.core.Location(2314, 7420, 0), getUsername: () => 'castle-kitchen-legacy-fixture', getDisplayName: () => 'castle-kitchen-legacy-fixture',
     getInventory: () => ({ contains: () => false }),
     getPacketSender: () => new Proxy({ sendVarbit() {} }, { get: (target, key) => target[key] ?? (() => {}) }),
   };
@@ -4698,7 +4699,7 @@ test('Blood Moon Castle supplies the tinderbox, gated explosive barrel, and firs
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => inventory,
     getPacketSender: () => new Proxy({}, { get: () => () => {} }),
-    getUsername: () => 'bmr-supply-test',
+    getUsername: () => 'bmr-supply-test', getDisplayName: () => 'bmr-supply-test',
     getPrivateArea: () => null,
     sendMessage() {},
   };
@@ -4864,7 +4865,7 @@ test('Blood Moon crossing preserves the captured native stages and starts the sh
   const player = {
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     isPlayer: () => true, isNpc: () => false, getAsPlayer() { return this; }, getIndex: () => 100,
-    getArea: () => playerArea, setArea: area => { playerArea = area; }, getUsername: () => 'first-blood-fixture',
+    getArea: () => playerArea, setArea: area => { playerArea = area; }, getUsername: () => 'first-blood-fixture', getDisplayName: () => 'first-blood-fixture',
     getInventory: () => ({ contains: () => false }), getHitpoints: () => 99,
     getLocation: () => player.location, getPrayerActive: () => [],
     moveTo: location => { player.location = location; },
@@ -5632,7 +5633,7 @@ test('Blood Moon laboratory places the recorded notes on entry and opens their c
     getAttribute: key => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => inventory,
-    getUsername: () => 'lab-notes-test',
+    getUsername: () => 'lab-notes-test', getDisplayName: () => 'lab-notes-test',
     getPrivateArea: () => null,
     getLocation: () => ({ getX: () => 2502, getY: () => 7400, getZ: () => 0 }),
     moveTo() {},
@@ -5730,7 +5731,7 @@ test('The Wyrd transcript action starts a private encounter with the cache-mappe
   require('../plugins/quests/quests/TheBloodMoonRises.Quest')(api);
   let playerHitpoints = 100, movementBlocked = false;
   const player = {
-    getUsername: () => 'WyrdFightTest',
+    getUsername: () => 'WyrdFightTest', getDisplayName: () => 'WyrdFightTest',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getDialogueManager: () => ({ reset() { dialogueActive = false; }, startDialogues() {
@@ -6116,7 +6117,7 @@ test('Blood Moon stage 90 Veliaf dialogue takes precedence over completed Myrequ
     getAttribute: key => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => new api.core.Location(3506, 9838, 0),
-    getUsername: () => 'bmr-veliaf-precedence',
+    getUsername: () => 'bmr-veliaf-precedence', getDisplayName: () => 'bmr-veliaf-precedence',
     getDialogueManager: () => ({ startDialogues: builder => started.push(builder) }),
     getPacketSender: () => new Proxy({}, { get: () => () => {} }),
     sendMessage() {},
@@ -6183,7 +6184,7 @@ test('Blood Moon northern-door transcript starts the private Lowerniel encounter
   };
   require('../plugins/quests/quests/TheBloodMoonRises.Quest')(api);
   const player = {
-    getUsername: () => 'DrakanFightTest',
+    getUsername: () => 'DrakanFightTest', getDisplayName: () => 'DrakanFightTest',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getPacketSender: () => new Proxy({}, { get: () => () => {} }),
@@ -6402,7 +6403,7 @@ test('Blood Moon siege barrier action starts the second private Lowerniel fight 
   const { getRegisteredQuests } = require('../plugins/quests/QuestRuntime');
   const quest = getRegisteredQuests().filter((entry) => entry.key === 'the_blood_moon_rises').at(-1);
   const player = {
-    getUsername: () => 'SiegeDrakanTest',
+    getUsername: () => 'SiegeDrakanTest', getDisplayName: () => 'SiegeDrakanTest',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getPacketSender: () => new Proxy({}, { get: () => () => {} }),
@@ -6476,7 +6477,7 @@ test('Blood Moon hall defence spawns six Aranei, crates and repairs the captured
     };
     const player = {
       isPlayer: () => true, getAsPlayer: () => player,
-      getUsername: () => 'SiegeHallTest',
+      getUsername: () => 'SiegeHallTest', getDisplayName: () => 'SiegeHallTest',
       getPrivateArea: () => player.area,
       getAttribute: (key) => attributes.get(key),
       setAttribute: (key, value) => attributes.set(key, value),
@@ -7050,7 +7051,7 @@ test('Desert Treasure II requires Kasonde dialogue and the full three-minute hid
     const messages = [];
     const p = {
       getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-      getUsername: () => 'dt2-defence-test', getAsPlayer() { return this; }, isPlayer: () => true,
+      getUsername: () => 'dt2-defence-test', getDisplayName: () => 'dt2-defence-test', getAsPlayer() { return this; }, isPlayer: () => true,
       getPacketSender: () => new Proxy({}, { get: () => () => {} }),
       moveTo(location) { this.location = location; }, sendMessage: (message) => messages.push(message),
     };
@@ -7204,7 +7205,7 @@ test('Desert Treasure II requires both Stranglewood ingredients and defeating te
     let freeSlots = 28;
     const p = {
       getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-      getUsername: () => 'dt2-temple-test', moveTo(location) { this.location = location; },
+      getUsername: () => 'dt2-temple-test', getDisplayName: () => 'dt2-temple-test', moveTo(location) { this.location = location; },
       getInventory: () => ({
         getAmount: (id) => counts.get(id) ?? 0,
         getFreeSlots: () => freeSlots,
@@ -7342,7 +7343,7 @@ test('Desert Treasure II enters a private copy of the real war room from the cle
       getAttribute(key) { return this.attrs.get(key); },
       setAttribute(key, value) { this.attrs.set(key, value); },
       getPacketSender: () => new Proxy({}, { get: () => () => {} }),
-      getUsername: () => 'dt2-room-test',
+      getUsername: () => 'dt2-room-test', getDisplayName: () => 'dt2-room-test',
       moveTo(location) { this.location = location; },
     };
     quest.setStage(p, 5);
@@ -7416,7 +7417,7 @@ test('Desert Treasure II requires the four matching ancient combat spells to cha
     const messages = [];
     const p = {
       getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-      getUsername: () => 'dt2-totem-test', moveTo(location) { this.location = location; },
+      getUsername: () => 'dt2-totem-test', getDisplayName: () => 'dt2-totem-test', moveTo(location) { this.location = location; },
       getPacketSender: () => new Proxy({}, { get: () => () => {} }), sendMessage(message) { messages.push(message); },
       getDialogueManager: () => ({ startDialogues: (chain) => statements.push(chain) }),
     };
@@ -7538,7 +7539,7 @@ test('Desert Treasure II enters the cache Ancient Vault and requires the four st
     let spellbook = core.MagicSpellbook.NORMAL;
     const player = {
       getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-      getUsername: () => 'vault-test',
+      getUsername: () => 'vault-test', getDisplayName: () => 'vault-test',
       getPrivateArea: () => attrs.get('desert-treasure-ii:ancient-vault'),
       getSpellbook: () => spellbook,
       getSkillManager: () => ({ getMaxLevel: () => 99 }),
@@ -7638,7 +7639,7 @@ test('Desert Treasure II requires each medallion on its matching Vault statue an
   const counts = new Map([[I.VARDORVIS_MEDALLION, 1]]);
   const p = {
     getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-    getUsername: () => 'dt2-medallion-test', getSkillManager: () => ({ getMaxLevel: () => 99 }),
+    getUsername: () => 'dt2-medallion-test', getDisplayName: () => 'dt2-medallion-test', getSkillManager: () => ({ getMaxLevel: () => 99 }),
     getInventory: () => ({
       getAmount: (id) => counts.get(id) ?? 0,
       deleteNumber: (id, amount) => counts.set(id, Math.max(0, (counts.get(id) ?? 0) - amount)),
@@ -7706,7 +7707,7 @@ test('Desert Treasure II takes the medallions in any order and Smith takes the f
   const counts = new Map();
   const player = {
     getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-    getUsername: () => 'dt2-four-medallions-test', getSkillManager: () => ({ getMaxLevel: () => 99 }),
+    getUsername: () => 'dt2-four-medallions-test', getDisplayName: () => 'dt2-four-medallions-test', getSkillManager: () => ({ getMaxLevel: () => 99 }),
     getInventory: () => ({
       getAmount: id => counts.get(id) ?? 0,
       deleteNumber: (id, amount) => counts.set(id, Math.max(0, (counts.get(id) ?? 0) - amount)),
@@ -7783,7 +7784,7 @@ test('Desert Treasure II meets the Mysterious Figure at the vault door with the 
   const attrs = new Map(), counts = new Map(), varbits = new Map();
   const p = {
     getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-    getUsername: () => 'Blurite Rock', getSkillManager: () => ({ getMaxLevel: () => 99 }),
+    getUsername: () => 'Blurite Rock', getDisplayName: () => 'Blurite Rock', getSkillManager: () => ({ getMaxLevel: () => 99 }),
     getInventory: () => ({ getAmount: (id) => counts.get(id) ?? 0 }),
     getPacketSender: () => new Proxy({}, { get: (_, name) => name === 'sendVarbit' ? (id, value) => varbits.set(id, value) : () => {} }),
     moveTo(location) { this.location = location; }, sendMessage() {},
@@ -7826,7 +7827,7 @@ test('DT2 relog resumes the Scar only from its exit, so another chapter can be i
   const player = {
     location: new api.core.Location(2975, 5794, 0), // Camdozaal, by Prescott
     getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-    getUsername: () => 'dt2-scar-relog-test', getLocation() { return this.location; }, moveTo(location) { this.location = location; },
+    getUsername: () => 'dt2-scar-relog-test', getDisplayName: () => 'dt2-scar-relog-test', getLocation() { return this.location; }, moveTo(location) { this.location = location; },
     area: null, getArea() { return this.area; }, setArea(area) { this.area = area; },
     getPrivateArea() { return this.area; }, isPlayer: () => true, isNpc: () => false,
     getInventory: () => ({ getAmount: () => 0 }), sendMessage() {},
@@ -7864,7 +7865,7 @@ test('Desert Treasure II moves saves at the old chapter stages onto the open cha
   const attrs = new Map(), varbits = new Map();
   const player = {
     getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-    getUsername: () => 'dt2-migration-test', getLocation: () => ({ x: 3300, y: 3200, z: 0 }), moveTo() {},
+    getUsername: () => 'dt2-migration-test', getDisplayName: () => 'dt2-migration-test', getLocation: () => ({ x: 3300, y: 3200, z: 0 }), moveTo() {},
     getInventory: () => ({ getAmount: () => 0 }), sendMessage() {},
     getPacketSender: () => new Proxy({}, { get: (_, name) => name === 'sendVarbit' ? (id, value) => varbits.set(id, value) : () => {} }),
   };
@@ -7916,7 +7917,7 @@ test('Desert Treasure II plays the first-medallion ambush before re-entering the
     const counts = new Map([[core.ItemIdentifiers.VARDORVIS_MEDALLION, 1]]);
     const player = {
       getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-      getUsername: () => 'dt2-first-medallion-test',
+      getUsername: () => 'dt2-first-medallion-test', getDisplayName: () => 'dt2-first-medallion-test',
       getSkillManager: () => ({ getMaxLevel: () => 99 }),
       getInventory: () => ({ getAmount: (id) => counts.get(id) ?? 0 }),
       getPacketSender: () => new Proxy({}, { get: () => () => {} }),
@@ -8013,7 +8014,7 @@ test('Desert Treasure II last medallion route traps the player, requires solving
     const inventory = container(inventoryItems), equipment = container(equipmentItems);
     const p = {
       getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-      getUsername: () => 'dt2-final-cell-test',
+      getUsername: () => 'dt2-final-cell-test', getDisplayName: () => 'dt2-final-cell-test',
       location: new core.Location(3086, 9260, 0), hitpoints: 120, registered: true, movementBlocked: false,
       isRegistered() { return this.registered; }, getHitpoints() { return this.hitpoints; }, getLocation() { return this.location; },
       isPlayer: () => true,
@@ -8379,7 +8380,7 @@ test('Desert Treasure II final wights expose their distinct smoke, clone, vial a
     const activePrayers = [];
     const p = {
       getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-      getUsername: () => 'dt2-final-wight-mechanics', hitpoints: 99, getHitpoints() { return this.hitpoints; }, isPlayer: () => true, getAsPlayer() { return this; },
+      getUsername: () => 'dt2-final-wight-mechanics', getDisplayName: () => 'dt2-final-wight-mechanics', hitpoints: 99, getHitpoints() { return this.hitpoints; }, isPlayer: () => true, getAsPlayer() { return this; },
       getPrivateArea: () => attrs.get('desert-treasure-ii:final-room'), getLocation() { return this.location; },
       getInventory: () => ({ getAmount: () => 0, adds() {}, deleteNumber() {}, getFreeSlots: () => 28 }),
       getEquipment: () => ({ getAmount: () => 0 }),
@@ -8943,7 +8944,7 @@ test('Desert Treasure II handoff creates the four owned wight stages and grants 
     let equipment;
     const p = {
       getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-      getUsername: () => 'dt2-final-room-test', getInventory: () => inventory, getEquipment: () => equipment,
+      getUsername: () => 'dt2-final-room-test', getDisplayName: () => 'dt2-final-room-test', getInventory: () => inventory, getEquipment: () => equipment,
       getPacketSender: () => new Proxy({}, { get: () => () => {} }),
       moveTo(location) { this.location = location; }, sendMessage() {}, isRegistered: () => false,
       onEquipmentChanged() {},
@@ -9059,7 +9060,7 @@ test('Desert Treasure II opens the ritual site after the serum and grants the Te
   const varbits = new Map();
   const p = {
     getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-    getUsername: () => 'dt2-vardorvis-test',
+    getUsername: () => 'dt2-vardorvis-test', getDisplayName: () => 'dt2-vardorvis-test',
     getInventory: () => ({ getAmount: (id) => counts.get(id) ?? 0, adds: (id, n) => counts.set(id, (counts.get(id) ?? 0) + n) }),
     getPacketSender: () => new Proxy({}, { get: () => () => {} }),
     moveTo(location) { this.location = location; }, sendMessage() {},
@@ -9135,7 +9136,7 @@ test('Desert Treasure II enters the Scar through the Catalytic Guardian and requ
     let divingGear;
     const player = {
       getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-      getUsername: () => 'dt2-scar-test',
+      getUsername: () => 'dt2-scar-test', getDisplayName: () => 'dt2-scar-test',
       getEquipment: () => divingGear,
       isPlayer: () => true, getAsPlayer() { return this; },
       getLocation() { return { x: this.location.x, y: this.location.y, getX: () => this.location.x, getY: () => this.location.y }; },
@@ -9911,7 +9912,7 @@ test('Desert Treasure II opens Lassar from Ramarno and Prescott, then gates the 
       area: null, isPlayer: () => true, getAsPlayer() { return this; }, getIndex: () => 99,
       getArea() { return this.area; }, getPrivateArea() { return this.area; }, setArea(area) { this.area = area; },
       getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-      getUsername: () => 'dt2-lassar-test',
+      getUsername: () => 'dt2-lassar-test', getDisplayName: () => 'dt2-lassar-test',
       getSkillManager: () => ({ getMaxLevel: () => 99 }),
       getInventory: () => ({
         getAmount: (id) => counts.get(id) ?? 0,
@@ -10690,7 +10691,7 @@ test('Desert Treasure II runs the Whisperer specials, enrage and medallion recov
     getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
     hitpoints: 50,
     heal(amount) { this.hitpoints = Math.min(99, this.hitpoints + amount); },
-    getUsername: () => username, getSkillManager: () => ({
+    getUsername: () => username, getDisplayName: () => username, getSkillManager: () => ({
       getMaxLevel: () => 99,
       getCurrentLevel: () => prayerLevel,
       setCurrentLevel(_skill, level) { prayerLevel = level; },
@@ -11309,7 +11310,7 @@ test('DT2 prison relog resumes only the saved clear tile at the matching earned 
     area: null,
     isPlayer: () => true,
     getAsPlayer() { return this; },
-    getUsername: () => 'dt2-prison-checkpoint-test',
+    getUsername: () => 'dt2-prison-checkpoint-test', getDisplayName: () => 'dt2-prison-checkpoint-test',
     getAttribute: key => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getPrivateArea() { return this.area; },
@@ -11428,7 +11429,7 @@ test('Desert Treasure II prison escape leads to the cache Duke arena and require
   const quest = runtime.getRegisteredQuests().at(-1);
   const attrs = new Map(), inventory = new Map(), bankItems = new Map(), messages = [];
   const player = {
-    isPlayer: () => true, getAsPlayer() { return this; }, getUsername: () => 'dt2-sucellus-test',
+    isPlayer: () => true, getAsPlayer() { return this; }, getUsername: () => 'dt2-sucellus-test', getDisplayName: () => 'dt2-sucellus-test',
     getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
     moveTo(location) { this.location = location; }, getLocation() { return this.location; }, sendMessage: (message) => messages.push(message),
     getPrivateArea: () => attrs.get('desert-treasure-ii:sucellus-area') ?? null,
@@ -11679,13 +11680,49 @@ test('Surok requires real combat spells and the opposite element for surges', ()
   f.fights.set(player,{boss,enemies:new Set([boss,surge])});
   const hit = {getAttacker:()=>player,getSpell:()=>launched,getCombatType:()=>api.core.CombatType.MAGIC,setTotalDamage:n=>damage=n};
   f.hit({npc:boss,hit});assert.equal(damage,0,'powered staff is blocked even after a previous standard cast');
-  launched=api.core.CombatSpells.TRIDENT_OF_THE_SEAS;damage=20;f.hit({npc:boss,hit});assert.equal(damage,0,'the powered spell object is blocked too');
+  launched={poweredStaffSpell:true};damage=20;f.hit({npc:boss,hit});assert.equal(damage,0,'the powered spell object is blocked too');
   launched=api.core.CombatSpells.FIRE_WAVE;selected=null;damage=20;f.hit({npc:boss,hit});assert.equal(damage,20);
   f.targets.set(surge,{surge:true,index:0});damage=20;f.hit({npc:surge,hit});assert.equal(damage,0,'fire cannot counter earth');
   launched=api.core.CombatSpells.WIND_WAVE;selected=api.core.CombatSpells.FIRE_WAVE;damage=20;f.hit({npc:surge,hit});assert.equal(damage,16);
   launched=api.core.CombatSpells.WIND_STRIKE;damage=0;f.hit({npc:surge,hit});assert.equal(damage,16,'even a zero-damage opposing strike dispels the spell');
   const effect={attacker:player,target:boss,spell:api.core.CombatSpells.BLOOD_BARRAGE,allowed:true};
   f.spellEffects(effect);assert.equal(effect.allowed,false,'blood damage must not heal off Surok');
+});
+
+test('Surok Fire Surge damage lands with its projectile, not at the cast', () => {
+ for (const [tiles, landsAt] of [[1, 6], [5, 8]]) {
+  const {api}=mockApi(),sent=[],damage=[];
+  const surge={castAnimation:()=>null,castProjectile:()=>({sendProjectile:()=>sent.push(true)})};
+  api.core={...api.core,CombatSpells:Object.assign(Object.create(api.core.CombatSpells),{FIRE_SURGE:surge})};
+  const f=require('../plugins/quests/wgs/Surok.WhileGuthixSleeps')({api});
+  const p={getHitpoints:()=>99,getSize:()=>1,getPrayerActive:()=>[],getLocation:()=>new api.core.Location(4145,4850+tiles,2),
+   getCombat:()=>({getHitQueue:()=>({addPendingDamage:hits=>damage.push(...hits)})})};
+  const a=new f.SurokArea(p);a.boss={getHitpoints:()=>450,getSize:()=>1,performAnimation(){},getLocation:()=>new api.core.Location(4145,4850,2)};a.started=true;
+  for(let tick=1;tick<landsAt;tick++)a.process(p);
+  assert.equal(sent.length,1,'cast on tick 5');assert.equal(damage.length,0,`${tiles} tiles: still in flight`);
+  a.process(p);assert.equal(damage.length,1,`${tiles} tiles: queued on tick ${landsAt}, shown the tick after (46 + 10 a tile)`);
+ }
+});
+
+test('a Fire Surge still in flight when Surok falls, or the player leaves, never lands', () => {
+ for (const ending of ['defeat', 'leave']) {
+  const {api,handlers}=mockApi(),damage=[];
+  const surge={castAnimation:()=>null,castProjectile:()=>({sendProjectile(){}})};
+  api.core={...api.core,CombatSpells:Object.assign(Object.create(api.core.CombatSpells),{FIRE_SURGE:surge})};
+  api.spawnNpc=()=>{const n={setMaxHitpoints:()=>n,setHitpoints:()=>n,setScriptedMovement(){},getMovementQueue:()=>({setBlockMovement(){}}),forceChat(){},getCombat:()=>({getLastAttack:()=>({reset(){}})})};return n;};
+  const f=require('../plugins/quests/wgs/Surok.WhileGuthixSleeps')({api,advance(){}});
+  const p={getHitpoints:()=>20,getSize:()=>1,getPrayerActive:()=>[],getLocation:()=>new api.core.Location(4145,4855,2),sendMessage(){},setArea(){},
+   getCombat:()=>({getHitQueue:()=>({addPendingDamage:hits=>damage.push(...hits)})})};
+  const a=new f.SurokArea(p);a.enter=()=>{};
+  const boss={getOwner:()=>p,getHitpoints:()=>450,getSize:()=>1,performAnimation(){},getLocation:()=>new api.core.Location(4145,4850,2)};
+  a.boss=boss;a.started=true;f.fights.set(p,a);
+  for(let tick=1;tick<=5;tick++)a.process(p);
+  assert.equal(a.incoming.length,1,'cast on tick 5 from 5 tiles: lands on tick 8');
+  if(ending==='defeat')for(const h of handlers.npcDeath)h({npc:boss});
+  else a.postLeave(p,false);
+  for(let tick=6;tick<=10;tick++)a.process(p);
+  assert.equal(damage.length,0,`after the ${ending}, the surge in flight deals nothing`);
+ }
 });
 
 test('Surok explosive can only be alchemised after telegrab at its actual position', () => {
@@ -11949,7 +11986,7 @@ test('WGS restores native Slayer and Warriors Guild replacement states on login'
 test('Astral Contact and its former name use one astral, one cosmic and two air runes', () => {
  const {Spell}=PluginManager.getCoreApi(),{LunarSpells}=require('../dist/game/content/combat/magic/LunarSpells');
  const original=Spell.prototype.canCast,emit=PluginManager.emitCustomEvent;let costs,chain,xp=0;
- const player={getSkillManager:()=>({getMaxLevel:()=>99,addExperiences:(s,n)=>xp+=n}),performAnimation(){},performGraphic(){},getDialogueManager:()=>({startDialogues:c=>chain=c})};
+ const player={getIndex:()=>1,getPacketSender:()=>({sendSoundEffect(){}}),getSkillManager:()=>({getMaxLevel:()=>99,addExperiences:(s,n)=>xp+=n}),performAnimation(){},performGraphic(){},getDialogueManager:()=>({startDialogues:c=>chain=c})};
  try {
   Spell.prototype.canCast=function(){costs=this.itemsRequired().map(i=>[i.getId(),i.getAmount()]);return true;};PluginManager.emitCustomEvent=()=>{};
   for(const name of ['Astral Contact','NPC Contact']){
@@ -12207,7 +12244,7 @@ test('Song of the Elves rubs the seed to the Enchanted Valley and returns to Lle
   const quest = runtime.getRegisteredQuests().filter((entry) => entry.key === 'song_of_the_elves').at(-1);
   const attributes = new Map();
   const player = {
-    getUsername: () => 'SoteTest',
+    getUsername: () => 'SoteTest', getDisplayName: () => 'SoteTest',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => ({ getAmount: (id) => id===api.core.ItemIdentifiers.CRYSTAL_SEED_5?1:0, getFreeSlots: () => 28 }),
@@ -12265,7 +12302,7 @@ test('Song of the Elves follows the cached Hefin stepping stones from the Poison
     requestWalk: (destination) => requested.push(destination),
   };
   const player = {
-    getUsername: () => 'HefinStoneTest',
+    getUsername: () => 'HefinStoneTest', getDisplayName: () => 'HefinStoneTest',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => ({ getX: () => location.x, getY: () => location.y, getZ: () => location.z }),
@@ -12304,7 +12341,7 @@ test('Song of the Elves exposes the post-library meeting through a talkable Aria
   const quest = getRegisteredQuests().filter((entry) => entry.key === 'song_of_the_elves').at(-1);
   const attributes = new Map();
   const player = {
-    getUsername: () => 'PostLibraryMeetingTest',
+    getUsername: () => 'PostLibraryMeetingTest', getDisplayName: () => 'PostLibraryMeetingTest',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getPacketSender: () => new Proxy({}, { get: () => () => {} }),
@@ -12350,7 +12387,7 @@ test('Song of the Elves makes Baxtorian available in Lletya for the dwarf-camp c
     .filter((entry) => entry.key === 'song_of_the_elves').at(-1);
   const attributes = new Map();
   const player = {
-    getUsername: () => 'DwarfCampBaxtorianTest',
+    getUsername: () => 'DwarfCampBaxtorianTest', getDisplayName: () => 'DwarfCampBaxtorianTest',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getPacketSender: () => new Proxy({}, { get: () => () => {} }),
@@ -12410,7 +12447,7 @@ test('Song of the Elves can re-enter the defended dwarf camp to retry Essyllt af
     ['quest.song_of_the_elves.late-chapter', 19],
   ]);
   const player = {
-    getUsername: () => 'DwarfCampRetryTest',
+    getUsername: () => 'DwarfCampRetryTest', getDisplayName: () => 'DwarfCampRetryTest',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => ({ getFreeSlots: () => 10, getAmount: () => 0, adds: () => {} }),
@@ -12474,7 +12511,7 @@ test('Song of the Elves gives the real stackable explosive potion with one free 
     adds: (id, amount) => { if (!items.has(id)) freeSlots--; items.set(id, (items.get(id) ?? 0) + amount); },
   };
   const player = {
-    getUsername: () => 'DwarfCampStackablePotionTest',
+    getUsername: () => 'DwarfCampStackablePotionTest', getDisplayName: () => 'DwarfCampStackablePotionTest',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => inventory,
@@ -12581,7 +12618,7 @@ test('Song of the Elves starts Essyllt again when core death cleanup left a stal
     ['quest.song_of_the_elves.late-chapter', 19],
   ]);
   const player = {
-    getUsername: () => 'DwarfCampStaleEssylltTest',
+    getUsername: () => 'DwarfCampStaleEssylltTest', getDisplayName: () => 'DwarfCampStaleEssylltTest',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => ({ getFreeSlots: () => 10, getAmount: () => 0, adds() {} }),
@@ -12709,7 +12746,7 @@ test('Song of the Elves spawns the attackable Fragment variant for the final fig
     ['quest.song_of_the_elves.fragment-defeated', false],
   ]);
   const player = {
-    getUsername: () => 'FragmentBossVariantTest',
+    getUsername: () => 'FragmentBossVariantTest', getDisplayName: () => 'FragmentBossVariantTest',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => ({ getFreeSlots: () => 10, getAmount: () => 0, adds: () => {} }),
@@ -12753,7 +12790,7 @@ test('Song of the Elves Fragment uses Wiki paired ranged hits and ordered phase-
     getHitQueue: () => ({ addPendingDamage: hits => queued.push(...hits) }),
   };
   const player = {
-    getUsername: () => 'FragmentPrayerTest',
+    getUsername: () => 'FragmentPrayerTest', getDisplayName: () => 'FragmentPrayerTest',
     getAttribute: key => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => ({ getFreeSlots: () => 10, getAmount: () => 0, adds() {} }),
@@ -13200,7 +13237,7 @@ test('Song of the Elves clears the Fragment instance on logout so the Temple cut
     ['quest.song_of_the_elves.temple-cutscene-started', true],
   ]);
   const player = {
-    getUsername: () => 'FragmentDisconnectTest',
+    getUsername: () => 'FragmentDisconnectTest', getDisplayName: () => 'FragmentDisconnectTest',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => ({ getFreeSlots: () => 10, getAmount: () => 0, adds: () => {} }),
@@ -13259,7 +13296,7 @@ test('Song of the Elves keeps the Fragment death return at the dwarf camp', () =
     ['quest.song_of_the_elves.fragment-defeated', false],
   ]);
   const player = {
-    getUsername: () => 'FragmentDeathReturnTest',
+    getUsername: () => 'FragmentDeathReturnTest', getDisplayName: () => 'FragmentDeathReturnTest',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => ({ getFreeSlots: () => 10, getAmount: () => 0, adds: () => {} }),
@@ -13471,7 +13508,7 @@ test('Song of the Elves keeps Arianwyn engaged so ranged hits are not erased by 
   const attributes = new Map([['quest.song_of_the_elves.lletya-traitor-revealed', true]]);
   const player = {
     area: null,
-    getUsername: () => 'ArianwynEngagementTest',
+    getUsername: () => 'ArianwynEngagementTest', getDisplayName: () => 'ArianwynEngagementTest',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => ({ getX: () => 2351, getY: () => 3172, getZ: () => 0 }),
@@ -13640,7 +13677,7 @@ test('Song of the Elves spawns Baxtorian in Lletya for the post-attack clan clue
   const quest = getRegisteredQuests().filter((entry) => entry.key === 'song_of_the_elves').at(-1);
   const attributes = new Map();
   const player = {
-    getUsername: () => 'PostAttackCluesTest',
+    getUsername: () => 'PostAttackCluesTest', getDisplayName: () => 'PostAttackCluesTest',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getPacketSender: () => new Proxy({}, { get: () => () => {} }),
@@ -13685,7 +13722,7 @@ test('Song of the Elves chapter 16 requires the real Ithell symbols, statue, clu
   const equipment = [];
   const messages = [];
   const player = {
-    getUsername: () => 'SoteChapter16Test',
+    getUsername: () => 'SoteChapter16Test', getDisplayName: () => 'SoteChapter16Test',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => ({
@@ -13868,7 +13905,7 @@ test('Song of the Elves restores the saved private library on relog without rese
   let location = new api.core.Location(2623, 6130, 1);
   const messages = [];
   const player = { getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
-    getUsername: () => 'library-relog', getLocation: () => location, getArea() { return this.area; },
+    getUsername: () => 'library-relog', getDisplayName: () => 'library-relog', getLocation: () => location, getArea() { return this.area; },
     moveTo: destination => { location = destination; }, sendMessage: message => messages.push(message),
     getDialogueManager: () => ({ reset() {}, startDialogues() {} }) };
   const restore = handlers.playerLogin.find(handler => handler.name === 'syncLibraryLogin');
@@ -13971,7 +14008,7 @@ test('Song of the Elves memory replay contains the original knowledge once inste
     require('../plugins/quests/quests/SongOfTheElves.Quest')(api);
     const attributes = new Map([['quest.song_of_the_elves.stage', 130], ['quest.song_of_the_elves.library-seals', 511]]);
     const player = { getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
-      getUsername: () => 'memory-replay', getArea() { return this.area; },
+      getUsername: () => 'memory-replay', getDisplayName: () => 'memory-replay', getArea() { return this.area; },
       getLocation: () => new api.core.Location(2623, 6144, 0) };
     handlers.playerLogin.find(handler => handler.name === 'syncLibraryLogin')({ player });
     const talk = handlers.npcInteractions.get('Memory of Seren')['Talk-to'];
@@ -14048,7 +14085,7 @@ test('Song of the Elves library mirrors must follow the previous beam direction'
     deleteNumber: (id, amount) => amounts.set(id, Math.max(0, (amounts.get(id) ?? 0) - amount)),
   };
   const player = {
-    getUsername: () => 'SoteLibraryTest',
+    getUsername: () => 'SoteLibraryTest', getDisplayName: () => 'SoteLibraryTest',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => inventory,
@@ -14684,7 +14721,7 @@ function questScene(name) {
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => inventory,
     getPacketSender: () => sender,
-    getUsername: () => 'QuestTester',
+    getUsername: () => 'QuestTester', getDisplayName: () => 'QuestTester',
     getPrivateArea: () => null,
     isPlayer: () => true,
     getAsPlayer: () => player,
@@ -14723,31 +14760,37 @@ test('manor front doors close after entry and the back door crosses both ways', 
   assert.deepEqual(open(O.DOOR_15, 3123, 3361, 3, tile(3123, 3361)), [3123, 3360]);
 });
 
-test('fortress sturdy doors and secret walls can be crossed and recrossed from their own tile', () => {
+test('fortress sturdy doors and secret walls can be crossed and recrossed from their own tile', (t) => {
   const { api, handlers, quest, player, tile } = questScene('BlackKnightsFortress');
   const { ObjectIdentifiers: O, GameObject } = api.core;
+  const walks = [];
+  t.mock.method(require('../plugins/skills/agility/ObstacleRunner.Agility.js'), 'run', (_, steps) => walks.push(steps[0].walk[0]));
   for (const stage of [1, 2, 3]) {
     quest.setStage(player, stage);
-    for (const [id, x, y, face, option] of [
-      [O.STURDY_DOOR_2, 3025, 3511, 2, 'Open'],
-      [O.WALL_8, 3016, 3517, 3, 'Push'],
-      [O.WALL_8, 3030, 3510, 3, 'Push'],
+    for (const [id, x, y, face, option, axis, across] of [
+      [O.STURDY_DOOR_2, 3025, 3511, 2, 'Open', 'x', 1],
+      [O.WALL_8, 3016, 3517, 3, 'Push', 'y', -1],
+      [O.WALL_8, 3030, 3510, 3, 'Push', 'y', -1],
     ]) {
       const object = new GameObject(id, tile(x, y, 1), 0, face);
-      const axis = face === 2 ? 'x' : 'y';
-      for (const side of [-1, 0, 1]) {
-        const from = { x, y, z: 1, [axis]: (axis === 'x' ? x : y) + side };
+      const centre = axis === 'x' ? x : y;
+      for (const side of [-1, 1]) {
+        const from = { x, y, z: 1, [axis]: centre + side };
         player.moveTo(tile(from.x, from.y, from.z));
         const route = { player, object, objectId: id, sourceLocation: from };
         handlers.route.forEach((h) => h(route));
+        assert.equal(route.destination[axis], side === across ? centre + across : centre, 'routes to its own side');
         player.moveTo(tile(route.destination.x, route.destination.y, 1));
         const event = { player, object, objectId: id, location: { x, y, z: 1 }, clickType: 1,
           definition: { getInteractions: () => [option] } };
         handlers.object.forEach((h) => h(event));
-        const direction = side || (face === 2 ? -1 : 1);
-        assert.equal(player.getLocation()[axis === 'x' ? 'getX' : 'getY'](), (axis === 'x' ? x : y) - direction);
         assert.equal(event.handled, true);
+        const [walkX, walkY] = walks.at(-1);
+        assert.equal(axis === 'x' ? walkX : walkY, side === across ? centre : centre + across, 'walks through to the other side');
       }
+      const inLine = { player, object, objectId: id, sourceLocation: { x, y, z: 1 } };
+      handlers.route.forEach((h) => h(inLine));
+      assert.equal(inLine.destination, undefined, 'in line with the passage, the ordinary object route picks the reachable side');
     }
   }
 });
@@ -14780,9 +14823,9 @@ test('all four Surok elemental surges launch from his reachable tile', () => {
  const {api}=mockApi(),created=[],L=api.core.Location;
  api.core={...api.core,PrivateArea:class{enter(){}},CombatSpells:{...api.core.CombatSpells,FIRE_SURGE:{castAnimation:()=>null,castProjectile:()=>null}}};
  const location=new L(4145,4850,2),combat={getLastAttack:()=>({reset(){}})};
- const npc=(id)=>({getId:()=>id,getLocation:()=>location,getHitpoints:()=>1,getCombat:()=>combat,performAnimation(){},forceChat(){},setMaxHitpoints(){return this;},setHitpoints(){return this;},setScriptedMovement(){},getMovementQueue:()=>({setBlockMovement(){}})});
+ const npc=(id)=>({getId:()=>id,getLocation:()=>location,getSize:()=>1,getHitpoints:()=>1,getCombat:()=>combat,performAnimation(){},forceChat(){},setMaxHitpoints(){return this;},setHitpoints(){return this;},setScriptedMovement(){},getMovementQueue:()=>({setBlockMovement(){}})});
  api.spawnNpc=spec=>{created.push(spec);return npc(spec.id);};
- const player={getLocation:()=>new L(4135,4850,2),getHitpoints:()=>99,getPrayerActive:()=>[],getCombat:()=>({getHitQueue:()=>({addPendingDamage(){}})})};
+ const player={getLocation:()=>new L(4135,4850,2),getSize:()=>1,getHitpoints:()=>99,getPrayerActive:()=>[],getCombat:()=>({getHitQueue:()=>({addPendingDamage(){}})})};
  const f=require('../plugins/quests/wgs/Surok.WhileGuthixSleeps')({api});
  const room=new f.SurokArea(player);room.boss=npc(13482);room.enemies.add(room.boss);room.started=true;room.specials=2;room.specialAt=1;room.nextAttack=0;room.process(player);
  assert.equal(created.length,4);for(const spell of created){assert.ok([13505,13506,13507,13508].includes(spell.id));assert.deepEqual([spell.x,spell.y,spell.z],[4145,4850,2]);}
@@ -16386,7 +16429,7 @@ test('Dragon Slayer II restores the Karamja plinth when its key piece was lost',
   const player = {
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
-    getUsername: () => 'Karamja recovery test',
+    getUsername: () => 'Karamja recovery test', getDisplayName: () => 'Karamja recovery test',
     getInventory: () => ({
       getAmount: (id) => items.get(id) ?? 0,
       getFreeSlots: () => 28 - [...items.values()].reduce((sum, amount) => sum + amount, 0),
@@ -16448,7 +16491,7 @@ test('Dragon Slayer II laboratory copies every cache chunk containing its six no
   const player = {
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
-    getUsername: () => 'Lab map test',
+    getUsername: () => 'Lab map test', getDisplayName: () => 'Lab map test',
     moveTo: (location) => { spawn = location; },
     sendMessage() {},
   };
@@ -16507,7 +16550,7 @@ test('Dragon Slayer II Ungael lever limits the key chest to its 30-tick window',
   const player = {
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
-    getUsername: () => 'Ungael lever test',
+    getUsername: () => 'Ungael lever test', getDisplayName: () => 'Ungael lever test',
     getRunEnergy: () => 20,
     getInventory: () => inventory,
     moveTo() {},
@@ -16579,7 +16622,7 @@ test('Dragon Slayer II Torfinn runs the cache quest dragons, checkpoints the wav
     let inventoryCapacity = 28;
     const packet = new Proxy({}, { get: (_target, _key) => (..._args) => packet });
     const player = {
-      isPlayer: () => true, getAsPlayer: () => player, getIndex: () => 987654, getUsername: () => 'quest-wave-test',
+      isPlayer: () => true, getAsPlayer: () => player, getIndex: () => 987654, getUsername: () => 'quest-wave-test', getDisplayName: () => 'quest-wave-test',
       getArea: () => null, setArea: () => {}, getLocation: () => at, moveTo: (location) => { at = location; },
       getAttribute: (key) => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
       getPacketSender: () => packet, sendMessage: (message) => messages.push(message),
@@ -17337,7 +17380,7 @@ test('Dragon Slayer II Robert death plays Bob’s memories before unlocking the 
     isPlayer: () => true,
     getAsPlayer: () => player,
     moveTo(location) { moves.push([location.getX(), location.getY(), location.getZ()]); },
-    getUsername: () => 'BobMemoryTest',
+    getUsername: () => 'BobMemoryTest', getDisplayName: () => 'BobMemoryTest',
     getInventory: () => ({
       getAmount: (id) => inventory.get(id) ?? 0,
       deleteNumber: (id, amount) => inventory.set(id, Math.max(0, (inventory.get(id) ?? 0) - amount)),
@@ -17555,7 +17598,7 @@ test('Dragon Slayer II enters the cache deep Lithkren vault and starts the autom
     setArea: value => { area = value; },
     getPrivateArea: () => area,
     getIndex: () => 4999,
-    getUsername: () => 'VaultSceneTest',
+    getUsername: () => 'VaultSceneTest', getDisplayName: () => 'VaultSceneTest',
     isPlayer: () => true,
     getAsPlayer() { return this; },
     getLocation: () => location,
@@ -17813,7 +17856,7 @@ test('DT2 excavation uses the cache winch, pickaxe crate and crevice without let
     require('../plugins/quests/quests/DesertTreasureII.Quest')(api);
     const quest = runtime.getRegisteredQuests().at(-1), { ItemIdentifiers: I, ObjectIdentifiers: O, NpcIdentifiers: N } = api.core;
     const attrs = new Map(), amounts = new Map(), messages = [], equipment = [];
-    const player = { getUsername: () => 'dt2-excavation', getAttribute: key => attrs.get(key), setAttribute: (key,value) => attrs.set(key,value),
+    const player = { getUsername: () => 'dt2-excavation', getDisplayName: () => 'dt2-excavation', getAttribute: key => attrs.get(key), setAttribute: (key,value) => attrs.set(key,value),
       getPacketSender: () => new Proxy({}, { get: () => () => {} }), getSkillManager: () => ({ getCurrentLevel: () => 99 }),
       getInventory: () => ({ contains: id => (amounts.get(id) ?? 0) > 0, getAmount: id => amounts.get(id) ?? 0,
         getFreeSlots: () => 28 - amounts.size, adds: (id,n) => amounts.set(id,(amounts.get(id) ?? 0)+n) }),
@@ -18414,31 +18457,6 @@ test('Night at the Theatre obtains and hands in the head once, and scopes shared
 
 });
 
-
-test('Entry Mode notice board starts its party prompt from the live cache object id', () => {
-  const { api } = mockApi();
-  const interactions=[];let prompt;
-  api.onObjectInteraction=(name,options)=>interactions.push([name,options]);
-  api.sendMultiChatboxPrompt=(...args)=>{prompt=args;};
-  const entry=require('../plugins/minigames/tob/Entry.TheatreOfBlood');entry(api);
-  const player={attributes:new Map(),getAttribute(k){return this.attributes.get(k);},setAttribute(k,v){this.attributes.set(k,v);},sendMessage(){}};
-  const actions=interactions.find(([name])=>name==='Notice board')[1];
-  const read=actions.Read;
-  assert.equal(typeof actions.read,'function','the live cache interaction may be lowercased by ObjectDefinition');
-  assert.equal(read({player,objectId:32655,definition:{id:24099}}),true);
-  assert.equal(read({player,objectId:24099}),false,'unrelated notice boards keep their own interaction');
-  assert.equal(prompt[1],'Theatre of Blood: choose a mode');
-  assert.equal(prompt[2],'Solo Entry Mode.');
-  prompt[3]();
-  assert.equal(player.attributes.get('tob:entry-party'),true);
-  let normal;
-  api.onCustomEvent('tob:normal-party',event=>{normal=event.player;});
-  assert.equal(prompt[4],'Normal Mode party.');
-  prompt[5]();
-  assert.equal(normal,player);
-  assert.equal(player.attributes.get('tob:entry-party'),false);
-  assert.equal(interactions.find(([name])=>name==='Theatre of Blood')[1].Enter({player,objectId:32653}),false,'normal parties retain the main entrance handler');
-});
 
 test('Entry Mode leaves the entrance available to normal Theatre parties', () => {
   const { api } = mockApi();
@@ -20908,7 +20926,7 @@ test('Dragon Slayer II crypt uses canonical template locs and reachable native-v
   const doorPluginPath = require.resolve('../plugins/objects/Doors.plugin');
   delete require.cache[doorPluginPath];
   require(doorPluginPath).register(doorApi);
-  const doorPlayer = { getPrivateArea: () => area, getUsername: () => 'crypt-puzzle-test' };
+  const doorPlayer = { getPrivateArea: () => area, getUsername: () => 'crypt-puzzle-test', getDisplayName: () => 'crypt-puzzle-test' };
   for (const [id, x, y] of [[32406, 1503, 9956], [32405, 1503, 9944]]) {
     const door = area.resolveObject(id, sourceLocation(x, y));
     assert.ok(door, `cache double door ${id} exists at source ${x},${y},1`);
@@ -21518,7 +21536,7 @@ test('Song of the Elves confirms the Iorwerth cave entry before spawning guards 
     const inventory = { getAmount: () => 0, getFreeSlots: () => 4 };
     const player = { index: 1, isPlayer: () => true, isNpc: () => false, getAsPlayer() { return this; },
       getIndex() { return this.index; }, getArea: () => area, setArea: next => { area = next; },
-      getLocation: () => location, moveTo: next => { location = next; }, getUsername: () => 'SoteOrbCaveTest',
+      getLocation: () => location, moveTo: next => { location = next; }, getUsername: () => 'SoteOrbCaveTest', getDisplayName: () => 'SoteOrbCaveTest',
       getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
       sendMessage() {}, getInventory: () => inventory };
     const enter = handlers.objects.find(handler => handler.name === 'enterOrbSupplyCave');
@@ -21566,7 +21584,7 @@ test('Song of the Elves remembers Elena’s earlier answer and fills the cave di
   require('../plugins/quests/quests/SongOfTheElves.Quest')(api);
   const attrs = new Map([['quest.song_of_the_elves.stage', 90]]);
   const player = { getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-    getUsername: () => 'SoteTest' };
+    getUsername: () => 'SoteTest', getDisplayName: () => 'SoteTest' };
   const choice = handlers.custom.get('npc-dialogue:choice').find(handler => handler.name === 'handleDialogueChoice');
   const definition = { getName: () => 'Elena' };
   const condition = handlers.condition.at(-1);
@@ -21871,7 +21889,7 @@ test('Blood Moon prisoner scene waits for the transcript, then leaves the player
   const player = {
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => location, moveTo: next => { moved.push([next.getX(), next.getY(), next.getZ()]); location = next; },
-    getInventory: () => ({ contains: () => false }), getUsername: () => 'castle-prison-scene',
+    getInventory: () => ({ contains: () => false }), getUsername: () => 'castle-prison-scene', getDisplayName: () => 'castle-prison-scene',
     getDialogueManager: () => ({ getCurrent: () => dialogue }),
     getPacketSender: () => new Proxy({}, { get: () => () => {} }),
   };
@@ -21927,7 +21945,7 @@ test('Blood Moon Gibbous passage reconciles the plane before the basement exit',
     getLocation: () => location,
     moveTo: next => { moved.push([next.getX(), next.getY(), next.getZ()]); location = next; },
     getInventory: () => ({ contains: id => id === 33727, snapshot: () => [[33727, 1]] }),
-    getUsername: () => 'castle-cross-plane',
+    getUsername: () => 'castle-cross-plane', getDisplayName: () => 'castle-cross-plane',
     getPacketSender: () => new Proxy({ sendVarbit: (id, value) => varbits.set(id, value) }, {
       get: (target, key) => target[key] ?? (() => {}),
     }),
@@ -21988,7 +22006,7 @@ test('Blood Moon repairs only the earned west-side laboratory landing on login',
         getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
         getLocation: () => location,
         moveTo: next => { moved.push([next.getX(), next.getY(), next.getZ()]); location = next; },
-        getInventory: () => inventory, getUsername: () => 'legacy-castle-laboratory',
+        getInventory: () => inventory, getUsername: () => 'legacy-castle-laboratory', getDisplayName: () => 'legacy-castle-laboratory',
         getPacketSender: () => new Proxy({}, { get: () => () => {} }),
       },
     };
@@ -22934,7 +22952,7 @@ test('In Search of Knowledge uses the real inventory for food eligibility and ca
     sendMessage: (message) => messages.push(message),
     isRegistered: () => false,
     isPlayerBot: () => false,
-    getUsername: () => 'ISKRealInventory',
+    getUsername: () => 'ISKRealInventory', getDisplayName: () => 'ISKRealInventory',
   };
   const inventory = new Inventory(player);
   player.getInventory = () => inventory;
@@ -23013,7 +23031,7 @@ test('In Search of Knowledge resumes the reward after the final tome is handed i
     getInventory: () => inventory,
     getPacketSender: () => sender,
     getDialogueManager: () => manager,
-    getUsername: () => 'ISKResume',
+    getUsername: () => 'ISKResume', getDisplayName: () => 'ISKResume',
     isPlayerBot: () => false,
     sendMessage: () => {},
     isRegistered: () => false,

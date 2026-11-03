@@ -44,5 +44,11 @@
   "tackleBait": [
     "Fishing bait", "Dark fishing bait", "Raw karambwanji", "Feather", "Stripy feather", "Fish offcuts",
     "Fine fish offcuts", "Molch pearl", "Shark lure", "Sandworms", "Diabolic worms", "Spirit flakes"
+  ],
+  "_forestryKitPouchItems": "Enum 817 items the Forestry kit takes only with the clothes pouch (the Lumberjack and Forestry outfits) or the cape pouch (the Woodcutting cape) installed (Wiki: Forestry kit). By gameval.",
+  "forestryKitPouchItems": [
+    "ramble_lumberjack_top", "ramble_lumberjack_legs", "ramble_lumberjack_hat", "ramble_lumberjack_boots",
+    "forestry_lumberjack_top", "forestry_lumberjack_legs", "forestry_lumberjack_hat", "forestry_lumberjack_boots",
+    "skillcape_woodcutting", "skillcape_woodcutting_trimmed"
   ]
 }

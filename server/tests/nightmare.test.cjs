@@ -190,3 +190,26 @@ test("Sister Senga's introduction never leaves an action mid-chain, and sets its
   assert.deepEqual(varbits, [Common.data.varbits.phosaniSkipIntro, Common.data.varbits.phosaniIntro]);
   assert.equal(player.getAttribute(Common.PHOSANI_INTRO_ATTRIBUTE), true);
 });
+
+test("husk hits land with their captured projectiles (#1862)", (t) => {
+  fakeApi.core.Projectile = { ticksToLand: (end) => Math.max(1, Math.ceil(end / 30)) };
+  t.after(() => { delete fakeApi.core.Projectile; });
+  const Husks = require("../plugins/bosses/nightmare/Husks.Nightmare");
+  const shots = [];
+  const strikes = [];
+  t.mock.method(Common, "projectile", (_area, _from, _to, spec) => shots.push(spec));
+  t.mock.method(Common, "strike", (_npc, _player, style, _max, delay) => strikes.push([style, delay]));
+  for (const name of ["animation", "graphic", "areaSound"]) t.mock.method(Common, name, () => ({}));
+  const player = { getLocation: () => ({}), performGraphic: () => {} };
+  const husk = (style) => ({
+    __nightmareHusk: { style, player, next: 0 },
+    isRegistered: () => true, getHitpoints: () => 20, getLocation: () => ({}),
+    performAnimation: () => {}, setPositionToFace: () => {},
+  });
+  const fight = { tick: 10, dream: { area: null }, players: () => [], frozen: new Map([[player, [husk("magic"), husk("ranged")]]]) };
+  Husks.process(fight);
+  const { husks } = Common.data;
+  assert.deepEqual(shots, [husks.magic.projectile, husks.ranged.projectile]);
+  // Magic lands at 67 cycles (3 ticks), ranged at 60 (2), not a tick out.
+  assert.deepEqual(strikes, [["magic", 3], ["ranged", 2]]);
+});

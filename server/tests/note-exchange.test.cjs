@@ -22,7 +22,45 @@ const phials = { fee: 5 };
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
-  NoteExchange.register({ core, onItemOnNpc: () => {} });
+  NoteExchange.register(PluginManager.createApi('NoteExchangeTest'));
+});
+
+test('the Chaos druid remembers a native Exchange X amount for later exchanges', async t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
+    close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setIndex(500); p.setRegistered(true); p.setUsername('exchangenative');
+  const connection = new ClientConnection(channel); connection.player = p;
+  t.after(() => { p.closeInterruptibleInterfaces(); p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); });
+  p.getInventory().adds(BONES_NOTE, 50); p.getInventory().adds(COINS, 10000);
+  const npc = new core.NPC(core.NpcIdentifiers.ELDER_CHAOS_DRUID_2, p.getLocation());
+  const open = () => PluginManager.emitItemOnNpc({ player: p, target: npc, npcId: npc.getId(), itemId: BONES_NOTE,
+    item: p.getInventory().get(p.getInventory().getSlotForItemId(BONES_NOTE)), handled: false });
+  const choose = async childIndex => {
+    await connection.dispatch([{ type: 'dialogue_continue', widgetId: core.OptionDialogue.OPTIONS_WIDGET_ID, childIndex }]);
+    connection.processTurnPackets();
+  };
+  const input = async amount => { await connection.dispatch([{ type: 'dialogue_amount', amount }]); connection.processTurnPackets(); };
+  assert.equal(open(), true);
+  assert.equal(p.getDialogueManager().getCurrent().getOptions()[1], 'Exchange 5 (250 coins).');
+  await choose(4); await input(7);
+  assert.equal(p.getInventory().getAmount(BONES), 7);
+  assert.equal(p.getInventory().getAmount(COINS), 9650);
+  p.getInventory().deleteNumber(BONES, 7);
+  open();
+  assert.equal(p.getDialogueManager().getCurrent().getOptions()[1], 'Exchange 7 (350 coins).');
+  await choose(2);
+  assert.equal(p.getInventory().getAmount(BONES), 7, 'the shortcut repeats the chosen amount');
+  p.getInventory().deleteNumber(BONES, 7);
+  open(); await choose(4);
+  p.getPacketSender().sendInterfaceRemoval(); await input(12);
+  open();
+  assert.equal(p.getDialogueManager().getCurrent().getOptions()[1], 'Exchange 7 (350 coins).', 'cancelled X cannot overwrite it');
+  await choose(4); await input(1000);
+  assert.equal(p.getInventory().getAmount(BONES), 26, 'a remembered request remains capped by available inventory space');
 });
 
 /** Stacks of [id, amount], one per slot; the rest of the 28 slots are free. */

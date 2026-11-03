@@ -64,7 +64,7 @@ export class GroundItemsPlugin extends Plugin {
         name: "Ground Items",
         description: "Highlight ground items and/or show price information",
         tags: ["grand", "exchange", "high", "alchemy", "prices", "highlight", "overlay"],
-        enabledByDefault: true,
+        enabledByDefault: false,
         configKey: "grounditemsplugin",
     };
 

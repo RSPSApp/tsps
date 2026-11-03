@@ -87,7 +87,7 @@ function makePlayer() {
       hasStaffEquipped: () => false,
       getWeapon: () => ({ getId: () => weapon }),
     }),
-    getUsername: () => 'q061-test',
+    getUsername: () => 'q061-test', getDisplayName: () => 'q061-test',
     getIndex: () => 1,
     getPrivateArea: () => null,
     getPacketSender: () => sender,

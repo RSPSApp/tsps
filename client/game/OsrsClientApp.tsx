@@ -104,8 +104,8 @@ function OsrsClientApp() {
     const [graphicsLost, setGraphicsLost] = useState(false);
     const loginUnsubscribers = useMemo<Array<LoginUnsubscriber>>(() => [], []);
     useViewportCssVars();
-    // Phones only (not iPad): CSS-rotate when portrait + try orientation.lock.
-    // Enabled from login onward — portrait layout is unusable for the classic UI.
+    // Phones only (not iPad): CSS-rotate when portrait + try orientation.lock, unless the
+    // Portrait Mode plugin is on, which lays the game out upright instead.
     const safariLandscapeLock = useSafariLandscapeLock(checkMobile());
 
     // A lost WebGL context is never rebuilt, so the canvas goes blank while the game keeps

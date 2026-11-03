@@ -32,6 +32,8 @@ module.exports = function registerLostCityQuest(api) {
     ObjectIdentifiers,
     Equipment,
     Location,
+    Animation,
+    CacheDefinitions,
   } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
 
@@ -358,10 +360,16 @@ module.exports = function registerLostCityQuest(api) {
       event.handled = true;
       return;
     }
-    player.getInventory().adds(DRAMEN_BRANCH_ITEM_ID, 1);
-    if (stage === STAGE_SPIRIT_DEFEATED) quest.setStage(player, STAGE_TREE_CHOPPED);
-    player.sendMessage("You cut a branch from the Dramen tree.");
+    api.emitCustomEvent("woodcutting:chop", {
+      player, object: event.object, logId: DRAMEN_BRANCH_ITEM_ID, handled: false,
+    });
     event.handled = true;
+  }
+
+  function handleWoodcuttingSuccess({ player, logId }) {
+    if (logId === DRAMEN_BRANCH_ITEM_ID && quest.getStage(player) === STAGE_SPIRIT_DEFEATED) {
+      quest.setStage(player, STAGE_TREE_CHOPPED);
+    }
   }
 
   function handleStaffCraft(event) {
@@ -373,6 +381,7 @@ module.exports = function registerLostCityQuest(api) {
       event.handled = true;
       return;
     }
+    player.performAnimation(new Animation(CacheDefinitions.getSeqId("human_fletching")));
     player.getInventory().deleteNumber(DRAMEN_BRANCH_ITEM_ID, 1);
     player.getInventory().adds(DRAMEN_STAFF_ITEM_ID, 1);
     if (quest.getStage(player) === STAGE_TREE_CHOPPED) quest.setStage(player, STAGE_STAFF_MADE);
@@ -453,6 +462,7 @@ module.exports = function registerLostCityQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onCustomEvent("ladders:climb", claimEntranaLadder);
+  api.onCustomEvent("woodcutting:success", handleWoodcuttingSuccess);
   api.onNpcDeath(handleTreeSpiritDeath);
   api.onPlayerLogout(handleLogout);
   api.onObjectInteraction(handleTreeChop);

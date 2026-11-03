@@ -1,38 +1,27 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 
 import type { OsrsClient } from "../../OsrsClient";
 import { IndexType } from "../../../rs/cache/IndexType";
 import { SpriteLoader } from "../../../rs/sprite/SpriteLoader";
 import { spriteToCanvas } from "../../../ui/item/ItemIcon";
-import { VENGEANCE_TIME_LIMIT_VARBIT, type VengeanceTimerPlugin } from "./VengeanceTimerPlugin";
+import { showAllTimers } from "../../../common/utils/DeviceUtil";
+import type { VengeanceTimer } from "./VengeanceTimer";
 import "./VengeanceTimerOverlay.css";
+import { mobileCombatTimerStyle } from "../../widgets/MobileHudLayout";
+import "../../widgets/MobileHudLayout.css";
 
 const VENGEANCE_SPRITE_ID = 564;
 
 export function VengeanceTimerOverlay({
     osrsClient,
     plugin,
+    now,
 }: {
     osrsClient: OsrsClient;
-    plugin: VengeanceTimerPlugin;
+    plugin: VengeanceTimer;
+    now: number;
 }): JSX.Element | null {
-    const subscribe = useCallback((listener: () => void) => plugin.subscribe(listener), [plugin]);
-    const getSnapshot = useCallback(() => plugin.getState(), [plugin]);
-    const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-    const [now, setNow] = useState(Date.now());
     const [iconUrl, setIconUrl] = useState<string>();
-
-    useEffect(() => {
-        const sync = () => {
-            const value = osrsClient.varManager?.getVarbit(VENGEANCE_TIME_LIMIT_VARBIT) ?? 0;
-            plugin.syncCooldownVarbit(value);
-            setNow(Date.now());
-        };
-
-        sync();
-        const interval = window.setInterval(sync, 200);
-        return () => window.clearInterval(interval);
-    }, [osrsClient, plugin]);
 
     useEffect(() => {
         if (!osrsClient.loadedCache || !osrsClient.cacheSystem) {
@@ -49,16 +38,15 @@ export function VengeanceTimerOverlay({
 
     const remaining = plugin.getRemainingSeconds(now);
     if (
-        !state.config.enabled ||
-        state.cooldownEndsAt === null ||
-        remaining <= 0 ||
+        (!showAllTimers && remaining <= 0) ||
         osrsClient.isOnLoginScreen()
     ) {
         return null;
     }
 
+    const mobileStyle = mobileCombatTimerStyle(osrsClient, 5);
     return (
-        <div className="vengeance-timer-infobox" title="Vengeance cooldown">
+        <div className={`vengeance-timer-infobox${mobileStyle ? " mobile-combat-timer" : ""}`} style={mobileStyle} title="Vengeance cooldown">
             {iconUrl ? (
                 <img src={iconUrl} alt="" className="vengeance-timer-icon" />
             ) : (

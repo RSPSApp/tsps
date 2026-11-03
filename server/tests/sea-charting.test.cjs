@@ -87,7 +87,7 @@ function captain({ level = 99 } = {}) {
     isNpc: () => false,
     isRegistered: () => true,
     getAsPlayer: () => player,
-    getUsername: () => "captain",
+    getUsername: () => "captain", getDisplayName: () => "captain",
     getRights: () => 0,
     sendMessage: (message) => sent.push(["sendMessage", message]),
     performAnimation: (animation) => animations.push(animation.getId?.() ?? animation.id ?? animation),

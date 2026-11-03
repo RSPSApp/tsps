@@ -61,6 +61,10 @@ function createRevenantCombat(core) {
 
   const prays = (target, prayer) => target.isPlayer() && PrayerHandler.isActivated(target, prayer);
 
+  // Where each projectile lands (captured launches, 10 cycles a tile); its hit lands with it.
+  const magicEnd = (npc, target) => Projectile.arrivalCycles(npc, target, MAGIC.delay - 5);
+  const rangedEnd = (npc, target) => Projectile.arrivalCycles(npc, target, RANGED.delay + 7);
+
   const STYLES = { melee: CombatType.MELEE, magic: CombatType.MAGIC, ranged: CombatType.RANGED };
 
   function styleAgainst(npc, target) {
@@ -116,10 +120,10 @@ function createRevenantCombat(core) {
       if (this.style === CombatType.MAGIC) {
         Sounds.sendSound(npc, new Sound(MAGIC.castSound, 1, 0, 0));
         Projectile.createProjectile(npc, target, MAGIC.projectile, MAGIC.delay,
-          Projectile.arrivalCycles(npc, target, MAGIC.delay - 5), MAGIC.startHeight, MAGIC.endHeight).sendProjectile();
+          magicEnd(npc, target), MAGIC.startHeight, MAGIC.endHeight).sendProjectile();
       } else if (this.style === CombatType.RANGED) {
         Projectile.createProjectile(npc, target, RANGED.projectile, RANGED.delay,
-          Projectile.arrivalCycles(npc, target, RANGED.delay + 7), RANGED.startHeight, RANGED.endHeight)
+          rangedEnd(npc, target), RANGED.startHeight, RANGED.endHeight)
           .withProgress(RANGED.progress).sendProjectile();
       }
     }
@@ -127,10 +131,8 @@ function createRevenantCombat(core) {
     hits(npc, target) {
       if (this.healing) return [];
       if (this.style === CombatType.MELEE) return [this.hit(npc, target, 0)];
-      const distance = npc.calculateDistance(target);
-      const delay = this.style === CombatType.MAGIC
-        ? 1 + Math.floor((1 + distance) / 3)
-        : 1 + Math.floor((3 + distance) / 6);
+      // The player's Wiki hit delays hit a tick or two before the revenant's slower projectiles landed.
+      const delay = Projectile.ticksToLand(this.style === CombatType.MAGIC ? magicEnd(npc, target) : rangedEnd(npc, target));
       if (this.style === CombatType.RANGED) return [this.hit(npc, target, delay)];
       const victims = [target, ...othersOnTile(target)];
       return victims.map((victim) => this.magicHit(npc, victim, delay));

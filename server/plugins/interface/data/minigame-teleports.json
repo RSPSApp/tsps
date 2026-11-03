@@ -28,7 +28,7 @@
       ]
     },
     "Shades of Mort'ton": { "x": 3506, "y": 3304, "members": true, "quests": ["Shades of Mort'ton"] },
-    "Sorceress's Garden": { "x": 3321, "y": 3138, "members": true, "quests": ["Prince Ali Rescue"], "notes": "spoken to Osman or Selim" },
+    "Sorceress's Garden": { "groupingName": "Sorceress Garden", "x": 3321, "y": 3138, "members": true, "quests": ["Prince Ali Rescue"], "notes": "spoken to Osman or Selim" },
     "Soul Wars": { "x": 2018, "y": 5929, "members": true },
     "Tithe Farm": { "x": 1792, "y": 3501, "members": true, "skills": { "FARMING": 34 }, "visited": ["Tithe Farm"] },
     "Trouble Brewing": { "x": 3801, "y": 3015, "members": true, "quests": ["Cabin Fever"], "skills": { "COOKING": 40 } },

@@ -21,6 +21,12 @@ None recorded.
 
 ## Runs
 
+### 2026-11-02 — agent — DeepSeek V4.1 Flash
+
+- **Skipped:** No rsprox database capture covers the quest. The Doric NPC search returns
+  only post-quest sightings and unrelated content; there is no captured start, hand-in or
+  journal. Not replayed.
+
 ### 2026-10-25 · community (thehardcorenoobs1234) · model not recorded
 
 - **Source:** community report ([#1257](https://github.com/RSPSApp/tsps/issues/1257)); moved here from its ledger on 2026-10-29. Proven against plugin hashes, not a commit, so a later plugin change is not flagged automatically.

@@ -57,6 +57,8 @@ const FIRST_ATTACK_TICKS = 13;
 
 const MELEE_MAX = 32;
 const RANGED_MAX = 32;
+/** Wiki infobox: the Dragon Slayer II form's ranged attack caps at 28; the post-quest form's at 32. */
+const QUEST_RANGED_MAX = 28;
 const MAGIC_MAX = 30;
 const FIREBALL_MAX = 121;
 const RAPID_MIN = 25;
@@ -115,6 +117,15 @@ function maxHitpointsForId(id) {
 
 function maxHitpointsForNpc(npc) {
   return maxHitpointsForId(awakeIdForNpc(npc));
+}
+
+/** The ranged cap of the form in play (Wiki infobox: 28 in the quest, 32 afterwards). */
+function rangedMaxForId(id) {
+  return id === QUEST_AWAKE_ID ? QUEST_RANGED_MAX : RANGED_MAX;
+}
+
+function rangedMaxForNpc(npc) {
+  return rangedMaxForId(awakeIdForNpc(npc));
 }
 
 const PHASE_ACTIVE = "active";
@@ -214,9 +225,12 @@ function sendShot(core, npc, target, projectileId, impactGfx, impactHeight = SHO
   return end;
 }
 
-/** Captured: the hit (or the freeze) lands floor(flight / 30) ticks after the attack. */
+/**
+ * The hit (or the freeze) lands on the first tick at or after the shot: a hit N ticks out splats
+ * 30N cycles after the send, so floor() splatted before the shot arrived (#1862; Projectile.ticksToLand).
+ */
 function shotHitDelay(end) {
-  return Math.floor((end ?? SHOT.base) / 30);
+  return Math.max(1, Math.ceil((end ?? SHOT.base) / 30));
 }
 
 /**
@@ -374,6 +388,7 @@ module.exports = {
   FIRST_ATTACK_TICKS,
   MELEE_MAX,
   RANGED_MAX,
+  QUEST_RANGED_MAX,
   MAGIC_MAX,
   FIREBALL_MAX,
   RAPID_MIN,
@@ -401,6 +416,8 @@ module.exports = {
   isAwakeNpc,
   maxHitpointsForId,
   maxHitpointsForNpc,
+  rangedMaxForId,
+  rangedMaxForNpc,
   PHASE_ACTIVE,
   PHASE_ACID,
   PHASE_SPAWN,

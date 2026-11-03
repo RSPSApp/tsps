@@ -261,12 +261,12 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   const SECOND_RITUAL_VARIANT = "summoning-agrith-naar-in-position";
 
   const SKILL_BY_OPTION = new Map([
-    ["Strength *", Skill.STRENGTH],
-    ["Attack *", Skill.ATTACK],
-    ["Defence *", Skill.DEFENCE],
-    ["Hitpoints *", Skill.HITPOINTS],
-    ["Magic *", Skill.MAGIC],
-    ["Ranged *", Skill.RANGED],
+    ["* Strength *", Skill.STRENGTH],
+    ["* Attack *", Skill.ATTACK],
+    ["* Defence *", Skill.DEFENCE],
+    ["* Hitpoints *", Skill.HITPOINTS],
+    ["* Magic *", Skill.MAGIC],
+    ["* Ranged *", Skill.RANGED],
   ]);
   const SKILL_BY_INDEX = new Map(
     [...SKILL_BY_OPTION.values()].map((skill) => [skill.getIndex(), skill])
@@ -682,6 +682,11 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       if (stage >= STAGE_RITUAL_DONE) return "performing-the-ritual-talking-to-matthew-again";
       if (stage >= STAGE_RITUAL) return "performing-the-ritual-talking-to-matthew";
       if (stage >= STAGE_BOOK_SHOWN) {
+        // Returning prepared hands the first ritual to Denath. Matthew's readiness
+        // reminder deliberately ends here, so replaying it cannot assemble the circle.
+        if (inRitualCircle(player) && hasItem(player, DEMONIC_SIGIL_ITEM_ID) && hasDyedSilverlight(player)) {
+          return "performing-the-ritual";
+        }
         return "infiltrating-the-wizards-talking-to-matthew-again-after-showing-him-the-book";
       }
       if (stage >= STAGE_MATTHEW_TOLD) return "infiltrating-the-wizards-returning-to-matthew";
@@ -1327,7 +1332,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     if (!OWN_NPC_IDS.has(event.npcId)) return;
     let text = event.text;
     if (text.includes("[player name]")) {
-      text = text.replace(/\[player name\]/gi, String(event.player.getUsername()));
+      text = text.replace(/\[player name\]/gi, String(event.player.getDisplayName()));
     }
     if (text.includes("[him/her]") || text.includes("[his/her]") || text.includes("[He/She]")) {
       const male = event.player.getAppearance?.().isMale?.() !== false;

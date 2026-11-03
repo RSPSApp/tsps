@@ -227,7 +227,7 @@ test("retrieval owners expose stored items without consuming or changing them, a
     [require("../plugins/bosses/zulrah/Shrine.Zulrah"), "zulrah:retrieval", {items: [[23182, 1]]}],
     [require("../plugins/bosses/nightmare/Retrieval.Nightmare"), "nightmare:held-items", {holder: "shura", items: [[23182, 1]]}],
     [require("../plugins/bosses/yama/Voice.Yama"), "yama:held-items", {items: [[23182, 1]]}],
-    [require("../plugins/minigames/tob/Retrieval.TheatreOfBlood"), "tob:retrieval", [{id: 23182, amount: 1}]],
+    [require("../plugins/minigames/tob/Retrieval.TheatreOfBlood"), "tob:retrieval", {items: [{id: 23182, amount: 1}], paid: false}],
     [require("../plugins/skills/farming/Patches.Farming"), "farming:state", {deathbank: [{id: 23182, amount: 1, meta: {test: true}}]}],
   ];
   // Use each owner's actual attribute constant for Zulrah rather than guessing its namespace.

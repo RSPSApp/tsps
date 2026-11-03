@@ -67,7 +67,7 @@ module.exports = function attach(api, Events) {
     nags: NAGS,
     goodbye: "Maybe later.",
     linger: true,
-    otherPlayerLine: owner => `I'm looking for ${owner.getUsername()}.`,
+    otherPlayerLine: owner => `I'm looking for ${owner.getDisplayName()}.`,
     leavingLine: () => "Goodbye.",
     talk(active, { teleport, leave }) {
       const { player } = active;
@@ -75,7 +75,7 @@ module.exports = function attach(api, Events) {
         player,
         npcId: active.definition.id,
         title: "What would you like to say?",
-        lines: [{ text: `Hey, ${player.getUsername()}, can you come and help me with some pheasants?`,
+        lines: [{ text: `Hey, ${player.getDisplayName()}, can you come and help me with some pheasants?`,
           expression: INVITE_EXPRESSION }],
         options: [
           ["Okay, I'll help with your pheasants.", () => reply(player, "Okay, I'll help with your pheasants.",
@@ -97,7 +97,7 @@ module.exports = function attach(api, Events) {
   function start(session) {
     const { player } = session;
     const tails = [2, 3, 4][Math.floor(Math.random() * 3)];
-    session.data.request = requestLine(player.getUsername(), tails);
+    session.data.request = requestLine(player.getDisplayName(), tails);
     session.data.done = false;
     session.data.killing = false;
     const sender = player.getPacketSender();
@@ -170,7 +170,7 @@ module.exports = function attach(api, Events) {
     if (!session || session.kind !== "forester" || event.npc.getId?.() !== N.FREAKY_FORESTER) return false;
     event.handled = true;
     const { player } = event;
-    const name = player.getUsername();
+    const name = player.getDisplayName();
     let line = session.data.request;
     let expression = REQUEST_EXPRESSION;
     if (session.data.done) {

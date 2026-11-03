@@ -188,3 +188,15 @@
 .map-editor-active .rl-sidebar-toggle-zone {
     display: none !important;
 }
+
+/* Let portrait keep the full game width, with the plugin rail below it. */
+@media (orientation: portrait) {
+    .game-container-root.portrait-mode {
+        position: relative;
+        flex-direction: column;
+    }
+
+    .portrait-mode > .game-viewport {
+        min-height: 0;
+    }
+}

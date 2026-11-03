@@ -139,7 +139,7 @@ function talkWorld(key) {
       getDialogueManager: () => manager,
       getSkillManager: () => ({ getCurrentLevel: () => 99, getMaxLevel: () => 10, getCombatLevel: () => 20 }),
       getLocation: () => location, moveTo: (value) => { location = value; },
-      getUsername: () => 'QhParity', getAppearance: () => ({ isMale: () => true }), isIronman: () => false,
+      getUsername: () => 'QhParity', getDisplayName: () => 'QhParity', getAppearance: () => ({ isMale: () => true }), isIronman: () => false,
       sendMessage: (text) => messages.push(text), isRegistered: () => true,
       getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; } }),
       getCombat: () => ({ reset() {} }), setUntargetable() {}, performAnimation() {},
@@ -462,7 +462,7 @@ test('Below completion keeps the extra 1,999 coins in a full, stacked or one-slo
       getInventory: () => inventory, getPacketSender: () => packet,
       getSkillManager: () => ({ getCurrentLevel: () => 99 }), getPrivateArea: () => null,
       getLocation: () => new core.Location(2950, 5769, 0),
-      getUsername: () => username, getIndex: () => sequence, isPlayer: () => true, sendMessage() {},
+      getUsername: () => username, getDisplayName: () => username, getIndex: () => sequence, isPlayer: () => true, sendMessage() {},
     };
     const inventory = new Inventory(player);
     if (sharks) inventory.adds(I.SHARK, sharks);

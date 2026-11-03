@@ -78,8 +78,8 @@ function makeHarness(pluginFile, levels = {}, extraPlugins = []) {
       return npc;
     },
     removeNpc(npc) { removed.push(npc); },
-    getItemOnGroundManager: () => ({ registerLocation(player, item, location) {
-      groundSpawns.push({ itemId: item.getId?.() ?? item.id, x: location.getX(), y: location.getY() });
+    getItemOnGroundManager: () => ({ registerLocation(player, item, location, area, options) {
+      groundSpawns.push({ itemId: item.getId?.() ?? item.id, x: location.getX(), y: location.getY(), despawnDelay: options?.despawnDelay });
     }, getGroundItem: () => null }),
     onPlayerLogin(fn) { hooks.logins.push(fn); },
     onPlayerLogout(fn) { hooks.logouts.push(fn); },
@@ -271,6 +271,22 @@ test('Current Affairs audit passes matching answers and re-asks only misses', ()
   h.hooks.namedNpcs.get('Councillor Catherine')['Talk-to']({ player: h.player, npcId: N.COUNCILLOR_CATHERINE });
   assert.equal(h.quest.getStage(h.player), 30);
   assert.equal(h.varbits.get(18288), 1, 'audit-start varbit mirrors the quiz');
+  assert.equal(h.attrs.get('current-affairs:form-answers'), '00000000', 'the completed form stays saved for relog');
+  assert.equal(h.varbits.get(18290), 1, 'answer q1 stays published after the audit');
+  assert.equal(h.varbits.get(18298), 1, 'correctness c1 is published on the passing audit');
+});
+
+test('Current Affairs login restores the completed form answers, correctness and dialogue flags', () => {
+  const h = makeHarness('../plugins/quests/quests/CurrentAffairs.Quest', { Sailing: 22, Fishing: 10 });
+  h.quest.setStage(h.player, 45);
+  // Capture 3467's finishing answers, stored 0-based: 1,1,3,1,1,3,1,2.
+  h.attrs.set('current-affairs:form-answers', '00200201');
+  h.attrs.set('current-affairs:kit-bought', true);
+  h.hooks.logins[0]({ player: h.player });
+  assert.deepEqual([...Array(8)].map((_, i) => h.varbits.get(18290 + i)), [1, 1, 3, 1, 1, 3, 1, 2]);
+  assert.deepEqual([...Array(8)].map((_, i) => h.varbits.get(18298 + i)), [1, 1, 1, 1, 1, 1, 1, 1]);
+  assert.equal(h.varbits.get(18284), 1, 'form-dialogue flag survives login');
+  assert.equal(h.varbits.get(18286), 1, 'Harry chat flag survives login');
 });
 
 // ---------------------------------------------------------------------------
@@ -454,6 +470,10 @@ test('Troubled Tortugans follows the Quest Helper stages through repairs, tracki
   const injured = N.INJURED_TORTUGAN;
   h.emit('npc-dialogue:hook', { npcId: injured, hook: 'quest:troubled-tortugans:start' });
   assert.equal(h.quest.getStage(h.player), 2);
+  assert.ok(h.messages.includes("You've started a new quest: <col=0ab0ff>Troubled Tortugans</col>"),
+    'the captured start message is sent once');
+  h.line(injured, "Right, you take it easy. I'll get your bandages sorted as quick as possible.");
+  assert.equal(h.quest.getStage(h.player), 4, 'capture 3456 advances to 4 on the opening conversation\'s last line');
 
   const makeBandages = h.hooks.itemOnItem.find((entry) => entry.first === 'Seaweed').fn;
   h.inventory.set(I.SEAWEED, 1); h.inventory.set(I.PALM_LEAF, 1);
@@ -558,6 +578,23 @@ test('Troubled Tortugans follows the Quest Helper stages through repairs, tracki
   assert.equal(h.quest.getStage(h.player), 34);
 });
 
+test('Troubled Tortugans jatoba chopping gives no log or message on a full bag', () => {
+  const h = makeHarness('../plugins/quests/quests/TroubledTortugans.Quest');
+  const I = h.core.ItemIdentifiers;
+  const chop = h.hooks.namedObjects.get('Jatoba tree')['Chop down'];
+  h.inventory.set(I.BRONZE_AXE, 1);
+  h.inventory.set(I.JATOBA_LOGS, 1);
+  for (let slot = 0; slot < 26; slot++) h.inventory.set(1000 + slot, 1);
+  assert.equal(chop({ player: h.player, objectId: 58555 }), true);
+  assert.equal(h.inventory.get(I.JATOBA_LOGS), 1, 'non-stackable logs cannot fit a full bag even when one is held');
+  assert.equal(h.messages.includes('You get some jatoba logs.'), false);
+
+  h.inventory.delete(1000);
+  chop({ player: h.player, objectId: 58555 });
+  assert.equal(h.inventory.get(I.JATOBA_LOGS), 2);
+  assert.ok(h.messages.includes('You get some jatoba logs.'));
+});
+
 test('Troubled Tortugans Shieldbane fight and final hand-in complete once', () => {
   const h = makeHarness('../plugins/quests/quests/TroubledTortugans.Quest');
   const N = h.core.NpcIdentifiers;
@@ -594,6 +631,10 @@ test('Troubled Tortugans Shieldbane fight and final hand-in complete once', () =
   const shippedFinal = runtime.loadTranscripts(h.api)['Troubled Tortugans'].variants['part-3-talking-to-floopa-or-elder-raley'];
   h.line(N.ELDER_RALEY, shippedFinal.find(step => step.text?.startsWith('No, no, no!')).text);
   assert.equal(h.quest.getStage(h.player), 44);
+  assert.ok(h.messages.includes("Congratulations, you've completed a quest: <col=0ab0ff>Troubled Tortugans</col>"),
+    'capture 3456 uses the 0ab0ff completion colour');
+  assert.equal(h.quest.completionJingleId, 152);
+  assert.equal(h.quest.scrollItemId, h.core.ItemIdentifiers.SEA_SHELL);
   for (const varbit of [18322, 18323, 18324, 18325, 18326]) {
     assert.equal(h.varbits.get(varbit), 0, `completion clears trail varbit ${varbit}`);
   }
@@ -936,6 +977,7 @@ test('Troubled Tortugans mandatory spawns match capture coordinates and are path
     'raw and resolved docks Korel ids select the same dialogue');
   const seaweed = h.groundSpawns.find((spawn) => spawn.itemId === I.SEAWEED);
   assert.deepEqual({ x: seaweed.x, y: seaweed.y }, { x: 2962, y: 2600 });
+  assert.equal(seaweed.despawnDelay, 6000, 'the bandage seaweed survives the default 300-tick floor timer');
   assert.equal(pathExists(R, [2962, 2604], [2962, 2600]), true, 'capture seaweed tile is reachable');
 
   h.quest.setStage(h.player, 14);
@@ -945,6 +987,9 @@ test('Troubled Tortugans mandatory spawns match capture coordinates and are path
   const shells = h.groundSpawns.filter((spawn) => spawn.itemId === I.SEA_SHELL).map(({ x, y }) => [x, y]).sort();
   assert.deepEqual(scutes, [[3102,2415],[3110,2430],[3115,2407],[3118,2419],[3119,2443],[3131,2398]]);
   assert.deepEqual(shells, [[3161,2389],[3168,2388],[3179,2384],[3190,2379],[3191,2383],[3197,2376]]);
+  for (const spawn of h.groundSpawns.filter((entry) => entry.itemId === I.TORTUGAN_SCUTE || entry.itemId === I.SEA_SHELL)) {
+    assert.equal(spawn.despawnDelay, 6000, `repair material at ${spawn.x},${spawn.y} keeps the extended floor timer`);
+  }
   for (const tile of [...scutes, ...shells]) assert.equal(pathExists(R, [3167, 2411], tile, 200), true, `spawn ${tile} is reachable`);
 
   h.quest.setStage(h.player, 26);

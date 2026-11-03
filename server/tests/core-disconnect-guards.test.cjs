@@ -668,6 +668,18 @@ test('an accepted logout leaves the world on the same tick with the logout sourc
   });
 });
 
+test('a server-side logout (content\'s log out buttons) tells the client as the logout button does', () => {
+  const { player, sent } = stubLoggedInPlayer('edgeexit');
+  player.setRegistered(true);
+  withDisconnectEvents((events) => {
+    Player.prototype.requestLogout.call(player);
+    assert.deepEqual(sent, [['logout']], 'the logout response and close, so the browser and RuneLite leave');
+    World.process();
+    assert.equal(World.getRemovePlayerQueue().includes(player), false, 'removed this tick');
+    assert.deepEqual(events.map((event) => event.source), ['logout']);
+  });
+});
+
 test('a player removed in combat stays in the world and fires disconnect only on leaving', () => {
   let ready = false;
   const { player } = stubLoggedInPlayer('edgexlog', { readyToLeaveWorld: () => ready });
@@ -918,7 +930,7 @@ test('NPC spell targeting requires explicit area permission for actionless puzzl
     getPrivateArea:()=>privateArea,getOwner:()=>null,getContentId:()=>1};
   const spell={canCastOnTarget:()=>valid,canCast:()=>true,spellId:()=>1,castSound:()=>null,
     startCast(){},baseExperience:()=>0};
-  const player={getHitpoints:()=>99,busy:()=>false,getArea:()=>null,getPrivateArea:()=>privateArea,
+  const player={sendMessage(){},getHitpoints:()=>99,busy:()=>false,getArea:()=>null,getPrivateArea:()=>privateArea,
     getLocation:()=>({getX:()=>1,getY:()=>1,getZ:()=>0,isWithinDistance:()=>true}),isPlayer:()=>true,getSize:()=>1,
     getMovementQueue:()=>({reset(){}}),getCombat:()=>({castSpellOn:(target,chosen)=>{assert.equal(target,npc);assert.equal(chosen,spell);casts++;}})};
   World.getNpcs=()=>({capacityReturn:()=>10,get:()=>npc});CombatSpells.getCombatSpell=()=>spell;

@@ -1,9 +1,12 @@
 import { sha256Hex } from "../../common/utils/sha256";
 import { assembleRs2asm } from "./rs2asm";
 import { RUNELITE_BANK_SCRIPTS, type RuneliteScript } from "./runelite/bankScripts";
+import { RUNELITE_CHAT_SCRIPTS } from "./runelite/chatScripts";
 import type { Script } from "./Script";
 
-const SCRIPTS = new Map<number, RuneliteScript>(RUNELITE_BANK_SCRIPTS.map((s) => [s.id, s]));
+const SCRIPTS = new Map<number, RuneliteScript>(
+    [...RUNELITE_BANK_SCRIPTS, ...RUNELITE_CHAT_SCRIPTS].map((s) => [s.id, s]),
+);
 const warned = new Set<number>();
 
 /**
@@ -21,7 +24,17 @@ export function loadRuneliteScript(id: number, data: Int8Array, vanilla: Script)
         }
         return null;
     }
-    const script = assembleRs2asm(patch.source);
+    let script: Script;
+    try {
+        script = assembleRs2asm(patch.source);
+    } catch (error) {
+        // A patch this client can't assemble must not take the script away.
+        if (!warned.has(id)) {
+            warned.add(id);
+            console.warn(`[cs2] couldn't assemble RuneLite's ${patch.name}; using the cache's script ${id}`, error);
+        }
+        return null;
+    }
     script.name = vanilla.name;
     script.localIntCount = Math.max(script.localIntCount, vanilla.localIntCount);
     script.localObjCount = Math.max(script.localObjCount, vanilla.localObjCount);

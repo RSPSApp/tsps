@@ -67,6 +67,13 @@ function configure(event) {
   } else prompt(saved,special ? definition.specialPageId : ordinary ? definition.pageId : config(player,definition)?.pageId ?? definition.pageId);
 }
 
+function placeholderIdentity(event) {
+  const definition = Common.getDefinition(event.itemId);
+  if (!definition) return;
+  event.placeholderId = definition.chargedId;
+  event.itemIds = [definition.chargedId,definition.emptyId].filter(id=>id!==undefined);
+}
+
 function withdrawn({player,items}) {
   if (!core.Bank.isOpen(player) || !Array.isArray(items)) return;
   for (const item of new Set(items)) {
@@ -96,6 +103,7 @@ function withdrawn({player,items}) {
 
 function attach(api) {
   api.persistAttribute(CONFIG_ATTRIBUTE,{});
+  api.onCustomEvent(core.Bank.PLACEHOLDER_IDENTITY_EVENT,placeholderIdentity);
   api.onCustomEvent(core.Bank.ITEM_OP_EVENT,configure);
   api.onCustomEvent(core.Bank.WITHDRAWN_ITEMS_EVENT,withdrawn);
 }

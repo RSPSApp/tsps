@@ -106,7 +106,9 @@ function makePlayer({ equipped = [], banks = [] } = {}) {
 
 function harness() {
   const variants = [], conditions = [], npcInteraction = [], itemOnItem = [], itemOnObject = [];
-  const custom = {}, npcDeath = [], loginHandlers = [], objectInteraction = {};
+  // Horror from the Deep is a start requirement; answer it as complete.
+  const custom = { 'quest:is-complete': [request => { if (request.key === 'horror_from_the_deep') request.complete = true; }] };
+  const npcDeath = [], loginHandlers = [], objectInteraction = {};
   const transcripts = [];
   const tasks = [];
   class TestCountdownTask {

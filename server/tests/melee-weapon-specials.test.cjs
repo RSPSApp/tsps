@@ -257,7 +257,7 @@ test("an instant special without enough energy changes nothing", () => {
   assert.equal(player.skillManager.level("STRENGTH"), 90);
   assert.equal(player.skillManager.level("ATTACK"), 90);
   assert.deepEqual(player.calls.chat, []);
-  assert.deepEqual(player.calls.messages, ["You do not have enough special attack energy left!"]);
+  assert.deepEqual(player.calls.messages, ["You don't have enough power left."]);
 });
 
 // Wiki: Excalibur gives a visible +8 Defence boost; visible boosts do not stack.
@@ -295,7 +295,7 @@ test("Sanctuary below 100% energy leaves Defence and energy unchanged", () => {
   CombatSpecial.activate(player);
   assert.equal(player.skillManager.level("DEFENCE"), 50);
   assert.equal(player.energy, 99);
-  assert.deepEqual(player.calls.messages, ["You do not have enough special attack energy left!"]);
+  assert.deepEqual(player.calls.messages, ["You don't have enough power left."]);
 });
 
 test("a swing special lights on the first press and toggling it off cancels without spending energy", () => {
@@ -488,19 +488,35 @@ test("Healing Blade restores at least 10 Hitpoints and 5 Prayer, half and a quar
 
 test("Ice Cleave freezes for 32 ticks on a hit only", () => {
   const registered = [];
+  const targetGraphics = [];
   const target = {
     getTimers: () => ({ has: () => false, registers: (key, ticks) => registered.push(ticks) }),
     getSize: () => 1,
     hasFlag: () => false,
     getMovementQueue: () => ({ reset() {} }),
     isPlayer: () => false,
-    performGraphic() {},
+    performGraphic: (graphic) => targetGraphics.push(graphic.getId()),
   };
   const zgs = special("zamorak_godsword").getCombatMethod();
   zgs.handleAfterHitEffects(hit(target, 0, false));
   assert.equal(registered.length, 0);
+  assert.deepEqual(targetGraphics, [], "no ice block on a miss");
   zgs.handleAfterHitEffects(hit(target, 10, true));
   assert.equal(Math.round(registered[0]), 32);
+  assert.deepEqual(targetGraphics, [369], "issue 2007: the target is encased in the Ice Barrage block");
+});
+
+test("Ice Cleave plays the red slash on the attacker, not the target", () => {
+  const player = fakePlayer({ weaponId: ItemIdentifiers.ZAMORAK_GODSWORD });
+  const original = World.getPlayers;
+  World.getPlayers = () => [player];
+  try {
+    special("zamorak_godsword").getCombatMethod().start(player, npcTarget(99));
+  } finally {
+    World.getPlayers = original;
+  }
+  assert.equal(player.calls.animations[0].getId(), 7638);
+  assert.deepEqual(player.calls.graphics.map((graphic) => graphic.getId()), [1210], "issue 2007: wiki Ice_Cleave.gif");
 });
 
 test("Blood Sacrifice heals 15% of the target's max Hitpoints, capped at 25 on NPCs and 15 on players", () => {

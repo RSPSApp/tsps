@@ -23,7 +23,10 @@ function setup() {
   const core = {
     ...PluginManager.getCoreApi(),
     CountdownTask: class { constructor(key, ticks, run) { Object.assign(this, { key, ticks, run }); } },
-    TaskManager: { submit(task) { task.due = tick + (task.ticks ?? 1); tasks.push(task); }, cancelTasks() {} },
+    TaskManager: {
+      submit(task) { task.due = tick + (task.ticks ?? 1); tasks.push(task); },
+      cancelTasks(key) { for (const task of tasks) if (task.key === key) executed.add(task); },
+    },
     TeleportHandler: { teleport(player, location, _type, _delay, onArrival) { player.moveTo(location); onArrival?.(); } },
     ObjectManager: { register() {}, deregister() {} },
     ShopManager: { open() { return true; } },
@@ -77,6 +80,9 @@ function setup() {
     sendCameraLookAt(...args) { cameras.push(['look', ...args.slice(0, 3)]); return sender; },
     sendCameraMoveArc(...args) { cameras.push(['arc', ...args.slice(0, 6)]); return sender; },
     sendCameraReset() { cameras.push(['reset']); return sender; },
+    sendCameraTarget(target) { cameras.push(['target', target]); return sender; },
+    sendSubInterface(uid, id, type, options) { scripts.push({ uid, id, type, ...options }); return sender; },
+    closeSubInterface(uid) { scripts.push({ close: uid }); return sender; },
     sendPositionalHint(...args) { hints.push(args.slice(0, 4)); return sender; },
     clearHintArrow() { hints.push(['clear']); return sender; },
     sendConfig(id, value) { varbits.set(id, value); return sender; },
@@ -265,6 +271,8 @@ test('Pandemonium uses the captured varbit stages and the real raft cargo route'
 test('Crab Quest uses 5/25/30/45/47/50/55/60/63 and hands in all seven shells', () => {
   const h = setup();
   const quest = load(h, 'CrabQuest.Quest.js');
+  // Pandemonium is a start requirement; load it after Crab Quest so hooks.npcs[0] stays the Crab's.
+  load(h, 'Pandemonium.Quest.js').setStage(h.player, 50);
   assert.equal(quest.startedValue, 5);
   assert.equal(quest.completionValue, 63);
   h.emit('npc-dialogue:hook', { npcId: h.core.NpcIdentifiers.CRAB_9, hook: 'quest:crab-quest:start' });
@@ -857,4 +865,101 @@ test('Crab bottle recovery reports only after the collection is actually granted
   const said = h.messages.slice(before);
   assert.ok(said.some((message) => message.includes("couldn't hold")), 'engine reports the full inventory');
   assert.ok(!said.some((message) => message.includes('familiar shells')), 'recovery is not announced before it is given');
+});
+
+test('Pandemonium cameras frame the rendered ship and follow it once the helm is taken', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  const { BoatManager } = require('../dist/game/content/sailing/BoatManager');
+  for (const stale of StaticShips.all()) StaticShips.dispose(stale);
+  const quest = load(h, 'Pandemonium.Quest.js');
+  try {
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+    const ship = StaticShips.all()[0];
+    h.tickOnce(); h.tickOnce();
+    for (const camera of h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look')) {
+      assert.ok(Math.abs(camera[1] - ship.boat.tileX) < 20 && Math.abs(camera[2] - ship.boat.tileY) < 20,
+        'camera frames the boat at sea, not its synthetic deck scene');
+    }
+    assert.equal(h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look').length, 2);
+    quest.setStage(h.player, 10);
+    clickAction(h, 59554, 'Helm', ['Navigate', 'Escape'], 0);
+    assert.deepEqual(h.cameras.at(-1), ['target', { worldEntity: ship.boat.entityIndex }],
+      'taking the helm releases the fixed camera to follow the moving boat');
+    clickAction(h, 29506, 'Sails', h.core.CacheDefinitions.getObject(29506).actions, 1);
+    ship.boat.fineX = 3032 * 128 + 64; ship.boat.fineY = 3050 * 128;
+    BoatManager.tick(); h.tickOnce(); h.tickOnce();
+    assert.equal(h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look').length, 4);
+    for (const camera of h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look').slice(-2)) {
+      assert.ok(Math.abs(camera[1] - ship.boat.tileX) < 20 && Math.abs(camera[2] - ship.boat.tileY) < 20,
+        'wreck camera also uses main-world coordinates');
+    }
+    assert.equal(quest.getStage(h.player), 12);
+  } finally {
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+  }
+});
+
+test('Pandemonium cancels departed ship cameras and offers boarding again from the dock', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  const { BoatManager } = require('../dist/game/content/sailing/BoatManager');
+  for (const stale of StaticShips.all()) StaticShips.dispose(stale);
+  const quest = load(h, 'Pandemonium.Quest.js');
+  const lines = [];
+  h.api.onCustomEvent('npc-dialogue:line', (event) => lines.push(event.text));
+  const talk = () => h.hooks.named.get('Will')['Talk-to']({ player: h.player, npcId: h.core.NpcIdentifiers.WILL, definition: { getName: () => 'Will' } });
+  try {
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+    h.action(h.core.NpcIdentifiers.WILL, 'VuZpfc');
+    h.tickOnce(); h.tickOnce();
+    assert.deepEqual(h.cameras.at(-1), ['reset']);
+    assert.equal(h.cameras.some((camera) => camera[0] === 'move'), false, 'departed ship cannot repin the camera');
+    assert.ok(h.scripts.some((script) => script.close === ((161 << 16) | 1)), 'departing closes the fade overlay');
+    talk();
+    assert.equal(lines.at(-1), 'Hello there, [player name]. Shall we hop back aboard our ship?');
+    assert.equal(quest.getStage(h.player), 6, 'dock talk does not advance the missing ship');
+    h.action(h.core.NpcIdentifiers.WILL, 'Nm7LVw');
+    assert.ok(BoatManager.getBoatAboard(h.player), 'the return action boards a new ship');
+    const replaced = StaticShips.all()[0];
+    replaced.boat.fineX = 3400 * 128;
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+    h.tickOnce();
+    assert.ok(h.cameras.at(-1)[1] < 3100, 'a replacement cancels the departed ship camera');
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+    quest.setStage(h.player, 10);
+    clickAction(h, 59554, 'Helm', ['Navigate', 'Escape'], 0);
+    h.tickOnce(); h.tickOnce();
+    assert.deepEqual(h.cameras.at(-1), ['target', { worldEntity: StaticShips.all()[0].boat.entityIndex }],
+      'a pending intro cannot replace helm tracking');
+    // Teleport/death movement has already taken the player off the deck before the boat tick.
+    h.player.getArea().leave(h.player, false);
+    h.player.moveTo(new h.core.Location(3025, 3209, 0));
+    BoatManager.tick();
+    assert.equal(StaticShips.all().length, 0, 'leaving removes the orphan tutorial ship');
+    assert.deepEqual(h.cameras.at(-1), ['reset']);
+    talk();
+    assert.equal(lines.at(-1), 'Hello there, [player name]. Shall we hop back aboard our ship?');
+    h.action(h.core.NpcIdentifiers.WILL, 'Nm7LVw');
+    quest.setStage(h.player, 14);
+    h.action(h.core.NpcIdentifiers.WILL, 'VuZpfc');
+    h.action(h.core.NpcIdentifiers.WILL, 'Nm7LVw');
+    assert.equal(quest.getStage(h.player), 14, 'reboarding preserves earned wreck progress');
+    assert.equal(StaticShips.all()[0].boat.tileY, 3050);
+    const previous = StaticShips.all()[0];
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+    h.tickOnce(); h.tickOnce();
+    assert.deepEqual(h.cameras.at(-1), ['reset'], 'logout cancels any camera tasks');
+    h.relog();
+    assert.ok(BoatManager.getBoatAboard(h.player), 'relog restores the tutorial ship');
+    assert.notEqual(StaticShips.all()[0], previous);
+    assert.equal(quest.getStage(h.player), 14);
+    quest.setStage(h.player, 8);
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+    h.tickOnce(); h.tickOnce();
+    assert.deepEqual(h.cameras.at(-1), ['reset'], 'logout during the intro fade cancels its camera');
+  } finally {
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+  }
 });

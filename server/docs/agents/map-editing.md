@@ -250,8 +250,17 @@ cache.
 This is the constraint that shapes larger builds, so it is worth understanding.
 
 A region replacement is not a delta — the server sends the whole encoded 64×64×4-plane
-terrain blob in one `REGION_REPLACEMENT` packet, and the client stores it wholesale. Packet
-payload ceiling: `MapRegionReplacementManager.MAX_PACKET_PAYLOAD = 0xfffd` (65,533 bytes).
+terrain blob in one `REGION_REPLACEMENT` packet, and the client stores it wholesale. Short
+packets are limited to `MapRegionReplacementManager.MAX_PACKET_PAYLOAD = 0xfffd` (65,533
+bytes).
+
+A payload that does not fit raw is deflated: the server sends `REGION_REPLACEMENT_COMPRESSED`
+(region id, the reload flag, the raw terrain and object lengths, then the deflated sections)
+and the client inflates it back into the same terrain blob and object archive. That is not an
+edge case, it is the normal path for dense regions: Falador's 12084 is 69,253 bytes of terrain
+plus 12,989 of objects (82,249 raw, about 13,400 deflated), and Lumbridge (12850) is 60,239 +
+11,157 (about 13,400 deflated). Every terrain result reports `terrainBytes` per region; read it
+after the first small edit, but the compression is what makes city-sized edits possible at all.
 
 Cost per edited tile, on top of the cache's own encoding:
 
@@ -261,32 +270,27 @@ Cost per edited tile, on top of the cache's own encoding:
 | overlay | 4 bytes |
 | underlay | 4 bytes |
 
-Dense regions start close to the cap from the cache alone: Lumbridge (region 12850) is about
-60 KB before any edit, leaving roughly 5 KB, about 1,300 overlay edits — nowhere near enough to
-repaint and terrace a 90×71 site. Every terrain result reports `terrainBytes` per region; read
-it after the first small edit before planning a big one.
-
-What actually works:
+What still matters:
 
 1. **Persist like the editor** — edits are written as `data/regions/<id>.pack` (header + object
    archive + terrain archive), the same format the map editor exports and the server loads, so
    the `/regions/<id>.pack` endpoint serves either.
-2. **Stream terrain-only when it does not fit** — the *file* always carries the region's
-   objects (the cache's, or a previously loaded pack's), but the *packet* drops them when
-   `7 + terrain + objects` would exceed the ceiling. The client then falls back to the cache's
-   objects, and because the pack holds those same objects, the reloaded world matches what
-   players were shown. `streamed` on the tool result says which happened (`pack` | `terrain`).
+2. **Stream terrain-only when the objects are the problem** — if even the deflated payload will
+   not fit, the *packet* drops the objects (`replaceMapRegionData(regionId, terrain, null)`)
+   while the *file* keeps the region's objects (the cache's, or a previously loaded pack's).
+   The client then falls back to the cache's objects, and because the pack holds those same
+   objects, the reloaded world matches what players were shown. `streamed` on the tool result
+   says which happened (`pack` | `terrain`). In practice compression fits both sections.
 3. **Clear first** — `clear_terrain` restores the cache encoding, the smallest form, freeing
    everything the previous edits added.
-4. **Edit a smaller footprint** — paint the plateau and terraces, not every tile of a rectangle.
-5. **Use more regions** — each region has its own budget and its own packet. Spreading a city
-   across regions buys space linearly.
+4. **Use more regions** — each region has its own packet. Spreading a city across regions
+   keeps each one small.
 
-When even terrain alone overflows, the tool fails with
-`region replacement is too large: region=<id> bytes=<n> max=65533`; nothing is half-applied.
-Clean up with `clear_terrain` and try a smaller footprint. Removing the cap entirely would need
-a chunked replacement protocol (split the terrain stream, reassemble client-side) — not
-implemented here.
+When the deflated payload cannot fit 65,533 bytes either, the tool fails with
+`Region replacement <id> is too large to stream: <n> bytes, <m> compressed, max 65533`; nothing
+is half-applied. That needs roughly 65 KB of uncompressible terrain and objects, so normal map
+data never reaches it. Removing the cap entirely would need a chunked replacement protocol
+(split the terrain stream, reassemble client-side) — not implemented here.
 
 A `.pack` here does **not** bake in objects placed with `place_object`/`build_preset`: those
 stay as entries in `object-spawns.json` and are applied on top of the region at runtime. Baking
@@ -317,9 +321,9 @@ state on open and on **Refresh map**:
 So an agent build appears in the editor without a login, and the same edits appear in-game to
 logged-in players on scene rebuild (walk, teleport, relog).
 
-Save applies the budget below before anything leaves the editor: if any edited region would be
-over 65,533 bytes, nothing is saved and the regions are named, because the server skips an
-oversized `.pack` on load and the map would come out half edited.
+Save checks the packet the server will actually stream: if a region's terrain and objects cannot
+fit 65,533 bytes even deflated, nothing is saved and the regions are named. A normal dense region
+(Falador, Lumbridge) compresses far below that limit, so it saves like any other.
 
 ## What looks right
 

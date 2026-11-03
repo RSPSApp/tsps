@@ -1,6 +1,6 @@
 import { BANKMAIN, INVENTORY } from "@runelite/api/gameval/InterfaceID";
 import { runeliteImage } from "@runelite/client/ui/runeliteImages";
-import { FONT_BOLD_12, FONT_PLAIN_12 } from "../../../ui/fonts";
+import { boldFont, overlayFont } from "@runelite/client/ui/overlay/OverlayFonts";
 import { drawTextGL } from "../../../widgets/components/TextRenderer";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
 import type { WidgetNode } from "../../../widgets/WidgetNode";
@@ -391,21 +391,26 @@ export class QuestHelperPanelOverlay implements WidgetOverlay {
     draw(context: WidgetOverlayDrawContext): Rect[] {
         const lines = this.lines();
         if (!lines.length) return [];
-        const plain = context.fontLoader(FONT_PLAIN_12);
-        const measure = (s: string) => (plain ? plain.measure(s) : s.length * 6);
+        // A TOP_LEFT panel: the interface font, its titles bold. The panel keeps its width.
+        const font = overlayFont("interface");
+        const title = boldFont(font);
+        const scale = font.scale;
+        const plain = context.fontLoader(font.id);
+        const measure = (s: string) => (plain ? plain.measure(s) : s.length * 6) * scale;
         const inner = PANEL_WIDTH - 2 * PANEL_BORDER;
         const rows: { text: string; color: number; align: number; font: number; right?: string; rightColor?: number }[] = [];
         for (const line of lines) {
             if (line.kind === "title") {
-                for (const text of wrapText(line.text ?? "", inner, measure)) rows.push({ text, color: hex(line.color), align: 1, font: FONT_BOLD_12 });
+                for (const text of wrapText(line.text ?? "", inner, measure)) rows.push({ text, color: hex(line.color), align: 1, font: title.id });
                 continue;
             }
             const right = line.right ? clean(line.right) : undefined;
             const room = right ? inner - measure(right) - 4 : inner;
             const wrapped = wrapText(line.left ?? "", Math.max(20, room), measure);
-            wrapped.forEach((text, i) => rows.push({ text, color: hex(line.leftColor), align: 0, font: FONT_PLAIN_12, right: i === 0 ? right : undefined, rightColor: hex(line.rightColor) }));
+            wrapped.forEach((text, i) => rows.push({ text, color: hex(line.leftColor), align: 0, font: font.id, right: i === 0 ? right : undefined, rightColor: hex(line.rightColor) }));
         }
-        const height = 2 * PANEL_BORDER + rows.length * LINE_HEIGHT;
+        const lineHeight = Math.max(1, Math.round(LINE_HEIGHT * scale));
+        const height = 2 * PANEL_BORDER + rows.length * lineHeight;
         const at = context.place(this, PANEL_WIDTH, height);
         if (!at) return [];
         const { scaleX: sx, scaleY: sy } = at;
@@ -417,10 +422,10 @@ export class QuestHelperPanelOverlay implements WidgetOverlay {
         glr.drawRect(r.x, r.y + sy, sx, r.h - 2 * sy, PANEL_OUTLINE);
         glr.drawRect(r.x + r.w - sx, r.y + sy, sx, r.h - 2 * sy, PANEL_OUTLINE);
         let y = r.y + PANEL_BORDER * sy;
-        const x = r.x + PANEL_BORDER * sx, w = inner * sx, h = LINE_HEIGHT * sy;
+        const x = r.x + PANEL_BORDER * sx, w = inner * sx, h = lineHeight * sy;
         for (const row of rows) {
-            drawTextGL(glr, context.fontLoader, row.text, x, y, w, h, row.font, row.color, row.align, 1, true, 1, undefined, sx, sy);
-            if (row.right) drawTextGL(glr, context.fontLoader, row.right, x, y, w, h, FONT_PLAIN_12, row.rightColor ?? 0xffffff, 2, 1, true, 1, undefined, sx, sy);
+            drawTextGL(glr, context.fontLoader, row.text, x, y, w, h, row.font, row.color, row.align, 1, true, 1, undefined, sx * scale, sy * scale);
+            if (row.right) drawTextGL(glr, context.fontLoader, row.right, x, y, w, h, font.id, row.rightColor ?? 0xffffff, 2, 1, true, 1, undefined, sx * scale, sy * scale);
             y += h;
         }
         return [r];

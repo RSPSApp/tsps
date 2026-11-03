@@ -21,6 +21,7 @@ const Area = require("./Area.Vorkath");
 const StorageDeaths = require("../../items/storage/Events.StorageItems");
 
 const ATTR = "vorkath:retrieval";
+const OWNER = "vorkath";
 const MAX_STACK = 2147483647;
 const FEE = 100000;
 const INV = 525;
@@ -125,6 +126,8 @@ function sendContents(player, lot) {
 
 function open(player) {
   const lot = held(player);
+  // The interface is shared (the Theatre of Blood's chest): whichever opened it answers its clicks.
+  player.__retrievalOwner = OWNER;
   const sender = player.getPacketSender();
   sender.sendInterfaceRemoval();
   sender.sendConfig(VARP.if2, 0);
@@ -178,15 +181,17 @@ function takeAll(player, lot) {
 }
 
 function button({ player }) {
+  if (player.__retrievalOwner !== undefined && player.__retrievalOwner !== OWNER) return false;
   if (!isOpen(player)) return;
   const lot = held(player);
-  if (!lot) return;
+  if (!lot) return false;
   if (!lot.paid) pay(player, lot);
   else takeAll(player, lot);
 }
 
 function clickItem(event) {
   const { player } = event;
+  if (player.__retrievalOwner !== undefined && player.__retrievalOwner !== OWNER) return false;
   if (!isOpen(player)) return;
   const lot = held(player);
   const entry = lot?.items[Number.isInteger(event.slot) ? event.slot : -1];
@@ -213,7 +218,7 @@ function collect({ player, npc, definition }) {
   }
   const { DialogueChainBuilder, NpcDialogue } = core;
   const npcId = definition?.getId?.() ?? npc?.getId?.();
-  const line = MESSAGE.nothing.replace("[name]", player.getUsername?.() ?? "");
+  const line = MESSAGE.nothing.replace("[name]", player.getDisplayName?.() ?? "");
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new NpcDialogue(0, npcId, line)));
   return true;
 }

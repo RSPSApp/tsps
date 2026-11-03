@@ -36,9 +36,6 @@ function shotsTable() {
   }
   return SHOTS;
 }
-/** NPC magic lands a fixed 3 ticks after the cast, as the engine's own NPC cast does. */
-const HIT_DELAY_TICKS = 3;
-
 function shotsFor(npcId) {
   return shotsTable()[npcId] ?? shotsTable()[Shared.ids().BOSS];
 }
@@ -69,7 +66,8 @@ function methodClass() {
     }
 
     hits(character, target) {
-      return [new PendingHit(character, target, this, HIT_DELAY_TICKS)];
+      // Lands with the shot, which flies the legacy 46 + 10 a tile, as the engine's NPC magic (#1862).
+      return [new PendingHit(character, target, this, Projectile.arrivalTicks(character, target, Projectile.LEGACY_MAGIC_END_BASE))];
     }
 
     handleAfterHitEffects(hit) {
@@ -92,4 +90,4 @@ function attach(api) {
   );
 }
 
-module.exports = { attach, methodClass, shotsFor, HIT_DELAY_TICKS };
+module.exports = { attach, methodClass, shotsFor };

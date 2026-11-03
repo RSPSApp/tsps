@@ -18,10 +18,12 @@ number.
 
 ## Boss drop rates
 
-`pluginConfig` `"NpcDrops:bossRareMultiplier"` makes bosses' rare drops that many times likelier.
+`pluginConfig` `"NpcDrops:bossRareMultiplier"` makes bosses' unique drops that many times likelier.
 `1` (or leaving it out) is the OSRS rate; at `2` a 1/512 unique is 1/256, at `3` 1/171, at `5`
-1/102. It covers every unique or pre-roll row a boss drops that is rarer than 1/10, and every
-other drop rarer than 1/100: pets, jars, visages and clue scrolls. Common loot keeps its rate:
+1/102. Eligible items are rarer than 1/10 and either listed in a unique section or in the cache's
+boss collection log (including rings, pets, jars and visages). Rarity alone does not qualify:
+ordinary supplies, equipment, clue scrolls and shared drop tables keep their rates.
+The Collection Log plugin does not need to be enabled. Ordinary loot keeps its rate:
 on the weighted main roll the boosted rows are rolled separately instead of taking chance from
 the rest of the table, so a very high multiplier can drop a rare alongside the main roll. Bosses
 are the NPCs the game cache marks as bosses, plus the few `npc-drop-overrides.json` lists
@@ -31,6 +33,30 @@ Amascut) and other reward chests are not affected.
 ```json
 {
   "pluginConfig": { "NpcDrops:bossRareMultiplier": 2 }
+}
+```
+
+## Welcome screen message
+
+`pluginConfig` `"WelcomeScreen:messageOfTheWeek"` is the text on the scroll at the bottom of
+the welcome screen. It defaults to `Welcome to Old School RuneScape!`. The text can use the game's
+`<col=rrggbb>` and `<br>` tags. League worlds show their own league message instead.
+
+```json
+{
+  "pluginConfig": { "WelcomeScreen:messageOfTheWeek": "Double XP this weekend!<br>Have fun." }
+}
+```
+
+## Display names
+
+`pluginConfig` `"DisplayName:cooldownDays"` is how many days a player waits between
+[display name](display-names.md) changes (default `28`; `0` lets them change at any time).
+`"DisplayName:holdDays"` is how long a name given up stays held for its old owner (default `35`).
+
+```json
+{
+  "pluginConfig": { "DisplayName:cooldownDays": 7, "DisplayName:holdDays": 14 }
 }
 ```
 

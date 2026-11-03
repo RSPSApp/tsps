@@ -434,3 +434,30 @@ test('a same-area process teleport rechecks overlapping priority on the next tic
   AreaManager.process(mobile);
   assert.equal(mobile.getArea(), specific, 'the teleport is not hidden by the location hint');
 });
+
+
+test('generic chests load on free-to-play worlds without members-only chest plugins', () => {
+  const fs = require('node:fs');
+  const files = {
+    'plugins/Chests.plugin.js': fs.readFileSync(require.resolve('../plugins/objects/Chests.plugin.js'), 'utf8'),
+  };
+  for (const name of ['Quests', 'Clans', 'RandomEvents', 'GiantLairs']) {
+    files[`plugins/${name}.plugin.js`] = plugin(name);
+  }
+  for (const [name, source] of [
+    ['KeyChests', '../plugins/objects/KeyChests.plugin'],
+    ['TheatreOfBlood', '../plugins/minigames/TheatreOfBlood.plugin'],
+  ]) {
+    files[`plugins/${name}.plugin.js`] = plugin(name, `members: ${require(source).members},`);
+  }
+  const worldDefinition = require('../dist/game/definition/WorldDefinition');
+  const originalMembers = worldDefinition.isMembersWorld;
+  try {
+    worldDefinition.isMembersWorld = () => false;
+    const { loaded, warn } = loadPlugins({}, files);
+    assert.ok(!loaded.includes('KeyChests') && !loaded.includes('TheatreOfBlood'));
+    assert.ok(loaded.includes('Chests'), warn.join('\n'));
+  } finally {
+    worldDefinition.isMembersWorld = originalMembers;
+  }
+});

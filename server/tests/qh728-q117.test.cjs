@@ -104,7 +104,7 @@ function makePlayer() {
     getSkillManager: () => ({
       addExperiences(skill, amount) { experience.push({ skill, amount }); },
     }),
-    getUsername: () => 'qh728-q117',
+    getUsername: () => 'qh728-q117', getDisplayName: () => 'qh728-q117',
     getPrivateArea: () => null,
     getLocation: () => location,
     isPlayer: () => true, isNpc: () => false, getIndex: () => 1,

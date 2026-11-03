@@ -59,8 +59,12 @@ function farmer(worn = null, { slot, carried = null, full = false } = {}) {
     const state = { ...Model.emptyPatch(Date.now(), { offset: 0 }), crop: 'BELLADONNA', status: 'grown', stage: 4, lives: 1, checked: true };
     p.setAttribute(Patches.FARM_ATTRIBUTE, { offset: 0, patches: { [Data.patchKey(patch)]: state }, tools: {} });
     varbits.set(patch.varbit, Model.patchValue(patch, state));
-    const pick = () => hooks.onObjectInteraction[0]({ player: p, object: { getId: () => patch.id },
-        location: { x: patch.x, y: patch.y, z: patch.z }, clickType: 1 });
+    // The pick swings at once and the produce lands on the third farming tick after it.
+    const pick = () => {
+        hooks.onObjectInteraction[0]({ player: p, object: { getId: () => patch.id },
+            location: { x: patch.x, y: patch.y, z: patch.z }, clickType: 1 });
+        for (let i = 0; i < 3; i++) Patches.tick();
+    };
     return { p, state, pick, shown, produce: () => p.getInventory().getAmount(Data.itemId('Nightshade')) };
 }
 

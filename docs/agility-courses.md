@@ -78,6 +78,10 @@ tick after):
     captured).
   - **The top's climb** is the Desert diary's medium task "Climb to the summit of the Agility
     Pyramid" (captured).
+  - **Checked against the Wiki (2 November 2026):** the doorway's 300 + 8 x level (capped at
+    1,000) matches 1757 (948 at 81); the top sells for 10,000 coins flat. The main page's 4-damage
+    low wall slip isn't built (no chance, landing or message known). The Pyramid block page says
+    both blocks run on 15 ticks; both captures show 13 on floor 3, which is kept.
   - **Simon Templeton** (`plugins/minigames/pyramidplunder/Simon.PyramidPlunder.js`) buys pyramid
     tops for 10,000 coins each (Wiki) through his transcript: his introduction the first time
     (setting `agility_pyramid_simon_named` and `_job`), then the before- and after-sale lines;
@@ -89,7 +93,28 @@ tick after):
 Some courses share obstacles. A course with `sharesWith: { course, through }` continues a lap that
 the other course began, through that obstacle index; when a clicked object belongs to more than
 one course, the entry that continues the player's lap is used. A full lap's bonus counts the shared
-obstacles' XP once.
+obstacles' XP once. With `progress: true` in `sharesWith` the shared obstacles also set this
+course's `progressVarbit`, and either lap's end clears both (the Colossal Wyrm's: rsprox 1106);
+Shayzien's shared obstacles leave the advanced varbit alone (1632).
+
+## What every obstacle and lap does
+
+- **Busy:** an obstacle sets the client's `BUSY` varbit (12393) to 1 as it starts and back to 0 as
+  it ends (rsprox 1788, 1885).
+- **Run energy:** each completed rooftop obstacle restores 1.5% (150 of 10,000), measured in the
+  main-game captures 339 (72 Agility) and 3154 (99 Agility); the server keeps whole percent, so the
+  half carries to the next obstacle. The Wiki's pages say 1-2% and "around 2%". Varrock's clothes
+  line and wall restore a second 1.5% partway through in the captures; that isn't done.
+- **Diary XP:** an obstacle's `diaryXp: { diary, tier, xp }` pays more once that tier is done
+  (Wiki: Pollnivneach's drying line 666 with hard Desert, Rellekka's pile of fish 615 with hard
+  Fremennik). The lap bonus is worked out from the plain `xp`.
+- **Other skills:** `lapSkillXp` pays XP in other skills with the lap (Barbarian Outpost: 41.3
+  Strength, Wiki).
+- **Diary tasks:** a lap's `diaryTask` line comes before the lap count (1788). Every course with a
+  "complete a lap" diary task now sends it: Draynor and Al Kharid (Lumbridge), Varrock, Canifis
+  (Morytania), Falador, Seers' and Barbarian (Kandarin), Pollnivneach (Desert), Rellekka
+  (Fremennik), Ardougne, Gnome Stronghold and Ape Atoll (Western Provinces), Shayzien (Kourend)
+  and the Wilderness course.
 
 ## Marks of grace
 
@@ -110,10 +135,19 @@ course's `marks` block:
 - **On the floor:** a mark only its player sees, on one of the course's mark tiles, for 10 minutes.
   Marks on one tile stack and restart the 10 minutes. Time logged out doesn't count: the plugin
   pauses the player's course marks on logout and resumes them on login.
+- **Tiles:** every rooftop's `marks.tiles` are the Wiki's spawn spots (Template:Mark of grace
+  spawns). Captured exactly: Draynor 3098,3281,3 and 3100,3257,3 (1723, 1718); Varrock 3186,3395,3,
+  3220,3402,3 and 3238,3408,3 (1723, 75); Canifis 3506,3495,2, 3501,3505,2 and 3490,3501,2 (90,
+  91); Rellekka 2623,3675, 2628,3652, 2629,3653 and 2642,3651 (1864, 1885); Ardougne 2657,3318,3
+  (all ten marks in 787). The rest are the Wiki map's pins with the roof's plane, not checked in
+  game; Varrock's pins were a tile off where captured.
 - **Other courses:** the Wiki gives no roll chance for the non-rooftop courses. Ape Atoll uses 2/25,
   which with the cooldown gives the Wiki's 5-6 marks an hour at 95 laps an hour; the Shayzien
-  courses use the rooftop 2/6. The Gnome Stronghold, Barbarian Outpost and Werewolf courses give
-  marks too (since 8 May 2024), but have no `marks` block: their tiles and chances aren't known.
+  courses and Werewolf use the rooftop 2/6 (Werewolf's one tile, 3540,9888, is the Wiki's). The
+  Shayzien marks spawn only before the courses split (Wiki), so both use the same guessed tiles.
+  The Gnome Stronghold and Barbarian Outpost courses give marks too (since 8 May 2024), but have
+  no `marks` block: their tiles and chances aren't known. Prifddinas and the Wilderness course give
+  none.
 
 ## Shayzien Agility Course (basic and advanced)
 
@@ -130,6 +164,11 @@ course's `marks` block:
   - the beam swing (the cache has no Shayzien swing; `dorgesh_grapple_swing` is used);
   - where the gap's jump lands (1554,3639) and where the zipline lands (1522,3626);
   - the mark of grace tiles.
+- **Diary:** a lap of either course is the Kourend & Kebos easy task. Marks spawn only before the
+  courses split (Wiki), so both use the ladder top, the monkeybars' end and the first tightrope's
+  end (guessed tiles). 1632 starts with `shayzien_agility_up_progress` at 4 and the shared
+  obstacles leave it alone; no other capture reaches the advanced obstacles (searched 2 November
+  2026).
 - **Progress varbit:** the basic course sets `shayzien_agility_low_progress` to the obstacle the
   lap has reached (1 after the ladder, 2 after the monkeybars, 3 after the tightrope, as captured)
   and back to 0 when the lap is done; the reset is not captured. No cache script or loc reads it.
@@ -162,6 +201,15 @@ course's `marks` block:
 - **Wiki:** the lines said at the pauses on the last rope (one pause on basic, two on advanced).
 - **Guesses:** where the tightropes wobble and the ropes pause, and the advanced ladder's top tile
   (1648,2908; the next recorded step starts beside it).
+- **Progress varbits** (1106): `varlamore_wyrm_agility_basic_progress` / `_advanced_progress`
+  (11292/11293) follow the obstacle index and go to 0 with the lap; the shared ladder and
+  tightrope set both.
+- **Termites** (1106, 1108, pre-rework): a lap's end may set `varlamore_wyrm_agility_termite_obstacle`
+  (11412) to a marker (1-5, 8-10); finishing the obstacle that ends there scoops them ("You managed
+  to scoop up N termites!", sound 2581), sometimes with bone shards ("You also find N piles of bone
+  shards they chipped off!"). The Wiki gives per-scoop amounts but no spawn rate, so none are given.
+- **Worm Tongue** (1106): the start ladder before a talk with him gives his "You there! Over here!
+  Let's have a little chat before you head up there!" (varbit 11354 records the talk). Not done.
 - **Not given yet:** termites, blessed bone shards and Worm Tongue's rewards; the giant squirrel
   rate is unknown on the Wiki since its 2026 change, so these courses don't roll it.
 
@@ -191,8 +239,17 @@ course's `marks` block:
   count, with no formula; it fails on Agility alone here (never from 80), partway down onto the
   spikes for 10-30 damage and 160 XP. A helmet is refused with the trainer's line (Wiki), as a
   message rather than his dialogue.
-- **Not done:** marks of grace (no tiles known), the Skullball course, and putting a logged-out
-  player back at the entrance.
+- **Lines (1849, 1858):** the deathslide's grip and landing lines and "You give the stick to the
+  werewolf." are spam; the player's yell comes with the slide, two ticks after the grip; arriving
+  below the trapdoor says "You climb down through the trapdoor..." (spam). The trainer calls out
+  at the pipes, slope and slide, not the hurdles, and his line is "...whiskers plucking!!!!" (the
+  Wiki's transcript says "perking"). The stick's projectile flies 30 tiles north of the Agility
+  Boss wherever the stick lands (captured landings 3538,9912 and 3543,9911).
+- **The stick** goes when the player leaves by the ladder ("The werewolf trainer removes your
+  stick as you leave.", 1849) or logs out (Wiki).
+- **Not done:** the helmet refusal is the Agility Trainer's chathead dialogue in 1858, but stays a
+  game message (a precondition can only send a message); the stick trainer's idle shouts; the
+  Skullball course; putting a logged-out player back at the entrance (the Wiki's "may").
 
 ## Ape Atoll Agility Course
 
@@ -219,5 +276,114 @@ course's `marks` block:
 - **No capture exists.** The movement and its timing come from the monkey animations' lengths
   (`100_ilm_*`, `yarn dump:seq`); the fall damage (1-3), the fail chance below 75 (the engine's
   linear default), the entrance tile (2757,2745) and the mark tiles are guesses.
+- **Human slips:** each obstacle has its own line (the obstacles' Wiki pages), e.g. "The rock is
+  covered in slime and you slip into the water... ...you're not monkey enough to try this!"; the
+  second tree's is "You jump up to seize the vine... ...and lose your grip!". A lap is the Western
+  Provinces hard task. Still no capture (searched by loc, seq and message text).
+- **Open question:** the engine cuts mark chances to a fifth 20 levels over the course (68 here),
+  so a player who never fails (75+) gets about 1.4 marks an hour, not the Wiki's 5-6. The Wiki
+  doesn't say whether the cut applies off the rooftops.
 - Recipe for Disaster's Awowogei part opens its hole when this course's rope is swung during the
   quest (`agility:obstacle`); it no longer swings the rope or climbs the last tree itself.
+
+## Prifddinas Agility Course
+
+- **Portals** (rsprox 1149, Leagues VI): the six portal locs are 36241-36246, each shown as the
+  "Portal" (36240) by varbit 9298 (varp 2340), and a click names the placed loc; before the
+  2 November 2026 audit the course listened for 36240, so no portal could be used. The lap's
+  portal shows on the tick the obstacle before it is begun. It is crossed from the tile beside it:
+  a turn, a step on, and the teleport the next tick with "You find a crystal shard on your way
+  through the portal.", a shard and 81.9 XP (the Wiki rounds it to 82).
+- **XP:** a lap is the obstacles' 1285.2 (the last dark hole's 1037.1 is the bonus); 1149 pays
+  nothing more with the lap count, which says "Prifddinas Agility Course".
+- **Not done:** Ystwyth's lap statistics, the "Lap duration" line (1106/1108/1149 are all Leagues
+  VI, so it may be a league feature), Song of the Elves (Prifddinas can't be reached without it).
+  Fail damage and landings are guesses (no fail captured).
+
+## Rooftops: audit of 2 November 2026
+
+- **XP since the 8 May 2024 rebalance** (Wiki course tables): Al Kharid 12/36/48/48/12/6/18/36
+  (216, confirmed by 1858's `helper_agility_add_xp`), Falador
+  11/22/61/27/26/61/53/30/14/13/13/14/241 (586), Seers' 45/20/20/35/15/435 (570), Ardougne's last
+  gap 625 (889; 787's XP is 18.75x the Wiki's on every obstacle). Each adds up to the lap with no
+  bonus.
+- **Timing from captures:** Al Kharid follows 1858 (one lap, Leagues V), Pollnivneach 1788 (one
+  lap: jumps put the player a plane up while crossing), Ardougne 787 (19 laps, a "Grid Master"
+  world; the steep roof ends on 2656,3297, where the last gap is jumped from). Falador and Seers'
+  have no capture, so their movement is a guess.
+- **Failures** (no message, no XP; the player lands below with anim 1332, sounds 2455 and
+  518/519, and the damage):
+  - Varrock clothes line (1723): a jump, a wobble (764, sound 2493), on 3212,3414,0 a tick later.
+    Varrock wall (1723): the fourth hold slips (1123), on the ground two ticks later. Their fail
+    chances aren't known (the engine's default, never failing from 50).
+  - Canifis gap 3 (90): on 3482,3499,0 the next tick; the Wiki's chart (175/300, never from 64);
+    damage 1-8 (the upper bound is an older Wiki revision's).
+  - Rellekka first tightrope (1885): two tiles, the fall (764, sound 2493), a tick later straight
+    down; damage is 10% of current Hitpoints rounded up (6 at 57; the Wiki says rounded down);
+    the chance below 85 is a guess.
+- **Failures not built** (no landing, animation or line known): Al Kharid tightrope 1 (the zip
+  line's fail was removed on 8 May 2024, though the course page still lists it), Falador hand
+  holds (until 66, 3-8 damage), Seers' gap 1 and tightrope (until 79), Pollnivneach market stall
+  (Mod Ash: low 60 / high 300, floor(HP / 17 + 2) damage), Ardougne gaps 1 and 2 (until 95).
+
+## Gnome Stronghold and Barbarian Outpost
+
+- **Gnome Stronghold:** XP since 2024 is 10/10/6.5/10/6.5/10/7.5 and a 50 bonus (110.5); the pipe's
+  own page says 10, which the course table doesn't add up to. The second climb-down branch and the
+  rope's middle tiles are clickable too. OSRS has no advanced section (that is RuneScape's).
+  Capture 3225 only shows other players in the pipes. The gnome trainers' lines aren't done.
+- **Barbarian Outpost:** the lap is 153.3 Agility (the obstacles' 107 and 46.3) and 41.3 Strength
+  (Wiki). The log follows 2875 (spam start line, the creak on the 2nd and 7th tiles). The ropeswing,
+  log and ledge can fail until 93 (the Wiki's charts), but no damage, landing or line is known,
+  so they don't. The entry pipe's 10 XP and Barcrawl requirement and the ladder's level 35 are in
+  `agility-shortcuts.json` and aren't done.
+
+## Wilderness Agility Course
+
+- **From rsprox 449 and 450** (rev 233, main game): every line is spam ("You skillfully swing
+  across.", "You carefully start crossing the stepping stones..." / "...You safely cross to the
+  other side.", "You skillfully edge across the gap.", "You reach the top."); the rope swing, six
+  stone jumps two ticks apart, the log with its creaks, and the rocks climbed as a walk (render
+  737), not a jump.
+- **Levels:** 49 for the pipe, none for the rest; the gate needs 52 (Wiki).
+- **Failures** (Wiki and Mod Ash): rope 200/250, stones 180/250, log 200/250, even at 99. The
+  stones fail only on the third stone, as captured in 449 (back to 3002,3963 for HP / 5 + 1). The
+  rope and log fall into the pit for 3/20 of HP + 1 ("You slip and fall into the pit below." /
+  "...onto the spikes below."); their landings (3005,10357 and 3000,10345) and timing are guesses.
+- **Not done:** the gate's ridge lines and the exit prompt after paying (shortcut entries).
+
+## Brimhaven Agility Arena
+
+`plugins/minigames/brimhavenagilityarena/`, checked against rsprox 75, 1735, 1738, 1863, 4308
+(Leagues V, rev 227) and 1102 (Leagues VI, rev 237), XP divided by the league's multiplier.
+
+- **Obstacles:** one click crosses the whole obstacle between two pillars and pays its XP once, the
+  tick after landing, with each kind's captured animations, sounds and timing. Hand holds need 20
+  Agility (Wiki).
+- **Traps:** floor spikes, pressure pads, spinning blades and darts go off as the player stops on
+  their span and jump (darts: walk) them over the whole of it. The darts are in the three
+  corridors that join two darts dispensers, not on the dispensers. Blades use their own chart
+  (153/255) and darts 131/255 (Wiki); nothing fails at 99.
+- **Tags:** ticket 29480 (the 2024 ticket; 2996 is the discontinued one) and a voucher, after the
+  lap count line, with the ticket's item box and jingle 71. The first tag is the Karamja medium
+  task; the elite Karamja diary doubles a tag 1 time in 10. Karamja gloves 2-4 add 10% to obstacle
+  XP (Wiki).
+- **Pirate Jackie:** Trade and "I'd like to trade in my tickets" open the cache's Agility Arena
+  Store (omnishop `agilityarena_rewards_newshop`, interface 819 in 75, 1102, 1738, 1863, 4308):
+  345 Agility XP a ticket (379.5 with Karamja gloves 2+), Buy N spending N tickets; herbs noted;
+  the Graceful recolour swaps the six default pieces for the Agility Arena ones; the captured info
+  texts. The old-or-new shop question needs both tickets. Discontinued tickets (2996) used on her
+  become vouchers 1:1 (the Wiki gives no rate). The old Ticket Exchange is the shops.json one, at
+  its item values and without its tiered XP.
+- **Not done:** reverting the Agility Arena graceful at Jackie; broken-plank falls and the climbing ropes back up; the saw
+  blades; fail rates for the clickable obstacles (the Wiki has no charts); the re-entry and
+  world-hop locks. The north ledge's and west hand holds' animations are mirrored from the
+  captured sides.
+
+## Courses not built
+
+- **Dorgesh-Kaan Agility Course** (70 Agility, Death to the Dorgeshuun): the locs are in the rev-241
+  cache and rsprox 1843 (Leagues V) has 23 clicks on it.
+- **Penguin Agility Course:** only Cold War's simplified hops (`ColdWar.Quest.js`), with no XP or
+  failures.
+- **Werewolf Skullball.**

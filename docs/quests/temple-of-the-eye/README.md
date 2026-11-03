@@ -44,6 +44,40 @@ For #1858, queued Continues could reach the incantation's overhead chant before 
 cast entered native NPC sync, closing the dialogue while leaving stage 90 and cutscene controls
 active. The scene now holds for one sync tick before starting its unchanged transcript.
 
+Holding Space through the chant still froze the scene: "Alright, with me!" stays in the chatbox
+while the chant waits on its timer, and a Continue on it ended the chain under that timer. Native
+Continues no longer advance a step that moves itself on (an overhead line, a held line, `Scenes.hold`),
+which covers every transcript cutscene, not just this one.
+
+For #1906, the temple scenes are real private instances instead of the shared cache template squares.
+The untouched temple, the Stone of Jas vision and the tutorial's arena each get their own
+`TemplatedInstanceArea`, so the vision is the stone in a void and no copy can see another. Nothing
+stands on the template map any more, so the quest, the vision, the tutorial and the minigame cannot
+see one another, and random events (which skip private areas) cannot interrupt the scenes. The camera
+and every owner-only NPC/loc are mapped through the active copy. Switching to the vision, to the
+tutorial and back for the closing scene, relog recovery, and the altar trips now enter the correct
+copy; `::tele`/logout during them recovers at the matching start tile.
+
+- Persten calling the player back ends the vision on that line: the player returns to the temple
+  markings and the camera resets instead of staying in the vision.
+- The tutorial's first Felix explanation is tracked separately from its short repeat, so a save
+  parked on his step hears the weak-cell explanation once rather than "take one to Tamara".
+- The exploration apprentices' repeat keys map to their real transcript variants; Felix's
+  `<name>-again` shortcut does not exist, which used to fall through to the generic shop page.
+- Tutorial arrows sit over the middle of multi-tile locs (the large guardian remains, the piles,
+  the workbench, the cell tables); after Felix explains the workbench the arrow moves there.
+- At the Mind-altar step, Tamara replaces a weak cell the player never made as well as a lost
+  catalytic stone, so skipping the uncharged cell no longer softlocks the barrier.
+- Persten is pulled into the rift on the "dragged into the rift" action, and the creatures appear
+  when the transcript says they do.
+
+For #1978, the vision plays its opening like capture 1693 (ticks 4609-4633). The chatbox is held
+on arrival; 11 ticks later the player walks seven tiles south to the Mysterious Stone (2400,5731)
+while the camera slowly pans to it (2403,5728), and the voices start 24 ticks after arrival. Before,
+the voices started at once, the player never moved, and the pan ran on "And with you, Zachariah",
+which carried the camera away from the player. Live returns the player to the temple on "Jas!"
+(level 1 of the vision's build area); here it is still on Persten's "[player name]?".
+
 Known gaps:
 
 - Other players on the same step are visible (shared map, not an instance).
@@ -56,6 +90,26 @@ Known gaps:
 
 ## Runs
 
+- **2026-11-03, #1978 vision walk, real web client + MCP:** stage 100 by command, the three
+  apprentices and Persten by real clicks, chatbox Continues clicked in the browser client. Before
+  the fix the player stood at 2400,5738 while the camera panned to the stone on the second voice
+  line. After it, the player waits 10 ticks, walks 2400,5738 to 2400,5731 one tile a tick and is
+  beside the stone in frame when "Saradomin be with you." opens on tick 24; every voice line, the
+  return to the temple and the rift transcript continued. The reported freeze did not reproduce
+  on main before the fix: Continue clicks on the real link advanced the vision (missed clicks just
+  above the link look like a freeze). The rest of the quest was not replayed.
+- **2026-11-02, #1906 instances and tutorial fixes:** offline native checkpoints take the quest
+  from stage 90 through the temple instance, the vision return, the tutorial instance, the third
+  power-up back in the temple and the tower exit; the Felix repeat, weak-cell replacement and
+  workbench-arrow regressions are covered by
+  `tests/temple-of-the-eye-named-dispatch.test.cjs`. Web-client screenshots of stage 100 and
+  stage 115 show the private temple and tutorial copies with no other copy in view. The vision,
+  rift, closing-scene camera tracks and the in-client arrow positions were not re-captured.
+- **2026-11-02, offline native checkpoint (stage 85), held Space:** the same harness sends a
+  Continue on the open chatbox every tick the chant waits. Stage 100, four chants, one portal and
+  restored controls; with the guard removed it stays at stage 90. In the web client (browser pane),
+  key-repeated Space didn't freeze it even without the guard: the client sends one Continue per
+  chatbox until that widget is rebuilt, so the window the report hit wasn't reached live.
 - **2026-11-02, offline native checkpoints (stages 85 and 90):** real Player, ClientConnection,
   quest/dialogue dispatch, NPC spawning and local sync. Paced and same-tick queued Continues reach
   stage 100; the four actors chant, the portal opens, and controls return. Bank/dialogue replacement

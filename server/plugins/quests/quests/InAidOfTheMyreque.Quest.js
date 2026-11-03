@@ -522,7 +522,7 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
       text = text.replace(/\[He\/She\]/g, male ? "He" : "She");
     }
     if (text.includes("[player name]")) {
-      text = text.replace(/\[player name\]/gi, String(request.player.getUsername()));
+      text = text.replace(/\[player name\]/gi, String(request.player.getDisplayName()));
     }
     if (text.includes("[citizen name]")) {
       const name = request.definition?.getName?.() || "Citizen";

@@ -10,6 +10,8 @@ module.exports = {
   members: true,
   register(api) {
     require("./toa/Lobby.TombsOfAmascut")(api);
+    require("./toa/Retrieval.TombsOfAmascut")(api);
+    require("./toa/EscapeCrystal.TombsOfAmascut")(api);
     require("./toa/Raid.TombsOfAmascut")(api);
     require("./toa/CombatAchievements.TombsOfAmascut")(api);
     require("./toa/Nexus.TombsOfAmascut")(api);

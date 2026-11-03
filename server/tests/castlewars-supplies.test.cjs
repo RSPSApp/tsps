@@ -210,7 +210,7 @@ test('bucket routing stands directly next to a Castle Wars tap', (t) => {
 test('cleanup includes buckets and every potion dose; Lanthus and ground supplies use corrected canonical spawns', () => {
   for (const id of [core.ItemIdentifiers.BUCKET, core.ItemIdentifiers.BUCKET_OF_WATER, ...data.BREW_DOSES]) {
     assert.equal(data.CLEANUP_ITEM_IDS.has(id), true);
-    assert.equal(data.DEATH_REMOVE_ITEM_IDS.has(id), true);
+    assert.equal(data.DEATH_REMOVE_ITEM_IDS.has(id), false, 'supplies last until the player leaves the game');
   }
   const lanthus = require('../data/definitions/npc-spawns.json').filter((spawn) => spawn.name === 'Lanthus');
   assert.equal(lanthus.length, 1);

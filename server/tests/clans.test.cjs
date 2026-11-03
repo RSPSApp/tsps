@@ -92,7 +92,7 @@ function player(name) {
     getSkillManager: () => ({ getCombatLevel: () => self.combat ?? 3, getTotalLevel: () => self.total ?? 32, getMaxLevel: () => 1, getExperience: () => self.xp ?? 0 }),
     notices: [],
     messages: [],
-    getUsername: () => name,
+    getUsername: () => name, getDisplayName: () => name,
     getLongUsername: () => BigInt(name.length),
     getIndex: () => (self.index ??= nextIndex++),
     getHostAddress: () => '127.0.0.1',

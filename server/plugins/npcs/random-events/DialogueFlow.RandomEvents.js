@@ -40,7 +40,7 @@ function npcLine(api, player, index, npcId, text, expression) {
 }
 
 function playerLine(api, player, index, text, expression) {
-  return mirrored(player, new api.core.PlayerDialogue(index, text, expression), player.getUsername(), text);
+  return mirrored(player, new api.core.PlayerDialogue(index, text, expression), player.getDisplayName(), text);
 }
 
 function chat(api, { player, npcId = -1, title = OPTIONS_TITLE, lines = [], playerLines = [],

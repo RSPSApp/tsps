@@ -58,6 +58,7 @@ function createPlayer(name, index) {
     texts,
     packets,
     getUsername: () => name,
+    getDisplayName: () => name,
     getIndex: () => index,
     getSession: () => ({ sendClientPacket: (packet) => packets.push(packet) > 0 }),
     getPacketSender: () => sender,

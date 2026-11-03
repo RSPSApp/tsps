@@ -21,7 +21,11 @@ const WARDENS_OPEN = 1;
 const SUPPLY_INVENTORIES = [807, 808, 809];
 const SUPPLY_BAG_INVENTORY = 810;
 const SUPPLY_BAG_SIZE = 28;
-const CHAOS_RARE_ONE_IN = 8;
+const CHAOS_RARE_ONE_IN = 5;
+/** Entry raids' packs in every recording (223/00014, 227/00101, 234/03280): half as much again. */
+const ENTRY_PACK_FACTOR = 1.5;
+const POWER_SALTS_ROUNDED_DOWN_ONE_IN = 5;
+const ATTR_MET_SPIRIT = "toa:met-spirit";
 const SHOP_PACK_COMPONENTS = [6, 9, 12];
 const SHOP_CONTAINER_COMPONENTS = [4, 7, 10];
 const SIDE_MODAL_UID = (161 << 16) | 74;
@@ -39,10 +43,6 @@ class NexusRoom extends Raid.Room {
     if (!raid.pathLevelsSeeded) {
       this.increases.fill(settings.startingPathLevel());
       raid.pathLevelsSeeded = true;
-    }
-    if (settings.isActive("WALK_THE_PATH")) {
-      if (done === 1) this.levelRandomPaths(2);
-      else if (done === 2 || done === 3) this.levelRandomPaths(1);
     }
     if (done === 2 || done === 4) this.offerSupplies();
     if (done === 4) this.replaceObject(Shared.WARDENS_ENTRANCE, ENTRANCE_SHAPE, WARDENS_OPEN);
@@ -65,19 +65,14 @@ class NexusRoom extends Raid.Room {
     if (this.spirit && this.eligibleForSupplies.delete(player.getUsername())) {
       player.sendMessage("<col=0000b2>A helpful spirit has arrived with some supplies.");
       raid.member(player).canClaimSupplies = true;
+      player.getPacketSender().sendVarbit(Shared.VARBIT.SPIRIT_ROLLED, 0);
+      player.getPacketSender().sendVarbit(Shared.VARBIT.SPIRIT_CLAIMED, 0);
     }
     if (raid.pathsCompleted.length > 0) {
       const path = PATH_BY_KEY[raid.pathsCompleted[raid.pathsCompleted.length - 1]];
       const { Direction } = Shared.core();
       const facing = { APMEKEN: Direction.WEST, SCABARAS: Direction.SOUTH_WEST, HET: Direction.EAST, CRONDIS: Direction.SOUTH_EAST }[path.key];
       if (facing) player.setDirection?.(facing);
-    }
-  }
-
-  levelRandomPaths(amount) {
-    const open = PATHS.filter((path) => !this.raid.pathsCompleted.includes(path.key));
-    for (let i = 0; i < amount && open.length > 0; i++) {
-      this.increases[PATH_BY_KEY[Shared.randomOf(open).key].index]++;
     }
   }
 
@@ -101,18 +96,20 @@ class NexusRoom extends Raid.Room {
         Shared.statement(player, "You can't proceed as a different path has already been selected.");
         return;
       }
-      if (raid.enterRoom(player, path.first, { leaderOnly: true })) raid.setHudPath(player, path.index + 1);
+      if (raid.enterRoom(player, path.first, { leaderOnly: true })) raid.setHudPath(player, path.hud);
       return;
     }
     if (!raid.isLeader(player)) {
-      Shared.statement(player, `Your leader, ${Shared.displayName(raid.leader)}, must enter first.`);
+      Shared.statement(player, `Your leader, ${Shared.displayName(raid.leader)}, must go first.`);
+      player.sendMessage(`Your leader, ${Shared.displayName(raid.leader)}, must go first.`);
       return;
     }
     const go = () => {
+      forfeitSupplies(raid, this);
       this.selectPath(path.key);
       raid.enterRoom(player, path.first, { leaderOnly: true });
-      raid.setHudPath(player, path.index + 1);
-      raid.broadcast(`${Shared.displayName(player)} has chosen to walk the Path of ${path.name}. Join them...`, player);
+      raid.setHudPath(player, path.hud);
+      raid.broadcast(`${Shared.displayName(player)} has chosen to walk the Path of ${path.name}. Join ${Shared.pronoun(player)}...`, player);
     };
     if (raid.hasStragglers()) raid.abandonPrompt(player, `Do you wish to walk the Path of ${path.name}`, go);
     else if (quick) go();
@@ -136,9 +133,10 @@ class NexusRoom extends Raid.Room {
       return;
     }
     const go = () => {
+      forfeitSupplies(raid, this);
       if (raid.enterRoom(player, "WARDENS_P1", { leaderOnly: true })) {
         raid.setHudPath(player, PATHS.length + 1);
-        if (raid.isLeader(player)) raid.broadcast(`${Shared.displayName(player)} has proceeded to the lower level. Join them...`, player);
+        if (raid.isLeader(player)) raid.broadcast(`${Shared.displayName(player)} has proceeded to the lower level. Join ${Shared.pronoun(player)}...`, player);
       }
     };
     if (!raid.isLeader(player)) {
@@ -152,35 +150,53 @@ class NexusRoom extends Raid.Room {
 }
 
 /**
- * Wiki: the helpful spirit's three packs; the help invocations shrink them (with at least one
- * of each guaranteed item). The chaos pack is rolled: 1-8 nectar, 0-6 tears, 0-2 salts and a
- * rare (1 in 8, OpenRune) ambrosia and liquid adrenaline.
+ * Wiki (Helpful Spirit): the three packs. Life: 5 nectar, 5 tears, 1-3 dressings, 1-3 scarabs, 1-2
+ * ambrosia; On a Diet swaps the dressings for two scarabs and an ambrosia. Chaos: 1-8 nectar, 0-6
+ * tears, 0-2 salts, and rarely an ambrosia or a liquid adrenaline. Power: 2 salts, 1 adrenaline. The
+ * help invocations reduce them to 66%, 33% and 10%, with a minimum of one, and the Wiki notes
+ * that the reduction doesn't always bite (2 or 1 salts with Need Some Help).
+ *
+ * Captured (invs 807-809, 88 offers in the recordings):
+ * - Rounded up: nectar and tears 4/4, 2/2, 1/1 under the three (227/00581, 227/01838, 227/00553).
+ * - An Entry raid has half as much again: 9/8 and 3 salts + 2 adrenaline (223/00014, 234/03280).
+ * - The rare's chance: 1 chaos pack in 5 (19 of 88, a fit). 1 salt rather than 2 under Need Some
+ *   Help, 1 in 5 (4 of 20, a fit).
+ * Wiki vs capture: at Normal and Expert the captures have 11 nectar and tears together, 6/5 or
+ * 5/6, not the Wiki's 5/5. The Wiki's numbers are used.
  */
 function supplyPacks(settings) {
   const I = Shared.core().ItemIdentifiers;
-  const factor = settings.supplyFactor();
+  const help = settings.supplyFactor();
+  const factor = help * (settings.raidLevel < 150 ? ENTRY_PACK_FACTOR : 1);
   const diet = settings.isActive("ON_A_DIET");
-  const scaled = (amount, minimum = 1) => Math.max(minimum, Math.floor(amount * factor));
-  const rare = () => (Shared.random(1, CHAOS_RARE_ONE_IN) === 1 ? scaled(1, 0) : 0);
+  const scaled = (amount, minimum = 1) => (amount <= 0 ? 0 : Math.max(minimum, Math.ceil(amount * factor)));
+  const rare = (id) => [id, Shared.random(1, CHAOS_RARE_ONE_IN) === 1 ? scaled(1) : 0];
   const life = [
     [I.NECTAR_4_, scaled(5)],
     [I.TEARS_OF_ELIDINIS_4_, scaled(5)],
-    [I.AMBROSIA_2_, scaled(diet ? 3 : 2)],
-    [I.BLESSED_CRYSTAL_SCARAB_2_, scaled(diet ? 5 : 3)],
+    [I.AMBROSIA_2_, scaled(Shared.random(1, 2) + (diet ? 1 : 0))],
+    [I.BLESSED_CRYSTAL_SCARAB_2_, scaled(Shared.random(1, 3) + (diet ? 2 : 0))],
   ];
-  if (!diet) life.push([I.SILK_DRESSING_2_, scaled(3, 0)]);
+  if (!diet) life.push([I.SILK_DRESSING_2_, scaled(Shared.random(1, 3))]);
   const chaos = [
     [I.NECTAR_4_, scaled(Shared.random(1, 8))],
-    [I.TEARS_OF_ELIDINIS_4_, scaled(Shared.random(0, 6), 0)],
-    [I.SMELLING_SALTS_2_, scaled(Shared.random(0, 2), 0)],
-    [I.AMBROSIA_2_, rare()],
-    [I.LIQUID_ADRENALINE_2_, rare()],
+    [I.TEARS_OF_ELIDINIS_4_, scaled(Shared.random(0, 6))],
+    [I.SMELLING_SALTS_2_, scaled(Shared.random(0, 2))],
+    rare(I.AMBROSIA_2_),
+    rare(I.LIQUID_ADRENALINE_2_),
   ];
+  const fewerSalts = help < 1 && help > 0.5 && Shared.random(1, POWER_SALTS_ROUNDED_DOWN_ONE_IN) === 1;
   const power = [
-    [I.SMELLING_SALTS_2_, scaled(2)],
+    [I.SMELLING_SALTS_2_, fewerSalts ? 1 : scaled(2)],
     [I.LIQUID_ADRENALINE_2_, scaled(1)],
   ];
   return [life, chaos, power].map((pack) => pack.filter(([, amount]) => amount > 0));
+}
+
+/** Wiki: supplies not collected from the spirit are forfeited on moving on. */
+function forfeitSupplies(raid, room) {
+  if (!room.spirit) return;
+  for (const player of raid.players) raid.member(player).canClaimSupplies = false;
 }
 
 function packItems(pack) {
@@ -197,18 +213,35 @@ function nexusOf(player) {
 // ------------------------------------------------------------------ objects
 
 function usePathEntrance(event) {
-  const room = nexusOf(event.player);
-  if (!room) return false;
   const location = event.object.getLocation();
   const path = PATHS.find((candidate) => candidate.entrance.x === location.getX() && candidate.entrance.y === location.getY());
   if (!path) return false;
+  const room = nexusOf(event.player);
+  if (!room) return followIntoPath(event.player, PATH_BY_KEY[path.key]);
   room.choosePath(event.player, PATH_BY_KEY[path.key], event.option !== "Enter");
+  return true;
+}
+
+/**
+ * The leader went in first, which took the party's room on from the Nexus: those still in it follow
+ * through the chosen path's doorway. (Played over the MCP: a second player couldn't.)
+ */
+function followIntoPath(player, path) {
+  const raid = Raid.raidOf(player);
+  if (!raid || !Shared.inTombs(player.getLocation())) return false;
+  if (raid.roomFor(player)) return false;
+  const key = path ? path.first : "WARDENS_P1";
+  if (raid.roomKey !== key) {
+    Shared.statement(player, "You can't proceed as a different path has already been selected.");
+    return true;
+  }
+  if (raid.enterRoom(player, key, { leaderOnly: false })) raid.setHudPath(player, path ? path.hud : PATHS.length + 1);
   return true;
 }
 
 function useWardensEntry(event) {
   const room = nexusOf(event.player);
-  if (!room) return false;
+  if (!room) return followIntoPath(event.player, null);
   room.enterWardens(event.player, event.option !== "Enter");
   return true;
 }
@@ -224,6 +257,12 @@ function claimSupplies({ player }) {
     return true;
   }
   const sender = player.getPacketSender();
+  if (!player.getAttribute(ATTR_MET_SPIRIT)) {
+    player.setAttribute(ATTR_MET_SPIRIT, 1);
+    Shared.statement(player, "The spirit looks at you without saying a word. However, as you approach, he offers you some items.");
+    return true;
+  }
+  sender.sendVarbit(Shared.VARBIT.SPIRIT_ROLLED, 1);
   room.packs.forEach((pack, index) => {
     sender.sendInventory(SUPPLY_INVENTORIES[index], 9, pack.map(([id, amount]) => ({ id, amount })));
     sender.sendInterfaceFlagsRange((INTERFACE.SUPPLIES_SHOP << 16) | SHOP_PACK_COMPONENTS[index], 0, 9, EVENT.OP1);
@@ -246,7 +285,7 @@ function takePack(event) {
   const inventory = player.getInventory();
   if (!inventory.contains(ItemIdentifiers.SUPPLIES)) {
     if (inventory.getFreeSlots() < 1) {
-      Shared.statement(player, "You need at least one inventory spot for a supply bag.");
+      Shared.statement(player, "The spirit gives you a strange look. You don't have enough room for what he's offering.");
       return;
     }
     member.supplies = items;
@@ -259,7 +298,15 @@ function takePack(event) {
     member.supplies.push(...items);
   }
   member.canClaimSupplies = false;
+  player.getPacketSender().sendVarbit(Shared.VARBIT.SPIRIT_CLAIMED, 1);
   player.getPacketSender().sendInterfaceRemoval();
+}
+
+/** 227/01753 tick 5032: the bag goes when its last supply comes out. */
+function bagGone(player) {
+  player.sendMessage("The empty bag disintegrates.");
+  player.sendMessage("The bag disintegrates.");
+  player.getPacketSender().closeSubInterface(SIDE_MODAL_UID);
 }
 
 function openSupplyBag({ player }) {
@@ -290,7 +337,8 @@ function useSupplyBag(event) {
   if (op === BAG_OP.DROP) {
     member.supplies.splice(slot, 1);
     const { ItemOnGroundManager, Item } = Shared.core();
-    ItemOnGroundManager.registerLocation(player, new Item(id, 1), player.getLocation().clone(), raid.area);
+    // Wiki (5 October 2022): a raid's potions dropped appear at once for the party.
+    ItemOnGroundManager.registerLocation(player, new Item(id, 1), player.getLocation().clone(), raid.area, { public: true });
   } else {
     const wanted = op === BAG_OP.FIVE ? 5 : op === BAG_OP.ALL ? SUPPLY_BAG_SIZE : 1;
     const free = player.getInventory().getFreeSlots();
@@ -305,13 +353,13 @@ function useSupplyBag(event) {
   }
   if (member.supplies.length === 0) {
     player.getInventory().delete(Shared.core().ItemIdentifiers.SUPPLIES, 1);
-    player.getPacketSender().closeSubInterface(SIDE_MODAL_UID);
+    bagGone(player);
     return;
   }
   sendBagContents(player, member.supplies);
 }
 
-/** Using one of the spirit's supplies on the bag puts it back in (OpenRune; not honey locusts). */
+/** Using one of the spirit's supplies on the bag puts it back in (Wiki: Supplies; not honey locusts). */
 function storeSupply(event) {
   const { player } = event;
   const raid = Raid.raidOf(player);
@@ -353,7 +401,7 @@ function withdrawSupplies(player, count) {
     inventory.adds(id, 1);
     taken++;
   }
-  if (member.supplies.length === 0) player.getPacketSender().closeSubInterface(SIDE_MODAL_UID);
+  if (member.supplies.length === 0) bagGone(player);
   else sendBagContents(player, member.supplies);
   return true;
 }
@@ -398,10 +446,28 @@ function resupply({ player }) {
   inventory.refreshItems();
   if (member.supplies.length === 0) {
     inventory.delete(Shared.core().ItemIdentifiers.SUPPLIES, 1);
-    player.getPacketSender().closeSubInterface(SIDE_MODAL_UID);
+    bagGone(player);
   } else {
     sendBagContents(player, member.supplies);
   }
+  return true;
+}
+
+/**
+ * The raid's own items never reach a bank (the deposit pot is a deposit box): leaving takes them
+ * from the inventory only, so a banked Nectar would have come out again for another raid. The
+ * refusal's wording is the one other minigames' items get; no capture banks a ToA supply.
+ */
+function refuseRaidItems(event) {
+  if (!Raid.isRaidItem(event.item?.getId?.())) return;
+  event.allow = false;
+  event.player.sendMessage("A magical force prevents you from banking this item!");
+}
+
+/** Wiki (Deposit pot): beside the spirit, as a bank deposit box. */
+function usePot({ player }) {
+  if (!nexusOf(player)) return false;
+  Shared.api().emitCustomEvent("bank:open-deposit-box", { player });
   return true;
 }
 
@@ -419,10 +485,13 @@ function registerRaidItems() {
 
 module.exports = function registerTombsNexus(api) {
   Shared.bind(api);
+  api.persistAttribute(ATTR_MET_SPIRIT, 0);
   Raid.registerRoom("MAIN_HALL", NexusRoom);
   registerRaidItems();
   Shared.onObject(api, PATHS.map((path) => `Path of ${path.name}`), usePathEntrance);
   Shared.onObject(api, "Entry", useWardensEntry);
+  Shared.onObject(api, "Deposit pot", usePot);
+  api.onCanBankItem(refuseRaidItems);
   api.onNpcInteraction("Helpful Spirit", { Claim: claimSupplies });
   api.onItemAction("Supplies", { Open: openSupplyBag, "Withdraw 1": withdrawOne, "Withdraw All": withdrawAll, Resupply: resupply });
   api.onItemOnItem(storeSupply);

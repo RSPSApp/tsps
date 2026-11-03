@@ -112,7 +112,7 @@ function message(steps, casket = false) {
 const PLAYER_NAME = /\[(?:player name|playername|player|Fremennik name)(\.?)\]|<player name>/gi;
 
 function named(text, player) {
-  const name = player.getUsername?.();
+  const name = player.getDisplayName?.();
   return name ? String(text).replace(PLAYER_NAME, (_, period) => `${name}${period ?? ""}`) : String(text);
 }
 

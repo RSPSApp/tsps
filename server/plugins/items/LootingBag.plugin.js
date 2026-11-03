@@ -266,6 +266,8 @@ function openBag({ player, item }) {
   item.setMetaValue(`${BAG_DATA}:open`, undefined);
   player.getInventory().refreshItems();
   player.sendMessage(MESSAGE.OPEN);
+  // "looting-bag:opened" { player }: the bag opened (picked-up loot goes in).
+  api.emitCustomEvent("looting-bag:opened", { player });
   return true;
 }
 

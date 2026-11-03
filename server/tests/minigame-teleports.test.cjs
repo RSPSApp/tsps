@@ -32,6 +32,7 @@ function recordingPlayer(at = new Location(3222, 3218, 0)) {
         sendVarbit: (id, value) => (log(`varbit ${id}=${value}`), sender),
         sendConfig: (id, value) => (log(`varp ${id}=${value}`), sender),
         sendInterface: (id) => (log(`interface ${id}`), sender),
+        sendInterfaceFlagsRange: (uid, from, to, flags) => (log(`flags ${uid} ${from}..${to}=${flags}`), sender),
         sendInterfaceRemoval: () => (log('close'), sender),
         sendClientScript: (id) => (log(`script ${id}`), sender),
     };
@@ -168,11 +169,12 @@ test('interface 951 maps its components to the cache minigames, and every one ha
     assert.deepEqual(names.filter((name) => !data[name]), [], 'missing from minigame-teleports.json');
 });
 
-function attachPlugins(prompts, quests = [], zones = [], customHooks = []) {
+function attachPlugins(prompts, quests = [], zones = [], customHooks = [], interfaceHooks = []) {
     const api = {
         core,
         persistAttribute: () => {},
-    onInterfaceActionClick: () => {},
+    onInterfaceActionClick: (handler) => interfaceHooks.push(handler),
+    onItemAction: () => {},
     onCustomEvent: (name, handler) => customHooks.push({ name, handler }),
     emitCustomEvent: (name, request) => {
       if (name !== 'quest:is-complete') return;
@@ -220,6 +222,7 @@ test('known missing quest gates and unvisited destinations fail closed', async (
 test('cooldowns: the captured messages, and the varps set on landing', async (t) => {
     stubWorld(t)(() => {});
     await CachePipeline.initialize(path.resolve(__dirname, '..'));
+    t.mock.method(Date, 'now', () => 1_800_000_000_000);
     attachPlugins([]);
     const minigame = recordingPlayer();
     const now = Sequence.dateMinutes();
@@ -262,7 +265,7 @@ test('Animation opens the native picker for every home spell without casting or 
         const event = { player: f.player, buttonId: spell.widgetId, itemId: spell.itemId, opId: 10, handled: false };
         HomeTeleports._test.castHomeTeleport(event);
         assert.equal(event.handled, true, name);
-        assert.deepEqual(f.ticks.flat(), ['varp 4559=4093', 'varp 4560=1', 'interface 525', 'script 7707'], name);
+        assert.deepEqual(f.ticks.flat(), ['varp 4559=4093', 'varp 4560=1', 'interface 525', 'flags 34406408 0..10=2', 'script 7707'], name);
         assert.equal(f.player.getAttribute(HomeTeleports._test.LAST_HOME_TELEPORT_ATTRIBUTE), minute);
     }
 });
@@ -285,4 +288,122 @@ test('the spell opens the minigame list with busy set; Rat Pits asks which pit',
     ]);
     assert.equal(ticks.flat().at(-1), 'varbit 12393=1', 'busy stays set while the pit is chosen');
     assert.equal(SPELLBOOK, spell.widgetId >>> 16);
+    MinigameTeleports._test.chooseMinigame({ player: recordingPlayer().player, groupId: 76, childId: 32, slot: 18, action: 1 });
+    assert.equal(prompts.length, 2, 'Grouping keeps the same Rat Pits choice menu');
+});
+
+test('native Grouping selections use the existing teleport, cooldown and refusal paths', async t => {
+    await CachePipeline.initialize(path.resolve(__dirname, '..'));
+    const { PluginManager } = require('../dist/plugins/PluginManager');
+    const { Player } = require('../dist/game/entity/impl/player/Player');
+    const { PlayerSession } = require('../dist/net/PlayerSession');
+    const { ClientConnection } = require('../dist/net/NetworkBuilder');
+    const api = PluginManager.createApi('native-grouping-teleports-test');
+    MinigameTeleports.register(api);
+    require('../plugins/interface/SideChannels.plugin').register(api);
+    let nextIndex = 1700;
+    function who() {
+        const channel = { kind: 'test', isOpen: () => true, send: () => true, close() {}, onData() {}, onClose() {}, onError() {} };
+        const session = new PlayerSession(channel), player = new Player(session, new Location(3222, 3218, 0));
+        session.setPlayer(player); player.setRegistered(true); player.setIndex(nextIndex++); player.setUsername('grouping' + player.getIndex()); player.needsPlacement = false;
+        const connection = new ClientConnection(channel); connection.player = player;
+        const messages = []; t.mock.method(player, 'sendMessage', message => messages.push(message));
+        t.after(() => { player.setRegistered(false); TaskManager.cancelTasks(player); TaskManager.cancelTasks(player.getIndex()); });
+        return { player, connection, messages };
+    }
+    const position = f => [f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()];
+    const slots = CacheDefinitions.getEnumValues(848);
+    const slotFor = name => [...slots].find(([, value]) => value === name)?.[0];
+    const click = async (f, slot, opId = 1) => {
+        await f.connection.dispatch([{ type: 'widget_action', widgetId: (76 << 16) | 32, groupId: 76, childId: 32, buttonNum: opId, opId, slot, itemId: -1 }]);
+        f.connection.processTurnPackets();
+    };
+    for (const slot of [0, -1, 999, slotFor('Shield of Arrav')]) {
+        const f = who(); await click(f, slot);
+        for (let tick = 0; tick < 26; tick++) TaskManager.process();
+        assert.deepEqual(position(f), [3222, 3218, 0], `ineligible grouping slot ${slot} stays put`);
+        assert.equal(f.player.getAttribute(MinigameTeleports._test.LAST_MINIGAME_TELEPORT_ATTRIBUTE), undefined);
+    }
+    const wrongOp = who(); await click(wrongOp, slotFor('Castle Wars'), 2);
+    assert.equal(wrongOp.player.getAttribute(MinigameTeleports._test.LAST_MINIGAME_TELEPORT_ATTRIBUTE), undefined);
+    assert.deepEqual(position(wrongOp), [3222, 3218, 0]);
+    const castle = who(); await click(castle, slotFor('Castle Wars'));
+    for (let tick = 0; tick < 26; tick++) TaskManager.process();
+    assert.deepEqual(position(castle), [2442, 3093, 0]);
+    assert.equal(castle.player.getAttribute(MinigameTeleports._test.LAST_MINIGAME_TELEPORT_ATTRIBUTE), Sequence.dateMinutes());
+    await click(castle, slotFor('Castle Wars'));
+    assert.match(castle.messages.at(-1), /wait another 20 minutes/);
+    for (const [name, expected] of [
+        ['Fishing Trawler', /Fishing level of 15/], ['Pest Control', /combat level of 40/], ['Blast Furnace', /visited Keldagrim/],
+        ['Guardians of the Rift', /complete Temple of the Eye/], ['Sorceress Garden', /complete Prince Ali Rescue/],
+    ]) {
+        const f = who(); await click(f, slotFor(name));
+        assert.match(f.messages.at(-1) ?? '', expected);
+        assert.deepEqual(position(f), [3222, 3218, 0]);
+        assert.equal(f.player.getAttribute(MinigameTeleports._test.LAST_MINIGAME_TELEPORT_ATTRIBUTE), undefined);
+    }
+    const busy = who(); busy.player.setInterfaceId(12); await click(busy, slotFor('Castle Wars'));
+    assert.match(busy.messages.at(-1), /cannot do that right now/);
+    assert.equal(busy.player.getInterfaceId(), 12, 'the grouping click cannot close a busy interface to bypass its gate');
+    const blocked = who(); blocked.player.setLocation(new Location(3200, 3600, 0));
+    blocked.player.getCombat().getTeleblockTimer().start(300); await click(blocked, slotFor('Castle Wars'));
+    assert.match(blocked.messages.at(-1), /blocking you from teleporting/);
+    assert.deepEqual(position(blocked), [3200, 3600, 0]);
+    const vetoed = who();
+    const { Area } = require('../dist/game/model/areas/Area');
+    vetoed.player.setArea(new class extends Area { canTeleport() { return false; } }([]));
+    await click(vetoed, slotFor('Castle Wars'));
+    assert.deepEqual(position(vetoed), [3222, 3218, 0]);
+    assert.equal(vetoed.player.getAttribute(MinigameTeleports._test.LAST_MINIGAME_TELEPORT_ATTRIBUTE), undefined);
+    t.mock.method(WorldDefinition, 'isMembersWorld', () => false);
+    const free = who(); await click(free, slotFor('Nightmare Zone'));
+    assert.match(free.messages.at(-1), /members' world/);
+});
+
+
+test('home animation picker persists only valid toggle row operations and retains one enabled cast', () => {
+    const handlers = [];
+    attachPlugins([], [], [], [], handlers);
+    const f = recordingPlayer();
+    f.player.setAttribute('home-teleport:animations-unlocked', 1 << 5);
+    const click = (overrides = {}) => {
+        const event = { player: f.player, groupId: 525, childId: 8, opId: 1, slot: 5, ...overrides };
+        for (const handler of handlers) handler(event);
+        return event;
+    };
+    for (const invalid of [{ childId: 7 }, { opId: 2 }, { slot: -1 }, { slot: 32 }, { slot: 5.5 }]) {
+        click(invalid);
+        assert.equal(f.player.getAttribute(Sequence.TOGGLES_ATTRIBUTE), undefined);
+    }
+    click({ slot: 6 }); // Shattered is still locked.
+    assert.equal(f.player.getAttribute(Sequence.TOGGLES_ATTRIBUTE), undefined);
+    assert.equal(click().handled, true);
+    assert.equal(f.player.getAttribute(Sequence.TOGGLES_ATTRIBUTE), 33);
+    click({ slot: 0 });
+    assert.equal(f.player.getAttribute(Sequence.TOGGLES_ATTRIBUTE), 32);
+    click(); // Trailblazer is the last enabled animation.
+    assert.equal(f.player.getAttribute(Sequence.TOGGLES_ATTRIBUTE), 32);
+    assert.ok(f.ticks.flat().includes('varp 4560=32'));
+});
+
+test('enabled league casts use their own lock/landing ticks and release movement when cancelled', (t) => {
+    stubWorld(t)(() => {});
+    for (const [bit, animation, lockTick, landTick] of [[5, 8798, 22, 24], [6, 9209, 16, 19]]) {
+        const f = recordingPlayer();
+        f.player.setAttribute(Sequence.TOGGLES_ATTRIBUTE, 1 << bit);
+        Sequence.startHomeTeleport(core, f.player, new Location(2609, 3121, 0), () => f.log('arrived'));
+        run(f.ticks, f.nextTick, landTick + 2);
+        assert.ok(f.ticks[1].includes(`anim ${animation}`));
+        assert.ok(f.ticks[lockTick].includes('locked'));
+        assert.ok(f.ticks[landTick].includes('arrived'));
+        assert.ok(f.ticks[landTick].includes('free'));
+        const cancelled = recordingPlayer();
+        cancelled.player.setAttribute(Sequence.TOGGLES_ATTRIBUTE, 1 << bit);
+        const task = Sequence.startHomeTeleport(core, cancelled.player, new Location(2609, 3121, 0));
+        run(cancelled.ticks, cancelled.nextTick, lockTick + 1);
+        task.stop();
+        assert.ok(cancelled.ticks.flat().includes('free'));
+        run(cancelled.ticks, cancelled.nextTick, landTick + 2);
+        assert.ok(!cancelled.ticks.flat().some(e => e.startsWith('teleport')));
+    }
 });

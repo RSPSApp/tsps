@@ -49,6 +49,10 @@ const REWARD_POTENTIAL_INFO = "Reward Potential|"
   + "Close|";
 
 const NECROPOLIS_ENTRANCE_RADIUS = 8;
+/** Asked until "Yes, and don't ask again." (234/03280 ticks 5036-5040). */
+const ATTR_WARNED = "toa:entry-warned";
+const ENTRY_WARNING = "You are about to enter the Tombs of Amascut which is not a safe area. In addition, be aware that the raid uses various flashing effects that may cause discomfort to some users. Are you sure you wish to enter?";
+const REWARDS_WARNING = "A nearby chest contains some uncollected rewards. You should retrieve them before re-entering the Tombs of Amascut. If you enter without retrieving them, they will be destroyed.";
 // Interface 775: data_a_p/c_p/d_p (each followed by its world column), then per team size
 // data_<n>_p_o, _p_r, _g_o, _g_r from 53; the tabs story (Entry), normal and hard (Expert).
 const SCOREBOARD = {
@@ -116,16 +120,50 @@ function enterTombs({ player }) {
       "Cancel.", () => {});
     return true;
   }
-  if (Rewards.hasRewards(player)) {
-    Shared.statement(player, "You have unclaimed rewards from your last raid. Collect them from the chest first.");
+  if (Rewards.hasRewards(player) && !player.__toaWarnedOfRewards) {
+    // 227/01852 tick 15775: the warning, once; going in after it destroys them (Wiki).
+    player.__toaWarnedOfRewards = true;
+    player.sendMessage(REWARDS_WARNING);
+    Shared.statement(player, REWARDS_WARNING);
     return true;
   }
+  if (!lobby.raid && !lobby.isLeader(player)) {
+    player.sendMessage(`Your leader, ${lobby.leaderName}, must enter first.`);
+    Shared.statement(player, `Your leader, ${lobby.leaderName}, must enter first.`);
+    return true;
+  }
+  if (!player.getAttribute(ATTR_WARNED)) {
+    warnThenEnter(player, lobby);
+    return true;
+  }
+  goInside(player, lobby);
+  return true;
+}
+
+function warnThenEnter(player, lobby) {
+  const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = Shared.core();
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new StatementDialogue(0, ENTRY_WARNING),
+    new ActionDialogue(1, {
+      execute: () => Shared.options(player, "Are you sure you wish to enter?",
+        "Yes.", () => goInside(player, lobby),
+        "Yes, and don't ask again.", () => {
+          player.setAttribute(ATTR_WARNED, 1);
+          goInside(player, lobby);
+        },
+        "No.", () => {}),
+    }),
+  ));
+}
+
+function goInside(player, lobby) {
+  if (Rewards.hasRewards(player)) Rewards.destroyRewards(player);
+  player.__toaWarnedOfRewards = false;
   const raid = lobby.raid ?? Raid.begin(player);
-  if (!raid) return true;
+  if (!raid) return;
   raid.add(player);
   raid.enterRoom(player, "MAIN_HALL", { leaderOnly: !raid.room });
   Parties.stateOf(player).current = lobby;
-  return true;
 }
 
 /**
@@ -795,4 +833,5 @@ module.exports = function registerTombsLobby(api) {
   api.onInterfaceActionButton(MANAGEMENT_PRESETS_UID, clickPreset);
   api.persistAttribute("toa:invocation-presets", Array.from({ length: 5 }, () => [0, 0, 0]));
   api.persistAttribute("toa:completions");
+  api.persistAttribute(ATTR_WARNED, 0);
 };

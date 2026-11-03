@@ -17,7 +17,7 @@
  * 11. isHidden (byte)
  * 12. color/texture override flags (unsigned short)
  * 13. actions (3 null-terminated strings)
- * 14. final byte
+ * 14. text pronouns (byte)
  * 15. custom ammo quantity (signed int)
  * 16. custom ammo item id (signed int)
  * 17. custom ring item id (signed int)
@@ -62,6 +62,7 @@ const CP1252_DECODE: Record<number, number> = {
  */
 export interface DecodedAppearance {
     gender: number;
+    pronouns: number;
     headIconPk: number;
     headIconPrayer: number;
     npcTransformationId: number;
@@ -307,10 +308,8 @@ export function decodeAppearanceBinary(buffer: Uint8Array): DecodedAppearance | 
             reader.readStringCp1252NullTerminated(),
         ];
 
-        // 14. Final byte (we can ignore this)
-        if (reader.hasMore()) {
-            reader.readByte();
-        }
+        // 14. The native appearance textGender byte, separate from body type.
+        const pronouns = reader.hasMore() ? reader.readByte() : gender;
 
         // 15. Project extension: equipped ammo quantity for local equipment inventory sync.
         const ammoQuantity = reader.hasMore() ? Math.max(0, reader.readInt()) : 0;
@@ -330,6 +329,7 @@ export function decodeAppearanceBinary(buffer: Uint8Array): DecodedAppearance | 
 
         return {
             gender,
+            pronouns,
             headIconPk,
             headIconPrayer,
             npcTransformationId,

@@ -87,6 +87,69 @@ These match the captures or the Wiki, so they were left alone:
   (`3987`), **bone bolts** (`696`), **chinchompas** (`908/909/1272`), **atlatl** (`2795`),
   **salamanders** and the NPC projectile specs already captured in their plugins.
 
+## Magic shortbow Snapshot (issue #2021)
+
+Snapshot used the ordinary glowing-arrow launch graphic (`250`) immediately at height 100,
+and both travel arrows ended at cycle 57 despite starting at cycles 40 and 33. The dedicated
+Snapshot graphic is now `256`, in actor slot 1 at height 92 with a 30-cycle delay. Its two
+arrows start at cycles 20 and 50, end at `30 + 3 × tiles` and `50 + 3 × tiles`, and use angle
+15, progress 11 and heights 163/146. PacketSender multiplies projectile heights by four,
+so the plugin supplies 40.75/36.5. Each hit is queued for the first tick at or after its
+projectile lands, accounting for the core's extra processing tick against NPCs.
+
+Evidence:
+
+- The [OSRS Wiki](https://oldschool.runescape.wiki/w/Magic_shortbow#Special_attack) describes
+  Snapshot's two arrows in rapid succession.
+- [RSProx recording 412](https://rsprox.net/download/412), revision 231, normal world:
+  ticks 92 and 99 show sequence `snapshot (1074)`, slot-1 graphic
+  `sp_attack_snapshot_spotanim (256)` delayed 30 cycles at height 92, and both captured
+  projectile shapes at distances one and two. Both NPC hits appear two ticks after each
+  activation. [Recording 4008](https://rsprox.net/download/4008), revision 237, Pest Control,
+  repeats the projectile shapes at distances two and four.
+- The active revision-241 cache confirms travel `249` (model 3473, no sequence), launch
+  `250` (model 3473, sequence 366), Snapshot `256` (model 3473, sequence 1075) and attack
+  sequence `1074` (58 cycles).
+
+Offline regressions exercise the plugin, serialized projectile fields and hit scheduling for
+NPC/player targets. Player-target alignment applies the captured projectile arrival to the
+existing scheduler; the recordings above only show NPC targets. No live gameplay, browser
+rendering or PvP/PID timing was tested.
+
+## Dark bow Descent graphics (issue #2022)
+
+Descent omitted the equipped arrows' draw-back graphic and visible arrow projectiles,
+used flat flights for both special effects, and played the dragon impact after each
+hit even when firing ordinary arrows. The special now sends the equipped ammunition's
+double-arrow launch in actor slot 1 at height 96, pairs each special effect with its
+visible arrow, and sends one matching impact at the second arrow's landing delay.
+
+The [OSRS Wiki](https://oldschool.runescape.wiki/w/Dark_bow#Special_attack) describes
+dragon heads with dragon/seeking dragon arrows and shrouded arrows otherwise. Live
+[RSProx 273](https://rsprox.net/download/273), revision 229, tick 497, records the
+dragon launch `1111`, paired projectiles `1099`/`1120`, and impact `1100` delayed to
+cycle 145 at height 96. At nine tiles the low flight runs 41→91 and the high flight
+41→145, with angles 5/25, progress 11 and projectile heights 40/36. Revision 229
+projectiles quantize those heights to multiples of four; the current packet sends
+160/144 for the same measurements.
+
+[RSProx 2510](https://rsprox.net/download/2510), revision 229, ticks 456/683/940,
+repeats both projectile pairs against players. The first flight ends at `46 + 6 × tiles`
+(64 at three tiles, 70 at four), and the second at `55 + 10 × tiles` (85/95).
+The NPC recording's first flight matches `46 + 5 × tiles`; the target-specific
+distance formula is inferred from those samples rather than a capture at every range.
+
+The active revision-241 cache confirms `darkbow_dragon_head_flying_projanim` 1099,
+`darkbow_dragon_head_flying_impact_anim` 1100, `darkbow_generic_smoke_arrow_flight` 1101,
+`darkbow_broadarrow_smoke_arrow_flight` 1102, and `darkbow_smoke_arrow_impact` 1103.
+Ordinary/broad arrows use those smoke effects and their own visible arrow. No captured
+non-dragon Descent was found, so applying the same trajectories, launch height and
+impact delay to those variants is an inference from the shared weapon and cache names.
+
+Offline tests cover dragon, seeking dragon, rune and broad ammunition, packet fields at
+the captured distances and the delayed impact remaining unchanged after hits. No live
+gameplay or browser rendering was checked. Existing hit scheduling is unchanged.
+
 ## Verification
 
 ```
@@ -117,3 +180,49 @@ and the Concentrated Shot launch (rune javelin `205`, end `71` at 9 tiles, impac
 - The comp ogre bow still also fires metal arrows, which the Wiki doesn't list for it.
 - Heights are quarter-tiles (packet values are `height × 4`); the captured values used here
   (163/146, 155/146, 142/146, 155/177) are exact.
+
+# Magic and NPC projectiles (issue #1862)
+
+Projectiles "didn't align with the casting animation or travel toward the player". Two client
+bugs made projectiles hang over their caster, and many NPC attacks hit before their projectile
+arrived.
+
+## Client
+
+| Bug | Fix |
+| --- | --- |
+| A relog without a page load restarts the client clock. `ProjectileManager` only solves cycles past its last one, so every projectile sat on its caster and snapped to its target until the new clock passed the old (minutes). `resetWorld` cleared `renderer.projectileManager`, which the WebGPU renderer doesn't have. | `resetWorld` clears through `getProjectileManager()`, and `update()` starts over when the clock goes back. |
+| After a slow frame (a new area loading) the clock catches up up to 50 cycles at once; `update()` replayed 10 and dropped the rest, so the projectile fell behind and was removed mid-air. | Every elapsed cycle is replayed. |
+
+`client/tests/projectile-clock.test.ts` covers both; each fails on the old manager.
+
+## Hit timing
+
+Measured in the client: a hit queued N ticks out on a **player** shows its splat 30·N cycles
+after the projectile was sent; one on an **NPC** a tick later (`CombatFactory.hitProcessingDelay`).
+A projectile reaches its target at its end cycle. So an NPC's hit on a player lines up when
+N = `Projectile.ticksToLand(end)` = ceil(end / 30). Player spells and ranged already did.
+
+Fixed to hit when the projectile lands (projectile ids, heights and arcs unchanged; captured
+flights kept, only their hits moved):
+
+- Generic NPC magic (fixed 3 ticks) and ranged (1 tick with a flat 40 → 57 arrow, now
+  41 → 46 + 5/tile).
+- Dragonfire (flat 40 → 55, 1 tick; now 40 → 45 + 10/tile), wyrms, demonic gorillas, revenants,
+  Pest Control defilers and torchers, Surok, Ithoi, the Sourhog.
+- TzTok-Jad and JalTok-Jad: the hit (and the prayer read) stays at 3 ticks; the magic orb now
+  lands then, not 10 cycles a tile after.
+- God Wars generals and bodyguards, Vorkath, Sarachnis, Araxxor, Callisto/Artio, Venenatis/Spindel,
+  Chaos Elemental, Chaos Fanatic, both Archaeologists, Skotizo.
+- Nightmare husks, Nex's mages and blood reavers, Dagannoth Prime/Supreme, Spinolyps, Kraken,
+  Thermonuclear smoke devil, Kalphite Queen, Mimic minions.
+- Raids: Nylocas (all), Maiden's Blackstorm, CoX Skeletal Mystics, Deathly mage/ranger,
+  Muttadiles, Shamans, Olm's head shots, Vanguards, Tekton sparks, ToA agile scarabs.
+- Flights that ended at or before their launch (drawn on the caster): Growler/Balfrug and the
+  Vanguards' magic up close, Alchemical Hydra, Grotesque Guardians, Shellbane Gryphon and
+  Muttadile magic at 1 tick, Leviathan's 1-tick volley.
+
+Left as they are, on purpose: the Callisto/Artio orb (its knockback dodge is read at landing),
+the CoX Ice Demon burst up close (captured), the Fanatic and Archaeologist tile bombs, and the
+Kalphite Queen's flat 40 → 70 flight (`docs/kalphite-queen.md` wants captures first). Revenant
+and Sourhog impact graphics keep their captured cycle, which can be ahead of a long flight.

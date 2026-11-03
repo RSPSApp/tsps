@@ -146,6 +146,9 @@ export class CombatSpecial {
         if (character.isPlayer()) {
             let p = character.getAsPlayer();
             CombatSpecial.updateBar(p);
+            // "combat-special:performed" { player, itemId }: a special attack performed, with the weapon wielded.
+            const { PluginManager } = require("../../../plugins/PluginManager");
+            PluginManager.emitCustomEvent("combat-special:performed", { player: p, itemId: p.getEquipment?.()?.get(Equipment.WEAPON_SLOT)?.getId?.() ?? -1 });
         }
     }
 
@@ -279,7 +282,7 @@ export class CombatSpecial {
             if (queuedAttack) {
                 const equippedWeaponId = player.getEquipment().get(Equipment.WEAPON_SLOT).getId();
                 if (!developerQueuedAttackSpam && !CombatSpecial.affordable(player, spec, spec.getDrainAmountForWeaponId(equippedWeaponId))) {
-                    player.sendMessage("You do not have enough special attack energy left!");
+                    player.sendMessage("You don't have enough power left.");
                     player.setSpecialActivated(false);
                     CombatSpecial.updateBar(player);
                     return;
@@ -301,11 +304,18 @@ export class CombatSpecial {
                         }
                         // A special swing is the player's attack for the cycle and is
                         // followed by the weapon's normal cooldown; `bypassDelay`
-                        // (performNewAttack(true)) skips that reset, so do it here.
+                        // (performNewAttack(true)) skips that reset, so do it here. A
+                        // bypassing special swings outside the cycle, so it only extends
+                        // the deadline: Quick Smash after an AGS hit leaves the AGS's
+                        // cooldown running instead of cutting it to one tick.
                         const { PluginManager } = require("../../../plugins/PluginManager");
                         const speed = PluginManager.emitAttackSpeed(player, target, method.type(),
                             spec.getTraits()?.attackSpeedTicks ?? method.attackSpeed(player));
-                        player.getCombat().setAttackDelay(speed);
+                        if (instant) {
+                            player.getCombat().extendAttackDelay(speed);
+                        } else {
+                            player.getCombat().setAttackDelay(speed);
+                        }
                     } else {
                         player.getCombat().setSpecialAttackQueued(true);
                     }
@@ -331,7 +341,7 @@ export class CombatSpecial {
         const equippedWeaponId = player.getEquipment().get(Equipment.WEAPON_SLOT).getId();
         const drainAmount = spec.getDrainAmountForWeaponId(equippedWeaponId);
         if (!CombatSpecial.affordable(player, spec, drainAmount)) {
-            player.sendMessage("You do not have enough special attack energy left!");
+            player.sendMessage("You don't have enough power left.");
             return;
         }
 

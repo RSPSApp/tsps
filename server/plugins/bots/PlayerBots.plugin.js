@@ -9,6 +9,7 @@ const {
 } = require("./behaviours/state/State.PlayerBots");
 const { registerBotCommands } = require("./runtime/RegisterBotCommands.PlayerBots");
 const { registerBotEvents } = require("./runtime/RegisterBotEvents.PlayerBots");
+const { registerPvpChatter } = require("./behaviours/pvp/PvpChatter.PlayerBots");
 const { createBotPluginLogging } = require("./runtime/PluginLogging.PlayerBots");
 const { bootPlayerBotsRuntime } = require("./runtime/PluginBoot.PlayerBots");
 const { createBotBenchmark } = require("./runtime/Benchmark.PlayerBots");
@@ -208,6 +209,7 @@ function registerDuelBotAcceptance(api) {
 module.exports = {
   name: "PlayerBots",
   register(api) {
+    registerPvpChatter(api);
     initPvpTierLoadouts(api);
     registerDuelBotAcceptance(api);
     initPlayerBotStateCoreAccess(api);

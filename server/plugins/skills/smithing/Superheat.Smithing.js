@@ -17,7 +17,8 @@ const SPELL_NAME = "Superheat Item";
 const LEVEL = 43;
 const MAGIC_XP = 53;
 /** Wiki: one cast every 3 ticks. */
-const CAST_DELAY_MS = 1800;
+const CAST_TICKS = 3;
+const TICK_MS = 600;
 const CAST_ANIMATION = 725;
 const CAST_GRAPHIC = 148;
 const FAIL_GRAPHIC = 85;
@@ -33,7 +34,10 @@ const MESSAGE = {
   NOT_HOT_ENOUGH: "Even this spell is not hot enough to heat this item.",
 };
 
+const { actionInterval } = require("../SkillActions");
+
 let core = null;
+let api = null;
 let spell = null;
 
 /** The furnace recipe a cast on `oreId` smelts, or null when the item isn't an ore it heats. */
@@ -91,6 +95,11 @@ function castOnItem(event) {
   player.getSkillManager().addExperiences(core.Skill.SMITHING, Smithing.smeltingXp(player, recipe));
 }
 
+/** Ticks to the next cast; content may cast faster ("skills:action-interval", a league relic's 2-tick pace). */
+function castTicks(player) {
+  return actionInterval(api, player, core.Skill.MAGIC, "superheat", CAST_TICKS);
+}
+
 function createSpell() {
   const { ItemIds } = core;
   class SuperheatItem extends core.Spell {
@@ -107,13 +116,14 @@ function createSpell() {
     equipmentRequired() { return []; }
     startCast() {}
     usesSharedCastDelay() { return true; }
-    getCastCooldown() { return { attribute: "superheat:next-cast-at", duration: CAST_DELAY_MS }; }
+    getCastCooldown(player) { return { attribute: "superheat:next-cast-at", duration: castTicks(player) * TICK_MS }; }
   }
   return new SuperheatItem();
 }
 
-module.exports = function attach(api) {
-  core = api.core;
+module.exports = function attach(pluginApi) {
+  api = pluginApi;
+  core = pluginApi.core;
   api.onSpellOnItem(castOnItem);
 };
 

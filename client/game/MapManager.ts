@@ -497,6 +497,29 @@ export class MapManager<T extends MapSquare> {
         return this.gridRevision > 0 && !this.gridTransitionPending && this.isTargetGridReady(frameCount);
     }
 
+    /**
+     * Whether the square the view is centred on, the player's, can be drawn. A teleport leaves it
+     * unbuilt for a moment; walking over a square edge streams the next squares in while it stays.
+     */
+    isViewSquareReady(frameCount: number): boolean {
+        return this.isSquareReadyAt(this.viewX, this.viewZ, frameCount);
+    }
+
+    /**
+     * Whether the square holding the tile (`tileX`, `tileZ`) is drawn: built, and in the active
+     * grid, which only switches once every square in view of the new one is built. A frame asks
+     * this of the player's tile before streaming has caught up with it (the view is last frame's).
+     */
+    isSquareReadyAt(tileX: number, tileZ: number, frameCount: number): boolean {
+        if (ClientState.inInstance) return this.isSceneReady(frameCount);
+        const mapId = getMapSquareId(
+            Math.floor(tileX / Scene.MAP_SQUARE_SIZE),
+            Math.floor(tileZ / Scene.MAP_SQUARE_SIZE),
+        );
+        if (this.invalidMapIds.has(mapId)) return true;
+        return this.activeGridMapIdSet.has(mapId) && this.mapSquares.get(mapId)?.canRender(frameCount) === true;
+    }
+
     private isTargetGridReady(frameCount: number): boolean {
         for (let i = 0; i < this.gridMapCount; i++) {
             const mapId = this.gridMapIds[i];

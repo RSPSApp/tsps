@@ -116,7 +116,7 @@ function buildHarness(comboEatChance = 0, profileId = 'standard') {
   return {
     setHp: (value) => { hp = value; },
     getHp: () => hp,
-    setFood: (count) => { foodItems = Array.from({ length: count }, () => ({ getId: () => ItemIdentifiers.SHARK })); },
+    setFood: (count) => { foodItems = Array.from({ length: count }, () => new core.Item(ItemIdentifiers.SHARK, 1)); },
     engage: (value) => { target = value ? {} : null; attacker = null; following = null; },
     tick: () => node.tick({ player, state, nowMs: 1000 }),
     player, timers, delays,
@@ -223,7 +223,7 @@ test('a combo food can save a low-HP bot while normal food is on cooldown', () =
 
 
 function prayerHarness({ prayer = 99, defence = 99, confidenceTier = 2 } = {}) {
-  const player = new Player(null);
+  const player = new Player(null, new core.Location(3243, 3526));
   const sender = new Proxy({}, { get: () => () => sender });
   player.getPacketSender = () => sender;
   player.sendMessage = () => {};
@@ -304,6 +304,126 @@ test('bots choose unlocked style prayers and retain Piety alongside Smite', () =
   smiter.review();
   assert.equal(smiter.player.getPrayerActive()[PrayerHandler.SMITE], false);
   assert.equal(smiter.player.getPrayerActive()[PrayerHandler.PROTECT_FROM_MELEE], true);
+});
+
+test('every Edgeville kit uses only Smite as its overhead at every difficulty', () => {
+  const { getEnabledWildernessHotspots } = require('../plugins/bots/behaviours/pvp/WildernessHotspotRegistry.PlayerBots');
+  const kits = require('../plugins/modes/data/pvp-presets-players.json');
+  const spots = getEnabledWildernessHotspots().filter(spot => spot.smiteOnly);
+  assert.deepEqual(spots.map(spot => spot.id).sort(), ['edge_low', 'edge_mains', 'edge_mid']);
+  for (const spot of spots) for (const kit of kits) {
+    const prayer = kit.stats[5];
+    for (const confidenceTier of [1, 2, 3, 4]) {
+      const f = prayerHarness({ prayer, confidenceTier });
+      f.state.pvp.hotspotId = spot.id;
+      f.node.shouldSmite = () => assert.fail('Edgeville Smite must not depend on random rolls or opponent risk');
+      f.node.resolveProtectionPrayer = () => assert.fail('Edgeville must never choose a protection prayer');
+      f.player.getPrayerActive()[PrayerHandler.PROTECT_FROM_MELEE] = true;
+      f.review();
+      const activeOverheads = PrayerHandler.OVERHEAD_PRAYERS.filter(id => f.player.getPrayerActive()[id]);
+      assert.deepEqual(activeOverheads, prayer >= 52 ? [PrayerHandler.SMITE] : [], spot.id + '/' + kit.key + '/' + confidenceTier);
+    }
+  }
+});
+
+test('Edgeville Smite respects the level threshold and depleted prayer points', () => {
+  const { getEnabledWildernessHotspots } = require('../plugins/bots/behaviours/pvp/WildernessHotspotRegistry.PlayerBots');
+  const spot = getEnabledWildernessHotspots().find(spot => spot.smiteOnly);
+  for (const prayer of [51, 52]) {
+    const f = prayerHarness({ prayer, confidenceTier: 1 });
+    f.state.pvp.hotspotId = spot.id;
+    f.review();
+    assert.equal(f.player.getPrayerActive()[PrayerHandler.SMITE] === true, prayer === 52);
+  }
+  const drained = prayerHarness();
+  drained.state.pvp.hotspotId = spot.id;
+  drained.skills.setCurrentLevel(core.Skill.PRAYER, 0, false);
+  drained.review();
+  assert.equal(drained.player.getPrayerActive()[PrayerHandler.SMITE] === true, false);
+  drained.skills.setCurrentLevel(core.Skill.PRAYER, 10, false);
+  drained.review();
+  assert.equal(drained.player.getPrayerActive()[PrayerHandler.SMITE], true);
+});
+
+test('Edgeville visitors use Smite regardless of missing, stale or different spawn assignments', () => {
+  for (const [x, y] of [[3036, 3486], [3090, 3490], [3068, 3531], [3135, 3583]]) {
+    for (const hotspotId of [null, 'edge_mains', 'varrock_ditch']) {
+      for (const confidenceTier of [1, 2, 3, 4]) {
+        const f = prayerHarness({ prayer: 52, confidenceTier });
+        f.player.setLocation(new core.Location(x, y));
+        f.state.pvp.hotspotId = hotspotId;
+        f.node.resolveProtectionPrayer = () => assert.fail('location must override the spawn assignment');
+        f.player.getPrayerActive()[PrayerHandler.PROTECT_FROM_MELEE] = true;
+        f.review();
+        assert.deepEqual(PrayerHandler.OVERHEAD_PRAYERS.filter(id => f.player.getPrayerActive()[id]),
+          [PrayerHandler.SMITE], `${x},${y}/${hotspotId}/${confidenceTier}`);
+      }
+    }
+  }
+});
+
+test('the location rule stops at Edgeville region boundaries and the surface plane', () => {
+  const { usesSmiteOnlyPrayers } = require('../plugins/bots/behaviours/pvp/WildernessHotspotRegistry.PlayerBots');
+  const f = prayerHarness();
+  for (const [x, y, z, expected] of [[3008, 3456, 0, true], [3135, 3583, 0, true],
+    [3007, 3490, 0, false], [3136, 3490, 0, false], [3090, 3455, 0, false],
+    [3090, 3584, 0, false], [3090, 3490, 1, false]]) {
+    f.player.setLocation(new core.Location(x, y, z));
+    assert.equal(usesSmiteOnlyPrayers(f.player, f.state), expected, `${x},${y},${z}`);
+  }
+});
+
+test('idle Edgeville visitors immediately clear existing protection without disabling other prayers', () => {
+  const { ReplenishAfterKillNode } = require('../plugins/bots/behaviours/nodes/pvp/ReplenishAfterKillNode.PlayerBots');
+  for (const prayerId of PrayerHandler.PROTECTION_PRAYERS) {
+    const f = prayerHarness();
+    f.player.setLocation(new core.Location(3090, 3531));
+    PrayerHandler.activatePrayerPrayerId(f.player, PrayerHandler.PIETY);
+    PrayerHandler.activatePrayerPrayerId(f.player, PrayerHandler.PROTECT_ITEM);
+    PrayerHandler.activatePrayerPrayerId(f.player, prayerId);
+    assert.equal(PrayerHandler.isActivated(f.player, prayerId), true);
+    Object.assign(f.state.pvp, { replenishPrayerId: prayerId, replenishPrayerUntil: Date.now() + 10000,
+      nextPrayerReviewAt: Date.now() + 10000 });
+    const node = Object.create(ReplenishAfterKillNode.prototype);
+    node.PrayerHandler = PrayerHandler;
+    node.eatFoodActionNode = { tick() { assert.fail('idle cleanup must not eat'); } };
+    node.tick(f);
+    assert.deepEqual(PrayerHandler.PROTECTION_PRAYERS.filter(id => f.player.getPrayerActive()[id]), []);
+    assert.equal(f.player.getPrayerActive()[PrayerHandler.PIETY], true);
+    assert.equal(f.player.getPrayerActive()[PrayerHandler.PROTECT_ITEM], true);
+    assert.equal(f.state.pvp.replenishPrayerId, null);
+    assert.equal(f.state.pvp.replenishPrayerUntil, 0);
+    assert.equal(f.state.pvp.nextPrayerReviewAt, 0, 'the next combat review can enable Smite immediately');
+  }
+});
+
+test('post-kill protection is disabled at Edgeville and retained at other sites', () => {
+  const { ReplenishAfterKillNode } = require('../plugins/bots/behaviours/nodes/pvp/ReplenishAfterKillNode.PlayerBots');
+  const { getEnabledWildernessHotspots } = require('../plugins/bots/behaviours/pvp/WildernessHotspotRegistry.PlayerBots');
+  const spots = getEnabledWildernessHotspots().filter(spot => spot.smiteOnly);
+  for (const site of [...spots, { id: 'varrock_ditch', smiteOnly: false },
+    { id: null, smiteOnly: true, location: new core.Location(3090, 3531) }]) {
+    for (const profileId of ['veteran', 'elite']) {
+      const f = prayerHarness();
+      if (site.location) f.player.setLocation(site.location);
+      Object.assign(f.state.pvp, { hotspotId: site.id, profileId, replenishAfterKillPending: true });
+      const node = Object.create(ReplenishAfterKillNode.prototype);
+      node.PrayerHandler = PrayerHandler;
+      let meals = 0;
+      node.eatFoodActionNode = { tick() { meals++; } };
+      node.findClosestRealLocalPlayer = () => {
+        assert.equal(site.smiteOnly, false, 'Edgeville must not choose a player to protect against');
+        return f.target;
+      };
+      node.resolveProtectPrayerForTarget = () => PrayerHandler.PROTECT_FROM_MISSILES;
+      node.tick(f);
+      assert.equal(meals, 1);
+      assert.equal(f.state.pvp.replenishAfterKillPending, false);
+      const expected = site.smiteOnly ? [] : [profileId === 'elite'
+        ? PrayerHandler.PROTECT_FROM_MISSILES : PrayerHandler.PROTECT_FROM_MELEE];
+      assert.deepEqual(PrayerHandler.OVERHEAD_PRAYERS.filter(id => f.player.getPrayerActive()[id]), expected);
+    }
+  }
 });
 
 test('low prayer consumes real restore doses, obeys potion cooldowns and does not invent supplies', () => {

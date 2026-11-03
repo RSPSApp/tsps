@@ -100,6 +100,22 @@ mirror them for the client.
   hoods were banked).
 - The Ardougne save tile (the marketplace, 2662,3305) is approximate.
 
+## Skill Cape emote stalls
+
+`interface/Emotes.plugin.js` holds movement and world interactions for the
+[Wiki's per-cape stall durations](https://oldschool.runescape.wiki/w/Skill_Cape_(emote)#Emote_durations),
+including the longer Cooking (25 ticks), Quest point (15), Achievement diary (32) and
+Max (8) emotes. These are gameplay delays, not the cache sequence's visual length.
+Another emote click during that delay cannot restart or replace the animation or graphic;
+the existing input queue keeps the most recent walk click until the delay ends.
+Incoming damage is not delayed by this content lock.
+
+[RSProx recording 2235](https://rsprox.net/download/2235), tick 30, records emote-tab
+slot 43 playing the Max cape sequence 7121 and graphic 1286, matching the current cache.
+It contains no walk or repeated emote click during the stall, so it does not establish
+its input-blocking duration; the durations above come from the Wiki. Verification of
+input locking is offline through the real connection dispatcher and movement policy.
+
 ## Open
 
 - Essence pouches never degrade in tsps, so the Runecraft cape's no-decay perk has nothing to stop.

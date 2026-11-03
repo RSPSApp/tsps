@@ -204,7 +204,7 @@ the MCP endpoint is stateless and every call names the player.
 | Click object | `object_option { id, x, y, option }` |
 | Inventory | `inventory_option { slot? item? option }`, `use_item { item, targetItem? target? }` |
 | Walk and settle | `walk_to { x, y, run, maxTicks }` |
-| Travel anywhere | `travel_to { x, y, z, exact, run, budgetTicks, retryFailed }` |
+| Travel anywhere | `travel_to { x, y, z, exact, run, budgetTicks, retryFailed, skipWalks }` |
 | Let time pass | `wait_ticks { ticks }` |
 | The guide's next step | `quest_helper { player, quest, variant?, fresh? }`; `quest_helper_result { player }`; `quest_helper_quests { player, filter? }` |
 | Admin probe | `command { text }` (runs as developer for that call) |
@@ -257,6 +257,14 @@ live data (an id, a menu entry, a landing tile). A blocked hop is routed around 
 call; decide first whether it is a real requirement or a bug, and record it. `needs-requirements`
 lists the skills, items, quests or varbits the only route needs. Destination networks (fairy
 rings, spirit trees, gliders) and teleports are not planned: use them by hand.
+
+In an unwatched run, `skipWalks: true` moves over the walking between transports in hops along
+the planned path instead of walking it; every transport is still clicked. It still walks a few
+tiles either side of every `Area` change, so enter and leave hooks run on a real step, and every
+wilderness tile. Each hop is a `{ skipped, from, to }` entry in `legs`, and `skippedTiles` counts
+them. It cannot catch what only walking shows (a path the planner thinks is open, aggressive
+NPCs on the way, run energy), so record the run's travel as `travel_to (walks skipped)` and keep
+an occasional full walk. Never use it in a watched run: the player jumps across the map.
 
 For a read-only same-floor plan, use MCP `plan_route` before trying arbitrary
 intermediate tiles. It reuses the bot long-distance collision planner and returns short

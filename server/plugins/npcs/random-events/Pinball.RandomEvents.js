@@ -73,7 +73,7 @@ module.exports = function attach(api, Events) {
         player,
         npcId: active.definition.id,
         title: "What would you like to say?",
-        lines: [{ text: `You want play game of pinball, ${player.getUsername()}?`, expression: INVITE_EXPRESSION }],
+        lines: [{ text: `You want play game of pinball, ${player.getDisplayName()}?`, expression: INVITE_EXPRESSION }],
         options: [
           ["Yes, pinball is fun.", () => reply(player, "Yes, pinball is fun.", () => teleport({
             kind: "pinball",
@@ -212,7 +212,7 @@ module.exports = function attach(api, Events) {
     }
     const roll = Math.floor(Math.random() * 10);
     const reward = GEM_TABLE.find(([, , limit]) => roll < limit);
-    if (!Teleports.finish(session)) return true;
+    if (!Teleports.finish(session, { completed: true })) return true;
     event.player.sendMessage(`You were awarded ${reward[3]}!`);
     Rewards.give(api, event.player, [{ id: reward[0], amount: reward[1] }]);
     return true;

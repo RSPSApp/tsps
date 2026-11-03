@@ -33,6 +33,13 @@ const BOT_RESPAWN_REACQUIRE_DELAY_MAX_MS = 7000;
 const ATTR_RECRUIT_SINGLEWAY_WARN_UNTIL = "bot-recruit-singleway-warn-until";
 const RECRUIT_SINGLEWAY_WARN_COOLDOWN_MS = 5000;
 
+function saveBotAmmunition(event) {
+  // Generated bot ammunition must not become farmable ground items.
+  if (event?.player?.isPlayerBot?.() === true) {
+    event.saved = true;
+  }
+}
+
 function isActiveClanRecruit(owner, bot) {
   if (!owner || !bot || owner.isPlayerBot?.() === true || bot.isPlayerBot?.() !== true) {
     return false;
@@ -248,6 +255,7 @@ function registerBotEvents(options) {
   } = options;
 
   initBotDeathLootCoreAccess(api);
+  api.onCustomEvent("combat:ammo-saving", saveBotAmmunition);
 
   const handleRuntimeRemoval = ({ player, username, source }) => {
     if (

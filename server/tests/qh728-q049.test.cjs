@@ -250,7 +250,7 @@ function player() {
     isNpc: () => false,
     getAsPlayer: () => p,
     isRegistered: () => !offline,
-    getUsername: () => 'q049',
+    getUsername: () => 'q049', getDisplayName: () => 'q049',
     getIndex: () => p.index,
     index: nextIndex++,
     setUntargetable: noop,

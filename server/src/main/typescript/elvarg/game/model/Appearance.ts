@@ -14,6 +14,7 @@ export class Appearance {
     static readonly FEET = 6;
     static readonly BEARD = 7;
     static readonly GENDER = 0;
+    static readonly PRONOUNS_ATTRIBUTE = "appearance:pronouns";
 
     canChangeAppearance = false;
     headHint = -1;
@@ -76,13 +77,24 @@ export class Appearance {
             this.look[Appearance.HANDS] = 68;
             this.look[Appearance.LEGS] = 77;
             this.look[Appearance.FEET] = 80;
-            this.look[Appearance.BEARD] = 57;
+            this.look[Appearance.BEARD] = -1;
         }
         this.look[Appearance.HAIR_COLOUR] = 2;
         this.look[Appearance.TORSO_COLOUR] = 14;
         this.look[Appearance.LEG_COLOUR] = 5;
         this.look[Appearance.FEET_COLOUR] = 4;
         this.look[Appearance.SKIN_COLOUR] = 0;
+        this.player.getUpdateFlag().flag(Flag.APPEARANCE);
+    }
+
+    getPronouns(): number {
+        const value = this.player.getAttribute(Appearance.PRONOUNS_ATTRIBUTE);
+        return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 2 ? value : this.isMale() ? 0 : 1;
+    }
+
+    setPronouns(value: number): void {
+        if (!Number.isInteger(value) || value < 0 || value > 2) return;
+        this.player.setAttribute(Appearance.PRONOUNS_ATTRIBUTE, value);
         this.player.getUpdateFlag().flag(Flag.APPEARANCE);
     }
 

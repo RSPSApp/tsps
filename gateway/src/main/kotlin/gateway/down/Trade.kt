@@ -10,6 +10,13 @@ import net.rsprot.protocol.game.outgoing.misc.player.RunClientScript
 import net.rsprot.protocol.message.OutgoingGameMessage
 
 /**
+ * Varbit 7792, the offer grid's default quantity (cache script 3620): 0 one, 1 five, 2 all,
+ * 3 X. It is the tool leprechaun's "selected quantity" varp; the client reads the same one
+ * for the trade side, so a player who set that has the same left click here.
+ */
+internal const val TRADE_QUANTITY_VARBIT = 7792
+
+/**
  * Trading. tsps opens the real trade interfaces (335 offer, 334 confirm, 336 inventory) and
  * writes their text itself, but sends the two offers in its own TRADE_OPEN/UPDATE packet and
  * takes the player's moves as the browser's TRADE_ACTION. The offers become inventory 90 (and
@@ -20,6 +27,11 @@ class Trade(
     private val sendTsps: (ByteArray) -> Unit,
     /** How many of an item the player carries, for Offer-All. */
     private val carried: (Int) -> Int,
+    /**
+     * [TRADE_QUANTITY_VARBIT]: what the offer grid's op 1 (and so a left click on an item)
+     * offers. 0 one, 1 five, 2 all, 3 X.
+     */
+    private val offerQuantityMode: () -> Int = { 0 },
 ) {
     private var ownOffer = emptyList<Offer>()
     private var pendingX: (Int) -> Unit = {}
@@ -58,8 +70,8 @@ class Trade(
             OFFER_ACCEPT -> action(ACCEPT)
             OFFER_DECLINE, CONFIRM_DECLINE, CONFIRM_CLOSE -> action(DECLINE)
             CONFIRM_ACCEPT -> action(CONFIRM_ACCEPT_ACTION)
-            INVENTORY_SIDE -> move(OFFER, sub, obj, op) { carried(obj) }
-            OWN_OFFER -> move(REMOVE, sub, obj, op) { ownOffer.filter { it.item == obj }.sumOf { it.quantity } }
+            INVENTORY_SIDE -> offer(sub, obj, op)
+            OWN_OFFER -> remove(sub, obj, op)
             else -> return false
         }
         return true
@@ -73,19 +85,44 @@ class Trade(
         return true
     }
 
-    private fun move(action: Int, slot: Int, item: Int, op: Int, all: () -> Int) {
+    /**
+     * The inventory side (336:0) is the cache's offer grid, built by script 3620: op 1 is the
+     * player's default quantity and the rest fill 2-5 in order, skipping the default's own
+     * slot. There is no Offer-10 on this side; the own offer below has one.
+     */
+    private fun offer(slot: Int, item: Int, op: Int) {
         when (op) {
-            1 -> trade(action, slot, item, 1)
-            2 -> trade(action, slot, item, 5)
-            3 -> trade(action, slot, item, 10)
-            4 -> trade(action, slot, item, all())
-            5 -> {
-                // The browser asks for the amount itself; OSRS has the server open the count dialog.
-                awaitingCount = true
-                pendingX = { amount -> trade(action, slot, item, amount) }
-                send(RunClientScript(COUNT_DIALOG_SCRIPT, listOf("Enter amount:")))
-            }
+            1 ->
+                when (offerQuantityMode()) {
+                    1 -> trade(OFFER, slot, item, 5)
+                    2 -> trade(OFFER, slot, item, carried(item))
+                    3 -> askAmount(OFFER, slot, item)
+                    else -> trade(OFFER, slot, item, 1)
+                }
+            2 -> trade(OFFER, slot, item, 1)
+            3 -> trade(OFFER, slot, item, 5)
+            4 -> askAmount(OFFER, slot, item)
+            5 -> trade(OFFER, slot, item, carried(item))
         }
+    }
+
+    /** The own offer (335:25), from script 763: 1, 5, 10, All, X at ops 1-5. */
+    private fun remove(slot: Int, item: Int, op: Int) {
+        val offered = { ownOffer.filter { it.item == item }.sumOf { it.quantity } }
+        when (op) {
+            1 -> trade(REMOVE, slot, item, 1)
+            2 -> trade(REMOVE, slot, item, 5)
+            3 -> trade(REMOVE, slot, item, 10)
+            4 -> trade(REMOVE, slot, item, offered())
+            5 -> askAmount(REMOVE, slot, item)
+        }
+    }
+
+    /** The browser asks for the amount itself; OSRS has the server open the count dialog. */
+    private fun askAmount(action: Int, slot: Int, item: Int) {
+        awaitingCount = true
+        pendingX = { amount -> trade(action, slot, item, amount) }
+        send(RunClientScript(COUNT_DIALOG_SCRIPT, listOf("Enter amount:")))
     }
 
     private fun trade(action: Int, slot: Int, item: Int, quantity: Int) {

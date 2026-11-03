@@ -70,7 +70,7 @@ test('dropping the Castle Wars explosive consumes that slot and hits only its ow
   assert.deepEqual(chat, ['Ow!']);
 });
 
-test('repeated potion drops can kill and use the existing safe Castle Wars death and respawn', (t) => {
+test('repeated potion drops respawn safely with supplies retained, and leaving still removes them', (t) => {
   const { p } = player(t, { hp: 25 });
   const tasks = [];
   t.mock.method(core.TaskManager, 'submit', (task) => { tasks.push(task); });
@@ -80,7 +80,12 @@ test('repeated potion drops can kill and use the existing safe Castle Wars death
   t.mock.method(p, 'smartMoves', (bounds) => moves.push(bounds));
   p.getEquipment().setItem(core.Equipment.BODY_SLOT, new core.Item(core.ItemIdentifiers.IRON_PLATEBODY));
   game.carryFlag(p, game.TEAM.ZAMORAK);
-  p.getInventory().adds(core.ItemIdentifiers.EXPLOSIVE_POTION, 2);
+  const I = core.ItemIdentifiers;
+  const supplies = [I.BANDAGES, I.BRONZE_PICKAXE, I.BARRICADE, I.ROCK_5, I.TINDERBOX,
+    I.ROPE, I.TOOLKIT_2, I.BUCKET, I.BUCKET_OF_WATER, game.data.RUNE_POUCH, ...game.data.BREW_DOSES];
+  p.getInventory().adds(I.EXPLOSIVE_POTION, 3);
+  for (const id of supplies) p.getInventory().adds(id, 1);
+  p.getInventory().adds(I.IRON_PLATEBODY, 1);
   for (const [slot, cycle, expected] of [[0, 1001, 10], [1, 1002, 0]]) {
     DropItemPacketListener.drop(p, core.ItemIdentifiers.EXPLOSIVE_POTION, core.Inventory.INTERFACE_ID, slot);
     p.getCombat().getHitQueue().process(cycle);
@@ -89,13 +94,21 @@ test('repeated potion drops can kill and use the existing safe Castle Wars death
   assert.equal(p.isDyingReturn(), true);
   const death = tasks.find((task) => task.constructor.name === 'PlayerDeathTask');
   assert.ok(death);
+  const inventory = p.getInventory().getItems().map((item) => item.clone());
   death.execute(); death.execute(); death.execute();
+  assert.deepEqual(p.getInventory().getItems(), inventory, 'death retains every unconsumed supply and ordinary item');
   assert.deepEqual(moves, [game.getTeamData(game.TEAM.SARADOMIN).respawnBounds]);
   assert.equal(p.getEquipment().getSlot(core.Equipment.BODY_SLOT), core.ItemIdentifiers.IRON_PLATEBODY);
   assert.equal(game.getCarriedFlagTeam(p), null);
   assert.equal(game.flagStatus[game.TEAM.ZAMORAK], 2);
   assert.equal(p.getHitpoints(), 100);
   assert.equal(p.isDyingReturn(), false);
+  game.clearCastleWarsItems(p);
+  for (const id of [I.EXPLOSIVE_POTION, ...supplies]) {
+    assert.equal(p.getInventory().getAmount(id), 0, 'leaving the game still removes its supplies');
+  }
+  assert.equal(p.getInventory().getAmount(I.IRON_PLATEBODY), 1);
+  assert.equal(p.getEquipment().getSlot(core.Equipment.BODY_SLOT), I.IRON_PLATEBODY);
 });
 
 test('explosive drop policy ignores other items and players outside an active game', (t) => {

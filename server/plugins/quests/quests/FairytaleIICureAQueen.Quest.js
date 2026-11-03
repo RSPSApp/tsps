@@ -43,12 +43,7 @@
  * any skill over 30) and the fairy ring network.
  *
  * Gaps/approximations:
- * - The fairy ring sequence that opens the hideout (AIR/DLR/DJQ/AJS) is the
- *   FairyRings plugin's territory, which refuses every ring until FT2 is
- *   complete. During the quest the player is teleported by the verifier; the
- *   shared change needed is a "fairyring_permission" branch in FairyRings.
- * - The cosmic plane and gorak plane are reached with ::tele in the same way;
- *   the star flowers are spawned instantly on entering the plane rather than
+ * - The star flowers are spawned instantly on entering the cosmic plane rather than
  *   after the wiki's 2-5 minute growth.
  * - The certificate "Study" and rune temple sign "Read" have no transcript page;
  *   they send short messages and set 2336/2338 (the sign message is not from a
@@ -243,6 +238,9 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const PLANE_GORAK = 1 << 1;
 
   const HIDEOUT_ZONE = { minX: 2324, maxX: 2367, minY: 4420, maxY: 4468, levels: [0] };
+  const HIDEOUT_SEQUENCE = ["AIR", "DLR", "DJQ", "AJS"];
+  // Cache loc 29495 is 1x1 here; ordinary DB89 destinations likewise match its anchor.
+  const HIDEOUT_RING = new Location(2328, 4426, 0);
   const STAR_PLANE_ZONE = { minX: 2060, maxX: 2098, minY: 4806, maxY: 4862, levels: [0] };
   const GORAK_PLANE_ZONE = { minX: 3009, maxX: 3072, minY: 5312, maxY: 5380, levels: [0] };
 
@@ -264,10 +262,33 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const starflowers = new Map(); // player -> spawned NPCs
   const awakeQueen = new Map(); // player -> spawned NPC
   const pendingLamp = new WeakMap();
+  const hideoutSequence = new WeakMap();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const freeSlots = (player) => player.getInventory().getFreeSlots();
   const studied = (player) => Number(player.getAttribute(STUDIED_ATTRIBUTE)) > 0;
+
+  function answerFairyRingAccess(request) {
+    request.allowed = quest.getStage(request.player) >= STAGE_PERMISSION;
+  }
+
+  function resolveFairyRingDestination(request) {
+    const { player, code } = request;
+    if (quest.getStage(player) < STAGE_PERMISSION) return;
+    // DJQ is the sequence's no-trip step, not a new destination.
+    if (code === "DJQ") request.destination = request.origin ?? player.getLocation().clone();
+    if (code !== "AJS" || hideoutSequence.get(player) !== 3) return;
+    if (quest.isComplete(player)
+      || (held(player, NUFFS_CERTIFICATE_ITEM_ID) && studied(player) && Number(player.getAttribute(SIGN_ATTRIBUTE)) > 0)) {
+      request.destination = HIDEOUT_RING;
+    }
+  }
+
+  function recordFairyRingTravel({ player, code }) {
+    const step = hideoutSequence.get(player) ?? 0;
+    const next = code === HIDEOUT_SEQUENCE[step] ? step + 1 : code === HIDEOUT_SEQUENCE[0] ? 1 : 0;
+    hideoutSequence.set(player, next < HIDEOUT_SEQUENCE.length ? next : 0);
+  }
 
   function ft1Complete(player) {
     const request = { player, key: "fairytale_i_growing_pains", complete: null };
@@ -939,6 +960,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   }
 
   function handleLogout({ player }) {
+    hideoutSequence.delete(player);
     removePlayerSpawns(player);
   }
 
@@ -1083,6 +1105,10 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:condition", handleConditionEvent);
   api.onCustomEvent("npc-dialogue:action", handleActionEvent);
+  api.onCustomEvent("fairy-rings:access", answerFairyRingAccess);
+  api.onCustomEvent("fairy-rings:destination", resolveFairyRingDestination);
+  api.onCustomEvent("fairy-rings:travelled", recordFairyRingTravel);
+  api.onCustomEvent("fairy-rings:invalid", recordFairyRingTravel);
   api.onObjectInteraction("Healing certificate", { Take: handleTakeCertificate });
   api.onObjectInteraction("Potion shelves", { Search: handleShelfSearch });
   api.onObjectInteraction("Potion shelf", { Search: handleShelfSearch });

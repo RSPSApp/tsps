@@ -1,8 +1,14 @@
+import fs = require("fs");
+import path = require("path");
 import { CacheDefinitions } from "../cache/CacheDefinitions";
 import { CombatType } from "../content/combat/CombatType";
 import { Misc } from "../../util/Misc";
 
+/** Examine text by npc id from the Wiki's Infobox NPC pages (osrsreboxed-db `scripts.examines --kind npc`). */
+const EXAMINES_FILE = "data/definitions/npc-examines.json";
+
 export class NpcDefinition {
+    private static npcExamines: Record<string, string> | null = null;
     static definitions: Map<number, NpcDefinition> = new Map<number, NpcDefinition>();
     /**
      * Slot layout, populated by NpcDefinitionLoader from monsters-complete.json:
@@ -64,6 +70,8 @@ export class NpcDefinition {
         return (type === "standard" ? undefined : this.rangedDefenceBonuses[type]) ?? this.stats[14] ?? 0;
     }
     private slayerLevel: number = 0;
+    /** The dump's first attack style ("stab", "crush", "ranged", ...); "" when unknown. */
+    private attackStyle: string = "";
     /** Retreat/leash max range; the Wiki's "almost always seven tiles". */
     private combatFollowDistance: number = 7;
     /** Where an aggressive NPC searches for a target, from its current south-west tile. */
@@ -123,12 +131,17 @@ export class NpcDefinition {
     
     /**
      * OSRS keeps NPC examine text server-side, so the cache carries none of it -
-     * the real text comes from monsters-complete.json via NpcDefinitionLoader.
-     * Everything the dump does not cover gets a generic line rather than the
+     * the real text comes from monsters-complete.json via NpcDefinitionLoader
+     * (attackable NPCs only) or npc-examines.json (every Infobox NPC page).
+     * Everything neither covers gets a generic line rather than the
      * bare name the examine packet used to echo back.
      */
     public getExamine(): string {
         if (this.examine) return this.examine;
+        // Read on the first examine that needs it, not at boot.
+        NpcDefinition.npcExamines ??= JSON.parse(fs.readFileSync(path.resolve(EXAMINES_FILE), "utf8"));
+        const wiki = NpcDefinition.npcExamines![String(this.id)];
+        if (wiki) return wiki;
         if (!this.name || this.name === "null") return "It's nothing special.";
         return `It's ${Misc.anOrA(this.name)} ${this.name}.`;
     }
@@ -270,6 +283,11 @@ export class NpcDefinition {
 
     public isMembers(): boolean {
         return this.members;
+    }
+
+    /** Monster Examine's "Main attack style". */
+    public getAttackStyle(): string {
+        return this.attackStyle;
     }
 
     public getAttackType(): CombatType {

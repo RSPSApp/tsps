@@ -51,11 +51,26 @@ const VARBIT = {
   PARTY_STATUS: 14345,
   HUD_PLAYER_BASE: 14346,
   HUD_PLAYER_ME: 14354,
+  HUD_HIDE_PLAYERS: 14355,
   HUD_PLAYER_SIGHT_BASE: 14362,
-  HUD_PATH_LEVEL_BASE: 14376,
   HUD_RAID_LEVEL: 14380,
   HUD_PATH: 14381,
   FRIENDS_ONLY: 14318,
+  SHOULD_HAVE_LOOT: 14319,
+  /** The raid summary's running totals, and those for the current room. */
+  DAMAGE_TAKEN: 14323,
+  TITLE_SELECTED: 14324,
+  DAMAGE_DONE: 14325,
+  /** TOA_TITLE_ACHIEVED_SWIMMER, the first of 18 in a row (Summary.*). */
+  TITLE_ACHIEVED_BASE: 14326,
+  DAMAGE_DONE_CURRENT: 14374,
+  DAMAGE_TAKEN_CURRENT: 14375,
+  /** The helpful spirit: claimed, and its stock rolled for this player. */
+  SPIRIT_CLAIMED: 14321,
+  SPIRIT_ROLLED: 14322,
+  /** Smelling salts' time left, in 25-tick steps, and whether liquid adrenaline is working. */
+  SALTS_TIMER: 14344,
+  ADRENALINE_ACTIVE: 14361,
   PRESET_SELECT: 14541,
   REWARD_CHEST_PURPLE: 14373,
 };
@@ -97,7 +112,10 @@ const OVERLAY_HUD_UID = (161 << 16) | 8;
 const MAIN_MODAL_UID = (161 << 16) | 16;
 const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
 const FADE_OVERLAY_GROUP = 174;
-const FADE_CYCLES = 15;
+/** Every recording: script 948 over 50 cycles, the move 4 ticks after, 2 more until it's gone. */
+const FADE_CYCLES = 50;
+const FADE_MOVE_TICKS = 4;
+const FADE_CLEAR_TICKS = 2;
 
 /** Interface event masks (if_setevents). */
 const EVENT = {
@@ -221,16 +239,17 @@ const ROOMS = {
 };
 
 /**
- * The four paths off the Nexus, in the HUD's order (path varbit = index + 1). `entrance` is
- * the doorway object in the Nexus, and `back` the westmost of the `spread` + 1 tiles you land
- * on returning from that path; they must clear the doorway's footprint.
+ * The four paths off the Nexus. `entrance` is the doorway object in the Nexus, and `back` the
+ * westmost of the `spread` + 1 tiles you land on returning from that path; they must clear the
+ * doorway's footprint. `hud` is TOA_CLIENT_CURRENT_PATH's value for the path (223/00014: Crondis
+ * 4, Scabaras 1, Het 2, Apmeken 3), `levelVarbit` TOA_CLIENT_<PATH>_LEVEL.
  */
 const PATHS = [
   // Apmeken's doorway (3x2, turned) covers x 3562-3563, so the return tiles lie west of it.
-  { key: "APMEKEN", name: "Apmeken", first: "APMEKEN_PUZZLE", entrance: { x: 3562, y: 5146 }, back: { x: 3559, y: 5146 }, spread: 2 },
-  { key: "SCABARAS", name: "Scabaras", first: "SCABARAS_PUZZLE", entrance: { x: 3559, y: 5155 }, back: { x: 3558, y: 5154 }, spread: 0 },
-  { key: "HET", name: "Het", first: "HET_PUZZLE", entrance: { x: 3539, y: 5146 }, back: { x: 3541, y: 5146 }, spread: 2 },
-  { key: "CRONDIS", name: "Crondis", first: "CRONDIS_PUZZLE", entrance: { x: 3541, y: 5155 }, back: { x: 3544, y: 5154 }, spread: 0 },
+  { key: "APMEKEN", name: "Apmeken", first: "APMEKEN_PUZZLE", entrance: { x: 3562, y: 5146 }, back: { x: 3559, y: 5146 }, spread: 2, hud: 3, levelVarbit: 14379 },
+  { key: "SCABARAS", name: "Scabaras", first: "SCABARAS_PUZZLE", entrance: { x: 3559, y: 5155 }, back: { x: 3558, y: 5154 }, spread: 0, hud: 1, levelVarbit: 14377 },
+  { key: "HET", name: "Het", first: "HET_PUZZLE", entrance: { x: 3539, y: 5146 }, back: { x: 3541, y: 5146 }, spread: 2, hud: 2, levelVarbit: 14378 },
+  { key: "CRONDIS", name: "Crondis", first: "CRONDIS_PUZZLE", entrance: { x: 3541, y: 5155 }, back: { x: 3544, y: 5154 }, spread: 0, hud: 4, levelVarbit: 14376 },
 ];
 const PATH_BY_KEY = Object.fromEntries(PATHS.map((path, index) => [path.key, { ...path, index }]));
 const WARDENS_ENTRANCE = { x: 3548, y: 5134 };
@@ -346,13 +365,25 @@ function fade(player, out) {
   });
 }
 
-/** Fades out, runs `action` while the screen is black, then fades back in. */
-function fadeMove(player, action) {
+/**
+ * Fades out, runs `action` while the screen is black, then fades back in. `after` runs as the fade
+ * goes (the raid's HUD takes its place, 227/01852 ticks 10801-10807); without it the overlay closes.
+ */
+function fadeMove(player, action, after = null) {
   fade(player, true);
-  later(player, 2, () => {
+  later(player, FADE_MOVE_TICKS, () => {
     action();
     fade(player, false);
+    later(player, FADE_CLEAR_TICKS, () => {
+      if (after) after();
+      else player.getPacketSender().closeSubInterface(OVERLAY_ATMOSPHERE_UID);
+    });
   });
+}
+
+/** The captured messages' "Join him..." / "Join her...". */
+function pronoun(player) {
+  return player.getAppearance?.()?.isMale?.() === false ? "her" : "him";
 }
 
 function sound(player, id, delay = 0) {
@@ -382,6 +413,25 @@ function damage(target, amount) {
   target.getCombat().getHitQueue().addPendingDamage([new HitDamage(Math.trunc(amount), HitMask.RED)]);
 }
 
+/**
+ * Kills an NPC through its hit queue, so its death runs. setHitpoints(0) alone left it standing at 0
+ * forever, and a room counting it never finished (Apmeken's blast, played over the MCP).
+ */
+function kill(npc) {
+  const { HitDamage, HitMask } = core();
+  if (!npc || npc.getHitpoints() <= 0) return;
+  npc.getCombat().getHitQueue().addPendingDamage([new HitDamage(npc.getHitpoints(), HitMask.RED)]);
+}
+
+/**
+ * The raids' escape crystal: cache obj tob_teleport (22517), "Escape crystal", ops Teleport, Wear,
+ * Auto-afk, Configure. ESCAPE_CRYSTAL (25961) is the Gauntlet's, gauntlet_escape_crystal, with only
+ * Activate: holding that one did nothing here (played over the MCP).
+ */
+function escapeCrystalId() {
+  return core().ItemIdentifiers.ESCAPE_CRYSTAL_2;
+}
+
 /** formatTicks with hundredths, as the raid summary prints times ("20:00.60", "1:02:03.00"). */
 function formatTicksHundredths(ticks) {
   return `${formatTicks(ticks)}.${String((ticks * 60) % 100).padStart(2, "0")}`;
@@ -398,7 +448,7 @@ function formatTicks(ticks) {
 }
 
 function displayName(player) {
-  return player.getUsername();
+  return player.getDisplayName();
 }
 
 /** Whether a tile is walkable for this raid (its own objects included). */
@@ -438,11 +488,11 @@ function tileProjectile(area, from, to, id, { delay = 0, duration = 30, perTile 
 }
 
 /** Throws a player `dx`,`dy` tiles over a few client cycles. */
-function knockback(player, dx, dy, { ticks = 2, speed = 30, direction = 0, animation = -1 } = {}) {
+function knockback(player, dx, dy, { ticks = 2, delay = 0, speed = 30, direction = 0, animation = -1 } = {}) {
   const { ForceMovement, ForceMovementTask, Location, TaskManager } = core();
   if (dx === 0 && dy === 0) return;
   TaskManager.submit(new ForceMovementTask(player, ticks,
-    new ForceMovement(player.getLocation().clone(), new Location(dx, dy), 0, speed, direction, animation)));
+    new ForceMovement(player.getLocation().clone(), new Location(dx, dy), delay, speed, direction, animation)));
 }
 
 /**
@@ -504,6 +554,7 @@ module.exports = {
   INTERFACE,
   SCRIPT,
   OVERLAY_HUD_UID,
+  OVERLAY_ATMOSPHERE_UID,
   MAIN_MODAL_UID,
   EVENT,
   JINGLE,
@@ -530,11 +581,14 @@ module.exports = {
   confirm,
   fade,
   fadeMove,
+  pronoun,
   sound,
   jingle,
   gfx,
   graphicAt,
   damage,
+  kill,
+  escapeCrystalId,
   formatTicks,
   formatTicksHundredths,
   displayName,

@@ -1157,6 +1157,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                     if (interactId >= PLAYER_INTERACT_BASE) {
                         const ecsIndex = hit.playerEcsIndex;
                         if (ecsIndex == null) continue;
+                        const firstNpcs: number[] = [];
 
                         const playerSubX = playerEcs.getX(ecsIndex) | 0;
                         const playerSubY = playerEcs.getY(ecsIndex) | 0;
@@ -1184,6 +1185,11 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                                 if (otherWorldSubX !== playerSubX || otherWorldSubY !== playerSubY)
                                     continue;
 
+                                const npcType = host.getEffectiveNpcType(npcEcs.getNpcTypeId(otherId) | 0);
+                                if (npcType?.drawPriority === NpcDrawPriority.DRAW_PRIORITY_FIRST) {
+                                    firstNpcs.push(otherId);
+                                    continue;
+                                }
                                 addNpcMenuEntries(
                                     npcEcs.getNpcTypeId(otherId) | 0,
                                     npcEcs.getServerId(otherId) | 0,
@@ -1204,6 +1210,16 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                         }
 
                         addPlayerMenuEntries(ecsIndex, worldTileX, worldTileY);
+                        // Later entries win the menu order, including when the ray hit the player first.
+                        for (const npc of firstNpcs) {
+                            addNpcMenuEntries(
+                                npcEcs.getNpcTypeId(npc) | 0,
+                                npcEcs.getServerId(npc) | 0,
+                                npc,
+                                worldTileX,
+                                worldTileY,
+                            );
+                        }
                     } else {
                         const npcServerId = hit.npcServerId;
                         const npcEcsId = hit.npcEcsId;
@@ -1241,6 +1257,11 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                                 );
                             }
 
+                            // Lower-priority NPCs sit beneath overlapping player actions.
+                            const npcType = host.getEffectiveNpcType(interactId);
+                            if (npcType?.drawPriority !== NpcDrawPriority.DRAW_PRIORITY_FIRST) {
+                                addNpcMenuEntries(interactId, npcServerId, npcEcsId, worldTileX, worldTileY);
+                            }
                             // Players on the same coords
                             const hitMapId = hit.mapId | 0;
                             const hitMapX = (hitMapId >> 8) & 0xff;

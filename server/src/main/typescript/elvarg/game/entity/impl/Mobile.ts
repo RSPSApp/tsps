@@ -87,6 +87,13 @@ export abstract class Mobile extends Entity {
     public animation: Animation;
     public graphic: Graphic;
     private following: Mobile;
+    /**
+     * Increments on every moveTo/smartMove. A follower records the leader's counter when the
+     * follow starts, so a teleport (including a change of plane) ends the chase instead of the
+     * follower pathing to wherever the leader landed.
+     */
+    private teleportSerial = 0;
+    private followedTeleportSerial = -1;
 
     private attributes: Map<Object, Object> | null = null;
 
@@ -100,6 +107,8 @@ export abstract class Mobile extends Entity {
      * Fields
      */
     interactingMobile: any;
+    /** Bumped by every setMobileInteraction, so a delayed clear can tell it was overtaken. */
+    private interactionGeneration = 0;
     npcTransformationId = -1;
     poisonDamage: number = 0;
     /**
@@ -162,6 +171,7 @@ export abstract class Mobile extends Entity {
     }
 
     private notifyTeleport(target: Location): void {
+        this.teleportSerial++;
         const following = this.getFollowing();
         if (this.isPlayer() && following) {
             this.setFollowing(null);
@@ -259,6 +269,7 @@ export abstract class Mobile extends Entity {
         this.graphic = null;
         this.slotGraphics?.clear();
         this.displayedHealth = null;
+        this.healthBarHidden = false;
         this.tintState = null;
     }
 
@@ -279,20 +290,28 @@ export abstract class Mobile extends Entity {
 
     /** What the health bar shows with this tick's hits, when it is not the actor's hitpoints. */
     private displayedHealth: { current: number; max: number; bar?: { id: number; width: number } } | null = null;
+    /** This tick's hits go out without a health bar (`showHitsplat(..., false)`). */
+    private healthBarHidden = false;
 
     /**
      * Shows a hitsplat that changes nothing - a meter other than hitpoints, such as the
      * Wintertodt's cold on the warmth meter. `splat` is the cache hitsplat for the target and
-     * for everyone else; `health`, when given, is what the health bar shows with it.
+     * for everyone else; `health`, when given, is what the health bar shows with it, and `false`
+     * sends the splat with no health bar at all.
      */
     showHitsplat(
         damage: number,
         splat: { mine: number; others: number },
-        health?: { current: number; max: number; bar?: { id: number; width: number } },
+        health?: { current: number; max: number; bar?: { id: number; width: number } } | false,
     ): void {
         const hit = new HitDamage(Math.max(0, Math.trunc(damage)), HitMask.RED).setSplatTypes(splat.mine, splat.others);
         this.addTickHit(hit);
-        if (health) this.displayedHealth = health;
+        if (health === false) this.healthBarHidden = true;
+        else if (health) this.displayedHealth = health;
+    }
+
+    isHealthBarHidden(): boolean {
+        return this.healthBarHidden;
     }
 
     getDisplayedHealth(): { current: number; max: number; bar?: { id: number; width: number } } | null {
@@ -320,12 +339,27 @@ export abstract class Mobile extends Entity {
             this.facingDirection = previousDirection;
         }
         this.interactingMobile = mobile;
+        this.interactionGeneration++;
         const nextDirection = this.targetFacingDirection(mobile);
         if (nextDirection !== Direction.NONE) {
             this.facingDirection = nextDirection;
         }
         this.getUpdateFlag().flag(Flag.ENTITY_INTERACTION);
         return this;
+    }
+
+    /**
+     * Turns to `target` and lets go the next tick, as live answers a click it refuses: a frozen
+     * player told "I can't reach that!" faces the NPC or player on the click tick and clears it
+     * on the next (rsprox 2238 OpPlayer, 3391 OpNpc). Anything that sets an interaction in
+     * between keeps its own.
+     */
+    faceMobileBriefly(target: Mobile): void {
+        this.setMobileInteraction(target);
+        const generation = this.interactionGeneration;
+        TaskManager.submit(new MobileTask(1, () => {
+            if (this.interactionGeneration === generation) this.setMobileInteraction(null);
+        }));
     }
 
     performAnimation(animation: Animation) {
@@ -712,6 +746,11 @@ export abstract class Mobile extends Entity {
         if (outcome < 0)
             outcome = 0;
         hit.setHealthLost(this.getHitpoints() - outcome);
+        const source = hit.getSource();
+        // Reflections land separately from the attack, sometimes after their source died.
+        if (hit.isReflected() && this.isPlayer() && source?.isPlayer() && source !== this && hit.getHealthLost() > 0) {
+            this.getCombat().addDamage(source, hit.getHealthLost());
+        }
         this.setHitpoints(outcome);
         return hit;
     }
@@ -846,6 +885,16 @@ export abstract class Mobile extends Entity {
             return;
         }
         this.following = following;
+        this.followedTeleportSerial = following?.getTeleportSerial?.() ?? -1;
+    }
+
+    getTeleportSerial(): number {
+        return this.teleportSerial;
+    }
+
+    /** The leader's teleport counter when this actor started following it. */
+    getFollowedTeleportSerial(): number {
+        return this.followedTeleportSerial;
     }
 
     getCombatFollowing(): Mobile | null {

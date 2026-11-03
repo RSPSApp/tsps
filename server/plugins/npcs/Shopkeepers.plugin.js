@@ -3,7 +3,7 @@ const path = require("path");
 const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 
-const CLICK_FIELDS = ["firstClick", "secondClick", "thirdClick", "fourthClick"];
+const CLICK_FIELDS = ["firstClick", "secondClick", "thirdClick", "fourthClick", "fifthClick"];
 
 const ITEM_CURRENCY_ALIASES = {
   [ItemIdentifiers.AGILITY_ARENA_TICKET]: ["Agility arena ticket (discontinued)"],
@@ -42,7 +42,6 @@ const ITEM_CURRENCIES = [
 ];
 
 const POINT_CURRENCIES = [
-  "Abyssal pearls",
   "Bounty Hunter Points",
   "Deadman Points",
   "event points",
@@ -112,9 +111,45 @@ function shopkeepers() {
   return bindings;
 }
 
+/**
+ * NPC options that open more than one shops.json shop, by "npcId:slot": the shop names. These are
+ * versions of one wiki shop ("Daga's Scimitar Smithy (Default)" / "(Monkey Madness I)"), so
+ * they take no fixed binding; Trade picks one as dialogue does.
+ */
+function sharedTraders() {
+  const shops = new Map();
+  for (const shop of readShops("shops.json")) {
+    for (const key of traderKeys(shop)) shops.set(key, [...(shops.get(key) ?? []), shop]);
+  }
+  return new Map([...shops].filter(([, list]) => list.length > 1));
+}
+
+let pluginApi;
+let shared = null;
+
+/**
+ * Trade on an NPC with shop versions: "npc-dialogue:shop" picks the one the player's progress
+ * unlocks (QuestRuntime for "(After Contact!)"-style names), else the Default version, as an
+ * open_shop dialogue step does. With neither, the option stays unhandled.
+ */
+function tradeVersion(event) {
+  if (event.handled) return;
+  shared ??= sharedTraders();
+  const shops = shared.get(`${event.npcId}:${event.clickType}`);
+  if (!shops) return;
+  const names = shops.map((shop) => shop.name);
+  const request = { player: event.player, npcId: event.npcId, target: null, shops: names, shop: null };
+  pluginApi.emitCustomEvent("npc-dialogue:shop", request);
+  const chosen = shops.find((shop) => shop.name === (request.shop ?? names.find((name) => name.endsWith(" (Default)"))));
+  if (!chosen) return;
+  event.handled = true;
+  pluginApi.core.ShopManager.open(event.player, chosen.id, true);
+}
+
 module.exports = {
   name: "Shopkeepers",
   register(api) {
+    pluginApi = api;
     for (const itemId of ITEM_CURRENCIES) {
       api.registerItemShopCurrency(itemId, {
         aliases: ITEM_CURRENCY_ALIASES[itemId],
@@ -129,9 +164,12 @@ module.exports = {
       const [npcId, slot] = key.split(":").map(Number);
       api.registerNpcInteraction(npcId, { [CLICK_FIELDS[slot - 1]]: { shopId } });
     }
+    api.onNpcInteraction(tradeVersion);
   },
   registerPointCurrency,
   shopkeepers,
+  sharedTraders,
+  tradeVersion,
   ITEM_CURRENCIES,
   ITEM_CURRENCY_ALIASES,
   POINT_CURRENCIES,

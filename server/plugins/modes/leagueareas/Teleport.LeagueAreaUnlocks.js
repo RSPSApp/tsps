@@ -3,7 +3,8 @@
  * table's area_teleport_coord, the captured landings), within the captured spread of two tiles.
  * Raging Echoes plays its own captured animation set (data `teleportCast`); a league without one
  * plays the standard home teleport cast. Interrupted like a home teleport; no cooldown (the
- * capture has some ninety casts in one session).
+ * capture has some ninety casts in one session). Other teleports may play the same cast: they ask
+ * `league:teleport-cast` { player } -> cast (the league's `teleportCast`, null without one).
  */
 const Common = require("./Common.LeagueAreaUnlocks");
 const { startHomeTeleport, castOf } = require("../../combat/HomeTeleportSequence");
@@ -33,4 +34,12 @@ function cast(player, type, area) {
   return true;
 }
 
-module.exports = { cast, destination };
+/** `league:teleport-cast` { player } -> cast: the character's league's own area-teleport cast, if it has one. */
+function answerTeleportCast(query) {
+  if (!query?.player) return;
+  const type = Common.leagueOf(query.player);
+  const own = type === null ? null : Common.league(type)?.teleportCast;
+  if (own) query.cast = own;
+}
+
+module.exports = { cast, destination, answerTeleportCast };

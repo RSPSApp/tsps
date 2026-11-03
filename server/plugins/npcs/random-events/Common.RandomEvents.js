@@ -87,7 +87,7 @@ function initialize(pluginApi) {
         () => "You think I made these just for fun?!", name => `All types of sandwiches, ${name}.`,
         name => `Come on ${name}, I made these specially!`],
       goodbye: MAYBE_LATER,
-      otherPlayerLine: owner => `This is for ${owner.getUsername()}, not you.`,
+      otherPlayerLine: owner => `This is for ${owner.getDisplayName()}, not you.`,
       leavingLine: () => "I'd best be going - lots more sandwiches to deliver!",
       rewardLine: () => "Hope that fills you up!", rewardExpression: 567 },
     { id: N.DRUNKEN_DWARF, kind: "dwarf", rewards: [I.BEER, I.KEBAB], linger: true,
@@ -116,7 +116,7 @@ function initialize(pluginApi) {
       greet: name => `Greetings ${name}, I need your help.`, nags: certerNags,
       goodbye: MAYBE_LATER, overheadAnimation: WAVE_ANIMATION, arrivalSmokes: [SMOKE_SOUND, SMOKE_SOUND],
       leaveAnimation: WAVE_ANIMATION,
-      otherPlayerLine: owner => `Sorry, but I'm trying to talk to ${owner.getUsername()}, but ${heShe(owner)} seems to be ignoring me.`,
+      otherPlayerLine: owner => `Sorry, but I'm trying to talk to ${owner.getDisplayName()}, but ${heShe(owner)} seems to be ignoring me.`,
       leavingLine: () => "I must be leaving now." },
     { id: N.MYSTERIOUS_OLD_MAN_2, underwaterId: N.MYSTERIOUS_OLD_MAN_3, kind: "gift", linger: true,
       greet: (name) => oldManLines[Math.floor(Math.random() * oldManLines.length)](name), nags: oldManLines,
@@ -206,7 +206,7 @@ function spawn(player, state, now, definition = null) {
     npc.setFollowing(player);
     npc.setMobileInteraction(player);
   }
-  if (definition.greeting) npc.forceChat(`${definition.greeting} ${player.getUsername()}!`);
+  if (definition.greeting) npc.forceChat(`${definition.greeting} ${player.getDisplayName()}!`);
   for (const sound of definition.arrivalSmokes ?? [SMOKE_SOUND]) smoke(npc, player, sound);
   definition.onSpawn?.(active);
   return true;
@@ -348,7 +348,7 @@ function processPlayer({ player }) {
       return;
     }
     if (!valid(active, player, now)) { finish(active); return; }
-    const username = player.getUsername();
+    const username = player.getDisplayName();
     if (!active.greeted) {
       if (now - active.startedAt >= TICK_MS / 2) {
         active.greeted = true;
@@ -406,7 +406,7 @@ function serve(active, rewards, exchange = null, options = {}) {
 
 function rewardDialogue(active) {
   const { player, npc, definition } = active;
-  const line = definition.rewardLine?.(player.getUsername(), player);
+  const line = definition.rewardLine?.(player.getDisplayName(), player);
   if (line) Flow.chat(api, { player, npcId: npc.getId(), lines: [{ text: line, expression: definition.rewardExpression }] });
 }
 

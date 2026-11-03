@@ -16,8 +16,47 @@ const CHARGES_META_KEY = "abyssal-tentacle";
 const MAX_CHARGES = 10000;
 
 let core = null;
-let pluginApi = null;
+let api = null;
 let tentacleIds = new Set();
+
+function combine({ player, usedItem, usedWithItem, usedItemSlot, usedWithItemSlot }) {
+  const I = core.ItemIdentifiers;
+  const whipFirst = usedItem.getId() === I.ABYSSAL_WHIP;
+  const whip = whipFirst ? usedItem : usedWithItem;
+  const tentacle = whipFirst ? usedWithItem : usedItem;
+  const whipSlot = whipFirst ? usedItemSlot : usedWithItemSlot;
+  const tentacleSlot = whipFirst ? usedWithItemSlot : usedItemSlot;
+  // The cache also names quest and placeholder variants "Abyssal whip".
+  if (whip.getId() !== I.ABYSSAL_WHIP || tentacle.getId() !== I.KRAKEN_TENTACLE) return false;
+
+  api.sendMultiChatboxPrompt(player, "This is irreversible and makes the whip untradeable. Combine?",
+    "Yes, create an abyssal tentacle.", () => {
+      const inventory = player.getInventory();
+      if (inventory.getItems()[whipSlot] !== whip || inventory.getItems()[tentacleSlot] !== tentacle ||
+        whip.getId() !== I.ABYSSAL_WHIP || tentacle.getId() !== I.KRAKEN_TENTACLE ||
+        whip.getAmount() !== 1 || tentacle.getAmount() !== 1) return;
+      inventory.deleteAtSlot(tentacleSlot, 1, false);
+      whip.setId(I.ABYSSAL_TENTACLE);
+      inventory.refreshItems();
+      player.sendMessage("You attach the kraken tentacle to your abyssal whip.");
+    },
+    "No, keep them separate.", () => {});
+}
+
+function dissolve({ player, item, itemId, slot, interfaceId }) {
+  // shortcut: ornamented Dissolve needs verified kit-refund rules before sharing this route.
+  if (itemId !== core.ItemIdentifiers.ABYSSAL_TENTACLE || interfaceId === core.Equipment.INVENTORY_INTERFACE_ID) return false;
+  const inventory = player.getInventory();
+  if (inventory.getItems()[slot] !== item || item.getId() !== itemId || item.getAmount() !== 1) return false;
+
+  api.sendMultiChatboxPrompt(player, "This will dissolve your whip immediately. The whip will be permanently lost.",
+    "Yes, dissolve the whip.", () => {
+      if (inventory.getItems()[slot] !== item || item.getId() !== itemId || item.getAmount() !== 1) return;
+      item.setId(core.ItemIdentifiers.KRAKEN_TENTACLE);
+      inventory.refreshItems();
+    },
+    "No, keep it.", () => {});
+}
 
 /** A tentacle with no saved count (spawned, or from before charges were tracked) is full. */
 function charges(item) {
@@ -46,8 +85,8 @@ function degrade(player, tentacle) {
 function useCharge(player, tentacle) {
   // Content may spare the charge (a league relic): the question every charged weapon asks.
   const consume = { player, itemId: tentacle.getId(), skip: false };
-  pluginApi.emitCustomEvent("combat:melee-charge", consume);
-  pluginApi.emitCustomEvent("combat:consume-charge", consume);
+  api.emitCustomEvent("combat:melee-charge", consume);
+  api.emitCustomEvent("combat:consume-charge", consume);
   if (consume.skip) return;
   const left = charges(tentacle) - 1;
   if (left > 0) {
@@ -81,9 +120,9 @@ function onHitResolved({ attacker, target, hit }) {
   core.CombatFactory.poisonEntity(target, POISON_SEVERITY, POISON_ORB_TYPE);
 }
 
-function attach(api) {
-  pluginApi = api;
-  core = api.core;
+function attach(pluginApi) {
+  api = pluginApi;
+  core = pluginApi.core;
   tentacleIds = new Set([
     core.ItemIdentifiers.ABYSSAL_TENTACLE,
     core.ItemIdentifiers.ABYSSAL_TENTACLE_OR_,
@@ -94,9 +133,10 @@ module.exports = {
   name: "AbyssalTentacle",
   members: true,
   register(api) {
-    attach(api);
+    api.onServerStartup(attach.bind(null, api));
+    api.onItemOnItem("Kraken tentacle", "Abyssal whip", combine, { noted: false });
+    api.onItemAction("Abyssal tentacle", { Check: check, Dissolve: dissolve });
     api.onCombatHitResolved(onHitResolved);
-    api.onItemAction("Abyssal tentacle", { Check: check });
     api.onItemAction("Abyssal tentacle (or)", { Check: check });
   },
   _test: { onHitResolved, charges, check, POISON_CHANCE, POISON_SEVERITY, MAX_CHARGES },

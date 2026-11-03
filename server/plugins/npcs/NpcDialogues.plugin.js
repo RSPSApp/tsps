@@ -13,7 +13,8 @@
  * an `after` callback run once the player continues
  * past it. A message step's "npc-dialogue:action" (`kind: "message"`) can set
  * `box: { items }` (one or two item ids) to show it as an item box, as OSRS shows
- * hand-outs, instead of a chat message. "npc-dialogue:start" plays a named variant on demand
+ * hand-outs, instead of a chat message, and `after` to run once the player continues past
+ * that box. "npc-dialogue:start" plays a named variant on demand
  * and returns an optional request.cancel handle scoped to that playback's chain/chatbox.
  * Speech, choices, random alternatives and named shops run through existing systems; a shop
  * with versions emits "npc-dialogue:shop" ({ player, npcId, target, shops, shop }) to pick one.
@@ -141,11 +142,11 @@ const GENDERED_ALTERNATIVE = /\[([^\[\]]*\/[^\[\]]*)\]/g;
 
 /** The address words the wiki templates use for each gender. */
 const MALE_ADDRESS_WORDS = new Set([
-  "sir", "sirrah", "mister", "master", "milord", "lord", "lad", "laddie", "man", "men", "boy", "boys",
+  "he", "him", "his", "himself", "sir", "sirrah", "mister", "master", "milord", "lord", "lad", "laddie", "man", "men", "boy", "boys",
   "brother", "fellow", "fella", "chap", "guy", "prince", "strongman", "craftsman", "monsieur",
 ]);
 const FEMALE_ADDRESS_WORDS = new Set([
-  "madam", "madame", "ma'am", "m'am", "miss", "lady", "milady", "m'lady", "mistress", "lass", "lassie",
+  "she", "her", "hers", "herself", "madam", "madame", "ma'am", "m'am", "miss", "lady", "milady", "m'lady", "mistress", "lass", "lassie",
   "woman", "women", "girl", "girls", "gal", "sister", "princess", "strongwoman", "craftswoman",
 ]);
 
@@ -158,25 +159,26 @@ function genderedForm(text) {
 }
 
 /** The alternative to show a player of this gender, or null to leave the group alone. */
-function pickAlternative(parts, name, male) {
+function pickAlternative(parts, name, pronouns) {
   if (parts.some((part) => PLAYER_NAME_ALTERNATIVE.test(part))) return name ?? null;
   const forms = parts.map((part) => ({ text: part, gender: genderedForm(part) }));
   if (!forms.some((form) => form.gender)) return null;
-  const wanted = male ? "male" : "female";
+  const wanted = pronouns === 0 ? "male" : pronouns === 1 ? "female" : null;
   const match = forms.find((form) => form.gender === wanted) ?? forms.find((form) => !form.gender);
   return (match ?? forms[0]).text;
 }
 
 function formatPlayerText(text, player) {
   let out = String(text ?? "");
-  const name = player?.getUsername?.();
+  const name = player?.getDisplayName?.();
   // "[player.]" keeps the sentence's closing period.
   if (name) out = out.replace(PLAYER_NAME_PLACEHOLDER, (_, period) => `${name}${period ?? ""}`);
   if (!out.includes("/")) return out;
-  const male = player?.getAppearance?.()?.isMale?.() !== false;
+  const appearance = player?.getAppearance?.();
+  const pronouns = appearance?.getPronouns?.() ?? (appearance?.isMale?.() === false ? 1 : 0);
   return out.replace(GENDERED_ALTERNATIVE, (whole, body) => {
     const parts = body.split("/").map((part) => part.trim());
-    return parts.length < 2 ? whole : pickAlternative(parts, name, male) ?? whole;
+    return parts.length < 2 ? whole : pickAlternative(parts, name, pronouns) ?? whole;
   });
 }
 
@@ -686,7 +688,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     if (cancelled) return;
     const { step, rest, record } = menu;
     context.currentMenu = menu;
-    const notice = { player, npcId, definition, prompt: step.prompt || "Select an Option", warning: null };
+    const notice = { player, npcId, definition, prompt: step.prompt || "Select an option", warning: null };
     api.emitCustomEvent("npc-dialogue:menu", notice);
     const warned = context.warnedMenus ??= new WeakSet();
     if (notice.warning && !warned.has(step)) {
@@ -733,7 +735,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     if (!pairs.length) return run(rest, record);
     playedAny = true;
     manager.reset();
-    if (!presentOwned(() => api.sendMultiChatboxPrompt(player, formatPlayerText(step.prompt || "Select an Option", player), ...pairs))) {
+    if (!presentOwned(() => api.sendMultiChatboxPrompt(player, formatPlayerText(step.prompt || "Select an option", player), ...pairs))) {
       unavailable();
     }
   }
@@ -868,7 +870,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
               // overhead leaves no active ActionDialogue behind.
               if (!rest.length) manager.reset?.();
             }));
-          } });
+          } }, true);
           chain.add(overheadAction);
           startChain(chain);
           return;
@@ -899,7 +901,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
             api.core.TaskManager.submit(new api.core.CountdownTask(player, request.holdTicks, () => {
               if (manager.getCurrent?.() === hold) manager.advance();
             }));
-          } })
+          } }, true)
           : undefined;
         if (hold) chain.add(hold);
         let held;
@@ -959,7 +961,10 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
               : second === undefined
                 ? new ItemStatementDialogue(0, first, text)
                 : new DoubleItemStatementDialogue(0, first, second, text));
-            box.add(new ActionDialogue(1, { execute: () => run(rest, currentRecord) }));
+            box.add(new ActionDialogue(1, { execute: () => {
+              message.after?.();
+              run(rest, currentRecord);
+            } }));
             startChain(box);
             return;
           }

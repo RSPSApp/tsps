@@ -53,9 +53,9 @@ function resendLargeDoorState(player) {
   const table = largeDoors();
   const open = openLeaves();
   for (const teamId of Object.keys(table)) {
-    const spots = [...table[teamId].leaves.map(([id, x, y, z]) => [id, x, y, z]), ...open[teamId]];
-    for (const [id, x, y, z] of spots) {
-      const location = new core.Location(x, y, z);
+    const spots = [...table[teamId].leaves, ...open[teamId]];
+    for (const [id, x, y] of spots) {
+      const location = new core.Location(x, y, 0);
       const object = core.MapObjects.get(id, location, null);
       if (object) {
         sender.sendObject(object);
@@ -203,6 +203,7 @@ function repairDoor({ player, objectId }) {
 }
 
 function openSideDoor(owner, object) {
+  if (openSideDoors.has(owner)) return;
   const location = object.getLocation();
   const face = object.getFace() & 3;
   const [dx, dy] = COORD_OFFSETS[face];
@@ -272,10 +273,15 @@ function routeCastleDoor(event) {
   event.destination = { x, y: owner === game.TEAM.SARADOMIN ? 3073 : 3134, z: 0 };
 }
 
+function resetDoors() {
+  openSideDoors.clear();
+}
+
 module.exports = function attachCastleWarsDoors(api, castleWars) {
   game = castleWars;
   core = api.core;
   api.onCustomEvent("door:toggle", guardLargeDoor);
+  api.onCustomEvent("castlewars:reset", resetDoors);
   api.onObjectRoute(routeCastleDoor);
   api.onObjectInteraction("Large door", { Attack: attackDoor });
   api.onObjectInteraction("Broken door", { Repair: repairDoor });

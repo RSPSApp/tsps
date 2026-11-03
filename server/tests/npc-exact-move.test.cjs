@@ -301,6 +301,8 @@ test('lazy combat damage tracking preserves contributors, killer selection and r
   assert.equal(combat.damageMapContains(a), false);
   combat.addDamage(b, 1);
   assert.equal(combat.getKiller(false), b);
+  combat.removeDamager(b);
+  assert.equal(combat.getKiller(false), null, 'a dead attacker no longer wins a later kill');
 });
 
 test('lazy timers preserve reads, extension, ticking, cancellation and mutable access', () => {
@@ -331,4 +333,143 @@ test('lazy timers preserve reads, extension, ticking, cancellation and mutable a
   assert.equal(timers.has(key), false);
   timers.register(new Timer(key, 2));
   assert.equal(mutable.get(key).ticks(), 2, 'previously returned maps stay connected');
+});
+
+/** Real hit/death producers; only transport, persistence and death-floor effects are stubbed. */
+function nativeKillCredit(t) {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const core = PluginManager.getCoreApi();
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { CombatType } = require('../dist/game/content/combat/CombatType');
+  const actors = [], tasks = [];
+  const initialCycle = core.World.getProcessCycle();
+  t.mock.method(core.TaskManager, 'submit', task => tasks.push(task));
+  t.mock.method(core.ItemOnGroundManager, 'registerLocation', () => {});
+  t.mock.method(core.GameConstants.PLAYER_PERSISTENCE, 'requestSave', () => {});
+  t.mock.method(PluginManager, 'emitShouldDropItemsOnDeath', () => false);
+  function actor() {
+    const channel = { kind: 'test', isOpen: () => true, send: () => true };
+    const session = new PlayerSession(channel), p = new Player(session);
+    session.setPlayer(p);
+    p.setUsername(`killcredit${actors.length}`);
+    assert.ok(core.World.getPlayers().add(p));
+    p.setLocation(new core.Location(3300 + actors.length, 3700));
+    p.setNeedsPlacement(false); p.setUntargetable(false); p.setAutoRetaliate(false);
+    p.getSkillManager().setMaxLevels(core.Skill.HITPOINTS, 99, false).setCurrentLevel(core.Skill.HITPOINTS, 99, false);
+    actors.push(p);
+    return p;
+  }
+  const clock = () => ++core.World.processCycle;
+  const process = p => p.getCombat().getHitQueue().process(clock());
+  function pending(a, b, damage, type = CombatType.MELEE) {
+    return new core.PendingHit(a, b, { type: () => type, accuracyDefenceType: () => undefined },
+      { damage, rollAccuracy: false, experience: false, handleAfterHitEffects: false });
+  }
+  function hit(a, b, damage) {
+    core.CombatFactory.executeHit(pending(a, b, damage));
+    process(b);
+  }
+  const death = p => tasks.find(task => task.constructor.name === 'PlayerDeathTask' && task.player === p);
+  function respawn(p) {
+    const task = death(p);
+    assert.ok(task);
+    for (let tick = 0; tick < 3; tick++) { clock(); task.execute(); }
+    assert.equal(p.isDyingReturn(), false);
+    assert.equal(p.getHitpoints(), 99);
+  }
+  t.after(() => {
+    for (const p of actors) {
+      p.getCombat().getHitQueue().clear();
+      t.mock.method(p, 'onRemove', () => {});
+      core.World.getPlayers().remove(p);
+    }
+    for (const task of tasks) task.stop();
+    core.World.processCycle = initialCycle;
+  });
+  return { core, PluginManager, CombatType, actor, clock, process, pending, hit, death, respawn };
+}
+
+test('a real death and same-object respawn discard old PvP damage, retaining PvM credit and the later killer', t => {
+  const f = nativeKillCredit(t), a = f.actor(), b = f.actor(), c = f.actor();
+  f.hit(b, a, 75);
+  assert.equal(a.getCombat().getKiller(false), b);
+  const npc = new NPC(1, new Location(3300, 3701));
+  npc.getCombat().addDamage(b, 10);
+  f.hit(a, b, 99);
+  assert.equal(a.getCombat().getKiller(false), null);
+  assert.equal(npc.getCombat().getKiller(false), b, 'PvM contributors are unchanged');
+  f.respawn(b);
+  assert.equal(a.getCombat().getKiller(false), null, 'the same registered Player has a new life');
+  f.hit(c, a, 24);
+  assert.equal(f.death(a).killer, c);
+});
+
+for (const delayed of [false, true]) {
+  test(`a real Vengeance double KO keeps both killers${delayed ? ' even when the reflected hit waits past respawn' : ''}`, t => {
+    const f = nativeKillCredit(t), a = f.actor(), b = f.actor();
+    f.hit(b, a, 94); // a is on 5 HP, b still owns the earlier damage.
+    b.getSkillManager().setCurrentLevel(f.core.Skill.HITPOINTS, 10, false);
+    b.setHasVengeance(true);
+    if (delayed) {
+      const shot = f.pending(a, b, 10, f.CombatType.RANGED);
+      b.getCombat().getHitQueue().addPendingHit(shot, f.core.World.getProcessCycle() + 2);
+      t.mock.method(f.PluginManager, 'emitAnimationStall', event => {
+        event.kind = 'full'; event.holdsHits = true; event.ticks = 12;
+      });
+      a.getCombat().expectAttackAnimation();
+      a.performAnimation(new f.core.Animation(830));
+      f.process(b); f.process(b); // The already-launched shot kills b during a's stall.
+      f.process(a);
+      assert.equal(a.getHitpoints(), 5);
+      f.respawn(b);
+      assert.equal(a.getCombat().getKiller(false), null, 'old-life damage stays discarded');
+      while (a.getHitpoints() > 0) f.process(a);
+    } else {
+      f.hit(a, b, 10);
+      f.process(a);
+    }
+    assert.equal(f.death(b).killer, a);
+    assert.equal(f.death(a).killer, b);
+    assert.deepEqual(a.__recentDeathDamagerEntries, [{ player: b, damage: 5 }],
+      'only the fresh, HP-capped reflection counts, never the discarded 94 damage');
+  });
+}
+
+test('alive Vengeance is credited once and stays proportional to an opposing contributor', t => {
+  const f = nativeKillCredit(t), reflector = f.actor(), victim = f.actor(), other = f.actor();
+  f.hit(other, victim, 7);
+  reflector.setHasVengeance(true);
+  f.hit(victim, reflector, 8);
+  f.process(victim);
+  assert.deepEqual(victim.getCombat().getRecentDamagerEntries(), [
+    { player: other, damage: 7 }, { player: reflector, damage: 6 },
+  ]);
+  assert.equal(victim.getCombat().getKiller(false), other);
+});
+
+test('reflected PvP credit uses modified and capped HP loss, excluding zero, missing/NPC source and PvM hits', t => {
+  const f = nativeKillCredit(t), source = f.actor(), victim = f.actor();
+  const { HitDamage, HitMask } = f.core;
+  const apply = hit => { victim.getCombat().getHitQueue().addPendingDamage([hit]); f.process(victim); };
+  t.mock.method(f.PluginManager, 'emitCustomEvent', (name, event) => {
+    if (name === 'combat:damage-apply' && event.hit.getDamage() === 90) event.hit.setDamage(4);
+  });
+  apply(new HitDamage(90, HitMask.RED).markReflected().setSource(source));
+  assert.deepEqual(victim.getCombat().getRecentDamagerEntries(), [{ player: source, damage: 4 }]);
+  victim.getCombat().clearDamageMap();
+  const npc = new NPC(1, new Location(3300, 3701));
+  for (const hit of [new HitDamage(0, HitMask.RED).markReflected().setSource(source),
+    new HitDamage(1, HitMask.RED).markReflected(), new HitDamage(1, HitMask.RED).markReflected().setSource(npc),
+    new HitDamage(1, HitMask.RED).markReflected().setSource(victim),
+    new HitDamage(1, HitMask.RED).setSource(source)]) apply(hit);
+  assert.deepEqual(victim.getCombat().getRecentDamagers(), []);
+  npc.setRegistered(true); npc.setHitpoints(10);
+  npc.getCombat().getHitQueue().addPendingDamage([new HitDamage(2, HitMask.RED).markReflected().setSource(source)]);
+  f.process(npc);
+  assert.deepEqual(npc.getCombat().getRecentDamagers(), [], 'PvM reflection accounting is unchanged');
+  npc.setRegistered(false);
+  victim.getSkillManager().setCurrentLevel(f.core.Skill.HITPOINTS, 3, false);
+  apply(new HitDamage(99, HitMask.RED).markReflected().setSource(source));
+  assert.equal(f.death(victim).killer, source);
+  assert.deepEqual(victim.__recentDeathDamagerEntries, [{ player: source, damage: 3 }]);
 });

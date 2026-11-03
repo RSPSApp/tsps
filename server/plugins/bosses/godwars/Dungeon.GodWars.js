@@ -40,15 +40,17 @@ function inGodWars(player) {
   return Common.inDungeon(player.getLocation()) || area?.isGodWarsInstance === true || area?.isGodWarsArea === true;
 }
 
-/** Heals and resets the general and bodyguards of an empty shared chamber. */
+/** Heals and resets the general and bodyguards of an empty shared chamber (health and every stat). */
 function resetChamber(faction) {
+  const { Skill } = Common.core;
   const ids = new Set([faction.general, ...faction.bodyguards]);
+  const stats = [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.RANGED, Skill.MAGIC];
   Common.core.World.getNpcs().forEach((npc) => {
     if (!npc || !ids.has(npc.getId()) || npc.getPrivateArea() || npc.getHitpoints() <= 0) return;
     if (!Common.inBox(faction.room, npc.getLocation().getX(), npc.getLocation().getY(), npc.getLocation().getZ())) return;
     npc.getCombat().reset();
     npc.setHitpoints(npc.getMaxHitpoints());
-    npc.setDefenceLevel(npc.getCurrentDefinition().getStats()[2]);
+    for (const skill of stats) npc.setCurrentLevels(skill, npc.getMaxLevel(skill));
   });
 }
 
@@ -235,6 +237,17 @@ function setRespawns() {
   }
 }
 
+/**
+ * The four armies fight one another (Wiki, God Wars Dungeon). Each faction's followers are one
+ * side; generals and bodyguards keep to their chambers, where no other army comes.
+ */
+function declareRivalries() {
+  const followersOf = (faction) => faction.followers
+    .flatMap(([lo, hi]) => Array.from({ length: hi - lo + 1 }, (_, i) => lo + i))
+    .filter((id) => id !== faction.general && !faction.bodyguards.includes(id));
+  Common.api.emitCustomEvent("npc-rivalries:add", { name: "God Wars Dungeon armies", sides: Common.factions.map(followersOf) });
+}
+
 /** "godwars:god-items" { player, god, count }: how many worn items are the god's ("bandos", "armadyl", "saradomin", "zamorak"). */
 function godItemsQuery(request) {
   const faction = Common.factionByKey(String(request?.god ?? ""));
@@ -248,6 +261,7 @@ function attachDungeon(api) {
   api.persistAttribute(Common.ENTRANCE_ROPE_ATTRIBUTE);
   api.registerArea(new (dungeonArea())());
   api.onServerStartup(setRespawns);
+  api.onServerStartup(declareRivalries);
   api.onObjectFirstClick(entrance.boulder, moveBoulder);
   api.onObjectFirstClick(entrance.crack, crawlThroughCrack);
   api.onObjectFirstClick(entrance.hole, climbDown);
@@ -258,4 +272,4 @@ function attachDungeon(api) {
   api.registerCommand("essence", essenceCommand, Common.core.PlayerRights.ADMINISTRATOR, "Set God Wars essence: ::essence [amount] [god]");
 }
 
-module.exports = { attachDungeon, openOverlay, closeOverlay, inGodWars, chamberOccupants };
+module.exports = { attachDungeon, openOverlay, closeOverlay, inGodWars, chamberOccupants, resetChamber };

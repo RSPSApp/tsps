@@ -12,7 +12,7 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
-const { NPC } = require("../dist/game/entity/impl/npc/Npc");
+const { NPC } = require("../dist/game/entity/impl/npc/NPC");
 const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
 const { GameConstants } = require("../dist/game/GameConstants");
 const { Skill } = require("../dist/game/model/Skill");

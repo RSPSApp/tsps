@@ -702,8 +702,8 @@ test('a random story skips alternatives a plugin rules out, and an action can sp
 
 test('player-name and gendered placeholders resolve from the reader', () => {
   const { formatPlayerText } = require('../plugins/npcs/NpcDialogues.plugin');
-  const male = { getUsername: () => 'Zezima', getAppearance: () => ({ isMale: () => true }) };
-  const female = { getUsername: () => 'Woox', getAppearance: () => ({ isMale: () => false }) };
+  const male = { getUsername: () => 'Zezima', getDisplayName: () => 'Zezima', getAppearance: () => ({ isMale: () => true }) };
+  const female = { getUsername: () => 'Woox', getDisplayName: () => 'Woox', getAppearance: () => ({ isMale: () => false }) };
 
   assert.equal(formatPlayerText('Can I help you, [sir/madam]?', male), 'Can I help you, sir?');
   assert.equal(formatPlayerText('Can I help you, [sir/madam]?', female), 'Can I help you, madam?');
@@ -776,7 +776,7 @@ test('Quest transcript options reuse answers from earlier variants on the same p
     reset() { current = null; }, getCurrent: () => current,
     startDialogues(builder) { chain = builder; current = [...builder.getDialogues().values()][0]; },
   };
-  const player = { getUsername: () => 'Test', getDialogueManager: () => manager,
+  const player = { getUsername: () => 'Test', getDisplayName: () => 'Test', getDialogueManager: () => manager,
     getPacketSender: () => ({ sendInterfaceRemoval() {} }) };
   const api = { core: { ...PluginManager.getCoreApi(), NpcDefinition: { forId: id => ({ getId: () => id, getName: () => 'Wizard Persten' }) } },
     emitCustomEvent() {}, sendMultiChatboxPrompt(_player, _title, ...pairs) { menu = pairs; } };
@@ -870,7 +870,7 @@ test('the Lassar vision overhead copies speak through the player actor on the ta
     get: (_target, key) => (...args) => { sent.push([key, ...args]); return sender; },
   });
   const player = {
-    getUsername: () => 'Test',
+    getUsername: () => 'Test', getDisplayName: () => 'Test',
     getAppearance: () => ({ isMale: () => true }),
     isRegistered: () => true,
     forceChat(text) { chats.push(text); },
@@ -910,7 +910,7 @@ test('an overhead NPC action owns its two-tick continuation; treating it as a di
   const sender = new Proxy({}, { get: (_target, _key) => (..._args) => sender });
   const location = { getZ: () => 0, getDistance: () => 1 };
   const player = {
-    getUsername: () => 'Test', getAppearance: () => ({ isMale: () => true }),
+    getUsername: () => 'Test', getDisplayName: () => 'Test', getAppearance: () => ({ isMale: () => true }),
     isRegistered: () => true, getLocation: () => location, getPrivateArea: () => area,
     getPacketSender: () => sender, getDialogueManager() { return this.manager; },
     getLocalNpcs: () => [burntof],
@@ -943,10 +943,19 @@ test('an overhead NPC action owns its two-tick continuation; treating it as a di
     player.manager.reset();
     play();
     assert.ok(player.manager.getCurrent() instanceof ActionDialogue);
-    player.manager.advance(); // Mirrors clicking Continue while MCP reports kind "other".
+    player.manager.advance(); // A plugin moving the chain on, not a native Continue.
     TaskManager.process();
     TaskManager.process();
     assert.equal(player.manager.getCurrent(), undefined, 'advancing the internal action invalidates its guarded continuation');
+
+    player.manager.reset();
+    play();
+    // Held Space: a native Continue on the chatbox still showing reaches the waiting overhead.
+    assert.equal(player.manager.handleResume((231 << 16) | 5, -1), true);
+    assert.ok(player.manager.getCurrent() instanceof ActionDialogue, 'a Continue does not skip the overhead cadence');
+    TaskManager.process();
+    TaskManager.process();
+    assert.ok(player.manager.getCurrent() instanceof PlayerDialogue, 'the overhead still continues on its own timer');
   } finally {
     TaskManager.cancelTasks(player);
     TaskManager.pendingTasks.clear();
@@ -1066,7 +1075,7 @@ test('ordinary typed player-placeholder lines still use the player chathead', ()
   const { PlayerDialogue } = require('../dist/game/model/dialogues/entries/impl/PlayerDialogue');
   const sender = new Proxy({}, { get: () => (..._args) => sender });
   const player = {
-    getUsername: () => 'Test',
+    getUsername: () => 'Test', getDisplayName: () => 'Test',
     getAppearance: () => ({ isMale: () => true }),
     isRegistered: () => true,
     getPacketSender: () => sender,
@@ -1121,7 +1130,7 @@ test('quest state callbacks run when their line is reached, never while later li
     startDialogues: chain => { entries = chain.getDialogues(); index = 0; },
     advance: () => { index++; },
   };
-  const player = { getUsername: () => 'Test', getDialogueManager: () => manager };
+  const player = { getUsername: () => 'Test', getDisplayName: () => 'Test', getDialogueManager: () => manager };
   const definition = { getName: () => 'Cassius', getId: () => 15632 };
   const api = { emitCustomEvent(name, request) {
     if (name !== 'npc-dialogue:line') return;
@@ -1140,7 +1149,7 @@ test('quest state callbacks run when their line is reached, never while later li
 
 test('a quest can select the captured head for a group of cutscene speakers', () => {
   let chain;
-  const player = { getUsername: () => 'Test', getDialogueManager: () => ({ startDialogues: value => { chain = value; } }) };
+  const player = { getUsername: () => 'Test', getDisplayName: () => 'Test', getDialogueManager: () => ({ startDialogues: value => { chain = value; } }) };
   const definition = { getName: () => 'Denath', getId: () => 5091 };
   startDialogue({ emitCustomEvent(name, request) {
     if (name === 'npc-dialogue:line') request.speakerId = 5087;
@@ -1230,7 +1239,7 @@ test('conditional menu options resolve by their source condition id', () => {
 test('typed speakers retain their name with a nameless transform-parent head and captured expressions', () => {
   let chain;
   const sent = [], sender = new Proxy({}, { get: (_target, key) => (...args) => { sent.push([key, ...args]); return sender; } });
-  const player = { getUsername: () => 'Test', getPacketSender: () => sender,
+  const player = { getUsername: () => 'Test', getDisplayName: () => 'Test', getPacketSender: () => sender,
     getDialogueManager: () => ({ startDialogues: value => { chain = value; } }) };
   const definition = { getName: () => 'null', getId: () => 13404 };
   startDialogue({ emitCustomEvent(name, request) { if (name === 'npc-dialogue:line') request.expression = 567; } },
@@ -1247,7 +1256,7 @@ test('typed speakers retain their name with a nameless transform-parent head and
 test('paired cutscene NPCs can use the native right-side chatbox without the player head', () => {
   let chain;
   const sent = [], sender = new Proxy({}, { get: (_target, key) => (...args) => { sent.push([key, ...args]); return sender; } });
-  const player = { getUsername: () => 'Test', getPacketSender: () => sender,
+  const player = { getUsername: () => 'Test', getDisplayName: () => 'Test', getPacketSender: () => sender,
     getDialogueManager: () => ({ startDialogues: value => { chain = value; } }) };
   startDialogue({ emitCustomEvent(_name, request) { request.speakerId = 16536; request.side = 'right'; } },
     { player, npcId: 16527, definition: { getName: () => 'Outlaw', getId: () => 16527 } },
@@ -1269,7 +1278,7 @@ test('Talk-to warns once per NPC name when it falls back to the placeholder line
     onAnyNpcInteraction(actions) { talk = actions['Talk-to']; },
   });
   const chains = [];
-  const player = { getUsername: () => 'Test', getDialogueManager: () => ({ reset() {}, startDialogues: chain => chains.push(chain) }) };
+  const player = { getUsername: () => 'Test', getDisplayName: () => 'Test', getDialogueManager: () => ({ reset() {}, startDialogues: chain => chains.push(chain) }) };
   const talkTo = (name) => talk({ player, npc: null, npcId: -1, definition: { getName: () => name, getId: () => 0 } });
   const placeholder = () => [...chains.at(-1).getDialogues().values()][0].getText();
 
@@ -1297,7 +1306,7 @@ test('cancelling mid-chain through closeInterruptibleInterfaces leaves no stuck 
   const { PlayerStatus } = require('../dist/game/model/PlayerStatus');
   await CachePipeline.initialize(process.cwd());
   const sender = new Proxy({}, { get: () => () => sender });
-  const player = { getUsername: () => 'Test', getPacketSender: () => sender, getDialogueManager: () => manager,
+  const player = { getUsername: () => 'Test', getDisplayName: () => 'Test', getPacketSender: () => sender, getDialogueManager: () => manager,
     getSession: () => ({ sendClientPacket() {} }), getInterfaceId: () => -1, getFrameUpdater: () => ({ clearGroup() {} }) };
   const manager = new DialogueManager(player);
   // The fields Player.closeInterruptibleInterfaces reads; the real PacketSender does the reset.
@@ -1325,7 +1334,7 @@ test('npc-dialogue:line skip applies to one player and one line only', () => {
   const steps = [{ npc: 'Hello.' }, { npc: 'Here is your reward.' }, { npc: 'Goodbye.' }];
   const definition = { getName: () => 'Hans', getId: () => 3105 };
   const chains = new Map();
-  const makePlayer = (name) => ({ getUsername: () => name,
+  const makePlayer = (name) => ({ getUsername: () => name, getDisplayName: () => name,
     getDialogueManager: () => ({ reset() {}, startDialogues: chain => chains.set(name, chain) }) });
   const alice = makePlayer('Alice'), bob = makePlayer('Bob');
   const seen = [];
@@ -1446,4 +1455,13 @@ test('live condition runs fall through only after a chosen true branch', () => {
   } finally {
     PluginManager.npcDialogueConditionHooks.splice(PluginManager.npcDialogueConditionHooks.indexOf(condition), 1);
   }
+});
+
+test('dialogue alternatives follow saved pronouns independently of the body', () => {
+  const { formatPlayerText } = require('../plugins/npcs/NpcDialogues.plugin');
+  const player = (value) => ({ getUsername: () => 'Alex', getAppearance: () => ({ isMale: () => false, getPronouns: () => value }) });
+  assert.equal(formatPlayerText('[He/She/They] is ready.', player(0)), 'He is ready.');
+  assert.equal(formatPlayerText('[He/She/They] is ready.', player(1)), 'She is ready.');
+  assert.equal(formatPlayerText('[He/She/They] are ready.', player(2)), 'They are ready.');
+  assert.equal(formatPlayerText('[Greetings, sir/Greetings, madam/Greetings]', player(2)), 'Greetings');
 });

@@ -99,8 +99,9 @@ import {
     isLowEndDevice,
     isWebGL2Supported,
 } from "../../common/utils/DeviceUtil";
+import { isPortraitModeEnabled, isPortraitViewport } from "../../game/plugins/portraitmode/PortraitLayout";
 import { clamp } from "../../common/utils/MathUtil";
-import { ClientState } from "../../game/ClientState";
+import { ClientState, DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT } from "../../game/ClientState";
 import { GameRenderer } from "../../game/GameRenderer";
 import type { HitsplatEventPayload } from "../../game/GameRenderer";
 import { OsrsRendererType, WEBGL } from "../../game/GameRenderers";
@@ -229,9 +230,21 @@ export function getMobileGameplayUiScale(host: WebGLOsrsRendererHost,
         // the gameframe grows with the screen instead of staying phone-sized on a tablet.
         const shortestCssEdge = Math.max(1, Math.min(cssW, cssH));
         const phoneEdge = RENDER_CONSTANTS.MOBILE_GAMEPLAY_UI_PHONE_EDGE;
-        return (
-            (RENDER_CONSTANTS.MOBILE_GAMEPLAY_UI_SCALE * phoneEdge) / Math.max(phoneEdge, shortestCssEdge)
-        );
+        const scale =
+            (RENDER_CONSTANTS.MOBILE_GAMEPLAY_UI_SCALE * phoneEdge) / Math.max(phoneEdge, shortestCssEdge);
+        // Portrait Mode: the gameframe must still be as wide as the main modal (512) and the
+        // chatbox (519), or banks and shops are cut off at the sides, and tall enough for the
+        // chat, a modal and the bottom HUD stacked, or a squarer tablet overlaps them.
+        if (isPortraitModeEnabled() && isPortraitViewport(cssW, cssH)) {
+            return Math.max(
+                scale,
+                RENDER_CONSTANTS.MOBILE_PORTRAIT_MIN_LAYOUT_WIDTH / Math.max(1, cssW),
+                RENDER_CONSTANTS.MOBILE_PORTRAIT_MIN_LAYOUT_HEIGHT / Math.max(1, cssH),
+            );
+        }
+        // Cache script 4731 reserves at least 680px for the landscape safezone, plus edge padding.
+        // Keep the stock client width available when a nearly square window cannot fit that HUD.
+        return Math.max(scale, DEFAULT_SCREEN_WIDTH / Math.max(1, cssW));
     
 }
 
@@ -250,10 +263,10 @@ export function computeUiRenderMetrics(host: WebGLOsrsRendererHost,
         const safeBufW = Math.max(1, bufW | 0);
         const safeBufH = Math.max(1, bufH | 0);
         const gameState = host.osrsClient.gameState;
+        const rootInterface = host.osrsClient.widgetManager?.rootInterface ?? -1;
         const isLoginLikeState =
             gameState === GameState.DOWNLOADING || host.osrsClient.isOnLoginScreen();
-        const rootInterface = host.osrsClient.widgetManager?.rootInterface ?? -1;
-        const isMobileGameplayRoot = isMobileMode && !isLoginLikeState && rootInterface === 601;
+        const isMobileGameplayRoot = !isLoginLikeState && rootInterface === 601;
         const { cssW, cssH } = host.getUiSurfaceCssSize(safeBufW, safeBufH);
 
         if (!isLoginLikeState) {
@@ -279,6 +292,11 @@ export function computeUiRenderMetrics(host: WebGLOsrsRendererHost,
                         safeBufW / dprComponent,
                         safeBufH / dprComponent,
                     );
+                    // A saved zoom must not make the layout smaller than the stock gameframe.
+                    desktopUiScale = Math.min(desktopUiScale, Math.max(1, Math.min(
+                        safeBufW / dprComponent / DEFAULT_SCREEN_WIDTH,
+                        safeBufH / dprComponent / DEFAULT_SCREEN_HEIGHT,
+                    )));
                 }
                 // The Stretched Mode plugin scales the fixed gameframe up to fill the window.
                 const stretch = isFixedGameframe

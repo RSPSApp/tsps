@@ -6,6 +6,10 @@ import { GroundItemStore } from "../game/data/ground/GroundItemStore";
 import { GroundItemsConfig } from "../game/plugins/grounditems/GroundItemsConfig";
 import { GroundItemsPlugin, collapse } from "../game/plugins/grounditems/GroundItemsPlugin";
 import { STRING_GAP } from "../game/plugins/grounditems/GroundItemsOverlay";
+import { FontType } from "@runelite/client/config/FontType";
+import { RuneLiteConfig } from "@runelite/client/config/RuneLiteConfig";
+import { bindOverlayFonts } from "@runelite/client/ui/overlay/OverlayFonts";
+import { FONT_PLAIN_11 } from "../ui/fonts";
 import { MenuTargetType } from "../rs/MenuEntry";
 import type { SimpleMenuEntry } from "../ui/menu/MenuEngine";
 import { guidePrice, loadItemPrices } from "../network/serverConnection/domain/itemPrices";
@@ -66,6 +70,8 @@ async function main(): Promise<void> {
     const config = inject(ConfigManager);
     const set = (key: string, value: unknown) => config.setConfigValue(GroundItemsConfig, key as any, value);
     const plugin = new GroundItemsPlugin(client);
+    assert.equal(plugin.isEnabled(), false, "ground item overlays are opt-in");
+    plugin.setEnabledState(true);
     plugin.guidePrice = (id) => prices[id] ?? 0;
     const changed = () => plugin.onConfigChanged({ getGroup: () => "grounditems" } as any);
     set("hiddenItems", "Bones");
@@ -73,7 +79,7 @@ async function main(): Promise<void> {
     set("highlightedItems", "Rune scimitar");
     await plugin.start();
     changed();
-    assert.equal(GroundItemsPlugin.descriptor.enabledByDefault, true, "on by default, as in RuneLite");
+    assert.equal(GroundItemsPlugin.descriptor.enabledByDefault, false, "off by default to avoid ground item overlay cost");
 
     // --- Merging and prices ------------------------------------------------------------------
     store.update({ kind: "snapshot", serial: 1, stacks: [
@@ -126,6 +132,17 @@ async function main(): Promise<void> {
     const coinY = texts.find((t) => t[0].startsWith("Coins"))![2];
     const scimY = texts.find((t) => t[0].startsWith("Rune"))![2];
     assert.equal(coinY - scimY, STRING_GAP, "the second item on a tile sits 15 px higher");
+    // A 32pt dynamic overlay font doubles the labels, and their gap with them.
+    const fonts = new ConfigManager(undefined);
+    const unbindFonts = bindOverlayFonts(fonts);
+    fonts.setConfigValue(RuneLiteConfig, "dynamicOverlayFont", FontType.SMALL.withSize(32));
+    frame = JSON.parse(plugin.widgetOverlay.signature());
+    assert.deepEqual(frame[frame.length - 1], [FONT_PLAIN_11, 2], "labels drawn in the dynamic overlay font");
+    const bigCoinY = frame[1].find((t: any[]) => t[0].startsWith("Coins"))![2];
+    const bigScimY = frame[1].find((t: any[]) => t[0].startsWith("Rune"))![2];
+    assert.equal(bigCoinY - bigScimY, 2 * STRING_GAP, "the gap grows with the font");
+    fonts.unsetConfiguration(RuneLiteConfig.group, "fontType");
+    unbindFonts();
     assert.equal(messages.length, 1);
     assert.equal(messages[0], "<col=ff0000>You received a highlighted drop: Rune scimitar</col>");
 

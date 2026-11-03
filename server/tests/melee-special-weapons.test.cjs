@@ -306,14 +306,22 @@ test("a weapon with no registered special has no special state", () => {
 
 // --- Shove: knockback, stun and immunity ---------------------------------------------------
 
-test("Shove stuns a normal target for 5 ticks, costs 25% once and sets the 5-tick swing", () => {
-  const attacker = fakeFighter();
-  const target = fakeTarget();
-  special("shove").getCombatMethod().start(attacker, target);
-  assert.deepEqual(attacker.log.drains, [25]);
-  assert.equal(target.log.stunned, true);
-  assert.equal(attacker.attackDelay, 5, "Shove takes 5 ticks against the spear's 4");
-  assert.equal(attacker.activated, false);
+test("every Shove weapon puts its stun graphic on the target and drains 25% once", () => {
+  for (const weaponId of special("shove").getIdentifiers()) {
+    const attacker = fakeFighter();
+    const target = fakeTarget();
+    const targetGraphics = [];
+    target.performGraphic = graphic => targetGraphics.push(graphic);
+    CombatSpecial.getForWeaponId(weaponId).getCombatMethod().start(attacker, target);
+    assert.equal(attacker.log.graphics, 0, `weapon ${weaponId} has no attacker graphic`);
+    assert.equal(targetGraphics.length, 1, `weapon ${weaponId} retains its target stun graphic`);
+    assert.equal(attacker.log.animations, 1);
+    assert.equal(target.log.animations, 1);
+    assert.deepEqual(attacker.log.drains, [25]);
+    assert.equal(target.log.stunned, true);
+    assert.equal(attacker.attackDelay, 5, "Shove takes 5 ticks against the spear's 4");
+    assert.equal(attacker.activated, false);
+  }
 });
 
 test("Shove leaves large, stunned and stun-immune targets untouched and spends no energy", () => {
@@ -638,7 +646,7 @@ test("Sweep hits a large target twice instead of sweeping, and the second hit ro
   const realDefence = AccuracyFormulasDpsCalc.defenseMeleeRoll;
   AccuracyFormulasDpsCalc.attackMeleeRoll = () => 1000;
   AccuracyFormulasDpsCalc.defenseMeleeRoll = () => 500;
-  const entity = { isPlayer: () => false, isNpc: () => true, getAsNpc: () => ({ getRollFactor: () => 1 }) };
+  const entity = { isPlayer: () => false, isNpc: () => true, getAsNpc: () => ({ getRollFactor: () => 1, getDefenceRollFactor: () => 1 }) };
   try {
     rolls.push(AccuracyFormulasDpsCalc.specialRolls(entity, entity, CombatType.MELEE).attack);
     rolls.push(AccuracyFormulasDpsCalc.withAccuracyScale(sweep.largeTargetExtraHit.accuracyMultiplier,

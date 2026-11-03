@@ -221,7 +221,12 @@ function runCleanup(session) {
  * that end by death or log out), then `reward` is granted there, so anything that no
  * longer fits is dropped beside the player and not left behind in the event area.
  */
-function finish(session, { reward = null, message = null, back = true } = {}) {
+/**
+ * Ends a teleported event. One that rewards the player is completed ("random-events:completed"
+ * { player, event: its kind }, a league's "Complete the Maze random event"); `completed` says so
+ * for one whose reward is not an item (Evil Bob's experience, Pinball's own gem).
+ */
+function finish(session, { reward = null, message = null, back = true, completed = !!reward?.length } = {}) {
   if (!session || session.finishing) return false;
   session.finishing = true;
   sessions.delete(session.player);
@@ -233,6 +238,7 @@ function finish(session, { reward = null, message = null, back = true } = {}) {
   if (back) returnToStart(session);
   if (reward?.length) grant(session, reward, message);
   else if (message) session.player.sendMessage(message);
+  if (completed) api?.emitCustomEvent?.("random-events:completed", { player: session.player, event: session.kind });
   return true;
 }
 

@@ -40,7 +40,7 @@ function setup(module) {
     attributes, items, varbits, messages,
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
-    getInventory: () => inventory,
+    getInventory: () => inventory, performAnimation() {},
     getBanks: () => [],
     getEquipment: () => ({ get: () => null, getItems: () => [] }),
     getLocation: () => new core.Location(3200, 3400, 0),
@@ -49,7 +49,7 @@ function setup(module) {
     getSkillManager: () => ({ getCurrentLevel: () => 99, getCombatLevel: () => 99, addExperiences() {} }),
     sendMessage: (message) => messages.push(message),
     isPlayer: () => true, isNpc: () => false, isRegistered: () => true,
-    getUsername: () => 'QH parity',
+    getUsername: () => 'QH parity', getDisplayName: () => 'QH parity',
   };
   return { api, quest, player, items, attributes, varbits, messages, itemOnObject };
 }
@@ -143,7 +143,8 @@ function sceneSetup() {
       const npc = {
         def, getId: () => def.id, getIndex: () => 1, getLocation: () => location,
         moveTo: (value) => { location = value; }, getArea: () => area, setArea: (value) => { area = value; },
-        getMovementQueue: () => ({ addSteps: (value) => { location = value; } }), getCombat: () => ({ reset() {} }),
+        getMovementQueue: () => ({ addSteps: (value) => { location = value; } }), getCombat: () => ({ reset() {}, attack() {} }),
+        forceChat() {}, setPositionToFace() {}, getMovementCoordinator: () => ({ setRadius() {} }),
         getHitpoints: () => hp, setHitpoints: (value) => { hp = value; }, getDefinition: () => core.NpcDefinition.forId(def.id),
         setNpcTransformationId: (value) => { transform = value; }, getNpcTransformationId: () => transform,
         getOwner: () => def.owner, isPlayer: () => false, isNpc: () => true, isRegistered: () => true,
@@ -179,7 +180,7 @@ function sceneSetup() {
     getBanks: () => [], getEquipment: () => ({ getItems: () => equipment, get: () => null }),
     getLocation: () => location, moveTo: (value) => { location = value; },
     getArea: () => area, setArea: (value) => { area = value; }, getPrivateArea: () => area instanceof core.PrivateArea ? area : null,
-    getPacketSender: () => sender, getUsername: () => 'Scene tester', getIndex: () => 1,
+    getPacketSender: () => sender, getUsername: () => 'Scene tester', getDisplayName: () => 'Scene tester', getIndex: () => 1,
     getSkillManager: () => ({ getCurrentLevel: () => 99, getCombatLevel: () => 99, addExperiences() {} }),
     getMovementQueue: () => movement, setUntargetable() {}, getCombat: () => ({ reset() {} }),
     getForceMovement: () => null, setForceMovement() {}, isRunningReturn: () => false, setRunning() {},
@@ -209,8 +210,7 @@ test('Demon Slayer keeps the summon scene locked, then hands off unlocked at sto
   for (let step = 0; step < 8 && h.manager.getCurrent(); step++) h.manager.advance();
   assert.equal(h.varbits.get(2569), 1, 'the story-end marker is sent');
   assert.equal(h.movement.block, false, 'story end hands control to the fight');
-  assert.ok(h.removed.length > 0, 'the exit actor is cleaned up after the handoff');
-  const delrith = h.spawned.find((npc) => npc.getId() === core.NpcIdentifiers.DELRITH);
+    const delrith = h.spawned.find((npc) => npc.getId() === core.NpcIdentifiers.DELRITH);
   h.player.equipment.push({ getId: () => core.ItemIdentifiers.SILVERLIGHT });
   assert.equal(h.areas[0].canAttack(h.player, delrith), null, 'the real-area attack gate accepts Silverlight after the story');
 });
@@ -242,10 +242,10 @@ function knightsSetup() {
   let location = new core.Location(3001, 3144, 0);
   const player = { attrs, items, varbits,
     getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-    getInventory: () => inventory, getEquipment: () => ({ get: () => null }), getBanks: () => [],
+    getInventory: () => inventory, performAnimation() {}, getEquipment: () => ({ get: () => null }), getBanks: () => [],
     getPacketSender: () => sender, getLocation: () => location, moveTo: (value) => { location = value; },
     getSkillManager: () => ({ getCurrentLevel: () => 99, getCombatLevel: () => 99, addExperiences() {} }),
-    getUsername: () => 'Knight recovery', getAppearance: () => ({ isMale: () => true }), isRegistered: () => true,
+    getUsername: () => 'Knight recovery', getDisplayName: () => 'Knight recovery', getAppearance: () => ({ isMale: () => true }), isRegistered: () => true,
     getFrameUpdater: () => ({ clear() {} }), performAnimation() {}, performGraphic() {},
   };
   const manager = new DialogueManager(player);

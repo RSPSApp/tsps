@@ -48,8 +48,8 @@ function methodClass() {
     }
 
     hits(character, target) {
-      // Two ticks, like the kings' captured flights at this range.
-      return [new PendingHit(character, target, this, 2)];
+      // Lands with the shot, which flies the legacy 46 + 10 a tile (#1862).
+      return [new PendingHit(character, target, this, Projectile.arrivalTicks(character, target, Projectile.LEGACY_MAGIC_END_BASE))];
     }
 
     handleAfterHitEffects(hit) {

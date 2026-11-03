@@ -1,6 +1,6 @@
 /** Forester campfire tending and the existing log-lighting loop. Evidence: docs/firemaking.md. */
 let ChatType, Skill, Equipment, Animation, Task, Location, Item, GameObject, MapObjects, RegionManager, Sound, Sounds, ItemIds, ObjectIds;
-const { pauseForLevelUp } = require("../SkillActions");
+const { pauseForLevelUp, actionInterval } = require("../SkillActions");
 
 const SESSION_MODE = Object.freeze({
   INVENTORY: "inventory",
@@ -297,10 +297,7 @@ function spawnFire(player, location) {
   );
   ObjectManager.register(fire, true);
   activeFires.set(fire, createFireState(fire, player));
-  if (player.getLocation().equals(location)) {
-    stepAwayFromFire(player);
-  }
-  // Live turns the player back to the fire as they step off it (face_angle 1536 after a step west).
+  // Live turns the player back to the fire a tick after they step off it (face_angle 1536 after a step west).
   player.setPositionToFace(location);
   return fire;
 }
@@ -403,6 +400,11 @@ function startFiremakingAttempt(player, log, source, activeSessions) {
   return true;
 }
 
+/** Ticks to the next log on a tended campfire; content may add faster ("skills:action-interval", a league relic's 2-tick pace). */
+function tendInterval(player) {
+  return actionInterval(pluginApi, player, Skill.FIREMAKING, "tend", TEND_INTERVAL_TICKS);
+}
+
 function startTendFire(player, log, object, activeSessions, amount = Infinity) {
   if (!player || !log || !object) {
     return false;
@@ -439,7 +441,7 @@ function startTendFire(player, log, object, activeSessions, amount = Infinity) {
     fireState: activeFires.get(object) ?? null,
     location: object.getLocation().clone(),
     privateArea: object.getPrivateArea(),
-    nextActionTick: sessionTick + TEND_INTERVAL_TICKS,
+    nextActionTick: sessionTick + tendInterval(player),
   });
 
   player.performAnimation(TENDING_ANIMATIONS.get(log.itemId));
@@ -569,7 +571,8 @@ function processFiremakingTick(activeSessions, currentTick) {
       continue;
     }
 
-    if (player.getMovementQueue()?.size?.() > 0) {
+    // After a hit, the queued step off the log is ours and must not cancel the fire.
+    if (session.catchTick == null && player.getMovementQueue()?.size?.() > 0) {
       stopFiremaking(activeSessions, player);
       continue;
     }
@@ -589,7 +592,7 @@ function processFiremakingTick(activeSessions, currentTick) {
       if (currentTick < session.nextActionTick) {
         continue;
       }
-      session.nextActionTick = currentTick + TEND_INTERVAL_TICKS;
+      session.nextActionTick = currentTick + tendInterval(player);
       tendFire(player, session, activeSessions);
       continue;
     }
@@ -629,12 +632,17 @@ function processFiremakingTick(activeSessions, currentTick) {
     pluginApi.emitCustomEvent("firemaking:light-roll", light);
     if (!light.success) {
       player.performAnimation(LIGHT_FIRE_ANIMATION);
-      session.nextActionTick = currentTick + LIGHT_ATTEMPT_INTERVAL_TICKS;
+      // Content may light faster ("skills:action-interval", a league relic's 2-tick pace).
+      session.nextActionTick = currentTick + actionInterval(pluginApi, player, Skill.FIREMAKING, "light", LIGHT_ATTEMPT_INTERVAL_TICKS);
       continue;
     }
 
-    // A hit stops the animation; the fire catches on the next tick.
+    // A hit stops the animation and steps the player off the log on the same tick; the fire catches
+    // on the next tick, behind them (rsprox recordings 1035, 1098 and 1108).
     player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+    if (player.getLocation().equals(session.location)) {
+      stepAwayFromFire(player);
+    }
     session.catchTick = currentTick + FIRE_CATCH_DELAY_TICKS;
   }
 }

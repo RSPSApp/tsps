@@ -10,6 +10,7 @@ const Common = require("./forestry/Common.Forestry");
 const Spawns = require("./forestry/Spawns.Forestry");
 const Sapling = require("./forestry/Sapling.Forestry");
 const Roots = require("./forestry/Roots.Forestry");
+const Forester = require("./forestry/Forester.Forestry");
 
 module.exports = {
   name: "Forestry",
@@ -18,5 +19,6 @@ module.exports = {
     Spawns.attachSpawns(api);
     Sapling.attachSapling(api);
     Roots.attachRoots(api);
+    Forester.attachForester(api);
   },
 };

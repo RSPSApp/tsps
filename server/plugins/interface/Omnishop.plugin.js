@@ -10,8 +10,10 @@
  * - "omnishop:open" { player, shop } opens a shop by its DB row name (`mixology_rewards`).
  * - "omnishop:currency" { player, shop, currency, itemId, balance, set }: a currency's owner
  *   answers with `balance` and a `set(value)` function. A currency with no obj has no other
- *   source; one with an obj is that item in the inventory unless its owner claims it (GotR's
- *   abyssal pearls are a saved balance).
+ *   source; one with an obj is that item in the inventory unless its owner claims it. A mixed
+ *   wallet can supply `inventoryCost(amount)`: the number of `itemId` removed from inventory
+ *   when that much currency is spent, and `refundItemId`: the inventory item a refund is paid
+ *   in, so a sale checks there is room for it.
  * - "omnishop:describe" { player, shop, stock, description }: the info panel's text, which the
  *   cache doesn't carry.
  * - "omnishop:can-buy" { player, shop, stock, itemId, cancel, unlock }: before each unit is
@@ -19,6 +21,11 @@
  *   inventory space.
  * - "omnishop:purchase" { player, shop, stock, itemId, handled }: once a unit is paid for;
  *   `handled` means the owner gave something else (an unlock), so no item is handed over.
+ * - "omnishop:units" { player, shop, stock, single }: a transaction-multiplier-0 row buys one
+ *   unit an order; its owner sets `single` false where live buys the clicked amount (the
+ *   Agility Arena Store's Agility XP, rsprox 75, 1863, 4308).
+ * - "omnishop:can-sell" { player, shop, stock, itemId, cancel }: the owner can refuse a sale;
+ *   the same check controls whether the side panel offers Sell.
  *
  * As live OSRS sends it (rsprox captures; Mixology Rewards in 1107, 4210, 4234, 4235; the
  * Boat Emporium in rev 241):
@@ -40,7 +47,7 @@
  *   have enough inventory space."
  * - Side panel: op1 selects an inventory item (varp 3870, omnishop_side_info_setup [slot, shop,
  *   1, 0, sellable ? 1 : -1, entry or -1, description]); ops 2-5 and its buttons sell 1/5/10/50
- *   for 40% of the cost (Alchemist labcoat: 2,250/2,800/3,700 -> +900/+1,120/+1,480), then
+ *   for the cache's sell rate (default 40%: labcoat 2,250/2,800/3,700 -> +900/+1,120/+1,480), then
  *   omnishop_side_info_close. Close Info sets varp 3870 back to -1.
  */
 
@@ -79,7 +86,7 @@ const QUANTITY_ENUM = 5844;
 /** List and side ops 2-5 are the four quantities; op10 is Examine. */
 const FIRST_QUANTITY_OP = 2;
 const EXAMINE_OP = 10;
-const SELL_RATE = 0.4;
+const INHERIT_RATE = -2147483648;
 const EVENT = {
   OP1_TO_OP6: (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6),
   OP10: 1 << 10,
@@ -129,6 +136,14 @@ function buyQuantities(row) {
   });
 }
 
+/** Native cost procs 7261/7262 inherit the shop rate and clamp it to at least 10%. */
+function costRate(shop, stock, buying) {
+  const suffix = buying ? "buy" : "sell";
+  const override = int(stock, TABLE.STOCK, `omnishop_stock_cost_mod_${suffix}`, INHERIT_RATE);
+  return Math.max(100, override === INHERIT_RATE
+    ? int(shop, TABLE.SHOP, `omnishop_shop_cost_mod_${suffix}`, buying ? 1000 : 400) : override);
+}
+
 /** A shop row read once: its stock and currencies. */
 function shopOf(rowId) {
   if (shops.has(rowId)) return shops.get(rowId);
@@ -138,7 +153,12 @@ function shopOf(rowId) {
     const stockRow = cache().getDbRow(Number(stockId));
     const cost = values(stockRow, TABLE.STOCK, "omnishop_stock_cost");
     const costs = [];
-    for (let i = 0; i + 1 < cost.length; i += 2) costs.push({ currency: Number(cost[i]), amount: Number(cost[i + 1]) });
+    for (let i = 0; i + 1 < cost.length; i += 2) costs.push({
+      currency: Number(cost[i]),
+      amount: Math.max(Number(cost[i + 1]) > 0 ? 1 : 0,
+        Math.floor(Number(cost[i + 1]) * costRate(row, stockRow, true) / 1000)),
+      refund: Math.floor(Number(cost[i + 1]) * costRate(row, stockRow, false) / 1000),
+    });
     return {
       index,
       row: Number(stockId),
@@ -148,8 +168,12 @@ function shopOf(rowId) {
         || int(stockRow, TABLE.STOCK, "omnishop_stock_restricted_category") > 0,
       restrictedUim: int(stockRow, TABLE.STOCK, "omnishop_stock_restricted_uim") === 1,
       single: int(stockRow, TABLE.STOCK, "omnishop_stock_transaction_multiplier", 1) === 0,
+      amount: Math.max(1, int(stockRow, TABLE.STOCK, "omnishop_stock_transaction_multiplier", 1)),
       maxPurchase: int(stockRow, TABLE.STOCK, "omnishop_stock_max_purchase", 0),
-      sellable: int(stockRow, TABLE.STOCK, "omnishop_stock_sellable") === 1,
+      buyable: int(stockRow, TABLE.STOCK, "omnishop_stock_buyable", 1) === 1
+        && int(stockRow, TABLE.STOCK, "omnishop_stock_view_only") !== 1,
+      sellable: int(stockRow, TABLE.STOCK, "omnishop_stock_sellable") === 1
+        && int(stockRow, TABLE.STOCK, "omnishop_stock_view_only") !== 1,
       noted: int(stockRow, TABLE.STOCK, "omnishop_stock_sold_noted") === 1,
     };
   });
@@ -170,19 +194,23 @@ function currencyObj(currency) {
 
 /**
  * The player's balance of a currency, with a setter. An owner may claim a currency even when
- * the cache gives it an obj: Guardians of the Rift's abyssal pearls are saved as a balance,
- * though the legacy currency row still names the item. Unclaimed obj currencies stay items.
+ * the cache gives it an obj (keeping it as a saved balance); unclaimed obj currencies stay items.
  */
 function wallet(player, shop, currency) {
   const obj = currencyObj(currency);
   const request = { player, shop: shop.name, currency, itemId: obj > 0 ? obj : -1, balance: null, set: null };
   pluginApi.emitCustomEvent("omnishop:currency", request);
   if (typeof request.set === "function") {
-    return { balance: Number(request.balance) || 0, set: request.set };
+    return {
+      balance: Number(request.balance) || 0, set: request.set,
+      paymentItemId: obj, inventoryCost: request.inventoryCost,
+      refundItemId: Number.isInteger(request.refundItemId) && request.refundItemId > 0 ? request.refundItemId : -1,
+    };
   }
   if (obj > 0) {
     const inventory = player.getInventory();
     return {
+      itemId: obj,
       balance: inventory.getAmount(obj),
       set: (value) => {
         const delta = value - inventory.getAmount(obj);
@@ -259,6 +287,7 @@ function redraw(player, shop) {
 
 /** One unit: the checks, the payment and the item. False stops the rest of the order. */
 function buyOne(player, shop, entry) {
+  if (!entry.buyable) return false;
   if (entry.restrictedUim && isUltimate(player)) {
     player.sendMessage(MESSAGE.ULTIMATE);
     return false;
@@ -271,7 +300,8 @@ function buyOne(player, shop, entry) {
   const check = { player, shop: shop.name, stock, itemId: entry.itemId, cancel: false, unlock: false };
   pluginApi.emitCustomEvent("omnishop:can-buy", check);
   if (check.cancel) return false;
-  const wallets = entry.costs.map((cost) => ({ cost, wallet: wallet(player, shop, cost.currency) }));
+  const wallets = entry.costs.filter((cost) => cost.amount > 0)
+    .map((cost) => ({ cost, wallet: wallet(player, shop, cost.currency) }));
   const short = wallets.find(({ cost, wallet: held }) => !held || held.balance < cost.amount);
   if (short) {
     player.sendMessage(MESSAGE.TOO_POOR(currencyName(short.cost.currency)));
@@ -280,26 +310,40 @@ function buyOne(player, shop, entry) {
   const { ItemDefinition } = core;
   const itemId = entry.noted ? (ItemDefinition.forId(entry.itemId)?.getNoteId?.() ?? entry.itemId) : entry.itemId;
   const inventory = player.getInventory();
-  const stackable = ItemDefinition.forId(itemId)?.isStackable?.() === true;
-  if (check.unlock !== true && inventory.getFreeSlots() < 1 && !(stackable && inventory.contains(itemId))) {
-    player.sendMessage(MESSAGE.NO_SPACE);
-    return false;
+  if (check.unlock !== true) {
+    const preview = new core.Inventory(player).setItems(inventory.getCopiedItems());
+    for (const { cost, wallet: held } of wallets) {
+      if (typeof held.inventoryCost === "function") {
+        if (held.paymentItemId > 0) preview.deleted(held.paymentItemId, held.inventoryCost(cost.amount), false);
+      } else if (held.itemId > 0) preview.deleted(held.itemId, cost.amount, false);
+    }
+    if (preview.getAddableAmount(new core.Item(itemId, entry.amount)) < entry.amount) {
+      player.sendMessage(MESSAGE.NO_SPACE);
+      return false;
+    }
   }
   for (const { cost, wallet: held } of wallets) held.set(held.balance - cost.amount);
   const request = { player, shop: shop.name, stock, itemId: entry.itemId, handled: false };
   pluginApi.emitCustomEvent("omnishop:purchase", request);
   if (!request.handled) {
-    inventory.adds(itemId, 1);
+    inventory.adds(itemId, entry.amount);
     inventory.refreshItems();
-    pluginApi.emitCustomEvent("collection-log:obtain", { player, itemId: entry.itemId, amount: 1 });
+    pluginApi.emitCustomEvent("collection-log:obtain", { player, itemId: entry.itemId, amount: entry.amount });
   }
   // A purchase handler may have closed the shop (a boat is delivered with a message box).
   if (openShopFor(player)) redraw(player, shop);
   return true;
 }
 
+function singleUnit(player, shop, entry) {
+  const request = { player, shop: shop.name, stock: cache().getDbRowName(entry.row), single: true };
+  pluginApi.emitCustomEvent("omnishop:units", request);
+  return request.single !== false;
+}
+
 function buy(player, shop, entry, quantity) {
-  const units = entry.single ? 1 : entry.maxPurchase > 0 ? Math.min(quantity, entry.maxPurchase) : quantity;
+  const units = entry.single && singleUnit(player, shop, entry) ? 1
+    : entry.maxPurchase > 0 ? Math.min(quantity, entry.maxPurchase) : quantity;
   for (let unit = 0; unit < units; unit++) if (!buyOne(player, shop, entry)) break;
   pluginApi.emitCustomEvent("persistence:save", { player, reason: "omnishop" });
 }
@@ -362,23 +406,48 @@ function clickBuy(event) {
 }
 
 function stockFor(shop, itemId) {
-  return shop.stock.find((entry) => entry.itemId === itemId) ?? null;
+  return shop.stock.find((entry) => entry.itemId === itemId && entry.sellable)
+    ?? shop.stock.find((entry) => entry.itemId === itemId) ?? null;
+}
+
+function canSell(player, shop, entry) {
+  if (!entry?.sellable) return false;
+  const request = {
+    player, shop: shop.name, stock: cache().getDbRowName(entry.row), itemId: entry.itemId, cancel: false,
+  };
+  pluginApi.emitCustomEvent("omnishop:can-sell", request);
+  return !request.cancel;
 }
 
 function sell(player, shop, slot, quantity) {
   const inventory = player.getInventory();
   const item = inventory.getItems()[slot];
   const entry = item ? stockFor(shop, item.getId()) : null;
-  if (!entry?.sellable) {
+  if (!canSell(player, shop, entry)) {
     player.sendMessage(MESSAGE.NOT_SELLABLE);
     return;
   }
   for (let unit = 0; unit < quantity && inventory.getItems()[slot]?.getId?.() === entry.itemId; unit++) {
-    inventory.deleteAtSlot(slot, 1);
-    for (const cost of entry.costs) {
-      const held = wallet(player, shop, cost.currency);
-      held?.set(held.balance + Math.floor(cost.amount * SELL_RATE));
+    const payments = entry.costs.filter((cost) => cost.refund > 0)
+      .map((cost) => ({ cost, wallet: wallet(player, shop, cost.currency) }));
+    const preview = new core.Inventory(player).setItems(inventory.getCopiedItems());
+    preview.deleteAtSlot(slot, 1, false);
+    let fits = true;
+    for (const { cost, wallet: held } of payments) {
+      // A refund paid into the inventory needs room there: the currency's item, or what a custom wallet pays in.
+      const refundId = held ? (held.itemId > 0 ? held.itemId : held.refundItemId ?? -1) : -1;
+      if (!held || (refundId > 0 && preview.getAddableAmount(new core.Item(refundId, cost.refund)) < cost.refund)) {
+        fits = false;
+        break;
+      }
+      if (refundId > 0) preview.add(new core.Item(refundId, cost.refund), false);
     }
+    if (!fits) {
+      player.sendMessage(MESSAGE.NO_SPACE);
+      break;
+    }
+    inventory.deleteAtSlot(slot, 1);
+    for (const { cost, wallet: held } of payments) held.set(held.balance + cost.refund);
     redraw(player, shop);
   }
   inventory.refreshItems();
@@ -393,7 +462,7 @@ function selectSide(player, shop, slot) {
   const sender = player.getPacketSender();
   sender.sendConfig(varp(VARP.SIDE_SELECTED), slot);
   sender.sendInterfaceScript(SCRIPT.SIDE_INFO_SETUP, [
-    slot, shop.row, 1, 0, entry?.sellable ? 1 : -1, entry ? entry.index : -1,
+    slot, shop.row, 1, 0, canSell(player, shop, entry) ? 1 : -1, entry ? entry.index : -1,
     entry ? description(player, shop, entry) : core.ItemDefinition.forId(item.getId())?.getExamine?.() ?? "",
   ]);
 }

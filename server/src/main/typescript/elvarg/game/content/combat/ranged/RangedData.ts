@@ -241,6 +241,7 @@ export class Ammunition {
     public static readonly TARROMIN_TAR = new Ammunition(ItemIdentifiers.TARROMIN_TAR, null, 33, 31)
     public static readonly HARRALANDER_TAR = new Ammunition(ItemIdentifiers.HARRALANDER_TAR, null, 33, 49)
     public static readonly IRIT_TAR = new Ammunition(ItemIdentifiers.IRIT_TAR, null, 33, 36)
+    public static readonly TONALZTICS_OF_RALOS_UNCHARGED = new Ammunition(ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_, null, 2729, 0) // PROJANIM_GLAIVE_01_REGULAR
     public static readonly TONALZTICS_OF_RALOS = new Ammunition(ItemIdentifiers.TONALZTICS_OF_RALOS, null, 2729, 0) // PROJANIM_GLAIVE_01_REGULAR
 
     // Wiki: Blurite bolts, Silver bolts, Barbed bolts. The cache has no travel spotanim of their own.
@@ -554,6 +555,7 @@ export class RangedWeapon {
     public static readonly MORRIGANS_THROWING_AXE = new RangedWeapon([ItemIdentifiers.MORRIGANS_THROWING_AXE, ItemIdentifiers.MORRIGANS_THROWING_AXE_2, ItemIdentifiers.MORRIGANS_THROWING_AXE_BH_, ItemIdentifiers.MORRIGANS_THROWING_AXE_BH__2], [Ammunition.MORRIGANS_THROWING_AXE], RangedWeaponType.THROWNAXE)
     // The league's Sage's axe: a dart-interface thrown weapon (item-gameplay.json), 3 ticks, 2 on Rapid (Wiki).
     public static readonly SAGES_AXE = new RangedWeapon([ItemIdentifiers.SAGES_AXE, ItemIdentifiers.SAGES_AXE_2], [Ammunition.SAGES_AXE], RangedWeaponType.DART)
+    public static readonly TONALZTICS_OF_RALOS_UNCHARGED = new RangedWeapon([ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_], [Ammunition.TONALZTICS_OF_RALOS_UNCHARGED], RangedWeaponType.GLAIVE)
     public static readonly TONALZTICS_OF_RALOS = new RangedWeapon([ItemIdentifiers.TONALZTICS_OF_RALOS, ItemIdentifiers.TONALZTICS_OF_RALOS_2], [Ammunition.TONALZTICS_OF_RALOS], RangedWeaponType.GLAIVE)
     public static readonly MORRIGANS_JAVELIN = new RangedWeapon([
         ItemIdentifiers.MORRIGANS_JAVELIN, ItemIdentifiers.MORRIGANS_JAVELIN_2, ItemIdentifiers.MORRIGANS_JAVELIN_3,

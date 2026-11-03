@@ -335,7 +335,9 @@ export const TRANSMIT_VARPS: ReadonlySet<number> = new Set([
     VARP_OPTION_RUN, // Run toggle
     VARP_ATTACK_STYLE, // Combat attack style
     VARP_AUTO_RETALIATE, // Auto-retaliate toggle
-    VARP_SPECIAL_ATTACK, // Special attack toggle
+    // %sa_attack (301) is predicted locally for the orb, but the orb and special bar send a
+    // native widget operation and the server decides. Sending the prediction too would turn
+    // one click into two toggles.
     VARP_KEYBINDING_ESC_TO_CLOSE, // %keybinding_esc_to_close
     VARP_SHOP_QUANTITY, // Shop quantity selector (%shop_quantity)
     VARP_SIDE_JOURNAL_STATE, // Side journal tab selection (drives IF_OPENSUB swap for 629:43)

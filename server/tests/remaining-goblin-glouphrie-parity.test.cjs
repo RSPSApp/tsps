@@ -235,7 +235,7 @@ function player(overrides = {}) {
       getExperience: () => 0,
       addExperiences: (skill, amount) => xp.push([skill.getIndex?.() ?? skill, amount]),
     }),
-    getUsername: () => 'Parity',
+    getUsername: () => 'Parity', getDisplayName: () => 'Parity',
     isPlayer: () => true,
     isNpc: () => false,
     isRegistered: () => true,

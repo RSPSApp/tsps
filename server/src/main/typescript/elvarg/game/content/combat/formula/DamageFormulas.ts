@@ -7,7 +7,7 @@ import { Mobile } from "../../../entity/impl/Mobile";
 import type { Player } from "../../../entity/impl/player/Player";
 import type { NPC } from "../../../entity/impl/npc/NPC";
 import type { CombatSpell } from "../magic/CombatSpell";
-import { applyCombatEffectiveLevelModifiers, applyMagicDamageBonusModifiers, applyMeleeStrengthPercentModifiers, applyMagicHitModifiers, applyMeleeHitModifiers, applyRangedHitModifiers } from "../EquipmentEffects";
+import { applyCombatEffectiveLevelModifiers, applyMagicDamageBonusModifiers, applyMeleeStrengthPercentModifiers, applyMeleeStrengthBonusModifiers, applyMagicHitModifiers, applyMeleeHitModifiers, applyRangedHitModifiers } from "../EquipmentEffects";
 import { CombatSpecial } from "../CombatSpecial";
 import { SpecialAttackMaximumHitSource, WeaponSpecialTraits } from "../WeaponSpecialTraits";
 import { PluginManager } from "../../../../plugins/PluginManager";
@@ -26,8 +26,14 @@ const getPlayerCombatSpecial = (player: Player): any | null => {
 
 export class DamageFormulas {
     public static sourceHitBounds(entity: Mobile, attackType: CombatType, target?: Mobile): { minimum: number; maximum: number } {
-        if (attackType === CombatType.MAGIC && CombatSpecial.activeTraitsFor(entity)?.maximumHitSource === undefined) {
-            return DamageFormulas.getMagicHitBounds(entity, undefined, target);
+        const traits = attackType === CombatType.MAGIC ? CombatSpecial.activeTraitsFor(entity) : null;
+        if (attackType === CombatType.MAGIC && traits?.maximumHitSource === undefined) {
+            const bounds = DamageFormulas.getMagicHitBounds(entity, undefined, target);
+            // A magic special's damage traits scale the spell's max hit, as melee and ranged
+            // specials' do (Soul Rend's 1.3, Condemn's 1.5).
+            if (!traits || (traits.damageMultiplier === undefined && !traits.damageMultiplierStages?.length)) return bounds;
+            const maximum = DamageFormulas.applyDamageMultiplierTraits(bounds.maximum, traits, 1);
+            return { minimum: Math.min(bounds.minimum, maximum), maximum };
         }
         return { minimum: 0, maximum: DamageFormulas.sourceMaxHit(entity, attackType) };
     }
@@ -158,7 +164,7 @@ export class DamageFormulas {
         if (entity.isPlayer()) {
             let player = entity.getAsPlayer();
             const traits = CombatSpecial.activeTraitsFor(entity);
-            let strengthBonus = player.getBonusManager().getOtherBonus()[BonusManager.STRENGTH];
+            const strengthBonus = applyMeleeStrengthBonusModifiers(player, player.getBonusManager().getOtherBonus()[BonusManager.STRENGTH]);
             maxHit = DamageFormulas.scaleRatio(
                 DamageFormulas.effectiveStrengthLevel(player, traits?.strengthLevelMultiplier) * (strengthBonus + 64) + 320,
                 1,

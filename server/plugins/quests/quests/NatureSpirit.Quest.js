@@ -17,13 +17,16 @@
  * bowl at the camp hides the mirror, the Bloom spell sprouts fungi on a
  * rotting log, the fungus/used spell go on the nature/spirit stones, the
  * Nature Spirit blesses the silver sickle and hands over the druid pouch, the
- * blessed sickle blooms swamp plants into pouch charges, and walking a filled
- * pouch past a ghast reveals it so the kill can count.
+ * blessed sickle blooms swamp plants into pouch charges, and the swamp's invisible
+ * ghasts attack players (rotting food, or 1-3 damage with none) and become visible
+ * when they land a hit. A filled pouch spends a charge to reveal an attacker instead,
+ * so its food stays fresh; using a filled pouch on one reveals it too.
  */
 module.exports = function registerNatureSpiritQuest(api) {
   const {
-    Skill, Equipment, Location, Item, ItemOnGroundManager, Boundary, Area, GameObject,
+    Animation, Skill, Equipment, Location, Item, ItemOnGroundManager, Boundary, Area, GameObject,
     ObjectManager, MapObjects, RegionManager, World, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers,
+    HitDamage, HitMask, CacheDefinitions, Graphic,
   } = api.core;
   const { registerQuest, refreshQuestList } = require("../QuestRuntime");
 
@@ -105,6 +108,24 @@ module.exports = function registerNatureSpiritQuest(api) {
 
   const GHAST_NPC_ID = NpcIdentifiers.GHAST; // 945, the invisible swamp ghast
   const GHAST_VISIBLE_NPC_ID = NpcIdentifiers.GHAST_2; // 946, the level 30 ghast
+  /** Every invisible version placed in Mort Myre (the Wiki lists 945 and 5622-5624). */
+  const INVISIBLE_GHAST_IDS = new Set([
+    NpcIdentifiers.GHAST,
+    NpcIdentifiers.GHAST_3,
+    NpcIdentifiers.GHAST_4,
+    NpcIdentifiers.GHAST_5,
+  ]);
+  /** The visible ghast's recorded attack animation (npc-captured-animations, NPC 946). */
+  const GHAST_ATTACK_ANIMATION = 1087;
+  const GHAST_ATTACK_RANGE = 8;
+  /** Not in the Wiki: how often one player may be attacked, in game ticks. */
+  const GHAST_ATTACK_MIN_DELAY = 12;
+  const GHAST_ATTACK_MAX_DELAY = 30;
+  /** Wiki: ghasts have a 7/10 chance of missing completely. */
+  const GHAST_MISS_CHANCE = 0.7;
+  /** Wiki: the easy Morytania diary gives a 50% chance the ghast ignores the player. */
+  const GHAST_DIARY_IGNORE_CHANCE = 0.5;
+  const ROTTEN_FOOD_ITEM_ID = ItemIdentifiers.ROTTEN_FOOD;
 
   /** What casting Bloom on each rotting plant grows. */
   const BLOOMED_PLANT = new Map([
@@ -126,12 +147,21 @@ module.exports = function registerNatureSpiritQuest(api) {
     MORT_MYRE_FUNGUS_ITEM_ID,
     ItemIdentifiers.VINE_FLOWER,
   ];
-  const BLOOM_RADIUS = 2;
+  const BLOOM_RADIUS = 1;
+  const BLOOM_ANIMATION = 1100; // druidicspirit_human_bloom
+  const BLOOM_PLAYER_GRAPHIC = 264; // druidicspirit_bloom_player_spotanim
+  const BLOOM_PLANT_GRAPHIC = 263; // druidicspirit_bloom_spotanim
+  const BLOOM_SOUND = 1493; // capture 1698, each of its eight local Bloom casts
+  const BLOOM_DELAY_TICKS = 3; // the cache animation lasts 64 client cycles
+  // Inferred from capture 1635: 145/214 eligible logs and 19/26 branches bloom.
+  const BLOOM_SUCCESS_CHANCE = 2 / 3;
+  const POUCH_GRAPHIC = 255; // druidicspirit_druidsshield
+  const POUCH_DELAY_TICKS = 1; // the cache effect lasts 18 client cycles
 
   const GROTTO_INTERIOR = { x: 3441, y: 9736, z: 0 };
   const GROTTO_SURFACE = { x: 3443, y: 3338, z: 0 };
   const FILLIMAN_CAMP = { x: 3442, y: 3340, z: 0 };
-  const NATURE_SPIRIT_CAMP = { x: 3441, y: 9736, z: 0 };
+  const NATURE_SPIRIT_CAMP = { x: 3441, y: 9738, z: 0 };
   const WASHING_BOWL_TILE = { x: 3437, y: 3337, z: 0 };
   /** Mort Myre swamp: the ghasts the pouch can reveal all live inside. */
   const SWAMP_BOUNDS = new Boundary(3380, 3590, 3310, 3480, 0);
@@ -143,9 +173,15 @@ module.exports = function registerNatureSpiritQuest(api) {
     player.getEquipment().get(Equipment.AMULET_SLOT)?.getId?.() === GHOSTSPEAK_AMULET_ITEM_ID;
   const actionOf = (event) =>
     String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
+  const inGrotto = (player) => {
+    const at = player.getLocation();
+    return at.getX() >= 3435 && at.getX() <= 3448 && at.getY() >= 9733 && at.getY() <= 9746;
+  };
 
   /** Owner-only quest NPC spawns (Filliman outside, Nature Spirit inside). */
   const spawnedByPlayer = new Map();
+  const nextBloom = new WeakMap();
+  const nextPouch = new WeakMap();
 
   function trackSpawn(player, npc) {
     if (!npc) return npc;
@@ -194,8 +230,23 @@ module.exports = function registerNatureSpiritQuest(api) {
     );
   }
 
-  /** The visible ghasts we spawned, so a death can be counted for its owner. */
+  /**
+   * The visible ghasts we spawned, by NPC: the invisible source it stands for and the owner
+   * who can see it. The source stays in the world (and in the player's local NPCs), so this
+   * association is what keeps one source to one visible form.
+   */
   const visibleGhasts = new Map();
+
+  /** The visible form this player already sees for an invisible ghast, if any. */
+  function visibleGhastFor(player, source) {
+    for (const [npc, reveal] of visibleGhasts) {
+      if (reveal.source === source && reveal.owner === player) return npc;
+    }
+    return null;
+  }
+
+  /** The game cycle each player's next ghast attack may happen on. */
+  const ghastNextAttack = new WeakMap();
 
   /** Swap a scenery object for another id in place (the reference's loc change). */
   function replaceObject(object, newId) {
@@ -214,26 +265,24 @@ module.exports = function registerNatureSpiritQuest(api) {
     );
   }
 
-  /** The nearest rotting plant the player's Bloom can reach, or null. */
-  function nearestBloomable(player, bloomableIds) {
+  /** Every adjacent plant, deduplicating the map and runtime views of a loc. */
+  function bloomablePlants(player, bloomableIds) {
     const location = player.getLocation();
     const x = location.getX();
     const y = location.getY();
     const z = location.getZ();
-    let best = null;
-    let bestDistance = BLOOM_RADIUS + 1;
+    const plants = new Map();
     const consider = (object) => {
       if (!bloomableIds.has(object.getId())) return;
+      if ((object.getPrivateArea() ?? null) !== (player.getPrivateArea?.() ?? null)) return;
       const objectLocation = object.getLocation();
       if (objectLocation.getZ() !== z) return;
       const distance = Math.max(
         Math.abs(objectLocation.getX() - x),
         Math.abs(objectLocation.getY() - y)
       );
-      if (distance < bestDistance) {
-        best = object;
-        bestDistance = distance;
-      }
+      if (distance > BLOOM_RADIUS) return;
+      plants.set(`${objectLocation.getX()},${objectLocation.getY()},${object.getType()}`, object);
     };
     // Cache/map locs live in MapObjects; only runtime objects are in World.
     RegionManager.loadMapFiles(x, y);
@@ -247,7 +296,24 @@ module.exports = function registerNatureSpiritQuest(api) {
     for (const object of World.getObjects()) {
       consider(object);
     }
-    return best;
+    return [...plants.values()];
+  }
+
+  function playBloom(player) {
+    // Capture 1635: the player animates, then the effect spreads across the eight adjacent tiles.
+    player.performAnimation(new Animation(BLOOM_ANIMATION, 10));
+    player.performGraphic(new Graphic(BLOOM_PLAYER_GRAPHIC, 30, 200));
+    player.getPacketSender().sendSoundEffect(BLOOM_SOUND, 35, 0, 0);
+    const at = player.getLocation();
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+      if (dx || dy) player.getPacketSender().sendGraphic(new Graphic(BLOOM_PLANT_GRAPHIC, 15, 150),
+        new Location(at.getX() + dx, at.getY() + dy, at.getZ()));
+    }
+    nextBloom.set(player, World.getProcessCycle() + BLOOM_DELAY_TICKS);
+  }
+
+  function growPlant(plant) {
+    replaceObject(plant, BLOOMED_PLANT.get(plant.getId()));
   }
 
   /** Both ritual offerings sit on their stones. */
@@ -274,29 +340,126 @@ module.exports = function registerNatureSpiritQuest(api) {
     ItemOnGroundManager.registerLocation(player, new Item(WASHING_BOWL_ITEM_ID, 1), position);
   }
 
-  /** A filled pouch spent to make a ghast visible and attackable. */
-  function revealGhast(player, ghast) {
-    if (!held(player, DRUID_POUCH_FILLED_ITEM_ID)) {
-      player.sendMessage("You have nothing left in your druid pouch!");
-      return;
-    }
-    player.getInventory().deleteNumber(DRUID_POUCH_FILLED_ITEM_ID, 1);
-    if (!held(player, DRUID_POUCH_FILLED_ITEM_ID)) player.getInventory().adds(DRUID_POUCH_EMPTY_ITEM_ID, 1);
+  /**
+   * Spawn the visible form where the invisible ghast stands, owned by the player who saw it.
+   * The invisible source is never removed (it is a shared world spawn), so a source that is
+   * already revealed for this player keeps the form it has instead of growing another copy.
+   */
+  function spawnVisibleGhast(player, ghast) {
+    const existing = visibleGhastFor(player, ghast);
+    if (existing) return existing;
     const location = ghast.getLocation();
     const visible = api.spawnNpc({
       id: GHAST_VISIBLE_NPC_ID,
       x: location.getX(),
       y: location.getY(),
       z: location.getZ(),
-      wanderRadius: 0,
+      wanderRadius: GHAST_ATTACK_RANGE,
       owner: player,
       ownerOnly: true,
     });
     if (visible) {
       visible.__skipDefaultRespawn = true;
-      visibleGhasts.set(visible, player);
+      visibleGhasts.set(visible, { owner: player, source: ghast });
+      visible.getCombat().attack(player);
     }
+    return visible ?? null;
+  }
+
+  /** A filled pouch spent to make a ghast visible and attackable. */
+  function revealGhast(player, ghast) {
+    // Already visible to this player: spending a charge would reveal nothing new.
+    if (visibleGhastFor(player, ghast)) return true;
+    if (!held(player, DRUID_POUCH_FILLED_ITEM_ID)) {
+      player.sendMessage("You have nothing left in your druid pouch!");
+      return false;
+    }
+    player.getInventory().deleteNumber(DRUID_POUCH_FILLED_ITEM_ID, 1);
+    if (!held(player, DRUID_POUCH_FILLED_ITEM_ID)) player.getInventory().adds(DRUID_POUCH_EMPTY_ITEM_ID, 1);
+    spawnVisibleGhast(player, ghast);
     player.sendMessage("The druid pouch makes the ghast visible.");
+    return true;
+  }
+
+  /** The easy Morytania diary makes half of the ghasts ignore the player (Wiki). */
+  function easyMorytaniaDiary(player) {
+    const request = { player, diary: "morytania", tier: "easy", complete: false };
+    api.emitCustomEvent("diary:is-complete", request);
+    return request.complete === true;
+  }
+
+  function nearestInvisibleGhast(player) {
+    const location = player.getLocation();
+    let nearest = null;
+    let nearestDistance = GHAST_ATTACK_RANGE + 1;
+    for (const npc of player.getLocalNpcs?.() ?? []) {
+      if (!INVISIBLE_GHAST_IDS.has(npc?.getId?.())) continue;
+      if (visibleGhastFor(player, npc)) continue;
+      const at = npc.getLocation?.();
+      if (!at || at.getZ() !== location.getZ()) continue;
+      const distance = Math.max(Math.abs(at.getX() - location.getX()), Math.abs(at.getY() - location.getY()));
+      if (distance < nearestDistance) {
+        nearest = npc;
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
+  }
+
+  /** Food is what the cache gives an Eat action; potions and raw/inedible items stay put. */
+  function isFoodItem(itemId) {
+    const definition = CacheDefinitions.getItem(itemId);
+    if (!definition || definition.noteTemplate >= 0) return false;
+    return (definition.inventoryActions ?? []).some((action) => String(action).toLowerCase() === "eat");
+  }
+
+  /** The first edible item in the pack becomes rotten food; false with nothing to rot. */
+  function rotFood(player) {
+    const inventory = player.getInventory();
+    const items = inventory.getItems?.() ?? [];
+    for (const item of items) {
+      if (!item || !isFoodItem(item.getId())) continue;
+      if (item.getAmount() > 1) {
+        inventory.deleteNumber(item.getId(), 1);
+        inventory.adds(ROTTEN_FOOD_ITEM_ID, 1);
+      } else {
+        item.setId(ROTTEN_FOOD_ITEM_ID);
+        inventory.refreshItems();
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * A ghast's attack: a filled druid pouch spends a charge to reveal the attacker instead
+   * (so no food is rotted and no damage is taken), else 7/10 miss, else rot one food item
+   * or hit 1-3 when there is none. A hit makes the ghast visible, as live does; the kill
+   * then counts towards the quest like any pouch-revealed one. The Wiki gives the roll but
+   * neither the interval nor the exact retreat, so one player sees an attempt every 12-30
+   * ticks. Once revealed, the visible form owns ordinary combat; its invisible source
+   * must not keep rotting food or applying a second attack alongside it.
+   */
+  function ghastAttack(player, ghast) {
+    const cycle = World.getProcessCycle();
+    ghastNextAttack.set(player, cycle + GHAST_ATTACK_MIN_DELAY
+      + Math.floor(Math.random() * (GHAST_ATTACK_MAX_DELAY - GHAST_ATTACK_MIN_DELAY + 1)));
+    if (easyMorytaniaDiary(player) && Math.random() < GHAST_DIARY_IGNORE_CHANCE) return;
+    if (Math.random() < GHAST_MISS_CHANCE) return;
+    // The filled pouch is the defence the Wiki documents: it spends a charge to reveal the
+    // ghast, which costs neither food nor health. revealGhast() spends nothing when the
+    // source is already visible to this player, so repeat attacks cannot burn charges.
+    if (held(player, DRUID_POUCH_FILLED_ITEM_ID) && revealGhast(player, ghast)) {
+      visibleGhastFor(player, ghast)?.performAnimation?.(new Animation(GHAST_ATTACK_ANIMATION));
+      return;
+    }
+    if (!rotFood(player)) {
+      player.getCombat().getHitQueue().addPendingDamage([
+        new HitDamage(1 + Math.floor(Math.random() * 3), HitMask.RED),
+      ]);
+    }
+    const visible = spawnVisibleGhast(player, ghast);
+    visible?.performAnimation?.(new Animation(GHAST_ATTACK_ANIMATION));
   }
 
   function firstProduce(player) {
@@ -322,8 +485,13 @@ module.exports = function registerNatureSpiritQuest(api) {
     if (!player) return;
     const stage = quest.getStage(player);
     if (stage >= STAGE_ENTERED_GROTTO) {
-      despawn(player, FILLIMAN_NPC_ID);
-      if (!hasSpawn(player, NATURE_SPIRIT_NPC_ID)) spawnAt(player, NATURE_SPIRIT_NPC_ID, NATURE_SPIRIT_CAMP);
+      const id = stage >= STAGE_FULL_TRANSFORM ? NATURE_SPIRIT_NPC_ID : FILLIMAN_NPC_ID;
+      const tile = { ...NATURE_SPIRIT_CAMP, z: stage >= STAGE_COMPLETE ? 1 : 0 };
+      for (const npc of [...(spawnedByPlayer.get(player) ?? [])]) {
+        const at = npc.getLocation();
+        if (npc.getId() !== id || at.getY() < 9000 || at.getZ() !== tile.z) despawn(player, npc.getId());
+      }
+      if (!hasSpawn(player, id)) spawnAt(player, id, tile);
       return;
     }
     if (stage >= STAGE_ENTERED_SWAMP && !hasSpawn(player, FILLIMAN_NPC_ID)) {
@@ -388,6 +556,11 @@ module.exports = function registerNatureSpiritQuest(api) {
     player.getSkillManager().addExperiences(Skill.CRAFTING, 3000);
     player.getSkillManager().addExperiences(Skill.HITPOINTS, 2000);
     player.getSkillManager().addExperiences(Skill.DEFENCE, 2000);
+    if (inGrotto(player)) {
+      const at = player.getLocation();
+      player.moveTo(new Location(at.getX(), at.getY(), 1));
+    }
+    ensureQuestNpcs(player);
   }
 
   function drezelVariant(stage, player) {
@@ -419,7 +592,6 @@ module.exports = function registerNatureSpiritQuest(api) {
       return "entering-filliman-s-grove-talking-to-filliman-inside-his-grotto-again";
     }
     if (stage >= STAGE_ENTERED_GROTTO) {
-      quest.setStage(player, STAGE_FULL_TRANSFORM);
       return "entering-filliman-s-grove-talking-to-filliman-inside-his-grove";
     }
     if (stage >= STAGE_PERFORMED_RITUAL) {
@@ -488,6 +660,7 @@ module.exports = function registerNatureSpiritQuest(api) {
   function answerCondition({ player, npcId, text }) {
     if (![DREZEL_NPC_ID, FILLIMAN_NPC_ID, NATURE_SPIRIT_NPC_ID].includes(npcId)) return null;
     const value = String(text).toLowerCase();
+    if (value.includes("player searches the grotto")) return quest.getStage(player) >= STAGE_ENTERED_GROTTO;
     const inventory = player.getInventory();
     if (value.includes("does not meet the requirements")) return !meetsRequirements(player);
     if (value.includes("meets the requirements")) return meetsRequirements(player);
@@ -595,12 +768,30 @@ module.exports = function registerNatureSpiritQuest(api) {
     }
   }
 
+  function handleSpiritLine(event) {
+    if (event.npcId !== FILLIMAN_NPC_ID && event.npcId !== NATURE_SPIRIT_NPC_ID) return;
+    const { player, text } = event;
+    if (quest.getStage(player) >= STAGE_FULL_TRANSFORM) event.speakerId = NATURE_SPIRIT_NPC_ID;
+    if (quest.getStage(player) === STAGE_ENTERED_GROTTO && text.startsWith("I must complete the transformation now.")) {
+      event.after = () => {
+        if (quest.getStage(player) !== STAGE_ENTERED_GROTTO) return;
+        quest.setStage(player, STAGE_FULL_TRANSFORM);
+        ensureQuestNpcs(player);
+        for (const npc of spawnedByPlayer.get(player) ?? []) npc.performGraphic(new Graphic(BLOOM_PLANT_GRAPHIC));
+      };
+    }
+    // shortcut: this holds the transformation effect; replace with the full camera sequence when captured.
+    if (text.startsWith("Hmmm, good, the transformation is complete.")) event.holdTicks = BLOOM_DELAY_TICKS;
+  }
+
   /** The mirror proves to Filliman that he is dead. */
   function handleMirrorOnFilliman(event) {
     if (event.itemId !== MIRROR_ITEM_ID) return;
     const target = event.npcId ?? event.target?.getId?.();
     if (target !== FILLIMAN_NPC_ID && target !== NATURE_SPIRIT_NPC_ID) return;
-    if (quest.getStage(event.player) !== STAGE_SPOKEN_FILLIMAN) return;
+    const stage = quest.getStage(event.player);
+    if (stage < STAGE_ENTERED_SWAMP || stage >= STAGE_SHOWN_MIRROR) return;
+    if (!held(event.player, MIRROR_ITEM_ID)) return;
     if (!wearingGhostspeak(event.player)) return;
     quest.setStage(event.player, STAGE_SHOWN_MIRROR);
     event.player.sendMessage("Filliman sees no reflection and finally accepts that he is dead.");
@@ -632,14 +823,16 @@ module.exports = function registerNatureSpiritQuest(api) {
     const stage = quest.getStage(player);
     if (stage < STAGE_BLESSED || stage >= STAGE_PICKED_FUNGI) return;
     if (!held(player, DRUIDIC_SPELL_ITEM_ID)) return;
-    const plant = nearestBloomable(player, SPELL_BLOOMABLE_IDS);
+    if (World.getProcessCycle() < (nextBloom.get(player) ?? 0)) { event.handled = true; return; }
+    const plant = bloomablePlants(player, SPELL_BLOOMABLE_IDS)[0];
     if (!plant) {
       player.sendMessage("You cast the spell in the swamp.");
       player.sendMessage("There is no suitable material to be affected in this area.");
       event.handled = true;
       return;
     }
-    replaceObject(plant, BLOOMED_PLANT.get(plant.getId()));
+    playBloom(player);
+    growPlant(plant);
     player.getInventory().deleteNumber(DRUIDIC_SPELL_ITEM_ID, 1);
     player.getInventory().adds(USED_SPELL_ITEM_ID, 1);
     if (stage < STAGE_CAST_SPELL) quest.setStage(player, STAGE_CAST_SPELL);
@@ -650,16 +843,26 @@ module.exports = function registerNatureSpiritQuest(api) {
   /** The blessed sickle's Bloom grows the swamp produce used to fill the pouch. */
   function handleSickleAction(event) {
     if (event.itemId !== SILVER_SICKLE_BLESSED_ITEM_ID) return;
-    if (!String(event.option ?? "").toLowerCase().includes("cast bloom")) return;
+    if (!String(event.option ?? "").toLowerCase().includes("bloom")) return;
     const { player } = event;
     if (quest.getStage(player) < STAGE_BLESSED_SICKLE) return;
-    const plant = nearestBloomable(player, SICKLE_BLOOMABLE_IDS);
-    if (!plant) {
+    if (!held(player, SILVER_SICKLE_BLESSED_ITEM_ID)
+      && player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId?.() !== SILVER_SICKLE_BLESSED_ITEM_ID) return;
+    event.handled = true;
+    if (World.getProcessCycle() < (nextBloom.get(player) ?? 0)) return;
+    const skills = player.getSkillManager();
+    const prayer = skills.getCurrentLevel(Skill.PRAYER);
+    if (prayer <= 0) { player.sendMessage("You need some Prayer points to cast Bloom."); return; }
+    skills.setCurrentLevels(Skill.PRAYER, Math.max(0, prayer - 1 - Math.floor(Math.random() * 6)));
+    skills.updateSkill(Skill.PRAYER);
+    playBloom(player);
+    const plants = bloomablePlants(player, SICKLE_BLOOMABLE_IDS);
+    if (!plants.length) {
       player.sendMessage("There is no suitable material to be affected in this area.");
       event.handled = true;
       return;
     }
-    replaceObject(plant, BLOOMED_PLANT.get(plant.getId()));
+    for (const plant of plants) if (Math.random() < BLOOM_SUCCESS_CHANCE) growPlant(plant);
     if (quest.getStage(player) < STAGE_CAST_SICKLE_BLOOM) {
       quest.setStage(player, STAGE_CAST_SICKLE_BLOOM);
     }
@@ -784,7 +987,7 @@ module.exports = function registerNatureSpiritQuest(api) {
 
   /** Using a filled pouch on an invisible ghast reveals it. */
   function handlePouchOnGhast(event) {
-    if (event.npcId !== GHAST_NPC_ID) return;
+    if (!INVISIBLE_GHAST_IDS.has(event.npcId)) return;
     if (event.itemId !== DRUID_POUCH_EMPTY_ITEM_ID && event.itemId !== DRUID_POUCH_FILLED_ITEM_ID) return;
     const { player } = event;
     if (quest.getStage(player) < STAGE_ADDED_POUCH) return;
@@ -793,16 +996,20 @@ module.exports = function registerNatureSpiritQuest(api) {
       event.handled = true;
       return;
     }
-    revealGhast(player, event.target);
     event.handled = true;
+    if (World.getProcessCycle() < (nextPouch.get(player) ?? 0)) return;
+    if (revealGhast(player, event.target)) {
+      player.performGraphic(new Graphic(POUCH_GRAPHIC));
+      nextPouch.set(player, World.getProcessCycle() + POUCH_DELAY_TICKS);
+    }
   }
 
   /** Each revealed ghast that dies counts toward the three. */
   function handleGhastDeath(event) {
-    const owner = visibleGhasts.get(event.npc);
-    if (!owner) return;
+    const reveal = visibleGhasts.get(event.npc);
+    if (!reveal) return;
     visibleGhasts.delete(event.npc);
-    const player = event.killer ?? owner;
+    const player = event.killer ?? reveal.owner;
     const stage = quest.getStage(player);
     if (stage < STAGE_ADDED_POUCH || stage >= STAGE_KILLED_GHAST_3) return;
     const next = stage >= 100 ? STAGE_KILLED_GHAST_3 : stage >= 95 ? 100 : 95;
@@ -815,22 +1022,26 @@ module.exports = function registerNatureSpiritQuest(api) {
   }
 
   /**
-   * Walking a filled pouch past a ghast is what makes it attack and become
-   * visible; scope it to the swamp so no other area pays for the hook.
+   * The swamp's invisible ghasts now do what the Wiki says they do: they attack players,
+   * rotting a food item or dealing 1-3 when there is none, and the ghast that lands a hit
+   * becomes visible. Scope it to the swamp so no other area pays for the hook.
    */
   function createSwampArea() {
     class MortMyreSwampArea extends Area {
       process(mobile) {
         if (!mobile?.isPlayer?.()) return;
         const player = mobile.getAsPlayer();
-        if (quest.getStage(player) < STAGE_ADDED_POUCH) return;
-        if (!held(player, DRUID_POUCH_FILLED_ITEM_ID)) return;
-        for (const npc of player.getLocalNpcs?.() ?? []) {
-          if (npc?.getId?.() !== GHAST_NPC_ID) continue;
-          if (player.calculateDistance(npc) > 1) continue;
-          revealGhast(player, npc);
+        if (player.getPrivateArea?.()) return;
+        const cycle = World.getProcessCycle();
+        const next = ghastNextAttack.get(player);
+        if (next === undefined) {
+          ghastNextAttack.set(player, cycle + GHAST_ATTACK_MIN_DELAY);
           return;
         }
+        if (cycle < next) return;
+        const ghast = nearestInvisibleGhast(player);
+        if (!ghast) return;
+        ghastAttack(player, ghast);
       }
     }
     return new MortMyreSwampArea([SWAMP_BOUNDS]);
@@ -863,16 +1074,25 @@ module.exports = function registerNatureSpiritQuest(api) {
         ensureQuestNpcs(player);
         return;
       }
-      player.moveTo(new Location(GROTTO_INTERIOR.x, GROTTO_INTERIOR.y, GROTTO_INTERIOR.z));
+      player.moveTo(new Location(GROTTO_INTERIOR.x, GROTTO_INTERIOR.y, quest.isComplete(player) ? 1 : GROTTO_INTERIOR.z));
       if (quest.getStage(player) >= STAGE_PERFORMED_RITUAL && quest.getStage(player) < STAGE_FULL_TRANSFORM) {
         quest.setStage(player, STAGE_ENTERED_GROTTO);
       }
       ensureQuestNpcs(player);
       return;
     }
-    if (objectId === GROTTO_EXIT_ID && (option.includes("exit") || option.includes("leave"))) {
+    if ((objectId === GROTTO_EXIT_ID || objectId === ObjectIdentifiers.GROTTO_4) && (option.includes("exit") || option.includes("leave"))) {
       event.handled = true;
       player.moveTo(new Location(GROTTO_SURFACE.x, GROTTO_SURFACE.y, GROTTO_SURFACE.z));
+      return;
+    }
+    if (objectId === ObjectIdentifiers.GROTTO_2 && option.includes("search")) {
+      if (quest.getStage(player) < STAGE_ENTERED_GROTTO) return;
+      event.handled = true;
+      ensureQuestNpcs(player);
+      const npcId = quest.getStage(player) < STAGE_FULL_TRANSFORM ? FILLIMAN_NPC_ID : NATURE_SPIRIT_NPC_ID;
+      const { startTranscript } = require("../QuestRuntime");
+      startTranscript(api, player, npcId, "Nature Spirit", fillimanVariant(quest.getStage(player), player));
       return;
     }
     if (objectId === GROTTO_TREE_ID && option.includes("search")) {
@@ -895,7 +1115,25 @@ module.exports = function registerNatureSpiritQuest(api) {
     player.sendMessage("You bless the silver sickle.");
   }
 
+  function prayAtNatureAltar({ player }) {
+    if (!quest.isComplete(player)) return false;
+    const skills = player.getSkillManager();
+    const maximum = skills.getMaxLevel(Skill.PRAYER) + 2;
+    if (skills.getCurrentLevel(Skill.PRAYER) >= maximum) return true;
+    player.performAnimation(new Animation(645));
+    skills.setCurrentLevels(Skill.PRAYER, maximum);
+    skills.updateSkill(Skill.PRAYER);
+    player.getPacketSender().sendSoundEffect(api.core.Sound.PRAYER_RECHARGE.getId(), 1, 0, 0);
+    player.sendMessage("You recharge your Prayer points.");
+    return true;
+  }
+
   function handleLogin({ player }) {
+    if (quest.isComplete(player) && inGrotto(player)
+      && player.getLocation().getZ() === 0) {
+      const at = player.getLocation();
+      player.moveTo(new Location(at.getX(), at.getY(), 1));
+    }
     refreshQuestList(player);
     ensureQuestNpcs(player);
     if (quest.getStage(player) >= STAGE_ENTERED_SWAMP) ensureWashingBowl(player);
@@ -903,9 +1141,11 @@ module.exports = function registerNatureSpiritQuest(api) {
 
   function handleLogout({ player }) {
     if (!player) return;
+    nextBloom.delete(player);
+    nextPouch.delete(player);
     clearSpawns(player);
-    for (const [npc, owner] of [...visibleGhasts]) {
-      if (owner !== player) continue;
+    for (const [npc, reveal] of [...visibleGhasts]) {
+      if (reveal.owner !== player) continue;
       visibleGhasts.delete(npc);
       api.removeNpc(npc);
     }
@@ -940,6 +1180,7 @@ module.exports = function registerNatureSpiritQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:line", handleSpiritLine);
   api.onCustomEvent("door:toggle", handleSwampGate);
   api.onNpcDeath(handleGhastDeath);
   api.onItemOnNpc(handleMirrorOnFilliman);
@@ -954,6 +1195,7 @@ module.exports = function registerNatureSpiritQuest(api) {
   api.onGroundItemPickup(handleWashingBowlPickup);
   api.onObjectInteraction(handleGrotto);
   api.onObjectInteraction(handleBloomPick);
+  api.onObjectInteraction("Altar of nature", { "Pray-at": prayAtNatureAltar });
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
   api.registerArea(createSwampArea());

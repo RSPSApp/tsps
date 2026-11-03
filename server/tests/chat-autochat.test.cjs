@@ -44,6 +44,7 @@ function listener(name, index, icons, receives = () => true) {
   const frames = [];
   const player = {
     getUsername: () => name,
+    getDisplayName: () => name,
     getHostAddress: () => '127.0.0.1',
     getIndex: () => index,
     getChatIcons: () => icons,

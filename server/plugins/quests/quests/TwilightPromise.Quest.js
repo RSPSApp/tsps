@@ -31,14 +31,19 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const {
     ActionDialogue,
     Animation,
+    CountdownTask,
     DialogueChainBuilder,
     GameObject,
+    HitDamage,
+    HitMask,
     ItemIdentifiers,
     Location,
     NpcIdentifiers,
     ObjectIdentifiers,
+    ObjectManager,
     PrayerHandler,
     Skill,
+    TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
@@ -134,6 +139,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const GATE_OBJECT_ID = ObjectIdentifiers.GATE_295; // 50861, vmq2_temple_gate
   const GATE_OPEN_OBJECT_ID = ObjectIdentifiers.GATE_296; // 50862
   const GATEWAY_OBJECT_ID = 38848; // the nameless loc the capture swaps onto the gate
+  /** "A Matter of Intrigue" (archive track 810), unlocked and played in the temple during the quest. */
+  const TEMPLE_QUEST_TRACK = 810;
   const GATE_TILE = { x: 1698, y: 9496 };
   const CRATE_OBJECT_ID = 50870; // vmq2_cothon_crate
   const CRATES_OBJECT_ID = 50871; // vmq2_cothon_crates
@@ -164,6 +171,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const VELAM_DAMAGE = 50;
   const SPAR_ATTACKS = { guard: 401, guardBlock: 403, cultist: 386, cultistBlock: 388, itzla: 390, itzlaBlock: 388 };
   const SPAR_TICKS = 4;
+  // The capture gives attacks and blocks but no max hits (the two sides are level 81 and level 34).
+  const SPAR_DAMAGE = { min: 1, max: 4 };
 
   // Azali's escort.
   const FOLLOW_STRAY_DISTANCE = 10;
@@ -171,6 +180,9 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const FOLLOW_REST_MAX_TICKS = 25;
   const FOUNTAIN_TILE = [1757, 3068];
   const FOUNTAIN_REACH = 2;
+  // The fountain tile itself is clipped, so the captured step onto it walks with the same
+  // cutscene clipping exemption the other scripted moves use.
+  const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
 
   // Mezan prays against a style used four times running (Wiki); his three prayer calls.
   const MEZAN_PRAYER_STREAK = 4;
@@ -183,7 +195,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const TEOMAT_BOUNDS = [[1425, 1465, 3140, 3205, 0]];
   const COLOSSEUM_LOBBY_TILE = [1803, 9521, 0];
   const BATTLE_CULTISTS = [
-    { id: 12921, tile: [1434, 3167], face: [1440, 3172] },
+    { id: 12921, tile: [1434, 3167], face: [1440, 3172], partner: 1 },
     { id: 12923, tile: [1438, 3172], face: [1440, 3172], partner: 1 },
     { id: 12922, tile: [1445, 3166], face: [1445, 3168], partner: 0 },
     { id: 12920, tile: [1444, 3172], face: [1444, 3174], partner: "itzla" },
@@ -803,7 +815,20 @@ module.exports = function registerTwilightPromiseQuest(api) {
     return true;
   }
 
-  /** The crypt gate lets the player through and shuts behind them, as captured. */
+  /** A gate leaf, or the invisible wall the capture swaps onto its tile, for every player to see. */
+  function placeGateLoc(id, x, y, z, face) {
+    const loc = new GameObject(id, new Location(x, y, z), 0, face, null);
+    ObjectManager.register(loc, true);
+    return loc;
+  }
+
+  /** The quest's own track, first heard as the crypt gate opens; completion unlocks it as well. */
+  function playTempleTrack(player) {
+    api.emitCustomEvent("music:unlock-track", { player, trackId: TEMPLE_QUEST_TRACK });
+    player.getPacketSender().sendSong(TEMPLE_QUEST_TRACK);
+  }
+
+  /** The crypt gate lets the player through and shuts two ticks after they cross, as captured. */
   function handleGate(request) {
     if (request.handled || request.objectId !== GATE_OBJECT_ID) return;
     const { player, object } = request;
@@ -816,12 +841,19 @@ module.exports = function registerTwilightPromiseQuest(api) {
     }
     const crossing = crossingFor(object, player.getLocation());
     if (!crossing || ObstacleRunner.isBusy(player)) return;
-    const sender = player.getPacketSender();
-    const open = new GameObject(GATE_OPEN_OBJECT_ID, new Location(location.getX(), location.getY() - 1, location.getZ()), 0, 0, null);
-    sender.sendObject(open).sendObject(new GameObject(GATEWAY_OBJECT_ID, location.clone(), 0, object.getFace(), null));
-    ObstacleRunner.run({ player, object }, [{ walk: [[crossing.destination.x, crossing.destination.y]] }]);
-    Scenes.later(player, 2, () => {
-      sender.sendObjectRemoval(open).sendObject(new GameObject(GATE_OBJECT_ID, location.clone(), 0, object.getFace(), null));
+    const face = object.getFace() & 3;
+    const [dx, dy] = [[-1, 0], [0, 1], [1, 0], [0, -1]][face];
+    const gateway = placeGateLoc(GATEWAY_OBJECT_ID, location.getX(), location.getY(), location.getZ(), face);
+    const open = placeGateLoc(GATE_OPEN_OBJECT_ID, location.getX() + dx, location.getY() + dy, location.getZ(), (face + 1) & 3);
+    if (stage(player) < STAGE_COMPLETE) playTempleTrack(player);
+    ObstacleRunner.run({ player, object }, [{ walk: [[crossing.destination.x, crossing.destination.y]] }], {
+      // The gate shut two ticks after the player crossed, never two ticks after the click: a
+      // route to the gate from a distance must not finish with it already closed.
+      onFinish: () => TaskManager.submit(new CountdownTask(open, 2, () => {
+        ObjectManager.deregister(open, true);
+        ObjectManager.deregister(gateway, true);
+        placeGateLoc(GATE_OBJECT_ID, location.getX(), location.getY(), location.getZ(), face);
+      })),
     });
   }
 
@@ -981,8 +1013,15 @@ module.exports = function registerTwilightPromiseQuest(api) {
         Scenes.fade(player, false);
         azali?.getMovementQueue().addSteps(new Location(1755, 3068, 0));
       });
-      Scenes.later(scene, 5, () => azali?.moveTo(new Location(1757, 3068, 0)));
-      Scenes.later(scene, 7, () => {
+      Scenes.later(scene, 5, () => {
+        // The last two tiles walk into the fountain's own tile. The cache clips it and the
+        // fountain actor stands on it, so the walk takes the scripted clipping exemption;
+        // the earlier approach stays ordinary. The flag goes before the splash.
+        azali?.setFlag?.(IGNORE_CLIPPING_FLAG);
+        azali?.getMovementQueue().addSteps(new Location(1757, 3068, 0));
+      });
+      Scenes.later(scene, 9, () => {
+        azali?.removeFlag?.(IGNORE_CLIPPING_FLAG);
         fountain?.performAnimation(new Animation(FOUNTAIN_SPLASH_ANIMATION));
         if (azali) Scenes.removeActor(scene, azali);
       });
@@ -1319,6 +1358,24 @@ module.exports = function registerTwilightPromiseQuest(api) {
     return true;
   }
 
+  /**
+   * The Teomat's guards and Itzla are quest actors, so the cultists' blows may drop their health
+   * bar but never take them out of the scene: they recover and rejoin the fight.
+   */
+  function keepBattleAllyStanding(event) {
+    const npc = event.npc;
+    const player = npc?.__questSceneOwner;
+    const scene = player ? Scenes.get(player) : null;
+    if (!scene || scene.name !== "battle" || !scene.allies?.includes(npc)) return;
+    event.preventDeath = true;
+    npc.getCombat().reset?.();
+    const max = npc.getMaxHitpoints?.() ?? npc.getHitpoints?.() ?? 1;
+    Scenes.later(scene, 2, () => {
+      if (Scenes.get(player) !== scene || !npc.isRegistered?.()) return;
+      npc.setHitpoints?.(max);
+    });
+  }
+
   // ==========================================================================
   // The cultist attack
   // ==========================================================================
@@ -1336,6 +1393,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
       Scenes.face(player, [1441, 3178]);
       scene.guards = BATTLE_GUARDS.map(({ id, tile, face }) => Scenes.actor(scene, id, tile, face));
       scene.itzla = Scenes.actor(scene, ITZLA_FIGHTER_ID, [1444, 3174], [1444, 3172]);
+      scene.allies = [...scene.guards, scene.itzla].filter(Boolean);
       Scenes.actor(scene, SERVIUS_BATTLE_ID, [1453, 3172], [1453, 3177]);
       Scenes.actor(scene, METZLI_BATTLE_ID, [1449, 3195], [1449, 3194]);
       scene.cultists = BATTLE_CULTISTS.map((entry) => {
@@ -1352,8 +1410,11 @@ module.exports = function registerTwilightPromiseQuest(api) {
         Scenes.fade(player, false);
         Scenes.controls(player, false);
       });
-      Scenes.later(scene, 4, () => Scenes.closeFade(player));
-      spar(player, scene, 0);
+      Scenes.later(scene, 4, () => {
+        Scenes.closeFade(player);
+        for (const cultist of scene.cultists) engage(cultist);
+        spar(player, scene, 0);
+      });
     });
   }
 
@@ -1365,32 +1426,76 @@ module.exports = function registerTwilightPromiseQuest(api) {
     return scene.cultists.includes(npc) ? true : false;
   }
 
-  // shortcut: allied sparring is cosmetic; add allied kills when this scene has captured NPC combat rules.
+  /** The tile beside `partner` on the side the cultist came from: the capture's pairs stand two apart. */
+  function meleeTile(cultist, partner) {
+    const from = cultist.getLocation(), at = partner.getLocation();
+    return new Location(at.getX() + Math.sign(from.getX() - at.getX()), at.getY() + Math.sign(from.getY() - at.getY()), at.getZ());
+  }
+
+  /** Sends an idle cultist into reach of its ally, facing it. */
+  function engage(cultist) {
+    const partner = cultist?.__tpPartner;
+    if (!cultist?.isRegistered?.() || !partner?.isRegistered?.()) return;
+    const at = partner.getLocation(), from = cultist.getLocation();
+    Scenes.face(cultist, [at.getX(), at.getY()]);
+    const tile = meleeTile(cultist, partner);
+    if (from.getX() !== tile.getX() || from.getY() !== tile.getY()) cultist.getMovementQueue().addSteps(tile);
+  }
+
+  /** One exchange: the attacker swings, the defender blocks, and the blow takes real hitpoints. */
+  function sparHit(attacker, defender, swing, block) {
+    const at = attacker.getLocation(), to = defender.getLocation();
+    Scenes.face(attacker, [to.getX(), to.getY()]);
+    Scenes.face(defender, [at.getX(), at.getY()]);
+    attacker.performAnimation(new Animation(swing));
+    defender.performAnimation(new Animation(block));
+    // These are scripted blows, so neither fighter has a combat target. Refresh the combat
+    // stopwatch the same way an ordinary hit would, or NPC.process() treats both as out of
+    // combat and regenerates the damage back while the pair is still trading swings.
+    attacker.getCombat()?.getLastAttack?.().reset?.();
+    defender.getCombat()?.getLastAttack?.().reset?.();
+    const damage = SPAR_DAMAGE.min + Math.floor(Math.random() * (SPAR_DAMAGE.max - SPAR_DAMAGE.min + 1));
+    defender.getCombat()?.getHitQueue?.().addPendingDamage([new HitDamage(damage, HitMask.RED)]);
+  }
+
+  /**
+   * The guards and Itzla fight the cultists for real: the pairs close to melee range, then trade
+   * swings until one side falls. Cultist deaths count however they are earned, so the allies can
+   * finish the eight, as the Wiki says they can.
+   */
   function spar(player, scene, beat) {
     Scenes.later(scene, SPAR_TICKS / 2, () => {
       if (Scenes.get(player) !== scene) return;
-      for (const cultist of scene.cultists) {
+      scene.cultists.forEach((cultist, index) => {
         const partner = cultist?.__tpPartner;
-        if (!cultist?.isRegistered?.() || (cultist.getHitpoints?.() ?? 1) <= 0 || !partner?.isRegistered?.()) continue;
-        if (cultist.getCombat().getTarget?.()) continue;
+        if (!cultist?.isRegistered?.() || (cultist.getHitpoints?.() ?? 1) <= 0) return;
+        if (!partner?.isRegistered?.() || (partner.getHitpoints?.() ?? 1) <= 0) return;
+        if (cultist.getLocation().getDistance(partner.getLocation()) > 1) {
+          if (!cultist.getMovementQueue().hasPendingWork?.()) engage(cultist);
+          return;
+        }
         const itzla = partner === scene.itzla;
-        const [hitter, hit, swing, block] = beat % 2 === 0
-          ? [partner, cultist, itzla ? SPAR_ATTACKS.itzla : SPAR_ATTACKS.guard, SPAR_ATTACKS.cultistBlock]
-          : [cultist, partner, SPAR_ATTACKS.cultist, itzla ? SPAR_ATTACKS.itzlaBlock : SPAR_ATTACKS.guardBlock];
-        hitter.performAnimation(new Animation(swing));
-        hit.performAnimation(new Animation(block));
-        Scenes.face(hitter, [hit.getLocation().getX(), hit.getLocation().getY()]);
-        hit.showHitsplat?.(Math.floor(Math.random() * 5), { mine: 17, others: 17 });
-      }
+        // Stagger the pairs so the whole line does not swing on the same tick.
+        if ((beat + index) % 2 === 0) {
+          sparHit(partner, cultist, itzla ? SPAR_ATTACKS.itzla : SPAR_ATTACKS.guard, SPAR_ATTACKS.cultistBlock);
+        } else {
+          sparHit(cultist, partner, SPAR_ATTACKS.cultist, itzla ? SPAR_ATTACKS.itzlaBlock : SPAR_ATTACKS.guardBlock);
+        }
+      });
       spar(player, scene, beat + 1);
     });
   }
 
-  function handleNpcDeath(event) {
+  /**
+   * A cultist's death counts at the death itself, not on player credit: an allied blow carries
+   * no player damage, so NPCDeathTask never emits onNpcDeath for it. Counting before the death
+   * task covers both credited and uncredited kills, and the `isDying` guard makes it once each.
+   */
+  function handleCultistDeath(event) {
     const npc = event.npc;
     const player = npc?.__questSceneOwner;
     const scene = player ? Scenes.get(player) : null;
-    if (!scene || scene.name !== "battle" || !scene.cultists.includes(npc)) return;
+    if (!scene || scene.name !== "battle" || event.preventDeath || !scene.cultists.includes(npc)) return;
     scene.kills++;
     player.sendMessage(`Enemies Defeated: ${scene.kills}/${BATTLE_CULTISTS.length}`);
     if (scene.kills >= BATTLE_CULTISTS.length) Scenes.later(scene, 3, () => beginAftermath(player));
@@ -1566,7 +1671,8 @@ module.exports = function registerTwilightPromiseQuest(api) {
   api.onPlayerDealtDamage(countMezanAttack);
   api.onNpcHitModify(blockMezanHit);
   api.onNpcBeforeDeath(keepMezanStanding);
-  api.onNpcDeath(handleNpcDeath);
+  api.onNpcBeforeDeath(keepBattleAllyStanding);
+  api.onNpcBeforeDeath(handleCultistDeath);
   api.onPlayerProcess(handleProcess);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);

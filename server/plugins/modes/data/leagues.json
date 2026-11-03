@@ -1,6 +1,6 @@
 {
-  "$comment": "Leagues (docs/leagues.md), used by plugins/modes/LeagueMode.plugin.js and LeaguePoints.plugin.js. A league character is the account's separate save a league world logs it into (persistence/PlayerProfile); world.json pluginConfig `league:type` names the league, and `default` only stands in for a type this data does not know. `ironmanMode` is the Ironman mode every league character plays as (the Wiki's 'Player restrictions'). Varbits, varps, scripts and texts are from rsprox Leagues V recordings (osrs-captures 227/00070, 227/00075, 227/00579); the leagues' own numbers (XP rates, starting levels; the relic tiers are league-relics.json) are the Wiki's (Trailblazer_Reloaded_League, Raging_Echoes_League and their /Relics pages). `struct` is the cache's league struct (enum 2670 by league type) whose params the client reads; `colour` is its param 2050 as an RGB int; `unlockSpotanim` is param 1021 and `name` param 858. `passives` are the relic tiers' passive effects (the Relics pages' Tier N bullets), each from the 1-based tier named by `fromTier` (a map picks the highest tier reached): `dropRate` multiplies the boosted drops (league-boosted-drops.json), `runEnergy` stops running from draining energy, `scrollBoxes` drops clue scrolls as scroll boxes without a limit, `minigamePoints` multiplies points asked over `minigame:points`, `slayer` gives Bigger and Badder, superiors 1 in `superiorChance`, task points x `pointsMultiplier` after `freeTasks` tasks, and `combatXp` multiplies the listed skills' XP (Raging Echoes only). Applied by league/Passives.LeagueMode.js and league/BoostedDrops.LeagueMode.js.",
-  "default": 4,
+  "$comment": "Leagues (docs/leagues.md), used by plugins/modes/LeagueMode.plugin.js and LeaguePoints.plugin.js. A league character is the account's separate save a league world logs it into (persistence/PlayerProfile); world.json pluginConfig `league:type` names the league, and `default` only stands in for a type this data does not know. `ironmanMode` is the Ironman mode every league character plays as (the Wiki's 'Player restrictions'). Varbits, varps, scripts and texts are from rsprox Leagues V recordings (osrs-captures 227/00070, 227/00075, 227/00579); the leagues' own numbers (XP rates, starting levels; the relic tiers are league-relics.json) are the Wiki's (Trailblazer_Reloaded_League, Raging_Echoes_League and their /Relics pages). `struct` is the cache's league struct (enum 2670 by league type) whose params the client reads; `colour` is its param 2050 as an RGB int; `unlockSpotanim` is param 1021 and `name` param 858. `passives` are the relic tiers' passive effects (the Relics pages' Tier N bullets), each from the 1-based tier named by `fromTier` (a map picks the highest tier reached): `dropRate` multiplies the boosted drops (league-boosted-drops.json), `runEnergy` stops running from draining energy, `scrollBoxes` drops clue scrolls as scroll boxes without a limit, `minigamePoints` multiplies points asked over `minigame:points`, `slayer` gives Bigger and Badder, superiors 1 in `superiorChance`, task points x `pointsMultiplier` after `freeTasks` tasks, and `combatXp` multiplies the listed skills' XP (Raging Echoes x2, Demonic Pacts x1.5). Applied by league/Passives.LeagueMode.js and league/BoostedDrops.LeagueMode.js.",
+  "default": 6,
   "varbits": {
     "account": 10031,
     "type": 10032,
@@ -39,6 +39,10 @@
   "content": {
     "_comment": "The structs, enums and DB rows a league needs that the cache does not carry are sent together as one structOverrides / enumOverrides / dbRowOverrides payload (GamemodeContentStore replaces the whole set on each payload). Virtual struct and enum ids start at virtualIdBase + league type x 1000; each unit keeps its own offsets (relics 0-199, ranks 900-901). The tasks' DB rows have their own ids (league-task-list.json virtualRowBase) and replace the cache's task enums 5950 and 2671.",
     "virtualIdBase": 200000
+  },
+  "modals": {
+    "_comment": "The league screens opened as the main modal (areas, relics, Summary, Info, Rank), as the Leagues VI recordings send them (rev 237: 1098, 1102, 1104, in wire order): varbit busy (12393) 0 -> 1, an open league floater closed (the task list, with its script 9431), script 2524, the modal, its events; busy 1 -> 0 when it closes (Modals.LeagueMode.js). Live left busy at 1 while a confirm's modal waited to reopen; here any close clears it.",
+    "busyVarbit": 12393
   },
   "panels": {
     "_comment": "The side panel's Summary / Info / Rank buttons (656:7, 656:2, 656:10), as captured (227/00075 sub 88831, 227/01845, 227/00579): each opens its interface as the main modal with if_setevents OP1 on its menu frame; the Summary also plays sound 2266 and runs script 7741 on its stats row 2 (Time Played) with '(Click to reveal)' until the row (529:23 slot 2) is clicked, then with the time played in the captured shape ('17 days, 2 hours', '19 hours, 46 minutes', '17 days, 58 minutes'). Every other row the panels draw comes from varps and the league struct.",
@@ -207,7 +211,27 @@
       "unlockSpotanim": 3576,
       "_xp": "Wiki Demonic_Pacts_League/Relics: 8x at tier 2, 12x at tier 4, 16x at tier 6.",
       "xpMultiplier": { "base": 5, "fromTier": { "2": 8, "4": 12, "6": 16 } },
-      "startingLevels": { "HERBLORE": 3, "RUNECRAFTING": 5 }
+      "startingLevels": { "HERBLORE": 3, "RUNECRAFTING": 5 },
+      "_starterKit": "A new character's inventory as live sends it at its first login (237/01098, in slot order): the Lumbridge starter kit and a Dramen staff; nothing worn. By obj gameval name.",
+      "starterKit": [
+        ["bronze_axe", 1], ["bronze_pickaxe", 1], ["tinderbox", 1], ["net", 1], ["shrimp", 1],
+        ["bronze_dagger", 1], ["bronze_sword", 1], ["wooden_shield", 1], ["shortbow", 1], ["bronze_arrow", 25],
+        ["airrune", 25], ["mindrune", 15], ["bucket_empty", 1], ["pot_empty", 1], ["bread", 1],
+        ["waterrune", 6], ["earthrune", 4], ["bodyrune", 2], ["dramen_staff", 1]
+      ],
+      "_startQuests": "Wiki Demonic_Pacts_League, Auto-completed quests: completed for every character, with no experience (live's new character has only its starting levels, 237/01098). Listed dependents first: league:complete-quests completes the list in reverse, requirements first.",
+      "startQuests": ["Twilight's Promise", "Perilous Moons", "Children of the Sun", "Desert Treasure II - The Fallen Empire", "Fairytale II - Cure a Queen", "Fairytale I - Growing Pains", "Lost City", "Nature Spirit", "Priest in Peril", "The Restless Ghost", "Eagles' Peak", "Elemental Workshop I", "Dragon Slayer I", "Druidic Ritual", "Rune Mysteries", "Learning the Ropes"],
+      "_shopStock": "Leagues VI's news posts (Get Ready For Leagues VI, Launches Today) and the Wiki's Demonic Pacts guides: most shop stock will not deplete. Every league buy recorded (39 shops, 600+ buys in 237/01098, 01102, 01135, 04054 and more) left the stock as it was; the only drops were on main-game worlds (237/04012, 238/04155, 238/04249). Which shops are the 'most' exceptions is not recorded, so none are made. Stock players sold to a shop still goes as it is bought (ours: the guides still sell to the lowest-stock shops for the best price).",
+      "shopStock": { "keep": true },
+      "_passives": "The tier structs' passive text in the rev 241 cache (struct 6436's tier enum, param 1020), as the relic interface shows it: tier 1 boosted drops x2, farming ticks every minute, minigame points x4, no run energy drain, clue scrolls as scroll boxes with saved step progress; tier 3 combat skills (Hitpoints and Prayer included) x1.5, Bigger and Badder free, Slayer task points x5 from the first task, superiors 1/50; tier 4 drops x5, minigame points x8. docs/leagues.md (Tier passives) lists the two left out.",
+      "passives": {
+        "dropRate": { "fromTier": { "1": 2, "4": 5 } },
+        "runEnergy": { "fromTier": 1 },
+        "scrollBoxes": { "fromTier": 1 },
+        "minigamePoints": { "fromTier": { "1": 4, "4": 8 } },
+        "slayer": { "fromTier": 3, "pointsMultiplier": 5, "freeTasks": 0, "biggerAndBadder": true, "superiorChance": 50 },
+        "combatXp": { "fromTier": 3, "multiplier": 1.5, "skills": ["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC", "HITPOINTS", "PRAYER"] }
+      }
     }
   }
 }

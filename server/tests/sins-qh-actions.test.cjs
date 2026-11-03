@@ -155,6 +155,15 @@ test('Sins canonical Vanescula ntch-j starts the fight and keeps Safalaan HgxSdS
   assert.equal(h.quest.getStage(blocked), 126, 'ntch-j without the flail cannot skip the gate');
 });
 
+test('Sins login keeps the capture-zero lab bit clear', () => {
+  const h = harness();
+  const p = makePlayer();
+  h.quest.setStage(p, 68);
+  h.hooks.onPlayerLogin[0]({ player: p });
+  assert.equal(p.log.some(row => row[0] === 'sendVarbit' && row[1] === 13719), false,
+    'capture 1637 never sets 13719, so login must not publish it');
+});
+
 test('Sins canonical long vine uses branch 38004 then swings 38005', () => {
   const h = harness();
   const p = makePlayer();

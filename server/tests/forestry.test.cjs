@@ -26,10 +26,17 @@ before(() => {
   const api = {
     core,
     persistAttribute() {},
+    onNpcInteraction() {},
+    onNpcDialogueVariant() {},
+    onNpcDialogueCondition() {},
+    onItemOnNpc() {},
     onObjectInteraction: (name, actions) => { if (typeof name !== 'function') for (const [op, fn] of Object.entries(actions)) hooks.objects.set(`${name}:${op}`, fn); },
     onCustomEvent: (name, fn) => { (hooks.events.get(name) ?? hooks.events.set(name, []).get(name)).push(fn); },
     onPlayerLogout() {},
-    onPlayerLogin: (fn) => { hooks.login = fn; },
+    onPlayerLogin: (fn) => {
+      (hooks.logins ??= []).push(fn);
+      hooks.login = (event) => hooks.logins.forEach((handler) => handler(event));
+    },
     emitCustomEvent() {},
   };
   Woodcutting = require('../plugins/skills/Woodcutting.plugin');
@@ -82,6 +89,7 @@ function fakePlayer({ at = new Location(3085, 3233, 0), level = 70, kit = true }
     getLocation: () => p.location,
     getAttribute: (k) => attributes.get(k), setAttribute: (k, v) => attributes.set(k, v),
     getInventory: () => p.inventory,
+    getEquipment: () => ({ contains: () => false }),
     sendMessage: (m) => p.messages.push(m),
     performAnimation: (a) => p.anims.push(a.getId()),
     setPositionToFace() {},
@@ -95,6 +103,7 @@ function fakePlayer({ at = new Location(3085, 3233, 0), level = 70, kit = true }
         sendTypedMessage: (type, text) => { p.spam.push(text); return sender; },
         sendSoundEffect: (id) => { (p.sounds ??= []).push(id); return sender; },
         sendAreaSound: () => sender, sendGraphic: () => sender, sendObjectAnimation: () => sender,
+        sendVarbit: () => sender, sendInventory: () => sender,
       };
       return sender;
     },
@@ -158,6 +167,17 @@ test('an event needs an eligible tree, a kit, enough chopping, and none nearby; 
   log(q);
   ticks(1);
   assert.equal(Spawns.active.size, 1, 'none within 30 tiles of another');
+});
+
+test('an equipped Forestry kit also enables events', () => {
+  const p = fakePlayer({ kit: false });
+  p.getEquipment = () => ({ contains: (id) => id === 28136 });
+  Math.random = () => 0;
+  chop(p, tree(), 25);
+  log(p);
+  ticks(1);
+  Math.random = random;
+  assert.equal(Sapling.saplings.size + Roots.events.size, 1);
 });
 
 test('a regular tree or too little chopping brings nothing', () => {
@@ -528,4 +548,306 @@ test("mulch goes with the sapling even when its maker walked off, and at login i
   p.inventory.adds(28650, 1);
   hooks.login({ player: p });
   assert.equal(p.inventory.getAmount(28650), 0, 'no sapling near: gone at login');
+});
+
+// These service checks use the production packet dispatcher, dialogue runtime, account morph,
+// cache stock and real player inventories, without opening a server socket.
+test('Friendly Forester native NPC services', async (t) => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const api = PluginManager.createApi('Forestry');
+  Common.init(api);
+  require('../plugins/minigames/forestry/Forester.Forestry').attachForester(api);
+  require('../plugins/interface/Omnishop.plugin').register(PluginManager.createApi('Omnishop'));
+  require('../plugins/npcs/NpcDialogues.plugin').register(PluginManager.createApi('NpcDialogues'));
+  api.onCustomEvent('ironman:mode', (event) => { event.mode = event.player.getAttribute('ironman:mode') ?? 'none'; });
+  const cache = core.CacheDefinitions;
+  core.RegionManager.loadMapFiles(3096, 3238);
+  const spawn = require('../data/definitions/npc-spawns.json').filter((row) => row.id === 12119);
+  assert.equal(spawn.length, 1);
+  assert.deepEqual([spawn[0].x, spawn[0].y, spawn[0].level, spawn[0].wanderRadius], [3096, 3238, 0, 0]);
+  let nextIndex = 1800;
+
+  function harness({ mode = 'none', level = 70 } = {}) {
+    const channel = { kind: 'test', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const session = new PlayerSession(channel);
+    const player = new Player(session, new Location(3095, 3238, 0));
+    session.setPlayer(player);
+    player.setIndex(nextIndex++);
+    player.setUsername('foresterproof');
+    player.setRegistered(true);
+    player.setAttribute('ironman:mode', mode);
+    player.getPacketSender().sendVarbit(1777, mode === 'ultimate' ? 2 : mode === 'ironman' ? 1 : 0);
+    player.getSkillManager().setMaxLevels(core.Skill.WOODCUTTING, level, false);
+    const connection = new ClientConnection(channel);
+    connection.player = player;
+    const npc = PluginManager.spawnNpc({ id: 12119, x: 3096, y: 3238, z: 0, wanderRadius: 0 });
+    const send = async (packet) => { await connection.dispatch([packet]); connection.processTurnPackets(); };
+    const option = async (name) => {
+      const actions = npc.getCurrentDefinition(player).getActions();
+      assert.ok(actions.includes(name), name);
+      await send({ type: 'npc_option', index: npc.getIndex(), clickType: actions.indexOf(name) + 1 });
+    };
+    const choose = async (text) => {
+      const pending = core.MultiChatboxPrompt.getPending(player);
+      assert.ok(pending, text);
+      const index = pending.options.indexOf(text);
+      assert.ok(index >= 0, `${text} in ${pending.options}`);
+      await send({ type: 'dialogue_continue', widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: index + 1 });
+    };
+    const click = (component, fields) => PluginManager.emitInterfaceActionClick({
+      player, buttonId: cache.getComponentId(component), action: 2, slot: -1, handled: false, ...fields,
+    });
+    return { player, npc, send, option, choose, click,
+      async conversation(choice = "I'd like to trade with you.") {
+        for (let index = 0; index < 60 && player.getInterfaceId() !== 819; index++) {
+          if (core.MultiChatboxPrompt.getPending(player)) await choose(choice);
+          else if (player.getDialogueManager().isActive()) {
+            const group = player.getPacketSender().getChatboxGroupId();
+            await send({ type: 'dialogue_continue', widgetId: (group << 16) | (group === 229 ? 4 : 5), childIndex: -1 });
+          } else { ticks(1); break; }
+        }
+      },
+      buy(row, action = 2) {
+        const shop = cache.getDbRow(player.getAttribute('omnishop:shop'));
+        const stock = shop.column(cache.getDbColumn(shop.tableId, 'omnishop_shop_stock'));
+        const index = stock.indexOf(cache.getDbRowId(row));
+        assert.ok(index >= 0, row);
+        click('omnishop_main:list', { slot: index * 12, action });
+      },
+      sell(id) { click('omnishop_side:items', { slot: player.getInventory().getSlotForItemId(id) }); },
+      close() {
+        player.setRegistered(false);
+        PluginManager.removeNpc(npc);
+        core.TaskManager.cancelTasks(player.getIndex());
+      },
+    };
+  }
+
+  await t.test('Draynor Trade opens the native cache shop and offers a free kit', async () => {
+    const h = harness();
+    try {
+      assert.equal(h.npc.getContentId(h.player), 11427);
+      await h.option('Trade');
+      assert.equal(h.player.getInterfaceId(), 819);
+      assert.equal(h.player.getAttribute('omnishop:shop'), cache.getDbRowId('forestry_shop'));
+      h.buy('forestry_shop_stock_0');
+      assert.equal(h.player.getInventory().getAmount(28136), 1);
+      const description = { player: h.player, shop: 'forestry_shop', stock: 'forestry_shop_stock_0' };
+      api.emitCustomEvent('omnishop:describe', description);
+      assert.equal(description.description, cache.getItem(28136).params.get(1784));
+    } finally { h.close(); }
+  });
+
+  await t.test('first and repeat Talk-to and the help branch open the shop', async () => {
+    const h = harness();
+    try {
+      await h.option('Talk-to');
+      await h.conversation();
+      assert.equal(h.player.getInterfaceId(), 819, 'intro opens the shop after the transcript closes');
+      assert.equal(h.player.getAttribute('forestry:met-forester'), true);
+      h.player.getPacketSender().sendInterfaceRemoval();
+      await h.option('Talk-to');
+      await h.conversation();
+      assert.equal(h.player.getInterfaceId(), 819, 'repeat Trade dialogue');
+      h.player.getPacketSender().sendInterfaceRemoval();
+      await h.option('Talk-to');
+      for (let index = 0; index < 12 && !core.MultiChatboxPrompt.getPending(h.player); index++) h.player.getDialogueManager().advance();
+      await h.choose('Could you tell me more about forestry?');
+      await h.conversation('Yes please.');
+      assert.equal(h.player.getInterfaceId(), 819, 'help then accept Trade');
+    } finally { h.close(); }
+  });
+
+  await t.test('level-14 introduction ends safely; direct free-kit Trade still works', async () => {
+    const h = harness({ level: 14 });
+    try {
+      await h.option('Talk-to');
+      await h.conversation();
+      assert.notEqual(h.player.getInterfaceId(), 819);
+      await h.option('Trade');
+      h.buy('forestry_shop_stock_0');
+      assert.equal(h.player.getInventory().getAmount(28136), 1);
+    } finally { h.close(); }
+  });
+
+  await t.test('a newer interface cancels the deferred dialogue shop opening', async () => {
+    const h = harness();
+    try {
+      await h.option('Talk-to');
+      for (let index = 0; index < 60 && h.player.getDialogueManager().isActive(); index++) {
+        const group = h.player.getPacketSender().getChatboxGroupId();
+        await h.send({ type: 'dialogue_continue', widgetId: (group << 16) | 5, childIndex: -1 });
+      }
+      assert.equal(h.player.getDialogueManager().isActive(), false);
+      h.player.getPacketSender().sendInterface(12);
+      ticks(1);
+      assert.equal(h.player.getInterfaceId(), 12);
+    } finally { h.close(); }
+  });
+
+  await t.test('free worlds offer the kit and felling handle while refusing members rewards', async () => {
+    const h = harness();
+    const members = core.WorldDefinition.isMembersWorld;
+    core.WorldDefinition.isMembersWorld = () => false;
+    try {
+      const inventory = h.player.getInventory();
+      inventory.adds(28134, 12500); inventory.adds(1522, 500);
+      await h.option('Trade');
+      h.buy('forestry_shop_stock_0'); h.buy('forestry_shop_stock_18');
+      assert.equal(inventory.getAmount(28136), 1); assert.equal(inventory.getAmount(28177), 1);
+      h.buy('forestry_shop_stock_27');
+      assert.equal(inventory.getAmount(28613), 0);
+      assert.equal(inventory.getAmount(28134), 2500);
+    } finally { core.WorldDefinition.isMembersWorld = members; h.close(); }
+  });
+
+  await t.test('Ultimate morph exposes one-way log storage, requires confirmation and saves both noted and unnoted logs', async () => {
+    const h = harness({ mode: 'ultimate' });
+    try {
+      assert.equal(h.npc.getContentId(h.player), 6724);
+      const inventory = h.player.getInventory();
+      inventory.adds(1521, 2); inventory.adds(1522, 300); inventory.adds(1520, 300); inventory.adds(1351, 1);
+      await h.option('Log-storage'); await h.choose('Deposit all logs');
+      assert.equal(inventory.getAmount(1522), 300, 'nothing moves before confirmation');
+      await h.choose('No');
+      assert.equal(inventory.getAmount(1522), 300);
+      await h.option('Log-storage'); await h.choose('Deposit all logs'); await h.choose('Yes, deposit all logs');
+      assert.equal(inventory.getAmount(1521), 0); assert.equal(inventory.getAmount(1522), 0);
+      assert.equal(inventory.getAmount(1351), 1, 'unrelated items stay put');
+      assert.deepEqual(h.player.getAttribute('forestry:shop-logs'), { 1521: 302, 1519: 300 });
+      inventory.adds(28134, 5000);
+      await h.option('Trade');
+      assert.equal(h.player.getAttribute('omnishop:shop'), cache.getDbRowId('forestry_shop_uim'));
+      h.buy('forestry_shop_stock_7_uim');
+      assert.equal(inventory.getAmount(28140), 1, 'spends saved logs');
+      assert.equal(h.player.getAttribute('forestry:shop-logs')[1521], 2);
+      assert.equal(h.player.getAttribute('forestry:shop-logs')[1519], 0);
+      h.sell(28140);
+      assert.equal(inventory.getAmount(28140), 1, 'UIM cannot refund its log basket');
+    } finally { h.close(); }
+  });
+
+  await t.test('single-log amount input preserves notes and rejects stale, invalid and overflowing deposits', async () => {
+    const h = harness({ mode: 'ultimate' });
+    try {
+      const inventory = h.player.getInventory();
+      inventory.adds(1521, 5); inventory.adds(1522, 20);
+      function prompt() {
+        assert.equal(PluginManager.emitItemOnNpc({ player: h.player, target: h.npc, npcId: 6724,
+          item: inventory.getItems()[inventory.getSlotForItemId(1522)], itemId: 1522,
+          slot: inventory.getSlotForItemId(1522), handled: false }), true);
+        return h.player.getEnteredAmountAction();
+      }
+      for (const value of [-1, 0, NaN, 1.5, Infinity]) prompt().execute(value);
+      assert.equal(inventory.getAmount(1521), 5);
+      const stale = prompt(); h.player.setLocation(new Location(3105, 3238, 0)); stale.execute(5);
+      assert.equal(inventory.getAmount(1521), 5);
+      h.player.setLocation(new Location(3095, 3238, 0));
+      prompt();
+      await h.send({ type: 'dialogue_amount', amount: 3 });
+      assert.equal(inventory.getAmount(1521), 2); assert.equal(inventory.getAmount(1522), 20);
+      h.player.setAttribute('forestry:shop-logs', { 1521: 2147483646 });
+      prompt().execute(99);
+      assert.equal(h.player.getAttribute('forestry:shop-logs')[1521], 2147483647);
+      assert.equal(inventory.getAmount(1521), 1, 'overflowing logs stay in the inventory');
+    } finally { h.close(); }
+  });
+
+  await t.test('mixed saved logs and notes can pay in a full inventory without false capacity', async () => {
+    const h = harness({ mode: 'ultimate' });
+    try {
+      const inventory = h.player.getInventory();
+      h.player.setAttribute('forestry:shop-logs', { 1521: 5, 1519: 5 });
+      inventory.adds(1522, 5); inventory.adds(28134, 21);
+      while (inventory.getFreeSlots()) inventory.adds(1351, 1);
+      await h.option('Trade'); h.buy('forestry_shop_stock_1');
+      assert.equal(inventory.getAmount(28159), 1);
+      assert.equal(inventory.getAmount(28134), 1);
+      assert.equal(inventory.getAmount(1522), 0);
+      assert.equal(h.player.getAttribute('forestry:shop-logs')[1521], 0);
+      assert.equal(h.player.getAttribute('forestry:shop-logs')[1519], 0);
+    } finally { h.close(); }
+  });
+
+  await t.test('normal purchases and 80% refunds include the exact noted-log costs', async () => {
+    const h = harness();
+    try {
+      const inventory = h.player.getInventory();
+      inventory.adds(28134, 5000); inventory.adds(1522, 300); inventory.adds(1520, 299);
+      await h.option('Trade'); h.buy('forestry_shop_stock_7');
+      assert.equal(inventory.getAmount(28134), 5000, 'missing one currency takes nothing');
+      assert.equal(inventory.getAmount(1522), 300);
+      inventory.adds(1520, 1); h.buy('forestry_shop_stock_7');
+      assert.equal(inventory.getAmount(28140), 1);
+      h.sell(28140);
+      assert.equal(inventory.getAmount(28140), 0);
+      assert.equal(inventory.getAmount(28134), 4000);
+      assert.equal(inventory.getAmount(1522), 240); assert.equal(inventory.getAmount(1520), 240);
+    } finally { h.close(); }
+  });
+
+  await t.test('a sale refuses while its bark and log refunds would not all fit', async () => {
+    const h = harness();
+    try {
+      // Review of #1990: a log basket, a noted oak stack and 26 fillers, with no bark or noted willow.
+      const inventory = h.player.getInventory();
+      inventory.adds(28140, 1); inventory.adds(1522, 1);
+      while (inventory.getFreeSlots()) inventory.adds(1351, 1);
+      await h.option('Trade');
+      h.sell(28140);
+      assert.equal(inventory.getAmount(28140), 1, 'the basket stays: bark and noted willow need two new slots');
+      assert.equal(inventory.getAmount(28134), 0);
+      assert.equal(inventory.getAmount(1520), 0);
+      assert.equal(inventory.getAmount(1522), 1);
+
+      inventory.delete(1351, 1);
+      h.sell(28140);
+      assert.equal(inventory.getAmount(28140), 0, 'with a second free slot the sale goes through');
+      assert.equal(inventory.getAmount(28134), 4000);
+      assert.equal(inventory.getAmount(1522), 241); assert.equal(inventory.getAmount(1520), 240);
+    } finally { h.close(); }
+  });
+
+  await t.test('storage is account-wide across relog and Check paginates every saved log', async () => {
+    const h = harness({ mode: 'ultimate' });
+    const reloaded = harness({ mode: 'ultimate' });
+    try {
+      const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+      const saved = { 1521: 42, 1519: 17 };
+      h.player.setAttribute('forestry:shop-logs', saved);
+      h.player.setAttribute('forestry:met-forester', true);
+      const snapshot = PlayerSave.fromPlayer(h.player);
+      assert.deepEqual(snapshot.attributes['forestry:shop-logs'], saved);
+      assert.equal(snapshot.attributes['forestry:met-forester'], true);
+      snapshot.applyToPlayer(reloaded.player);
+      PluginManager.emitPlayerLogin({ player: reloaded.player, username: reloaded.player.getUsername() });
+      assert.equal(reloaded.player.getPacketSender().getVarbit(17231), 1);
+      assert.deepEqual(reloaded.player.getAttribute('forestry:shop-logs'), saved);
+      await reloaded.option('Log-storage'); await reloaded.choose('Check stored logs');
+      const pages = [];
+      for (let i = 0; i < 4 && reloaded.player.getDialogueManager().isActive(); i++) {
+        const page = reloaded.player.getDialogueManager().getCurrent().getText();
+        assert.ok(page.split('<br>').length <= 3);
+        pages.push(page); reloaded.player.getDialogueManager().advance();
+      }
+      assert.equal(pages.length, 3);
+      assert.ok(pages.join('<br>').includes('Oak logs: 42'));
+      assert.ok(pages.join('<br>').includes('Willow logs: 17'));
+      assert.deepEqual(reloaded.player.getAttribute('forestry:shop-logs'), saved, 'Check never withdraws logs');
+    } finally { h.close(); reloaded.close(); }
+  });
+
+  await t.test('UIM cape refunds and transactions through a stale account-mode shop are refused', async () => {
+    const h = harness({ mode: 'ultimate' });
+    try {
+      h.player.getInventory().adds(28613, 1);
+      await h.option('Trade'); h.sell(28613);
+      assert.equal(h.player.getInventory().getAmount(28613), 1);
+      h.player.setAttribute('ironman:mode', 'none');
+      h.buy('forestry_shop_stock_0');
+      assert.equal(h.player.getInventory().getAmount(28136), 0);
+    } finally { h.close(); }
+  });
 });

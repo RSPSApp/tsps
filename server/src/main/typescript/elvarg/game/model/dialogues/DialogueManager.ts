@@ -77,6 +77,9 @@ export class DialogueManager {
             return true;
         }
         if (!this.canContinue(widgetId)) return false;
+        // An overhead line or a held moment leaves the previous chatbox up; held Space
+        // would otherwise end the chain under its timer.
+        if (current instanceof ActionDialogue && current.isSelfAdvancing()) return true;
         this.advance();
         return true;
     }

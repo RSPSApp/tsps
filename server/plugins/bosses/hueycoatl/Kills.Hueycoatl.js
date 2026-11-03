@@ -206,7 +206,7 @@ function killed(session) {
     session.graphic(lootTile, Shared.GFX.LOOT_BEAM, 0, [player]);
     for (const drop of main) player.sendMessage(`<col=${DROP_COLOUR}>The Hueycoatl dropped: ${describe(drop)}</col>`);
     for (const drop of uniques.filter((entry) => drops.includes(entry))) {
-      for (const other of team) other.sendMessage(`<col=${BROADCAST_COLOUR}>${player.getUsername()} received a drop: ${describe(drop)}</col>`);
+      for (const other of team) other.sendMessage(`<col=${BROADCAST_COLOUR}>${player.getDisplayName()} received a drop: ${describe(drop)}</col>`);
     }
   }
 }

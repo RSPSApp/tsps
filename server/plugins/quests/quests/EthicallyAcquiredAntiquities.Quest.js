@@ -980,7 +980,7 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
   /** An empty chatbox the player cannot continue: the capture's held moments. */
   function hold(player) {
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-      new ActionDialogue(0, { execute: () => StatementDialogue.send(player, "", false) })
+      new ActionDialogue(0, { execute: () => StatementDialogue.send(player, "", false) }, true)
     ));
   }
 

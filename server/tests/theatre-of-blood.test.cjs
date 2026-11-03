@@ -1,4 +1,4 @@
-// Run after `yarn build`: node --test tests/theatre-of-blood.test.cjs
+﻿// Run after `yarn build`: node --test tests/theatre-of-blood.test.cjs
 const assert = require('node:assert/strict');
 const { test, before, beforeEach } = require('node:test');
 
@@ -42,10 +42,10 @@ function fakeApiBase() {
     },
     persistAttribute() {},
     onObjectInteraction() {},
-    onInterfaceActionButton() {},
+    onInterfaceActionButton: (uid, handler) => { (hooks.buttons ??= {})[uid] = handler; },
     onZoneEnter() {},
     onZoneExit() {},
-    onPlayerLogout() {},
+    onPlayerLogout: (handler) => (hooks.logout ??= []).push(handler),
     onPlayerLogin() {},
     onShouldDropItemsOnDeath() {},
     onPlayerDeath() {},
@@ -98,9 +98,9 @@ function fakePlayer(name) {
   const index = nextIndex++;
   const p = {
     name, location: new Location(3667, 3219, 0), area: null, hp: 99, blocked: false, untargetable: false, render: null,
-    messages: [], scripts: [], interfaces: [], subs: new Map(), statements: [], texts: {}, sounds: [], songs: [],
+    messages: [], scripts: [], interfaces: [], inventories: [], subs: new Map(), statements: [], texts: {}, sounds: [], songs: [],
     inventory: fakeContainer(28), equipment: fakeContainer(14),
-    getUsername: () => name,
+    getUsername: () => name, getDisplayName: () => name,
     getIndex: () => index,
     isPlayer: () => true,
     isNpc: () => false,
@@ -124,7 +124,12 @@ function fakePlayer(name) {
       setCurrentLevel(skill, level) { if (skill.getIndex?.() === 3) p.hp = level; },
       getCombatLevel: () => 126,
     }),
-    getMovementQueue: () => ({ setBlockMovement(value) { p.blocked = value; return this; }, reset() { return this; } }),
+    getMovementQueue: () => ({ setBlockMovement(value) { p.blocked = value; return this; }, reset() { return this; }, isMovings: () => false }),
+    getTimers: () => {
+      const active = new Set();
+      return { registers: (key) => active.add(key), cancel: (key) => active.delete(key), has: (key) => active.has(key) };
+    },
+    performGraphic() {},
     setUntargetable(value) { p.untargetable = value; },
     getCombat: () => ({ reset() {} }),
     setRenderAnimations(value) { p.render = value; },
@@ -148,6 +153,7 @@ function fakePlayer(name) {
         sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); return sender; },
         sendInterfaceFlagsRange: () => sender,
         sendInterfaceFlags: () => sender,
+        sendInventory: (inv, size, items) => { p.inventories.push({ inv, size, items }); return sender; },
         sendString: (text, uid) => { p.texts[uid] = text; return sender; },
         sendEnterAmountPrompt: () => sender,
         sendJingle: () => sender,
@@ -181,6 +187,10 @@ before(() => {
   require('../plugins/minigames/tob/Verzik.TheatreOfBlood')(api);
   require('../plugins/minigames/tob/Entry.TheatreOfBlood')(api);
   require('../plugins/minigames/tob/InfoBoard.TheatreOfBlood')(api);
+  require('../plugins/minigames/tob/Stats.TheatreOfBlood')(api);
+  require('../plugins/minigames/tob/CombatAchievements.TheatreOfBlood')(api);
+  require('../plugins/minigames/tob/EscapeCrystal.TheatreOfBlood')(api);
+  require('../plugins/minigames/tob/Supplies.TheatreOfBlood')(api);
   hooks.api = api;
 });
 
@@ -226,7 +236,7 @@ test('a party takes applicants, accepts up to five and blocks the declined', () 
   assert.equal(party.accept(others[4]), false, 'five at most');
   party.decline(others[5]);
   assert.equal(party.rightsOf(others[5]), Parties.RIGHTS.BLOCKED);
-  assert.equal(Lobby.rowText(party, leader).split('|').length, 11, 'five names and five fields, as script 2340 splits it');
+  assert.equal(Lobby.rowText(party, leader).split('|').length, 10, 'five names and five fields, as captured (no trailing bar) in what script 2340 splits');
   party.dispose();
 });
 
@@ -249,6 +259,11 @@ test('the notice board lists parties; My Party makes one and shows its informati
 
 test('the entrance: no party offers the list; the leader is warned once and asked about crystals', () => {
   const player = fakePlayer('Entrant');
+  Lobby.useEntrance({ player });
+  assert.equal(hooks.prompts.length, 0, 'someone new is called over by the Stranger instead');
+  assert.equal(player.statements.length, 1, 'the Stranger calls them over');
+  player.setAttribute(Lobby.ATTR.MET_STRANGER, true);
+  player.statements.length = 0;
   Lobby.useEntrance({ player });
   assert.equal(hooks.prompts.at(-1).title, 'You are not in a party...');
   const party = Parties.create(player);
@@ -367,18 +382,38 @@ test('a wipe fails the raid: items go to the retrieval chest and everyone is put
   assert.equal(Parties.partyOf(solo), null, 'the party is gone with the raid');
 });
 
-test('the retrieval chest charges 100,000 coins', () => {
+test('a wipe fails the raid even when a party member never entered the fight', () => {
+  const [ann, bob] = [fakePlayer('WipeAnn'), fakePlayer('WipeBob')];
+  const party = Parties.create(ann);
+  party.apply(bob);
+  party.accept(bob);
+  const raid = Raid.begin(ann);
+  // Ann goes in; Bob stays outside and is never jailed.
+  raid.enter(ann);
+  ticks(2);
+  ann.inventory.setItem(0, new Item(4151, 1));
+  bob.inventory.setItem(0, new Item(4151, 1));
+  raid.room.start();
+  Object.assign(raid.member(ann), { roomKey: 'MAIDEN', inFight: true });
+  ann.hp = 0;
+  raid.onPlayerDied(ann);
+  ticks(5);
+  assert.equal(raid.failed, true, 'the member in the fight dying is the whole fight');
+  assert.equal(Raid.raidOf(ann), null);
+  assert.equal(bob.inventory.getAmount(4151), 1, 'someone who never fought keeps their items');
+  assert.equal(Retrieval.storedOf(ann).length >= 1, true, 'the dead member still has a retrieval lot');
+});
+
+test('a wipe stores everything; Entry Mode owes nothing for it', () => {
   const player = fakePlayer('Reclaimer');
-  player.setAttribute(Retrieval.ATTR_STORED, [{ id: 4151, amount: 1 }]);
-  Retrieval.searchChest({ player });
-  choose('Yes, pay the fee.');
-  assert.equal(Retrieval.storedOf(player).length, 1, 'no coins, no items');
-  player.inventory.setItem(0, new Item(995, 100000));
-  Retrieval.searchChest({ player });
-  choose('Yes, pay the fee.');
-  assert.equal(Retrieval.storedOf(player).length, 0);
-  assert.ok(player.inventory.contains(4151));
-  assert.equal(player.inventory.contains(995), false);
+  player.inventory.setItem(0, new Item(4151, 1));
+  Retrieval.storeAfterWipe(player);
+  assert.equal(player.inventory.contains(4151), false);
+  assert.deepEqual(Retrieval.lotOf(player), { items: [{ id: 4151, amount: 1 }], paid: false });
+  const free = fakePlayer('EntryReclaimer');
+  free.inventory.setItem(0, new Item(4151, 1));
+  Retrieval.storeAfterWipe(free, { free: true });
+  assert.equal(Retrieval.lotOf(free).paid, true);
 });
 
 test('a logout mid-fight is a death; logging back in rejoins the party among the dead', () => {
@@ -387,7 +422,7 @@ test('a logout mid-fight is a death; logging back in rejoins the party among the
   raid.member(ann).inFight = true;
   raid.member(bob).inFight = true;
   raid.onLogout(ann);
-  assert.deepEqual(ann.getAttribute(Raid.ATTR_LOGOUT), { raid: raid.id, fight: true });
+  assert.deepEqual(ann.getAttribute(Raid.ATTR_LOGOUT), { raid: raid.id, fight: true, mode: 'normal' });
   const returning = fakePlayer('Ann3');
   returning.setAttribute(Raid.ATTR_LOGOUT, ann.getAttribute(Raid.ATTR_LOGOUT));
   returning.location = ann.location;
@@ -401,7 +436,7 @@ test('teleports are blocked inside; an escape crystal gets out and is used up', 
   const { raid, players: [solo] } = startRaid(['Escaper']);
   assert.equal(raid.area.canTeleport(solo), false);
   solo.inventory.setItem(0, new Item(Shared.ITEM.ESCAPE_CRYSTAL, 1));
-  assert.equal(RaidUnit.useEscapeCrystal({ player: solo, itemId: Shared.ITEM.ESCAPE_CRYSTAL }), true);
+  assert.equal(require('../plugins/minigames/tob/EscapeCrystal.TheatreOfBlood').teleport({ player: solo }), true);
   assert.equal(solo.inventory.contains(Shared.ITEM.ESCAPE_CRYSTAL), false);
   ticks(2);
   assert.equal(Raid.raidOf(solo), null);
@@ -438,6 +473,27 @@ test('supplies: points buy, one stamina per chest, and never below zero', () => 
   raid.dispose();
 });
 
+test('Hard Mode\'s supply chest is a band lower than Normal\'s (Wiki, Hard Mode)', (t) => {
+  t.mock.method(Math, 'random', () => 0);
+  const normal = startRaid(['SupplyNormal']);
+  normal.raid.member(normal.players[0]).roomStats('MAIDEN').damage = 100;
+  normal.raid.grantSupplyPoints({ key: 'BLOAT' });
+  assert.equal(normal.raid.member(normal.players[0]).supplyPoints, 8, 'average grade, normal band 8-11');
+
+  const leader = fakePlayer('SupplyHard');
+  const party = Parties.create(leader);
+  party.mode = 'hard';
+  const hard = Raid.begin(leader);
+  hard.enter(leader);
+  ticks(2);
+  hard.member(leader).roomStats('MAIDEN').damage = 100;
+  hard.grantSupplyPoints({ key: 'BLOAT' });
+  assert.equal(hard.member(leader).supplyPoints, 6, 'the same grade, one band down: 6-9');
+  hard.dispose();
+  normal.raid.dispose();
+});
+
+
 test('the Nylocas room runs the Wiki\'s 31 waves from three lanes', () => {
   const { WAVES, parse } = require('../plugins/minigames/tob/NylocasWaves.TheatreOfBlood');
   assert.equal(WAVES.length, 31);
@@ -450,8 +506,10 @@ test('the Nylocas room runs the Wiki\'s 31 waves from three lanes', () => {
       }
     }
   }
-  assert.deepEqual(parse('ra~mame'), { style: 'ranged', big: false, aggressive: false, flickers: ['magic', 'melee'] });
-  assert.deepEqual(parse('ME!'), { style: 'melee', big: true, aggressive: true, flickers: [] });
+  const flickering = parse('ra~mame');
+  assert.deepEqual([flickering.style, flickering.big, flickering.aggressive, flickering.flickers], ['ranged', false, false, ['magic', 'melee']]);
+  const big = parse('ME!');
+  assert.deepEqual([big.style, big.big, big.aggressive, big.flickers], ['melee', true, true, []]);
 });
 
 test('Sotetseg\'s maze is one connected path from the bottom row to the portal, mirrored on the real floor', () => {
@@ -460,7 +518,7 @@ test('Sotetseg\'s maze is one connected path from the bottom row to the portal, 
   for (let run = 0; run < 200; run++) {
     const path = Sotetseg.generatePath();
     assert.equal(path[0].y, REALM.minY);
-    assert.equal(path.at(-1).y, REALM.maxY + 1);
+    assert.equal(path.at(-1).y, REALM.maxY);
     for (let i = 1; i < path.length; i++) {
       const step = Math.abs(path[i].x - path[i - 1].x) + Math.abs(path[i].y - path[i - 1].y);
       assert.equal(step, 1, 'each tile touches the last');
@@ -488,6 +546,117 @@ test('Verzik: only poisoned weapons hurt Nylocas Athanatos', () => {
   player.equipment.setItem(Equipment.WEAPON_SLOT, new Item(5698, 1)); // dragon dagger(p++)
   assert.equal(Verzik.poisonedWeapon(player, 'melee'), true);
 });
+
+/** A stand-in for her NPC when the fake API spawns nothing. */
+function fakeVerzik() {
+  const npc = {
+    location: new Location(3165, 4310, 0),
+    hp: 100,
+    isPlayer: () => false,
+    isNpc: () => true,
+    getLocation: () => npc.location,
+    getSize: () => 5,
+    getHitpoints: () => npc.hp,
+    getMaxHitpoints: () => 100,
+    setHitpoints: (value) => { npc.hp = value; },
+    isRegistered: () => true,
+    getMovementQueue: () => ({ reset() {}, setBlockMovement() {} }),
+    performAnimation() {},
+    setNpcTransformationId() {},
+    moveTo(location) { npc.location = location; },
+  };
+  return npc;
+}
+
+test('Verzik: her phase 3 hazards stop once she dies, and her webs are cleared', (t) => {
+  const Verzik = require('../plugins/minigames/tob/Verzik.TheatreOfBlood');
+  const { raid, players: [solo] } = startRaid(['Hazard']);
+  const room = raid.buildRoom('VERZIK');
+  room.verzik = fakeVerzik();
+  room.phase = 3;
+  room.stage = 'started';
+  room.transition = false;
+  Object.assign(raid.member(solo), { roomKey: 'VERZIK', inFight: true });
+  const hurts = [];
+  room.hurt = (_player, _amount, attack) => hurts.push(attack);
+  room.animate = () => {};
+  room.despawn = () => {};
+  t.mock.method(Shared, 'projectile', () => 2);
+  t.mock.method(Shared, 'floorFree', () => true);
+
+  // Real in-flight attacks, queued before the death.
+  room.autoAttack(solo);
+  room.bounceGreen(room.verzik, solo, { passes: 0, visited: new Set(), lethal: false });
+  room.special_dots();
+
+  // A web that would burst on the party this tick.
+  const { GameObject, ObjectManager } = PluginManager.getCoreApi();
+  const webObject = new GameObject(Shared.OBJECT.WEB, new Location(3160, 4310, 0), 10, 0, raid.area);
+  ObjectManager.register(webObject, true);
+  room.webs.set('3160,4310', {
+    tile: { x: 3160, y: 4310, z: 0 }, object: webObject,
+    npc: { isRegistered: () => true, getHitpoints: () => 10 }, age: 18, stuck: new Set([solo]),
+  });
+
+  room.die();
+  assert.equal(room.transition, true);
+  assert.equal(room.webs.size, 0, 'the webs go with her');
+  ticks(40);
+  assert.deepEqual(hurts, [], 'no in-flight hazard landed after the death');
+  assert.equal(solo.hp, 99, 'nothing hurt the player');
+
+  // Prove the same callbacks do land while she is alive, so the test isn't vacuous.
+  const room2 = raid.buildRoom('VERZIK');
+  room2.verzik = fakeVerzik();
+  room2.phase = 3;
+  room2.stage = 'started';
+  room2.transition = false;
+  Object.assign(raid.member(solo), { roomKey: 'VERZIK', inFight: true });
+  const hurtAgain = [];
+  room2.hurt = (_player, _amount, attack) => hurtAgain.push(attack);
+  room2.animate = () => {};
+  room2.bounceGreen(room2.verzik, solo, { passes: 0, visited: new Set(), lethal: false });
+  ticks(3);
+  assert.deepEqual(hurtAgain, ['green ball'], 'alive, the green ball does land');
+  raid.dispose();
+});
+
+test('the Dawnbringer: dropped for a teammate, and dropped on death', (t) => {
+  const Verzik = require('../plugins/minigames/tob/Verzik.TheatreOfBlood');
+  const { raid, players: [ann, bob] } = startRaid(['Dawn1', 'Dawn2']);
+  const { EquipPacketListener } = PluginManager.getCoreApi();
+  t.mock.method(EquipPacketListener, 'resetWeapon', () => {});
+  const room = raid.buildRoom('VERZIK');
+  room.verzik = fakeVerzik();
+  room.phase = 1;
+  room.stage = 'started';
+  for (const player of [ann, bob]) Object.assign(raid.member(player), { roomKey: 'VERZIK', inFight: true });
+  ann.inventory.setItem(0, new Item(Shared.ITEM.DAWNBRINGER, 1));
+  const drop = { player: ann, itemId: Shared.ITEM.DAWNBRINGER, item: ann.inventory.getItems()[0], slot: 0, handled: false };
+  Verzik.dropDawnbringerItem(drop);
+  assert.equal(drop.handled, true);
+  assert.equal(ann.inventory.contains(Shared.ITEM.DAWNBRINGER), false, 'it leaves the dropper');
+  const ground = [...room.looseDawnbringers][0];
+  assert.ok(ground, 'it is on the floor');
+  const { ItemOnGroundManager } = PluginManager.getCoreApi();
+  assert.equal(ItemOnGroundManager.canSee(bob, ground), true, 'a teammate can see and take it');
+
+  // Death: the equipped copy is left where the player fell, before the jail.
+  const { Equipment } = PluginManager.getCoreApi();
+  ann.equipment.setItem(Equipment.WEAPON_SLOT, new Item(Shared.ITEM.DAWNBRINGER, 1));
+  ann.location = new Location(3170, 4310, 0);
+  raid.onPlayerDied(ann);
+  assert.equal(ann.equipment.getItems()[Equipment.WEAPON_SLOT].getId(), -1, 'no longer held');
+  assert.equal(raid.member(ann).jailed, true);
+  const dropped = [...room.looseDawnbringers].find((entry) => entry.getPosition().getX() === 3170 && entry.getPosition().getY() === 4310);
+  assert.ok(dropped, 'left at the death tile');
+
+  // Phase 1 ending takes every loose copy with it.
+  room.clearLooseDawnbringers();
+  assert.ok([...room.looseDawnbringers].every((entry) => entry.isPendingRemoval()));
+  raid.dispose();
+});
+
 
 test('rewards: a unique replaces the commons; no contribution gets the cabbage; three noted common rolls otherwise', () => {
   const Rewards = require('../plugins/minigames/tob/Rewards.TheatreOfBlood');
@@ -546,6 +715,102 @@ test('Entry Mode still answers the completion query and never clears another pro
   const mixed = { player: both, complete: false };
   hooks.api.emitCustomEvent('tob:has-completion', mixed);
   assert.equal(mixed.complete, true, 'the normal-mode answer is not overwritten');
+});
+
+test('unclaimed vault loot is lost on starting another raid, and the vault roll replaces it', (t) => {
+  const Rewards = require('../plugins/minigames/tob/Rewards.TheatreOfBlood');
+  const I = PluginManager.getCoreApi().ItemIdentifiers;
+  t.mock.method(Math, 'random', () => 0);
+  const solo = fakePlayer('LootLost');
+  Rewards.setLoot(solo, [{ id: I.COINS, amount: 123 }]);
+  Parties.create(solo);
+  const raid = Raid.begin(solo);
+  raid.enter(solo);
+  assert.deepEqual(Rewards.lootOf(solo), [], 'entering a new raid loses the old loot');
+  Rewards.setLoot(solo, [{ id: I.COINS, amount: 123 }]);
+  raid.buildRoom('REWARDS');
+  const after = Rewards.lootOf(solo);
+  assert.ok(!after.some((entry) => entry.id === I.COINS), 'the vault roll replaces anything older');
+  assert.ok(after.some((entry) => entry.id === I.AVERNIC_DEFENDER_HILT), 'the new roll is there');
+  hooks.api.emitCustomEvent('tob:raid-entered', { raid, player: solo });
+  assert.ok(Rewards.lootOf(solo).length > 0, 'stepping in again at the vault keeps its own roll');
+  raid.dispose();
+});
+
+test("unclaimed vault loot is lost on logging out, but Lil' Zik is still delivered", () => {
+  const Rewards = require('../plugins/minigames/tob/Rewards.TheatreOfBlood');
+  const I = PluginManager.getCoreApi().ItemIdentifiers;
+  const solo = fakePlayer('LogoutLoot');
+  Rewards.setLoot(solo, [{ id: I.COINS, amount: 123 }, { id: I.LIL_ZIK, amount: 1 }]);
+  hooks.custom = [];
+  for (const handler of hooks.logout) handler({ player: solo });
+  assert.deepEqual(Rewards.lootOf(solo), [], 'nothing is left to claim');
+  assert.ok(hooks.custom.some((entry) => entry.name === 'npc-drops:roll' && entry.payload.drops.some((drop) => drop.itemId === I.LIL_ZIK)),
+    'the pet goes to the pet delivery');
+});
+
+test('a seven-item Hard roll shows six; the bulk buttons act on those and the seventh moves into view', () => {
+  const Rewards = require('../plugins/minigames/tob/Rewards.TheatreOfBlood');
+  const I = PluginManager.getCoreApi().ItemIdentifiers;
+  const TAKE_ALL = (23 << 16) | 8;
+  const DISCARD_ALL = (23 << 16) | 10;
+  const solo = fakePlayer('SevenSlots');
+  // The reviewer's roll: three commons, the clue, the dust and both kits.
+  const seven = () => [565, 445, 452, I.CLUE_SCROLL_ELITE_, I.SANGUINE_DUST, I.SANGUINE_ORNAMENT_KIT, I.HOLY_ORNAMENT_KIT]
+    .map((id) => ({ id, amount: 1 }));
+  const lastSent = () => solo.inventories.at(-1);
+  Rewards.setLoot(solo, seven());
+  Rewards.openLoot(solo);
+  assert.equal(lastSent().size, 6, 'inventory 612 has six slots (cache)');
+  assert.deepEqual(lastSent().items.map((item) => item.id), seven().slice(0, 6).map((entry) => entry.id), 'the first six are shown');
+  assert.ok(solo.messages.some((text) => /More rewards are waiting/.test(text)), 'the player is told more are waiting');
+
+  hooks.buttons[DISCARD_ALL]({ player: solo });
+  choose('<col=ff0000>DESTROY!');
+  assert.deepEqual(Rewards.lootOf(solo).map((entry) => entry.id), [I.HOLY_ORNAMENT_KIT], 'Discard-all destroys only what was shown');
+  assert.deepEqual(lastSent().items.map((item) => item.id), [I.HOLY_ORNAMENT_KIT], 'the hidden kit comes into view');
+
+  // Bank-all goes through the same takeAll; the fake player has no bank to drive it with.
+  Rewards.setLoot(solo, seven());
+  hooks.buttons[TAKE_ALL]({ player: solo });
+  const left = Rewards.lootOf(solo).map((entry) => entry.id);
+  assert.ok(left.includes(I.HOLY_ORNAMENT_KIT), 'Take-all leaves the unshown kit in the chest');
+  assert.deepEqual(lastSent().items.map((item) => item.id), left.slice(0, 6), 'what is left is shown, the kit with it');
+  assert.ok(left.length <= 6, 'the six shown were taken, so nothing is hidden any more');
+});
+
+test('the vault loot reaches the collection log once, and the category answers the ToB counts', () => {
+  const Rewards = require('../plugins/minigames/tob/Rewards.TheatreOfBlood');
+  const Stats = require('../plugins/minigames/tob/Stats.TheatreOfBlood');
+  const I = PluginManager.getCoreApi().ItemIdentifiers;
+  const { raid, players: [solo] } = startRaid(['ClogToB']);
+  Rewards.setLoot(solo, [
+    { id: I.SANGUINE_DUST, amount: 1 },
+    { id: I.HOLY_ORNAMENT_KIT, amount: 1 },
+    { id: I.LIL_ZIK, amount: 1 },
+  ]);
+  hooks.custom = [];
+  Rewards.openLoot(solo);
+  const obtained = hooks.custom.filter((entry) => entry.name === 'collection-log:obtain').map((entry) => entry.payload.itemId);
+  assert.deepEqual(obtained.sort(), [I.HOLY_ORNAMENT_KIT, I.SANGUINE_DUST].sort(), 'the uniques/tertiaries log; Lil\' Zik goes through the pet delivery');
+  hooks.custom = [];
+  Rewards.openLoot(solo);
+  assert.equal(hooks.custom.filter((entry) => entry.name === 'collection-log:obtain').length, 0, 'reopening adds nothing');
+  Rewards.setLoot(solo, [{ id: I.VIAL_OF_BLOOD_2, amount: 8, loggedAmount: 5 }]);
+  hooks.custom = [];
+  Rewards.logLoot(solo);
+  const vial = hooks.custom.find((entry) => entry.name === 'collection-log:obtain');
+  assert.equal(vial?.payload.amount, 3, 'only the later copies are logged');
+  solo.setAttribute('tob:completions', 2);
+  solo.setAttribute('tob:hard-completions', 1);
+  solo.setAttribute('tob:entry-completions', 3);
+  const request = { player: solo, category: 'Theatre of Blood', struct: 506, count: null };
+  hooks.api.emitCustomEvent('collection-log:category-count', request);
+  assert.equal(request.count, 6, 'Entry + Normal + Hard');
+  const other = { player: solo, category: 'Zulrah', count: 9 };
+  Stats.collectionLogCount(other);
+  assert.equal(other.count, 9, 'another category is left alone');
+  raid.dispose();
 });
 
 test('a death costs a fifth of a player\'s standing', () => {
@@ -620,8 +885,8 @@ test('every party-information click redraws it, so the client\'s pause button cl
   const party = Parties.create(leader);
   Lobby.openInformation(leader, party);
   const before = leader.interfaces.length;
-  Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 6, handled: false });
-  assert.equal(leader.interfaces.length, before + 1, 'Mode');
+  Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 1, handled: false });
+  assert.equal(leader.interfaces.length, before + 1, 'Refresh');
   Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 8, handled: false });
   assert.equal(leader.interfaces.length, before + 2, 'kicking an empty member row');
   party.dispose();
@@ -721,4 +986,273 @@ test('the strategy table outside a raid is left alone', (t) => {
   const reader = realReader(t, 'Wanderer');
   assert.equal(InfoBoard.read({ player: reader, objectId: 33014, option: 'Read' }), false);
   assert.deepEqual(reader.sent.interfaces, []);
+});
+
+// ------------------------------------------------------------------ modes, records, tasks
+
+const Stats = require('../plugins/minigames/tob/Stats.TheatreOfBlood');
+const CombatAchievements = require('../plugins/minigames/tob/CombatAchievements.TheatreOfBlood');
+const Rewards = require('../plugins/minigames/tob/Rewards.TheatreOfBlood');
+const Supplies = require('../plugins/minigames/tob/Supplies.TheatreOfBlood');
+const EscapeCrystal = require('../plugins/minigames/tob/EscapeCrystal.TheatreOfBlood');
+
+test('team hitpoints by mode: a fifth per player in Entry, the Wiki\'s shares otherwise', () => {
+  assert.deepEqual([1, 2, 5].map(Shared.MODES.entry.hitpoints), [0.2, 0.4, 1]);
+  assert.deepEqual([1, 3, 4, 5].map(Shared.MODES.normal.hitpoints), [0.75, 0.75, 0.875, 1]);
+  assert.deepEqual([1, 3, 4, 5].map(Shared.MODES.hard.hitpoints), [0.75, 0.75, 0.875, 1]);
+  assert.equal(Shared.formatTicks(150), '1:30.00', 'as the captured wave lines show a time');
+  assert.equal(Shared.formatTicks(1), '0:00.60');
+});
+
+test('the party\'s mode: captured prompt; Hard needs everyone to have a Normal completion', () => {
+  const leader = fakePlayer('ModeLeader');
+  const party = Parties.create(leader);
+  Lobby.openInformation(leader, party);
+  Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 6, handled: false });
+  assert.equal(hooks.prompts.at(-1).title, 'Select a mode. Currently set to Normal Mode.');
+  choose('Hard Mode.');
+  assert.equal(party.mode, 'normal', 'no completion yet');
+  assert.match(leader.messages.at(-1), /Normal Mode/);
+  leader.setAttribute('tob:completions', 1);
+  Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 6, handled: false });
+  choose('Hard Mode.');
+  assert.equal(party.mode, 'hard');
+  assert.deepEqual(leader.scripts.filter(([id]) => id === Shared.SCRIPT.PARTY_FOOTER).at(-1), [Shared.SCRIPT.PARTY_FOOTER, Parties.RIGHTS.LEADER, 0, 3, 2], 'the footer carries it, as captured');
+  Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 6, handled: false });
+  choose('Entry Mode.');
+  assert.equal(party.mode, 'entry');
+  party.dispose();
+});
+
+test('the last wave\'s lines and records, in the captured order and words', () => {
+  const { raid, players: [solo] } = startRaid(['Records']);
+  raid.buildRoom('VERZIK');
+  raid.totalTicks = 1000;
+  raid.startCycle = Shared.cycle() - 1200;
+  raid.room.complete();
+  const lines = solo.messages.filter((line) => /Final Challenge|total completion|count is/.test(line));
+  assert.match(lines[0], /^Wave 'The Final Challenge' \(Normal Mode\) complete!<br>Duration: .*<br>Theatre of Blood completion time: .* \(new personal best\)$/);
+  assert.match(lines[1], /^Theatre of Blood total completion time: <col=ff0000>12:00\.00<\/col> \(new personal best\)$/);
+  assert.equal(lines[2], 'Your completed Theatre of Blood count is: <col=ff0000>1</col>.');
+  assert.equal(Stats.statsOf(solo, 'normal').completions, 1);
+  assert.equal(Stats.bestSuffix({ 1: 100 }, 1, 200), '. Personal best: 1:00.00');
+  raid.dispose();
+});
+
+test('Hard Mode states its target as the first fight starts', () => {
+  const leader = fakePlayer('Hard1');
+  const party = Parties.create(leader);
+  party.mode = 'hard';
+  const raid = Raid.begin(leader);
+  raid.enter(leader);
+  ticks(2);
+  raid.room.start();
+  assert.ok(leader.messages.includes('Time to beat: <col=ff0000>70:00</col>'));
+  raid.dispose();
+});
+
+test('Combat Achievements: only the raid\'s mode counts, failures say so, Perfect rooms fail Perfect Theatre', () => {
+  const { raid, players: [solo] } = startRaid(['Tasks1']);
+  raid.failTask('Perfect Maiden', 'A Nylocas Matomenos healed The Maiden.');
+  assert.ok(solo.messages.includes('You have failed <col=0cc919>Perfect Maiden</col>: A Nylocas Matomenos healed The Maiden.'));
+  assert.ok(solo.messages.includes('You have failed <col=0cc919>Perfect Theatre</col>: A Nylocas Matomenos healed The Maiden.'));
+  assert.equal(raid.taskLive('Perfect Maiden'), false);
+  const before = solo.messages.length;
+  raid.failTask('Perfect Maiden', 'again');
+  assert.equal(solo.messages.length, before, 'once a raid');
+  raid.failTask('Royal Affairs', 'a Hard Mode task');
+  assert.equal(solo.messages.length, before, 'not this mode');
+  hooks.custom = [];
+  raid.completeTask('Perfect Maiden');
+  raid.completeTask('Royal Affairs');
+  raid.completeTask('Two-Down');
+  assert.deepEqual(hooks.custom.filter((entry) => entry.name === 'combat-achievements:complete').map((entry) => entry.payload.task), ['Two-Down'], 'a failed task and another mode\'s don\'t finish');
+  raid.dispose();
+});
+
+test('the Wiki\'s 50 tasks are all placed in a mode', () => {
+  assert.ok(CombatAchievements.MODE_OF_TASK.size >= 40);
+  assert.equal(CombatAchievements.MODE_OF_TASK.get('Theatre (Trio) Speed-Runner'), 'normal');
+  assert.equal(CombatAchievements.MODE_OF_TASK.get('Theatre: HM (Trio) Speed-Runner'), 'hard');
+  assert.equal(CombatAchievements.MONSTER.hard, 'HM: Theatre of Blood');
+});
+
+test('an Entry Mode wipe is another attempt, with bandages, not a failure', () => {
+  const leader = fakePlayer('EntryWipe');
+  const party = Parties.create(leader);
+  party.mode = 'entry';
+  const raid = Raid.begin(leader);
+  raid.enter(leader);
+  ticks(2);
+  raid.room.start();
+  raid.member(leader).inFight = true;
+  raid.onPlayerDied(leader);
+  assert.equal(raid.member(leader).jailed, true);
+  ticks(4);
+  assert.equal(raid.over, false);
+  assert.equal(raid.failed, false);
+  assert.equal(raid.member(leader).jailed, false, 'back up');
+  assert.equal(raid.room.stage, 'idle', 'the room starts again');
+  assert.equal(leader.inventory.getAmount(Shared.ITEM.BANDAGES), Supplies.BANDAGES_PER_WIPE);
+  assert.equal(raid.member(leader).deaths, 1, 'the death still counts against the loot');
+  raid.dispose();
+});
+
+test('loot by mode: Entry has no uniques or pet, Hard the Wiki\'s rates', () => {
+  const { entry, normal, hard } = Rewards.LOOT_BY_MODE;
+  assert.equal(entry.unique, 0);
+  assert.equal(entry.pet, 0);
+  assert.equal(entry.common, 0.2);
+  assert.equal(entry.clue, 1 / 25);
+  assert.equal(normal.clue, 3 / 25);
+  assert.equal(hard.clue, 3.5 / 25);
+  assert.equal(hard.unique, 1 / 7.7);
+  assert.equal(hard.hilt, 7);
+  assert.equal(hard.pet, 1 / 500);
+});
+
+test('the escape crystal: inactive by default, fires on a hit only once armed and idle', () => {
+  const { raid, players: [solo] } = startRaid(['Crystal1']);
+  solo.inventory.setItem(0, new Item(Shared.ITEM.ESCAPE_CRYSTAL, 1));
+  solo.lastInputCycle = Shared.cycle();
+
+  assert.equal(EscapeCrystal.afkFires(solo), false, 'not armed');
+  solo.setAttribute(EscapeCrystal.ATTR.AFK, true);
+  solo.__tobLoginCycle = -1000;
+  assert.equal(EscapeCrystal.afkFires(solo), false, 'armed, just active');
+  solo.lastInputCycle = Shared.cycle() - 100;
+  assert.equal(EscapeCrystal.afkFires(solo), true, 'armed and idle past the default 30 seconds');
+  EscapeCrystal.damageApplied({ target: Object.assign(solo, { getAsPlayer: () => solo }), hit: { getDamage: () => 0 } });
+  assert.equal(solo.inventory.contains(Shared.ITEM.ESCAPE_CRYSTAL), false, 'a zero hit counts, as the Wiki says');
+  ticks(2);
+  assert.equal(Raid.raidOf(solo), null);
+});
+
+test('the Avernic defender comes from the hilt on a dragon defender', () => {
+  const plugin = require('../plugins/items/AvernicDefender.plugin');
+  const prompts = [];
+  plugin.register({
+    core: PluginManager.getCoreApi(),
+    onItemOnItem() {}, onItemAction() {},
+    sendMultiChatboxPrompt: (player, title, ...args) => prompts.push({ title, args }),
+  });
+  const player = fakePlayer('Hilt');
+  player.inventory.setItem(0, new Item(22477, 1));
+  player.inventory.setItem(1, new Item(12954, 1));
+  plugin._test.combine({ player });
+  prompts.at(-1).args[1]();
+  assert.equal(player.inventory.contains(22477), false);
+  assert.equal(player.inventory.contains(12954), false);
+  assert.equal(player.inventory.contains(22322), true);
+});
+
+test('Sinhaza shrouds: earned from 100 Normal or Hard completions, taken from the Stranger, changed between earned tiers', () => {
+  const player = fakePlayer('Shroud');
+  const pages = [{ page: 'Mysterious Stranger' }];
+  const ask = (text) => Stats.shroudCondition({ player, text, pages });
+  assert.equal(ask("If the player hasn't earned any Sinhaza shrouds:"), true);
+  assert.equal(ask('If the player can claim a Sinhaza shroud:'), false);
+  player.setAttribute('tob:completions', 60);
+  player.setAttribute('tob:hard-completions', 40);
+  player.setAttribute('tob:entry-completions', 900);
+  assert.equal(Stats.shroudTiers(player), 1, 'Entry completions don\'t count');
+  assert.equal(ask('If the player can claim a Sinhaza shroud:'), true);
+  Stats.shroudChoice({ player, option: 'Take Sinhaza shroud tier 2.' });
+  const refused = { player, pages, text: 'The Mysterious Stranger hands you a cape.' };
+  Stats.shroudHanded(refused);
+  assert.equal(refused.end, true);
+  assert.match(player.messages.at(-1), /500 Theatre of Blood completions/);
+  Stats.shroudChoice({ player, option: 'Take Sinhaza shroud tier 1.' });
+  const given = { player, pages, text: 'The Mysterious Stranger hands you a cape.' };
+  Stats.shroudHanded(given);
+  assert.equal(player.inventory.contains(22494), true);
+  assert.deepEqual(given.box, { items: [22494] });
+  player.setAttribute('tob:completions', 460);
+  const cape = player.inventory.getItems().find((item) => item?.getId?.() === 22494);
+  Stats.changeShroud({ player, item: cape });
+  assert.equal(cape.getId(), 22496, 'tier 2 once earned');
+  Stats.changeShroud({ player, item: cape });
+  assert.equal(cape.getId(), 22494, 'round again');
+  assert.equal(Stats.shroudCondition({ player, text: "If the player hasn't earned any Sinhaza shrouds:", pages: [{ page: 'Someone else' }] }), undefined, 'other pages are left alone');
+});
+
+test('the escape crystal answers direct damage as it is applied (a room hazard), once a tick', () => {
+  const { Mobile } = require('../dist/game/entity/impl/Mobile');
+  const { HitDamage } = require('../dist/game/content/combat/hit/HitDamage');
+  const { HitMask } = require('../dist/game/content/combat/hit/HitMask');
+  PluginManager.customEventHooks.delete('combat:damage-apply');
+  PluginManager.createApi('TobCrystalTest').onCustomEvent('combat:damage-apply', EscapeCrystal.damageApplied);
+  try {
+    const { raid, players: [solo] } = startRaid(['Crystal2']);
+    solo.inventory.setItem(0, new Item(Shared.ITEM.ESCAPE_CRYSTAL, 2));
+    Object.assign(solo, {
+      isNpc: () => false, setHitpoints(value) { solo.hp = value; }, getRights: () => PluginManager.getCoreApi().PlayerRights.PLAYER,
+      lastInputCycle: Shared.cycle() - 100, __tobLoginCycle: -1000,
+    });
+    solo.setAttribute(EscapeCrystal.ATTR.AFK, true);
+    // What Shared.damage queues reaches Mobile.decrementHealth, which announces it.
+    Mobile.prototype.decrementHealth.call(solo, new HitDamage(7, HitMask.RED));
+    Mobile.prototype.decrementHealth.call(solo, new HitDamage(7, HitMask.RED));
+    assert.equal(solo.inventory.getAmount(Shared.ITEM.ESCAPE_CRYSTAL), 1, 'one crystal for the tick\'s hits');
+    ticks(2);
+    assert.equal(Raid.raidOf(solo), null, 'out of the raid');
+    raid.dispose();
+  } finally {
+    PluginManager.customEventHooks.delete('combat:damage-apply');
+  }
+});
+
+test('Xarpus judges a run by the tile it really passed over, mixed runs included', () => {
+  const { passedOver } = require('../plugins/minigames/tob/Xarpus.TheatreOfBlood');
+  const { Direction } = require('../dist/game/model/Direction');
+  const from = { x: 3164, y: 4381 };
+  assert.deepEqual(passedOver(from, { x: 3166, y: 4382 }, Direction.EAST), { x: 3165, y: 4381 }, 'east, then north-east');
+  assert.deepEqual(passedOver(from, { x: 3166, y: 4382 }, Direction.NORTH_EAST), { x: 3165, y: 4382 }, 'north-east, then east');
+  assert.deepEqual(passedOver(from, { x: 3166, y: 4381 }, Direction.NONE), { x: 3165, y: 4381 }, 'a straight run without a direction');
+  assert.deepEqual(passedOver(from, { x: 3165, y: 4381 }, Direction.EAST), { x: -1, y: -1 }, 'a walk passes over nothing');
+});
+
+test('a Nylocas hit thrown a tick before its form changed still counts', () => {
+  const { launchedAt } = require('../plugins/minigames/tob/Nylocas.TheatreOfBlood');
+  const now = Shared.cycle();
+  // Launched at now - 3 with a delay of 2 lands at now (CombatFactory: launch + delay + one NPC tick).
+  const hit = { getDelay: () => 2, getTarget: () => ({ isNpc: () => true }) };
+  assert.equal(launchedAt(hit), now - 3);
+  assert.ok(launchedAt(hit) < now - 2, 'before a form change at now - 2');
+});
+
+test('Xarpus: a mixed run over a pool still hurts after the engine clears the step for sync', () => {
+  const { Direction } = require('../dist/game/model/Direction');
+  require('../plugins/minigames/tob/Xarpus.TheatreOfBlood')(hooks.api);
+  const { raid, players: [runner] } = startRaid(['Runner1']);
+  const room = raid.buildRoom('XARPUS');
+  const member = raid.member(runner);
+  member.roomKey = 'XARPUS';
+  member.inFight = true;
+  room.stage = 'started';
+  room.phase = 'poison';
+  room.xarpus = { getLocation: () => new Location(3168, 4387, 1), getSize: () => 5, getHitpoints: () => 100, getMaxHitpoints: () => 100 };
+  // The raid already ticked this turn, from an NPC; the player's own area call comes after.
+  raid.lastCycle = Shared.cycle();
+  room.pools.set('3165,4381', {});
+  const hurts = [];
+  room.hurt = (player, amount, mask, reason) => hurts.push(reason);
+  let walking = Direction.NONE;
+  runner.getWalkingDirection = () => walking;
+  // Turn 1: standing at (3164,4381); the player's own area call records where they are.
+  runner.location = new Location(3164, 4381, 1);
+  raid.area.process(runner);
+  // Turn 2: the run east then north-east to (3166,4382), then the player's area call, then sync's reset.
+  runner.location = new Location(3166, 4382, 1);
+  walking = Direction.EAST;
+  raid.area.process(runner);
+  walking = Direction.NONE;
+  // Turn 3: the room ticks first, from an NPC, with the direction gone.
+  room.tickFloor();
+  ticks(2);
+  assert.deepEqual(hurts, ["stood in Xarpus' poison."], 'the crossed pool hurts a tick late');
+  room.tickFloor();
+  ticks(2);
+  assert.equal(hurts.length, 1, 'once');
+  raid.dispose();
 });

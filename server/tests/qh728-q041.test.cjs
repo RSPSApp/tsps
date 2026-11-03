@@ -185,7 +185,7 @@ function setup({ withDoors = false, withTranscript = false, promptChoice = null 
     getDialogueManager: () => dialogueManager,
     getLocation: () => location,
     getPrivateArea: () => null,
-    getUsername: () => 'qh728-q041',
+    getUsername: () => 'qh728-q041', getDisplayName: () => 'qh728-q041',
     getHitpoints: () => 10,
     isRegistered: () => true,
     moveTo: (next) => { location = next; },

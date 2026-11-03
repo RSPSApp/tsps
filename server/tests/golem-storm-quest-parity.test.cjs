@@ -100,7 +100,7 @@ function setup(register, options = {}) {
     sendInterfaceRemoval() { if (options.realDialogue) player.getDialogueManager().reset(); return sender; },
   }, { get(target, key) { return target[key] ?? (() => sender); } });
   const player = {
-    getUsername: () => 'parity-test',
+    getUsername: () => 'parity-test', getDisplayName: () => 'parity-test',
     getAppearance: () => ({ isMale: () => true }),
     getAttribute: (key) => attrs.get(key),
     setAttribute(key, value) { attrs.set(key, value); },
@@ -114,7 +114,7 @@ function setup(register, options = {}) {
       adds(id, count) { inventory.set(id, (inventory.get(id) ?? 0) + count); },
     }),
     getEquipment: () => ({ getItems: () => [] }),
-    getSkillManager: () => ({ getCurrentLevel: () => 99, addExperiences() {} }),
+    getSkillManager: () => ({ getCurrentLevel: () => 99, getMaxLevel: () => 99, addExperiences() {} }),
     getLocation: () => location,
     moveTo(value) { location = value; },
     getPrivateArea: () => player?.__area ?? null,
@@ -308,7 +308,7 @@ test('Shadow of the Storm: requirement refusal and shared portal teleports', () 
     definition: { getActions: () => ['Talk-to'] },
   });
   assert.equal(h.quest.getStage(h.player), 0);
-  assert.ok(h.messages.includes('You need to complete The Golem and Demon Slayer before you can start Shadow of the Storm.'));
+  assert.ok(h.messages.includes('You need 30 Crafting, The Golem and Demon Slayer before you can start Shadow of the Storm.'));
 
   h.quest.setStage(h.player, 40);
   h.hooks.objects[0]({ player: h.player, objectId: 6310 });
@@ -731,4 +731,40 @@ test('Shadow of the Storm: Reen only replaces Silverlight the player owns in no 
   assert.equal(h.hooks.conditions[0]({ player: h.player, stepId: 'fllvV0' }), true);
   h.emit('npc-dialogue:action', { npcId: h.core.NpcIdentifiers.FATHER_REEN, stepId: 'Kh2EP0' });
   assert.equal(h.inventory.get(I.SILVERLIGHT), 1, 'a lost sword is handed back');
+});
+
+test('Shadow: prepared stage-70 Matthew hands off to Denath instead of repeating readiness forever', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  for (const equipped of [false, true]) {
+    const h = setup(api => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api));
+    const I = h.core.ItemIdentifiers;
+    h.quest.setStage(h.player, 70);
+    h.setLocation(2722, 4901, 2);
+    h.inventory.set(I.DEMONIC_SIGIL, 1);
+    if (equipped) h.player.getEquipment = () => ({ getItems: () => [{ getId: () => I.SILVERLIGHT_2 }] });
+    else h.inventory.set(I.SILVERLIGHT_2, 1);
+    const variant = h.hooks.variants[0]({ player: h.player, npcId: h.core.NpcIdentifiers.MATTHEW });
+    assert.equal(variant, 'performing-the-ritual', 'Denath must assemble the first ritual for a prepared player');
+    assert.equal(h.quest.getStage(h.player), 70, 'selecting a variant alone must not advance progress');
+    const record = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/definitions/npc-dialogues.json'), 'utf8'))['Shadow of the Storm'];
+    const assembly = record.variants[variant].find(step => step.type === 'action' && step.id === 'FK8qAZ');
+    assert.ok(assembly, 'the actual transcript contains the ritual assembly action');
+    h.emit('npc-dialogue:action', { npcId: h.core.NpcIdentifiers.DENATH, stepId: assembly.id });
+    assert.equal(h.quest.getStage(h.player), 80, 'the assembly action advances the quest to the first ritual');
+  }
+});
+
+test('Shadow: the first-ritual handoff requires the sigil, dyed Silverlight and throne-room position', () => {
+  for (const missing of ['sigil', 'sword', 'room']) {
+    const h = setup(api => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api));
+    const I = h.core.ItemIdentifiers;
+    h.quest.setStage(h.player, 70);
+    h.setLocation(2722, 4901, missing === 'room' ? 0 : 2);
+    if (missing !== 'sigil') h.inventory.set(I.DEMONIC_SIGIL, 1);
+    if (missing !== 'sword') h.inventory.set(I.SILVERLIGHT_2, 1);
+    assert.equal(h.hooks.variants[0]({ player: h.player, npcId: h.core.NpcIdentifiers.MATTHEW }),
+      'infiltrating-the-wizards-talking-to-matthew-again-after-showing-him-the-book', missing);
+    assert.equal(h.quest.getStage(h.player), 70);
+  }
 });

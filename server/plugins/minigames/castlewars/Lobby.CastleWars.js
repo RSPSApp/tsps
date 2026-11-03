@@ -16,6 +16,7 @@ const CASTLE_WARS_TICKET_EXCHANGE_SHOP = 1432;
 const SEED_BOTS_CONFIG_KEY = "CastleWars:seedBots";
 const BOT_ROLE_ATTRIBUTE = "castlewars:bot-role";
 const BOT_TIER_ATTRIBUTE = "castlewars:bot-tier";
+const PRACTICE_MAXED_ATTRIBUTE = "castlewars:practice-maxed";
 const BOTS_PER_TEAM = 30;
 // The lobby prompt's bot choices; the label is what the player clicks, the value the tier
 // Bots.CastleWars pins each spawned bot's loadout and combat level band to.
@@ -52,7 +53,7 @@ function moveToWaitingRoom(player, teamId) {
   player.smartMove(game.getTeamData(teamId).waitingRoom, 8);
 }
 
-function spawnCastleWarsBot(teamId, role = "attacker", username = `CWBot${++botSerial}`, tier = null) {
+function spawnCastleWarsBot(teamId, role = "attacker", username = `CWBot${++botSerial}`, tier = null, maxed = false) {
   const bot = createBotPlayer(username, data.LOBBY_TELEPORT, { api, loadPersistence: false, saveRandomizedAppearance: false });
   if (!bot) {
     return;
@@ -64,6 +65,7 @@ function spawnCastleWarsBot(teamId, role = "attacker", username = `CWBot${++botS
   if (tier) {
     bot.setAttribute(BOT_TIER_ATTRIBUTE, tier);
   }
+  if (maxed) bot.setAttribute(PRACTICE_MAXED_ATTRIBUTE, true);
   api.emitPlayerLogin({ player: bot, username });
   moveToWaitingRoom(bot, teamId);
 }
@@ -73,14 +75,16 @@ function castleWarsBotUsername(teamId, index) {
   return `CWBot${teamId === data.TEAM.SARADOMIN ? "S" : "Z"}${index}`;
 }
 
-function populateCastleWarsBots(teamId, tier) {
+function populateCastleWarsBots(teamId, tier, maxed = false) {
   const opposingTeam = game.opposingTeam(teamId);
   const settings = game.settings ?? { teamSize: BOTS_PER_TEAM, opponent: "mixed" };
+  if (settings.opponent === "none") return;
+  const ownRole = settings.opponent === "scorer" ? "defender" : settings.opponent === "defender" ? "scorer" : null;
   for (let index = 0; index < settings.teamSize; index++) {
     const role = BOT_ROLE_MIX[index % BOT_ROLE_MIX.length];
     // The joining human occupies one slot in practice teams.
-    if (index > 0) spawnCastleWarsBot(teamId, role, castleWarsBotUsername(teamId, index), tier);
-    spawnCastleWarsBot(opposingTeam, settings.opponent === "mixed" ? role : settings.opponent, castleWarsBotUsername(opposingTeam, index), tier);
+    if (index > 0) spawnCastleWarsBot(teamId, ownRole ?? role, castleWarsBotUsername(teamId, index), tier, maxed);
+    spawnCastleWarsBot(opposingTeam, settings.opponent === "mixed" ? role : settings.opponent, castleWarsBotUsername(opposingTeam, index), tier, maxed);
   }
 }
 
@@ -106,18 +110,32 @@ function chooseTeam(sizes, requestedTeam) {
   return sizes[requestedTeam] > sizes[other(requestedTeam)] ? null : requestedTeam;
 }
 
-function joinWaitingRoom(player, requestedTeam, botTier = undefined, portalGod = requestedTeam ?? "guthix") {
+const MESBOX_CHAT = 115;
+const ENTRY_REFUSED = "Some items are stopping you from entering the Castle Wars waiting area. See the chat for details.";
+
+/**
+ * One reason per attempt in chat, then a message box pointing at it (rsprox 3233, rev 232:
+ * "You can't wear capes in the arena." is checked before non-combat items).
+ */
+function refuseEntry(player, reason) {
+  player.sendMessage(reason);
+  player.getPacketSender().sendTypedMessage(MESBOX_CHAT, ENTRY_REFUSED);
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, ENTRY_REFUSED)));
+}
+
+function joinWaitingRoom(player, requestedTeam, botTier = undefined, portalGod = requestedTeam ?? "guthix", maxed = false) {
   const phase = game.getPhase();
   if (phase === game.PHASE.ACTIVE || phase === game.PHASE.ENDING) {
     player.sendMessage("There's already a Castle Wars game running. Please wait.");
     return;
   }
   if (player.getEquipment().getSlot(core.Equipment.CAPE_SLOT) > 0) {
-    player.sendMessage("You can't wear capes in Castle Wars.");
+    refuseEntry(player, "You can't wear capes in the arena.");
     return;
   }
   if (player.getInventory().getItems().some((item) => FoodPlugin.isFoodItem(item?.getId?.()))) {
-    player.sendMessage("You may not bring your own consumables inside Castle Wars.");
+    // RSPS-only wording; the capture only shows the cape and non-combat item refusals.
+    refuseEntry(player, "You may not bring your own consumables inside Castle Wars.");
     return;
   }
 
@@ -141,7 +159,7 @@ function joinWaitingRoom(player, requestedTeam, botTier = undefined, portalGod =
   // bots' combat level band and gear; None leaves the game player-only.
   if (!isBot && lobbyEmpty && !seedsBots()) {
     if (botTier !== undefined) {
-      if (botTier !== null) populateCastleWarsBots(teamId, botTier);
+      if (botTier !== null) populateCastleWarsBots(teamId, botTier, maxed);
       game.prepareWaitingForm?.(player, portalGod);
       moveToWaitingRoom(player, teamId);
       return;
@@ -213,6 +231,7 @@ module.exports = function attachCastleWarsLobby(registry, castleWars) {
   data = castleWars.data;
   game.BOT_ROLE_KEY = BOT_ROLE_ATTRIBUTE;
   game.BOT_TIER_KEY = BOT_TIER_ATTRIBUTE;
+  game.PRACTICE_MAXED_KEY = PRACTICE_MAXED_ATTRIBUTE;
   game.joinFromLobby = joinWaitingRoom;
   registry.onObjectInteraction(useCastleWarsPortal);
   registry.onNpcInteraction("Lanthus", { Trade: ({ player }) => ShopManager.open(player, CASTLE_WARS_TICKET_EXCHANGE_SHOP) });

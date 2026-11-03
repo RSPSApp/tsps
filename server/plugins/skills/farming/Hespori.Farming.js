@@ -6,7 +6,9 @@ const Patches = require("./Patches.Farming");
 const Services = require("./Services.Farming");
 const ANIMATION = { SPAWN: 8221, SPECIAL: 8223, RANGED: 8224 };
 const PROJECTILE = { RANGE: 1639, MAGIC: 1640, VINES: 1642 };
-const EXIT = new core.Location(1232, 3728, 0);
+/** 234/03282: the Hespori cave's Exit lands here, west of the cave (1232,3728 was inside its footprint), and Enter there. */
+const EXIT = new core.Location(1230, 3730, 0);
+const ENTRY = new core.Location(1242, 10082, 0);
 class HesporiArea extends core.PrivateArea {
     constructor() { super([new core.Boundary(1216, 1279, 10048, 10111, 0)]); }
     isMulti() { return true; }
@@ -200,7 +202,10 @@ class HesporiCombat extends core.CombatMethod {
             const hit = new core.PendingHit(npc, target, this, 2 + index);
             const prayer = target.getPrayerActive()[ranged ? core.PrayerHandler.PROTECT_FROM_MISSILES : core.PrayerHandler.PROTECT_FROM_MAGIC];
             const damage = hit.isAccurate() ? Math.floor(Math.random() * (ranged ? 9 : 15)) : 0;
-            hit.setTotalDamage(Math.min(target.getHitpoints(), prayer ? Math.floor(damage / 4) : damage));
+            // Wiki: Protect from Missiles caps each spore at 2 (8+8 -> 2+2) and Protect from
+            // Magic caps the wave at 3; it is a cap, not a quarter of the roll.
+            const capped = prayer ? Math.min(damage, ranged ? 2 : 3) : damage;
+            hit.setTotalDamage(Math.min(target.getHitpoints(), capped));
             return hit;
         });
     }
@@ -364,7 +369,7 @@ function hesporiCave(event) {
         const area = new HesporiArea();
         player.getArea()?.leave(player, false);
         area.enter(player);
-        player.moveTo(new core.Location(1243, 10081, 0));
+        player.moveTo(ENTRY.clone());
     }
 }
 

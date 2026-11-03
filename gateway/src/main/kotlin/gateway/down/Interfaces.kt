@@ -55,7 +55,8 @@ class Interfaces(
                 if (!modal || group >= CUSTOM_INTERFACE_START) {
                     DropCounter.down(packet.opcode)
                 } else {
-                    openSub(tree.modalTarget(), group, MODAL)
+                    val target = tree.modalOpened(group)
+                    send(IfOpenSub(target ushr 16, target and 0xFFFF, group, MODAL))
                 }
             }
             TspsServerPacket.WIDGET_CLOSE -> tree.targetOf(reader.u16())?.let { send(IfCloseSub(it ushr 16, it and 0xFFFF)) }
@@ -99,7 +100,7 @@ class Interfaces(
                 val end = reader.u16().signed16()
                 val flags = reader.i32()
                 val ops = reader.i32()
-                if (exists(uid)) send(IfSetEventsV2(uid ushr 16, uid and 0xFFFF, start, end, flags, ops)) else dropped(uid)
+                if (exists(uid)) send(IfSetEventsV2(uid ushr 16, uid and 0xFFFF, start, end, withTargetEvents(uid, flags), ops)) else dropped(uid)
             }
             TspsServerPacket.WIDGET_RUN_SCRIPT -> runScriptBundle(reader)
             TspsServerPacket.RUN_CLIENT_SCRIPT -> script(reader.u16(), reader)
@@ -147,7 +148,9 @@ class Interfaces(
         if (welcomeShown) openSub((InterfaceTree.LOGIN_ROOT shl 16) or InterfaceTree.WELCOME_SLOT, WELCOME_SCREEN, MODAL)
     }
 
-    private var welcomeShown = false
+    /** Whether the welcome screen is up; Upstream turns closing it into Play. */
+    var welcomeShown = false
+        private set
 
     private fun openSub(target: Int, group: Int, type: Int) {
         tree.mounted(target, group)
@@ -207,12 +210,17 @@ class Interfaces(
     private fun events(uid: Int, start: Int, end: Int, flags: Int) {
         val ops = (flags ushr 1) and OLD_OP_BITS
         if (!exists(uid)) return dropped(uid)
-        // The official client only lets a selected spell or Use land on a slot whose events say
-        // it's a target (bit 21), and an item's own Use reaches what bits 11-16 allow. tsps leaves
-        // them out, as the browser makes its inventory menus another way; live sets them.
-        val events = if (uid == INVENTORY) flags or INVENTORY_TARGET_EVENTS else flags
-        send(IfSetEventsV2(uid ushr 16, uid and 0xFFFF, start.signed16(), end.signed16(), events and (OLD_OP_BITS shl 1).inv(), ops))
+        send(IfSetEventsV2(uid ushr 16, uid and 0xFFFF, start.signed16(), end.signed16(), withTargetEvents(uid, flags) and (OLD_OP_BITS shl 1).inv(), ops))
     }
+
+    /**
+     * The official client only lets a selected spell or Use land on a slot whose events say it's a
+     * target (bit 21), and an item's own Use reaches what bits 11-16 allow. tsps leaves them out, as
+     * the browser makes its inventory menus another way; live sets them.
+     */
+    private fun withTargetEvents(uid: Int, flags: Int) = if (uid == INVENTORY) flags or INVENTORY_TARGET_EVENTS else flags
+
+    private var summaryCombat = -1
 
     private fun stats(reader: TspsReader) {
         repeat(reader.u8()) {
@@ -226,7 +234,20 @@ class Interfaces(
         }
         reader.u16() // total level
         // The browser works the combat level out itself and shows it from this varbit.
-        varps.setVarbit(COMBAT_LEVEL_VARBIT, reader.u8())?.let(send)
+        val combat = reader.u8()
+        varps.setVarbit(COMBAT_LEVEL_VARBIT, combat)?.let(send)
+        summaryCombatLevel(combat)
+    }
+
+    /**
+     * The character summary (712) shows varc 52, which the official client only sets by running
+     * script 3954 (the browser sets the varc itself). Unset it reads -1. The script lays out the
+     * summary rows, so it waits until 712 is mounted and runs again only when the level changes.
+     */
+    private fun summaryCombatLevel(combat: Int) {
+        if (combat == summaryCombat || !exists(SUMMARY_CONTENTS)) return
+        summaryCombat = combat
+        send(RunClientScript(SUMMARY_COMBAT_SCRIPT, listOf(SUMMARY_CONTENTS, SUMMARY_CLICK_LAYER, combat)))
     }
 
     private inline fun component(reader: TspsReader, message: (Int, Int) -> OutgoingGameMessage) {
@@ -257,5 +278,8 @@ class Interfaces(
         const val ARG_LONG = 2
         const val OLD_OP_BITS = 0x3FF
         const val COMBAT_LEVEL_VARBIT = 13027
+        const val SUMMARY_COMBAT_SCRIPT = 3954
+        const val SUMMARY_CONTENTS = (712 shl 16) or 2
+        const val SUMMARY_CLICK_LAYER = (712 shl 16) or 3
     }
 }

@@ -117,8 +117,13 @@ test("registered chromatic and metallic providers keep their custom prayer damag
       getAsPlayer: () => victim,
       getEquipment: () => ({ getItems: () => Array.from({ length: 14 }, () => ({ getId: () => -1 })) }),
       performGraphic() {},
+      getLocation: () => new core.Location(3200, 3205, 0),
+      getSize: () => 1,
     });
-    const attacker = { isPlayer: () => false, isNpc: () => true, isRegistered: () => true, getHitpoints: () => 100 };
+    const attacker = {
+      isPlayer: () => false, isNpc: () => true, isRegistered: () => true, getHitpoints: () => 100,
+      getLocation: () => new core.Location(3200, 3200, 0), getSize: () => 1,
+    };
     const breath = (Method) => {
       const method = new Method();
       method.useDragonfire = true;
@@ -147,6 +152,51 @@ test("antifire is subtracted after the damage roll", () => {
     assert.equal(Dragonfire.resolveChromaticDragonfireDamage({}, target, { maxHit: 50 }).damage, 0);
   } finally {
     Math.random = original.random;
+  }
+});
+
+test("dragonfire hits when the breath lands, at every range (#1862)", () => {
+  const registered = [];
+  require("../plugins/npcs/Dragons.plugin").register({
+    core,
+    getPrayerHandler: () => PrayerHandler,
+    getCombatFactory: () => core.CombatFactory,
+    emitCustomEvent() {},
+    registerNpcCombatMethodProvider: (_ids, method) => registered.push(method),
+  });
+  const Brutal = registered[1];
+  const originalCreate = core.Projectile.createProjectile;
+  const originalBounds = core.DamageFormulas.sourceHitBounds;
+  core.DamageFormulas.sourceHitBounds = () => ({ minimum: 0, maximum: 0 });
+  const sent = [];
+  core.Projectile.createProjectile = (_source, _victim, id, delay, end) => ({ sendProjectile: () => sent.push({ id, delay, end }) });
+  ({ shield = false, prayer = false, accurate = false } = {});
+  try {
+    for (const [tiles, end, ticks] of [[2, 65, 3], [5, 95, 4], [8, 125, 5]]) {
+      const victim = player();
+      Object.assign(victim, {
+        isPlayer: () => true,
+        getAsPlayer: () => victim,
+        getHitpoints: () => 99,
+        getLocation: () => new core.Location(3200, 3200 + tiles, 0),
+        getSize: () => 1,
+      });
+      const dragon = {
+        isPlayer: () => false, isNpc: () => true, isRegistered: () => true, getHitpoints: () => 100, performAnimation() {},
+        calculateDistance: () => tiles,
+        getLocation: () => new core.Location(3200, 3200, 0), getSize: () => 1,
+      };
+      const method = new Brutal();
+      sent.length = 0;
+      method.start(dragon, victim);
+      assert.deepEqual(sent, [{ id: 393, delay: 40, end }], `${tiles} tiles: 45 + 10 a tile`);
+      const [pending] = method.hits(dragon, victim);
+      assert.equal(pending.getDelay(), ticks, `${tiles} tiles: hit as it lands`);
+      assert.equal(pending.getDelay(), core.Projectile.ticksToLand(end));
+    }
+  } finally {
+    core.Projectile.createProjectile = originalCreate;
+    core.DamageFormulas.sourceHitBounds = originalBounds;
   }
 });
 

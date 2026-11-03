@@ -82,6 +82,35 @@ export class Bank extends ItemContainer {
     public static readonly WITHDRAWN_ITEMS_EVENT = "bank:withdrawn-items";
     /** `{ player }` after the open bank redraws its items and the side panel's inventory. */
     public static readonly REFRESHED_EVENT = "bank:refreshed";
+    public static readonly PLACEHOLDER_IDENTITY_EVENT = "bank:placeholder-identity";
+
+    public static placeholderIdentity(itemId: number): { placeholderId: number; itemIds: number[] } | null {
+        if (!Number.isInteger(itemId) || itemId < 0) return null;
+        const event = { itemId, placeholderId: -1, itemIds: [] as number[] };
+        getPluginManager().emitCustomEvent(Bank.PLACEHOLDER_IDENTITY_EVENT, event);
+        if (!Number.isInteger(event.placeholderId) || event.placeholderId < 0) return null;
+        const ids = [...new Set([event.itemId, event.placeholderId, ...(Array.isArray(event.itemIds) ? event.itemIds : [])])]
+            .filter((id) => Number.isInteger(id) && id >= 0);
+        return { placeholderId: event.placeholderId, itemIds: ids };
+    }
+
+    public static placeholderFamily(itemId: number): number[] {
+        return Bank.placeholderIdentity(itemId)?.itemIds ?? [itemId];
+    }
+
+    public static sharesPlaceholder(a: number, b: number): boolean {
+        if (a === b) return true;
+        if (a < 0 || b < 0) return false;
+        return Bank.placeholderFamily(a).includes(b);
+    }
+
+    public static placeholderBankId(itemId: number): number {
+        if (!Number.isInteger(itemId) || itemId < 0) return -1;
+        if (ItemDefinition.forId(itemId).getPlaceholderId() >= 0) return itemId;
+        const identity = Bank.placeholderIdentity(itemId);
+        if (!identity) return -1;
+        return ItemDefinition.forId(identity.placeholderId).getPlaceholderId() >= 0 ? identity.placeholderId : -1;
+    }
 
     /** Ends the client's bank search, as OSRS does on closing the bank or picking a tab. */
     public static closeSearch(player: Player): void {
@@ -193,13 +222,14 @@ export class Bank extends ItemContainer {
         return Math.min(super.getFreeSlots() + Bank.MAX_SLOTS - this.items.length, this.roomLeft());
     }
 
-    /** Banked items always stack: a full bank still takes more of an item it holds (same metadata). */
+    /** A full bank accepts reserved placeholders or live stacks with matching metadata. */
     public canTake(item: Item): boolean {
         if (this.getFreeSlots() > 0) return true;
         const id = ItemDefinition.forId(item.getId()).unNote();
         const meta = JSON.stringify(item.getMeta() ?? null);
-        return this.items.some((held) => held != null && held.getId() === id
-            && JSON.stringify(held.getMeta() ?? null) === meta);
+        return this.items.some((held) => held != null && (
+            (held.getId() === id && (held.getAmount() === 0 || JSON.stringify(held.getMeta() ?? null) === meta))
+            || (held.getAmount() === 0 && Bank.sharesPlaceholder(held.getId(), id))));
     }
 
     public isEmpty(): boolean {
@@ -467,7 +497,10 @@ export class Bank extends ItemContainer {
     public static displayItemId(item: Item): number {
         if (item.getAmount() > 0) return item.getId();
         const placeholderId = item.getDefinition().getPlaceholderId();
-        return placeholderId >= 0 ? placeholderId : item.getId();
+        if (placeholderId >= 0) return placeholderId;
+        const bankId = Bank.placeholderBankId(item.getId());
+        const familyPlaceholder = bankId >= 0 ? ItemDefinition.forId(bankId).getPlaceholderId() : -1;
+        return familyPlaceholder >= 0 ? familyPlaceholder : item.getId();
     }
 
     /** Removes the placeholder in `slot` of `tab`. */
@@ -1142,6 +1175,19 @@ export class Bank extends ItemContainer {
             }
         }
 
+        const family = Bank.placeholderFamily(itemID).filter((id) => id !== itemID);
+        if (family.length > 0) {
+            for (let k = 0; k < this.TOTAL_BANK_TABS; k++) {
+                if (k === this.BANK_SEARCH_TAB_INDEX) {
+                    continue;
+                }
+                if (player.getBank(k).getItems().some((held) => held.getId() !== itemID
+                    && held.getAmount() === 0 && family.includes(held.getId()))) {
+                    return k;
+                }
+            }
+        }
+
         // Find empty bank slot
         if (player.getBank(player.getCurrentBankTab()).getFreeSlots() > 0) {
             return player.getCurrentBankTab();
@@ -1177,6 +1223,7 @@ export class Bank extends ItemContainer {
             return this;
         }
         const opening = !Bank.isOpen(this.getPlayer());
+        if (opening) this.getPlayer().setNoteWithdrawal(false);
 
         // Update player status
         this.getPlayer().setStatus(PlayerStatus.BANKING);
@@ -1318,6 +1365,11 @@ export class Bank extends ItemContainer {
             return this;
         }
 
+        if (to instanceof Inventory && this.getPlayer().isPlaceholders()
+                && item.getAmount() >= this.getItems()[slot].getAmount()
+                && Bank.placeholderBankId(item.getId()) < 0) {
+            this.getPlayer().sendMessage("That item cannot leave a placeholder.");
+        }
         this.deleteItemContainer(item, slot, to instanceof Inventory ? false : refresh, to);
 
 

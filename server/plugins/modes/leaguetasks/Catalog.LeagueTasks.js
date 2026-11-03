@@ -4,7 +4,8 @@
  * cache only carries the current league's, so this answers LeagueMode's `league:content-rows` with a
  * league's own enum rows and DB rows (sent with the other units' as one enumOverrides /
  * dbRowOverrides payload at login and before the list opens). A task's position in the enum is its
- * completion bit (Complete.LeagueTasks).
+ * completion bit (Complete.LeagueTasks). The league the cache carries (`fromCache`, Demonic Pacts)
+ * needs none: its catalog is the cache's own list.
  */
 const Common = require("./Common.LeagueTasks");
 
@@ -38,7 +39,8 @@ function dbRows(type) {
 /** `league:content-rows` { league, enums, dbRows }: this league's task list. */
 function content(query) {
   const type = query?.league;
-  if (!Common.catalog(type)) return;
+  const catalog = Common.catalog(type);
+  if (!catalog || catalog.fromCache) return;
   query.enums.push(...enumRows(type));
   query.dbRows.push(...dbRows(type));
 }

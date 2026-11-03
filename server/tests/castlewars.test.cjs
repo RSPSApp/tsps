@@ -54,12 +54,14 @@ function fakeArea(players = []) {
 function fakePlayer({ head = -1, cape = -1, inventory = [], bot = false } = {}) {
   const attributes = new Map();
   const state = {
-    messages: [], moves: [], logouts: 0,
+    messages: [], moves: [], logouts: 0, typed: [], statements: [],
     getEquipment: () => ({
       getSlot: (slot) => (slot === core.Equipment.HEAD_SLOT ? head : slot === core.Equipment.CAPE_SLOT ? cape : -1),
     }),
     getInventory: () => ({ getItems: () => inventory.map((id) => ({ getId: () => id })) }),
     sendMessage: (message) => state.messages.push(message),
+    getPacketSender: () => ({ sendTypedMessage: (type, message) => state.typed.push([type, message]) }),
+    getDialogueManager: () => ({ startDialogues: (chain) => state.statements.push(chain) }),
     smartMove: (location) => state.moves.push(location),
     moveTo: (location) => state.moves.push(location),
     isPlayerBot: () => bot,
@@ -168,7 +170,10 @@ test('capes block entry before the teleport', () => {
   enterPortal(player, core.ObjectIdentifiers.GUTHIX_PORTAL);
   assert.equal(game.getTeamId(player), null);
   assert.equal(player.moves.length, 0);
-  assert.deepEqual(player.messages, ["You can't wear capes in Castle Wars."]);
+  // rsprox 3233 (rev 232): the reason in chat, then the message box.
+  assert.deepEqual(player.messages, ["You can't wear capes in the arena."]);
+  assert.deepEqual(player.typed, [[115, 'Some items are stopping you from entering the Castle Wars waiting area. See the chat for details.']]);
+  assert.equal(player.statements.length, 1);
 });
 
 test('modern Castle Wars allows helmets when entering a portal', () => {
@@ -307,6 +312,7 @@ test('picking a tier populates both teams with the 12/6/5 mix plus the specialis
     };
     for (const bot of teamBots) {
       assert.equal(bot.getAttribute('castlewars:bot-tier'), 'veteran', `${bot.getUsername()} is the picked tier`);
+      assert.notEqual(bot.getAttribute(game.PRACTICE_MAXED_KEY), true, 'normal tier selection keeps its original stat band');
       const role = bot.getAttribute('castlewars:bot-role');
       assert.ok(role in roles, `${bot.getUsername()} has a real role`);
       roles[role] += 1;
@@ -338,6 +344,8 @@ test('practice sizes count the human and select the requested opposing bot role'
     const opponents = bots.filter((bot) => game.getTeamId(bot) === TEAM.ZAMORAK);
     assert.equal(opponents.length, size);
     assert.ok(opponents.every((bot) => bot.getAttribute(game.BOT_ROLE_KEY) === 'scorer'));
+    assert.ok(bots.filter((bot) => game.getTeamId(bot) === TEAM.SARADOMIN).every((bot) => bot.getAttribute(game.BOT_ROLE_KEY) === 'defender'));
+    assert.ok(bots.every((bot) => bot.getAttribute(game.BOT_TIER_KEY) === 'veteran'));
   }
 });
 
@@ -384,24 +392,41 @@ test('practice menus join from every portal through the real prompt dispatcher w
     pick(player, 'Bots:');
     pick(player, 'Scorer (magic defence)');
     pick(player, 'More settings');
-    pick(player, 'Ice freeze:');
-    pick(player, '10 seconds');
     pick(player, 'Barricades per team:');
     pick(player, '20');
     pick(player, 'Back');
     pick(player, 'Join practice');
-    pick(player, 'Veteran');
 
     assert.equal(MultiChatboxPrompt.getPending(player), null, 'joining closes the last prompt');
     assert.equal(moves.length, 1, 'the join action reaches the waiting room');
     assert.equal(game.getTeamId(player), expectedTeam);
     assert.equal(forms.at(-1), god, 'the original portal determines the waiting-room transformation');
-    assert.deepEqual(game.settings, { teamSize: 1, opponent: 'scorer', freezeSeconds: 10, barricades: 20 });
+    assert.deepEqual(game.settings, { teamSize: 1, opponent: 'scorer', barricades: 20, botTier: 'maxed' });
     const bots = World.getAddPlayerQueue();
     assert.equal(bots.length, 1, '1 vs 1 uses the human and one opposing bot');
     assert.equal(game.getTeamId(bots[0]), game.opposingTeam(expectedTeam));
     assert.equal(bots[0].getAttribute(game.BOT_ROLE_KEY), 'scorer');
     assert.equal(bots[0].getAttribute(game.BOT_TIER_KEY), 'veteran');
+    assert.equal(bots[0].getAttribute(game.PRACTICE_MAXED_KEY), true);
+  }
+});
+
+test('Lanthus maxed practice fills both sides with complementary selected roles', () => {
+  Settings(registry, game);
+  const player = fakePlayer();
+  const pick = (text) => {
+    const option = prompt.options.find((entry) => entry.text.startsWith(text));
+    assert.ok(option, text);
+    option.pick();
+  };
+  Settings.openSettings({ player, requestedTeam: TEAM.SARADOMIN });
+  pick('Teams:'); pick('3 vs 3'); pick('Bots:'); pick('Scorer (magic defence)'); pick('Join practice');
+  const bots = World.getAddPlayerQueue();
+  assert.equal(bots.length, 5);
+  for (const bot of bots) {
+    assert.equal(bot.getAttribute(game.PRACTICE_MAXED_KEY), true);
+    assert.equal(bot.getAttribute(game.BOT_TIER_KEY), 'veteran');
+    assert.equal(bot.getAttribute(game.BOT_ROLE_KEY), game.getTeamId(bot) === TEAM.SARADOMIN ? 'defender' : 'scorer');
   }
 });
 
@@ -420,9 +445,10 @@ test('Lanthus can join practice directly, and a stale Join callback cannot chang
   Settings(registry, game);
   const player = fakePlayer();
   Settings.openSettings({ player });
+  prompt.options.find((option) => option.text.startsWith('Bots:')).pick();
+  prompt.options.find((option) => option.text === 'None').pick();
   const join = prompt.options.find((option) => option.text === 'Join practice').pick;
   join();
-  prompt.options.find((option) => option.text === 'None').pick();
   assert.equal(player.moves.length, 1, 'Lanthus uses the normal portal entry validation');
   assert.equal(World.getAddPlayerQueue().length, 0);
   game.waitingAreas[TEAM.ZAMORAK].players.push(player);
@@ -475,12 +501,13 @@ test('a carrier whose banner was stripped before the drop hook still drops the f
   game.restoreFlagToBase(TEAM.ZAMORAK);
 });
 
-test('Castle Wars deaths keep player and bot gear, drop the flag and remove only game supplies', (t) => {
+test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other deaths still drop bones', (t) => {
   const { PlayerDeathTask } = require('../dist/game/task/impl/PlayerDeath');
   const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');
   let deathPolicy;
   let respawn;
   const calls = [];
+  const deathApi = PluginManager.createApi('Castle Wars death regression');
   const island = {
     ...game,
     getTeamId: () => TEAM.SARADOMIN,
@@ -489,7 +516,7 @@ test('Castle Wars deaths keep player and bot gear, drop the flag and remove only
     resetIdleTicks: () => {},
   };
   Areas({
-    core, registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {}, onCustomEvent() {},
+    core, registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {}, onCustomEvent: deathApi.onCustomEvent,
     onShouldDropItemsOnDeath: (handler) => { deathPolicy = handler; },
     onPlayerDeath: (handler) => { respawn = handler; },
   }, island);
@@ -500,25 +527,33 @@ test('Castle Wars deaths keep player and bot gear, drop the flag and remove only
   });
   t.mock.method(PluginManager, 'emitPlayerDeath', (event) => { respawn(event); return event.handled; });
   t.mock.method(PluginManager, 'emitPlayerDefeated', () => {});
-  t.mock.method(ItemOnGroundManager, 'registerLocation', () => {});
-  const drop = t.mock.method(PlayerDeathTask, 'dropItems', () => { throw new Error('A safe death must not process gear'); });
-  for (const bot of [false, true]) {
+  const bones = t.mock.method(ItemOnGroundManager, 'registerLocation', () => {});
+  const drop = t.mock.method(PlayerDeathTask, 'dropItems', () => []);
+  function victim(bot, area = island.gameArea) {
     const gear = new core.Item(core.ItemIdentifiers.DRAGON_WARHAMMER, 1);
     const player = {
       isPlayerBot: () => bot,
-      getArea: () => island.gameArea,
+      getArea: () => area,
       getLocation: () => new core.Location(2420, 3075),
       getCombat: () => ({ getRecentDamagerEntries: () => [], getKiller: () => null }),
       getInventory: () => ({ getItems: () => [gear] }),
       resetAttributes() {},
+      moveTo() {},
       smartMoves: (bounds) => { assert.equal(bounds, data.TEAM_DATA[TEAM.SARADOMIN].respawnBounds); },
     };
-    const task = new PlayerDeathTask(player);
-    task.ticks = 0;
-    task.execute();
-    assert.equal(task.loseItems, false);
-    assert.equal(player.getInventory().getItems()[0], gear);
+    return { player, gear };
   }
+  for (const area of [island.gameArea, ...Object.values(island.waitingAreas)]) {
+    for (const bot of [false, true]) {
+      const { player, gear } = victim(bot, area);
+      const task = new PlayerDeathTask(player);
+      task.ticks = 0;
+      task.execute();
+      assert.equal(task.loseItems, false);
+      assert.equal(player.getInventory().getItems()[0], gear);
+    }
+  }
+  assert.equal(bones.mock.callCount(), 0, 'Castle Wars players and bots leave no bones in the arena or waiting rooms');
   assert.equal(drop.mock.callCount(), 0);
   assert.deepEqual(calls, ['flag', data.DEATH_REMOVE_ITEM_IDS, 'flag', data.DEATH_REMOVE_ITEM_IDS]);
   for (const area of Object.values(island.waitingAreas)) {
@@ -529,6 +564,19 @@ test('Castle Wars deaths keep player and bot gear, drop the flag and remove only
   const outside = { player: { getArea: () => ({}) }, shouldDrop: null };
   deathPolicy(outside);
   assert.equal(outside.shouldDrop, null, 'ordinary deaths keep their existing rules');
+  for (const shouldDrop of [false, true]) {
+    t.mock.method(PluginManager, 'emitShouldDropItemsOnDeath', () => shouldDrop);
+    const { player } = victim(false, island.lobbyArea);
+    const task = new PlayerDeathTask(player);
+    task.ticks = 0;
+    task.execute();
+    const call = bones.mock.calls.at(-1);
+    assert.equal(call.arguments[0], player);
+    assert.equal(call.arguments[1].getId(), core.ItemIdentifiers.BONES);
+    assert.ok(call.arguments[2].equals(player.getLocation()));
+  }
+  assert.equal(bones.mock.callCount(), 2, 'outside bones still drop for both safe and dangerous deaths');
+  assert.equal(drop.mock.callCount(), 1, 'only the dangerous outside death processes gear');
 });
 
 test('the arena is multi-combat: several enemies may hit one player, the lobby and waiting rooms are not', (t) => {
@@ -652,5 +700,67 @@ test('ending and resetting a match clears both native Castle Wars team flags', t
     assert.equal(game.getTeamId(p), null);
     assert.equal(vars.get(144), 0);
     assert.equal(vars.get(154), 0);
+  }
+});
+
+test('practice and human matches retain normal Ice Barrage movement and overlay timing after the custom controls are removed', t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  const realApi = PluginManager.createApi('CastleWarsPracticeFreezeTest');
+  t.mock.method(registry, 'sendMultiChatboxPrompt', realApi.sendMultiChatboxPrompt);
+  t.mock.method(registry, 'onCustomEvent', realApi.onCustomEvent);
+  registry.emitCustomEvent = realApi.emitCustomEvent;
+  t.mock.method(World, 'getItems', () => []);
+  Settings(registry, game);
+  let syncTimer;
+  require('../plugins/interface/FreezeTimer.plugin').register({ core, onCombatHitResolved() {}, onPlayerLogin() {},
+    onPlayerProcess(handler) { syncTimer = handler; }, onPlayerLogout() {} });
+  t.after(() => { game.endGame(); game.gameArea.players.length = 0; delete registry.emitCustomEvent; });
+
+  const ticks = 32;
+  for (const practice of [true, false]) {
+    const caster = new Player(null), victim = new Player(null);
+    for (const p of [caster, victim]) {
+      t.mock.method(p, 'getSession', () => ({ sendClientPacket: () => true }));
+      t.mock.method(p, 'getArea', () => game.gameArea);
+      t.mock.method(p, 'smartMove', () => {});
+      t.mock.method(p, 'requestLogout', () => {});
+      p.setLocation(new core.Location(2426, 3082, 1));
+    }
+    const configs = new Map();
+    t.mock.method(victim.getPacketSender(), 'sendConfig', (id, value) => configs.set(id, value));
+    Settings.openSettings({ player: victim });
+    const pending = MultiChatboxPrompt.getPending(victim);
+    const index = pending.options.indexOf('More settings');
+    assert.notEqual(index, -1);
+    assert.equal(PluginManager.emitInterfaceActionClick({ player: victim,
+      buttonId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, groupId: 219, action: 1, slot: index + 1, handled: false }), true);
+    assert.deepEqual(MultiChatboxPrompt.getPending(victim).options,
+      ['Barricades per team: 10', 'Bot combat: Maxed (126)', 'Bracelet charges', 'Back']);
+    caster.setPlayerBot(practice);
+    caster.setAttribute(game.BOT_KEY, practice);
+    for (const [p, team] of [[caster, TEAM.SARADOMIN], [victim, TEAM.ZAMORAK]]) {
+      game.setTeamId(p, team);
+      game.waitingAreas[team].players.push(p);
+    }
+    game.beginStartCountdown();
+    submittedTasks.at(-1).execute();
+    assert.equal(game.getPhase(), game.PHASE.ACTIVE);
+    for (const area of Object.values(game.waitingAreas)) area.players.length = 0;
+    game.gameArea.players.push(caster, victim);
+    assert.equal(game.hasPracticeBots(), practice);
+
+    core.CombatSpells.ICE_BARRAGE.getSpell().spellEffectOnHitCalc(caster, victim, 10);
+    assert.equal(victim.getTimers().getTicks(core.TimerKey.FREEZE), ticks);
+    assert.equal(victim.getMovementQueue().getMobility().canMove(), false);
+    syncTimer({ player: victim });
+    assert.equal(configs.get(7998), Math.ceil(ticks * 0.6), 'the overlay receives the normal freeze duration');
+    for (let i = 0; i < ticks; i++) victim.getTimers().process();
+    assert.equal(victim.getTimers().has(core.TimerKey.FREEZE), false);
+    assert.equal(victim.getMovementQueue().getMobility().canMove(), true);
+    syncTimer({ player: victim });
+    assert.equal(configs.get(7998), 0, 'the overlay clears when movement unlocks');
+    game.endGame();
+    game.gameArea.players.length = 0;
   }
 });

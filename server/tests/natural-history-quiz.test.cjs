@@ -74,7 +74,7 @@ function makePlayer(attributes = {}) {
   const player = {
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => { attrs.set(key, value); },
-    getUsername: () => "quiz-test",
+    getUsername: () => "quiz-test", getDisplayName: () => "quiz-test",
     getAppearance: () => ({ isMale: () => true }),
     getPacketSender: () => sender,
     getDialogueManager: () => player.manager,

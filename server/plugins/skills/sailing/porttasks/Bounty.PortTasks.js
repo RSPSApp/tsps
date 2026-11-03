@@ -166,7 +166,7 @@ function collect(player, index, bounty) {
   player.setAttribute(common.SLOTS_ATTRIBUTE, held);
   player.getPacketSender().sendVarbit(COUNTER_VARBITS[index], remaining(held[index], bounty));
   const name = itemName(bounty.part);
-  player.sendMessage(`${player.getUsername()} has harvested 1x ${name}.`);
+  player.sendMessage(`${player.getDisplayName()} has harvested 1x ${name}.`);
   player.sendMessage(`<col=ef1020>Untradeable drop: ${name}</col>`);
   player.getPacketSender().sendSoundEffect(JINGLE, 1, JINGLE_DELAY, 10);
 }

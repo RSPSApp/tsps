@@ -3,12 +3,15 @@ package gateway.down
 import gateway.tsps.TspsPacket
 import gateway.tsps.TspsReader
 import gateway.tsps.TspsServerPacket
+import net.rsprot.protocol.game.incoming.clan.ClanChannelFullRequest
+import net.rsprot.protocol.game.incoming.clan.ClanSettingsFullRequest
 import net.rsprot.protocol.game.outgoing.clan.ClanChannelDelta
 import net.rsprot.protocol.game.outgoing.clan.ClanChannelFull
 import net.rsprot.protocol.game.outgoing.clan.ClanSettingsDelta
 import net.rsprot.protocol.game.outgoing.clan.ClanSettingsFull
 import net.rsprot.protocol.game.outgoing.clan.VarClan
 import net.rsprot.protocol.game.outgoing.clan.VarClanEnable
+import net.rsprot.protocol.message.IncomingGameMessage
 import net.rsprot.protocol.message.OutgoingGameMessage
 
 /**
@@ -21,13 +24,41 @@ import net.rsprot.protocol.message.OutgoingGameMessage
  * and delta 7868, then full 7869). tsps numbers a delta with the count after it, and the browser
  * ignores it. So the count is kept here, from the last full update, and tsps's is not passed on.
  * A delta with no full update before it is dropped, as the client would have nothing to apply it to.
+ *
+ * A client whose count is behind a delta's (one it missed) throws the delta away and asks for the
+ * full update again, and tsps has no handler for that. So each clan's state is kept here too, with
+ * every delta applied as the client applies it, and a request is answered with it.
  */
 class Clans(private val send: (OutgoingGameMessage) -> Unit) {
-    private class Channel(val key: Long, var updateNum: Long)
+    private class Channel(val full: ClanChannelFull.JoinUpdate, var updateNum: Long) {
+        val users = full.members.toMutableList()
+
+        fun current() = ClanChannelFull.JoinUpdate(full.clanHash, updateNum, full.clanName, true, full.kickRank, full.talkRank, users.toList())
+    }
+
+    private class Settings(val full: ClanSettingsFull.JoinUpdate, var updateNum: Int) {
+        val members = full.affinedMembers.toMutableList()
+        val values = LinkedHashMap<Int, Int>().apply { for (setting in full.settings) if (setting is ClanSettingsFull.IntClanSetting) put(setting.id, setting.value) }
+
+        fun current() =
+            ClanSettingsFull.JoinUpdate(
+                updateNum,
+                full.creationTime,
+                full.clanName,
+                full.allowUnaffined,
+                full.talkRank,
+                full.kickRank,
+                NO_SHARE_RANK,
+                NO_SHARE_RANK,
+                members.toList(),
+                full.bannedMembers,
+                values.map { (id, value) -> ClanSettingsFull.IntClanSetting(id, value) },
+            )
+    }
 
     /** By clan type: 0 the player's own clan, -1 the guest clan. */
     private val channels = HashMap<Int, Channel>()
-    private val settingsUpdateNums = HashMap<Int, Int>()
+    private val settings = HashMap<Int, Settings>()
     private var varsEnabled = false
 
     fun handle(packet: TspsPacket): Boolean {
@@ -42,10 +73,20 @@ class Clans(private val send: (OutgoingGameMessage) -> Unit) {
         }
     }
 
+    /** The client's request for a clan's full channel or settings; true when it was one. */
+    fun resync(message: IncomingGameMessage): Boolean {
+        when (message) {
+            is ClanChannelFullRequest -> channels[message.clanId]?.let { send(ClanChannelFull(message.clanId, it.current())) }
+            is ClanSettingsFullRequest -> settings[message.clanId]?.let { send(ClanSettingsFull(message.clanId, it.current())) }
+            else -> return false
+        }
+        return true
+    }
+
     private fun settingsFull(reader: TspsReader): Boolean {
         val clanType = reader.s8()
         if (reader.u8() == 0) {
-            settingsUpdateNums -= clanType
+            settings -= clanType
             send(ClanSettingsFull(clanType, ClanSettingsFull.LeaveUpdate))
             return true
         }
@@ -67,26 +108,10 @@ class Clans(private val send: (OutgoingGameMessage) -> Unit) {
                 ClanSettingsFull.AffinedClanMember(member, rank, extraInfo, reader.u16(), muted)
             }
         val banned = List(reader.u16()) { ClanSettingsFull.BannedClanMember(reader.string()) }
-        val settings = List(reader.u16()) { ClanSettingsFull.IntClanSetting(reader.u16(), reader.i32()) }
-        settingsUpdateNums[clanType] = updateNum
-        send(
-            ClanSettingsFull(
-                clanType,
-                ClanSettingsFull.JoinUpdate(
-                    updateNum,
-                    creationTime,
-                    name,
-                    allowGuests,
-                    talkRank,
-                    kickRank,
-                    NO_SHARE_RANK,
-                    NO_SHARE_RANK,
-                    members,
-                    banned,
-                    settings,
-                ),
-            ),
-        )
+        val values = List(reader.u16()) { ClanSettingsFull.IntClanSetting(reader.u16(), reader.i32()) }
+        val full = ClanSettingsFull.JoinUpdate(updateNum, creationTime, name, allowGuests, talkRank, kickRank, NO_SHARE_RANK, NO_SHARE_RANK, members, banned, values)
+        settings[clanType] = Settings(full, updateNum)
+        send(ClanSettingsFull(clanType, full))
         return true
     }
 
@@ -104,11 +129,38 @@ class Clans(private val send: (OutgoingGameMessage) -> Unit) {
                     else -> ClanSettingsDelta.SetIntSettingUpdate(reader.u16(), reader.i32())
                 }
             }
-        val updateNum = settingsUpdateNums[clanType] ?: return false
-        settingsUpdateNums[clanType] = updateNum + 1
-        send(ClanSettingsDelta(clanType, NO_OWNER_HASH, updateNum, updates))
+        val state = settings[clanType] ?: return false
+        send(ClanSettingsDelta(clanType, NO_OWNER_HASH, state.updateNum++, updates))
+        for (update in updates) state.applyDelta(update)
         return true
     }
+
+    /** [update] on the kept members and settings, as `ClanSettings` applies it in the client. */
+    private fun Settings.applyDelta(update: ClanSettingsDelta.Update) {
+        fun edit(index: Int, change: (ClanSettingsFull.AffinedClanMember) -> ClanSettingsFull.AffinedClanMember) {
+            if (index in members.indices) members[index] = change(members[index])
+        }
+        when (update) {
+            // The client makes the first member of an empty clan its owner (rank 126).
+            is ClanSettingsDelta.AddMemberV2Update ->
+                members += ClanSettingsFull.AffinedClanMember(update.name!!, if (members.isEmpty()) OWNER_RANK else 0, 0, update.joinRuneDay, false)
+            is ClanSettingsDelta.DeleteMemberUpdate -> if (update.index in members.indices) members.removeAt(update.index)
+            is ClanSettingsDelta.SetMemberRankUpdate -> edit(update.index) { it.with(rank = update.rank) }
+            is ClanSettingsDelta.SetMemberMutedUpdate -> edit(update.index) { it.with(muted = update.muted) }
+            is ClanSettingsDelta.SetMemberExtraInfoUpdate ->
+                edit(update.index) {
+                    val low = (1 shl update.startBit) - 1
+                    val high = if (update.endBit == 31) -1 else (1 shl (update.endBit + 1)) - 1
+                    val mask = high xor low
+                    it.with(extraInfo = (it.extraInfo and mask.inv()) or ((update.value shl update.startBit) and mask))
+                }
+            is ClanSettingsDelta.SetIntSettingUpdate -> values[update.setting] = update.value
+            else -> Unit
+        }
+    }
+
+    private fun ClanSettingsFull.AffinedClanMember.with(rank: Int = this.rank, muted: Boolean = this.muted, extraInfo: Int = this.extraInfo) =
+        ClanSettingsFull.AffinedClanMember(name!!, rank, extraInfo, joinRuneDay, muted)
 
     private fun channelFull(reader: TspsReader): Boolean {
         val clanType = reader.s8()
@@ -128,9 +180,10 @@ class Clans(private val send: (OutgoingGameMessage) -> Unit) {
                 val rank = reader.s8()
                 ClanChannelFull.ClanMember(user, rank, reader.u16())
             }
-        channels[clanType] = Channel(key, updateNum)
         // Live always sends true for the boolean the client discards.
-        send(ClanChannelFull(clanType, ClanChannelFull.JoinUpdate(key, updateNum, name, true, kickRank, talkRank, users)))
+        val full = ClanChannelFull.JoinUpdate(key, updateNum, name, true, kickRank, talkRank, users)
+        channels[clanType] = Channel(full, updateNum)
+        send(ClanChannelFull(clanType, full))
         return true
     }
 
@@ -149,8 +202,15 @@ class Clans(private val send: (OutgoingGameMessage) -> Unit) {
                     ClanChannelDelta.DeleteUserEvent(reader.u16())
                 }
             }
-        val channel = channels[clanType]?.takeIf { it.key == key } ?: return false
+        val channel = channels[clanType]?.takeIf { it.full.clanHash == key } ?: return false
         send(ClanChannelDelta(clanType, key, channel.updateNum++, events))
+        for (event in events) {
+            when (event) {
+                is ClanChannelDelta.AddUserEvent -> channel.users += ClanChannelFull.ClanMember(event.name, event.rank, event.world)
+                is ClanChannelDelta.DeleteUserEvent -> if (event.index in channel.users.indices) channel.users.removeAt(event.index)
+                else -> Unit
+            }
+        }
         return true
     }
 
@@ -168,6 +228,8 @@ class Clans(private val send: (OutgoingGameMessage) -> Unit) {
     private companion object {
         /** What live sends for loot and coin share, which tsps doesn't have (rsprox 763, 3886). */
         const val NO_SHARE_RANK = 0
+
+        const val OWNER_RANK = 126
 
         /** Live's delta owner when members go by display name (rsprox 3886). */
         const val NO_OWNER_HASH = 0L

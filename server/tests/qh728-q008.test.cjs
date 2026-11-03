@@ -204,7 +204,7 @@ function player(woodcutting = 99) {
     getLocation: () => location,
     moveTo: (value) => { location = value; },
     sendMessage: (text) => messages.push(text),
-    getUsername: () => 'Qh728Bone', getIndex: () => 1, isPlayerBot: () => false,
+    getUsername: () => 'Qh728Bone', getDisplayName: () => 'Qh728Bone', getIndex: () => 1, isPlayerBot: () => false,
     isRegistered: () => true, isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p,
     getAppearance: () => ({ isMale: () => true }),
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; } }),

@@ -39,10 +39,10 @@ const PROJECTILE = { DELAY: 56, LENGTH: 16, PER_TILE: 10, START_HEIGHT: 62, END_
 const MAGIC_ATTACK = 3; // BonusManager.ATTACK_MAGIC
 const MAGIC_DAMAGE = 12; // BonusManager.MAGIC_STRENGTH among the "other" bonuses
 
+const { definePoweredStaff } = require("./PoweredStaff");
+
 let api = null;
-let ShadowCombatMethod = null;
-/** Each caster's built-in spell: its max hit reads their Magic level. */
-const spells = new WeakMap();
+let staff = null;
 
 function core() {
   return api.core;
@@ -56,18 +56,12 @@ function plural(amount, word) {
   return `${amount.toLocaleString()} ${word}${amount === 1 ? "" : "s"}`;
 }
 
-function weaponOf(player) {
-  return player.getEquipment().getItems()[core().Equipment.WEAPON_SLOT] ?? null;
-}
-
 function wieldsShadow(player, chargedOnly = false) {
-  const id = weaponOf(player)?.getId?.();
-  const I = ids();
-  return id === I.TUMEKENS_SHADOW || (!chargedOnly && id === I.TUMEKENS_SHADOW_UNCHARGED_);
+  return staff.wields(player, chargedOnly);
 }
 
 function chargesOf(item) {
-  return Math.max(0, Number(item?.getMetaValue?.(CHARGES_KEY)) || 0);
+  return staff.chargesOf(item);
 }
 
 function inTombs(player) {
@@ -82,13 +76,8 @@ function travelCycles(from, to) {
   return PROJECTILE.DELAY + PROJECTILE.LENGTH + from.getLocation().getDistance(to.getLocation()) * PROJECTILE.PER_TILE;
 }
 
-function spellFor(player) {
-  let spell = spells.get(player);
-  if (spell) return spell;
-  const { CombatNormalSpell, Animation, Graphic, GraphicHeight, Projectile, Skill } = core();
-  spell = new CombatNormalSpell({
-    spellId: () => ids().TUMEKENS_SHADOW,
-    maximumHit: () => Math.floor(player.getSkillManager().getCurrentLevel(Skill.MAGIC) / 3) + 1,
+function look({ Animation, Graphic, GraphicHeight, Projectile }) {
+  return {
     castAnimation: () => new Animation(ANIMATION_CAST),
     startGraphic: () => new Graphic(GRAPHIC.CASTING),
     castProjectile: (cast, castOn) => Projectile.createProjectile(cast, castOn, GRAPHIC.TRAVEL, PROJECTILE.DELAY,
@@ -96,93 +85,37 @@ function spellFor(player) {
       .withAngle(PROJECTILE.ANGLE).withProgress(PROJECTILE.PROGRESS),
     castSound: () => SOUND_CAST,
     endGraphic: () => new Graphic(GRAPHIC.IMPACT, GraphicHeight.HIGH),
-    baseExperience: () => 0,
-    levelRequired: () => 1,
-  });
-  spells.set(player, spell);
-  return spell;
+  };
 }
 
-/** Takes a charge; an emptied staff becomes the uncharged one. */
-function useCharge(player) {
-  const { Flag } = core();
-  const staff = weaponOf(player);
-  // Content may spare the charge (a league relic): the same question every powered staff asks.
-  const consume = { player, itemId: staff.getId(), skip: false };
-  api.emitCustomEvent("combat:consume-charge", consume);
-  if (consume.skip) return;
-  const left = chargesOf(staff) - 1;
-  staff.setMetaValue(CHARGES_KEY, Math.max(0, left));
-  if (left > 0) return;
-  staff.setId(ids().TUMEKENS_SHADOW_UNCHARGED_);
-  player.getEquipment().refreshItems();
-  player.getUpdateFlag().flag(Flag.APPEARANCE);
+/** Not against players; the passive depends on being in the tombs, so it is refreshed for the cast. */
+function canAttack(player, target) {
+  if (target?.isPlayer?.()) {
+    player.sendMessage("You can't use Tumeken's shadow against other players.");
+    return false;
+  }
   api.getBonusManager().update(player);
-  player.sendMessage("Your Tumeken's shadow has run out of charges.");
+  return true;
 }
 
-function shadowMethod() {
-  if (ShadowCombatMethod) return ShadowCombatMethod;
-  const { MagicCombatMethod, PendingHit } = core();
-
-  ShadowCombatMethod = new (class extends MagicCombatMethod {
-    canAttack(character, target) {
-      const player = character.getAsPlayer();
-      if (target?.isPlayer?.()) {
-        player.sendMessage("You can't use Tumeken's shadow against other players.");
-        player.getCombat().reset();
-        return false;
-      }
-      if (!wieldsShadow(player, true) || chargesOf(weaponOf(player)) <= 0) {
-        player.sendMessage("Tumeken's shadow has no charges! You need to charge it with soul runes and chaos runes.");
-        player.getCombat().reset();
-        return false;
-      }
-      // Its built-in spell is the only one it casts, whatever is selected or autocast.
-      player.getCombat().setCastSpell(spellFor(player));
-      // The passive's multiplier depends on being in the tombs; refresh it for this cast.
-      api.getBonusManager().update(player);
-      useCharge(player);
-      return true;
-    }
-
-    canPursue(character) {
-      const player = character.getAsPlayer();
-      return wieldsShadow(player, true) && chargesOf(weaponOf(player)) > 0;
-    }
-
-    hits(character, target) {
-      const spell = spellFor(character.getAsPlayer());
-      // The hit lands as the slow projectile arrives.
-      const delay = Math.max(1, Math.floor(travelCycles(character, target) / 30));
-      const hit = new PendingHit(character, target, this, delay);
-      spell.onHitCalc(hit);
-      return [hit];
-    }
-
-    attackSpeed() {
-      return ATTACK_SPEED;
-    }
-
-    attackDistance(character) {
-      const { FightStyle } = core();
-      // Longrange is the powered staff's defensive style.
-      return ATTACK_RANGE + (character.getFightType?.()?.getStyle?.() === FightStyle.DEFENSIVE ? LONGRANGE_EXTRA : 0);
-    }
-
-    /** Keeps attacking: the staff casts on its own, unlike a single manual cast. */
-    finished(character) {
-      const combat = character.getCombat();
-      combat.setPreviousCast(spellFor(character.getAsPlayer()));
-      combat.setCastSpell(null);
-    }
-  })();
-  return ShadowCombatMethod;
-}
-
-function resolveShadow(attacker) {
-  if (!attacker?.isPlayer?.()) return null;
-  return wieldsShadow(attacker.getAsPlayer()) ? shadowMethod() : null;
+function defineShadow() {
+  const I = ids();
+  return definePoweredStaff(api, {
+    name: "Tumeken's shadow",
+    chargesKey: CHARGES_KEY,
+    maxCharges: MAX_CHARGES,
+    pairs: [[I.TUMEKENS_SHADOW, I.TUMEKENS_SHADOW_UNCHARGED_]],
+    maxHit: (player) => Math.floor(player.getSkillManager().getCurrentLevel(core().Skill.MAGIC) / 3) + 1,
+    attackSpeed: ATTACK_SPEED,
+    range: ATTACK_RANGE,
+    spell: look,
+    // The hit lands as the slow projectile arrives.
+    hitDelay: (attacker, target) => Math.max(1, Math.floor(travelCycles(attacker, target) / 30)),
+    canAttack,
+    emptied: (player) => api.getBonusManager().update(player),
+    noChargesMessage: "Tumeken's shadow has no charges! You need to charge it with soul runes and chaos runes.",
+    ranOutMessage: "Your Tumeken's shadow has run out of charges.",
+  });
 }
 
 /** The passive: worn magic attack and damage x3 (x4 in the tombs), damage capped at 100%. */
@@ -196,9 +129,7 @@ function shadowBonuses({ player, bonuses }) {
 // ------------------------------------------------------------------ charges
 
 function setCharges(player, item, charges) {
-  const I = ids();
-  item.setMetaValue(CHARGES_KEY, charges);
-  item.setId(charges > 0 ? I.TUMEKENS_SHADOW : I.TUMEKENS_SHADOW_UNCHARGED_);
+  staff.setCharges(item, charges);
   player.getInventory().refreshItems();
 }
 
@@ -207,10 +138,10 @@ function chargeShadow(event) {
   const { player } = event;
   const I = ids();
   const shadowIds = [I.TUMEKENS_SHADOW, I.TUMEKENS_SHADOW_UNCHARGED_];
-  const staff = shadowIds.includes(event.usedItemId) ? event.usedItem : event.usedWithItem;
-  if (!staff) return false;
+  const shadow = shadowIds.includes(event.usedItemId) ? event.usedItem : event.usedWithItem;
+  if (!shadow) return false;
   const inventory = player.getInventory();
-  const current = chargesOf(staff);
+  const current = chargesOf(shadow);
   if (current >= MAX_CHARGES) {
     player.sendMessage("Your Tumeken's shadow is already fully charged.");
     return true;
@@ -226,7 +157,7 @@ function chargeShadow(event) {
   }
   inventory.deleteNumber(I.SOUL_RUNE, affordable * SOULS_PER_CHARGE);
   inventory.deleteNumber(I.CHAOS_RUNE, affordable * CHAOS_PER_CHARGE);
-  setCharges(player, staff, current + affordable);
+  setCharges(player, shadow, current + affordable);
   player.sendMessage(current === 0
     ? `You apply ${plural(affordable, "charge")} to your Tumeken's shadow.`
     : `You apply an additional ${plural(affordable, "charge")} to your Tumeken's shadow. It now has ${plural(current + affordable, "charge")} in total.`);
@@ -268,7 +199,8 @@ module.exports = {
   members: true,
   register(pluginApi) {
     api = pluginApi;
-    pluginApi.registerCombatMethodResolver({ resolve: resolveShadow });
+    staff = defineShadow();
+    pluginApi.registerCombatMethodResolver(staff.resolver);
     pluginApi.registerBonusProvider({ apply: shadowBonuses });
     for (const rune of ["Soul rune", "Chaos rune"]) {
       pluginApi.onItemOnItem(rune, "Tumeken's shadow", chargeShadow);

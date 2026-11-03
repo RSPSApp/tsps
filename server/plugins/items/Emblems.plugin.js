@@ -86,7 +86,7 @@ module.exports = {
       event.killer
         ?.getPacketSender?.()
         ?.sendMessage?.(
-          `@red@${event.player?.getUsername?.() ?? "A player"} dropped a ${droppedName}!`
+          `@red@${event.player?.getDisplayName?.() ?? "A player"} dropped a ${droppedName}!`
         );
     });
 

@@ -14,6 +14,8 @@ The first dig summons gardener 3651 at 2997,3382. Digging while he still threate
 
 Captured sailing (rsprox captures 1434 and 1653, Seaman Lorris, Captain Tobias and the Customs officer) charges 30 coins with "You pay 30 coins and board the ship." On the same tick the player is put on the ship at sea (a one-chunk instance of map chunk 3064,3208 plane 1), song 147 and jingle 172 play, `ship_journey` (299) opens with script 1131 (route 4 to Karamja, 5 to Port Sarim), and the side tabs close (combat to magic, logout to music). Nine ticks later the tabs come back, 299 closes, the player stands on the destination ship's deck, 2956,3143,1 (Musa Point) or 3032,3217,1 (Port Sarim), and a message box says "The ship arrives at Karamja." / "The ship arrives at Port Sarim."; the gangplank leads ashore. Logging out at sea lands the player on that deck. Repeat travel during the voyage cannot charge twice. The Pandemonium trips have no capture and still move the player after five ticks. Carrying rum through the customs travel option goes through the confiscation conversation.
 
+Recordings 4287 (rev 239, main game) and 465 (rev 233) cover the plantation employment and apron checks. Packing one banana is a message box ("You pack a banana into the crate."), not game chat, with animation 832 and sound 2739; filling the crate to capacity says "You fill the crate with bananas." while a partial fill says "You pack all your bananas into the crate."; an empty crate reads "The crate is completely empty."; and Luthas pays with "Luthas hands you 30 coins." Using bananas, Fill or rum on the crate before asking Luthas for employment gives "Why would I want to do that?". The pack, Fill and stash actions are therefore gated on Luthas's employment flag. The apron is picked up from the shop's apron spawn and worn; entering the stock room without it plays Wydin's "Can you put your white apron on before going in there, please?" and does not open the door. The customs officer's `[Charm]` options are now hidden unless a Ring of Charos(a) is worn (the unactivated ring does not count), and the free "You board the ship." branch uses the existing zero-fare action.
+
 ## Prince Ali Rescue
 
 Varp 273 follows 10→20→30→31→40→50→100→110. Historical saved internal 21/22 key states still report wire 20. The modern key route uses key print 2423 on a furnace, asks for confirmation, consumes a bronze bar and the print, and grants bronze key 2418 plus 2 Crafting XP after one tick. Leela accepts a fully prepared player at 20 without requiring the historical Osman key route.
@@ -35,6 +37,14 @@ The capture sends cluequest 8063 through 0→1 on accepting,2 on Veos's scroll l
 Scrolls open native clue-text 203:2 and map 267. Digging swaps the current clue and presents its native item box, including the casket's whisper and subsequent player dialogue. The recording successfully digs adjacent to the published pins at 3230,3209;3203,3212;3109,3264;3078,3259. The dig hook runs before generic spade handling. Canonical Veos parents 8632 and 1063 use visibility varbits 12151 and 12148; no permanent owner copies are spawned. From *A Kingdom Divided* stage 12 (`akd` 12296), when Cabin Boy Herbert takes over, 12148 is 0 and the Port Sarim Veos is gone, as captured at `akd` 150.
 
 The orb uses Chebyshev distance, previous-distance 8064, previous-coordinate 3697 and helper script 6473. Recorded readings reproduce cold 95, warm 86/76/73/61, hot 47/35/28 and very hot 22, including warmer/colder comparisons. Casket handover precedes completion, and the final Veos dialogue waits until the player closes the completion scroll; the reward is 200 coins, lamp 23072, beginner box 24361 and 1 QP, with captured reward flags and jingle 154. The lamp uses the shared native skill picker for 300 XP and records its consumed reward flag.
+
+Login after completion restores 8065=1 alongside 8066 and 8258. The bootstrap re-sends
+`cluequest` 8063 as value 8 and clears the sibling reward bits in the same varp, so restoring
+only the lamp and clue-box flags left the coin reward unset; a completed account now logs in
+with the same three captured reward flags it had at the hand-in. Post-quest Veos also still
+offers `Can you take me somewhere?` and travels to Port Piscarilius (setting
+`zeah_playerhasvisited`, 4897, to 1); the earlier report that Kourend access stayed
+unavailable after completion did not reproduce.
 
 ## Verification and limits
 

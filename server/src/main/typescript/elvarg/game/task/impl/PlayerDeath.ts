@@ -66,12 +66,15 @@ export class PlayerDeathTask extends Task {
                         PluginManager.emitShouldDropItemsOnDeath(this.player, this.killer ?? null);
                     this.loseItems = pluginShouldDropItems ?? true;
                     const deathPosition = this.player.getLocation();
-                    // Always drop player bones on death, independent of item-drop policy.
-                    ItemOnGroundManager.registerLocation(
-                        this.killer ? this.killer : this.player,
-                        new Item(ItemIdentifiers.BONES),
-                        deathPosition
-                    );
+                    const bones = { player: this.player, killer: this.killer ?? null, location: deathPosition, allow: true };
+                    PluginManager.emitCustomEvent("player:death-bones", bones);
+                    if (bones.allow) {
+                        ItemOnGroundManager.registerLocation(
+                            this.killer ? this.killer : this.player,
+                            new Item(ItemIdentifiers.BONES),
+                            deathPosition
+                        );
+                    }
                     if (this.loseItems) {
                         this.itemsToKeep = PlayerDeathTask.dropItems(this.player, this.killer, deathPosition);
                     }
@@ -140,6 +143,7 @@ export class PlayerDeathTask extends Task {
 
                     // Perform death animation..
                     this.player.performAnimation(new Animation(836));
+                    PluginManager.emitCustomEvent("player:dying", { player: this.player, killer: this.killer ?? null });
 
                     // Retribution hits our killer, unless the killing blow was rebounded
                     // damage - recoil, vengeance or another Retribution (Wiki: Retribution).
@@ -245,7 +249,7 @@ export class PlayerDeathTask extends Task {
 
         // Handle defeat..
         if (killer && !dropped && !pluginHandledDrop) {
-            killer.sendMessage(`${player.getUsername()} had no valuable items to be dropped.`);
+            killer.sendMessage(`${player.getDisplayName()} had no valuable items to be dropped.`);
         }
 
         // Reset items

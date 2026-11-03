@@ -108,3 +108,37 @@ one space short and opening at exactly enough; a box closed by the next click; E
 the limit landing on the ground; three clicks on one pack in a tick giving one pack's contents; five
 packs queued in a tick; packs refusing Wear and still dropping; rewards surviving a relog; Tempoross's
 casket keeping its own handler. Sounds and the real client's rendering weren't checked live.
+
+# View, Look-in and Check audit (issue #1971)
+
+Issue 1971 reported the Forestry kit's View doing nothing. The rev 241 cache has 290 distinct items
+(Barrows degradation copies counted once) with an inventory View, Open, Check, Look-in or similar
+option and no handler registered by item name. Each was given to an account on a live server, its
+option clicked through the agent MCP, and the next two ticks read for a message, an interface or
+a changed inventory. 315 options were clicked.
+
+## Fixed
+
+- **Forestry kit** (View, Fill) and the forestry basket's Forestry kit sub-options and Dismantle:
+  `ForestryKit.StorageItems.js`, see `docs/storage-items.md`.
+
+## Answered already
+
+Containers and charge checks that responded: the herb sack and seed box, the herb box and seed
+pack, clue nests and geodes, the Ruined backpack, the bottomless compost bucket, the crystal and
+infernal tools, the toxic blowpipe and staff, the Pharaoh's sceptre, Gricoller's can, the loot key
+and the charged rings and amulets.
+
+## Still silent, and a player can get them
+
+Shop stock, an NPC drop, a clue reward or a plugin hands these out. None is a container like the kit:
+
+| Kind | Items |
+| --- | --- |
+| Charge or status Check, no charge system here | Abyssal tentacle, Amulet of the Damned, Binding necklace, Blade of Saeldor, Bow of Faerdhinen, Craw's bow, Crystal shield, Echo boots, Expeditious bracelet, Gloves of silence, Gnomish firelighter, Hat of the Eye, Iban's staff (u), Infernal pickaxe, Merfolk trident, Pendant of Ates (inert), Ring of shadows, Santa's list, Slayer's staff (e), Soul bearer, Thammaron's sceptre, Treat cauldron, Trident of the Seas (full), Webweaver bow, Xeric's talisman (inert), the Barrows equipment, slayer helmets |
+| Wiki gives the behaviour | Jar of Darkness View: "You view the darkness." with the screen going black for a moment (Wiki trivia; not captured) |
+| Wiki gives no behaviour | Tea flask Look-in (holds 5 cups), Dizana's max cape Open (most likely the blessed quiver's ammo interface) |
+| Listed by #1765 | Jar of Swamp, Heavy casket, Master scroll book |
+
+The other 214 silent items are ones nothing in the game gives out yet (league-only rewards,
+the meat and fur pouches, the reagent and gem pouches, the Huntsman's kit, quest props).

@@ -58,6 +58,23 @@ const NETWORK_PERF_LOG_INTERVAL_MS = 10000;
 const WS_CLOSE_BACKPRESSURE = 1013;
 const WS_CLOSE_SEND_FAILURE = 1011;
 
+/**
+ * The map rebuild a changed scene needs: `region` draws a templated instance from its palette,
+ * `normal` the cache map. A plain private area is drawn from the cache map without one, unless
+ * the client is leaving a templated instance: it stays in instance mode until a `normal`
+ * rebuild arrives, and would otherwise show nothing at the new tile.
+ */
+export function sceneRebuildFor(
+  area: PrivateArea | null,
+  replayedArea: PrivateArea | null,
+  sceneChanged: boolean,
+): "region" | "normal" | null {
+  if (!sceneChanged) return null;
+  if (area instanceof TemplatedInstanceArea) return "region";
+  if (area == null || replayedArea instanceof TemplatedInstanceArea) return "normal";
+  return null;
+}
+
 export class PlayerSession {
   /**
    * The interacting-entity field (24 bits in npc/player info) marks a player by adding this to
@@ -310,15 +327,15 @@ export class PlayerSession {
       || this.replayedSceneLevel !== sceneTile.level
       || this.replayedPrivateArea !== privateArea
       || this.replayedSceneVersion !== sceneVersion;
-    const rebuildNeeded = (privateArea == null || templated != null) && (
+    const rebuild = sceneRebuildFor(privateArea, this.replayedPrivateArea, (
       !this.hasReplayedScene
       || this.replayedSceneBaseX !== this.sceneBaseX
       || this.replayedSceneBaseY !== this.sceneBaseY
       || this.replayedPrivateArea !== privateArea
       || this.replayedSceneVersion !== sceneVersion
-    );
-    if (rebuildNeeded && !(templated
-      ? this.sendClientPacket(templated.encodeScene(sceneTile.x >> 3, sceneTile.y >> 3))
+    ));
+    if (rebuild && !(rebuild === "region"
+      ? this.sendClientPacket(templated!.encodeScene(sceneTile.x >> 3, sceneTile.y >> 3))
       : this.sendRebuildNormal(sceneTile.x >> 3, sceneTile.y >> 3, this.replayedPrivateArea != null))) {
       return;
     }
@@ -476,7 +493,9 @@ export class PlayerSession {
 
   private createPlayerView(player: Player, forceAppearance = false): PlayerView {
     const location = player.getLocation();
-    const dirty = forceAppearance || player.getUpdateFlag().flagged(Flag.APPEARANCE);
+    // Equipment may have changed while this player was outside the observer's view.
+    const dirty = forceAppearance || !this.playerSyncState?.lastTiles.has(player.getIndex())
+      || player.getUpdateFlag().flagged(Flag.APPEARANCE);
     const cached = this.appearanceCache.get(player.getIndex());
     let payload = cached?.player === player && !dirty ? cached.payload : undefined;
     if (!payload) {
@@ -513,6 +532,7 @@ export class PlayerSession {
       payload = encodePlayerAppearance(
         {
           gender: look[Appearance.GENDER] ?? 0,
+          pronouns: player.getAppearance().getPronouns(),
           colors: [
             look[Appearance.HAIR_COLOUR],
             look[Appearance.TORSO_COLOUR],
@@ -537,7 +557,7 @@ export class PlayerSession {
             prayer: player.getAppearance().getHeadHint(),
           },
         },
-        player.getUsername(),
+        player.getDisplayName(),
         player.getSkillManager().getCombatLevel(),
         player.getSkillManager().getTotalLevel(),
         animations
@@ -582,8 +602,10 @@ export class PlayerSession {
         ? {
             startDeltaX: forceMovement.getStart().getX() - location.getX(),
             startDeltaY: forceMovement.getStart().getY() - location.getY(),
-            endDeltaX: forceMovement.getEnd().getX(),
-            endDeltaY: forceMovement.getEnd().getY(),
+            // The end tile from the current one, as the start is: a slide whose player is already
+            // on its end tile (moved there the same tick, as live jumps a stepping stone) ends at 0.
+            endDeltaX: forceMovement.getStart().getX() + forceMovement.getEnd().getX() - location.getX(),
+            endDeltaY: forceMovement.getStart().getY() + forceMovement.getEnd().getY() - location.getY(),
             startCycleOffset: forceMovement.getSpeed(),
             endCycleOffset: forceMovement.getReverseSpeed(),
             direction: [1024, 1536, 0, 512][forceMovement.getDirection()] ?? forceMovement.getDirection(),
@@ -637,7 +659,7 @@ export class PlayerSession {
       hits: hits.length > 0
         ? hits.map((hit: any) => this.hitView(hit, mine))
         : undefined,
-      health: hits.length > 0
+      health: hits.length > 0 && !actor.isHealthBarHidden?.()
         ? actor.getDisplayedHealth?.()
           ?? { current: actor.getHitpoints(), max: maxHitpoints, bar: actor.getHealthBar?.() ?? undefined }
         : undefined,

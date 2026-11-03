@@ -1,5 +1,7 @@
+import * as pako from "pako";
+
 import type { ObjectSpawn } from "./hostProtocol/objectSpawnsMessage";
-import type { EditModeEdit } from "./types";
+import type { EditModeEdit, EditModeRegionOverlays } from "./types";
 
 const MAP_SIZE = 64;
 const PLANE_COUNT = 4;
@@ -283,16 +285,42 @@ export function buildRegionPack(
     return pack;
 }
 
-/** MapRegionReplacementManager.MAX_PACKET_PAYLOAD: the server refuses a bigger region and keeps the cache's. */
+/** MapRegionReplacementManager.MAX_PACKET_PAYLOAD: the payload ceiling of one region packet. */
 export const MAX_REGION_PACK_PAYLOAD = 0xfffd;
 
-/** Regions the server would refuse to load, with the size it would measure them at. */
+/** regionId(2) + flags(1) + rawTerrainLength(4) + rawObjectLength(4), before the deflated data. */
+const COMPRESSED_REGION_PAYLOAD_HEADER = 11;
+
+/**
+ * The bytes the server puts on the wire for a region. Raw terrain + objects are used while
+ * they fit the short packet; denser regions are deflated by encodeRegionReplacement, which
+ * is what makes Falador's 82 KB cache regions editable. pako tracks zlib closely (a few
+ * hundred bytes either way on 80 KB), and map data deflates by roughly 6x, so the check sits
+ * far from the edge in both directions.
+ */
+export function regionReplacementPayloadSize(
+    terrain: Uint8Array,
+    objects: Uint8Array,
+): number {
+    if (terrain.length + objects.length > 16 * 1024 * 1024) {
+        throw new RangeError("Region replacement exceeds the 16 MiB raw limit");
+    }
+    const raw = 7 + terrain.length + objects.length;
+    if (raw <= MAX_REGION_PACK_PAYLOAD) return raw;
+    const combined = new Uint8Array(terrain.length + objects.length);
+    combined.set(terrain, 0);
+    combined.set(objects, terrain.length);
+    const deflated = pako.deflate(combined, { level: 9 });
+    return COMPRESSED_REGION_PAYLOAD_HEADER + deflated.length;
+}
+
+/** Regions the server could not stream, with the size it would measure them at. */
 export function oversizedRegionPacks(
     packs: readonly { regionId: number; data: Uint8Array }[],
 ): { regionId: number; payload: number }[] {
     return packs.flatMap(({ regionId, data }) => {
         const { objectData, terrainData } = parseRegionPack(data);
-        const payload = 7 + terrainData.length + objectData.length;
+        const payload = regionReplacementPayloadSize(terrainData, objectData);
         return payload > MAX_REGION_PACK_PAYLOAD ? [{ regionId, payload }] : [];
     });
 }
@@ -374,6 +402,40 @@ export function buildAreaClipboard(
     return JSON.stringify({ format: "elvarg-map-area", version: 1, origin: { x: bounds.minX, y: bounds.minY },
         width: bounds.maxX - bounds.minX + 1, height: bounds.maxY - bounds.minY + 1,
         planes: PLANE_COUNT, wideTerrain, tiles, objects });
+}
+
+/** Decodes each tile's overlay, shape and rotation from region terrain data, as the scene builder reads them. */
+export function readRegionOverlays(data: Uint8Array, wideTerrain: boolean): EditModeRegionOverlays {
+    const tileCount = PLANE_COUNT * MAP_SIZE * MAP_SIZE;
+    const result = {
+        overlays: new Uint16Array(tileCount),
+        shapes: new Uint8Array(tileCount),
+        rotations: new Uint8Array(tileCount),
+    };
+    const width = wideTerrain ? 2 : 1;
+    let offset = 0;
+    const read = (bytes = width): number => {
+        if (offset + bytes > data.length) throw new Error("Truncated region terrain data");
+        const value = bytes === 2 ? (data[offset] << 8) | data[offset + 1] : data[offset];
+        offset += bytes;
+        return value;
+    };
+    for (let index = 0; index < tileCount; index++) {
+        while (true) {
+            const opcode = read();
+            if (opcode === 0) break;
+            if (opcode === 1) {
+                read(1);
+                break;
+            }
+            if (opcode <= 49) {
+                result.overlays[index] = read();
+                result.shapes[index] = (opcode - 2) >> 2;
+                result.rotations[index] = (opcode - 2) & 3;
+            }
+        }
+    }
+    return result;
 }
 
 /** Compare complete previews to their original map, preserving ids needed for collision removal. */

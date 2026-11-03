@@ -176,6 +176,7 @@ function createPlayer({ base = 99, current = 1, inventory = [], equipment = [] }
     getCombat: () => ({ getPoisonImmunityTimer: () => poisonImmunity }),
     getSkillManager: () => ({
       getMaxLevel: () => base,
+      getRestingLevel: () => base,
       getCurrentLevel: (skill) => levels.get(skill),
       setCurrentLevels: (skill, level) => levels.set(skill, level),
       increaseCurrentLevel: (skill, amount, max) => levels.set(skill, Math.min(max, levels.get(skill) + amount)),

@@ -318,8 +318,14 @@ export class ProjectileManager implements IProjectileManager {
         const currentCycleRaw = this.getCurrentCycleFloat();
         const targetTick = Math.floor(currentCycleRaw);
 
-        // Initialize Sim Cycle if first run
-        if (!Number.isFinite(this.simCycle) || !Number.isFinite(this.lastAdvanceTime)) {
+        // Initialize Sim Cycle if first run, and again if the client clock went back (it restarts
+        // on a relog without a page load): ticks are only solved past simCycle, so a stale one
+        // left every projectile hanging over its caster until the new clock caught up (#1862).
+        if (
+            !Number.isFinite(this.simCycle) ||
+            !Number.isFinite(this.lastAdvanceTime) ||
+            currentCycleRaw < this.lastAdvanceTime
+        ) {
             this.simCycle = targetTick;
             this.lastAdvanceTime = currentCycleRaw;
             return;
@@ -327,9 +333,12 @@ export class ProjectileManager implements IProjectileManager {
 
         // We need to solve each integer boundary before advancing through that cycle,
         // mirroring OSRS order: setDestination(cycle) then advance(graphicsCycle).
+        // A slow frame (a new area's maps loading) moves the client clock on by up to its
+        // 2-second backlog at once, so every one of those cycles is replayed: a projectile that
+        // skipped some fell behind its flight and was removed mid-air at its end cycle (#1862).
         let t = this.lastAdvanceTime;
         let boundariesProcessed = 0;
-        const MAX_BOUNDARIES_PER_UPDATE = 10;
+        const MAX_BOUNDARIES_PER_UPDATE = 100;
 
         while (t < currentCycleRaw && boundariesProcessed < MAX_BOUNDARIES_PER_UPDATE) {
             const nextBoundary = Math.min(Math.floor(t) + 1, currentCycleRaw);
@@ -351,12 +360,10 @@ export class ProjectileManager implements IProjectileManager {
         }
 
         // If we are still behind (tab background throttling), fast-forward the rest without
-        // discrete solves to avoid spiraling.
+        // discrete solves to avoid spiraling, but through all of it: dropping time leaves
+        // projectiles short of where their flight puts them.
         if (t < currentCycleRaw) {
-            const remaining = Math.min(1.5, currentCycleRaw - t);
-            if (remaining > 0) {
-                this.updateContinuousFrame(remaining, currentCycleRaw);
-            }
+            this.updateContinuousFrame(currentCycleRaw - t, currentCycleRaw);
         }
 
         this.lastAdvanceTime = currentCycleRaw;
@@ -485,6 +492,7 @@ export class ProjectileManager implements IProjectileManager {
         this.dynamicTargets.clear();
         this.dynamicSources.clear();
         this.simCycle = NaN;
+        this.lastAdvanceTime = NaN;
     }
 
     // =========================================================================

@@ -15,6 +15,14 @@ import type { ProjectileProfile } from "../../WeaponProfile";
 export class RangedCombatMethod extends CombatMethod {
     /** Bronze arrow; used when an npc has no projectile configured. */
     private static readonly DEFAULT_NPC_PROJECTILE = 10;
+    /**
+     * An NPC's shot flies like a bow's arrow (launched at 41, landing at 46 + 5 cycles a tile)
+     * and hits when it lands. It used a flat 40 -> 57 with a 1-tick hit, so the player was hit
+     * before the arrow left and a long shot crossed its range in a third of a second (#1862).
+     */
+    private static readonly NPC_PROJECTILE_DELAY = 41;
+    private static readonly NPC_PROJECTILE_END_BASE = 46;
+    private static readonly NPC_PROJECTILE_CYCLES_PER_TILE = 5;
 
     type(): CombatType {
         return CombatType.RANGED;
@@ -27,8 +35,19 @@ export class RangedCombatMethod extends CombatMethod {
 
     hits(character: Mobile, target: Mobile): PendingHit[] {
         const distance = CombatPosition.distance(character, target);
-        const delays = character.isPlayer() ? WeaponProfiles.hitDelays(character.getAsPlayer(), distance) : [1];
+        const delays = character.isPlayer()
+            ? WeaponProfiles.hitDelays(character.getAsPlayer(), distance)
+            : [RangedCombatMethod.npcHitDelay(character, target)];
         return delays.map((delay) => new PendingHit(character, target, this, delay));
+    }
+
+    /** Ticks until an NPC's shot lands, so its hit shows when the arrow arrives. */
+    public static npcHitDelay(character: Mobile, target: Mobile): number {
+        return Projectile.arrivalTicks(character, target, RangedCombatMethod.NPC_PROJECTILE_END_BASE, RangedCombatMethod.NPC_PROJECTILE_CYCLES_PER_TILE);
+    }
+
+    private static npcProjectileEnd(character: Mobile, target: Mobile): number {
+        return Projectile.arrivalCycles(character, target, RangedCombatMethod.NPC_PROJECTILE_END_BASE, RangedCombatMethod.NPC_PROJECTILE_CYCLES_PER_TILE);
     }
 
     canAttack(character: Mobile, target: Mobile): boolean {
@@ -75,7 +94,8 @@ export class RangedCombatMethod extends CombatMethod {
             // at least visible.
             const configured = character.getAsNpc().getCurrentDefinition().getProjectileId();
             const projectileId = configured >= 0 ? configured : RangedCombatMethod.DEFAULT_NPC_PROJECTILE;
-            Projectile.createProjectile(character, target, projectileId, 40, 57, 43, 31).sendProjectile();
+            const end = RangedCombatMethod.npcProjectileEnd(character, target);
+            Projectile.createProjectile(character, target, projectileId, RangedCombatMethod.NPC_PROJECTILE_DELAY, end, 43, 31).sendProjectile();
             return;
         }
 

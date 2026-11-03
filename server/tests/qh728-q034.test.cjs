@@ -160,7 +160,7 @@ function setup({ boneVoyage = false } = {}) {
     performAnimation() {},
     getArea: () => null,
     sendMessage: (text) => messages.push(text),
-    getUsername: () => 'qh728-q034',
+    getUsername: () => 'qh728-q034', getDisplayName: () => 'qh728-q034',
     isRegistered: () => true,
     isPlayer: () => true,
     isPlayerBot: () => false,

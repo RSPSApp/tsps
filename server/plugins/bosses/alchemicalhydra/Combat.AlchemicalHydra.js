@@ -1,9 +1,9 @@
 /**
  * The Alchemical Hydra's combat method (Wiki: Alchemical Hydra/Strategies; stats from
  * monsters-complete): ranged and magic, switching every three basic attacks (every attack once
- * enraged), 35 at most and every 6 ticks, 55 and every 4 ticks enraged; the phase's special in
- * place of an attack when the count says so (Fight.AlchemicalHydra.js). Protection prayers block
- * its attacks entirely, as for any NPC.
+ * enraged), 35 at most and every 6 ticks, 55 and every 4 ticks enraged (52 while an incorrect
+ * vent has empowered it); the phase's special in place of an attack when the count says so
+ * (Fight.AlchemicalHydra.js). Protection prayers block its attacks entirely, as for any NPC.
  */
 const Common = require("./Common.AlchemicalHydra");
 
@@ -11,6 +11,19 @@ const Common = require("./Common.AlchemicalHydra");
 function hitDelay(style, distance) {
   if (style === "magic") return 1 + Math.floor((1 + distance) / 3);
   return 1 + Math.floor((3 + distance) / 6);
+}
+
+/** Cycles before the projectile shows. */
+const LAUNCH = 30;
+
+/**
+ * Where the projectile ends: on the hit's tick (30 cycles a tick), except that a 1-tick hit
+ * would end at its own launch (drawn for a cycle on the Hydra), so those fly 5 + 10 (magic) or
+ * 5 (ranged) a tile instead (#1862).
+ */
+function flightEnd(style, distance) {
+  const end = hitDelay(style, distance) * 30;
+  return end > LAUNCH + 1 ? end : LAUNCH + 5 + (style === "magic" ? 10 : 5) * distance;
 }
 
 function combatClass() {
@@ -21,7 +34,7 @@ function combatClass() {
     hits(character, target) {
       if (!character || !target || !this.style) return [];
       const fight = character.getAsNpc?.()?.__hydraFight;
-      const max = fight?.enraged ? combat.enragedMaxHit : combat.maxHit;
+      const max = fight?.maxHit?.() ?? combat.maxHit;
       const hit = new PendingHit(character, target, this, this.delay);
       hit.setTotalDamage(Math.min(max, hit.getTotalDamage()));
       return [hit];
@@ -50,9 +63,11 @@ function combatClass() {
       this.style = kind;
       npc.performAnimation(new Animation((kind === "magic" ? ids.seqs.magic : ids.seqs.ranged)[fight.phase]));
       const distance = Common.distanceToFootprint(target.getLocation(), npc);
-      this.delay = hitDelay(kind, distance);
+      const end = flightEnd(kind, distance);
+      // The hit lands with the projectile.
+      this.delay = Projectile.ticksToLand(end);
       const projectile = kind === "magic" ? ids.spotanims.magic : ids.spotanims.ranged;
-      new Projectile(Projectile.centreOf(npc), target.getLocation(), target, projectile, 30, this.delay * 30, 80, 31, npc.getPrivateArea?.() ?? null).sendProjectile();
+      new Projectile(Projectile.centreOf(npc), target.getLocation(), target, projectile, LAUNCH, end, 80, 31, npc.getPrivateArea?.() ?? null).sendProjectile();
     }
 
     attackDistance() {
@@ -74,4 +89,4 @@ function attach(api) {
   api.registerNpcCombatMethodProvider(Common.phaseForms(), combatClass(), { singleton: false });
 }
 
-module.exports = { attach, combatClass, hitDelay };
+module.exports = { attach, combatClass, hitDelay, flightEnd };

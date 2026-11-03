@@ -144,3 +144,34 @@ test('register wires the provider for 7806 as a per-npc instance plus the death 
   deathHandler({ npc: null });
   assert.deepEqual(said, ['Oh!']);
 });
+
+test('a ranged book flies 5 cycles a tile and its hit lands with it (#1862)', () => {
+  const { Projectile } = Core;
+  for (const tiles of [2, 5, 10]) {
+    const sent = [];
+    const core = {
+      ...Core,
+      Projectile: {
+        arrivalCycles: Projectile.arrivalCycles,
+        ticksToLand: Projectile.ticksToLand,
+        createProjectile: (...args) => { sent.push(args); return { sendProjectile: () => {} }; },
+      },
+      // Only the queued delay matters here, not the hit roll.
+      PendingHit: class { constructor(attacker, target, method, delay) { this.delay = delay; } getDelay() { return this.delay; } },
+    };
+    const Method = Plugin._test.combatClass(core);
+    const method = new Method();
+    const { character, attributes } = fakeSides(3683, 3706);
+    character.getSize = () => 1;
+    attributes.set('deranged-archaeologist:special-ready-cycle', Number.MAX_SAFE_INTEGER);
+    const target = { getLocation: () => new Location(3683 + tiles, 3706, 0), getSize: () => 1 };
+    method.start(character, target);
+    assert.equal(method.attack, Attack.RANGED);
+    const [, , id, delay, end] = sent[0];
+    assert.equal(id, 1259);
+    assert.equal(delay, 40);
+    assert.equal(end, 45 + 5 * tiles, `${tiles} tiles`);
+    const [hit] = method.hits(character, target);
+    assert.equal(hit.getDelay(), Projectile.ticksToLand(end), `${tiles} tiles`);
+  }
+});

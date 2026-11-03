@@ -16,6 +16,7 @@ import { MagicSpellbook } from "../../../../model/MagicSpellbook";
 import { Skill } from "../../../../model/Skill";
 import type { CombatSpell } from "../../magic/CombatSpell";
 import { Spell } from "../../magic/Spell";
+import { Autocasting } from "../../magic/Autocasting";
 
 
 export class MagicCombatMethod extends CombatMethod {
@@ -61,18 +62,19 @@ export class MagicCombatMethod extends CombatMethod {
         return CombatType.MAGIC;
     }
 
-    /** NPC casters keep their old fixed delay; their attacks are tuned around it. */
-    private static readonly NPC_HIT_DELAY = 3;
-
     /**
      * Wiki (Hit delay): a player's magic lands 1 + (1 + distance) / 3 ticks after the cast, the
      * distance measured edge to edge (to the target's nearest tile); barrage spells measure to
      * its south-west tile. A spell with a fixed delay of its own keeps it.
+     *
+     * An NPC's cast lands when its projectile does (the legacy magic shape, 46 + 10 cycles a
+     * tile). A fixed 3 ticks hit a player a tick before a spell from 10 tiles arrived, and a
+     * tick after one from the next tile had landed (#1862).
      */
     public static hitDelay(attacker: Mobile, target: Mobile, spell?: any): number {
         const own = spell?.hitDelay?.();
         if (typeof own === "number") return own;
-        if (!attacker.isPlayer()) return MagicCombatMethod.NPC_HIT_DELAY;
+        if (!attacker.isPlayer()) return Projectile.arrivalTicks(attacker, target, Projectile.LEGACY_MAGIC_END_BASE);
         const distance = MagicCombatMethod.isBarrage(spell)
             ? CombatPosition.distance(attacker, target)
             : MagicCombatMethod.edgeDistance(attacker, target);
@@ -98,7 +100,10 @@ export class MagicCombatMethod extends CombatMethod {
     public hits(character: Mobile, target: Mobile): PendingHit[] {
         let spell = character.getCombat().getSelectedSpell();
         const context = Spell.getCastContext(character, spell);
-        let hits: PendingHit[] = [new PendingHit(character, target, this, MagicCombatMethod.hitDelay(character, target, spell), true, context).setSpell(spell)];
+        // A spell cast is never a special attack: a special armed meanwhile (Soul Rend, Condemn)
+        // keeps its energy and must not lend the spell its accuracy or damage (ordinary).
+        let hits: PendingHit[] = [new PendingHit(character, target, this,
+            { delay: MagicCombatMethod.hitDelay(character, target, spell), handleAfterHitEffects: true, ordinary: true }, undefined, context).setSpell(spell)];
 
 
         if (!spell) {
@@ -134,7 +139,8 @@ export class MagicCombatMethod extends CombatMethod {
                 if (!CombatFactory.canAttackSecondaryTarget(character, target, next, spellRadius)) {
                     continue;
                 }
-                let pendingHit: PendingHit = new PendingHit(character, next, this, MagicCombatMethod.hitDelay(character, next, spell), false, context).setSpell(spell);
+                let pendingHit: PendingHit = new PendingHit(character, next, this,
+                    { delay: MagicCombatMethod.hitDelay(character, next, spell), handleAfterHitEffects: false, ordinary: true }, undefined, context).setSpell(spell);
                 multiCombatHits.push(pendingHit);
                 spell.onHitCalc(pendingHit);
             }
@@ -165,7 +171,7 @@ export class MagicCombatMethod extends CombatMethod {
         }
 
         // Set the current spell to the autocast spell if it's null.
-        if (character.getCombat().getCastSpell() == null) {
+        if (character.getCombat().getCastSpell() == null && Autocasting.isActive(character.getAsPlayer())) {
             character.getCombat().setCastSpell(character.getCombat().getAutocastSpell());
         }
 
@@ -256,7 +262,9 @@ export class MagicCombatMethod extends CombatMethod {
         // Update previousCastSpell so effects can be handled.
         const current = character.getCombat().getCastSpell();
         character.getCombat().setCastSpell(null);
-        if (character.getCombat().getAutocastSpell() === null) {
+        // A default spell kept without a staff isn't autocast: a hand cast still stops here,
+        // rather than falling back to melee and walking around a safespot to reach the target.
+        if (!Autocasting.isActive(character.getAsPlayer())) {
             // The same tick as the cast: keep its animation, which the reset would replace.
             character.getCombat().reset(false);
             // reset() clears the interaction; a resolved manual cast still faces its target.

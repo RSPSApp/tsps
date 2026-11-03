@@ -51,6 +51,13 @@ module.exports = function registerDwarfCannonQuest(api) {
   const CANNON_INTERFACE_GROUP = 409;
   const CANNON_INTERFACE_PARTS = new Map([[7, "safety"], [8, "spring"], [9, "gear"]]);
   const CANNON_TOOL_VARBITS = new Map([[1, 2235], [2, 2236], [3, 2237]]);
+  // IF1 409 has no CS1 comparisons: the server selects its cached tool models.
+  const CANNON_TOOL_MODELS = new Map([[1, [15328, 15326]], [2, [15330, 15329]], [3, [15332, 15331]]]);
+  const CANNON_MECHANISM_COMPONENT = (CANNON_INTERFACE_GROUP << 16) | 5;
+  const CANNON_IDLE_ANIMATION = 3196; // mcannon_interface_gun_idle
+  const CANNON_SPRING_ANIMATION = 3197; // mcannon_interface_gun_idle_with_spring
+  const CANNON_SAFETY_ANIMATION = 3199; // mcannon_interface_gun_safety_on_with_spring
+  const CANNON_SAFETY_WITHOUT_SPRING_ANIMATION = 3201; // mcannon_interface_gun_safety_on
   const CANNON_SAFETY_VARBIT = 2238;
   const CANNON_SPRING_VARBIT = 2239;
   const MUDPILE_OBJECT_ID = 13; // "Mud pile", Climb-over
@@ -116,6 +123,14 @@ module.exports = function registerDwarfCannonQuest(api) {
 
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.CRAFTING, 750);
+  }
+
+  function remindAboutLollk({ player, npc, npcId }) {
+    if (npcId !== NpcIdentifiers.CAPTAIN_LAWGOF || quest.getStage(player) !== STAGE_FIND_LOLLK) return false;
+    // Reuse the rescue instructions after the hand-in, without handing the remains in again.
+    return startTranscript(api, player, npcId, PAGE,
+      "finding-the-remains-talking-to-captain-lawgof-after-getting-the-remains",
+      (steps) => steps.slice(steps.findIndex((step) => step.id === "KcffSR") + 1), npc);
   }
 
   function selectVariant({ npcId, player }) {
@@ -315,25 +330,37 @@ module.exports = function registerDwarfCannonQuest(api) {
     if (objectId !== CANNON_OBJECT_ID || itemId !== ItemIdentifiers.TOOLKIT) return;
     const stage = quest.getStage(player);
     if (stage < STAGE_REPAIR_CANNON || stage >= STAGE_CANNON_REPAIRED) return;
+    if (!has(player, ItemIdentifiers.TOOLKIT)) return;
     const sender = player.getPacketSender();
     for (const varbit of [...CANNON_TOOL_VARBITS.values(), CANNON_SAFETY_VARBIT, CANNON_SPRING_VARBIT]) {
       sender.sendVarbit(varbit, 0);
     }
     sender.sendInterface(CANNON_INTERFACE_GROUP);
+    selectCannonTool(player, null);
+    sender.sendInterfaceAnimation(CANNON_MECHANISM_COMPONENT, CANNON_IDLE_ANIMATION);
     event.handled = true;
+  }
+
+  function selectCannonTool(player, selected) {
+    const sender = player.getPacketSender();
+    for (const [child, varbit] of CANNON_TOOL_VARBITS) {
+      const active = child === selected;
+      sender.sendVarbit(varbit, active ? 1 : 0);
+      sender.sendInterfaceRawModel((CANNON_INTERFACE_GROUP << 16) | child, CANNON_TOOL_MODELS.get(child)[active ? 1 : 0]);
+    }
   }
 
   function handleCannonRepairClick(event) {
     const { player, buttonId } = event;
     const stage = quest.getStage(player);
     if ((event.groupId ?? (buttonId >>> 16)) !== CANNON_INTERFACE_GROUP
-      || stage < STAGE_REPAIR_CANNON || stage > STAGE_INSPECTED_CANNON) return;
+      || stage < STAGE_REPAIR_CANNON || stage > STAGE_INSPECTED_CANNON
+      || player.getInterfaceId() !== CANNON_INTERFACE_GROUP) return;
     const childId = event.childId ?? (buttonId & 0xffff);
     const sender = player.getPacketSender();
     const toolVarbit = CANNON_TOOL_VARBITS.get(childId);
     if (toolVarbit !== undefined) {
-      for (const varbit of CANNON_TOOL_VARBITS.values()) sender.sendVarbit(varbit, 0);
-      sender.sendVarbit(toolVarbit, 1);
+      selectCannonTool(player, childId);
       event.handled = true;
       return;
     }
@@ -343,8 +370,12 @@ module.exports = function registerDwarfCannonQuest(api) {
     if (!part || sender.getVarbit(requiredToolVarbit) !== 1) return;
     if (part === "safety") {
       sender.sendVarbit(CANNON_SAFETY_VARBIT, 1);
+      sender.sendInterfaceAnimation(CANNON_MECHANISM_COMPONENT, sender.getVarbit(CANNON_SPRING_VARBIT) === 1
+        ? CANNON_SAFETY_ANIMATION : CANNON_SAFETY_WITHOUT_SPRING_ANIMATION);
     } else if (part === "spring") {
       sender.sendVarbit(CANNON_SPRING_VARBIT, 1);
+      sender.sendInterfaceAnimation(CANNON_MECHANISM_COMPONENT, sender.getVarbit(CANNON_SAFETY_VARBIT) === 1
+        ? CANNON_SAFETY_ANIMATION : CANNON_SPRING_ANIMATION);
     } else if (sender.getVarbit(CANNON_SAFETY_VARBIT) === 1
       && sender.getVarbit(CANNON_SPRING_VARBIT) === 1) {
       sender.sendInterfaceRemoval();
@@ -353,7 +384,7 @@ module.exports = function registerDwarfCannonQuest(api) {
     } else {
       return;
     }
-    for (const varbit of CANNON_TOOL_VARBITS.values()) sender.sendVarbit(varbit, 0);
+    selectCannonTool(player, null);
     event.handled = true;
   }
 
@@ -489,6 +520,7 @@ module.exports = function registerDwarfCannonQuest(api) {
   api.persistAttribute(RAILS_ATTRIBUTE, 0);
   api.persistAttribute(RAILS_MASK_ATTRIBUTE, 0);
   api.onNpcDialogueVariant(selectVariant);
+  api.onNpcInteraction("Captain Lawgof", { "Talk-to": remindAboutLollk });
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);

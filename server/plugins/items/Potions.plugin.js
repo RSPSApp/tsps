@@ -372,10 +372,10 @@ function timedEffectSkillIndexes(player) {
 }
 
 /**
- * Wiki: temporary boosts drop one point toward base every minute on a continuous cycle, which
- * Preserve stretches to 90 seconds. Prayer points are not covered, and Hitpoints above base
- * drop on the core's Hitpoints timer; lowered stats are restored by the core
- * (Player.processStatRestoration).
+ * Wiki: temporary boosts drop one point toward base (the core's resting level, with a permanent
+ * boost) every minute on a continuous cycle, which Preserve stretches to 90 seconds. Prayer points
+ * are not covered, and Hitpoints above base drop on the core's Hitpoints timer; lowered stats are
+ * restored by the core (Player.processStatRestoration).
  */
 function processBoostDecay(player) {
   // An area can hold temporary boosts indefinitely (Rogues' Den); the cycle resumes on leaving.
@@ -407,8 +407,9 @@ function processBoostDecay(player) {
       continue;
     }
     const current = getCurrentLevel(player, skill);
-    const base = getMaxLevel(player, skill);
-    if (current > base) {
+    // A permanent boost (the core's resting level) is where a boost stops decaying.
+    const resting = getSkillManager(player).getRestingLevel(skill);
+    if (current > resting) {
       setCurrentLevel(player, skill, current - 1);
     }
   }
@@ -496,6 +497,22 @@ function canDrink(player, itemId) {
 
 function canEat(player, itemId) {
   return pluginApi.emitCanEat(player, itemId) !== false;
+}
+
+/**
+ * Why `player` may not drink a dose of `entry` here, as the drink path decides it (the canDrink
+ * hooks, the potion's area, food permission, content unlocks, its own canUse); null when they may.
+ */
+function drinkRefusal(player, entry) {
+  const itemId = entry.itemId;
+  if (!canDrink(player, itemId)) return "You cannot use potions here.";
+  if (entry.potion.area && !inArea(player, entry.potion.area)) return AREA_MESSAGES[entry.potion.area] ?? "You cannot use that here.";
+  if (entry.potion.requiresFoodPermission && !canEat(player, itemId)) return "You cannot eat here.";
+  const permission = { player, itemId, allowed: true, message: null };
+  pluginApi.emitCustomEvent("potions:validate-drink", permission);
+  if (permission.allowed === false) return permission.message ?? "You cannot use that here.";
+  if (entry.potion.canUse && !entry.potion.canUse(player)) return "You need more than 50 Hitpoints to drink this potion.";
+  return null;
 }
 
 function registerPotion(definition) {
@@ -1354,18 +1371,9 @@ function handlePotionDrink(player, itemId, slot) {
   player.performAnimation(entry.potion.drink?.animation ? new Animation(entry.potion.drink.animation) : DRINK_ANIMATION);
   Sounds.sendSound(player, Sound.DRINK);
 
-  inventory.setItem(slot, new Item(entry.replacementId, entry.replacementId === NO_EMPTY_ITEM ? 0 : 1)).refreshItems();
+  const meta = inventory.getItems()[slot]?.getMeta();
+  inventory.setItem(slot, new Item(entry.replacementId, entry.replacementId === NO_EMPTY_ITEM ? 0 : 1, meta)).refreshItems();
   entry.potion.effect(player);
-
-  const share = player.getAttribute("lunar:potion-share");
-  if (share && entry.potion.shareable && pluginApi.core.World.getProcessCycle() < share.expiresAt) {
-    const restorative = /restore|prayer|energy|stamina|antipoison|antidote|antifire|guthix rest/i.test(entry.potion.name);
-    if ((share.type === "restore") === restorative) {
-      entry.potion.effect(share.target);
-      share.target.sendMessage(`${player.getUsername()} shares their ${entry.potion.name}.`);
-      player.setAttribute("lunar:potion-share", null);
-    }
-  }
 
   if (entry.potion.drink?.messages) {
     for (const message of entry.potion.drink.messages(itemId)) player.sendMessage(message);
@@ -1374,9 +1382,66 @@ function handlePotionDrink(player, itemId, slot) {
       ? "You have finished your potion. The gourd vial disintegrates."
       : "You have finished your potion.");
   }
-  pluginApi.emitCustomEvent("potions:drunk", { player, itemId, name: entry.potion.name });
+  pluginApi.emitCustomEvent("potions:drunk", { player, itemId, name: entry.potion.name, meta });
 
   return true;
+}
+
+/** The potions each Lunar share spell works on (Wiki: Stat Restore Pot Share, Boost Potion Share). */
+const SHAREABLE = {
+  restore: new Set([
+    "Energy potion", "Prayer potion", "Restore potion", "Super energy", "Super restore", "Anti-venom",
+    "Anti-venom+", "Extended anti-venom+", "Sanfew serum", "Stamina potion",
+  ]),
+  boost: new Set([
+    "Agility potion", "Attack potion", "Bastion potion", "Battlemage potion", "Defence potion", "Fishing potion",
+    "Magic potion", "Ranging potion", "Strength potion", "Super attack", "Super combat potion", "Super defence",
+    "Super strength",
+  ]),
+};
+
+/**
+ * "potions:share" `{ player, slot, kind, targets }` from the Lunar share spells: the potion in
+ * `slot` gives one dose to each of `targets` while it has doses, and the caster drinks one free.
+ * Sets `valid` and `apply` (run once the spell is paid for), or `message` when it can't be shared.
+ */
+function sharePotion(request) {
+  const { player, slot, kind, targets } = request;
+  const item = player.getInventory().getItems()[slot];
+  const entry = item ? POTION_BY_ITEM_ID.get(item.getId()) : null;
+  if (!entry || !entry.potion.shareable || !SHAREABLE[kind]?.has(entry.potion.name)) {
+    request.message = kind === "restore"
+      ? "This spell can only be cast on restore-type potions."
+      : "This spell can only be cast on stat-boosting potions.";
+    return;
+  }
+  // Every drinker passes the rules a normal drink does (a duel's No Drinks among them).
+  const refusal = drinkRefusal(player, entry);
+  if (refusal) {
+    request.message = refusal;
+    return;
+  }
+  // Only the other players' doses come out of the potion, so the spell needs one of them (Wiki).
+  const eligible = targets.filter((target) => drinkRefusal(target, entry) === null);
+  if (eligible.length === 0) {
+    request.message = "There is nobody nearby to share your potion with.";
+    return;
+  }
+  request.valid = true;
+  request.apply = () => {
+    const sharers = eligible.slice(0, entry.doses);
+    let current = entry;
+    for (const target of sharers) {
+      current.potion.effect(target);
+      target.sendMessage(`${player.getDisplayName()} shares a dose of ${entry.potion.name} with you.`);
+      const next = POTION_BY_ITEM_ID.get(current.replacementId);
+      player.getInventory().setItem(slot, new Item(current.replacementId, current.replacementId === NO_EMPTY_ITEM ? 0 : 1, item.getMeta()));
+      if (!next) break;
+      current = next;
+    }
+    entry.potion.effect(player);
+    player.getInventory().refreshItems();
+  };
 }
 
 /** Cache enum 5583: every potion, mix and unfinished potion to its dose enum (0 = the empty vial, 1-4 doses). */
@@ -1564,6 +1629,7 @@ module.exports = {
     api.onCustomEvent("potions:dose-family", answerDoseFamily);
     api.onCustomEvent("potions:register-copy", registerCopy);
     api.onCustomEvent("potions:register", registerContentPotion);
+    api.onCustomEvent("potions:share", sharePotion);
     api.onCustomEvent("prayer:activated", notePreserveActivated);
     pluginApi = api;
     initDragonfireProtectionCoreAccess(api);

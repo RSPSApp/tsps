@@ -11,6 +11,9 @@ const LAPS_ATTRIBUTE = "agility.laps";
  * counted (OSRS Wiki, Grace).
  */
 const LAP_COUNTER_OFF_ATTRIBUTE = "agility.lap-counter-off";
+/** Run energy (percent) a rooftop obstacle restores, and the fraction carried to the next one. */
+const ROOFTOP_ENERGY_RESTORE = 1.5;
+const ROOFTOP_ENERGY_CARRY_ATTRIBUTE = "agility.energy-carry";
 
 /**
  * Marks of grace (Wiki: Mark of Grace, "Spawning mechanics"). Completing a lap rolls for a mark
@@ -86,7 +89,9 @@ function buildIndex() {
     for (const obstacle of course.obstacles) {
       obstacle.course = course;
       if (obstacle.index != null) {
-        obstacleXp.set(obstacle.index, Math.max(obstacleXp.get(obstacle.index) ?? 0, obstacle.xp ?? 0));
+        // XP that depends on the player (the Agility Pyramid's doorway) is all lap, no bonus.
+        const xp = typeof obstacle.xp === "number" ? obstacle.xp : 0;
+        obstacleXp.set(obstacle.index, Math.max(obstacleXp.get(obstacle.index) ?? 0, xp));
       }
       indexObstacle(obstacle);
     }
@@ -236,10 +241,30 @@ function withHighlight(steps, helper) {
   return at < 0 ? [...steps, highlight] : [...steps.slice(0, at), highlight, ...steps.slice(at)];
 }
 
-/** A course's own progress varbit (Shayzien's), set to the obstacle the lap has reached. */
+/**
+ * A course's own progress varbit (Shayzien's, the Colossal Wyrm's), set to the obstacle the lap
+ * has reached. A course that shares this one's first obstacles with `sharesWith.progress` has its
+ * varbit follow them too (the Wyrm's advanced course: rsprox 1106 sets both on the shared ladder
+ * and tightrope).
+ */
 function setProgressVarbit(player, course, index) {
   if (course.progressVarbit != null) {
     player.getPacketSender().sendVarbit(course.progressVarbit, index);
+  }
+  for (const other of COURSES) {
+    const shares = other.sharesWith;
+    if (shares?.course === course.key && shares.progress && other.progressVarbit != null && index <= shares.through) {
+      player.getPacketSender().sendVarbit(other.progressVarbit, index);
+    }
+  }
+}
+
+/** A finished lap clears the course's progress varbit and, when they move together, the shared course's. */
+function resetProgressVarbits(player, course) {
+  setProgressVarbit(player, course, 0);
+  const shared = course.sharesWith?.progress ? COURSES.find((other) => other.key === course.sharesWith.course) : null;
+  if (shared?.progressVarbit != null) {
+    player.getPacketSender().sendVarbit(shared.progressVarbit, 0);
   }
 }
 
@@ -259,18 +284,23 @@ function completeLap(player, course) {
   if (reward.xp > 0) {
     addAgilityXp(player, reward.xp, course);
   }
+  // XP in other skills for a full lap (`lapSkillXp`: Barbarian Outpost's Strength, Wiki).
+  for (const [skillName, xp] of Object.entries(course.lapSkillXp ?? {})) {
+    player.getSkillManager().addExperiences(core.Skill[skillName.toUpperCase()], xp);
+  }
+  // The diary's line comes before the lap count (rsprox 1788).
+  if (course.diaryTask) {
+    pluginApi.emitCustomEvent("diary:task", { player, ...course.diaryTask });
+  }
   if (!player.getAttribute(LAP_COUNTER_OFF_ATTRIBUTE)) {
     player.sendMessage(`Your ${course.name} lap count is: <col=ff0000>${laps[course.key]}</col>.`);
   }
-  setProgressVarbit(player, course, 0);
+  resetProgressVarbits(player, course);
   if (course.helper != null) {
     player.getPacketSender().sendVarbit(HIGHLIGHTED_COURSE_VARBIT, 0);
     player.getPacketSender().sendClientScript(END_LAP_SCRIPT, lapClock(), Math.max(1, reward.count | 0) - 1);
   }
-  pluginApi.emitCustomEvent("agility:lap", { player, course: course.key, laps: laps[course.key] });
-  if (course.diaryTask) {
-    pluginApi.emitCustomEvent("diary:task", { player, ...course.diaryTask });
-  }
+  pluginApi.emitCustomEvent("agility:lap", { player, course: course.key, laps: laps[course.key], count: Math.max(1, reward.count | 0) });
   // The giant squirrel rolls once per completed course.
   pluginApi.emitCustomEvent("agility:success", { player, skill: core.Skill.AGILITY, petBase: course.petBase });
 }
@@ -332,6 +362,10 @@ function rollMarkOfGrace(player, course) {
   if (marks.overlevelPenalty !== false && unboosted >= marks.level + MARK_OVERLEVEL_THRESHOLD) {
     chance *= MARK_OVERLEVELLED_MULTIPLIER;
   }
+  // Content may set the lap's mark chance ("agility:mark-chance", a league relic's fixed 33%).
+  const request = { player, course: course.key, chance };
+  pluginApi.emitCustomEvent("agility:mark-chance", request);
+  if (Number.isFinite(request.chance)) chance = request.chance;
   if (Math.random() >= chance && Math.random() >= diaryBonusChance(player, marks.rerolls)) return;
   const short = Math.random() < diaryBonusChance(player, marks.shortCooldown);
   player.setAttribute(MARK_COOLDOWN_ATTRIBUTE, minute + (short ? MARK_SHORT_COOLDOWN_MINUTES : MARK_COOLDOWN_MINUTES));
@@ -350,8 +384,58 @@ function rollMarkOfGrace(player, course) {
 
 /** The player's course marks on the floor; dropped marks go public and age as usual. */
 function spawnedMarks(username) {
-  return ItemOnGroundManager.ownedBy(username).filter((item) => item.getItem().getId() === core.ItemIds.MARK_OF_GRACE
-    && !item.getgoesGlobal() && item.getDespawnDelay() === MARK_DESPAWN_TICKS);
+  return ItemOnGroundManager.ownedBy(username).filter(isCourseMark);
+}
+
+function isCourseMark(groundItem) {
+  return groundItem.getItem().getId() === core.ItemIds.MARK_OF_GRACE && !groundItem.getgoesGlobal()
+    && groundItem.getDespawnDelay() === MARK_DESPAWN_TICKS;
+}
+
+/** The course whose mark tiles hold `location`. */
+function courseOfMark({ x, y, z }) {
+  return COURSES.find((course) => course.marks?.tiles.some((tile) => tile[0] === x && tile[1] === y && tile[2] === z)) ?? null;
+}
+
+/**
+ * A course mark picked up (one the inventory has room for). Content may make it finish a lap of
+ * its course ("agility:mark-taken", a league relic): the lap is recorded and paid as the last
+ * obstacle would, and `items` go to the inventory (the floor when it has no room).
+ */
+function takeMark(event) {
+  const { player, groundItem } = event;
+  if (!isCourseMark(groundItem) || ItemOnGroundManager.inventoryCapacity(player, groundItem.getItem()) <= 0) return;
+  const course = courseOfMark(event.location);
+  if (!course) return;
+  const request = { player, course: course.key, completesLap: false, items: [] };
+  pluginApi.emitCustomEvent("agility:mark-taken", request);
+  if (!request.completesLap) return;
+  player.setAttribute(PROGRESS_ATTRIBUTE, null);
+  completeLap(player, course);
+  for (const [itemId, amount] of request.items) {
+    const item = new core.Item(itemId, amount);
+    const added = Math.min(amount, player.getInventory().getAddableAmount(item));
+    if (added > 0) player.getInventory().adds(itemId, added);
+    if (amount > added) ItemOnGroundManager.registerLocation(player, new core.Item(itemId, amount - added), player.getLocation().clone());
+  }
+}
+
+/**
+ * An obstacle's own find (`gives`: { item (an ItemIdentifiers name), amount, message }, Prifddinas's portal shard): its line,
+ * then the item to the inventory, the floor for what has no room. Content may change the amount
+ * first ("agility:course-item" { player, course, itemId, amount }, a league relic's tenfold shards).
+ */
+function giveCourseItem(player, course, gives) {
+  const itemId = core.ItemIdentifiers[gives.item];
+  const request = { player, course: course?.key ?? null, itemId, amount: gives.amount };
+  pluginApi.emitCustomEvent("agility:course-item", request);
+  const amount = Math.max(0, request.amount | 0);
+  if (amount <= 0) return;
+  if (gives.message) player.sendMessage(gives.message);
+  const item = new core.Item(itemId, amount);
+  const added = Math.min(amount, player.getInventory().getAddableAmount(item));
+  if (added > 0) player.getInventory().adds(itemId, added);
+  if (amount > added) ItemOnGroundManager.registerLocation(player, new core.Item(itemId, amount - added), player.getLocation().clone());
 }
 
 function pauseMarksOnLogout({ player }) {
@@ -369,7 +453,10 @@ function finishObstacle(player, obstacle, success, completed, fail = obstacle.fa
   if (success && lapStart && obstacle.course.helper != null) {
     player.getPacketSender().sendClientScript(START_LAP_SCRIPT, lapClock());
   }
-  const reward = success ? obstacle.xp : fail?.xp;
+  // `diaryXp` ({ diary, tier, xp }) pays more once that diary tier is done (Pollnivneach's and
+  // Rellekka's last obstacles); the lap bonus is worked out from the plain `xp`.
+  const diaryXp = success && obstacle.diaryXp && diaryTierComplete(player, obstacle.diaryXp) ? obstacle.diaryXp.xp : null;
+  const reward = success ? diaryXp ?? obstacle.xp : fail?.xp;
   const xp = typeof reward === "function" ? reward(player) : reward;
   if (xp > 0) {
     addAgilityXp(player, xp, obstacle.course);
@@ -381,13 +468,19 @@ function finishObstacle(player, obstacle, success, completed, fail = obstacle.fa
   if (!success) {
     return;
   }
-  // OSRS rooftop obstacles restore 1–2% energy; shortcuts and other courses do not.
-  // ponytail: use the documented 1% minimum until per-obstacle captures establish 2% overrides.
+  // Rooftop obstacles restore 1.5% energy each (rsprox 339 and 3154, main game: 150 of 10,000 on
+  // every XP tick); shortcuts and other courses do not. Energy is kept in whole percent, so the
+  // half carries over to the next obstacle.
   if (obstacle.course?.name.includes("Rooftop")) {
-    player.setRunEnergy(player.getRunEnergy() + 1);
+    const restored = (player.getAttribute(ROOFTOP_ENERGY_CARRY_ATTRIBUTE) ?? 0) + ROOFTOP_ENERGY_RESTORE;
+    player.setAttribute(ROOFTOP_ENERGY_CARRY_ATTRIBUTE, restored - Math.floor(restored));
+    player.setRunEnergy(player.getRunEnergy() + Math.floor(restored));
     player.getPacketSender().sendRunEnergy();
   }
   obstacle.onSuccess?.(player);
+  if (obstacle.gives != null) {
+    giveCourseItem(player, obstacle.course, obstacle.gives);
+  }
   if (obstacle.takes != null) {
     takeAll(player, obstacle.takes);
   }
@@ -494,10 +587,12 @@ function attemptObstacle(player, context, entry) {
   }
   ObstacleRunner.run(context, steps, {
     render: success ? obstacle.render : fail?.render ?? obstacle.render,
+    busyVarbit: obstacle.course != null,
     onFinish: (completed) => {
       finishObstacle(player, obstacle, success, completed, fail, lapStart);
       if (completed && success) {
-        pluginApi.emitCustomEvent("agility:obstacle", { player, objectId, location: context.obj });
+        // A shortcut's own name (agility-shortcuts.json's, "Stepping stone (Shilo Village)"); a course obstacle has none.
+        pluginApi.emitCustomEvent("agility:obstacle", { player, objectId, location: context.obj, shortcut: obstacle.course ? null : obstacle.name ?? null });
       }
       if (completed && success && obstacle.skipTo != null) {
         skipAhead(player, obstacle, context);
@@ -628,6 +723,7 @@ module.exports = {
     api.onPlayerLogout(finishObstacleOnLogout);
     api.onPlayerLogout(pauseMarksOnLogout);
     api.onPlayerLogin(resumeMarksOnLogin);
+    api.onGroundItemPickup(takeMark);
 
     api.log("registered", {
       courses: COURSES.length,
@@ -636,3 +732,5 @@ module.exports = {
     });
   },
 };
+
+module.exports.giveCourseItem = giveCourseItem;

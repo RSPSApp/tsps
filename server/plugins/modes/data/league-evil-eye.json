@@ -1,0 +1,85 @@
+{
+ "$comment": "Evil Eye's destinations (Demonic Pacts tier 3; docs/leagues.md), by the item's area submenu (the cache's subops, in their order; `area` is the league area's id, league-areas.json). The rows and their order are the Wiki's (Evil_Eye_(Demonic_Pacts_League), 'Teleports by Area', read 2026-11-02), Barrows twice (its chest and its surface) and each Moon of Peril on its own. The Wiki's pins mark the dungeon's surface for many bosses 'inside' one; the relic goes to 'the entrance of' the boss, so each tile is one the server's own data gives for it (`source`): the tile its lair's or raid's code puts a player outside the entrance, else the open tile before the entrance loc on the cache's map, else the Wiki's pin where that is the entrance; each is open floor on the cache's map with 30 or more tiles walkable from it, or the whole of a small room before the entrance (the Mimic's, Sarachnis' and the Moons' antechambers). None of the Wiki's rows is left out. Requirements past the area (kill counts, keys, tasks, quests) are the bosses' own, met or refused at the entrance.",
+ "areas": [
+  { "name": "Asgarnia", "area": 3, "destinations": [
+    {"name": "Cerberus", "x": 1309, "y": 1269, "z": 0, "source": "plugins/bosses/data/cerberus.json arenas north.outside: beside the Iron Winch 23104 (2x2 at 1307,1269) on its open side, in the Key Master's hall. reach 300+."},
+    {"name": "Commander Zilyana", "x": 2909, "y": 5265, "z": 0, "source": "plugins/bosses/godwars/data/godwars.json factions.saradomin.door.outside (door 2908,5265); also ::teleports 'Outside Saradomin's encampment door'."},
+    {"name": "Giant Mole", "x": 1752, "y": 5236, "z": 0, "source": "plugins/bosses/GiantMole.plugin.js MOLE_LAIR_ENTRANCE: where digging a Falador mole hill lands; also ::teleports Giant Mole."},
+    {"name": "General Graardor", "x": 2862, "y": 5354, "z": 2, "source": "godwars.json factions.bandos.door.outside (door 2863,5354); ::teleports 'Outside Bandos' stronghold door'."},
+    {"name": "Kree'arra", "x": 2839, "y": 5294, "z": 2, "source": "godwars.json factions.armadyl.door.outside (door 2839,5295); ::teleports 'Outside Armadyl's eyrie door'."},
+    {"name": "K'ril Tsutsaroth", "x": 2925, "y": 5333, "z": 2, "source": "godwars.json factions.zamorak.door.outside (door 2925,5332); ::teleports 'Outside Zamorak's fortress door'."},
+    {"name": "Nex", "x": 2883, "y": 5280, "z": 2, "source": "plugins/bosses/data/nex.json prison.gwdSide: the God Wars side of the frozen door to Nex's prison (the ::teleports Nex spot), not past it."},
+    {"name": "Royal Titans", "x": 2950, "y": 9574, "z": 0, "source": "plugins/bosses/royaltitans/Shared.RoyalTitans.js OUTSIDE_LANDING (live's exit, by Tunnel 55986 at 2948,9573); ::teleports Royal Titans."},
+    {"name": "Whisperer", "x": 2656, "y": 6386, "z": 0, "source": "plugins/bosses/data/whisperer.json site.outside: just north of the Sunken Cathedral arena (2640-2676,6352-6385); escape/logout put the player here."}
+  ] },
+  { "name": "Desert", "area": 6, "destinations": [
+    {"name": "Kalphite Queen", "x": 3508, "y": 9494, "z": 2, "source": "plugins/bosses/kalphitequeen/Encounter.KalphiteQueen.js CHAMBER_EXIT: the lair-side tile where the chamber rope (3832) puts you, beside the queen's tunnel (multiloc 23609 at 3509,9497,2)."},
+    {"name": "Leviathan", "x": 2063, "y": 6435, "z": 0, "source": "plugins/bosses/data/leviathan.json site.campReturn, beside the camp Rowboat 49212 (site.campBoat 2065,6435) in The Scar."},
+    {"name": "Tempoross", "x": 3148, "y": 2840, "z": 0, "source": "Wiki pin, checked: walkable, inside tempoross.json lobby.zone (Ruins of Unkah lobby HUD zone), by the ferry arrival (lobby.ferryArrival 3148,2842)."},
+    {"name": "Tombs of Amascut", "x": 3357, "y": 2713, "z": 0, "source": "plugins/minigames/toa/Shared.TombsOfAmascut.js NECROPOLIS_EXIT: the Necropolis tile outside the tomb entrance; also ::teleports ToA."}
+  ] },
+  { "name": "Fremennik", "area": 8, "destinations": [
+    {"name": "Dagannoth Kings", "x": 1910, "y": 4367, "z": 0, "source": "plugins/bosses/data/dagannoth-kings.json outsideTile ('Dungeon side: the player stands here before climbing down'), beside the Kings' ladder multiloc 3831 at 1911,4367."},
+    {"name": "Duke Sucellus", "x": 3039, "y": 6432, "z": 0, "source": "plugins/bosses/data/duke-sucellus.json site.outside, south of the asylum Gate 49138 (site.gate 3039,6433)."},
+    {"name": "Phantom Muspah", "x": 2909, "y": 10317, "z": 0, "source": "plugins/bosses/data/phantom-muspah.json lair.exit, beside Crevice 46597 at 2908,10316 in Ghorrock Dungeon; ::teleports 'By the crevice'."},
+    {"name": "Vorkath", "x": 2272, "y": 4052, "z": 0, "source": "plugins/interface/Teleports.plugin.js VORKATH_TELEPORT_DESTINATION (and ::teleports): Ungael, south of the Ice chunks 31990 at 2272,4053."}
+  ] },
+  { "name": "Kandarin", "area": 4, "destinations": [
+    {"name": "Kraken", "x": 2280, "y": 10016, "z": 0, "source": "plugins/bosses/kraken/Crevice.Kraken.js COVE_SIDE_TILE: cove side of the boss Crevice 537 at 2280,10017."},
+    {"name": "Thermonuclear smoke devil", "x": 2379, "y": 9452, "z": 0, "source": "plugins/bosses/data/thermonuclear-smoke-devil.json outsideTile ('outside east of the crevice'), Crevices 535/536 at 2378/2377,9452."}
+  ] },
+  { "name": "Karamja", "area": 2, "destinations": [
+    {"name": "Fight Cave", "x": 2438, "y": 5168, "z": 0, "source": "plugins/minigames/TzhaarFightCaves.plugin.js EXIT (where leaving puts you), north of the Cave entrance 11833 (2437-2439,5166-5167) in Mor Ul Rek."},
+    {"name": "Inferno", "x": 2496, "y": 5119, "z": 0, "source": "plugins/minigames/inferno/Entry.Inferno.js WALKWAY_TIP (2496-2497,5119): the tip of the walkway the player jumps into the chasm (30352 at 2493,5124) from."},
+    {"name": "TzHaar-Ket-Rak's Challenges", "x": 2544, "y": 5111, "z": 0, "source": "plugins/minigames/data/tzhaar-ket-rak.json outside (rsprox: where the player stands before TzHaar-Ket-Rak; his spawn is 2545,5110)."}
+  ] },
+  { "name": "Kourend", "area": 20, "destinations": [
+    {"name": "Alchemical hydra", "x": 1354, "y": 10259, "z": 0, "source": "plugins/bosses/data/alchemical-hydra.json room.outside, west of the Alchemical doors 34553/34554 at 1355,10258-10259."},
+    {"name": "Chambers of Xeric", "x": 1234, "y": 3572, "z": 0, "source": "cache: the raid entrance 29777 'Chambers of Xeric' (4x1 over 1232-1235,3573; named in plugins/minigames/cox/Shared.ChambersOfXeric.js): the tile directly in front (south) of it."},
+    {"name": "Hespori", "x": 1230, "y": 3730, "z": 0, "source": "plugins/skills/farming/Hespori.Farming.js EXIT (234/03282: where the cave's Exit lands; the Wiki pin too), west of the Hespori Cave 34499 in the Farming Guild."},
+    {"name": "Mimic", "x": 1645, "y": 3570, "z": 1, "source": "plugins/bosses/mimic/Shared.Mimic.js WATSON_TILE: upstairs in Watson's house beside the Strange casket 34733 at 1645,3569,1. reach 21 (the room)."},
+    {"name": "Sarachnis", "x": 1842, "y": 9913, "z": 0, "source": "plugins/bosses/data/sarachnis.json outsideTile, north of the Thick Web 34858 at 1841-1842,9912; ::teleports Sarachnis."},
+    {"name": "Skotizo", "x": 1662, "y": 10049, "z": 0, "source": "plugins/bosses/data/skotizo.json exit.tile ('where captured players stood to use the altar'), by Altar 28900 at 1663,10047."},
+    {"name": "Wintertodt", "x": 1630, "y": 3963, "z": 0, "source": "Wiki pin, checked: walkable, directly south of the Doors of Dinh 29322 (7x4 over 1627-1633,3964-3967) on the camp path (Shared.Wintertodt.js CAMP_ZONE)."},
+    {"name": "Yama", "x": 1439, "y": 10076, "z": 0, "source": "plugins/bosses/data/yama.json voice.respawn ('back by the Voice'): the Voice of Yama (spawn 1439,10079) starts the fight; ::teleports Yama."}
+  ] },
+  { "name": "Morytania", "area": 5, "destinations": [
+    {"name": "Araxxor", "x": 3658, "y": 9816, "z": 0, "source": "plugins/interface/Teleports.plugin.js ARAXXOR_TELEPORT_DESTINATION: east of the lair's web tunnel (multiloc 54161, 3x4 over 3655-3657,9814-9817; Shared.Araxxor.js LAIR east wall)."},
+    {"name": "Barrows (chest)", "x": 3551, "y": 9694, "z": 0, "source": "cache: the chest 20973 at 3551,9695 in the central crypt (Barrows.plugin.js tunnel map: 'chest'): the tile directly south of it, in the chest room (reach 95 = the room)."},
+    {"name": "Barrows (surface)", "x": 3565, "y": 3288, "z": 0, "source": "plugins/minigames/Barrows.plugin.js BROTHERS[0] (Ahrim) surface tile, on his mound (3562-3568,3285-3292)."},
+    {"name": "Grotesque Guardians", "x": 3426, "y": 3541, "z": 2, "source": "plugins/bosses/data/grotesque-guardians.json roof.outside: Slayer Tower top floor, by the Roof Entrance (where logout/exit return you)."},
+    {"name": "The Nightmare", "x": 3808, "y": 9756, "z": 1, "source": "plugins/bosses/data/nightmare.json lobby.exit ('where the sleeping Nightmare lies'), beside The Nightmare 9460 (spawn 3806,9757,1); ::teleports Nightmare."},
+    {"name": "Theatre of Blood", "x": 3676, "y": 3217, "z": 0, "source": "plugins/minigames/tob/Entry.TheatreOfBlood.js leave/teleport-out tile, west of the Theatre of Blood entrance 32653 (3678-3679,3216-3222)."}
+  ] },
+  { "name": "Tirannwn", "area": 7, "destinations": [
+    {"name": "The Gauntlet", "x": 3227, "y": 6114, "z": 0, "source": "plugins/minigames/gauntlet/Shared.Gauntlet.js PRIFDDINAS ('Beside the Gauntlet Portal (36081)', portal at 3229,6114); equals the Wiki pin."},
+    {"name": "Zalcano", "x": 3283, "y": 6058, "z": 0, "source": "plugins/bosses/data/zalcano.json prison.outside (237/04057: where leaving the prison lands), east of the Teleport Platform 36198 (2x2 over 3281-3282,6058-6059). reach 2000."},
+    {"name": "Zulrah", "x": 2211, "y": 3057, "z": 0, "source": "Wiki pin, checked: walkable, at the Zul-Andra pier beside Priestess Zul-Gwenwynig (spawn 2212,3057) and the Sacrificial boat multiloc 10068 at 2214,3056."}
+  ] },
+  { "name": "Varlamore", "area": 21, "destinations": [
+    {"name": "Amoxliatl", "x": 1602, "y": 9631, "z": 0, "source": "plugins/bosses/data/amoxliatl.json door.outside, beside the frozen door multiloc 55355 at 1601,9630; ::teleports Amoxliatl."},
+    {"name": "Doom of Mokhaiotl", "x": 1311, "y": 9531, "z": 1, "source": "plugins/bosses/doom/Shared.DoomOfMokhaiotl.js TILES.RUINS ('just outside the entrance', entrance 56613 at 1310,9533,1); ::teleports Doom."},
+    {"name": "Fortis Colosseum", "x": 1795, "y": 3107, "z": 0, "source": "Wiki pin, checked: walkable, beside the Colosseum entrance 50749 (1796,3106-3107); Shared.Colosseum.js CITY 1795,3106 (captured) is the tile south of it."},
+    {"name": "The Hueycoatl", "x": 1524, "y": 3290, "z": 0, "source": "plugins/bosses/hueycoatl/Shared.Hueycoatl.js CAMP_LANDING (camp on the Darkfrost, foot of the Slope 55234 at 1520,3290); ::teleports Hueycoatl."},
+    {"name": "Abyssal Sire", "x": 3039, "y": 4800, "z": 0, "source": "plugins/bosses/data/abyssal-sire.json nexus.passageArrival: Abyssal Nexus landing by the Passage 27055 at 3039,4801; ::teleports Abyssal Sire."},
+    {"name": "Blue Moon", "x": 1440, "y": 9658, "z": 0, "source": "cache: Blue Moon statue 51373 (moons-of-peril.json moons.blue.statue; 3x3 over 1439-1441,9659-9661, the arena's way in): the tile in front (south) of it, in its antechamber (reach 46)."},
+    {"name": "Eclipse Moon", "x": 1466, "y": 9632, "z": 0, "source": "cache: Eclipse Moon statue 51374 (moons.eclipse.statue; 3x3 over 1467-1469,9631-9633): the tile in front (west) of it, in its antechamber (reach 46)."},
+    {"name": "Blood Moon", "x": 1413, "y": 9632, "z": 0, "source": "cache: Blood Moon statue 51372 (moons.blood.statue; 3x3 over 1410-1412,9631-9633): the tile in front (east) of it, in its antechamber (reach 46)."},
+    {"name": "Vardorvis", "x": 1117, "y": 3428, "z": 0, "source": "plugins/bosses/data/vardorvis.json site.outside ('Outside the Stranglewood gate'), beside multiloc 49495 at 1118,3428."}
+  ] },
+  { "name": "Wilderness", "area": 11, "destinations": [
+    {"name": "Artio", "x": 3116, "y": 3675, "z": 0, "source": "plugins/bosses/data/wilderness-bosses.json lairs[artio].entrance.stand, by Cave Entrance 47141 at 3115,3676."},
+    {"name": "Callisto", "x": 3292, "y": 3848, "z": 0, "source": "wilderness-bosses.json lairs[callisto].entrance.stand, by Cave Entrance 47140 at 3291,3849."},
+    {"name": "Calvar'ion", "x": 3180, "y": 3682, "z": 0, "source": "wilderness-bosses.json lairs[calvarion].entrance.stand, by Memorial 46996 at 3180,3683."},
+    {"name": "Chaos Elemental", "x": 3261, "y": 3927, "z": 0, "source": "data/definitions/npc-spawns.json Chaos Elemental spawn = Wiki pin = ::teleports (no lair; surface boss)."},
+    {"name": "Chaos Fanatic", "x": 2979, "y": 3846, "z": 0, "source": "npc-spawns.json Chaos Fanatic spawn = Wiki pin = ::teleports (surface boss)."},
+    {"name": "Corporeal Beast", "x": 2966, "y": 4252, "z": 2, "source": "plugins/bosses/corporealbeast/Shared.CorporealBeast.js LOBBY (the ::teleports Corporeal Beast spot), before the Passage to the beast."},
+    {"name": "Crazy Archaeologist", "x": 2977, "y": 3702, "z": 0, "source": "npc-spawns.json Crazy archaeologist spawn = Wiki pin = ::teleports (surface boss)."},
+    {"name": "King Black Dragon", "x": 3017, "y": 3850, "z": 0, "source": "plugins/bosses/KingBlackDragon.plugin.js KING_BLACK_DRAGON_LADDER (lever return 'north of that ladder'), beside the Lava Maze Ladder 18987 at 3017,3849, which in this server leads straight into the lair."},
+    {"name": "Scorpia", "x": 3233, "y": 3950, "z": 0, "source": "plugins/bosses/wildernessbosses/Scorpia.WildernessBosses.js WAYS[1] pit arrival, beside Cavern 26762 (3231-3234,3951-3952) in the Scorpion Pit."},
+    {"name": "Spindel", "x": 3182, "y": 3745, "z": 0, "source": "wilderness-bosses.json lairs[spindel].entrance.stand, by Cave Entrance 47078 at 3183,3744."},
+    {"name": "Venenatis", "x": 3320, "y": 3796, "z": 0, "source": "wilderness-bosses.json lairs[venenatis].entrance.stand, by Cave Entrance 47077 at 3321,3794."},
+    {"name": "Vet'ion", "x": 3222, "y": 3786, "z": 0, "source": "wilderness-bosses.json lairs[vetion].entrance.stand, by Crevice 46995 at 3221,3787."}
+  ] }
+ ]
+}

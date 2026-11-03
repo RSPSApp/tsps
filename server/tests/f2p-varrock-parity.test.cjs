@@ -74,7 +74,7 @@ function player() {
     setUntargetable: value => { p.untargetable = value; }, getLocation: () => location, moveTo: to => { location = to; },
     getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; }, getIndex: () => p.index,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
-    getUsername: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
+    getUsername: () => 'Parity', getDisplayName: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
     performAnimation: a => p.animations.push(a.getId()), sendMessage: text => p.messages.push(text),
   }; p.manager = new DialogueManager(p); return p;
 }
@@ -169,8 +169,12 @@ test('Romeo berries handed over in a closed conversation still make one potion a
 test('Juliet and crypt scenes use separate copied maps, retain potion until the last line, and clean up', () => {
   const h=harness('RomeoAndJuliet'),p=player();h.quest.setStage(p,50);p.items.set(I.CADAVA_POTION,1);p.moveTo(new core.Location(3158,3426,1));
   h.action(p,N.JULIET,'LEub3y');h.tick(3);const room=p.getArea();assert.ok(room instanceof core.TemplatedInstanceArea);assert.equal(room.getChunk(1,0,0).sourceChunkX,393);
+  for(let x=0;x<4;x++)for(let y=0;y<4;y++)assert.deepEqual(room.getChunk(0,x,y),{...room.getChunk(1,x,y),sourcePlane:0},'the balcony retains the ground floor beneath every copied upper-floor chunk');
+  const chunkCounts=scene=>scene.buildScenePalette(scene.baseChunkX,scene.baseChunkY).palette.map(plane=>plane.flat().filter(chunk=>chunk!==-1).length);
+  assert.deepEqual(chunkCounts(room),[16,16,0,0]);
   h.line(p,N.JULIET,'Poor Juliet...make preparations for her body to be placed in the Crypt...').after();assert.equal(h.quest.getStage(p),60);assert.equal(p.items.get(I.CADAVA_POTION),0);h.tick(3);assert.equal(p.getArea(),null);
   p.moveTo(new core.Location(3215,3418,0));h.action(p,N.ROMEO,'UCaOJi');h.tick(3);assert.equal(p.getArea().getChunk(0,0,0).sourceChunkX,290);
+  assert.deepEqual(chunkCounts(p.getArea()),[16,0,0,0],'the crypt still copies only its original ground-floor map');
   h.action(p,N.ROMEO,'PO2Wli');assert.equal(h.quest.getStage(p),60);h.tick(5);assert.equal(h.quest.getStage(p),100);assert.equal(p.attrs.get('quest.points'),5);assert.equal(p.varbits.get(1838),2);assert.equal(p.items.get(I.CADAVA_POTION),0);
   assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()],[3215,3418]);
 });
@@ -213,6 +217,35 @@ test('Imp Catcher fast-start plays the check, timed ritual, separate stage/rewar
   h.tick(10);assert.equal(p.items.get(I.AMULET_OF_ACCURACY),1);assert.deepEqual(p.xp,[[core.Skill.MAGIC.getIndex(),875]]);assert.equal(p.attrs.get('quest.points'),undefined);
   h.tick(2);assert.equal(p.attrs.get('quest.points'),1);assert.equal(h.quest.getStage(p),2);
   h.action(p,5005,'jxPdQz');assert.equal(p.items.get(I.AMULET_OF_ACCURACY),2);assert.equal(p.xp.length,1);
+});
+
+test('Imp Catcher journal follows the wiki journal transcript at every stage', () => {
+  const h = harness('ImpCatcher'), p = player(), quest = h.quest;
+  assert.deepEqual(quest.buildJournal(p, quest), [
+    "I can start this quest by talking to",
+    "<col=800000>Wizard Mizgog</col> in the",
+    "<col=800000>Wizards' Tower</col>.",
+    "",
+    "There aren't any requirements for this quest.",
+  ]);
+  quest.setStage(p, 1);
+  const collecting = quest.buildJournal(p, quest);
+  assert.equal(collecting[0], "<str>I have spoken to Wizard Mizgog.</str>");
+  assert.equal(collecting[2], "I need to collect some items by killing <col=800000>Imps</col>, I can");
+  assert.equal(collecting[3], "find Imps all over the kingdom.");
+  assert.ok(collecting.includes("<col=800000>1 Black Bead.</col>"));
+  for (const id of [I.RED_BEAD, I.BLACK_BEAD, I.WHITE_BEAD, I.YELLOW_BEAD]) p.items.set(id, 1);
+  const ready = quest.buildJournal(p, quest);
+  assert.deepEqual(ready.slice(2), [
+    "I have collected all the missing beads and need to return",
+    "them to <col=800000>Wizard Mizgog</col>.",
+  ]);
+  quest.setStage(p, 2);
+  assert.deepEqual(quest.buildJournal(p, quest).slice(-3), [
+    "<str>Wizard Mizgog thanked me for finding his beads and gave me an</str>",
+    "<str>Amulet of Accuracy.</str>",
+    "<col=ff0000>QUEST COMPLETE!</col>",
+  ]);
 });
 
 test('Rune Mysteries complete short-route dialogue round trip gives the package, tea and final talisman once', () => {

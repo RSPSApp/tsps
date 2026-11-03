@@ -21,6 +21,13 @@ module.exports = function registerANightAtTheTheatre(api) {
   const GATE_ATTRIBUTE = "night-at-the-theatre:crypt-unlocked";
   const EGGS_OPENED_ATTRIBUTE = "night-at-the-theatre:egg-sac-opened";
   const LAMP = I.ANTIQUE_LAMP_23;
+  // Sibling varbits on varp 3055. Capture 101 (fresh) sets given_acid when Daer
+  // Krand hands over the acid (tick 24272) and done_tob when the Theatre run
+  // finishes (tick 27338); capture 1695 (veteran) already holds done_tob on
+  // login. The quest stage itself is re-sent by QuestRuntime, but these two are
+  // not, so the bootstrap has to publish them for the client transforms.
+  const VARBIT_TOB_DONE = 12972;
+  const VARBIT_GIVEN_ACID = 12974;
   const CRYPT_ENTRANCE = 42523;
   const CRYPT_EXIT = 42524;
   const CRYPT_GATE = 42529;
@@ -110,7 +117,7 @@ module.exports = function registerANightAtTheTheatre(api) {
       player.sendMessage("Sugadinti is grateful for your help.");
       return true;
     }
-    if (!s && !requirement(player)) { player.sendMessage("You must complete A Taste of Hope before helping the Mysterious Stranger."); return true; }
+    if (!s && !requirement(player)) { startTranscript(api, player, npcId, STRANGER_PAGE, "initial-dialogue"); return true; }
     let variant;
     if (!s) variant = hasRaidCompletion(player) ? "starting-off-if-the-player-has-cleared-the-theatre-at-least-once" : "starting-off-if-the-player-hasn-t-cleared-the-theatre-before";
     else if (s < 14) variant = held(player, I.RANIS_HEAD) ? "talking-to-the-mysterious-stranger-after-getting-ranis-head" : "starting-off-talking-to-the-mysterious-stranger-after-being-told-to-get-ranis-head";
@@ -187,7 +194,7 @@ module.exports = function registerANightAtTheTheatre(api) {
     if (stepId === "0vgPPw" && s === 31) advance(player, 32);
     if (stepId === "Jb3C2v" && s === 32) advance(player, 33);
     if (["IU5Rz7", "Qs0rAF", "5e1Ac5"].includes(stepId) && s >= 22 && s < 30 && give(player, I.SULPHURIC_ACID)) {
-      player.setAttribute(ACID_ATTRIBUTE, 1); player.getPacketSender().sendVarbit(12974, 1);
+      player.setAttribute(ACID_ATTRIBUTE, 1); player.getPacketSender().sendVarbit(VARBIT_GIVEN_ACID, 1);
     }
     if (stepId === "iMEbae" && s >= 44 && s < 48 && held(player, I.HESPORI_BARK)) { player.getInventory().deleteNumber(I.HESPORI_BARK, 1); advance(player, 48); }
     if (stepId === "MyJYx0" && s === 48) advance(player, 50);
@@ -196,13 +203,7 @@ module.exports = function registerANightAtTheTheatre(api) {
   }
   function condition({ player, stepId, pages }) {
     const names = (pages ?? []).map(entry => String(entry.page ?? "").replace(/^Transcript:/, ""));
-    // The Stranger's post-quest page offers a Sinhaza shroud this server cannot
-    // award (the tier rules are not implemented), so the reward option is not
-    // offered; the teleport crystal option opens the shop.
-    if (names.includes(STRANGER_PAGE)) {
-      if (stepId === "FY0RCF") return true;
-      if (stepId === "WhwoJ-" || stepId === "-nVpES") return false;
-    }
+    // The Stranger's Sinhaza shroud conditions are answered by the Theatre of Blood's Stats unit.
     if (!names.includes(PAGE)) return;
     const conditions = {
       "YudDDA": !held(player, I.RANIS_HEAD), "tv61D-": !held(player, I.STRANGE_SPIDER_EGGS), "UuYs_j": !held(player, I.HESPORI_BARK),
@@ -325,13 +326,21 @@ module.exports = function registerANightAtTheTheatre(api) {
     if (!quest.isComplete(event.player)) return;
     claimLamps(event.player); event.handled = true;
   }
-  function raidCompleted({ player }) { if (stage(player) >= 52 && stage(player) < 78) advance(player, 78); }
+  function raidCompleted({ player }) {
+    if (stage(player) >= 52 && stage(player) < 78) advance(player, 78);
+    player.getPacketSender().sendVarbit(VARBIT_TOB_DONE, 1);
+  }
   function raidSkip({ player, option, npcId }) {
     if (api.core.NpcDefinition.forId(npcId)?.getName?.() !== "Mysterious Stranger") return;
     if (stage(player) >= 52 && stage(player) < 56 && option === "Yes." && hasRaidCompletion(player)) advance(player, 78);
   }
+  function sendAuxVarbits(player) {
+    const sender = player.getPacketSender();
+    sender.sendVarbit(VARBIT_GIVEN_ACID, value(player, ACID_ATTRIBUTE));
+    sender.sendVarbit(VARBIT_TOB_DONE, hasRaidCompletion(player) ? 1 : 0);
+  }
+  function handleBootstrap({ player }) { sendAuxVarbits(player); }
   function login({ player }) {
-    player.getPacketSender().sendVarbit(12974, value(player, ACID_ATTRIBUTE));
     if (player.getLocation().getX() >= 3500 && player.getLocation().getX() <= 3520 && player.getLocation().getY() >= 3345 && player.getLocation().getY() <= 3370) player.moveTo(new Location(3497, 3355, 0));
   }
   for (const key of [LAMPS_ATTRIBUTE, NOTE_ATTRIBUTE, ACID_ATTRIBUTE, HEAD_ATTRIBUTE, GATE_ATTRIBUTE, EGGS_OPENED_ATTRIBUTE]) api.persistAttribute(key);
@@ -358,5 +367,6 @@ module.exports = function registerANightAtTheTheatre(api) {
   api.onCustomEvent("hespori:quest-defeated", hesporiDefeated);
   api.onCustomEvent("tob:completed", raidCompleted);
   api.onCustomEvent("night-at-the-theatre:claim-lamps", reclaimLamps);
+  api.onCustomEvent("player:bootstrap-complete", handleBootstrap);
   api.onPlayerLogin(login);
 };

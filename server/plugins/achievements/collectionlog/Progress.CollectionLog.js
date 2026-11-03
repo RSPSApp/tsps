@@ -142,9 +142,12 @@ function obtain(player, itemId, amount = 1, { ensure = false, silent = false } =
   all[itemId] = ensure ? Math.max(before, 1) : before + amount;
   player.setAttribute(ITEMS_ATTRIBUTE, all);
   if (before > 0) return false;
+  // "collection-log:slot-filled" { player, itemId }: any slot filled, silent ones too (a league's "Fill 15 slots...").
+  pluginApi.emitCustomEvent("collection-log:slot-filled", { player, itemId });
   const total = uniqueCount(player);
   player.getPacketSender().sendConfig(VARP.UNSYNCED, total);
   if (!silent) announce(player, itemId);
+  // "collection-log:new-item" { player, itemId }: a newly earned item the player is told about (a clan broadcast).
   if (!silent && !ensure) pluginApi.emitCustomEvent("collection-log:new-item", { player, itemId });
   const list = recent(player);
   list.unshift([itemId, today()]);

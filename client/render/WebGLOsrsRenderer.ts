@@ -166,6 +166,7 @@ import { InteractType } from "./InteractType";
 import { profiler } from "./PerformanceProfiler";
 import { PlayerChatheadFactory } from "./PlayerChatheadFactory";
 import { resolveFogRange } from "./RenderDistancePolicy";
+import { SceneFrameHold } from "./SceneFrameHold";
 import { Frustum } from "../game/Frustum";
 import { WebGLMapSquare } from "./WebGLMapSquare";
 import { WorldEntityAnimator } from "./WorldEntityAnimator";
@@ -414,6 +415,12 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     textureColorTarget?: Texture;
     textureDepthTarget?: Renderbuffer;
     textureFramebuffer?: Framebuffer;
+    /** Presents the last scene while the player's square builds (SceneFrameHold). */
+    sceneFrameHold = new SceneFrameHold();
+    /** The frame texture holding the last scene drawn over a ready square, and its size. */
+    heldSceneFramebuffer?: Framebuffer;
+    heldSceneWidth = 0;
+    heldSceneHeight = 0;
 
     // Textures
     textureFilterMode: TextureFilterMode = TextureFilterMode.DISABLED;

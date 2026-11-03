@@ -175,7 +175,7 @@ module.exports = function attach(api, Events) {
         const island = variant === "evilbob";
         const npc = active.definition.id;
         const line = island
-          ? `Hey, ${player.getUsername()}, come with me if you like fishing! Or has this amulet of humanspeak broken again?`
+          ? `Hey, ${player.getDisplayName()}, come with me if you like fishing! Or has this amulet of humanspeak broken again?`
           : "Do you wanna meet my pet? His name's Pete. Or has this amulet of humanspeak broken again?";
         say(player, [{ npc, text: line, anim: 555 }], {
           title: "Follow the scary cat?",
@@ -378,7 +378,7 @@ module.exports = function attach(api, Events) {
     const player = session.player;
     const magic = player.getSkillManager().getMaxLevel(api.core.Skill.MAGIC);
     const skill = magic >= MAGIC_XP_LEVEL && Math.random() < 0.5 ? api.core.Skill.MAGIC : api.core.Skill.FISHING;
-    Teleports.finish(session);
+    Teleports.finish(session, { completed: true });
     player.getSkillManager().addExperience(skill, ISLAND_XP, false);
     say(player, [
       { me: true, text: "Now what was that all about? Did any of that really happen?", anim: 555 },
@@ -398,11 +398,11 @@ module.exports = function attach(api, Events) {
         { me: true, text: "Evil Bob has fallen asleep, come quickly!" },
         { npc: servant, text: "Come? Come where?" },
         { me: true, text: "Away from this place! To Gielinor!" },
-        { npc: servant, text: `You go, ${player.getUsername()}, I don't belong there... I belong here, in ScapeRune. This is the only place I can ever go...` },
+        { npc: servant, text: `You go, ${player.getDisplayName()}, I don't belong there... I belong here, in ScapeRune. This is the only place I can ever go...` },
       ], { options: [
         ["But I love you!", () => say(player, [
           { me: true, text: "But I love you!" },
-          { npc: servant, text: `Our love can never be, sweet ${player.getUsername()}.` },
+          { npc: servant, text: `Our love can never be, sweet ${player.getDisplayName()}.` },
           { npc: servant, text: "Go now! Go, and don't look back!" },
         ])],
         ["Oh, alright then.", () => say(player, [{ me: true, text: "Oh, alright then, I'll be off! See you around!" }])],
@@ -450,7 +450,7 @@ module.exports = function attach(api, Events) {
     if (!session || session.kind !== "evilbob") return false;
     event.handled = true;
     const player = event.player;
-    const name = player.getUsername();
+    const name = player.getDisplayName();
     const bob = N.EVIL_BOB_2;
     if (session.data.asleep) {
       Flow.statement(api, player, "Evil Bob appears to be sleeping, best not to wake him up.");

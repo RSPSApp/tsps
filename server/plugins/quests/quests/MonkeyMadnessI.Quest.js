@@ -995,9 +995,9 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
       }
       case "pgN5Sw": // sigil: subsequent times
         return flag(player, SIGIL_USED_ATTRIBUTE);
-      case "Agjjnw": // the player is male
+      case "AYjoK1": // the player is male
         return player.getAppearance?.().isMale?.() !== false;
-      case "DTbh6y": // the player is female
+      case "c39yGh": // the player is female
         return player.getAppearance?.().isMale?.() === false;
       default:
         return null;

@@ -102,7 +102,7 @@ function tip(player, house, itemId, noun, amount) {
   jar[itemId === COINS ? "coins" : "platinum"] += given;
   House.saveHouse(house);
   player.sendMessage(`You tip ${given.toLocaleString("en-US")} ${noun}.`);
-  if (!jar.muted) house.owner.sendMessage(`${player.getUsername()} has tipped you ${given.toLocaleString("en-US")} ${noun}.`);
+  if (!jar.muted) house.owner.sendMessage(`${player.getDisplayName()} has tipped you ${given.toLocaleString("en-US")} ${noun}.`);
 }
 
 function tipWith(event) {

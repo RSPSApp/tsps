@@ -16,11 +16,12 @@
  * caught in any order. Durable completion stage 4 is sent as varp 76 value 6:
  * cache quest DB row 126 requires >= 6 for completion.
  *
- * Requirements: the cache quest row lists 31 Prayer, and the OSRS Wiki marks
- * Alfred Grimhand's Barcrawl as the only "[required to start]" requirement.
- * This server has no Barcrawl quest or attribute, so the start gate enforces
- * the 31 Prayer the cache lists (needed to reach the Monastery scorpion) and
- * plays the page's "without the requirements" branch when it is missing.
+ * Requirements: the OSRS Wiki marks Alfred Grimhand's Barcrawl as the only
+ * "[required to start]" requirement and 31 Prayer as "[not required to start]"
+ * (it is needed to enter the Monastery 1st floor, shared Doors/Ladders content
+ * this plugin does not own). This server has no Barcrawl quest or attribute, so
+ * the start gate cannot be enforced here and the quest is offered as it comes;
+ * Prayer is therefore not used as a substitute for the missing requirement.
  *
  * Picking a scorpion up stings for 3 hitpoints (OSRS Wiki, "The first
  * scorpion"), and the post-quest battlestaff service uses the cache interface
@@ -195,11 +196,10 @@ module.exports = function registerScorpionCatcherQuest(api) {
         return "finishing-up";
       }
       if (stage === 0) {
-        // Alfred Grimhand's Barcrawl has no server quest to read; the Prayer
-        // requirement is enforced here and by the start hook.
-        return meetsSkillRequirements(player)
-          ? "starting-off-with-the-requirements"
-          : "starting-off-without-the-requirements";
+        // The only start requirement is Alfred Grimhand's Barcrawl, which this
+        // server has no quest or attribute for, so the quest is offered as it
+        // comes rather than refused on a requirement that cannot be read.
+        return "starting-off-with-the-requirements";
       }
       return "starting-off-subsequent-dialogue";
     }
@@ -229,28 +229,9 @@ module.exports = function registerScorpionCatcherQuest(api) {
     return null;
   }
 
-  /** The cache quest row also lists 31 Prayer (needed to reach the monastery scorpion). */
-  const PRAYER_REQUIREMENT = 31;
-
-  function meetsSkillRequirements(player) {
-    return player.getSkillManager().getMaxLevel(Skill.PRAYER) >= PRAYER_REQUIREMENT;
-  }
-
-  function notifySkillRequirements(player) {
-    if (!meetsSkillRequirements(player)) {
-      player.sendMessage(
-        `You need a Prayer level of at least ${PRAYER_REQUIREMENT} to start this quest.`
-      );
-    }
-  }
-
   function handleStartHook({ player, npcId, hook }) {
     if (npcId !== THORMAC_NPC_ID || hook !== START_HOOK) return;
     if (quest.getStage(player) < STAGE_STARTED) {
-      if (!meetsSkillRequirements(player)) {
-        notifySkillRequirements(player);
-        return;
-      }
       if (!ownsAnyCage(player)) player.getInventory().adds(EMPTY_CAGE, 1);
       quest.setStage(player, STAGE_STARTED);
     }

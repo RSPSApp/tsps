@@ -163,4 +163,12 @@ export class HitQueue {
     isEmpty(exception: Mobile): boolean {
         return this.pendingHits.every(({ hit }) => hit.getAttacker() === exception);
     }
+
+    /** Like isEmpty, but hits on their way from NPCs nobody owns don't count either. */
+    isEmptyButFreeNpcs(exception: Mobile): boolean {
+        return this.pendingHits.every(({ hit }) => {
+            const attacker = hit.getAttacker();
+            return attacker === exception || (attacker.isNpc() && attacker.getAsNpc().getOwner() == null);
+        });
+    }
 }

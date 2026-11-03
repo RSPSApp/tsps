@@ -2,7 +2,6 @@
 
 const data = require("./Data.BarbarianAssault");
 
-const LEGACY_HONOUR_ATTRIBUTE = "barbarian-assault:honour";
 const QUEEN_KILLED_ATTRIBUTE = "barbarian-assault:queen-killed";
 const HIGH_GAMBLE_COUNT_ATTRIBUTE = "barbarian-assault:high-gambles";
 const LAST_ROLE_ATTRIBUTE = "barbarian-assault:last-role";
@@ -26,11 +25,7 @@ function count(player, key, fallback = 0) {
 }
 
 function honourOf(player) {
-  return Math.max(0, Math.trunc(Number(player?.getAttribute?.(LEGACY_HONOUR_ATTRIBUTE)) || 0));
-}
-
-function setHonour(player, value) {
-  player?.setAttribute?.(LEGACY_HONOUR_ATTRIBUTE, Math.max(0, Math.trunc(value)));
+  return data.ROLES.reduce((total, role) => total + points(player, role), 0);
 }
 
 function points(player, role) {
@@ -110,11 +105,11 @@ function setQueenKilled(player, value) {
   player?.setAttribute?.(QUEEN_KILLED_ATTRIBUTE, value === true);
 }
 
-function recordQueenKill(player, { legacyHonour = true } = {}) {
+function recordQueenKill(player, { awardPoints = true } = {}) {
   if (!player) return false;
   setQueenKilled(player, true);
   player.setAttribute(data.ATTRIBUTE.QUEEN_KILLS, queenKills(player) + 1);
-  if (legacyHonour) setHonour(player, honourOf(player) + QUEEN_KILL_HONOUR);
+  if (awardPoints) addLegacyHonour({ player, points: QUEEN_KILL_HONOUR });
   sync(player);
   return true;
 }
@@ -123,9 +118,7 @@ function recordQueenKill(player, { legacyHonour = true } = {}) {
 function award(player, role, amount) {
   if (!player || !data.ROLE_LABEL[role]) return 0;
   player.setAttribute(LAST_ROLE_ATTRIBUTE, role);
-  const gained = addPoints(player, role, amount);
-  setHonour(player, honourOf(player) + Math.max(0, gained));
-  return gained;
+  return addPoints(player, role, amount);
 }
 
 /** Wave 10: 80 in the player's role and 5 in each other role. */
@@ -166,37 +159,36 @@ function addLegacyHonour(request) {
   const player = request?.player;
   const amount = Number(request?.points ?? request?.amount);
   if (!player || !Number.isFinite(amount) || amount === 0) return;
-  setHonour(player, honourOf(player) + Math.trunc(amount));
   const lastRole = player.getAttribute?.(LAST_ROLE_ATTRIBUTE);
-  if (data.ROLE_LABEL[lastRole]) addPoints(player, lastRole, amount);
+  addPoints(player, data.ROLE_LABEL[lastRole] ? lastRole : data.ROLE.ATTACKER, amount);
 }
 
 function queenDied({ npc, killer }) {
   if (!killer || npc?.getId?.() !== core?.NpcIdentifiers?.PENANCE_QUEEN) return;
-  // The match emits the kill for every member so the role bonus and the legacy
-  // gamble flag are paid once; only an unrelated queen death uses this hook.
+  // The match records every member's kill and pays its own role bonus.
   if (npc?.__baType === "queen") return;
   recordQueenKill(killer);
 }
 
 function queenKillRequest(request) {
   if (!request || request.handled) return;
-  recordQueenKill(request.player);
+  recordQueenKill(request.player, { awardPoints: request.awardPoints !== false });
   request.handled = true;
 }
 
-function highGamble(player, random = Math.random) {
+function highGamble(player, random = Math.random, role) {
   if (!player) return { allowed: false, reason: "player", pet: false, awarded: false };
   if (!queenKilled(player)) {
     player.sendMessage?.("You need to defeat the Penance Queen before you can take a high gamble, soldier.");
     return { allowed: false, reason: "queen", pet: false, awarded: false };
   }
-  if (honourOf(player) < HIGH_GAMBLE_COST) {
-    player.sendMessage?.(`You need ${HIGH_GAMBLE_COST} Honour Points for a high gamble.`);
+  role ??= data.ROLES.find((candidate) => points(player, candidate) >= HIGH_GAMBLE_COST);
+  if (!data.ROLE_LABEL[role] || points(player, role) < HIGH_GAMBLE_COST) {
+    player.sendMessage?.(`You need ${HIGH_GAMBLE_COST} Honour Points in one role for a high gamble.`);
     return { allowed: false, reason: "points", pet: false, awarded: false };
   }
 
-  setHonour(player, honourOf(player) - HIGH_GAMBLE_COST);
+  addPoints(player, role, -HIGH_GAMBLE_COST);
   player.setAttribute?.(HIGH_GAMBLE_COUNT_ATTRIBUTE, count(player, HIGH_GAMBLE_COUNT_ATTRIBUTE) + 1);
   sync(player);
 
@@ -208,7 +200,7 @@ function highGamble(player, random = Math.random) {
 
 function highGambleRequest(request) {
   if (!request || request.handled) return;
-  request.result = highGamble(request.player);
+  request.result = highGamble(request.player, Math.random, request.role);
   request.handled = true;
 }
 
@@ -216,13 +208,21 @@ function highGambleDialogue(request) {
   if (!request || request.npcId !== core?.NpcIdentifiers?.COMMANDER_CONNAD || !HIGH_GAMBLE_STEPS.has(request.stepId)) return;
   request.handled = true;
   request.end = true;
-  highGamble(request.player);
+  highGamblePrompt(request.player);
 }
 
 function highGambleOption(event) {
   if (!event || event.handled) return;
-  highGamble(event.player);
+  highGamblePrompt(event.player);
   event.handled = true;
+}
+
+function highGamblePrompt(player) {
+  api.sendMultiChatboxPrompt(player, "Which role will pay the 500 Honour Points?",
+    ...data.ROLES.flatMap((role) => [
+      `${data.ROLE_LABEL[role]} (${points(player, role)})`,
+      () => highGamble(player, Math.random, role),
+    ]));
 }
 
 const roleCurrency = {
@@ -235,7 +235,6 @@ const roleCurrency = {
 function attach(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
-  pluginApi.persistAttribute(LEGACY_HONOUR_ATTRIBUTE, 0);
   pluginApi.persistAttribute(QUEEN_KILLED_ATTRIBUTE, false);
   pluginApi.persistAttribute(HIGH_GAMBLE_COUNT_ATTRIBUTE, 0);
   pluginApi.persistAttribute(LAST_ROLE_ATTRIBUTE, "");
@@ -255,11 +254,11 @@ function attach(pluginApi) {
 }
 
 module.exports = {
-  LEGACY_HONOUR_ATTRIBUTE, QUEEN_KILLED_ATTRIBUTE, HIGH_GAMBLE_COUNT_ATTRIBUTE,
+  QUEEN_KILLED_ATTRIBUTE, HIGH_GAMBLE_COUNT_ATTRIBUTE,
   QUEEN_KILL_HONOUR, HIGH_GAMBLE_COST, PENANCE_PET_ITEM_ID, PET_CHANCE,
-  honourOf, setHonour, points, setPoints, addPoints, level, setLevel,
+  honourOf, points, setPoints, addPoints, level, setLevel,
   upgradeCost, upgradeRole, allRoleMinimum, addToAllRoles, removeFromAllRoles,
   queenKills, queenKilled, setQueenKilled, recordQueenKill, award, awardQueen,
-  sync, roleCurrency, highGamble, attach,
+  sync, roleCurrency, highGamble, highGamblePrompt, attach,
   _test: { HIGH_GAMBLE_STEPS, addLegacyHonour, queenDied },
 };

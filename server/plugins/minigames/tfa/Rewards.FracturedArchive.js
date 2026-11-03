@@ -37,6 +37,12 @@ function syncZeal({ player }) {
   player.getPacketSender().sendVarbit(ZEAL_UNLOCKED_VARBIT, player.getAttribute(ZEAL_UNLOCKED_ATTRIBUTE) === true ? 1 : 0);
 }
 
+/** Wiki transcript: the horn's Inspect points the player at Camelot. */
+function inspectHorn({ player }) {
+  player.sendMessage("You inspect the horn-like item...");
+  player.sendMessage("You notice a small symbol, similar to the one you've seen the Knights of the Round Table wear.");
+}
+
 /** Wiki: "Upon entering Camelot, a cutscene begins" - the cutscene is not built, a message stands in. */
 function enterCamelot(mobile) {
   const player = mobile.isPlayer?.() ? mobile.getAsPlayer() : null;
@@ -148,10 +154,11 @@ module.exports = function registerFracturedArchiveRewards(api) {
   api.persistAttribute(ZEAL_UNLOCKED_ATTRIBUTE, false);
   api.onPlayerLogin(syncZeal);
   api.onPrayerDisabled(zealRequirements);
+  api.onItemAction("Horn of Bran", { Inspect: inspectHorn });
   api.registerArea(createCamelotArea(api));
   for (const folio of ["Archivist's folio", "Archivist's folio (inert)"]) {
     api.onItemAction(folio, { Read: readFolio, Charge: chargeFolio, Check: checkFolio });
     api.onItemOnItem("Ascension shards", folio, chargeWithShards);
   }
 };
-module.exports._test = { zealRequirements, readFolio, chargeFolio, enterCamelot, chargeWithShards };
+module.exports._test = { zealRequirements, readFolio, chargeFolio, enterCamelot, inspectHorn, chargeWithShards };

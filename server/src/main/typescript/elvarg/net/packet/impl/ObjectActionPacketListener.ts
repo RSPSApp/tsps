@@ -70,7 +70,7 @@ export class ObjectActionPacketListener {
       const interactionLocation = player.getLocation().clone();
       player.getMovementQueue().reset();
       player.getMovementQueue().walkToReset();
-      player.setPositionToFace(object.getLocation());
+      player.setPositionToFace(player.getLocation().equals(object.getLocation()) ? null : object.getLocation());
 
       const pluginHandled = PluginManager.emitObjectInteraction({
         player,

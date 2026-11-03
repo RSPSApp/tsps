@@ -32,7 +32,7 @@ function completion(t, actors, roll = 0) {
   for (const { p } of actors) { raid.players.add(p); raid.original.add(p.getUsername()); raid.points.set(p.getUsername(), 100000); p.setAttribute(Raid.ATTR_RAID, raid); }
   raid.totalPoints = 100000 * actors.length; raid.startCycle = 0; raid.stage = Raid.STAGE.OLM;
   t.mock.method(Math, "random", () => roll); t.mock.method(core.World, "getProcessCycle", () => 100); raid.complete();
-  assert.equal(raid.duration, 101, "completion must fix the elapsed time before setting its completed flag");
+  assert.equal(raid.duration, 100, "completion must fix the elapsed time before setting its completed flag");
   t.after(() => { raid.players.clear(); raid.destroy("test"); });
   return raid;
 }

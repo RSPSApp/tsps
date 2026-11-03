@@ -9,18 +9,26 @@
  * Stages (varp 317): 10 started, 20 Dad killed, 30 prison key looted, 40 both
  * cell keys, 45 Godric and Eadgar freed, 50 complete.
  *
- * Requires Death Plateau. Dad's arena fight is not simulated (his death
- * advances the stage); the rock climb and stile are the shared Agility
- * shortcuts. The arena gates, cave tunnel, stronghold door and stairs, and the
- * prison door are reproduced as scene handoffs. Dad's arena menu has a missing
- * first option in the dump ("Why are you called Dad?"), so his Talk-to is
- * replayed with that text patched in. Twig and Berry can be pickpocketed
+ * Requires Death Plateau. The rock climbs and stile are the shared Agility
+ * shortcuts; the arena gates and the prison door are Doors pass-through gates
+ * that this plugin guards. Walking into the arena (or talking to Dad) plays his
+ * challenge; he surrenders instead of dying ("Stop! You win."), which advances
+ * the stage, and only the transcript's "Prepare to die!" kills him, turning the
+ * spectators on the player. Dad's arena menu has a missing first option in the
+ * dump ("Why are you called Dad?"), so it is replayed with that text patched in.
+ * A Troll general's drop table carries the prison key; this plugin only says
+ * whether the killer may have one. Twig and Berry can be pickpocketed
  * (30 Thieving) through their transcript variants or killed for the keys; the
- * cell doors unlock with Cell key 1 (Godric) and Cell key 2 (Eadgar).
+ * cell doors unlock with Cell key 1 (Godric) and Cell key 2 (Eadgar), swing open
+ * for a moment and lock again, so every player frees their own prisoners. The
+ * prison's Exit and the Secret Door outside are the back way in and out.
  */
 module.exports = function registerTrollStrongholdQuest(api) {
-  const { Skill, Location, GameObject, ObjectManager, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
+  const {
+    Skill, Location, GameObject, ObjectManager, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers,
+    World, TaskManager, CountdownTask, Sound, Sounds, Area, Boundary,
+  } = api.core;
+  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
   const { startDialogue } = require("../../npcs/NpcDialogues.plugin.js");
 
   const DENULTH_NPC_IDS = new Set([NpcIdentifiers.DENULTH, NpcIdentifiers.DENULTH_2]);
@@ -54,26 +62,38 @@ module.exports = function registerTrollStrongholdQuest(api) {
   const COINS_ITEM_ID = ItemIdentifiers.COINS;
 
   // Godric's locked cell door (3767) takes Cell key 1, Eadgar's (3765) Cell
-  // key 2; unlocking swings the 3764 open door one tile west like the map's
-  // other open cells.
+  // key 2. Unlocking swings the door's nameless open leaf (closed id + 1) into
+  // the cell tile west, and it locks again a moment later.
   const CELL_DOOR_GODRIC_ID = ObjectIdentifiers.CELL_DOOR_5;
   const CELL_DOOR_EADGAR_ID = ObjectIdentifiers.CELL_DOOR_4;
-  const CELL_DOOR_OPEN_ID = ObjectIdentifiers.CELL_DOOR_3;
+  const CELL_DOOR_OPEN_LEAF_IDS = new Map([[CELL_DOOR_GODRIC_ID, 3768], [CELL_DOOR_EADGAR_ID, 3766]]);
+  const CELL_DOOR_OPEN_TICKS = 2;
   const GUARD_THIEVING_LEVEL = 30;
 
-  // Cache osrs-241 gameval: troll_stronghold_arena_entrance_inactive (3784)
-  // and troll_stronghold_arena_exit_inactive (3787). Opening a gate swaps the
-  // actionful leaf for its actionless, same-model static form.
   const ARENA_ENTRANCE_IDS = new Set([ObjectIdentifiers.ARENA_ENTRANCE, ObjectIdentifiers.ARENA_ENTRANCE_2]);
-  const ARENA_ENTRANCE_OPEN_ID = 3784;
   const ARENA_EXIT_IDS = new Set([ObjectIdentifiers.ARENA_EXIT, ObjectIdentifiers.ARENA_EXIT_2]);
-  const ARENA_EXIT_OPEN_ID = 3787;
+  // The entrance is the arena's west wall (x 2897), the exit its north wall (y 3629).
+  const ARENA_ENTRANCE_X = 2897;
+  const ARENA_EXIT_Y = 3629;
+  // Dad's challenge starts once the step through the entrance has landed.
+  const ARENA_CHALLENGE_DELAY_TICKS = 2;
+  const ARENA_SEARCH_RADIUS = 24;
+  // Inside the arena's walls, where Dad and his spectators stand (the arena's multi-combat zone).
+  const TROLL_ARENA = { minX: 2896, maxX: 2927, minY: 3595, maxY: 3630, z: 0 };
+  const ARENA_SPECTATOR_IDS = new Set([
+    NpcIdentifiers.TROLL_SPECTATOR, NpcIdentifiers.TROLL_SPECTATOR_2, NpcIdentifiers.TROLL_SPECTATOR_3,
+    NpcIdentifiers.TROLL_SPECTATOR_4, NpcIdentifiers.TROLL_SPECTATOR_5, NpcIdentifiers.TROLL_SPECTATOR_6,
+    NpcIdentifiers.TROLL_SPECTATOR_7,
+  ]);
   const CAVE_ENTRANCE_ID = ObjectIdentifiers.CAVE_ENTRANCE_22;
   const CAVE_EXIT_ID = ObjectIdentifiers.CAVE_EXIT_11;
   const STRONGHOLD_ENTRANCE_ID = ObjectIdentifiers.STRONGHOLD;
   const STRONGHOLD_EXIT_IDS = new Set([ObjectIdentifiers.EXIT_2, ObjectIdentifiers.EXIT_3, ObjectIdentifiers.EXIT_4]);
   const PRISON_DOOR_ID = ObjectIdentifiers.PRISON_DOOR_9;
-  const PRISON_DOOR_OPEN_ID = 3781; // gameval troll_stronghold_prison_door_open
+  const PRISON_EXIT_ID = ObjectIdentifiers.EXIT;
+  const SECRET_DOOR_ID = ObjectIdentifiers.SECRET_DOOR;
+  // Capture 740 tick 1471: the unlock sound plays with the door's own (Doors sends that one).
+  const PRISON_DOOR_UNLOCK_SOUND_ID = 1631;
   // Cache-map tiles: the entrance emerges on the top floor beside the exits;
   // the cave tunnel's south and north mouths both surface beside the arena path.
   const STRONGHOLD_INTERIOR = new Location(2836, 10090, 2);
@@ -82,6 +102,12 @@ module.exports = function registerTrollStrongholdQuest(api) {
   const CAVE_SOUTH_SURFACE = new Location(2904, 3643, 0);
   const CAVE_NORTH_INTERIOR = new Location(2907, 10019, 0);
   const CAVE_NORTH_SURFACE = new Location(2908, 3654, 0);
+  // The prison's south Exit (2823,10048) and the Secret Door (2827,3647) in the
+  // mountain pass: the tiles in front of each (cache map, no capture).
+  const PRISON_EXIT_INTERIOR = new Location(2824, 10050, 0);
+  const SECRET_DOOR_SURFACE = new Location(2827, 3646, 0);
+  // The prison's cells and corridor, where Godric and Eadgar are held.
+  const PRISON_CELLS = { minX: 2820, maxX: 2840, minY: 10070, maxY: 10095, z: 0 };
   const LAW_TALISMAN_PRICE = 1000;
   const BUY_LAW_TALISMAN_ACTION_ID = "JpNnpQ";
 
@@ -94,8 +120,20 @@ module.exports = function registerTrollStrongholdQuest(api) {
   const BERRY_KEY_VARIANT = "entering-the-prison-retrieving-the-keys-from-berry";
   const FREEING_VARIANT = "entering-the-prison-freeing-eadgar-and-godric";
   const DAD_ARENA_VARIANT = "getting-started-entering-dad-s-arena";
+  const DAD_DEFEATED_VARIANT = "getting-started-after-dad-has-been-defeated";
   // The dump lost the first arena option's text ({{topt||Why are you called Dad?}}).
   const DAD_MISSING_OPTION_TEXT = "Why are you called Dad?";
+  const DAD_BLOCKS_EXIT_TEXT = "No human pass through arena without defeating Dad!";
+  const DAD_REFIGHT_MESSAGE = "You don't need to fight him again.";
+  const DAD_WONT_TALK_MESSAGE = "He doesn't seem interested in talking right now.";
+  /** "I accept your challenge!" and "I'm not done yet! Prepare to die!" */
+  const DAD_ACCEPT_ACTION_ID = "AL-4op";
+  const DAD_FATAL_BLOW_ACTION_ID = "yw_WWY";
+  // Rsprox 740/741 (after the quest): the prisoners' Talk-to from inside their cells.
+  const PRISONER_LINES = new Map([
+    [NpcIdentifiers.GODRIC, { speaker: "Godric", text: "Don't worry about me, I'll be out again soon enough." }],
+    [NpcIdentifiers.EADGAR, { speaker: "Eadgar", text: "Don't worry about me, I'll be out in a jiffy. Talk to me at my home." }],
+  ]);
 
   const START_HOOK = "quest:troll-stronghold:start";
   /** Twig / Berry pocket messages that yield the cell keys. */
@@ -105,6 +143,8 @@ module.exports = function registerTrollStrongholdQuest(api) {
   const COMPLETE_ACTION_ID = "GT_EpY";
 
   let quest;
+  /** Dads being killed after surrendering ("Prepare to die!"), whose death goes ahead. */
+  const dadExecutions = new WeakSet();
 
   const held = (player, itemId, amount = 1) =>
     player.getInventory().getAmount(itemId) >= amount;
@@ -117,17 +157,6 @@ module.exports = function registerTrollStrongholdQuest(api) {
 
   function syncFreedHelperState(player) {
     player.getPacketSender().sendVarbit(VARBIT_EADGAR_FREED, eadgarFreed(player) ? 1 : 0);
-  }
-
-  /** Swaps a blocking loc for its actionless open form; ObjectManager register does not re-add clipping. */
-  function openLoc(object, openId) {
-    const location = object.getLocation();
-    ObjectManager.deregister(object, true);
-    ObjectManager.register(
-      new GameObject(openId, new Location(location.getX(), location.getY(), location.getZ()),
-        object.getType(), object.getFace(), object.getPrivateArea() ?? null),
-      true
-    );
   }
 
   function buildJournal(player, questHandle) {
@@ -200,16 +229,6 @@ module.exports = function registerTrollStrongholdQuest(api) {
     if (godricFreed(player) && eadgarFreed(player)) quest.setStage(player, STAGE_GODRIC_FREED);
   }
 
-  /** Talking to a prisoner with both cell keys frees both cells at once. */
-  function freeBothCells(player) {
-    player.getInventory().deleteNumber(CELL_KEY_1_ITEM_ID, 1);
-    player.getInventory().deleteNumber(CELL_KEY_2_ITEM_ID, 1);
-    player.setAttribute(GODRIC_FREED_ATTRIBUTE, true);
-    player.setAttribute(EADGAR_FREED_ATTRIBUTE, true);
-    player.sendMessage("You unlock the cells and free Godric and Eadgar.");
-    updateFreedStage(player);
-  }
-
   /** Wiki: 30 Thieving; the first successful pocket holds the key. */
   function pickpocketGuard(event, keyId, variant) {
     const { player, npcId } = event;
@@ -238,22 +257,6 @@ module.exports = function registerTrollStrongholdQuest(api) {
 
   function pickpocketBerry(event) {
     pickpocketGuard(event, CELL_KEY_2_ITEM_ID, BERRY_KEY_VARIANT);
-  }
-
-  function openArenaGate(event) {
-    const { object, objectId } = event;
-    if (!object || !ARENA_ENTRANCE_IDS.has(objectId)) return false;
-    openLoc(object, ARENA_ENTRANCE_OPEN_ID);
-    event.handled = true;
-    return true;
-  }
-
-  function openArenaExit(event) {
-    const { object, objectId } = event;
-    if (!object || !ARENA_EXIT_IDS.has(objectId)) return false;
-    openLoc(object, ARENA_EXIT_OPEN_ID);
-    event.handled = true;
-    return true;
   }
 
   /** South mouth (arena side) and north mouth (Trollheim side) of the pass tunnel. */
@@ -301,41 +304,6 @@ module.exports = function registerTrollStrongholdQuest(api) {
     return true;
   }
 
-  /** The prison key opens the stronghold's prison door once; the unlock persists for the save. */
-  function unlockPrisonDoor(event) {
-    const { player, object, objectId } = event;
-    if (objectId !== PRISON_DOOR_ID) return false;
-    event.handled = true;
-    if (prisonDoorUnlocked(player)) {
-      if (object) openLoc(object, PRISON_DOOR_OPEN_ID);
-      return true;
-    }
-    if (!held(player, PRISON_KEY_ITEM_ID)) {
-      player.sendMessage("You need a key to unlock this door.");
-      return true;
-    }
-    player.setAttribute(PRISON_DOOR_ATTRIBUTE, true);
-    if (object) openLoc(object, PRISON_DOOR_OPEN_ID);
-    player.sendMessage("You unlock the door.");
-    return true;
-  }
-
-  /** Swings the locked cell door open into the cell, clearing its blocked tile. */
-  function openCellDoor(object) {
-    const location = object.getLocation();
-    ObjectManager.deregister(object, true);
-    ObjectManager.register(
-      new GameObject(
-        CELL_DOOR_OPEN_ID,
-        new Location(location.getX() - 1, location.getY(), location.getZ()),
-        object.getType(),
-        1,
-        object.getPrivateArea() ?? null
-      ),
-      true
-    );
-  }
-
   /** Cell Door "Unlock": key 1 for Godric's cell, key 2 for Eadgar's. */
   function unlockCellDoor(event) {
     const { player, objectId } = event;
@@ -361,10 +329,88 @@ module.exports = function registerTrollStrongholdQuest(api) {
     player.getInventory().deleteNumber(keyId, 1);
     player.setAttribute(isGodric ? GODRIC_FREED_ATTRIBUTE : EADGAR_FREED_ATTRIBUTE, true);
     syncFreedHelperState(player);
-    openCellDoor(event.object);
+    if (event.object) swingCellDoor(event.object);
     player.sendMessage(`You unlock the cell and free ${prisoner}.`);
     updateFreedStage(player);
     startTranscript(api, player, npcId, PAGE, FREEING_VARIANT);
+    return true;
+  }
+
+  /**
+   * Swings a cell door into its cell and locks it again a moment later. The
+   * cell stays locked for everyone else, who free their own prisoners.
+   */
+  function swingCellDoor(object) {
+    const location = object.getLocation();
+    const privateArea = object.getPrivateArea() ?? null;
+    const closed = new GameObject(object.getId(), new Location(location.getX(), location.getY(), location.getZ()),
+      object.getType(), object.getFace(), privateArea);
+    const opened = new GameObject(CELL_DOOR_OPEN_LEAF_IDS.get(object.getId()),
+      new Location(location.getX() - 1, location.getY(), location.getZ()), object.getType(), 1, privateArea);
+    ObjectManager.deregister(closed, true);
+    ObjectManager.register(opened, true);
+    TaskManager.submit(new CountdownTask(`troll-stronghold:cell-door:${location.getX()},${location.getY()}`,
+      CELL_DOOR_OPEN_TICKS, () => relockCellDoor(opened, closed)));
+  }
+
+  function relockCellDoor(opened, closed) {
+    ObjectManager.deregister(opened, true);
+    ObjectManager.register(closed, true);
+  }
+
+  /** The prison key opens the prison door; once unlocked (or after the quest) it no longer needs one. */
+  function unlockPrisonDoor(event) {
+    const { player, object, objectId } = event;
+    if (objectId !== PRISON_DOOR_ID) return false;
+    event.handled = true;
+    const firstUnlock = !prisonDoorUnlocked(player) && !quest.isComplete(player);
+    if (firstUnlock && !held(player, PRISON_KEY_ITEM_ID)) {
+      player.sendMessage("You need a key to unlock this door.");
+      return true;
+    }
+    if (firstUnlock) {
+      player.setAttribute(PRISON_DOOR_ATTRIBUTE, true);
+      player.sendMessage("You unlock the door.");
+    }
+    Sounds.sendSound(player, new Sound(PRISON_DOOR_UNLOCK_SOUND_ID, 1, 0, 0));
+    if (object) api.emitCustomEvent("door:open", { player, object, handled: false });
+    return true;
+  }
+
+  /** The prison's back exit leads out to the Secret Door in the pass. */
+  function leavePrison(event) {
+    const { player, objectId } = event;
+    if (objectId !== PRISON_EXIT_ID) return false;
+    player.moveTo(new Location(SECRET_DOOR_SURFACE.getX(), SECRET_DOOR_SURFACE.getY(), SECRET_DOOR_SURFACE.getZ()));
+    event.handled = true;
+    return true;
+  }
+
+  /** The Secret Door is the back way into the prison once the prisoners have been freed. */
+  function enterSecretDoor(event) {
+    const { player, objectId } = event;
+    if (objectId !== SECRET_DOOR_ID) return false;
+    event.handled = true;
+    if (quest.getStage(player) < STAGE_GODRIC_FREED) {
+      // No capture of the refusal; the Wiki only says the way opens during the quest.
+      player.sendMessage("The door won't open.");
+      return true;
+    }
+    player.moveTo(new Location(PRISON_EXIT_INTERIOR.getX(), PRISON_EXIT_INTERIOR.getY(), PRISON_EXIT_INTERIOR.getZ()));
+    return true;
+  }
+
+  const inPrisonCells = (location) => location.getZ() === PRISON_CELLS.z
+    && location.getX() >= PRISON_CELLS.minX && location.getX() <= PRISON_CELLS.maxX
+    && location.getY() >= PRISON_CELLS.minY && location.getY() <= PRISON_CELLS.maxY;
+
+  /** Godric and Eadgar talk from behind their cell doors; Eadgar at home keeps his own pages. */
+  function talkToPrisoner(event) {
+    const { player, npc, npcId } = event;
+    const line = PRISONER_LINES.get(npcId);
+    if (!line || !npc || !inPrisonCells(npc.getLocation())) return false;
+    startDialogue(api, event, [{ type: "line", ...line }], {},
+      { player, npc, npcId, definition: event.definition });
     return true;
   }
 
@@ -387,17 +433,135 @@ module.exports = function registerTrollStrongholdQuest(api) {
     });
   }
 
+  const dadDefeated = (player) => quest.getStage(player) >= STAGE_DAD_KILLED;
+
+  function findDad(location) {
+    return World.getNpcsNear(location, ARENA_SEARCH_RADIUS, null)
+      .find((npc) => npc.getId() === DAD_NPC_ID && npc.getHitpoints() > 0) ?? null;
+  }
+
+  function playDadChallenge(player, dad) {
+    startTranscript(api, player, DAD_NPC_ID, PAGE, DAD_ARENA_VARIANT, patchEmptyOptionText, dad);
+  }
+
+  /** Before the fight, Dad's challenge; after his surrender he has nothing to say until the quest is done. */
   function talkToDad(event) {
     const { player } = event;
-    if (quest.getStage(player) >= STAGE_DAD_KILLED) return false; // after-defeated transcript handles it
-    const record = loadTranscripts(api)?.[PAGE];
-    const steps = record?.variants?.[DAD_ARENA_VARIANT];
-    if (!Array.isArray(steps)) return false;
-    startDialogue(api, event, patchEmptyOptionText(steps), record.branches, {
-      player, npc: event.npc, npcId: event.npcId, definition: event.definition,
-      pages: [{ page: PAGE, variants: [DAD_ARENA_VARIANT] }],
-    });
+    if (quest.isComplete(player)) return false; // Dad's own post-quest page
+    if (dadDefeated(player)) {
+      player.sendMessage(DAD_WONT_TALK_MESSAGE);
+      return true;
+    }
+    playDadChallenge(player, event.npc);
     return true;
+  }
+
+  /** Wiki: once Dad has been defeated he can no longer be attacked. */
+  function attackDad(event) {
+    const { player, npcId } = event;
+    if (npcId !== DAD_NPC_ID || !dadDefeated(player)) return;
+    player.sendMessage(DAD_REFIGHT_MESSAGE);
+    event.handled = true;
+  }
+
+  const refusesRefight = (player, npc) => player?.isPlayer?.() && npc?.isNpc?.()
+    && npc.getId() === DAD_NPC_ID && dadDefeated(player);
+
+  /**
+   * The troll arena keeps a player who has beaten Dad from fighting him again by any route:
+   * a combat spell cast on him is refused like the Attack option (attackDad), and the combat
+   * permission refuses whatever else would start the fight. Dad's own attacks, and the
+   * scripted killing blow, are untouched.
+   */
+  function createArenaArea() {
+    class TrollArena extends Area {
+      getName() {
+        return "Troll arena";
+      }
+
+      canCastOnNpc(player, npc) {
+        if (!refusesRefight(player, npc)) return null;
+        player.sendMessage(DAD_REFIGHT_MESSAGE);
+        return false;
+      }
+
+      canAttack(attacker, target) {
+        return refusesRefight(attacker, target) ? false : null;
+      }
+    }
+    const { minX, maxX, minY, maxY, z } = TROLL_ARENA;
+    return new TrollArena([new Boundary(minX, maxX, minY, maxY, z)]);
+  }
+
+  /**
+   * Doors' arena gates ask before opening. Walking in sets off Dad's challenge;
+   * he won't let anyone out through the north gate who hasn't defeated him.
+   */
+  function guardArenaGate(request) {
+    const { player, objectId } = request;
+    if (request.handled || dadDefeated(player)) return;
+    if (ARENA_ENTRANCE_IDS.has(objectId) && player.getLocation().getX() < ARENA_ENTRANCE_X) {
+      TaskManager.submit(new CountdownTask(player, ARENA_CHALLENGE_DELAY_TICKS, () => challengeEntrant(player)));
+      return;
+    }
+    if (ARENA_EXIT_IDS.has(objectId) && player.getLocation().getY() < ARENA_EXIT_Y) {
+      request.handled = true;
+      const dad = findDad(player.getLocation());
+      if (!dad) return;
+      dad.forceChat(DAD_BLOCKS_EXIT_TEXT);
+      dad.getCombat().attack(player);
+    }
+  }
+
+  function challengeEntrant(player) {
+    if (!player.isRegistered() || player.getLocation().getX() < ARENA_ENTRANCE_X) return;
+    const dad = findDad(player.getLocation());
+    if (dad) playDadChallenge(player, dad);
+  }
+
+  /**
+   * Dad stops the fight just before he dies (Wiki: "Stop! You win."): he keeps
+   * his life, the fight ends and the player may pass. Only the transcript's
+   * "Prepare to die!" lets the killing blow through.
+   */
+  function spareDad(event) {
+    const { npc } = event;
+    if (npc?.getId?.() !== DAD_NPC_ID) return;
+    // The killing blow goes through once; a respawned Dad surrenders again.
+    if (dadExecutions.delete(npc)) return;
+    const player = npc.getCombat().getKiller(false);
+    if (!player) return;
+    event.preventDeath = true;
+    npc.setHitpoints(npc.getMaxHitpoints());
+    endDadFight(npc, player);
+    // Hits still in flight this tick retaliate and pick the fight up again; end it once more after them.
+    TaskManager.submit(new CountdownTask(npc, 1, () => endDadFight(npc, player)));
+    if (quest.getStage(player) >= STAGE_STARTED && !dadDefeated(player)) quest.setStage(player, STAGE_DAD_KILLED);
+    startTranscript(api, player, DAD_NPC_ID, PAGE, DAD_DEFEATED_VARIANT, undefined, npc);
+  }
+
+  function endDadFight(dad, player) {
+    dad.getCombat().reset();
+    dad.getCombat().clearDamageMap();
+    if (player.getCombat().getTarget() === dad) player.getCombat().reset();
+  }
+
+  /** Killing Dad after he surrendered turns the arena's spectators on the player. */
+  function deliverFatalBlow(player) {
+    const dad = findDad(player.getLocation());
+    if (!dad) return;
+    dadExecutions.add(dad);
+    dad.setHitpoints(0);
+    for (const npc of World.getNpcsNear(player.getLocation(), ARENA_SEARCH_RADIUS, null)) {
+      if (ARENA_SPECTATOR_IDS.has(npc.getId()) && npc.getHitpoints() > 0) npc.getCombat().attack(player);
+    }
+  }
+
+  /** After the dialogue has closed: closing it ends Dad's talk, which would also drop a target set now. */
+  function dadAttacks(player) {
+    TaskManager.submit(new CountdownTask(player, 1, () => {
+      if (player.isRegistered()) findDad(player.getLocation())?.getCombat().attack(player);
+    }));
   }
 
   /** Which transcript variant each speaker plays, by quest stage. */
@@ -421,20 +585,10 @@ module.exports = function registerTrollStrongholdQuest(api) {
       if (stage >= STAGE_GODRIC_FREED) return "after-freeing-the-prisoners-talking-to-dunstan";
       return "getting-started-talking-to-dunstan";
     }
-    if (npcId === DAD_NPC_ID) {
-      if (stage >= STAGE_COMPLETE) return null; // Dad's own post-quest page
-      if (stage >= STAGE_DAD_KILLED) return "getting-started-after-dad-has-been-defeated";
-      return DAD_ARENA_VARIANT;
-    }
+    // Dad's Talk-to (talkToDad) and the arena gate pick his pages themselves.
+    if (npcId === DAD_NPC_ID) return null;
     if (TWIG_NPC_IDS.has(npcId)) return TWIG_KEY_VARIANT;
     if (BERRY_NPC_IDS.has(npcId)) return BERRY_KEY_VARIANT;
-    if (npcId === EADGAR_NPC_ID && stage >= STAGE_COMPLETE) return null; // Eadgar's Ruse / Eadgar's own page
-    if (npcId === GODRIC_NPC_ID || npcId === EADGAR_NPC_ID) {
-      if (stage >= STAGE_HAS_PRISON_KEY && stage < STAGE_GODRIC_FREED && hasBothCellKeys(player)) {
-        freeBothCells(player);
-      }
-      return FREEING_VARIANT;
-    }
     return null;
   }
 
@@ -529,6 +683,23 @@ module.exports = function registerTrollStrongholdQuest(api) {
     }
   }
 
+  /**
+   * Wiki (Troll general drops): the prison key drops "only before completion of the
+   * Troll Stronghold quest if the player doesn't have one". Once the prison door is
+   * unlocked it needs no key, so it is not needed either.
+   */
+  function owesPrisonKey(player) {
+    const stage = quest.getStage(player);
+    return stage >= STAGE_DAD_KILLED && stage < STAGE_COMPLETE
+      && !prisonDoorUnlocked(player) && !held(player, PRISON_KEY_ITEM_ID);
+  }
+
+  /** The general's table always lists the key; it stays off the floor for anyone not owed one. */
+  function withholdPrisonKey({ player, npcId, context }) {
+    if (!TROLL_GENERAL_NPC_IDS.has(npcId) || !context) return;
+    if (!player || !owesPrisonKey(player)) context.handledItemIds.add(PRISON_KEY_ITEM_ID);
+  }
+
   /** Dad's death opens the stronghold; a Troll General drops the prison key. */
   function handleNpcDeath({ killer, npcId }) {
     if (!killer) return;
@@ -537,23 +708,8 @@ module.exports = function registerTrollStrongholdQuest(api) {
       if (stage < STAGE_DAD_KILLED) quest.setStage(killer, STAGE_DAD_KILLED);
       return;
     }
-    if (TROLL_GENERAL_NPC_IDS.has(npcId) && stage >= STAGE_DAD_KILLED) {
-      // A lost key is re-obtainable from another general until the door is unlocked.
-      if (stage < STAGE_HAS_PRISON_KEY || (!prisonDoorUnlocked(killer) && !held(killer, PRISON_KEY_ITEM_ID))) {
-        if (!held(killer, PRISON_KEY_ITEM_ID)) {
-          const inventory = killer.getInventory();
-          const before = inventory.getAmount(PRISON_KEY_ITEM_ID);
-          inventory.adds(PRISON_KEY_ITEM_ID, 1);
-          if (inventory.getAmount(PRISON_KEY_ITEM_ID) <= before) {
-            inventory.full();
-            return;
-          }
-        }
-        if (quest.getStage(killer) < STAGE_HAS_PRISON_KEY) quest.setStage(killer, STAGE_HAS_PRISON_KEY);
-      }
-      if (quest.getStage(killer) < STAGE_HAS_CELL_KEYS && hasBothCellKeys(killer)) {
-        quest.setStage(killer, STAGE_HAS_CELL_KEYS);
-      }
+    if (TROLL_GENERAL_NPC_IDS.has(npcId) && stage >= STAGE_DAD_KILLED && stage < STAGE_HAS_PRISON_KEY) {
+      quest.setStage(killer, STAGE_HAS_PRISON_KEY);
       return;
     }
     // QH supports killing Twig/Berry when the player lacks 30 Thieving.
@@ -588,6 +744,14 @@ module.exports = function registerTrollStrongholdQuest(api) {
       if (quest.getStage(player) >= STAGE_GODRIC_FREED && !quest.isComplete(player)) {
         quest.complete(player);
       }
+      return;
+    }
+    if (npcId === DAD_NPC_ID && stepId === DAD_ACCEPT_ACTION_ID) {
+      dadAttacks(player);
+      return;
+    }
+    if (npcId === DAD_NPC_ID && stepId === DAD_FATAL_BLOW_ACTION_ID) {
+      deliverFatalBlow(player);
       return;
     }
     if (stepId === GIVE_TWIG_KEY_MESSAGE_ID) {
@@ -627,16 +791,21 @@ module.exports = function registerTrollStrongholdQuest(api) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onNpcInteraction("Dad", { "Talk-to": talkToDad });
+  api.onNpcAttackOption(attackDad);
+  api.registerArea(createArenaArea());
+  api.onNpcBeforeDeath(spareDad);
   api.onNpcInteraction("Twig", { Pickpocket: pickpocketTwig });
   api.onNpcInteraction("Berry", { Pickpocket: pickpocketBerry });
+  api.onNpcsInteraction(["Godric", "Eadgar"], { "Talk-to": talkToPrisoner });
   api.onObjectInteraction("Cell Door", { Unlock: unlockCellDoor });
-  api.onObjectInteraction("Arena Entrance", { Open: openArenaGate });
-  api.onObjectInteraction("Arena Exit", { Open: openArenaExit });
   api.onObjectInteraction("Cave Entrance", { Enter: enterCave });
   api.onObjectInteraction("Cave Exit", { Exit: exitCave });
   api.onObjectInteraction("Stronghold", { Enter: enterStronghold });
-  api.onObjectInteraction("Exit", { Use: exitStronghold, Leave: exitStronghold });
+  api.onObjectInteraction("Exit", { Use: exitStronghold, Leave: exitStronghold, Open: leavePrison });
+  api.onObjectInteraction("Secret Door", { Open: enterSecretDoor });
   api.onObjectInteraction("Prison Door", { Unlock: unlockPrisonDoor });
+  api.onCustomEvent("door:toggle", guardArenaGate);
+  api.onCustomEvent("npc-drops:context", withholdPrisonKey);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onNpcDeath(handleNpcDeath);

@@ -283,19 +283,32 @@ test("a currency with a unit uses OSRS's wording: costs, buy-back and too few", 
 });
 
 
-test("Baba Yaga's Trade opens her post-Lunar Diplomacy shop", () => {
+test("Trade on an NPC with shop versions opens the version the player's progress unlocks", () => {
+  const Shopkeepers = require("../plugins/npcs/Shopkeepers.plugin");
   const shops = require("../data/definitions/shops.json");
-  const BabaYaga = require("../plugins/npcs/BabaYaga.plugin");
+  const nameOf = (id) => shops.find((shop) => shop.id === id).name;
   const opened = [];
-  let actions;
-  BabaYaga.register({
-    core: { ShopManager: { open: (...args) => opened.push(args) } },
-    onNpcInteraction: (name, handlers) => { if (name === "Baba Yaga") actions = handlers; },
-  });
-  const player = {};
-  actions.Trade({ player });
-  assert.equal(opened[0][0], player);
-  assert.match(shops.find(({ id }) => id === opened[0][1]).name, /^Baba Yaga's Magic Shop\. \(After Lunar Diplomacy\)$/);
+  let picked = null;
+  let handler;
+  const api = {
+    core: { ShopManager: { open: (player, shopId) => opened.push(shopId) } },
+    registerItemShopCurrency() {}, registerShopCurrency() {}, persistAttribute() {}, registerNpcInteraction() {},
+    onNpcInteraction: (fn) => { handler = fn; },
+    emitCustomEvent: (name, request) => { if (name === "npc-dialogue:shop") request.shop = picked; },
+  };
+  Shopkeepers.register(api);
+  assert.ok([...Shopkeepers.sharedTraders().get("3837:3")].length >= 2, "Baba Yaga's Trade is shared by two versions");
+  const trade = (npcId, clickType = 3) => { const event = { player: {}, npcId, clickType, handled: false }; handler(event); return event.handled; };
+
+  picked = "Baba Yaga's Magic Shop. (After Lunar Diplomacy)";
+  assert.equal(trade(3837), true);
+  assert.equal(nameOf(opened.pop()), picked);
+  picked = null;
+  assert.equal(trade(5250), true, "no version applies: Daga's Default shop");
+  assert.equal(nameOf(opened.pop()), "Daga's Scimitar Smithy (Default)");
+  assert.equal(trade(3837), false, "no version and no Default: Baba Yaga stays shut");
+  assert.equal(trade(822), false, "an NPC with one shop keeps its fixed binding");
+  assert.equal(opened.length, 0);
 });
 
 test("a custom shop's npcInteractions bind its NPC, over shops.json on the same option", (t) => {
@@ -308,7 +321,7 @@ test("a custom shop's npcInteractions bind its NPC, over shops.json on the same 
   };
   const readFileSync = fs.readFileSync;
   t.mock.method(fs, "readFileSync", (file, ...args) => {
-    const name = Object.keys(files).find((candidate) => String(file).endsWith(`/${candidate}`));
+    const name = Object.keys(files).find((candidate) => require("node:path").basename(String(file)) === candidate);
     return name ? JSON.stringify(files[name]) : readFileSync(file, ...args);
   });
   assert.deepEqual([...shopkeepers()], [["1:3", 100], ["2:3", null], ["3:3", 7], ["4:1", 8]],
@@ -430,4 +443,57 @@ test("noted mode leaves other shops, stackable/non-noteable items and other plug
   } finally {
     DEFINITIONS[STEEL_AXE].note = original;
   }
+});
+
+// Issue 1909: Fadli's menu is Talk-to, Bank, Collect, Buy, so his shop is option 5; the dump used to
+// bind both rotten tomato shops to Collect (4), and the two cancelled each other out.
+test("Fadli's Buy opens the Shop of Distaste on option 5, and no NPC opens Pelters' Veg Stall", () => {
+  const { shopkeepers } = require("../plugins/npcs/Shopkeepers.plugin");
+  const shops = require("../data/definitions/shops.json");
+  const shopId = (name) => shops.find((shop) => shop.name === name).id;
+  const FADLI = 3340;
+  const bindings = shopkeepers();
+  assert.equal(bindings.get(`${FADLI}:5`), shopId("Shop of Distaste"));
+  assert.equal(bindings.has(`${FADLI}:4`), false, "Collect stays the collection box");
+  assert.equal([...bindings.values()].includes(shopId("Pelters' Veg Stall")), false);
+});
+
+test("a shop bound to NPC option 5 reaches the shop through the plugin API and loader", (t) => {
+  const { NpcInteractionManager } = require("../dist/game/entity/impl/npc/NpcInteractionManager");
+  const { NpcInteractionDefinition } = require("../dist/game/definition/NpcInteractionDefinition");
+  const { NpcInteractionDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcInteractionDefinitionLoader");
+  const NPC = 3340;
+  const previous = NpcInteractionDefinition.all();
+  const opened = [];
+  t.mock.method(ShopManager, "open", (_player, shopId) => { opened.push(shopId); return true; });
+  t.mock.method(console, "debug", () => {});
+  try {
+    PluginManager.createApi("FifthClickShop").registerNpcInteraction(NPC, { fifthClick: { shopId: AXE_SHOP } });
+    new NpcInteractionDefinitionLoader().load();
+    const npc = { getContentId: () => NPC };
+    assert.equal(NpcInteractionManager.handle({}, npc, 1, 4), false);
+    assert.equal(NpcInteractionManager.handle({}, npc, 1, 5), true);
+    assert.deepEqual(opened, [AXE_SHOP]);
+    assert.equal(NpcInteractionManager.all().find((entry) => entry.npcId === NPC).fifthClick.method, "core.shops.open");
+  } finally {
+    NpcInteractionDefinition.replace(previous);
+  }
+});
+
+test("the rotten tomato crates' Buy opens Pelters' Veg Stall", () => {
+  const RottenTomatoCrate = require("../plugins/objects/RottenTomatoCrate.plugin");
+  const PELTERS = 1267;
+  const hooks = new Map();
+  const opened = [];
+  RottenTomatoCrate.register({
+    core: {
+      ShopDefinition: { all: () => [{ getName: () => "Shop of Distaste", getId: () => 1257 }, { getName: () => "Pelters' Veg Stall", getId: () => PELTERS }] },
+      ShopManager: { open: (player, shopId) => opened.push([player, shopId]) },
+    },
+    onObjectInteraction: (name, actions) => hooks.set(name, actions),
+  });
+  assert.equal(RottenTomatoCrate.members, true);
+  const player = {};
+  hooks.get("Crate").Buy({ player });
+  assert.deepEqual(opened, [[player, PELTERS]]);
 });

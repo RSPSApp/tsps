@@ -80,4 +80,18 @@ manager.setRootInterface(902);
 manager.viewportWidget = rootA;
 assert.equal(manager.getSceneViewportWidget(), null, "no viewport widget means no viewport");
 
+// Switching only the gameframe must retain the server's operation flags on mounted content.
+const bank = widget((12 << 16) | 13, 0);
+const desktopRoot = widget(161 << 16, 0);
+manager.setRootInterface(161);
+manager.setWidgetFlagsOverride(bank, 0x7fe);
+manager.setWidgetFlagsOverride(desktopRoot, 2);
+manager.setRootInterface(601);
+assert.equal(manager.getServerSetFlags(bank), 0x7fe, "open bank actions survive a mobile switch");
+assert.equal(manager.getServerSetFlags(desktopRoot), undefined, "old gameframe flags are removed");
+manager.setRootInterface(161);
+assert.equal(manager.getServerSetFlags(bank), 0x7fe, "bank actions survive switching back");
+manager.setRootInterface(902);
+assert.equal(manager.getServerSetFlags(bank), undefined, "leaving the gameframe still clears flags");
+
 console.log("viewport widget rediscovery test passed");

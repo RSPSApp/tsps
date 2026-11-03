@@ -447,7 +447,9 @@ module.exports = function registerRomeoAndJulietQuest(api) {
     constructor(player,kind) {
       super(4,4);this.owner=player;this.kind=kind;this.origin=kind==="juliet"?[3144,3416,1]:[2320,4632,0];
       this.returnTile=kind==="juliet"?new Location(3157,3425,1):player.getLocation().clone();this.actors=new Map();
-      for(let x=0;x<4;x++)for(let y=0;y<4;y++)this.setChunk(this.origin[2],x,y,{sourceChunkX:this.origin[0]/8+x,sourceChunkY:this.origin[1]/8+y,sourcePlane:this.origin[2],rotation:0});
+      for(let plane=0;plane<=this.origin[2];plane++) {
+        for(let x=0;x<4;x++)for(let y=0;y<4;y++)this.setChunk(plane,x,y,{sourceChunkX:this.origin[0]/8+x,sourceChunkY:this.origin[1]/8+y,sourcePlane:plane,rotation:0});
+      }
     }
     sourceTile(x,y) { return this.tile(x-this.origin[0],y-this.origin[1],this.origin[2]); }
     canTeleport(){return false;} canAttack(){return false;}

@@ -16,6 +16,7 @@
     {"raw":"uncooked_redberry_pie","cooked":"redberry_pie","burnt":"burnt_pie","level":10,"xp":78,"stopBurn":45,"name":"redberry pie","rangeOnly":true,"message":"You successfully bake a delicious redberry pie."},
     {"raw":"spit_raw_bird_meat","cooked":"spit_roasted_bird_meat","burnt":"spit_burned_bird_meat","level":11,"xp":60,"stopBurn":47,"name":"bird meat"},
     {"raw":"snail_corpse1","cooked":"snail_corpse_cooked1","burnt":"burnt_snail","level":12,"xp":70,"lumbridgeStopBurn":43,"stopBurn":47,"name":"thin snail","message":"You cook the thin snail."},
+    {"raw":"raw_tbone_steak","cooked":"tbone_steak","burnt":"tbone_steak_burned","level":13,"xp":90,"stopBurn":50,"name":"t-bone steak"},
     {"raw":"raw_trout","cooked":"trout","burnt":"burntfish2","level":15,"xp":70,"lumbridgeStopBurn":45,"stopBurn":49,"name":"trout"},
     {"raw":"tbw_spider_on_shaft_raw","cooked":"tbw_spider_on_shaft_burnt","burnt":"tbw_spider_on_stick_burnt","level":16,"xp":80,"stopBurn":34,"name":"spider on shaft"},
     {"raw":"snail_corpse2","cooked":"snail_corpse_cooked2","burnt":"burnt_snail","level":17,"xp":80,"lumbridgeStopBurn":46,"stopBurn":47,"name":"lean snail","message":"You cook the lean snail."},

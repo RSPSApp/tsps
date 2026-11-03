@@ -9,8 +9,11 @@
  *   api.emitCustomEvent("collection-log:obtain", { player, itemId, amount?, ensure?, silent? })
  *   api.emitCustomEvent("collection-log:count", { player, category: "Zulrah", amount? })
  *   answer "collection-log:category-count" { player, category, struct, count } with a kept count
+ *   ask "collection-log:slots" { player, category? } -> count: the category's slots filled (all, with none)
+ *   ask "collection-log:obtained" { player, itemId } -> count: how many of a logged item the player has obtained
+ *   hear "collection-log:slot-filled" { player, itemId }: any slot filled, silent and ensured ones too
+ *   hear "collection-log:new-item" { player, itemId }: an item newly earned and announced, from any source
  *   api.emitCustomEvent("collection-log:open", { player, category? })  open it, at a category by name
- * and it emits "collection-log:new-item" { player, itemId } for an item newly earned, from any source.
  *
  *   ::clog <item name|id> [amount]   obtain through the real path
  *   ::clog count <category> <n>      set a category's count
@@ -26,6 +29,24 @@ const USAGE = "Usage: ::clog <item name|id> [amount] | ::clog count <category> <
 function categoriesNamed(name) {
   const wanted = String(name ?? "").toLowerCase();
   return Data.tabs().flatMap((tab) => tab.categories).filter((category) => category.name.toLowerCase() === wanted);
+}
+
+/** "collection-log:slots" { player, category } -> count: the category's slots filled ("Hard Treasure Trails"). */
+function slotsQuery(query) {
+  if (!query?.player) return;
+  // No category: every slot filled, as the log's own total counts them.
+  if (query.category == null) {
+    query.count = Progress.uniqueCount(query.player);
+    return;
+  }
+  const category = categoriesNamed(query.category)[0];
+  if (!category) return;
+  query.count = category.items.filter((itemId) => Progress.obtained(query.player, itemId) > 0).length;
+}
+
+/** "collection-log:obtained" { player, itemId } -> count, for a logged item only (the Lost Property shop's "obtained before"). */
+function obtainedQuery(query) {
+  if (query?.player && Data.isLogged(Number(query.itemId))) query.count = Progress.obtained(query.player, Number(query.itemId));
 }
 
 /** A loot roll, read once every handler has finished with it. */
@@ -106,6 +127,8 @@ module.exports = {
     Interface(api);
     api.onCustomEvent("npc-drops:roll", onLoot);
     api.onCustomEvent("collection-log:obtain", onObtain);
+    api.onCustomEvent("collection-log:slots", slotsQuery);
+    api.onCustomEvent("collection-log:obtained", obtainedQuery);
     api.onCustomEvent("collection-log:is-item", isLoggedItem);
     api.onCustomEvent("collection-log:count", onCount);
     api.onCustomEvent("shop:purchase", onPurchase);

@@ -140,17 +140,23 @@ function combatHarness({ others = [] } = {}) {
     setTotalDamage(damage) { this.damage = damage; }
     isAccurate() { return true; }
   }
-  const projectile = (id) => ({ withProgress() { return this; }, sendProjectile: () => log.push(`projectile ${id}`) });
+  const projectile = (id, end) => ({ withProgress() { return this; }, sendProjectile: () => { log.push(`projectile ${id}`); ends.push(end); } });
+  const ends = [];
   const RevenantCombat = createRevenantCombat({
     ...core,
     PendingHit: FakeHit,
-    Projectile: { createProjectile: (n, t, id) => projectile(id), arrivalCycles: () => 56 },
+    // Lands `delay` + 10 cycles a tile out, like the real arrivalCycles.
+    Projectile: {
+      createProjectile: (n, t, id, delay, end) => projectile(id, end),
+      arrivalCycles: (npc, _target, delay) => delay + 10 * npc.calculateDistance(),
+      ticksToLand: core.Projectile.ticksToLand,
+    },
     Sounds: { sendSound: (who, sound) => log.push(`sound ${sound.getId()}`) },
     CombatFactory: { freeze: () => log.push("frozen") },
     World: { getProcessCycle: () => 100, getPlayers: () => others },
     PrayerHandler: { ...core.PrayerHandler, isActivated: (target, prayer) => target.protect === prayer },
   });
-  return { method: new RevenantCombat(), log };
+  return { method: new RevenantCombat(), log, ends };
 }
 
 function revenant(id, { distance = 1, hitpoints = 80, max = 80 } = {}) {
@@ -185,7 +191,7 @@ test("a pyrefiend melees next to you and casts from afar (captured animations an
   method.hits(far, target);
   assert.deepEqual(far.animations, [7820], "pyrefiend_casting");
   assert.deepEqual(log.slice(0, 3), ["sound 696", "sound 162", "projectile 1415"]);
-  assert.ok(log.includes("hit MAGIC delay 3"));
+  assert.ok(log.includes("hit MAGIC delay 4"), "lands at 46 + 50 = 96 cycles: the 4th tick");
   assert.ok(target.messages.includes("gfx 1454") || target.messages.includes("gfx 369"));
 });
 
@@ -196,7 +202,21 @@ test("against Protect from Magic a revenant at range shoots (projectile 206)", (
   method.start(ork, target);
   method.hits(ork, target);
   assert.deepEqual(ork.animations, [6972], "the ork's ranged attack");
-  assert.deepEqual(log, ["projectile 206", "hit RANGED delay 2"]);
+  assert.deepEqual(log, ["projectile 206", "hit RANGED delay 3"], "lands at 42 + 40 = 82 cycles: the 3rd tick");
+});
+
+test("a revenant's spell and shot hit as their projectiles land, near and far (#1862)", () => {
+  for (const [protect, base, type] of [[null, 46, "MAGIC"], [core.PrayerHandler.PROTECT_FROM_MAGIC, 42, "RANGED"]]) {
+    for (const distance of [2, 8]) {
+      const { method, log, ends } = combatHarness();
+      const target = player({ protect });
+      const ork = revenant(Data.REVENANTS.ORK, { distance });
+      method.start(ork, target);
+      method.hits(ork, target);
+      assert.deepEqual(ends, [base + 10 * distance], `${type} at ${distance}`);
+      assert.ok(log.includes(`hit ${type} delay ${core.Projectile.ticksToLand(ends[0])}`), `${type} at ${distance}: ${log}`);
+    }
+  }
 });
 
 test("Magic also hits the others on the target's tile", () => {
@@ -361,6 +381,7 @@ function caver(name, at = new Location(3200, 10100, 0)) {
   const p = player({ at });
   p.name = name;
   p.getUsername = () => name;
+  p.getDisplayName = () => name;
   p.getHitpoints = () => 99;
   p.isRegistered = () => true;
   p.getPacketSender = () => ({ sendEntityHint() {}, sendPositionalHint() {}, clearHintArrow() {}, sendSound() {} });

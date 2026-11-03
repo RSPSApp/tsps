@@ -222,6 +222,8 @@ test('magic lands 1 + (1 + distance) / 3 ticks after the cast, edge to edge; bar
     const burst = { spellRadius: () => 1, levelRequired: () => 70 };
     assert.equal(delay(caster(3207, 3200), npc(3200, 3200, 5), burst), 2, 'a burst measures edge to edge');
     assert.equal(delay(caster(3209, 3200), npc(3200, 3200), { hitDelay: () => 1 }), 1, 'a spell with its own delay keeps it');
-    const npcCaster = { isPlayer: () => false, getLocation: () => new Location(3201, 3200, 0) };
-    assert.equal(delay(npcCaster, npc(3200, 3200)), 3, 'NPC casters keep their fixed delay');
+    // An NPC's spell lands with its projectile (51 -> 46 + 10 a tile): 2 ticks from 1 tile, 5 from 10.
+    const npcCaster = (x) => ({ isPlayer: () => false, getLocation: () => new Location(x, 3200, 0), getSize: () => 1 });
+    assert.equal(delay(npcCaster(3201), npc(3200, 3200)), 2, 'an NPC casting from 1 tile');
+    assert.equal(delay(npcCaster(3210), npc(3200, 3200)), 5, 'an NPC casting from 10 tiles');
 });

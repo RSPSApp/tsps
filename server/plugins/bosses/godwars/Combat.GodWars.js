@@ -3,22 +3,26 @@
 /**
  * The generals' and bodyguards' attacks, built from captured specs (rsprox): the NPC's sequence
  * and spot animation, the sound, the projectile with its launch cycle, arc and height, and how its
- * flight time grows per tile. The hit lands as the projectile does (whole ticks of 30 cycles),
+ * flight time grows per tile. The hit lands on the first tick (30 cycles) at or after the projectile,
  * a melee hit on the attack's own tick.
  *
  *   { style: "MELEE" | "RANGED" | "MAGIC", anim, sound?, maxHit?, minHit?, npcGfx?: [id, height],
  *     projectile?: { id, start, base, perTile, angle, progress, startHeight, endHeight },
- *     targetGfx?: { id, delay?: number | "impact", height? }, room?: true, accuracyAs?: style }
+ *     targetGfx?: { id, delay?: number | "impact", height? }, room?: true, accuracyAs?: style,
+ *     alwaysHits?: true }
  *
- * `maxHit` defaults to the NPC's own; `room` hits every player in the chamber.
+ * `maxHit` defaults to the NPC's own; `room` hits every player in the chamber; `alwaysHits` skips
+ * the accuracy roll (K'ril's prayer smash always lands 35-49, Wiki).
  */
 const Common = require("./Common.GodWars");
 
-const CYCLES_PER_TICK = 30;
 const ROOM_SCAN_DISTANCE = 16;
 
 function flightCycles(projectile, distance) {
-  return projectile.base + projectile.perTile * distance;
+  const end = projectile.base + projectile.perTile * distance;
+  // A captured base below the launch (Growler, Balfrug) lands at or before it up close, which
+  // the client drops: fly 5 + 10 a tile from the launch there instead (#1862).
+  return end > projectile.start + 1 ? end : projectile.start + 5 + 10 * distance;
 }
 
 function distanceBetween(npc, target) {
@@ -104,8 +108,9 @@ function createMethod({ choose, reach = 1, onHit = null }) {
       const maxHit = attack.maxHit ?? npc.getDefinition().getMaxHit();
       const hits = [];
       for (const [victim, end] of this.landing) {
-        const delay = attack.hitDelay ?? (attack.projectile ? Math.max(1, Math.floor(end / CYCLES_PER_TICK)) : 0);
-        const hit = new PendingHit(npc, victim, this, delay);
+        // A hit N ticks out splats 30N cycles after the send: the first tick at or after landing (#1862).
+        const delay = attack.hitDelay ?? (attack.projectile ? Common.core.Projectile.ticksToLand(end) : 0);
+        const hit = new PendingHit(npc, victim, this, attack.alwaysHits ? { delay, rollAccuracy: false } : delay);
         CombatFactory.applyStyleDamage(hit, maxHit, { minHit: attack.minHit ?? 0, bypassProtectionPrayer: attack.throughPrayer === true });
         hits.push(hit);
       }

@@ -20,32 +20,40 @@ const ATTR_THREAD = "toa:thread-obtained";
 /** The unique a player found, sealed in Osmumten's sarcophagus until they open it. */
 const ATTR_SARCOPHAGUS = "toa:sarcophagus";
 
-/** Common table: an item and its points divisor (quantity = points / divisor). NR RewardEncounter. */
+/**
+ * Wiki (Chest (Tombs of Amascut)): the common table, an item and its points divisor (quantity =
+ * points / divisor), three rolls of 1/27 each; the Cache of runes is always one. Captures show the
+ * unnoted ids in the chest (inv 811), and the Wiki's "(noted)" items come out noted (`noted`).
+ */
 function commonTable(I) {
   return [
-    [I.COINS, 1], [I.DEATH_RUNE, 20], [I.SOUL_RUNE, 40], [I.GOLD_ORE, 90], [I.DRAGON_DART_TIP, 100],
-    [I.MAHOGANY_LOGS, 100], [I.SAPPHIRE, 200], [I.EMERALD, 250], [I.GOLD_BAR, 250], [I.POTATO_CACTUS, 250],
-    [I.RAW_SHARK, 250], [I.RUBY, 300], [I.DIAMOND, 400], [I.RAW_MANTA_RAY, 450], [I.CACTUS_SPINE, 600],
-    [I.DRAGONSTONE, 600], [I.BATTLESTAFF, 1100], [I.COCONUT_MILK, 1100], [I.LILY_OF_THE_SANDS, 1100],
-    [I.TOADFLAX_SEED, 1400], [I.RANARR_SEED, 1800], [I.TORSTOL_SEED, 2200], [I.SNAPDRAGON_SEED, 2200],
-    [I.DRAGON_MED_HELM, 4000], [I.MAGIC_SEED, 6500], [I.BLOOD_ESSENCE, 7500],
+    [I.CACHE_OF_RUNES, 0], [I.COINS, 1], [I.DEATH_RUNE, 20], [I.SOUL_RUNE, 40], [I.GOLD_ORE, 90, true], [I.DRAGON_DART_TIP, 100],
+    [I.MAHOGANY_LOGS, 180, true], [I.SAPPHIRE, 200, true], [I.EMERALD, 250, true], [I.GOLD_BAR, 250, true], [I.POTATO_CACTUS, 250, true],
+    [I.RAW_SHARK, 250, true], [I.RUBY, 300, true], [I.DIAMOND, 400, true], [I.RAW_MANTA_RAY, 450, true], [I.CACTUS_SPINE, 600, true],
+    [I.DRAGONSTONE, 600, true], [I.BATTLESTAFF, 1100, true], [I.COCONUT_MILK, 1100, true], [I.LILY_OF_THE_SANDS, 1100, true],
+    [I.TOADFLAX_SEED, 2000], [I.RANARR_SEED, 2500], [I.TORSTOL_SEED, 3200], [I.SNAPDRAGON_SEED, 3200],
+    [I.DRAGON_MED_HELM, 4000, true], [I.MAGIC_SEED, 6500], [I.BLOOD_ESSENCE, 7500],
   ];
 }
 
 /**
- * Wiki unique weights: out of 24 up to raid level 300, out of 19 at 400 and 16.5 at 500 as the
- * fang and lightbearer get rarer (interpolated between, and held past 500). `level`: the rare
- * ones need raid level 150, the rest 50, or a 1/50 roll.
+ * Wiki unique weights, its table's chances as weights: the fang and lightbearer 7 each up to raid
+ * level 300; then 6 and 6 at 350, 4 and 5 at 400, 4 and 4 at 450, 3 and 3.5 at 500 ("adjusted every
+ * 5 levels" since 20 August 2025, so interpolated in steps of 5, and held past 500). The others
+ * don't move. `level`: the rare ones need raid level 150, the rest 50, or a 1/50 roll.
  */
+const FANG_LIGHTBEARER_WEIGHTS = [[300, 7, 7], [350, 6, 6], [400, 4, 5], [450, 4, 4], [500, 3, 3.5]];
+
 function uniqueTable(I, raidLevel) {
-  const between = (at300, at400, at500) => {
-    if (raidLevel <= 300) return at300;
-    if (raidLevel <= 400) return at300 + (at400 - at300) * (raidLevel - 300) / 100;
-    return at400 + (at500 - at400) * (Math.min(500, raidLevel) - 400) / 100;
-  };
+  const level = Math.floor(Math.min(500, Math.max(300, raidLevel)) / 5) * 5;
+  let index = 0;
+  while (index < FANG_LIGHTBEARER_WEIGHTS.length - 2 && level > FANG_LIGHTBEARER_WEIGHTS[index + 1][0]) index++;
+  const [fromLevel, fromFang, fromLight] = FANG_LIGHTBEARER_WEIGHTS[index];
+  const [toLevel, toFang, toLight] = FANG_LIGHTBEARER_WEIGHTS[index + 1];
+  const part = (level - fromLevel) / (toLevel - fromLevel);
   return [
-    { id: I.LIGHTBEARER, weight: between(7, 5, 3.5), level: 50 },
-    { id: I.OSMUMTENS_FANG, weight: between(7, 4, 3), level: 50 },
+    { id: I.LIGHTBEARER, weight: fromLight + (toLight - fromLight) * part, level: 50 },
+    { id: I.OSMUMTENS_FANG, weight: fromFang + (toFang - fromFang) * part, level: 50 },
     { id: I.ELIDINIS_WARD, weight: 3, level: 150 },
     { id: I.MASORI_MASK, weight: 2, level: 150 },
     { id: I.MASORI_BODY, weight: 2, level: 150 },
@@ -64,14 +72,22 @@ function jewels(I) {
   ];
 }
 
-/** Each boss's invocations; all of one set at raid level 450+ earns its remnant. */
+/**
+ * Wiki's challenge rewards: at raid level 450+, with no deaths, all of a boss's invocations and its
+ * path at level 4 earn its remnant (the Wardens need only theirs). One per raid, in Mod Ash's order.
+ */
 const REMNANT_SETS = [
-  ["REMNANT_OF_AKKHA", ["DOUBLE_TROUBLE", "KEEP_BACK", "STAY_VIGILANT", "FEELING_SPECIAL"]],
-  ["REMNANT_OF_ZEBAK", ["NOT_JUST_A_HEAD", "ARTERIAL_SPRAY", "BLOOD_THINNERS", "UPSET_STOMACH"]],
-  ["REMNANT_OF_BA_BA", ["MIND_THE_GAP", "GOTTA_HAVE_FAITH", "JUNGLE_JAPES", "SHAKING_THINGS_UP", "BOULDERDASH"]],
-  ["REMNANT_OF_KEPHRI", ["LIVELY_LARVAE", "MORE_OVERLORDS", "BLOWING_MUD", "MEDIC", "AERIAL_ASSAULT"]],
-  ["ANCIENT_REMNANT", ["ANCIENT_HASTE", "ACCELERATION", "PENETRATION", "OVERCLOCKED", "OVERCLOCKED_2", "INSANITY"]],
+  ["REMNANT_OF_AKKHA", "HET", ["DOUBLE_TROUBLE", "KEEP_BACK", "STAY_VIGILANT", "FEELING_SPECIAL"]],
+  ["REMNANT_OF_ZEBAK", "CRONDIS", ["NOT_JUST_A_HEAD", "ARTERIAL_SPRAY", "BLOOD_THINNERS", "UPSET_STOMACH"]],
+  ["REMNANT_OF_BA_BA", "APMEKEN", ["MIND_THE_GAP", "GOTTA_HAVE_FAITH", "JUNGLE_JAPES", "SHAKING_THINGS_UP", "BOULDERDASH"]],
+  ["REMNANT_OF_KEPHRI", "SCABARAS", ["LIVELY_LARVAE", "MORE_OVERLORDS", "BLOWING_MUD", "MEDIC", "AERIAL_ASSAULT"]],
+  ["ANCIENT_REMNANT", null, ["ANCIENT_HASTE", "ACCELERATION", "PENETRATION", "OVERCLOCKED", "OVERCLOCKED_2", "INSANITY"]],
 ];
+const REMNANT_LEVEL = 450;
+const REMNANT_PATH_LEVEL = 4;
+const KIT_LEVEL = 350;
+const ORNAMENT_LEVEL = 425;
+const PHALANX_LEVEL = 500;
 
 function lootOf(player) {
   const loot = player.getAttribute(ATTR_LOOT);
@@ -117,6 +133,13 @@ function unsealUnique(player) {
   return id;
 }
 
+/** Wiki (Rewards Niche): entering another raid destroys what's unclaimed. */
+function destroyRewards(player) {
+  player.setAttribute(ATTR_LOOT, null);
+  player.setAttribute(ATTR_SARCOPHAGUS, null);
+  player.getPacketSender().sendVarbit(Shared.VARBIT.SHOULD_HAVE_LOOT, 0);
+}
+
 /** Anything still to collect: chest loot or an unopened sarcophagus. */
 function hasRewards(player) {
   return hasLoot(player) || sealedUnique(player) !== -1;
@@ -155,6 +178,12 @@ function weightedPick(entries, weightOf) {
   return entries[entries.length - 1];
 }
 
+/** The noted form of an item, where it has one (Wiki's "(noted)"). */
+function notedId(id) {
+  const noted = Shared.core().ItemDefinition.forId(id)?.getNoteId?.() ?? -1;
+  return noted > 0 ? noted : id;
+}
+
 function owns(player, id) {
   const { Bank } = Shared.core();
   if (player.getInventory().contains(id) || player.getEquipment().contains(id)) return true;
@@ -174,7 +203,11 @@ function rollRaidLoot(raid) {
   const players = raid.players.slice();
   const pointsOf = (player) => raid.lootPoints(player);
   const raidLevel = raid.raidLevel;
-  const total = players.reduce((sum, player) => sum + pointsOf(player), 0);
+  // Wiki (Mod Ash): the points of those who left still count towards the unique; if it's theirs,
+  // nobody here gets it.
+  const present = players.reduce((sum, player) => sum + pointsOf(player), 0);
+  const departed = raid.departedPoints ?? 0;
+  const total = present + departed;
   const chance = uniqueChancePercent(total, raidLevel);
   const forced = raid.forcedLoot && players.includes(raid.forcedLoot.player) ? raid.forcedLoot : null;
   let uniqueWinner = null;
@@ -184,12 +217,12 @@ function rollRaidLoot(raid) {
     uniqueId = forced.unique === true ? weightedPick(uniqueTable(I, raidLevel), (entry) => entry.weight).id : forced.unique;
   } else if (Math.random() * 100 < chance) {
     const unique = weightedPick(uniqueTable(I, raidLevel), (entry) => entry.weight);
-    if (raidLevel >= unique.level || Shared.random(0, 49) === 0) {
+    if ((raidLevel >= unique.level || Shared.random(0, 49) === 0) && Math.random() * total < present) {
       uniqueWinner = weightedPick(players, (player) => Math.max(0, pointsOf(player)));
       uniqueId = unique.id;
     }
   }
-  const petChance = petChancePercent(total, raidLevel);
+  const petChance = petChancePercent(present, raidLevel);
   const petWinner = forced?.pet ? forced.player
     : Math.random() * 100 < petChance ? weightedPick(players, (player) => Math.max(0, pointsOf(player))) : null;
   for (const player of players) {
@@ -223,26 +256,26 @@ function rollPlayer(raid, player, foundUnique) {
     if (existing) existing.amount += amount;
     else loot.push({ id, amount });
   };
-  if (points < DUNG_POINTS && !foundUnique) {
-    add(I.FOSSILISED_DUNG);
-    return loot;
-  }
   if (raid.totalDeaths < 1) {
-    if (raidLevel >= 350 && !owns(player, I.MASORI_CRAFTING_KIT)) add(I.MASORI_CRAFTING_KIT);
-    if (raidLevel >= 400 && !owns(player, I.MENAPHITE_ORNAMENT_KIT)) add(I.MENAPHITE_ORNAMENT_KIT);
-    if (raidLevel >= 450) {
-      const remnant = REMNANT_SETS.find(([key, invocations]) =>
-        invocations.every((name) => raid.settings.isActive(name)) && !owns(player, I[key]));
+    if (raidLevel >= KIT_LEVEL && !owns(player, I.MASORI_CRAFTING_KIT)) add(I.MASORI_CRAFTING_KIT);
+    if (raidLevel >= ORNAMENT_LEVEL && !owns(player, I.MENAPHITE_ORNAMENT_KIT)) add(I.MENAPHITE_ORNAMENT_KIT);
+    if (raidLevel >= REMNANT_LEVEL) {
+      const remnant = REMNANT_SETS.find(([key, path, invocations]) =>
+        invocations.every((name) => raid.settings.isActive(name))
+        && (!path || raid.pathLevels[Shared.PATH_BY_KEY[path].index] >= REMNANT_PATH_LEVEL)
+        && !owns(player, I[key]));
       if (remnant) add(I[remnant[0]]);
     }
-    if (raidLevel >= 500) add(I.CURSED_PHALANX);
+    if (raidLevel >= PHALANX_LEVEL && !owns(player, I.CURSED_PHALANX) && !owns(player, I.OSMUMTENS_FANG_OR_)) add(I.CURSED_PHALANX);
   }
-  if (!foundUnique) {
+  if (points < DUNG_POINTS && !foundUnique) {
+    add(notedId(I.FOSSILISED_DUNG));
+  } else if (!foundUnique) {
     const factor = raidLevel < 300 ? 1 : 1.15 + 0.01 * ((raidLevel - 300) / 5);
-    const table = commonTable(I).filter(([, divisor]) => points >= divisor);
-    for (let roll = 0; roll < 3 && table.length > 0; roll++) {
-      const [id, divisor] = Shared.randomOf(table);
-      add(id, Math.floor(Math.floor(points / divisor) * factor));
+    const table = commonTable(I);
+    for (let roll = 0; roll < 3; roll++) {
+      const [id, divisor, noted] = Shared.randomOf(table);
+      add(noted ? notedId(id) : id, divisor === 0 ? 1 : Math.max(1, Math.floor((points * factor) / divisor + 1e-9)));
     }
   }
   const counts = Raid.killCounts(player);
@@ -254,10 +287,10 @@ function rollPlayer(raid, player, foundUnique) {
     player.setAttribute(ATTR_THREAD, true);
   }
   // Wiki: 1/50 for each of the four jewels, up to three times that at 75 completions; no
-  // duplicate until all have been had (the jewel or its partisan held).
-  if (Math.random() < scaledRate(4 / 50, completions, 75)) {
-    const all = jewels(I);
-    const missing = all.filter(([jewel, partisan]) => !owns(player, jewel) && !owns(player, partisan));
+  // duplicate until all have been had (the jewel or its partisan held), and then back to the base.
+  const all = jewels(I);
+  const missing = all.filter(([jewel, partisan]) => !owns(player, jewel) && !owns(player, partisan));
+  if (Math.random() < (missing.length > 0 ? scaledRate(4 / 50, completions, 75) : 4 / 50)) {
     add(Shared.randomOf(missing.length > 0 ? missing : all)[0]);
   }
   // Wiki: 1/100 per 2,000 points, up to 25/100.
@@ -277,6 +310,9 @@ module.exports = {
   unsealUnique,
   logClaimed,
   hasRewards,
+  destroyRewards,
+  commonTable,
+  uniqueTable,
   uniqueChancePercent,
   petChancePercent,
   rollRaidLoot,

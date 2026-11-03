@@ -38,11 +38,35 @@ The north-east Release gate starts a private copy of the cow field. At two ticks
 
 Melee uses animation 13783, five-tick recovery and a maximum hit of three. During the quest, melee cannot take the player below one Hitpoint. Specials use eight-tick recovery, the captured overheads, charge animation 13778 and stomp 13785. Delayed damage checks the player's new position. The recorded charge moves four tiles south; the implementation also handles the horizontal facing axis. Stomp graphic 3588 follows the selected three-tile row or five-tile corner. Consecutive stomps keep their original selected footprint, as observed when the player sidesteps in 4153. Special damage can kill.
 
+Recording 4153 sends an exact move at cycle 562, from four tiles north to the destination over 60 client cycles (two ticks), after its cycle-558 growl. A plain NPC teleport is excluded from the player's local list for its placement tick; Brutus now uses the existing exact-move path so the charge stays visible. Ordinary pursuit remains blocked until the glide finishes. The postquest three-tick windup remains the existing behavior; this recording covers the quest's four-tick windup.
+
+The boss temporarily owns coordinate facing through `combat:keep-facing`, clearing entity tracking during its telegraph. Live restores entity tracking at cycle 564 after that charge and six ticks after each recorded stomp (586 to 592, 594 to 600). Recovery releases the held heading and restores the same living encounter's current target; death, leaving, replacement or retargeting cannot reattach the old player. This also forces a fresh native entity-face update instead of leaving the proxy's coordinate-facing state until the next movement.
+
 Charges check the bull's swept 3x3 footprint against the cache's walls, including diagonal fences, and keep it inside its existing private field. The bull holds its position during the charge windup even if the player sidesteps. A blocked charge is rejected in full: adjacent players get a stomp, while a distant player brings ordinary melee pursuit back into range. Interior scenery remains passable during a charge, as the Wiki describes; the Plant at (3257,3289) is a regression control. The private field's southern boundary remains an instance constraint, not a claimed OSRS fence location.
 
-Quest kills suppress normal loot, return the player from the private field, and show the Brutus tag once as both game message and continued statement. Postquest kills retain the field and its loot; canonical respawn is 36 ticks and ringing the cowbell restarts the wait at 13 ticks. Cancelled timers cannot spawn duplicates after a subsequent kill. Brutus grants double normal combat XP. Leaving or logging out clears private actors, tasks and busy flags.
+Quest kills suppress normal loot, return the player from the private field, and show the Brutus tag once as both game message and continued statement. Postquest kills retain the field and its loot; canonical respawn is 36 ticks and ringing the cowbell restarts the wait at 13 ticks. Cancelled timers cannot spawn duplicates after a subsequent kill. The reported RuneLite respawn-overlay mismatch is tracked separately in [issue 2164](https://github.com/RSPSApp/tsps/issues/2164); retest after the charge visibility repair before assuming a separate integration defect. Brutus grants double normal combat XP. Leaving or logging out clears private actors, tasks and busy flags.
 
 Cowbell charging, worn actions, Ring sounds and milking are documented in [the Lumbridge/Vampyre evidence notes](f2p-lumbridge-vampyre.md#cowbell-amulet-follow-up).
+
+## 2026-11-02 audit
+
+A fresh account replayed the complete 4153 route. The captured state sequence, first-sample
+damage, private bull field, Brutus identity and Hitpoints, rewards and post-quest hand-outs
+all matched. Three presentation issues were fixed:
+
+- **Low-combat warning:** the transcript's recommendation box is unconditional, but live
+  sends it only below combat 15 and before the start menu. The quest now sets the shared
+  start-menu warning and consumes the transcript box, matching the other recommended-combat
+  quests. A low-level account sees the box before "Start The Ides of Milk quest?".
+- **Gillie's line:** 4153 says "I'm sure he'll **be** happy to share some information with
+  you"; the wiki transcript has "he'll he happy". The dumper correction and regenerated
+  export carry the captured wording.
+- **Chat-heads:** the captured Cassius, Gillie, Seth and Duke animations are in
+  `plugins/quests/data/chathead-animations.json`, together with Professor Oddenstein's
+  captured post-quest lines from 3209.
+
+The lamp's exact confirmation text, alternate full-inventory branches and every combat roll
+remain outside this run's evidence.
 
 ## Verification and limits
 

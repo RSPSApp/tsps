@@ -9,6 +9,7 @@ export interface CombatEffectiveLevelContext {
 }
 export type CombatEffectiveLevelModifier = (entity: Mobile, level: number, context: CombatEffectiveLevelContext) => number;
 export type MeleeStrengthPercentModifier = (entity: Mobile, percent: number) => number;
+export type MeleeStrengthBonusModifier = (entity: Mobile, strengthBonus: number) => number;
 export type RunEnergyRestoreModifier = (entity: Mobile, delayMs: number) => number;
 export type RunEnergyDrainModifier = (entity: Mobile, amount: number) => number;
 export type SpecialEnergyRestoreModifier = (entity: Mobile, delayTicks: number) => number;
@@ -31,6 +32,7 @@ export type PrayerDrainRateModifier = (entity: Mobile, drainEffect: number) => n
 const meleeHitModifiers: HitModifier[] = [];
 const combatEffectiveLevelModifiers: CombatEffectiveLevelModifier[] = [];
 const meleeStrengthPercentModifiers: MeleeStrengthPercentModifier[] = [];
+const meleeStrengthBonusModifiers: MeleeStrengthBonusModifier[] = [];
 const rangedHitModifiers: HitModifier[] = [];
 const magicHitModifiers: HitModifier[] = [];
 const magicDamageBonusModifiers: HitModifier[] = [];
@@ -80,6 +82,22 @@ export function applyMeleeStrengthPercentModifiers(entity: Mobile, percent: numb
     const next = modifier(entity, value);
     return Number.isFinite(next) ? next : value;
   }, percent);
+}
+
+/**
+ * Adds to the worn melee strength bonus as a max hit is worked out, before the max-hit formula
+ * (so special attacks' multipliers and the melee hit modifiers scale it, as they scale the worn
+ * bonus): for boosts the Wiki words as "melee strength is increased by".
+ */
+export function registerMeleeStrengthBonusModifier(modifier: MeleeStrengthBonusModifier): void {
+  if (typeof modifier === "function") meleeStrengthBonusModifiers.push(modifier);
+}
+
+export function applyMeleeStrengthBonusModifiers(entity: Mobile, strengthBonus: number): number {
+  return meleeStrengthBonusModifiers.reduce((value, modifier) => {
+    const next = modifier(entity, value);
+    return Number.isFinite(next) ? next : value;
+  }, strengthBonus);
 }
 
 export function applyCombatEffectiveLevelModifiers(entity: Mobile, level: number, context: CombatEffectiveLevelContext): number {

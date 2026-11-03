@@ -74,7 +74,7 @@ module.exports = function attach(api, Events) {
         player,
         npcId: active.definition.id,
         title: "What would you like to say?",
-        lines: [{ text: `Private ${player.getUsername()}, atten-SHUN! You've been recommended for my corps. ` +
+        lines: [{ text: `Private ${player.getDisplayName()}, atten-SHUN! You've been recommended for my corps. ` +
           "Do you think you can be the best?", expression: INVITE_EXPRESSION }],
         options: [
           ["Sir, yes sir!", () => reply(player, "Sir, yes sir!", () => teleport({

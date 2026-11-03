@@ -61,10 +61,10 @@ function registeredQuests() {
 /** The `---` block at the top of a quest page, as plain `field: value` lines. */
 function statusBlock(file) {
   const text = readFileSync(file, "utf8");
-  const block = /^---\n([\s\S]*?)\n---/.exec(text);
+  const block = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
   if (!block) throw new Error(`${relative(ROOT, file)} has no status block`);
   const fields = {};
-  for (const line of block[1].split("\n")) {
+  for (const line of block[1].split(/\r?\n/)) {
     const match = /^([a-z]+):\s*(.*?)\s*(#.*)?$/.exec(line);
     if (match) fields[match[1]] = match[2].replace(/^"(.*)"$/, "$1");
   }
@@ -72,7 +72,7 @@ function statusBlock(file) {
     throw new Error(`${relative(ROOT, file)}: status "${fields.status}" is not one of ${STATUSES.join(", ")}`);
   }
   // Open findings: list items under "## Findings" marked **open**.
-  const findings = /\n## Findings\n([\s\S]*?)(\n## |$)/.exec(text)?.[1] ?? "";
+  const findings = /\r?\n## Findings\r?\n([\s\S]*?)(\r?\n## |$)/.exec(text)?.[1] ?? "";
   fields.open = (findings.match(/^- \*\*open\*\*/gm) ?? []).length;
   return fields;
 }
@@ -121,7 +121,7 @@ function build() {
 # Quest test status
 
 Every quest the server registers, with the latest result recorded in its page here. How to
-test a quest is in [server/docs/agents/quest-testing.md](../../server/docs/agents/quest-testing.md);
+test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
 ${rows.length} quests · ${summary}

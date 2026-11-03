@@ -54,7 +54,7 @@ function registered({persistAttribute = () => {}} = {}) {
     onInterfaceActionButton: (id, handler) => ids(id).forEach((one) => buttons.set(one, handler)),
     onCustomEvent: (name, handler) => events.set(name, handler),
     onPlayerLogin: (handler) => logins.push(handler),
-    core: { CacheDefinitions },
+    core: { CacheDefinitions, orbsGroupFor: require('../dist/net/protocol/ClientProtocol').orbsGroupFor },
   };
   Settings.register(new Proxy(api, { get: (target, prop) => (prop in target ? target[prop] : () => {}) }));
   return { buttons, events, logins };
@@ -73,6 +73,34 @@ function recordingPlayer() {
   };
   return { sent, getPacketSender: () => sender, setAttribute: (k, v) => attributes.set(k, v), getAttribute: (k) => attributes.get(k) };
 }
+
+test('responsive gameframes validate messages, ignore duplicates and restore the saved desktop layout', () => {
+  const { events } = registered();
+  const receive = events.get('network:plugin-message');
+  const player = recordingPlayer();
+  const roots = [], orbs = [];
+  const sender = player.getPacketSender();
+  sender.sendRootInterface = root => { roots.push(root); return sender; };
+  sender.sendSubInterface = (uid, group) => { orbs.push(group); return sender; };
+  player.getSession = () => ({ sendClientPacket() {} });
+  player.setAttribute('client-layout-root', 548);
+  player.setAttribute('client-layout317', true);
+  const request = mobile => receive({ player, channel: 'gameframe:layout', data: { mobile } });
+  for (const invalid of [undefined, null, 1, 'true', {}, []]) request(invalid);
+  assert.deepEqual(roots, [], 'only a boolean is accepted');
+  request(true);
+  request(true);
+  assert.deepEqual(roots, [601], 'duplicate requests do not rebuild the gameframe');
+  assert.deepEqual(orbs, [897], 'mobile uses the mobile orbs');
+  request(false);
+  assert.deepEqual(roots, [601, 548]);
+  assert.deepEqual(orbs, [897, 160]);
+  assert.equal(player.getAttribute('client-layout-root'), 548);
+  assert.equal(player.getAttribute('client-layout317'), true);
+  player.setAttribute('native-client', true);
+  request(true);
+  assert.deepEqual(roots, [601, 548], 'native gateway sessions keep their own layout');
+});
 
 test('as captured: the search bar takes the keyboard, and closing All Settings by any route gives it back', () => {
   const { buttons, events } = registered();

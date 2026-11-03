@@ -110,7 +110,7 @@ function player() {
     getArea: () => area, setArea: value => { area = value; },
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement(value) { p.blocked = value; return this; } }),
     setUntargetable: value => { p.untargetable = value; },
-    getIndex: () => 1, getAsPlayer: () => p, getUsername: () => 'ShadowsTest',
+    getIndex: () => 1, getAsPlayer: () => p, getUsername: () => 'ShadowsTest', getDisplayName: () => 'ShadowsTest',
     isPlayer: () => true, isPlayerBot: () => false, isRegistered: () => true,
     sendMessage: text => p.messages.push(text),
   };
@@ -184,4 +184,15 @@ test('One real Antos rescue transcript completes Ariadna and the quest at stage 
   runtime.startTranscript(h.api, p, N.ANTOS, 'Shadows of Custodia', 'rescuing-antos-talking-to-antos-after-killing-the-strange-creatures');
   drain(p, 300);
   assert.equal(h.quest.getStage(p), 24);
+});
+
+test('Shadows of Custodia start sends the captured message and scroll metadata', () => {
+  const h = harness(), p = player();
+  (h.events['quest:is-complete'] ??= []).push((event) => { event.complete = true; });
+  h.emit('npc-dialogue:hook', { player: p, hook: 'quest:shadows-of-custodia:start' });
+  assert.equal(h.quest.getStage(p), 2);
+  assert.ok(p.messages.includes("You've started a new quest: <col=0ab0ff>Shadows of Custodia</col>"));
+  assert.equal(h.quest.completionJingleId, 153);
+  assert.equal(h.quest.completionMessageColor, '0ab0ff');
+  assert.equal(h.quest.scrollItemId, 31081);
 });

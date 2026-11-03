@@ -5,15 +5,16 @@ const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const Thieving = require('../plugins/skills/Thieving.plugin');
-const { handleStealFromStall: steal, STALLS, PORT_ROBERTS_STALLS, depleted, emptyStallId } = Thieving._test;
+const { handleStealFromStall: steal, STALLS, PORT_ROBERTS_STALLS, MOR_UL_REK_STALLS, depleted, emptyStallId } = Thieving._test;
 const core = PluginManager.getCoreApi();
 const O = core.ObjectIdentifiers;
 const I = core.ItemIdentifiers;
 const hooks = new Map();
 let tick, tasks, npcs, objects, events, realObjects = false;
 const npcHooks = new Map(), lifecycle = {};
-const bits = { cake: 158, silk: 159, fur: 160, silver: 161, spice: 162, gem: 163, tea: 170, seed: 594, wine: 2050, keldabread: 589, keldagem: 590, keldasilver: 592, vikingfur: 165, silk_prif: 8422, silver_prif: 8424, gem_prif: 8423, spice_prif: 8425 };
-const itemNames = new Map([[I.CUP_OF_TEA, 'Cup of tea'], [I.BANANA, 'Banana'], [I.UNCUT_SAPPHIRE, 'Uncut sapphire'], [I.BREAD, 'Bread']]);
+const bits = { cake: 158, silk: 159, fur: 160, silver: 161, spice: 162, gem: 163, tea: 170, seed: 594, wine: 2050, keldabread: 589, keldagem: 590, keldasilver: 592, vikingfur: 165, silk_prif: 8422, silver_prif: 8424, gem_prif: 8423, spice_prif: 8425,
+    vikingfish: 164, miscfish: 166, miscveg: 167, etcfish: 168, etcveg: 169, keldacraft: 591, xbows: 2477, tzhaar_gemore: 5641, warrensfish: 6026 };
+const itemNames = new Map([[I.CUP_OF_TEA_2, 'Cup of tea'], [I.BANANA, 'Banana'], [I.UNCUT_SAPPHIRE, 'Uncut sapphire'], [I.BREAD, 'Bread']]);
 core.ItemDefinition.forId = (id) => ({ getName: () => itemNames.get(id) ?? `item ${id}` });
 const testApi = {
     core: {
@@ -25,6 +26,9 @@ const testApi = {
             [O.SILVER_STALL_7, 'port_roberts_market_stall_silver'], [O.SPICE_STALL_7, 'port_roberts_market_stall_spice'],
             [O.GEM_STALL_11, 'port_roberts_market_stall_gems'], [O.ORE_STALL_2, 'port_roberts_market_stall_ore'],
             [O.CANNONBALL_STALL, 'port_roberts_market_stall_cball'],
+            [O.FISH_STALL, 'viking_fish_market'], [O.FISH_STALL_2, 'misc_fish_market'], [O.FISH_STALL_3, 'etc_fish_market'],
+            [O.FISH_STALL_4, 'fish_stall_warrens'], [O.VEG_STALL, 'misc_veg_market'], [O.VEG_STALL_2, 'etc_veg_market'],
+            [O.SHOP_COUNTER_4, 'tzhaar_shopcounter_ore'], [O.SHOP_COUNTER_5, 'tzhaar_shopcounter_gem'],
         ]), getVarbitId: (name) => bits[name.replace("marketthief_", "")], getSeqId: (name) => { assert.equal(name, "human_pickuptable"); return 832; } },
         World: { getProcessCycle: () => tick, getNpcsNear: (at, radius, area) => npcs.filter((npc) => npc.getLocation().getDistance(at) <= radius && npc.area === area) },
         RegionManager: { canProjectileAttackBounds: (at) => npcs.find((npc) => npc.getLocation() === at).visible },
@@ -92,8 +96,13 @@ test('registers the cache names/options and resolves every reward symbol', () =>
         ["Baker's stall", 'Steal-from'], ["Baker's Stall", 'Steal-from'], ['Seed Stall', 'Steal from'],
         ['Fruit Stall', 'Steal-from'], ['Veg stall', 'Steal-from'], ['Fish stall', 'Steal-from'],
         ['Ore stall', 'Steal-from'], ['Cannonball stall', 'Steal-from'],
+        ['Crossbow stall', 'Steal-from'], ['Crafting stall', 'Steal-from'], ['Shop Counter', 'Steal-from'],
+        ['Crafting Stall', 'Steal from'], ['Food Stall', 'Steal from'], ['General Stall', 'Steal from'],
+        ['Magic Stall', 'Steal from'], ['Scimitar Stall', 'Steal from'],
     ]) assert.equal(hooks.get(name)?.[option], steal, `${name} ${option}`);
-    for (const stall of [...STALLS.values(), ...PORT_ROBERTS_STALLS.values()]) for (const [name] of stall.rewards) assert.ok(I[name] > 0, name);
+    for (const stall of [...STALLS.values(), ...PORT_ROBERTS_STALLS.values(), ...MOR_UL_REK_STALLS.values()]) {
+        for (const [name] of [...stall.rewards, ...(stall.rare?.rewards ?? [])]) assert.ok(I[name] > 0, name);
+    }
 });
 
 test('silver, spice and wine grant loot/XP and restock at their Wiki intervals', () => {
@@ -158,8 +167,23 @@ test('visible guards catch and attack thieves, preventing loot, XP, pets and dep
     assert.ok(!who.messages.includes("You've been caught stealing!"));
     assert.equal(who.items.length, 0);
     assert.equal(who.xp.length, 0);
-    assert.equal(events.length, 0);
+    assert.deepEqual(events.map(([name]) => name), ['thieving:stall-watch'], 'only the watch asked');
     assert.ok(!depleted.has(stall));
+});
+
+test('content may keep a thief unseen (thieving:stall-watch): no guard catches them', () => {
+    const emit = testApi.emitCustomEvent;
+    testApi.emitCustomEvent = (name, request) => { if (name === 'thieving:stall-watch') request.unseen = true; emit(name, request); };
+    try {
+        const who = player(), stall = object();
+        const guard = npc('Guard', { attackable: true });
+        click(who, stall);
+        advance();
+        assert.deepEqual([guard.attacks, guard.chats], [[], []]);
+        assert.equal(who.items.length, 1);
+    } finally {
+        testApi.emitCustomEvent = emit;
+    }
 });
 
 test('the owner calls a nearby guard even if that guard cannot see the thief', () => {
@@ -206,6 +230,7 @@ test('existing stalls use current restock times and market-specific empty models
         ['Fur stall', O.FUR_STALL_7, 12, O.MARKET_STALL_28],
         ['Tea stall', O.TEA_STALL, 4, O.MARKET_STALL],
         ['Seed Stall', O.SEED_STALL, 4, O.MARKET_STALL],
+        ['Fur stall', O.FUR_STALL_2, 12, O.MARKET_STALL_7],
     ]) {
         tasks = [];
         const stall = object(id);
@@ -565,4 +590,149 @@ test('stall lines are spam; a stolen item is named with its article; silk and th
     const fruit = STALLS.get('Fruit Stall');
     assert.equal(fruit.level, 25); assert.equal(fruit.xp, 28.5);
     assert.equal(emptyStallId(object(O.FRUIT_STALL_3)), O.FRUIT_STALL);
+});
+
+// Issue 1909: every stall the cache places with a steal option, checked against its Wiki page.
+// The tests above re-register the plugin on a real API, so each of these registers it again.
+function withRandom(values, run) {
+    const random = Math.random, queue = [...values];
+    Math.random = () => (queue.length ? queue.shift() : 0);
+    try { run(); } finally { Math.random = random; }
+}
+test('the Fremennik, Keldagrim, Ape Atoll and Mor Ul Rek stalls grant their Wiki loot, XP, restock and empty stall', () => {
+    Thieving.register(testApi);
+    for (const [name, id, level, xp, ticks, empty, item, amount = 1] of [
+        ['Fish stall', O.FISH_STALL, 42, 42, 12, O.MARKET_STALL_7, I.RAW_SALMON],
+        ['Fish stall', O.FISH_STALL_2, 42, 42, 12, O.MARKET_STALL_7, I.RAW_SALMON],
+        ['Fish stall', O.FISH_STALL_3, 42, 42, 12, O.MARKET_STALL_7, I.RAW_SALMON],
+        ['Fish stall', O.FISH_STALL_4, 42, 42, 12, O.MARKET_STALL_7, I.RAW_SALMON],
+        ['Veg stall', O.VEG_STALL, 2, 10, 2, O.MARKET_STALL_7, I.POTATO],
+        ['Veg stall', O.VEG_STALL_2, 2, 10, 2, O.MARKET_STALL_7, I.POTATO],
+        ['Crossbow stall', O.CROSSBOW_STALL, 49, 52, 8, O.MARKET_STALL_12, I.BRONZE_BOLTS, 3],
+        ['Crafting stall', O.CRAFTING_STALL_2, 5, 20, 8, O.MARKET_STALL_12, I.AMULET_MOULD],
+        ['Crafting Stall', O.CRAFTING_STALL, 5, 20, 8, O.BAMBOO_DESK, I.AMULET_MOULD],
+        ['Food Stall', O.FOOD_STALL, 5, 16, 6, O.BAMBOO_DESK, I.BANANA],
+        ['General Stall', O.GENERAL_STALL, 5, 25, 8, O.BAMBOO_DESK, I.HAMMER],
+        ['Magic Stall', O.MAGIC_STALL, 65, 90, 12, O.BAMBOO_DESK, I.AIR_RUNE],
+        ['Scimitar Stall', O.SCIMITAR_STALL, 65, 210, 32, O.BAMBOO_DESK, I.IRON_SCIMITAR],
+        ['Shop Counter', O.SHOP_COUNTER_4, 82, 350, 50, O.SHOP_COUNTER_3, I.IRON_ORE],
+        ['Shop Counter', O.SHOP_COUNTER_5, 75, 408, 175, O.SHOP_COUNTER_3, I.UNCUT_SAPPHIRE],
+    ]) {
+        tasks = []; objects = []; events = [];
+        const stall = object(id);
+        const low = player({ level: level - 1 });
+        assert.equal(click(low, stall, name).handled, true, name);
+        assert.deepEqual(low.messages, [`You need a Thieving level of at least ${level} to do this.`], name);
+        const who = player({ level });
+        // The gem counter's onyx roll comes first; 0.5 passes it.
+        withRandom(id === O.SHOP_COUNTER_5 ? [0.5] : [], () => { click(who, stall, name); advance(); });
+        assert.deepEqual(who.items.map((reward) => [reward.getId(), reward.getAmount()]), [[item, amount]], name);
+        assert.deepEqual(who.xp, [xp], name);
+        assert.equal(objects.at(-1)[1].getId(), empty, name);
+        assert.equal(emptyStallId(stall), empty, name);
+        assert.equal(tasks.at(-1).getDelay(), ticks, name);
+        assert.ok(events.some(([event, request]) => event === 'thieving:success' && request.petBase > 0), name);
+    }
+});
+
+test('the new stalls set their own cache theft bits', () => {
+    Thieving.register(testApi);
+    for (const [name, id, key] of [
+        ['Fish stall', O.FISH_STALL, 'vikingfish'], ['Fish stall', O.FISH_STALL_2, 'miscfish'],
+        ['Fish stall', O.FISH_STALL_3, 'etcfish'], ['Fish stall', O.FISH_STALL_4, 'warrensfish'],
+        ['Veg stall', O.VEG_STALL, 'miscveg'], ['Veg stall', O.VEG_STALL_2, 'etcveg'],
+        ['Crossbow stall', O.CROSSBOW_STALL, 'xbows'], ['Crafting stall', O.CRAFTING_STALL_2, 'keldacraft'],
+        ['Shop Counter', O.SHOP_COUNTER_4, 'tzhaar_gemore'],
+    ]) {
+        const who = player();
+        click(who, object(id), name);
+        advance();
+        assert.deepEqual(who.varbits, [[bits[key], 1]], name);
+    }
+});
+
+test('fishmongers, greengrocers and the Keldagrim and Mor Ul Rek owners refuse a recent thief for their Wiki wait', () => {
+    Thieving.register(testApi);
+    for (const [name, id, owner, minutes] of [
+        ['Fish stall', O.FISH_STALL, 'Fish monger', 15], ['Fish stall', O.FISH_STALL_2, 'Fishmonger', 15],
+        ['Veg stall', O.VEG_STALL, 'Greengrocer', 10], ['Crossbow stall', O.CROSSBOW_STALL, 'Hirko', 10],
+        ['Crafting stall', O.CRAFTING_STALL_2, 'Nolar', 10], ['Shop Counter', O.SHOP_COUNTER_5, 'TzHaar-Hur-Rin', 30],
+    ]) {
+        npcs = []; tasks = [];
+        const who = player();
+        withRandom([0.5], () => { click(who, object(id), name); advance(); });
+        npcs = [];
+        assert.equal(merchant(who, owner).event.handled, true, owner);
+        npcs = [];
+        advance(minutes * 100);
+        assert.equal(merchant(who, owner).result, false, `${owner} trades again`);
+    }
+});
+
+test('Ape Atoll stalls refuse a monkey, can miss without a stun, and leave the owners trading', () => {
+    Thieving.register(testApi);
+    const stall = object(O.MAGIC_STALL);
+    const monkey = player({ level: 65 });
+    const emit = testApi.emitCustomEvent;
+    testApi.emitCustomEvent = (name, request) => { if (name === 'greegree:form') request.form = 'SMALL_NINJA'; else emit(name, request); };
+    try { click(monkey, stall, 'Magic Stall'); } finally { testApi.emitCustomEvent = emit; }
+    assert.deepEqual(monkey.messages, ["You wouldn't like to blow your cover by getting caught stealing."]);
+    assert.equal(tasks.length, 0);
+    const who = player({ level: 65 });
+    const owner = npc('Tutab', { x: 3200 });
+    withRandom([0.99], () => { click(who, stall, 'Magic Stall'); advance(); });
+    assert.deepEqual(who.messages, ['You attempt to steal from the stall but you miss your chance...']);
+    assert.deepEqual(who.items, []);
+    assert.deepEqual(who.xp, []);
+    assert.ok(!depleted.has(stall));
+    withRandom([0], () => { click(who, stall, 'Magic Stall'); advance(); });
+    assert.equal(who.items.length, 1);
+    assert.deepEqual(owner.chats, []);
+    assert.deepEqual(who.varbits, []);
+    assert.equal(who.getAttribute('thieving:stall-thefts'), undefined);
+    assert.equal(npcHooks.has('Tutab'), false);
+});
+
+test('Ape Atoll success chances follow their Skilling success charts', () => {
+    const { successChance } = Thieving._test;
+    assert.equal(successChance([20, 180], 65), 125 / 256);
+    assert.equal(successChance([200, 480], 5), 212 / 256);
+    assert.equal(successChance([128, 512], 99), 1);
+});
+
+test('the Mor Ul Rek gem counter rolls its onyx before the gem table', () => {
+    Thieving.register(testApi);
+    const who = player();
+    withRandom([0, 0], () => { click(who, object(O.SHOP_COUNTER_5), 'Shop Counter'); advance(); });
+    assert.deepEqual(who.items.map((reward) => reward.getId()), [I.UNCUT_ONYX]);
+    assert.ok(who.messages.includes('You steal an uncut onyx! Wow!'));
+});
+
+test("a thief guards the Warrens' fish stall", () => {
+    Thieving.register(testApi);
+    const who = player(), thief = npc('Thief', { attackable: true });
+    click(who, object(O.FISH_STALL_4), 'Fish stall');
+    advance();
+    assert.deepEqual(thief.attacks, [who]);
+    assert.deepEqual(who.items, []);
+});
+
+test('the Keldagrim clothes stall has nothing to steal, and an unknown stall falls through', () => {
+    Thieving.register(testApi);
+    const who = player();
+    hooks.get('Clothes stall')['Steal-from']({ player: who });
+    assert.deepEqual(who.messages, ["You don't really see anything you'd want to steal from this stall."]);
+    const event = { player: who, object: object(O.SHOP_COUNTER_3), definition: { getName: () => 'Shop Counter' } };
+    assert.equal(steal(event), false);
+    assert.equal(event.handled, undefined);
+});
+
+// Issue 1922: the Wiki's cup of tea is cup_of_tea (1978), which notes; 712 is display_tea, which does not.
+test('the tea stall gives the noteable cup of tea', () => {
+    Thieving.register(testApi);
+    const who = player();
+    click(who, object(O.TEA_STALL), 'Tea stall');
+    advance();
+    assert.deepEqual(who.items.map((reward) => reward.getId()), [I.CUP_OF_TEA_2]);
+    assert.equal(I.CUP_OF_TEA_2, 1978);
 });

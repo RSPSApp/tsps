@@ -269,8 +269,8 @@ export function buildLocModelHighlightParts(host: WebGLOsrsRendererHost,
                         anim.y === rsY &&
                         anim.level === (target.plane | 0)
                     ) {
-                        seqId = anim.seqType?.id ?? seqId;
-                        seqFrame = anim.frame | 0;
+                        seqId = anim.seqType?.id ?? -1;
+                        seqFrame = seqId === -1 ? -1 : anim.frame | 0;
                         break;
                     }
                 }

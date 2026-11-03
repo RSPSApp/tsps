@@ -3,6 +3,7 @@
 const { PvpProfileId } = require("../../pvp/PvpProfileRegistry.PlayerBots");
 const { isVisibleRealPlayer } = require("../../pvp/PvpTargetFilters.PlayerBots");
 const { EatFoodActionNode } = require("../actions/EatFoodActionNode.PlayerBots");
+const { usesSmiteOnlyPrayers } = require("../../pvp/WildernessHotspotRegistry.PlayerBots");
 
 const PROTECTION_DURATION_MS = 10_000;
 const RUNNING = Object.freeze({ handled: false, status: "running" });
@@ -21,6 +22,17 @@ class ReplenishAfterKillNode {
     if (!player || !state || !pvp) {
       return RUNNING;
     }
+    const smiteOnly = usesSmiteOnlyPrayers(player, state);
+    if (smiteOnly) {
+      for (const prayerId of this.PrayerHandler.PROTECTION_PRAYERS) {
+        if (this.PrayerHandler.isActivated(player, prayerId)) {
+          this.PrayerHandler.deactivatePrayer(player, prayerId);
+          pvp.nextPrayerReviewAt = 0;
+        }
+      }
+      pvp.replenishPrayerId = null;
+      pvp.replenishPrayerUntil = 0;
+    }
     this.clearExpiredPrayerProtection(player, pvp);
     if (pvp.replenishAfterKillPending !== true) {
       return RUNNING;
@@ -28,6 +40,9 @@ class ReplenishAfterKillNode {
 
     pvp.replenishAfterKillPending = false;
     this.eatFoodActionNode.tick(context);
+    if (smiteOnly) {
+      return RUNNING;
+    }
 
     const profileId = pvp.profileId;
     if (profileId !== PvpProfileId.VETERAN && profileId !== PvpProfileId.ELITE) {

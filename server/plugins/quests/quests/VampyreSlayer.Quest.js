@@ -62,38 +62,66 @@ module.exports = function registerVampyreSlayerQuest(api) {
   /** "Dr Harlow hands you a stake." (both the beer and lost-stake branches). */
   const HARLOW_STAKE_MESSAGE_IDS = new Set(["jJK9QV", "Za1uIb"]);
 
+  const REGENERATE_HITPOINTS = 20;
+  const HEAL_HITSPLAT = 6;
+
   let quest;
+
+  function later(ticks, action) {
+    const { TaskManager, CountdownTask } = api.core;
+    TaskManager.submit(new CountdownTask(null, ticks, action));
+  }
 
   const hasItem = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
 
   const ownsStake = (player) => hasItem(player, STAKE_ITEM_ID) ||
     (player.getBanks?.() ?? []).some((bank) => bank?.getAmount?.(STAKE_ITEM_ID) > 0);
 
+  const r = (text) => `<col=800000>${text}</col>`;
+  const JOURNAL_SPOKE_TO_MORGAN = `I spoke to ${r("Morgan")} at his home in ${r("Draynor Village")}. He told me about ${r("Count Draynor")}, a vampyre living in ${r("Draynor Manor")} north of the village. At his request, I agreed to try and kill ${r("Count Draynor")}. ${r("Morgan")} suggested I begin by seeking out ${r("Dr Harlow")}, a retired vampyre hunter, at the ${r("Blue Moon Inn")} in ${r("Varrock")}.`;
+  const JOURNAL_FOUND_HARLOW = `I travelled to the ${r("Blue Moon Inn")} in ${r("Varrock")} and found ${r("Dr Harlow")}.`;
+  const JOURNAL_GOT_STAKE = `${JOURNAL_FOUND_HARLOW} He told me that vampyres are hard to kill due to their ability to regenerate. However, he gave me a ${r("Stake")} and told me I could use it to prevent the regeneration.`;
+  const JOURNAL_GARLIC = `${r("Dr Harlow")} also suggested I carry some ${r("Garlic")} on me. ${r("Morgan")} might have some.`;
+
+  /** Word-wrap journal prose to the journal's width; colour tags take no space. */
+  function wrap(text, strike = false) {
+    const visible = (value) => value.replace(/<[^>]*>/g, "").length;
+    const lines = [];
+    let line = "";
+    for (const word of text.split(" ")) {
+      if (line && visible(line) + 1 + visible(word) > 58) { lines.push(line); line = word; }
+      else line = line ? `${line} ${word}` : word;
+    }
+    if (line) lines.push(line);
+    return strike ? lines.map((value) => `<str>${value.replace(/<[^>]*>/g, "")}</str>`) : lines;
+  }
+
+  // Transcript:Vampyre_Slayer/Journal (the 30 June 2026 rewrite).
   function buildJournal(player, questHandle) {
     const stage = questHandle.getStage(player);
     if (stage >= STAGE_COMPLETE) {
       return [
-        "<str>I killed Count Draynor and saved the village.</str>",
-        "",
+        ...wrap(JOURNAL_SPOKE_TO_MORGAN, true), "",
+        ...wrap(JOURNAL_GOT_STAKE, true), "",
+        ...wrap("I entered Draynor Manor and found Count Draynor in the basement. However, I was able to use the Stake that Dr Harlow gave me to kill him for good.", true), "",
         "<col=ff0000>QUEST COMPLETE!</col>",
       ];
     }
+    if (stage >= STAGE_HARLOW && player.getAttribute(STAKE_RECEIVED_ATTRIBUTE) === true) {
+      const hunt = `I'll now need to head to ${r("Draynor Manor")}, find ${r("Count Draynor")} and kill him.`;
+      const tools = ownsStake(player)
+        ? `I should make sure to take the ${r("Stake")} with me, along with a ${r("Hammer")}. Most ${r("General Stores")} should stock a ${r("Hammer")}.`
+        : `I should make sure to take the ${r("Stake")} with me. If I lose it, I'll need to ask ${r("Dr Harlow")} for another. I'll also need a ${r("Hammer")}. Most ${r("General Stores")} should stock one.`;
+      return [...wrap(JOURNAL_SPOKE_TO_MORGAN, true), "", ...wrap(`${JOURNAL_GOT_STAKE} ${hunt} ${tools} ${JOURNAL_GARLIC}`)];
+    }
     if (stage >= STAGE_HARLOW) {
       return [
-        "I need to kill <col=800000>Count Draynor</col> beneath Draynor Manor.",
-        "I need a <col=800000>stake and hammer</col>; garlic will weaken him.",
+        ...wrap(JOURNAL_SPOKE_TO_MORGAN, true), "",
+        ...wrap(`${JOURNAL_FOUND_HARLOW} However, he doesn't seem willing to talk to me unless I buy him a ${r("Beer")} first.`),
       ];
     }
-    if (stage >= STAGE_STARTED) {
-      return [
-        "Morgan told me to find <col=800000>Dr Harlow</col> in",
-        "Varrock's <col=800000>Blue Moon Inn</col>.",
-      ];
-    }
-    return [
-      "I can start this quest by speaking to",
-      "<col=800000>Morgan</col> in Draynor Village.",
-    ];
+    if (stage >= STAGE_STARTED) return wrap(JOURNAL_SPOKE_TO_MORGAN);
+    return wrap(`I can start this quest by talking to ${r("Morgan")} at his home in ${r("Draynor Village")}.`);
   }
 
   function reward(player) {
@@ -152,9 +180,8 @@ module.exports = function registerVampyreSlayerQuest(api) {
   function answerCondition({ npcId, player, text }) {
     if (!MORGAN_NPC_IDS.has(npcId) && !HARLOW_NPC_IDS.has(npcId)) return null;
     const value = String(text).toLowerCase();
-    if (value.includes("combat level less than 20")) {
-      return player.getSkillManager().getCombatLevel() < 20;
-    }
+    // The start menu shows this as a box (warnBeforeStart), so the transcript's line is skipped.
+    if (value.includes("combat level less than 20")) return false;
     if (value.includes("lost the stake")) return !ownsStake(player);
     if (value.includes("has the stake")) return ownsStake(player);
     if (value.includes("does not have a beer")) return !hasItem(player, BEER_ITEM_ID);
@@ -166,6 +193,15 @@ module.exports = function registerVampyreSlayerQuest(api) {
     if (!MORGAN_NPC_IDS.has(npcId) || hook !== QUEST_START_HOOK) return;
     if (quest.getStage(player) >= STAGE_STARTED) return;
     quest.setStage(player, STAGE_STARTED);
+    player.sendMessage("You've started a new quest: <col=081190>Vampyre Slayer</col>");
+  }
+
+  /** rsprox 1718: below combat 20 a blocking box comes before "Start the Vampyre Slayer quest?". */
+  function warnBeforeStart(event) {
+    if (String(event.prompt).includes("Start the Vampyre Slayer quest") &&
+        (event.player.getSkillManager().getCombatLevel?.() ?? 20) < 20) {
+      event.warning = "Before starting this quest, be aware that your combat level is lower than the recommended level of 20.";
+    }
   }
 
   function handleDialogueAction(event) {
@@ -237,10 +273,21 @@ module.exports = function registerVampyreSlayerQuest(api) {
     if (stage < STAGE_STARTED || stage >= STAGE_COMPLETE) return;
     const hasStake = hasItem(killer, STAKE_ITEM_ID);
     const hasHammer = hasItem(killer, HAMMER_ITEM_ID);
-    if (hasStake && hasHammer) return;
-    if (hasStake) killer.sendMessage("You're unable to push the stake far enough in!");
-    killer.sendMessage("The vampyre seems to regenerate!");
-    npc.setHitpoints(npc.getDefinition().getHitpoints());
+    if (hasStake && hasHammer) {
+      // rsprox 3275, 1710: the message and the hammering come the tick after the last hit,
+      // with the Count's death animation; completion follows with the death (onNpcDeath).
+      later(1, () => {
+        killer.sendMessage("<col=ff3045>You hammer the stake into the vampyre's chest!");
+        killer.performAnimation(new Animation(806));
+      });
+      return;
+    }
+    if (hasStake) killer.sendMessage("<col=ff3045>You're unable to push the stake far enough in!");
+    killer.sendMessage("<col=ff3045>The vampyre seems to regenerate!");
+    // rsprox 1710 (125231): a heal hitsplat of 20, not a full heal.
+    const healed = Math.min(REGENERATE_HITPOINTS, npc.getMaxHitpoints?.() ?? npc.getDefinition().getHitpoints());
+    npc.setHitpoints(healed);
+    npc.showHitsplat?.(healed, { mine: HEAL_HITSPLAT, others: HEAL_HITSPLAT });
     event.preventDeath = true;
   }
 
@@ -252,8 +299,6 @@ module.exports = function registerVampyreSlayerQuest(api) {
     if (stage < STAGE_STARTED || stage >= STAGE_COMPLETE) return;
     if (!hasItem(killer, STAKE_ITEM_ID) || !hasItem(killer, HAMMER_ITEM_ID)) return;
     killer.getInventory().deleteNumber(STAKE_ITEM_ID, 1);
-    killer.performAnimation(new Animation(806));
-    killer.sendMessage("<col=ff3045>You hammer the stake into the vampyre's chest!");
     quest.complete(killer);
   }
 
@@ -266,6 +311,7 @@ module.exports = function registerVampyreSlayerQuest(api) {
     questPoints: 3,
     xpRewards: [{ skillId: Skill.ATTACK.getIndex(), amount: 4825, label: "Attack" }],
     scrollItemId: STAKE_ITEM_ID,
+    completionJingleId: 154,
     buildJournal,
     onReward: reward,
   });
@@ -275,6 +321,7 @@ module.exports = function registerVampyreSlayerQuest(api) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
+  api.onCustomEvent("npc-dialogue:menu", warnBeforeStart);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onObjectInteraction(useGarlicCupboard);

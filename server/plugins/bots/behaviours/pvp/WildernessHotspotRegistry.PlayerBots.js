@@ -37,7 +37,6 @@ function freezeHotspot(hotspot) {
       : null,
     allowedProfiles: Object.freeze([...(hotspot.allowedProfiles ?? [])]),
     allowedLoadouts: Object.freeze([...hotspot.allowedLoadouts]),
-    styleWeights: Object.freeze({ ...(hotspot.styleWeights ?? {}) }),
     activityWeights: Object.freeze({ ...(hotspot.activityWeights ?? {}) }),
   });
 }
@@ -45,11 +44,12 @@ function freezeHotspot(hotspot) {
 /**
  * PvP bots are configured with the rest of the bot population, in bot-sites.json: the
  * "pvp" block holds pool size and active-region spread, and every site with a `pvp`
- * block is a hotspot. A hotspot names a loadout `style`; the loadouts carrying that tag
- * in pvp-bot-loadouts.json are its gear.
+ * block is a hotspot. Its gear is the loadout groups `pvp.loadouts` lists from
+ * pvp-bot-loadouts.json or, without that list, the groups tagged with its `style`.
  */
 const SITES_FILE = readBotSites(path.join(GameConstants.DEFINITIONS_DIRECTORY, "bot-sites.json"));
 const PVP_BOT_CONFIG = SITES_FILE.pvp ?? {};
+const SMITE_ONLY_REGIONS = new Set(PVP_BOT_CONFIG.smiteOnlyRegions ?? []);
 
 /** How many wilderness bot names exist and how they spread over players' active regions. */
 const PVP_BOT_SETTINGS = Object.freeze({
@@ -63,13 +63,27 @@ function siteToHotspot(site, loadouts) {
   const { pvp } = site;
   const z = site.z ?? 0;
   const radius = site.radius ?? 6;
-  // f2p gear only joins f2p sites; a free world filters to f2p gear on its own.
-  const allowedLoadouts = loadouts
-    .filter((loadout) => loadout.tags?.includes(pvp.style))
-    .filter((loadout) => pvp.style === "f2p" || !loadout.tags.includes("f2p"))
-    .map((loadout) => loadout.id);
-  if (allowedLoadouts.length === 0) {
-    throw new Error(`[bot sites] ${site.id}: no loadout is tagged '${pvp.style}'`);
+  let allowedLoadouts;
+  if (pvp.loadouts !== undefined) {
+    // An explicit list of loadout groups wins over the style's tags.
+    const known = new Set(loadouts.map((loadout) => loadout.id));
+    if (!Array.isArray(pvp.loadouts) || pvp.loadouts.length === 0) {
+      throw new Error(`[bot sites] ${site.id}: pvp.loadouts must list at least one loadout`);
+    }
+    const unknown = pvp.loadouts.filter((id) => !known.has(id));
+    if (unknown.length > 0) {
+      throw new Error(`[bot sites] ${site.id}: unknown loadout ${unknown.join(", ")}`);
+    }
+    allowedLoadouts = [...new Set(pvp.loadouts)];
+  } else {
+    // f2p gear only joins f2p sites; a free world filters to f2p gear on its own.
+    allowedLoadouts = loadouts
+      .filter((loadout) => loadout.tags?.includes(pvp.style))
+      .filter((loadout) => pvp.style === "f2p" || !loadout.tags.includes("f2p"))
+      .map((loadout) => loadout.id);
+    if (allowedLoadouts.length === 0) {
+      throw new Error(`[bot sites] ${site.id}: no loadout is tagged '${pvp.style}'`);
+    }
   }
   return {
     id: site.id,
@@ -82,6 +96,7 @@ function siteToHotspot(site, loadouts) {
     roamRadius: pvp.roam,
     lingerMs: pvp.lingerMs,
     maxSimultaneousFights: pvp.maxFights,
+    smiteOnly: pvp.smiteOnly === true,
     combatLevelRange: pvp.combat ? { min: pvp.combat[0], max: pvp.combat[1] } : undefined,
     allowedProfiles: pvp.profiles ?? listPvpProfiles().map((profile) => profile.id),
     allowedLoadouts,
@@ -107,6 +122,14 @@ const WILDERNESS_HOTSPOT_IDS = Object.freeze(Object.keys(WILDERNESS_HOTSPOTS));
 
 function getWildernessHotspot(hotspotId) {
   return WILDERNESS_HOTSPOTS[hotspotId] ?? null;
+}
+
+function usesSmiteOnlyPrayers(player, state) {
+  if (getWildernessHotspot(state?.pvp?.hotspotId)?.smiteOnly === true) return true;
+  const location = player?.getLocation?.();
+  return location != null && SMITE_ONLY_REGIONS.has(
+    `${location.getZ()}:${location.getX() >> 6}:${location.getY() >> 6}`
+  );
 }
 
 function listWildernessHotspots() {
@@ -150,6 +173,7 @@ function isOutsideWildernessHotspots(location) {
 }
 
 module.exports = {
+  _test: { siteToHotspot },
   PVP_BOT_SETTINGS,
   WILDERNESS_HOTSPOT_IDS,
   WILDERNESS_HOTSPOTS,
@@ -159,4 +183,5 @@ module.exports = {
   hotspotContainsLocation,
   isOutsideWildernessHotspots,
   listWildernessHotspots,
+  usesSmiteOnlyPrayers,
 };

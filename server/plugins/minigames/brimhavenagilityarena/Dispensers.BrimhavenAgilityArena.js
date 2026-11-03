@@ -8,6 +8,8 @@
  */
 
 const Shared = require("./Shared.BrimhavenAgilityArena");
+const Area = require("./Area.BrimhavenAgilityArena");
+const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
 
 /**
  * Paying and the ladders, as rsprox captures show them (rev 227-237). Paying Cap'n Izzy
@@ -205,12 +207,14 @@ let cycleTask = null;
 function startCycle() {
   const { Task, TaskManager } = Shared.core();
   Shared.advanceCycle();
+  Area.startBlades();
   cycleTask = new (class extends Task {
     constructor() {
       super(1, Shared.CYCLE_TASK_KEY, false);
     }
     execute() {
       Shared.tick();
+      Area.tickBlades();
     }
   })();
   TaskManager.submit(cycleTask);
@@ -219,6 +223,7 @@ function startCycle() {
 function shutdown() {
   cycleTask?.stop();
   cycleTask = null;
+  Area.stopBlades();
 }
 
 /** Logging out inside the arena throws the player into the entrance hut and forgets them. */
@@ -226,6 +231,8 @@ function logout({ player }) {
   if (!player) return;
   const core = Shared.core();
   if (Shared.isInArena(player)) {
+    // Finish before relocating: Agility's later logout hook must not land us back inside.
+    ObstacleRunner.completeNow(player);
     player.setLocation(new core.Location(Shared.HUT.x, Shared.HUT.y, Shared.HUT.z));
     player.setAttribute(Shared.PAID_ATTRIBUTE, null);
   }

@@ -344,7 +344,7 @@ function createObstacleTask(Task) {
       this.finished = true;
       super.stop();
       // A landing animation started on the last tick plays out; resetting it would cut it off.
-      release(this.player, this.animatedTick === this.ticksRun);
+      release(this.player, this.keepAnimation ? completed : this.animatedTick === this.ticksRun);
       this.complete(completed);
     }
 
@@ -385,10 +385,12 @@ function release(player, keepAnimation = false) {
  * Runs `steps` for the player. `render` sets a walk animation for the whole run.
  * `onFinish(completed)` fires once; `completed` is false if the player died or left.
  * `busyVarbit` sets the client's BUSY varbit for the run (Agility course obstacles).
+ * `keepAnimation` lets a successful delayed pose finish after movement unlocks; cancellation resets it.
  */
-function run(context, steps, { render = null, onFinish = null, busyVarbit = false } = {}) {
+function run(context, steps, { render = null, onFinish = null, busyVarbit = false, keepAnimation = false } = {}) {
   const task = new ObstacleTask(context, steps, onFinish);
   task.busyVarbit = busyVarbit;
+  task.keepAnimation = keepAnimation;
   lock(context.player, task);
   if (render != null) {
     setRender(context.player, render);

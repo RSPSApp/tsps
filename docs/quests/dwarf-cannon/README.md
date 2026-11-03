@@ -27,7 +27,11 @@ ROUTE_PASSWORD=<any> NODE_PATH=$PWD/node_modules node ../docs/quests/dwarf-canno
 ```
 
 On a failure it prints the step, the helper's step and the stage, and the `--from` to resume
-with on the same account once the cause is fixed.
+with on the same account once the cause is fixed. `--from` and `--to` must name a step (the
+script lists them otherwise). Step 12 saves the pre-completion observation to `--checkpoint`
+(default: a per-account file in the system temp directory), so a resume at "13 rewards"
+measures the reward against it; without that checkpoint it stops and asks for a resume from
+step 12.
 
 The script tests the server's quest logic, not the client UI: it sends the clicks a client would
 send, so a client that fails to offer or send a click (see #1963) is not caught. Quests with

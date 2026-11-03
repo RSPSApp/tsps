@@ -9,7 +9,8 @@
  *
  * Run from server/ (needs the server with AGENT_MCP=1 and the Quest Helper bridge):
  *   NODE_PATH=$PWD/node_modules node ../docs/quests/dwarf-cannon/route.cjs \
- *     --mcp http://127.0.0.1:<AGENT_MCP_PORT>/mcp --player <fresh account> [--from <step>] [--to <step>] [--out report.json]
+ *     --mcp http://127.0.0.1:<AGENT_MCP_PORT>/mcp --player <fresh account> [--from <step>] [--to <step>] \
+ *     [--checkpoint <file>] [--out report.json]
  * with ROUTE_PASSWORD set in the environment (see below).
  *
  * Setup (declared, before the baseline): ::master, ::maxgear melee, ::tele to Captain Lawgof.
@@ -17,7 +18,9 @@
  */
 "use strict";
 const { randomBytes } = require("node:crypto");
-const { writeFileSync } = require("node:fs");
+const { existsSync, readFileSync, writeFileSync } = require("node:fs");
+const { tmpdir } = require("node:os");
+const { join } = require("node:path");
 const { Client } = require("@modelcontextprotocol/sdk/client/index.js");
 const { StreamableHTTPClientTransport } = require("@modelcontextprotocol/sdk/client/streamableHttp.js");
 
@@ -27,11 +30,32 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, arg, i, all
   return pairs;
 }, []));
 if (!args.mcp || !args.player) {
-  console.error("Usage: route.cjs --mcp http://127.0.0.1:<port>/mcp --player <name> [--from <step>] [--to <step>] [--out <file>]");
+  console.error("Usage: route.cjs --mcp http://127.0.0.1:<port>/mcp --player <name> [--from <step>] [--to <step>] [--checkpoint <file>] [--out <file>]");
+  process.exit(2);
+}
+// Every step, in order. --from and --to must name one; step() refuses a name not listed here.
+const STEPS = [
+  "setup", "baseline", "1 start: talk to Captain Lawgof", "2 repair the six railings", "3 report the railings to Lawgof",
+  "4 take the remains from the watchtower", "5 return the remains to Lawgof", "6 find Lollk in the goblin cave",
+  "7 leave the cave by the mud pile", "8 return to Lawgof for the toolkit", "9 repair the multicannon",
+  "10 report the repair to Lawgof", "11 get the notes and ammo mould from Nulodion", "12 complete: return to Lawgof",
+  "13 rewards", "14 repeat talk: no second reward", "15 relog keeps the completion",
+];
+for (const option of ["from", "to"]) {
+  if (args[option] !== undefined && !STEPS.includes(args[option])) {
+    console.error(`--${option} "${args[option]}" is not a step. Steps:\n  ${STEPS.join("\n  ")}`);
+    process.exit(2);
+  }
+}
+if (args.from && args.to && STEPS.indexOf(args.to) < STEPS.indexOf(args.from)) {
+  console.error(`--to "${args.to}" comes before --from "${args.from}"`);
   process.exit(2);
 }
 const player = String(args.player);
 const QUEST = "dwarf_cannon";
+// Step 12 saves the pre-completion observation here, so a resume at "13 rewards" measures the
+// reward against it. Per account; it holds an observation only, no password.
+const CHECKPOINT = String(args.checkpoint ?? join(tmpdir(), `dwarf-cannon-route-${String(args.player).toLowerCase()}.json`));
 // The test account's password stays out of the repo and the report: pass it in the environment
 // so a --from resume can still relog. Without it, a random one serves a single uninterrupted run.
 const password = process.env.ROUTE_PASSWORD || randomBytes(9).toString("hex");
@@ -86,6 +110,7 @@ function finding(text) {
 }
 
 async function step(name, body) {
+  if (!STEPS.includes(name)) throw new Error(`step "${name}" is not listed in STEPS`);
   if (stopped) return;
   if (!reached) {
     if (name !== args.from) { console.log(`- ${name} (skipped, before --from)`); return; }
@@ -100,7 +125,7 @@ async function step(name, body) {
     console.log(`FAIL (${((Date.now() - started) / 1000).toFixed(1)}s)\n  ${error.message}`);
     if (error.context && Object.keys(error.context).length) console.log(`  context: ${JSON.stringify(error.context).slice(0, 4000)}`);
     if (lastHelper) console.log(`  helper step: ${JSON.stringify(lastHelper.step?.text)} stage ${lastHelper.stage} wire ${JSON.stringify(lastHelper.wire)}`);
-    console.log(`  resume: --from "${name}"`);
+    console.log(`  resume: --from "${error.context?.resumeFrom ?? name}"`);
     throw error;
   }
   report.steps.push({ name, ok: true, ms: Date.now() - started });
@@ -400,11 +425,23 @@ async function route() {
     await helperSays("Captain Lawgof");
     await travel(LAWGOF_TILE);
     report.preCompletion = await observe();
+    if (report.preCompletion.varpValues[VARP_STAGE] !== 10) fail("expected stage 10 before the completion talk");
+    writeFileSync(CHECKPOINT, JSON.stringify({ player: player.toLowerCase(), preCompletion: report.preCompletion }));
     await talkTo("Captain Lawgof");
     await expectStage(11);
   });
 
   await step("13 rewards", async () => {
+    // A resume here measures against step 12's saved observation, never against the completed state.
+    if (!report.preCompletion) {
+      const saved = existsSync(CHECKPOINT) ? JSON.parse(readFileSync(CHECKPOINT, "utf8")) : null;
+      if (saved?.player !== player.toLowerCase() || saved.preCompletion?.varpValues?.[VARP_STAGE] !== 10) {
+        fail(`no pre-completion checkpoint for ${player} at ${CHECKPOINT}: resume from step 12 on an account at stage 10`,
+          { resumeFrom: "12 complete: return to Lawgof" });
+      }
+      report.preCompletion = saved.preCompletion;
+      report.preCompletionFrom = "checkpoint";
+    }
     const before = report.preCompletion;
     const after = await observe();
     const close = await call("close_interface", { player }, { allowError: true });
@@ -447,8 +484,11 @@ async function route() {
   let ok = true;
   try {
     await route();
-  } catch {
+    // Belt and braces: a --from that never ran a step is not a pass.
+    if (!reached) throw new Error(`--from "${args.from}" was never reached; no steps ran`);
+  } catch (error) {
     ok = false;
+    if (!report.steps.some((s) => !s.ok)) console.log(error.message);
   }
   report.ok = ok;
   report.totalMs = Date.now() - started;

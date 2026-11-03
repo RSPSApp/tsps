@@ -64,9 +64,11 @@ const pieRect = (pie: Pie): Rect => {
     const r = TIMER_OVERLAY_DIAMETER / 2;
     return { x: pie.x - r - 1, y: pie.y - r - 1, w: 2 * r + 2, h: 2 * r + 2 };
 };
+/** The glyphs and their shadow or outline reach 4 px per 16pt below the baseline, so the padding scales. */
 const textRect = (t: Text, width: number, scale: number): Rect => {
     const h = TEXT_HEIGHT * scale;
-    return { x: t.x - 2, y: t.y - h, w: width + 6, h: h + 6 };
+    const pad = Math.max(6, Math.ceil(6 * scale));
+    return { x: t.x - 2, y: t.y - h, w: width + pad, h: h + pad };
 };
 
 type LabelCacheEntry = { mode: string; quantity: number; gePrice: number; haPrice: number; text: string };

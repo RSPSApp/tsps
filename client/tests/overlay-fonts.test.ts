@@ -5,6 +5,8 @@ import { FontType } from "@runelite/client/config/FontType";
 import { RuneLiteConfig } from "@runelite/client/config/RuneLiteConfig";
 import { bindOverlayFonts, boldFont, overlayFont, overlayFontsVersion, resolveFontType } from "@runelite/client/ui/overlay/OverlayFonts";
 import { FONT_BOLD_12, FONT_PLAIN_11, FONT_PLAIN_12 } from "../ui/fonts";
+import { GroundItemsOverlay } from "../game/plugins/grounditems/GroundItemsOverlay";
+import { BitmapFont } from "../rs/font/BitmapFont";
 
 // FontType: RuneLite's presets, JSON storage, legacy enum names, bad input.
 assert.equal(FontType.SMALL.family, "RuneScape Small");
@@ -63,5 +65,57 @@ assert.deepEqual(overlayFont("infobox"), { id: FONT_PLAIN_11, scale: 1 });
 config.setDefaultConfiguration(RuneLiteConfig, true);
 assert.deepEqual(overlayFont("dynamic"), { id: FONT_PLAIN_11, scale: 1 }, "reset: back to the default");
 unbind();
+
+// Ground item labels: the rects draw() and coverage() report hold every glyph quad, its shadow
+// and outline included, at every size. Partial redraws clear and scissor to them, so a label
+// reaching past them leaves old pixels behind (PR #2044 review). The font is shaped like the cache
+// fonts: an ascent of 12 and descenders reaching 3 px below the baseline, plus the shadow's 1 px.
+(globalThis as any).document = {
+    createElement: () => ({ width: 0, height: 0, getContext: () => ({
+        createImageData: (w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+        putImageData() {},
+    }) }),
+};
+const font = new BitmapFont();
+font.ascent = font.maxAscent = 12;
+font.maxDescent = 3;
+for (let ch = 32; ch < 127; ch++) {
+    font.advances[ch] = 7;
+    font.widths[ch] = 6;
+    font.heights[ch] = 13;
+    font.topBearings[ch] = 2;
+    font.glyphPixels[ch] = new Uint8Array(6 * 13).fill(1);
+}
+let quads: number[][] = [];
+const renderer: any = {
+    createTextureFromCanvas: (_key: string, canvas: any) => ({ tex: {}, w: canvas.width, h: canvas.height }),
+    deleteTexture() {},
+    drawTextureQuads(_texture: unknown, data: Float32Array, count: number) {
+        for (let q = 0; q < count; q++) quads.push([...data.subarray(q * 16, q * 16 + 16)].filter((_, i) => i % 4 < 2));
+    },
+};
+const holds = (r: { x: number; y: number; w: number; h: number }, points: number[]) => {
+    for (let i = 0; i < points.length; i += 2) {
+        if (points[i] < r.x || points[i] > r.x + r.w || points[i + 1] < r.y || points[i + 1] > r.y + r.h) return false;
+    }
+    return true;
+};
+for (const size of [8, 16, 24, 32, 48, 64]) for (const outline of [false, true]) {
+    const overlay: any = new GroundItemsOverlay({} as any);
+    overlay.frame = {
+        tiles: [], backgrounds: [], boxes: [], pies: [], signature: "label",
+        texts: [{ text: "Abyssal whip (GE: 751K gp) gjpqy", x: 100, y: 200, color: 0xffffffff, outline }],
+        font: resolveFontType(FontType.SMALL.withSize(size)),
+    };
+    quads = [];
+    const [drawn] = overlay.draw({ renderer, fontLoader: () => font });
+    const [covered] = overlay.coverage();
+    const bottom = Math.max(...quads.flatMap((q) => q.filter((_, i) => i % 2 === 1)));
+    assert.ok(bottom > 200, `${size}pt: the descenders reach below the baseline`);
+    for (const q of quads) {
+        assert.ok(holds(drawn, q), `${size}pt ${outline ? "outline" : "shadow"}: draw() holds every quad`);
+        assert.ok(holds(covered, q), `${size}pt ${outline ? "outline" : "shadow"}: coverage() holds every quad`);
+    }
+}
 
 console.log("overlay-fonts: ok");

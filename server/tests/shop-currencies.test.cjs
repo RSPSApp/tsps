@@ -26,6 +26,7 @@ function loadPlugin() {
     registerItemShopCurrency: (itemId, options) => ShopManager.registerItemCurrency(itemId, options),
     persistAttribute: (key) => persisted.add(key),
     registerNpcInteraction: () => {},
+    onNpcInteraction: () => {},
   });
   return { persisted, handlers: ShopManager.currencyHandlers };
 }

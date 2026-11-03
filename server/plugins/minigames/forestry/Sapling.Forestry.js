@@ -316,7 +316,7 @@ function gifts(event) {
     Common.bark(player, lumpBark(average), true);
     const leaves = Common.data.trees[event.site.name] ?? "Leaves";
     const amount = Common.randomInt(...sapling.leaves);
-    Common.give(player, Common.data.leaves[leaves], amount);
+    Common.award(player, Common.data.leaves[leaves], amount);
     player.sendMessage(Common.message("leaves", { amount, leaves }));
     Common.xp(player, "WOODCUTTING", Common.level(player, "WOODCUTTING") * sapling.bonusXpPerLevel * (average / 100));
   }

@@ -12,7 +12,8 @@
  *   answers with `balance` and a `set(value)` function. A currency with no obj has no other
  *   source; one with an obj is that item in the inventory unless its owner claims it (GotR's
  *   abyssal pearls are a saved balance). A mixed wallet can supply `inventoryCost(amount)`:
- *   the number of `itemId` removed from inventory when that much currency is spent.
+ *   the number of `itemId` removed from inventory when that much currency is spent, and
+ *   `refundItemId`: the inventory item a refund is paid in, so a sale checks there is room for it.
  * - "omnishop:describe" { player, shop, stock, description }: the info panel's text, which the
  *   cache doesn't carry.
  * - "omnishop:can-buy" { player, shop, stock, itemId, cancel, unlock }: before each unit is
@@ -201,6 +202,7 @@ function wallet(player, shop, currency) {
     return {
       balance: Number(request.balance) || 0, set: request.set,
       paymentItemId: obj, inventoryCost: request.inventoryCost,
+      refundItemId: Number.isInteger(request.refundItemId) && request.refundItemId > 0 ? request.refundItemId : -1,
     };
   }
   if (obj > 0) {
@@ -423,11 +425,13 @@ function sell(player, shop, slot, quantity) {
     preview.deleteAtSlot(slot, 1, false);
     let fits = true;
     for (const { cost, wallet: held } of payments) {
-      if (!held || (held.itemId > 0 && preview.getAddableAmount(new core.Item(held.itemId, cost.refund)) < cost.refund)) {
+      // A refund paid into the inventory needs room there: the currency's item, or what a custom wallet pays in.
+      const refundId = held ? (held.itemId > 0 ? held.itemId : held.refundItemId ?? -1) : -1;
+      if (!held || (refundId > 0 && preview.getAddableAmount(new core.Item(refundId, cost.refund)) < cost.refund)) {
         fits = false;
         break;
       }
-      if (held.itemId > 0) preview.add(new core.Item(held.itemId, cost.refund), false);
+      if (refundId > 0) preview.add(new core.Item(refundId, cost.refund), false);
     }
     if (!fits) {
       player.sendMessage(MESSAGE.NO_SPACE);

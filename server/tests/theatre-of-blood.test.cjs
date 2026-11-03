@@ -45,7 +45,7 @@ function fakeApiBase() {
     onInterfaceActionButton() {},
     onZoneEnter() {},
     onZoneExit() {},
-    onPlayerLogout() {},
+    onPlayerLogout: (handler) => (hooks.logout ??= []).push(handler),
     onPlayerLogin() {},
     onShouldDropItemsOnDeath() {},
     onPlayerDeath() {},
@@ -717,24 +717,36 @@ test('Entry Mode still answers the completion query and never clears another pro
   assert.equal(mixed.complete, true, 'the normal-mode answer is not overwritten');
 });
 
-test('unclaimed vault loot is kept when a later raid rolls its own', (t) => {
+test('unclaimed vault loot is lost on starting another raid, and the vault roll replaces it', (t) => {
   const Rewards = require('../plugins/minigames/tob/Rewards.TheatreOfBlood');
   const I = PluginManager.getCoreApi().ItemIdentifiers;
   t.mock.method(Math, 'random', () => 0);
-  const { raid, players: [solo] } = startRaid(['LootCarry']);
-  const old = [{ id: I.COINS, amount: 123 }, { id: I.DEATH_RUNE, amount: 100, loggedAmount: 100 }];
-  Rewards.setLoot(solo, old);
+  const solo = fakePlayer('LootLost');
+  Rewards.setLoot(solo, [{ id: I.COINS, amount: 123 }]);
+  Parties.create(solo);
+  const raid = Raid.begin(solo);
+  raid.enter(solo);
+  assert.deepEqual(Rewards.lootOf(solo), [], 'entering a new raid loses the old loot');
+  Rewards.setLoot(solo, [{ id: I.COINS, amount: 123 }]);
   raid.buildRoom('REWARDS');
   const after = Rewards.lootOf(solo);
-  assert.deepEqual(after.find((entry) => entry.id === I.COINS), old[0], 'the older coins are still there');
-  assert.ok(after.some((entry) => entry.id === I.AVERNIC_DEFENDER_HILT), 'the new roll is added');
-  assert.equal(Rewards.mergeLoot([{ id: 5, amount: 2 }], [{ id: 5, amount: 3 }, { id: 6, amount: 1 }])
-    .find((entry) => entry.id === 5).amount, 5, 'same items add together');
-  assert.equal(Rewards.mergeLoot([{ id: 5, amount: 2, loggedAmount: 2 }], [{ id: 5, amount: 3 }])[0].loggedAmount, 2,
-    'the collection log still sees the new copies');
-  Rewards.setLoot(solo, [{ id: 5, amount: 3, loggedAmount: 5 }]);
-  assert.equal(Rewards.lootOf(solo)[0].loggedAmount, 3, 'a partial claim clamps what is already logged');
+  assert.ok(!after.some((entry) => entry.id === I.COINS), 'the vault roll replaces anything older');
+  assert.ok(after.some((entry) => entry.id === I.AVERNIC_DEFENDER_HILT), 'the new roll is there');
+  hooks.api.emitCustomEvent('tob:raid-entered', { raid, player: solo });
+  assert.ok(Rewards.lootOf(solo).length > 0, 'stepping in again at the vault keeps its own roll');
   raid.dispose();
+});
+
+test("unclaimed vault loot is lost on logging out, but Lil' Zik is still delivered", () => {
+  const Rewards = require('../plugins/minigames/tob/Rewards.TheatreOfBlood');
+  const I = PluginManager.getCoreApi().ItemIdentifiers;
+  const solo = fakePlayer('LogoutLoot');
+  Rewards.setLoot(solo, [{ id: I.COINS, amount: 123 }, { id: I.LIL_ZIK, amount: 1 }]);
+  hooks.custom = [];
+  for (const handler of hooks.logout) handler({ player: solo });
+  assert.deepEqual(Rewards.lootOf(solo), [], 'nothing is left to claim');
+  assert.ok(hooks.custom.some((entry) => entry.name === 'npc-drops:roll' && entry.payload.drops.some((drop) => drop.itemId === I.LIL_ZIK)),
+    'the pet goes to the pet delivery');
 });
 
 test('the vault loot reaches the collection log once, and the category answers the ToB counts', () => {

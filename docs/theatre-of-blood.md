@@ -12,7 +12,7 @@ It is one plugin, `server/plugins/minigames/TheatreOfBlood.plugin.js`, which del
 | The six rooms in Normal Mode | Done | Solo route played from entry to leaving, fights shortened; see [Tested](#tested) |
 | Entry and Hard Mode | Built | See [Tested](#tested) for how far each was played |
 | Deaths, the jail, wipes, logouts, teleports, a second party | Done | Played as scenarios; absent members no longer hold a wipe open (unit test) |
-| Unclaimed vault loot across raids, the collection log, the Dawnbringer's drop and pickup, Verzik's hazards at her death | Done | Unit tests (see [Tested](#tested)) |
+| Unclaimed vault loot lost on a new raid or logout, the collection log, the Dawnbringer's drop and pickup, Verzik's hazards at her death | Done | Unit tests (see [Tested](#tested)) |
 | Retrieval chest, stats, scoreboard, escape crystal, spectating | Built | Played as scenarios; the interfaces' looks not seen in a client |
 | Combat Achievements | Built | The rooms report them; several seen firing in play, most only by unit test or not at all |
 | Theatre's items | See [Items](#items) | Avernic defender and kits played; scythe and staff checked against the Wiki's text |
@@ -157,7 +157,7 @@ From the Wiki's Monumental chest page, by mode as in [Modes](#modes):
 - **A unique** replaces the common loot; "<name> found something special: <item>", both in red (captured).
 - **Commons:** three rolls of the 1/30 table, noted. A player who did no damage gets a cabbage and a message (22475).
 - **Leaving:** the teleport crystal asks "Make sure you've collected all your stuff!" with "Leave the Theatre." / "Stay in the Theatre." (captured).
-- **Unclaimed loot** stays in `tob:loot`, claimed from the Rewards Chest (varbit 11958 `tob_should_have_loot`). The Wiki says it's lost on logging out; here it's kept. A later raid adds its roll to it rather than replacing it: the Wiki gives no rule for starting another raid, so nothing is silently lost.
+- **Unclaimed loot** stays in `tob:loot`, claimed from the Rewards Chest (varbit 11958 `tob_should_have_loot`). It's lost on logging out (Wiki) and on entering another raid (players' reports; the Wiki is silent), and a vault's roll replaces anything older. Lil' Zik is still delivered when the rest is lost.
 - **The collection log:** its one "Theatre of Blood" category (cache struct 506, 17 items) is fed when the loot interface is opened, and its kill count answers with the player's completions in Entry, Normal and Hard (the cache has no separate ToB log entries for the modes). Lil' Zik still goes through the pet delivery.
 - **The strategy table (459):** each wave's time, the MVP, the challenge and overall times, each member's deaths.
 
@@ -212,7 +212,7 @@ Over the agent MCP (2026-11-02). No fight was played at full length: every boss 
 - **Solo, Normal:** party through the notice board, the Stranger's gate, the entrance and its prompts, then every room through its real barriers and passages. That includes both of Sotetseg's mazes run to the portal, the Xarpus north barrier, the skeleton and the door, all three of Verzik's phases to her death, the vault's chest, strategy table, bookshelf and crystal, and leaving. The Nylocas room was skipped with `::tobcomplete`. Verzik was finished for real once and skipped once to test the vault.
 - **Two players, Normal, Hard and Entry:** the Maiden fought; the Bloat finished with `::tobcomplete`, because a script can't time going in as a player does and its flies kill in about 8 ticks; the Nylocas skipped; Sotetseg's mazes run, then `::tobcomplete`; Xarpus fought; Verzik not reached in these.
 - **Scenarios:** a death, the jail and release when the room is won; a team wipe, the retrieval chest refusing without coins, taking the fee, giving back, then empty; logging out mid-fight and rejoining into the jail; a crystal carried at logout; teleports refused; a crystal used on a teammate; auto-afk firing on a hit; two parties at once, each with its own Maiden, unseen and unattackable by the other; spectating the most recent party and teleporting out; the scoreboard; the Avernic defender and a Holy kit.
-- **Unit tests (2026-11-03):** a wipe with one member who never entered; unclaimed vault loot surviving a later raid's roll; the loot interface feeding the collection log and the category's kill count; Verzik's auto-attacks, green ball, yellow strikes and webs doing nothing after `die()`; the Dawnbringer dropped, visible to a teammate, and dropped on death; Hard's supply chest a band lower.
+- **Unit tests (2026-11-03):** a wipe with one member who never entered; unclaimed vault loot lost on entering another raid and on logging out (Lil' Zik still delivered); the loot interface feeding the collection log and the category's kill count; Verzik's auto-attacks, green ball, yellow strikes and webs doing nothing after `die()`; the Dawnbringer dropped, visible to a teammate, and dropped on death; Hard's supply chest a band lower.
 
 ## What isn't verified
 

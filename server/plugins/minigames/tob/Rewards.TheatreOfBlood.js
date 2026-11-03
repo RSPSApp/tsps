@@ -14,7 +14,9 @@
  *   non-stackables noted; deaths lower the amounts for everyone. A player with no contribution
  *   gets a cabbage and a message.
  * - Tertiaries, scaled by the player's own performance: an elite clue (3/25), Lil' Zik (1/650).
- * - Unclaimed loot can be claimed from the chest outside the bank in Ver Sinhaza.
+ * - Unclaimed loot can be claimed from the chest outside the bank in Ver Sinhaza; it is lost
+ *   on logging out. Players also report it lost on starting another raid, so entering one
+ *   clears it too. Lil' Zik is delivered first rather than lost.
  * Cache: the chests (33086-33090), each a multiloc on its varbit (6450-6454): 0 someone else's,
  * 1 someone else's with a unique, 2 the player's, 3 the player's with a unique; opened 32994
  * (41746 with a unique). Interface 23: Bank-all (6), Take-all (8), Discard-all (10), the items
@@ -25,8 +27,7 @@
  * Estimates (the Wiki gives no formula): each death costs a fifth of a player's share - of the
  * unique chance (averaged over the team), of the unique weighting (with damage dealt), of the
  * common amounts (averaged) and of their tertiary odds; Rewards Chest varbit values (0 empty,
- * 1 loot waiting); loot left behind is kept on the player rather than lost on logout, and a
- * later raid adds its roll to it instead of replacing it (the Wiki only says logout loses it).
+ * 1 loot waiting).
  * Collection log: opening the loot interface logs what is in it (as the Tombs' sarcophagus
  * does); Lil' Zik is logged through the pet delivery.
  */
@@ -186,36 +187,30 @@ function lootOf(player) {
 }
 
 function setLoot(player, loot) {
-  // A stack that has been partly taken cannot still have more logged than it now holds;
-  // otherwise the next raid's extra copies of it would be under-counted.
-  for (const entry of loot) {
-    if (entry.loggedAmount !== undefined) entry.loggedAmount = Math.min(entry.loggedAmount, entry.amount);
-  }
   player.setAttribute(ATTR_LOOT, loot.length > 0 ? loot : null);
   player.getPacketSender().sendVarbit(CLAIM_CHEST.varbit, loot.length > 0 ? 1 : 0);
 }
 
 /**
- * A new raid's roll added to whatever is still unclaimed. The Wiki only says unclaimed loot is
- * lost on logging out, and says nothing about starting another raid, so it is never dropped
- * here. The same item merges into one stack; `loggedAmount` keeps how much of it the collection
- * log has already seen, so a later roll of the same item is still logged.
+ * Unclaimed loot is lost on logging out (Wiki) and on starting another raid (players' reports).
+ * Lil' Zik still goes to the pet delivery rather than being lost with the rest.
  */
-function mergeLoot(existing, rolled) {
-  const merged = existing.map((entry) => ({ ...entry }));
-  for (const entry of rolled) {
-    const same = merged.find((other) => other.id === entry.id);
-    if (same) same.amount += entry.amount;
-    else merged.push({ ...entry });
-  }
-  return merged;
+function loseLoot(player) {
+  if (lootOf(player).length === 0) return;
+  claimPetLoot(player);
+  setLoot(player, []);
+}
+
+/** Entering a raid that hasn't reached its vault starts a new run. */
+function enterRaid({ raid, player }) {
+  if (!(raid.room instanceof RewardsRoom)) loseLoot(player);
 }
 
 /**
  * The chest's loot reaches the collection log when the interface is opened, as the Tombs' loot
  * does. Lil' Zik is left to the pet delivery (`npc-drops:roll`), which already logs it, so it
  * is not counted twice. `loggedAmount` is marked, so reopening a part-claimed chest adds
- * nothing while a later raid's extra copies still count.
+ * nothing.
  */
 function logLoot(player) {
   const loot = lootOf(player);
@@ -242,8 +237,7 @@ class RewardsRoom extends Raid.Room {
     this.opened = new Set();
     this.chests = [];
     const { loot, uniqueWinner, uniqueId } = rollRaid(raid);
-    // Never erase an earlier raid's unclaimed loot (see mergeLoot).
-    for (const [player, items] of loot) setLoot(player, mergeLoot(lootOf(player), items));
+    for (const [player, items] of loot) setLoot(player, items);
     this.uniqueSlot = uniqueWinner ? this.slots.get(uniqueWinner) : -1;
     raid.players.forEach((player, slot) => {
       const chest = CHESTS[slot];
@@ -471,10 +465,12 @@ module.exports = function registerTheatreRewards(api) {
   Shared.onObject(api, Shared.OBJECT.TELEPORT_CRYSTAL, useCrystal);
   Shared.onObject(api, CLAIM_CHEST.id, claimChest);
   api.onPlayerLogin(showClaimChest);
+  api.onPlayerLogout(({ player }) => loseLoot(player));
+  api.onCustomEvent("tob:raid-entered", enterRaid);
   api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.BANK_ALL, clickBankAll);
   api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.TAKE_ALL, clickTakeAll);
   api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.DISCARD_ALL, clickDiscardAll);
   api.onInterfaceActionButton(ITEMS_UID, clickLootItem);
 };
 
-Object.assign(module.exports, { RewardsRoom, rollRaid, standing, lootOf, setLoot, mergeLoot, logLoot, openLoot, CHESTS, ATTR_LOOT, LOOT_BY_MODE });
+Object.assign(module.exports, { RewardsRoom, rollRaid, standing, lootOf, setLoot, loseLoot, logLoot, openLoot, CHESTS, ATTR_LOOT, LOOT_BY_MODE });

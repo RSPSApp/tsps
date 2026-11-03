@@ -56,7 +56,7 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   GRUM_DOOR_OPEN: 1542, // Grum's Gold Exchange; capture 465
 });
 
-let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
+let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, OWN_TILE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
 let DOUBLE_DOOR_ID_FAMILIES, DOUBLE_DOOR_FAMILY_IDS_BY_ID, DORGESH_CITY_DOOR_IDS;
 let SPECIAL_DOUBLE_DOOR_PAIRS, SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID, SPECIAL_DOUBLE_DOOR_OPEN_IDS_BY_CLOSED_ID;
 let PASS_THROUGH_GATES;
@@ -134,6 +134,12 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // closed 1533's 884/885) that replaces the closed one on the same tile with the same rotation.
   // These floor trapdoors likewise replace their model in place.
   IN_PLACE_DOOR_IDS = new Set([O.CURTAIN_3, O.TRAPDOOR_4, O.TRAPDOOR_5]);
+
+  // Doors that swing to the far side of their wall: the open leaf stays on the closed leaf's tile,
+  // turned a quarter, instead of stepping onto the next tile. buildDoorCatalog adds every door
+  // whose cache name ends in "_reverse"; these are the others. Jatizso's city gates (rsprox 75:
+  // 21403/21405 at 2413,3797 face 3 open as 21404/21406 face 2/0 on the same tiles).
+  OWN_TILE_DOOR_IDS = new Set([O.GATE_155, O.GATE_157]);
 
   // Tree Gnome Stronghold main gate: one 5x2 loc (190, face 2) opens into two
   // nameless 2x2 leaves (191/192), leaving the centre tile clear.
@@ -429,9 +435,9 @@ const GATE_PARTNER_OFFSETS = Object.freeze([
 ]);
 
 let DOOR_CATALOG = null;
-// Leaves of same-model double doors found by buildDoorCatalog. They only act as a double door
-// where both leaves stand side by side, so a lone one stays a single door.
-const SAME_MODEL_DOUBLE_DOOR_IDS = new Set();
+// Leaves of double doors found by buildDoorCatalog. They only act as a double door where both
+// leaves stand side by side, so a lone one stays a single door.
+const CATALOG_DOUBLE_DOOR_IDS = new Set();
 const OPEN_OBJECT_STATES = new Map();
 /** Pass-through gates swung open right now, by anchor key. */
 const OPEN_PASS_THROUGH_GATES = new Set();
@@ -472,6 +478,10 @@ function buildDoorCatalog() {
     // gameval-named open loc; leave it to the pairing below, which registers both leaves.
     const namedOpenId = namedOpenLeaf(id);
     const namedOpen = namedOpenId == null ? null : core.CacheDefinitions.getObject(namedOpenId);
+    // "_reverse" doors open on their own tile: Ardougne's poshdoor_reverse 46863 at 2570,3271
+    // face 0 opens as 46864 face 1 on that tile (rsprox 3279 tick 6704), as do
+    // fortis_door_l_reverse 52600 (rsprox 1098) and pandemonium_door_reverse 58064 (rsprox 3457).
+    if (core.CacheDefinitions.getLocNames().get(id)?.endsWith("_reverse")) OWN_TILE_DOOR_IDS.add(id);
     if (
       !isSameModelLeafPair(id, id + 1) && !isSameModelLeafPair(id - 1, id) &&
       !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(id) &&
@@ -495,22 +505,22 @@ function buildDoorCatalog() {
       }
       continue;
     }
-    // Some cache exports list both variants with only "Open" (the open door shares
-    // the same model and only differs by rotation). Pair consecutive same-model
-    // doors so they still open; see e.g. Varrock Palace door 32464/32465.
-    // Skip double-door leaves and already-paired ids so chains don't form.
-    // The same pair is also how the cache builds a double door's two leaves (11766/11767, the
-    // second mirrored), so it is registered as one too; see addSameModelDoubleDoor.
+    // Two consecutive same-model locs that both offer only "Open" are two closed doors, never a
+    // door and its open form: Varrock Palace's 32464 opens as 32464 again (rsprox 3220), and
+    // Ardougne's picklock1/picklock2 (11719/11720) stand on opposite walls of one house. Each
+    // swings open under its own id. Skip double-door leaves and already-paired ids so chains
+    // don't form. The same pair is also how the cache builds a double door's two leaves
+    // (11766/11767, the second mirrored), so it is registered as one too; see addSameModelDoubleDoor.
     if (
       hasAction(partner.actions, "open") &&
       !SELF_OPENING_DOOR_IDS.has(id + 1) &&
       JSON.stringify(partner.models) === JSON.stringify(def.models) &&
       !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(id) && !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(id + 1) &&
-      !openToClosed.has(id) &&
+      !openToClosed.has(id) && !closedToOpen.has(id) &&
       !closedToOpen.has(id + 1)
     ) {
-      closedToOpen.set(id, id + 1);
-      openToClosed.set(id + 1, id);
+      closedToOpen.set(id, id);
+      closedToOpen.set(id + 1, id + 1);
       sameModelPairs.push(id);
     }
     // An unused, actionless variant can sit between a door and its open loc: Varrock's
@@ -522,7 +532,7 @@ function buildDoorCatalog() {
       hasAction(skipped.actions, "close") && !hasAction(skipped.actions, "open") &&
       JSON.stringify(skipped.models) === JSON.stringify(def.models) &&
       !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(id) && !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(id + 2) &&
-      !openToClosed.has(id)
+      !openToClosed.has(id) && !closedToOpen.has(id)
     ) {
       closedToOpen.set(id, id + 2);
       openToClosed.set(id + 2, id);
@@ -553,6 +563,21 @@ function buildDoorCatalog() {
   }
   for (const left of sameModelPairs) {
     if (!SINGLE_DOOR_OPEN_IDS.has(left) && !SINGLE_DOOR_OPEN_IDS.has(left + 1)) addSameModelDoubleDoor(left, left + 1);
+  }
+  // Mirrored leaves that each have their own "Close" loc (w_ardougnedoubledoorl 2546 -> 2547,
+  // w_ardougnedoubledoorr 2548 -> 2549) are one double door too: paired as two single doors,
+  // both leaves turned the same way. Live opens them as a pair (rsprox 1694 tick 8364; also
+  // Yanille 17091/17093 in 3271, Camelot 25638/25640 and Seers' 25825/25827 in 1149).
+  for (const [closedId, openId] of closedToOpen) {
+    const partnerId = closedId + 2;
+    const family = [closedId, partnerId, openId, partnerId + 1];
+    if (
+      openId === closedId + 1 && closedToOpen.get(partnerId) === partnerId + 1 &&
+      !family.some((id) => DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(id) || SINGLE_DOOR_OPEN_IDS.has(id)) &&
+      isMirroredLeafName(core.CacheDefinitions.getLocNames().get(closedId), core.CacheDefinitions.getLocNames().get(partnerId))
+    ) {
+      addCatalogDoubleDoor(closedId, partnerId, openId, partnerId + 1);
+    }
   }
   return { closedToOpen, openToClosed };
 }
@@ -607,10 +632,15 @@ function addSameModelDoubleDoor(a, b) {
   const openA = namedOpenLeaf(a);
   const openB = namedOpenLeaf(b);
   const [nextA, nextB] = openA != null && openB != null ? [openA, openB] : [a, b];
+  addCatalogDoubleDoor(a, b, nextA, nextB);
+}
+
+// Registers closed leaves a and b as one double door whose leaves open into nextA and nextB.
+function addCatalogDoubleDoor(a, b, nextA, nextB) {
   const family = [...new Set([a, b, nextA, nextB])];
   for (const id of family) {
     DOUBLE_DOOR_FAMILY_IDS_BY_ID.set(id, family);
-    SAME_MODEL_DOUBLE_DOOR_IDS.add(id);
+    CATALOG_DOUBLE_DOOR_IDS.add(id);
   }
   for (const [id, partner] of [[a, b], [b, a], [nextA, nextB], [nextB, nextA]]) {
     SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID.set(id, [partner]);
@@ -1024,7 +1054,7 @@ function handleMappedDoor(player, object, objectId, location) {
   const inPlace = IN_PLACE_DOOR_IDS.has(closedId);
   const nextRotation = open ? ((rotation + 1) & 0x3) : rotation;
   const offsetIndex = type === 9 ? ((nextRotation + 1) & 0x3) : nextRotation;
-  const [dx, dy] = inPlace ? [0, 0] : (COORD_OFFSETS[offsetIndex] ?? [0, 0]);
+  const [dx, dy] = inPlace || OWN_TILE_DOOR_IDS.has(closedId) ? [0, 0] : (COORD_OFFSETS[offsetIndex] ?? [0, 0]);
   const previousObject = activeObject;
   const nextObject = open && existingState?.closed?.[0]
     ? objectFromSnapshot(existingState.closed[0])
@@ -1112,7 +1142,7 @@ function ensureDynamicDoubleDoorRecords(object, objectId, location, privateArea 
     for (const partnerId of familyIds) {
       const partnerObject = core.MapObjects.get(partnerId, candidateLocation, privateArea)
         ?? privateArea?.resolveObject?.(partnerId, candidateLocation);
-      if (!partnerObject || !isSameModelLeafPartner(object, objectId, partnerObject)) {
+      if (!partnerObject || !isCatalogLeafPartner(object, objectId, partnerObject)) {
         continue;
       }
 
@@ -1137,9 +1167,9 @@ function ensureDynamicDoubleDoorRecords(object, objectId, location, privateArea 
   return null;
 }
 
-// A same-model leaf pairs only with a leaf in the same wall line, never with a lone open door.
-function isSameModelLeafPartner(object, objectId, partnerObject) {
-  if (!SAME_MODEL_DOUBLE_DOOR_IDS.has(objectId)) return true;
+// A catalog leaf pairs only with a leaf in the same wall line, never with a lone open door.
+function isCatalogLeafPartner(object, objectId, partnerObject) {
+  if (!CATALOG_DOUBLE_DOOR_IDS.has(objectId)) return true;
   return (Number(object.getFace?.() ?? object.face ?? 0) & 0x3) === (Number(partnerObject.getFace?.() ?? 0) & 0x3) &&
     Number(object.getType?.() ?? object.type ?? 0) === Number(partnerObject.getType?.() ?? 0);
 }
@@ -1179,11 +1209,11 @@ function resolveOpenedDoubleDoorId(record) {
   return SPECIAL_DOUBLE_DOOR_OPEN_IDS_BY_CLOSED_ID.get(record.originalId) ?? (record.originalId + 1);
 }
 
-// Swings one leaf of a double door: opening steps it a tile along its closed face and turns it
-// to openFaces[closed face], closing puts it back.
+// Swings one leaf of a double door: opening steps it a tile along its closed face (or keeps it on
+// its tile, see OWN_TILE_DOOR_IDS) and turns it to openFaces[closed face], closing puts it back.
 function toggleDoubleDoorLeaf(record, openFaces) {
   const closedPose = record.currentFace === record.originalFace;
-  const [dx, dy] = closedPose ? COORD_OFFSETS[record.originalFace] : [0, 0];
+  const [dx, dy] = closedPose && !OWN_TILE_DOOR_IDS.has(record.originalId) ? COORD_OFFSETS[record.originalFace] : [0, 0];
   if (record.x === record.originalX && record.y === record.originalY) {
     record.x += dx;
     record.y += dy;

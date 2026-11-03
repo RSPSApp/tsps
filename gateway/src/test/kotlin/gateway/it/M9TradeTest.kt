@@ -27,10 +27,11 @@ class M9TradeTest {
                 second.ticks(SETTLE_TICKS)
                 first.ticks(SETTLE_TICKS)
 
-                // One asks, the other answers the request: tsps opens the offer screen for both.
-                second.playerOp2(first.index)
+                // One asks with Trade with, the other clicks the request in the chatbox: both send
+                // OPPLAYER4, and tsps opens the offer screen for both.
+                second.playerOp4(first.index)
                 first.until { it is MessageGame && it.message.contains("wishes to trade") }
-                first.playerOp2(second.index)
+                first.playerOp4(second.index)
                 // The offers arrive as inventory 90, the other player's as 90 | 0x8000; rsprot
                 // may flush them ahead of the interface in the same tick.
                 first.untilAll(

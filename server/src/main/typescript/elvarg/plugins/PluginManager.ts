@@ -4403,6 +4403,10 @@ export class PluginManager {
         require("../game/content/combat/EquipmentEffects").registerRunEnergyDrainModifier(
           modifier
         ),
+      registerRunEnergyStatusModifier: (modifier) =>
+        require("../game/content/combat/EquipmentEffects").registerRunEnergyStatusModifier(
+          modifier
+        ),
       registerSpecialEnergyRestoreModifier: (modifier) =>
         require("../game/content/combat/EquipmentEffects").registerSpecialEnergyRestoreModifier(
           modifier

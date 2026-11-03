@@ -165,6 +165,7 @@ export class PlayerSave {
     private skullTimer: number;
     private skullType;
     private running: boolean;
+    /** Percent (0-100, fractional since run energy moved to units); old integer saves load as-is. */
     private runEnergy: number;
     private inventory: Item[];
     private equipment: Item[];

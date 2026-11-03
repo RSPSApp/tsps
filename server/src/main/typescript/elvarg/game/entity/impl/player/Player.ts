@@ -149,8 +149,8 @@ export class Player extends Mobile {
     private isRunning = true;
     private playerBot = false;
     private botAreaProcessTick = 0;
-    private runEnergy = 100;
-    private lastRunRecovery = new TickStopwatch();
+    /** Run energy in OSRS units (0-10,000; 100 units = 1%). */
+    private runEnergy = GameConstants.RUN_ENERGY_MAX_UNITS;
     private isDying: boolean;
     public forceMovement: ForceMovement;
     private skillAnimation: number;
@@ -499,12 +499,13 @@ export class Player extends Mobile {
 
         this.processSkullTimer();
 
-        // Increase run energy
-        if (!isBot && this.runEnergy < 100 && (!this.getMovementQueue().isMovings() || !this.isRunning)) {
-            if (this.lastRunRecovery.elapsedTime(MovementQueue.runEnergyRestoreDelay(this))) {
-                this.runEnergy++;
+        // Increase run energy every tick not spent running (Wiki: Recovery).
+        if (!isBot && this.runEnergy < GameConstants.RUN_ENERGY_MAX_UNITS
+            && !this.getMovementQueue().didRunThisCycle()) {
+            const restored = MovementQueue.runEnergyRestoreUnits(this);
+            if (restored > 0) {
+                this.addRunEnergyUnits(restored);
                 this.getPacketSender().sendRunEnergy();
-                this.lastRunRecovery.reset();
             }
         }
 
@@ -1108,12 +1109,44 @@ export class Player extends Mobile {
             this.displayedEquipment?.get(slot) ?? item?.getId?.() ?? -1);
     }
 
+    /** Run energy as a percentage (0-100), for content that works in whole or fractional percent. */
     public getRunEnergy(): number {
+        return this.runEnergy / 100;
+    }
+
+    public setRunEnergy(runEnergyPercent: number) {
+        this.setRunEnergyUnits(runEnergyPercent * 100);
+    }
+
+    /** Run energy in OSRS units (0-10,000), the precision the formulas and the client use. */
+    public getRunEnergyUnits(): number {
         return this.runEnergy;
     }
 
-    public setRunEnergy(runEnergy: number) {
-        this.runEnergy = Math.max(0, Math.min(100, Math.floor(runEnergy)));
+    public setRunEnergyUnits(units: number) {
+        this.runEnergy = Math.max(0, Math.min(GameConstants.RUN_ENERGY_MAX_UNITS, Math.floor(units)));
+    }
+
+    public addRunEnergyUnits(units: number) {
+        this.setRunEnergyUnits(this.runEnergy + units);
+    }
+
+    /**
+     * Carried weight in kilograms, as the OSRS client reports it (Wiki: Energy; cache item
+     * weights are grams, the displayed weight drops the fraction). Inventory and equipment only.
+     */
+    public getWeightKg(): number {
+        let grams = 0;
+        for (const container of [this.getInventory(), this.getEquipment()]) {
+            for (const item of container.getItems()) {
+                if (item == null || item.getId() < 0) {
+                    continue;
+                }
+                const amount = Math.max(1, item.getAmount?.() ?? 1);
+                grams += ItemDefinition.forId(item.getId()).getWeight() * amount;
+            }
+        }
+        return Math.floor(grams / 1000);
     }
 
     public isDrainingPrayer(): boolean {

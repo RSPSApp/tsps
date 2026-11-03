@@ -3,7 +3,11 @@
 // Shared canonical effects for potions and restorative food.
 function restoreRunEnergy(player, amount) {
   if (!Number.isFinite(amount) || amount <= 0) return;
-  player.setRunEnergy(Math.max(0, Math.min(100, Math.floor(player.getRunEnergy() + amount))));
+  if (typeof player.addRunEnergyUnits === "function") {
+    player.addRunEnergyUnits(Math.round(amount * 100));
+  } else {
+    player.setRunEnergy(Math.max(0, Math.min(100, Math.floor(player.getRunEnergy() + amount))));
+  }
   player.getPacketSender().sendRunEnergy();
 }
 

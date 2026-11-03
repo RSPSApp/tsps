@@ -64,10 +64,21 @@ function energyRestoreBonus(player) {
   return gracefulRestoreBonusFromSlots(nameBySlot, capeIsSubstitute(player));
 }
 
-/** The core delay is milliseconds per energy point; a bigger rate means a shorter delay. */
-function applyGracefulRunEnergy(player, delayMs) {
-  const bonus = energyRestoreBonus(player);
-  return bonus > 0 ? delayMs / (1 + bonus) : delayMs;
+/**
+ * Restore runs every tick, so the bonus is cached until the six worn ids change; the skillcape
+ * query only runs when the equipment actually moves.
+ */
+const restoreBonusCache = new WeakMap();
+
+function applyGracefulRunEnergy(player, units) {
+  const equipment = player.getEquipment().getItems();
+  const signature = PIECES.map((piece) => equipment[piece.slot]?.getId?.() ?? -1).join(",");
+  let cached = restoreBonusCache.get(player);
+  if (!cached || cached.signature !== signature) {
+    cached = { signature, bonus: energyRestoreBonus(player) };
+    restoreBonusCache.set(player, cached);
+  }
+  return cached.bonus > 0 ? units * (1 + cached.bonus) : units;
 }
 
 /** Every colour variant keeps its piece's Wiki weight; nothing is stored per player. */

@@ -1387,12 +1387,17 @@ export interface PluginApi {
   registerMagicDefenseModifier(
     modifier: (entity: any, baseHit: number) => number
   ): void;
+  /** Run energy units regained per tick; the graceful set raises the amount. */
   registerRunEnergyRestoreModifier(
-    modifier: (entity: any, delayMs: number) => number
+    modifier: (entity: any, units: number) => number
   ): void;
-  /** Run energy spent per movement step; return 0 to skip the drain. */
+  /** Run energy spent per running tick; return 0 to skip the drain. */
   registerRunEnergyDrainModifier(
     modifier: (entity: any, amount: number) => number
+  ): void;
+  /** Fills the run-energy status the client needs (the stamina effect's remaining ticks). */
+  registerRunEnergyStatusModifier(
+    modifier: (entity: any, status: { staminaTicks: number; staminaMultiplier: number }) => void
   ): void;
   /** Ticks between special-attack restores; a rate-doubling effect halves this. */
   registerSpecialEnergyRestoreModifier(

@@ -98,6 +98,7 @@ import {
   WORLD_MAP_TARGET_UID,
 } from "../protocol/WorldMapProtocol";
 import { CacheDefinitions } from "../../game/cache/CacheDefinitions";
+import { applyRunEnergyStatusModifiers } from "../../game/content/combat/EquipmentEffects";
 const CHATBOX_MODAL_TARGET_UID = (162 << 16) | 568;
 const MAIN_MODAL_TARGET_UID = (161 << 16) | 16;
 /** The gameframe's side button click: selects the tab and runs its setup. */
@@ -323,9 +324,18 @@ export class PacketSender {
   }
 
   public sendRunEnergy(): this {
-    if (this.player.getSession().sendClientPacket(encodeRunEnergy(
-      this.player.getRunEnergy(), this.player.isRunningReturn()
-    ))) return this;
+    if (this.sendRunEnergyPacket()) return this;
+  }
+
+  /** The run orb packet: exact units, the carried weight and any stamina effect left. */
+  private sendRunEnergyPacket(): boolean {
+    const status = applyRunEnergyStatusModifiers(this.player, { staminaTicks: 0, staminaMultiplier: 0 });
+    return this.player.getSession().sendClientPacket(encodeRunEnergy(
+      this.player.getRunEnergyUnits(),
+      this.player.isRunningReturn(),
+      this.player.getWeightKg(),
+      status.staminaTicks
+    ));
   }
 
   sendQuickPrayersState(activated: boolean): this {
@@ -344,9 +354,7 @@ export class PacketSender {
   }
 
   sendRunStatus(): this {
-    if (this.player.getSession().sendClientPacket(encodeRunEnergy(
-      this.player.getRunEnergy(), this.player.isRunningReturn()
-    ))) return this;
+    if (this.sendRunEnergyPacket()) return this;
   }
 
   sendInterface(id: number): this {

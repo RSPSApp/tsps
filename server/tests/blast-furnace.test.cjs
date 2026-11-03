@@ -47,7 +47,7 @@ function player({ smithing = 99, items = {}, hands = -1 } = {}) {
   if (hands !== -1) equipment[Equipment.HANDS_SLOT] = { getId: () => hands };
   const p = {
     messages: [], spam: [], xp: 0, varbits: new Map(), dialogues: 0, statement: null, sounds: [], menu: null, inventory,
-    index: ++playerIndex, location: new Location(1940, 4960, 0), runEnergy: 100, moving: false,
+    index: ++playerIndex, location: new Location(1940, 4960, 0), runEnergy: 10000, moving: false,
     getIndex: () => p.index,
     getLocation: () => p.location,
     isRegistered: () => true,
@@ -57,7 +57,9 @@ function player({ smithing = 99, items = {}, hands = -1 } = {}) {
     getMovementQueue: () => ({ size: () => p.moving ? 1 : 0 }),
     getForceMovement: () => null,
     getRunEnergy: Player.prototype.getRunEnergy,
+    getRunEnergyUnits: Player.prototype.getRunEnergyUnits,
     setRunEnergy: Player.prototype.setRunEnergy,
+    setRunEnergyUnits: Player.prototype.setRunEnergyUnits,
     setPositionToFace() {},
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),

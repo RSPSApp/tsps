@@ -294,6 +294,27 @@ void (async () => {
     plugin.importNpcSpawnEdits([]);
     plugin.setConfig({ tool: "select" });
 
+    // The host already applies remove-then-add patches before supplying preview NPCs.
+    const replacementBaseline = [
+        { kind: "npcDelete" as const, locId: 3, tileX: 3250, tileY: 3250, plane: 0, shape: 0, rotation: 0 },
+        { kind: "npc" as const, locId: 3, tileX: 3250, tileY: 3250, plane: 0, shape: 10, rotation: 0 },
+    ];
+    calls.length = 0;
+    plugin.importNpcSpawnEdits(replacementBaseline, false);
+    assert.deepEqual(calls, [], "a saved tombstone must not hide the host's surviving replacement");
+    plugin.reapply();
+    assert.deepEqual(calls, [], "reloading the scene keeps the complete baseline data-only");
+    pointer = { tileX: 3250, tileY: 3250, plane: 0 };
+    selected = { kind: "npc", ...pointer, locId: 3, locName: "Goblin", npcSource: "spawn", npcSpawn: { id: 3, ...pointer } };
+    plugin.applyAtPointer();
+    plugin.deleteSelection();
+    calls.length = 0;
+    assert.equal(plugin.undo(), true);
+    assert.equal(calls.some(([kind]) => kind === "hideNpcSpawn"), false,
+        "undoing a user deletion restores the replacement without replaying its baseline tombstone");
+    assert.deepEqual(plugin.getConfig().edits.map(({ persistedNpc, ...edit }) => edit), replacementBaseline);
+    plugin.clearEdits();
+
     const baseline = [
         { kind: "npc" as const, locId: 3, tileX: 3260, tileY: 3260, plane: 0, shape: 10, rotation: 0, wanderRadius: 5, npcName: "First" },
         { kind: "npc" as const, locId: 3, tileX: 3270, tileY: 3270, plane: 0, shape: 10, rotation: 0, npcName: "Untouched" },

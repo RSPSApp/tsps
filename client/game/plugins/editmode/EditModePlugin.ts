@@ -1493,7 +1493,7 @@ export class EditModePlugin {
     }
 
     private dispatch(edit: EditModeEdit): void {
-        if (edit.kind === "npc" && edit.persistedNpc) return;
+        if (edit.persistedNpc) return;
         const host = this.host;
         if (!host) return;
 

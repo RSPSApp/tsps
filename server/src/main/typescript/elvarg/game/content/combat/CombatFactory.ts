@@ -990,7 +990,8 @@ export class CombatFactory {
             }
 
             // Close interfaces while being hit (except developer rights).
-            if (playerTarget.getRights() != PlayerRights.DEVELOPER && playerTarget.busy()) {
+            if (playerTarget.getRights() != PlayerRights.DEVELOPER &&
+                (playerTarget.busy() || playerTarget.getPacketSender().hasInterruptibleInterface())) {
                 playerTarget.getPacketSender().sendInterfaceRemoval();
             }
 

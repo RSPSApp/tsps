@@ -209,6 +209,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
 
   const START_HOOK = "quest:fairytale-i-growing-pains:start";
   const GARDENER_QUESTION = "Are you a member of the Group of Advanced Gardeners?";
+  const GARDENER_REPORTED_ACTION = "fairytale-i-growing-pains:gardener-reported";
 
   const GATEKEEPER_REFUSAL_VARIANT =
     "gatekeeper-near-the-entrance-to-the-tanglefoot-s-lair-attempting-to-enter-the-shady-grove-without-magic-secateurs";
@@ -469,14 +470,21 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     };
   }
 
-  function handleDialogueChoice({ player, npcId, option }) {
-    if (option !== GARDENER_QUESTION) return;
+  function recordGardener({ player, npcId }) {
     if (quest.getStage(player) !== STAGE_STARTED) return;
     if (!GARDENER_NPC_IDS.has(npcId)) return;
     const asked = askedGardeners(player);
     if (asked.length >= 5 || asked.includes(npcId)) return;
     asked.push(npcId);
     player.setAttribute(GARDENERS_ATTRIBUTE, asked.join(","));
+  }
+
+  function handleDialogueLine(event) {
+    if (!event.pages?.some(({ page }) => page === PAGE)) return;
+    if (!GARDENER_NPC_IDS.has(event.npcId) && !INVALID_GARDENER_NPC_IDS.has(event.npcId)) return;
+    if (/^\[Gardener(?: #\d+)?\]$/.test(event.step?.speaker ?? "")) {
+      event.speakerName = event.definition.getName();
+    }
   }
 
   function questIsComplete(player, key) {
@@ -540,6 +548,11 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
 
   function handleActionEvent(event) {
     const { player, npcId, stepId } = event;
+    if (event.action === GARDENER_REPORTED_ACTION) {
+      event.handled = true;
+      recordGardener(event);
+      return;
+    }
     if (stepId === GROVE_ENTER_ACTION_ID || stepId === GROVE_REENTER_ACTION_ID) {
       event.handled = true;
       player.moveTo(new Location(GROVE_ENTRY.x, GROVE_ENTRY.y, GROVE_ENTRY.z));
@@ -574,15 +587,6 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   // World interactions
   // ==========================================================================
 
-  function gardenerVariant(player, npcId) {
-    const asked = askedGardeners(player);
-    if (asked.length >= 5) {
-      return "talking-to-the-gardeners-talking-to-other-gardeners-after-having-already-asked-five";
-    }
-    if (asked.includes(npcId)) return "talking-to-the-gardeners-if-the-player-has-already-talked-to-them";
-    return `talking-to-the-gardeners-gardener-${asked.length + 1}`;
-  }
-
   /** The gardeners are shared NPCs; only claim them for the gathering stage. */
   function handleNpcInteraction(event) {
     const { player, npcId } = event;
@@ -590,11 +594,28 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     if (!isGardener && !INVALID_GARDENER_NPC_IDS.has(npcId)) return;
     if (actionOf(event) !== "talk-to") return;
     if (quest.getStage(player) !== STAGE_STARTED) return;
+    const asked = askedGardeners(player);
+    if (asked.length >= 5 || asked.includes(npcId)) return;
     event.handled = true;
     const variant = isGardener
-      ? gardenerVariant(player, npcId)
+      ? `talking-to-the-gardeners-gardener-${asked.length + 1}`
       : "talking-to-the-gardeners-invalid-gardener";
-    startTranscript(api, player, npcId, PAGE, variant);
+    startTranscript(api, player, npcId, PAGE, variant, gardenerMenu, event.npc);
+  }
+
+  function gardenerMenu(steps) {
+    return steps.map(step => step.type !== "choice" ? step : {
+      ...step,
+      options: step.options.map(option => {
+        if (option.text === GARDENER_QUESTION) {
+          return { ...option, steps: [...option.steps, { type: "action", action: GARDENER_REPORTED_ACTION }] };
+        }
+        if (option.text === "Would you look after my crops for me?") {
+          return { ...option, steps: [{ type: "action", action: "farming:gardener-protect" }] };
+        }
+        return option;
+      }),
+    });
   }
 
   function handleObjectInteraction(event) {
@@ -813,8 +834,8 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
-  api.onCustomEvent("npc-dialogue:choice", handleDialogueChoice);
   api.onCustomEvent("npc-dialogue:line", handleNuffDialogueLine);
+  api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:condition", handleConditionEvent);
   api.onCustomEvent("npc-dialogue:action", handleActionEvent);

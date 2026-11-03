@@ -3,6 +3,7 @@ import type { MinimapGeometry, SceneGeometry } from "./scene/SceneGeometry";
 import { vec3 } from "gl-matrix";
 import { closeOpenModal } from "./widgets/input/widgetKeyboardInput";
 import { getNpcMenuActions } from "./menu/WorldMenuBuilder";
+import { handleCommandShortcut } from "./chat/commandShortcuts";
 
 import { directionToDelta } from "../common/Direction";
 import { ChatMessageType } from "../common/chat/ChatMessageType";
@@ -1148,6 +1149,7 @@ export class OsrsClient {
         document.addEventListener(
             "keydown",
             (event) => {
+                if (handleCommandShortcut(event, this.isLoggedIn())) return;
                 // Capture build-menu chat before tab shortcuts, plugin handlers,
                 // or focus on a non-input component can swallow the event.
                 const constructionOpen = this.widgetManager?.rootInterface === 458 ||

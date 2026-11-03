@@ -676,6 +676,8 @@ test("XP rewards refuse skills under 25 and rewards the player cannot afford", (
 test("XP rewards preserve points while the ordinary lockxp command has locked experience", () => {
   const commands = new Map();
   require("../plugins/commands/PlayerCommands.plugin").register({
+    core: { PlayerRights: require("../dist/game/model/rights/PlayerRights").PlayerRights },
+    onInterfaceActionButton() {},
     getWorld() {}, getItemOnGroundManager() {}, getCombatFactory() {}, getPlayerPunishment() {},
     registerCommand: (name, handler) => commands.set(name, handler),
   });

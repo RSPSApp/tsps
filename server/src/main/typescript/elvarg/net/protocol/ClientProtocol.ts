@@ -1083,6 +1083,12 @@ function chatStyleBytes(style: ChatStyle | undefined): Buffer {
   return Buffer.from([style.colour & 0xff, style.effect & 0xff, ...(style.pattern ?? []).map((value) => value & 0xff)]);
 }
 
+const LEGACY_CHAT_COLOURS: Record<string, string> = {
+  red: "ff0000", gre: "00ff00", blu: "0000ff", yel: "ffff00", cya: "00ffff", mag: "ff00ff",
+  whi: "ffffff", bla: "000000", lre: "ff9040", dre: "800000", dbl: "000080",
+  or1: "ffb000", or2: "ff7000", or3: "ff3000", gr1: "c0ff00", gr2: "80ff00", gr3: "40ff00",
+};
+
 export function encodeChatMessage(
   messageType: "game" | "public" | "private_in" | "private_out" | "channel" | "clan" | "trade" | "server",
   text: string,
@@ -1104,6 +1110,11 @@ export function encodeChatMessage(
     server: 0,
   };
   const type = chatType ?? defaultTypes[messageType];
+  // Existing server content uses legacy colours; both clients render native font markup.
+  if (messageType === "game" || messageType === "server") {
+    text = text.replace(/@([a-z0-9]{3})@/g, (tag, colour) =>
+      LEGACY_CHAT_COLOURS[colour] ? `<col=${LEGACY_CHAT_COLOURS[colour]}>` : tag);
+  }
   const id = Buffer.alloc(2);
   id.writeUInt16BE(playerId & 0xffff);
   return encodeServerPacket(ServerPacketId.CHAT_MESSAGE, Buffer.concat([

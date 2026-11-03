@@ -81,6 +81,8 @@ module.exports = function registerCurrentAffairsQuest(api) {
   const VARP_CURRENT_AFFAIRS = 4956; // "current_affairs_main"
   const VARBIT_CURRENT_AFFAIRS_STAGE = 18282; // "current_affairs", varp 4956 bits 0-6
   const VARBIT_FORM_GIVEN = 18285;
+  const VARBIT_FORM_DIALOGUE = 18284;
+  const VARBIT_HARRY_CHAT = 18286;
   const VARBIT_KIT_PURCHASED = 18287;
   const VARBIT_AUDIT_START = 18288;
   const VARBIT_FORM2_GIVEN = 18289;
@@ -508,10 +510,13 @@ module.exports = function registerCurrentAffairsQuest(api) {
     for (const index of asked) packet.sendVarbit(VARBIT_FORM_Q1_CORRECT + index, wrong.includes(index) ? 0 : 1);
     if (wrong.length === 0) {
       if (quest.getStage(player) < STAGE_FORM2_GIVEN) quest.setStage(player, STAGE_FORM2_GIVEN);
+      // Capture 3467 leaves the completed form's answers and correctness bits
+      // in place after the audit; they are part of the saved post-quest state.
+      for (let index = 0; index < QUESTION_COUNT; index++) {
+        packet.sendVarbit(VARBIT_FORM_Q1_CORRECT + index, 1);
+      }
+      sendFormAnswerVarbits(player, expected);
       playTranscriptSteps(player, auditData().passed);
-      // The form answers are only needed for the audit; the quiz is done with them.
-      player.setAttribute(FORM_ANSWERS_ATTRIBUTE, "");
-      sendFormAnswerVarbits(player, null);
       return;
     }
     audits.set(player, { answers: [], asked: [], remaining: wrong });
@@ -891,10 +896,15 @@ module.exports = function registerCurrentAffairsQuest(api) {
     refreshQuestList(player);
     sendFormAnswerVarbits(player);
     const packet = player.getPacketSender();
+    packet.sendVarbit(VARBIT_FORM_DIALOGUE, quest.getStage(player) >= STAGE_FORM_GIVEN ? 1 : 0);
     packet.sendVarbit(VARBIT_FORM_GIVEN, quest.getStage(player) >= STAGE_FORM_GIVEN ? 1 : 0);
+    packet.sendVarbit(VARBIT_HARRY_CHAT, quest.getStage(player) >= STAGE_SIGNED_HANDED_IN ? 1 : 0);
     packet.sendVarbit(VARBIT_KIT_PURCHASED, player.getAttribute(KIT_BOUGHT_ATTRIBUTE) === true ? 1 : 0);
     packet.sendVarbit(VARBIT_AUDIT_START, quest.getStage(player) >= STAGE_MAYOR_CHAINED ? 1 : 0);
     packet.sendVarbit(VARBIT_FORM2_GIVEN, quest.getStage(player) >= STAGE_FORM2_GIVEN ? 1 : 0);
+    for (let index = 0; index < QUESTION_COUNT; index++) {
+      packet.sendVarbit(VARBIT_FORM_Q1_CORRECT + index, quest.getStage(player) >= STAGE_FORM2_GIVEN ? 1 : 0);
+    }
     // Charted before sea charting kept the charts: the task counts as charted there too.
     if (currentsCharted(player)) api.emitCustomEvent("charting:mark", { player, spot: CATHERBY_CURRENT });
     ensureCatherine(player);

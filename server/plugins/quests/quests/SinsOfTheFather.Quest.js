@@ -34,7 +34,8 @@
  * The quest's own sub-bits live in one persisted attribute
  * "quest.sins_of_the_father.bits" and key ones are mirrored to the cache's
  * varbits (10347-10351 convinced, 10353/10354 Kroy tables, 10359 Trader Sven
- * met, 10365 puzzle, 13719 lab unlocked).
+ * met, 10365 puzzle). Capture 1637 keeps 13719 ("myq5_lab_sc_unlocked") at 0
+ * for the whole run, so the plugin does not publish it.
  *
  * Source: OSRS Wiki "Sins of the Father", its Quick guide and
  * Transcript:Sins of the Father; the cache for every id, varbit and
@@ -182,7 +183,6 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   const VARBIT_KROY_TABLE_2 = 10354;
   const VARBIT_TRADER_SVEN_MET = 10359;
   const VARBIT_PUZZLE_COMPLETED = 10365;
-  const VARBIT_LAB_UNLOCKED = 13719;
 
   const BIT_KAEL = 1 << 0;
   const BIT_VERTIDA = 1 << 1;
@@ -1442,7 +1442,6 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     sender.sendVarbit(VARBIT_KROY_TABLE_2, tableState(BIT_TABLE_2));
     sender.sendVarbit(VARBIT_TRADER_SVEN_MET, hasBit(player, BIT_SVEN) ? 1 : 0);
     sender.sendVarbit(VARBIT_PUZZLE_COMPLETED, quest.getStage(player) >= STAGE_PUZZLE_DONE ? 1 : 0);
-    sender.sendVarbit(VARBIT_LAB_UNLOCKED, quest.getStage(player) >= STAGE_LAB_PLAN ? 1 : 0);
   }
 
   // ---------------------------------------------------------------------------

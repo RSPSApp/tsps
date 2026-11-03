@@ -87,8 +87,13 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   // ==========================================================================
 
   const VARBIT_INVESTIGATED_ENTRY = 13844; // bcs_investigated_entry, varp 3421 bit 12
+  const VARBIT_INVESTIGATED_CITIZENS = 13845; // bcs_investigated_citizens, bit 13
+  const VARBIT_FOUND_PILLAR = 13846; // bcs_found_pillar, bit 14
   const VARBIT_FOUND_MOULD = 13847; // bcs_found_mould, varp 3421 bits 15-17
+  const VARBIT_FOUND_TOMB = 13848; // bcs_found_tomb, bit 18
+  const VARBIT_EMBLEM_ROTATION = 13849; // bcs_emblem_rotation, bits 19-24
   const VARBIT_LILY = 13850; // bcs_lily_type
+  const VARBIT_QUESTCOMPLETE_TYPE = 13851; // bcs_questcomplete_type, bits 27-28
   const VARBIT_OWED_PARTISAN = 13853; // bcs_owed_partisan
   const VARBIT_OWED_CIRCLET = 13854; // bcs_owed_circlet
 
@@ -500,6 +505,9 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
 
   function lilyType(player) {
     const stage = quest.getStage(player);
+    // Capture 101 moves 1 -> 2 while the lily is grown/picked, then back to 0
+    // when the quest completes at 108.
+    if (stage >= STAGE_COMPLETE) return 0;
     if (stage >= STAGE_LILY_PICKED) return 2;
     if (stage >= STAGE_ROGER_FED) return 1;
     return 0;
@@ -536,8 +544,15 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     const sender = player.getPacketSender();
     const stage = quest.getStage(player);
     sender.sendVarbit(VARBIT_INVESTIGATED_ENTRY, entryInspected(player) || stage >= STAGE_ENTRY_INSPECTED ? 1 : 0);
+    sender.sendVarbit(VARBIT_INVESTIGATED_CITIZENS, hasFlag(player, TALKED_CITIZEN_ATTRIBUTE) ? 1 : 0);
+    sender.sendVarbit(VARBIT_FOUND_PILLAR, stage >= STAGE_EMBLEM ? 1 : 0);
     sender.sendVarbit(VARBIT_FOUND_MOULD, foundMouldState(player));
+    sender.sendVarbit(VARBIT_FOUND_TOMB, stage >= STAGE_EMBLEM_CONFIRMED ? 1 : 0);
+    // Capture 101 runs the pillar rotation through 18 -> 15 and leaves 15
+    // once the tomb opens; the solved value is all that survives a relog.
+    sender.sendVarbit(VARBIT_EMBLEM_ROTATION, stage >= STAGE_EMBLEM_CONFIRMED ? 15 : 0);
     sender.sendVarbit(VARBIT_LILY, lilyType(player));
+    sender.sendVarbit(VARBIT_QUESTCOMPLETE_TYPE, stage >= STAGE_COMPLETE ? 2 : 0);
     sender.sendVarbit(VARBIT_OWED_PARTISAN, owedPartisan(player) ? 1 : 0);
     sender.sendVarbit(VARBIT_OWED_CIRCLET, owedCirclet(player) ? 1 : 0);
   }

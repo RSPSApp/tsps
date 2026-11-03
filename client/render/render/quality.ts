@@ -101,7 +101,7 @@ import {
 } from "../../common/utils/DeviceUtil";
 import { isPortraitModeEnabled } from "../../game/plugins/portraitmode/PortraitLayout";
 import { clamp } from "../../common/utils/MathUtil";
-import { ClientState } from "../../game/ClientState";
+import { ClientState, DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT } from "../../game/ClientState";
 import { GameRenderer } from "../../game/GameRenderer";
 import type { HitsplatEventPayload } from "../../game/GameRenderer";
 import { OsrsRendererType, WEBGL } from "../../game/GameRenderers";
@@ -195,7 +195,6 @@ const LOW_END_SCENE_SCALE = 0.6;
 
 /** OSRS fixed-mode toplevel; its gameframe renders at a fixed 765x503. */
 const FIXED_GAMEFRAME_ROOT = 548;
-const WELCOME_SCREEN_ROOT = 378;
 /** Cache 548:26 - fixed mode's 3D viewport (4,4 512x334 inside the gameframe). */
 const FIXED_SCENE_VIEWPORT = { x: 4, y: 4, width: 512, height: 334 };
 
@@ -264,7 +263,7 @@ export function computeUiRenderMetrics(host: WebGLOsrsRendererHost,
         const gameState = host.osrsClient.gameState;
         const rootInterface = host.osrsClient.widgetManager?.rootInterface ?? -1;
         const isLoginLikeState =
-            gameState === GameState.DOWNLOADING || host.osrsClient.isOnLoginScreen() || rootInterface === WELCOME_SCREEN_ROOT;
+            gameState === GameState.DOWNLOADING || host.osrsClient.isOnLoginScreen();
         const isMobileGameplayRoot = isMobileMode && !isLoginLikeState && rootInterface === 601;
         const { cssW, cssH } = host.getUiSurfaceCssSize(safeBufW, safeBufH);
 
@@ -291,6 +290,11 @@ export function computeUiRenderMetrics(host: WebGLOsrsRendererHost,
                         safeBufW / dprComponent,
                         safeBufH / dprComponent,
                     );
+                    // A saved zoom must not make the layout smaller than the stock gameframe.
+                    desktopUiScale = Math.min(desktopUiScale, Math.max(1, Math.min(
+                        safeBufW / dprComponent / DEFAULT_SCREEN_WIDTH,
+                        safeBufH / dprComponent / DEFAULT_SCREEN_HEIGHT,
+                    )));
                 }
                 // The Stretched Mode plugin scales the fixed gameframe up to fill the window.
                 const stretch = isFixedGameframe
@@ -335,8 +339,7 @@ export function computeUiRenderMetrics(host: WebGLOsrsRendererHost,
             };
         }
 
-        // Title/login and the welcome screen ignore gameplay scaling so their buttons stay on screen.
-        // They get the same integer device-pixel snapping as the
+        // The title/login surface gets the same integer device-pixel snapping as the
         // gameplay branch above so NEAREST-sampled title sprites and bitmap fonts map
         // 1:N onto device pixels at any OS/browser scaling. The scene itself stays
         // authored at native fixed-mode size (no interface scaling on the title

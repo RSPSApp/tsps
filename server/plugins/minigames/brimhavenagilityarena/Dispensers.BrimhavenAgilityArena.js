@@ -9,6 +9,7 @@
 
 const Shared = require("./Shared.BrimhavenAgilityArena");
 const Area = require("./Area.BrimhavenAgilityArena");
+const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
 
 /**
  * Paying and the ladders, as rsprox captures show them (rev 227-237). Paying Cap'n Izzy
@@ -230,6 +231,8 @@ function logout({ player }) {
   if (!player) return;
   const core = Shared.core();
   if (Shared.isInArena(player)) {
+    // Finish before relocating: Agility's later logout hook must not land us back inside.
+    ObstacleRunner.completeNow(player);
     player.setLocation(new core.Location(Shared.HUT.x, Shared.HUT.y, Shared.HUT.z));
     player.setAttribute(Shared.PAID_ATTRIBUTE, null);
   }

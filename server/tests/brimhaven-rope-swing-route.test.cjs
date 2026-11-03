@@ -81,6 +81,8 @@ test('native blade hazards use the shared clock, real clipping, movement and ses
   const resetAnimation = core.Animation.DEFAULT_RESET_ANIMATION.getId();
   Shared.sessions.clear(); Shared.cycle.tick = 0;
   Arena.register(PluginManager.createApi('native-brimhaven-blades'));
+  // Production also finishes pending obstacles from Agility's later logout hook.
+  require('../plugins/skills/Agility.plugin').register(PluginManager.createApi('native-agility'));
   PluginManager.emitServerStartup({});
   t.after(() => { PluginManager.emitServerShutdown({}); Shared.sessions.clear(); });
   const turn = () => {

@@ -53,7 +53,7 @@
   ],
   "pvp": {
     "botPool": 845,
-    "activeRegionBotsPerRegion": 48,
+    "activeRegionBotsPerRegion": 16,
     "activeRegionInset": 1
   }
 }

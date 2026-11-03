@@ -369,15 +369,8 @@ function createBotRegistry(options) {
     let totalDesired = 0;
     for (const region of activeRegions) {
       const hotspotCount = hotspotCountsByRegion?.get?.(region.key) ?? 0;
-      // Keep levelled Wilderness encounters sparser than town fights on PvP worlds.
-      const wildernessLevel = Wilderness.levelAt(
-        region.regionX * WILDERNESS_REGION_SIZE + WILDERNESS_REGION_SIZE / 2,
-        region.regionY * WILDERNESS_REGION_SIZE + WILDERNESS_REGION_SIZE / 2
-      );
-      const targetCount = wildernessLevel > 0
-        ? Math.ceil(wildernessActiveRegionBotsPerRegion / 3)
-        : wildernessActiveRegionBotsPerRegion;
-      const desiredCount = Math.max(0, targetCount - hotspotCount);
+      // One target for every PvP region, levelled Wilderness or not, so the setting means what it says.
+      const desiredCount = Math.max(0, wildernessActiveRegionBotsPerRegion - hotspotCount);
       desiredCountsByRegion.set(region.key, desiredCount);
       totalDesired += desiredCount;
     }

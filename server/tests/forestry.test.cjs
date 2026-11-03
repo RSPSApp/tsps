@@ -788,6 +788,28 @@ test('Friendly Forester native NPC services', async (t) => {
     } finally { h.close(); }
   });
 
+  await t.test('a sale refuses while its bark and log refunds would not all fit', async () => {
+    const h = harness();
+    try {
+      // Review of #1990: a log basket, a noted oak stack and 26 fillers, with no bark or noted willow.
+      const inventory = h.player.getInventory();
+      inventory.adds(28140, 1); inventory.adds(1522, 1);
+      while (inventory.getFreeSlots()) inventory.adds(1351, 1);
+      await h.option('Trade');
+      h.sell(28140);
+      assert.equal(inventory.getAmount(28140), 1, 'the basket stays: bark and noted willow need two new slots');
+      assert.equal(inventory.getAmount(28134), 0);
+      assert.equal(inventory.getAmount(1520), 0);
+      assert.equal(inventory.getAmount(1522), 1);
+
+      inventory.delete(1351, 1);
+      h.sell(28140);
+      assert.equal(inventory.getAmount(28140), 0, 'with a second free slot the sale goes through');
+      assert.equal(inventory.getAmount(28134), 4000);
+      assert.equal(inventory.getAmount(1522), 241); assert.equal(inventory.getAmount(1520), 240);
+    } finally { h.close(); }
+  });
+
   await t.test('storage is account-wide across relog and Check paginates every saved log', async () => {
     const h = harness({ mode: 'ultimate' });
     const reloaded = harness({ mode: 'ultimate' });

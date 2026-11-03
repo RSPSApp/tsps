@@ -164,8 +164,9 @@ function barkCurrency(event) {
   Common.api.emitCustomEvent("storage:amount", query);
   event.balance = query.amount;
   event.inventoryCost = (amount) => Math.min(amount, inventory.getAmount(event.itemId));
+  // A refund is paid into the inventory, so a sale must have room for it.
+  event.refundItemId = event.itemId;
   event.set = (balance) => {
-    // A refund goes to the inventory, as the shop's own currency would.
     if (balance > event.balance) inventory.adds(event.itemId, balance - event.balance);
     const spend = Math.max(0, event.balance - balance);
     const fromInventory = Math.min(spend, inventory.getAmount(event.itemId));

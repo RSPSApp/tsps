@@ -25,10 +25,13 @@ module.exports = function registerIdesOfMilkQuest(api) {
     TaskManager,
     ObjectIdentifiers,
     RegionManager,
+    World,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, openBook } = require("../QuestRuntime");
 
   const PAGE = "The Ides of Milk";
+  const BRUTUS_MONSTER = "Brutus";
+  const BRUTUS_BEST_ATTRIBUTE = "ides-of-milk:brutus-best-ticks";
   const START_HOOK = "quest:the-ides-of-milk:start";
 
   const CASSIUS_NPC_ID = NpcIdentifiers.CASSIUS_2; // 15632
@@ -653,6 +656,8 @@ module.exports = function registerIdesOfMilkQuest(api) {
     arena.nextSpecial = quest.isComplete(arena.player) && Math.random() < 0.5 ? "stomp" : "charge";
     arena.stompsRemaining = 0;
     arena.respawnTask = null;
+    // ponytail: timed from the bull entering; live may start it at the first hit.
+    arena.startTick = World.getProcessCycle();
     arena.enter(npc);
     bullsByPlayer.set(arena.player, npc);
     npc.performAnimation(new Animation(ANIMATION.spawn));
@@ -721,6 +726,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
     const player = arena.player;
     if (killer !== player) return;
     if (quest.isComplete(player)) {
+      countBrutusKill(player, World.getProcessCycle() - arena.startTick, true);
       arena.bull = null;
       bullsByPlayer.delete(player);
       api.removeNpc(npc);
@@ -728,12 +734,45 @@ module.exports = function registerIdesOfMilkQuest(api) {
       arena.respawnTask = later(arena, npc.getDefinition().getRespawn(), () => spawnArenaBull(arena));
       return;
     }
+    countBrutusKill(player, 0, false);
     leaveFight(player);
     if (quest.getStage(player) === STAGE_BULL_TASK) {
       quest.setStage(player, STAGE_BRUTUS_DEAD);
       player.sendMessage("You notice a strange tag float to the ground as the bull falls. It reads 'Brutus'.");
       startTranscript(api, player, BULL_NPC_ID, PAGE, "facing-the-bull-after-killing-brutus");
     }
+  }
+
+  /** A fight's length as the game prints it: m:ss.cc. */
+  function formatTicks(ticks) {
+    const centis = Math.round(ticks * 60);
+    const minutes = Math.floor(centis / 6000);
+    const seconds = Math.floor((centis % 6000) / 100);
+    return `${minutes}:${String(seconds).padStart(2, "0")}.${String(centis % 100).padStart(2, "0")}`;
+  }
+
+  /** The kill count and the fight's length against the personal best, before any task the kill finishes. */
+  function countBrutusKill(player, ticks, announced) {
+    api.emitCustomEvent("combat-achievements:kill", {
+      player,
+      monster: BRUTUS_MONSTER,
+      announce: announced && ((kills) => {
+        player.sendMessage(`Your Brutus kill count is: <col=ff0000>${kills}</col>.`);
+        const best = Number(player.getAttribute(BRUTUS_BEST_ATTRIBUTE)) || 0;
+        if (!best || ticks < best) {
+          player.setAttribute(BRUTUS_BEST_ATTRIBUTE, ticks);
+          api.emitCustomEvent("boss:personal-best", { player, boss: BRUTUS_MONSTER, ticks });
+          player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col> (new personal best)`);
+        } else {
+          player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col>. Personal best: ${formatTicks(best)}`);
+        }
+      }),
+    });
+  }
+
+  function answerBrutusBest(request) {
+    const best = Number(request.player.getAttribute(BRUTUS_BEST_ATTRIBUTE)) || 0;
+    if (request.monster === BRUTUS_MONSTER && best > 0) request.best = best;
   }
 
   function ringForBull({ player }) {
@@ -934,6 +973,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   api.persistAttribute(SETH_TALKED_ATTRIBUTE, 0);
   api.persistAttribute(GILLIE_TALKED_ATTRIBUTE, 0);
   api.persistAttribute(REWARD_ATTRIBUTE, 0);
+  api.persistAttribute(BRUTUS_BEST_ATTRIBUTE, 0);
   api.persistAttribute(LAMP_USED_ATTRIBUTE, 0);
 
   api.persistAttribute(STAGE_SCHEMA_ATTRIBUTE, 0);
@@ -972,6 +1012,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   api.onItemAction(handleItemAction);
   api.onNpcDeath(handleNpcDeath);
   api.registerNpcCombatMethodProvider([QUEST_BRUTUS_NPC_ID], BrutusCombat);
+  api.onCustomEvent("combat-achievements:personal-best", answerBrutusBest);
   api.onPlayerLogout(handleLogout);
   api.onPlayerLogin(handleLogin);
   require("./ides-of-milk/CowbellAmulet.Quest")(api);

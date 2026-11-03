@@ -78,6 +78,25 @@ function sellerVariant(event) {
  * The transcripts' shared conditions, most specific first. Each is `[pattern, answer]`; the
  * answer gets `{ player, cape }`.
  */
+/**
+ * Brother Jered (Wiki: Transcript:Brother Jered) also blesses an unblessed symbol into a holy
+ * symbol. The transcript marks the blessing itself "unavailable" and says no Prayer level for it,
+ * so a player carrying one is offered it instead of the plain Prayer branch.
+ */
+const BLESSING_STEP_ID = "4VbQ5b";
+
+function carriesUnblessed({ player, cape }) {
+  return cape.skillKey === "PRAYER" && player.getInventory().contains(Capes.core.ItemIdentifiers.UNBLESSED_SYMBOL);
+}
+
+function bless(player) {
+  const { UNBLESSED_SYMBOL, HOLY_SYMBOL } = Capes.core.ItemIdentifiers;
+  const inventory = player.getInventory();
+  if (!inventory.contains(UNBLESSED_SYMBOL)) return;
+  inventory.deleteNumber(UNBLESSED_SYMBOL, 1);
+  inventory.adds(HOLY_SYMBOL, 1);
+}
+
 const CONDITIONS = [
   [/pvp arena world|pvp world|deadman world/i, () => false],
   [/has 99 \w+, an? .*cape, but no hood/i, ({ player, cape }) =>
@@ -91,7 +110,8 @@ const CONDITIONS = [
   [/does not have two free inventory spaces|does not have enough inventory space/i, ({ player }) => !hasRoom(player)],
   [/has no (?:free )?inventory spaces?|does not have a free inventory space/i, ({ player }) => player.getInventory().getFreeSlots() === 0],
   [/has at least (?:one|1) free inventory space/i, ({ player }) => player.getInventory().getFreeSlots() > 0],
-  [/(?:does not|doesn't) have 99 \w+/i, ({ player, cape }) => !mastered(player, cape)],
+  [/carrying an unblessed symbol/i, carriesUnblessed],
+  [/(?:does not|doesn't) have 99 \w+/i, ({ player, cape }) => !mastered(player, cape) && !carriesUnblessed({ player, cape })],
   [/has 99 \w+/i, ({ player, cape }) => mastered(player, cape)],
   [/(?:does not|doesn't) have an? (?:skillcape|\w+ cape)|does not have a skillcape of/i, ({ player, cape }) => !ownsCape(player, cape)],
   [/has an? (?:skillcape|\w+ cape)|has a skillcape of|already bought a skillcape before/i, ({ player, cape }) => ownsCape(player, cape)],
@@ -136,6 +156,11 @@ function giveHood(player, cape) {
 /** The transcripts' hand-outs: "an Attack cape and hood", "a Cooking hood", "... hands you another hood". */
 function sellerAction(event) {
   const master = masterFor(event);
+  if (master && event.stepId === BLESSING_STEP_ID && master.cape.skillKey === "PRAYER") {
+    bless(event.player);
+    event.handled = true;
+    return;
+  }
   if (!master || typeof event.text !== "string") return;
   const text = event.text;
   // A narrated message still shows; only actions are marked handled so the branch carries on.

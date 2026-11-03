@@ -275,6 +275,10 @@ export class Player extends Mobile {
             }
             // A respawn is the same Player object; drop rolls cached against the state it died in.
             CombatFactory.clearHitRollCache(this);
+            // Kill credit is per life: damage this player dealt stops counting once they die.
+            World.getPlayers().forEach((other) => {
+                if (other !== this) other.getCombat().removeDamager(this);
+            });
             TaskManager.submit(new PlayerDeathTask(this, beforeDeath.announce !== false));
             this.isDying = true;
         }

@@ -694,6 +694,11 @@ export class Combat {
         this.damageMap = null;
     }
 
+    /** Forgets one player's damage, so the dead do not win a later kill. */
+    public removeDamager(player: Player): void {
+        this.damageMap?.delete(player);
+    }
+
     public damageMapContains(player: Player): boolean {
         const cached = this.damageMap?.get(player);
         return cached != null && cached.getStopwatch() < CombatConstants.DAMAGE_CACHE_TIMEOUT;

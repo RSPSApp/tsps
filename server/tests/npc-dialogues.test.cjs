@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
-const { pickVariant, aliasKeys, flatten, startDialogue, speakerIdIndex } = require('../plugins/npcs/NpcDialogues.plugin');
+const { pickVariant, aliasKeys, flatten, startDialogue, speakerIdIndex, collectMenuBefore } = require('../plugins/npcs/NpcDialogues.plugin');
 
 const data = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/definitions/npc-dialogues.json'), 'utf8'));
 const aliases = aliasKeys(data);
@@ -456,6 +456,122 @@ test('"previous" on the first menu replays it instead of ending the dialogue', (
   const event = { player, npc: { getId: () => 1288 }, npcId: 1288, definition };
   startDialogue(api, event, tree, {}, { player, npc: event.npc, npcId: 1288, definition, pages: [] });
   assert.deepEqual(prompts, ['Q1', 'Q1']);
+});
+
+test('prior menus include condition containers, preserve the variant family and stop at the first choice', () => {
+  const nested = { type: 'choice', options: [{ text: 'Nested', steps: [] }] };
+  const menu = { type: 'choice', options: [{ text: 'Help', steps: [nested] }] };
+  const record = { variants: {
+    'filliman-first': [{ type: 'line', speaker: 'Filliman Tarlock', text: 'Hello.' },
+      { type: 'condition', steps: [{ type: 'condition', steps: [menu] }] }],
+    'drezel-other': [{ type: 'choice', options: [{ text: 'Foreign', steps: [] }] }],
+    'filliman-again': [{ npc: 'Hello again.' }],
+  } };
+  const scope = { initial: true, callerName: 'Filliman Tarlock' };
+  assert.equal(collectMenuBefore(record, 'filliman-again', scope).step, menu);
+  assert.equal(collectMenuBefore(record, 'filliman-again'), undefined, 'legacy lookup remains direct-only');
+  assert.equal(collectMenuBefore(record, 'filliman-first'), undefined);
+  assert.equal(collectMenuBefore(record, 'drezel-other'), undefined);
+  const canonical = collectMenuBefore(data['Nature Spirit'], 'finding-filliman-subsequent-dialogue-with-filliman-2', scope);
+  assert.ok(canonical.step.options.some(option => option.text === 'How can I help?'));
+});
+
+test('initial uses the conversation menu before its prior-page fallback and ends without either', () => {
+  const prior = { step: { type: 'choice', prompt: 'Prior', options: [{ text: 'Bye', steps: [] }] }, rest: [] };
+  for (const ownMenu of [false, true]) {
+    const prompts = [];
+    const player = {
+      getDialogueManager: () => ({ reset() {}, startDialogues(chain) {
+        for (const entry of chain.getDialogues().values()) if (entry.constructor.name === 'ActionDialogue') return entry.send(player);
+      } }),
+      getPacketSender: () => ({ sendInterfaceRemoval() {} }), sendMessage() {},
+    };
+    const event = { player, npcId: 943, definition: { getName: () => 'Filliman Tarlock', getId: () => 943 } };
+    const api = {
+      emitCustomEvent() {},
+      sendMultiChatboxPrompt(_player, title, ...pairs) {
+        prompts.push(title); assert.ok(prompts.length <= 2, 'initial should return to a usable menu');
+        pairs[prompts.length === 1 && ownMenu ? 1 : pairs.length - 1]();
+      },
+    };
+    const steps = ownMenu ? [{ type: 'choice', prompt: 'Current', options: [
+      { text: 'Again', steps: [{ type: 'jump', reference: 'initial' }] }, { text: 'Bye', steps: [] },
+    ] }] : [{ type: 'jump', reference: 'initial' }];
+    startDialogue(api, event, steps, {}, { ...event, pages: [], pageInitialMenu: prior });
+    assert.deepEqual(prompts, ownMenu ? ['Current', 'Current'] : ['Prior']);
+    prompts.length = 0;
+    startDialogue(api, event, [{ type: 'jump', reference: 'initial' }], {}, { ...event, pages: [] });
+    assert.deepEqual(prompts, []);
+  }
+});
+
+test('scoped initial recovery rejects foreign, mixed and unknown source ownership', () => {
+  const menu = { type: 'choice', options: [{ text: 'Help', steps: [] }] };
+  const line = speaker => ({ type: 'line', speaker, text: 'Hello.' });
+  for (const speakers of [[], ['Velorina'], ['Old crone', 'Velorina'], [null]]) {
+    const record = { variants: {
+      'talking-first': [...speakers.map(speaker => speaker ? line(speaker) : { npc: 'An unlabelled speaker.' }), menu],
+      'talking-again': [line('Old crone')],
+    } };
+    assert.equal(collectMenuBefore(record, 'talking-again', { initial: true, callerName: 'Old crone' }), undefined);
+  }
+});
+
+test('canonical Kragen keeps the direct menu ahead of an earlier conditional menu', () => {
+  const record = data['Garden of Tranquillity'], variant = 'talking-to-kragen-subsequent-dialogue-with-kragen';
+  const expected = ['Would you look after my crops for me?', 'Can you give me any farming advice?',
+    'Can you sell me something?', "That's all, thanks."];
+  for (const options of [undefined, { initial: true, callerName: 'Kragen' }]) {
+    assert.deepEqual(collectMenuBefore(record, variant, options).step.options.map(option => option.text), expected);
+  }
+});
+
+test('legacy above/below keeps its implicit-owner direct menu while initial fails closed', () => {
+  const menu = { type: 'choice', prompt: 'Legacy', options: [{ text: 'Bye', steps: [] }] };
+  const record = { variants: { 'talking-first': [menu], 'talking-again': [{ type: 'jump', reference: 'above' }] } };
+  const prior = collectMenuBefore(record, 'talking-again');
+  assert.equal(prior.step, menu);
+  assert.equal(collectMenuBefore(record, 'talking-again', { initial: true, callerName: 'Unknown' }), undefined);
+  for (const reference of ['above', 'below', 'initial']) {
+    const prompts = [];
+    const player = {
+      getDialogueManager: () => ({ reset() {}, startDialogues(chain) {
+        for (const entry of chain.getDialogues().values()) if (entry.constructor.name === 'ActionDialogue') return entry.send(player);
+      } }),
+      getPacketSender: () => ({ sendInterfaceRemoval() {} }), sendMessage() {},
+    };
+    const event = { player, npcId: 943, definition: { getName: () => 'Unknown', getId: () => 943 } };
+    startDialogue({ emitCustomEvent() {}, sendMultiChatboxPrompt(_player, title) { prompts.push(title); } },
+      event, [{ type: 'jump', reference }], {}, { ...event, pages: [], pageMenuBefore: prior });
+    assert.deepEqual(prompts, reference === 'initial' ? [] : ['Legacy']);
+  }
+});
+
+test('canonical Old crone material handover cannot recover Velorina acquisition questions', t => {
+  const record = data['Ghosts Ahoy'], variant = 'talking-to-the-old-crone-with-the-materials';
+  const scope = { initial: true, callerName: 'Old crone' };
+  const initial = collectMenuBefore(record, variant, scope);
+  const expected = ['I am afraid I have not found your son yet.', 'Remind me - what can I do about Necrovarus?',
+    'What did you want me to get for you?', "I'll go and search for those items you wanted."];
+  assert.deepEqual(initial.step.options.map(option => option.text), expected);
+  assert.deepEqual(collectMenuBefore(record, variant, { initial: true }).step.options.map(option => option.text), expected,
+    'a single canonical source actor is also sufficient without a caller override');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  t.mock.method(PluginManager, 'emitNpcDialogueCondition', event => event.text === 'If the player has the Book of Haricanto:');
+  let sender;
+  sender = new Proxy({}, { get: () => () => sender });
+  const player = { getDisplayName: () => 'Reviewer', sendMessage() {}, getPacketSender: () => sender,
+    getDialogueManager: () => ({ reset() {}, startDialogues(chain) {
+      for (const entry of chain.getDialogues().values()) entry.send(player);
+    } }) };
+  const event = { player, npcId: 1695, definition: { getName: () => 'Old crone', getId: () => 1695 } };
+  const menus = [], options = require('../plugins/npcs/NpcDialogues.plugin').collectPageOptions(record);
+  startDialogue({ emitCustomEvent() {}, sendMultiChatboxPrompt(_player, _title, ...pairs) {
+    menus.push(pairs.filter((_value, i) => i % 2 === 0));
+  } }, event, record.variants[variant], record.branches, { ...event, pages: [],
+    pageMenuBefore: collectMenuBefore(record, variant), pageInitialMenu: initial,
+    pageOptions: options.byText, pageOptionList: options.list });
+  assert.deepEqual(menus, [expected]);
 });
 
 test('returning to a menu abandons the old handout branch and keeps the menu continuation once', () => {
@@ -1464,4 +1580,22 @@ test('dialogue alternatives follow saved pronouns independently of the body', ()
   assert.equal(formatPlayerText('[He/She/They] is ready.', player(1)), 'She is ready.');
   assert.equal(formatPlayerText('[He/She/They] are ready.', player(2)), 'They are ready.');
   assert.equal(formatPlayerText('[Greetings, sir/Greetings, madam/Greetings]', player(2)), 'Greetings');
+});
+
+
+test('initial recovery rejects mutually exclusive prior menus instead of taking the first condition', () => {
+  const variant = 'forming-a-fellowship-capturing-a-spy-talking-to-akrisae-after-the-truth-serum-breaks';
+  assert.equal(collectMenuBefore(data['While Guthix Sleeps'], variant,
+    { initial: true, callerName: 'Akrisae' }), undefined);
+  const menu = { type: 'choice', options: [{ text: 'Old option', steps: [] }] };
+  const line = { type: 'line', speaker: 'Akrisae', text: 'Hello.' };
+  const record = { variants: {
+    'talking-first': [line, menu],
+    'talking-conditional': [line,
+      { type: 'condition', text: 'If available:', steps: [menu] },
+      { type: 'condition', text: 'If used:', steps: [menu] }],
+    'talking-again': [line],
+  } };
+  assert.equal(collectMenuBefore(record, 'talking-again',
+    { initial: true, callerName: 'Akrisae' }), undefined, 'ambiguity cannot fall back to an older menu');
 });

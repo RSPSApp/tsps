@@ -837,7 +837,9 @@ function startTranscript(api, player, npcId, page, variant, select, npc = null) 
   const event = { player, npcId, npc, definition };
   const options = collectPageOptions(record);
   const context = { player, npc, npcId, definition, pages: [{ page, variants: [variant] }], speakerIdByName: transcriptSpeakers,
-    pageOptions: options.byText, pageOptionList: options.list, pageLines: collectPageLines(record), pageMenuBefore: collectMenuBefore(record, variant) };
+    pageOptions: options.byText, pageOptionList: options.list, pageLines: collectPageLines(record),
+    pageMenuBefore: collectMenuBefore(record, variant),
+    pageInitialMenu: collectMenuBefore(record, variant, { initial: true, callerName: definition.getName() }) };
   playDialogue(api, event, steps, record.branches, context);
   return true;
 }

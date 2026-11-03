@@ -18,8 +18,8 @@
  * rotting log, the fungus/used spell go on the nature/spirit stones, the
  * Nature Spirit blesses the silver sickle and hands over the druid pouch, the
  * blessed sickle blooms swamp plants into pouch charges, and the swamp's invisible
- * ghasts attack players (rotting food, or 1-3 damage with none) and become visible
- * when they land a hit. A filled pouch spends a charge to reveal an attacker instead,
+ * ghasts attack players (rotting food, or 1-3 damage with none). A filled pouch
+ * spends a charge to reveal an attacker instead,
  * so its food stays fresh; using a filled pouch on one reveals it too.
  */
 module.exports = function registerNatureSpiritQuest(api) {
@@ -28,7 +28,7 @@ module.exports = function registerNatureSpiritQuest(api) {
     ObjectManager, MapObjects, RegionManager, World, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers,
     HitDamage, HitMask, CacheDefinitions, Graphic,
   } = api.core;
-  const { registerQuest, refreshQuestList } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const DREZEL_NPC_ID = NpcIdentifiers.DREZEL; // 9636
   const FILLIMAN_NPC_ID = NpcIdentifiers.FILLIMAN_TARLOCK; // 943
@@ -86,6 +86,11 @@ module.exports = function registerNatureSpiritQuest(api) {
   const SICKLE_BLESSED_MESSAGE_ID = "zcAIZC";
   /** The Nature Spirit's "gives you an empty pouch." step. */
   const POUCH_GIVEN_MESSAGE_ID = "bf6r0R";
+  const FILLIMAN_ITEM_VARIANT = "finding-filliman-subsequent-dialogue-with-filliman";
+  const MIRROR_CONDITION_ID = "ASJiE8";
+  const JOURNAL_CONDITION_ID = "LvFssE";
+  const GHOSTSPEAK_MISSING_CONDITION_ID = "GQYpTB";
+  const JOURNAL_GIVEN_MESSAGE_ID = "JPq1Gd";
 
   const FUNGUS_OFFERING_ATTRIBUTE = "nature-spirit:fungus-offering";
   const SPELL_OFFERING_ATTRIBUTE = "nature-spirit:spell-offering";
@@ -160,7 +165,7 @@ module.exports = function registerNatureSpiritQuest(api) {
 
   const GROTTO_INTERIOR = { x: 3441, y: 9736, z: 0 };
   const GROTTO_SURFACE = { x: 3443, y: 3338, z: 0 };
-  const FILLIMAN_CAMP = { x: 3442, y: 3340, z: 0 };
+  const FILLIMAN_CAMP = { x: 3440, y: 3336, z: 0 };
   const NATURE_SPIRIT_CAMP = { x: 3441, y: 9738, z: 0 };
   const WASHING_BOWL_TILE = { x: 3437, y: 3337, z: 0 };
   /** Mort Myre swamp: the ghasts the pouch can reveal all live inside. */
@@ -434,8 +439,8 @@ module.exports = function registerNatureSpiritQuest(api) {
   /**
    * A ghast's attack: a filled druid pouch spends a charge to reveal the attacker instead
    * (so no food is rotted and no damage is taken), else 7/10 miss, else rot one food item
-   * or hit 1-3 when there is none. A hit makes the ghast visible, as live does; the kill
-   * then counts towards the quest like any pouch-revealed one. The Wiki gives the roll but
+   * or hit 1-3 when there is none. Only a filled pouch reveals an attackable form.
+   * The Wiki gives the roll but
    * neither the interval nor the exact retreat, so one player sees an attempt every 12-30
    * ticks. Once revealed, the visible form owns ordinary combat; its invisible source
    * must not keep rotting food or applying a second attack alongside it.
@@ -458,8 +463,6 @@ module.exports = function registerNatureSpiritQuest(api) {
         new HitDamage(1 + Math.floor(Math.random() * 3), HitMask.RED),
       ]);
     }
-    const visible = spawnVisibleGhast(player, ghast);
-    visible?.performAnimation?.(new Animation(GHAST_ATTACK_ANIMATION));
   }
 
   function firstProduce(player) {
@@ -480,8 +483,8 @@ module.exports = function registerNatureSpiritQuest(api) {
     return true;
   }
 
-  /** Filliman waits at his camp until the grotto ritual, then the Spirit is inside. */
-  function ensureQuestNpcs(player) {
+  /** The surface entrance summons Filliman; later stages restore the actor inside. */
+  function ensureQuestNpcs(player, summon = false) {
     if (!player) return;
     const stage = quest.getStage(player);
     if (stage >= STAGE_ENTERED_GROTTO) {
@@ -494,7 +497,7 @@ module.exports = function registerNatureSpiritQuest(api) {
       if (!hasSpawn(player, id)) spawnAt(player, id, tile);
       return;
     }
-    if (stage >= STAGE_ENTERED_SWAMP && !hasSpawn(player, FILLIMAN_NPC_ID)) {
+    if (summon && stage >= STAGE_ENTERED_SWAMP && !hasSpawn(player, FILLIMAN_NPC_ID)) {
       spawnAt(player, FILLIMAN_NPC_ID, FILLIMAN_CAMP);
     }
   }
@@ -608,7 +611,6 @@ module.exports = function registerNatureSpiritQuest(api) {
     if (stage >= STAGE_CAST_SPELL) return "talking-to-filliman";
     if (stage >= STAGE_RECEIVED_SPELL) return "finding-filliman-subsequent-dialogue-with-filliman-2";
     if (stage >= STAGE_GIVEN_JOURNAL) {
-      quest.setStage(player, STAGE_RECEIVED_SPELL);
       return "finding-filliman-subsequent-dialogue-with-filliman-2";
     }
     if (stage >= STAGE_SHOWN_MIRROR) {
@@ -667,10 +669,12 @@ module.exports = function registerNatureSpiritQuest(api) {
     if (value.includes("talks to him again after speaking to him with a ghostspeak amulet")) {
       return wearingGhostspeak(player) && quest.getStage(player) >= STAGE_SPOKEN_FILLIMAN;
     }
-    if (value.includes("without wearing a ghostspeak amulet")) return !wearingGhostspeak(player);
+    if (/without wearing (?:a|the) ghostspeak amulet/.test(value)) return !wearingGhostspeak(player);
     if (value.includes("not wearing the ghostspeak amulet")) return !wearingGhostspeak(player);
     if (value.includes("wearing the ghostspeak amulet")) return wearingGhostspeak(player);
     if (value.includes("not wearing their ghostspeak amulet")) return !wearingGhostspeak(player);
+    if (value.includes("did not go offer their help yet")) return quest.getStage(player) < STAGE_RECEIVED_SPELL;
+    if (value.includes("offered their help")) return quest.getStage(player) >= STAGE_RECEIVED_SPELL;
     if (value.includes("has the silver sickle in their inventory")) {
       return held(player, SILVER_SICKLE_ITEM_ID) || held(player, SILVER_SICKLE_BLESSED_ITEM_ID);
     }
@@ -753,6 +757,12 @@ module.exports = function registerNatureSpiritQuest(api) {
 
   function handleAction(event) {
     const { player, npcId, stepId } = event;
+    if (npcId === FILLIMAN_NPC_ID && stepId === JOURNAL_GIVEN_MESSAGE_ID && event.kind === "message") {
+      if (quest.getStage(player) !== STAGE_SHOWN_MIRROR || !held(player, JOURNAL_ITEM_ID) || !wearingGhostspeak(player)) return;
+      player.getInventory().deleteNumber(JOURNAL_ITEM_ID, 1);
+      quest.setStage(player, STAGE_GIVEN_JOURNAL);
+      return;
+    }
     if (stepId === FOOD_MESSAGE_ID) {
       giveDrezelFood(event);
       return;
@@ -771,6 +781,27 @@ module.exports = function registerNatureSpiritQuest(api) {
   function handleSpiritLine(event) {
     if (event.npcId !== FILLIMAN_NPC_ID && event.npcId !== NATURE_SPIRIT_NPC_ID) return;
     const { player, text } = event;
+    if (event.npcId === FILLIMAN_NPC_ID && text.startsWith("It must be a sign...")) {
+      event.after = () => {
+        const stage = quest.getStage(player);
+        if (stage >= STAGE_ENTERED_SWAMP && stage < STAGE_SHOWN_MIRROR && held(player, MIRROR_ITEM_ID) && wearingGhostspeak(player)) {
+          quest.setStage(player, STAGE_SHOWN_MIRROR);
+        }
+      };
+    }
+    if (event.npcId === FILLIMAN_NPC_ID && text.startsWith("It is required if you're to cast this druid spell.")) {
+      event.after = () => {
+        if (quest.getStage(player) !== STAGE_GIVEN_JOURNAL || !wearingGhostspeak(player)) return;
+        if (!held(player, DRUIDIC_SPELL_ITEM_ID)) {
+          if (player.getInventory().getFreeSlots() < 1) {
+            player.sendMessage("You don't have enough inventory space for the spell.");
+            return;
+          }
+          player.getInventory().adds(DRUIDIC_SPELL_ITEM_ID, 1);
+        }
+        quest.setStage(player, STAGE_RECEIVED_SPELL);
+      };
+    }
     if (quest.getStage(player) >= STAGE_FULL_TRANSFORM) event.speakerId = NATURE_SPIRIT_NPC_ID;
     if (quest.getStage(player) === STAGE_ENTERED_GROTTO && text.startsWith("I must complete the transformation now.")) {
       event.after = () => {
@@ -792,24 +823,21 @@ module.exports = function registerNatureSpiritQuest(api) {
     const stage = quest.getStage(event.player);
     if (stage < STAGE_ENTERED_SWAMP || stage >= STAGE_SHOWN_MIRROR) return;
     if (!held(event.player, MIRROR_ITEM_ID)) return;
-    if (!wearingGhostspeak(event.player)) return;
-    quest.setStage(event.player, STAGE_SHOWN_MIRROR);
-    event.player.sendMessage("Filliman sees no reflection and finally accepts that he is dead.");
-    event.handled = true;
+    event.handled = startTranscript(api, event.player, FILLIMAN_NPC_ID, "Nature Spirit", FILLIMAN_ITEM_VARIANT,
+      steps => steps.find(step => step.id === (wearingGhostspeak(event.player) ? MIRROR_CONDITION_ID : GHOSTSPEAK_MISSING_CONDITION_ID))?.steps,
+      event.target);
   }
 
-  /** Giving Filliman his journal earns the Bloom spell. */
+  /** Giving Filliman his journal opens his transformation plans. */
   function handleJournalOnFilliman(event) {
     if (event.itemId !== JOURNAL_ITEM_ID) return;
     const target = event.npcId ?? event.target?.getId?.();
     if (target !== FILLIMAN_NPC_ID && target !== NATURE_SPIRIT_NPC_ID) return;
     if (quest.getStage(event.player) !== STAGE_SHOWN_MIRROR) return;
     if (!held(event.player, JOURNAL_ITEM_ID)) return;
-    event.player.getInventory().deleteNumber(JOURNAL_ITEM_ID, 1);
-    if (!held(event.player, DRUIDIC_SPELL_ITEM_ID)) event.player.getInventory().adds(DRUIDIC_SPELL_ITEM_ID, 1);
-    quest.setStage(event.player, STAGE_GIVEN_JOURNAL);
-    event.player.sendMessage("Filliman reads his journal and remembers his purpose.");
-    event.handled = true;
+    event.handled = startTranscript(api, event.player, FILLIMAN_NPC_ID, "Nature Spirit", FILLIMAN_ITEM_VARIANT,
+      steps => steps.find(step => step.id === (wearingGhostspeak(event.player) ? JOURNAL_CONDITION_ID : GHOSTSPEAK_MISSING_CONDITION_ID))?.steps,
+      event.target);
   }
 
   /**
@@ -1023,8 +1051,8 @@ module.exports = function registerNatureSpiritQuest(api) {
 
   /**
    * The swamp's invisible ghasts now do what the Wiki says they do: they attack players,
-   * rotting a food item or dealing 1-3 when there is none, and the ghast that lands a hit
-   * becomes visible. Scope it to the swamp so no other area pays for the hook.
+   * rotting a food item or dealing 1-3 when there is none. A filled pouch reveals the
+   * attacker instead. Scope it to the swamp so no other area pays for the hook.
    */
   function createSwampArea() {
     class MortMyreSwampArea extends Area {
@@ -1058,7 +1086,6 @@ module.exports = function registerNatureSpiritQuest(api) {
     if (stage < STAGE_STARTED || stage >= STAGE_ENTERED_SWAMP) return;
     quest.setStage(player, STAGE_ENTERED_SWAMP);
     player.sendMessage("You walk into the gloomy atmosphere of Mort Myre.");
-    ensureQuestNpcs(player);
     ensureWashingBowl(player);
   }
 
@@ -1071,7 +1098,7 @@ module.exports = function registerNatureSpiritQuest(api) {
       // Before the ritual, trying the entrance summons Filliman outside instead.
       if (quest.getStage(player) < STAGE_PERFORMED_RITUAL) {
         player.sendMessage("You prepare to enter the Druid's grotto.");
-        ensureQuestNpcs(player);
+        ensureQuestNpcs(player, true);
         return;
       }
       player.moveTo(new Location(GROTTO_INTERIOR.x, GROTTO_INTERIOR.y, quest.isComplete(player) ? 1 : GROTTO_INTERIOR.z));
@@ -1091,7 +1118,6 @@ module.exports = function registerNatureSpiritQuest(api) {
       event.handled = true;
       ensureQuestNpcs(player);
       const npcId = quest.getStage(player) < STAGE_FULL_TRANSFORM ? FILLIMAN_NPC_ID : NATURE_SPIRIT_NPC_ID;
-      const { startTranscript } = require("../QuestRuntime");
       startTranscript(api, player, npcId, "Nature Spirit", fillimanVariant(quest.getStage(player), player));
       return;
     }

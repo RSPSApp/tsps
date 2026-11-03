@@ -346,19 +346,49 @@ function collectPageLines(record) {
   return lines;
 }
 
-/** The first top-level menu of a variant, if it has one. */
-function topLevelMenu(steps) {
-  return (steps || []).find((step) => step.type === "choice" && step.options?.length);
+/** The first menu, including condition containers but never another menu's options. */
+function topLevelMenu(steps, nested = false) {
+  const direct = (steps ?? []).find(step => step.type === "choice" && step.options?.length);
+  if (direct) return direct;
+  if (!nested) return undefined;
+  const menus = [];
+  const visit = (nodes) => {
+    for (const step of nodes ?? []) {
+      if (step.type === "choice" && step.options?.length) menus.push(step);
+      else if (step.type === "condition") visit(step.steps);
+    }
+  };
+  visit(steps);
+  // A recovered historical menu has no guard context: never choose among alternatives.
+  return menus.length === 1 ? menus[0] : menus.length > 1 ? null : undefined;
+}
+
+/** Named source actors establish menu ownership on pages shared by several NPCs. */
+function sourceSpeakers(steps) {
+  const speakers = new Set();
+  const visit = (nodes) => {
+    for (const step of nodes ?? []) {
+      const speaker = normText(step.speaker);
+      if (speaker && speaker !== "player" && speaker !== "playername") speakers.add(speaker);
+      visit(step.steps);
+      for (const option of step.options ?? []) visit(option.steps);
+    }
+  };
+  visit(steps);
+  return speakers;
 }
 
 /**
  * The menu "above" the given variant on its page: the nearest earlier variant with
- * a top-level menu. The wiki writes "same as above" tails ({{tact|above}}) that
+ * a menu. The wiki writes "same as above" tails ({{tact|above}}) that
  * continue into the previous variant's menu, which is not linked in the dump.
  */
-function collectMenuBefore(record, variantName) {
+function collectMenuBefore(record, variantName, { initial = false, callerName } = {}) {
   const variants = record?.variants ?? {};
   const keys = Object.keys(variants);
+  const currentSpeakers = initial ? sourceSpeakers(variants[variantName]) : null;
+  const actor = normText(callerName) || (currentSpeakers?.size === 1 ? [...currentSpeakers][0] : "");
+  if (initial && (!actor || currentSpeakers.size > 1 || (currentSpeakers.size === 1 && !currentSpeakers.has(actor)))) return undefined;
   const family = variantName ? String(variantName).split("-")[0] : "";
   const index = variantName ? keys.indexOf(variantName) : -1;
   const upto = index === -1 ? keys.length : index;
@@ -367,8 +397,13 @@ function collectMenuBefore(record, variantName) {
     // Stay within the same variant family ("sir-prysin-*"), or a page shared by
     // several NPCs would continue into an unrelated NPC's menu.
     if (family && keys[i].split("-")[0] !== family) continue;
-    const found = topLevelMenu(variants[keys[i]]);
-    if (found) menu = { step: found, rest: [], record: undefined };
+    if (initial) {
+      const speakers = sourceSpeakers(variants[keys[i]]);
+      if (speakers.size !== 1 || !speakers.has(actor)) continue;
+    }
+    const found = topLevelMenu(variants[keys[i]], initial);
+    if (found === null) menu = undefined; // An ambiguous nearer variant rules out older menus.
+    else if (found) menu = { step: found, rest: [], record: undefined };
   }
   return menu;
 }
@@ -566,7 +601,8 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     const current = context.currentMenu;
     const history = context.menuHistory;
     if (/^other/i.test(reference)) return current ? { menu: current } : "end";
-    if (/^initial/i.test(reference)) return history[0] ? { menu: history[0] } : "end";
+    if (/^initial/i.test(reference)) return history[0] || context.pageInitialMenu
+      ? { menu: history[0] ?? context.pageInitialMenu } : "end";
     const match = /^previous(\d*)/i.exec(reference);
     const back = match && match[1] ? Number(match[1]) : 1;
     const index = current ? history.indexOf(current) : history.length - 1;
@@ -1152,6 +1188,8 @@ module.exports = {
           // Only a known variant has a well-defined "menu above"; otherwise a
           // page shared by several NPCs could replay an unrelated menu.
           result.context.pageMenuBefore = result.variant ? collectMenuBefore(data[page], result.variant) : undefined;
+          result.context.pageInitialMenu = result.variant ? collectMenuBefore(data[page], result.variant,
+            { initial: true, callerName: event.definition.getName() }) : undefined;
         }
         return result;
       };

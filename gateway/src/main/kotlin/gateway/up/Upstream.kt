@@ -66,6 +66,8 @@ class Upstream(
     private val interceptCount: (Int) -> Boolean = { false },
     /** tsps's index for a boat the client names by its world id. */
     private val worldEntityIndex: (Int) -> Int? = { it },
+    /** Whether the welcome screen is up (a modal, as live opens it). */
+    private val welcomeShown: () -> Boolean = { false },
     private val send: (ByteArray) -> Unit,
 ) {
     fun handle(message: IncomingGameMessage) {
@@ -124,7 +126,10 @@ class Upstream(
             is ResumePLongDialog -> send(TspsWriter().i32(message.count.coerceIn(0, Int.MAX_VALUE.toLong()).toInt()).fixed(RESUME_COUNTDIALOG))
             is ResumePNameDialog -> send(TspsWriter().string(message.name).varByte(RESUME_NAMEDIALOG))
             is ResumePStringDialog -> send(TspsWriter().string(message.string).varByte(RESUME_STRINGDIALOG))
-            is CloseModal -> send(TspsWriter().fixed(IF_CLOSE))
+            // The client closes modals itself (Escape, a close button) and then tells the server. On
+            // the welcome screen tsps would leave the player on the login root without a gameframe,
+            // so closing it means Play, the only way tsps leaves it.
+            is CloseModal -> send(if (welcomeShown()) TspsClientPacket.ifButtonX(WELCOME_PLAY, NONE, NONE, 1) else TspsWriter().fixed(IF_CLOSE))
             is MessagePublic ->
                 when {
                     // tsps's clan chat has no colour or effect.
@@ -273,6 +278,10 @@ class Upstream(
         const val RUN_VARP = 173
         const val LOGOUT_TAB_BUTTON = (182 shl 16) or 8
         const val WORLD_SWITCHER_LOGOUT = (69 shl 16) or 25
+        const val WELCOME_PLAY = (378 shl 16) or 72
+
+        /** The slot and obj an IF_BUTTONX on a plain component carries. */
+        const val NONE = 0xFFFF
 
         /** OSRS public-chat types (0 public, 1 autotyper, 2 friends chat) to tsps chat kinds. */
         val PUBLIC_CHAT_KINDS = mapOf(0 to 0, 1 to 3, 2 to 2)

@@ -19,6 +19,12 @@ class InterfaceTree(private val enums: EnumTypes) {
     /** The resizable-root components tsps has mounted something on (the gameframe), kept across roots. */
     private val gameframe = LinkedHashSet<Int>()
 
+    /**
+     * Group → the resizable-root component of a WIDGET_OPEN modal, kept across roots: the client
+     * leaves an open modal where it was when the root changes, so it moves with the gameframe.
+     */
+    private val modals = HashMap<Int, Int>()
+
     fun setRoot(group: Int) {
         root = group
         mounts.clear()
@@ -37,12 +43,14 @@ class InterfaceTree(private val enums: EnumTypes) {
     /** tsps mounted a group on resizable-root component [uid], or (false) closed it. */
     fun gameframe(uid: Int, mounted: Boolean) {
         if (uid ushr 16 != RESIZABLE_ROOT) return
+        // Whatever opens or closes there takes a modal's place.
+        modals.values.removeAll { it == uid }
         if (mounted) gameframe += uid else gameframe -= uid
     }
 
-    /** Each gameframe mount as it sits on [from] and on the active root, where the two differ. */
+    /** Each gameframe mount and modal as it sits on [from] and on the active root, where the two differ. */
     fun moves(from: Int): List<Pair<Int, Int>> =
-        gameframe.map { remap(it, from) to remap(it) }.filter { (source, target) -> source != target }
+        (gameframe + modals.values).map { remap(it, from) to remap(it) }.filter { (source, target) -> source != target }
 
     fun mounted(target: Int, group: Int) {
         mounts[group] = target
@@ -50,10 +58,16 @@ class InterfaceTree(private val enums: EnumTypes) {
 
     fun unmounted(target: Int): Int? = mounts.entries.firstOrNull { it.value == target }?.key?.also(mounts::remove)
 
-    /** Where tsps's untargeted WIDGET_OPEN puts a group: the main modal area. */
-    fun modalTarget(): Int = remap((RESIZABLE_ROOT shl 16) or MAIN_MODAL)
+    /** tsps's untargeted WIDGET_OPEN of [group]: it goes in the main modal area, which this returns, replacing any modal there. */
+    fun modalOpened(group: Int): Int {
+        val uid = (RESIZABLE_ROOT shl 16) or MAIN_MODAL
+        modals.values.removeAll { it == uid }
+        modals[group] = uid
+        return remap(uid)
+    }
 
-    fun targetOf(group: Int): Int? = mounts.remove(group)
+    /** Where [group] is mounted on the active root, for WIDGET_CLOSE; it is forgotten. */
+    fun targetOf(group: Int): Int? = mounts.remove(group) ?: modals.remove(group)?.let(::remap)
 
     companion object {
         const val RESIZABLE_ROOT = 161

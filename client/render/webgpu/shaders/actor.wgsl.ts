@@ -411,23 +411,37 @@ fn applyPriorityDepthBias(viewPos: vec4<f32>, priority: u32) -> vec4<f32> {
     return out;
 }
 
-/** height-map.glsl actorSunkTiles: how far an actor vertex is below the floor under it, in tiles. */
-fn actorSunkTiles(localPos: vec4<f32>, plane: u32, groundOffset: f32) -> f32 {
-    let floorY = -getHeightInterp(localPos.xz, plane) + groundOffset;
-    return max(localPos.y - floorY, 0.0) / 128.0;
+/** height-map.glsl actorFloorY: the floor's y under a local x/z, with the actor's ground offset. */
+fn actorFloorY(xz: vec2<f32>, plane: u32, groundOffset: f32) -> f32 {
+    return -getHeightInterp(xz, plane) + groundOffset;
 }
 
-/** priority-depth.glsl actorFloorViewPos: where the line of sight to a sunk vertex crosses its floor's level. */
-fn actorFloorViewPos(viewPos: vec4<f32>, sunkTiles: f32, worldToView: mat4x4<f32>, projection: mat4x4<f32>) -> vec4<f32> {
-    let ortho = projection[3][3] > 0.5;
-    let up = (worldToView * vec4<f32>(0.0, -1.0, 0.0, 0.0)).xyz;
-    let towardEye = select(-viewPos.xyz, vec3<f32>(0.0, 0.0, 1.0), ortho);
-    let rise = dot(towardEye, up);
-    if (sunkTiles <= 0.0 || rise <= 0.0) {
+/**
+ * height-map.glsl actorFloorViewPos: for an actor vertex below the floor, the view-space point
+ * where its line of sight comes up through the floor (Newton steps along the ray on the height map).
+ */
+fn actorFloorViewPos(viewPos: vec4<f32>, localPos: vec4<f32>, plane: u32, groundOffset: f32,
+        worldToView: mat4x4<f32>, projection: mat4x4<f32>) -> vec4<f32> {
+    if (localPos.y <= actorFloorY(localPos.xz, plane, groundOffset)) {
         return viewPos;
     }
-    let along = sunkTiles / rise;
-    return vec4<f32>(viewPos.xyz + towardEye * select(min(along, 0.999), along, ortho), viewPos.w);
+    let ortho = projection[3][3] > 0.5;
+    let towardEye = select(-viewPos.xyz, vec3<f32>(0.0, 0.0, 1.0), ortho);
+    let ray = transpose(mat3x3<f32>(worldToView[0].xyz, worldToView[1].xyz, worldToView[2].xyz)) * towardEye * 128.0;
+    let slopeStep = 16.0 / max(length(ray.xz), 0.001);
+    let maxT = select(0.999, 1.0e6, ortho);
+    var t = 0.0;
+    for (var i = 0; i < 4; i++) {
+        let p = localPos.xyz + ray * t;
+        let floorY = actorFloorY(p.xz, plane, groundOffset);
+        let floorRise = (actorFloorY(p.xz + ray.xz * slopeStep, plane, groundOffset) - floorY) / slopeStep;
+        let rate = ray.y - floorRise;
+        if (rate >= 0.0) {
+            break;
+        }
+        t = clamp(t - (p.y - floorY) / rate, 0.0, maxT);
+    }
+    return vec4<f32>(viewPos.xyz + towardEye * t, viewPos.w);
 }
 
 fn actorTextureAnimation(vertex: Vertex) -> vec2<f32> {
@@ -508,7 +522,8 @@ function placement(kind: ActorKind): string {
     // both keep the original screen position and perspective.
     const sinks = player || kind === "npc";
     const floorView = (pos: string) =>
-        `actorFloorViewPos(${pos}, sunkTiles, actorU.u_worldEntityTransform * scene.u_viewMatrix, scene.u_projectionMatrix)`;
+        `actorFloorViewPos(${pos}, groundedPos, info.plane, ${player ? "" : "-"}actorU.u_modelYOffset,
+        actorU.u_worldEntityTransform * scene.u_viewMatrix, scene.u_projectionMatrix)`;
     const clip = player
         ? `
     let depthViewPos = applyPriorityDepthBias(${floorView("viewPos")}, vertex.priority);
@@ -538,7 +553,7 @@ ${info}${pose}
 
     localPos.y -= getHeightInterp(info.tilePos, info.plane);
     localPos.y ${player ? "+=" : "-="} actorU.u_modelYOffset;${sinks ? `
-    let sunkTiles = actorSunkTiles(localPos, info.plane, ${player ? "" : "-"}actorU.u_modelYOffset);` : ""}
+    let groundedPos = localPos;` : ""}
 
     localPos /= vec4<f32>(128.0, 128.0, 128.0, 1.0);
     localPos += vec4<f32>(actorU.u_mapPos.x * 64.0, 0.0, actorU.u_mapPos.y * 64.0, 0.0);

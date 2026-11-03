@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](../../server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-191 quests · ✅ passed: 28 · ⚠️ passed with issues: 16 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 25 · untested: 113
+191 quests · ✅ passed: 28 · ⚠️ passed with issues: 15 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 26 · untested: 113
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -188,7 +188,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Tribal Totem](tribal-totem/README.md) | ✅ passed | 2026-10-25 | agent |  | 1 |
 | Troll Romance | untested |  |  |  |  |
 | [Troll Stronghold](troll-stronghold/README.md) | untested |  |  |  |  |
-| [Troubled Tortugans](troubled-tortugans/README.md) | ⚠️ passed with issues | 2026-11-03 | agent | deepseek-v4.1-flash | 2 |
+| [Troubled Tortugans](troubled-tortugans/README.md) | 🔁 needs recheck | 2026-11-03 | agent | deepseek-v4.1-flash | 1 |
 | [Twilight's Promise](twilights-promise/README.md) | untested |  |  |  |  |
 | Underground Pass | untested |  |  |  |  |
 | Vale Totems | untested |  |  |  |  |

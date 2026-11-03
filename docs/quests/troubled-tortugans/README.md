@@ -38,7 +38,8 @@ Newest first.
 - **fixed** The completion chat line used the default `<col=081190>`; capture 3456 uses
   `<col=0ab0ff>`. The quest now sets `completionMessageColor`.
 - **fixed** Chopping jatoba with a full bag printed both "You couldn't hold all those items."
-  and "You get some jatoba logs." The success line is now omitted when the logs were not added.
+  and "You get some jatoba logs." Jatoba logs (32902) do not stack, so the chop now stops on any
+  full bag, including one that already holds a log, and no log or success line is given.
 - **open** The boat legs were not played naturally. A raft was supplied in declared setup
   (`::raft`, `::maxboat`), the player used `::pandemonium` to reach it, and `::bt tp`
   moved it to Remote Island and the Great Conch. Boarding, docking and disembarking themselves

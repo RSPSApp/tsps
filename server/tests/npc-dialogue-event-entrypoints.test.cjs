@@ -330,6 +330,70 @@ test('a real worn helmet still blocks both native Hairdresser shortcuts', async 
   }
 });
 
+for (const farming of [1, 2]) {
+  test(`Fairytale I reaches its native start prompt without looping at Farming ${farming}`, async t => {
+    const f = fixture(t);
+    const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+    const quest = quests.find(entry => entry.key === 'fairytale_i_growing_pains');
+    f.player.getSkillManager().setMaxLevels(core.Skill.FARMING, farming);
+    const npcId = core.NpcIdentifiers.MARTIN_THE_MASTER_GARDENER;
+    const npc = core.NPC.create(npcId, new core.Location(3078, 3258));
+    const talk = () => PM.emitNpcInteraction({ player: f.player, npc, npcId,
+      action: 'Talk-to', clickType: 1, handled: false });
+    const select = async text => {
+      const pending = MultiChatboxPrompt.getPending(f.player);
+      assert.ok(pending?.options.includes(text), `expected option ${text}, got ${JSON.stringify(pending)}`);
+      await choose(f, pending.options.indexOf(text) + 1);
+    };
+    const untilMenu = async () => {
+      for (let n = 0; n < 30 && !MultiChatboxPrompt.getPending(f.player); n++) {
+        assert.ok(f.player.getDialogueManager().getCurrent(), 'the source conversation remains reachable');
+        await nextLine(f);
+      }
+      assert.ok(MultiChatboxPrompt.getPending(f.player), 'dialogue reaches its next menu');
+    };
+    const reachStart = async () => {
+      assert.equal(talk(), true);
+      await select('Ask about the quest.');
+      await untilMenu();
+      await select('Anything I can help with?');
+      await untilMenu();
+      assert.equal(MultiChatboxPrompt.getPending(f.player).title, 'Start the Fairytale I - Growing Pains quest?');
+    };
+    for (const key of ['lost_city', 'nature_spirit']) {
+      await reachStart();
+      await select('Yes.');
+      assert.equal(quest.getStage(f.player), 0, 'both prerequisite quests are required');
+      f.player.closeInterruptibleInterfaces();
+      const prerequisite = quests.find(entry => entry.key === key);
+      prerequisite.setStage(f.player, prerequisite.completionValue);
+    }
+    await reachStart();
+    assert.equal(quest.getStage(f.player), 0, 'hearing the offer cannot start the quest');
+    f.player.closeInterruptibleInterfaces();
+    assert.equal(quest.getStage(f.player), 0, 'closing the offer cannot start the quest');
+    await reachStart();
+    await select('No.');
+    f.player.closeInterruptibleInterfaces();
+    assert.equal(quest.getStage(f.player), 0, 'refusing preserves the unstarted state');
+    await reachStart();
+    await select('Yes.');
+    assert.equal(quest.getStage(f.player), quest.startedValue);
+    f.player.closeInterruptibleInterfaces();
+    assert.equal(talk(), true);
+    const followup = 'Have you spoken to any other members of the Gardening Group yet?';
+    assert.equal(f.player.getDialogueManager().getCurrent()?.getText().replace(/\s+/g, ' '), followup,
+      'started characters keep their follow-up conversation');
+    const restored = fixture(t);
+    const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+    PlayerSave.fromPlayer(f.player).applyToPlayer(restored.player);
+    assert.equal(quest.getStage(restored.player), quest.startedValue, 'the start stage survives save/load');
+    PM.emitNpcInteraction({ player: restored.player, npc, npcId, action: 'Talk-to', clickType: 1, handled: false });
+    assert.equal(restored.player.getDialogueManager().getCurrent()?.getText().replace(/\s+/g, ' '), followup,
+      'relogging retains the follow-up conversation');
+  });
+}
+
 test('native Hairdresser preview cancels or confirms through the existing makeover engine', async t => {
   const f = hairdresserFixture(t), appearance = f.player.getAppearance();
   const original = [...appearance.getLook()];

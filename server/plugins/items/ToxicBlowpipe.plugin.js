@@ -7,6 +7,18 @@ const TOXIC_BLOWPIPE_MAX_SCALES = 16383;
 const TOXIC_BLOWPIPE_MAX_DARTS = 16383;
 const TOXIC_BLOWPIPE_META_KEY = "toxic-blowpipe";
 
+// The native confirmdestroy chatbox: setup script 814 installs the mouse and 1/Y, 2/N listeners.
+const CONFIRM_GROUP_ID = 584;
+const CONFIRM_SETUP_SCRIPT = 814;
+const CONFIRM_BUTTON = CONFIRM_GROUP_ID << 16;
+// rsprox 1862/550 (a drygore blowpipe's Unload): "Are you sure you want to uncharge it?" /
+// "If you uncharge the blowpipe, all darts will fall out."
+const UNLOAD_QUESTION = "Are you sure you want to uncharge it?";
+const UNLOAD_WARNING = "If you uncharge the blowpipe, all darts will fall out.";
+// Wiki (Toxic blowpipe): uncharging returns the remaining darts and scales, and empties the pipe.
+const UNCHARGE_WARNING = "If you uncharge the blowpipe, all scales and darts will fall out.";
+const NO_SPACE = "You don't have enough free inventory space to do that.";
+
 const DART_RANGED_STRENGTHS = new Map([
   ["BRONZE_DART", 1],
   ["IRON_DART", 2],
@@ -239,18 +251,6 @@ function chargeDarts(player, blowpipeItem, blowpipeSlot, dartItem) {
   // "toxic-blowpipe:darts-loaded" { player, itemId, amount }: those darts loaded into it.
   pluginApi.emitCustomEvent("toxic-blowpipe:darts-loaded", { player, itemId: dartId, amount: add });
 }
-
-// The native confirmdestroy chatbox: setup script 814 installs the mouse and 1/Y, 2/N listeners.
-const CONFIRM_GROUP_ID = 584;
-const CONFIRM_SETUP_SCRIPT = 814;
-const CONFIRM_BUTTON = CONFIRM_GROUP_ID << 16;
-// rsprox 1862/550 (a drygore blowpipe's Unload): "Are you sure you want to uncharge it?" /
-// "If you uncharge the blowpipe, all darts will fall out."
-const UNLOAD_QUESTION = "Are you sure you want to uncharge it?";
-const UNLOAD_WARNING = "If you uncharge the blowpipe, all darts will fall out.";
-// Wiki (Toxic blowpipe): uncharging returns the remaining darts and scales, and empties the pipe.
-const UNCHARGE_WARNING = "If you uncharge the blowpipe, all scales and darts will fall out.";
-const NO_SPACE = "You don't have enough free inventory space to do that.";
 
 const pendingPrompts = new WeakMap();
 

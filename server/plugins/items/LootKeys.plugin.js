@@ -305,6 +305,7 @@ const CHEST_NAME = "Loot Chest";
 const GROUP_ID = 742;
 const MAIN_MODAL_UID = (161 << 16) | 16;
 const TABS_UID = (GROUP_ID << 16) | 4;
+const SET_TAB_VALUE_SCRIPT = 8013; // Sets the text child at 742:4, index 10 + tab.
 const CONTENT_UID = (GROUP_ID << 16) | 5;
 const INVENTORY_IDS = [558, 559, 560, 561, 562];
 const WITHDRAW_ALL_INVENTORY_UID = (GROUP_ID << 16) | 27;
@@ -360,6 +361,19 @@ function refreshChest(player) {
   const tab = LootKeys.chestTab(player);
   sendActionFlags(player);
   player.getPacketSender().sendInterfaceScript(8006, [], undefined, { 4842: tab, 4843: stateFor(player).notes ? 1 : 0 }, nativeInventories(player));
+  const chest = LootKeys.chestItems(player), carried = inventoryKeys(player);
+  // Script 8006 recreates the dynamic text children, so write their values afterwards.
+  for (let index = 0; index < MAX_KEYS; index++) {
+    const items = index === tab && chest.length ? chest
+      : LootKeys.keyItems(carried.find(({ item }) => item.getId() === KEY_IDS[index])?.item);
+    player.getPacketSender().sendClientScript(SET_TAB_VALUE_SCRIPT, index, items.length ? formatTabValue(LootKeys.totalValue(items)) : "");
+  }
+}
+
+function formatTabValue(value) {
+  if (value >= 1_000_000) return `${Math.floor(value / 1_000_000)}M`;
+  if (value >= 1_000) return `${Math.floor(value / 1_000)}K`;
+  return String(Math.floor(value));
 }
 
 function openChest(player) {

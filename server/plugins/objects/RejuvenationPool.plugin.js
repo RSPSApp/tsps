@@ -88,7 +88,7 @@ function clearBleed(player) {
 
 function restoreFromPool(player, tier) {
   restoreSpecialAttack(player);
-  pluginApi?.emitCustomEvent("rejuvenation-pool:restored", { player });
+  pluginApi?.emitCustomEvent("rejuvenation-pool:restored", { player, tier });
   if (tier >= 1) restoreRunEnergy(player);
   if (tier >= 2) restorePrayer(player);
   if (tier >= 3) restoreLoweredStats(player);

@@ -188,6 +188,11 @@ function fightOf(npc) {
   return fights.get(npc);
 }
 
+function burnImmune(event) {
+  const creature = common.creatureOf(event.target);
+  if (creature && !["Osprey", "Albatross", "Frigatebird", "Tern"].includes(creature.name)) event.immune = true;
+}
+
 /** The creatures' per-tick work, hooked once however often the unit attaches (tests attach again). */
 function startTicking(api) {
   if (attached) return;
@@ -198,6 +203,7 @@ function startTicking(api) {
 function attach(api) {
   common.init(api);
   api.onCustomEvent("sea-combat:creature-attacked", attacked);
+  api.onCustomEvent("combat:burn-immune", burnImmune);
   api.onCombatHitResolved(hitResolved);
   startTicking(api);
 }

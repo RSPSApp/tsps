@@ -1,6 +1,6 @@
-// TODO: ported from xrsps-typescript; untested.
+// Wiki: Eclipse atlatl. The special is a magic attack at melee reach, without ammunition.
 module.exports = function registerEclipseAtlatlSpecialAttack(api) {
-  const { Animation, CombatMethod, CombatSpecial, CombatType, Equipment, Graphic, ItemIdentifiers, PendingHit } = api.core;
+  const { Animation, CombatMethod, CombatSpecial, CombatType, Graphic, ItemIdentifiers, PendingHit } = api.core;
 
   const DRAIN = 50;
   const SPECIAL_ANIMATION = new Animation(11060);
@@ -8,16 +8,14 @@ module.exports = function registerEclipseAtlatlSpecialAttack(api) {
   const IMPACT_GRAPHIC = new Graphic(2798);
   const ACCURACY_MULTIPLIER = 1.5;
 
-  const ECLIPSE_MOON_HELM_IDS = [ItemIdentifiers.ECLIPSE_MOON_HELM];
-  const ECLIPSE_MOON_BODY_IDS = [ItemIdentifiers.ECLIPSE_MOON_CHESTPLATE];
-  const ECLIPSE_MOON_LEGS_IDS = [ItemIdentifiers.ECLIPSE_MOON_TASSETS];
-
-  function hasFullEclipseMoonArmour(player) {
-    const items = player.getEquipment().getItems();
-    return ECLIPSE_MOON_HELM_IDS.includes(items[Equipment.HEAD_SLOT].getId())
-      && ECLIPSE_MOON_BODY_IDS.includes(items[Equipment.BODY_SLOT].getId())
-      && ECLIPSE_MOON_LEGS_IDS.includes(items[Equipment.LEG_SLOT].getId());
-  }
+  const consumedBurns = new WeakMap();
+  const traits = {
+    hitCount: 1,
+    accuracyMultiplier: ACCURACY_MULTIPLIER,
+    rollAttackType: "magic",
+    damageType: "magic",
+    maximumHitSource: "ranged",
+  };
 
   class EclipseAtlatlCombatMethod extends CombatMethod {
     hits(character, target) {
@@ -29,10 +27,17 @@ module.exports = function registerEclipseAtlatlSpecialAttack(api) {
     }
 
     canAttack(character, target) {
-      return character.isPlayer() && hasFullEclipseMoonArmour(character.getAsPlayer());
+      if (!character.isPlayer()) return false;
+      const query = { player: character.getAsPlayer(), fullSet: false };
+      api.emitCustomEvent("eclipse-atlatl:full-set", query);
+      if (!query.fullSet) character.getAsPlayer().sendMessage("You must wear the full Eclipse Moon armour set to use this special attack.");
+      return query.fullSet;
     }
 
     start(character, target) {
+      const burn = { target, remaining: 0 };
+      api.emitCustomEvent("combat:consume-burn", burn);
+      consumedBurns.set(character, Math.min(50, burn.remaining));
       CombatSpecial.drain(character, DRAIN);
       character.performAnimation(SPECIAL_ANIMATION);
       character.performGraphic(SPECIAL_VFX);
@@ -44,9 +49,9 @@ module.exports = function registerEclipseAtlatlSpecialAttack(api) {
       }
     }
 
-    // TODO: consuming the target's remaining Arkan-blade burn damage (capped at
-    // 50) into minimumDamageBonus/maximumDamageBonus needs the shared burn
-    // tracker and dynamic traits, neither of which is exposed to plugins yet.
+    finished(character) {
+      consumedBurns.delete(character);
+    }
   }
 
   api.registerCombatSpecial({
@@ -55,13 +60,12 @@ module.exports = function registerEclipseAtlatlSpecialAttack(api) {
     drainAmount: DRAIN,
     strengthMultiplier: 1,
     accuracyMultiplier: ACCURACY_MULTIPLIER,
-    traits: {
-      hitCount: 1,
-      accuracyMultiplier: ACCURACY_MULTIPLIER,
-      rollAttackType: "magic",
-      damageType: "magic",
-      maximumHitSource: "physical_melee",
-    },
+    traits,
+    traitsFor: (player) => ({
+      ...traits,
+      minimumDamageBonus: Math.floor((consumedBurns.get(player) ?? 0) / 2),
+      maximumDamageBonus: consumedBurns.get(player) ?? 0,
+    }),
     combatMethod: new EclipseAtlatlCombatMethod(),
   });
 };

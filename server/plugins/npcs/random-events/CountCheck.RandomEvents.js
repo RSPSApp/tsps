@@ -3,8 +3,8 @@
 // Count Check (random event): talking reports his account check and hands out a lamp when the
 // player passes. Lines and order from the Wiki's Count Check transcript and recordings 4053,
 // 1148 (fail line, then "I must be leaving now." when talked to again). OSRS requires a Jagex
-// Account and a Bank PIN; every account on this server counts as a Jagex account, the Bank PIN
-// plugin answers for the PIN. See SOURCES.md.
+// Account and a Bank PIN (waived for Ultimate Ironmen); every account here counts as a Jagex
+// account, and the Bank PIN / Ironman plugins answer their own state. See SOURCES.md.
 const Flow = require("./DialogueFlow.RandomEvents");
 const PASSED = "Ahahahaha! I, Count Check, have checked your account.<br>You have a Jagex Account, and you have set a Bank PIN,<br>so you pass my checks! Enjoy your prize.";
 const FAILED = "Ahahahaha! I, Count Check, have checked your account.<br>You do not have a Bank PIN, so you fail my checks!<br>Talk to a banker to set a PIN before we meet again.";
@@ -32,9 +32,13 @@ function definition(api) {
     leavingLine: () => "I must be leaving now.",
     talk(active, { serve, leave }) {
       const player = active.player, npcId = active.npc.getId();
-      const passed = hasPin(api, player);
+      const pin = hasPin(api, player);
+      const account = { player, mode: "none" };
+      api.emitCustomEvent("ironman:mode", account);
+      const passed = pin || account.mode === "ultimate";
       if (passed ? !serve(active, [api.core.ItemIdentifiers.LAMP]) : !leave(active)) return;
-      Flow.chat(api, { player, npcId, lines: [{ text: passed ? PASSED : FAILED, expression: EXPRESSION }] });
+      const passLine = pin ? PASSED : PASSED.replace(", and you have set a Bank PIN", "");
+      Flow.chat(api, { player, npcId, lines: [{ text: passed ? passLine : FAILED, expression: EXPRESSION }] });
     },
   };
 }

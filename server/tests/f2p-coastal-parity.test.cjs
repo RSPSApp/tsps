@@ -489,6 +489,19 @@ test('X Marks preserves old saved stages, native clue/map interfaces, and captur
   q.emit('npc-dialogue:action',{player:p,npcId:8484,stepId:'03vD77'});assert.equal(p.items.get(995),200);
 });
 
+test('X Marks login restores the captured coin, lamp and clue-box reward flags', () => {
+  const q = register('XMarksTheSpot', 'x_marks_the_spot'), p = player();
+  q.quest.setStage(p, 6);
+  p.setAttribute('x-marks-the-spot:lamp-used', 1);
+  p.setAttribute('x-marks-the-spot:clue-box-state', 2);
+  p.packets.length = 0;
+  q.call('onPlayerLogin', { player: p });
+  const sent = (id) => p.packets.filter(([m, vid]) => m === 'sendVarbit' && vid === id).at(-1)?.[2];
+  assert.equal(sent(8065), 1, 'coin reward flag is restored, as completed captures log in with it');
+  assert.equal(sent(8066), 1, 'used lamp stays used');
+  assert.equal(sent(8258), 1, 'claimed clue box stays claimed');
+});
+
 test('Port Sarim Veos leaves once Cabin Boy Herbert takes over in A Kingdom Divided, as captured at akd 150', () => {
   const q = register('XMarksTheSpot', 'x_marks_the_spot'), akd = register('AKingdomDivided', 'a_kingdom_divided'), p = player();
   const sarim = () => p.packets.filter(([m, id]) => m === 'sendVarbit' && id === 12148).at(-1)?.[2];

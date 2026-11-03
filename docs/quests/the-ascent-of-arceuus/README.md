@@ -15,6 +15,13 @@ travel:
 
 Natural main route from stage 0 to completion across one saved checkpoint, with the grave/trail/altar steps and rewards paid once. Accepted for the exact reviewed plugin revision.
 
+## Capture search
+
+RSProx database and issue #600 capture list checked on 2026-11-03: no Ascent of Arceuus
+recording was found. The database has no quest start/completion message or quest dialogue;
+the `arcquest_main` (2071) hits are completed accounts (stage 14) and unrelated text, not a
+quest run. No capture audit was possible, so the quest was skipped.
+
 ## Findings
 
 - **fixed** Sins of the Father's condition handler overrode Mori's requirements check; now scoped to Sins' nine condition IDs.

@@ -38,6 +38,14 @@ Scrolls open native clue-text 203:2 and map 267. Digging swaps the current clue 
 
 The orb uses Chebyshev distance, previous-distance 8064, previous-coordinate 3697 and helper script 6473. Recorded readings reproduce cold 95, warm 86/76/73/61, hot 47/35/28 and very hot 22, including warmer/colder comparisons. Casket handover precedes completion, and the final Veos dialogue waits until the player closes the completion scroll; the reward is 200 coins, lamp 23072, beginner box 24361 and 1 QP, with captured reward flags and jingle 154. The lamp uses the shared native skill picker for 300 XP and records its consumed reward flag.
 
+Login after completion restores 8065=1 alongside 8066 and 8258. The bootstrap re-sends
+`cluequest` 8063 as value 8 and clears the sibling reward bits in the same varp, so restoring
+only the lamp and clue-box flags left the coin reward unset; a completed account now logs in
+with the same three captured reward flags it had at the hand-in. Post-quest Veos also still
+offers `Can you take me somewhere?` and travels to Port Piscarilius (setting
+`zeah_playerhasvisited`, 4897, to 1); the earlier report that Kourend access stayed
+unavailable after completion did not reproduce.
+
 ## Verification and limits
 
 `node --test tests/f2p-coastal-parity.test.cjs` covers22 progression, exchange, timing, private-scene cleanup, owner-only combat and native-note regressions. Filtered `quest-dialogue.test.cjs` covers the five quest variant maps and Fight Arena. These tests use the production cache and quest modules, with deterministic task ticks and packet/NPC mocks; they are not full client playthroughs.

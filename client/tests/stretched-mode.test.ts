@@ -61,4 +61,36 @@ const uneven = viewport(2.5, 2);
 assertSameProjection(uneven, base, "same projection shape");
 assert.equal(uneven.viewportWidth, 1280);
 
-console.log("Stretched mode tests passed");
+// Welcome is a full-screen login interface, so a saved gameplay scale must not crop its Play button.
+(globalThis as any).self = globalThis;
+for (const ext of [".glsl", ".wgsl", ".css", ".png", ".jpg", ".webp", ".wasm", ".cs2"]) {
+    require.extensions[ext] = (module) => { module.exports = ""; };
+}
+const { computeUiRenderMetrics } = require("../render/render/quality");
+const { setUiScale } = require("../ui/UiScale");
+const { GameState } = require("../game/login");
+setUiScale(4);
+try {
+    for (const dpr of [1, 2]) {
+        const host = {
+            osrsClient: {
+                gameState: GameState.LOGGED_IN,
+                isOnLoginScreen: () => false,
+                widgetManager: { rootInterface: 378 },
+                clientPlugins: { resizableScale: (scale: number) => scale * 1.5 },
+            },
+            getUiSurfaceCssSize: () => ({ cssW: 1089, cssH: 763 }),
+        };
+        const metrics = computeUiRenderMetrics(host, 1089 * dpr, 763 * dpr);
+        assert.equal(metrics.layoutW, 1089, "welcome keeps the full layout width at 400% gameplay scaling");
+        assert.equal(metrics.layoutH, 763, "welcome keeps the Play button on screen");
+        assert.equal(metrics.renderScaleX, dpr, "welcome text only scales for display density");
+        host.osrsClient.widgetManager.rootInterface = 161;
+        assert.equal(computeUiRenderMetrics(host, 1089 * dpr, 763 * dpr).renderScaleX, 6 * dpr,
+            "gameplay retains interface scaling and Stretched Mode");
+    }
+} finally {
+    setUiScale(null);
+}
+
+console.log("Stretched mode and welcome screen scaling tests passed");

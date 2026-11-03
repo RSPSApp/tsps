@@ -243,7 +243,7 @@ module.exports = {
     api.persistAttribute(FAVOURITES_ATTRIBUTE, []);
     api.persistAttribute(RECENT_ATTRIBUTE, []);
     api.persistAttribute(SKIP_WILDERNESS_WARNING_ATTRIBUTE, false);
-    api.registerCommand("teleports", openTeleports, undefined, "Browse teleport destinations (optional search text, or 'last')");
+    api.registerCommand("teleports", openTeleports, undefined, "Browse teleport destinations (Ctrl+;, optional search text, or 'last')");
     api.onInterfaceActionButton(TAB_UIDS, clickTab);
     api.onInterfaceActionButton(ROW_UIDS, clickRow);
     api.onInterfaceActionButton([uid(COMPONENT.TELEPORT_BUTTON), uid(COMPONENT.TELEPORT_LABEL)], clickTeleportButton);

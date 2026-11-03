@@ -14,6 +14,7 @@ import { CacheSystem } from "../rs/cache/CacheSystem";
 import { Cs2Vm } from "../rs/cs2/Cs2Vm";
 import { Script } from "../rs/cs2/Script";
 import { loadCache, loadCacheInfos, loadCacheList } from "../scripts/cache/load-util";
+import { handleCommandShortcut } from "../game/chat/commandShortcuts";
 
 let sentPacket: Uint8Array | undefined;
 (globalThis as any).WebSocket = { OPEN: 1 };
@@ -23,6 +24,38 @@ state.socket = {
         sentPacket = packet;
     },
 } as any;
+
+// Shortcuts send the same command packets as typed ::commands, without changing chat input.
+const shortcut = (key: string, overrides: Partial<KeyboardEvent> = {}, loggedIn = true) => {
+    sentPacket = undefined;
+    let prevented = false, stopped = false;
+    const handled = handleCommandShortcut({
+        key, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false, repeat: false,
+        isComposing: false, target: null,
+        preventDefault: () => { prevented = true; },
+        stopImmediatePropagation: () => { stopped = true; },
+        ...overrides,
+    } as KeyboardEvent, loggedIn);
+    return { handled, prevented, stopped };
+};
+for (const [key, command] of [[";", "teleports"], ["/", "commands"]]) {
+    assert.deepEqual(shortcut(key), { handled: true, prevented: true, stopped: true });
+    assert.ok(sentPacket);
+    assert.deepEqual(decodeClientPacket(Buffer.from(sentPacket!)), {
+        type: "chat", text: `::${command}`, messageType: "public",
+    });
+}
+assert.ok(shortcut("/", { repeat: true }).handled);
+assert.equal(sentPacket, undefined, "holding a shortcut does not send more commands");
+for (const overrides of [{ ctrlKey: false }, { altKey: true }, { shiftKey: true }, { metaKey: true },
+    { isComposing: true }, { target: { closest: () => ({}) } as unknown as EventTarget }]) {
+    assert.equal(shortcut("/", overrides).handled, false);
+    assert.equal(sentPacket, undefined);
+}
+assert.equal(shortcut("/", {}, false).handled, false, "no shortcut before login");
+for (const key of ["t", "c", "a", "; "]) {
+    assert.equal(shortcut(key).handled, false, "browser and ordinary keys keep their behavior");
+}
 
 const handlers: HandlerMap = new Map();
 registerChatOps(handlers);

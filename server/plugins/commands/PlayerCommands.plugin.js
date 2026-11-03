@@ -10,6 +10,53 @@ const INAPPROPRIATE_TITLES = ["nigger", "ass", "boobs"];
 const XP_LOCKED_ATTRIBUTE = "skills:xp-locked";
 const LOYALTY_TITLE_ATTRIBUTE = "loyalty:title";
 const YELL_UNTIL_ATTRIBUTE = "yell:until";
+const JOURNAL_GROUP = 119;
+const JOURNAL_TITLE = (JOURNAL_GROUP << 16) | 5;
+const JOURNAL_CLOSE = (JOURNAL_GROUP << 16) | 8;
+const JOURNAL_SWITCH = (JOURNAL_GROUP << 16) | 9;
+const JOURNAL_BACK = (JOURNAL_GROUP << 16) | 10;
+const JOURNAL_FIRST_LINE = 11;
+const JOURNAL_LINE_COUNT = 210;
+const JOURNAL_LINES_VARP = 4398;
+const JOURNAL_RESET_SCRIPT = 5240;
+const JOURNAL_SCROLL_SCRIPT = 2523;
+const FLOATER_OVERLAY = (161 << 16) | 18;
+
+function home({ player }) {
+  const destination = core.WorldDefinition.WORLD_SPAWN.clone();
+  if (core.TeleportHandler.checkReqs(player, destination)) {
+    core.TeleportHandler.teleport(player, destination, core.TeleportType.NORMAL, false);
+  }
+  return true;
+}
+
+function staff({ player }) {
+  const online = [...World.getPlayers()].filter((candidate) => candidate &&
+    candidate.isPlayerBot?.() !== true && World.isPlayerSessionConnected(candidate) && candidate.isStaff());
+  online.sort((a, b) => a.getUsername().localeCompare(b.getUsername()));
+  const lines = online.map((candidate) => {
+    const rank = Object.entries(core.PlayerRights).find(([, rights]) => rights === candidate.getRights())[0];
+    return `${candidate.getUsername()} - ${rank.charAt(0)}${rank.slice(1).toLowerCase()}`;
+  });
+  if (lines.length === 0) lines.push("No staff are currently online.");
+  // shortcut: the native journal has 210 rows; add paging if a world exceeds that many online staff.
+  if (lines.length > JOURNAL_LINE_COUNT) lines.splice(JOURNAL_LINE_COUNT - 1, Infinity, "More staff are online than this scroll can display.");
+  const sender = player.getPacketSender();
+  sender.sendConfig(JOURNAL_LINES_VARP, lines.length);
+  sender.sendSubInterface(FLOATER_OVERLAY, JOURNAL_GROUP, 0);
+  sender.sendInterfaceFlagsRange(JOURNAL_CLOSE, -1, -1, 1 << 1);
+  sender.sendInterfaceScript(JOURNAL_RESET_SCRIPT, []);
+  sender.sendInterfaceDisplayState(JOURNAL_SWITCH, true);
+  sender.sendInterfaceDisplayState(JOURNAL_BACK, true);
+  sender.sendString(`<col=7f0000>Online staff (${online.length})</col>`, JOURNAL_TITLE);
+  lines.forEach((line, index) => sender.sendString(`<col=000080>${line}</col>`, (JOURNAL_GROUP << 16) | (JOURNAL_FIRST_LINE + index)));
+  sender.sendInterfaceScript(JOURNAL_SCROLL_SCRIPT, [0, lines.length]);
+  return true;
+}
+
+function closeStaff({ player }) {
+  player.getPacketSender().closeSubInterface(FLOATER_OVERLAY);
+}
 
 function commandTail(raw, parts) {
   return raw.substring(parts[0].length).trim();
@@ -96,14 +143,19 @@ let World;
 let ItemOnGroundManager;
 let CombatFactory;
 let PlayerPunishment;
+let core;
 
 module.exports = {
   name: "PlayerCommands",
   register(api) {
+    core = api.core;
     World = api.getWorld();
     ItemOnGroundManager = api.getItemOnGroundManager();
     CombatFactory = api.getCombatFactory();
     PlayerPunishment = api.getPlayerPunishment();
+    api.registerCommand("home", home, api.core.PlayerRights.NONE, "Teleport to the world spawn");
+    api.registerCommand("staff", staff, api.core.PlayerRights.NONE, "List online staff and their ranks");
+    api.onInterfaceActionButton(JOURNAL_CLOSE, closeStaff);
     api.registerCommand("players", ({ player }) => {
       sendOnlinePlayers(player);
       return true;

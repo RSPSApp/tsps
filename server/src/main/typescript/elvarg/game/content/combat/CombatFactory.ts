@@ -13,6 +13,7 @@ import { HitMask } from "./hit/HitMask";
 import { PendingHit } from "./hit/PendingHit";
 import { CombatSpells } from "./magic/CombatSpells";
 import { ArceuusSpells } from "./magic/ArceuusSpells";
+import { Autocasting } from "./magic/Autocasting";
 import { CombatMethod } from "./method/CombatMethod";
 import { MagicCombatMethod } from "./method/impl/MagicCombatMethod";
 import { MeleeCombatMethod } from "./method/impl/MeleeCombatMethod";
@@ -157,7 +158,7 @@ export class CombatFactory {
                 return special.getCombatMethod();
             }
 
-            if (player.getCombat().getAutocastSpell() != null && player.getEquipment().hasStaffEquipped()) {
+            if (Autocasting.isActive(player)) {
                 return CombatFactory.MAGIC_COMBAT;
             }
 

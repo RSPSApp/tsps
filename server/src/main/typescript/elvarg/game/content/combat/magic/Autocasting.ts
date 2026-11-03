@@ -162,6 +162,14 @@ export class Autocasting {
         return null;
     }
 
+    /**
+     * Whether the player is autocasting now. A default spell kept without a staff ("Default spell
+     * set. Please equip a staff to use autocast.") is only remembered, not cast.
+     */
+    public static isActive(player: Player): boolean {
+        return player.getCombat().getAutocastSpell() != null && player.getEquipment().hasStaffEquipped();
+    }
+
     /** Whether the wielded weapon is a staff that can autocast `spell`. */
     public static canAutocast(player: Player, spell: CombatSpell): boolean {
         return player.getEquipment().hasStaffEquipped() && this.weaponRefusal(player, spell.getSpellbook()) == null;

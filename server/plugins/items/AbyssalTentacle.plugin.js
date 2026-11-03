@@ -37,6 +37,21 @@ function combine({ player, usedItem, usedWithItem, usedItemSlot, usedWithItemSlo
     "No, keep them separate.", () => {});
 }
 
+function dissolve({ player, item, itemId, slot, interfaceId }) {
+  // shortcut: ornamented Dissolve needs verified kit-refund rules before sharing this route.
+  if (itemId !== core.ItemIdentifiers.ABYSSAL_TENTACLE || interfaceId === core.Equipment.INVENTORY_INTERFACE_ID) return false;
+  const inventory = player.getInventory();
+  if (inventory.getItems()[slot] !== item || item.getId() !== itemId || item.getAmount() !== 1) return false;
+
+  api.sendMultiChatboxPrompt(player, "This will dissolve your whip immediately. The whip will be permanently lost.",
+    "Yes, dissolve the whip.", () => {
+      if (inventory.getItems()[slot] !== item || item.getId() !== itemId || item.getAmount() !== 1) return;
+      item.setId(core.ItemIdentifiers.KRAKEN_TENTACLE);
+      inventory.refreshItems();
+    },
+    "No, keep it.", () => {});
+}
+
 function wieldedTentacle(player) {
   const weapon = player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT];
   return weapon && tentacleIds.has(weapon.getId()) ? weapon : null;
@@ -71,6 +86,7 @@ module.exports = {
   register(api) {
     api.onServerStartup(attach.bind(null, api));
     api.onItemOnItem("Kraken tentacle", "Abyssal whip", combine, { noted: false });
+    api.onItemAction("Abyssal tentacle", { Dissolve: dissolve });
     api.onCombatHitResolved(onHitResolved);
   },
   _test: { onHitResolved, POISON_CHANCE, POISON_SEVERITY },

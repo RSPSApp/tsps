@@ -107,6 +107,34 @@ test("Buy 10 on Agility XP spends the tickets held, then refuses the rest (rspro
   assert.ok(f.messages.includes("You don't have enough Agility Arena Tickets."), f.messages.join(" | "));
 });
 
+/** A shopper whose inventory is full: these items, then bronze daggers. */
+function fullShopper(t, inventory) {
+  const f = shopper(t, inventory);
+  while (f.p.getInventory().getFreeSlots()) f.p.getInventory().add(new core.Item(obj("bronze_dagger"), 1), false);
+  f.trade();
+  return f;
+}
+
+test("Agility XP needs no free inventory slot", async (t) => {
+  const xp = Math.floor(345 * GameConstants.EXPERIENCE_MULTIPLIER * 10) / 10;
+  for (const [op, spent] of [[2, 1], [3, 3]]) {
+    const f = fullShopper(t, [[Items.AGILITY_ARENA_TICKET_3, 3]]);
+    const before = f.xp();
+    await f.buy(ENTRY.XP, op);
+    assert.equal(f.amount(Items.AGILITY_ARENA_TICKET_3), 3 - spent, `op ${op}`);
+    assert.equal(f.xp() - before, spent * xp, `op ${op}`);
+    assert.ok(!f.messages.includes("You don't have enough inventory space."), f.messages.join(" | "));
+  }
+});
+
+test("the herbs still need inventory space", async (t) => {
+  // The voucher stack outlives the payment, so its slot doesn't free up for the herb.
+  const f = fullShopper(t, [[Items.BRIMHAVEN_VOUCHER, 6]]);
+  await f.buy(ENTRY.TOADFLAX);
+  assert.equal(f.amount(Items.BRIMHAVEN_VOUCHER), 6);
+  assert.ok(f.messages.includes("You don't have enough inventory space."), f.messages.join(" | "));
+});
+
 test("Buy 5 on the herbs still buys five", async (t) => {
   const f = shopper(t, [[Items.BRIMHAVEN_VOUCHER, 15]]);
   f.trade();

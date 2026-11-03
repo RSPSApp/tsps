@@ -96,6 +96,11 @@ function describe(request) {
   if (request.shop === STORE && DESCRIPTION[request.stock]) request.description = DESCRIPTION[request.stock];
 }
 
+/** Agility XP hands over no item, so it needs no inventory space. */
+function canBuy(request) {
+  if (request.shop === STORE && request.stock === STOCK.XP) request.unlock = true;
+}
+
 /** Buy 5/10/50 on Agility XP spends that many tickets. */
 function units(request) {
   if (request.shop === STORE && request.stock === STOCK.XP) request.single = false;
@@ -154,12 +159,13 @@ module.exports = function attachStore(pluginApi) {
   api.onCustomEvent("npc-dialogue:action", openFromDialogue);
   api.onCustomEvent("npc-dialogue:action", convert);
   api.onCustomEvent("omnishop:describe", describe);
+  api.onCustomEvent("omnishop:can-buy", canBuy);
   api.onCustomEvent("omnishop:units", units);
   api.onCustomEvent("omnishop:purchase", purchase);
   api.onItemOnNpc(useOldTicket);
 };
 
 Object.assign(module.exports, {
-  open, trade, openFromDialogue, answerCondition, describe, units, purchase, useOldTicket, convert,
+  open, trade, openFromDialogue, answerCondition, describe, canBuy, units, purchase, useOldTicket, convert,
   withCount, STORE, STOCK, TICKET_XP, RECOLOURED,
 });

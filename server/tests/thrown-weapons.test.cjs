@@ -4,7 +4,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { test } = require("node:test");
+const { test, before } = require("node:test");
 
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
@@ -29,7 +29,11 @@ const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const { Misc } = require("../dist/util/Misc");
 
 const core = PluginManager.getCoreApi();
-const specialApi = { core, registerCombatSpecial: CombatSpecial.register, getBonusManager: () => BonusManager };
+// Kept from before any test mocks so the real Tonalztics firing tests never inherit a no-op start.
+const REAL_RANGED_START = RangedCombatMethod.prototype.start;
+const REAL_DECREMENT_AMMO = CombatFactory.decrementAmmo;
+const specialApi = { core, registerCombatSpecial: CombatSpecial.register, getBonusManager: () => BonusManager,
+  emitCustomEvent: PluginManager.emitCustomEvent };
 
 const gameplay = new Map(
   JSON.parse(fs.readFileSync(path.join(__dirname, "../data/definitions/item-gameplay.json"), "utf8")).map((row) => [row.id, row]),
@@ -607,4 +611,447 @@ test('Chainhit owns its projectile, sounds per hit and consumes only one axe', (
   assert.deepEqual(sounds, Array(hits.length).fill(2528));
   assert.equal(graphics[0].getId(), 257);
   assert.equal(graphics[0].getHeight(), 96);
+});
+
+// ------------------------------------------------------------------ Tonalztics of Ralos
+
+const TONALZTICS_CHARGES = "tonalztics-of-ralos:charges";
+const ROOT = path.resolve(__dirname, "..");
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+const { Skill } = require("../dist/game/model/Skill");
+const { Inventory } = require("../dist/game/model/container/impl/Inventory");
+const { AccuracyFormulasDpsCalc: Accuracy } = require("../dist/game/content/combat/formula/AccuracyFormulasDpsCalc");
+const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxPrompt");
+const { ItemActionPacketListener } = require("../dist/net/packet/impl/ItemActionPacketListener");
+const { UseItemPacketListener } = require("../dist/net/packet/impl/UseItemPacketListener");
+
+let registrationWarnings = [];
+let nextIndex = 21000;
+
+before(async () => {
+  await require("../dist/game/cache/CachePipeline").CachePipeline.initialize(ROOT);
+  require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnings.push(args.join(" "));
+  try {
+    const pluginApi = PluginManager.createApi("TonalzticsOfRalos");
+    require("../plugins/items/TonalzticsOfRalos.plugin").register(pluginApi);
+    require("../plugins/combat/specials/TonalzticsOfRalos.SpecialAttack")(pluginApi);
+  } finally {
+    console.warn = originalWarn;
+  }
+  registrationWarnings = warnings;
+});
+
+function tonalzticsPlayer(location = new Location(3200, 3200, 0)) {
+  const player = new Player({ sendClientPacket() { return true; }, write() { return true; } }, location);
+  player.setIndex(nextIndex++);
+  player.setRegistered(true);
+  player.setNeedsPlacement(false);
+  player.getSkillManager().setMaxLevels(Skill.HITPOINTS, 1000).setCurrentLevels(Skill.HITPOINTS, 1000);
+  player.getSkillManager().setMaxLevels(Skill.RANGED, 99).setCurrentLevels(Skill.RANGED, 99);
+  player.getSkillManager().setMaxLevels(Skill.DEFENCE, 99).setCurrentLevels(Skill.DEFENCE, 99);
+  player.getSkillManager().setMaxLevels(Skill.MAGIC, 99).setCurrentLevels(Skill.MAGIC, 99);
+  return player;
+}
+
+function equipTonalztics(player, weaponId, charges = 0) {
+  const item = new Item(weaponId, 1);
+  if (charges > 0) item.setMetaValue(TONALZTICS_CHARGES, charges);
+  player.getEquipment().setItem(WEAPON, item);
+  WeaponInterfaceManager.assign(player);
+  return item;
+}
+
+function tonalzticsTarget(npcId = core.NpcIdentifiers.MAN) {
+  const target = new NPC(npcId, new Location(3205, 3200, 0));
+  target.setIndex(nextIndex++);
+  target.setRegistered(true);
+  target.setHitpoints(1000);
+  return target;
+}
+
+function choose(player, index) {
+  return MultiChatboxPrompt.handleInterfaceActionClick({
+    player,
+    buttonId: MultiChatboxPrompt.OPTIONS_WIDGET_ID,
+    groupId: MultiChatboxPrompt.OPTIONS_WIDGET_ID >>> 16,
+    slot: index + 1,
+    action: index + 1,
+    handled: false,
+  });
+}
+
+function itemAction(player, item, slot, option, clickType) {
+  return ItemActionPacketListener.handleAction(player, Inventory.INTERFACE_ID, item.getId(), slot, clickType, option);
+}
+
+/** The browser/native gateway's actual resume-count frame, through the connection dispatcher. */
+async function submitCount(player, amount) {
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { decodeClientPackets } = require("../dist/net/protocol/ClientProtocol");
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const RESUME_COUNTDIALOG = 192; // ClientPackets.ts const enum; also used by the browser encoder.
+  const frame = Buffer.alloc(5); frame[0] = RESUME_COUNTDIALOG; frame.writeInt32BE(amount, 1);
+  const packets = decodeClientPackets(frame);
+  assert.deepEqual(packets, [{ type: "dialogue_amount", amount }]);
+  const connection = new ClientConnection(channel); connection.player = player;
+  await connection.dispatch(packets, true); connection.processTurnPackets();
+}
+
+function put(player, slot, id, amount = 1, meta = null) {
+  const item = new Item(id, amount, meta);
+  player.getInventory().setItem(slot, item);
+  return item;
+}
+
+test("the production API accepts the Tonalztics 75% modifier and applies it once", () => {
+  assert.deepEqual(registrationWarnings.filter((line) => /invalid ranged combat modifier/.test(line)), []);
+  const player = tonalzticsPlayer();
+  const target = tonalzticsTarget();
+  equipTonalztics(player, ItemIdentifiers.TONALZTICS_OF_RALOS, 5);
+  assert.equal(PluginManager.modifyRangedMaxHit(player, target, 100), 75);
+  equipTonalztics(player, ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_);
+  assert.equal(PluginManager.modifyRangedMaxHit(player, target, 100), 75);
+  equipTonalztics(player, ItemIdentifiers.RUNE_KNIFE);
+  assert.equal(PluginManager.modifyRangedMaxHit(player, target, 100), 100, "other ranged weapons are untouched");
+  assert.equal(CombatSpecial.getForWeaponId(ItemIdentifiers.TONALZTICS_OF_RALOS).getId(), "tonalztics_of_ralos");
+  assert.equal(CombatSpecial.getForWeaponId(ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_).getId(), "tonalztics_of_ralos");
+});
+
+test("a charged id with no stored charges is normalised to the one-hit uncharged weapon", () => {
+  const player = tonalzticsPlayer();
+  const target = tonalzticsTarget();
+  const item = equipTonalztics(player, ItemIdentifiers.TONALZTICS_OF_RALOS);
+  const method = CombatFactory.getMethod(player);
+
+  assert.equal(item.getId(), ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_);
+  assert.equal(WeaponProfiles.attackDistance(player, 6), 6);
+  assert.equal(method.canAttack(player, target), true);
+  assert.equal(method.hits(player, target)[0].getHits().length, 1);
+  assert.equal(item.getMetaValue(TONALZTICS_CHARGES), undefined);
+});
+
+test("normal throws spend one charge, keep the final charged shot and honour ammo/charge saving", (t) => {
+  t.mock.restoreAll();
+  RangedCombatMethod.prototype.start = REAL_RANGED_START;
+  CombatFactory.decrementAmmo = REAL_DECREMENT_AMMO;
+  quiet(t);
+  const target = tonalzticsTarget();
+
+  const uncharged = tonalzticsPlayer();
+  const unchargedItem = equipTonalztics(uncharged, ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_);
+  let unchargedMethod = CombatFactory.getMethod(uncharged);
+  unchargedMethod.start(uncharged, target);
+  assert.equal(unchargedItem.getId(), ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_);
+  assert.equal(unchargedItem.getAmount(), 1, "the weapon is not dropped as ammunition");
+  assert.equal(unchargedMethod.hits(uncharged, target)[0].getHits().length, 1);
+
+  const ordinary = tonalzticsPlayer();
+  const ordinaryItem = equipTonalztics(ordinary, ItemIdentifiers.TONALZTICS_OF_RALOS, 2);
+  let method = CombatFactory.getMethod(ordinary);
+  assert.equal(method.canAttack(ordinary, target), true);
+  assert.equal(ordinaryItem.getMetaValue(TONALZTICS_CHARGES), 2, "the eligibility check spends nothing");
+  method.start(ordinary, target);
+  assert.equal(ordinaryItem.getMetaValue(TONALZTICS_CHARGES), 1);
+  assert.equal(method.hits(ordinary, target)[0].getHits().length, 2);
+
+  const last = tonalzticsPlayer();
+  const lastItem = equipTonalztics(last, ItemIdentifiers.TONALZTICS_OF_RALOS, 1);
+  method = CombatFactory.getMethod(last);
+  method.start(last, target);
+  assert.equal(lastItem.getId(), ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_);
+  assert.equal(method.hits(last, target)[0].getHits().length, 2, "the last charge's throw is still charged");
+
+  const miss = tonalzticsPlayer();
+  const missItem = equipTonalztics(miss, ItemIdentifiers.TONALZTICS_OF_RALOS, 1);
+  method = CombatFactory.getMethod(miss);
+  method.start(miss, target);
+  t.mock.method(Accuracy, "rollAccuracy", () => false);
+  const missed = method.hits(miss, target)[0];
+  assert.equal(missed.getHits().length, 2);
+  assert.equal(missed.getHits().every((hit) => hit.getDamage() === 0), true);
+  assert.equal(missItem.getMetaValue(TONALZTICS_CHARGES), undefined, "a miss still spends the charge");
+
+  const saved = tonalzticsPlayer();
+  const savedItem = equipTonalztics(saved, ItemIdentifiers.TONALZTICS_OF_RALOS, 1);
+  method = CombatFactory.getMethod(saved);
+  let ammoSaved = null;
+  const emit = PluginManager.emitCustomEvent;
+  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => {
+    if (event.player === saved && name === "combat:consume-charge") {
+      event.skip = true;
+      return;
+    }
+    if (event.player === ammoSaved && name === "combat:ammo-saving") {
+      event.saved = true;
+      return;
+    }
+    return emit(name, event);
+  });
+  method.start(saved, target);
+  assert.equal(savedItem.getId(), ItemIdentifiers.TONALZTICS_OF_RALOS);
+  assert.equal(savedItem.getMetaValue(TONALZTICS_CHARGES), 1);
+  assert.equal(method.hits(saved, target)[0].getHits().length, 2);
+
+  ammoSaved = tonalzticsPlayer();
+  const ammoSavedItem = equipTonalztics(ammoSaved, ItemIdentifiers.TONALZTICS_OF_RALOS, 1);
+  method = CombatFactory.getMethod(ammoSaved);
+  method.start(ammoSaved, target);
+  assert.equal(ammoSavedItem.getMetaValue(TONALZTICS_CHARGES), 1, "core ammo saving also keeps the charge");
+  assert.equal(method.hits(ammoSaved, target)[0].getHits().length, 2);
+});
+
+test("the last charge's hit profile is a snapshot even if the weapon is swapped before hits", (t) => {
+  t.mock.restoreAll();
+  RangedCombatMethod.prototype.start = REAL_RANGED_START;
+  CombatFactory.decrementAmmo = REAL_DECREMENT_AMMO;
+  quiet(t);
+  const player = tonalzticsPlayer();
+  const target = tonalzticsTarget();
+  equipTonalztics(player, ItemIdentifiers.TONALZTICS_OF_RALOS, 1);
+  const method = CombatFactory.getMethod(player);
+  method.start(player, target);
+  player.getEquipment().setItem(WEAPON, new Item(ItemIdentifiers.RUNE_KNIFE, 1));
+  assert.equal(method.hits(player, target)[0].getHits().length, 2);
+});
+
+test("Division projects the first hit's Defence drain into the NPC second roll but snapshots PvP", (t) => {
+  t.mock.restoreAll();
+  RangedCombatMethod.prototype.start = REAL_RANGED_START;
+  CombatFactory.decrementAmmo = REAL_DECREMENT_AMMO;
+  quiet(t);
+  t.mock.method(Misc, "randomInclusive", (min, max) => Math.max(min, max));
+  const original = Accuracy.defenseRangedRoll.bind(Accuracy);
+  const rolls = [];
+  t.mock.method(Accuracy, "defenseRangedRoll", (enemy, type, projected) => {
+    rolls.push(projected);
+    return original(enemy, type, projected);
+  });
+
+  const player = tonalzticsPlayer();
+  equipTonalztics(player, ItemIdentifiers.TONALZTICS_OF_RALOS, 5);
+  const special = CombatSpecial.getForWeaponId(ItemIdentifiers.TONALZTICS_OF_RALOS);
+  player.setCombatSpecial(special);
+  player.setSpecialActivated(true);
+  player.setSpecialPercentage(100);
+
+  const npc = tonalzticsTarget(core.NpcIdentifiers.ZULRAH);
+  const baseDefence = Math.min(npc.getMaxLevel(Skill.DEFENCE), 100);
+  assert.ok(baseDefence >= 10, `Zulrah has ${baseDefence} base Defence`);
+  npc.setCurrentLevels(Skill.DEFENCE, baseDefence);
+  npc.setCurrentLevels(Skill.MAGIC, Math.min(npc.getMaxLevel(Skill.MAGIC), 160));
+  const drain = Math.floor(npc.getCurrentLevel(Skill.MAGIC) / 8);
+  assert.ok(drain > 0);
+
+  const method = CombatFactory.getMethod(player);
+  method.start(player, npc);
+  const npcHit = method.hits(player, npc)[0];
+  assert.equal(npcHit.getHits().length, 2);
+  const expectedDefence = Accuracy.projectedEffectiveDefenceLevel(npc,
+    npc.previewCurrentLevel(Skill.DEFENCE, baseDefence - drain));
+  assert.equal(rolls[0], undefined, "the first roll uses the native Defence");
+  assert.equal(rolls[1], expectedDefence, "the second roll sees the first hit's projected drain");
+  assert.equal(npc.getDefenceLevel(), baseDefence, "rolling does not drain early");
+  method.handleAfterHitEffects(npcHit);
+  assert.equal(npc.getDefenceLevel(), Math.max(0, baseDefence - 2 * drain), "impact drains both damaging hits");
+
+  rolls.length = 0;
+  const pvpAttacker = tonalzticsPlayer();
+  equipTonalztics(pvpAttacker, ItemIdentifiers.TONALZTICS_OF_RALOS, 5);
+  pvpAttacker.setCombatSpecial(special);
+  pvpAttacker.setSpecialActivated(true);
+  pvpAttacker.setSpecialPercentage(100);
+  const pvpTarget = tonalzticsPlayer(new Location(3205, 3200, 0));
+  pvpTarget.getSkillManager().setMaxLevels(Skill.DEFENCE, 100).setCurrentLevels(Skill.DEFENCE, 100);
+  const pvpDefence = pvpTarget.getSkillManager().getCurrentLevel(Skill.DEFENCE);
+  const pvpMethod = CombatFactory.getMethod(pvpAttacker);
+  pvpMethod.start(pvpAttacker, pvpTarget);
+  const pvpHit = pvpMethod.hits(pvpAttacker, pvpTarget)[0];
+  assert.equal(rolls.length, 2);
+  assert.deepEqual(rolls, [undefined, undefined], "PvP keeps the same-tick Defence snapshot");
+  assert.equal(pvpTarget.getSkillManager().getCurrentLevel(Skill.DEFENCE), pvpDefence);
+  pvpMethod.handleAfterHitEffects(pvpHit);
+  assert.ok(pvpTarget.getSkillManager().getCurrentLevel(Skill.DEFENCE) < pvpDefence);
+});
+
+test("Uncharge asks first, refunds all 20,000 into a compatible stack and keeps charges when the refund cannot fit", () => {
+  const full = tonalzticsPlayer();
+  const fullItem = put(full, 0, ItemIdentifiers.TONALZTICS_OF_RALOS);
+  fullItem.setMetaValue(TONALZTICS_CHARGES, 20000);
+  put(full, 1, ItemIdentifiers.SUNFIRE_SPLINTERS, 2147483647);
+
+  assert.equal(itemAction(full, fullItem, 0, "Uncharge", 5), true);
+  assert.deepEqual(MultiChatboxPrompt.getPending(full).options, ["Proceed.", "Cancel."]);
+  assert.equal(fullItem.getMetaValue(TONALZTICS_CHARGES), 20000, "the prompt alone changes nothing");
+  choose(full, 0);
+  assert.equal(fullItem.getId(), ItemIdentifiers.TONALZTICS_OF_RALOS);
+  assert.equal(fullItem.getMetaValue(TONALZTICS_CHARGES), 20000);
+  assert.equal(full.getInventory().getAmount(ItemIdentifiers.SUNFIRE_SPLINTERS), 2147483647);
+
+  const compatible = tonalzticsPlayer();
+  const compatibleItem = put(compatible, 0, ItemIdentifiers.TONALZTICS_OF_RALOS);
+  compatibleItem.setMetaValue(TONALZTICS_CHARGES, 20000);
+  put(compatible, 1, ItemIdentifiers.SUNFIRE_SPLINTERS, 100);
+  itemAction(compatible, compatibleItem, 0, "Uncharge", 5);
+  choose(compatible, 0);
+  assert.equal(compatibleItem.getId(), ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_);
+  assert.equal(compatibleItem.getMetaValue(TONALZTICS_CHARGES), undefined);
+  assert.equal(compatible.getInventory().getAmount(ItemIdentifiers.SUNFIRE_SPLINTERS), 20100);
+  assert.equal(choose(compatible, 0), false, "a repeated/stale answer cannot refund twice");
+  assert.equal(compatible.getInventory().getAmount(ItemIdentifiers.SUNFIRE_SPLINTERS), 20100);
+
+  const incompatible = tonalzticsPlayer();
+  const incompatibleItem = put(incompatible, 0, ItemIdentifiers.TONALZTICS_OF_RALOS);
+  incompatibleItem.setMetaValue(TONALZTICS_CHARGES, 500);
+  put(incompatible, 1, ItemIdentifiers.SUNFIRE_SPLINTERS, 100, { untradeable: true });
+  for (let slot = 2; slot < 28; slot++) put(incompatible, slot, ItemIdentifiers.COINS, 1);
+  itemAction(incompatible, incompatibleItem, 0, "Uncharge", 5);
+  choose(incompatible, 0);
+  assert.equal(incompatibleItem.getId(), ItemIdentifiers.TONALZTICS_OF_RALOS);
+  assert.equal(incompatibleItem.getMetaValue(TONALZTICS_CHARGES), 500);
+  assert.equal(incompatible.getInventory().getAmount(ItemIdentifiers.SUNFIRE_SPLINTERS), 100);
+
+  const cancelled = tonalzticsPlayer();
+  const cancelledItem = put(cancelled, 0, ItemIdentifiers.TONALZTICS_OF_RALOS);
+  cancelledItem.setMetaValue(TONALZTICS_CHARGES, 500);
+  put(cancelled, 1, ItemIdentifiers.SUNFIRE_SPLINTERS, 100);
+  itemAction(cancelled, cancelledItem, 0, "Uncharge", 5);
+  choose(cancelled, 1);
+  assert.equal(cancelledItem.getMetaValue(TONALZTICS_CHARGES), 500);
+  assert.equal(cancelled.getInventory().getAmount(ItemIdentifiers.SUNFIRE_SPLINTERS), 100);
+
+  const stale = tonalzticsPlayer();
+  const staleItem = put(stale, 0, ItemIdentifiers.TONALZTICS_OF_RALOS);
+  staleItem.setMetaValue(TONALZTICS_CHARGES, 500);
+  put(stale, 1, ItemIdentifiers.SUNFIRE_SPLINTERS, 100);
+  itemAction(stale, staleItem, 0, "Uncharge", 5);
+  stale.getInventory().setItem(0, new Item(-1));
+  stale.getInventory().setItem(2, staleItem);
+  choose(stale, 0);
+  assert.equal(staleItem.getId(), ItemIdentifiers.TONALZTICS_OF_RALOS);
+  assert.equal(staleItem.getMetaValue(TONALZTICS_CHARGES), 500);
+});
+
+test("native Sunfire item-on-item asks before charging both ways, caps at 20,000 and ignores notes", async () => {
+  const first = tonalzticsPlayer();
+  const uncharged = put(first, 1, ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_);
+  put(first, 0, ItemIdentifiers.SUNFIRE_SPLINTERS, 25000);
+  UseItemPacketListener.itemOnItem(first, 0, 1);
+  assert.equal(uncharged.getId(), ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_);
+  assert.equal(first.getInventory().getAmount(ItemIdentifiers.SUNFIRE_SPLINTERS), 25000, "nothing spent before amount input");
+  assert.ok(first.getEnteredAmountAction());
+  await submitCount(first, 25000);
+  assert.equal(first.getEnteredAmountAction(), null, "the native count dispatcher releases the prompt");
+  assert.equal(uncharged.getId(), ItemIdentifiers.TONALZTICS_OF_RALOS);
+  assert.equal(uncharged.getMetaValue(TONALZTICS_CHARGES), 20000);
+  assert.equal(first.getInventory().getAmount(ItemIdentifiers.SUNFIRE_SPLINTERS), 5000);
+
+  const second = tonalzticsPlayer();
+  const weapon = put(second, 0, ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_);
+  put(second, 1, ItemIdentifiers.SUNFIRE_SPLINTERS, 500);
+  UseItemPacketListener.itemOnItem(second, 0, 1);
+  assert.equal(second.getInventory().getAmount(ItemIdentifiers.SUNFIRE_SPLINTERS), 500);
+  await submitCount(second, 500);
+  assert.equal(weapon.getId(), ItemIdentifiers.TONALZTICS_OF_RALOS);
+  assert.equal(weapon.getMetaValue(TONALZTICS_CHARGES), 500);
+  assert.equal(second.getInventory().getAmount(ItemIdentifiers.SUNFIRE_SPLINTERS), 0);
+
+  const noted = tonalzticsPlayer();
+  const notedWeapon = put(noted, 0, ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_);
+  put(noted, 1, ItemIdentifiers.SUNFIRE_SPLINTERS_2, 500);
+  UseItemPacketListener.itemOnItem(noted, 0, 1);
+  assert.equal(notedWeapon.getId(), ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_);
+  assert.equal(notedWeapon.getMetaValue(TONALZTICS_CHARGES), undefined);
+});
+
+test("native Check and Charge act on the clicked charged item and persist its metadata", async (t) => {
+  const player = tonalzticsPlayer();
+  const messages = [];
+  t.mock.method(player, "sendMessage", (message) => messages.push(message));
+  const weapon = put(player, 4, ItemIdentifiers.TONALZTICS_OF_RALOS);
+  weapon.setMetaValue(TONALZTICS_CHARGES, 500);
+  weapon.setMetaValue("tonalztics:test-marker", "kept");
+  put(player, 5, ItemIdentifiers.SUNFIRE_SPLINTERS, 1000);
+
+  itemAction(player, weapon, 4, "Check", 3);
+  assert.match(messages.at(-1), /500 charges/);
+
+  itemAction(player, weapon, 4, "Charge", 4);
+  const action = player.getEnteredAmountAction();
+  assert.ok(action, "Charge opens the enter-amount prompt");
+  await submitCount(player, 200);
+  assert.equal(weapon.getMetaValue(TONALZTICS_CHARGES), 700);
+  assert.equal(player.getInventory().getAmount(ItemIdentifiers.SUNFIRE_SPLINTERS), 800);
+  assert.equal(weapon.clone().getMetaValue(TONALZTICS_CHARGES), 700, "charge metadata survives cloning");
+  const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+  const restored = tonalzticsPlayer(); PlayerSave.fromPlayer(player).applyToPlayer(restored);
+  const savedWeapon = restored.getInventory().getItems()[4];
+  assert.equal(savedWeapon.getMetaValue(TONALZTICS_CHARGES), 700, "the charged item survives real save/load");
+  assert.equal(savedWeapon.getMetaValue("tonalztics:test-marker"), "kept", "other metadata is preserved");
+});
+
+
+test("charge amount replies reject cancelled, moved, replaced, changed and superseded requests", async () => {
+  for (const change of ["cancelled", "moved", "replaced", "changed-id", "changed-charges", "superseded", "zero", "duplicate"]) {
+    const player = tonalzticsPlayer();
+    const weapon = put(player, 0, ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_);
+    put(player, 1, ItemIdentifiers.SUNFIRE_SPLINTERS, 500);
+    UseItemPacketListener.itemOnItem(player, 0, 1);
+    const action = player.getEnteredAmountAction(); assert.ok(action);
+    if (change === "cancelled") player.getPacketSender().sendInterfaceRemoval();
+    if (change === "moved") {
+      player.getInventory().setItem(0, new Item(-1, 0)); player.getInventory().setItem(2, weapon);
+    }
+    if (change === "replaced") put(player, 0, ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_);
+    if (change === "changed-id") weapon.setId(ItemIdentifiers.RUNE_KNIFE);
+    if (change === "changed-charges") weapon.setMetaValue(TONALZTICS_CHARGES, 1);
+    let otherReplies = 0;
+    if (change === "superseded") player.setEnteredAmountAction({ execute() { otherReplies++; } });
+    await submitCount(player, change === "zero" ? 0 : 100);
+    action.execute(100); // A saved callback cannot regain ownership after native close/reply.
+    assert.equal(player.getInventory().getAmount(ItemIdentifiers.SUNFIRE_SPLINTERS), change === "duplicate" ? 400 : 500, change);
+    assert.equal(otherReplies, change === "superseded" ? 1 : 0);
+    if (change === "duplicate") {
+      await submitCount(player, 100);
+      assert.equal(weapon.getMetaValue(TONALZTICS_CHARGES), 100, "only the first answer can spend");
+    }
+  }
+});
+
+test("a final charged shot expires before the next special, and combat cancellation releases its snapshot", (t) => {
+  t.mock.restoreAll(); RangedCombatMethod.prototype.start = REAL_RANGED_START; CombatFactory.decrementAmmo = REAL_DECREMENT_AMMO;
+  quiet(t);
+  const player = tonalzticsPlayer(), target = tonalzticsTarget();
+  const item = equipTonalztics(player, ItemIdentifiers.TONALZTICS_OF_RALOS, 1);
+  const normal = CombatFactory.getMethod(player); normal.start(player, target);
+  assert.equal(normal.hits(player, target)[0].getHits().length, 2);
+  normal.finished(player, target);
+  player.setCombatSpecial(CombatSpecial.getForWeaponId(item.getId())); player.setSpecialActivated(true);
+  assert.equal(CombatSpecial.activeTraitsFor(player).hitCount, 1, "next prospective special uses the empty weapon");
+  const next = CombatFactory.getMethod(player); next.start(player, target);
+  assert.equal(next.hits(player, target)[0].getHits().length, 1);
+  next.finished(player, target);
+  equipTonalztics(player, ItemIdentifiers.TONALZTICS_OF_RALOS, 1);
+  assert.equal(CombatSpecial.activeTraitsFor(player).hitCount, 2, "fresh charged equipment is read between attacks");
+  const cancelled = CombatFactory.getMethod(player); cancelled.start(player, target);
+  player.getCombat().target = target; player.getCombat().method = cancelled;
+  player.getCombat().reset();
+  assert.equal(CombatSpecial.activeTraitsFor(player).hitCount, 1, "actual combat reset calls the shot's cancellation cleanup");
+});
+
+test("plain plugin combat methods without the optional projection hook still prepare two splats", (t) => {
+  const player = tonalzticsPlayer(), target = tonalzticsTarget();
+  const methods = Object.fromEntries(Object.getOwnPropertyNames(core.CombatMethod.prototype)
+    .filter(name => name !== "constructor" && name !== "projectedDefenceLevel")
+    .map(name => [name, core.CombatMethod.prototype[name]]));
+  const plain = { ...methods, type: () => core.CombatType.RANGED,
+    hits(source, victim) { return [new PendingHit(source, victim, this, { hitAmount: 2, rollAccuracy: false })]; } };
+  PluginManager.createApi("plain-projection-control").registerCombatMethodResolver({ resolve: source => source === player ? plain : null });
+  assert.equal(CombatFactory.getMethod(player), plain, "the production resolver accepts a plain JS object");
+  t.mock.method(CombatFactory, "getHitDamage", () => new core.HitDamage(5, core.HitMask.RED));
+  assert.equal(plain.hits(player, target)[0].getHits().length, 2);
 });

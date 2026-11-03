@@ -365,15 +365,23 @@ export class PendingHit {
         let hits: HitDamage[] = new Array(hitAmount);
         let firstAccurate: boolean | undefined;
         let firstBounds: SpecialDamageBounds | undefined;
+        const priorHits: HitDamage[] = [];
         for (let i = 0; i < hits.length; i++) {
             const roll = { attacker: this.attacker, target: this.target, combatType: this.combatType, forceAccurate: false, forceMaxHit: false, bypassProtectionPrayer };
             PluginManager.emitCombatHitRoll(roll);
             if (roll.bypassProtectionPrayer) this.protectionBypassed = true;
+            const projectedDefence = i > 0 && this.method
+                ? this.method.projectedDefenceLevel?.(this.attacker, this.target, {
+                    hitIndex: i,
+                    priorHits: [...priorHits],
+                    combatType: this.combatType,
+                })
+                : undefined;
             let resolved: { accurate: boolean; bounds?: SpecialDamageBounds };
             if (i > 0 && traits?.sharedAccuracyRollAcrossHits === true) {
                 resolved = { accurate: firstAccurate === true, bounds: firstBounds };
             } else {
-                resolved = PendingHit.withForcedMax(this.rollSpecialTraits(traits, roll.forceAccurate, rollAccuracy, i), roll.forceMaxHit);
+                resolved = PendingHit.withForcedMax(this.rollSpecialTraits(traits, roll.forceAccurate, rollAccuracy, i, projectedDefence), roll.forceMaxHit);
                 if (i === 0) {
                     firstAccurate = resolved.accurate;
                     firstBounds = resolved.bounds;
@@ -391,6 +399,7 @@ export class PendingHit {
             capToRemaining(damage);
             this.totalDamage += damage.getDamage();
             hits[i] = damage;
+            priorHits.push(damage);
         }
         return hits;
     }
@@ -430,12 +439,13 @@ export class PendingHit {
         traits: WeaponSpecialTraits | null,
         forceAccurate: boolean,
         rollAccuracyFlag: boolean,
-        hitIndex: number
+        hitIndex: number,
+        projectedDefenceLevel?: number
     ): { accurate: boolean; bounds?: SpecialDamageBounds } {
         const defenceType = this.method.accuracyDefenceType(this.combatType);
         if (!traits) {
             const accurate = forceAccurate || !rollAccuracyFlag ||
-                AccuracyFormulasDpsCalc.rollAccuracy(this.attacker, this.target, this.combatType, defenceType);
+                AccuracyFormulasDpsCalc.rollAccuracy(this.attacker, this.target, this.combatType, defenceType, undefined, projectedDefenceLevel);
             return { accurate };
         }
         const guaranteed =
@@ -450,9 +460,9 @@ export class PendingHit {
         } else {
             const fixed = traits.fixedAccuracyRollMultiplierWhenTargetAtOrBelowMaximumDamage;
             if (fixed !== undefined && this.target.getHitpoints() <= DamageFormulas.sourceMaxHit(this.attacker, this.combatType)) {
-                successfulRolls = AccuracyFormulasDpsCalc.rollFixedAccuracy(this.attacker, this.target, this.combatType, fixed, defenceType) ? 1 : 0;
+                successfulRolls = AccuracyFormulasDpsCalc.rollFixedAccuracy(this.attacker, this.target, this.combatType, fixed, defenceType, projectedDefenceLevel) ? 1 : 0;
             } else {
-                successfulRolls = AccuracyFormulasDpsCalc.rollAccuracyCount(this.attacker, this.target, this.combatType, rollCount, defenceType);
+                successfulRolls = AccuracyFormulasDpsCalc.rollAccuracyCount(this.attacker, this.target, this.combatType, rollCount, defenceType, projectedDefenceLevel);
             }
         }
         const range = successfulRolls > 0 ? traits.damageRangeBySuccessfulAccuracyRolls?.[successfulRolls - 1] : undefined;

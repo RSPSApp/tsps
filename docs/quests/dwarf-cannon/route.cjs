@@ -9,7 +9,7 @@
  *
  * Run from server/ (needs the server with AGENT_MCP=1 and the Quest Helper bridge):
  *   NODE_PATH=$PWD/node_modules node ../docs/quests/dwarf-cannon/route.cjs \
- *     --mcp http://127.0.0.1:<AGENT_MCP_PORT>/mcp --player <fresh account> [--from <step>] [--out report.json]
+ *     --mcp http://127.0.0.1:<AGENT_MCP_PORT>/mcp --player <fresh account> [--from <step>] [--to <step>] [--out report.json]
  * with ROUTE_PASSWORD set in the environment (see below).
  *
  * Setup (declared, before the baseline): ::master, ::maxgear melee, ::tele to Captain Lawgof.
@@ -27,7 +27,7 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, arg, i, all
   return pairs;
 }, []));
 if (!args.mcp || !args.player) {
-  console.error("Usage: route.cjs --mcp http://127.0.0.1:<port>/mcp --player <name> [--from <step>] [--out <file>]");
+  console.error("Usage: route.cjs --mcp http://127.0.0.1:<port>/mcp --player <name> [--from <step>] [--to <step>] [--out <file>]");
   process.exit(2);
 }
 const player = String(args.player);
@@ -62,6 +62,7 @@ const report = { quest: QUEST, player, startedAt: new Date().toISOString(), step
 let client;
 let lastHelper = null;
 let reached = !args.from;
+let stopped = false;
 
 async function call(name, input = {}, { allowError = false } = {}) {
   const result = await client.callTool({ name, arguments: input }, undefined, { timeout: 600_000 });
@@ -85,6 +86,7 @@ function finding(text) {
 }
 
 async function step(name, body) {
+  if (stopped) return;
   if (!reached) {
     if (name !== args.from) { console.log(`- ${name} (skipped, before --from)`); return; }
     reached = true;
@@ -103,6 +105,10 @@ async function step(name, body) {
   }
   report.steps.push({ name, ok: true, ms: Date.now() - started });
   console.log(`ok (${((Date.now() - started) / 1000).toFixed(1)}s)`);
+  if (args.to && name === args.to) {
+    stopped = true;
+    console.log(`- stopping after "${name}" (--to)`);
+  }
 }
 
 const observe = (extra = {}) => call("observe", { player, radius: 15, varps: [VARP_STAGE, VARP_QUEST_POINTS], ...extra });

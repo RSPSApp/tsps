@@ -29,10 +29,25 @@ ROUTE_PASSWORD=<any> NODE_PATH=$PWD/node_modules node ../docs/quests/dwarf-canno
 On a failure it prints the step, the helper's step and the stage, and the `--from` to resume
 with on the same account once the cause is fixed.
 
+The script tests the server's quest logic, not the client UI: it sends the clicks a client would
+send, so a client that fails to offer or send a click (see #1963) is not caught. Quests with
+custom interfaces still need a check in a real client.
+
 ## Findings
 
 Newest first.
 
+- **open** #1963: the X on the cannon repair interface (IF1 409, component 11, buttonType 3)
+  does not close it. The client gives IF1 buttonType 1, 4, 5 and 6 components actions but not
+  3 (close), so the button has no menu entry or click. Shared client code, not quest code.
+- **not reproduced** #1963: "tool selection does not work". The server recovered from seven
+  wrong orders (gear first, pliers on the spring, a part with no tool, spring before safety,
+  switching tools, the same tool twice) and the correct clicks still repaired the cannon; in a
+  real client the repair worked both in order and after a wrong order first.
+- **not a bug** #1963: railings "autofix" when spammed. Each Inspect is a 5-tick attempt that
+  succeeds at random, as on the Wiki ("It may take several attempts"); a new click replaces the
+  pending attempt, so spamming does not stack rolls (six clicks: five attempts started, one
+  resolved).
 - **open** Railing repair failure: the Wiki walkthrough says a failed attempt deals "1 or 2
   damage or your Strength or Crafting will be temporarily reduced", but the transcript the
   plugin follows gives 0-2 damage, one of four messages and an overhead cry, with no stat
@@ -88,8 +103,10 @@ Newest first.
   quest complete. A repeat talk to Lawgof changed no QP or XP. A relog kept stage 11, the QP,
   the XP and the mould. Two clean passes on fresh accounts took 12 min 21 s and 12 min 5 s,
   about 7 min 40 s of each the two walks between Lawgof and Nulodion.
-- **Not checked:** visuals (no client was connected: the remains' loc and the cannon
-  interface's models were not seen), the offline save beyond the relog, Nulodion's post-quest
+- **Follow-up (#1963):** in a real client the cannon repair worked in order and after a wrong
+  order first; the interface's X does not close it (finding above).
+- **Not checked:** visuals of the rest of the route (no client was connected for it: the
+  remains' loc was not seen), the offline save beyond the relog, Nulodion's post-quest
   dialogue, recovery cases (lost toolkit, notes or mould, full bag), out-of-order cannon clicks,
   and the railing failure's damage and messages beyond seeing them occur.
 

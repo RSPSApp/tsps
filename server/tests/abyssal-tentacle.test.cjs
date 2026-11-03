@@ -19,6 +19,7 @@ AbyssalTentacle.register({
   },
   onServerStartup: (handler) => handler(),
   onItemOnItem() {},
+  onItemAction() {},
   onCombatHitResolved() {},
 });
 
@@ -178,5 +179,105 @@ test("creation through the real item-use dispatcher confirms, consumes one pair 
     assert.equal(MultiChatboxPrompt.getPending(player), null, `invalid pair ${first}/${second}`);
     assert.equal(inventory.getItems()[0].getId(), first);
     assert.equal(inventory.getItems()[1].getId(), second);
+  }
+});
+
+test("native Dissolve confirms and returns only the clicked normal tentacle, rejecting stale confirmations", async (t) => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi();
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { decodeClientPackets } = require("../dist/net/protocol/ClientProtocol");
+  const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxPrompt");
+  require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+  AbyssalTentacle.register(PluginManager.createApi("AbyssalTentacle"));
+  PluginManager.emitServerStartup({});
+  assert.equal(core.CacheDefinitions.getItem(ItemIds.ABYSSAL_TENTACLE).inventoryActions[4], "Dissolve");
+  let index = 2800;
+
+  function actor(itemId = ItemIds.ABYSSAL_TENTACLE) {
+    const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const session = new PlayerSession(channel);
+    const player = new Player(session);
+    session.setPlayer(player);
+    player.setIndex(index++);
+    player.setUsername(`dissolve${index}`);
+    player.setRegistered(true);
+    player.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 99, false);
+    const inventory = player.getInventory();
+    for (let slot = 0; slot < inventory.capacity(); slot++) inventory.setItem(slot, new core.Item(ItemIds.BRONZE_DAGGER, 1));
+    const item = new core.Item(itemId, 1, { unbankable: true, untradeable: true });
+    inventory.setItem(7, item);
+    inventory.setItem(8, new core.Item(ItemIds.ABYSSAL_TENTACLE, 1));
+    const connection = new ClientConnection(channel);
+    connection.player = player;
+    t.after(() => { player.setRegistered(false); core.TaskManager.cancelTasks(player.getIndex()); });
+    return { player, inventory, item, connection };
+  }
+  async function dissolve(actor) {
+    const frame = Buffer.alloc(9);
+    frame[0] = 14; // Native IF_BUTTON7: inventory action 5, via cache enum 4303.
+    frame.writeInt32BE(149 << 16, 1);
+    frame.writeUInt16BE(7, 5);
+    frame.writeUInt16BE(actor.item.getId(), 7);
+    const decoded = decodeClientPackets(frame);
+    assert.equal(decoded[0].option, undefined);
+    await actor.connection.dispatch(decoded, true);
+    actor.connection.processTurnPackets();
+  }
+  async function choose(actor, option) {
+    const frame = Buffer.alloc(7);
+    frame[0] = 62; // Native RESUME_PAUSEBUTTON.
+    frame[1] = option >>> 8;
+    frame[2] = (option + 128) & 255;
+    frame.writeInt32BE(MultiChatboxPrompt.OPTIONS_WIDGET_ID, 3);
+    const decoded = decodeClientPackets(frame);
+    assert.equal(decoded[0].childIndex, option);
+    await actor.connection.dispatch(decoded, true);
+    actor.connection.processTurnPackets();
+  }
+
+  const full = actor();
+  await dissolve(full);
+  assert.match(MultiChatboxPrompt.getPending(full.player)?.title ?? "", /whip.*permanently lost/i);
+  assert.equal(full.inventory.getItems()[7], full.item, "the prompt has not consumed the item");
+  assert.equal(full.item.getId(), ItemIds.ABYSSAL_TENTACLE);
+  assert.equal(full.inventory.getFreeSlots(), 0);
+  await choose(full, 1);
+  assert.equal(full.inventory.getItems()[7], full.item, "the same slot returns the kraken tentacle even when full");
+  assert.equal(full.item.getId(), ItemIds.KRAKEN_TENTACLE);
+  assert.equal(full.inventory.getAmount(ItemIds.KRAKEN_TENTACLE), 1);
+  assert.equal(full.inventory.getItems()[8].getId(), ItemIds.ABYSSAL_TENTACLE, "the spare is untouched");
+  assert.deepEqual(full.item.getMeta(), { unbankable: true, untradeable: true }, "item restrictions survive");
+  await choose(full, 1);
+  assert.equal(full.inventory.getAmount(ItemIds.KRAKEN_TENTACLE), 1, "duplicate resume cannot return another tentacle");
+
+  for (const change of ["cancel", "remove", "replace", "move", "change-id", "change-amount", "close"]) {
+    const pending = actor();
+    await dissolve(pending);
+    assert.ok(MultiChatboxPrompt.getPending(pending.player), change);
+    if (change === "remove") pending.inventory.deleteAtSlot(7, 1, false);
+    if (change === "replace") pending.inventory.setItem(7, new core.Item(ItemIds.ABYSSAL_TENTACLE, 1));
+    if (change === "move") pending.inventory.swap(7, 9);
+    if (change === "change-id") pending.item.setId(ItemIds.BRONZE_DAGGER);
+    if (change === "change-amount") pending.item.setAmount(2);
+    if (change === "close") pending.player.getPacketSender().sendInterfaceRemoval();
+    const before = pending.inventory.getItems().map(item => [item.getId(), item.getAmount(), item.getMeta()]);
+    await choose(pending, change === "cancel" ? 2 : 1);
+    assert.deepEqual(pending.inventory.getItems().map(item => [item.getId(), item.getAmount(), item.getMeta()]), before, change);
+    assert.equal(MultiChatboxPrompt.getPending(pending.player), null);
+  }
+
+  for (const itemId of [ItemIds.ABYSSAL_TENTACLE_2, ItemIds.ABYSSAL_TENTACLE_OR_, ItemIds.ABYSSAL_TENTACLE_OR__2,
+    ItemIds.ABYSSAL_TENTACLE_3, ItemIds.ABYSSAL_TENTACLE_4]) {
+    const excluded = actor(itemId);
+    assert.equal(PluginManager.emitItemAction({ player: excluded.player, interfaceId: core.Inventory.INTERFACE_ID,
+      item: excluded.item, itemId, slot: 7, clickType: 5, option: "Dissolve", handled: false }), false);
+    assert.equal(excluded.item.getId(), itemId);
+    assert.equal(MultiChatboxPrompt.getPending(excluded.player), null);
   }
 });

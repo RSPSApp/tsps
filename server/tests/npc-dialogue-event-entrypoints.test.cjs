@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { before, test } = require('node:test');
+process.env.DISABLE_PLAYER_BOTS = '1';
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
@@ -722,4 +723,152 @@ test('native Hairdresser preview cancels or confirms through the existing makeov
   assert.equal(appearance.getLook()[core.Appearance.HEAD], styles[style]);
   assert.equal(f.player.getInterfaceId(), -1);
   assert.ok(f.messages.includes('You get a fresh, new haircut!'));
+});
+
+function fillimanFixture(t, stage = 20) {
+  const f = fixture(t), { player } = f;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'nature_spirit');
+  quest.setStage(player, stage);
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(3440, 3336);
+  player.setLocation(new core.Location(3440, 3335)); player.needsPlacement = false;
+  player.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(core.ItemIdentifiers.GHOSTSPEAK_AMULET));
+  const npc = PM.spawnNpc({ id: core.NpcIdentifiers.FILLIMAN_TARLOCK, x: 3440, y: 3336, z: 0,
+    owner: player, ownerOnly: true, wanderRadius: 0 });
+  const messages = [];
+  t.mock.method(player.getPacketSender(), 'sendMessage', text => { messages.push(text); return player.getPacketSender(); });
+  t.after(() => PM.removeNpc(npc));
+  const use = async itemId => {
+    player.closeInterruptibleInterfaces();
+    await f.connection.dispatch([{ type: 'item_on_npc', targetIndex: npc.getIndex(), itemId,
+      slot: player.getInventory().getSlotForItemId(itemId), widgetId: 149 << 16 }]);
+    f.connection.processTurnPackets();
+    for (let tick = 0; tick < 8; tick++) {
+      core.TaskManager.processWalkTo(player.getIndex()); player.getMovementQueue().process();
+    }
+  };
+  const talk = () => PM.emitNpcInteraction({ player, npc, npcId: npc.getId(), action: 'Talk-to', clickType: 1, handled: false });
+  return { ...f, npc, quest, use, talk, messages };
+}
+
+async function fillimanUntil(f, stop) {
+  const lines = [];
+  for (let n = 0; n < 60; n++) {
+    const menu = MultiChatboxPrompt.getPending(f.player);
+    const text = f.player.getDialogueManager().getCurrent()?.getText?.()?.replace(/\s+/g, ' ');
+    if (stop({ menu, text })) return lines;
+    assert.ok(text, 'Filliman conversation must reach the expected continuation');
+    lines.push(text);
+    await nextLine(f);
+  }
+  assert.fail('Filliman conversation did not reach the expected continuation');
+}
+
+test('Nature Spirit native mirror use plays the dead dialogue and commits only after its final line', async t => {
+  const f = fillimanFixture(t, 10), { player, quest } = f;
+  assert.equal(f.talk(), true);
+  await fillimanUntil(f, ({ menu }) => !!menu);
+  await choose(f, 2);
+  const refusal = await fillimanUntil(f, ({ menu }) => !!menu);
+  assert.ok(refusal.some(text => text.includes("I'm not a ghost!")));
+  player.closeInterruptibleInterfaces();
+  f.talk();
+  const reminder = await fillimanUntil(f, ({ menu }) => !!menu);
+  assert.ok(reminder.some(text => text.includes("do you still think I'm dead?")));
+  assert.ok(MultiChatboxPrompt.getPending(player).options.includes('How long have you been a ghost?'));
+  player.closeInterruptibleInterfaces();
+  player.getInventory().add(new core.Item(core.ItemIdentifiers.MIRROR));
+  await f.use(core.ItemIdentifiers.MIRROR);
+  assert.equal(quest.getStage(player), 20, 'showing the mirror first starts its source conversation');
+  const final = ({ text }) => text?.startsWith('It must be a sign...');
+  const lines = await fillimanUntil(f, final);
+  assert.ok(lines.some(text => text.includes('This mirror must somehow be dysfunctional.')));
+  player.closeInterruptibleInterfaces(); await nextLine(f);
+  assert.equal(quest.getStage(player), 20, 'cancellation and a stale Continue cannot accept death');
+  await f.use(core.ItemIdentifiers.MIRROR);
+  await fillimanUntil(f, final); await nextLine(f);
+  assert.equal(quest.getStage(player), 25);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.MIRROR), 1);
+});
+
+test('Nature Spirit native diary reading and help choice resume without granting an early spell', async t => {
+  const f = fillimanFixture(t, 25), { player, quest } = f;
+  const { JOURNAL, DRUIDIC_SPELL } = core.ItemIdentifiers;
+  player.getInventory().add(new core.Item(JOURNAL));
+  await f.use(JOURNAL);
+  assert.equal(quest.getStage(player), 30);
+  assert.equal(player.getInventory().getAmount(JOURNAL), 0, 'the canonical handover gives Filliman his journal');
+  assert.equal(player.getInventory().getAmount(DRUIDIC_SPELL), 0, 'the journal itself does not award the spell');
+  const lines = await fillimanUntil(f, ({ menu }) => !!menu);
+  assert.ok(lines.some(text => text.includes('My journal!')));
+  assert.ok(lines.some(text => text.includes("It's all coming back to me now.")));
+  assert.ok(f.messages.some(text => text.includes('starts leafing through the journal')));
+  await choose(f, MultiChatboxPrompt.getPending(player).options.indexOf('Ok thanks.') + 1);
+  await nextLine(f);
+  assert.equal(quest.getStage(player), 30);
+  assert.equal(player.getInventory().getAmount(DRUIDIC_SPELL), 0);
+  const offerHelp = async () => {
+    assert.equal(f.talk(), true);
+    await fillimanUntil(f, ({ menu }) => !!menu);
+    assert.deepEqual(MultiChatboxPrompt.getPending(player).options, [
+      'Being dead, what options do you think you have?', "So, what's your plan?", 'Well, good luck with that.', 'How can I help?', 'Ok thanks.',
+    ]);
+    await choose(f, 4);
+    await fillimanUntil(f, ({ text }) => text?.startsWith("It is required if you're to cast this druid spell."));
+  };
+  await offerHelp();
+  player.closeInterruptibleInterfaces(); await nextLine(f);
+  assert.equal(quest.getStage(player), 30);
+  assert.equal(player.getInventory().getAmount(DRUIDIC_SPELL), 0, 'closing the final instruction cannot grant a spell');
+  await offerHelp(); await nextLine(f);
+  assert.equal(quest.getStage(player), 35);
+  assert.equal(player.getInventory().getAmount(DRUIDIC_SPELL), 1);
+  f.talk(); player.closeInterruptibleInterfaces();
+  assert.equal(player.getInventory().getAmount(DRUIDIC_SPELL), 1, 'retalking does not duplicate the reward');
+});
+
+test('Nature Spirit saved journal progress and full inventories recover at the help conversation', async t => {
+  const saved = fillimanFixture(t, 30), f = fillimanFixture(t, 0);
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  PlayerSave.fromPlayer(saved.player).applyToPlayer(f.player);
+  const { player, quest } = f, inventory = player.getInventory();
+  assert.equal(quest.getStage(player), 30, 'the help checkpoint survives native save/load');
+  const { SPADE, DRUIDIC_SPELL } = core.ItemIdentifiers;
+  inventory.add(new core.Item(SPADE, 28));
+  const help = async () => {
+    f.talk();
+    await fillimanUntil(f, ({ menu }) => !!menu);
+    await choose(f, 4);
+    await fillimanUntil(f, ({ text }) => text?.startsWith("It is required if you're to cast this druid spell."));
+    await nextLine(f);
+  };
+  await help();
+  assert.equal(quest.getStage(player), 30);
+  assert.equal(inventory.getAmount(DRUIDIC_SPELL), 0);
+  inventory.deleteNumber(SPADE, 1);
+  await help();
+  assert.equal(quest.getStage(player), 35);
+  assert.equal(inventory.getAmount(DRUIDIC_SPELL), 1);
+});
+
+test('Nature Spirit native item use requires held items and ghostspeak, including direct mirror use at stage10', async t => {
+  const f = fillimanFixture(t, 10), { player, quest } = f, inventory = player.getInventory();
+  const { MIRROR, JOURNAL } = core.ItemIdentifiers;
+  await f.use(MIRROR);
+  assert.equal(quest.getStage(player), 10);
+  assert.equal(player.getDialogueManager().getCurrent(), undefined);
+  inventory.add(new core.Item(MIRROR));
+  player.getEquipment().setItem(core.Equipment.AMULET_SLOT, null);
+  await f.use(MIRROR);
+  assert.equal(player.getDialogueManager().getCurrent().getText(), 'Ahhrs Oooohh arhhhhAHhhh.');
+  await nextLine(f); assert.equal(quest.getStage(player), 10);
+  player.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(core.ItemIdentifiers.GHOSTSPEAK_AMULET));
+  await f.use(MIRROR);
+  await fillimanUntil(f, ({ text }) => text?.startsWith('It must be a sign...'));
+  await nextLine(f); assert.equal(quest.getStage(player), 25);
+  inventory.add(new core.Item(JOURNAL));
+  player.getEquipment().setItem(core.Equipment.AMULET_SLOT, null);
+  await f.use(JOURNAL);
+  assert.equal(player.getDialogueManager().getCurrent().getText(), 'Ahhrs Oooohh arhhhhAHhhh.');
+  await nextLine(f); assert.equal(quest.getStage(player), 25);
+  assert.equal(inventory.getAmount(JOURNAL), 1, 'an untranslated conversation cannot take the diary');
 });

@@ -37,6 +37,33 @@ owns subsequent lines. Search inside the grotto can start that conversation. Rev
 retain their source positions, can move and engage their owner, and their invisible sources
 stop applying an additional food-rot attack. Pouch use covers all four invisible ghast ids.
 
+The exterior ghost is summoned by attempting to enter the grotto after passing the swamp
+gate, rather than by gate progression or login alone. He stands at `(3440,3336,0)` between
+the stones, as the pinned Quest Helper's NPC steps specify. Login still restores the later
+interior actor; an exterior visit can summon him again through the entrance.
+
+Mirror and journal Use actions play the existing
+[transcript](https://oldschool.runescape.wiki/w/Transcript:Nature_Spirit?oldid=15371590)
+branches `ASJiE8` and `LvFssE`. Continuing the mirror's final acceptance line records the
+proof; the journal handover message `JPq1Gd` consumes the journal and records the reading
+checkpoint. The spell and its next stage wait for the final instruction after choosing
+"How can I help?". Cancellation, missing ghostspeak and a full inventory cannot skip that
+handoff. The shared dialogue runner also resumes an initial menu from the preceding variant's
+condition containers when the current conversation has not yet shown a menu, preserving
+the transcript's journal-help and earlier refusal menus after interruption. This new recovery
+requires unambiguous source ownership matching the caller. Direct menus retain priority;
+existing above/below navigation is unchanged.
+
+The [Ghast mechanics](https://oldschool.runescape.wiki/w/Ghast) distinguish food rot/no-food
+damage from a charged pouch's automatic reveal. Unprotected attacks leave the original
+unattackable ghast in native NPC updates. Manual pouch use and automatic charged protection
+still spend one charge and reveal the attackable form; three quest kills still progress.
+
+Offline checks cover actual native item-on-NPC/Continue inputs, refusal and diary menus,
+cancellation/stale Continue, saved journal progress, full-bag recovery, actual grotto clicks,
+owner NPC publication and the ghast's native NPC_INFO identity. No visual playthrough or
+timed exterior disappearance has been verified.
+
 Remaining: the transformation presentation uses the quest's Bloom effect and a short held
 line. Its full live camera/cinematic sequence still needs a recording; this change does not
 claim exact cutscene fidelity. No generated dialogue/data files are modified.

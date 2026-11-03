@@ -13,7 +13,7 @@ const core = PluginManager.getCoreApi();
 const I = core.ItemIdentifiers, N = core.NpcIdentifiers, O = core.ObjectIdentifiers;
 const noop = () => {};
 
-function harness({ npcDrops = false } = {}) {
+function harness({ npcDrops = false, nativeNpc = false } = {}) {
   const hooks = {}, events = {}, eventCounts = new Map(), tasks = [], transcripts = [], objects = [], npcs = [];
   const groundDrops = [];
   class PrivateArea {
@@ -24,6 +24,7 @@ function harness({ npcDrops = false } = {}) {
     postLeave(actor) { this.entities = this.entities.filter(value => value !== actor); actor.setArea(null); this.destroy(); }
     destroy() { this.destroyed = true; }
     isDestroyed() { return this.destroyed; }
+    countsAsMainWorld() { return false; }
     getObjects() { return objects.filter(object => object.getArea() === this); }
     getBoundaries() { return this.boundaries; }
   }
@@ -42,11 +43,18 @@ function harness({ npcDrops = false } = {}) {
     },
     registerNpcCombatMethodProvider: (ids, method) => { api.combat = method; },
     spawnNpc: definition => {
+      if (nativeNpc) {
+        const npc = new core.NPC(definition.id, new core.Location(definition.x, definition.y, definition.z));
+        npc.getPrivateArea = () => npc.getArea();
+        npcs.push(npc);
+        return npc;
+      }
       let area, at = new core.Location(definition.x, definition.y, definition.z);
       const npc = { ...definition, getId: () => definition.id, getArea: () => area, setArea: value => { area = value; },
         getSize: () => 3, isPlayer: () => false,
         getMovementQueue: () => ({ reset() { return this; }, setBlockMovement: noop }),
-        getHitpoints: () => 58, getLocation: () => at, moveTo: value => { at = value; },
+        getHitpoints: () => 58, getLocation: () => at, moveTo: value => { at = value; }, exactMove: value => { at = value; },
+        setFlag: noop, removeFlag: noop, setMobileInteraction: noop,
         getCombat: () => ({ reset: noop, getTarget: () => area?.player }), getDefinition: () => ({ getRespawn: () => 36 }),
         setCombatXpMultiplier: value => { npc.xpMultiplier = value; }, setPositionToFace: noop, performAnimation: noop, performGraphic: noop, forceChat: noop };
       npcs.push(npc); return npc;
@@ -316,8 +324,8 @@ test('the Groats book opens the captured four-page book without advancing quest 
   assert.equal(spreads.length, 2); assert.equal(spreads[1][48], 'Always squirrel money away');
 });
 
-function fight(stage = 18) {
-  const h = harness(), p = player(); h.quest.setStage(p, stage);
+function fight(stage = 18, options) {
+  const h = harness(options), p = player(); h.quest.setStage(p, stage);
   h.action(p, N.BULL, 'mKQNRL'); h.tick(4);
   return { h, p, npc: h.npcs[0], arena: p.getArea(), method: new h.api.combat() };
 }
@@ -419,6 +427,8 @@ test('a valid sidestep cannot pull Brutus out of his charge windup', () => {
   assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [3261, 3287], 'hold the telegraphed origin');
   h.tick(4);
   assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [3261, 3283], 'land at the original charge endpoint');
+  assert.equal(movement.getMobility().canMove(), false, 'hold pursuit through the two-tick glide');
+  h.tick(2);
   assert.equal(movement.getMobility().canMove(), true, 'ordinary pursuit resumes after the charge');
 });
 
@@ -436,4 +446,134 @@ test('postquest kills preserve the private field and Ring restarts respawn witho
   h.tick(13); assert.equal(h.npcs.length, 3);
   h.hooks.onPlayerLogout[0]({ player: p });
   assert.equal(arena.isDestroyed(), true);
+});
+
+// Keep the quest hooks/tasks, with a cached NPC and the real local-list/session sync.
+function nativeFight(stage = 22) {
+  const { World } = require('../dist/game/World');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const protocol = require('../dist/net/protocol/ClientProtocol');
+  const { h, p, npc, arena, method } = fight(stage, { nativeNpc: true });
+  npc.moveTo(new core.Location(3260, 3290, 0));
+  p.moveTo(new core.Location(3261, 3289, 0));
+  npc.resetUpdating(); npc.setNeedsPlacement(false);
+  npc.getCombat().target = p;
+  npc.setMobileInteraction(p);
+  const localNpcs = [];
+  Object.assign(p, {
+    getIndex: () => 1, isPlayer: () => true, isNpc: () => false,
+    getPrivateArea: () => p.getArea(), getLocalNpcs: () => localNpcs, getLocalPlayers: () => [],
+    getAudioSettings: () => ({ 18: 1 }), getForceMovement: () => null,
+  });
+  assert.ok(World.getNpcs().add(npc, true));
+  const session = new PlayerSession({ isOpen: true }); session.setPlayer(p);
+  const at = p.getLocation(), region = ((at.getX() >> 6) << 8) | (at.getY() >> 6);
+  Object.assign(session, {
+    hasReplayedScene: true, replayedSceneBaseX: (at.getX() - 48) & ~7,
+    replayedSceneBaseY: (at.getY() - 48) & ~7, replayedSceneLevel: 0,
+    lastGroundItemRegion: region, lastGroundItemLevel: 0, lastMusicRegion: region, lastMusicMode: 1,
+  });
+  const packets = []; let tick = 0;
+  session.sendClientPacket = packet => { packets.push(packet); return true; };
+  function sync() {
+    World.updateLocalNpcs(p, [npc]);
+    packets.length = 0; session.playerSyncState = undefined;
+    let views;
+    const encode = protocol.encodeNpcSync;
+    protocol.encodeNpcSync = (...args) => { views = args[2]; return encode(...args); };
+    try { session.flush(++tick); } finally { protocol.encodeNpcSync = encode; }
+    const packet = packets.find(packet => packet[0] === 21);
+    assert.ok(packet, 'native NPC_INFO sent');
+    const result = { view: views.find(view => view.index === npc.getIndex()), packet };
+    npc.resetUpdating(); npc.setNeedsPlacement(false);
+    return result;
+  }
+  function advance(ticks) {
+    const frames = [];
+    while (ticks-- > 0) {
+      // The combat loop attempts to renew facing while cooling down.
+      npc.getCombat().faceTarget(npc.getCombat().getTarget());
+      h.tick(1); frames.push(sync());
+    }
+    return frames;
+  }
+  sync();
+  return { h, p, npc, arena, method, sync, advance, close: () => World.getNpcs().remove(npc) };
+}
+
+function stationaryMask(frame) {
+  // One retained, stationary NPC followed by the 0xffff addition terminator.
+  const bytes = frame.packet.subarray(14);
+  if (bytes.equals(Buffer.from([1, 0x7f, 0xff, 0x80]))) return 0;
+  assert.deepEqual([...bytes.subarray(0, 4)], [1, 0x9f, 0xff, 0xe0]);
+  return bytes[4] | (bytes[4] & 0x80 ? bytes[5] << 8 : 0);
+}
+
+test('Brutus charge stays in native NPC_INFO with the captured two-tick glide and restores tracking', () => {
+  for (const [stage, windup] of [[18, 4], [22, 3]]) {
+    const f = nativeFight(stage);
+    try {
+      f.arena.meleeRemaining = 0; f.arena.nextSpecial = 'charge';
+      f.method.start(f.npc, f.p); f.sync();
+      const moving = f.advance(windup).at(-1).view;
+      assert.ok(moving, 'Brutus remains in the real local NPC list on the charge tick');
+      assert.deepEqual(moving.exactMove, { startDeltaX: 0, startDeltaY: 4, endDeltaX: 0, endDeltaY: 0,
+        startCycleOffset: 0, endCycleOffset: 60, direction: 0 });
+      assert.deepEqual([moving.x, moving.y], [3260, 3286]);
+      assert.equal(moving.interactionIndex, -1, 'the glide owns its heading');
+      assert.equal(f.advance(1)[0].view.interactionIndex, -1);
+      const recovered = f.advance(1)[0];
+      assert.equal(recovered.view.interactionIndex, 65537);
+      assert.ok(stationaryMask(recovered) & 0x08, 'native entity-facing mask restores tracking');
+    } finally { f.close(); }
+  }
+});
+
+test('each stomp holds its telegraph then sends an entity-face recovery before normal melee', () => {
+  const f = nativeFight();
+  try {
+    for (const x of [3260, 3262]) {
+      f.p.moveTo(new core.Location(x, 3293, 0));
+      f.arena.stompsRemaining = 0; f.arena.meleeRemaining = 0; f.arena.nextSpecial = 'stomp';
+      f.method.start(f.npc, f.p);
+      const telegraph = f.sync();
+      assert.equal(telegraph.view.interactionIndex, -1);
+      assert.deepEqual(telegraph.view.faceTile, { x, y: 3293 });
+      assert.equal(stationaryMask(telegraph) & 0x808, 0x808, 'coordinate facing replaces entity tracking');
+      assert.ok(f.advance(5).every(frame => frame.view.interactionIndex === -1), 'combat renewal cannot turn the telegraph');
+      const recovered = f.advance(1)[0];
+      assert.equal(recovered.view.interactionIndex, 65537);
+      assert.equal(recovered.view.faceTile, undefined);
+      assert.ok(stationaryMask(recovered) & 0x08);
+    }
+    f.arena.stompsRemaining = 0; f.arena.meleeRemaining = 1;
+    f.p.moveTo(new core.Location(3261, 3289, 0));
+    f.method.start(f.npc, f.p);
+    assert.equal(f.npc.hasFlag('combat:keep-facing'), false);
+    assert.equal(f.npc.getInteractingMobile(), f.p);
+    assert.equal(f.npc.getAnimation().getId(), 13783, 'ordinary melee resumes');
+  } finally { f.close(); }
+});
+
+test('special recovery never reattaches a dead, replaced, abandoned or retargeted fight', () => {
+  for (const change of ['dead', 'replaced', 'left', 'retargeted', 'cancelled']) {
+    const f = nativeFight();
+    try {
+      f.p.moveTo(new core.Location(3261, 3293, 0));
+      f.arena.meleeRemaining = 0; f.arena.nextSpecial = 'stomp';
+      f.method.start(f.npc, f.p); f.sync();
+      if (change === 'dead') f.npc.setHitpoints(0);
+      if (change === 'replaced') f.arena.bull = null;
+      if (change === 'left') f.p.setArea(null);
+      const nextTarget = player();
+      if (change === 'retargeted') f.npc.getCombat().target = nextTarget;
+      if (change === 'cancelled') f.arena.destroy();
+      f.h.tick(6);
+      assert.notEqual(f.npc.getInteractingMobile(), f.p, change);
+      if (change === 'retargeted') {
+        f.npc.getCombat().faceTarget(nextTarget);
+        assert.equal(f.npc.getInteractingMobile(), nextTarget, 'the next engagement can turn normally');
+      }
+    } finally { f.close(); }
+  }
 });

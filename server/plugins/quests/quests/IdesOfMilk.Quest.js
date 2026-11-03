@@ -117,6 +117,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   const EXIT_GATE_IDS = new Set([ObjectIdentifiers.GATE_323, ObjectIdentifiers.GATE_324]);
   const ANIMATION = { eat: 829, cough: 11267, attack: 13783, charge: 13778, stomp: 13785, spawn: 13790 };
   const STOMP_GRAPHIC = { ground: 3588, bull: 3589 };
+  const KEEP_FACING_FLAG = "combat:keep-facing";
 
   class BullPen extends Area {
     constructor() { super([new Boundary(3259, 3268, 3294, 3301, 0)]); }
@@ -250,11 +251,22 @@ module.exports = function registerIdesOfMilkQuest(api) {
         arena.meleeRemaining = quest.isComplete(player) ? 4 + Math.floor(Math.random() * 2) : 1 + Math.floor(Math.random() * 6);
         arena.nextSpecial = quest.isComplete(player) ? (charge ? "stomp" : "charge") : Math.random() < 0.5 ? "charge" : "stomp";
       }
+      npc.setFlag(KEEP_FACING_FLAG);
+      npc.setMobileInteraction(null);
       npc.setPositionToFace(aimed);
       npc.forceChat(charge ? "*growls*" : "*snorts*");
       npc.performAnimation(new Animation(charge ? ANIMATION.charge : ANIMATION.stomp, charge ? 60 : 30));
-      later(arena, charge && quest.isComplete(player) ? 3 : 4, () => {
+      const windup = charge && quest.isComplete(player) ? 3 : 4;
+      arena.faceRecoveryTask?.stop();
+      // 4153 resumes entity tracking six ticks after a stomp, or after the two-tick charge glide.
+      arena.faceRecoveryTask = later(arena, charge ? windup + 2 : 6, () => {
+        npc.removeFlag(KEEP_FACING_FLAG);
+        npc.setPositionToFace(null);
         if (charge) npc.getMovementQueue().setBlockMovement(false);
+        if (!arena.isDestroyed() && arena.bull === npc && npc.getArea() === arena && npc.getHitpoints() > 0 &&
+            player.getArea() === arena && npc.getCombat().getTarget() === player) npc.setMobileInteraction(player);
+      });
+      later(arena, windup, () => {
         if (arena.isDestroyed() || npc.getHitpoints() <= 0 || player.getArea() !== arena) return;
         const current = player.getLocation();
         const underBull = current.getX() >= at.getX() && current.getX() <= at.getX() + 2 &&
@@ -266,7 +278,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
         if (!charge) {
           npc.performGraphic(new Graphic(STOMP_GRAPHIC.bull));
           for (const [x, y] of tiles) player.getPacketSender().sendGraphic(new Graphic(STOMP_GRAPHIC.ground), new Location(x, y, 0));
-        } else npc.moveTo(end);
+        } else npc.exactMove(end, { endCycles: 60 });
         if (hit) {
           const hp = player.getSkillManager().getMaxLevel(Skill.HITPOINTS);
           // shortcut: quest scaling is documented as roughly 30–40%; capture low-level hits to establish exact rounding.

@@ -1012,8 +1012,8 @@ test('regional PvP bots use varied catalogue gear and favour towns over the leve
     const regionY = player.getLocation().getY() >> 6;
     counts.set(regionY, (counts.get(regionY) ?? 0) + 1);
   }
-  assert.equal(counts.get(50), 48, 'a town PvP region gets the per-region target');
-  assert.equal(counts.get(57), 48, 'a levelled Wilderness region gets the same target');
+  assert.equal(counts.get(50), 16, 'a town PvP region gets the per-region target');
+  assert.equal(counts.get(57), 16, 'a levelled Wilderness region gets the same target');
   assert.ok(generated.every((entry) => entry && !entry.archetypeId.startsWith('preset:')),
     'roamers use the varied catalogue instead of the eighteen player presets');
   assert.ok(new Set(generated.map((entry) => entry.archetypeId)).size > 18);

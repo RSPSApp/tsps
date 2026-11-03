@@ -11,7 +11,7 @@ const { GameConstants } = require("../../../../../src/main/typescript/elvarg/gam
 const { ItemDefinition } = require("../../../../../src/main/typescript/elvarg/game/definition/ItemDefinition");
 const { TimerKey } = require("../../../../../src/main/typescript/elvarg/util/timers/TimerKey");
 const { getPotionName } = require("../../../../items/Potions.plugin");
-const { getWildernessHotspot } = require("../../pvp/WildernessHotspotRegistry.PlayerBots");
+const { usesSmiteOnlyPrayers } = require("../../pvp/WildernessHotspotRegistry.PlayerBots");
 const { randomInRange } = require("../../navigation/Navigation.PlayerBots");
 const {
   getPvpCombatSnapshot,
@@ -290,7 +290,7 @@ class PvpCombatExecutionNode {
 
     this.reviewItemProtection(player, state, target);
     const confidenceTier = Number(resolvedProfile?.confidenceTier ?? 0);
-    const smiteOnly = getWildernessHotspot(pvp.hotspotId)?.smiteOnly === true;
+    const smiteOnly = usesSmiteOnlyPrayers(player, state);
     // Novices only protect items, with Smite also available at Smite-only sites.
     // Tiers below veteran lean on targetStyleReactionTicks
     // so they switch late rather than reading the style instantly.

@@ -3,6 +3,26 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { PacketSender } = require('../dist/net/packet/PacketSender');
 
+test('server chat translates legacy colour tags into native font markup', () => {
+  const frames = [];
+  const sender = Object.assign(Object.create(PacketSender.prototype), {
+    player: { getSession: () => ({ sendClientPacket: frame => frames.push(frame) }) },
+  });
+  sender.sendMessage('@red@Warning @whi@white @gre@green @bla@black');
+  sender.sendTypedMessage(14, '@dre@Pet @or2@announcement');
+  const text = frame => frame.toString('latin1', 3, frame.indexOf(0, 3));
+  assert.equal(text(frames[0]), '<col=ff0000>Warning <col=ffffff>white <col=00ff00>green <col=000000>black');
+  assert.equal(text(frames[1]), '<col=800000>Pet <col=ff7000>announcement');
+  sender.sendMessage('<col=123456>Native</col> email@example.com @xyz@');
+  assert.equal(text(frames[2]), '<col=123456>Native</col> email@example.com @xyz@');
+
+  const { encodeChatMessage } = require('../dist/net/protocol/ClientProtocol');
+  for (const kind of ['public', 'private_in', 'private_out', 'channel', 'clan', 'trade']) {
+    assert.equal(text(encodeChatMessage(kind, '@red@literal')), '@red@literal', `${kind} keeps player-authored text literal`);
+  }
+  assert.equal(text(encodeChatMessage('server', '@blu@Notice')), '<col=0000ff>Notice');
+});
+
 const sender = (interfaceId, tracked) => ({
   resetInterfaceState: () => interfaceId,
   closeTrackedInterfaces: () => tracked,

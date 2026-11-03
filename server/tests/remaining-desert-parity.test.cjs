@@ -188,6 +188,22 @@ test('Contact: dungeon Osman uses the 11568 cache parent and is cleaned up on lo
   assert.equal(osman.removed, true, 'logout removes the parent-id dungeon Osman');
 });
 
+test('Contact: Maisa stays hidden from the boss through Osman leaving and every login hook', () => {
+  const h = harness('../plugins/quests/quests/Contact.Quest');
+  const p = player();
+  h.quest.setStage(p, 90);
+  h.action(p, core.NpcIdentifiers.GIANT_SCARAB, '_dkntA');
+  assert.equal(p.varbits.get(3284), 1, 'the scarab attack hides Maisa');
+  const boss = h.npcs.find(n => n.getId() === core.NpcIdentifiers.GIANT_SCARAB);
+  h.hooks.onNpcDeath[0]({ killer: p, npc: boss, npcId: boss.getId() });
+  h.action(p, 11568, '1Ipn6a');
+  assert.equal(h.quest.getStage(p), 120);
+  const progressed = p.varbits.get(3284);
+  assert.equal(progressed, 1, 'Osman leaving keeps the captured hidden state');
+  for (const handler of h.hooks.onPlayerLogin ?? []) handler({ player: p });
+  assert.equal(p.varbits.get(3284), progressed, 'login agrees with the progression send');
+});
+
 test('Contact: Maisa stops replaying the quiz once Osman has been sent for', () => {
   const h = harness('../plugins/quests/quests/Contact.Quest');
   const p = player();

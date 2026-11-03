@@ -731,7 +731,7 @@ module.exports = function registerContactQuest(api) {
         event.end = true;
         if (quest.getStage(player) === STAGE_CAVES) {
           quest.setStage(player, STAGE_BOSS_FIGHT);
-          player.getPacketSender().sendVarbit(VARBIT_CONTACT_MAISA_INVIS, 1);
+          syncMaisaVisibility(player);
           spawnGiantScarab(player);
         }
         return;
@@ -739,7 +739,7 @@ module.exports = function registerContactQuest(api) {
         removeTracked(player, "osman");
         if (quest.getStage(player) === STAGE_BOSS_DEAD) {
           quest.setStage(player, STAGE_OSMAN_TALKED);
-          player.getPacketSender().sendVarbit(VARBIT_CONTACT_MAISA_INVIS, 0);
+          syncMaisaVisibility(player);
         }
         return;
       case "Rc_Gnh": // Osman hands over the unclaimed Keris

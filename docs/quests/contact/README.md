@@ -26,6 +26,9 @@ fixture.
 - **fixed** Login never restored `contact_bankers_vis` (3276), `contact_been_downstairs` (3279),
   the post-quest Menaphos/Osman flags (13866-13871), and it cleared `contact_maisa_invis` (3284)
   at stage 120 although the capture leaves it **1** through completion. All are now mirrored.
+- **fixed** Osman leaving the cavern (stage 110 → 120) also sent `contact_maisa_invis` = 0, so
+  Maisa's state flipped on the next relog. The boss attack and Osman's exit now both send 3284
+  through the same visibility sync as login, so it stays **1** from the boss onwards.
 - After the fix, a completed MCP fixture relogged to varp 964 = **1057497986**, the exact value
   recorded at completion in capture 101 (with the lamp-unused state).
 - Covered by `server/tests/remaining-desert-parity.test.cjs`.

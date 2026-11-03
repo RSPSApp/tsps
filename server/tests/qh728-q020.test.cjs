@@ -367,15 +367,15 @@ test('pyramid ladder route and Azzanadra action complete on varbit 358 = 15', ()
   h.quest.setStage(p, 12);
 
   fire(h.objectInteraction, { player: p, objectId: 6497, location: { x: 3233, y: 2897, z: 0 }, handled: false });
-  assert.deepEqual(p.moves.at(-1), [2913, 4953, 3]);
+  assert.deepEqual(p.moves.at(-1), [2912, 4953, 3]);
   assert.equal(h.quest.getStage(p), 13, 'entering the pyramid advances to helper finish stage 13');
 
   fire(h.objectInteraction, { player: p, objectId: 6498, location: { x: 2909, y: 4964, z: 3 }, handled: false });
-  assert.deepEqual(p.moves.at(-1), [2845, 4964, 2]);
+  assert.deepEqual(p.moves.at(-1), [2844, 4964, 2]);
   fire(h.objectInteraction, { player: p, objectId: 6499, location: { x: 2846, y: 4973, z: 2 }, handled: false });
-  assert.deepEqual(p.moves.at(-1), [2782, 4973, 1]);
+  assert.deepEqual(p.moves.at(-1), [2781, 4973, 1]);
   fire(h.objectInteraction, { player: p, objectId: 6500, location: { x: 2784, y: 4941, z: 1 }, handled: false });
-  assert.deepEqual(p.moves.at(-1), [3232, 9293, 0]);
+  assert.deepEqual(p.moves.at(-1), [3231, 9293, 0]);
   fire(h.objectInteraction, { player: p, objectId: 6553, location: { x: 3234, y: 9324, z: 0 }, handled: false });
   assert.deepEqual(p.moves.at(-1), [3234, 9323, 0]);
 
@@ -503,4 +503,111 @@ test('registered-dispatch chain reaches completion from a fresh stage 0 (not a l
   assert.equal(h.quest.getStage(p), 15);
   assert.equal(p.log.filter(row => row[0] === 'sendVarbit' && row[1] === 358).at(-1)?.[2], 15);
   assert.equal(p.items.get(I.ANCIENT_STAFF), 1);
+});
+
+test('native pyramid ladders retain the diamond gate and pair every floor before generic fallback', async t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const climb = require('../plugins/objects/ClimbLinks');
+  require('../plugins/objects/Ladders.plugin').register(PluginManager.createApi('pyramid-native-ladders'));
+  require('../plugins/quests/quests/DesertTreasureI.Quest')(PluginManager.createApi('pyramid-native-quest'));
+  const quest = runtime.getRegisteredQuests().find(q => q.key === 'desert_treasure_i');
+  let index = 1900;
+  function objectAt(id, [x, y, z]) {
+    RegionManager.loadMapFiles(x, y);
+    const object = core.MapObjects.mapObjects.get(core.MapObjects.getHash(x, y, z))?.find(o => o.getId() === id);
+    assert.ok(object, `cache loc ${id} at ${x},${y},${z}`);
+    return object;
+  }
+  function playerAt(stage, placed = 0) {
+    const channel = { kind: 'test', isOpen: () => true, send: () => true, close() {}, onData() {}, onClose() {}, onError() {} };
+    const session = new PlayerSession(channel), player = new Player(session); session.setPlayer(player);
+    player.setIndex(index++); player.setUsername('pyramid' + player.getIndex()); player.setRegistered(true);
+    const connection = new ClientConnection(channel); connection.player = player;
+    const messages = []; player.sendMessage = text => messages.push(text);
+    quest.setStage(player, stage);
+    if (placed) {
+      RegionManager.loadMapFiles(3233, 2897);
+      player.getSkillManager().setMaxLevel(core.Skill.MAGIC, 50).setCurrentLevel(core.Skill.MAGIC, 50, false);
+      const diamonds = [[6482, I.BLOOD_DIAMOND], [6485, I.SMOKE_DIAMOND], [6488, I.ICE_DIAMOND], [6491, I.SHADOW_DIAMOND]];
+      for (const [objectId, itemId] of diamonds.slice(0, placed)) {
+        const object = [...core.MapObjects.mapObjects.values()].flat().find(o => o.getId() === objectId);
+        assert.ok(object); player.getInventory().add(new core.Item(itemId), false);
+        assert.equal(PluginManager.emitItemOnObject({ player, object, objectId, itemId, handled: false }), true);
+        assert.equal(player.getInventory().getAmount(itemId), 0);
+      }
+      if (placed === 4) {
+        assert.equal(quest.getStage(player), 12);
+        assert.equal(player.getAttribute('desert-treasure-i:placed-mask'), 15);
+        assert.deepEqual([387, 388, 389, 390].map(id => player.getPacketSender().getVarbit(id)), [1, 1, 1, 1]);
+      }
+    }
+    return { player, connection, messages };
+  }
+  const position = tile => [tile.getX(), tile.getY(), tile.getZ()];
+  async function click(f, id, source) {
+    const object = objectAt(id, source), definition = core.ObjectDefinition.forId(id);
+    assert.equal(definition.getName(), 'Ladder');
+    const start = climb.landingTile(object, { x: source[0], y: source[1] }, null);
+    assert.ok(start); assert.equal(RegionManager.blocked(start), false);
+    f.player.setLocation(start); f.player.needsPlacement = false;
+    await f.connection.dispatch([{ type: 'object_option', id, x: source[0], y: source[1], clickType: 1, action: definition.getActions()[0] }]);
+    f.connection.processTurnPackets();
+    for (let tick = 0; tick < 4; tick++) {
+      core.TaskManager.process(); core.TaskManager.processWalkTo(f.player.getIndex()); f.player.getMovementQueue().process();
+    }
+    return position(start);
+  }
+  function cleanup(test, f) {
+    test.after(() => { f.player.setRegistered(false); core.TaskManager.cancelTasks(f.player.getIndex()); });
+  }
+  for (const [stage, placed] of [[0, 0], [11, 3]]) await t.test(`entry refuses stage ${stage} with ${placed} diamonds placed`, async test => {
+    const f = playerAt(stage, placed); cleanup(test, f);
+    const start = await click(f, 6497, [3233, 2897, 0]);
+    assert.deepEqual(position(f.player.getLocation()), start);
+    assert.equal(quest.getStage(f.player), stage);
+    assert.match(f.messages.at(-1), /powerful force prevents/);
+  });
+  const routes = [
+    [6497, [3233, 2897, 0], [2912, 4953, 3], 6504, [2913, 4953, 3]],
+    [6498, [2909, 4964, 3], [2844, 4964, 2], 6503, [2845, 4964, 2]],
+    [6499, [2846, 4973, 2], [2781, 4973, 1], 6502, [2782, 4973, 1]],
+    [6500, [2784, 4941, 1], [3231, 9293, 0], 6501, [3232, 9293, 0]],
+    [6504, [2913, 4953, 3], [3232, 2897, 0], 6497, [3233, 2897, 0]],
+    [6503, [2845, 4964, 2], [2908, 4964, 3], 6498, [2909, 4964, 3]],
+    [6502, [2782, 4973, 1], [2845, 4973, 2], 6499, [2846, 4973, 2]],
+    [6501, [3232, 9293, 0], [2783, 4941, 1], 6500, [2784, 4941, 1]],
+  ];
+  for (const [id, source, destination, returnId, returnTile] of routes) await t.test(`cache ladder ${id} lands on a walkable tile beside its paired ladder`, async test => {
+    const f = playerAt(id === 6497 ? 11 : 13, id === 6497 ? 4 : 0); cleanup(test, f);
+    await click(f, id, source);
+    assert.deepEqual(position(f.player.getLocation()), destination);
+    assert.equal(quest.getStage(f.player), 13);
+    const otherEnd = objectAt(returnId, returnTile), movement = f.player.getMovementQueue();
+    assert.equal(RegionManager.blocked(f.player.getLocation()), false);
+    assert.equal(movement.reachesObject(otherEnd, movement.buildObjectRouteSpec(otherEnd)), true, 'the return ladder remains usable from the landing');
+  });
+  await t.test('a player returning from an old invalid entry gains no quest stage', async test => {
+    const f = playerAt(0); cleanup(test, f); await click(f, 6504, [2913, 4953, 3]);
+    assert.deepEqual(position(f.player.getLocation()), [3232, 2897, 0]);
+    assert.equal(quest.getStage(f.player), 0);
+  });
+  await t.test('completed entry retains completion', async test => {
+    const f = playerAt(15); cleanup(test, f); await click(f, 6497, [3233, 2897, 0]);
+    assert.deepEqual(position(f.player.getLocation()), [2912, 4953, 3]);
+    assert.equal(quest.getStage(f.player), 15);
+  });
+  await t.test('descending after an old invalid entry cannot grant quest progress', async test => {
+    const f = playerAt(0); cleanup(test, f);
+    await click(f, 6501, [3232, 9293, 0]);
+    assert.equal(quest.getStage(f.player), 0);
+    await click(f, 6500, [2784, 4941, 1]);
+    assert.equal(quest.getStage(f.player), 0);
+  });
+  await t.test('a ready interior checkpoint still advances to stage 13', async test => {
+    const f = playerAt(11, 4); cleanup(test, f); await click(f, 6498, [2909, 4964, 3]);
+    assert.equal(quest.getStage(f.player), 13);
+    assert.deepEqual(position(f.player.getLocation()), [2844, 4964, 2]);
+  });
 });

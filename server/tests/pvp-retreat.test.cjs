@@ -286,3 +286,59 @@ test('PvP worlds add 15 to the shared Wilderness level for players and bots', ()
   assert.equal(canAttackByWildernessLevel(player(80, 3528), player(97, 3200)), false);
   assert.equal(canAttackByWildernessLevel(player(80, 3200), player(97, 3528)), false);
 });
+
+test('a reachable unlevelled PvP border does not remove the levelled player\'s combat cap', () => {
+  const { AreaManager } = require('../dist/game/model/areas/AreaManager');
+  const { RegionManager } = require('../dist/game/collision/RegionManager');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { Skill } = require('../dist/game/model/Skill');
+  const { CombatFactory, CanAttackResponse } = require('../dist/game/content/combat/CombatFactory');
+  const { hasGlobalWorldTag } = require('../dist/game/definition/WorldDefinition');
+  const wild = require('../plugins/areas/Wilderness.plugin');
+  const api = PluginManager.createApi('Wilderness');
+  const startup = [];
+  const areaCount = AreaManager.areas.length;
+  wild.register({ ...api, onServerStartup: (handler) => startup.push(handler) });
+  startup.forEach((handler) => handler());
+  RegionManager.init();
+  const player = (name, index, x, level) => {
+    const session = new PlayerSession({ readyState: 1, send() {} });
+    const actor = new Player(session, new Location(x, 3595, 0));
+    session.setPlayer(actor);
+    actor.setUsername(name).setIndex(index);
+    actor.setRegistered(true);
+    for (const skill of [Skill.ATTACK, Skill.DEFENCE, Skill.STRENGTH, Skill.HITPOINTS]) {
+      actor.getSkillManager().setCurrentLevel(skill, level, false).setMaxLevels(skill, level, false);
+    }
+    actor.setHitpoints(level);
+    actor.setArea(AreaManager.get(actor.getLocation()));
+    return actor;
+  };
+  try {
+    // world.json's PvP ground extends to x=3392; the cache's levelled strip stops at 3391.
+    // These are adjacent, walkable tiles, not a fixture-only location across a wall or water.
+    const high = player('BorderHigh', 880, 3391, 80);
+    const low = player('BorderLow', 881, 3392, 10);
+    assert.equal(hasGlobalWorldTag('pvp'), false);
+    assert.equal(RegionManager.getRegion(3392, 3595).getClip(3392, 3595, 0), 0);
+    assert.equal(RegionManager.canMove(3391, 3595, 3392, 3595, 0, 1, 1, null), true);
+    assert.equal(Wilderness.isInLocation(high.getLocation()), true);
+    assert.equal(Wilderness.isInLocation(low.getLocation()), true);
+    assert.deepEqual([Wilderness.levelAt(3391, 3595), Wilderness.levelAt(3392, 3595)], [10, 0]);
+    assert.ok(CombatFactory.validTarget(high, low));
+    for (const [attacker, target] of [[high, low], [low, high]]) {
+      assert.equal(wild.wildernessAttackRange(attacker, target), 10);
+      assert.equal(CombatFactory.canAttackPermission(attacker, target, false, CombatFactory.MELEE_COMBAT),
+        CanAttackResponse.CANT_ATTACK_IN_AREA);
+      attacker.getCombat().attack(target);
+      assert.equal(attacker.getCombat().performNewAttack(true), false);
+      assert.equal(target.getCombat().getHitQueue().hasPendingWork(), false);
+    }
+    // Zero keeps its existing "no levelled constraint" meaning when neither side has a level.
+    const unlevelled = player('BorderOther', 882, 3392, 80);
+    assert.equal(wild.wildernessAttackRange(unlevelled, low), 0);
+    assert.equal(wild.canAttackByWildernessLevel(unlevelled, low), true);
+  } finally {
+    AreaManager.areas.splice(areaCount);
+  }
+});

@@ -143,15 +143,20 @@ function wildernessLevelOf(player) {
 
 /**
  * Combat level range for an attack, i.e. the largest level difference that still allows
- * it. 0 means the pair isn't subject to the rule - one of them is outside the levelled
- * Wilderness, and whether they may fight at all is decided elsewhere. Both players must
+ * it. On a normal world, 0 means neither player has a levelled constraint, and whether
+ * they may fight at all is decided elsewhere. Both players must
  * be within range of each other, so the usable range is the shallower of their two
  * Wilderness levels; standing deeper alone does not widen it. On a PvP world the flat
  * +15 applies everywhere, and the shallower side still caps the total.
  */
 function wildernessAttackRange(attacker, target) {
   const base = hasGlobalWorldTag("pvp") ? PVP_WORLD_ATTACK_RANGE : 0;
-  return base + Math.min(wildernessLevelOf(attacker), wildernessLevelOf(target));
+  const attackerLevel = wildernessLevelOf(attacker);
+  const targetLevel = wildernessLevelOf(target);
+  const sharedLevel = Math.min(attackerLevel, targetLevel);
+  // Normal-world unlevelled PvP ground must not erase the other side's cap via the 0 sentinel.
+  // On a PvP world, that side has a real +/-15 range, so the minimum still applies.
+  return base + (base === 0 && sharedLevel === 0 ? Math.max(attackerLevel, targetLevel) : sharedLevel);
 }
 
 /**

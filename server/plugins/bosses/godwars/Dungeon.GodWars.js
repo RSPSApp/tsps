@@ -235,6 +235,17 @@ function setRespawns() {
   }
 }
 
+/**
+ * The four armies fight one another (Wiki, God Wars Dungeon). Each faction's followers are one
+ * side; generals and bodyguards keep to their chambers, where no other army comes.
+ */
+function declareRivalries() {
+  const followersOf = (faction) => faction.followers
+    .flatMap(([lo, hi]) => Array.from({ length: hi - lo + 1 }, (_, i) => lo + i))
+    .filter((id) => id !== faction.general && !faction.bodyguards.includes(id));
+  Common.api.emitCustomEvent("npc-rivalries:add", { name: "God Wars Dungeon armies", sides: Common.factions.map(followersOf) });
+}
+
 /** "godwars:god-items" { player, god, count }: how many worn items are the god's ("bandos", "armadyl", "saradomin", "zamorak"). */
 function godItemsQuery(request) {
   const faction = Common.factionByKey(String(request?.god ?? ""));
@@ -248,6 +259,7 @@ function attachDungeon(api) {
   api.persistAttribute(Common.ENTRANCE_ROPE_ATTRIBUTE);
   api.registerArea(new (dungeonArea())());
   api.onServerStartup(setRespawns);
+  api.onServerStartup(declareRivalries);
   api.onObjectFirstClick(entrance.boulder, moveBoulder);
   api.onObjectFirstClick(entrance.crack, crawlThroughCrack);
   api.onObjectFirstClick(entrance.hole, climbDown);

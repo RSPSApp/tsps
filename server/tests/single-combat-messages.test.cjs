@@ -20,6 +20,7 @@ function mobile(kind, name) {
     getAsPlayer: () => self,
     getAsNpc: () => self,
     isMultiCombat: () => false,
+    getOwner: () => null,
     getUsername: () => name, getDisplayName: () => name,
     getDueling: () => null,
     getArea: () => null,

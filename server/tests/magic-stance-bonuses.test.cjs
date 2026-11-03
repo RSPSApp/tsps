@@ -356,7 +356,9 @@ test("a manual cast keeps its cast animation: the combat reset after it doesn't 
     const animations = [];
     const character = {
         isPlayer: () => true, isNpc: () => false,
-        getAsPlayer: () => ({ getPacketSender: () => ({ sendConfig() {} }) }),
+        getAsPlayer: () => character,
+        getPacketSender: () => ({ sendConfig() {} }),
+        getEquipment: () => ({ hasStaffEquipped: () => false }),
         setMobileInteraction() {}, setPositionToFace() {},
         performAnimation: (animation) => animations.push(animation.getId()),
         getMovementQueue: () => ({ reset() {} }),

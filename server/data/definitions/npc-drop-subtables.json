@@ -707,6 +707,163 @@
       }
     ]
   },
+  "uncommonSeed": {
+    "name": "uncommonSeed",
+    "wiki_label": "uncommon seed drop table",
+    "wiki_page": "Drop table",
+    "entries": [
+      {
+        "item_id": 5100,
+        "name": "Limpwurt seed",
+        "quantity_raw": "1",
+        "rarity_raw": "137/1048"
+      },
+      {
+        "item_id": 5323,
+        "name": "Strawberry seed",
+        "quantity_raw": "1",
+        "rarity_raw": "131/1048"
+      },
+      {
+        "item_id": 5292,
+        "name": "Marrentill seed",
+        "quantity_raw": "1",
+        "rarity_raw": "125/1048"
+      },
+      {
+        "item_id": 5104,
+        "name": "Jangerberry seed",
+        "quantity_raw": "1",
+        "rarity_raw": "92/1048"
+      },
+      {
+        "item_id": 5293,
+        "name": "Tarromin seed",
+        "quantity_raw": "1",
+        "rarity_raw": "85/1048"
+      },
+      {
+        "item_id": 5311,
+        "name": "Wildblood seed",
+        "quantity_raw": "1",
+        "rarity_raw": "83/1048"
+      },
+      {
+        "item_id": 5321,
+        "name": "Watermelon seed",
+        "quantity_raw": "1",
+        "rarity_raw": "63/1048"
+      },
+      {
+        "item_id": 5294,
+        "name": "Harralander seed",
+        "quantity_raw": "1",
+        "rarity_raw": "56/1048"
+      },
+      {
+        "item_id": 22879,
+        "name": "Snape grass seed",
+        "quantity_raw": "1",
+        "rarity_raw": "40/1048"
+      },
+      {
+        "item_id": 5295,
+        "name": "Ranarr seed",
+        "quantity_raw": "1",
+        "rarity_raw": "39/1048"
+      },
+      {
+        "item_id": 5105,
+        "name": "Whiteberry seed",
+        "quantity_raw": "1",
+        "rarity_raw": "34/1048"
+      },
+      {
+        "item_id": 5282,
+        "name": "Mushroom spore",
+        "quantity_raw": "1",
+        "rarity_raw": "29/1048"
+      },
+      {
+        "item_id": 5296,
+        "name": "Toadflax seed",
+        "quantity_raw": "1",
+        "rarity_raw": "27/1048"
+      },
+      {
+        "item_id": 5281,
+        "name": "Belladonna seed",
+        "quantity_raw": "1",
+        "rarity_raw": "18/1048"
+      },
+      {
+        "item_id": 5297,
+        "name": "Irit seed",
+        "quantity_raw": "1",
+        "rarity_raw": "18/1048"
+      },
+      {
+        "item_id": 5106,
+        "name": "Poison ivy seed",
+        "quantity_raw": "1",
+        "rarity_raw": "13/1048"
+      },
+      {
+        "item_id": 5298,
+        "name": "Avantoe seed",
+        "quantity_raw": "1",
+        "rarity_raw": "12/1048"
+      },
+      {
+        "item_id": 5280,
+        "name": "Cactus seed",
+        "quantity_raw": "1",
+        "rarity_raw": "12/1048"
+      },
+      {
+        "item_id": 5299,
+        "name": "Kwuarm seed",
+        "quantity_raw": "1",
+        "rarity_raw": "9/1048"
+      },
+      {
+        "item_id": 22873,
+        "name": "Potato cactus seed",
+        "quantity_raw": "1",
+        "rarity_raw": "8/1048"
+      },
+      {
+        "item_id": 5300,
+        "name": "Snapdragon seed",
+        "quantity_raw": "1",
+        "rarity_raw": "5/1048"
+      },
+      {
+        "item_id": 5301,
+        "name": "Cadantine seed",
+        "quantity_raw": "1",
+        "rarity_raw": "4/1048"
+      },
+      {
+        "item_id": 5302,
+        "name": "Lantadyme seed",
+        "quantity_raw": "1",
+        "rarity_raw": "3/1048"
+      },
+      {
+        "item_id": 5303,
+        "name": "Dwarf weed seed",
+        "quantity_raw": "1",
+        "rarity_raw": "2/1048"
+      },
+      {
+        "item_id": 5304,
+        "name": "Torstol seed",
+        "quantity_raw": "1",
+        "rarity_raw": "1/1048"
+      }
+    ]
+  },
   "talisman": {
     "name": "talisman",
     "wiki_label": "talisman drop table",

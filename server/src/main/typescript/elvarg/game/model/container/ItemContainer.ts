@@ -471,13 +471,17 @@ export abstract class ItemContainer {
 
   /** How much of an item add() can accept, without changing either item or container. */
   public getAddableAmount(item: Item): number {
+    ensureContainersLoaded();
     const requested = Math.max(0, Math.floor(item.getAmount()));
     if (item.getId() < 0 || !Number.isFinite(requested) || requested <= 0) return 0;
     if (getItemDefinition().forId(item.getId()).isStackable() || this.stackType() == StackType.STACKS) {
       const meta = JSON.stringify(item.getMeta() ?? null);
-      const existing = this.items.find((held) => held.getId() === item.getId() &&
+      const existing = this.items.find((held) => held.getId() === item.getId() && (!(this instanceof Bank) || held.getAmount() > 0) &&
         JSON.stringify(held.getMeta() ?? null) === meta);
       if (existing) return Math.min(requested, Math.max(0, MAX_STACK_AMOUNT - existing.getAmount()));
+      if (this instanceof Bank && this.items.some((held) => held.getId() === item.getId() && held.getAmount() === 0)) {
+        return Math.min(requested, MAX_STACK_AMOUNT);
+      }
       return this.getFreeSlots() > 0 ? Math.min(requested, MAX_STACK_AMOUNT) : 0;
     }
     return Math.min(requested, this.getFreeSlots());
@@ -496,8 +500,13 @@ export abstract class ItemContainer {
       this.stackType() == StackType.STACKS
     ) {
       let slot = -1;
+      let emptyBankSlot = -1;
       for (let i = 0; i < this.capacity(); i++) {
         if (this.items[i].getId() !== item.getId()) {
+          continue;
+        }
+        if (this instanceof Bank && this.items[i].getAmount() === 0) {
+          if (emptyBankSlot === -1) emptyBankSlot = i;
           continue;
         }
         if (
@@ -509,7 +518,7 @@ export abstract class ItemContainer {
         }
       }
       if (slot == -1) {
-        slot = this.getEmptySlot();
+        slot = emptyBankSlot >= 0 ? emptyBankSlot : this.getEmptySlot();
       }
       if (slot == -1) {
         if (this.getPlayer() != null) {

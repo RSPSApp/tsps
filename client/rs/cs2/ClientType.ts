@@ -1,3 +1,9 @@
+import {
+    TOPLEVEL,
+    TOPLEVEL_DISPLAY,
+    TOPLEVEL_OSRS_STRETCH,
+    TOPLEVEL_PRE_EOC,
+} from "@runelite/api/gameval/InterfaceID";
 import { isMobileMode } from "../../common/utils/DeviceUtil";
 
 /**
@@ -12,15 +18,22 @@ export const CLIENT_TYPE_MOBILE = 7;
 /** Client types scripts 1445 and 2476 treat as the current client. */
 const CURRENT_CLIENT_TYPES = new Set([4, 5, 7, 8, 10]);
 export const MOBILE_ROOT_INTERFACE = 601;
+const DESKTOP_ROOT_INTERFACES = new Set([
+    TOPLEVEL,
+    TOPLEVEL_DISPLAY,
+    TOPLEVEL_OSRS_STRETCH,
+    TOPLEVEL_PRE_EOC,
+]);
 
 /**
  * One source of truth for "cache scripts are talking to a mobile client": the same
- * platform decision that picks the mobile layout, plus the runtime mobile root.
+ * active gameframe, falling back to the startup platform before a gameframe is loaded.
  * Touch hardware alone must not count, or a touchscreen laptop (desktop layout)
  * gets told it is mobile and mobile scripts hide the mouseover text (#358).
  */
 export function isMobileClient(rootInterface: number | undefined): boolean {
-    return isMobileMode || rootInterface === MOBILE_ROOT_INTERFACE;
+    if (rootInterface !== undefined && DESKTOP_ROOT_INTERFACES.has(rootInterface)) return false;
+    return rootInterface === MOBILE_ROOT_INTERFACE || isMobileMode;
 }
 
 export function reportedClientType(rootInterface: number | undefined): number {

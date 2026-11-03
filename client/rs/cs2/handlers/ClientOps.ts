@@ -8,7 +8,7 @@ import {
     DEFAULT_SCREEN_WIDTH,
 } from "../../../game/ClientState";
 import { getClientClock } from "../../../game/TransmitCycles";
-import { getSafeAreaBounds, isTouchDevice } from "../../../common/utils/DeviceUtil";
+import { getSafeAreaBounds } from "../../../common/utils/DeviceUtil";
 import { isMobileClient, reportedClientType } from "../ClientType";
 import { VARBIT_ROOF_REMOVAL } from "../../../common/vars";
 import { MenuTargetType } from "../../MenuEntry";
@@ -30,7 +30,7 @@ const SPELL_REQUIREMENT_SCRIPT = 19;
 
 function getUiZoomDefaultPercent(ctx: any): number {
     const wm = ctx.widgetManager as any;
-    return wm?.rootInterface === 601 || isTouchDevice
+    return isMobileClient(wm?.rootInterface) || ctx.varManager?.getVarbit(6352) === 1
         ? UIZOOM_DEFAULT_MOBILE_PERCENT
         : UIZOOM_DEFAULT_DESKTOP_PERCENT;
 }

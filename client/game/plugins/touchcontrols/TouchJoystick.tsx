@@ -4,7 +4,7 @@ import { isIosLandscapeRotated } from "../../InputManager";
 import { type TouchAction, type TouchControlsPlugin } from "./TouchControlsPlugin";
 import "./TouchJoystick.css";
 
-/** Knob travel from the centre, in px, for the full-size base (BASE_SIZE, the CSS --stick-size). */
+/** Reference travel/base size; the rendered bounds scale travel with the smaller stick. */
 const RADIUS = 44;
 const BASE_SIZE = 120;
 /** Fraction of the travel that still counts as centred. */
@@ -31,7 +31,7 @@ export function TouchJoystick({ plugin }: { plugin: TouchControlsPlugin }): JSX.
 
     const steer = (clientX: number, clientY: number, base: HTMLElement) => {
         const rect = base.getBoundingClientRect();
-        // The portrait stick is drawn smaller; its travel shrinks with it.
+        // Travel follows the rendered stick size in either orientation.
         const radius = RADIUS * (rect.width > 0 ? Math.min(rect.width, rect.height) / BASE_SIZE : 1);
         const screenX = clientX - (rect.left + rect.width / 2);
         const screenY = clientY - (rect.top + rect.height / 2);
@@ -81,7 +81,7 @@ export function TouchJoystick({ plugin }: { plugin: TouchControlsPlugin }): JSX.
     return (
         <div
             className={`touch-controls${state.portrait ? " portrait" : ""}`}
-            style={{ "--hud-inset": `${state.hudInset}px` } as React.CSSProperties}
+            style={{ "--hud-inset": `${state.hudInset}px`, "--touch-ui-scale": state.scale } as React.CSSProperties}
         >
             <div
                 className={`touch-joystick${knob ? " is-active" : ""}`}

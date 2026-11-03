@@ -1,9 +1,11 @@
 import { OverlayPosition } from "@runelite/client/ui/overlay/OverlayPosition";
 import { skillIconSprite } from "../../../rs/skill/skillIcons";
-import { SKILL_NAME, type SkillId } from "../../../rs/skill/skills";
+import { SKILL_IDS, SKILL_NAME, SkillId } from "../../../rs/skill/skills";
 import { type OverlayFont, overlayFont } from "@runelite/client/ui/overlay/OverlayFonts";
 import { drawTextGL } from "../../../widgets/components/TextRenderer";
 import type { OverlayMenuEntry, WidgetOverlay, WidgetOverlayDrawContext } from "../ClientPluginManager";
+import { showAllTimers } from "../../../common/utils/DeviceUtil";
+import { COMBAT_INFOBOX_SIZE } from "../../widgets/MobileHudLayout";
 import type { BoostsPlugin } from "./BoostsPlugin";
 
 type Rgba = [number, number, number, number];
@@ -18,9 +20,9 @@ const DEBUFFED = rgba(238, 51, 51);
 const WHITE = 0xffffff;
 /** Color.RED.brighter(). */
 const RED_BRIGHTER = 0xff0000;
-const INFOBOX_SIZE = 35;
+const INFOBOX_SIZE = COMBAT_INFOBOX_SIZE;
 const INFOBOX_GAP = 2;
-const INFOBOX_ICON = 25;
+const INFOBOX_ICON = 22;
 const PANEL_WIDTH = 129;
 const PANEL_BORDER = 4;
 const LINE_HEIGHT = 15;
@@ -37,22 +39,24 @@ function menuEntries(plugin: BoostsPlugin): OverlayMenuEntry[] {
     return [{ option: "Configure", target: "Boosts overlay", onClick: () => plugin.openSettings() }];
 }
 
+const PREVIEW_SKILLS = SKILL_IDS.filter(skill => skill !== SkillId.Hitpoints && skill !== SkillId.Prayer);
+
 /** The skill rows, then the debuff and buff restore timers (RuneLite's infobox and compact order). */
 function entries(plugin: BoostsPlugin): Entry[] {
     const skills: Entry[] = [];
-    for (const skill of plugin.skillsToDisplay) {
+    for (const skill of showAllTimers ? PREVIEW_SKILLS : plugin.skillsToDisplay) {
         const boost = plugin.getBoostedSkillLevel(skill) - plugin.getRealSkillLevel(skill);
-        if (boost === 0) continue;
+        if (boost === 0 && !showAllTimers) continue;
         skills.push({ skill, text: plugin.boostText(skill), color: plugin.textColor(boost), tooltip: `${SKILL_NAME[skill]} boost` });
     }
     const timers: Entry[] = [];
     const up = plugin.getChangeUpTicks();
-    if (up !== -1) {
-        timers.push({ arrow: "down", text: String(plugin.getChangeTime(up)).padStart(2, "0"), color: up < 10 ? RED_BRIGHTER : WHITE, tooltip: "Next debuff change" });
+    if (up !== -1 || showAllTimers) {
+        timers.push({ arrow: "down", text: String(up === -1 ? 0 : plugin.getChangeTime(up)).padStart(2, "0"), color: up < 10 ? RED_BRIGHTER : WHITE, tooltip: "Next debuff change" });
     }
     const down = plugin.getChangeDownTicks();
-    if (down !== -1) {
-        timers.push({ arrow: "up", text: String(plugin.getChangeTime(down)).padStart(2, "0"), color: down < 10 ? RED_BRIGHTER : WHITE, tooltip: "Next buff change" });
+    if (down !== -1 || showAllTimers) {
+        timers.push({ arrow: "up", text: String(down === -1 ? 0 : plugin.getChangeTime(down)).padStart(2, "0"), color: down < 10 ? RED_BRIGHTER : WHITE, tooltip: "Next buff change" });
     }
     return [...skills, ...timers];
 }
@@ -91,11 +95,11 @@ function frame(context: WidgetOverlayDrawContext, r: Rect, sx: number, sy: numbe
 }
 
 /**
- * RuneLite's BoostIndicator and StatChangeIndicator infoboxes, as one movable row: the skill
+ * RuneLite's BoostIndicator and StatChangeIndicator infoboxes, as one movable group: the skill
  * icon with its level (or relative boost), then the buff and debuff restore timers.
  */
 export class BoostsInfoBoxOverlay implements WidgetOverlay {
-    readonly movable = { name: "BoostsInfoBoxOverlay", position: OverlayPosition.TOP_LEFT };
+    readonly movable = { name: "BoostsInfoBoxOverlay", position: OverlayPosition.BELOW_MINIMAP };
 
     constructor(private readonly plugin: BoostsPlugin) {}
 
@@ -104,7 +108,7 @@ export class BoostsInfoBoxOverlay implements WidgetOverlay {
     }
 
     private entries(): Entry[] {
-        if (!this.plugin.isStarted() || this.plugin.config.displayInfoboxes() !== true) return [];
+        if (!this.plugin.isEnabled() || !this.plugin.isStarted() || this.plugin.config.displayInfoboxes() !== true) return [];
         return entries(this.plugin);
     }
 
@@ -116,16 +120,20 @@ export class BoostsInfoBoxOverlay implements WidgetOverlay {
     draw(context: WidgetOverlayDrawContext): Rect[] {
         const list = this.entries();
         if (list.length === 0) return [];
-        const width = list.length * INFOBOX_SIZE + (list.length - 1) * INFOBOX_GAP;
-        const at = context.place(this, width, INFOBOX_SIZE);
+        const columns = Math.min(8, list.length, context.canvasCssWidth
+            ? Math.max(1, Math.floor((context.canvasCssWidth / (context.hudScale ?? 1) - 16 + INFOBOX_GAP) / (INFOBOX_SIZE + INFOBOX_GAP)))
+            : list.length);
+        const rows = Math.ceil(list.length / columns);
+        const width = columns * INFOBOX_SIZE + (columns - 1) * INFOBOX_GAP;
+        const height = rows * INFOBOX_SIZE + (rows - 1) * INFOBOX_GAP;
+        const at = context.place(this, width, height);
         if (!at) return [];
         const { scaleX: sx, scaleY: sy } = at;
-        // InfoBoxComponent: the infobox font, as the boxes are at least its 32 px default size.
         const font = overlayFont("infobox");
         const textH = Math.round(12 * font.scale);
         const rects: Rect[] = [];
         list.forEach((entry, i) => {
-            const r = { x: at.x + i * (INFOBOX_SIZE + INFOBOX_GAP) * sx, y: at.y, w: INFOBOX_SIZE * sx, h: INFOBOX_SIZE * sy };
+            const r = { x: at.x + (i % columns) * (INFOBOX_SIZE + INFOBOX_GAP) * sx, y: at.y + Math.floor(i / columns) * (INFOBOX_SIZE + INFOBOX_GAP) * sy, w: INFOBOX_SIZE * sx, h: INFOBOX_SIZE * sy };
             frame(context, r, sx, sy);
             const pad = ((INFOBOX_SIZE - INFOBOX_ICON) / 2) * sx;
             drawIcon(context, entry, r.x + pad, r.y + 2 * sy, INFOBOX_ICON * sx);
@@ -138,7 +146,7 @@ export class BoostsInfoBoxOverlay implements WidgetOverlay {
 
 /** RuneLite's BoostsOverlay: a panel of restore timers and "boosted/base" per skill. */
 export class BoostsPanelOverlay implements WidgetOverlay {
-    readonly movable = { name: "BoostsOverlay", position: OverlayPosition.TOP_LEFT };
+    readonly movable = { name: "BoostsOverlay", position: OverlayPosition.BELOW_MINIMAP };
 
     constructor(private readonly plugin: BoostsPlugin) {}
 
@@ -149,13 +157,13 @@ export class BoostsPanelOverlay implements WidgetOverlay {
     /** [left, right parts with colours]. */
     private lines(): [string, [string, number][]][] {
         const plugin = this.plugin;
-        if (!plugin.isStarted() || plugin.config.displayPanel() !== true) return [];
+        if (!plugin.isEnabled() || !plugin.isStarted() || plugin.config.displayPanel() !== true) return [];
         const lines: [string, [string, number][]][] = [];
         const down = plugin.getChangeDownTicks();
-        if (down !== -1) lines.push(["Next + restore in", [[String(plugin.getChangeTime(down)), WHITE]]]);
+        if (down !== -1 || showAllTimers) lines.push(["Next + restore in", [[String(down === -1 ? 0 : plugin.getChangeTime(down)), WHITE]]]);
         const up = plugin.getChangeUpTicks();
-        if (up !== -1) lines.push(["Next - restore in", [[String(plugin.getChangeTime(up)), WHITE]]]);
-        for (const skill of plugin.skillsToDisplay) {
+        if (up !== -1 || showAllTimers) lines.push(["Next - restore in", [[String(up === -1 ? 0 : plugin.getChangeTime(up)), WHITE]]]);
+        for (const skill of showAllTimers ? PREVIEW_SKILLS : plugin.skillsToDisplay) {
             const boosted = plugin.getBoostedSkillLevel(skill);
             const base = plugin.getRealSkillLevel(skill);
             const boost = boosted - base;
@@ -208,7 +216,7 @@ export class BoostsPanelOverlay implements WidgetOverlay {
 
 /** RuneLite's CompactBoostsOverlay: a small icon and right-justified text per boost and timer. */
 export class CompactBoostsOverlay implements WidgetOverlay {
-    readonly movable = { name: "CompactBoostsOverlay", position: OverlayPosition.TOP_LEFT };
+    readonly movable = { name: "CompactBoostsOverlay", position: OverlayPosition.BELOW_MINIMAP };
 
     constructor(private readonly plugin: BoostsPlugin) {}
 
@@ -217,7 +225,7 @@ export class CompactBoostsOverlay implements WidgetOverlay {
     }
 
     private entries(): Entry[] {
-        if (!this.plugin.isStarted() || this.plugin.config.compactDisplay() !== true) return [];
+        if (!this.plugin.isEnabled() || !this.plugin.isStarted() || this.plugin.config.compactDisplay() !== true) return [];
         return entries(this.plugin);
     }
 

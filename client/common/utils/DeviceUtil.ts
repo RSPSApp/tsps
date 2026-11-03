@@ -132,10 +132,22 @@ export const forceMobileMode =
 // Debug UI (the Leva panel and its F-key shortcuts) only mounts with an
 // explicit ?debug flag, so players never see it.
 export const isDebugMode = urlParams?.has("debug") ?? false;
+export const showAllTimers = urlParams?.has("timers") ?? false;
 
 // Layout/mobile UI mode should only follow actual handheld/tablet platforms (plus overrides),
 // not generic touch-capable desktop hardware.
 export const isMobileMode = checkAndroid() || isIos || forceMobileMode;
+
+export const MOBILE_GAMEFRAME_MEDIA_QUERY = "(max-width: 764px), (max-height: 502px)";
+
+/** Layout follows the current browser/device mode; hardware/renderer defaults stay fixed at startup. */
+export function prefersMobileGameframe(): boolean {
+    const agent = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const mobileBrowser = /Android|iPhone|iPad|iPod/i.test(agent) ||
+        (agent.includes("Macintosh") && navigator.maxTouchPoints > 1);
+    return forceMobileMode || mobileBrowser || (typeof window !== "undefined" &&
+        typeof window.matchMedia === "function" && window.matchMedia(MOBILE_GAMEFRAME_MEDIA_QUERY).matches);
+}
 
 /**
  * Phones, tablets (including one on "desktop site": touch with a coarse main pointer) and iOS:

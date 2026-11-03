@@ -2438,6 +2438,7 @@ export class PluginManager {
       XPDROPS_ENABLED_ATTRIBUTE: require("../net/protocol/ClientProtocol").XPDROPS_ENABLED_ATTRIBUTE,
       encodeGameframeBootstrap: require("../net/protocol/ClientProtocol").encodeGameframeBootstrap,
       resolveGameframeRoot: require("../net/protocol/ClientProtocol").resolveGameframeRoot,
+      orbsGroupFor: require("../net/protocol/ClientProtocol").orbsGroupFor,
       encodeFinePosition: require("../net/protocol/ClientProtocol").encodeFinePosition,
       Boundary: require(`${model}/Boundary`).Boundary,
       PolygonalBoundary: require(`${model}/PolygonalBoundary`).PolygonalBoundary,

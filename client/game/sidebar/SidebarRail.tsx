@@ -1,17 +1,21 @@
+import type { ReactNode } from "react";
 import type { NavigationButton } from "@runelite/client/ui/NavigationButton";
 
-/** The always-visible column of sidebar icons on the right edge (RuneLite's toolbar). */
+/** RuneLite's toolbar: a side rail, or a bottom row in portrait mode. */
 export function SidebarRail({
     buttons,
     selected,
     onClick,
+    children,
 }: {
+    children?: ReactNode;
     buttons: ReadonlyArray<NavigationButton>;
     selected: string | null;
     onClick: (button: NavigationButton) => void;
 }): JSX.Element {
     return (
         <nav className="rl-sidebar-rail" aria-label="Sidebar">
+            {children}
             {buttons.map((button) => {
                 const active = selected === button.tooltip;
                 const Icon = button.icon;

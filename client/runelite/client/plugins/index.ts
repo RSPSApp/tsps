@@ -2,7 +2,6 @@ import { AnimationSmoothingConfig } from "../../../game/plugins/animationsmoothi
 import { BugReportPlugin } from "../../../game/plugins/bugreport/BugReportPlugin";
 import { VoiceChatPlugin } from "../../../game/plugins/voice/VoiceChatPlugin";
 import { AnimationSmoothingPlugin } from "../../../game/plugins/animationsmoothing/AnimationSmoothingPlugin";
-import { AttackTimerPlugin } from "../../../game/plugins/attacktimer/AttackTimerPlugin";
 import { BankPlugin } from "../../../game/plugins/bank/BankPlugin";
 import { BankTagsPlugin } from "../../../game/plugins/banktags/BankTagsPlugin";
 import { BoostsPlugin } from "../../../game/plugins/boosts/BoostsPlugin";
@@ -47,17 +46,10 @@ import { PrayerPlugin } from "../../../game/plugins/tabreorder/PrayerPlugin";
 import { FairyRingPlugin } from "../../../game/plugins/fairyring/FairyRingPlugin";
 import { PestControlPlugin } from "../../../game/plugins/pestcontrol/PestControlPlugin";
 import { SpellbookPlugin } from "../../../game/plugins/tabreorder/SpellbookPlugin";
-import {
-    AntifireTimerPlugin,
-    FreezeTimerPlugin,
-    PoisonTimerPlugin,
-    StaminaTimerPlugin,
-    TeleblockTimerPlugin,
-} from "../../../game/plugins/statustimer/StatusTimerPlugin";
+import { TimersPlugin } from "../../../game/plugins/statustimer/TimersPlugin";
 import { LegacyTileMarkersConfig } from "../../../game/plugins/tilemarkers/migrateTileMarkers";
 import { TileMarkersPlugin } from "../../../game/plugins/tilemarkers/TileMarkersPlugin";
 import { TilePacksPlugin } from "../../../game/plugins/tilepacks/TilePacksPlugin";
-import { VengeanceTimerPlugin } from "../../../game/plugins/vengeancetimer/VengeanceTimerPlugin";
 import { WeatherPlugin } from "../../../game/plugins/weather/WeatherPlugin";
 import { XpTrackerPlugin } from "../../../game/plugins/xptracker/XpTrackerPlugin";
 import { XpGlobesPlugin } from "../../../game/plugins/xpglobes/XpGlobesPlugin";
@@ -103,13 +95,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     TimestampPlugin,
     ChatFilterPlugin,
     AnimationSmoothingPlugin,
-    AttackTimerPlugin,
-    VengeanceTimerPlugin,
-    PoisonTimerPlugin,
-    FreezeTimerPlugin,
-    AntifireTimerPlugin,
-    TeleblockTimerPlugin,
-    StaminaTimerPlugin,
+    TimersPlugin,
     WeatherPlugin,
     StatusBarsPlugin,
     BoostsPlugin,

@@ -87,6 +87,10 @@ export type WidgetOverlayDrawContext = {
     itemImage?(itemId: number, quantity: number, outline: number): HTMLCanvasElement | undefined;
     /** Where a movable overlay of this size (layout units) draws this frame; nothing while the HUD is hidden. */
     place(overlay: WidgetOverlay, width: number, height: number): OverlayPlacement | undefined;
+    /** Visible game canvas width in CSS pixels, for compact infobox wrapping. */
+    canvasCssWidth?: number;
+    /** Mobile gameframe growth relative to compact phone-sized controls. */
+    hudScale?: number;
     /** HUD text scale on each canvas axis, including touch-display adjustments. */
     overlayTextScale?(): { x: number; y: number };
     inputScale?(): { x: number; y: number };

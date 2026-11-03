@@ -4,7 +4,8 @@ import { CacheIndex } from "../../rs/cache/CacheIndex";
 import { CacheSystem } from "../../rs/cache/CacheSystem";
 import { BitmapFont } from "../../rs/font/BitmapFont";
 import { ClientState } from "../../game/ClientState";
-import { isLowEndDevice, isTouchDevice } from "../../common/utils/DeviceUtil";
+import { getCanvasCssSize, isLowEndDevice, isTouchDevice } from "../../common/utils/DeviceUtil";
+import { mobileHudScale } from "../../game/widgets/MobileHudLayout";
 import { getUiScale } from "../UiScale";
 import { FONT_BOLD_12, FONT_VERDANA_13 } from "../fonts";
 import { getChooseOptionMenuRect } from "../../widgets/gl/choose-option";
@@ -1176,8 +1177,12 @@ export class WidgetsOverlay implements Overlay {
     private drawWidgetOverlays(overlays: WidgetOverlay[], resetRects = true, into?: DirtyRect[]): DirtyRect[] {
         const glr = this.glRenderer;
         if (!glr) return into ?? this.widgetOverlayRects;
+        const cssWidth = getCanvasCssSize(this.app.gl.canvas as HTMLCanvasElement).width;
+        const manager = this.ctx.getWidgetManager?.();
         const context = {
             renderer: glr,
+            canvasCssWidth: cssWidth,
+            hudScale: mobileHudScale(manager?.rootInterface, cssWidth, manager?.canvasWidth),
             fontLoader: this.ctx.getFontLoader?.() || (() => undefined),
             sprite: (id: number) => (glr.canvas as any).__textureCache?.getSpriteById(id),
             itemImage: (itemId: number, quantity: number, outline: number) =>

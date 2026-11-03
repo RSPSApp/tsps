@@ -51,6 +51,7 @@ const COMBAT_TARGET_PLAYER_VARP = 1075;
 
 /** No attack animation may hold a player longer than this; guards a bad seq decode. */
 const MAX_ANIMATION_STALL_TICKS = 5;
+const MAX_CONTENT_ANIMATION_STALL_TICKS = 100;
 
 /** Owns one character's target, attack deadline, approach route, and delayed hits. */
 export class Combat {
@@ -147,8 +148,8 @@ export class Combat {
      * `partial` stall only keeps a click from cutting the animation away - the server still
      * processes movement, and the client withholds the actor's steps until the animation ends,
      * then catches up (the rubber band). A `full` stall also holds their clicks, their movement
-     * and any hit coming in, all released together on the cycle the client finishes playing the
-     * animation. Only content declares one; seq config cannot.
+     * and, when requested by content, incoming hits until the animation finishes.
+     * Only content declares one; seq config cannot.
      */
     private animationStall: {
         untilCycle: number;
@@ -204,6 +205,19 @@ export class Combat {
             untilCycle: World.getProcessCycle() + event.ticks,
             kind: event.kind,
             holdsHits: event.kind === "full" && event.holdsHits,
+        };
+    }
+
+    /** Content can hold actions and movement without delaying incoming damage. */
+    public setAnimationStall(ticks: number): void {
+        if (!Number.isFinite(ticks) || ticks <= 0) return;
+        const now = World.getProcessCycle();
+        const existing = this.animationStall;
+        const activeFull = existing?.kind === "full" && existing.untilCycle > now;
+        this.animationStall = {
+            untilCycle: Math.max(now + Math.min(MAX_CONTENT_ANIMATION_STALL_TICKS, Math.trunc(ticks)), activeFull ? existing.untilCycle : now),
+            kind: "full",
+            holdsHits: activeFull && existing.holdsHits,
         };
     }
 

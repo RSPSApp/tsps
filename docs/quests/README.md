@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-191 quests · ✅ passed: 29 · ⚠️ passed with issues: 15 · 🔄 in progress: 11 · ❌ failed: 1 · 🔁 needs recheck: 27 · untested: 108
+191 quests · ✅ passed: 28 · ⚠️ passed with issues: 15 · 🔄 in progress: 11 · ❌ failed: 1 · 🔁 needs recheck: 28 · untested: 108
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -19,7 +19,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [A Tail of Two Cats](a-tail-of-two-cats/README.md) | 🔄 in progress | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [A Taste of Hope](taste-of-hope/README.md) | 🔄 in progress | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [Animal Magnetism](animal-magnetism/README.md) | untested |  |  |  |  |
-| [Another Slice of H.A.M.](another-slice-of-ham/README.md) | ✅ passed | 2026-11-03 | agent | DeepSeek V4.1 Flash | 3 |
+| [Another Slice of H.A.M.](another-slice-of-ham/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash | 3 |
 | [At First Light](at-first-light/README.md) | ⚠️ passed with issues |  | agent |  | 1 |
 | [Bear Your Soul](bear-your-soul/README.md) | 🔄 in progress | 2026-10-31 | agent | DeepSeek V4.1 Flash |  |
 | [Below Ice Mountain](below-ice-mountain/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 6 |

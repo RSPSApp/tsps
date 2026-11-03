@@ -54,7 +54,7 @@ live varbit table and Quest Helper's pinned commit
 
 Newest first.
 
-- **fixed** Review follow-ups to `ed4f07f68`, fixed in `FOLLOWUP_COMMIT`:
+- **fixed** Review follow-ups to `ed4f07f68`, fixed in `9a97c2a51`:
   - Stage 6 had no way back to the tower: the generals only moved a stage-5 player into the
     instance, and Oldak's return dialogue skipped 6. A stage-6 player who died or left is now sent
     back by the generals with the surviving snipers, and Oldak offers the return at 5-7.

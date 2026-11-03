@@ -13,6 +13,7 @@ const Shared = require("./brimhavenagilityarena/Shared.BrimhavenAgilityArena");
 const Area = require("./brimhavenagilityarena/Area.BrimhavenAgilityArena");
 const Dispensers = require("./brimhavenagilityarena/Dispensers.BrimhavenAgilityArena");
 const Obstacles = require("./brimhavenagilityarena/Obstacles.BrimhavenAgilityArena");
+const Store = require("./brimhavenagilityarena/Store.BrimhavenAgilityArena");
 
 module.exports = {
   name: "BrimhavenAgilityArena",
@@ -79,5 +80,6 @@ module.exports = {
     Area(api);
     Dispensers(api);
     Obstacles(api);
+    Store(api);
   },
 };

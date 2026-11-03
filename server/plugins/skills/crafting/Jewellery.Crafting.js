@@ -75,7 +75,7 @@ function data() {
     perfect: perfect.recipes.map((recipe) => ({
       ...recipe, itemId: Shared.itemId(recipe.item), mouldId: Shared.itemId(recipe.mould),
     })),
-    strung: new Map(strungAmulets.pairs.map(([unstrung, strung]) => [Shared.itemId(unstrung), Shared.itemId(strung)])),
+    strung: new Map(strungAmulets.pairs.map(([unstrung, strung, noun = "amulet"]) => [Shared.itemId(unstrung), { itemId: Shared.itemId(strung), noun }])),
     stringXp: strungAmulets.xp,
     animation: new Animation(FURNACE_ANIMATION_ID),
     sound: new Sound(FURNACE_SOUND, 1, 0, 0),
@@ -274,14 +274,14 @@ function handlePerfectJewellery(event) {
   );
 }
 
-/** A ball of wool used on an unstrung amulet, in either order. */
+/** A ball of wool used on unstrung jewellery, in either order. */
 function stringAmulet(event) {
   const { player, usedItemId, usedWithItemId } = event;
   const { ItemIds: I, Item } = Shared.getCore();
   const unstrungId = usedItemId === I.BALL_OF_WOOL ? usedWithItemId : usedItemId;
   const woolId = usedItemId === I.BALL_OF_WOOL ? usedItemId : usedWithItemId;
-  const strungId = data().strung.get(unstrungId);
-  if (woolId !== I.BALL_OF_WOOL || strungId === undefined) return;
+  const strung = data().strung.get(unstrungId);
+  if (woolId !== I.BALL_OF_WOOL || !strung) return;
 
   event.handled = true;
   Shared.nextTick(player, () => {
@@ -289,9 +289,9 @@ function stringAmulet(event) {
     if (!inventory.contains(I.BALL_OF_WOOL) || !inventory.contains(unstrungId)) return;
     inventory.deleteNumber(I.BALL_OF_WOOL, 1);
     inventory.deleteNumber(unstrungId, 1);
-    inventory.addItem(new Item(strungId, 1));
+    inventory.addItem(new Item(strung.itemId, 1));
     Shared.addCraftingXp(player, data().stringXp);
-    Shared.spam(player, "You put some string on your amulet.");
+    Shared.spam(player, `You put some string on your ${strung.noun}.`);
   });
 }
 

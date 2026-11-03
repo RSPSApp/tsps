@@ -770,6 +770,37 @@ function pouch(player, option, name = 'Colossal pouch') {
   return hooks.items[name][option]({ player, itemId: id });
 }
 
+test('the native bank inventory Fill op fills and empties an essence pouch without banking it', t => {
+  const core = PluginManager.getCoreApi(), { Bank } = core;
+  const player = new Player(null);
+  player.setUsername('bankpouch');
+  t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true }));
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
+    for (const handler of hooks.custom[name] ?? []) handler(event);
+  });
+  player.getSkillManager().setMaxLevels(core.Skill.RUNECRAFTING, 99, false);
+  const id = core.CacheDefinitions.getObjId('rcu_pouch_small');
+  const essence = core.CacheDefinitions.getObjId('blankrune_high');
+  assert.equal(core.CacheDefinitions.getItem(id).params.get(595), 'Fill', 'native cache bank action');
+  player.getInventory().adds(id, 1).adds(essence, 3);
+  player.setStatus(core.PlayerStatus.BANKING);
+  player.setInterfaceId(Bank.MAIN_INTERFACE_ID);
+  const op = () => Bank.handleWidgetAction(player, { groupId: Bank.SIDE_INTERFACE_ID,
+    childId: Bank.SIDE_ITEMS_CHILD, slot: 0, itemId: id, buttonNum: 9 });
+  assert.equal(op(), true);
+  assert.equal(player.getInventory().getAmount(essence), 0);
+  assert.equal(player.getAttribute(Pouches.POUCHES_ATTRIBUTE).small.amount, 3);
+  assert.equal(player.getInventory().getAmount(id), 1);
+  assert.equal(player.getBank(0).getAmount(id), 0);
+  assert.equal(Bank.isOpen(player), true);
+  assert.equal(op(), true);
+  assert.equal(player.getInventory().getAmount(essence), 3, 'the existing full-pouch action empties it');
+  assert.equal(player.getAttribute(Pouches.POUCHES_ATTRIBUTE).small.amount, 0);
+  player.setStatus(core.PlayerStatus.NONE);
+  assert.equal(op(), false, 'the bank-only action cannot run after closing');
+  assert.equal(player.getInventory().getAmount(essence), 3);
+});
+
 test('pouches hold one kind of essence, shown on their varbits; Fill empties a full pouch', () => {
   const player = fakePlayer('Pouch', { runecraft: 85 });
   const colossal = Shared.core().CacheDefinitions.getObjId('rcu_pouch_colossal');

@@ -11,38 +11,56 @@ const { ItemIds } = require("../dist/util/IdEnums");
 const AbyssalTentacle = require("../plugins/items/AbyssalTentacle.plugin");
 
 const poisoned = [];
+const itemActions = {};
+const CombatType = { MELEE: "melee", MAGIC: "magic" };
 AbyssalTentacle.register({
   core: {
+    CombatType,
     Equipment,
+    Flag: { APPEARANCE: "appearance" },
+    Item: class { constructor(id, amount) { this.id = id; this.amount = amount; } },
     ItemIdentifiers: ItemIds,
+    WeaponInterfaceManager: { assign() {} },
     CombatFactory: { poisonEntity: (target, severity, orb) => poisoned.push({ target, severity, orb }) },
   },
+  emitCustomEvent() {},
   onCombatHitResolved() {},
+  onItemAction(name, actions) { itemActions[name] = actions; },
 });
 
-function item(id) {
+function item(id, meta = {}) {
   return {
     id,
+    meta,
     getId() { return this.id; },
     setId(next) { this.id = next; },
+    getMetaValue(key) { return this.meta[key]; },
+    setMetaValue(key, value) { this.meta[key] = value; },
   };
 }
 
 function createPlayer(weapon = null) {
   const equipment = new Array(14).fill(null).map(() => item(0));
   if (weapon) equipment[Equipment.WEAPON_SLOT] = weapon;
+  const messages = [];
+  const added = [];
   return {
-    getEquipment: () => ({ getItems: () => equipment }),
+    messages,
+    added,
+    getEquipment: () => ({ getItems: () => equipment, refreshItems() {} }),
+    getInventory: () => ({ forceAdd: (_player, given) => added.push(given) }),
+    getUpdateFlag: () => ({ flag() {} }),
+    sendMessage: (message) => messages.push(message),
     isPlayer: () => true,
     getAsPlayer() { return this; },
   };
 }
 
-function strike(player, { accurate = true, damage = 5 } = {}) {
+function strike(player, { accurate = true, damage = 5, type = CombatType.MELEE } = {}) {
   AbyssalTentacle._test.onHitResolved({
     attacker: player,
     target: {},
-    hit: { isAccurate: () => accurate, getTotalDamage: () => damage },
+    hit: { isAccurate: () => accurate, getTotalDamage: () => damage, getCombatType: () => type },
   });
 }
 
@@ -92,4 +110,50 @@ test("misses and zero-damage hits do not roll, and an unwielded tentacle never p
   } finally {
     Math.random = original;
   }
+});
+
+test("Check reports the attacks left, full for a tentacle with no saved count", () => {
+  assert.equal(typeof itemActions["Abyssal tentacle"].Check, "function");
+  assert.equal(typeof itemActions["Abyssal tentacle (or)"].Check, "function");
+  const player = createPlayer();
+  AbyssalTentacle._test.check({ player, item: item(ItemIds.ABYSSAL_TENTACLE, { "abyssal-tentacle": 955 }) });
+  AbyssalTentacle._test.check({ player, item: item(ItemIds.ABYSSAL_TENTACLE) });
+  assert.deepEqual(player.messages, [
+    "Your abyssal tentacle can perform 955 more attacks.",
+    "Your abyssal tentacle can perform 10,000 more attacks.",
+  ]);
+});
+
+test("every melee attack, hit or miss, uses a charge; other attacks do not", () => {
+  const tentacle = item(ItemIds.ABYSSAL_TENTACLE, { "abyssal-tentacle": 10 });
+  const player = createPlayer(tentacle);
+  const original = Math.random;
+  try {
+    Math.random = () => 0.9;
+    strike(player);
+    strike(player, { accurate: false, damage: 0 });
+    strike(player, { type: CombatType.MAGIC });
+  } finally {
+    Math.random = original;
+  }
+  assert.equal(AbyssalTentacle._test.charges(tentacle), 8);
+});
+
+test("the last charge leaves the kraken tentacle, and an (or) tentacle returns its kit", () => {
+  const plain = item(ItemIds.ABYSSAL_TENTACLE, { "abyssal-tentacle": 1 });
+  const ornamented = item(ItemIds.ABYSSAL_TENTACLE_OR_, { "abyssal-tentacle": 1 });
+  const plainOwner = createPlayer(plain);
+  const ornamentedOwner = createPlayer(ornamented);
+  const original = Math.random;
+  try {
+    Math.random = () => 0.9;
+    strike(plainOwner);
+    strike(ornamentedOwner);
+  } finally {
+    Math.random = original;
+  }
+  assert.equal(plain.getId(), ItemIds.KRAKEN_TENTACLE);
+  assert.equal(plainOwner.added.length, 0);
+  assert.equal(ornamented.getId(), ItemIds.KRAKEN_TENTACLE);
+  assert.equal(ornamentedOwner.added[0].id, ItemIds.SHATTERED_RELICS_VARIETY_ORNAMENT_KIT);
 });

@@ -69,6 +69,35 @@ function interrupted(core, player, start) {
 /** The standard cast; a league's own animation set (LeagueAreaUnlocks) passes another. */
 const DEFAULT_CAST = { steps: STEPS, lockTick: LOCK_TICK, landTick: LAND_TICK };
 
+/** Enabled home teleport animations, a bitmask in the picker's bit order (varp 4560); bit 0 is the default. */
+const TOGGLES_ATTRIBUTE = "home-teleport:animation-toggles";
+
+/**
+ * The unlockable animations by picker bit (CS2 7758) as { steps: [{ tick, animation, graphic? }], lockTick,
+ * landTick }, chained from the cache's per-part sequences (each starts as the last ends); not from a capture.
+ * Twisted (bit 4) has no per-part sequences in the cache, so it plays the standard cast.
+ */
+const COSMETIC_CASTS = new Map([
+  [5, { // Trailblazer: league_trailblazer_home_teleport_human_1..6 and spotanim_2..6
+    steps: [[1, 8798], [4, 8799, 1819], [7, 8801, 1820], [12, 8803, 1821], [17, 8805, 1822], [22, 8807, 1823]],
+    lockTick: 22,
+    landTick: 24,
+  }],
+  [6, { // Shattered Relics: league03_home_teleport_human_1..6 and spotanim_1..6
+    steps: [[1, 9209, 2025], [4, 9210, 2026], [7, 9211, 2027], [10, 9212, 2028], [13, 9213, 2029], [16, 9214, 2030]],
+    lockTick: 16,
+    landTick: 19,
+  }],
+]);
+
+/** A random one of the player's enabled animations (the standard cast for the default and for Twisted). */
+function chosenCast(player) {
+  const mask = Number(player.getAttribute?.(TOGGLES_ATTRIBUTE) ?? 1);
+  const enabled = [...Array(11).keys()].filter((bit) => mask & (1 << bit));
+  const bit = enabled[Math.floor(Math.random() * enabled.length)];
+  return castOf(COSMETIC_CASTS.get(bit));
+}
+
 /** The long cast only starts while the player stands still; a moving click never begins it. */
 function standingStill(player) {
   return (player.getMovementQueue?.()?.size?.() ?? 0) === 0;
@@ -78,7 +107,10 @@ function standingStill(player) {
 function castOf(definition) {
   if (!definition) return DEFAULT_CAST;
   const steps = new Map();
-  for (const step of definition.steps ?? []) steps.set(step.tick, step);
+  for (const step of definition.steps ?? []) {
+    const own = Array.isArray(step) ? { tick: step[0], animation: step[1], graphic: step[2] } : step;
+    steps.set(own.tick, own);
+  }
   return { steps, lockTick: definition.lockTick ?? LOCK_TICK, landTick: definition.landTick ?? LAND_TICK };
 }
 
@@ -88,7 +120,7 @@ function castOf(definition) {
  * the player is moving (the long cast only starts from a standstill). `cast` is the animation set
  * to play, the standard one unless given (see castOf).
  */
-function startHomeTeleport(core, player, destination, onArrival, cast = DEFAULT_CAST) {
+function startHomeTeleport(core, player, destination, onArrival, cast = chosenCast(player)) {
   const { steps: STEPS, lockTick: LOCK_TICK, landTick: LAND_TICK } = cast;
   // OSRS: the home teleport does not stop the player's walk, it simply cannot be cast
   // while moving. Refuse the click without clearing the route or playing tick 0.
@@ -163,4 +195,4 @@ function dateMinutes(nowMs = Date.now()) {
   return Math.floor(nowMs / 60_000);
 }
 
-module.exports = { startHomeTeleport, castOf, dateMinutes, LAND_TICK, LOCK_TICK, BUSY_VARBIT };
+module.exports = { TOGGLES_ATTRIBUTE, startHomeTeleport, castOf, dateMinutes, LAND_TICK, LOCK_TICK, BUSY_VARBIT };

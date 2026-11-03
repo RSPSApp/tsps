@@ -269,6 +269,7 @@ export abstract class Mobile extends Entity {
         this.graphic = null;
         this.slotGraphics?.clear();
         this.displayedHealth = null;
+        this.healthBarHidden = false;
         this.tintState = null;
     }
 
@@ -289,20 +290,28 @@ export abstract class Mobile extends Entity {
 
     /** What the health bar shows with this tick's hits, when it is not the actor's hitpoints. */
     private displayedHealth: { current: number; max: number; bar?: { id: number; width: number } } | null = null;
+    /** This tick's hits go out without a health bar (`showHitsplat(..., false)`). */
+    private healthBarHidden = false;
 
     /**
      * Shows a hitsplat that changes nothing - a meter other than hitpoints, such as the
      * Wintertodt's cold on the warmth meter. `splat` is the cache hitsplat for the target and
-     * for everyone else; `health`, when given, is what the health bar shows with it.
+     * for everyone else; `health`, when given, is what the health bar shows with it, and `false`
+     * sends the splat with no health bar at all.
      */
     showHitsplat(
         damage: number,
         splat: { mine: number; others: number },
-        health?: { current: number; max: number; bar?: { id: number; width: number } },
+        health?: { current: number; max: number; bar?: { id: number; width: number } } | false,
     ): void {
         const hit = new HitDamage(Math.max(0, Math.trunc(damage)), HitMask.RED).setSplatTypes(splat.mine, splat.others);
         this.addTickHit(hit);
-        if (health) this.displayedHealth = health;
+        if (health === false) this.healthBarHidden = true;
+        else if (health) this.displayedHealth = health;
+    }
+
+    isHealthBarHidden(): boolean {
+        return this.healthBarHidden;
     }
 
     getDisplayedHealth(): { current: number; max: number; bar?: { id: number; width: number } } | null {

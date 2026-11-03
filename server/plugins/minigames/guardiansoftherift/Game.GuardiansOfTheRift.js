@@ -162,6 +162,14 @@ function portal() {
   return { direction: game.portal.direction, closesIn: game.portal.closesIn };
 }
 
+/**
+ * How many rift guardians can stand at once. rsprox captures: 2 solo, 10 on a busy world (Wiki:
+ * "Only ten rift guardians can be active at any time"). Between those, one more per player is ours.
+ */
+function riftGuardianCap() {
+  return Math.min(Shared.RIFT_GUARDIAN_CAP, Math.max(1, game.players.size) + 1);
+}
+
 function setRiftGuardians(count) {
   game.riftGuardians = Math.max(0, count);
 }
@@ -308,7 +316,7 @@ function sendHud(player) {
     closing ? 0 : game.power, game.maxPower,
     closing ? -1 : game.portal.direction,
     game.altars.elemental, game.altars.catalytic,
-    game.riftGuardians, Shared.RIFT_GUARDIAN_CAP,
+    game.riftGuardians, riftGuardianCap(),
     hudTimer(),
     portalOpen ? game.portal.closesIn : -1);
 }
@@ -403,15 +411,19 @@ function closeRift() {
 }
 
 /**
- * Wiki: the game fails at 0% power. No capture has a loss, so the message is ours; the rift
- * closes as it would after a win, without the rewards.
+ * Wiki: the game fails at 0% power. rsprox captures (two solo losses): the defeat line and the
+ * Portal Guardians' 30 seconds on the same tick, the barriers gone and every cell tile inactive;
+ * the rift then closes as it would after a win, without the rewards.
  */
 function lose() {
   game.phase = PHASE.CLOSING;
   game.timer = TIMING.GRACE;
   closePortal();
-  message("<col=ef1020>The Great Guardian has been defeated. The rift remains open.</col>");
-  for (const player of game.players.keys()) Shared.setVarbit(player, Shared.VARBIT.FINISHED_GAME, 1);
+  for (const player of game.players.keys()) {
+    Shared.setVarbit(player, Shared.VARBIT.FINISHED_GAME, 1);
+    player.sendMessage("<col=ef1020>The Great Guardian was defeated!</col>");
+    player.sendMessage("The Portal Guardians will keep their rifts open for another 30 seconds.");
+  }
   emit("lost", {});
   emit("ended", { won: false });
   broadcastHud();
@@ -565,7 +577,7 @@ function describe() {
 module.exports = {
   PHASE, TIMING, PORTAL_DIRECTIONS,
   on, phase, isRunning, altarsOpen, isPlaying, stateOf, players, powerPercent, activeAltars, portal,
-  setRiftGuardians, maxPowerFor, addPower, setPower, addEnergy, syncEnergy, join, leave,
+  setRiftGuardians, riftGuardianCap, maxPowerFor, addPower, setPower, addEnergy, syncEnergy, join, leave,
   openHud, closeHud, sendHud, message, greatGuardian, startingPlayers: () => game.startingPlayers,
   tick, start, skip, advanceTime, describe, clock: () => game.clock,
   _game: game,

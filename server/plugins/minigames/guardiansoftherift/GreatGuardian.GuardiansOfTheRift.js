@@ -61,12 +61,13 @@ const IDLE_FLOURISH_TICKS = 50;
 const IDLE_FLOURISH_SEQ = 9372;
 
 /**
- * Between games the Guardian sleeps (the cache's portal_guardian_sleep, _sleep_loop and _wakeup;
- * no capture shows when, so the moments are ours): it sinks into sleep when the rift closes or it
- * is defeated, stays asleep through the lobby, and wakes as the rift opens. The loop is sent again
- * every few ticks so players who arrive in the lobby see it asleep too.
+ * Between games the Guardian sleeps (rsprox captures): portal_guardian_sleep 3 ticks after "The
+ * Great Guardian successfully closed the rift!" and 1 tick after "The Great Guardian was
+ * defeated!" (a loss has no death animation of its own), then portal_guardian_sleep_loop every
+ * tick through the lobby, and portal_guardian_wakeup on the tick "The rift becomes active!".
  */
-const SLEEP_LOOP_TICKS = 8;
+const SLEEP_LOOP_TICKS = 1;
+const SLEEP_AFTER = { won: 3, lost: 1 };
 /** The clock tick it fell asleep, or -1 while awake; the server starts in the lobby. */
 let asleepAt = 0;
 
@@ -75,9 +76,12 @@ function guardianAnimation(name) {
   if (npc?.isRegistered()) npc.performAnimation(new (Shared.core().Animation)(Shared.seq(name)));
 }
 
-function fallAsleep() {
-  asleepAt = Game.clock();
-  guardianAnimation("portal_guardian_sleep");
+function fallAsleep({ won } = {}) {
+  Shared.later(won ? SLEEP_AFTER.won : SLEEP_AFTER.lost, () => {
+    if (Game.isRunning()) return;
+    asleepAt = Game.clock();
+    guardianAnimation("portal_guardian_sleep");
+  });
 }
 
 function wakeUp() {

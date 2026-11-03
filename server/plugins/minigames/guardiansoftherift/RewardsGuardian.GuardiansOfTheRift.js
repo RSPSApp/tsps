@@ -21,7 +21,7 @@ const Shared = require("./Shared.GuardiansOfTheRift");
 const Records = require("./Records.GuardiansOfTheRift");
 const DATA = require("../data/guardians-of-the-rift-rewards.json");
 const DIARY = require("../data/atlax-diary");
-const { openBook } = require("../../quests/QuestRuntime");
+const { openIndexedBook } = require("../../quests/QuestRuntime");
 
 const BIG_SEARCH = 5;
 const SEARCH_TICKS = 3;
@@ -292,13 +292,10 @@ function openPouch({ player }) {
   return true;
 }
 
-/** Atlax's diary: Read opens the book (Wiki: 24 pages). */
+/** Atlax's diary: Read opens the indexed book with its 24 captured pages. */
 function readDiary({ player }) {
-  if (DIARY.pages.length === 0) {
-    player.sendMessage("The diary's pages haven't been transcribed yet.");
-    return true;
-  }
-  openBook(player, DIARY.title, DIARY.pages);
+  Shared.animate(player, "human_readbook");
+  openIndexedBook(player, DIARY);
   return true;
 }
 

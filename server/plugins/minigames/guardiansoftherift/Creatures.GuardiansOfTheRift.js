@@ -6,8 +6,12 @@
  *
  * rsprox captures (rev 241):
  * - From the attack on, creatures come out of the rift in batches 76 ticks apart, with
- *   abyssal_demon_teleport map anims (height 90) where they appear. A busy world had batches of
- *   13-22: about two thirds leeches, a quarter walkers and the rest abyssal guardians.
+ *   abyssal_demon_teleport map anims (height 90) where they appear. Batches grow through the
+ *   game: solo 1, 2, 2, 2, 3, 4, 4, 4 (abyssal guardians from the fifth); a world of hundreds
+ *   15, 16, 19, 20, 18, 20, 22, 24, 26 (guardians from the third), mostly leeches, about one in
+ *   seven walkers.
+ * - A hit on the Great Guardian shows hitsplat 17 with no health bar and takes half the splat,
+ *   rounded up, from its power: leeches 1-2 (1 power), walkers 5-6 (3). Two solo losses.
  * - Hits on barriers and rift guardians, and the guardians' hits on creatures, run 0-6; about
  *   four in ten are zeros.
  * - The leech, walker and abyssal guardian attack, block and die with gotr_abyssal_*_attack /
@@ -15,8 +19,9 @@
  * Wiki: creatures attack the barriers and the Great Guardian, draining its power, and fight back
  * only against rift guardians; more walkers and guardians come after the 60% surge; at 100% they
  * all die. The cache: leech 5, walker 30, abyssal guardian 50 hitpoints.
- * No capture shows a creature reaching the Great Guardian on a world that busy. The batch size
- * for a small world, the hit chances, attack speeds and the power each hit drains are ours.
+ * No capture shows a creature reaching the Great Guardian on a busy world, so how the drain
+ * scales there is ours, as are the batch formula between the two captured sizes, the hit
+ * chances, attack speeds and the abyssal guardian's drain.
  */
 
 const Shared = require("./Shared.GuardiansOfTheRift");
@@ -26,11 +31,14 @@ const Temple = require("./Temple.GuardiansOfTheRift");
 
 const KINDS = {
   leech: { npc: "gotr_abyssal_leech", attack: "gotr_abyssal_leech_attack", maxHit: 2, drain: 1 },
-  walker: { npc: "gotr_abyssal_walker", attack: "gotr_abyssal_walker_attack", maxHit: 4, drain: 2 },
+  walker: { npc: "gotr_abyssal_walker", attack: "gotr_abyssal_walker_attack", maxHit: 4, drain: 3 },
   guardian: { npc: "gotr_abyssal_pyramid", attack: "gotr_abyssal_pyramid_attack", maxHit: 6, drain: 3 },
 };
-/** The mix before and after the surge (captured before; Wiki: more walkers and guardians after). */
-const MIX = { calm: { leech: 0.7, walker: 0.2, guardian: 0.1 }, surged: { leech: 0.5, walker: 0.3, guardian: 0.2 } };
+/**
+ * Each batch's walkers and abyssal guardians, as shares of it (rsprox captures: about 15% walkers
+ * and up to 15% guardians; Wiki: more of both after the 60% surge). The rest are leeches.
+ */
+const SHARE = { walker: 0.15, guardian: 0.12, surged: 1.25 };
 
 const BATCH_TICKS = 76;
 const RIFT_AREA = { minX: 3613, maxX: 3617, minY: 9522, maxY: 9525 };
@@ -38,24 +46,47 @@ const GREAT_GUARDIAN = { x: 3613, y: 9501, size: 5 };
 const ATTACK_TICKS = 4;
 const HIT_CHANCE = 0.6;
 const TELEPORT_GRAPHIC = "abyssal_demon_teleport";
-/** Ours, raised from 2 (issue 1986: small games were far easier than live). */
-const MIN_BATCH = 4;
-const MAX_BATCH = 22;
-const PLAYERS_PER_CREATURE = 30;
+const MAX_BATCH = 30;
+/** Hitsplat 17 on the Great Guardian (rsprox captures), for everyone. */
+const GREAT_GUARDIAN_SPLAT = { mine: 17, others: 17 };
 
 const creatures = new Map();
 let api = null;
 let nextBatch = 0;
+/** This game's batches so far: the first is wave 0. */
+let wave = 0;
 
-/** Ours: four for a quiet world, up to 22 as on the captured world of hundreds. */
-function batchSize(players) {
-  return Math.max(MIN_BATCH, Math.min(MAX_BATCH, Math.round(players / PLAYERS_PER_CREATURE) + MIN_BATCH));
+/**
+ * Ours, fit to the captures: a batch starts at 1 solo and 15 on a world of hundreds, and grows by
+ * about a half (solo) to 1.3 (busy) creatures a wave.
+ */
+function batchSize(players, waveIndex = 0) {
+  const base = Math.min(15, 1 + Math.floor(Math.max(0, players - 1) / 25));
+  const growth = Math.min(1.3, 0.45 + players / 400);
+  return Math.min(MAX_BATCH, base + Math.round(waveIndex * growth));
 }
 
-function pickKind(mix, roll = Math.random()) {
-  if (roll < mix.leech) return "leech";
-  if (roll < mix.leech + mix.walker) return "walker";
-  return "guardian";
+/** Abyssal guardians come from the fifth wave solo, the third with 20 or more (rsprox captures). */
+function firstGuardianWave(players) {
+  return players >= 20 ? 2 : 4;
+}
+
+/**
+ * The batch's kinds: shares of walkers and guardians, at least one of each from its wave on
+ * (walkers from the third solo; a busy world's first batch already has two), the rest leeches.
+ */
+function batchKinds(players, waveIndex, surged) {
+  const size = batchSize(players, waveIndex);
+  const boost = surged ? SHARE.surged : 1;
+  const atLeast = (due) => (due ? 1 : 0);
+  const guardians = waveIndex >= firstGuardianWave(players)
+    ? Math.max(1, Math.round(size * SHARE.guardian * boost)) : 0;
+  const walkers = Math.max(atLeast(waveIndex >= 2), Math.round(size * SHARE.walker * boost));
+  const special = Math.min(size, guardians + walkers);
+  const kinds = [];
+  for (let i = 0; i < special; i++) kinds.push(i < Math.min(guardians, size) ? "guardian" : "walker");
+  while (kinds.length < size) kinds.push("leech");
+  return kinds;
 }
 
 // ------------------------------------------------------------------ geometry
@@ -120,11 +151,9 @@ function animate(npc, name) {
 /** Nothing comes through for a game everyone has left. */
 function spawnBatch() {
   if (Game.players().length === 0) return;
-  const count = batchSize(Game.players().length);
-  const mix = Game._game.surged ? MIX.surged : MIX.calm;
+  const kinds = batchKinds(Game.players().length, wave++, Game._game.surged);
   const viewers = Temple.inTemple();
-  for (let i = 0; i < count; i++) {
-    const kind = pickKind(mix);
+  for (const kind of kinds) {
     const x = Shared.random(RIFT_AREA.minX, RIFT_AREA.maxX);
     const y = Shared.random(RIFT_AREA.minY, RIFT_AREA.maxY);
     const npc = api.spawnNpc({ id: Shared.npc(KINDS[kind].npc), x, y, z: 0, wanderRadius: 0 });
@@ -192,12 +221,19 @@ function creatureTurn(npc, state, now) {
   npc.setPositionToFace?.(Shared.location(at));
   animate(npc, kind.attack);
   if (target) hit(target, kind.maxHit);
-  else Game.addPower(-drainOf(kind));
+  else hitGreatGuardian(kind);
+}
+
+/** The splat is twice the kind's drain or one less (rsprox captures: leech 1-2, walker 5-6). */
+function hitGreatGuardian(kind) {
+  const npc = Game.greatGuardian();
+  npc?.showHitsplat?.(kind.drain * 2 - Shared.random(0, 1), GREAT_GUARDIAN_SPLAT, false);
+  Game.addPower(-drainOf(kind));
 }
 
 /**
  * A hit on the Great Guardian takes the same share of its power whatever the game's size: the
- * maximum is 250 stones a player (Wiki), so the drain scales with it (1/2/3 stones solo).
+ * maximum is 250 stones a player (Wiki), so the drain scales with it (1/3/3 stones solo).
  */
 function drainOf(kind) {
   return Math.max(kind.drain, Math.round((kind.drain * Game._game.maxPower) / Game.maxPowerFor(1)));
@@ -222,6 +258,7 @@ function tick({ phase }) {
 /** The first batch comes with the attack; then one every 76 ticks. */
 function attackBegins() {
   nextBatch = Game.clock();
+  wave = 0;
 }
 
 /** A rift guardian struck this creature: it turns on the guardian while close (Wiki). */
@@ -245,7 +282,7 @@ function nearestCreature(from, fromSize, range) {
 }
 
 module.exports = {
-  KINDS, batchSize, pickKind, drainOf, gap, tileOf, sizeOf, hit, isElementalGuardian, animate, route, struckBy, nearestCreature, creatures, clear,
+  KINDS, batchSize, batchKinds, drainOf, gap, tileOf, sizeOf, hit, isElementalGuardian, animate, route, struckBy, nearestCreature, creatures, clear,
   attach(pluginApi) {
     api = pluginApi;
     Game.on("attack", attackBegins);

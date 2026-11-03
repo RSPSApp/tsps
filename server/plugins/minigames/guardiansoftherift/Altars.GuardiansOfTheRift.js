@@ -239,12 +239,22 @@ function altarRune(player, objectId) {
   return request.rune;
 }
 
+/** Rune, pure and daeyalt essence: Runecrafting's own, not the minigame's. */
+const OTHER_ESSENCE = ["blankrune", "blankrune_high", "blankrune_daeyalt"];
+
 function craft(event) {
   const { player, objectId } = event;
   const altar = byAltar(objectId);
   const essence = Shared.count(player, Shared.ITEM.ESSENCE);
   if (!altar || !Game.isPlaying(player)) return false;
-  if (essence <= 0) return chargeOnly(player, altar);
+  if (essence <= 0) {
+    if (chargeOnly(player, altar)) return true;
+    // Other essence crafts as plain Runecrafting does.
+    if (OTHER_ESSENCE.some((item) => Shared.count(player, item) > 0)) return false;
+    // rsprox capture (solo): no essence and nothing to charge (the cell held was the altar's tier).
+    player.sendMessage("You do not have any guardian essence to bind here.");
+    return true;
+  }
   const rune = altarRune(player, objectId);
   if (!rune) return false;
   if (player.getSkillManager().getCurrentLevel(Shared.core().Skill.RUNECRAFTING) < rune.level) {
@@ -295,7 +305,7 @@ function chargeCell(player, altar) {
 
 /**
  * Craft-rune with no guardian essence still charges an uncharged cell (Wiki: players imbue a
- * cell between games, when the essence is gone). Nothing to charge falls through to Runecrafting.
+ * cell between games, when the essence is gone). False when there's nothing to charge.
  */
 function chargeOnly(player, altar) {
   if (!chargeCell(player, altar)) return false;

@@ -5,6 +5,9 @@ import { ClientState } from "../game/ClientState";
 import { WikiConfig } from "../game/plugins/wiki/WikiConfig";
 import { lookupUrl, pageUrl, searchUrl, WIKI_ICONS, WikiPlugin } from "../game/plugins/wiki/WikiPlugin";
 import { MenuTargetType } from "../rs/MenuEntry";
+import { worldEntriesToSimple } from "../ui/menu/MenuBridge";
+import { menuClickListeners, type MenuActionData } from "../ui/menu/menuEvents";
+import { MenuState } from "../ui/menu/MenuState";
 
 // --- Config and URLs -----------------------------------------------------------------------------
 assert.equal(WikiConfig.group, "wiki");
@@ -74,31 +77,64 @@ const click = (opcode: number, extra: Partial<{ param0: number; param1: number; 
     plugin.onMenuOptionClicked({ param0: 0, param1: 0, opcode, identifier: 0, itemId: -1, option: "", target: "",
         screenX: 0, screenY: 0, ...extra });
 
-// --- World lookups: the target entries open the wiki and clear the selection ----------------------
+// --- World lookups, through the real menu: the scene's spell-target entries (as the world menu
+// builds them while the button is selected), registered in a MenuState and invoked as a left
+// click or a menu choice is. The click hook must look the target up itself: the entries' own
+// handlers only run after the click hook, which consumes the click.
+const pluginClicks = (action: MenuActionData) => plugin.onMenuOptionClicked(action);
+const unconsumed: MenuActionData[] = [];
+// After the plugin: sees only what it lets through, and keeps it from the network in this test.
+const spy = (action: MenuActionData) => (unconsumed.push(action), true);
+menuClickListeners.add(pluginClicks);
+menuClickListeners.add(spy);
+const spell = { spellId: 0, spellName: "<col=ff9040>Wiki</col>", spellLevel: 0, runes: null };
+const state = new MenuState();
+const invokeWorld = (entry: any): MenuActionData => {
+    selectWiki();
+    unconsumed.length = 0;
+    const [simple] = worldEntriesToSimple([entry], { menuState: state, registerWithState: true });
+    const index = simple.menuStateIndex!;
+    const recorded = { opcode: state.opcodes[index], identifier: state.identifiers[index] } as MenuActionData;
+    state.invoke(index, 0, 0);
+    return recorded;
+};
 assert.equal(plugin.isWikiSelected(), false);
 selectWiki();
 assert.ok(plugin.isWikiSelected());
 ClientState.baseX = 3168;
 ClientState.baseY = 3168;
-const world = plugin.transformMenuEntries([
-    { option: "Lookup-entity", target: "Wiki -> Man", targetType: MenuTargetType.NPC, targetId: 3106, npcServerId: 12 },
-    { option: "Lookup-entity", target: "Wiki -> Bush", targetType: MenuTargetType.LOC, targetId: 10778, mapX: 55, mapY: 49 },
-    { option: "Lookup-entity", target: "Wiki -> Bronze axe", targetType: MenuTargetType.OBJ, targetId: 1352 },
-    { option: "Cancel" },
-], { surface: "world", menu: true });
-assert.equal(world.length, 4);
-world[0].onClick!();
+
+let row = invokeWorld({ option: "Lookup-entity", targetName: "<col=ff9040>Wiki</col> -> Man", targetType: MenuTargetType.NPC,
+    targetId: 3106, npcServerId: 12, mapX: 43, mapY: 59, spellCast: { ...spell, npcServerId: 12 } });
+assert.equal(row.opcode, 8, "WIDGET_TARGET_ON_NPC");
 assert.equal(opened.pop(), "https://oldschool.runescape.wiki/w/Special:Lookup?type=npc&id=3106&name=Man&x=3211&y=3227&plane=0");
+assert.deepEqual(unconsumed, [], "consumed: no target op to the server");
 assert.equal(ClientState.isSpellSelected, false, "a lookup ends the selection");
-selectWiki();
-world[1].onClick!();
+
+row = invokeWorld({ option: "Lookup-entity", targetName: "<col=ff9040>Wiki</col> -> Bush", targetType: MenuTargetType.LOC,
+    targetId: 10778, mapX: 55, mapY: 49, spellCast: { ...spell, mapX: 55, mapY: 49 } });
+assert.equal(row.opcode, 2, "WIDGET_TARGET_ON_GAME_OBJECT");
 assert.equal(opened.pop(), "https://oldschool.runescape.wiki/w/Special:Lookup?type=object&id=1124&name=Bush&x=3223&y=3217&plane=0",
     "the object's impostor, at its world tile (scene base + local)");
-selectWiki();
-world[2].onClick!();
+assert.deepEqual(unconsumed, []);
+
+row = invokeWorld({ option: "Lookup-entity", targetName: "<col=ff9040>Wiki</col> -> Bronze axe", targetType: MenuTargetType.OBJ,
+    targetId: 1352, mapX: 55, mapY: 50, spellCast: { ...spell, mapX: 55, mapY: 50 } });
+assert.equal(row.opcode, 17, "WIDGET_TARGET_ON_GROUND_ITEM");
 assert.equal(opened.pop(), "https://oldschool.runescape.wiki/w/Special:Lookup?type=item&id=1351&name=Bronze+axe",
     "a noted ground item is looked up as its item");
-assert.equal(world[3].onClick, undefined, "Cancel is left alone");
+assert.deepEqual(unconsumed, []);
+assert.equal(opened.length, 0, "one page per click");
+
+// Without the button selected the same row is the game's (the spy sees it).
+ClientState.isSpellSelected = false;
+const [walk] = worldEntriesToSimple([{ option: "Walk here", targetType: MenuTargetType.NONE, mapX: 55, mapY: 49 } as any],
+    { menuState: state, registerWithState: true });
+state.invoke(walk.menuStateIndex!, 0, 0);
+assert.equal(unconsumed.length, 1, "not consumed");
+assert.equal(opened.length, 0);
+menuClickListeners.delete(spy);
+menuClickListeners.delete(pluginClicks);
 
 // --- Interface items: the selection's target op on an item ---------------------------------------
 selectWiki();

@@ -14,9 +14,10 @@ A port of RuneLite 1.13.5's Wiki (`wiki`). It is on by default, as in RuneLite.
 ## How
 
 The button is the game's own (`Orbs.WIKI_ICON`), whose target verb is "Lookup-entity". While it is
-selected the plugin turns the world's target entries into lookups and takes the target clicks on
-interface items through the `onMenuOptionClicked` hook (RuneLite's MenuOptionClicked), which also
-takes the button's Search op.
+selected, the plugin takes every target click through the `onMenuOptionClicked` hook (RuneLite's
+MenuOptionClicked), as RuneLite does: it looks up what the click names (the NPC's server index,
+the object or ground item and its scene tile, or the interface item) and consumes the click, so no
+target op goes to the server. The same hook takes the button's Search op.
 
 ## Differences from RuneLite
 

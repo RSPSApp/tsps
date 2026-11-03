@@ -4,7 +4,6 @@ import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { ChatboxPanelManager } from "@runelite/client/game/chatbox/ChatboxPanelManager";
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
 import { CLIENT_TOKEN, inject } from "@runelite/client/plugins/PluginInjector";
-import { MenuTargetType } from "../../../rs/MenuEntry";
 import type { SimpleMenuEntry } from "../../../ui/menu/MenuEngine";
 import type { MenuActionData } from "../../../ui/menu/menuEvents";
 import type { MenuTransformContext } from "../../../ui/menu/menuTransforms";
@@ -145,44 +144,30 @@ export class WikiPlugin extends Plugin {
     }
 
     transformMenuEntries(entries: SimpleMenuEntry[], context: MenuTransformContext): SimpleMenuEntry[] {
-        if (!this.isStarted()) return entries;
-        if (this.isWikiSelected()) return context.surface === "world" ? this.lookupEntries(entries) : entries;
+        if (!this.isStarted() || this.isWikiSelected()) return entries;
         if (context.surface === "widget" && context.menu) return this.widgetWikiEntries(entries, context);
         return entries;
     }
 
     /**
-     * The button's target entries on the world, made to open the wiki instead of going to the
-     * server. (An interface item's target entry is the selection's own; onMenuOptionClicked takes
-     * its click.)
+     * What a target click looks up (RuneLite's switch on the menu action), null for nothing. A
+     * world target carries the entity in `identifier` (the NPC's server index, the object's or
+     * ground item's id) and its scene tile in `param0`/`param1`; an interface item comes as the
+     * target op (25) or WIDGET_TARGET_ON_WIDGET with the item's id.
      */
-    private lookupEntries(entries: SimpleMenuEntry[]): SimpleMenuEntry[] {
-        return entries.map((entry) => {
-            const lookup = this.lookupFor(entry);
-            if (lookup === undefined) return entry;
-            return {
-                ...entry,
-                onClick: () => {
-                    CANCEL_SELECTION_HANDLER();
-                    if (lookup) this.browse(lookupUrl(lookup));
-                },
-            };
-        });
-    }
-
-    /** What a world entry looks up; undefined for entries that aren't a lookup, null for nothing. */
-    private lookupFor(entry: SimpleMenuEntry): WikiLookup | null | undefined {
-        const option = String(entry.option ?? "").trim().toLowerCase();
-        if (option === "cancel" || option === "examine" || option === "walk here") return undefined;
-        switch (entry.targetType) {
-            case MenuTargetType.NPC:
-                return this.npcLookup(entry);
-            case MenuTargetType.LOC:
-                return this.locLookup(entry);
-            case MenuTargetType.OBJ:
-                return this.itemLookup(entry.targetId ?? -1);
+    private lookupFor(action: MenuActionData): WikiLookup | null {
+        switch (action.opcode) {
+            case WIDGET_TARGET_ON_NPC:
+                return this.npcLookup(action.identifier);
+            case WIDGET_TARGET_ON_GAME_OBJECT:
+                return this.locLookup(action.identifier, action.param0, action.param1);
+            case WIDGET_TARGET_ON_GROUND_ITEM:
+                return this.itemLookup(action.identifier);
+            case WIDGET_TARGET:
+            case WIDGET_TARGET_ON_WIDGET:
+                return action.itemId > 0 ? this.itemLookup(action.itemId) : null;
             default:
-                return undefined;
+                return null;
         }
     }
 
@@ -195,9 +180,9 @@ export class WikiPlugin extends Plugin {
         return { type: "item", id, name: removeTags(name) };
     }
 
-    private npcLookup(entry: SimpleMenuEntry): WikiLookup | null {
+    private npcLookup(npcServerId: number): WikiLookup | null {
         const client = this.client;
-        const ecsId = entry.npcServerId !== undefined ? client.npcEcs?.getEcsIdForServer(entry.npcServerId) : undefined;
+        const ecsId = client.npcEcs?.getEcsIdForServer(npcServerId);
         let type = ecsId !== undefined ? client.npcTypeLoader?.load(client.npcEcs.getNpcTypeId(ecsId) | 0) : undefined;
         if (type?.transforms) type = type.transform(client.varManager, client.npcTypeLoader) ?? type;
         if (!type) return null;
@@ -212,14 +197,13 @@ export class WikiPlugin extends Plugin {
         return { x: npcs.getWorldX(ecsId) >> 7, y: npcs.getWorldY(ecsId) >> 7, plane: this.plane() };
     }
 
-    private locLookup(entry: SimpleMenuEntry): WikiLookup | null {
+    /** WorldPoint.fromScene: the scene tile plus the scene's base. */
+    private locLookup(locId: number, sceneX: number, sceneY: number): WikiLookup | null {
         const client = this.client;
-        let type = client.locTypeLoader?.load(entry.targetId ?? -1);
+        let type = client.locTypeLoader?.load(locId);
         if (type?.transforms) type = type.transform(client.varManager, client.locTypeLoader) ?? type;
         if (!type) return null;
-        const location = entry.mapX !== undefined && entry.mapY !== undefined
-            ? { x: ClientState.baseX + entry.mapX, y: ClientState.baseY + entry.mapY, plane: this.plane() }
-            : undefined;
+        const location = { x: ClientState.baseX + sceneX, y: ClientState.baseY + sceneY, plane: this.plane() };
         return { type: "object", id: type.id, name: removeTags(type.name), location };
     }
 
@@ -270,9 +254,8 @@ export class WikiPlugin extends Plugin {
 
     /**
      * RuneLite's onMenuOptionClicked. While the button is selected every target click is the
-     * plugin's: an item in an interface is looked up, and nothing goes to the server (the world's
-     * NPCs, objects and ground items are looked up by the entries lookupEntries made). The
-     * button's own Search op opens the search input.
+     * plugin's: what it was used on is looked up, and nothing goes to the server. The button's
+     * own Search op opens the search input.
      */
     onMenuOptionClicked(action: MenuActionData): boolean {
         if (!this.isStarted()) return false;
@@ -280,11 +263,9 @@ export class WikiPlugin extends Plugin {
         // here; the button's own target op is a re-click that deselects it.
         const itemTarget = action.opcode === WIDGET_TARGET && action.itemId > 0 && !WIKI_ICONS.includes(action.param1);
         if (this.isWikiSelected() && (TARGET_OPCODES.has(action.opcode) || itemTarget)) {
+            const lookup = this.lookupFor(action);
             CANCEL_SELECTION_HANDLER();
-            if ((action.opcode === WIDGET_TARGET_ON_WIDGET || itemTarget) && action.itemId > 0) {
-                const lookup = this.itemLookup(action.itemId);
-                if (lookup) this.browse(lookupUrl(lookup));
-            }
+            if (lookup) this.browse(lookupUrl(lookup));
             return true;
         }
         if ((action.opcode === CC_OP || action.opcode === CC_OP_LOW_PRIORITY) && WIKI_ICONS.includes(action.param1)

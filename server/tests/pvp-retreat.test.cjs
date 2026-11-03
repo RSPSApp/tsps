@@ -264,6 +264,11 @@ test('PvP worlds add 15 to the shared Wilderness level for players and bots', ()
   assert.equal(levelAt(3200, 3200), 0);
   assert.equal(wildernessAttackRange(player(80, 3520), player(81, 3528)), 1);
   assert.equal(canAttackByWildernessLevel(player(80, 3520), player(82, 3528)), false);
+  // #2146: a deeper attacker does not widen the bracket. In level 5 vs level 1 the range
+  // is 1, so a 5-level gap is out of range in both directions.
+  assert.equal(wildernessAttackRange(player(105, 3552), player(100, 3520)), 1);
+  assert.equal(canAttackByWildernessLevel(player(105, 3552), player(100, 3520)), false);
+  assert.equal(canAttackByWildernessLevel(player(100, 3520), player(105, 3552)), false);
   globalPvp = true;
   for (const [y, range] of [[3200, 15], [3520, 16], [3528, 17], [9920, 16]]) {
     assert.equal(wildernessAttackRange(player(80, y), player(80 + range, y)), range);
@@ -275,9 +280,9 @@ test('PvP worlds add 15 to the shared Wilderness level for players and bots', ()
   assert.equal(wildernessAttackRange(player(80, 3520), player(97, 3528)), 16);
   assert.equal(canAttackByWildernessLevel(player(80, 3520), player(97, 3528)), false);
   assert.equal(wildernessAttackRange(player(80, 3200), player(96, 3528)), 15);
-  // The attacker's own depth sets the range; a shallower target must not shrink it,
-  // or leaving the levelled strip would silently re-tighten the bracket.
-  assert.equal(wildernessAttackRange(player(80, 3528), player(80, 3200)), 17);
-  assert.equal(canAttackByWildernessLevel(player(80, 3528), player(97, 3200)), true);
-  assert.equal(canAttackByWildernessLevel(player(80, 3528), player(98, 3200)), false);
+  // Both levels cap the range, so the shallower side sets it in either direction.
+  assert.equal(wildernessAttackRange(player(80, 3528), player(80, 3200)), 15);
+  assert.equal(wildernessAttackRange(player(80, 3200), player(80, 3528)), 15);
+  assert.equal(canAttackByWildernessLevel(player(80, 3528), player(97, 3200)), false);
+  assert.equal(canAttackByWildernessLevel(player(80, 3200), player(97, 3528)), false);
 });

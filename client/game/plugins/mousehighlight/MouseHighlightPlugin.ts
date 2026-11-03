@@ -5,19 +5,30 @@ import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
 import { CLIENT_TOKEN, inject } from "@runelite/client/plugins/PluginInjector";
 import { type Tooltip, TooltipManager } from "@runelite/client/ui/overlay/tooltip/TooltipManager";
 import { minMenuSnapshot, type MinMenuSnapshot } from "../../../rs/cs2/minimenu";
+import { FONT_PLAIN_12 } from "../../../ui/fonts";
 import { getClientClock } from "../../TransmitCycles";
 import type { OsrsClient } from "../../OsrsClient";
 import { MouseHighlightConfig } from "./MouseHighlightConfig";
 
-/** What the plugin reads from the client: the hovered minimenu entry and the tooltip varcs. */
+/** What the plugin reads from the client: the hovered entry and native tooltip state. */
 export type MouseHighlightClient = {
     hoveredEntry(): MinMenuSnapshot;
     getVarcIntValue(varcId: number): number;
     getGameCycle(): number;
+    nativeTooltipVisible(text: string): boolean;
 };
 
 /** Options too common to be worth a tooltip (MouseHighlightOverlay's switch). */
 const TRIVIAL_OPTIONS = new Set(["Walk here", "Cancel", "Continue", "Set heading"]);
+const NATIVE_MOUSEOVER_TIMER = 4725;
+
+function nativeTooltipVisible(client: OsrsClient, text: string): boolean {
+    const widgets = client.widgetManager;
+    // Cache 4728 uses plain12 near the pointer; 4727's separate top-left label uses bold12.
+    return widgets?.getActiveTimerWidgets().some((root) => root.onTimer?.[0] === NATIVE_MOUSEOVER_TIMER &&
+        root.children?.some((child) => child?.type === 4 && !child.hidden && child.fontId === FONT_PLAIN_12 &&
+            child.text?.trim() === text.trim() && !widgets.isEffectivelyHidden(child.uid))) ?? false;
+}
 
 /**
  * RuneLite 1.13.5 Mouse Tooltips: the left-click option under the cursor ("Attack Goblin
@@ -49,6 +60,7 @@ export class MouseHighlightPlugin extends Plugin {
                 hoveredEntry: () => minMenuSnapshot(osrsClient),
                 getVarcIntValue: (varcId) => osrsClient.varManager?.getVarcInt(varcId) ?? 0,
                 getGameCycle: () => getClientClock(),
+                nativeTooltipVisible: (text) => nativeTooltipVisible(osrsClient, text),
             };
         }
     }
@@ -85,6 +97,9 @@ export class MouseHighlightPlugin extends Plugin {
         // If this varc is set, a tooltip is already being displayed
         if (this.client.getVarcIntValue(TOOLTIP_BUILT) === 1) return undefined;
 
-        return { text: option + (target ? ` ${target}` : "") };
+        const text = option + (target ? ` ${target}` : "");
+        // Cache 4728 builds a near-pointer tooltip without the legacy TOOLTIP_BUILT flag.
+        if (this.client.nativeTooltipVisible(text)) return undefined;
+        return { text };
     }
 }

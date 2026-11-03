@@ -6,6 +6,8 @@ The left-click option under the cursor shows as a tooltip just below it: "Attack
 "Take Bones", "Wear Bronze axe". Trivial options (Walk here, Cancel, Continue, Set heading) and
 sliding puzzle pieces get none, and the game's own tooltips win: while one is about to show
 (`TOOLTIP_TIME`) or is showing (`TOOLTIP_BUILT`), there is no second one.
+The current cache's visible near-pointer action tooltip also wins. Its separate top-left
+mouseover label leaves the plugin available when the native pointer tooltip is absent or disabled.
 
 The option is the one the game's mouseover text uses (`rs/cs2/minimenu.ts`, shared with the
 MINIMENU_* script ops): a hovered component's op, else the world menu's first option.

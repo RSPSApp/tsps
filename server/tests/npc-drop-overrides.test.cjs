@@ -159,3 +159,15 @@ test("a fractional main weight stays on the main table", (t) => {
   const table = { main_max_roll: 128, entries: [{ item_id: 995, name: "Coins", quantity: [1, 1], weight: 1.28, out_of: 128 }], tertiary: [] };
   assert.deepEqual(__internals.rollOnce(table, table.entries, null).map((drop) => drop.itemId ?? drop.id), [995]);
 });
+
+test("lizardmen roll the uncommon seed table at the Wiki's rates (#1952)", () => {
+  // The dumper dropped {{UncommonSeedDropLines}}, so most kills gave only bones.
+  const seedRoll = (id) => _test.tablesByNpc.get(id)[0].entries
+    .filter((entry) => entry.shared_table === "uncommonSeed")
+    .map((entry) => [entry.weight, entry.out_of]);
+  assert.deepEqual(seedRoll(6914), [[15, 87]], "level 53");
+  assert.deepEqual(seedRoll(6916), [[15, 78]], "level 62");
+  assert.deepEqual(seedRoll(8563), [[15, 78]], "Battlefront");
+  assert.deepEqual(seedRoll(6918), [[15, 67]], "brute");
+  assert.ok(_test.sharedTables.get("uncommonSeed").some((entry) => entry.itemId === 5295), "ranarr seed");
+});

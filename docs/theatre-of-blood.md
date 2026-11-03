@@ -11,7 +11,8 @@ It is one plugin, `server/plugins/minigames/TheatreOfBlood.plugin.js`, which del
 | Parties, modes, the entrance, instancing, barriers and passages | Done | Played over the agent MCP |
 | The six rooms in Normal Mode | Done | Solo route played from entry to leaving, fights shortened; see [Tested](#tested) |
 | Entry and Hard Mode | Built | See [Tested](#tested) for how far each was played |
-| Deaths, the jail, wipes, logouts, teleports, a second party | Done | Played as scenarios |
+| Deaths, the jail, wipes, logouts, teleports, a second party | Done | Played as scenarios; absent members no longer hold a wipe open (unit test) |
+| Unclaimed vault loot lost on a new raid or logout, the collection log, the Dawnbringer's drop and pickup, Verzik's hazards at her death | Done | Unit tests (see [Tested](#tested)) |
 | Retrieval chest, stats, scoreboard, escape crystal, spectating | Built | Played as scenarios; the interfaces' looks not seen in a client |
 | Combat Achievements | Built | The rooms report them; several seen firing in play, most only by unit test or not at all |
 | Theatre's items | See [Items](#items) | Avernic defender and kits played; scythe and staff checked against the Wiki's text |
@@ -55,7 +56,7 @@ A room reports its tasks with `raid.failTask(task, reason)` and `raid.completeTa
 | --- | --- | --- | --- |
 | Team hitpoints | a fifth per player (Wiki: "down to 20%"; fits 2 samples) | 75%, 87.5%, 100% for up to 3, 4, 5 (Wiki) | as Normal |
 | A wipe | another attempt, three bandages each; the room starts again | the raid fails | the raid fails |
-| Supply chests | ten bandages per chest (not carried over) | points | points (as Normal; see [What isn't verified](#what-isnt-verified)) |
+| Supply chests | ten bandages per chest (not carried over) | points | points, a band lower than Normal (Wiki: fewer; see [What isn't verified](#what-isnt-verified)) |
 | Loot (Wiki) | no uniques or pet, 20% common, clue 1/25 | 1/9.1, hilt 8/19, clue 3/25, pet 1/650 | 1/7.7, hilt 7/18, +15% common (+30% inside the target), clue 3.5/25, pet 1/500; inside the target, dust 1/275, Sanguine kit 1/150, Holy kit 1/100 |
 | Retrieval | free | 100,000 coins | 100,000 coins |
 
@@ -156,7 +157,8 @@ From the Wiki's Monumental chest page, by mode as in [Modes](#modes):
 - **A unique** replaces the common loot; "<name> found something special: <item>", both in red (captured).
 - **Commons:** three rolls of the 1/30 table, noted. A player who did no damage gets a cabbage and a message (22475).
 - **Leaving:** the teleport crystal asks "Make sure you've collected all your stuff!" with "Leave the Theatre." / "Stay in the Theatre." (captured).
-- **Unclaimed loot** stays in `tob:loot`, claimed from the Rewards Chest (varbit 11958 `tob_should_have_loot`). The Wiki says it's lost on logging out; here it's kept.
+- **Unclaimed loot** stays in `tob:loot`, claimed from the Rewards Chest (varbit 11958 `tob_should_have_loot`). It's lost on logging out (Wiki) and on entering another raid (players' reports; the Wiki is silent), and a vault's roll replaces anything older. Lil' Zik is still delivered when the rest is lost. The loot interface's inventory (612) has six slots in the cache, but a target-time Hard roll can hold seven items (three commons, the clue, the dust and both kits); the Wiki gives no rule, so the first six show, Bank-all, Take-all and Discard-all act on those, and the rest move into view as slots empty, with a line saying more are waiting (our wording).
+- **The collection log:** its one "Theatre of Blood" category (cache struct 506, 17 items) is fed when the loot interface is opened, and its kill count answers with the player's completions in Entry, Normal and Hard (the cache has no separate ToB log entries for the modes). Lil' Zik still goes through the pet delivery.
 - **The strategy table (459):** each wave's time, the MVP, the challenge and overall times, each member's deaths.
 
 ## The retrieval chest
@@ -200,7 +202,7 @@ All 50 tasks have a mode in `CombatAchievements.*` and a condition somewhere. Ca
 | Books | `Books.*`: each boss leaves its book for someone without it, and the bookshelves give the first one missing. Their text isn't transcribed, so reading says the writing's too faded. |
 | Sanguine dust | Drops from Hard Mode. Lil' Zik's forms are `Dust.Pets.js`'s. |
 | Sinhaza shrouds | `Stats.*`: tiers 1-5 at 100, 500, 1000, 1500 and 2000 Normal or Hard completions, from the Mysterious Stranger's "What do you have for me?"; Change moves between earned tiers (Wiki; Transcript:Mysterious Stranger). The refusal of a tier not earned yet is our wording. Unit tested, not played: no account here has 100 completions. |
-| Dawnbringer | Its special, and every other, now says "You don't have enough power left." when energy is short, as 24 captures do (`Combat.ts`, `CombatSpecial.ts`). |
+| Dawnbringer | Its special, and every other, now says "You don't have enough power left." when energy is short, as 24 captures do (`Combat.ts`, `CombatSpecial.ts`). It can also be dropped in Verzik's room during phase 1 and picked up by a teammate (the Wiki's way of passing it), drops on death, and is removed when phase 1 ends or when its holder leaves. |
 
 Xarpus' splat also poisons, starting at 2 (Wiki, Strategies; "You have been poisoned!" captured).
 
@@ -210,14 +212,16 @@ Over the agent MCP (2026-11-02). No fight was played at full length: every boss 
 - **Solo, Normal:** party through the notice board, the Stranger's gate, the entrance and its prompts, then every room through its real barriers and passages. That includes both of Sotetseg's mazes run to the portal, the Xarpus north barrier, the skeleton and the door, all three of Verzik's phases to her death, the vault's chest, strategy table, bookshelf and crystal, and leaving. The Nylocas room was skipped with `::tobcomplete`. Verzik was finished for real once and skipped once to test the vault.
 - **Two players, Normal, Hard and Entry:** the Maiden fought; the Bloat finished with `::tobcomplete`, because a script can't time going in as a player does and its flies kill in about 8 ticks; the Nylocas skipped; Sotetseg's mazes run, then `::tobcomplete`; Xarpus fought; Verzik not reached in these.
 - **Scenarios:** a death, the jail and release when the room is won; a team wipe, the retrieval chest refusing without coins, taking the fee, giving back, then empty; logging out mid-fight and rejoining into the jail; a crystal carried at logout; teleports refused; a crystal used on a teammate; auto-afk firing on a hit; two parties at once, each with its own Maiden, unseen and unattackable by the other; spectating the most recent party and teleporting out; the scoreboard; the Avernic defender and a Holy kit.
+- **Unit tests (2026-11-03):** a wipe with one member who never entered; unclaimed vault loot lost on entering another raid and on logging out (Lil' Zik still delivered); a seven-item roll showing six, with Discard-all and Take-all leaving the seventh and showing it; the loot interface feeding the collection log and the category's kill count; Verzik's auto-attacks, green ball, yellow strikes and webs doing nothing after `die()`; the Dawnbringer dropped, visible to a teammate, and dropped on death; Hard's supply chest a band lower.
 
 ## What isn't verified
 
 - **The real client:** interfaces, looks and timing weren't seen in a client; everything was driven headless.
 - **Hard Mode's bosses' hitpoints:** see [Modes](#modes).
-- **Hard's supply points:** the Wiki says they're fewer ("usually 15, at most 18" by Sotetseg), with no rule; here they're as Normal.
+- **Hard's supply points:** the Wiki says they're fewer ("usually an average of 15, the highest 18" by Sotetseg), with no rule; here each chest takes a band lower than Normal, which is our fit to that line.
 - **Fits from few samples:** Entry's team scaling, Entry's waves' gaps, Entry's forms, Hard's Maiden speed-up, Hard's repeated attacks (×1.15, third in a row, limited to three players or fewer, no sample of it with others alive), Bloat's turn odds, Xarpus' absorption and Entry's numbers, Verzik's Entry team multipliers for 3 and 4 players.
 - **Estimates with no source:** the jail's stance (RuneLite's name), the retrieval lot's second-wipe timing, Sotetseg's tornado damage, the Hard realm's sections for three runners, Hard's dots' 80 per strike, Hard Matomenos' blast, each death costing a fifth of a player's standing (unique chance, weighting, commons, tertiaries), the MVP's formula, supply grading.
+- **Checked against the Wiki or the cache and left as they are:** the pillars have the cache's 185 hitpoints (NPC 8379) and collapse on phase 2 damaging and stunning adjacent players (Wiki, Supporting Pillar); urnbombs check Protect from Missiles when they land while the blood spell checks Protect from Magic during her animation (Wiki, Verzik Vitur); Sotetseg has no maze immunity in the Wiki (the players who stay in the arena can still attack him); the between-room heal is in captures outside Entry; and a second team wipe before reclaiming replaces the retrieval lot (Wiki, Death mechanics).
 - **Our wording, not captured:** the Vyre Orator's lines, "Are you ready to proceed?", the crystal's, the Avernic defender's, Hard's refusal, Entry's retry line, the supply chest's Open line.
 - **Not built, for want of a source:**
   - Varbit 6400 `tob_verzik_throne_visible`: no capture changes it, and its values are unknown.

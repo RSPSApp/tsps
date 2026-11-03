@@ -14,7 +14,9 @@
  *   non-stackables noted; deaths lower the amounts for everyone. A player with no contribution
  *   gets a cabbage and a message.
  * - Tertiaries, scaled by the player's own performance: an elite clue (3/25), Lil' Zik (1/650).
- * - Unclaimed loot can be claimed from the chest outside the bank in Ver Sinhaza.
+ * - Unclaimed loot can be claimed from the chest outside the bank in Ver Sinhaza; it is lost
+ *   on logging out. Players also report it lost on starting another raid, so entering one
+ *   clears it too. Lil' Zik is delivered first rather than lost.
  * Cache: the chests (33086-33090), each a multiloc on its varbit (6450-6454): 0 someone else's,
  * 1 someone else's with a unique, 2 the player's, 3 the player's with a unique; opened 32994
  * (41746 with a unique). Interface 23: Bank-all (6), Take-all (8), Discard-all (10), the items
@@ -22,10 +24,16 @@
  * Captured: the loot interface (23), "Your completed Theatre of Blood count is: N.".
  * Estimates: the chests' tiles and order (party slot), their facing, the player's opening
  * animation (536), inventory 612 for the loot.
+ * Inventory 612 has six slots in the cache, but a Hard Mode roll in the target time can hold
+ * seven items (three commons, the clue, the dust and both kits). The Wiki gives no rule, so the
+ * interface shows the first six; Bank-all, Take-all and Discard-all act on those, and the rest
+ * move into view as slots empty (our handling; the line saying so is our wording).
  * Estimates (the Wiki gives no formula): each death costs a fifth of a player's share - of the
  * unique chance (averaged over the team), of the unique weighting (with damage dealt), of the
  * common amounts (averaged) and of their tertiary odds; Rewards Chest varbit values (0 empty,
- * 1 loot waiting); loot left behind is kept on the player rather than lost on logout.
+ * 1 loot waiting).
+ * Collection log: opening the loot interface logs what is in it (as the Tombs' sarcophagus
+ * does); Lil' Zik is logged through the pet delivery.
  */
 
 const Shared = require("./Shared.TheatreOfBlood");
@@ -187,6 +195,43 @@ function setLoot(player, loot) {
   player.getPacketSender().sendVarbit(CLAIM_CHEST.varbit, loot.length > 0 ? 1 : 0);
 }
 
+/**
+ * Unclaimed loot is lost on logging out (Wiki) and on starting another raid (players' reports).
+ * Lil' Zik still goes to the pet delivery rather than being lost with the rest.
+ */
+function loseLoot(player) {
+  if (lootOf(player).length === 0) return;
+  claimPetLoot(player);
+  setLoot(player, []);
+}
+
+/** Entering a raid that hasn't reached its vault starts a new run. */
+function enterRaid({ raid, player }) {
+  if (!(raid.room instanceof RewardsRoom)) loseLoot(player);
+}
+
+/**
+ * The chest's loot reaches the collection log when the interface is opened, as the Tombs' loot
+ * does. Lil' Zik is left to the pet delivery (`npc-drops:roll`), which already logs it, so it
+ * is not counted twice. `loggedAmount` is marked, so reopening a part-claimed chest adds
+ * nothing.
+ */
+function logLoot(player) {
+  const loot = lootOf(player);
+  let changed = false;
+  const { LIL_ZIK } = Shared.core().ItemIdentifiers;
+  for (const entry of loot) {
+    const seen = Math.min(entry.amount, Number(entry.loggedAmount) || 0);
+    const amount = entry.amount - seen;
+    if (amount > 0 && entry.id !== LIL_ZIK) Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId: entry.id, amount });
+    if (entry.loggedAmount !== entry.amount) {
+      entry.loggedAmount = entry.amount;
+      changed = true;
+    }
+  }
+  if (changed) player.setAttribute(ATTR_LOOT, loot);
+}
+
 // ------------------------------------------------------------------ the vault
 
 class RewardsRoom extends Raid.Room {
@@ -256,6 +301,7 @@ class RewardsRoom extends Raid.Room {
 function openLoot(player) {
   // Includes persisted rewards recovered outside the Theatre, not only this raid's chest.
   claimPetLoot(player);
+  logLoot(player);
   const loot = lootOf(player);
   if (loot.length === 0) {
     player.sendMessage("Your reward chest is empty.");
@@ -285,8 +331,14 @@ function claimPetLoot(player) {
   return consumed;
 }
 
+/** What the six slots show; anything after them waits until slots empty. */
+function shown(loot) {
+  return loot.slice(0, LOOT_SLOTS);
+}
+
 function sendLoot(player, loot) {
-  player.getPacketSender().sendInventory(LOOT_INVENTORY, LOOT_SLOTS, loot.map(({ id, amount }) => ({ id, amount })));
+  player.getPacketSender().sendInventory(LOOT_INVENTORY, LOOT_SLOTS, shown(loot).map(({ id, amount }) => ({ id, amount })));
+  if (loot.length > LOOT_SLOTS) player.sendMessage("More rewards are waiting in the chest. Take some to make room for them.");
 }
 
 function bankFor(player, id) {
@@ -330,11 +382,9 @@ function take(player, entry, destination) {
 }
 
 function takeAll(player, destination) {
-  const left = [];
-  for (const entry of lootOf(player)) {
-    entry.amount -= take(player, entry, destination);
-    if (entry.amount > 0) left.push(entry);
-  }
+  const loot = lootOf(player);
+  for (const entry of shown(loot)) entry.amount -= take(player, entry, destination);
+  const left = loot.filter((entry) => entry.amount > 0);
   setLoot(player, left);
   sendLoot(player, left);
 }
@@ -356,8 +406,11 @@ function clickDiscardAll({ player }) {
   if (lootOf(player).length === 0) return;
   Shared.options(player, "Are you sure you want to destroy the items?",
     "<col=ff0000>DESTROY!", () => {
-      setLoot(player, []);
-      sendLoot(player, []);
+      // Only what the player could see; anything waiting behind it comes into view.
+      const left = lootOf(player).slice(LOOT_SLOTS);
+      setLoot(player, left);
+      if (left.length > 0) openLoot(player);
+      else sendLoot(player, left);
     },
     "Cancel", () => openLoot(player));
 }
@@ -423,10 +476,12 @@ module.exports = function registerTheatreRewards(api) {
   Shared.onObject(api, Shared.OBJECT.TELEPORT_CRYSTAL, useCrystal);
   Shared.onObject(api, CLAIM_CHEST.id, claimChest);
   api.onPlayerLogin(showClaimChest);
+  api.onPlayerLogout(({ player }) => loseLoot(player));
+  api.onCustomEvent("tob:raid-entered", enterRaid);
   api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.BANK_ALL, clickBankAll);
   api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.TAKE_ALL, clickTakeAll);
   api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.DISCARD_ALL, clickDiscardAll);
   api.onInterfaceActionButton(ITEMS_UID, clickLootItem);
 };
 
-Object.assign(module.exports, { RewardsRoom, rollRaid, standing, lootOf, setLoot, CHESTS, ATTR_LOOT, LOOT_BY_MODE });
+Object.assign(module.exports, { RewardsRoom, rollRaid, standing, lootOf, setLoot, loseLoot, logLoot, openLoot, CHESTS, ATTR_LOOT, LOOT_BY_MODE });

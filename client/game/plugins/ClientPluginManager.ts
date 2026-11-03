@@ -9,6 +9,7 @@ import type { GLRenderer } from "../../widgets/gl/renderer";
 import type { ClickRegistry } from "../../widgets/gl/click-registry";
 import type { SimpleMenuEntry } from "../../ui/menu/MenuEngine";
 import type { MenuTransformContext } from "../../ui/menu/menuTransforms";
+import type { MenuActionData } from "../../ui/menu/menuEvents";
 import type { FontLoader } from "../../widgets/components/TextRenderer";
 import type { IndexedSprite } from "../../rs/sprite/IndexedSprite";
 import type { OverlayPosition } from "@runelite/client/ui/overlay/OverlayPosition";
@@ -242,6 +243,14 @@ export interface ClientPlugin {
     onHitsplat?(event: HitsplatEventPayload): void;
     /** A health bar update arrived from the server. */
     onHealthBar?(event: HealthBarEvent): void;
+    /**
+     * Text is about to show over a player's head, their public chat or forced chat (RuneLite's
+     * OverheadTextChanged): return the text to show instead, or undefined to leave it. The chat
+     * history keeps the message as sent.
+     */
+    overheadChatText?(event: { name: string; text: string }): string | undefined;
+    /** A menu option is about to be dispatched (RuneLite's MenuOptionClicked); true consumes it. */
+    onMenuOptionClicked?(action: MenuActionData): boolean;
     /** A clientscript finished, nested calls included (RuneLite's ScriptPostFired). */
     onScriptFinished?(scriptId: number): void;
     /**
@@ -453,6 +462,18 @@ export class ClientPluginManager {
 
     onHealthBar(event: HealthBarEvent): void {
         for (const plugin of this.plugins) plugin.onHealthBar?.(event);
+    }
+
+    onMenuOptionClicked(action: MenuActionData): boolean {
+        return this.implementing("onMenuOptionClicked").some((plugin) => plugin.onMenuOptionClicked!(action) === true);
+    }
+
+    /** The overhead text after every plugin has had its say, each seeing the last one's text. */
+    overheadChatText(name: string, text: string): string {
+        for (const plugin of this.implementing("overheadChatText")) {
+            text = plugin.overheadChatText!({ name, text }) ?? text;
+        }
+        return text;
     }
 
     onScriptFinished(scriptId: number): void {

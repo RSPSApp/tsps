@@ -99,17 +99,26 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   let pirateRockPilesInstalled = false;
   const FINAL_ROOM = { x: 1900, y: 5355, z: 2 };
   const FINAL_ROOM_BOUNDS = { minX: 1889, maxX: 1910, minY: 5345, maxY: 5366, z: 2 };
+  // The frozen Lumbridge dining room (the Culinaromancer's dimension) and its guests' seats,
+  // the cache's own npc-spawns for them; Aris has no cache spawn, so she stands by the table.
+  const DINING_DIMENSION = { minX: 1855, maxX: 1870, minY: 5338, maxY: 5358, z: 0 };
+  const DINING_DOORS_LUMBRIDGE = new Set([12349, 12350]);
+  const DINING_DOORS_DIMENSION = new Set([1521, 1524]);
+  const DINING_ENTRY = { x: 1867, y: 5348, z: 0 };
+  const DINING_EXIT = { x: 3214, y: 3221, z: 0 };
+  const CULINAROMANCER_CHEST_CELLAR = 12308;
+  const CULINAROMANCER_CHEST_SIDE = { x: 3218, y: 9623, z: 0 };
   const COUNCIL_SPAWNS = [
-    { id: NpcIdentifiers.MOUNTAIN_DWARF, x: 3236, y: 3219 },
-    { id: NpcIdentifiers.GENERAL_WARTFACE_5, x: 3237, y: 3219 },
-    { id: NpcIdentifiers.GENERAL_BENTNOZE_5, x: 3238, y: 3219 },
-    { id: NpcIdentifiers.PIRATE_PETE_3, x: 3239, y: 3219 },
-    { id: NpcIdentifiers.LUMBRIDGE_GUIDE_4, x: 3240, y: 3219 },
-    { id: NpcIdentifiers.EVIL_DAVE_3, x: 3236, y: 3220 },
-    { id: NpcIdentifiers.SKRACH_UGLOGWEE, x: 3237, y: 3220 },
-    { id: NpcIdentifiers.SIR_AMIK_VARZE_3, x: 3238, y: 3220 },
-    { id: NpcIdentifiers.AWOWOGEI, x: 3239, y: 3220 },
-    { id: NpcIdentifiers.ARIS_3, x: 3240, y: 3220 },
+    { id: NpcIdentifiers.MOUNTAIN_DWARF, x: 1862, y: 5345 },
+    { id: NpcIdentifiers.GENERAL_WARTFACE_5, x: 1862, y: 5351 },
+    { id: NpcIdentifiers.GENERAL_BENTNOZE_5, x: 1862, y: 5349 },
+    { id: NpcIdentifiers.PIRATE_PETE_3, x: 1862, y: 5347 },
+    { id: NpcIdentifiers.LUMBRIDGE_GUIDE_4, x: 1865, y: 5349 },
+    { id: NpcIdentifiers.EVIL_DAVE_3, x: 1865, y: 5347 },
+    { id: NpcIdentifiers.SKRACH_UGLOGWEE, x: 1863, y: 5352 },
+    { id: NpcIdentifiers.SIR_AMIK_VARZE_3, x: 1865, y: 5345 },
+    { id: NpcIdentifiers.AWOWOGEI, x: 1865, y: 5343 },
+    { id: NpcIdentifiers.ARIS_3, x: 1866, y: 5351 },
   ];
   function ensureCouncilTalkActions() {
     for (const { id } of COUNCIL_SPAWNS) {
@@ -2911,6 +2920,39 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (reach <= 2) event.destination = { x: playerLocation.getX(), y: playerLocation.getY(), z: playerLocation.getZ() };
   }
 
+  // The dining room doors lead into the frozen dimension once the cook has the ingredients,
+  // and the dimension's own doors lead back out.
+  function handleDiningDoors(event) {
+    if (event.handled) return;
+    const { player, objectId } = event;
+    const inside = DINING_DOORS_DIMENSION.has(objectId) && inZone(player, DINING_DIMENSION);
+    if (!inside && !(DINING_DOORS_LUMBRIDGE.has(objectId) && stage(player) >= STAGE_OPENING_COMPLETE)) return;
+    event.handled = true;
+    const to = inside ? DINING_EXIT : DINING_ENTRY;
+    moveTo(player, to.x, to.y, to.z);
+    if (!inside) spawnCouncil(player);
+  }
+  // The chest sits against the cellar's east wall, so no tile on its cache access side can be
+  // stood on; it is operated from the floor beside it.
+  function routeCulinaromancerChest(event) {
+    if (event.objectId !== CULINAROMANCER_CHEST_CELLAR) return;
+    event.destination = { ...CULINAROMANCER_CHEST_SIDE };
+  }
+  function handleCulinaromancerChest(event) {
+    if (event.objectId !== CULINAROMANCER_CHEST_CELLAR) return false;
+    const option = event.definition?.getActions?.()?.[event.clickType - 1];
+    if (option !== "Bank") return false;
+    event.handled = true;
+    event.player.getBank(event.player.getCurrentBankTab()).open();
+    return true;
+  }
+  function blockStaticDiningGuests(event) {
+    const x = event.location?.getX?.() ?? event.location?.x;
+    const y = event.location?.getY?.() ?? event.location?.y;
+    if (x >= DINING_DIMENSION.minX && x <= DINING_DIMENSION.maxX && y >= DINING_DIMENSION.minY
+      && y <= DINING_DIMENSION.maxY && COUNCIL_SPAWNS.some(({ id }) => id === event.npcId)) event.allow = false;
+  }
+
   function handleAwowogeiDungeon(event) {
     const { player, objectId } = event;
     const option = event.definition?.getActions?.()?.[event.clickType - 1];
@@ -3203,6 +3245,10 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.onObjectInteraction(handleAwowogeiDungeon);
   api.onObjectInteraction(handleAwowogeiSnakePit);
   api.onObjectRoute(routeRedBananaTree);
+  api.onObjectRoute(routeCulinaromancerChest);
+  api.onCustomEvent("door:toggle", handleDiningDoors);
+  api.onObjectInteraction(handleCulinaromancerChest);
+  api.onCanSpawnNpc(blockStaticDiningGuests);
   api.onObjectInteraction(handleAwowogeiKing);
   api.onItemAction("Balloon toad", { Drop: handleSkrachDrop, Release: handleSkrachDrop });
   api.onItemDropPolicy(handleSkrachDrop);

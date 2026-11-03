@@ -252,7 +252,8 @@ export class NPC extends Mobile {
 
     public isAggressiveTo(player: Player): boolean {
         return player.getSkillManager().getCombatLevel() <= (this.getCurrentDefinition().getCombatLevel() * 2)
-            || Wilderness.isIn(player);
+            || (Wilderness.isIn(player)
+                && Wilderness.levelAt(player.getLocation().getX(), player.getLocation().getY()) > 0);
     }
 
     public process() {

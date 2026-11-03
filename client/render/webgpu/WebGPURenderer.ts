@@ -59,6 +59,8 @@ import { WebGPUOverlays } from "./overlays/WebGPUOverlays";
 import { LocUpdates, type LocReloadGroup } from "./locUpdates";
 import { getClientCycle } from "../../network/ServerConnection";
 import { WebGPUUi } from "./ui/WebGPUUi";
+import { WebGPUHeldScene } from "./heldScene";
+import { SceneFrameHold } from "../SceneFrameHold";
 import type { UiRenderMetrics } from "./ui/WebGPUUi";
 
 interface QueuedMap {
@@ -122,6 +124,9 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     /** The GPU plugin's anti-aliasing: multisampled world-pass targets, or FXAA on the base path. */
     private msaaTargets?: SceneMsaaTargets;
     private fxaa?: FxaaPass;
+    /** The last world drawn, presented while the player's square builds (SceneFrameHold). */
+    private heldScene?: WebGPUHeldScene;
+    private readonly sceneFrameHold = new SceneFrameHold();
 
     private dataLoader = new SdMapDataLoader();
 
@@ -253,7 +258,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             device: this.device,
             format: this.format,
             alphaMode: "premultiplied",
-            usage: GPU_TEXTURE_USAGE.RENDER_ATTACHMENT | GPU_TEXTURE_USAGE.COPY_SRC,
+            usage: GPU_TEXTURE_USAGE.RENDER_ATTACHMENT | GPU_TEXTURE_USAGE.COPY_SRC | GPU_TEXTURE_USAGE.COPY_DST,
         });
 
         this.ensureDepthTexture(this.canvas.width, this.canvas.height);
@@ -887,6 +892,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         const loggedIn = this.osrsClient.isLoggedIn();
         const scenePreview = !loggedIn && this.osrsClient.scenePreviewEnabled && !!this.osrsClient.loadedCache;
         const drawScene = loggedIn || scenePreview;
+        // A held world is of this session; the next login starts without one.
+        if (!loggedIn) this.heldScene?.invalidate();
         const sceneViewport = this.getSceneViewportWidgetRect();
         let restoreCamera: (() => void) | undefined;
 
@@ -978,6 +985,25 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         this.ui?.update(time, deltaTime);
 
         const encoder = this.device.createCommandEncoder();
+        const canvasTexture = this.context.getCurrentTexture();
+        const canvasView = canvasTexture.createView();
+        // While the player's square builds (after a teleport), the last world drawn is presented
+        // again with the interface over it, as OSRS draws its loading box over its last frame.
+        const playerSquareReady =
+            loggedIn &&
+            this.mapManager.isSquareReadyAt(this.playerPosUni[0], this.playerPosUni[1], this.stats.frameCount);
+        const holdScene =
+            loggedIn &&
+            this.sceneFrameHold.update(
+                this.heldScene?.isValidFor(canvasTexture) === true,
+                playerSquareReady,
+                performance.now(),
+            );
+        if (holdScene) {
+            this.heldScene!.present(encoder, canvasTexture);
+            this.encodeScreenPass(encoder, canvasTexture, canvasView, false, restoreCamera, width, height, sceneViewport);
+            return;
+        }
         const visible = drawScene ? this.mapManager.visibleMaps : [];
         const roofPlaneLimit = this.frameRoofPlaneLimit;
         const camera = this.osrsClient.camera;
@@ -993,8 +1019,6 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             extension!.beforeScene?.(this, encoder);
         }
 
-        const canvasTexture = this.context.getCurrentTexture();
-        const canvasView = canvasTexture.createView();
         // An active extension that declares sceneColorFormat renders the world into the HDR
         // target and composites to the canvas in afterScene (HDR tonemapping, bloom, SSAO).
         const sceneExtension = world.extension;
@@ -1100,7 +1124,30 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             });
         }
 
+        if (playerSquareReady) {
+            (this.heldScene ??= new WebGPUHeldScene(this.device)).maybeSnapshot(
+                encoder,
+                canvasTexture,
+                this.stats.frameCount,
+            );
+        }
+
+        this.encodeScreenPass(encoder, canvasTexture, canvasView, drawScene, restoreCamera, width, height, sceneViewport);
+    }
+
+    /** Restores the camera, then draws the overlays and UI over the world and submits the frame. */
+    private encodeScreenPass(
+        encoder: GPUCommandEncoder,
+        canvasTexture: GPUTexture,
+        canvasView: GPUTextureView,
+        drawWorldOverlays: boolean,
+        restoreCamera: (() => void) | undefined,
+        width: number,
+        height: number,
+        sceneViewport: { x: number; y: number; width: number; height: number },
+    ): void {
         if (restoreCamera) {
+            const camera = this.osrsClient.camera;
             restoreCamera();
             camera.update(width, height, sceneViewport.x, sceneViewport.y, sceneViewport.width, sceneViewport.height);
             this.worldEntityAnimator?.compose(camera.viewMatrix as Float32Array);
@@ -1111,7 +1158,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         const screenPass = encoder.beginRenderPass({
             colorAttachments: [{ view: canvasView, loadOp: "load", storeOp: "store" }],
         });
-        if (drawScene) {
+        if (drawWorldOverlays) {
             this.overlays?.drawScreen(screenPass);
         }
         this.ui?.draw(screenPass);
@@ -1356,5 +1403,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         this.msaaTargets = undefined;
         this.fxaa?.dispose();
         this.fxaa = undefined;
+        this.heldScene?.destroy();
+        this.heldScene = undefined;
     }
 }

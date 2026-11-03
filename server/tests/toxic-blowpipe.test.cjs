@@ -13,6 +13,8 @@ const { WeaponInterfaces } = require("../dist/game/content/combat/WeaponInterfac
 const { PendingHit } = require("../dist/game/content/combat/hit/PendingHit");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const ToxicBlowpipe = require("../plugins/items/ToxicBlowpipe.plugin");
+const DestroyItem = require("../plugins/interface/DestroyItem.plugin");
+const { PacketSender } = require("../dist/net/packet/PacketSender");
 
 const TOXIC_BLOWPIPE_ID = 12926;
 const TOXIC_BLOWPIPE_EMPTY_ID = 12924;
@@ -117,12 +119,18 @@ function loadedPipe(scales, dartId, dartAmount) {
 function fakeInventory(items) {
   const slots = items.slice();
   while (slots.length < 28) slots.push(null);
+  const removed = [];
   const idOf = (entry) => (entry && (entry.getId ? entry.getId() : entry.id)) ?? -1;
   return {
     slots,
+    removed,
     getItems: () => slots,
     getFreeSlots: () => slots.filter((entry) => !entry).length,
     contains: (itemId) => slots.some((entry) => entry && idOf(entry) === itemId),
+    deleteAtSlot: (slot, amount) => {
+      removed.push({ slot, itemId: idOf(slots[slot]), amount });
+      slots[slot] = null;
+    },
     add: (item, stack) => {
       const at = stack ? slots.findIndex((entry) => entry && idOf(entry) === item.getId()) : -1;
       if (at >= 0) {
@@ -212,3 +220,105 @@ test("only the pipe's cache options are hooked, so right-click Wield cannot unlo
   assert.deepEqual(Object.keys(hooks.actions).sort(), ["Check", "Uncharge", "Unload"]);
   assert.equal(hooks.buttonId, 584 << 16);
 });
+
+/**
+ * DestroyItem and ToxicBlowpipe, registered in PluginManager's order (DestroyItem first), with
+ * the manager's stop-at-first-handler dispatch for the shared confirmdestroy button.
+ */
+function confirmPlugins() {
+  const buttons = [];
+  const customEvents = new Map();
+  const dropPolicies = [];
+  let actions = null;
+  const api = new Proxy({}, {
+    get: (_, name) => {
+      if (name === "core") return require("../dist/plugins/PluginManager").PluginManager.getCoreApi();
+      if (name === "onItemAction") return (_, registered) => { actions = registered; };
+      if (name === "onInterfaceActionButton") return (buttonId, handler) => buttons.push({ buttonId, handler });
+      if (name === "onCustomEvent") return (event, handler) => {
+        customEvents.set(event, [...(customEvents.get(event) ?? []), handler]);
+      };
+      if (name === "emitCustomEvent") return (event, payload) => {
+        for (const handler of customEvents.get(event) ?? []) handler(payload);
+      };
+      if (name === "onItemDropPolicy") return (handler) => dropPolicies.push(handler);
+      return () => {};
+    },
+  });
+  DestroyItem.register(api);
+  ToxicBlowpipe.register(api);
+  return {
+    actions: () => actions,
+    drop: (event) => {
+      for (const policy of dropPolicies) {
+        policy(event);
+        if (event.handled) break;
+      }
+      return event;
+    },
+    pressConfirm: (player, action) => {
+      const event = { player, action, buttonId: 584 << 16, handled: false };
+      for (const hook of buttons) {
+        if (event.handled || hook.buttonId !== event.buttonId) continue;
+        if (hook.handler(event) !== false) event.handled = true;
+      }
+      return event.handled;
+    },
+  };
+}
+
+/** A player whose PacketSender is real, so sendInterfaceRemoval resets DestroyItem's own state. */
+function confirmPlayer(pipe, extra = []) {
+  const attributes = new Map();
+  const inventory = fakeInventory([pipe, ...extra]);
+  const player = {
+    inventory,
+    getInventory: () => inventory,
+    getEquipment: () => ({ get: () => null, getItems: () => [] }),
+    getWeapon: () => -1,
+    getUpdateFlag: () => ({ flag: () => {} }),
+    getBonusManager: () => ({ attackBonus: [], defenceBonus: [], otherBonus: [] }),
+    sendMessage: () => {},
+    getAttribute: (key) => attributes.get(key) ?? -1,
+    setAttribute: (key, value) => attributes.set(key, value),
+    getInterfaceId: () => -1,
+    setInterfaceId: () => {},
+    setStatus: () => {},
+    getEnteredAmountAction: () => null,
+    setEnteredAmountAction: () => {},
+    setEnteredSyntaxAction: () => {},
+    getDialogueManager: () => ({ reset: () => {} }),
+    setCreationMenu: () => {},
+    setSearchingBank: () => {},
+    setTeleportInterfaceOpen: () => {},
+    getAppearance: () => ({ setCanChangeAppearance: () => {} }),
+    getFrameUpdater: () => ({ clearGroup: () => {} }),
+    getSession: () => ({ sendClientPacket: () => true }),
+  };
+  const sender = new PacketSender(player);
+  player.getPacketSender = () => sender;
+  return player;
+}
+
+for (const action of ["Unload", "Uncharge"]) {
+  test(`${action} answers its own prompt after Destroy, so Yes cannot destroy the item Destroy named`, () => {
+    const hooks = confirmPlugins();
+    const pipe = loadedPipe(5000, DRAGON_DART, 120);
+    const mineral = { id: 21341, amount: 1, getId: () => 21341, getAmount: () => 1, isDropable: () => false };
+    mineral.clone = () => mineral;
+    const player = confirmPlayer(pipe, [mineral]);
+
+    // Open Destroy on the unrelated untradeable, then choose the pipe's option without answering it.
+    hooks.drop({ player, item: mineral, itemId: 21341, slot: 1, dropToGround: false, handled: false });
+    assert.equal(player.getAttribute("destroy-item:pending"), 21341, "Destroy owns the prompt");
+    assert.equal(hooks.actions()[action]({ player, item: pipe, slot: 0 }), true);
+
+    // Yes goes to DestroyItem first, as registered; it must no longer have a pending item.
+    assert.equal(hooks.pressConfirm(player, 1), true);
+    assert.deepEqual(player.inventory.removed, [], "the mineral is not destroyed");
+    assert.equal(player.inventory.contains(21341), true);
+    assert.equal(player.inventory.contains(DRAGON_DART), true, "the pipe's darts are returned");
+    assert.equal(pipe.getId(), action === "Unload" ? TOXIC_BLOWPIPE_ID : TOXIC_BLOWPIPE_EMPTY_ID);
+    assert.equal(pipe.state().scales ?? 0, action === "Unload" ? 5000 : 0);
+  });
+}

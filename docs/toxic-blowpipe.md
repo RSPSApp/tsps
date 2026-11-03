@@ -59,8 +59,13 @@ Both ask first. rsprox 1862 and 550 (a drygore blowpipe's Unload) show the nativ
 out.`; confirming returns the darts and empties the pipe (here the drygore holds no scales).
 The Uncharge warning is not captured and uses the toxic blowpipe's own destroy text from the
 Wiki instead: `If you uncharge the blowpipe, all scales and darts will fall out.` Confirming
-re-checks the slot still holds the same item, and the destroy confirmation's
-`destroy-item:prompt` clears a pending blowpipe prompt because both use interface 584.
+re-checks the slot still holds the same item. The destroy confirmation and the pipe's share
+interface 584, so whichever opens second owns the prompt: Destroy's `destroy-item:prompt`
+clears a pending blowpipe prompt, and the pipe closes any open prompt
+(`sendInterfaceRemoval`, which also resets `destroy-item:pending`) before installing its own.
+Without the latter, an unanswered Destroy prompt on another item stayed pending, DestroyItem
+(registered first) consumed the pipe's Yes, and the other item was destroyed while the pipe
+kept its darts.
 
 A full inventory refuses before the prompt with the live message
 `You don't have enough free inventory space to do that.` (rsprox 1637, same wording).
@@ -70,4 +75,7 @@ A full inventory refuses before the prompt with the live message
 `server/tests/toxic-blowpipe.test.cjs` drives the registered handlers: the captured Check
 line, Unload returning darts and keeping 5,000 scales on a charged pipe, Uncharge returning
 both stacks and switching to the empty id, the no-space refusal (no prompt), and that the
-hooked actions are exactly the pipe's cache options so Wield cannot unload it.
+hooked actions are exactly the pipe's cache options so Wield cannot unload it. With
+DestroyItem and ToxicBlowpipe both registered in the manager's order and its stop-at-first
+handler dispatch, opening Destroy on another item and then choosing Unload or Uncharge leaves
+that item in the inventory and answers only the pipe's prompt.

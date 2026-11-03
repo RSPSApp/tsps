@@ -318,6 +318,10 @@ function removeEverything(player, blowpipeItem, slot) {
 }
 
 function openConfirm(player, blowpipeItem, slot, warning, apply) {
+  // The destroy confirmation shares group 584 and registers first: closing whatever prompt is
+  // open clears its pending item (sendInterfaceRemoval resets "destroy-item:pending"), so the
+  // player's Yes answers this prompt instead of destroying the item Destroy named.
+  player.getPacketSender().sendInterfaceRemoval();
   pendingPrompts.set(player, { itemId: blowpipeItem.getId(), slot, apply });
   player
     .getPacketSender()

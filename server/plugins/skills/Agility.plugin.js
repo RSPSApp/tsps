@@ -11,6 +11,9 @@ const LAPS_ATTRIBUTE = "agility.laps";
  * counted (OSRS Wiki, Grace).
  */
 const LAP_COUNTER_OFF_ATTRIBUTE = "agility.lap-counter-off";
+/** Run energy (percent) a rooftop obstacle restores, and the fraction carried to the next one. */
+const ROOFTOP_ENERGY_RESTORE = 1.5;
+const ROOFTOP_ENERGY_CARRY_ATTRIBUTE = "agility.energy-carry";
 
 /**
  * Marks of grace (Wiki: Mark of Grace, "Spawning mechanics"). Completing a lap rolls for a mark
@@ -86,7 +89,9 @@ function buildIndex() {
     for (const obstacle of course.obstacles) {
       obstacle.course = course;
       if (obstacle.index != null) {
-        obstacleXp.set(obstacle.index, Math.max(obstacleXp.get(obstacle.index) ?? 0, obstacle.xp ?? 0));
+        // XP that depends on the player (the Agility Pyramid's doorway) is all lap, no bonus.
+        const xp = typeof obstacle.xp === "number" ? obstacle.xp : 0;
+        obstacleXp.set(obstacle.index, Math.max(obstacleXp.get(obstacle.index) ?? 0, xp));
       }
       indexObstacle(obstacle);
     }
@@ -236,10 +241,30 @@ function withHighlight(steps, helper) {
   return at < 0 ? [...steps, highlight] : [...steps.slice(0, at), highlight, ...steps.slice(at)];
 }
 
-/** A course's own progress varbit (Shayzien's), set to the obstacle the lap has reached. */
+/**
+ * A course's own progress varbit (Shayzien's, the Colossal Wyrm's), set to the obstacle the lap
+ * has reached. A course that shares this one's first obstacles with `sharesWith.progress` has its
+ * varbit follow them too (the Wyrm's advanced course: rsprox 1106 sets both on the shared ladder
+ * and tightrope).
+ */
 function setProgressVarbit(player, course, index) {
   if (course.progressVarbit != null) {
     player.getPacketSender().sendVarbit(course.progressVarbit, index);
+  }
+  for (const other of COURSES) {
+    const shares = other.sharesWith;
+    if (shares?.course === course.key && shares.progress && other.progressVarbit != null && index <= shares.through) {
+      player.getPacketSender().sendVarbit(other.progressVarbit, index);
+    }
+  }
+}
+
+/** A finished lap clears the course's progress varbit and, when they move together, the shared course's. */
+function resetProgressVarbits(player, course) {
+  setProgressVarbit(player, course, 0);
+  const shared = course.sharesWith?.progress ? COURSES.find((other) => other.key === course.sharesWith.course) : null;
+  if (shared?.progressVarbit != null) {
+    player.getPacketSender().sendVarbit(shared.progressVarbit, 0);
   }
 }
 
@@ -259,18 +284,23 @@ function completeLap(player, course) {
   if (reward.xp > 0) {
     addAgilityXp(player, reward.xp, course);
   }
+  // XP in other skills for a full lap (`lapSkillXp`: Barbarian Outpost's Strength, Wiki).
+  for (const [skillName, xp] of Object.entries(course.lapSkillXp ?? {})) {
+    player.getSkillManager().addExperiences(core.Skill[skillName.toUpperCase()], xp);
+  }
+  // The diary's line comes before the lap count (rsprox 1788).
+  if (course.diaryTask) {
+    pluginApi.emitCustomEvent("diary:task", { player, ...course.diaryTask });
+  }
   if (!player.getAttribute(LAP_COUNTER_OFF_ATTRIBUTE)) {
     player.sendMessage(`Your ${course.name} lap count is: <col=ff0000>${laps[course.key]}</col>.`);
   }
-  setProgressVarbit(player, course, 0);
+  resetProgressVarbits(player, course);
   if (course.helper != null) {
     player.getPacketSender().sendVarbit(HIGHLIGHTED_COURSE_VARBIT, 0);
     player.getPacketSender().sendClientScript(END_LAP_SCRIPT, lapClock(), Math.max(1, reward.count | 0) - 1);
   }
   pluginApi.emitCustomEvent("agility:lap", { player, course: course.key, laps: laps[course.key], count: Math.max(1, reward.count | 0) });
-  if (course.diaryTask) {
-    pluginApi.emitCustomEvent("diary:task", { player, ...course.diaryTask });
-  }
   // The giant squirrel rolls once per completed course.
   pluginApi.emitCustomEvent("agility:success", { player, skill: core.Skill.AGILITY, petBase: course.petBase });
 }
@@ -423,7 +453,10 @@ function finishObstacle(player, obstacle, success, completed, fail = obstacle.fa
   if (success && lapStart && obstacle.course.helper != null) {
     player.getPacketSender().sendClientScript(START_LAP_SCRIPT, lapClock());
   }
-  const reward = success ? obstacle.xp : fail?.xp;
+  // `diaryXp` ({ diary, tier, xp }) pays more once that diary tier is done (Pollnivneach's and
+  // Rellekka's last obstacles); the lap bonus is worked out from the plain `xp`.
+  const diaryXp = success && obstacle.diaryXp && diaryTierComplete(player, obstacle.diaryXp) ? obstacle.diaryXp.xp : null;
+  const reward = success ? diaryXp ?? obstacle.xp : fail?.xp;
   const xp = typeof reward === "function" ? reward(player) : reward;
   if (xp > 0) {
     addAgilityXp(player, xp, obstacle.course);
@@ -435,10 +468,13 @@ function finishObstacle(player, obstacle, success, completed, fail = obstacle.fa
   if (!success) {
     return;
   }
-  // OSRS rooftop obstacles restore 1–2% energy; shortcuts and other courses do not.
-  // ponytail: use the documented 1% minimum until per-obstacle captures establish 2% overrides.
+  // Rooftop obstacles restore 1.5% energy each (rsprox 339 and 3154, main game: 150 of 10,000 on
+  // every XP tick); shortcuts and other courses do not. Energy is kept in whole percent, so the
+  // half carries over to the next obstacle.
   if (obstacle.course?.name.includes("Rooftop")) {
-    player.setRunEnergy(player.getRunEnergy() + 1);
+    const restored = (player.getAttribute(ROOFTOP_ENERGY_CARRY_ATTRIBUTE) ?? 0) + ROOFTOP_ENERGY_RESTORE;
+    player.setAttribute(ROOFTOP_ENERGY_CARRY_ATTRIBUTE, restored - Math.floor(restored));
+    player.setRunEnergy(player.getRunEnergy() + Math.floor(restored));
     player.getPacketSender().sendRunEnergy();
   }
   obstacle.onSuccess?.(player);
@@ -551,6 +587,7 @@ function attemptObstacle(player, context, entry) {
   }
   ObstacleRunner.run(context, steps, {
     render: success ? obstacle.render : fail?.render ?? obstacle.render,
+    busyVarbit: obstacle.course != null,
     onFinish: (completed) => {
       finishObstacle(player, obstacle, success, completed, fail, lapStart);
       if (completed && success) {

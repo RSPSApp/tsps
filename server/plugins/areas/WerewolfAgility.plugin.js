@@ -22,7 +22,8 @@ const Loc = Object.freeze({
   STEPPING_STONE: 11643, // werewolf_steping_stone
   SKULL_SLOPE: 11641, // werewolf_skull_climb_1
   ZIP_LINES: [11644, 11645, 11646], // werewolf_slide_center, _side, _side_mirror
-  OBSTACLES: [11638, 11639, 11640, 11657], // the hurdles and the pipe
+  // The trainer calls out at the pipes, not the hurdles (rsprox 1849, 1858: six hurdles, no line).
+  PIPE: 11657, // waa_pipe
 });
 const RINGS_OF_CHAROS = [4202, 6465]; // ring_of_charos, ring_of_charos_unlocked
 const STICK = 4179; // waa_stick
@@ -32,8 +33,10 @@ const TRAPDOOR_SOUND = 91;
 const FIRST_STONE = [3538, 9875];
 const BELOW_TRAPDOOR = [3549, 9865, 0];
 const ABOVE_LADDER = [3543, 3463, 0];
-/** Beyond the pipes, where the Agility Boss's stick lands (Wiki); the tile is a guess. */
+/** Beyond the pipes, where the Agility Boss's stick lands (Wiki; rsprox 1849 3538,9912 and 1858 3543,9911). */
 const STICK_AREA = { x: [3536, 3546], y: [9911, 9914] };
+/** The stick's projectile flies 30 tiles north of the boss wherever the stick lands (rsprox 1849, 1858). */
+const STICK_THROW_TILES = 30;
 const STICK_FLIGHT_TICKS = 5;
 
 const GUARD_WELCOME = "Good luck down there, my friend. Remember, to the west is the main agility course, while to the east is a skullball course.";
@@ -43,7 +46,7 @@ const GUARD_REFUSAL = "You can't go down there, human. If it wasn't my duty to g
 const LINES = Object.freeze({
   obstacle: [
     "Remember - a slow wolf is a hungry wolf!!",
-    "Get on with it - you need your whiskers perking!!!!",
+    "Get on with it - you need your whiskers plucking!!!!", // rsprox 1849 (the Wiki's transcript says "perking")
     "Claws first - think later.",
     "Imagine the smell of blood in your nostrils!!!",
     "I never really wanted to be an agility trainer...",
@@ -59,8 +62,9 @@ const LINES = Object.freeze({
   forgotStick: "You idiot - you've forgotten the stick!!!!",
   fetch: "FETCH!!!!!",
   stickNotHandedIn: "Why didn't you hand the stick over?!!?",
-  yell: "WAAAAAARRRGGGHHHH!!!!!!",
 });
+/** rsprox 1849: leaving the course (there, by a teleport) takes the stick. */
+const STICK_REMOVED = "The werewolf trainer removes your stick as you leave.";
 
 let pluginApi;
 let core;
@@ -135,10 +139,33 @@ function claimClimb(request) {
     }
     guardSays(player, GUARD_WELCOME);
     pluginApi.emitCustomEvent("ladders:climbDown", { player, destination: new core.Location(...BELOW_TRAPDOOR) });
+    // rsprox 1849, 1858: a spam line as the player arrives below, two ticks after the click.
+    core.TaskManager.submit(new (class extends core.Task {
+      constructor() { super(2, player, false); }
+      execute() {
+        this.stop();
+        if (player.getLocation().equals(new core.Location(...BELOW_TRAPDOOR))) {
+          player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, "You climb down through the trapdoor...");
+        }
+      }
+    })());
   } else if (objectId === Loc.LADDER) {
     request.handled = true;
+    if (removeSticks(player)) player.sendMessage(STICK_REMOVED);
     pluginApi.emitCustomEvent("ladders:climbUp", { player, destination: new core.Location(...ABOVE_LADDER) });
   }
+}
+
+/** Takes every stick carried; true if there were any. */
+function removeSticks(player) {
+  const amount = player.getInventory().getAmount(STICK);
+  if (amount > 0) player.getInventory().delete(STICK, amount);
+  return amount > 0;
+}
+
+/** The stick disappears on logout (Wiki). */
+function dropStickOnLogout({ player }) {
+  removeSticks(player);
 }
 
 function randomStickTile() {
@@ -158,7 +185,8 @@ function throwStick(player) {
   const landing = randomStickTile();
   if (boss) {
     const { Projectile } = core;
-    new Projectile(boss.getLocation(), landing, null, STICK_PROJECTILE, 30, 150, 40, 36, null).withAngle(10).withProgress(32).sendProjectile();
+    const target = boss.getLocation().transform(0, STICK_THROW_TILES);
+    new Projectile(boss.getLocation(), target, null, STICK_PROJECTILE, 30, 150, 40, 36, null).withAngle(10).withProgress(32).sendProjectile();
   }
   core.TaskManager.submit(new (class extends core.Task {
     constructor() { super(STICK_FLIGHT_TICKS, player, false); }
@@ -171,7 +199,7 @@ function throwStick(player) {
   })());
 }
 
-/** The trainers react as each obstacle starts (Wiki transcripts). */
+/** The trainers react as each obstacle starts (Wiki transcripts); the player's deathslide yell is the course's step. */
 function onObstacleStart({ player, objectId, location }) {
   if (objectId === Loc.STEPPING_STONE) {
     if (location.x === FIRST_STONE[0] && location.y === FIRST_STONE[1]) throwStick(player);
@@ -180,10 +208,9 @@ function onObstacleStart({ player, objectId, location }) {
   const human = !wearsRing(player);
   if (Loc.ZIP_LINES.includes(objectId)) {
     npcSays(player, Npc.TRAINER, pick(human ? LINES.zipLineHuman : LINES.zipLine));
-    player.forceChat(LINES.yell);
   } else if (objectId === Loc.SKULL_SLOPE && !hasStick(player)) {
     npcSays(player, Npc.TRAINER, LINES.forgotStick);
-  } else if (objectId === Loc.SKULL_SLOPE || Loc.OBSTACLES.includes(objectId)) {
+  } else if (objectId === Loc.SKULL_SLOPE || objectId === Loc.PIPE) {
     npcSays(player, Npc.TRAINER, pick(human ? LINES.obstacleHuman : LINES.obstacle));
   }
 }
@@ -217,5 +244,6 @@ module.exports = {
     api.onCustomEvent("ladders:climb", claimClimb);
     api.onCustomEvent("agility:obstacle-start", onObstacleStart);
     api.onNpcDialogueVariant(selectVariant);
+    api.onPlayerLogout(dropStickOnLogout);
   },
 };

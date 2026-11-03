@@ -178,10 +178,10 @@ function claimLadder(request) {
 }
 
 /**
- * Tagging a dispenser: the active one pays a ticket, a voucher and the level-scaled XP; the
- * darts version dodges first (level 40, damage and a two-level drain on a miss), then pays the
- * darts obstacle's 30 XP. An inactive one only complains, and a second tag in the same cycle
- * is refused.
+ * Tagging a dispenser: the active one pays a ticket, a voucher and the level-scaled XP. The darts
+ * version (3581) tags the same way: its darts are a walk-over trap in the corridors between them
+ * (Area unit), and a tag on it pays only the tag XP (rsprox 75 ticks 13549/13580, 1863 tick
+ * 2030). An inactive one only complains, and a second tag in the same cycle is refused.
  */
 function tagDispenser(event) {
   const { player, objectId, location } = event;
@@ -195,20 +195,6 @@ function tagDispenser(event) {
   if (Shared.stateOf(player).taggedCycle === Shared.cycle.index) {
     player.sendMessage(Shared.REPEAT_MESSAGE);
     return;
-  }
-  if (objectId === Shared.OBJECTS.DARTS_DISPENSER) {
-    const level = Shared.agilityLevel(player);
-    if (level < Shared.OBSTACLE_LEVEL.DARTS) {
-      player.sendMessage(Shared.levelRefusal(Shared.OBSTACLE_LEVEL.DARTS));
-      return;
-    }
-    if (!Shared.roll(Shared.successChance(Shared.DARTS_SUCCESS.low, Shared.DARTS_SUCCESS.high, level))) {
-      player.sendMessage(Shared.DARTS_FAIL_MESSAGE);
-      Shared.drainAgility(player, 2);
-      Shared.hit(player, Shared.trapDamage(player.getHitpoints()));
-      return;
-    }
-    Shared.addXp(player, Shared.OBSTACLE_XP.DARTS);
   }
   Shared.rewardTag(player);
 }
@@ -270,6 +256,7 @@ function death(event) {
 
 module.exports = (api) => {
   api.persistAttribute(Shared.PAID_ATTRIBUTE);
+  api.persistAttribute(Shared.LAPS_ATTRIBUTE);
   api.onNpcInteraction(Shared.NPC.IZZY, { Pay: payIzzy });
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:action", transcriptPayment);

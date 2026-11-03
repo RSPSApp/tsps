@@ -49,9 +49,16 @@ module.exports = {
   lapXp: 153.5,
   progressVarbit: LOW_PROGRESS_VARBIT,
   petBase: 31804, // Giant squirrel base chance (Wiki)
+  // Kourend & Kebos easy: "Do a lap of either tier of the Shayzien Agility Course." (Wiki)
+  diaryTask: {
+    diary: "kourend",
+    task: "do-a-lap-of-either-tier-of-the-shayzien-agility",
+  },
+  // Marks spawn before the basic and advanced courses split (Wiki, Template:Mark of grace
+  // spawns); the tiles on that stretch are guesses.
   marks: {
     level: 1,
-    tiles: [[1553, 3632, 3], [1539, 3633, 2], [1524, 3636, 2], [1524, 3644, 3], [1553, 3643, 2]],
+    tiles: [[1553, 3632, 3], [1539, 3633, 2], [1524, 3636, 2]],
   },
   obstacles: [
     {

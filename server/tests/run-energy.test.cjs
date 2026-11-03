@@ -70,3 +70,57 @@ test("recovery follows the Wiki's per-tick rate, and graceful raises it", () => 
   registerRunEnergyRestoreModifier((_entity, units) => units * 1.3);
   assert.equal(MovementQueue.runEnergyRestoreUnits(subject(0, 1)), 19);
 });
+
+/** A real Player over the real cache, with graceful's slot weights hooked into PluginManager. */
+function cachePlayer() {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const Graceful = require("../plugins/items/GracefulOutfit.plugin");
+  CachePipeline.initialize();
+  if (!PluginManager.customEventHooks.get("equipment:weights")?.length) {
+    Graceful.register(PluginManager.createApi("GracefulOutfit"));
+  }
+  const player = new Player(null);
+  return player;
+}
+
+const drainAt1 = (player) => MovementQueue.runEnergyDrainUnits({
+  getWeightKg: () => player.getWeightKg(),
+  getSkillManager: () => ({ getCurrentLevel: () => 1 }),
+});
+
+test("stackable coins and runes, and notes, weigh nothing however many are carried", () => {
+  const { Item } = require("../dist/game/model/Item");
+  const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
+  const player = cachePlayer();
+  // Coins and nature runes carry a 2 g cache weight that OSRS overrides to 0 (Wiki: Weight).
+  assert.ok(ItemDefinition.forId(995).getWeight() > 0, "coins keep a raw cache weight");
+  player.getInventory().setItem(0, new Item(995, 32000));
+  player.getInventory().setItem(1, new Item(561, 5000));
+  const notedPlatebodies = ItemDefinition.forId(1127).getNoteId();
+  player.getInventory().setItem(2, new Item(notedPlatebodies, 50));
+  assert.equal(player.getCarriedWeightGrams(), 0);
+  assert.equal(player.getWeightKg(), 0);
+
+  player.getInventory().setItem(3, new Item(1127, 1));
+  assert.equal(player.getCarriedWeightGrams(), ItemDefinition.forId(1127).getWeight());
+});
+
+test("worn graceful's weight reduction applies to the drain, the packet and the panel alike", () => {
+  const { Item } = require("../dist/game/model/Item");
+  const EquipmentStats = require("../plugins/interface/EquipmentStats.plugin");
+  const player = cachePlayer();
+  for (const [slot, id] of [[0, 11850], [1, 11852], [4, 11854], [7, 11856], [9, 11858], [10, 11860]]) {
+    player.getEquipment().setItem(slot, new Item(id, 1));
+  }
+  assert.equal(player.getWeightKg(), -25);
+  assert.equal(EquipmentStats._test.getWeight(player), -25);
+  assert.equal(drainAt1(player), MovementQueue.runEnergyDrainUnits(subject(0, 1)), "drains as 0 kg");
+
+  // Two rune platebodies (9.979 kg each) still leave the net weight negative.
+  player.getInventory().setItem(0, new Item(1127, 1));
+  player.getInventory().setItem(1, new Item(1127, 1));
+  assert.ok(player.getWeightKg() < 0, `net weight ${player.getWeightKg()} kg`);
+  assert.equal(player.getWeightKg(), Math.trunc(EquipmentStats._test.getWeight(player)));
+  assert.equal(drainAt1(player), MovementQueue.runEnergyDrainUnits(subject(0, 1)), "drains as 0 kg");
+});

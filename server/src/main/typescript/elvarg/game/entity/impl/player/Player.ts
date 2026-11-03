@@ -13,6 +13,7 @@ import { PendingHit } from "../../../content/combat/hit/PendingHit";
 import { Autocasting } from "../../../content/combat/magic/Autocasting";
 import { SkillManager } from "../../../content/skill/SkillManager";
 import { ItemDefinition } from "../../../definition/ItemDefinition";
+import type { Item } from "../../../model/Item";
 import { Mobile } from "../Mobile";
 import { NPC } from "../npc/NPC";
 import { NpcAggression } from "../npc/NpcAggression";
@@ -1132,21 +1133,41 @@ export class Player extends Mobile {
     }
 
     /**
-     * Carried weight in kilograms, as the OSRS client reports it (Wiki: Energy; cache item
-     * weights are grams, the displayed weight drops the fraction). Inventory and equipment only.
+     * Carried weight in grams: inventory plus equipment, the one total the equipment panel, the
+     * run-energy packet and the drain all use. Stackables (coins, runes, notes) weigh nothing
+     * (Wiki: Weight, their cache weight is overridden to 0), and plugins can replace a worn
+     * slot's weight through "equipment:weights" (graceful's negative weights), so the total
+     * can be negative.
      */
-    public getWeightKg(): number {
+    public getCarriedWeightGrams(): number {
+        const request = { player: this, slotWeights: {} as Record<number, number> };
+        PluginManager.emitCustomEvent("equipment:weights", request);
+        const itemGrams = (item: Item | null | undefined): number => {
+            if (item == null || item.getId() < 0 || item.getAmount() <= 0) {
+                return 0;
+            }
+            const definition = ItemDefinition.forId(item.getId());
+            return definition.isStackable() || definition.isNoted() ? 0 : definition.getWeight();
+        };
         let grams = 0;
-        for (const container of [this.getInventory(), this.getEquipment()]) {
-            for (const item of container.getItems()) {
-                if (item == null || item.getId() < 0) {
-                    continue;
-                }
-                const amount = Math.max(1, item.getAmount?.() ?? 1);
-                grams += ItemDefinition.forId(item.getId()).getWeight() * amount;
+        const equipment = this.getEquipment().getItems();
+        for (let slot = 0; slot < equipment.length; slot++) {
+            const override = request.slotWeights[slot];
+            if (Number.isFinite(override) && equipment[slot]?.getId() >= 0 && equipment[slot].getAmount() > 0) {
+                grams += override * 1000;
+            } else {
+                grams += itemGrams(equipment[slot]);
             }
         }
-        return Math.floor(grams / 1000);
+        for (const item of this.getInventory().getItems()) {
+            grams += itemGrams(item);
+        }
+        return grams;
+    }
+
+    /** Carried weight in whole kilograms, the fraction dropped toward zero as the client shows it. */
+    public getWeightKg(): number {
+        return Math.trunc(this.getCarriedWeightGrams() / 1000);
     }
 
     public isDrainingPrayer(): boolean {

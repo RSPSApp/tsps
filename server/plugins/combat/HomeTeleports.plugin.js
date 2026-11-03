@@ -16,6 +16,9 @@ const LAST_HOME_TELEPORT_ATTRIBUTE = "home-teleport:last-minute";
 // Cache: animation_picker, CS2 7707/1196/1197, home_tele_anim_toggle_list.
 const ANIMATION_PICKER = 525;
 const ANIMATION_PICKER_INIT = 7707;
+const ANIMATION_TOGGLE_CHILD = 8;
+const LAST_ANIMATION_SLOT = 10;
+const TRANSMIT_OP1 = 1 << 1;
 const ANIMATION_CATEGORY_VARP = 4559;
 const HOME_ANIMATION_CATEGORY = 4093;
 const HOME_ANIMATION_TOGGLES_VARP = 4560;
@@ -77,6 +80,7 @@ function castHomeTeleport(event) {
       .sendConfig(ANIMATION_CATEGORY_VARP, HOME_ANIMATION_CATEGORY)
       .sendConfig(HOME_ANIMATION_TOGGLES_VARP, toggles(player))
       .sendInterface(ANIMATION_PICKER)
+      .sendInterfaceFlagsRange((ANIMATION_PICKER << 16) | ANIMATION_TOGGLE_CHILD, 0, LAST_ANIMATION_SLOT, TRANSMIT_OP1)
       .sendClientScript(ANIMATION_PICKER_INIT);
     return;
   }
@@ -139,7 +143,9 @@ function learnIncantation(player, scroll, itemId) {
 
 /** The picker's "Toggle" on animation `slot`: as CS2 7756, a locked one, or the last one enabled, stays. */
 function toggleAnimation(event) {
-  if (event.groupId !== ANIMATION_PICKER || event.slot === undefined) return;
+  if (event.groupId !== ANIMATION_PICKER || event.childId !== ANIMATION_TOGGLE_CHILD
+      || (event.opId ?? event.action ?? 1) !== 1
+      || !Number.isInteger(event.slot) || event.slot < 0 || event.slot > LAST_ANIMATION_SLOT) return;
   event.handled = true;
   const { player, slot } = event;
   const next = toggles(player) ^ (1 << slot);

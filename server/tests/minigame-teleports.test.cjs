@@ -32,6 +32,7 @@ function recordingPlayer(at = new Location(3222, 3218, 0)) {
         sendVarbit: (id, value) => (log(`varbit ${id}=${value}`), sender),
         sendConfig: (id, value) => (log(`varp ${id}=${value}`), sender),
         sendInterface: (id) => (log(`interface ${id}`), sender),
+        sendInterfaceFlagsRange: (uid, from, to, flags) => (log(`flags ${uid} ${from}..${to}=${flags}`), sender),
         sendInterfaceRemoval: () => (log('close'), sender),
         sendClientScript: (id) => (log(`script ${id}`), sender),
     };
@@ -168,11 +169,12 @@ test('interface 951 maps its components to the cache minigames, and every one ha
     assert.deepEqual(names.filter((name) => !data[name]), [], 'missing from minigame-teleports.json');
 });
 
-function attachPlugins(prompts, quests = [], zones = [], customHooks = []) {
+function attachPlugins(prompts, quests = [], zones = [], customHooks = [], interfaceHooks = []) {
     const api = {
         core,
         persistAttribute: () => {},
-    onInterfaceActionClick: () => {},
+    onInterfaceActionClick: (handler) => interfaceHooks.push(handler),
+    onItemAction: () => {},
     onCustomEvent: (name, handler) => customHooks.push({ name, handler }),
     emitCustomEvent: (name, request) => {
       if (name !== 'quest:is-complete') return;
@@ -220,6 +222,7 @@ test('known missing quest gates and unvisited destinations fail closed', async (
 test('cooldowns: the captured messages, and the varps set on landing', async (t) => {
     stubWorld(t)(() => {});
     await CachePipeline.initialize(path.resolve(__dirname, '..'));
+    t.mock.method(Date, 'now', () => 1_800_000_000_000);
     attachPlugins([]);
     const minigame = recordingPlayer();
     const now = Sequence.dateMinutes();
@@ -262,7 +265,7 @@ test('Animation opens the native picker for every home spell without casting or 
         const event = { player: f.player, buttonId: spell.widgetId, itemId: spell.itemId, opId: 10, handled: false };
         HomeTeleports._test.castHomeTeleport(event);
         assert.equal(event.handled, true, name);
-        assert.deepEqual(f.ticks.flat(), ['varp 4559=4093', 'varp 4560=1', 'interface 525', 'script 7707'], name);
+        assert.deepEqual(f.ticks.flat(), ['varp 4559=4093', 'varp 4560=1', 'interface 525', 'flags 34406408 0..10=2', 'script 7707'], name);
         assert.equal(f.player.getAttribute(HomeTeleports._test.LAST_HOME_TELEPORT_ATTRIBUTE), minute);
     }
 });
@@ -355,4 +358,52 @@ test('native Grouping selections use the existing teleport, cooldown and refusal
     t.mock.method(WorldDefinition, 'isMembersWorld', () => false);
     const free = who(); await click(free, slotFor('Nightmare Zone'));
     assert.match(free.messages.at(-1), /members' world/);
+});
+
+
+test('home animation picker persists only valid toggle row operations and retains one enabled cast', () => {
+    const handlers = [];
+    attachPlugins([], [], [], [], handlers);
+    const f = recordingPlayer();
+    f.player.setAttribute('home-teleport:animations-unlocked', 1 << 5);
+    const click = (overrides = {}) => {
+        const event = { player: f.player, groupId: 525, childId: 8, opId: 1, slot: 5, ...overrides };
+        for (const handler of handlers) handler(event);
+        return event;
+    };
+    for (const invalid of [{ childId: 7 }, { opId: 2 }, { slot: -1 }, { slot: 32 }, { slot: 5.5 }]) {
+        click(invalid);
+        assert.equal(f.player.getAttribute(Sequence.TOGGLES_ATTRIBUTE), undefined);
+    }
+    click({ slot: 6 }); // Shattered is still locked.
+    assert.equal(f.player.getAttribute(Sequence.TOGGLES_ATTRIBUTE), undefined);
+    assert.equal(click().handled, true);
+    assert.equal(f.player.getAttribute(Sequence.TOGGLES_ATTRIBUTE), 33);
+    click({ slot: 0 });
+    assert.equal(f.player.getAttribute(Sequence.TOGGLES_ATTRIBUTE), 32);
+    click(); // Trailblazer is the last enabled animation.
+    assert.equal(f.player.getAttribute(Sequence.TOGGLES_ATTRIBUTE), 32);
+    assert.ok(f.ticks.flat().includes('varp 4560=32'));
+});
+
+test('enabled league casts use their own lock/landing ticks and release movement when cancelled', (t) => {
+    stubWorld(t)(() => {});
+    for (const [bit, animation, lockTick, landTick] of [[5, 8798, 22, 24], [6, 9209, 16, 19]]) {
+        const f = recordingPlayer();
+        f.player.setAttribute(Sequence.TOGGLES_ATTRIBUTE, 1 << bit);
+        Sequence.startHomeTeleport(core, f.player, new Location(2609, 3121, 0), () => f.log('arrived'));
+        run(f.ticks, f.nextTick, landTick + 2);
+        assert.ok(f.ticks[1].includes(`anim ${animation}`));
+        assert.ok(f.ticks[lockTick].includes('locked'));
+        assert.ok(f.ticks[landTick].includes('arrived'));
+        assert.ok(f.ticks[landTick].includes('free'));
+        const cancelled = recordingPlayer();
+        cancelled.player.setAttribute(Sequence.TOGGLES_ATTRIBUTE, 1 << bit);
+        const task = Sequence.startHomeTeleport(core, cancelled.player, new Location(2609, 3121, 0));
+        run(cancelled.ticks, cancelled.nextTick, lockTick + 1);
+        task.stop();
+        assert.ok(cancelled.ticks.flat().includes('free'));
+        run(cancelled.ticks, cancelled.nextTick, landTick + 2);
+        assert.ok(!cancelled.ticks.flat().some(e => e.startsWith('teleport')));
+    }
 });

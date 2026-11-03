@@ -56,11 +56,12 @@ test('handshake decodes the mobile client type byte', () => {
 });
 
 function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAccount = false, root = 161, config = {} } = {}) {
-  const hooks = {}, events = [], packets = [];
+  const hooks = {}, events = [], packets = [], messages = [];
   const player = {
     getLocation: () => ({ wilderness }),
     isPlayerBot: () => bot,
     getUsername: () => 'WelcomeTester',
+    sendMessage: text => { if (!bot) messages.push(text); },
     getAttribute: key => key === MOBILE_CLIENT_ATTRIBUTE ? mobile : key === 'client-layout-root' ? root : false,
     getSession: () => ({ sendClientPacket: packet => packets.push(['frame', packet]) }),
     getPacketSender: () => ({
@@ -82,12 +83,13 @@ function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAc
     log() {},
   });
   hooks.login({ player, isNewAccount: newAccount });
-  return { hooks, player, packets, events };
+  return { hooks, player, packets, events, messages };
 }
 
 test('welcome screen waits for synchronous login initialization and restores the saved frame once', async () => {
   for (const root of [161, 164, 548]) {
     const h = welcomeHarness({ root });
+    assert.deepEqual(h.messages, ['Welcome to Old School RuneScape.'], 'the chatbox login line');
     assert.deepEqual(h.packets, [], 'login initializes the frame before the root swap microtask');
     assert.equal(h.hooks['player:gameframe-bootstrap'], undefined, 'core does not delegate bootstrap control to Welcome');
     await Promise.resolve();
@@ -98,6 +100,7 @@ test('welcome screen waits for synchronous login initialization and restores the
     h.hooks.play({ player: h.player });
     assert.deepEqual(h.packets.slice(3).map(row => row[1]), encodeGameframeBootstrap('WelcomeTester', root));
     assert.deepEqual(h.events, ['welcome-screen:shown', 'gameframe:ready']);
+    assert.deepEqual(h.messages, ['Welcome to Old School RuneScape.'], 'Play does not send it again');
   }
 });
 
@@ -107,11 +110,12 @@ test('the message of the week scroll takes the world config text', async () => {
   assert.deepEqual(h.packets.find(row => row[0] === 'text'), ['text', (378 << 16) | 6, 'Double XP this weekend!']);
 });
 
-test('new, mobile, bot and Wilderness logins keep the immediate gameframe', async () => {
+test('new, mobile, bot and Wilderness logins keep the immediate gameframe, and players get the login line', async () => {
   for (const options of [{ newAccount:true }, { mobile:true }, { bot:true }, { wilderness:true }]) {
     const h = welcomeHarness(options);
     await Promise.resolve();
     assert.deepEqual(h.packets, []);
+    assert.deepEqual(h.messages, options.bot ? [] : ['Welcome to Old School RuneScape.'], JSON.stringify(options));
   }
 });
 
@@ -176,6 +180,9 @@ test('real login bootstraps before snapshots and completes recovery before deskt
       save: { applyToPlayer: p => p.setLocation(new Location(3210, 3220, 0)) } };
     try {
       connection.enterWorld(mobile ? 1 : 0);
+      const loginLines = connection.player.getSession().pendingPackets
+        .filter(packet => packet.includes(Buffer.from('Welcome to Old School RuneScape.')));
+      assert.equal(loginLines.length, 1, 'the chatbox login line is sent exactly once');
       const tabIndex = order.findIndex(row => row[0] === 'sendTabInterface');
       const memberIndex = order.findIndex(row => row[0] === 'sendInterfaceScript' && row[1] === 828);
       const inventoryIndex = order.findIndex(row => row[0] === 'sendItemContainer');

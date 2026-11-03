@@ -394,6 +394,152 @@ for (const farming of [1, 2]) {
   });
 }
 
+async function nativeDig(f, itemId = core.ItemIdentifiers.SPADE, slot = f.player.getInventory().getSlotForItemId(itemId)) {
+  await f.connection.dispatch([{ type: 'inventory_action', widgetId: core.CacheDefinitions.getComponentId('inventory:items'),
+    itemId, slot, option: 'Dig', optionIndex: 1 }]);
+  f.connection.processTurnPackets();
+}
+
+test('Fairytale I Draynor skull is reachable through the native Spade Dig action', async t => {
+  const f = fixture(t), { player } = f;
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3106, 3384);
+  const grave = core.MapObjects.get(core.ObjectIdentifiers.GRAVESTONE_8, new core.Location(3106, 3384), null);
+  assert.ok(grave, 'the grave is present in the real cache at the quest location');
+  player.setLocation(new core.Location(3106, 3385));
+  player.getInventory().add(new core.Item(core.ItemIdentifiers.SPADE));
+  await nativeDig(f);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 1);
+  await nativeDig(f);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 1, 'repeated digging cannot duplicate it');
+  player.getInventory().deleteNumber(core.ItemIdentifiers.DRAYNOR_SKULL, 1);
+  player.getBank(2).add(new core.Item(core.ItemIdentifiers.DRAYNOR_SKULL), false);
+  await nativeDig(f);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 0, 'a banked skull is still owned');
+  player.getBank(2).deleteNumber(core.ItemIdentifiers.DRAYNOR_SKULL, 1);
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
+  assert.equal(quest.getStage(player), 0, 'the skull remains obtainable before the quest without starting it');
+  quest.setStage(player, 40);
+  await f.connection.dispatch([{ type: 'item_on_object', widgetId: core.CacheDefinitions.getComponentId('inventory:items'),
+    itemId: core.ItemIdentifiers.SPADE, slot: player.getInventory().getSlotForItemId(core.ItemIdentifiers.SPADE),
+    objectId: grave.getId(), x: 3106, y: 3384 }]);
+  f.connection.processTurnPackets();
+  for (let n = 0; n < 4; n++) {
+    core.TaskManager.processWalkTo(player.getIndex());
+    player.getMovementQueue().process();
+    core.TaskManager.process();
+  }
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 1, 'using the spade on the grave still works');
+  assert.equal(quest.getStage(player), 40, 'digging does not advance the quest');
+});
+
+test('Fairytale I Draynor dig rejects incorrect tiles, planes and item sources and handles a full bag', async t => {
+  const f = fixture(t), { player } = f, inventory = player.getInventory();
+  let laterDigs = 0;
+  const hooks = PM.itemActionHooks, start = hooks.length;
+  t.after(() => hooks.splice(start));
+  PM.createApi('LaterQuestDigProbe').onItemAction('Spade', { Dig: () => { laterDigs++; return false; } });
+  const { SPADE, DRAYNOR_SKULL } = core.ItemIdentifiers;
+  inventory.add(new core.Item(SPADE));
+  for (const at of [new core.Location(3106, 3388), new core.Location(3106, 3385, 1)]) {
+    player.setLocation(at); await nativeDig(f);
+    assert.equal(inventory.getAmount(DRAYNOR_SKULL), 0);
+  }
+  assert.equal(laterDigs, 2, 'off-site digs remain available to other content');
+  player.setLocation(new core.Location(3106, 3385));
+  await nativeDig(f, SPADE, 20);
+  assert.equal(inventory.getAmount(DRAYNOR_SKULL), 0, 'an empty or stale slot cannot dig');
+  inventory.resetItems();
+  const noted = core.ItemDefinition.forId(SPADE).getNoteId();
+  inventory.add(new core.Item(noted));
+  await nativeDig(f, noted);
+  assert.equal(inventory.getAmount(DRAYNOR_SKULL), 0, 'a noted spade has no native Dig action');
+  inventory.resetItems();
+  inventory.add(new core.Item(SPADE, 28));
+  assert.equal(inventory.getFreeSlots(), 0);
+  await nativeDig(f);
+  assert.equal(inventory.getAmount(DRAYNOR_SKULL), 0);
+  inventory.deleteNumber(SPADE, 1);
+  const hash = core.MapObjects.getHash(3106, 3384, 0), objects = core.MapObjects.mapObjects.get(hash);
+  core.MapObjects.mapObjects.delete(hash);
+  try {
+    await nativeDig(f);
+    assert.equal(inventory.getAmount(DRAYNOR_SKULL), 0, 'a removed grave cannot supply its skull');
+  } finally { core.MapObjects.mapObjects.set(hash, objects); }
+  await nativeDig(f);
+  assert.equal(inventory.getAmount(DRAYNOR_SKULL), 1, 'freeing a slot makes the next dig recoverable');
+});
+
+function nuffFixture(t, stage = 20) {
+  const f = fixture(t), { player } = f;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
+  quest.setStage(player, stage);
+  const npcId = core.NpcIdentifiers.FAIRY_NUFF_2, npc = core.NPC.create(npcId, new core.Location(2386, 4727));
+  return { ...f, quest, talk: () => PM.emitNpcInteraction({ player, npc, npcId, action: 'Talk-to', clickType: 1, handled: false }) };
+}
+
+async function finishNuff(f) {
+  for (let n = 0; f.player.getDialogueManager().getCurrent() && n < 60; n++) await nextLine(f);
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined);
+}
+
+async function cancelFinalNuffLine(f) {
+  for (let n = 0; n < 60; n++) {
+    const line = f.player.getDialogueManager().getCurrent()?.getText() ?? '';
+    if (/I believe he now resides|I have a copy of it here/.test(line)) break;
+    assert.ok(line, 'the handover line remains reachable');
+    await nextLine(f);
+  }
+  assert.match(f.player.getDialogueManager().getCurrent()?.getText() ?? '', /I believe he now resides|I have a copy of it here/);
+  const group = f.player.getPacketSender().getChatboxGroupId();
+  f.player.closeInterruptibleInterfaces();
+  await f.connection.dispatch([{ type: 'dialogue_continue', widgetId: (group << 16) | 5, childIndex: -1 }]);
+  f.connection.processTurnPackets();
+}
+
+test('Fairytale I Nuff waits for native dialogue completion and preserves cancellation, recovery and retalk', async t => {
+  const f = nuffFixture(t), { player, quest } = f, item = core.ItemIdentifiers.SYMPTOMS_LIST;
+  assert.equal(f.talk(), true);
+  assert.equal(player.getInventory().getAmount(item), 0);
+  assert.equal(quest.getStage(player), 20);
+  await cancelFinalNuffLine(f);
+  assert.equal(player.getInventory().getAmount(item), 0, 'a closed conversation and stale Continue cannot hand over the list');
+  assert.equal(quest.getStage(player), 20);
+  f.talk(); await finishNuff(f);
+  assert.equal(player.getInventory().getAmount(item), 1);
+  assert.equal(quest.getStage(player), 30);
+  f.talk(); player.closeInterruptibleInterfaces();
+  assert.equal(player.getInventory().getAmount(item), 1, 'retalking with the list does not duplicate it');
+  player.getInventory().deleteNumber(item, 1);
+  f.talk();
+  assert.equal(player.getInventory().getAmount(item), 0, 'replacement lists also wait for their conversation');
+  await cancelFinalNuffLine(f);
+  assert.equal(player.getInventory().getAmount(item), 0);
+  f.talk(); await finishNuff(f);
+  assert.equal(player.getInventory().getAmount(item), 1);
+  assert.equal(quest.getStage(player), 30);
+});
+
+test('Fairytale I Nuff handovers recover from a full inventory without skipping quest stages', async t => {
+  const f = nuffFixture(t), { player, quest } = f, inventory = player.getInventory();
+  const { SPADE, SYMPTOMS_LIST } = core.ItemIdentifiers;
+  inventory.add(new core.Item(SPADE, 28));
+  f.talk(); await finishNuff(f);
+  assert.equal(inventory.getAmount(SYMPTOMS_LIST), 0);
+  assert.equal(quest.getStage(player), 20);
+  inventory.deleteNumber(SPADE, 1);
+  f.talk(); await finishNuff(f);
+  assert.equal(inventory.getAmount(SYMPTOMS_LIST), 1);
+  assert.equal(quest.getStage(player), 30);
+  inventory.deleteNumber(SYMPTOMS_LIST, 1); inventory.add(new core.Item(SPADE));
+  f.talk(); await finishNuff(f);
+  assert.equal(inventory.getAmount(SYMPTOMS_LIST), 0);
+  inventory.deleteNumber(SPADE, 1);
+  f.talk(); await finishNuff(f);
+  assert.equal(inventory.getAmount(SYMPTOMS_LIST), 1);
+  assert.equal(quest.getStage(player), 30);
+});
+
 for (const shieldStage of [4, 7]) {
   test(`Priest in Peril starts through native choices after Shield of Arrav stage ${shieldStage}`, async t => {
     const f = fixture(t);

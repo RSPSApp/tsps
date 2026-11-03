@@ -8,7 +8,7 @@ before(async () => {
   await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
 });
 let nextIndex = 100;
-function setup() {
+function setup({ nativeSpawns = false } = {}) {
   const hooks = { custom: new Map(), variants: [], namedNpcs: new Map(), objects: [], items: [], logout: [] };
   const tasks = [], spawned = [], removed = [], objects = [], projectiles = [], graphics = [], cameras = [];
   let tick = 0; const executed = new Set();
@@ -26,8 +26,15 @@ function setup() {
     onCustomEvent(name, fn) { const list = hooks.custom.get(name) ?? []; list.push(fn); hooks.custom.set(name, list); },
     emitCustomEvent(name, event) { for (const fn of hooks.custom.get(name) ?? []) fn(event); },
     spawnNpc(def) {
+      if (nativeSpawns) {
+        const npc = PluginManager.spawnNpc(def, 'BelowIceMountainPillarTest');
+        spawned.push(npc);
+        return npc;
+      }
       let hp = 40, area, tile = new core.Location(def.x, def.y, def.z);
+      const flags = new Set();
       const npc = { def, getId: () => def.id, getOwner: () => def.owner, getHitpoints: () => hp, setHitpoints(value) { hp = value; },
+        setFlag(flag) { flags.add(flag); }, hasFlag: flag => flags.has(flag),
         getCombat: () => ({ attack(target) { npc.target = target; } }), isRegistered: () => true,
         isNpc: () => true, isPlayer: () => false, setArea(value) { area = value; }, getArea: () => area,
         getIndex: () => nextIndex++, getAsNpc() { return npc; }, getLocation: () => tile, moveTo(value) { tile = value; },
@@ -174,6 +181,39 @@ test('mining needs level/pickaxe, damages each distinct pillar once and gives 10
   for (let i = 0; i < 3; i++) { click(); h.tasks.at(-1).run(); }
   assert.equal(h.quest.getStage(h.player), 4); assert.equal(h.varbits.get(12063), 40); assert.equal(h.xp.reduce((sum, x) => sum + x.amount, 0), 40); assert.ok(h.removed.includes(guardian));
   h.player.getPrivateArea().destroy();
+});
+
+test('four native pillar hits defeat the guardian without regeneration; ordinary NPCs still regenerate', t => {
+  const h = setup({ nativeSpawns: true }), { NPC, Location, World } = h.core;
+  const cycle = World.getProcessCycle();
+  h.api.removeNpc = npc => { h.removed.push(npc); PluginManager.removeNpc(npc); };
+  h.quest.setStage(h.player, 3);
+  h.action(h.core.NpcIdentifiers.WILLOW, 'wWX1Ws');
+  const guardian = h.spawned.at(-1);
+  t.after(() => { PluginManager.removeNpc(guardian); h.player.getPrivateArea().destroy(); World.processCycle = cycle; });
+  assert.ok(guardian instanceof NPC);
+  assert.equal(guardian.getMaxHitpoints(), 40);
+  const ordinary = new NPC(guardian.getId(), new Location(2952, 5778));
+  ordinary.setHitpoints(30);
+  ordinary.process();
+  assert.equal(ordinary.getHitpoints(), 34, 'a normal unflagged NPC retains its existing regeneration');
+  h.api.onCustomEvent('mining:best-pickaxe', event => { event.pickaxe = { animation: new h.core.Animation(625) }; });
+  for (let mined = 1; mined <= 4; mined++) {
+    const object = h.objects.find(object => object.getId() === h.core.ObjectIdentifiers.STRUCTURAL_PILLAR);
+    h.player.moveTo(object.getLocation().transform(1, 0));
+    h.hooks.objects[0]({ player: h.player, objectId: object.getId(), object, clickType: 1 });
+    h.tasks.at(-1).run();
+    assert.equal(guardian.getHitpoints(), 40 - 10 * mined);
+    if (mined < 4) {
+      for (let tick = 0; tick < 40; tick++) { World.processCycle++; guardian.process(); }
+      assert.equal(guardian.getHitpoints(), 40 - 10 * mined, 'mining-only damage survives ordinary NPC processing');
+    }
+  }
+  assert.equal(h.quest.getStage(h.player), 4);
+  assert.equal(h.varbits.get(12063), 40);
+  assert.equal(h.xp.reduce((sum, award) => sum + award.amount, 0), 40);
+  assert.ok(h.removed.includes(guardian));
+  assert.equal(guardian.isRegistered(), false);
 });
 
 test('entrance uses a private crew and Marley scene, then replaces the awakening with a combat guardian', () => {

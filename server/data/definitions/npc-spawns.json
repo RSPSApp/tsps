@@ -12851,7 +12851,7 @@
   {"level":0,"name":"Dark warrior","x":3585,"y":6068,"id":531},
   {"level":0,"name":"Dark warrior","x":3585,"y":6071,"id":531},
   {"level":0,"name":"Mountain goat","x":2832,"y":3597,"id":4117},
-  {"level":0,"name":"Soldier","x":2840,"y":3589,"id":4092},
+  {"level":0,"name":"Soldier","x":2840,"y":3589,"id":4092,"wanderRadius":0},
   {"level":0,"name":"Thrower Troll","x":2851,"y":3598,"id":935},
   {"level":0,"name":"Mountain troll","x":2852,"y":3591,"id":936},
   {"level":0,"name":"Thrower Troll","x":2854,"y":3600,"id":931},

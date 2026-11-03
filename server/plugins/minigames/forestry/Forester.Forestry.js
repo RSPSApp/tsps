@@ -151,6 +151,30 @@ function currency(event) {
   };
 }
 
+/**
+ * Anima-infused bark pays from the inventory and then from a carried or worn Forestry kit
+ * ("storage:amount" / "storage:take"), since event bark goes straight into the kit. Ours: neither
+ * the Wiki nor a capture shows the shop spending kit bark.
+ */
+function barkCurrency(event) {
+  if (!isShop(event.shop) || event.itemId !== Common.data.items.bark || typeof event.set === "function") return;
+  const { player } = event;
+  const inventory = player.getInventory();
+  const query = { player, itemId: event.itemId, amount: inventory.getAmount(event.itemId) };
+  Common.api.emitCustomEvent("storage:amount", query);
+  event.balance = query.amount;
+  event.inventoryCost = (amount) => Math.min(amount, inventory.getAmount(event.itemId));
+  event.set = (balance) => {
+    // A refund goes to the inventory, as the shop's own currency would.
+    if (balance > event.balance) inventory.adds(event.itemId, balance - event.balance);
+    const spend = Math.max(0, event.balance - balance);
+    const fromInventory = Math.min(spend, inventory.getAmount(event.itemId));
+    if (fromInventory > 0) inventory.delete(event.itemId, fromInventory);
+    if (spend > fromInventory) Common.api.emitCustomEvent("storage:take", { player, itemId: event.itemId, amount: spend - fromInventory, taken: 0 });
+    inventory.refreshItems();
+  };
+}
+
 function inReach(player, npc) {
   return player.isRegistered() && npc.isRegistered() && isUltimate(player)
     && player.getPrivateArea() === npc.getPrivateArea()
@@ -218,6 +242,7 @@ function attachForester(api) {
   api.onCustomEvent("npc-dialogue:condition", met);
   api.onCustomEvent("npc-dialogue:action", openFromDialogue);
   api.onCustomEvent("omnishop:currency", currency);
+  api.onCustomEvent("omnishop:currency", barkCurrency);
   api.onCustomEvent("omnishop:describe", describe);
   api.onCustomEvent("omnishop:can-buy", canBuy);
   api.onCustomEvent("omnishop:can-sell", canSell);

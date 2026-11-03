@@ -54,7 +54,7 @@ function harness({ npcDrops = false, nativeNpc = false } = {}) {
         getSize: () => 3, isPlayer: () => false,
         getMovementQueue: () => ({ reset() { return this; }, setBlockMovement: noop }),
         getHitpoints: () => 58, getLocation: () => at, moveTo: value => { at = value; }, exactMove: value => { at = value; },
-        setFlag: noop, removeFlag: noop, setMobileInteraction: noop,
+        setFlag: noop, removeFlag: noop, setMobileInteraction: noop, setNeedsPlacement: noop,
         getCombat: () => ({ reset: noop, getTarget: () => area?.player }), getDefinition: () => ({ getRespawn: () => 36 }),
         setCombatXpMultiplier: value => { npc.xpMultiplier = value; }, setPositionToFace: noop, performAnimation: noop, performGraphic: noop, forceChat: noop };
       npcs.push(npc); return npc;
@@ -576,4 +576,29 @@ test('special recovery never reattaches a dead, replaced, abandoned or retargete
       }
     } finally { f.close(); }
   }
+});
+
+test('the charge survives real combat validation before its facing recovery', () => {
+  const f = nativeFight(22);
+  try {
+    Object.assign(f.p, {
+      isRegistered: () => true, isUntargetable: () => false, isNeedsPlacement: () => false,
+      isTeleportingReturn: () => false, getAsPlayer: () => f.p, isDyingReturn: () => false,
+      getSize: () => 1, getDueling: () => null,
+    });
+    const { Player } = require('../dist/game/entity/impl/player/Player');
+    const playerCombat = new Player(null).getCombat();
+    f.p.getCombat = () => playerCombat;
+    f.arena.isMulti = () => false;
+    f.arena.meleeRemaining = 0; f.arena.nextSpecial = 'charge';
+    f.method.start(f.npc, f.p); f.sync();
+    f.h.tick(3); // World processes quest tasks before NPC combat and before sync clears placement.
+    assert.equal(core.CombatFactory.validTarget(f.npc, f.p), true);
+    f.npc.getCombat().preMovementProcess();
+    assert.equal(f.npc.getCombat().getTarget(), f.p);
+    assert.equal(f.npc.getMovementQueue().getMobility().canMove(), false);
+    f.h.tick(2);
+    assert.equal(f.npc.getInteractingMobile(), f.p);
+    assert.equal(f.npc.getMovementQueue().getMobility().canMove(), true);
+  } finally { f.close(); }
 });

@@ -278,7 +278,11 @@ module.exports = function registerIdesOfMilkQuest(api) {
         if (!charge) {
           npc.performGraphic(new Graphic(STOMP_GRAPHIC.bull));
           for (const [x, y] of tiles) player.getPacketSender().sendGraphic(new Graphic(STOMP_GRAPHIC.ground), new Location(x, y, 0));
-        } else npc.exactMove(end, { endCycles: 60 });
+        } else {
+          npc.exactMove(end, { endCycles: 60 });
+          // The charge stays in this fight; placement would make combat discard its target.
+          npc.setNeedsPlacement(false);
+        }
         if (hit) {
           const hp = player.getSkillManager().getMaxLevel(Skill.HITPOINTS);
           // shortcut: quest scaling is documented as roughly 30–40%; capture low-level hits to establish exact rounding.

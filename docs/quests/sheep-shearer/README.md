@@ -2,10 +2,10 @@
 quest: Sheep Shearer
 key: sheep_shearer
 status: passed-with-issues
-tested: 2026-10-29
+tested: 2026-11-03
 tester: agent
-model: grok-4.7
-commit: b6edd9b4ac46
+model: claude-opus-5-5
+commit: 9c0850318
 cache: osrs-241_2026-10-20
 start: fresh
 travel: travel_to
@@ -13,18 +13,49 @@ travel: travel_to
 
 # Sheep Shearer
 
-A watched account with the quest unstarted finished the normal route: Fred's start, twenty
-sheared sheep, the Lumbridge castle spinning wheel, the hand-in, the reward scroll, a repeat
-talk, and a relog. The Thing's escape animation played. `travel_to` still notes a staircase
-id mismatch on the way up into the castle.
+A fresh account played the route rsprox 1718 captured: Fred's start conversation while
+already carrying 20 balls of wool, which starts and finishes the quest in one talk. Every page,
+option, stage change and reward now matches the capture; the capture-backed differences are
+fixed. The ordinary shear-and-spin route was played on 2026-10-29 and has no capture.
 
 ## Findings
 
+Newest first.
+
+- **fixed** "You've started a new quest: Sheep Shearer" was never sent; it now follows
+  "Yes, okay. I can do that." as in 1718.
+- **fixed** The 20 balls of wool left at the "You give Fred 20 balls of wool." box; 1718 takes
+  them with the coins on the last page, in the same inventory update.
+- **fixed** Completion played jingle 238; 1718 plays 154.
+- **fixed** The player says "a little **woolly**" (1718); the wiki has "wooly". Corrected in
+  the dumper ([RSPSApp/osrsreboxed-db#35](https://github.com/RSPSApp/osrsreboxed-db/pull/35)) and regenerated.
+- **fixed** Added the captured Fred and player chat-head animations from 1718.
+- **open** The post-quest "Fred! Fred! I've seen The Thing!" option shows to players who never
+  met The Thing; the wiki gates it. No capture covers post-quest Fred.
+- **open** (all quests) The level-up message arrives before the completion message; in 1718 it
+  arrives after the scroll closes. The scroll's item is sent at zoom 1 without
+  `IfSetPosition` (live: 400 and a position), and the scroll opens a tick after completion.
+  Shared quest runtime.
+- **open** (all quests) Dialogue pages are not echoed to chat history (live sends type 114/115
+  game messages for every page and box). Shared dialogue runtime.
 - **open** `travel_to` Climb-up on the Lumbridge castle staircase at 3204, 3207 used object
   56230, found by name. The live transport id is 16671. The hop still arrived. Climb-down
   on 16672 at the same tile had no note.
 
 ## Runs
+
+### 2026-11-03 — agent — Claude Opus 5.5
+
+- **Start:** fresh account (varp 179 = 0, 0 quest points, Crafting 1), placed at Fred with
+  `::tele` (the only teleport); 20 balls of wool (1759) supplied as declared setup, as in 1718.
+- **Route:** Fred, "I'm looking for a quest.", the Thing lines, "Yes.", the 20-ball branch.
+  Text, options and order matched 1718 page for page, including "woolly".
+- **Result:** "You've started a new quest" and varp 179 = 1 after "Yes, okay. I can do that.";
+  the statement box "You give Fred 20 balls of wool." with the wool still carried; on the last
+  page varp 179 = 21, 1 quest point, the wool replaced by 60 coins, 150 Crafting XP. Repeat
+  talk opened Fred's post-quest menu; a relog kept stage, quest point, coins and XP.
+- **Not checked:** the shear/spin route and the partial hand-in branches (no capture; played
+  2026-10-29), chat-head animations on screen, the jingle on a client.
 
 ### 2026-10-29 · agent · grok-4.7
 

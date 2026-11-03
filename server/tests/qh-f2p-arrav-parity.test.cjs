@@ -125,7 +125,12 @@ test('Charlie first-ask and payment conditions do not leak the location after fi
 test('quest start and completion mirror the current-cache quest-state varbit', () => {
   const q = register(), p = player();
   q.emit('npc-dialogue:hook', { player: p, hook: 'quest:shield-of-arrav:start' });
+  assert.equal(q.quest.getStage(p), 0, 'rsprox 1705: choosing Yes does not start the quest yet');
+  const line = { player: p, npcId: core.NpcIdentifiers.RELDO,
+    text: "Well, if you look around for book called The Shield of Arrav, you'll find a quest in there." };
+  q.emit('npc-dialogue:line', line); line.after();
   assert.equal(q.quest.getStage(p), 1); assert.equal(lastVarbit(p, 13716), 1);
+  assert.ok(p.messages.includes("You've started a new quest: <col=0ab0ff>Shield of Arrav</col>"));
   q.quest.setStage(p, 6); p.items.set(769, 1);
   q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.KING_ROALD_3, stepId: '25_j1f' });
   assert.equal(q.quest.getStage(p), 7); assert.equal(lastVarbit(p, 13716), 2);
@@ -153,12 +158,24 @@ test('shield caches use the chest or cupboard transcript messages', () => {
   interact(q, phoenix, core.ObjectIdentifiers.CHEST_12);
   assert.ok(phoenix.messages.includes("You open the chest, but don't find anything of interest inside."));
 
+  // rsprox 1710: the Black Arm cupboard animates, opens a tick later and plays its transcript.
   const blackArm = player(); blackArm.attributes.set('shield-of-arrav.gang', 2); q.quest.setStage(blackArm, 4);
-  interact(q, blackArm, core.ObjectIdentifiers.CUPBOARD_12);
-  assert.ok(blackArm.messages.includes('You open the cupboard and find half of a shield inside.'));
-  assert.equal(blackArm.items.get(765), 1);
-  interact(q, blackArm, core.ObjectIdentifiers.CUPBOARD_13);
-  assert.ok(blackArm.messages.includes("You open the cupboard, but don't find anything of interest inside."));
+  const animations = []; blackArm.performAnimation = (animation) => animations.push(animation.getId());
+  const cupboard = new core.GameObject(core.ObjectIdentifiers.CUPBOARD_12, new core.Location(3189, 3385, 1), 10, 0, null);
+  q.call('onObjectInteraction', { player: blackArm, objectId: cupboard.getId(), object: cupboard, clickType: 1,
+    definition: { getInteractions: () => ['Open'] } });
+  assert.deepEqual(animations, [536]);
+  assert.ok(blackArm.packets.some(([method, id]) => method === 'sendSound' && id === 58));
+  assert.equal(blackArm.items.get(765) ?? 0, 0, 'the half comes with the transcript, not the click');
+  const cupboardCondition = (stepId) => q.hooks.get('onNpcDialogueCondition')[0]({ player: blackArm, stepId, text: '', pages: [{ page: 'Shield of Arrav' }] });
+  assert.equal(cupboardCondition('T17vKO'), true); assert.equal(cupboardCondition('ZP1-L8'), false);
+  const found = { player: blackArm, npcId: core.NpcIdentifiers.KATRINE, stepId: 'OVz4IP' };
+  q.emit('npc-dialogue:action', found);
+  assert.equal(blackArm.items.get(765), 1); assert.deepEqual(found.box, { items: [765] });
+  assert.equal(cupboardCondition('T17vKO'), false); assert.equal(cupboardCondition('ZP1-L8'), true);
+  const empty = { player: blackArm, npcId: core.NpcIdentifiers.KATRINE, stepId: 'fxdAOt' };
+  q.emit('npc-dialogue:action', empty);
+  assert.deepEqual(empty.box, { statement: true });
 });
 
 test('crossbow pickup protection uses the weaponsmaster transcript lines', () => {

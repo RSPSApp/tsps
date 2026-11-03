@@ -25,6 +25,12 @@ A watched account with the quest unstarted finished the normal route: Duke Horac
 
 ## Runs
 
+### 2026-11-02 — agent — Claude Opus 5.5
+
+- **Skipped:** No rsprox database capture covers the quest route. No recording changes varp
+  63, and the research package, research notes and air talisman hand-over appear in none;
+  Sedridor and Aubury hits are post-quest accounts (varp 63 = 6). Not replayed.
+
 ### 2026-10-30 · agent · grok-4.7
 
 - **Start:** fresh account, placed at 3210, 3218, 1 with `::tele` (the only command teleport). Baseline: varp 63 = 0, quest points (varp 101) = 0, talisman varbit 13720 = 0, empty inventory and equipment, every skill 13,034,431 XP. Branched from `acf4a8659da5`. The menu replay is the quest code in `69bc52e8f3ea`. The user watched in their own client.

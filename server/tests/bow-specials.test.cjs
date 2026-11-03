@@ -17,6 +17,7 @@ const { WeaponInterfaces } = require("../dist/game/content/combat/WeaponInterfac
 
 // Real core, with the pieces that touch a live world replaced by recorders.
 const drains = [];
+const projectiles = [];
 let rolledBounds = [];
 let sourceMax = 0;
 const hitDamageHandlers = [];
@@ -34,7 +35,15 @@ const core = {
   },
   DamageFormulas: { sourceMaxHit: () => sourceMax },
   PluginManager: { modifyRangedMaxHit: (_a, _t, maxHit) => maxHit },
-  Projectile: { createProjectile: () => ({ withAngle() { return this; }, withProgress() { return this; }, sendProjectile() {} }) },
+  Projectile: { createProjectile: (...args) => {
+    const shot = { args };
+    projectiles.push(shot);
+    return {
+      withAngle(angle) { shot.angle = angle; return this; },
+      withProgress(progress) { shot.progress = progress; return this; },
+      sendProjectile() {},
+    };
+  } },
   Sounds: { sendSound() {} },
 };
 const api = {
@@ -47,7 +56,7 @@ require("../plugins/combat/specials/DarkBow.SpecialAttack")(api);
 require("../plugins/combat/specials/Ballista.SpecialAttack")(api);
 
 function fakePlayer({ weapon, ammo = Ammunition.RUNE_ARROW, rangedWeapon, special, ammoStrength = 0, rangedLevel = 99, activated = true }) {
-  const state = { activated, special: CombatSpecial.getById(special), animations: 0 };
+  const state = { activated, special: CombatSpecial.getById(special), animations: 0, slotGraphics: [] };
   const player = {
     isPlayer: () => true,
     getAsPlayer: () => player,
@@ -69,12 +78,13 @@ function fakePlayer({ weapon, ammo = Ammunition.RUNE_ARROW, rangedWeapon, specia
     getLocation: () => ({ getDistance: () => 1 }),
     performAnimation: () => { state.animations++; },
     performGraphic: () => {},
+    performGraphicInSlot: (slot, graphic) => state.slotGraphics.push({ slot, graphic }),
     state,
   };
   return player;
 }
 
-const target = { getLocation: () => ({}), performGraphic: () => {} };
+const target = { getLocation: () => ({}), performGraphic: () => {}, isNpc: () => true };
 
 function shoot(attacker, accurate, startingDamage = 0) {
   rolledBounds = [];
@@ -120,6 +130,69 @@ test("Snapshot cannot fire from another bow and drains nothing", () => {
   const attacker = fakePlayer({ weapon: I.MAGIC_SHORTBOW, rangedWeapon: RangedWeapon.RUNE_CROSSBOW ?? null, special: "magic_shortbow" });
   assert.equal(CombatSpecial.getById("magic_shortbow").getCombatMethod().canAttack(attacker, target), false);
   assert.deepEqual(drains, []);
+});
+
+test("Snapshot uses its delayed slot-1 graphic and the two captured trajectories", () => {
+  const { Location } = core;
+  const { PacketSender } = require("../dist/net/packet/PacketSender");
+  for (const distance of [1, 2, 4, 7, 9]) {
+    projectiles.length = 0;
+    const attacker = fakePlayer({ weapon: I.MAGIC_SHORTBOW_I_, rangedWeapon: RangedWeapon.MAGIC_SHORTBOW, special: "magic_shortbow" });
+    attacker.getLocation = () => new Location(3200, 3200, 0);
+    const victim = { getLocation: () => new Location(3200 + distance, 3200, 0) };
+    CombatSpecial.getById("magic_shortbow").getCombatMethod().start(attacker, victim);
+    assert.deepEqual(attacker.state.slotGraphics.map(({ slot, graphic }) => [slot, graphic.getId(), graphic.getDelay(), graphic.getHeight()]), [[1, 256, 30, 92]], "RSProx 412 ticks 92/99");
+    assert.deepEqual(projectiles.map(({ args, angle, progress }) => [args[2], args[3], args[4], args[5] * 4, args[6] * 4, angle, progress]), [
+      [249, 20, 30 + 3 * distance, 163, 146, 15, 11],
+      [249, 50, 50 + 3 * distance, 163, 146, 15, 11],
+    ], "RSProx 412 d1/d2 and 4008 d2/d4");
+    const sent = [];
+    const sender = new PacketSender({ getSession: () => ({ sendClientPacket: (packet) => { sent.push(packet); return true; } }) });
+    for (const { args, angle, progress } of projectiles) {
+      sender.sendProjectile(attacker.getLocation(), victim.getLocation(), 0, args[4], args[2], args[5], args[6], null, args[3], angle, progress);
+    }
+    assert.equal(sent.length, 2);
+    for (let i = 0; i < sent.length; i++) {
+      const packet = sent[i].subarray(sent[i].length - 29);
+      assert.equal(packet.readUInt16BE(7), 163, "serialized source height");
+      assert.equal(packet.readUInt16BE(14), 146, "serialized target height");
+      assert.equal(packet[16], 15, "serialized angle");
+      assert.equal(packet.readUInt16BE(17), 11, "serialized progress");
+      assert.equal(packet.readUInt16BE(19), i === 0 ? 20 : 50, "serialized launch cycle");
+      assert.equal(packet.readUInt16BE(21), (i === 0 ? 30 : 50) + 3 * distance, "serialized landing cycle");
+    }
+  }
+});
+
+test("Snapshot hits land with each projectile for NPC and player targets", (t) => {
+  const { PendingHit, CombatFactory, Location } = PluginManager.getCoreApi();
+  const { World } = require("../dist/game/World");
+  t.mock.method(PendingHit.prototype, "prepareHits", () => []);
+  t.mock.method(PluginManager, "emitPlayerDealtDamage", () => {});
+  t.mock.method(CombatFactory, "rewardExp", () => {});
+  t.mock.method(CombatFactory, "handleSkull", () => {});
+  t.mock.method(World, "getProcessCycle", () => 100);
+  for (const npc of [true, false]) {
+    for (let distance = 1; distance <= 9; distance++) {
+      const attacker = fakePlayer({ weapon: I.MAGIC_SHORTBOW, special: "magic_shortbow" });
+      attacker.getLocation = () => new Location(3200, 3200, 0);
+      const due = [];
+      const victim = {
+        getLocation: () => new Location(3200 + distance, 3200, 0),
+        isNpc: () => npc,
+        isPlayer: () => !npc,
+        getAsPlayer: () => victim,
+        getHitpoints: () => 99,
+        isUntargetable: () => false,
+        isNeedsPlacement: () => false,
+        getCombat: () => ({ getHitQueue: () => ({ addPendingHit: (_hit, cycle) => due.push(cycle - 100) }) }),
+      };
+      const hits = CombatSpecial.getById("magic_shortbow").getCombatMethod().hits(attacker, victim);
+      for (const hit of hits) CombatFactory.addPendingHit(hit);
+      assert.deepEqual(due, [Math.ceil((30 + 3 * distance) / 30), Math.ceil((50 + 3 * distance) / 30)]);
+      if (npc && distance <= 2) assert.deepEqual(due, [2, 2], "both dummy hits at +2 ticks in RSProx 412");
+    }
+  }
 });
 
 test("Snapshot's max hit counts only the visible Ranged level and the arrow's strength", () => {
@@ -231,7 +304,7 @@ test("Snapshot and Descent each launch two independently delayed hits", (t) => {
   t.mock.method(PendingHit.prototype, "prepareHits", (amount) => { rolledAmounts.push(amount); return []; });
   const { WeaponInterfaces } = core;
   for (const [special, weapon, profile, expected] of [
-    ["magic_shortbow", I.MAGIC_SHORTBOW, WeaponInterfaces.SHORTBOW, [2, 3]],
+    ["magic_shortbow", I.MAGIC_SHORTBOW, WeaponInterfaces.SHORTBOW, [1, 2]],
     ["dark_bow", I.DARK_BOW, WeaponInterfaces.DARK_BOW, [2, 3]],
   ]) {
     const player = fakePlayer({ weapon, special });

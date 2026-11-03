@@ -187,7 +187,8 @@ test('native widget dispatch blocks prayer, orbs and combat controls before thei
   connection.player = p;
   const input = async (packet) => connection.dispatch([packet], true);
   const widget = (uid, buttonNum = 1) => ({ type: 'widget_action', widgetId: uid, groupId: uid >>> 16, childId: uid & 65535, buttonNum });
-  let quickPrayers = 0, prayers = 0, maps = 0;
+  let quickPrayers = 0, prayers = 0, maps = 0, specials = 0;
+  t.mock.method(core.CombatSpecial, 'activate', () => { specials++; });
   t.mock.method(p.getQuickPrayers(), 'handleWidgetAction', () => { quickPrayers++; return false; });
   t.mock.method(core.PrayerHandler, 'togglePrayer', () => { prayers++; return true; });
   t.mock.method(p.getPacketSender(), 'toggleWorldMap', () => { maps++; });
@@ -195,19 +196,24 @@ test('native widget dispatch blocks prayer, orbs and combat controls before thei
   const autoRetaliate = widget((593 << 16) | 32);
   const orbs = ['orbs:prayerbutton', 'orbs_osm:prayerbutton', 'orbs:worldmap', 'orbs_osm:worldmap']
     .map((name) => { const id = core.CacheDefinitions.getComponentId(name); assert.ok(Number.isInteger(id), name); return widget(id, 2); });
+  const specialOrbs = ['orbs:specbutton', 'orbs_nomap:specbutton', 'orbs_osm:specbutton', 'orbs_osm_nomap:specbutton']
+    .map(name => { const id = core.CacheDefinitions.getComponentId(name); assert.ok(Number.isInteger(id), name); return widget(id); });
   game.prepareWaitingForm(p, 'saradomin');
   game.applyWaitingForm(p);
   p.setAutoRetaliate(false);
-  for (const packet of [prayer, autoRetaliate, ...orbs, { type: 'varp_transmit', varpId: 172, value: 0 }]) await input(packet);
+  for (const packet of [prayer, autoRetaliate, ...orbs, ...specialOrbs, { type: 'varp_transmit', varpId: 172, value: 0 }]) await input(packet);
   assert.equal(quickPrayers, 0);
   assert.equal(prayers, 0);
   assert.equal(maps, 0);
+  assert.equal(specials, 0, 'every native special orb is blocked while transformed');
   assert.equal(p.autoRetaliateReturn(), false);
   game.clearWaitingForm(p);
   quickPrayers = 0;
   await input(prayer);
   await input(autoRetaliate);
   await input(orbs[2]);
+  for (const packet of specialOrbs) await input(packet);
+  assert.equal(specials, 4, 'all four native special orbs resume after leaving');
   assert.equal(prayers, 1, 'native prayer actions resume after leaving');
   assert.equal(p.autoRetaliateReturn(), true, 'native combat controls resume after leaving');
   assert.equal(maps, 1, 'the world map opens normally after leaving');

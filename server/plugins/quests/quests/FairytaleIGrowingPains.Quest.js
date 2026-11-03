@@ -481,6 +481,13 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
 
   function handleDialogueLine(event) {
     if (!event.pages?.some(({ page }) => page === PAGE)) return;
+    if (event.npcId === MALIGNIUS_NPC_ID && event.step?.speaker === "Malignius Mortifer") {
+      const items = requiredNatureItems(event.player);
+      if (items.length === 3) {
+        event.text = event.text.replace(/\[item\s*([123])\]/gi, (_, index) => items[Number(index) - 1].name);
+      }
+      return;
+    }
     if (!GARDENER_NPC_IDS.has(event.npcId) && !INVALID_GARDENER_NPC_IDS.has(event.npcId)) return;
     if (/^\[Gardener(?: #\d+)?\]$/.test(event.step?.speaker ?? "")) {
       event.speakerName = event.definition.getName();

@@ -514,6 +514,86 @@ function nuffFixture(t, stage = 20) {
   return { ...f, quest, talk: () => PM.emitNpcInteraction({ player, npc, npcId, action: 'Talk-to', clickType: 1, handled: false }) };
 }
 
+const NATURE_ITEMS_ATTRIBUTE = 'quest.fairytale-i-growing-pains:nature-items';
+async function readNatureRecipe(f, quest, first = false) {
+  const npcId = core.NpcIdentifiers.MALIGNIUS_MORTIFER;
+  const npc = core.NPC.create(npcId, new core.Location(3000, 3275));
+  assert.equal(PM.emitNpcInteraction({ player: f.player, npc, npcId,
+    action: 'Talk-to', clickType: 1, handled: false }), true);
+  const choices = first ? ['I need help with fighting a Tanglefoot.'] : [
+    'I was asking you about fighting a Tanglefoot...', 'What did I need to take to the Nature Spirit again?'];
+  const lines = [];
+  for (let n = 0; n < 80; n++) {
+    const menu = MultiChatboxPrompt.getPending(f.player);
+    if (menu) {
+      const choice = choices.shift();
+      assert.ok(menu.options.includes(choice), `expected ${choice}, got ${JSON.stringify(menu)}`);
+      await choose(f, menu.options.indexOf(choice) + 1);
+    } else if (f.player.getDialogueManager().getCurrent()) {
+      lines.push(f.player.getDialogueManager().getCurrent().getText?.() ?? '');
+      await nextLine(f);
+    } else break;
+  }
+  assert.deepEqual(choices, []);
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined);
+  assert.equal(quest.getStage(f.player), 50);
+  return lines.join(' ').replace(/\s+/g, ' ');
+}
+
+for (const [first, names] of [[1, ['white berries', 'a mort myre pear', 'a mort myre stem']],
+  [29, ['a king worm', 'snape grass', 'a lime']]]) {
+  test(`Fairytale I native initial and reminder recipes match saved items ${first}-${first + 2}`, async t => {
+    const f = fixture(t), other = fixture(t);
+    f.player.setUsername(`nature${first}`);
+    const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'fairytale_i_growing_pains');
+    const originalRandom = core.Misc.randomInclusive;
+    let rolls = 0;
+    t.mock.method(core.Misc, 'randomInclusive', (min, max) => {
+      if (min === 1 && max === 29) { rolls++; return first; }
+      return originalRandom(min, max);
+    });
+    quest.setStage(f.player, 40);
+    f.player.getInventory().add(new core.Item(core.ItemIdentifiers.DRAYNOR_SKULL), false);
+    const positions = `${first},${first + 1},${first + 2}`;
+    const check = (text, player) => {
+      assert.doesNotMatch(text, /\[item\s*[123]\]/i);
+      for (const name of names) {
+        assert.ok(text.includes(name), `the native recipe names ${name}: ${text}`);
+        assert.ok(quest.buildJournal(player, quest).includes(name), `the journal agrees on ${name}`);
+      }
+      assert.equal(player.getAttribute(NATURE_ITEMS_ATTRIBUTE), positions);
+    };
+    check(await readNatureRecipe(f, quest, true), f.player);
+    assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 0);
+    check(await readNatureRecipe(f, quest), f.player);
+    const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+    PlayerSave.fromPlayer(f.player).applyToPlayer(other.player);
+    check(await readNatureRecipe(other, quest), other.player);
+    assert.equal(rolls, 1, 'reminders and save/load reuse the persisted recipe');
+    const foreign = fixture(t);
+    foreign.player.setUsername(`other${first}`);
+    quest.setStage(foreign.player, 50);
+    foreign.player.setAttribute(NATURE_ITEMS_ATTRIBUTE, first === 1 ? '29,30,31' : '1,2,3');
+    const foreignText = await readNatureRecipe(foreign, quest);
+    assert.ok(foreignText.includes(first === 1 ? 'snape grass' : 'white berries'));
+    assert.equal(f.player.getAttribute(NATURE_ITEMS_ATTRIBUTE), positions, 'another player cannot replace this recipe');
+  });
+}
+
+test('Fairytale I only substitutes Malignius recipe lines on its own transcript page', t => {
+  const f = fixture(t), text = 'Gather [item 1], [item 2] and [item 3].';
+  f.player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
+  for (const [page, npcId, speaker] of [
+    ['Another page', core.NpcIdentifiers.MALIGNIUS_MORTIFER, 'Malignius Mortifer'],
+    ['Fairytale I - Growing Pains', core.NpcIdentifiers.NATURE_SPIRIT, 'Nature Spirit'],
+    ['Fairytale I - Growing Pains', core.NpcIdentifiers.MALIGNIUS_MORTIFER, 'Player'],
+  ]) {
+    const event = { player: f.player, npcId, pages: [{ page }], step: { speaker }, text };
+    PM.emitCustomEvent('npc-dialogue:line', event);
+    assert.equal(event.text, text);
+  }
+});
+
 async function finishNuff(f) {
   for (let n = 0; f.player.getDialogueManager().getCurrent() && n < 60; n++) await nextLine(f);
   assert.equal(f.player.getDialogueManager().getCurrent(), undefined);

@@ -86,6 +86,10 @@ Deposit-10, Deposit-X and Deposit-All (script 3744; op1 follows the bank's quant
 asks "Enter amount:". "Deposit loot" banks everything and "Dismiss" goes back to the inventory.
 
 ## Destroy (captured, Wiki)
+Recording [1541](https://rsprox.net/download/1541) sends synth `2381` (one loop, no delay)
+on the same tick as the confirmed inventory removal. The shared destroy handler plays it only
+after removal, including item-owned destruction; opening, cancelling or vetoing the prompt is silent.
+
 Destroy asks first, through the shared destroy prompt: "Are you sure you want to destroy the bag?",
 then "If you destroy it, the contents will be lost." or, for an empty bag, "The bag is empty. Are you
 sure you want to destroy it?". The shared prompt uses native cache interface 584/script 814: 1/Y confirms,

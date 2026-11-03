@@ -356,6 +356,36 @@ test('a withdrawal fills only what the coin stack can hold, and the coffer keeps
   assert.equal(Profile.coffer(p), 4000, 'nothing taken, nothing deducted');
 });
 
+test('Justine explains the win requirement and refuses tradeable purchases before a win', (t) => {
+  const Rewards = require('../plugins/minigames/lms/Rewards.LastManStanding');
+  const p = realPlayer(t);
+  let dialogue;
+  t.mock.method(p.getDialogueManager(), 'startDialogues', (chain) => { dialogue = chain; });
+  const event = { player: p, shopId: Rewards.SHOP_ID, allow: true };
+  Rewards.canShop(event);
+  assert.equal(event.allow, false, 'the native rewards interface replaces the generic shop');
+  assert.ok(dialogue, 'a player without a win gets the explanation first');
+  assert.match(dialogue.getDialogues().get(0).getText(), /browse.*win.*buy tradeable rewards/);
+  const interfaces = [];
+  t.mock.method(p.getPacketSender(), 'sendSubInterface', (...args) => interfaces.push(args));
+  dialogue.getDialogues().get(1).send(p);
+  assert.ok(interfaces.some(([, group]) => group === Common.interfaceId('br_reward_shop')), 'Continue opens the shop for browsing');
+
+  p.setAttribute(Common.POINTS_ATTRIBUTE, 10);
+  const slot = Common.data.shop.stock.findIndex((entry) => entry && entry[0] === 'rune_arrow');
+  Rewards.confirm({ player: p, slot });
+  assert.deepEqual(p.messages, [Common.message('tradeableNeedsWin')]);
+  assert.equal(Common.points(p), 10);
+  assert.equal(p.getInventory().getAmount(id('rune_arrow')), 0);
+
+  const untradeable = Common.data.shop.stock.findIndex((entry) => entry && entry[0] === 'br_deadman_body');
+  const entry = Common.data.shop.stock[untradeable];
+  p.setAttribute(Common.POINTS_ATTRIBUTE, entry[1]);
+  Rewards.confirm({ player: p, slot: untradeable });
+  assert.equal(Common.points(p), 0, 'untradeable rewards remain available without a win');
+  assert.equal(p.getInventory().getAmount(id(entry[0])), 1);
+});
+
 test('Justine\'s purchase: a stack that cannot take the whole set refuses it and keeps the points', (t) => {
   const Rewards = require('../plugins/minigames/lms/Rewards.LastManStanding');
   const slot = Common.data.shop.stock.findIndex((entry) => entry && entry[0] === 'rune_arrow');

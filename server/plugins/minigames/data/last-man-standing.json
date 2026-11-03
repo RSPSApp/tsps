@@ -1159,7 +1159,7 @@
     "cofferHasDeposit": "You have {amount} coins stored in the coffer. You need at least 1,000 coins to make a deposit.",
     "deposit": "How much do you wish to deposit? ({max})",
     "withdraw": "How much do you wish to withdraw? ({max} coins)",
-    "needWin": "Before I show you the rewards, I'll grant access to further rewards once you've been the Last Man Standing at least once.",
+    "needWin": "You can browse my rewards, but you'll need to win a game of Last Man Standing before you can buy tradeable rewards.",
     "sets": "How many sets of {set} would you like? (0 - {max})",
     "howMany": "How many would you like? (0 - {max})",
     "noRoom": "You don't have enough inventory space.",
@@ -1261,5 +1261,5 @@
   },
   "$requirements": "Wiki: Competitive and High Stakes need a total level of 750 and 30 quest points, or a total level of 1,500; Competitive only on members' worlds; no High Stakes for Ironmen; three forfeits in a day bar both for the rest of the day.",
   "forfeitsPerDay": 3,
-  "$messages": "Captured unless listed here. Inferred (no capture, no Wiki quote): requirements, membersOnly, ironman, needFee, freeEntry, highStakesClosed, forfeited, claimed, prize, noRoomCoins, and the casual/high stakes wizard lines."
+  "$messages": "Captured unless listed here. Reworded for clarity: needWin (browsing is allowed; tradeable purchases require a win). Inferred (no capture, no Wiki quote): requirements, membersOnly, ironman, needFee, freeEntry, highStakesClosed, forfeited, claimed, prize, noRoomCoins, and the casual/high stakes wizard lines."
 }

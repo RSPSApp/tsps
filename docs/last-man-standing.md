@@ -131,8 +131,9 @@ Justine's Trade opens `br_reward_shop` (645) in place of the generic shop 1449 b
 `shops.json`. Captured: the stock arrives as inventory 422, each slot's count its price; points on
 varp 261 and wins on varp 262; the confirm button's sub is the slot; set rewards ask "How many sets
 of 50 would you like? (0 - 13)"; a purchase takes the points, adds the items, plays sound 2304 and
-reopens the shop. With no win Justine first says "Before I show you the rewards, I'll grant access
-to further rewards once you've been the Last Man Standing at least once." Points are the existing
+reopens the shop. With no win Justine first explains that browsing is allowed, but buying
+tradeable rewards requires a win. This clarifies the recorded line, which misleadingly starts
+"Before I show you the rewards". Points are the existing
 `shop-currency:Last Man Standing Points`. Wiki: tradeable rewards need a win.
 
 ## Bots

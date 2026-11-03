@@ -20,6 +20,13 @@ test('shop ids and names are unique', () => {
   assert.ok(shops.length > 400, 'the imported shop set is present');
 });
 
+test("both versions of Ned's rope shop bind his Trade option", () => {
+  for (const version of ['Default', 'Fremennik Isles']) {
+    const shop = shops.find((entry) => entry.name === `Ned's Handmade Rope (100% Wool) (${version})`);
+    assert.ok(shop?.npcInteractions.some(({ npcIds, optionSlot }) => npcIds.includes(4280) && optionSlot === 3), version);
+  }
+});
+
 test('the slayer equipment shop binds the masters on Trade; Rewards is an interface', () => {
   const equipment = shops.find((shop) => shop.name === 'Slayer Equipment (shop)');
   assert.ok(equipment, 'the slayer equipment shop exists in shops.json');

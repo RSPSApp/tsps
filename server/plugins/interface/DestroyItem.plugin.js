@@ -3,6 +3,8 @@ const GROUP_ID = 584;
 const SETUP_SCRIPT = 814;
 const CONFIRM_BUTTON = GROUP_ID << 16;
 const PENDING_ATTRIBUTE = "destroy-item:pending";
+// Live OSRS: rsprox 1541 sends synth 2381 after the confirmed inventory removal.
+const DESTROY_SOUND = 2381;
 const DEFAULT_QUESTION = "Are you sure you want to destroy this item?";
 const DEFAULT_WARNING = "This item will be destroyed permanently.";
 
@@ -75,6 +77,7 @@ function confirmDestroy({ player, action }) {
     dropToGround: false,
     handled: false,
   };
+  const amount = item.getAmount();
   pluginApi.core?.PluginManager?.emitItemDropPolicy(event);
   if (!event.handled) {
     const discarded = item.clone();
@@ -82,6 +85,10 @@ function confirmDestroy({ player, action }) {
     pluginApi.emitCustomEvent("item:discarded", { player, item: discarded });
     // Containers and other item owners clear their state only after actual destruction.
     pluginApi.emitCustomEvent("destroy-item:destroyed", { player, itemId: pending.itemId, amount: pending.amount });
+  }
+  const remaining = player.getInventory().getItems()[pending.slot];
+  if (remaining?.getId() !== pending.itemId || remaining.getAmount() < amount) {
+    player.getPacketSender().sendSound(DESTROY_SOUND, 100, 0);
   }
   close(player);
 }

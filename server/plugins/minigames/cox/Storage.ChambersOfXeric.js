@@ -15,6 +15,9 @@
  * - The shared storage only takes raid items (cache enum 1666: raid items and their tools).
  * - Items left in a private storage are kept, and taken out at the storage unit by the bank
  *   chest on the mountain, which must be emptied before entering again.
+ * - Ultimate Ironmen can build and upgrade the unit but cannot store anything in it (Wiki,
+ *   Chambers of Xeric: "Ultimate Ironman players are able to upgrade the storage unit, but
+ *   cannot store any items or supplies in it."; Ultimate Ironman Mode, Storage restrictions).
  * Wiki (Tiny storage unit, Creation Menu): four rows on keys 1-4, one per tier.
  * Cache (raids_storage_private/_shared/_side and their scripts): private 271 (inventory 583; 4
  *   capacity, 5 to shared, 6 items, 9 withdraw all, 10 deposit all / bank all), shared 550
@@ -30,7 +33,9 @@
  *   rest stays unchecked: which rows the menu lists once a tier is built (here always all four,
  *   so the keys hold), which icon variant each row uses (21038/21040 are both medium, 21039/
  *   21041/21042 large, 24660-24663 massive), one unit being built at a time ("Someone else is
- *   already building a storage unit."), done 2 ticks later.
+ *   already building a storage unit."), done 2 ticks later. No capture drags in the list: the
+ *   private storage's items (271:6) are rearranged as the Tackle box's grid is, and its message
+ *   to an Ultimate Ironman is guessed.
  * Items keep their meta in a store (a raid potion's maker, see Supplies).
  */
 
@@ -238,10 +243,21 @@ function inventoryAmount(player, id) {
   return player.getInventory().getAmount(id);
 }
 
+/** Wiki (Ultimate Ironman Mode, Storage restrictions): they can't use the raid's storage. */
+function isUltimateIronman(player) {
+  const query = { player, mode: "none" };
+  Shared.api().emitCustomEvent("ironman:mode", query);
+  return query.mode === "ultimate";
+}
+
 function deposit(player, slot, amount) {
   const view = viewOf(player);
   if (!view || view.mount) {
     if (view?.mount) player.sendMessage("You can't store items now.");
+    return;
+  }
+  if (isUltimateIronman(player)) {
+    player.sendMessage("You can't store items in the storage unit.");
     return;
   }
   const inventory = player.getInventory();
@@ -377,6 +393,30 @@ function depositOrBankAll({ player }) {
   if (items.length > 0) player.sendMessage("Not enough space in your bank.");
   refresh(player);
   return true;
+}
+
+/**
+ * Reordering the private storage's list (271:6). No capture drags one; the client redraws the
+ * two slots swapped as it does for the Tackle box, so the store swaps them too, and a drop on
+ * an empty slot moves the item to the end.
+ */
+function dragPrivate(event) {
+  const { player, packet } = event;
+  const view = viewOf(player);
+  if (!view || view.kind !== "private") return;
+  const grid = uid(Shared.INTERFACE.PRIVATE_STORAGE, COMPONENT.PRIVATE.ITEMS);
+  if (packet?.sourceWidgetId !== grid || packet?.targetWidgetId !== grid) return;
+  event.handled = true;
+  const items = privateItems(player);
+  const from = Number(packet.sourceSlot);
+  const to = Number(packet.targetSlot);
+  if (!items[from] || from === to || !(to >= 0 && to < view.size)) {
+    refresh(player);
+    return;
+  }
+  if (items[to]) [items[from], items[to]] = [items[to], items[from]];
+  else items.push(...items.splice(from, 1));
+  refresh(player);
 }
 
 function switchToShared({ player }) {
@@ -554,6 +594,7 @@ module.exports = function registerCoxStorage(api) {
   Shared.onObjectIds(api, [...UNIT_IDS, MOUNT_UNIT], useUnit);
   api.onInterfaceActionClick(chooseBuild);
   api.onCustomEvent("interface:closed", buildMenuClosed);
+  api.onCustomEvent("player:widget-action", dragPrivate);
   api.onInterfaceActionButton(uid(Shared.INTERFACE.PRIVATE_STORAGE, COMPONENT.PRIVATE.ITEMS), clickStoredItem);
   api.onInterfaceActionButton(uid(Shared.INTERFACE.SHARED_STORAGE, COMPONENT.SHARED.ITEMS), clickStoredItem);
   api.onInterfaceActionButton(uid(SIDE_INTERFACE, COMPONENT.SIDE.ITEMS), clickInventoryItem);
@@ -566,4 +607,5 @@ module.exports = function registerCoxStorage(api) {
 
 Object.assign(module.exports, {
   TIERS, sharedItem, addTo, pullFrom, takeFrom, privateItems, openPrivate, openShared, deposit, withdraw, build, canEnter, findUnits,
+  dragPrivate, isUltimateIronman,
 });

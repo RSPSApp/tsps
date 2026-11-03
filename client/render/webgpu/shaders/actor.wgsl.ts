@@ -416,9 +416,13 @@ fn actorFloorY(xz: vec2<f32>, plane: u32, groundOffset: f32) -> f32 {
     return -getHeightInterp(xz, plane) + groundOffset;
 }
 
+const ACTOR_FLOOR_MARCH_STEP: f32 = 8.0;
+const ACTOR_FLOOR_MARCH_STEPS: i32 = 128;
+const ACTOR_FLOOR_BISECTIONS: i32 = 6;
+
 /**
  * height-map.glsl actorFloorViewPos: for an actor vertex below the floor, the view-space point
- * where its line of sight comes up through the floor (Newton steps along the ray on the height map).
+ * where its line of sight first comes up through the floor (marched to a bracket, then bisected).
  */
 fn actorFloorViewPos(viewPos: vec4<f32>, localPos: vec4<f32>, plane: u32, groundOffset: f32,
         worldToView: mat4x4<f32>, projection: mat4x4<f32>) -> vec4<f32> {
@@ -428,20 +432,35 @@ fn actorFloorViewPos(viewPos: vec4<f32>, localPos: vec4<f32>, plane: u32, ground
     let ortho = projection[3][3] > 0.5;
     let towardEye = select(-viewPos.xyz, vec3<f32>(0.0, 0.0, 1.0), ortho);
     let ray = transpose(mat3x3<f32>(worldToView[0].xyz, worldToView[1].xyz, worldToView[2].xyz)) * towardEye * 128.0;
-    let slopeStep = 16.0 / max(length(ray.xz), 0.001);
+    let stepT = ACTOR_FLOOR_MARCH_STEP / max(length(ray), 0.001);
     let maxT = select(0.999, 1.0e6, ortho);
-    var t = 0.0;
-    for (var i = 0; i < 4; i++) {
+    var under = 0.0;
+    var over = -1.0;
+    for (var i = 1; i <= ACTOR_FLOOR_MARCH_STEPS; i++) {
+        let t = min(f32(i) * stepT, maxT);
         let p = localPos.xyz + ray * t;
-        let floorY = actorFloorY(p.xz, plane, groundOffset);
-        let floorRise = (actorFloorY(p.xz + ray.xz * slopeStep, plane, groundOffset) - floorY) / slopeStep;
-        let rate = ray.y - floorRise;
-        if (rate >= 0.0) {
+        if (p.y <= actorFloorY(p.xz, plane, groundOffset)) {
+            over = t;
             break;
         }
-        t = clamp(t - (p.y - floorY) / rate, 0.0, maxT);
+        under = t;
+        if (t >= maxT) {
+            break;
+        }
     }
-    return vec4<f32>(viewPos.xyz + towardEye * t, viewPos.w);
+    if (over < 0.0) {
+        return viewPos;
+    }
+    for (var i = 0; i < ACTOR_FLOOR_BISECTIONS; i++) {
+        let mid = 0.5 * (under + over);
+        let p = localPos.xyz + ray * mid;
+        if (p.y <= actorFloorY(p.xz, plane, groundOffset)) {
+            over = mid;
+        } else {
+            under = mid;
+        }
+    }
+    return vec4<f32>(viewPos.xyz + towardEye * over, viewPos.w);
 }
 
 fn actorTextureAnimation(vertex: Vertex) -> vec2<f32> {

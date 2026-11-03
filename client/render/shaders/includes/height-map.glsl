@@ -53,8 +53,13 @@ float actorFloorY(vec2 xz, uint plane, float groundOffset) {
 // (`localPos` in local units after its tile height and ground offset), this is the view-space point
 // where its line of sight comes up through the floor: the same screen position, at the depth the
 // floor has there, so the floor no longer covers it and a wall in front still does. The crossing
-// is found on the height map itself, by Newton steps along the ray, so a slope toward or away
-// from the camera moves it with the terrain. `worldToView` is rigid.
+// is the first one on the height map along the ray: marched in 8-unit steps (up to 8 tiles) to
+// bracket it, then bisected. With no crossing in reach the vertex keeps its own depth.
+// `worldToView` is rigid.
+const float ACTOR_FLOOR_MARCH_STEP = 8.0;
+const int ACTOR_FLOOR_MARCH_STEPS = 128;
+const int ACTOR_FLOOR_BISECTIONS = 6;
+
 vec4 actorFloorViewPos(vec4 viewPos, vec4 localPos, uint plane, float groundOffset, mat4 worldToView, mat4 projection) {
     if (localPos.y <= actorFloorY(localPos.xz, plane, groundOffset)) {
         return viewPos;
@@ -63,20 +68,33 @@ vec4 actorFloorViewPos(vec4 viewPos, vec4 localPos, uint plane, float groundOffs
     vec3 towardEye = ortho ? vec3(0.0, 0.0, 1.0) : -viewPos.xyz;
     // Local units moved per unit of t along the ray; in perspective t = 1 is the eye.
     vec3 ray = transpose(mat3(worldToView)) * towardEye * 128.0;
-    // A 16-unit step across the floor for its slope along the ray.
-    float slopeStep = 16.0 / max(length(ray.xz), 0.001);
+    float stepT = ACTOR_FLOOR_MARCH_STEP / max(length(ray), 0.001);
     float maxT = ortho ? 1.0e6 : 0.999;
-    float t = 0.0;
-    for (int i = 0; i < 4; i++) {
+    float under = 0.0;
+    float over = -1.0;
+    for (int i = 1; i <= ACTOR_FLOOR_MARCH_STEPS; i++) {
+        float t = min(float(i) * stepT, maxT);
         vec3 p = localPos.xyz + ray * t;
-        float floorY = actorFloorY(p.xz, plane, groundOffset);
-        float floorRise = (actorFloorY(p.xz + ray.xz * slopeStep, plane, groundOffset) - floorY) / slopeStep;
-        // How fast the ray's depth below the floor changes; it must climb out to cross it.
-        float rate = ray.y - floorRise;
-        if (rate >= 0.0) {
+        if (p.y <= actorFloorY(p.xz, plane, groundOffset)) {
+            over = t;
             break;
         }
-        t = clamp(t - (p.y - floorY) / rate, 0.0, maxT);
+        under = t;
+        if (t >= maxT) {
+            break;
+        }
     }
-    return vec4(viewPos.xyz + towardEye * t, viewPos.w);
+    if (over < 0.0) {
+        return viewPos;
+    }
+    for (int i = 0; i < ACTOR_FLOOR_BISECTIONS; i++) {
+        float mid = 0.5 * (under + over);
+        vec3 p = localPos.xyz + ray * mid;
+        if (p.y <= actorFloorY(p.xz, plane, groundOffset)) {
+            over = mid;
+        } else {
+            under = mid;
+        }
+    }
+    return vec4(viewPos.xyz + towardEye * over, viewPos.w);
 }

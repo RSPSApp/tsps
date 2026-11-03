@@ -125601,7 +125601,7 @@
       "label": "Drops",
       "table_name": "Manta ray (monster) Drops",
       "wiki_page": "Manta ray (monster)",
-      "main_max_roll": 99,
+      "main_max_roll": 344,
       "entries": [
         {
           "item_id": 31959,
@@ -125617,42 +125617,52 @@
           "section": "Pre-roll"
         },
         {
-          "item_id": 389,
-          "name": "Raw manta ray",
+          "item_id": 21488,
+          "name": "Mahogany seed",
           "quantity": [
             1,
             1
           ],
-          "weight": 15,
-          "out_of": 99,
-          "rarity": 0.1515152,
-          "section": "Other"
+          "weight": 1,
+          "out_of": 344,
+          "rarity": 0.002907,
+          "section": "Seeds"
         },
         {
-          "item_id": 1783,
-          "name": "Bucket of sand",
+          "item_id": 5314,
+          "name": "Maple seed",
           "quantity": [
-            10,
-            15
+            1,
+            1
           ],
-          "weight": 5,
-          "out_of": 99,
-          "rarity": 0.0505051,
-          "section": "Other",
-          "noted": true
+          "weight": 1,
+          "out_of": 344,
+          "rarity": 0.002907,
+          "section": "Seeds"
         },
         {
-          "item_id": 401,
-          "name": "Seaweed",
+          "item_id": 21486,
+          "name": "Teak seed",
           "quantity": [
-            10,
-            15
+            1,
+            1
           ],
-          "weight": 5,
-          "out_of": 99,
-          "rarity": 0.0505051,
-          "section": "Other",
-          "noted": true
+          "weight": 1,
+          "out_of": 344,
+          "rarity": 0.002907,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5315,
+          "name": "Yew seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 344,
+          "rarity": 0.002907,
+          "section": "Seeds"
         },
         {
           "shared_table": "combatHerb",
@@ -125734,6 +125744,331 @@
           "section": "Sailing seeds and frags"
         },
         {
+          "item_id": 5296,
+          "name": "Toadflax seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 83,
+          "rarity": 0.0120482,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 209,
+          "name": "Grimy irit leaf",
+          "quantity": [
+            2,
+            3
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 83,
+          "rarity": 0.0120482,
+          "section": "Unnoted herbs"
+        },
+        {
+          "item_id": 5297,
+          "name": "Irit seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 122,
+          "rarity": 0.0081967,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5281,
+          "name": "Belladonna seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 126,
+          "rarity": 0.0079365,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5298,
+          "name": "Avantoe seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 175,
+          "rarity": 0.0057143,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5106,
+          "name": "Poison ivy seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 178,
+          "rarity": 0.005618,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5280,
+          "name": "Cactus seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 187,
+          "rarity": 0.0053476,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 22873,
+          "name": "Potato cactus seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 257,
+          "rarity": 0.0038911,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5299,
+          "name": "Kwuarm seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 261,
+          "rarity": 0.0038314,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5300,
+          "name": "Snapdragon seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 141,
+          "rarity": 0.0070922,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5301,
+          "name": "Cadantine seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 562,
+          "rarity": 0.0017794,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5302,
+          "name": "Lantadyme seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 782,
+          "rarity": 0.0012788,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 22879,
+          "name": "Snape grass seed",
+          "quantity": [
+            3,
+            3
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 899,
+          "rarity": 0.0011123,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5303,
+          "name": "Dwarf weed seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 1285,
+          "rarity": 0.0007782,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5304,
+          "name": "Torstol seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 247,
+          "rarity": 0.0040486,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5295,
+          "name": "Ranarr seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 206,
+          "rarity": 0.0048544,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5321,
+          "name": "Watermelon seed",
+          "quantity": [
+            15,
+            15
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 295,
+          "rarity": 0.0033898,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5313,
+          "name": "Willow seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 309,
+          "rarity": 0.0032362,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5288,
+          "name": "Papaya tree seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 442,
+          "rarity": 0.0022624,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5316,
+          "name": "Magic seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 563,
+          "rarity": 0.0017762,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5289,
+          "name": "Palm tree seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 619,
+          "rarity": 0.0016155,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 5317,
+          "name": "Spirit seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 773,
+          "rarity": 0.0012937,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 22877,
+          "name": "Dragonfruit tree seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 1031,
+          "rarity": 0.0009699,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 22869,
+          "name": "Celastrus seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 1547,
+          "rarity": 0.0006464,
+          "section": "Seeds"
+        },
+        {
+          "item_id": 22871,
+          "name": "Redwood tree seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 1547,
+          "rarity": 0.0006464,
+          "section": "Seeds"
+        },
+        {
           "item_id": 199,
           "name": "Grimy guam leaf",
           "quantity": [
@@ -125796,19 +126131,6 @@
           "weight": 1,
           "out_of": 46,
           "rarity": 0.0217391,
-          "section": "Unnoted herbs"
-        },
-        {
-          "item_id": 209,
-          "name": "Grimy irit leaf",
-          "quantity": [
-            2,
-            3
-          ],
-          "separate_roll": true,
-          "weight": 1,
-          "out_of": 83,
-          "rarity": 0.0120482,
           "section": "Unnoted herbs"
         },
         {
@@ -125901,6 +126223,47 @@
           "out_of": 264,
           "rarity": 0.0037879,
           "section": "Unnoted herbs"
+        },
+        {
+          "item_id": 389,
+          "name": "Raw manta ray",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 15,
+          "out_of": 99,
+          "rarity": 0.1515152,
+          "section": "Other"
+        },
+        {
+          "item_id": 1783,
+          "name": "Bucket of sand",
+          "quantity": [
+            10,
+            15
+          ],
+          "separate_roll": true,
+          "weight": 5,
+          "out_of": 99,
+          "rarity": 0.0505051,
+          "section": "Other",
+          "noted": true
+        },
+        {
+          "item_id": 401,
+          "name": "Seaweed",
+          "quantity": [
+            10,
+            15
+          ],
+          "separate_roll": true,
+          "weight": 5,
+          "out_of": 99,
+          "rarity": 0.0505051,
+          "section": "Other",
+          "noted": true
         }
       ],
       "tertiary": [

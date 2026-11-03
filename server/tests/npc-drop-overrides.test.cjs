@@ -171,3 +171,12 @@ test("lizardmen roll the uncommon seed table at the Wiki's rates (#1952)", () =>
   assert.deepEqual(seedRoll(6918), [[15, 67]], "brute");
   assert.ok(_test.sharedTables.get("uncommonSeed").some((entry) => entry.itemId === 5295), "ranarr seed");
 });
+
+test("the manta ray keeps its own seed rows beside the uncommon seed table (#1982 review)", () => {
+  // Its Seeds section lists rare and tree-herb seed rolls next to {{UncommonSeedDropLines}}.
+  const [manta] = _test.tablesByNpc.get(15220);
+  assert.equal(manta.table_id, "manta_ray_monster");
+  const names = new Set(manta.entries.map((entry) => entry.name));
+  for (const seed of ["Yew seed", "Magic seed", "Redwood tree seed"]) assert.ok(names.has(seed), seed);
+  assert.ok(manta.entries.some((entry) => entry.shared_table === "uncommonSeed"));
+});

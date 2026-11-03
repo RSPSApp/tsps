@@ -286,6 +286,43 @@ test('both open large and side doors route to the original threshold on the play
   }
 });
 
+for (const state of ['open', 'closed']) {
+  test(`plane changes resync both castles' ${state} large doors on the ground floor`, (t) => {
+    attachDoors(registry, game);
+    const O = core.ObjectIdentifiers;
+    const closed = [
+      [O.LARGE_DOOR_24, 2426, 3088, 3], [O.LARGE_DOOR_25, 2427, 3088, 3],
+      [O.LARGE_DOOR_28, 2373, 3119, 1], [O.LARGE_DOOR_29, 2372, 3119, 1],
+    ];
+    const opened = [
+      [O.LARGE_DOOR_26, 2426, 3087, 0], [O.LARGE_DOOR_27, 2427, 3087, 0],
+      [O.LARGE_DOOR_30, 2373, 3120, 0], [O.LARGE_DOOR_31, 2372, 3120, 0],
+    ];
+    const objects = rows => rows.map(([id, x, y, face]) =>
+      new core.GameObject(id, new core.Location(x, y, 0), 0, face, null));
+    const standing = objects(state === 'open' ? opened : closed);
+    const absent = state === 'open' ? closed : opened;
+    t.mock.method(core.MapObjects, 'get', (id, location) =>
+      standing.find(object => object.getId() === id && object.getLocation().equals(location)) ?? null);
+    const p = player(game.TEAM.ZAMORAK, [2372, 3121, 2]);
+    const spawned = [], removed = [];
+    t.mock.method(p.getPacketSender(), 'sendObject', object => spawned.push(object));
+    t.mock.method(p.getPacketSender(), 'sendObjectRemoval', object => removed.push(object));
+    const process = () => game.inGameProcessors.forEach(handler => handler(p));
+    process();
+    assert.equal(spawned.length + removed.length, 0, 'the initial observation does not resend');
+
+    p.setLocation(new core.Location(2372, 3121, 0));
+    process();
+    assert.deepEqual(spawned, standing, 'resend the real world leaves, retaining their rotations');
+    assert.deepEqual(removed.map(object => [object.getId(), object.getLocation().getX(),
+      object.getLocation().getY(), object.getLocation().getZ(), object.getType()]),
+    absent.map(([id, x, y]) => [id, x, y, 0, 0]), 'remove stale leaves on plane zero, without touching upper walls');
+    process();
+    assert.equal(spawned.length + removed.length, 8, 'remaining on the same floor sends no duplicate update');
+  });
+}
+
 test('both starting-room trapdoors intercept generic door handling and descend immediately', () => {
   attachNavigation(registry, game);
   for (const [team, id, from, to] of [

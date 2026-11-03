@@ -730,7 +730,7 @@ export class Player extends Mobile {
             this.status !== PlayerStatus.TRADING &&
             this.status !== PlayerStatus.DUELING &&
             (this.status !== PlayerStatus.NONE || this.interfaceId >= 0 || this.dialogueManager.isActive() ||
-                this.packetSender.hasInterruptibleInterface())
+                this.packetSender.hasInterruptibleInterface() || this.packetSender.hasInputPrompt())
         ) {
             this.packetSender.closeInterruptibleInterfaces();
         }

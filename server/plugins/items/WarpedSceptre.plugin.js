@@ -107,7 +107,7 @@ function markInterfaceBusy(player) {
 function closeChargingInterface({ player }) {
   if (!chargingInterfaces.delete(player)) return;
   const input = chargeInputs.get(player);
-  if (input && player.getEnteredAmountAction() === input) player.setEnteredAmountAction(null);
+  if (input && player.getEnteredAmountAction() === input) player.getPacketSender().abortInputPrompt();
   chargeInputs.delete(player);
   player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
 }
@@ -149,6 +149,8 @@ function chargeSceptre(player, sceptre) {
   const input = {
     acceptsZero: true,
     execute(amount) {
+      // Answered, so there is no prompt left for closing to abort.
+      player.setEnteredAmountAction(null);
       closeChargingInterface({ player });
       if (!inventory.getItems().includes(sceptre)) return;
       const current = charges(sceptre);

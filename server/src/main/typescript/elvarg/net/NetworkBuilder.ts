@@ -977,7 +977,8 @@ export class ClientConnection {
               this.player.getStatus() !== PlayerStatus.NONE ||
               this.player.getInterfaceId() >= 0 ||
               this.player.getDialogueManager().isActive() ||
-              this.player.getPacketSender().hasInterruptibleInterface();
+              this.player.getPacketSender().hasInterruptibleInterface() ||
+              this.player.getPacketSender().hasInputPrompt();
             if (hadSomethingOpen) {
               // IF_CLOSE is explicit: clear even interfaces that world interactions preserve.
               this.player.getPacketSender().closeInterruptibleInterfaces();

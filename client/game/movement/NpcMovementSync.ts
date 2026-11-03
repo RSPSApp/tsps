@@ -248,7 +248,8 @@ export class NpcMovementSync {
             // over facing as movement begins; forcing targetRot early makes retreating NPCs
             // instantly snap away from their last combat-facing yaw.
             this.npcEcs.setTargetRot(ecsIndex, orientation);
-            if (forceImmediateRotation || teleported) {
+            // An NPC that never turns (turn speed 0) keeps the angle it is drawn at.
+            if ((forceImmediateRotation || teleported) && (this.npcEcs.getRotationSpeed(ecsIndex) | 0) !== 0) {
                 this.npcEcs.setRotation(ecsIndex, orientation);
             }
         }

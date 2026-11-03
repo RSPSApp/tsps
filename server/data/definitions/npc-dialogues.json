@@ -101820,7 +101820,7 @@
               ]
             },
             {
-              "text": "Hello. I am in search of a quest.",
+              "text": "Hello! I'm in search of a quest.",
               "steps": [
                 {
                   "player": "Hello! I am in search of a quest."
@@ -900901,7 +900901,7 @@
                               "text": "Have you been shearing my sheep without permission!?"
                             },
                             {
-                              "player": "No! Well, maybe... They just looked a little wooly! Surely you like a shave once in a while, too?"
+                              "player": "No! Well, maybe... They just looked a little woolly! Surely you like a shave once in a while, too?"
                             },
                             {
                               "type": "line",
@@ -902238,7 +902238,7 @@
               "text": "Do you have anything to trade?"
             },
             {
-              "text": "What do you do?"
+              "text": "I'd better get going."
             }
           ]
         }
@@ -902332,11 +902332,6 @@
           "type": "line",
           "speaker": "Reldo",
           "text": "Hello there, [player name]."
-        },
-        {
-          "type": "message",
-          "text": "",
-          "id": "VXmx2H"
         },
         {
           "type": "choice",
@@ -902452,6 +902447,83 @@
               ]
             },
             {
+              "text": "Okay, here you go.",
+              "steps": [
+                {
+                  "player": "Okay, here you go."
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has coins in their inventory:",
+                  "steps": [
+                    {
+                      "type": "action",
+                      "text": "(Player gives Charlie 1 coin.)",
+                      "id": "SPAjYU"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Charlie the Tramp",
+                      "text": "Hey, thanks a lot!"
+                    },
+                    {
+                      "type": "choice",
+                      "options": [
+                        {
+                          "text": "No problem.",
+                          "steps": [
+                            {
+                              "player": "No problem."
+                            },
+                            {
+                              "type": "end"
+                            }
+                          ]
+                        },
+                        {
+                          "text": "Don't I get some sort of quest hint or something now?",
+                          "steps": [
+                            {
+                              "player": "So...don't I get some sort of quest hint or something now?"
+                            },
+                            {
+                              "type": "line",
+                              "speaker": "Charlie the Tramp",
+                              "text": "Huh? What do you mean? That wasn't why I asked you for money."
+                            },
+                            {
+                              "type": "line",
+                              "speaker": "Charlie the Tramp",
+                              "text": "I just need to eat..."
+                            },
+                            {
+                              "type": "end"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "id": "Vd68yh"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player does not have coins in their inventory:",
+                  "steps": [
+                    {
+                      "player": "Oh wait. I haven't got any, sorry."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Charlie the Tramp",
+                      "text": "Thanks anyway."
+                    }
+                  ],
+                  "id": "jyd1Up"
+                }
+              ]
+            },
+            {
               "text": "Sorry, I haven't got any.",
               "steps": [
                 {
@@ -902524,7 +902596,7 @@
                                   "steps": [
                                     {
                                       "type": "call",
-                                      "branch": "jump-c11a93ba95d40a5c"
+                                      "branch": "jump-063e054b246f622d"
                                     }
                                   ]
                                 }
@@ -902732,9 +902804,14 @@
                           "text": "Anyway, say we were the Black Arm Gang, what would you want with us?"
                         },
                         {
-                          "type": "action",
-                          "text": "Continues above after \"Say we were the Black Arm Gang, what would you want with us?\"",
-                          "id": "rFf-3t"
+                          "type": "jump",
+                          "id": "rFf-3t",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-d6e2ef7a1dff09c1"
+                            }
+                          ]
                         }
                       ]
                     },
@@ -902758,9 +902835,14 @@
                           "text": "I see... Well... say we were the Black Arm Gang, what would you want with us?"
                         },
                         {
-                          "type": "action",
-                          "text": "Continues above after \"Say we were the Black Arm Gang, what would you want with us?\"",
-                          "id": "FtqAjs"
+                          "type": "jump",
+                          "id": "FtqAjs",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-d6e2ef7a1dff09c1"
+                            }
+                          ]
                         }
                       ]
                     }
@@ -903123,6 +903205,9 @@
               "type": "line",
               "speaker": "Katrine",
               "text": "It seems you're more skilled than I originally gave you credit for. Well done. Consider yourself a member of the Black Arm Gang. I'd suggest you now go and familiarise yourself with the rest of the ganghouse."
+            },
+            {
+              "player": "Will do! Thanks!"
             }
           ],
           "id": "oIS8H7"
@@ -903368,10 +903453,10 @@
                   "type": "choice",
                   "options": [
                     {
-                      "text": "Okay. Have 20 gold coins.",
+                      "text": "Okay, here's 20 coins.",
                       "steps": [
                         {
-                          "player": "Okay. Have 20 gold coins."
+                          "player": "Okay, here's 20 coins."
                         },
                         {
                           "type": "condition",
@@ -903415,7 +903500,7 @@
                       ]
                     },
                     {
-                      "text": "No, I don't like things like bribery.",
+                      "text": "No, I don't do things like bribery.",
                       "steps": [
                         {
                           "player": "No, I don't do things like bribery."
@@ -903428,7 +903513,7 @@
                       ]
                     },
                     {
-                      "text": "Yes. I'd like to be 20 coins richer too.",
+                      "text": "Yes, I'd like to be 20 coins richer too.",
                       "steps": [
                         {
                           "player": "Yes, I'd like to be 20 coins richer too."
@@ -903440,7 +903525,7 @@
               ]
             },
             {
-              "text": "Hello. I am in search of a quest."
+              "text": "Hello! I'm in search of a quest."
             }
           ]
         }
@@ -904236,7 +904321,7 @@
           "text": "This is incredible! But where's the other half?"
         },
         {
-          "player": "I obtained this half from the [Phoenix Gang/Black Arm Gang]. The [Black Arm Gang/Phoenix Gang] might have the other half."
+          "player": "I obtained this half from the [Phoenix Gang/Black Arm Gang]. I wonder if the [Black Arm Gang/Phoenix Gang] might have the other half."
         },
         {
           "type": "line",
@@ -904249,12 +904334,12 @@
         {
           "type": "line",
           "speaker": "Curator Haig Halen",
-          "text": "I'm afraid the reward is for the recovery of the full shield. However, what I'll do is write you out two half- certificates. If another adventurer returns the other shield half, I'll do the same for them."
+          "text": "I'm afraid the reward is for the recovery of the full shield. However, what I'll do is write you out two half-certificates. If another adventurer returns the other shield half, I'll do the same for them."
         },
         {
           "type": "line",
           "speaker": "Curator Haig Halen",
-          "text": "The two of you can then swap one of the half- certificates to make a full one each. Take that to the King and he will grant you your reward."
+          "text": "The two of you can then swap one of the half-certificates to make a full one each. Take that to the King and he will grant you your reward."
         },
         {
           "type": "message",
@@ -904564,7 +904649,12 @@
       ]
     },
     "branches": {
-      "jump-c11a93ba95d40a5c": [
+      "jump-063e054b246f622d": [
+        {
+          "type": "line",
+          "speaker": "Katrine",
+          "text": "How unusual... Okay, let's say we are who you believe we are. Do you think we'd be recruiting people who just waltz in here saying 'hello, I'd like to play'?"
+        },
         {
           "player": "I don't know. What would be the alternative?"
         },
@@ -904825,6 +904915,224 @@
                       ]
                     }
                   ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "jump-d6e2ef7a1dff09c1": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "I want to become a member of your gang.",
+              "steps": [
+                {
+                  "player": "I want to become a member of your gang."
+                },
+                {
+                  "type": "jump",
+                  "id": "aewU9i",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-063e054b246f622d"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "I want some hints on becoming a thief.",
+              "steps": [
+                {
+                  "player": "I want some hints on becoming a thief."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Katrine",
+                  "text": "Do you now? And what makes you think I'll provide anything like that?"
+                },
+                {
+                  "player": "Well, how about I become a member of your gang in return?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Katrine",
+                  "text": "How unusual... Okay, let's say we are who you believe we are. Do you think we'd be recruiting people who just waltz in here saying 'hello, I'd like to play'?"
+                },
+                {
+                  "player": "I don't know. What would be the alternative?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Katrine",
+                  "text": "Watching local thugs and thieves in action, perhaps? How do I know I can just trust someone who's wandered in here."
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Well, you can give me a try can't you?",
+                      "steps": [
+                        {
+                          "player": "Well, you can give me a try can't you?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Katrine",
+                          "text": "I'm not so sure..."
+                        },
+                        {
+                          "type": "jump",
+                          "id": "EtZN6a",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-4c4f33465d8c5b21"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Well, people tell me I have an honest face.",
+                      "steps": [
+                        {
+                          "player": "Well, people tell me I have an honest face."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Katrine",
+                          "text": "Someone honest wanting to join a gang of thieves? Excuse me if I remain unconvinced..."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Katrine",
+                          "text": "Thinking about it... I may have a solution actually. You may have heard of the Phoenix Gang. I hear they have a very nice weapons stash not too far from here."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Katrine",
+                          "text": "We're fresh out of crossbows, but apparently they have plenty. If someone were to aquire a couple for us, it would be very much appreciated."
+                        },
+                        {
+                          "player": "Sounds simple enough. Any particular reason you need them?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Katrine",
+                          "text": "Let's just say there's a local merchant who is refusing to pay some very reasonable 'keep-your-life-pleasant' insurance rates."
+                        },
+                        {
+                          "player": "So you're planning to murder him?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Katrine",
+                          "text": "Him? No. However, I hear that the local law might soon be finding a crossbow belonging to the Phoenix Gang in his home..."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Katrine",
+                          "text": "I also hear that a similar type of crossbow might soon be used in a murder on the other side of the city..."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Katrine",
+                          "text": "Now, are you going to keep asking questions, or are you going to go get those crossbows?"
+                        },
+                        {
+                          "type": "choice",
+                          "options": [
+                            {
+                              "text": "Okay, no problem.",
+                              "steps": [
+                                {
+                                  "player": "Okay, no problem."
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Katrine",
+                                  "text": "Great! Apparently the Phoenix Gang's weapons stash is somewhere to the east. Ask that tramp outside. I'm sure he'll know more."
+                                },
+                                {
+                                  "type": "end"
+                                }
+                              ]
+                            },
+                            {
+                              "text": "Sounds a little tricky. Got anything easier?",
+                              "steps": [
+                                {
+                                  "player": "Sounds a little tricky. Got anything easier?"
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Katrine",
+                                  "text": "If you're not up for a little bit of danger, I don't think you've got anything to offer us."
+                                },
+                                {
+                                  "type": "choice",
+                                  "options": [
+                                    {
+                                      "text": "Okay, I'll do it.",
+                                      "steps": [
+                                        {
+                                          "player": "Okay, I'll do it."
+                                        },
+                                        {
+                                          "type": "line",
+                                          "speaker": "Katrine",
+                                          "text": "Great! Apparently the Phoenix Gang's weapons stash is somewhere to the east. Ask that tramp outside. I'm sure he'll know more."
+                                        },
+                                        {
+                                          "type": "end"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "text": "It's a no from me then.",
+                                      "steps": [
+                                        {
+                                          "player": "It's a no from me then."
+                                        },
+                                        {
+                                          "type": "line",
+                                          "speaker": "Katrine",
+                                          "text": "Then get lost!"
+                                        },
+                                        {
+                                          "type": "end"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "I'm looking for the door out of here.",
+              "steps": [
+                {
+                  "player": "I'm looking for the door out of here."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Katrine",
+                  "text": "Try... the one you just came through?"
+                },
+                {
+                  "type": "end"
                 }
               ]
             }

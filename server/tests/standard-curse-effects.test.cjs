@@ -162,7 +162,7 @@ test('Count Draynor garlic cannot turn any nondamaging curse into a damaging imp
   });
   openCoffin({ player: attacker, object: new core.GameObject(core.ObjectIdentifiers.COFFIN_46,
     new core.Location(3077, 9775, 0), 10, 3, null) });
-  tasks.find(task => task.getDelay() === 9).execute();
+  tasks.find(task => task.getDelay() === 10).execute();
   const target = spawned.at(-1);
   assert.equal(target.getId(), core.NpcIdentifiers.COUNT_DRAYNOR);
   attacker.getCombat().setTarget(target);

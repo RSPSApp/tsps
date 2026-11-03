@@ -5,6 +5,7 @@ import fs from "node:fs";
 import { Camera } from "../game/Camera";
 import { InputManager } from "../game/InputManager";
 import { ClientPluginManager } from "../game/plugins/ClientPluginManager";
+import { SceneFrameHold } from "../render/SceneFrameHold";
 
 // The renderer shares the client shell; only its bundled assets need Node loaders.
 require.extensions[".glsl"] = (module, file) => { module.exports = fs.readFileSync(file, "utf8"); };
@@ -21,18 +22,25 @@ let loggedIn = true;
 let viewport = { x: 354, y: 4, width: 512, height: 334 };
 const scissors: number[][] = [];
 let scale = 1;
+// The player's square can be drawn; a teleport to an unbuilt square clears it.
+let squareReady = true;
+// Texture copies, as "from>to" by label: the held world (heldScene.ts) goes in and out of the canvas.
+const copies: string[] = [];
+const canvasTexture = { label: "canvas", width: 1466, height: 763, format: "bgra8unorm", createView: () => ({}) };
 Object.assign(renderer, {
     canvas: { width: 1466, height: 763, style: { clipPath: "" } },
     depthView: {},
     skyColor: [0.5, 0.7, 1, 1],
-    context: { getCurrentTexture: () => ({ createView: () => ({}) }) },
+    context: { getCurrentTexture: () => canvasTexture },
     device: {
         createCommandEncoder: () => ({
             beginRenderPass: () => ({
                 setScissorRect: (...args: number[]) => scissors.push(args), end: noop,
             }),
+            copyTextureToTexture: (from: any, to: any) => copies.push(`${from.texture.label}>${to.texture.label}`),
             finish: noop,
         }),
+        createTexture: (desc: any) => ({ ...desc, width: desc.size[0], height: desc.size[1], destroy: noop }),
         queue: { submit: noop },
     },
     world: { selectExtension: noop, sceneData: new Float32Array(66) },
@@ -51,9 +59,11 @@ Object.assign(renderer, {
     },
     mapManager: {
         visibleMaps: [], worldEntityMapIds: new Set(), update: noop, getGridTileBounds: () => undefined,
+        isSquareReadyAt: () => squareReady,
         getMap: () => undefined, getMapForWorldTile: () => undefined,
     },
     stats: { frameCount: 1 },
+    sceneFrameHold: new SceneFrameHold(),
     sceneBuilds: new Map(),
     cameraShakeEnabled: Array(5).fill(false),
     cameraShakeRandomAmplitude: Array(5).fill(0),
@@ -92,6 +102,8 @@ Object.assign(presentation, {
 });
 
 function render() {
+    canvasTexture.width = renderer.canvas.width;
+    canvasTexture.height = renderer.canvas.height;
     scissors.length = 0;
     fills.length = 0;
     clears.length = 0;
@@ -280,4 +292,46 @@ wheelInput.wheelDeltaY = 120;
 wheelInput.viewportWheelDeltaY = 0;
 render();
 assert.equal(renderer.followCamWheel, 120, "unclaimed world wheel still zooms when the HUD has no viewport listener");
+
+// A teleport to a square that is still building presents the last world drawn, with the interface
+// over it, instead of the bare sky (issue #2017).
+renderer.handleInput = noop;
+let uiDraws = 0;
+renderer.ui = { update: noop, draw: () => uiDraws++ };
+copies.length = 0;
+renderer.stats.frameCount = 16;
+render();
+assert.ok(copies.includes("canvas>held-scene"), "the world is copied out every few frames while its square is ready");
+renderer.stats.frameCount = 17;
+copies.length = 0;
+render();
+assert.deepEqual(copies, [], "but not every frame");
+copies.length = 0;
+scissors.length = 0;
+squareReady = false;
+uiDraws = 0;
+render();
+assert.deepEqual(copies, ["held-scene>canvas"], "the held world is put back");
+assert.deepEqual(scissors, [], "no world pass while the destination builds");
+assert.equal(uiDraws, 1, "the interface and loading box still draw over it");
+squareReady = true;
+copies.length = 0;
+render();
+assert.ok(scissors.length > 0 && !copies.includes("held-scene>canvas"), "built: the live world again");
+// A held world doesn't outlive a resize, or the session.
+renderer.canvas.width = 500;
+squareReady = false;
+copies.length = 0;
+render();
+assert.deepEqual(copies, [], "a copy of another size is never presented");
+squareReady = true;
+render();
+loggedIn = false;
+render();
+loggedIn = true;
+squareReady = false;
+copies.length = 0;
+render();
+assert.deepEqual(copies, [], "a new session holds nothing from the last one");
+squareReady = true;
 console.log("WebGPU scene viewport and editor preview tests passed");

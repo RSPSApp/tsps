@@ -400,7 +400,7 @@ module.exports = function registerDeathPlateauQuest(api) {
         if (hasCertificate(player)) return "new-route-up-death-plateau-talking-to-dunstan-while-holding-the-certificate";
         return "new-route-up-death-plateau-talking-to-dunstan-again";
       }
-      if (stage >= STAGE_CLIMBING_BOOTS && hasBoots(player)) quest.setStage(player, STAGE_DUNSTAN);
+      if (stage >= STAGE_CLIMBING_BOOTS) quest.setStage(player, STAGE_DUNSTAN);
       return "new-route-up-death-plateau-talking-to-dunstan";
     }
     if (ARCHER_NPC_IDS.has(npcId)) {

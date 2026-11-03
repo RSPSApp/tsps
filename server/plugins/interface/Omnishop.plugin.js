@@ -10,10 +10,10 @@
  * - "omnishop:open" { player, shop } opens a shop by its DB row name (`mixology_rewards`).
  * - "omnishop:currency" { player, shop, currency, itemId, balance, set }: a currency's owner
  *   answers with `balance` and a `set(value)` function. A currency with no obj has no other
- *   source; one with an obj is that item in the inventory unless its owner claims it (GotR's
- *   abyssal pearls are a saved balance). A mixed wallet can supply `inventoryCost(amount)`:
- *   the number of `itemId` removed from inventory when that much currency is spent, and
- *   `refundItemId`: the inventory item a refund is paid in, so a sale checks there is room for it.
+ *   source; one with an obj is that item in the inventory unless its owner claims it. A mixed
+ *   wallet can supply `inventoryCost(amount)`: the number of `itemId` removed from inventory
+ *   when that much currency is spent, and `refundItemId`: the inventory item a refund is paid
+ *   in, so a sale checks there is room for it.
  * - "omnishop:describe" { player, shop, stock, description }: the info panel's text, which the
  *   cache doesn't carry.
  * - "omnishop:can-buy" { player, shop, stock, itemId, cancel, unlock }: before each unit is
@@ -194,8 +194,7 @@ function currencyObj(currency) {
 
 /**
  * The player's balance of a currency, with a setter. An owner may claim a currency even when
- * the cache gives it an obj: Guardians of the Rift's abyssal pearls are saved as a balance,
- * though the legacy currency row still names the item. Unclaimed obj currencies stay items.
+ * the cache gives it an obj (keeping it as a saved balance); unclaimed obj currencies stay items.
  */
 function wallet(player, shop, currency) {
   const obj = currencyObj(currency);

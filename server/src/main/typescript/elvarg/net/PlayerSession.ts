@@ -642,7 +642,7 @@ export class PlayerSession {
       hits: hits.length > 0
         ? hits.map((hit: any) => this.hitView(hit, mine))
         : undefined,
-      health: hits.length > 0
+      health: hits.length > 0 && !actor.isHealthBarHidden?.()
         ? actor.getDisplayedHealth?.()
           ?? { current: actor.getHitpoints(), max: maxHitpoints, bar: actor.getHealthBar?.() ?? undefined }
         : undefined,

@@ -415,6 +415,90 @@ test('the temple, vision and tutorial play in separate instances, and closing re
   assert.ok(packets.length > 0, 'the native client received packets');
 });
 
+test('the vision walks the player to the Mysterious Stone before the voices start', async (t) => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { quest, cleanup } = registerProductionPlugins({ nativeNpcs: true });
+  const channel = {
+    kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {},
+  };
+  const player = new Player(new PlayerSession(channel));
+  player.setIndex(1803); player.setUsername('tote-vision'); player.setRegistered(true);
+  player.setLocation(new core.Location(3104, 9573));
+  const connection = new ClientConnection(channel); connection.player = player;
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(3104, 9573);
+  t.after(() => {
+    player.closeInterruptibleInterfaces();
+    player.setRegistered(false);
+    core.TaskManager.cancelTasks(player);
+    core.TaskManager.cancelTasks(player.getIndex());
+    cleanup();
+  });
+  quest.setStage(player, 90);
+  player.setAttribute('quest.temple_of_the_eye.stage-schema', 2);
+  PluginManager.loginHooks.find(hook => hook.pluginName === 'TempleOfTheEyeDispatchTest')
+    .handler({ player, username: player.getUsername() });
+  PluginManager.emitCustomEvent('npc-dialogue:action',
+    { player, npcId: N.WIZARD_PERSTEN_4, stepId: 'I_aoEy', kind: 'action', handled: false, text: 'I_aoEy' });
+  quest.setStage(player, 105);
+  player.setAttribute('quest.temple_of_the_eye.temple-apprentices', 7);
+  const cameraLooks = [];
+  const sender = player.getPacketSender();
+  const sendCameraLookAt = sender.sendCameraLookAt;
+  sender.sendCameraLookAt = (x, y, height, rates) => {
+    cameraLooks.push({ x, y, height, rates });
+    return sendCameraLookAt.call(sender, x, y, height, rates);
+  };
+  function tick() {
+    core.World.processCycle++;
+    core.TaskManager.process();
+    connection.processTurnPackets();
+    player.getMovementQueue().process(); core.TaskManager.processWalkTo(player.getIndex());
+    player.getSession().flushClient(core.World.processCycle);
+    player.resetUpdating();
+  }
+
+  const manager = player.getDialogueManager();
+  assert.equal(PluginManager.emitNpcInteraction(npcEvent(player, 'Wizard Persten', N.WIZARD_PERSTEN_4)), true);
+  for (let i = 0; i < 20 && quest.getStage(player) === 105; i++) {
+    manager.advance();
+    if (quest.getStage(player) === 105) tick();
+  }
+  assert.equal(quest.getStage(player), 110, 'the vision began');
+  const vision = player.getPrivateArea();
+  assert.equal(vision?.getName?.(), 'Temple of the Eye (vision)');
+  const start = { x: player.getLocation().getX(), y: player.getLocation().getY() };
+  assert.deepEqual(start, { x: vision.getBaseX() + 32, y: vision.getBaseY() + 42 }, 'the player arrives at 2400,5738');
+  const voices = () => manager.getCurrent()?.getText?.() === 'Saradomin be with you.';
+
+  const path = [], blocked = [];
+  for (let i = 1; i <= 24 && !voices(); i++) {
+    // Held Space: the held chatbox ignores Continues while the player walks.
+    manager.handleResume((player.getPacketSender().getChatboxGroupId() << 16) | 5, -1);
+    tick();
+    path.push(player.getLocation().getY() - vision.getBaseY());
+    blocked.push(player.getMovementQueue().isMovementBlocked());
+  }
+  assert.deepEqual(blocked.map((value, i) => value ? null : i + 1).filter(Boolean),
+    [11, 12, 13, 14, 15, 16, 17], 'control is released only for the walk');
+  assert.equal(path.length, 24, `the voices wait 24 ticks: ${JSON.stringify(path)}`);
+  assert.ok(voices(), 'the first voice speaks once the player is at the stone');
+  // Capture 1693: still for 10 ticks, then one tile a tick to y=5731 (seven tiles south).
+  assert.deepEqual(path.slice(0, 10), Array(10).fill(42), 'the player waits on arrival');
+  assert.deepEqual(path.slice(10, 17), [41, 40, 39, 38, 37, 36, 35], 'then walks south to the stone');
+  assert.ok(path.slice(17).every(y => y === 35), 'and stays beside it');
+  assert.equal(player.getLocation().getX(), start.x);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), true, 'the cutscene keeps control during the voices');
+  const pan = cameraLooks.find(look => look.rates?.rate === 1);
+  assert.deepEqual(pan && [pan.x - vision.getBaseX(), pan.y - vision.getBaseY(), pan.height], [35, 32, 560],
+    'the camera pans to the stone (2403,5728) as the walk starts');
+
+  manager.advance(); tick();
+  assert.match(manager.getCurrent()?.getText?.() ?? '', /^And with you, Zachariah/, 'the transcript carries on');
+});
+
 function spawnedNpcs() {
   return [...core.World.getNpcs()].filter(npc => npc.isOwnerOnly?.() === true
     && npc.getOwner?.()?.getUsername?.() === 'tote-scenes');

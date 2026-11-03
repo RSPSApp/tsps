@@ -1,5 +1,5 @@
 const { Anim } = require("../Constants.Agility");
-const { ShortcutAnim, hops } = require("./Builders.Agility");
+const { ShortcutAnim } = require("./Builders.Agility");
 
 /** Misthalin shortcut scripts (agility-shortcuts.json). */
 module.exports = {
@@ -8,19 +8,6 @@ module.exports = {
     steps: ({ pos, obj }) => {
       const north = pos.y <= obj.y;
       return [{ move: [obj.x, north ? obj.y + 3 : obj.y - 1], anim: Anim.SQUEEZE_PIPE, speed: [0, 90], ticks: 2 }];
-    },
-  }),
-
-  /** Draynor stepping stones over the River Lum: one stone per click, ashore off the last one. */
-  draynorSteppingStones: ({ westStone, westShore, eastStone, eastShore }) => ({
-    steps: ({ pos, obj }) => {
-      const steps = hops([obj.x, obj.y]);
-      const west = obj.x < pos.x;
-      const lastStone = west ? westStone : eastStone;
-      if (obj.x === lastStone[0] && obj.y === lastStone[1]) {
-        steps.push({ wait: 1 }, { walk: [west ? westShore : eastShore] });
-      }
-      return steps;
     },
   }),
 

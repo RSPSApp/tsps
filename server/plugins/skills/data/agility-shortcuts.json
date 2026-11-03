@@ -228,8 +228,11 @@
       "xp": 3,
       "start": "You attempt to balance on the stepping stone.",
       "end": "You manage to make the jump.",
-      "script": "draynorSteppingStones",
-      "params": {"westStone":[3150,3363],"westShore":[3149,3363],"eastStone":[3153,3363],"eastShore":[3154,3363]}
+      "between": {
+        "ends": [[3149,3363,0],[3154,3363,0]],
+        "via": [[3151,3363]],
+        "cross": [{"use":"hops","args":["...via","to"]}]
+      }
     },
     {
       "name": "Fence (Varrock)",
@@ -1875,14 +1878,33 @@
       "params": {"alongY":[[2888,3660],[2856,3611],[2834,3628]]}
     },
     {
-      "name": "Rocks (Trollheim advanced)",
-      "object": [3748,16523],
-      "level": 44,
-      "end": "You climb over the rocks.",
-      "fail": {"low":170,"high":253,"cross":true,"hit":[1,4]},
-      "unverified": "the failure's damage (no capture)",
+      "name": "Rocks (Troll Country)",
+      "object": 3748,
+      "level": 15,
+      "xp": 0,
+      "requires": [{"skills":{"agility":15},"equipped":[{"slot":"feet","ids":[3105,3107],"message":"You'll need some climbing boots to go that way."}]}],
+      "start": "You climb onto the rock...",
+      "end": "...and step down the other side.",
+      "unverified": "the slip back down that the Wiki transcript mentions (no capture, no rate)",
+      "note": "rsprox capture 3 (the rock at 2910,3686); the Wiki's Troll Stronghold transcript, \"Climbing the rocks north of the Death Plateau\"",
       "script": "trollheimRockStep",
-      "params": {"alongY":[[2888,3660],[2856,3611],[2834,3628]]}
+      "params": {"alongY":[[2856,3611],[2834,3628]],"delay":30,"speed":[30,94]}
+    },
+    {
+      "name": "Rocks (Trollheim advanced)",
+      "object": 16523,
+      "level": 44,
+      "xp": 8,
+      "fail": {"low":170,"high":253,"cross":true,"hit":[1,4]},
+      "unverified": "the failure's damage (no capture); the climbing walk animation (the capture changes the player's movement animations; not decoded); the climb up (only the climb down was captured; it reverses it)",
+      "note": "rsprox capture 3 ticks 10-17: two tiles down the cliff, then two west, no message, 8 xp",
+      "between": {
+        "ends": [[2909,3684,0],[2907,3682,0]],
+        "cross": {
+          "forward": [{"sound":2454,"loops":2},{"walk":[[2909,3683],[2909,3682],[2908,3682],[2907,3682]]}],
+          "back": [{"sound":2454,"loops":2},{"walk":[[2908,3682],[2909,3682],[2909,3683],[2909,3684]]}]
+        }
+      }
     },
     {
       "name": "Rocky handholds (God Wars Dungeon, Wilderness)",

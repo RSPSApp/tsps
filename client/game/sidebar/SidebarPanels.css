@@ -192,6 +192,43 @@
     color: var(--rl-orange);
 }
 
+/* A FontType item's button and its FontPanel (RuneLite's createFont / FontPanel) */
+.rl-config-font-button {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+}
+
+.rl-config-font-button img {
+    image-rendering: pixelated;
+}
+
+.rl-config-font-button:hover img {
+    opacity: 0.7;
+}
+
+.rl-config-font-button:focus-visible {
+    outline: 1px solid var(--rl-orange);
+    outline-offset: -1px;
+}
+
+.rl-config-font-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.rl-config-font-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .rl-config-section-title {
     display: flex;
     align-items: center;

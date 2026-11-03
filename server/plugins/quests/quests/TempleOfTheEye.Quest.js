@@ -410,6 +410,12 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   const TAMARA_TEMPLE_TILE = { x: 2384, y: 5657, z: 0 };
   const CORDELIA_TEMPLE_TILE = { x: 2398, y: 5676, z: 0 };
   const VISION_TILE = { x: 2400, y: 5738, z: 0 };
+  // Capture 1693: 11 ticks after arriving the player walks seven tiles south to the stone while the
+  // camera pans after them; the voices start 24 ticks after arriving.
+  const VISION_STONE_TILE = { x: 2400, y: 5731, z: 0 };
+  const VISION_WALK_TICKS = 11;
+  const VISION_VOICES_TICKS = 24;
+  const VISION_VARIANT = "enter-the-gate-talking-to-wizard-persten-after-speaking-with-the-apprentices";
   const RIFT_SCENE_TILE = { x: 2398, y: 5669, z: 0 };
   const ARRIVAL_CAST = [
     { key: "arrival-persten", id: PERSTEN_CUTSCENE_NPC_ID, x: 2398, y: 5646, z: 0 },
@@ -1270,7 +1276,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     if (npcId === PERSTEN_TEMPLE_NPC_ID) {
       if (stage < STAGE_TEMPLE || stage >= STAGE_GUARDIAN) return null;
       return allTempleApprenticesSeen(player)
-        ? "enter-the-gate-talking-to-wizard-persten-after-speaking-with-the-apprentices"
+        ? VISION_VARIANT
         : "enter-the-gate-talking-to-persten-upon-arrival";
     }
     return null;
@@ -1579,7 +1585,6 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     ["Are we... underwater?", (player) => camera(player, [2399, 5645, 550], [2399, 5626, 300], { rate: 1, rate2: 0 })],
     ["Let me cast a locator spell!", (player) => camera(player, [2391, 5641, 720], [2403, 5634, 480])],
     ["It seems we're deep below the sea, just south of Morytania!", (player) => camera(player, [2391, 5641, 720], [2403, 5634, 480])],
-    ["And with you, Zachariah. So, it's really true?", (player) => camera(player, [2389, 5734, 760], [2403, 5728, 560], { rate: 1, rate2: 0 })],
     ["[player name]?", (player) => {
       if (stageOf(player) !== STAGE_VISION || scenePhases.get(player) !== "vision") return;
       // Persten calls the player back: the vision ends at once, the player is back in the
@@ -1879,6 +1884,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
         setStage(player, STAGE_VISION);
         Scenes.controls(player, true, true);
         camera(player, [2389, 5734, 760], [2403, 5739, 560]);
+        walkToStone(player, npcId);
         return;
       case "9R5c1w":
       case "9kzaP8": // "Abyssal rift cutscene continues below."
@@ -1971,6 +1977,31 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       default:
         return;
     }
+  }
+
+  /**
+   * The vision's opening: the chatbox is held while the player walks up to the Mysterious Stone
+   * and the camera follows, then the voices pick up the transcript after the vision action.
+   */
+  function walkToStone(player, npcId) {
+    Scenes.hold(player);
+    const area = currentSceneArea(player);
+    const inVision = () => player.isRegistered() && stageOf(player) === STAGE_VISION
+      && scenePhases.get(player) === "vision" && currentSceneArea(player) === area;
+    Scenes.later(player, VISION_WALK_TICKS, () => {
+      if (!inVision()) return;
+      camera(player, [2389, 5734, 760], [2403, 5728, 560], { rate: 1, rate2: 0 });
+      player.getMovementQueue().setBlockMovement(false).requestWalk(sceneLocation(player, VISION_STONE_TILE), false);
+    });
+    // One tile a tick: the cutscene takes control back once the player reaches the stone.
+    const walkTicks = VISION_TILE.y - VISION_STONE_TILE.y;
+    Scenes.later(player, VISION_WALK_TICKS + walkTicks, () => {
+      if (inVision()) player.getMovementQueue().reset().setBlockMovement(true);
+    });
+    Scenes.later(player, VISION_VOICES_TICKS, () => {
+      if (!inVision()) return;
+      play(player, npcId, VISION_VARIANT, (steps) => steps.slice(steps.findIndex((step) => step.id === "Wc3Ys0") + 1));
+    });
   }
 
   function shakeRift(player) {

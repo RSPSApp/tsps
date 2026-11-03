@@ -394,6 +394,51 @@ for (const farming of [1, 2]) {
   });
 }
 
+for (const shieldStage of [4, 7]) {
+  test(`Priest in Peril starts through native choices after Shield of Arrav stage ${shieldStage}`, async t => {
+    const f = fixture(t);
+    const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+    const quest = quests.find(entry => entry.key === 'priest_in_peril');
+    quests.find(entry => entry.key === 'shield_of_arrav').setStage(f.player, shieldStage);
+    const npcId = core.NpcIdentifiers.KING_ROALD_3;
+    const npc = core.NPC.create(npcId, new core.Location(3222, 3474));
+    const select = async text => {
+      const pending = MultiChatboxPrompt.getPending(f.player);
+      assert.ok(pending?.options.includes(text), `expected ${text}, got ${JSON.stringify(pending)}`);
+      await choose(f, pending.options.indexOf(text) + 1);
+    };
+    const untilMenu = async () => {
+      for (let n = 0; n < 15 && !MultiChatboxPrompt.getPending(f.player); n++) {
+        assert.ok(f.player.getDialogueManager().getCurrent(), 'Roald conversation remains reachable');
+        await nextLine(f);
+      }
+      assert.ok(MultiChatboxPrompt.getPending(f.player));
+    };
+    const reachStart = async () => {
+      assert.equal(PM.emitNpcInteraction({ player: f.player, npc, npcId,
+        action: 'Talk-to', clickType: 1, handled: false }), true);
+      await untilMenu();
+      await select("I'm looking for a quest!");
+      await untilMenu();
+      await select("Yes, I think I've heard of it.");
+      await untilMenu();
+      assert.equal(MultiChatboxPrompt.getPending(f.player).title, 'Start the Priest in Peril quest?');
+    };
+    await reachStart();
+    assert.equal(quest.getStage(f.player), 0);
+    f.player.closeInterruptibleInterfaces();
+    assert.equal(quest.getStage(f.player), 0, 'closing the offer leaves it unstarted');
+    await reachStart();
+    await select('No.');
+    f.player.closeInterruptibleInterfaces();
+    assert.equal(quest.getStage(f.player), 0, 'refusing leaves it unstarted');
+    await reachStart();
+    await select('Yes.');
+    assert.equal(quest.getStage(f.player), quest.startedValue, 'native acceptance starts the quest');
+    assert.equal(f.player.getPacketSender().getVarp(302), 1);
+  });
+}
+
 test('native Hairdresser preview cancels or confirms through the existing makeover engine', async t => {
   const f = hairdresserFixture(t), appearance = f.player.getAppearance();
   const original = [...appearance.getLook()];

@@ -202,13 +202,26 @@ export class WebGPUOverlays {
         if (this.healthBars) this.healthBars.scale = scale * RENDER_CONSTANTS.HEALTH_BAR_VISUAL_SCALE;
     }
 
-    /** World pass (depth available): ground item meshes and depth-aware tile markers. */
+    /**
+     * World pass, before the actors' alpha: ground item meshes. OSRS paints a tile's items before
+     * what stands on it, so a loot beam's translucent glow blends over an item; drawn after it,
+     * the glow's depth hid the item (issue 2003). WebGL draws them with their map, also first.
+     */
+    drawGroundItems(pass: GPURenderPassEncoder): void {
+        if (!this.initialized) return;
+        try {
+            this.groundMeshes?.drawWorld(pass);
+        } catch (error) {
+            console.warn("[webgpu] ground item draw failed", error);
+        }
+    }
+
+    /** World pass (depth available), after the scene: depth-aware tile markers. */
     drawWorld(pass: GPURenderPassEncoder): void {
         if (!this.initialized) return;
         const world = getWorldResources(this.renderer);
         const hdrActive = !!world?.extensionActive && !!world.extension?.sceneColorFormat;
         try {
-            this.groundMeshes?.drawWorld(pass);
             this.tileMarker?.drawWorld(pass, hdrActive, world?.sampleCount ?? 1);
         } catch (error) {
             console.warn("[webgpu] overlays world draw failed", error);

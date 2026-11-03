@@ -1,4 +1,4 @@
-import { FONT_BOLD_12, FONT_PLAIN_12 } from "../../../ui/fonts";
+import { boldFont, overlayFont } from "@runelite/client/ui/overlay/OverlayFonts";
 import { drawTextGL } from "../../../widgets/components/TextRenderer";
 import type { WidgetOverlay, WidgetOverlayDrawContext } from "../ClientPluginManager";
 import type { CombatLevelPlugin } from "./CombatLevelPlugin";
@@ -64,18 +64,22 @@ export class CombatLevelOverlay implements WidgetOverlay {
         const s = this.snapshot();
         if (!s) return [];
         const renderer: any = context.renderer;
-        const width = 152 * s.sx;
-        const height = (28 + s.lines.length * 16) * s.sy;
+        // A tooltip: the tooltip font (its heading bold), the box sized to it.
+        const font = overlayFont("tooltip");
+        const heading = boldFont(font);
+        const sx = s.sx * font.scale, sy = s.sy * font.scale;
+        const width = 152 * sx;
+        const height = (28 + s.lines.length * 16) * sy;
         const mouse = (this.plugin.getClient() as any).inputManager;
         const box = positionCombatTooltip(s.rect, { x: mouse.mouseX, y: mouse.mouseY },
             { w: renderer.canvas.width, h: renderer.canvas.height }, { w: width, h: height });
         renderer.drawRect(box.x, box.y, box.w, box.h, BG);
         renderer.drawRect(box.x, box.y, box.w, 1, BORDER);
         renderer.drawRect(box.x, box.y + box.h - 1, box.w, 1, BORDER);
-        drawTextGL(renderer, context.fontLoader, "Next combat level:", box.x + 8 * s.sx, box.y + 5 * s.sy,
-            box.w - 16 * s.sx, 16 * s.sy, FONT_BOLD_12, COMBAT_LEVEL_COLOUR, 0, 0, true, 1, undefined, s.sx, s.sy);
-        s.lines.forEach((line, i) => drawTextGL(renderer, context.fontLoader, line, box.x + 8 * s.sx,
-            box.y + (24 + i * 16) * s.sy, box.w - 16 * s.sx, 16 * s.sy, FONT_PLAIN_12, 0xffffff, 0, 0, true, 1, undefined, s.sx, s.sy));
+        drawTextGL(renderer, context.fontLoader, "Next combat level:", box.x + 8 * sx, box.y + 5 * sy,
+            box.w - 16 * sx, 16 * sy, heading.id, COMBAT_LEVEL_COLOUR, 0, 0, true, 1, undefined, sx, sy);
+        s.lines.forEach((line, i) => drawTextGL(renderer, context.fontLoader, line, box.x + 8 * sx,
+            box.y + (24 + i * 16) * sy, box.w - 16 * sx, 16 * sy, font.id, 0xffffff, 0, 0, true, 1, undefined, sx, sy));
         return [box];
     }
 }

@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](../../server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-191 quests · ✅ passed: 28 · ⚠️ passed with issues: 18 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 16 · untested: 120
+191 quests · ✅ passed: 28 · ⚠️ passed with issues: 15 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 20 · untested: 119
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -81,7 +81,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Hazeel Cult](hazeel-cult/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
 | Heroes' Quest | untested |  |  |  |  |
 | [His Faithful Servants](his-faithful-servants/README.md) | untested |  |  |  |  |
-| Holy Grail | untested |  |  |  |  |
+| [Holy Grail](holy-grail/README.md) | 🔁 needs recheck | 2026-11-02 | agent | claude-opus-5-5 | 5 |
 | [Horror from the Deep](horror-from-the-deep/README.md) | 🔄 in progress |  | agent |  |  |
 | Icthlarin's Little Helper | untested |  |  |  |  |
 | Imp Catcher | untested |  |  |  |  |
@@ -138,8 +138,8 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Shadow of the Storm | untested |  |  |  |  |
 | Shadows of Custodia | untested |  |  |  |  |
 | [Sheep Herder](sheep-herder/README.md) | untested |  |  |  |  |
-| [Sheep Shearer](sheep-shearer/README.md) | ⚠️ passed with issues | 2026-10-29 | agent | grok-4.7 | 1 |
-| [Shield of Arrav](shield-of-arrav/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
+| [Sheep Shearer](sheep-shearer/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 4 |
+| [Shield of Arrav](shield-of-arrav/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 7 |
 | Shilo Village | untested |  |  |  |  |
 | [Sins of the Father](sins-of-the-father/README.md) | untested |  |  |  |  |
 | [Skippy and the Mogres](skippy-and-the-mogres/README.md) | ✅ passed | 2026-10-31 | agent | deepseek-v4.1-flash | 1 |
@@ -192,7 +192,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Twilight's Promise](twilights-promise/README.md) | untested |  |  |  |  |
 | Underground Pass | untested |  |  |  |  |
 | Vale Totems | untested |  |  |  |  |
-| [Vampyre Slayer](vampyre-slayer/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
+| [Vampyre Slayer](vampyre-slayer/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 3 |
 | [Wanted!](wanted/README.md) | untested |  |  |  |  |
 | Watchtower | untested |  |  |  |  |
 | [Waterfall Quest](waterfall-quest/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 3 |

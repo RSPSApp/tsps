@@ -20,6 +20,7 @@ import { isWidgetUseTarget } from "../../widgets/WidgetFlags";
 import { ClientState } from "../ClientState";
 import { createSelectedSpellOnWidgetPacket } from "../selectedSpellPackets";
 import type { WidgetActionEvent } from "./widgetActionPayload";
+import { closeOpenModal } from "./input/widgetKeyboardInput";
 import { spellWidgetChildSlot } from "./SpellSelectionController";
 
 /** bankside: the inventory panel shown beside the open bank. */
@@ -379,6 +380,22 @@ export function handleWidgetActionTargeting(
 }
 
 /** Pause/continue button widgets. Returns true when fully handled. */
+/**
+ * An IF1 close button (buttonType 3, the X sprite on legacy interfaces) closes the open modal, as
+ * Esc does, instead of going to the server as a button click. True when it was one.
+ */
+export function handleWidgetActionCloseButton(
+    deps: WidgetActionHandlersDeps,
+    event: WidgetActionEvent,
+): boolean {
+    const widget = event.widget as any;
+    if (!widget || widget.isIf3 !== false || (widget.buttonType | 0) !== 3) return false;
+    const widgetManager = deps.getWidgetManager();
+    const cs2Vm = deps.getCs2Vm();
+    if (widgetManager && cs2Vm) closeOpenModal(widgetManager, cs2Vm);
+    return true;
+}
+
 export function handleWidgetActionPauseButton(
     deps: WidgetActionHandlersDeps,
     event: WidgetActionEvent,

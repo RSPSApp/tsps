@@ -56,7 +56,7 @@ export interface WidgetNode {
     fileId: number;
     childIndex?: number; // OSRS: -1 for static widgets, >= 0 for dynamic children (CC_CREATE slot index)
     type?: number;
-    buttonType?: number; // IF1: 0=none, 1=ok, 2=spell, 4=close, 5=toggle, 6=continue
+    buttonType?: number; // IF1: 0=none, 1=ok, 2=target (spell), 3=close, 4=toggle, 5=select, 6=continue
     isIf3?: boolean; // true for IF3 format widgets
 
     rootIndex?: number; // Index in root interface array (-1 if not root)

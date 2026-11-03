@@ -182,6 +182,7 @@ function registerQuestPlugin(name, pluginName, questKey) {
 let registered;
 before(() => {
   registered = registerQuestPlugin('DeathPlateau', 'DeathPlateauTest', 'death_plateau');
+  require('../plugins/npcs/NpcDialogues.plugin').register(PluginManager.createApi('DeathPlateauNativeDialogueTest'));
 });
 
 const N = () => core.NpcIdentifiers;
@@ -232,7 +233,6 @@ test('Harold wagers use native NPC, amount, Roll and Continue dispatch', async (
   assert.equal(component('continue_button'), (99 << 16) | 30);
   assert.equal(cache.getSeqId('dice_roll_1'), 1150);
   assert.equal(cache.getSeqId('dice_roll_6'), 1155);
-  require('../plugins/npcs/NpcDialogues.plugin').register(PluginManager.createApi('HaroldNativeDialogueTest'));
   core.RegionManager.loadMapFiles(2905, 3539);
   const npc = PluginManager.spawnNpc({ id: N().HAROLD, x: 2905, y: 3539, z: 1, wanderRadius: 0 });
   let index = 2200;
@@ -572,6 +572,80 @@ test('lost climbing boots after Tenzing use the canonical gUxInm recovery branch
   assert.ok(lines.some((line) => line.text === "I've lost the climbing boots."));
   assert.equal(player.inventory.getAmount(I().CLIMBING_BOOTS), 1);
   assert.equal(quest.getStage(player), 72);
+});
+
+test('Dunstan and Denulth accept the certificate request after losing Tenzing\'s boots', async (t) => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { quest } = registered;
+  core.RegionManager.loadMapFiles(2896, 3529);
+  const npcs = [N().DUNSTAN, N().DENULTH, N().TENZING].map(id =>
+    PluginManager.spawnNpc({ id, x: 2897, y: 3529, z: 0, wanderRadius: 0 }));
+  t.after(() => { for (const npc of npcs) { npc.setRegistered(false); core.World.getNpcs().remove(npc); } });
+  let index = 2300;
+
+  function actor(stage, boots = false) {
+    const channel = { kind: 'test', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const session = new PlayerSession(channel), player = new Player(session, new core.Location(2896, 3529, 0));
+    session.setPlayer(player);
+    player.setUsername(`bootstest${index}`);
+    player.setIndex(index++);
+    player.setRegistered(true);
+    player.needsPlacement = false;
+    quest.setStage(player, stage);
+    if (boots) player.getInventory().adds(I().CLIMBING_BOOTS, 1);
+    const connection = new ClientConnection(channel);
+    connection.player = player;
+    const send = async packet => { await connection.dispatch([packet]); connection.processTurnPackets(); };
+    async function talk(npc) {
+      await send({ type: 'npc_option', index: npc.getIndex(), clickType: 1 });
+      assert.ok(player.getDialogueManager().isActive(), 'native Talk-to starts the transcript');
+      for (let line = 0; line < 40 && player.getDialogueManager().isActive(); line++) {
+        assert.equal(core.MultiChatboxPrompt.getPending(player), null, 'these quest variants have no choice menu');
+        const group = player.getPacketSender().getChatboxGroupId();
+        await send({ type: 'dialogue_continue', widgetId: (group << 16) | (group === 229 ? 4 : 5), childIndex: -1 });
+      }
+      assert.equal(player.getDialogueManager().isActive(), false, 'native Continue finishes the transcript');
+    }
+    t.after(() => { player.closeInterruptibleInterfaces(); player.setRegistered(false); core.TaskManager.cancelTasks(player.getIndex()); });
+    return { player, talk, amount: id => player.getInventory().getAmount(id) };
+  }
+
+  await t.test('talking to Dunstan before Tenzing supplies the boots cannot unlock a certificate', async () => {
+    const f = actor(70, true);
+    await f.talk(npcs[0]);
+    assert.equal(quest.getStage(f.player), 70);
+    await f.talk(npcs[1]);
+    assert.equal(f.amount(I().CERTIFICATE_2), 0);
+    assert.equal(f.amount(I().CLIMBING_BOOTS), 1);
+  });
+
+  for (const boots of [false, true]) await t.test(boots ? 'ordinary boots exchange' : 'lost boots recovery', async () => {
+    const f = actor(72, boots);
+    await f.talk(npcs[0]);
+    assert.equal(quest.getStage(f.player), 73, 'meeting Dunstan records the request even without the boots');
+    await f.talk(npcs[1]);
+    assert.equal(f.amount(I().CERTIFICATE_2), 1, 'Denulth provides the certificate');
+    await f.talk(npcs[0]);
+    assert.equal(f.amount(I().CERTIFICATE_2), 0, 'Dunstan accepts the certificate before checking materials');
+    assert.equal(f.player.getAttribute('death-plateau:certificate-delivered'), true);
+    assert.equal(f.amount(I().SPIKED_BOOTS), 0, 'the certificate alone cannot create spiked boots');
+    assert.equal(quest.getStage(f.player), 73);
+    if (!boots) {
+      await f.talk(npcs[2]);
+      assert.equal(f.amount(I().CLIMBING_BOOTS), 1, 'Tenzing replaces the lost boots');
+    }
+    await f.talk(npcs[0]);
+    assert.equal(f.amount(I().CLIMBING_BOOTS), 1, 'missing iron bar does not consume the boots');
+    assert.equal(f.amount(I().SPIKED_BOOTS), 0);
+    f.player.getInventory().adds(I().IRON_BAR, 1);
+    await f.talk(npcs[0]);
+    assert.equal(f.amount(I().CLIMBING_BOOTS), 0);
+    assert.equal(f.amount(I().IRON_BAR), 0);
+    assert.equal(f.amount(I().SPIKED_BOOTS), 1);
+    assert.equal(quest.getStage(f.player), 75);
+  });
 });
 
 test('Dunstan replaces spiked boots lost before the Tenzing hand-in', () => {

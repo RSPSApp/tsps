@@ -85,14 +85,18 @@ module.exports = {
     },
   }),
 
-  /** Low rocks on the paths to Trollheim, stepped over along y near `alongY`, otherwise along x. */
-  trollheimRockStep: ({ alongY }) => ({
+  /**
+   * Low rocks on the paths to Trollheim, stepped over along y near `alongY`, otherwise along x.
+   * `delay` and `speed` override the climb's timing where a capture gives it.
+   */
+  trollheimRockStep: ({ alongY, delay, speed }) => ({
     steps: ({ pos, obj }) => {
       const vertical = alongY.some(([x, y]) => Math.max(Math.abs(obj.x - x), Math.abs(obj.y - y)) <= 3);
       const destination = vertical
         ? [obj.x, obj.y + (pos.y > obj.y ? -1 : 1)]
         : [obj.x + (pos.x > obj.x ? -1 : 1), obj.y];
-      return [climbOver(destination)];
+      const climb = climbOver(destination);
+      return [speed ? { ...climb, delay, speed } : climb];
     },
   }),
 

@@ -31,7 +31,7 @@ sessions, so the browser wire format doesn't change.
 | 83 SPOT_ANIM | MAP_ANIM_SPECIFIC | mapped | 7 | tile spot anims (actor ones are in the sync blocks) |
 | 84 PROJECTILES | PROJANIM_SPECIFIC_V4 | mapped | 8 | heights pass through (tsps already ×4); actors locked as rsprot expects (player -(i+1), NPC i+1) |
 | 87 DESTINATION | SET_MAP_FLAG_V2 | mapped | 2 | 0,0 clears the flag |
-| 88 PLAYER_OPTION | SET_PLAYER_OP | mapped | 3, 8 | plus Trade with (op 2) and Follow (op 3) at login, and Attack (op 1) while the wilderness varbit (5963) is set, which the browser adds itself |
+| 88 PLAYER_OPTION | SET_PLAYER_OP | mapped | 3, 8 | plus Trade with and Follow (op 3) at login, and Attack (op 1) while the wilderness varbit (5963) is set, which the browser adds itself; tsps's slots 2 (trade) and 4 (Duel Arena Challenge) are swapped, so Trade with is op 4 as on live |
 | 89 HINT_ARROW | HINT_ARROW | mapped | 7 | npc, tile, player, world entity, reset; a tile arrow's level scope is lost |
 | 90 ATTACK_TIMER | — | dropped | 8 | tsps HUD |
 | 100 / 101 WIDGET_OPEN / CLOSE | IF_OPENSUB / IF_CLOSESUB | mapped | 4 | modal opens go to the main modal area and are remembered for the close, across root changes: a root change moves an open one with the gameframe (the client leaves it on the old root's component), and the close goes to where it is now. Whatever else opens or closes there takes its place. Non-modal ones are dropped (tsps's browser mounts nothing for them either) |
@@ -85,7 +85,7 @@ sessions, so the browser wire format doesn't change.
 | CLOSE_MODAL | 55 IF_CLOSE, or 91 IF_BUTTONX on the welcome screen | mapped | 4 | the client closes its modals itself (Escape, a close button), the welcome screen too, as live opens it as a modal. tsps only leaves the welcome screen on Play, so while it is up this is Play (378:72 op 1, no slot or obj), not IF_CLOSE |
 | settings / run orb buttons | 191 VARP_TRANSMIT, tsps button handlers | mapped | 10 | run orb (160:28) toggles varp 173 from the mirror. Volumes are stored by the server, as live does: the sliders' scripts set the varp in the client and, when released, send IF_SCRIPT_TRIGGER on 116:95/109/123/137 with the new level, which sets tsps's stored master, music, sound-effect and area volumes (varps 3796/168/169/872); tsps sends them back at login. The client sends those triggers only with the transmit-trigger event (bit 23) on the slider, which tsps sets as live does. Esc-to-close is the keybinds toggle tsps already handles. XP drops setup (137): tsps enables the dropdown rows for native sessions and saves the choice (varp 1227), as it does for the browser's VARP_TRANSMIT |
 | logout button | 203 LOGOUT | mapped | 4 | logout tab 182:8 and world switcher 69:25 |
-| OPPLAYER1–8 / OPPLAYERT | 44… / 32 or 65 | mapped | 3, 5 | `T` from the inventory (149:0) is item use (65), otherwise a spell (32) |
+| OPPLAYER1–8 / OPPLAYERT | 44… / 32 or 65 | mapped | 3, 5 | ops 2 and 4 swapped back (`PlayerOps`): a trade request clicked in the chatbox sends OPPLAYER4 (scripts 84, 86, 7822); `T` from the inventory (149:0) is item use (65), otherwise a spell (32) |
 | OPNPC1–5 / OPNPC6 / OPNPCT | 76, 12, 34, 70, 57 / 9 / 75 or 36 | mapped | 3, 5 | subop dropped; `T` split as for players |
 | OPLOC1–5 / OPLOC6 / OPLOCT | 96, 28, 42, 38, 51 / 85 / 2 or 86 | mapped | 5 | subop dropped |
 | OPOBJ1–5 / OPOBJ6 / OPOBJT | 102, 43, 103, 56, 82 / 104 / 94 or 79 | mapped | 5 | |

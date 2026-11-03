@@ -71,10 +71,13 @@ the ground, and leagues recordings 1098, 1108, 1718, 1788, 1843 and 1846 for the
   spam channel, and the log leaves the inventory and lands underfoot on the same tick.
   Lighting a log already on the ground ("Light", or a tinderbox on it) goes the same way.
 - **Rolls:** the first is 3 ticks after the click, then every 4 ticks. A miss restarts
-  the animation; a hit stops it, and the fire replaces the ground log on the next tick
-  (tick 4, 8, 12 ...).
+  the animation. On a hit, the animation stops and the player steps one tile off the log
+  (west first, at walk speed) on that same tick. The fire replaces the ground log on the
+  next tick (tick 4, 8, 12 ...), behind the player.
 - **The fire:** synth 2596, "The fire catches and the logs begin to burn." on the spam
-  channel, and the XP. The player steps west off the fire and turns back to face it.
+  channel, the XP, and the player turns back to face the fire, all on the fire's tick. All
+  nine lightings in recordings 1035, 1098 and 1108 have this order. Issue 2010: the step
+  used to come with the fire, so the player stood idle on the log for a tick first.
 - **Blocked tile:** "You can't light a fire here." (game message), seen in recording 1035
   and once on each of the yew, willow, maple and magic log sheets.
 - Not done: an Ironman lighting another player's dropped log gets "You're an Ironman, so

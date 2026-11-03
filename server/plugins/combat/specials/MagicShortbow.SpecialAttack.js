@@ -5,6 +5,11 @@ const RANGED_STRENGTH_BONUS_INDEX = 11;
 const IMBUED_DRAIN = 50;
 const DRAIN = 55;
 const SPECIAL_ID = "magic_shortbow";
+// RSProx 412/4008: Snapshot's arrows leave a tick apart and land 20 cycles apart.
+const PROJECTILES = [
+  { delay: 20, lengthAdjustment: 10, stepMultiplier: 3 },
+  { delay: 50, lengthAdjustment: 0, stepMultiplier: 3 },
+];
 
 function snapshotMaxHit(player) {
   const { Equipment, Skill } = core;
@@ -24,15 +29,19 @@ function rollSnapshot({ attacker, target, damage, accurate }) {
 }
 
 function buildMagicShortbowSpecialAttack(core) {
-  const { Animation, CombatFactory, CombatSpecial, CombatType, Equipment, Graphic, GraphicHeight, ItemIdentifiers, PendingHit, Projectile, WeaponProfiles, RangedCombatMethod, RangedWeapon, Skill, Sound, Sounds } = core;
+  const { Animation, CombatFactory, CombatPosition, CombatSpecial, Equipment, Graphic, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds } = core;
   const ANIMATION = new Animation(1074);
-  const GRAPHIC = new Graphic(250, GraphicHeight.HIGH);
+  const GRAPHIC = new Graphic(256, 30, 92);
 
   class MagicShortbowCombatMethod extends RangedCombatMethod {
     hits(character, target) {
-      const distance = character.getLocation().getDistance(target.getLocation());
-      const delay = WeaponProfiles.hitDelays(character.getAsPlayer(), distance)[0];
-      return [delay, delay + 1].map((ticks) => new PendingHit(character, target, this, { delay: ticks, hitAmount: 1 }));
+      const distance = CombatPosition.distance(character, target);
+      return PROJECTILES.map((shot) => {
+        const end = RangedCombatMethod.projectileEnd(shot, distance);
+        // The core adds a processing tick for NPC targets.
+        const delay = Math.ceil(end / 30) - (target.isNpc() ? 1 : 0);
+        return new PendingHit(character, target, this, { delay, hitAmount: 1 });
+      });
     }
 
     canAttack(character, target) {
@@ -50,10 +59,14 @@ function buildMagicShortbowSpecialAttack(core) {
       const player = character.getAsPlayer();
       CombatSpecial.drain(player, player.getCombatSpecial().getDrainAmountForWeaponId(player.getEquipment().get(Equipment.WEAPON_SLOT).getId()));
       player.performAnimation(ANIMATION);
-      player.performGraphic(GRAPHIC);
+      player.performGraphicInSlot(1, GRAPHIC);
       Sounds.sendSound(player, Sound.MAGIC_SHORTBOW_SPECIAL);
-      Projectile.createProjectile(player, target, 249, 40, 57, 43, 31).sendProjectile();
-      Projectile.createProjectile(character, target, 249, 33, 57, 48, 31).sendProjectile();
+      const distance = CombatPosition.distance(character, target);
+      for (const shot of PROJECTILES) {
+        const end = RangedCombatMethod.projectileEnd(shot, distance);
+        Projectile.createProjectile(player, target, 249, shot.delay, end, 40.75, 36.5)
+          .withAngle(15).withProgress(11).sendProjectile();
+      }
       CombatFactory.decrementAmmo(player, target.getLocation(), 2);
     }
 

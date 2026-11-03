@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](../../server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-191 quests · ✅ passed: 27 · ⚠️ passed with issues: 19 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 16 · untested: 120
+191 quests · ✅ passed: 28 · ⚠️ passed with issues: 18 · 🔄 in progress: 8 · ❌ failed: 1 · 🔁 needs recheck: 16 · untested: 120
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -199,6 +199,6 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [What Lies Below](what-lies-below/README.md) | untested |  |  |  |  |
 | [While Guthix Sleeps](while-guthix-sleeps/README.md) | untested |  |  |  |  |
 | [Witch's House](witchs-house/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 | 5 |
-| [Witch's Potion](witchs-potion/README.md) | ✅ passed | 2026-10-25 | community |  |  |
-| [X Marks the Spot](x-marks-the-spot/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
+| [Witch's Potion](witchs-potion/README.md) | ✅ passed | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
+| [X Marks the Spot](x-marks-the-spot/README.md) | ✅ passed | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [Zogre Flesh Eaters](zogre-flesh-eaters/README.md) | ❌ failed |  | agent |  | 1 |

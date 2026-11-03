@@ -68,7 +68,12 @@ Without the latter, an unanswered Destroy prompt on another item stayed pending,
 kept its darts.
 
 A full inventory refuses before the prompt with the live message
-`You don't have enough free inventory space to do that.` (rsprox 1637, same wording).
+`You don't have enough free inventory space to do that.` (rsprox 1637, same wording). The
+return is checked again when Yes is answered, against the inventory as it stands then: the
+inventory can fill up while the prompt is open (unequipping into the last free slot is a
+widget action that leaves the chatbox mounted), and `Inventory.add` would silently drop the
+stack while the pipe's metadata was cleared. If the darts (or scales) no longer fit, including
+the existing stack's headroom, the same message is sent and the pipe keeps what it holds.
 
 ## Validation
 
@@ -78,4 +83,6 @@ both stacks and switching to the empty id, the no-space refusal (no prompt), and
 hooked actions are exactly the pipe's cache options so Wield cannot unload it. With
 DestroyItem and ToxicBlowpipe both registered in the manager's order and its stop-at-first
 handler dispatch, opening Destroy on another item and then choosing Unload or Uncharge leaves
-that item in the inventory and answers only the pipe's prompt.
+that item in the inventory and answers only the pipe's prompt. A second pair fills the
+inventory between opening the pipe's prompt and answering Yes (unequipped gear into the last
+slot): the refusal message is shown and the pipe keeps its scales and darts.

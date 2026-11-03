@@ -294,6 +294,34 @@ function slotsNeeded(inventory, stacks) {
   return needed;
 }
 
+/** Whether the inventory can take every returned stack now: free slots and stack headroom. */
+function canReturnAll(inventory, stacks) {
+  if (inventory.getFreeSlots() < slotsNeeded(inventory, stacks)) {
+    return false;
+  }
+  return stacks.every(([itemId, amount]) =>
+    amount <= 0 || inventory.getAddableAmount(new core.Item(itemId, amount)) >= amount);
+}
+
+/** The stack Unload returns: the loaded darts. */
+function dartsToReturn(blowpipeItem) {
+  const { dartId, dartAmount } = BlowpipeState.read(blowpipeItem);
+  return dartAmount > 0 && isToxicBlowpipeDartId(dartId) ? [[dartId, dartAmount]] : [];
+}
+
+/** The stacks Uncharge returns: the scales and the loaded darts. */
+function everythingToReturn(blowpipeItem) {
+  const { scales, dartId, dartAmount } = BlowpipeState.read(blowpipeItem);
+  const stacks = [];
+  if (scales > 0) {
+    stacks.push([core.ItemIdentifiers.ZULRAHS_SCALES, scales]);
+  }
+  if (dartAmount > 0 && isToxicBlowpipeDartId(dartId)) {
+    stacks.push([dartId, dartAmount]);
+  }
+  return stacks;
+}
+
 /** Unload: the loaded darts go back, the scales stay and the pipe keeps its charged id. */
 function removeDarts(player, blowpipeItem, slot) {
   const { dartId, dartAmount } = BlowpipeState.read(blowpipeItem);
@@ -317,12 +345,12 @@ function removeEverything(player, blowpipeItem, slot) {
   refreshBlowpipeState(player, blowpipeItem, slot);
 }
 
-function openConfirm(player, blowpipeItem, slot, warning, apply) {
+function openConfirm(player, blowpipeItem, slot, warning, getStacks, apply) {
   // The destroy confirmation shares group 584 and registers first: closing whatever prompt is
   // open clears its pending item (sendInterfaceRemoval resets "destroy-item:pending"), so the
   // player's Yes answers this prompt instead of destroying the item Destroy named.
   player.getPacketSender().sendInterfaceRemoval();
-  pendingPrompts.set(player, { itemId: blowpipeItem.getId(), slot, apply });
+  pendingPrompts.set(player, { itemId: blowpipeItem.getId(), slot, getStacks, apply });
   player
     .getPacketSender()
     .sendChatboxInterface(CONFIRM_GROUP_ID)
@@ -339,7 +367,13 @@ function confirmPrompt({ player, action }) {
   if (action !== 1) return true;
   const blowpipeItem = player.getInventory().getItems()[pending.slot];
   if (blowpipeItem?.getId() === pending.itemId) {
-    pending.apply(player, blowpipeItem);
+    // The inventory can fill up while the prompt is open (unequipping into the last slot), and
+    // add() would silently refuse: re-check the return as it stands now and keep the pipe loaded.
+    if (!canReturnAll(player.getInventory(), pending.getStacks(blowpipeItem))) {
+      player.sendMessage(NO_SPACE);
+    } else {
+      pending.apply(player, blowpipeItem);
+    }
   }
   return true;
 }
@@ -350,34 +384,28 @@ function forgetPrompt({ player }) {
 }
 
 function unloadBlowpipe({ player, item, slot }) {
-  const { dartId, dartAmount } = BlowpipeState.read(item);
-  if (dartAmount <= 0 || !isToxicBlowpipeDartId(dartId)) {
+  const stacks = dartsToReturn(item);
+  if (stacks.length === 0) {
     return true;
   }
-  const inventory = player.getInventory();
-  if (inventory.getFreeSlots() < slotsNeeded(inventory, [[dartId, dartAmount]])) {
+  if (!canReturnAll(player.getInventory(), stacks)) {
     player.sendMessage(NO_SPACE);
     return true;
   }
-  openConfirm(player, item, slot, UNLOAD_WARNING, (owner, blowpipeItem) => removeDarts(owner, blowpipeItem, slot));
+  openConfirm(player, item, slot, UNLOAD_WARNING, dartsToReturn, (owner, blowpipeItem) => removeDarts(owner, blowpipeItem, slot));
   return true;
 }
 
 function unchargeBlowpipe({ player, item, slot }) {
-  const { scales, dartId, dartAmount } = BlowpipeState.read(item);
+  const { scales, dartAmount } = BlowpipeState.read(item);
   if (scales <= 0 && dartAmount <= 0) {
     return true;
   }
-  const inventory = player.getInventory();
-  const stacks = [[core.ItemIdentifiers.ZULRAHS_SCALES, scales]];
-  if (dartAmount > 0 && isToxicBlowpipeDartId(dartId)) {
-    stacks.push([dartId, dartAmount]);
-  }
-  if (inventory.getFreeSlots() < slotsNeeded(inventory, stacks)) {
+  if (!canReturnAll(player.getInventory(), everythingToReturn(item))) {
     player.sendMessage(NO_SPACE);
     return true;
   }
-  openConfirm(player, item, slot, UNCHARGE_WARNING, (owner, blowpipeItem) => removeEverything(owner, blowpipeItem, slot));
+  openConfirm(player, item, slot, UNCHARGE_WARNING, everythingToReturn, (owner, blowpipeItem) => removeEverything(owner, blowpipeItem, slot));
   return true;
 }
 

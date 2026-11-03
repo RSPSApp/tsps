@@ -127,6 +127,10 @@ function fakeInventory(items) {
     getItems: () => slots,
     getFreeSlots: () => slots.filter((entry) => !entry).length,
     contains: (itemId) => slots.some((entry) => entry && idOf(entry) === itemId),
+    getAddableAmount: (item) => {
+      if (slots.some((entry) => entry && idOf(entry) === item.getId())) return item.getAmount();
+      return slots.some((entry) => !entry) ? item.getAmount() : 0;
+    },
     deleteAtSlot: (slot, amount) => {
       removed.push({ slot, itemId: idOf(slots[slot]), amount });
       slots[slot] = null;
@@ -270,15 +274,17 @@ function confirmPlugins() {
 /** A player whose PacketSender is real, so sendInterfaceRemoval resets DestroyItem's own state. */
 function confirmPlayer(pipe, extra = []) {
   const attributes = new Map();
+  const messages = [];
   const inventory = fakeInventory([pipe, ...extra]);
   const player = {
     inventory,
+    messages,
     getInventory: () => inventory,
     getEquipment: () => ({ get: () => null, getItems: () => [] }),
     getWeapon: () => -1,
     getUpdateFlag: () => ({ flag: () => {} }),
     getBonusManager: () => ({ attackBonus: [], defenceBonus: [], otherBonus: [] }),
-    sendMessage: () => {},
+    sendMessage: (message) => messages.push(message),
     getAttribute: (key) => attributes.get(key) ?? -1,
     setAttribute: (key, value) => attributes.set(key, value),
     getInterfaceId: () => -1,
@@ -320,5 +326,32 @@ for (const action of ["Unload", "Uncharge"]) {
     assert.equal(player.inventory.contains(DRAGON_DART), true, "the pipe's darts are returned");
     assert.equal(pipe.getId(), action === "Unload" ? TOXIC_BLOWPIPE_ID : TOXIC_BLOWPIPE_EMPTY_ID);
     assert.equal(pipe.state().scales ?? 0, action === "Unload" ? 5000 : 0);
+  });
+}
+
+for (const action of ["Unload", "Uncharge"]) {
+  test(`${action} re-checks space at Yes, so gear unequipped into the last slot keeps the pipe loaded`, () => {
+    const hooks = confirmPlugins();
+    const pipe = loadedPipe(100, DRAGON_DART, 120);
+    // Unload returns the darts; Uncharge returns the scales too, so it needs one more slot.
+    const slotsNeeded = action === "Unload" ? 1 : 2;
+    const filler = Array.from({ length: 27 - slotsNeeded }, (_, index) => ({ id: 1000 + index, amount: 1 }));
+    const player = confirmPlayer(pipe, filler);
+    assert.equal(player.inventory.getFreeSlots(), slotsNeeded);
+
+    assert.equal(hooks.actions()[action]({ player, item: pipe, slot: 0 }), true);
+    // Unequipping into the last free slot is a widget action, which leaves the prompt open.
+    for (let i = 0; i < slotsNeeded; i++) {
+      const free = player.inventory.getItems().findIndex((entry) => !entry);
+      player.inventory.getItems()[free] = { id: 21018 + i, amount: 1 };
+    }
+    assert.equal(player.inventory.getFreeSlots(), 0);
+
+    assert.equal(hooks.pressConfirm(player, 1), true);
+    assert.deepEqual(player.messages, ["You don't have enough free inventory space to do that."]);
+    assert.deepEqual(pipe.state(), { scales: 100, dartId: DRAGON_DART, dartAmount: 120 }, "nothing leaves the pipe");
+    assert.equal(pipe.getId(), TOXIC_BLOWPIPE_ID);
+    assert.equal(player.inventory.contains(DRAGON_DART), false);
+    assert.equal(player.inventory.contains(ZULRAHS_SCALES), false);
   });
 }

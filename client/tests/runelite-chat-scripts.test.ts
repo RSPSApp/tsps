@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { IndexType } from "../rs/cache/IndexType";
 import { Opcodes } from "../rs/cs2/Opcodes";
 import { assembleRs2asm } from "../rs/cs2/rs2asm";
@@ -33,8 +35,29 @@ assert.equal(tiny.switches![0].get(2), 4 - 1 - 1, "a case's offset is target - p
 assert.equal(tiny.switches![0].get(-1), 6 - 1 - 1);
 assert.throws(() => assembleRs2asm(".id 1\n   iconst 1\n   2: NOWHERE"), /case outside a switch/);
 
+// --- MenuOptionClicked: a listener can consume a click before it is dispatched -------------------
+const action: MenuActionData = { param0: 0, param1: 0, opcode: 57, identifier: 1, itemId: -1, option: "Search", target: "",
+    screenX: 0, screenY: 0 };
+const dispatched: number[] = [];
+const consume = (a: MenuActionData) => a.option === "Search";
+menuClickListeners.add(consume);
+dispatchMenuAction(action, (a) => dispatched.push(a.opcode));
+assert.deepEqual(dispatched, [], "consumed");
+dispatchMenuAction({ ...action, option: "Other" }, (a) => dispatched.push(a.opcode));
+assert.deepEqual(dispatched, [57], "not consumed: dispatched");
+menuClickListeners.delete(consume);
+dispatchMenuAction(action, (a) => dispatched.push(a.opcode));
+assert.deepEqual(dispatched, [57, 57]);
+
 // --- RuneLite's chat scripts replace the cache's (same SHA-256 as RuneLite's .hash files) -------
 assert.deepEqual(RUNELITE_CHAT_SCRIPTS.map((s) => [s.id, s.name]), [[84, "ChatBuilder"], [89, "ChatSplitBuilder"], [4742, "ChatTimestamp"]]);
+
+// CI has no server cache, so it stops after the checks above.
+if (!existsSync(resolve(__dirname, "../../server/caches/caches.json"))) {
+    console.log("RuneLite chat scripts: ok (no server cache, cache script checks skipped)");
+    process.exit(0);
+}
+
 const { scripts, cache } = createCacheVm();
 const index: any = cache.getIndex(IndexType.DAT2.clientScript);
 const callbacks: Record<number, string[]> = {
@@ -63,19 +86,5 @@ const raw = index.getArchive(4742).getFile(0).data;
 assert.equal(loadRuneliteScript(4742, raw, new Script()), null, "a patch that can't assemble: the cache's");
 patch.source = source;
 console.warn = warn;
-
-// --- MenuOptionClicked: a listener can consume a click before it is dispatched -------------------
-const action: MenuActionData = { param0: 0, param1: 0, opcode: 57, identifier: 1, itemId: -1, option: "Search", target: "",
-    screenX: 0, screenY: 0 };
-const dispatched: number[] = [];
-const consume = (a: MenuActionData) => a.option === "Search";
-menuClickListeners.add(consume);
-dispatchMenuAction(action, (a) => dispatched.push(a.opcode));
-assert.deepEqual(dispatched, [], "consumed");
-dispatchMenuAction({ ...action, option: "Other" }, (a) => dispatched.push(a.opcode));
-assert.deepEqual(dispatched, [57], "not consumed: dispatched");
-menuClickListeners.delete(consume);
-dispatchMenuAction(action, (a) => dispatched.push(a.opcode));
-assert.deepEqual(dispatched, [57, 57]);
 
 console.log("RuneLite chat scripts tests passed");

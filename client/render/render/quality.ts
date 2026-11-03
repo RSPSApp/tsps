@@ -195,6 +195,7 @@ const LOW_END_SCENE_SCALE = 0.6;
 
 /** OSRS fixed-mode toplevel; its gameframe renders at a fixed 765x503. */
 const FIXED_GAMEFRAME_ROOT = 548;
+const WELCOME_SCREEN_ROOT = 378;
 /** Cache 548:26 - fixed mode's 3D viewport (4,4 512x334 inside the gameframe). */
 const FIXED_SCENE_VIEWPORT = { x: 4, y: 4, width: 512, height: 334 };
 
@@ -261,9 +262,9 @@ export function computeUiRenderMetrics(host: WebGLOsrsRendererHost,
         const safeBufW = Math.max(1, bufW | 0);
         const safeBufH = Math.max(1, bufH | 0);
         const gameState = host.osrsClient.gameState;
-        const isLoginLikeState =
-            gameState === GameState.DOWNLOADING || host.osrsClient.isOnLoginScreen();
         const rootInterface = host.osrsClient.widgetManager?.rootInterface ?? -1;
+        const isLoginLikeState =
+            gameState === GameState.DOWNLOADING || host.osrsClient.isOnLoginScreen() || rootInterface === WELCOME_SCREEN_ROOT;
         const isMobileGameplayRoot = isMobileMode && !isLoginLikeState && rootInterface === 601;
         const { cssW, cssH } = host.getUiSurfaceCssSize(safeBufW, safeBufH);
 
@@ -334,7 +335,8 @@ export function computeUiRenderMetrics(host: WebGLOsrsRendererHost,
             };
         }
 
-        // The title/login surface gets the same integer device-pixel snapping as the
+        // Title/login and the welcome screen ignore gameplay scaling so their buttons stay on screen.
+        // They get the same integer device-pixel snapping as the
         // gameplay branch above so NEAREST-sampled title sprites and bitmap fonts map
         // 1:N onto device pixels at any OS/browser scaling. The scene itself stays
         // authored at native fixed-mode size (no interface scaling on the title

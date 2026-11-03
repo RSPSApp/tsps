@@ -21,6 +21,14 @@ const N = core.NpcIdentifiers;
 const I = core.ItemIdentifiers;
 const O = core.ObjectIdentifiers;
 const VARP_LOST_CITY = 147;
+let nativeRegistration;
+function nativeQuest() {
+  if (!nativeRegistration) {
+    require('../plugins/quests/quests/LostCity.Quest')(PluginManager.createApi('LostCityNativeRegression'));
+    nativeRegistration = runtime.getRegisteredQuests().findLast(q => q.key === 'lost_city');
+  }
+  return nativeRegistration;
+}
 
 function setup() {
   const custom = new Map();
@@ -72,7 +80,7 @@ function setup() {
     isFull: () => full,
   };
 
-  const questCore = { ...core, CountdownTask: undefined, TaskManager: undefined };
+  const questCore = { ...core, CountdownTask: undefined, TaskManager: core.TaskManager };
   const api = new Proxy({
     core: questCore,
     persistAttribute() {},
@@ -105,6 +113,8 @@ function setup() {
   require('../plugins/quests/quests/LostCity.Quest')(api);
   const quest = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'lost_city');
 
+  let teleporting = false;
+  const movement = { reset() { return this; }, setBlockMovement() { return this; }, handleRegionChange() {} };
   const player = {
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
@@ -116,7 +126,18 @@ function setup() {
       getCurrentLevel: (skill) => levels.get(skill) ?? 99,
       getMaxLevel: (skill) => levels.get(skill) ?? 99,
       getCombatLevel: () => combat,
+      stopSkillable() {},
     }),
+    getMovementQueue: () => movement,
+    isPlayerBot: () => false,
+    setLocation: next => { location = next; },
+    setWalkingDirection() {},
+    isTeleportingReturn: () => teleporting,
+    setTeleporting: value => { teleporting = value; },
+    setUntargetable() {},
+    getClickDelay: () => ({ reset() {} }),
+    getCombat: () => ({ reset() {} }),
+    performGraphic() {},
     getLocation: () => location,
     moveTo: (next) => { location = next; moves.push([next.getX(), next.getY(), next.getZ()]); },
     getUsername: () => 'qh728-q067',
@@ -221,7 +242,9 @@ test('fresh-stage route completes through the registered handlers and grants no 
   assert.equal(h.quest.getStage(h.player), 5);
 
   h.setWeapon(I.DRAMEN_STAFF);
+  h.setLocation(3201, 3169);
   assert.equal(h.object(O.DOOR_72).handled, true);
+  for (let tick = 0; tick < 4; tick++) core.TaskManager.process();
   assert.equal(h.quest.getStage(h.player), 6);
   assert.equal(h.quest.isComplete(h.player), true);
   assert.equal(h.attributes.get('quest.points'), 3);
@@ -378,7 +401,9 @@ test('quest completion reaps the owner-only quest NPCs', () => {
 
   h.stage(5);
   h.setWeapon(I.DRAMEN_STAFF);
+  h.setLocation(3201, 3169);
   h.object(O.DOOR_72);
+  for (let tick = 0; tick < 4; tick++) core.TaskManager.process();
   assert.equal(h.quest.isComplete(h.player), true);
   assert.ok(h.removed.some((npc) => npc.id === N.SHAMUS), 'completion removes the tracked Shamus');
 });
@@ -418,9 +443,7 @@ test('native Dramen chopping animates, can be interrupted and advances only on a
   player.setLocation(new core.Location(2859, 9734, 0));
   player.getSkillManager().setMaxLevels(core.Skill.WOODCUTTING, 36).setCurrentLevels(core.Skill.WOODCUTTING, 36);
   player.getInventory().add(new core.Item(I.BRONZE_AXE), true);
-  const questApi = PluginManager.createApi('LostCityAnimations');
-  require('../plugins/quests/quests/LostCity.Quest')(questApi);
-  const quest = runtime.getRegisteredQuests().findLast(entry => entry.key === 'lost_city');
+  const quest = nativeQuest();
   quest.setStage(player, 3);
   const woodcutting = require('../plugins/skills/Woodcutting.plugin');
   woodcutting.register(PluginManager.createApi('Woodcutting'));
@@ -450,4 +473,81 @@ test('native Dramen chopping animates, can be interrupted and advances only on a
   core.TaskManager.process();
   assert.equal(player.getInventory().getAmount(I.DRAMEN_BRANCH), 1);
   assert.equal(quest.getStage(player), 4, 'real Woodcutting success advances the quest');
+});
+
+test('Zanaris shed entry presents on the entry tile and lands three real task ticks later', t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const player = new Player(null, new core.Location(3201, 3169, 0));
+  player.setIndex(2087); player.setUsername('zanarisentry'); player.setRegistered(true);
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(I.DRAMEN_STAFF, 1));
+  const packets = [];
+  t.mock.method(player.getPacketSender(), 'sendSoundEffect', (id, loops, delay) => { packets.push({ id, delay, loops }); return player.getPacketSender(); });
+  t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write() {} }));
+  t.mock.method(player, 'sendMessage', () => {});
+  const quest = nativeQuest();
+  quest.setStage(player, 5);
+  const door = new core.GameObject(O.DOOR_72, new core.Location(3202, 3169, 0), 0, 0, null);
+  const use = () => PluginManager.emitObjectInteraction({ player, object: door, objectId: O.DOOR_72, clickType: 1, handled: false });
+  const coord = () => [player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()];
+  t.after(() => { core.TaskManager.cancelTasks(player); player.setRegistered(false); });
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(-1, 0));
+  assert.equal(use(), false, 'without a wielded Dramen staff the existing door guard remains unclaimed');
+  assert.deepEqual(coord(), [3201, 3169, 0]);
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(I.DRAMEN_STAFF, 1));
+  quest.setStage(player, 4);
+  assert.equal(use(), true, 'insufficient quest stage retains its existing refusal');
+  assert.deepEqual(coord(), [3201, 3169, 0]);
+  assert.equal(packets.length, 0);
+  quest.setStage(player, 5);
+  assert.equal(use(), true);
+  assert.deepEqual(coord(), [3202, 3169, 0], 'object interaction steps onto shed before presentation');
+  assert.equal(quest.getStage(player), 5, 'no completion on the approach');
+  use();
+  core.TaskManager.process();
+  assert.deepEqual(coord(), [3202, 3169, 0]);
+  assert.equal(player.getAnimation().getId(), 3265);
+  assert.equal(player.getAnimation().getDelay(), 30, 'encoded client animation delay, not 30 task ticks');
+  assert.equal(player.getGraphic().getId(), 569);
+  assert.deepEqual(packets, [{ id: 1098, delay: 0, loops: 1 }]);
+  use();
+  for (let tick = 1; tick <= 2; tick++) {
+    core.TaskManager.process();
+    assert.deepEqual(coord(), [3202, 3169, 0], `no arrival after presentation+${tick}`);
+    assert.equal(quest.getStage(player), 5);
+  }
+  core.TaskManager.process();
+  assert.deepEqual(coord(), [2452, 4473, 0], 'entry destination differs from the exit shed tile');
+  assert.equal(player.getAnimation().getId(), 3266);
+  assert.equal(quest.isComplete(player), true);
+  assert.equal(packets.length, 1, 'duplicate input cannot restart or double the sequence');
+  assert.equal(player.isTeleportingReturn(), false);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  player.setLocation(new core.Location(3205, 3169, 0));
+  use();
+  assert.deepEqual(coord(), [3205, 3169, 0], 'a distant handler call cannot stand in for normal object approach');
+  assert.equal(packets.length, 1);
+});
+
+test('Zanaris entry cancellation releases the native player without completing the quest', t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  for (const ticks of [0, 1, 2]) {
+    const player = new Player(null, new core.Location(3201, 3169, 0));
+    player.setIndex(2088 + ticks); player.setUsername('zanariscancel' + ticks); player.setRegistered(true);
+    t.after(() => { core.TaskManager.cancelTasks(player); player.setRegistered(false); });
+    player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(I.DRAMEN_STAFF, 1));
+    t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write() {} }));
+    t.mock.method(player, 'sendMessage', () => {});
+    const quest = nativeQuest();
+    quest.setStage(player, 5);
+    const door = new core.GameObject(O.DOOR_72, new core.Location(3202, 3169, 0), 0, 0, null);
+    PluginManager.emitObjectInteraction({ player, object: door, objectId: O.DOOR_72, clickType: 1, handled: false });
+    for (let n = 0; n < ticks; n++) core.TaskManager.process();
+    // Real logout cancels tasks by this same player key; no live logout/save/DB in this fixture.
+    core.TaskManager.cancelTasks(player); player.setRegistered(false);
+    for (let n = 0; n < 5; n++) core.TaskManager.process();
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3202, 3169]);
+    assert.equal(quest.getStage(player), 5);
+    assert.equal(player.isTeleportingReturn(), false);
+    assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  }
 });

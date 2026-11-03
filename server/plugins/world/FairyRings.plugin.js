@@ -14,13 +14,12 @@
  *   check (Wiki: Fairy ring (Zanaris)): the one by the shed's arrival tile to the Lumbridge
  *   Swamp shed, the market's to behind Al Kharid bank.
  *
- * ponytail: Fairytale II - Cure a Queen is not implemented, so the quest check passes when the
- * quest is not registered rather than blocking every player.
+ * Quest-owned permission and special routes use custom queries; with quests disabled,
+ * the network remains available to staff-wielding players.
  */
 const { Location } = require("../../src/main/typescript/elvarg/game/model/Location");
 const { Direction } = require("../../src/main/typescript/elvarg/game/model/Direction");
 const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
-const QuestRuntime = require("../quests/QuestRuntime");
 
 const DIALS_INTERFACE = 398;
 const LOG_INTERFACE = 381;
@@ -74,7 +73,6 @@ const TELEPORT_SOUND = 1098;
 const LAST_CODE_ATTRIBUTE = "fairy-rings:last";
 const USED_CODES_ATTRIBUTE = "fairy-rings:used";
 const FAVOURITES_ATTRIBUTE = "fairy-rings:favourites";
-const FAIRYQUEST_NAME = "Fairytale II - Cure a Queen";
 
 /**
  * Zanaris' one-way exit rings by loc id. Lumbridge Swamp: rsprox capture 3173 (rev 232), the
@@ -90,6 +88,7 @@ function loadExitRings(ids) {
 }
 
 let core = null;
+let pluginApi;
 /** Players whose dials or warning close because they are going: busy stays set (as captured). */
 const going = new WeakSet();
 /** The ring each player configured, which Confirm steps onto. */
@@ -143,8 +142,17 @@ function wieldsFairyMagic(player) {
 }
 
 function questAllows(player) {
-  const quest = QuestRuntime.getRegisteredQuests().find((entry) => entry.name === FAIRYQUEST_NAME);
-  return quest ? quest.isComplete(player) : true;
+  const request = { player, allowed: true };
+  pluginApi.emitCustomEvent("fairy-rings:access", request);
+  return request.allowed === true;
+}
+
+/** Content can resolve a code differently without changing the cache's ordinary destination. */
+function resolveRing(player, ring, origin) {
+  if (!ring) return null;
+  const request = { player, code: ring.code, destination: ring.destination, origin };
+  pluginApi.emitCustomEvent("fairy-rings:destination", request);
+  return request.destination ? { ...ring, destination: request.destination } : null;
 }
 
 function canUse(player) {
@@ -296,6 +304,7 @@ function fairyTeleport(player, ring, from, fromClick) {
           core.PluginManager?.emitCustomEvent?.("teleport:landed", { player, from, fromInstance, to: ring.destination });
           rememberUse(player, ring);
         }
+        pluginApi.emitCustomEvent("fairy-rings:travelled", { player, code: ring.code, destination: player.getLocation() });
         player.performAnimation(new core.Animation(APPEAR_ANIMATION));
       }
       if (tick === delay + 4) {
@@ -320,8 +329,10 @@ function hasLightSource(player) {
 }
 
 function confirmDial(player) {
-  const ring = rings.get(codeFromDials(player));
+  if (!canUse(player)) return;
+  const ring = resolveRing(player, rings.get(codeFromDials(player)), configuredRing.get(player));
   if (!ring?.destination) {
+    pluginApi.emitCustomEvent("fairy-rings:invalid", { player, code: codeFromDials(player) });
     player.sendMessage("The fairy ring combination is not a valid destination.");
     return;
   }
@@ -431,7 +442,7 @@ function interfaceClosed({ player, interfaceId }) {
 
 function lastDestination({ player, location }) {
   if (!player || !canUse(player)) return;
-  const ring = rings.get(String(player.getAttribute(LAST_CODE_ATTRIBUTE) ?? ""));
+  const ring = resolveRing(player, rings.get(String(player.getAttribute(LAST_CODE_ATTRIBUTE) ?? "")), ringTile(location));
   if (!ring?.destination) {
     player.sendMessage("You haven't used the fairy ring teleportation system yet.");
     return;
@@ -462,6 +473,7 @@ function sendLastOnLogin({ player }) {
 
 function attach(api) {
   core = api.core;
+  pluginApi = api;
   rings = loadRings();
   exitRings = loadExitRings(core.ObjectIdentifiers);
   ringsByComponent = new Map();

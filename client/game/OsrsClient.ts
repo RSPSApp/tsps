@@ -205,6 +205,7 @@ import { TextureLoader } from "../rs/texture/TextureLoader";
 import { faceAngleRs } from "../rs/utils/rotation";
 import { npcAddedRotation } from "./utils/rotation";
 import { getOsrsInterfaceScalingPercent, setOsrsInterfaceScalingPercent } from "../ui/UiScale";
+import { isMobileClient } from "../rs/cs2/ClientType";
 import {
     DEVICE_OPTION_SCREEN_BRIGHTNESS,
     gammaFromScreenBrightness,
@@ -2237,7 +2238,7 @@ export class OsrsClient {
             // Option ID 19 = master_volume (enhanced client)
             getDeviceOption: (optionId: number): number => {
                 if (optionId === DEVICE_OPTION_INTERFACE_SCALING) {
-                    return getOsrsInterfaceScalingPercent();
+                    return getOsrsInterfaceScalingPercent(isMobileClient(self.widgetManager?.rootInterface) || self.varManager?.getVarbit(6352) === 1);
                 }
                 return self.deviceOptions.get(optionId) ?? 0;
             },

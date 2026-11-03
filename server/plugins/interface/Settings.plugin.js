@@ -83,6 +83,7 @@ const GAMEFRAME_317_FIXED_OPTION = 4;
 const GAMEFRAME_317_VARP = 7995; // mirrors client/common/ui/gameframeLayout.ts
 const CLIENT_LAYOUT_317_ATTRIBUTE = "client-layout317";
 const DEFAULT_GAMEFRAME_ROOT = 161;
+const ORBS_PANE_UID = (ROOT_INTERFACE << 16) | 33;
 // world.json "gameframe" -> the dropdown option (enum 3509 index) it forces on login.
 const WORLD_GAMEFRAME_OPTIONS = {
   "modern-fixed": 0,
@@ -496,13 +497,29 @@ function applyGameframeLayout({ player, slot }) {
   if (!Number.isInteger(slot)) return false;
   const root = selectGameframeOption(player, slot - 1);
   if (root === undefined) return false;
+  sendGameframeLayout(player, root);
+  return true;
+}
+
+function sendGameframeLayout(player, root) {
   const sender = player.getPacketSender();
   syncGameframeVarbit(player);
   sender.sendRootInterface(root);
   for (const packet of encodeGameframeFlags(root)) {
     player.getSession().sendClientPacket(packet);
   }
-  return true;
+}
+
+function receiveGameframeLayout(event) {
+  if (event.channel !== "gameframe:layout") return;
+  event.handled = true;
+  const { player, data } = event;
+  if (typeof data?.mobile !== "boolean" || player.getAttribute(NATIVE_CLIENT_ATTRIBUTE) === true) return;
+  if (isMobileClient(player) === data.mobile) return;
+  player.setAttribute(MOBILE_CLIENT_ATTRIBUTE, data.mobile ? true : null);
+  const root = getGameframeRoot(player);
+  sendGameframeLayout(player, root);
+  player.getPacketSender().sendSubInterface(ORBS_PANE_UID, pluginApi.core.orbsGroupFor(root), 1);
 }
 
 function choosePlayerAttackOption({ player, slot }) {
@@ -780,6 +797,7 @@ module.exports = {
     // dropdown panel's dynamic children, one per option (the row at child 0 is
     // the highlight rectangle), so the option index is slot - 1.
     api.onInterfaceActionButton(DISPLAY_LAYOUT_DROPDOWN, applyGameframeLayout);
+    api.onCustomEvent("network:plugin-message", receiveGameframeLayout);
     api.onInterfaceActionButton(ATTACK_PRIORITY_PLAYER_BUTTONS_UID, choosePlayerAttackOption);
     api.onInterfaceActionButton(ATTACK_PRIORITY_NPC_BUTTONS_UID, chooseNpcAttackOption);
 

@@ -70,6 +70,8 @@ async function main(): Promise<void> {
     const config = inject(ConfigManager);
     const set = (key: string, value: unknown) => config.setConfigValue(GroundItemsConfig, key as any, value);
     const plugin = new GroundItemsPlugin(client);
+    assert.equal(plugin.isEnabled(), false, "ground item overlays are opt-in");
+    plugin.setEnabledState(true);
     plugin.guidePrice = (id) => prices[id] ?? 0;
     const changed = () => plugin.onConfigChanged({ getGroup: () => "grounditems" } as any);
     set("hiddenItems", "Bones");
@@ -77,7 +79,7 @@ async function main(): Promise<void> {
     set("highlightedItems", "Rune scimitar");
     await plugin.start();
     changed();
-    assert.equal(GroundItemsPlugin.descriptor.enabledByDefault, true, "on by default, as in RuneLite");
+    assert.equal(GroundItemsPlugin.descriptor.enabledByDefault, false, "off by default to avoid ground item overlay cost");
 
     // --- Merging and prices ------------------------------------------------------------------
     store.update({ kind: "snapshot", serial: 1, stacks: [

@@ -10,10 +10,10 @@ import { alignPosition, alignSize, type WidgetLike } from "../../../widgets/layo
  * this moves the gameframe's panes:
  *
  *   chat across the top, the minimap and orbs bottom-left above two rows of tab stones,
- *   and the side panel (inventory etc.) bottom-right.
+ *   and the side panel (inventory etc.) bottom-right. Left-handed mode swaps those sides.
  *
- * Only computed positions/sizes change (as a post-alignment step of the shared layout
- * routine), so the cs2 that drives these panes keeps working: its raw values, hides and
+ * Only computed geometry and the fold arrow's display angle change after layout,
+ * so the cs2 that drives these panes keeps working: its raw values, hides and
  * scripts are untouched, and every relayout reapplies the arrangement.
  */
 
@@ -32,6 +32,7 @@ export const PORTRAIT_COMPONENTS = {
     sideRightTabs: uidOf(50),
     tabsGroupRight: uidOf(61),
     tabsGroupLeft: uidOf(87),
+    tabsToggleArrow: uidOf(110),
     sideContainer: uidOf(111),
 } as const;
 
@@ -51,7 +52,7 @@ export function portraitBottomHudTop(frameH: number): number {
     return Math.min(frameH - TAB_ROWS_HEIGHT - MAP_HEIGHT - EDGE * 2, frameH - SIDE_PANEL_HEIGHT - EDGE);
 }
 
-type LayoutNode = WidgetLike & { uid?: number; parentUid?: number };
+type LayoutNode = WidgetLike & { uid?: number; parentUid?: number; spriteAngle?: number };
 
 /** PortraitModePlugin's configKey; its enabled flag lives under the `runelite` config group. */
 export const PORTRAIT_MODE_CONFIG_KEY = "portraitmode";
@@ -85,6 +86,30 @@ export function setPortraitModeEnabled(value: boolean): void {
 export function subscribePortraitModeEnabled(listener: () => void): () => void {
     enabledListeners.add(listener);
     return () => enabledListeners.delete(listener);
+}
+
+let leftHanded = false;
+const handednessListeners = new Set<() => void>();
+
+export function isPortraitLeftHanded(): boolean { return leftHanded; }
+
+export function setPortraitLeftHanded(value: boolean): void {
+    if (leftHanded === value) return;
+    leftHanded = value;
+    for (const listener of handednessListeners) listener();
+}
+
+export function subscribePortraitHandedness(listener: () => void): () => void {
+    handednessListeners.add(listener);
+    return () => { handednessListeners.delete(listener); };
+}
+
+/** The bottom toolbar can make a nearly square portrait window's canvas wider than it is tall. */
+export function isPortraitViewport(fallbackWidth: number, fallbackHeight: number): boolean {
+    if (typeof window !== "undefined" && window.innerWidth > 0 && window.innerHeight > 0) {
+        return window.innerHeight >= window.innerWidth;
+    }
+    return fallbackHeight >= fallbackWidth;
 }
 
 let active = false;
@@ -136,10 +161,18 @@ function transpose(w: LayoutNode, parentW: number, parentH: number): void {
  * alignment, with the parent size it was aligned against.
  */
 export function adjustMobilePortraitWidget(node: WidgetLike, parentW: number, parentH: number): void {
-    if (!active) return;
     const w = node as LayoutNode;
     const uid = w.uid;
     if (typeof uid !== "number" || uid >>> 16 !== ROOT) return;
+    // The native left/right arrow becomes down/up, and resets when the phone turns sideways.
+    if (uid === PORTRAIT_COMPONENTS.tabsToggleArrow) w.spriteAngle = active ? 16384 : 0;
+    if (!active) {
+        // Native scripts centre these on taller landscape surfaces; keep the responsive HUD bottom-aligned.
+        if (enabled && (uid === PORTRAIT_COMPONENTS.sideContainer || uid === PORTRAIT_COMPONENTS.sideRightTabs)) {
+            w.y = Math.max(0, parentH - (w.height ?? 0) - EDGE);
+        }
+        return;
+    }
 
     const parentUid = w.parentUid ?? -1;
     if (parentUid !== -1 && transposedParents.has(parentUid >>> 0)) {
@@ -194,12 +227,14 @@ export function adjustMobilePortraitWidget(node: WidgetLike, parentW: number, pa
             break;
         }
         case PORTRAIT_COMPONENTS.sideRightTabs: {
-            // Two rows of stones along the bottom-left.
+            // Two rows of stones along the bottom, beside the inventory.
             const columnH = w.height ?? 0;
+            // Native Show More/Less changes the columns' width (58/85); transpose that too.
+            const rowsHeight = w.width ?? TAB_ROWS_HEIGHT;
             w.width = columnH;
-            w.height = TAB_ROWS_HEIGHT;
-            w.x = EDGE;
-            w.y = parentH - TAB_ROWS_HEIGHT - EDGE;
+            w.height = rowsHeight;
+            w.x = leftHanded ? parentW - columnH - EDGE : EDGE;
+            w.y = parentH - rowsHeight - EDGE;
             break;
         }
         case PORTRAIT_COMPONENTS.tabsGroupLeft:
@@ -210,13 +245,13 @@ export function adjustMobilePortraitWidget(node: WidgetLike, parentW: number, pa
         }
         case PORTRAIT_COMPONENTS.mapContainer: {
             // Minimap and orbs above the tab rows.
-            w.x = EDGE;
+            w.x = leftHanded ? parentW - (w.width ?? 0) - EDGE : EDGE;
             w.y = parentH - TAB_ROWS_HEIGHT - MAP_HEIGHT - EDGE * 2;
             break;
         }
         case PORTRAIT_COMPONENTS.sideContainer: {
-            // The side panel bottom-right, beside the minimap and tabs.
-            w.x = parentW - (w.width ?? 0) - EDGE;
+            // The side panel goes opposite the minimap and tabs.
+            w.x = leftHanded ? EDGE : parentW - (w.width ?? 0) - EDGE;
             w.y = parentH - (w.height ?? 0) - EDGE;
             break;
         }

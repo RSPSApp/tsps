@@ -380,6 +380,7 @@ void (async () => {
         renderer: { canvas: { width: 1000, height: 2000, clientWidth: 500, clientHeight: 1000 } },
         widgetManager: {
             rootInterface: 601,
+            canvasWidth: 625,
             interfaceParents: parents,
             isEffectivelyHidden: () => false,
             getWidgetByUid: (uid: number) => widgets.get(uid),
@@ -395,6 +396,13 @@ void (async () => {
         assert.equal(state.portrait, true, "drawn as the portrait stick");
         assert.equal(state.hudInset, 200, "lifted above the minimap");
         assert.equal(state.stonesInset, 0, "the stones are along the bottom, not on the right");
+        assert.equal(state.scale, 1, "phone-sized controls stay compact");
+        client.renderer!.canvas!.clientWidth = 1000;
+        plugin.onClientTick();
+        assert.equal(plugin.getUiState().scale, 2, "joystick and action controls follow a larger mobile viewport without reload");
+        client.renderer!.canvas!.clientWidth = 500;
+        plugin.onClientTick();
+        assert.equal(plugin.getUiState().scale, 1, "shrinking restores the compact size");
 
         parents.set((601 << 16) | 27, { type: 0 });
         plugin.onClientTick();

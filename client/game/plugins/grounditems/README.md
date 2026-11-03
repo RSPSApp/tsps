@@ -1,6 +1,6 @@
 # Ground Items
 
-A port of RuneLite 1.13.3's Ground Items. It is on by default.
+A port of RuneLite 1.13.3's Ground Items. It is off by default to avoid ground item overlay cost.
 
 ## Labels
 

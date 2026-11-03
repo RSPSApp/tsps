@@ -1531,6 +1531,7 @@ export interface PluginCoreApi {
   XPDROPS_ENABLED_ATTRIBUTE: typeof import("../net/protocol/ClientProtocol").XPDROPS_ENABLED_ATTRIBUTE;
   encodeGameframeBootstrap: typeof import("../net/protocol/ClientProtocol").encodeGameframeBootstrap;
   resolveGameframeRoot: typeof import("../net/protocol/ClientProtocol").resolveGameframeRoot;
+  orbsGroupFor: typeof import("../net/protocol/ClientProtocol").orbsGroupFor;
   encodeFinePosition: typeof import("../net/protocol/ClientProtocol").encodeFinePosition;
   Boundary: any;
   PolygonalBoundary: any;

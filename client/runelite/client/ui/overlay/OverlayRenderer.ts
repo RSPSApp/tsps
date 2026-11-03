@@ -1,6 +1,7 @@
 import { TOPLEVEL, TOPLEVEL_OSM, TOPLEVEL_OSRS_STRETCH, TOPLEVEL_PRE_EOC } from "@runelite/api/gameval/InterfaceID";
 import type { OsrsClient } from "../../../../game/OsrsClient";
 import { getMousePos } from "../../../../game/InputManager";
+import { combatStatusAnchor } from "../../../../game/widgets/MobileHudLayout";
 import type {
     ClientPlugin,
     OverlayPlacement,
@@ -134,8 +135,11 @@ export class OverlayRenderer implements ClientPlugin {
         if (!movable) return undefined;
         const frame = this.beginPass(canvas);
         if (!frame) return undefined;
-        const w = width * frame.scaleX;
-        const h = height * frame.scaleY;
+        const status = frame.combatStatus;
+        const scaleX = movable.position === OverlayPosition.BELOW_MINIMAP && status ? status.scaleX : frame.scaleX;
+        const scaleY = movable.position === OverlayPosition.BELOW_MINIMAP && status ? status.scaleY : frame.scaleY;
+        const w = width * scaleX;
+        const h = height * scaleY;
         const saved = this.load(movable.name);
 
         let x: number;
@@ -150,13 +154,19 @@ export class OverlayRenderer implements ClientPlugin {
             const position = correctedPosition(saved.position ?? movable.position, frame.resized);
             corner = this.corners.find((c) => c.position === position);
             [x, y] = corner ? corner.nextDrawPosition(w, h) : [0, 0];
+            if (position === OverlayPosition.BELOW_MINIMAP && status) {
+                if (status.mobile) x += w;
+                if (x < 0 || x + w > canvas.w) {
+                    x = status.mobile ? 8 * scaleX : canvas.w - 8 * scaleX - w;
+                }
+            }
         }
         [x, y] = clampToCanvas(Math.round(x), Math.round(y), w, h, frame.canvas);
 
         const bounds = { x, y, w, h };
         corner?.shift(bounds, PADDING * frame.scaleY);
         this.placed.push({ overlay, bounds });
-        return { x, y, scaleX: frame.scaleX, scaleY: frame.scaleY };
+        return { x, y, scaleX, scaleY };
     }
 
     /** The first placement of a pass reads the HUD and restarts the snap corners. */
@@ -183,7 +193,13 @@ export class OverlayRenderer implements ClientPlugin {
         const chat = rectOf(manager.getWidgetByUid(layout.chat)) ?? { x: hud.x, y: hud.y + hud.h, w: 0, h: 0 };
         const chatArea: any = manager.getWidgetByUid(CHATAREA);
         if (chatArea?.isHidden) chat.y += chatArea._absHeight ?? 0;
-        return { canvas, hud, chat, scaleX, scaleY, resized: manager.rootInterface !== TOPLEVEL };
+        const status = combatStatusAnchor(this.client);
+        const combatStatus = status && { ...status,
+            right: status.mobile ? 8 * canvas.w / manager.canvasWidth
+                : manager.minimapWidget!._absX! + manager.minimapWidget!._absWidth!,
+            top: status.top + status.rowHeight,
+        };
+        return { canvas, hud, chat, scaleX, scaleY, combatStatus, resized: manager.rootInterface !== TOPLEVEL };
     }
 
     private draw(context: WidgetOverlayDrawContext): Rect[] {

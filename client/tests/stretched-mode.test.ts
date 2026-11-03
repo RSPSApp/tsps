@@ -102,3 +102,38 @@ try {
 }
 
 console.log("Stretched mode and welcome screen scaling tests passed");
+
+// Native mobile login (4618, called by toplevel_init) replaces a scale below 175% with 400%.
+const { createCacheVm } = require("../scripts/cache/cs2-sweep");
+const { getOsrsInterfaceScalingPercent, setOsrsInterfaceScalingPercent } = require("../ui/UiScale");
+const native = createCacheVm();
+const writes: number[] = [];
+native.vm.context.widgetManager.rootInterface = 601;
+native.vm.context.getDeviceOption = (id: number) => id === 27
+    ? getOsrsInterfaceScalingPercent(native.vm.context.widgetManager.rootInterface === 601 || native.vm.context.varManager.getVarbit(6352) === 1) : 0;
+native.vm.context.setDeviceOption = (id: number, value: number) => {
+    if (id !== 27) return;
+    writes.push(value);
+    setOsrsInterfaceScalingPercent(value);
+};
+try {
+    for (const saved of [100, 125, 150, 175, 200, 400]) {
+        setOsrsInterfaceScalingPercent(saved);
+        writes.length = 0;
+        native.vm.execute(native.scripts.load(4618));
+        assert.deepEqual(writes, [], "mobile startup must not overwrite the saved desktop preference");
+        assert.equal(getOsrsInterfaceScalingPercent(), saved);
+        assert.equal(getOsrsInterfaceScalingPercent(true), Math.max(175, saved));
+    }
+    setOsrsInterfaceScalingPercent(400);
+    native.vm.context.widgetManager.rootInterface = 161;
+    native.vm.execute(native.scripts.load(3054), [0, 0]); // Settings: select the 100% dropdown entry.
+    assert.equal(getOsrsInterfaceScalingPercent(), 100);
+    for (const root of [161, 601, 161]) {
+        native.vm.context.widgetManager.rootInterface = root;
+        native.vm.execute(native.scripts.load(4618));
+        assert.equal(getOsrsInterfaceScalingPercent(), 100, "the Settings choice survives desktop/mobile login initialization");
+    }
+} finally {
+    setUiScale(null);
+}

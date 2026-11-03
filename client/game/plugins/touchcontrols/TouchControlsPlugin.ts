@@ -17,6 +17,7 @@ import { getNpcMenuOptions } from "../../menu/WorldMenuBuilder";
 import { stripTags } from "../npcindicators/npcMatching";
 import { RS_TO_RADIANS } from "../../../rs/MathConstants";
 import { MOBILE_ROOT_INTERFACE } from "../../../rs/cs2/ClientType";
+import { mobileHudScale } from "../../widgets/MobileHudLayout";
 import { isMobilePortraitLayoutActive, PORTRAIT_COMPONENTS } from "../portraitmode/PortraitLayout";
 import { menuAction } from "../../../ui/menu/MenuAction";
 import { MenuOpcode } from "../../../ui/menu/MenuState";
@@ -53,6 +54,7 @@ export type TouchAction = {
 };
 
 export type TouchControlsUiState = {
+    scale: number;
     visible: boolean;
     /** The object the player walked into; its first option is the button. */
     action?: TouchAction;
@@ -79,6 +81,7 @@ export type TouchControlsClient = {
     cs2Vm?: { inputDialogType?: number };
     widgetManager?: {
         rootInterface?: number;
+        canvasWidth?: number;
         interfaceParents: Map<number, { type: number }>;
         isEffectivelyHidden?(uid: number): boolean;
         getWidgetByUid?(uid: number): { x?: number; y?: number; parentUid?: number } | undefined;
@@ -167,7 +170,7 @@ export class TouchControlsPlugin extends Plugin implements ClientPlugin {
     private npcLeftAt?: number;
     private gameTicks = 0;
     private padMode: PadModeValue = PadMode.DEFAULT;
-    private uiState: TouchControlsUiState = { visible: false, stonesInset: 0, portrait: false, hudInset: 0 };
+    private uiState: TouchControlsUiState = { scale: 1, visible: false, stonesInset: 0, portrait: false, hudInset: 0 };
     private uiKey = "";
 
     constructor(client?: TouchControlsClient) {
@@ -580,10 +583,12 @@ export class TouchControlsPlugin extends Plugin implements ClientPlugin {
             ? { kind: this.focus.kind, options: this.menuOrder(this.focus) } : undefined;
         const stonesInset = visible ? this.stonesInset() : 0;
         const hudInset = visible ? this.hudInset() : 0;
-        const key = JSON.stringify([visible, action, stonesInset, portrait, hudInset]);
+        const scale = mobileHudScale(this.client.widgetManager?.rootInterface,
+            this.client.renderer?.canvas?.clientWidth ?? 0, this.client.widgetManager?.canvasWidth);
+        const key = JSON.stringify([visible, action, stonesInset, portrait, hudInset, scale]);
         if (key === this.uiKey) return;
         this.uiKey = key;
-        this.uiState = { visible, action, stonesInset, portrait, hudInset };
+        this.uiState = { visible, action, stonesInset, portrait, hudInset, scale };
         for (const listener of [...this.listeners]) {
             try {
                 listener();

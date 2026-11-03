@@ -99,7 +99,7 @@ import {
     isLowEndDevice,
     isWebGL2Supported,
 } from "../../common/utils/DeviceUtil";
-import { isPortraitModeEnabled } from "../../game/plugins/portraitmode/PortraitLayout";
+import { isPortraitModeEnabled, isPortraitViewport } from "../../game/plugins/portraitmode/PortraitLayout";
 import { clamp } from "../../common/utils/MathUtil";
 import { ClientState, DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT } from "../../game/ClientState";
 import { GameRenderer } from "../../game/GameRenderer";
@@ -235,14 +235,16 @@ export function getMobileGameplayUiScale(host: WebGLOsrsRendererHost,
         // Portrait Mode: the gameframe must still be as wide as the main modal (512) and the
         // chatbox (519), or banks and shops are cut off at the sides, and tall enough for the
         // chat, a modal and the bottom HUD stacked, or a squarer tablet overlaps them.
-        if (isPortraitModeEnabled() && cssH > cssW) {
+        if (isPortraitModeEnabled() && isPortraitViewport(cssW, cssH)) {
             return Math.max(
                 scale,
                 RENDER_CONSTANTS.MOBILE_PORTRAIT_MIN_LAYOUT_WIDTH / Math.max(1, cssW),
                 RENDER_CONSTANTS.MOBILE_PORTRAIT_MIN_LAYOUT_HEIGHT / Math.max(1, cssH),
             );
         }
-        return scale;
+        // Cache script 4731 reserves at least 680px for the landscape safezone, plus edge padding.
+        // Keep the stock client width available when a nearly square window cannot fit that HUD.
+        return Math.max(scale, DEFAULT_SCREEN_WIDTH / Math.max(1, cssW));
     
 }
 
@@ -264,7 +266,7 @@ export function computeUiRenderMetrics(host: WebGLOsrsRendererHost,
         const rootInterface = host.osrsClient.widgetManager?.rootInterface ?? -1;
         const isLoginLikeState =
             gameState === GameState.DOWNLOADING || host.osrsClient.isOnLoginScreen();
-        const isMobileGameplayRoot = isMobileMode && !isLoginLikeState && rootInterface === 601;
+        const isMobileGameplayRoot = !isLoginLikeState && rootInterface === 601;
         const { cssW, cssH } = host.getUiSurfaceCssSize(safeBufW, safeBufH);
 
         if (!isLoginLikeState) {

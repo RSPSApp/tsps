@@ -17,10 +17,11 @@ export function appendAttackTimerOverhead(
     output: OverheadTextEntry[],
     maxEntries: number,
     playerDefaultHeightTiles: number | undefined,
+    preview = false,
 ): void {
     if (index === undefined || output.length >= maxEntries) return;
     const ticks = getAttackTimerTicks(getCurrentTick());
-    if (ticks <= 0) return;
+    if (ticks <= 0 && !preview) return;
     const pe = host.osrsClient.playerEcs;
     // On a boat deck the player is drawn elsewhere; leave the timer out there.
     if ((pe.getWorldViewId(index) | 0) >= 0) return;

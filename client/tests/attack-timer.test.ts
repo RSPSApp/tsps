@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { clearAttackTimer, getAttackTimerTicks, setAttackTimer } from "../game/plugins/attacktimer/attackTimerState";
 import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
 import { encodeAttackTimer } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
+import { getCurrentTick } from "../network/serverConnection/timing";
+import { appendAttackTimerOverhead } from "../game/plugins/attacktimer/AttackTimerOverhead";
+import { TimersPlugin } from "../game/plugins/statustimer/TimersPlugin";
 
 // ATTACK_TIMER carries the ticks until the local player's next attack (not an OSRS packet).
 const decode = (ticks: number) => decodeServerPacket(new Uint8Array(encodeAttackTimer(ticks))) as any;
@@ -28,5 +31,24 @@ assert.equal(getAttackTimerTicks(1200 + 1), 0, "and it stays cleared");
 setAttackTimer(4, 300);
 clearAttackTimer();
 assert.equal(getAttackTimerTicks(300), 0);
+
+const host: any = {
+    osrsClient: { playerEcs: { getWorldViewId: () => -1, getX: () => 128, getY: () => 128, getLevel: () => 0 } },
+    acquireOverheadTextEntry: () => ({}), makeActorGroupKey: () => 1, mapOverheadColor: () => 0xffff00,
+    resolvePlayerLogicalHeightTiles: () => 2,
+};
+const output: any[] = [];
+appendAttackTimerOverhead(host, 0, output, 10, 2, true);
+assert.equal(output[0].text, "0", "preview includes an inactive attack timer");
+output.length = 0;
+const timers = new TimersPlugin();
+setAttackTimer(4, getCurrentTick());
+timers.setEnabledState(false);
+timers.appendLocalPlayerOverheads(host, 0, output, 10, 2);
+assert.equal(output.length, 0, "the single plugin switch also hides the attack timer");
+timers.setEnabledState(true);
+timers.appendLocalPlayerOverheads(host, 0, output, 10, 2);
+assert.equal(output[0].text, "4");
+clearAttackTimer();
 
 console.log("attack timer: ok");

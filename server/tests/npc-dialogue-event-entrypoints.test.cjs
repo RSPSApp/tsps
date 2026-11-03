@@ -872,3 +872,48 @@ test('Nature Spirit native item use requires held items and ghostspeak, includin
   await nextLine(f); assert.equal(quest.getStage(player), 25);
   assert.equal(inventory.getAmount(JOURNAL), 1, 'an untranslated conversation cannot take the diary');
 });
+
+for (const studied of [false, true]) {
+  test(`Fairytale II native certificate Use reaches its ${studied ? 'studied' : 'unstudied'} Godfather dialogue`, async t => {
+    const f = fixture(t), { player } = f;
+    const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'fairytale_ii_cure_a_queen');
+    const stage = studied ? 30 : 20, certificate = core.ItemIdentifiers.NUFFS_CERTIFICATE;
+    quest.setStage(player, stage);
+    player.setAttribute('quest.fairytale-ii-cure-a-queen:certificate-studied', studied ? 1 : 0);
+    core.RegionManager.init(); core.RegionManager.loadMapFiles(3222, 3218);
+    player.setLocation(new core.Location(3222, 3218)); player.needsPlacement = false;
+    const npc = PM.spawnNpc({ id: core.NpcIdentifiers.FAIRY_GODFATHER, x: 3223, y: 3218, z: 0,
+      owner: player, ownerOnly: true, wanderRadius: 0 });
+    t.after(() => PM.removeNpc(npc));
+    const inventory = player.getInventory(); inventory.add(new core.Item(certificate));
+    const packet = { type: 'item_on_npc', targetIndex: npc.getIndex(), itemId: certificate,
+      slot: inventory.getSlotForItemId(certificate), widgetId: 149 << 16 };
+    const use = async () => {
+      await f.connection.dispatch([packet]); f.connection.processTurnPackets();
+      for (let tick = 0; tick < 8; tick++) {
+        core.TaskManager.processWalkTo(player.getIndex()); player.getMovementQueue().process();
+      }
+    };
+    await use();
+    assert.ok(player.getDialogueManager().getCurrent(), 'native certificate Use opens its canonical conversation');
+    player.closeInterruptibleInterfaces(); await nextLine(f);
+    assert.equal(player.getDialogueManager().getCurrent(), undefined, 'stale Continue cannot resume the cancelled use');
+    await use();
+    const lines = [];
+    for (let n = 0; n < 8 && player.getDialogueManager().getCurrent(); n++) {
+      lines.push(player.getDialogueManager().getCurrent().getText().replace(/\s+/g, ' '));
+      await nextLine(f);
+    }
+    assert.deepEqual(lines, studied ? [
+      'Do you know what these strange marks mean?',
+      'For why you show-a me dat? Eez very nice to see yous learning to draw! Bravo!',
+    ] : ['For why you show-a me dat? I-a busy fairy! I donn-a have time for nonsense!']);
+    assert.equal(player.getDialogueManager().getCurrent(), undefined);
+    assert.equal(inventory.getAmount(certificate), 1, 'showing the certificate does not consume it');
+    assert.equal(quest.getStage(player), stage);
+    assert.equal(player.getAttribute('quest.fairytale-ii-cure-a-queen:certificate-studied'), studied ? 1 : 0);
+    inventory.deleteNumber(certificate, 1);
+    await use();
+    assert.equal(player.getDialogueManager().getCurrent(), undefined, 'native Use without the certificate cannot start a conversation');
+  });
+}

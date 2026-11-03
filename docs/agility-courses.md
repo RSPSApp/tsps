@@ -364,6 +364,15 @@ course's `marks` block:
   their span and jump (darts: walk) them over the whole of it. The darts are in the three
   corridors that join two darts dispensers, not on the dispensers. Blades use their own chart
   (153/255) and darts 131/255 (Wiki); nothing fails at 99.
+- **Saw blades:** the three pairs of floor decorations 3568/3569 stand for three ticks, then
+  animated scenery 3567 replaces them for four ticks, on one shared seven-tick clock. The native
+  scenery owns sequence 1103 and blocks both tiles. On the transition to 3567, an occupant is
+  pushed out from their half of the pair with 846 (delay 30, exact move 30–56); damage is
+  `floor(currentHP * 5 / 100) + 2` the next tick. The saw message and sounds 1386/1393 are captured;
+  cycle sound 1386 reaches five tiles. This obstacle gives zero XP, as the Wiki specifies.
+- **Spinning-blade animation:** 3580 has no default sequence. Each attempted crossing sends 1107
+  to nearby players one tick after the 1114/1115 launch. Its 24-cycle sequence plays once:
+  `frameStep=-1` ends it despite the default `maxLoops=99`.
 - **Tags:** ticket 29480 (the 2024 ticket; 2996 is the discontinued one) and a voucher, after the
   lap count line, with the ticket's item box and jingle 71. The first tag is the Karamja medium
   task; the elite Karamja diary doubles a tag 1 time in 10. Karamja gloves 2-4 add 10% to obstacle
@@ -375,10 +384,19 @@ course's `marks` block:
   texts. The old-or-new shop question needs both tickets. Discontinued tickets (2996) used on her
   become vouchers 1:1 (the Wiki gives no rate). The old Ticket Exchange is the shops.json one, at
   its item values and without its tiered XP.
-- **Not done:** reverting the Agility Arena graceful at Jackie; broken-plank falls and the climbing ropes back up; the saw
-  blades; fail rates for the clickable obstacles (the Wiki has no charts); the re-entry and
+- **Not done:** reverting the Agility Arena graceful at Jackie; broken-plank falls and the climbing ropes back up;
+  fail rates for the clickable obstacles (the Wiki has no charts); the re-entry and
   world-hop locks. The north ledge's and west hand holds' animations are mirrored from the
   captured sides.
+
+Blade timing is from [rsprox 1102](https://rsprox.net/database/1102), corroborated by rev 227 captures
+1735, 1738 and 4308. In 1102, rebuild 350,1198 at tick 14068 gives scene base 2752,9536; enclosed
+zone offsets are tiles. At 2788,9579, ticks 14353/14356/14360 show decoration → animated scenery →
+decoration; the player occupies 2788 at 14355, is pushed to 2787 at 14356 and takes four damage at 14357.
+These are Leagues recordings: the unrelated Leagues VI transmutation spotanim 3577 is excluded.
+The uncaptured second north/south pair uses the same cache geometry and rotation as the captured
+one. Earlier occupancy that ended before the transition is not latched. No normal-world visual
+recording was available, and the absolute phase of the cycle is recording-relative.
 
 ## Courses not built
 

@@ -77,6 +77,37 @@ test("native Bloom plants keep their grown base model after growth ends, with an
     }
 });
 
+test("native Brimhaven blades bake and expire once; their default maxLoops99 does not make a loc loop", () => {
+    const { info, cache } = createCacheVm();
+    const factory = getCacheLoaderFactory(info, cache);
+    const loader = new LocModelLoader(factory.getLocTypeLoader(), factory.getModelLoader(), factory.getTextureLoader(),
+        factory.getSeqTypeLoader(), factory.getSeqFrameLoader(), factory.getSkeletalSeqLoader());
+    assert.equal(loader.locTypeLoader.load(3567).seqId, 1103, "the changing scenery owns the saw animation");
+    assert.equal(loader.locTypeLoader.load(3580).seqId, -1, "the spinning blade needs a server cue");
+    for (const [id, seqId] of [[3567, 1103], [3580, 1107]]) {
+        const type = loader.locTypeLoader.load(id), seq = loader.seqTypeLoader.load(seqId);
+        assert.equal(type.ambientSoundId, -1); assert.ok(!type.ambientSoundIds?.length);
+        assert.ok(!seq.frameSounds?.size, "explicit saw audio does not duplicate cache-owned sounds");
+        assert.equal(seq.frameStep, -1); assert.equal(seq.maxLoops, 99);
+        const scene = { levels: 1, isInside: () => false, tileHeights: [Array.from({length: 6}, () => new Int32Array(6))],
+            tiles: [Array.from({length: 6}, () => Array(6))] };
+        let count = 0;
+        const buffer = { addModelAnimFrame: () => newDrawRange(count++ * 3, 3) };
+        const [group] = [...addLocEntities(false, loader, {} as any, scene as any, [], [], buffer as any,
+            [{entity: {id, type: 10, rotation: 0, tileX: 1, tileY: 1, level: 0, seqId}, level: 0}] as any, false)];
+        assert.ok(group?.anim.frames.length > 1, `${id} has native animated geometry`);
+        const animated = new LocAnimated(0, 0, 0, 0, -1, -1, -1, -1, group.anim, seq, 0, false, id, 1, 1, 0, 0);
+        const duration = seq.frameLengths.reduce((a: number, b: number) => a + b, 0);
+        const batches = geometry(), updater = new LocAnimationUpdater();
+        updater.update([animated], batches, loader.seqFrameLoader, duration - 1);
+        assert.ok(animated.seqType, "the animation remains through its final held frame");
+        updater.update([animated], batches, loader.seqFrameLoader, duration + 1);
+        assert.equal(animated.seqType, undefined, "one play ends despite maxLoops99");
+        assert.deepEqual(batches.drawCall!.drawRanges[0].slice(), group.anim.frames[animated.drawFrame()].slice(),
+            "expiry reaches the submitted base geometry");
+    }
+});
+
 test("WebGL shares opaque/alpha/full/far poses across 240 FPS, HD and sunken passes", () => {
     const animated = loc();
     const batches = geometry();

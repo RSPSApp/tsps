@@ -21,6 +21,87 @@ const BLADES_HIT_SOUND = 1376;
 const DARTS_HIT_SOUND = 1382;
 /** The dodge: sound 1378, then anim 1110 (delay 70) and five ticks' wait (rsprox 1735, 1738). */
 const DART_DODGE = { SOUND: 1378, ANIM: 1110, DELAY: 70, HOLD: 5 };
+/** rsprox 1102/1735/1738/4308: three decoration ticks, then four of solid 3567 (cache seq 1103). */
+const SAW = { FIRST: 3568, SECOND: 3569, ANIMATED: 3567, PERIOD: 7, START: 3, SOUND: 1386, HIT_SOUND: 1393, ANIM: 846 };
+const SAW_PAIRS = [
+  { x: 2761, y: 9584, dx: 0, dy: 1, face: 2 },
+  { x: 2783, y: 9551, dx: 0, dy: 1, face: 2 },
+  { x: 2788, y: 9579, dx: 1, dy: 0, face: 3 },
+];
+const SAW_MESSAGE = "You were hit by the saw blade!";
+const SPINNING_BLADE_ANIM = 1107;
+let sawPairs = [];
+
+function setSawRaised(pair, raised) {
+  if (pair.raised === raised) return;
+  const { ObjectManager } = Shared.core();
+  if (raised) {
+    ObjectManager.deregister(pair.first, true);
+    ObjectManager.deregister(pair.second, true);
+    ObjectManager.register(pair.animated, true);
+  } else {
+    ObjectManager.deregister(pair.animated, true);
+    ObjectManager.register(pair.first, true);
+    ObjectManager.register(pair.second, true);
+  }
+  pair.raised = raised;
+}
+
+function startBlades() {
+  stopBlades();
+  const { RegionManager, MapObjects, GameObject, Location } = Shared.core();
+  for (const pair of SAW_PAIRS) {
+    RegionManager.loadMapFiles(pair.x, pair.y, false);
+    const first = MapObjects.get(SAW.FIRST, new Location(pair.x, pair.y, Shared.ARENA_PLANE), null);
+    const second = MapObjects.get(SAW.SECOND, new Location(pair.x + pair.dx, pair.y + pair.dy, Shared.ARENA_PLANE), null);
+    if (!first || !second) continue;
+    const state = { ...pair, first, second, raised: false,
+      animated: new GameObject(SAW.ANIMATED, first.getLocation().clone(), 10, pair.face, null) };
+    sawPairs.push(state);
+    setSawRaised(state, Shared.cycle.tick % SAW.PERIOD >= SAW.START);
+  }
+}
+
+function stopBlades() {
+  for (const pair of sawPairs) setSawRaised(pair, false);
+  sawPairs = [];
+}
+
+function sawDamage({ player }) {
+  if (Shared.isInArena(player)) Shared.hit(player, Shared.trapDamage(player.getHitpoints()));
+}
+
+/** The world task precedes player movement: inspect the last pre-transition tile, without a latch. */
+function tickBlades() {
+  const phase = Shared.cycle.tick % SAW.PERIOD;
+  if (phase !== 0 && phase !== SAW.START) return;
+  for (const pair of sawPairs) setSawRaised(pair, phase === SAW.START);
+  if (phase !== SAW.START) return;
+  for (const player of Shared.sessions.keys()) {
+    if (!player.isRegistered() || !Shared.isInArena(player) || player.getPrivateArea()) continue;
+    const at = player.getLocation();
+    for (const pair of sawPairs) {
+      // rsprox 1102: synth 1386 at distances 1–5, absent at 6–17. Neither loc nor seq owns a sound.
+      if (Math.max(Math.abs(at.getX() - pair.x), Math.abs(at.getY() - pair.y)) <= 5) {
+        player.getPacketSender().sendSoundEffect(SAW.SOUND, 1, 0);
+      }
+      const first = at.equals(pair.first.getLocation());
+      if (!first && !at.equals(pair.second.getLocation())) continue;
+      if (player.getHitpoints() <= 0 || ObstacleRunner.isBusy(player)) continue;
+      const offset = first ? -1 : 2;
+      ObstacleRunner.run({ player }, [
+        { msg: { spam: SAW_MESSAGE } }, { sound: SAW.HIT_SOUND },
+        { move: [pair.x + pair.dx * offset, pair.y + pair.dy * offset, Shared.ARENA_PLANE],
+          anim: SAW.ANIM, delay: 30, speed: [30, 56], ticks: 1 },
+        { run: sawDamage },
+      ], { keepAnimation: true });
+    }
+  }
+}
+
+function animateSpinningBlade({ object }) {
+  object.performAnimation(new (Shared.core().Animation)(SPINNING_BLADE_ANIM));
+}
 
 function createArea() {
   const { Area, Boundary } = Shared.core();
@@ -121,6 +202,7 @@ function trapSteps(player, span, outcome, dir) {
   if (outcome === "fail" && span.kind === "SPINNING_BLADES") {
     steps.push(
       { move: [...back, z], anim: KNOCKBACK.ANIM, delay: KNOCKBACK.BLADES_DELAY, speed: KNOCKBACK.BLADES_SPEED, ticks: 1 },
+      { run: animateSpinningBlade },
       { msg: { spam: Shared.BLADES_FAIL_MESSAGE } },
       { sound: BLADES_HIT_SOUND },
       { wait: 1 },
@@ -139,6 +221,7 @@ function trapSteps(player, span, outcome, dir) {
     // XP lands three ticks after the jump (rsprox 4308 2177 -> 2180).
     steps.push(
       { move: [...past, z], anim: TRAP_JUMP.ANIM, delay: TRAP_JUMP.DELAY, speed: TRAP_JUMP.SPEED, ticks: 1 },
+      { run: animateSpinningBlade },
       { sound: BLADES_AFTER_SOUND, delay: 30 },
       { wait: 2 },
     );
@@ -178,7 +261,12 @@ function stepTrap(player, span, previous = null) {
   const outcome = rollTrap(kind, level) ? "pass" : "fail";
   const at = player.getLocation();
   const dir = heading(span, { x: at.getX(), y: at.getY() }, previous);
-  const context = { player, core: Shared.core(), pos: { x: at.getX(), y: at.getY(), z: at.getZ() } };
+  const core = Shared.core();
+  const context = { player, core, pos: { x: at.getX(), y: at.getY(), z: at.getZ() } };
+  if (span.object) {
+    const [x, y, face] = span.object;
+    context.object = new core.GameObject(Shared.OBJECTS.SPINNING_BLADES, new core.Location(x, y, Shared.ARENA_PLANE), 10, face, null);
+  }
   ObstacleRunner.run(context, trapSteps(player, span, outcome, dir), {
     onFinish: (completed) => {
       if (completed && outcome === "pass" && pays) Shared.addObstacleXp(player, kind);
@@ -210,3 +298,6 @@ module.exports.stepTrap = stepTrap;
 module.exports.trapSteps = trapSteps;
 module.exports.heading = heading;
 module.exports.rollTrap = rollTrap;
+module.exports.startBlades = startBlades;
+module.exports.stopBlades = stopBlades;
+module.exports.tickBlades = tickBlades;

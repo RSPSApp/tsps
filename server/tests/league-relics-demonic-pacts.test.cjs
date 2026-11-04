@@ -1179,13 +1179,28 @@ test("Evil Eye and Map of Alacrity: the data's areas are the items' submenus, ev
     }
   }
   for (const destination of ALACRITY_DATA.areas.flatMap((entry) => entry.destinations)) {
-    const shortcut = SHORTCUTS.find((entry) => entry.name === destination.shortcut);
-    assert.ok(shortcut, `${destination.name}: the server's ${destination.shortcut}`);
-    assert.equal(shortcut.level, destination.level, `${destination.name}: the shortcut's own level`);
+    // A name can cover several entries (the Slayer Tower's chains, medium and advanced): one has the level.
+    const named = SHORTCUTS.filter((entry) => entry.name === destination.shortcut);
+    assert.ok(named.length > 0, `${destination.name}: the server's ${destination.shortcut}`);
+    assert.ok(named.some((entry) => entry.level === destination.level), `${destination.name}: the shortcut's own level`);
   }
   const relics = Common.catalog(DP).tiers[2].relics;
   assert.equal(relics[1].key, Common.data.effects.evilEye.key);
   assert.equal(relics[2].key, Common.data.effects.mapOfAlacrity.key);
+});
+
+test("Map of Alacrity: every destination is open floor to walk from, landed on as given (the data's own check)", () => {
+  core.RegionManager.init();
+  const Teleports = require("../plugins/modes/leaguerelics/Teleports.LeagueRelics");
+  for (const destination of ALACRITY_DATA.areas.flatMap((entry) => entry.destinations)) {
+    const tile = new Location(destination.x, destination.y, destination.z ?? 0);
+    core.RegionManager.loadMapFiles(tile.getX(), tile.getY());
+    const landed = Teleports.landing(tile);
+    assert.ok(landed.equals(tile), `${destination.name}: lands on its own tile, not ${landed.getX()},${landed.getY()}`);
+    assert.ok(Teleports.reach(tile, 30) >= 30, `${destination.name}: 30 tiles walkable from it`);
+  }
+  const picked = ALACRITY_DATA.areas.flatMap((entry) => entry.destinations).filter((destination) => destination.note);
+  assert.ok(picked.length >= 15, "the explicit picks keep their note");
 });
 
 test("Evil Eye: Teleport's area submenu, carried or worn, lists its destinations; a pick casts the eye's recorded teleport to the tile, and Last-destination goes back", () => {

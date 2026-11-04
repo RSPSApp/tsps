@@ -2658,3 +2658,29 @@ test('a minigame PvP bot without wilderness roam bounds is left to its own contr
   assert.equal(trackStuckArea(entry, 1000 + STUCK_AREA_MS + 1), null,
     'the waiting area is not a stuck wilderness square');
 });
+
+// Minigames intentionally use PvP entries without a roaming assignment, brain or kit.
+test('recovery watchdogs leave independently managed PvP waiters untouched', () => {
+  const { BotBehaviorTask } = require('../plugins/bots/behaviours/task/BehaviorTask.PlayerBots');
+  let gearChecks = 0, moves = 0;
+  const player = {
+    ...fakePlayer('waiting', 3141, 3641),
+    getHitpoints: () => 99, isDyingReturn: () => false,
+    getCombat: () => ({ getTarget: () => null, getAttacker: () => null }),
+    getEquipment: () => { gearChecks++; return { getItems: () => [] }; },
+    moveTo: () => { moves++; },
+  };
+  const state = { mode: 'pvp', pvp: {}, roaming: {}, autonomy: { allowedAutonomousModes: ['pvp'] } };
+  const entry = { player, state, brain: null };
+  const task = new BotBehaviorTask([entry], 1, { api: {
+    getWorld: () => ({}),
+    getRegionManager: () => ({ blocked: () => false, isWater: () => false }),
+    getCombatFactory: () => ({}), getAreaManager: () => ({}),
+    getServerPerf: () => ({ measurePhase: (_, fn) => fn() }),
+  } });
+  task.processEntry(entry, 0, 1000);
+  task.processEntry(entry, 0, 17000);
+  assert.equal(gearChecks, 0, 'an intentional empty kit must not be inspected or replaced');
+  assert.equal(moves, 0);
+  assert.equal(entry.brain, null);
+});

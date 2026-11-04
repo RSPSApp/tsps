@@ -858,7 +858,7 @@ class BotBehaviorTask extends Task {
       return false;
     }
     // Instances, teleports and live fights belong to their own controllers (LMS, BH).
-    if (player.getPrivateArea?.() != null || isTeleblocked(player) || this.hasCombatLinks(player)) {
+    if (player.getPrivateArea?.() != null || isTeleblocked(player) || this.hasCombatLinks(player) || player.getCombat?.()?.getHitQueue?.()?.hasPendingWork?.()) {
       return false;
     }
     const watch = entry.stuckWatch ?? (entry.stuckWatch = createStuckWatch(nowMs));
@@ -951,7 +951,7 @@ class BotBehaviorTask extends Task {
     if ((player.getHitpoints?.() ?? 0) <= 0 || player.isDyingReturn?.() === true) {
       return false;
     }
-    if (player.getPrivateArea?.() != null || isTeleblocked(player) || this.hasCombatLinks(player)) {
+    if (player.getPrivateArea?.() != null || isTeleblocked(player) || this.hasCombatLinks(player) || player.getCombat?.()?.getHitQueue?.()?.hasPendingWork?.()) {
       return false;
     }
     const watch = entry.stuckWatch ?? (entry.stuckWatch = createStuckWatch(nowMs));

@@ -64,6 +64,23 @@ function putOnTable(event) {
     return;
   }
 
+  // Placing on a table removes the item from the inventory just like dropping it, so the shared
+  // drop policy runs first: a plugin can refuse the removal (bonds), consume the item itself
+  // (Wintertodt supplies, gnomeballs) or apply its drop-side changes (barrows durability).
+  const policy = {
+    player,
+    interfaceId: core.Inventory.INTERFACE_ID,
+    item: current,
+    itemId,
+    slot: itemSlot,
+    dropToGround: true,
+    handled: false,
+  };
+  core.PluginManager.emitItemDropPolicy(policy);
+  if (policy.handled || policy.dropToGround === false) return;
+  // A policy handler may also have taken the item itself; never place a clone of what it removed.
+  if (player.getInventory().getItems()[itemSlot] !== current) return;
+
   const placed = current.clone().setAmount(1);
   player.getInventory().deleteAtSlot(itemSlot, 1);
   core.ItemOnGroundManager.registerLocation(player, placed, location, player.getPrivateArea(), {

@@ -25,12 +25,15 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const TABLE_ID = 593;
 const TABLE_LOCATION = new Location(3222, 3218, 0);
 const WHIP = 4151;
+const TRADEABLE_BOND = 13190;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   ObjectDefinition.init();
   // The real API registers the plugin's fallback hook on the native item-on-object event.
   require("../plugins/world/TableItems.plugin").register(PluginManager.createApi("TableItems"));
+  // The bond's protection is a registered item-drop policy, so table placement must honour it.
+  require("../plugins/items/Bonds.plugin").register(PluginManager.createApi("Bonds"));
 });
 
 /** A real cache table in a private area, as the producer path sees it. */
@@ -151,6 +154,25 @@ test("an item that becomes untradeable while walking is not placed", () => {
 
     assert.equal(inventory.getItems()[0], whip, "the item stays carried");
     assert.equal(newGroundItems(since).length, 0);
+  } finally {
+    World.getItems().splice(since);
+  }
+});
+
+test("a bond's registered drop policy stops table placement", () => {
+  const since = World.getItems().length;
+  try {
+    const fixture = tableFixture();
+    const bond = new Item(TRADEABLE_BOND, 1);
+    assert.equal(bond.isTradeable(), true, "the cache bond is tradeable");
+    assert.equal(bond.isDropable(), true, "the cache bond passes the plain drop flag");
+    const { inventory, messages, arrive } = useOnTable({ area: fixture.area, items: [bond] });
+
+    arrive();
+
+    assert.equal(inventory.getItems()[0], bond, "the bond stays carried");
+    assert.equal(newGroundItems(since).length, 0, "no tradeable bond goes on the table");
+    assert.deepEqual(messages, ["This object cannot be dropped or destroyed."]);
   } finally {
     World.getItems().splice(since);
   }

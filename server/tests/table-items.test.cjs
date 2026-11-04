@@ -22,9 +22,10 @@ class FakeItem {
   setAmount(amount) { this.amount = amount; return this; }
 }
 
-function setup({ items = [], groundItems = [] } = {}) {
+function setup({ items = [], groundItems = [], dropPolicies = [] } = {}) {
   const placed = [];
   const messages = [];
+  const policies = [];
   const inventory = { items, deleted: [] };
   const player = {
     getPrivateArea: () => "area",
@@ -42,13 +43,21 @@ function setup({ items = [], groundItems = [] } = {}) {
   };
   const core = {
     Item: FakeItem,
+    Inventory: { INTERFACE_ID: 3214 },
     Location: { isSameTile: (a, b) => a.x === b.x && a.y === b.y && a.z === b.z },
     World: { getItems: () => groundItems },
     ItemOnGroundManager: { registerLocation: (...args) => placed.push(args) },
+    PluginManager: {
+      emitItemDropPolicy: (event) => {
+        policies.push(event);
+        for (const handler of dropPolicies) handler(event);
+        return event.handled === true;
+      },
+    },
   };
   const hooks = [];
   TableItems.register({ core, onItemOnObject: (handler, filter) => hooks.push({ handler, filter }) });
-  return { player, placed, messages, groundItems, hooks, inventory };
+  return { player, placed, messages, groundItems, hooks, inventory, policies };
 }
 
 function table(name = "Table") {
@@ -168,4 +177,90 @@ test("a stack in another private area does not block the table", () => {
 
   assert.equal(useOn(player, table(), item).handled, true);
   assert.equal(placed.length, 1);
+});
+
+test("runs the shared drop policy with the exact item before placing", () => {
+  const item = new FakeItem(995, 5);
+  const { player, placed, hooks, policies } = setup({ items: [item] });
+  player.__handler = hooks[0].handler;
+
+  useOn(player, table(), item);
+
+  assert.equal(policies.length, 1);
+  const [policy] = policies;
+  assert.equal(policy.player, player);
+  assert.equal(policy.item, item);
+  assert.equal(policy.itemId, 995);
+  assert.equal(policy.slot, 0);
+  assert.equal(policy.interfaceId, 3214);
+  assert.equal(policy.dropToGround, true);
+  assert.equal(placed.length, 1);
+});
+
+test("a drop policy that handles the item stops it being placed", () => {
+  const item = new FakeItem(995);
+  const { player, placed, hooks, messages, inventory } = setup({
+    items: [item],
+    dropPolicies: [(policy) => {
+      policy.player.sendMessage("This object cannot be dropped or destroyed.");
+      policy.handled = true;
+    }],
+  });
+  player.__handler = hooks[0].handler;
+
+  const event = useOn(player, table(), item);
+
+  assert.equal(event.handled, true);
+  assert.equal(inventory.deleted.length, 0, "the item stays carried");
+  assert.equal(placed.length, 0, "nothing goes on the table");
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0], "This object cannot be dropped or destroyed.");
+});
+
+test("a drop policy that refuses the ground drop stops placement", () => {
+  const item = new FakeItem(995);
+  const { player, placed, hooks, inventory } = setup({
+    items: [item],
+    dropPolicies: [(policy) => {
+      policy.dropToGround = false;
+    }],
+  });
+  player.__handler = hooks[0].handler;
+
+  useOn(player, table(), item);
+
+  assert.equal(inventory.deleted.length, 0);
+  assert.equal(placed.length, 0);
+});
+
+test("a drop policy can change the item that is placed", () => {
+  const item = new FakeItem(995);
+  const { player, placed, hooks } = setup({
+    items: [item],
+    dropPolicies: [(policy) => {
+      policy.item.tradeable = false;
+    }],
+  });
+  player.__handler = hooks[0].handler;
+
+  useOn(player, table(), item);
+
+  assert.equal(placed.length, 1);
+  assert.equal(placed[0][1].isTradeable(), false);
+});
+
+test("a drop policy that takes the item without handling it places nothing", () => {
+  const item = new FakeItem(995);
+  const { player, placed, hooks, inventory } = setup({
+    items: [item],
+    dropPolicies: [(policy) => {
+      policy.player.getInventory().deleteAtSlot(policy.slot, 1);
+    }],
+  });
+  player.__handler = hooks[0].handler;
+
+  useOn(player, table(), item);
+
+  assert.equal(inventory.deleted.length, 1, "only the policy removed the item");
+  assert.equal(placed.length, 0, "no clone of the removed item is placed");
 });

@@ -1270,12 +1270,14 @@ module.exports = function registerWatchtowerQuest(api) {
     const end = entering ? [2505, 3087] : [2511, 3096];
     const roped = new api.core.GameObject(ObjectIdentifiers.ROPESWING_10, at.clone(), object.getType(), object.getFace(), player.getPrivateArea());
     let task;
+    let ropeConsumed = false;
     const steps = [{ walk: [start], arrive: true }, { faceDir: entering ? "east" : "north" }];
     if (entering) steps.push(
       { msg: "You tie the rope to the tree..." }, { anim: ROPE_THROW_ANIMATION }, { wait: 1 },
       { run: () => {
         if (!held(player, ItemIdentifiers.ROPE)) { task.stop(); return; }
         remove(player, ItemIdentifiers.ROPE);
+        ropeConsumed = true;
         player.getPacketSender().sendObject(roped);
       } },
       { wait: 1 }
@@ -1287,7 +1289,15 @@ module.exports = function registerWatchtowerQuest(api) {
       { wait: 2 }, { tele: end }
     );
     task = ObstacleRunner.run({ player, object: entering ? roped : object }, steps, {
-      onFinish: () => { if (entering) player.getPacketSender().sendObject(object); },
+      onFinish: (completed) => {
+        if (!entering) return;
+        // Logout fast-forwards movement without executing the delayed payment step.
+        if (completed && !ropeConsumed) {
+          if (held(player, ItemIdentifiers.ROPE)) remove(player, ItemIdentifiers.ROPE);
+          else player.moveTo(new Location(start[0], start[1], 0));
+        }
+        player.getPacketSender().sendObject(object);
+      },
     });
   }
 

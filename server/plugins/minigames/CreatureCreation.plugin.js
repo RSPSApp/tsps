@@ -211,6 +211,13 @@ function onServerShutdown(api) { for (const player of [...ownedNpcs.keys()]) cle
 
 function onDropRoll(api, core, event) {
   if (!activityNpcs.has(event.npc) || ownerByNpc.get(event.npc) !== event.player) return;
+  if (event.npcId === 3603 && altarByNpc.get(event.npc) === "swordchick") {
+    api.emitCustomEvent("diary:task", {
+      player: event.player,
+      diary: "ardougne",
+      task: "kill-a-swordchick-in-the-tower-of-life",
+    });
+  }
   const easy = { player: event.player, diary: "ardougne", tier: "easy", complete: false };
   const medium = { player: event.player, diary: "ardougne", tier: "medium", complete: false };
   api.emitCustomEvent("diary:is-complete", easy);

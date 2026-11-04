@@ -6,6 +6,8 @@ const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
 const { ObjectIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 
 const PRAY_AT_ALTAR_ANIMATION = new Animation(645);
+const EAST_ARDOUGNE_CHURCH_ALTAR = [2617, 3309, 0];
+const ARDOUGNE_ALTAR_TASK = "use-the-altar-in-east-ardougne-s-church";
 
 // The easy Wilderness Diary's "Pray at the Chaos Altar in Western Wilderness.": the Chaos Temple
 // (church) altar at level 38 (OSRS Wiki: Chaos Temple), not the Wilderness hut's.
@@ -72,8 +74,27 @@ function darkAltar({ player }) {
   return handleOccultAltar(player, player.getSpellbook() === MagicSpellbook.ARCEUUS ? MagicSpellbook.NORMAL : MagicSpellbook.ARCEUUS);
 }
 
-function prayerAltar({ player }) {
-  return handlePrayerAltar(player);
+function prayerAltar({ player, object }) {
+  if (player.getHitpoints() <= 0 || player.isDyingReturn?.() === true) return false;
+
+  const skillManager = player.getSkillManager();
+  const prayerBefore = skillManager.getCurrentLevel(Skill.PRAYER);
+  const handled = handlePrayerAltar(player);
+
+  if (object && skillManager.getCurrentLevel(Skill.PRAYER) > prayerBefore && object.getId() === ObjectIds.ALTAR) {
+    const location = object.getLocation();
+    const [x, y, z] = EAST_ARDOUGNE_CHURCH_ALTAR;
+    if (location.getX() === x && location.getY() === y && location.getZ() === z
+      && player.getPrivateArea() === null) {
+      api.emitCustomEvent("diary:task", {
+        player,
+        diary: "ardougne",
+        task: ARDOUGNE_ALTAR_TASK,
+      });
+    }
+  }
+
+  return handled;
 }
 
 /**
@@ -81,12 +102,14 @@ function prayerAltar({ player }) {
  * messages). The Yanille Agility dungeon's trapdoor altar is left to fall through.
  */
 function prayAtChaosAltar({ player, objectId, location }) {
+  if (player.getHitpoints?.() <= 0 || player.isDyingReturn?.() === true) return false;
   if (objectId === core.ObjectIdentifiers.CHAOS_ALTAR_3) return false;
+  const handled = handlePrayerAltar(player);
   const west = WESTERN_CHAOS_ALTAR;
-  if (location?.x === west.x && location.y === west.y && location.z === west.z) {
+  if (handled && location?.x === west.x && location?.y === west.y && location?.z === west.z) {
     api.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "pray-at-the-chaos-altar-in-western-wilderness" });
   }
-  return handlePrayerAltar(player);
+  return handled;
 }
 
 /** Shrines restore Prayer as altars do; the Woodcutting Guild's full-Prayer line, as captured. */
@@ -119,15 +142,15 @@ module.exports = {
   name: "Altars",
   register: (pluginApi) => {
     api = pluginApi;
-    core = api.core;
-    api.onObjectInteraction("Ancient Altar", { Venerate: ancientAltar });
-    api.onObjectInteraction("Lunar Altar", { Venerate: lunarAltar });
-    api.onObjectInteraction("Dark Altar", { Venerate: darkAltar });
-    api.onObjectInteraction("Altar", { "Pray-at": prayerAltar, Pray: prayerAltar });
-    api.onObjectInteraction("Chaos altar", { "Pray-at": prayAtChaosAltar });
-    api.onObjectInteraction("Shrine", { "Pray-at": prayAtShrine });
-    api.onObjectInteraction("Shrine of Ralos", { Bask: prayerAltar });
-    api.onObjectInteraction("Altar of the Occult", {
+    core = pluginApi.core;
+    pluginApi.onObjectInteraction("Ancient Altar", { Venerate: ancientAltar });
+    pluginApi.onObjectInteraction("Lunar Altar", { Venerate: lunarAltar });
+    pluginApi.onObjectInteraction("Dark Altar", { Venerate: darkAltar });
+    pluginApi.onObjectInteraction("Altar", { "Pray-at": prayerAltar, Pray: prayerAltar });
+    pluginApi.onObjectInteraction("Chaos altar", { "Pray-at": prayAtChaosAltar });
+    pluginApi.onObjectInteraction("Shrine", { "Pray-at": prayAtShrine });
+    pluginApi.onObjectInteraction("Shrine of Ralos", { Bask: prayerAltar });
+    pluginApi.onObjectInteraction("Altar of the Occult", {
       Venerate: venerateOccultAltar,
       Standard: standardSpellbook,
       Ancient: ancientSpellbook,

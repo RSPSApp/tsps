@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
+import { test } from "node:test";
+import { ConfigManager } from "../runelite/client/config/ConfigManager";
+import { EventBus } from "../runelite/client/eventbus/EventBus";
+import { PluginManager } from "../runelite/client/plugins/PluginManager";
+import { CLIENT_TOKEN } from "../runelite/client/plugins/PluginInjector";
 import { AntiAliasingMode, GpuConfig } from "../game/plugins/gpu/GpuConfig";
-import { resolveGpuSettings } from "../game/plugins/gpu/GpuPlugin";
+import { GpuPlugin, resolveGpuSettings } from "../game/plugins/gpu/GpuPlugin";
 import { createScenePipeline, WEBGPU_MSAA_SAMPLES, withSampleCount } from "../render/webgpu/multisample";
 
 const settings = (antiAliasingMode: string, extra: Partial<Parameters<typeof resolveGpuSettings>[0]> = {}) =>
@@ -52,3 +57,23 @@ assert.equal(withSampleCount(base, WEBGPU_MSAA_SAMPLES), twin, "the twin is reus
 assert.equal(created.length, 2);
 
 console.log("gpu-plugin tests passed");
+
+
+test("brightness applies through the bound client, including settings changed while disabled", async () => {
+    const events = new EventBus();
+    const config = new ConfigManager(events);
+    const manager = new PluginManager(events, config);
+    const applied: number[] = [];
+    manager.getInjector().provide(CLIENT_TOKEN, { applyScreenBrightness: (value: number) => applied.push(value) });
+    manager.loadCorePlugins([GpuPlugin]);
+    await manager.setPluginEnabled(GpuPlugin, true);
+    assert.deepEqual(applied, [], "an unset plugin brightness preserves the Settings-tab value");
+    config.setConfigValue(GpuConfig, "brightness", 90);
+    assert.deepEqual(applied, [90], "the event runs after the constructor injector scope ends");
+    await manager.setPluginEnabled(GpuPlugin, false);
+    config.setConfigValue(GpuConfig, "brightness", 20);
+    assert.deepEqual(applied, [90], "disabled plugins do not receive config events");
+    await manager.setPluginEnabled(GpuPlugin, true);
+    assert.deepEqual(applied, [90, 20], "enabling picks up the saved brightness");
+    await manager.setPluginEnabled(GpuPlugin, false);
+});

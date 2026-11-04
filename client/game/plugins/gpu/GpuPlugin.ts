@@ -73,6 +73,7 @@ export class GpuPlugin extends Plugin {
     static config = GpuConfig;
 
     private readonly configManager = inject(ConfigManager);
+    private readonly client = inject<OsrsClient>(CLIENT_TOKEN);
     private current: GpuSettings;
 
     constructor() {
@@ -83,13 +84,16 @@ export class GpuPlugin extends Plugin {
     /** Config events only reach a started plugin, so pick up changes made while it was off. */
     protected override async startUp(): Promise<void> {
         this.current = this.readConfig();
+        if (this.configManager.getConfiguration(GpuConfig.group, "brightness") !== undefined) {
+            this.client.applyScreenBrightness(this.configManager.getConfig(GpuConfig).brightness());
+        }
     }
 
     onConfigChanged(event: ConfigChanged): void {
         if (event.getGroup() !== GpuConfig.group) return;
         this.current = this.readConfig();
         if (event.getKey() === "brightness") {
-            inject<OsrsClient>(CLIENT_TOKEN).applyScreenBrightness(this.configManager.getConfig(GpuConfig).brightness());
+            this.client.applyScreenBrightness(this.configManager.getConfig(GpuConfig).brightness());
         }
     }
 

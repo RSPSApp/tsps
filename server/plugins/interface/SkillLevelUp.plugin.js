@@ -124,6 +124,16 @@ function trackCombatLevel({ player }) {
   player.setAttribute(COMBAT_LEVEL_ATTRIBUTE, player.getSkillManager().getCombatLevel());
 }
 
+/**
+ * Whether the blocking pop-up opens: the world's SkillLevelUp:interruptActions, then content's
+ * answer for this player ("level-up:interrupts" { player, skill, interrupts }, Idle Mode).
+ */
+function interruptsActions(player, skill) {
+  const request = { player, skill, interrupts: pluginApi.getPluginConfig(INTERRUPT_ACTIONS_CONFIG, true) !== false };
+  pluginApi.emitCustomEvent("level-up:interrupts", request);
+  return request.interrupts;
+}
+
 function showLevelUp({ player, skill, oldLevel, newLevel }) {
   const skills = player.getSkillManager();
   const name = skill.getName();
@@ -146,7 +156,7 @@ function showLevelUp({ player, skill, oldLevel, newLevel }) {
   const combatGained = Number.isInteger(previousCombat) && combat > previousCombat;
   if (combatGained) announceCombatLevel(player);
 
-  if (!popupsEnabled(player) || pluginApi.getPluginConfig(INTERRUPT_ACTIONS_CONFIG, true) === false) return;
+  if (!popupsEnabled(player) || !interruptsActions(player, skill)) return;
   if (combatGained && player.getAttribute(COMBAT_POPUP_FROM_ATTRIBUTE) === undefined) {
     player.setAttribute(COMBAT_POPUP_FROM_ATTRIBUTE, previousCombat);
   }

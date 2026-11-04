@@ -42,6 +42,7 @@ For an idle account, Woodcutting, Mining and Fishing (`"skills"` in the data) ne
 | `endlessResources` | Trees and rocks do not deplete. | `woodcutting:deplete-tree`, `mining:deplete-rock` |
 | `fishingSpotsStay` | A fishing spot's random stop is skipped. Spots with their own movement (the minnow platform) still move. | `fishing:spot-stays` (emitted by `Fishing.plugin.js`) |
 | `randomEvents` | `false` keeps random events away from idle accounts. | `random-events:eligibility` |
+| `levelUpPopups` | `false`: an idle skill's level-up pop-up does not hold the gathering until Continue (the message, graphic and sounds stay). | `level-up:interrupts` (emitted by `SkillLevelUp.plugin.js`) |
 
 ## Offline progress
 
@@ -73,11 +74,44 @@ While you were away for 1h 0m, you kept woodcutting:
 | `capHours` | `12` |
 | `efficiency` | `1` |
 
+## Auto-resume
+
+`server/plugins/modes/idle/Auto.IdleMode.js`. The character goes back to work by itself:
+
+- **The target** is the last object or NPC option an idle player clicked (seen through
+  `onBeforeObjectInteraction` / `onBeforeNpcInteraction`) that led to an idle skill's gather
+  within `rememberClickSeconds`: its name, the option, and where the player stood (the anchor).
+  It's saved as `idle-mode:auto-target` `{ skill, kind, name, option, anchor }`, so it survives
+  logging out. Gathering the same kind of thing nearby keeps the anchor; anything else replaces it.
+- **Every `tickInterval` ticks**, for each idle player with a target: when nothing has been
+  gathered for `restartAfterSeconds` (and nothing was tried for `retrySeconds`), the character
+  walks to the nearest object or NPC with that name and option within `searchTiles` of the anchor
+  and uses the option, as the player's click would. Nothing in reach (a rock respawning) waits.
+- **It leaves the player be** while they are busy (an interface open, a teleport), moving, in
+  combat, on another floor, or more than `leashTiles` from the anchor. Walking off to do something
+  else pauses it; coming back resumes it.
+
+```
+::idle auto        what it will resume
+::idle auto off    stop resuming (saved as idle-mode:auto)
+::idle auto on     resume again
+```
+
+| Setting (`"auto"`) | Default |
+| --- | --- |
+| `enabled` | `true` |
+| `tickInterval` | `2` |
+| `restartAfterSeconds` | `12` |
+| `retrySeconds` | `6` |
+| `rememberClickSeconds` | `30` |
+| `searchTiles` | `16` |
+| `leashTiles` | `24` |
+
 ## Roadmap
 
 1. Endless gathering - done.
 2. Offline progress - done.
-3. Auto-activity: pick an activity and the character walks there and works by itself (built on
-   the player bots in `server/plugins/bots/`).
+3. Auto-resume - done. Next: picking an activity from a list and travelling there (built on the
+   player bots' long routes in `server/plugins/bots/`).
 4. Idle progression: points for time played and a shop of upgrades (speed, offline cap, bank).
 5. Idle combat: fighting monsters by itself, with the existing drop tables.

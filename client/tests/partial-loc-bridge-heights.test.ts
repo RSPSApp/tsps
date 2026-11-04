@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
 
+import { interpolateActorHeight } from "../game/scene/BridgeHeightSampler";
 import { SceneBuffer, type SceneModel } from "../render/buffer/SceneBuffer";
 import { addLocEntities } from "../render/loader/SdMapDataLoader";
 import { getSceneLocs } from "../render/loc/SceneLocs";
@@ -49,3 +50,17 @@ for (const m of bridge) {
     assert.equal(heights(m), full.get(key(m)), `loc ${key(m)} keeps its full-build height`);
 }
 console.log(`Partial loc reload: ${bridge.length} Lumbridge bridge locs keep their heights`);
+
+// The first Falador tightrope is a chain of cache loc 269, one 1x1 segment per
+// tile. Its authored centre height is the same bilinear floor that grounds actors.
+const falador = builder.buildScene(3008, 3328, 64, 64, true, LocLoadType.MODELS);
+const rope = getSceneLocs(locTypeLoader, falador, 0, 3).locs.filter((m) =>
+    m.interactId === 269 && m.level === 3 && (m.sceneZ >> 7) === 3343 - 3328
+    && (m.sceneX >> 7) >= 3041 - 3008 && (m.sceneX >> 7) <= 3046 - 3008);
+assert.equal(rope.length, 6, "all six drawn first-rope segments are present");
+for (const m of rope) {
+    const x = m.sceneX >> 7, y = m.sceneZ >> 7, h = falador.tileHeights[3];
+    assert.equal(interpolateActorHeight(-h[x][y], -h[x + 1][y], -h[x][y + 1], -h[x + 1][y + 1], 0.5, 0.5),
+        -m.sceneHeight, `actor stays at the cache rope's height on tile ${x + 3008},${y + 3328}`);
+}
+console.log("Falador first-rope actor grounding matches all six drawn cache segments");

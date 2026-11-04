@@ -132,7 +132,7 @@ import {
 } from "../../game/movement/NpcClientTick";
 import type { TileMarkersPluginConfig } from "../../game/plugins/tilemarkers/types";
 import { computeRoofPlaneLimit } from "../../game/roof/RoofVisibility";
-import { sampleBridgeHeightForWorldTile } from "../../game/scene/BridgeHeightSampler";
+import { sampleActorHeightForWorldTile, sampleBridgeHeightForWorldTile } from "../../game/scene/BridgeHeightSampler";
 import {
     BridgePlaneStrategy,
     resolveBridgePromotedPlane,
@@ -220,7 +220,7 @@ export function updateCameraFollow(host: WebGLOsrsRendererHost, deltaTime?: numb
         host.playerPosUni[0] = playerX;
         host.playerPosUni[1] = playerZ;
         const basePlane = cameraTarget ? cameraTarget.level : pe.getLevel(playerEcsIndex) | 0;
-        const playerHeightSample = sampleBridgeHeightForWorldTile(
+        const playerHeightSample = sampleActorHeightForWorldTile(
             host.mapManager,
             playerX,
             playerZ,

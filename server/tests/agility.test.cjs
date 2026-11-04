@@ -816,6 +816,66 @@ test("Falador's rough wall is climbed facing it (north, across its edge)", () =>
   assert.deepEqual(steps[0], { face: [3036, 3342] });
 });
 
+test("Falador's handhold corner starts outside the house, with the wall path, end and XP unchanged", () => {
+  const falador = COURSES.find((course) => course.key === "falador");
+  const holds = falador.obstacles.find((obstacle) => obstacle.index === 3);
+  assert.equal(holds.object, ObjectIds.HAND_HOLDS_4);
+
+  const player = createPlayer(3050, 3350, 3);
+  const landings = [];
+  const moveTo = player.moveTo;
+  player.moveTo = (location) => {
+    landings.push([location.getX(), location.getY(), location.getZ()]);
+    return moveTo(location);
+  };
+  hooks.events.length = 0;
+  assert.notEqual(operate(player, holds.object, [3050, 3350, 3]), false);
+
+  assert.deepEqual(landings[0], [3051, 3351, 2], "the initial corner lands outside the room");
+  assert.deepEqual(landings.slice(1, 5), [
+    [3051, 3352, 2],
+    [3051, 3353, 2],
+    [3051, 3354, 2],
+    [3051, 3355, 2],
+  ], "all four existing actor holds remain on the outside face");
+  assert.deepEqual(landings.at(-1), [3050, 3357, 3], "the final roof landing is unchanged");
+  assert.deepEqual(tileOf(player), [3050, 3357, 3]);
+
+  assert.equal(player.state.xp, holds.xp, "one obstacle's XP, unchanged");
+  assert.equal(
+    hooks.events.filter((event) => event.name === "agility:obstacle" && event.payload.objectId === holds.object).length,
+    1,
+    "one completion"
+  );
+  assert.equal(player.getAttribute("agility.obstacle") ?? null, null);
+});
+
+test("Falador's diagonal tightrope follows the drawn span instead of the parallel click-anchor line", () => {
+  const falador = COURSES.find((course) => course.key === "falador");
+  const rope = falador.obstacles.find((obstacle) => obstacle.index === 6);
+  const player = createPlayer(3035, 3362, 3);
+  const tiles = [];
+  const setLocation = player.setLocation;
+  player.setLocation = (location) => {
+    tiles.push([location.getX(), location.getY(), location.getZ()]);
+    return setLocation(location);
+  };
+  hooks.events.length = 0;
+  operate(player, rope.object, [3034, 3361, 3]);
+  assert.deepEqual(tiles.slice(0, 2), [[3035, 3362, 3], [3034, 3362, 3]],
+    "keep the roof approach, then step west onto the rope");
+  // Cache loc 11397's visible span runs (3034,3362) -> (3028,3356).
+  for (const [x, y, z] of tiles.slice(1)) {
+    assert.equal(y - x, 328, `(${x},${y}) stays on the drawn diagonal`);
+    assert.equal(z, 3);
+  }
+  assert.deepEqual(tileOf(player), [3027, 3355, 3]);
+  assert.equal(player.state.xp, 61, "one obstacle's unchanged XP");
+  assert.equal(hooks.events.filter((event) => event.name === "agility:obstacle"
+    && event.payload.objectId === rope.object).length, 1);
+  assert.equal(player.getAttribute("agility.obstacle") ?? null, null);
+});
+
 const MARK_OF_GRACE = 11849;
 const MARK_COOLDOWN_ATTRIBUTE = "agility:mark-cooldown-minute";
 

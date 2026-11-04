@@ -228,6 +228,18 @@ fn getHeightInterp(pos: vec2<f32>, plane: u32) -> f32 {
     return f32(max(h0, h1));
 }
 
+// Actors follow native bilinear grounding; terrain-depth correction keeps its rendered floor.
+fn getActorHeightInterp(pos: vec2<f32>, plane: u32) -> f32 {
+    let tilePos = pos / f32(tileSize);
+    let tile = vec2<i32>(floor(tilePos));
+    let offset = fract(tilePos);
+    let row0 = mix(f32(getTileHeight(tile.x, tile.y, plane)),
+        f32(getTileHeight(tile.x + 1, tile.y, plane)), offset.x);
+    let row1 = mix(f32(getTileHeight(tile.x, tile.y + 1, plane)),
+        f32(getTileHeight(tile.x + 1, tile.y + 1, plane)), offset.x);
+    return mix(row0, row1, offset.y);
+}
+
 // fog.glsl
 fn sdRoundedBox(p: vec2<f32>, b: vec2<f32>, r: f32) -> f32 {
     let q = abs(p) - b + r;
@@ -570,7 +582,7 @@ ${info}${pose}
         rotationY(f32(actorRotation) * RS_TO_RADIANS),
     ) + vec4<f32>(info.tilePos.x, 0.0, info.tilePos.y, 0.0);
 
-    localPos.y -= getHeightInterp(info.tilePos, info.plane);
+    localPos.y -= getActorHeightInterp(info.tilePos, info.plane);
     localPos.y ${player ? "+=" : "-="} actorU.u_modelYOffset;${sinks ? `
     let groundedPos = localPos;` : ""}
 

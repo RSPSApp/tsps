@@ -535,6 +535,13 @@ function unmet(player, requirement) {
     pluginApi.emitCustomEvent("diary:is-complete", request);
     if (request.complete === false) return message;
   }
+  if (requirement.slayerTask) {
+    const request = { player, task: null };
+    pluginApi.emitCustomEvent("slayer:current-task", request);
+    const taskName = String(request.task?.name ?? "").toLowerCase();
+    const accepted = [].concat(requirement.slayerTask).some((name) => taskName.includes(String(name).toLowerCase()));
+    if (!accepted) return requirement.slayerTaskMessage ?? "You need an appropriate Slayer task to attempt this.";
+  }
   return null;
 }
 

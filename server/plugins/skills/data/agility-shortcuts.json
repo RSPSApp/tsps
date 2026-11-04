@@ -4007,6 +4007,14 @@
       "name": "Araxxor lair web tunnel (in)",
       "object": 54161,
       "level": 1,
+      "requires": [
+        {
+          "skills": {"slayer": 92},
+          "quest": {"key": "priest_in_peril", "message": "You need to complete Priest in Peril before entering Morytania."},
+          "slayerTask": ["araxyte", "spider"],
+          "slayerTaskMessage": "You need to be assigned an araxyte or spider Slayer task to enter Araxxor's lair."
+        }
+      ],
       "render": "LONG_CRAWL",
       "steps": [
         {"sound":2454},

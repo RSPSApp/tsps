@@ -56,7 +56,7 @@ const ENTRY_KEYS = new Set([
 const FAIL_KEYS = new Set([
   "low", "high", "baseChance", "neverFailLevel", "fromLevel", "xp", "start", "end", "render", "steps", "cross", "hit",
 ]);
-const REQUIREMENT_KEYS = new Set(["method", "skills", "equipped", "items", "quest", "diary", "steps", "cross", "start", "end"]);
+const REQUIREMENT_KEYS = new Set(["method", "skills", "equipped", "items", "quest", "diary", "slayerTask", "slayerTaskMessage", "steps", "cross", "start", "end"]);
 
 function animation(name, where) {
   const id = ANIMATIONS[name];

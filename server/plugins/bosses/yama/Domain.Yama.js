@@ -144,8 +144,18 @@ class Session {
 
 const sessionOf = (player) => sessions.get(player) ?? null;
 
+function canEnter(player) {
+  const request = { player, key: "a_kingdom_divided", complete: false };
+  Common.api.emitCustomEvent("quest:is-complete", request);
+  return request.complete === true;
+}
+
 /** Builds the player's domain and moves them in behind the captured fade. */
 function enter(player) {
+  if (!canEnter(player)) {
+    player.sendMessage("You need to complete A Kingdom Divided before entering Yama's Domain.");
+    return false;
+  }
   if (sessionOf(player)) return;
   const session = new Session(player);
   sessions.set(player, session);
@@ -161,6 +171,7 @@ function enter(player) {
     player.getPacketSender().sendVarbit(Common.data.varbits.multiway, 1);
     Common.playMusic(player, domain.music);
   });
+  return true;
 }
 
 /** Back to the Voice; the area's postLeave ends the domain. */
@@ -225,4 +236,4 @@ function attachDomain(api) {
   api.onPlayerDeath(respawnByVoice);
 }
 
-module.exports = { attachDomain, enter, leave, sessionOf };
+module.exports = { attachDomain, enter, leave, sessionOf, canEnter };

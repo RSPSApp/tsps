@@ -152,6 +152,7 @@ module.exports = function registerDragonSlayerQuest(api) {
   const SCENE_INTERFACE = { journey: 299, route: 544, clouds: 543, elvarg: 545, fly: 546, fade: 174 };
   /** Walk animation of Doors.plugin's GATE_WALK_ANIMATION. */
   const DOOR_WALK_ANIMATION = 819;
+  const MELZAR_DOOR_LOCKED_SOUND = 2402;
   const ELVARG_BODY = 25202, ELVARG_HEADLESS = 25203;
   // Cache rev241: dragonsecretdoor 2606 is a shape-0 wall at 2836,9600 face3; the
   // Crandor side is north (walkable 2836,9601) and Karamja is south (2836,9598).
@@ -936,7 +937,9 @@ module.exports = function registerDragonSlayerQuest(api) {
       return;
     }
     if (quest.getStage(player) < STAGE_OZIACH || !hasItem(player, ITEM.mazeKey)) {
-      player.sendMessage("The door is locked.");
+      // RSProx 468 (ticks 6449 and 6732): this message and sound 2402 on the front door.
+      player.sendMessage("This door is securely locked.");
+      player.getPacketSender().sendSoundEffect(MELZAR_DOOR_LOCKED_SOUND, 1, 0);
       return;
     }
     player.moveTo(TILE.melzarInside.clone());

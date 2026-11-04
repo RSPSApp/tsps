@@ -105,11 +105,12 @@ const doorToggle = (h, p, objectId, clickType = 1, interactions = ['Open']) => {
 };
 
 function player() {
-  const attrs = new Map(), items = new Map(), varbits = new Map(), messages = [];
+  const attrs = new Map(), items = new Map(), varbits = new Map(), messages = [], sounds = [];
   let location = new core.Location(3210, 3220, 0), privateArea = null, movementBlocked = false, forceMovement = null;
   const packet = new Proxy({
     sendVarbit(id, value) { varbits.set(id, value); return packet; },
     sendConfig(id, value) { varbits.set(`config:${id}`, value); return packet; },
+    sendSoundEffect(id) { sounds.push(id); return packet; },
   }, { get: (target, key) => target[key] ?? (() => packet) });
   const inventory = {
     getAmount: id => items.get(id) ?? 0,
@@ -118,7 +119,7 @@ function player() {
     deleteNumber(id, amount) { items.set(id, (items.get(id) ?? 0) - amount); },
   };
   return {
-    attrs, items, varbits, messages,
+    attrs, items, varbits, messages, sounds,
     getAttribute: key => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
     getInventory: () => inventory,
@@ -613,7 +614,9 @@ test('Dragon Slayer leaves the Melzar ladder room through the east exterior door
   assert.equal(click(locked).handled, true);
   assert.deepEqual([locked.getLocation().getX(), locked.getLocation().getY()], [2942, 3248],
     'the exterior side without the key keeps the door locked');
-  assert.deepEqual(locked.messages, ['The door is locked.']);
+  // RSProx 468 ticks 6449-6450 and 6732-6733: "This door is securely locked." with sound 2402.
+  assert.deepEqual(locked.messages, ['This door is securely locked.']);
+  assert.deepEqual(locked.sounds, [2402]);
 });
 
 test('Dragon Slayer Ned selector defers to Prince Ali wig while preserving DS voyage', () => {

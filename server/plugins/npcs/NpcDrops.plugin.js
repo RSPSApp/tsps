@@ -801,9 +801,20 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
     const first = group[0];
     const accessOutOf = Number(first.group_access_out_of);
     const accessWeight = Number(first.group_access_weight);
-    if (!(accessOutOf > 0) || Math.random() * accessOutOf >= accessWeight) continue;
+    if (!(accessOutOf > 0) || !(accessWeight > 0)) continue;
+    // Boost the marginal rarity, not merely the choice after gaining access.
+    // A uniform boost must increase access while preserving the group's ratios.
+    const weighted = group.map((entry) => ({
+      ...entry,
+      weight: entry.weight * entryMultiplier(table, {
+        ...entry, out_of: Number(entry.out_of) * accessOutOf / accessWeight,
+      }, rules),
+    }));
+    const totalWeight = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+    const boostedAccess = accessWeight * totalWeight / Number(first.out_of);
+    if (Math.random() * accessOutOf >= Math.min(accessOutOf, boostedAccess)) continue;
     preRollHit = true;
-    const entry = rollWeighted(group, Number(first.out_of), rules);
+    const entry = rollWeighted(weighted, totalWeight, []);
     if (entry) drops.push(...resolveEntry(entry, player, context));
   }
 

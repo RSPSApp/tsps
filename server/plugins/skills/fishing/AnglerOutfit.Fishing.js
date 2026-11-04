@@ -150,7 +150,10 @@ function onDialogueAction(event) {
     ?? firstCarried(event.player, false);
   if (!piece) return;
   if (pendingMessage.has(event.player)) pendingMessage.delete(event.player);
-  event.step.text = event.step.text.replace("[outfit piece]", itemName(piece.angler));
+  // Transcript message leaves are shared between conversations. Keep the
+  // template intact so the next player sees their own outfit piece.
+  event.player.sendMessage(event.step.text.replace("[outfit piece]", itemName(piece.angler)));
+  event.handled = true;
 }
 
 function onItemOnNpc(event) {

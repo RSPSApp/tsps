@@ -473,9 +473,28 @@ From the captures of three kills, the Wiki's Ocellus and strategy pages, and the
 - **The loot** follows the Wiki's chest table (`loot` in the data file):
   - one unique (Rondache > Zorya's tome = Horn of Bran > Ascension crossbows > Obligator), or else three standard rolls (weights out of 148 from the Drop Rate Project; each roll 1/51 to give five times as much);
   - tertiaries: the inert Archivist's folio 1/20, each elemental fragment 1/80, an elite clue;
-  - Orion, the pet.
+  - Orion, the pet (1/750, the Wiki).
 - **The reward chest:** Search opens `tfa_chests` (973), the Archive's copy of the Tombs of Amascut's chest. Its items sit on inventory 1029 (six slots, `tfa_chests`), with Take / Take-5 / Take-10 / Take-All on an item (`interface_inv_init`, 149) and Bank-all (973:5), Take-all (973:7) and Discard-all (973:9, after "Are you sure you want to discard everything?"). Taken to the inventory, bulky drops come noted; banked, they're unnoted. The loot counts for the collection log when the chest is first opened.
-- *Estimates:* the unique chance (4%) and weights, the pet's rate (1/400), the unique chest's tile, opening only your own chest, the chest's item options (as the Tombs of Amascut's), unclaimed loot going to the bank on leaving or logging out (the Wiki says the lobby's Loot Wheelbarrow keeps it), and the cabbage for a poor run (not done). Aether catalyst (3/148) is left out: the cache has no item by that name.
+- *Estimates:* the unique chance (4%) and weights, the unique chest's tile, opening only your own chest, the chest's item options (as the Tombs of Amascut's), unclaimed loot going to the bank on leaving or logging out (the Wiki says the lobby's Loot Wheelbarrow keeps it), and the cabbage for a poor run (not done). Aether catalyst (3/148) is left out: the cache has no item by that name.
+
+## The records room
+
+- The strange door (63280/63281) is in the Archive at 4123,5573. Using the archive key on it
+  permanently unlocks it; the exact line is "As you insert the key into the door, the vines on
+  the key shift and intertwine with the lock itself. You hear a click as the door unlocks."
+- The archive key (34658) is the Archive Guardian's reward from the first kill after 100 raid
+  completions (the Wiki's drop table says Always, with that note). Its chatbox line is "A small
+  object falls out of the defeated Archive Guardian."
+- The door is sealed while the Guardian challenge is active: "The door has sealed itself while
+  the Archive Guardian is active."
+- The records room lies on the plane above the door. Its Living Record stands use the cache
+  visibility varbits (`tfa_cape_claim_t1_visible` ... `_t5_visible`); each item's completion
+  requirement is cache param 2722 on items 34659/34661/34663/34665/34667 (100/500/1000/1500/
+  2000). Inspect uses the Wiki transcript, including "[x] completions required."
+- Claim gives that tier's cape once; holding it prevents a duplicate, and losing it allows a
+  reclaim. The collection log is credited only by a claim that actually grants the item.
+- *Estimate:* the room's arrival tile (4108,5573) and return tile (4124,5573) come from the
+  cache's door/exit geometry, not a capture.
 
 ## The rewards
 

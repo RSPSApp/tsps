@@ -1,3 +1,5 @@
+import { Sound } from "../../../Sound";
+import { Sounds } from "../../../Sounds";
 import { Mobile } from "../../../entity/impl/Mobile";
 import { Player } from "../../../entity/impl/player/Player";
 import { Animation } from "../../../model/Animation";
@@ -78,6 +80,7 @@ export class EffectSpells extends Spell {
                 player.setHasVengeance(true);
                 EffectSpells.startVengeanceCooldown(player);
                 player.performAnimation(new Animation(8316));
+                Sounds.playAreaSoundAt(player, Sound.VENGEANCE, 10);
                 player.performGraphic(new Graphic(726, GraphicHeight.HIGH));
                 player.getSkillManager().addExperiences(Skill.MAGIC, spell.baseExperience());
                 break;

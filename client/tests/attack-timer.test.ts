@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { ConfigManager } from "@runelite/client/config/ConfigManager";
+import { inject } from "@runelite/client/plugins/PluginInjector";
+import { TimersConfig } from "../game/plugins/statustimer/TimersConfig";
 
 import { clearAttackTimer, getAttackTimerTicks, setAttackTimer } from "../game/plugins/attacktimer/attackTimerState";
 import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
@@ -43,12 +46,20 @@ assert.equal(output[0].text, "0", "preview includes an inactive attack timer");
 output.length = 0;
 const timers = new TimersPlugin();
 setAttackTimer(4, getCurrentTick());
+timers.setEnabledState(true);
+timers.appendLocalPlayerOverheads(host, 0, output, 10, 2);
+assert.equal(output.length, 0, "overhead combat timer is off by default");
+inject(ConfigManager).setConfigValue(TimersConfig, "showAttackTimer", true);
 timers.setEnabledState(false);
 timers.appendLocalPlayerOverheads(host, 0, output, 10, 2);
 assert.equal(output.length, 0, "the single plugin switch also hides the attack timer");
 timers.setEnabledState(true);
 timers.appendLocalPlayerOverheads(host, 0, output, 10, 2);
 assert.equal(output[0].text, "4");
+output.length = 0;
+inject(ConfigManager).setConfigValue(TimersConfig, "showAttackTimer", false);
+timers.appendLocalPlayerOverheads(host, 0, output, 10, 2);
+assert.equal(output.length, 0, "unchecking the option immediately hides the timer");
 clearAttackTimer();
 
 console.log("attack timer: ok");

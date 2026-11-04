@@ -915,17 +915,17 @@ test("Gita Prymes upgrades angler kit to spirit kit for 1,200 flakes, then both 
   assert.equal(talker.getInventory().getAmount(I.SPIRIT_FLAKES), 0);
   const message = { npcId: N.GITA_PRYMES, player: talker, kind: "message", stepId: "3sMFrS", step: { text: "Gita Prymes exchanges your [outfit piece] for Spirit Angler kit." } };
   handlers["npc-dialogue:action"](message);
-  assert.equal(message.step.text, "Gita Prymes exchanges your Angler top for Spirit Angler kit.");
+  assert.equal(talker.messages.at(-1), "Gita Prymes exchanges your Angler top for Spirit Angler kit.");
 
   // The warning messages before Proceed name the piece that will be converted.
   const warned = player([[I.ANGLER_WADERS, 1]]);
   const warning = { npcId: N.GITA_PRYMES, player: warned, kind: "message", stepId: "biLPTa", step: { text: "Gita Prymes wants 1,200 spirit flakes to upgrade your [outfit piece]. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit. If you change it back later, you will not get your spirit flakes back." } };
   handlers["npc-dialogue:action"](warning);
-  assert.equal(warning.step.text, "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler waders. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit. If you change it back later, you will not get your spirit flakes back.");
+  assert.equal(warned.messages.at(-1), "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler waders. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit. If you change it back later, you will not get your spirit flakes back.");
   const paidWarning = player([[I.ANGLER_WADERS, 1]], { waders: true });
   const paidMessage = { npcId: N.GITA_PRYMES, player: paidWarning, kind: "message", stepId: "y9-UMa", step: { text: "Gita Prymes will upgrade your [outfit piece] for free, as you have already paid the conversion fee. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit." } };
   handlers["npc-dialogue:action"](paidMessage);
-  assert.equal(paidMessage.step.text, "Gita Prymes will upgrade your Angler waders for free, as you have already paid the conversion fee. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit.");
+  assert.equal(paidWarning.messages.at(-1), "Gita Prymes will upgrade your Angler waders for free, as you have already paid the conversion fee. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit.");
 
   const talkerShort = player([[I.ANGLER_WADERS, 1], [I.SPIRIT_FLAKES, 1199]]);
   handlers["npc-dialogue:condition"]({ npcId: N.GITA_PRYMES, player: talkerShort, stepId: Angler._test.CONDITIONS.FIRST_UPGRADE });
@@ -933,4 +933,16 @@ test("Gita Prymes upgrades angler kit to spirit kit for 1,200 flakes, then both 
   handlers["npc-dialogue:choice"](shortChoice);
   assert.equal(shortChoice.end, true, "the branch ends without exchanging when the flakes are short");
   assert.equal(talkerShort.getInventory().getAmount(I.ANGLER_WADERS), 1);
+  // NpcDialogues reuses message leaves from the cached transcript between players.
+  const sharedStep = { type: "message", text: "Gita Prymes wants 1,200 spirit flakes to upgrade your [outfit piece]." };
+  const messageFor = p => ({ npcId: N.GITA_PRYMES, player: p, kind: "message", step: sharedStep, text: sharedStep.text });
+  const firstWarning = messageFor(player([[I.ANGLER_HAT, 1]]));
+  handlers["npc-dialogue:action"](firstWarning);
+  assert.equal(sharedStep.text, "Gita Prymes wants 1,200 spirit flakes to upgrade your [outfit piece].", "cached transcript is never personalized");
+  assert.equal(firstWarning.handled, true);
+  assert.equal(firstWarning.player.messages.at(-1), "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler hat.");
+  const nextWarning = messageFor(player([[I.ANGLER_BOOTS, 1]]));
+  handlers["npc-dialogue:action"](nextWarning);
+  assert.equal(nextWarning.player.messages.at(-1), "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler boots.");
+
 });

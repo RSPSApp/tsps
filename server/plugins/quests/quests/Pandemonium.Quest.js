@@ -1432,7 +1432,10 @@ module.exports = function registerPandemoniumQuest(api) {
     scheduleEnsureSteve(player);
     const stage = quest.getStage(player);
     if (stage >= STAGE_BOARDED && stage <= STAGE_SALVAGE_READY) {
-      startTutorialShip(player, { atWreck: stage >= STAGE_ARRIVED });
+      if (startTutorialShip(player, { atWreck: stage >= STAGE_ARRIVED }) && stage === STAGE_BOARDED) {
+        const scene = tutorialScene(player);
+        Scenes.later(player, 2, () => startBoardingDialogue(player, scene));
+      }
     }
     if (stage === STAGE_JIM_DONE) ensureOldGrog(player);
     sendIntroVarbits(player);
@@ -1610,6 +1613,8 @@ module.exports = function registerPandemoniumQuest(api) {
   StaticShips.attach(api);
   api.persistAttribute(STAGE_VERSION_ATTRIBUTE, 0);
   api.persistAttribute(TUTORIAL_ATTRIBUTE, 0);
+  api.persistAttribute(TUTORIAL_HELM_ATTRIBUTE, false);
+  api.persistAttribute(TUTORIAL_SAILS_ATTRIBUTE, false);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onNpcInteraction("Will", { "Talk-to": willAnneTalkTo });

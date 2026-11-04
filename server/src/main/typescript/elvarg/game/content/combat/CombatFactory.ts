@@ -1,7 +1,5 @@
 import { CombatPosition } from "./CombatPosition";
 import { ItemAliases } from "../../model/ItemAliases";
-import { Sound } from "../../Sound";
-import { Sounds } from "../../Sounds";
 import { PrayerHandler } from "../PrayerHandler";
 import { Dueling, DuelRule, DuelState } from "../Duelling";
 import { WeaponInterfaces } from "./WeaponInterfaces";
@@ -983,12 +981,6 @@ export class CombatFactory {
         // Target-side player effects.
         if (target.isPlayer()) {
             const playerTarget = target.getAsPlayer();
-            if (resolvedHit.isAccurate() && damage > 0) {
-                Sounds.sendSound(playerTarget, Sound.PLAYER_GETTING_HIT);
-            } else {
-                Sounds.sendSound(playerTarget, Sound.DEFENCE_BLOCK);
-            }
-
             // Close interfaces while being hit (except developer rights).
             if (playerTarget.getRights() != PlayerRights.DEVELOPER &&
                 (playerTarget.busy() || playerTarget.getPacketSender().hasInterruptibleInterface())) {

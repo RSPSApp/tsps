@@ -24,6 +24,18 @@ open is outside the quest's code or has no source to settle it.
 
 Newest first.
 
+- **fixed (bounded inference)** During the quest, monument Study now opens the cache's
+  quest-specific `priestperil_gravemonument` window (group 272, title "Grave Monument") and
+  writes the existing inscription to 272:7, instead of the 229 messagebox. The emblem on
+  272:8 is set with the canonical item through IF_SETITEM (golden souvenir; iron key for the
+  key monument), so it uses the item's own mesh and cache camera. The cache supplies the
+  window, text target, item target and close path (scripts 227/228/29 and the global IF_CLOSE
+  close); no raw model id, camera, animation or timing is invented. The after-quest Study
+  text and the Take-from refusal stay in the 229 messagebox, matching primary capture #365.
+  There is no live in-quest packet capture, and `Transcript:Monument` uses the Wiki's `tbox` (documented
+  as the chatbox template), so this is a cache + user-report inference for the reported wrong
+  window, not full OSRS parity. The live 272 artwork, post-swap emblem and item camera angles
+  remain unverified. References #2207.
 - **fixed** The temple's large doors stayed open after a quester used them (Doors keeps
   them open), so a player who hadn't started the quest could walk in. Live swings them shut
   two ticks later (rsprox.net #365). The quest walks the player through instead: from stage 30, or

@@ -144,8 +144,8 @@ function getAmmoName(dartId) {
   return new core.Item(dartId).getDefinition()?.getName?.()?.toLowerCase?.() ?? "darts";
 }
 
-function canAddStack(inventory, itemId) {
-  return inventory.getFreeSlots() > 0 || inventory.contains(itemId);
+function canReturnDarts(inventory, itemId, amount) {
+  return inventory.getAddableAmount(new core.Item(itemId, amount)) >= amount;
 }
 
 function getItemContainer(player, item, preferredSlot = -1) {
@@ -229,7 +229,7 @@ function chargeDarts(player, blowpipeItem, blowpipeSlot, dartItem) {
     return;
   }
 
-  if (currentAmount > 0 && currentId !== dartId && !canAddStack(player.getInventory(), currentId)) {
+  if (currentAmount > 0 && currentId !== dartId && !canReturnDarts(player.getInventory(), currentId, currentAmount)) {
     player.sendMessage("You need more inventory space to swap the loaded darts.");
     return;
   }

@@ -32,6 +32,7 @@ function makePlayer(trident, resources = {}) {
     },
     contains: (id) => (amounts.get(id) ?? 0) > 0,
     getFreeSlots: () => 28,
+    getAddableAmount: (item) => item.getAmount(),
     addItem(item) {
       amounts.set(item.getId(), this.getAmount(item.getId()) + item.getAmount());
     },

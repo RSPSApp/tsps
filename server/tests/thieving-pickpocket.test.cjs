@@ -482,6 +482,22 @@ test("a relic's repeat follows the NPC as it wanders: the player walks up to it 
     assert.equal(submitted.length, 0);
 });
 
+test("a click between a relic's attempt and its outcome ends the chain: no repeat pulls the player back", (t) => {
+    const original = Math.random;
+    Math.random = () => 0;
+    repeatAgain = true;
+    t.after(() => { Math.random = original; repeatAgain = false; });
+    const who = player({ level: 1 });
+    const target = npc();
+    who.setMobileInteraction(target);
+    submitted.length = 0;
+    Thieving._test.pickpocket({ player: who, npc: target, npcId: 0, definition: { getName: () => 'Man' } });
+    // Walk clicked meanwhile: walkToReset cancels the player's keyed tasks and clears the interaction.
+    who.setMobileInteraction(null);
+    submitted[0].execute();
+    assert.equal(submitted.length, 1, 'the pending attempt resolves, but no repeat is scheduled');
+});
+
 test('names as the rsprox captures show them: the Master Farmer, Martin, the H.A.M. man and woman, the Menaphite, the Bandit', (t) => {
     const name = (npcName, npcId = 0) => attempt(t, { name: npcName, npcId, who: player() }).click.at(-1);
     assert.equal(name('Master Farmer'), "spam: You attempt to pick the Master Farmer's pocket.");

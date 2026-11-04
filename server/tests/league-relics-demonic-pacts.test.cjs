@@ -303,6 +303,13 @@ test("Abundance: a visible +10 to non-combat skills, 2 more XP a drop, and 2 coi
   skills(late).addExperience(Skill.FISHING, 83 - xp(late, Skill.FISHING));
   assert.equal(skills(late).getMaxLevel(Skill.FISHING), 2);
   assert.equal(current(late, Skill.FISHING), 12, "a level-up keeps the boost");
+  // A death (PlayerDeath -> resetAttributes) sets every level back to where it rests, the boost kept.
+  skills(late).setCurrentLevel(Skill.FISHING, 5, false);
+  late.resetAttributes();
+  assert.equal(current(late, Skill.FISHING), 12, "a death keeps the boost (resting level, not base)");
+  assert.equal(current(late, Skill.STRENGTH), 1, "an unboosted skill goes back to its base");
+  emit("league:login", { player: late, league: DP });
+  assert.equal(current(late, Skill.FISHING), 12, "and a relog after it adds nothing twice");
   const before = xp(who.relic, Skill.COOKING);
   emit("skills:experience-gained", { player: who.relic, skill: Skill.COOKING, experience: 10.5, multiplied: true });
   assert.ok(xp(who.relic, Skill.COOKING) >= before + 2, "2 more XP");

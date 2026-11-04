@@ -383,10 +383,12 @@ function pickpocketTask(player, npc, target, name, event) { return new (class ex
     // Content may ask for another go ("thieving:done", a league relic that keeps pickpocketing): the same click, a tick later.
     const done = { player, kind: "pickpocket", npc, succeeded, again: false };
     pluginApi.emitCustomEvent("thieving:done", done);
-    if (done.again) {
-      // Leagues VI captures (recs 1104-1106, Larcenist): the player keeps facing the NPC and follows it as it
-      // wanders, with no clicks of their own, an attempt every 2 ticks for hundreds of attempts. The repeat is the
-      // player's action, keyed by their index, so any click (MovementQueue.walkToReset) ends the chain.
+    // Leagues VI captures (recs 1104-1106, Larcenist): the player keeps facing the NPC and follows it as it
+    // wanders, with no clicks of their own, an attempt every 2 ticks for hundreds of attempts. The repeat is the
+    // player's action, keyed by their index, so any click (MovementQueue.walkToReset) ends the chain; and only
+    // while the player still tracks this NPC, since a click between the attempt and this outcome (a Walk) has
+    // already cleared that, and this task, not keyed to the player, still resolves.
+    if (done.again && player.getInteractingMobile?.() === npc) {
       core.TaskManager.submit(new core.CountdownTask(player.getIndex(), 1, () => pickpocketAgain(event)));
       return;
     }

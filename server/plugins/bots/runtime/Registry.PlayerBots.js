@@ -439,7 +439,8 @@ function createBotRegistry(options) {
   function botNameTaken(username, name) {
     if (botApi.core.DisplayNames.refusal(username, name)) return true;
     const key = name.toLowerCase();
-    for (const online of botApi.core.World.getPlayers()) {
+    // Newly spawned bots share a batch before the world drains its add-player queue.
+    for (const online of [...botApi.core.World.getPlayers(), ...botApi.core.World.getAddPlayerQueue()]) {
       if (online.getUsername() !== username && online.getDisplayName().toLowerCase() === key) return true;
     }
     return false;

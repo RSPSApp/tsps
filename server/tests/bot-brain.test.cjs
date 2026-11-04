@@ -23,6 +23,8 @@ const {
 
 const fakePlayer = (name = 'bot', x = 3100, y = 3600) => ({
   getUsername: () => name,
+  getDisplayName() { return this.displayName || name; },
+  setDisplayName(value) { this.displayName = value; },
   getForceMovement: () => null,
   getMovementQueue: () => ({ size: () => 0 }),
   getLocation: () => ({ getX: () => x, getY: () => y, getZ: () => 0 }),
@@ -952,7 +954,10 @@ test('a requested PvP profile and archetype reach the first kit before the bot j
   const metadata = { profileId: 'elite', loadoutId: 'deep_wild_nh', generatedArchetypeId: 'elite_nh_ags',
     combatLevelRange: { min: 121, max: 126 } };
   const registry = createBotRegistry({
-    botApi: { getRegionManager: () => ({}) }, botCount: 0, spawn: new Location(3423, 4120),
+    botApi: { getRegionManager: () => ({}), core: {
+      DisplayNames: { refusal: () => null },
+      World: { getPlayers: () => [], getAddPlayerQueue: () => [] },
+    } }, botCount: 0, spawn: new Location(3423, 4120),
     behaviorMode: { PVP: 'pvp' }, worldGetPlayerByName: () => null,
     createBotPlayer: (name, location) => ({ ...fakePlayer(name), getLocation: () => location }),
     createInitialState: () => ({ pvp: {} }), assignPvpMetadata,
@@ -983,7 +988,10 @@ test('regional PvP bots use varied catalogue gear and favour towns over the leve
   let regionsUpdated;
   const generated = [];
   const registry = createBotRegistry({
-    botApi: { getRegionManager: () => ({ blocked: () => false, isWater: () => false }) },
+    botApi: { getRegionManager: () => ({ blocked: () => false, isWater: () => false }), core: {
+      DisplayNames: { refusal: () => null },
+      World: { getPlayers: () => [], getAddPlayerQueue: () => [] },
+    } },
     botCount: 0,
     wildernessRoamerBotCount: 128,
     wildernessActiveRegionBotsPerRegion: PVP_BOT_SETTINGS.activeRegionBotsPerRegion,

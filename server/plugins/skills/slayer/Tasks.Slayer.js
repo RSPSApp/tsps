@@ -482,10 +482,11 @@ function grantPoints(player, points) {
 const POINTS_CAP = (1 << 17) - 1;
 
 /**
- * "slayer:current-task" { player, task: null }: fills task with { master, taskId, name, count,
+ * "slayer:current-task" { player, task: null, points: 0 }: fills points and task with { master, taskId, name, count,
  * area } (name lowercase, as "kalphites"; area the slayer_area row's text) or leaves it null.
  */
 function currentTaskEvent(request) {
+  request.points = request.player ? State.varbit(request.player, "slayer_points") : 0;
   const task = request?.player ? current(request.player) : null;
   if (!task) return;
   request.task = { master: task.masterId, taskId: task.taskId, name: taskName(task.task), count: task.count, area: task.area?.text ?? null };

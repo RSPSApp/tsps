@@ -28,6 +28,7 @@ function loadKits() {
     worn: Number(entry.worn) || 0,
     name: entry.name,
     refund: entry.refund === true,
+    cleaningCloth: entry.cleaningCloth === true,
   }));
 }
 
@@ -59,13 +60,41 @@ function applyKit(event) {
   if (!baseItem || resolvedBase(baseItem.getId?.()) !== match.entry.base) {
     return;
   }
-  player.getInventory().deleteNumber(match.entry.kit, 1);
+  const kit = match.kitOnLeft ? event.usedItem : event.usedWithItem;
+  const kitSlot = match.kitOnLeft ? event.usedItemSlot : event.usedWithItemSlot;
+  const baseSlot = match.kitOnLeft ? event.usedWithItemSlot : event.usedItemSlot;
+  const inventory = player.getInventory();
+  if (inventory.getItems()[kitSlot] !== kit || inventory.getItems()[baseSlot] !== baseItem ||
+    kit.getId() !== match.entry.kit || kit.getAmount() !== 1 || baseItem.getAmount() !== 1) return;
+  if (kit.isPresetItem() || kit.isUntradeable() || kit.isUnbankable()) {
+    player.sendMessage("You cannot use restricted items to upgrade equipment.");
+    event.handled = true;
+    return;
+  }
+  inventory.deleteAtSlot(kitSlot, 1, false);
   const stage = Barrows.stageOf(baseItem.getId?.()) ?? 0;
   baseItem.setId(stage === 0
     ? match.entry.result
     : Barrows.stageItemIdFor(match.entry.result, stage) ?? match.entry.result);
   refresh(player);
   player.sendMessage(`You apply the ${match.entry.name.toLowerCase()}.`);
+  event.handled = true;
+}
+
+function cleanDye(event) {
+  const clothFirst = event.usedItemId === core.ItemIdentifiers.CLEANING_CLOTH;
+  const cloth = clothFirst ? event.usedItem : event.usedWithItem;
+  const item = clothFirst ? event.usedWithItem : event.usedItem;
+  const clothSlot = clothFirst ? event.usedItemSlot : event.usedWithItemSlot;
+  const itemSlot = clothFirst ? event.usedWithItemSlot : event.usedItemSlot;
+  const entry = byResult.get(item?.getId());
+  const inventory = event.player.getInventory();
+  if (!entry?.cleaningCloth || cloth?.getId() !== core.ItemIdentifiers.CLEANING_CLOTH ||
+    inventory.getItems()[clothSlot] !== cloth || inventory.getItems()[itemSlot] !== item ||
+    cloth.getAmount() !== 1 || item.getAmount() !== 1) return;
+  item.setId(entry.base);
+  inventory.refreshItems();
+  event.player.sendMessage("You wipe the colour off your weapon.");
   event.handled = true;
 }
 
@@ -77,7 +106,7 @@ function revertItem(event) {
   const itemId = Number(event.itemId);
   const barrowsBase = Barrows.baseItemId(itemId);
   const entry = byResult.get(itemId) ?? (barrowsBase == null ? null : byBase.get(barrowsBase));
-  if (!entry || !event.item) {
+  if (!entry || entry.cleaningCloth || !event.item) {
     return;
   }
   if (barrowsBase == null) {
@@ -143,6 +172,7 @@ module.exports = {
       }
     }
     api.onItemOnItem(applyKit, { noted: false });
+    api.onItemOnItem(cleanDye, { noted: false });
     api.onItemAction(revertItem);
     api.log("registered", { pairs: byKitAndBase.size, variants: byResult.size });
   },

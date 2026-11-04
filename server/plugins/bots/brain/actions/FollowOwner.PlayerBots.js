@@ -79,8 +79,12 @@ function teleportNear(world, bot, follower, state) {
   }
   // A Tele Blocked bot follows on foot like a blocked player; only the snap is a teleport.
   if (isTeleblocked(bot)) {
+    // Preserve the dispatched route and let segmented navigation own movement.
+    bot.getCombat?.()?.clearInteraction?.();
+    bot.setFollowing?.(null);
+    bot.setCombatFollowing?.(null);
     queueRouteAndFlagAppearance(bot, followerLoc.getX(), followerLoc.getY(), { state });
-    return;
+    return true;
   }
   const tiles = [];
   for (const tile of follower.outterTiles?.() ?? []) {
@@ -210,11 +214,15 @@ function createFollowOwnerAction(spec, world) {
       if (player.getPrivateArea?.() !== owner.getPrivateArea?.()) {
         player.setArea?.(owner.getArea?.() ?? null);
       }
-      teleportNear(world, player, owner, state);
+      if (teleportNear(world, player, owner, state)) {
+        return "running";
+      }
 
       const assistTarget = resolveAssistTarget(world, player, owner);
       if (assistTarget) {
-        teleportNear(world, player, assistTarget, state);
+        if (teleportNear(world, player, assistTarget, state)) {
+          return "running";
+        }
         player.setFollowing?.(assistTarget);
         player.setMobileInteraction?.(assistTarget);
         player.setPositionToFace?.(assistTarget.getLocation?.());

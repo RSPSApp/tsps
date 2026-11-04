@@ -185,6 +185,8 @@ test('the real ration is non-noteable and its duplicate identifier is its placeh
 // Keep that order here: draining a one-step route before the next global pass is
 // the cancellation boundary under investigation, not a synthetic success hook.
 function woodcutCancellationTurn(f) {
+  // Mirror World.process's epoch prefix before its global task pass.
+  core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
   core.TaskManager.process();
   f.c.processTurnPackets();
   const movement=f.p.getMovementQueue();

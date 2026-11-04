@@ -10,7 +10,10 @@ const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+const { Player } = require('../dist/game/entity/impl/player/Player');
+const { PlayerSession } = require('../dist/net/PlayerSession');
 const core = PluginManager.getCoreApi();
+let realCasters = 0;
 
 let Common, Guardians, Lobby, Telekinetic, Enchanting, Alchemists, Graveyard, Rewards, events, ironmanMode, testApi;
 
@@ -921,7 +924,7 @@ function castBones(player, spellName) {
   }
 }
 
-test('Bones to Peaches plays sound 114 with its cast; no Bones to Bananas cast is captured, so it plays none', () => {
+test('both bones spells play sound 114 with their cast in the room (Wiki, List of sound IDs: bones_to_bananas_all)', () => {
   const [x, y, z] = graveyardTile();
   const peaches = fakePlayer(x, y, z);
   const peachEffects = recordEffects(peaches);
@@ -937,8 +940,64 @@ test('Bones to Peaches plays sound 114 with its cast; no Bones to Bananas cast i
   bananas.items.set(Common.ids.items.bones1, 2);
   castBones(bananas, 'Bones to Bananas');
   assert.equal(bananas.items.get(Common.ids.items.banana), 2);
-  assert.deepEqual(bananaEffects.sounds, [], 'no capture of a Bones to Bananas cast, so no sound is invented for it');
+  assert.deepEqual(bananaEffects.sounds, [114], 'used for both spells, once a cast');
+  assert.deepEqual(bananaEffects.animations, [722]);
 });
+
+test('a bones spell cast in the room stays in the room, so the normal cast adds no second sound', () => {
+  const [x, y, z] = graveyardTile();
+  const player = fakePlayer(x, y, z);
+  recordEffects(player);
+  player.items.set(Common.ids.items.bones1, 1);
+  const Spell = core.Spell.prototype;
+  const original = Spell.canCast;
+  Spell.canCast = () => true;
+  const event = { player, spellName: 'Bones to Bananas', handled: false };
+  try {
+    Graveyard.castBonesSpell(event);
+  } finally {
+    Spell.canCast = original;
+  }
+  assert.equal(event.handled, true, 'emitSpellCast runs before EffectSpells.handleSpell, and a handled cast stops there');
+});
+
+function realCaster(t) {
+  const channel = {
+    kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
+    close() {}, onData() {}, onError() {}, onClose() {},
+  };
+  const player = new Player(new PlayerSession(channel));
+  player.setIndex(5600 + (realCasters++));
+  player.setUsername(`bonesqa${realCasters}`);
+  player.setRegistered(true);
+  player.needsPlacement = false;
+  player.getSkillManager().setMaxLevels(core.Skill.MAGIC, 99, false).setCurrentLevels(core.Skill.MAGIC, 99, false);
+  const sounds = [];
+  t.mock.method(player.getPacketSender(), 'sendSoundEffect', (id) => { sounds.push(id); return player.getPacketSender(); });
+  t.after(() => player.setRegistered(false));
+  return { player, sounds };
+}
+
+function giveRunes(player) {
+  for (const [id, amount] of [[561, 2], [555, 4], [557, 4]]) player.getInventory().add(new core.Item(id, amount), false);
+}
+
+for (const [name, fruit] of [['BONES_TO_BANANAS', 1963], ['BONES_TO_PEACHES', 6883]]) {
+  test(`the normal cast of ${name} plays sound 114 once, and none without bones`, (t) => {
+    const spell = core.EffectSpells[name];
+    const control = realCaster(t);
+    giveRunes(control.player);
+    core.EffectSpells.handleSpell(control.player, spell.spellId());
+    assert.deepEqual(control.sounds, [], 'control: no bones, no cast, no sound');
+
+    const { player, sounds } = realCaster(t);
+    giveRunes(player);
+    player.getInventory().add(new core.Item(526, 2), false);
+    core.EffectSpells.handleSpell(player, spell.spellId());
+    assert.equal(player.getInventory().getAmount(fruit), 2, 'the cast happened');
+    assert.deepEqual(sounds, [114], 'one sound for the cast, however many bones');
+  });
+}
 
 test('turning fruit in plays animation 832 and sound 1663; an empty chute plays neither', () => {
   const [x, y, z] = graveyardTile();

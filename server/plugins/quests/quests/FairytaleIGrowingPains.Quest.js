@@ -11,12 +11,21 @@
  *   0 not started,
  *   10 Martin asked me to talk to five gardeners,
  *   20 five gardeners reported (Martin sends me to a fairy),
- *   30 Fairy Nuff gave me the symptoms list,
- *   40 Zandar Horfyre diagnosed the Queen,
- *   50 Malignius Mortifer taught me the recipe,
- *   60 the Nature Spirit enchanted my secateurs,
- *   70 the Tanglefoot is dead and I have the Queen's secateurs,
- *   80 complete.
+ *   30 the Fairy Godfather sent me to Fairy Nuff,
+ *   40 Fairy Nuff gave me the symptoms list,
+ *   50 Zandar Horfyre diagnosed the Queen,
+ *   60 Malignius Mortifer taught me the recipe,
+ *   70 the Nature Spirit enchanted my secateurs,
+ *   80 the Tanglefoot is dead and I have the Queen's secateurs,
+ *   90 complete.
+ *
+ * These are the cache's own progress values: its quest DB row completes at
+ * 90. Older saves used 30..80 for the stages after the Godfather conversation,
+ * so migrateStage moves them to 40..90 once; 0..20 are unchanged.
+ *
+ * Quest Helper's pinned FairytaleI.java likewise maps 20 Godfather, 30 Nuff,
+ * 40 Zandar, 50 Mortifer, 60 enchant, 70 kill and 80 finish:
+ * https://github.com/Zoinkwiz/quest-helper/blob/06da90f982518a093f2fe1c9cfac5547fa7053d3/src/main/java/com/questhelper/helpers/quests/fairytalei/FairytaleI.java
  *
  * Varbits sharing varp 671: 1804-1806 hold the three randomised nature items
  * (positions 1-31 in the wiki's ordered table); 1807 hides the throne Queen and
@@ -37,13 +46,14 @@
  *   branch.
  * - Fairy Nuff has no "I still have the list" variant; talking to her while
  *   holding it falls back to her standard-page dialogue.
- * - The grove's north-west chamber is sealed in the cache's static clipping, so
- *   the fight happens in the connected tunnel south of the entrance (the
- *   transcript's "appears in the grove" action teleports there).
- * - The Tanglefoot is spawned per player (it is absent from npc-spawns.json).
- *   Only magic secateurs damage it; the wiki's ring-of-recoil exception is not
- *   modelled, and normal secateurs have no Wield option, so enchanting consumes
- *   them from the inventory.
+ * - The lair's tunnel loops south of the entrance before doubling back north,
+ *   so the Tanglefoot waits at the north end (2375,4385, the tile inferred from
+ *   Quest Helper's kill step, among the baby tanglefootii). The cache clipping
+ *   is open there and the tunnel is connected from the real entrance. It is
+ *   spawned per player, as it is absent from npc-spawns.json. Only magic
+ *   secateurs damage it; the wiki's ring-of-recoil exception is not modelled,
+ *   and normal secateurs have no Wield option, so enchanting consumes them from
+ *   the inventory.
  * - The wiki prose is authored for the two dig and damage messages, which no
  *   transcript page carries. The grave has no click action: the capture-confirmed
  *   native route is the spade's inventory Dig option (capture 3209), which plays
@@ -127,12 +137,19 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
 
   const STAGE_STARTED = 10;
   const STAGE_GARDENERS_REPORTED = 20;
-  const STAGE_HAS_SYMPTOMS_LIST = 30;
-  const STAGE_DIAGNOSED = 40;
-  const STAGE_HAS_RECIPE = 50;
-  const STAGE_HAS_MAGIC_SECATEURS = 60;
-  const STAGE_TANGLEFOOT_DEFEATED = 70;
-  const STAGE_COMPLETE = 80;
+  const STAGE_TALKED_TO_GODFATHER = 30;
+  const STAGE_HAS_SYMPTOMS_LIST = 40;
+  const STAGE_DIAGNOSED = 50;
+  const STAGE_HAS_RECIPE = 60;
+  const STAGE_HAS_MAGIC_SECATEURS = 70;
+  const STAGE_TANGLEFOOT_DEFEATED = 80;
+  const STAGE_COMPLETE = 90;
+
+  const STAGE_SCHEMA_ATTRIBUTE = "quest.fairytale-i-growing-pains:stage-schema";
+  const STAGE_SCHEMA = 1;
+  // Older saves numbered the post-Godfather stages 30..80; they are now 40..90.
+  const LEGACY_STAGE_VALUES = { 30: 40, 40: 50, 50: 60, 60: 70, 70: 80, 80: 90 };
+  const LEGACY_STAGE_COMPLETE = 80;
 
   const VARP_FAIRYTALE = 671;
   const VARBIT_FAIRYTALE_QUEST = 1803; // "fairy_farmers_quest", bits 0-6
@@ -235,15 +252,15 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     "gatekeeper-near-the-entrance-to-the-tanglefoot-s-lair-after-fairytale-i";
   const ZANDAR_VARIANT = "at-the-dark-wizard-s-tower-talking-to-zandar-horfyre";
 
-  // The tunnel south of the gap; the sealed north-west chamber is not simulated.
+  // The tunnel loops south of the gap and doubles back north to the Tanglefoot.
   const GROVE_ENTRY = { x: 2394, y: 4379, z: 0 };
   const GROVE_EXIT = { x: 2400, y: 4379, z: 0 };
-  const TANGLEFOOT_SPAWN = { x: 2395, y: 4358, z: 0 };
+  const TANGLEFOOT_SPAWN = { x: 2375, y: 4385, z: 0 };
   const GROVE_ZONE = {
-    minX: 2388,
-    maxX: 2396,
+    minX: 2368,
+    maxX: 2398,
     minY: 4354,
-    maxY: 4384,
+    maxY: 4399,
     levels: [0],
   };
 
@@ -260,6 +277,14 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
 
   function advance(player, value) {
     if (quest.getStage(player) < value && !quest.isComplete(player)) quest.setStage(player, value);
+  }
+
+  /** Moves saves written before the Godfather stage existed onto the cache's values. */
+  function migrateStage({ player }) {
+    if (Number(player.getAttribute(STAGE_SCHEMA_ATTRIBUTE)) >= STAGE_SCHEMA) return;
+    const migrated = LEGACY_STAGE_VALUES[quest.getStage(player)];
+    player.setAttribute(STAGE_SCHEMA_ATTRIBUTE, STAGE_SCHEMA);
+    if (migrated !== undefined) quest.setStage(player, migrated);
   }
 
   function actionOf(event) {
@@ -334,7 +359,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     );
   }
 
-  /** The Tanglefoot exists only while the player on stage 60 is in its tunnel. */
+  /** The Tanglefoot exists only while the player on stage 70 is in its tunnel. */
   function ensureTanglefoot(player) {
     if (quest.getStage(player) !== STAGE_HAS_MAGIC_SECATEURS) return;
     const existing = tanglefootByPlayer.get(player);
@@ -540,6 +565,14 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     }
     advance(player, STAGE_STARTED);
     sendProgressVarbits(player);
+  }
+
+  /** The "Where's the Fairy Queen?" answer is the step that sends the player to Nuff. */
+  function handleDialogueChoice({ player, npcId, option }) {
+    if (!FAIRY_GODFATHER_NPC_IDS.has(npcId)) return;
+    if (option !== "Where's the Fairy Queen?") return;
+    if (quest.getStage(player) !== STAGE_GARDENERS_REPORTED) return;
+    advance(player, STAGE_TALKED_TO_GODFATHER);
   }
 
   function handleConditionEvent({ player, npcId, stepId }) {
@@ -803,12 +836,14 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   }
 
   function handleLogin({ player }) {
+    migrateStage({ player });
     refreshQuestList(player);
     sendProgressVarbits(player);
     if (insideGrove(player)) ensureTanglefoot(player);
   }
 
   function handleBootstrap({ player }) {
+    migrateStage({ player });
     sendProgressVarbits(player);
   }
 
@@ -878,6 +913,13 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
         "<col=800000>Dark Wizards' Tower</col>.",
       ];
     }
+    if (stage >= STAGE_TALKED_TO_GODFATHER) {
+      return [
+        "The <col=800000>Fairy Godfather</col> told me the Queen is in an",
+        "enchanted sleep. I should speak to <col=800000>Fairy Nuff</col>",
+        "in Zanaris.",
+      ];
+    }
     if (stage >= STAGE_GARDENERS_REPORTED) {
       return [
         "The gardeners all blamed something different for the failing",
@@ -913,6 +955,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   api.persistAttribute(GARDENERS_ATTRIBUTE);
   api.persistAttribute(MALIGNIUS_ASKED_ATTRIBUTE);
   api.persistAttribute(NATURE_ITEMS_ATTRIBUTE);
+  api.persistAttribute(STAGE_SCHEMA_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "fairytale_i_growing_pains",
@@ -933,10 +976,22 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     onReward: grantReward,
   });
 
+  // League start-quest and quest-pack completion runs before the Quests plugin's
+  // login hooks (modes/ loads first). Until this save's one-shot migration has
+  // stamped the schema, an 80 is the old completed value, not the new Tanglefoot
+  // stage, so it must not be completed (and rewarded) a second time.
+  const isComplete = quest.isComplete.bind(quest);
+  quest.isComplete = (player) => {
+    if (!(Number(player.getAttribute(STAGE_SCHEMA_ATTRIBUTE)) >= STAGE_SCHEMA)
+      && quest.getStage(player) === LEGACY_STAGE_COMPLETE) return true;
+    return isComplete(player);
+  };
+
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:line", handleNuffDialogueLine);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
+  api.onCustomEvent("npc-dialogue:choice", handleDialogueChoice);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:condition", handleConditionEvent);
   api.onCustomEvent("npc-dialogue:action", handleActionEvent);

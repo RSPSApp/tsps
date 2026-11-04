@@ -158,6 +158,10 @@ module.exports = function registerPriestInPerilQuest(api) {
       golden: ItemIdentifiers.GOLDEN_CANDLE, study: "Saradomin is the light that shines throughout our lives." },
   ];
 
+  const MONUMENT_WINDOW_GROUP_ID = 272;
+  const MONUMENT_WINDOW_TEXT_UID = (MONUMENT_WINDOW_GROUP_ID << 16) | 7;
+  const MONUMENT_WINDOW_ITEM_UID = (MONUMENT_WINDOW_GROUP_ID << 16) | 8;
+
   const NORTH_TRAPDOOR_LOCATION = { x: 3405, y: 3507, z: 0 };
   const CHURCH_TRAPDOOR_LOCATION = { x: 3422, y: 3485, z: 0 };
   const CELL_GATE_LOCATION = { x: 3415, y: 3489, z: 2 };
@@ -231,6 +235,14 @@ module.exports = function registerPriestInPerilQuest(api) {
 
   function showStatement(player, text) {
     StatementDialogue.send(player, text);
+  }
+
+  function showMonumentWindow(player, monument) {
+    player.getPacketSender()
+      .sendInterface(MONUMENT_WINDOW_GROUP_ID)
+      .sendString(monument.study, MONUMENT_WINDOW_TEXT_UID)
+      .sendItemOnInterfaces(MONUMENT_WINDOW_ITEM_UID,
+        monument.key ? IRON_KEY_ITEM_ID : monument.golden, 1);
   }
 
   function showItemStatement(player, itemId, text) {
@@ -770,9 +782,11 @@ module.exports = function registerPriestInPerilQuest(api) {
     const monument = monumentFor(event.objectId);
     if (!monument) return false;
     const { player } = event;
-    showStatement(player, quest.isStarted(player) && monumentsGuarded(player)
-      ? monument.study
-      : "A monument dedicated to the fallen.");
+    if (quest.isStarted(player) && monumentsGuarded(player)) {
+      showMonumentWindow(player, monument);
+    } else {
+      showStatement(player, "A monument dedicated to the fallen.");
+    }
     return true;
   }
 

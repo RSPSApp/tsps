@@ -3224,7 +3224,7 @@ export class OsrsClient {
                         if (wireLoops <= 0) return;
                         // Radius in tiles -> scene units (128 per tile)
                         const radiusScene =
-                            payload.radius !== undefined && payload.radius > 0
+                            hasPosition && payload.radius !== undefined
                                 ? (payload.radius | 0) * 128
                                 : undefined;
                         this.soundEffectSystem.playSoundEffect(payload.soundId, {

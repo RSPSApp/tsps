@@ -398,6 +398,8 @@ export class SoundEffectSystem {
     playSoundEffect(soundId: number, options: PlaySoundOptions = {}): void {
         if (this.disposed) return;
         const pending = { soundId, options: { ...options }, consumed: false };
+        // Sequence emitters reuse scratch coordinates; delayed sounds retain their emitted source.
+        if (pending.options.position) pending.options.position = { ...pending.options.position };
         for (const listener of this.beforePlayListeners) listener(pending);
         if (!pending.consumed) this.playSoundEffectInternal(pending.soundId, pending.options, 0);
     }

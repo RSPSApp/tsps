@@ -470,6 +470,7 @@ function dropCarriedFlag(player) {
 function trackBarricade(npc, teamId) {
   npc.castleWarsTeam = teamId;
   npc.setFlag(core.NPC.BLOCKS_PLAYERS_FLAG);
+  npc.setFlag(core.NPC.BLOCKS_PROJECTILES_FLAG);
   barricades.add(npc);
 }
 
@@ -486,6 +487,7 @@ function releaseBarricade(npc) {
     return;
   }
   npc.removeFlag(core.NPC.BLOCKS_PLAYERS_FLAG);
+  npc.removeFlag(core.NPC.BLOCKS_PROJECTILES_FLAG);
 }
 
 function removeBarricade(npc) {

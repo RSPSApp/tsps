@@ -426,7 +426,7 @@ test('a defender lights its own barricade once and keeps a burning blockade when
   t.mock.method(core.World, 'getNpcs', () => npcs);
   t.mock.method(core.PathFinder, 'reachedEntity', () => true);
   const tools = [];
-  t.mock.method(core.PluginManager, 'emitItemOnNpc', ({ itemId }) => { tools.push(itemId); return true; });
+  t.mock.method(core.PluginManager, 'emitItemOnNpc', ({ itemId }) => { tools.push(itemId); npcs[0].getNpcTransformationId = () => itemId === core.ItemIdentifiers.TINDERBOX ? 1 : -1; return true; });
   const own = barricade(2427, 3082, false);
   own.castleWarsTeam = 'a';
   npcs = [own];
@@ -463,7 +463,9 @@ test('one defender can light, douse and relight the same barricade', (t) => {
   Practice._test.defenderTools({ player: p, nowMs: 2000 }, state, target);
   Practice._test.defenderTools({ player: p, nowMs: 4000 }, state, null);
   Practice._test.defenderTools({ player: p, nowMs: 6000 }, state, target);
-  assert.deepEqual(tools, [core.ItemIdentifiers.TINDERBOX, core.ItemIdentifiers.BUCKET_OF_WATER, core.ItemIdentifiers.TINDERBOX]);
+  burning = false; // A teammate douses it through the ordinary item-on-NPC action.
+  Practice._test.defenderTools({ player: p, nowMs: 8000 }, state, target);
+  assert.deepEqual(tools, [core.ItemIdentifiers.TINDERBOX, core.ItemIdentifiers.BUCKET_OF_WATER, core.ItemIdentifiers.TINDERBOX, core.ItemIdentifiers.TINDERBOX]);
 });
 
 test('scorer defence places behind a pursuer, lights next tick and only throttles new placements', (t) => {

@@ -10,6 +10,7 @@ const CrystalHarpoon = require("./fishing/CrystalHarpoon.Fishing");
 const Guild = require("./fishing/Guild.Fishing");
 const AnglerOutfit = require("./fishing/AnglerOutfit.Fishing");
 const MinnowPlatform = require("./fishing/MinnowPlatform.Fishing");
+const RadasBlessing = require("./fishing/RadasBlessing.Fishing");
 const KarambwanVessel = require("./fishing/Karambwan.Fishing");
 const { pauseForLevelUp } = require("./SkillActions");
 
@@ -637,6 +638,25 @@ function inventoryBlocks(player, tool) {
     !tool.fish.some((fish) => storageRoom(player, fish.id));
 }
 
+/**
+ * Rada's blessing: a chance to double a catch, with no experience or bait. The Wiki
+ * (Rada's blessing 4) shows "Rada's blessing enabled you to catch an extra fish." for it. An
+ * infernal harpoon gives the extra its own chance to be cooked (Wiki: Infernal harpoon), which
+ * gives Cooking XP and uses an infernal charge. That the extra uses no crystal harpoon charge is
+ * inferred, not Wiki.
+ * Junk is left out: the Wiki says "fish" and doesn't settle it.
+ */
+function landExtra(player, variant, fish, amount) {
+  if (fish.junk || !RadasBlessing.rollExtraFish(player)) return;
+  if (variant.infernal && InfernalHarpoon.tryCookFish(player, fish.id)) {
+    spam(player, RadasBlessing.EXTRA_FISH_MESSAGE);
+    return;
+  }
+  if (!hasRoom(player, fish)) return;
+  giveCatch(player, fish.id, amount);
+  spam(player, RadasBlessing.EXTRA_FISH_MESSAGE);
+}
+
 function landCatch(player, tool, variant, caught) {
   const xpMultiplier = AnglerOutfit.xpMultiplier(player);
   // Each fish needs a free slot, its own stack or room in an open fish barrel. Holy Lake shrimps
@@ -644,9 +664,9 @@ function landCatch(player, tool, variant, caught) {
   const landed = [];
   for (const fish of caught) {
     if (!hasRoom(player, fish)) break;
-    landed.push(fish);
+    const amount = fish.amount(player);
+    landed.push({ fish, amount });
     if (!variant.infernal || !InfernalHarpoon.tryCookFish(player, fish.id)) {
-      const amount = fish.amount(player);
       giveCatch(player, fish.id, amount, fish.experience * xpMultiplier);
       spam(player, fish.message(amount));
     }
@@ -658,10 +678,14 @@ function landCatch(player, tool, variant, caught) {
       player.getSkillManager().addExperiences(skill, xp);
     }
   }
+  // Rada's blessing rolls once for each fish, after the whole catch has its slots.
+  for (const { fish, amount } of landed) {
+    landExtra(player, variant, fish, amount);
+  }
   // Wiki (Heron): a big net catch rolls the pet once per kind of fish in it.
   // A listener may take over the session (the tutorial stops after one catch).
   let stop = false;
-  for (const fish of new Set(landed)) {
+  for (const fish of new Set(landed.map((entry) => entry.fish))) {
     if (fish.junk) continue;
     const event = { player, skill: Skill.FISHING, itemId: fish.id, petBase: fish.petBase, stop: false };
     pluginApi.emitCustomEvent("fishing:success", event);
@@ -822,6 +846,7 @@ module.exports = {
     activeSessionsRef = activeSessions;
     TaskManager.submit(new FishingTask(activeSessions));
     InfernalHarpoon.attach(api);
+    RadasBlessing.attach(api);
     CrystalHarpoon.attach(api);
     Guild.attach(api);
     AnglerOutfit.attach(api);

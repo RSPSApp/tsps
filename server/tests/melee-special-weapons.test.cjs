@@ -228,6 +228,22 @@ test("Favour plays the mace's special animation and graphic", () => {
   assert.deepEqual(attacker.log.drains, [100]);
 });
 
+test("special attack animations use the cache's own sequences", () => {
+  const cases = [
+    ["voidwaker", 11275, "human_special02_voidwaker"], // 11240 is not sent by the live game
+    ["dragon_hasta", 11171, "specialattack_unleash"],
+    ["statius_warhammer_bh", 1378, "dragon_warhammer_sa_player"],
+  ];
+  for (const [id, expected, name] of cases) {
+    const animations = [];
+    const attacker = fakeFighter();
+    attacker.getEquipment = () => ({ get: () => ({ getId: () => ItemIdentifiers.DRAGON_HASTA }) });
+    attacker.performAnimation = (animation) => animations.push(animation.getId());
+    special(id).getCombatMethod().start(attacker, fakeTarget());
+    assert.equal(animations.at(-1), expected, `${id}: ${name}`);
+  }
+});
+
 test("the ancient mace and dragon sword specials pierce NPC melee prayers; the hasta's doesn't", () => {
   assert.equal(hitRoll(wielding(ItemIdentifiers.ANCIENT_MACE)), true, "Favour");
   assert.equal(hitRoll(wielding(ItemIdentifiers.DRAGON_SWORD)), true, "Wild Stab");

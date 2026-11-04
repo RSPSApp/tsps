@@ -490,9 +490,14 @@ function combatMethod(special) {
         player.getCombat().reset();
         return;
       }
-      const animation = character.getAttackAnim();
-      if (animation !== -1) {
-        character.performAnimation(new core.Animation(animation));
+      if (this.special) {
+        // TOXIC_BLOWPIPE_SPECIAL_UPDATED; the ordinary attack keeps the style's 5061.
+        character.performAnimation(new core.Animation(876));
+      } else {
+        const animation = character.getAttackAnim();
+        if (animation !== -1) {
+          character.performAnimation(new core.Animation(animation));
+        }
       }
       core.Projectile.createProjectile(character, target, ammo.getProjectileId(), 40, 60, 40, 35)
         .sendProjectile();

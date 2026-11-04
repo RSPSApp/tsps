@@ -164,9 +164,37 @@
    "refund": true
   },
   {
+   "kit": 12528,
+   "base": 6916,
+   "result": 12458,
+   "name": "Dark infinity colour kit",
+   "refund": true
+  },
+  {
+   "kit": 12528,
+   "base": 6924,
+   "result": 12459,
+   "name": "Dark infinity colour kit",
+   "refund": true
+  },
+  {
    "kit": 12530,
    "base": 6918,
    "result": 12419,
+   "name": "Light infinity colour kit",
+   "refund": true
+  },
+  {
+   "kit": 12530,
+   "base": 6916,
+   "result": 12420,
+   "name": "Light infinity colour kit",
+   "refund": true
+  },
+  {
+   "kit": 12530,
+   "base": 6924,
+   "result": 12421,
    "name": "Light infinity colour kit",
    "refund": true
   },
@@ -521,46 +549,46 @@
    "name": "Agility Arena graceful boots"
   },
   {
-   "kit": 0,
+   "kit": 24729,
    "base": 11850,
    "result": 24743,
    "worn": 24745,
-   "name": "Hallowed graceful hood"
+   "name": "Dark dye"
   },
   {
-   "kit": 0,
+   "kit": 24729,
    "base": 11852,
    "result": 24746,
    "worn": 24748,
-   "name": "Hallowed graceful cape"
+   "name": "Dark dye"
   },
   {
-   "kit": 0,
+   "kit": 24729,
    "base": 11854,
    "result": 24749,
    "worn": 24751,
-   "name": "Hallowed graceful top"
+   "name": "Dark dye"
   },
   {
-   "kit": 0,
+   "kit": 24729,
    "base": 11856,
    "result": 24752,
    "worn": 24754,
-   "name": "Hallowed graceful legs"
+   "name": "Dark dye"
   },
   {
-   "kit": 0,
+   "kit": 24729,
    "base": 11858,
    "result": 24755,
    "worn": 24757,
-   "name": "Hallowed graceful gloves"
+   "name": "Dark dye"
   },
   {
-   "kit": 0,
+   "kit": 24729,
    "base": 11860,
    "result": 24758,
    "worn": 24760,
-   "name": "Hallowed graceful boots"
+   "name": "Dark dye"
   },
   {
    "kit": 0,
@@ -609,42 +637,54 @@
    "base": 11850,
    "result": 25069,
    "worn": 25071,
-   "name": "Trailblazer graceful hood"
+   "name": "Trailblazer graceful hood",
+   "refund": true,
+   "allowGracefulVariants": true
   },
   {
    "kit": 25099,
    "base": 11852,
    "result": 25072,
    "worn": 25074,
-   "name": "Trailblazer graceful cape"
+   "name": "Trailblazer graceful cape",
+   "refund": true,
+   "allowGracefulVariants": true
   },
   {
    "kit": 25099,
    "base": 11854,
    "result": 25075,
    "worn": 25077,
-   "name": "Trailblazer graceful top"
+   "name": "Trailblazer graceful top",
+   "refund": true,
+   "allowGracefulVariants": true
   },
   {
    "kit": 25099,
    "base": 11856,
    "result": 25078,
    "worn": 25080,
-   "name": "Trailblazer graceful legs"
+   "name": "Trailblazer graceful legs",
+   "refund": true,
+   "allowGracefulVariants": true
   },
   {
    "kit": 25099,
    "base": 11858,
    "result": 25081,
    "worn": 25083,
-   "name": "Trailblazer graceful gloves"
+   "name": "Trailblazer graceful gloves",
+   "refund": true,
+   "allowGracefulVariants": true
   },
   {
    "kit": 25099,
    "base": 11860,
    "result": 25084,
    "worn": 25086,
-   "name": "Trailblazer graceful boots"
+   "name": "Trailblazer graceful boots",
+   "refund": true,
+   "allowGracefulVariants": true
   },
   {
    "kit": 30044,
@@ -796,6 +836,847 @@
    "result": 12774,
    "name": "Frozen whip mix",
    "cleaningCloth": true
+  },
+  {
+   "kit": 23321,
+   "base": 1333,
+   "result": 23330,
+   "name": "Rune scimitar ornament kit (Guthix)",
+   "refund": true
+  },
+  {
+   "kit": 23324,
+   "base": 1333,
+   "result": 23332,
+   "name": "Rune scimitar ornament kit (Saradomin)",
+   "refund": true
+  },
+  {
+   "kit": 23327,
+   "base": 1333,
+   "result": 23334,
+   "name": "Rune scimitar ornament kit (Zamorak)",
+   "refund": true
+  },
+  {
+   "kit": 24670,
+   "base": 21018,
+   "result": 24664,
+   "name": "Twisted ancestral colour kit",
+   "refund": true
+  },
+  {
+   "kit": 24670,
+   "base": 21021,
+   "result": 24666,
+   "name": "Twisted ancestral colour kit",
+   "refund": true
+  },
+  {
+   "kit": 24670,
+   "base": 21024,
+   "result": 24668,
+   "name": "Twisted ancestral colour kit",
+   "refund": true
+  },
+  {
+   "kit": 25090,
+   "base": 6739,
+   "result": 25378,
+   "name": "Trailblazer tool ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 25090,
+   "base": 13241,
+   "result": 25066,
+   "name": "Trailblazer tool ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 25090,
+   "base": 21028,
+   "result": 25373,
+   "name": "Trailblazer tool ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 25090,
+   "base": 21031,
+   "result": 25059,
+   "name": "Trailblazer tool ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 25090,
+   "base": 11920,
+   "result": 25376,
+   "name": "Trailblazer tool ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 25090,
+   "base": 13243,
+   "result": 25063,
+   "name": "Trailblazer tool ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26421,
+   "base": 12006,
+   "result": 26484,
+   "name": "Shattered relics variety ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26421,
+   "base": 4151,
+   "result": 26482,
+   "name": "Shattered relics variety ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26421,
+   "base": 9185,
+   "result": 26486,
+   "name": "Shattered relics variety ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26421,
+   "base": 3840,
+   "result": 26496,
+   "name": "Shattered relics variety ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26421,
+   "base": 3842,
+   "result": 26498,
+   "name": "Shattered relics variety ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26421,
+   "base": 3844,
+   "result": 26488,
+   "name": "Shattered relics variety ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26421,
+   "base": 12608,
+   "result": 26494,
+   "name": "Shattered relics variety ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26421,
+   "base": 12610,
+   "result": 26492,
+   "name": "Shattered relics variety ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26421,
+   "base": 12612,
+   "result": 26490,
+   "name": "Shattered relics variety ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26541,
+   "base": 4089,
+   "result": 26531,
+   "name": "Shattered relics mystic ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26541,
+   "base": 4091,
+   "result": 26533,
+   "name": "Shattered relics mystic ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26541,
+   "base": 4093,
+   "result": 26535,
+   "name": "Shattered relics mystic ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26541,
+   "base": 4095,
+   "result": 26537,
+   "name": "Shattered relics mystic ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26541,
+   "base": 4097,
+   "result": 26539,
+   "name": "Shattered relics mystic ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26707,
+   "base": 13652,
+   "result": 26708,
+   "name": "Dragon claws ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26709,
+   "base": 13576,
+   "result": 26710,
+   "name": "Dragon warhammer ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26711,
+   "base": 19481,
+   "result": 26712,
+   "name": "Heavy ballista ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26713,
+   "base": 11826,
+   "result": 26714,
+   "name": "Armadyl armour ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26713,
+   "base": 11828,
+   "result": 26715,
+   "name": "Armadyl armour ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26713,
+   "base": 11830,
+   "result": 26716,
+   "name": "Armadyl armour ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26717,
+   "base": 11832,
+   "result": 26718,
+   "name": "Bandos armour ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26717,
+   "base": 11834,
+   "result": 26719,
+   "name": "Bandos armour ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 26717,
+   "base": 11836,
+   "result": 26720,
+   "name": "Bandos armour ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 27098,
+   "base": 21003,
+   "result": 27100,
+   "name": "Elder maul ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 27113,
+   "base": 20595,
+   "result": 27119,
+   "name": "Elder chaos robes ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 27113,
+   "base": 20517,
+   "result": 27115,
+   "name": "Elder chaos robes ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 27113,
+   "base": 20520,
+   "result": 27117,
+   "name": "Elder chaos robes ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 27121,
+   "base": 24288,
+   "result": 27123,
+   "name": "Dagon'hai robes ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 27121,
+   "base": 24291,
+   "result": 27125,
+   "name": "Dagon'hai robes ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 27121,
+   "base": 24294,
+   "result": 27127,
+   "name": "Dagon'hai robes ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 7158,
+   "result": 28051,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 1377,
+   "result": 28037,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 11732,
+   "result": 28055,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 3140,
+   "result": 28065,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 13652,
+   "result": 28039,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 21902,
+   "result": 28053,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 1215,
+   "result": 28019,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 3204,
+   "result": 28049,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 1305,
+   "result": 28033,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 1434,
+   "result": 28027,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 1149,
+   "result": 28057,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 4087,
+   "result": 28061,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 4585,
+   "result": 28063,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 4587,
+   "result": 28031,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 1249,
+   "result": 28041,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 1187,
+   "result": 28059,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 21009,
+   "result": 28029,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 13576,
+   "result": 28035,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 10551,
+   "result": 28067,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 10828,
+   "result": 28070,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28336,
+   "base": 26382,
+   "result": 28254,
+   "name": "Ancient blood ornament kit",
+   "consumeKit": false,
+   "revertable": false,
+   "materials": [{ "id": 565, "amount": 20000, "name": "blood runes" }]
+  },
+  {
+   "kit": 28336,
+   "base": 26384,
+   "result": 28256,
+   "name": "Ancient blood ornament kit",
+   "consumeKit": false,
+   "revertable": false,
+   "materials": [{ "id": 565, "amount": 20000, "name": "blood runes" }]
+  },
+  {
+   "kit": 28336,
+   "base": 26386,
+   "result": 28258,
+   "name": "Ancient blood ornament kit",
+   "consumeKit": false,
+   "revertable": false,
+   "materials": [{ "id": 565, "amount": 20000, "name": "blood runes" }]
+  },
+  {
+   "kit": 28684,
+   "base": 21015,
+   "result": 28682,
+   "name": "Trailblazer Reloaded bulwark ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28690,
+   "base": 12924,
+   "result": 28687,
+   "name": "Trailblazer Reloaded blowpipe ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28690,
+   "base": 12926,
+   "result": 28688,
+   "name": "Trailblazer Reloaded blowpipe ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 30432,
+   "base": 27610,
+   "result": 30434,
+   "name": "Echo venator bow ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 30432,
+   "base": 27612,
+   "result": 30436,
+   "name": "Echo venator bow ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 30443,
+   "base": 26241,
+   "result": 30437,
+   "name": "Echo virtus ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 30443,
+   "base": 26243,
+   "result": 30439,
+   "name": "Echo virtus ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 30443,
+   "base": 26245,
+   "result": 30441,
+   "name": "Echo virtus ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 33305,
+   "base": 25484,
+   "result": 33335,
+   "name": "Demonic axe ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 33308,
+   "base": 1409,
+   "result": 33330,
+   "name": "Demonic staff ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 33308,
+   "base": 12658,
+   "result": 33332,
+   "name": "Demonic staff ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 33311,
+   "base": 12899,
+   "result": 33314,
+   "name": "Demonic trident ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 33311,
+   "base": 12900,
+   "result": 33316,
+   "name": "Demonic trident ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 33311,
+   "base": 22292,
+   "result": 33318,
+   "name": "Demonic trident ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 33311,
+   "base": 22294,
+   "result": 33320,
+   "name": "Demonic trident ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 33311,
+   "base": 11907,
+   "result": 33322,
+   "name": "Demonic trident ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 33311,
+   "base": 11905,
+   "result": 33323,
+   "name": "Demonic trident ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 33311,
+   "base": 11908,
+   "result": 33434,
+   "name": "Demonic trident ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 33311,
+   "base": 22288,
+   "result": 33326,
+   "name": "Demonic trident ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 33311,
+   "base": 22290,
+   "result": 33328,
+   "name": "Demonic trident ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 28017,
+   "base": 24175,
+   "result": 28069,
+   "name": "Bounty hunter ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 7980,
+   "base": 21012,
+   "result": 25918,
+   "name": "King Black Dragon heads",
+   "refund": true
+  },
+  {
+   "kit": 21907,
+   "base": 21012,
+   "result": 25916,
+   "name": "Vorkath's head",
+   "refund": true
+  },
+  {
+   "kit": 23908,
+   "base": 11920,
+   "result": 23677,
+   "name": "Zalcano shard",
+   "refund": true
+  },
+  {
+   "kit": 12800,
+   "base": 11920,
+   "result": 12797,
+   "name": "Dragon pickaxe upgrade kit"
+  },
+  {
+   "kit": 12798,
+   "base": 11787,
+   "result": 12795,
+   "name": "Steam staff upgrade kit"
+  },
+  {
+   "kit": 12798,
+   "base": 11789,
+   "result": 12796,
+   "name": "Steam staff upgrade kit"
+  },
+  {
+   "kit": 21202,
+   "base": 3053,
+   "result": 21198,
+   "name": "Lava staff upgrade kit"
+  },
+  {
+   "kit": 21202,
+   "base": 3054,
+   "result": 21200,
+   "name": "Lava staff upgrade kit"
+  },
+  {
+   "kit": 12802,
+   "base": 11926,
+   "result": 12807,
+   "name": "Ward upgrade kit"
+  },
+  {
+   "kit": 12802,
+   "base": 11924,
+   "result": 12806,
+   "name": "Ward upgrade kit"
+  },
+  {
+   "kit": 12757,
+   "base": 11235,
+   "result": 12765,
+   "name": "Blue dark bow paint",
+   "cleaningCloth": true
+  },
+  {
+   "kit": 12759,
+   "base": 11235,
+   "result": 12767,
+   "name": "Green dark bow paint",
+   "cleaningCloth": true
+  },
+  {
+   "kit": 12761,
+   "base": 11235,
+   "result": 15072,
+   "name": "Yellow dark bow paint",
+   "cleaningCloth": true
+  },
+  {
+   "kit": 12763,
+   "base": 11235,
+   "result": 15074,
+   "name": "White dark bow paint",
+   "cleaningCloth": true
+  },
+  {
+   "kit": 12849,
+   "base": 4153,
+   "result": 12848,
+   "name": "Granite clamp"
+  },
+  {
+   "kit": 12849,
+   "base": 24225,
+   "result": 24226,
+   "name": "Granite clamp"
+  },
+  {
+   "kit": 26811,
+   "base": 26850,
+   "result": 26858,
+   "name": "Abyssal red dye"
+  },
+  {
+   "kit": 26811,
+   "base": 26852,
+   "result": 26860,
+   "name": "Abyssal red dye"
+  },
+  {
+   "kit": 26811,
+   "base": 26854,
+   "result": 26862,
+   "name": "Abyssal red dye"
+  },
+  {
+   "kit": 26811,
+   "base": 26912,
+   "result": 26984,
+   "name": "Abyssal red dye"
+  },
+  {
+   "kit": 26811,
+   "base": 26914,
+   "result": 26990,
+   "name": "Abyssal red dye"
+  },
+  {
+   "kit": 26807,
+   "base": 26850,
+   "result": 26864,
+   "name": "Abyssal green dye"
+  },
+  {
+   "kit": 26807,
+   "base": 26852,
+   "result": 26866,
+   "name": "Abyssal green dye"
+  },
+  {
+   "kit": 26807,
+   "base": 26854,
+   "result": 26868,
+   "name": "Abyssal green dye"
+  },
+  {
+   "kit": 26807,
+   "base": 26912,
+   "result": 26986,
+   "name": "Abyssal green dye"
+  },
+  {
+   "kit": 26807,
+   "base": 26914,
+   "result": 26992,
+   "name": "Abyssal green dye"
+  },
+  {
+   "kit": 26809,
+   "base": 26850,
+   "result": 26870,
+   "name": "Abyssal blue dye"
+  },
+  {
+   "kit": 26809,
+   "base": 26852,
+   "result": 26872,
+   "name": "Abyssal blue dye"
+  },
+  {
+   "kit": 26809,
+   "base": 26854,
+   "result": 26874,
+   "name": "Abyssal blue dye"
+  },
+  {
+   "kit": 26809,
+   "base": 26912,
+   "result": 26988,
+   "name": "Abyssal blue dye"
+  },
+  {
+   "kit": 26809,
+   "base": 26914,
+   "result": 26994,
+   "name": "Abyssal blue dye"
+  },
+  {
+   "kit": 30793,
+   "base": 30750,
+   "result": 30777,
+   "name": "Purifying sigil",
+   "consumeKit": false,
+   "materials": [{ "id": 30843, "amount": 2500, "name": "aether runes" }]
+  },
+  {
+   "kit": 30793,
+   "base": 30753,
+   "result": 30779,
+   "name": "Purifying sigil",
+   "consumeKit": false,
+   "materials": [{ "id": 30843, "amount": 2500, "name": "aether runes" }]
+  },
+  {
+   "kit": 30793,
+   "base": 30756,
+   "result": 30781,
+   "name": "Purifying sigil",
+   "consumeKit": false,
+   "materials": [{ "id": 30843, "amount": 2500, "name": "aether runes" }]
+  },
+  {
+   "kit": 30793,
+   "base": 33338,
+   "result": 33340,
+   "name": "Purifying sigil",
+   "consumeKit": false,
+   "materials": [{ "id": 30843, "amount": 2500, "name": "aether runes" }]
+  },
+  {
+   "kit": 30793,
+   "base": 33439,
+   "result": 33445,
+   "name": "Purifying sigil",
+   "consumeKit": false,
+   "materials": [{ "id": 30843, "amount": 2500, "name": "aether runes" }]
   }
  ]
 }

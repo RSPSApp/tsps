@@ -132,5 +132,10 @@
     "energyVarbit": "lumbridge_energy_restore",
     "alchemyPerDay": 30,
     "alchemyVarbit": "lumbridge_free_alchs"
+  },
+  "flaxKeeper": {
+    "npc": "Flax keeper",
+    "diary": "kandarin",
+    "perDay": [30, 60, 120, 250]
   }
 }

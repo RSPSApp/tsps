@@ -10,13 +10,16 @@
  *   Boost), and worn Home, Crafting Guild, Guild Teleports, Skilling Areas and POH Portals.
  * - Combining: one of the listed capes used on it, with the max hood carried ("You need your max
  *   cape hood to be able to combine those."), makes the combined cape and hood. A knife takes a
- *   combined cape apart again into the max cape and the original item.
+ *   combined cape apart again into the max cape and the original item. Preset (untradeable,
+ *   unbankable) copies never combine: refused at the prompt, and only unrestricted instances are
+ *   consumed at Yes.
  */
 const Capes = require("./Common.SkillCapes");
 const Teleports = require("./Teleports.SkillCapes");
 const Options = require("./Options.SkillCapes");
 
 const MAC = "Mac";
+const PRESET_TEXT = "Preset items cannot be used for this.";
 const MAC_HAS_CAPE_VARIANT = "standard-dialogue-if-the-player-has-a-max-cape-in-their-inventory";
 const MAC_NO_CAPE_VARIANT = "standard-dialogue-if-the-player-does-not-have-a-max-cape-in-their-bank-or-inventory";
 const MAC_HOOD_VARIANT = "using-items-on-mac-using-any-max-hood-variant-on-mac";
@@ -275,12 +278,25 @@ function maxCapeOption(event) {
 
 // --- Combining and disassembling ------------------------------------------------------------
 
+/** Preset (and other untradeable or unbankable) copies keep their restrictions, so they never convert. */
+function restricted(item) {
+  const { Item } = Capes.core;
+  return !!item && (item.isPresetItem?.() === true
+    || item.getMetaValue?.(Item.PRESET_META) === true
+    || item.getMetaValue?.(Item.UNTRADEABLE_META) === true
+    || item.getMetaValue?.(Item.UNBANKABLE_META) === true);
+}
+
+/** The slot of an unrestricted copy of the item: the instance that is actually consumed. */
+function plainSlot(inventory, itemId) {
+  return inventory.getItems().findIndex((item) => item && item.getId() === itemId && !restricted(item));
+}
+
 function combine(player, combined) {
   const inventory = player.getInventory();
-  if (!inventory.contains(Capes.MAX.cape) || !inventory.contains(combined.item) || !inventory.contains(Capes.MAX.hood)) return;
-  inventory.deleteNumber(Capes.MAX.cape, 1);
-  inventory.deleteNumber(Capes.MAX.hood, 1);
-  inventory.deleteNumber(combined.item, 1);
+  const slots = [Capes.MAX.cape, Capes.MAX.hood, combined.item].map((id) => plainSlot(inventory, id));
+  if (slots.some((slot) => slot < 0)) return;
+  for (const slot of slots) inventory.deleteAtSlot(slot, 1);
   inventory.adds(combined.cape, 1);
   inventory.adds(combined.hood, 1);
   const chain = new Capes.core.DialogueChainBuilder();
@@ -289,7 +305,7 @@ function combine(player, combined) {
 }
 
 function combineOnUse(event) {
-  const { player, usedItemId, usedWithItemId } = event;
+  const { player, usedItem, usedWithItem, usedItemId, usedWithItemId } = event;
   const other = usedItemId === Capes.MAX.cape ? usedWithItemId : usedWithItemId === Capes.MAX.cape ? usedItemId : null;
   if (other === null) return;
   if (other === Capes.objId(Capes.DATA.combinedNotBlessed)) {
@@ -300,6 +316,10 @@ function combineOnUse(event) {
   const combined = Capes.COMBINED_BY_ITEM.get(other);
   if (!combined) return;
   event.handled = true;
+  if (restricted(usedItem) || restricted(usedWithItem)) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   if (!player.getInventory().contains(Capes.MAX.hood)) {
     player.sendMessage("You need your max cape hood to be able to combine those.");
     return;

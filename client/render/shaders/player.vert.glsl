@@ -145,7 +145,7 @@ void main() {
 
     vec4 localPos = vec4(vertex.pos, 1.0) * rotationY(float(playerInfo.rotation) * RS_TO_RADIANS) + vec4(playerInfo.tilePos.x, 0, playerInfo.tilePos.y, 0.0);
 
-    localPos.y -= getHeightInterp(playerInfo.tilePos, playerInfo.plane);
+    localPos.y -= getActorHeightInterp(playerInfo.tilePos, playerInfo.plane);
     localPos.y += u_modelYOffset;
     vec4 groundedPos = localPos;
 

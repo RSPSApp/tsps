@@ -144,6 +144,85 @@ test("skulled skips older than 30 minutes no longer count", () => {
   assert.equal(skipOutcome([now - SKIP_WINDOW_MS + 1, now - 1], now, true).blocks, true);
 });
 
+test("combat XP blocked in the arena still sends fake XP drops", async () => {
+  const { Skill } = require("../dist/game/model/Skill");
+  const { GameConstants } = require("../dist/game/GameConstants");
+  const Area = require("../plugins/minigames/bountyhunter/Area.BountyHunter");
+  const bh = require("../plugins/minigames/bountyhunter/State.BountyHunter");
+  const state = { ...bh, arena: new Set(), lobby: new Set(), targets: new Map(), immuneUntil: new WeakMap() };
+  const noop = () => {};
+  Area({
+    core: {
+      Area: class { constructor(boundaries) { this.boundaries = boundaries; } },
+      Boundary: class { constructor(...bounds) { this.bounds = bounds; } },
+      Skill,
+      GameConstants,
+      XPDROPS_ENABLED_ATTRIBUTE: "xp-drops:enabled",
+    },
+    registerArea: noop,
+    onPrayerDisabled: noop,
+    onCanGainExperience: noop,
+    onAttackTiming: noop,
+    onCombatHitResolved: noop,
+    onCustomEvent: noop,
+  }, state);
+
+  const sent = [];
+  const attributes = new Map([["xp-drops:enabled", true]]);
+  const xps = new Map(Skill.values().map((skill) => [skill.getClientId(), 1_000_000 + skill.getClientId()]));
+  const fakeDropsOff = { value: 0 };
+  const target = { isPlayer: () => true };
+  const sender = {
+    getVarbit: (id) => (id === Area._test.FAKE_DROPS_OFF_VARBIT ? fakeDropsOff.value : 0),
+    sendClientScript(id, ...args) { sent.push([id, ...args]); return this; },
+  };
+  const player = {
+    isPlayer: () => true,
+    getAttribute: (key) => attributes.get(key),
+    getPacketSender: () => sender,
+    getCombat: () => ({ getTarget: () => target }),
+    getSkillManager: () => ({ getExperience: (skill) => xps.get(skill.getClientId()) ?? 0 }),
+  };
+  state.arena.add(player);
+
+  // A three-damage Strength hit awards Hitpoints and Strength in one synchronous batch.
+  const hpEvent = { player, skill: Skill.HITPOINTS, experience: 4, allow: null };
+  const strengthEvent = { player, skill: Skill.STRENGTH, experience: 12, allow: null };
+  Area._test.noPvpCombatExperience(hpEvent);
+  Area._test.noPvpCombatExperience(strengthEvent);
+  assert.deepEqual([hpEvent.allow, strengthEvent.allow], [false, false], "the real XP stays blocked");
+  assert.equal(sent.length, 2, "both skills queue before the render");
+  await Promise.resolve();
+  assert.equal(sent.length, 3, "one render drains the whole batch");
+  assert.deepEqual(sent[0], [2091, Skill.HITPOINTS.getClientId(), 4]);
+  assert.deepEqual(sent[1], [2091, Skill.STRENGTH.getClientId(), 12]);
+
+  const render = sent[2];
+  assert.equal(render[0], 1004);
+  assert.equal(render[1], 1, "the fake-drop mode");
+  assert.deepEqual(render.slice(2, 12), Area._test.FAKE_DROP_RENDER_ARGS);
+  assert.deepEqual(render.slice(12), [0, 2, 4, 6, 1, 3, 5, 16, 15, 17, 12, 20, 14, 13, 10, 7, 11, 8, 9, 18, 19, 22, 21, 23]
+    .map((clientId) => xps.get(clientId)), "the client's baseline table in its own order");
+
+  sent.length = 0;
+  fakeDropsOff.value = 1;
+  Area._test.noPvpCombatExperience({ ...strengthEvent, allow: null });
+  await Promise.resolve();
+  assert.deepEqual(sent, [], "Fake drops: Off sends nothing");
+  fakeDropsOff.value = 0;
+
+  attributes.delete("xp-drops:enabled");
+  Area._test.noPvpCombatExperience({ ...strengthEvent, allow: null });
+  await Promise.resolve();
+  assert.deepEqual(sent, [], "a hidden XP counter sends nothing");
+
+  attributes.set("xp-drops:enabled", true);
+  state.arena.delete(player);
+  Area._test.noPvpCombatExperience({ ...strengthEvent, allow: null });
+  await Promise.resolve();
+  assert.deepEqual(sent, [], "XP outside the arena is not faked");
+});
+
 test("real Bounty Hunter deaths return humans to the lobby and honour Skully's loot-key settings", async (t) => {
   const { Server } = require('../dist/Server');
   Server.installProductionPathResolver();

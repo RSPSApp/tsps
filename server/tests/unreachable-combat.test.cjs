@@ -40,7 +40,7 @@ before(async () => {
  * tile occupant for wherever they end up, and `t.after` takes it back out. A left-behind occupant
  * is a wall to the next scene's pursuer, which tests entity blocks by accident.
  */
-function scene(t, { gap = 18, playerImmobile = false, npcImmobile = false } = {}) {
+function scene(t, { gap = 18, playerImmobile = false, npcImmobile = false, noRetreat = false } = {}) {
   let cycle = 1000;
   t.mock.method(core.World, "getProcessCycle", () => cycle);
   const tasks = [];
@@ -66,6 +66,9 @@ function scene(t, { gap = 18, playerImmobile = false, npcImmobile = false } = {}
   npc.isRegistered = () => true;
   npc.setNeedsPlacement(false);
   npc.setHitpoints(500);
+  // These tests are about the unreachable deadline, not the aggression-range leash: opt out of
+  // the latter so a target far from the spawn cannot end the engagement early.
+  if (noRetreat) npc.setFlag("combat:no-retreat");
   if (npcImmobile) npc.getMovementQueue().setBlockMovement(true);
 
   function tick() {
@@ -123,7 +126,7 @@ test("a player that cannot move, chasing a target that never comes, gives up", (
 });
 
 test("an immobile npc gives up a player that never comes", (t) => {
-  const s = scene(t, { playerImmobile: true, npcImmobile: true });
+  const s = scene(t, { playerImmobile: true, npcImmobile: true, noRetreat: true });
   s.npc.getCombat().attack(s.player);
   s.ticks(GIVE_UP_CYCLES - 1);
   assert.ok(s.npc.getCombat().getTarget(), "still patient one cycle short of the deadline");
@@ -133,7 +136,7 @@ test("an immobile npc gives up a player that never comes", (t) => {
 });
 
 test("a fighter still walking toward its target keeps it", (t) => {
-  const s = scene(t);
+  const s = scene(t, { noRetreat: true });
   const from = s.npc.getLocation().getDistance(s.player.getLocation());
   s.npc.getCombat().attack(s.player);
   s.ticks(GIVE_UP_CYCLES * 3);
@@ -177,8 +180,9 @@ test("an npc whose pursuit step another actor rejects gives up", (t) => {
 
 test("an npc chasing a target that walks away at its own speed keeps it", (t) => {
   // A held gap is not a failed pursuit. Both actors step south every cycle, so the distance never
-  // closes; only the mover knows the chase is still going, and live walks on.
-  const s = scene(t, { gap: 8 });
+  // closes; only the mover knows the chase is still going, and live walks on. The aggression-range
+  // leash is opted out here (see aggression-range.test.cjs), since this is the deadline's case.
+  const s = scene(t, { gap: 8, noRetreat: true });
   s.npc.getCombat().attack(s.player);
   const chase = GIVE_UP_CYCLES + 5;
   let steps = 0;

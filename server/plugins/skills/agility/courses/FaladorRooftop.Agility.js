@@ -2,14 +2,14 @@ const { ObjectIds } = require("../../../../src/main/typescript/elvarg/util/IdEnu
 const { Anim } = require("../Constants.Agility");
 const { climb, faceLoc } = require("../Steps.Agility");
 
-/** Hand holds climbed after the first hold, all on the wall's west face. */
+/** Hand holds followed north after the outside corner. */
 const HAND_HOLDS = [[3051, 3352], [3051, 3353], [3051, 3354], [3051, 3355]];
 
 function handHolds() {
   const steps = [
     { anim: Anim.JUMP_SHORT },
     { wait: 1 },
-    { tele: [3050, 3351, 2] },
+    { tele: [3051, 3351, 2] },
     { anim: Anim.HANG },
   ];
   for (const hold of HAND_HOLDS) {
@@ -19,8 +19,8 @@ function handHolds() {
   return steps;
 }
 
-/** Tightropes start on the rope's own tile, then balance to the far roof. */
-function tightrope(object, index, route, finish, xp) {
+/** The drawn rope can be offset from its clickable anchor; follow the authored path. */
+function tightrope(object, index, route, path, xp) {
   return {
     object,
     index,
@@ -28,7 +28,7 @@ function tightrope(object, index, route, finish, xp) {
     xp,
     route,
     render: Anim.BALANCE_WALK,
-    steps: ({ obj }) => [{ walk: [[obj.x, obj.y], finish] }],
+    steps: [{ walk: path }],
   };
 }
 
@@ -48,8 +48,8 @@ function ledge(object, index, dx, dy, xp) {
 }
 
 /**
- * Falador Rooftop. No rsprox capture exists (searched every obstacle loc id, the lap count line);
- * the movement is a guess from the cache's locs. XP per obstacle is the Wiki course page's since
+ * Falador Rooftop. Routes follow the cache locs; no rsprox capture was located for timing.
+ * XP per obstacle is the Wiki course page's since
  * the 8 May 2024 rebalance, adding up to the 586 lap with no bonus.
  */
 module.exports = {
@@ -77,7 +77,7 @@ module.exports = {
       route: [3036, 3341, 0],
       steps: (context) => [faceLoc(context.obj), ...climb([3036, 3342, 3])],
     },
-    tightrope(ObjectIds.TIGHTROPE_6, 2, [3039, 3343, 3], [3047, 3343], 22),
+    tightrope(ObjectIds.TIGHTROPE_6, 2, [3039, 3343, 3], [[3040, 3343], [3047, 3343]], 22),
     {
       object: ObjectIds.HAND_HOLDS_4,
       index: 3,
@@ -101,8 +101,8 @@ module.exports = {
       route: [3045, 3361, 3],
       steps: [{ move: [3041, 3361], anim: Anim.JUMP, speed: [15, 35], dir: "west" }],
     },
-    tightrope(ObjectIds.TIGHTROPE_7, 6, [3035, 3362, 3], [3027, 3354], 61),
-    tightrope(ObjectIds.TIGHTROPE_8, 7, [3027, 3353, 3], [3020, 3353], 53),
+    tightrope(ObjectIds.TIGHTROPE_7, 6, [3035, 3362, 3], [[3034, 3362], [3027, 3355]], 61),
+    tightrope(ObjectIds.TIGHTROPE_8, 7, [3027, 3353, 3], [[3026, 3353], [3020, 3353]], 53),
     ledge(ObjectIds.GAP_26, 8, 0, -4, 30),
     ledge(ObjectIds.LEDGE_7, 9, -2, 0, 14),
     ledge(ObjectIds.LEDGE_13, 10, 0, -2, 13),

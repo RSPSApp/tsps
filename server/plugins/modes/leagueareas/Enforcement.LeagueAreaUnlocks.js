@@ -7,7 +7,10 @@
  *   the league home;
  * - a teleport whose destination is known (`onCanTeleport`) is refused;
  * - a respawn another plugin sent into a locked square, or the world's spawn when locked, goes to
- *   the league home.
+ *   the league home;
+ * - Death's Office's exit portal, when it would lead to a locked square, leads to the league home.
+ *   The Wiki's respawn rule applied to the portal (ours: no capture shows a locked exit). Left to
+ *   the map-square rule, the player would go back into a copy that is ending as they leave it.
  * The league home is the world's spawn, or the first default area's hub when that is locked (so
  * always open, which ends the correction). A main character is never asked.
  */
@@ -100,11 +103,20 @@ function respawn(event) {
   }
 }
 
+/** Asked by Death's Office before its exit portal opens. */
+function officeExit(query) {
+  const { player, destination } = query;
+  const type = Common.leagueOf(player);
+  if (type === null || Regions.isOpenAt(type, player, destination)) return;
+  query.destination = home(type, player);
+}
+
 module.exports = function attach(api) {
   api.onPlayerMapSquareChange(mapSquareChanged);
   api.onCanTeleport(canTeleport);
   api.onPlayerDeath(died);
   api.onCustomEvent("player:respawn", respawn);
+  api.onCustomEvent("deaths-office:exit", officeExit);
 };
 
 Object.assign(module.exports, { home });

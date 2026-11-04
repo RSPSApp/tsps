@@ -4872,6 +4872,9 @@ export class PluginManager {
     resolver: PluginCombatMethodResolver
   ): void {
     PluginManager.combatMethodResolvers.push(resolver);
+    // Stable: weapon overrides first, each group in registration order.
+    PluginManager.combatMethodResolvers.sort((a, b) =>
+      Number(b.overridesWeapon === true) - Number(a.overridesWeapon === true));
   }
 
   private static registerNpcCombatMethodProviderInternal(

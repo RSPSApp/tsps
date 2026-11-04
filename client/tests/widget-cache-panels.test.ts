@@ -392,6 +392,154 @@ import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdat
 
 console.log("Cache panel scripts retain inventory items, 64-bit prices and native Castle Wars HUD state");
 
+// Fairytale II documents use the cache's IF1 models and fairy fonts without rewritten text.
+{
+    const { vm } = require('../scripts/cache/cs2-sweep').createCacheVm();
+    const { encodeWidgetOpenSub, encodeWidgetCloseSub } = require('../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol');
+    const wm = vm.context.widgetManager, errors: unknown[] = [], target = (161 << 16) | 16;
+    vm.logError = (error: unknown) => errors.push(error);
+    wm.setRootInterface(161); wm.resize(765, 503);
+    wm.onLoadListener = (_id: number, widget: any) => vm.runScriptEvent({ args: widget.onLoad, widget });
+    const documents = [
+        { group: 423, args: [-1, -1], model: 16050, textChild: 1, font: 497, text: 'Certificate of Advanced Healing' },
+        { group: 424, args: [4269835, 100], model: 16051, textChild: 4, font: 647, text: 'AIR DLR DJQ AJS' },
+        { group: 425, args: [-1, -1], model: 16067, textChild: 1, font: 648, text: 'COSMIC<br>RUNEe<br>ALTAR' },
+    ];
+    // Opening the front again after the back must restore the ordinary modal arguments.
+    for (const document of [...documents, documents[0]]) {
+        const script: any = decodeServerPacket(encodeWidgetRunScript(2524, document.args));
+        vm.run(vm.context.loadScript(script.payload.scriptId), script.payload.args, []);
+        assert.equal(vm.lastError, null);
+        assert.equal(vm.context.varManager.getVarcInt(172), document.args[0]);
+        assert.equal(vm.context.varManager.getVarcInt(173), document.args[1]);
+        const open: any = decodeServerPacket(encodeWidgetOpenSub(target, document.group, 0));
+        wm.openSubInterface(open.payload.targetUid, open.payload.groupId, open.payload.type);
+        assert.equal(wm.getSubInterface(target)?.group, document.group);
+        const model = wm.getWidgetByUid(document.group << 16);
+        const text = wm.getWidgetByUid((document.group << 16) | document.textChild);
+        assert.equal(model.type, 6); assert.equal(model.modelId, document.model); assert.equal(model.hidden, false);
+        assert.equal(text.fontId, document.font); assert.equal(text.hidden, false);
+        assert.ok(text.text.includes(document.text));
+        const close: any = decodeServerPacket(encodeWidgetCloseSub(target));
+        wm.closeSubInterface(close.payload.targetUid);
+        assert.equal(wm.getSubInterface(target), undefined);
+    }
+    assert.deepEqual(errors, []);
+}
+
+// Ring pickers use the cache's pause-button routes, with their distinct choice indices.
+{
+    const { vm } = require('../scripts/cache/cs2-sweep').createCacheVm();
+    const { processWidgetClickInput } = require('../game/widgets/input/widgetClickInput');
+    const { WidgetActionRouter } = require('../game/widgets/WidgetActionRouter');
+    const { decodeClientPackets } = require('../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol');
+    const { state } = require('../network/serverConnection/state');
+    const rings = require('../../server/plugins/items/TransformationRings.plugin')._test.RINGS;
+    const wm = vm.context.widgetManager, frames: Buffer[] = [], errors: unknown[] = [];
+    const socket = { readyState: 1, send: (frame: Uint8Array) => frames.push(Buffer.from(frame)) };
+    (globalThis as any).WebSocket ??= { OPEN: 1 };
+    state.socket = socket; setPacketSocket(socket as any);
+    vm.logError = (error: unknown) => errors.push(error);
+    wm.onLoadListener = (_id: number, widget: any) => vm.runScriptEvent({ args: widget.onLoad, widget });
+    wm.setRootInterface(161); wm.resize(765, 503);
+    const interaction: any = {
+        clickedWidget: null, clickedWidgetParent: null, clickedWidgetHandled: false,
+        resolveClickedWidgetParent: () => null, handleTradeRequestChatClick: () => false,
+        isWidgetDraggable: () => false,
+    };
+    let router: any;
+    const deps: any = new Proxy({
+        getWidgetManager: () => wm, getCs2Vm: () => vm, getVarManager: () => vm.context.varManager,
+        getCustomInterfaces: () => ({ handleWidgetClick: () => false, rowIdAt: () => undefined, handleWidgetOp() {} }),
+        getTransmitCycles: () => ({ cycleCntr: 1 }), getSpellSelection: () => ({ getWidgetTargetMask: () => 0 }),
+        handleTradeWidgetAction: () => false,
+        buildWidgetActionPayload: (event: any) => router.buildWidgetActionPayload(event),
+        resolveTransmitFlagWidget: (widget: any, payload: any) => router.resolveTransmitFlagWidget(widget, payload),
+        executeScriptListener: (widget: any, args: any[], context: any) => vm.runScriptEvent({ args, widget, ...context }),
+    }, { get: (target: any, key: any) => target[key] ?? (() => undefined) });
+    router = new WidgetActionRouter(deps);
+    const click = (widget: any) => {
+        frames.length = 0;
+        wm.meslayerContinueWidget = null; // A fresh mount/answer releases the native repeat guard.
+        interaction.clickedWidget = null; interaction.clickedWidgetParent = null; interaction.clickedWidgetHandled = false;
+        processWidgetClickInput(deps, { cachedHoverHits: null }, {
+            input: { leftClickX: 10, leftClickY: 10 }, collectFromAllRoots: () => [widget],
+            getWidgetFlags: (target: any) => wm.getWidgetFlags(target),
+        }, wm, interaction, (target: any) => ({ option: target.actions?.[0] ?? target.text ?? 'Continue', target: '', opIndex: 1 }), true);
+        flushPackets();
+        return frames.flatMap(frame => decodeClientPackets(frame));
+    };
+    try {
+        wm.openSubInterface((161 << 16) | 16, 187, 0);
+        vm.run(vm.context.loadScript(217), [1], ['Choose a form', Object.keys(rings['Ring of 3rd Age'].choices).join('|')]);
+        const choices = wm.getDynamicChildrenByParent((187 << 16) | 3);
+        assert.equal(choices.length, 24);
+        for (const index of [0, 23]) {
+            wm.setWidgetFlagsByKey((187 << 16) | 3, index, 1);
+            assert.deepEqual(click(choices.find((widget: any) => widget.childIndex === index)),
+                [{ type: 'dialogue_continue', childIndex: index, widgetId: (187 << 16) | 3 }]);
+        }
+        wm.closeSubInterface((161 << 16) | 16);
+        wm.openSubInterface((162 << 16) | 567, 219, 0);
+        vm.run(vm.context.loadScript(58), [], ['Choose a form', 'Traditional|Tempy|Thermy']);
+        const snowmen = wm.getDynamicChildrenByParent((219 << 16) | 1);
+        for (const index of [1, 3]) {
+            wm.setWidgetFlagsByKey((219 << 16) | 1, index, 1);
+            assert.deepEqual(click(snowmen.find((widget: any) => widget.childIndex === index)),
+                [{ type: 'dialogue_continue', childIndex: index, widgetId: (219 << 16) | 1 }]);
+        }
+        wm.openSubInterface((162 << 16) | 567, 136, 0);
+        const unmorph = wm.getWidgetByUid(136 << 16);
+        assert.deepEqual(unmorph.actions, ['Unmorph']);
+        const packets = click(unmorph);
+        assert.equal(packets.length, 1); assert.equal(packets[0].type, 'widget_action');
+        assert.equal(packets[0].widgetId, 136 << 16); assert.equal(packets[0].buttonNum, 1);
+        wm.openSubInterface((162 << 16) | 567, 747, 0);
+        for (const [child, label] of ['Unmorph', 'Question', 'Exclaim', 'Shake', 'Survey'].entries()) {
+            const button = wm.getWidgetByUid((747 << 16) | child);
+            assert.deepEqual(button.actions, [label]);
+            const cratePackets = click(button);
+            assert.equal(cratePackets.length, 1); assert.equal(cratePackets[0].type, 'widget_action');
+            assert.equal(cratePackets[0].widgetId, (747 << 16) | child); assert.equal(cratePackets[0].buttonNum, 1);
+        }
+        assert.deepEqual(errors, []);
+    } finally {
+        setPacketSocket(null); state.socket = null;
+    }
+}
+
+// Native prayer and quick-prayer icons follow the server's Knight Waves unlock varbit.
+{
+    const { createCacheVm } = require('../scripts/cache/cs2-sweep');
+    const { encodeVarbit } = require('../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol');
+    const { vm } = createCacheVm(), wm = vm.context.widgetManager;
+    vm.context.getStatLevel = vm.context.getStatBase = vm.context.getStatBoosted = () => 99;
+    wm.onLoadListener = (_id: number, widget: any) => vm.runScriptEvent({ args: widget.onLoad, widget });
+    wm.resize(765, 503); wm.setRootInterface(161); resetTransmitCycles();
+    const queued: any[] = [];
+    const transmits = new WidgetTransmitProcessor({ getWidgetManager: () => wm, getCs2Vm: () => vm,
+        getTransmitCycles, queueScriptEvent: event => queued.push(event),
+        executeScriptListener: (widget, args) => vm.runScriptEvent({ widget, args }) });
+    vm.context.varManager.onVarpChange = (id: number) => vm.isRunning() ? vm.queueVarpChange(id) : markVarTransmit(id);
+    vm.onVarpChange = markVarTransmit;
+    for (const group of [541, 77]) {
+        wm.openSubInterface((161 << 16) | 81, group, 1);
+        vm.run(vm.context.loadScript(915), [5], []); // The server selects the prayer sidebar.
+        for (const [state, sprites] of [[0, [949, 950]], [8, [945, 946]], [0, [949, 950]]] as const) {
+            const message = decodeServerPacket(encodeVarbit(3909, state)) as any;
+            vm.context.varManager.setServerVarbit(message.payload.varbitId, message.payload.value);
+            transmits.processWidgetTransmits();
+            while (queued.length) vm.runScriptEvent(queued.shift());
+            assert.equal(vm.lastError, null);
+            const icons = group === 541 ? [34, 35].map(child => wm.getWidgetByUid((541 << 16) | child).children[1])
+                : [79, 81].map(index => wm.getWidgetByUid((77 << 16) | 4).children[index]);
+            assert.deepEqual(icons.map(icon => icon.spriteId), sprites,
+                `${group} shows the native Chivalry/Piety locked or unlocked sprites`);
+        }
+    }
+    resetTransmitCycles();
+}
+
 // Actual cache key listeners -> native resume packet -> real PlayerSession/DestroyItem policy.
 async function nativeDestroyConfirmation() {
     const previousDirectory = process.cwd();
@@ -442,8 +590,13 @@ async function nativeDestroyConfirmation() {
     require(serverRoot + '/plugins/interface/DestroyItem.plugin').register(PluginManager.createApi('destroy-keyboard-test'));
     const connection = new ClientConnection(channel); connection.player = player;
     const outgoing: any[] = [];
+    const { state } = require('../network/serverConnection/state');
+    const { sendWidgetDrag } = require('../network/serverConnection/outgoing/bank');
+    const previousSocket = state.socket;
     (globalThis as any).WebSocket ??= { OPEN: 1 };
-    setPacketSocket({ readyState: 1, send: (frame: Uint8Array) => outgoing.push(decodeClientPacket(Buffer.from(frame))) } as any);
+    const socket = { readyState: 1, send: (frame: Uint8Array) => outgoing.push(decodeClientPacket(Buffer.from(frame))) } as any;
+    state.socket = socket;
+    setPacketSocket(socket);
     const open = () => {
         player.getInventory().setItem(0, new core.Item(11941, 1));
         DropItemPacketListener.drop(player, 11941, core.Inventory.INTERFACE_ID, 0);
@@ -489,7 +642,175 @@ async function nativeDestroyConfirmation() {
         open(); player.getPacketSender().sendInterfaceRemoval();
         await connection.dispatch([{ type: 'dialogue_continue', widgetId: 584 << 16, childIndex: 1 }]); connection.processTurnPackets();
         assert.equal(player.getInventory().getAmount(11941), 1, 'a closed or replaced chat interface invalidates confirmation');
+
+        // Bank incinerator: the cache's bankmain:incinerator_target is a drop target for the
+        // stack under the cursor. Confirming destroys that bank stack; cancelling keeps it.
+        const { PlayerSave } = require(serverModules + '/game/entity/impl/player/persistence/PlayerSave');
+        const bankItems = (core.Bank.MAIN_INTERFACE_ID << 16) | core.Bank.ITEMS_CHILD;
+        const bankIncinerator = (core.Bank.MAIN_INTERFACE_ID << 16) | core.Bank.INCINERATOR_CHILD;
+        const bankSaves: Array<{ save: any; coinsAtEvent: number }> = [];
+        PluginManager.createApi('bank-incinerate-save-test').onCustomEvent('persistence:save', (event) => {
+            if (event.player !== player || event.reason !== 'bank-incinerate') return;
+            bankSaves.push({ save: PlayerSave.fromPlayer(player), coinsAtEvent: player.getBank(0).getAmount(995) });
+        });
+        const openScene = (currentTab: number, fill: () => void) => {
+            if (player.getInterfaceId() >= 0 || player.getPacketSender().isChatboxInterface(584)) {
+                player.getPacketSender().sendInterfaceRemoval();
+            }
+            for (let tab = 0; tab < core.Bank.TOTAL_BANK_TABS; tab++) player.getBank(tab).resetItems();
+            fill();
+            player.setCurrentBankTab(currentTab);
+            player.getBank(currentTab).open();
+            assert.equal(player.getInterfaceId(), core.Bank.MAIN_INTERFACE_ID);
+            assert.equal(player.getStatus(), core.PlayerStatus.BANKING);
+        };
+        // Send the actual IF_BUTTOND the client emits when the stack is released on the icon.
+        const dragOntoIncinerator = async (sourceSlot: number, itemId: number) => {
+            sendWidgetDrag(bankItems, sourceSlot, itemId, bankIncinerator, -1, -1);
+            flushPackets();
+            await connection.dispatch(outgoing.splice(0));
+            connection.processTurnPackets();
+        };
+        const openBankIncinerator = async (sourceSlot: number, itemId: number) => {
+            await dragOntoIncinerator(sourceSlot, itemId);
+            assert.equal(player.getPacketSender().isChatboxInterface(584), true);
+            assert.equal(wm.getWidgetByUid((584 << 16) | 5).itemId, itemId);
+        };
+
+        // Whole stack + neighbouring stack + a save snapshot taken after the mutation.
+        openScene(0, () => {
+            player.getBank(0).add(new core.Item(995, 5), false);
+            player.getBank(0).add(new core.Item(556, 2), false);
+        });
+        await openBankIncinerator(0, 995); key('1'); await resume(1);
+        assert.equal(player.getBank(0).getAmount(995), 0, 'the whole bank stack is destroyed');
+        assert.equal(player.getBank(0).getAmount(556), 2, 'the neighbouring stack is untouched');
+        assert.equal(bankSaves.length, 1, 'the confirmed mutation requests a durable save');
+        assert.equal(bankSaves[0].coinsAtEvent, 0, 'the save request follows the bank mutation');
+        const reloaded = new Player(null);
+        bankSaves[0].save.applyToPlayer(reloaded);
+        assert.equal(reloaded.getBank(0).getAmount(995), 0, 'the saved snapshot has the stack removed');
+        assert.equal(reloaded.getBank(0).getAmount(556), 2);
+        assert.equal(player.getInterfaceId(), core.Bank.MAIN_INTERFACE_ID, 'confirming keeps the bank open');
+        assert.equal(player.getStatus(), core.PlayerStatus.BANKING);
+
+        // Cancellation leaves the stack, its neighbour and persistence alone.
+        openScene(0, () => {
+            player.getBank(0).add(new core.Item(995, 5), false);
+            player.getBank(0).add(new core.Item(556, 2), false);
+        });
+        await openBankIncinerator(0, 995); key('2'); await resume(0);
+        assert.equal(player.getBank(0).getAmount(995), 5, 'cancelling leaves the bank stack');
+        assert.equal(player.getBank(0).getAmount(556), 2);
+        assert.equal(bankSaves.length, 1, 'cancelling does not request a save');
+        assert.equal(player.getInterfaceId(), core.Bank.MAIN_INTERFACE_ID, 'cancelling keeps the bank open');
+        assert.equal(player.getStatus(), core.PlayerStatus.BANKING);
+
+        // A changed amount invalidates the prompt.
+        openScene(0, () => player.getBank(0).add(new core.Item(995, 5), false));
+        await openBankIncinerator(0, 995);
+        player.getBank(0).getItems()[0].setAmount(4);
+        key('1'); await resume(1);
+        assert.equal(player.getBank(0).getAmount(995), 4, 'an amount change cannot destroy the stack');
+        assert.equal(bankSaves.length, 1, 'a stale prompt does not request a save');
+
+        // Reordering after the prompt cannot destroy the neighbour now in the original slot.
+        openScene(0, () => {
+            player.getBank(0).add(new core.Item(995, 5), false);
+            player.getBank(0).add(new core.Item(556, 2), false);
+        });
+        await openBankIncinerator(0, 995);
+        player.getBank(0).swap(0, 1);
+        key('1'); await resume(1);
+        assert.equal(player.getBank(0).getAmount(995), 5, 'the reordered source stack remains');
+        assert.equal(player.getBank(0).getAmount(556), 2, 'the new occupant of the old slot remains');
+        assert.equal(bankSaves.length, 1, 'a reordered prompt does not request a save');
+
+        // A nested metadata change invalidates the prompt.
+        openScene(0, () => player.getBank(0).add(new core.Item(11907, 1, { charges: 5, state: { used: 0 } }), false));
+        await openBankIncinerator(0, 11907);
+        player.getBank(0).getItems()[0].getMeta().state.used = 1;
+        key('1'); await resume(1);
+        assert.equal(player.getBank(0).getAmount(11907), 1, 'a nested metadata change cannot destroy the stack');
+        assert.deepEqual(player.getBank(0).getItems()[0].getMeta(), { charges: 5, state: { used: 1 } });
+        assert.equal(bankSaves.length, 1, 'a stale metadata prompt does not request a save');
+
+        // A bank item in a nonzero tab resolves through the actual display slot.
+        openScene(2, () => {
+            player.getBank(1).add(new core.Item(995, 4), false);
+            player.getBank(2).add(new core.Item(556, 3), false);
+        });
+        await openBankIncinerator(1, 556);
+        key('1'); await resume(1);
+        assert.equal(player.getBank(2).getAmount(556), 0, 'the nonzero-tab stack is destroyed');
+        assert.equal(player.getBank(1).getAmount(995), 4);
+        assert.equal(bankSaves.length, 2);
+
+        // The all-items view maps its later slots back to the main tab.
+        openScene(0, () => {
+            player.getBank(1).add(new core.Item(556, 2), false);
+            player.getBank(0).add(new core.Item(995, 5), false);
+        });
+        await openBankIncinerator(1, 995);
+        key('1'); await resume(1);
+        assert.equal(player.getBank(0).getAmount(995), 0, 'the all-items stack is destroyed');
+        assert.equal(player.getBank(1).getAmount(556), 2);
+        assert.equal(bankSaves.length, 3);
+
+        // Search results are a separate display list; the matching bank stack is resolved.
+        openScene(0, () => {
+            player.getBank(1).add(new core.Item(556, 2), false);
+            player.getBank(0).add(new core.Item(995, 5), false);
+        });
+        core.Bank.search(player, 'coins');
+        assert.equal(player.isSearchingBank(), true);
+        assert.equal(player.getBank(core.Bank.BANK_SEARCH_TAB_INDEX).getItems()[0].getId(), 995);
+        await openBankIncinerator(0, 995);
+        key('1'); await resume(1);
+        assert.equal(player.getBank(0).getAmount(995), 0, 'the searched stack is destroyed');
+        assert.equal(player.getBank(1).getAmount(556), 2);
+        assert.equal(bankSaves.length, 4);
+
+        // Closed prompt: the old confirmation cannot destroy anything.
+        openScene(0, () => player.getBank(0).add(new core.Item(995, 5), false));
+        await openBankIncinerator(0, 995);
+        player.getPacketSender().sendInterfaceRemoval();
+        await connection.dispatch([{ type: 'dialogue_continue', widgetId: 584 << 16, childIndex: 1 }]); connection.processTurnPackets();
+        assert.equal(player.getBank(0).getAmount(995), 5, 'a closed prompt cannot destroy');
+        assert.equal(bankSaves.length, 4);
+
+        // Replaced 584: a later prompt is not ours, so it is neither confirmed nor closed.
+        openScene(0, () => player.getBank(0).add(new core.Item(995, 5), false));
+        await openBankIncinerator(0, 995);
+        DropItemPacketListener.destroyItemInterface(player, player.getBank(0).getItems()[0]);
+        await connection.dispatch([{ type: 'dialogue_continue', widgetId: 584 << 16, childIndex: 1 }]); connection.processTurnPackets();
+        assert.equal(player.getBank(0).getAmount(995), 5, 'a replacement prompt cannot destroy the bank stack');
+        assert.equal(player.getPacketSender().isChatboxInterface(584), true, 'the replacement UI is left open');
+        assert.equal(bankSaves.length, 4);
+
+        // Placeholders have nothing to destroy and never open a prompt.
+        openScene(0, () => player.getBank(0).add(new core.Item(995, 0), false));
+        await dragOntoIncinerator(0, 995);
+        assert.equal(player.getPacketSender().isChatboxInterface(584), false, 'a placeholder is not destroyed');
+
+        // Refresh compacts nonzero tabs: a same-ID neighbour is not the deleted stack.
+        const discarded: any[] = [];
+        PluginManager.createApi('bank-incinerate-compaction-test').onCustomEvent('item:discarded', event => {
+            if (event.player === player) discarded.push(event.item.clone());
+        });
+        openScene(1, () => {
+            player.getBank(1).add(new core.Item(11907, 1, { charges: 5 }), false);
+            player.getBank(1).add(new core.Item(11907, 1, { charges: 10 }), false);
+        });
+        await openBankIncinerator(0, 11907); key('1'); await resume(1);
+        assert.deepEqual(player.getBank(1).getValidItems().map((item: any) => item.getMeta()), [{ charges: 10 }]);
+        assert.equal(bankSaves.length, 5, 'compaction cannot suppress the successful removal save');
+        assert.deepEqual(discarded.map(item => item.getMeta()), [{ charges: 5 }], 'the removed stack reaches its owner');
+        const compactedReload = new Player(null);
+        bankSaves[4].save.applyToPlayer(compactedReload);
+        assert.deepEqual(compactedReload.getBank(1).getValidItems().map((item: any) => item.getMeta()), [{ charges: 10 }]);
     } finally {
+        state.socket = previousSocket;
         session.flushPackets(); setPacketSocket(null); player.setRegistered(false);
         process.chdir(previousDirectory);
     }
@@ -503,8 +824,7 @@ async function nativeSpecialOrbSendsOneServerAuthoritativeInput() {
     try {
         const serverModules = serverRoot + '/src/main/typescript/elvarg';
         require(serverModules + '/Server').Server.installProductionPathResolver();
-        const { CachePipeline } = require(serverModules + '/game/cache/CachePipeline');
-        await CachePipeline.initialize(serverRoot);
+        // Reuse the cache initialized above; Gamevals retains that open store.
         const { PluginManager } = require(serverModules + '/plugins/PluginManager');
         const { Player } = require(serverModules + '/game/entity/impl/player/Player');
         const { PlayerSession } = require(serverModules + '/net/PlayerSession');

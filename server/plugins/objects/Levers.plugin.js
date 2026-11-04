@@ -6,7 +6,8 @@
  * after that, and the player lands three ticks later with the lever's own line.
  *
  * Other plugins teleport through it without a lever's pull:
- *   api.emitCustomEvent("lever:teleport", { player, destination })
+ *   api.emitCustomEvent("lever:teleport", { player, destination, onArrival? })
+ * `onArrival` runs when the player has landed.
  */
 const ObstacleRunner = require("../skills/agility/ObstacleRunner.Agility");
 
@@ -32,6 +33,9 @@ const OUT_OF_WILDERNESS = "... and teleport out of the Wilderness.";
 const DESERTED_KEEP = [3154, 3924];
 // The easy Ardougne Diary's "Use the Ardougne Lever to teleport to the Wilderness."
 const ARDOUGNE_LEVER_TASK = { diary: "ardougne", task: "use-the-ardougne-lever-to-teleport-to-the-wilder" };
+// The easy Wilderness Diary's "Enter the Wilderness from the Ardougne or Edgeville lever." Counted on
+// landing; no recording shows the completion, so the moment is the journal text read plainly.
+const WILDERNESS_LEVER_TASK = { diary: "wilderness", task: "enter-the-wilderness-from-the-ardougne-or-edgevi" };
 const EAST_ARDOUGNE = [2562, 3311];
 const EDGEVILLE = [3090, 3475];
 
@@ -39,12 +43,12 @@ const EDGEVILLE = [3090, 3475];
 const LEVERS = Object.freeze({
   edgeville_wildy_lever: {
     warn: true,
-    Pull: { to: DESERTED_KEEP, landed: INTO_WILDERNESS, intoKeep: true },
+    Pull: { to: DESERTED_KEEP, landed: INTO_WILDERNESS, intoKeep: true, diaryTasks: [WILDERNESS_LEVER_TASK] },
   },
   // Wiki, Lever (Ardougne). Its warning is assumed to be the Edgeville lever's.
   wildinlever: {
     warn: true,
-    Pull: { to: DESERTED_KEEP, landed: INTO_WILDERNESS, intoKeep: true, diaryTask: ARDOUGNE_LEVER_TASK },
+    Pull: { to: DESERTED_KEEP, landed: INTO_WILDERNESS, intoKeep: true, diaryTasks: [ARDOUGNE_LEVER_TASK, WILDERNESS_LEVER_TASK] },
   },
   // The Keep's multiloc: "Pull" until the easy Wilderness Diary, then "Ardougne" and "Edgeville".
   wildoutlever: {
@@ -127,7 +131,7 @@ function landedInKeep(player) {
 
 function landed(player, destination) {
   if (destination.intoKeep) landedInKeep(player);
-  if (destination.diaryTask) api.emitCustomEvent("diary:task", { player, ...destination.diaryTask });
+  for (const task of destination.diaryTasks ?? []) api.emitCustomEvent("diary:task", { player, ...task });
 }
 
 function pull(player, object, destination) {
@@ -185,9 +189,9 @@ function initialize(pluginApi) {
   ObstacleRunner.init(api);
 }
 
-function teleport({ player, destination }) {
+function teleport({ player, destination, onArrival }) {
   if (core.TeleportHandler.checkReqs(player, destination, Infinity)) {
-    core.TeleportHandler.teleport(player, destination.clone(), core.TeleportType.NORMAL, false);
+    core.TeleportHandler.teleport(player, destination.clone(), core.TeleportType.NORMAL, false, onArrival);
   }
 }
 

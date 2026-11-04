@@ -1773,6 +1773,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       leaveFinalRoom(player);
       return true;
     }
+    // Only the Lumbridge entry portal is ours; other "Portal" objects belong to other quests.
+    if (location && (location.x !== ENTRY_PORTAL_TILE.x || location.y !== ENTRY_PORTAL_TILE.y || location.z !== ENTRY_PORTAL_TILE.z)) return false;
     if (!canBeginFinale(player)) {
       if (flags(player) === ALL_RESCUES) {
         player.sendMessage("You need at least 175 quest points, Desert Treasure I and Horror from the Deep before facing the Culinaromancer.");
@@ -1782,7 +1784,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     }
     const checkpoint = Number(player.getAttribute(FINAL_FIGHT_ATTRIBUTE));
     if (checkpoint !== -1 && !(checkpoint >= 1 && checkpoint <= FINAL_WAVES.length)) return false;
-    if (location && (location.x !== ENTRY_PORTAL_TILE.x || location.y !== ENTRY_PORTAL_TILE.y || location.z !== ENTRY_PORTAL_TILE.z)) return false;
     if (action && !["Use", "Enter", "Enter portal", "Walk-through", "Pass-through"].includes(action)) return false;
     enterFinalRoom(player);
     moveTo(player, FINAL_ROOM.x, FINAL_ROOM.y, FINAL_ROOM.z);

@@ -1,4 +1,4 @@
-const { DragonfireProtectionTier, getDragonfireProtectionTier } = require("../combat/DragonfireProtection");
+const { DragonfireProtectionTier, emitDragonfireBreath, getDragonfireProtectionTier, sendDragonfireMessages } = require("../combat/DragonfireProtection");
 
 let pluginApi;
 const encounters = new WeakMap();
@@ -122,6 +122,7 @@ function dragonfireDamage(player) {
     superPotion ? "You are completely protected from the dragon fire." :
       prayer || potion ? "You manage to resist some of the dragon fire." : "You're horribly burnt by the dragon fire!";
   player.sendMessage(message);
+  sendDragonfireMessages(player, emitDragonfireBreath(null, player, []));
   const skills = player.getSkillManager(), prayerLevel = skills.getCurrentLevel(pluginApi.core.Skill.PRAYER);
   if (prayerLevel >= 10) skills.setCurrentLevels(pluginApi.core.Skill.PRAYER, prayerLevel - Math.floor(prayerLevel / 10));
   return max ? Misc.randomInclusive(0, max) : 0;

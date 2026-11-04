@@ -313,8 +313,17 @@ function hasCompletedEnterTheAbyss(player) {
   return request.complete === true;
 }
 
-function requestTeleport(player, destination) {
-  pluginApi.emitCustomEvent("lever:teleport", { player, destination: destination.clone() });
+/**
+ * The easy Wilderness Diary's "Enter the Chaos Runecrafting temple.": through the ruins or the
+ * Abyss's rift (Wiki: Chaos Altar). The Tunnel of Chaos and Guardians of the Rift do not count, and
+ * do not come through here.
+ */
+function enteredChaosTemple(player) {
+  pluginApi.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "enter-the-chaos-runecrafting-temple" });
+}
+
+function requestTeleport(player, destination, onArrival) {
+  pluginApi.emitCustomEvent("lever:teleport", { player, destination: destination.clone(), onArrival });
 }
 
 function ouraniaWeights(level) {
@@ -546,6 +555,7 @@ function enterRuins(player, ruins) {
   player.moveTo(new Location(...ruins.destination));
   player.getPacketSender().sendSound(EXIT_PORTAL_SOUND, 1, 0);
   spam(player, "You feel a powerful force take hold of you...");
+  if (ruins.name === "Chaos") enteredChaosTemple(player);
 }
 
 /**
@@ -568,6 +578,10 @@ function handleTalismanOnRuins(event) {
       player.getPacketSender().sendSound(EXIT_PORTAL_SOUND, 1, 0);
       spam(player, `You hold the ${name} towards the mysterious ruins.<br>You feel a powerful force take hold of you...`);
       player.getPacketSender().sendVarbit(busy, 1);
+    },
+    // The landing follows this step in the same tick.
+    [1 + HOLD_TALISMAN_TICKS]: () => {
+      if (ruins.name === "Chaos") enteredChaosTemple(player);
     },
   }, () => {
     if (held) player.getPacketSender().sendVarbit(busy, 0);
@@ -763,7 +777,10 @@ function teleportToAbyss(player) {
   player.getSkillManager().setCurrentLevels(Skill.PRAYER, 0);
   // The Mage of Zamorak skulls the player for 10 minutes (Wiki).
   pluginApi.core.CombatFactory.skull(player, pluginApi.core.SkullType.WHITE_SKULL, ABYSS_SKULL_SECONDS);
-  requestTeleport(player, ABYSS_INNER_RING);
+  // The Wilderness Diary's "Have the Mage of Zamorak teleport you to the Abyss.", on landing.
+  requestTeleport(player, ABYSS_INNER_RING, () => {
+    pluginApi.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "have-the-mage-of-zamorak-teleport-you-to-the-aby" });
+  });
 }
 
 function handleZamorakTeleport(event) {
@@ -847,7 +864,9 @@ function handleEnterRift(event) {
   }
   const destination = ALTAR_DESTINATIONS.get(runeId);
   if (destination) {
-    requestTeleport(event.player, new Location(destination.x, destination.y, 0));
+    const { player } = event;
+    requestTeleport(player, new Location(destination.x, destination.y, 0),
+      runeId === ItemIdentifiers.CHAOS_RUNE ? () => enteredChaosTemple(player) : undefined);
   }
   return true;
 }

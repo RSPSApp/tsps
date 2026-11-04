@@ -13,7 +13,7 @@ travel: travel_to
 
 # Another Slice of H.A.M.
 
-The latest run is scripted and unwatched: [route.cjs](route.cjs) played the whole quest over
+The latest run is scripted and unwatched: [route.cjs](https://github.com/RSPSApp/tsps/blob/main/docs/quests/another-slice-of-ham/route.cjs) played the whole quest over
 the agent MCP from a fresh stage-0 account to completion, checking Quest Helper before each leg
 and varbit 3550 after it. Three quest bugs were fixed first: the station doorway landed on the
 captured post-quest platform, which has no link to the dig floor, handed-in artefacts reverted to

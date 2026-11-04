@@ -7,8 +7,20 @@ const { test } = require('node:test');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 require(root + '/dist/Server').Server.installProductionPathResolver();
+const { PluginManager } = require(root + '/dist/plugins/PluginManager');
+const { Player } = require(root + '/dist/game/entity/impl/player/Player');
+const { PlayerSession } = require(root + '/dist/net/PlayerSession');
+const { ClientConnection } = require(root + '/dist/net/NetworkBuilder');
+const { encodeWidgetCloseSub, encodeWidgetOpenSub, encodeWidgetSetItem, encodeWidgetSetText } =
+  require(root + '/dist/net/protocol/ClientProtocol');
+
 require('node:test').before(async () => {
   await require(root + '/dist/game/cache/CachePipeline').CachePipeline.initialize(root);
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3427, 9894);
+  require(root + '/plugins/quests/quests/PriestInPeril.Quest')(
+    PluginManager.createApi('native-priest-in-peril-test')
+  );
 });
 
 const core = require(root + '/dist/plugins/PluginManager').PluginManager.getCoreApi();
@@ -20,6 +32,11 @@ const N = core.NpcIdentifiers;
 const O = core.ObjectIdentifiers;
 const VARP = 302;
 const STAGE = 'quest.priest_in_peril.stage';
+const MONUMENT_WINDOW = 272;
+const MONUMENT_WINDOW_TEXT_UID = (MONUMENT_WINDOW << 16) | 7;
+const MONUMENT_WINDOW_ITEM_UID = (MONUMENT_WINDOW << 16) | 8;
+const MAIN_MODAL_TARGET_UID = (161 << 16) | 16;
+const CHATBOX_MODAL_TARGET_UID = (162 << 16) | 568;
 
 // The plugin destructures these at registration: record what it plays instead of
 // running the transcript runtime.
@@ -38,9 +55,16 @@ function makePlayer() {
   const configs = [];
   const xp = [];
   const statements = [];
+  const interfaces = [];
+  const strings = [];
+  const itemsOnInterfaces = [];
   let location = new core.Location(3415, 3489, 2);
   const sender = new Proxy({
     sendConfig(id, value) { if (id === VARP) configs.push(value); return sender; },
+    sendChatboxInterface(id) { interfaces.push(id); return sender; },
+    sendInterface(id) { interfaces.push(id); return sender; },
+    sendString(text, uid) { strings.push([uid, text]); return sender; },
+    sendItemOnInterfaces(uid, itemId, amount) { itemsOnInterfaces.push([uid, itemId, amount]); return sender; },
   }, { get: (target, key) => (key in target ? target[key] : () => sender) });
   const inventory = {
     capacity: Infinity,
@@ -60,7 +84,7 @@ function makePlayer() {
     forceAdd(_player, item) { return inventory.adds(item.getId(), item.getAmount()); },
   };
   return {
-    attrs, items, configs, xp, statements, inventory,
+    attrs, items, configs, xp, statements, interfaces, strings, itemsOnInterfaces, inventory,
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
     getInventory: () => inventory,
@@ -147,6 +171,95 @@ const CELL_GATE = [O.CELL_GATE_7, 3415, 3489, 2];
 const COFFIN = [O.COFFIN_7, 3413, 3486, 2];
 const WELL = [O.WELL_6, 3423, 9890, 0];
 const MAUSOLEUM = new core.Location(3440, 9895, 0);
+
+let nextNativeIndex = 9000;
+
+function nativeActor(t) {
+  const frames = [];
+  const channel = {
+    kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: (frame) => { frames.push(Buffer.from(frame)); return true; },
+    close() {}, onData() {}, onError() {}, onClose() {},
+  };
+  const player = new Player(new PlayerSession(channel));
+  player.setIndex(nextNativeIndex++);
+  player.setUsername(`pipnative${nextNativeIndex}`);
+  player.setRegistered(true);
+  player.setLocation(new core.Location(3426, 9894, 0));
+  player.needsPlacement = false;
+  const connection = new ClientConnection(channel);
+  connection.player = player;
+  t.after(() => {
+    PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
+    player.setRegistered(false);
+    core.TaskManager.cancelTasks(player.getIndex());
+  });
+  return { player, connection, frames };
+}
+
+async function nativeSend(f, packet) {
+  await f.connection.dispatch([packet]);
+  f.connection.processTurnPackets();
+  for (let tick = 0; tick < 10; tick++) {
+    core.TaskManager.processWalkTo(f.player.getIndex());
+    f.player.getMovementQueue().process();
+    core.TaskManager.process();
+  }
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
+const framesContain = (frames, packet) => Buffer.concat(frames).includes(packet);
+
+test('native Study opens 272, IF_CLOSE closes 161:16, and Study reopens it', async (t) => {
+  const f = nativeActor(t);
+  const quest = runtime.getRegisteredQuests().find((entry) => entry.key === 'priest_in_peril');
+  assert.ok(quest);
+  quest.setStage(f.player, 40);
+  const location = new core.Location(3427, 9894, 0);
+  const object = core.MapObjects.get(O.MONUMENT_5, location.clone(), null);
+  assert.ok(object, 'the real cache MONUMENT_5 must exist at 3427,9894,0');
+  assert.equal(object.getId(), O.MONUMENT_5);
+  assert.deepEqual([object.getLocation().getX(), object.getLocation().getY(), object.getLocation().getZ()],
+    [3427, 9894, 0]);
+  assert.equal(object.getType(), 10, 'the cache monument keeps shape 10');
+  assert.equal(object.getFace(), 0, 'the cache monument keeps rotation 0');
+  const study = () => nativeSend(f, {
+    type: 'object_option', id: object.getId(), x: 3427, y: 9894, action: 'Study',
+  });
+  const text = 'Saradomin is the key that unlocks the mysteries of life.';
+  const open = encodeWidgetOpenSub(MAIN_MODAL_TARGET_UID, MONUMENT_WINDOW, 0);
+  const setText = encodeWidgetSetText(MONUMENT_WINDOW_TEXT_UID, text);
+  const setItem = encodeWidgetSetItem(MONUMENT_WINDOW_ITEM_UID, I.IRON_KEY, 1);
+
+  f.frames.length = 0;
+  await study();
+  assert.ok(framesContain(f.frames, open), 'Study mounts 272 into 161:16 type 0');
+  assert.ok(framesContain(f.frames, setText), 'Study sends the key inscription to 272:7');
+  assert.ok(framesContain(f.frames, setItem), 'Study sends the iron key emblem to 272:8');
+  assert.equal(f.player.getInterfaceId(), MONUMENT_WINDOW);
+
+  f.frames.length = 0;
+  await nativeSend(f, { type: 'interface_close' });
+  assert.ok(framesContain(f.frames, encodeWidgetCloseSub(MAIN_MODAL_TARGET_UID)),
+    'IF_CLOSE closes the 161:16 main modal');
+  assert.equal(f.player.getInterfaceId(), -1);
+
+  f.frames.length = 0;
+  await study();
+  assert.ok(framesContain(f.frames, open), 'Study reopens 272 after the native close');
+  assert.ok(framesContain(f.frames, setText), 'the reopened window keeps the inscription');
+  assert.ok(framesContain(f.frames, setItem), 'the reopened window keeps the iron key emblem');
+  assert.equal(f.player.getInterfaceId(), MONUMENT_WINDOW);
+
+  quest.setStage(f.player, 60);
+  f.frames.length = 0;
+  await study();
+  assert.ok(framesContain(f.frames, encodeWidgetOpenSub(CHATBOX_MODAL_TARGET_UID, 229, 0)),
+    'post-quest Study stays in the 229 messagebox');
+  assert.ok(framesContain(f.frames, encodeWidgetSetText((229 << 16) | 3,
+    'A monument dedicated to the fallen.')));
+  assert.ok(!framesContain(f.frames, open), 'post-quest Study does not open 272');
+});
 
 test('joining or completing Shield of Arrav cannot hide Priest in Peril at King Roald', () => {
   const h = harness({ shieldOfArrav: true });
@@ -330,11 +443,36 @@ test('saves from before the cell and coffin stages keep their meaning', () => {
   assert.equal(h.stage(), 55);
 });
 
+test('in-quest monument Study opens the quest monument window for every inscription', () => {
+  const inscriptions = [
+    [O.MONUMENT, 'Saradomin is the vessel that keeps us safe from harm.', I.GOLDEN_POT],
+    [O.MONUMENT_2, 'Saradomin is the hammer that crushes evil everywhere.', I.GOLDEN_HAMMER],
+    [O.MONUMENT_3, 'Saradomin is the delicate touch that brushes us with love.', I.GOLDEN_FEATHER],
+    [O.MONUMENT_4, 'Saradomin is the needle that binds our lives together.', I.GOLDEN_NEEDLE],
+    [O.MONUMENT_5, 'Saradomin is the key that unlocks the mysteries of life.', I.IRON_KEY],
+    [O.MONUMENT_6, 'Saradomin is the spark that lights the fire in our hearts.', I.GOLDEN_TINDERBOX],
+    [O.MONUMENT_7, 'Saradomin is the light that shines throughout our lives.', I.GOLDEN_CANDLE],
+  ];
+  for (const [objectId, text, emblem] of inscriptions) {
+    const h = harness();
+    h.player.setAttribute(STAGE, 40);
+    h.object('Monument', 'Study', objectId, 3423, 9890, 0);
+    assert.deepEqual(h.player.interfaces, [MONUMENT_WINDOW], `monument ${objectId} opens 272`);
+    assert.deepEqual(h.player.strings, [[MONUMENT_WINDOW_TEXT_UID, text]], 'only 272:7 gets the inscription');
+    assert.deepEqual(h.player.itemsOnInterfaces, [[MONUMENT_WINDOW_ITEM_UID, emblem, 1]],
+      `monument ${objectId} shows its canonical emblem on 272:8`);
+    assert.deepEqual(h.player.statements, [], 'in-quest Study does not use messagebox 229');
+  }
+});
+
 test('monuments guard their items until the coffin is sealed and give one souvenir each', () => {
   const h = harness();
   h.player.setAttribute(STAGE, 40);
   h.object('Monument', 'Study', O.MONUMENT_5, 3427, 9894, 0);
-  assert.equal(h.statements.at(-1), 'Saradomin is the key that unlocks the mysteries of life.');
+  assert.deepEqual(h.player.interfaces, [MONUMENT_WINDOW]);
+  assert.deepEqual(h.player.strings.at(-1),
+    [MONUMENT_WINDOW_TEXT_UID, 'Saradomin is the key that unlocks the mysteries of life.']);
+  assert.deepEqual(h.player.itemsOnInterfaces.at(-1), [MONUMENT_WINDOW_ITEM_UID, I.IRON_KEY, 1]);
   h.player.inventory.adds(I.HAMMER, 2);
   assert.ok(h.useOn(I.HAMMER, O.MONUMENT_2, 3423, 9895, 0));
   assert.equal(h.player.inventory.getAmount(I.GOLDEN_HAMMER), 1);
@@ -345,6 +483,8 @@ test('monuments guard their items until the coffin is sealed and give one souven
   h.player.setAttribute(STAGE, 60);
   h.object('Monument', 'Study', O.MONUMENT_5, 3427, 9894, 0);
   assert.equal(h.statements.at(-1), 'A monument dedicated to the fallen.');
+  assert.equal(h.player.interfaces.filter((id) => id === MONUMENT_WINDOW).length, 1,
+    'post-quest Study does not open the monument window');
   h.player.inventory.adds(I.BUCKET);
   assert.equal(h.useOn(I.BUCKET, ...WELL), false, 'after the quest the well fills an ordinary bucket of water');
 });

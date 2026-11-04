@@ -762,9 +762,14 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         // Quest-gated choices carry a slug like "quest:cook-s-assistant:start";
         // let the owning quest run its action, then play the branch.
         if (option.hook) {
-          api.emitCustomEvent("npc-dialogue:hook", { player, npc: event.npc, npcId, definition, hook: option.hook, quest: option.quest, option: option.text });
+          const hook = { player, npc: event.npc, npcId, definition, hook: option.hook, quest: option.quest, option: option.text };
+          api.emitCustomEvent("npc-dialogue:hook", hook);
+          // The native option prompt is already closed; preserve any replacement UI.
+          if (hook.end) return;
         }
-        api.emitCustomEvent("npc-dialogue:choice", { player, npc: event.npc, npcId, definition, option: option.text, stepId: option.id });
+        const choice = { player, npc: event.npc, npcId, definition, option: option.text, stepId: option.id };
+        api.emitCustomEvent("npc-dialogue:choice", choice);
+        if (choice.end) return;
         context.currentMenu = menu;
         run([...(option.steps || []), ...rest, ...tail], recordOption(option));
       }];
@@ -971,8 +976,11 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       chain.add(new ActionDialogue(index++, { execute: () => {
         // Action steps can carry a quest slug; emit it, then continue the branch.
         if (step.hook) {
-          api.emitCustomEvent("npc-dialogue:hook", { player, npc: event.npc, npcId, definition, hook: step.hook, quest: step.quest, action: step.action });
-          return run(rest, currentRecord);
+          const hook = { player, npc: event.npc, npcId, definition, hook: step.hook, quest: step.quest, action: step.action };
+          const current = manager.getCurrent?.();
+          api.emitCustomEvent("npc-dialogue:hook", hook);
+          if (current && manager.getCurrent() !== current) return;
+          return hook.end ? close() : run(rest, currentRecord);
         }
         // Quest actions ("Quest complete!", "receive", ...) let a plugin drive
         // state through the mutable payload, then the branch continues.

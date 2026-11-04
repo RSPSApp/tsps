@@ -445,11 +445,13 @@ test('Fairytale II: permission and the four-code hideout route through real ring
     quest.setStage(p, 30);
     if (certificate || study) p.getInventory().adds(I.NUFFS_CERTIFICATE, 1);
     if (study) assert.equal(PluginManager.emitItemAction({ player: p, item: p.getInventory().get(0), slot: 0,
-      itemId: I.NUFFS_CERTIFICATE, clickType: 1, option: 'Study', handled: false }), true);
+      itemId: I.NUFFS_CERTIFICATE, clickType: 2, option: 'Study', handled: false }), true);
+    p.closeInterruptibleInterfaces();
     if (sign) {
       const id = core.ObjectIdentifiers.RUNE_TEMPLE_SIGN;
       objectAction(p, id, new Location(2409, 4369), 'Read');
       assert.equal(p.getPacketSender().getVarbit(2338), 4);
+      p.closeInterruptibleInterfaces();
     }
     if (permission) PluginManager.emitCustomEvent('npc-dialogue:choice', { player: p, npcId: core.NpcIdentifiers.FAIRY_GODFATHER, option: 'Yes, okay.' });
     if (!certificate) p.getInventory().deleteNumber(I.NUFFS_CERTIFICATE, 1);

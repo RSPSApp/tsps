@@ -9,6 +9,10 @@ const PRAY_AT_ALTAR_ANIMATION = new Animation(645);
 const EAST_ARDOUGNE_CHURCH_ALTAR = [2617, 3309, 0];
 const ARDOUGNE_ALTAR_TASK = "use-the-altar-in-east-ardougne-s-church";
 
+// The easy Wilderness Diary's "Pray at the Chaos Altar in Western Wilderness.": the Chaos Temple
+// (church) altar at level 38 (OSRS Wiki: Chaos Temple), not the Wilderness hut's.
+const WESTERN_CHAOS_ALTAR = { x: 2947, y: 3820, z: 0 };
+
 let core = null;
 let api = null;
 
@@ -97,8 +101,15 @@ function prayerAltar({ player, object }) {
  * Chaos altars pray as altars do (captured at the Chaos Temple: human_pray, synth 2674, the same
  * messages). The Yanille Agility dungeon's trapdoor altar is left to fall through.
  */
-function prayAtChaosAltar({ player, objectId }) {
-  return objectId === core.ObjectIdentifiers.CHAOS_ALTAR_3 ? false : handlePrayerAltar(player);
+function prayAtChaosAltar({ player, objectId, location }) {
+  if (player.getHitpoints?.() <= 0 || player.isDyingReturn?.() === true) return false;
+  if (objectId === core.ObjectIdentifiers.CHAOS_ALTAR_3) return false;
+  const handled = handlePrayerAltar(player);
+  const west = WESTERN_CHAOS_ALTAR;
+  if (handled && location?.x === west.x && location?.y === west.y && location?.z === west.z) {
+    api.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "pray-at-the-chaos-altar-in-western-wilderness" });
+  }
+  return handled;
 }
 
 /** Shrines restore Prayer as altars do; the Woodcutting Guild's full-Prayer line, as captured. */

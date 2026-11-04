@@ -27,7 +27,12 @@ plugin.register({
   onPrayerDisabled(handler) { prayerDisabledHook = handler; },
   onCustomEvent(name, handler) { customEventHooks.set(name, handler); },
   onItemAction(name, actions) { itemActions.set(name, actions); },
-  emitCustomEvent(name, event) { if (name === "prayer:unlocks-bypass" && bypassHook) bypassHook(event); },
+  emitCustomEvent(name, event) {
+    if (name === "prayer:unlocks-bypass" && bypassHook) bypassHook(event);
+    if (name === "quest:is-complete" && event.key === "kings_ransom") {
+      event.complete = Number(event.player.getAttribute("quest.kings_ransom.stage")) >= 85;
+    }
+  },
   sendMultiChatboxPrompt(player, title, ...pairs) {
     prompt = { player, title, options: [] };
     for (let i = 0; i < pairs.length; i += 2) {
@@ -323,4 +328,111 @@ test("the plugin starts every unlock locked", () => {
     ["prayer:rigour-unlocked", false],
     ["prayer:augury-unlocked", false],
   ]);
+});
+
+// Isolated processes keep the real QuestRuntime registry from leaking between world configs.
+async function nativeQuestPrayerScenario(config) {
+  const assert = require('node:assert/strict');
+  const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+  const root = process.cwd(), temp = fs.mkdtempSync(path.join(os.tmpdir(), 'tsps-quest-prayer-'));
+  require(root + '/dist/Server').Server.installProductionPathResolver();
+  await require(root + '/dist/game/cache/CachePipeline').CachePipeline.initialize(root);
+  const { PluginManager } = require(root + '/dist/plugins/PluginManager');
+  const { Player } = require(root + '/dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require(root + '/dist/net/PlayerSession');
+  const { ClientConnection } = require(root + '/dist/net/NetworkBuilder');
+  const { ClientPacketId } = require(root + '/dist/net/protocol/NativeClientPackets');
+  const { decodeClientPackets } = require(root + '/dist/net/protocol/ClientProtocol');
+  const core = PluginManager.getCoreApi();
+  const enabled = config.plugins?.Quests !== false && !config.disabledPlugins?.includes('Quests');
+  try {
+    fs.mkdirSync(temp + '/data/definitions', { recursive: true });
+    fs.mkdirSync(temp + '/plugins');
+    fs.writeFileSync(temp + '/data/definitions/world.json', JSON.stringify({
+      spawn: { x: 3222, y: 3218, z: 0 }, zones: [], experienceMultiplier: 1, ...config,
+    }));
+    // Exercise actual plugin switches without loading unrelated content or listeners.
+    fs.writeFileSync(temp + '/plugins/PrayerUnlocks.plugin.js',
+      'module.exports = require(' + JSON.stringify(root + '/plugins/skills/PrayerUnlocks.plugin.js') + ');');
+    fs.writeFileSync(temp + '/plugins/Quests.plugin.js',
+      'module.exports = {name:"Quests",register:require(' + JSON.stringify(root + '/plugins/quests/quests/KingsRansom.Quest.js') + ')};');
+    process.chdir(temp); PluginManager.loadFromDirectory(temp + '/plugins'); process.chdir(root);
+    const channel = { kind: 'test', binaryTransport: true, isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onClose() {}, onError() {} };
+    const session = new PlayerSession(channel), player = new Player(session); session.setPlayer(player);
+    player.setRegistered(true); player.setNeedsPlacement(false); player.setUsername('quest-prayer-fixture');
+    player.getSkillManager().setMaxLevel(core.Skill.PRAYER, 99, false);
+    player.getSkillManager().setCurrentLevel(core.Skill.PRAYER, 99, false);
+    player.getSkillManager().setMaxLevel(core.Skill.DEFENCE, 99, false);
+    const connection = new ClientConnection(channel); connection.player = player;
+    const query = { player, key: 'kings_ransom', complete: null };
+    PluginManager.emitCustomEvent('quest:is-complete', query);
+    assert.equal(query.complete, enabled ? false : null, 'real quest registration follows the world toggle');
+    PluginManager.emitPlayerLogin({ player, username: player.getUsername() });
+    for (const id of [5451, 5452, 5453]) assert.equal(player.getPacketSender().getVarbit(id), 0, 'scrolls stay locked');
+    const click = async (child, group = 541, slot = -1) => {
+      const raw = Buffer.alloc(9); raw[0] = ClientPacketId.IF_BUTTON1;
+      raw.writeInt32BE((group << 16) | child, 1); raw.writeUInt16BE(slot & 65535, 5); raw.writeUInt16BE(65535, 7);
+      await connection.dispatch(decodeClientPackets(raw)); connection.processTurnPackets();
+    };
+    const initial = [];
+    for (const [child, name] of [[34, 'CHIVALRY'], [35, 'PIETY']]) {
+      await click(child); initial.push(!!player.getPrayerActive()[core.PrayerHandler[name]]);
+      if (initial.at(-1)) await click(child);
+    }
+    await click(4, 77, 26);
+    const quickSelected = player.getQuickPrayers().prayers[core.PrayerHandler.PIETY] != null;
+    if (quickSelected) await click(4, 77, 26);
+    assert.deepEqual({ knightWaves: player.getPacketSender().getVarbit(3909), initial, quickSelected },
+      { knightWaves: enabled ? 0 : 8, initial: [!enabled, !enabled], quickSelected: !enabled },
+      'the native tab, activation and quick-prayer setup agree');
+    if (enabled) {
+      const quest = require(root + '/plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'kings_ransom');
+      quest.setStage(player, 84); assert.equal(player.getPacketSender().getVarbit(3909), 0);
+      quest.setStage(player, 85); assert.equal(player.getPacketSender().getVarbit(3909), 8, 'completion uses the real stage-changed query');
+    }
+    for (const [child, name, prayerLevel, defenceLevel] of [[34, 'CHIVALRY', 60, 65], [35, 'PIETY', 70, 70]]) {
+      await click(child); assert.equal(!!player.getPrayerActive()[core.PrayerHandler[name]], true, name + ' activates');
+      await click(child);
+      player.getSkillManager().setMaxLevel(core.Skill.PRAYER, prayerLevel - 1, false);
+      player.getSkillManager().setCurrentLevel(core.Skill.PRAYER, 99, false);
+      await click(child); assert.equal(!!player.getPrayerActive()[core.PrayerHandler[name]], false, 'boosts cannot bypass base Prayer');
+      player.getSkillManager().setMaxLevel(core.Skill.PRAYER, prayerLevel, false);
+      player.getSkillManager().setMaxLevel(core.Skill.DEFENCE, defenceLevel - 1, false);
+      await click(child); assert.equal(!!player.getPrayerActive()[core.PrayerHandler[name]], false, 'Defence still required');
+      player.getSkillManager().setMaxLevel(core.Skill.DEFENCE, defenceLevel, false);
+      await click(child); assert.equal(!!player.getPrayerActive()[core.PrayerHandler[name]], true, 'exact base levels work');
+      await click(child);
+      player.getSkillManager().setCurrentLevel(core.Skill.PRAYER, 0, false);
+      await click(child); assert.equal(!!player.getPrayerActive()[core.PrayerHandler[name]], false, 'zero Prayer cannot activate');
+      player.getSkillManager().setMaxLevel(core.Skill.PRAYER, 99, false);
+      player.getSkillManager().setCurrentLevel(core.Skill.PRAYER, 99, false);
+      player.getSkillManager().setMaxLevel(core.Skill.DEFENCE, 99, false);
+    }
+    await click(4, 77, 26); await click(4);
+    assert.equal(player.getPrayerActive()[core.PrayerHandler.PIETY], true, 'quick-prayer orb also activates Piety');
+    await click(4);
+    for (const name of ['RIGOUR', 'AUGURY', 'PRESERVE']) {
+      assert.equal(core.PrayerHandler.canUse(player, core.PrayerData[name], false), false, 'scroll required for ' + name);
+    }
+    if (!enabled) assert.equal(player.getAttribute('quest.kings_ransom.stage'), undefined, 'no synthetic quest completion');
+    for (const key of ['rigour', 'augury', 'preserve']) {
+      assert.notEqual(player.getAttribute('prayer:' + key + '-unlocked'), true, 'no synthetic scroll unlock');
+    }
+    core.TaskManager.cancelTasks(player); player.setRegistered(false); session.flushPackets();
+  } finally {
+    process.chdir(root); fs.rmSync(temp, { recursive: true, force: true });
+  }
+}
+
+for (const [label, config] of [
+  ['disabled', { plugins: { Quests: false } }],
+  ['legacy-disabled', { disabledPlugins: ['Quests'] }],
+  ['enabled', { plugins: { Quests: true } }],
+  ['default-enabled', {}],
+]) test('native prayer gates with quests ' + label, () => {
+  const result = require('node:child_process').spawnSync(process.execPath,
+    ['-e', '(' + nativeQuestPrayerScenario.toString() + ')(' + JSON.stringify(config) + ').catch(error => {console.error(error);process.exitCode=1;})'],
+    { cwd: require('node:path').resolve(__dirname, '..'), encoding: 'utf8', timeout: 30000 });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
 });

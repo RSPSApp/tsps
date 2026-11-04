@@ -24,12 +24,12 @@ const loc = (name) => CacheDefinitions.getLocId(name);
 const varbit = (name) => CacheDefinitions.getVarbitId(name);
 
 /** Registers the plugin against a fake api, keeping its hooks and the tasks it submits. */
-function harness({ diaryComplete = false } = {}) {
+function harness({ diaryComplete = false, teleportSpy = () => {} } = {}) {
   const hooks = {};
   const tasks = [];
   const persisted = [];
   const api = {
-    core: { ...core, TeleportHandler: { ...core.TeleportHandler, checkReqs: () => true } },
+    core: { ...core, TeleportHandler: { ...core.TeleportHandler, checkReqs: () => true, teleport: teleportSpy } },
     // As TaskManager.submit: an immediate task runs once on the tick it is submitted.
     getTaskManager: () => ({ submit: (task) => { task.setRunning(true); if (task.isImmediate()) task.execute(); tasks.push(task); } }),
     persistAttribute: (key, value) => persisted.push([key, value]),
@@ -169,6 +169,7 @@ test("the Edgeville lever warns as live, lands beside the Keep lever and skips t
   runTicks(h, who, 8);
   assert.deepEqual(who.log.find((entry) => entry[1] === "tele"), [6, "tele", 3154, 3924], "pull a tick after the choice, land five after that");
   assert.equal(who.sent.get(varbit("wildoutlever_vis")), undefined, "no diary: the Keep lever stays Pull");
+  assert.deepEqual(h.diaryTasks, [[who, "wilderness", "enter-the-wilderness-from-the-ardougne-or-edgevi"]], "the Edgeville lever completes the easy Wilderness Diary task on landing, and no Ardougne one");
 
   who.dialogue = undefined;
   use(h, who, "edgeville_wildy_lever", "Pull", 3090, 3475);
@@ -216,7 +217,7 @@ test("the East Ardougne lever warns, lands beside the Keep lever and completes t
   assert.deepEqual(who.log.find((entry) => entry[1] === "tele"), [6, "tele", 3154, 3924]);
   assert.deepEqual(who.log.filter((entry) => entry[1] === "msg").map((entry) => entry[2]),
     ["You pull the lever...", "... and teleport into the Wilderness."]);
-  assert.deepEqual(h.diaryTasks, [[who, "ardougne", "use-the-ardougne-lever-to-teleport-to-the-wilder"]]);
+  assert.deepEqual(h.diaryTasks, [[who, "ardougne", "use-the-ardougne-lever-to-teleport-to-the-wilder"], [who, "wilderness", "enter-the-wilderness-from-the-ardougne-or-edgevi"]], "the easy Wilderness Diary task counts on landing too");
   assert.equal(who.sent.get(varbit("wildoutlever_vis")), 1, "the Keep lever shows its diary options");
 });
 
@@ -227,4 +228,14 @@ test("other levers fall through", () => {
   const definition = ObjectDefinition.forPlayer(objectId, who);
   assert.equal(h.hooks.Lever.Pull({ player: who, objectId, definition, clickType: 1, location: { x: 3104, y: 3956, z: 0 } }), false);
   assert.equal(h.tasks.length, 0);
+});
+
+test("lever:teleport hands its onArrival callback to the teleport, to run on landing", () => {
+  const calls = [];
+  const h = harness({ teleportSpy: (...args) => calls.push(args) });
+  const who = player();
+  const onArrival = () => {};
+  h.hooks["lever:teleport"]({ player: who, destination: new core.Location(3000, 3000, 0), onArrival });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][4], onArrival, "TeleportHandler.teleport's arrival callback");
 });

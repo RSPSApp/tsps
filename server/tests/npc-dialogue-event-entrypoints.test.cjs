@@ -436,42 +436,74 @@ async function nativeDig(f, itemId = core.ItemIdentifiers.SPADE, slot = f.player
     itemId, slot, option: 'Dig', optionIndex: 1 }]);
   f.connection.processTurnPackets();
 }
+function advanceDig(f, ticks = 4) {
+  for (let n = 0; n < ticks; n++) {
+    core.TaskManager.processWalkTo(f.player.getIndex());
+    f.player.getMovementQueue().process();
+    core.TaskManager.process();
+  }
+}
+const HUMAN_DIG_LONG = () => core.CacheDefinitions.getSeqId('human_dig_long');
 
 test('Fairytale I Draynor skull is reachable through the native Spade Dig action', async t => {
-  const f = fixture(t), { player } = f;
+  const f = fixture(t), { player } = f, messages = [], sounds = [], typedMessages = [];
+  player.sendMessage = message => messages.push(message);
+  const sender = player.getPacketSender(), sendSoundEffect = sender.sendSoundEffect.bind(sender);
+  const sendTypedMessage = sender.sendTypedMessage.bind(sender);
+  sender.sendTypedMessage = (type, message, from) => {
+    typedMessages.push([type, message]); messages.push(message);
+    return sendTypedMessage(type, message, from);
+  };
+  sender.sendSoundEffect = (id, loops, delay, volume) => {
+    sounds.push([id, Math.max(1, loops), delay]);
+    return sendSoundEffect(id, loops, delay, volume);
+  };
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(3106, 3384);
   const grave = core.MapObjects.get(core.ObjectIdentifiers.GRAVESTONE_8, new core.Location(3106, 3384), null);
   assert.ok(grave, 'the grave is present in the real cache at the quest location');
   player.setLocation(new core.Location(3106, 3385));
   player.getInventory().add(new core.Item(core.ItemIdentifiers.SPADE));
+  const skull = () => player.getInventory().getAmount(core.ItemIdentifiers.DRAYNOR_SKULL);
   await nativeDig(f);
-  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 1);
+  assert.equal(skull(), 0, 'the skull is not granted on the click tick');
+  assert.equal(player.getAnimation()?.getId(), HUMAN_DIG_LONG(), 'the long dig sequence plays');
+  assert.deepEqual(messages, ['You start digging...']);
+  assert.deepEqual(typedMessages, [[105, 'You start digging...']], 'the opening uses the captured spam channel');
+  assert.deepEqual(sounds, [[1470, 1, 0], [1470, 3, 25]], 'the captured synth sounds play once each');
+  advanceDig(f, 3);
+  assert.equal(skull(), 0, 'the grant waits the captured four ticks');
+  assert.deepEqual(messages, ['You start digging...']);
+  advanceDig(f, 1);
+  assert.equal(skull(), 1);
+  assert.deepEqual(messages, ['You start digging...', 'You dig up a skull.']);
+  assert.equal(player.getAnimation()?.getId(), core.Animation.DEFAULT_RESET_ANIMATION.getId(), 'the long dig sequence resets');
   await nativeDig(f);
-  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 1, 'repeated digging cannot duplicate it');
+  advanceDig(f);
+  assert.equal(skull(), 1, 'repeated digging cannot duplicate it');
+  assert.equal(messages.at(-1), 'You dig the grave but find nothing.');
   player.getInventory().deleteNumber(core.ItemIdentifiers.DRAYNOR_SKULL, 1);
   player.getBank(2).add(new core.Item(core.ItemIdentifiers.DRAYNOR_SKULL), false);
   await nativeDig(f);
-  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 0, 'a banked skull is still owned');
+  advanceDig(f);
+  assert.equal(skull(), 0, 'a banked skull is still owned');
+  assert.equal(messages.at(-1), "I think I've already stored the skull in my bank.");
   player.getBank(2).deleteNumber(core.ItemIdentifiers.DRAYNOR_SKULL, 1);
   const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
   assert.equal(quest.getStage(player), 0, 'the skull remains obtainable before the quest without starting it');
-  quest.setStage(player, 40);
+  quest.setStage(player, 50);
   await f.connection.dispatch([{ type: 'item_on_object', widgetId: core.CacheDefinitions.getComponentId('inventory:items'),
     itemId: core.ItemIdentifiers.SPADE, slot: player.getInventory().getSlotForItemId(core.ItemIdentifiers.SPADE),
     objectId: grave.getId(), x: 3106, y: 3384 }]);
   f.connection.processTurnPackets();
-  for (let n = 0; n < 4; n++) {
-    core.TaskManager.processWalkTo(player.getIndex());
-    player.getMovementQueue().process();
-    core.TaskManager.process();
-  }
-  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 1, 'using the spade on the grave still works');
-  assert.equal(quest.getStage(player), 40, 'digging does not advance the quest');
+  advanceDig(f);
+  assert.equal(skull(), 1, 'using the spade on the grave still works');
+  assert.equal(quest.getStage(player), 50, 'digging does not advance the quest');
 });
 
 test('Fairytale I Draynor dig rejects incorrect tiles, planes and item sources and handles a full bag', async t => {
-  const f = fixture(t), { player } = f, inventory = player.getInventory();
+  const f = fixture(t), { player } = f, inventory = player.getInventory(), messages = [];
+  player.sendMessage = message => messages.push(message);
   let laterDigs = 0;
   const hooks = PM.itemActionHooks, start = hooks.length;
   t.after(() => hooks.splice(start));
@@ -482,6 +514,8 @@ test('Fairytale I Draynor dig rejects incorrect tiles, planes and item sources a
     player.setLocation(at); await nativeDig(f);
     assert.equal(inventory.getAmount(DRAYNOR_SKULL), 0);
   }
+  advanceDig(f);
+  assert.equal(inventory.getAmount(DRAYNOR_SKULL), 0, 'off-site clicks start no delayed grant');
   assert.equal(laterDigs, 2, 'off-site digs remain available to other content');
   player.setLocation(new core.Location(3106, 3385));
   await nativeDig(f, SPADE, 20);
@@ -495,16 +529,75 @@ test('Fairytale I Draynor dig rejects incorrect tiles, planes and item sources a
   inventory.add(new core.Item(SPADE, 28));
   assert.equal(inventory.getFreeSlots(), 0);
   await nativeDig(f);
+  advanceDig(f);
   assert.equal(inventory.getAmount(DRAYNOR_SKULL), 0);
+  assert.equal(messages.at(-1), 'Not enough space in your inventory.');
   inventory.deleteNumber(SPADE, 1);
   const hash = core.MapObjects.getHash(3106, 3384, 0), objects = core.MapObjects.mapObjects.get(hash);
   core.MapObjects.mapObjects.delete(hash);
   try {
     await nativeDig(f);
+    advanceDig(f);
     assert.equal(inventory.getAmount(DRAYNOR_SKULL), 0, 'a removed grave cannot supply its skull');
   } finally { core.MapObjects.mapObjects.set(hash, objects); }
   await nativeDig(f);
+  advanceDig(f);
   assert.equal(inventory.getAmount(DRAYNOR_SKULL), 1, 'freeing a slot makes the next dig recoverable');
+});
+
+test('Fairytale I Draynor dig cancels on movement or logout and never duplicates a pending grant', async t => {
+  const f = fixture(t), { player } = f, inventory = player.getInventory(), messages = [];
+  player.sendMessage = message => messages.push(message);
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3106, 3384);
+  player.setLocation(new core.Location(3106, 3385));
+  inventory.add(new core.Item(core.ItemIdentifiers.SPADE));
+  const skull = () => inventory.getAmount(core.ItemIdentifiers.DRAYNOR_SKULL);
+  await nativeDig(f);
+  advanceDig(f, 1);
+  await nativeDig(f);
+  assert.equal(player.getAnimation()?.getId(), HUMAN_DIG_LONG(), 'a repeated click restores the long dig pose');
+  advanceDig(f, 3);
+  assert.equal(skull(), 0, 'a repeated click restarts the four-tick dig');
+  advanceDig(f, 1);
+  assert.equal(skull(), 1, 'a second click cannot queue a duplicate grant');
+  assert.equal(messages.filter(message => message === 'You dig up a skull.').length, 1);
+  inventory.deleteNumber(core.ItemIdentifiers.DRAYNOR_SKULL, 1);
+  await nativeDig(f);
+  player.getMovementQueue().walkToReset();
+  advanceDig(f);
+  assert.equal(skull(), 0, 'walking cancels the pending dig');
+  assert.equal(player.getAnimation()?.getId(), core.Animation.DEFAULT_RESET_ANIMATION.getId());
+  await nativeDig(f);
+  player.setRegistered(false);
+  advanceDig(f);
+  assert.equal(skull(), 0, 'a dig that ends after logout grants nothing');
+  player.setRegistered(true);
+  await nativeDig(f);
+  advanceDig(f);
+  assert.equal(skull(), 1, 'the next dig after interruption still works');
+});
+
+test('Fairytale I pending dig cannot grant a skull after native Drop or override a real death pose', async t => {
+  const f = fixture(t), { player } = f, inventory = player.getInventory();
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(3106, 3384);
+  player.setLocation(new core.Location(3106, 3385));
+  inventory.add(new core.Item(core.ItemIdentifiers.SPADE));
+  await nativeDig(f); advanceDig(f, 3);
+  await f.connection.dispatch([{ type: 'inventory_action', widgetId: core.CacheDefinitions.getComponentId('inventory:items'),
+    itemId: core.ItemIdentifiers.SPADE, slot: inventory.getSlotForItemId(core.ItemIdentifiers.SPADE), option: 'Drop', optionIndex: 5 }]);
+  f.connection.processTurnPackets(); advanceDig(f);
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.SPADE), 0);
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 0);
+  inventory.add(new core.Item(core.ItemIdentifiers.SPADE));
+  await nativeDig(f); advanceDig(f, 2);
+  player.getSkillManager().setCurrentLevels(core.Skill.HITPOINTS, 0);
+  player.appendDeath(); advanceDig(f, 1);
+  const deathAnimation = player.getAnimation()?.getId();
+  assert.equal(deathAnimation, 836, 'the real PlayerDeathTask starts its death pose');
+  advanceDig(f, 1);
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 0);
+  assert.equal(player.getAnimation()?.getId(), deathAnimation, 'dig cancellation cannot reset death');
 });
 
 function nuffFixture(t, stage = 20) {
@@ -537,7 +630,7 @@ async function readNatureRecipe(f, quest, first = false) {
   }
   assert.deepEqual(choices, []);
   assert.equal(f.player.getDialogueManager().getCurrent(), undefined);
-  assert.equal(quest.getStage(f.player), 50);
+  assert.equal(quest.getStage(f.player), 60);
   return lines.join(' ').replace(/\s+/g, ' ');
 }
 
@@ -553,7 +646,7 @@ for (const [first, names] of [[1, ['white berries', 'a mort myre pear', 'a mort 
       if (min === 1 && max === 29) { rolls++; return first; }
       return originalRandom(min, max);
     });
-    quest.setStage(f.player, 40);
+    quest.setStage(f.player, 50);
     f.player.getInventory().add(new core.Item(core.ItemIdentifiers.DRAYNOR_SKULL), false);
     const positions = `${first},${first + 1},${first + 2}`;
     const check = (text, player) => {
@@ -573,7 +666,7 @@ for (const [first, names] of [[1, ['white berries', 'a mort myre pear', 'a mort 
     assert.equal(rolls, 1, 'reminders and save/load reuse the persisted recipe');
     const foreign = fixture(t);
     foreign.player.setUsername(`other${first}`);
-    quest.setStage(foreign.player, 50);
+    quest.setStage(foreign.player, 60);
     foreign.player.setAttribute(NATURE_ITEMS_ATTRIBUTE, first === 1 ? '29,30,31' : '1,2,3');
     const foreignText = await readNatureRecipe(foreign, quest);
     assert.ok(foreignText.includes(first === 1 ? 'snape grass' : 'white berries'));
@@ -624,7 +717,7 @@ test('Fairytale I Nuff waits for native dialogue completion and preserves cancel
   assert.equal(quest.getStage(player), 20);
   f.talk(); await finishNuff(f);
   assert.equal(player.getInventory().getAmount(item), 1);
-  assert.equal(quest.getStage(player), 30);
+  assert.equal(quest.getStage(player), 40);
   f.talk(); player.closeInterruptibleInterfaces();
   assert.equal(player.getInventory().getAmount(item), 1, 'retalking with the list does not duplicate it');
   player.getInventory().deleteNumber(item, 1);
@@ -634,7 +727,7 @@ test('Fairytale I Nuff waits for native dialogue completion and preserves cancel
   assert.equal(player.getInventory().getAmount(item), 0);
   f.talk(); await finishNuff(f);
   assert.equal(player.getInventory().getAmount(item), 1);
-  assert.equal(quest.getStage(player), 30);
+  assert.equal(quest.getStage(player), 40);
 });
 
 test('Fairytale I Nuff handovers recover from a full inventory without skipping quest stages', async t => {
@@ -647,14 +740,237 @@ test('Fairytale I Nuff handovers recover from a full inventory without skipping 
   inventory.deleteNumber(SPADE, 1);
   f.talk(); await finishNuff(f);
   assert.equal(inventory.getAmount(SYMPTOMS_LIST), 1);
-  assert.equal(quest.getStage(player), 30);
+  assert.equal(quest.getStage(player), 40);
   inventory.deleteNumber(SYMPTOMS_LIST, 1); inventory.add(new core.Item(SPADE));
   f.talk(); await finishNuff(f);
   assert.equal(inventory.getAmount(SYMPTOMS_LIST), 0);
   inventory.deleteNumber(SPADE, 1);
   f.talk(); await finishNuff(f);
   assert.equal(inventory.getAmount(SYMPTOMS_LIST), 1);
-  assert.equal(quest.getStage(player), 30);
+  assert.equal(quest.getStage(player), 40);
+});
+
+const FAIRYTALE_STAGE_SCHEMA = 'quest.fairytale-i-growing-pains:stage-schema';
+const FAIRYTALE_STAGE = 'quest.fairytale_i_growing_pains.stage';
+
+function godfatherFixture(t, stage = 20) {
+  const f = fixture(t), { player } = f;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
+  player.setAttribute(FAIRYTALE_STAGE_SCHEMA, 1);
+  quest.setStage(player, stage);
+  const npcId = core.NpcIdentifiers.FAIRY_GODFATHER_2, npc = core.NPC.create(npcId, new core.Location(2387, 4445));
+  return { ...f, quest, npcId, npc, talk: () => PM.emitNpcInteraction({ player, npc, npcId, action: 'Talk-to', clickType: 1, handled: false }) };
+}
+
+async function untilChoice(f) {
+  for (let n = 0; n < 40 && !MultiChatboxPrompt.getPending(f.player); n++) {
+    assert.ok(f.player.getDialogueManager().getCurrent(), 'the Godfather conversation remains reachable');
+    await nextLine(f);
+  }
+  const pending = MultiChatboxPrompt.getPending(f.player);
+  assert.ok(pending?.options.includes("Where's the Fairy Queen?"), `expected the Godfather menu, got ${JSON.stringify(pending)}`);
+  return pending;
+}
+
+async function finishDialogue(f) {
+  for (let n = 0; n < 60 && f.player.getDialogueManager().getCurrent(); n++) await nextLine(f);
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined);
+}
+
+test('Fairytale I Godfather choice sends the player to Nuff, who then hands over the symptoms list', async t => {
+  const f = godfatherFixture(t, 20), { player, quest } = f;
+  assert.equal(f.talk(), true);
+  let menu = await untilChoice(f);
+  await choose(f, menu.options.indexOf('Who are you?') + 1);
+  assert.equal(quest.getStage(player), 20, 'another Godfather answer does not advance');
+  menu = await untilChoice(f);
+  await choose(f, menu.options.indexOf("Where's the Fairy Queen?") + 1);
+  assert.equal(quest.getStage(player), 30, 'the Queen answer is the step that sends the player to Nuff');
+  player.closeInterruptibleInterfaces();
+  assert.match(quest.buildJournal(player, quest).join(' ').replace(/\s+/g, ' '), /Fairy Nuff/,
+    'the stage-30 journal names the next contact');
+
+  const nuffId = core.NpcIdentifiers.FAIRY_NUFF_2, nuff = core.NPC.create(nuffId, new core.Location(2386, 4727));
+  assert.equal(PM.emitNpcInteraction({ player, npc: nuff, npcId: nuffId, action: 'Talk-to', clickType: 1, handled: false }), true);
+  await finishNuff(f);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.SYMPTOMS_LIST), 1);
+  assert.equal(quest.getStage(player), 40, 'the subsequent Nuff handoff continues from the Godfather stage');
+
+  quest.setStage(player, 10);
+  PM.emitCustomEvent('npc-dialogue:choice', { player, npcId: f.npcId, option: "Where's the Fairy Queen?" });
+  assert.equal(quest.getStage(player), 10, 'the same answer outside stage 20 does not advance');
+});
+
+test('Fairytale I varbit 1803 and varp 671 progress through native completion at 90 and keep siblings', async t => {
+  const f = godfatherFixture(t, 10), { player, quest } = f, sender = player.getPacketSender();
+  const row = core.CacheDefinitions.getDbRow(46);
+  assert.equal(row.tableId, 0);
+  assert.equal(row.int(19), 90, 'active cache quest DB row 46 completes at 90');
+  assert.equal(quest.completionValue, row.int(19));
+  sender.sendVarbit(1804, 21).sendVarbit(1805, 10).sendVarbit(1806, 31).sendVarbit(1807, 3).sendVarbit(1808, 1);
+  const siblings = sender.getVarp(671) & ~0x7f;
+  assert.notEqual(siblings, 0);
+  for (const stage of [10, 20, 30, 40, 50, 60, 70, 80]) {
+    quest.setStage(player, stage);
+    assert.equal(sender.getVarbit(1803), stage, `varbit 1803 follows stage ${stage}`);
+    assert.equal(sender.getVarp(671) & 0x7f, stage, `varp 671's quest bits hold stage ${stage}`);
+    assert.equal(sender.getVarp(671) & ~0x7f, siblings, `stage ${stage} preserves the packed siblings`);
+  }
+  player.getInventory().add(new core.Item(core.ItemIdentifiers.QUEENS_SECATEURS));
+  const xp = skill => player.getSkillManager().getExperience(skill);
+  const before = [core.Skill.FARMING, core.Skill.ATTACK, core.Skill.MAGIC].map(xp);
+  assert.equal(f.talk(), true);
+  await finishDialogue(f);
+  assert.equal(quest.getStage(player), 90);
+  assert.equal(sender.getVarbit(1803), 90, 'the cache completion value reaches varbit 1803');
+  assert.equal(sender.getVarp(671) & 0x7f, 90, 'and its parent varp');
+  assert.equal(sender.getVarp(671) & ~0x7f, siblings, 'completion preserves the siblings');
+  assert.equal(quest.isComplete(player), true);
+  assert.deepEqual([core.Skill.FARMING, core.Skill.ATTACK, core.Skill.MAGIC].map(xp),
+    before.map((value, index) => value + [3500, 2000, 1000][index]), 'the quest rewards are paid once');
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.QUEENS_SECATEURS), 0);
+
+  const replay = { player, npcId: f.npcId, stepId: 'Z_ZWiI', handled: false, end: false };
+  PM.emitCustomEvent('npc-dialogue:action', replay);
+  assert.equal(replay.handled, true);
+  assert.deepEqual([core.Skill.FARMING, core.Skill.ATTACK, core.Skill.MAGIC].map(xp),
+    before.map((value, index) => value + [3500, 2000, 1000][index]), 'replaying the completion action pays no second reward');
+});
+
+test('Fairytale I legacy saves migrate once through login and bootstrap while fresh saves stay at zero', async t => {
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
+  const login = player => PM.emitPlayerLogin({ player, username: player.getUsername(), isNewAccount: false });
+  const bootstrap = player => PM.emitCustomEvent('player:bootstrap-complete', { player, username: player.getUsername() });
+  const xp = player => [core.Skill.FARMING, core.Skill.ATTACK, core.Skill.MAGIC].map(skill => player.getSkillManager().getExperience(skill));
+  const points = player => Number(player.getAttribute('quest.points')) || 0;
+  const stageEvents = [];
+  const hooks = PM.customEventHooks.get('quest:stage-changed');
+  const hookCount = hooks.length;
+  PM.createApi('FairytaleMigrationObserver').onCustomEvent('quest:stage-changed', event => {
+    if (event.key === 'fairytale_i_growing_pains') stageEvents.push({
+      player: event.player, stage: event.stage,
+      schema: event.player.getAttribute(FAIRYTALE_STAGE_SCHEMA), complete: quest.isComplete(event.player),
+    });
+  });
+  t.after(() => hooks.splice(hookCount));
+  for (const [legacy, current] of [[30, 40], [40, 50], [50, 60], [60, 70], [70, 80], [80, 90]]) {
+    const source = fixture(t);
+    source.player.setUsername(`legacy${legacy}`);
+    quest.setStage(source.player, legacy);
+    const target = fixture(t);
+    PlayerSave.fromPlayer(source.player).applyToPlayer(target.player);
+    assert.equal(target.player.getAttribute(FAIRYTALE_STAGE_SCHEMA), 0, 'the legacy save has no schema stamp');
+    target.player.getPacketSender().sendConfig(671, (1 << 26) | (1 << 30));
+    login(target.player);
+    assert.equal(quest.getStage(target.player), current, `legacy ${legacy} migrates to ${current}`);
+    assert.equal(target.player.getAttribute(FAIRYTALE_STAGE_SCHEMA), 1);
+    const change = stageEvents.find(event => event.player === target.player && event.stage === current);
+    assert.ok(change, 'migration publishes the native stage change');
+    assert.equal(change.schema, 1, 'observers/save requests see the schema stamp with the new value');
+    assert.equal(change.complete, current === 90, 'legacy 70 -> current 80 is still unfinished during the event');
+    assert.equal(target.player.getPacketSender().getVarp(671) & ((1 << 26) | (1 << 30)), (1 << 26) | (1 << 30),
+      'migration preserves unrelated packed bits');
+    if (current === 90) {
+      assert.equal(quest.isComplete(target.player), true, 'a migrated completed save is complete');
+      assert.deepEqual(xp(target.player), [0, 0, 0], 'migration does not repay experience');
+      assert.equal(points(target.player), 0, 'migration does not repay quest points');
+      const reloaded = fixture(t);
+      PlayerSave.fromPlayer(target.player).applyToPlayer(reloaded.player);
+      assert.equal(reloaded.player.getAttribute(FAIRYTALE_STAGE_SCHEMA), 1, 'the schema survives save/load');
+      assert.equal(quest.getStage(reloaded.player), 90);
+      login(reloaded.player);
+      assert.equal(quest.getStage(reloaded.player), 90, 'a reloaded migrated save is not shifted again');
+    }
+    bootstrap(target.player);
+    assert.equal(quest.getStage(target.player), current, 'bootstrap does not migrate twice');
+    login(target.player);
+    assert.equal(quest.getStage(target.player), current, 'a repeated login does not migrate twice');
+  }
+
+  const fresh = fixture(t);
+  assert.equal(quest.getStage(fresh.player), 0);
+  login(fresh.player);
+  bootstrap(fresh.player);
+  login(fresh.player);
+  assert.equal(quest.getStage(fresh.player), 0, 'a fresh save stays unstarted');
+  assert.equal(fresh.player.getAttribute(FAIRYTALE_STAGE_SCHEMA), 1);
+
+  const current = fixture(t);
+  current.player.setAttribute(FAIRYTALE_STAGE_SCHEMA, 1);
+  current.player.setAttribute(FAIRYTALE_STAGE, 90);
+  login(current.player);
+  assert.equal(quest.getStage(current.player), 90, 'a save already on the current schema is not shifted');
+
+  const league = fixture(t);
+  quest.setStage(league.player, 80);
+  const leagueXp = xp(league.player), leaguePoints = points(league.player);
+  const prerequisite = { player: league.player, key: 'fairytale_i_growing_pains', complete: null };
+  PM.emitCustomEvent('quest:is-complete', prerequisite);
+  assert.equal(prerequisite.complete, true, 'FT2 and quest queries see a legacy complete save before migration');
+  PM.emitCustomEvent('league:complete-quests', { player: league.player, quests: ['Fairytale I - Growing Pains'], items: false });
+  assert.equal(quest.getStage(league.player), 80, 'league completion before login leaves a legacy complete save alone');
+  assert.deepEqual(xp(league.player), leagueXp, 'league completion does not repay its experience');
+  assert.equal(points(league.player), leaguePoints, 'league completion does not repay its quest points');
+  login(league.player);
+  assert.equal(quest.getStage(league.player), 90, 'the login migration then moves it to the cache completion value');
+  assert.deepEqual(xp(league.player), leagueXp, 'the migration still does not repay experience');
+  assert.equal(points(league.player), leaguePoints, 'the migration still does not repay quest points');
+});
+
+test('Fairytale I north Tanglefoot spawn is reachable by the production pathfinder and owner-isolated', t => {
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(2394, 4379);
+  const { PathFinder } = require('../dist/game/model/movement/path/PathFinder');
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
+  const first = fixture(t), second = fixture(t);
+  const enter = f => {
+    f.player.setLocation(new core.Location(2394, 4379, 0));
+    quest.setStage(f.player, 70);
+    PM.emitPlayerProcess({ player: f.player });
+  };
+  enter(first); enter(second);
+  const spawns = () => [...core.World.getNpcs()].filter(npc => npc?.getId?.() === core.NpcIdentifiers.TANGLEFOOT);
+  const owned = player => spawns().filter(npc => npc.getOwner?.() === player);
+  const firstNpcs = owned(first.player), secondNpcs = owned(second.player);
+  assert.equal(firstNpcs.length, 1, 'the real zone-enter route spawns one Tanglefoot for its owner');
+  assert.equal(secondNpcs.length, 1, 'another player gets their own Tanglefoot');
+  assert.notEqual(firstNpcs[0], secondNpcs[0]);
+  const spawned = firstNpcs[0], at = spawned.getLocation();
+  assert.deepEqual([at.getX(), at.getY(), at.getZ()], [2375, 4385, 0], 'Quest Helper kill-tile inference');
+  assert.equal(spawned.isOwnerOnly(), true);
+  assert.equal(core.RegionManager.blocked(at, null), false, 'the spawned tile is not clipped');
+  const definition = core.CacheDefinitions.getNpc(core.NpcIdentifiers.TANGLEFOOT);
+  assert.equal(definition.size, 1);
+  assert.ok(definition.actions.includes('Attack'), 'the actual cache NPC offers Attack');
+
+  // Gameplay routes stop at 25 checkpoints; raise the cap to prove the whole
+  // tunnel connects the entrance to the exact spawn.
+  const route = PathFinder.rsmodRouteFinding.findRoute({
+    level: 0, srcX: 2394, srcY: 4379, srcSize: 1,
+    destX: at.getX(), destY: at.getY(), privateArea: null, moveNear: true, maxWaypoints: 128,
+  });
+  assert.equal(route.success, true, 'the production pathfinder finds the real entrance -> north spawn route');
+  assert.equal(route.endX, at.getX());
+  assert.equal(route.endY, at.getY());
+  const points = route.waypoints.map(point => new core.Location(point.x, point.y, point.z));
+  assert.ok(points.length > 0);
+  const end = points.at(-1);
+  assert.deepEqual([end.getX(), end.getY(), end.getZ()], [at.getX(), at.getY(), at.getZ()],
+    'the route ends exactly on the spawned Tanglefoot tile');
+  let from = new core.Location(2394, 4379, 0);
+  for (const point of points) {
+    assert.equal(core.RegionManager.canMovestart(from, point, 1, 1, null), true,
+      `legal directional step ${from.getX()},${from.getY()} -> ${point.getX()},${point.getY()}`);
+    from = point;
+  }
+  assert.ok(at.getX() >= 2368 && at.getX() <= 2398 && at.getY() >= 4354 && at.getY() <= 4399,
+    'the expanded encounter zone covers the spawned location');
+  t.after(() => {
+    for (const npc of [...core.World.getNpcs()]) {
+      if (npc?.getOwner?.() === first.player || npc?.getOwner?.() === second.player) core.World.getNpcs().remove(npc);
+    }
+  });
 });
 
 for (const shieldStage of [4, 7]) {
@@ -873,6 +1189,22 @@ test('Nature Spirit native item use requires held items and ghostspeak, includin
   assert.equal(inventory.getAmount(JOURNAL), 1, 'an untranslated conversation cannot take the diary');
 });
 
+test('Fairytale I pending dig cancels on native Eat and preserves its newer pose', async t => {
+ const f=fixture(t), {player}=f, inv=player.getInventory();
+ core.RegionManager.init(); core.RegionManager.loadMapFiles(3106,3384);
+ player.setLocation(new core.Location(3106,3385));
+ inv.add(new core.Item(core.ItemIdentifiers.SPADE)); inv.add(new core.Item(core.ItemIdentifiers.CABBAGE));
+ await nativeDig(f); advanceDig(f,3);
+ await f.connection.dispatch([{type:'inventory_action',widgetId:core.CacheDefinitions.getComponentId('inventory:items'),itemId:core.ItemIdentifiers.CABBAGE,slot:inv.getSlotForItemId(core.ItemIdentifiers.CABBAGE),option:'Eat',optionIndex:1}]);
+ f.connection.processTurnPackets();
+ assert.equal(inv.getAmount(core.ItemIdentifiers.CABBAGE),0,'native Eat consumed the cabbage');
+ advanceDig(f,1);
+ assert.equal(inv.getAmount(core.ItemIdentifiers.DRAYNOR_SKULL),0,'Eat must interrupt the pending dig');
+ assert.equal(player.getAnimation()?.getId(),829,'cancelled dig cannot reset the newer eating pose');
+ assert.equal(player.getSkill(),null);
+ assert.equal(core.TaskManager.hasActiveTask(player.getIndex(),'DraynorDigTask'),false);
+});
+
 for (const studied of [false, true]) {
   test(`Fairytale II native certificate Use reaches its ${studied ? 'studied' : 'unstudied'} Godfather dialogue`, async t => {
     const f = fixture(t), { player } = f;
@@ -917,3 +1249,118 @@ for (const studied of [false, true]) {
     assert.equal(player.getDialogueManager().getCurrent(), undefined, 'native Use without the certificate cannot start a conversation');
   });
 }
+
+function documentPackets(f, t) {
+  const { decodeClientPackets } = require('../dist/net/protocol/ClientProtocol');
+  const { ClientPacketId } = require('../dist/net/protocol/NativeClientPackets');
+  const sender = f.player.getPacketSender(), calls = [];
+  for (const [method, tag] of [['sendClientScript', 'script'], ['sendInterface', 'open']]) {
+    const original = sender[method];
+    t.mock.method(sender, method, function (...args) { calls.push([tag, ...args]); return original.apply(this, args); });
+  }
+  async function input(bytes) {
+    await f.connection.dispatch(decodeClientPackets(bytes)); f.connection.processTurnPackets();
+  }
+  return {
+    calls,
+    async certificate(action) {
+      const itemId = core.ItemIdentifiers.NUFFS_CERTIFICATE;
+      // Cache inventory actions Read/Study use widget ops2/3 (script7779/enum4303).
+      const frame = Buffer.alloc(9); frame[0] = action === 'Read' ? ClientPacketId.IF_BUTTON2 : ClientPacketId.IF_BUTTON3;
+      frame.writeInt32BE(149 << 16, 1);
+      frame.writeUInt16BE(Math.max(0, f.player.getInventory().getSlotForItemId(itemId)), 5);
+      frame.writeUInt16BE(itemId, 7);
+      await input(frame);
+    },
+    close: () => input(Buffer.from([ClientPacketId.IF_CLOSE])),
+    mounted: () => sender.getSubInterfaceAt((161 << 16) | 16)?.groupId,
+  };
+}
+
+for (const stage of [20, 90]) {
+  test(`Fairytale II native Read/Study at stage ${stage} preserves documents and progress across close/reopen`, async t => {
+    const f = fixture(t), { player } = f, doc = documentPackets(f, t);
+    const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'fairytale_ii_cure_a_queen');
+    const certificate = core.ItemIdentifiers.NUFFS_CERTIFICATE, inventory = player.getInventory();
+    assert.deepEqual(core.CacheDefinitions.getItem(certificate).inventoryActions.slice(0, 2), ['Read', 'Study']);
+    quest.setStage(player, stage); inventory.add(new core.Item(certificate));
+    await doc.certificate('Read');
+    assert.equal(player.getInterfaceId(), 423); assert.equal(doc.mounted(), 423);
+    assert.deepEqual(doc.calls.slice(-2), [['script', 2524, -1, -1], ['open', 423]]);
+    assert.equal(quest.getStage(player), stage);
+    assert.equal(player.getAttribute('quest.fairytale-ii-cure-a-queen:certificate-studied') ?? 0, 0);
+    await doc.close(); assert.equal(player.getInterfaceId(), -1); assert.equal(doc.mounted(), undefined);
+    await doc.certificate('Read'); assert.equal(doc.mounted(), 423);
+    await doc.certificate('Study');
+    assert.equal(player.getInterfaceId(), 424); assert.equal(doc.mounted(), 424);
+    assert.deepEqual(doc.calls.slice(-2), [['script', 2524, 4269835, 100], ['open', 424]]);
+    assert.equal(quest.getStage(player), Math.max(30, stage));
+    assert.equal(player.getPacketSender().getVarbit(2336), 1);
+    assert.equal(inventory.getAmount(certificate), 1);
+    await doc.close(); await doc.close(); await doc.certificate('Read');
+    assert.equal(doc.mounted(), 423, 'Read turns back to the front after Study');
+    assert.equal(player.getAttribute('quest.fairytale-ii-cure-a-queen:certificate-studied'), 1);
+    await doc.close(); inventory.deleteNumber(certificate, 1);
+    const count = doc.calls.length; await doc.certificate('Study');
+    assert.equal(doc.calls.length, count, 'a stale item action cannot reopen a document');
+    assert.equal(quest.getStage(player), Math.max(30, stage));
+  });
+}
+
+test('Fairytale II native Rune temple sign opens its document only after studying and can reopen', async t => {
+  const f = fixture(t), { player } = f, doc = documentPackets(f, t);
+  const messages = [], sendMessage = player.sendMessage;
+  t.mock.method(player, 'sendMessage', function (text, ...args) { messages.push(text); return sendMessage.call(this, text, ...args); });
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'fairytale_ii_cure_a_queen');
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(2409, 4369);
+  player.setLocation(new core.Location(2409, 4370)); player.setNeedsPlacement(false);
+  quest.setStage(player, 20);
+  const read = async () => {
+    await f.connection.dispatch([{ type: 'object_option', id: 16307, x: 2409, y: 4369, clickType: 1 }]);
+    f.connection.processTurnPackets();
+    for (let tick = 0; tick < 4; tick++) {
+      core.TaskManager.processWalkTo(player.getIndex()); player.getMovementQueue().process();
+    }
+  };
+  await read();
+  assert.ok(messages.includes('The strange markings on the sign mean nothing to you yet.'), 'native map-object action reaches the sign owner');
+  assert.equal(doc.mounted(), undefined); assert.equal(player.getPacketSender().getVarbit(2338), 0);
+  player.getInventory().add(new core.Item(core.ItemIdentifiers.NUFFS_CERTIFICATE));
+  await doc.certificate('Study'); await doc.close();
+  await read();
+  assert.equal(player.getInterfaceId(), 425); assert.equal(doc.mounted(), 425);
+  assert.deepEqual(doc.calls.slice(-2), [['script', 2524, -1, -1], ['open', 425]]);
+  assert.equal(player.getPacketSender().getVarbit(2338), 4); assert.equal(quest.getStage(player), 30);
+  await doc.close(); assert.equal(doc.mounted(), undefined);
+  await read(); assert.equal(doc.mounted(), 425);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.NUFFS_CERTIFICATE), 1);
+});
+
+test('Fairytale I Tanglefoot lair gate and Nature Spirit treat wielded magic secateurs as owned', t => {
+  const { player } = fixture(t), { MAGIC_SECATEURS, SECATEURS } = core.ItemIdentifiers;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
+  quest.setStage(player, 70);
+  const gap = { x: 2397, y: 4379, z: 0 };
+  const enter = () => {
+    player.closeInterruptibleInterfaces();
+    player.setLocation(new core.Location(gap.x + 1, gap.y, 0));
+    // emitObjectInteraction ignores events without an `object`; a stub with a definition skips the cache lookup.
+    const objectId = core.ObjectIdentifiers.A_GAP_THROUGH_THE_WALL, definition = { getName: () => 'A gap through the wall', getInteractions: () => [] };
+    const handled = PM.emitObjectInteraction({ player, object: { getId: () => objectId, getDefinition: () => definition },
+      objectId, definition, location: gap, clickType: 1, handled: false });
+    assert.equal(handled, true, 'the quest claims the gap click');
+    return player.getDialogueManager().getCurrent()?.getText();
+  };
+  assert.match(enter(), /^I'm afraid nobody is allowed in there/, 'without the secateurs the gatekeeper refuses');
+  player.getInventory().add(new core.Item(MAGIC_SECATEURS));
+  assert.match(enter(), /^I've received orders to let you through/, 'carried secateurs let the player in');
+  player.getInventory().deleteNumber(MAGIC_SECATEURS, 1);
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(MAGIC_SECATEURS));
+  assert.match(enter(), /^I've received orders to let you through/, 'wielded secateurs let the player in');
+  const enchant = () => PM.emitCustomEvent('npc-dialogue:action', { player, npcId: core.NpcIdentifiers.NATURE_SPIRIT, stepId: 'JQyqMZ', handled: false });
+  enchant();
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0, 'a wielded pair is not duplicated by the Nature Spirit');
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, null);
+  enchant();
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 1, 'a lost pair is still replaced');
+});

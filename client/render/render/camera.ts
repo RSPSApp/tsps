@@ -131,7 +131,7 @@ import {
 } from "../../game/movement/NpcClientTick";
 import type { TileMarkersPluginConfig } from "../../game/plugins/tilemarkers/types";
 import { computeRoofPlaneLimit } from "../../game/roof/RoofVisibility";
-import { sampleBridgeHeightForWorldTile } from "../../game/scene/BridgeHeightSampler";
+import { sampleActorHeightForWorldTile } from "../../game/scene/BridgeHeightSampler";
 import {
     BridgePlaneStrategy,
     resolveBridgePromotedPlane,
@@ -199,7 +199,7 @@ export function updateCameraTerrainPitchPressure(host: WebGLOsrsRendererHost,
         if (cycles <= 0) {
             return;
         }
-        const focalHeight = sampleBridgeHeightForWorldTile(
+        const focalHeight = sampleActorHeightForWorldTile(
             host.mapManager,
             focalSubX / 128,
             focalSubZ / 128,

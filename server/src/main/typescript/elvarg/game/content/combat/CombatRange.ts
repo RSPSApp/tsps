@@ -155,6 +155,21 @@ export class CombatRange {
         };
     }
 
+    /**
+     * Chebyshev distance from `point` to an NPC footprint whose south-west tile is `origin`.
+     * NPC locations are south-west corners, so the footprint extends `size - 1` tiles north and
+     * east only. The size must not be added to a range as a symmetric radius: a size-3 NPC's
+     * southern boundary is still max range + reach from its spawn, while its northern and
+     * eastern boundary is two tiles further out.
+     */
+    static footprintDistance(origin: Location, size: number, point: Location): number {
+        if (origin.getZ() !== point.getZ()) return Number.MAX_SAFE_INTEGER;
+        const extent = Math.max(1, size | 0) - 1;
+        const dx = Math.max(origin.getX() - point.getX(), 0, point.getX() - (origin.getX() + extent));
+        const dy = Math.max(origin.getY() - point.getY(), 0, point.getY() - (origin.getY() + extent));
+        return Math.max(dx, dy);
+    }
+
     private static distance(a: Bounds, b: Bounds): number {
         return Math.max(
             0,

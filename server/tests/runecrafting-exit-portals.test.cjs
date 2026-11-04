@@ -510,3 +510,44 @@ test("a death cancels a wizard's teleport: neither the dying nor the respawned p
   ticks(4);
   assert.deepEqual(teleported(respawned), ["move 2913,4832,0"]);
 });
+
+// The easy Wilderness Diary's "Enter the Chaos Runecrafting temple." (Wiki: Chaos Altar): through the
+// mysterious ruins or the Abyss; the Tunnel of Chaos and Guardians of the Rift do not count.
+test("entering the Chaos altar by its ruins (tiara or talisman) or the Abyss rift completes the easy Wilderness Diary task", () => {
+  const chaos = ruinsData.find((ruins) => ruins.name === "Chaos");
+  const air = ruinsData.find((ruins) => ruins.name === "Air");
+  const diary = () => emitted.filter(([name]) => name === "diary:task").map(([, event]) => `${event.diary}:${event.task}`);
+  const TASK = "wilderness:enter-the-chaos-runecrafting-temple";
+  emitted.length = 0;
+
+  const tiara = runecrafter(chaos.tiaraId);
+  tiara.getEquipment().refreshItems();
+  assert.equal(handlers["Mysterious ruins:Enter"]({ player: tiara, objectId: chaos.ruinsId }), true);
+  assert.ok(tiara.log.includes("move 2281,4837,0"), "the tiara takes the player in");
+  assert.deepEqual(diary(), [TASK]);
+
+  emitted.length = 0;
+  const airTiara = runecrafter(air.tiaraId);
+  airTiara.getEquipment().refreshItems();
+  assert.equal(handlers["Mysterious ruins:Enter"]({ player: airTiara, objectId: air.ruinsId }), true);
+  assert.deepEqual(diary(), [], "another altar's ruins");
+
+  emitted.length = 0;
+  const holder = runecrafter();
+  assert.equal(useOnRuins(holder, chaos.ruinsId, chaos.talismanId), true);
+  assert.deepEqual(diary(), [], "not before the landing");
+  ticks(3);
+  assert.ok(holder.log.includes("move 2281,4837,0"));
+  assert.deepEqual(diary(), [TASK], "a talisman held to the ruins");
+
+  emitted.length = 0;
+  assert.equal(handlers["Chaos rift:Exit-through"]({ player: visitor(), objectId: ObjectIdentifiers.CHAOS_RIFT }), true);
+  assert.deepEqual(diary(), [], "the rift's teleport has not landed yet");
+  const riftTeleport = emitted.find(([name]) => name === "lever:teleport")[1];
+  assert.equal(typeof riftTeleport.onArrival, "function", "the teleport reports its landing");
+  riftTeleport.onArrival();
+  assert.deepEqual(diary(), [TASK], "the Abyss's Chaos rift, on landing");
+  emitted.length = 0;
+  assert.equal(handlers["Air rift:Exit-through"]({ player: visitor(), objectId: ObjectIdentifiers.AIR_RIFT }), true);
+  assert.deepEqual(diary(), [], "another altar's rift");
+});

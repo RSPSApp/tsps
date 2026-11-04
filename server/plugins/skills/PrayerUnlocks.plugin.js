@@ -33,8 +33,6 @@ const KNIGHT_WAVES_STATE_VARBIT = 3909;
 const KNIGHT_WAVES_COMPLETE = 8;
 
 const KINGS_RANSOM_KEY = "kings_ransom";
-const KINGS_RANSOM_STAGE_ATTRIBUTE = "quest.kings_ransom.stage";
-const KINGS_RANSOM_COMPLETE_STAGE = 85;
 
 // OSRS Wiki transcripts: Transcript:Dexterous prayer scroll, Transcript:Arcane prayer scroll and
 // Transcript:Torn prayer scroll.
@@ -68,8 +66,11 @@ function scrollFor(itemId) {
   return scrolls().find((scroll) => scroll.itemId === itemId) ?? null;
 }
 
+/** Disabled or unavailable quests impose no requirement, as with quest equipment. */
 function kingsRansomComplete(player) {
-  return (Number(player.getAttribute(KINGS_RANSOM_STAGE_ATTRIBUTE)) || 0) >= KINGS_RANSOM_COMPLETE_STAGE;
+  const request = { player, key: KINGS_RANSOM_KEY, complete: null };
+  api.emitCustomEvent("quest:is-complete", request);
+  return request.complete !== false;
 }
 
 /**

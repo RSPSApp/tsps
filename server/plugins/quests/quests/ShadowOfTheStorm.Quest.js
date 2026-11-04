@@ -1522,7 +1522,8 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       ensureWizardNpcs(player);
       return;
     }
-    if (objectId === PORTAL_EXIT_OBJECT_ID && portalStage >= STAGE_IN_GROUP && portalStage < STAGE_COMPLETE) {
+    // No upper bound: completion leaves the player on plane 2, so the exit must keep working.
+    if (objectId === PORTAL_EXIT_OBJECT_ID && portalStage >= STAGE_IN_GROUP) {
       event.handled = true;
       player.sendMessage("You step into the portal.");
       player.moveTo(new Location(2721, 4911, 0));

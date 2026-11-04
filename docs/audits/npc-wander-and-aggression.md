@@ -330,14 +330,68 @@ Per-NPC overrides can call `setHuntRange()`; the default is 3. The Kalphite Quee
 existing 9-tile encounter range by setting `huntRange: 9` alongside `combatFollowDistance: 9`.
 
 A separate aggression-range formula (`max range + attack range + size - 1` from the static
-spawn) is not needed for hunting and is not implemented. `combatFollowDistance` remains the
-retreat/leash max range; `retreats` still needs hydrating before the retreat path can work. If a
-future retaliation feature needs "can be attacked from spawn", it should compute that formula
-from the spawn, not reuse the hunt range.
+spawn) is not needed for hunting and is not implemented in this branch. `combatFollowDistance`
+remains the retreat/leash max range; `retreats` still needs hydrating before the low-health
+retreat path can work. If a future retaliation feature needs "can be attacked from spawn", it
+should compute that formula from the spawn, not reuse the hunt range.
 
 The hunt-range default and clamping are covered in `aggression-tolerance.test.cjs`. The full
 melee/ranged/magic and size cases need a live combat harness rather than the unit test; that is
 the remaining verification gap.
+
+### Follow-up: issue #2097 (2026-11-03)
+
+The audit above found the retreat path dead (`NpcDefinition.retreats` is never hydrated), but
+left it there. That is the report in #2097: every aggressive NPC that acquires a target keeps it
+until the player teleports, because `Combat.shouldRetreat` returned false for every NPC on its
+first line. There was no chase bound at all.
+
+The missing piece is the Wiki's **aggression range**, `max range + attack range`, measured from the
+**static spawn footprint** (Aggressiveness#Aggression range). NPC locations are south-west
+corners, so the footprint extends `size - 1` tiles north and east only; the size must not be
+added to the radius as a symmetric term. The check is `NpcDefinition.getAggressionRange()` plus
+`CombatRange.footprintDistance()`:
+
+- **Hunting:** `NpcAggression` refuses a target outside the spawn footprint's aggression range,
+  even when the NPC has wandered within hunt range of it. An area rule returning `true` still
+  overrides the engine check, as it does for tolerance.
+- **Chasing:** `Combat.shouldRetreat` drops a target outside the aggression range (or an NPC
+  dragged beyond its max range), marks the coordinator `RETREATING` and lets it walk home.
+  `combat:no-retreat` still exempts scripted content, and a target that is fighting the NPC
+  (`isSafespotted`) is never dropped, so player-started fights and safespots behave as before.
+  Instanced NPCs (a `PrivateArea`, e.g. Zulrah's phase moves and the raid rooms) are left to
+  their own arena rules rather than the open-world range.
+- **Public scripted arenas:** a shared boss chamber is not open-world hunting either. The God
+  Wars dungeon's `Combat.engage` gives the general and bodyguards `combat:no-retreat` as soon as
+  the area claims them, so a player crossing the room does not turn the boss around; the
+  chamber's existing reset-when-empty rule still ends the fight. The dungeon's ordinary
+  followers are not flagged: their `npcAggression` rule makes them attack on sight, but they
+  keep the normal leash. Scurrius' lair does the same: its public encounter is spawned with
+  `combat:no-retreat` (a private instance already gets the `PrivateArea` exemption), so a player
+  in the room stays his target through a feeding round, when his reach between swipes drops to
+  melee. Leaving the lair still invalidates the target, and death/respawn are unchanged.
+
+`max range` is **not** the wander radius. osrs-docs defines it separately
+([Max range](https://osrs-docs.com/docs/variables/max-range/), default 7) and the cited Mod Ash
+reply says the retreat radius is configured per NPC and only "often" set slightly larger than
+the wander range. Using `wanderRadius + attack` would give every stationary aggressive NPC
+(wander radius 0, e.g. monkey archers) an aggression range of 1 and stop them attacking at all.
+
+Capture check: 90 rsprox recordings, 17,182 deduplicated NPC tracks matched to a spawn within
+one tile, 221 aggressive ids. The largest displacement from the matched spawn was 21 tiles;
+percentiles were 50th = 5, 75th = 8, 90th = 10, 95th = 12, 99th = 16.8. No aggressive NPC
+crossed the map. The raw 55-tile Dagannoth outlier disappears once a reused NPC index or a
+teleport starts a new track; without that split the same index was followed across unrelated
+respawns.
+
+`aggression-range.test.cjs` covers the formula, the spawn check, the leash, the
+`combat:no-retreat` exemption, and the public God Wars chamber (the boss keeps a room-wide
+pursuit, an ordinary follower still gives up). It also runs the real Scurrius producer and
+feeding transition: the public boss keeps an in-room player eleven tiles from the spawn
+footprint after a feeding round drops his reach to melee, the same scene without the flag gives
+up, a private instance relies on its `PrivateArea` instead, and a player who leaves stops being
+a target. `unreachable-combat.test.cjs` opts those deadline scenes out of the leash so they
+still test the unreachable-target budget alone.
 
 Data note: 10 spawned ids offer `Attack` but are absent from `monsters-complete.json`, so
 `isAggressive` is false for them. Nine are nameless multinpc parents whose transformed form

@@ -4,7 +4,7 @@ import { clamp } from "../../common/utils/MathUtil";
 import { getClientCycle } from "../../network/ServerConnection";
 import { RS_TO_RADIANS } from "../../rs/MathConstants";
 import { ProjectionType } from "../../game/Camera";
-import { sampleBridgeHeightForWorldTile } from "../../game/scene/BridgeHeightSampler";
+import { sampleActorHeightForWorldTile, sampleBridgeHeightForWorldTile } from "../../game/scene/BridgeHeightSampler";
 import { BridgePlaneStrategy } from "../../game/scene/PlaneResolver";
 import { LoadingRequirement } from "../../game/state/LoadingTracker";
 import { projectDeckToWorld } from "../render/worldEntityMotion";
@@ -105,7 +105,7 @@ export function updateFollowCamera(
     renderer.playerPosUni[0] = playerX;
     renderer.playerPosUni[1] = playerZ;
     const basePlane = cameraTarget ? cameraTarget.level : playerEcs.getLevel(playerEcsIndex) | 0;
-    const playerHeightSample = sampleBridgeHeightForWorldTile(
+    const playerHeightSample = sampleActorHeightForWorldTile(
         renderer.mapManager,
         playerX,
         playerZ,

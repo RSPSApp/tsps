@@ -823,7 +823,7 @@ function loadTranscripts(api) {
  * `select` can narrow the variant's steps (e.g. skip a wiki continuation tail); `npc`, the
  * NPC talked to, reaches the dialogue events (for its animations).
  */
-function startTranscript(api, player, npcId, page, variant, select, npc = null) {
+function startTranscript(api, player, npcId, page, variant, select, npc = null, { scoped = false } = {}) {
   const data = loadTranscripts(api);
   const record = data?.[page];
   const raw = record?.variants?.[variant];
@@ -837,7 +837,8 @@ function startTranscript(api, player, npcId, page, variant, select, npc = null) 
     transcriptSpeakers = speakerIdIndex(index, api.core.NpcDefinition);
   }
   const definition = api.core.NpcDefinition.forId(npcId);
-  const event = { player, npcId, npc, definition };
+  // Timed scenes can retain the existing named-playback ownership token across Continues.
+  const event = { player, npcId, npc, definition, explicit: scoped };
   const options = collectPageOptions(record);
   const context = { player, npc, npcId, definition, pages: [{ page, variants: [variant] }], speakerIdByName: transcriptSpeakers,
     pageOptions: options.byText, pageOptionList: options.list, pageLines: collectPageLines(record),

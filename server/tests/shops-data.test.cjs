@@ -103,3 +103,19 @@ test('the loader reads the host editor fields: name, currency, default stock and
     'a missing amount uses stockAmount; an explicit amount and -1 default price win'
   );
 });
+
+test('a shop-wide stockAmount of 0 keeps rows that omit their own amount', () => {
+  const { ShopDefinitionLoader } = require('../dist/game/definition/loader/impl/ShopDefinitionLoader');
+  const definition = new ShopDefinitionLoader().toDefinition({
+    id: 999997,
+    name: 'Zero default',
+    currency: 'COINS',
+    stockAmount: 0,
+    originalStock: [{ id: 303 }, { id: 317, amount: 2 }, { id: 321, amount: 'x' }],
+  }, 'core');
+  assert.deepEqual(
+    definition.getOriginalStock().map(({ id, amount }) => [id, amount]),
+    [[303, 0], [317, 2]],
+    'the inherited zero stays listed, an explicit amount wins and an invalid amount is still dropped'
+  );
+});

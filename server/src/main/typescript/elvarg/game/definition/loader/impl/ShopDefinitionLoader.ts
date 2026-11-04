@@ -135,10 +135,12 @@ export class ShopDefinitionLoader extends DefinitionLoader {
         if (Array.isArray(raw.originalStock)) {
             for (const entry of raw.originalStock as RawShopStockDefinition[]) {
                 const itemId = Number(entry?.id);
-                const amount = this.normalizeAmount(entry?.amount ?? stockAmount);
+                const rawAmount = entry?.amount ?? stockAmount;
+                const amount = this.normalizeAmount(rawAmount);
                 // A listed stock of 0 is real: specialist shops (Gerrant's raw fish) show and
-                // buy items they start with none of.
-                const listedEmpty = Number(entry?.amount) === 0;
+                // buy items they start with none of. The resolved amount counts, so a shop-wide
+                // stockAmount of 0 keeps rows that omit their own amount.
+                const listedEmpty = Number(rawAmount) === 0;
                 if (!Number.isInteger(itemId) || itemId <= 0 || (amount <= 0 && !listedEmpty)) {
                     continue;
                 }

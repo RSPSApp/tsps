@@ -11,6 +11,10 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { ObjectDefinition } = require("../dist/game/definition/ObjectDefinition");
 const { RegionManager } = require("../dist/game/collision/RegionManager");
 const { readTemplateRegion, templateChunkKey } = require("../dist/game/collision/TemplateRegionData");
+const { World } = require("../dist/game/World");
+const { TaskManager } = require("../dist/game/task/TaskManager");
+const { NPCDeathTask } = require("../dist/game/task/impl/NPCDeathTask");
+const { NPCRespawnTask } = require("../dist/game/task/impl/NPCRespawnTask");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const MaggotKing = require("../plugins/bosses/MaggotKing.plugin");
 const Common = require("../plugins/bosses/maggotking/Common.MaggotKing");
@@ -20,6 +24,7 @@ const Entrance = require("../plugins/bosses/maggotking/Entrance.MaggotKing");
 const core = PluginManager.getCoreApi();
 const handlers = new Map();
 const loginHandlers = [];
+const deathHandlers = [];
 const spawned = [];
 const removed = [];
 const persisted = [];
@@ -29,6 +34,7 @@ const api = {
   persistAttribute: (...args) => persisted.push(args),
   onObjectInteraction: (name, actions) => handlers.set(name, actions),
   onPlayerLogin: handler => loginHandlers.push(handler),
+  onNpcDeath: handler => deathHandlers.push(handler),
   emitCustomEvent(name, event) {
     if (name === "quest:is-complete" && event.key === Common.data.questKey) {
       event.complete = event.player.questComplete === true;
@@ -38,16 +44,23 @@ const api = {
     const npc = {
       definition,
       id: definition.id,
+      index: spawned.length,
       location: new core.Location(definition.x, definition.y, definition.z),
       area: null,
       getId() { return this.id; },
       getLocation() { return this.location; },
       getSize() { return 5; },
+      getIndex() { return this.index; },
+      isPlayer() { return false; },
       isNpc() { return true; },
       getAsNpc() { return this; },
       setArea(area) { this.area = area; },
       getArea() { return this.area; },
       getPrivateArea() { return this.area; },
+      getOwner() { return definition.owner ?? null; },
+      getDefinition() { return { getRespawn: () => 3 }; },
+      setDying(value) { this.dying = value; },
+      setNpcTransformationId(value) { this.transformationId = value; },
     };
     spawned.push(npc);
     return npc;
@@ -169,4 +182,61 @@ test("Blood Moon access opens a private solo lair and cleans it up on escape and
   loginHandlers[0]({ player: recovered });
   assert.equal(recovered.getLocation().equals(Common.loc(Common.data.outside)), true);
   assert.equal(recovered.getAttribute(Instance._test.INSTANCE_ATTRIBUTE), null);
+});
+
+test("a killed Maggot King respawns in its private lair and closing the session cancels the next respawn", t => {
+  const submitted = [];
+  const submit = TaskManager.submit.bind(TaskManager);
+  t.mock.method(TaskManager, "submit", task => {
+    submitted.push(task);
+    return submit(task);
+  });
+  const owner = player(5, true);
+  const firstSpawnIndex = spawned.length;
+  assert.equal(Instance.enter(owner), true);
+  const session = Instance.sessionOf(owner);
+  const firstBoss = session.boss;
+  const area = session.area;
+
+  deathHandlers[0]({ npc: firstBoss, killer: owner });
+  assert.equal(session.boss, null);
+  assert.equal(firstBoss.__skipDefaultRespawn, true);
+  assert.equal(session.respawnTask.getDelay(), 3);
+  new NPCDeathTask(firstBoss).remove();
+  const removeQueue = World.getRemoveNPCQueue();
+  const firstRemoveIndex = removeQueue.indexOf(firstBoss);
+  assert.notEqual(firstRemoveIndex, -1, "the native death removal queues the old boss");
+  removeQueue.splice(firstRemoveIndex, 1);
+  assert.equal(submitted.some(task => task instanceof NPCRespawnTask), false, "the engine default respawn remains suppressed");
+
+  TaskManager.process();
+  TaskManager.process();
+  assert.equal(spawned.length, firstSpawnIndex + 1, "the lair stays empty until the respawn delay expires");
+  TaskManager.process();
+  const replacement = session.boss;
+  assert.equal(spawned.length, firstSpawnIndex + 2);
+  assert.notEqual(replacement, firstBoss);
+  assert.equal(replacement.getArea(), area);
+  assert.equal(replacement.getLocation().equals(session.tile(Common.data.bossSpawn)), true);
+  assert.equal(replacement.definition.owner, owner);
+  assert.equal(replacement.definition.ownerOnly, true);
+  assert.equal(replacement.__skipDefaultRespawn, true);
+  assert.equal(area.entities.includes(replacement), true);
+
+  deathHandlers[0]({ npc: replacement, killer: owner });
+  assert.equal(session.boss, null);
+  new NPCDeathTask(replacement).remove();
+  const replacementRemoveIndex = removeQueue.indexOf(replacement);
+  assert.notEqual(replacementRemoveIndex, -1, "the native death removal queues the replacement");
+  removeQueue.splice(replacementRemoveIndex, 1);
+  const spawnCountBeforeClose = spawned.length;
+  const pendingRespawn = session.respawnTask;
+  assert.equal(pendingRespawn.isRunning(), true);
+
+  area.leave(owner, false);
+  assert.equal(session.ended, true);
+  assert.equal(pendingRespawn.isRunning(), false);
+  for (let tick = 0; tick < 4; tick++) TaskManager.process();
+  assert.equal(spawned.length, spawnCountBeforeClose, "a closed instance does not receive a queued boss");
+  assert.equal(area.isDestroyed(), true);
 });

@@ -38,6 +38,7 @@ function attach(api) {
   api.onObjectInteraction("Darkwood trees", { Enter: enterLair });
   api.onObjectInteraction("Cave", { Escape: exitLair, "Quick-escape": exitLair });
   api.onPlayerLogin(recoverOnLogin);
+  api.onNpcDeath(Instance.onBossDeath);
 }
 
 module.exports = { attach, enterLair, exitLair, recoverOnLogin, NO_ACCESS, EXIT_CAVE_ID };

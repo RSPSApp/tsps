@@ -72,31 +72,63 @@ class Session {
 
   enter() {
     const { data } = Common;
-    const spawn = this.tile(data.bossSpawn);
     this.area.enter(this.player);
     this.player.setAttribute(INSTANCE_ATTRIBUTE, true);
     this.player.moveTo(this.tile(data.arrival));
-    this.boss = Common.api().spawnNpc({
-      id: Common.core().NpcIdentifiers.MAGGOT_KING,
-      x: spawn.getX(), y: spawn.getY(), z: spawn.getZ(),
-      owner: this.player, ownerOnly: true, wanderRadius: 0,
-    });
-    if (!this.boss) {
+    if (!this.spawnBoss()) {
       this.player.moveTo(Common.loc(data.outside));
       this.area.leave(this.player, false);
       return false;
     }
-    this.boss.__skipDefaultRespawn = true;
-    this.area.add(this.boss);
     return true;
+  }
+
+  spawnBoss() {
+    if (this.ended || this.boss) return null;
+    const spawn = this.tile(Common.data.bossSpawn);
+    const boss = Common.api().spawnNpc({
+      id: Common.core().NpcIdentifiers.MAGGOT_KING,
+      x: spawn.getX(), y: spawn.getY(), z: spawn.getZ(),
+      owner: this.player, ownerOnly: true, wanderRadius: 0,
+    });
+    if (!boss) return null;
+    boss.__skipDefaultRespawn = true;
+    boss.__maggotKingSession = this;
+    this.area.add(boss);
+    this.boss = boss;
+    return boss;
+  }
+
+  scheduleRespawn(ticks) {
+    if (this.ended) return;
+    this.respawnTask?.stop();
+    const session = this;
+    const { Task, TaskManager } = Common.core();
+    const task = new (class extends Task {
+      constructor() {
+        super(Math.max(1, Math.trunc(ticks)), session, false);
+      }
+
+      execute() {
+        this.stop();
+        if (session.respawnTask === this) session.respawnTask = null;
+        if (session.ended || session.boss) return;
+        if (!session.spawnBoss()) session.scheduleRespawn(1);
+      }
+    })();
+    this.respawnTask = task;
+    TaskManager.submit(task);
   }
 
   close() {
     if (this.ended) return;
     this.ended = true;
+    this.respawnTask?.stop();
+    this.respawnTask = null;
     sessions.delete(this.player);
     this.player.setAttribute(INSTANCE_ATTRIBUTE, null);
     if (this.boss) {
+      this.boss.__maggotKingSession = null;
       this.area.detach(this.boss);
       Common.api().removeNpc(this.boss);
       this.boss = null;
@@ -116,4 +148,13 @@ function enter(player) {
   return session.enter();
 }
 
-module.exports = { enter, sessionOf, sessions, areaClass, _test: { INSTANCE_ATTRIBUTE } };
+function onBossDeath({ npc }) {
+  const session = npc?.__maggotKingSession;
+  if (!session || session.ended || session.boss !== npc) return;
+  npc.__maggotKingSession = null;
+  npc.__skipDefaultRespawn = true;
+  session.boss = null;
+  session.scheduleRespawn(npc.getDefinition().getRespawn());
+}
+
+module.exports = { enter, sessionOf, sessions, areaClass, onBossDeath, _test: { INSTANCE_ATTRIBUTE } };

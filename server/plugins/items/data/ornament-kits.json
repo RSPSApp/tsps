@@ -1,5 +1,5 @@
 {
- "$comment": "Ornament kit transformations transcribed from https://oldschool.runescape.wiki/w/Ornament_kit. Applying a kit consumes it and swaps the base item id for the ornamented id.",
+ "$comment": "Ornament kit transformations transcribed from https://oldschool.runescape.wiki/w/Ornament_kit; whip mixes and reusable cloth removal from https://oldschool.runescape.wiki/w/Volcanic_abyssal_whip and Frozen_abyssal_whip. Applying a kit consumes it and swaps the base item id for the ornamented id.",
  "source": "https://oldschool.runescape.wiki/w/Ornament_kit",
  "kits": [
   {
@@ -744,6 +744,20 @@
    "result": 25741,
    "name": "Sanguine ornament kit",
    "refund": true
+  },
+  {
+   "kit": 12771,
+   "base": 4151,
+   "result": 12773,
+   "name": "Volcanic whip mix",
+   "cleaningCloth": true
+  },
+  {
+   "kit": 12769,
+   "base": 4151,
+   "result": 12774,
+   "name": "Frozen whip mix",
+   "cleaningCloth": true
   }
  ]
 }

@@ -19658,7 +19658,7 @@ test('RFD fishcake recipe preserves incomplete ingredients and consumes all four
   const { api: base } = mockApi();
   const itemHandlers = [];
   const core = Object.create(base.core);
-  Object.defineProperty(core, 'NpcDefinition', { value: { forId: () => ({ getActions: () => ['Talk-to'] }) } });
+  Object.defineProperty(core, 'NpcDefinition', { value: { forId: () => ({ getActions: () => ['Talk-to'], getName: () => 'Cook' }) } });
   const api = new Proxy(base, {
     get(target, prop) {
       if (prop === 'core') return core;

@@ -2640,7 +2640,7 @@ test('a PvP bot that lost its brain is recovered and moved onto a walkable Wilde
 
 
 test('a minigame PvP bot without wilderness roam bounds is left to its own controller', () => {
-  const { __testing: behaviorTesting } = require('../plugins/bots/behaviours/task/BehaviorTask.PlayerBots');
+  const { __testing: behaviorTesting, BotBehaviorTask } = require('../plugins/bots/behaviours/task/BehaviorTask.PlayerBots');
   const { isManagedWildernessBot, trackStuckArea, STUCK_AREA_MS } = behaviorTesting;
   const waiting = {
     autonomy: { allowedAutonomousModes: ['pvp'] },
@@ -2648,13 +2648,41 @@ test('a minigame PvP bot without wilderness roam bounds is left to its own contr
     roaming: { target: null, nextWalkAt: 0 },
   };
   assert.equal(isManagedWildernessBot(waiting), false, 'LMS/BH bots carry no assigned roam bounds');
+  let movedTo = null;
   const player = {
     ...fakePlayer('LmsBot1', 3100, 3600),
-    getCombat: () => ({ getTarget: () => null, getAttacker: () => null }),
+    isDyingReturn: () => false,
+    getHitpoints: () => 99,
+    getCombat: () => ({ getTarget: () => null, getAttacker: () => null, reset() {}, setUnderAttack() {} }),
     getCombatFollowing: () => null,
+    setFollowing() {},
+    setCombatFollowing() {},
+    setMobileInteraction() {},
+    setPositionToFace() {},
+    getMovementQueue: () => ({ size: () => 0, reset() {}, walkToReset() {} }),
+    moveTo: (location) => { movedTo = location; },
+    getEquipment: () => ({ getItems: () => [] }),
   };
   const entry = { player, state: waiting, brain: null };
   assert.equal(trackStuckArea(entry, 1000), null);
   assert.equal(trackStuckArea(entry, 1000 + STUCK_AREA_MS + 1), null,
     'the waiting area is not a stuck wilderness square');
+
+  const logs = [];
+  const task = new BotBehaviorTask([entry], 1, {
+    idleEntryStride: 1,
+    api: {
+      getWorld: () => ({}),
+      getRegionManager: () => ({ blocked: () => false, isWater: () => false }),
+      getCombatFactory: () => ({}),
+      getAreaManager: () => ({}),
+      getServerPerf: () => ({ measurePhase: (_, fn) => fn() }),
+      log: (message, extra) => logs.push([message, extra]),
+    },
+  });
+  task.processEntry(entry, 0, 1000);
+  task.processEntry(entry, 0, 16001);
+  assert.equal(movedTo, null, 'its waiting-area position is left alone');
+  assert.equal(waiting.pvp.loadoutPending, undefined, 'its stashed kit is not regenerated');
+  assert.equal(logs.some(([message]) => message === 'bot_stuck_recovered' || message === 'bot_pvp_loadout_restored'), false);
 });

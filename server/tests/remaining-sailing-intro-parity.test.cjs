@@ -58,7 +58,7 @@ function setup() {
     onPlayerLogin(fn) { hooks.login.push(fn); },
     onPlayerLogout(fn) { hooks.logout.push(fn); },
     spawnNpc(definition) {
-      const npc = { definition, getId: () => definition.id, getLocation: () => new core.Location(definition.x ?? 0, definition.y ?? 0, definition.z ?? 0), isRegistered: () => true, isNpc: () => true, isPlayer: () => false, getAsNpc() { return npc; }, getArea: () => npc.__area, setArea: (area) => { npc.__area = area; }, isOwnerOnly: () => definition.ownerOnly, getOwner: () => definition.owner };
+      const npc = { definition, getId: () => definition.id, getLocation: () => new core.Location(definition.x ?? 0, definition.y ?? 0, definition.z ?? 0), isRegistered: () => true, isNpc: () => true, isPlayer: () => false, getAsNpc() { return npc; }, getArea: () => npc.__area, getPrivateArea: () => npc.__area ?? null, setArea: (area) => { npc.__area = area; }, isOwnerOnly: () => definition.ownerOnly, getOwner: () => definition.owner, setMobileInteraction(target) { npc.target = target; } };
       return npc;
     },
     removeNpc() {},
@@ -87,6 +87,7 @@ function setup() {
     clearHintArrow() { hints.push(['clear']); return sender; },
     sendConfig(id, value) { varbits.set(id, value); return sender; },
     sendInterfaceRemoval() { return sender; },
+    hasInterruptibleInterface() { return false; },
   }, { get(target, key) { return target[key] ?? (() => sender); } });
   const player = {
     getAttribute: (key) => attrs.get(key),
@@ -113,6 +114,8 @@ function setup() {
     moveTo(value) { location = value; },
     getSailing: () => sailing,
     isRegistered: () => true,
+    getHitpoints: () => 99,
+    isDying: false,
     isPlayerBot: () => false,
     getIndex: () => 1,
     isPlayer: () => true,
@@ -120,7 +123,9 @@ function setup() {
     isNpc: () => false,
     getEquipment: () => ({ getItems: () => [] }),
     getDialogueManager: () => ({ isActive: () => false, startDialogues() {}, getCurrent() { return null; } }),
-    getPrivateArea: () => null,
+    getPrivateArea: () => player.__area ?? null,
+    setMobileInteraction(target) { player.target = target; },
+    setPositionToFace(target) { player.face = target; },
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; } }),
     setUntargetable() {},
     performAnimation() {},
@@ -197,13 +202,16 @@ test('Pandemonium uses the captured varbit stages and the real raft cargo route'
   h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
   assert.equal(quest.getStage(h.player), 6);
   h.tickOnce(); h.tickOnce();
-  assert.ok(h.cameras.some((camera) => camera[0] === 'move' && camera[3] === 550), 'tutorial ship camera');
+  assert.ok(h.cameras.some((camera) => camera[0] === 'target' && Number.isInteger(camera[1].worldEntity)), 'free tutorial ship camera');
   h.hooks.named.get('Will')['Talk-to']({ player: h.player, npcId: h.core.NpcIdentifiers.WILL, definition: { getName: () => 'Will' } });
+  assert.equal(quest.getStage(h.player), 6, 'the instructions are still pending');
+  h.emit('npc-dialogue:line', { npcId: h.core.NpcIdentifiers.WILL, text: 'Over to you, [player name]! Take the helm when ready.',
+    step: { speaker: 'Anne' }, pages: [{ page: 'Pandemonium', variants: ['at-the-boat-talking-to-anne-or-will'] }] }).before();
   assert.equal(quest.getStage(h.player), 8);
   h.line(h.core.NpcIdentifiers.WILL, 'A line', { speaker: 'Will' });
   assert.equal(h.lastLineSpeakerId, 14958, 'boat Will chathead');
   h.emit('npc-dialogue:choice', { npcId: h.core.NpcIdentifiers.WILL, option: "Okay, I'll get to it." });
-  assert.equal(quest.getStage(h.player), 10);
+  assert.equal(quest.getStage(h.player), 8);
   const { BoatManager } = require('../dist/game/content/sailing/BoatManager');
   const boat = BoatManager.all().find((entry) => entry.ownerPlayerId === 1);
   const helm = BoatManager.getSpec(boat).locs.find((loc) => loc.part === 'helm');
@@ -867,7 +875,7 @@ test('Crab bottle recovery reports only after the collection is actually granted
   assert.ok(!said.some((message) => message.includes('familiar shells')), 'recovery is not announced before it is given');
 });
 
-test('Pandemonium cameras frame the rendered ship and follow it once the helm is taken', () => {
+test('Pandemonium camera follows the rendered ship freely before and after the helm is taken', () => {
   const h = setup();
   const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
   const { BoatManager } = require('../dist/game/content/sailing/BoatManager');
@@ -877,11 +885,8 @@ test('Pandemonium cameras frame the rendered ship and follow it once the helm is
     h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
     const ship = StaticShips.all()[0];
     h.tickOnce(); h.tickOnce();
-    for (const camera of h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look')) {
-      assert.ok(Math.abs(camera[1] - ship.boat.tileX) < 20 && Math.abs(camera[2] - ship.boat.tileY) < 20,
-        'camera frames the boat at sea, not its synthetic deck scene');
-    }
-    assert.equal(h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look').length, 2);
+    assert.equal(h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look').length, 0);
+    assert.deepEqual(h.cameras.at(-1), ['target', { worldEntity: ship.boat.entityIndex }]);
     quest.setStage(h.player, 10);
     clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
     assert.deepEqual(h.cameras.at(-1), ['target', { worldEntity: ship.boat.entityIndex }],
@@ -889,7 +894,7 @@ test('Pandemonium cameras frame the rendered ship and follow it once the helm is
     clickAction(h, 59553, 'Sails', h.core.CacheDefinitions.getObject(59553).actions, 1);
     ship.boat.fineX = 3035 * 128 + 32; ship.boat.fineY = 3048 * 128 + 96;
     BoatManager.tick(); h.tickOnce(); h.tickOnce();
-    assert.equal(h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look').length, 2,
+    assert.equal(h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look').length, 0,
       'arrival keeps the voyage context; the captured fixed camera belongs to later Deploy');
     assert.equal(quest.getStage(h.player), 12);
   } finally {
@@ -922,7 +927,8 @@ test('Pandemonium cancels departed ship cameras and offers boarding again from t
     replaced.boat.fineX = 3400 * 128;
     h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
     h.tickOnce();
-    assert.ok(h.cameras.at(-1)[1] < 3100, 'a replacement cancels the departed ship camera');
+    assert.deepEqual(h.cameras.at(-1), ['target', { worldEntity: StaticShips.all()[0].boat.entityIndex }],
+      'a replacement targets its own ship, never the departed one');
     h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
     quest.setStage(h.player, 10);
     clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);

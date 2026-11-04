@@ -94,7 +94,7 @@ loaded cache map. It proves:
 - source region 10828 plane 2 supplies the temple mesh; the 14 torches/fire/beds/standards and the
   phase-owned circle/portal locs are explicit dynamic additions.
 
-The existing `npc-dialogue-event-entrypoints.test.cjs` also passes all 44 cases, including two
+The existing `npc-dialogue-event-entrypoints.test.cjs` also passes all 48 cases after main integration, including two
 real `NpcDialogues`/`DialogueManager`/native Continue conversations for the corrected Golem
 exchange, with and without a sigil. Both new cases fail against the original generated export
 (16/15 spoken lines instead of 8/7). The sigil handoff still consumes one item and advances once.
@@ -120,9 +120,7 @@ REBUILD_REGION instance, so instance-only death/grave behaviour is not claimed.
 - A true instance transition, the full cosmetic sound set, and the optional double-sigil Tanya
   glitch are not reproduced. Fire Blast timing uses the cache `CombatSpells.FIRE_BLAST` projectile
   (130, end 20, heights 43/31), not invented values.
-- The full suite in this worktree reports 72 failures outside ShadowOfTheStorm (the count varies
-  by one with two flaky suites, Agility's dispenser and Nightmare Zone's dream disconnect, which
-  pass when run alone), including the known RFD fishcake fixture `definition.getName is not a
-  function`. Those plugins were not modified here and were not re-baselined in a clean checkout
-  (this worktree may not be reset); the focused Shadow suite and
-  `ShadowOfTheStorm: every selected dialogue variant exists` pass.
+- An earlier broad run in the inherited worktree reported failures outside ShadowOfTheStorm.
+  It was not repeated on this final main integration; the validation above is the focused
+  scene/combat suite, native dialogue entrypoints and selected-variant check. No whole-suite
+  passing claim is made.

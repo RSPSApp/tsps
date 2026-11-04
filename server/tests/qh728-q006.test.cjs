@@ -955,3 +955,16 @@ test('canAttack policy only gates the tracked chompy, not other owner-only quest
   assert.equal(CombatFactory.canAttackByPolicy(p, chompy), CanAttackResponse.CAN_ATTACK,
     'tracked chompy is attackable with the canonical bow and arrows');
 });
+
+test('claiming a Chompy bird hat credits the collection log', () => {
+  const h = questHarness();
+  const p = dialoguePlayer([[core.ItemIdentifiers.OGRE_BOW, 1]], [], {});
+  h.quest.setStage(p, 65);
+  const obtains = [];
+  (h.hooks['collection-log:obtain'] ??= []).push((event) => obtains.push(event));
+  h.api.emitCustomEvent('npc-dialogue:action', {
+    player: p, npcId: core.NpcIdentifiers.RANTZ, stepId: -1, text: 'this is the hat for ogre bowman',
+  });
+  assert.equal(p.getInventory().getAmount(2978), 1);
+  assert.deepEqual(obtains.map((event) => [event.player, event.itemId, event.amount]), [[p, 2978, 1]]);
+});

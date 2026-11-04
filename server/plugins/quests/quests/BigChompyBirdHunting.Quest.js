@@ -561,7 +561,10 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     if (!hat) return;
     const index = CHOMPY_HATS.indexOf(hat);
     if (hatClaimed(player, index)) return;
-    if (!has(player, hat.item)) player.getInventory().adds(hat.item, 1);
+    if (!has(player, hat.item)) {
+      player.getInventory().adds(hat.item, 1);
+      api.emitCustomEvent("collection-log:obtain", { player, itemId: hat.item, amount: 1 });
+    }
     player.setAttribute(HATS_CLAIMED_ATTRIBUTE, hatsClaimed(player) | (1 << index));
   }
 

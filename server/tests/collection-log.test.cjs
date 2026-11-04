@@ -391,6 +391,10 @@ test("reward-shop purchases log quantities, but unrelated shops and resold stock
   emit("shop:purchase", { ...purchase, shopName: "General Store" });
   emit("shop:purchase", { ...purchase, originalStock: false });
   assert.equal(Progress.obtained(player, CARPENTERS_BOOTS), 3);
+  emit("shop:purchase", {
+    player, shopName: "Petrified Pete's Ore Shop", itemId: 21697, amount: 1, originalStock: true,
+  });
+  assert.equal(Progress.obtained(player, 21697), 1, "the Volcanic Mine reward shop already credits");
 });
 
 test("every configured reward shop exists in canonical shop data", () => {

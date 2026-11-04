@@ -1155,6 +1155,8 @@ test('wands are upgrades: each takes the tier before it', () => {
   assert.equal(Rewards.buy(player, slotOf(6910), 1), 1);
   assert.equal(player.items.get(6908), 0, 'the beginner wand is handed in');
   assert.equal(player.items.get(6910), 1);
+  assert.ok(events.some(([name, event]) => name === 'collection-log:obtain' && event.itemId === 6910 && event.amount === 1),
+    'the bought wand is credited to the collection log');
 });
 
 test('Bones to Peaches is a one-time unlock needing Magic 60, read by the Graveyard', () => {
@@ -1167,6 +1169,8 @@ test('Bones to Peaches is a one-time unlock needing Magic 60, read by the Gravey
   assert.equal(Rewards.buy(player, slotOf(6926), 5), 1);
   assert.equal(player.getAttribute(Common.PEACHES_UNLOCKED_ATTRIBUTE), true);
   assert.equal(player.items.get(6926) ?? 0, 0, 'no item, an unlock');
+  assert.ok(events.some(([name, event]) => name === 'collection-log:obtain' && event.itemId === 6926 && event.amount === 1),
+    'the Bones to Peaches unlock is credited to the collection log');
   assert.equal(Rewards.buy(player, slotOf(6926), 1), 0);
   assert.equal(player.messages.at(-1), Common.message('shopAlreadyUnlocked'));
 });

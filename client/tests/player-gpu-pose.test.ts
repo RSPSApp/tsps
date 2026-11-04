@@ -227,3 +227,19 @@ console.log(
     `GPU player poses match the CPU path: ${checked} frames, ${interleaved} interleaved, ` +
         `exact to ${worstSeen.toFixed(4)}; the CPU's integer rounding drifts up to ${worstRounding.toFixed(1)}`,
 );
+
+
+// GPU label heights must include animation and vertices outside any label.
+const heightModel = new Model();
+heightModel.verticesCount = heightModel.usedVertexCount = 3;
+heightModel.verticesX = new Int32Array([0, 10, 0]);
+heightModel.verticesY = new Int32Array([-196, -100, -240]);
+heightModel.verticesZ = new Int32Array(3);
+heightModel.vertexLabels = [new Int32Array([0, 1])];
+const heightRig = LabelRig.of(heightModel)!;
+assert.equal(heightRig.vertexLabelOf(), heightRig.vertexLabelOf(), "immutable rig reuses its vertex-label map across poses");
+const lifted = new LabelPose(heightRig);
+lifted.transform0(SeqTransformType.TRANSLATE, [0], 0, -73, 0);
+assert.equal(heightRig.height(lifted.finish(0, 0)), 269);
+const resting = new LabelPose(heightRig);
+assert.equal(heightRig.height(resting.finish(0, 0)), 240);

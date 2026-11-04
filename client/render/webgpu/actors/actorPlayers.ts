@@ -37,6 +37,7 @@ export interface PosedActorGeometry {
     /** The pose's key, shared by every player in the same pose this frame. */
     poseKey?: string;
     bounds?: ActorBounds;
+    logicalHeight?: number;
 }
 
 /** One unshared face corner per label: shared by player and NPC rest meshes. */
@@ -183,7 +184,7 @@ export class PlayerPoseGeometry {
         if (allowGpu) {
             const matrices = this.poseFor(key, base, { seqId, frameIdx, interpolation, overlaySeqId, overlayFrameIdx });
             const rest = matrices ? this.restMeshFor(appKey, base.baseModel) : undefined;
-            if (rest) return { ...rest, matrices, poseKey: key };
+            if (rest && matrices) return { ...rest, matrices, poseKey: key, logicalHeight: this.rigFor(base.baseModel)!.height(matrices) };
         }
 
         const cached = this.geomCache.get(key);
@@ -412,7 +413,9 @@ export class PlayerPoseGeometry {
             const alphaVertices = new Uint8Array(this.alphaSceneBuf.vertexBuf.byteArray());
             const alphaIndices = new Int32Array(this.alphaSceneBuf.indices);
 
+            model.calculateBoundsCylinder();
             return [{
+                logicalHeight: model.height,
                 key: "",
                 opaqueVertices,
                 opaqueIndices,

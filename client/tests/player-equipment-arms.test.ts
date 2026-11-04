@@ -240,11 +240,11 @@ import { RUNE_FULL_HELM } from "../runelite/api/gameval/ItemID";
             assert.deepEqual(requests, expected, `${label}: literal primary/secondary dialogue head models`);
             assert.ok(head, `${label}: real DAT parts produce a chathead model`);
         }
-        checkHead(RUNE_FULL_HELM, Gender.MALE, [primary, secondary], "ordinary male");
-        checkHead(RUNE_FULL_HELM, Gender.FEMALE, [secondary, primary], "ordinary female");
+        checkHead(RUNE_FULL_HELM, Gender.MALE, [primary, secondary, primary, secondary], "ordinary male");
+        checkHead(RUNE_FULL_HELM, Gender.FEMALE, [secondary, primary, secondary, primary], "ordinary female");
         console.log("CUSTOM_HELMET_CHATHEAD_2485_BASE_PASS genders=2 appearance=native");
-        checkHead(customHelmetId, Gender.MALE, [secondary, primary], "custom male");
-        checkHead(customHelmetId, Gender.FEMALE, [primary, secondary], "custom female");
+        checkHead(customHelmetId, Gender.MALE, [secondary, primary, secondary, primary], "custom male");
+        checkHead(customHelmetId, Gender.FEMALE, [primary, secondary, primary, secondary], "custom female");
     } catch (error) {
         failure = error;
     } finally {

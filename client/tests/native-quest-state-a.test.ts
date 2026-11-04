@@ -40,11 +40,16 @@ before(async () => {
         if (key === 'withProfileLabel') return () => api;
         if (key === 'onPlayerLogin') return (fn: Function) => logins.push(fn);
         if (key === 'onCustomEvent') return (name: string, fn: Function) => custom.set(name, [...(custom.get(name) ?? []), fn]);
-        if (key === 'emitCustomEvent') return (name: string, event: any) => emitted.push({ name, event });
+        if (key === 'emitCustomEvent') return (name: string, event: any) => {
+            emitted.push({name,event});
+            if(name==='quest:is-complete') for(const fn of custom.get(name)??[]) fn(event);
+        };
         if (typeof key === 'string' && (/^on[A-Z]/.test(key) || ['persistAttribute','registerArea','registerCommand','log'].includes(key))) return () => {};
         return typeof target[key] === 'function' ? target[key].bind(target) : target[key];
     }});
     for (const [file] of cases) require(path.join(server, 'plugins/quests/quests', file + '.Quest'))(api);
+    require(path.join(server,'plugins/quests/quests/FairytaleIGrowingPains.Quest'))(api);
+    require(path.join(server,'plugins/quests/quests/FairytaleIICureAQueen.Quest'))(api);
     vm = createCacheVm(path.join(server,'caches',fs.readFileSync(path.join(server,'target.txt'),'utf8').trim())).vm;
 });
 
@@ -160,6 +165,27 @@ test('native progress also restores the cache NPC morphs rather than only list c
     eagles.setStage(f.player,8);
     assert.equal(CacheDefinitions.resolveNpc(2023,f.sender),undefined,'Nickolaus leaves the nest');
     assert.equal(CacheDefinitions.resolveNpc(2024,f.sender)?.id,1485,'Nickolaus is at camp');
+});
+test('Fairytale II starts at acceptance, after the native inclusive unstarted threshold', t => {
+    const q=quest('fairytale_ii_cure_a_queen'), f=fixture(t);
+    assert.equal(questMetadata(q,CacheDefinitions).unstartedstate[0],10);
+    assert.equal(q.startedValue,20);
+    for(const saved of [0,5,10,'10']) {
+        f.attributes.set('quest.'+q.key+'.stage',saved);
+        Q.sendQuestVarps({player:f.player});
+        assert.equal(wire(q,f.sent),Number(saved),'wire phases remain canonical');
+        assert.equal(q.isStarted(f.player),false,'waiting/ready precedes acceptance');
+        assert.equal(nativeStatus(q),1);
+    }
+    assert.match(q.buildJournal(f.player,q).join(' '),/crops/);
+    const ft1=quest('fairytale_i_growing_pains');
+    f.attributes.set('quest.'+ft1.key+'.stage',ft1.completionValue);
+    for(const fn of custom.get('npc-dialogue:hook')??[]) fn({player:f.player,npcId:5832,hook:'quest:fairytale-ii-cure-a-queen:start'});
+    assert.equal(q.getStage(f.player),20,'actual acceptance hook advances to investigation');
+    assert.equal(q.isStarted(f.player),true);
+    assert.equal(wire(q,f.sent),20);
+    assert.equal(nativeStatus(q),0);
+    assert.match(q.buildJournal(f.player,q).join(' '),/Martin asked me to find out/);
 });
 test('optional external evidence export contains only native state',()=>{
     if(process.env.NATIVE_STATE_CASES_OUT) fs.writeFileSync(process.env.NATIVE_STATE_CASES_OUT,JSON.stringify(exported,null,2));

@@ -1096,8 +1096,8 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     name: "Fairytale II - Cure a Queen",
     varpId: VARP_FAIRYTALE,
     varbitId: VARBIT_QUEST,
-    // Cache DB row 47 column 18: varbit 2326 >= 10 is started (stage 5 is the wait step).
-    startedValue: STAGE_READY,
+    // Cache DB unstartedstate is inclusive: 0..10 precedes acceptance; the start hook sets 20.
+    startedValue: STAGE_INVESTIGATING,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
     xpRewards: [

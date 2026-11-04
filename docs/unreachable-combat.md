@@ -108,8 +108,9 @@ the existing releases could not run; it introduces no new message.
   bear walks back to its post and drops the target and the player is not left in combat. Its third
   note - fighting a bear at the Gnome Stronghold pen, then walking 25 tiles away until combat and
   `busy` cleared and logout was accepted - was the bug, not the expected result: a target walking
-  away at the same speed now keeps the chase, bounded by `combat:retreat`/the follow distance, so
-  that check wants re-running against the step-aware rule before it is quoted again.
+  away at the same speed now keeps the chase, bounded by the aggression range
+  (`Combat.shouldRetreat`; `combat:no-retreat` opts out), so that check wants re-running against
+  the step-aware rule before it is quoted again.
 - `yarn build` clean, and the full server suite: 9,835 tests, 9,834 pass. The single failure is
   pre-existing and unrelated: `tests/league-combat-masteries.test.cjs:15` requires
   `../dist/game/entity/impl/npc/Npc` while tsc emits `NPC.js`, so the file cannot load on a
@@ -129,11 +130,12 @@ the existing releases could not run; it introduces no new message.
   still shuffles an overlapped NPC aside.
 - **What a step now buys.** An actor that keeps taking steps it was allowed to take, yet never
   closes the gap, is no longer released at 20 cycles - that is the correction, and it is what a
-  chase looks like to the mover. The pursuit still ends by itself: an NPC at its follow distance
-  from its spawn retreats (`Combat.shouldRetreat`, `combat:retreat`), an overlapped NPC whose
-  target is walking away does not shuffle at all (`processNpcUnderTarget` returns on `targetBusy`,
-  so no step is taken and the budget runs out), and a player who stops walking is released by the
-  pre-existing paths the moment the queue empties. What the deadline is left to end is an actor
-  that gets nowhere: frozen, stunned, in transit, or wedged.
+  chase looks like to the mover. The pursuit still ends by itself: an NPC outside its aggression
+  range from its spawn loses the target and walks home (`Combat.shouldRetreat`; `combat:no-retreat`
+  opts out), an overlapped NPC whose target is walking away does not shuffle at all
+  (`processNpcUnderTarget` returns on `targetBusy`, so no step is taken and the budget runs out),
+  and a player who stops walking is released by the pre-existing paths the moment the queue
+  empties. What the deadline is left to end is an actor that gets nowhere: frozen, stunned, in
+  transit, or wedged.
 - The 20-cycle budget is a safety net for the states above. The ordinary unreachable-target release
   happens in one or two cycles, as before.

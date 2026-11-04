@@ -128,15 +128,27 @@ function single(attack, reach) {
   return createMethod({ choose: () => attack, reach });
 }
 
+/** Keeps a scripted arena's NPC on its target however far it moves from its spawn. */
+const NO_RETREAT_FLAG = "combat:no-retreat";
+
 /**
  * The general and bodyguards attack whoever is in their chamber on sight (Wiki); ordinary
  * aggression only reaches a few tiles from their spawns. `npcs` are the chamber's candidates.
+ *
+ * A chamber is a scripted public arena rather than open-world hunting, so the boss and its
+ * bodyguards are claimed by the arena as soon as it engages them: `combat:no-retreat` stops the
+ * ordinary aggression leash cutting the fight short when a player crosses the room, exactly as
+ * the private chamber's own area does. The chamber's existing rules still end the fight - it
+ * resets the general and bodyguards when the room empties (`Dungeon.resetChamber`) and the
+ * private instance owns its copies. Followers are deliberately not flagged: the dungeon's
+ * `npcAggression` rule makes them attack on sight, but they keep their normal leash.
  */
 function engage(player, faction, npcs) {
   const { CombatFactory } = Common.core;
   for (const npc of npcs) {
     if (!npc || npc.getHitpoints() <= 0 || npc.getPrivateArea() !== player.getPrivateArea()) continue;
     if (npc.getId() !== faction.general && !faction.bodyguards.includes(npc.getId())) continue;
+    if (!npc.hasFlag(NO_RETREAT_FLAG)) npc.setFlag(NO_RETREAT_FLAG);
     if (CombatFactory.inCombat(npc) || npc.getCombat().getTarget()) continue;
     npc.getCombat().attack(player);
   }

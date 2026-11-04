@@ -293,3 +293,29 @@ test("the expiry notice is sent once, even when dragonfire resolves on the expir
     Date.now = original.now;
   }
 });
+
+test("every breath on a player, super antifire included, lets a worn shield add its lines", () => {
+  const seen = [];
+  const emitCustomEvent = (name, event) => {
+    if (name !== Dragonfire.DRAGONFIRE_BREATH_EVENT) return;
+    seen.push(event.player);
+    event.messages.push({ text: "Your dragonfire shield glows more brightly.", spam: true });
+  };
+  Dragonfire.initDragonfireProtectionCoreAccess({ core, getPrayerHandler: () => PrayerHandler, emitCustomEvent });
+  try {
+    ({ shield, prayer, accurate } = { shield: true, prayer: false, accurate: false });
+    const target = player();
+    const { messages } = Dragonfire.resolveChromaticDragonfireDamage({}, target, { maxHit: 50 });
+    assert.deepEqual(messages.map((line) => line.text), [
+      "Your shield absorbs most of the dragon fire!",
+      "Your dragonfire shield glows more brightly.",
+    ]);
+    const immune = player({ potion: Tier.SUPER_ANTIFIRE });
+    const superMessages = Dragonfire.resolveChromaticDragonfireDamage({}, immune, { maxHit: 50 }).messages;
+    assert.equal(superMessages.at(-1).text, "Your dragonfire shield glows more brightly.");
+    assert.deepEqual(seen, [target, immune]);
+  } finally {
+    shield = false;
+    Dragonfire.initDragonfireProtectionCoreAccess({ core, getPrayerHandler: () => PrayerHandler, emitCustomEvent() {} });
+  }
+});

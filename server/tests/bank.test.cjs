@@ -603,8 +603,15 @@ test("removing placeholders from a tab leaves other tabs' placeholders", () => {
 
 const BANK_ITEMS = (Bank.MAIN_INTERFACE_ID << 16) | Bank.ITEMS_CHILD;
 const BANK_TABS = (Bank.MAIN_INTERFACE_ID << 16) | Bank.TABS_CHILD;
+const BANK_INCINERATOR = (Bank.MAIN_INTERFACE_ID << 16) | Bank.INCINERATOR_CHILD;
 const SIDE_ITEMS = (Bank.SIDE_INTERFACE_ID << 16) | Bank.SIDE_ITEMS_CHILD;
 const A = MYSTIC_LAVA_STAFF, B = LAVA_BATTLESTAFF, C = TRIDENT;
+
+const incinerations = [];
+PluginManager.createApi("bank-incinerator-test").onCustomEvent(
+  Bank.INCINERATE_EVENT,
+  (event) => incinerations.push(event),
+);
 
 function drag(player, sourceWidgetId, sourceSlot, sourceItemId, targetWidgetId, targetSlot) {
   return Bank.handleDrag(player, { sourceWidgetId, sourceSlot, sourceItemId, targetWidgetId, targetSlot });
@@ -707,6 +714,49 @@ test("dragging onto the empty space after a tab's items moves the item to the en
   drag(player, BANK_ITEMS, 2, C, BANK_ITEMS, Bank.TAB_DROP_SLOT_OFFSET + 1);
 
   assert.deepEqual(tabsOf(player), [[1, A, 1], [1, B, 1], [1, C, 1]]);
+});
+
+test("dragging a bank stack onto the incinerator asks to destroy that exact stack", () => {
+  const player = createPlayer();
+  player.getBank().add(new Item(A, 4), false);
+  player.getBank().add(new Item(B, 2), false);
+  incinerations.length = 0;
+
+  assert.equal(drag(player, BANK_ITEMS, 1, B, BANK_INCINERATOR, -1), true);
+
+  assert.deepEqual(tabsOf(player), [[0, A, 4], [0, B, 2]], "the drag does not move the stack");
+  assert.equal(incinerations.length, 1);
+  const [event] = incinerations;
+  assert.equal(event.tab, 0);
+  assert.equal(event.slot, 1);
+  assert.equal(event.item.getId(), B);
+  assert.equal(event.item.getAmount(), 2, "the whole stack is offered, never a client amount");
+});
+
+test("an inventory item dropped on the incinerator is neither deposited nor destroyed", () => {
+  const player = createPlayer();
+  bankOf(player, [A]);
+  player.getInventory().add(new Item(B, 1), false);
+  incinerations.length = 0;
+
+  assert.equal(drag(player, SIDE_ITEMS, 0, B, BANK_INCINERATOR, -1), true);
+
+  assert.equal(player.getInventory().getAmount(B), 1);
+  assert.deepEqual(tabsOf(player), [[0, A, 1]]);
+  assert.deepEqual(incinerations, []);
+});
+
+test("a placeholder or a mismatched item id dropped on the incinerator is ignored", () => {
+  const player = createPlayer();
+  player.getBank().add(new Item(A, 0), false);
+  incinerations.length = 0;
+
+  drag(player, BANK_ITEMS, 0, A, BANK_INCINERATOR, -1);
+  assert.deepEqual(incinerations, [], "placeholders have nothing to destroy");
+
+  player.getBank().setItem(0, new Item(A, 2));
+  drag(player, BANK_ITEMS, 0, B, BANK_INCINERATOR, -1);
+  assert.deepEqual(incinerations, [], "a stale client item id cannot destroy the stack now in that slot");
 });
 
 /** A player whose packet sender records client scripts. */

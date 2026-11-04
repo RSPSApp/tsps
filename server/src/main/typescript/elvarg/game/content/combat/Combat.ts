@@ -339,7 +339,7 @@ export class Combat {
             this.cancelIfCurrent(target, generation);
             return;
         }
-        if (this.shouldRetreat()) {
+        if (this.shouldRetreat(method)) {
             this.cancelIfCurrent(target, generation);
             return;
         }
@@ -776,18 +776,41 @@ export class Combat {
     public getPrayerBlockTimer(): SecondsTimer { return this.prayerBlockTimer ??= new SecondsTimer(); }
     public getLastAttack(): TickStopwatch { return this.lastAttack; }
 
-    private shouldRetreat(): boolean {
+    private shouldRetreat(method: CombatMethod): boolean {
         if (!this.character.isNpc()) return false;
         const npc = this.character.getAsNpc();
         if (Number(npc.getAttribute("arceuus:dark-lure-until") ?? 0) > World.getProcessCycle()) return false;
         // "combat:no-retreat": an NPC content moves about its arena (a raid boss teleported by its own
         // specials) never gives up on its target for being far from where it spawned.
         if (npc.hasFlag("combat:no-retreat")) return false;
-        if (!npc.getCurrentDefinition().doesRetreat()) return false;
         const coordinator = npc.getMovementCoordinator();
-        if (coordinator.getCoordinateState() === CoordinateState.RETREATING ||
-            npc.getLocation().getDistance(npc.getSpawnPosition()) >=
-                npc.getCurrentDefinition().getCombatFollowDistance()) {
+        if (coordinator.getCoordinateState() === CoordinateState.RETREATING) return true;
+
+        const definition = npc.getCurrentDefinition();
+        const spawn = npc.getSpawnPosition();
+        const spawnDistance = npc.getLocation().getDistance(spawn);
+        // A low-health retreat (chickens, unicorns) is confined to the max range.
+        if (definition.doesRetreat() && spawnDistance >= definition.getCombatFollowDistance()) {
+            coordinator.setCoordinateState(CoordinateState.RETREATING);
+            return true;
+        }
+
+        const target = this.target;
+        if (target == null || this.isSafespotted(target)) return false;
+        // Instanced content owns its arena and its reset rules (Zulrah's phase moves, the raid
+        // rooms): the open-world aggression range must not cut a scripted fight short.
+        if (npc.getPrivateArea() != null) return false;
+
+        // Outside its aggression range an NPC cannot attack the target at all, so it loses
+        // interest and walks home: the Wiki draws the aggression range from the static spawn
+        // (max range + attack range, measured from the spawn footprint), and osrs-docs has an
+        // NPC dragged outside its max range lose its target. A target still fighting it (a
+        // safespot or a normal engagement) keeps it, so this bounds hunting, not the fight the
+        // player started. The footprint already extends `size - 1` north and east.
+        const aggressionRange = definition.getAggressionRange(method.attackDistance(npc));
+        const targetDistance = CombatRange.footprintDistance(spawn, definition.getSize(), target.getLocation());
+        if (spawnDistance > definition.getCombatFollowDistance()
+            || targetDistance > aggressionRange) {
             coordinator.setCoordinateState(CoordinateState.RETREATING);
             return true;
         }
@@ -918,12 +941,13 @@ export class Combat {
         // perform it themselves - many through super.start() first - so the arm stays open across
         // the whole call, and the seq left standing when it returns is the one that is measured.
         this.expectAttackAnimation();
-        PluginManager.emitCustomEvent("combat:attack-started", { attacker: this.character, target });
+        PluginManager.emitCustomEvent("combat:attack-started", { attacker: this.character, target, method });
         method.start(this.character, target);
         this.measureAnimationCycle = -1;
         const hits = method.hits(this.character, target);
         if (hits == null) {
             this.trace("hits=null", target);
+            PluginManager.emitCustomEvent("combat:attack-finished", { attacker: this.character, target, method });
             return false;
         }
         this.trace(`hits=${hits.length} dmg=[${hits.map((h: any) => h?.getTotalDamage?.()).join(",")}]`, target);
@@ -951,6 +975,9 @@ export class Combat {
         }
 
         method.finished(this.character, target);
+        // The swing has used the weapon, style and special it started with (animation, rolls,
+        // xp): what it spent may now change the equipment (a weapon degrading on its last charge).
+        PluginManager.emitCustomEvent("combat:attack-finished", { attacker: this.character, target, method });
 
         this.specialAttackQueued = false;
         if (this.character.isSpecialActivated()) {

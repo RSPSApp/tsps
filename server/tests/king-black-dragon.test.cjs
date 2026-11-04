@@ -43,3 +43,5 @@ test("special breath maxima match the Wiki table", () => {
     assert.equal(breathMax(true, protection), SPECIAL[key], key);
   }
 });
+
+// The lair-entry diary credit is covered, with the real Ladders path, in kbd-lair-arrival.test.cjs.

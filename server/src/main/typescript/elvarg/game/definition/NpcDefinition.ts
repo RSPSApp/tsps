@@ -310,6 +310,18 @@ export class NpcDefinition {
         return this.combatFollowDistance;
     }
 
+    /**
+     * The Wiki's aggression range: the NPC's max range plus its attack range, measured from
+     * its static spawn (Aggressiveness#Aggression range). The caller measures to the spawn's
+     * footprint, which already extends `size - 1` tiles north and east; the size must not be
+     * added here as a symmetric radius (see `CombatRange.footprintDistance`).
+     * `attackDistance` is the combat method's own reach (ranged and magic NPCs reach further).
+     */
+    public getAggressionRange(attackDistance: number): number {
+        const reach = Number.isFinite(attackDistance) ? Math.max(1, Math.trunc(attackDistance)) : 1;
+        return Math.max(0, this.combatFollowDistance) + reach;
+    }
+
     public getHuntRange(): number {
         return this.huntRange;
     }

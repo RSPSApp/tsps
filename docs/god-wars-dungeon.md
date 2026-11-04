@@ -31,6 +31,8 @@ OSRS calls the kill count "Essence" in the dungeon, and so does tsps.
 
 Every monster in the dungeon attacks on sight, whatever the player's combat level, unless the player wears something of its god; one item per god is enough (Wiki). The generals and bodyguards ignore god items and attack anyone who comes into their chamber.
 
+A chamber is a scripted public arena, so `Combat.engage` gives its general and bodyguards the existing `combat:no-retreat` flag when the area claims them: a player crossing the room cannot outrun the ordinary aggression leash and leave the boss walking home. Followers are not flagged - they still attack on sight through `npcAggression`, but keep the normal leash. The chamber's own reset when it empties (`Dungeon.resetChamber`) and the private instance's arena rules are unchanged.
+
 ### God items
 
 Each god's `protectionItems` in the data file is the Wiki's protection table for it ([God Wars Dungeon](https://oldschool.runescape.wiki/w/God_Wars_Dungeon), "God equipment", read 28 October 2026), written as the cache's item names and compared without case. Zaros's list (`ancient`) is there too. The same list drives aggression, the altar's Prayer boost, `godwars:kill`'s `godItems` and anything else that calls `godItemCount`.

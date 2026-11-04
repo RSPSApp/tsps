@@ -5,7 +5,7 @@ import type { WebGLMapSquare } from "../WebGLMapSquare";
 import type { WebGLOsrsRenderer } from "../WebGLOsrsRenderer";
 import type { GfxCache } from "../gfx/GfxCache";
 import type { SpotAnimGpuCache, SpotAnimGpuRecord } from "../gfx/SpotAnimGpuCache";
-import { sampleBridgeHeightForWorldTile } from "../../game/scene/BridgeHeightSampler";
+import { sampleActorHeightForWorldTile } from "../../game/scene/BridgeHeightSampler";
 import { BridgePlaneStrategy } from "../../game/scene/PlaneResolver";
 import type { Projectile } from "./Projectile";
 import type { ProjectileManager } from "./ProjectileManager";
@@ -170,7 +170,7 @@ export class ProjectileRenderer {
     ): number {
         let heightOffset = pos.z;
         try {
-            const sample = sampleBridgeHeightForWorldTile(
+            const sample = sampleActorHeightForWorldTile(
                 (this.renderer as any).mapManager,
                 pos.x / 128,
                 pos.y / 128,

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { vec4 } from "gl-matrix";
 
 import { Camera } from "../game/Camera";
-import { sampleBridgeHeightForWorldTile, sampleCameraHeightForWorldTile } from "../game/scene/BridgeHeightSampler";
+import { sampleActorHeightForWorldTile, sampleBridgeHeightForWorldTile, sampleCameraHeightForWorldTile } from "../game/scene/BridgeHeightSampler";
 import { handleInboundWorld } from "../network/serverConnection/handlers/inboundWorld";
 
 const previousClient = (globalThis as any).__osrsClient;
@@ -145,7 +145,10 @@ const slopeManager = { getMapForWorldTile: () => slopeMap } as any;
 assert.equal(sampleCameraHeightForWorldTile(slopeManager, 3200.5, 3328.5, 0), -32 / 128,
     'camera uses integer bilinear height at a non-flat tile centre');
 assert.equal(sampleBridgeHeightForWorldTile(slopeManager, 3200.5, 3328.5, 0).height, -64 / 128,
-    'actor triangle heights remain unchanged');
+    'terrain sampling stays unchanged');
+
+assert.equal(sampleActorHeightForWorldTile(slopeManager, 3200.5, 3328.5, 0).height, -32 / 128,
+    'actor and scripted camera origins use native bilinear grounding');
 
 let terrainReady = false, terrainPlane = 0;
 const delayedCamera = new Camera(10, -2, 20, 256, 0);

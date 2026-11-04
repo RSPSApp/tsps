@@ -81,6 +81,16 @@ function prayerAltar({ player, object }) {
   const prayerBefore = skillManager.getCurrentLevel(Skill.PRAYER);
   const handled = handlePrayerAltar(player);
 
+  if (object && skillManager.getCurrentLevel(Skill.PRAYER) > prayerBefore) {
+    const location = object.getLocation();
+    // Content that credits praying by place (the Desert Diary's Sophanem altar) reads the gain.
+    api.emitCustomEvent("altars:prayed", {
+      player,
+      location: { x: location.getX(), y: location.getY(), z: location.getZ() },
+      restored: skillManager.getCurrentLevel(Skill.PRAYER) - prayerBefore,
+    });
+  }
+
   if (object && skillManager.getCurrentLevel(Skill.PRAYER) > prayerBefore && object.getId() === ObjectIds.ALTAR) {
     const location = object.getLocation();
     const [x, y, z] = EAST_ARDOUGNE_CHURCH_ALTAR;

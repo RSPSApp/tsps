@@ -327,7 +327,7 @@ function cookOne(player, session) {
     player.getInventory().addItem(new Item(cookable.cooked, 1));
     Common.spam(player, successMessage(cookable));
     countCook(player, false);
-    Common.api.emitCustomEvent("cooking:success", { player, skill: Skill.COOKING, itemId: cookable.cooked });
+    Common.api.emitCustomEvent("cooking:success", { player, skill: Skill.COOKING, itemId: cookable.cooked, objectId: session.objectId });
     Common.addXp(player, cookable.xp);
     Common.api.emitCustomEvent("skills:produced", { player, skill: Skill.COOKING, itemId: cookable.cooked, amount: 1, xp: cookable.xp, kind: "cook" });
   } else {

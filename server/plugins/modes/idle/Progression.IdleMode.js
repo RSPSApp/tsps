@@ -1,6 +1,6 @@
 /**
  * Idle points and upgrades (plugins/modes/data/idle-mode.json "progression"). An idle account
- * earns a point per `xpPerPoint` XP in the idle skills, online and offline (the offline XP lands
+ * earns a point per `xpPerPoint` XP in the idle skills (and the combat skills), online and offline (the offline XP lands
  * through the same experience hook). Points buy upgrade levels with `::idle buy <upgrade>`:
  * Quick Hands (a chance an action takes a tick less: `skills:action-interval`, `fishing:interval`),
  * Long Dreams (more offline hours) and Bountiful Harvest (a chance of an extra resource to the bank;
@@ -47,9 +47,15 @@ function tickSaveChance(player) {
   return levelOf(player, "quick-hands") * (upgrade("quick-hands")?.tickSaveChancePerLevel ?? 0);
 }
 
-/** `onExperienceGained`: idle skills' XP fills points. */
+/** Whether this XP earns points: an idle skill's, or (`combat.pointsFromXp`) idle combat's. */
+function earns(player, skill) {
+  if (Common.idleGather(player, skill)) return true;
+  return Common.data.combat.pointsFromXp && Common.isIdle(player) && Common.idleCombatSkill(skill);
+}
+
+/** `onExperienceGained`: idle XP fills points. */
 function earn({ player, skill, experience }) {
-  if (!Common.idleGather(player, skill) || !(experience > 0)) return;
+  if (!earns(player, skill) || !(experience > 0)) return;
   const progress = (Number(player.getAttribute(PROGRESS_ATTRIBUTE)) || 0) + experience;
   const earned = Math.floor(progress / config().xpPerPoint);
   player.setAttribute(PROGRESS_ATTRIBUTE, progress - earned * config().xpPerPoint);

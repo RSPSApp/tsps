@@ -11,7 +11,12 @@ function skill(index) {
   return { getIndex: () => index };
 }
 
-const Skill = { WOODCUTTING: skill(8), FISHING: skill(10), MINING: skill(14), COOKING: skill(7) };
+const Skill = {
+  ATTACK: skill(0), DEFENCE: skill(1), STRENGTH: skill(2), HITPOINTS: skill(3), RANGED: skill(4), MAGIC: skill(6),
+  COOKING: skill(7), WOODCUTTING: skill(8), FISHING: skill(10), MINING: skill(14),
+};
+const SHARK = 385;
+const BONES = 526;
 const LOGS = 1511;
 const YEW_LOGS = 1515;
 
@@ -31,15 +36,21 @@ function fakeApi(config = {}) {
       Skill,
       Item,
       Bank: { getTabForItem: () => 0 },
-      ItemDefinition: { forId: (id) => ({ getName: () => (id === YEW_LOGS ? "Yew logs" : "Logs") }) },
+      ItemDefinition: { forId: (id) => ({ getName: () => ({ [YEW_LOGS]: "Yew logs", [BONES]: "Bones" })[id] ?? "Logs" }) },
       PlayerRights: { NONE: { name: "none" } },
       Location: FakeLocation,
       ObjectManager: { objectsAt: (location) => world.objects.filter((o) => o.at.x === location.getX() && o.at.y === location.getY() && o.at.z === location.getZ()) },
       World: { getNpcsNear: (location, radius) => world.npcs.filter((n) => Math.max(Math.abs(n.at.x - location.getX()), Math.abs(n.at.y - location.getY())) <= radius) },
       Task: class { constructor(delay) { this.delay = delay; } },
+      CanAttackResponse: { CAN_ATTACK: "can" },
+      CombatFactory: { getMethod: () => "melee", canAttackPermission: (player, npc) => (npc.protectedFrom === player ? "no" : "can") },
+      CacheDefinitions: { getItem: (id) => ({ inventoryActions: id === SHARK ? ["Eat", null, null, null, "Drop"] : [null, null, null, null, "Drop"] }) },
+      Inventory: { INTERFACE_ID: 3214 },
+      ItemActionPacketListener: { handleAction: (player, interfaceId, itemId, slot, clickType, option) => api.itemActions.push({ player, interfaceId, itemId, slot, clickType, option }) },
       TaskManager: { submit: (task) => world.tasks.push(task) },
     },
     interactions: [],
+    itemActions: [],
     persisted: {},
     getPluginConfig: (key, fallback) => (key in config ? config[key] : fallback),
     persistAttribute: (key, value) => { api.persisted[key] = value; },
@@ -49,6 +60,7 @@ function fakeApi(config = {}) {
     onBeforeObjectInteraction: (handler) => (handlers.events["before-object"] ??= []).push(handler),
     onBeforeNpcInteraction: (handler) => (handlers.events["before-npc"] ??= []).push(handler),
     onServerStartup: (handler) => (handlers.events.startup ??= []).push(handler),
+    onNpcAttackOption: (handler) => (handlers.events["attack-option"] ??= []).push(handler),
     onExperienceGained: (handler) => (handlers.events.xp ??= []).push(handler),
     emitObjectInteraction: (event) => { api.interactions.push({ kind: "object", ...event }); return true; },
     emitNpcInteraction: (event) => { api.interactions.push({ kind: "npc", ...event }); return true; },
@@ -109,12 +121,22 @@ function fakePlayer({ bankSlots = 800 } = {}) {
     walks,
     moving: 0,
     isBusy: false,
-    fighting: false,
+    hitpoints: 99,
+    inventory: [],
+    combat: {
+      target: null,
+      attacker: null,
+      getTarget() { return this.target; },
+      getAttacker() { return this.attacker; },
+      attack(target) { this.target = target; },
+    },
+    getHitpoints() { return this.hitpoints; },
+    getInventory() { return { getItems: () => this.inventory }; },
     moveTo(x, y, z = 0) { location = new FakeLocation(x, y, z); },
     getLocation: () => location,
     isRegistered: () => true,
     busy() { return this.isBusy; },
-    getCombat() { return { getTarget: () => (this.fighting ? {} : null), getAttacker: () => null }; },
+    getCombat() { return this.combat; },
     setPositionToFace() {},
     getMovementQueue() {
       const player = this;
@@ -129,6 +151,7 @@ function fakePlayer({ bankSlots = 800 } = {}) {
     getBank: () => container,
     getSkillManager: () => ({
       getExperience: (s) => xp.get(s) ?? 0,
+      getMaxLevel: () => 99,
       addExperience(s, amount) {
         xp.set(s, (xp.get(s) ?? 0) + amount);
         api.emit("xp", { player: self, skill: s, experience: amount });
@@ -247,7 +270,7 @@ test("offline: logging out mid-session pays the time away at the measured rate",
   }
   api.logout({ player });
   const away = player.getAttribute("idle-mode:away");
-  assert.deepEqual(away, { skill: "WOODCUTTING", durationMs: 120_000, xp: 500, items: { [LOGS]: 20 }, loggedOutAt: now });
+  assert.deepEqual(away, { activity: "WOODCUTTING", durationMs: 120_000, xp: { WOODCUTTING: 500 }, items: { [LOGS]: 20 }, loggedOutAt: now });
 
   now += 60 * 60 * 1000; // one hour away: 30 times the session
   const xpBefore = player.xp.get(Skill.WOODCUTTING);
@@ -264,12 +287,12 @@ test("offline: logging out mid-session pays the time away at the measured rate",
 
 test("offline: the cap limits the time paid and says so", (t) => {
   const { offlineReward } = require(OFFLINE);
-  const away = { skill: "WOODCUTTING", durationMs: 60_000, xp: 100, items: { [YEW_LOGS]: 2 }, loggedOutAt: 0 };
+  const away = { activity: "WOODCUTTING", durationMs: 60_000, xp: { WOODCUTTING: 100 }, items: { [YEW_LOGS]: 2 }, loggedOutAt: 0 };
   const config = { capHours: 12, efficiency: 1 };
   const reward = offlineReward(away, 48 * 3600 * 1000, config);
   assert.equal(reward.paidMs, 12 * 3600 * 1000);
   assert.equal(reward.items[YEW_LOGS], 1440);
-  assert.equal(reward.xp, 72_000);
+  assert.deepEqual(reward.xp, { WOODCUTTING: 72_000 });
   assert.equal(offlineReward(away, 3600 * 1000, { capHours: 12, efficiency: 0.5 }).items[YEW_LOGS], 60, "efficiency scales it");
 
   let now = 0;
@@ -309,16 +332,18 @@ test("offline: too short, stale or interrupted sessions leave nothing", (t) => {
   assert.equal(normal.getAttribute("idle-mode:away"), null, "not idle");
 });
 
-test("offline: a long gap or another skill starts a new session", () => {
-  const { addGather } = require(OFFLINE);
+test("offline: a long gap or another activity starts a new session", () => {
+  const { addResult } = require(OFFLINE);
   const config = { maxGapSeconds: 60 };
-  let session = addGather(null, { skill: Skill.WOODCUTTING, itemId: LOGS, amount: 1 }, 0, 0, config);
-  session = addGather(session, { skill: Skill.WOODCUTTING, itemId: LOGS, amount: 1 }, 5000, 25, config);
+  const logs = { activity: "WOODCUTTING", items: { [LOGS]: 1 } };
+  let session = addResult(null, logs, 0, { WOODCUTTING: 0 }, config);
+  session = addResult(session, logs, 5000, { WOODCUTTING: 25 }, config);
   assert.deepEqual(session.items, { [LOGS]: 1 });
-  const fishing = addGather(session, { skill: Skill.FISHING, itemId: 317, amount: 1 }, 6000, 0, config);
-  assert.equal(fishing.skill, Skill.FISHING);
+  assert.deepEqual(session.lastXp, { WOODCUTTING: 25 });
+  const fishing = addResult(session, { activity: "FISHING", items: { 317: 1 } }, 6000, { FISHING: 0 }, config);
+  assert.equal(fishing.activity, "FISHING");
   assert.deepEqual(fishing.items, {});
-  const late = addGather(fishing, { skill: Skill.FISHING, itemId: 317, amount: 1 }, 6000 + 61_000, 0, config);
+  const late = addResult(fishing, { activity: "FISHING", items: { 317: 1 } }, 6000 + 61_000, { FISHING: 0 }, config);
   assert.equal(late.firstAt, 67_000);
 });
 
@@ -326,7 +351,7 @@ test("offline: a full bank loses what does not fit, and says so", (t) => {
   let now = 0;
   t.mock.method(Date, "now", () => now);
   const player = fakePlayer({ bankSlots: 0 });
-  player.setAttribute("idle-mode:away", { skill: "WOODCUTTING", durationMs: 60_000, xp: 100, items: { [LOGS]: 10 }, loggedOutAt: 0 });
+  player.setAttribute("idle-mode:away", { activity: "WOODCUTTING", durationMs: 60_000, xp: { WOODCUTTING: 100 }, items: { [LOGS]: 10 }, loggedOutAt: 0 });
   now = 60_000;
   api.login({ player });
   assert.equal(player.xp.get(Skill.WOODCUTTING), 100, "the XP is still paid");
@@ -389,9 +414,9 @@ test("auto: busy, moving, fighting, walked away or turned off leaves the player 
   player.moving = 3;
   assert.equal(resume(player, Date.now()), "busy");
   player.moving = 0;
-  player.fighting = true;
+  player.combat.target = {};
   assert.equal(resume(player, Date.now()), "busy");
-  player.fighting = false;
+  player.combat.target = null;
   player.moveTo(3300, 3300);
   assert.equal(resume(player, Date.now()), "away", "too far from where it started");
   player.moveTo(3200, 3200, 1);
@@ -460,8 +485,8 @@ test("auto: a task looks at tracked players from server start, and logout forget
   const { tracked } = require(AUTO);
   assert.ok(tracked.has(player));
   api.emit("startup", {});
-  assert.equal(world.tasks.length, 1);
-  assert.equal(world.tasks[0].delay, 2);
+  assert.equal(world.tasks.length, 2, "auto-resume and idle combat");
+  assert.deepEqual(world.tasks.map((task) => task.delay), [2, 2]);
   api.logout({ player });
   assert.equal(tracked.has(player), false);
   api.login({ player });
@@ -489,7 +514,7 @@ test("points: one per 250 idle-skill XP, carried over, online and offline", (t) 
   // The offline XP lands through the same hook.
   let now = 0;
   t.mock.method(Date, "now", () => now);
-  player.setAttribute("idle-mode:away", { skill: "WOODCUTTING", durationMs: 60_000, xp: 500, items: { [LOGS]: 10 }, loggedOutAt: 0 });
+  player.setAttribute("idle-mode:away", { activity: "WOODCUTTING", durationMs: 60_000, xp: { WOODCUTTING: 500 }, items: { [LOGS]: 10 }, loggedOutAt: 0 });
   now = 60_000;
   api.login({ player });
   assert.equal(player.getAttribute("idle-mode:points"), 5);
@@ -546,10 +571,164 @@ test("upgrades: Quick Hands takes a tick off by chance; Long Dreams and Bountifu
   const away = fakePlayer();
   away.setAttribute("idle-mode:enabled", true);
   away.setAttribute("idle-mode:upgrades", { "long-dreams": 2, "bountiful-harvest": 5 });
-  away.setAttribute("idle-mode:away", { skill: "WOODCUTTING", durationMs: 3_600_000, xp: 1000, items: { [LOGS]: 100 }, loggedOutAt: 0 });
+  away.setAttribute("idle-mode:away", { activity: "WOODCUTTING", durationMs: 3_600_000, xp: { WOODCUTTING: 1000 }, items: { [LOGS]: 100 }, loggedOutAt: 0 });
   now = 48 * 3_600_000;
   api.login({ player: away });
   assert.equal(away.bank.get(LOGS), 2160, "18h x 100 x 1.2");
   assert.equal(away.xp.get(Skill.WOODCUTTING), 18_000, "no XP for the extras");
   assert.match(away.messages[0], /capped at 18h/);
+});
+
+const COMBAT = "../plugins/modes/idle/Combat.IdleMode";
+
+function fakeMonster(name, x, y, hitpoints = 10) {
+  const npc = fakeNpc(name, ["Attack"], x, y);
+  npc.hp = hitpoints;
+  npc.attacker = null;
+  npc.getHitpoints = () => npc.hp;
+  npc.getCombat = () => ({ getAttacker: () => npc.attacker });
+  npc.isNpc = () => true;
+  return npc;
+}
+
+/** An idle player who chose to attack a cow at (3201, 3200) and killed it. */
+function killingCows(t) {
+  let now = 1_000_000;
+  t.mock.method(Date, "now", () => now);
+  const player = fakePlayer();
+  player.setAttribute("idle-mode:enabled", true);
+  const cow = fakeMonster("Cow", 3201, 3200);
+  api.emit("attack-option", { player, npc: cow, npcId: 2790, clickType: 2, handled: false });
+  const drops = [{ itemId: BONES, amount: 1 }, { itemId: 1739, amount: 1 }];
+  api.emit("npc-drops:generated", { player, npc: cow, npcId: 2790, drops, handled: false });
+  return { player, cow, drops, advance: (ms) => (now += ms), now: () => now };
+}
+
+test("combat: a chosen monster's kill becomes the target, its loot goes to the bank", (t) => {
+  assert.equal(api.persisted["idle-mode:combat-target"], null);
+  const { player, drops } = killingCows(t);
+  assert.deepEqual(player.getAttribute("idle-mode:combat-target"), { name: "Cow", anchor: { x: 3200, y: 3200, z: 0 } });
+  assert.equal(player.bank.get(BONES), 1);
+  assert.equal(player.bank.get(1739), 1);
+  assert.equal(drops.length, 0, "nothing left for the ground");
+  api.command(player, "idle auto");
+  assert.match(player.messages.pop(), /fight the nearest cow here/);
+});
+
+test("combat: it attacks the nearest one it may, not one another player fights", (t) => {
+  const { player, advance } = killingCows(t);
+  const { fight } = require(COMBAT);
+  const taken = fakeMonster("Cow", 3200, 3201);
+  taken.attacker = { isPlayer: () => true };
+  const guarded = fakeMonster("Cow", 3201, 3201);
+  guarded.protectedFrom = player;
+  const dead = fakeMonster("Cow", 3199, 3200, 0);
+  const near = fakeMonster("Cow", 3203, 3203);
+  const far = fakeMonster("Cow", 3210, 3210);
+  const goblin = fakeMonster("Goblin", 3200, 3199);
+  world.npcs.push(taken, guarded, dead, near, far, goblin);
+  advance(5000);
+  assert.equal(fight(player, Date.now()), "attacking");
+  assert.equal(player.combat.target, near);
+  assert.equal(fight(player, Date.now()), "fighting");
+  player.combat.target = null;
+  assert.equal(fight(player, Date.now()), "waiting", "a moment before the next one");
+});
+
+test("combat: it eats below half hitpoints, fights back, and waits when out of food", (t) => {
+  const { player, advance } = killingCows(t);
+  const { fight } = require(COMBAT);
+  player.inventory = [new Item(BONES), new Item(SHARK)];
+  player.hitpoints = 40;
+  assert.equal(fight(player, Date.now()), "ate");
+  assert.deepEqual(api.itemActions.at(-1), { player, interfaceId: 3214, itemId: SHARK, slot: 1, clickType: 1, option: "Eat" });
+
+  player.hitpoints = 80;
+  const angry = fakeMonster("Cow", 3202, 3202);
+  player.combat.attacker = angry;
+  assert.equal(fight(player, Date.now()), "retaliating");
+  assert.equal(player.combat.target, angry);
+  player.combat.target = null;
+  player.combat.attacker = null;
+
+  player.inventory = [];
+  player.hitpoints = 20;
+  assert.equal(fight(player, Date.now()), "low");
+  assert.equal(fight(player, Date.now()), "low");
+  assert.equal(player.messages.filter((m) => /out of food/.test(m)).length, 1, "said once");
+  player.hitpoints = 45;
+  advance(5000);
+  world.npcs.push(fakeMonster("Cow", 3201, 3201));
+  assert.equal(fight(player, Date.now()), "attacking", "low, but above the stop line: keeps going");
+});
+
+test("combat: away, turned off or not idle leaves the player be; a gather takes over", (t) => {
+  const { player, cow, advance } = killingCows(t);
+  const { fight } = require(COMBAT);
+  world.npcs.push(fakeMonster("Cow", 3201, 3201));
+  advance(5000);
+  player.moveTo(3300, 3300);
+  assert.equal(fight(player, Date.now()), "away");
+  player.moveTo(3200, 3200);
+  api.command(player, "idle auto off");
+  assert.equal(fight(player, Date.now()), "off");
+  api.command(player, "idle auto on");
+
+  // Chopping a tree now makes gathering the activity.
+  const willow = fakeObject("Willow tree", ["Chop down"], 3200, 3201);
+  api.emit("before-object", { player, object: willow, objectId: 1276, clickType: 1, handled: false });
+  chop(player);
+  assert.equal(player.getAttribute("idle-mode:combat-target"), null);
+  assert.equal(fight(player, Date.now()), "off");
+
+  // And a cow killed again makes it combat.
+  api.emit("attack-option", { player, npc: cow, npcId: 2790, clickType: 2, handled: false });
+  api.emit("npc-drops:generated", { player, npc: cow, npcId: 2790, drops: [], handled: false });
+  assert.equal(player.getAttribute("idle-mode:auto-target"), null);
+});
+
+test("combat: a monster that came at a gatherer, or a non-idle kill, changes nothing", (t) => {
+  let now = 0;
+  t.mock.method(Date, "now", () => now);
+  const player = fakePlayer();
+  player.setAttribute("idle-mode:enabled", true);
+  const drops = [{ itemId: BONES, amount: 1 }];
+  api.emit("npc-drops:generated", { player, npc: fakeMonster("Goblin", 3201, 3200), npcId: 1, drops, handled: false });
+  assert.equal(player.getAttribute("idle-mode:combat-target"), undefined);
+  assert.equal(drops.length, 1, "its loot stays on the ground");
+  const normal = fakePlayer();
+  const cow = fakeMonster("Cow", 3201, 3200);
+  api.emit("attack-option", { player: normal, npc: cow, npcId: 2790, clickType: 2, handled: false });
+  api.emit("npc-drops:generated", { player: normal, npc: cow, npcId: 2790, drops, handled: false });
+  assert.equal(normal.getAttribute("idle-mode:combat-target"), undefined);
+});
+
+test("combat offline: kills measure the combat XP and loot, paid on login; combat XP earns points", (t) => {
+  const { player, cow, advance } = killingCows(t);
+  // A kill every 20 seconds for two minutes: 6 measured kills, 40 Attack and 13 Hitpoints XP each.
+  for (let i = 1; i <= 6; i++) {
+    advance(20_000);
+    player.getSkillManager().addExperience(Skill.ATTACK, 40);
+    player.getSkillManager().addExperience(Skill.HITPOINTS, 13);
+    api.emit("npc-drops:generated", { player, npc: cow, npcId: 2790, drops: [{ itemId: BONES, amount: 1 }], handled: false });
+  }
+  assert.equal(player.getAttribute("idle-mode:points"), 1, "318 combat XP: a point");
+  api.logout({ player });
+  const away = player.getAttribute("idle-mode:away");
+  assert.equal(away.activity, "COMBAT");
+  assert.deepEqual(away.xp, { ATTACK: 240, HITPOINTS: 78 });
+  assert.deepEqual(away.items, { [BONES]: 6 });
+
+  advance(60 * 60 * 1000);
+  const bones = player.bank.get(BONES);
+  api.login({ player });
+  assert.equal(player.xp.get(Skill.ATTACK), 240 + 240 * 30);
+  assert.equal(player.bank.get(BONES) - bones, 180);
+  assert.match(player.messages.join("\n"), /you kept fighting:\n7,200 Attack XP, 2,340 Hitpoints XP, 180 x Bones to your bank\./);
+});
+
+test("combat: an idle combat skill's level-up does not hold the fight", () => {
+  const player = fakePlayer();
+  player.setAttribute("idle-mode:enabled", true);
+  assert.equal(api.emit("level-up:interrupts", { player, skill: Skill.STRENGTH, interrupts: true }).interrupts, false);
 });

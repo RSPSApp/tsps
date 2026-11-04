@@ -9,10 +9,11 @@
  */
 const Common = require("./Common.IdleMode");
 
+const { chebyshev } = Common;
+
 /** Saved: { skill, kind: "object" | "npc", name, option, anchor: { x, y, z } }. */
-const TARGET_ATTRIBUTE = "idle-mode:auto-target";
-/** Saved: false when the player turned auto-resume off. */
-const AUTO_ATTRIBUTE = "idle-mode:auto";
+const TARGET_ATTRIBUTE = Common.GATHER_TARGET_ATTRIBUTE;
+const AUTO_ATTRIBUTE = Common.AUTO_ATTRIBUTE;
 
 /** player -> the last object or NPC option clicked: { kind, name, option, at }. */
 const clicks = new Map();
@@ -32,7 +33,7 @@ function stateOf(player) {
 }
 
 function autoOn(player) {
-  return config().enabled && Common.isIdle(player) && player.getAttribute(AUTO_ATTRIBUTE) !== false;
+  return config().enabled && Common.autoOn(player);
 }
 
 function remember(player, kind, name, option) {
@@ -52,10 +53,6 @@ function observeNpc(event) {
 
 function sameTarget(a, b) {
   return !!a && !!b && a.kind === b.kind && a.name === b.name && a.option.toLowerCase() === b.option.toLowerCase();
-}
-
-function chebyshev(location, point) {
-  return Math.max(Math.abs(location.getX() - point.x), Math.abs(location.getY() - point.y));
 }
 
 /** `storage:gather`: an idle skill gathered; a click just before it becomes the target. */
@@ -78,6 +75,8 @@ function gathered(request) {
     option: click.option,
     anchor: keepAnchor ? previous.anchor : { x: location.getX(), y: location.getY(), z: location.getZ() },
   });
+  // One activity at a time: gathering now replaces idle combat's target.
+  player.setAttribute(Common.COMBAT_TARGET_ATTRIBUTE, null);
   tracked.add(player);
 }
 
@@ -157,13 +156,6 @@ function useNpc(player, npc, target) {
   }, 1);
 }
 
-/** Whether the player is free for the character to go back to work. */
-function free(player) {
-  if (player.busy?.() || player.getMovementQueue().size() > 0) return false;
-  const combat = player.getCombat?.();
-  return !combat?.getTarget?.() && !combat?.getAttacker?.();
-}
-
 /** One look at a tracked player: resumes the gathering when it has stopped. "resumed" when it did. */
 function resume(player, now) {
   const target = player.getAttribute(TARGET_ATTRIBUTE);
@@ -171,7 +163,7 @@ function resume(player, now) {
   const state = stateOf(player);
   const { restartAfterSeconds, retrySeconds, leashTiles } = config();
   if (now - state.lastGatherAt < restartAfterSeconds * 1000 || now - state.lastAttemptAt < retrySeconds * 1000) return "gathering";
-  if (!free(player)) return "busy";
+  if (!Common.free(player)) return "busy";
   const location = player.getLocation();
   if (location.getZ() !== target.anchor.z || chebyshev(location, target.anchor) > leashTiles) return "away";
   const entity = target.kind === "npc" ? findNpc(player, target) : findObject(player, target);
@@ -209,8 +201,10 @@ function logout({ player }) {
 
 function describe(player) {
   const target = player.getAttribute(TARGET_ATTRIBUTE);
+  const fight = player.getAttribute(Common.COMBAT_TARGET_ATTRIBUTE);
   const state = player.getAttribute(AUTO_ATTRIBUTE) === false ? "off" : "on";
-  if (!target) return `Auto-resume is ${state}. Start gathering and your character will keep at it.`;
+  if (fight) return `Auto-resume is ${state}: fight the nearest ${fight.name.toLowerCase()} here.`;
+  if (!target) return `Auto-resume is ${state}. Start gathering or fighting and your character will keep at it.`;
   return `Auto-resume is ${state}: ${target.option.toLowerCase()} the nearest ${target.name.toLowerCase()} here.`;
 }
 

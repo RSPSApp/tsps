@@ -37,9 +37,10 @@ function randomEvents(request) {
   if (request.allowed === null && !Common.data.gathering.randomEvents && Common.isIdle(request.player)) request.allowed = false;
 }
 
-/** `level-up:interrupts`: an idle skill's level-up pop-up does not hold the gathering until Continue. */
+/** `level-up:interrupts`: an idle or combat skill's level-up pop-up does not hold the work until Continue. */
 function levelUps(request) {
-  if (request.interrupts && !Common.data.gathering.levelUpPopups && Common.idleGather(request.player, request.skill)) request.interrupts = false;
+  if (!request.interrupts || Common.data.gathering.levelUpPopups || !Common.isIdle(request.player)) return;
+  if (Common.idleSkill(request.skill) || Common.idleCombatSkill(request.skill)) request.interrupts = false;
 }
 
 module.exports = function attach(api) {

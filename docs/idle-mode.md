@@ -42,21 +42,22 @@ For an idle account, Woodcutting, Mining and Fishing (`"skills"` in the data) ne
 | `endlessResources` | Trees and rocks do not deplete. | `woodcutting:deplete-tree`, `mining:deplete-rock` |
 | `fishingSpotsStay` | A fishing spot's random stop is skipped. Spots with their own movement (the minnow platform) still move. | `fishing:spot-stays` (emitted by `Fishing.plugin.js`) |
 | `randomEvents` | `false` keeps random events away from idle accounts. | `random-events:eligibility` |
-| `levelUpPopups` | `false`: an idle skill's level-up pop-up does not hold the gathering until Continue (the message, graphic and sounds stay). | `level-up:interrupts` (emitted by `SkillLevelUp.plugin.js`) |
+| `levelUpPopups` | `false`: an idle or idle-combat skill's level-up pop-up does not hold the work until Continue (the message, graphic and sounds stay). | `level-up:interrupts` (emitted by `SkillLevelUp.plugin.js`) |
 
 ## Offline progress
 
-`server/plugins/modes/idle/Offline.IdleMode.js`. While an idle account gathers, the plugin
-measures the rate it really gets from each `storage:gather`: the items, and the skill's XP
-between the first gather of the session and the latest. Nothing is estimated from formulas, so
-tools, levels, boosts and relics all count as they did in play.
+`server/plugins/modes/idle/Offline.IdleMode.js`. While an idle account works, the plugin
+measures the rate it really gets from its own results: each idle gather (`storage:gather`) and
+each idle kill (Combat) records the items and the activity's skills' XP. Nothing is estimated
+from formulas, so tools, levels, boosts and relics all count as they did in play.
 
-- **A session** starts on the first gather. Another skill, or more than `maxGapSeconds` between
-  two gathers, starts a new one.
-- **Logging out** mid-session (the last gather no more than `maxGapSeconds` before) with at
+- **A session** starts on the first result. Another activity (another gathering skill, or
+  combat), or more than `maxGapSeconds` between two results, starts a new one.
+- **Logging out** mid-session (the last result no more than `maxGapSeconds` before) with at
   least `minSampleSeconds` measured saves the session as `idle-mode:away`:
-  `{ skill, durationMs, xp, items, loggedOutAt }`.
-- **Logging back in** pays the time away at that rate: the XP to the skill (the world's XP rate
+  `{ activity, durationMs, xp: { skill: xp }, items, loggedOutAt }`; `activity` is the gathering
+  skill (`"WOODCUTTING"`) or `"COMBAT"`.
+- **Logging back in** pays the time away at that rate: the XP to the skills (the world's XP rate
   was already in the measured XP, so it isn't applied twice) and the items to the bank. Time over
   `capHours` isn't paid, and `efficiency` scales the whole reward (`1` = the rate played). What
   the bank has no room for is lost. The player is told:
@@ -107,6 +108,42 @@ While you were away for 1h 0m, you kept woodcutting:
 | `searchTiles` | `16` |
 | `leashTiles` | `24` |
 
+## Idle combat
+
+`server/plugins/modes/idle/Combat.IdleMode.js`. Fighting works the same way as gathering:
+
+- **The target**: an idle player who attacks a monster (`onNpcAttackOption`) and kills it within
+  `rememberAttackSeconds` makes that monster's name the target, with where they stood. Saved as
+  `idle-mode:combat-target` `{ name, anchor }`. One activity at a time: a kill replaces the
+  gathering target and a gather replaces this one.
+- **Every `tickInterval` ticks**, with auto-resume on (`::idle auto`):
+  - below `eatBelowPercent` hitpoints it eats the first item with an "Eat" option, as a click
+    would. Below `stopBelowPercent` with no food it waits, and says so once;
+  - attacked while not attacking, it fights back;
+  - otherwise, free and within `leashTiles` of the place, it attacks the nearest monster of that
+    name within `searchTiles` that it may attack (`CombatFactory.canAttackPermission`) and no
+    other player is fighting.
+- **Loot**: a kill of the target (or of a monster just chosen) banks its drops
+  (`npc-drops:generated`); what the bank can't take stays on the ground. A monster that came at a
+  gathering player changes nothing.
+- **Offline**: each such kill is recorded with the combat skills' XP (`"skills"`) and its loot.
+  Offline fights eat no food: the measured rate is paid as it is.
+- **Points**: with `pointsFromXp`, combat XP earns idle points too.
+
+| Setting (`"combat"`) | Default |
+| --- | --- |
+| `enabled` | `true` |
+| `skills` | Attack, Strength, Defence, Ranged, Magic, Hitpoints |
+| `bankLoot` | `true` |
+| `pointsFromXp` | `true` |
+| `tickInterval` | `2` |
+| `retrySeconds` | `3` |
+| `rememberAttackSeconds` | `120` |
+| `searchTiles` | `12` |
+| `leashTiles` | `20` |
+| `eatBelowPercent` | `50` |
+| `stopBelowPercent` | `25` |
+
 ## Points and upgrades
 
 `server/plugins/modes/idle/Progression.IdleMode.js`. An idle account earns an **idle point** per
@@ -138,4 +175,6 @@ the offline progress measures, so it counts offline as well.
 3. Auto-resume - done. Next: picking an activity from a list and travelling there (built on the
    player bots' long routes in `server/plugins/bots/`).
 4. Idle points and upgrades - done (chat commands; an interface of its own comes later).
-5. Idle combat: fighting monsters by itself, with the existing drop tables.
+5. Idle combat - done.
+6. Next ideas: travelling to a chosen activity, an Idle interface (points, upgrades, the time
+   away), more skills (cooking, smithing, fletching: production loops), and idle bosses.

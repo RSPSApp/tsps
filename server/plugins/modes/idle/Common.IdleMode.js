@@ -7,6 +7,12 @@ const path = require("path");
 
 /** The account flag: on, the listed skills gather endlessly and keep going while logged out. */
 const ENABLED_ATTRIBUTE = "idle-mode:enabled";
+/** Saved: what auto-resume gathers ({ skill, kind, name, option, anchor }, Auto). */
+const GATHER_TARGET_ATTRIBUTE = "idle-mode:auto-target";
+/** Saved: what idle combat fights ({ name, anchor }, Combat). One of the two at a time. */
+const COMBAT_TARGET_ATTRIBUTE = "idle-mode:combat-target";
+/** Saved: false when the player turned auto-resume (gathering and combat) off. */
+const AUTO_ATTRIBUTE = "idle-mode:auto";
 /** world.json pluginConfig: new accounts start idle (an idle world). */
 const NEW_ACCOUNTS_CONFIG = "IdleMode:newAccounts";
 
@@ -14,12 +20,14 @@ let api = null;
 let core = null;
 let data = null;
 let skills = null;
+let combatSkills = null;
 
 function init(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
   data = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "idle-mode.json"), "utf8"));
   skills = null;
+  combatSkills = null;
 }
 
 function isIdle(player) {
@@ -34,6 +42,32 @@ function setIdle(player, enabled) {
 function idleSkill(skill) {
   if (!skills) skills = new Set(data.skills.map((name) => core.Skill[name]).filter((value) => value !== undefined));
   return skills.has(skill);
+}
+
+/** The core Skills idle combat trains. */
+function combatSkillList() {
+  if (!combatSkills) combatSkills = data.combat.skills.map((name) => core.Skill[name]).filter((value) => value !== undefined);
+  return combatSkills;
+}
+
+function idleCombatSkill(skill) {
+  return combatSkillList().includes(skill);
+}
+
+/** Auto-resume is on: Idle Mode, its data switch and the player's own (`::idle auto`). */
+function autoOn(player) {
+  return isIdle(player) && player.getAttribute(AUTO_ATTRIBUTE) !== false;
+}
+
+function chebyshev(location, point) {
+  return Math.max(Math.abs(location.getX() - point.x), Math.abs(location.getY() - point.y));
+}
+
+/** Whether the player is free for the character to go back to work. */
+function free(player) {
+  if (player.busy?.() || player.getMovementQueue().size() > 0) return false;
+  const combat = player.getCombat?.();
+  return !combat?.getTarget?.() && !combat?.getAttacker?.();
 }
 
 /** An idle player gathering one of the idle skills. */
@@ -69,12 +103,20 @@ function itemName(itemId) {
 
 module.exports = {
   ENABLED_ATTRIBUTE,
+  GATHER_TARGET_ATTRIBUTE,
+  COMBAT_TARGET_ATTRIBUTE,
+  AUTO_ATTRIBUTE,
   NEW_ACCOUNTS_CONFIG,
   init,
   isIdle,
   setIdle,
   idleSkill,
   idleGather,
+  combatSkillList,
+  idleCombatSkill,
+  autoOn,
+  chebyshev,
+  free,
   bank,
   bankHasRoom,
   skillKey,

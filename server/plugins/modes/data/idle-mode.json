@@ -70,5 +70,26 @@
         "extraChancePerLevel": 0.04
       }
     }
+  },
+  "combat": {
+    "_description": "Idle combat (docs/idle-mode.md): the last kind of monster an idle player attacked and killed is the target; the character attacks the nearest one around where it started, eats below eatBelowPercent hitpoints, stops when out of food below stopBelowPercent, and banks the loot.",
+    "enabled": true,
+    "skills": [
+      "ATTACK",
+      "STRENGTH",
+      "DEFENCE",
+      "RANGED",
+      "MAGIC",
+      "HITPOINTS"
+    ],
+    "bankLoot": true,
+    "pointsFromXp": true,
+    "tickInterval": 2,
+    "retrySeconds": 3,
+    "rememberAttackSeconds": 120,
+    "searchTiles": 12,
+    "leashTiles": 20,
+    "eatBelowPercent": 50,
+    "stopBelowPercent": 25
   }
 }

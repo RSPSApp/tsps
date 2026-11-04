@@ -918,12 +918,13 @@ export class Combat {
         // perform it themselves - many through super.start() first - so the arm stays open across
         // the whole call, and the seq left standing when it returns is the one that is measured.
         this.expectAttackAnimation();
-        PluginManager.emitCustomEvent("combat:attack-started", { attacker: this.character, target });
+        PluginManager.emitCustomEvent("combat:attack-started", { attacker: this.character, target, method });
         method.start(this.character, target);
         this.measureAnimationCycle = -1;
         const hits = method.hits(this.character, target);
         if (hits == null) {
             this.trace("hits=null", target);
+            PluginManager.emitCustomEvent("combat:attack-finished", { attacker: this.character, target, method });
             return false;
         }
         this.trace(`hits=${hits.length} dmg=[${hits.map((h: any) => h?.getTotalDamage?.()).join(",")}]`, target);
@@ -951,6 +952,9 @@ export class Combat {
         }
 
         method.finished(this.character, target);
+        // The swing has used the weapon, style and special it started with (animation, rolls,
+        // xp): what it spent may now change the equipment (a weapon degrading on its last charge).
+        PluginManager.emitCustomEvent("combat:attack-finished", { attacker: this.character, target, method });
 
         this.specialAttackQueued = false;
         if (this.character.isSpecialActivated()) {

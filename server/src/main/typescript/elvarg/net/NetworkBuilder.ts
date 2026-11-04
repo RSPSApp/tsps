@@ -774,8 +774,12 @@ export class ClientConnection {
                   subOpId: actionPacket.subOpId,
                   handled: false,
                 });
+              // Only op1 is Remove; ops 2+ are the item's worn options (Check, Activate...),
+              // which never take the item off, even when nothing handles them.
               if (!itemActionHandled && actionPacket.buttonNum === 1) {
                 EquipPacketListener.unequip(this.player, equipmentSlot);
+              } else if (!itemActionHandled && item?.getId?.() > 0) {
+                this.player.sendMessage("Nothing interesting happens.");
               }
             } else if (Bank.handleWidgetAction(this.player, actionPacket)) {
               // Bank owns its cache-native widgets while the bank modal is open.

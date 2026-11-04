@@ -119,11 +119,25 @@ function buyMaxCape(player) {
   return true;
 }
 
-/** Sells the first max cape carried (and its hood, if carried) back for 80%. */
-function sellBack(player) {
-  const cape = maxCapeInInventory(player);
+/** Whether the coins and any item inside the cape all fit, once the cape and hood have gone. */
+function sellBackFits(inventory, cape) {
+  const { Item, ItemIdentifiers } = Capes.core;
+  const hasCoins = inventory.contains(ItemIdentifiers.COINS);
+  if (hasCoins && inventory.getAddableAmount(new Item(ItemIdentifiers.COINS, Capes.MAX.sellBack)) < Capes.MAX.sellBack) return false;
+  const freed = 1 + (inventory.contains(hoodFor(cape)) ? 1 : 0);
+  const needed = (Capes.COMBINED_BY_CAPE.has(cape) ? 1 : 0) + (hasCoins ? 0 : 1);
+  return inventory.getFreeSlots() + freed >= needed;
+}
+
+/** Sells a carried max cape (and its hood, if carried) back for 80%: the first one, unless named. */
+function sellBack(player, cape = maxCapeInInventory(player)) {
   if (cape === null) return false;
   const inventory = player.getInventory();
+  if (!inventory.contains(cape)) return false;
+  if (!sellBackFits(inventory, cape)) {
+    player.sendMessage("You don't have enough room for what Mac would give you.");
+    return false;
+  }
   const hood = hoodFor(cape);
   const combined = Capes.COMBINED_BY_CAPE.get(cape);
   inventory.deleteNumber(cape, 1);
@@ -177,7 +191,7 @@ function macAction(event) {
       event.end = true;
     }
   } else if (/You sell your cape (?:and hood )?back to Mac/i.test(text)) {
-    sellBack(player);
+    if (!sellBack(player)) event.end = true;
     event.handled = true;
   } else if (/which max hood variant/i.test(text)) {
     event.handled = true;
@@ -186,11 +200,12 @@ function macAction(event) {
   }
 }
 
-function sellPrompt(player) {
+function sellPrompt(player, cape) {
   const price = Capes.core.Misc.insertCommasToNumber(String(Capes.MAX.sellBack));
-  api.sendMultiChatboxPrompt(player, "Sell your max cape and hood back?",
+  const name = Capes.isMaxCape(cape) ? "max cape" : Capes.itemName(cape);
+  api.sendMultiChatboxPrompt(player, `Sell your ${name} and hood back?`,
     `Yes - receive ${price} coins.`, () => {
-      if (sellBack(player)) Capes.messageBox(player, "You sell your cape and hood back to Mac.");
+      if (sellBack(player, cape)) Capes.messageBox(player, "You sell your cape and hood back to Mac.");
     },
     "No, I've changed my mind.", () => {});
 }
@@ -199,7 +214,7 @@ function itemOnMac(event) {
   if (Capes.core.CacheDefinitions.getNpc(event.npcId)?.name !== MAC) return;
   if (isAnyMaxCape(event.itemId)) {
     event.handled = true;
-    sellPrompt(event.player);
+    sellPrompt(event.player, event.itemId);
   } else if (event.itemId === Capes.MAX.hood || [...Capes.COMBINED_BY_CAPE.values()].some((c) => c.hood === event.itemId)) {
     event.handled = true;
     Capes.playTranscript(event.player, event.target, MAC_HOOD_VARIANT);
@@ -339,6 +354,11 @@ function combineOnUse(event) {
 function disassemble(player, combined) {
   const inventory = player.getInventory();
   if (!inventory.contains(combined.cape)) return;
+  // The max cape takes the combined cape's slot, and the item needs another.
+  if (inventory.getFreeSlots() < 1) {
+    player.sendMessage("You don't have enough inventory space to disassemble that.");
+    return;
+  }
   const name = Capes.itemName(combined.cape);
   inventory.deleteNumber(combined.cape, 1);
   inventory.adds(Capes.MAX.cape, 1);

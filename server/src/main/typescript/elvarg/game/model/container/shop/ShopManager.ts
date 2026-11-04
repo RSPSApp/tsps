@@ -759,7 +759,11 @@ export class ShopManager {
             shop.definition.getCurrency(),
             quantity * price
         );
-        this.addStock(shop, stockId, quantity);
+        // Content may keep the stock as it was on a sale too ("shop:keep-stock" with `selling`, a
+        // league's shops whose stock never changes): the item is paid for and not added.
+        const keep = { player, shopId: shop.definition.getId(), itemId: stockId, amount: quantity, keep: false, selling: true };
+        PluginManager.emitCustomEvent("shop:keep-stock", keep);
+        if (!keep.keep) this.addStock(shop, stockId, quantity);
         Sounds.sendSound(player, Sound.DROP_ITEM);
         this.refresh(shop.definition.getId());
         this.ensureRestockTask();
@@ -848,7 +852,8 @@ export class ShopManager {
     /**
      * Takes a purchase out of the stock: what was bought. Content may keep the shop's own stock
      * ("shop:keep-stock" { player, shopId, itemId, amount, keep }, a league's shops that never
-     * deplete): then only stock above the shop's own amount (what players sold it) goes.
+     * deplete): then only stock above the shop's own amount (what players sold it) goes. A sale
+     * asks the same event with `selling: true` (sellItem).
      */
     private static takeStock(player: any, shop: RuntimeShop, itemId: number, amount: number): number {
         const request = { player, shopId: shop.definition.getId(), itemId, amount, keep: false };

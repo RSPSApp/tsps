@@ -403,7 +403,9 @@ function offTaskKill(player, npc) {
   const hitpoints = (npc.getCurrentDefinition?.() ?? npc.getDefinition()).getHitpoints();
   const kill = { player, npc, xp: hitpoints, offTask: true };
   api.emitCustomEvent("slayer:task-kill", kill);
-  if (kill.xp > 0) player.getSkillManager().addExperiences(core.Skill.SLAYER, kill.xp);
+  // The Morytania Diary counts it too (not Mortimer's modifier: there is no task).
+  const xp = kill.xp * MorytaniaDiary.boost(player, npc);
+  if (xp > 0) player.getSkillManager().addExperiences(core.Skill.SLAYER, xp);
 }
 
 function complete(player, task) {

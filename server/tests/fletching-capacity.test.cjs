@@ -217,6 +217,40 @@ test("a full inventory holding only a preset stack of the product takes nothing"
   assert.ok(f.messages.includes(SPACE_TEXT), "says why");
 });
 
+test("a full inventory: the room check follows the feathers actually used", async (t) => {
+  const run = async (ordinary, used) => {
+    const f = actor(t);
+    put(f, item(I.BRONZE_DART_TIP, 20), 0);
+    put(f, item(I.FEATHER, ordinary), 1);
+    put(f, item(I.YELLOW_FEATHER, 100), 2);
+    fill(f);
+    await useOn(f, used, used === 0 ? 1 : 0);
+    return [f.inv.getAmount(I.BRONZE_DART), f.inv.getAmount(I.BRONZE_DART_TIP), f.inv.getAmount(I.FEATHER), f.inv.getAmount(I.YELLOW_FEATHER)];
+  };
+  assert.deepEqual(await run(10, 1), [10, 10, 0, 100], "ordinary feathers clicked: they run out, leaving the slot");
+  assert.deepEqual(await run(5, 1), [10, 10, 0, 95], "the ordinary run out first, the yellow make up the rest");
+  assert.deepEqual(await run(10, 0), [10, 10, 0, 100], "tips clicked: data order takes the ordinary first");
+  assert.deepEqual(await run(10, 2), [0, 20, 10, 100], "yellow clicked: nothing runs out, so nothing is taken");
+  assert.deepEqual(await run(20, 1), [0, 20, 20, 100], "more ordinary than the batch: nothing runs out");
+});
+
+test("a full inventory: a preset stack of a material does not count as making room", async (t) => {
+  const run = async (plain) => {
+    const f = actor(t);
+    customPreset(f, [item(I.RUNITE_BOLTS, 10)]);
+    assert.equal(f.inv.getItems()[0].isPresetItem(), true, "the preset stack comes first");
+    put(f, item(I.RUNITE_BOLTS, plain), 1);
+    put(f, item(I.DRAGONSTONE_BOLT_TIPS, 30), 2);
+    fill(f);
+    await useOn(f, 2, 1);
+    if (f.p.getCreationMenu()) await create(f, I.DRAGONSTONE_BOLTS, 1);
+    ticks(5);
+    return [plainOf(f, I.DRAGONSTONE_BOLTS), plainOf(f, I.RUNITE_BOLTS), presetOf(f, I.RUNITE_BOLTS), f.inv.getAmount(I.DRAGONSTONE_BOLT_TIPS)];
+  };
+  assert.deepEqual(await run(10), [10, 0, 10, 20], "the plain bolts run out, leaving the slot");
+  assert.deepEqual(await run(20), [0, 20, 10, 30], "nothing plain runs out, so nothing is taken");
+});
+
 // ------------------------------------------------------------------ preset materials
 
 test("preset bolts are not tipped into plain ones", async (t) => {

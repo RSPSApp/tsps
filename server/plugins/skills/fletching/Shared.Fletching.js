@@ -267,17 +267,21 @@ function hasTools(player, recipe) {
   return recipe.held.every((tool) => carries(player, tool.ids));
 }
 
+/** The order a material's ids are taken in: the clicked one, then data order. */
+function takeOrder(material, via) {
+  const clicked = triggerAliases.get(via) ?? via;
+  return material.ids.includes(clicked) ? [clicked, ...material.ids.filter((id) => id !== clicked)] : material.ids;
+}
+
 /**
  * Takes `amount` of a material, starting with the item the player clicked: the feather they used,
  * or the spool's bow strings when they used the spool. Other ids follow in data order.
  */
 function takeMaterial(player, material, amount, via) {
   const inventory = player.getInventory();
-  const clicked = triggerAliases.get(via) ?? via;
-  const order = material.ids.includes(clicked) ? [clicked, ...material.ids.filter((id) => id !== clicked)] : material.ids;
   const sourceFirst = triggerAliases.has(via);
   let remaining = amount;
-  for (const id of order) {
+  for (const id of takeOrder(material, via)) {
     const source = virtualMaterials.get(id);
     if (source && sourceFirst) remaining -= source.take(player, remaining);
     inventory.getItems().forEach((item, slot) => {
@@ -291,11 +295,31 @@ function takeMaterial(player, material, amount, via) {
   }
 }
 
+/** Whether taking this material would empty a slot, following takeMaterial's own order. */
+function emptiesSlot(player, material, via) {
+  const inventory = player.getInventory();
+  const sourceFirst = triggerAliases.has(via);
+  let remaining = material.amount;
+  for (const id of takeOrder(material, via)) {
+    const source = virtualMaterials.get(id);
+    if (source && sourceFirst) remaining -= Math.min(remaining, source.count(player));
+    for (const item of inventory.getItems()) {
+      if (remaining <= 0) return false;
+      if (item.getId() !== id || restricted(item) || item.getAmount() <= 0) continue;
+      if (item.getAmount() <= remaining) return true;
+      remaining = 0;
+    }
+    if (source && !sourceFirst && remaining > 0) remaining -= Math.min(remaining, source.count(player));
+    if (remaining <= 0) return false;
+  }
+  return false;
+}
+
 /**
  * Whether the product fits once the materials are taken, at its largest roll. A stack with other
  * metadata (a preset one) is not one to join, and takes no room from the product's own slot.
  */
-function fits(player, recipe) {
+function fits(player, recipe, via) {
   const inventory = player.getInventory();
   const product = new core.Item(recipe.outputId, recipe.amountMax);
   const stackable = core.ItemDefinition.forId(recipe.outputId).isStackable();
@@ -303,11 +327,7 @@ function fits(player, recipe) {
     item.getId() === recipe.outputId && item.getAmount() > 0 && item.getMeta() == null);
   if (joins) return inventory.getAddableAmount(product) >= recipe.amountMax;
   if (inventory.getFreeSlots() > 0) return true;
-  return recipe.materials.some((material) => material.ids.some((id) => {
-    const held = plainAmount(inventory, id);
-    if (held <= 0) return false;
-    return !core.ItemDefinition.forId(id).isStackable() || heldAmount(player, material) <= material.amount;
-  }));
+  return recipe.materials.some((material) => emptiesSlot(player, material, via));
 }
 
 function formatMessage(message, amount) {
@@ -321,7 +341,7 @@ function makeBatch(player, recipe, via) {
     return false;
   }
   if (!hasTools(player, recipe) || batchesAvailable(player, recipe) <= 0) return false;
-  if (!fits(player, recipe)) {
+  if (!fits(player, recipe, via)) {
     player.sendMessage("You don't have enough inventory space.");
     return false;
   }

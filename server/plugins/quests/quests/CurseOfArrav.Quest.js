@@ -690,10 +690,12 @@ module.exports = function registerCurseOfArravQuest(api) {
     if (event.hook !== START_HOOK || event.npcId !== ELIAS_NPC_ID) return;
     if (event.player && quest.getStage(event.player) < STAGE_STARTED) {
       if (missingSkillRequirements(event.player).length > 0) {
+        event.end = true;
         notifySkillRequirements(event.player);
         return;
       }
       if (missingQuestRequirements(event.player).length > 0) {
+        event.end = true;
         notifyQuestRequirements(event.player);
         return;
       }

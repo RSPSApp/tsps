@@ -563,10 +563,12 @@ module.exports = function registerLostTribeQuest(api) {
     if (hook !== START_HOOK || !SIGMUND_IDS.has(npcId)) return;
     if (quest.getStage(player) === 0) {
       if (missingSkillRequirements(player).length > 0) {
+        event.end = true;
         notifySkillRequirements(player);
         return;
       }
       if (missingQuestRequirements(player).length > 0) {
+        event.end = true;
         notifyQuestRequirements(player);
         return;
       }

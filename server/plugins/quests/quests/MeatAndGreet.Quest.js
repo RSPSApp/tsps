@@ -621,9 +621,11 @@ module.exports = function registerMeatAndGreetQuest(api) {
     }
   }
 
-  function handleStartHook({ player, npcId, hook }) {
+  function handleStartHook(event) {
+    const { player, npcId, hook } = event;
     if (npcId !== EMELIO_NPC_ID || hook !== START_HOOK || stage(player) !== 0) return;
     if (!isQuestComplete(player, CHILDREN_OF_THE_SUN_KEY)) {
+      event.end = true;
       player.sendMessage("You must complete Children of the Sun before starting this quest.");
       return;
     }

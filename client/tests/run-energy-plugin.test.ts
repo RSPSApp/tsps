@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import type { WorldPoint } from "@runelite/api/Client";
-import { ConfigChanged } from "@runelite/api/events";
+import { ChatMessage, ConfigChanged } from "@runelite/api/events";
 import {
     GRACEFUL_BOOTS,
     GRACEFUL_CAPE,
@@ -13,6 +13,7 @@ import {
 } from "@runelite/api/gameval/ItemID";
 import { STAMINA_ACTIVE } from "@runelite/api/gameval/VarbitID";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
+import { EventBus } from "@runelite/client/eventbus/EventBus";
 import { inject } from "@runelite/client/plugins/PluginInjector";
 import { TooltipManager } from "@runelite/client/ui/overlay/tooltip/TooltipManager";
 import { RunEnergyConfig } from "../game/plugins/runenergy/RunEnergyConfig";
@@ -91,6 +92,35 @@ history.addMessage(0, "Your Ring of endurance doubles the duration of your stami
 assert.equal(chat.length, 1);
 history.addMessage(2, "Your Ring of endurance is charged with 5 stamina doses.", "Someone");
 assert.equal(plugin.getRingOfEnduranceCharges(), 497, "only game messages count");
+
+// The running client both inserts chat history and posts RuneLite-shaped events.
+const bus = new EventBus();
+bus.register(plugin);
+const errors: unknown[][] = [];
+const originalError = console.error;
+console.error = (...args: unknown[]) => errors.push(args);
+try {
+    const message = (type: number, text: string) => {
+        history.addMessage(type, text);
+        bus.post(new ChatMessage(type, "", text, null));
+    };
+    message(0, "Welcome to Old School RuneScape.");
+    message(0, "Your Ring of endurance is charged with 500 stamina doses.");
+    assert.equal(plugin.getRingOfEnduranceCharges(), 500);
+    const warnings = chat.length;
+    message(0, "Your Ring of endurance doubles the duration of your stamina potion's effect.");
+    assert.equal(plugin.getRingOfEnduranceCharges(), 499, "one game message consumes exactly one charge");
+    assert.equal(chat.length, warnings + 1, "crossing 500 warns exactly once");
+    message(105, "Your Ring of endurance doubles the duration of your stamina potion's effect.");
+    assert.equal(plugin.getRingOfEnduranceCharges(), 498, "spam messages still update charges once");
+    assert.equal(chat.length, warnings + 1, "further charges do not repeat the warning");
+    message(2, "Your Ring of endurance is charged with 5 stamina doses.");
+    assert.equal(plugin.getRingOfEnduranceCharges(), 498, "public chat cannot set ring charges");
+    assert.deepEqual(errors, [], "ordinary and ring messages must not throw in the EventBus subscriber");
+} finally {
+    console.error = originalError;
+    bus.unregister(plugin);
+}
 worn[12] = -1;
 
 // --- Recovery: 25 + Agility/6 units a second, graceful pieces boost it ---------------------------
@@ -146,5 +176,8 @@ assert.deepEqual(orbText, ["91s", "90"], "back to the energy");
 void plugin.stop();
 assert.deepEqual(tooltips.getTooltips(), [], "shutDown removes the tooltip");
 assert.equal(history.beforeInsertListeners.size, 0);
+const stoppedCharges = plugin.getRingOfEnduranceCharges();
+history.addMessage(0, "Your Ring of endurance is charged with 5 stamina doses.");
+assert.equal(plugin.getRingOfEnduranceCharges(), stoppedCharges, "stopped plugins no longer consume chat");
 
 console.log("Run Energy plugin tests passed");

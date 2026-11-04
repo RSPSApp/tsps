@@ -1,9 +1,8 @@
 // Run after `yarn build`: node --test tests/avernic-defender-preset.test.cjs
 //
-// Free preset items must not turn into ordinary bankable items through the Avernic defender
-// combine. The items come from the real preset producer (Presets.PvpMode spawnPresetItem, which
-// marks every item of a global preset, dragon defender included); the combine and Dismantle go
-// through the real PluginManager hooks and the Yes answer through the real MultiChatboxPrompt.
+// Free preset items must not turn into ordinary bankable items through item conversions. The
+// items come from the real preset producer (Presets.PvpMode spawnPresetItem); actions and the Yes
+// answer go through the real PluginManager hooks and MultiChatboxPrompt.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, test } = require("node:test");
@@ -54,6 +53,19 @@ function preset(id) {
   return item;
 }
 
+/** An item copied from the named global preset's real inventory entry. */
+function presetItem(presetName, id) {
+  assert.equal(Presets.isEnabled(), true, "the Presets plugin is registered");
+  const source = Presets.getGlobalPresetByName(presetName);
+  assert.ok(source, `the ${presetName} global preset exists`);
+  const template = source.getInventory().find((item) => item.getId() === id);
+  assert.ok(template, `the ${presetName} preset contains item ${id}`);
+  const item = Presets._test.spawnPresetItem(template, source);
+  assert.equal(item.isPresetItem(), true, "the producer marked the item");
+  assert.equal(item.isUnbankable(), true);
+  return item;
+}
+
 const real = (id) => new core.Item(id, 1);
 
 /** Slot of an item by value: add() stores a clone, so the original instance is never in the container. */
@@ -99,7 +111,7 @@ function itemOnItem(player, usedValue, targetValue) {
 function dismantle(player, itemValue) {
   const item = stored(player, itemValue);
   const index = core.CacheDefinitions.getItem(item.getId()).inventoryActions.indexOf("Dismantle");
-  assert.ok(index >= 0, "the cache gives the Avernic defender a Dismantle option");
+  assert.ok(index >= 0, "the cache gives the item a Dismantle option");
   return PluginManager.emitItemAction({
     player, interfaceId: core.Inventory.INTERFACE_ID, item, itemId: item.getId(), slot: slotOf(player, item),
     clickType: index + 1, option: "Dismantle", handled: false,
@@ -215,6 +227,34 @@ test("a restricted Avernic defender swapped in after the Dismantle prompt is not
   yes(player);
   assert.deepEqual(ids(player), [I.AVERNIC_DEFENDER]);
   assert.equal(held(player)[0].isPresetItem(), true);
+});
+
+test("Dismantle refuses the real Main AGS preset sword before prompting", (t) => {
+  const { player, messages } = actor(t);
+  const sword = presetItem("Main AGS", I.ARMADYL_GODSWORD);
+  give(player, sword);
+  dismantle(player, sword);
+  assert.equal(pending(player), null, "no confirmation is offered");
+  assert.deepEqual(ids(player), [I.ARMADYL_GODSWORD]);
+  assert.equal(held(player)[0].isPresetItem(), true);
+  assert.equal(held(player).some((item) => item.getId() === I.GODSWORD_BLADE || item.getId() === I.ARMADYL_HILT), false);
+  assert.ok(messages.length >= 1, "the player is told why");
+});
+
+test("Dismantle rechecks godsword restrictions after Yes", (t) => {
+  const { player, messages } = actor(t);
+  const sword = real(I.ARMADYL_GODSWORD);
+  give(player, sword);
+  dismantle(player, sword);
+  assert.ok(pending(player), "the confirmation is offered for an unrestricted sword");
+  const heldSword = stored(player, sword);
+  heldSword.setMetaValue(core.Item.PRESET_META, true);
+  heldSword.setMetaValue(core.Item.UNTRADEABLE_META, true);
+  heldSword.setMetaValue(core.Item.UNBANKABLE_META, true);
+  yes(player);
+  assert.deepEqual(ids(player), [I.ARMADYL_GODSWORD]);
+  assert.equal(held(player)[0].isPresetItem(), true);
+  assert.ok(messages.length >= 1, "the player is told why dismantling stopped");
 });
 
 test("ordinary items still combine and dismantle", (t) => {

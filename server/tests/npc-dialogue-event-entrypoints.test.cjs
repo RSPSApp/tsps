@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, test } = require('node:test');
+const { before, after, test } = require('node:test');
 process.env.DISABLE_PLAYER_BOTS = '1';
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
@@ -16,7 +16,9 @@ before(async () => {
   core = PM.getCoreApi();
   cookId = core.CacheDefinitions.getNpcId('fai_varrock_bluemoon_chef');
   PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
+  PM.emitServerStartup({});
 });
+after(() => PM.emitServerShutdown({}));
 function fixture(t) {
   const packets = [];
   const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
@@ -399,8 +401,23 @@ for (const farming of [1, 2]) {
     };
     for (const key of ['lost_city', 'nature_spirit']) {
       await reachStart();
+      const refusalFrom = f.packets.length;
       await select('Yes.');
       assert.equal(quest.getStage(f.player), 0, 'both prerequisite quests are required');
+      assert.equal(Number(f.player.getAttribute('quest.points')) || 0, 0);
+      assert.equal(f.player.getDialogueManager().getCurrent(), undefined,
+        'a rejected start must not play the successful gardener assignment');
+      assert.equal(f.player.getPacketSender().getChatboxGroupId(), -1, 'the refusal is visible in the uncovered chatbox');
+      f.player.getSession().flushPackets();
+      const refusal = Buffer.concat(f.packets.slice(refusalFrom));
+      assert.ok(refusal.includes(Buffer.from('You must complete Nature Spirit to start this quest.')),
+        'the actual chat packet names the missing prerequisite');
+      assert.equal(refusal.includes(Buffer.from('You must complete Lost City to start this quest.')), key === 'lost_city',
+        'only missing prerequisites are reported');
+      const oldPackets = f.packets.length;
+      await choose(f, 1);
+      assert.equal(quest.getStage(f.player), 0, 'a stale Yes cannot start the quest');
+      assert.equal(f.packets.length, oldPackets, 'the rejected prompt is no longer resumable');
       f.player.closeInterruptibleInterfaces();
       const prerequisite = quests.find(entry => entry.key === key);
       prerequisite.setStage(f.player, prerequisite.completionValue);
@@ -1364,6 +1381,405 @@ test('Fairytale I Tanglefoot lair gate and Nature Spirit treat wielded magic sec
   enchant();
   assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 1, 'a lost pair is still replaced');
 });
+
+// The banquet uses real Player/NPC/PrivateArea/TaskManager and native object,
+// Talk-to and Continue producers. No gameplay server or fabricated dialogue runner.
+const RFD_FEAST_PENDING = 'recipe-for-disaster:feast-pending';
+const RFD_FEAST_SEEN = 'recipe-for-disaster:feast-seen';
+function rfdOldSave() {
+  const { JsonPlayerPersistence } = require('../plugins/persistence/JsonPlayerPersistence.plugin');
+  const codec = new JsonPlayerPersistence();
+  // Produced by the pre-feast quest through a native ingredient handover and PlayerSave.
+  const json = require('node:fs').readFileSync(path.join(__dirname, 'fixtures/rfd-opening-pre-feast-save.json'), 'utf8');
+  const save = codec.hydratePlayerSave(JSON.parse(json, codec.reviver.bind(codec)));
+  assert.equal(Object.hasOwn(save.attributes, RFD_FEAST_PENDING), false);
+  assert.equal(Object.hasOwn(save.attributes, RFD_FEAST_SEEN), false);
+  return { save, codec };
+}
+function rfdSavedProgress(player) {
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const save = PlayerSave.fromPlayer(player);
+  return JSON.stringify({
+    attributes: Object.fromEntries(Object.entries(save.attributes).filter(([key]) =>
+      (key.startsWith('recipe-for-disaster:') || key === 'quest.recipe_for_disaster.stage' || key === 'quest.points')
+      && key !== RFD_FEAST_PENDING && key !== RFD_FEAST_SEEN)),
+    inventory: save.inventory,
+  });
+}
+async function rfdCookTalk(f) {
+  f.player.closeInterruptibleInterfaces();
+  f.player.setLocation(new core.Location(3209,3215));
+  f.player.setNeedsPlacement(false);
+  await f.connection.dispatch([{ type: 'npc_option', index: f.npc.getIndex(), clickType: 1 }]);
+  f.connection.processTurnPackets(); f.tick(3);
+  return f.player.getDialogueManager().getCurrent()?.getText();
+}
+function rfdFeastFixture(t, { historical = false, selim = false } = {}) {
+  const f = fixture(t), { player } = f;
+  core.RegionManager.init();
+  player.setIndex(player.getIndex() % 2000); // Native player sync has an eleven-bit local index.
+  player.getSession().setPlayer(player);
+  f.nativeFrames = [];
+  const send = player.getSession().sendClientPacket;
+  t.mock.method(player.getSession(), 'sendClientPacket', function(packet) {
+    f.nativeFrames.push(packet);
+    return send.call(this, packet);
+  });
+  const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+  f.quest = quests.find(q => q.key === 'recipe_for_disaster');
+  const cooks = quests.find(q => q.key === 'cooks_assistant');
+  cooks.setStage(player, cooks.completionValue);
+  if (selim) {
+    const bcs = quests.find(q => q.key === 'beneath_cursed_sands');
+    bcs.setStage(player, bcs.completionValue);
+  }
+  f.quest.setStage(player, historical ? 4 : 1);
+  player.setLocation(new core.Location(3209, 3215));
+  f.npc = core.NPC.create(core.CacheDefinitions.getNpcId('cook'), new core.Location(3208, 3215));
+  core.World.getNpcs().add(f.npc);
+  f.effects = [];
+  const spawn = PM.spawnNpc;
+  t.mock.method(PM, 'spawnNpc', function(definition, ...args) {
+    const npc = spawn.call(this, definition, ...args);
+    if (npc && definition.owner === player) {
+      for (const method of ['performAnimation', 'performGraphic', 'setBaseAnimations', 'exactMove', 'forceChat']) {
+        const original = npc[method];
+        t.mock.method(npc, method, function(...values) {
+          f.effects.push({ id: npc.getId(), method, values });
+          return original.apply(this, values);
+        });
+      }
+    }
+    return npc;
+  });
+  const cycle = core.World.processCycle;
+  f.owned = () => {
+    const result = [];
+    core.World.getNpcs().forEach(npc => { if (npc.getOwner?.() === player) result.push(npc); });
+    return result;
+  };
+  f.tick = (count = 1) => {
+    for (let n = 0; n < count; n++) {
+      ++core.World.processCycle;
+      player.getArea()?.process(player);
+      core.TaskManager.processWalkTo(player.getIndex());
+      for (const npc of f.owned()) npc.getMovementQueue().process();
+      player.getMovementQueue().process();
+      core.TaskManager.process();
+      const npcs = f.owned();
+      core.World.updateLocalNpcs(player, npcs);
+      player.getSession().flush(core.World.getProcessCycle());
+      for (const npc of npcs) { npc.resetUpdating(); npc.setNeedsPlacement(false); }
+      player.setNeedsPlacement(false);
+    }
+  };
+  f.click = async (id, x, y, clickType = 1) => {
+    await f.connection.dispatch([{ type: 'object_option', id, x, y, clickType }]);
+    f.connection.processTurnPackets();
+    f.tick(5);
+  };
+  f.enter = async () => {
+    player.closeInterruptibleInterfaces();
+    player.setLocation(new core.Location(3214, 3221));
+    await f.click(12349, 3213, 3221);
+    f.tick(2);
+  };
+  t.after(() => {
+    PM.emitPlayerLogout({ player, username: player.getUsername() });
+    for (const npc of f.owned()) PM.removeNpc(npc);
+    core.World.getNpcs().remove(f.npc);
+    core.World.processCycle = cycle;
+  });
+  return f;
+}
+async function rfdHandover(f) {
+  for (const id of [core.ItemIdentifiers.EYE_OF_NEWT, core.ItemIdentifiers.GREENMANS_ALE,
+    core.ItemIdentifiers.ROTTEN_TOMATO, core.ItemIdentifiers.DIRTY_BLAST]) f.player.getInventory().add(new core.Item(id));
+  await f.connection.dispatch([{ type: 'npc_option', index: f.npc.getIndex(), clickType: 1 }]);
+  f.connection.processTurnPackets();
+  for (let n = 0; n < 5; n++) {
+    core.TaskManager.processWalkTo(f.player.getIndex()); f.player.getMovementQueue().process();
+  }
+  for (let n = 0; n < 12 && f.quest.getStage(f.player) < 4; n++) await nextLine(f);
+  assert.equal(f.quest.getStage(f.player), 4, `the native Cook conversation accepts the ingredients: ${JSON.stringify({current:f.player.getDialogueManager().getCurrent()?.getText?.(),prompt:MultiChatboxPrompt.getPending(f.player),location:f.player.getLocation()})}`);
+}
+async function finishRfdFeast(f) {
+  const lines = [];
+  for (let n = 0; n < 180 && f.player.getAttribute(RFD_FEAST_PENDING); n++) {
+    const current = f.player.getDialogueManager().getCurrent();
+    const text = current?.getText?.()?.replace(/\s+/g, ' ');
+    if (text) { lines.push(text); await nextLine(f); }
+    f.tick();
+  }
+  assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), false, `canonical final fade completes the feast: ${JSON.stringify({last:lines.slice(-4),current:f.player.getDialogueManager().getCurrent()?.constructor.name, area:!!f.player.getPrivateArea()})}`);
+  return lines;
+}
+
+test('RFD native first dining entry plays the complete feast and freezes the owned council', async t => {
+  const f = rfdFeastFixture(t), { player } = f;
+  const points = Number(player.getAttribute('quest.points')) || 0;
+  await rfdHandover(f);
+  assert.equal(player.getAttribute(RFD_FEAST_PENDING), true);
+  assert.equal(player.getAttribute('quest.points'), points + 1);
+  assert.equal(player.getPacketSender().getVarbit(1850), 2, 'the pre-feast chest and finale portal stay hidden');
+  await f.enter();
+  const scene = player.getPrivateArea();
+  assert.ok(scene, 'real dining-door dispatch creates a private feast');
+  assert.match(player.getDialogueManager().getCurrent()?.getText(), /Welcome, gentlemen/);
+  const actors = f.owned();
+  core.World.updateLocalNpcs(player, actors);
+  assert.ok(player.getLocalNpcs().some(npc => npc.getId() === core.NpcIdentifiers.DUKE_HORACIO));
+  const stranger = fixture(t).player;
+  stranger.setLocation(player.getLocation().clone());
+  core.World.updateLocalNpcs(stranger, actors);
+  assert.equal(stranger.getLocalNpcs().length, 0, 'the feast cast is private to its owner');
+  const lines = await finishRfdFeast(f);
+  for (const phrase of ['I welcome Osman', 'Excuse me while I deal with this', 'Nooooooooooooo!',
+    'Ooh – nice food!', "Aha! I'm BACK!", "And now I'll kill you!", "Sorry I'm late", 'TEMPUS CESSIT!']) {
+    assert.ok(lines.some(line => line.includes(phrase)), phrase);
+  }
+  assert.equal(!!player.getPrivateArea(), false);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(player.isUntargetable(), false);
+  assert.equal(player.getPacketSender().getVarbit(1850), 3);
+  assert.equal(player.getAttribute('quest.points'), points + 1, 'the feast does not award another opening point');
+  for (const [id, freeze] of [[3390,3376],[3389,3373],[3391,3388],[3392,3384],[3393,3361],
+    [3394,3367],[3395,3370],[3396,3392],[3398,3380],[3400,3364]]) {
+    assert.ok(f.effects.some(e => e.id === id && e.method === 'performAnimation' && e.values[0].getId() === freeze), `model-specific freeze ${id}`);
+  }
+  assert.ok(f.effects.some(e => e.id === 11891 && e.method === 'performAnimation' && e.values[0].getId() === 3397));
+  assert.ok(f.effects.some(e => e.id === 3397 && e.method === 'exactMove'), 'the monkey visibly moves when kicked');
+  assert.ok(f.effects.some(e => e.id === 11891 && e.method === 'performGraphic' && e.values[0].getId() === 601), 'Aris is targeted before freezing time');
+  for (const text of ['Greetings, Horacio!', 'Meoooooow!', 'Ikik...']) {
+    assert.ok(f.effects.some(e => e.method === 'forceChat' && e.values[0] === text), `actual actor overhead: ${text}`);
+  }
+  assert.ok(f.nativeFrames.some(packet => packet[0] === 21 && packet.length > 12), 'actual PlayerSession emits the visible cast in native NPC_INFO');
+  assert.ok(f.owned().some(npc => npc.getId() === 4849), 'the Culinaromancer remains visibly frozen');
+  assert.ok(f.owned().filter(npc => npc.getId() !== 11891 && npc.getId() !== 4849).every(npc => npc.getBaseAnimationsForUpdate()?.length), 'the ordinary rescue IDs retain frozen poses');
+  await f.enter();
+  assert.equal(player.getPrivateArea(), null, 'repeat entry goes to the dormant room without replay');
+  assert.equal(player.getAttribute('quest.points'), points + 1);
+  assert.equal(player.getAttribute(RFD_FEAST_SEEN), true);
+});
+
+test('RFD native feast selects Selim, cancels safely and resumes without repeating ingredients or rewards', async t => {
+  const f = rfdFeastFixture(t, { selim: true }), { player } = f;
+  await rfdHandover(f);
+  const points = player.getAttribute('quest.points');
+  await f.enter();
+  const first = player.getPrivateArea();
+  await nextLine(f); f.tick();
+  assert.match(player.getDialogueManager().getCurrent()?.getText(), /I welcome Selim/);
+  await f.connection.dispatch([{ type: 'interface_close' }]); f.connection.processTurnPackets(); f.tick();
+  assert.equal(!!player.getPrivateArea(), false);
+  assert.equal(first.isDestroyed(), true);
+  assert.equal(player.getAttribute(RFD_FEAST_PENDING), true);
+  assert.equal(player.getAttribute(RFD_FEAST_SEEN), false);
+  assert.equal(f.owned().length, 0);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3214,3221]);
+  await nextLine(f); f.tick(5);
+  assert.equal(player.getAttribute(RFD_FEAST_PENDING), true, 'stale native Continue cannot complete an abandoned feast');
+  await f.enter();
+  const lines = await finishRfdFeast(f);
+  assert.ok(lines.some(line => line.includes('I welcome Selim')));
+  assert.ok(!lines.some(line => line.includes('I welcome Osman')));
+  assert.equal(player.getAttribute('quest.points'), points);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.DIRTY_BLAST), 0);
+});
+
+test('RFD pending-feast Cook retalk invites entry across cancel and relog, then restores the later conversation', async t => {
+  const f = rfdFeastFixture(t);
+  await rfdHandover(f);
+  const points = f.player.getAttribute('quest.points');
+  assert.equal(await rfdCookTalk(f), "How's that banquet going?");
+  const widgetId = (f.player.getPacketSender().getChatboxGroupId() << 16) | 5;
+  await f.connection.dispatch([{ type: 'interface_close' }]); f.connection.processTurnPackets();
+  await f.connection.dispatch([{ type: 'dialogue_continue', widgetId, childIndex: -1 }]);
+  f.connection.processTurnPackets(); f.tick(2);
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined);
+  assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), true, 'closing the reminder does not consume the feast');
+  PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  const save = require('../dist/game/entity/impl/player/persistence/PlayerSave').PlayerSave.fromPlayer(f.player);
+  const restored = rfdFeastFixture(t, { historical: true });
+  save.applyToPlayer(restored.player);
+  PM.emitCustomEvent('player:bootstrap-complete', { player: restored.player });
+  assert.equal(await rfdCookTalk(restored), "How's that banquet going?", 'the saved pending handoff keeps the invitation');
+  await nextLine(restored);
+  assert.match(restored.player.getDialogueManager().getCurrent()?.getText(), /gone and looked at the feast/);
+  await restored.enter(); await finishRfdFeast(restored);
+  assert.equal(await rfdCookTalk(restored), 'Can we talk about what happened in the dining room?');
+  assert.equal(restored.player.getAttribute('quest.points'), points);
+  assert.equal(restored.player.getInventory().getAmount(core.ItemIdentifiers.DIRTY_BLAST), 0);
+  const historical = rfdFeastFixture(t, { historical: true });
+  historical.player.setAttribute('recipe-for-disaster:rescues', 17);
+  assert.equal(await rfdCookTalk(historical), 'Can we talk about what happened in the dining room?',
+    'opening-complete legacy saves retain their existing time-bubble conversation');
+});
+
+test('RFD historical stage4 saves retain their rescue progress and native Collect uses actual op3', async t => {
+  const f = rfdFeastFixture(t, { historical: true }), { player } = f;
+  player.setAttribute('recipe-for-disaster:rescues', 17);
+  await f.enter();
+  assert.equal(player.getPrivateArea(), null);
+  assert.equal(player.getAttribute('recipe-for-disaster:rescues'), 17);
+  assert.ok(!f.owned().some(npc => [3390,3394].includes(npc.getId())), 'rescued historical guests stay removed');
+  player.setLocation(new core.Location(3218,9623));
+  const parent = core.MapObjects.get(12308, new core.Location(3219,9623), null);
+  assert.ok(parent, 'the cache provides the transformed chest parent');
+  const definition = core.ObjectDefinition.forPlayer(parent.getId(), player);
+  assert.equal(definition.getName(), 'Chest');
+  assert.equal(definition.getActions()[2], 'Collect');
+  await f.click(12309,3219,9623,3);
+  assert.equal(player.getInterfaceId(),402,'native op3 reaches the existing GE collection box');
+  player.closeInterruptibleInterfaces();
+  await f.click(12309,3219,9623,2);
+  assert.notEqual(player.getInterfaceId(),402,'blank op2 does not collect');
+  await f.click(12309,3219,9623,1);
+  assert.notEqual(player.getInterfaceId(),402,'Bank stays with the bank handler');
+});
+
+test('RFD feast logout persists the pending handoff and replays after real PlayerSave recovery', async t => {
+  const f = rfdFeastFixture(t);
+  await rfdHandover(f); await f.enter();
+  const points = f.player.getAttribute('quest.points');
+  PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  assert.equal(!!f.player.getPrivateArea(), false);
+  assert.equal(f.owned().length, 0);
+  assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), true);
+  const save = require('../dist/game/entity/impl/player/persistence/PlayerSave').PlayerSave.fromPlayer(f.player);
+  const restored = rfdFeastFixture(t, { historical: true });
+  save.applyToPlayer(restored.player);
+  PM.emitCustomEvent('player:bootstrap-complete', { player: restored.player });
+  assert.equal(restored.player.getAttribute(RFD_FEAST_PENDING), true);
+  assert.equal(restored.player.getPacketSender().getVarbit(1850), 2);
+  await restored.enter(); await finishRfdFeast(restored);
+  assert.equal(restored.player.getAttribute('quest.points'), points);
+  assert.equal(restored.player.getInventory().getAmount(core.ItemIdentifiers.DIRTY_BLAST), 0);
+});
+
+test('RFD feast cancels on real death without consuming its pending retry', async t => {
+  const f = rfdFeastFixture(t);
+  await rfdHandover(f); await f.enter();
+  f.player.appendDeath(); f.tick();
+  assert.equal(!!f.player.getPrivateArea(), false);
+  assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), true);
+  assert.equal(f.owned().length, 0);
+  assert.equal(f.player.isUntargetable(), true, 'the real death task retains its own protection after scene cleanup');
+});
+
+test('RFD stale final-fade callback preserves a replacement native prompt and pending retry', async t => {
+  const f = rfdFeastFixture(t), { player } = f;
+  await rfdHandover(f); await f.enter();
+  let finalLine = false;
+  for (let n = 0; n < 160; n++) {
+    const text = player.getDialogueManager().getCurrent()?.getText?.();
+    if (text?.includes('you must help me defeat this evil!')) { finalLine = true; break; }
+    if (text) await nextLine(f);
+    f.tick();
+  }
+  assert.equal(finalLine,true);
+  await nextLine(f); // The canonical final fade is now pending.
+  PM.createApi('RfdReplacement').sendMultiChatboxPrompt(player,'Keep this question', 'Yes',()=>{},'No',()=>{});
+  const replacement = player.getDialogueManager().getCurrent();
+  f.tick(4);
+  assert.equal(!!player.getPrivateArea(),false);
+  assert.equal(player.getAttribute(RFD_FEAST_PENDING),true,'an abandoned final fade must not commit');
+  assert.equal(player.getAttribute(RFD_FEAST_SEEN),false,'a replaced final fade cannot mark the feast seen');
+  assert.equal(player.getDialogueManager().getCurrent(),replacement);
+  assert.equal(MultiChatboxPrompt.getPending(player).title,'Keep this question');
+  assert.equal(f.owned().length,0);
+});
+
+test('RFD actual pre-feast saves recover on login before frozen-room routing and complete only once', async t => {
+  for (const insideRoom of [false, true]) await t.test(insideRoom ? 'saved in the frozen room' : 'saved in the kitchen', async t => {
+    const f = rfdFeastFixture(t), { save, codec } = rfdOldSave();
+    if (insideRoom) save.position = new core.Location(1867,5348);
+    save.applyToPlayer(f.player);
+    const progress = rfdSavedProgress(f.player);
+    PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername(), isNewAccount: false });
+    assert.equal(f.quest.getStage(f.player), 4);
+    assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), true, 'recover the actual unmarked opening-only save');
+    assert.equal(f.player.getAttribute(RFD_FEAST_SEEN), false);
+    assert.equal(f.player.getPacketSender().getVarbit(1850), 2);
+    if (insideRoom) assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [3214,3221]);
+    assert.equal(f.owned().filter(npc => npc.getLocation().getX() >= 1855 && npc.getLocation().getX() <= 1870
+      && npc.getLocation().getY() >= 5338 && npc.getLocation().getY() <= 5358).length, 0,
+    'recovery precedes frozen-council spawning');
+    assert.equal(rfdSavedProgress(f.player), progress, 'migration does not rewrite quest progress, points or items');
+    assert.equal(await rfdCookTalk(f), "How's that banquet going?");
+    await f.enter();
+    await f.connection.dispatch([{ type: 'interface_close' }]); f.connection.processTurnPackets(); f.tick();
+    assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), true);
+    assert.equal(f.player.getAttribute(RFD_FEAST_SEEN), false);
+    await f.enter(); await finishRfdFeast(f);
+    assert.equal(f.player.getAttribute(RFD_FEAST_SEEN), true);
+    assert.equal(rfdSavedProgress(f.player), progress, 'replaying the missing scene cannot consume ingredients or award another point');
+    PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+    const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+    const serialized = JSON.stringify(PlayerSave.fromPlayer(f.player), codec.replacer.bind(codec));
+    const restoredSave = codec.hydratePlayerSave(JSON.parse(serialized, codec.reviver.bind(codec)));
+    const restored = rfdFeastFixture(t);
+    restoredSave.applyToPlayer(restored.player);
+    PM.emitPlayerLogin({ player: restored.player, username: restored.player.getUsername(), isNewAccount: false });
+    PM.emitCustomEvent('player:bootstrap-complete', { player: restored.player });
+    assert.equal(restored.player.getAttribute(RFD_FEAST_SEEN), true);
+    assert.equal(restored.player.getAttribute(RFD_FEAST_PENDING), false);
+    assert.equal(restored.player.getPacketSender().getVarbit(1850), 3);
+    assert.equal(await rfdCookTalk(restored), 'Can we talk about what happened in the dining room?');
+    await restored.enter();
+    assert.equal(restored.player.getPrivateArea(), null, 'a completed zero-rescue save does not replay the feast');
+    assert.equal(rfdSavedProgress(restored.player), progress);
+  });
+});
+
+test('RFD unmarked saves with any recorded rescue or finale progress retain every progression byte', async t => {
+  const cases = [
+    ['rescues', 17],
+    ...['pirate', 'goblin', 'dwarf', 'guide', 'evil-dave', 'skrach', 'amik', 'awowogei'].map(name => [`${name}-stage`, 1]),
+    ['pirate-state', 16], ['goblin-state', 1], ['dwarf-state', 8], ['guide-state', 1],
+    ['evil-dave-state', 1], ['skrach-state', 256], ['amik-state', 1], ['awowogei-state', 256],
+    ['pirate-hides-given', 1], ['pirate-first-dive', true],
+    ['evil-dave-recipe', { red: 1, yellow: 2, brown: 3, orange: 0 }],
+    ['evil-dave-stew', { doses: { red: 1 } }],
+    ['amik-dragon-drop', true], ['amik-chicken-dead', true], ['amik-wom-briefed', 1],
+    ['culinaromancer-wave', 1], ['culinaromancer-defeated', true],
+  ];
+  for (const [key, value] of cases) await t.test(key, t => {
+    const f = rfdFeastFixture(t), { save } = rfdOldSave();
+    save.attributes[`recipe-for-disaster:${key}`] = value;
+    save.applyToPlayer(f.player);
+    const progress = rfdSavedProgress(f.player);
+    PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername(), isNewAccount: false });
+    PM.emitCustomEvent('player:bootstrap-complete', { player: f.player });
+    assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), false, 'recorded partial progress is never treated as an unseen opening');
+    assert.equal(!!f.player.getAttribute(RFD_FEAST_SEEN), false, 'recovery does not invent a completed feast');
+    assert.equal(rfdSavedProgress(f.player), progress, 'classification and synchronization are pure reads of existing progression');
+    assert.equal(f.player.getPrivateArea(), null);
+  });
+  for (const stage of [0, 1, 3, 5, 10]) await t.test(`other main stage ${stage}`, t => {
+    const f = rfdFeastFixture(t), { save } = rfdOldSave();
+    save.attributes['quest.recipe_for_disaster.stage'] = stage;
+    save.applyToPlayer(f.player);
+    const progress = rfdSavedProgress(f.player);
+    PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername(), isNewAccount: false });
+    assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), false);
+    assert.equal(rfdSavedProgress(f.player), progress);
+  });
+});
+
+test('RFD already-loaded unmarked saves recover through native Cook and dining-door inputs', async t => {
+  for (const input of ['cook', 'door']) await t.test(input, async t => {
+    const f = rfdFeastFixture(t), { save } = rfdOldSave();
+    save.applyToPlayer(f.player);
+    const progress = rfdSavedProgress(f.player);
+    if (input === 'cook') assert.equal(await rfdCookTalk(f), "How's that banquet going?");
+    else { await f.enter(); assert.ok(f.player.getPrivateArea()); }
+    assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), true);
+    assert.equal(f.player.getPacketSender().getVarbit(1850), 2);
+    assert.equal(rfdSavedProgress(f.player), progress);
+  });
+});
+
 function pandemoniumShipFixture(t, stage = 14) {
   const f = fixture(t);
   core.RegionManager.init();
@@ -1529,4 +1945,240 @@ test('Pandemonium native: the captured helm and sails still sail to the wreck wi
   f.player.closeInterruptibleInterfaces();
   await pandemoniumDeploy(f);
   assert.ok(f.player.getDialogueManager().getCurrent(), 'Deploy remains usable after the ordinary voyage');
+});
+
+
+
+function sourceStartChoice(page, hook) {
+  const record = require('../data/definitions/npc-dialogues.json')[page];
+  function find(steps) {
+    for (const step of steps) {
+      if (step.options?.some(option => option.hook === hook)) return step;
+      for (const nested of [step.steps ?? [], ...(step.options ?? []).map(option => option.steps ?? [])]) {
+        const result = find(nested);
+        if (result) return result;
+      }
+    }
+  }
+  for (const [variant, steps] of Object.entries(record.variants)) {
+    const choice = find(steps);
+    if (choice) return { variant, choice };
+  }
+  throw Error(`Missing canonical start choice ${hook}`);
+}
+
+for (const [page, key, npcKey, hook, reasons] of [
+  ['Lost City', 'lost_city', 'WARRIOR', 'quest:lost-city:start', ['Crafting level of at least 31', 'Woodcutting level of at least 36']],
+  ['In Search of the Myreque', 'in_search_of_the_myreque', 'VANSTROM_KLAUSE_8', 'quest:in-search-of-the-myreque:start', ['Agility level of at least 25']],
+]) test(`${page} native start refusal exposes existing reasons without playing accepted dialogue`, async t => {
+  const f = fixture(t), quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === key);
+  const { variant, choice } = sourceStartChoice(page, hook);
+  const show = () => {
+    const request = { player: f.player, npcId: core.NpcIdentifiers[npcKey], variant: { page, variant }, exact: true, select: () => [choice] };
+    PM.emitCustomEvent('npc-dialogue:start', request);
+    assert.equal(request.handled, true);
+    return request;
+  };
+  const refuse = async expected => {
+    show(); await choose(f, choice.options.findIndex(option => option.hook === hook) + 1);
+    assert.equal(quest.getStage(f.player), 0);
+    assert.equal(Number(f.player.getAttribute('quest.points')) || 0, 0);
+    assert.equal(f.player.getDialogueManager().getCurrent(), undefined);
+    assert.equal(f.player.getPacketSender().getChatboxGroupId(), -1);
+    f.player.getSession().flushPackets();
+    const packets = Buffer.concat(f.packets).toString('utf8');
+    for (const reason of expected) assert.ok(packets.includes(reason), reason);
+  };
+  await refuse(reasons);
+  if (key === 'lost_city') {
+    f.player.getSkillManager().setMaxLevels(core.Skill.CRAFTING, 31, false);
+    await refuse(['Woodcutting level of at least 36']);
+    f.player.getSkillManager().setMaxLevels(core.Skill.WOODCUTTING, 36, false);
+  } else {
+    f.player.getSkillManager().setMaxLevels(core.Skill.AGILITY, 25, false);
+    await refuse(['You must complete Nature Spirit to start this quest.']);
+    const prerequisite = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'nature_spirit');
+    prerequisite.setStage(f.player, prerequisite.completionValue);
+  }
+  show(); await choose(f, choice.options.findIndex(option => option.hook === hook) + 1);
+  assert.ok(quest.getStage(f.player) > 0, 'meeting the existing requirements starts normally');
+  assert.ok(f.player.getDialogueManager().getCurrent(), 'the canonical accepted branch is still played');
+});
+
+test('a rejected owned quest-start hook preserves a replacement conversation and its next native choice', async t => {
+  const f = fixture(t), page = 'Fairytale I - Growing Pains', hook = 'quest:fairytale-i-growing-pains:start';
+  const { variant, choice } = sourceStartChoice(page, hook);
+  const hooks = PM.customEventHooks.get('npc-dialogue:hook'), start = hooks.length;
+  t.after(() => hooks.splice(start));
+  let replacement, refused;
+  PM.createApi('RefusalReplacementTest').onCustomEvent('npc-dialogue:hook', event => {
+    if (event.player !== f.player || event.hook !== hook) return;
+    refused = event.end === true;
+    replacement = request(f.player, f.npc);
+  });
+  const old = { player: f.player, npcId: core.NpcIdentifiers.MARTIN_THE_MASTER_GARDENER, variant: { page, variant }, exact: true, select: () => [choice] };
+  PM.emitCustomEvent('npc-dialogue:start', old);
+  await choose(f, choice.options.findIndex(option => option.hook === hook) + 1);
+  assert.equal(refused, true, 'the real prerequisite handler rejected this start');
+  assert.equal(replacement.handled, true);
+  assert.equal(MultiChatboxPrompt.getPending(f.player).title, 'Ask about the Christmas Event?');
+  assert.equal(old.cancel(), false, 'the ended playback no longer owns the replacement');
+  await choose(f, 1);
+  assert.match(f.player.getDialogueManager().getCurrent().getText(), /Can't you see the huge queue/);
+  assert.equal(Number(f.player.getAttribute('quest.points')) || 0, 0);
+});
+
+test('action hook end stops its tail and preserves a replacement native dialogue', t => {
+  for (const replace of [false, true]) {
+    const f = fixture(t), hooks = PM.customEventHooks.get('npc-dialogue:hook'), start = hooks.length;
+    t.after(() => hooks.splice(start));
+    PM.createApi('ActionEndTest').onCustomEvent('npc-dialogue:hook', event => {
+      if (event.player !== f.player || event.hook !== 'test:refusal') return;
+      event.end = true;
+      if (replace) {
+        const builder = new core.DialogueChainBuilder(); builder.add(new core.NpcDialogue(0, cookId, 'Replacement dialogue.'));
+        f.player.getDialogueManager().startDialogues(builder);
+      }
+    });
+    const playback = { player: f.player, npcId: cookId, variant: { page: '2025 Christmas event', variant: 'starting-the-event-talking-to-the-cook' }, exact: true,
+      select: () => [{ type: 'action', hook: 'test:refusal' }, { npc: 'The refused tail must not play.' }] };
+    PM.emitCustomEvent('npc-dialogue:start', playback);
+    assert.equal(playback.handled, true);
+    assert.equal(f.player.getDialogueManager().getCurrent()?.getText(), replace ? 'Replacement dialogue.' : undefined);
+    playback.cancel();
+    assert.equal(f.player.getDialogueManager().getCurrent()?.getText(), replace ? 'Replacement dialogue.' : undefined);
+  }
+});
+
+
+test('Nature Spirit retains its canonical Drezel prerequisite refusal', async t => {
+  const f = fixture(t), quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+  const priest = quests.find(q => q.key === 'priest_in_peril'), nature = quests.find(q => q.key === 'nature_spirit');
+  priest.setStage(f.player, priest.completionValue);
+  const npcId = core.NpcIdentifiers.DREZEL, npc = core.NPC.create(npcId, new core.Location(3440, 9897));
+  assert.equal(PM.emitNpcInteraction({ player: f.player, npc, npcId, action: 'Talk-to', clickType: 1, handled: false }), true);
+  const lines = [];
+  for (let n = 0; n < 10 && f.player.getDialogueManager().getCurrent(); n++) {
+    const current = f.player.getDialogueManager().getCurrent(); if (current.getText) lines.push(current.getText());
+    await nextLine(f);
+  }
+  assert.ok(lines.some(line => line.startsWith("Well... I don't think so.")), 'Drezel speaks the existing canonical refusal');
+  f.player.getSession().flushPackets();
+  assert.ok(Buffer.concat(f.packets).includes(Buffer.from('You do not meet all of the requirements to start the Nature Spirit quest.')));
+  assert.equal(nature.getStage(f.player), 0);
+  assert.equal(Number(f.player.getAttribute('quest.points')) || 0, 0);
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined);
+});
+
+const REJECTED_START_ROUTES = [
+  { page: 'Jungle Potion', key: 'jungle_potion', npc: 'TRUFITUS', quests: ['druidic_ritual'],
+    route: ['What does Bwana mean?', 'Yes, of course I do.', 'A proposition eh? Sounds interesting!', 'Me? How can I help?', 'Yes.'] },
+  { page: 'Haunted Mine', key: 'haunted_mine', npc: 'ZEALOT', skills: true, quests: ['priest_in_peril'],
+    route: ['I follow the path of Saradomin.', 'I come seeking challenges and quests.', 'Yes.'] },
+  { page: 'Between a Rock...', key: 'between_a_rock', npc: 'DONDAKAN_THE_DWARF', skills: true, quests: ['dwarf_cannon', 'fishing_contest'],
+    route: ['Why are you firing a cannon at a wall?', 'Yes.'] },
+  { page: 'The Lost Tribe', key: 'the_lost_tribe', npc: 'SIGMUND_13', skills: true, quests: ['goblin_diplomacy', 'rune_mysteries'],
+    route: ['Do you have any quests for me?', 'Yes.'] },
+  { page: 'Meat and Greet', key: 'meat_and_greet', npc: 'EMELIO', quests: ['children_of_the_sun'], route: ['Yes.'] },
+  { page: 'The Curse of Arrav', key: 'curse_of_arrav', npc: 'ELIAS_WHITE', skills: true, quests: ['defender_of_varrock', 'troll_romance'], route: ['Yes.'] },
+];
+const RUM_START_ROUTE = { npc: 'PIRATE_PETE', route: ['Yes!', 'Of course, I fear no demon!', 'Nonsense! Keep the money!'] };
+const registeredQuest = key => require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(quest => quest.key === key);
+const carriedItems = player => player.getInventory().getItems().filter(item => item.getId() >= 0).map(item => [item.getId(), item.getAmount(), item.getMeta()]);
+function completePrerequisites(player, keys) {
+  for (const key of keys) { const quest = registeredQuest(key); assert.ok(quest, key); quest.setStage(player, quest.completionValue); }
+}
+function startSkillLevels(player, maximum, current = maximum) {
+  for (const skill of core.Skill.values()) player.getSkillManager().setMaxLevels(skill, maximum, false).setCurrentLevel(skill, current, false);
+}
+async function followNativeStartRoute(f, definition) {
+  const npcId = core.NpcIdentifiers[definition.npc], npc = core.NPC.create(npcId, new core.Location(3222, 3218));
+  assert.equal(PM.emitNpcInteraction({ player: f.player, npc, npcId, action: 'Talk-to', clickType: 1, handled: false }), true);
+  for (const option of definition.route) {
+    for (let n = 0; n < 80 && !MultiChatboxPrompt.getPending(f.player); n++) {
+      assert.ok(f.player.getDialogueManager().getCurrent(), `source dialogue reaches ${option}`);
+      await nextLine(f);
+    }
+    const menu = MultiChatboxPrompt.getPending(f.player), index = menu?.options.indexOf(option) ?? -1;
+    assert.ok(index >= 0, `${option} in ${JSON.stringify(menu)}`);
+    await choose(f, index + 1);
+  }
+}
+async function assertRejectedStart(f, key, items) {
+  const player = f.player;
+  assert.equal(registeredQuest(key).getStage(player), 0);
+  assert.equal(Number(player.getAttribute('quest.points')) || 0, 0);
+  assert.deepEqual(carriedItems(player), items);
+  assert.equal(player.getDialogueManager().getCurrent(), undefined, 'the accepted source tail is not played');
+  assert.equal(player.getPacketSender().getChatboxGroupId(), -1, 'the existing refusal messages are uncovered');
+  assert.equal(MultiChatboxPrompt.getPending(player), null);
+  for (let n = 0; n < 3; n++) { await choose(f, 1); await nextLine(f); }
+  assert.equal(registeredQuest(key).getStage(player), 0, 'stale native replies cannot reach later quest actions');
+  assert.deepEqual(carriedItems(player), items);
+}
+for (const definition of REJECTED_START_ROUTES) test(`${definition.page} normal rejected-start routes stop before accepted actions and retry successfully`, async t => {
+  const f = fixture(t), items = carriedItems(f.player);
+  const refuse = async () => {
+    const first = f.packets.length;
+    await followNativeStartRoute(f, definition);
+    await assertRejectedStart(f, definition.key, items);
+    f.player.getSession().flushPackets();
+    assert.match(Buffer.concat(f.packets.slice(first)).toString('utf8'), /You (?:must complete|need)/, 'real packets contain the existing requirement reason');
+  };
+  await refuse();
+  startSkillLevels(f.player, 99);
+  if (definition.skills) await refuse();
+  completePrerequisites(f.player, definition.quests);
+  await followNativeStartRoute(f, definition);
+  assert.ok(registeredQuest(definition.key).getStage(f.player) > 0);
+  assert.ok(f.player.getDialogueManager().getCurrent(), 'eligible acceptance still plays its source branch');
+});
+
+for (const mode of ['missing quests', 'skills only', 'drained skills']) test(`Rum Deal normal choice rejects ${mode} without knockout, items or quest points`, async t => {
+  const f = fixture(t), items = carriedItems(f.player), location = f.player.getLocation().clone();
+  if (mode === 'missing quests') startSkillLevels(f.player, 99);
+  else { completePrerequisites(f.player, ['zogre_flesh_eaters', 'priest_in_peril']); if (mode === 'drained skills') startSkillLevels(f.player, 99, 1); }
+  await followNativeStartRoute(f, RUM_START_ROUTE);
+  await assertRejectedStart(f, 'rum_deal', items);
+  assert.ok(f.player.getLocation().equals(location), 'a rejected choice cannot enter the knockout sequence');
+  f.player.getSession().flushPackets();
+  const packets = Buffer.concat(f.packets).toString('utf8');
+  if (mode === 'missing quests') assert.ok(packets.includes('You must complete Zogre Flesh Eaters to start this quest.'));
+  else for (const [required, skill] of [[40, 'Farming'], [50, 'Fishing'], [47, 'Prayer'], [42, 'Crafting'], [42, 'Slayer']]) {
+    assert.ok(packets.includes(`You need ${required} ${skill} to start this quest.`), `${skill} refusal is explicit`);
+  }
+  // Rum's existing predicate reads current levels: boosting passes, draining fails.
+  startSkillLevels(f.player, mode === 'drained skills' ? 1 : 99, 99);
+  completePrerequisites(f.player, ['zogre_flesh_eaters', 'priest_in_peril']);
+  await followNativeStartRoute(f, RUM_START_ROUTE);
+  assert.equal(registeredQuest('rum_deal').getStage(f.player), 1);
+  for (let n = 0; n < 8 && registeredQuest('rum_deal').getStage(f.player) < 2; n++) await nextLine(f);
+  assert.equal(registeredQuest('rum_deal').getStage(f.player), 2, 'an eligible acceptance retains the canonical knockout');
+});
+
+test('Rum Deal alternate source hook refuses without playing its accepted tail', async t => {
+  const f = fixture(t), items = carriedItems(f.player), hook = 'quest:rum-deal:start';
+  const { variant, choice } = sourceStartChoice('Pirate Pete', hook);
+  const event = { player: f.player, npcId: core.NpcIdentifiers.PIRATE_PETE, variant: { page: 'Pirate Pete', variant }, exact: true, select: () => [choice] };
+  PM.emitCustomEvent('npc-dialogue:start', event); assert.equal(event.handled, true);
+  await choose(f, choice.options.findIndex(option => option.hook === hook) + 1);
+  await assertRejectedStart(f, 'rum_deal', items);
+});
+
+test('a refused choice preserves replacement UI opened by its owning handler', async t => {
+  const f = fixture(t), hooks = PM.customEventHooks.get('npc-dialogue:choice'), start = hooks.length;
+  t.after(() => hooks.splice(start));
+  let replacement, refused;
+  PM.createApi('RefusedChoiceReplacement').onCustomEvent('npc-dialogue:choice', event => {
+    if (event.player !== f.player || event.option !== 'Nonsense! Keep the money!') return;
+    refused = event.end === true;
+    replacement = request(f.player, f.npc);
+  });
+  await followNativeStartRoute(f, RUM_START_ROUTE);
+  assert.equal(refused, true, 'Rum has already rejected this choice');
+  assert.equal(replacement.handled, true);
+  assert.equal(registeredQuest('rum_deal').getStage(f.player), 0);
+  assert.equal(MultiChatboxPrompt.getPending(f.player).title, 'Ask about the Christmas Event?');
+  await choose(f, 1);
+  assert.match(f.player.getDialogueManager().getCurrent().getText(), /Can't you see the huge queue/);
 });

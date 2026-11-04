@@ -161,7 +161,7 @@
     "pyreBusy": "Someone else is using that pyre.",
     "needQuest": "You can't do that until you have made your own funeral pyre logs."
   },
-  "_pyres": "Recorded (227/01846 [10247]-[10272], 232/03118): pyre logs on the funeral pyre ('You put some logs on the pyre.', the pyre shows its wood), remains on the logs ('You place the shade's remains on the logs.'), Light ('You attempt to light the funeral pyre.'), the fire 3 ticks on with the experience, the Shade Spirit 2 ticks later, and 4 ticks after that the reward on the stone stand (private, gone after 500 ticks) with a puff of smoke as the pyre empties. Wiki: the woods (Firemaking level and experience), the remains' Prayer experience and the wood each needs, 21% coins or else a key.",
+  "_pyres": "Recorded (227/01846 [10247]-[10272], 232/03118): pyre logs on the funeral pyre ('You put some logs on the pyre.', the pyre shows its wood), remains on the logs ('You place the shade's remains on the logs.'), Light ('You attempt to light the funeral pyre.'), the fire 3 ticks on with the experience, the Shade Spirit 2 ticks later, and 4 ticks after that the reward on the stone stand (private, gone after 500 ticks) with a puff of smoke as the pyre empties. Wiki: the woods (Firemaking level and experience), the remains' Prayer experience by remains and wood (Cremating shade remains table), the wood each remains needs, the Morytania Hard (+50% Prayer) and Elite (+50% Firemaking) diaries, 21% coins or else a key.",
   "pyres": {
     "woods": [
       ["logs", 5, 50],
@@ -180,13 +180,13 @@
     ],
     "remains": {
       "shade_bones1": {
-        "prayer": 25,
+        "prayer": {"logs": 25, "oak": 33, "willow": 33.5, "teak": 33.7, "arctic_pine": 33.9, "maple": 34, "mahogany": 34.3, "yew": 34.5, "camphor": 34.5, "magic": 35, "ironwood": 35.5, "redwood": 35.5, "rosewood": 35.6},
         "minWood": 5,
         "coins": [200, 300],
         "keys": [[79, ["bronze_bloodred", "bronze_brown", "bronze_crimson"]]]
       },
       "shade_bones2": {
-        "prayer": 37.5,
+        "prayer": {"logs": 37.5, "oak": 45.5, "willow": 46, "teak": 46.2, "arctic_pine": 46.4, "maple": 46.5, "mahogany": 46.8, "yew": 47, "camphor": 47.5, "magic": 47.5, "ironwood": 47.5, "redwood": 48, "rosewood": 48},
         "minWood": 5,
         "coins": [400, 500],
         "keys": [
@@ -195,13 +195,13 @@
         ]
       },
       "shade_bones3": {
-        "prayer": 61,
+        "prayer": {"willow": 61, "teak": 61.2, "arctic_pine": 61.4, "maple": 61.5, "mahogany": 61.8, "yew": 62, "camphor": 62, "magic": 62.5, "ironwood": 62.5, "redwood": 63, "rosewood": 63},
         "minWood": 35,
         "coins": [600, 700],
         "keys": [[12.5, ["steel_black", "steel_purple"]], [66.5, ["black_bloodred", "black_brown", "black_crimson"]]]
       },
       "shade_bones4": {
-        "prayer": 79.5,
+        "prayer": {"yew": 79.5, "camphor": 79.5, "magic": 80, "ironwood": 80.5, "redwood": 80.5, "rosewood": 80.6},
         "minWood": 65,
         "coins": [800, 900],
         "keys": [
@@ -210,7 +210,7 @@
         ]
       },
       "shade_bones5": {
-        "prayer": 100,
+        "prayer": {"magic": 100, "ironwood": 100, "redwood": 100.5, "rosewood": 100.5},
         "minWood": 80,
         "coins": [2000, 4000],
         "keys": [
@@ -219,12 +219,13 @@
         ]
       },
       "shade_bones6": {
-        "prayer": 120.5,
+        "prayer": {"redwood": 120.5, "rosewood": 120.5},
         "minWood": 95,
         "coins": [2000, 7000],
         "keys": [[79, ["gold_bloodred", "gold_brown", "gold_crimson", "gold_black", "gold_purple"]]]
       }
     },
+    "diaryBonus": 1.5,
     "stand": "pyre_stand",
     "standReach": 4,
     "spirit": "shade_heaven",

@@ -283,11 +283,25 @@ function checkBlowpipe({ player, item }) {
   return true;
 }
 
-/** One slot per stack the unload returns that the inventory does not already hold. */
+/** Inventory.add merges only when both the item id and the metadata match. */
+function sameStack(held, item) {
+  return held.getId() === item.getId() &&
+    JSON.stringify(held.getMeta() ?? null) === JSON.stringify(item.getMeta() ?? null);
+}
+
+/**
+ * One slot per returned stack that has no matching stack to merge into. The id alone is not
+ * enough: a preset dart stack shares the id but not the metadata, so returned ordinary darts
+ * still need a slot of their own.
+ */
 function slotsNeeded(inventory, stacks) {
   let needed = 0;
   for (const [itemId, amount] of stacks) {
-    if (amount > 0 && !inventory.contains(itemId)) {
+    if (amount <= 0) {
+      continue;
+    }
+    const item = new core.Item(itemId, amount);
+    if (!inventory.getItems().some((held) => held && sameStack(held, item))) {
       needed++;
     }
   }

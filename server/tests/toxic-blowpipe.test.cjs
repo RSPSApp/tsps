@@ -12,6 +12,7 @@ const { Equipment } = require("../dist/game/model/container/impl/Equipment");
 const { WeaponInterfaces } = require("../dist/game/content/combat/WeaponInterfaces");
 const { PendingHit } = require("../dist/game/content/combat/hit/PendingHit");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
+const { Item } = require("../dist/game/model/Item");
 const ToxicBlowpipe = require("../plugins/items/ToxicBlowpipe.plugin");
 const DestroyItem = require("../plugins/interface/DestroyItem.plugin");
 const { PacketSender } = require("../dist/net/packet/PacketSender");
@@ -117,10 +118,14 @@ function loadedPipe(scales, dartId, dartAmount) {
 }
 
 function fakeInventory(items) {
-  const slots = items.slice();
+  // Real Items, so metadata matching matches ItemContainer.add.
+  const slots = items.map((entry) =>
+    entry && typeof entry.getId === "function" ? entry : entry ? new Item(entry.id, entry.amount ?? 1, entry.meta ?? null) : null,
+  );
   while (slots.length < 28) slots.push(null);
   const removed = [];
   const idOf = (entry) => (entry && (entry.getId ? entry.getId() : entry.id)) ?? -1;
+  const metaOf = (entry) => JSON.stringify((entry && entry.getMeta ? entry.getMeta() : entry?.meta) ?? null);
   return {
     slots,
     removed,
@@ -128,7 +133,7 @@ function fakeInventory(items) {
     getFreeSlots: () => slots.filter((entry) => !entry).length,
     contains: (itemId) => slots.some((entry) => entry && idOf(entry) === itemId),
     getAddableAmount: (item) => {
-      if (slots.some((entry) => entry && idOf(entry) === item.getId())) return item.getAmount();
+      if (slots.some((entry) => entry && idOf(entry) === item.getId() && metaOf(entry) === metaOf(item))) return item.getAmount();
       return slots.some((entry) => !entry) ? item.getAmount() : 0;
     },
     deleteAtSlot: (slot, amount) => {
@@ -136,7 +141,7 @@ function fakeInventory(items) {
       slots[slot] = null;
     },
     add: (item, stack) => {
-      const at = stack ? slots.findIndex((entry) => entry && idOf(entry) === item.getId()) : -1;
+      const at = stack ? slots.findIndex((entry) => entry && idOf(entry) === item.getId() && metaOf(entry) === metaOf(item)) : -1;
       if (at >= 0) {
         slots[at] = { id: item.getId(), amount: (slots[at].amount ?? 1) + item.getAmount() };
         return;
@@ -343,7 +348,7 @@ for (const action of ["Unload", "Uncharge"]) {
     // Unequipping into the last free slot is a widget action, which leaves the prompt open.
     for (let i = 0; i < slotsNeeded; i++) {
       const free = player.inventory.getItems().findIndex((entry) => !entry);
-      player.inventory.getItems()[free] = { id: 21018 + i, amount: 1 };
+      player.inventory.getItems()[free] = new Item(21018 + i, 1);
     }
     assert.equal(player.inventory.getFreeSlots(), 0);
 
@@ -355,3 +360,50 @@ for (const action of ["Unload", "Uncharge"]) {
     assert.equal(player.inventory.contains(ZULRAHS_SCALES), false);
   });
 }
+
+/** A custom-preset stack: the same dart id, but its metadata stops ItemContainer.add merging. */
+function presetDarts(amount) {
+  return new Item(DRAGON_DART, amount, { untradeable: true, unbankable: true, preset: true });
+}
+
+test("Uncharge refuses with preset darts and one free slot, because the two returns cannot merge", () => {
+  const hooks = confirmPlugins();
+  const pipe = loadedPipe(5000, DRAGON_DART, 120);
+  // pipe + 75 preset darts + 25 fillers = 27 slots, one free. contains(DRAGON_DART) is true,
+  // but the returned ordinary darts need their own slot beside the preset stack.
+  const filler = Array.from({ length: 25 }, (_, index) => new Item(1000 + index, 1));
+  const player = confirmPlayer(pipe, [presetDarts(75), ...filler]);
+  assert.equal(player.inventory.getFreeSlots(), 1);
+
+  assert.equal(hooks.actions().Uncharge({ player, item: pipe, slot: 0 }), true);
+  assert.deepEqual(player.messages, ["You don't have enough free inventory space to do that."]);
+  // No prompt was opened, so Yes answers nothing.
+  assert.equal(hooks.pressConfirm(player, 1), false);
+  assert.deepEqual(pipe.state(), { scales: 5000, dartId: DRAGON_DART, dartAmount: 120 }, "nothing leaves the pipe");
+  assert.equal(pipe.getId(), TOXIC_BLOWPIPE_ID);
+  assert.equal(player.inventory.getItems()[1].getAmount(), 75, "the preset stack is untouched");
+  assert.equal(player.inventory.contains(ZULRAHS_SCALES), false);
+});
+
+test("Uncharge re-checks metadata at Yes, so preset darts arriving in the last slot keep the pipe loaded", () => {
+  const hooks = confirmPlugins();
+  const pipe = loadedPipe(5000, DRAGON_DART, 120);
+  // Two free slots for the scales and the darts at open time.
+  const filler = Array.from({ length: 25 }, (_, index) => new Item(1000 + index, 1));
+  const player = confirmPlayer(pipe, filler);
+  assert.equal(player.inventory.getFreeSlots(), 2);
+
+  assert.equal(hooks.actions().Uncharge({ player, item: pipe, slot: 0 }), true);
+  // A preset dart stack lands in one free slot while the prompt is open: the id matches the
+  // darts to return, the metadata does not, so both stacks still need their own slot.
+  const free = player.inventory.getItems().findIndex((entry) => !entry);
+  player.inventory.getItems()[free] = presetDarts(75);
+  assert.equal(player.inventory.getFreeSlots(), 1);
+
+  assert.equal(hooks.pressConfirm(player, 1), true);
+  assert.deepEqual(player.messages, ["You don't have enough free inventory space to do that."]);
+  assert.deepEqual(pipe.state(), { scales: 5000, dartId: DRAGON_DART, dartAmount: 120 }, "nothing leaves the pipe");
+  assert.equal(pipe.getId(), TOXIC_BLOWPIPE_ID);
+  assert.equal(player.inventory.getItems()[free].getAmount(), 75, "the preset stack is untouched");
+  assert.equal(player.inventory.contains(ZULRAHS_SCALES), false);
+});

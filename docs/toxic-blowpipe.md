@@ -75,6 +75,13 @@ widget action that leaves the chatbox mounted), and `Inventory.add` would silent
 stack while the pipe's metadata was cleared. If the darts (or scales) no longer fit, including
 the existing stack's headroom, the same message is sent and the pipe keeps what it holds.
 
+Space is counted the way `Inventory.add` merges stacks: same item id **and** same metadata.
+An existing stack of the returned id only saves a slot when it carries no extras; a custom
+preset's darts (`preset`, `untradeable`, `unbankable` metadata) share the id but not the
+metadata, so the ordinary darts Uncharge returns still need a slot of their own. Counting by
+id alone let the scales take the only free slot and the 120 returned darts then vanish while
+the pipe's metadata was cleared.
+
 ## Validation
 
 `server/tests/toxic-blowpipe.test.cjs` drives the registered handlers: the captured Check
@@ -85,4 +92,7 @@ DestroyItem and ToxicBlowpipe both registered in the manager's order and its sto
 handler dispatch, opening Destroy on another item and then choosing Unload or Uncharge leaves
 that item in the inventory and answers only the pipe's prompt. A second pair fills the
 inventory between opening the pipe's prompt and answering Yes (unequipped gear into the last
-slot): the refusal message is shown and the pipe keeps its scales and darts.
+slot): the refusal message is shown and the pipe keeps its scales and darts. A preset dart
+stack is covered in both positions: already in the inventory with one free slot when Uncharge
+is chosen, and arriving in the last free slot while the prompt is open. Both refuse and leave
+the pipe, the preset stack and the held scales untouched.

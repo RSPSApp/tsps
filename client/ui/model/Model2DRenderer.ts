@@ -717,7 +717,7 @@ export class Model2DRenderer {
                     // ai == 0 means fully transparent face
                     if (ai > 0) {
                         plot(idx, R, G, B, ai);
-                        if (!disableZbuf) zbuf[idx] = effZ - zBias;
+                        if (!disableZbuf && ai === 255) zbuf[idx] = effZ - zBias;
                     }
                 }
             }
@@ -787,7 +787,7 @@ export class Model2DRenderer {
                     const B = (w0 * b0 + w1 * b1 + w2 * b2) | 0;
                     if (ai === 0) continue;
                     plot(idx, R, G, B, ai);
-                    if (!disableZbuf) zbuf[idx] = effZ;
+                    if (!disableZbuf && ai === 255) zbuf[idx] = effZ;
                 }
             }
             triDrawn++;
@@ -940,6 +940,21 @@ export class Model2DRenderer {
             }
 
             while (peekDepth() !== -1000) pop10or11();
+        }
+
+        // A layered player composite needs opaque geometry to establish the depth buffer
+        // before translucent equipment is blended over it. Keep each pass in the existing
+        // depth/layer order so translucent faces still blend back-to-front.
+        if (model.faceRenderLayers && model.faceAlphas) {
+            const opaqueFaces: number[] = [];
+            const translucentFaces: number[] = [];
+            for (const face of drawOrder) {
+                if ((model.faceAlphas[face] & 0xff) === 0) opaqueFaces.push(face);
+                else translucentFaces.push(face);
+            }
+            drawOrder.length = 0;
+            for (const face of opaqueFaces) drawOrder.push(face);
+            for (const face of translucentFaces) drawOrder.push(face);
         }
 
         // Debug dump moved below draw loop to ensure counters are initialized

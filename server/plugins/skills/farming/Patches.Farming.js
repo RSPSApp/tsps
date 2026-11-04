@@ -907,6 +907,7 @@ function itemOnObject(event) {
     } else if (id === Data.itemId("Scarecrow") && patch.type === "FLOWER" && !state.crop && !state.weeds && !state.scarecrow) {
         if (!hasLevel(player, SCARECROW_LEVEL, "scarecrow")) return;
         player.getInventory().deleteNumber(id, 1); state.scarecrow = true;
+        core.PluginManager.emitCustomEvent("farming:scarecrow", { player, patch });
     } else if (id === Data.itemId("Plant pot")) fillPlantPot(player, patch, state, id);
     else player.sendMessage("Nothing interesting happens.");
     syncPatch(player, patch);

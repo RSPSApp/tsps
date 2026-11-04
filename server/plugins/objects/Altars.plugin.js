@@ -112,6 +112,16 @@ function prayAtChaosAltar({ player, objectId, location }) {
   return handled;
 }
 
+/** The Nature Grotto's altar: restores Prayer as altars do, and reports the restored points. */
+function natureAltar({ player }) {
+  const before = player.getSkillManager().getCurrentLevel(Skill.PRAYER);
+  const handled = handlePrayerAltar(player);
+  if (handled && player.getSkillManager().getCurrentLevel(Skill.PRAYER) > before) {
+    api.emitCustomEvent("altar:nature", { player });
+  }
+  return handled;
+}
+
 /** Shrines restore Prayer as altars do; the Woodcutting Guild's full-Prayer line, as captured. */
 function prayAtShrine({ player }) {
   return handlePrayerAltar(player, "You already have full Prayer Points.");
@@ -148,6 +158,7 @@ module.exports = {
     pluginApi.onObjectInteraction("Dark Altar", { Venerate: darkAltar });
     pluginApi.onObjectInteraction("Altar", { "Pray-at": prayerAltar, Pray: prayerAltar });
     pluginApi.onObjectInteraction("Chaos altar", { "Pray-at": prayAtChaosAltar });
+    pluginApi.onObjectInteraction("Altar of nature", { "Pray-at": natureAltar });
     pluginApi.onObjectInteraction("Shrine", { "Pray-at": prayAtShrine });
     pluginApi.onObjectInteraction("Shrine of Ralos", { Bask: prayerAltar });
     pluginApi.onObjectInteraction("Altar of the Occult", {

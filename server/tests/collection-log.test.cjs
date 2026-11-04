@@ -27,6 +27,7 @@ const fakeApi = new Proxy({
   emitCustomEvent: (name, request) => (customEvents.get(name) ?? []).forEach((handler) => handler(request)),
   core: {
     Task: require("../dist/game/task/Task").Task,
+    World: { getProcessCycle: () => 0 },
     CacheDefinitions: require("../dist/game/cache/CacheDefinitions").CacheDefinitions,
     Sound: require("../dist/game/Sound").Sound,
     Sounds,
@@ -43,13 +44,26 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
 });
 
+const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+
 function createPlayer() {
   const log = [];
   const attributes = new Map();
+  const varps = new Map();
   const sender = {
-    sendConfig: (id, value) => { log.push(`varp ${id}=${value}`); return sender; },
-    sendVarbit: (id, value) => { log.push(`varbit ${id}=${value}`); return sender; },
-    getVarbit: () => 0,
+    sendConfig: (id, value) => { varps.set(id, value | 0); log.push(`varp ${id}=${value}`); return sender; },
+    sendVarbit: (id, value) => {
+      const { baseVar, startBit, endBit } = CacheDefinitions.getVarbit(id);
+      const mask = ((1 << (endBit - startBit + 1)) - 1) << startBit;
+      varps.set(baseVar, ((varps.get(baseVar) ?? 0) & ~mask) | ((value << startBit) & mask));
+      log.push(`varbit ${id}=${value}`);
+      return sender;
+    },
+    getVarp: (id) => varps.get(id) ?? 0,
+    getVarbit: (id) => {
+      const { baseVar, startBit, endBit } = CacheDefinitions.getVarbit(id);
+      return (sender.getVarp(baseVar) >> startBit) & ((1 << (endBit - startBit + 1)) - 1);
+    },
     sendInterfaceRemoval: () => sender,
     sendSubInterface: (target, group, type) => { log.push(`open ${target >>> 16}:${target & 0xffff} ${group} ${type}`); return sender; },
     closeSubInterface: (target) => { log.push(`close ${target >>> 16}:${target & 0xffff}`); return sender; },
@@ -218,6 +232,88 @@ test("login sends what is set; ::clog obtains, counts and resets", () => {
   assert.equal(Progress.obtained(player, ZULRAH_SCALES), 0);
   run("clog bronze bar");
   assert.equal(player.log.at(-1), '"bronze bar" is not in the collection log.');
+});
+
+test("the notification preference treats Off as chosen, not unset, and restores it on login", () => {
+  const player = createPlayer();
+  player.setAttribute(Progress.NOTIFY_ATTRIBUTE, 0);
+  Progress.restore({ player });
+  assert.ok(player.log.includes(`varbit ${Progress.NOTIFY_VARBIT}=0`), "Off is sent back, not replaced by the default");
+  player.log.length = 0;
+  sounds.length = 0;
+  assert.equal(Progress.obtain(player, CARPENTERS_BOOTS, 1), true);
+  assert.deepEqual(player.log, ["varp 4848=1"], "Off: no chat message and no popup");
+  assert.deepEqual(sounds, [], "Off: no jingle");
+});
+
+test("chat, popup and both each announce exactly their configured feedback", () => {
+  for (const [setting, message, popup] of [[1, true, false], [2, false, true], [3, true, true]]) {
+    const player = createPlayer();
+    player.setAttribute(Progress.NOTIFY_ATTRIBUTE, setting);
+    sounds.length = 0;
+    Progress.obtain(player, CARPENTERS_BOOTS, 1);
+    assert.equal(player.log.some((line) => line.startsWith("New item added")), message, `chat for ${setting}`);
+    assert.equal(player.log.some((line) => line.startsWith("open 161:13")), popup, `popup for ${setting}`);
+    assert.equal(sounds.length, popup ? 1 : 0, `jingle for ${setting}`);
+  }
+});
+
+test("All Settings rows 85 and 171 toggle the chat and popup bits in varbit 11959", () => {
+  const player = createPlayer();
+  player.setAttribute(Progress.NOTIFY_ATTRIBUTE, 0);
+  player.getPacketSender().sendVarbit(11866, 1); // precise timing, another bit of varp 2856
+  const click = (settingId) => {
+    const request = { player, settingId, handled: false };
+    emit("settings:setting-clicked", request);
+    assert.equal(request.handled, true, `setting ${settingId} is owned by the collection log`);
+    return player.getAttribute(Progress.NOTIFY_ATTRIBUTE);
+  };
+  assert.equal(click(85), 1, "chat on");
+  assert.ok(player.log.includes(`varbit ${Progress.NOTIFY_VARBIT}=1`));
+  assert.equal(click(171), 3, "popup on too");
+  assert.equal(click(85), 2, "chat off, popup on");
+  assert.equal(click(171), 0, "both off");
+  assert.equal(player.getPacketSender().getVarbit(11866), 1, "the other settings in varp 2856 are untouched");
+});
+
+test("one real click's varp transmission and setting click apply once, not twice", () => {
+  const player = createPlayer();
+  player.setAttribute(Progress.NOTIFY_ATTRIBUTE, 3);
+  const transmission = { player, varpId: Progress.NOTIFY_VARP, value: 2 << 16, handled: false };
+  emit("player:varp-transmit", transmission);
+  const clicked = { player, settingId: 85, handled: false };
+  emit("settings:setting-clicked", clicked);
+  assert.equal(transmission.handled, true);
+  assert.equal(clicked.handled, true);
+  assert.equal(player.getAttribute(Progress.NOTIFY_ATTRIBUTE), 2, "not toggled back to 3");
+
+  const player2 = createPlayer();
+  player2.setAttribute(Progress.NOTIFY_ATTRIBUTE, 3);
+  const clickedFirst = { player: player2, settingId: 85, handled: false };
+  emit("settings:setting-clicked", clickedFirst);
+  emit("player:varp-transmit", { player: player2, varpId: Progress.NOTIFY_VARP, value: 2 << 16, handled: false });
+  assert.equal(player2.getAttribute(Progress.NOTIFY_ATTRIBUTE), 2, "either packet order ends on the client's value");
+});
+
+test("a transmitted varp 2856 keeps the notification bits and every unrelated shared bit", () => {
+  const player = createPlayer();
+  const { startBit, endBit } = CacheDefinitions.getVarbit(Progress.NOTIFY_VARBIT);
+  const notifyMask = ((1 << (endBit - startBit + 1)) - 1) << startBit;
+  const unrelated = (1 << 0) | (1 << 31);
+  const value = unrelated | (2 << startBit);
+  const transmission = { player, varpId: Progress.NOTIFY_VARP, value, handled: false };
+  emit("player:varp-transmit", transmission);
+  assert.equal(transmission.handled, true);
+  assert.equal(player.getAttribute(Progress.NOTIFY_ATTRIBUTE), 2, "popup only");
+  assert.ok(player.log.includes(`varp ${Progress.NOTIFY_VARP}=${value}`), "the whole shared varp is kept in step");
+  player.log.length = 0;
+  Progress.restore({ player });
+  assert.ok(player.log.includes(`varbit ${Progress.NOTIFY_VARBIT}=2`));
+  assert.equal(player.getPacketSender().getVarp(Progress.NOTIFY_VARP) & ~notifyMask, unrelated, "unrelated bits survive restore");
+
+  const other = { player, varpId: 1234, value, handled: false };
+  emit("player:varp-transmit", other);
+  assert.equal(other.handled, false, "other varps are left alone");
 });
 
 test("pets report through the event", () => {

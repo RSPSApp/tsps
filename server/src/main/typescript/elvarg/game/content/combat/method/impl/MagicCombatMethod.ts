@@ -96,7 +96,7 @@ export class MagicCombatMethod extends CombatMethod {
         const dx = Math.max(0, to.getX() - from.getX(), from.getX() - (to.getX() + size - 1));
         const dy = Math.max(0, to.getY() - from.getY(), from.getY() - (to.getY() + size - 1));
         const horizontal = Math.max(dx, dy);
-        return CrossFloor.projectileDistanceFrom(horizontal, from.getZ() - to.getZ());
+        return horizontal;
     }
 
     /** Barrages are the only area spells from level 86 (bursts go up to 70). */

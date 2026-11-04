@@ -115,13 +115,14 @@ test('cross-floor combat falls back when a zero-step range route cannot clear pr
   assert.equal(CombatRange.canReach(attacker, ranged, target), true, 'the fallback endpoint has a clear cross-floor shot');
 });
 
-test('projectile travel distance uses 3D Chebyshev distance and leaves same-floor timing unchanged', () => {
+test('projectile travel uses horizontal Chebyshev distance on every floor', () => {
   const { Projectile } = require('../dist/game/model/Projectile');
   const { Location } = require('../dist/game/model/Location');
   assert.equal(Projectile.arrivalCycles(new Location(3200, 3200, 0), new Location(3201, 3200, 0)), 50);
-  assert.equal(Projectile.arrivalCycles(new Location(3200, 3200, 0), new Location(3200, 3200, 1)), 50);
+  assert.equal(Projectile.arrivalCycles(new Location(3200, 3200, 0), new Location(3200, 3200, 1)), 40);
   assert.equal(Projectile.arrivalCycles(new Location(3200, 3200, 0), new Location(3201, 3200, 1)), 50);
   assert.equal(Projectile.arrivalCycles(new Location(3200, 3200, 0), new Location(3202, 3201, 1)), 60);
+  assert.equal(Projectile.arrivalCycles(new Location(3200, 3200, 0), new Location(3200, 3200, 3)), 40);
 });
 
 test('cross-floor ranged and magic hitsplats wait for the slower projectile arrival', t => {

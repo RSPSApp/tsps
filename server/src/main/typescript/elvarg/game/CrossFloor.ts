@@ -17,12 +17,9 @@ export class CrossFloor {
     static distance(a: Location, b: Location): number {
         return Math.max(Math.abs(a.getX() - b.getX()), Math.abs(a.getY() - b.getY()));
     }
-    /** Extend OSRS's 2D Chebyshev distance with the discrete floor delta. */
+    /** Projectile travel follows OSRS's horizontal Chebyshev tile distance on every floor. */
     static projectileDistance(a: Location, b: Location): number {
-        return CrossFloor.projectileDistanceFrom(CrossFloor.distance(a, b), a.getZ() - b.getZ());
-    }
-    static projectileDistanceFrom(horizontal: number, floorDelta: number): number {
-        return Math.max(horizontal, Math.abs(floorDelta));
+        return CrossFloor.distance(a, b);
     }
     static canCross(a: Location, b: Location): boolean {
         return CrossFloor.combatEnabled() && a.getZ() >= 0 && a.getZ() < 4 && b.getZ() >= 0 && b.getZ() < 4;

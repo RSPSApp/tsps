@@ -235,7 +235,7 @@ test("Descent of Darkness: other arrows hit up to 1.3x, at least 5, uncapped", (
   assert.equal(hit.bounds[0].minimumBonus, 0);
 });
 
-test("Dark bow cross-floor hits use finite 3D projectile travel delays", (t) => {
+test("Dark bow cross-floor hits use finite horizontal projectile travel delays", (t) => {
   const { CombatPosition, Location, WeaponProfiles } = core;
   const previous = process.env.CROSS_FLOOR_COMBAT;
   t.after(() => { if (previous === undefined) delete process.env.CROSS_FLOOR_COMBAT; else process.env.CROSS_FLOOR_COMBAT = previous; });
@@ -257,8 +257,8 @@ test("Dark bow cross-floor hits use finite 3D projectile travel delays", (t) => 
   };
   const hits = CombatSpecial.getById("dark_bow").getCombatMethod().hits(attacker, victim);
 
-  assert.equal(CombatPosition.projectileDistance(attacker, victim), 1);
-  assert.deepEqual(hits.map((hit) => hit.getDelay()), [2, 3]);
+  assert.equal(CombatPosition.projectileDistance(attacker, victim), 0);
+  assert.deepEqual(hits.map((hit) => hit.getDelay()), [2, 2]);
 });
 
 test("a dark bow arrow that misses still deals the minimum", () => {

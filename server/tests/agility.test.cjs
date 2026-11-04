@@ -34,12 +34,12 @@ function tick() {
   }
 }
 
-const hooks = { persisted: {}, areas: [], route: [], click: new Map(), logout: [], login: [], teleport: [], events: [], npcs: {}, answers: {}, listeners: {} };
+const hooks = { persisted: {}, areas: [], route: [], click: new Map(), objectActions: new Map(), logout: [], login: [], teleport: [], events: [], npcs: {}, answers: {}, listeners: {} };
 const groundItems = [];
 /** Answers ItemOnGroundManager.ownedBy: the stacks a test has put on the floor. */
 const floorStacks = [];
 const Agility = require("../plugins/skills/Agility.plugin");
-Agility.register({
+const agilityApi = {
   core: PluginManager.getCoreApi(),
   getTaskManager: () => taskManager,
   getItemOnGroundManager: () => ({
@@ -51,6 +51,7 @@ Agility.register({
   persistAttribute: (key, value) => { hooks.persisted[key] = value; },
   onObjectRoute: (handler) => hooks.route.push(handler),
   onObjectFirstClick: (ids, handler) => ids.forEach((id) => hooks.click.set(id, handler)),
+  onObjectInteraction: (name, actions) => hooks.objectActions.set(name, { ...(hooks.objectActions.get(name) ?? {}), ...actions }),
   onCanTeleport: (handler) => hooks.teleport.push(handler),
   registerArea: (area) => hooks.areas.push(area),
   onPlayerLogout: (handler) => hooks.logout.push(handler),
@@ -62,7 +63,7 @@ Agility.register({
     hooks.answers[name]?.(payload);
   },
   log() {},
-});
+};
 
 const { COURSES } = require("../plugins/skills/agility/courses/Courses.Agility");
 const { Anim } = require("../plugins/skills/agility/Constants.Agility");
@@ -139,11 +140,18 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
 
 function gameObject(id, x, y, z, face = 0) {
   const definition = CacheDefinitions.getObject(id);
+  const actions = definition?.actions ?? [];
   return {
     getId: () => id,
     getFace: () => face,
     getLocation: () => new Location(x, y, z),
-    getDefinition: () => ({ getSizeX: () => definition?.sizeX ?? 1, getSizeY: () => definition?.sizeY ?? 1 }),
+    getDefinition: () => ({
+      getName: () => definition?.name,
+      getSizeX: () => definition?.sizeX ?? 1,
+      getSizeY: () => definition?.sizeY ?? 1,
+      getActions: () => actions,
+      getInteractions: () => actions,
+    }),
   };
 }
 
@@ -153,20 +161,26 @@ function tileOf(player) {
 }
 
 /** Routes the player the way the object packet would, clicks, and plays the obstacle out. */
-function operate(player, objectId, objectTile, face = 0) {
+function operate(player, objectId, objectTile, face = 0, clickType = 1) {
   const object = gameObject(objectId, ...objectTile, face);
-  const route = { player, object, objectId, clickType: 1, destination: null };
+  const definition = object.getDefinition();
+  const route = { player, object, definition, objectId, clickType, destination: null };
   hooks.route.forEach((handler) => handler(route));
   if (route.destination) {
     player.setLocation(new Location(route.destination.x, route.destination.y, route.destination.z));
   }
-  const handler = hooks.click.get(objectId);
-  assert.ok(handler, `no click handler for object ${objectId}`);
+  const option = definition.getActions()?.[clickType - 1];
+  const handler = clickType === 1
+    ? hooks.click.get(objectId)
+    : hooks.objectActions.get(definition.getName())?.[option];
+  assert.ok(handler, `no click handler for object ${objectId}, option ${option}`);
   const handled = handler({
     player,
     object,
+    definition,
     objectId,
-    clickType: 1,
+    clickType,
+    option,
     location: { x: objectTile[0], y: objectTile[1], z: objectTile[2] },
     handled: false,
   });
@@ -207,6 +221,7 @@ function runLap(course, player, { beforeLast } = {}) {
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  Agility.register(agilityApi);
 });
 
 /** A loc the cache has: named, or a nameless multiloc (Wyrmscraig's cliff top) drawn as one. */
@@ -415,16 +430,23 @@ test("shortcut audit: current directional Agility gates and captured no-sequence
   ]);
 });
 
-test("Arceuus railings and the Brimhaven demon pipe award their Agility XP on completion", () => {
-  const middle = createPlayer(1627, 3806, 1, 52);
-  operate(middle, 28373, [1628, 3806, 1], 3);
-  assert.deepEqual(tileOf(middle), [1629, 3806, 0]);
-  assert.equal(middle.state.xp, 3);
+test("Arceuus railings use their cached Jump-down option and award Agility XP", () => {
+  for (const [objectId, floor, level, xp] of [[28373, 1, 52, 3], [28374, 2, 62, 4]]) {
+    const actions = CacheDefinitions.getObject(objectId)?.actions ?? [];
+    assert.equal(actions[0], "Inspect", `object ${objectId} keeps its Inspect action first`);
+    const clickType = actions.indexOf("Jump-down") + 1;
+    assert.ok(clickType > 1, `object ${objectId} has a cached Jump-down action`);
 
-  const top = createPlayer(1627, 3806, 2, 62);
-  operate(top, 28373, [1628, 3806, 2], 3);
-  assert.deepEqual(tileOf(top), [1629, 3806, 0]);
-  assert.equal(top.state.xp, 4);
+    const inspect = createPlayer(1627, 3806, floor, level);
+    assert.equal(operate(inspect, objectId, [1628, 3806, floor], 3, actions.indexOf("Inspect") + 1), false);
+    assert.deepEqual(tileOf(inspect), [1627, 3806, floor], "Inspect does not route or jump");
+    assert.equal(inspect.state.xp, 0, "Inspect does not award Agility XP");
+
+    const player = createPlayer(1627, 3806, floor, level);
+    operate(player, objectId, [1628, 3806, floor], 3, clickType);
+    assert.deepEqual(tileOf(player), [1629, 3806, 0]);
+    assert.equal(player.state.xp, xp);
+  }
 
   const demonPipe = createPlayer(2698, 9492, 0, 34);
   operate(demonPipe, 60840, [2698, 9493, 0]);

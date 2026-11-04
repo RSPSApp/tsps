@@ -2,7 +2,7 @@
 
 Yama (https://oldschool.runescape.wiki/w/Yama), solo, built from rsprox captures (https://rsprox.net/database), the OSRS Wiki and the cache. It is one plugin, `server/plugins/bosses/Yama.plugin.js`, with one unit per part in `server/plugins/bosses/yama/` and its data in `plugins/bosses/data/yama.json`.
 
-Open access: OSRS asks for A Kingdom Divided first; tsps doesn't. Duo fights and contracts are not in yet.
+Access requires completion of A Kingdom Divided. The Voice turns away players who have not completed it. This implementation is solo-only; the Wiki also allows a duo, which remains unsupported here.
 
 ## Layout
 

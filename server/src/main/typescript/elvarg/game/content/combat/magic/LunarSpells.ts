@@ -533,7 +533,9 @@ export class LunarSpells {
      * Interface 522's text, as live sends it to script 1179: four `|`-separated sections and the
      * NPC's name; bonuses of 0 are left out of Aggressive Stats (rsprox 3235, 3377, 2224, 4127).
      */
-    private static monsterStats(npc: any): string {
+    public static monsterStats(npc: any, options: {
+        includeMaxHit?: boolean; includeAttackStyle?: boolean; meleeBonusLabel?: string;
+    } = {}): string {
         const definition = npc.getCurrentDefinition();
         const stats: number[] = definition.getStats();
         const style = definition.getAttackStyle() || "crush";
@@ -542,19 +544,22 @@ export class LunarSpells {
         const section = (title: string, lines: string[]) => [heading(title), ...lines].join("<br>");
         const aggressive = [`Attack speed: ${definition.getAttackSpeed()}`];
         const bonus = (label: string, value: number | undefined) => { if (value) aggressive.push(`${label}: ${value}`); };
-        bonus(style === "ranged" || style === "magic" ? "Melee bonus" : `${styleName} bonus`, stats[5]);
+        bonus(options.meleeBonusLabel ?? (style === "ranged" || style === "magic" ? "Melee bonus" : `${styleName} bonus`), stats[5]);
         bonus("Magic bonus", stats[7]);
         bonus("Ranged bonus", stats[9]);
         const attributes = [definition.getSlayerLevel() > 0 ? "- Is a slayer monster." : "- Is not a slayer monster."];
         if (definition.isPoisonImmune()) attributes.push("- Poison Resistance: 100%.");
         const weakness = definition.getElementalWeakness();
         if (weakness) attributes.push(`- ${weakness.percent}% ${ELEMENTS[weakness.type - 1]} weakness.`);
+        const basicStats = [
+            `Combat level: ${definition.getCombatLevel()}`, `Hitpoints: ${npc.getHitpoints()}`,
+            `Attack: ${stats[0]}`, `Defence: ${stats[2]}`, `Strength: ${stats[1]}`, `Magic: ${stats[4]}`,
+            `Ranged: ${stats[3]}`,
+        ];
+        if (options.includeMaxHit !== false) basicStats.push(`Max standard hit: ${definition.getMaxHit()}`);
+        if (options.includeAttackStyle !== false) basicStats.push(`Main attack style: ${styleName}`);
         return [
-            section("Stats", [
-                `Combat level: ${definition.getCombatLevel()}`, `Hitpoints: ${npc.getHitpoints()}`,
-                `Attack: ${stats[0]}`, `Defence: ${stats[2]}`, `Strength: ${stats[1]}`, `Magic: ${stats[4]}`,
-                `Ranged: ${stats[3]}`, `Max standard hit: ${definition.getMaxHit()}`, `Main attack style: ${styleName}`,
-            ]),
+            section("Stats", basicStats),
             section("Aggressive Stats", aggressive),
             section("Defensive Stats", [
                 `Stab: ${stats[10] ?? 0}`, `Slash: ${stats[11] ?? 0}`, `Crush: ${stats[12] ?? 0}`, `Magic: ${stats[13] ?? 0}`,

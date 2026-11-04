@@ -167,4 +167,13 @@ test("Monster Examine sends interface 522 the text live sends script 1179", () =
   });
   castable(() => LunarSpells.handleNpcTarget(player, npc, "Monster Examine"));
   assert.deepEqual(sent, [["mount", 522], ["script", 1179, live.replace("<br>Strength bonus: -21", "")]]);
+
+  const options = { includeMaxHit: false, includeAttackStyle: false, meleeBonusLabel: "Attack bonus" };
+  assert.equal(LunarSpells.monsterStats(npc, options), live.replace("<br>Strength bonus: -21", "")
+    .replace("<br>Max standard hit: 3", "").replace("<br>Main attack style: Crush", ""));
+  const withBonus = { ...npc, getCurrentDefinition: () => ({ ...definition,
+    getStats: () => [35, 30, 25, 1, 1, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  }) };
+  assert.ok(LunarSpells.monsterStats(withBonus, options).includes("<br>Attack bonus: 7"));
+  assert.ok(LunarSpells.monsterStats(withBonus).includes("<br>Crush bonus: 7"), "optional field controls leave the Lunar defaults intact");
 });

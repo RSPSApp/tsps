@@ -591,10 +591,12 @@ export class ClientConnection {
             if (target && LunarSpells.handleNpcTarget(this.player, target, spellName)) {
               continue;
             }
+            const selection = spellName ? CacheDefinitions.getSpellByName(spellName) : undefined;
             NPCOptionPacketListener.castSpell(
               this.player,
               packet.targetIndex,
-              this.resolveClientCombatSpellId(packet.spellWidget, packet.spellChild, packet.spellItemId)
+              this.resolveClientCombatSpellId(packet.spellWidget, packet.spellChild, packet.spellItemId),
+              spellName && selection ? { name: spellName, widgetId: selection.widgetId } : undefined
             );
           }
           continue;

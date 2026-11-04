@@ -20,6 +20,7 @@ const npcHandlers = new Map<string, Function>();
 const cases = [
  ['LostTribe','the_lost_tribe',[0,1,2,3,4,5,6,7,8,9,10,11,12],[0,1,2,3,4,4,5,5,6,8,10,10,11]],
  ['RecruitmentDrive','recruitment_drive',[0,1,2,3,4],[0,1,1,1,2]],
+ ['ShieldOfArrav','shield_of_arrav',[0,1,2,3,4,6,7],[0,1,1,1,1,1,2]],
 ] as const;
 before(async()=>{
  await require(path.join(server,'dist/game/cache/CachePipeline')).CachePipeline.initialize(server);
@@ -144,6 +145,26 @@ test('Lost Tribe side progress and direct side publication preserve native phase
  action('npc-dialogue:line',{player:f.player,npcId:815,text:line[1]});
  check(q,f,9,9);assert.equal(f.sender.getVarp(465)&(1<<30),1<<30);
  q.setStage(f.player,11);action('player:bootstrap-complete',{player:f.player});check(q,f,11,10);
+});
+test('Shield canonical header binding preserves Phoenix/Black Arm world progress through login/bootstrap',t=>{
+ const q=quest('shield_of_arrav');assert.equal(q.varbitId,13716,'header must read the same selector as native4029');
+ const login=logins.at(-1)!;assert.equal(login.name,'handleLogin');
+ for(const[gang,stage,phoenix,blackarm]of [[1,4,9,0],[2,4,2,3],[1,7,10,0],[2,7,2,4]]){
+  const f=fixture(t,{'shield-of-arrav.gang':gang});f.sender.sendVarbit(13715,9);
+  q.setStage(f.player,stage);
+  const expected=stage>=7?2:1;
+  for(const replay of [()=>{},()=>login({player:f.player}),()=>Q.sendQuestVarps({player:f.player}),()=>action('player:bootstrap-complete',{player:f.player})]){
+   replay();check(q,f,stage,expected);
+   assert.equal(f.sender.getVarp(145),phoenix,'Phoenix world/morph state stays separate');
+   assert.equal(f.sender.getVarp(146),blackarm,'Black Arm world/morph state stays separate');
+   assert.equal(f.sender.getVarbit(13715),9,'Shield state preserves Creature sibling');
+   const boundValue=q.varbitId===undefined?f.sender.getVarp(q.varpId):f.sender.getVarbit(q.varbitId);
+   const headerComplete=boundValue>=Number(questMetadata(q,C).endstate[0]);
+   assert.equal(headerComplete,stage>=7,'registration binding must agree with native4029');
+   assert.equal(f.player.getAttribute('shield-of-arrav.gang'),gang);
+   assert.equal(f.player.getAttribute('quest.points'),undefined,'state replay cannot grant rewards');
+  }
+ }
 });
 test('optional external evidence export contains only native state, no account data',()=>{
  if(process.env.NATIVE_STATE_CASES_OUT) fs.writeFileSync(process.env.NATIVE_STATE_CASES_OUT,JSON.stringify(exported,null,2));

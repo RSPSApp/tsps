@@ -476,6 +476,11 @@ function flatten(steps, opts = {}) {
     if (opts.stopped) break;
     const step = steps[position];
     if (step.type === "jump") {
+      // A "below" marker followed by a menu already has its continuation in
+      // the queue. Guessing another option here replays earlier branches (Jorral's
+      // contact explanations) instead of reaching that menu. Explicit targets win.
+      if (!Array.isArray(step.steps) && /^below/i.test(String(step.reference ?? ""))
+        && steps[position + 1]?.type === "choice") continue;
       // Some wiki exports inline the target body on a "continue" jump instead
       // of storing it in the page-level jump table. Prefer that body so nested
       // quest branches do not stop at the jump marker.

@@ -21,6 +21,7 @@ const T = FairyRings._test;
 const DRAMEN_STAFF = 772;
 const LIT_CANDLE = 33;
 let core;
+let canAttackHook;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -29,8 +30,23 @@ before(async () => {
   TeleportHandler.checkReqs = (player) => !(player.getInterfaceId() > 0);
   FairyRings.register({
     core, persistAttribute() {}, onObjectInteraction() {}, onInterfaceActionClick() {},
-    onCustomEvent() {}, emitCustomEvent() {}, onPlayerLogin() {}, log() {},
+    onCustomEvent() {}, emitCustomEvent() {}, onPlayerLogin() {}, onCanAttack: handler => { canAttackHook = handler; }, log() {},
   });
+});
+
+test('Gorak-plane fairy ring centre protects its occupant from NPC attacks', () => {
+  const gorakRing = T.rings().get('DIR');
+  assert.ok(gorakRing?.destination, 'DIR resolves to the Gorak-plane fairy ring');
+  const target = { isPlayer: () => true, getLocation: () => gorakRing.destination };
+  const attacker = { isNpc: () => true };
+  const centre = { attacker, target, allow: null };
+  canAttackHook(centre);
+  assert.equal(centre.allow, false);
+
+  const adjacent = new Location(gorakRing.destination.getX() + 1, gorakRing.destination.getY(), gorakRing.destination.getZ());
+  const outside = { attacker, target: { ...target, getLocation: () => adjacent }, allow: null };
+  canAttackHook(outside);
+  assert.equal(outside.allow, null, 'the protection applies only on the ring tile');
 });
 
 /** A player recording, per tick, what the server sends. */

@@ -284,7 +284,7 @@ test("real Bounty Hunter deaths return humans to the lobby and honour Skully's l
     PluginManager.emitPlayerBeforeDeath({ player: victim, killer, handled: false });
     if (killer) victim.getCombat().addDamage(killer, 10);
     const task = new PlayerDeathTask(victim);
-    task.execute(); task.execute(); task.execute();
+    for (let tick = 0; tick < 5; tick++) task.execute();
   }
   function chestValues(t, player) {
     const scripts = [];

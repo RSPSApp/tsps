@@ -147,12 +147,12 @@ function uncharge({ player, item }) {
   }
   const inventory = player.getInventory();
   const runeId = ids().BLOOD_RUNE;
-  const needed = inventory.contains(runeId) ? 0 : 1;
-  if (inventory.getFreeSlots() < needed) {
+  const refund = new Item(runeId, charges * BLOOD_RUNES_PER_CHARGE);
+  if (inventory.getAddableAmount(refund) < refund.getAmount()) {
     player.sendMessage("Your inventory is too full to hold the blood runes.");
     return true;
   }
-  inventory.addItem(new Item(runeId, charges * BLOOD_RUNES_PER_CHARGE));
+  inventory.addItem(refund);
   setCharges(player, item, 0);
   player.sendMessage(
     `You uncharge your Sanguinesti staff, regaining ${(charges * BLOOD_RUNES_PER_CHARGE).toLocaleString()} blood runes.`

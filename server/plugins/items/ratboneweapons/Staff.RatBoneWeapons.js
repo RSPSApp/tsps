@@ -149,11 +149,12 @@ function uncharge({ player, item }) {
   }
   const inventory = player.getInventory();
   const runeId = core.ItemIdentifiers.CHAOS_RUNE;
-  if (!inventory.contains(runeId) && inventory.getFreeSlots() < 1) {
+  const refund = new core.Item(runeId, charges);
+  if (inventory.getAddableAmount(refund) < charges) {
     player.sendMessage("Your inventory is too full to hold the chaos runes.");
     return true;
   }
-  inventory.addItem(new core.Item(runeId, charges));
+  inventory.addItem(refund);
   setCharges(item, 0);
   inventory.refreshItems();
   const { DialogueChainBuilder, ItemStatementDialogue } = core;

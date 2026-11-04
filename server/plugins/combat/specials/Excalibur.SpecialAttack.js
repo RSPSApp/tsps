@@ -1,7 +1,8 @@
 module.exports = function registerExcaliburSpecialAttack(api) {
-  const { CombatMethod, CombatSpecial, CombatType, ItemIdentifiers, Skill, Sound, Sounds } = api.core;
+  const { Animation, CombatMethod, CombatSpecial, CombatType, ItemIdentifiers, Skill, Sound, Sounds } = api.core;
 
   const DRAIN = 100;
+  const ANIMATION = new Animation(1057); // SANCTUARY
   const DEFENCE_BOOST = 8;
 
   // Sanctuary is an instant utility special: +8 Defence, no attack roll.
@@ -20,6 +21,7 @@ module.exports = function registerExcaliburSpecialAttack(api) {
         return;
       }
       const skillManager = character.getAsPlayer().getSkillManager();
+      character.performAnimation(ANIMATION);
       // Sanctuary's own sound (Wiki: Sanctuary.wav; rsprox gameval `sanctuary`).
       Sounds.sendSound(character, Sound.EXCALIBUR_SPECIAL);
       const current = skillManager.getCurrentLevel(Skill.DEFENCE);

@@ -3,7 +3,7 @@ module.exports = function registerVoidwakerSpecialAttack(api) {
   const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Sound, Sounds } = api.core;
 
   const DRAIN = 50;
-  const SPECIAL_ANIMATION = new Animation(11240);
+  const SPECIAL_ANIMATION = new Animation(11275); // HUMAN_SPECIAL02_VOIDWAKER (rsprox 1094/1095/1433)
   const SPECIAL_VFX = new Graphic(2834);
   const IMPACT_GRAPHIC = new Graphic(2363);
 

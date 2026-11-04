@@ -144,8 +144,8 @@ function getAmmoName(dartId) {
   return new core.Item(dartId).getDefinition()?.getName?.()?.toLowerCase?.() ?? "darts";
 }
 
-function canAddStack(inventory, itemId) {
-  return inventory.getFreeSlots() > 0 || inventory.contains(itemId);
+function canReturnDarts(inventory, itemId, amount) {
+  return inventory.getAddableAmount(new core.Item(itemId, amount)) >= amount;
 }
 
 function getItemContainer(player, item, preferredSlot = -1) {
@@ -229,7 +229,7 @@ function chargeDarts(player, blowpipeItem, blowpipeSlot, dartItem) {
     return;
   }
 
-  if (currentAmount > 0 && currentId !== dartId && !canAddStack(player.getInventory(), currentId)) {
+  if (currentAmount > 0 && currentId !== dartId && !canReturnDarts(player.getInventory(), currentId, currentAmount)) {
     player.sendMessage("You need more inventory space to swap the loaded darts.");
     return;
   }
@@ -490,9 +490,14 @@ function combatMethod(special) {
         player.getCombat().reset();
         return;
       }
-      const animation = character.getAttackAnim();
-      if (animation !== -1) {
-        character.performAnimation(new core.Animation(animation));
+      if (this.special) {
+        // TOXIC_BLOWPIPE_SPECIAL_UPDATED; the ordinary attack keeps the style's 5061.
+        character.performAnimation(new core.Animation(876));
+      } else {
+        const animation = character.getAttackAnim();
+        if (animation !== -1) {
+          character.performAnimation(new core.Animation(animation));
+        }
       }
       core.Projectile.createProjectile(character, target, ammo.getProjectileId(), 40, 60, 40, 35)
         .sendProjectile();

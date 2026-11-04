@@ -46,17 +46,22 @@ assert.equal(raw[1], 0, "a real stat change asks 1004 for its normal path");
 assert.deepEqual(raw.slice(2, 12), Area.FAKE_DROP_RENDER_ARGS,
     "the server's fake-drop arguments match the cache listener");
 
-// Queue one drop and render it through the same call the server makes.
+// Queue both skills a three-damage hit awards and render once, as the server now does. With
+// Group XP drops on, the client puts both icons on the same counter rather than two counters.
 const xps = [0, 2, 4, 6, 1, 3, 5, 16, 15, 17, 12, 20, 14, 13, 10, 7, 11, 8, 9, 18, 19, 22, 21, 23]
     .map(() => 1_000_000);
 vars.setVarbit(4702, 1); // the Show/Hide XP drops toggle
+vars.setVarbit(4696, 1); // Group skills
 vars.setVarcInt(70, 0);
 vars.setVarcInt(71, 0);
 vars.setVarcInt(76, Date.now() | 0);
-vm.run(scripts.load(2091)!, [5, 40], []);
+vm.run(scripts.load(2091)!, [3, 4], []);
+vm.run(scripts.load(2091)!, [2, 12], []);
 vm.run(scripts.load(1004)!, [1, ...Area.FAKE_DROP_RENDER_ARGS, ...xps], []);
 
 const layer: any = manager.getWidgetByUid((122 << 16) | 18);
-assert.ok(layer.children?.length > 0, "the fake drop creates its counter");
+assert.equal(layer.children?.filter(Boolean).length, 2, "both skills share one grouped counter");
+assert.equal((manager.getWidgetByUid((122 << 16) | 19) as any).children, undefined,
+    "the batch does not spill into a second counter");
 
 console.log("xp drops fake test passed");

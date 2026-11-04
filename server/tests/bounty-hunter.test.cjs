@@ -144,7 +144,7 @@ test("skulled skips older than 30 minutes no longer count", () => {
   assert.equal(skipOutcome([now - SKIP_WINDOW_MS + 1, now - 1], now, true).blocks, true);
 });
 
-test("combat XP blocked in the arena still sends fake XP drops", () => {
+test("combat XP blocked in the arena still sends fake XP drops", async () => {
   const { Skill } = require("../dist/game/model/Skill");
   const { GameConstants } = require("../dist/game/GameConstants");
   const Area = require("../plugins/minigames/bountyhunter/Area.BountyHunter");
@@ -185,13 +185,19 @@ test("combat XP blocked in the arena still sends fake XP drops", () => {
   };
   state.arena.add(player);
 
-  const event = { player, skill: Skill.STRENGTH, experience: 4, allow: null };
-  Area._test.noPvpCombatExperience(event);
-  assert.equal(event.allow, false, "the real XP stays blocked");
-  assert.equal(sent.length, 2, "one queue script and one render script");
-  assert.deepEqual(sent[0], [2091, Skill.STRENGTH.getClientId(), 4]);
+  // A three-damage Strength hit awards Hitpoints and Strength in one synchronous batch.
+  const hpEvent = { player, skill: Skill.HITPOINTS, experience: 4, allow: null };
+  const strengthEvent = { player, skill: Skill.STRENGTH, experience: 12, allow: null };
+  Area._test.noPvpCombatExperience(hpEvent);
+  Area._test.noPvpCombatExperience(strengthEvent);
+  assert.deepEqual([hpEvent.allow, strengthEvent.allow], [false, false], "the real XP stays blocked");
+  assert.equal(sent.length, 2, "both skills queue before the render");
+  await Promise.resolve();
+  assert.equal(sent.length, 3, "one render drains the whole batch");
+  assert.deepEqual(sent[0], [2091, Skill.HITPOINTS.getClientId(), 4]);
+  assert.deepEqual(sent[1], [2091, Skill.STRENGTH.getClientId(), 12]);
 
-  const render = sent[1];
+  const render = sent[2];
   assert.equal(render[0], 1004);
   assert.equal(render[1], 1, "the fake-drop mode");
   assert.deepEqual(render.slice(2, 12), Area._test.FAKE_DROP_RENDER_ARGS);
@@ -200,17 +206,20 @@ test("combat XP blocked in the arena still sends fake XP drops", () => {
 
   sent.length = 0;
   fakeDropsOff.value = 1;
-  Area._test.noPvpCombatExperience({ ...event, allow: null });
+  Area._test.noPvpCombatExperience({ ...strengthEvent, allow: null });
+  await Promise.resolve();
   assert.deepEqual(sent, [], "Fake drops: Off sends nothing");
   fakeDropsOff.value = 0;
 
   attributes.delete("xp-drops:enabled");
-  Area._test.noPvpCombatExperience({ ...event, allow: null });
+  Area._test.noPvpCombatExperience({ ...strengthEvent, allow: null });
+  await Promise.resolve();
   assert.deepEqual(sent, [], "a hidden XP counter sends nothing");
 
   attributes.set("xp-drops:enabled", true);
   state.arena.delete(player);
-  Area._test.noPvpCombatExperience({ ...event, allow: null });
+  Area._test.noPvpCombatExperience({ ...strengthEvent, allow: null });
+  await Promise.resolve();
   assert.deepEqual(sent, [], "XP outside the arena is not faked");
 });
 

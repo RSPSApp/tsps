@@ -265,6 +265,8 @@ function disableProtectionPrayers(event) {
 
 /** Client skill id -> the server's Skill, built once (Construction and Hunter swap ids). */
 let skillsByClientId = null;
+/** Players whose queued fake drops are waiting for the end of the current XP batch. */
+const pendingFakeDrops = new Set();
 
 function skillForClientId(clientId) {
   if (!skillsByClientId) {
@@ -274,9 +276,11 @@ function skillForClientId(clientId) {
 }
 
 /**
- * A blocked hit still shows what it would have paid. Script 2091 queues the drop and script
- * 1004 renders it; 1004 asks the interface's own listener for every skill's XP baseline, so
- * the server sends the same table the cache would (https://oldschool.runescape.wiki/w/Bounty_Hunter#Fighting).
+ * A blocked hit still shows what it would have paid. Each skill is queued with script 2091;
+ * the render (script 1004) waits for a microtask so every skill the same hit awards is in the
+ * queue together, letting the client's Group XP drops setting combine them into one counter.
+ * 1004 asks the interface's own listener for every skill's XP baseline, so the server sends the
+ * same table the cache would (https://oldschool.runescape.wiki/w/Bounty_Hunter#Fighting).
  */
 function showFakeExperienceDrop(player, skill, experience) {
   if (player.getAttribute(core.XPDROPS_ENABLED_ATTRIBUTE) !== true) return;
@@ -284,12 +288,22 @@ function showFakeExperienceDrop(player, skill, experience) {
   if (sender.getVarbit(FAKE_DROPS_OFF_VARBIT) !== 0) return;
   const amount = Math.floor(experience * (core.GameConstants?.EXPERIENCE_MULTIPLIER ?? 1));
   if (amount <= 0) return;
+  sender.sendClientScript(FAKE_DROP_SCRIPT, skill.getClientId(), amount);
+  // addExperience calls for one hit are synchronous, so the microtask runs after the last one.
+  if (pendingFakeDrops.has(player)) return;
+  pendingFakeDrops.add(player);
+  queueMicrotask(() => {
+    pendingFakeDrops.delete(player);
+    renderFakeDrops(player);
+  });
+}
+
+function renderFakeDrops(player) {
   const xps = XP_DROPS_SKILL_ORDER.map((clientId) => {
     const ordered = skillForClientId(clientId);
     return ordered ? player.getSkillManager().getExperience(ordered) : 0;
   });
-  sender
-    .sendClientScript(FAKE_DROP_SCRIPT, skill.getClientId(), amount)
+  player.getPacketSender()
     .sendClientScript(FAKE_DROP_RENDER_SCRIPT, 1, ...FAKE_DROP_RENDER_ARGS, ...xps);
 }
 

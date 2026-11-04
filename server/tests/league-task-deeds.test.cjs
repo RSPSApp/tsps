@@ -955,14 +955,17 @@ for (const row of [
   {name:"omitted log",draw:0.199999,logs:0,progress:0},
 ]) {
   test("native felling yield and league production: "+row.name, async t => {
-    const f=pactsCharacter(t,[3222,3218,0]),ids=core.ItemIdentifiers,skill=core.Skill.WOODCUTTING;
+    // Demonic Pacts starts in Varlamore; Lumbridge is locked Misthalin in this league.
+    const at=[1666,3136,0],f=pactsCharacter(t,at),ids=core.ItemIdentifiers,skill=core.Skill.WOODCUTTING;
+    const position=()=>[f.player.getLocation().getX(),f.player.getLocation().getY(),f.player.getLocation().getZ()];
+    assert.deepEqual(position(),at,"the native fixture must actually remain in its permitted area: "+JSON.stringify(f.messages));
     const skills=f.player.getSkillManager();
     skills.setMaxLevel(skill,99);
     skills.setCurrentLevel(skill,99);
     f.player.getInventory().add(new core.Item(ids.RUNE_FELLING_AXE),true);
     f.player.getInventory().add(new core.Item(ids.FORESTERS_RATION,2),true);
-    core.RegionManager.loadMapFiles(3222,3218);
-    const tree=new core.GameObject(core.ObjectIdentifiers.YEW_TREE,new core.Location(3223,3218,0),10,0,null);
+    core.RegionManager.loadMapFiles(at[0],at[1]);
+    const tree=new core.GameObject(core.ObjectIdentifiers.YEW_TREE,new core.Location(at[0]+1,at[1],at[2]),10,0,null);
     core.ObjectManager.register(tree,true);
     t.after(()=>core.ObjectManager.deregister(tree,true));
     let observing=true,petRolls=0;
@@ -981,10 +984,16 @@ for (const row of [
       if(stack.includes("fellingChop")) return row.draw;
       return 0;
     });
-    await f.connection.dispatch([{type:"object_option",id:tree.getId(),x:3223,y:3218,action:"Chop down"}]);
+    const definition=core.ObjectDefinition.forPlayer(tree.getId(),f.player);
+    assert.ok(definition,"the actual per-player Yew definition must be present");
+    assert.equal(definition.getName(),"Yew tree");
+    assert.ok(definition.getActions()?.includes("Chop down"),"the actual Yew definition must expose the native action");
+    assert.deepEqual(position(),at,"the actor must still be adjacent before native dispatch");
+    await f.connection.dispatch([{type:"object_option",id:tree.getId(),x:at[0]+1,y:at[1],action:"Chop down"}]);
     f.connection.processTurnPackets();
     // Stop observation at the first actual successful action; no synthetic stop/success hook.
     for(let i=0;i<32&&actions.length===0;i++) await ticks(f,1);
+    assert.equal(actions.length,1,"one actual Yew chop must complete before yield assertions: "+JSON.stringify({position:position(),messages:f.messages,xp,actions}));
 
     const floor=core.World.getItems().filter(g=>g.getItem().getId()===ids.YEW_LOGS&&g.getOwner()===f.player.getUsername());
     t.after(()=>{for(const g of floor)core.ItemOnGroundManager.deregister(g);});

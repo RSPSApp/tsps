@@ -135,6 +135,10 @@ export class Bank extends ItemContainer {
     public static readonly PLACEHOLDER_CHILD = 40; // bankmain:placeholder
     public static readonly DEPOSIT_INVENTORY_CHILD = 47; // bankmain:depositinv
     public static readonly DEPOSIT_WORN_CHILD = 49; // bankmain:depositworn
+    /** bankmain:incinerator_target (0x36), a drop target that destroys the dragged bank stack. */
+    public static readonly INCINERATOR_CHILD = 54;
+    /** `{ player, item, tab, slot, handled }`: a bank stack dropped on the incinerator. */
+    public static readonly INCINERATE_EVENT = "bank:incinerate";
     /** Drops on the empty space after tab N's items report item-grid slot 1428 + N. */
     public static readonly TAB_DROP_SLOT_OFFSET = 1410 + 9 * 2;
     /**
@@ -584,6 +588,13 @@ export class Bank extends ItemContainer {
         }
         if (tab !== undefined && (tab < 0 || tab > 9)) return true;
 
+        if (targetGroup === Bank.MAIN_INTERFACE_ID && targetChild === Bank.INCINERATOR_CHILD) {
+            // The incinerator destroys bank stacks only. A dragged inventory item must not fall
+            // through to the deposit branch and disappear into the bank instead.
+            if (fromBank) Bank.incinerateDragged(player, drag.sourceSlot, drag.sourceItemId);
+            return true;
+        }
+
         if (fromInventory && targetGroup === Bank.SIDE_INTERFACE_ID && targetChild === Bank.SIDE_ITEMS_CHILD) {
             player.getInventory().swap(drag.sourceSlot, drag.targetSlot).refreshItems();
         } else if (fromInventory && targetGroup === Bank.MAIN_INTERFACE_ID) {
@@ -595,6 +606,30 @@ export class Bank extends ItemContainer {
         }
         GameConstants.PLAYER_PERSISTENCE.requestSave(player, "container-reorder");
         return true;
+    }
+
+    /** Publishes the bank stack a drag released on the incinerator for the destroy confirmation. */
+    private static incinerateDragged(player: Player, clientSlot: number, itemId: number): void {
+        let entry: { tab: number; slot: number; item: Item } | undefined;
+        if (player.isSearchingBank()) {
+            // Search results are their own display list, not the bank layout: find the actual
+            // stack whose identity the displayed result cloned. Aggregated/ambiguous results
+            // stay unresolved rather than guessing a slot.
+            const searched = player.getBank(Bank.BANK_SEARCH_TAB_INDEX).getItems()[clientSlot];
+            if (!searched || searched.getId() !== itemId || searched.getAmount() <= 0) return;
+            entry = Bank.layout(player).find(({ item }) => item.equals(searched));
+        } else {
+            entry = Bank.resolveDisplaySlot(player, clientSlot) ?? undefined;
+            if (!entry || Bank.displayItemId(entry.item) !== itemId || entry.item.getAmount() <= 0) return;
+        }
+        if (!entry) return;
+        getPluginManager().emitCustomEvent(Bank.INCINERATE_EVENT, {
+            player,
+            item: entry.item,
+            tab: entry.tab,
+            slot: entry.slot,
+            handled: false,
+        });
     }
 
     /** The slot after `bank`'s last item, where a moved item joins the tab; -1 if full. */

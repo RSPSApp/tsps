@@ -558,8 +558,13 @@ async function nativeDestroyConfirmation() {
     require(serverRoot + '/plugins/interface/DestroyItem.plugin').register(PluginManager.createApi('destroy-keyboard-test'));
     const connection = new ClientConnection(channel); connection.player = player;
     const outgoing: any[] = [];
+    const { state } = require('../network/serverConnection/state');
+    const { sendWidgetDrag } = require('../network/serverConnection/outgoing/bank');
+    const previousSocket = state.socket;
     (globalThis as any).WebSocket ??= { OPEN: 1 };
-    setPacketSocket({ readyState: 1, send: (frame: Uint8Array) => outgoing.push(decodeClientPacket(Buffer.from(frame))) } as any);
+    const socket = { readyState: 1, send: (frame: Uint8Array) => outgoing.push(decodeClientPacket(Buffer.from(frame))) } as any;
+    state.socket = socket;
+    setPacketSocket(socket);
     const open = () => {
         player.getInventory().setItem(0, new core.Item(11941, 1));
         DropItemPacketListener.drop(player, 11941, core.Inventory.INTERFACE_ID, 0);
@@ -605,7 +610,175 @@ async function nativeDestroyConfirmation() {
         open(); player.getPacketSender().sendInterfaceRemoval();
         await connection.dispatch([{ type: 'dialogue_continue', widgetId: 584 << 16, childIndex: 1 }]); connection.processTurnPackets();
         assert.equal(player.getInventory().getAmount(11941), 1, 'a closed or replaced chat interface invalidates confirmation');
+
+        // Bank incinerator: the cache's bankmain:incinerator_target is a drop target for the
+        // stack under the cursor. Confirming destroys that bank stack; cancelling keeps it.
+        const { PlayerSave } = require(serverModules + '/game/entity/impl/player/persistence/PlayerSave');
+        const bankItems = (core.Bank.MAIN_INTERFACE_ID << 16) | core.Bank.ITEMS_CHILD;
+        const bankIncinerator = (core.Bank.MAIN_INTERFACE_ID << 16) | core.Bank.INCINERATOR_CHILD;
+        const bankSaves: Array<{ save: any; coinsAtEvent: number }> = [];
+        PluginManager.createApi('bank-incinerate-save-test').onCustomEvent('persistence:save', (event) => {
+            if (event.player !== player || event.reason !== 'bank-incinerate') return;
+            bankSaves.push({ save: PlayerSave.fromPlayer(player), coinsAtEvent: player.getBank(0).getAmount(995) });
+        });
+        const openScene = (currentTab: number, fill: () => void) => {
+            if (player.getInterfaceId() >= 0 || player.getPacketSender().isChatboxInterface(584)) {
+                player.getPacketSender().sendInterfaceRemoval();
+            }
+            for (let tab = 0; tab < core.Bank.TOTAL_BANK_TABS; tab++) player.getBank(tab).resetItems();
+            fill();
+            player.setCurrentBankTab(currentTab);
+            player.getBank(currentTab).open();
+            assert.equal(player.getInterfaceId(), core.Bank.MAIN_INTERFACE_ID);
+            assert.equal(player.getStatus(), core.PlayerStatus.BANKING);
+        };
+        // Send the actual IF_BUTTOND the client emits when the stack is released on the icon.
+        const dragOntoIncinerator = async (sourceSlot: number, itemId: number) => {
+            sendWidgetDrag(bankItems, sourceSlot, itemId, bankIncinerator, -1, -1);
+            flushPackets();
+            await connection.dispatch(outgoing.splice(0));
+            connection.processTurnPackets();
+        };
+        const openBankIncinerator = async (sourceSlot: number, itemId: number) => {
+            await dragOntoIncinerator(sourceSlot, itemId);
+            assert.equal(player.getPacketSender().isChatboxInterface(584), true);
+            assert.equal(wm.getWidgetByUid((584 << 16) | 5).itemId, itemId);
+        };
+
+        // Whole stack + neighbouring stack + a save snapshot taken after the mutation.
+        openScene(0, () => {
+            player.getBank(0).add(new core.Item(995, 5), false);
+            player.getBank(0).add(new core.Item(556, 2), false);
+        });
+        await openBankIncinerator(0, 995); key('1'); await resume(1);
+        assert.equal(player.getBank(0).getAmount(995), 0, 'the whole bank stack is destroyed');
+        assert.equal(player.getBank(0).getAmount(556), 2, 'the neighbouring stack is untouched');
+        assert.equal(bankSaves.length, 1, 'the confirmed mutation requests a durable save');
+        assert.equal(bankSaves[0].coinsAtEvent, 0, 'the save request follows the bank mutation');
+        const reloaded = new Player(null);
+        bankSaves[0].save.applyToPlayer(reloaded);
+        assert.equal(reloaded.getBank(0).getAmount(995), 0, 'the saved snapshot has the stack removed');
+        assert.equal(reloaded.getBank(0).getAmount(556), 2);
+        assert.equal(player.getInterfaceId(), core.Bank.MAIN_INTERFACE_ID, 'confirming keeps the bank open');
+        assert.equal(player.getStatus(), core.PlayerStatus.BANKING);
+
+        // Cancellation leaves the stack, its neighbour and persistence alone.
+        openScene(0, () => {
+            player.getBank(0).add(new core.Item(995, 5), false);
+            player.getBank(0).add(new core.Item(556, 2), false);
+        });
+        await openBankIncinerator(0, 995); key('2'); await resume(0);
+        assert.equal(player.getBank(0).getAmount(995), 5, 'cancelling leaves the bank stack');
+        assert.equal(player.getBank(0).getAmount(556), 2);
+        assert.equal(bankSaves.length, 1, 'cancelling does not request a save');
+        assert.equal(player.getInterfaceId(), core.Bank.MAIN_INTERFACE_ID, 'cancelling keeps the bank open');
+        assert.equal(player.getStatus(), core.PlayerStatus.BANKING);
+
+        // A changed amount invalidates the prompt.
+        openScene(0, () => player.getBank(0).add(new core.Item(995, 5), false));
+        await openBankIncinerator(0, 995);
+        player.getBank(0).getItems()[0].setAmount(4);
+        key('1'); await resume(1);
+        assert.equal(player.getBank(0).getAmount(995), 4, 'an amount change cannot destroy the stack');
+        assert.equal(bankSaves.length, 1, 'a stale prompt does not request a save');
+
+        // Reordering after the prompt cannot destroy the neighbour now in the original slot.
+        openScene(0, () => {
+            player.getBank(0).add(new core.Item(995, 5), false);
+            player.getBank(0).add(new core.Item(556, 2), false);
+        });
+        await openBankIncinerator(0, 995);
+        player.getBank(0).swap(0, 1);
+        key('1'); await resume(1);
+        assert.equal(player.getBank(0).getAmount(995), 5, 'the reordered source stack remains');
+        assert.equal(player.getBank(0).getAmount(556), 2, 'the new occupant of the old slot remains');
+        assert.equal(bankSaves.length, 1, 'a reordered prompt does not request a save');
+
+        // A nested metadata change invalidates the prompt.
+        openScene(0, () => player.getBank(0).add(new core.Item(11907, 1, { charges: 5, state: { used: 0 } }), false));
+        await openBankIncinerator(0, 11907);
+        player.getBank(0).getItems()[0].getMeta().state.used = 1;
+        key('1'); await resume(1);
+        assert.equal(player.getBank(0).getAmount(11907), 1, 'a nested metadata change cannot destroy the stack');
+        assert.deepEqual(player.getBank(0).getItems()[0].getMeta(), { charges: 5, state: { used: 1 } });
+        assert.equal(bankSaves.length, 1, 'a stale metadata prompt does not request a save');
+
+        // A bank item in a nonzero tab resolves through the actual display slot.
+        openScene(2, () => {
+            player.getBank(1).add(new core.Item(995, 4), false);
+            player.getBank(2).add(new core.Item(556, 3), false);
+        });
+        await openBankIncinerator(1, 556);
+        key('1'); await resume(1);
+        assert.equal(player.getBank(2).getAmount(556), 0, 'the nonzero-tab stack is destroyed');
+        assert.equal(player.getBank(1).getAmount(995), 4);
+        assert.equal(bankSaves.length, 2);
+
+        // The all-items view maps its later slots back to the main tab.
+        openScene(0, () => {
+            player.getBank(1).add(new core.Item(556, 2), false);
+            player.getBank(0).add(new core.Item(995, 5), false);
+        });
+        await openBankIncinerator(1, 995);
+        key('1'); await resume(1);
+        assert.equal(player.getBank(0).getAmount(995), 0, 'the all-items stack is destroyed');
+        assert.equal(player.getBank(1).getAmount(556), 2);
+        assert.equal(bankSaves.length, 3);
+
+        // Search results are a separate display list; the matching bank stack is resolved.
+        openScene(0, () => {
+            player.getBank(1).add(new core.Item(556, 2), false);
+            player.getBank(0).add(new core.Item(995, 5), false);
+        });
+        core.Bank.search(player, 'coins');
+        assert.equal(player.isSearchingBank(), true);
+        assert.equal(player.getBank(core.Bank.BANK_SEARCH_TAB_INDEX).getItems()[0].getId(), 995);
+        await openBankIncinerator(0, 995);
+        key('1'); await resume(1);
+        assert.equal(player.getBank(0).getAmount(995), 0, 'the searched stack is destroyed');
+        assert.equal(player.getBank(1).getAmount(556), 2);
+        assert.equal(bankSaves.length, 4);
+
+        // Closed prompt: the old confirmation cannot destroy anything.
+        openScene(0, () => player.getBank(0).add(new core.Item(995, 5), false));
+        await openBankIncinerator(0, 995);
+        player.getPacketSender().sendInterfaceRemoval();
+        await connection.dispatch([{ type: 'dialogue_continue', widgetId: 584 << 16, childIndex: 1 }]); connection.processTurnPackets();
+        assert.equal(player.getBank(0).getAmount(995), 5, 'a closed prompt cannot destroy');
+        assert.equal(bankSaves.length, 4);
+
+        // Replaced 584: a later prompt is not ours, so it is neither confirmed nor closed.
+        openScene(0, () => player.getBank(0).add(new core.Item(995, 5), false));
+        await openBankIncinerator(0, 995);
+        DropItemPacketListener.destroyItemInterface(player, player.getBank(0).getItems()[0]);
+        await connection.dispatch([{ type: 'dialogue_continue', widgetId: 584 << 16, childIndex: 1 }]); connection.processTurnPackets();
+        assert.equal(player.getBank(0).getAmount(995), 5, 'a replacement prompt cannot destroy the bank stack');
+        assert.equal(player.getPacketSender().isChatboxInterface(584), true, 'the replacement UI is left open');
+        assert.equal(bankSaves.length, 4);
+
+        // Placeholders have nothing to destroy and never open a prompt.
+        openScene(0, () => player.getBank(0).add(new core.Item(995, 0), false));
+        await dragOntoIncinerator(0, 995);
+        assert.equal(player.getPacketSender().isChatboxInterface(584), false, 'a placeholder is not destroyed');
+
+        // Refresh compacts nonzero tabs: a same-ID neighbour is not the deleted stack.
+        const discarded: any[] = [];
+        PluginManager.createApi('bank-incinerate-compaction-test').onCustomEvent('item:discarded', event => {
+            if (event.player === player) discarded.push(event.item.clone());
+        });
+        openScene(1, () => {
+            player.getBank(1).add(new core.Item(11907, 1, { charges: 5 }), false);
+            player.getBank(1).add(new core.Item(11907, 1, { charges: 10 }), false);
+        });
+        await openBankIncinerator(0, 11907); key('1'); await resume(1);
+        assert.deepEqual(player.getBank(1).getValidItems().map((item: any) => item.getMeta()), [{ charges: 10 }]);
+        assert.equal(bankSaves.length, 5, 'compaction cannot suppress the successful removal save');
+        assert.deepEqual(discarded.map(item => item.getMeta()), [{ charges: 5 }], 'the removed stack reaches its owner');
+        const compactedReload = new Player(null);
+        bankSaves[4].save.applyToPlayer(compactedReload);
+        assert.deepEqual(compactedReload.getBank(1).getValidItems().map((item: any) => item.getMeta()), [{ charges: 10 }]);
     } finally {
+        state.socket = previousSocket;
         session.flushPackets(); setPacketSocket(null); player.setRegistered(false);
         process.chdir(previousDirectory);
     }

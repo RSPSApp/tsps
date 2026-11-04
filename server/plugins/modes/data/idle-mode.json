@@ -1,0 +1,18 @@
+{
+  "_description": "Idle Mode (docs/idle-mode.md): an account flag. Skills listed here gather endlessly while the flag is on, and keep gathering while the player is logged out.",
+  "skills": ["WOODCUTTING", "MINING", "FISHING"],
+  "gathering": {
+    "bankResources": true,
+    "endlessResources": true,
+    "fishingSpotsStay": true,
+    "randomEvents": false
+  },
+  "offline": {
+    "_description": "A gathering session counts once it has run minSampleSeconds; a gap of more than maxGapSeconds between two gathers starts a new one. Time away is paid up to capHours at efficiency (1 = the rate the player had when they logged out).",
+    "enabled": true,
+    "minSampleSeconds": 60,
+    "maxGapSeconds": 60,
+    "capHours": 12,
+    "efficiency": 1
+  }
+}

@@ -36,6 +36,17 @@ Amascut) and other reward chests are not affected.
 }
 ```
 
+## Idle worlds
+
+`pluginConfig` `"IdleMode:newAccounts": true` makes every new account an [Idle Mode](idle-mode.md)
+account. Players can still switch it with `::idle on` / `::idle off`.
+
+```json
+{
+  "pluginConfig": { "IdleMode:newAccounts": true }
+}
+```
+
 ## Welcome screen message
 
 `pluginConfig` `"WelcomeScreen:messageOfTheWeek"` is the text on the scroll at the bottom of

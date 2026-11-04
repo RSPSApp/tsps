@@ -128,11 +128,14 @@ export class ShopDefinitionLoader extends DefinitionLoader {
         const prices = raw.requiresPresets === true && !usePresetPrices
             ? new Map<number, number>()
             : this.itemPrices(raw.prices);
+        // The host editor's default stack size also fills originalStock rows that omit an
+        // amount; imported shops leave stockAmount out, so their rows still default to one.
+        const stockAmount = this.normalizeAmount(raw.stockAmount ?? 1);
         const stock: ShopStockDefinition[] = [];
         if (Array.isArray(raw.originalStock)) {
             for (const entry of raw.originalStock as RawShopStockDefinition[]) {
                 const itemId = Number(entry?.id);
-                const amount = this.normalizeAmount(entry?.amount ?? 1);
+                const amount = this.normalizeAmount(entry?.amount ?? stockAmount);
                 // A listed stock of 0 is real: specialist shops (Gerrant's raw fish) show and
                 // buy items they start with none of.
                 const listedEmpty = Number(entry?.amount) === 0;
@@ -153,7 +156,6 @@ export class ShopDefinitionLoader extends DefinitionLoader {
                 });
             }
         }
-        const stockAmount = this.normalizeAmount(raw.stockAmount ?? 1);
         for (const item of this.items(raw.items)) {
             const itemId = typeof item === "number" ? item : this.itemIdForName(item);
             if (itemId === null || stockAmount <= 0) {
@@ -177,11 +179,13 @@ export class ShopDefinitionLoader extends DefinitionLoader {
             ? raw.name.trim()
             : "Shop";
         const configuredCurrency = typeof raw.currency === "string" && raw.currency.trim()
-            ? raw.currency.trim().toUpperCase()
+            ? raw.currency.trim().toUpperCase().replace(/\s+/g, " ")
             : "COINS";
+        // Blood money is the one currency key with an underscore; accept the Wiki's spaced name too.
+        const currencyKey = configuredCurrency === "BLOOD MONEY" ? "BLOOD_MONEY" : configuredCurrency;
         const currency = raw.requiresPresets === true && !usePresetPrices
             ? "COINS"
-            : configuredCurrency;
+            : currencyKey;
         return new ShopDefinition(
             id,
             name,

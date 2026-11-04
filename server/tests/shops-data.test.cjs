@@ -48,7 +48,6 @@ test('the loader keeps stock rows listed at 0, so specialist shops buy them', ()
   assert.ok(gerrant.originalStock.some(({ id, amount }) => id === 317 && amount === 0), 'Gerrant lists raw shrimps at 0');
 });
 
-
 test('Pest Control Exchange stays with its reward interface, not a generic shop', () => {
   // PestControl.plugin.js owns Void Knight Exchange and interface 243. The
   // canonical exporter also describes these rewards, but that must not install
@@ -74,4 +73,33 @@ test('Pest Control Exchange stays with its reward interface, not a generic shop'
     assert.equal(shop.currency, 'COINS');
     assert.ok(shop.npcInteractions.some(binding => binding.optionSlot === 3 && binding.npcIds.includes(npcId)), name);
   }
+});
+
+test('the loader reads the host editor fields: name, currency, default stock and restock, per-item prices', () => {
+  const { ShopDefinitionLoader } = require('../dist/game/definition/loader/impl/ShopDefinitionLoader');
+  const definition = new ShopDefinitionLoader().toDefinition({
+    id: 999998,
+    name: '  Host edited shop  ',
+    currency: 'blood money',
+    stockAmount: 500,
+    defaultRestockTicks: 12,
+    prices: { 303: 2500, 317: -1 },
+    originalStock: [
+      { id: 303 },
+      { id: 317, amount: 2, restockTicks: 30 },
+      { id: 321, amount: 0 },
+    ],
+  }, 'core');
+  assert.equal(definition.getName(), 'Host edited shop');
+  assert.equal(definition.getCurrency(), 'BLOOD_MONEY');
+  assert.equal(definition.getDefaultRestockTicks(), 12);
+  assert.deepEqual(
+    definition.getOriginalStock().map(({ id, amount, restockTicks, price }) => [id, amount, restockTicks, price]),
+    [
+      [303, 500, null, 2500],
+      [317, 2, 30, null],
+      [321, 0, null, null],
+    ],
+    'a missing amount uses stockAmount; an explicit amount and -1 default price win'
+  );
 });

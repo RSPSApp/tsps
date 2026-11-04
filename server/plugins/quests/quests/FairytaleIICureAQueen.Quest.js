@@ -665,7 +665,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     const variant = CERTIFICATE_VARIANTS.get(event.npcId);
     if (!variant) return;
     event.handled = true;
-    startTranscript(api, player, event.npcId, PAGE, variant);
+    startTranscript(api, event.player, event.npcId, PAGE, variant);
   }
 
   function handlePickpocket(event) {

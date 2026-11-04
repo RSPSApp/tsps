@@ -1374,12 +1374,116 @@ test('Fairytale I Tanglefoot lair gate and Nature Spirit treat wielded magic sec
   player.getInventory().deleteNumber(MAGIC_SECATEURS, 1);
   player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(MAGIC_SECATEURS));
   assert.match(enter(), /^I've received orders to let you through/, 'wielded secateurs let the player in');
-  const enchant = () => PM.emitCustomEvent('npc-dialogue:action', { player, npcId: core.NpcIdentifiers.NATURE_SPIRIT, stepId: 'JQyqMZ', handled: false });
+  const enchant = () => {
+    const action = { player, npcId: core.NpcIdentifiers.NATURE_SPIRIT, stepId: 'JQyqMZ', handled: false };
+    PM.emitCustomEvent('npc-dialogue:action', action);
+    assert.equal(action.handled, true);
+    assert.equal(action.end, true, 'the blessing closes the chat while the scene plays');
+    for (let n = 0; n < 12; n++) core.TaskManager.process();
+  };
   enchant();
   assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0, 'a wielded pair is not duplicated by the Nature Spirit');
   player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, null);
   enchant();
   assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 1, 'a lost pair is still replaced');
+});
+
+test('Fairytale I Nature Spirit blessing scene runs before the items are consumed', async t => {
+  const f = fixture(t), { player } = f;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
+  const { SECATEURS, MAGIC_SECATEURS, WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM } = core.ItemIdentifiers;
+  quest.setStage(player, 60);
+  player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
+  player.getInventory().add(new core.Item(SECATEURS));
+  for (const id of [WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM]) player.getInventory().add(new core.Item(id));
+  const npc = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(3441, 9738, 1));
+  const graphics = [], sender = player.getPacketSender(), sendGraphic = sender.sendGraphic.bind(sender);
+  sender.sendGraphic = (graphic, location) => {
+    graphics.push([graphic.getId(), location.getX(), location.getY(), location.getZ()]);
+    return sendGraphic(graphic, location);
+  };
+  const action = { player, npc, npcId: npc.getId(), stepId: 'JQyqMZ', handled: false,
+    pages: [{ page: 'Fairytale I - Growing Pains', variants: ['in-the-nature-grotto-talking-to-the-nature-spirit'] }] };
+  PM.emitCustomEvent('npc-dialogue:action', action);
+  assert.equal(action.handled, true);
+  assert.equal(action.end, true, 'the chat closes while the scene plays');
+  assert.equal(player.getAnimation()?.getId(), core.CacheDefinitions.getSeqId('human_fairy_kneel_and_offer'),
+    'the player kneels and offers the secateurs');
+  assert.equal(player.getMovementQueue().isMovementBlocked(), true);
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0);
+  assert.equal(quest.getStage(player), 60);
+  for (let n = 0; n < 11; n++) core.TaskManager.process();
+  assert.deepEqual(graphics, [[core.CacheDefinitions.getSpotanimId('fairy_flower_enchant'), 3441, 9738, 1]],
+    'the cache flower-enchant effect plays above the Nature Spirit');
+  assert.equal(npc.getAnimation()?.getId(), core.CacheDefinitions.getSeqId('human_fairy_take_and_hold_up'),
+    'the Nature Spirit takes and holds the secateurs up');
+  assert.equal(player.getInventory().getAmount(SECATEURS), 1, 'materials survive the scene');
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0);
+  assert.equal(quest.getStage(player), 60);
+  core.TaskManager.process();
+  assert.equal(player.getInventory().getAmount(SECATEURS), 0);
+  for (const id of [WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM]) {
+    assert.equal(player.getInventory().getAmount(id), 0, 'the blessing consumes the saved recipe');
+  }
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 1);
+  assert.equal(quest.getStage(player), 70);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  assert.match(player.getDialogueManager().getCurrent()?.getText() ?? '', /^It is done!/);
+  await nextLine(f);
+  assert.match(player.getDialogueManager().getCurrent()?.getText() ?? '', /^Farewell,/);
+});
+
+test('Fairytale I blessing cancellation leaves the materials and stage untouched', t => {
+  const f = fixture(t), { player } = f;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
+  const { SECATEURS, MAGIC_SECATEURS, WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM } = core.ItemIdentifiers;
+  quest.setStage(player, 60);
+  player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
+  player.getInventory().add(new core.Item(SECATEURS));
+  for (const id of [WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM]) player.getInventory().add(new core.Item(id));
+  const npc = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(3441, 9738, 1));
+  const action = { player, npc, npcId: npc.getId(), stepId: 'JQyqMZ', handled: false };
+  PM.emitCustomEvent('npc-dialogue:action', action);
+  for (let n = 0; n < 3; n++) core.TaskManager.process();
+  player.setLocation(new core.Location(3442, 9738, 1));
+  core.TaskManager.process();
+  assert.equal(player.getInventory().getAmount(SECATEURS), 1, 'walking away does not consume the secateurs');
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0);
+  assert.equal(quest.getStage(player), 60);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(player.getAnimation()?.getId(), core.Animation.DEFAULT_RESET_ANIMATION.getId());
+});
+
+test('Fairytale I Tanglefoot combat pursuit stops at its chamber doorway', t => {
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(2394, 4379);
+  const f = fixture(t), { player } = f;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
+  player.setLocation(new core.Location(2375, 4384, 0));
+  quest.setStage(player, 70);
+  PM.emitPlayerProcess({ player });
+  const boss = [...core.World.getNpcs()].find(npc => npc?.getId?.() === core.NpcIdentifiers.TANGLEFOOT
+    && npc.getOwner?.() === player);
+  assert.ok(boss, 'entering the grove spawns the owner Tanglefoot');
+  t.after(() => {
+    core.TaskManager.cancelTasks(boss);
+    core.World.getNpcs().remove(boss);
+  });
+  assert.equal(boss.hasFlag('combat:no-retreat'), true, 'the chamber is the leash, not the generic spawn radius');
+  boss.getCombat().attack(player);
+  core.TaskManager.process();
+  assert.equal(boss.getCombat().getTarget(), player, 'the fight can pursue anywhere inside the chamber');
+  player.setLocation(new core.Location(2383, 4377, 0));
+  core.TaskManager.process();
+  assert.equal(boss.getCombat().getTarget() ?? null, null, 'leaving the chamber drops the pursuit');
+  player.setLocation(new core.Location(2375, 4384, 0));
+  boss.getCombat().attack(player);
+  core.TaskManager.process();
+  boss.setLocation(new core.Location(2390, 4379, 0));
+  core.TaskManager.process();
+  const at = boss.getLocation();
+  assert.deepEqual([at.getX(), at.getY(), at.getZ()], [2375, 4385, 0],
+    'a boss that ever leaves the chamber is returned to its spawn');
 });
 
 // The banquet uses real Player/NPC/PrivateArea/TaskManager and native object,

@@ -1,7 +1,8 @@
 import { strict as assert } from "node:assert";
 import type { Client } from "@runelite/api/Client";
-import { ConfigChanged } from "@runelite/api/events";
+import { ChatMessage, ConfigChanged } from "@runelite/api/events";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
+import { EventBus } from "@runelite/client/eventbus/EventBus";
 import { inject } from "@runelite/client/plugins/PluginInjector";
 import { ChatNotificationsConfig } from "../game/plugins/chatnotifications/ChatNotificationsConfig";
 import { ChatNotificationsPlugin, getLastColor, stripColor } from "../game/plugins/chatnotifications/ChatNotificationsPlugin";
@@ -89,6 +90,23 @@ assert.deepEqual(sent, ["News: drop party"], "the link token and tags go");
 sent.length = 0;
 shown(6, "dragon", "Bob");
 assert.deepEqual(sent, [], "your own outgoing PMs never notify");
+
+const bus = new EventBus();
+bus.register(plugin);
+const errors: unknown[][] = [];
+const originalError = console.error;
+console.error = (...args: unknown[]) => errors.push(args);
+try {
+    const text = "Bob wishes to trade with you.";
+    shown(101, text, "Bob");
+    bus.post(new ChatMessage(101, "Bob", text, null));
+    assert.deepEqual(sent, [text], "the two chat producers send exactly one trade notification");
+    assert.deepEqual(errors, [], "the API chat event must not reach the history-only handler");
+} finally {
+    console.error = originalError;
+    bus.unregister(plugin);
+}
+sent.length = 0;
 
 // Disabling stops it.
 void plugin.stop();

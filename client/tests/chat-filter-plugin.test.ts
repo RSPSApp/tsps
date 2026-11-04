@@ -1,7 +1,8 @@
 import { strict as assert } from "node:assert";
-import { GameStateChanged } from "@runelite/api/events";
+import { ChatMessage, GameStateChanged } from "@runelite/api/events";
 import { GameState } from "@runelite/api/GameState";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
+import { EventBus } from "@runelite/client/eventbus/EventBus";
 import { inject } from "@runelite/client/plugins/PluginInjector";
 import { ChatFilterConfig, ChatFilterType } from "../game/plugins/chatfilter/ChatFilterConfig";
 import { CENSOR_MESSAGE, ChatFilterPlugin } from "../game/plugins/chatfilter/ChatFilterPlugin";
@@ -106,6 +107,19 @@ const build = (id: number) => {
     return vm.intStack[0] === 0 ? null : vm.stringStack[0];
 };
 assert.deepEqual(ids.map(build), [null, null, "Nothing interesting happens. (3)"]);
+// An API event must not overwrite the real history entry's duplicate identity.
+const bus = new EventBus();
+bus.register(plugin);
+try {
+    const id = history.addMessage(GAME, "undefined");
+    bus.post(new ChatMessage(GAME, "", "undefined", null));
+    const vm: any = { intStack: [1, GAME, id], intStackSize: 3, stringStack: ["undefined"], stringStackSize: 1 };
+    plugin.onScriptCallback({ eventName: "chatFilterCheck", vm });
+    assert.equal(vm.intStack[0], 1, "a real line remains visible after both chat producers run");
+    assert.equal(vm.stringStack[0], "undefined");
+} finally {
+    bus.unregister(plugin);
+}
 set("collapsePlayerChat", true);
 set("maxRepeatedPublicChats", 2);
 const spamIds = [1, 2, 3].map(() => history.addMessage(PUBLIC, "buy gf", "Stranger"));

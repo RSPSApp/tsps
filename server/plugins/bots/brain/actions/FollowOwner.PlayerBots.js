@@ -14,6 +14,8 @@ const {
 } = require("../../behaviours/policies/PvpLoadoutPolicy.PlayerBots");
 const { startBrainRoam, startReactivePvp } = require("../BrainActivities.PlayerBots");
 const { playerState } = require("../ActionState.PlayerBots");
+const { isTeleblocked } = require("../../behaviours/state/State.PlayerBots");
+const { queueRouteAndFlagAppearance } = require("../../behaviours/navigation/Navigation.PlayerBots");
 const {
   ATTR_RECRUIT_OWNER_USERNAME,
   ATTR_RECRUIT_RETURN_AFTER_DEATH_AT,
@@ -60,7 +62,7 @@ function resolveAssistTarget(world, bot, owner) {
   return candidate;
 }
 
-function teleportNear(world, bot, follower) {
+function teleportNear(world, bot, follower, state) {
   const botLoc = bot.getLocation?.();
   const followerLoc = follower.getLocation?.();
   if (!botLoc || !followerLoc) {
@@ -73,6 +75,11 @@ function teleportNear(world, bot, follower) {
       GameConstants.PET_FOLLOW_AUTO_TELEPORT_DISTANCE
     ) === true
   ) {
+    return;
+  }
+  // A Tele Blocked bot follows on foot like a blocked player; only the snap is a teleport.
+  if (isTeleblocked(bot)) {
+    queueRouteAndFlagAppearance(bot, followerLoc.getX(), followerLoc.getY(), { state });
     return;
   }
   const tiles = [];
@@ -203,11 +210,11 @@ function createFollowOwnerAction(spec, world) {
       if (player.getPrivateArea?.() !== owner.getPrivateArea?.()) {
         player.setArea?.(owner.getArea?.() ?? null);
       }
-      teleportNear(world, player, owner);
+      teleportNear(world, player, owner, state);
 
       const assistTarget = resolveAssistTarget(world, player, owner);
       if (assistTarget) {
-        teleportNear(world, player, assistTarget);
+        teleportNear(world, player, assistTarget, state);
         player.setFollowing?.(assistTarget);
         player.setMobileInteraction?.(assistTarget);
         player.setPositionToFace?.(assistTarget.getLocation?.());

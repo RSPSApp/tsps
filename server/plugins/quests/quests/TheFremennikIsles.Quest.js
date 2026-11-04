@@ -1619,6 +1619,7 @@ module.exports = function registerTheFremennikIslesQuest(api) {
         player.getInventory().deleteNumber(BRONZE_NAILS, 1);
         player.getInventory().adds(NEITIZNOT_SHIELD, 1);
         player.sendMessage("You make a Neitiznot shield.");
+        api.emitCustomEvent("fremennik-isles:shield-made", { player });
         return;
       }
     }

@@ -32,6 +32,7 @@ const WATER_SOURCES = new Map([
   ["pump and tub", null],
 ]);
 
+let api;
 let core;
 let FILLED_BY_EMPTY;
 
@@ -81,6 +82,7 @@ function fillFromWaterSource(event) {
 
   // Keyed to the player's index, so walking or another click cancels the rest (walkToReset).
   const at = player.getLocation().clone();
+  api.emitCustomEvent("water-source:filled", { player, objectId, itemId, name, location: at });
   core.TaskManager.submit(new (class extends core.Task {
     constructor() { super(1, player.getIndex()); }
     execute() {
@@ -92,8 +94,9 @@ function fillFromWaterSource(event) {
 
 module.exports = {
   name: "WaterSources",
-  register(api) {
-    core = api.core;
+  register(pluginApi) {
+    api = pluginApi;
+    core = pluginApi.core;
     defineContainers(core);
     api.onItemOnObject(fillFromWaterSource, { noted: false });
   },

@@ -26,7 +26,7 @@
  */
 const Shared = require("./Shared.Crafting");
 
-const FURNACE_NAMES = new Set(["Furnace", "Small furnace"]);
+const FURNACE_NAMES = new Set(["Furnace", "Small furnace", "Clay forge"]);
 /** human_furnace and the smelting sound, as captured for silver. */
 const FURNACE_ANIMATION_ID = 899;
 const FURNACE_SOUND = 2725;
@@ -298,6 +298,7 @@ function stringAmulet(event) {
 module.exports = function attach(api) {
   api.onObjectInteraction("Furnace", { Smelt: smeltAtFurnace });
   api.onObjectInteraction("Small furnace", { Smelt: smeltAtFurnace });
+  api.onObjectInteraction("Clay forge", { Smelt: smeltAtFurnace });
   api.onItemOnObject(handlePerfectJewellery, { noted: false });
   api.onItemOnObject(handleBarOnFurnace, { noted: false });
   api.onInterfaceActionClick(handleJewelleryButton);

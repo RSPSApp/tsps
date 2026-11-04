@@ -674,6 +674,10 @@ module.exports = {
   register(api) {
     core = api.core;
     pluginApi = api;
+    // The ornament changes appearance only. Native ranged-weapon and profile lookups
+    // should see the corresponding charged or empty Toxic Blowpipe definition.
+    core.ItemAliases.register(core.ItemIdentifiers.BLAZING_BLOWPIPE, core.ItemIdentifiers.TOXIC_BLOWPIPE);
+    core.ItemAliases.register(core.ItemIdentifiers.BLAZING_BLOWPIPE_EMPTY_, core.ItemIdentifiers.TOXIC_BLOWPIPE_EMPTY_);
     api.onCombatHitDamage(rememberDamage);
     api.registerRangedAmmoResolver({ resolve: rangedAmmoResolverResolve });
     api.registerRangedAmmoHandler({ checkAmmo: rangedAmmoHandlerCheckAmmo, decrementAmmo: rangedAmmoHandlerDecrementAmmo });

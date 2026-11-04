@@ -103,6 +103,10 @@ test("cosmetic variants exist and carry their base item's bonuses and requiremen
   ]);
   assert.equal(rows.get(25378)?.requirements?.[0], 60, "Wiki: Dragon axe (or) needs 60 Attack");
   assert.equal(rows.get(21031)?.bonuses?.[10], 42, "Wiki: Infernal harpoon has +42 melee strength");
+  assert.equal(rows.get(25916)?.requirements?.[4], 70, "Wiki: turquoise Dragon hunter crossbow needs 70 Ranged");
+  assert.equal(rows.get(25918)?.requirements?.[4], 70, "Wiki: black Dragon hunter crossbow needs 70 Ranged");
+  assert.deepEqual(rows.get(26710)?.requirements, [0, 0, 60, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "Wiki: Dragon warhammer (or) requires Strength 60 and no Attack level");
   for (const entry of OrnamentKits._test.loadKits()) {
     const base = rows.get(entry.base);
     assert.ok(base || cacheBackedItems.has(entry.base), `base ${entry.base} for ${entry.name}`);

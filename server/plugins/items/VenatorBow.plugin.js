@@ -393,6 +393,10 @@ module.exports = {
     unchargedId = core.ItemIdentifiers.VENATOR_BOW_UNCHARGED_;
     echoBowId = core.ItemIdentifiers.ECHO_VENATOR_BOW;
     echoUnchargedId = core.ItemIdentifiers.ECHO_VENATOR_BOW_UNCHARGED_;
+    // Echo is cosmetic: let the native ranged registry and item profile resolve through
+    // the matching charged/uncharged Venator Bow definitions.
+    core.ItemAliases.register(echoBowId, bowId);
+    core.ItemAliases.register(echoUnchargedId, unchargedId);
     shardId = core.ItemIdentifiers.VENATOR_SHARD;
     essenceId = core.ItemIdentifiers.ANCIENT_ESSENCE;
     api.registerCombatMethodResolver({ resolve: resolveVenatorBow });

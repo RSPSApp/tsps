@@ -7,7 +7,7 @@ module.exports = function registerToxicBlowpipeSpecialAttack(api) {
 
   api.registerCombatSpecial({
     id: "toxic_blowpipe",
-    itemIds: [ItemIdentifiers.TOXIC_BLOWPIPE],
+    itemIds: [ItemIdentifiers.TOXIC_BLOWPIPE, ItemIdentifiers.BLAZING_BLOWPIPE],
     drainAmount: 50,
     strengthMultiplier: 1.5,
     accuracyMultiplier: 2.0,

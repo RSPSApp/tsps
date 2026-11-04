@@ -17,6 +17,9 @@ const { NpcAggression } = require("../dist/game/entity/impl/npc/NpcAggression");
 const { CoordinateState } = require("../dist/game/entity/impl/npc/NPCMovementCoordinator");
 const GodWarsCommon = require("../plugins/bosses/godwars/Common.GodWars");
 const GodWarsCombat = require("../plugins/bosses/godwars/Combat.GodWars");
+const ScurriusCommon = require("../plugins/bosses/scurrius/Common.Scurrius");
+const ScurriusFight = require("../plugins/bosses/scurrius/Fight.Scurrius");
+const ScurriusLair = require("../plugins/bosses/scurrius/Lair.Scurrius");
 const core = PluginManager.getCoreApi();
 
 const MUGGER = core.NpcIdentifiers.MUGGER_2;
@@ -34,6 +37,7 @@ function scene(t, {
   spawn = new core.Location(FIELD.x, FIELD.y + 2, 0),
   npcAt = spawn.clone(),
   playerAt = new core.Location(FIELD.x, FIELD.y, 0),
+  providedNpc = null,
 } = {}) {
   let cycle = 1000;
   t.mock.method(core.World, "getProcessCycle", () => cycle);
@@ -55,7 +59,7 @@ function scene(t, {
   }
 
   const spawnPosition = spawn.clone();
-  const npc = core.NPC.create(npcId, npcAt.clone());
+  const npc = providedNpc ?? core.NPC.create(npcId, npcAt.clone());
   npc.setSpawnPosition(spawnPosition.clone());
   npc.isRegistered = () => true;
   npc.setNeedsPlacement(false);
@@ -232,4 +236,110 @@ test("an ordinary God Wars follower keeps the open-world leash", (t) => {
   }
   assert.equal(s.npc.getCombat().getTarget(), null, "the follower still gives up the chase");
   assert.equal(s.npc.getMovementCoordinator().getCoordinateState(), CoordinateState.RETREATING);
+});
+
+/**
+ * The real Scurrius producer over a stub plugin API: real NPCs and the real fight, without
+ * registering world hooks. The combat method provider is served through PluginManager so
+ * `CombatFactory` resolves the actual Scurrius method.
+ */
+function scurriusProducer(t) {
+  const api = new Proxy({
+    core,
+    spawnNpc: ({ id, x, y, z, wanderRadius }) => {
+      const npc = core.NPC.create(id, new core.Location(x, y, z ?? 0));
+      if (Number.isFinite(wanderRadius)) npc.getMovementCoordinator().setRadius(wanderRadius);
+      return npc;
+    },
+  }, { get: (target, key) => target[key] ?? (() => {}) });
+  ScurriusCommon.init(api);
+  ScurriusFight.attach(api);
+  ScurriusLair.attach(api);
+  const Method = ScurriusFight._test.defineCombatMethod();
+  t.mock.method(PluginManager, "getNpcCombatMethodProviders", () => [{
+    pluginName: "Scurrius",
+    npcIds: new Set([ScurriusCommon.PUBLIC_ID]),
+    provider: { provide: () => new Method() },
+  }]);
+  return (id = ScurriusCommon.PUBLIC_ID, area = null) => ScurriusLair._test.spawnBoss(id, area);
+}
+
+/**
+ * The room from the review: spawn 3301,9867, the boss walked to 3304,9866, and a player on the
+ * west side at 3290,9867 - eleven tiles from the spawn footprint, but still in the lair.
+ */
+function inRoomScurriusFight(t, { exempt }) {
+  const spawnBoss = scurriusProducer(t);
+  const boss = spawnBoss();
+  if (!exempt) boss.removeFlag("combat:no-retreat");
+  const s = scene(t, {
+    providedNpc: boss,
+    spawn: new core.Location(...ScurriusCommon.SPAWN_TILE),
+    npcAt: new core.Location(3304, 9866, 0),
+    playerAt: new core.Location(3290, 9867, 0),
+  });
+  // He eats with a 20-tile reach; getting up for the between-rounds swipes drops it to melee.
+  const state = ScurriusFight.stateOf(boss);
+  ScurriusFight._test.startFeeding(boss, state, ScurriusCommon.FEEDING_SPOTS[1]);
+  while (state.phase === "feeding") ScurriusFight._test.feedingTurn(boss, state);
+  return { ...s, boss, state };
+}
+
+test("public Scurrius keeps an in-room player through a feeding transition", (t) => {
+  const s = inRoomScurriusFight(t, { exempt: true });
+  assert.equal(s.boss.hasFlag("combat:no-retreat"), true,
+    "the lair's public fight is scripted arena content, not open-world hunting");
+  assert.equal(s.state.phase, "between", "the real feeding round got him up");
+  assert.equal(core.CombatFactory.getMethod(s.boss).attackDistance(s.boss), 1,
+    "and between rounds he swipes at melee reach");
+  assert.ok(core.CombatRange.footprintDistance(s.spawn, 3, s.player.getLocation()) > 8,
+    "the player is outside the eight-tile aggression range");
+  assert.ok(s.boss.getLocation().getDistance(s.spawn) <= 7, "the boss is still inside its max range");
+
+  s.boss.getCombat().attack(s.player);
+  s.boss.process();
+  assert.equal(s.boss.getCombat().getTarget(), s.player, "the boss keeps the in-room target");
+  assert.notEqual(s.boss.getMovementCoordinator().getCoordinateState(), CoordinateState.RETREATING,
+    "and is not sent home mid-fight");
+});
+
+test("without the arena exemption the same room-crossing target is dropped", (t) => {
+  const s = inRoomScurriusFight(t, { exempt: false });
+  assert.equal(s.boss.hasFlag("combat:no-retreat"), false);
+  s.boss.getCombat().attack(s.player);
+  s.boss.process();
+  assert.equal(s.boss.getCombat().getTarget(), null, "the ordinary leash drops it");
+  assert.equal(s.boss.getMovementCoordinator().getCoordinateState(), CoordinateState.RETREATING,
+    "and sends it home");
+});
+
+test("a private Scurrius instance relies on its PrivateArea exemption, not the flag", (t) => {
+  const spawnBoss = scurriusProducer(t);
+  const instance = new core.PrivateArea([new core.Boundary(3289, 3308, 9858, 9877, 0)]);
+  const boss = spawnBoss(ScurriusCommon.SOLO_ID, instance);
+  assert.equal(instance.boss, boss);
+  assert.equal(boss.getPrivateArea(), instance, "the instance owns its copy");
+  assert.equal(boss.hasFlag("combat:no-retreat"), false,
+    "Combat.shouldRetreat already exempts every PrivateArea NPC");
+});
+
+test("leaving the lair still ends a public Scurrius fight", (t) => {
+  const spawnBoss = scurriusProducer(t);
+  const boss = spawnBoss();
+  const s = scene(t, {
+    providedNpc: boss,
+    spawn: new core.Location(...ScurriusCommon.SPAWN_TILE),
+    npcAt: new core.Location(3304, 9866, 0),
+    playerAt: new core.Location(3290, 9867, 0),
+  });
+  // Full health keeps him in phase one, so this test is about leaving, not the feeding walk.
+  boss.setHitpoints(boss.getMaxHitpoints());
+  boss.getCombat().attack(s.player);
+  s.tick();
+  assert.equal(boss.getCombat().getTarget(), s.player, "in the room, he holds the fight");
+
+  // The player leaves: target validity still releases the boss even with the exemption on.
+  s.player.setRegistered(false);
+  s.tick();
+  assert.equal(boss.getCombat().getTarget(), null, "a player who leaves stops being a target");
 });

@@ -366,7 +366,10 @@ added to the radius as a symmetric term. The check is `NpcDefinition.getAggressi
   the area claims them, so a player crossing the room does not turn the boss around; the
   chamber's existing reset-when-empty rule still ends the fight. The dungeon's ordinary
   followers are not flagged: their `npcAggression` rule makes them attack on sight, but they
-  keep the normal leash.
+  keep the normal leash. Scurrius' lair does the same: its public encounter is spawned with
+  `combat:no-retreat` (a private instance already gets the `PrivateArea` exemption), so a player
+  in the room stays his target through a feeding round, when his reach between swipes drops to
+  melee. Leaving the lair still invalidates the target, and death/respawn are unchanged.
 
 `max range` is **not** the wander radius. osrs-docs defines it separately
 ([Max range](https://osrs-docs.com/docs/variables/max-range/), default 7) and the cited Mod Ash
@@ -383,8 +386,12 @@ respawns.
 
 `aggression-range.test.cjs` covers the formula, the spawn check, the leash, the
 `combat:no-retreat` exemption, and the public God Wars chamber (the boss keeps a room-wide
-pursuit, an ordinary follower still gives up). `unreachable-combat.test.cjs` opts those deadline
-scenes out of the leash so they still test the unreachable-target budget alone.
+pursuit, an ordinary follower still gives up). It also runs the real Scurrius producer and
+feeding transition: the public boss keeps an in-room player eleven tiles from the spawn
+footprint after a feeding round drops his reach to melee, the same scene without the flag gives
+up, a private instance relies on its `PrivateArea` instead, and a player who leaves stops being
+a target. `unreachable-combat.test.cjs` opts those deadline scenes out of the leash so they
+still test the unreachable-target budget alone.
 
 Data note: 10 spawned ids offer `Attack` but are absent from `monsters-complete.json`, so
 `isAggressive` is false for them. Nine are nameless multinpc parents whose transformed form

@@ -380,7 +380,7 @@ function fight(stage = 18, options) {
   return { h, p, npc: h.npcs[0], arena: p.getArea(), method: new h.api.combat() };
 }
 
-test('stomp freezes the captured L footprint and misses a player who steps back', () => {
+test('each stomp retargets its captured footprint, then freezes it during the windup', () => {
   const { h, p, npc, arena, method } = fight();
   npc.moveTo(new core.Location(3260, 3286, 0));
   p.moveTo(new core.Location(3260, 3289, 0));
@@ -390,10 +390,14 @@ test('stomp freezes the captured L footprint and misses a player who steps back'
   assert.ok(p.damage[0].getDamage() >= 3 && p.damage[0].getDamage() <= 4, 'low-level quest damage scales to base Hitpoints');
   p.damage.length = 0; p.graphics.length = 0;
   arena.stompsRemaining = 1;
+  // rsprox 4153 ticks 602/606: the third snort turns east after the bull and player move.
+  npc.moveTo(new core.Location(3261, 3286, 0));
   p.moveTo(new core.Location(3263, 3289, 0));
   method.start(npc, p); h.tick(4);
-  assert.equal(p.damage.length, 0, 'later stomps retain the selected footprint after the player moves');
-  assert.ok(p.graphics.some(([x, y]) => x === 3259 && y === 3287));
+  assert.deepEqual(p.graphics.slice().sort(), [[3262, 3289], [3263, 3289], [3264, 3287], [3264, 3288], [3264, 3289]].sort());
+  assert.equal(p.damage.length, 1, 'the next snort hits its new footprint');
+  p.damage.length = 0;
+  npc.moveTo(new core.Location(3260, 3286, 0));
   arena.stompsRemaining = 0; arena.meleeRemaining = 0; arena.nextSpecial = 'stomp';
   p.moveTo(new core.Location(3261, 3289, 0));
   method.start(npc, p); p.moveTo(new core.Location(3261, 3290, 0)); h.tick(4);

@@ -63,7 +63,8 @@ function inBounds(location) {
 }
 
 function inMaze(location) {
-  // The doorway itself is at y=4991; the maze starts one tile further south.
+  // The doorway itself is at y=4991; the wall row at y=4992 is solid, so the maze floor
+  // starts at the walkable threshold tile y=4993.
   return inBounds(location) && location.getY() >= 4992;
 }
 

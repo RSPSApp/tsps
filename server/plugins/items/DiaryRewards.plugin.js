@@ -15,5 +15,6 @@ module.exports = {
     require("./diaryrewards/Teleports.DiaryRewards")(api);
     require("./diaryrewards/FaladorShield.DiaryRewards")(api);
     require("./diaryrewards/ExplorersRing.DiaryRewards")(api);
+    require("./diaryrewards/Robin.DiaryRewards")(api);
   },
 };

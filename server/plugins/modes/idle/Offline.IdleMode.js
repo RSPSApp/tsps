@@ -5,6 +5,8 @@
  * activity's skills' XP. A session runs from its first record to its latest. Logging out
  * mid-session keeps that rate with the account; logging back in pays the time away at that rate
  * (up to the cap, at the efficiency), the XP to the skills and the items to the bank, and says so.
+ * The saved rate is also kept current on every result, so a server restart or crash (no logout)
+ * still pays the time away from the last save.
  */
 const Common = require("./Common.IdleMode");
 const Progression = require("./Progression.IdleMode");
@@ -103,7 +105,12 @@ function xpNow(player, skills) {
 function record(player, activity, skills, items, maxGapSeconds) {
   const config = Common.data.offline;
   if (!config.enabled || !Common.isIdle(player)) return;
-  sessions.set(player, addResult(sessions.get(player), { activity, items, maxGapSeconds }, Date.now(), xpNow(player, skills), config));
+  const now = Date.now();
+  const session = addResult(sessions.get(player), { activity, items, maxGapSeconds }, now, xpNow(player, skills), config);
+  sessions.set(player, session);
+  // Kept current while playing, so any save carries it: the server's shutdown save (which logs
+  // no one out) and the periodic autosave before a crash pay the time away on the next login.
+  player.setAttribute(AWAY_ATTRIBUTE, awayFromSession(session, now, config));
 }
 
 function gathered(request) {

@@ -6,7 +6,7 @@ Jagex's shared reward shop interface: `omnishop_main` (819) with `omnishop_side`
 - `omnishop_stock_data` (40): obj, cost pairs and modifiers, restricted, buyable, sellable, view-only, sold noted, transaction multiplier
 - `omnishop_currency_data` (41): obj or none, names, graphic
 
-The interface draws itself from those tables. `server/plugins/interface/Omnishop.plugin.js` opens a shop, keeps the selection varps and balances right, and does the buying and selling. Mixology Rewards, the Boat Emporium (`sailing_boat_shop`, Sailing's Buy-boat) and the Agility Arena Store (`agilityarena_rewards_newshop`, Pirate Jackie's Trade) use it. Other omnishops in the cache (Tithe Farm, Castle Wars, Bounty Hunter, Trouble Brewing, Forestry, abyssal pearls) can move onto it the same way.
+The interface draws itself from those tables. `server/plugins/interface/Omnishop.plugin.js` opens a shop, keeps the selection varps and balances right, and does the buying and selling. Mixology Rewards, the Boat Emporium (`sailing_boat_shop`, Sailing's Buy-boat), the Agility Arena Store (`agilityarena_rewards_newshop`, Pirate Jackie's Trade), and Castle Wars (`cw_shop_data`, Lanthus's Trade) use it. Other omnishops in the cache (Tithe Farm, Bounty Hunter, Trouble Brewing, Forestry, abyssal pearls) can move onto it the same way.
 
 ## Plugging a shop in
 
@@ -46,3 +46,16 @@ From rsprox captures of Mixology Rewards (recordings 1107, 4182, 4210, 4234, 423
 Component ids move between revisions (`omnishop_main:list` was 819:34 in rev 238 and is 819:38 in 241), so the plugin looks them up by gameval name.
 
 Not captured: the messages for an Ultimate Ironman buying a `restricted_uim` item and for selling an item the shop doesn't take.
+
+
+## Castle Wars scope
+
+Lanthus opens the cache's modern ticket exchange. Ticket gear uses the inventory's Castle
+Wars tickets, including the cache's full ticket refunds. The saved `castlewars:plaudits`
+balance starts at zero and synchronizes `castlewars_plaudits` on login and opening Trade.
+The cache prices one supply crate at one plaudit and does not allow selling it back.
+Cache-marked members items cannot be bought on a free-to-play world.
+
+This is partial support for #2065: match plaudit awards (designated world, participation and
+eligibility rules) and opening supply crates are not implemented here. A new player therefore
+cannot earn plaudits through this change. Ticket gear remains usable independently.

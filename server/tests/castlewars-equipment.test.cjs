@@ -471,4 +471,152 @@ test('native Castle Wars supplies work with production plugin ordering and the c
   assert.equal(healer.p.getRunEnergy(), 55);
   assert.equal(healer.p.getPoisonDamage(), 0);
   assert.equal(inventory.getAmount(core.ItemIdentifiers.BANDAGES), 0);
+
+
+  // Reuse this one production-order registration and canonical NPC for native Trade too.
+  const PLAUDITS = 'castlewars:plaudits';
+  const { ATTR_SKIP_PERSISTENCE } = require('../plugins/bots/runtime/PersistenceConstants.PlayerBots');
+  function shopActor(subtest) {
+    let h;
+    const errors = [];
+    const error = console.error;
+    subtest.mock.method(console, 'error', (...args) => { errors.push(args); error.apply(console, args); });
+    subtest.after(() => {
+      try {
+        if (h) {
+          core.GameConstants.PLAYER_PERSISTENCE.cancelRequestedSave(h.p);
+          core.TaskManager.cancelTasks(h.p.getIndex());
+          core.TaskManager.cancelTasks(h.p);
+          h.p.getMovementQueue().reset();
+          h.p.setRegistered(false);
+          assert.equal(h.p.isRegistered(), false);
+        }
+      } finally {
+        assert.equal(errors.length, 0, 'caught hook failures must fail the case');
+      }
+    });
+    h = actor();
+    // No disk writer is part of this fixture. PlayerSave serialization/hydration is real.
+    h.p.setAttribute(ATTR_SKIP_PERSISTENCE, true);
+    return h;
+  }
+  async function trade(h) {
+    const actions = lanthus.getCurrentDefinition(h.p).getActions();
+    const option = actions.findIndex((action) => action?.toLowerCase() === 'trade');
+    assert.ok(option >= 0, 'the visible Lanthus morph offers Trade');
+    await h.send({ type: 'npc_option', index: lanthus.getIndex(), clickType: option + 1 });
+    for (let i = 0; i < 3; i++) {
+      h.p.getMovementQueue().process();
+      core.TaskManager.processWalkTo(h.p.getIndex());
+    }
+    assert.equal(h.p.getInterfaceId(), 819);
+    assert.equal(h.p.getPacketSender().getVarp(3874), 5063);
+  }
+  async function shopClick(h, component, slot, itemId) {
+    const widgetId = core.CacheDefinitions.getComponentId(component);
+    assert.ok(widgetId > 0);
+    await h.send({ type: 'widget_action', widgetId, groupId: widgetId >>> 16,
+      childId: widgetId & 0xffff, buttonNum: 2, itemId, slot });
+  }
+  function restoreAttributes(save, h) {
+    const restored = Object.assign(new PlayerSave(), save);
+    restored.attributes = JSON.parse(JSON.stringify(save.attributes));
+    restored.applyToPlayer(h.p);
+    h.p.setLocation(new core.Location(2440, 3089, 0));
+    h.p.setNeedsPlacement(false);
+  }
+
+  await t.test('Lanthus Trade opens both native panels and preserves ticket prices and full refunds', async (subtest) => {
+    const h = shopActor(subtest), sender = h.p.getPacketSender(), opens = [], scripts = [];
+    const sendSubInterface = sender.sendSubInterface, sendInterfaceScript = sender.sendInterfaceScript;
+    subtest.mock.method(sender, 'sendSubInterface', function (...args) {
+      opens.push(args); return sendSubInterface.apply(this, args);
+    });
+    subtest.mock.method(sender, 'sendInterfaceScript', function (...args) {
+      scripts.push(args); return sendInterfaceScript.apply(this, args);
+    });
+    await trade(h);
+    assert.equal(opens.filter((args) => args[1] === 819).length, 1);
+    assert.ok(opens.some((args) => args[0] === ((161 << 16) | 16) && args[1] === 819 && args[2] === 0));
+    assert.ok(opens.some((args) => args[0] === ((161 << 16) | 74) && args[1] === 806 && args[2] === 3));
+    assert.deepEqual(scripts.find((args) => args[0] === 7140)?.[1], [5063, -1, -1]);
+    assert.deepEqual(scripts.find((args) => args[0] === 7246)?.[1], [5063]);
+    assert.equal(h.p.getAttribute(PLAUDITS), 0);
+    assert.equal(sender.getVarp(4693), 0);
+    await h.send({ type: 'varp_transmit', varpId: 4693, value: 1 });
+    await shopClick(h, 'omnishop_main:list', 0, 30690);
+    assert.equal(h.p.getInventory().getAmount(30690), 0, 'a client varp is not a plaudit wallet');
+    assert.equal(h.p.getAttribute(PLAUDITS), 0);
+    h.p.getInventory().adds(4067, 4);
+    await shopClick(h, 'omnishop_main:list', 12, 4071);
+    assert.equal(h.p.getInventory().getAmount(4067), 0);
+    assert.equal(h.p.getInventory().getAmount(4071), 1);
+    await shopClick(h, 'omnishop_side:items', h.p.getInventory().getSlotForItemId(4071), 4071);
+    assert.equal(h.p.getInventory().getAmount(4071), 0);
+    assert.equal(h.p.getInventory().getAmount(4067), 4, 'the cache refunds all four tickets');
+  });
+
+  await t.test('ticket payment frees its last stack slot but a remaining stack cannot hide a full inventory', async (subtest) => {
+    for (const [tickets, helm, remaining] of [[4, 1, 0], [5, 0, 5]]) {
+      const h = shopActor(subtest), inventory = h.p.getInventory();
+      inventory.setItem(0, new core.Item(4067, tickets));
+      for (let slot = 1; slot < 28; slot++) inventory.setItem(slot, new core.Item(1277, 1));
+      await trade(h);
+      await shopClick(h, 'omnishop_main:list', 12, 4071);
+      assert.equal(inventory.getAmount(4071), helm);
+      assert.equal(inventory.getAmount(4067), remaining);
+      assert.equal(inventory.getAmount(1277), 27);
+    }
+  });
+
+  await t.test('a saved plaudit synchronizes on Trade and pays for exactly one unsellable crate', async (subtest) => {
+    const seed = shopActor(subtest);
+    seed.p.setAttribute(PLAUDITS, 1); // Controlled saved input; this test does not award a match.
+    const saved = PlayerSave.fromPlayer(seed.p);
+    assert.equal(saved.attributes[PLAUDITS], 1);
+    const h = shopActor(subtest);
+    restoreAttributes(saved, h);
+    assert.equal(h.p.getAttribute(PLAUDITS), 1);
+    await trade(h);
+    assert.equal(h.p.getPacketSender().getVarp(4693), 1);
+    h.p.getInventory().adds(4067, 4);
+    await shopClick(h, 'omnishop_main:list', 0, 30690);
+    assert.equal(h.p.getInventory().getAmount(30690), 1);
+    assert.equal(h.p.getInventory().getAmount(4067), 4);
+    assert.equal(h.p.getAttribute(PLAUDITS), 0);
+    assert.equal(h.p.getPacketSender().getVarp(4693), 0);
+    await shopClick(h, 'omnishop_main:list', 0, 30690);
+    await shopClick(h, 'omnishop_side:items', h.p.getInventory().getSlotForItemId(30690), 30690);
+    assert.equal(h.p.getInventory().getAmount(30690), 1, 'neither a second buy nor Sell creates currency');
+    assert.equal(h.p.getAttribute(PLAUDITS), 0);
+    const spent = PlayerSave.fromPlayer(h.p);
+    assert.equal(Object.hasOwn(spent.attributes, PLAUDITS), false, 'zero uses the registered save default');
+    const reloaded = shopActor(subtest);
+    restoreAttributes(spent, reloaded);
+    assert.equal(reloaded.p.getAttribute(PLAUDITS), 0);
+    assert.equal(reloaded.p.getInventory().getAmount(30690), 1);
+    await trade(reloaded);
+    assert.equal(reloaded.p.getPacketSender().getVarp(4693), 0);
+  });
+
+  await t.test('crate refusals preserve the saved balance for a full inventory or a members-only item on a free world', async (subtest) => {
+    const h = shopActor(subtest), inventory = h.p.getInventory();
+    h.p.setAttribute(PLAUDITS, 1);
+    for (let slot = 0; slot < 28; slot++) inventory.setItem(slot, new core.Item(1277, 1));
+    await trade(h);
+    await shopClick(h, 'omnishop_main:list', 0, 30690);
+    assert.equal(inventory.getAmount(30690), 0);
+    assert.equal(inventory.getAmount(1277), 28);
+    assert.equal(h.p.getAttribute(PLAUDITS), 1);
+    assert.equal(h.p.getPacketSender().getVarp(4693), 1);
+    const free = shopActor(subtest);
+    free.p.setAttribute(PLAUDITS, 1);
+    assert.equal(core.CacheDefinitions.getItem(30690).isMembers, true, 'cache membership is an input precondition');
+    subtest.mock.method(core.WorldDefinition, 'isMembersWorld', () => false);
+    await trade(free);
+    await shopClick(free, 'omnishop_main:list', 0, 30690);
+    assert.equal(free.p.getInventory().getAmount(30690), 0);
+    assert.equal(free.p.getAttribute(PLAUDITS), 1);
+    assert.equal(free.p.getPacketSender().getVarp(4693), 1);
+  });
 });

@@ -145,5 +145,16 @@
     "npc": "Flax keeper",
     "diary": "kandarin",
     "perDay": [30, 60, 120, 250]
+  },
+  "robin": {
+    "npc": "Robin",
+    "diary": "morytania",
+    "perDay": [
+      0,
+      13,
+      26,
+      39
+    ],
+    "varbit": 4543
   }
 }

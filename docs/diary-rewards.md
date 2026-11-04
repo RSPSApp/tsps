@@ -35,6 +35,7 @@ Every option works whether the item is worn or carried. The inventory names and 
 | | Check | The day's restores left | |
 | Explorer's ring | Energy (Functions > Energy on rings 2–4) | Restores 50% / 50% / 50% / 100% run energy | 2 / 3 / 4 / 3 |
 | | Check | The day's alchemy and energy charges, and ring 2's teleports | |
+| Robin | Claim-slime | Bones to bonemeal and a bucket of slime each (rsprox 703, 1857; varbit 4543, RuneLite's MORYTANIA_SLIME_CLAIMED) | – / 13 / 26 / 39 |
 
 "–" means the tier has no such option in the cache. "locked" means the option is there but does nothing until a later tier (Wiki).
 

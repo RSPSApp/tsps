@@ -17,5 +17,6 @@ module.exports = {
     require("./diaryrewards/ExplorersRing.DiaryRewards")(api);
     require("./diaryrewards/FlaxKeeper.DiaryRewards")(api);
     require("./diaryrewards/Battlestaves.DiaryRewards")(api);
+    require("./diaryrewards/Robin.DiaryRewards")(api);
   },
 };

@@ -20,6 +20,7 @@ const events = [];
 let dialogue;
 let commands;
 let buttons;
+const customEvents = new Map();
 
 class OptionDialogue {
   constructor(_id, handler, ...options) { this.handler = handler; this.options = options; }
@@ -42,6 +43,7 @@ before(async () => {
     registerCustomInterface() {},
     persistAttribute() {},
     registerCommand: (name, handler) => commands.set(name, handler),
+    onCustomEvent: (name, handler) => customEvents.set(name, handler),
     onInterfaceActionButton: (ids, handler) => ids.forEach((id) => buttons.set(id, handler)),
     emitCustomEvent: (name, request) => {
       if (name === "combat-achievements:count") request.total = request.monster === "Zulrah" ? 12 : 0;
@@ -77,6 +79,12 @@ function player() {
     getDialogueManager: () => ({ startDialogues() {} }),
   };
 }
+
+test("the summary shortcut opens the same teleport interface without command text", () => {
+  const p = player();
+  customEvents.get("teleports:open")({ player: p });
+  assert.equal(p.getInterfaceId(), TeleportInterface._test.GROUP_ID);
+});
 
 const run = (p, ...parts) => commands.get("teleports")({ player: p, parts: ["teleports", ...parts] });
 const { DATA_PART_COMPONENTS } = require("../plugins/interface/teleportinterface/Layout.TeleportInterface");

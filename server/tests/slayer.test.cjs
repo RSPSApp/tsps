@@ -420,11 +420,16 @@ test("slayer:grant-points and slayer:current-task", () => {
   const player = createPlayer();
   handlers.events.get("slayer:grant-points")[0]({ player, points: 30 });
   assert.equal(varbit(player, "slayer_points"), 30);
+  const noTask = { player, task: null };
+  handlers.events.get("slayer:current-task")[0](noTask);
+  assert.equal(noTask.task, null);
+  assert.equal(noTask.points, 30, "points are available even without a current task");
   giveTask(player, 8, Data.get().taskById.get(Data.npcTaskId(npcNamed("Kalphite Worker").getId())).displayName, 5);
   const request = { player, task: null };
   handlers.events.get("slayer:current-task")[0](request);
   assert.equal(request.task.master, 8);
   assert.equal(request.task.name, "kalphites");
+  assert.equal(request.points, 30);
 });
 
 test("every Slayer data name is a cache NPC", () => {

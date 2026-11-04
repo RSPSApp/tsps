@@ -59,6 +59,7 @@ module.exports = {
     api.registerCommand("presets", openPresets, undefined, "Open the presets interface");
     api.registerCommand("kits", openPresets, undefined, "Open the presets interface");
     api.onPlayerDefeated(openPresetsAfterDeath);
+    api.onCustomEvent("presets:open", openPresets);
     api.onCustomEvent("prayer:unlocks-bypass", bypassPrayerUnlocks);
   },
 };

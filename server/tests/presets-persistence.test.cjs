@@ -490,7 +490,7 @@ test("dropping a preset item destroys it without the confirmation interface", ()
   destroy.register({
     registerCustomInterface() {},
     onItemDropPolicy(handler) { onDrop = handler; },
-    onInterfaceActionButton() {},
+    onInterfaceActionButton() {}, onCustomEvent() {},
   });
 
   const deleted = [];

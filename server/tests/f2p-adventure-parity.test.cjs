@@ -333,3 +333,51 @@ test('interrupting Elvarg introduction after the return cancels its delayed shot
   assert.equal(resetCount, 1); assert.deepEqual(p.log.filter(row => row[0] === 'sendCameraUnlock'), [['sendCameraUnlock', false]]);
   h.tick(5); assert.equal(p.log.filter(row => row[0] === 'sendCameraReset').length, resetCount);
 });
+
+// Regression: use the production Player's lazy bank array and container methods.
+const { Player: ProductionPlayer } = require('../dist/game/entity/impl/player/Player');
+for (const scenario of ['carried-head-lazy-tabs', 'no-head-lazy-tabs', 'banked-head-null-search-tab']) {
+  test(`Dragon Slayer ${scenario}: normal Oziach completion grants both XP rewards`, () => {
+    const h = harness('DragonSlayer'), p = player();
+    const productionPlayer = new ProductionPlayer(null);
+    p.banks = productionPlayer.getBanks();
+    p.getBanks = ProductionPlayer.prototype.getBanks.bind(p);
+    p.getBank = ProductionPlayer.prototype.getBank.bind(p);
+    p.setBank = ProductionPlayer.prototype.setBank.bind(p);
+    p.isSearchingBank = () => false;
+    p.getCurrentBankTab = () => 0;
+    p.getInterfaceId = () => -1;
+    const inventory = new core.Inventory(p);
+    p.getInventory = () => inventory;
+    inventory.adds(I.COINS, 123);
+    if (scenario === 'carried-head-lazy-tabs') inventory.adds(I.ELVARGS_HEAD, 1);
+    if (scenario === 'banked-head-null-search-tab') {
+      for (let tab = 0; tab < core.Bank.BANK_SEARCH_TAB_INDEX; tab++) p.getBank(tab);
+      p.getBank(0).adds(I.ELVARGS_HEAD, 1);
+      // A normal login never restores the ephemeral search tab.
+      p.setBank(core.Bank.BANK_SEARCH_TAB_INDEX, null);
+    }
+    h.quest.setStage(p, 9);
+    p.attrs.set('dragon-slayer:elvarg-killed', 1);
+    const nullTabs = p.getBanks().flatMap((bank, tab) => bank === null ? [tab] : []);
+    let failure;
+    try {
+      h.talk(p, N.OZIACH);
+      h.continueUntil(p, () => h.quest.isComplete(p));
+    } catch (error) { failure = error; }
+    const receipt = {
+      scenario, nullTabs,
+      failure: failure ? { name: failure.name, message: failure.message, stack: failure.stack } : null,
+      stage: h.quest.getStage(p), questPoints: p.attrs.get('quest.points'), xp: p.xp,
+      inventoryHead: inventory.getAmount(I.ELVARGS_HEAD), coins: inventory.getAmount(I.COINS),
+      repeatCompletion: h.quest.complete(p),
+    };
+    assert.equal(failure, undefined, 'normal completion must not throw on production lazy banks');
+    assert.deepEqual(p.xp, [[core.Skill.STRENGTH.getIndex(),18650],[core.Skill.DEFENCE.getIndex(),18650]]);
+    assert.equal(receipt.stage, 10);
+    assert.equal(receipt.questPoints, 2);
+    assert.equal(receipt.inventoryHead, 0);
+    assert.equal(receipt.coins, 123);
+    assert.equal(receipt.repeatCompletion, false);
+  });
+}

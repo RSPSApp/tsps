@@ -245,6 +245,7 @@ module.exports = function registerDragonSlayerQuest(api) {
   function reward(player) {
     // The head is optional proof; OSRS also removes banked heads on completion.
     for (const container of [player.getInventory(), ...player.getBanks()]) {
+      if (container == null) continue;
       const amount = container.getAmount(ITEM.elvargsHead);
       if (amount > 0) container.deleteNumber(ITEM.elvargsHead, amount);
     }

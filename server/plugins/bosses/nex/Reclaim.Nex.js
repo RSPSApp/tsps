@@ -57,21 +57,26 @@ function died({ player }) {
   }
 }
 
-function slotsNeeded(player, items) {
+function slotsNeeded(player, items, coinsSpent) {
   const { ItemDefinition } = Common.core;
   const inventory = player.getInventory();
   const counted = new Set();
   let slots = 0;
   for (const [id] of items) {
     const stackable = ItemDefinition.forId(id)?.isStackable?.();
-    if (stackable && (inventory.contains(id) || counted.has(id))) continue;
+    // Paying with the last coins empties that stack, so stored coins then need a slot of their own.
+    const heldStack = inventory.contains(id) && !(id === COINS && coinsSpent);
+    if (stackable && (heldStack || counted.has(id))) continue;
     counted.add(id);
     slots++;
   }
   return slots;
 }
 
-/** Whether each stack already carried can take its share: a stack can't grow past its cap. */
+/**
+ * Whether each stack already carried can take its share: a stack can't grow past its cap. The fee
+ * comes out of the coin stack first, so it counts as room there.
+ */
 function heldStacksFit(player, items) {
   const { Item } = Common.core;
   const inventory = player.getInventory();
@@ -79,7 +84,8 @@ function heldStacksFit(player, items) {
   for (const [id, amount] of items) totals.set(id, (totals.get(id) ?? 0) + amount);
   return [...totals].every(([id, amount]) => {
     const stackable = Common.core.ItemDefinition.forId(id)?.isStackable?.();
-    return !stackable || !inventory.contains(id) || inventory.getAddableAmount(new Item(id, amount)) >= amount;
+    const room = id === COINS ? FEE : 0;
+    return !stackable || !inventory.contains(id) || inventory.getAddableAmount(new Item(id, amount)) + room >= amount;
   });
 }
 
@@ -92,7 +98,8 @@ function reclaim(player) {
     player.sendMessage("You need 100,000 coins to reclaim your items.");
     return;
   }
-  const needed = slotsNeeded(player, items) - (inventory.getAmount(COINS) === FEE ? 1 : 0);
+  const coinsSpent = inventory.getAmount(COINS) === FEE;
+  const needed = slotsNeeded(player, items, coinsSpent) - (coinsSpent ? 1 : 0);
   if (inventory.getFreeSlots() < needed) {
     player.sendMessage(`You need ${needed} free inventory spaces to reclaim your items.`);
     return;

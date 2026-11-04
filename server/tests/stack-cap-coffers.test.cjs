@@ -253,6 +253,69 @@ test("Nex chest: a stack that can't take the stored amount keeps the items and t
   assert.equal(f.messages.at(-1), NO_SPACE);
 });
 
+test("Nex chest: the fee counts as room for stored coins, and a refusal charges nothing", async (t) => {
+  const reclaimCoins = async (f, stored, held) => {
+    for (let slot = 10; slot < 13; slot++) f.inv.setItem(slot, plain(I.TUMEKENS_SHADOW_UNCHARGED_));
+    f.inv.setItem(0, plain(I.COINS, stored));
+    PlayerDeathTask.dropItems(f.p, null, new core.Location(...NEX_CHAMBER, 0));
+    assert.deepEqual(f.p.getAttribute(NEX_RECLAIM), [[I.COINS, stored]], "the chest took the coins");
+    f.inv.setItem(5, plain(I.COINS, held));
+    useLoc(f, "Chest", "claim", NEX_CHEST);
+    assert.ok(pending(f), "the chest asks first");
+    await answer(f, YES);
+  };
+  const storedCoins = (f) => (f.p.getAttribute(NEX_RECLAIM) ?? []).reduce((sum, [, count]) => sum + count, 0);
+
+  const control = actor(t, NEX_CHAMBER);
+  await reclaimCoins(control, 1000, 500000);
+  assert.equal(control.inv.getAmount(I.COINS), 500000 - NEX_FEE + 1000, "control: paid and reclaimed");
+  assert.equal(storedCoins(control), 0, "control: the chest is empty");
+
+  const capped = actor(t, NEX_CHAMBER);
+  await reclaimCoins(capped, 1000, MAX_STACK_AMOUNT);
+  assert.equal(capped.inv.getAmount(I.COINS), MAX_STACK_AMOUNT - NEX_FEE + 1000, "a full stack has the fee's room");
+  assert.equal(storedCoins(capped), 0, "the chest is empty");
+
+  const exact = actor(t, NEX_CHAMBER);
+  await reclaimCoins(exact, NEX_FEE + 50, MAX_STACK_AMOUNT - 50);
+  assert.equal(exact.inv.getAmount(I.COINS), MAX_STACK_AMOUNT, "spare room plus the fee is exactly enough");
+  assert.equal(storedCoins(exact), 0);
+
+  const over = actor(t, NEX_CHAMBER);
+  await reclaimCoins(over, NEX_FEE + 51, MAX_STACK_AMOUNT - 50);
+  assert.equal(over.inv.getAmount(I.COINS), MAX_STACK_AMOUNT - 50, "one coin too many charges nothing");
+  assert.equal(storedCoins(over), NEX_FEE + 51, "and the chest keeps them");
+  assert.equal(over.messages.at(-1), NO_SPACE);
+});
+
+test("Nex chest: paying the last coins frees a slot only once, so stored coins and an item both need room", async (t) => {
+  const whipOwned = (f) => f.inv.getAmount(I.ABYSSAL_WHIP)
+    + (f.p.getAttribute(NEX_RECLAIM) ?? []).filter(([id]) => id === I.ABYSSAL_WHIP).length;
+  const reclaimBoth = async (f, freeSlots) => {
+    for (let slot = 10; slot < 13; slot++) f.inv.setItem(slot, plain(I.TUMEKENS_SHADOW_UNCHARGED_));
+    f.inv.setItem(0, plain(I.COINS, 1000));
+    f.inv.setItem(1, plain(I.ABYSSAL_WHIP));
+    PlayerDeathTask.dropItems(f.p, null, new core.Location(...NEX_CHAMBER, 0));
+    assert.equal(f.p.getAttribute(NEX_RECLAIM).length, 2, "the chest took the coins and the whip");
+    f.inv.setItem(5, plain(I.COINS, NEX_FEE));
+    while (f.inv.getFreeSlots() > freeSlots) f.inv.add(plain(I.RAKE), false);
+    useLoc(f, "Chest", "claim", NEX_CHEST);
+    assert.ok(pending(f), "the chest asks first");
+    await answer(f, YES);
+  };
+  const control = actor(t, NEX_CHAMBER);
+  await reclaimBoth(control, 1);
+  assert.equal(control.inv.getAmount(I.ABYSSAL_WHIP), 1, "control: one free slot takes the whip");
+  assert.equal(control.inv.getAmount(I.COINS), 1000, "control: the fee's slot takes the coins");
+
+  const full = actor(t, NEX_CHAMBER);
+  await reclaimBoth(full, 0);
+  assert.equal(whipOwned(full), 1, "the whip is held or still in the chest");
+  assert.equal(full.inv.getAmount(I.COINS), NEX_FEE, "no fee taken");
+  assert.equal(full.p.getAttribute(NEX_RECLAIM).length, 2, "the chest keeps both");
+  assert.equal(full.messages.at(-1), "You need 1 free inventory spaces to reclaim your items.");
+});
+
 // ------------------------------------------------------------------ Perdu's unlock
 
 test("Perdu unlock: a coin stack that can't take the refund leaves the item locked", async (t) => {

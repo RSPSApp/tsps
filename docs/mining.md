@@ -1,8 +1,8 @@
 # Mining rocks
 
 `plugins/skills/Mining.plugin.js` mines the ore rocks (clay to runite, blurite, barronite, the essence mines) and the
-skilling rocks below them: soft clay, lead, lovakite, nickel, rubium, sunstone, infernal shale, gem rocks, amethyst
-and Daeyalt.
+skilling rocks below them: soft clay, lead, lovakite, nickel, rubium, sunstone, infernal shale, gem rocks, amethyst,
+Daeyalt and the Cam Torum calcified rocks.
 Pickaxe-specific rules are in `plugins/skills/mining/`.
 
 `plugins/areas/MiningGuild.plugin.js` checks 60 current Mining at all four Falador entrance
@@ -60,7 +60,7 @@ Recording 3280's live message agrees with mithril's level 55.
 
 OSRS Wiki rock pages (https://oldschool.runescape.wiki/w/Soft_clay_rocks, `/w/Lead_rocks`, `/w/Lovakite_rocks`,
 `/w/Nickel_rocks`, `/w/Rubium_rocks`, `/w/Sunstone_rocks`, `/w/Infernal_shale_rocks`, `/w/Gem_rocks`,
-`/w/Amethyst_crystals`, `/w/Daeyalt_rocks`; pet base rates from `/w/Rock_golem`):
+`/w/Amethyst_crystals`, `/w/Daeyalt_rocks`, `/w/Calcified_rocks`; pet base rates from `/w/Rock_golem`):
 
 | Rock | Level | XP | Respawn | Before it goes |
 | --- | ---: | ---: | --- | --- |
@@ -74,6 +74,7 @@ OSRS Wiki rock pages (https://oldschool.runescape.wiki/w/Soft_clay_rocks, `/w/Le
 | Gem rocks | 40 | 65 | 99 ticks | 1 |
 | Amethyst | 92 | 240 | 75 s (125 ticks) | 2-3 |
 | Daeyalt | 20 | 17.5 | 28 s (47 ticks) | 3 (one stage each) |
+| Calcified | 41 | 33 (shards), 36 (deposit) | 30 s (50 ticks) | about 70 s (117 ticks) of being mined, or the end of its water |
 
 - **Mined-out locs:** the Sailing rocks have their own `<gameval>_empty` loc (`leadrock1_empty`, `nickelrock1_empty`,
   `rubiumrock1_empty`, all named "Rocks"); clicking Mine on one says there is no ore, like `rocks1`/`rocks2`. Amethyst
@@ -111,6 +112,35 @@ OSRS Wiki rock pages (https://oldschool.runescape.wiki/w/Soft_clay_rocks, `/w/Le
   `area_sanguine_mine_minerocks_01` -> `_02` -> `_03` while the player mines on, then `_04` with
   `This rock face is now empty.`. It grows back as `_01`. Its ore line is a game message (recording 1637), where
   every other rock's is spam.
+
+### Calcified rocks
+
+Cam Torum mine (Wiki Calcified rocks; rsprox capture 1105, rev 237, a Leagues world, ten water cycles).
+`plugins/skills/mining/CalcifiedWater.Mining.js` runs the water.
+
+- **Mining:** wall swings (`human_mining_<pickaxe>_pickaxe_wall`). Each success is 1-3 blessed bone shards (74/75,
+  33 XP) or a calcified deposit (1/75, 36 XP): `You manage to chip off some bone shards.` /
+  `You manage to mine a calcified deposit.` (spam), sound 3600. `tracking_ore_mined` goes up by the number of
+  shards (+3 for three). The gem pre-roll applies; mining enhancers don't. A full inventory stops mining even with
+  shards in it (Wiki: shards stack, but a free slot is still needed).
+- **Running out:** the rock stays through its ores and runs out on a timer that counts the ticks it is mined: the
+  Wiki's "around 70 seconds" (117 ticks). In the capture each mined-out rock went with the first ore after
+  121-127 ticks of mining (three of three), so the rock goes with the next ore once the timer is over. The rock
+  becomes its own `_empty` loc (`varlamore_mining_rock` -> `varlamore_mining_rock_empty`,
+  `varlamore_mining_rock02` -> `varlamore_mining_rock_empty02`, ...), with area sound 2661 (delay 10, range 1)
+  and the respawn timer.
+- **Water:** `<col=a53fff>Some cracks around the cave begin to ooze water.` (game message) and sound 2041, and
+  `varlamore_mining_special_rock` is added as a wall decoration (shape 4) on four rocks' tiles, with each rock's
+  rotation. Cycles started 117-146 ticks apart and the water lasted 38-54 ticks (the Wiki: every 1-2 minutes,
+  for 20-30 seconds). When it stops the decorations go, and the next tick every one of the four rocks is mined out,
+  mined or not, with sound 2661 and the respawn timer for the players there. Every recorded cycle wet two rocks
+  of the west half (x 1497-1505) and two of the east half (x 1514-1521).
+- **Boost:** the Wiki's 15% better success rate while a rock is wet.
+
+Estimated, not recorded: the success chart (below); that the 15% multiplies the roll's chance (×1.15, capped at
+1); that the water picks only standing rocks, at random within each half; the mine's area (x 1490-1528,
+y 9530-9553, level 1). The capture's respawns were 11-14 ticks (timers of 12 and 13) on a Leagues world; the
+Wiki's 30 s is used, as for gem rocks.
 
 ## Rolls and success chance
 
@@ -163,6 +193,7 @@ The Wiki has no chart for the rocks below; these are estimates, to replace once 
 | Sunstone | 69 | 301 | the Wiki's momentum rate (75% at 53, 100% at 80) |
 | Infernal shale | 60 | 180 | the Wiki: "between iron and coal" to mine |
 | Daeyalt | 96 | 350 | iron's chart; recordings got ore on every roll |
+| Calcified | 20 | 200 | the Wiki training rates (23,500-49,000 XP an hour at 50-99), and 46% at level 61 in capture 1105 (51% here) |
 
 The Runite rocks page checks the formula: 17/256 at level 85 and 19/256 from 97.
 
@@ -207,8 +238,10 @@ Leagues world) has `You just found a Sapphire!` while mining coal rocks, and the
 - Access isn't checked: Shilo Village for the Shilo gem rocks, the Mining Guild for amethyst, the Yama contract for
   infernal shale, Sailing islands for lead, nickel and rubium.
 - A Daeyalt face only grows back once it is empty; a face left part-mined stays at its stage.
+- Calcified rocks: the world-hop debuff (`Your pickaxe keeps slipping on the rocks as it's still wet from the last
+  deposit.`) and the Varlamore red token are not modelled.
 - Not mineable yet, each needing its own area or mechanic: limestone (stages with their own respawns), rubium and
-  infernal shale deposits (one of two active, timed), calcified rocks (timed depletion, water), Daeyalt Essence,
+  infernal shale deposits (one of two active, timed), Daeyalt Essence,
   Tai Bwo Wannai gem rocks, the Lovatt Mine ore veins, the Fossil Island boulders, ash piles and volcanic
   sulphur, the Keldagrim gold vein, the salt rocks, and the Easter egg rock. `tests/mining-parity.test.cjs` lists
   every loc with a Mine option, so a new one without a handler fails the test.

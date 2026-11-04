@@ -59,18 +59,40 @@ function preset(id) {
 
 const real = (id) => new core.Item(id, 1);
 
+/** Slot of an item by value: add() stores a clone, so the original instance is never in the container. */
 function slotOf(player, item) {
-  return player.getInventory().getItems().indexOf(item);
+  return player.getInventory().getItems().findIndex((entry) => entry && entry.equals(item));
 }
 
-function itemOnItem(player, used, target) {
+/** The instance the container actually holds, as the engine would hand it to a hook. */
+function stored(player, item) {
+  const slot = slotOf(player, item);
+  assert.ok(slot >= 0, "the item is in the inventory");
+  return player.getInventory().getItems()[slot];
+}
+
+/** Takes the real item out and puts the replacement in, proving both happened before any assertion. */
+function swapIn(player, original, replacement) {
+  const slot = slotOf(player, original);
+  assert.ok(slot >= 0, "the item to swap out is in the inventory");
+  player.getInventory().deleteAtSlot(slot, 1, false);
+  assert.equal(slotOf(player, original), -1, "the original is gone");
+  player.getInventory().add(replacement, false);
+  assert.ok(slotOf(player, replacement) >= 0, "the replacement is in");
+  assert.notEqual(slotOf(player, replacement), -1);
+}
+
+function itemOnItem(player, usedValue, targetValue) {
+  const used = stored(player, usedValue);
+  const target = stored(player, targetValue);
   return PluginManager.emitItemOnItem({
     player, usedItem: used, usedItemId: used.getId(), usedItemSlot: slotOf(player, used),
     usedWithItem: target, usedWithItemId: target.getId(), usedWithItemSlot: slotOf(player, target), handled: false,
   });
 }
 
-function dismantle(player, item) {
+function dismantle(player, itemValue) {
+  const item = stored(player, itemValue);
   const index = core.CacheDefinitions.getItem(item.getId()).inventoryActions.indexOf("Dismantle");
   assert.ok(index >= 0, "the cache gives the faceguard a Dismantle option");
   return PluginManager.emitItemAction({
@@ -156,8 +178,7 @@ test("a preset helm swapped in after the prompt is not consumed at Yes", (t) => 
   player.getInventory().add(jaw, false);
   itemOnItem(player, realHelm, jaw);
   assert.ok(pending(player));
-  player.getInventory().deleteAtSlot(slotOf(player, realHelm), 1, false);
-  player.getInventory().add(preset(I.HELM_OF_NEITIZNOT), false);
+  swapIn(player, realHelm, preset(I.HELM_OF_NEITIZNOT));
   answer(player, 1);
   const left = held(player);
   assert.deepEqual(left.map((item) => item.getId()).sort((a, b) => a - b),
@@ -172,8 +193,7 @@ test("a preset jaw swapped in after the prompt is not consumed at Yes", (t) => {
   player.getInventory().add(realHelm, false);
   player.getInventory().add(jaw, false);
   itemOnItem(player, realHelm, jaw);
-  player.getInventory().deleteAtSlot(slotOf(player, jaw), 1, false);
-  player.getInventory().add(preset(I.BASILISK_JAW), false);
+  swapIn(player, jaw, preset(I.BASILISK_JAW));
   answer(player, 1);
   assert.deepEqual(ids(player), [I.HELM_OF_NEITIZNOT, I.BASILISK_JAW].sort((a, b) => a - b));
   assert.equal(held(player).find((item) => item.getId() === I.BASILISK_JAW).isPresetItem(), true);
@@ -196,8 +216,7 @@ test("a preset faceguard swapped in after the Dismantle prompt is not taken apar
   player.getInventory().add(faceguard, false);
   dismantle(player, faceguard);
   assert.ok(pending(player));
-  player.getInventory().deleteAtSlot(slotOf(player, faceguard), 1, false);
-  player.getInventory().add(preset(I.NEITIZNOT_FACEGUARD), false);
+  swapIn(player, faceguard, preset(I.NEITIZNOT_FACEGUARD));
   answer(player, 1);
   assert.deepEqual(ids(player), [I.NEITIZNOT_FACEGUARD]);
   assert.equal(held(player)[0].isPresetItem(), true);

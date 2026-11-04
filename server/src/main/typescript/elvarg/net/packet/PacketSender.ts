@@ -309,8 +309,8 @@ export class PacketSender {
   }
 
   /** Populates the quest list (side journal); the client renders opcode 116. */
-  sendQuestList(groups: QuestListGroup[]): this {
-    this.player.getSession().sendClientPacket(encodeWidgetSetQuestList(groups));
+  sendQuestList(groups: QuestListGroup[], nativeRows: readonly { nativeSlot: number; slot: number }[] = []): this {
+    this.player.getSession().sendClientPacket(encodeWidgetSetQuestList(groups, nativeRows));
     return this;
   }
 

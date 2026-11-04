@@ -2286,8 +2286,10 @@ export type QuestListGroup = {
   quests: QuestListEntry[];
 };
 
+export type NativeQuestRow = { nativeSlot: number; slot: number };
+
 /** Mirrors the client's WIDGET_SET_QUEST_LIST decoder (ServerBinaryDecoder.ts). */
-export function encodeWidgetSetQuestList(groups: readonly QuestListGroup[]): Buffer {
+export function encodeWidgetSetQuestList(groups: readonly QuestListGroup[], nativeRows: readonly NativeQuestRow[] = []): Buffer {
   const parts: Buffer[] = [];
   const groupCount = Buffer.alloc(2);
   groupCount.writeUInt16BE(groups.length & 0xffff);
@@ -2306,6 +2308,14 @@ export function encodeWidgetSetQuestList(groups: readonly QuestListGroup[]): Buf
       parts.push(string(quest.displayName));
     }
   }
+  // Optional trailer for stock-cache row identities; browser slots remain unchanged.
+  const mapping = Buffer.alloc(2 + nativeRows.length * 4);
+  mapping.writeUInt16BE(nativeRows.length);
+  nativeRows.forEach((row, index) => {
+    mapping.writeUInt16BE(row.nativeSlot, 2 + index * 4);
+    mapping.writeUInt16BE(row.slot, 4 + index * 4);
+  });
+  parts.push(mapping);
   return encodeServerPacket(ServerPacketId.WIDGET_SET_QUEST_LIST, Buffer.concat(parts));
 }
 

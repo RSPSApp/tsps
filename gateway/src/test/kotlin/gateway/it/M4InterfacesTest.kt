@@ -88,6 +88,21 @@ class M4InterfacesTest {
         }
     }
 
+    @Test
+    fun `native quest row identities open the matching journal instead of dense browser neighbours`() {
+        login().use { game ->
+            game.until(TICKS)
+            for ((nativeSlot, title) in listOf(16 to "Pirate's Treasure", 55 to "Elemental Workshop I")) {
+                game.button(399, 7, sub = nativeSlot)
+                val messages = game.until(TICKS)
+                val titles = messages.filterIsInstance<net.rsprox.protocol.game.outgoing.model.interfaces.IfSetText>()
+                    .filter { it.interfaceId == 119 || it.interfaceId == 782 }
+                    .map { it.text }
+                assertTrue(titles.any { title in it }, "native row $nativeSlot expected $title; got $titles")
+            }
+        }
+    }
+
     private fun login(): HeadlessClient.Game {
         val result = LiveGateway.client().login(LiveGateway.newAccount("gwui"), PASSWORD, modulus)
         assertEquals(OK, result.code)

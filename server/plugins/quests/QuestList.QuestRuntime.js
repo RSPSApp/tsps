@@ -86,4 +86,33 @@ function questListGroups(quests, player, cache, statusOf, Skill) {
 function questMetadata(quest, cache) {
   return metadata(cache).get(normalize(quest.name));
 }
-module.exports = { questListGroups, metadata, questMetadata };
+/**
+ * Native 399:7 children use the quest table's id column, independent of sort/filter order.
+ * RFD's subrows share the registered parent's journal unless registered separately.
+ */
+function nativeQuestRows(slotQuests, cache) {
+  const all = [...metadata(cache).values()];
+  const byRow = new Map(all.map(row => [row.rowId, row]));
+  const slots = new Map();
+  slotQuests.forEach((quest, slot) => {
+    if (quest) {
+      const row = questMetadata(quest, cache);
+      if (row) slots.set(row.rowId, slot);
+    }
+  });
+  const result = [];
+  for (const row of all) {
+    let current = row;
+    const seen = new Set();
+    while (current && !slots.has(current.rowId) && !seen.has(current.rowId)) {
+      seen.add(current.rowId);
+      current = byRow.get(current.parent_quest?.[0]);
+    }
+    const nativeSlot = row.id?.[0];
+    if (current && slots.has(current.rowId) && Number.isInteger(nativeSlot) && nativeSlot >= 0 && nativeSlot < 65535) {
+      result.push({ nativeSlot, slot: slots.get(current.rowId) });
+    }
+  }
+  return result.sort((a, b) => a.nativeSlot - b.nativeSlot);
+}
+module.exports = { questListGroups, metadata, questMetadata, nativeQuestRows };

@@ -15,7 +15,7 @@ const groups = [
     },
 ];
 
-const packet = encodeWidgetSetQuestList(groups);
+const packet = encodeWidgetSetQuestList(groups, [{ nativeSlot: 16, slot: 1 }, { nativeSlot: 55, slot: 2 }]);
 let offset = 0;
 
 assert.equal(packet[offset++], ServerPacketId.WIDGET_SET_QUEST_LIST, "opcode");
@@ -43,6 +43,13 @@ for (const expected of groups[0].quests) {
     assert.equal(packet[offset++], expected.status, "status");
     assert.equal(readString(), expected.key, "key");
     assert.equal(readString(), expected.displayName, "displayName");
+}
+assert.equal(packet.readUInt16BE(offset), 2, "native row count");
+offset += 2;
+for (const expected of [[16, 1], [55, 2]]) {
+    assert.equal(packet.readUInt16BE(offset), expected[0]);
+    assert.equal(packet.readUInt16BE(offset + 2), expected[1]);
+    offset += 4;
 }
 assert.equal(offset, packet.length, "no trailing bytes");
 

@@ -5,7 +5,7 @@ import ts from "typescript";
 import { Inventory } from "../rs/inventory/Inventory";
 import { deriveRawMenuEntriesForWidget } from "../widgets/menu/utils";
 import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
-import { encodeWidgetRunScript, encodeWidgetSetText, encodeWidgetSetFlagsRange, decodeClientPacket } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
+import { encodeWidgetSetQuestList, encodeWidgetRunScript, encodeWidgetSetText, encodeWidgetSetFlagsRange, decodeClientPacket } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
 import { buildWidgetActionPayload } from "../game/widgets/widgetActionPayload";
 import { shouldTransmitAction } from "../widgets/WidgetFlags";
 import { InputManager } from "../game/InputManager";
@@ -1071,3 +1071,48 @@ nativeDestroyConfirmation().then(() => console.log('Native destroy confirmation 
     .then(() => nativeSpecialOrbSendsOneServerAuthoritativeInput())
     .then(() => console.log('Native special orb and bar send one server-authoritative input'))
     .catch(error => { console.error(error); process.exitCode = 1; });
+
+
+// The stock quest list keeps child identities while sorting/filtering changes screen positions.
+{
+    const { vm } = require('../scripts/cache/cs2-sweep').createCacheVm();
+    const wm = vm.context.widgetManager;
+    wm.rootInterface = 161;
+    wm.getGroup(399);
+    const root = wm.getWidgetByUid(399 << 16);
+    const { CacheDefinitions } = require("../../server/src/main/typescript/elvarg/game/cache/CacheDefinitions");
+    const { metadata } = require("../../server/plugins/quests/QuestList.QuestRuntime");
+    const questMetadata = [...metadata(CacheDefinitions).values()] as any[];
+    const nativeRows = questMetadata.filter(row => row.parent_quest?.[0] === 117 || row.type?.[0] === 1)
+        .map(row => [row.displayname[0], row.id[0]]);
+    for (const layout of [548, 161, 164]) {
+        wm.rootInterface = layout;
+        for (let sort = 0; sort < 12; sort++) {
+            for (const hide of [0, 13773, 13774, 13775, 13776, 13777]) {
+                for (const id of [13773, 13774, 13775, 13776, 13777]) vm.context.varManager.setVarbit(id, id === hide ? 1 : 0);
+                vm.context.varManager.setVarbit(13772, sort);
+                vm.runScriptEvent({ args: root.onLoad, widget: root });
+                assert.equal(vm.lastError, null);
+                const rows = wm.getWidgetByUid((399 << 16) | 7).children;
+                for (const [name, child] of [["Pirate's Treasure", 16], ["Elemental Workshop I", 55],
+                    ["Recipe for Disaster", 106], ...nativeRows] as const) {
+                    const row = rows.find((row: any) => String(row.text).replace(/^MQ: /, "") === name);
+                    if (row) assert.equal(row.childIndex, child, name);
+                    else assert.notEqual(hide, 0, name + " is present without filters");
+                }
+            }
+        }
+    }
+    const groups = [{ title: "Free", quests: [{ slot: 1, status: 1, key: "pirate", displayName: "Pirate's Treasure" }] }];
+    const frame = encodeWidgetSetQuestList(groups, [{ nativeSlot: 16, slot: 1 }]);
+    assert.deepEqual((decodeServerPacket(frame) as any).payload.groups, groups, "native mappings do not change browser slots");
+    const malformed = (tail: number[]) => {
+        const body = Buffer.concat([frame.subarray(0, frame.length - 6), Buffer.from(tail)]);
+        body.writeUInt16BE(body.length - 3, 1);
+        return body;
+    };
+    assert.throws(() => decodeServerPacket(malformed([0, 1, 0, 16, 0])), /quest row mapping|readShort/);
+    assert.throws(() => decodeServerPacket(malformed([0, 1, 0, 16, 0, 2])), /quest row mapping/);
+    assert.throws(() => decodeServerPacket(malformed([0, 2, 0, 16, 0, 1, 0, 16, 0, 1])), /quest row mapping/);
+    assert.deepEqual((decodeServerPacket(malformed([])) as any).payload.groups, groups, "legacy list without trailer remains readable");
+}

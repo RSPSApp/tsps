@@ -1147,6 +1147,19 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 }
                 groups.push({ title, quests });
             }
+            // Stock-client identities are a gateway concern, but validate the entire trailer.
+            if (reader.remaining > 0) {
+                const count = reader.readShort();
+                if (reader.remaining !== count * 4) throw new Error("Invalid quest row mapping length");
+                const slots = new Set(groups.flatMap(group => group.quests.map(quest => quest.slot)));
+                const nativeSlots = new Set<number>();
+                for (let i = 0; i < count; i++) {
+                    const nativeSlot = reader.readShort();
+                    const slot = reader.readShort();
+                    if (nativeSlots.has(nativeSlot) || !slots.has(slot)) throw new Error("Invalid quest row mapping");
+                    nativeSlots.add(nativeSlot);
+                }
+            }
             return {
                 type: "widget",
                 payload: {

@@ -87,7 +87,7 @@ const STATUS_IN_PROGRESS = 0;
 const STATUS_NOT_STARTED = 1;
 const STATUS_COMPLETE = 2;
 
-const { questListGroups, questMetadata } = require("./QuestList.QuestRuntime");
+const { questListGroups, questMetadata, nativeQuestRows } = require("./QuestList.QuestRuntime");
 const quests = [];
 const sentQuestSlots = new WeakMap();
 const openBooks = new WeakMap();
@@ -159,7 +159,7 @@ function sendQuestList(player) {
   sentQuestSlots.set(player, slotQuests);
   const packet = player.getPacketSender();
   if (previous?.length) packet.sendInterfaceFlagsRange(QUEST_LIST_ENTRY_UID, 0, previous.length - 1, 0);
-  packet.sendQuestList(groups);
+  packet.sendQuestList(groups, nativeQuestRows(slotQuests, coreApi?.CacheDefinitions));
   for (const [start, end] of ranges) {
     if (end >= start) {
       packet.sendInterfaceFlagsRange(QUEST_LIST_ENTRY_UID, start, end, QUEST_LIST_ENTRY_FLAGS);

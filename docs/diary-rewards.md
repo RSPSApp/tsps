@@ -6,6 +6,10 @@ The achievement diaries' reward items (Ardougne cloak, Karamja gloves, Explorer'
 - the Explorer's ring's free alchemy (the Alchemy option and using items on the ring);
 - the passive perks: shop discounts, Kandarin headgear's extra logs, Rada's blessing's extra fish, Morytania legs as a ghostspeak amulet, desert heat protection, and the like.
 
+## Zaff's battlestaves
+
+The barrel in Zaff's shop sells one noted stack of battlestaves a day at 7,000 coins each: 15 / 30 / 60 / 120 for the highest Varrock tier claimed from Toby. The barrel checks room first, then offers the price (Yes. / No.); Yes. re-checks coins and room, takes the coins, gives the stack and sets `zaff_last_claimed`. The day is the UTC date in the daily attribute; the barrel is a multiloc on `zaff_last_claimed`, so a claim and each login of a claimed player schedule a task that sends the varbit back to 0 at 00:00 UTC (Wiki, 23 July 2025: no relog). The flow is as captured in rsprox archive 3216; the reset is from the Wiki and the cache, no capture shows it. Not done: the Wiki also says the battlestaves are only purchasable after partial completion of What Lies Below (the quest page ties it to defeating King Roald). No capture or cache check shows that gate and no refusal text is known, so it is not enforced. A player with no claimed tier clicking the full barrel gets no response (no text is known).
+
 ## Options
 
 Every option works whether the item is worn or carried. The inventory names and the worn names (cache params 451+) lead to the same thing.

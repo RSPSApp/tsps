@@ -5,6 +5,7 @@
  * lets the player pick a pair from the skill-multi menu and unlocks Stamp Foot; it can be
  * searched again for more boots (Wiki). A floor's reward counts as its completion.
  */
+const { Item } = require("../../../src/main/typescript/elvarg/game/model/Item");
 const { Skill } = require("../../../src/main/typescript/elvarg/game/model/Skill");
 const { Sound } = require("../../../src/main/typescript/elvarg/game/Sound");
 const { Sounds } = require("../../../src/main/typescript/elvarg/game/Sounds");
@@ -48,6 +49,14 @@ function openChest(player, floor) {
     new ActionDialogue(1, { execute: () => {
       if (Data.isClaimed(player, floor)) {
         player.getDialogueManager().advance();
+        return;
+      }
+      // Checked here, as room can change during the opening statement. Refusing is ours: the
+      // Wiki doesn't cover it, and the reward can only be had once.
+      if (player.getInventory().getAddableAmount(new Item(COINS, reward.coins)) < reward.coins) {
+        player.sendMessage("You don't have enough inventory space.");
+        player.getDialogueManager().reset();
+        player.getPacketSender().sendInterfaceRemoval();
         return;
       }
       Data.claim(player, floor);

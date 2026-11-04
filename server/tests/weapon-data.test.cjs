@@ -221,3 +221,27 @@ test("gem machetes swing at the cache's 4 ticks, and the twisted bow at its 6", 
   }
   assert.equal(WeaponProfiles.attackSpeed(wielding(20997, WeaponInterfaces.SHORTBOW), 4), 6);
 });
+
+test("the reported weapon families use their primary/cache-sourced holding stances for every wearable variant", () => {
+  const nightmareReady = CacheDefinitions.getSeqId("human_nightmare_staff_ready");
+  const kistenReady = CacheDefinitions.getSeqId("human_weapons_crimson_kisten_ready01");
+  const kistenWalk = CacheDefinitions.getSeqId("human_weapons_crimson_kisten_walk_f");
+  const kistenRun = CacheDefinitions.getSeqId("human_weapons_crimson_kisten_run_f");
+  const kistenDefend = CacheDefinitions.getSeqId("human_weapons_crimson_kisten_def");
+  assert.ok([nightmareReady, kistenReady, kistenWalk, kistenRun, kistenDefend].every(id => Number.isInteger(id) && id >= 0));
+  let checked = 0;
+  for (const item of cacheWeapons()) {
+    const definition = ItemDefinition.forId(item.id);
+    if (/nightmare staff/i.test(item.name)) {
+      assert.equal(definition.getStandAnim(), nightmareReady, item.name + " " + item.id);
+    } else if (/^Osmumten's fang/.test(item.name)) {
+      // Official rsprox1779 tick3674: Fang(or)27246, appearance BAS809/823/819/820/821/822/824.
+      assert.equal(definition.getStandAnim(), 809, item.name + " " + item.id);
+    } else if (item.name === "Crimson kisten") {
+      assert.deepEqual([definition.getStandAnim(), definition.getWalkAnim(), definition.getRunAnim(), definition.getBlockAnim()],
+        [kistenReady, kistenWalk, kistenRun, kistenDefend]);
+    } else continue;
+    checked++;
+  }
+  assert.equal(checked, 11, "the cache's current seven staff, three fang and one kisten variants are covered");
+});

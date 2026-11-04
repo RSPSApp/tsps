@@ -215,8 +215,18 @@ export class LunarSpells {
         ["tele group ice plateau", teleport("tele group ice plateau", 99, 2975, 3938)],
     ]);
 
+    /**
+     * Destination, cost and level of every Lunar teleport, in the same shape as the standard and
+     * Arceuus spellbooks: the construction portals reuse them for their own costs and Magic checks.
+     */
     public static getTeleportDestinations() {
-        return Array.from(this.TELEPORTS, ([name, spell]) => ({ name, ...spell.teleport }));
+        return Array.from(this.TELEPORTS, ([name, spell]) => ({
+            name,
+            level: spell.levelRequired(),
+            experience: spell.data.experience,
+            runes: spell.itemsRequired(),
+            destination: spell.teleport.destination,
+        }));
     }
 
     /** A self-cast from the spellbook; `option` is the clicked op (Spellbook Swap's quick books are 2-4). */

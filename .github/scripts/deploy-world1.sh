@@ -21,6 +21,7 @@ if [ -n "$id" ]; then
     case "$id" in *[!0-9-]* | '' | -* | *-) echo 'Invalid deployment id' >&2; exit 2 ;; esac
     case "$id" in *-*) ;; *) echo 'Invalid deployment id' >&2; exit 2 ;; esac
 fi
+set +f
 
 exec 9>/run/tsps-deploy.lock
 flock 9

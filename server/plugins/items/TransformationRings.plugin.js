@@ -224,6 +224,9 @@ function selectMenu(event) {
 }
 
 function begin(player, ring, source) {
+  // Existing forms (for example a greegree) belong to their own content.
+  if (player.getNpcTransformationId() >= 0
+    && player.getNpcTransformationId() !== active.get(player)?.npcId) return;
   if (!sourceValid(player, source)) return;
   player.getSkillManager().stopSkillable();
   if (ring.choices) choose(player, ring, source);

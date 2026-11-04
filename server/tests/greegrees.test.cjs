@@ -443,4 +443,21 @@ test('transformation rings use native inventory inputs, World appearance sync an
       assert.notEqual(f.p.getPacketSender().getChatboxGroupId(), 747);
     });
   }
+  await t.test('rings preserve a greegree form and its gameplay state', async test => {
+    const f = actor(test, ...MARIM); turn(); turn();
+    f.p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(KARAMJAN));
+    hooks.events['player:bootstrap-complete']({ player: f.p });
+    assert.equal(f.p.getNpcTransformationId(), 1469);
+    for (const [name, id, , picker] of cases) {
+      f.p.getInventory().add(new core.Item(id));
+      await wear(f, id);
+      if (picker) await resume(f, picker === 'menu' ? 187 : 219, picker === 'menu' ? 3 : 1, picker === 'menu' ? 0 : 1);
+      await widget(f, (id === 26939 ? 747 : 136) << 16);
+      for (let tick = 0; tick < 5; tick++) turn();
+      hooks.events['equipment:changed']({ player: f.p });
+      assert.equal(f.p.getNpcTransformationId(), 1469, name);
+      assert.equal(f.p.getAttribute('greegrees:form'), 'karamjan-monkey', name);
+    }
+  });
+
 });

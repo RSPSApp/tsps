@@ -14,6 +14,7 @@ const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/Npc
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
+const QuestRuntime = require("../plugins/quests/QuestRuntime");
 
 const STORY_ATTRIBUTE = "neitiznot:faceguard-story";
 const STORY_VARBIT = 9472;
@@ -50,6 +51,12 @@ function actor(t) {
 
 function login(player) {
   PluginManager.emitPlayerLogin({ player, username: player.getUsername(), isNewAccount: false });
+}
+
+/** The story needs The Fremennik Exiles (Wiki: Basilisk jaw); finish it the way the quest does. */
+function completeExiles(player) {
+  const quest = QuestRuntime.getRegisteredQuests().find((entry) => entry.key === "the_fremennik_exiles");
+  quest.setStage(player, 130);
 }
 
 function give(player, id) {
@@ -91,6 +98,7 @@ function pick(player, number) {
 
 test("the jaw used on Olaf plays his story and learns it, keeping the jaw", (t) => {
   const { player } = actor(t);
+  completeExiles(player);
   give(player, core.ItemIdentifiers.BASILISK_JAW);
   assert.equal(jawOnOlaf(player), true, "the use is handled");
   assert.ok(player.getDialogueManager().isActive(), "a conversation starts");
@@ -110,6 +118,7 @@ test("another item used on Olaf is not taken by the faceguard plugin", (t) => {
 test("the full route: story, then helm and jaw make the faceguard, Dismantle undoes it", (t) => {
   const { player } = actor(t);
   const I = core.ItemIdentifiers;
+  completeExiles(player);
   give(player, I.BASILISK_JAW);
   give(player, I.HELM_OF_NEITIZNOT);
   jawOnOlaf(player);

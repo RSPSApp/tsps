@@ -185,6 +185,32 @@ function resolve(value, context) {
   return typeof value === "function" ? value(context) : value;
 }
 
+/** The configured action's cache slot, or the first click for ordinary shortcuts. */
+function interactionClickType(obstacle, definition) {
+  if (!obstacle.option) return 1;
+  const actions = definition?.getActions?.() ?? definition?.getInteractions?.();
+  if (!Array.isArray(actions)) return null;
+  const index = actions.indexOf(obstacle.option);
+  return index < 0 ? null : index + 1;
+}
+
+/** Register option-specific shortcuts by the cache's exact object name and action. */
+function registerOptionInteractions(api) {
+  const handlersByName = new Map();
+  for (const [objectId, obstacles] of OBSTACLES_BY_OBJECT) {
+    const name = core.CacheDefinitions.getObject(objectId)?.name;
+    for (const obstacle of obstacles) {
+      if (!obstacle.option || !name || name === "null") continue;
+      const handlers = handlersByName.get(name) ?? {};
+      handlers[obstacle.option] = operateObstacle;
+      handlersByName.set(name, handlers);
+    }
+  }
+  for (const [name, handlers] of handlersByName) {
+    api.onObjectInteraction(name, handlers);
+  }
+}
+
 function agilityLevel(player) {
   return player.getSkillManager().getCurrentLevel(core.Skill.AGILITY);
 }
@@ -631,7 +657,7 @@ function attemptObstacle(player, context, entry) {
 function routeToObstacle(event) {
   const location = event.object.getLocation();
   const obstacle = findObstacle(event.objectId, { x: location.getX(), y: location.getY(), z: location.getZ() }, event.player);
-  if (!obstacle?.route || event.clickType !== 1) return;
+  if (!obstacle?.route || interactionClickType(obstacle, event.definition ?? event.object.getDefinition?.()) !== event.clickType) return;
   const tile = resolve(obstacle.route, objectContext(event.player, event.object));
   if (tile) {
     event.destination = { x: tile[0], y: tile[1], z: tile[2] ?? location.getZ() };
@@ -640,7 +666,7 @@ function routeToObstacle(event) {
 
 function operateObstacle(event) {
   const obstacle = findObstacle(event.objectId, event.location, event.player);
-  if (!obstacle) return false;
+  if (!obstacle || interactionClickType(obstacle, event.definition ?? event.object.getDefinition?.()) !== event.clickType) return false;
   if (ObstacleRunner.isBusy(event.player)) return true;
   attemptObstacle(event.player, objectContext(event.player, event.object), obstacle);
   return true;
@@ -745,6 +771,7 @@ module.exports = {
     api.onNpcInteraction("Grace", { "Toggle Counter": toggleLapCounter });
     api.onObjectRoute(routeToObstacle);
     api.onObjectFirstClick([...OBSTACLES_BY_OBJECT.keys()], operateObstacle);
+    registerOptionInteractions(api);
     api.onCustomEvent("ladders:climb", claimLadderObstacle);
     api.onNpcInteraction("Agility Trainer", { "Give-Stick": operateNpcObstacle });
     api.registerArea(createTileObstacleArea());

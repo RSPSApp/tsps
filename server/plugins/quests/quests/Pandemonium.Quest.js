@@ -48,9 +48,7 @@
  * - Will and Anne have no post-quest variant in the dump, so a completed player
  *   falls through to their standard page. Their short "after starting the quest"
  *   variants lost their jump targets (and the offer variant its boarding action), so
- *   the full interview is replayed while the quest is at stage 2 or 4. startTranscript has
- *   no speaker index, so a transcript's typed lines all use the talked-to NPC's
- *   chathead (Will/Anne swap heads between conversations).
+ *   the full interview is replayed while the quest is at stage 2 or 4.
  */
 module.exports = function registerPandemoniumQuest(api) {
   const {
@@ -253,7 +251,7 @@ module.exports = function registerPandemoniumQuest(api) {
   const OPEN_SHOP_ACTION_ID = "n-AhO0";
 
   // Option and line texts the stage changes key on.
-  const GET_TO_IT_OPTION = "Okay, I'll get to it.";
+  const BOARDING_DONE_LINE = "Take the helm when ready.";
   const INTERVIEW_DONE_LINE = "Just let us know when you're ready, and we'll hop aboard!";
   const STEVE_RIBS_LINE = "speak to Ribs";
   const STEVE_JIM_LINE = "speak with Junior Jim";
@@ -657,16 +655,6 @@ module.exports = function registerPandemoniumQuest(api) {
     return new Set((spec?.locs ?? []).filter((loc) => loc.part === part).map((loc) => loc.id));
   }
 
-  function tutorialCamera(player, scene) {
-    const boat = scene.boat;
-    // Camera packets address the main world, where the deck is rendered.
-    const move = boat.deckTileToWorld(boat.deckBaseX - 8, boat.deckBaseY + 3);
-    const look = boat.deckTileToWorld(boat.deckBaseX + 12, boat.deckBaseY - 2);
-    player.getPacketSender()
-      .sendCameraMoveTo(move.x, move.y, 550, { rate: 232, rate2: 100, heightRelative: false })
-      .sendCameraLookAt(look.x, look.y, 350, { rate: 232, rate2: 100, heightRelative: false });
-  }
-
   function showTutorialBoxes(player, boxes) {
     const { DialogueChainBuilder, ItemStatementDialogue, ActionDialogue } = api.core;
     const chain = new DialogueChainBuilder();
@@ -727,17 +715,52 @@ module.exports = function registerPandemoniumQuest(api) {
     if (scene.voyageStarted && !atWreck) {
       startVoyage(scene);
     } else if (!atWreck) {
-      tutorialFadeIn(player, ship.boat);
+      tutorialFadeIn(player, scene);
     }
     return true;
   }
 
-  function tutorialFadeIn(player, boat) {
+  function tutorialFadeIn(player, scene) {
     Scenes.fade(player, true);
     Scenes.later(player, 1, () => {
-      tutorialCamera(player, { boat });
+      if (tutorialScene(player) !== scene || !StaticShips.isAboard(player, scene.staticShip)) return;
+      player.getPacketSender().sendCameraTarget({ worldEntity: scene.boat.entityIndex });
       Scenes.later(player, 1, () => Scenes.fade(player, false));
     });
+  }
+
+  function startBoardingDialogue(player, scene) {
+    if (tutorialScene(player) !== scene || !StaticShips.isAboard(player, scene.staticShip)
+      || !player.isRegistered() || player.getHitpoints() <= 0 || player.isDying
+      || quest.getStage(player) !== STAGE_BOARDED || player.getDialogueManager().isActive()
+      || player.getPacketSender().hasInterruptibleInterface()) return;
+    scene.will.setMobileInteraction(player);
+    startTranscript(api, player, WILL_NPC_ID, PAGE, WILL_ABOARD_VARIANT, undefined, scene.will);
+  }
+
+  function handleTutorialDialogueLine(event) {
+    const { player, step, pages } = event;
+    const scene = tutorialScene(player);
+    const actor = step?.speaker === "Will" ? scene?.will : step?.speaker === "Anne" ? scene?.anne : null;
+    if (!actor || !pages?.some(({ page }) => page === PAGE)
+      || (event.npc && event.npc !== scene.will && event.npc !== scene.anne)) return;
+    const previous = event.before;
+    event.before = () => {
+      const current = player.getDialogueManager().getCurrent();
+      previous?.();
+      if (player.getDialogueManager().getCurrent() !== current || tutorialScene(player) !== scene
+        || !player.isRegistered() || player.getHitpoints() <= 0 || player.isDying
+        || !StaticShips.isAboard(player, scene.staticShip) || !actor.isRegistered() || actor.getOwner() !== player
+        || actor.getPrivateArea() !== player.getPrivateArea()
+        || quest.getStage(player) < STAGE_BOARDED || quest.getStage(player) > STAGE_SALVAGE_READY) return;
+      player.setMobileInteraction(null);
+      player.setPositionToFace(actor.getLocation());
+      if (quest.getStage(player) === STAGE_BOARDED && step.speaker === "Anne"
+        && event.text.endsWith(BOARDING_DONE_LINE)
+        && pages.some(({ page, variants }) => page === PAGE && variants?.includes(WILL_ABOARD_VARIANT))) {
+        quest.setStage(player, STAGE_SAILING);
+      }
+    };
   }
 
   function endTutorialShip(player) {
@@ -929,8 +952,7 @@ module.exports = function registerPandemoniumQuest(api) {
       return true;
     }
     if (stage === STAGE_BOARDED) {
-      startTranscript(api, player, npcId, PAGE, WILL_ABOARD_VARIANT);
-      quest.setStage(player, STAGE_SAILING);
+      startTranscript(api, player, npcId, PAGE, WILL_ABOARD_VARIANT, undefined, event.npc);
       return true;
     }
     if (stage === STAGE_SAILING || stage === STAGE_SAIL_ACCEPTED) {
@@ -960,15 +982,8 @@ module.exports = function registerPandemoniumQuest(api) {
   }
 
   function handleChoice(event) {
-    const { player, npcId, definition, option } = event;
+    const { player, npcId, option } = event;
     if (typeof option !== "string") return;
-    const name = definition?.getName?.();
-    if (npcId === WILL_NPC_ID || npcId === ANNE_NPC_ID || name === "Will" || name === "Anne") {
-      if (option === GET_TO_IT_OPTION && quest.getStage(player) === STAGE_SAILING) {
-        quest.setStage(player, STAGE_SAIL_ACCEPTED);
-      }
-      return;
-    }
     if (npcId === RIBS_NPC_ID && quest.getStage(player) === STAGE_STEVE_ASKED) {
       quest.setStage(player, STAGE_RIBS_DONE);
     }
@@ -977,6 +992,7 @@ module.exports = function registerPandemoniumQuest(api) {
   /** The transcript has no end-of-branch action for these; their lines carry the stage. */
   function handleDialogueLine(event) {
     if (handleSalvageLine(event)) return;
+    handleTutorialDialogueLine(event);
     const { player, npcId, text, step } = event;
     if (typeof text !== "string") return;
     const stage = quest.getStage(player);
@@ -1013,6 +1029,10 @@ module.exports = function registerPandemoniumQuest(api) {
     const stage = quest.getStage(player);
     if (!startTutorialShip(player, { atWreck: stage >= STAGE_ARRIVED && stage <= STAGE_SALVAGE_READY })) return;
     if (quest.getStage(player) < STAGE_BOARDED) quest.setStage(player, STAGE_BOARDED);
+    if (stage <= STAGE_BOARDED) {
+      const scene = tutorialScene(player);
+      Scenes.later(player, 2, () => startBoardingDialogue(player, scene));
+    }
   }
 
   /** Drops a trailing wiki "the conversation continues below" jump (the cutscene tail). */
@@ -1042,6 +1062,7 @@ module.exports = function registerPandemoniumQuest(api) {
     switch (stepId) {
       case BOARD_SHIP_ACTION_ID:
         event.handled = true;
+        event.end = true;
         boardShip(player);
         return;
       case GO_BACK_TO_PORT_ACTION_ID:
@@ -1051,8 +1072,8 @@ module.exports = function registerPandemoniumQuest(api) {
         return;
       case GO_BACK_TO_SHIP_ACTION_ID:
         event.handled = true;
+        event.end = true;
         boardShip(player);
-        if (quest.getStage(player) < STAGE_SAILING) quest.setStage(player, STAGE_SAILING);
         return;
       case PUSH_OVERBOARD_ACTION_ID:
         event.handled = true;
@@ -1232,19 +1253,22 @@ module.exports = function registerPandemoniumQuest(api) {
   /** The tutorial voyage requires taking the helm, raising the sails, then sailing south. */
   function handleTutorialHelm(event) {
     const { player } = event;
-    if (quest.getStage(player) !== STAGE_SAIL_ACCEPTED) return false;
+    const stage = quest.getStage(player);
+    if (stage !== STAGE_SAILING && stage !== STAGE_SAIL_ACCEPTED) return false;
     const scene = tutorialScene(player);
-    if (!scene) return false;
+    if (!scene || !StaticShips.isAboard(player, scene.staticShip)) return false;
     const name = event.definition?.getName?.();
     const option = event.definition?.getInteractions?.()?.[event.clickType - 1];
     if (!tutorialPartIds(scene, "helm").has(event.objectId) && !(name === "Helm" && option === "Navigate")) return false;
     if (option !== undefined && option !== "Navigate") return false;
     event.handled = true;
+    if (scene.will?.getInteractingMobile() === player) scene.will.setMobileInteraction(null);
     if (scene.helmTaken) return true;
     scene.helmTaken = true;
     player.setAttribute(TUTORIAL_HELM_ATTRIBUTE, true);
     scene.boat.helmPlayerId = player.getIndex();
     scene.boat.moveMode = sailingContent.MOVE_MODE.STOPPED;
+    if (stage === STAGE_SAILING) quest.setStage(player, STAGE_SAIL_ACCEPTED);
     Scenes.cancel(player);
     Scenes.closeFade(player);
     player.getPacketSender().sendCameraTarget({ worldEntity: scene.boat.entityIndex });

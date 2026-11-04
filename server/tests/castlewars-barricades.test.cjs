@@ -619,15 +619,51 @@ test('standard-world barricades and burning variants use the cache types that re
   }
 });
 
-test('Castle Wars barricades block movement but allow ranged, magic and halberd reach', (t) => {
-  // Jagex Poll 83 (December 2024) explicitly permits hitting over barricades.
+test('Castle Wars barricades block combat sight in both directions and remain attackable', (t) => {
   const owner = playerAt(t, 2405, 3110, 0);
-  deployed(t, owner);
+  const barricade = deployed(t, owner);
   const attacker = playerAt(t, 2406, 3110, 0);
   const target = playerAt(t, 2404, 3110, 0);
+  attacker.getCombat().setCastSpell(core.CombatSpells.ICE_BARRAGE.getSpell());
+  assert.equal(core.CombatRange.canReach(attacker, core.CombatFactory.MAGIC_COMBAT, target), false, 'native Ice Barrage targeting');
+  const mapClip = RegionManager.getClipping(2405, 3110, 0, null);
   for (const type of [core.CombatType.RANGED, core.CombatType.MAGIC, core.CombatType.MELEE]) {
     const method = { type: () => type, attackDistance: () => 2 };
-    assert.equal(core.CombatRange.canReach(attacker, method, target), true, String(type));
+    assert.equal(core.CombatRange.canReach(attacker, method, target), false, String(type));
+    assert.equal(core.CombatRange.canReach(target, method, attacker), false, 'reverse ray');
+    assert.equal(core.CombatRange.canReach(attacker, method, barricade), true, 'attack the blocker itself');
+    assert.equal(core.CombatRange.canReach(attacker, method, playerAt(t, 2406, 3111, 0)), true, 'off-ray target');
   }
   assert.equal(attacker.getMovementQueue().canWalkTo(owner.getLocation(), attacker.getLocation()), false);
+  assert.equal(RegionManager.getClipping(2405, 3110, 0, null), mapClip, 'dynamic NPCs leave map clips intact');
+  const sight = () => RegionManager.canProjectileAttackTarget(attacker, target);
+  barricade.setNpcTransformationId(barricade.getId() + 1);
+  assert.equal(sight(), false, 'burning still blocks sight');
+  barricade.setNpcTransformationId(-1);
+  assert.equal(sight(), false, 'extinguished still blocks sight');
+  game.removeBarricade(barricade);
+  assert.equal(sight(), true, 'removal opens the ray before the NPC removal queue runs');
+  assert.equal(core.CombatRange.canReach(attacker, core.CombatFactory.MAGIC_COMBAT, target), true, 'Ice Barrage can target again');
+});
+
+test('projectile blockers are scoped to their plane and private area, and overlapping blockers clear independently', (t) => {
+  const owner = playerAt(t, 2405, 3110, 0);
+  const first = deployed(t, owner);
+  const second = new core.NPC(first.getId(), owner.getLocation().clone());
+  World.getNpcs().add(second);
+  game.trackBarricade(second, data.TEAM.SARADOMIN);
+  t.after(() => { game.releaseBarricade(second); World.getNpcs().remove(second); });
+  const ray = (z = 0, area = null) => RegionManager.canProjectileAttackBounds(
+    new core.Location(2406, 3110, z), new core.Location(2404, 3110, z), 1, 1, 1, 1, area);
+  assert.equal(ray(), false);
+  assert.equal(ray(0, {}), true, 'a different instance is unaffected');
+  assert.equal(World.isProjectileBlockingNpcOnTile(2405, 3110, 1, null), false, 'another floor is unaffected');
+  game.releaseBarricade(first);
+  assert.equal(ray(), false, 'the overlapping blocker remains');
+  second.setLocation(new core.Location(2405, 3111, 0));
+  assert.equal(ray(), true, 'moving the blocker updates its indexed footprint');
+  second.setLocation(owner.getLocation().clone());
+  assert.equal(ray(), false);
+  World.getNpcs().remove(second);
+  assert.equal(ray(), true, 'unregistering removes the indexed blocker');
 });

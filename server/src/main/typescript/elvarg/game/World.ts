@@ -480,6 +480,11 @@ export class World {
         return false;
     }
 
+    public static isProjectileBlockingNpcOnTile(x: number, y: number, z: number, privateArea: any): boolean {
+        return World.npcTileOccupants.get(World.getNpcTileKey(x, y, z))?.some((npc) =>
+            npc.hasFlag(NPC.BLOCKS_PROJECTILES_FLAG) && npc.getPrivateArea() === (privateArea ?? null)) ?? false;
+    }
+
     private static addToUpdateBucket<T extends Mobile>(
         buckets: Map<string, T[]>,
         entity: T

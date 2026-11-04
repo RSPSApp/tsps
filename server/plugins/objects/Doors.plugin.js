@@ -85,7 +85,8 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // actionless variant has no Close option, so it swings in place.
     O.GATE_270,
     O.GATE_327,
-    // The two Ardougne Wall Door loc variants swing open by rotating the same cache loc.
+    // West Ardougne's wall gate is a pass-through gate (PASS_THROUGH_GATES takes its clicks first);
+    // the ids stay listed so the catalog never pairs them by heuristics.
     O.ARDOUGNE_WALL_DOOR, O.ARDOUGNE_WALL_DOOR_2,
     // Ghorrock Prison's western gate has no separate open loc in the cache.
     O.GATE_282,
@@ -330,7 +331,10 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LARGE_DOOR_9, O.LARGE_DOOR_10],
   ]);
   // Gates that let the player through and shut behind them, never staying open. Each leaf is
-  // [id, x, y, z, face] of a shape-0 wall loc; crossX/crossY is the boundary the player crosses.
+  // [id, x, y, z, face] of a shape-0 wall loc (a sixth entry names another shape, for a closed
+  // centrepiece); crossX/crossY is the boundary the player crosses. crossBetween [low, high] with
+  // crossRows is a gate more than one tile thick whose tiles the map blocks: the player is carried
+  // across, from the low side to the high side or back, along their own row.
   PASS_THROUGH_GATES = Object.freeze([
     // Guidor's gate, south-east Varrock (rsprox 1663, 3218, 3220): on Open the leaves swing to the
     // south edges of the two tiles west, the player steps through, and the gate shuts two ticks
@@ -344,6 +348,30 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       ],
       crossX: 3264,
       closeTicks: 2,
+    }),
+    // West Ardougne's wall gate, four leaves over four tiles (x 2557-2558, y 3299-3300). The map's
+    // terrain sets the blocked-tile flag on all four tiles, open or closed, so a swapped loc can never
+    // make them walkable: the leaves swing open and the player is carried across the three tiles
+    // from x 2556 to 2559 (or back), then the leaves close. NOT CAPTURED (nothing in the RSProx
+    // archive shows this gate): the crossing, its timing and the open faces are inferred. The closed
+    // leaves are the map's shape-10 centrepieces; the open forms are the cache's 8740/8741 walls,
+    // each folded to the edge of its own row (south row face 3, north row face 1).
+    Object.freeze({
+      closed: [
+        [O.ARDOUGNE_WALL_DOOR_2, 2557, 3299, 0, 2, 10],
+        [O.ARDOUGNE_WALL_DOOR, 2558, 3299, 0, 0, 10],
+        [O.ARDOUGNE_WALL_DOOR, 2557, 3300, 0, 2, 10],
+        [O.ARDOUGNE_WALL_DOOR_2, 2558, 3300, 0, 0, 10],
+      ],
+      opened: [
+        [O.ARDOUGNE_WALL_DOOR_4, 2557, 3299, 0, 3, 0],
+        [O.ARDOUGNE_WALL_DOOR_3, 2558, 3299, 0, 3, 0],
+        [O.ARDOUGNE_WALL_DOOR_3, 2557, 3300, 0, 1, 0],
+        [O.ARDOUGNE_WALL_DOOR_4, 2558, 3300, 0, 1, 0],
+      ],
+      crossBetween: [2556, 2559],
+      crossRows: [3299, 3300],
+      closeTicks: 5,
     }),
     // Mort Myre: capture 1638 ticks 1014/1016. Both Open-only leaves close behind the player.
     Object.freeze({
@@ -1310,11 +1338,11 @@ function handleDoubleDoor(player, object, objectId, location) {
 
 function passThroughGateAt(objectId, x, y, z) {
   return PASS_THROUGH_GATES.find((gate) =>
-    gate.closed.some(([id, gx, gy, gz]) => id === objectId && gx === x && gy === y && gz === z)) ?? null;
+    [...gate.closed, ...gate.opened].some(([id, gx, gy, gz]) => id === objectId && gx === x && gy === y && gz === z)) ?? null;
 }
 
-function wallLoc([id, x, y, z, face], privateArea) {
-  return new core.GameObject(id, cloneLocation(x, y, z), 0, face, privateArea);
+function wallLoc([id, x, y, z, face, shape = 0], privateArea) {
+  return new core.GameObject(id, cloneLocation(x, y, z), shape, face, privateArea);
 }
 
 function swapLocs(remove, add, privateArea) {
@@ -1322,8 +1350,29 @@ function swapLocs(remove, add, privateArea) {
   for (const leaf of add) core.ObjectManager.register(wallLoc(leaf, privateArea), true);
 }
 
+const GATE_WALK_ANIMATION = 819;
+
+/** A thick gate whose tiles the map blocks: carry the player across it, on their own row, in both directions. */
+function carryAcrossGate(player, gate, y, z) {
+  const [low, high] = gate.crossBetween;
+  const here = player.getLocation();
+  const row = gate.crossRows.includes(here.getY()) ? here.getY() : y;
+  const eastward = here.getX() < (low + high) / 2;
+  const from = cloneLocation(eastward ? low : high, row, z);
+  if (Math.abs(here.getX() - from.getX()) > 1 || Math.abs(here.getY() - from.getY()) > 1) return;
+  if (!here.equals(from)) player.moveTo(from.clone());
+  const span = high - low;
+  core.TaskManager.submit(new core.ForceMovementTask(player, span,
+    new core.ForceMovement(from.clone(), new core.Location(eastward ? span : -span, 0, 0), 0, 30 * span,
+      eastward ? 1 : 3, GATE_WALK_ANIMATION)));
+}
+
 /** The player crosses on the clicked row or column, from whichever side they stand on. */
 function stepThroughGate(player, gate, x, y, z) {
+  if (gate.crossBetween) {
+    carryAcrossGate(player, gate, y, z);
+    return;
+  }
   const destination = gate.crossX != null
     ? cloneLocation(player.getLocation().getX() < gate.crossX ? gate.crossX : gate.crossX - 1, y, z)
     : cloneLocation(x, player.getLocation().getY() < gate.crossY ? gate.crossY : gate.crossY - 1, z);
@@ -1426,7 +1475,17 @@ function routeWallDoor(event) {
   // An open leaf stands across the doorway instead, and the tile inside the doorway is at its
   // end, so it keeps ordinary wall reach: closing it from inside doesn't walk the player out.
   if (isOpenLeaf(event.definition)) return;
+  // An open leaf of a pass-through gate keeps its Open option (it takes the click that carries the
+  // player across) but stands beside the doorway like any open leaf, so it keeps ordinary wall reach.
+  if (isPassThroughOpenLeaf(event.object)) return;
   event.blockAccessFlags = (event.blockAccessFlags ?? 0) | 0x5;
+}
+
+function isPassThroughOpenLeaf(object) {
+  const at = object?.getLocation?.();
+  if (!at) return false;
+  return PASS_THROUGH_GATES.some((gate) => gate.opened.some(([id, x, y, z]) =>
+    id === object.getId() && x === at.getX() && y === at.getY() && z === at.getZ()));
 }
 
 function isOpenLeaf(definition) {

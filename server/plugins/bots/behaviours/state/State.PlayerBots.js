@@ -7,6 +7,7 @@ const MODE_TRANSITION_PROFILE_OVERRIDES = Object.freeze({
 function createRoamingBehaviorState() {
   return {
     target: null,
+    targetPickedAt: 0,
     nextWalkAt: 0,
     endpointPauseUntil: 0,
   };
@@ -17,6 +18,7 @@ function clearRoamingBehaviorState(state) {
     return;
   }
   state.roaming.target = null;
+  state.roaming.targetPickedAt = 0;
   state.roaming.nextWalkAt = 0;
   state.roaming.endpointPauseUntil = 0;
 }

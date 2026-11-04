@@ -158,7 +158,7 @@ import { DrawRange, NULL_DRAW_RANGE, newDrawRange } from "../DrawRange";
 import { InteractType } from "../InteractType";
 import { profiler } from "../PerformanceProfiler";
 import { PlayerChatheadFactory } from "../PlayerChatheadFactory";
-import { resolveFogRange } from "../RenderDistancePolicy";
+import { fogSettings, resolveFogRange } from "../RenderDistancePolicy";
 import { WebGLMapSquare } from "../WebGLMapSquare";
 import { sceneryRangeVisible } from "../SceneryVisibility";
 import { WorldEntityAnimator } from "../WorldEntityAnimator";
@@ -328,8 +328,7 @@ export function drawWithRoofPlaneFilter(host: WebGLOsrsRendererHost,
         const moving = map && host.mapManager.worldEntityMapIds.has(map.id);
         const point = map ? host.getRenderCullTile() : undefined;
         const distance = map ? resolveFogRange({ renderDistance: host.getFrameRenderDistanceTiles(),
-            autoFogDepth: host.autoFogDepth, autoFogDepthFactor: host.autoFogDepthFactor,
-            manualFogDepth: host.fogDepth, hd: host.osrsClient.clientPlugins.hdEnabled() }).fogEnd : 0;
+            ...fogSettings(host), hd: host.osrsClient.clientPlugins.hdEnabled() }).fogEnd : 0;
         const lodDistance = map ? host.getFrameLodThresholdTiles() : 0;
         const baseX = map?.getRenderBaseTileX() ?? 0, baseZ = map?.getRenderBaseTileY() ?? 0;
 

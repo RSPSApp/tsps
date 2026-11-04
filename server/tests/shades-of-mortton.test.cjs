@@ -26,15 +26,27 @@ before(() => {
   CachePipeline.initialize();
   RegionManager.init();
   core = PluginManager.getCoreApi();
-  hooks = { objects: new Map(), events: { emitted: [] }, npcHit: [], npcDeath: [] };
+  hooks = { objects: new Map(), events: { emitted: [] }, npcHit: [], npcDeath: [], spawned: [] };
+  const itemOnObjectFns = [];
+  const logoutFns = [];
   const api = {
     core,
     onObjectInteraction: (name, actions) => { for (const [op, fn] of Object.entries(actions)) chain(hooks.objects, `${name}:${op}`, fn); },
     onNpcHitModify: (fn) => hooks.npcHit.push(fn),
     onNpcDeath: (fn) => hooks.npcDeath.push(fn),
     onCustomEvent: (name, fn) => { hooks.events[name] = fn; },
-    onItemOnObject: (fn) => { hooks.itemOnObject = fn; },
-    onPlayerLogout: (fn) => { hooks.logout = fn; },
+    // As PluginManager.emitItemOnObject: every hook sees the event until one handles it.
+    onItemOnObject: (fn) => {
+      itemOnObjectFns.push(fn);
+      hooks.itemOnObject = (event) => { for (const f of itemOnObjectFns) if (!event.handled) f(event); };
+    },
+    // The real PluginManager spawn and removal: a real NPC, in the real World.
+    spawnNpc: (definition) => { const npc = PluginManager.spawnNpc(definition, "Shades of Mort'ton"); hooks.spawned.push(npc); return npc; },
+    removeNpc: (npc) => PluginManager.removeNpc(npc),
+    onPlayerLogout: (fn) => {
+      logoutFns.push(fn);
+      hooks.logout = (event) => { for (const f of logoutFns) f(event); };
+    },
     emitCustomEvent: (name, payload) => {
       if (name === 'quest:get-stage') payload.stage = payload.player.stage ?? 0;
       else hooks.events.emitted.push([name, payload]);
@@ -346,4 +358,146 @@ test('a spare key does not cost the room: the dissolving key always frees its ow
   assert.equal(p.inventory.getAmount(key('bronze', 'bloodred')), 1, 'one key dissolves, the spare stays');
   assert.equal(p.inventory.getAmount(2359), 3);
   assert.ok(p.inventory.getAmount(Common.objId('swamppaste')) > 0);
+});
+
+// ------------------------------------------------------------------ the Undead Zealot and the Altar of the Damned
+// Wiki (Undead Zealot, Altar (Shade Catacombs)). No rsprox capture exists for any of it (NPC
+// 10591/10592 and object 41222 searches return nothing). Still a harness: the hook registry above
+// (not PluginManager's), fake players for the chest and altar, and no real combat for the zealot.
+// Real: PluginManager.spawnNpc / removeNpc, a real NPC in the real World, the real cache names.
+
+const ZEALOT = 10591;
+const ZEALOT_2 = 10592;
+const BLEACHED_BONES = 25422;
+const ALTAR_OF_THE_DAMNED = 41222;
+
+test('the cache names of the zealot, the bleached bones and the altar resolve to the Wiki ids', () => {
+  assert.equal(Common.npcId('shades_undead_zealot_1'), ZEALOT);
+  assert.equal(Common.npcId('shades_undead_zealot_2'), ZEALOT_2);
+  assert.equal(Common.objId('shade_bleached_bones'), BLEACHED_BONES);
+  assert.equal(Common.locId('shade_lair_temple_altar'), ALTAR_OF_THE_DAMNED);
+});
+
+function openBronzeChest(p, random) {
+  p.inventory.add(new core.Item(key('bronze', 'bloodred'), 1));
+  const original = Math.random;
+  Math.random = () => random;
+  try {
+    hooks.objects.get('Bronze Chest:Open')({ player: p, object: loc('shadechest_bronze_bloodred', 3511, 9724) });
+  } finally {
+    Math.random = original;
+  }
+}
+
+test('opening a chest raises an Undead Zealot 1 time in 20, owned by the opener alone (Wiki, Mod Ash)', () => {
+  hooks.spawned.length = 0;
+  const lucky = fakePlayer(new Location(3510, 9723, 0));
+  openBronzeChest(lucky, 0.0499);
+  assert.equal(lucky.inventory.getAmount(key('bronze', 'bloodred')), 0, 'the chest still opened');
+  assert.equal(hooks.spawned.length, 1);
+  const zealot = hooks.spawned[0];
+  assert.ok(zealot, 'a real NPC was created');
+  assert.equal(zealot.getId(), ZEALOT);
+  assert.equal(zealot.getOwner(), lucky, 'only the opener may attack it');
+  assert.equal(zealot.isOwnerOnly(), false, 'the Wiki does not hide it from others');
+  PluginManager.removeNpc(zealot);
+  const unlucky = fakePlayer(new Location(3510, 9723, 0));
+  openBronzeChest(unlucky, 0.05);
+  assert.equal(hooks.spawned.length, 1, 'no zealot at 1 in 20 and above');
+});
+
+test('no zealot when the chest does not open (wrong key)', () => {
+  hooks.spawned.length = 0;
+  const p = fakePlayer(new Location(3510, 9723, 0));
+  p.inventory.add(new core.Item(key('bronze', 'brown'), 1));
+  const original = Math.random;
+  Math.random = () => 0;
+  try {
+    hooks.objects.get('Bronze Chest:Open')({ player: p, object: loc('shadechest_bronze_bloodred', 3511, 9724) });
+  } finally {
+    Math.random = original;
+  }
+  assert.equal(hooks.spawned.length, 0);
+});
+
+test('an unkilled zealot is removed when its opener logs out, and only then', () => {
+  hooks.spawned.length = 0;
+  const opener = fakePlayer(new Location(3510, 9723, 0));
+  const other = fakePlayer(new Location(3510, 9723, 0));
+  openBronzeChest(opener, 0);
+  const zealot = hooks.spawned[0];
+  assert.ok(zealot, 'a real NPC was created');
+  assert.equal(zealot.isRegistered(), true, 'it is in the world');
+  hooks.logout({ player: other });
+  assert.equal(zealot.isRegistered(), true, 'another player leaving does not remove it');
+  hooks.logout({ player: opener });
+  assert.equal(zealot.isRegistered(), false, 'removed from the world');
+  hooks.logout({ player: opener });
+});
+
+test('an Undead Zealot always drops bleached bones, and keeps its other drops', () => {
+  for (const npcId of [ZEALOT, ZEALOT_2]) {
+    const event = { npcId, drops: [{ itemId: 6807, amount: 1 }] };
+    hooks.events['npc-drops:roll'](event);
+    assert.deepEqual(event.drops, [{ itemId: 6807, amount: 1 }, { itemId: BLEACHED_BONES, amount: 1 }]);
+  }
+  const other = { npcId: Common.npcId('shade_level1'), drops: [] };
+  hooks.events['npc-drops:roll'](other);
+  assert.ok(!other.drops.some((d) => d.itemId === BLEACHED_BONES), 'a shade drops no bleached bones');
+});
+
+function prayerPlayer(current) {
+  const p = burner();
+  const levels = { current, max: 99 };
+  p.getSkillManager = () => ({
+    getCurrentLevel: () => levels.current,
+    getMaxLevel: () => levels.max,
+    setCurrentLevels: (skill, level) => { levels.current = level; },
+    updateSkill() {},
+    addExperience: (skill, amount) => { p.xp.push([skill.getName(), amount]); },
+  });
+  p.prayer = () => levels.current;
+  return p;
+}
+
+const altar = () => new core.GameObject(ALTAR_OF_THE_DAMNED, new Location(3492, 9694, 0), 10, 0, null);
+const onAltar = (p, itemId) => {
+  const event = { player: p, object: altar(), objectId: ALTAR_OF_THE_DAMNED, itemId, handled: false };
+  hooks.itemOnObject(event);
+  return event;
+};
+
+test('bleached bones on the Altar of the Damned restore full Prayer, use up one bone and give no experience (Wiki)', () => {
+  const p = prayerPlayer(10);
+  p.inventory.add(new core.Item(BLEACHED_BONES, 1));
+  const event = onAltar(p, BLEACHED_BONES);
+  assert.equal(event.handled, true);
+  assert.equal(p.prayer(), 99);
+  assert.equal(p.inventory.getAmount(BLEACHED_BONES), 0);
+  assert.deepEqual(p.xp, [], 'no Prayer experience');
+});
+
+test('bones dropped on the way to the altar restore nothing on arrival', () => {
+  const p = prayerPlayer(10);
+  const event = onAltar(p, BLEACHED_BONES);
+  assert.equal(event.handled, false, 'left to the engine');
+  assert.equal(p.prayer(), 10);
+});
+
+test('at full Prayer the altar leaves the event to the engine and keeps the bone', () => {
+  const p = prayerPlayer(99);
+  p.inventory.add(new core.Item(BLEACHED_BONES, 1));
+  const event = onAltar(p, BLEACHED_BONES);
+  assert.equal(event.handled, false);
+  assert.equal(p.inventory.getAmount(BLEACHED_BONES), 1);
+  assert.deepEqual(p.messages, []);
+});
+
+test('other bones are not taken by the Altar of the Damned', () => {
+  const p = prayerPlayer(10);
+  p.inventory.add(new core.Item(526, 1));
+  const event = onAltar(p, 526);
+  assert.equal(event.handled, false);
+  assert.equal(p.prayer(), 10);
+  assert.equal(p.inventory.getAmount(526), 1);
 });

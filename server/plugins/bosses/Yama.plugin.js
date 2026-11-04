@@ -3,7 +3,7 @@
  * at the bottom of the Chasm of Fire: the Voice of Yama, Yama's Domain (an instance of the
  * player's own), Yama on his throne with his contract, the fight's three phases with the Judge
  * of Yama between them, and the loot. Each part lives in ./yama/.
- * Solo only, and open to all: A Kingdom Divided isn't asked for. See docs/yama.md.
+ * Solo-only in tsps, and gated on A Kingdom Divided. See docs/yama.md.
  */
 const Common = require("./yama/Common.Yama");
 const Domain = require("./yama/Domain.Yama");

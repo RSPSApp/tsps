@@ -508,6 +508,69 @@ console.log("Cache panel scripts retain inventory items, 64-bit prices and nativ
     }
 }
 
+// Native prayer and quick-prayer icons follow the server's Knight Waves unlock varbit.
+{
+    const { createCacheVm } = require('../scripts/cache/cs2-sweep');
+    const { encodeVarbit } = require('../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol');
+    const { vm } = createCacheVm(), wm = vm.context.widgetManager;
+    vm.context.getStatLevel = vm.context.getStatBase = vm.context.getStatBoosted = () => 99;
+    wm.onLoadListener = (_id: number, widget: any) => vm.runScriptEvent({ args: widget.onLoad, widget });
+    wm.resize(765, 503); wm.setRootInterface(161); resetTransmitCycles();
+    const queued: any[] = [];
+    const transmits = new WidgetTransmitProcessor({ getWidgetManager: () => wm, getCs2Vm: () => vm,
+        getTransmitCycles, queueScriptEvent: event => queued.push(event),
+        executeScriptListener: (widget, args) => vm.runScriptEvent({ widget, args }) });
+    vm.context.varManager.onVarpChange = (id: number) => vm.isRunning() ? vm.queueVarpChange(id) : markVarTransmit(id);
+    vm.onVarpChange = markVarTransmit;
+    for (const group of [541, 77]) {
+        wm.openSubInterface((161 << 16) | 81, group, 1);
+        vm.run(vm.context.loadScript(915), [5], []); // The server selects the prayer sidebar.
+        for (const [state, sprites] of [[0, [949, 950]], [8, [945, 946]], [0, [949, 950]]] as const) {
+            const message = decodeServerPacket(encodeVarbit(3909, state)) as any;
+            vm.context.varManager.setServerVarbit(message.payload.varbitId, message.payload.value);
+            transmits.processWidgetTransmits();
+            while (queued.length) vm.runScriptEvent(queued.shift());
+            assert.equal(vm.lastError, null);
+            const icons = group === 541 ? [34, 35].map(child => wm.getWidgetByUid((541 << 16) | child).children[1])
+                : [79, 81].map(index => wm.getWidgetByUid((77 << 16) | 4).children[index]);
+            assert.deepEqual(icons.map(icon => icon.spriteId), sprites,
+                `${group} shows the native Chivalry/Piety locked or unlocked sprites`);
+        }
+    }
+    resetTransmitCycles();
+}
+
+// Cache trade buttons reach the dedicated binary protocol, including second-screen Accept.
+{
+    const { vm } = require('../scripts/cache/cs2-sweep').createCacheVm();
+    const { handleTradeWidgetAction } = require('../game/widgets/widgetActionTrade');
+    const { decodeClientPackets } = require('../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol');
+    const { state } = require('../network/serverConnection/state');
+    const previousSocket = state.socket, frames: Buffer[] = [];
+    (globalThis as any).WebSocket ??= { OPEN: 1 };
+    state.socket = { readyState: 1, send: (frame: Uint8Array) => frames.push(Buffer.from(frame)) };
+    try {
+        for (const [group, child, stage, action] of [
+            [335, 10, 'offer', 'accept'], [335, 13, 'offer', 'decline'],
+            [334, 13, 'confirm', 'confirm_accept'], [334, 14, 'confirm', 'confirm_decline'],
+            [334, 32, 'confirm', 'confirm_decline'],
+        ] as const) {
+            vm.context.widgetManager.getGroup(group);
+            const widget = vm.context.widgetManager.getWidgetByUid((group << 16) | child);
+            frames.length = 0;
+            assert.equal(handleTradeWidgetAction({ getTradeState: () => ({ open: true, stage }) },
+                widget, { option: widget.actions[0] }, group, child), true);
+            assert.equal(frames.length, 1);
+            const decoded = frames.flatMap(frame => decodeClientPackets(frame));
+            assert.equal(decoded.length, 1); assert.equal(decoded[0].type, 'trade_action');
+            assert.equal(decoded[0].action, action, 'the native cache option selects the intended binary action');
+            if (action === 'confirm_accept') assert.equal(frames[0].toString('hex'), 'b40904000000000000ffff');
+        }
+    } finally {
+        state.socket = previousSocket;
+    }
+}
+
 // Actual cache key listeners -> native resume packet -> real PlayerSession/DestroyItem policy.
 async function nativeDestroyConfirmation() {
     const previousDirectory = process.cwd();

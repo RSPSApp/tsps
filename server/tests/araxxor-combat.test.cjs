@@ -18,6 +18,35 @@ test("lair bounds cover the arena but not the tunnel approach", () => {
   assert.equal(Area.insideLair(null), false);
 });
 
+test("Araxxor access requires boosted Slayer 92, Priest in Peril and an araxyte or spider task", () => {
+  class CoreArea {}
+  class PrivateArea {}
+  class Boundary {}
+  const events = [];
+  const core = { Area: CoreArea, PrivateArea, Boundary, Skill: { SLAYER: 18 } };
+  Area.attach({
+    core,
+    registerArea() {},
+    emitCustomEvent(name, request) {
+      events.push(name);
+      if (name === "quest:is-complete") request.complete = request.player.priestInPeril;
+      if (name === "slayer:current-task") request.task = request.player.task;
+    },
+  });
+  const player = (level, priestInPeril, task) => ({
+    priestInPeril,
+    task,
+    getSkillManager: () => ({ getCurrentLevel: skill => skill === core.Skill.SLAYER ? level : 1 }),
+  });
+  assert.match(Area._test.entryReason(player(91, true, { name: "Araxytes" })), /92/);
+  assert.match(Area._test.entryReason(player(92, false, { name: "Araxytes" })), /Priest in Peril/);
+  assert.match(Area._test.entryReason(player(92, true, { name: "Vampyres" })), /araxyte|spider/i);
+  assert.equal(Area._test.entryReason(player(92, true, { name: "Spiders" })), null);
+  assert.equal(Area._test.entryReason(player(92, true, { name: "Araxytes" })), null);
+  assert.equal(events.filter(name => name === "slayer:current-task").length, 3,
+    "the Slayer task is queried only after level and quest checks pass");
+});
+
 test("edge distance measures to the 7x7 body, not its corner", () => {
   assert.equal(Shared.edgeDistance(3631, 9812, 3638, 9812), 1);
   assert.equal(Shared.edgeDistance(3631, 9812, 3637, 9818), 0, "under the body");

@@ -1,192 +1,230 @@
 {
- "$comment": "Ornament kit transformations transcribed from https://oldschool.runescape.wiki/w/Ornament_kit. Applying a kit consumes it and swaps the base item id for the ornamented id.",
+ "$comment": "Ornament kit transformations transcribed from https://oldschool.runescape.wiki/w/Ornament_kit; whip mixes and reusable cloth removal from https://oldschool.runescape.wiki/w/Volcanic_abyssal_whip and Frozen_abyssal_whip. Applying a kit consumes it and swaps the base item id for the ornamented id. An entry has \"refund\": true where the Wiki page of the ornamented item says dismantling or reverting it returns the kit; the rest are left as they were.",
  "source": "https://oldschool.runescape.wiki/w/Ornament_kit",
  "kits": [
   {
    "kit": 23227,
    "base": 8850,
    "result": 23230,
-   "name": "Rune defender ornament kit"
+   "name": "Rune defender ornament kit",
+   "refund": true
   },
   {
    "kit": 12538,
    "base": 11335,
    "result": 12417,
-   "name": "Dragon full helm ornament kit"
+   "name": "Dragon full helm ornament kit",
+   "refund": true
   },
   {
    "kit": 12534,
    "base": 3140,
    "result": 12414,
-   "name": "Dragon chainbody ornament kit"
+   "name": "Dragon chainbody ornament kit",
+   "refund": true
   },
   {
    "kit": 22236,
    "base": 21892,
    "result": 22242,
-   "name": "Dragon platebody ornament kit"
+   "name": "Dragon platebody ornament kit",
+   "refund": true
   },
   {
-   "kit": 22236,
+   "kit": 12536,
    "base": 4087,
    "result": 12415,
-   "name": "Dragon platebody ornament kit"
+   "name": "Dragon legs/skirt ornament kit",
+   "refund": true
+  },
+  {
+   "kit": 12536,
+   "base": 4585,
+   "result": 12416,
+   "name": "Dragon legs/skirt ornament kit",
+   "refund": true
   },
   {
    "kit": 22231,
    "base": 11840,
    "result": 22234,
-   "name": "Dragon boots ornament kit"
+   "name": "Dragon boots ornament kit",
+   "refund": true
   },
   {
    "kit": 12532,
    "base": 1187,
    "result": 12418,
-   "name": "Dragon sq shield ornament kit"
+   "name": "Dragon sq shield ornament kit",
+   "refund": true
   },
   {
    "kit": 22239,
    "base": 21895,
    "result": 22244,
-   "name": "Dragon kiteshield ornament kit"
+   "name": "Dragon kiteshield ornament kit",
+   "refund": true
   },
   {
    "kit": 20002,
    "base": 4587,
    "result": 20000,
-   "name": "Dragon scimitar ornament kit"
+   "name": "Dragon scimitar ornament kit",
+   "refund": true
   },
   {
    "kit": 20143,
-   "base": 23597,
+   "base": 12954,
    "result": 19722,
-   "name": "Dragon defender ornament kit"
+   "name": "Dragon defender ornament kit",
+   "refund": true
   },
   {
    "kit": 20068,
    "base": 11802,
    "result": 20368,
-   "name": "Armadyl godsword ornament kit"
+   "name": "Armadyl godsword ornament kit",
+   "refund": true
   },
   {
    "kit": 20071,
    "base": 11804,
    "result": 20370,
-   "name": "Bandos godsword ornament kit"
+   "name": "Bandos godsword ornament kit",
+   "refund": true
   },
   {
    "kit": 20074,
    "base": 11806,
    "result": 20372,
-   "name": "Saradomin godsword ornament kit"
+   "name": "Saradomin godsword ornament kit",
+   "refund": true
   },
   {
    "kit": 20077,
    "base": 11808,
    "result": 20374,
-   "name": "Zamorak godsword ornament kit"
+   "name": "Zamorak godsword ornament kit",
+   "refund": true
   },
   {
    "kit": 23232,
    "base": 6528,
    "result": 23235,
-   "name": "Tzhaar-ket-om ornament kit"
+   "name": "Tzhaar-ket-om ornament kit",
+   "refund": true
   },
   {
    "kit": 23237,
    "base": 11128,
    "result": 23240,
-   "name": "Berserker necklace ornament kit"
+   "name": "Berserker necklace ornament kit",
+   "refund": true
   },
   {
    "kit": 12526,
    "base": 6585,
    "result": 12436,
-   "name": "Fury ornament kit"
+   "name": "Fury ornament kit",
+   "refund": true
   },
   {
    "kit": 20062,
    "base": 19553,
    "result": 20366,
-   "name": "Torture ornament kit"
+   "name": "Torture ornament kit",
+   "refund": true
   },
   {
    "kit": 22246,
    "base": 19547,
    "result": 22249,
-   "name": "Anguish ornament kit"
+   "name": "Anguish ornament kit",
+   "refund": true
   },
   {
    "kit": 23348,
    "base": 19544,
    "result": 23444,
-   "name": "Tormented ornament kit"
+   "name": "Tormented ornament kit",
+   "refund": true
   },
   {
    "kit": 20065,
    "base": 12002,
    "result": 19720,
-   "name": "Occult ornament kit"
+   "name": "Occult ornament kit",
+   "refund": true
   },
   {
-   "kit": 20065,
+   "kit": 12528,
    "base": 6918,
    "result": 12457,
-   "name": "Occult ornament kit"
+   "name": "Dark infinity colour kit",
+   "refund": true
   },
   {
-   "kit": 20065,
+   "kit": 12530,
    "base": 6918,
    "result": 12419,
-   "name": "Occult ornament kit"
+   "name": "Light infinity colour kit",
+   "refund": true
   },
   {
    "kit": 26479,
    "base": 8839,
    "result": 26463,
-   "name": "Shattered relics void ornament kit"
+   "name": "Shattered relics void ornament kit",
+   "refund": true
   },
   {
    "kit": 26479,
    "base": 8840,
    "result": 26465,
-   "name": "Shattered relics void ornament kit"
+   "name": "Shattered relics void ornament kit",
+   "refund": true
   },
   {
    "kit": 26479,
    "base": 8842,
    "result": 26467,
-   "name": "Shattered relics void ornament kit"
+   "name": "Shattered relics void ornament kit",
+   "refund": true
   },
   {
    "kit": 26479,
    "base": 13072,
    "result": 26469,
-   "name": "Shattered relics void ornament kit"
+   "name": "Shattered relics void ornament kit",
+   "refund": true
   },
   {
    "kit": 26479,
    "base": 13073,
    "result": 26471,
-   "name": "Shattered relics void ornament kit"
+   "name": "Shattered relics void ornament kit",
+   "refund": true
   },
   {
    "kit": 26479,
    "base": 11663,
    "result": 26473,
-   "name": "Shattered relics void ornament kit"
+   "name": "Shattered relics void ornament kit",
+   "refund": true
   },
   {
    "kit": 26479,
    "base": 11664,
    "result": 26475,
-   "name": "Shattered relics void ornament kit"
+   "name": "Shattered relics void ornament kit",
+   "refund": true
   },
   {
    "kit": 26479,
    "base": 11665,
    "result": 26477,
-   "name": "Shattered relics void ornament kit"
+   "name": "Shattered relics void ornament kit",
+   "refund": true
   },
   {
    "kit": 0,
@@ -654,25 +692,29 @@
    "kit": 30451,
    "base": 4708,
    "result": 30445,
-   "name": "Echo ahrim's ornament kit"
+   "name": "Echo ahrim's ornament kit",
+   "refund": true
   },
   {
    "kit": 30451,
    "base": 4712,
    "result": 30447,
-   "name": "Echo ahrim's ornament kit"
+   "name": "Echo ahrim's ornament kit",
+   "refund": true
   },
   {
    "kit": 30451,
    "base": 4714,
    "result": 30449,
-   "name": "Echo ahrim's ornament kit"
+   "name": "Echo ahrim's ornament kit",
+   "refund": true
   },
   {
    "kit": 30451,
    "base": 4710,
    "result": 30568,
-   "name": "Echo ahrim's ornament kit"
+   "name": "Echo ahrim's ornament kit",
+   "refund": true
   },
   {
    "kit": 27248,
@@ -740,6 +782,20 @@
    "result": 25741,
    "name": "Sanguine ornament kit",
    "refund": true
+  },
+  {
+   "kit": 12771,
+   "base": 4151,
+   "result": 12773,
+   "name": "Volcanic whip mix",
+   "cleaningCloth": true
+  },
+  {
+   "kit": 12769,
+   "base": 4151,
+   "result": 12774,
+   "name": "Frozen whip mix",
+   "cleaningCloth": true
   }
  ]
 }

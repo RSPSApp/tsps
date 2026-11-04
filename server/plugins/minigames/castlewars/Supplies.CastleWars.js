@@ -60,7 +60,15 @@ function supplyRunes(event) {
   if (params?.get(SPELLBOOK_PARAM) === LUNAR_SPELLBOOK_INDEX && params.get(CASTLE_WARS_POUCH_PARAM) === 1) event.bypass = true;
 }
 
-function noFreeMagicExperience(event) {
+function inActiveArena(player) {
+  return game.isPlaying(player) && player.getArea() === game.gameArea && game.inGameBounds(player.getLocation());
+}
+
+function noCombatExperience(event) {
+  if (inActiveArena(event.player) && event.player.getAttribute(data.COMBAT_XP_DISABLED_ATTRIBUTE) === true
+    && [core.Skill.ATTACK, core.Skill.STRENGTH, core.Skill.DEFENCE, core.Skill.RANGED, core.Skill.MAGIC, core.Skill.HITPOINTS].includes(event.skill)) {
+    event.allow = false;
+  }
   if (event.skill === core.Skill.MAGIC && game.isPlaying(event.player) && event.player.getInventory().contains(data.RUNE_POUCH)) {
     event.allow = false;
   }
@@ -78,12 +86,30 @@ function applyBrew(player) {
 }
 
 function registerSupplyPotions() {
+  for (const [copy, original] of data.AMMUNITION_ALIASES) core.ItemAliases.register(copy, original);
   api.emitCustomEvent("potions:register", { name: "Castlewars brew", chains: [data.BREW_DOSES], area: POTION_AREA, emptyItemId: null, effect: applyBrew });
 }
 
 function allowSupplyPotions(event) {
   if (event.area === POTION_AREA) event.inside = game.isPlaying(event.player);
 }
+
+/** Leave compatibility and projectile consumption to the ordinary dragon-ammunition path. */
+function restrictCastleWarsAmmo(event) {
+  if (!data.AMMUNITION_ALIASES.has(event.itemId) || inActiveArena(event.player)) return;
+  event.allowed = false;
+  if (!event.silent) event.player.sendMessage("You can only fire Castle Wars ammunition during a Castle Wars game.");
+  event.player.getCombat().reset();
+}
+
+function checkCastleWarsAmmo(player, _amount, silent) {
+  if (!core.Ammunition.firesFromAmmoSlot(player)) return null;
+  const permission = { player, itemId: player.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getId(), silent, allowed: true };
+  restrictCastleWarsAmmo(permission);
+  return permission.allowed ? null : false;
+}
+
+function decrementCastleWarsAmmo() { return false; }
 
 /** A tap is mounted on a wall: use the cardinal tile in front, rather than reaching diagonally. */
 function routeToTap(event) {
@@ -113,7 +139,9 @@ module.exports = function attachCastleWarsSupplies(pluginApi, castleWars) {
   api.onObjectInteraction(takeSupply);
   api.onObjectRoute(routeToTap);
   api.onSpellRuneBypass(supplyRunes);
-  api.onCanGainExperience(noFreeMagicExperience);
+  api.onCanGainExperience(noCombatExperience);
+  api.registerRangedAmmoHandler({ checkAmmo: checkCastleWarsAmmo, decrementAmmo: decrementCastleWarsAmmo });
+  api.onCustomEvent("ranged:ammo-permission", restrictCastleWarsAmmo);
   api.onServerStartup(registerSupplyPotions);
   api.onCustomEvent("castlewars:started-player", giveStartingPouch);
   api.onCustomEvent("potions:area", allowSupplyPotions);

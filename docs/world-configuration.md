@@ -121,3 +121,9 @@ through the host's plugin switches hides its button when the world loads that co
 The summary also refreshes command access while open and rejects clicks on unavailable controls.
 Its layout and behavior live under `plugins/interface/sidejournaldefaults/`; it does not
 require the optional PvP statistics plugin to display.
+
+## PvP Arena worlds
+
+Ranked PvP Arena match finding (the Grouping tab's PvP Arena button, `DuelArena` plugin) is only
+available on designated worlds. Enable it with `"pluginConfig": { "DuelArena:pvpArenaWorld": true }`
+in `world.local.json` (default off). Legacy Duels are unaffected.

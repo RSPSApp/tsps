@@ -28,7 +28,7 @@ import type { WorldEntityAnimator } from "../WorldEntityAnimator";
 import { pickSeaPoint, projectDeckToWorld, updateWorldEntityMotion } from "../render/worldEntityMotion";
 import { getServerTickPhaseNow } from "../../network/serverConnection/timing";
 import { WebGPUMapSquare, type SceneryDrawContext } from "./WebGPUMapSquare";
-import { resolveFogRange } from "../RenderDistancePolicy";
+import { fogSettings, resolveFogRange } from "../RenderDistancePolicy";
 import { WorldResources } from "./WorldResources";
 import { WebGPUActors } from "./actors/WebGPUActors";
 import { WebGPUInstances } from "./instances";
@@ -853,8 +853,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
 
         const renderDistance = resolveWebGPURenderDistance(this);
         // HD spreads haze over long views, as on WebGL (render/render/frame/render.ts).
-        const { fogEnd, fogDepth } = resolveFogRange({ renderDistance, autoFogDepth: true,
-            autoFogDepthFactor: AUTO_FOG_DEPTH_FACTOR, manualFogDepth: 0, hd: this.osrsClient.clientPlugins.hdEnabled() });
+        const { fogEnd, fogDepth } = resolveFogRange({ renderDistance, ...fogSettings({ osrsClient: this.osrsClient, autoFogDepth: true,
+            autoFogDepthFactor: AUTO_FOG_DEPTH_FACTOR, fogDepth: 0 }), hd: this.osrsClient.clientPlugins.hdEnabled() });
 
         const data = this.world.sceneData;
         data.set(camera.viewProjMatrix as Float32Array, 0);

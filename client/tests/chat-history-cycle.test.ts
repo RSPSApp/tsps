@@ -18,4 +18,9 @@ assert.equal(store.getFullByTypeAndLine(0, 0)?.cycle, 8001);
 assert.equal(store.getNextUid(0, first), sameFrame);
 assert.equal(store.getNextUid(0, sameFrame), later);
 assert.equal(store.getPrevUid(0, later), sameFrame);
+// A server chat packet without text must not reach listeners (RunEnergyPlugin startsWith) as undefined.
+const seen: unknown[] = [];
+store.beforeInsertListeners.add((message) => seen.push(message.text));
+store.addMessage(0, undefined as unknown as string);
+assert.deepEqual(seen, [""]);
 console.log("chat-history-cycle ok");

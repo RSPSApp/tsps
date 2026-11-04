@@ -287,3 +287,215 @@ test('owner sale checks update the side panel and reject previously offered sale
   assert.equal(h.inventory.getAmount(28613), 0);
   assert.equal(h.inventory.getAmount(28134), 2000);
 });
+
+
+/** Real player/items and the station's registered callbacks, with a controlled processing clock.
+ * This does not dispatch a client packet or render the NPC headbar. */
+function stationWork(t, key = 'alembic') {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const core = PluginManager.getCoreApi();
+  const previousApi = Shared.api();
+  const hooks = new Map();
+  const itemHooks = [];
+  const bars = new Set();
+  const sounds = [];
+  const xp = [];
+  let now = 0;
+  let player;
+  t.after(() => {
+    try {
+      if (player) {
+        Stations.stop(player);
+        core.TaskManager.cancelTasks(player.getIndex());
+        player.setRegistered(false);
+      }
+      assert.equal(bars.size, 0, 'owned progress bars are removed');
+    } finally {
+      Shared.bind(previousApi);
+    }
+  });
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  player = new Player(new PlayerSession(channel));
+  player.setIndex(1800);
+  player.setUsername('mixologystation');
+  const station = Stations.STATIONS[key];
+  const tile = new core.Location(station.loc.x, station.loc.y - 1, Shared.LAB.z);
+  player.setLocation(tile);
+  const skills = player.getSkillManager();
+  skills.setExperience(core.Skill.HERBLORE, core.SkillManager.getExperienceForLevel(60));
+  skills.setMaxLevel(core.Skill.HERBLORE, 60);
+  skills.setCurrentLevel(core.Skill.HERBLORE, 60, false);
+  assert.equal(Stations.total(player), 25);
+  const realAddXp = skills.addExperiences.bind(skills);
+  t.mock.method(skills, 'addExperiences', (skill, amount, ...rest) => {
+    if (skill === core.Skill.HERBLORE) xp.push(amount);
+    return realAddXp(skill, amount, ...rest);
+  });
+  const sender = player.getPacketSender();
+  const realSound = sender.sendSound.bind(sender);
+  t.mock.method(sender, 'sendSound', (id, loops, delay, ...rest) => {
+    sounds.push({ now, id, loops, delay });
+    return realSound(id, loops, delay, ...rest);
+  });
+  t.mock.method(Shared, 'tick', () => now);
+  const api = { ...previousApi, core,
+    onObjectInteraction(name, actions) { hooks.set(name, actions); },
+    onItemOnObject(handler) { itemHooks.push(handler); },
+    spawnNpc() {
+      const bar = { showHeadbar() {} };
+      bars.add(bar);
+      return bar;
+    },
+    removeNpc(bar) { bars.delete(bar); },
+  };
+  Shared.bind(api);
+  Stations(api);
+  Shared.set(player, Shared.VARBIT.MET_SUPERVISOR, 1);
+  const potion = Shared.potion(1);
+  player.getInventory().add(new core.Item(potion.unfinished, 1), true);
+  const event = { player, objectId: station.loc.id,
+    location: new core.Location(station.loc.x, station.loc.y, Shared.LAB.z) };
+  const action = { alembic: 'Crystalise-potion', retort: 'Concentrate-potion', agitator: 'Homogenise-potion' }[key];
+  const interact = () => hooks.get(station.name)[action]({ ...event });
+  function start() {
+    const itemSlot = player.getInventory().getItems().findIndex(item => item?.getId() === potion.unfinished);
+    assert.ok(itemSlot >= 0);
+    const use = { ...event, itemId: potion.unfinished, itemSlot, handled: false };
+    for (const handler of itemHooks) handler(use);
+    assert.equal(use.handled, true, 'real registered item-on-station handler accepted the potion');
+    assert.equal(player.getInventory().getAmount(potion.unfinished), 0);
+    assert.equal(Shared.get(player, station.potionVarbit), 1);
+    assert.equal(Stations.isWorking(player), true);
+  }
+  function advance(click = false) {
+    now++;
+    if (click) interact();
+    Stations.tick(player, now);
+  }
+  function leaveAndResume() {
+    player.setLocation(new core.Location(tile.getX() + 1, tile.getY(), tile.getZ()));
+    advance();
+    assert.equal(Stations.isWorking(player), false, 'moving away stops active work');
+    assert.equal(Shared.get(player, station.potionVarbit), 1, 'unfinished potion stays in station');
+    player.setLocation(tile);
+    interact();
+    assert.equal(Stations.isWorking(player), true);
+  }
+  function finish() {
+    for (let i = 0; i < 40 && Stations.isWorking(player); i++) advance();
+    assert.equal(Stations.isWorking(player), false, 'bounded processing completed');
+    assert.equal(Shared.get(player, station.potionVarbit), 0);
+    assert.equal(Shared.get(player, station.progressVarbit), 0);
+    const carried = player.getInventory().getItems().filter(item => item && item.getId() >= 0 && item.getAmount() > 0);
+    assert.equal(carried.length, 1, 'one input becomes exactly one output, without extra items');
+    assert.equal(carried[0].getId(), potion.finished);
+    assert.equal(carried[0].getAmount(), 1);
+    assert.equal(carried[0].getMetaValue(Shared.META.MODIFIER), station.modifier);
+    assert.equal(bars.size, 0);
+  }
+  const cues = () => sounds.filter(sound => sound.id === 2655);
+  return { player, station, start, advance, interact, leaveAndResume, finish, xp, cues,
+    progress: () => Shared.get(player, station.progressVarbit),
+    hit: () => Shared.get(player, station.hitVarbit) };
+}
+
+test('alembic: a missed first window rearms after seven active pumps, independently of progress', t => {
+  const f = stationWork(t);
+  f.start();
+  for (let i = 0; i < 4; i++) f.advance();
+  assert.deepEqual(f.cues(), [{ now: 4, id: 2655, loops: 1, delay: 30 }]);
+  f.advance(); // Leave the existing one-step response window unused.
+  f.advance(true); // A late click loses progress and starts the retry count.
+  assert.equal(f.progress(), 3, 'late click deducts two from five');
+  assert.deepEqual(f.xp, []);
+  for (let i = 0; i < 6; i++) f.advance();
+  assert.equal(f.cues().length, 1, 'six following pumps cannot open the recovery cue');
+  f.advance();
+  assert.deepEqual(f.cues().map(sound => [sound.now, sound.delay]), [[4, 30], [13, 30]]);
+  assert.deepEqual(f.xp, [], 'the cue itself grants nothing');
+  f.advance(true); // The established delayed-cue response phase is unchanged.
+  assert.deepEqual(f.xp, [14]);
+  assert.equal(f.hit(), 1);
+  assert.equal(f.progress(), 20, 'ten progress plus one third of 25 and the ordinary click step');
+  f.finish();
+  assert.deepEqual(f.xp, [14]);
+});
+
+test('alembic: an early click keeps the initial retry target rather than shifting it on every miss', t => {
+  const f = stationWork(t);
+  f.start();
+  f.advance(true); // Failure on active pump one: target pump eight.
+  assert.equal(f.progress(), 0);
+  f.advance(true); // Another bad click must not postpone the initial target.
+  for (let i = 0; i < 5; i++) f.advance();
+  assert.deepEqual(f.cues(), []);
+  f.advance();
+  assert.deepEqual(f.cues().map(sound => sound.now), [8]);
+  f.advance(true);
+  assert.deepEqual(f.xp, [14]);
+  f.finish();
+});
+
+test('alembic: leaving and restarting resets pump count without resetting potion progress', t => {
+  const f = stationWork(t);
+  f.start();
+  for (let i = 0; i < 4; i++) f.advance();
+  f.advance();
+  f.advance(true);
+  assert.equal(f.progress(), 3);
+  f.leaveAndResume(); // Stop at time seven, retaining three progress.
+  assert.equal(f.progress(), 3);
+  for (let i = 0; i < 3; i++) f.advance();
+  assert.deepEqual(f.cues().map(sound => sound.now), [4]);
+  f.advance();
+  assert.deepEqual(f.cues().map(sound => sound.now), [4, 11]);
+  f.advance(true);
+  assert.deepEqual(f.xp, [14]);
+  f.finish();
+});
+
+test('alembic: a potion keeps its awarded bonus across leaving, restarting and further clicks', t => {
+  const f = stationWork(t);
+  f.start();
+  for (let i = 0; i < 4; i++) f.advance();
+  f.advance(true);
+  assert.deepEqual(f.xp, [14]);
+  assert.equal(f.hit(), 1);
+  f.leaveAndResume();
+  assert.equal(f.hit(), 1);
+  f.advance(true);
+  for (let i = 0; i < 8; i++) f.advance();
+  assert.equal(f.cues().length, 1, 'a hit potion cannot rearm a cue');
+  assert.deepEqual(f.xp, [14], 'no second bonus after resume');
+  f.finish();
+  assert.deepEqual(f.xp, [14]);
+});
+
+test('station controls: retort click XP and potion conservation are unchanged', t => {
+  const f = stationWork(t, 'retort');
+  f.start();
+  f.advance(true);
+  assert.equal(f.progress(), 2);
+  assert.deepEqual(f.xp, [2]);
+  assert.deepEqual(f.cues(), []);
+  f.finish();
+  assert.deepEqual(f.xp, [2]);
+});
+
+test('station controls: agitator retains its two-hit window and literal XP rewards', t => {
+  t.mock.method(Math, 'random', () => 0);
+  const f = stationWork(t, 'agitator');
+  f.start();
+  f.advance();
+  f.advance();
+  assert.deepEqual(f.cues(), [{ now: 2, id: 2655, loops: 1, delay: 0 }]);
+  f.advance(true);
+  assert.equal(f.progress(), 12);
+  f.advance(true);
+  assert.equal(f.progress(), 22);
+  assert.deepEqual(f.xp, [14, 2]);
+  f.finish();
+  assert.deepEqual(f.xp, [14, 2]);
+});

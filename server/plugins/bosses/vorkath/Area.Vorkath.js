@@ -13,6 +13,10 @@ const Specials = require("./Specials.Vorkath");
 const CRATER = { minX: 2258, maxX: 2286, minY: 4054, maxY: 4078 };
 
 const ATTR_AREA = "vorkath:instance-area";
+const QUEST_KEY = "dragon_slayer_ii";
+const QUEST_FIGHT_STAGE = 8;
+const QUEST_TRIP_ATTRIBUTE = "dragon-slayer-ii:ungael-trip";
+const ACCESS_MESSAGE = "You need to complete Dragon Slayer II to fight Vorkath.";
 
 let api = null;
 let core = null;
@@ -27,6 +31,14 @@ function insideCrater(location) {
   const x = location.getX();
   const y = location.getY();
   return x >= CRATER.minX && x <= CRATER.maxX && y >= CRATER.minY && y <= CRATER.maxY;
+}
+
+function canEnter(player) {
+  const request = { player, key: QUEST_KEY, complete: false };
+  api.emitCustomEvent("quest:is-complete", request);
+  if (request.complete === true) return true;
+  return Number(player?.getAttribute?.("quest.dragon_slayer_ii.stage") ?? 0) === QUEST_FIGHT_STAGE
+    && player?.getAttribute?.(QUEST_TRIP_ATTRIBUTE) === true;
 }
 
 function defineAreaClass() {
@@ -136,6 +148,12 @@ function enterCrater({ player }) {
     destroyArea(player);
     return;
   }
+  if (!canEnter(player)) {
+    destroyArea(player);
+    player.sendMessage(ACCESS_MESSAGE);
+    player.moveTo(new core.Location(2272, 4053, 0));
+    return;
+  }
   let area = areaOf(player);
   if (!area) {
     area = new VorkathPrivateArea(player.getUsername?.());
@@ -162,8 +180,9 @@ function attach(pluginApi) {
 module.exports = {
   attach,
   insideCrater,
+  canEnter,
   areaOf,
   ensureSleeper,
   destroyArea,
-  _test: { insideCrater, getAreaClass: () => VorkathPrivateArea },
+  _test: { insideCrater, canEnter, getAreaClass: () => VorkathPrivateArea },
 };

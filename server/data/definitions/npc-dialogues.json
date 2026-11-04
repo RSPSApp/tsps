@@ -894920,40 +894920,6 @@
           "text": "What are we waiting for? What do I need to do?"
         },
         {
-          "player": "I need to get you a demonic sigil."
-        },
-        {
-          "type": "line",
-          "speaker": "Clay golem",
-          "text": "I will wait."
-        },
-        {
-          "type": "line",
-          "speaker": "Clay golem",
-          "text": "I sensed a great darkness, as of a demon revelling in its moment of triumph."
-        },
-        {
-          "type": "line",
-          "speaker": "Clay golem",
-          "text": "And now this sandstorm appears, the likes of which I have not seen in three thousand years. What can it mean?"
-        },
-        {
-          "player": "Denath was Agrith-Naar all along! We've accidentally helped him get back to his own dimension!"
-        },
-        {
-          "type": "line",
-          "speaker": "Clay golem",
-          "text": "It is a terrible thing for a demon to be victorious. I wish there was something I could do to rectify the situation."
-        },
-        {
-          "player": "You could help me summon the demon again so I could kill him!"
-        },
-        {
-          "type": "line",
-          "speaker": "Clay golem",
-          "text": "What are we waiting for? What do I need to do?"
-        },
-        {
           "type": "condition",
           "text": "While having a demonic sigil:",
           "steps": [

@@ -32,6 +32,10 @@ const MARK_COOLDOWN_MINUTES = 3;
 const MARK_SHORT_COOLDOWN_MINUTES = 2;
 const MARK_DESPAWN_TICKS = 1000;
 const MINUTE_MS = 60_000;
+const YANILLE_GRAPPLE_CROSSINGS = [
+  { object: [2556, 3074, 0], start: [2556, 3075, 0], landing: [2556, 3074, 1] },
+  { object: [2556, 3073, 0], start: [2556, 3072, 0], landing: [2556, 3073, 1] },
+];
 
 /**
  * The Agility course helper (rsprox captures). A lap's first obstacle sets
@@ -56,6 +60,7 @@ const OBSTACLES_BY_NPC = new Map();
 const OBSTACLES_BY_TILE = new Map();
 /** player -> the tile key they last stepped onto inside a tile obstacle's area. */
 const lastTileStepped = new WeakMap();
+const logoutObstacleCompletions = new WeakSet();
 
 let pluginApi;
 let core;
@@ -178,6 +183,32 @@ function tileContext(player, obstacle) {
 
 function resolve(value, context) {
   return typeof value === "function" ? value(context) : value;
+}
+
+/** The configured action's cache slot, or the first click for ordinary shortcuts. */
+function interactionClickType(obstacle, definition) {
+  if (!obstacle.option) return 1;
+  const actions = definition?.getActions?.() ?? definition?.getInteractions?.();
+  if (!Array.isArray(actions)) return null;
+  const index = actions.indexOf(obstacle.option);
+  return index < 0 ? null : index + 1;
+}
+
+/** Register option-specific shortcuts by the cache's exact object name and action. */
+function registerOptionInteractions(api) {
+  const handlersByName = new Map();
+  for (const [objectId, obstacles] of OBSTACLES_BY_OBJECT) {
+    const name = core.CacheDefinitions.getObject(objectId)?.name;
+    for (const obstacle of obstacles) {
+      if (!obstacle.option || !name || name === "null") continue;
+      const handlers = handlersByName.get(name) ?? {};
+      handlers[obstacle.option] = operateObstacle;
+      handlersByName.set(name, handlers);
+    }
+  }
+  for (const [name, handlers] of handlersByName) {
+    api.onObjectInteraction(name, handlers);
+  }
 }
 
 function agilityLevel(player) {
@@ -530,6 +561,13 @@ function unmet(player, requirement) {
     pluginApi.emitCustomEvent("diary:is-complete", request);
     if (request.complete === false) return message;
   }
+  if (requirement.slayerTask) {
+    const request = { player, task: null };
+    pluginApi.emitCustomEvent("slayer:current-task", request);
+    const taskName = String(request.task?.name ?? "").toLowerCase();
+    const accepted = [].concat(requirement.slayerTask).some((name) => taskName.includes(String(name).toLowerCase()));
+    if (!accepted) return requirement.slayerTaskMessage ?? "You need an appropriate Slayer task to attempt this.";
+  }
   return null;
 }
 
@@ -549,7 +587,7 @@ function usable(player, obstacle, level) {
     const reason = unmet(player, alternative);
     if (!reason) {
       const { steps, start, end } = alternative;
-      return { obstacle: { ...obstacle, ...(steps ? { steps } : {}), ...(start ? { start } : {}), ...(end ? { end } : {}) } };
+      return { obstacle: { ...obstacle, ...(alternative.method ? { method: alternative.method } : {}), ...(steps ? { steps } : {}), ...(start ? { start } : {}), ...(end ? { end } : {}) } };
     }
     refusal ??= reason;
   }
@@ -578,6 +616,8 @@ function attemptObstacle(player, context, entry) {
   const success = roll.success;
   const resolved = resolve(success ? obstacle.steps : fail.steps, context);
   if (!resolved) return;
+  const actionStart = obstacle.method ? [context.pos.x, context.pos.y, context.pos.z] : null;
+  const actionPrivateArea = obstacle.method ? player.getPrivateArea?.() ?? null : null;
   const lapStart = success && startsLap(obstacle, context);
   const steps = lapStart && obstacle.course.helper != null ? withHighlight(resolved, obstacle.course.helper) : resolved;
   pluginApi.emitCustomEvent("agility:obstacle-start", { player, objectId, location: context.obj, success });
@@ -592,7 +632,27 @@ function attemptObstacle(player, context, entry) {
       finishObstacle(player, obstacle, success, completed, fail, lapStart);
       if (completed && success) {
         // A shortcut's own name (agility-shortcuts.json's, "Stepping stone (Shilo Village)"); a course obstacle has none.
-        pluginApi.emitCustomEvent("agility:obstacle", { player, objectId, location: context.obj, shortcut: obstacle.course ? null : obstacle.name ?? null });
+        const event = { player, objectId, location: context.obj, shortcut: obstacle.course ? null : obstacle.name ?? null };
+        if (obstacle.method) event.method = obstacle.method;
+        pluginApi.emitCustomEvent("agility:obstacle", event);
+        const location = player.getLocation();
+        if (
+          obstacle.method === "grapple" && obstacle.name === "Wall (Yanille)" && [17047, 17049, 17050].includes(objectId) &&
+          YANILLE_GRAPPLE_CROSSINGS.some(({ object, start, landing }) =>
+            context.obj.x === object[0] && context.obj.y === object[1] && context.obj.z === object[2] &&
+            actionStart?.[0] === start[0] && actionStart?.[1] === start[1] && actionStart?.[2] === start[2] &&
+            location.getX() === landing[0] && location.getY() === landing[1] && location.getZ() === landing[2]) &&
+          actionPrivateArea == null && (player.getPrivateArea?.() ?? null) == null &&
+          player.getHitpoints() > 0 && !logoutObstacleCompletions.has(player)
+        ) {
+          pluginApi.emitCustomEvent("agility:yanille-grapple", {
+            player,
+            objectId,
+            location: context.obj,
+            method: obstacle.method,
+            start: { x: actionStart[0], y: actionStart[1], z: actionStart[2] },
+          });
+        }
       }
       if (completed && success && obstacle.skipTo != null) {
         skipAhead(player, obstacle, context);
@@ -604,7 +664,7 @@ function attemptObstacle(player, context, entry) {
 function routeToObstacle(event) {
   const location = event.object.getLocation();
   const obstacle = findObstacle(event.objectId, { x: location.getX(), y: location.getY(), z: location.getZ() }, event.player);
-  if (!obstacle?.route || event.clickType !== 1) return;
+  if (!obstacle?.route || interactionClickType(obstacle, event.definition ?? event.object.getDefinition?.()) !== event.clickType) return;
   const tile = resolve(obstacle.route, objectContext(event.player, event.object));
   if (tile) {
     event.destination = { x: tile[0], y: tile[1], z: tile[2] ?? location.getZ() };
@@ -613,7 +673,7 @@ function routeToObstacle(event) {
 
 function operateObstacle(event) {
   const obstacle = findObstacle(event.objectId, event.location, event.player);
-  if (!obstacle) return false;
+  if (!obstacle || interactionClickType(obstacle, event.definition ?? event.object.getDefinition?.()) !== event.clickType) return false;
   if (ObstacleRunner.isBusy(event.player)) return true;
   attemptObstacle(event.player, objectContext(event.player, event.object), obstacle);
   return true;
@@ -695,7 +755,9 @@ function blockTeleportMidObstacle(event) {
 }
 
 function finishObstacleOnLogout({ player }) {
+  logoutObstacleCompletions.add(player);
   ObstacleRunner.completeNow(player);
+  logoutObstacleCompletions.delete(player);
 }
 
 buildIndex();
@@ -716,6 +778,7 @@ module.exports = {
     api.onNpcInteraction("Grace", { "Toggle Counter": toggleLapCounter });
     api.onObjectRoute(routeToObstacle);
     api.onObjectFirstClick([...OBSTACLES_BY_OBJECT.keys()], operateObstacle);
+    registerOptionInteractions(api);
     api.onCustomEvent("ladders:climb", claimLadderObstacle);
     api.onNpcInteraction("Agility Trainer", { "Give-Stick": operateNpcObstacle });
     api.registerArea(createTileObstacleArea());

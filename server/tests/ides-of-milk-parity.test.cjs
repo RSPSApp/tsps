@@ -13,12 +13,13 @@ const core = PluginManager.getCoreApi();
 const I = core.ItemIdentifiers, N = core.NpcIdentifiers, O = core.ObjectIdentifiers;
 const noop = () => {};
 
-function harness({ npcDrops = false, nativeNpc = false } = {}) {
-  const hooks = {}, events = {}, eventCounts = new Map(), tasks = [], transcripts = [], objects = [], npcs = [];
+function harness({ npcDrops = false, nativeNpc = false, refuseNpcId = null } = {}) {
+  const hooks = {}, events = {}, eventCounts = new Map(), tasks = [], transcripts = [], objects = [], npcs = [], prompts = [];
   const groundDrops = [];
   class PrivateArea {
     constructor(boundaries) { this.boundaries = boundaries; this.entities = []; this.destroyed = false; }
     add(actor) { this.entities.push(actor); actor.setArea(this); }
+    detach(actor) { this.entities = this.entities.filter(value => value !== actor); actor.setArea(null); }
     enter(actor) { this.add(actor); }
     leave(actor, logout) { this.postLeave(actor, logout); }
     postLeave(actor) { this.entities = this.entities.filter(value => value !== actor); actor.setArea(null); this.destroy(); }
@@ -36,6 +37,7 @@ function harness({ npcDrops = false, nativeNpc = false } = {}) {
       MapObjects: { getType: core.MapObjects.getType.bind(core.MapObjects),
         get: (id, location) => new core.GameObject(id, location, 0, id === O.GATE_319 || id === O.GATE_322 ? 1 : 0, null) } },
     persistAttribute: noop,
+    sendMultiChatboxPrompt: (...args) => prompts.push(args),
     onCustomEvent: (name, handler) => (events[name] ??= []).push(handler),
     emitCustomEvent: (name, event) => {
       eventCounts.set(name, (eventCounts.get(name) ?? 0) + 1);
@@ -43,6 +45,7 @@ function harness({ npcDrops = false, nativeNpc = false } = {}) {
     },
     registerNpcCombatMethodProvider: (ids, method) => { api.combat = method; },
     spawnNpc: definition => {
+      if (definition.id === refuseNpcId) return null;
       if (nativeNpc) {
         const npc = new core.NPC(definition.id, new core.Location(definition.x, definition.y, definition.z));
         npc.getPrivateArea = () => npc.getArea();
@@ -71,11 +74,12 @@ function harness({ npcDrops = false, nativeNpc = false } = {}) {
   runtime.startTranscript = (...args) => { transcripts.push(args); return true; };
   try { require('../plugins/quests/quests/IdesOfMilk.Quest')(api); }
   finally { runtime.startTranscript = original; }
-  return { api, hooks, tasks, transcripts, objects, npcs, groundDrops, eventCounts, quest: runtime.getRegisteredQuests().at(-1),
+  return { api, hooks, tasks, transcripts, objects, npcs, prompts, groundDrops, eventCounts, quest: runtime.getRegisteredQuests().at(-1),
     emit: (name, event) => (events[name] ?? []).forEach(handler => handler(event)),
     line(player, npcId, text) { const event = { player, npcId, text }; this.emit('npc-dialogue:line', event); event.before?.(); },
     action(player, npcId, stepId) { const event = { player, npcId, stepId }; this.emit('npc-dialogue:action', event); return event; },
     item(player, itemId, option, item, slot) { const event = { player, itemId, option, item, slot }; hooks.onItemAction[0](event); return event; },
+    itemOnNpc(player, target, itemId) { const event = { player, target, itemId }; hooks.onItemOnNpc[0](event); return event; },
     tick(count) { while (count-- > 0) [...tasks].forEach(task => task.tick()); },
   };
 }
@@ -200,6 +204,52 @@ test('leaving a post-quest fight restores the cow-field gates so Brutus can be r
     .sort((a, b) => a[0] - b[0]),
   [[O.GATE_18, 3253, 3266, 0], [O.GATE_20, 3253, 3267, 0], [O.GATE_319, 3263, 3294, 1], [O.GATE_322, 3262, 3294, 1]],
   'each actionless private leaf is replaced by the map gate it hid, so "Release" is back');
+});
+
+test('Demonic Brutus is a post-quest, Desert Treasure II-gated potato upgrade in the private encounter', () => {
+  const h = harness(), p = player(); h.quest.setStage(p, 22); p.items.set(I.ABYSSAL_POTATO, 1);
+  h.action(p, N.BULL, 'mKQNRL'); h.tick(4);
+  const arena = p.getArea(), regular = h.npcs[0];
+  assert.equal(regular.getId(), N.BRUTUS);
+  const refused = h.itemOnNpc(p, regular, I.ABYSSAL_POTATO);
+  assert.equal(refused.handled, true);
+  assert.equal(h.prompts.length, 0);
+  assert.equal(p.items.get(I.ABYSSAL_POTATO), 1, 'the Desert Treasure II gate must not consume the potato');
+
+  h.api.onCustomEvent('quest:is-complete', request => {
+    if (request.key === 'desert_treasure_ii') request.complete = true;
+  });
+  const accepted = h.itemOnNpc(p, regular, I.ABYSSAL_POTATO);
+  assert.equal(accepted.handled, true);
+  assert.equal(p.items.get(I.ABYSSAL_POTATO), 1, 'consume only after the player confirms');
+  assert.match(h.prompts[0][1], /Demonic Brutus/);
+  h.prompts[0][3]();
+  const demonic = h.npcs.at(-1);
+  assert.equal(p.items.get(I.ABYSSAL_POTATO), 0);
+  assert.equal(regular.removed, true);
+  assert.equal(demonic.getId(), N.DEMONIC_BRUTUS);
+  assert.equal(demonic.getArea(), arena);
+
+  h.hooks.onNpcDeath[0]({ killer: p, npc: demonic, npcId: N.DEMONIC_BRUTUS });
+  assert.equal(h.eventCounts.get('combat-achievements:kill') ?? 0, 0, 'the hard variant does not report a standard Brutus kill');
+  h.tick(35);
+  assert.equal(h.npcs.length, 2, 'the hard variant uses the encounter respawn timer');
+  h.tick(1);
+  assert.equal(h.npcs.at(-1).getId(), N.BRUTUS, 'the standard encounter returns for the next attempt');
+});
+
+test('a refused Demonic Brutus spawn keeps the regular fight and does not consume the potato', () => {
+  const h = harness({ refuseNpcId: N.DEMONIC_BRUTUS }), p = player(); h.quest.setStage(p, 22); p.items.set(I.ABYSSAL_POTATO, 1);
+  h.api.onCustomEvent('quest:is-complete', request => {
+    if (request.key === 'desert_treasure_ii') request.complete = true;
+  });
+  h.action(p, N.BULL, 'mKQNRL'); h.tick(4);
+  const regular = h.npcs[0];
+  h.itemOnNpc(p, regular, I.ABYSSAL_POTATO);
+  h.prompts[0][3]();
+  assert.equal(regular.removed, undefined);
+  assert.equal(p.items.get(I.ABYSSAL_POTATO), 1);
+  assert.match(p.messages.at(-1), /potato was not used/);
 });
 
 test('private gates hide moved world leaves and restore the current world state on exit or logout', () => {
@@ -330,7 +380,7 @@ function fight(stage = 18, options) {
   return { h, p, npc: h.npcs[0], arena: p.getArea(), method: new h.api.combat() };
 }
 
-test('stomp freezes the captured L footprint and misses a player who steps back', () => {
+test('each stomp retargets its captured footprint, then freezes it during the windup', () => {
   const { h, p, npc, arena, method } = fight();
   npc.moveTo(new core.Location(3260, 3286, 0));
   p.moveTo(new core.Location(3260, 3289, 0));
@@ -340,10 +390,14 @@ test('stomp freezes the captured L footprint and misses a player who steps back'
   assert.ok(p.damage[0].getDamage() >= 3 && p.damage[0].getDamage() <= 4, 'low-level quest damage scales to base Hitpoints');
   p.damage.length = 0; p.graphics.length = 0;
   arena.stompsRemaining = 1;
+  // rsprox 4153 ticks 602/606: the third snort turns east after the bull and player move.
+  npc.moveTo(new core.Location(3261, 3286, 0));
   p.moveTo(new core.Location(3263, 3289, 0));
   method.start(npc, p); h.tick(4);
-  assert.equal(p.damage.length, 0, 'later stomps retain the selected footprint after the player moves');
-  assert.ok(p.graphics.some(([x, y]) => x === 3259 && y === 3287));
+  assert.deepEqual(p.graphics.slice().sort(), [[3262, 3289], [3263, 3289], [3264, 3287], [3264, 3288], [3264, 3289]].sort());
+  assert.equal(p.damage.length, 1, 'the next snort hits its new footprint');
+  p.damage.length = 0;
+  npc.moveTo(new core.Location(3260, 3286, 0));
   arena.stompsRemaining = 0; arena.meleeRemaining = 0; arena.nextSpecial = 'stomp';
   p.moveTo(new core.Location(3261, 3289, 0));
   method.start(npc, p); p.moveTo(new core.Location(3261, 3290, 0)); h.tick(4);

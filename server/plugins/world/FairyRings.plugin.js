@@ -96,6 +96,7 @@ const configuredRing = new WeakMap();
 /** code -> { code, destination, destinationId, index, logText, logComponent, starComponent } */
 let rings = new Map();
 let ringsByComponent = new Map();
+const pendingTeleports = new WeakMap();
 
 function unpackCoord(packed) {
   return { x: (packed >> 14) & 0x3fff, y: packed & 0x3fff, z: packed >>> 28 };
@@ -205,6 +206,24 @@ function ringTile(location) {
   return location ? new Location(location.x, location.y, location.z) : null;
 }
 
+function locationSnapshot(player) {
+  const location = player.getLocation?.();
+  if (!location) return null;
+  return new Location(location.getX(), location.getY(), location.getZ());
+}
+
+function sameTile(left, right) {
+  return left && right && left.getX() === right.getX() && left.getY() === right.getY() && left.getZ() === right.getZ();
+}
+
+function cancelPendingTeleport(player, pending = pendingTeleports.get(player)) {
+  if (!pending) return false;
+  pending.cancelled = true;
+  if (pendingTeleports.get(player) !== pending) return false;
+  pendingTeleports.delete(player);
+  return true;
+}
+
 /** OSRS sets busy the tick after the dials open (not on a dial click). */
 function openDial({ player, location }) {
   if (!player || !canUse(player)) return;
@@ -271,7 +290,11 @@ function stepOntoRing(player, ring) {
 function fairyTeleport(player, ring, from, fromClick) {
   const sender = player.getPacketSender();
   const onRing = !from || from.equals(player.getLocation());
+  const origin = locationSnapshot(player);
+  const privateArea = player.getPrivateArea?.() ?? null;
+  const teleportSerial = player.getTeleportSerial?.();
   if (!onRing) stepOntoRing(player, from);
+  const expectedTile = locationSnapshot(player);
   const delay = onRing ? 0 : 1;
   const sameRing = ring.destination.getDistance(from ?? player.getLocation()) <= 1;
   const vanish = () => {
@@ -283,6 +306,13 @@ function fairyTeleport(player, ring, from, fromClick) {
   if (delay === 0) vanish();
   // A ring's option runs on the player's turn, after this tick's tasks: the first run is tick 1.
   let tick = fromClick ? -1 : 0;
+  const pending = { cancelled: false };
+  cancelPendingTeleport(player);
+  pendingTeleports.set(player, pending);
+  const stillValid = () => !pending.cancelled && pendingTeleports.get(player) === pending &&
+    (pending.landed || (player.isRegistered() && player.getHitpoints?.() > 0 && !player.isDyingReturn?.() &&
+      player.getTeleportSerial?.() === teleportSerial &&
+      (player.getPrivateArea?.() ?? null) === privateArea && sameTile(locationSnapshot(player), expectedTile)));
   core.TaskManager.submit(new (class extends core.Task {
     constructor() {
       super(1, player, false);
@@ -290,18 +320,36 @@ function fairyTeleport(player, ring, from, fromClick) {
 
     execute() {
       tick++;
-      if (!player.isRegistered()) {
+      if (!stillValid()) {
+        const ownsPending = cancelPendingTeleport(player, pending);
+        if (ownsPending && player.isRegistered()) sender.sendVarbit(BUSY_VARBIT, 0);
         this.stop();
         return;
       }
       if (tick === delay) vanish();
       if (tick === delay + 3) {
         if (!sameRing) {
-          const from = player.getLocation?.()?.clone?.() ?? null;
-          const fromInstance = player.getPrivateArea?.() != null;
+          const teleportFrom = locationSnapshot(player);
+          const fromInstance = privateArea != null;
           player.moveTo(ring.destination);
-          // As the core's teleports do ("teleport:landed"): where it began, for content that remembers it.
-          core.PluginManager?.emitCustomEvent?.("teleport:landed", { player, from, fromInstance, to: ring.destination });
+          const landed = player.getLocation?.();
+          const arrived = landed && landed.getX() === ring.destination.getX() &&
+            landed.getY() === ring.destination.getY() && landed.getZ() === ring.destination.getZ() &&
+            teleportFrom && !sameTile(landed, teleportFrom) &&
+            player.getTeleportSerial?.() === (teleportSerial === undefined ? undefined : teleportSerial + 1) &&
+            (player.getPrivateArea?.() ?? null) === privateArea && player.getHitpoints?.() > 0 &&
+            !player.isDyingReturn?.() && player.isRegistered();
+          if (!arrived) {
+            const ownsPending = cancelPendingTeleport(player, pending);
+            if (ownsPending && player.isRegistered()) sender.sendVarbit(BUSY_VARBIT, 0);
+            this.stop();
+            return;
+          }
+          pending.landed = true;
+          // Emit arrival only after the player reaches the requested tile.
+          core.PluginManager?.emitCustomEvent?.("teleport:landed", {
+            player, from: origin, fromInstance, to: landed, source: "fairy-ring", code: ring.code,
+          });
           rememberUse(player, ring);
         }
         pluginApi.emitCustomEvent("fairy-rings:travelled", { player, code: ring.code, destination: player.getLocation() });
@@ -310,10 +358,19 @@ function fairyTeleport(player, ring, from, fromClick) {
       if (tick === delay + 4) {
         sender.sendVarbit(BUSY_VARBIT, 0);
         player.performAnimation(core.Animation.DEFAULT_RESET_ANIMATION);
+        cancelPendingTeleport(player, pending);
         this.stop();
       }
     }
   })());
+}
+
+function playerDied({ player }) {
+  if (!player) return;
+  const pending = pendingTeleports.get(player);
+  if (cancelPendingTeleport(player, pending) && player.isRegistered()) {
+    player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+  }
 }
 
 /** A light source keeps AJQ's dark-cave warning away. */
@@ -503,6 +560,7 @@ module.exports = {
     interfaceAction,
     interfaceClosed,
     hasLightSource,
+    playerDied,
     ringOptions,
     rings: () => rings,
     DIAL_VARBITS,
@@ -519,6 +577,7 @@ module.exports = {
     api.onObjectInteraction("Fairy ring", ringOptions());
     api.onInterfaceActionClick(interfaceAction);
     api.onCustomEvent("interface:closed", interfaceClosed);
+    api.onPlayerDeath?.(playerDied);
     api.onCustomEvent("fairy-rings:configure", openDial);
     api.onCustomEvent("fairy-rings:zanaris", zanaris);
     api.onCustomEvent("fairy-rings:last-destination", lastDestination);

@@ -596,7 +596,11 @@ export class Bank extends ItemContainer {
         }
 
         if (fromInventory && targetGroup === Bank.SIDE_INTERFACE_ID && targetChild === Bank.SIDE_ITEMS_CHILD) {
-            player.getInventory().swap(drag.sourceSlot, drag.targetSlot).refreshItems();
+            const inventory = player.getInventory();
+            // Legacy slot-only requests omit the ID or use a negative/16-bit sentinel.
+            if (drag.sourceItemId != null && drag.sourceItemId >= 0 && drag.sourceItemId !== 0xffff
+                && inventory.getItems()[drag.sourceSlot]?.getId() !== drag.sourceItemId) return true;
+            inventory.swap(drag.sourceSlot, drag.targetSlot).refreshItems();
         } else if (fromInventory && targetGroup === Bank.MAIN_INTERFACE_ID) {
             Bank.depositDragged(player, drag.sourceSlot, drag.sourceItemId, tab);
         } else if (fromBank && tab !== undefined) {
@@ -1387,7 +1391,7 @@ export class Bank extends ItemContainer {
             const checkId = withdrawAsNote ? noteId : item.getId();
             if (to.getAmount(checkId) + item.getAmount() > MAX_STACK_AMOUNT
                     || to.getAmount(checkId) + item.getAmount() <= 0) {
-                item.setAmount(MAX_STACK_AMOUNT - (to.getAmount(item.getId())));
+                item.setAmount(MAX_STACK_AMOUNT - to.getAmount(checkId));
                 if (item.getAmount() <= 0) {
                     this.getPlayer().sendMessage("You cannot withdraw that entire amount into your inventory.");
                         return this;

@@ -165,6 +165,65 @@ test("depositing everything banks notes as the item they note", () => {
   assert.equal(player.getInventory().getAmount(LAVA_BATTLESTAFF_NOTE), 0);
 });
 
+for (const [route, deposit] of [
+  ["Deposit-All", (player, amount) => Bank.deposits(player, LAVA_BATTLESTAFF_NOTE, 0, amount)],
+  ["Deposit inventory", (player, amount) => player.getInventory().switchItems(
+    player.getBank(), new Item(LAVA_BATTLESTAFF_NOTE, amount), false, false)],
+]) {
+  for (const [boundary, held, offered] of [
+    ["near cap", 2147483645, 5],
+    ["full stack", 2147483647, 5],
+    ["exact fit", 2147483645, 2],
+  ]) {
+    test(`${route} preserves noted items at ${boundary}`, () => {
+      const player = createPlayer();
+      player.getBank().add(new Item(LAVA_BATTLESTAFF, held), false);
+      player.getInventory().add(new Item(LAVA_BATTLESTAFF_NOTE, offered), false);
+
+      deposit(player, offered);
+
+      const remaining = player.getInventory().getAmount(LAVA_BATTLESTAFF_NOTE);
+      const banked = player.getBank().getAmount(LAVA_BATTLESTAFF);
+      assert.equal(remaining + banked, offered + held, "deposit must preserve the whole item family");
+      assert.ok(remaining >= 0 && remaining <= 2147483647);
+      assert.ok(banked >= 0 && banked <= 2147483647);
+      assert.equal(player.getBank().getAmount(LAVA_BATTLESTAFF_NOTE), 0);
+      if (boundary === "full stack") assert.equal(remaining, offered);
+      if (boundary === "exact fit") assert.equal(remaining, 0);
+    });
+  }
+}
+
+for (const [boundary, held, offered] of [
+  ["near cap", 2147483645, 5],
+  ["full stack", 2147483647, 5],
+  ["exact fit", 2147483645, 2],
+]) {
+  test(`noted withdrawal preserves items at ${boundary}`, t => {
+    const forId = ItemDefinition.forId;
+    t.mock.method(ItemDefinition, "forId", id => {
+      const definition = forId(id);
+      if (id === LAVA_BATTLESTAFF) definition.getNoteId = () => LAVA_BATTLESTAFF_NOTE;
+      return definition;
+    });
+    const player = createPlayer();
+    player.withdrawAsNote = () => true;
+    player.getInventory().add(new Item(LAVA_BATTLESTAFF_NOTE, held), false);
+    player.getBank().add(new Item(LAVA_BATTLESTAFF, offered), false);
+
+    Bank.withdraw(player, LAVA_BATTLESTAFF, 0, -1, 0);
+
+    const carried = player.getInventory().getAmount(LAVA_BATTLESTAFF_NOTE);
+    const remaining = player.getBank().getAmount(LAVA_BATTLESTAFF);
+    assert.equal(carried + remaining, held + offered, "withdrawal must preserve the whole item family");
+    assert.ok(carried >= 0 && carried <= 2147483647);
+    assert.ok(remaining >= 0 && remaining <= 2147483647);
+    assert.equal(player.getInventory().getAmount(LAVA_BATTLESTAFF), 0);
+    if (boundary === "full stack") assert.equal(remaining, offered);
+    if (boundary === "exact fit") assert.equal(remaining, 0);
+  });
+}
+
 function metas(container) {
   return container.getValidItems().map((item) => [item.getAmount(), item.getMeta()]);
 }
@@ -677,6 +736,53 @@ test("dragging within the bank's inventory panel swaps inventory slots", () => {
 
   assert.deepEqual(player.getInventory().getValidItems().map((item) => item.getId()), [B, A]);
 });
+
+test("bank inventory drags reject a stale source item ID and accept the updated ID", () => {
+  const player = createPlayer();
+  player.getInventory().add(new Item(A, 1), false);
+  player.getInventory().add(new Item(B, 1), false);
+  const [first, second] = player.getInventory().getItems();
+  const ids = () => player.getInventory().getValidItems().map((item) => item.getId());
+
+  assert.equal(drag(player, SIDE_ITEMS, 0, A, SIDE_ITEMS, 1), true);
+  assert.deepEqual(ids(), [B, A]);
+
+  assert.equal(drag(player, SIDE_ITEMS, 0, A, SIDE_ITEMS, 1), true);
+  assert.deepEqual(ids(), [B, A], "stale source item ID must not swap the current items");
+  assert.equal(player.getInventory().getItems()[0], second);
+  assert.equal(player.getInventory().getItems()[1], first);
+  assert.equal(player.getInventory().getAmount(A), 1);
+  assert.equal(player.getInventory().getAmount(B), 1);
+
+  assert.equal(drag(player, SIDE_ITEMS, 0, B, SIDE_ITEMS, 1), true);
+  assert.deepEqual(ids(), [A, B]);
+  assert.equal(player.getInventory().getItems()[0], first);
+  assert.equal(player.getInventory().getItems()[1], second);
+});
+
+for (const [label, sourceItemId] of [
+  ["omitted", undefined], ["null", null], ["negative", -2],
+  ["sentinel", -1], ["wire sentinel", 0xffff],
+]) {
+  test(`bank inventory drags keep legacy slot-only behavior with ${label} source IDs`, () => {
+    const player = createPlayer();
+    player.getInventory().add(new Item(A, 1), false);
+    player.getInventory().add(new Item(B, 1), false);
+    const [first, second] = player.getInventory().getItems();
+    const request = {
+      sourceWidgetId: SIDE_ITEMS, sourceSlot: 0,
+      targetWidgetId: SIDE_ITEMS, targetSlot: 1,
+    };
+    if (sourceItemId !== undefined) request.sourceItemId = sourceItemId;
+
+    assert.equal(Bank.handleDrag(player, request), true);
+    assert.equal(player.getInventory().getItems()[0], second);
+    assert.equal(player.getInventory().getItems()[1], first);
+    assert.deepEqual(player.getInventory().getValidItems().map((item) => item.getId()), [B, A]);
+    assert.equal(player.getInventory().getAmount(A), 1);
+    assert.equal(player.getInventory().getAmount(B), 1);
+  });
+}
 
 test("bank drags are ignored while the bank is closed", () => {
   const player = createPlayer();

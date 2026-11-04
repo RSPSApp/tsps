@@ -70,6 +70,7 @@ case "${1:-ls}" in
   new)
     branch=${2:?usage: wt new <branch> [base]}
     dir="$(dirname "$MAIN")/$(basename "$MAIN")-${branch//\//-}"
+    free_slot >/dev/null # fail before creating a worktree that would get no .env
     if git show-ref -q --verify "refs/heads/$branch"; then
       git worktree add "$dir" "$branch"
     else

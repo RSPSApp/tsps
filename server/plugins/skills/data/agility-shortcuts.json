@@ -428,6 +428,7 @@
       "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
       "requires": [
         {
+          "method": "grapple",
           "skills": {"agility":39,"strength":38,"ranged":21},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
@@ -435,6 +436,7 @@
           ]
         },
         {
+          "method": "barehanded",
           "skills": {"agility":69},
           "steps": [
             {"face":{"object":[0,0]}},
@@ -465,6 +467,7 @@
       "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
       "requires": [
         {
+          "method": "grapple",
           "skills": {"agility":39,"strength":38,"ranged":21},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
@@ -472,6 +475,7 @@
           ]
         },
         {
+          "method": "barehanded",
           "skills": {"agility":69},
           "steps": [
             {"face":{"object":[0,0]}},
@@ -1007,6 +1011,7 @@
     {
       "name": "Pipe (Brimhaven Dungeon)",
       "object": 21727,
+      "at": [2698,9498,0],
       "level": 1,
       "between": {
         "ends": [[2698,9492,0],[2698,9500,0]],
@@ -1015,6 +1020,21 @@
           {"use":"pipe","args":["via0","to"]}
         ]
       }
+    },
+    {
+      "name": "Pipe (Brimhaven Dungeon, toward demons)",
+      "object": 60840,
+      "at": [2698,9493,0],
+      "level": 34,
+      "xp": 10,
+      "between": {
+        "ends": [[2698,9492,0],[2698,9500,0]],
+        "via": [[2698,9496]],
+        "cross": [
+          {"use":"pipe","args":["via0","to"]}
+        ]
+      },
+      "note": "The OSRS Wiki lists 34 Agility toward the demons and 1 toward the dragons. Loc 60840 is the return-side pipe; the cache places it at 2698,9493."
     },
     {
       "name": "Log balance (Brimhaven Dungeon, heading east)",
@@ -1029,7 +1049,7 @@
     {
       "name": "Log balance (Brimhaven Dungeon, heading west)",
       "object": 20884,
-      "level": 30,
+      "level": 1,
       "xp": 10,
       "render": "BALANCE_WALK",
       "steps": [
@@ -1038,8 +1058,23 @@
     },
     {
       "name": "Stepping stones (Western Brimhaven Dungeon)",
-      "object": [21738,21739],
+      "object": 21738,
+      "at": [2649,9561,0],
       "level": 12,
+      "xp": 7.5,
+      "between": {
+        "ends": [[2649,9562,0],[2647,9557,0]],
+        "via": [[2649,9561],[2649,9560],[2648,9560],[2647,9560],[2647,9559],[2647,9558]],
+        "cross": [
+          {"use":"hops","args":["...via","to"]}
+        ]
+      }
+    },
+    {
+      "name": "Stepping stones (Western Brimhaven Dungeon)",
+      "object": 21739,
+      "at": [2647,9558,0],
+      "level": 1,
       "xp": 7.5,
       "between": {
         "ends": [[2649,9562,0],[2647,9557,0]],
@@ -1056,9 +1091,12 @@
       "script": "brimhavenRiver",
       "params": {
         "splitY": 9531,
+        "islandLevel": 56,
+        "awayLevel": 1,
         "north": {"firstRockX":2688,"tiles":[[2690,9547],[2688,9547],[2686,9548],[2684,9548],[2682,9548]]},
         "south": {"firstRockX":2695,"tiles":[[2695,9533],[2695,9531],[2695,9529],[2696,9527],[2697,9525]]}
-      }
+      },
+      "note": "The OSRS Wiki gives 56 Agility toward the island and 1 away. RSProx capture 4092 records the route: the north crossing runs east, then the south crossing runs south toward the dragon area."
     },
     {
       "name": "Vines (Brimhaven Dungeon, up)",
@@ -1265,8 +1303,11 @@
     {
       "name": "Climbing rocks (Agility Pyramid)",
       "object": [11948,11949],
+      "at": [[3335,2826,0],[3335,2827,0],[3335,2828,0],[3335,2829,0],[3337,2826,0],[3337,2827,0],[3337,2828,0],[3337,2829,0],[3349,2827,0],[3349,2828,0],[3349,2829,0],[3351,2827,0],[3351,2828,0],[3351,2829,0]],
       "level": 30,
-      "script": "pyramidClimbingRocks"
+      "script": "pyramidClimbingRocks",
+      "params": {"simonX":3346},
+      "note": "The OSRS Wiki lists 1 Agility toward Simon Templeton and 30 toward the pyramid; the gate follows the crossing direction."
     },
     {
       "name": "Broken fence (Morytania)",
@@ -1774,9 +1815,8 @@
     {
       "name": "Strange floor (Fremennik Slayer Dungeon)",
       "object": 16544,
-      "level": 81,
+      "level": 43,
       "xp": 5,
-      "unverified": "the level: the Wiki's infobox says 43, its success chart starts at 81",
       "script": "fremennikStrangeFloor",
       "params": {
         "westCrack": [2769,10002],
@@ -1793,7 +1833,7 @@
           "eastLanding": [2775,10003]
         }
       },
-      "note": "rsprox captures 2952"
+      "note": "The OSRS Wiki says the requirement was reduced from 62 to 43 Agility; RSProx capture 2952 confirms the crossing."
     },
     {
       "name": "Little boulder (Ice Path)",
@@ -2456,17 +2496,8 @@
       "at": [2561,3108,0],
       "level": 5,
       "xp": 25,
-      "unverified": "the movement (the captures only show the sound and message)",
-      "between": {
-        "ends": [[2561,3107,0],[2561,3110,0]],
-        "cross": [
-          {"sound":2453},
-          {"msg":"You climb over the wall."},
-          {"move":"to","anim":"CLIMB_ROCKS","speed":[0,90],"ticks":3},
-          {"anim":-1}
-        ]
-      },
-      "note": "rsprox captures 347, 358"
+      "script": "yanilleClimbingRocks",
+      "note": "OSRS Wiki: one-way out of Yanille; rsprox capture 358 moves from the loc at 2561,3108 to 2561,3111 with sound 2453 and no sequence update"
     },
     {
       "name": "Broken Raft",
@@ -2507,6 +2538,15 @@
       "object": 21728,
       "at": [2655,9571,0],
       "level": 22,
+      "xp": 8.5,
+      "unverified": "the movement and both ends (no capture; ends from the map)",
+      "between": {"ends":[[2655,9566,0],[2655,9573,0]],"cross":[{"use":"tunnel","args":["to"]}]}
+    },
+    {
+      "name": "Pipe (Brimhaven Dungeon Entrance, toward entrance)",
+      "object": 60841,
+      "at": [2655,9567,0],
+      "level": 1,
       "xp": 8.5,
       "unverified": "the movement and both ends (no capture; ends from the map)",
       "between": {"ends":[[2655,9566,0],[2655,9573,0]],"cross":[{"use":"tunnel","args":["to"]}]}
@@ -3154,17 +3194,15 @@
       "at": [2946,3439,0],
       "level": 66,
       "xp": 25,
-      "unverified": "the movement (the captures only show the sound and message)",
       "between": {
         "ends": [[2943,3439,0],[2947,3439,0]],
         "cross": [
+          {"move":"to","speed":[0,60],"ticks":1},
           {"sound":2453},
-          {"msg":"You climb over the wall."},
-          {"move":"to","anim":"CLIMB_ROCKS","speed":[0,120],"ticks":4},
-          {"anim":-1}
+          {"msg":"You climb over the wall."}
         ]
       },
-      "note": "rsprox captures 362, 1698, 2774, 2963"
+      "note": "rsprox capture 2963 shows the crossing move with speed 1, then sound 2453 and the message, without a sequence update"
     },
     {
       "name": "Rocks (Ice Mountain)",
@@ -4003,6 +4041,14 @@
       "name": "Araxxor lair web tunnel (in)",
       "object": 54161,
       "level": 1,
+      "requires": [
+        {
+          "skills": {"slayer": 92},
+          "quest": {"key": "priest_in_peril", "message": "You need to complete Priest in Peril before entering Morytania."},
+          "slayerTask": ["araxyte", "spider"],
+          "slayerTaskMessage": "You need to be assigned an araxyte or spider Slayer task to enter Araxxor's lair."
+        }
+      ],
       "render": "LONG_CRAWL",
       "steps": [
         {"sound":2454},
@@ -4020,6 +4066,38 @@
         {"walk":[[3658,9815]]}
       ],
       "note": "The squeeze-through out of Araxxor's lair (OSRS Wiki); crawl movement and ends ours"
+    },
+    {
+      "name": "Railing (Arceuus Library, middle floor)",
+      "object": [28373,28374],
+      "option": "Jump-down",
+      "at": [
+        [1628,3804,1],[1628,3806,1],[1628,3808,1],[1628,3810,1],
+        [1629,3803,1],[1629,3812,1],[1631,3803,1],[1631,3812,1],
+        [1633,3803,1],[1633,3812,1],[1635,3803,1],[1635,3812,1],
+        [1637,3804,1],[1637,3806,1],[1637,3808,1],[1637,3810,1]
+      ],
+      "level": 52,
+      "xp": 3,
+      "script": "arceuusLibraryRailing",
+      "unverified": "the jump-down animation and duration (no RSProx capture)",
+      "note": "OSRS Wiki: middle floor railing requires 52 Agility; locs 28373/28374 and placements from cache; landing tiles follow the rail face"
+    },
+    {
+      "name": "Railing (Arceuus Library, top floor)",
+      "object": [28373,28374],
+      "option": "Jump-down",
+      "at": [
+        [1628,3804,2],[1628,3806,2],[1628,3808,2],[1628,3810,2],
+        [1629,3803,2],[1629,3812,2],[1631,3803,2],[1631,3812,2],
+        [1633,3803,2],[1633,3812,2],[1635,3803,2],[1635,3812,2],
+        [1637,3804,2],[1637,3806,2],[1637,3808,2],[1637,3810,2]
+      ],
+      "level": 62,
+      "xp": 4,
+      "script": "arceuusLibraryRailing",
+      "unverified": "the jump-down animation and duration (no RSProx capture)",
+      "note": "OSRS Wiki: top floor railing requires 62 Agility; locs 28373/28374 and placements from cache; landing tiles follow the rail face"
     }
   ]
 }

@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, test } = require('node:test');
+const { before, after, test } = require('node:test');
 process.env.DISABLE_PLAYER_BOTS = '1';
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
@@ -16,7 +16,9 @@ before(async () => {
   core = PM.getCoreApi();
   cookId = core.CacheDefinitions.getNpcId('fai_varrock_bluemoon_chef');
   PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
+  PM.emitServerStartup({});
 });
+after(() => PM.emitServerShutdown({}));
 function fixture(t) {
   const packets = [];
   const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
@@ -399,8 +401,23 @@ for (const farming of [1, 2]) {
     };
     for (const key of ['lost_city', 'nature_spirit']) {
       await reachStart();
+      const refusalFrom = f.packets.length;
       await select('Yes.');
       assert.equal(quest.getStage(f.player), 0, 'both prerequisite quests are required');
+      assert.equal(Number(f.player.getAttribute('quest.points')) || 0, 0);
+      assert.equal(f.player.getDialogueManager().getCurrent(), undefined,
+        'a rejected start must not play the successful gardener assignment');
+      assert.equal(f.player.getPacketSender().getChatboxGroupId(), -1, 'the refusal is visible in the uncovered chatbox');
+      f.player.getSession().flushPackets();
+      const refusal = Buffer.concat(f.packets.slice(refusalFrom));
+      assert.ok(refusal.includes(Buffer.from('You must complete Nature Spirit to start this quest.')),
+        'the actual chat packet names the missing prerequisite');
+      assert.equal(refusal.includes(Buffer.from('You must complete Lost City to start this quest.')), key === 'lost_city',
+        'only missing prerequisites are reported');
+      const oldPackets = f.packets.length;
+      await choose(f, 1);
+      assert.equal(quest.getStage(f.player), 0, 'a stale Yes cannot start the quest');
+      assert.equal(f.packets.length, oldPackets, 'the rejected prompt is no longer resumable');
       f.player.closeInterruptibleInterfaces();
       const prerequisite = quests.find(entry => entry.key === key);
       prerequisite.setStage(f.player, prerequisite.completionValue);
@@ -1357,10 +1374,1641 @@ test('Fairytale I Tanglefoot lair gate and Nature Spirit treat wielded magic sec
   player.getInventory().deleteNumber(MAGIC_SECATEURS, 1);
   player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(MAGIC_SECATEURS));
   assert.match(enter(), /^I've received orders to let you through/, 'wielded secateurs let the player in');
-  const enchant = () => PM.emitCustomEvent('npc-dialogue:action', { player, npcId: core.NpcIdentifiers.NATURE_SPIRIT, stepId: 'JQyqMZ', handled: false });
+  const enchant = () => {
+    const action = { player, npcId: core.NpcIdentifiers.NATURE_SPIRIT, stepId: 'JQyqMZ', handled: false };
+    PM.emitCustomEvent('npc-dialogue:action', action);
+    assert.equal(action.handled, true);
+    assert.equal(action.end, true, 'the blessing closes the chat while the scene plays');
+    for (let n = 0; n < 12; n++) core.TaskManager.process();
+  };
   enchant();
   assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0, 'a wielded pair is not duplicated by the Nature Spirit');
   player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, null);
   enchant();
   assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 1, 'a lost pair is still replaced');
 });
+
+test('Fairytale I Nature Spirit blessing scene runs before the items are consumed', async t => {
+  const f = fixture(t), { player } = f;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
+  const { SECATEURS, MAGIC_SECATEURS, WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM } = core.ItemIdentifiers;
+  quest.setStage(player, 60);
+  player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
+  player.getInventory().add(new core.Item(SECATEURS));
+  for (const id of [WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM]) player.getInventory().add(new core.Item(id));
+  const npc = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(3441, 9738, 1));
+  const graphics = [], sender = player.getPacketSender(), sendGraphic = sender.sendGraphic.bind(sender);
+  sender.sendGraphic = (graphic, location) => {
+    graphics.push([graphic.getId(), location.getX(), location.getY(), location.getZ()]);
+    return sendGraphic(graphic, location);
+  };
+  const action = { player, npc, npcId: npc.getId(), stepId: 'JQyqMZ', handled: false,
+    pages: [{ page: 'Fairytale I - Growing Pains', variants: ['in-the-nature-grotto-talking-to-the-nature-spirit'] }] };
+  PM.emitCustomEvent('npc-dialogue:action', action);
+  assert.equal(action.handled, true);
+  assert.equal(action.end, true, 'the chat closes while the scene plays');
+  assert.equal(player.getAnimation()?.getId(), core.CacheDefinitions.getSeqId('human_fairy_kneel_and_offer'),
+    'the player kneels and offers the secateurs');
+  assert.equal(player.getMovementQueue().isMovementBlocked(), true);
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0);
+  assert.equal(quest.getStage(player), 60);
+  for (let n = 0; n < 11; n++) core.TaskManager.process();
+  assert.deepEqual(graphics, [[core.CacheDefinitions.getSpotanimId('fairy_flower_enchant'), 3441, 9738, 1]],
+    'the cache flower-enchant effect plays above the Nature Spirit');
+  assert.equal(npc.getAnimation()?.getId(), core.CacheDefinitions.getSeqId('human_fairy_take_and_hold_up'),
+    'the Nature Spirit takes and holds the secateurs up');
+  assert.equal(player.getInventory().getAmount(SECATEURS), 1, 'materials survive the scene');
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0);
+  assert.equal(quest.getStage(player), 60);
+  core.TaskManager.process();
+  assert.equal(player.getInventory().getAmount(SECATEURS), 0);
+  for (const id of [WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM]) {
+    assert.equal(player.getInventory().getAmount(id), 0, 'the blessing consumes the saved recipe');
+  }
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 1);
+  assert.equal(quest.getStage(player), 70);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  assert.match(player.getDialogueManager().getCurrent()?.getText() ?? '', /^It is done!/);
+  await nextLine(f);
+  assert.match(player.getDialogueManager().getCurrent()?.getText() ?? '', /^Farewell,/);
+});
+
+test('Fairytale I blessing cancellation leaves the materials and stage untouched', t => {
+  const f = fixture(t), { player } = f;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
+  const { SECATEURS, MAGIC_SECATEURS, WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM } = core.ItemIdentifiers;
+  quest.setStage(player, 60);
+  player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
+  player.getInventory().add(new core.Item(SECATEURS));
+  for (const id of [WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM]) player.getInventory().add(new core.Item(id));
+  const npc = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(3441, 9738, 1));
+  const action = { player, npc, npcId: npc.getId(), stepId: 'JQyqMZ', handled: false };
+  PM.emitCustomEvent('npc-dialogue:action', action);
+  for (let n = 0; n < 3; n++) core.TaskManager.process();
+  player.setLocation(new core.Location(3442, 9738, 1));
+  core.TaskManager.process();
+  assert.equal(player.getInventory().getAmount(SECATEURS), 1, 'walking away does not consume the secateurs');
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0);
+  assert.equal(quest.getStage(player), 60);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(player.getAnimation()?.getId(), core.Animation.DEFAULT_RESET_ANIMATION.getId());
+});
+
+test('Fairytale I Tanglefoot combat pursuit stops at its chamber doorway', t => {
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(2394, 4379);
+  const f = fixture(t), { player } = f;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
+  player.setLocation(new core.Location(2375, 4384, 0));
+  quest.setStage(player, 70);
+  PM.emitPlayerProcess({ player });
+  const boss = [...core.World.getNpcs()].find(npc => npc?.getId?.() === core.NpcIdentifiers.TANGLEFOOT
+    && npc.getOwner?.() === player);
+  assert.ok(boss, 'entering the grove spawns the owner Tanglefoot');
+  t.after(() => {
+    core.TaskManager.cancelTasks(boss);
+    core.World.getNpcs().remove(boss);
+  });
+  assert.equal(boss.hasFlag('combat:no-retreat'), true, 'the chamber is the leash, not the generic spawn radius');
+  boss.getCombat().attack(player);
+  core.TaskManager.process();
+  assert.equal(boss.getCombat().getTarget(), player, 'the fight can pursue anywhere inside the chamber');
+  player.setLocation(new core.Location(2383, 4377, 0));
+  core.TaskManager.process();
+  assert.equal(boss.getCombat().getTarget() ?? null, null, 'leaving the chamber drops the pursuit');
+  player.setLocation(new core.Location(2375, 4384, 0));
+  boss.getCombat().attack(player);
+  core.TaskManager.process();
+  boss.setLocation(new core.Location(2390, 4379, 0));
+  core.TaskManager.process();
+  const at = boss.getLocation();
+  assert.deepEqual([at.getX(), at.getY(), at.getZ()], [2375, 4385, 0],
+    'a boss that ever leaves the chamber is returned to its spawn');
+});
+
+// The banquet uses real Player/NPC/PrivateArea/TaskManager and native object,
+// Talk-to and Continue producers. No gameplay server or fabricated dialogue runner.
+const RFD_FEAST_PENDING = 'recipe-for-disaster:feast-pending';
+const RFD_FEAST_SEEN = 'recipe-for-disaster:feast-seen';
+function rfdOldSave() {
+  const { JsonPlayerPersistence } = require('../plugins/persistence/JsonPlayerPersistence.plugin');
+  const codec = new JsonPlayerPersistence();
+  // Produced by the pre-feast quest through a native ingredient handover and PlayerSave.
+  const json = require('node:fs').readFileSync(path.join(__dirname, 'fixtures/rfd-opening-pre-feast-save.json'), 'utf8');
+  const save = codec.hydratePlayerSave(JSON.parse(json, codec.reviver.bind(codec)));
+  assert.equal(Object.hasOwn(save.attributes, RFD_FEAST_PENDING), false);
+  assert.equal(Object.hasOwn(save.attributes, RFD_FEAST_SEEN), false);
+  return { save, codec };
+}
+function rfdSavedProgress(player) {
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const save = PlayerSave.fromPlayer(player);
+  return JSON.stringify({
+    attributes: Object.fromEntries(Object.entries(save.attributes).filter(([key]) =>
+      (key.startsWith('recipe-for-disaster:') || key === 'quest.recipe_for_disaster.stage' || key === 'quest.points')
+      && key !== RFD_FEAST_PENDING && key !== RFD_FEAST_SEEN)),
+    inventory: save.inventory,
+  });
+}
+async function rfdCookTalk(f) {
+  f.player.closeInterruptibleInterfaces();
+  f.player.setLocation(new core.Location(3209,3215));
+  f.player.setNeedsPlacement(false);
+  await f.connection.dispatch([{ type: 'npc_option', index: f.npc.getIndex(), clickType: 1 }]);
+  f.connection.processTurnPackets(); f.tick(3);
+  return f.player.getDialogueManager().getCurrent()?.getText();
+}
+function rfdFeastFixture(t, { historical = false, selim = false } = {}) {
+  const f = fixture(t), { player } = f;
+  core.RegionManager.init();
+  player.setIndex(player.getIndex() % 2000); // Native player sync has an eleven-bit local index.
+  player.getSession().setPlayer(player);
+  f.nativeFrames = [];
+  const send = player.getSession().sendClientPacket;
+  t.mock.method(player.getSession(), 'sendClientPacket', function(packet) {
+    f.nativeFrames.push(packet);
+    return send.call(this, packet);
+  });
+  const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+  f.quest = quests.find(q => q.key === 'recipe_for_disaster');
+  const cooks = quests.find(q => q.key === 'cooks_assistant');
+  cooks.setStage(player, cooks.completionValue);
+  if (selim) {
+    const bcs = quests.find(q => q.key === 'beneath_cursed_sands');
+    bcs.setStage(player, bcs.completionValue);
+  }
+  f.quest.setStage(player, historical ? 4 : 1);
+  player.setLocation(new core.Location(3209, 3215));
+  f.npc = core.NPC.create(core.CacheDefinitions.getNpcId('cook'), new core.Location(3208, 3215));
+  core.World.getNpcs().add(f.npc);
+  f.effects = [];
+  const spawn = PM.spawnNpc;
+  t.mock.method(PM, 'spawnNpc', function(definition, ...args) {
+    const npc = spawn.call(this, definition, ...args);
+    if (npc && definition.owner === player) {
+      for (const method of ['performAnimation', 'performGraphic', 'setBaseAnimations', 'exactMove', 'forceChat']) {
+        const original = npc[method];
+        t.mock.method(npc, method, function(...values) {
+          f.effects.push({ id: npc.getId(), method, values });
+          return original.apply(this, values);
+        });
+      }
+    }
+    return npc;
+  });
+  const cycle = core.World.processCycle;
+  f.owned = () => {
+    const result = [];
+    core.World.getNpcs().forEach(npc => { if (npc.getOwner?.() === player) result.push(npc); });
+    return result;
+  };
+  f.tick = (count = 1) => {
+    for (let n = 0; n < count; n++) {
+      ++core.World.processCycle;
+      player.getArea()?.process(player);
+      core.TaskManager.processWalkTo(player.getIndex());
+      for (const npc of f.owned()) npc.getMovementQueue().process();
+      player.getMovementQueue().process();
+      core.TaskManager.process();
+      const npcs = f.owned();
+      core.World.updateLocalNpcs(player, npcs);
+      player.getSession().flush(core.World.getProcessCycle());
+      for (const npc of npcs) { npc.resetUpdating(); npc.setNeedsPlacement(false); }
+      player.setNeedsPlacement(false);
+    }
+  };
+  f.click = async (id, x, y, clickType = 1) => {
+    await f.connection.dispatch([{ type: 'object_option', id, x, y, clickType }]);
+    f.connection.processTurnPackets();
+    f.tick(5);
+  };
+  f.enter = async () => {
+    player.closeInterruptibleInterfaces();
+    player.setLocation(new core.Location(3214, 3221));
+    await f.click(12349, 3213, 3221);
+    f.tick(2);
+  };
+  t.after(() => {
+    PM.emitPlayerLogout({ player, username: player.getUsername() });
+    for (const npc of f.owned()) PM.removeNpc(npc);
+    core.World.getNpcs().remove(f.npc);
+    core.World.processCycle = cycle;
+  });
+  return f;
+}
+async function rfdHandover(f) {
+  for (const id of [core.ItemIdentifiers.EYE_OF_NEWT, core.ItemIdentifiers.GREENMANS_ALE,
+    core.ItemIdentifiers.ROTTEN_TOMATO, core.ItemIdentifiers.DIRTY_BLAST]) f.player.getInventory().add(new core.Item(id));
+  await f.connection.dispatch([{ type: 'npc_option', index: f.npc.getIndex(), clickType: 1 }]);
+  f.connection.processTurnPackets();
+  for (let n = 0; n < 5; n++) {
+    core.TaskManager.processWalkTo(f.player.getIndex()); f.player.getMovementQueue().process();
+  }
+  for (let n = 0; n < 12 && f.quest.getStage(f.player) < 4; n++) await nextLine(f);
+  assert.equal(f.quest.getStage(f.player), 4, `the native Cook conversation accepts the ingredients: ${JSON.stringify({current:f.player.getDialogueManager().getCurrent()?.getText?.(),prompt:MultiChatboxPrompt.getPending(f.player),location:f.player.getLocation()})}`);
+}
+async function finishRfdFeast(f) {
+  const lines = [];
+  for (let n = 0; n < 180 && f.player.getAttribute(RFD_FEAST_PENDING); n++) {
+    const current = f.player.getDialogueManager().getCurrent();
+    const text = current?.getText?.()?.replace(/\s+/g, ' ');
+    if (text) { lines.push(text); await nextLine(f); }
+    f.tick();
+  }
+  assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), false, `canonical final fade completes the feast: ${JSON.stringify({last:lines.slice(-4),current:f.player.getDialogueManager().getCurrent()?.constructor.name, area:!!f.player.getPrivateArea()})}`);
+  return lines;
+}
+
+test('RFD native first dining entry plays the complete feast and freezes the owned council', async t => {
+  const f = rfdFeastFixture(t), { player } = f;
+  const points = Number(player.getAttribute('quest.points')) || 0;
+  await rfdHandover(f);
+  assert.equal(player.getAttribute(RFD_FEAST_PENDING), true);
+  assert.equal(player.getAttribute('quest.points'), points + 1);
+  assert.equal(player.getPacketSender().getVarbit(1850), 2, 'the pre-feast chest and finale portal stay hidden');
+  await f.enter();
+  const scene = player.getPrivateArea();
+  assert.ok(scene, 'real dining-door dispatch creates a private feast');
+  assert.match(player.getDialogueManager().getCurrent()?.getText(), /Welcome, gentlemen/);
+  const actors = f.owned();
+  core.World.updateLocalNpcs(player, actors);
+  assert.ok(player.getLocalNpcs().some(npc => npc.getId() === core.NpcIdentifiers.DUKE_HORACIO));
+  const stranger = fixture(t).player;
+  stranger.setLocation(player.getLocation().clone());
+  core.World.updateLocalNpcs(stranger, actors);
+  assert.equal(stranger.getLocalNpcs().length, 0, 'the feast cast is private to its owner');
+  const lines = await finishRfdFeast(f);
+  for (const phrase of ['I welcome Osman', 'Excuse me while I deal with this', 'Nooooooooooooo!',
+    'Ooh – nice food!', "Aha! I'm BACK!", "And now I'll kill you!", "Sorry I'm late", 'TEMPUS CESSIT!']) {
+    assert.ok(lines.some(line => line.includes(phrase)), phrase);
+  }
+  assert.equal(!!player.getPrivateArea(), false);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(player.isUntargetable(), false);
+  assert.equal(player.getPacketSender().getVarbit(1850), 3);
+  assert.equal(player.getAttribute('quest.points'), points + 1, 'the feast does not award another opening point');
+  for (const [id, freeze] of [[3390,3376],[3389,3373],[3391,3388],[3392,3384],[3393,3361],
+    [3394,3367],[3395,3370],[3396,3392],[3398,3380],[3400,3364]]) {
+    assert.ok(f.effects.some(e => e.id === id && e.method === 'performAnimation' && e.values[0].getId() === freeze), `model-specific freeze ${id}`);
+  }
+  assert.ok(f.effects.some(e => e.id === 11891 && e.method === 'performAnimation' && e.values[0].getId() === 3397));
+  assert.ok(f.effects.some(e => e.id === 3397 && e.method === 'exactMove'), 'the monkey visibly moves when kicked');
+  assert.ok(f.effects.some(e => e.id === 11891 && e.method === 'performGraphic' && e.values[0].getId() === 601), 'Aris is targeted before freezing time');
+  for (const text of ['Greetings, Horacio!', 'Meoooooow!', 'Ikik...']) {
+    assert.ok(f.effects.some(e => e.method === 'forceChat' && e.values[0] === text), `actual actor overhead: ${text}`);
+  }
+  assert.ok(f.nativeFrames.some(packet => packet[0] === 21 && packet.length > 12), 'actual PlayerSession emits the visible cast in native NPC_INFO');
+  assert.ok(f.owned().some(npc => npc.getId() === 4849), 'the Culinaromancer remains visibly frozen');
+  assert.ok(f.owned().filter(npc => npc.getId() !== 11891 && npc.getId() !== 4849).every(npc => npc.getBaseAnimationsForUpdate()?.length), 'the ordinary rescue IDs retain frozen poses');
+  await f.enter();
+  assert.equal(player.getPrivateArea(), null, 'repeat entry goes to the dormant room without replay');
+  assert.equal(player.getAttribute('quest.points'), points + 1);
+  assert.equal(player.getAttribute(RFD_FEAST_SEEN), true);
+});
+
+test('RFD native feast selects Selim, cancels safely and resumes without repeating ingredients or rewards', async t => {
+  const f = rfdFeastFixture(t, { selim: true }), { player } = f;
+  await rfdHandover(f);
+  const points = player.getAttribute('quest.points');
+  await f.enter();
+  const first = player.getPrivateArea();
+  await nextLine(f); f.tick();
+  assert.match(player.getDialogueManager().getCurrent()?.getText(), /I welcome Selim/);
+  await f.connection.dispatch([{ type: 'interface_close' }]); f.connection.processTurnPackets(); f.tick();
+  assert.equal(!!player.getPrivateArea(), false);
+  assert.equal(first.isDestroyed(), true);
+  assert.equal(player.getAttribute(RFD_FEAST_PENDING), true);
+  assert.equal(player.getAttribute(RFD_FEAST_SEEN), false);
+  assert.equal(f.owned().length, 0);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3214,3221]);
+  await nextLine(f); f.tick(5);
+  assert.equal(player.getAttribute(RFD_FEAST_PENDING), true, 'stale native Continue cannot complete an abandoned feast');
+  await f.enter();
+  const lines = await finishRfdFeast(f);
+  assert.ok(lines.some(line => line.includes('I welcome Selim')));
+  assert.ok(!lines.some(line => line.includes('I welcome Osman')));
+  assert.equal(player.getAttribute('quest.points'), points);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.DIRTY_BLAST), 0);
+});
+
+test('RFD pending-feast Cook retalk invites entry across cancel and relog, then restores the later conversation', async t => {
+  const f = rfdFeastFixture(t);
+  await rfdHandover(f);
+  const points = f.player.getAttribute('quest.points');
+  assert.equal(await rfdCookTalk(f), "How's that banquet going?");
+  const widgetId = (f.player.getPacketSender().getChatboxGroupId() << 16) | 5;
+  await f.connection.dispatch([{ type: 'interface_close' }]); f.connection.processTurnPackets();
+  await f.connection.dispatch([{ type: 'dialogue_continue', widgetId, childIndex: -1 }]);
+  f.connection.processTurnPackets(); f.tick(2);
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined);
+  assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), true, 'closing the reminder does not consume the feast');
+  PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  const save = require('../dist/game/entity/impl/player/persistence/PlayerSave').PlayerSave.fromPlayer(f.player);
+  const restored = rfdFeastFixture(t, { historical: true });
+  save.applyToPlayer(restored.player);
+  PM.emitCustomEvent('player:bootstrap-complete', { player: restored.player });
+  assert.equal(await rfdCookTalk(restored), "How's that banquet going?", 'the saved pending handoff keeps the invitation');
+  await nextLine(restored);
+  assert.match(restored.player.getDialogueManager().getCurrent()?.getText(), /gone and looked at the feast/);
+  await restored.enter(); await finishRfdFeast(restored);
+  assert.equal(await rfdCookTalk(restored), 'Can we talk about what happened in the dining room?');
+  assert.equal(restored.player.getAttribute('quest.points'), points);
+  assert.equal(restored.player.getInventory().getAmount(core.ItemIdentifiers.DIRTY_BLAST), 0);
+  const historical = rfdFeastFixture(t, { historical: true });
+  historical.player.setAttribute('recipe-for-disaster:rescues', 17);
+  assert.equal(await rfdCookTalk(historical), 'Can we talk about what happened in the dining room?',
+    'opening-complete legacy saves retain their existing time-bubble conversation');
+});
+
+test('RFD historical stage4 saves retain their rescue progress and native Collect uses actual op3', async t => {
+  const f = rfdFeastFixture(t, { historical: true }), { player } = f;
+  player.setAttribute('recipe-for-disaster:rescues', 17);
+  await f.enter();
+  assert.equal(player.getPrivateArea(), null);
+  assert.equal(player.getAttribute('recipe-for-disaster:rescues'), 17);
+  assert.ok(!f.owned().some(npc => [3390,3394].includes(npc.getId())), 'rescued historical guests stay removed');
+  player.setLocation(new core.Location(3218,9623));
+  const parent = core.MapObjects.get(12308, new core.Location(3219,9623), null);
+  assert.ok(parent, 'the cache provides the transformed chest parent');
+  const definition = core.ObjectDefinition.forPlayer(parent.getId(), player);
+  assert.equal(definition.getName(), 'Chest');
+  assert.equal(definition.getActions()[2], 'Collect');
+  await f.click(12309,3219,9623,3);
+  assert.equal(player.getInterfaceId(),402,'native op3 reaches the existing GE collection box');
+  player.closeInterruptibleInterfaces();
+  await f.click(12309,3219,9623,2);
+  assert.notEqual(player.getInterfaceId(),402,'blank op2 does not collect');
+  await f.click(12309,3219,9623,1);
+  assert.notEqual(player.getInterfaceId(),402,'Bank stays with the bank handler');
+});
+
+test('RFD feast logout persists the pending handoff and replays after real PlayerSave recovery', async t => {
+  const f = rfdFeastFixture(t);
+  await rfdHandover(f); await f.enter();
+  const points = f.player.getAttribute('quest.points');
+  PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  assert.equal(!!f.player.getPrivateArea(), false);
+  assert.equal(f.owned().length, 0);
+  assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), true);
+  const save = require('../dist/game/entity/impl/player/persistence/PlayerSave').PlayerSave.fromPlayer(f.player);
+  const restored = rfdFeastFixture(t, { historical: true });
+  save.applyToPlayer(restored.player);
+  PM.emitCustomEvent('player:bootstrap-complete', { player: restored.player });
+  assert.equal(restored.player.getAttribute(RFD_FEAST_PENDING), true);
+  assert.equal(restored.player.getPacketSender().getVarbit(1850), 2);
+  await restored.enter(); await finishRfdFeast(restored);
+  assert.equal(restored.player.getAttribute('quest.points'), points);
+  assert.equal(restored.player.getInventory().getAmount(core.ItemIdentifiers.DIRTY_BLAST), 0);
+});
+
+test('RFD feast cancels on real death without consuming its pending retry', async t => {
+  const f = rfdFeastFixture(t);
+  await rfdHandover(f); await f.enter();
+  f.player.appendDeath(); f.tick();
+  assert.equal(!!f.player.getPrivateArea(), false);
+  assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), true);
+  assert.equal(f.owned().length, 0);
+  assert.equal(f.player.isUntargetable(), true, 'the real death task retains its own protection after scene cleanup');
+});
+
+test('RFD stale final-fade callback preserves a replacement native prompt and pending retry', async t => {
+  const f = rfdFeastFixture(t), { player } = f;
+  await rfdHandover(f); await f.enter();
+  let finalLine = false;
+  for (let n = 0; n < 160; n++) {
+    const text = player.getDialogueManager().getCurrent()?.getText?.();
+    if (text?.includes('you must help me defeat this evil!')) { finalLine = true; break; }
+    if (text) await nextLine(f);
+    f.tick();
+  }
+  assert.equal(finalLine,true);
+  await nextLine(f); // The canonical final fade is now pending.
+  PM.createApi('RfdReplacement').sendMultiChatboxPrompt(player,'Keep this question', 'Yes',()=>{},'No',()=>{});
+  const replacement = player.getDialogueManager().getCurrent();
+  f.tick(4);
+  assert.equal(!!player.getPrivateArea(),false);
+  assert.equal(player.getAttribute(RFD_FEAST_PENDING),true,'an abandoned final fade must not commit');
+  assert.equal(player.getAttribute(RFD_FEAST_SEEN),false,'a replaced final fade cannot mark the feast seen');
+  assert.equal(player.getDialogueManager().getCurrent(),replacement);
+  assert.equal(MultiChatboxPrompt.getPending(player).title,'Keep this question');
+  assert.equal(f.owned().length,0);
+});
+
+test('RFD actual pre-feast saves recover on login before frozen-room routing and complete only once', async t => {
+  for (const insideRoom of [false, true]) await t.test(insideRoom ? 'saved in the frozen room' : 'saved in the kitchen', async t => {
+    const f = rfdFeastFixture(t), { save, codec } = rfdOldSave();
+    if (insideRoom) save.position = new core.Location(1867,5348);
+    save.applyToPlayer(f.player);
+    const progress = rfdSavedProgress(f.player);
+    PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername(), isNewAccount: false });
+    assert.equal(f.quest.getStage(f.player), 4);
+    assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), true, 'recover the actual unmarked opening-only save');
+    assert.equal(f.player.getAttribute(RFD_FEAST_SEEN), false);
+    assert.equal(f.player.getPacketSender().getVarbit(1850), 2);
+    if (insideRoom) assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [3214,3221]);
+    assert.equal(f.owned().filter(npc => npc.getLocation().getX() >= 1855 && npc.getLocation().getX() <= 1870
+      && npc.getLocation().getY() >= 5338 && npc.getLocation().getY() <= 5358).length, 0,
+    'recovery precedes frozen-council spawning');
+    assert.equal(rfdSavedProgress(f.player), progress, 'migration does not rewrite quest progress, points or items');
+    assert.equal(await rfdCookTalk(f), "How's that banquet going?");
+    await f.enter();
+    await f.connection.dispatch([{ type: 'interface_close' }]); f.connection.processTurnPackets(); f.tick();
+    assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), true);
+    assert.equal(f.player.getAttribute(RFD_FEAST_SEEN), false);
+    await f.enter(); await finishRfdFeast(f);
+    assert.equal(f.player.getAttribute(RFD_FEAST_SEEN), true);
+    assert.equal(rfdSavedProgress(f.player), progress, 'replaying the missing scene cannot consume ingredients or award another point');
+    PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+    const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+    const serialized = JSON.stringify(PlayerSave.fromPlayer(f.player), codec.replacer.bind(codec));
+    const restoredSave = codec.hydratePlayerSave(JSON.parse(serialized, codec.reviver.bind(codec)));
+    const restored = rfdFeastFixture(t);
+    restoredSave.applyToPlayer(restored.player);
+    PM.emitPlayerLogin({ player: restored.player, username: restored.player.getUsername(), isNewAccount: false });
+    PM.emitCustomEvent('player:bootstrap-complete', { player: restored.player });
+    assert.equal(restored.player.getAttribute(RFD_FEAST_SEEN), true);
+    assert.equal(restored.player.getAttribute(RFD_FEAST_PENDING), false);
+    assert.equal(restored.player.getPacketSender().getVarbit(1850), 3);
+    assert.equal(await rfdCookTalk(restored), 'Can we talk about what happened in the dining room?');
+    await restored.enter();
+    assert.equal(restored.player.getPrivateArea(), null, 'a completed zero-rescue save does not replay the feast');
+    assert.equal(rfdSavedProgress(restored.player), progress);
+  });
+});
+
+test('RFD unmarked saves with any recorded rescue or finale progress retain every progression byte', async t => {
+  const cases = [
+    ['rescues', 17],
+    ...['pirate', 'goblin', 'dwarf', 'guide', 'evil-dave', 'skrach', 'amik', 'awowogei'].map(name => [`${name}-stage`, 1]),
+    ['pirate-state', 16], ['goblin-state', 1], ['dwarf-state', 8], ['guide-state', 1],
+    ['evil-dave-state', 1], ['skrach-state', 256], ['amik-state', 1], ['awowogei-state', 256],
+    ['pirate-hides-given', 1], ['pirate-first-dive', true],
+    ['evil-dave-recipe', { red: 1, yellow: 2, brown: 3, orange: 0 }],
+    ['evil-dave-stew', { doses: { red: 1 } }],
+    ['amik-dragon-drop', true], ['amik-chicken-dead', true], ['amik-wom-briefed', 1],
+    ['culinaromancer-wave', 1], ['culinaromancer-defeated', true],
+  ];
+  for (const [key, value] of cases) await t.test(key, t => {
+    const f = rfdFeastFixture(t), { save } = rfdOldSave();
+    save.attributes[`recipe-for-disaster:${key}`] = value;
+    save.applyToPlayer(f.player);
+    const progress = rfdSavedProgress(f.player);
+    PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername(), isNewAccount: false });
+    PM.emitCustomEvent('player:bootstrap-complete', { player: f.player });
+    assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), false, 'recorded partial progress is never treated as an unseen opening');
+    assert.equal(!!f.player.getAttribute(RFD_FEAST_SEEN), false, 'recovery does not invent a completed feast');
+    assert.equal(rfdSavedProgress(f.player), progress, 'classification and synchronization are pure reads of existing progression');
+    assert.equal(f.player.getPrivateArea(), null);
+  });
+  for (const stage of [0, 1, 3, 5, 10]) await t.test(`other main stage ${stage}`, t => {
+    const f = rfdFeastFixture(t), { save } = rfdOldSave();
+    save.attributes['quest.recipe_for_disaster.stage'] = stage;
+    save.applyToPlayer(f.player);
+    const progress = rfdSavedProgress(f.player);
+    PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername(), isNewAccount: false });
+    assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), false);
+    assert.equal(rfdSavedProgress(f.player), progress);
+  });
+});
+
+test('RFD already-loaded unmarked saves recover through native Cook and dining-door inputs', async t => {
+  for (const input of ['cook', 'door']) await t.test(input, async t => {
+    const f = rfdFeastFixture(t), { save } = rfdOldSave();
+    save.applyToPlayer(f.player);
+    const progress = rfdSavedProgress(f.player);
+    if (input === 'cook') assert.equal(await rfdCookTalk(f), "How's that banquet going?");
+    else { await f.enter(); assert.ok(f.player.getPrivateArea()); }
+    assert.equal(f.player.getAttribute(RFD_FEAST_PENDING), true);
+    assert.equal(f.player.getPacketSender().getVarbit(1850), 2);
+    assert.equal(rfdSavedProgress(f.player), progress);
+  });
+});
+
+function pandemoniumJimFixture(t) {
+  const f = fixture(t);
+  core.RegionManager.init();
+  f.player.setAttribute('pandemonium:stage-version', 2);
+  f.quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'pandemonium');
+  f.quest.setStage(f.player, 30); // The cargo hold was built; Jim is ready to issue the log.
+  f.npc = core.NPC.create(core.NpcIdentifiers.JUNIOR_JIM, new core.Location(2083,2730));
+  core.World.getNpcs().add(f.npc);
+  t.after(() => core.World.getNpcs().remove(f.npc));
+  f.talk = async () => {
+    f.player.closeInterruptibleInterfaces();
+    // The canonical shipyard return waits for the conversation to close, then lands normally.
+    for (let n = 0; n < 16; n++) core.TaskManager.process();
+    f.player.setLocation(new core.Location(2084,2730));
+    f.player.setNeedsPlacement(false);
+    await f.connection.dispatch([{ type: 'npc_option', index: f.npc.getIndex(), clickType: 1 }]);
+    f.connection.processTurnPackets();
+    for (let n = 0; n < 5; n++) {
+      core.TaskManager.processWalkTo(f.player.getIndex()); f.player.getMovementQueue().process(); core.TaskManager.process();
+    }
+    assert.ok(f.player.getDialogueManager().getCurrent(), 'the real named Jim interaction starts its canonical source');
+  };
+  f.finish = async (stop = () => false) => {
+    for (let n = 0; n < 80 && !stop(); n++) {
+      if (MultiChatboxPrompt.getPending(f.player)) await choose(f, 1);
+      else if (f.player.getDialogueManager().getCurrent()) await nextLine(f);
+      else break;
+      core.TaskManager.process();
+    }
+  };
+  f.tasks = require('../plugins/skills/sailing/porttasks/Common.PortTasks');
+  return f;
+}
+
+test('Pandemonium native initial Jim request assigns cargo before the first Sarim table visit', async t => {
+  const f = pandemoniumJimFixture(t);
+  await f.talk(); await f.finish();
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.CAPTAINS_LOG), 1);
+  assert.equal(f.quest.getStage(f.player), 34);
+  assert.deepEqual(f.tasks.slots(f.player)[0], { id: 599, taken: 0, delivered: 0 });
+  for (let n = 0; n < 12; n++) core.TaskManager.process(); // Finish the owned shipyard return first.
+  f.player.closeInterruptibleInterfaces();
+  core.RegionManager.loadMapFiles(3028,3194);
+  f.player.setLocation(new core.Location(3028,3193));
+  f.player.setNeedsPlacement(false);
+  const id = core.CacheDefinitions.getLocId('dock_loading_bay_ledger_table_port_sarim');
+  await f.connection.dispatch([{ type: 'object_option', id, x: 3028, y: 3194, clickType: 1 }]);
+  f.connection.processTurnPackets();
+  for (let n = 0; n < 12; n++) {
+    core.TaskManager.processWalkTo(f.player.getIndex()); f.player.getMovementQueue().process(); core.TaskManager.process();
+  }
+  assert.equal(f.tasks.heldCrate(f.player), core.ItemIdentifiers.CRATE_OF_SHIP_PARTS_7);
+  assert.equal(f.tasks.slots(f.player)[0].taken, 1);
+});
+
+test('Pandemonium native cancelled log handover recovers once on Jim retalk', async t => {
+  const f = pandemoniumJimFixture(t);
+  await f.talk(); await f.finish(() => f.quest.getStage(f.player) === 32);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.CAPTAINS_LOG), 1);
+  assert.ok(!f.tasks.slots(f.player).some(slot => slot?.id === 599));
+  await f.connection.dispatch([{ type: 'interface_close' }]); f.connection.processTurnPackets();
+  await nextLine(f); core.TaskManager.process();
+  assert.ok(!f.tasks.slots(f.player).some(slot => slot?.id === 599), 'stale Continue cannot finish the abandoned request');
+  await f.talk(); await f.finish();
+  assert.equal(f.quest.getStage(f.player), 34);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.CAPTAINS_LOG), 1);
+  assert.equal(f.tasks.slots(f.player).filter(slot => slot?.id === 599).length, 1);
+});
+
+test('Pandemonium native full bag preserves the log handover until space is made', async t => {
+  const f = pandemoniumJimFixture(t);
+  for (let n = 0; n < 28; n++) f.player.getInventory().addItem(new core.Item(core.ItemIdentifiers.BONES, 1));
+  assert.equal(f.player.getInventory().getFreeSlots(), 0);
+  await f.talk(); await f.finish();
+  assert.equal(f.quest.getStage(f.player), 30);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.CAPTAINS_LOG), 0);
+  assert.ok(!f.tasks.slots(f.player).some(slot => slot?.id === 599));
+  f.player.getInventory().deleteNumber(core.ItemIdentifiers.BONES, 1);
+  await f.talk(); await f.finish();
+  assert.equal(f.quest.getStage(f.player), 34);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.CAPTAINS_LOG), 1);
+  assert.equal(f.tasks.slots(f.player).filter(slot => slot?.id === 599).length, 1);
+});
+
+test('Pandemonium native cargo assignment preserves a full task list and recovers after a slot is freed', async t => {
+  const f = pandemoniumJimFixture(t);
+  f.player.getSkillManager().setMaxLevel(core.Skill.SAILING, 99);
+  const tasks = f.tasks.DATA.tasks.filter(task => task.cancellable !== false).slice(0, 5)
+    .map(task => ({ id: task.id, taken: 0, delivered: 0 }));
+  f.tasks.setSlots(f.player, tasks);
+  const before = JSON.stringify(f.tasks.slots(f.player));
+  await f.talk(); await f.finish();
+  assert.equal(f.quest.getStage(f.player), 32, 'the request cannot advance without an actual task slot');
+  assert.equal(JSON.stringify(f.tasks.slots(f.player)), before);
+  require('../plugins/skills/sailing/porttasks/PortMaster.PortTasks').cancel(f.player, 4);
+  await f.talk(); await f.finish();
+  assert.equal(f.quest.getStage(f.player), 34);
+  assert.deepEqual(f.tasks.slots(f.player).slice(0, 4), tasks.slice(0, 4));
+  assert.deepEqual(f.tasks.slots(f.player)[4], { id: 599, taken: 0, delivered: 0 });
+});
+
+function pandemoniumShipFixture(t, stage = 14, save) {
+  const f = fixture(t);
+  core.RegionManager.init();
+  f.player.setIndex(f.player.getIndex() % 2000);
+  f.player.getSession().setPlayer(f.player);
+  f.player.setUsername(`pandemonium${f.player.getIndex()}`);
+  f.quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'pandemonium');
+  if (save) {
+    save.applyToPlayer(f.player);
+    core.Sailing.onLogin(f.player);
+  } else {
+    f.player.setAttribute('pandemonium:stage-version', 2);
+    f.quest.setStage(f.player, stage);
+  }
+  const lifecycle = () => ({ player: f.player, username: f.player.getUsername(), isNewAccount: false });
+  f.login = () => PM.emitPlayerLogin(lifecycle());
+  t.after(() => PM.emitPlayerLogout(lifecycle()));
+  f.login();
+  const ships = require('../plugins/skills/sailing/StaticShips.Sailing');
+  f.ship = () => ships.all().find(ship => ship.boat.ownerPlayerId === f.player.getIndex());
+  return f;
+}
+
+test('Pandemonium native: the tutorial uses its two-column cache hull and keeps both crew on deck', t => {
+  const f = pandemoniumShipFixture(t), ship = f.ship();
+  assert.ok(ship, 'the real login handler restores the owner-only tutorial ship');
+  assert.deepEqual([ship.boat.configId, ship.spec.templateChunkX, ship.spec.templateChunkY], [2, 480, 800],
+    'the captured tutorial template uses the active-cache 2x5 world-entity type');
+  assert.deepEqual([ship.spec.hull.width, ship.spec.hull.length], [256, 640]);
+  assert.deepEqual(ship.spec.boardingTile, { x: 4, y: 4 });
+  const crew = [...core.World.getNpcs()].filter(npc => npc.getOwner() === f.player && [14958, 14963].includes(npc.getId()));
+  assert.equal(crew.length, 2);
+  assert.deepEqual(crew.map(npc => [npc.getId(), npc.getLocation().getX() - ship.boat.deckBaseX,
+    npc.getLocation().getY() - ship.boat.deckBaseY]).sort((a, b) => a[0] - b[0]), [[14958, 4, 3], [14963, 3, 2]]);
+  for (const npc of crew) {
+    const x = npc.getLocation().getX() - ship.boat.deckBaseX, y = npc.getLocation().getY() - ship.boat.deckBaseY;
+    assert.ok(ship.spec.walkableDeck.some(tile => tile.x === x && tile.y === y), `${npc.getId()} stands on its actual hull`);
+  }
+});
+
+test('Pandemonium native: first visibility and relog send the interactive hook on the drawn deck plane', t => {
+  const f = pandemoniumShipFixture(t);
+  const sync = require('../dist/game/content/sailing/WorldEntitySync').WorldEntitySync;
+  const hookId = core.CacheDefinitions.getLocId('sailing_intro_salvaging_hook');
+  const hookPackets = () => sync.flush(f.player).filter(packet => packet[0] === 134 && packet.readUInt16BE(2) === hookId);
+  const verify = () => {
+    const ship = f.ship(), packets = hookPackets();
+    assert.equal(packets.length, 1, 'one initial hook update reaches the native client');
+    assert.deepEqual([packets[0].readUInt16BE(4) - ship.boat.deckBaseX,
+      packets[0].readUInt16BE(6) - ship.boat.deckBaseY, packets[0][8], packets[0][9] & 3], [3, 4, 1, 1]);
+    assert.equal(packets[0][10] & 1, 1, 'Deploy is enabled');
+    assert.ok(core.MapObjects.getPrivateArea(f.player, hookId,
+      new core.Location(ship.boat.deckBaseX + 3, ship.boat.deckBaseY + 4, 0)), 'server lookup keeps deck clicks at z=0');
+  };
+  verify();
+  const old = f.ship();
+  f.login();
+  assert.notEqual(f.ship().boat.entityIndex, old.boat.entityIndex, 'relog recreates the private ship');
+  verify();
+});
+
+async function pandemoniumDeploy(f, id = core.CacheDefinitions.getLocId('sailing_intro_salvaging_hook'), ship = f.ship()) {
+  const x = ship.boat.deckBaseX + 3, y = ship.boat.deckBaseY + 4;
+  const { ClientPacketId } = require('../dist/net/protocol/NativeClientPackets');
+  const { decodeClientPackets } = require('../dist/net/protocol/ClientProtocol');
+  const frame = Buffer.alloc(8);
+  frame[0] = ClientPacketId.OPLOC1;
+  frame[1] = (x + 128) & 255;
+  frame[2] = x >>> 8;
+  frame.writeUInt16LE(y, 3);
+  frame[6] = id >>> 8;
+  frame[7] = (id + 128) & 255;
+  const decoded = decodeClientPackets(frame);
+  assert.deepEqual(decoded, [{ type: 'object_option', id, x, y, clickType: 1 }]);
+  await f.connection.dispatch(decoded);
+  f.connection.processTurnPackets();
+  core.TaskManager.processWalkTo(f.player.getIndex());
+  core.TaskManager.process();
+}
+
+test('Pandemonium native: parent Deploy reaches the canonical salvage handover exactly once', async t => {
+  const f = pandemoniumShipFixture(t);
+  f.player.closeInterruptibleInterfaces();
+  f.player.setNeedsPlacement(false);
+  await pandemoniumDeploy(f);
+  assert.ok(f.player.getDialogueManager().getCurrent(), 'the real OPLOC1 producer reaches the quest transcript');
+  for (let lines = 0; lines < 120 && f.quest.getStage(f.player) < 16; lines++) {
+    if (MultiChatboxPrompt.getPending(f.player)) await choose(f, 1);
+    else if (f.player.getDialogueManager().getCurrent()) await nextLine(f);
+    core.TaskManager.process();
+  }
+  assert.equal(f.quest.getStage(f.player), 16, 'native Continue reaches the existing cup/overboard handover');
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP), 1);
+  PM.emitCustomEvent('npc-dialogue:action', { player: f.player, npcId: core.NpcIdentifiers.WILL,
+    page: 'Pandemonium', stepId: 'p40qKY', handled: false, end: false });
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP), 1, 'stale handover cannot duplicate the cup');
+});
+
+test('Pandemonium native: foreign and Modify clicks cannot salvage, and cancelling allows an owned retry', async t => {
+  const f = pandemoniumShipFixture(t), stranger = pandemoniumShipFixture(t);
+  for (const context of [f, stranger]) {
+    context.player.closeInterruptibleInterfaces();
+    context.player.setNeedsPlacement(false);
+  }
+  await pandemoniumDeploy(stranger, undefined, f.ship());
+  assert.equal(stranger.player.getDialogueManager().getCurrent(), undefined, 'a foreign owner cannot operate this ship');
+  const ship = f.ship();
+  await f.connection.dispatch([{ type: 'object_option', id: core.CacheDefinitions.getLocId('sailing_intro_salvaging_hook'),
+    x: ship.boat.deckBaseX + 3, y: ship.boat.deckBaseY + 4, clickType: 5 }]);
+  f.connection.processTurnPackets();
+  core.TaskManager.processWalkTo(f.player.getIndex());
+  core.TaskManager.process();
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined, 'Modify cannot become Deploy');
+  assert.equal(f.quest.getStage(f.player), 14);
+  await pandemoniumDeploy(f);
+  const widgetId = (f.player.getPacketSender().getChatboxGroupId() << 16) | 5;
+  assert.ok(f.player.getDialogueManager().getCurrent());
+  f.player.closeInterruptibleInterfaces();
+  await f.connection.dispatch([{ type: 'dialogue_continue', widgetId, childIndex: -1 }]);
+  f.connection.processTurnPackets();
+  assert.equal(f.quest.getStage(f.player), 14, 'a closed source cannot advance through a stale Continue');
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP), 0);
+  f.login();
+  f.player.closeInterruptibleInterfaces();
+  f.player.setNeedsPlacement(false);
+  await pandemoniumDeploy(f, core.ObjectIdentifiers.SALVAGING_HOOK_2);
+  assert.ok(f.player.getDialogueManager().getCurrent(), 'a visible-child click retries the same owned parent after relog');
+});
+
+test('Pandemonium native: the captured helm and sails still sail to the wreck with Deploy available', async t => {
+  const f = pandemoniumShipFixture(t, 10), ship = f.ship();
+  for (const [x, y] of [[3054, 3193], [3054, 3120], [3051, 3110], [3048, 3070], [3032, 3050]]) {
+    core.RegionManager.loadMapFiles(x, y, true);
+  }
+  f.player.closeInterruptibleInterfaces();
+  f.player.setNeedsPlacement(false);
+  const operate = async (part, clickType) => {
+    const loc = ship.spec.locs.find(loc => loc.part === part);
+    await f.connection.dispatch([{ type: 'object_option', id: loc.id,
+      x: ship.boat.deckBaseX + loc.x, y: ship.boat.deckBaseY + loc.y, clickType }]);
+    f.connection.processTurnPackets();
+    for (let tick = 0; tick < 6; tick++) {
+      core.TaskManager.processWalkTo(f.player.getIndex());
+      f.player.getMovementQueue().beginCycle();
+      f.player.getMovementQueue().process();
+      core.TaskManager.process();
+    }
+  };
+  await operate('helm', 1);
+  assert.equal(ship.boat.helmPlayerId, f.player.getIndex(), 'Navigate uses the actual parent and reachable deck');
+  await operate('sails', 2);
+  assert.equal(ship.boat.moveMode, 2, 'Set starts the observed full-sail voyage');
+  for (let tick = 0; tick < 350 && f.quest.getStage(f.player) < 12; tick++) core.BoatManager.tick();
+  assert.equal(f.quest.getStage(f.player), 12,
+    `the existing route arrives with the wider hull (boat ${ship.boat.tileX},${ship.boat.tileY}, ${JSON.stringify(ship.boat.lastStep)})`);
+  f.player.closeInterruptibleInterfaces();
+  const will = [...core.World.getNpcs()].find(npc => npc.getOwner() === f.player && npc.getId() === 14958);
+  assert.ok(will);
+  await f.connection.dispatch([{ type: 'npc_option', index: will.getIndex(), clickType: 1 }]);
+  f.connection.processTurnPackets();
+  for (let tick = 0; tick < 6; tick++) {
+    core.TaskManager.processWalkTo(f.player.getIndex());
+    f.player.getMovementQueue().beginCycle();
+    f.player.getMovementQueue().process();
+    core.TaskManager.process();
+  }
+  assert.equal(f.quest.getStage(f.player), 14);
+  assert.equal(ship.spec.locs.some(loc => loc.id === core.ObjectIdentifiers.SMALL_SHIPWRECK), false,
+    'arrival does not place an unrelated wreck model on the deck');
+  f.player.closeInterruptibleInterfaces();
+  await pandemoniumDeploy(f);
+  assert.ok(f.player.getDialogueManager().getCurrent(), 'Deploy remains usable after the ordinary voyage');
+});
+
+
+
+function sourceStartChoice(page, hook) {
+  const record = require('../data/definitions/npc-dialogues.json')[page];
+  function find(steps) {
+    for (const step of steps) {
+      if (step.options?.some(option => option.hook === hook)) return step;
+      for (const nested of [step.steps ?? [], ...(step.options ?? []).map(option => option.steps ?? [])]) {
+        const result = find(nested);
+        if (result) return result;
+      }
+    }
+  }
+  for (const [variant, steps] of Object.entries(record.variants)) {
+    const choice = find(steps);
+    if (choice) return { variant, choice };
+  }
+  throw Error(`Missing canonical start choice ${hook}`);
+}
+
+for (const [page, key, npcKey, hook, reasons] of [
+  ['Lost City', 'lost_city', 'WARRIOR', 'quest:lost-city:start', ['Crafting level of at least 31', 'Woodcutting level of at least 36']],
+  ['In Search of the Myreque', 'in_search_of_the_myreque', 'VANSTROM_KLAUSE_8', 'quest:in-search-of-the-myreque:start', ['Agility level of at least 25']],
+]) test(`${page} native start refusal exposes existing reasons without playing accepted dialogue`, async t => {
+  const f = fixture(t), quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === key);
+  const { variant, choice } = sourceStartChoice(page, hook);
+  const show = () => {
+    const request = { player: f.player, npcId: core.NpcIdentifiers[npcKey], variant: { page, variant }, exact: true, select: () => [choice] };
+    PM.emitCustomEvent('npc-dialogue:start', request);
+    assert.equal(request.handled, true);
+    return request;
+  };
+  const refuse = async expected => {
+    show(); await choose(f, choice.options.findIndex(option => option.hook === hook) + 1);
+    assert.equal(quest.getStage(f.player), 0);
+    assert.equal(Number(f.player.getAttribute('quest.points')) || 0, 0);
+    assert.equal(f.player.getDialogueManager().getCurrent(), undefined);
+    assert.equal(f.player.getPacketSender().getChatboxGroupId(), -1);
+    f.player.getSession().flushPackets();
+    const packets = Buffer.concat(f.packets).toString('utf8');
+    for (const reason of expected) assert.ok(packets.includes(reason), reason);
+  };
+  await refuse(reasons);
+  if (key === 'lost_city') {
+    f.player.getSkillManager().setMaxLevels(core.Skill.CRAFTING, 31, false);
+    await refuse(['Woodcutting level of at least 36']);
+    f.player.getSkillManager().setMaxLevels(core.Skill.WOODCUTTING, 36, false);
+  } else {
+    f.player.getSkillManager().setMaxLevels(core.Skill.AGILITY, 25, false);
+    await refuse(['You must complete Nature Spirit to start this quest.']);
+    const prerequisite = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'nature_spirit');
+    prerequisite.setStage(f.player, prerequisite.completionValue);
+  }
+  show(); await choose(f, choice.options.findIndex(option => option.hook === hook) + 1);
+  assert.ok(quest.getStage(f.player) > 0, 'meeting the existing requirements starts normally');
+  assert.ok(f.player.getDialogueManager().getCurrent(), 'the canonical accepted branch is still played');
+});
+
+test('a rejected owned quest-start hook preserves a replacement conversation and its next native choice', async t => {
+  const f = fixture(t), page = 'Fairytale I - Growing Pains', hook = 'quest:fairytale-i-growing-pains:start';
+  const { variant, choice } = sourceStartChoice(page, hook);
+  const hooks = PM.customEventHooks.get('npc-dialogue:hook'), start = hooks.length;
+  t.after(() => hooks.splice(start));
+  let replacement, refused;
+  PM.createApi('RefusalReplacementTest').onCustomEvent('npc-dialogue:hook', event => {
+    if (event.player !== f.player || event.hook !== hook) return;
+    refused = event.end === true;
+    replacement = request(f.player, f.npc);
+  });
+  const old = { player: f.player, npcId: core.NpcIdentifiers.MARTIN_THE_MASTER_GARDENER, variant: { page, variant }, exact: true, select: () => [choice] };
+  PM.emitCustomEvent('npc-dialogue:start', old);
+  await choose(f, choice.options.findIndex(option => option.hook === hook) + 1);
+  assert.equal(refused, true, 'the real prerequisite handler rejected this start');
+  assert.equal(replacement.handled, true);
+  assert.equal(MultiChatboxPrompt.getPending(f.player).title, 'Ask about the Christmas Event?');
+  assert.equal(old.cancel(), false, 'the ended playback no longer owns the replacement');
+  await choose(f, 1);
+  assert.match(f.player.getDialogueManager().getCurrent().getText(), /Can't you see the huge queue/);
+  assert.equal(Number(f.player.getAttribute('quest.points')) || 0, 0);
+});
+
+test('action hook end stops its tail and preserves a replacement native dialogue', t => {
+  for (const replace of [false, true]) {
+    const f = fixture(t), hooks = PM.customEventHooks.get('npc-dialogue:hook'), start = hooks.length;
+    t.after(() => hooks.splice(start));
+    PM.createApi('ActionEndTest').onCustomEvent('npc-dialogue:hook', event => {
+      if (event.player !== f.player || event.hook !== 'test:refusal') return;
+      event.end = true;
+      if (replace) {
+        const builder = new core.DialogueChainBuilder(); builder.add(new core.NpcDialogue(0, cookId, 'Replacement dialogue.'));
+        f.player.getDialogueManager().startDialogues(builder);
+      }
+    });
+    const playback = { player: f.player, npcId: cookId, variant: { page: '2025 Christmas event', variant: 'starting-the-event-talking-to-the-cook' }, exact: true,
+      select: () => [{ type: 'action', hook: 'test:refusal' }, { npc: 'The refused tail must not play.' }] };
+    PM.emitCustomEvent('npc-dialogue:start', playback);
+    assert.equal(playback.handled, true);
+    assert.equal(f.player.getDialogueManager().getCurrent()?.getText(), replace ? 'Replacement dialogue.' : undefined);
+    playback.cancel();
+    assert.equal(f.player.getDialogueManager().getCurrent()?.getText(), replace ? 'Replacement dialogue.' : undefined);
+  }
+});
+
+
+test('Nature Spirit retains its canonical Drezel prerequisite refusal', async t => {
+  const f = fixture(t), quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+  const priest = quests.find(q => q.key === 'priest_in_peril'), nature = quests.find(q => q.key === 'nature_spirit');
+  priest.setStage(f.player, priest.completionValue);
+  const npcId = core.NpcIdentifiers.DREZEL, npc = core.NPC.create(npcId, new core.Location(3440, 9897));
+  assert.equal(PM.emitNpcInteraction({ player: f.player, npc, npcId, action: 'Talk-to', clickType: 1, handled: false }), true);
+  const lines = [];
+  for (let n = 0; n < 10 && f.player.getDialogueManager().getCurrent(); n++) {
+    const current = f.player.getDialogueManager().getCurrent(); if (current.getText) lines.push(current.getText());
+    await nextLine(f);
+  }
+  assert.ok(lines.some(line => line.startsWith("Well... I don't think so.")), 'Drezel speaks the existing canonical refusal');
+  f.player.getSession().flushPackets();
+  assert.ok(Buffer.concat(f.packets).includes(Buffer.from('You do not meet all of the requirements to start the Nature Spirit quest.')));
+  assert.equal(nature.getStage(f.player), 0);
+  assert.equal(Number(f.player.getAttribute('quest.points')) || 0, 0);
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined);
+});
+
+const REJECTED_START_ROUTES = [
+  { page: 'Jungle Potion', key: 'jungle_potion', npc: 'TRUFITUS', quests: ['druidic_ritual'],
+    route: ['What does Bwana mean?', 'Yes, of course I do.', 'A proposition eh? Sounds interesting!', 'Me? How can I help?', 'Yes.'] },
+  { page: 'Haunted Mine', key: 'haunted_mine', npc: 'ZEALOT', skills: true, quests: ['priest_in_peril'],
+    route: ['I follow the path of Saradomin.', 'I come seeking challenges and quests.', 'Yes.'] },
+  { page: 'Between a Rock...', key: 'between_a_rock', npc: 'DONDAKAN_THE_DWARF', skills: true, quests: ['dwarf_cannon', 'fishing_contest'],
+    route: ['Why are you firing a cannon at a wall?', 'Yes.'] },
+  { page: 'The Lost Tribe', key: 'the_lost_tribe', npc: 'SIGMUND_13', skills: true, quests: ['goblin_diplomacy', 'rune_mysteries'],
+    route: ['Do you have any quests for me?', 'Yes.'] },
+  { page: 'Meat and Greet', key: 'meat_and_greet', npc: 'EMELIO', quests: ['children_of_the_sun'], route: ['Yes.'] },
+  { page: 'The Curse of Arrav', key: 'curse_of_arrav', npc: 'ELIAS_WHITE', skills: true, quests: ['defender_of_varrock', 'troll_romance'], route: ['Yes.'] },
+];
+const RUM_START_ROUTE = { npc: 'PIRATE_PETE', route: ['Yes!', 'Of course, I fear no demon!', 'Nonsense! Keep the money!'] };
+const registeredQuest = key => require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(quest => quest.key === key);
+const carriedItems = player => player.getInventory().getItems().filter(item => item.getId() >= 0).map(item => [item.getId(), item.getAmount(), item.getMeta()]);
+function completePrerequisites(player, keys) {
+  for (const key of keys) { const quest = registeredQuest(key); assert.ok(quest, key); quest.setStage(player, quest.completionValue); }
+}
+function startSkillLevels(player, maximum, current = maximum) {
+  for (const skill of core.Skill.values()) player.getSkillManager().setMaxLevels(skill, maximum, false).setCurrentLevel(skill, current, false);
+}
+async function followNativeStartRoute(f, definition) {
+  const npcId = core.NpcIdentifiers[definition.npc], npc = core.NPC.create(npcId, new core.Location(3222, 3218));
+  assert.equal(PM.emitNpcInteraction({ player: f.player, npc, npcId, action: 'Talk-to', clickType: 1, handled: false }), true);
+  for (const option of definition.route) {
+    for (let n = 0; n < 80 && !MultiChatboxPrompt.getPending(f.player); n++) {
+      assert.ok(f.player.getDialogueManager().getCurrent(), `source dialogue reaches ${option}`);
+      await nextLine(f);
+    }
+    const menu = MultiChatboxPrompt.getPending(f.player), index = menu?.options.indexOf(option) ?? -1;
+    assert.ok(index >= 0, `${option} in ${JSON.stringify(menu)}`);
+    await choose(f, index + 1);
+  }
+}
+async function assertRejectedStart(f, key, items) {
+  const player = f.player;
+  assert.equal(registeredQuest(key).getStage(player), 0);
+  assert.equal(Number(player.getAttribute('quest.points')) || 0, 0);
+  assert.deepEqual(carriedItems(player), items);
+  assert.equal(player.getDialogueManager().getCurrent(), undefined, 'the accepted source tail is not played');
+  assert.equal(player.getPacketSender().getChatboxGroupId(), -1, 'the existing refusal messages are uncovered');
+  assert.equal(MultiChatboxPrompt.getPending(player), null);
+  for (let n = 0; n < 3; n++) { await choose(f, 1); await nextLine(f); }
+  assert.equal(registeredQuest(key).getStage(player), 0, 'stale native replies cannot reach later quest actions');
+  assert.deepEqual(carriedItems(player), items);
+}
+for (const definition of REJECTED_START_ROUTES) test(`${definition.page} normal rejected-start routes stop before accepted actions and retry successfully`, async t => {
+  const f = fixture(t), items = carriedItems(f.player);
+  const refuse = async () => {
+    const first = f.packets.length;
+    await followNativeStartRoute(f, definition);
+    await assertRejectedStart(f, definition.key, items);
+    f.player.getSession().flushPackets();
+    assert.match(Buffer.concat(f.packets.slice(first)).toString('utf8'), /You (?:must complete|need)/, 'real packets contain the existing requirement reason');
+  };
+  await refuse();
+  startSkillLevels(f.player, 99);
+  if (definition.skills) await refuse();
+  completePrerequisites(f.player, definition.quests);
+  await followNativeStartRoute(f, definition);
+  assert.ok(registeredQuest(definition.key).getStage(f.player) > 0);
+  assert.ok(f.player.getDialogueManager().getCurrent(), 'eligible acceptance still plays its source branch');
+});
+
+for (const mode of ['missing quests', 'skills only', 'drained skills']) test(`Rum Deal normal choice rejects ${mode} without knockout, items or quest points`, async t => {
+  const f = fixture(t), items = carriedItems(f.player), location = f.player.getLocation().clone();
+  if (mode === 'missing quests') startSkillLevels(f.player, 99);
+  else { completePrerequisites(f.player, ['zogre_flesh_eaters', 'priest_in_peril']); if (mode === 'drained skills') startSkillLevels(f.player, 99, 1); }
+  await followNativeStartRoute(f, RUM_START_ROUTE);
+  await assertRejectedStart(f, 'rum_deal', items);
+  assert.ok(f.player.getLocation().equals(location), 'a rejected choice cannot enter the knockout sequence');
+  f.player.getSession().flushPackets();
+  const packets = Buffer.concat(f.packets).toString('utf8');
+  if (mode === 'missing quests') assert.ok(packets.includes('You must complete Zogre Flesh Eaters to start this quest.'));
+  else for (const [required, skill] of [[40, 'Farming'], [50, 'Fishing'], [47, 'Prayer'], [42, 'Crafting'], [42, 'Slayer']]) {
+    assert.ok(packets.includes(`You need ${required} ${skill} to start this quest.`), `${skill} refusal is explicit`);
+  }
+  // Rum's existing predicate reads current levels: boosting passes, draining fails.
+  startSkillLevels(f.player, mode === 'drained skills' ? 1 : 99, 99);
+  completePrerequisites(f.player, ['zogre_flesh_eaters', 'priest_in_peril']);
+  await followNativeStartRoute(f, RUM_START_ROUTE);
+  assert.equal(registeredQuest('rum_deal').getStage(f.player), 1);
+  for (let n = 0; n < 8 && registeredQuest('rum_deal').getStage(f.player) < 2; n++) await nextLine(f);
+  assert.equal(registeredQuest('rum_deal').getStage(f.player), 2, 'an eligible acceptance retains the canonical knockout');
+});
+
+test('Rum Deal alternate source hook refuses without playing its accepted tail', async t => {
+  const f = fixture(t), items = carriedItems(f.player), hook = 'quest:rum-deal:start';
+  const { variant, choice } = sourceStartChoice('Pirate Pete', hook);
+  const event = { player: f.player, npcId: core.NpcIdentifiers.PIRATE_PETE, variant: { page: 'Pirate Pete', variant }, exact: true, select: () => [choice] };
+  PM.emitCustomEvent('npc-dialogue:start', event); assert.equal(event.handled, true);
+  await choose(f, choice.options.findIndex(option => option.hook === hook) + 1);
+  await assertRejectedStart(f, 'rum_deal', items);
+});
+
+test('a refused choice preserves replacement UI opened by its owning handler', async t => {
+  const f = fixture(t), hooks = PM.customEventHooks.get('npc-dialogue:choice'), start = hooks.length;
+  t.after(() => hooks.splice(start));
+  let replacement, refused;
+  PM.createApi('RefusedChoiceReplacement').onCustomEvent('npc-dialogue:choice', event => {
+    if (event.player !== f.player || event.option !== 'Nonsense! Keep the money!') return;
+    refused = event.end === true;
+    replacement = request(f.player, f.npc);
+  });
+  await followNativeStartRoute(f, RUM_START_ROUTE);
+  assert.equal(refused, true, 'Rum has already rejected this choice');
+  assert.equal(replacement.handled, true);
+  assert.equal(registeredQuest('rum_deal').getStage(f.player), 0);
+  assert.equal(MultiChatboxPrompt.getPending(f.player).title, 'Ask about the Christmas Event?');
+  await choose(f, 1);
+  assert.match(f.player.getDialogueManager().getCurrent().getText(), /Can't you see the huge queue/);
+});
+
+for (const withSigil of [false, true]) {
+  test(`Shadow Golem reprogram dialogue speaks once through native Continue (sigil=${withSigil})`, async t => {
+    const f = fixture(t), { player } = f;
+    t.after(() => {
+      for (const npc of [...core.World.getNpcs()]) {
+        if (npc.getOwner?.() === player) PM.removeNpc(npc);
+      }
+    });
+    const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+    const quest = quests.find(entry => entry.key === 'shadow_of_the_storm');
+    const golem = quests.find(entry => entry.key === 'the_golem');
+    golem.setStage(player, golem.completionValue);
+    quest.setStage(player, 90);
+    player.setAttribute('quest.shadow_of_the_storm.helpers', 1 << 4);
+    const sigil = core.ItemIdentifiers.DEMONIC_SIGIL;
+    if (withSigil) player.getInventory().add(new core.Item(sigil));
+    const npcId = core.NpcIdentifiers.CLAY_GOLEM_3;
+    const npc = core.NPC.create(npcId, new core.Location(3478, 3089));
+    const talk = () => PM.emitNpcInteraction({ player, npc, npcId, action: 'Talk-to', clickType: 1, handled: false });
+    assert.equal(talk(), true);
+    const lines = [];
+    for (let guard = 0; guard < 30 && player.getDialogueManager().getCurrent(); guard++) {
+      lines.push(player.getDialogueManager().getCurrent().getText().replace(/\s+/g, ' ').trim());
+      await nextLine(f);
+    }
+    assert.equal(player.getDialogueManager().getCurrent(), undefined, 'the canonical exchange ends');
+    assert.equal(lines.length, withSigil ? 7 : 8, 'one exchange and only the matching sigil branch');
+    assert.equal(new Set(lines).size, lines.length, 'no spoken line repeats');
+    assert.match(lines[0], /^I sensed a great darkness/);
+    assert.match(lines.at(-1), withSigil ? /Take this demonic sigil/ : /I will wait/);
+    assert.equal(quest.getStage(player), withSigil ? 100 : 90, 'the existing sigil handoff advances recruitment once');
+    assert.equal(player.getInventory().getAmount(sigil), 0, 'only the existing sigil handoff consumes the offered item');
+    assert.equal(talk(), true, 'the next canonical conversation remains reachable after closing');
+    player.closeInterruptibleInterfaces();
+    await nextLine(f);
+    assert.equal(player.getDialogueManager().getCurrent(), undefined, 'stale Continue cannot resume a cancelled exchange');
+  });
+}
+
+// #2289: exercise the registered NPC route and native continuation packets; no
+// synthetic transcript or direct condition/variant hooks stand in for playback.
+function jorralFixture(t, eligible = true) {
+  const f = fixture(t);
+  const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+  const quest = key => {
+    const entry = quests.find(entry => entry.key === key);
+    assert.ok(entry, `registered quest ${key}`);
+    return entry;
+  };
+  f.quest = quest('making_history');
+  if (eligible) {
+    quest('the_restless_ghost').setStage(f.player, quest('the_restless_ghost').startedValue);
+    quest('priest_in_peril').setStage(f.player, quest('priest_in_peril').completionValue);
+  }
+  f.player.setLocation(new core.Location(2437, 3346));
+  core.RegionManager.loadMapFiles(2437, 3347);
+  f.npc = core.NPC.create(core.NpcIdentifiers.JORRAL, new core.Location(2437, 3347));
+  core.World.getNpcs().add(f.npc);
+  f.npc.setRegistered(true);
+  t.after(() => { f.npc.setRegistered(false); core.World.getNpcs().remove(f.npc); });
+  f.trace = [];
+  f.talk = () => hansOp(f, 'Talk-to');
+  f.menu = () => MultiChatboxPrompt.getPending(f.player);
+  f.select = async text => {
+    const menu = f.menu();
+    assert.ok(menu?.options.includes(text), `expected ${text}: ${JSON.stringify(menu)}; trace=${JSON.stringify(f.trace)}`);
+    await choose(f, menu.options.indexOf(text) + 1);
+  };
+  f.advance = async () => {
+    const current = f.player.getDialogueManager().getCurrent();
+    const text = current?.getText?.();
+    if (text) f.trace.push(text.replace(/\s+/g, ' '));
+    await nextLine(f);
+  };
+  f.untilMenu = async () => {
+    for (let n = 0; n < 60 && !f.menu(); n++) {
+      assert.ok(f.player.getDialogueManager().getCurrent(), `conversation closed before menu: ${JSON.stringify(f.trace)}`);
+      await f.advance();
+    }
+    assert.ok(f.menu(), `no menu within 60 continuations: ${JSON.stringify(f.trace)}`);
+  };
+  return f;
+}
+
+for (const contact of ['A trader in Ardougne', 'A ghost in Port Phasmatys', 'A warrior in Rellekka']) {
+  test(`Jorral task explanation reaches its follow-up menu and ends after ${contact}`, async t => {
+    const f = jorralFixture(t);
+    await f.talk();
+    await f.untilMenu();
+    assert.equal(f.quest.getStage(f.player), 0, 'hearing the introduction does not start the quest');
+    await f.select('Tell me more.');
+    await f.untilMenu();
+    assert.equal(f.menu().title, 'Start the Making History quest?');
+    await f.select('Yes.');
+    assert.equal(f.quest.getStage(f.player), f.quest.startedValue, 'the actual acceptance hook starts the quest');
+    await f.untilMenu();
+    await f.select(contact);
+    await f.untilMenu();
+    assert.deepEqual(f.menu().options, ["What's the story so far?", 'What do I need to do now?', 'Got to go, bye!'],
+      `contact explanation must reach its continuation: ${JSON.stringify(f.trace)}`);
+    await f.select('Got to go, bye!');
+    for (let n = 0; n < 5 && f.player.getDialogueManager().getCurrent(); n++) await f.advance();
+    assert.equal(f.menu(), null, 'goodbye leaves no pending menu');
+    assert.equal(f.player.getDialogueManager().isActive(), false, 'goodbye ends playback');
+    assert.equal(f.quest.getStage(f.player), f.quest.startedValue, 'ending the conversation preserves progress');
+  });
+}
+
+test('Jorral missing prerequisites refuses once and native close leaves a fresh start available', async t => {
+  const f = jorralFixture(t, false);
+  await f.talk();
+  for (let n = 0; n < 10 && f.player.getDialogueManager().getCurrent(); n++) await f.advance();
+  assert.equal(f.menu(), null);
+  assert.equal(f.player.getDialogueManager().isActive(), false, `refusal must end: ${JSON.stringify(f.trace)}`);
+  assert.equal(f.trace.filter(text => text === "Don't bother, you're not experienced enough to help me!").length, 1);
+  assert.equal(f.quest.getStage(f.player), 0);
+  await f.talk();
+  await f.connection.dispatch([{ type: 'interface_close' }]);
+  f.connection.processTurnPackets();
+  assert.equal(f.menu(), null);
+  assert.equal(f.quest.getStage(f.player), 0, 'closing cannot start the quest');
+  await f.talk();
+  assert.ok(f.player.getDialogueManager().getCurrent(), 'normal talk can restart after closing');
+});
+
+test('Jorral native close and declining the start offer preserve the normal introduction', async t => {
+  const f = jorralFixture(t);
+  await f.talk();
+  await f.untilMenu();
+  await f.connection.dispatch([{ type: 'interface_close' }]);
+  f.connection.processTurnPackets();
+  assert.equal(f.menu(), null);
+  assert.equal(f.quest.getStage(f.player), 0);
+  await f.talk();
+  await f.untilMenu();
+  await f.select('Tell me more.');
+  await f.untilMenu();
+  await f.select('No.');
+  for (let n = 0; n < 10 && f.player.getDialogueManager().isActive(); n++) await f.advance();
+  assert.equal(f.menu(), null);
+  assert.equal(f.player.getDialogueManager().isActive(), false, `declining must end: ${JSON.stringify(f.trace)}`);
+  assert.equal(f.quest.getStage(f.player), 0);
+  await f.talk();
+  await f.untilMenu();
+  assert.ok(f.menu().options.includes('Tell me more.'), 'declining retains the normal quest introduction');
+});
+
+function pandemoniumCinematicFixture(t, save, stage = 14) {
+  const f = pandemoniumShipFixture(t, stage, save);
+  f.frames = []; f.poses = [];
+  const send = f.player.getSession().sendClientPacket;
+  t.mock.method(f.player.getSession(), 'sendClientPacket', function(packet) {
+    f.frames.push(packet); return send.call(this, packet);
+  });
+  const playerAnimation = f.player.performAnimation;
+  t.mock.method(f.player, 'performAnimation', function(animation) {
+    const result = playerAnimation.call(this, animation);
+    if (this.getAnimation() === animation) f.poses.push({ id: animation.getId(), tick: core.World.processCycle,
+      actor: 'player', x: this.getLocation().getX(), y: this.getLocation().getY(), z: this.getLocation().getZ() });
+    return result;
+  });
+  const spawn = PM.spawnNpc;
+  t.mock.method(PM, 'spawnNpc', function(definition, ...args) {
+    const npc = spawn.call(this, definition, ...args);
+    if (npc && definition.owner === f.player && [14961,14966].includes(npc.getId())) {
+      const animate = npc.performAnimation;
+      t.mock.method(npc, 'performAnimation', function(animation) {
+        const result = animate.call(this, animation);
+        if (this.getAnimation() === animation) f.poses.push({ id: animation.getId(), tick: core.World.processCycle, actor: npc.getId() });
+        return result;
+      });
+    }
+    return npc;
+  });
+  const cycle = core.World.processCycle;
+  f.owned = () => [...core.World.getNpcs()].filter(npc => npc.getOwner?.() === f.player);
+  f.tick = (count = 1) => {
+    for (let n = 0; n < count; n++) {
+      ++core.World.processCycle;
+      f.player.getArea()?.process(f.player);
+      core.TaskManager.processWalkTo(f.player.getIndex());
+      for (const npc of f.owned()) npc.getMovementQueue().process();
+      f.player.getMovementQueue().process(); core.TaskManager.process();
+      core.World.updateLocalPlayers(f.player);
+      core.World.updateLocalNpcs(f.player, f.owned());
+      f.player.getSession().flush(core.World.getProcessCycle());
+      for (const npc of f.owned()) npc.resetUpdating();
+      f.player.resetUpdating();
+    }
+  };
+  f.advance = async () => {
+    const current = f.player.getDialogueManager().getCurrent();
+    if (MultiChatboxPrompt.getPending(f.player)) await choose(f, 1);
+    else if (current?.getText?.()) {
+      const group = f.player.getPacketSender().getChatboxGroupId();
+      await f.connection.dispatch([{ type: 'dialogue_continue', widgetId: (group << 16) | (group === 11 ? 4 : 5), childIndex: -1 }]);
+      f.connection.processTurnPackets();
+    }
+    f.tick();
+  };
+  f.finish = async () => {
+    for (let n = 0; n < 180 && f.quest.getStage(f.player) === 14; n++) await f.advance();
+    assert.equal(f.quest.getStage(f.player), 16, 'only the owned shore finish commits sixteen');
+  };
+  t.after(() => { core.World.processCycle = cycle; });
+  f.tick(3); // The native voyage map/placement reaches the client before its first object input.
+  return f;
+}
+
+test('Pandemonium native Deploy uses the actual copied salvage and shore scenes before committing sixteen', async t => {
+  const f = pandemoniumCinematicFixture(t), { player } = f;
+  const points = player.getAttribute('quest.points');
+  await pandemoniumDeploy(f); f.tick(3);
+  const area = player.getPrivateArea();
+  assert.ok(area instanceof core.TemplatedInstanceArea, 'Deploy uses its copied cinematic map, not the voyage entity');
+  assert.deepEqual(area.getChunk(1,3,4), { sourceChunkX: 187, sourceChunkY: 564, sourcePlane: 1, rotation: 0 });
+  assert.deepEqual([player.getLocation().getX()-area.getBaseX(), player.getLocation().getY()-area.getBaseY(), player.getLocation().getZ()], [26,32,1]);
+  const protocol = require('../dist/net/protocol/ClientProtocol');
+  const rates = { rate:232, rate2:100, heightRelative:false };
+  const has = packet => f.frames.some(frame => frame.equals(packet));
+  assert.ok(has(protocol.encodeCameraMoveTo(area.getBaseX()+18,area.getBaseY()+29,550,rates)));
+  assert.ok(has(protocol.encodeCameraLookAt(area.getBaseX()+38,area.getBaseY()+34,350,rates)));
+  assert.ok(has(area.encodeScene((player.getLocation().getX()>>3),(player.getLocation().getY()>>3))), 'real PlayerSession sends its native instance palette');
+  const actors = f.owned().filter(npc => [14961,14966].includes(npc.getId()));
+  assert.deepEqual(actors.map(npc=>npc.getId()).sort(), [14961,14966]);
+  assert.ok(f.frames.some(frame=>frame[0]===21 && frame.length>12), 'native NPC_INFO includes the cinematic cast');
+  const outsider = fixture(t).player; outsider.setLocation(player.getLocation().clone());
+  core.World.updateLocalNpcs(outsider, actors);
+  assert.equal(outsider.getLocalNpcs().length,0,'other players cannot see the private cast');
+  await f.advance(); f.tick(5);
+  assert.equal(player.getPacketSender().getChatboxGroupId(),11);
+  assert.deepEqual(player.getDialogueManager().getCurrent().getItemIds(), [31337,31338]);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP),1);
+  assert.equal(f.quest.getStage(player),14,'the item popup cannot commit the unfinished shore sequence');
+  assert.equal(f.poses.at(-1).id,core.Animation.DEFAULT_RESET_ANIMATION.getId(),'the captured hook-reset loop stops at the item popup');
+  for(let n=0;n<100&&!f.poses.some(pose=>pose.id===10044);n++)await f.advance();
+  assert.ok(f.poses.some(pose=>pose.id===10044));
+  assert.deepEqual(area.getChunk(0,3,6),{sourceChunkX:379,sourceChunkY:374,sourcePlane:0,rotation:0});
+  assert.ok(has(area.encodeScene(player.getLocation().getX()>>3,player.getLocation().getY()>>3)),'the shore camera has its actual rebuilt native source context');
+  await f.finish();
+  for (const id of [13576,13578,13083,13084,10044,8328]) assert.ok(f.poses.some(pose=>pose.id===id),`captured active sequence ${id}`);
+  const pushed = f.poses.find(pose=>pose.id===13083), anne = f.poses.find(pose=>pose.id===13084);
+  assert.equal(pushed.tick,anne.tick);
+  assert.deepEqual([pushed.x-area.getBaseX(),pushed.y-area.getBaseY(),pushed.z],[26,31,1]);
+  assert.ok(has(protocol.encodeCameraMoveTo(area.getBaseX()+18,area.getBaseY()+56,550,rates)));
+  assert.ok(has(protocol.encodeCameraLookAt(area.getBaseX()+28,area.getBaseY()+49,350,rates)));
+  assert.equal(area.isDestroyed(),true);
+  assert.equal(player.getPrivateArea(),null);
+  assert.deepEqual([player.getLocation().getX(),player.getLocation().getY(),player.getLocation().getZ()],[3049,2970,0]);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP),1);
+  assert.equal(player.getAttribute('quest.points'),points);
+  assert.equal(player.getMovementQueue().isMovementBlocked(),false);
+  assert.equal(player.isUntargetable(),false);
+  assert.ok(!f.owned().some(npc=>[14961,14966].includes(npc.getId())));
+});
+
+test('Pandemonium native scene cancellation preserves a replacement prompt and permits an item-safe retry', async t => {
+  const f = pandemoniumCinematicFixture(t);
+  await pandemoniumDeploy(f); f.tick(3);
+  const old = f.player.getPrivateArea();
+  await f.advance(); f.tick(5);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP),1);
+  PM.createApi('PandemoniumReplacement').sendMultiChatboxPrompt(f.player,'Keep this choice','Yes',()=>{},'No',()=>{});
+  const replacement = f.player.getDialogueManager().getCurrent();
+  f.tick(3);
+  assert.equal(old.isDestroyed(),true);
+  assert.equal(f.quest.getStage(f.player),14);
+  assert.equal(f.player.getDialogueManager().getCurrent(),replacement);
+  assert.equal(MultiChatboxPrompt.getPending(f.player).title,'Keep this choice');
+  assert.ok(f.ship(),'the owner can retry from their actual tutorial ship');
+  f.player.closeInterruptibleInterfaces();
+  await pandemoniumDeploy(f); f.tick(3); await f.finish();
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP),1);
+});
+
+test('Pandemonium native full bag refuses new salvage but permits a carried-cup retry and saved fourteen', async t => {
+  const f = pandemoniumCinematicFixture(t);
+  for(let n=0;n<28;n++)f.player.getInventory().addItem(new core.Item(core.ItemIdentifiers.BONES,1));
+  await pandemoniumDeploy(f); f.tick(4);
+  assert.equal(f.quest.getStage(f.player),14);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP),0);
+  assert.ok(f.ship());
+  f.player.getInventory().deleteNumber(core.ItemIdentifiers.BONES,1);
+  await pandemoniumDeploy(f); f.tick(3); await f.advance(); f.tick(5);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP),1);
+  assert.equal(f.player.getInventory().getFreeSlots(),0);
+  const { PlayerSave }=require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const save=PlayerSave.fromPlayer(f.player);
+  PM.emitPlayerLogout({player:f.player,username:f.player.getUsername()});
+  const restored=pandemoniumCinematicFixture(t,save);
+  assert.equal(restored.quest.getStage(restored.player),14);
+  assert.equal(restored.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP),1);
+  await pandemoniumDeploy(restored); restored.tick(3); await restored.finish();
+  assert.equal(restored.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP),1);
+});
+
+test('Pandemonium native Close clears the flushed looping shore pose', async t => {
+  const f=pandemoniumCinematicFixture(t);
+  await pandemoniumDeploy(f);f.tick(3);
+  for(let n=0;n<100&&!f.poses.some(pose=>pose.id===10044);n++)await f.advance();
+  assert.ok(f.poses.some(pose=>pose.id===10044));
+  assert.equal(f.player.getAnimation(),null,'the real update flush has consumed its animation mask');
+  const start=f.poses.length;
+  await f.connection.dispatch([{type:'interface_close'}]);f.connection.processTurnPackets();f.tick();
+  assert.equal(f.quest.getStage(f.player),14);
+  assert.ok(f.poses.slice(start).some(pose=>pose.id===core.Animation.DEFAULT_RESET_ANIMATION.getId()),'leaving cannot retain the captured looping floor pose');
+});
+
+test('Pandemonium cancellation preserves a later pose that was already sent with replacement UI', async t => {
+  const f=pandemoniumCinematicFixture(t);
+  await pandemoniumDeploy(f);f.tick(3);
+  for(let n=0;n<100&&!f.poses.some(pose=>pose.id===10044);n++)await f.advance();
+  assert.ok(f.poses.some(pose=>pose.id===10044));
+  PM.createApi('PandemoniumLaterPose').sendMultiChatboxPrompt(f.player,'Later pose','Yes',()=>{},'No',()=>{});
+  f.player.performAnimation(new core.Animation(829)); // The existing food animation, from a later feature callback.
+  f.player.getSession().flush(core.World.getProcessCycle());f.player.resetUpdating();
+  const start=f.poses.length;f.tick();
+  assert.equal(f.quest.getStage(f.player),14);
+  assert.equal(MultiChatboxPrompt.getPending(f.player).title,'Later pose');
+  assert.ok(!f.poses.slice(start).some(pose=>pose.id===core.Animation.DEFAULT_RESET_ANIMATION.getId()),'the earlier scene cannot reset a later flushed pose');
+});
+
+test('Pandemonium closing the final shore fade cancels its saved stage commit and stale Continue', async t => {
+  const f = pandemoniumCinematicFixture(t);
+  await pandemoniumDeploy(f); f.tick(3);
+  for (let n = 0; n < 150 && !f.player.getDialogueManager().getCurrent()?.getText?.().includes('Where am I'); n++) await f.advance();
+  assert.match(f.player.getDialogueManager().getCurrent()?.getText?.(), /Where am I/);
+  await f.advance();
+  const area = f.player.getPrivateArea();
+  assert.ok(area instanceof core.TemplatedInstanceArea);
+  assert.equal(f.quest.getStage(f.player), 14);
+  await f.connection.dispatch([{ type: 'interface_close' }]); f.connection.processTurnPackets();
+  await f.connection.dispatch([{ type: 'dialogue_continue', widgetId: (217 << 16) | 5, childIndex: -1 }]);
+  f.connection.processTurnPackets(); f.tick(15);
+  assert.equal(area.isDestroyed(), true);
+  assert.equal(f.quest.getStage(f.player), 14, 'the cancelled finish cannot commit after its timer expires');
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP), 1);
+  assert.ok(f.ship());
+  await pandemoniumDeploy(f); f.tick(3); await f.finish();
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP), 1);
+});
+
+test('Pandemonium scene death cleanup preserves the death pose and movement protection', async t => {
+  const f = pandemoniumCinematicFixture(t);
+  await pandemoniumDeploy(f); f.tick(3);
+  const area = f.player.getPrivateArea();
+  f.player.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 0, false);
+  f.player.isDying = true;
+  f.player.performAnimation(new core.Animation(836)); // The existing PlayerDeathTask pose.
+  const generation = f.player.getAnimationGeneration();
+  f.tick(20); // The real area process observes a dying owner before the later respawn hooks.
+  assert.equal(area.isDestroyed(), true);
+  assert.equal(f.quest.getStage(f.player), 14);
+  assert.equal(f.player.getAnimationGeneration(), generation, 'cleanup cannot reset the death task animation');
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), true);
+  assert.equal(f.player.isUntargetable(), true);
+  assert.equal(f.ship(), undefined, 'a dying player is not placed on a replacement tutorial ship');
+});
+
+test('Pandemonium saved shore completion and older later progress never restart the salvage scene', async t => {
+  const f = pandemoniumCinematicFixture(t);
+  await pandemoniumDeploy(f); f.tick(3); await f.finish();
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const { JsonPlayerPersistence } = require('../plugins/persistence/JsonPlayerPersistence.plugin');
+  const codec = new JsonPlayerPersistence();
+  const roundTrip = player => codec.hydratePlayerSave(JSON.parse(
+    JSON.stringify(PlayerSave.fromPlayer(player), codec.replacer.bind(codec)), codec.reviver.bind(codec)));
+  const finished = pandemoniumShipFixture(t, 16, roundTrip(f.player));
+  assert.equal(finished.quest.getStage(finished.player), 16);
+  assert.equal(finished.ship(), undefined);
+  assert.equal(finished.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP), 1);
+  assert.deepEqual([finished.player.getLocation().getX(), finished.player.getLocation().getY()], [3049,2970]);
+  for (const stage of [16,18,20,28,34,46,50]) {
+    const original = pandemoniumShipFixture(t, stage);
+    original.player.getInventory().addItem(new core.Item(core.ItemIdentifiers.OLD_CUP, 1));
+    const saved = roundTrip(original.player), restored = pandemoniumShipFixture(t, stage, saved);
+    assert.equal(restored.quest.getStage(restored.player), stage, `existing version-two ${stage} progress is retained`);
+    assert.equal(restored.ship(), undefined);
+    assert.equal(restored.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP), 1);
+  }
+  const old = pandemoniumShipFixture(t, 16);
+  old.player.setAttribute('pandemonium:stage-version', 0);
+  const legacy = pandemoniumShipFixture(t, 16, roundTrip(old.player));
+  assert.equal(legacy.quest.getStage(legacy.player), 46, 'the pre-existing invented-ladder migration remains intact');
+  assert.equal(legacy.ship(), undefined);
+});
+
+test('Pandemonium native Will conversation returns to Port Sarim and permits boarding again', async t => {
+  const f = pandemoniumShipFixture(t, 10);
+  f.player.closeInterruptibleInterfaces(); f.player.setNeedsPlacement(false);
+  const talk = async npc => {
+    await f.connection.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: 1 }]);
+    f.connection.processTurnPackets();
+    for (let n = 0; n < 6; n++) {
+      core.TaskManager.processWalkTo(f.player.getIndex());
+      f.player.getMovementQueue().beginCycle(); f.player.getMovementQueue().process(); core.TaskManager.process();
+    }
+  };
+  const will = [...core.World.getNpcs()].find(npc => npc.getOwner() === f.player && npc.getId() === 14958);
+  assert.ok(will); await talk(will);
+  for (let n = 0; n < 30 && !MultiChatboxPrompt.getPending(f.player); n++) await nextLine(f);
+  const option = MultiChatboxPrompt.getPending(f.player)?.options.indexOf('Actually, I want to go back to Port Sarim.') ?? -1;
+  assert.ok(option >= 0); await choose(f, option + 1);
+  for (let n = 0; n < 15 && f.player.getDialogueManager().getCurrent(); n++) await nextLine(f);
+  for (let n = 0; n < 16; n++) core.TaskManager.process();
+  assert.equal(f.ship(), undefined);
+  assert.equal(f.quest.getStage(f.player), 10);
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [3025,3209]);
+  const dockWill = PM.spawnNpc({ id: core.NpcIdentifiers.WILL, x: 3025, y: 3209, wanderRadius: 0 });
+  t.after(() => PM.removeNpc(dockWill));
+  f.player.setNeedsPlacement(false);
+  await talk(dockWill);
+  for (let n = 0; n < 15 && !MultiChatboxPrompt.getPending(f.player); n++) await nextLine(f);
+  const okay = MultiChatboxPrompt.getPending(f.player)?.options.indexOf('Okay.') ?? -1;
+  assert.ok(okay >= 0); await choose(f, okay + 1);
+  for (let n = 0; n < 15 && !f.ship(); n++) await nextLine(f);
+  assert.ok(f.ship(), 'the canonical return choice permits reboarding the owner-only tutorial');
+  assert.equal(f.quest.getStage(f.player), 10);
+});
+
+function pandemoniumBoardingFixture(t, stage = 0, save) {
+  const f = pandemoniumCinematicFixture(t, save, stage);
+  f.npcClicks = 0;
+  f.talk = async npc => {
+    ++f.npcClicks;
+    await f.connection.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: 1 }]);
+    f.connection.processTurnPackets(); f.tick(6);
+  };
+  if (!save && stage === 0) {
+    f.player.moveTo(new core.Location(3025, 3209));
+    f.dockWill = PM.spawnNpc({ id: core.NpcIdentifiers.WILL, x: 3025, y: 3208, wanderRadius: 0 });
+    t.after(() => PM.removeNpc(f.dockWill));
+    f.tick(3);
+  }
+  f.board = async (settle = 4) => {
+    assert.equal(f.quest.getStage(f.player), 0, 'the interview starts from an actual fresh quest');
+    await f.talk(f.dockWill);
+    for (let n = 0; n < 100 && !f.ship(); n++) {
+      const menu = MultiChatboxPrompt.getPending(f.player);
+      if (menu) {
+        const index = menu.options.findIndex(option => option === 'Yes.' || option === "I guess I'm ready...");
+        assert.ok(index >= 0, JSON.stringify(menu)); await choose(f, index + 1); f.tick();
+      } else await f.advance();
+    }
+    assert.ok(f.ship(), 'the actual interview action boards the owned tutorial ship');
+    f.tick(settle);
+  };
+  f.operate = async part => {
+    const ship = f.ship(), loc = ship.spec.locs.find(entry => entry.part === part);
+    const actions = core.ObjectDefinition.forPlayer(loc.id, f.player).getActions();
+    const clickType = actions.indexOf(part === 'helm' ? 'Navigate' : 'Set') + 1;
+    assert.ok(clickType > 0);
+    await f.connection.dispatch([{ type: 'object_option', id: loc.id,
+      x: ship.boat.deckBaseX + loc.x, y: ship.boat.deckBaseY + loc.y, clickType }]);
+    f.connection.processTurnPackets(); f.tick(8);
+    return ship;
+  };
+  f.assertFreeShipCamera = () => {
+    const protocol = require('../dist/net/protocol/ClientProtocol'), boat = f.ship().boat;
+    const opcode = protocol.encodeCameraReset()[0];
+    assert.equal(require('../dist/net/protocol/ServerPackets').SERVER_PACKET_LENGTHS[opcode], -1);
+    const cameras = f.frames.filter(frame => frame[0] === opcode);
+    assert.ok(cameras.every(frame => frame[1] === frame.length - 2));
+    // All legacy, captured-rate and timed move/look variants in the actual client decoder.
+    assert.ok(!cameras.some(frame => [1,2,4,5,8,9].includes(frame[2])), 'boarding sends no fixed camera position or look command');
+    const target = protocol.encodeCameraTarget({ worldEntity: boat.entityIndex });
+    assert.ok(f.frames.some(frame => frame.equals(target)), 'the real camera follows its sailing entity');
+  };
+  return f;
+}
+
+test('Pandemonium fresh native interview keeps the initial ship camera free', async t => {
+  const f = pandemoniumBoardingFixture(t);
+  await f.board(); f.assertFreeShipCamera();
+});
+
+test('Pandemonium fresh native boarding automatically plays both crew and the helm advances eight to ten', async t => {
+  const f = pandemoniumBoardingFixture(t);
+  await f.board();
+  assert.equal(f.player.getDialogueManager().getCurrent()?.getText?.(), 'Lovely! The open sea!', 'boarding starts the canonical dialogue without another NPC click');
+  assert.equal(f.quest.getStage(f.player), 6);
+  const lines = [];
+  for (let n = 0; n < 40 && f.player.getDialogueManager().isActive(); n++) {
+    const current = f.player.getDialogueManager().getCurrent();
+    if (current?.getText) lines.push({ text: current.getText().replace(/<br>/g, ' ').replace(/\s+/g, ' '), stage: f.quest.getStage(f.player) });
+    await f.advance();
+  }
+  assert.ok(lines.some(line => line.text.includes("You're our new helm!")));
+  assert.ok(lines.some(line => line.text.includes('Take the helm when ready.') && line.stage === 8), JSON.stringify(lines));
+  assert.equal(f.npcClicks, 1, 'only the original dock interaction is needed');
+  assert.equal(f.quest.getStage(f.player), 8);
+  const will = f.owned().find(npc => npc.getId() === 14958);
+  assert.equal(will.getInteractingMobile(), f.player, 'automatic Will uses the captured initial facing target');
+  const ship = await f.operate('helm');
+  assert.equal(f.quest.getStage(f.player), 10, 'the actual first helm interaction earns ten');
+  assert.equal(ship.boat.helmPlayerId, f.player.getIndex());
+  assert.equal(will.getInteractingMobile() === null, true, 'taking the helm releases the captured initial Will target');
+  await f.operate('sails'); assert.equal(ship.boat.moveMode, 2);
+});
+
+test('Pandemonium native stage-eight checkpoint can take the helm without another acceptance menu', async t => {
+  const f = pandemoniumBoardingFixture(t, 8);
+  const will = f.owned().find(npc => npc.getId() === 14958), newerTarget = fixture(t).player;
+  will.setMobileInteraction(newerTarget);
+  const ship = await f.operate('helm');
+  assert.equal(f.quest.getStage(f.player), 10);
+  assert.equal(ship.boat.helmPlayerId, f.player.getIndex());
+  assert.equal(will.getInteractingMobile() === newerTarget, true, 'taking the helm cannot clear a different newer NPC target');
+});
+
+test('Pandemonium native saved-ten helm and sails remain usable with a free ship camera', async t => {
+  const f = pandemoniumBoardingFixture(t, 10);
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const saved = PlayerSave.fromPlayer(f.player);
+  PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  const resumed = pandemoniumBoardingFixture(t, 10, saved);
+  const ship = await resumed.operate('helm');
+  assert.equal(resumed.quest.getStage(resumed.player), 10);
+  assert.equal(ship.boat.helmPlayerId, resumed.player.getIndex(), 'the screenshot stage-ten resume path can take its actual helm');
+  await resumed.operate('sails'); assert.equal(ship.boat.moveMode, 2);
+  resumed.assertFreeShipCamera();
+});
+
+test('Pandemonium pending automatic boarding preserves replacement UI and recovers through native Talk-to', async t => {
+  const f = pandemoniumBoardingFixture(t);
+  await f.board(0);
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined, 'replacement arrives before the deferred automatic source');
+  PM.createApi('BoardingReplacement').sendMultiChatboxPrompt(f.player, 'Keep this new choice', 'Yes', () => {}, 'No', () => {});
+  const replacement = f.player.getDialogueManager().getCurrent();
+  f.tick(4);
+  assert.equal(f.player.getDialogueManager().getCurrent(), replacement);
+  assert.equal(MultiChatboxPrompt.getPending(f.player).title, 'Keep this new choice');
+  assert.equal(f.quest.getStage(f.player), 6);
+  await f.connection.dispatch([{ type: 'interface_close' }]); f.connection.processTurnPackets();
+  const will = f.owned().find(npc => npc.getId() === 14958);
+  await f.talk(will);
+  assert.equal(f.player.getDialogueManager().getCurrent()?.getText?.(), 'Lovely! The open sea!');
+  assert.equal(f.quest.getStage(f.player), 6, 'retalk does not skip the unspoken instructions');
+  for (let n = 0; n < 40 && f.player.getDialogueManager().isActive(); n++) await f.advance();
+  assert.equal(f.quest.getStage(f.player), 8);
+  const ship = await f.operate('helm'); assert.equal(ship.boat.helmPlayerId, f.player.getIndex());
+});
+
+test('Pandemonium pending boarding is retired on logout and a saved-six retry retains its own instructions', async t => {
+  const f = pandemoniumBoardingFixture(t);
+  await f.board(0);
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined, 'logout retires the pending automatic source');
+  const old = f.ship().boat;
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const save = PlayerSave.fromPlayer(f.player);
+  PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  f.tick(5);
+  assert.equal(core.BoatManager.getBoat(old.entityIndex), undefined);
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined, 'retired callbacks cannot start the old ship dialogue');
+  const restored = pandemoniumBoardingFixture(t, 6, save);
+  assert.equal(restored.quest.getStage(restored.player), 6);
+  const will = restored.owned().find(npc => npc.getId() === 14958);
+  await restored.talk(will);
+  assert.equal(restored.quest.getStage(restored.player), 6);
+  for (let n = 0; n < 40 && restored.player.getDialogueManager().isActive(); n++) await restored.advance();
+  assert.equal(restored.quest.getStage(restored.player), 8);
+  restored.assertFreeShipCamera();
+});
+
+test('Pandemonium stage-eight acknowledgement and stale menu cannot replace the actual helm checkpoint', async t => {
+  const f = pandemoniumBoardingFixture(t, 8), will = f.owned().find(npc => npc.getId() === 14958);
+  await f.talk(will);
+  for (let n = 0; n < 12 && !MultiChatboxPrompt.getPending(f.player); n++) await f.advance();
+  const index = MultiChatboxPrompt.getPending(f.player)?.options.indexOf("Okay, I'll get to it.") ?? -1;
+  assert.ok(index >= 0); await choose(f, index + 1);
+  assert.equal(f.quest.getStage(f.player), 8, 'acknowledging the route is not taking the helm');
+  await f.connection.dispatch([{ type: 'interface_close' }]); f.connection.processTurnPackets();
+  await choose(f, index + 1); f.tick();
+  assert.equal(f.quest.getStage(f.player), 8);
+  const ship = await f.operate('helm');
+  assert.equal(f.quest.getStage(f.player), 10);
+  assert.equal(ship.boat.helmPlayerId, f.player.getIndex());
+});
+
+
+for (const droppedName of ['SECATEURS', 'WHITE_BERRIES']) {
+  test(`Fairytale I blessing rechecks materials after native Drop of ${droppedName}`, async t => {
+    const f = fixture(t), { player } = f;
+    const messages = [];
+    t.mock.method(player, 'sendMessage', text => messages.push(text));
+    const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'fairytale_i_growing_pains');
+    quest.setStage(player, 60);
+    player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
+    const ids = ['SECATEURS', 'WHITE_BERRIES', 'MORT_MYRE_PEAR', 'MORT_MYRE_STEM'].map(name => core.ItemIdentifiers[name]);
+    player.setLocation(new core.Location(3441, 9737, 1));
+    for (const id of ids) player.getInventory().add(new core.Item(id));
+    player.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(core.ItemIdentifiers.GHOSTSPEAK_AMULET));
+    const npc = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(3441, 9738, 1));
+    const start = { player, npc, npcId: npc.getId(), variant: {
+      page: 'Fairytale I - Growing Pains', variant: 'in-the-nature-grotto-talking-to-the-nature-spirit',
+    }, exact: true };
+    PM.emitCustomEvent('npc-dialogue:start', start);
+    assert.equal(start.handled, true);
+    for (let n = 0; n < 20 && !player.getMovementQueue().isMovementBlocked(); n++) await nextLine(f);
+    assert.equal(player.getMovementQueue().isMovementBlocked(), true);
+    core.TaskManager.process();
+    const droppedId = core.ItemIdentifiers[droppedName];
+    const slot = player.getInventory().getItems().findIndex(item => item?.getId() === droppedId);
+    await f.connection.dispatch([{ type: 'inventory_action', widgetId: 3214,
+      itemId: droppedId, slot, option: 'Drop', optionIndex: 5 }]);
+    f.connection.processTurnPackets();
+    assert.equal(player.getInventory().getAmount(droppedId), 0, 'the real inventory packet drops the item');
+    for (let n = 0; n < 12; n++) core.TaskManager.process();
+    assert.equal(quest.getStage(player), 60, 'missing materials cannot advance the initial blessing');
+    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.MAGIC_SECATEURS), 0);
+    for (const id of ids.filter(id => id !== droppedId)) {
+      assert.equal(player.getInventory().getAmount(id), 1, 'remaining materials are not consumed');
+    }
+    assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+    assert.match(messages.at(-1), /materials/);
+  });
+}

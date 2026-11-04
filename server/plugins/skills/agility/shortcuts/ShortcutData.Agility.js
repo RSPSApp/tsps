@@ -50,13 +50,13 @@ const COORDINATES = {
   "object.z": (scope) => scope.obj.z,
 };
 const ENTRY_KEYS = new Set([
-  "name", "object", "at", "level", "xp", "start", "end", "render", "route", "refuse",
+  "name", "object", "at", "level", "xp", "option", "start", "end", "render", "route", "refuse",
   "steps", "between", "stile", "script", "params", "fail", "requires", "unverified", "note",
 ]);
 const FAIL_KEYS = new Set([
   "low", "high", "baseChance", "neverFailLevel", "fromLevel", "xp", "start", "end", "render", "steps", "cross", "hit",
 ]);
-const REQUIREMENT_KEYS = new Set(["skills", "equipped", "items", "quest", "diary", "steps", "cross", "start", "end"]);
+const REQUIREMENT_KEYS = new Set(["method", "skills", "equipped", "items", "quest", "diary", "slayerTask", "slayerTaskMessage", "steps", "cross", "start", "end"]);
 
 function animation(name, where) {
   const id = ANIMATIONS[name];
@@ -215,6 +215,12 @@ function build(raw, index) {
     level: raw.level,
     xp: raw.xp ?? 0,
   };
+  if (raw.option != null) {
+    if (typeof raw.option !== "string" || !raw.option.trim()) {
+      throw new Error(`agility-shortcuts.json: "${where}" option must be a non-empty string`);
+    }
+    entry.option = raw.option;
+  }
   if (raw.start != null) entry.start = raw.start;
   if (raw.end != null) entry.end = raw.end;
   if (raw.render != null) entry.render = animation(raw.render, where);

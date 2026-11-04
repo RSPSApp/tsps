@@ -8,7 +8,7 @@
  *   `equipment:changed` (every worn-items refresh) and at login.
  * - `produce { items, count }`: that many of the items made or gathered, whatever the skill:
  *   `skills:produced` { itemId, amount } (cooking, crafting, fletching, herblore, smithing),
- *   `fishing:success` { itemId }, `woodcutting:success` { logId }, `mining:success` { itemId } and
+ *   `fishing:success` { itemId }, `woodcutting:success` { logId, logAmount? }, `mining:success` { itemId } and
  *   `runecrafting:success` { runeId, rolls, amountPerEssence }.
  * - `hunt { npcs, count }`: creatures caught, `hunter:success` { npcId }.
  * - `pickpocket { npcs, count }`: pockets picked, `thieving:success` { method: "pickpocket", target }.
@@ -210,8 +210,8 @@ function gathered({ player, itemId }) {
   if (player) count(player, "produce", itemName(itemId));
 }
 
-function chopped({ player, logId }) {
-  if (player) count(player, "produce", itemName(logId));
+function chopped({ player, logId, logAmount = 1 }) {
+  if (player) count(player, "produce", itemName(logId), logAmount);
 }
 
 function crafted({ player, runeId, rolls, amountPerEssence }) {

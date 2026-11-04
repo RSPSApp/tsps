@@ -71,18 +71,22 @@ const successText = ([base, crystal, result]) =>
   `You successfully infuse the ${base} and ${crystal} to create ${result}.`;
 
 function createInventory(ids) {
-  const amounts = new Map(ids.map((id) => [id, 1]));
+  const slots = ids.map((id) => new Item(id, 1));
   return {
-    amounts,
-    getAmount: (id) => amounts.get(id) ?? 0,
-    deleteNumber(id, amount) {
-      const left = (amounts.get(id) ?? 0) - amount;
-      if (left > 0) amounts.set(id, left);
-      else amounts.delete(id);
+    slots,
+    get amounts() {
+      const totals = new Map();
+      for (const entry of slots) if (entry) totals.set(entry.getId(), (totals.get(entry.getId()) ?? 0) + entry.getAmount());
+      return totals;
     },
-    addItem(item) {
-      amounts.set(item.getId(), (amounts.get(item.getId()) ?? 0) + item.getAmount());
+    getItems: () => slots,
+    getAmount: (id) => slots.reduce((sum, entry) => sum + (entry && entry.getId() === id ? entry.getAmount() : 0), 0),
+    deleteNumber(id) {
+      const at = slots.findIndex((entry) => entry && entry.getId() === id);
+      if (at >= 0) slots[at] = null;
     },
+    deleteAtSlot(slot) { slots[slot] = null; },
+    addItem(item) { slots.push(item); },
   };
 }
 
@@ -126,7 +130,10 @@ function use(player, usedId, withId) {
   const hook = findHook(usedId, withId);
   assert.ok(hook, `no onItemOnItem hook registered for item ${usedId} + ${withId}`);
   assert.equal(hook.filter?.noted, false, "combine must not accept noted items");
-  hook.handler({ player });
+  const items = player.inventory.slots;
+  const usedItem = items.find((entry) => entry && entry.getId() === usedId);
+  const usedWithItem = items.find((entry) => entry && entry.getId() === withId);
+  hook.handler({ player, usedItem, usedItemId: usedId, usedWithItem, usedWithItemId: withId });
 }
 
 function sorted(inventory) {

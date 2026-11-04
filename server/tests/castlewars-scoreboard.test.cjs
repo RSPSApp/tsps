@@ -29,6 +29,8 @@ const { TEAM } = data;
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'castle-wars-scoreboard-'));
 const hooks = { objects: {}, custom: {}, persisted: new Map() };
 let game;
+let startTask;
+let cycle = 0;
 let index = 1;
 let INTERFACE, BOARD;
 
@@ -38,8 +40,8 @@ const registry = {
   getBonusManager: () => ({ update: () => {} }),
   getObjectManager: () => ({ register: () => {}, deregister: () => {}, existsLocation: () => false }),
   getRegionManager: () => RegionManager,
-  getTaskManager: () => ({ submit: () => {}, cancelTasks: () => {} }),
-  getWorld: () => World,
+  getTaskManager: () => ({ submit: (task) => { if (task.onComplete) startTask = task; }, cancelTasks: () => {} }),
+  getWorld: () => new Proxy(World, { get: (target, key) => key === "getProcessCycle" ? () => cycle : Reflect.get(target, key) }),
   persistAttribute: (key, value) => hooks.persisted.set(key, value),
   onObjectInteraction: (name, actions) => { (hooks.objects[name] ??= []).push(actions); },
   onCustomEvent: (name, handler) => { (hooks.custom[name] ??= []).push(handler); },
@@ -70,7 +72,8 @@ function realPlayer(t) {
   const p = new Player(null);
   p.setIndex(index++);
   p.setRegistered(true);
-  p.setLocation(new Location(2440, 3089, 0));
+  p.setLocation(new Location(2426, 3076, 1));
+  t.mock.method(p, "getArea", () => game.gameArea);
   t.mock.method(p, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
   t.mock.method(p.getInventory(), 'refreshItems', () => {});
   t.mock.method(p, 'smartMove', () => {});
@@ -86,8 +89,12 @@ function realPlayer(t) {
 function playGame(teams, saradominScore, zamorakScore) {
   game.waitingAreas[TEAM.SARADOMIN].players.push(...[...teams].filter(([, team]) => team === TEAM.SARADOMIN).map(([p]) => p));
   game.waitingAreas[TEAM.ZAMORAK].players.push(...[...teams].filter(([, team]) => team === TEAM.ZAMORAK).map(([p]) => p));
+  for (const [player, team] of teams) game.setTeamId(player, team);
   game.beginStartCountdown();
   assert.equal(game.getPhase(), game.PHASE.STARTING);
+  startTask.execute();
+  for (const [player] of teams) game.startParticipation(player);
+  cycle += 1500;
   for (const area of Object.values(game.waitingAreas)) area.players.length = 0;
   for (const [player, team] of teams) game.setTeamId(player, team);
   game.gameArea.players.splice(0, game.gameArea.players.length, ...teams.keys());

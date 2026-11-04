@@ -1556,6 +1556,7 @@ export interface PluginCoreApi {
     isEnabled(): boolean;
   };
   World: any;
+  DisplayNames: any;
   BoatManager: any;
   Sailing: any;
   BOAT_VIEW_DISTANCE: number;

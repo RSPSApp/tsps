@@ -101,6 +101,17 @@ test('without a previous retrieval the existing immediate fight remains availabl
   const f = fixture(t,false); Hespori.harvestHespori(f.p,patch); Patches.tick();
   assert.equal(f.state.hesporiFight,true); assert.equal(MultiChatboxPrompt.getPending(f.p),null);
 });
+test('Hespori awards pending planting XP when the harvested patch is cleared', t => {
+  const f = fixture(t, false), xp = [];
+  t.mock.method(f.p.getSkillManager(), 'addExperiences', (skill, amount) => xp.push([skill, amount]));
+  f.p.getInventory().add(new core.Item(Data.itemId('Spade')), false);
+  f.state.hesporiLoot = [{ itemId: core.ItemIdentifiers.COINS, amount: 1 }];
+  f.state.plantExperiencePending = true;
+  Hespori.harvestHespori(f.p, patch);
+  for (let tick = 0; tick < 5; tick++) Patches.tick();
+  assert.deepEqual(xp.map(([, amount]) => amount), [Data.CROPS.get('HESPORI').harvest, Data.CROPS.get('HESPORI').plant]);
+  assert.equal(Patches.stateFor(f.p, patch).crop, undefined);
+});
 test('teleport or logout before the delayed harvest cannot open a remote warning or start a fight', async t => {
   for (const transition of ['teleport','logout']) {
     const f = fixture(t); Hespori.harvestHespori(f.p,patch);

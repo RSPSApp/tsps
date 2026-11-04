@@ -464,6 +464,12 @@ function createBotRegistry(options) {
       wildernessRegionalPendingDespawn.delete(username);
       return false;
     }
+    const combat = player.getCombat?.();
+    // Culling a bot mid-fight makes it vanish on the player; retry on the next reconcile.
+    if (combat?.getTarget?.() || combat?.getAttacker?.() || player.getCombatFollowing?.() ||
+        combat?.getHitQueue?.()?.hasPendingWork?.()) {
+      return false;
+    }
     wildernessRegionalPendingDespawn.add(username);
     if (player.isPlayerBot?.() === true) {
       player.getForcedLogoutTimer?.().start?.(0);

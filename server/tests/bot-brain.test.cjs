@@ -2712,3 +2712,89 @@ test('recovery watchdogs leave independently managed PvP waiters untouched', () 
   assert.equal(moves, 0);
   assert.equal(entry.brain, null);
 });
+
+// Real movement/combat behind these checks: fake combat links would miss both regressions.
+function nativeFollowCombatPlayer(t, name, location) {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { Skill } = require('../dist/game/model/Skill');
+  const player = new Player(null, location);
+  const sender = new Proxy({}, { get: () => () => sender });
+  player.setUsername(name);
+  player.setPlayerBot(true);
+  player.getPacketSender = () => sender;
+  player.setRegistered(true);
+  player.setNeedsPlacement(false);
+  for (const skill of Skill.values()) {
+    player.getSkillManager().setMaxLevel(skill, 99);
+    player.getSkillManager().setCurrentLevel(skill, 99);
+  }
+  t.after(() => player.setRegistered(false));
+  return player;
+}
+
+test('a teleblocked recruit walks a segmented route after a distant owner teleport', (t) => {
+  const { createFollowOwnerAction } = require('../plugins/bots/brain/actions/FollowOwner.PlayerBots');
+  const { ATTR_RECRUIT_OWNER_USERNAME } = require('../plugins/bots/runtime/RecruitConstants.PlayerBots');
+  const { FriendsChatManager } = require('../plugins/interface/FriendsChatManager');
+  const bot = nativeFollowCombatPlayer(t, 'blocked-recruit', new Location(3100, 3550));
+  const owner = nativeFollowCombatPlayer(t, 'recruit-owner', new Location(3100, 3850));
+  bot.setAttribute(ATTR_RECRUIT_OWNER_USERNAME, owner.getUsername());
+  bot.getCombat().getTeleblockTimer().start(300);
+  t.mock.method(FriendsChatManager, 'getOwnedChannel', () => ({}));
+  const state = { pvp: {}, home: { x: 3100, y: 3550, z: 0 } };
+  const world = { getPlayerByName: () => owner, areaManager: { inMulti: () => false } };
+  const activity = { id: 'follow_owner', actions: [createFollowOwnerAction({}, world)] };
+  const brain = new BotBrain({ player: bot, state, world, registry: fakeRegistry(), activity, nowMs: 1000 });
+  t.after(() => brain.reset());
+  for (let tick = 0; tick < 8; tick++) {
+    brain.tick(1000 + tick * 600);
+    bot.getMovementQueue().beginCycle();
+    bot.getMovementQueue().process();
+  }
+  assert.equal(brain.lastError, null);
+  assert.ok(bot.getLocation().getY() > 3550, 'the dispatched walk survives the action update');
+  assert.ok(bot.getLocation().getY() < 3570, 'the recruit walks rather than snapping to the owner');
+  assert.equal(bot.getCombat().getTeleblockTimer().finished(), false);
+});
+
+test('regional culling waits for an incoming ranged hit before the first attacker link', (t) => {
+  const { createBotRegistry } = require('../plugins/bots/runtime/Registry.PlayerBots');
+  const { CombatFactory } = require('../dist/game/content/combat/CombatFactory');
+  const { RangedCombatMethod } = require('../dist/game/content/combat/method/impl/RangedCombatMethod');
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let regionsUpdated;
+  let snapshot = { regions: [{ key: '0:50:57', regionX: 50, regionY: 57, z: 0 }] };
+  const registry = createBotRegistry({
+    botApi: { getRegionManager: () => ({ blocked: () => false, isWater: () => false }), log() {} },
+    botCount: 0, wildernessRoamerBotCount: 1, wildernessActiveRegionBotsPerRegion: 1,
+    spawn: new Location(3222, 3218), behaviorMode: { PVP: 'pvp' },
+    worldGetPlayerByName: () => null,
+    createBotPlayer: (name, location) => nativeFollowCombatPlayer(t, name, location),
+    createInitialState: () => ({ pvp: {} }), applyInitialPvpLoadout: () => true,
+    emitPlayerLogin() {}, ensureBehaviorTaskStarted() {}, randomInRange: (min) => min,
+    onActiveRegionsUpdated: (handler) => { regionsUpdated = handler; },
+    getActiveRegionSnapshot: () => snapshot,
+  });
+  registry.scheduleInitialSpawn();
+  regionsUpdated(snapshot);
+  const bot = registry.entries[0].player;
+  bot.setNeedsPlacement(false);
+  const attacker = nativeFollowCombatPlayer(t, 'ranged-attacker',
+    new Location(bot.getLocation().getX(), bot.getLocation().getY() + 5));
+  let logouts = 0;
+  t.mock.method(bot, 'requestLogout', () => { logouts++; });
+  for (const hit of new RangedCombatMethod().hits(attacker, bot)) CombatFactory.addPendingHit(hit);
+  t.after(() => bot.getCombat().getHitQueue().clear());
+  assert.equal(bot.getCombat().getTarget(), null);
+  assert.equal(bot.getCombat().getAttacker(), null);
+  assert.equal(bot.getCombat().getHitQueue().hasPendingWork(), true);
+  snapshot = { regions: [] };
+  regionsUpdated(snapshot);
+  t.mock.timers.tick(30000);
+  assert.equal(logouts, 0, 'a shot in flight prevents culling before attacker is set');
+  assert.equal(bot.getForcedLogoutTimer().isRunning(), false);
+  bot.getCombat().getHitQueue().clear();
+  regionsUpdated(snapshot);
+  t.mock.timers.tick(30000);
+  assert.equal(logouts, 1, 'culling resumes after the incoming hit is gone');
+});

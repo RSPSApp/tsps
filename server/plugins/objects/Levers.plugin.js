@@ -6,7 +6,8 @@
  * after that, and the player lands three ticks later with the lever's own line.
  *
  * Other plugins teleport through it without a lever's pull:
- *   api.emitCustomEvent("lever:teleport", { player, destination })
+ *   api.emitCustomEvent("lever:teleport", { player, destination, onArrival? })
+ * `onArrival` runs when the player has landed.
  */
 const ObstacleRunner = require("../skills/agility/ObstacleRunner.Agility");
 
@@ -188,9 +189,9 @@ function initialize(pluginApi) {
   ObstacleRunner.init(api);
 }
 
-function teleport({ player, destination }) {
+function teleport({ player, destination, onArrival }) {
   if (core.TeleportHandler.checkReqs(player, destination, Infinity)) {
-    core.TeleportHandler.teleport(player, destination.clone(), core.TeleportType.NORMAL, false);
+    core.TeleportHandler.teleport(player, destination.clone(), core.TeleportType.NORMAL, false, onArrival);
   }
 }
 

@@ -322,8 +322,8 @@ function enteredChaosTemple(player) {
   pluginApi.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "enter-the-chaos-runecrafting-temple" });
 }
 
-function requestTeleport(player, destination) {
-  pluginApi.emitCustomEvent("lever:teleport", { player, destination: destination.clone() });
+function requestTeleport(player, destination, onArrival) {
+  pluginApi.emitCustomEvent("lever:teleport", { player, destination: destination.clone(), onArrival });
 }
 
 function ouraniaWeights(level) {
@@ -777,9 +777,10 @@ function teleportToAbyss(player) {
   player.getSkillManager().setCurrentLevels(Skill.PRAYER, 0);
   // The Mage of Zamorak skulls the player for 10 minutes (Wiki).
   pluginApi.core.CombatFactory.skull(player, pluginApi.core.SkullType.WHITE_SKULL, ABYSS_SKULL_SECONDS);
-  requestTeleport(player, ABYSS_INNER_RING);
-  // The Wilderness Diary's "Have the Mage of Zamorak teleport you to the Abyss."
-  pluginApi.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "have-the-mage-of-zamorak-teleport-you-to-the-aby" });
+  // The Wilderness Diary's "Have the Mage of Zamorak teleport you to the Abyss.", on landing.
+  requestTeleport(player, ABYSS_INNER_RING, () => {
+    pluginApi.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "have-the-mage-of-zamorak-teleport-you-to-the-aby" });
+  });
 }
 
 function handleZamorakTeleport(event) {
@@ -863,8 +864,9 @@ function handleEnterRift(event) {
   }
   const destination = ALTAR_DESTINATIONS.get(runeId);
   if (destination) {
-    requestTeleport(event.player, new Location(destination.x, destination.y, 0));
-    if (runeId === ItemIdentifiers.CHAOS_RUNE) enteredChaosTemple(event.player);
+    const { player } = event;
+    requestTeleport(player, new Location(destination.x, destination.y, 0),
+      runeId === ItemIdentifiers.CHAOS_RUNE ? () => enteredChaosTemple(player) : undefined);
   }
   return true;
 }

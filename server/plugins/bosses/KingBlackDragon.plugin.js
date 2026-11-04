@@ -111,9 +111,12 @@ let CombatFactory;
 
 function climbDownToLair({ player }) {
   const [x, y, z] = KING_BLACK_DRAGON_LAIR;
-  api.emitCustomEvent("ladders:climbDown", { player, destination: new Location(x, y, z) });
-  // The easy Wilderness Diary's "Enter the King Black Dragon's lair."
-  api.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "enter-the-king-black-dragon-s-lair" });
+  api.emitCustomEvent("ladders:climbDown", {
+    player,
+    destination: new Location(x, y, z),
+    // The easy Wilderness Diary's "Enter the King Black Dragon's lair.", once the climb has landed.
+    onArrival: () => api.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "enter-the-king-black-dragon-s-lair" }),
+  });
   return true;
 }
 

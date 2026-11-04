@@ -93,6 +93,16 @@ export abstract class PrivateArea extends Area {
         return false;
     }
 
+    /** Whether this area's scene is copied from cache template chunks instead of the normal map. */
+    public usesTemplateMap(): boolean {
+        return false;
+    }
+
+    /** Template-map scenery at a tile; ordinary private areas use the regular map instead. */
+    public getTemplateObjects(_location: Location): GameObject[] {
+        return [];
+    }
+
     /** Allows an instance to validate client-only dynamic locs on demand. */
     public resolveObject(_id: number, _location: Location, _player?: Player): GameObject | null {
         return null;

@@ -25,6 +25,7 @@ const REMOVE_TEXT = "You remove the Basilisk Jaw from the Neitiznot Faceguard.";
 const SHOW_TEXT = "You show the Basilisk Jaw to Olaf.";
 const STORY_VARIANT = "after-the-fremennik-trials";
 const STORY_OPTION = "Do you know any great stories about Basilisk Jaws?";
+const PRESET_TEXT = "Preset items cannot be used for this.";
 const NO_SPACE = "You don't have enough inventory space to do that.";
 
 let api = null;
@@ -91,6 +92,20 @@ function login({ player }) {
   syncStory(player);
 }
 
+/** Preset (and other untradeable or unbankable) copies keep their restrictions, so they never convert. */
+function restricted(item) {
+  const Item = core.Item;
+  return !!item && (item.isPresetItem?.() === true
+    || item.getMetaValue?.(Item.PRESET_META) === true
+    || item.getMetaValue?.(Item.UNTRADEABLE_META) === true
+    || item.getMetaValue?.(Item.UNBANKABLE_META) === true);
+}
+
+/** The slot of an unrestricted copy of the item: the instance that is actually consumed. */
+function plainSlot(player, id) {
+  return player.getInventory().getItems().findIndex((item) => item && item.getId() === id && !restricted(item));
+}
+
 function say(player, dialogue) {
   const chain = new core.DialogueChainBuilder();
   chain.add(dialogue);
@@ -101,15 +116,21 @@ function say(player, dialogue) {
 function attach(player) {
   const I = core.ItemIdentifiers;
   const inventory = player.getInventory();
-  if (inventory.getAmount(I.HELM_OF_NEITIZNOT) < 1 || inventory.getAmount(I.BASILISK_JAW) < 1) return;
-  inventory.deleteNumber(I.HELM_OF_NEITIZNOT, 1);
-  inventory.deleteNumber(I.BASILISK_JAW, 1);
+  const helm = plainSlot(player, I.HELM_OF_NEITIZNOT);
+  const jaw = plainSlot(player, I.BASILISK_JAW);
+  if (helm < 0 || jaw < 0) return;
+  inventory.deleteAtSlot(helm, 1);
+  inventory.deleteAtSlot(jaw, 1);
   inventory.addItem(new core.Item(I.NEITIZNOT_FACEGUARD, 1));
   player.getPacketSender().sendInterfaceRemoval();
   say(player, new core.ItemStatementDialogue(0, I.NEITIZNOT_FACEGUARD, ATTACH_TEXT));
 }
 
-function combine({ player }) {
+function combine({ player, usedItem, usedWithItem }) {
+  if (restricted(usedItem) || restricted(usedWithItem)) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   if (!learned(player)) {
     say(player, new core.StatementDialogue(0, UNKNOWN_TEXT));
     return;
@@ -122,19 +143,24 @@ function combine({ player }) {
 function detach(player) {
   const I = core.ItemIdentifiers;
   const inventory = player.getInventory();
-  if (inventory.getAmount(I.NEITIZNOT_FACEGUARD) < 1) return;
+  const faceguard = plainSlot(player, I.NEITIZNOT_FACEGUARD);
+  if (faceguard < 0) return;
   if (inventory.getFreeSlots() < 1) {
     player.sendMessage(NO_SPACE);
     return;
   }
-  inventory.deleteNumber(I.NEITIZNOT_FACEGUARD, 1);
+  inventory.deleteAtSlot(faceguard, 1);
   inventory.addItem(new core.Item(I.HELM_OF_NEITIZNOT, 1));
   inventory.addItem(new core.Item(I.BASILISK_JAW, 1));
   player.getPacketSender().sendInterfaceRemoval();
   say(player, new core.DoubleItemStatementDialogue(0, I.HELM_OF_NEITIZNOT, I.BASILISK_JAW, REMOVE_TEXT));
 }
 
-function dismantle({ player }) {
+function dismantle({ player, item }) {
+  if (restricted(item)) {
+    player.sendMessage(PRESET_TEXT);
+    return true;
+  }
   if (player.getInventory().getFreeSlots() < 1) {
     player.sendMessage(NO_SPACE);
     return true;

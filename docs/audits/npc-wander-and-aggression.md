@@ -361,6 +361,12 @@ added to the radius as a symmetric term. The check is `NpcDefinition.getAggressi
   (`isSafespotted`) is never dropped, so player-started fights and safespots behave as before.
   Instanced NPCs (a `PrivateArea`, e.g. Zulrah's phase moves and the raid rooms) are left to
   their own arena rules rather than the open-world range.
+- **Public scripted arenas:** a shared boss chamber is not open-world hunting either. The God
+  Wars dungeon's `Combat.engage` gives the general and bodyguards `combat:no-retreat` as soon as
+  the area claims them, so a player crossing the room does not turn the boss around; the
+  chamber's existing reset-when-empty rule still ends the fight. The dungeon's ordinary
+  followers are not flagged: their `npcAggression` rule makes them attack on sight, but they
+  keep the normal leash.
 
 `max range` is **not** the wander radius. osrs-docs defines it separately
 ([Max range](https://osrs-docs.com/docs/variables/max-range/), default 7) and the cited Mod Ash
@@ -375,9 +381,10 @@ crossed the map. The raw 55-tile Dagannoth outlier disappears once a reused NPC 
 teleport starts a new track; without that split the same index was followed across unrelated
 respawns.
 
-`aggression-range.test.cjs` covers the formula, the spawn check, the leash and the
-`combat:no-retreat` exemption. `unreachable-combat.test.cjs` opts those deadline scenes out of
-the leash so they still test the unreachable-target budget alone.
+`aggression-range.test.cjs` covers the formula, the spawn check, the leash, the
+`combat:no-retreat` exemption, and the public God Wars chamber (the boss keeps a room-wide
+pursuit, an ordinary follower still gives up). `unreachable-combat.test.cjs` opts those deadline
+scenes out of the leash so they still test the unreachable-target budget alone.
 
 Data note: 10 spawned ids offer `Attack` but are absent from `monsters-complete.json`, so
 `isAggressive` is false for them. Nine are nameless multinpc parents whose transformed form

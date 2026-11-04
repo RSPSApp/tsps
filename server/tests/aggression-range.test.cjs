@@ -15,6 +15,8 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { NpcAggression } = require("../dist/game/entity/impl/npc/NpcAggression");
 const { CoordinateState } = require("../dist/game/entity/impl/npc/NPCMovementCoordinator");
+const GodWarsCommon = require("../plugins/bosses/godwars/Common.GodWars");
+const GodWarsCombat = require("../plugins/bosses/godwars/Combat.GodWars");
 const core = PluginManager.getCoreApi();
 
 const MUGGER = core.NpcIdentifiers.MUGGER_2;
@@ -186,4 +188,48 @@ test("combat:no-retreat keeps a scripted NPC on its target", (t) => {
     s.tick();
   }
   assert.equal(s.npc.getCombat().getTarget(), s.player);
+});
+
+test("a public arena boss is claimed by its area and keeps the room-wide pursuit", (t) => {
+  GodWarsCommon.init({ core });
+  const faction = GodWarsCommon.factionByKey("saradomin");
+  const s = scene(t, { npcId: core.NpcIdentifiers.COMMANDER_ZILYANA });
+  // The boss's own hits are not this suite's subject; keep the player alive for the pursuit.
+  s.player.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 100_000);
+  // What Dungeon.GodWars does every tick for a player in the shared chamber.
+  GodWarsCombat.engage(s.player, faction, [s.npc]);
+  assert.equal(s.npc.hasFlag("combat:no-retreat"), true,
+    "the chamber's boss joins the arena instead of the open-world leash");
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+
+  // A player crossing the room is beyond the 8-tile aggression range, but the arena owns the fight.
+  for (let i = 0; i < 20; i++) {
+    s.walkPlayer(0, 1);
+    s.tick();
+  }
+  assert.ok(s.player.getLocation().getDistance(s.spawn) > 8, "the player left the aggression range");
+  assert.equal(s.npc.getCombat().getTarget(), s.player, "the boss still pursues");
+  assert.notEqual(s.npc.getMovementCoordinator().getCoordinateState(), CoordinateState.RETREATING,
+    "and is not walking home to its spawn");
+});
+
+test("an ordinary God Wars follower keeps the open-world leash", (t) => {
+  GodWarsCommon.init({ core });
+  const faction = GodWarsCommon.factionByKey("saradomin");
+  const s = scene(t, { npcId: core.NpcIdentifiers.KNIGHT_OF_SARADOMIN });
+  s.player.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 100_000);
+  // The dungeon's npcAggression rule makes followers attack on sight; only the general and
+  // bodyguards are scripted arena NPCs.
+  GodWarsCombat.engage(s.player, faction, [s.npc]);
+  assert.equal(s.npc.hasFlag("combat:no-retreat"), false);
+  s.npc.getCombat().attack(s.player);
+
+  let cycles = 0;
+  while (s.npc.getCombat().getTarget() != null && cycles < 30) {
+    s.walkPlayer(0, 1);
+    s.tick();
+    cycles++;
+  }
+  assert.equal(s.npc.getCombat().getTarget(), null, "the follower still gives up the chase");
+  assert.equal(s.npc.getMovementCoordinator().getCoordinateState(), CoordinateState.RETREATING);
 });

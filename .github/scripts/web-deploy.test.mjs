@@ -14,6 +14,7 @@ function fixture(t) {
     const write = (file, text) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
     write(host + '/index.html', 'new host'); write(client + '/index.html', 'new client');
     write(client + '/static/main.js', 'main'); write(client + '/static/main.js.map', 'do not deploy');
+    write(client + '/.htaccess', 'public Apache configuration');
     write(client + '/caches/caches.json', 'server-owned cache manifest');
     const files = { 'runtime.snapshot.gz': 'complete runtime', 'definitions.json': '{"version":2}' };
     const release = { id: releaseId, files: Object.fromEntries(Object.entries(files).map(([name, text]) => [name, { bytes: Buffer.byteLength(text), sha256: hash(text) }])) };
@@ -38,6 +39,7 @@ test('stages each startup file once; maps and server-owned client caches are exc
 test('verified publication preserves old releases, full caches and the active marker', t => {
     const f = fixture(t); applyWebDeploy(f.stage, f.live, commit, id);
     assert.equal(fs.readFileSync(f.live + '/host/index.html', 'utf8'), 'new host');
+    assert.equal(fs.readFileSync(f.live + '/play/.htaccess', 'utf8'), 'public Apache configuration');
     assert.equal(fs.readFileSync(f.live + '/host/browser-host/release.json', 'utf8'), '{"id":"previous"}');
     assert.equal(fs.readFileSync(f.live + '/play/caches/preserved.dat2', 'utf8'), 'existing full cache');
     assert.equal(fs.readFileSync(f.live + '/host/browser-host/releases/previous/runtime.snapshot.gz', 'utf8'), 'older release');

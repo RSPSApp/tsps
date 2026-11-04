@@ -11,6 +11,7 @@ records the sources and the parts that are implemented; the code is
 
 - [Mage Training Arena](https://oldschool.runescape.wiki/w/Mage_Training_Arena), its room pages,
   [Pizazz points](https://oldschool.runescape.wiki/w/Pizazz_points),
+  [Maze Guardian](https://oldschool.runescape.wiki/w/Maze_Guardian),
   [Progress hat](https://oldschool.runescape.wiki/w/Progress_hat),
   [Entrance Guardian](https://oldschool.runescape.wiki/w/Entrance_Guardian) and
   [Rewards Guardian](https://oldschool.runescape.wiki/w/Rewards_Guardian_\(Mage_Training_Arena\)).
@@ -41,12 +42,17 @@ Guardian for the player and slides it with the world's own collision map:
 - the cast side is the side of the maze the player stands on (the four sides exclude the
   corners, as on the Wiki);
 - a cast slides the statue away from the player until the next tile is blocked; a corner cast
-  spends its runes and moves nothing;
-- the statue turns into the moving form and glides over five ticks, then either becomes the
-  completed guardian (goal) or a statue again;
-- New-maze starts the next arena; Reset returns the statue to its start; Observe toggles the
-  overhead camera. All three are used from the room, outside the maze, so a guardian-scoped
-  route reaches it across the walls instead of walking the player into them;
+  spends its runes and moves nothing. The guardian waits for Telekinetic Grab's impact graphic
+  (80 client cycles after the cast) before it starts moving;
+- the statue turns into the moving form and glides at two tiles per game tick (15 client cycles
+  per tile), so short and long slides keep the same speed. It then becomes the completed guardian
+  at the goal or a statue again;
+- recording 1757 sends guardian sound 1666 for each slide (44 times) and sound 1665 for each
+  completed maze (five times). The complete sound plays when the statue reaches the goal;
+- New-maze is the completed guardian's default action and starts the next arena; Reset returns the
+  statue to its start; Observe toggles the overhead camera. All three are used from the room,
+  outside the maze, so a guardian-scoped route reaches it across the walls instead of walking the
+  player into them;
 - leaving or logging out removes the private guardian and resets the maze, but the five-maze
   streak is saved. The streak is what the Wiki says is retained when leaving the arena.
 

@@ -4,7 +4,7 @@ import { resolveGpuSettings } from "../game/plugins/gpu/GpuPlugin";
 import { createScenePipeline, WEBGPU_MSAA_SAMPLES, withSampleCount } from "../render/webgpu/multisample";
 
 const settings = (antiAliasingMode: string, extra: Partial<Parameters<typeof resolveGpuSettings>[0]> = {}) =>
-    resolveGpuSettings({ antiAliasingMode, drawDistance: 25, fpsLimit: 240, colorBanding: 0, ...extra });
+    resolveGpuSettings({ antiAliasingMode, drawDistance: 25, fpsLimit: 240, colorBanding: 0, autoFog: true, fogStart: 85, manualFogStart: 24, ...extra });
 
 assert.equal(GpuConfig.items.antiAliasingMode.default, AntiAliasingMode.MSAA_4, "desktop AA default is preserved");
 assert.equal(GpuConfig.items.fpsLimit.default, 240, "desktop FPS default is preserved");
@@ -24,6 +24,15 @@ assert.equal(settings(AntiAliasingMode.DISABLED, { fpsLimit: -1 }).fpsLimit, 0);
 // Colour banding uses the dev panel's mapping: 0% is the smooth 255.
 assert.equal(settings(AntiAliasingMode.DISABLED).colorBanding, 255);
 assert.equal(settings(AntiAliasingMode.DISABLED, { colorBanding: 100 }).colorBanding, 55);
+
+// Fog options and the renderer choice are plugin settings, not just debug-panel ones.
+assert.deepEqual(
+    [settings(AntiAliasingMode.DISABLED).autoFogDepth, settings(AntiAliasingMode.DISABLED).autoFogDepthFactor, settings(AntiAliasingMode.DISABLED).fogDepth],
+    [true, 0.85, 24],
+);
+assert.equal(settings(AntiAliasingMode.DISABLED, { fogStart: 500, manualFogStart: 999 }).autoFogDepthFactor, 1);
+assert.equal(settings(AntiAliasingMode.DISABLED, { manualFogStart: 999 }).fogDepth, 400);
+for (const key of ["renderer", "brightness", "autoFog", "fogStart", "manualFogStart"]) assert.ok(key in GpuConfig.items, key);
 
 // Scene pipelines get one multisampled twin, built on first use.
 const created: GPURenderPipelineDescriptor[] = [];

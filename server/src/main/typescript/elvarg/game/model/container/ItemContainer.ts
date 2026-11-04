@@ -316,18 +316,13 @@ export abstract class ItemContainer {
       (this instanceof Inventory || this instanceof Equipment) &&
       to instanceof Bank
     ) {
-      if (
-        to.getAmount(item.getId()) + item.getAmount() >
-          MAX_STACK_AMOUNT ||
-        to.getAmount(item.getId()) + item.getAmount() <= 0
-      ) {
-        item.setAmount(MAX_STACK_AMOUNT - to.getAmount(item.getId()));
-        if (item.getAmount() <= 0) {
-          this.getPlayer().sendMessage(
-            "You cannot deposit that entire amount into your bank."
-          );
-          return this;
-        }
+      const bankItem = item.clone().setId(getItemDefinition().forId(item.getId()).unNote());
+      item.setAmount(to.getAddableAmount(bankItem));
+      if (item.getAmount() <= 0) {
+        this.getPlayer().sendMessage(
+          "You cannot deposit that entire amount into your bank."
+        );
+        return this;
       }
     }
 
@@ -379,6 +374,17 @@ export abstract class ItemContainer {
 
     if (item.getAmount() <= 0) {
       return this;
+    }
+
+    if (to instanceof Bank) {
+      const bankItem = item.clone().setId(getItemDefinition().forId(item.getId()).unNote());
+      item.setAmount(to.getAddableAmount(bankItem));
+      if (item.getAmount() <= 0) {
+        this.getPlayer().sendMessage(
+          "You cannot deposit that entire amount into your bank."
+        );
+        return this;
+      }
     }
 
     this.deleteBoolean(item, refresh);

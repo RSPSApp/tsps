@@ -1387,7 +1387,7 @@ export class Bank extends ItemContainer {
             const checkId = withdrawAsNote ? noteId : item.getId();
             if (to.getAmount(checkId) + item.getAmount() > MAX_STACK_AMOUNT
                     || to.getAmount(checkId) + item.getAmount() <= 0) {
-                item.setAmount(MAX_STACK_AMOUNT - (to.getAmount(item.getId())));
+                item.setAmount(MAX_STACK_AMOUNT - to.getAmount(checkId));
                 if (item.getAmount() <= 0) {
                     this.getPlayer().sendMessage("You cannot withdraw that entire amount into your inventory.");
                         return this;

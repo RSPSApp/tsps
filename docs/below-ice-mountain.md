@@ -35,6 +35,13 @@ The sandwich recipe unlocks when the cook explains the bread/meat combination. K
 
 The entrance scene creates a private crew, explosion and rubble replacements, the Marley disguise/tripwires, indoor crew, earthquake and awakening. The combat Guardian and its four mineable pillars occupy a separate private instance. Pillars require a usable pickaxe and boosted Mining10, award10 MiningXP each and damage the40HP Guardian by10. A broken pillar cannot be mined repeatedly. The Guardian attacks after the cutscene and on re-entry. Its death starts the finishing dialogue automatically.
 
+The Guardian's hit reaction no longer falls back to human block 424. Cache NPC 10654 uses model
+42128 and guardian animation base 1955; human block 424 uses base 0 and deforms that model's
+renderable geometry. Unknown NPC blocks default to no reaction, while human
+idle families retain their existing fallback and the combat loader still applies resolved roles.
+Both melee launch and projectile impact already skip an unknown block without resetting the
+actor's correct attack pose. No replacement Guardian flinch sequence is inferred.
+
 The finishing sequence shows Willow's bag and coins before opening the doors and meeting Ramarno. The ending resets the camera five ticks after the resumed "Bless my beard..." line, before completion at eight ticks. Completion follows that recorded transition, grants 2,000 coins and one Quest point once, uses a steak sandwich on the scroll and jingle 152, and automatically starts the Ramarno introduction when the scroll closes. Ramarno's departure updates the cache morph variable.
 
 The workout retains all 54 captured camera packets (including its reset), with exact source tiles, heights, both movement-rate fields and cycle offsets. Rock-paper-scissors, the exterior escape/explosion, Marley's two trap pans, the entrance rise, Willow's room sweep, the earthquake/awakening, and the final bag/door shots also retain their captured targets and rates. Transition cameras change at the recorded fade boundaries; dialogue-driven shots start with the matching line or Continue, without replaying the recording player's reading delays.
@@ -46,6 +53,14 @@ The fuse uses the 1959/1967 fade pair, explosion aftermath 1988/1993, rubble cle
 ## Verification and remaining fidelity limits
 
 `node --test tests/below-ice-mountain-parity.test.cjs` (from `server/`) covers the captured states, legacy saves, interrupted conversations, actual Flex requirement, recipe/menu/postquest use, every RPS choice, workout timing and cleanup, all 54 workout camera packets and scene camera transitions, private crew/Guardian transition, distinct pillar mining and single reward.
+
+The hit-reaction regression also uses the registered entrance, real quest-owned and ordinary
+same-type NPCs, queued ranged damage, ordinary melee launch, World processing and PlayerSession
+NPC sync. It preserves existing human fallbacks, authored/captured/cache-family blocks and explicit
+no-block roles across hydration. A separate offline replay through the actual client decoder,
+NPC movement/animation controller and cache geometry reproduces the bad human rig before the fix.
+This is not a live GPU visual check or proof of every scene animation in issue #2134; its training,
+dialogue and cutscene reports remain open.
 
 Live agent MCP on this worktree's port49802 verified the16-point refusal, main35/sides50, cache entrance interaction, a private Guardian arena with one40HP Guardian, all four pillars and the mapped exit.
 

@@ -49,7 +49,7 @@ export class NpcDefinition {
     private hitpoints: number = 10;
     private attackSpeed: number = 4;
     private attackAnim: number = 422;
-    private defenceAnim: number = 424;
+    private defenceAnim: number = -1;
     private deathAnim: number = 836;
     private spawnAnim: number | null = null;
     private deathSound: number = -1;
@@ -105,6 +105,10 @@ export class NpcDefinition {
         this.size = cached.size;
         this.attackable = cached.actions.some((action) => action?.toLowerCase() === "attack");
         this.actions = [...cached.actions];
+        // Only human rigs inherit the legacy human block; other creatures need a resolved role.
+        if (CacheDefinitions.getSeqName(cached.idleSeqId)?.split("_").includes("human")) {
+            this.defenceAnim = CacheDefinitions.getSeqId("human_unarmedblock") ?? -1;
+        }
         if (cached.combatLevel >= 0) this.combatLevel = cached.combatLevel;
         if (cached.hitpoints > 0) this.hitpoints = cached.hitpoints;
         const stats = this.stats ? [...this.stats] : [...NpcDefinition.DEFAULT_STATS];

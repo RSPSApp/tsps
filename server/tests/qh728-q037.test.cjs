@@ -185,7 +185,11 @@ function setup() {
     performAnimation() {},
     setPositionToFace() {},
   };
-  const fire = (name, event = {}) => api.emitCustomEvent(name, { player, ...event });
+  const fire = (name, event = {}) => {
+    const request = { player, ...event };
+    api.emitCustomEvent(name, request);
+    return request;
+  };
   const variant = (npcId) => hooks.variants.map((fn) => fn({ player, npcId })).find(Boolean) ?? null;
   const condition = (stepId, npcId) => hooks.conditions
     .map((fn) => fn({ player, npcId, stepId }))
@@ -364,6 +368,10 @@ test('fresh stage 0 follows the mandatory route and completes on the native varb
   h.setLocation(2070, 4841, 0);
   h.zoneEnter();
   assert.equal(h.varbits.get(2330), 1);
+  assert.equal(h.spawned.filter((npc) => npc.getId() === N.STARFLOWER_2 && npc.isRegistered()).length, 0,
+    'the starflowers do not appear immediately on first arrival');
+  h.fire('agent:advance-time', { ms: 60001, handledBy: [] });
+  h.zoneEnter();
   const flower = h.spawned.find((npc) => npc.getId() === N.STARFLOWER_2 && npc.isRegistered());
   assert.ok(flower);
   assert.equal(h.npcEvent(N.STARFLOWER_2, 'Pick', flower).handled, true);
@@ -377,6 +385,25 @@ test('fresh stage 0 follows the mandatory route and completes on the native varb
   h.inventory.set(I.GORAK_CLAWS, 1);
   h.inventory.set(I.VIAL_OF_WATER, 1);
   h.inventory.set(I.PESTLE_AND_MORTAR, 1);
+  h.itemOnItem(I.STAR_FLOWER, I.VIAL_OF_WATER);
+  assert.equal(h.inventory.get(I.STAR_FLOWER), 1, 'the ingredients are retained until Nuff explains the recipe');
+  assert.equal(h.inventory.get(I.VIAL_OF_WATER), 1);
+  assert.equal(h.inventory.get(I.MAGIC_ESSENCE_UNF_) ?? 0, 0);
+  h.setLocation(2355, 4455, 0);
+  h.npcEvent(NUFF, 'Talk-to');
+  assert.equal(transcripts.at(-1).variant, 'curing-the-queen-talking-to-fairy-nuff-after-visiting-the-cosmic-plane-and-gorak-plane');
+  assert.equal(h.quest.getStage(h.player), 65, 'visiting the planes alone does not complete Nuff’s recipe step');
+  const recipeLine = h.fire('npc-dialogue:line', {
+    npcId: NUFF,
+    text: "Yes, I'm on my way.",
+    step: { speaker: 'Fairy Nuff', text: "Yes, I'm on my way." },
+    pages: [{ page: 'Fairytale II - Cure a Queen', variants: ['curing-the-queen-talking-to-fairy-nuff-after-visiting-the-cosmic-plane-and-gorak-plane'] }],
+  });
+  assert.equal(typeof recipeLine.after, 'function', 'the final recipe line commits after Continue');
+  assert.equal(h.quest.getStage(h.player), 65);
+  recipeLine.after();
+  assert.equal(h.quest.getStage(h.player), 70);
+  assert.equal(h.attrs.get('quest.fairytale-ii-cure-a-queen:potion-recipe-taught'), 1);
   h.itemOnItem(I.STAR_FLOWER, I.VIAL_OF_WATER);
   assert.equal(h.inventory.get(I.MAGIC_ESSENCE_UNF_), 1);
   assert.equal(h.quest.getStage(h.player), 72);

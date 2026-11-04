@@ -7,7 +7,12 @@ const { ObjectIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 
 const PRAY_AT_ALTAR_ANIMATION = new Animation(645);
 
+// The easy Wilderness Diary's "Pray at the Chaos Altar in Western Wilderness.": the Chaos Temple
+// (church) altar at level 38 (OSRS Wiki: Chaos Temple), not the Wilderness hut's.
+const WESTERN_CHAOS_ALTAR = { x: 2947, y: 3820, z: 0 };
+
 let core = null;
+let api = null;
 
 // The client transforms the occult altar to match the active spellbook. Its
 // first "Venerate" option therefore selects the spellbook omitted by the
@@ -75,8 +80,13 @@ function prayerAltar({ player }) {
  * Chaos altars pray as altars do (captured at the Chaos Temple: human_pray, synth 2674, the same
  * messages). The Yanille Agility dungeon's trapdoor altar is left to fall through.
  */
-function prayAtChaosAltar({ player, objectId }) {
-  return objectId === core.ObjectIdentifiers.CHAOS_ALTAR_3 ? false : handlePrayerAltar(player);
+function prayAtChaosAltar({ player, objectId, location }) {
+  if (objectId === core.ObjectIdentifiers.CHAOS_ALTAR_3) return false;
+  const west = WESTERN_CHAOS_ALTAR;
+  if (location?.x === west.x && location.y === west.y && location.z === west.z) {
+    api.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "pray-at-the-chaos-altar-in-western-wilderness" });
+  }
+  return handlePrayerAltar(player);
 }
 
 /** Shrines restore Prayer as altars do; the Woodcutting Guild's full-Prayer line, as captured. */
@@ -107,7 +117,8 @@ function arceuusSpellbook({ player }) {
 
 module.exports = {
   name: "Altars",
-  register: (api) => {
+  register: (pluginApi) => {
+    api = pluginApi;
     core = api.core;
     api.onObjectInteraction("Ancient Altar", { Venerate: ancientAltar });
     api.onObjectInteraction("Lunar Altar", { Venerate: lunarAltar });

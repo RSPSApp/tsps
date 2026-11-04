@@ -71,6 +71,7 @@ function setCharges(item, amount) {
 function refresh(player) {
   player.getInventory().refreshItems();
   player.getEquipment().refreshItems();
+  core.BonusManager.update(player);
   player.getUpdateFlag().flag(core.Flag.APPEARANCE);
 }
 

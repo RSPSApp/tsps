@@ -12,6 +12,7 @@ const AbyssalTentacle = require("../plugins/items/AbyssalTentacle.plugin");
 
 const poisoned = [];
 const itemActions = {};
+const bonusUpdates = [];
 const CombatType = { MELEE: "melee", MAGIC: "magic" };
 AbyssalTentacle.register({
   core: {
@@ -21,11 +22,13 @@ AbyssalTentacle.register({
     Item: class { constructor(id, amount) { this.id = id; this.amount = amount; } },
     ItemIdentifiers: ItemIds,
     WeaponInterfaceManager: { assign() {} },
+    BonusManager: { update: (player) => bonusUpdates.push(player) },
     CombatFactory: { poisonEntity: (target, severity, orb) => poisoned.push({ target, severity, orb }) },
   },
   emitCustomEvent() {},
   onServerStartup: (handler) => handler(),
   onItemOnItem() {},
+  onCombatHitDamage() {},
   onCombatHitResolved() {},
   onCustomEvent() {},
   onItemAction(name, actions) { itemActions[name] = actions; },
@@ -66,12 +69,20 @@ function swing(player, type = CombatType.MELEE) {
   AbyssalTentacle._test.onAttackFinished(event);
 }
 
-function strike(player, { accurate = true, damage = 5, type = CombatType.MELEE } = {}) {
-  AbyssalTentacle._test.onHitResolved({
-    attacker: player,
-    target: {},
-    hit: { isAccurate: () => accurate, getTotalDamage: () => damage, getCombatType: () => type },
-  });
+/** A hit rolled now, while the swing is made. */
+function roll(player, { accurate = true, damage = 5, type = CombatType.MELEE } = {}) {
+  const hit = { isAccurate: () => accurate, getTotalDamage: () => damage, getCombatType: () => type };
+  AbyssalTentacle._test.onHitDamage({ attacker: player, combatType: type, hit });
+  return hit;
+}
+
+function land(player, hit) {
+  AbyssalTentacle._test.onHitResolved({ attacker: player, target: {}, hit });
+}
+
+/** A hit rolled and landing with the same equipment. */
+function strike(player, options = {}) {
+  land(player, roll(player, options));
 }
 
 test("a successful hit has a 25% chance to poison for 4 damage", () => {
@@ -214,6 +225,47 @@ test("the last charge leaves the kraken tentacle, and an (or) tentacle returns i
   assert.equal(plainOwner.added.length, 0);
   assert.equal(ornamented.getId(), ItemIds.KRAKEN_TENTACLE);
   assert.equal(ornamentedOwner.added[0].id, ItemIds.SHATTERED_RELICS_VARIETY_ORNAMENT_KIT);
+});
+
+test("the last charge's hit still poisons when it lands after the tentacle degraded", () => {
+  poisoned.length = 0;
+  const tentacle = item(ItemIds.ABYSSAL_TENTACLE, { "abyssal-tentacle": 1 });
+  const player = createPlayer(tentacle);
+  const event = { attacker: player, target: {}, method: { type: () => CombatType.MELEE } };
+  AbyssalTentacle._test.onAttackStarted(event);
+  const hit = roll(player);
+  AbyssalTentacle._test.onAttackFinished(event);
+  assert.equal(tentacle.getId(), ItemIds.KRAKEN_TENTACLE);
+  const original = Math.random;
+  try {
+    Math.random = () => 0;
+    land(player, hit);
+  } finally {
+    Math.random = original;
+  }
+  assert.equal(poisoned.length, 1);
+});
+
+test("poison follows the weapon that rolled the hit, not the one held at impact", () => {
+  poisoned.length = 0;
+  const player = createPlayer(item(ItemIds.ABYSSAL_WHIP));
+  const whipHit = roll(player);
+  player.getEquipment().getItems()[Equipment.WEAPON_SLOT] = item(ItemIds.ABYSSAL_TENTACLE);
+  const original = Math.random;
+  try {
+    Math.random = () => 0;
+    land(player, whipHit);
+  } finally {
+    Math.random = original;
+  }
+  assert.equal(poisoned.length, 0);
+});
+
+test("degrading recalculates the player's equipment bonuses", () => {
+  bonusUpdates.length = 0;
+  const player = createPlayer(item(ItemIds.ABYSSAL_TENTACLE, { "abyssal-tentacle": 1 }));
+  swing(player);
+  assert.deepEqual(bonusUpdates, [player]);
 });
 
 test("creation through the real item-use dispatcher confirms, consumes one pair and rejects stale ingredients", async () => {
@@ -401,7 +453,8 @@ test("native Dissolve confirms and returns only the clicked normal tentacle, rej
   }
 });
 
-test("through the real attack path, the last charge's swing starts and rolls with the tentacle still held", (t) => {
+// Registers the plugin with the real core: keep last.
+test("through the real attack path, the last charge's swing rolls with the tentacle, and its hit still poisons after the degrade", (t) => {
   const { Combat } = require("../dist/game/content/combat/Combat");
   const { CombatFactory, CanAttackResponse } = require("../dist/game/content/combat/CombatFactory");
   const { CombatType: RealCombatType } = require("../dist/game/content/combat/CombatType");
@@ -417,6 +470,8 @@ test("through the real attack path, the last charge's swing starts and rolls wit
   t.mock.method(CombatFactory, "canAttack", () => CanAttackResponse.CAN_ATTACK);
   const { WeaponInterfaceManager } = require("../dist/game/content/combat/WeaponInterfaceManager");
   const assigned = t.mock.method(WeaponInterfaceManager, "assign", () => {});
+  const { BonusManager } = require("../dist/game/model/equipment/BonusManager");
+  const recalculated = t.mock.method(BonusManager, "update", () => {});
   t.mock.method(combat, "expectAttackAnimation", () => {});
   t.mock.method(combat, "attackTiming", () => ({ keepDelay: true }));
   const heldDuring = [];
@@ -424,10 +479,32 @@ test("through the real attack path, the last charge's swing starts and rolls wit
   const method = {
     type: () => RealCombatType.MELEE, onCombatBegan() {}, finished() {},
     start: () => heldDuring.push(["start", weapon()]),
-    hits: () => { heldDuring.push(["hits", weapon()]); return []; },
+    hits: () => {
+      heldDuring.push(["hits", weapon()]);
+      // The swing's hit, rolled through the real hit-damage hooks as PendingHit rolls it.
+      PluginManager.emitCombatHitDamage({ attacker: player, target, combatType: RealCombatType.MELEE, hit: rolled, damage: {}, accurate: true });
+      return [];
+    },
   };
+  const rolled = { isAccurate: () => true, getTotalDamage: () => 11, getCombatType: () => RealCombatType.MELEE };
+  const poisonedTargets = t.mock.method(CombatFactory, "poisonEntity", () => {});
   assert.equal(combat.executeAttack(method, target, true, 0, false), true);
   assert.deepEqual(heldDuring, [["start", ItemIds.ABYSSAL_TENTACLE], ["hits", ItemIds.ABYSSAL_TENTACLE]]);
   assert.equal(tentacle.getId(), ItemIds.KRAKEN_TENTACLE, "degraded once the swing finished");
   assert.equal(assigned.mock.callCount(), 1, "the weapon interface changes after the swing");
+  assert.equal(recalculated.mock.callCount(), 1, "the kraken tentacle's bonuses replace the tentacle's");
+
+  // The hit lands after the degrade: it was the tentacle's, so it may still poison.
+  // (Earlier tests registered this plugin on the shared PluginManager too, so count "any".)
+  const unrolled = { isAccurate: () => true, getTotalDamage: () => 11, getCombatType: () => RealCombatType.MELEE };
+  const original = Math.random;
+  try {
+    Math.random = () => 0;
+    PluginManager.emitCombatHitResolved({ attacker: player, target, hit: unrolled });
+    assert.equal(poisonedTargets.mock.callCount(), 0, "a hit no tentacle rolled never poisons");
+    PluginManager.emitCombatHitResolved({ attacker: player, target, hit: rolled });
+  } finally {
+    Math.random = original;
+  }
+  assert.ok(poisonedTargets.mock.callCount() > 0, "the tentacle's own last hit poisons");
 });

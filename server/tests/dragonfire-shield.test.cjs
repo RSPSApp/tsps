@@ -17,6 +17,7 @@ DragonfireShield.register({
     Animation: class { constructor(id, delay) { this.id = id; this.delay = delay; } },
     CombatMethod: class {},
     Equipment,
+    BonusManager: { update() {} },
     Flag: { APPEARANCE: "appearance" },
     Graphic: class { constructor(id, delay) { this.id = id; this.delay = delay; } },
     ItemIdentifiers: ItemIds,

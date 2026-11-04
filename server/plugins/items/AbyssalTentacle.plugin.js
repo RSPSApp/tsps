@@ -20,6 +20,8 @@ let api = null;
 let tentacleIds = new Set();
 /** Player -> the tentacle whose last charge their current swing spent. */
 const spent = new WeakMap();
+/** Hits rolled while a tentacle was wielded: the poison follows the hit, not the weapon at impact. */
+const tentacleHits = new WeakSet();
 
 function combine({ player, usedItem, usedWithItem, usedItemSlot, usedWithItemSlot }) {
   const I = core.ItemIdentifiers;
@@ -80,6 +82,7 @@ function degrade(player, tentacle) {
     player.getInventory().forceAdd(player, new Item(ItemIdentifiers.SHATTERED_RELICS_VARIETY_ORNAMENT_KIT, 1));
   }
   player.getEquipment().refreshItems();
+  core.BonusManager.update(player);
   player.getUpdateFlag().flag(core.Flag.APPEARANCE);
   core.WeaponInterfaceManager.assign(player);
 }
@@ -131,6 +134,12 @@ function onAttackStarted({ attacker, method }) {
   }
 }
 
+function onHitDamage({ attacker, combatType, hit }) {
+  if (attacker?.isPlayer?.() && combatType === core.CombatType.MELEE && hit && wieldedTentacle(attacker.getAsPlayer())) {
+    tentacleHits.add(hit);
+  }
+}
+
 function onHitResolved({ attacker, target, hit }) {
   if (!attacker?.isPlayer?.() || !target || hit?.getCombatType?.() !== core.CombatType.MELEE) {
     return;
@@ -138,7 +147,7 @@ function onHitResolved({ attacker, target, hit }) {
   if (!hit.isAccurate() || !(hit.getTotalDamage() > 0)) {
     return;
   }
-  if (!wieldedTentacle(attacker.getAsPlayer())) {
+  if (!tentacleHits.has(hit)) {
     return;
   }
   if (Math.random() >= POISON_CHANCE) {
@@ -165,8 +174,9 @@ module.exports = {
     api.onItemAction("Abyssal tentacle", { Check: check, Dissolve: dissolve });
     api.onCustomEvent("combat:attack-started", onAttackStarted);
     api.onCustomEvent("combat:attack-finished", onAttackFinished);
+    api.onCombatHitDamage(onHitDamage);
     api.onCombatHitResolved(onHitResolved);
     api.onItemAction("Abyssal tentacle (or)", { Check: check });
   },
-  _test: { onAttackStarted, onAttackFinished, onHitResolved, charges, check, POISON_CHANCE, POISON_SEVERITY, MAX_CHARGES },
+  _test: { onAttackStarted, onAttackFinished, onHitDamage, onHitResolved, charges, check, POISON_CHANCE, POISON_SEVERITY, MAX_CHARGES },
 };

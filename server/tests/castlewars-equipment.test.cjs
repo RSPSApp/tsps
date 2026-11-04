@@ -219,32 +219,43 @@ test('native widget dispatch blocks prayer, orbs and combat controls before thei
   assert.equal(maps, 1, 'the world map opens normally after leaving');
 });
 
-test('targeted Lunar magic cannot consume items or grant XP while transformed and resumes after leaving', async (t) => {
+test('native Lunar String Jewellery spends nothing while transformed and resumes after leaving', async (t) => {
   const p = player(t, [core.ItemIdentifiers.ZAMORAK_FULL_HELM]);
+  t.after(() => game.clearWaitingForm(p));
   p.setSpellbook(core.MagicSpellbook.LUNAR);
   p.getSkillManager().setMaxLevels(core.Skill.MAGIC, 99).setCurrentLevels(core.Skill.MAGIC, 99);
   p.getSkillManager().setMaxLevels(core.Skill.DEFENCE, 99).setCurrentLevels(core.Skill.DEFENCE, 99);
-  for (const [id, amount] of [[1635, 1], [9075, 2], [556, 5], [563, 1]]) p.getInventory().adds(id, amount);
+  assert.equal(core.ItemDefinition.forId(1673).getName(), 'Gold amulet (u)');
+  assert.equal(core.ItemDefinition.forId(1692).getName(), 'Gold amulet');
+  for (const [id, amount] of [[1673, 1], [9075, 2], [557, 10], [555, 5]]) p.getInventory().adds(id, amount);
   const spell = core.CacheDefinitions.getSpellByName('String Jewellery');
-  assert.ok(spell);
+  const requirements = core.CacheDefinitions.getSpellRequirements('String Jewellery');
+  assert.ok(spell && requirements);
+  assert.equal(requirements.level, 80);
+  assert.deepEqual([...requirements.runes].sort((a, b) => a.id - b.id), [
+    { id: 555, amount: 5 }, { id: 557, amount: 10 }, { id: 9075, amount: 2 },
+  ]);
   const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
     close() {}, onData() {}, onError() {}, onClose() {} };
   const connection = new ClientConnection(channel);
   connection.player = p;
-  const packet = { type: 'widget_target', sourceWidgetId: spell.widgetId, sourceItemId: spell.itemId,
-    sourceSlot: -1, targetWidgetId: 149 << 16, targetItemId: 1635, targetSlot: 0 };
-  const amounts = () => [1635, 1656, 9075, 556, 563].map((id) => p.getInventory().getAmount(id));
+  const packet = { type: 'widget_action', widgetId: spell.widgetId, groupId: spell.widgetId >>> 16,
+    childId: spell.widgetId & 0xffff, buttonNum: 1, itemId: spell.itemId };
+  const amounts = () => [1673, 1692, 9075, 557, 555].map((id) => p.getInventory().getAmount(id));
   const xp = p.getSkillManager().getExperience(core.Skill.MAGIC);
+  const craftingXp = p.getSkillManager().getExperience(core.Skill.CRAFTING);
   game.prepareWaitingForm(p, 'saradomin');
   game.applyWaitingForm(p);
   await connection.dispatch([packet], true);
-  assert.deepEqual(amounts(), [1, 0, 2, 5, 1]);
+  assert.deepEqual(amounts(), [1, 0, 2, 10, 5]);
   assert.equal(p.getSkillManager().getExperience(core.Skill.MAGIC), xp);
+  assert.equal(p.getSkillManager().getExperience(core.Skill.CRAFTING), craftingXp);
   assert.match(p.messages.at(-1), /transformed/);
   game.clearWaitingForm(p);
   await connection.dispatch([packet], true);
   assert.deepEqual(amounts(), [0, 1, 0, 0, 0]);
   assert.equal(p.getSkillManager().getExperience(core.Skill.MAGIC), xp + 83);
+  assert.equal(p.getSkillManager().getExperience(core.Skill.CRAFTING), craftingXp + 4);
 });
 
 test('an observer gets fresh flag, weapon and movement appearance when a player re-enters view', (t) => {

@@ -14,7 +14,7 @@ import { HdMaterials } from "./HdMaterials";
 import { HdMist } from "./HdMist";
 import { HdSceneInputs } from "./HdSceneInputs";
 import { Frustum } from "../../Frustum";
-import { resolveFogRange } from "../../../render/RenderDistancePolicy";
+import { fogSettings, resolveFogRange } from "../../../render/RenderDistancePolicy";
 import type {
     WebGPUSceneExtension,
     WebGPUSceneExtensionContext,
@@ -173,8 +173,7 @@ export class HdPlugin extends Plugin {
         set("u_hdDirectional", environment.directionalColor.map(c => c * environment.lightStrength * 0.9));
         set("u_hdFogColor", environment.fogColor);
         const fogEnd = Math.max(1, renderer.getFrameRenderDistanceTiles());
-        const fog = resolveFogRange({ renderDistance: fogEnd, autoFogDepth: renderer.autoFogDepth,
-            autoFogDepthFactor: renderer.autoFogDepthFactor, manualFogDepth: renderer.fogDepth, hd: true });
+        const fog = resolveFogRange({ renderDistance: fogEnd, ...fogSettings(renderer), hd: true });
         set("u_hdFog", [fog.fogDepth, fog.fogEnd, Math.max(0.6, Math.min(1.2,
             1.2 - environment.fogDepth * environment.fogScale * 0.08))]);
         set("u_hdGroundFog", [environment.groundFogStart / 128, environment.groundFogEnd / 128, environment.groundFogOpacity]);

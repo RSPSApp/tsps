@@ -127,9 +127,10 @@ function character(name, profile, picks = {}, leagueType = DP) {
   player.setProfile(profile);
   player.setLocation(new Location(3200, 3200, 0));
   player.setRegistered(true);
-  const sent = { messages: [], configs: new Map(), scripts: [], interfaces: [], flags: [] };
+  const sent = { messages: [], configs: new Map(), varbits: new Map(), scripts: [], interfaces: [], flags: [] };
   const record = {
     sendConfig: (id, value) => sent.configs.set(id, value),
+    sendVarbit: (id, value) => sent.varbits.set(id, value),
     sendClientScript: (id, ...args) => sent.scripts.push({ id, args }),
     sendInterface: (id) => (sent.interfaces.push(id), player.setInterfaceId(id)),
     sendInterfaceRemoval: () => player.setInterfaceId(-1),
@@ -1673,16 +1674,17 @@ test("Minion: fights its owner's NPC every 3 ticks for 3 to its max, in the targ
   const target = {
     isNpc: () => true, isRegistered: () => true, isUntargetable: () => false, getHitpoints: () => 50,
     getDefinition: () => ({ getName: () => name }),
-    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: ([hit]) => hits.push(hit) }), addDamage() {} }),
+    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: ([hit]) => hits.push(hit) }), addDamage() {}, getLastAttack: () => ({ reset: () => resets++ }) }),
   };
+  let resets = 0;
   t.mock.method(player, "getCombat", () => ({ getTarget: () => target }));
   let permission = core.CanAttackResponse.CAN_ATTACK;
   t.mock.method(core.CombatFactory, "canAttackPermission", () => permission);
-  const shown = { models: null, animations: [], graphics: [] };
+  const shown = { npc: null, animations: [], graphics: [] };
   const npc = {
     isRegistered: () => true, getFollowing: () => null, setFollowing() {}, getInteractingMobile: () => target, setMobileInteraction() {},
     calculateDistance: () => 3, getAttribute: () => null, setAttribute() {}, getMovementQueue: () => ({ reset() {} }),
-    setModelCustomisation: (models) => (shown.models = models), setBaseAnimations() {},
+    setNpcTransformationId: (id) => (shown.npc = id),
     performAnimation: (animation) => shown.animations.push(animation.getId()), performGraphic: (graphic) => shown.graphics.push(graphic.getId()),
   };
   const minion = { npc, ticksLeft: 3000, style: "melee", attackIn: 0 };
@@ -1690,7 +1692,7 @@ test("Minion: fights its owner's NPC every 3 ticks for 3 to its max, in the targ
   Math.random = () => 0;
   assert.equal(Minion().tick(player, minion), true);
   assert.equal(minion.style, "magic");
-  assert.deepEqual(shown.models, [{ slot: 5, modelId: 60353 }, { slot: 6, modelId: 60352 }]);
+  assert.equal(shown.npc, core.CacheDefinitions.getNpcId("debug_thrall_imp_magic"), "the magic imp (models 60352-60353, live's magic look)");
   assert.deepEqual(shown.graphics, [core.CacheDefinitions.getSpotanimId("leagues_6_thrall_imp_magic_transition_vfx_spotanim")]);
   assert.deepEqual(shown.animations, [core.CacheDefinitions.getSeqId("leagues_6_thrall_imp_magic_attack_02")]);
   assert.equal(shots.length, 1, "the magic projectile");
@@ -1703,6 +1705,7 @@ test("Minion: fights its owner's NPC every 3 ticks for 3 to its max, in the targ
   for (let tick = 0; tick < 4; tick++) core.TaskManager.process();
   assert.ok(hits.length >= 1);
   assert.ok(hits.every((hit) => hit.getDamage() === 3), "a sure hit's lowest roll is the min hit");
+  assert.equal(resets, hits.length, "each hit holds off the target's regeneration, its owner fighting or not");
   permission = core.CanAttackResponse.ALREADY_UNDER_ATTACK;
   for (let tick = 0; tick < 6; tick++) Minion().tick(player, minion);
   assert.equal(shown.animations.length, 2, "never a target its owner may not attack");
@@ -1715,10 +1718,108 @@ test("Minion: fights its owner's NPC every 3 ticks for 3 to its max, in the targ
   assert.equal(Minion().minions.has(player), false);
 });
 
+test("Minion: the style imps are live's looks: each debug_thrall_imp_* carries its style's models, idle and walk", () => {
+  const ids = Object.fromEntries(["melee", "ranged", "magic"].map((style) => [style, core.CacheDefinitions.getNpcId(`debug_thrall_imp_${style}`)]));
+  assert.deepEqual(ids, { melee: 15644, ranged: 15643, magic: 15642 });
+  for (const [style, models] of [["melee", [60354, 60355]], ["ranged", [60356, 60357]], ["magic", [60352, 60353]]]) {
+    const definition = core.CacheDefinitions.getNpc(ids[style]);
+    assert.deepEqual([...definition.modelIds].sort(), models, `${style}: the recordings' body models`);
+    assert.equal(definition.idleSeqId, core.CacheDefinitions.getSeqId(`leagues_6_thrall_imp_${style}_idle`));
+    assert.equal(definition.walkSeqId, core.CacheDefinitions.getSeqId(`leagues_6_thrall_imp_${style}_walk`));
+  }
+});
+
+test("Minion: with no target of its owner's it fights the NPC attacking its owner", (t) => {
+  const player = cases(MINION).relic;
+  const attacker = { isNpc: () => true, isRegistered: () => true, isUntargetable: () => false, getHitpoints: () => 10, getDefinition: () => ({ getName: () => "Goblin" }) };
+  t.mock.method(player, "getCombat", () => ({ getTarget: () => null, getAttacker: () => attacker }));
+  t.mock.method(core.CombatFactory, "canAttackPermission", () => core.CanAttackResponse.CAN_ATTACK);
+  const spawned = [];
+  t.after(() => { delete Common.api.spawnNpc; });
+  const npcs = [];
+  Common.api.spawnNpc = (options) => {
+    spawned.push(options.id);
+    const npc = {
+      isRegistered: () => true, setPet() {}, setUntargetable() {}, setFollowing() {}, getFollowing: () => null, performAnimation() {}, performGraphic() {},
+      setNpcTransformationId: (id) => (npc.transformed = id), getInteractingMobile: () => null, setMobileInteraction: (mob) => (npc.fighting = mob),
+      calculateDistance: () => 9, getAttribute: () => null, setAttribute() {}, getMovementQueue: () => ({ reset() {}, setPursuitCheckpoint() {} }),
+    };
+    npcs.push(npc);
+    return npc;
+  };
+  Minion().summon(player);
+  assert.deepEqual(spawned, [core.CacheDefinitions.getNpcId("debug_thrall_imp_melee")], "spawned as the melee imp");
+  const minion = Minion().minions.get(player);
+  t.mock.method(core.CombatRange, "overlapsEntities", () => false);
+  t.mock.method(core.CombatRange, "rangedDestination", () => new Location(3200, 3200, 0));
+  for (const roll of ["defenseMeleeRoll", "defenseRangedRoll", "defenseMagicRoll"]) t.mock.method(core.AccuracyFormulasDpsCalc, roll, () => 1000);
+  t.mock.method(core.PathFinder, "calculateGroundItemRoute", () => {});
+  Minion().tick(player, minion);
+  assert.equal(npcs[0].fighting, attacker, "after the owner's attacker");
+  Minion().minions.delete(player);
+});
+
+test("Minion: the whistle's Rules set the cache's varbits (saved, sent at login) and Follow off keeps it in place; Check tells the time left", (t) => {
+  const player = cases(MINION).relic;
+  const whistle = itemActions.get("Minion whistle");
+  const rules = (subOp) => whistle.Rules({ player, interfaceId: (149 << 16), itemId: I.MINION_WHISTLE, slot: 0, clickType: 3, subOpId: subOp + 1, handled: false });
+  const varbit = (name) => player.sent.varbits.get(core.CacheDefinitions.getVarbitId(name));
+  rules(0);
+  assert.equal(varbit("league_guardian_aoe_disabled"), 1, "Area of effect off");
+  assert.equal(player.getAttribute(Minion().AOE_DISABLED_ATTRIBUTE), 1);
+  rules(0);
+  assert.equal(varbit("league_guardian_aoe_disabled"), 0, "and back on");
+  rules(1);
+  assert.equal(varbit("league_guardian_follow_disabled"), 1, "Follow off");
+  assert.equal(Minion().ruleOn(player, "follow"), false);
+
+  const before = prompts.length;
+  rules(2);
+  const menu = prompts.at(-1);
+  assert.equal(prompts.length, before + 1, "Looting's menu");
+  menu.entries[0][1]();
+  assert.equal(varbit("league_guardian_pickup_items_disabled"), 1);
+  menu.entries[1][1]();
+  assert.equal(varbit("league_guardian_pickup_noted_disabled"), 1);
+  let entered = null;
+  t.mock.method(player, "setEnteredAmountAction", (action) => (entered = action));
+  menu.entries[2][1]();
+  entered.execute(5000);
+  assert.equal(player.sent.configs.get(core.CacheDefinitions.getVarpId("league_guardian_pickup_value")), 5000);
+  assert.equal(player.getAttribute(Minion().PICKUP_VALUE_ATTRIBUTE), 5000);
+
+  player.sent.varbits.clear();
+  emit("league:login", { player });
+  assert.equal(varbit("league_guardian_follow_disabled"), 1, "sent again at login");
+  assert.equal(varbit("league_guardian_pickup_items_disabled"), 1);
+
+  // Follow off: between fights the minion waits where it is.
+  let following = player;
+  const npc = { isRegistered: () => true, getLocation: () => player.getLocation(), calculateDistance: () => 4, getFollowing: () => following,
+    setFollowing: (mob) => (following = mob), getMovementQueue: () => ({ reset() {} }), setAttribute() {} };
+  t.mock.method(player, "getCombat", () => ({ getTarget: () => null, getAttacker: () => null }));
+  const minion = { npc, ticksLeft: 1550, style: "melee", attackIn: 0 };
+  Minion().minions.set(player, minion);
+  Minion().tick(player, minion);
+  assert.equal(following, null, "stays put");
+  rules(1);
+  Minion().tick(player, minion);
+  assert.equal(following, player, "Follow on: after its owner again");
+
+  whistle.Check({ player, handled: false });
+  assert.equal(player.sent.messages.at(-1), "Your minion has 15 minutes left.");
+  Minion().minions.delete(player);
+  whistle.Check({ player, handled: false });
+  assert.equal(player.sent.messages.at(-1), "You do not have a minion summoned.");
+  for (const attribute of [Minion().AOE_DISABLED_ATTRIBUTE, Minion().FOLLOW_DISABLED_ATTRIBUTE, Minion().ITEMS_DISABLED_ATTRIBUTE, Minion().NOTED_DISABLED_ATTRIBUTE, Minion().PICKUP_VALUE_ATTRIBUTE]) {
+    player.setAttribute(attribute, 0);
+  }
+});
+
 test("Minion: the whistle does nothing for a character without the relic, another league's or a main character", () => {
   const whistle = itemActions.get("Minion whistle");
   for (const player of others(cases(MINION))) {
-    for (const option of ["Blow", "Banish"]) {
+    for (const option of ["Blow", "Banish", "Rules", "Check"]) {
       const event = { player, handled: false };
       assert.equal(whistle[option](event), false);
       assert.equal(event.handled, false);

@@ -1,6 +1,5 @@
 {
-  "$comment": "Minion (Demonic Pacts tier 8; leaguerelics/Minion.LeagueRelics.js). Numbers: Wiki Minion_(Demonic_Pacts_League) (30 minutes; min hit 3, max 10, +2 a unique Zamorak item up to 5; 1.8 s, 3 ticks; accuracy 45,000; never Yama or the Gemstone Crab). The minion is the cache's league_guardian NPC; its looks are server-only columns (league_guardian_body_data / anim_data are not CLIENTSIDE), so each style's are as the Leagues VI recordings show other players' minions (rev 237: 01149, 01160, 01163, 01173, 04086, 04092): the bas, the two body models (slots 5 and 6 of eight), the attack sequence, the projectile (map_projanim_v2 starttime 30, endtime 60, angle 25, heights /4 as the server sends them), and the spotanim on a change of style. It summons with the melee spawn (13837, spotanim 3735, three recordings) in melee's look.",
-  "npc": "league_guardian",
+  "$comment": "Minion (Demonic Pacts tier 8; leaguerelics/Minion.LeagueRelics.js). Numbers: Wiki Minion_(Demonic_Pacts_League) (30 minutes; min hit 3, max 10, +2 a unique Zamorak item up to 5; 1.8 s, 3 ticks; accuracy 45,000; never Yama or the Gemstone Crab). Live's minion is the cache's league_guardian NPC (a model of its own, named null) dressed per style in body models and a bas the recordings show other players' minions with (rev 237: 01149, 01160, 01163, 01173, 04086, 04092: models 60352-60357 in body_customisation slots 5 and 6, the leagues_6_thrall_imp_* idle and walk). The cache's debug_thrall_imp_melee / _ranged / _magic NPCs are exactly those looks (the same two models each, the style's idle and walk), so the minion is spawned as the melee one and transformed on a change of style, which every client draws. Each style's attack sequence, the projectile (map_projanim_v2 starttime 30, endtime 60, angle 25, heights /4 as the server sends them), and the spotanim on a change of style. It summons with the melee spawn (13837, spotanim 3735, three recordings) as the melee imp.",
   "whistle": "Minion whistle",
   "durationTicks": 3000,
   "attackTicks": 3,
@@ -14,27 +13,39 @@
   "spawn": { "animation": "leagues_6_thrall_imp_melee_spawn", "graphic": "leagues_6_thrall_imp_melee_spawn_vfx_spotanim" },
   "styles": {
     "melee": {
-      "idle": "leagues_6_thrall_imp_melee_idle", "walk": "leagues_6_thrall_imp_melee_walk",
-      "models": [60355, 60354], "attack": "leagues_6_thrall_imp_melee_attack",
+      "npc": "debug_thrall_imp_melee", "attack": "leagues_6_thrall_imp_melee_attack",
       "change": "leagues_6_thrall_imp_melee_transition_vfx_spotanim", "hitDelayTicks": 1
     },
     "ranged": {
-      "idle": "leagues_6_thrall_imp_ranged_idle", "walk": "leagues_6_thrall_imp_ranged_walk",
-      "models": [60357, 60356], "attack": "leagues_6_thrall_imp_ranged_attack",
+      "npc": "debug_thrall_imp_ranged", "attack": "leagues_6_thrall_imp_ranged_attack",
       "change": "leagues_6_thrall_imp_ranged_transition_vfx_spotanim",
       "projectile": { "id": "leagues_6_thrall_imp_ranged_attack_vfx_projanim", "delay": 30, "end": 60, "angle": 25, "startHeight": 7.5, "endHeight": 7.5 },
       "hitDelayTicks": 2
     },
     "magic": {
-      "idle": "leagues_6_thrall_imp_magic_idle", "walk": "leagues_6_thrall_imp_magic_walk",
-      "models": [60353, 60352], "attack": "leagues_6_thrall_imp_magic_attack_02",
+      "npc": "debug_thrall_imp_magic", "attack": "leagues_6_thrall_imp_magic_attack_02",
       "change": "leagues_6_thrall_imp_magic_transition_vfx_spotanim",
       "projectile": { "id": "leagues_6_thrall_imp_magic_attack_vfx_projanim", "delay": 30, "end": 60, "angle": 25, "startHeight": 25, "endHeight": 25 },
       "hitDelayTicks": 2
     }
   },
-  "_modelSlots": "The recordings' body_customisation lists eight models, all -1 but the sixth and seventh (slots 5 and 6).",
-  "modelSlots": [5, 6],
+  "_rules": "The whistle's Rules submenu (the item's subops: Area of effect, Follow, Looting) sets the cache's league_guardian_* varbits on varp 4033, each a 'disabled' flag (0 on), and varp league_guardian_pickup_value, the loot threshold in coins; all are saved and sent again at login. No recording of the whistle's Rules or Check (no capture sets these vars), so every line and the Looting menu's layout are ours. Follow off: the minion stays where it is between fights, unless its owner is more than `followLeash` tiles off or on another plane (ours, so it is never lost). The AoE and the looting are not implemented yet (Minion.LeagueRelics.js), so those settings are stored for them.",
+  "rules": {
+    "title": "Rules",
+    "aoe": { "subop": "Area of effect", "varbit": "league_guardian_aoe_disabled", "on": "Your minion will now use area of effect attacks.", "off": "Your minion will no longer use area of effect attacks." },
+    "follow": { "subop": "Follow", "varbit": "league_guardian_follow_disabled", "on": "Your minion will now follow you.", "off": "Your minion will no longer follow you." },
+    "items": { "varbit": "league_guardian_pickup_items_disabled", "on": "Your minion will now pick up items.", "off": "Your minion will no longer pick up items." },
+    "noted": { "varbit": "league_guardian_pickup_noted_disabled", "on": "Your minion will now pick up items as noted.", "off": "Your minion will no longer pick up items as noted." },
+    "looting": {
+      "subop": "Looting", "valueVarp": "league_guardian_pickup_value", "title": "Looting",
+      "items": "Pick up items: {state}", "noted": "Pick up noted: {state}", "value": "Minimum value: {value} coins",
+      "valuePrompt": "Enter the minimum value of items to pick up:", "valueSet": "Your minion will now only pick up items worth at least {value} coins.",
+      "enabled": "<col=229628>On</col>", "disabled": "<col=ff3045>Off</col>"
+    }
+  },
+  "followLeash": 15,
+  "_check": "Check: the time the minion has left, or that none is summoned. Ours (unrecorded).",
+  "check": { "left": "Your minion has {minutes} minutes left.", "lastMinute": "Your minion has less than a minute left.", "none": "You do not have a minion summoned." },
   "_hitDelayTicks": "Ours: the projectile lands 60 client cycles (2 ticks) after the attack; a melee hit a tick on.",
   "_zamorak": "The Wiki's 'possible accepted items' (Minion_(Demonic_Pacts_League)#Zamorak items by region), each the id its Wiki page gives for the item itself (not its broken, locked, uncharged or (u) forms: the Wiki does not know whether variants count). One used on the whistle, unnoted, not given before and with room under the five, is taken.",
   "zamorakItems": {

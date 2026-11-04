@@ -110,3 +110,96 @@ test('splashes never bind, and unrelated curses and existing large-NPC immunity 
  const large=fixture(t,'ENTANGLE');t.mock.method(large.target,'getSize',()=>3);assert.equal(large.commit(),true);large.impact(large.hit());assert.equal(large.target.getTimers().has(core.TimerKey.FREEZE),false);
  large.target.setFlag('combat:freezable',true);large.impact(large.hit());assert.equal(large.target.getTimers().getTicks(core.TimerKey.FREEZE),24);
 });
+test('blighted entangle sacks fund ordinary Bind, Snare and Entangle casts',async t=>{
+ const SACK=24613,PLACEHOLDER=24614,RUNES=[555,557,561];
+ const rows=[{name:'BIND',level:20,ticks:8},{name:'SNARE',level:50,ticks:16},{name:'ENTANGLE',level:79,ticks:24}];
+ // Real plugin registration/dispatch, as in vengeance.test.cjs; no extracted first-hook shortcut.
+ // Registration has this test process's lifetime, like the existing before() registrations.
+ require('../plugins/items/BlightedSpellSacks.plugin').register(PluginManager.createApi('BindingSackTest'));
+ assert.equal(core.ItemIdentifiers.BLIGHTED_ENTANGLE_SACK,SACK);
+ assert.equal(core.ItemIdentifiers.BLIGHTED_ENTANGLE_SACK_2,PLACEHOLDER);
+ const definition=new core.Item(SACK).getDefinition();
+ assert.equal(definition.getName(),'Blighted entangle sack');
+ assert.equal(definition.getPlaceholderId(),PLACEHOLDER);
+ assert.equal(new core.Item(PLACEHOLDER).getDefinition().getPlaceholderId(),-1);
+
+ function caster(st,row,{sacks=2,level=row.level,wild=true,book=core.MagicSpellbook.NORMAL}={}){
+  const f=fixture(st,row.name);
+  st.after(()=>{
+   f.p.getInventory().resetItems();f.p.getEquipment().resetItems();
+   f.target.getTimers().cancel(core.TimerKey.FREEZE);f.target.getTimers().cancel(core.TimerKey.FREEZE_IMMUNITY);
+  });
+  // The existing fixture seeds ordinary runes. Clear all of them before defining sack-only inputs.
+  f.p.getInventory().resetItems();f.p.getEquipment().resetItems();
+  f.p.setLocation(new core.Location(wild?3100:3200,wild?3600:3200));
+  f.target.setLocation(new core.Location(wild?3101:3201,wild?3600:3200));
+  f.p.setSpellbook(book);
+  f.p.getSkillManager().setMaxLevel(core.Skill.MAGIC,level);
+  f.p.getSkillManager().setCurrentLevel(core.Skill.MAGIC,level,false);
+  st.mock.method(core.WorldDefinition,'hasGlobalWorldTag',()=>false); // ordinary non-PvP world
+  if(sacks)f.p.getInventory().add(new core.Item(SACK,sacks));
+  assert.equal(f.p.isPlayerBot(),false);
+  assert.deepEqual(f.p.getEquipment().getValidItems(),[]);
+  assert.equal(core.Wilderness.levelAt(f.p.getLocation().getX(),f.p.getLocation().getY())>0,wild);
+  assert.equal(f.p.getCombat().getTarget(),f.target);
+  assert.equal(f.target.getHitpoints()>0,true);
+  assert.equal(f.spell.canCastOnTarget(f.p,f.target),true);
+  assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.MAGIC),level);
+  return f;
+ }
+ const amounts=f=>[SACK,...RUNES].map(id=>[id,f.p.getInventory().getAmount(id)]);
+ const emptyEffect=f=>{
+  assert.equal(f.target.getTimers().has(core.TimerKey.FREEZE),false);
+  assert.equal(f.target.getTimers().has(core.TimerKey.FREEZE_IMMUNITY),false);
+ };
+ function refuses(f){
+  const before=amounts(f);emptyEffect(f);
+  assert.equal(f.spell.canCast(f.p,false),false);assert.equal(f.commit(),false);
+  assert.deepEqual(amounts(f),before);emptyEffect(f);
+ }
+ for(const row of rows)await t.test(`${row.name}: one sack pays at level ${row.level}, hold ${row.ticks}+5`,st=>{
+  const f=caster(st,row);emptyEffect(f);
+  assert.deepEqual(f.p.getInventory().getValidItems().map(i=>[i.getId(),i.getAmount()]),[[SACK,2]]);
+  for(let query=0;query<2;query++){
+   assert.equal(f.spell.canCast(f.p,false),true,'eligible read-only query');
+   assert.deepEqual(amounts(f),[[SACK,2],[555,0],[557,0],[561,0]]);emptyEffect(f);
+  }
+  assert.equal(f.commit(),true,'one ordinary committed cast');
+  assert.deepEqual(amounts(f),[[SACK,1],[555,0],[557,0],[561,0]]);emptyEffect(f);
+  assert.equal(f.commit(),false,'same-tick shared cooldown rejects duplicate payment');
+  assert.deepEqual(amounts(f),[[SACK,1],[555,0],[557,0],[561,0]]);
+  const hit=f.hit();assert.equal(hit.isAccurate(),true);f.impact(hit);
+  const timers=f.target.getTimers();
+  assert.equal(timers.getTicks(core.TimerKey.FREEZE),row.ticks);
+  assert.equal(timers.getTicks(core.TimerKey.FREEZE_IMMUNITY),row.ticks+5);
+  for(let tick=0;tick<row.ticks;tick++)timers.process();
+  assert.equal(timers.has(core.TimerKey.FREEZE),false);assert.equal(timers.getTicks(core.TimerKey.FREEZE_IMMUNITY),5);
+  for(let tick=0;tick<5;tick++)timers.process();emptyEffect(f);
+  assert.deepEqual(amounts(f),[[SACK,1],[555,0],[557,0],[561,0]],'effect/timer processing never repays');
+ });
+ for(const row of rows)await t.test(`${row.name}: below required level preserves sacks`,st=>refuses(caster(st,row,{level:row.level-1})));
+ const entangle=rows[2];
+ await t.test('ordinary non-Wilderness land does not fund Entangle with a sack',st=>refuses(caster(st,entangle,{wild:false})));
+ await t.test('no sack and no runes refuses Entangle',st=>refuses(caster(st,entangle,{sacks:0})));
+ await t.test('wrong spellbook preserves both sacks',st=>refuses(caster(st,entangle,{book:core.MagicSpellbook.ANCIENT})));
+ for(const[key,label]of [[core.TimerKey.FREEZE,'FREEZE'],[core.TimerKey.FREEZE_IMMUNITY,'FREEZE_IMMUNITY']])await t.test(`target timer ${label} refuses without paying`,st=>{
+  const f=caster(st,entangle);f.target.getTimers().registers(key,7);const before=amounts(f);
+  assert.equal(f.spell.canCast(f.p,false),false);assert.equal(f.commit(),false);
+  assert.deepEqual(amounts(f),before);assert.equal(f.target.getTimers().getTicks(key),7);
+ });
+ await t.test('ordinary runes still pay one Entangle without any sack',st=>{
+  const f=caster(st,entangle,{sacks:0});
+  for(const[id,n]of [[555,5],[557,5],[561,4]])f.p.getInventory().add(new core.Item(id,n));
+  assert.equal(f.spell.canCast(f.p,false),true);assert.deepEqual(amounts(f),[[SACK,0],[555,5],[557,5],[561,4]]);
+  assert.equal(f.commit(),true);assert.deepEqual(amounts(f),[[SACK,0],[555,0],[557,0],[561,0]]);
+  const hit=f.hit();assert.equal(hit.isAccurate(),true);f.impact(hit);
+  assert.equal(f.target.getTimers().getTicks(core.TimerKey.FREEZE),24);
+ });
+ await t.test('a committed splash spends one sack but never binds',st=>{
+  const f=caster(st,entangle);f.p.setAttribute(PROBE,false);
+  st.mock.method(AccuracyFormulasDpsCalc,'rollAccuracy',()=>false);
+  assert.equal(f.commit(),true);assert.deepEqual(amounts(f),[[SACK,1],[555,0],[557,0],[561,0]]);
+  const hit=f.hit();assert.equal(hit.isAccurate(),false);f.impact(hit);emptyEffect(f);
+  assert.deepEqual(amounts(f),[[SACK,1],[555,0],[557,0],[561,0]]);
+ });
+});

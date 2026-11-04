@@ -422,6 +422,7 @@ test('Telekinetic Grab slides the guardian and a solved maze awards its points o
   const session = Telekinetic.startSession(player, 8);
   const npc = session.npc;
   player.moveTo(loc(3340, 9684, 2));
+  const start = npc.getLocation();
   const pending = [];
   const originalLater = Common.later;
   Common.later = (ticks, action) => pending.push({ ticks, action });
@@ -431,9 +432,19 @@ test('Telekinetic Grab slides the guardian and a solved maze awards its points o
     assert.equal(event.handled, true);
     assert.equal(event.runes(), 1);
     assert.equal(player.anims, 1);
+    assert.equal(npc.getId(), Common.ids.npcs.mazeGuardian, 'the guardian waits for the projectile');
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY(), npc.getLocation().getZ()], [start.getX(), start.getY(), start.getZ()]);
+    assert.equal(pending[0].ticks, Telekinetic.GRAB_IMPACT_TICKS);
+    pending.shift().action();
     assert.equal(npc.getId(), Common.ids.npcs.mazeGuardianMoving);
     assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY(), npc.getLocation().getZ()], [3348, 9683, 2]);
-    assert.equal(pending[0].ticks, 5);
+    const moveCycles = npc.moves.at(-1).options.endCycles;
+    const distance = Math.max(
+      Math.abs(npc.getLocation().getX() - start.getX()),
+      Math.abs(npc.getLocation().getY() - start.getY())
+    );
+    assert.equal(moveCycles, distance * Telekinetic.MAZE_MOVE_CYCLES_PER_TILE);
+    assert.equal(pending[0].ticks, Math.ceil(moveCycles / 30));
     pending.shift().action();
     assert.equal(npc.getId(), Common.ids.npcs.mazeGuardian);
 
@@ -505,10 +516,20 @@ test('Reset returns the statue and keeps the streak; New-maze moves to the next 
 
   next.solved = true;
   const before = spawned.length;
+  next.npc.setNpcTransformationId(Common.ids.npcs.mazeGuardianComplete);
   const original = Math.random;
   Math.random = () => 0;
   try {
-    Telekinetic.newMaze({ player, npc: next.npc });
+    const event = {
+      player,
+      npc: next.npc,
+      npcId: Common.ids.npcs.mazeGuardianComplete,
+      clickType: 1,
+      definition: { getActions: () => [] },
+      handled: false,
+    };
+    Telekinetic.mazeGuardianAction(event);
+    assert.equal(event.handled, true, 'the completed guardian default action advances the maze');
   } finally {
     Math.random = original;
   }

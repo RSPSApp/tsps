@@ -3,7 +3,7 @@ export type Box = { minX: number; maxX: number; minY: number; maxY: number; z: n
 /** A border segment on the grid: the line between two tiles, from (x1, y1) to (x2, y2), one axis constant. */
 export type Segment = { x1: number; y1: number; x2: number; y2: number };
 
-/** The "multi-combat" zones of the server's world definition (/api/world, so world.local.json applies); a zone's `z` defaults to the surface. */
+/** The "multi-combat" zones of the server's world definition (served as gameplay bounds, so world.local.json applies); a zone's `z` defaults to the surface. */
 export function multiBoxes(zones: readonly any[]): Box[] {
     return zones
         .filter((zone) => zone.minX !== undefined && zone.tags?.includes("multi-combat"))

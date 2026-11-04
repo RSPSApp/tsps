@@ -8,8 +8,9 @@ import type { OsrsClient } from "../../OsrsClient";
 import type { WidgetOverlay, WidgetOverlayDrawContext } from "../ClientPluginManager";
 import { argbToRgba } from "../npcindicators/NpcIndicatorsConfig";
 import { MultiLinesConfig } from "./MultiLinesConfig";
+import { state } from "../../../network/serverConnection/state";
 import { fetchContent } from "../../../network/serverConnection/contentApi";
-import { multiBorders, multiBoxes, wildernessLines, type Box, type Segment } from "./multiLines";
+import { multiBorders, wildernessLines, type Box, type Segment } from "./multiLines";
 
 type Rgba = [number, number, number, number];
 type Line = { points: [number, number][]; color: Rgba };
@@ -41,15 +42,29 @@ export class MultiLinesPlugin extends Plugin {
         this.overlays = [new MultiLinesOverlay(this, false), new MultiLinesOverlay(this, true)];
     }
 
+    private connection: unknown;
     private loading = false;
+    private retryAt = 0;
 
-    /** Fetched once logged in: the connection (and so the API address) does not exist at start-up. */
+    /** Keep bounds tied to the live world and discard responses from an old connection. */
     private load(): void {
-        if (this.loading) return;
+        const connection = state.socket;
+        if (connection !== this.connection) {
+            this.connection = connection;
+            this.boxes = [];
+            this.loading = false;
+            this.retryAt = 0;
+        }
+        if (this.loading || performance.now() < this.retryAt) return;
         this.loading = true;
-        fetchContent("/api/world").then(
-            (world) => { this.boxes = multiBoxes(world.zones ?? []); },
-            (error) => { console.warn("[multi-lines] could not load the world definition", error); setTimeout(() => (this.loading = false), 10_000); },
+        fetchContent("/api/multi-combat").then(
+            (boxes) => { if (state.socket === connection) this.boxes = boxes; },
+            (error) => {
+                if (state.socket !== connection) return;
+                console.warn("[multi-lines] could not load multicombat bounds", error);
+                this.loading = false;
+                this.retryAt = performance.now() + 10_000;
+            },
         );
     }
 
@@ -86,14 +101,16 @@ export class MultiLinesPlugin extends Plugin {
 }
 
 export class MultiLinesOverlay implements WidgetOverlay {
-    readonly drawBelowWidgets = true;
+    readonly drawBelowWidgets: boolean;
     private lines?: Line[];
 
-    constructor(private readonly plugin: MultiLinesPlugin, private readonly minimap: boolean) {}
+    constructor(private readonly plugin: MultiLinesPlugin, private readonly minimap: boolean) {
+        this.drawBelowWidgets = !minimap;
+    }
 
     signature(): string {
         this.lines = this.build();
-        return JSON.stringify(this.lines.map((l) => [l.points.map(([x, y]) => [Math.round(x), Math.round(y)]), l.color]));
+        return JSON.stringify([this.minimap ? 1 : this.plugin.config.borderWidth(), this.lines.map((l) => [l.points.map(([x, y]) => [Math.round(x), Math.round(y)]), l.color])]);
     }
 
     draw(context: WidgetOverlayDrawContext): Rect[] {

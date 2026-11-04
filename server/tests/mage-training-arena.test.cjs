@@ -68,8 +68,9 @@ function fakePlayer(x = 3363, y = 9644, z = 0) {
   const strings = new Map();
   const hidden = new Map();
   const camera = [];
+  const scripts = [];
   const player = {
-    messages: [], attributes: {}, xp, strings, hidden, camera, magic: 99, anims: 0, runEnergy: 100,
+    messages: [], attributes: {}, xp, strings, hidden, camera, scripts, magic: 99, anims: 0, runEnergy: 100,
     getLocation: () => tile,
     moveTo: (to) => { tile = to; },
     isRegistered: () => true,
@@ -81,6 +82,7 @@ function fakePlayer(x = 3363, y = 9644, z = 0) {
     setRunEnergy: (value) => { player.runEnergy = value; },
     getPacketSender: () => ({
       sendSubInterface() {}, closeSubInterface() {}, sendSound() {}, sendSoundEffect() {}, sendRunEnergy() {},
+      sendClientScript: (...args) => scripts.push(args),
       sendString: (text, id) => strings.set(id, text),
       sendInterfaceDisplayState: (id, hide) => hidden.set(id, hide),
       sendCameraLookAt: (x, y, height, motion) => camera.push({ mode: 'look', x, y, height, motion }),
@@ -236,6 +238,22 @@ test('each pile gives its shape, 1 in 32 a dragonstone; nothing with a full pack
   Enchanting.takeFromPile({ player, objectId: locs.cubePile }, () => 0.5);
   assert.equal(player.items.get(items.cube) ?? 0, 0);
   assert.equal(player.messages.at(-1), Common.message('inventoryFull'));
+});
+
+test('MTA level 1 and 2 enchants return to the spellbook only after a successful cast', () => {
+  for (const level of [1, 2]) {
+    for (const accepted of [false, true]) {
+      const player = fakePlayer();
+      const itemId = Common.ids.items.cube;
+      player.items.set(itemId, 1);
+      player.slots = [{ getId: () => itemId }];
+      const spell = { canCast: () => accepted, baseExperience: () => 17.5,
+        data: { animation: 719, graphic: 114, sound: 136 } };
+      Enchanting.enchantShape({ player, spell, spellName: `Lvl-${level} Enchant`, itemId, slot: 0 });
+      assert.deepEqual(player.scripts, accepted ? [[915, 6]] : []);
+      assert.equal(player.items.get(itemId), accepted ? 0 : 1);
+    }
+  }
 });
 
 test('enchant points: the spell level, doubled every 10th shape, +2 on the bonus shape, double for a dragonstone', () => {

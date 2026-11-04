@@ -268,3 +268,18 @@ test("the reported weapon families use their primary/cache-sourced holding stanc
   }
   assert.equal(checked, 11, "the cache's current seven staff, three fang and one kisten variants are covered");
 });
+
+
+test('recorded scimitar Lunge and Dharok Smash keep their own synth through cache regeneration', () => {
+  const { FightType } = require('../dist/game/content/combat/FightType');
+  assert.equal(FightType.SCIMITAR_LUNGE.getAttackSound().getId(),2501,'raw3151 local1714 seq386 at282/286');
+  assert.equal(FightType.SCIMITAR_SLASH.getAttackSound().getId(),2500);
+  assert.equal(FightType.GREATAXE_SMASH.getAttackSound().getId(),1316,'raw1885 local2 seq2066 at20915/20921');
+  assert.equal(FightType.GREATAXE_CHOP.getAttackSound().getId(),1321);
+  const { spawnSync } = require('node:child_process');
+  const original=fs.readFileSync(path.join(DEFINITIONS,'item-combat-styles.json'));
+  const check=spawnSync(process.execPath,['-r','ts-node/register','scripts/dump-item-combat-styles.ts','--check'],
+    {cwd:path.resolve(__dirname,'..'),encoding:'utf8',env:{...process.env,TS_NODE_COMPILER_OPTIONS:JSON.stringify({target:'es2020'})}});
+  assert.equal(check.status,0,check.stdout+check.stderr);
+  assert.deepEqual(fs.readFileSync(path.join(DEFINITIONS,'item-combat-styles.json')),original,'check mode preserves canonical metadata without rewriting the file');
+});

@@ -45,7 +45,9 @@ jobs:
                   (cd tsps/client && yarn install --immutable)
                   (cd rsps-website/host && corepack yarn@1.22.22 install --frozen-lockfile)
             - name: Test cache publishing
-              run: node --test tsps/server/tests/ensure-cache.test.cjs
+              run: |
+                  node --test tsps/server/tests/ensure-cache.test.cjs
+                  node --test tsps/.github/scripts/ftp-upload.test.mjs
             - name: Build host
               working-directory: rsps-website/host
               run: |
@@ -95,9 +97,8 @@ jobs:
                   FTP_USER: ${{ secrets.FTP_USER }}
                   FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
                   FTP_TLS_SERVERNAME: ${{ secrets.FTP_TLS_SERVERNAME }}
-                  FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
               run: |
-                  node .github/scripts/ftp-upload.mjs dist/host "$FTP_REMOTE_DIR"
+                  node .github/scripts/ftp-upload.mjs dist/host /host
                   node .github/scripts/ftp-upload.mjs dist/client /play
             # /usr/local/bin/tsps-deploy is installed from .github/scripts/deploy-world1.sh.
             # It also publishes the full client cache locally on the VPS.
@@ -128,3 +129,11 @@ jobs:
                   }
                   console.log(`Public client cache verified: ${target}`);
                   JS
+            - name: Publish hosted-world update
+              env:
+                  FTP_HOST: ${{ secrets.FTP_HOST }}
+                  FTP_PORT: ${{ secrets.FTP_PORT }}
+                  FTP_USER: ${{ secrets.FTP_USER }}
+                  FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+                  FTP_TLS_SERVERNAME: ${{ secrets.FTP_TLS_SERVERNAME }}
+              run: node .github/scripts/ftp-upload.mjs dist/host /host --release-marker

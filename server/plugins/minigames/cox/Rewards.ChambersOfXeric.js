@@ -191,6 +191,16 @@ function teamSize(size) {
 }
 
 /**
+ * The cache's collection log has one Chambers of Xeric category (struct 507) holding both
+ * modes' items, so its count is the player's completions in every mode.
+ */
+function collectionLogCount(request) {
+  if (request?.category !== RAID_NAME) return;
+  request.count = (Number(request.player.getAttribute(Shared.ATTR.KILLS)) || 0)
+    + (Number(request.player.getAttribute(Shared.ATTR.CHALLENGE_KILLS)) || 0);
+}
+
+/**
  * Bests saved before team-size names were used ("cm:3") move to theirs ("cm:3 players"),
  * keeping the faster where two land on one name.
  */
@@ -290,11 +300,29 @@ function claimPetLoot(player, raid) {
   }
 }
 
+/**
+ * The chest's loot reaches the collection log when it is opened, as the Tombs' and Theatre's do.
+ * The Olmlet is left to the pet delivery (`npc-drops:roll`), which already logs it, so it is not
+ * counted twice. `loggedAmount` is marked, so reopening a part-claimed chest adds nothing.
+ */
+function logRewards(player, raid) {
+  const items = rewardsOf(raid).get(player.getUsername()) ?? [];
+  for (const entry of items) {
+    const seen = Math.min(entry.amount, Number(entry.loggedAmount) || 0);
+    const amount = entry.amount - seen;
+    if (amount > 0 && entry.id !== ITEM.OLMLET) {
+      Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId: entry.id, amount });
+    }
+    entry.loggedAmount = entry.amount;
+  }
+}
+
 function openChest(event) {
   const { player } = event;
   const raid = Raid.raidOf(player);
   if (!raid) return false;
   claimPetLoot(player, raid);
+  logRewards(player, raid);
   const items = rewardsOf(raid).get(player.getUsername()) ?? [];
   if (items.length === 0) {
     Shared.statement(player, "The chest is empty.");
@@ -451,6 +479,7 @@ module.exports = function registerCoxRewards(api) {
   api.persistAttribute(ATTR_BEST);
   Raid.onComplete(completed);
   Raid.onLeave(unclaimedLoot);
+  api.onCustomEvent("collection-log:category-count", collectionLogCount);
   api.onObjectInteraction("Ancient chest", { Search: openChest });
   api.onCustomEvent("interface:closed", chestClosed);
   api.onInterfaceActionButton((INTERFACE.REWARDS << 16) | INTERFACE.ITEMS, clickReward);
@@ -460,4 +489,4 @@ module.exports = function registerCoxRewards(api) {
   api.onNpcInteraction("Captain Rimor", { "Claim-cape": claimCape });
 };
 
-Object.assign(module.exports, { uniqueRolls, commonLoot, targetTicks, teamSize, generate, completed, openChest, chestClosed, clickReward, UNIQUES, COMMONS });
+Object.assign(module.exports, { uniqueRolls, commonLoot, targetTicks, teamSize, collectionLogCount, generate, completed, openChest, logRewards, chestClosed, clickReward, UNIQUES, COMMONS });

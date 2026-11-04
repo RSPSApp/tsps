@@ -16,6 +16,7 @@ const OP1 = 1 << 1;
 /** The most of one item a stack holds. */
 const MAX_STACK = 2147483647;
 const JUSTINE_HEAD = "br_reward_shopkeeper";
+const COLLECTION_LOG_CATEGORY = "Last Man Standing";
 
 function wins(player) {
   return Common.number(player, Common.ATTRIBUTES.wins);
@@ -77,6 +78,7 @@ function buy(player, entry, count) {
   if (stackable) inventory.add(new Common.core.Item(id, amount), false);
   else for (let i = 0; i < amount; i++) inventory.add(new Common.core.Item(id, 1), false);
   inventory.refreshItems();
+  Common.api.emitCustomEvent("collection-log:obtain", { player, itemId: id, amount, category: COLLECTION_LOG_CATEGORY });
   player.getPacketSender().sendSound(Common.data.sounds.bought, 100, 0);
 }
 

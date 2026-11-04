@@ -9,6 +9,7 @@ import { MagicSpellbook } from "../../../model/MagicSpellbook";
 import { Skill } from "../../../model/Skill";
 import { TeleportHandler } from "../../../model/teleportation/TeleportHandler";
 import { TeleportType } from "../../../model/teleportation/TeleportType";
+import { Sound } from "../../../Sound";
 import { Sounds } from "../../../Sounds";
 import { Task } from "../../../task/Task";
 import { TaskManager } from "../../../task/TaskManager";
@@ -509,6 +510,8 @@ export class LunarSpells {
         }
         return this.VENGEANCE_OTHER.cast(player, () => {
             target.setHasVengeance(true);
+            // Raw2796: immediate radius10 sound is at the caster, not the graphic on the recipient.
+            Sounds.playAreaSoundAt(player, Sound.VENGEANCE_OTHER, 10);
             EffectSpells.startVengeanceCooldown(player);
             target.performGraphic(new Graphic(725, GraphicHeight.HIGH));
             target.sendMessage("You have the power of vengeance!");

@@ -5,6 +5,8 @@ const Data = require("./Data.BeginnerTreasureTrails");
 const TRAIL_META = "treasure-trails:beginner";
 const COMPLETED_ATTRIBUTE = "treasure-trails:beginner-completed";
 const COUNT_VARBIT_NAME = "collection_clues_beginner_completed";
+// The cache's collection log category name.
+const CATEGORY_NAME = "Beginner Treasure Trails";
 let api;
 let core;
 let catalogue;
@@ -240,7 +242,7 @@ function restore({ player }) {
 }
 
 function categoryCount(request) {
-  if (/^Treasure Trails \(Beginner\)$/i.test(request.category)) request.count = Number(request.player.getAttribute(COMPLETED_ATTRIBUTE)) || 0;
+  if (request.category === CATEGORY_NAME) request.count = Number(request.player.getAttribute(COMPLETED_ATTRIBUTE)) || 0;
 }
 
 function canEmote(request) {
@@ -272,4 +274,4 @@ module.exports = function attachBeginnerTreasureTrails(pluginApi) {
   api.onInterfaceActionButton((203 << 16) | 1, close);
 };
 
-Object.assign(module.exports, { TRAIL_META, COMPLETED_ATTRIBUTE, data, trailLength: length, stateOf, trails, read, checkSteps, advance, talk, dig, emote, feel, temperature, emoteReady, restore, canEmote });
+Object.assign(module.exports, { TRAIL_META, COMPLETED_ATTRIBUTE, data, trailLength: length, stateOf, trails, read, checkSteps, advance, talk, dig, emote, feel, temperature, emoteReady, restore, categoryCount, canEmote });

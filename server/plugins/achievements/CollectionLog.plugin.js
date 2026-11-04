@@ -8,7 +8,7 @@
  * finished editing it. A roll that is not the kill itself - a boss's pet re-roll, or loot whose
  * kill its plugin counts through "collection-log:count" - passes `countKill: false` so it logs
  * items without tallying a second kill. Other sources and plugins use events:
- *   api.emitCustomEvent("collection-log:obtain", { player, itemId, amount?, ensure?, silent? })
+ *   api.emitCustomEvent("collection-log:obtain", { player, itemId, amount?, category?, ensure?, silent? })
  *   api.emitCustomEvent("collection-log:count", { player, category: "Zulrah", amount? })
  *   answer "collection-log:category-count" { player, category, struct, count } with a kept count
  *   ask "collection-log:slots" { player, category? } -> count: the category's slots filled (all, with none)
@@ -93,6 +93,7 @@ function onLoot(event) {
 }
 
 function onObtain(request) {
+  if (request?.category && !Data.categoriesOf(Number(request.itemId)).some((category) => category.name === request.category)) return;
   if (request?.player) request.added = Progress.obtain(request.player, Number(request.itemId), Number(request.amount ?? 1), request);
 }
 

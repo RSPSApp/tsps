@@ -93,6 +93,8 @@ While you were away for 1h 0m, you kept woodcutting:
 - **It leaves the player be** while they are busy (an interface open, a teleport), moving, in
   combat, on another floor, or more than `leashTiles` from the anchor. Walking off to do something
   else pauses it; coming back resumes it.
+- **A try that gathers nothing** (a rock out of reach from this side) leaves that one alone for
+  `skipSeconds` and tries the next nearest.
 - **It pauses** when the player clicks something else (another object or NPC, an attack) until
   their next gather, and after `maxFailedAttempts` tries in a row that gathered nothing (no axe,
   too low a level), which it says once. `::idle auto on` lifts a pause.
@@ -113,6 +115,7 @@ While you were away for 1h 0m, you kept woodcutting:
 | `searchTiles` | `16` |
 | `leashTiles` | `24` |
 | `maxFailedAttempts` | `3` |
+| `skipSeconds` | `120` |
 
 ## Idle combat
 
@@ -205,13 +208,70 @@ and the client fetches them the first time the group opens.
   `Common.changed(player)` when points, upgrades, the switches, the activity or a pause change,
   and the screen listens with `Common.onChange`. Text that hasn't changed isn't resent.
 
+## Travel
+
+![The travel screen](images/idle-travel.png)
+
+`server/plugins/modes/idle/Travel.IdleMode.js` and `TravelScreen.IdleMode.js`. An idle player
+picks an activity's site and teleports there with the normal teleport (`"travel"` `teleportType`),
+under the server's own rules (`TeleportHandler.checkReqs`: busy, deep Wilderness, teleblock). The
+site's tile becomes the activity's anchor: the gathering target for auto-resume (`Auto.adopt`) or
+the monster for idle combat (`Combat.adopt`), unpaused, so the character walks to the nearest
+one there and starts at once. Travelling turns auto-resume on.
+
+```
+::idle travel         open the travel screen (or Travel on the Idle screen)
+::idle go <site>      travel straight to a site
+::idle sites          list the sites' ids
+```
+
+- **The screen** (group 30021) is a server-defined interface on the shared list runtime, like
+  `::teleports`: tabs per activity (it opens on the current one), a search, a row per site with
+  its resource's item and the level it needs (and the player's own when it falls short), and a
+  details panel filled client-side: where it is, the level (green when the player has it), what
+  to bring, and a Travel button. Right-click Travel on a row goes straight there.
+- **Gathering sites need the skill's level**; combat sites only advise a combat level. Members
+  sites are left out of free-to-play worlds. Idle Mode must be on.
+- **The sites** (`"travel"` `"sites"`): `{ id, name, place, skill, kind, target, option, tile, level,
+  icon, tool, members? }`. `target` is the cache's name (an `npc-spawns.json` name can differ:
+  "Al Kharid warrior"). `server/tests/idle-travel-sites.test.cjs` checks every one against the
+  cache map: its tile is free to stand on and at least two targets with its option are within the
+  reach auto-resume or idle combat searches from it.
+
+![Arrived at Draynor's willows](images/idle-travel-arrived.png)
+
+| Site | Activity | Where | Skill | Level |
+| --- | --- | --- | --- | --- |
+| `lumbridge-trees` | Trees | West of Lumbridge | Woodcutting | 1 |
+| `draynor-oaks` | Oak trees | Draynor Village | Woodcutting | 15 |
+| `draynor-willows` | Willow trees | Draynor Village | Woodcutting | 30 |
+| `seers-maples` | Maple trees | Seers' Village (members) | Woodcutting | 45 |
+| `edgeville-yews` | Yew trees | Edgeville | Woodcutting | 60 |
+| `lumbridge-copper` | Copper rocks | Lumbridge Swamp mine | Mining | 1 |
+| `lumbridge-tin` | Tin rocks | Lumbridge Swamp mine | Mining | 1 |
+| `varrock-iron` | Iron rocks | South-east Varrock mine | Mining | 15 |
+| `barbarian-coal` | Coal rocks | Barbarian Village | Mining | 30 |
+| `al-kharid-gold` | Gold rocks | Al Kharid mine | Mining | 40 |
+| `al-kharid-mithril` | Mithril rocks | Al Kharid mine | Mining | 55 |
+| `lumbridge-shrimp` | Shrimps and anchovies | Lumbridge Swamp | Fishing | 1 |
+| `barbarian-trout` | Trout and salmon | Barbarian Village river | Fishing | 20 |
+| `musa-tuna` | Tuna and swordfish | Musa Point, Karamja | Fishing | 35 |
+| `musa-lobster` | Lobsters | Musa Point, Karamja | Fishing | 40 |
+| `lumbridge-chickens` | Chickens | North of Lumbridge | Combat | 1 (advised) |
+| `lumbridge-cows` | Cows | East of Lumbridge | Combat | 1 (advised) |
+| `lumbridge-goblins` | Goblins | East of Lumbridge | Combat | 3 (advised) |
+| `barbarians` | Barbarians | Barbarian Village | Combat | 10 (advised) |
+| `al-kharid-warriors` | Al Kharid warriors | Al Kharid palace | Combat | 15 (advised) |
+| `hill-giants` | Hill Giants | Edgeville Dungeon | Combat | 30 (advised) |
+
 ## Roadmap
 
 1. Endless gathering - done.
 2. Offline progress - done.
-3. Auto-resume - done. Next: picking an activity from a list and travelling there (built on the
-   player bots' long routes in `server/plugins/bots/`).
+3. Auto-resume - done.
 4. Idle points and upgrades - done, with the Idle screen.
 5. Idle combat - done.
-6. Next ideas: travelling to a chosen activity, an Idle interface (points, upgrades, the time
-   away), more skills (cooking, smithing, fletching: production loops), and idle bosses.
+6. Travel to an activity - done (a teleport; walking there would build on the player bots' long
+   routes in `server/plugins/bots/`).
+7. Next ideas: more skills (cooking, smithing, fletching: production loops), opening the Idle
+   screen on a login that paid time away, and idle bosses.

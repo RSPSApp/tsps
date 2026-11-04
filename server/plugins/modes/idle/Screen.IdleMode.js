@@ -2,7 +2,8 @@
  * The Idle screen (`::idle`): a server-defined interface (docs/agents/interfaces.md), so it needs
  * no client change. On the left, the account's status: Idle Mode and auto-resume (each with a
  * button to switch it), what the character is doing, the idle points and the next one, the offline
- * cap, and what the last time away paid. On the right, the upgrades: each one's level, what it
+ * cap, and what the last time away paid; a third button opens the travel screen. On the right,
+ * the upgrades: each one's level, what it
  * does, the next level's price and a Buy button. It redraws while open whenever any of that
  * changes (Common's `changed`), so points tick up as the character works.
  */
@@ -11,6 +12,7 @@ const Auto = require("./Auto.IdleMode");
 const Combat = require("./Combat.IdleMode");
 const Offline = require("./Offline.IdleMode");
 const Progression = require("./Progression.IdleMode");
+const TravelScreen = require("./TravelScreen.IdleMode");
 
 const { FLAG_OP1, TYPE_RECTANGLE, TYPE_TEXT, createWidgetGroup } = require("../../interface/widgetGroup");
 
@@ -24,7 +26,7 @@ const STATUS_LINES = 7;
 const MAX_UPGRADE_SLOTS = 4;
 const COMPONENT = {
   ROOT: 0, FRAME: 1, STATUS_BOX: 2, STATUS_TITLE: 3, STATUS_LINE_START: 4,
-  IDLE_BUTTON: 12, IDLE_LABEL: 13, AUTO_BUTTON: 14, AUTO_LABEL: 15,
+  IDLE_BUTTON: 12, IDLE_LABEL: 13, AUTO_BUTTON: 14, AUTO_LABEL: 15, TRAVEL_BUTTON: 11, TRAVEL_LABEL: 19,
   UPGRADES_BOX: 16, UPGRADES_TITLE: 17, POINTS: 18,
   // Each upgrade slot: its name, description, price, and Buy button and label.
   SLOT_START: 20, SLOT_STRIDE: 5,
@@ -53,7 +55,7 @@ const box = (x, y, width, height, overrides = {}) => ({
 const button = (x, y, width, height, action) => box(x, y, width, height, {
   color: 0x3b2f20, mouseOverColor: 0x54432c, opacity: 0, actions: [action], flags: FLAG_OP1,
 });
-const buttonLabel = (x, y, width, height) => text(x, y, width, height, { textColor: 0xffd27f, xTextAlignment: 1, yTextAlignment: 1 });
+const buttonLabel = (x, y, width, height, label = "") => text(x, y, width, height, { text: label, textColor: 0xffd27f, xTextAlignment: 1, yTextAlignment: 1 });
 
 function addStatus(add, root) {
   const { x, y, width, height } = LEFT;
@@ -66,12 +68,15 @@ function addStatus(add, root) {
       yTextAlignment: line === STATUS_LINES - 1 ? 0 : 1,
     }));
   }
-  const buttonWidth = (width - 24) / 2;
+  const buttonWidth = Math.floor((width - 32) / 3);
   const buttonY = y + height - 30;
-  add(COMPONENT.IDLE_BUTTON, root, button(x + 8, buttonY, buttonWidth, 24, "Switch"));
-  add(COMPONENT.IDLE_LABEL, root, buttonLabel(x + 8, buttonY, buttonWidth, 24));
-  add(COMPONENT.AUTO_BUTTON, root, button(x + 16 + buttonWidth, buttonY, buttonWidth, 24, "Switch"));
-  add(COMPONENT.AUTO_LABEL, root, buttonLabel(x + 16 + buttonWidth, buttonY, buttonWidth, 24));
+  const buttonX = (index) => x + 8 + index * (buttonWidth + 8);
+  add(COMPONENT.IDLE_BUTTON, root, button(buttonX(0), buttonY, buttonWidth, 24, "Switch"));
+  add(COMPONENT.IDLE_LABEL, root, buttonLabel(buttonX(0), buttonY, buttonWidth, 24));
+  add(COMPONENT.AUTO_BUTTON, root, button(buttonX(1), buttonY, buttonWidth, 24, "Switch"));
+  add(COMPONENT.AUTO_LABEL, root, buttonLabel(buttonX(1), buttonY, buttonWidth, 24));
+  add(COMPONENT.TRAVEL_BUTTON, root, button(buttonX(2), buttonY, buttonWidth, 24, "Travel"));
+  add(COMPONENT.TRAVEL_LABEL, root, buttonLabel(buttonX(2), buttonY, buttonWidth, 24, "Travel"));
 }
 
 /** One slot per upgrade in the data, as tall as the panel allows. */
@@ -147,8 +152,9 @@ function statusLines(player) {
 function sendStatus(player) {
   const sender = player.getPacketSender();
   statusLines(player).forEach((line, index) => sender.sendString(line, uid(COMPONENT.STATUS_LINE_START + index)));
-  sender.sendString(Common.isIdle(player) ? "Turn idle off" : "Turn idle on", uid(COMPONENT.IDLE_LABEL));
-  sender.sendString(player.getAttribute(Common.AUTO_ATTRIBUTE) === false ? "Turn auto on" : "Turn auto off", uid(COMPONENT.AUTO_LABEL));
+  sender.sendString(Common.isIdle(player) ? "Stop idle" : "Start idle", uid(COMPONENT.IDLE_LABEL));
+  sender.sendString(player.getAttribute(Common.AUTO_ATTRIBUTE) === false ? "Start auto" : "Stop auto", uid(COMPONENT.AUTO_LABEL));
+  sender.sendString("Travel", uid(COMPONENT.TRAVEL_LABEL));
 }
 
 function priceLine(row, points) {
@@ -199,6 +205,12 @@ function switchAuto({ player }) {
   return true;
 }
 
+function travelButton({ player }) {
+  if (!isOpen(player)) return false;
+  TravelScreen.open(player);
+  return true;
+}
+
 function buyButton({ player, buttonId }) {
   if (!isOpen(player)) return false;
   const slot = buyUids().findIndex((uids) => uids.includes(buttonId));
@@ -223,6 +235,7 @@ module.exports = function attach(api) {
   api.registerCustomInterface(buildInterface());
   api.onInterfaceActionButton([uid(COMPONENT.IDLE_BUTTON), uid(COMPONENT.IDLE_LABEL)], switchIdle);
   api.onInterfaceActionButton([uid(COMPONENT.AUTO_BUTTON), uid(COMPONENT.AUTO_LABEL)], switchAuto);
+  api.onInterfaceActionButton([uid(COMPONENT.TRAVEL_BUTTON), uid(COMPONENT.TRAVEL_LABEL)], travelButton);
   api.onInterfaceActionButton(buyUids().flat(), buyButton);
   Common.onChange(redraw);
 };

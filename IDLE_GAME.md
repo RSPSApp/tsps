@@ -38,6 +38,9 @@ Sem isso, cada jogador liga o modo com `::idle on`.
 | `::idle on` / `::idle off` | Liga ou desliga o modo idle da conta |
 | `::idle auto` | Mostra o que o personagem vai retomar sozinho |
 | `::idle auto on` / `::idle auto off` | Liga ou desliga a retomada automática |
+| `::idle travel` | Abre a tela de viagem: escolha uma atividade e o personagem vai até lá |
+| `::idle go <local>` | Viaja direto pra um local (ex.: `draynor-willows`, `lumbridge-cows`) |
+| `::idle sites` | Lista os locais disponíveis |
 | `::idle points` | Mostra seus pontos idle |
 | `::idle shop` | Lista as melhorias, níveis e preços |
 | `::idle buy <melhoria>` | Compra o próximo nível (`quick-hands`, `long-dreams`, `bountiful-harvest`) |
@@ -59,6 +62,13 @@ Sem isso, cada jogador liga o modo com `::idle on`.
 5. **Combate idle**: ataque e mate um monstro, e o personagem continua atacando os do mesmo tipo
    por perto. Ele come quando a vida fica abaixo de 50%, revida quando é atacado e manda os drops
    pro banco. Também conta para o progresso offline.
+6. **Viagem até a atividade**: na tela `::idle travel` (ou no botão Travel da tela idle), escolha
+   entre 21 locais (árvores, minas, pesca e monstros, de Lumbridge a Karamja). O personagem
+   teleporta e já começa a trabalhar sozinho. Locais de coleta pedem o nível da skill.
+
+![A tela de viagem](docs/images/idle-travel.png)
+
+O que falta para o jogo ficar jogável está em [`IDLE_ROADMAP.md`](IDLE_ROADMAP.md).
 
 Todos os números (velocidades, limites, preços) ficam em
 `server/plugins/modes/data/idle-mode.json`.
@@ -67,6 +77,12 @@ Todos os números (velocidades, limites, preços) ficam em
 
 ```bash
 cd server && node --test tests/idle-mode.test.cjs
+```
+
+O teste dos locais de viagem usa o cache do jogo (baixado no primeiro `yarn start`):
+
+```bash
+cd server && node --test tests/idle-travel-sites.test.cjs
 ```
 
 ## Atualizar com o projeto original

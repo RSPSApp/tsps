@@ -11,8 +11,9 @@
  *   name within `searchTiles` that it may attack and no other player is fighting.
  *
  * Clicking something else (an object, an NPC option, another kind of monster) pauses it until the
- * next kill of the target, and so do `maxFailedAttempts` attacks in a row with no kill (a monster
- * out of reach), said once. `::idle auto on` lifts a pause. Pressing logout or losing the
+ * next kill of the target. A monster attacked that is still alive, unfought, at the next look (the
+ * attack never took: out of reach) is left alone for `skipSeconds`, and after `maxFailedAttempts`
+ * attacks in a row with no kill it pauses, said once. `::idle auto on` lifts a pause. Pressing logout or losing the
  * connection stops it starting new fights, so the 10 seconds after combat can pass and the
  * player leaves (with the offline progress).
  *
@@ -28,7 +29,10 @@ const TARGET_ATTRIBUTE = Common.COMBAT_TARGET_ATTRIBUTE;
 
 /** player -> the last monster the player chose to attack: { name, at }. */
 const attacks = new Map();
-/** player -> { lastAttemptAt, warned, failedAttempts, paused: null | "click" | "stuck" | "logout" }. */
+/**
+ * player -> { lastAttemptAt, warned, failedAttempts, paused: null | "click" | "stuck" | "logout",
+ * lastNpc (the last attacked), skips (npc -> until when it is left alone) }.
+ */
 const states = new Map();
 const tracked = new Set();
 
@@ -38,7 +42,9 @@ function config() {
 
 function stateOf(player) {
   let state = states.get(player);
-  if (!state) states.set(player, (state = { lastAttemptAt: 0, warned: false, failedAttempts: 0, paused: null }));
+  if (!state) {
+    states.set(player, (state = { lastAttemptAt: 0, warned: false, failedAttempts: 0, paused: null, lastNpc: null, skips: new Map() }));
+  }
   return state;
 }
 
@@ -68,6 +74,24 @@ function otherClick({ player }) {
   if (Common.isIdle(player)) pause(player);
 }
 
+/**
+ * Makes `target` ({ name, anchor }) what idle combat fights, at once and unpaused (a travel to
+ * it). One activity at a time: the gathering target goes.
+ */
+function adopt(player, target) {
+  player.setAttribute(TARGET_ATTRIBUTE, target);
+  player.setAttribute(Common.GATHER_TARGET_ATTRIBUTE, null);
+  const state = stateOf(player);
+  state.paused = null;
+  state.failedAttempts = 0;
+  state.lastAttemptAt = 0;
+  state.lastNpc = null;
+  state.skips.clear();
+  attacks.delete(player);
+  tracked.add(player);
+  Common.changed(player);
+}
+
 /** Logout pressed (`onCanLogout`, answered by others) or the connection lost: no new fights. */
 function leaving({ player }) {
   if (player.getAttribute(TARGET_ATTRIBUTE) && Common.isIdle(player)) stateOf(player).paused = "logout";
@@ -78,6 +102,8 @@ function unpause(player) {
   const state = stateOf(player);
   state.paused = null;
   state.failedAttempts = 0;
+  state.lastNpc = null;
+  state.skips.clear();
 }
 
 /** `npc-drops:generated`: an idle kill. Banks the loot, records it, and may set the target. */
@@ -97,6 +123,7 @@ function killed(event) {
   const state = stateOf(player);
   state.paused = null;
   state.failedAttempts = 0;
+  if (state.lastNpc === npc) state.lastNpc = null;
   if (config().bankLoot && Array.isArray(drops)) {
     for (let i = drops.length - 1; i >= 0; i--) {
       const drop = drops[i];
@@ -149,14 +176,14 @@ function attackable(player, npc) {
   return CombatFactory.canAttackPermission(player, npc, false, CombatFactory.getMethod(player)) === CanAttackResponse.CAN_ATTACK;
 }
 
-function findMonster(player, target) {
+function findMonster(player, target, usable) {
   const { Location, World } = Common.core;
   const { anchor } = target;
   const here = player.getLocation();
   let best = null;
   let bestDistance = Infinity;
   for (const npc of World.getNpcsNear(new Location(anchor.x, anchor.y, anchor.z), config().searchTiles)) {
-    if (npcName(npc) !== target.name || !attackable(player, npc)) continue;
+    if (npcName(npc) !== target.name || !usable(npc) || !attackable(player, npc)) continue;
     const distance = Common.chebyshev(here, { x: npc.getLocation().getX(), y: npc.getLocation().getY() });
     if (distance < bestDistance) {
       best = npc;
@@ -197,7 +224,12 @@ function fight(player, now) {
   const location = player.getLocation();
   if (location.getZ() !== target.anchor.z || Common.chebyshev(location, target.anchor) > config().leashTiles) return "away";
   if (now - state.lastAttemptAt < config().retrySeconds * 1000) return "waiting";
-  const npc = findMonster(player, target);
+  // The last one attacked is alive and not being fought: the attack never took (out of reach).
+  if (state.lastNpc?.getHitpoints?.() > 0 && state.lastNpc.isRegistered?.() !== false) {
+    state.skips.set(state.lastNpc, now + config().skipSeconds * 1000);
+  }
+  state.lastNpc = null;
+  const npc = findMonster(player, target, (candidate) => !(state.skips.get(candidate) > now));
   if (!npc) return "none";
   if (++state.failedAttempts > config().maxFailedAttempts) {
     state.paused = "stuck";
@@ -206,6 +238,7 @@ function fight(player, now) {
     return "paused";
   }
   state.lastAttemptAt = now;
+  state.lastNpc = npc;
   combat.attack(npc);
   return "attacking";
 }
@@ -259,6 +292,7 @@ module.exports = function attach(api) {
 module.exports.TARGET_ATTRIBUTE = TARGET_ATTRIBUTE;
 module.exports.fight = fight;
 module.exports.unpause = unpause;
+module.exports.adopt = adopt;
 /** Why idle combat is paused ("click", "stuck", "logout"), or null. */
 module.exports.pausedFor = (player) => states.get(player)?.paused ?? null;
 module.exports.tracked = tracked;

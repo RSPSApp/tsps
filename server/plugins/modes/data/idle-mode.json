@@ -29,7 +29,8 @@
     "rememberClickSeconds": 30,
     "searchTiles": 16,
     "leashTiles": 24,
-    "maxFailedAttempts": 3
+    "maxFailedAttempts": 3,
+    "skipSeconds": 120
   },
   "progression": {
     "_description": "Idle points (docs/idle-mode.md): one per xpPerPoint XP an idle account gains in the idle skills, online or offline. They buy the upgrades' levels, each level at its listed cost.",
@@ -93,6 +94,371 @@
     "eatBelowPercent": 50,
     "stopBelowPercent": 25,
     "maxFailedAttempts": 5,
-    "maxGapSeconds": 180
+    "maxGapSeconds": 180,
+    "skipSeconds": 120
+  },
+  "travel": {
+    "_description": "Idle travel (docs/idle-mode.md): an idle player picks a site from ::idle travel and teleports to its tile, which becomes the activity's anchor; auto-resume then walks to the nearest target there and starts. Tiles are free tiles checked against the cache map, with the targets within auto-resume's or idle combat's searchTiles (server/tests/idle-travel-sites.test.cjs). level: the skill level needed (gathering) or the combat level advised (combat); icon: the item shown in the list.",
+    "teleportType": "NORMAL",
+    "sites": [
+      {
+        "id": "lumbridge-trees",
+        "name": "Trees",
+        "place": "West of Lumbridge",
+        "skill": "WOODCUTTING",
+        "kind": "object",
+        "target": "Tree",
+        "option": "Chop down",
+        "tile": [
+          3164,
+          3219,
+          0
+        ],
+        "level": 1,
+        "icon": 1511,
+        "tool": "Any axe"
+      },
+      {
+        "id": "draynor-oaks",
+        "name": "Oak trees",
+        "place": "Draynor Village",
+        "skill": "WOODCUTTING",
+        "kind": "object",
+        "target": "Oak tree",
+        "option": "Chop down",
+        "tile": [
+          3101,
+          3243,
+          0
+        ],
+        "level": 15,
+        "icon": 1521,
+        "tool": "Any axe"
+      },
+      {
+        "id": "draynor-willows",
+        "name": "Willow trees",
+        "place": "Draynor Village",
+        "skill": "WOODCUTTING",
+        "kind": "object",
+        "target": "Willow tree",
+        "option": "Chop down",
+        "tile": [
+          3087,
+          3234,
+          0
+        ],
+        "level": 30,
+        "icon": 1519,
+        "tool": "Any axe"
+      },
+      {
+        "id": "seers-maples",
+        "name": "Maple trees",
+        "place": "Seers' Village",
+        "skill": "WOODCUTTING",
+        "kind": "object",
+        "target": "Maple tree",
+        "option": "Chop down",
+        "tile": [
+          2728,
+          3500,
+          0
+        ],
+        "level": 45,
+        "icon": 1517,
+        "tool": "Any axe",
+        "members": true
+      },
+      {
+        "id": "edgeville-yews",
+        "name": "Yew trees",
+        "place": "Edgeville",
+        "skill": "WOODCUTTING",
+        "kind": "object",
+        "target": "Yew tree",
+        "option": "Chop down",
+        "tile": [
+          3088,
+          3474,
+          0
+        ],
+        "level": 60,
+        "icon": 1515,
+        "tool": "Any axe"
+      },
+      {
+        "id": "lumbridge-copper",
+        "name": "Copper rocks",
+        "place": "Lumbridge Swamp mine",
+        "skill": "MINING",
+        "kind": "object",
+        "target": "Copper rocks",
+        "option": "Mine",
+        "tile": [
+          3228,
+          3147,
+          0
+        ],
+        "level": 1,
+        "icon": 436,
+        "tool": "Any pickaxe"
+      },
+      {
+        "id": "lumbridge-tin",
+        "name": "Tin rocks",
+        "place": "Lumbridge Swamp mine",
+        "skill": "MINING",
+        "kind": "object",
+        "target": "Tin rocks",
+        "option": "Mine",
+        "tile": [
+          3228,
+          3147,
+          0
+        ],
+        "level": 1,
+        "icon": 438,
+        "tool": "Any pickaxe"
+      },
+      {
+        "id": "varrock-iron",
+        "name": "Iron rocks",
+        "place": "South-east Varrock mine",
+        "skill": "MINING",
+        "kind": "object",
+        "target": "Iron rocks",
+        "option": "Mine",
+        "tile": [
+          3286,
+          3365,
+          0
+        ],
+        "level": 15,
+        "icon": 440,
+        "tool": "Any pickaxe"
+      },
+      {
+        "id": "barbarian-coal",
+        "name": "Coal rocks",
+        "place": "Barbarian Village",
+        "skill": "MINING",
+        "kind": "object",
+        "target": "Coal rocks",
+        "option": "Mine",
+        "tile": [
+          3081,
+          3421,
+          0
+        ],
+        "level": 30,
+        "icon": 453,
+        "tool": "Any pickaxe"
+      },
+      {
+        "id": "al-kharid-gold",
+        "name": "Gold rocks",
+        "place": "Al Kharid mine",
+        "skill": "MINING",
+        "kind": "object",
+        "target": "Gold rocks",
+        "option": "Mine",
+        "tile": [
+          3299,
+          3300,
+          0
+        ],
+        "level": 40,
+        "icon": 444,
+        "tool": "Any pickaxe"
+      },
+      {
+        "id": "al-kharid-mithril",
+        "name": "Mithril rocks",
+        "place": "Al Kharid mine",
+        "skill": "MINING",
+        "kind": "object",
+        "target": "Mithril rocks",
+        "option": "Mine",
+        "tile": [
+          3299,
+          3300,
+          0
+        ],
+        "level": 55,
+        "icon": 447,
+        "tool": "Any pickaxe"
+      },
+      {
+        "id": "lumbridge-shrimp",
+        "name": "Shrimps and anchovies",
+        "place": "Lumbridge Swamp",
+        "skill": "FISHING",
+        "kind": "npc",
+        "target": "Fishing spot",
+        "option": "Net",
+        "tile": [
+          3243,
+          3152,
+          0
+        ],
+        "level": 1,
+        "icon": 317,
+        "tool": "A small fishing net"
+      },
+      {
+        "id": "barbarian-trout",
+        "name": "Trout and salmon",
+        "place": "Barbarian Village river",
+        "skill": "FISHING",
+        "kind": "npc",
+        "target": "Rod Fishing spot",
+        "option": "Lure",
+        "tile": [
+          3105,
+          3430,
+          0
+        ],
+        "level": 20,
+        "icon": 335,
+        "tool": "A fly fishing rod and feathers"
+      },
+      {
+        "id": "musa-tuna",
+        "name": "Tuna and swordfish",
+        "place": "Musa Point, Karamja",
+        "skill": "FISHING",
+        "kind": "npc",
+        "target": "Fishing spot",
+        "option": "Harpoon",
+        "tile": [
+          2924,
+          3178,
+          0
+        ],
+        "level": 35,
+        "icon": 359,
+        "tool": "A harpoon"
+      },
+      {
+        "id": "musa-lobster",
+        "name": "Lobsters",
+        "place": "Musa Point, Karamja",
+        "skill": "FISHING",
+        "kind": "npc",
+        "target": "Fishing spot",
+        "option": "Cage",
+        "tile": [
+          2924,
+          3178,
+          0
+        ],
+        "level": 40,
+        "icon": 377,
+        "tool": "A lobster pot"
+      },
+      {
+        "id": "lumbridge-chickens",
+        "name": "Chickens",
+        "place": "North of Lumbridge",
+        "skill": "COMBAT",
+        "kind": "npc",
+        "target": "Chicken",
+        "option": "Attack",
+        "tile": [
+          3233,
+          3295,
+          0
+        ],
+        "level": 1,
+        "icon": 314,
+        "tool": "A weapon and some food"
+      },
+      {
+        "id": "lumbridge-cows",
+        "name": "Cows",
+        "place": "East of Lumbridge",
+        "skill": "COMBAT",
+        "kind": "npc",
+        "target": "Cow",
+        "option": "Attack",
+        "tile": [
+          3258,
+          3275,
+          0
+        ],
+        "level": 1,
+        "icon": 1739,
+        "tool": "A weapon and some food"
+      },
+      {
+        "id": "lumbridge-goblins",
+        "name": "Goblins",
+        "place": "East of Lumbridge",
+        "skill": "COMBAT",
+        "kind": "npc",
+        "target": "Goblin",
+        "option": "Attack",
+        "tile": [
+          3249,
+          3234,
+          0
+        ],
+        "level": 3,
+        "icon": 526,
+        "tool": "A weapon and some food"
+      },
+      {
+        "id": "barbarians",
+        "name": "Barbarians",
+        "place": "Barbarian Village",
+        "skill": "COMBAT",
+        "kind": "npc",
+        "target": "Barbarian",
+        "option": "Attack",
+        "tile": [
+          3079,
+          3419,
+          0
+        ],
+        "level": 10,
+        "icon": 526,
+        "tool": "A weapon and some food"
+      },
+      {
+        "id": "al-kharid-warriors",
+        "name": "Al Kharid warriors",
+        "place": "Al Kharid palace",
+        "skill": "COMBAT",
+        "kind": "npc",
+        "target": "Al Kharid warrior",
+        "option": "Attack",
+        "tile": [
+          3292,
+          3174,
+          0
+        ],
+        "level": 15,
+        "icon": 526,
+        "tool": "A weapon and some food"
+      },
+      {
+        "id": "hill-giants",
+        "name": "Hill Giants",
+        "place": "Edgeville Dungeon",
+        "skill": "COMBAT",
+        "kind": "npc",
+        "target": "Hill Giant",
+        "option": "Attack",
+        "tile": [
+          3117,
+          9852,
+          0
+        ],
+        "level": 30,
+        "icon": 532,
+        "tool": "A weapon and plenty of food"
+      }
+    ]
   }
 }

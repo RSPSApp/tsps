@@ -322,7 +322,7 @@ test('issue 1929: a player cannot cut diagonally past a barricade', (t) => {
   assert.equal(step(1, 1), true);
 });
 
-test("issue 1929: a standard dropped on tunnel rocks, or your own on catapult battlements, goes home", (t) => {
+test("a standard dropped on blocked tunnel rocks, or your own on catapult battlements, goes home", (t) => {
   const { SARADOMIN } = data.TEAM;
   const dropAt = (x, y) => {
     const carrier = playerAt(t, x, y, 0);
@@ -334,7 +334,7 @@ test("issue 1929: a standard dropped on tunnel rocks, or your own on catapult ba
     return result;
   };
   // RuneHQ: "if you die on the stepping stones or under the rockslide, it will return to your base."
-  // Rocks 4437 stand at 2391,9501 in the cache map; the same holds once they are mined away.
+  // Rocks 4437 stand at 2391,9501 in the cache map; cleared patches have outside floor drops.
   const rockTiles = [[2391, 9501], [2392, 9502], [2401, 9494], [2402, 9495], [2409, 9503], [2400, 9512]];
   // The reporter's battlement tiles beside each catapult, and their mirrors.
   const battlements = [[2383, 3116], [2384, 3116], [2385, 3116], [2387, 3118], [2387, 3119],
@@ -345,7 +345,9 @@ test("issue 1929: a standard dropped on tunnel rocks, or your own on catapult ba
     assert.equal(dropped, null, `${x},${y} leaves nothing on the floor`);
   }
   t.mock.method(core.MapObjects, 'get', () => null);
-  assert.equal(dropAt(2392, 9502).status, 0, 'mined-away rocks still send it home');
+  const cleared = dropAt(2392, 9502);
+  assert.equal(cleared.status, 2, 'cleared rocks leave a dropped standard');
+  assert.ok(cleared.dropped.getLocation().equals(new core.Location(2393, 9502)), 'the east-west passage keeps the carrier row');
   // The rest of the catapult deck, and the tunnel beside the rocks, drop it as usual.
   for (const [x, y] of [[2383, 3118], [2385, 3120], [2413, 3087], [2393, 9502], [2401, 9493]]) {
     const { status, dropped } = dropAt(x, y);

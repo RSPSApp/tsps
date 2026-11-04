@@ -38,3 +38,8 @@ checkout.
   and what to look at.
 - **New worktrees:** `scripts/wt new <branch>`, not plain `git worktree add`; it writes the
   ports and copies `node_modules`.
+
+## Working through issues
+
+To fix GitHub issues unattended (claim, fix, verify in game, PR, next), follow
+[docs/bug-loop.md](docs/bug-loop.md). Its helpers are in `scripts/agents/`.

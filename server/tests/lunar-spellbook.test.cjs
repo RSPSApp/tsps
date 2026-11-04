@@ -10,6 +10,7 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells");
+const { Skill } = require("../dist/game/model/Skill");
 const { Spell } = require("../dist/game/content/combat/magic/Spell");
 
 before(async () => {
@@ -155,7 +156,9 @@ test("Monster Examine sends interface 522 the text live sends script 1179", () =
     getElementalWeakness: () => null, getCombatLevel: () => 32, getMaxHit: () => 3, getName: () => "Outlaw",
     getRangedDefenceBonus: () => 0,
   };
-  const npc = { getCurrentDefinition: () => definition, getHitpoints: () => 20, getLocation: () => ({}), performGraphic() {} };
+  const npc = { getCurrentDefinition: () => definition,
+    getCurrentLevel: skill => definition.getStats()[[Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.RANGED, Skill.MAGIC].indexOf(skill)],
+    getHitpoints: () => 20, getLocation: () => ({}), performGraphic() {} };
   const sent = [];
   const sender = {
     sendMagicTabInterface(id) { sent.push(["mount", id]); return sender; },
@@ -176,4 +179,12 @@ test("Monster Examine sends interface 522 the text live sends script 1179", () =
   }) };
   assert.ok(LunarSpells.monsterStats(withBonus, options).includes("<br>Attack bonus: 7"));
   assert.ok(LunarSpells.monsterStats(withBonus).includes("<br>Crush bonus: 7"), "optional field controls leave the Lunar defaults intact");
+  const drained = { ...npc, getCurrentLevel: skill => new Map([
+    [Skill.ATTACK, 3], [Skill.DEFENCE, 0], [Skill.STRENGTH, 2], [Skill.MAGIC, 1], [Skill.RANGED, 0],
+  ]).get(skill) };
+  for (const settings of [undefined, options]) {
+    assert.ok(LunarSpells.monsterStats(drained, settings).includes(
+      "Attack: 3<br>Defence: 0<br>Strength: 2<br>Magic: 1<br>Ranged: 0"),
+      "both inspection spells report temporary instance levels instead of the base definition");
+  }
 });

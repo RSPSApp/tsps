@@ -253,6 +253,7 @@ test('native Standard Monster Inspect pays once, displays its stats and closes t
   const cases = [
     { label: 'desktop sentinel selection', raw: '4b00e7c600da00ffff7fff80' },
     { label: 'world-click selection', raw: '4b00e7c600da0000c67fff80' },
+    { label: 'drained target reports current Defence', raw: '4b00e7c600da00ffff7fff80', defence: 0 },
     { label: 'level refusal', level: 41, message: 'You need a Magic level of 42 to cast this spell.' },
     { label: 'rune refusal', runes: false, message: 'You do not have the required items to cast this spell.' },
     { label: 'wrong book', book: MagicSpellbook.LUNAR },
@@ -272,6 +273,10 @@ test('native Standard Monster Inspect pays once, displays its stats and closes t
     if (entry.runes !== false) for (const rune of requirements.runes) player.getInventory().add(new core.Item(rune.id, rune.amount), false);
     const npc = new core.NPC(core.NpcIdentifiers.GOBLIN, new core.Location(3223, 3218, 0));
     World.getNpcs().add(npc); npc.needsPlacement = false;
+    if (entry.defence !== undefined) {
+      assert.ok(npc.getCurrentLevel(Skill.DEFENCE) > entry.defence);
+      npc.setDefenceLevel(entry.defence);
+    }
     t.after(() => {
       player.closeInterruptibleInterfaces();
       PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
@@ -306,6 +311,8 @@ test('native Standard Monster Inspect pays once, displays its stats and closes t
     const sections = scripts[0][1].split('|');
     assert.equal(sections.length, 5); assert.equal(sections[4], npc.getCurrentDefinition(player).getName());
     assert.ok(sections[0].includes('Combat level:'));
+    assert.ok(sections[0].includes(`Defence: ${npc.getCurrentLevel(Skill.DEFENCE)}<br>`),
+      'the native stats panel must report the instance level after combat drains');
     assert.ok(!sections[0].includes('Max standard hit:')); assert.ok(!sections[0].includes('Main attack style:'));
     assert.equal(player.getAnimation().getId(), core.LunarSpells.CASTS['monster examine'].animation);
     assert.equal(sounds.length, 1); assert.ok(frames.length > 0, 'the real session emitted its native UI packets');

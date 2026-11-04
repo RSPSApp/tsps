@@ -553,8 +553,9 @@ export class LunarSpells {
         if (weakness) attributes.push(`- ${weakness.percent}% ${ELEMENTS[weakness.type - 1]} weakness.`);
         const basicStats = [
             `Combat level: ${definition.getCombatLevel()}`, `Hitpoints: ${npc.getHitpoints()}`,
-            `Attack: ${stats[0]}`, `Defence: ${stats[2]}`, `Strength: ${stats[1]}`, `Magic: ${stats[4]}`,
-            `Ranged: ${stats[3]}`,
+            `Attack: ${npc.getCurrentLevel(Skill.ATTACK)}`, `Defence: ${npc.getCurrentLevel(Skill.DEFENCE)}`,
+            `Strength: ${npc.getCurrentLevel(Skill.STRENGTH)}`, `Magic: ${npc.getCurrentLevel(Skill.MAGIC)}`,
+            `Ranged: ${npc.getCurrentLevel(Skill.RANGED)}`,
         ];
         if (options.includeMaxHit !== false) basicStats.push(`Max standard hit: ${definition.getMaxHit()}`);
         if (options.includeAttackStyle !== false) basicStats.push(`Main attack style: ${styleName}`);

@@ -1,4 +1,5 @@
 import { CombatFactory, CanAttackResponse } from "../../../content/combat/CombatFactory";
+import { CombatRange } from "../../../content/combat/CombatRange";
 import { CombatMethod } from "../../../content/combat/method/CombatMethod";
 import { NpcDefinition } from "../../../definition/NpcDefinition"
 import { Player } from "../player/Player";
@@ -64,14 +65,17 @@ export class NpcAggression {
                 continue;
             }
 
-            // The NPC's authority to start this fight is its aggression range from the spawn
-            // (`max range + attack range`, plus size - 1): a player outside it cannot be
-            // attacked by it, even when the NPC has wandered close enough to hunt (Wiki
+            // The NPC's authority to start this fight is its aggression range from the spawn:
+            // `max range + attack range`, measured from the spawn footprint. NPC locations are
+            // south-west corners, so the footprint already extends `size - 1` tiles north and
+            // east; the size must not be added as a symmetric radius. A player outside it cannot
+            // be attacked, even when the NPC has wandered close enough to hunt (Wiki
             // Aggressiveness#Aggression range). An area rule that forces aggression overrides it.
             const method: CombatMethod = CombatFactory.getMethod(npc);
             const attackDistance = method.attackDistance(npc);
-            if (rule !== true
-                && npc.getSpawnPosition().getDistance(player.getLocation()) > npcDefinition.getAggressionRange(attackDistance)) {
+            const spawnDistance = CombatRange.footprintDistance(
+                npc.getSpawnPosition(), npcDefinition.getSize(), player.getLocation());
+            if (rule !== true && spawnDistance > npcDefinition.getAggressionRange(attackDistance)) {
                 continue;
             }
 

@@ -1,6 +1,7 @@
-// Aggression ranges, measured from an NPC's static spawn (Wiki Aggressiveness#Aggression range):
-//   aggression range = max range + attack range + size - 1
-// An NPC outside it cannot attack the player, and a hunter dragged outside it loses interest and
+// Aggression ranges, measured from an NPC's static spawn footprint
+// (Wiki Aggressiveness#Aggression range): max range + attack range. NPC locations are
+// south-west corners, so the footprint extends `size - 1` tiles north and east only.
+// A player outside it cannot be hunted, and a hunter dragged outside it loses interest and
 // walks home instead of following the player across the map.
 //
 // Run after `yarn build`: node --test tests/aggression-range.test.cjs
@@ -17,6 +18,7 @@ const { CoordinateState } = require("../dist/game/entity/impl/npc/NPCMovementCoo
 const core = PluginManager.getCoreApi();
 
 const MUGGER = core.NpcIdentifiers.MUGGER_2;
+const BLACK_DEMON = core.NpcIdentifiers.BLACK_DEMON;
 /** Open ground, so only the actors decide the hunt. */
 const FIELD = { x: 3220, y: 3220 };
 
@@ -25,7 +27,12 @@ before(async () => {
   new NpcDefinitionLoader().load();
 });
 
-function scene(t) {
+function scene(t, {
+  npcId = MUGGER,
+  spawn = new core.Location(FIELD.x, FIELD.y + 2, 0),
+  npcAt = spawn.clone(),
+  playerAt = new core.Location(FIELD.x, FIELD.y, 0),
+} = {}) {
   let cycle = 1000;
   t.mock.method(core.World, "getProcessCycle", () => cycle);
   const tasks = [];
@@ -36,7 +43,7 @@ function scene(t) {
   const sender = new Proxy({}, { get: () => () => sender });
   player.getPacketSender = () => sender;
   player.getSession = () => ({ sendClientPacket: () => true, processPackets: () => {} });
-  player.setLocation(new core.Location(FIELD.x, FIELD.y, 0));
+  player.setLocation(playerAt.clone());
   player.setRegistered(true);
   player.setNeedsPlacement(false);
   player.autoRetaliateReturn = () => false;
@@ -45,9 +52,9 @@ function scene(t) {
     player.getSkillManager().setMaxLevel(skill, 99);
   }
 
-  const spawn = new core.Location(FIELD.x, FIELD.y + 2, 0);
-  const npc = core.NPC.create(MUGGER, spawn.clone());
-  npc.setSpawnPosition(spawn.clone());
+  const spawnPosition = spawn.clone();
+  const npc = core.NPC.create(npcId, npcAt.clone());
+  npc.setSpawnPosition(spawnPosition.clone());
   npc.isRegistered = () => true;
   npc.setNeedsPlacement(false);
   npc.setHitpoints(500);
@@ -78,18 +85,59 @@ function scene(t) {
     core.World.unregisterNpcPosition(npc);
     core.World.unregisterPlayerPosition(player);
   });
-  return { player, npc, spawn, tick, ticks, walkPlayer };
+  return { player, npc, spawn: spawnPosition, tick, ticks, walkPlayer };
 }
 
-test("the aggression range is max range + attack range + size - 1 (Wiki)", () => {
+test("the aggression range is max range + attack range, measured from the spawn footprint", () => {
   const definition = new core.NpcDefinition();
-  assert.equal(definition.getAggressionRange(1), 8, "melee, size 1: 7 + 1 + 0");
-  assert.equal(definition.getAggressionRange(6), 13, "ranged, size 1: 7 + 6 + 0");
-  assert.equal(definition.getAggressionRange(10), 17, "magic, size 1: 7 + 10 + 0");
+  assert.equal(definition.getAggressionRange(1), 8, "melee: 7 + 1");
+  assert.equal(definition.getAggressionRange(6), 13, "ranged: 7 + 6");
+  assert.equal(definition.getAggressionRange(10), 17, "magic: 7 + 10");
   Object.assign(definition, { size: 3 });
-  assert.equal(definition.getAggressionRange(1), 10, "a size-3 melee NPC adds two tiles");
+  assert.equal(definition.getAggressionRange(1), 8, "the size lives in the footprint, not the radius");
   Object.assign(definition, { combatFollowDistance: 9 });
-  assert.equal(definition.getAggressionRange(1), 12, "a longer max range widens it by the same amount");
+  assert.equal(definition.getAggressionRange(1), 10, "a longer max range widens it by the same amount");
+});
+
+test("a size-3 footprint extends north and east only", () => {
+  const origin = new core.Location(3200, 3200, 0);
+  const at = (x, y) => new core.Location(x, y, 0);
+  assert.equal(core.CombatRange.footprintDistance(origin, 3, at(3200, 3192)), 8, "south");
+  assert.equal(core.CombatRange.footprintDistance(origin, 3, at(3192, 3200)), 8, "west");
+  assert.equal(core.CombatRange.footprintDistance(origin, 3, at(3200, 3210)), 8, "north, measured from maxY 3202");
+  assert.equal(core.CombatRange.footprintDistance(origin, 3, at(3210, 3200)), 8, "east, measured from maxX 3202");
+  assert.equal(core.CombatRange.footprintDistance(origin, 3, at(3201, 3201)), 0, "inside the footprint");
+  assert.equal(core.CombatRange.footprintDistance(origin, 3, new core.Location(3200, 3200, 1)),
+    Number.MAX_SAFE_INTEGER, "another plane");
+});
+
+test("a size-3 NPC acquires at its south and north spawn-footprint boundaries", (t) => {
+  const x = FIELD.x, y = FIELD.y;
+  assert.equal(core.NpcDefinition.forId(BLACK_DEMON).getSize(), 3);
+
+  const south = scene(t, {
+    npcId: BLACK_DEMON,
+    spawn: new core.Location(x, y, 0),
+    npcAt: new core.Location(x, y - 7, 0),
+    playerAt: new core.Location(x, y - 9, 0),
+  });
+  NpcAggression.runAggression(south.player, [south.npc]);
+  assert.equal(south.npc.getCombat().getTarget(), null, "nine tiles south is outside the eight-tile limit");
+  south.player.setLocation(new core.Location(x, y - 8, 0));
+  NpcAggression.runAggression(south.player, [south.npc]);
+  assert.equal(south.npc.getCombat().getTarget(), south.player, "eight tiles south is inside");
+
+  const north = scene(t, {
+    npcId: BLACK_DEMON,
+    spawn: new core.Location(x, y, 0),
+    npcAt: new core.Location(x, y + 8, 0),
+    playerAt: new core.Location(x, y + 11, 0),
+  });
+  NpcAggression.runAggression(north.player, [north.npc]);
+  assert.equal(north.npc.getCombat().getTarget(), null, "eleven tiles north is outside the footprint limit");
+  north.player.setLocation(new core.Location(x, y + 10, 0));
+  NpcAggression.runAggression(north.player, [north.npc]);
+  assert.equal(north.npc.getCombat().getTarget(), north.player, "ten tiles north is inside");
 });
 
 test("a player outside the aggression range is not hunted, even right next to the NPC", (t) => {

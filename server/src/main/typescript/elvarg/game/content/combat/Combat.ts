@@ -798,12 +798,14 @@ export class Combat {
 
         // Outside its aggression range an NPC cannot attack the target at all, so it loses
         // interest and walks home: the Wiki draws the aggression range from the static spawn
-        // (max range + attack range, plus the size), and osrs-docs has an NPC dragged outside
-        // its max range lose its target. A target still fighting it (a safespot or a normal
-        // engagement) keeps it, so this bounds hunting, not the fight the player started.
+        // (max range + attack range, measured from the spawn footprint), and osrs-docs has an
+        // NPC dragged outside its max range lose its target. A target still fighting it (a
+        // safespot or a normal engagement) keeps it, so this bounds hunting, not the fight the
+        // player started. The footprint already extends `size - 1` north and east.
         const aggressionRange = definition.getAggressionRange(method.attackDistance(npc));
+        const targetDistance = CombatRange.footprintDistance(spawn, definition.getSize(), target.getLocation());
         if (spawnDistance > definition.getCombatFollowDistance()
-            || target.getLocation().getDistance(spawn) > aggressionRange) {
+            || targetDistance > aggressionRange) {
             coordinator.setCoordinateState(CoordinateState.RETREATING);
             return true;
         }

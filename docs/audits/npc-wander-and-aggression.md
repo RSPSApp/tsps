@@ -346,13 +346,15 @@ left it there. That is the report in #2097: every aggressive NPC that acquires a
 until the player teleports, because `Combat.shouldRetreat` returned false for every NPC on its
 first line. There was no chase bound at all.
 
-The missing piece is the Wiki's **aggression range**, `max range + attack range + size - 1`,
-measured from the **static spawn point** (Aggressiveness#Aggression range). It is now
-`NpcDefinition.getAggressionRange(attackDistance)`:
+The missing piece is the Wiki's **aggression range**, `max range + attack range`, measured from the
+**static spawn footprint** (Aggressiveness#Aggression range). NPC locations are south-west
+corners, so the footprint extends `size - 1` tiles north and east only; the size must not be
+added to the radius as a symmetric term. The check is `NpcDefinition.getAggressionRange()` plus
+`CombatRange.footprintDistance()`:
 
-- **Hunting:** `NpcAggression` refuses a target outside the spawn's aggression range, even when
-  the NPC has wandered within hunt range of it. An area rule returning `true` still overrides
-  the engine check, as it does for tolerance.
+- **Hunting:** `NpcAggression` refuses a target outside the spawn footprint's aggression range,
+  even when the NPC has wandered within hunt range of it. An area rule returning `true` still
+  overrides the engine check, as it does for tolerance.
 - **Chasing:** `Combat.shouldRetreat` drops a target outside the aggression range (or an NPC
   dragged beyond its max range), marks the coordinator `RETREATING` and lets it walk home.
   `combat:no-retreat` still exempts scripted content, and a target that is fighting the NPC

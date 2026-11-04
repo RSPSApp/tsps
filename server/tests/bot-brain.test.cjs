@@ -2542,7 +2542,11 @@ test('a wilderness bot pacing one 8x8 square is flagged as stuck, a fight or its
     getCombat: () => ({ getTarget: () => null, getAttacker: () => null }),
     getCombatFollowing: () => null,
   };
-  const state = { autonomy: { allowedAutonomousModes: ['pvp'] }, pvp: { hotspotId: null } };
+  const state = {
+    autonomy: { allowedAutonomousModes: ['pvp'] },
+    pvp: { hotspotId: null },
+    roaming: { roamBounds: { minX: 3072, maxX: 3135, minY: 3584, maxY: 3647, z: 0 } },
+  };
   const entry = { player, state };
   assert.equal(trackStuckArea(entry, 1000), null);
   assert.equal(trackStuckArea(entry, 1000 + STUCK_AREA_MS - 1), null);
@@ -2606,7 +2610,11 @@ test('a PvP bot that lost its brain is recovered and moved onto a walkable Wilde
     mode: 'pvp',
     home: { x: 3100, y: 3600, z: 0 },
     pvp: { phase: 'seeking', hotspotId: null },
-    roaming: { target: null, nextWalkAt: 0 },
+    roaming: {
+      target: null,
+      nextWalkAt: 0,
+      roamBounds: { minX: 3072, maxX: 3135, minY: 3584, maxY: 3647, z: 0 },
+    },
     autonomy: { allowedAutonomousModes: ['pvp'] },
   };
   const entry = { player, state, brain: null };
@@ -2628,4 +2636,25 @@ test('a PvP bot that lost its brain is recovered and moved onto a walkable Wilde
   assert.ok(movedTo, 'the bot is moved back onto the map');
   assert.ok(logs.some(([message]) => message === 'bot_stuck_recovered'), 'the recovery is logged');
   assert.equal(state.pvp.phase, 'seeking', 'its PvP frame starts over');
+});
+
+
+test('a minigame PvP bot without wilderness roam bounds is left to its own controller', () => {
+  const { __testing: behaviorTesting } = require('../plugins/bots/behaviours/task/BehaviorTask.PlayerBots');
+  const { isManagedWildernessBot, trackStuckArea, STUCK_AREA_MS } = behaviorTesting;
+  const waiting = {
+    autonomy: { allowedAutonomousModes: ['pvp'] },
+    pvp: { hotspotId: null },
+    roaming: { target: null, nextWalkAt: 0 },
+  };
+  assert.equal(isManagedWildernessBot(waiting), false, 'LMS/BH bots carry no assigned roam bounds');
+  const player = {
+    ...fakePlayer('LmsBot1', 3100, 3600),
+    getCombat: () => ({ getTarget: () => null, getAttacker: () => null }),
+    getCombatFollowing: () => null,
+  };
+  const entry = { player, state: waiting, brain: null };
+  assert.equal(trackStuckArea(entry, 1000), null);
+  assert.equal(trackStuckArea(entry, 1000 + STUCK_AREA_MS + 1), null,
+    'the waiting area is not a stuck wilderness square');
 });

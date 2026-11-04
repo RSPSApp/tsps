@@ -81,13 +81,30 @@ function restorePvpBot(player, state, api) {
 }
 
 /**
+ * Managed Wilderness population bots are spawned with assigned roam bounds. Minigame
+ * bots (LMS waiting area, Bounty Hunter crater) use the same PvP runtime but set no
+ * bounds, so the Wilderness watchdogs must leave them to their own controllers.
+ */
+function isManagedWildernessBot(state) {
+  if (!isPvpOnlyBotState(state)) {
+    return false;
+  }
+  const bounds = state?.roaming?.roamBounds ?? null;
+  return !!bounds &&
+    Number.isFinite(bounds.minX) &&
+    Number.isFinite(bounds.maxX) &&
+    Number.isFinite(bounds.minY) &&
+    Number.isFinite(bounds.maxY);
+}
+
+/**
  * Per-entry same-area watchdog. Returns the stuck reason, or null. A legitimate fight
  * resets the clock, and a hotspot bot lingering inside its own hotspot is doing its job.
  */
 function trackStuckArea(entry, nowMs) {
   const player = entry?.player;
   const state = entry?.state;
-  if (!player || !state || !isPvpOnlyBotState(state)) {
+  if (!player || !state || !isManagedWildernessBot(state)) {
     return null;
   }
   const location = player.getLocation?.();
@@ -834,10 +851,14 @@ class BotBehaviorTask extends Task {
   recoverStuckBot(entry, nowMs) {
     const player = entry?.player;
     const state = entry?.state;
-    if (!player || !state || !isPvpOnlyBotState(state)) {
+    if (!player || !state || !isManagedWildernessBot(state)) {
       return false;
     }
     if ((player.getHitpoints?.() ?? 0) <= 0 || player.isDyingReturn?.() === true) {
+      return false;
+    }
+    // Instances, teleports and live fights belong to their own controllers (LMS, BH).
+    if (player.getPrivateArea?.() != null || isTeleblocked(player) || this.hasCombatLinks(player)) {
       return false;
     }
     const watch = entry.stuckWatch ?? (entry.stuckWatch = createStuckWatch(nowMs));
@@ -924,10 +945,13 @@ class BotBehaviorTask extends Task {
   maybeRestoreMissingLoadout(entry, nowMs) {
     const player = entry?.player;
     const state = entry?.state;
-    if (!player || !state || !isPvpOnlyBotState(state) || !state.pvp) {
+    if (!player || !state || !isManagedWildernessBot(state) || !state.pvp) {
       return false;
     }
     if ((player.getHitpoints?.() ?? 0) <= 0 || player.isDyingReturn?.() === true) {
+      return false;
+    }
+    if (player.getPrivateArea?.() != null || isTeleblocked(player) || this.hasCombatLinks(player)) {
       return false;
     }
     const watch = entry.stuckWatch ?? (entry.stuckWatch = createStuckWatch(nowMs));
@@ -1242,6 +1266,7 @@ module.exports = {
   refreshIdleFace,
   __testing: {
     STUCK_AREA_MS,
+    isManagedWildernessBot,
     trackStuckArea,
   },
 };

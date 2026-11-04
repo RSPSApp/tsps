@@ -140,6 +140,82 @@ class ContentTest {
         }
     }
 
+    @Test
+    fun `rune pouch bank view fills directly from native bank item operations`() {
+        LiveGateway.login(developer()).use { game ->
+            game.expect<RebuildLoginV2>()
+            val state = prepareRunePouch(game)
+            val slot = requireNotNull(state.bank.entries.firstOrNull { it.value.first == AIR_RUNE }?.key)
+            game.button(12, 12, op = 4, sub = slot, obj = AIR_RUNE) // Withdraw-10 into the viewed pouch.
+            game.ticks(3, state.vars, state::track)
+            assertEquals(1, varbit(state.vars, 29), "air occupies the pouch's first slot")
+            assertEquals(10, varbit(state.vars, 1624), "the bank fills the pouch directly")
+            assertTrue(state.inventory.values.none { it.first == AIR_RUNE }, "runes never enter inventory")
+        }
+    }
+
+    @Test
+    fun `rune pouch loadout creation accepts native object search and quantity answers`() {
+        LiveGateway.login(developer()).use { game ->
+            game.expect<RebuildLoginV2>()
+            val state = prepareRunePouch(game)
+            // Choose a different rune from a previous run so stale saved loadouts cannot pass.
+            val type = if (varbit(state.vars, 9717) == 1) 4 else 1
+            val rune = if (type == 1) AIR_RUNE else FIRE_RUNE
+            game.button(15, 33, sub = 1) // Cache bankside:runepouch_loadout_a, first slot.
+            game.resumeObject(rune)
+            game.ticks(2, state.vars, state::track)
+            assertEquals(type, varbit(state.vars, 9717), "RESUME_P_OBJDIALOG stores the picked rune")
+            assertEquals(0, varbit(state.vars, 9686), "a new pick clears the old limit")
+            game.resumeCount(50)
+            game.ticks(2, state.vars, state::track)
+            assertEquals(50, varbit(state.vars, 9686), "native count answer sets the limit")
+            game.button(15, 27) // Cache bankside:runepouch_load_a.
+            game.ticks(3, state.vars, state::track)
+            assertEquals(type, varbit(state.vars, 29))
+            assertEquals(50, varbit(state.vars, 1624), "the created loadout fills from the bank")
+        }
+    }
+
+    private class RunePouchState {
+        val vars = HashMap<Int, Int>()
+        val inventory = HashMap<Int, Pair<Int, Int>>()
+        val bank = HashMap<Int, Pair<Int, Int>>()
+        fun track(message: Any) {
+            when (message) {
+                is UpdateInvFull -> {
+                    val target = when (message.inventoryId) { 93 -> inventory; 95 -> bank; else -> return }
+                    target.clear()
+                    message.objs.forEachIndexed { slot, obj -> if (obj.id >= 0) target[slot] = obj.id to obj.count }
+                }
+                is UpdateInvPartial -> {
+                    val target = when (message.inventoryId) { 93 -> inventory; 95 -> bank; else -> return }
+                    for (obj in message.objs) if (obj.id >= 0) target[obj.slot] = obj.id to obj.count else target.remove(obj.slot)
+                }
+            }
+        }
+    }
+
+    private fun prepareRunePouch(game: HeadlessClient.Game): RunePouchState {
+        val state = RunePouchState()
+        game.closeModal(); game.ticks(2, state.vars, state::track)
+        game.command("clearinv"); game.command("item $RUNE_POUCH 1")
+        game.ticks(2, state.vars, state::track)
+        game.button(149, 0, op = 6, sub = 0, obj = RUNE_POUCH) // Cache enum4303 maps item action4 (Empty) to widget op6.
+        game.ticks(2, state.vars, state::track)
+        assertEquals(0, varbit(state.vars, 1624), "previous pouch contents are emptied before setup")
+        game.command("clearinv"); game.command("item $RUNE_POUCH 1")
+        game.command("item $AIR_RUNE 100"); game.command("item $FIRE_RUNE 100"); game.command("bank")
+        game.ticks(3, state.vars, state::track)
+        for ((slot, item) in state.inventory.toMap()) if (item.first == AIR_RUNE || item.first == FIRE_RUNE)
+            game.button(15, 3, op = 8, sub = slot, obj = item.first)
+        game.ticks(2, state.vars, state::track)
+        game.button(15, 3, sub = 0, obj = RUNE_POUCH)
+        game.ticks(2, state.vars, state::track)
+        assertEquals(3, varbit(state.vars, 9727), "native bank pouch view is active")
+        return state
+    }
+
     private fun developer(): String {
         val developer = LiveGateway.developerName
         assumeTrue(developer != null, "DEV_USERNAME isn't set; the tests teleport and spawn runes")
@@ -188,6 +264,9 @@ class ContentTest {
         const val SPELLBOOK = 218
         const val VARROCK_TELEPORT = 26
         const val VARROCK_TELEPORT_LEVEL = 25
+        const val RUNE_POUCH = 12791
+        const val AIR_RUNE = 556
+        const val FIRE_RUNE = 554
         const val MAGIC = 6
 
         /** Law, air and fire runes. */

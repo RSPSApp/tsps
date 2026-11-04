@@ -78,12 +78,14 @@ function SetupDetails({
             </div>
             <Section title="Equipment">
                 {setup.equipment.length === 0 ? <EmptyLine text="No equipment saved" /> : setup.equipment.slice().sort((a, b) => a.slot - b.slot).map((required) => {
-                    const current = currentEquipment[required.slot]?.itemId;
-                    const ready = current === required.itemId;
+                    const current = currentEquipment[required.slot];
+                    const currentQuantity = current?.itemId === required.itemId ? Math.max(0, current.quantity) : 0;
+                    const missingEquipped = Math.max(0, required.quantity - currentQuantity);
+                    const ready = current?.itemId === required.itemId && missingEquipped === 0;
                     const inInventory = (inventoryCounts.get(required.itemId) ?? 0) >= required.quantity;
                     const inBank = (bankCounts.get(required.itemId) ?? 0) >= required.quantity;
                     const equippedElsewhere = !ready && currentEquipment.some((slot, index) => index !== required.slot && slot.itemId === required.itemId);
-                    const status = ready ? "Equipped" : equippedElsewhere ? "Equipped elsewhere" : inInventory ? "In inventory" : bankOpen && inBank ? "In bank" : bankOpen ? "Missing" : "";
+                    const status = ready ? "Equipped" : current?.itemId === required.itemId ? `Need ${missingEquipped} more` : equippedElsewhere ? "Equipped elsewhere" : inInventory ? "In inventory" : bankOpen && inBank ? "In bank" : bankOpen ? "Missing" : "";
                     return <SetupRow key={`${required.slot}-${required.itemId}`} label={EQUIPMENT_SLOTS[required.slot] || `Slot ${required.slot + 1}`} name={itemName(required.itemId)} status={status} ready={ready} />;
                 })}
             </Section>

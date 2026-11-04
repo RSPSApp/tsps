@@ -115,11 +115,10 @@ export class LootTrackerPlugin extends Plugin {
         if (stack.ownership !== 1 && !(stack.ownerId !== undefined && localId >= 0 && (stack.ownerId | 0) === localId)) return;
 
         if (event.kind === "spawn") {
-            const signature = `${stack.id}|${stack.itemId}|${stack.tile.x}|${stack.tile.y}|${stack.tile.level}|${stack.createdTick ?? "?"}`;
+            const signature = this.stackSignature(stack);
             this.activeStacks.set(stack.id | 0, { itemId: stack.itemId | 0 });
             if (this.seenStacks.has(signature)) return;
-            this.seenStacks.add(signature);
-            if (this.seenStacks.size > 5000) this.seenStacks.clear();
+            this.rememberStack(signature);
             this.add(stack.itemId, stack.name, stack.quantity, stack.gePrice);
             return;
         }
@@ -127,7 +126,21 @@ export class LootTrackerPlugin extends Plugin {
         const active = this.activeStacks.get(stack.id | 0);
         if (!active || active.itemId !== (stack.itemId | 0)) return;
         const increase = Math.max(0, (stack.quantity | 0) - (event.oldQuantity ?? stack.quantity));
-        if (increase > 0) this.add(stack.itemId, stack.name, increase, stack.gePrice);
+        if (increase > 0) {
+            // Merging keeps the stack ID but resets its age, changing createdTick. Remember
+            // the updated signature so a later region snapshot does not count the full stack again.
+            this.rememberStack(this.stackSignature(stack));
+            this.add(stack.itemId, stack.name, increase, stack.gePrice);
+        }
+    }
+
+    private stackSignature(stack: GroundItemMutation["stack"]): string {
+        return `${stack.id}|${stack.itemId}|${stack.tile.x}|${stack.tile.y}|${stack.tile.level}|${stack.createdTick ?? "?"}`;
+    }
+
+    private rememberStack(signature: string): void {
+        this.seenStacks.add(signature);
+        if (this.seenStacks.size > 5000) this.seenStacks.clear();
     }
 
     private add(itemId: number, name: string, quantity: number, unitPrice: number): void {

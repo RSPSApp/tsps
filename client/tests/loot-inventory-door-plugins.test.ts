@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { ConfigManager } from "../runelite/client/config/ConfigManager";
 import type { ConfigStorage } from "../runelite/client/config/ConfigStorage";
 import { EventBus } from "../runelite/client/eventbus/EventBus";
@@ -9,7 +11,9 @@ import { loadItemPrices } from "../network/serverConnection/domain/itemPrices";
 import { state } from "../network/serverConnection/state";
 import { LootTrackerPlugin } from "../game/plugins/loottracker/LootTrackerPlugin";
 import { InventorySetupsPlugin, InventorySetupsConfig } from "../game/plugins/inventorysetups/InventorySetupsPlugin";
+import { InventorySetupsPanel } from "../game/plugins/inventorysetups/InventorySetupsPanel";
 import { DoorKickerPlugin, DoorKickerConfig } from "../game/plugins/doorkicker/DoorKickerPlugin";
+import { GroundItemStore } from "../game/data/ground/GroundItemStore";
 
 class MemoryStorage implements ConfigStorage {
     private readonly values = new Map<string, string>();
@@ -25,14 +29,16 @@ async function main(): Promise<void> {
     (state as any).socket = { fetchContent: async (path: string) => path === "/api/item-prices" ? { 4151: 250 } : {} };
     await loadItemPrices();
 
-    const mutationListeners = new Set<(event: any) => void>();
+    const groundItems = new GroundItemStore();
+    groundItems.setMetadataResolver((itemId) => ({ name: itemId === 4151 ? "Abyssal whip" : itemId === 999 ? "Unquoted item" : `Item ${itemId}`, gePrice: 100, haPrice: 0, tradeable: true }));
+    const mutationListeners = groundItems.mutationListeners;
     const groupLoadedListeners = new Set<(groupId: number) => void>();
     const interfaceClosedListeners = new Set<(groupId: number, modalMode: number, unload: boolean) => void>();
     const playerAnimations: Array<[number, number]> = [];
     let bankOpen = true;
     const client: any = {
         controlledPlayerServerId: 42,
-        groundItems: { mutationListeners },
+        groundItems,
         inventory: new Inventory(),
         equipment: new Inventory(14),
         bankInventory: new Inventory(1410),
@@ -63,14 +69,17 @@ async function main(): Promise<void> {
     await pluginManager.setPluginEnabled(DoorKickerPlugin, true);
 
     // The tracker counts each owned stack once, adds later quantity increases, and ignores another player's drops.
-    const emit = (event: any) => { for (const listener of mutationListeners) listener(event); };
     const stack = { id: 7, itemId: 4151, quantity: 2, tile: { x: 3200, y: 3200, level: 0 }, createdTick: 100, ownerId: 42, ownership: 1, name: "Abyssal whip", gePrice: 100 };
-    emit({ kind: "spawn", stack });
-    emit({ kind: "spawn", stack });
-    emit({ kind: "quantity", stack: { ...stack, quantity: 4 }, oldQuantity: 2 });
-    emit({ kind: "spawn", stack: { ...stack, id: 8, ownerId: 99 } });
+    groundItems.update({ kind: "snapshot", serial: 1, stacks: [stack] });
+    groundItems.update({ kind: "snapshot", serial: 2, stacks: [stack] });
+    const mergedStack = { ...stack, quantity: 4, createdTick: 101 };
+    groundItems.update({ kind: "delta", serial: 3, upserts: [mergedStack], removes: [] });
+    // Region snapshots despawn and respawn every stack. A merge changes createdTick while
+    // retaining ID, so that respawn must not count the already-recorded full quantity again.
+    groundItems.update({ kind: "snapshot", serial: 4, stacks: [{ ...mergedStack, isPrivate: false }] });
+    groundItems.update({ kind: "delta", serial: 5, upserts: [{ ...stack, id: 8, ownerId: 99, ownership: 2 }], removes: [] });
     assert.deepEqual(loot.getState().items, [{ itemId: 4151, name: "Abyssal whip", quantity: 4, unitPrice: 250 }]);
-    emit({ kind: "despawn", stack: { ...stack, quantity: 4 } });
+    groundItems.update({ kind: "delta", serial: 6, upserts: [], removes: [stack.id] });
     assert.equal(loot.getState().items[0].quantity, 4, "despawning a ground stack does not erase recorded drops");
     loot.clear();
     assert.deepEqual(loot.getState().items, []);
@@ -79,7 +88,7 @@ async function main(): Promise<void> {
     (state as any).socket = { fetchContent: async (path: string) => path === "/api/item-prices" ? {} : {} };
     await loadItemPrices();
     const unquotedStack = { ...stack, id: 9, itemId: 999, name: "Unquoted item", gePrice: 0 };
-    emit({ kind: "spawn", stack: unquotedStack });
+    groundItems.update({ kind: "delta", serial: 7, upserts: [unquotedStack], removes: [] });
     assert.deepEqual(loot.getState().items, [{ itemId: 999, name: "Unquoted item", quantity: 2, unitPrice: 100 }]);
     loot.clear();
 
@@ -105,6 +114,13 @@ async function main(): Promise<void> {
     assert.ok(setups.getState().version > closedStateVersion, "opening the bank notifies the setup panel");
     assert.equal(setups.isBankOpen(), true);
     assert.equal(configManager.getConfiguration(InventorySetupsConfig.group, "setups")?.includes("raid"), true);
+
+    // A depleted equipment stack is not ready just because its item ID still matches.
+    client.equipment.setSlot(13, 882, 100);
+    setups.saveCurrent("Ammo");
+    client.equipment.setSlot(13, 882, 99);
+    const setupMarkup = renderToStaticMarkup(React.createElement(InventorySetupsPanel, { plugin: setups }));
+    assert.ok(setupMarkup.includes("Need 1 more"), "equipment rows show the quantity shortfall");
 
     // Animation choice comes from the config dropdown; only open actions on door-like objects match.
     assert.equal(door.onMenuOptionClicked(openDoor), false);

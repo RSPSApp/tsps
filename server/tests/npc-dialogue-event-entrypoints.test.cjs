@@ -1595,7 +1595,7 @@ for (const contact of ['A trader in Ardougne', 'A ghost in Port Phasmatys', 'A w
     await f.select('Got to go, bye!');
     for (let n = 0; n < 5 && f.player.getDialogueManager().getCurrent(); n++) await f.advance();
     assert.equal(f.menu(), null, 'goodbye leaves no pending menu');
-    assert.equal(f.player.getDialogueManager().getCurrent(), null, 'goodbye ends playback');
+    assert.equal(f.player.getDialogueManager().isActive(), false, 'goodbye ends playback');
     assert.equal(f.quest.getStage(f.player), f.quest.startedValue, 'ending the conversation preserves progress');
   });
 }
@@ -1605,7 +1605,7 @@ test('Jorral missing prerequisites refuses once and native close leaves a fresh 
   await f.talk();
   for (let n = 0; n < 10 && f.player.getDialogueManager().getCurrent(); n++) await f.advance();
   assert.equal(f.menu(), null);
-  assert.equal(f.player.getDialogueManager().getCurrent(), null, `refusal must end: ${JSON.stringify(f.trace)}`);
+  assert.equal(f.player.getDialogueManager().isActive(), false, `refusal must end: ${JSON.stringify(f.trace)}`);
   assert.equal(f.trace.filter(text => text === "Don't bother, you're not experienced enough to help me!").length, 1);
   assert.equal(f.quest.getStage(f.player), 0);
   await f.talk();

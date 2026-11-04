@@ -3,8 +3,9 @@
  *
  * - Forge, "Use" (captured): melts a Bandos chestplate into 3 Bandosian components or tassets into 2,
  *   asked first ("Melt down your Bandos chestplate into 3 Bandosian components?"), with seq 899 and
- *   synth 2725, the components (one a slot) three ticks later. "You don't have anything suitable to
- *   put in the forge." / "You require more inventory space to do that." No skill or XP (Wiki).
+ *   synth 2725, the armour swapped for the components (one a slot) three ticks later. "You don't
+ *   have anything suitable to put in the forge." / "You require more inventory space to do that."
+ *   (at the click, with no prompt). No skill or XP (Wiki).
  * - Anvil, "Smith" (captured): repairs damaged Torva with Bandosian components ("Repair your Torva
  *   platebody with 2 Bandosian components?"), seq 898 every 4 ticks, then on the 12th tick the
  *   repaired piece in an object box ("... You feel mentally and physically exhausted.") with the
@@ -46,19 +47,23 @@ function useForge({ player }) {
     player.sendMessage("You don't have anything suitable to put in the forge.");
     return true;
   }
+  const hasRoom = () => {
+    if (inventory.getFreeSlots() >= armour.components - 1) return true;
+    player.sendMessage("You require more inventory space to do that.");
+    return false;
+  };
+  if (!hasRoom()) return true;
   const melt = () => {
     player.getPacketSender().sendInterfaceRemoval();
     if (!inventory.contains(armour.id)) return;
-    if (inventory.getFreeSlots() < armour.components - 1) {
-      player.sendMessage("You require more inventory space to do that.");
-      return;
-    }
-    inventory.delete(armour.id, 1);
+    if (!hasRoom()) return;
     player.performAnimation(Common.animation(FURNACE_ANIM));
     player.getPacketSender().sendSoundEffect(FURNACE_SOUND, 1, 0);
     player.sendMessage("You use the forge to melt the armour down into some components.");
+    // The armour and its components change together (rec 819), so nothing is lost before then.
     Common.later(3, () => {
-      if (!player.isRegistered()) return;
+      if (!player.isRegistered() || !inventory.contains(armour.id) || !hasRoom()) return;
+      inventory.delete(armour.id, 1);
       for (let i = 0; i < armour.components; i++) inventory.adds(Common.core.ItemIdentifiers.BANDOSIAN_COMPONENTS, 1);
     });
   };

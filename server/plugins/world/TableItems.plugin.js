@@ -8,7 +8,8 @@
  * happens. A table tile holds one item stack, so a second item cannot be put on the same spot
  * until the first is taken or despawns.
  *
- * Fallback: content that gives a table its own item use runs first and keeps the item.
+ * Fallback: content that gives a table its own item use runs first and keeps the item. A removal is
+ * reported as an item discard, so a valuable item is saved before the table copy can be taken.
  */
 
 const TABLE_NAME = /\btable\b/i;
@@ -76,16 +77,31 @@ function putOnTable(event) {
     dropToGround: true,
     handled: false,
   };
+  // Native drop copies the item before the policy, so a handler that takes it can still report
+  // the loss. One unit is the part of the stack this use would remove.
+  const discarded = current.clone().setAmount(1);
+  const carried = current.getAmount();
   core.PluginManager.emitItemDropPolicy(policy);
-  if (policy.handled || policy.dropToGround === false) return;
-  // A policy handler may also have taken the item itself; never place a clone of what it removed.
-  if (player.getInventory().getItems()[itemSlot] !== current) return;
+  // The policy may refuse, replace or consume the item. Whatever it did, a slot that no longer
+  // holds the clicked stack means the item left the inventory, and like native drop that has to
+  // be reported for the durable save: otherwise a crash before the next autosave restores it.
+  if (policy.handled || policy.dropToGround === false
+      || player.getInventory().getItems()[itemSlot] !== current) {
+    const remaining = player.getInventory().getItems()[itemSlot];
+    if (remaining?.getId?.() !== itemId || (remaining?.getAmount?.() ?? 0) < carried) {
+      core.PluginManager.emitCustomEvent("item:discarded", { player, item: discarded });
+    }
+    return;
+  }
 
+  // Clone after the policy so its drop-side changes (barrows durability) are what goes on the
+  // table, and before the removal so the discard reports what left the inventory.
   const placed = current.clone().setAmount(1);
   player.getInventory().deleteAtSlot(itemSlot, 1);
   core.ItemOnGroundManager.registerLocation(player, placed, location, player.getPrivateArea(), {
     despawnDelay: TABLE_DESPAWN_TICKS,
   });
+  core.PluginManager.emitCustomEvent("item:discarded", { player, item: placed });
 }
 
 module.exports = {

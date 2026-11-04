@@ -5,6 +5,8 @@
 // different item (same id, different metadata) in the clicked slot. Only the exact clicked item
 // may be removed and placed, or the swap duplicates the item.
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { before, test } = require("node:test");
 
@@ -14,6 +16,9 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { ObjectDefinition } = require("../dist/game/definition/ObjectDefinition");
 const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
 const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
+const { State } = require("../dist/game/entity/impl/grounditem/ItemOnGround");
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { GameConstants } = require("../dist/game/GameConstants");
 const { PrivateArea } = require("../dist/game/model/areas/impl/PrivateArea");
 const { Inventory } = require("../dist/game/model/container/impl/Inventory");
 const { Item } = require("../dist/game/model/Item");
@@ -26,6 +31,8 @@ const TABLE_ID = 593;
 const TABLE_LOCATION = new Location(3222, 3218, 0);
 const WHIP = 4151;
 const TRADEABLE_BOND = 13190;
+// Tradeable, droppable, and 36m by the quoted guide price in item-prices.json.
+const RANGER_BOOTS = 2577;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -83,6 +90,39 @@ function presetWhip() {
 
 function newGroundItems(since) {
   return World.getItems().slice(since);
+}
+
+/** A real player, so the account save serializes its inventory the way a logout does. */
+function realPlayer(name, area, location) {
+  const player = new Player({ sendClientPacket: () => true, write() {} });
+  player.setUsername(name);
+  player.setArea(area);
+  player.setLocation(location.clone());
+  return player;
+}
+
+/** Native Use from a real player, with the walk callback held until the test calls it. */
+function useOnTableAs(player, item) {
+  player.getInventory().setItem(0, item);
+  let arrive = null;
+  const queue = {
+    walkToObject: (_object, callback) => { arrive = callback.execute; },
+    reset: () => {},
+    walkToReset: () => {},
+  };
+  player.getMovementQueue = () => queue;
+  UseItemPacketListener.itemOnObject(
+    player, 149, TABLE_ID, item.getId(), 0, TABLE_LOCATION.getX(), TABLE_LOCATION.getY(),
+  );
+  assert.equal(typeof arrive, "function", "the item use is queued behind the walk");
+  return () => arrive();
+}
+
+function savedAmount(persistence, name, itemId) {
+  const save = persistence.load(name);
+  return (save?.getInventory() ?? [])
+    .filter((item) => item.getId() === itemId)
+    .reduce((total, item) => total + item.getAmount(), 0);
 }
 
 test("cache: table 593 is a real table and an abyssal whip is tradeable", () => {
@@ -175,5 +215,70 @@ test("a bond's registered drop policy stops table placement", () => {
     assert.deepEqual(messages, ["This object cannot be dropped or destroyed."]);
   } finally {
     World.getItems().splice(since);
+  }
+});
+
+test("a valuable item's removal is saved before the table copy can be taken", async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "tsps-table-save-"));
+  const Json = require("../plugins/persistence/JsonPlayerPersistence.plugin");
+  const SaveEvents = require("../plugins/persistence/SaveEvents.plugin");
+  const { SkillManager } = require("../dist/game/content/skill/SkillManager");
+  const { loadItemPrices } = require("../plugins/items/ItemDefinitionLoader.plugin")._test;
+  const previousDirectory = Json.JsonPlayerPersistence.SAVE_DIRECTORY;
+  const previousBackend = GameConstants.PLAYER_PERSISTENCE;
+  const items = World.getItems();
+  const previousItems = items.splice(0);
+  Json.JsonPlayerPersistence.SAVE_DIRECTORY = path.join(directory, "characters");
+  let persistence = null;
+  Json.register({
+    getSkillManager: () => SkillManager,
+    setPlayerPersistence: (backend) => { persistence = backend; },
+    log() {},
+  });
+  // SaveEvents reaches the backend through GameConstants, as it does in the running server.
+  GameConstants.setPlayerPersistence(persistence);
+  // SaveEvents saves a discard when the quoted guide price is at least 10m.
+  loadItemPrices();
+  SaveEvents.register(PluginManager.createApi("SaveEvents"));
+  try {
+    const fixture = tableFixture();
+    const seller = realPlayer("Table Seller", fixture.area, new Location(3222, 3219, 0));
+    const boots = new Item(RANGER_BOOTS, 1);
+    assert.ok(boots.getDefinition().getGrandExchangeValue() >= 10_000_000,
+      "ranger boots are above the save threshold");
+    seller.getInventory().setItem(0, boots);
+    persistence.save(seller, "logout");
+    await persistence.flush();
+    assert.equal(savedAmount(persistence, "Table Seller", RANGER_BOOTS), 1,
+      "the saved account starts with the boots");
+
+    // Native use: the click is queued behind the walk, and the arrival moves the boots to the table.
+    const arrive = useOnTableAs(seller, boots);
+    arrive();
+    await persistence.flush();
+
+    assert.equal(savedAmount(persistence, "Table Seller", RANGER_BOOTS), 0,
+      "the saved account no longer owns the boots the table holds");
+    const [ground] = World.getItems();
+    assert.equal(ground.getItem().getId(), RANGER_BOOTS, "the boots are on the table");
+    for (let tick = 0; tick < ItemOnGroundManager.PUBLIC_REVEAL_DELAY; tick++) ground.process();
+    assert.equal(ground.getState(), State.SEEN_BY_EVERYONE, "the table copy is public after 100 ticks");
+
+    // The stack is now takeable, as it is for another player in the same area.
+    const taker = realPlayer("Table Taker", fixture.area, TABLE_LOCATION.clone());
+    ItemOnGroundManager.pickup(taker, ground);
+    assert.equal(taker.getInventory().getAmount(RANGER_BOOTS), 1, "the taker picks the boots up");
+    persistence.save(taker, "logout");
+    await persistence.flush();
+
+    assert.equal(savedAmount(persistence, "Table Taker", RANGER_BOOTS), 1,
+      "the taker's saved account owns the boots");
+    assert.equal(savedAmount(persistence, "Table Seller", RANGER_BOOTS), 0,
+      "and the seller's does not: the two files hold one pair between them");
+  } finally {
+    items.splice(0, items.length, ...previousItems);
+    Json.JsonPlayerPersistence.SAVE_DIRECTORY = previousDirectory;
+    GameConstants.setPlayerPersistence(previousBackend);
+    fs.rmSync(directory, { recursive: true, force: true });
   }
 });

@@ -92,6 +92,21 @@ export class PrayerHandler {
             case PrayerHandler.PROTECT_FROM_MAGIC: return Sound.PRAYER_PROTECT_MAGIC;
             case PrayerHandler.PROTECT_FROM_MISSILES: return Sound.PRAYER_PROTECT_RANGE;
             case PrayerHandler.PROTECT_FROM_MELEE: return Sound.PRAYER_PROTECT_MELEE;
+            case PrayerHandler.SHARP_EYE:
+            case PrayerHandler.RIGOUR: return Sound.PRAYER_SHARP_EYE;
+            case PrayerHandler.MYSTIC_WILL:
+            case PrayerHandler.AUGURY: return Sound.PRAYER_MYSTIC_WILL;
+            case PrayerHandler.PROTECT_ITEM: return Sound.PRAYER_PROTECT_ITEM;
+            case PrayerHandler.HAWK_EYE: return Sound.PRAYER_HAWK_EYE;
+            case PrayerHandler.MYSTIC_LORE: return Sound.PRAYER_MYSTIC_LORE;
+            case PrayerHandler.EAGLE_EYE: return Sound.PRAYER_EAGLE_EYE;
+            case PrayerHandler.MYSTIC_MIGHT: return Sound.PRAYER_MYSTIC_MIGHT;
+            case PrayerHandler.RETRIBUTION: return Sound.PRAYER_RETRIBUTION;
+            case PrayerHandler.REDEMPTION: return Sound.PRAYER_REDEMPTION;
+            case PrayerHandler.SMITE: return Sound.PRAYER_SMITE;
+            case PrayerHandler.PRESERVE: return Sound.PRAYER_RAPID_RESTORE;
+            case PrayerHandler.CHIVALRY: return Sound.PRAYER_CHIVALRY;
+            case PrayerHandler.PIETY: return Sound.PRAYER_PIETY;
             default: return null;
         }
     }
@@ -316,7 +331,7 @@ export class PrayerHandler {
         return true;
     }
 
-    public static deactivatePrayer(c: Mobile, prayerId: number): void {
+    public static deactivatePrayer(c: Mobile, prayerId: number, audible = true): void {
         if (!c.getPrayerActive()[prayerId]) {
             return;
         }
@@ -325,7 +340,7 @@ export class PrayerHandler {
         if (c.isPlayer()) {
             const player = c.getAsPlayer();
             player.getPacketSender().sendVarbit(pd.configId, 0);
-            Sounds.sendSound(player, Sound.PRAYER_TURN_OFF);
+            if (audible) Sounds.sendSound(player, Sound.PRAYER_TURN_OFF);
             if (pd.hint !== -1) {
                 const hintId = this.getHeadHint(c);
                 player.getAppearance().setHeadHint(hintId);
@@ -343,9 +358,9 @@ export class PrayerHandler {
         }
     }
 
-    public static deactivatePrayers(character: Mobile): void {
+    public static deactivatePrayers(character: Mobile, audible = true): void {
         for (let i = 0; i < character.getPrayerActive().length; i++) {
-            this.deactivatePrayer(character, i);
+            this.deactivatePrayer(character, i, audible);
         }
         if (character.isPlayer()) {
             character.getAsPlayer().getQuickPrayers().setEnabled(false);
@@ -417,8 +432,12 @@ export class PrayerHandler {
         // Recordings 1764, 1852, 4152: Prayer shows 0 on one tick and every prayer
         // is switched off, with this message, on the next.
         if (player.getSkillManager().getCurrentLevel(Skill.PRAYER) <= 0) {
-            PrayerHandler.deactivatePrayers(player);
-            player.sendMessage(RUN_OUT_MESSAGE);
+            if (player.getPrayerActive().some(Boolean)) {
+                // Raw3167: shutdown one tick after zero, with one depletion sound, not one off sound per prayer.
+                PrayerHandler.deactivatePrayers(player, false);
+                Sounds.sendSound(player, Sound.PRAYER_DEPLETED);
+                player.sendMessage(RUN_OUT_MESSAGE);
+            }
             PrayerHandler.stopDrain(player);
             return;
         }
@@ -476,7 +495,7 @@ export class PrayerHandler {
     public static resetPrayersC(c: Mobile, prayers: number[], prayerID: number): void {
         for (let i = 0; i < prayers.length; i++) {
             if (prayers[i] != prayerID)
-                this.deactivatePrayer(c, prayers[i]);
+                this.deactivatePrayer(c, prayers[i], false);
         }
     }
 

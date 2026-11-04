@@ -17,6 +17,24 @@ import { markWidgetInteractionDirty } from "../widgets/WidgetInteraction";
 import { HeldWidgetProperties } from "../widgets/HeldWidgetProperties";
 import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdates";
 
+// The native skillmulti script uses each production mode's verb on the same recipe buttons.
+{
+    const { vm } = require('../scripts/cache/cs2-sweep').createCacheVm();
+    const wm = vm.context.widgetManager;
+    wm.rootInterface = 161;
+    wm.getGroup(270);
+    for (const [mode, verb] of [[0, 'Make'], [6, 'Cook'], [13, 'Smelt'], [10, 'String'], [12, 'Cut'], [27, 'Burn'], [17, 'Take'], [31, 'Carve']] as const) {
+        vm.run(vm.context.loadScript(2046), [mode, 17, 1511, 6332, ...Array(16).fill(-1), 5],
+            ['What would you like to make?|Logs|Mahogany logs']);
+        assert.equal(vm.lastError, null);
+        for (const [slot, itemId] of [1511, 6332].entries()) {
+            const button = wm.getWidgetByUid((270 << 16) | (15 + slot));
+            assert.equal(button.actions[0], verb, 'the cache generates the requested production verb');
+            assert.equal(button.onOp[2], itemId, 'the verb change preserves the recipe target');
+        }
+    }
+}
+
 // Exercise the cache's actual panels and long-price script, not just the VM opcode.
 {
     const { createCacheVm } = require('../scripts/cache/cs2-sweep');

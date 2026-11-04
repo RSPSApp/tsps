@@ -617,8 +617,10 @@ export class Model2DRenderer {
 
         let triDrawn = 0;
         let triSkippedAlpha = 0;
-        // Default to OSRS UI behaviour: no z-buffer unless explicitly enabled
-        const disableZbuf = !depthTest;
+        // Player composites carry explicit equipment depth layers. The in-world renderer
+        // applies those layers with a depth buffer; do the same for widget previews so an
+        // equipped model cannot be overpainted by overlapping body-kit faces.
+        const disableZbuf = !depthTest && !model.faceRenderLayers;
         function drawTexturedTri(
             x0: number,
             y0: number,
@@ -862,7 +864,10 @@ export class Model2DRenderer {
         const binsLen = diameter > 0 ? diameter : maxBinObserved + 1;
         const bins: number[][] = Array.from({ length: binsLen }, () => []);
         for (const [b, list] of tmpBins.entries()) if (b >= 0 && b < binsLen) bins[b] = list;
-        const prioArr = model.faceRenderPriorities;
+        // Explicit render layers are produced by PlayerModelLoader for player composites and
+        // take precedence over the cache's per-face priorities in the in-world renderer too.
+        const renderPriorities = model.faceRenderLayers ?? model.faceRenderPriorities;
+        const prioArr = renderPriorities;
         const drawOrder: number[] = [];
         if (!prioArr) {
             for (let b = binsLen - 1; b >= 0; b--) {
@@ -984,8 +989,8 @@ export class Model2DRenderer {
             const faceAlpha = faceAlphaArr ? 0xff - (faceAlphaArr[f] & 0xff) : 0xff;
             // OSRS priority is 0-10+, but shader logic uses compressed 0-7 bands for depth bias.
             // Masking prevents excessive bias for high-priority faces (like 10+) which could pull back-faces through.
-            const rawPriority = model.faceRenderPriorities
-                ? model.faceRenderPriorities[f] & 0xff
+            const rawPriority = renderPriorities
+                ? renderPriorities[f] & 0xff
                 : 0;
             const priority = rawPriority & 0x7;
             if (faceTexId !== -1 && (model as any).uvs) {

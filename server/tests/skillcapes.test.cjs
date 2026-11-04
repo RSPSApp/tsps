@@ -63,6 +63,11 @@ function container(ids, size) {
         amount -= taken;
       }
     },
+    deleteAtSlot(slot, amount = 1) {
+      const held = items[slot];
+      held.setAmount(held.getAmount() - amount);
+      if (held.getAmount() <= 0) held.setId(-1);
+    },
     adds(id, amount) {
       const stack = items.find((i) => i.getId() === id && core.ItemDefinition.forId(id)?.isStackable?.());
       if (stack) { stack.setAmount(stack.getAmount() + amount); return; }

@@ -187,11 +187,23 @@ function isDropQuantity(quantity) {
 
 /**
  * A world's own edits, saved by the browser host's NPC Drops tab to npc-drops-custom.json and
- * absent everywhere else. Rows are addressed by their position in the dump, so this runs before
- * applyOverrides changes the arrays.
+ * absent everywhere else. New saves replace complete tables by name; old index-based saves
+ * remain supported. Both run before applyOverrides changes the arrays.
  */
 function applyCustomDrops(dump, custom) {
   for (const [tableId, edits] of Object.entries(custom.tables ?? {})) {
+    if (edits?.replacement !== undefined) {
+      const table = edits.replacement;
+      if (!table || typeof table !== "object" || Array.isArray(table) ||
+          ["entries", "tertiary"].some(field => table[field] !== undefined &&
+            (!Array.isArray(table[field]) || table[field].some(row => !row || typeof row !== "object" || Array.isArray(row))))) {
+        console.error(`[NpcDrops] invalid saved table '${tableId}'; using the default`);
+        continue;
+      }
+      // Clone: runtime corrections must never mutate the world's saved definition.
+      dump.tables[tableId] = structuredClone(table);
+      continue;
+    }
     const table = dump.tables[tableId];
     if (!table) {
       console.error(`[NpcDrops] npc-drops-custom.json changes unknown table '${tableId}'`);

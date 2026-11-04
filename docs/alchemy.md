@@ -53,3 +53,17 @@ valuable-item warning and the Warnings option), 4031 (rev 237: a cast inside Pes
   or Wiki page gives the default threshold.
 - The Explorer's ring's free casts (Wiki: 30 a day with ring 4, no XP); see
   [diary-rewards.md](diary-rewards.md).
+
+### Inventory priority
+
+High and Low Level Alchemy consume the first equivalent item in inventory slot order,
+so repeated casts targeting a later copy leave that copy until the earlier copies are gone
+(#2396). Equivalence uses the container's item-ID and metadata comparison: a preset-protected
+or differently charged copy is kept separate. Queued casts and confirmations still require
+the originally clicked instance to remain in its slot; alternative payments receive the
+instance and slot actually consumed.
+
+The priority behavior is the reporter's OSRS observation. Captures 3215, 3238, 3236, 337
+and 4270 did not target a later duplicate and therefore do not independently prove that
+ordering. The cache supplies the spell widgets; both real Gateway IF_BUTTONT packets and
+native Player widget-target regressions check the resulting slot order.

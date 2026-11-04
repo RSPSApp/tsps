@@ -21,7 +21,7 @@
  * 1042).
  */
 
-const { definePoweredStaff, distance, ticksFor } = require("./PoweredStaff");
+const { definePoweredStaff, refundsFit, distance, ticksFor } = require("./PoweredStaff");
 
 const TRIDENT_CHARGE_META_KEY = "trident-charges";
 const TRIDENT_MAX_CHARGES = 2500;
@@ -320,18 +320,13 @@ function unchargeTrident({ player, item }) {
   }
 
   const inventory = player.getInventory();
-  const neededSlots = recipe.refundResources.reduce(
-    (slots, [resourceId]) => slots + (inventory.contains(resourceId) ? 0 : 1),
-    0
-  );
-  if (inventory.getFreeSlots() < neededSlots) {
+  const refunds = recipe.refundResources.map(([resourceId, amountPerCharge]) => new core.Item(resourceId, current * amountPerCharge));
+  if (!refundsFit(inventory, refunds)) {
     player.sendMessage("Your inventory is too full to uncharge your trident.");
     return true;
   }
 
-  for (const [resourceId, amountPerCharge] of recipe.refundResources) {
-    inventory.addItem(new core.Item(resourceId, current * amountPerCharge));
-  }
+  for (const refund of refunds) inventory.addItem(refund);
   setCharges(item, 0);
   refreshTridentState(player, item);
   player.sendMessage(

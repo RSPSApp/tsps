@@ -267,6 +267,7 @@ test("Sanctuary boosts Defence immediately without a target and spends 100% ener
   assert.equal(player.skillManager.level("DEFENCE"), 58);
   assert.equal(player.energy, 0);
   assert.equal(player.activated, false);
+  assert.equal(player.calls.animations.at(-1).getId(), 1057, "sanctuary");
   assert.equal(special("excalibur").getCombatMethod().hits(player, null), null);
 });
 

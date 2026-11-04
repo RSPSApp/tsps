@@ -1254,9 +1254,7 @@ test('training-room deaths keep real gear and Hardcore status, clean room items 
     const roomItem = { enchanting: Common.ids.items.cube, alchemists: Common.ids.items.arenaCoins, graveyard: Common.ids.items.banana }[name];
     player.getInventory().adds(roomItem, 1);
     const task = new PlayerDeathTask(player);
-    task.execute();
-    task.execute();
-    task.execute();
+    for (let tick = 0; tick < 5; tick++) task.execute();
     assert.equal(deaths.get(player)?.itemsLost, false);
     assert.equal(Ironman.modeOf(player), 'hardcore');
     for (const id of carried) assert.equal(player.getInventory().getAmount(id), 100);

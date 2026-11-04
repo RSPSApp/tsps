@@ -3,16 +3,14 @@ module.exports = function registerStatiusWarhammerBhSpecialAttack(api) {
   const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Skill, Sound, Sounds } = api.core;
 
   const DRAIN = 35;
+  const ANIMATION = new Animation(1378); // DRAGON_WARHAMMER_SA_PLAYER, same Smash as Statius's warhammer
   const SPECIAL_VFX = new Graphic(844);
   const DEFENCE_DRAIN_FRACTION = 0.75;
 
   class StatiusWarhammerBhCombatMethod extends MeleeCombatMethod {
     start(character, target) {
       CombatSpecial.drain(character, DRAIN);
-      const animation = character.getAttackAnim(target);
-      if (animation !== -1) {
-        character.performAnimation(new Animation(animation));
-      }
+      character.performAnimation(ANIMATION);
       character.performGraphic(SPECIAL_VFX);
       Sounds.playAreaSoundAt(character, Sound.DRAGON_WARHAMMER_SPECIAL);
     }

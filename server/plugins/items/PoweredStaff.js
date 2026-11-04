@@ -254,4 +254,13 @@ function isPoweredStaffSpell(spell) {
   return spell?.[POWERED_STAFF_SPELL] === true;
 }
 
-module.exports = { definePoweredStaff, distance, ticksFor, isPoweredStaffSpell, LONGRANGE_EXTRA, IMPACT_SOUND_RANGE };
+/** Whether every refund fits at once: a new stack takes a slot of its own, and a matching one needs room. */
+function refundsFit(inventory, refunds) {
+  const meta = (item) => JSON.stringify(item.getMeta?.() ?? null);
+  const newStacks = refunds.filter((refund) => !inventory.getItems().some((held) =>
+    held?.getId() === refund.getId() && meta(held) === meta(refund))).length;
+  return newStacks <= inventory.getFreeSlots() &&
+    refunds.every((refund) => inventory.getAddableAmount(refund) >= refund.getAmount());
+}
+
+module.exports = { definePoweredStaff, refundsFit, distance, ticksFor, isPoweredStaffSpell, LONGRANGE_EXTRA, IMPACT_SOUND_RANGE };

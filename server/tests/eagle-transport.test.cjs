@@ -153,9 +153,7 @@ test('a completed real death cancels the old flight before its arrival', () => {
   player.isDying = true;
   player.setHitpoints(0);
   const death = new PlayerDeathTask(player);
-  death.execute();
-  death.execute();
-  death.execute();
+  for (let tick = 0; tick < 5; tick++) death.execute();
   const respawn = at(player);
   assert.equal(player.isDyingReturn(), false);
   assert.ok(player.getHitpoints() > 0);

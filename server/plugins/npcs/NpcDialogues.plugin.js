@@ -781,7 +781,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     if (!pairs.length) return run(rest, record);
     playedAny = true;
     manager.reset();
-    if (!presentOwned(() => api.sendMultiChatboxPrompt(player, formatPlayerText(step.prompt || "Select an option", player), ...pairs))) {
+    if (!presentOwned(() => api.sendMultiChatboxPrompt(player, formatPlayerText(notice.prompt, player), ...pairs))) {
       unavailable();
     }
   }

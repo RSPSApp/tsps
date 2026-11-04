@@ -181,7 +181,7 @@ function initialize(api) {
     [ObjectIdentifiers.ALTAR_33, { runeId: ItemIdentifiers.AIR_RUNE, level: 1, xp: 5, essence: ANY_ESSENCE, multiplier: [[11, 2], [22, 3], [33, 4], [44, 5], [55, 6], [66, 7], [77, 8], [88, 9], [99, 10]] }],
     [ObjectIdentifiers.ALTAR_34, { runeId: ItemIdentifiers.MIND_RUNE, level: 2, xp: 5.5, essence: ANY_ESSENCE, multiplier: [[14, 2], [28, 3], [42, 4], [56, 5], [70, 6], [84, 7], [98, 8]] }],
     [ObjectIdentifiers.ALTAR_35, { runeId: ItemIdentifiers.WATER_RUNE, level: 5, xp: 6, essence: ANY_ESSENCE, multiplier: [[19, 2], [38, 3], [57, 4], [76, 5], [95, 6]] }],
-    [ObjectIdentifiers.ALTAR_36, { runeId: ItemIdentifiers.EARTH_RUNE, level: 9, xp: 6.5, essence: ANY_ESSENCE, multiplier: [[26, 2], [52, 3], [78, 4]] }],
+    [ObjectIdentifiers.ALTAR_36, { runeId: ItemIdentifiers.EARTH_RUNE, level: 9, xp: 6.5, essence: ANY_ESSENCE, multiplier: [[26, 2], [52, 3], [78, 4], [104, 5]] }],
     [ObjectIdentifiers.ALTAR_37, { runeId: ItemIdentifiers.FIRE_RUNE, level: 14, xp: 7, essence: ANY_ESSENCE, multiplier: [[35, 2], [70, 3]] }],
     [ObjectIdentifiers.ALTAR_38, { runeId: ItemIdentifiers.BODY_RUNE, level: 20, xp: 7.5, essence: ANY_ESSENCE, multiplier: [[46, 2], [92, 3]] }],
     [ObjectIdentifiers.ALTAR_39, { runeId: ItemIdentifiers.COSMIC_RUNE, level: 27, xp: 8, essence: PURE_ESSENCE_ONLY, multiplier: [[59, 2]] }],

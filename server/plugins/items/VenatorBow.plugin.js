@@ -290,12 +290,13 @@ function uncharge({ player, item }) {
   if (!inventory.getItems().includes(item)) return false;
   const amount = charges(item);
   if (amount <= 0) return true;
-  if (!inventory.contains(essenceId) && inventory.getFreeSlots() <= 0) {
+  const refund = new core.Item(essenceId, amount);
+  if (inventory.getAddableAmount(refund) < amount) {
     player.sendMessage("You don't have enough inventory space to uncharge your venator bow.");
     return true;
   }
   setCharges(item, 0);
-  inventory.add(new core.Item(essenceId, amount));
+  inventory.add(refund);
   refresh(player);
   itemStatement(player, unchargedBowId(item), `You uncharge your venator bow, regaining ${format(amount)} ancient essence.`);
   return true;

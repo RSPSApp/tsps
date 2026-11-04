@@ -551,3 +551,16 @@ test("entering the Chaos altar by its ruins (tiara or talisman) or the Abyss rif
   assert.equal(handlers["Air rift:Exit-through"]({ player: visitor(), objectId: ObjectIdentifiers.AIR_RIFT }), true);
   assert.deepEqual(diary(), [], "another altar's rift");
 });
+
+// Wiki: Runecraft#Multiple_runes (revision 15386331). These use the fixture's
+// current-level stub; they do not simulate obtaining a boost from food or relics.
+for (const [level, runes] of [[77, 3], [78, 4], [103, 4], [104, 5]]) {
+  test(`the Earth Altar crafts ${runes} runes per essence at current Runecraft level ${level}`, () => {
+    const player = crafter(level, [[ItemIdentifiers.PURE_ESSENCE, 1]]);
+
+    assert.equal(craft(player, ObjectIdentifiers.ALTAR_36), true);
+    assert.equal(amount(player, ItemIdentifiers.EARTH_RUNE), runes, `earth runes at current level ${level}`);
+    assert.equal(amount(player, ItemIdentifiers.PURE_ESSENCE), 0, "the essence is consumed");
+    assert.deepEqual(player.xp, [6.5], "XP is per essence, not per rune");
+  });
+}

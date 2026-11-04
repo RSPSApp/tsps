@@ -508,6 +508,38 @@ console.log("Cache panel scripts retain inventory items, 64-bit prices and nativ
     }
 }
 
+// Native prayer and quick-prayer icons follow the server's Knight Waves unlock varbit.
+{
+    const { createCacheVm } = require('../scripts/cache/cs2-sweep');
+    const { encodeVarbit } = require('../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol');
+    const { vm } = createCacheVm(), wm = vm.context.widgetManager;
+    vm.context.getStatLevel = vm.context.getStatBase = vm.context.getStatBoosted = () => 99;
+    wm.onLoadListener = (_id: number, widget: any) => vm.runScriptEvent({ args: widget.onLoad, widget });
+    wm.resize(765, 503); wm.setRootInterface(161); resetTransmitCycles();
+    const queued: any[] = [];
+    const transmits = new WidgetTransmitProcessor({ getWidgetManager: () => wm, getCs2Vm: () => vm,
+        getTransmitCycles, queueScriptEvent: event => queued.push(event),
+        executeScriptListener: (widget, args) => vm.runScriptEvent({ widget, args }) });
+    vm.context.varManager.onVarpChange = (id: number) => vm.isRunning() ? vm.queueVarpChange(id) : markVarTransmit(id);
+    vm.onVarpChange = markVarTransmit;
+    for (const group of [541, 77]) {
+        wm.openSubInterface((161 << 16) | 81, group, 1);
+        vm.run(vm.context.loadScript(915), [5], []); // The server selects the prayer sidebar.
+        for (const [state, sprites] of [[0, [949, 950]], [8, [945, 946]], [0, [949, 950]]] as const) {
+            const message = decodeServerPacket(encodeVarbit(3909, state)) as any;
+            vm.context.varManager.setServerVarbit(message.payload.varbitId, message.payload.value);
+            transmits.processWidgetTransmits();
+            while (queued.length) vm.runScriptEvent(queued.shift());
+            assert.equal(vm.lastError, null);
+            const icons = group === 541 ? [34, 35].map(child => wm.getWidgetByUid((541 << 16) | child).children[1])
+                : [79, 81].map(index => wm.getWidgetByUid((77 << 16) | 4).children[index]);
+            assert.deepEqual(icons.map(icon => icon.spriteId), sprites,
+                `${group} shows the native Chivalry/Piety locked or unlocked sprites`);
+        }
+    }
+    resetTransmitCycles();
+}
+
 // Actual cache key listeners -> native resume packet -> real PlayerSession/DestroyItem policy.
 async function nativeDestroyConfirmation() {
     const previousDirectory = process.cwd();

@@ -1,7 +1,8 @@
 /**
  * Godsword blades (https://oldschool.runescape.wiki/w/Godsword_blade): two different shard
  * pieces are forged together at an anvil (80 Smithing, 100 XP each), shards into pairs and a
- * pair with the last shard into the blade. The blade and a hilt make the godsword, no skill.
+ * pair with the last shard into the blade. The blade and a hilt make the godsword, no skill;
+ * the hilt can be removed at any time (https://oldschool.runescape.wiki/w/Godswords).
  *
  * Captured (rsprox recs 1515, 1517; docs/smithing.md): Smith (or a piece used on the anvil)
  * opens "You set to work, trying to fix the ancient sword..." with human_smithing, again 3
@@ -134,8 +135,60 @@ function joinByHand(event) {
   }
 }
 
+function finishDismantle(player, item, swordId, hiltId) {
+  const inventory = player.getInventory();
+  const equipment = player.getEquipment();
+  const inventorySlot = inventory.getItems().indexOf(item);
+  const equipmentSlot = equipment.getItems().indexOf(item);
+  if ((inventorySlot < 0 && equipmentSlot < 0) || item.getId() !== swordId) return;
+  const neededSlots = equipmentSlot < 0 ? 1 : 2;
+  if (inventory.getFreeSlots() < neededSlots) {
+    player.sendMessage("You don't have enough inventory space to do that.");
+    return;
+  }
+  if (inventorySlot >= 0) {
+    item.setId(Core.ItemIdentifiers.GODSWORD_BLADE);
+    inventory.addItem(new Core.Item(hiltId, 1));
+  } else {
+    equipment.deleteAtSlot(equipmentSlot, 1);
+    inventory.addItem(new Core.Item(Core.ItemIdentifiers.GODSWORD_BLADE, 1));
+    inventory.addItem(new Core.Item(hiltId, 1));
+    equipment.refreshItems();
+    player.getUpdateFlag().flag(Core.Flag.APPEARANCE);
+  }
+  inventory.refreshItems();
+  player.sendMessage("You dismantle the godsword.");
+}
+
+function dismantle({ player, item }) {
+  const I = Core.ItemIdentifiers;
+  const swordId = item?.getId?.();
+  const hiltId = new Map([
+    [I.ARMADYL_GODSWORD, I.ARMADYL_HILT],
+    [I.BANDOS_GODSWORD, I.BANDOS_HILT],
+    [I.SARADOMIN_GODSWORD, I.SARADOMIN_HILT],
+    [I.ZAMORAK_GODSWORD, I.ZAMORAK_HILT],
+    [I.ANCIENT_GODSWORD, I.ANCIENT_HILT],
+  ]).get(swordId);
+  if (hiltId == null) return false;
+  Core.api.sendMultiChatboxPrompt(
+    player,
+    "Dismantle your godsword?",
+    "Yes, dismantle it.",
+    () => finishDismantle(player, item, swordId, hiltId),
+    "No.",
+    () => {},
+  );
+  return true;
+}
+
 module.exports = function attach(api) {
   api.onItemOnItem(joinByHand, { noted: false });
+  api.onItemAction("Armadyl godsword", { Dismantle: dismantle });
+  api.onItemAction("Bandos godsword", { Dismantle: dismantle });
+  api.onItemAction("Saradomin godsword", { Dismantle: dismantle });
+  api.onItemAction("Zamorak godsword", { Dismantle: dismantle });
+  api.onItemAction("Ancient godsword", { Dismantle: dismantle });
 };
 
-Object.assign(module.exports, { smithAtAnvil, useOnAnvil, holdsPiece });
+Object.assign(module.exports, { smithAtAnvil, useOnAnvil, holdsPiece, dismantle });

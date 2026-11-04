@@ -66,25 +66,29 @@
    "kit": 20068,
    "base": 11802,
    "result": 20368,
-   "name": "Armadyl godsword ornament kit"
+   "name": "Armadyl godsword ornament kit",
+   "refund": true
   },
   {
    "kit": 20071,
    "base": 11804,
    "result": 20370,
-   "name": "Bandos godsword ornament kit"
+   "name": "Bandos godsword ornament kit",
+   "refund": true
   },
   {
    "kit": 20074,
    "base": 11806,
    "result": 20372,
-   "name": "Saradomin godsword ornament kit"
+   "name": "Saradomin godsword ornament kit",
+   "refund": true
   },
   {
    "kit": 20077,
    "base": 11808,
    "result": 20374,
-   "name": "Zamorak godsword ornament kit"
+   "name": "Zamorak godsword ornament kit",
+   "refund": true
   },
   {
    "kit": 23232,

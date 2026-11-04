@@ -2,8 +2,8 @@
  * Ornament kits and cosmetic recolours (https://oldschool.runescape.wiki/w/Ornament_kit).
  *
  * Using a kit on its base item consumes the kit and swaps the item for the cosmetic id from
- * plugins/items/data/ornament-kits.json. Reverting swaps the id back but does not return the
- * kit (Wiki: kits are consumed on apply). The table also maps graceful colour variants, which
+ * plugins/items/data/ornament-kits.json. Reverting swaps the id back; entries whose Wiki says
+ * the kit is returned set `refund: true`. The table also maps graceful colour variants, which
  * keep the graceful set bonus because the cache names every colour "Graceful ...".
  *
  * Barrows gear maps through Barrows.baseItemId, so a kit applies to a degraded piece and an
@@ -69,7 +69,7 @@ function applyKit(event) {
   event.handled = true;
 }
 
-/** Revert from the item's Revert/Dismantle option; the kit is not refunded. */
+/** Revert from the item's Revert/Dismantle option, returning the kit for entries that specify it. */
 function revertItem(event) {
   if (event.option !== "Revert" && event.option !== "Dismantle") {
     return;

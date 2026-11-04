@@ -81,3 +81,13 @@ for (const site of DATA.travel.sites) {
     assert.ok(icon?.getName?.() && icon.getName() !== "null", `${site.id}: icon ${site.icon} is an item`);
   });
 }
+
+test("onboarding: the starter kit's ids are the items it names, and the start tile is free", () => {
+  for (const { id, name, amount } of DATA.onboarding.starterKit) {
+    assert.equal(core.ItemDefinition.forId(id)?.getName?.(), name, `item ${id}`);
+    assert.ok(Number.isInteger(amount) && amount >= 1, name);
+  }
+  const [x, y, z] = DATA.onboarding.startTile;
+  core.RegionManager.loadMapFiles(x, y);
+  assert.equal(core.RegionManager.blocked(new core.Location(x, y, z), null), false, `start tile ${DATA.onboarding.startTile} is blocked`);
+});

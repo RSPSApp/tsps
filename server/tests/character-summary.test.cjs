@@ -220,8 +220,9 @@ test("permission changes refresh mounted buttons without remounting or resending
   now += 2000; f.processes.forEach(process => process({ player: p }));
   assert.equal(p.hidden.get(Layout.uid(Layout.COMPONENT.COMMANDS)), true);
   assert.equal(p.hidden.get(Layout.uid(Layout.COMPONENT.XP)), true);
-  assert.equal(p.positions.get(Layout.uid(Layout.COMPONENT.TELEPORTS)).x, -30);
-  assert.equal(p.positions.get(Layout.uid(Layout.COMPONENT.PRESETS)).x, 30);
+  // Idle Mode's fork adds a fourth button (Idle), so the buttons are 46 wide with 2 between: two sit 48 apart.
+  assert.equal(p.positions.get(Layout.uid(Layout.COMPONENT.TELEPORTS)).x, -24);
+  assert.equal(p.positions.get(Layout.uid(Layout.COMPONENT.PRESETS)).x, 24);
   assert.equal(other.hidden.get(Layout.uid(Layout.COMPONENT.COMMANDS)), false, "another player retains their own access");
   assert.equal(p.mounts.length, mounts, "the scroll panel is preserved");
   p.commands.add("commands"); p.commands.add("lockxp");

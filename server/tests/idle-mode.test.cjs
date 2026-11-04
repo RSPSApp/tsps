@@ -44,7 +44,7 @@ function fakeApi(config = {}) {
         mapObjects: { get: (key) => world.objects.filter((o) => `${o.at.x},${o.at.y},${o.at.z}` === key) },
       },
       World: { getNpcsNear: (location, radius) => world.npcs.filter((n) => Math.max(Math.abs(n.at.x - location.getX()), Math.abs(n.at.y - location.getY())) <= radius) },
-      Task: class { constructor(delay) { this.delay = delay; } },
+      Task: class { constructor(delay) { this.delay = delay; } stop() { this.stopped = true; } },
       CanAttackResponse: { CAN_ATTACK: "can" },
       CombatFactory: { getMethod: () => "melee", canAttackPermission: (player, npc) => (npc.protectedFrom === player ? "no" : "can") },
       CacheDefinitions: { getItem: (id) => ({ inventoryActions: id === SHARK ? ["Eat", null, null, null, "Drop"] : [null, null, null, null, "Drop"] }) },
@@ -159,8 +159,16 @@ function fakePlayer({ bankSlots = 800 } = {}) {
       sendInterfaceRemoval: () => { interfaceId = -1; },
       clearItemOnInterface: () => {},
     }),
-    getInventory() { return { getItems: () => this.inventory }; },
-    moveTo(x, y, z = 0) { location = new FakeLocation(x, y, z); },
+    getInventory() {
+      const items = this.inventory;
+      return {
+        getItems: () => items,
+        getAddableAmount: (item) => (items.length < (this.inventorySlots ?? 28) ? item.getAmount() : 0),
+        add: (item) => items.push(item),
+      };
+    },
+    // Tests pass numbers; the server passes a Location, as the real Player.moveTo takes.
+    moveTo(x, y, z = 0) { location = typeof x === "object" ? new FakeLocation(x.getX(), x.getY(), x.getZ()) : new FakeLocation(x, y, z); },
     getLocation: () => location,
     isRegistered: () => true,
     busy() { return this.isBusy; },
@@ -219,7 +227,9 @@ test("the flag is saved with the account, off by default, and ::idle switches it
   assert.match(player.messages.pop(), /off/);
   api.command(player, "idle on");
   assert.equal(player.getAttribute("idle-mode:enabled"), true);
-  assert.match(player.messages.pop(), /Idle Mode is on/);
+  assert.match(player.messages.pop(), /Press Travel on the Idle screen/, "the first time: the welcome");
+  api.command(player, "idle on");
+  assert.match(player.messages.pop(), /Idle Mode is on/, "afterwards: the state");
   api.command(player, "idle off");
   assert.equal(player.getAttribute("idle-mode:enabled"), false);
   api.command(player, "idle maybe");
@@ -600,6 +610,7 @@ test("upgrades: Quick Hands takes a tick off by chance; Long Dreams and Bountifu
   const away = fakePlayer();
   away.setAttribute("idle-mode:enabled", true);
   away.setAttribute("idle-mode:upgrades", { "long-dreams": 2, "bountiful-harvest": 5 });
+  away.setAttribute("idle-mode:onboarded", true);
   away.setAttribute("idle-mode:away", { activity: "WOODCUTTING", durationMs: 3_600_000, xp: { WOODCUTTING: 1000 }, items: { [LOGS]: 100 }, loggedOutAt: 0 });
   now = 48 * 3_600_000;
   api.login({ player: away });
@@ -1092,4 +1103,66 @@ test("idle screen: its Travel button opens the travel screen", () => {
   assert.equal(screenText(player, COMPONENT.TRAVEL_LABEL), "Travel");
   api.click(player, uid(COMPONENT.TRAVEL_BUTTON));
   assert.equal(player.getInterfaceId(), require(TRAVEL_SCREEN).GROUP_ID);
+});
+
+const ONBOARDING = "../plugins/modes/idle/Onboarding.IdleMode";
+
+test("onboarding: the first ::idle on gives the kit, welcomes and opens the Idle screen, once", () => {
+  const { GROUP_ID } = require(SCREEN);
+  assert.equal(api.persisted["idle-mode:onboarded"], false);
+  const player = fakePlayer();
+  api.command(player, "idle on");
+  assert.deepEqual(player.inventory.map((item) => [item.getId(), item.getAmount()]), [[1351, 1], [1265, 1], [303, 1], [1277, 1], [315, 10]]);
+  assert.equal(player.getInventory().getItems().length, 5);
+  assert.match(player.messages.join("\n"), /Welcome to Idle Mode!.*\n.*axe, a pickaxe, a fishing net, a sword and some food/);
+  assert.equal(player.getInterfaceId(), GROUP_ID, "the Idle screen opens");
+  assert.equal(player.getAttribute("idle-mode:onboarded"), true);
+  api.command(player, "idle off");
+  api.command(player, "idle on");
+  assert.equal(player.inventory.length, 5, "no second kit");
+});
+
+test("onboarding: a full inventory sends the kit to the bank", () => {
+  const player = fakePlayer();
+  player.inventorySlots = 0;
+  api.command(player, "idle on");
+  assert.equal(player.inventory.length, 0);
+  assert.equal(player.bank.get(1351), 1);
+  assert.equal(player.bank.get(315), 10);
+});
+
+test("onboarding: a new account on an idle world starts in Lumbridge, idle, and the screen opens a few ticks in", () => {
+  const { GROUP_ID } = require(SCREEN);
+  load({ "IdleMode:newAccounts": true });
+  const player = fakePlayer();
+  api.login({ player, isNewAccount: true });
+  assert.equal(player.getAttribute("idle-mode:enabled"), true);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], [3222, 3218, 0]);
+  assert.equal(player.inventory.length, 5);
+  assert.notEqual(player.getInterfaceId(), GROUP_ID, "not at once: the game frame is still loading");
+  const task = world.tasks.at(-1);
+  assert.equal(task.delay, 3);
+  task.execute();
+  assert.equal(player.getInterfaceId(), GROUP_ID);
+});
+
+test("onboarding: an idle account from before is onboarded on its next login; a plain one is not", () => {
+  const old = fakePlayer();
+  old.setAttribute("idle-mode:enabled", true);
+  api.login({ player: old, isNewAccount: false });
+  assert.equal(old.getAttribute("idle-mode:onboarded"), true);
+  assert.equal(old.inventory.length, 5);
+  assert.deepEqual([old.getLocation().getX(), old.getLocation().getY()], [3200, 3200], "only new accounts are moved");
+  const plain = fakePlayer();
+  api.login({ player: plain, isNewAccount: true });
+  assert.notEqual(plain.getAttribute("idle-mode:onboarded"), true);
+  assert.equal(plain.inventory.length, 0);
+});
+
+test("journal: the Idle button's idle:open opens the Idle screen", () => {
+  const { GROUP_ID, COMPONENT } = require(SCREEN);
+  const player = idlePlayer();
+  api.emit("idle:open", { player });
+  assert.equal(player.getInterfaceId(), GROUP_ID);
+  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 2), "Activity: None yet: press Travel");
 });

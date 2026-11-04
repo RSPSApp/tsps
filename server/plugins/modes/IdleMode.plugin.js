@@ -8,7 +8,9 @@
  * starts again (Auto). The same goes for fighting a kind of monster, eating and banking the loot
  * (Combat). Idle XP earns points that buy upgrades (Progression). `::idle` opens a screen with
  * all of it and the switches (Screen), and `::idle travel` teleports to an activity's site, where
- * the character starts by itself (Travel, TravelScreen).
+ * the character starts by itself (Travel, TravelScreen). The first time an account is idle it gets
+ * a starter kit, a welcome and the Idle screen (Onboarding); the journal tab's Idle button opens
+ * the screen too.
  * Settings are plugins/modes/data/idle-mode.json.
  */
 const Common = require("./idle/Common.IdleMode");
@@ -25,5 +27,6 @@ module.exports = {
     require("./idle/Combat.IdleMode")(api);
     require("./idle/Screen.IdleMode")(api);
     require("./idle/TravelScreen.IdleMode")(api);
+    require("./idle/Onboarding.IdleMode")(api);
   },
 };

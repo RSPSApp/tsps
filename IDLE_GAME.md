@@ -33,6 +33,7 @@ Sem isso, cada jogador liga o modo com `::idle on`.
 
 | Comando | O que faz |
 | --- | --- |
+| botão **Idle** na aba do diário | Abre a tela do modo idle, sem digitar nada |
 | `::idle` | Abre a tela do modo idle: status, pontos, melhorias e botões |
 | `::idle status` | Diz no chat se o modo idle está ligado |
 | `::idle on` / `::idle off` | Liga ou desliga o modo idle da conta |
@@ -46,6 +47,17 @@ Sem isso, cada jogador liga o modo com `::idle on`.
 | `::idle buy <melhoria>` | Compra o próximo nível (`quick-hands`, `long-dreams`, `bountiful-harvest`) |
 
 ![A tela do modo idle](docs/images/idle-screen.png)
+
+## Primeiro login
+
+Na primeira vez que uma conta fica idle (conta nova num mundo idle, ou o primeiro `::idle on`):
+
+- recebe o **kit inicial**: machado, picareta, rede de pesca, espada e 10 camarões;
+- conta nova num mundo idle começa no **pátio do castelo de Lumbridge**, longe da Wilderness;
+- aparecem **3 linhas de boas-vindas** no chat e a **tela idle abre sozinha**;
+- depois disso, a tela abre pelo botão **Idle** na aba do diário (o ícone de missões).
+
+![Primeiro login de uma conta nova](docs/images/idle-first-login.png)
 
 ## O que o modo idle faz
 
@@ -92,7 +104,9 @@ git fetch upstream && git merge upstream/main
 ```
 
 O código idle fica em arquivos próprios (`server/plugins/modes/idle/`). Do projeto original, só
-três pontos foram mexidos, todos pequenos: `Fishing.plugin.js` ganhou um evento
+poucos pontos foram mexidos, todos pequenos: `Fishing.plugin.js` ganhou um evento
 (`fishing:spot-stays`), `SkillLevelUp.plugin.js` passou a ler um atributo do jogador
-(`level-up:keep-actions`) e `docs/world-configuration.md` ganhou uma seção. Assim os merges com o
+(`level-up:keep-actions`), o diário lateral (`sidejournaldefaults/Layout.SideJournalDefaults.js`)
+ganhou o botão Idle com botões um pouco mais estreitos (e o teste `character-summary` a posição
+nova), e `docs/world-configuration.md` ganhou uma seção. Assim os merges com o
 upstream ficam simples.

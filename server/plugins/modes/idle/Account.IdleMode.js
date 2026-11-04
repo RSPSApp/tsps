@@ -8,14 +8,23 @@ const Progression = require("./Progression.IdleMode");
 const Screen = require("./Screen.IdleMode");
 const Travel = require("./Travel.IdleMode");
 const TravelScreen = require("./TravelScreen.IdleMode");
+const Onboarding = require("./Onboarding.IdleMode");
 
 const ON = ["on", "true", "1", "yes"];
 const OFF = ["off", "false", "0", "no"];
 
-/** An idle world makes new accounts idle; every login puts the level-up setting in step. */
+/**
+ * An idle world makes new accounts idle and starts them in Lumbridge; every login puts the
+ * level-up setting in step, and an idle account not yet onboarded is (Onboarding).
+ */
 function login({ player, isNewAccount }) {
-  if (isNewAccount && Common.api.getPluginConfig(Common.NEW_ACCOUNTS_CONFIG, false) === true) Common.setIdle(player, true);
-  else Common.syncLevelUps(player);
+  if (isNewAccount && Common.api.getPluginConfig(Common.NEW_ACCOUNTS_CONFIG, false) === true) {
+    Common.setIdle(player, true);
+    Onboarding.placeNewAccount(player);
+  } else {
+    Common.syncLevelUps(player);
+  }
+  Onboarding.start(player, { fromLogin: true });
 }
 
 function describe(player) {
@@ -52,8 +61,11 @@ function idleCommand({ player, parts }) {
     Screen.open(player);
     return true;
   }
-  if (ON.includes(choice)) Common.setIdle(player, true);
-  else if (OFF.includes(choice)) Common.setIdle(player, false);
+  if (ON.includes(choice)) {
+    Common.setIdle(player, true);
+    // The first time: the starter kit, the welcome and the Idle screen.
+    if (Onboarding.start(player)) return true;
+  } else if (OFF.includes(choice)) Common.setIdle(player, false);
   else if (choice !== "status") {
     player.sendMessage("Use ::idle, ::idle [on|off|status], ::idle auto [on|off], ::idle travel, ::idle go <site>, ::idle points, ::idle shop or ::idle buy <upgrade>.");
     return true;

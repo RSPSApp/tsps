@@ -20,6 +20,15 @@ const DONE_MESSAGE = "Even for an experienced smith it is not an easy task, but 
 const NEED_TWO_MESSAGE = "You need at least two different Godsword blade pieces in your inventory to reforge them.";
 const NO_HAMMER_MESSAGE = "You'll need a hammer if you wish to repair the Godsword.";
 const ON_EACH_OTHER_MESSAGE = "Those pieces of the Godsword can't be joined together like that - try forging them on an anvil.";
+const RESTRICTED_ITEM_MESSAGE = "Preset items cannot be used for this.";
+
+function restricted(item) {
+  const Item = Core.Item;
+  return !!item && (item.isPresetItem?.() === true
+    || item.getMetaValue?.(Item.PRESET_META) === true
+    || item.getMetaValue?.(Item.UNTRADEABLE_META) === true
+    || item.getMetaValue?.(Item.UNBANKABLE_META) === true);
+}
 
 /** Each piece and the shards it holds. */
 function pieces() {
@@ -141,6 +150,10 @@ function finishDismantle(player, item, swordId, hiltId) {
   const inventorySlot = inventory.getItems().indexOf(item);
   const equipmentSlot = equipment.getItems().indexOf(item);
   if ((inventorySlot < 0 && equipmentSlot < 0) || item.getId() !== swordId) return;
+  if (restricted(item)) {
+    player.sendMessage(RESTRICTED_ITEM_MESSAGE);
+    return;
+  }
   const neededSlots = equipmentSlot < 0 ? 1 : 2;
   if (inventory.getFreeSlots() < neededSlots) {
     player.sendMessage("You don't have enough inventory space to do that.");
@@ -171,6 +184,10 @@ function dismantle({ player, item }) {
     [I.ANCIENT_GODSWORD, I.ANCIENT_HILT],
   ]).get(swordId);
   if (hiltId == null) return false;
+  if (restricted(item)) {
+    player.sendMessage(RESTRICTED_ITEM_MESSAGE);
+    return true;
+  }
   Core.api.sendMultiChatboxPrompt(
     player,
     "Dismantle your godsword?",

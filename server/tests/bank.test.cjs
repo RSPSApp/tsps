@@ -737,6 +737,53 @@ test("dragging within the bank's inventory panel swaps inventory slots", () => {
   assert.deepEqual(player.getInventory().getValidItems().map((item) => item.getId()), [B, A]);
 });
 
+test("bank inventory drags reject a stale source item ID and accept the updated ID", () => {
+  const player = createPlayer();
+  player.getInventory().add(new Item(A, 1), false);
+  player.getInventory().add(new Item(B, 1), false);
+  const [first, second] = player.getInventory().getItems();
+  const ids = () => player.getInventory().getValidItems().map((item) => item.getId());
+
+  assert.equal(drag(player, SIDE_ITEMS, 0, A, SIDE_ITEMS, 1), true);
+  assert.deepEqual(ids(), [B, A]);
+
+  assert.equal(drag(player, SIDE_ITEMS, 0, A, SIDE_ITEMS, 1), true);
+  assert.deepEqual(ids(), [B, A], "stale source item ID must not swap the current items");
+  assert.equal(player.getInventory().getItems()[0], second);
+  assert.equal(player.getInventory().getItems()[1], first);
+  assert.equal(player.getInventory().getAmount(A), 1);
+  assert.equal(player.getInventory().getAmount(B), 1);
+
+  assert.equal(drag(player, SIDE_ITEMS, 0, B, SIDE_ITEMS, 1), true);
+  assert.deepEqual(ids(), [A, B]);
+  assert.equal(player.getInventory().getItems()[0], first);
+  assert.equal(player.getInventory().getItems()[1], second);
+});
+
+for (const [label, sourceItemId] of [
+  ["omitted", undefined], ["null", null], ["negative", -2],
+  ["sentinel", -1], ["wire sentinel", 0xffff],
+]) {
+  test(`bank inventory drags keep legacy slot-only behavior with ${label} source IDs`, () => {
+    const player = createPlayer();
+    player.getInventory().add(new Item(A, 1), false);
+    player.getInventory().add(new Item(B, 1), false);
+    const [first, second] = player.getInventory().getItems();
+    const request = {
+      sourceWidgetId: SIDE_ITEMS, sourceSlot: 0,
+      targetWidgetId: SIDE_ITEMS, targetSlot: 1,
+    };
+    if (sourceItemId !== undefined) request.sourceItemId = sourceItemId;
+
+    assert.equal(Bank.handleDrag(player, request), true);
+    assert.equal(player.getInventory().getItems()[0], second);
+    assert.equal(player.getInventory().getItems()[1], first);
+    assert.deepEqual(player.getInventory().getValidItems().map((item) => item.getId()), [B, A]);
+    assert.equal(player.getInventory().getAmount(A), 1);
+    assert.equal(player.getInventory().getAmount(B), 1);
+  });
+}
+
 test("bank drags are ignored while the bank is closed", () => {
   const player = createPlayer();
   bankOf(player, [A, B]);

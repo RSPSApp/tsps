@@ -10,6 +10,7 @@ const { isSafeLocation: isFeroxSafeLocation } = require("../../areas/ferox/Bound
 const { Item } = require("../../../src/main/typescript/elvarg/game/model/Item");
 const { Skill } = require("../../../src/main/typescript/elvarg/game/model/Skill");
 const { EquipmentRequirements } = require("../../../src/main/typescript/elvarg/game/model/equipment/EquipmentRequirements");
+const { EffectTimer } = require("../../../src/main/typescript/elvarg/game/model/EffectTimer");
 const { MagicSpellbook } = require("../../../src/main/typescript/elvarg/game/model/MagicSpellbook");
 const { Flag } = require("../../../src/main/typescript/elvarg/game/model/Flag");
 const { Bank } = require("../../../src/main/typescript/elvarg/game/model/container/impl/Bank");
@@ -668,7 +669,15 @@ function applyPreset(player, preset) {
 
   sender.sendTabInterface(6, player.getSpellbook().getInterfaceId());
 
+  // A Tele Block is a PvP status, not part of the kit. Bots load presets inside the
+  // Wilderness (players cannot), so a reset must not let a blocked bot refit and escape.
+  const teleblockTimer = Wilderness.isIn(player) ? player.getCombat?.()?.getTeleblockTimer?.() : null;
+  const teleblockSeconds = teleblockTimer?.secondsRemaining?.() ?? 0;
   player.resetAttributes();
+  if (teleblockTimer && teleblockSeconds > 0) {
+    teleblockTimer.start(teleblockSeconds);
+    sender.sendEffectTimer?.(teleblockSeconds, EffectTimer.TELE_BLOCK);
+  }
   sender.sendMessage("Preset loaded!");
   sender.sendTotalExp(totalExp);
 

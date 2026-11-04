@@ -350,6 +350,7 @@ test("the ladder takes players down, gates the task lair, and peeks", () => {
   const atLadder = { x: 1911, y: 4367 };
   assert.equal(Entrance.goPublic({ player, location: atLadder, objectId: Common.LADDER_ID }), true);
   assert.deepEqual([moved[0].getX(), moved[0].getY()], [2900, 4449]);
+  assert.ok(!customEvents.some(({ name }) => name === "quest:is-complete"), "the public Waterbirth route does not require Fremennik Trials");
   // Slayer option without a task is refused; with one it lands in the task lair.
   const said = [];
   const taskPlayer = { ...player, sendMessage: (line) => said.push(line) };

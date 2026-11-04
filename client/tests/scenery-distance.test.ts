@@ -30,7 +30,7 @@ const edgeHost: any = {
     getFrameRenderDistanceTiles: () => 25, getFrameLodThresholdTiles: () => 100,
     getMapZoneDistanceFromPoint: (map: any, x: number, y: number) => getMapZoneDistanceFromPoint(edgeHost, map, x, y),
     autoFogDepth: true, autoFogDepthFactor: 0.85, fogDepth: 24,
-    osrsClient: { clientPlugins: { hdEnabled: () => false }, camera: { frustum: { intersectsBox: () => true } } },
+    osrsClient: { clientPlugins: { hdEnabled: () => false, gpuSettings: () => undefined }, camera: { frustum: { intersectsBox: () => true } } },
     frameRoofTotalRangeCount: 0, frameRoofFilteredRangeCount: 0, roofFilteredDrawIndices: [],
     draw: () => edgeDraws++,
 };

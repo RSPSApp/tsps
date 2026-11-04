@@ -781,6 +781,12 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   function finishBlessing(scene) {
     const { player, npcId } = scene;
     if (blessingScenes.get(player) !== scene) return;
+    // Inventory actions can remove recipe items while the timed scene blocks walking.
+    if (quest.getStage(player) < STAGE_HAS_MAGIC_SECATEURS && !hasEnchantingItems(player)) {
+      cancelBlessing(player);
+      player.sendMessage("You no longer have all the materials needed to bless the secateurs.");
+      return;
+    }
     blessingScenes.delete(player);
     scene.task?.stop();
     player.getMovementQueue().setBlockMovement(false);

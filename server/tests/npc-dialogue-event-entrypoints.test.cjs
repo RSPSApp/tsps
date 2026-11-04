@@ -2973,3 +2973,42 @@ test('Pandemonium stage-eight acknowledgement and stale menu cannot replace the 
   assert.equal(f.quest.getStage(f.player), 10);
   assert.equal(ship.boat.helmPlayerId, f.player.getIndex());
 });
+
+
+for (const droppedName of ['SECATEURS', 'WHITE_BERRIES']) {
+  test(`Fairytale I blessing rechecks materials after native Drop of ${droppedName}`, async t => {
+    const f = fixture(t), { player } = f;
+    const messages = [];
+    t.mock.method(player, 'sendMessage', text => messages.push(text));
+    const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'fairytale_i_growing_pains');
+    quest.setStage(player, 60);
+    player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
+    const ids = ['SECATEURS', 'WHITE_BERRIES', 'MORT_MYRE_PEAR', 'MORT_MYRE_STEM'].map(name => core.ItemIdentifiers[name]);
+    player.setLocation(new core.Location(3441, 9737, 1));
+    for (const id of ids) player.getInventory().add(new core.Item(id));
+    player.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(core.ItemIdentifiers.GHOSTSPEAK_AMULET));
+    const npc = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(3441, 9738, 1));
+    const start = { player, npc, npcId: npc.getId(), variant: {
+      page: 'Fairytale I - Growing Pains', variant: 'in-the-nature-grotto-talking-to-the-nature-spirit',
+    }, exact: true };
+    PM.emitCustomEvent('npc-dialogue:start', start);
+    assert.equal(start.handled, true);
+    for (let n = 0; n < 20 && !player.getMovementQueue().isMovementBlocked(); n++) await nextLine(f);
+    assert.equal(player.getMovementQueue().isMovementBlocked(), true);
+    core.TaskManager.process();
+    const droppedId = core.ItemIdentifiers[droppedName];
+    const slot = player.getInventory().getItems().findIndex(item => item?.getId() === droppedId);
+    await f.connection.dispatch([{ type: 'inventory_action', widgetId: 3214,
+      itemId: droppedId, slot, option: 'Drop', optionIndex: 5 }]);
+    f.connection.processTurnPackets();
+    assert.equal(player.getInventory().getAmount(droppedId), 0, 'the real inventory packet drops the item');
+    for (let n = 0; n < 12; n++) core.TaskManager.process();
+    assert.equal(quest.getStage(player), 60, 'missing materials cannot advance the initial blessing');
+    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.MAGIC_SECATEURS), 0);
+    for (const id of ids.filter(id => id !== droppedId)) {
+      assert.equal(player.getInventory().getAmount(id), 1, 'remaining materials are not consumed');
+    }
+    assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+    assert.match(messages.at(-1), /materials/);
+  });
+}

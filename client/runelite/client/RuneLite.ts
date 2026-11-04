@@ -104,7 +104,7 @@ export class RuneLite {
 
         subscribePluginMessages(({ channel, data }) => this.eventBus.post(new PluginMessage(channel, data)));
         subscribeChatMessages((msg) => this.eventBus.post(
-            new ChatMessage(msg.chatType ?? 0, msg.from ?? "", msg.text, msg.prefix ?? null),
+            new ChatMessage(msg.chatType ?? 0, msg.from ?? "", msg.text ?? "", msg.prefix ?? null),
         ));
 
         // A stats snapshot (login) or update: one StatChanged per skill it carries.

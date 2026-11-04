@@ -2452,6 +2452,7 @@ export class PluginManager {
         isEnabled: () => PluginManager.isPluginPerformanceProfilingEnabled(),
       }),
       World: require("../game/World").World,
+      DisplayNames: require("../game/entity/impl/player/DisplayNames").DisplayNames,
       BoatManager: require("../game/content/sailing/BoatManager").BoatManager,
       BOAT_VIEW_DISTANCE: require("../game/content/sailing/WorldEntitySync").BOAT_VIEW_DISTANCE,
       Sailing: require("../game/content/sailing/Sailing").Sailing,

@@ -6,7 +6,7 @@ Jagex's shared reward shop interface: `omnishop_main` (819) with `omnishop_side`
 - `omnishop_stock_data` (40): obj, cost pairs and modifiers, restricted, buyable, sellable, view-only, sold noted, transaction multiplier
 - `omnishop_currency_data` (41): obj or none, names, graphic
 
-The interface draws itself from those tables. `server/plugins/interface/Omnishop.plugin.js` opens a shop, keeps the selection varps and balances right, and does the buying and selling. Mixology Rewards, the Boat Emporium (`sailing_boat_shop`, Sailing's Buy-boat) and the Agility Arena Store (`agilityarena_rewards_newshop`, Pirate Jackie's Trade) use it. Other omnishops in the cache (Tithe Farm, Castle Wars, Bounty Hunter, Trouble Brewing, Forestry, abyssal pearls) can move onto it the same way.
+The interface draws itself from those tables. `server/plugins/interface/Omnishop.plugin.js` opens a shop, keeps the selection varps and balances right, and does the buying and selling. Mixology Rewards, the Boat Emporium (`sailing_boat_shop`, Sailing's Buy-boat), the Agility Arena Store (`agilityarena_rewards_newshop`, Pirate Jackie's Trade), and Castle Wars (`cw_shop_data`, Lanthus's Trade) use it. Other omnishops in the cache (Tithe Farm, Bounty Hunter, Trouble Brewing, Forestry, abyssal pearls) can move onto it the same way.
 
 ## Plugging a shop in
 
@@ -46,3 +46,43 @@ From rsprox captures of Mixology Rewards (recordings 1107, 4182, 4210, 4234, 423
 Component ids move between revisions (`omnishop_main:list` was 819:34 in rev 238 and is 819:38 in 241), so the plugin looks them up by gameval name.
 
 Not captured: the messages for an Ultimate Ironman buying a `restricted_uim` item and for selling an item the shop doesn't take.
+
+
+## Castle Wars scope
+
+Lanthus opens the cache's modern ticket exchange. Ticket gear uses the inventory's Castle
+Wars tickets, including the cache's full ticket refunds. The saved `castlewars:plaudits`
+balance starts at zero and synchronizes `castlewars_plaudits` on login and opening Trade.
+The cache prices one supply crate at one plaudit and does not allow selling it back.
+Cache-marked members items cannot be bought on a free-to-play world.
+
+Match completion now credits real players one plaudit per delivered ticket on ordinary TSPS
+members worlds, as [requested for TSPS](https://github.com/RSPSApp/tsps/issues/2065#issuecomment-6628335444).
+This differs from [OSRS, which awards plaudits on dedicated worlds](https://oldschool.runescape.wiki/w/Castle_Wars#Rewards).
+The existing standard-world ticket amounts and minigame multiplier remain. Players must be
+registered, still in the active arena, have played at least 15 minutes and have room for all
+tickets and plaudits. The Wiki's 15-minute participation rule carries conflicting-player-report
+qualification; this implementation uses that documented threshold. Leaving or logging out clears
+participation, and early endings or duplicate completion cannot mint another reward. Human
+practice games can qualify; bot accounts receive no plaudits.
+
+[Supply crates](https://oldschool.runescape.wiki/w/Castle_wars_supply_crate) open through the shared
+OpenableItems path into three independent rolls from the eleven-entry Wiki table. Equal weights
+follow the Wiki's Drop Log Project estimates. Fish and restores are noted; duplicate rewards
+merge. Entrana refuses opening. Inventory-space and maximum-stack checks happen before rolls or
+reward-hook side effects, preserving the crate on refusal. The maximum-stack check is conservative,
+like the existing worst-case slot check: it can refuse even when a lucky roll would fit.
+
+Castle Wars arrows and bolts reuse the existing dragon-ammunition compatibility and projectile
+paths while consuming their actual Castle Wars item IDs. The arrow uses the existing +60-strength
+dragon-arrow variant; bolts use dragon bolts. Firing is refused outside active Castle Wars play;
+normal ammunition remains unchanged. The existing poison, fire-arrow and bolt-tipping recipes do
+not accept these item IDs.
+
+Lanthus's cache-native Disable-XP option now offers a persistent, reversible confirmation through
+the existing chatbox prompt. It suppresses Attack, Strength, Defence, Ranged, Magic and Hitpoints
+XP and XP drops only during active arena play. Waiting rooms, other skills and outside XP remain
+unchanged, as does the separate free-rune-pouch Magic restriction. The [March 2026 update](https://oldschool.runescape.wiki/w/Update:Easter_2026_%26_PvP_QoL_Improvements)
+confirms the combat-XP toggle; exact Lanthus prompt wording and Prayer behavior were not captured,
+so the prompt is implementation text and the skill set follows the existing Fight Pits toggle.
+Offline native-session and cache-VM checks do not claim live browser or RuneLite verification.

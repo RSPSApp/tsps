@@ -127,6 +127,7 @@ function defineAreas() {
         game.returnToLobby(player);
         return;
       }
+      game.startParticipation(player);
       player.setAttribute(game.TRANSITION_KEY, false);
       player.getPacketSender().sendSubInterface(data.OVERLAY_HUD_UID, data.STATUS_OVERLAY_INTERFACE[game.getTeamId(player)], 1);
       sendGameVars(player, game.getTeamId(player));

@@ -185,6 +185,8 @@ test('the real ration is non-noteable and its duplicate identifier is its placeh
 // Keep that order here: draining a one-step route before the next global pass is
 // the cancellation boundary under investigation, not a synthetic success hook.
 function woodcutCancellationTurn(f) {
+  // Defer the prior turn's post-sync reset until callers have inspected its updates.
+  f.p.resetUpdating();
   // Mirror World.process's epoch prefix before its global task pass.
   core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
   core.TaskManager.process();
@@ -293,4 +295,128 @@ test('native plain woodcut: an outside-range approach settles before starting an
   for(let tick=0;tick<8;tick++) woodcutCancellationTurn(f);
   assert.deepEqual(gains,[25],'the movement guard must preserve a newly valid settled action');
   assert.equal(yieldCount(),1);
+});
+
+// These fixed cases reuse the native epoch/task/input/movement seam above.
+// Fifty selected turns is a hard per-case bound, not a new wall-clock budget.
+function plainCancellationScene(t) {
+  const f=actor(t),ids=core.ItemIdentifiers,gains=[];
+  const skills=f.p.getSkillManager(),addExperiences=skills.addExperiences.bind(skills);
+  t.mock.method(skills,'addExperiences',(skill,amount)=>{
+    if(skill===core.Skill.WOODCUTTING) gains.push(amount);
+    return addExperiences(skill,amount);
+  });
+  t.mock.method(Math,'random',missNest(0.01));
+  f.p.getInventory().add(new core.Item(ids.BRONZE_AXE),true);
+  const held=container=>container.getItems().filter(i=>i&&i.getId()>0&&i.getAmount()>0).map(i=>[i.getId(),i.getAmount()]);
+  assert.deepEqual(held(f.p.getInventory()),[[ids.BRONZE_AXE,1]],'the plain actor must carry only its declared axe');
+  assert.deepEqual(held(f.p.getEquipment()),[],'no hidden equipped tool or outfit may change the control');
+  const ownedGround=id=>core.World.getItems().filter(g=>
+    !g.isPendingRemoval()&&g.getOwner()===f.p.getUsername()&&
+    g.getPrivateArea()===f.p.getPrivateArea()&&(id==null||g.getItem().getId()===id));
+  const floor=id=>ownedGround(id).reduce((n,g)=>n+g.getItem().getAmount(),0);
+  const carried=id=>f.p.getInventory().getAmount(id)+f.p.getEquipment().getAmount(id);
+  const total=id=>carried(id)+floor(id);
+  t.after(()=>{for(const g of ownedGround())core.ItemOnGroundManager.deregister(g);});
+  const tree=new core.GameObject(core.ObjectIdentifiers.TREE,new core.Location(3223,3218,0),10,0,null);
+  core.ObjectManager.register(tree,true);
+  t.after(()=>core.ObjectManager.deregister(tree,true));
+  const definition=core.ObjectDefinition.forPlayer(tree.getId(),f.p);
+  assert.ok(definition,'the actual normal-tree definition must exist');
+  assert.equal(definition.getName(),'Tree');
+  assert.ok(definition.getActions()?.includes('Chop down'));
+  assert.deepEqual([f.p.getLocation().getX(),f.p.getLocation().getY(),f.p.getLocation().getZ()],[3222,3218,0]);
+  let turns=0;
+  const step=()=>{assert.ok(turns<50,'fixed cancellation case exceeded50 selected turns');turns++;woodcutCancellationTurn(f);};
+  const observe=n=>{for(let i=0;i<n;i++)step();};
+  const state=()=>JSON.stringify({turns,tile:[f.p.getLocation().getX(),f.p.getLocation().getY(),f.p.getLocation().getZ()],gains,logs:total(ids.LOGS)});
+  const noYield=()=>{assert.deepEqual(gains,[],'no delayed actual XP: '+state());assert.equal(total(ids.LOGS),0,'no delayed owned log: '+state());};
+  const start=async(animation=879)=>{
+    assert.notEqual(f.p.getAnimation()?.getId(),animation,'a new click must not be mistaken for an old active swing');
+    await f.c.dispatch([{type:'object_option',id:tree.getId(),x:3223,y:3218,action:'Chop down'}]);
+    step(); // Always process the fresh real packet, even if an old animation survives.
+    for(let i=1;i<8&&f.p.getAnimation()?.getId()!==animation;i++)step();
+    assert.equal(f.p.getAnimation()?.getId(),animation,'the fresh native click must really start the declared axe');
+    assert.equal(f.p.getMovementQueue().size(),0);
+    assert.equal(f.p.getMovementQueue().isMovings(),false);
+    noYield();
+  };
+  const dropBronze=async()=>{
+    await f.c.dispatch([{type:'inventory_action',slot:f.p.getInventory().getSlotForItemId(ids.BRONZE_AXE),itemId:ids.BRONZE_AXE,widgetId:149<<16,option:'Drop',optionIndex:5}]);
+    step();
+    assert.equal(carried(ids.BRONZE_AXE),0,'the ordinary Drop packet must remove the only carried axe');
+    assert.equal(floor(ids.BRONZE_AXE),1,'the same axe must exist on its real owned ground stack');
+    noYield();
+    step(); // The real woodcut task gets a pass with no usable carried axe.
+    noYield();
+  };
+  assert.equal(carried(ids.BRONZE_AXE),1);
+  assert.equal(total(ids.LOGS),0);
+  return {f,ids,gains,ownedGround,floor,carried,total,step,observe,start,dropBronze,noYield,state};
+}
+
+test('native woodcut cancellation: dropping the only axe leaves no delayed award or duplicated tool',async t=>{
+  const s=plainCancellationScene(t);
+  await s.start();
+  await s.dropBronze();
+  s.observe(8);
+  s.noYield();
+  assert.equal(s.carried(s.ids.BRONZE_AXE),0);
+  assert.equal(s.floor(s.ids.BRONZE_AXE),1);
+  assert.equal(s.total(s.ids.BRONZE_AXE),1,'actual Drop must conserve the single owned axe');
+});
+
+test('native woodcut cancellation: a stopped no-tool session cannot resume when a replacement is picked up',async t=>{
+  const s=plainCancellationScene(t),iron=s.ids.IRON_AXE;
+  // Owned scene input; delivery into inventory must still use the native Take packet.
+  core.ItemOnGroundManager.registers(s.f.p,new core.Item(iron));
+  assert.equal(s.carried(iron),0);
+  assert.equal(s.floor(iron),1);
+  await s.start();
+  await s.dropBronze();
+  s.observe(4);
+  s.noYield();
+  assert.equal(s.f.p.getLastItemPickup().elapsedTime(300),true,'native pickup cooldown must already be eligible; never reset it for the fixture');
+  const at=s.f.p.getLocation();
+  await s.f.c.dispatch([{type:'ground_item_action',itemId:iron,x:at.getX(),y:at.getY(),option:'Take',optionIndex:3}]);
+  s.step();
+  for(let i=1;i<4&&s.carried(iron)!==1;i++)s.step();
+  assert.equal(s.f.p.getInventory().getAmount(iron),1,'the real Take packet must credit the replacement');
+  assert.equal(s.floor(iron),0);
+  assert.equal(s.total(iron),1);
+  s.observe(8);
+  s.noYield(); // A fresh usable axe is not permission to revive the old stopped session.
+  await s.start(877);
+  s.observe(8);
+  assert.deepEqual(s.gains,[25],'only the fresh native iron-axe action may award actual XP');
+  assert.equal(s.total(s.ids.LOGS),1);
+  assert.equal(s.total(iron),1);
+  assert.equal(s.total(s.ids.BRONZE_AXE),1);
+});
+
+test('native woodcut cancellation: walk-cancel-restart grants one owned award and leaves a second actor untouched',async t=>{
+  const s=plainCancellationScene(t),other=actor(t),otherGains=[];
+  const skills=other.p.getSkillManager(),addExperiences=skills.addExperiences.bind(skills);
+  t.mock.method(skills,'addExperiences',(skill,amount)=>{
+    if(skill===core.Skill.WOODCUTTING)otherGains.push(amount);
+    return addExperiences(skill,amount);
+  });
+  t.after(()=>{for(const g of [...core.World.getItems()])if(g.getOwner()===other.p.getUsername()&&!g.isPendingRemoval())core.ItemOnGroundManager.deregister(g);});
+  await s.start();
+  await s.f.c.dispatch([{type:'move',worldX:3221,worldY:3218,modifierFlags:0,run:false}]);
+  s.step();
+  assert.deepEqual([s.f.p.getLocation().getX(),s.f.p.getLocation().getY(),s.f.p.getLocation().getZ()],[3221,3218,0]);
+  assert.equal(s.f.p.getMovementQueue().size(),0);
+  s.noYield();
+  s.observe(8);
+  s.noYield();
+  await s.start();
+  s.observe(8);
+  assert.deepEqual(s.gains,[25],'cancelled and restarted generations must not both award XP');
+  assert.equal(s.total(s.ids.LOGS),1,'one restarted action must produce exactly one owned resource');
+  assert.deepEqual(otherGains,[],'the untouched owned control actor must receive no XP');
+  assert.equal(other.p.getInventory().getAmount(s.ids.LOGS)+other.p.getEquipment().getAmount(s.ids.LOGS),0);
+  const foreign=core.World.getItems().filter(g=>!g.isPendingRemoval()&&g.getOwner()===other.p.getUsername()&&g.getItem().getId()===s.ids.LOGS);
+  assert.equal(foreign.reduce((n,g)=>n+g.getItem().getAmount(),0),0,'no award may leak to the other actor');
+  assert.equal(s.total(s.ids.BRONZE_AXE),1);
 });

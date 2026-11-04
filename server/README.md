@@ -54,6 +54,18 @@ api.registerNpcInteraction([506, 512], {
 
 Use `onNpcInteraction` for stateful or otherwise scripted interactions.
 
+## Custom shops
+
+`data/definitions/custom-shops.json` holds the shops behind `::shops` and the host
+editor's custom shops. Each record can set:
+
+- `name` and `currency` (`COINS` when omitted; other keys are registered by plugins).
+- `stockAmount`, the default amount for `originalStock` rows that omit `amount`.
+- `defaultRestockTicks`, how often one item restocks or destocks (one tick is 0.6s).
+- `originalStock` rows with `id`, optional `amount`, `restockTicks` and `price`.
+- `prices`, an item-ID map of overrides; `-1` or a missing entry uses the item's default price.
+- `npcInteractions`, the NPC options that open the shop.
+
 ## Custom items without cache packing
 
 Add records to `data/definitions/custom-items.json`. Each record has a stable

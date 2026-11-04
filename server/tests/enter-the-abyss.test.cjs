@@ -613,7 +613,10 @@ test("Enter the Abyss follows the helper route and its recovery paths", () => {
     quest.setStage(unlocked, 4);
     abyssTeleport(unlocked);
     assert.equal(teleports.length, 1, "the completed miniquest unlocks the Abyss teleport");
-    assert.deepEqual(diaryTasks, ["wilderness:have-the-mage-of-zamorak-teleport-you-to-the-aby"], "and completes the easy Wilderness Diary task");
+    assert.deepEqual(diaryTasks, [], "the Wilderness Diary's Abyss task waits for the landing");
+    assert.equal(typeof teleports[0].onArrival, "function", "the teleport reports its landing");
+    teleports[0].onArrival();
+    assert.deepEqual(diaryTasks, ["wilderness:have-the-mage-of-zamorak-teleport-you-to-the-aby"], "and completes the easy Wilderness Diary task on landing");
   } finally {
     runtime.startDialogue = realStartDialogue;
     runtime.openBook = realOpenBook;

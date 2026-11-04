@@ -24,12 +24,12 @@ const loc = (name) => CacheDefinitions.getLocId(name);
 const varbit = (name) => CacheDefinitions.getVarbitId(name);
 
 /** Registers the plugin against a fake api, keeping its hooks and the tasks it submits. */
-function harness({ diaryComplete = false } = {}) {
+function harness({ diaryComplete = false, teleportSpy = () => {} } = {}) {
   const hooks = {};
   const tasks = [];
   const persisted = [];
   const api = {
-    core: { ...core, TeleportHandler: { ...core.TeleportHandler, checkReqs: () => true } },
+    core: { ...core, TeleportHandler: { ...core.TeleportHandler, checkReqs: () => true, teleport: teleportSpy } },
     // As TaskManager.submit: an immediate task runs once on the tick it is submitted.
     getTaskManager: () => ({ submit: (task) => { task.setRunning(true); if (task.isImmediate()) task.execute(); tasks.push(task); } }),
     persistAttribute: (key, value) => persisted.push([key, value]),
@@ -228,4 +228,14 @@ test("other levers fall through", () => {
   const definition = ObjectDefinition.forPlayer(objectId, who);
   assert.equal(h.hooks.Lever.Pull({ player: who, objectId, definition, clickType: 1, location: { x: 3104, y: 3956, z: 0 } }), false);
   assert.equal(h.tasks.length, 0);
+});
+
+test("lever:teleport hands its onArrival callback to the teleport, to run on landing", () => {
+  const calls = [];
+  const h = harness({ teleportSpy: (...args) => calls.push(args) });
+  const who = player();
+  const onArrival = () => {};
+  h.hooks["lever:teleport"]({ player: who, destination: new core.Location(3000, 3000, 0), onArrival });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][4], onArrival, "TeleportHandler.teleport's arrival callback");
 });

@@ -517,7 +517,11 @@ test("entering the Chaos altar by its ruins (tiara or talisman) or the Abyss rif
 
   emitted.length = 0;
   assert.equal(handlers["Chaos rift:Exit-through"]({ player: visitor(), objectId: ObjectIdentifiers.CHAOS_RIFT }), true);
-  assert.deepEqual(diary(), [TASK], "the Abyss's Chaos rift");
+  assert.deepEqual(diary(), [], "the rift's teleport has not landed yet");
+  const riftTeleport = emitted.find(([name]) => name === "lever:teleport")[1];
+  assert.equal(typeof riftTeleport.onArrival, "function", "the teleport reports its landing");
+  riftTeleport.onArrival();
+  assert.deepEqual(diary(), [TASK], "the Abyss's Chaos rift, on landing");
   emitted.length = 0;
   assert.equal(handlers["Air rift:Exit-through"]({ player: visitor(), objectId: ObjectIdentifiers.AIR_RIFT }), true);
   assert.deepEqual(diary(), [], "another altar's rift");

@@ -7518,6 +7518,7 @@ export class OsrsClient {
 
         const decoded = this.npcUpdateDecoder.decode(payload.packet, {
             large: payload.large === true,
+            crossFloor: payload.crossFloor === true,
             loopCycle: payload.loopCycle | 0,
             clientCycle: getClientCycle() | 0,
             localTileX: decodeBase.tileX | 0,

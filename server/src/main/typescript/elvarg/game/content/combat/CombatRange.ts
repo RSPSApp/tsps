@@ -3,6 +3,7 @@ import type { Mobile } from "../../entity/impl/Mobile";
 import { Location } from "../../model/Location";
 import { PathFinder } from "../../model/movement/path/PathFinder";
 import { PluginManager } from "../../../plugins/PluginManager";
+import { CrossFloor } from "../../CrossFloor";
 import { CombatPosition } from "./CombatPosition";
 import { CombatType } from "./CombatType";
 import type { CombatMethod } from "./method/CombatMethod";
@@ -23,7 +24,8 @@ export class CombatRange {
         // main world's clipping (CombatPosition).
         const attackerLocation = CombatPosition.location(attacker, target);
         const targetLocation = CombatPosition.location(target, attacker);
-        if (attackerLocation.getZ() !== targetLocation.getZ()) {
+        const differentFloor = attackerLocation.getZ() !== targetLocation.getZ();
+        if (differentFloor && (!CrossFloor.canCross(attackerLocation, targetLocation) || method.type() === CombatType.MELEE)) {
             return false;
         }
         const area = CombatPosition.area(attacker, target);
@@ -35,7 +37,7 @@ export class CombatRange {
         // A large NPC fights on while its target stands inside its footprint: it cannot
         // vacate in a step, so overlap only stops 1x1 attackers (and players, who route out).
         const overlapBlocks = !attacker.isNpc() || Math.max(1, attacker.getSize() | 0) <= 1;
-        if ((overlapBlocks && overlapped) || this.distance(attackerBounds, targetBounds) > range) {
+        if ((!differentFloor && overlapBlocks && overlapped) || this.distance(attackerBounds, targetBounds) > range) {
             return false;
         }
 
@@ -55,6 +57,11 @@ export class CombatRange {
             // Use the projectile line below: walking collision would reject those attacks.
         }
 
+        if (differentFloor) {
+            // Check both floors' horizontal clipping so a wall on either floor blocks the shot.
+            return this.hasProjectileLine(attackerBounds, targetBounds, area, attackerLocation.getZ()) &&
+                this.hasProjectileLine(targetBounds, attackerBounds, area, targetLocation.getZ());
+        }
         if (attacker.isNpc()) {
             return this.hasProjectileLine(targetBounds, attackerBounds, area, attackerLocation.getZ());
         }
@@ -79,6 +86,21 @@ export class CombatRange {
     }
 
     static route(attacker: Mobile, method: CombatMethod, target: Mobile): boolean {
+        const attackerLocation = CombatPosition.location(attacker, target);
+        const targetLocation = CombatPosition.location(target, attacker);
+        if (attackerLocation.getZ() !== targetLocation.getZ() && CrossFloor.canCross(attackerLocation, targetLocation)) {
+            // The pathfinder routes in x/y on the attacker's current floor. Give it an
+            // attack-sized destination around the target instead of trying to route onto
+            // the target's inaccessible plane or all the way to its tile.
+            const movement = attacker.getMovementQueue();
+            const range = this.attackDistance(attacker, method, target);
+            PathFinder.calculateEntityRoute(attacker, target, range);
+            // Some collision layouts have no route to the wide range rectangle even though
+            // the ordinary entity approach can get closer. Use that route as a fallback;
+            // Combat rechecks reach after each step and stops as soon as the shot is viable.
+            if (!movement.hasRoute() && range > 1) PathFinder.calculateEntityRoute(attacker, target);
+            return attacker.getMovementQueue().hasRoute();
+        }
         // Route toward the moving entity itself. Combat's post-movement phase stops the queue
         // as soon as the method's real range/line-of-sight check succeeds, so this
         // naturally finds the first usable ranged, magic, or melee tile without a

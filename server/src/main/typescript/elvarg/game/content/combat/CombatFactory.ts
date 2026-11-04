@@ -1,3 +1,4 @@
+import { CrossFloor } from "../../CrossFloor";
 import { CombatPosition } from "./CombatPosition";
 import { ItemAliases } from "../../model/ItemAliases";
 import { Sound } from "../../Sound";
@@ -535,8 +536,8 @@ export class CombatFactory {
         const targetLocation = CombatPosition.location(target, attacker);
         if (
             CombatPosition.area(attacker, target) !== CombatPosition.area(target, attacker) ||
-            attackerLocation.getZ() !== targetLocation.getZ() ||
-            attackerLocation.getDistance(targetLocation) >= 40
+            (attackerLocation.getZ() !== targetLocation.getZ() && !CrossFloor.canCross(attackerLocation, targetLocation)) ||
+            CrossFloor.distance(attackerLocation, targetLocation) >= 40
         ) {
             return false;
         }

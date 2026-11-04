@@ -343,6 +343,44 @@ async function main() {
       await sleep(Number(arg("settle-ms", "2500")));
     }
 
+    const crossFloorPlayer = arg("check-cross-floor-player", null);
+    if (crossFloorPlayer) {
+      summary.crossFloorPlayer = await cdp.evaluate(`(() => {
+        const c = ${CLIENT_JS}, ecs = c.playerEcs;
+        const name = ${JSON.stringify(crossFloorPlayer)}.toLowerCase();
+        for (const index of ecs.getAllActiveIndices()) {
+          if (String(ecs.getName(index)).toLowerCase() === name) {
+            return { name: ecs.getName(index), level: ecs.getLevel(index), viewerLevel: ecs.getLevel(ecs.getIndexForServerId(c.controlledPlayerServerId)) };
+          }
+        }
+        return null;
+      })()`);
+      if (!summary.crossFloorPlayer || summary.crossFloorPlayer.level === summary.crossFloorPlayer.viewerLevel) {
+        throw new Error("cross-floor player was not present on a different floor");
+      }
+    }
+
+    const crossFloorNpcType = arg("check-cross-floor-npc", null);
+    if (crossFloorNpcType !== null) {
+      summary.crossFloorNpc = await cdp.evaluate(`(() => {
+        const c = ${CLIENT_JS}, ecs = c.npcEcs;
+        const typeId = ${Number(crossFloorNpcType) | 0};
+        const playerIndex = c.playerEcs.getIndexForServerId(c.controlledPlayerServerId);
+        const viewer = playerIndex === undefined ? -1 : c.playerEcs.getLevel(playerIndex) | 0;
+        const matches = [];
+        for (const id of ecs.getServerLinkedEcsIds()) {
+          if (!ecs.isActive(id) || !ecs.isLinked(id) || (ecs.getNpcTypeId(id) | 0) !== typeId) continue;
+          const level = ecs.getLevel(id) | 0;
+          if (level === viewer) continue;
+          matches.push({ typeId, level, viewerLevel: viewer, x: ecs.getWorldX(id), y: ecs.getWorldY(id) });
+        }
+        return matches;
+      })()`);
+      if (!summary.crossFloorNpc?.length) {
+        throw new Error(`cross-floor NPC type ${Number(crossFloorNpcType) | 0} was not present in the client ECS`);
+      }
+    }
+
     if (arg("check-mobile-keyboard", "0") === "1") {
       await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: true });
       const point = await cdp.evaluate(`(() => {

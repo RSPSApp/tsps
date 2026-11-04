@@ -1,4 +1,5 @@
 import { Location } from "./Location";
+import { CrossFloor } from "../CrossFloor";
 import { World } from '../World';
 import { Mobile } from "../entity/impl/Mobile";
 import { PrivateArea } from "./areas/impl/PrivateArea";
@@ -68,7 +69,7 @@ export class Projectile {
      * cross a boss's whole range as fast as it crosses one tile, which reads as teleporting.
      */
     public static arrivalCycles(from: Mobile | Location, to: Mobile | Location, delay: number = 40, perTile: number = 10): number {
-        return delay + Projectile.locationOf(from).getDistance(Projectile.locationOf(to)) * perTile;
+        return delay + CrossFloor.projectileDistance(Projectile.locationOf(from), Projectile.locationOf(to)) * perTile;
     }
 
     /**
@@ -163,7 +164,7 @@ export class Projectile {
             this.startHeight === 43 &&
             this.endHeight === 31
         ) {
-            const distance = this.start.getDistance(this.end);
+            const distance = CrossFloor.projectileDistance(this.start, this.end);
             resolvedDelay = 51;
             resolvedSpeed = Projectile.LEGACY_MAGIC_END_BASE + distance * 10;
         }
@@ -185,14 +186,14 @@ export class Projectile {
             const viewer = sameArea ? player.getLocation() : BoatManager.rootLocation(player);
             // Seen as far as NPCs are: an area that widens that shows their projectiles too.
             const range = Math.max(15, player.getNpcViewDistance?.() ?? 15);
-            if (!this.start.isViewableFromWithin(viewer, range)) {
+            if (!CrossFloor.visible(viewer, this.start, range)) {
                 skippedView++;
                 return;
             }
             if (
                 this.lockon &&
                 typeof this.lockon.getLocation === "function" &&
-                !(sameArea ? this.lockon.getLocation() : BoatManager.rootLocation(this.lockon)).isViewableFromWithin(viewer, range)
+                !CrossFloor.visible(viewer, sameArea ? this.lockon.getLocation() : BoatManager.rootLocation(this.lockon), range)
             ) {
                 skippedTargetView++;
                 return;

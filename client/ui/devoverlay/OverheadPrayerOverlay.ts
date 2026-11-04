@@ -310,7 +310,6 @@ export class OverheadPrayerOverlay implements Overlay {
 
         for (const entry of entries) {
             // Icons only render on the viewer's floor: a flag upstairs is not marked down here.
-            if ((entry.plane | 0) !== (args.state?.playerLevel ?? 0)) continue;
             const sprites = [
                 this.getSprite("pk", entry.headIconPk | 0),
                 this.getSprite("prayer", entry.headIconPrayer | 0),

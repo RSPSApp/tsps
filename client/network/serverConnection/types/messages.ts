@@ -19,6 +19,7 @@ export type BankServerUpdate =
 export type NpcInfoPayload = {
     loopCycle: number;
     large: boolean;
+    crossFloor?: boolean;
     /** Main-world tile that main-world NPC deltas are relative to (differs aboard a boat). */
     rootTileX: number;
     rootTileY: number;

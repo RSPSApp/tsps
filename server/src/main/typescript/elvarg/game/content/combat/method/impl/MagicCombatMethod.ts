@@ -17,6 +17,7 @@ import { Skill } from "../../../../model/Skill";
 import type { CombatSpell } from "../../magic/CombatSpell";
 import { Spell } from "../../magic/Spell";
 import { Autocasting } from "../../magic/Autocasting";
+import { CrossFloor } from "../../../../CrossFloor";
 
 
 export class MagicCombatMethod extends CombatMethod {
@@ -75,20 +76,27 @@ export class MagicCombatMethod extends CombatMethod {
         const own = spell?.hitDelay?.();
         if (typeof own === "number") return own;
         if (!attacker.isPlayer()) return Projectile.arrivalTicks(attacker, target, Projectile.LEGACY_MAGIC_END_BASE);
+        const from = CombatPosition.location(attacker, target);
+        const to = CombatPosition.location(target, attacker);
+        const crossFloor = CrossFloor.canCross(from, to) && from.getZ() !== to.getZ();
         const distance = MagicCombatMethod.isBarrage(spell)
-            ? CombatPosition.distance(attacker, target)
+            ? crossFloor ? CombatPosition.projectileDistance(attacker, target) : CombatPosition.distance(attacker, target)
             : MagicCombatMethod.edgeDistance(attacker, target);
+        if (crossFloor) {
+            return Projectile.ticksToLand(Projectile.LEGACY_MAGIC_END_BASE + distance * 10);
+        }
         return 1 + Math.floor((1 + distance) / 3);
     }
 
-    /** Chebyshev distance from the attacker's tile to the nearest tile of the target. */
+    /** Flight distance in tile units from the attacker to the nearest tile of the target. */
     private static edgeDistance(attacker: Mobile, target: Mobile): number {
         const from = CombatPosition.location(attacker, target);
         const to = CombatPosition.location(target, attacker);
         const size = Math.max(1, target.getSize?.() ?? 1);
         const dx = Math.max(0, to.getX() - from.getX(), from.getX() - (to.getX() + size - 1));
         const dy = Math.max(0, to.getY() - from.getY(), from.getY() - (to.getY() + size - 1));
-        return Math.max(dx, dy);
+        const horizontal = Math.max(dx, dy);
+        return CrossFloor.projectileDistanceFrom(horizontal, from.getZ() - to.getZ());
     }
 
     /** Barrages are the only area spells from level 86 (bursts go up to 70). */

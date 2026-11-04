@@ -271,7 +271,11 @@ function sortTick(player, session) {
   const loot = rollLoot(next.data);
   const salvageName = next.data.name.toLowerCase();
   if (loot) {
-    player.getInventory().addItem(new Item(loot.item, loot.amount));
+    const inventory = player.getInventory();
+    const before = inventory.getAmount(loot.item);
+    inventory.addItem(new Item(loot.item, loot.amount));
+    const credited = Math.max(0, inventory.getAmount(loot.item) - before);
+    if (credited > 0) pluginApi.emitCustomEvent("collection-log:obtain", { player, itemId: loot.item, amount: credited });
     const itemName = CacheDefinitions.getItem(loot.item)?.name ?? "something";
     spam(player, `You sort through the ${salvageName} and find: ${loot.amount} x ${itemName}.`);
   } else {

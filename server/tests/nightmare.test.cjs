@@ -213,3 +213,28 @@ test("husk hits land with their captured projectiles (#1862)", (t) => {
   // Magic lands at 67 cycles (3 ticks), ranged at 60 (2), not a tick out.
   assert.deepEqual(strikes, [["magic", 3], ["ranged", 2]]);
 });
+
+test("The Nightmare's loot roll is marked as loot, not a second kill: the fight counts the kill", () => {
+  const Loot = require("../plugins/bosses/nightmare/Loot.Nightmare");
+  const emitted = [];
+  fakeApi.emitCustomEvent = (name, payload) => {
+    emitted.push([name, payload]);
+    if (name === "npc-drops:roll-table") payload.drops.push({ itemId: 995, amount: 1 });
+  };
+  fakeApi.getItemOnGroundManager = () => ({ registerLocation() {} });
+  fakeApi.core.ItemIdentifiers = { BIG_BONES: 532, BONES: 526 };
+  fakeApi.core.Item = class { constructor(itemId, amount) { this.itemId = itemId; this.amount = amount; } };
+  fakeApi.core.ItemDefinition = { forId: () => ({ getNoteId: () => -1, isNoted: () => false, isStackable: () => true }) };
+  const player = fakePlayer();
+  const fight = {
+    phosani: false,
+    boss: {},
+    dream: { tile: () => ({}), area: {} },
+    contribution: new Map([[player, { shield: 1, totems: 1 }]]),
+  };
+  Loot.reward(fight, [player]);
+  const rolls = emitted.filter(([name]) => name === "npc-drops:roll").map(([, payload]) => payload);
+  assert.equal(rolls.length, 1);
+  assert.equal(rolls[0].countKill, false);
+  assert.equal(rolls[0].npc, fight.boss);
+});

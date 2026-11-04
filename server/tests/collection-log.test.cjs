@@ -204,6 +204,50 @@ test("loot counts once every roll handler is done, and kills tally their categor
   assert.equal(Progress.categoryCount(player, named(0, "Zulrah")), 1);
 });
 
+test("combined boss categories tally their category for every NPC in the group", async () => {
+  const player = createPlayer();
+  const npc = (name) => ({ getDefinition: () => ({ getName: () => name }) });
+  const rolls = [
+    "Dagannoth Rex", "Dagannoth Prime", "Dagannoth Supreme",
+    "Callisto", "Artio",
+    "Venenatis", "Spindel",
+    "Vet'ion", "Calvar'ion",
+    "Dusk",
+  ];
+  for (const name of rolls) Clog._test.onLoot({ player, drops: [], npc: npc(name) });
+  await Promise.resolve();
+  assert.equal(Progress.categoryCount(player, named(0, "Dagannoth Kings")), 3);
+  assert.equal(Progress.categoryCount(player, named(0, "Callisto and Artio")), 2);
+  assert.equal(Progress.categoryCount(player, named(0, "Venenatis and Spindel")), 2);
+  assert.equal(Progress.categoryCount(player, named(0, "Vet'ion and Calvar'ion")), 2);
+  assert.equal(Progress.categoryCount(player, named(0, "Grotesque Guardians")), 1);
+  assert.equal(Progress.categoryCount(player, named(0, "Zulrah")), 0, "no other category is touched");
+});
+
+test("an extra loot roll logs its items without tallying a second kill", async () => {
+  const player = createPlayer();
+  const npc = { getDefinition: () => ({ getName: () => "Araxxor" }) };
+  Clog._test.onLoot({ player, drops: [{ itemId: TANZANITE_FANG, amount: 1 }], npc });
+  await Promise.resolve();
+  assert.equal(Progress.categoryCount(player, named(0, "Araxxor")), 1);
+  Clog._test.onLoot({ player, drops: [{ itemId: ZULRAH_SCALES, amount: 1 }], npc, countKill: false });
+  await Promise.resolve();
+  assert.equal(Progress.categoryCount(player, named(0, "Araxxor")), 1, "the pet/Nid roll is not a kill");
+  assert.equal(Progress.obtained(player, ZULRAH_SCALES), 1, "but its item is still logged");
+});
+
+test("Nex and The Nightmare count one kill when the authoritative count and loot roll both fire", async () => {
+  const player = createPlayer();
+  const npc = (name) => ({ getDefinition: () => ({ getName: () => name }) });
+  for (const [category, name] of [["Nex", "Nex"], ["The Nightmare", "The Nightmare"]]) {
+    Clog._test.onCount({ player, category });
+    Clog._test.onLoot({ player, drops: [], npc: npc(name), countKill: false });
+  }
+  await Promise.resolve();
+  assert.equal(Progress.categoryCount(player, named(0, "Nex")), 1);
+  assert.equal(Progress.categoryCount(player, named(0, "The Nightmare")), 1);
+});
+
 test("login sends what is set; ::clog obtains, counts and resets", () => {
   const player = createPlayer();
   Progress.restore({ player });

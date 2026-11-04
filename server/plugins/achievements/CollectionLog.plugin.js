@@ -5,7 +5,9 @@
  *
  * Loot counts the moment it drops: every "npc-drops:roll" (NPC drops, and the rewards of the
  * Gauntlet, Doom, Wintertodt, the Colosseum, the Inferno and ToA) is read once its handlers have
- * finished editing it. Other sources and plugins use events:
+ * finished editing it. A roll that is not the kill itself - a boss's pet re-roll, or loot whose
+ * kill its plugin counts through "collection-log:count" - passes `countKill: false` so it logs
+ * items without tallying a second kill. Other sources and plugins use events:
  *   api.emitCustomEvent("collection-log:obtain", { player, itemId, amount?, ensure?, silent? })
  *   api.emitCustomEvent("collection-log:count", { player, category: "Zulrah", amount? })
  *   answer "collection-log:category-count" { player, category, struct, count } with a kept count
@@ -23,12 +25,36 @@ const Data = require("./collectionlog/Data.CollectionLog");
 const Progress = require("./collectionlog/Progress.CollectionLog");
 const Interface = require("./collectionlog/Interface.CollectionLog");
 const REWARD_SHOPS = new Set(require("./collectionlog/data/reward-shops.json"));
+/** Combat Achievements' boss records: the NPCs whose kills open a differently named category. */
+const MONSTERS = require("./combatachievements/data/monsters.json");
 
 const USAGE = "Usage: ::clog <item name|id> [amount] | ::clog count <category> <n> | ::clog reset";
+
+/**
+ * The categories a kill tallies: an NPC's own name, or the category its combined page uses
+ * ("Dagannoth Kings", "Callisto and Artio"...). The aliases and category names already live in
+ * Combat Achievements' data/monsters.json; the small wilderness bosses it does not key are added
+ * with their shared categories.
+ */
+const CATEGORY_BY_NPC = { ...MONSTERS.collectionLog };
+for (const [monster, npcs] of Object.entries(MONSTERS.npcs ?? {})) {
+  for (const npc of npcs) {
+    if (!(npc in CATEGORY_BY_NPC)) CATEGORY_BY_NPC[npc] = MONSTERS.collectionLog[monster] ?? monster;
+  }
+}
+Object.assign(CATEGORY_BY_NPC, {
+  Artio: "Callisto and Artio",
+  Spindel: "Venenatis and Spindel",
+  "Calvar'ion": "Vet'ion and Calvar'ion",
+});
 
 function categoriesNamed(name) {
   const wanted = String(name ?? "").toLowerCase();
   return Data.tabs().flatMap((tab) => tab.categories).filter((category) => category.name.toLowerCase() === wanted);
+}
+
+function categoriesForNpc(name) {
+  return categoriesNamed(CATEGORY_BY_NPC[name] ?? name);
 }
 
 /** "collection-log:slots" { player, category } -> count: the category's slots filled ("Hard Treasure Trails"). */
@@ -55,7 +81,9 @@ function onLoot(event) {
   queueMicrotask(() => {
     const { player, drops, npc } = event;
     const name = npc?.getDefinition?.()?.getName?.();
-    if (name) for (const category of categoriesNamed(name)) Progress.addCategoryCount(player, category);
+    if (name && event.countKill !== false) {
+      for (const category of categoriesForNpc(name)) Progress.addCategoryCount(player, category);
+    }
     for (const drop of drops) {
       const itemId = Number(drop?.itemId ?? drop?.id);
       const amount = Number(drop?.amount ?? 1);

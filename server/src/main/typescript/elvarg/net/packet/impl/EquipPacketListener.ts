@@ -36,6 +36,11 @@ export class EquipPacketListener {
     return player?.getAttribute?.(this.PRESERVE_INTERFACE_ON_EQUIP_ATTRIBUTE) === player?.getInterfaceId?.();
   }
 
+  /** Whether add() merges these: a stack's id and metadata both have to match. */
+  private static sameStack(a: any, b: any): boolean {
+    return a.getId() === b.getId() && JSON.stringify(a.getMeta() ?? null) === JSON.stringify(b.getMeta() ?? null);
+  }
+
   public static resolveEquipmentSlot(groupId: number, childId: number): number {
     const firstChild = groupId === 387 ? 15 : groupId === 84 ? 10 : -1;
     return firstChild < 0
@@ -142,16 +147,16 @@ export class EquipPacketListener {
 
     const currentlyEquipped = equipment.forSlot(equipmentSlot).clone();
     const stackableAndSameItem =
-      currentlyEquipped.getId() === item.getId() &&
+      EquipPacketListener.sameStack(currentlyEquipped, item) &&
       item.getDefinition().isStackable();
 
     if (stackableAndSameItem) {
-      const amount = Math.min(
-        Number.MAX_SAFE_INTEGER,
-        currentlyEquipped.getAmount() + item.getAmount()
-      );
-      inventory.deleteBoolean(item, false);
-      equipment.getItems()[equipmentSlot].setId(item.getId()).setAmount(amount);
+      if (equipment.getAddableAmount(item) < item.getAmount()) {
+        inventory.full();
+        return;
+      }
+      inventory.deleteAtSlot(slot, item.getAmount(), false);
+      equipment.getItems()[equipmentSlot].setAmount(currentlyEquipped.getAmount() + item.getAmount());
     } else if (
       item.getDefinition().isDoubleHanded() &&
       equipmentSlot === Equipment.WEAPON_SLOT
@@ -195,8 +200,15 @@ export class EquipPacketListener {
         currentlyEquipped.getDefinition().getEquipmentType().getSlot() ===
           equipmentSlot
       ) {
-        if (inventory.contains(currentlyEquipped.getId())) {
-          inventory.deleteBoolean(item, false);
+        // The clicked slot empties: worn ammo joins a stack it matches, anything else takes the slot.
+        const joinsStack = currentlyEquipped.getDefinition().isStackable() &&
+          inventory.getItems().some((held: any) => EquipPacketListener.sameStack(held, currentlyEquipped));
+        if (joinsStack) {
+          if (inventory.getAddableAmount(currentlyEquipped) < currentlyEquipped.getAmount()) {
+            inventory.full();
+            return;
+          }
+          inventory.deleteAtSlot(slot, item.getAmount(), false);
           inventory.add(currentlyEquipped, false);
         } else {
           inventory.setItem(slot, currentlyEquipped);
@@ -233,15 +245,18 @@ export class EquipPacketListener {
 
     const inventory = player.getInventory();
     const stackIntoExisting =
-      item.getDefinition().isStackable() && inventory.getAmount(item.getId()) > 0;
+      item.getDefinition().isStackable() &&
+      inventory.getItems().some((held: any) => EquipPacketListener.sameStack(held, item));
     const inventorySlot = inventory.getEmptySlot();
-    if (!stackIntoExisting && inventorySlot === -1) {
+    if (stackIntoExisting
+      ? inventory.getAddableAmount(item) < item.getAmount()
+      : inventorySlot === -1) {
       inventory.full();
       return false;
     }
 
     equipment.setItem(slot, new Item(-1, 0));
-    if (stackIntoExisting) inventory.adds(item.getId(), item.getAmount());
+    if (stackIntoExisting) inventory.add(item, false);
     else inventory.setItem(inventorySlot, item);
 
     getBonusManager().update(player);

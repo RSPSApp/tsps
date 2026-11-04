@@ -1,0 +1,276 @@
+/**
+ * Auto-resume for idle accounts (plugins/modes/data/idle-mode.json "auto"). The last thing an idle
+ * player clicked that led to an idle skill's gather (a "Willow tree", "Chop down"; a "Fishing spot",
+ * "Lure") is remembered with where it happened, and saved with the account. When the gathering
+ * stops (nothing gathered for `restartAfterSeconds`), the character walks to the nearest one of the
+ * same name around that place and uses the same option, as a click would. It leaves the player be
+ * while they are busy, moving, fighting, or more than `leashTiles` from the place: walking off to
+ * do something else pauses it, coming back resumes it. Clicking something else (another object or
+ * NPC, an attack) pauses it until the next gather, and so do `maxFailedAttempts` tries in a row that
+ * gather nothing (no axe, too low a level), said once. `::idle auto on|off` switches it.
+ */
+const Common = require("./Common.IdleMode");
+const Combat = require("./Combat.IdleMode");
+
+const { chebyshev } = Common;
+
+/** Saved: { skill, kind: "object" | "npc", name, option, anchor: { x, y, z } }. */
+const TARGET_ATTRIBUTE = Common.GATHER_TARGET_ATTRIBUTE;
+const AUTO_ATTRIBUTE = Common.AUTO_ATTRIBUTE;
+
+/** player -> the last object or NPC option clicked: { kind, name, option, at }. */
+const clicks = new Map();
+/** player -> { lastGatherAt, lastAttemptAt, failedAttempts, paused: null | "click" | "stuck" }. */
+const states = new Map();
+/** Idle players with a remembered target, looked at every few ticks. */
+const tracked = new Set();
+
+function config() {
+  return Common.data.auto;
+}
+
+function stateOf(player) {
+  let state = states.get(player);
+  if (!state) states.set(player, (state = { lastGatherAt: 0, lastAttemptAt: 0, failedAttempts: 0, paused: null }));
+  return state;
+}
+
+function autoOn(player) {
+  return config().enabled && Common.autoOn(player);
+}
+
+function remember(player, kind, name, option) {
+  if (!name || !option || !Common.isIdle(player)) return;
+  const click = { kind, name, option, at: Date.now() };
+  clicks.set(player, click);
+  // The player doing something else: leave them to it until they gather again.
+  if (!sameTarget(player.getAttribute(TARGET_ATTRIBUTE), click)) stateOf(player).paused = "click";
+}
+
+function observeObject(event) {
+  const definition = event.definition ?? event.object?.getDefinition?.();
+  remember(event.player, "object", definition?.getName?.(), event.option ?? definition?.getInteractions?.()?.[event.clickType - 1]);
+}
+
+function observeNpc(event) {
+  const definition = event.definition ?? event.npc?.getDefinition?.();
+  remember(event.player, "npc", definition?.getName?.(), definition?.getActions?.()?.[event.clickType - 1]);
+}
+
+/** `onNpcAttackOption`: an attack is something else too. */
+function observeAttack(event) {
+  remember(event.player, "attack", event.npc?.getDefinition?.()?.getName?.(), "Attack");
+}
+
+function sameTarget(a, b) {
+  return !!a && !!b && a.kind === b.kind && a.name === b.name && a.option.toLowerCase() === b.option.toLowerCase();
+}
+
+/** `storage:gather`: an idle skill gathered; a click just before it becomes the target. */
+function gathered(request) {
+  const { player } = request;
+  if (!Common.idleGather(player, request.skill)) return;
+  const now = Date.now();
+  const state = stateOf(player);
+  state.lastGatherAt = now;
+  state.failedAttempts = 0;
+  state.paused = null;
+  const click = clicks.get(player);
+  if (!click || now - click.at > config().rememberClickSeconds * 1000) return;
+  clicks.delete(player);
+  const location = player.getLocation();
+  const previous = player.getAttribute(TARGET_ATTRIBUTE);
+  const keepAnchor = sameTarget(previous, click) && previous.anchor.z === location.getZ() &&
+    chebyshev(location, previous.anchor) <= config().searchTiles;
+  player.setAttribute(TARGET_ATTRIBUTE, {
+    skill: Common.skillKey(request.skill),
+    kind: click.kind,
+    name: click.name,
+    option: click.option,
+    anchor: keepAnchor ? previous.anchor : { x: location.getX(), y: location.getY(), z: location.getZ() },
+  });
+  // One activity at a time: gathering now replaces idle combat's target.
+  player.setAttribute(Common.COMBAT_TARGET_ATTRIBUTE, null);
+  tracked.add(player);
+}
+
+function optionIndex(options, option) {
+  const wanted = option.toLowerCase();
+  return (options ?? []).findIndex((entry) => typeof entry === "string" && entry.toLowerCase() === wanted) + 1;
+}
+
+/** The nearest object called `name` with `option` around the anchor, nearest the player first. */
+function findObject(player, target) {
+  const { MapObjects } = Common.core;
+  const { anchor } = target;
+  const radius = config().searchTiles;
+  const here = player.getLocation();
+  let best = null;
+  let bestDistance = Infinity;
+  for (let x = anchor.x - radius; x <= anchor.x + radius; x++) {
+    for (let y = anchor.y - radius; y <= anchor.y + radius; y++) {
+      // The map's objects (trees, rocks) and the ones placed at runtime are both in MapObjects.
+      for (const object of MapObjects.mapObjects.get(MapObjects.getHash(x, y, anchor.z)) ?? []) {
+        const definition = object.getDefinition?.();
+        if (definition?.getName?.() !== target.name || optionIndex(definition.getInteractions?.(), target.option) === 0) continue;
+        const distance = Math.max(Math.abs(here.getX() - x), Math.abs(here.getY() - y));
+        if (distance < bestDistance) {
+          best = object;
+          bestDistance = distance;
+        }
+      }
+    }
+  }
+  return best;
+}
+
+function findNpc(player, target) {
+  const { Location, World } = Common.core;
+  const { anchor } = target;
+  const here = player.getLocation();
+  let best = null;
+  let bestDistance = Infinity;
+  for (const npc of World.getNpcsNear(new Location(anchor.x, anchor.y, anchor.z), config().searchTiles)) {
+    const definition = npc.getDefinition?.();
+    if (npc.isRegistered?.() === false || definition?.getName?.() !== target.name) continue;
+    if (optionIndex(definition.getActions?.(), target.option) === 0) continue;
+    const distance = chebyshev(here, { x: npc.getLocation().getX(), y: npc.getLocation().getY() });
+    if (distance < bestDistance) {
+      best = npc;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+function at(entity) {
+  const location = entity.getLocation();
+  return { x: location.getX(), y: location.getY(), z: location.getZ() };
+}
+
+/** Walks to the object and uses the option on arrival, as a click would. */
+function useObject(player, object, target) {
+  player.getMovementQueue().walkToObject(object, {
+    execute: () => {
+      const clickType = optionIndex(object.getDefinition().getInteractions(), target.option);
+      player.setPositionToFace(object.getLocation());
+      Common.api.emitObjectInteraction({
+        player, object, objectId: object.getId(), clickType, location: at(object), sourceLocation: at(player), handled: false,
+      });
+    },
+  });
+}
+
+function useNpc(player, npc, target) {
+  player.getMovementQueue().walkToEntity(npc, () => {
+    const clickType = optionIndex(npc.getDefinition().getActions(), target.option);
+    player.setPositionToFace(npc.getLocation());
+    Common.api.emitNpcInteraction({
+      player, npc, npcId: npc.getId(), npcIndex: npc.getIndex(), clickType, location: at(npc), handled: false,
+    });
+  }, 1);
+}
+
+/** One look at a tracked player: resumes the gathering when it has stopped. "resumed" when it did. */
+function resume(player, now) {
+  const target = player.getAttribute(TARGET_ATTRIBUTE);
+  if (!target || !autoOn(player)) return "off";
+  const state = stateOf(player);
+  if (state.paused) return "paused";
+  const { restartAfterSeconds, retrySeconds, leashTiles, maxFailedAttempts } = config();
+  if (now - state.lastGatherAt < restartAfterSeconds * 1000 || now - state.lastAttemptAt < retrySeconds * 1000) return "gathering";
+  if (!Common.free(player)) return "busy";
+  const location = player.getLocation();
+  if (location.getZ() !== target.anchor.z || chebyshev(location, target.anchor) > leashTiles) return "away";
+  const entity = target.kind === "npc" ? findNpc(player, target) : findObject(player, target);
+  if (!entity) return "none";
+  // The last try gathered nothing: after a few, stop trying until the player gathers again.
+  if (state.lastAttemptAt > state.lastGatherAt && ++state.failedAttempts >= maxFailedAttempts) {
+    state.paused = "stuck";
+    player.sendMessage(`Auto-resume has paused: your character can't ${target.option.toLowerCase()} the ${target.name.toLowerCase()}. Gather again to restart it.`);
+    return "paused";
+  }
+  state.lastAttemptAt = now;
+  if (target.kind === "npc") useNpc(player, entity, target);
+  else useObject(player, entity, target);
+  return "resumed";
+}
+
+function tick() {
+  const now = Date.now();
+  for (const player of tracked) {
+    if (player.isRegistered?.() === false) {
+      forget(player);
+      continue;
+    }
+    resume(player, now);
+  }
+}
+
+function forget(player) {
+  tracked.delete(player);
+  states.delete(player);
+  clicks.delete(player);
+}
+
+function login({ player }) {
+  if (player.getAttribute(TARGET_ATTRIBUTE)) tracked.add(player);
+}
+
+function logout({ player }) {
+  forget(player);
+}
+
+function describe(player) {
+  const target = player.getAttribute(TARGET_ATTRIBUTE);
+  const fight = player.getAttribute(Common.COMBAT_TARGET_ATTRIBUTE);
+  const state = player.getAttribute(AUTO_ATTRIBUTE) === false ? "off" : "on";
+  if (fight) return `Auto-resume is ${state}: fight the nearest ${fight.name.toLowerCase()} here.`;
+  if (!target) return `Auto-resume is ${state}. Start gathering or fighting and your character will keep at it.`;
+  return `Auto-resume is ${state}: ${target.option.toLowerCase()} the nearest ${target.name.toLowerCase()} here.`;
+}
+
+/** `::idle auto [on|off]`; turning it on also lifts a pause. */
+function autoCommand(player, choice) {
+  if (choice === "on") {
+    player.setAttribute(AUTO_ATTRIBUTE, true);
+    const state = stateOf(player);
+    state.paused = null;
+    state.failedAttempts = 0;
+    Combat.unpause(player);
+  }
+  else if (choice === "off") player.setAttribute(AUTO_ATTRIBUTE, false);
+  else if (choice) {
+    player.sendMessage("Use ::idle auto on or ::idle auto off.");
+    return;
+  }
+  player.sendMessage(describe(player));
+}
+
+function startTask() {
+  const { Task, TaskManager } = Common.core;
+  TaskManager.submit(new (class AutoResumeTask extends Task {
+    constructor() { super(Math.max(1, config().tickInterval | 0)); }
+    execute() { tick(); }
+  })());
+}
+
+module.exports = function attach(api) {
+  api.persistAttribute(TARGET_ATTRIBUTE, null);
+  api.persistAttribute(AUTO_ATTRIBUTE, true);
+  api.onBeforeObjectInteraction(observeObject);
+  api.onBeforeNpcInteraction(observeNpc);
+  api.onNpcAttackOption(observeAttack);
+  api.onCustomEvent("storage:gather", gathered);
+  api.onPlayerLogin(login);
+  api.onPlayerLogout(logout);
+  api.onServerStartup(startTask);
+};
+
+module.exports.TARGET_ATTRIBUTE = TARGET_ATTRIBUTE;
+module.exports.AUTO_ATTRIBUTE = AUTO_ATTRIBUTE;
+module.exports.autoCommand = autoCommand;
+module.exports.resume = resume;
+module.exports.stateOf = stateOf;
+module.exports.tick = tick;
+module.exports.tracked = tracked;

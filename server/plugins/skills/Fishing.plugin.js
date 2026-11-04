@@ -503,6 +503,13 @@ function useBait(player, bait) {
   pluginApi?.emitCustomEvent("storage:take", { player, itemId: bait, amount: 1, taken: 0 });
 }
 
+/** A spot's random stop is skipped when content keeps it ("fishing:spot-stays", Idle Mode). */
+function spotStays(player) {
+  const request = { player, handled: false };
+  pluginApi?.emitCustomEvent("fishing:spot-stays", request);
+  return request.handled;
+}
+
 /** Whether an open container (the fish barrel, "storage:room") would take this fish. */
 function storageRoom(player, itemId) {
   // `skill`: the skill gathering it, so content storing one skill's resources answers only for those.
@@ -816,7 +823,7 @@ class FishingTask extends Task {
       // ponytail: spots without their own movement still stop at random instead of moving. A full
       // inventory waits for the next tick's check, which says so.
       if (stopAfterCatch || !hasToolRequirements(player, session.tool) ||
-          (!session.tool.spot && !session.tool.stationary && Misc.getRandom(90) === 0)) {
+          (!session.tool.spot && !session.tool.stationary && Misc.getRandom(90) === 0 && !spotStays(player))) {
         stopFishing(this.activeSessions, player);
       }
     }

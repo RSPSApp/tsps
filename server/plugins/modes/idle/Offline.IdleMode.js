@@ -1,0 +1,164 @@
+/**
+ * Offline progress for idle accounts (plugins/modes/data/idle-mode.json "offline"). While an idle
+ * player works, the rate they really get is measured from their own results: each gather of an
+ * idle skill (`storage:gather`) and each idle kill's loot (Combat) records the items and the
+ * activity's skills' XP. A session runs from its first record to its latest. Logging out
+ * mid-session keeps that rate with the account; logging back in pays the time away at that rate
+ * (up to the cap, at the efficiency), the XP to the skills and the items to the bank, and says so.
+ */
+const Common = require("./Common.IdleMode");
+const Progression = require("./Progression.IdleMode");
+
+/**
+ * Saved at logout: { activity, durationMs, xp: { skillKey: xp }, items: { itemId: amount },
+ * loggedOutAt }. `activity` is the gathering skill's key ("WOODCUTTING") or "COMBAT".
+ */
+const AWAY_ATTRIBUTE = "idle-mode:away";
+
+/** player -> the session being measured. */
+const sessions = new Map();
+
+/**
+ * Adds one result to a session, or starts a new one (another activity, or more than the
+ * activity's `maxGapSeconds` since the last). `xp` is { skillKey: total XP now } for the
+ * activity's skills. The first result only
+ * sets the start: what it gave lies before the measured time.
+ */
+function addResult(session, result, now, xp, config) {
+  const { activity, items } = result;
+  const maxGapSeconds = result.maxGapSeconds ?? config.maxGapSeconds;
+  if (!session || session.activity !== activity || now - session.lastAt > session.maxGapSeconds * 1000) {
+    return { activity, maxGapSeconds, firstAt: now, lastAt: now, firstXp: { ...xp }, lastXp: { ...xp }, items: {} };
+  }
+  for (const [itemId, amount] of Object.entries(items)) {
+    if (amount > 0) session.items[itemId] = (session.items[itemId] ?? 0) + amount;
+  }
+  session.lastAt = now;
+  session.lastXp = { ...xp };
+  return session;
+}
+
+/** What a session at logout leaves for the time away, or null when it is too short or has ended. */
+function awayFromSession(session, now, config) {
+  if (!session) return null;
+  const durationMs = session.lastAt - session.firstAt;
+  const maxGapSeconds = session.maxGapSeconds ?? config.maxGapSeconds;
+  if (durationMs < config.minSampleSeconds * 1000 || now - session.lastAt > maxGapSeconds * 1000) return null;
+  const xp = {};
+  for (const [key, total] of Object.entries(session.lastXp)) {
+    const gained = total - (session.firstXp[key] ?? total);
+    if (gained > 0) xp[key] = gained;
+  }
+  if (Object.keys(session.items).length === 0 && Object.keys(xp).length === 0) return null;
+  return { activity: session.activity, durationMs, xp, items: { ...session.items }, loggedOutAt: now };
+}
+
+/**
+ * The time away paid at the session's rate: { elapsedMs, paidMs, xp, items }. `config.bonus` is an
+ * extra share of the items (Bountiful Harvest's expected extras), with no XP.
+ */
+function offlineReward(away, now, config) {
+  const elapsedMs = Math.max(0, now - away.loggedOutAt);
+  const paidMs = Math.min(elapsedMs, config.capHours * 3600 * 1000);
+  const factor = away.durationMs > 0 ? (paidMs / away.durationMs) * config.efficiency : 0;
+  const items = {};
+  for (const [itemId, amount] of Object.entries(away.items)) {
+    const earned = Math.floor(amount * factor * (1 + (config.bonus ?? 0)));
+    if (earned > 0) items[itemId] = earned;
+  }
+  const xp = {};
+  for (const [key, amount] of Object.entries(away.xp)) {
+    const earned = Math.floor(amount * factor);
+    if (earned > 0) xp[key] = earned;
+  }
+  return { elapsedMs, paidMs, xp, items };
+}
+
+function formatDuration(ms) {
+  const minutes = Math.floor(ms / 60000);
+  const hours = Math.floor(minutes / 60);
+  return hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+}
+
+function formatNumber(value) {
+  return Math.floor(value).toLocaleString("en-US");
+}
+
+function xpNow(player, skills) {
+  const xp = {};
+  for (const skill of skills) {
+    const key = Common.skillKey(skill);
+    if (key) xp[key] = player.getSkillManager().getExperience(skill);
+  }
+  return xp;
+}
+
+/**
+ * Records a result of an idle activity: `activity` names it, `skills` are the core Skills whose XP
+ * it gives, `items` what it gave ({ itemId: amount }), `maxGapSeconds` the activity's own longest
+ * wait between two results (the offline setting when left out).
+ */
+function record(player, activity, skills, items, maxGapSeconds) {
+  const config = Common.data.offline;
+  if (!config.enabled || !Common.isIdle(player)) return;
+  sessions.set(player, addResult(sessions.get(player), { activity, items, maxGapSeconds }, Date.now(), xpNow(player, skills), config));
+}
+
+function gathered(request) {
+  if (!Common.idleGather(request.player, request.skill)) return;
+  record(request.player, Common.skillKey(request.skill), [request.skill], { [request.itemId]: request.amount });
+}
+
+function logout({ player }) {
+  const session = sessions.get(player);
+  sessions.delete(player);
+  const away = Common.data.offline.enabled ? awayFromSession(session, Date.now(), Common.data.offline) : null;
+  player.setAttribute(AWAY_ATTRIBUTE, away);
+}
+
+function doing(activity) {
+  return activity === "COMBAT" ? "fighting" : Common.skillName(activity).toLowerCase();
+}
+
+/** Pays the time away, to the skills and the bank; what the bank had no room for is lost, and said. */
+function login({ player }) {
+  const away = player.getAttribute(AWAY_ATTRIBUTE);
+  if (!away) return;
+  player.setAttribute(AWAY_ATTRIBUTE, null);
+  const config = { ...Common.data.offline, capHours: Progression.capHours(player), bonus: Progression.bountyChance(player) };
+  const reward = offlineReward(away, Date.now(), config);
+  const gained = [];
+  for (const [key, amount] of Object.entries(reward.xp)) {
+    const skill = Common.core.Skill[key];
+    if (!skill) continue;
+    player.getSkillManager().addExperience(skill, amount, false);
+    gained.push(`${formatNumber(amount)} ${Common.skillName(key)} XP`);
+  }
+  const banked = [];
+  let lost = 0;
+  for (const [itemId, amount] of Object.entries(reward.items)) {
+    if (Common.bank(player, Number(itemId), amount)) banked.push(`${formatNumber(amount)} x ${Common.itemName(Number(itemId))}`);
+    else lost += amount;
+  }
+  if (gained.length === 0 && banked.length === 0 && lost === 0) return;
+  const capped = reward.paidMs < reward.elapsedMs ? ` (capped at ${config.capHours}h)` : "";
+  player.sendMessage(`While you were away for ${formatDuration(reward.elapsedMs)}${capped}, you kept ${doing(away.activity)}:`);
+  const parts = [...gained, ...(banked.length ? [`${banked.join(", ")} to your bank`] : [])];
+  if (parts.length) player.sendMessage(`${parts.join(", ")}.`);
+  if (lost > 0) player.sendMessage(`Your bank was full: ${formatNumber(lost)} items were lost.`);
+}
+
+module.exports = function attach(api) {
+  api.persistAttribute(AWAY_ATTRIBUTE, null);
+  api.onCustomEvent("storage:gather", gathered);
+  api.onPlayerLogout(logout);
+  api.onPlayerLogin(login);
+};
+
+module.exports.AWAY_ATTRIBUTE = AWAY_ATTRIBUTE;
+module.exports.addResult = addResult;
+module.exports.awayFromSession = awayFromSession;
+module.exports.offlineReward = offlineReward;
+module.exports.formatDuration = formatDuration;
+module.exports.record = record;
+module.exports.sessions = sessions;

@@ -1,0 +1,98 @@
+{
+  "_description": "Idle Mode (docs/idle-mode.md): an account flag. Skills listed here gather endlessly while the flag is on, and keep gathering while the player is logged out.",
+  "skills": [
+    "WOODCUTTING",
+    "MINING",
+    "FISHING"
+  ],
+  "gathering": {
+    "bankResources": true,
+    "endlessResources": true,
+    "fishingSpotsStay": true,
+    "randomEvents": false,
+    "levelUpPopups": false
+  },
+  "offline": {
+    "_description": "A gathering session counts once it has run minSampleSeconds; a gap of more than maxGapSeconds between two gathers starts a new one. Time away is paid up to capHours at efficiency (1 = the rate the player had when they logged out).",
+    "enabled": true,
+    "minSampleSeconds": 60,
+    "maxGapSeconds": 60,
+    "capHours": 12,
+    "efficiency": 1
+  },
+  "auto": {
+    "_description": "Auto-resume (docs/idle-mode.md): an idle player's last gathering target is remembered, and when the gathering stops the character walks to the nearest one of the same name near where it started and uses the same option again.",
+    "enabled": true,
+    "tickInterval": 2,
+    "restartAfterSeconds": 12,
+    "retrySeconds": 6,
+    "rememberClickSeconds": 30,
+    "searchTiles": 16,
+    "leashTiles": 24,
+    "maxFailedAttempts": 3
+  },
+  "progression": {
+    "_description": "Idle points (docs/idle-mode.md): one per xpPerPoint XP an idle account gains in the idle skills, online or offline. They buy the upgrades' levels, each level at its listed cost.",
+    "xpPerPoint": 250,
+    "upgrades": {
+      "quick-hands": {
+        "name": "Quick Hands",
+        "description": "each level: a 10% chance an action of the idle skills takes a tick less",
+        "costs": [
+          100,
+          250,
+          500,
+          1000,
+          2000
+        ],
+        "tickSaveChancePerLevel": 0.1
+      },
+      "long-dreams": {
+        "name": "Long Dreams",
+        "description": "each level: 3 more hours of offline progress",
+        "costs": [
+          150,
+          400,
+          900,
+          2000
+        ],
+        "offlineHoursPerLevel": 3
+      },
+      "bountiful-harvest": {
+        "name": "Bountiful Harvest",
+        "description": "each level: a 4% chance of an extra resource, online and offline",
+        "costs": [
+          200,
+          500,
+          1000,
+          2000,
+          4000
+        ],
+        "extraChancePerLevel": 0.04
+      }
+    }
+  },
+  "combat": {
+    "_description": "Idle combat (docs/idle-mode.md): the last kind of monster an idle player attacked and killed is the target; the character attacks the nearest one around where it started, eats below eatBelowPercent hitpoints, stops when out of food below stopBelowPercent, and banks the loot. Kills come slower than gathers: maxGapSeconds is the longest wait between two kills that keeps one offline session.",
+    "enabled": true,
+    "skills": [
+      "ATTACK",
+      "STRENGTH",
+      "DEFENCE",
+      "RANGED",
+      "MAGIC",
+      "HITPOINTS"
+    ],
+    "bankLoot": true,
+    "pointsFromXp": true,
+    "tickInterval": 2,
+    "retrySeconds": 3,
+    "rememberAttackSeconds": 120,
+    "searchTiles": 12,
+    "leashTiles": 20,
+    "eatBelowPercent": 50,
+    "stopBelowPercent": 25,
+    "maxFailedAttempts": 5,
+    "maxGapSeconds": 180
+  }
+}

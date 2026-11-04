@@ -5,7 +5,8 @@
 //
 // Opening a pop-up interrupts what the player is doing: it emits "level-up:popup-opened"
 // { player, skill, pause }, which holds skilling until Continue. With pop-ups off, nothing stops.
-// World owners can also disable the blocking pop-up with SkillLevelUp:interruptActions.
+// World owners can also disable the blocking pop-up with SkillLevelUp:interruptActions, and
+// content for one player with the attribute "level-up:keep-actions" (Idle Mode's idle accounts).
 const GROUP = 233;
 const TEXT1 = (GROUP << 16) | 1;
 const TEXT2 = (GROUP << 16) | 2;
@@ -35,6 +36,8 @@ const COMBAT_LEVEL_ATTRIBUTE = "level-up:combat-level";
 // The combat level the queued combat pop-up started from, or undefined when none is queued.
 const COMBAT_POPUP_FROM_ATTRIBUTE = "level-up:combat-popup-from";
 const POPUP_OPENED_EVENT = "level-up:popup-opened";
+// Set by content (Idle Mode): this player's actions carry on through a level-up, with no pop-up.
+const KEEP_ACTIONS_ATTRIBUTE = "level-up:keep-actions";
 
 let pluginApi = null;
 const pending = new WeakMap();
@@ -146,7 +149,8 @@ function showLevelUp({ player, skill, oldLevel, newLevel }) {
   const combatGained = Number.isInteger(previousCombat) && combat > previousCombat;
   if (combatGained) announceCombatLevel(player);
 
-  if (!popupsEnabled(player) || pluginApi.getPluginConfig(INTERRUPT_ACTIONS_CONFIG, true) === false) return;
+  if (!popupsEnabled(player) || pluginApi.getPluginConfig(INTERRUPT_ACTIONS_CONFIG, true) === false ||
+      player.getAttribute(KEEP_ACTIONS_ATTRIBUTE) === true) return;
   if (combatGained && player.getAttribute(COMBAT_POPUP_FROM_ATTRIBUTE) === undefined) {
     player.setAttribute(COMBAT_POPUP_FROM_ATTRIBUTE, previousCombat);
   }

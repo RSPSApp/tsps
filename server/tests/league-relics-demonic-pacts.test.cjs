@@ -1281,9 +1281,18 @@ test("Map of Alacrity: Read lists an area's shortcuts in the menu interface; no 
     const messages = player.sent.messages.length;
     pick(player, target.name);
     assert.equal(player.sent.messages.length, messages, `no refusal: ${player.sent.messages.slice(messages)}`);
-    assert.ok(ticksTo(player, target) > 0, `landed on ${target.name} at Agility 1`);
+    core.TaskManager.process();
+    core.TaskManager.process();
+    const hotfoot = core.CacheDefinitions.getSeqId("hotfoot_grace_teleport");
+    assert.equal(player.getAnimation()?.getId(), hotfoot, "the map's own cast");
+    assert.equal(player.getGraphic()?.getId(), core.CacheDefinitions.getSpotanimId("leagues_6_hotfoot"));
+    const landed = ticksTo(player, target);
+    assert.ok(landed > 0 && landed <= 3, `landed on ${target.name} at Agility 1, as the seq ends (${landed})`);
     relocate(player, new Location(3200, 3200, 0));
     click(player, I.MAP_OF_ALACRITY, "Last-destination");
+    core.TaskManager.process();
+    core.TaskManager.process();
+    assert.equal(player.getAnimation()?.getId(), hotfoot, "Last-destination: the same cast");
     assert.ok(ticksTo(player, target) > 0, "Last-destination");
 
     click(player, I.MAP_OF_ALACRITY, "Read");

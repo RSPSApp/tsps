@@ -330,6 +330,8 @@
     },
     "mapOfAlacrity": {
       "league": 6, "key": "map-of-alacrity", "toolName": "Map of alacrity",
+      "cast": { "tick": 1, "landTick": 3, "animation": "hotfoot_grace_teleport", "graphic": "leagues_6_hotfoot" },
+      "_cast": "No recording of the map in use: inferred from the Wiki's video and the cache's names, hotfoot_grace_teleport (a 2-tick seq) with spotanim leagues_6_hotfoot on the pick's next tick, the move when the seq ends. lockTick: ours, the cast's own tick.",
       "_shortcuts": "plugins/modes/data/league-map-of-alacrity.json: the Wiki map's shortcuts the server has, by area (leaguerelics/MapOfAlacrity.LeagueRelics.js)."
     },
     "flaskOfFervour": {

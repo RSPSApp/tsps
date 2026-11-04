@@ -128,6 +128,18 @@ function go(player, key, destination, { wildernessLevel = ANY_WILDERNESS_LEVEL, 
   return true;
 }
 
+/**
+ * An item's own cast from its data ({ tick, landTick, animation, graphic }, seq and spotanim by
+ * gameval name): the animation and graphic on `tick`, locked from it, the move on `landTick`.
+ */
+function itemCast(spec) {
+  const { CacheDefinitions } = Common.core;
+  return {
+    steps: [{ tick: spec.tick, animation: CacheDefinitions.getSeqId(spec.animation), graphic: CacheDefinitions.getSpotanimId(spec.graphic) }],
+    lockTick: spec.tick, landTick: spec.landTick,
+  };
+}
+
 /** The item's last destination, or a message when there is none yet. */
 function goLast(player, key) {
   const last = player.getAttribute(lastAttribute(key));
@@ -381,6 +393,6 @@ function areaTeleports({ key, title, areaTitle = (name) => name, areas, cast = t
 }
 
 module.exports = {
-  areaOpen, areaUnlocked, landing, reach, go, goLast, menu, listMenu, attachMenu, destinations, ask, spawnsNamed, lastAttribute, subOption, areaTeleports,
+  areaOpen, areaUnlocked, landing, reach, go, goLast, itemCast, menu, listMenu, attachMenu, destinations, ask, spawnsNamed, lastAttribute, subOption, areaTeleports,
   ANY_WILDERNESS_LEVEL,
 };

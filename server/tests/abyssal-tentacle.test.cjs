@@ -61,7 +61,9 @@ function createPlayer(weapon = null) {
 
 /** The swing being made: when the charge goes. */
 function swing(player, type = CombatType.MELEE) {
-  AbyssalTentacle._test.onAttackStarted({ attacker: player, target: {}, method: { type: () => type } });
+  const event = { attacker: player, target: {}, method: { type: () => type } };
+  AbyssalTentacle._test.onAttackStarted(event);
+  AbyssalTentacle._test.onAttackFinished(event);
 }
 
 function strike(player, { accurate = true, damage = 5, type = CombatType.MELEE } = {}) {
@@ -170,6 +172,30 @@ test("swapping tentacles before impact charges the one that swung", () => {
   }
   assert.equal(AbyssalTentacle._test.charges(first), 9);
   assert.equal(AbyssalTentacle._test.charges(second), 10);
+});
+
+test("the last charge's swing still uses the tentacle; it degrades once the swing is over", () => {
+  const tentacle = item(ItemIds.ABYSSAL_TENTACLE, { "abyssal-tentacle": 1 });
+  const player = createPlayer(tentacle);
+  const event = { attacker: player, target: {}, method: { type: () => CombatType.MELEE } };
+  AbyssalTentacle._test.onAttackStarted(event);
+  assert.equal(tentacle.getId(), ItemIds.ABYSSAL_TENTACLE, "during the swing");
+  assert.equal(AbyssalTentacle._test.charges(tentacle), 0);
+  AbyssalTentacle._test.onAttackFinished(event);
+  assert.equal(tentacle.getId(), ItemIds.KRAKEN_TENTACLE, "after the swing");
+});
+
+test("a damaging spell cast while holding a tentacle does not roll its poison", () => {
+  poisoned.length = 0;
+  const player = createPlayer(item(ItemIds.ABYSSAL_TENTACLE));
+  const original = Math.random;
+  try {
+    Math.random = () => 0;
+    strike(player, { damage: 8, type: CombatType.MAGIC });
+  } finally {
+    Math.random = original;
+  }
+  assert.equal(poisoned.length, 0);
 });
 
 test("the last charge leaves the kraken tentacle, and an (or) tentacle returns its kit", () => {
@@ -373,4 +399,35 @@ test("native Dissolve confirms and returns only the clicked normal tentacle, rej
     assert.equal(excluded.item.getId(), itemId);
     assert.equal(MultiChatboxPrompt.getPending(excluded.player), null);
   }
+});
+
+test("through the real attack path, the last charge's swing starts and rolls with the tentacle still held", (t) => {
+  const { Combat } = require("../dist/game/content/combat/Combat");
+  const { CombatFactory, CanAttackResponse } = require("../dist/game/content/combat/CombatFactory");
+  const { CombatType: RealCombatType } = require("../dist/game/content/combat/CombatType");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  AbyssalTentacle.register(PluginManager.createApi("AbyssalTentacle"));
+  PluginManager.emitServerStartup({});
+
+  const tentacle = item(ItemIds.ABYSSAL_TENTACLE, { "abyssal-tentacle": 1 });
+  const player = createPlayer(tentacle);
+  Object.assign(player, { isNpc: () => false, isSpecialActivated: () => false, setSpecialActivated() {}, getUpdateFlag: () => ({ flag() {} }) });
+  const target = { getCombat: () => ({ getAttacker: () => player }) };
+  const combat = new Combat(player);
+  t.mock.method(CombatFactory, "canAttack", () => CanAttackResponse.CAN_ATTACK);
+  const { WeaponInterfaceManager } = require("../dist/game/content/combat/WeaponInterfaceManager");
+  const assigned = t.mock.method(WeaponInterfaceManager, "assign", () => {});
+  t.mock.method(combat, "expectAttackAnimation", () => {});
+  t.mock.method(combat, "attackTiming", () => ({ keepDelay: true }));
+  const heldDuring = [];
+  const weapon = () => player.getEquipment().getItems()[Equipment.WEAPON_SLOT].getId();
+  const method = {
+    type: () => RealCombatType.MELEE, onCombatBegan() {}, finished() {},
+    start: () => heldDuring.push(["start", weapon()]),
+    hits: () => { heldDuring.push(["hits", weapon()]); return []; },
+  };
+  assert.equal(combat.executeAttack(method, target, true, 0, false), true);
+  assert.deepEqual(heldDuring, [["start", ItemIds.ABYSSAL_TENTACLE], ["hits", ItemIds.ABYSSAL_TENTACLE]]);
+  assert.equal(tentacle.getId(), ItemIds.KRAKEN_TENTACLE, "degraded once the swing finished");
+  assert.equal(assigned.mock.callCount(), 1, "the weapon interface changes after the swing");
 });

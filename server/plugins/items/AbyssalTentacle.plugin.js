@@ -18,6 +18,8 @@ const MAX_CHARGES = 10000;
 let core = null;
 let api = null;
 let tentacleIds = new Set();
+/** Player -> the tentacle whose last charge their current swing spent. */
+const spent = new WeakMap();
 
 function combine({ player, usedItem, usedWithItem, usedItemSlot, usedWithItemSlot }) {
   const I = core.ItemIdentifiers;
@@ -88,17 +90,30 @@ function useCharge(player, tentacle) {
   api.emitCustomEvent("combat:melee-charge", consume);
   api.emitCustomEvent("combat:consume-charge", consume);
   if (consume.skip) return;
-  const left = charges(tentacle) - 1;
-  if (left > 0) {
-    tentacle.setMetaValue(CHARGES_META_KEY, left);
-    return;
+  const left = Math.max(0, charges(tentacle) - 1);
+  tentacle.setMetaValue(CHARGES_META_KEY, left);
+  if (left === 0) {
+    // The swing still uses the tentacle's style, animation and special; it degrades after.
+    spent.set(player, tentacle);
   }
-  degrade(player, tentacle);
 }
 
 function wieldedTentacle(player) {
   const weapon = player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT];
   return weapon && tentacleIds.has(weapon.getId()) ? weapon : null;
+}
+
+/** The last charge's swing is over: the tentacle it spent becomes the kraken tentacle. */
+function onAttackFinished({ attacker }) {
+  const player = attacker?.isPlayer?.() ? attacker.getAsPlayer() : null;
+  const tentacle = player ? spent.get(player) : null;
+  if (!tentacle) {
+    return;
+  }
+  spent.delete(player);
+  if (tentacleIds.has(tentacle.getId()) && charges(tentacle) === 0) {
+    degrade(player, tentacle);
+  }
 }
 
 /**
@@ -117,7 +132,10 @@ function onAttackStarted({ attacker, method }) {
 }
 
 function onHitResolved({ attacker, target, hit }) {
-  if (!attacker?.isPlayer?.() || !target || !hit?.isAccurate?.() || !(hit?.getTotalDamage?.() > 0)) {
+  if (!attacker?.isPlayer?.() || !target || hit?.getCombatType?.() !== core.CombatType.MELEE) {
+    return;
+  }
+  if (!hit.isAccurate() || !(hit.getTotalDamage() > 0)) {
     return;
   }
   if (!wieldedTentacle(attacker.getAsPlayer())) {
@@ -146,8 +164,9 @@ module.exports = {
     api.onItemOnItem("Kraken tentacle", "Abyssal whip", combine, { noted: false });
     api.onItemAction("Abyssal tentacle", { Check: check, Dissolve: dissolve });
     api.onCustomEvent("combat:attack-started", onAttackStarted);
+    api.onCustomEvent("combat:attack-finished", onAttackFinished);
     api.onCombatHitResolved(onHitResolved);
     api.onItemAction("Abyssal tentacle (or)", { Check: check });
   },
-  _test: { onAttackStarted, onHitResolved, charges, check, POISON_CHANCE, POISON_SEVERITY, MAX_CHARGES },
+  _test: { onAttackStarted, onAttackFinished, onHitResolved, charges, check, POISON_CHANCE, POISON_SEVERITY, MAX_CHARGES },
 };

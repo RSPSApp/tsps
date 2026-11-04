@@ -303,8 +303,9 @@ test('attack-started observers run only after permission succeeds, for every com
   t.mock.method(combat, 'attackTiming', () => ({}));
   let method = null;
   t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
-    assert.equal(name, 'combat:attack-started');
     assert.deepEqual(event, { attacker, target, method }, 'names the method making the swing');
+    if (name === 'combat:attack-finished') return order.push('finished');
+    assert.equal(name, 'combat:attack-started');
     order.push('event');
   });
   for (const type of [CombatType.MELEE, CombatType.RANGED, CombatType.MAGIC]) {
@@ -317,7 +318,7 @@ test('attack-started observers run only after permission succeeds, for every com
     allowed = true;
     assert.equal(combat.executeAttack(method, target, true, 0, false), true);
   }
-  assert.deepEqual(order, ['event', 'attack', 'event', 'attack', 'event', 'attack']);
+  assert.deepEqual(order, ['event', 'attack', 'finished', 'event', 'attack', 'finished', 'event', 'attack', 'finished']);
 });
 
 test('both player and NPC death clear their roll cache before the death task runs', () => {

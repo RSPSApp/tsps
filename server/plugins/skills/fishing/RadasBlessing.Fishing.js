@@ -1,20 +1,32 @@
-const { ItemIds } = require("../../../src/main/typescript/elvarg/util/IdEnums");
+let core = null;
+// Rada's blessing 4 to 1, each with its chance.
+let extraFishChances = [];
 
-// Wiki (Kourend & Kebos Diary rewards): Rada's blessing 1 to 4, worn in the ammunition slot,
-// give a 2%, 4%, 6% or 8% chance to catch two fish at once, with no additional experience.
-const EXTRA_FISH_CHANCES = [
-  [ItemIds.RADAS_BLESSING_4, 0.08],
-  [ItemIds.RADAS_BLESSING_3, 0.06],
-  [ItemIds.RADAS_BLESSING_2, 0.04],
-  [ItemIds.RADAS_BLESSING_1, 0.02],
-];
+/**
+ * Wiki (Kourend & Kebos Diary rewards): Rada's blessing 1 to 4, worn in the ammunition slot,
+ * give a 2%, 4%, 6% or 8% chance to catch two fish at once, with no additional experience.
+ */
+function attach(api) {
+  core = api.core;
+  const I = core.ItemIdentifiers;
+  extraFishChances = [
+    [I.RADAS_BLESSING_4, 0.08],
+    [I.RADAS_BLESSING_3, 0.06],
+    [I.RADAS_BLESSING_2, 0.04],
+    [I.RADAS_BLESSING_1, 0.02],
+  ];
+}
 
 // Wiki (Rada's blessing 1 to 4); no capture of it exists, so the chat channel is Fishing's own.
 const EXTRA_FISH_MESSAGE = "Rada's blessing enabled you to catch an extra fish.";
 
-/** The worn tier's chance of a second fish, 0 without a blessing. */
+/**
+ * The worn tier's chance of a second fish, 0 without a blessing. It is a members' benefit: a
+ * blessing saved as worn stays on a free world, where FreeToPlay only blocks equipping it.
+ */
 function extraFishChance(player) {
-  const worn = EXTRA_FISH_CHANCES.find(([id]) => player.getEquipment().contains(id));
+  if (!core.WorldDefinition.isMembersWorld()) return 0;
+  const worn = extraFishChances.find(([id]) => player.getEquipment().contains(id));
   return worn ? worn[1] : 0;
 }
 
@@ -24,4 +36,4 @@ function rollExtraFish(player) {
   return chance > 0 && Math.random() < chance;
 }
 
-module.exports = { extraFishChance, rollExtraFish, EXTRA_FISH_MESSAGE };
+module.exports = { attach, extraFishChance, rollExtraFish, EXTRA_FISH_MESSAGE };

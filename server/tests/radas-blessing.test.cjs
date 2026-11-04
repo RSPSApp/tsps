@@ -133,6 +133,47 @@ test("Rada's blessing doubles a stackable catch, says so, and cooks the extra fi
   });
 });
 
+test("a saved worn Rada's blessing gives nothing on a free world", async () => {
+  const { core, Fishing, fisher, amount } = await fishingLoop();
+  const { ItemIdentifiers: I, Item, WorldDefinition } = core;
+  const { TOOLS, FISH } = Fishing;
+  const MESSAGE = "Rada's blessing enabled you to catch an extra fish.";
+  const worn = (p) => {
+    p.getEquipment = () => ({ contains: (id) => id === I.RADAS_BLESSING_4, getItems: () => new Array(14).fill(null) });
+    return p;
+  };
+  const lobster = (p) => Fishing.landCatch(p, TOOLS.LOBSTER_POT, Fishing.findTool(p, TOOLS.LOBSTER_POT), [FISH.LOBSTER]);
+
+  const membersWorld = WorldDefinition.isMembersWorld;
+  WorldDefinition.isMembersWorld = () => false;
+  try {
+    // The real FreeToPlay plugin refuses to equip a members item but leaves a saved worn one.
+    const equipHooks = [];
+    require("../plugins/modes/FreeToPlay.plugin").register(new Proxy({
+      core,
+      onCanEquip: (handler) => equipHooks.push(handler),
+    }, { get: (target, name) => target[name] ?? (() => {}) }));
+    const equip = { player: { sendMessage() {} }, item: new Item(I.RADAS_BLESSING_4, 1), allow: true };
+    equipHooks.forEach((hook) => hook(equip));
+    assert.equal(equip.allow, false, "FreeToPlay treats the blessing as a members item");
+
+    await withRandom(0.001, async () => {
+      const p = worn(fisher({ items: [[I.LOBSTER_POT]] }));
+      lobster(p);
+      assert.equal(amount(p, I.RAW_LOBSTER), 1, "no extra fish on a free world");
+      assert.ok(!p.messages.includes(MESSAGE));
+    });
+  } finally {
+    WorldDefinition.isMembersWorld = membersWorld;
+  }
+
+  await withRandom(0.001, async () => {
+    const p = worn(fisher({ items: [[I.LOBSTER_POT]] }));
+    lobster(p);
+    assert.equal(amount(p, I.RAW_LOBSTER), 2, "the same blessing works on a members world");
+  });
+});
+
 /**
  * The cache loads once per file: a second initialize closes the store that the Gamevals built by
  * the first still read (EBADF), so every test shares this one load.

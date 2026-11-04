@@ -846,6 +846,7 @@ module.exports = {
     activeSessionsRef = activeSessions;
     TaskManager.submit(new FishingTask(activeSessions));
     InfernalHarpoon.attach(api);
+    RadasBlessing.attach(api);
     CrystalHarpoon.attach(api);
     Guild.attach(api);
     AnglerOutfit.attach(api);

@@ -5,7 +5,7 @@ in game, open a PR another agent will review, then take the next. Any agent can 
 helper scripts are in `scripts/agents/`, and a prompt as short as "run the bug loop until I stop
 you" is enough.
 
-Read [AGENTS.md](../AGENTS.md) and [server/AGENTS.md](../server/AGENTS.md) first. Everything here
+Read [AGENTS.md](https://github.com/RSPSApp/tsps/blob/main/AGENTS.md) and [server/AGENTS.md](https://github.com/RSPSApp/tsps/blob/main/server/AGENTS.md) first. Everything here
 sits on top of their rules.
 
 ## 1. Pick an issue
@@ -56,7 +56,7 @@ grep AGENT_MCP_PORT ../tsps-fix-<N>-<short-name>/.env
 - **Reproduce first.** Use `scripts/agents/mcp` (or a native MCP client) on your worktree's
   port: `login`, `command` (`tele`, `item`, `master`, `quest …`), `object_option`,
   `npc_option`, `inventory_option`, `dialogue_*`, `can_attack`, `wait_ticks`, `observe`
-  ([server/docs/agents/testing.md](../server/docs/agents/testing.md)). Write down the
+  ([server/docs/agents/testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/testing.md)). Write down the
   before-state.
 - **Fix the root cause** where every caller goes through, in the smallest diff that follows the
   module's existing pattern.

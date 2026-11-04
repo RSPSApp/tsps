@@ -25,6 +25,8 @@ const CREATION_ALL_SENTINEL = 28;
 const DEFAULT_MENU = "make";
 const DEFAULT_ANIMATION = "human_fletching";
 
+const PRESET_TEXT = "Preset items cannot be used for this.";
+
 let api = null;
 let core = null;
 let recipes = [];
@@ -227,12 +229,25 @@ function unlocked(player, recipe) {
   return true;
 }
 
+/** Preset (and other untradeable or unbankable) copies keep their restrictions, so they never convert. */
+function restricted(item) {
+  const { Item } = core;
+  return item.isPresetItem() || item.getMetaValue(Item.UNTRADEABLE_META) === true
+    || item.getMetaValue(Item.UNBANKABLE_META) === true;
+}
+
+/** How many of `id` a recipe can consume: the unrestricted copies. */
+function plainAmount(inventory, id) {
+  return inventory.getItems().reduce((total, item) =>
+    (item.getId() === id && !restricted(item) ? total + item.getAmount() : total), 0);
+}
+
 /** How many of a material the player can use, a virtual source's (the spool's) included. */
-function heldAmount(player, material) {
+function heldAmount(player, material, amountOf = plainAmount) {
   const inventory = player.getInventory();
   let total = 0;
   for (const id of material.ids) {
-    total += inventory.getAmount(id);
+    total += amountOf(inventory, id);
     const source = virtualMaterials.get(id);
     if (source) total += source.count(player);
   }
@@ -265,25 +280,33 @@ function takeMaterial(player, material, amount, via) {
   for (const id of order) {
     const source = virtualMaterials.get(id);
     if (source && sourceFirst) remaining -= source.take(player, remaining);
-    const fromInventory = Math.min(remaining, inventory.getAmount(id));
-    if (fromInventory > 0) {
-      inventory.deleteNumber(id, fromInventory);
-      remaining -= fromInventory;
-    }
+    inventory.getItems().forEach((item, slot) => {
+      if (remaining <= 0 || item.getId() !== id || restricted(item)) return;
+      const taken = Math.min(remaining, item.getAmount());
+      inventory.deleteAtSlot(slot, taken);
+      remaining -= taken;
+    });
     if (source && !sourceFirst && remaining > 0) remaining -= source.take(player, remaining);
     if (remaining <= 0) return;
   }
 }
 
-/** Whether the product fits once the materials are taken. */
+/**
+ * Whether the product fits once the materials are taken, at its largest roll. A stack with other
+ * metadata (a preset one) is not one to join, and takes no room from the product's own slot.
+ */
 function fits(player, recipe) {
   const inventory = player.getInventory();
+  const product = new core.Item(recipe.outputId, recipe.amountMax);
   const stackable = core.ItemDefinition.forId(recipe.outputId).isStackable();
-  if (stackable && inventory.contains(recipe.outputId)) return true;
+  const joins = stackable && inventory.getItems().some((item) =>
+    item.getId() === recipe.outputId && item.getAmount() > 0 && item.getMeta() == null);
+  if (joins) return inventory.getAddableAmount(product) >= recipe.amountMax;
   if (inventory.getFreeSlots() > 0) return true;
   return recipe.materials.some((material) => material.ids.some((id) => {
-    if (!inventory.contains(id)) return false;
-    return !core.ItemDefinition.forId(id).isStackable() || inventory.getAmount(id) <= material.amount;
+    const held = plainAmount(inventory, id);
+    if (held <= 0) return false;
+    return !core.ItemDefinition.forId(id).isStackable() || heldAmount(player, material) <= material.amount;
   }));
 }
 
@@ -477,7 +500,13 @@ function handlePair(player, usedId, usedWithId) {
   }
   const usable = choices.filter((recipe) => hasTools(player, recipe) && batchesAvailable(player, recipe) > 0);
   // An empty spool on an unstrung bow does nothing at all, not even "Nothing interesting happens."
-  if (usable.length === 0) return true;
+  if (usable.length === 0) {
+    const everyCopy = (inventory, id) => inventory.getAmount(id);
+    const onlyPreset = choices.some((recipe) => hasTools(player, recipe) && recipe.materials.every((material) =>
+      heldAmount(player, material, everyCopy) >= material.amount));
+    if (onlyPreset) player.sendMessage(PRESET_TEXT);
+    return true;
+  }
   const via = usedId;
 
   if (usable.length === 1) {

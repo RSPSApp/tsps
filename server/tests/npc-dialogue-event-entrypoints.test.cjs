@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, test } = require('node:test');
+const { before, after, test } = require('node:test');
 process.env.DISABLE_PLAYER_BOTS = '1';
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
@@ -16,7 +16,9 @@ before(async () => {
   core = PM.getCoreApi();
   cookId = core.CacheDefinitions.getNpcId('fai_varrock_bluemoon_chef');
   PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
+  PM.emitServerStartup({});
 });
+after(() => PM.emitServerShutdown({}));
 function fixture(t) {
   const packets = [];
   const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
@@ -399,8 +401,23 @@ for (const farming of [1, 2]) {
     };
     for (const key of ['lost_city', 'nature_spirit']) {
       await reachStart();
+      const refusalFrom = f.packets.length;
       await select('Yes.');
       assert.equal(quest.getStage(f.player), 0, 'both prerequisite quests are required');
+      assert.equal(Number(f.player.getAttribute('quest.points')) || 0, 0);
+      assert.equal(f.player.getDialogueManager().getCurrent(), undefined,
+        'a rejected start must not play the successful gardener assignment');
+      assert.equal(f.player.getPacketSender().getChatboxGroupId(), -1, 'the refusal is visible in the uncovered chatbox');
+      f.player.getSession().flushPackets();
+      const refusal = Buffer.concat(f.packets.slice(refusalFrom));
+      assert.ok(refusal.includes(Buffer.from('You must complete Nature Spirit to start this quest.')),
+        'the actual chat packet names the missing prerequisite');
+      assert.equal(refusal.includes(Buffer.from('You must complete Lost City to start this quest.')), key === 'lost_city',
+        'only missing prerequisites are reported');
+      const oldPackets = f.packets.length;
+      await choose(f, 1);
+      assert.equal(quest.getStage(f.player), 0, 'a stale Yes cannot start the quest');
+      assert.equal(f.packets.length, oldPackets, 'the rejected prompt is no longer resumable');
       f.player.closeInterruptibleInterfaces();
       const prerequisite = quests.find(entry => entry.key === key);
       prerequisite.setStage(f.player, prerequisite.completionValue);
@@ -1529,4 +1546,240 @@ test('Pandemonium native: the captured helm and sails still sail to the wreck wi
   f.player.closeInterruptibleInterfaces();
   await pandemoniumDeploy(f);
   assert.ok(f.player.getDialogueManager().getCurrent(), 'Deploy remains usable after the ordinary voyage');
+});
+
+
+
+function sourceStartChoice(page, hook) {
+  const record = require('../data/definitions/npc-dialogues.json')[page];
+  function find(steps) {
+    for (const step of steps) {
+      if (step.options?.some(option => option.hook === hook)) return step;
+      for (const nested of [step.steps ?? [], ...(step.options ?? []).map(option => option.steps ?? [])]) {
+        const result = find(nested);
+        if (result) return result;
+      }
+    }
+  }
+  for (const [variant, steps] of Object.entries(record.variants)) {
+    const choice = find(steps);
+    if (choice) return { variant, choice };
+  }
+  throw Error(`Missing canonical start choice ${hook}`);
+}
+
+for (const [page, key, npcKey, hook, reasons] of [
+  ['Lost City', 'lost_city', 'WARRIOR', 'quest:lost-city:start', ['Crafting level of at least 31', 'Woodcutting level of at least 36']],
+  ['In Search of the Myreque', 'in_search_of_the_myreque', 'VANSTROM_KLAUSE_8', 'quest:in-search-of-the-myreque:start', ['Agility level of at least 25']],
+]) test(`${page} native start refusal exposes existing reasons without playing accepted dialogue`, async t => {
+  const f = fixture(t), quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === key);
+  const { variant, choice } = sourceStartChoice(page, hook);
+  const show = () => {
+    const request = { player: f.player, npcId: core.NpcIdentifiers[npcKey], variant: { page, variant }, exact: true, select: () => [choice] };
+    PM.emitCustomEvent('npc-dialogue:start', request);
+    assert.equal(request.handled, true);
+    return request;
+  };
+  const refuse = async expected => {
+    show(); await choose(f, choice.options.findIndex(option => option.hook === hook) + 1);
+    assert.equal(quest.getStage(f.player), 0);
+    assert.equal(Number(f.player.getAttribute('quest.points')) || 0, 0);
+    assert.equal(f.player.getDialogueManager().getCurrent(), undefined);
+    assert.equal(f.player.getPacketSender().getChatboxGroupId(), -1);
+    f.player.getSession().flushPackets();
+    const packets = Buffer.concat(f.packets).toString('utf8');
+    for (const reason of expected) assert.ok(packets.includes(reason), reason);
+  };
+  await refuse(reasons);
+  if (key === 'lost_city') {
+    f.player.getSkillManager().setMaxLevels(core.Skill.CRAFTING, 31, false);
+    await refuse(['Woodcutting level of at least 36']);
+    f.player.getSkillManager().setMaxLevels(core.Skill.WOODCUTTING, 36, false);
+  } else {
+    f.player.getSkillManager().setMaxLevels(core.Skill.AGILITY, 25, false);
+    await refuse(['You must complete Nature Spirit to start this quest.']);
+    const prerequisite = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'nature_spirit');
+    prerequisite.setStage(f.player, prerequisite.completionValue);
+  }
+  show(); await choose(f, choice.options.findIndex(option => option.hook === hook) + 1);
+  assert.ok(quest.getStage(f.player) > 0, 'meeting the existing requirements starts normally');
+  assert.ok(f.player.getDialogueManager().getCurrent(), 'the canonical accepted branch is still played');
+});
+
+test('a rejected owned quest-start hook preserves a replacement conversation and its next native choice', async t => {
+  const f = fixture(t), page = 'Fairytale I - Growing Pains', hook = 'quest:fairytale-i-growing-pains:start';
+  const { variant, choice } = sourceStartChoice(page, hook);
+  const hooks = PM.customEventHooks.get('npc-dialogue:hook'), start = hooks.length;
+  t.after(() => hooks.splice(start));
+  let replacement, refused;
+  PM.createApi('RefusalReplacementTest').onCustomEvent('npc-dialogue:hook', event => {
+    if (event.player !== f.player || event.hook !== hook) return;
+    refused = event.end === true;
+    replacement = request(f.player, f.npc);
+  });
+  const old = { player: f.player, npcId: core.NpcIdentifiers.MARTIN_THE_MASTER_GARDENER, variant: { page, variant }, exact: true, select: () => [choice] };
+  PM.emitCustomEvent('npc-dialogue:start', old);
+  await choose(f, choice.options.findIndex(option => option.hook === hook) + 1);
+  assert.equal(refused, true, 'the real prerequisite handler rejected this start');
+  assert.equal(replacement.handled, true);
+  assert.equal(MultiChatboxPrompt.getPending(f.player).title, 'Ask about the Christmas Event?');
+  assert.equal(old.cancel(), false, 'the ended playback no longer owns the replacement');
+  await choose(f, 1);
+  assert.match(f.player.getDialogueManager().getCurrent().getText(), /Can't you see the huge queue/);
+  assert.equal(Number(f.player.getAttribute('quest.points')) || 0, 0);
+});
+
+test('action hook end stops its tail and preserves a replacement native dialogue', t => {
+  for (const replace of [false, true]) {
+    const f = fixture(t), hooks = PM.customEventHooks.get('npc-dialogue:hook'), start = hooks.length;
+    t.after(() => hooks.splice(start));
+    PM.createApi('ActionEndTest').onCustomEvent('npc-dialogue:hook', event => {
+      if (event.player !== f.player || event.hook !== 'test:refusal') return;
+      event.end = true;
+      if (replace) {
+        const builder = new core.DialogueChainBuilder(); builder.add(new core.NpcDialogue(0, cookId, 'Replacement dialogue.'));
+        f.player.getDialogueManager().startDialogues(builder);
+      }
+    });
+    const playback = { player: f.player, npcId: cookId, variant: { page: '2025 Christmas event', variant: 'starting-the-event-talking-to-the-cook' }, exact: true,
+      select: () => [{ type: 'action', hook: 'test:refusal' }, { npc: 'The refused tail must not play.' }] };
+    PM.emitCustomEvent('npc-dialogue:start', playback);
+    assert.equal(playback.handled, true);
+    assert.equal(f.player.getDialogueManager().getCurrent()?.getText(), replace ? 'Replacement dialogue.' : undefined);
+    playback.cancel();
+    assert.equal(f.player.getDialogueManager().getCurrent()?.getText(), replace ? 'Replacement dialogue.' : undefined);
+  }
+});
+
+
+test('Nature Spirit retains its canonical Drezel prerequisite refusal', async t => {
+  const f = fixture(t), quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+  const priest = quests.find(q => q.key === 'priest_in_peril'), nature = quests.find(q => q.key === 'nature_spirit');
+  priest.setStage(f.player, priest.completionValue);
+  const npcId = core.NpcIdentifiers.DREZEL, npc = core.NPC.create(npcId, new core.Location(3440, 9897));
+  assert.equal(PM.emitNpcInteraction({ player: f.player, npc, npcId, action: 'Talk-to', clickType: 1, handled: false }), true);
+  const lines = [];
+  for (let n = 0; n < 10 && f.player.getDialogueManager().getCurrent(); n++) {
+    const current = f.player.getDialogueManager().getCurrent(); if (current.getText) lines.push(current.getText());
+    await nextLine(f);
+  }
+  assert.ok(lines.some(line => line.startsWith("Well... I don't think so.")), 'Drezel speaks the existing canonical refusal');
+  f.player.getSession().flushPackets();
+  assert.ok(Buffer.concat(f.packets).includes(Buffer.from('You do not meet all of the requirements to start the Nature Spirit quest.')));
+  assert.equal(nature.getStage(f.player), 0);
+  assert.equal(Number(f.player.getAttribute('quest.points')) || 0, 0);
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined);
+});
+
+const REJECTED_START_ROUTES = [
+  { page: 'Jungle Potion', key: 'jungle_potion', npc: 'TRUFITUS', quests: ['druidic_ritual'],
+    route: ['What does Bwana mean?', 'Yes, of course I do.', 'A proposition eh? Sounds interesting!', 'Me? How can I help?', 'Yes.'] },
+  { page: 'Haunted Mine', key: 'haunted_mine', npc: 'ZEALOT', skills: true, quests: ['priest_in_peril'],
+    route: ['I follow the path of Saradomin.', 'I come seeking challenges and quests.', 'Yes.'] },
+  { page: 'Between a Rock...', key: 'between_a_rock', npc: 'DONDAKAN_THE_DWARF', skills: true, quests: ['dwarf_cannon', 'fishing_contest'],
+    route: ['Why are you firing a cannon at a wall?', 'Yes.'] },
+  { page: 'The Lost Tribe', key: 'the_lost_tribe', npc: 'SIGMUND_13', skills: true, quests: ['goblin_diplomacy', 'rune_mysteries'],
+    route: ['Do you have any quests for me?', 'Yes.'] },
+  { page: 'Meat and Greet', key: 'meat_and_greet', npc: 'EMELIO', quests: ['children_of_the_sun'], route: ['Yes.'] },
+  { page: 'The Curse of Arrav', key: 'curse_of_arrav', npc: 'ELIAS_WHITE', skills: true, quests: ['defender_of_varrock', 'troll_romance'], route: ['Yes.'] },
+];
+const RUM_START_ROUTE = { npc: 'PIRATE_PETE', route: ['Yes!', 'Of course, I fear no demon!', 'Nonsense! Keep the money!'] };
+const registeredQuest = key => require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(quest => quest.key === key);
+const carriedItems = player => player.getInventory().getItems().filter(item => item.getId() >= 0).map(item => [item.getId(), item.getAmount(), item.getMeta()]);
+function completePrerequisites(player, keys) {
+  for (const key of keys) { const quest = registeredQuest(key); assert.ok(quest, key); quest.setStage(player, quest.completionValue); }
+}
+function startSkillLevels(player, maximum, current = maximum) {
+  for (const skill of core.Skill.values()) player.getSkillManager().setMaxLevels(skill, maximum, false).setCurrentLevel(skill, current, false);
+}
+async function followNativeStartRoute(f, definition) {
+  const npcId = core.NpcIdentifiers[definition.npc], npc = core.NPC.create(npcId, new core.Location(3222, 3218));
+  assert.equal(PM.emitNpcInteraction({ player: f.player, npc, npcId, action: 'Talk-to', clickType: 1, handled: false }), true);
+  for (const option of definition.route) {
+    for (let n = 0; n < 80 && !MultiChatboxPrompt.getPending(f.player); n++) {
+      assert.ok(f.player.getDialogueManager().getCurrent(), `source dialogue reaches ${option}`);
+      await nextLine(f);
+    }
+    const menu = MultiChatboxPrompt.getPending(f.player), index = menu?.options.indexOf(option) ?? -1;
+    assert.ok(index >= 0, `${option} in ${JSON.stringify(menu)}`);
+    await choose(f, index + 1);
+  }
+}
+async function assertRejectedStart(f, key, items) {
+  const player = f.player;
+  assert.equal(registeredQuest(key).getStage(player), 0);
+  assert.equal(Number(player.getAttribute('quest.points')) || 0, 0);
+  assert.deepEqual(carriedItems(player), items);
+  assert.equal(player.getDialogueManager().getCurrent(), undefined, 'the accepted source tail is not played');
+  assert.equal(player.getPacketSender().getChatboxGroupId(), -1, 'the existing refusal messages are uncovered');
+  assert.equal(MultiChatboxPrompt.getPending(player), null);
+  for (let n = 0; n < 3; n++) { await choose(f, 1); await nextLine(f); }
+  assert.equal(registeredQuest(key).getStage(player), 0, 'stale native replies cannot reach later quest actions');
+  assert.deepEqual(carriedItems(player), items);
+}
+for (const definition of REJECTED_START_ROUTES) test(`${definition.page} normal rejected-start routes stop before accepted actions and retry successfully`, async t => {
+  const f = fixture(t), items = carriedItems(f.player);
+  const refuse = async () => {
+    const first = f.packets.length;
+    await followNativeStartRoute(f, definition);
+    await assertRejectedStart(f, definition.key, items);
+    f.player.getSession().flushPackets();
+    assert.match(Buffer.concat(f.packets.slice(first)).toString('utf8'), /You (?:must complete|need)/, 'real packets contain the existing requirement reason');
+  };
+  await refuse();
+  startSkillLevels(f.player, 99);
+  if (definition.skills) await refuse();
+  completePrerequisites(f.player, definition.quests);
+  await followNativeStartRoute(f, definition);
+  assert.ok(registeredQuest(definition.key).getStage(f.player) > 0);
+  assert.ok(f.player.getDialogueManager().getCurrent(), 'eligible acceptance still plays its source branch');
+});
+
+for (const mode of ['missing quests', 'skills only', 'drained skills']) test(`Rum Deal normal choice rejects ${mode} without knockout, items or quest points`, async t => {
+  const f = fixture(t), items = carriedItems(f.player), location = f.player.getLocation().clone();
+  if (mode === 'missing quests') startSkillLevels(f.player, 99);
+  else { completePrerequisites(f.player, ['zogre_flesh_eaters', 'priest_in_peril']); if (mode === 'drained skills') startSkillLevels(f.player, 99, 1); }
+  await followNativeStartRoute(f, RUM_START_ROUTE);
+  await assertRejectedStart(f, 'rum_deal', items);
+  assert.ok(f.player.getLocation().equals(location), 'a rejected choice cannot enter the knockout sequence');
+  f.player.getSession().flushPackets();
+  const packets = Buffer.concat(f.packets).toString('utf8');
+  if (mode === 'missing quests') assert.ok(packets.includes('You must complete Zogre Flesh Eaters to start this quest.'));
+  else for (const [required, skill] of [[40, 'Farming'], [50, 'Fishing'], [47, 'Prayer'], [42, 'Crafting'], [42, 'Slayer']]) {
+    assert.ok(packets.includes(`You need ${required} ${skill} to start this quest.`), `${skill} refusal is explicit`);
+  }
+  // Rum's existing predicate reads current levels: boosting passes, draining fails.
+  startSkillLevels(f.player, mode === 'drained skills' ? 1 : 99, 99);
+  completePrerequisites(f.player, ['zogre_flesh_eaters', 'priest_in_peril']);
+  await followNativeStartRoute(f, RUM_START_ROUTE);
+  assert.equal(registeredQuest('rum_deal').getStage(f.player), 1);
+  for (let n = 0; n < 8 && registeredQuest('rum_deal').getStage(f.player) < 2; n++) await nextLine(f);
+  assert.equal(registeredQuest('rum_deal').getStage(f.player), 2, 'an eligible acceptance retains the canonical knockout');
+});
+
+test('Rum Deal alternate source hook refuses without playing its accepted tail', async t => {
+  const f = fixture(t), items = carriedItems(f.player), hook = 'quest:rum-deal:start';
+  const { variant, choice } = sourceStartChoice('Pirate Pete', hook);
+  const event = { player: f.player, npcId: core.NpcIdentifiers.PIRATE_PETE, variant: { page: 'Pirate Pete', variant }, exact: true, select: () => [choice] };
+  PM.emitCustomEvent('npc-dialogue:start', event); assert.equal(event.handled, true);
+  await choose(f, choice.options.findIndex(option => option.hook === hook) + 1);
+  await assertRejectedStart(f, 'rum_deal', items);
+});
+
+test('a refused choice preserves replacement UI opened by its owning handler', async t => {
+  const f = fixture(t), hooks = PM.customEventHooks.get('npc-dialogue:choice'), start = hooks.length;
+  t.after(() => hooks.splice(start));
+  let replacement, refused;
+  PM.createApi('RefusedChoiceReplacement').onCustomEvent('npc-dialogue:choice', event => {
+    if (event.player !== f.player || event.option !== 'Nonsense! Keep the money!') return;
+    refused = event.end === true;
+    replacement = request(f.player, f.npc);
+  });
+  await followNativeStartRoute(f, RUM_START_ROUTE);
+  assert.equal(refused, true, 'Rum has already rejected this choice');
+  assert.equal(replacement.handled, true);
+  assert.equal(registeredQuest('rum_deal').getStage(f.player), 0);
+  assert.equal(MultiChatboxPrompt.getPending(f.player).title, 'Ask about the Christmas Event?');
+  await choose(f, 1);
+  assert.match(f.player.getDialogueManager().getCurrent().getText(), /Can't you see the huge queue/);
 });

@@ -200,10 +200,12 @@ module.exports = function registerJunglePotionQuest(api) {
     return request.complete === true;
   }
 
-  function handleStartHook({ player, npcId, hook }) {
+  function handleStartHook(event) {
+    const { player, npcId, hook } = event;
     if (npcId !== TRUFITUS_NPC_ID || hook !== START_HOOK) return;
     if (quest.getStage(player) < STAGE_STARTED) {
       if (!druidicRitualComplete(player)) {
+        event.end = true;
         player.sendMessage("You must complete Druidic Ritual to start this quest.");
         return;
       }

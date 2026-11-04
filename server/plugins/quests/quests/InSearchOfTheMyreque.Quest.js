@@ -420,14 +420,17 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     return request.complete === true;
   }
 
-  function handleStartHook({ player, npcId, hook }) {
+  function handleStartHook(event) {
+    const { player, npcId, hook } = event;
     if (hook !== START_HOOK || !VANSTROM_NPC_IDS.has(npcId)) return;
     if (quest.getStage(player) === STAGE_UNSTARTED) {
       if (!meetsSkillRequirements(player)) {
+        event.end = true;
         notifySkillRequirements(player);
         return;
       }
       if (!natureSpiritComplete(player)) {
+        event.end = true;
         player.sendMessage("You must complete Nature Spirit to start this quest.");
         return;
       }

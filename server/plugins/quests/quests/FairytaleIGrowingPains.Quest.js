@@ -549,7 +549,8 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     return request.complete === true;
   }
 
-  function handleStartHook({ player, npcId, hook }) {
+  function handleStartHook(event) {
+    const { player, npcId, hook } = event;
     if (npcId !== MARTIN_NPC_ID || hook !== START_HOOK) return;
     if (quest.getStage(player) === 0) {
       const missing = [
@@ -557,6 +558,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
         { key: "nature_spirit", name: "Nature Spirit" },
       ].filter((requirement) => !questIsComplete(player, requirement.key));
       if (missing.length > 0) {
+        event.end = true;
         for (const requirement of missing) {
           player.sendMessage(`You must complete ${requirement.name} to start this quest.`);
         }

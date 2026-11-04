@@ -45,10 +45,17 @@
  *   modelled, and normal secateurs have no Wield option, so enchanting consumes
  *   them from the inventory.
  * - The wiki prose is authored for the two dig and damage messages, which no
- *   transcript page carries.
+ *   transcript page carries. The grave has no click action: the capture-confirmed
+ *   native route is the spade's inventory Dig option (capture 3209), which plays
+ *   human_dig_long for four ticks before the skull appears. The existing
+ *   spade-on-grave handler is retained; that route was not captured.
  */
 module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   const {
+    Animation,
+    CacheDefinitions,
+    ChatType,
+    CountdownTask,
     Equipment,
     ItemIdentifiers,
     Location,
@@ -56,6 +63,9 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     NpcIdentifiers,
     ObjectIdentifiers,
     Skill,
+    Sound,
+    Sounds,
+    TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
@@ -146,6 +156,14 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
 
   const DRAYNOR_GRAVE_OBJECT_ID = ObjectIdentifiers.GRAVESTONE_8; // 12125 at 3106,3384
   const DRAYNOR_GRAVE_TILE = new Location(3106, 3384, 0);
+  // Cache 241: human_dig_long 831 has eight frames, length 39, loops 99 and no
+  // frame sounds; capture 3209 sends its separate 1470 synth as loops=1/delay=0
+  // and loops=3/delay=25.
+  const HUMAN_DIG_LONG_SEQUENCE = 831;
+  const DRAYNOR_DIG_TICKS = 4;
+  const DRAYNOR_DIG_SOUND_ID = 1470;
+  const DRAYNOR_DIG_SOUND_DELAY = 25;
+  const DRAYNOR_DIG_SOUND_LOOPS = 3;
   const NUFF_HANDOVER_LINES = [
     "I believe he now resides in the Dark Wizard's tower near Falador,",
     "Well not to worry, I have a copy of it here.",
@@ -231,6 +249,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
 
   let quest;
   const tanglefootByPlayer = new Map();
+  const draynorDigTasks = new Map();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
 
@@ -650,30 +669,98 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     startTranscript(api, player, GATEKEEPER_NPC_ID, PAGE, variant);
   }
 
-  /** The Draynor skull is dug from the manor grave, quest or no quest. */
-  function digDraynorGrave(player) {
-    const at = player.getLocation();
-    if (!at.isWithinDistance(DRAYNOR_GRAVE_TILE, 1)) return false;
-    if (!api.core.MapObjects.get(DRAYNOR_GRAVE_OBJECT_ID, DRAYNOR_GRAVE_TILE, player.getPrivateArea())) return false;
-    if (held(player, DRAYNOR_SKULL_ITEM_ID)) {
-      player.sendMessage("You dig the grave but find nothing.");
-      return true;
+  /**
+   * Ends the looping long-dig sequence when the pending dig finishes or is cancelled.
+   * The task is keyed by the player's index, so walking away stops it like any other
+   * interruptible interaction.
+   */
+  class DraynorDigTask extends CountdownTask {
+    constructor(player) {
+      super(player.getIndex(), DRAYNOR_DIG_TICKS, () => finishDraynorDig(player));
+      this.draynorPlayer = player;
     }
-    if (player.getBanks().some(bank => bank?.getAmount(DRAYNOR_SKULL_ITEM_ID) > 0)) {
-      player.sendMessage("I think I've already stored the skull in my bank.");
-      return true;
+
+    onTick() {
+      if (this.isRunning() && (this.draynorPlayer.getSkill() !== this || !canContinueDraynorDig(this.draynorPlayer))) this.stop();
     }
-    if (player.getInventory().getFreeSlots() === 0) {
-      player.getInventory().full();
-      return true;
+
+    cancel() {
+      this.stop();
     }
-    player.getInventory().adds(DRAYNOR_SKULL_ITEM_ID, 1);
-    player.sendMessage("You dig the grave and find a skull.");
+
+    stop() {
+      const player = this.draynorPlayer;
+      const ownsActivity = player.getSkill() === this;
+      const digSequence = CacheDefinitions.getSeqId("human_dig_long") ?? HUMAN_DIG_LONG_SEQUENCE;
+      if (this.isRunning() && ownsActivity && player.getAnimation()?.getId() === digSequence && player.getHitpoints() > 0 && !player.isDying) {
+        player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+      }
+      if (ownsActivity) player.setSkill(null);
+      if (draynorDigTasks.get(player) === this) draynorDigTasks.delete(player);
+      super.stop();
+    }
+  }
+
+  function canContinueDraynorDig(player) {
+    return player.isRegistered() && player.getHitpoints() > 0 && !player.isDying
+      && held(player, SPADE_ITEM_ID) && player.getLocation().isWithinDistance(DRAYNOR_GRAVE_TILE, 1)
+      && !!api.core.MapObjects.get(DRAYNOR_GRAVE_OBJECT_ID, DRAYNOR_GRAVE_TILE, player.getPrivateArea());
+  }
+
+  function cancelDraynorDig(player) {
+    const task = draynorDigTasks.get(player);
+    if (task) task.stop();
+    draynorDigTasks.delete(player);
+  }
+
+  function beginDraynorDig(player, sendOpeningSound) {
+    cancelDraynorDig(player);
+    if (!canContinueDraynorDig(player)) return true;
+    player.getSkillManager().stopSkillable();
+    const sequence = CacheDefinitions.getSeqId("human_dig_long") ?? HUMAN_DIG_LONG_SEQUENCE;
+    player.performAnimation(new Animation(sequence));
+    player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You start digging...");
+    if (sendOpeningSound) {
+      Sounds.sendSound(player, new Sound(DRAYNOR_DIG_SOUND_ID, 1, 0, 1));
+    }
+    // The capture's second synth: three loops after 25 client cycles.
+    Sounds.sendSound(player, new Sound(DRAYNOR_DIG_SOUND_ID, 1, DRAYNOR_DIG_SOUND_DELAY, DRAYNOR_DIG_SOUND_LOOPS));
+    const task = new DraynorDigTask(player);
+    draynorDigTasks.set(player, task);
+    player.setSkill(task);
+    TaskManager.submit(task);
     return true;
   }
 
+  function finishDraynorDig(player) {
+    if (player.getSkill() !== draynorDigTasks.get(player) || !canContinueDraynorDig(player)) return;
+    if (held(player, DRAYNOR_SKULL_ITEM_ID)) {
+      player.sendMessage("You dig the grave but find nothing.");
+      return;
+    }
+    if (player.getBanks().some(bank => bank?.getAmount(DRAYNOR_SKULL_ITEM_ID) > 0)) {
+      player.sendMessage("I think I've already stored the skull in my bank.");
+      return;
+    }
+    if (player.getInventory().getFreeSlots() === 0) {
+      player.getInventory().full();
+      return;
+    }
+    player.getInventory().adds(DRAYNOR_SKULL_ITEM_ID, 1);
+    player.sendMessage("You dig up a skull.");
+  }
+
+  /** The Draynor skull is dug from the manor grave, quest or no quest. */
+  function digDraynorGrave(player, sendOpeningSound = true) {
+    const at = player.getLocation();
+    if (!at.isWithinDistance(DRAYNOR_GRAVE_TILE, 1)) return false;
+    if (!api.core.MapObjects.get(DRAYNOR_GRAVE_OBJECT_ID, DRAYNOR_GRAVE_TILE, player.getPrivateArea())) return false;
+    return beginDraynorDig(player, sendOpeningSound);
+  }
+
   function handleSpadeDig({ player }) {
-    return digDraynorGrave(player);
+    // The shared Spade Dig handler has already sent the opening 1470/loops=1 sound.
+    return digDraynorGrave(player, false);
   }
 
   function handleSpadeOnGrave(event) {
@@ -722,10 +809,12 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
 
   function handleLogout({ player }) {
     removeTanglefoot(player);
+    cancelDraynorDig(player);
   }
 
   function handlePlayerDeath({ player }) {
     removeTanglefoot(player);
+    cancelDraynorDig(player);
   }
 
   // ==========================================================================

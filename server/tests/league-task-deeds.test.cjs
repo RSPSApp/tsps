@@ -965,7 +965,10 @@ for (const row of [
     f.player.getInventory().add(new core.Item(ids.RUNE_FELLING_AXE),true);
     f.player.getInventory().add(new core.Item(ids.FORESTERS_RATION,2),true);
     core.RegionManager.loadMapFiles(at[0],at[1]);
-    const tree=new core.GameObject(core.ObjectIdentifiers.YEW_TREE,new core.Location(at[0]+1,at[1],at[2]),10,0,null);
+    // The first display-name YEW_TREE is a POH decoration; use the wild tree's cache name.
+    const yew=core.CacheDefinitions.getLocId("yewtree");
+    assert.ok(Number.isInteger(yew),"the active cache must contain the named wild Yew tree");
+    const tree=new core.GameObject(yew,new core.Location(at[0]+1,at[1],at[2]),10,0,null);
     core.ObjectManager.register(tree,true);
     t.after(()=>core.ObjectManager.deregister(tree,true));
     let observing=true,petRolls=0;

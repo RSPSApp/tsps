@@ -7,7 +7,7 @@ const OWNED_ATTRIBUTES = Object.freeze([
   'quest.points', 'quest.recipe_for_disaster.stage', ...['rescues', 'pirate-state', 'pirate-hides-given',
     'goblin-state', 'dwarf-state', 'guide-state', 'evil-dave-state',
     'evil-dave-stew', 'skrach-state', 'awowogei-state', 'amik-state',
-    'culinaromancer-wave', 'culinaromancer-defeated'].map(name => PREFIX + name),
+    'culinaromancer-wave', 'culinaromancer-defeated', 'feast-pending'].map(name => PREFIX + name),
 ]);
 const VARIANTS = Object.freeze([
   'START', 'DWARF', 'WARTFACE_AND_BENTNOZE', 'PIRATE_PETE',
@@ -24,7 +24,7 @@ function completionProjection(player) {
   const flags = Number(player.getAttribute(PREFIX + 'rescues')) || 0;
   const result = {};
   if (stage >= 5) result[1850] = 5;
-  else if (stage === 4) result[1850] = flags === 255 ? 4 : 3;
+  else if (stage === 4) result[1850] = player.getAttribute(PREFIX + 'feast-pending') ? 2 : flags === 255 ? 4 : 3;
   else if (stage === 0 || stage === 1) result[1850] = stage;
   for (const [flag, id, value] of [[1,1892,60],[2,1867,40],[4,1895,110],
     [8,1896,5],[16,1878,5],[32,1904,170],[64,1910,20],[128,1914,50]]) {
@@ -169,7 +169,7 @@ function createRfdRenderer({core, getQuests}) {
         return need("M'speak amulet carried or worn", any(ids) || equipped(core.Equipment.AMULET_SLOT, ids), ids);
       };
       const step = (id, text, targets, choices = []) => {
-        if (targets.some(target => target.kind === 'object' && target.id === 12349)) {
+        if (id !== 'opening-feast' && targets.some(target => target.kind === 'object' && target.id === 12349)) {
           text = [...(Array.isArray(text) ? text : [text]), 'Enter the frozen dining room through the large doors in Lumbridge Castle to reach Aris and the council.'];
         }
         response.activeStep = {id, text: Array.isArray(text) ? text : [text], targets,
@@ -181,6 +181,10 @@ function createRfdRenderer({core, getQuests}) {
       const failedRequirements = () => requirements.some(r => !r.met);
 
       if (quest.isComplete(player) || stage >= 5) return complete();
+      if (stage === 4 && player.getAttribute(PREFIX + 'feast-pending')) {
+        return step('opening-feast', 'Enter the dining room beside the Lumbridge Cook and watch the feast.',
+          [object([O.LARGE_DOOR_41, O.LARGE_DOOR_42], 3213, 3221, 0)]);
+      }
       const rescue = rescueRows.find(r => r[0] === part);
       if (rescue && (flags & rescue[1])) return complete();
       if (part === 'START') {

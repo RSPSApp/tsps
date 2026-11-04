@@ -8,7 +8,7 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 function actor(x, y, z) {
   const location = new Location(x, y, z);
   return { getLocation: () => location, getPrivateArea: () => null, getSize: () => 1,
-    isNpc: () => false, isPlayer: () => true, getAsPlayer: () => ({}),
+    isNpc: () => false, isPlayer: () => true, getAsPlayer: () => ({ getUsername: () => 'test' }),
     getCombat: () => ({ getCastSpell: () => null, getAutocastSpell: () => null }), hasFlag: () => false };
 }
 test('cross-floor ranged and magic honor the option, range and collision; melee remains blocked', t => {
@@ -65,6 +65,54 @@ test('cross-floor combat falls back to an ordinary approach when its range route
   assert.equal(calls.length, 2);
   assert.equal(calls[0][2], 6);
   assert.equal(calls[1].length, 2, 'the fallback uses the ordinary same-plane approach route');
+});
+
+test('cross-floor combat falls back when a zero-step range route cannot clear projectile clipping', t => {
+  const { PathFinder } = require('../dist/game/model/movement/path/PathFinder');
+  const { RsmodRouteFinding } = require('../dist/game/model/movement/path/RsmodRouteFinding');
+  const previous = Object.fromEntries(['CROSS_FLOOR_VISIBILITY_AND_COMBAT', 'CROSS_FLOOR_VISIBILITY', 'CROSS_FLOOR_COMBAT'].map(key => [key, process.env[key]]));
+  const previousFinder = PathFinder.rsmodRouteFinding;
+  t.after(() => {
+    PathFinder.rsmodRouteFinding = previousFinder;
+    for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  });
+  t.mock.method(PluginManager, 'emitCombatAttackDistance', data => data.distance);
+  process.env.CROSS_FLOOR_VISIBILITY = '1';
+  process.env.CROSS_FLOOR_COMBAT = '1';
+
+  const blocker = RegionManager.PROJECTILE_TILE_BLOCKED | RegionManager.BLOCKED_TILE;
+  t.mock.method(RegionManager, 'getClipping', (x, y, z) => z === 1 && x === 3207 && y === 3200 ? blocker : 0);
+  PathFinder.rsmodRouteFinding = new RsmodRouteFinding(RegionManager.getClipping.bind(RegionManager));
+
+  const queue = {
+    checkpoints: [],
+    foundRoute: false,
+    reset() { this.checkpoints.length = 0; this.foundRoute = false; return this; },
+    setRoute(found) { this.foundRoute = found; },
+    setPathX() { return this; },
+    setPathY() { return this; },
+    addCheckpoint(position) { this.checkpoints.push(position); },
+    syncDestinationFlagToRoute() {},
+    hasRoute() { return this.foundRoute; },
+  };
+  let attackerLocation = new Location(3204, 3200, 1);
+  const attacker = {
+    ...actor(3204, 3200, 1),
+    getLocation: () => attackerLocation,
+    getMovementQueue: () => queue,
+  };
+  const target = actor(3210, 3200, 0);
+  const ranged = { type: () => CombatType.RANGED, attackDistance: () => 6 };
+
+  const wideRouteSteps = PathFinder.calculateEntityRoute(attacker, target, 6);
+  assert.equal(wideRouteSteps, 0, 'the wide move-near route succeeds without adding checkpoints');
+  assert.equal(queue.hasRoute(), true);
+  assert.equal(CombatRange.canReach(attacker, ranged, target), false, 'the level-1 blocker still blocks the shot');
+
+  assert.equal(CombatRange.route(attacker, ranged, target), true);
+  assert.ok(queue.checkpoints.length > 0, 'the ordinary approach queues a route around the blocker');
+  attackerLocation = queue.checkpoints.at(-1);
+  assert.equal(CombatRange.canReach(attacker, ranged, target), true, 'the fallback endpoint has a clear cross-floor shot');
 });
 
 test('projectile travel distance includes floor height and leaves same-floor timing unchanged', () => {

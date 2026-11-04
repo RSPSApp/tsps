@@ -94,11 +94,16 @@ export class CombatRange {
             // the target's inaccessible plane or all the way to its tile.
             const movement = attacker.getMovementQueue();
             const range = this.attackDistance(attacker, method, target);
-            PathFinder.calculateEntityRoute(attacker, target, range);
+            const rangeRouteSteps = PathFinder.calculateEntityRoute(attacker, target, range);
             // Some collision layouts have no route to the wide range rectangle even though
-            // the ordinary entity approach can get closer. Use that route as a fallback;
-            // Combat rechecks reach after each step and stops as soon as the shot is viable.
-            if (!movement.hasRoute() && range > 1) PathFinder.calculateEntityRoute(attacker, target);
+            // the ordinary entity approach can get closer. A successful move-near search may
+            // also return zero steps when the actor is already beside that rectangle, even if
+            // projectile clipping still blocks the shot. Use the ordinary approach in either
+            // case; combat rechecks reach after each step and stops when the shot is viable.
+            const blockedAtCurrentTile = rangeRouteSteps === 0 && !this.canReach(attacker, method, target);
+            if ((!movement.hasRoute() || blockedAtCurrentTile) && range > 1) {
+                PathFinder.calculateEntityRoute(attacker, target);
+            }
             return attacker.getMovementQueue().hasRoute();
         }
         // Route toward the moving entity itself. Combat's post-movement phase stops the queue

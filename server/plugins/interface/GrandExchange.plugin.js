@@ -522,11 +522,13 @@ function confirm(player, offer) {
       return;
     }
   } else {
-    result.deleted(inputId, inputAmount, false);
-    if (result.getAmount(inputId) !== inventory.getAmount(inputId) - inputAmount) {
+    // An offer's input comes from one stack; a delete by id would run on into the next.
+    const firstStack = inventory.getItems()[inventory.getSlotForItemId(inputId)];
+    if (ItemDefinition.forId(inputId).isStackable() && firstStack.getAmount() < inputAmount) {
       sender.sendMessage("Trade one item stack at a time.");
       return;
     }
+    result.deleted(inputId, inputAmount, false);
   }
   inventory.setItems(result.getItems()).refreshItems();
   const delay = fillDelayMs(offer);

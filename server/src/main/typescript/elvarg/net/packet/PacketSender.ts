@@ -1288,7 +1288,7 @@ export class PacketSender {
     const lastItem = this.player.getAttribute?.(CREATION_MENU_LAST_ITEM_ATTRIBUTE);
     if (Number.isInteger(lastItem)) this.sendConfig(CREATION_MENU_LAST_ITEM_VARP, lastItem);
     this.sendInterfaceScript(2046, [
-      Number.isInteger(options.mode) ? options.mode : 13,
+      Number.isInteger(options.mode) ? options.mode : 0,
       [String(menu.getTitle() ?? "What would you like to make?"), ...names].join("|"),
       maxAmount,
       ...paddedIds,

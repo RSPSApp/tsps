@@ -33,13 +33,16 @@ Sem isso, cada jogador liga o modo com `::idle on`.
 
 | Comando | O que faz |
 | --- | --- |
-| `::idle` | Diz se o modo idle está ligado |
+| `::idle` | Abre a tela do modo idle: status, pontos, melhorias e botões |
+| `::idle status` | Diz no chat se o modo idle está ligado |
 | `::idle on` / `::idle off` | Liga ou desliga o modo idle da conta |
 | `::idle auto` | Mostra o que o personagem vai retomar sozinho |
 | `::idle auto on` / `::idle auto off` | Liga ou desliga a retomada automática |
 | `::idle points` | Mostra seus pontos idle |
 | `::idle shop` | Lista as melhorias, níveis e preços |
 | `::idle buy <melhoria>` | Compra o próximo nível (`quick-hands`, `long-dreams`, `bountiful-harvest`) |
+
+![A tela do modo idle](docs/images/idle-screen.png)
 
 ## O que o modo idle faz
 

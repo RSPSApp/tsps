@@ -12,9 +12,11 @@ routes. Where the guide and capture disagree, the capture wins and the differenc
 ## Validation status
 Descriptive "native"/parity below means the plugin path and focused tests, not a full MCP pass.
 The Golem is a current full native pass (native3, unchanged, reward and relog verified). Shadow
-of the Storm stopped at native3 stage 110; native4 is ongoing and has not passed. Current full
-native passes across the issue are six (The Golem, Throne of Miscellania, Shades of Mort'ton,
-Tai Bwo Wannai Trio, Scrambled!, Royal Trouble); no all-32 claim.
+of the Storm's previous run stopped at native3 stage 110; native4 is still not a full pass.
+This candidate reworks the ritual/fight scenes from capture 3333 and has focused red/green tests
+only (see "Validation status" below). Current full native passes across the issue are six (The
+Golem, Throne of Miscellania, Shades of Mort'ton, Tai Bwo Wannai Trio, Scrambled!, Royal
+Trouble); no all-32 claim.
 
 ## The Golem
 
@@ -44,18 +46,81 @@ feather 4621, ink 4622, quill 4623, program 4624.
 | --- | --- | --- |
 | Reen start gate | Refuses with the generic requirement message unless The Golem and Demon Slayer are complete (no refusal branch exists in the transcript) | Quest Helper requirements |
 | Wizard/helper recruitment | Dave, Badden, Reen, golem bits, only four helpers | transcript conditions |
-| Kiln search | Wrong kilns advance `agrith_kiln`; the book comes from 2733,4904 | Quest Helper `searchKilns` |
-| Throne room | Realm is map plane 2, entered by 6310 and left by 6282; owner-only cast spawns there | capture ticks 1808, 1042, 10719, 2432 |
-| First incantation | Click the sigil's `Chant` at (2720,4903,2); Denath speaks Nahudu Caldar Tarren Agrith-Naar Camerinthum, and the varbits store the reverse | capture ticks 18905 and 21204-21624 |
-| Post-ritual NPCs | Eric, Jennifer and Patrick persist at stage 90 for their post-ritual lines | capture stage 90 |
-| Tanya's sigil | **QuestScene**: first-ritual camera track and BOOM (interface 229), portal loc 10251, return to (2721,4911,0), Tanya 919 plus three ghosts 1989 under the captured camera; ghosts message at +7 sets stage 100 and drops her sigil; camera resets at +10 | capture t2109-t2150 |
-| Second incantation | Talk to Matthew; the real `pblmt4` condition and/or his resolved acceptance line sets the persisted assembly flag (stage 110 + 4 helpers + sigil + Silverlight), then click `Chant` at the circle; early Chant is blocked. The five picks use varbits 1373-1377 directly (Camerinthum, Agrith-Naar, Tarren, Caldar, Nahudu). **QuestScene** camera rises per picked word with shakes 1-5, Agrith-Naar 911 spawns at (2719,4899,2), fight camera resets at +14 | capture t2429-t2475 |
-| Agrith-Naar | Spawned on the demon action; death requires Silverlight and yields Darklight | Quest Helper fight steps |
+| Kiln search | Wrong kilns leave `agrith_kiln` alone; the hidden kiln gives the tome | Quest Helper `searchKilns` |
+| Throne room | The captured room is an instance copying source plane 2 (zones 338-341, 609-614 at 2704,4872); the plugin uses the existing QuestScenes/PrivateArea at those source tiles. 6310 enters at (2720,4884,2), 6282 leaves at (2721,4911,0) | capture t1808, t2017, t2362; Wiki instance notice |
+| Room dressing | 14 standing torches (including the inner north-west flinch torch at 2718,4905 and the outer 2712,4905), fire remains and four campsite beds are placed into the scene. Summon standards 10253 at 2723,4912/2717,4912 are shape 11, not shape 10. The `3550 inviswall_serverside` corridor exists only on the initial t1808 visit and is deleted at t1857 before the ritual visits; it is not added to the ritual/fight room. | capture t1808-t1857/t2017/t2362/t2398; Wiki flinching note |
+| First ritual circle | Seven actors ring 2720,4900 on plane 2: Denath 2720,4903; Eric 2722,4898; Tanya 2718,4898; Matthew 2722,4902; Jennifer 2723,4900; Patrick 2717,4900; Dave 2720,4897. Every actor faces the centre | capture t2065-t2092 |
+| First incantation | Click the sigil's `Chant` at (2720,4903,2); Denath speaks Nahudu Caldar Tarren Agrith-Naar Camerinthum, and the varbits store the reverse. Each word moves the camera out to 2726,4903..2722,4907 and plays `summon_summon_start` 2879; completion plays `summon_summon` 2880 with graphic 480, then Denath walks to 2720,4900 and plays `denath_leave` 2888 | capture t2050-t2101 |
+| Post-first ritual | Magic circle 10252 at (2719,4899) appears at t2095 and is deleted at t2104; Denath leaves, BOOM plus shake 15, then portal 10251 replaces the open portal at (2719,4883) at t2116, camera reset. The loc lifecycle is phase-owned, not static dressing. | capture t2095-t2123 |
+| Tanya's sigil | Player returns to (2721,4911,0). Tanya 919 (facing south) and three ghosts 1989 (facing Tanya at 2722,4905) spawn; Tanya plays 425 then death 836, the ghosts play 5532, the sigil drops at 2722,4905 and the camera resets | capture t2139-t2150 |
+| Final ritual circle | The seven second-ritual actors stand at Reen 2722,4898; Badden 2722,4902; Dave 2720,4897; Matthew 2718,4902; Jennifer 2717,4900; Patrick 2718,4898; golem 2723,4900, all facing 2720,4900. Words play 2879 (golem 2884); completion plays 2880 (golem 2885) with graphic 480. At t2455 circle 10252 returns, the closed portal 10251 is removed and 6282 is open again; circle 10252 is deleted at t2464. | capture t2420-t2464 |
+| Agrith-Naar summon | Agrith appears at 2719,4899 with `qip_ds_delrith_summoned` 4623 and graphic 482, initially facing Matthew; the summon camera then frames the fight and resets | capture t2455-t2475 |
+| Agrith-Naar combat | Melee 4679 up close by default. Fire Blast (anim 69, projectile 130, start/end graphics 129/131, max 10) when out of melee or against Protect from Melee. Out of range with Protect from Magic, Telekinetic Grab pulls the player against his 3x3 footprint, and skips safely if no legal tile exists. He does not walk. The final blow requires Silverlight equipped **and** the killer in melee footprint range, even when the last damage is a spell or poison. The effective flinch is the inner NW torch at 2718,4905, which turns magic reach from true on the bare template to false with the captured locs. | Wiki /w/Agrith_Naar, /w/Shadow_of_the_Storm; cache `demon_casting`; cache NPC 911 magic 100/attack 83/HP 95 |
+| Post-quest portal | 6282 remains usable after completion and returns the player to (2721,4911,0) | Merged PR 2206; recorded in-quest exit route and tested shared Portal dispatch |
 
-## Known gaps
+## Capture provenance
 
-- Capture 3333 is decoded and used for both routes; raw packets stay outside Git.
-- The Tanya and summoning camera/shake/loc/actor beats use QuestScenes and the captured coords; cosmetic sounds and every echo sequence are not reproduced.
-- Stage-110 assembly is set by the real resolved `pblmt4` condition and by Matthew's acceptance line, guarded by stage/helpers/sigil/Silverlight; this was added after native3 found the flag could remain false when only the transient condition callback ran.
-- The first- and second-ritual casts use the captured NPC ids and plane-2 tiles, but their full movement choreography is not reproduced.
-- The Golem's throne room demon is scenery (the skeleton), so no demon fight is simulated.
+- RSProx submission 3333, revision 235, downloaded archive `/private/tmp/cap3333/3333.bin`
+  (gzip, 727,906 bytes, SHA-256 `77513a3f73e358ddc0d7e22443c9b8e7f765ecabcbb9f324e07ba39e5c4da181`).
+- Decompressed blob decoded with the pinned rsprox libs: 214,605 packets over 15,180 ticks.
+  Raw/account-bearing captures remain outside Git; only the target facts above are recorded.
+- Relevant stage values on parent varp 602: 10 at t1351, 20 at t1752, 30 at t1807,
+  40 at t1851, 50 at t1881, 60 at t1944, 70 at t2034, 80 at t2050, 90 at t2092,
+  100 at t2147, 110 at t2406, 120 at t2455, 124 at t2490 and 125 at t2499.
+- Instance palettes: t1808 -> centre zone (1458,249), t2017 -> (1434,273), t2362 -> (1482,321);
+  all three are the same 24-chunk palette copying source zones 338-341 x 609-614, source level 2
+  (region 42,76) onto target instance plane 0. The candidate uses the source tiles directly
+  (QuestScenes convention) and does not claim REBUILD_REGION death parity.
+
+## Validation status
+
+This candidate is source review plus the focused `server/tests/golem-storm-quest-parity.test.cjs`
+suite (30 tests after integrating the two upstream portal cases). That includes a real native section using `Player`/`PlayerSession`/`PacketSender`,
+cache `NPC`, `PrivateArea`, `TaskManager`, `World`, `CombatFactory`/`Combat`/`PendingHit`, and the
+loaded cache map. It proves:
+
+- both ritual casts share the player's private scene, face the centre, and receive their cached
+  animation updates; logout and leave remove the owner-only actors and scene locs;
+- a wrong first ritual ends its scene, and a retry opens a fresh scene without stale actors;
+- the demon is spawned through `Scenes.actor`, shares the player's private area, and is removed on
+  completion/death/logout; a relog during the fight restores demon and cast in one private area;
+  the Denath leave callback is player-keyed and identity-guarded so cleanup cannot remove a
+  replacement;
+- the real combat path selects melee, Fire Blast and Telekinetic Grab; the safe-skip path does not
+  force a move when every adjacent tile is blocked; the inner NW torch blocks reach and the demon
+  never chases; and `PendingHit` stays within the Wiki/cache max hit 10;
+- each selected sequence shares its actor's cache skeleton (humans/golem/ghost/Tanya/Denath/demon),
+  not just a matching name;
+- source region 10828 plane 2 supplies the temple mesh; the 14 torches/fire/beds/standards and the
+  phase-owned circle/portal locs are explicit dynamic additions.
+
+The existing `npc-dialogue-event-entrypoints.test.cjs` also passes all 48 cases after main integration, including two
+real `NpcDialogues`/`DialogueManager`/native Continue conversations for the corrected Golem
+exchange, with and without a sigil. Both new cases fail against the original generated export
+(16/15 spoken lines instead of 8/7). The sigil handoff still consumes one item and advances once.
+
+It is **not** a full native/MCP playthrough: no server, client, browser or listener was started for
+this worktree. The room uses QuestScenes/PrivateArea at the source tiles, not a true client
+REBUILD_REGION instance, so instance-only death/grave behaviour is not claimed.
+
+## Remaining dependencies and blockers
+
+- **Golem reprogram dialogue duplicate** is fixed at the source in
+  [osrsreboxed-db PR 39](https://github.com/RSPSApp/osrsreboxed-db/pull/39), head
+  `44fecf07e24792a29098e9357abf62c6a431506d`. Its canonical output was imported byte-for-byte
+  after main integration; SHA-256
+  `ddf9899dcb0cf2a53343103610d2ddf2db8abb2d267a70304ac68f3674118632`.
+  The source correction has a regression; two complete offline generations and all 3,375
+  generated files were independently compared. Only the Shadow page changes semantically.
+  No generated JSON was hand-edited or filtered at runtime. The source PR remains a merge
+  dependency while open.
+- **PR 2206** (Shadow exit + RFD shared Portal interception) is merged and preserved from
+  main at `68fdf8e4586186947177c4ccfb07563c3489d440`; its two real hook/exit regressions pass
+  alongside the new scene tests. This candidate adds no duplicate generic Portal hook.
+- A true instance transition, the full cosmetic sound set, and the optional double-sigil Tanya
+  glitch are not reproduced. Fire Blast timing uses the cache `CombatSpells.FIRE_BLAST` projectile
+  (130, end 20, heights 43/31), not invented values.
+- An earlier broad run in the inherited worktree reported failures outside ShadowOfTheStorm.
+  It was not repeated on this final main integration; the validation above is the focused
+  scene/combat suite, native dialogue entrypoints and selected-variant check. No whole-suite
+  passing claim is made.

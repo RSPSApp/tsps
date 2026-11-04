@@ -2182,3 +2182,42 @@ test('a refused choice preserves replacement UI opened by its owning handler', a
   await choose(f, 1);
   assert.match(f.player.getDialogueManager().getCurrent().getText(), /Can't you see the huge queue/);
 });
+
+for (const withSigil of [false, true]) {
+  test(`Shadow Golem reprogram dialogue speaks once through native Continue (sigil=${withSigil})`, async t => {
+    const f = fixture(t), { player } = f;
+    t.after(() => {
+      for (const npc of [...core.World.getNpcs()]) {
+        if (npc.getOwner?.() === player) PM.removeNpc(npc);
+      }
+    });
+    const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+    const quest = quests.find(entry => entry.key === 'shadow_of_the_storm');
+    const golem = quests.find(entry => entry.key === 'the_golem');
+    golem.setStage(player, golem.completionValue);
+    quest.setStage(player, 90);
+    player.setAttribute('quest.shadow_of_the_storm.helpers', 1 << 4);
+    const sigil = core.ItemIdentifiers.DEMONIC_SIGIL;
+    if (withSigil) player.getInventory().add(new core.Item(sigil));
+    const npcId = core.NpcIdentifiers.CLAY_GOLEM_3;
+    const npc = core.NPC.create(npcId, new core.Location(3478, 3089));
+    const talk = () => PM.emitNpcInteraction({ player, npc, npcId, action: 'Talk-to', clickType: 1, handled: false });
+    assert.equal(talk(), true);
+    const lines = [];
+    for (let guard = 0; guard < 30 && player.getDialogueManager().getCurrent(); guard++) {
+      lines.push(player.getDialogueManager().getCurrent().getText().replace(/\s+/g, ' ').trim());
+      await nextLine(f);
+    }
+    assert.equal(player.getDialogueManager().getCurrent(), undefined, 'the canonical exchange ends');
+    assert.equal(lines.length, withSigil ? 7 : 8, 'one exchange and only the matching sigil branch');
+    assert.equal(new Set(lines).size, lines.length, 'no spoken line repeats');
+    assert.match(lines[0], /^I sensed a great darkness/);
+    assert.match(lines.at(-1), withSigil ? /Take this demonic sigil/ : /I will wait/);
+    assert.equal(quest.getStage(player), withSigil ? 100 : 90, 'the existing sigil handoff advances recruitment once');
+    assert.equal(player.getInventory().getAmount(sigil), 0, 'only the existing sigil handoff consumes the offered item');
+    assert.equal(talk(), true, 'the next canonical conversation remains reachable after closing');
+    player.closeInterruptibleInterfaces();
+    await nextLine(f);
+    assert.equal(player.getDialogueManager().getCurrent(), undefined, 'stale Continue cannot resume a cancelled exchange');
+  });
+}

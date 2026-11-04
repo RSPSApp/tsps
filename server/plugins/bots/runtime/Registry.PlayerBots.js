@@ -15,6 +15,8 @@ const {
 } = require("./PersistenceConstants.PlayerBots");
 const { SPAWNS_PER_BATCH, SPAWN_BATCH_DELAY_MS, runPaced } = require("./SpawnPacing.PlayerBots");
 
+const { generateBotName } = require("../lib/BotNames.PlayerBots");
+
 const WILDERNESS_SPAWN_TILE_PROBE_LIMIT = 256;
 const WILDERNESS_REGION_SIZE = 64;
 const WILDERNESS_REGION_DESPAWN_DELAY_MS = 30000;
@@ -433,6 +435,16 @@ function createBotRegistry(options) {
     return plans;
   }
 
+  /** Whether a bot may not show `name`: an account's name or save, or an online player's name. */
+  function botNameTaken(username, name) {
+    if (botApi.core.DisplayNames.refusal(username, name)) return true;
+    const key = name.toLowerCase();
+    for (const online of botApi.core.World.getPlayers()) {
+      if (online.getUsername() !== username && online.getDisplayName().toLowerCase() === key) return true;
+    }
+    return false;
+  }
+
   function claimAvailableWildernessUsername() {
     for (let i = 1; i <= wildernessRoamerBotCount; i += 1) {
       const username = `WildyBot${i}`;
@@ -512,6 +524,8 @@ function createBotRegistry(options) {
       return false;
     }
     bot.setPlayerBot?.(true);
+    const displayName = generateBotName(username, (name) => botNameTaken(username, name));
+    if (displayName) bot.setDisplayName(displayName);
     if (!persistent) {
       bot.setAttribute?.(ATTR_SKIP_PERSISTENCE, true);
     }
@@ -1180,6 +1194,7 @@ function createBotRegistry(options) {
         pvpMetadata: options.pvpMetadata,
       });
     },
+    botNameTaken,
     scheduleInitialSpawn,
     enableControllerForPlayer,
     disableControllerForPlayer,

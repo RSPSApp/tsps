@@ -627,7 +627,10 @@ function start(session) {
 }
 /** A fight the PvP Arena matchmaking arranged: no options or stakes, straight to the countdown. */
 function startArranged(players) {
-  if (!arenaSpawns() || players.some(p => sessions.has(p))) return false;
+  // Staging movement requests placement, so busy() would also reject legitimate arrivals.
+  if (players.some(p => sessions.has(p) || p.getHitpoints() <= 0 || p.isDying
+    || p.isTeleportingReturn() || p.getStatus() !== PlayerStatus.NONE || inCombat(p))
+    || !arenaSpawns()) return false;
   const session = { players, mask: 0, accepted: new Set(), offers: new Map(players.map(p => [p, new Map()])), stage: "confirm", ranked: true };
   for (const p of players) {
     sessions.set(p, session);

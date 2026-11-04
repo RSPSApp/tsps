@@ -9,11 +9,12 @@ const Matchmaking = require('../plugins/minigames/duelarena/Matchmaking.DuelAren
 
 function fakePlayer(name) {
   return {
-    name, messages: [], moved: null,
+    name, messages: [], moved: null, location: { getX: () => 3366, getY: () => 3275, getZ: () => 0 },
     getDisplayName() { return name; },
     sendMessage(text) { this.messages.push(text); },
-    moveTo(location) { this.moved = location; },
-    getLocation() { return { getX: () => 0, getY: () => 0, getZ: () => 0 }; },
+    moveTo(location) { this.moved = location; this.location = location; },
+    getLocation() { return this.location; },
+    getDueling() { return { inDuel: () => this.fighting === true }; },
     getAttribute() { return 0; },
     setAttribute() {},
   };
@@ -24,7 +25,7 @@ test('sign-ups pair, steps need an invitation, and both being up starts the figh
   const started = [];
   const api = {
     core: {
-      Location: class { constructor(x, y, z) { Object.assign(this, { x, y, z }); } },
+      Location: class { constructor(x, y, z) { Object.assign(this, { x, y, z }); } getX() { return this.x; } getY() { return this.y; } getZ() { return this.z; } },
       World: { getProcessCycle: () => 0 },
       CacheDefinitions: { getInterfaceId: () => 762, getComponentId: (name) => [...name].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 65521, 7) },
     },
@@ -33,7 +34,7 @@ test('sign-ups pair, steps need an invitation, and both being up starts the figh
     onInterfaceActionClick(handler) { hooks.click = (hooks.click ?? []).concat(handler); },
     onObjectInteraction(_name, options) { Object.assign(hooks, options); },
     emitCustomEvent() {},
-    sendMultiChatboxPrompt(_player, _title, _first, signUp) { signUp(); },
+    sendMultiChatboxPrompt(player, _title, _first, signUp, _second, withdraw) { player.withdraw = withdraw; signUp(); },
   };
   Matchmaking.attach(api, { startArranged: (players) => { started.push(players); return true; } });
   const [a, b] = [fakePlayer('a'), fakePlayer('b')];
@@ -51,7 +52,19 @@ test('sign-ups pair, steps need an invitation, and both being up starts the figh
 
   hooks['Climb-up']({ player: a });
   assert.equal(started.length, 0);
+  a.moveTo(new api.core.Location(3200, 3900, 0));
   hooks['Climb-up']({ player: b });
+  assert.equal(started.length, 0, 'leaving staging revokes readiness before the opponent climbs');
+  hooks['Climb-up']({ player: a });
   assert.equal(started.length, 1);
   assert.equal(started[0].length, 2);
+  a.fighting = true;
+  a.withdraw();
+  assert.equal(Matchmaking.matches.has(a), true, 'withdraw does not bypass fight forfeit');
+  a.fighting = false;
+  a.withdraw();
+  assert.equal(Matchmaking.matches.has(a), false);
+  assert.equal(Matchmaking.matches.has(b), false);
+  assert.match(a.messages.at(-1), /cancelled/);
+  assert.ok(b.messages.some(text => /cancelled/.test(text)));
 });

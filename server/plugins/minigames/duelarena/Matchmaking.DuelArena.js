@@ -104,7 +104,15 @@ function signUp(player) {
 }
 
 function withdraw(player) {
-  if (leaveQueue(player)) sendTo(player, "You are no longer signed up for a PvP Arena fight.");
+  const match = matches.get(player);
+  if (match) {
+    if (player.getDueling().inDuel()) {
+      sendTo(player, "Your fight has started. Use Forfeit to leave it.");
+      return;
+    }
+    cancel(match, player, "withdrew their sign-up");
+    sendTo(player, "Your PvP Arena invitation has been cancelled.");
+  } else if (leaveQueue(player)) sendTo(player, "You are no longer signed up for a PvP Arena fight.");
   else sendTo(player, "You are not signed up for a PvP Arena fight.");
 }
 
@@ -153,12 +161,13 @@ function climbUp(event) {
   moveTo(player, STAGING_LANDING);
   match.staged.add(player);
   const opponent = opponentOf(match, player);
-  if (!match.staged.has(opponent)) {
+  if (!match.staged.has(opponent) || !inStaging(opponent)) {
+    match.staged.delete(opponent);
     sendTo(player, "Waiting for your opponent to reach the staging area.");
     return;
   }
   if (!startArranged(match.players)) {
-    sendTo(player, "No space is currently available in the arena.");
+    sendTo(player, "The arena is unavailable or a player is not ready to fight.");
     match.staged.delete(player);
   }
 }
@@ -193,6 +202,7 @@ function grant(player, points, result) {
 
 function expireInvitation({ player }) {
   const match = matches.get(player);
+  if (match && !player.getDueling().inDuel() && !inStaging(player)) match.staged.delete(player);
   if (match && !player.getDueling().inDuel() && core.World.getProcessCycle() >= match.expires) {
     cancel(match, player, "did not reach the staging area in time");
     sendTo(player, "Your PvP Arena invitation has expired.");

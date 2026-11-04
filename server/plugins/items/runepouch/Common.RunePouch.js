@@ -168,9 +168,8 @@ function spend(player, runeId, amount) {
 // ------------------------------------------------------------------ inventory and bank
 
 /** Whether `amount` of a stackable rune fits in the inventory. */
-function inventoryFits(player, runeId) {
-  const inventory = player.getInventory();
-  return inventory.getFreeSlots() > 0 || inventory.getAmount(runeId) > 0;
+function inventoryFits(player, runeId, amount) {
+  return player.getInventory().getAddableAmount(new core.Item(runeId, amount)) >= amount;
 }
 
 function addToInventory(player, runeId, amount) {

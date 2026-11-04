@@ -59,10 +59,10 @@ same-type NPCs, queued ranged damage, ordinary melee launch, World processing an
 NPC sync. It preserves existing human fallbacks, authored/captured/cache-family blocks and explicit
 no-block roles across hydration. A separate offline replay through the actual client decoder,
 NPC movement/animation controller and cache geometry reproduces the bad human rig before the fix.
-This is not a live GPU visual check or proof of every scene animation in issue #2134; its training,
-dialogue and cutscene reports remain open.
+That original rig regression is offline. The current reported-scene repairs additionally have
+live server and WebGPU verification described below; this does not claim packet-for-packet parity.
 
-Live agent MCP on this worktree's port49802 verified the16-point refusal, main35/sides50, cache entrance interaction, a private Guardian arena with one40HP Guardian, all four pillars and the mapped exit.
+An earlier live agent MCP check (port 49802 at the time) verified the16-point refusal, main35/sides50, cache entrance interaction, a private Guardian arena with one40HP Guardian, all four pillars and the mapped exit.
 
 Recording 1636 uses combat rather than pillar mining. Recordings 332 and 333 (revision 230) only cover the crew's post-quest desert dialogue, which matches; no decoded recording mines a pillar. The eight-cycle mining delay is based on the Wiki speedrun description and needs a mining-route recording to confirm its timer interaction. Player running uses key segments rather than every captured step; actor facing microsteps, lighting/environment scripts and temporary HUD/sidebar suppression are not fully reproduced. Quest journal prose is the existing implementation because this recording does not open its journal. These limits prevent claiming full visual or packet-for-packet parity.
 
@@ -73,3 +73,60 @@ Known small differences kept on purpose: the recruit, main 35 and Ramarno move v
 The scroll lists only 1 Quest Point, 2,000 Coins and "Access to the Ruins of / Camdozaal" (2253); the Wiki's Flex and steak sandwich rewards are not on it. The drink box shows the drink given (886) and the bag's box shows coin-pile obj 1003 (2228). Recruits leave behind a fade (Checkal 604/608/609, Marley 838/841/843). Marley eats three bites before speaking (826–832, seq 829, sound 2393). The flex plays six ticks before its statement (555/561). Rock-paper-scissors rounds carry both overhead calls (910, 927, 947) and the third-round cheat plays nothing (956).
 
 At the entrance, Burntof plants the charge (1953–1955, seq 7205), the others move to cover and the fuse appears (1961), it hisses every three ticks from 1964, and the crew return for 1993. Checkal makes three rubble trips (2002–2016). The sounds at 1961, 1964, 1965, 1966, 1976 and 2230 follow their lines, and the player shouts "Aaah!" at 1977. Marley's trap uses seq 881, a one-tile tripwire step (seq 1236, 2043), three disarm beats with their sounds (2046–2050) and removes the tripwires at 2050. The main varbit reaches 30 as "That got it!" is continued (2051), and the music changes at 2055. Burntof's four asides speak as a box opens (2067, 2077, 2086, 2101) rather than pausing the conversation. At the bag, the player walks over, says "Hmm..." with seq 6840 (2224), and picks up with seq 827 before the coin box (2226/2228). Varbit 12068 reaches 2 when Ramarno explains the barronite errand (3169).
+
+## Scene backgrounds and actor poses (issue #2134)
+
+The workout, Burntof's upstairs room, the entrance and the Guardian room use their exact
+captured chunk palettes, including rotations, planes and intentionally empty chunks.
+Workouts replay all seven region rebuilds at their recorded offsets; shifted views share
+a fixed logical origin so walking actors keep their positions. The original three-by-three
+chunk Guardian room remains the gameplay boundary; surrounding unmapped tiles stay blocked.
+
+The original authored timeline used RSProx 1.0.5's text coordinates. Its
+`World.getInstancedCoordOrSelf` rotates instance coordinates toward the source in the
+opposite direction to RuneLite `WorldPoint.fromLocalInstance`. On odd rotations that placed
+actors and camera targets at the wrong tile inside their source chunk; an ordinary NPC
+step could become a fifteen-tile jump. The exporter corrects this normalization before
+runtime uses the standard source-to-instance rotation. Raw recording 1636 player teleports
+(345: 13574,717; 401: 13668,655; 504: 13575,756) and the Man's three adjacent positions
+(374–376: 13593,722 → 13592,722 → 13591,722) are independent regression references.
+
+The frozen, sanitized authored input is `below-ice-mountain-scenes.source.json`.
+It retains the original transcript coordinates and authored cue timings. The domain
+extractor reads that input and the official binary recording, verifies both SHA-256
+hashes, exports only map palettes (no account data), and regenerates the canonical
+`below-ice-mountain-scenes.json` and `below-ice-mountain-templates.json`. Both outputs
+record their provenance. With Java 17+ and RSProx 1.0.5 launcher jars installed:
+
+```sh
+java -Djava.awt.headless=true -cp "$HOME/.rsprox/launcher/repository/*" \
+  server/scripts/ExtractBelowIceMountainScenes.java /path/to/decompressed-1636.bin \
+  server/plugins/quests/data/below-ice-mountain-templates.json \
+  server/plugins/quests/data/below-ice-mountain-scenes.source.json \
+  server/plugins/quests/data/below-ice-mountain-scenes.json
+```
+
+The canonical timeline also retains captured player animation resets at workout ticks 0,
+77 and 159, and delay 2 on cheer 862 at tick 197. Actor-facing packets establish the
+entrance crew targets (1944), cover/return targets (1961/1993), interior crew (2055),
+Tina and Burntof turning to each other (974), the player facing west at the bag (2223),
+and Ramarno facing the player (2236). The upstairs player faces north toward Burntof (903).
+
+Regressions check every workout tick's exact palette, the complete 54-packet camera track
+against raw instance coordinates, source-to-instance position goldens and the formerly
+discontinuous NPC step, actor directions, the Guardian boundary, animation resets/delay,
+and the existing quest, reward, collision, death and interrupted-scene checks.
+
+Live verification of these repairs used the worktree's client 3105 and MCP 49805:
+the full first Atlas workout was recorded through a real WebGPU client, and one subsequent
+Checkal conversation followed by one nearby native Flex recruited him (12065=40,
+main12063=15). The browser logout/relogin also verified the saved workout checkpoint.
+Matched RPS captures show the restored lower-floor/exterior background and player facing.
+A separate account used explicit stage 3, level 99 and Rune scimitar setup, then fought the
+real Guardian and completed the finishing dialogue through the bag and Ramarno. The final
+varbits were 12063=120 and 12067=1, with 2,000 coins. The scene framing, bag-facing and
+completion scroll were inspected in the WebGPU recording.
+
+The 23 related tests and server build pass. Two extractor runs produced identical canonical
+timeline and template files. This validation uses declared quest/combat setup; it is not
+a fresh account's complete quest from its 16 Quest point requirement quest playthrough or a pixel-for-pixel comparison.

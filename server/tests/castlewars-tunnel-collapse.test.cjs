@@ -119,6 +119,8 @@ test('native Castle Wars tunnel drops use the current rock state through equipme
   require('../plugins/minigames/castlewars/Flags.CastleWars')(api, match);
   Tunnels(api, match);
   const actors = [];
+  const previousOrder = World.playerProcessOrder.slice();
+  const previousShuffle = World.nextPlayerOrderShuffleCycle;
   function actor(team, location) {
     const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
       send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
@@ -154,6 +156,8 @@ test('native Castle Wars tunnel drops use the current rock state through equipme
       World.getPlayers().remove(p);
       assert.equal(World.getPlayers().get(index), null, 'native actor slot is released');
     }
+    World.playerProcessOrder = previousOrder;
+    World.nextPlayerOrderShuffleCycle = previousShuffle;
     World.refreshActiveRegions();
   });
   const pending = [];
@@ -274,8 +278,11 @@ test('native Castle Wars tunnel drops use the current rock state through equipme
     }
   });
 
-  for (const layersLeft of [2, 1, 0]) {
-    await t.test(`actual collapse death resolves the current ${layersLeft}-layer rock state at completion`, async () => {
+  for (const helperFirst of [false, true]) for (const layersLeft of [2, 1, 0]) {
+    const order = helperFirst ? [helper.p, carrier.p] : [carrier.p, helper.p];
+    World.playerProcessOrder = order.slice();
+    World.nextPlayerOrderShuffleCycle = 0x7fffffff;
+    await t.test(`actual collapse death resolves the current ${layersLeft}-layer rock state with ${helperFirst ? 'helper' : 'carrier'} first`, async () => {
       for (const patch of patches) for (const team of Object.values(match.TEAM)) for (const [dx, dy, tx, ty] of cells(patch)) {
         await clear(patch);
         const tile = [patch[0] + dx, patch[1] + dy];
@@ -305,6 +312,7 @@ test('native Castle Wars tunnel drops use the current rock state through equipme
           }
         } finally { match.clearWeaponSlot(carrier.p); match.restoreFlagToBase(team); }
       }
+      assert.deepEqual(World.playerProcessOrder, order, 'both player-processing orders are exercised without random reshuffles');
     });
   }
 });

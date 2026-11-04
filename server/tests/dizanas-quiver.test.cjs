@@ -35,6 +35,7 @@ function fakePlayer({ cape = I.DIZANAS_QUIVER, weapon = I.TWISTED_BOW, ammo = nu
     contains: (id) => carried.has(id),
     getAmount: (id) => carried.get(id) ?? 0,
     getFreeSlots: () => 27,
+    getAddableAmount: (item) => item.getAmount(),
     adds(id, amount) { carried.set(id, (carried.get(id) ?? 0) + amount); return inventory; },
     add(item) { carried.set(item.getId(), (carried.get(item.getId()) ?? 0) + item.getAmount()); return inventory; },
     deleteNumber(id, amount) {

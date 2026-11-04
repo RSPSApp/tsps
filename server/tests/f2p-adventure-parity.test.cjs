@@ -77,7 +77,7 @@ function player() {
     getPacketSender: () => packet, getDialogueManager: () => p.manager, getUpdateFlag: () => ({ flag: noop }),
     getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill.getIndex(),amount]), getCombatLevel: () => p.combat ?? 3, getCurrentLevel: () => p.magic ?? 99 }),
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement(value) { p.blocked = value; return this; } }),
-    setUntargetable: value => { p.untargetable = value; }, setForceMovement: movement => {p.forceMovement=movement;}, getLocation: () => location, moveTo: to => { location = to; },
+    setUntargetable: value => { p.untargetable = value; }, setForceMovement: movement => {p.forceMovement=movement;}, getForceMovement: () => p.forceMovement ?? null, getLocation: () => location, moveTo: to => { location = to; },
     getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; }, getIndex: () => p.index,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
     getCombat: () => ({getHitQueue:()=>({addPendingDamage: damage=>{p.damage=damage;}})}),
@@ -381,3 +381,104 @@ for (const scenario of ['carried-head-lazy-tabs', 'no-head-lazy-tabs', 'banked-h
     assert.equal(receipt.repeatCompletion, false);
   });
 }
+
+// Melzar's Maze doors and the Oracle's riddle door are walked through (ForceMovement, as Doors.plugin's pass-through gates),
+// never teleported. The player stays put until the walk lands; keys and offerings are never lost to a walk that did not happen.
+const doorObject = (x, y, face = 0) => ({ getFace: () => face, getLocation: () => new core.Location(x, y, 0), getId: () => 0 });
+const toggleDoor = (h, p, objectId, object) => {
+  const request = { player: p, objectId, object, location: { x: object.getLocation().getX(), y: object.getLocation().getY(), z: 0 },
+    clickType: 1, handled: false, definition: { getInteractions: () => ['Open'] } };
+  h.emit('door:toggle', request); return request;
+};
+const at = p => [p.getLocation().getX(), p.getLocation().getY()];
+
+test('Melzar maze door: unlocking walks the player across and spends the key on arrival', () => {
+  const h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 2);
+  const door = doorObject(2931, 9640); p.items.set(I.KEY_3, 1); p.moveTo(new core.Location(2932, 9640, 0));
+  assert.equal(toggleDoor(h, p, core.ObjectIdentifiers.RED_DOOR, door).handled, true);
+  assert.deepEqual(at(p), [2932, 9640], 'the player is not teleported');
+  assert.ok(p.forceMovement, 'a walk is under way');
+  assert.equal(p.items.get(I.KEY_3), 1, 'the key is only spent when the walk lands');
+  assert.equal(p.forceMovement.getReverseSpeed(), 60, 'two tiles take two ticks (30 client cycles per tile), as the gate crossing paces them');
+  assert.equal(p.forceMovement.getAnimation(), 819);
+  h.tick(1);
+  assert.deepEqual(at(p), [2932, 9640], 'one tile per tick: halfway is not across'); assert.equal(p.items.get(I.KEY_3), 1);
+  h.tick(1);
+  assert.deepEqual(at(p), [2930, 9640]); assert.equal(p.forceMovement, null);
+  assert.equal(p.items.get(I.KEY_3), 0); assert.match(p.messages.at(-1), /disintegrates/);
+});
+
+test('Melzar maze door: a walk cancelled by logout keeps the key and leaves the player free to retry', () => {
+  const h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 2);
+  const door = doorObject(2931, 9640); p.items.set(I.KEY_3, 1); p.moveTo(new core.Location(2932, 9640, 0));
+  toggleDoor(h, p, core.ObjectIdentifiers.RED_DOOR, door);
+  h.hooks.onPlayerLogout[0]({ player: p }); h.tick(2);
+  assert.deepEqual(at(p), [2932, 9640]); assert.equal(p.forceMovement, null);
+  assert.equal(p.items.get(I.KEY_3), 1, 'no key lost for a crossing that never happened');
+  toggleDoor(h, p, core.ObjectIdentifiers.RED_DOOR, door); h.tick(2);
+  assert.deepEqual(at(p), [2930, 9640]); assert.equal(p.items.get(I.KEY_3), 0);
+});
+
+test('Melzar maze door: clicking again mid-walk does not spend a second key', () => {
+  const h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 2);
+  const door = doorObject(2931, 9640); p.items.set(I.KEY_3, 2); p.moveTo(new core.Location(2932, 9640, 0));
+  toggleDoor(h, p, core.ObjectIdentifiers.RED_DOOR, door); toggleDoor(h, p, core.ObjectIdentifiers.RED_DOOR, door); h.tick(3);
+  assert.deepEqual(at(p), [2930, 9640]); assert.equal(p.items.get(I.KEY_3), 1);
+});
+
+test('Melzar brown exit door walks the player out instead of teleporting', () => {
+  const h = harness('DragonSlayer'), p = player(); p.moveTo(new core.Location(2928, 9649, 0));
+  const door = doorObject(2927, 9649), event = { player: p, object: door, objectId: core.ObjectIdentifiers.EXIT_DOOR, location: door.getLocation(), handled: false };
+  h.clicks.get(core.ObjectIdentifiers.EXIT_DOOR)(event);
+  assert.equal(event.handled, true); assert.deepEqual(at(p), [2928, 9649]); assert.ok(p.forceMovement);
+  h.tick(1); assert.deepEqual(at(p), [2928, 9649]); h.tick(1);
+  assert.deepEqual(at(p), [2926, 9649]); assert.equal(p.forceMovement, null);
+});
+
+test('Riddle door: the offerings are spent first, the door opens a tick later, and only then does the player walk through', () => {
+  const O = core.ObjectIdentifiers, h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 3);
+  p.attrs.set('dragon-slayer.oracle', 2); p.moveTo(new core.Location(3049, 9839, 0));
+  const object = doorObject(3050, 9839), offerings = [I.SILK, I.UNFIRED_BOWL, I.LOBSTER_POT, I.WIZARDS_MIND_BOMB];
+  for (const id of offerings) p.items.set(id, 1);
+  for (const id of offerings) h.hooks.onItemOnObject[0]({ player: p, itemId: id, objectId: O.MAGIC_DOOR_6, object });
+  for (const id of offerings) assert.equal(p.items.get(id), 0);
+  assert.deepEqual(at(p), [3049, 9839]); assert.ok(!p.messages.includes('The door opens...')); assert.equal(p.forceMovement ?? null, null);
+  h.tick(1);
+  assert.equal(p.messages.at(-1), 'The door opens...'); assert.ok(p.log.some(row => row[0] === 'sendObjectAnimation'));
+  assert.deepEqual(at(p), [3049, 9839], 'the door has opened but the player has not been moved yet'); assert.ok(p.forceMovement, 'now walking through');
+  assert.equal(p.forceMovement.getReverseSpeed(), 60);
+  h.tick(1); assert.deepEqual(at(p), [3049, 9839]);
+  h.tick(1);
+  assert.deepEqual(at(p), [3051, 9839]); assert.equal(p.forceMovement, null);
+});
+
+test('Riddle door: a walk cancelled mid-way keeps the offerings, and the opened door can be walked through again', () => {
+  const O = core.ObjectIdentifiers, h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 3);
+  p.attrs.set('dragon-slayer.oracle', 3); p.attrs.set('dragon-slayer:offerings', 15); p.moveTo(new core.Location(3049, 9839, 0));
+  const object = doorObject(3050, 9839);
+  h.clicks.get(O.MAGIC_DOOR_6)({ player: p, object, location: object.getLocation(), handled: false });
+  assert.ok(p.forceMovement); assert.deepEqual(at(p), [3049, 9839]);
+  h.hooks.onPlayerDisconnect[0]({ player: p }); h.tick(2);
+  assert.deepEqual(at(p), [3049, 9839]); assert.equal(p.forceMovement, null); assert.equal(p.attrs.get('dragon-slayer:offerings'), 15);
+  h.clicks.get(O.MAGIC_DOOR_6)({ player: p, object, location: object.getLocation(), handled: false }); h.tick(2);
+  assert.deepEqual(at(p), [3051, 9839]);
+});
+
+test('Melzar maze door: dying mid-walk (death clears the force movement) keeps the key and strands nothing', () => {
+  const h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 2);
+  const door = doorObject(2931, 9640); p.items.set(I.KEY_3, 1); p.moveTo(new core.Location(2932, 9640, 0));
+  toggleDoor(h, p, core.ObjectIdentifiers.RED_DOOR, door); h.tick(1);
+  p.setForceMovement(null); h.tick(3);
+  assert.deepEqual(at(p), [2932, 9640]); assert.equal(p.items.get(I.KEY_3), 1);
+  toggleDoor(h, p, core.ObjectIdentifiers.RED_DOOR, door); h.tick(2);
+  assert.deepEqual(at(p), [2930, 9640], 'the door can be tried again: no walk token was left behind'); assert.equal(p.items.get(I.KEY_3), 0);
+});
+
+test('A door walk does not hold the quest action token, so a ship repair clicked during it still starts', () => {
+  const h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 4);
+  const door = doorObject(2931, 9640); p.items.set(I.KEY_3, 1); p.moveTo(new core.Location(2932, 9640, 0));
+  p.items.set(I.PLANK, 3); p.items.set(I.STEEL_NAILS, 90); p.items.set(I.HAMMER, 1);
+  toggleDoor(h, p, core.ObjectIdentifiers.RED_DOOR, door); assert.ok(p.forceMovement);
+  h.clicks.get(25036)({ player: p });
+  assert.ok(p.animations.includes(3676), 'the repair began while the door walk was under way');
+});

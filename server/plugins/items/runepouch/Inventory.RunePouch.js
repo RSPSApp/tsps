@@ -41,7 +41,7 @@ function empty({ player }) {
   let stuck = false;
   Pouch.slots(player).forEach((entry, slot) => {
     if (!entry) return;
-    if (!Pouch.inventoryFits(player, entry.id)) {
+    if (!Pouch.inventoryFits(player, entry.id, entry.amount)) {
       stuck = true;
       return;
     }

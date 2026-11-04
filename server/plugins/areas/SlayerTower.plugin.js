@@ -118,6 +118,7 @@ function attach(pluginApi) {
 module.exports = {
   name: "SlayerTower",
   members: true,
+  BASEMENT,
   _test: { attach, swing, openEntrance, closeEntrance, claimBasementLadder, showDarkness, basementArea, leaves, isOpen: () => entranceOpen, BASEMENT },
   register(pluginApi) {
     attach(pluginApi);

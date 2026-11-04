@@ -43,7 +43,16 @@ carrier's row and selects the nearer east/west end. The carrier stays in place.
 The shared drop path reads the current map objects when the drop is processed. In particular,
 if an explosive collapse kills the carrier, clearing both layers before the existing death
 sequence completes makes the standard drop outside the patch. Leaving either layer makes it
-return home. No death timing or animation was changed.
+return home. Ordinary deaths now resolve four ticks after animation 836 starts, matching the
+primary recordings below; the animation and completion-hook ordering stay unchanged.
+
+The shared death window is established by eight normal local-player deaths, verified against
+their raw appearance/animation and rebuild packets: [426](https://rsprox.net/download/426)
+(ticks 1131 to 1135), [1084](https://rsprox.net/download/1084) (853 to 857),
+[1085](https://rsprox.net/download/1085) (60 to 64), and five deaths in
+[2508](https://rsprox.net/download/2508), each four ticks after animation 836. These return to
+the normal world without a first-death scene. The previous two-tick task could complete
+before a helper's second potion, returning the standard while that rock layer remained.
 
 The three firsthand OSRS videos supplied in
 [#2355](https://github.com/RSPSApp/tsps/issues/2355) establish the relative behavior:
@@ -77,5 +86,8 @@ equipment Remove, movement/pickup and World-driven lethal damage/death completio
 standards across the four patches. It also checks full versus half rock layers, relocated
 drop overlap, actor positions, object ownership and preserved wall collision. The static
 footprint helper still forbids barricades on cleared patches. Related navigation tests retain
-capture, own-flag return, stripped-banner and overlapping-standard controls. Verification is
-offline; it does not claim browser/GPU rendering or live OSRS replay.
+capture, own-flag return, stripped-banner and overlapping-standard controls. These paths are
+also checked through the worktree's running server MCP: all sixteen cleared-patch unwield
+positions and collapse/clear/death at each of the four patches. The latter keeps the carrier
+dying until both layers clear and leaves a takeable corner standard after respawn. It does not
+claim a new browser/GPU or live OSRS replay.

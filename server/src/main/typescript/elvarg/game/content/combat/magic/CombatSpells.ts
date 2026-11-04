@@ -20,6 +20,7 @@ import { CombatNormalSpell, CombatNormalSpellOptions } from "./CombatNormalSpell
 import { CombatSpell } from "./CombatSpell";
 import { Spell } from "./Spell";
 import { World } from "../../../World";
+import { PluginManager } from "../../../../plugins/PluginManager";
 
 class ChargeSpell extends Spell {
     spellId(): number { return 0; }
@@ -29,13 +30,25 @@ class ChargeSpell extends Spell {
     equipmentRequired(): Item[] { return []; }
     startCast(): void { }
 
+    /** Wiki (Charge): members only. */
+    public members = true;
+
+    /** Wiki (Charge): it can only be cast once every 60 seconds (100 ticks). */
+    protected getCastCooldown(): { attribute: string, duration: number } | null {
+        return { attribute: CombatSpells.CHARGE_NEXT_CAST, duration: 60_000 };
+    }
+
     cast(player: Player): boolean {
+        // The cooldown is checked before the runes are taken, so a refused cast costs nothing.
         if (!this.canCast(player, false) || !this.canCast(player, true)) {
             return true;
         }
         player.getSkillManager().addExperiences(Skill.MAGIC, this.baseExperience());
-        player.setAttribute(CombatSpells.CHARGE_UNTIL, World.getProcessCycle() + 700);
-        player.sendMessage("You feel charged with magical power.");
+        const until = World.getProcessCycle() + CombatSpells.CHARGE_TICKS;
+        player.setAttribute(CombatSpells.CHARGE_UNTIL, until);
+        player.sendMessage("You feel charged with magic power.");
+        // The plugin that says "Your magical charge fades away" schedules itself from this.
+        PluginManager.emitCustomEvent("magic:charge-cast", { player, until });
         return true;
     }
 }
@@ -278,6 +291,9 @@ export class CombatAncientSpellExtend extends CombatSpell {
 
 export class CombatSpells {
     public static readonly CHARGE_UNTIL = "charge:until";
+    public static readonly CHARGE_NEXT_CAST = "charge:next-cast";
+    /** Wiki (Charge): the effect lasts 700 game ticks. */
+    public static readonly CHARGE_TICKS = 700;
     private static readonly CHARGE = new ChargeSpell();
     private static readonly GOD_SPELL_CAPES = new Map<number, Set<number>>([
         [1190, new Set([ItemIdentifiers.SARADOMIN_CAPE, ItemIdentifiers.SARADOMIN_CAPE_2, ItemIdentifiers.IMBUED_SARADOMIN_CAPE, ItemIdentifiers.IMBUED_SARADOMIN_CAPE_2, ItemIdentifiers.IMBUED_SARADOMIN_CAPE_3, ItemIdentifiers.IMBUED_SARADOMIN_CAPE_4])],

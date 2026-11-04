@@ -116,7 +116,7 @@ test('the native death task records the attributed kill before respawn and persi
   const task = new PlayerDeathTask(victim);
   assert.equal(task.killer, killer, 'the real damage attribution selects the killer');
   killer.setLocation(new core.Location(3200, 3200));
-  task.execute(); task.execute(); task.execute();
+  for (let tick = 0; tick < 5; tick++) task.execute();
   assert.equal(victim.getWildernessLevel(), 0, 'resetAttributes ran before the defeat event');
   assert.equal(victim.getPacketSender().getVarbit(8375), 1);
   assert.equal(killer.getPacketSender().getVarbit(8376), 1, 'a killer leaving after lethal damage still receives credit');
@@ -125,7 +125,7 @@ test('the native death task records the attributed kill before respawn and persi
   const safeVictim = player(t, 3130, 3630);
   safeVictim.getCombat().addDamage(killer, 10);
   const safeDeath = new PlayerDeathTask(safeVictim);
-  safeDeath.execute(); safeDeath.execute(); safeDeath.execute();
+  for (let tick = 0; tick < 5; tick++) safeDeath.execute();
   assert.equal(safeVictim.getPacketSender().getVarbit(8375), 0, 'a queued attributed death after entering Ferox does not count');
   assert.equal(killer.getPacketSender().getVarbit(8376), 1);
 });

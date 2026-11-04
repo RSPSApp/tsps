@@ -93,7 +93,7 @@ function askAmount(player, then) {
 function withdraw(player, slot, amount) {
   const entry = Pouch.slots(player)[slot];
   if (!entry || !(amount > 0)) return;
-  if (!Pouch.inventoryFits(player, entry.id)) {
+  if (!Pouch.inventoryFits(player, entry.id, Math.min(amount, entry.amount))) {
     player.sendMessage(Pouch.MESSAGE.NO_SPACE);
     return;
   }

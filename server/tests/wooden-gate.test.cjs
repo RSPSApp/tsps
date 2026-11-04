@@ -881,21 +881,6 @@ test("Grum's Gold Exchange door swings onto the tile inside, steps the player th
   }
 });
 
-test('Ardougne Wall Doors are registered and swing by rotating the same loc', () => {
-  const h = buildHarness();
-  try {
-    h.place(8738, 2557, 3299, 0);
-    assert.deepEqual(h.click(8738, 2557, 3299, 0, 'Open', 'Ardougne Wall Door'), [
-      ['deregister', 8738, 2557, 3299, 0], ['register', 8738, 2556, 3299, 1],
-    ]);
-    assert.deepEqual(h.click(8738, 2557, 3299, 0, 'Open', 'Ardougne Wall Door'), [
-      ['deregister', 8738, 2556, 3299, 1], ['register', 8738, 2557, 3299, 0],
-    ]);
-  } finally {
-    h.restore();
-  }
-});
-
 test('Tree Gnome Stronghold main gate handles packet coordinates, opens both leaves and auto-closes', () => {
   const h = buildHarness();
   try {

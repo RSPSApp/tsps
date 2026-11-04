@@ -908,11 +908,12 @@ test("screen: the status lines follow the account", (t) => {
   player.setAttribute("idle-mode:upgrades", { "long-dreams": 1 });
   player.setAttribute("idle-mode:last-away", "1h 0m woodcutting: 15,000 Woodcutting XP, 600 x Logs to your bank.");
   api.command(player, "idle");
-  const lines = Array.from({ length: 7 }, (_, line) => screenText(player, COMPONENT.STATUS_LINE_START + line));
+  const lines = Array.from({ length: 8 }, (_, line) => screenText(player, COMPONENT.STATUS_LINE_START + line));
   assert.deepEqual(lines, [
     "Idle Mode: On",
     "Auto-resume: On",
     "Activity: Chop down willow tree",
+    "XP per hour: -",
     "Idle points: 1,234",
     "Next point: 80 / 250 XP",
     "Offline: up to 15h at 100%",
@@ -971,7 +972,7 @@ test("screen: it redraws while open as points come in, and a pause shows", (t) =
   const { player, advance } = choppingWillow(t);
   api.command(player, "idle");
   api.emit("xp", { player, skill: Skill.WOODCUTTING, experience: 300 });
-  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 3), "Idle points: 1");
+  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 4), "Idle points: 1");
   assert.equal(screenText(player, COMPONENT.POINTS), "You have 1 idle point");
   api.emit("before-object", { player, object: fakeObject("Bank booth", ["Bank"], 3205, 3205), objectId: 1, clickType: 1, handled: false });
   assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 1), "Auto-resume: Paused (you're doing something else)");
@@ -1188,4 +1189,75 @@ test("offline: a server restart (a save, no logout) still pays the time away on 
   api.login({ player });
   assert.equal(player.bank.get(LOGS) - logsBefore, 600, "an hour at the rate it had");
   assert.equal(player.getAttribute("idle-mode:away"), null);
+});
+
+test("panel: XP per hour from the session played, totals of time idle, and the journal's rows", (t) => {
+  const { COMPONENT } = require(SCREEN);
+  let now = 1_000_000;
+  t.mock.method(Date, "now", () => now);
+  const player = idlePlayer();
+  player.setAttribute("idle-mode:onboarded", true);
+  // A log (25 XP) every 6 seconds for two minutes: 15,000 XP an hour.
+  for (let i = 0; i <= 20; i++) {
+    chop(player);
+    if (i < 20) now += 6000;
+  }
+  api.command(player, "idle");
+  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 3), "XP per hour: 15,000");
+  assert.deepEqual(player.getAttribute("idle-mode:totals"), { workedMs: 120_000, offlineMs: 0, xp: 500, items: 20 });
+  const request = api.emit("idle:summary", { player, summary: null });
+  assert.deepEqual(request.summary, { idleMode: "On", idleActivity: "None yet", idleXpRate: "15,000", idlePoints: 0, idleTime: "2m" });
+  // Stopped for longer than the gap: no rate to show.
+  now += 120_000;
+  assert.equal(api.emit("idle:summary", { player, summary: null }).summary.idleXpRate, "-");
+  // Time away paid adds to the totals.
+  api.logout({ player });
+  player.setAttribute("idle-mode:away", { activity: "WOODCUTTING", durationMs: 60_000, xp: { WOODCUTTING: 100 }, items: { [LOGS]: 10 }, loggedOutAt: now });
+  now += 3_600_000;
+  api.login({ player });
+  const totals = player.getAttribute("idle-mode:totals");
+  assert.equal(totals.offlineMs, 3_600_000);
+  assert.equal(totals.items, 20 + 600);
+  assert.equal(api.emit("idle:summary", { player, summary: null }).summary.idleTime, "1h 2m");
+});
+
+test("return: a login that paid time away opens the Idle screen a few ticks in, or after Play", (t) => {
+  const { GROUP_ID } = require(SCREEN);
+  let now = 0;
+  t.mock.method(Date, "now", () => now);
+  const away = () => ({ activity: "WOODCUTTING", durationMs: 60_000, xp: { WOODCUTTING: 100 }, items: { [LOGS]: 10 }, loggedOutAt: 0 });
+  // No welcome screen (a mobile login): it opens when the task runs.
+  const direct = idlePlayer();
+  direct.setAttribute("idle-mode:onboarded", true);
+  direct.setAttribute("idle-mode:away", away());
+  now = 60_000;
+  api.login({ player: direct });
+  assert.notEqual(direct.getInterfaceId(), GROUP_ID);
+  world.tasks.at(-1).execute();
+  assert.equal(direct.getInterfaceId(), GROUP_ID);
+  // Behind the welcome screen: the task waits, Play opens it.
+  const welcomed = idlePlayer();
+  welcomed.setAttribute("idle-mode:onboarded", true);
+  welcomed.setAttribute("idle-mode:away", away());
+  api.login({ player: welcomed });
+  api.emit("welcome-screen:shown", { player: welcomed });
+  world.tasks.at(-1).execute();
+  assert.notEqual(welcomed.getInterfaceId(), GROUP_ID);
+  api.emit("gameframe:ready", { player: welcomed });
+  assert.equal(welcomed.getInterfaceId(), GROUP_ID);
+  // Nothing paid: nothing opens.
+  const plain = idlePlayer();
+  plain.setAttribute("idle-mode:onboarded", true);
+  const tasks = world.tasks.length;
+  api.login({ player: plain });
+  assert.equal(world.tasks.length, tasks);
+});
+
+test("screens: every widget has its own id, and none runs into another's", () => {
+  for (const definition of api.interfaces) {
+    const uids = definition.widgets.map((widget) => widget.uid);
+    assert.equal(new Set(uids).size, uids.length, `group ${definition.groupId} repeats a widget id`);
+  }
+  const { COMPONENT } = require(SCREEN);
+  assert.ok(COMPONENT.STATUS_LINE_START + 8 <= COMPONENT.IDLE_BUTTON, "the status lines end before the buttons");
 });

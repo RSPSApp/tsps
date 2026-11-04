@@ -26,6 +26,14 @@ function buttonPositions(commands) {
 }
 const SECTIONS = [
   // Explicit component IDs keep existing rows and headings stable when adding a field.
+  // Idle Mode's fork: its summary first ("idle:summary", plugins/modes/idle/Screen.IdleMode.js).
+  [70, "Idle Information", [
+    [71, "idleMode", "Idle Mode"],
+    [72, "idleActivity", "Activity", 32],
+    [73, "idleXpRate", "XP per hour"],
+    [74, "idlePoints", "Idle points"],
+    [75, "idleTime", "Time idle"],
+  ]],
   [20, "PK Information", [
     [21, "playerKills", "Player Kills"],
     [22, "botKills", "Bot Kills"],

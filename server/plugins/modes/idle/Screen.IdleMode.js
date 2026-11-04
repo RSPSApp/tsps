@@ -2,7 +2,7 @@
  * The Idle screen (`::idle`): a server-defined interface (docs/agents/interfaces.md), so it needs
  * no client change. On the left, the account's status: Idle Mode and auto-resume (each with a
  * button to switch it), what the character is doing, the idle points and the next one, the offline
- * cap, and what the last time away paid; a third button opens the travel screen. On the right,
+ * cap, and what the last time away paid, with the XP per hour; a third button opens the travel screen. On the right,
  * the upgrades: each one's level, what it
  * does, the next level's price and a Buy button. It redraws while open whenever any of that
  * changes (Common's `changed`), so points tick up as the character works.
@@ -21,12 +21,13 @@ const MAIN_MODAL_UID = (161 << 16) | 16;
 /** The frame's title bar (cache script 227 draws it). */
 const FRAME_TITLE_SCRIPT = 227;
 const TITLE = "Idle Mode";
-const STATUS_LINES = 7;
+const STATUS_LINES = 8;
 /** At most this many upgrades fit; the data's own count sets the layout (Common.init runs first). */
 const MAX_UPGRADE_SLOTS = 4;
 const COMPONENT = {
   ROOT: 0, FRAME: 1, STATUS_BOX: 2, STATUS_TITLE: 3, STATUS_LINE_START: 4,
-  IDLE_BUTTON: 12, IDLE_LABEL: 13, AUTO_BUTTON: 14, AUTO_LABEL: 15, TRAVEL_BUTTON: 11, TRAVEL_LABEL: 19,
+  // STATUS_LINE_START + STATUS_LINES (8) runs to 11: the buttons sit clear of the lines.
+  IDLE_BUTTON: 12, IDLE_LABEL: 13, AUTO_BUTTON: 14, AUTO_LABEL: 15, TRAVEL_BUTTON: 50, TRAVEL_LABEL: 51,
   UPGRADES_BOX: 16, UPGRADES_TITLE: 17, POINTS: 18,
   // Each upgrade slot: its name, description, price, and Buy button and label.
   SLOT_START: 20, SLOT_STRIDE: 5,
@@ -62,8 +63,8 @@ function addStatus(add, root) {
   add(COMPONENT.STATUS_BOX, root, box(x, y, width, height));
   add(COMPONENT.STATUS_TITLE, root, text(x + 8, y + 4, width - 16, 20, { text: "Status", fontId: 496, textColor: 0xff981f, yTextAlignment: 1 }));
   for (let line = 0; line < STATUS_LINES; line++) {
-    // The last line, the time away, has room to wrap.
-    const lineHeight = line === STATUS_LINES - 1 ? 60 : LINE_HEIGHT - 2;
+    // The last line, the time away, has room to wrap above the buttons.
+    const lineHeight = line === STATUS_LINES - 1 ? 36 : LINE_HEIGHT - 2;
     add(COMPONENT.STATUS_LINE_START + line, root, text(x + 8, y + 28 + line * LINE_HEIGHT, width - 16, lineHeight, {
       yTextAlignment: line === STATUS_LINES - 1 ? 0 : 1,
     }));
@@ -125,12 +126,24 @@ function autoLine(player) {
   return col(COLOUR.ON, "On");
 }
 
-function activityLine(player) {
+/** What the character is doing, as plain text, or null when nothing yet. */
+function activityText(player) {
   const fight = player.getAttribute(Common.COMBAT_TARGET_ATTRIBUTE);
-  if (fight) return col(COLOUR.VALUE, `Fighting ${fight.name.toLowerCase()}s`);
+  if (fight) return `Fighting ${fight.name.toLowerCase()}s`;
   const gather = player.getAttribute(Common.GATHER_TARGET_ATTRIBUTE);
-  if (gather) return col(COLOUR.VALUE, `${gather.option} ${gather.name.toLowerCase()}`);
-  return col(COLOUR.DIM, "None yet: press Travel");
+  if (gather) return `${gather.option} ${gather.name.toLowerCase()}`;
+  return null;
+}
+
+function activityLine(player) {
+  const activity = activityText(player);
+  return activity ? col(COLOUR.VALUE, activity) : col(COLOUR.DIM, "None yet: press Travel");
+}
+
+/** XP per hour of the session being played, or "-" when none is long enough to tell. */
+function rateText(player) {
+  const rate = Offline.currentRate(player);
+  return rate ? number(rate.xpPerHour) : "-";
 }
 
 /** What each status line says, top to bottom. */
@@ -142,6 +155,7 @@ function statusLines(player) {
     `Idle Mode: ${idle ? col(COLOUR.ON, "On") : col(COLOUR.OFF, "Off")}`,
     `Auto-resume: ${idle ? autoLine(player) : col(COLOUR.DIM, "needs Idle Mode")}`,
     `Activity: ${activityLine(player)}`,
+    `XP per hour: ${col(COLOUR.VALUE, rateText(player))}`,
     `Idle points: ${col(COLOUR.VALUE, number(Progression.points(player)))}`,
     `Next point: ${col(COLOUR.VALUE, `${number(Progression.progress(player))} / ${number(xpPerPoint)} XP`)}`,
     `Offline: up to ${col(COLOUR.VALUE, `${Progression.capHours(player)}h`)} at ${col(COLOUR.VALUE, `${Math.round(Common.data.offline.efficiency * 100)}%`)}`,
@@ -205,6 +219,58 @@ function switchAuto({ player }) {
   return true;
 }
 
+/** `idle:summary`: the journal tab's Idle Information rows (plain text: the journal escapes it). */
+function journalSummary(request) {
+  const { player } = request;
+  const { workedMs, offlineMs } = Offline.totals(player);
+  request.summary = {
+    idleMode: Common.isIdle(player) ? "On" : "Off",
+    idleActivity: activityText(player) ?? "None yet",
+    idleXpRate: rateText(player),
+    idlePoints: Progression.points(player),
+    idleTime: Offline.formatDuration(workedMs + offlineMs),
+  };
+}
+
+/** Players whose login paid time away, for the screen to open once they are in the game. */
+const returning = new Set();
+/** Of those, the ones the welcome screen holds until they press Play (`gameframe:ready`). */
+const atWelcome = new Set();
+
+/** A login paid time away: show it, once the game frame is up. */
+function returned(player) {
+  if (!Common.data.offline.openScreenOnReturn) return;
+  returning.add(player);
+  const { Task, TaskManager } = Common.core;
+  TaskManager.submit(new (class OpenOnReturnTask extends Task {
+    constructor() { super(Math.max(1, Common.data.offline.openScreenDelayTicks | 0), player, false); }
+    execute() {
+      this.stop();
+      // Behind the welcome screen it waits for Play instead.
+      if (!atWelcome.has(player)) openReturning(player);
+    }
+  })());
+}
+
+function openReturning(player) {
+  if (!returning.delete(player)) return;
+  atWelcome.delete(player);
+  if (player.isRegistered?.() !== false) open(player);
+}
+
+function welcomeShown({ player }) {
+  atWelcome.add(player);
+}
+
+function gameframeReady({ player }) {
+  if (atWelcome.has(player)) openReturning(player);
+}
+
+function forgetReturn({ player }) {
+  returning.delete(player);
+  atWelcome.delete(player);
+}
+
 /** `idle:open`: the Idle button in the journal tab (SideJournalDefaults). */
 function openFromJournal({ player }) {
   open(player);
@@ -242,6 +308,11 @@ module.exports = function attach(api) {
   api.onInterfaceActionButton([uid(COMPONENT.AUTO_BUTTON), uid(COMPONENT.AUTO_LABEL)], switchAuto);
   api.onInterfaceActionButton([uid(COMPONENT.TRAVEL_BUTTON), uid(COMPONENT.TRAVEL_LABEL)], travelButton);
   api.onCustomEvent("idle:open", openFromJournal);
+  api.onCustomEvent("idle:summary", journalSummary);
+  api.onCustomEvent("welcome-screen:shown", welcomeShown);
+  api.onCustomEvent("gameframe:ready", gameframeReady);
+  api.onPlayerLogout(forgetReturn);
+  Offline.onPaid(returned);
   api.onInterfaceActionButton(buyUids().flat(), buyButton);
   Common.onChange(redraw);
 };

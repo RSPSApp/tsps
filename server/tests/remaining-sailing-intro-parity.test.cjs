@@ -220,9 +220,11 @@ test('Pandemonium uses the captured varbit stages and the real raft cargo route'
   h.hooks.named.get('Will')['Talk-to']({ player: h.player, npcId: h.core.NpcIdentifiers.WILL, definition: { getName: () => 'Will' } });
   assert.equal(quest.getStage(h.player), 14);
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
-  assert.equal(quest.getStage(h.player), 16);
+  assert.equal(quest.getStage(h.player), 14, 'the cup popup precedes the actual shore finish');
   h.action(h.core.NpcIdentifiers.WILL, 'hQBGdU');
   assert.equal(BoatManager.all().some((entry) => entry.ownerPlayerId === 1), false, 'the tutorial ship and crew are cleaned up');
+  // The real native scene suite proves the owned shore callback; this hook fixture resumes after it.
+  quest.setStage(h.player, 16);
   h.line(h.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE, 'You should speak to Ribs.');
   assert.equal(quest.getStage(h.player), 18);
   h.emit('npc-dialogue:choice', { npcId: h.core.NpcIdentifiers.RIBS, option: 'No, tell me about him.' });
@@ -622,7 +624,7 @@ test('Pandemonium owner spawns canonical parents and keeps the cache dialogue ch
   }
 });
 
-test('Pandemonium salvage accepts the placed parent and visible child, grants once and persists', () => {
+test('Pandemonium hooks without an owned ship cannot Deploy and a carried cup persists for pending retry', () => {
   const h = setup();
   const quest = load(h, 'Pandemonium.Quest.js');
   h.attrs.set('pandemonium:stage-version', 2);
@@ -632,16 +634,16 @@ test('Pandemonium salvage accepts the placed parent and visible child, grants on
     for (const fn of h.hooks.objects) fn(event);
     return event;
   };
-  assert.equal(click(60480).handled, true, 'the native producer sends the placed parent');
-  assert.equal(click(60482).handled, true, 'the visible child resolves to the same hook');
+  assert.equal(click(60480).handled, false, 'a parent id alone does not establish an owned tutorial ship');
+  assert.equal(click(60482).handled, false, 'a visible-child id alone cannot establish ownership either');
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
-  assert.equal(quest.getStage(h.player), 16);
+  assert.equal(quest.getStage(h.player), 14);
   assert.equal(h.inventory.get(h.core.ItemIdentifiers.OLD_CUP), 1);
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
   assert.equal(h.inventory.get(h.core.ItemIdentifiers.OLD_CUP), 1, 'the cup is granted once');
   const saved = h.saveState();
   h.relog(saved);
-  assert.equal(quest.getStage(h.player), 16, 'the salvaged stage survives relog');
+  assert.equal(quest.getStage(h.player), 14, 'the unfinished shore stage survives relog for an owned retry');
 });
 
 test('Pandemonium relog restores stages 12/14 at the earned wreck, docked and armed once', () => {
@@ -665,9 +667,8 @@ test('Pandemonium relog restores stages 12/14 at the earned wreck, docked and ar
   // Stage 12 still has to talk to Will before the hook becomes a salvage action.
   h.hooks.named.get('Will')['Talk-to']({ player: h.player, npcId: h.core.NpcIdentifiers.WILL, definition: { getName: () => 'Will' } });
   assert.equal(quest.getStage(h.player), 14);
-  h.clickObject(60482);
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
-  assert.equal(quest.getStage(h.player), 16);
+  assert.equal(quest.getStage(h.player), 14, 'the item popup cannot skip the shore scene');
   assert.equal(h.inventory.get(h.core.ItemIdentifiers.OLD_CUP), 1);
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
   assert.equal(h.inventory.get(h.core.ItemIdentifiers.OLD_CUP), 1, 'retry cannot duplicate the cup');
@@ -685,9 +686,8 @@ test('Pandemonium relog restores stages 12/14 at the earned wreck, docked and ar
   assert.equal(ship.boat.tileY, 3048);
   assert.equal(BoatManager.getBoatAboard(h.player), ship.boat);
   assert.equal(BoatManager.getSpec(ship.boat).locs.filter((loc) => loc.id === 60480).length, 1);
-  h.clickObject(60482);
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
-  assert.equal(quest.getStage(h.player), 16);
+  assert.equal(quest.getStage(h.player), 14);
   assert.equal(h.inventory.get(h.core.ItemIdentifiers.OLD_CUP), 1);
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
   assert.equal(h.inventory.get(h.core.ItemIdentifiers.OLD_CUP), 1);
@@ -889,11 +889,8 @@ test('Pandemonium cameras frame the rendered ship and follow it once the helm is
     clickAction(h, 59553, 'Sails', h.core.CacheDefinitions.getObject(59553).actions, 1);
     ship.boat.fineX = 3035 * 128 + 32; ship.boat.fineY = 3048 * 128 + 96;
     BoatManager.tick(); h.tickOnce(); h.tickOnce();
-    assert.equal(h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look').length, 4);
-    for (const camera of h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look').slice(-2)) {
-      assert.ok(Math.abs(camera[1] - ship.boat.tileX) < 20 && Math.abs(camera[2] - ship.boat.tileY) < 20,
-        'wreck camera also uses main-world coordinates');
-    }
+    assert.equal(h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look').length, 2,
+      'arrival keeps the voyage context; the captured fixed camera belongs to later Deploy');
     assert.equal(quest.getStage(h.player), 12);
   } finally {
     for (const logout of h.hooks.logout) logout({ player: h.player });

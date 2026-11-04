@@ -1780,13 +1780,121 @@ test('RFD already-loaded unmarked saves recover through native Cook and dining-d
   });
 });
 
-function pandemoniumShipFixture(t, stage = 14) {
+function pandemoniumJimFixture(t) {
   const f = fixture(t);
   core.RegionManager.init();
-  f.player.setUsername(`pandemonium${f.player.getIndex()}`);
   f.player.setAttribute('pandemonium:stage-version', 2);
+  f.quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'pandemonium');
+  f.quest.setStage(f.player, 30); // The cargo hold was built; Jim is ready to issue the log.
+  f.npc = core.NPC.create(core.NpcIdentifiers.JUNIOR_JIM, new core.Location(2083,2730));
+  core.World.getNpcs().add(f.npc);
+  t.after(() => core.World.getNpcs().remove(f.npc));
+  f.talk = async () => {
+    f.player.closeInterruptibleInterfaces();
+    // The canonical shipyard return waits for the conversation to close, then lands normally.
+    for (let n = 0; n < 16; n++) core.TaskManager.process();
+    f.player.setLocation(new core.Location(2084,2730));
+    f.player.setNeedsPlacement(false);
+    await f.connection.dispatch([{ type: 'npc_option', index: f.npc.getIndex(), clickType: 1 }]);
+    f.connection.processTurnPackets();
+    for (let n = 0; n < 5; n++) {
+      core.TaskManager.processWalkTo(f.player.getIndex()); f.player.getMovementQueue().process(); core.TaskManager.process();
+    }
+    assert.ok(f.player.getDialogueManager().getCurrent(), 'the real named Jim interaction starts its canonical source');
+  };
+  f.finish = async (stop = () => false) => {
+    for (let n = 0; n < 80 && !stop(); n++) {
+      if (MultiChatboxPrompt.getPending(f.player)) await choose(f, 1);
+      else if (f.player.getDialogueManager().getCurrent()) await nextLine(f);
+      else break;
+      core.TaskManager.process();
+    }
+  };
+  f.tasks = require('../plugins/skills/sailing/porttasks/Common.PortTasks');
+  return f;
+}
+
+test('Pandemonium native initial Jim request assigns cargo before the first Sarim table visit', async t => {
+  const f = pandemoniumJimFixture(t);
+  await f.talk(); await f.finish();
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.CAPTAINS_LOG), 1);
+  assert.equal(f.quest.getStage(f.player), 34);
+  assert.deepEqual(f.tasks.slots(f.player)[0], { id: 599, taken: 0, delivered: 0 });
+  for (let n = 0; n < 12; n++) core.TaskManager.process(); // Finish the owned shipyard return first.
+  f.player.closeInterruptibleInterfaces();
+  core.RegionManager.loadMapFiles(3028,3194);
+  f.player.setLocation(new core.Location(3028,3193));
+  f.player.setNeedsPlacement(false);
+  const id = core.CacheDefinitions.getLocId('dock_loading_bay_ledger_table_port_sarim');
+  await f.connection.dispatch([{ type: 'object_option', id, x: 3028, y: 3194, clickType: 1 }]);
+  f.connection.processTurnPackets();
+  for (let n = 0; n < 12; n++) {
+    core.TaskManager.processWalkTo(f.player.getIndex()); f.player.getMovementQueue().process(); core.TaskManager.process();
+  }
+  assert.equal(f.tasks.heldCrate(f.player), core.ItemIdentifiers.CRATE_OF_SHIP_PARTS_7);
+  assert.equal(f.tasks.slots(f.player)[0].taken, 1);
+});
+
+test('Pandemonium native cancelled log handover recovers once on Jim retalk', async t => {
+  const f = pandemoniumJimFixture(t);
+  await f.talk(); await f.finish(() => f.quest.getStage(f.player) === 32);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.CAPTAINS_LOG), 1);
+  assert.ok(!f.tasks.slots(f.player).some(slot => slot?.id === 599));
+  await f.connection.dispatch([{ type: 'interface_close' }]); f.connection.processTurnPackets();
+  await nextLine(f); core.TaskManager.process();
+  assert.ok(!f.tasks.slots(f.player).some(slot => slot?.id === 599), 'stale Continue cannot finish the abandoned request');
+  await f.talk(); await f.finish();
+  assert.equal(f.quest.getStage(f.player), 34);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.CAPTAINS_LOG), 1);
+  assert.equal(f.tasks.slots(f.player).filter(slot => slot?.id === 599).length, 1);
+});
+
+test('Pandemonium native full bag preserves the log handover until space is made', async t => {
+  const f = pandemoniumJimFixture(t);
+  for (let n = 0; n < 28; n++) f.player.getInventory().addItem(new core.Item(core.ItemIdentifiers.BONES, 1));
+  assert.equal(f.player.getInventory().getFreeSlots(), 0);
+  await f.talk(); await f.finish();
+  assert.equal(f.quest.getStage(f.player), 30);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.CAPTAINS_LOG), 0);
+  assert.ok(!f.tasks.slots(f.player).some(slot => slot?.id === 599));
+  f.player.getInventory().deleteNumber(core.ItemIdentifiers.BONES, 1);
+  await f.talk(); await f.finish();
+  assert.equal(f.quest.getStage(f.player), 34);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.CAPTAINS_LOG), 1);
+  assert.equal(f.tasks.slots(f.player).filter(slot => slot?.id === 599).length, 1);
+});
+
+test('Pandemonium native cargo assignment preserves a full task list and recovers after a slot is freed', async t => {
+  const f = pandemoniumJimFixture(t);
+  f.player.getSkillManager().setMaxLevel(core.Skill.SAILING, 99);
+  const tasks = f.tasks.DATA.tasks.filter(task => task.cancellable !== false).slice(0, 5)
+    .map(task => ({ id: task.id, taken: 0, delivered: 0 }));
+  f.tasks.setSlots(f.player, tasks);
+  const before = JSON.stringify(f.tasks.slots(f.player));
+  await f.talk(); await f.finish();
+  assert.equal(f.quest.getStage(f.player), 32, 'the request cannot advance without an actual task slot');
+  assert.equal(JSON.stringify(f.tasks.slots(f.player)), before);
+  require('../plugins/skills/sailing/porttasks/PortMaster.PortTasks').cancel(f.player, 4);
+  await f.talk(); await f.finish();
+  assert.equal(f.quest.getStage(f.player), 34);
+  assert.deepEqual(f.tasks.slots(f.player).slice(0, 4), tasks.slice(0, 4));
+  assert.deepEqual(f.tasks.slots(f.player)[4], { id: 599, taken: 0, delivered: 0 });
+});
+
+function pandemoniumShipFixture(t, stage = 14, save) {
+  const f = fixture(t);
+  core.RegionManager.init();
+  f.player.setIndex(f.player.getIndex() % 2000);
+  f.player.getSession().setPlayer(f.player);
+  f.player.setUsername(`pandemonium${f.player.getIndex()}`);
   f.quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'pandemonium');
-  f.quest.setStage(f.player, stage);
+  if (save) {
+    save.applyToPlayer(f.player);
+    core.Sailing.onLogin(f.player);
+  } else {
+    f.player.setAttribute('pandemonium:stage-version', 2);
+    f.quest.setStage(f.player, stage);
+  }
   const lifecycle = () => ({ player: f.player, username: f.player.getUsername(), isNewAccount: false });
   f.login = () => PM.emitPlayerLogin(lifecycle());
   t.after(() => PM.emitPlayerLogout(lifecycle()));
@@ -2328,4 +2436,277 @@ test('Jorral native close and declining the start offer preserve the normal intr
   await f.talk();
   await f.untilMenu();
   assert.ok(f.menu().options.includes('Tell me more.'), 'declining retains the normal quest introduction');
+});
+
+function pandemoniumCinematicFixture(t, save) {
+  const f = pandemoniumShipFixture(t, 14, save);
+  f.frames = []; f.poses = [];
+  const send = f.player.getSession().sendClientPacket;
+  t.mock.method(f.player.getSession(), 'sendClientPacket', function(packet) {
+    f.frames.push(packet); return send.call(this, packet);
+  });
+  const playerAnimation = f.player.performAnimation;
+  t.mock.method(f.player, 'performAnimation', function(animation) {
+    const result = playerAnimation.call(this, animation);
+    if (this.getAnimation() === animation) f.poses.push({ id: animation.getId(), tick: core.World.processCycle,
+      actor: 'player', x: this.getLocation().getX(), y: this.getLocation().getY(), z: this.getLocation().getZ() });
+    return result;
+  });
+  const spawn = PM.spawnNpc;
+  t.mock.method(PM, 'spawnNpc', function(definition, ...args) {
+    const npc = spawn.call(this, definition, ...args);
+    if (npc && definition.owner === f.player && [14961,14966].includes(npc.getId())) {
+      const animate = npc.performAnimation;
+      t.mock.method(npc, 'performAnimation', function(animation) {
+        const result = animate.call(this, animation);
+        if (this.getAnimation() === animation) f.poses.push({ id: animation.getId(), tick: core.World.processCycle, actor: npc.getId() });
+        return result;
+      });
+    }
+    return npc;
+  });
+  const cycle = core.World.processCycle;
+  f.owned = () => [...core.World.getNpcs()].filter(npc => npc.getOwner?.() === f.player);
+  f.tick = (count = 1) => {
+    for (let n = 0; n < count; n++) {
+      ++core.World.processCycle;
+      f.player.getArea()?.process(f.player);
+      core.TaskManager.processWalkTo(f.player.getIndex());
+      for (const npc of f.owned()) npc.getMovementQueue().process();
+      f.player.getMovementQueue().process(); core.TaskManager.process();
+      core.World.updateLocalPlayers(f.player);
+      core.World.updateLocalNpcs(f.player, f.owned());
+      f.player.getSession().flush(core.World.getProcessCycle());
+      for (const npc of f.owned()) npc.resetUpdating();
+      f.player.resetUpdating();
+    }
+  };
+  f.advance = async () => {
+    const current = f.player.getDialogueManager().getCurrent();
+    if (MultiChatboxPrompt.getPending(f.player)) await choose(f, 1);
+    else if (current?.getText?.()) {
+      const group = f.player.getPacketSender().getChatboxGroupId();
+      await f.connection.dispatch([{ type: 'dialogue_continue', widgetId: (group << 16) | (group === 11 ? 4 : 5), childIndex: -1 }]);
+      f.connection.processTurnPackets();
+    }
+    f.tick();
+  };
+  f.finish = async () => {
+    for (let n = 0; n < 180 && f.quest.getStage(f.player) === 14; n++) await f.advance();
+    assert.equal(f.quest.getStage(f.player), 16, 'only the owned shore finish commits sixteen');
+  };
+  t.after(() => { core.World.processCycle = cycle; });
+  f.tick(3); // The native voyage map/placement reaches the client before its first object input.
+  return f;
+}
+
+test('Pandemonium native Deploy uses the actual copied salvage and shore scenes before committing sixteen', async t => {
+  const f = pandemoniumCinematicFixture(t), { player } = f;
+  const points = player.getAttribute('quest.points');
+  await pandemoniumDeploy(f); f.tick(3);
+  const area = player.getPrivateArea();
+  assert.ok(area instanceof core.TemplatedInstanceArea, 'Deploy uses its copied cinematic map, not the voyage entity');
+  assert.deepEqual(area.getChunk(1,3,4), { sourceChunkX: 187, sourceChunkY: 564, sourcePlane: 1, rotation: 0 });
+  assert.deepEqual([player.getLocation().getX()-area.getBaseX(), player.getLocation().getY()-area.getBaseY(), player.getLocation().getZ()], [26,32,1]);
+  const protocol = require('../dist/net/protocol/ClientProtocol');
+  const rates = { rate:232, rate2:100, heightRelative:false };
+  const has = packet => f.frames.some(frame => frame.equals(packet));
+  assert.ok(has(protocol.encodeCameraMoveTo(area.getBaseX()+18,area.getBaseY()+29,550,rates)));
+  assert.ok(has(protocol.encodeCameraLookAt(area.getBaseX()+38,area.getBaseY()+34,350,rates)));
+  assert.ok(has(area.encodeScene((player.getLocation().getX()>>3),(player.getLocation().getY()>>3))), 'real PlayerSession sends its native instance palette');
+  const actors = f.owned().filter(npc => [14961,14966].includes(npc.getId()));
+  assert.deepEqual(actors.map(npc=>npc.getId()).sort(), [14961,14966]);
+  assert.ok(f.frames.some(frame=>frame[0]===21 && frame.length>12), 'native NPC_INFO includes the cinematic cast');
+  const outsider = fixture(t).player; outsider.setLocation(player.getLocation().clone());
+  core.World.updateLocalNpcs(outsider, actors);
+  assert.equal(outsider.getLocalNpcs().length,0,'other players cannot see the private cast');
+  await f.advance(); f.tick(5);
+  assert.equal(player.getPacketSender().getChatboxGroupId(),11);
+  assert.deepEqual(player.getDialogueManager().getCurrent().getItemIds(), [31337,31338]);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP),1);
+  assert.equal(f.quest.getStage(player),14,'the item popup cannot commit the unfinished shore sequence');
+  assert.equal(f.poses.at(-1).id,core.Animation.DEFAULT_RESET_ANIMATION.getId(),'the captured hook-reset loop stops at the item popup');
+  for(let n=0;n<100&&!f.poses.some(pose=>pose.id===10044);n++)await f.advance();
+  assert.ok(f.poses.some(pose=>pose.id===10044));
+  assert.deepEqual(area.getChunk(0,3,6),{sourceChunkX:379,sourceChunkY:374,sourcePlane:0,rotation:0});
+  assert.ok(has(area.encodeScene(player.getLocation().getX()>>3,player.getLocation().getY()>>3)),'the shore camera has its actual rebuilt native source context');
+  await f.finish();
+  for (const id of [13576,13578,13083,13084,10044,8328]) assert.ok(f.poses.some(pose=>pose.id===id),`captured active sequence ${id}`);
+  const pushed = f.poses.find(pose=>pose.id===13083), anne = f.poses.find(pose=>pose.id===13084);
+  assert.equal(pushed.tick,anne.tick);
+  assert.deepEqual([pushed.x-area.getBaseX(),pushed.y-area.getBaseY(),pushed.z],[26,31,1]);
+  assert.ok(has(protocol.encodeCameraMoveTo(area.getBaseX()+18,area.getBaseY()+56,550,rates)));
+  assert.ok(has(protocol.encodeCameraLookAt(area.getBaseX()+28,area.getBaseY()+49,350,rates)));
+  assert.equal(area.isDestroyed(),true);
+  assert.equal(player.getPrivateArea(),null);
+  assert.deepEqual([player.getLocation().getX(),player.getLocation().getY(),player.getLocation().getZ()],[3049,2970,0]);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP),1);
+  assert.equal(player.getAttribute('quest.points'),points);
+  assert.equal(player.getMovementQueue().isMovementBlocked(),false);
+  assert.equal(player.isUntargetable(),false);
+  assert.ok(!f.owned().some(npc=>[14961,14966].includes(npc.getId())));
+});
+
+test('Pandemonium native scene cancellation preserves a replacement prompt and permits an item-safe retry', async t => {
+  const f = pandemoniumCinematicFixture(t);
+  await pandemoniumDeploy(f); f.tick(3);
+  const old = f.player.getPrivateArea();
+  await f.advance(); f.tick(5);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP),1);
+  PM.createApi('PandemoniumReplacement').sendMultiChatboxPrompt(f.player,'Keep this choice','Yes',()=>{},'No',()=>{});
+  const replacement = f.player.getDialogueManager().getCurrent();
+  f.tick(3);
+  assert.equal(old.isDestroyed(),true);
+  assert.equal(f.quest.getStage(f.player),14);
+  assert.equal(f.player.getDialogueManager().getCurrent(),replacement);
+  assert.equal(MultiChatboxPrompt.getPending(f.player).title,'Keep this choice');
+  assert.ok(f.ship(),'the owner can retry from their actual tutorial ship');
+  f.player.closeInterruptibleInterfaces();
+  await pandemoniumDeploy(f); f.tick(3); await f.finish();
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP),1);
+});
+
+test('Pandemonium native full bag refuses new salvage but permits a carried-cup retry and saved fourteen', async t => {
+  const f = pandemoniumCinematicFixture(t);
+  for(let n=0;n<28;n++)f.player.getInventory().addItem(new core.Item(core.ItemIdentifiers.BONES,1));
+  await pandemoniumDeploy(f); f.tick(4);
+  assert.equal(f.quest.getStage(f.player),14);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP),0);
+  assert.ok(f.ship());
+  f.player.getInventory().deleteNumber(core.ItemIdentifiers.BONES,1);
+  await pandemoniumDeploy(f); f.tick(3); await f.advance(); f.tick(5);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP),1);
+  assert.equal(f.player.getInventory().getFreeSlots(),0);
+  const { PlayerSave }=require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const save=PlayerSave.fromPlayer(f.player);
+  PM.emitPlayerLogout({player:f.player,username:f.player.getUsername()});
+  const restored=pandemoniumCinematicFixture(t,save);
+  assert.equal(restored.quest.getStage(restored.player),14);
+  assert.equal(restored.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP),1);
+  await pandemoniumDeploy(restored); restored.tick(3); await restored.finish();
+  assert.equal(restored.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP),1);
+});
+
+test('Pandemonium native Close clears the flushed looping shore pose', async t => {
+  const f=pandemoniumCinematicFixture(t);
+  await pandemoniumDeploy(f);f.tick(3);
+  for(let n=0;n<100&&!f.poses.some(pose=>pose.id===10044);n++)await f.advance();
+  assert.ok(f.poses.some(pose=>pose.id===10044));
+  assert.equal(f.player.getAnimation(),null,'the real update flush has consumed its animation mask');
+  const start=f.poses.length;
+  await f.connection.dispatch([{type:'interface_close'}]);f.connection.processTurnPackets();f.tick();
+  assert.equal(f.quest.getStage(f.player),14);
+  assert.ok(f.poses.slice(start).some(pose=>pose.id===core.Animation.DEFAULT_RESET_ANIMATION.getId()),'leaving cannot retain the captured looping floor pose');
+});
+
+test('Pandemonium cancellation preserves a later pose that was already sent with replacement UI', async t => {
+  const f=pandemoniumCinematicFixture(t);
+  await pandemoniumDeploy(f);f.tick(3);
+  for(let n=0;n<100&&!f.poses.some(pose=>pose.id===10044);n++)await f.advance();
+  assert.ok(f.poses.some(pose=>pose.id===10044));
+  PM.createApi('PandemoniumLaterPose').sendMultiChatboxPrompt(f.player,'Later pose','Yes',()=>{},'No',()=>{});
+  f.player.performAnimation(new core.Animation(829)); // The existing food animation, from a later feature callback.
+  f.player.getSession().flush(core.World.getProcessCycle());f.player.resetUpdating();
+  const start=f.poses.length;f.tick();
+  assert.equal(f.quest.getStage(f.player),14);
+  assert.equal(MultiChatboxPrompt.getPending(f.player).title,'Later pose');
+  assert.ok(!f.poses.slice(start).some(pose=>pose.id===core.Animation.DEFAULT_RESET_ANIMATION.getId()),'the earlier scene cannot reset a later flushed pose');
+});
+
+test('Pandemonium closing the final shore fade cancels its saved stage commit and stale Continue', async t => {
+  const f = pandemoniumCinematicFixture(t);
+  await pandemoniumDeploy(f); f.tick(3);
+  for (let n = 0; n < 150 && !f.player.getDialogueManager().getCurrent()?.getText?.().includes('Where am I'); n++) await f.advance();
+  assert.match(f.player.getDialogueManager().getCurrent()?.getText?.(), /Where am I/);
+  await f.advance();
+  const area = f.player.getPrivateArea();
+  assert.ok(area instanceof core.TemplatedInstanceArea);
+  assert.equal(f.quest.getStage(f.player), 14);
+  await f.connection.dispatch([{ type: 'interface_close' }]); f.connection.processTurnPackets();
+  await f.connection.dispatch([{ type: 'dialogue_continue', widgetId: (217 << 16) | 5, childIndex: -1 }]);
+  f.connection.processTurnPackets(); f.tick(15);
+  assert.equal(area.isDestroyed(), true);
+  assert.equal(f.quest.getStage(f.player), 14, 'the cancelled finish cannot commit after its timer expires');
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP), 1);
+  assert.ok(f.ship());
+  await pandemoniumDeploy(f); f.tick(3); await f.finish();
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP), 1);
+});
+
+test('Pandemonium scene death cleanup preserves the death pose and movement protection', async t => {
+  const f = pandemoniumCinematicFixture(t);
+  await pandemoniumDeploy(f); f.tick(3);
+  const area = f.player.getPrivateArea();
+  f.player.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 0, false);
+  f.player.isDying = true;
+  f.player.performAnimation(new core.Animation(836)); // The existing PlayerDeathTask pose.
+  const generation = f.player.getAnimationGeneration();
+  f.tick(20); // The real area process observes a dying owner before the later respawn hooks.
+  assert.equal(area.isDestroyed(), true);
+  assert.equal(f.quest.getStage(f.player), 14);
+  assert.equal(f.player.getAnimationGeneration(), generation, 'cleanup cannot reset the death task animation');
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), true);
+  assert.equal(f.player.isUntargetable(), true);
+  assert.equal(f.ship(), undefined, 'a dying player is not placed on a replacement tutorial ship');
+});
+
+test('Pandemonium saved shore completion and older later progress never restart the salvage scene', async t => {
+  const f = pandemoniumCinematicFixture(t);
+  await pandemoniumDeploy(f); f.tick(3); await f.finish();
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const { JsonPlayerPersistence } = require('../plugins/persistence/JsonPlayerPersistence.plugin');
+  const codec = new JsonPlayerPersistence();
+  const roundTrip = player => codec.hydratePlayerSave(JSON.parse(
+    JSON.stringify(PlayerSave.fromPlayer(player), codec.replacer.bind(codec)), codec.reviver.bind(codec)));
+  const finished = pandemoniumShipFixture(t, 16, roundTrip(f.player));
+  assert.equal(finished.quest.getStage(finished.player), 16);
+  assert.equal(finished.ship(), undefined);
+  assert.equal(finished.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP), 1);
+  assert.deepEqual([finished.player.getLocation().getX(), finished.player.getLocation().getY()], [3049,2970]);
+  for (const stage of [16,18,20,28,34,46,50]) {
+    const original = pandemoniumShipFixture(t, stage);
+    original.player.getInventory().addItem(new core.Item(core.ItemIdentifiers.OLD_CUP, 1));
+    const saved = roundTrip(original.player), restored = pandemoniumShipFixture(t, stage, saved);
+    assert.equal(restored.quest.getStage(restored.player), stage, `existing version-two ${stage} progress is retained`);
+    assert.equal(restored.ship(), undefined);
+    assert.equal(restored.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP), 1);
+  }
+  const old = pandemoniumShipFixture(t, 16);
+  old.player.setAttribute('pandemonium:stage-version', 0);
+  const legacy = pandemoniumShipFixture(t, 16, roundTrip(old.player));
+  assert.equal(legacy.quest.getStage(legacy.player), 46, 'the pre-existing invented-ladder migration remains intact');
+  assert.equal(legacy.ship(), undefined);
+});
+
+test('Pandemonium native Will conversation returns to Port Sarim and permits boarding again', async t => {
+  const f = pandemoniumShipFixture(t, 10);
+  f.player.closeInterruptibleInterfaces(); f.player.setNeedsPlacement(false);
+  const talk = async npc => {
+    await f.connection.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: 1 }]);
+    f.connection.processTurnPackets();
+    for (let n = 0; n < 6; n++) {
+      core.TaskManager.processWalkTo(f.player.getIndex());
+      f.player.getMovementQueue().beginCycle(); f.player.getMovementQueue().process(); core.TaskManager.process();
+    }
+  };
+  const will = [...core.World.getNpcs()].find(npc => npc.getOwner() === f.player && npc.getId() === 14958);
+  assert.ok(will); await talk(will);
+  for (let n = 0; n < 30 && !MultiChatboxPrompt.getPending(f.player); n++) await nextLine(f);
+  const option = MultiChatboxPrompt.getPending(f.player)?.options.indexOf('Actually, I want to go back to Port Sarim.') ?? -1;
+  assert.ok(option >= 0); await choose(f, option + 1);
+  for (let n = 0; n < 15 && f.player.getDialogueManager().getCurrent(); n++) await nextLine(f);
+  for (let n = 0; n < 16; n++) core.TaskManager.process();
+  assert.equal(f.ship(), undefined);
+  assert.equal(f.quest.getStage(f.player), 10);
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [3025,3209]);
+  const dockWill = PM.spawnNpc({ id: core.NpcIdentifiers.WILL, x: 3025, y: 3209, wanderRadius: 0 });
+  t.after(() => PM.removeNpc(dockWill));
+  f.player.setNeedsPlacement(false);
+  await talk(dockWill);
+  for (let n = 0; n < 15 && !MultiChatboxPrompt.getPending(f.player); n++) await nextLine(f);
+  const okay = MultiChatboxPrompt.getPending(f.player)?.options.indexOf('Okay.') ?? -1;
+  assert.ok(okay >= 0); await choose(f, okay + 1);
+  for (let n = 0; n < 15 && !f.ship(); n++) await nextLine(f);
+  assert.ok(f.ship(), 'the canonical return choice permits reboarding the owner-only tutorial');
+  assert.equal(f.quest.getStage(f.player), 10);
 });

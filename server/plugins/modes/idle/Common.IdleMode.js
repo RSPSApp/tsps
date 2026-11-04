@@ -13,6 +13,8 @@ const GATHER_TARGET_ATTRIBUTE = "idle-mode:auto-target";
 const COMBAT_TARGET_ATTRIBUTE = "idle-mode:combat-target";
 /** Saved: false when the player turned auto-resume (gathering and combat) off. */
 const AUTO_ATTRIBUTE = "idle-mode:auto";
+/** Read by SkillLevelUp: true carries the player's actions on through a level-up, with no pop-up. */
+const KEEP_ACTIONS_ATTRIBUTE = "level-up:keep-actions";
 /** world.json pluginConfig: new accounts start idle (an idle world). */
 const NEW_ACCOUNTS_CONFIG = "IdleMode:newAccounts";
 
@@ -36,6 +38,12 @@ function isIdle(player) {
 
 function setIdle(player, enabled) {
   player.setAttribute(ENABLED_ATTRIBUTE, enabled === true);
+  syncLevelUps(player);
+}
+
+/** An idle account's level-up pop-up does not hold its work ("gathering" `levelUpPopups`). */
+function syncLevelUps(player) {
+  player.setAttribute(KEEP_ACTIONS_ATTRIBUTE, isIdle(player) && !data.gathering.levelUpPopups);
 }
 
 /** Whether `skill` (a core Skill) is one Idle Mode gathers. */
@@ -110,6 +118,7 @@ module.exports = {
   init,
   isIdle,
   setIdle,
+  syncLevelUps,
   idleSkill,
   idleGather,
   combatSkillList,

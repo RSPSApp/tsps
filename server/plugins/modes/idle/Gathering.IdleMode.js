@@ -1,10 +1,10 @@
 /**
  * Endless gathering for idle accounts (plugins/modes/data/idle-mode.json "gathering"): what the
  * idle skills gather goes to the bank, so a full inventory never stops them; trees and rocks stay
- * standing; fishing spots stay put; random events leave idle players alone; and a level-up pop-up
- * does not hold the gathering. Everything here answers the skills' own events (`storage:gather`,
- * `storage:room`, `woodcutting:deplete-tree`, `mining:deplete-rock`, `fishing:spot-stays`,
- * `random-events:eligibility`, `level-up:interrupts`).
+ * standing; fishing spots stay put; and random events leave idle players alone. Everything here
+ * answers the skills' own events (`storage:gather`, `storage:room`, `woodcutting:deplete-tree`,
+ * `mining:deplete-rock`, `fishing:spot-stays`, `random-events:eligibility`). The level-up pop-up
+ * is kept from holding the work by Common's `level-up:keep-actions`, set with the account flag.
  */
 const Common = require("./Common.IdleMode");
 
@@ -37,12 +37,6 @@ function randomEvents(request) {
   if (request.allowed === null && !Common.data.gathering.randomEvents && Common.isIdle(request.player)) request.allowed = false;
 }
 
-/** `level-up:interrupts`: an idle or combat skill's level-up pop-up does not hold the work until Continue. */
-function levelUps(request) {
-  if (!request.interrupts || Common.data.gathering.levelUpPopups || !Common.isIdle(request.player)) return;
-  if (Common.idleSkill(request.skill) || Common.idleCombatSkill(request.skill)) request.interrupts = false;
-}
-
 module.exports = function attach(api) {
   api.onCustomEvent("storage:gather", gather);
   api.onCustomEvent("storage:room", room);
@@ -50,7 +44,6 @@ module.exports = function attach(api) {
   api.onCustomEvent("mining:deplete-rock", keepRock);
   api.onCustomEvent("fishing:spot-stays", keepSpot);
   api.onCustomEvent("random-events:eligibility", randomEvents);
-  api.onCustomEvent("level-up:interrupts", levelUps);
 };
 
-module.exports.handlers = { gather, room, keepTree, keepRock, keepSpot, randomEvents, levelUps };
+module.exports.handlers = { gather, room, keepTree, keepRock, keepSpot, randomEvents };

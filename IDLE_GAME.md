@@ -73,6 +73,7 @@ git fetch upstream && git merge upstream/main
 ```
 
 O código idle fica em arquivos próprios (`server/plugins/modes/idle/`). Do projeto original, só
-três pontos foram mexidos, todos pequenos: `Fishing.plugin.js` e `SkillLevelUp.plugin.js`
-ganharam um evento cada (`fishing:spot-stays`, `level-up:interrupts`), e
-`docs/world-configuration.md` ganhou uma seção. Assim os merges com o upstream ficam simples.
+três pontos foram mexidos, todos pequenos: `Fishing.plugin.js` ganhou um evento
+(`fishing:spot-stays`), `SkillLevelUp.plugin.js` passou a ler um atributo do jogador
+(`level-up:keep-actions`) e `docs/world-configuration.md` ganhou uma seção. Assim os merges com o
+upstream ficam simples.

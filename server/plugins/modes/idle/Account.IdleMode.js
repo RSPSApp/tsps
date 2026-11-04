@@ -9,8 +9,10 @@ const Progression = require("./Progression.IdleMode");
 const ON = ["on", "true", "1", "yes"];
 const OFF = ["off", "false", "0", "no"];
 
-function newAccount({ player, isNewAccount }) {
+/** An idle world makes new accounts idle; every login puts the level-up setting in step. */
+function login({ player, isNewAccount }) {
   if (isNewAccount && Common.api.getPluginConfig(Common.NEW_ACCOUNTS_CONFIG, false) === true) Common.setIdle(player, true);
+  else Common.syncLevelUps(player);
 }
 
 function describe(player) {
@@ -46,7 +48,7 @@ function idleCommand({ player, parts }) {
 
 module.exports = function attach(api) {
   api.persistAttribute(Common.ENABLED_ATTRIBUTE, false);
-  api.onPlayerLogin(newAccount);
+  api.onPlayerLogin(login);
   api.registerCommand("idle", idleCommand, api.core.PlayerRights.NONE, "Idle Mode: ::idle [on|off], ::idle auto [on|off], ::idle points, ::idle shop, ::idle buy <upgrade>");
 };
 

@@ -39,7 +39,10 @@ function fakeApi(config = {}) {
       ItemDefinition: { forId: (id) => ({ getName: () => ({ [YEW_LOGS]: "Yew logs", [BONES]: "Bones" })[id] ?? "Logs" }) },
       PlayerRights: { NONE: { name: "none" } },
       Location: FakeLocation,
-      ObjectManager: { objectsAt: (location) => world.objects.filter((o) => o.at.x === location.getX() && o.at.y === location.getY() && o.at.z === location.getZ()) },
+      MapObjects: {
+        getHash: (x, y, z) => `${x},${y},${z}`,
+        mapObjects: { get: (key) => world.objects.filter((o) => `${o.at.x},${o.at.y},${o.at.z}` === key) },
+      },
       World: { getNpcsNear: (location, radius) => world.npcs.filter((n) => Math.max(Math.abs(n.at.x - location.getX()), Math.abs(n.at.y - location.getY())) <= radius) },
       Task: class { constructor(delay) { this.delay = delay; } },
       CanAttackResponse: { CAN_ATTACK: "can" },
@@ -61,6 +64,8 @@ function fakeApi(config = {}) {
     onBeforeNpcInteraction: (handler) => (handlers.events["before-npc"] ??= []).push(handler),
     onServerStartup: (handler) => (handlers.events.startup ??= []).push(handler),
     onNpcAttackOption: (handler) => (handlers.events["attack-option"] ??= []).push(handler),
+    onCanLogout: (handler) => (handlers.events["can-logout"] ??= []).push(handler),
+    onPlayerDisconnect: (handler) => (handlers.events.disconnect ??= []).push(handler),
     onExperienceGained: (handler) => (handlers.events.xp ??= []).push(handler),
     emitObjectInteraction: (event) => { api.interactions.push({ kind: "object", ...event }); return true; },
     emitNpcInteraction: (event) => { api.interactions.push({ kind: "npc", ...event }); return true; },
@@ -252,10 +257,6 @@ test("trees, rocks and fishing spots stay for idle players, and random events sk
   assert.equal(api.emit("random-events:eligibility", { player: normal, allowed: null }).allowed, null);
   // Another plugin's answer stands.
   assert.equal(api.emit("random-events:eligibility", { player: idle, allowed: true }).allowed, true);
-  // An idle skill's level-up pop-up does not hold the gathering; others' still do.
-  assert.equal(api.emit("level-up:interrupts", { player: idle, skill: Skill.MINING, interrupts: true }).interrupts, false);
-  assert.equal(api.emit("level-up:interrupts", { player: idle, skill: Skill.COOKING, interrupts: true }).interrupts, true);
-  assert.equal(api.emit("level-up:interrupts", { player: normal, skill: Skill.MINING, interrupts: true }).interrupts, true);
 });
 
 test("offline: logging out mid-session pays the time away at the measured rate", (t) => {
@@ -345,6 +346,9 @@ test("offline: a long gap or another activity starts a new session", () => {
   assert.deepEqual(fishing.items, {});
   const late = addResult(fishing, { activity: "FISHING", items: { 317: 1 } }, 6000 + 61_000, { FISHING: 0 }, config);
   assert.equal(late.firstAt, 67_000);
+  // An activity with its own gap (combat's slower kills) keeps its session longer.
+  const kill = addResult(null, { activity: "COMBAT", items: {}, maxGapSeconds: 180 }, 0, { ATTACK: 0 }, config);
+  assert.equal(addResult(kill, { activity: "COMBAT", items: { 526: 1 }, maxGapSeconds: 180 }, 150_000, { ATTACK: 40 }, config), kill);
 });
 
 test("offline: a full bank loses what does not fit, and says so", (t) => {
@@ -727,8 +731,83 @@ test("combat offline: kills measure the combat XP and loot, paid on login; comba
   assert.match(player.messages.join("\n"), /you kept fighting:\n7,200 Attack XP, 2,340 Hitpoints XP, 180 x Bones to your bank\./);
 });
 
-test("combat: an idle combat skill's level-up does not hold the fight", () => {
+test("level-ups: an idle account's pop-up does not hold its work, set with the flag and on login", () => {
   const player = fakePlayer();
-  player.setAttribute("idle-mode:enabled", true);
-  assert.equal(api.emit("level-up:interrupts", { player, skill: Skill.STRENGTH, interrupts: true }).interrupts, false);
+  api.command(player, "idle on");
+  assert.equal(player.getAttribute("level-up:keep-actions"), true);
+  api.command(player, "idle off");
+  assert.equal(player.getAttribute("level-up:keep-actions"), false);
+  // The flag is saved, the level-up setting is not: a login puts it back in step.
+  const returning = fakePlayer();
+  returning.setAttribute("idle-mode:enabled", true);
+  api.login({ player: returning, isNewAccount: false });
+  assert.equal(returning.getAttribute("level-up:keep-actions"), true);
+});
+
+test("auto: clicking something else pauses it until the next gather", (t) => {
+  const { player, willow, advance } = choppingWillow(t);
+  const { resume } = require(AUTO);
+  const booth = fakeObject("Bank booth", ["Bank"], 3205, 3205);
+  api.emit("before-object", { player, object: booth, objectId: 10355, clickType: 1, handled: false });
+  advance(20_000);
+  assert.equal(resume(player, Date.now()), "paused");
+  // Its own clicks on the target do not pause it; a gather lifts the pause.
+  api.emit("before-object", { player, object: willow, objectId: 1276, clickType: 1, handled: false });
+  chop(player);
+  advance(20_000);
+  assert.equal(resume(player, Date.now()), "resumed");
+  // An attack is something else too.
+  api.emit("attack-option", { player, npc: fakeMonster("Man", 3201, 3201), npcId: 3106, clickType: 2, handled: false });
+  advance(20_000);
+  assert.equal(resume(player, Date.now()), "paused");
+});
+
+test("auto: tries that gather nothing pause it, said once; ::idle auto on lifts it", (t) => {
+  const { player, advance } = choppingWillow(t);
+  const { resume } = require(AUTO);
+  const results = [];
+  for (let i = 0; i < 5; i++) {
+    advance(20_000);
+    results.push(resume(player, Date.now()));
+  }
+  assert.deepEqual(results, ["resumed", "resumed", "resumed", "paused", "paused"]);
+  assert.equal(player.messages.filter((m) => /Auto-resume has paused: your character can't chop down the willow tree/.test(m)).length, 1);
+  api.command(player, "idle auto on");
+  advance(20_000);
+  assert.equal(resume(player, Date.now()), "resumed");
+});
+
+test("combat: another click or attacks that never kill pause it, until a kill of the target", (t) => {
+  const { player, cow, advance } = killingCows(t);
+  const { fight } = require(COMBAT);
+  world.npcs.push(fakeMonster("Cow", 3201, 3201));
+  api.emit("before-object", { player, object: fakeObject("Bank booth", ["Bank"], 3205, 3205), objectId: 1, clickType: 1, handled: false });
+  advance(5000);
+  assert.equal(fight(player, Date.now()), "paused");
+  api.emit("npc-drops:generated", { player, npc: cow, npcId: 2790, drops: [], handled: false });
+  const results = [];
+  for (let i = 0; i < 7; i++) {
+    advance(5000);
+    player.combat.target = null;
+    results.push(fight(player, Date.now()));
+  }
+  assert.deepEqual(results, ["attacking", "attacking", "attacking", "attacking", "attacking", "paused", "paused"]);
+  assert.equal(player.messages.filter((m) => /Idle combat has paused/.test(m)).length, 1);
+  api.command(player, "idle auto on");
+  advance(5000);
+  player.combat.target = null;
+  assert.equal(fight(player, Date.now()), "attacking");
+});
+
+test("combat: pressing logout or a lost connection starts no new fights, so the player can leave", (t) => {
+  for (const event of ["can-logout", "disconnect"]) {
+    const { player, advance } = killingCows(t);
+    const { fight } = require(COMBAT);
+    world.npcs.push(fakeMonster("Cow", 3201, 3201));
+    const request = api.emit(event, { player, allow: null });
+    assert.equal(request.allow, null, "the logout itself is the game's to answer");
+    advance(5000);
+    assert.equal(fight(player, Date.now()), "paused", event);
+    t.mock.restoreAll();
+  }
 });

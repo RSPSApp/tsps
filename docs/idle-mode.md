@@ -42,7 +42,7 @@ For an idle account, Woodcutting, Mining and Fishing (`"skills"` in the data) ne
 | `endlessResources` | Trees and rocks do not deplete. | `woodcutting:deplete-tree`, `mining:deplete-rock` |
 | `fishingSpotsStay` | A fishing spot's random stop is skipped. Spots with their own movement (the minnow platform) still move. | `fishing:spot-stays` (emitted by `Fishing.plugin.js`) |
 | `randomEvents` | `false` keeps random events away from idle accounts. | `random-events:eligibility` |
-| `levelUpPopups` | `false`: an idle or idle-combat skill's level-up pop-up does not hold the work until Continue (the message, graphic and sounds stay). | `level-up:interrupts` (emitted by `SkillLevelUp.plugin.js`) |
+| `levelUpPopups` | `false`: an idle account's level-up pop-up does not open and hold the work until Continue (the message, graphic and sounds stay). | the attribute `level-up:keep-actions`, read by `SkillLevelUp.plugin.js`; set with the account flag and on every login |
 
 ## Offline progress
 
@@ -52,7 +52,8 @@ each idle kill (Combat) records the items and the activity's skills' XP. Nothing
 from formulas, so tools, levels, boosts and relics all count as they did in play.
 
 - **A session** starts on the first result. Another activity (another gathering skill, or
-  combat), or more than `maxGapSeconds` between two results, starts a new one.
+  combat), or more than `maxGapSeconds` between two results, starts a new one (combat has its
+  own, longer `maxGapSeconds`: kills come slower than gathers).
 - **Logging out** mid-session (the last result no more than `maxGapSeconds` before) with at
   least `minSampleSeconds` measured saves the session as `idle-mode:away`:
   `{ activity, durationMs, xp: { skill: xp }, items, loggedOutAt }`; `activity` is the gathering
@@ -91,6 +92,9 @@ While you were away for 1h 0m, you kept woodcutting:
 - **It leaves the player be** while they are busy (an interface open, a teleport), moving, in
   combat, on another floor, or more than `leashTiles` from the anchor. Walking off to do something
   else pauses it; coming back resumes it.
+- **It pauses** when the player clicks something else (another object or NPC, an attack) until
+  their next gather, and after `maxFailedAttempts` tries in a row that gathered nothing (no axe,
+  too low a level), which it says once. `::idle auto on` lifts a pause.
 
 ```
 ::idle auto        what it will resume
@@ -107,6 +111,7 @@ While you were away for 1h 0m, you kept woodcutting:
 | `rememberClickSeconds` | `30` |
 | `searchTiles` | `16` |
 | `leashTiles` | `24` |
+| `maxFailedAttempts` | `3` |
 
 ## Idle combat
 
@@ -126,8 +131,16 @@ While you were away for 1h 0m, you kept woodcutting:
 - **Loot**: a kill of the target (or of a monster just chosen) banks its drops
   (`npc-drops:generated`); what the bank can't take stays on the ground. A monster that came at a
   gathering player changes nothing.
-- **Offline**: each such kill is recorded with the combat skills' XP (`"skills"`) and its loot.
-  Offline fights eat no food: the measured rate is paid as it is.
+- **Pauses**: clicking something else (an object, an NPC option, another kind of monster)
+  pauses it until the next kill of the target; so do `maxFailedAttempts` attacks in a row with no
+  kill (a monster out of reach), said once. `::idle auto on` lifts a pause.
+- **Logging out**: live refuses a logout until 10 seconds after combat, and idle combat would
+  never stop. Pressing logout (`onCanLogout`, which it only watches) or losing the connection
+  (`onPlayerDisconnect`) stops it starting new fights, so the current one ends and the next press
+  logs out, offline progress and all.
+- **Offline**: each such kill is recorded with the combat skills' XP (`"skills"`) and its loot,
+  with `maxGapSeconds` as the longest wait between two kills of one session. Offline fights eat no
+  food: the measured rate is paid as it is.
 - **Points**: with `pointsFromXp`, combat XP earns idle points too.
 
 | Setting (`"combat"`) | Default |
@@ -143,6 +156,8 @@ While you were away for 1h 0m, you kept woodcutting:
 | `leashTiles` | `20` |
 | `eatBelowPercent` | `50` |
 | `stopBelowPercent` | `25` |
+| `maxFailedAttempts` | `5` |
+| `maxGapSeconds` | `180` |
 
 ## Points and upgrades
 

@@ -10,6 +10,12 @@
  * - otherwise, free and within `leashTiles` of the place, it attacks the nearest monster of that
  *   name within `searchTiles` that it may attack and no other player is fighting.
  *
+ * Clicking something else (an object, an NPC option, another kind of monster) pauses it until the
+ * next kill of the target, and so do `maxFailedAttempts` attacks in a row with no kill (a monster
+ * out of reach), said once. `::idle auto on` lifts a pause. Pressing logout or losing the
+ * connection stops it starting new fights, so the 10 seconds after combat can pass and the
+ * player leaves (with the offline progress).
+ *
  * The loot of a kill of the target (or of a monster just chosen) goes to the bank
  * (`npc-drops:generated`), and each such kill is recorded for the offline progress, with the
  * combat skills' XP; a monster that came at a gathering player changes nothing. One activity at a time: a kill replaces the
@@ -22,7 +28,7 @@ const TARGET_ATTRIBUTE = Common.COMBAT_TARGET_ATTRIBUTE;
 
 /** player -> the last monster the player chose to attack: { name, at }. */
 const attacks = new Map();
-/** player -> { lastAttemptAt, warned }. */
+/** player -> { lastAttemptAt, warned, failedAttempts, paused: null | "click" | "stuck" | "logout" }. */
 const states = new Map();
 const tracked = new Set();
 
@@ -32,7 +38,7 @@ function config() {
 
 function stateOf(player) {
   let state = states.get(player);
-  if (!state) states.set(player, (state = { lastAttemptAt: 0, warned: false }));
+  if (!state) states.set(player, (state = { lastAttemptAt: 0, warned: false, failedAttempts: 0, paused: null }));
   return state;
 }
 
@@ -46,7 +52,30 @@ function npcName(npc) {
 
 function attackChosen({ player, npc }) {
   const name = npcName(npc);
-  if (name && Common.isIdle(player) && config().enabled) attacks.set(player, { name, at: Date.now() });
+  if (!name || !Common.isIdle(player) || !config().enabled) return;
+  attacks.set(player, { name, at: Date.now() });
+  if (player.getAttribute(TARGET_ATTRIBUTE)?.name !== name) pause(player);
+}
+
+/** The player doing something else: leave them to it until the next kill of the target. */
+function pause(player) {
+  if (player.getAttribute(TARGET_ATTRIBUTE)) stateOf(player).paused = "click";
+}
+
+function otherClick({ player }) {
+  if (Common.isIdle(player)) pause(player);
+}
+
+/** Logout pressed (`onCanLogout`, answered by others) or the connection lost: no new fights. */
+function leaving({ player }) {
+  if (player.getAttribute(TARGET_ATTRIBUTE) && Common.isIdle(player)) stateOf(player).paused = "logout";
+}
+
+/** `::idle auto on` lifts a pause. */
+function unpause(player) {
+  const state = stateOf(player);
+  state.paused = null;
+  state.failedAttempts = 0;
 }
 
 /** `npc-drops:generated`: an idle kill. Banks the loot, records it, and may set the target. */
@@ -63,13 +92,16 @@ function killed(event) {
   const previous = player.getAttribute(TARGET_ATTRIBUTE);
   // Only the monster being trained counts: one that came at a gathering player does not.
   if (!chosen && previous?.name !== name) return;
+  const state = stateOf(player);
+  state.paused = null;
+  state.failedAttempts = 0;
   if (config().bankLoot && Array.isArray(drops)) {
     for (let i = drops.length - 1; i >= 0; i--) {
       const drop = drops[i];
       if (Number.isInteger(drop.itemId) && drop.amount > 0 && Common.bank(player, drop.itemId, drop.amount)) drops.splice(i, 1);
     }
   }
-  Offline.record(player, "COMBAT", Common.combatSkillList(), items);
+  Offline.record(player, "COMBAT", Common.combatSkillList(), items, config().maxGapSeconds);
   if (!chosen) return;
   const location = player.getLocation();
   const keepAnchor = previous?.name === name && previous.anchor.z === location.getZ() &&
@@ -136,6 +168,7 @@ function fight(player, now) {
   const target = player.getAttribute(TARGET_ATTRIBUTE);
   if (!target || !active(player)) return "off";
   const state = stateOf(player);
+  if (state.paused) return "paused";
   const hp = hitpointsPercent(player);
   if (hp < config().eatBelowPercent) {
     const food = findFood(player);
@@ -163,6 +196,11 @@ function fight(player, now) {
   if (now - state.lastAttemptAt < config().retrySeconds * 1000) return "waiting";
   const npc = findMonster(player, target);
   if (!npc) return "none";
+  if (++state.failedAttempts > config().maxFailedAttempts) {
+    state.paused = "stuck";
+    player.sendMessage(`Idle combat has paused: your character can't get a fight with a ${target.name.toLowerCase()}. Kill one to restart it.`);
+    return "paused";
+  }
   state.lastAttemptAt = now;
   combat.attack(npc);
   return "attacking";
@@ -204,6 +242,10 @@ function startTask() {
 module.exports = function attach(api) {
   api.persistAttribute(TARGET_ATTRIBUTE, null);
   api.onNpcAttackOption(attackChosen);
+  api.onBeforeObjectInteraction(otherClick);
+  api.onBeforeNpcInteraction(otherClick);
+  api.onCanLogout(leaving);
+  api.onPlayerDisconnect(leaving);
   api.onCustomEvent("npc-drops:generated", killed);
   api.onPlayerLogin(login);
   api.onPlayerLogout(logout);
@@ -212,4 +254,5 @@ module.exports = function attach(api) {
 
 module.exports.TARGET_ATTRIBUTE = TARGET_ATTRIBUTE;
 module.exports.fight = fight;
+module.exports.unpause = unpause;
 module.exports.tracked = tracked;

@@ -19,13 +19,16 @@ const AWAY_ATTRIBUTE = "idle-mode:away";
 const sessions = new Map();
 
 /**
- * Adds one result to a session, or starts a new one (another activity, or too long since the
- * last). `xp` is { skillKey: total XP now } for the activity's skills. The first result only
+ * Adds one result to a session, or starts a new one (another activity, or more than the
+ * activity's `maxGapSeconds` since the last). `xp` is { skillKey: total XP now } for the
+ * activity's skills. The first result only
  * sets the start: what it gave lies before the measured time.
  */
-function addResult(session, { activity, items }, now, xp, config) {
-  if (!session || session.activity !== activity || now - session.lastAt > config.maxGapSeconds * 1000) {
-    return { activity, firstAt: now, lastAt: now, firstXp: { ...xp }, lastXp: { ...xp }, items: {} };
+function addResult(session, result, now, xp, config) {
+  const { activity, items } = result;
+  const maxGapSeconds = result.maxGapSeconds ?? config.maxGapSeconds;
+  if (!session || session.activity !== activity || now - session.lastAt > session.maxGapSeconds * 1000) {
+    return { activity, maxGapSeconds, firstAt: now, lastAt: now, firstXp: { ...xp }, lastXp: { ...xp }, items: {} };
   }
   for (const [itemId, amount] of Object.entries(items)) {
     if (amount > 0) session.items[itemId] = (session.items[itemId] ?? 0) + amount;
@@ -39,7 +42,8 @@ function addResult(session, { activity, items }, now, xp, config) {
 function awayFromSession(session, now, config) {
   if (!session) return null;
   const durationMs = session.lastAt - session.firstAt;
-  if (durationMs < config.minSampleSeconds * 1000 || now - session.lastAt > config.maxGapSeconds * 1000) return null;
+  const maxGapSeconds = session.maxGapSeconds ?? config.maxGapSeconds;
+  if (durationMs < config.minSampleSeconds * 1000 || now - session.lastAt > maxGapSeconds * 1000) return null;
   const xp = {};
   for (const [key, total] of Object.entries(session.lastXp)) {
     const gained = total - (session.firstXp[key] ?? total);
@@ -91,12 +95,13 @@ function xpNow(player, skills) {
 
 /**
  * Records a result of an idle activity: `activity` names it, `skills` are the core Skills whose XP
- * it gives, `items` what it gave ({ itemId: amount }).
+ * it gives, `items` what it gave ({ itemId: amount }), `maxGapSeconds` the activity's own longest
+ * wait between two results (the offline setting when left out).
  */
-function record(player, activity, skills, items) {
+function record(player, activity, skills, items, maxGapSeconds) {
   const config = Common.data.offline;
   if (!config.enabled || !Common.isIdle(player)) return;
-  sessions.set(player, addResult(sessions.get(player), { activity, items }, Date.now(), xpNow(player, skills), config));
+  sessions.set(player, addResult(sessions.get(player), { activity, items, maxGapSeconds }, Date.now(), xpNow(player, skills), config));
 }
 
 function gathered(request) {

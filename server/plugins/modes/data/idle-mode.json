@@ -28,7 +28,8 @@
     "retrySeconds": 6,
     "rememberClickSeconds": 30,
     "searchTiles": 16,
-    "leashTiles": 24
+    "leashTiles": 24,
+    "maxFailedAttempts": 3
   },
   "progression": {
     "_description": "Idle points (docs/idle-mode.md): one per xpPerPoint XP an idle account gains in the idle skills, online or offline. They buy the upgrades' levels, each level at its listed cost.",
@@ -72,7 +73,7 @@
     }
   },
   "combat": {
-    "_description": "Idle combat (docs/idle-mode.md): the last kind of monster an idle player attacked and killed is the target; the character attacks the nearest one around where it started, eats below eatBelowPercent hitpoints, stops when out of food below stopBelowPercent, and banks the loot.",
+    "_description": "Idle combat (docs/idle-mode.md): the last kind of monster an idle player attacked and killed is the target; the character attacks the nearest one around where it started, eats below eatBelowPercent hitpoints, stops when out of food below stopBelowPercent, and banks the loot. Kills come slower than gathers: maxGapSeconds is the longest wait between two kills that keeps one offline session.",
     "enabled": true,
     "skills": [
       "ATTACK",
@@ -90,6 +91,8 @@
     "searchTiles": 12,
     "leashTiles": 20,
     "eatBelowPercent": 50,
-    "stopBelowPercent": 25
+    "stopBelowPercent": 25,
+    "maxFailedAttempts": 5,
+    "maxGapSeconds": 180
   }
 }

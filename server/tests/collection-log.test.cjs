@@ -228,6 +228,18 @@ test("pets report through the event", () => {
   assert.ok(!player.log.some((line) => line.startsWith("New item")), "silent, and ensured only once");
 });
 
+test("an optional category only records that category's items, and unscoped events are unchanged", () => {
+  const player = createPlayer();
+  emit("collection-log:obtain", { player, itemId: TANZANITE_FANG, amount: 1, category: "Zulrah" });
+  assert.equal(Progress.obtained(player, TANZANITE_FANG), 1, "matching category");
+  emit("collection-log:obtain", { player, itemId: ZULRAH_SCALES, amount: 1, category: "Barrows Chests" });
+  assert.equal(Progress.obtained(player, ZULRAH_SCALES), 0, "mismatched category");
+  emit("collection-log:obtain", { player, itemId: ZULRAH_SCALES, amount: 1, category: "No such category" });
+  assert.equal(Progress.obtained(player, ZULRAH_SCALES), 0, "unknown category");
+  emit("collection-log:obtain", { player, itemId: ZULRAH_SCALES, amount: 2 });
+  assert.equal(Progress.obtained(player, ZULRAH_SCALES), 2, "unscoped existing callers unchanged");
+});
+
 test("reward-shop purchases log quantities, but unrelated shops and resold stock do not", () => {
   const player = createPlayer();
   const purchase = { player, shopName: "Mahogany Homes Reward Shop", itemId: CARPENTERS_BOOTS, amount: 2, originalStock: true };

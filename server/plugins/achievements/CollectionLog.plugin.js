@@ -6,7 +6,7 @@
  * Loot counts the moment it drops: every "npc-drops:roll" (NPC drops, and the rewards of the
  * Gauntlet, Doom, Wintertodt, the Colosseum, the Inferno and ToA) is read once its handlers have
  * finished editing it. Other sources and plugins use events:
- *   api.emitCustomEvent("collection-log:obtain", { player, itemId, amount?, ensure?, silent? })
+ *   api.emitCustomEvent("collection-log:obtain", { player, itemId, amount?, category?, ensure?, silent? })
  *   api.emitCustomEvent("collection-log:count", { player, category: "Zulrah", amount? })
  *   answer "collection-log:category-count" { player, category, struct, count } with a kept count
  *   ask "collection-log:slots" { player, category? } -> count: the category's slots filled (all, with none)
@@ -65,6 +65,7 @@ function onLoot(event) {
 }
 
 function onObtain(request) {
+  if (request?.category && !Data.categoriesOf(Number(request.itemId)).some((category) => category.name === request.category)) return;
   if (request?.player) request.added = Progress.obtain(request.player, Number(request.itemId), Number(request.amount ?? 1), request);
 }
 

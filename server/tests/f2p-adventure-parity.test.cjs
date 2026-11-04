@@ -154,9 +154,33 @@ test('Dragon Slayer sails through the private fire and crash sequence, then coll
   const npc={getLocation:()=>new core.Location(2853,9637,0)};h.hooks.onNpcDeath[0]({killer:p,npcId:8033,npc});
   h.tick(1);assert.equal(p.configs.get(176),9);assert.equal(p.items.get(I.ELVARGS_HEAD),undefined);assert.equal(h.quest.isComplete(p),false);
   h.tick(10);assert.equal(p.items.get(I.ELVARGS_HEAD),1);assert.ok(p.animations.includes(6654));assert.ok(p.animations.includes(6655));h.tick(3);
-  h.talk(p,N.OZIACH);h.continueUntil(p,()=>h.quest.isComplete(p));assert.equal(p.attrs.get('quest.points'),2);assert.deepEqual(p.xp,[[core.Skill.STRENGTH.getIndex(),18650],[core.Skill.DEFENCE.getIndex(),18650]]);
+  h.talk(p,N.OZIACH);h.continueUntil(p,()=>h.quest.isComplete(p));assert.equal(p.items.get(I.ELVARGS_HEAD),0);assert.equal(p.attrs.get('quest.points'),2);assert.deepEqual(p.xp,[[core.Skill.STRENGTH.getIndex(),18650],[core.Skill.DEFENCE.getIndex(),18650]]);
 });
 
+
+test('Dragon Slayer completion removes carried and every bank-tab head, but preserves optional-head completion and rewards', () => {
+  for (const withHead of [true, false]) {
+    const h=harness('DragonSlayer'),p=player();
+    h.quest.setStage(p,9);p.attrs.set('dragon-slayer:elvarg-killed',1);
+    if (withHead) p.items.set(I.ELVARGS_HEAD,2);
+    p.items.set(I.COINS,123);
+    const tabs=Array.from({length:core.Bank.TOTAL_BANK_TABS},()=>new Map([[I.ELVARGS_HEAD,withHead?2:0],[I.COINS,456]]));
+    p.getBanks=()=>tabs.map(items=>({
+      getAmount:id=>items.get(id)??0,
+      deleteNumber(id,amount){assert.ok(amount>0);items.set(id,(items.get(id)??0)-amount);},
+    }));
+    h.talk(p,N.OZIACH);h.continueUntil(p,()=>h.quest.isComplete(p));
+    assert.equal(p.items.get(I.ELVARGS_HEAD)??0,0);
+    assert.ok(tabs.every(items=>items.get(I.ELVARGS_HEAD)===0));
+    assert.equal(p.items.get(I.COINS),123);
+    assert.ok(tabs.every(items=>items.get(I.COINS)===456));
+    assert.equal(p.attrs.get('quest.points'),2);
+    assert.deepEqual(p.xp,[[core.Skill.STRENGTH.getIndex(),18650],[core.Skill.DEFENCE.getIndex(),18650]]);
+    h.action(p,N.OZIACH,'0KEI_n');
+    assert.equal(h.quest.complete(p),false);
+    assert.equal(p.attrs.get('quest.points'),2);assert.equal(p.xp.length,2);
+  }
+});
 
 test('Ernest lever changes reproduce every recorded door bitset, including repeated toggles', () => {
   const h=harness('ErnestTheChicken'),p=player();
@@ -309,3 +333,51 @@ test('interrupting Elvarg introduction after the return cancels its delayed shot
   assert.equal(resetCount, 1); assert.deepEqual(p.log.filter(row => row[0] === 'sendCameraUnlock'), [['sendCameraUnlock', false]]);
   h.tick(5); assert.equal(p.log.filter(row => row[0] === 'sendCameraReset').length, resetCount);
 });
+
+// Regression: use the production Player's lazy bank array and container methods.
+const { Player: ProductionPlayer } = require('../dist/game/entity/impl/player/Player');
+for (const scenario of ['carried-head-lazy-tabs', 'no-head-lazy-tabs', 'banked-head-null-search-tab']) {
+  test(`Dragon Slayer ${scenario}: normal Oziach completion grants both XP rewards`, () => {
+    const h = harness('DragonSlayer'), p = player();
+    const productionPlayer = new ProductionPlayer(null);
+    p.banks = productionPlayer.getBanks();
+    p.getBanks = ProductionPlayer.prototype.getBanks.bind(p);
+    p.getBank = ProductionPlayer.prototype.getBank.bind(p);
+    p.setBank = ProductionPlayer.prototype.setBank.bind(p);
+    p.isSearchingBank = () => false;
+    p.getCurrentBankTab = () => 0;
+    p.getInterfaceId = () => -1;
+    const inventory = new core.Inventory(p);
+    p.getInventory = () => inventory;
+    inventory.adds(I.COINS, 123);
+    if (scenario === 'carried-head-lazy-tabs') inventory.adds(I.ELVARGS_HEAD, 1);
+    if (scenario === 'banked-head-null-search-tab') {
+      for (let tab = 0; tab < core.Bank.BANK_SEARCH_TAB_INDEX; tab++) p.getBank(tab);
+      p.getBank(0).adds(I.ELVARGS_HEAD, 1);
+      // A normal login never restores the ephemeral search tab.
+      p.setBank(core.Bank.BANK_SEARCH_TAB_INDEX, null);
+    }
+    h.quest.setStage(p, 9);
+    p.attrs.set('dragon-slayer:elvarg-killed', 1);
+    const nullTabs = p.getBanks().flatMap((bank, tab) => bank === null ? [tab] : []);
+    let failure;
+    try {
+      h.talk(p, N.OZIACH);
+      h.continueUntil(p, () => h.quest.isComplete(p));
+    } catch (error) { failure = error; }
+    const receipt = {
+      scenario, nullTabs,
+      failure: failure ? { name: failure.name, message: failure.message, stack: failure.stack } : null,
+      stage: h.quest.getStage(p), questPoints: p.attrs.get('quest.points'), xp: p.xp,
+      inventoryHead: inventory.getAmount(I.ELVARGS_HEAD), coins: inventory.getAmount(I.COINS),
+      repeatCompletion: h.quest.complete(p),
+    };
+    assert.equal(failure, undefined, 'normal completion must not throw on production lazy banks');
+    assert.deepEqual(p.xp, [[core.Skill.STRENGTH.getIndex(),18650],[core.Skill.DEFENCE.getIndex(),18650]]);
+    assert.equal(receipt.stage, 10);
+    assert.equal(receipt.questPoints, 2);
+    assert.equal(receipt.inventoryHead, 0);
+    assert.equal(receipt.coins, 123);
+    assert.equal(receipt.repeatCompletion, false);
+  });
+}

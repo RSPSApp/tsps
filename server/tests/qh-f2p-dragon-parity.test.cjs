@@ -106,7 +106,7 @@ const doorToggle = (h, p, objectId, clickType = 1, interactions = ['Open']) => {
 
 function player() {
   const attrs = new Map(), items = new Map(), varbits = new Map(), messages = [];
-  let location = new core.Location(3210, 3220, 0), privateArea = null, movementBlocked = false;
+  let location = new core.Location(3210, 3220, 0), privateArea = null, movementBlocked = false, forceMovement = null;
   const packet = new Proxy({
     sendVarbit(id, value) { varbits.set(id, value); return packet; },
     sendConfig(id, value) { varbits.set(`config:${id}`, value); return packet; },
@@ -137,7 +137,8 @@ function player() {
       didMovePreviousCycle: () => false,
     }),
     performAnimation: () => {},
-    setForceMovement: () => {},
+    setForceMovement: movement => { forceMovement = movement; },
+    getForceMovement: () => forceMovement,
     setUntargetable: () => {},
     sendMessage: text => messages.push(text),
     getUsername: () => 'Parity',
@@ -271,7 +272,12 @@ test('Dragon Slayer claims the Doors toggle so the maze and magic doors still re
   assert.equal(request.handled, true);
   assert.equal(p.items.get(I.KEY_3), undefined);
   p.items.set(I.KEY_3, 1);
+  p.moveTo(new core.Location(1, 0, 0));
   request = doorToggle(h, p, O.RED_DOOR);
+  assert.equal(p.items.get(I.KEY_3), 1, 'the key is spent when the walk through the door lands');
+  core.TaskManager.process();
+  assert.equal(p.items.get(I.KEY_3), 1, 'two tiles take two ticks');
+  core.TaskManager.process();
   assert.equal(p.items.get(I.KEY_3), 0);
   assert.match(p.messages.at(-1), /disintegrates/);
 
@@ -534,6 +540,7 @@ test('Dragon Slayer routes Melzar FUNLADDERTOP 2605 into the real basement and k
   const leaving = player();
   leaving.moveTo(new core.Location(2939, 3252, 0));
   assert.equal(clickExit(leaving, exitDoor).handled, true);
+  core.TaskManager.process(); core.TaskManager.process();
   assert.deepEqual([leaving.getLocation().getX(), leaving.getLocation().getY()], [2937, 3252],
     'ground NE ladder room exits into the maze');
 
@@ -554,6 +561,7 @@ test('Dragon Slayer routes Melzar FUNLADDERTOP 2605 into the real basement and k
     const out = player();
     out.moveTo(new core.Location(from[0], from[1], 0));
     assert.equal(clickExit(out, door).handled, true, `${label} can leave`);
+    core.TaskManager.process(); core.TaskManager.process();
     assert.deepEqual([out.getLocation().getX(), out.getLocation().getY()], to, `${label} exits west`);
 
     const back = player();

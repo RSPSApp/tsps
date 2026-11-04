@@ -472,7 +472,11 @@ function resolveAmmo(player) {
 
 function checkAmmo(player, amountRequired, silent) {
   if (!firedAmmunition(player)) return null;
-  if (stored(player).amount >= amountRequired) return true;
+  if (stored(player).amount >= amountRequired) {
+    const permission = { player, itemId: stored(player).id, silent, allowed: true };
+    pluginApi.emitCustomEvent("ranged:ammo-permission", permission);
+    return permission.allowed;
+  }
   if (!silent) player.sendMessage("You don't have the required amount of ammunition to fire that.");
   return false;
 }

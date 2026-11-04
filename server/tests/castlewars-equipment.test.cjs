@@ -373,6 +373,10 @@ test('bandages heal 10%, restore 30% run, and apply the patient bracelet bonus o
 
 test('native Castle Wars supplies work with production plugin ordering and the canonical Lanthus morph', async (t) => {
   const path = require('node:path');
+  const fs = require('node:fs');
+  const scratch = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'cw-native-rewards-'));
+  require('../plugins/minigames/castlewars/Scoreboard.CastleWars')._useFile(path.join(scratch, 'scoreboard.json'));
+  t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
   const { PlayerSession } = require('../dist/net/PlayerSession');
   const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
   const modulePath = require.resolve('../plugins/minigames/castlewars/Game.CastleWars');
@@ -388,10 +392,15 @@ test('native Castle Wars supplies work with production plugin ordering and the c
     if (bots === undefined) delete process.env.DISABLE_PLAYER_BOTS;
     else process.env.DISABLE_PLAYER_BOTS = bots;
   }
+  // Registration alone leaves these native event consumers without their startup context.
+  for (const hook of PluginManager.serverStartupHooks) {
+    if (['Hunter', 'WarpedSceptre', 'CastleWars'].includes(hook.pluginName)) hook.handler({});
+  }
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(2441, 3089);
   core.RegionManager.loadMapFiles(2426, 3076);
   match.endGame();
+  const nativeGameArea = match.gameArea;
   const actors = [];
   function actor() {
     const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
@@ -629,5 +638,268 @@ test('native Castle Wars supplies work with production plugin ordering and the c
     assert.equal(free.p.getInventory().getAmount(30690), 0);
     assert.equal(free.p.getAttribute(PLAUDITS), 1);
     assert.equal(free.p.getPacketSender().getVarp(4693), 1);
+    // This fixture booted a members world. Install only the real free-world item-use gate here.
+    const previousUseHooks = PluginManager.canUseItemHooks;
+    PluginManager.canUseItemHooks = [...previousUseHooks];
+    subtest.after(() => { PluginManager.canUseItemHooks = previousUseHooks; });
+    const freeApi = PluginManager.createApi('CastleWarsFreeWorldItemUse');
+    require('../plugins/modes/FreeToPlay.plugin').register(new Proxy({ core, onCanUseItem: freeApi.onCanUseItem },
+      { get: (target, key) => target[key] ?? (() => {}) }));
+    free.p.getInventory().adds(30690, 1);
+    free.p.getPacketSender().sendInterfaceRemoval();
+    await free.send({ type: 'widget_action', widgetId: 149 << 16, groupId: 149, childId: 0,
+      buttonNum: 2, itemId: 30690, slot: free.p.getInventory().getSlotForItemId(30690) });
+    assert.equal(free.p.getInventory().getAmount(30690), 1, 'the normal free-world item-use gate also refuses Open');
   });
+
+  let cycle = core.World.getProcessCycle();
+  t.mock.method(core.World, 'getProcessCycle', () => cycle);
+  match.endGame();
+  function startRewardMatch(first, second, subtest, delayTicks = 0) {
+    for (const [h, team] of [[first, match.TEAM.SARADOMIN], [second, match.TEAM.ZAMORAK]]) {
+      h.p.setLocation(new core.Location(2426, 3076, 1));
+      subtest.mock.method(h.p, 'getArea', () => match.gameArea);
+      subtest.mock.method(h.p, 'smartMove', () => {});
+      match.setTeamId(h.p, team);
+    }
+    match.waitingAreas = {
+      [match.TEAM.SARADOMIN]: { getPlayers: () => [first.p] },
+      [match.TEAM.ZAMORAK]: { getPlayers: () => [second.p] },
+    };
+    match.gameArea = { getPlayers: () => [first.p, second.p] };
+    let start;
+    const submit = core.TaskManager.submit;
+    core.TaskManager.submit = task => { if (task.onComplete) start = task; };
+    try { match.beginStartCountdown(); } finally { core.TaskManager.submit = submit; }
+    assert.ok(start);
+    start.execute();
+    assert.equal(match.getPhase(), match.PHASE.ACTIVE);
+    cycle += delayTicks;
+    nativeGameArea.postEnter(first.p);
+    nativeGameArea.postEnter(second.p);
+    subtest.after(() => { match.endGame(); match.gameArea = { getPlayers: () => [] }; });
+  }
+
+  await t.test('completed members games deliver tickets and saved plaudits exactly once, then Trade and Open work natively', async (subtest) => {
+    const first = shopActor(subtest), second = shopActor(subtest);
+    startRewardMatch(first, second, subtest);
+    cycle += 1500; // Fifteen minutes of native game cycles; no wall-clock sleeps.
+    match.endGame();
+    assert.equal(first.p.getInventory().getAmount(4067), 1);
+    assert.equal(first.p.getAttribute(PLAUDITS), 1);
+    assert.equal(first.p.getPacketSender().getVarp(4693), 1);
+    match.endGame();
+    assert.equal(first.p.getAttribute(PLAUDITS), 1, 'a duplicate end cannot award twice');
+    const saved = PlayerSave.fromPlayer(first.p);
+    const reloaded = shopActor(subtest);
+    restoreAttributes(saved, reloaded);
+    assert.equal(reloaded.p.getAttribute(PLAUDITS), 1);
+    await trade(reloaded);
+    await shopClick(reloaded, 'omnishop_main:list', 0, 30690);
+    assert.equal(reloaded.p.getAttribute(PLAUDITS), 0);
+    assert.equal(reloaded.p.getInventory().getAmount(30690), 1);
+    reloaded.p.getPacketSender().sendInterfaceRemoval();
+    const slot = reloaded.p.getInventory().getSlotForItemId(30690);
+    subtest.mock.method(Math, 'random', () => 0); // Three minimum noted manta-ray rewards.
+    const packet = { type: 'widget_action', widgetId: 149 << 16, groupId: 149, childId: 0,
+      buttonNum: 2, itemId: 30690, slot };
+    await reloaded.send(packet);
+    await reloaded.send(packet);
+    assert.equal(reloaded.p.getInventory().getAmount(30690), 0);
+    assert.equal(reloaded.p.getInventory().getAmount(24590), 45, 'three duplicate rolls merge exactly once');
+    assert.equal(reloaded.p.getInventory().getAmount(4067), 1, 'the earned ticket is not spent on a plaudit crate');
+  });
+
+  await t.test('early games, full bags and free worlds cannot create plaudits without delivered tickets', (subtest) => {
+    for (const scenario of ['early', 'late-entry', 'full', 'full-stack', 'free', 'bot', 'other-bot', 'unregistered']) {
+      const first = shopActor(subtest), second = shopActor(subtest);
+      startRewardMatch(first, second, subtest, scenario === 'late-entry' ? 1400 : 0);
+      if (scenario !== 'early') cycle += scenario === 'late-entry' ? 100 : 1500;
+      if (scenario.startsWith('full')) for (let slot = 0; slot < 28; slot++) first.p.getInventory().setItem(slot, new core.Item(1277, 1));
+      if (scenario === 'full-stack') first.p.getInventory().setItem(0, new core.Item(4067, 10));
+      if (scenario === 'unregistered') first.p.setRegistered(false);
+      if (scenario === 'bot') first.p.setAttribute(match.BOT_KEY, true);
+      if (scenario === 'other-bot') first.p.setPlayerBot(true);
+      const members = subtest.mock.method(core.WorldDefinition, 'isMembersWorld', () => scenario !== 'free');
+      match.endGame();
+      members.mock.restore();
+      assert.equal(first.p.getAttribute(PLAUDITS) ?? 0, 0, scenario);
+      assert.equal(first.p.getInventory().getAmount(4067), scenario === 'full-stack' ? 10 : ['free', 'bot', 'other-bot'].includes(scenario) ? 1 : 0, scenario);
+      if (scenario === 'full') {
+        assert.equal(first.p.getInventory().getAmount(1277), 28, 'no item is displaced');
+        assert.equal(first.p.getAttribute('castlewars:games-played'), 1, 'the result is recorded even when currency cannot fit');
+      }
+    }
+  });
+
+  await t.test('native Lanthus XP confirmation persists, blocks combat gains and drops only in the active arena, then enables again', async (subtest) => {
+    const first = shopActor(subtest), second = shopActor(subtest);
+    await first.send({ type: 'npc_option', index: lanthus.getIndex(), clickType: 3 });
+    for (let i = 0; i < 3; i++) { first.p.getMovementQueue().process(); core.TaskManager.processWalkTo(first.p.getIndex()); }
+    assert.match(core.MultiChatboxPrompt.getPending(first.p)?.title ?? '', /Disable.*XP/);
+    await choose(first, 'Cancel');
+    assert.notEqual(first.p.getAttribute('castlewars:combat-xp-disabled'), true);
+    await first.send({ type: 'npc_option', index: lanthus.getIndex(), clickType: 3 });
+    for (let i = 0; i < 3; i++) { first.p.getMovementQueue().process(); core.TaskManager.processWalkTo(first.p.getIndex()); }
+    await choose(first, 'Yes');
+    const saved = PlayerSave.fromPlayer(first.p);
+    assert.equal(saved.attributes['castlewars:combat-xp-disabled'], true);
+    const disabled = shopActor(subtest);
+    restoreAttributes(saved, disabled);
+    const drops = [];
+    subtest.mock.method(disabled.p.getPacketSender(), 'sendExpDrop', (skill, amount) => drops.push([skill, amount]));
+    startRewardMatch(disabled, second, subtest);
+    disabled.p.getInventory().deleteNumber(match.data.RUNE_POUCH, 1);
+    const skills = [core.Skill.ATTACK, core.Skill.STRENGTH, core.Skill.DEFENCE, core.Skill.RANGED, core.Skill.MAGIC, core.Skill.HITPOINTS];
+    for (const skill of skills) {
+      const old = disabled.p.getSkillManager().getExperience(skill);
+      disabled.p.getSkillManager().addExperience(skill, 5, false);
+      assert.equal(disabled.p.getSkillManager().getExperience(skill), old, skill.getName());
+    }
+    assert.equal(drops.length, 0);
+    disabled.p.getSkillManager().addExperience(core.Skill.MINING, 5, false);
+    assert.equal(drops.length, 1, 'unrelated skilling is unchanged');
+    const waiting = subtest.mock.method(disabled.p, 'getArea', () => match.waitingAreas[match.TEAM.SARADOMIN]);
+    disabled.p.getSkillManager().addExperience(core.Skill.ATTACK, 5, false);
+    assert.equal(drops.length, 2, 'active phase/team alone cannot block a waiting-room gain');
+    waiting.mock.restore();
+    disabled.p.setLocation(new core.Location(2440, 3089));
+    disabled.p.getSkillManager().addExperience(core.Skill.ATTACK, 5, false);
+    assert.equal(drops.length, 3, 'stale area ownership outside the arena cannot block XP');
+    match.endGame();
+    await disabled.send({ type: 'npc_option', index: lanthus.getIndex(), clickType: 3 });
+    for (let i = 0; i < 3; i++) { disabled.p.getMovementQueue().process(); core.TaskManager.processWalkTo(disabled.p.getIndex()); }
+    assert.match(core.MultiChatboxPrompt.getPending(disabled.p)?.title ?? '', /Enable.*XP/);
+    await choose(disabled, 'Yes');
+    assert.equal(disabled.p.getAttribute('castlewars:combat-xp-disabled'), false);
+    const old = disabled.p.getSkillManager().getExperience(core.Skill.ATTACK);
+    disabled.p.getSkillManager().addExperience(core.Skill.ATTACK, 5, false);
+    assert.equal(disabled.p.getSkillManager().getExperience(core.Skill.ATTACK), old + 5);
+  });
+
+
+  await t.test('standard outcomes and minigame multipliers credit only valid fully fitting ticket amounts', (subtest) => {
+    for (const [own, other, multiplier] of [[0, 0, 1], [1, 1, 1], [2, 1, 1], [1, 0, 1], [0, 1, 1], [1, 0, 2], [0, 0, NaN], [0, 0, 0.5], [0, 0, -1]]) {
+      const first = shopActor(subtest), second = shopActor(subtest);
+      startRewardMatch(first, second, subtest);
+      cycle += 1500;
+      match.score[match.TEAM.SARADOMIN] = own;
+      match.score[match.TEAM.ZAMORAK] = other;
+      const emit = PluginManager.emitCustomEvent;
+      subtest.mock.method(PluginManager, 'emitCustomEvent', function (name, event) {
+        if (name === 'minigame:points') event.points *= multiplier;
+        return emit.call(this, name, event);
+      });
+      match.endGame();
+      PluginManager.emitCustomEvent.mock.restore();
+      const base = own === other ? (own === 0 ? 1 : 2) : own < other ? 1 : other === 0 ? 3 : 2;
+      const expected = Number.isSafeInteger(base * multiplier) && base * multiplier > 0 ? base * multiplier : 0;
+      assert.equal(first.p.getInventory().getAmount(4067), expected);
+      assert.equal(first.p.getAttribute(PLAUDITS) ?? 0, expected);
+    }
+    for (const cap of ['tickets', 'plaudits']) {
+      const first = shopActor(subtest), second = shopActor(subtest);
+      startRewardMatch(first, second, subtest);
+      cycle += 1500;
+      match.score[match.TEAM.SARADOMIN] = 1; // Three tickets cannot fit above MAX-2.
+      if (cap === 'tickets') first.p.getInventory().adds(4067, 0x7fffffff - 2);
+      else first.p.setAttribute(PLAUDITS, 0x7fffffff - 2);
+      match.endGame();
+      assert.equal(first.p.getInventory().getAmount(4067), cap === 'tickets' ? 0x7fffffff - 2 : 0);
+      assert.equal(first.p.getAttribute(PLAUDITS) ?? 0, cap === 'plaudits' ? 0x7fffffff - 2 : 0);
+    }
+  });
+
+  await t.test('leaving or logging out clears participation and a new match cannot reuse earlier time', (subtest) => {
+    for (const logout of [false, true]) {
+      const first = shopActor(subtest), second = shopActor(subtest);
+      startRewardMatch(first, second, subtest);
+      cycle += 1400;
+      nativeGameArea.postLeave(first.p, logout);
+      assert.equal(match.getTeamId(first.p), null);
+      assert.equal(first.p.getAttribute(PLAUDITS) ?? 0, 0);
+      match.endGame();
+      startRewardMatch(first, second, subtest);
+      cycle += 100;
+      match.endGame();
+      assert.equal(first.p.getInventory().getAmount(4067), 0);
+      assert.equal(first.p.getAttribute(PLAUDITS) ?? 0, 0, 'the previous 1400 cycles are not reused');
+    }
+  });
+
+  await t.test('crate ammunition retains dragon compatibility and actual consumption only inside an active Castle Wars arena', async (subtest) => {
+    const first = shopActor(subtest), second = shopActor(subtest);
+    startRewardMatch(first, second, subtest);
+    const { Ammunition, RangedWeapon, CombatFactory, Equipment } = core;
+    subtest.mock.method(core.Misc, 'getRandom', () => 0); // Break one fired unit; no floor drop.
+    const equip = (weaponId, ammoId) => {
+      first.p.getEquipment().setItem(Equipment.WEAPON_SLOT, new core.Item(weaponId, 1));
+      first.p.getEquipment().setItem(Equipment.AMMUNITION_SLOT, new core.Item(ammoId, 10));
+      first.p.getCombat().setRangedWeapon(RangedWeapon.getFor(first.p));
+      first.p.getCombat().setAmmunition(Ammunition.getForItem(ammoId));
+    };
+    for (const weapon of Object.values(RangedWeapon)) {
+      if (weapon instanceof RangedWeapon) assert.equal(weapon.getAmmunitionData().includes(Ammunition.DRAGON_ARROW),
+        weapon.getAmmunitionData().includes(Ammunition.SEEKING_DRAGON_ARROW), 'the alias preserves the complete dragon-arrow compatibility set');
+    }
+    for (const [weapon, ammo, expected, strength] of [[11235, 30694, Ammunition.SEEKING_DRAGON_ARROW, 60], [21902, 30696, Ammunition.DRAGON_BOLTS, 122]]) {
+      assert.equal(Ammunition.getForItem(ammo), expected);
+      assert.equal(expected.getStrength(), strength);
+      equip(weapon, ammo);
+      assert.equal(CombatFactory.checkAmmo(first.p, 1), true);
+      CombatFactory.decrementAmmo(first.p, first.p.getLocation(), 1);
+      assert.equal(first.p.getEquipment().get(Equipment.AMMUNITION_SLOT).getId(), ammo);
+      assert.equal(first.p.getEquipment().get(Equipment.AMMUNITION_SLOT).getAmount(), 9, 'consume the actual Castle Wars stack');
+      const recovery = subtest.mock.method(CombatFactory, 'ammoRecovery', () => 80);
+      const roll = subtest.mock.method(core.Misc, 'getRandom', () => 99);
+      CombatFactory.decrementAmmo(first.p, first.p.getLocation(), 1);
+      assert.equal(first.p.getEquipment().get(Equipment.AMMUNITION_SLOT).getAmount(), 9, 'native recovery keeps the same Castle Wars stack');
+      recovery.mock.restore(); roll.mock.restore();
+      for (const [where, location] of [['lobby', new core.Location(2440, 3089)], ['waiting', new core.Location(2381, 9489)], ['world', new core.Location(3222, 3218)]]) {
+        first.p.setLocation(location);
+        equip(weapon, ammo);
+        assert.equal(CombatFactory.checkAmmo(first.p, 1), false, where);
+        assert.equal(first.p.getEquipment().get(Equipment.AMMUNITION_SLOT).getAmount(), 10);
+      }
+      first.p.setLocation(new core.Location(2426, 3076, 1));
+      const area = subtest.mock.method(first.p, 'getArea', () => match.waitingAreas[match.TEAM.SARADOMIN]);
+      equip(weapon, ammo);
+      assert.equal(CombatFactory.checkAmmo(first.p, 1), false, 'arena tiles alone do not admit a waiting actor');
+      area.mock.restore();
+      equip(861, ammo);
+      assert.equal(CombatFactory.checkAmmo(first.p, 1), false, 'a Magic shortbow cannot fire either dragon-tier ammo');
+    }
+    first.p.setLocation(new core.Location(3222, 3218));
+    for (const [weapon, ammo] of [[11235, 11212], [21902, 21905]]) {
+      equip(weapon, ammo);
+      assert.equal(CombatFactory.checkAmmo(first.p, 1), true, 'ordinary dragon ammunition remains usable elsewhere');
+    }
+    const Quiver = require('../plugins/items/DizanasQuiver.plugin');
+    first.p.getEquipment().setItem(Equipment.CAPE_SLOT, new core.Item(core.ItemIdentifiers.DIZANAS_QUIVER, 1));
+    const quiverAction = op => first.send({ type: 'widget_action', widgetId: (387 << 16) | 28,
+      groupId: 387, childId: 28, buttonNum: op, slot: -1, itemId: -1 });
+    for (const [weapon, ammo] of [[11235, 30694], [21902, 30696]]) {
+      equip(weapon, ammo);
+      await quiverAction(2);
+      assert.deepEqual(Quiver.stored(first.p), { id: ammo, amount: 10 }, 'native Fill retains the actual ammo ID');
+      first.p.getCombat().setAmmunition(Ammunition.getFor(first.p));
+      assert.equal(CombatFactory.checkAmmo(first.p, 1), false, 'a stored CW stack cannot bypass the outside restriction');
+      first.p.setLocation(new core.Location(2426, 3076, 1));
+      first.p.getCombat().setRangedWeapon(RangedWeapon.getFor(first.p));
+      first.p.getCombat().setAmmunition(Ammunition.getFor(first.p));
+      assert.equal(CombatFactory.checkAmmo(first.p, 1), true);
+      CombatFactory.decrementAmmo(first.p, first.p.getLocation(), 1);
+      assert.deepEqual(Quiver.stored(first.p), { id: ammo, amount: 9 }, 'quiver consumption preserves the Castle Wars ID');
+      await quiverAction(1);
+      first.p.setLocation(new core.Location(3222, 3218));
+    }
+    equip(11235, 11212);
+    await quiverAction(2);
+    first.p.getEquipment().setItem(Equipment.AMMUNITION_SLOT, new core.Item(30696, 10));
+    first.p.getCombat().setRangedWeapon(RangedWeapon.getFor(first.p));
+    first.p.getCombat().setAmmunition(Ammunition.getFor(first.p));
+    assert.equal(CombatFactory.checkAmmo(first.p, 1), true, 'unused worn CW bolts cannot block ordinary dragon arrows selected from the quiver');
+
+  });
+
 });

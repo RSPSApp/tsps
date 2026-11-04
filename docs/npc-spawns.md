@@ -169,6 +169,7 @@ The fix to the version pairing above, on the 60 spawns it affected (32 Wiki page
 - **Quest stages removed:** Attala and the builder at the Ralos' Rise camp (in Cam Torum after *Perilous Moons*, where they already are); Antos, Shas and Etz injured; the injured Guild Hunter Fox in the Avium Savannah; Forebearer Janus as a cultist, captured and bound; Furia Tullus as a cultist; Junior Jim's "limbo".
 - **Achilka:** one per boat stop, each with that stop's id (14727 Kastori, 14728 Tal Teklan, 14729 the Gloomthorn Trail); there had been two or three per stop with the wrong ids.
 - **Added:** Primio's Varrock end (12888), lost when the Civitas one took its id.
+- **Auburnvale's Renu:** normal-game RSProx recording 3127 (revision 232, 13 August 2025) adds parent 14690 twice at 1410,3362,0. Cache 241 transforms her on `quetzal_auburnvalley` (17756): 0 hides her, 1–5 show Renu's colours. The transport table's player landing at 1411,3361 and the Wiki map marker are not NPC spawn coordinates. The stationary row uses the cache's default south facing, matching the capture; login restores missing automatic-site visibility for existing Renu owners without changing their colour, built sites or Fortis feeding state.
 - **Decisions:** the quest-stage ids are in `npc-spawn-sync.json` under `ids` (`Quest stage`, skipped), so a rerun doesn't add them back.
 
 ## Labelled and several maps on one line

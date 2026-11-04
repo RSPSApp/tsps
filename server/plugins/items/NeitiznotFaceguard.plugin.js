@@ -23,6 +23,7 @@ const UNKNOWN_TEXT = "You're not quite sure how to do that. Perhaps Olaf the Bar
 const ATTACH_TEXT = "You attach the Basilisk Jaw to the Helm of Neitiznot.";
 const REMOVE_TEXT = "You remove the Basilisk Jaw from the Neitiznot Faceguard.";
 const SHOW_TEXT = "You show the Basilisk Jaw to Olaf.";
+const EXILES_QUEST = "The Fremennik Exiles";
 const STORY_VARIANT = "after-the-fremennik-trials";
 const STORY_OPTION = "Do you know any great stories about Basilisk Jaws?";
 const PRESET_TEXT = "Preset items cannot be used for this.";
@@ -62,10 +63,23 @@ function storySteps(steps) {
   return null;
 }
 
-/** The captured route: the jaw used on Olaf. Anything else used on him is left to the others. */
+/** True when The Fremennik Exiles is done, or this server has no such quest to do (it never gates then). */
+function exilesComplete(player) {
+  const request = { player, name: EXILES_QUEST, complete: null };
+  api.emitCustomEvent("quest:is-complete", request);
+  return request.complete !== false;
+}
+
+/**
+ * The captured route: the jaw used on Olaf. Anything else used on him is left to the others. The Wiki
+ * has the jaw combine "after the completion of The Fremennik Exiles" (which itself needs the Trials and
+ * The Fremennik Isles); what Olaf says to a player who has not finished it is not captured, so the use
+ * is simply left unhandled for them.
+ */
 function showJaw(event) {
   const { player, itemId, npcId, target } = event;
   if (itemId !== core.ItemIdentifiers.BASILISK_JAW || npcId !== core.NpcIdentifiers.OLAF_THE_BARD) return;
+  if (!exilesComplete(player)) return;
   const request = {
     player, npc: target, npcId, variant: STORY_VARIANT, exact: true, handled: false,
     select: (steps) => storySteps(steps) ?? [],

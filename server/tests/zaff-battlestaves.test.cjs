@@ -11,6 +11,7 @@ Server.installProductionPathResolver();
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Inventory } = require("../dist/game/model/container/impl/Inventory");
 const { Item } = require("../dist/game/model/Item");
+const { TaskManager } = require("../dist/game/task/TaskManager");
 const { ObjectDefinition } = require("../dist/game/definition/ObjectDefinition");
 const DiaryRewards = require("../plugins/items/DiaryRewards.plugin");
 const Rewards = require("../plugins/items/diaryrewards/Common.DiaryRewards");
@@ -29,12 +30,14 @@ let core;
 const tasks = [];
 const clickHooks = new Map();
 const loginHooks = [];
+const logoutHooks = [];
 let prompt = null;
 const api = new Proxy({
   onObjectFirstClick(ids, handler) {
     for (const id of [].concat(ids)) clickHooks.set(id, handler);
   },
   onPlayerLogin(handler) { loginHooks.push(handler); },
+  onPlayerLogout(handler) { logoutHooks.push(handler); },
   sendMultiChatboxPrompt(player, title, ...pairs) {
     prompt = { title, options: pairs.filter((_, i) => i % 2 === 0), callbacks: pairs.filter((_, i) => i % 2 === 1) };
     return true;
@@ -45,12 +48,30 @@ before(async () => {
   const { CachePipeline } = require("../dist/game/cache/CachePipeline");
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   ObjectDefinition.init(); // totalObjects is 0 until then, and forPlayer answers null
-  core = { ...PluginManager.getCoreApi(), TaskManager: { submit: (task) => tasks.push(task) } };
+  core = {
+  ...PluginManager.getCoreApi(),
+  TaskManager: {
+    // The real manager runs and cancels them; this only keeps what was submitted.
+    submit: (task) => { tasks.push(task); TaskManager.submit(task); },
+    cancelTasks: (key) => TaskManager.cancelTasks(key),
+  },
+  };
   DiaryRewards.register(api);
 });
 
 beforeEach(() => { prompt = null; tasks.length = 0; });
-afterEach(() => mock.timers.reset());
+afterEach(() => {
+  mock.timers.reset();
+  for (const task of tasks) task.stop();
+  TaskManager.process();
+});
+
+/** Game ticks through the real TaskManager. */
+function tick(count) {
+  for (let i = 0; i < count; i++) TaskManager.process();
+}
+
+const running = () => tasks.filter((task) => task.isRunning());
 
 /** The attributes a save keeps. */
 const SAVED = [REWARDS_ATTRIBUTE, "diary-rewards:daily"];
@@ -225,6 +246,57 @@ test("a reset that fires before the day has turned waits for the day", () => {
   tasks[0].execute();
   assert.equal(varbit(p), 1, "still the same UTC day: nothing is reset yet");
   assert.equal(tasks.length, 2, "and it waits again for the day to turn");
+});
+
+const DAY = 24 * 60 * 60 * 1000;
+const HOUR_TICKS = 60 * 60 * 1000 / TICK_MS;
+
+test("another system cancelling the player's tasks (rowboat travel) does not cancel the reset", () => {
+  mock.timers.enable({ apis: ["Date"], now: Date.UTC(2026, 10, 3, 23, 0, 0) });
+  const p = player({ coins: 840000, claimed: TIERS });
+  click(p);
+  choose(p, "Yes.");
+  assert.equal(varbit(p), 1);
+  TaskManager.cancelTasks(p); // as MisthalinMystery's rowboat does
+  mock.timers.setTime(Date.UTC(2026, 10, 4, 0, 0, 1));
+  tick(HOUR_TICKS);
+  assert.equal(varbit(p), 0, "the reset still fires and the barrel is full again");
+  assert.equal(shownBarrel(p).id, core.CacheDefinitions.getLocId(BARREL_FULL));
+});
+
+test("logging out removes the reset, whichever key it was filed under", () => {
+  mock.timers.enable({ apis: ["Date"], now: Date.UTC(2026, 10, 3, 23, 0, 0) });
+  const p = player({ coins: 840000, claimed: TIERS });
+  click(p);
+  choose(p, "Yes.");
+  assert.equal(running().length, 1);
+  assert.ok(logoutHooks.length > 0, "the unit cleans up on logout");
+  for (const hook of logoutHooks) hook({ player: p });
+  assert.equal(running().length, 0, "no reset task is left running for a player who is gone");
+  mock.timers.setTime(Date.UTC(2026, 10, 4, 0, 0, 1));
+  tick(HOUR_TICKS);
+  assert.equal(varbit(p), 1, "nothing is sent to a player who logged out");
+});
+
+test("login and repeat claims leave exactly one reset armed", () => {
+  mock.timers.enable({ apis: ["Date"], now: Date.UTC(2026, 10, 3, 23, 0, 0) });
+  const p = player({ coins: 2000000, claimed: TIERS });
+  click(p);
+  choose(p, "Yes.");
+  for (const hook of loginHooks) hook({ player: p });
+  for (const hook of loginHooks) hook({ player: p });
+  assert.equal(running().length, 1, "login re-arms the one reset instead of adding another");
+  mock.timers.setTime(Date.UTC(2026, 10, 4, 0, 0, 1));
+  tick(HOUR_TICKS);
+  assert.equal(varbit(p), 0);
+  assert.equal(running().length, 0, "the reset has run and nothing else waits");
+  click(p);
+  choose(p, "Yes.");
+  assert.equal(varbit(p), 1);
+  assert.equal(running().length, 1, "the next day's claim arms one reset");
+  mock.timers.setTime(Date.UTC(2026, 10, 4, 0, 0, 1) + DAY);
+  tick(24 * HOUR_TICKS);
+  assert.equal(varbit(p), 0);
 });
 
 test("the diary reward must have been claimed from Toby first", () => {

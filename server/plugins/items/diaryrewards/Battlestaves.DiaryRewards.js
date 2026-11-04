@@ -99,11 +99,33 @@ function ticksToReset() {
   return Math.max(1, Math.ceil((midnight - now) / TICK_MS));
 }
 
-/** Sends the varbit back to 0 once the UTC day has turned; a task that fires early waits again. */
+/**
+ * Each player's reset has its own task key, not the player: other systems call
+ * TaskManager.cancelTasks(player) (Misthalin Mystery's rowboat, among others) and would end it
+ * until a relog. Logout cancels it explicitly.
+ */
+const RESET_KEYS = new WeakMap();
+
+function resetKey(player) {
+  if (!RESET_KEYS.has(player)) RESET_KEYS.set(player, {});
+  return RESET_KEYS.get(player);
+}
+
+function cancelReset({ player }) {
+  Rewards.core.TaskManager.cancelTasks(resetKey(player));
+  RESET_KEYS.delete(player);
+}
+
+/**
+ * Sends the varbit back to 0 once the UTC day has turned; a task that fires early waits again.
+ * Arming replaces the player's earlier reset, so a login or a repeat claim never stacks two.
+ */
 function scheduleReset(player) {
   const { Task, TaskManager } = Rewards.core;
+  const key = resetKey(player);
+  TaskManager.cancelTasks(key);
   TaskManager.submit(new (class extends Task {
-    constructor() { super(ticksToReset(), player, false); }
+    constructor() { super(ticksToReset(), key, false); }
     execute() {
       this.stop();
       if (Rewards.dailyUses(player, DAILY_KEY) > 0) scheduleReset(player);
@@ -127,6 +149,7 @@ module.exports = function attachBattlestaves(api) {
   pluginApi = api;
   api.onObjectFirstClick(Rewards.core.CacheDefinitions.getLocId(stock().loc), clickBarrel);
   api.onPlayerLogin(syncOnLogin);
+  api.onPlayerLogout(cancelReset);
 };
 
 module.exports._test = { offer, buy, claimedTier, DAILY_KEY };

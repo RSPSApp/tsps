@@ -154,6 +154,25 @@ test("journal rebuilds keep the selected quest or diary tab and do not react to 
   assert.equal(p.mounts.length, before, "Adventure Paths retains ownership of its selected tab");
 });
 
+test("opening the summary keeps native main interfaces open", () => {
+  const f = fixture(), p = player();
+  p.getInterfaceId = () => 12;
+  f.api.core.CustomInterfaceRegistry = { get: () => undefined };
+  p.getPacketSender().sendInterfaceRemoval = () => assert.fail("native interfaces do not own the custom runtime");
+  mount(f, p);
+  assert.equal(p.mounts.at(-1)[1], Layout.GROUP_ID);
+});
+
+test("opening native journal tabs does not close a custom modal", () => {
+  const f = fixture(), p = player();
+  p.getInterfaceId = () => 30004;
+  f.api.core.CustomInterfaceRegistry = { get: () => ({}) };
+  p.getPacketSender().sendInterfaceRemoval = () => assert.fail("only the custom summary replaces the runtime");
+  p.getPacketSender().sendVarbit(8168, 1);
+  mount(f, p);
+  assert.equal(p.mounts.at(-1)[1], 399);
+});
+
 test("navigation labels and backgrounds open the corresponding existing interfaces", () => {
   const f = fixture(), p = player();
   mount(f, p);

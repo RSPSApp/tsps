@@ -1612,6 +1612,7 @@ export interface PluginCoreApi {
   PlayerRights: any;
   Server: any;
   PluginManager: any;
+  CustomInterfaceRegistry: any;
   ShopManager: any;
   ShopDefinition: any;
   MultiChatboxPrompt: any;

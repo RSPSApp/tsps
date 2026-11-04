@@ -104,7 +104,14 @@ function render(player) {
 }
 
 function resolveContent(request) {
-  if (request.groupId === NATIVE_SUMMARY_GROUP_ID) request.groupId = Layout.GROUP_ID;
+  if (request.groupId !== NATIVE_SUMMARY_GROUP_ID) return;
+  // The client runtime owns one custom interface at a time. Close a custom main modal
+  // before mounting the summary, so a visible modal cannot lose its search/tab state.
+  const modalId = request.player.getInterfaceId?.() ?? -1;
+  if (modalId >= 0 && core.CustomInterfaceRegistry.get(modalId)) {
+    request.player.getPacketSender().sendInterfaceRemoval();
+  }
+  request.groupId = Layout.GROUP_ID;
 }
 
 function mounted({ player, groupId }) {

@@ -409,6 +409,7 @@ test("the shared destroy prompt shows the lines the bag gives it, and its own fo
   let policy;
   delete require.cache[require.resolve("../plugins/interface/DestroyItem.plugin")];
   require("../plugins/interface/DestroyItem.plugin").register({
+    onCustomEvent() {},
     core, registerCustomInterface() {}, onInterfaceActionButton() {},
     onItemDropPolicy: (fn) => { policy = fn; },
     emitCustomEvent: (name, event) => hooks.events[name]?.(event),
@@ -436,6 +437,7 @@ test("confirmed destruction plays the captured sound once; cancellation, stale i
   t.mock.method(core.PluginManager, "emitItemDropPolicy", emitItemDropPolicy);
   delete require.cache[require.resolve("../plugins/interface/DestroyItem.plugin")];
   require("../plugins/interface/DestroyItem.plugin").register({
+    onCustomEvent() {},
     core,
     onItemDropPolicy: (handler) => { policy = handler; },
     onInterfaceActionButton: (_uid, handler) => { confirm = handler; },

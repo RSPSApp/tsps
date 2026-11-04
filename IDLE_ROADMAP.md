@@ -44,12 +44,15 @@ Uma interface própria e sempre à mão, para o jogador nunca precisar digitar c
 
 - [x] **Botão fixo do idle**: o primeiro botão da aba do diário abre a tela idle
 - [ ] **Ajuste visual**: com 4 botões no diário, o rótulo "Commands" perde a última letra
-- [ ] **Painel resumido sempre visível**: atividade atual, XP por hora, pontos e um indicador de
-      pausado/rodando
-- [ ] **Tela ao logar com ganhos offline**: abrir sozinha mostrando o resumo "enquanto você esteve
-      fora", com totais por item
+- [x] **Painel resumido**: seção "Idle Information" no topo da aba do diário, com modo, atividade,
+      XP por hora, pontos e tempo idle (atualiza a cada 2 segundos)
+- [ ] **Painel na tela de jogo** (sobreposto, sem abrir a aba do diário), se o diário não bastar
+- [x] **Tela ao logar com ganhos offline**: abre sozinha depois do Play, com o resumo da última vez
+      fora
 - [ ] **Abas na tela idle**: Status, Melhorias, Viagem, Loja e Estatísticas, numa só janela
-- [ ] **Estatísticas**: XP/hora por skill, itens coletados no total, tempo idle acumulado
+- [x] **Estatísticas, parte 1**: XP por hora da sessão e tempo idle total (online + offline);
+      totais de XP e itens já são guardados (`idle-mode:totals`)
+- [ ] **Estatísticas, parte 2**: uma aba que mostre os totais por skill e por item
 - [ ] **Versão mobile** conferida (o cliente já é responsivo; validar as telas idle no celular)
 
 ## P1 - Loja de Idle Coins

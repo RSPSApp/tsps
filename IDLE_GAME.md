@@ -55,7 +55,10 @@ Na primeira vez que uma conta fica idle (conta nova num mundo idle, ou o primeir
 - recebe o **kit inicial**: machado, picareta, rede de pesca, espada e 10 camarões;
 - conta nova num mundo idle começa no **pátio do castelo de Lumbridge**, longe da Wilderness;
 - aparecem **3 linhas de boas-vindas** no chat e a **tela idle abre sozinha**;
-- depois disso, a tela abre pelo botão **Idle** na aba do diário (o ícone de missões).
+- depois disso, a tela abre pelo botão **Idle** na aba do diário (o ícone de missões);
+- a mesma aba mostra no topo a seção **Idle Information**: atividade, XP por hora, pontos e tempo
+  idle;
+- sempre que você volta e o jogo pagou tempo offline, a tela idle abre sozinha com o resumo.
 
 ![Primeiro login de uma conta nova](docs/images/idle-first-login.png)
 

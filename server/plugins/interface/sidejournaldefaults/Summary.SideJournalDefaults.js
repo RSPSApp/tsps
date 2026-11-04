@@ -76,9 +76,14 @@ function render(player) {
   if (!panel) return;
   const pvp = { player, stats: null };
   const slayer = { player, task: null, points: 0 };
+  // Idle Mode's fork: its rows' values (plugins/modes/idle/Screen.IdleMode.js).
+  const idle = { player, summary: null };
   pluginApi.emitCustomEvent("pvp:stats", pvp);
   pluginApi.emitCustomEvent("slayer:current-task", slayer);
+  pluginApi.emitCustomEvent("idle:summary", idle);
   const values = {
+    idleMode: "Off", idleActivity: "None", idleXpRate: "-", idleTime: "0m",
+    ...idle.summary,
     ...pvp.stats,
     ...wealth(player),
     kdr: RATIO.format(pvp.stats?.kdr ?? 0),

@@ -19,8 +19,45 @@ const AWAY_ATTRIBUTE = "idle-mode:away";
 /** Saved: what the last time away paid, as the login message said it (the Idle screen shows it). */
 const LAST_AWAY_ATTRIBUTE = "idle-mode:last-away";
 
+/**
+ * Saved: what idle play has added up to, for the Idle screen and the journal:
+ * { workedMs (time spent gathering or fighting online), offlineMs (time away paid), xp, items }.
+ */
+const TOTALS_ATTRIBUTE = "idle-mode:totals";
+
 /** player -> the session being measured. */
 const sessions = new Map();
+/** Called with (player, reward) after a login paid time away (the Idle screen opens). */
+const paidListeners = [];
+
+function onPaid(listener) {
+  paidListeners.push(listener);
+}
+
+const sum = (values) => Object.values(values ?? {}).reduce((total, value) => total + (Number(value) || 0), 0);
+
+function totals(player) {
+  return { workedMs: 0, offlineMs: 0, xp: 0, items: 0, ...(player.getAttribute(TOTALS_ATTRIBUTE) ?? {}) };
+}
+
+function addTotals(player, { workedMs = 0, offlineMs = 0, xp = 0, items = 0 }) {
+  const current = totals(player);
+  player.setAttribute(TOTALS_ATTRIBUTE, {
+    workedMs: current.workedMs + workedMs, offlineMs: current.offlineMs + offlineMs,
+    xp: current.xp + xp, items: current.items + items,
+  });
+}
+
+/** The XP per hour of the session being played now, or null when there is none long enough. */
+function currentRate(player, now = Date.now()) {
+  const session = sessions.get(player);
+  const config = Common.data.offline;
+  if (!session) return null;
+  const durationMs = session.lastAt - session.firstAt;
+  const maxGapSeconds = session.maxGapSeconds ?? config.maxGapSeconds;
+  if (durationMs < config.minSampleSeconds * 1000 || now - session.lastAt > maxGapSeconds * 1000) return null;
+  return { activity: session.activity, xpPerHour: ((sum(session.lastXp) - sum(session.firstXp)) / durationMs) * 3600000 };
+}
 
 /**
  * Adds one result to a session, or starts a new one (another activity, or more than the
@@ -106,8 +143,13 @@ function record(player, activity, skills, items, maxGapSeconds) {
   const config = Common.data.offline;
   if (!config.enabled || !Common.isIdle(player)) return;
   const now = Date.now();
-  const session = addResult(sessions.get(player), { activity, items, maxGapSeconds }, now, xpNow(player, skills), config);
+  const previous = sessions.get(player);
+  const previousAt = previous?.lastAt;
+  const previousXp = sum(previous?.lastXp);
+  const session = addResult(previous, { activity, items, maxGapSeconds }, now, xpNow(player, skills), config);
   sessions.set(player, session);
+  // A result that carries the session on: the time since the last one is time worked.
+  if (session === previous) addTotals(player, { workedMs: now - previousAt, xp: Math.max(0, sum(session.lastXp) - previousXp), items: sum(items) });
   // Kept current while playing, so any save carries it: the server's shutdown save (which logs
   // no one out) and the periodic autosave before a crash pay the time away on the next login.
   player.setAttribute(AWAY_ATTRIBUTE, awayFromSession(session, now, config));
@@ -157,12 +199,16 @@ function login({ player }) {
   if (lost > 0) player.sendMessage(`Your bank was full: ${formatNumber(lost)} items were lost.`);
   player.setAttribute(LAST_AWAY_ATTRIBUTE,
     `${formatDuration(reward.elapsedMs)}${capped} ${doing(away.activity)}: ${parts.join(", ") || "nothing"}${lost > 0 ? ` (${formatNumber(lost)} lost, bank full)` : ""}.`);
+  addTotals(player, { offlineMs: reward.paidMs, xp: sum(reward.xp), items: sum(reward.items) });
   Common.changed(player);
+  for (const listener of paidListeners) listener(player, reward);
 }
 
 module.exports = function attach(api) {
   api.persistAttribute(AWAY_ATTRIBUTE, null);
   api.persistAttribute(LAST_AWAY_ATTRIBUTE, "");
+  // No fixed starting value worth comparing: an empty one is filled in by totals().
+  api.persistAttribute(TOTALS_ATTRIBUTE, null);
   api.onCustomEvent("storage:gather", gathered);
   api.onPlayerLogout(logout);
   api.onPlayerLogin(login);
@@ -170,6 +216,10 @@ module.exports = function attach(api) {
 
 module.exports.AWAY_ATTRIBUTE = AWAY_ATTRIBUTE;
 module.exports.LAST_AWAY_ATTRIBUTE = LAST_AWAY_ATTRIBUTE;
+module.exports.TOTALS_ATTRIBUTE = TOTALS_ATTRIBUTE;
+module.exports.totals = totals;
+module.exports.currentRate = currentRate;
+module.exports.onPaid = onPaid;
 module.exports.addResult = addResult;
 module.exports.awayFromSession = awayFromSession;
 module.exports.offlineReward = offlineReward;

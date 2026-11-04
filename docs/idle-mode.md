@@ -214,6 +214,22 @@ the 190-wide panel.
 
 ![The journal tab's Idle button](images/idle-journal-button.png)
 
+## Totals, the journal panel and the return screen
+
+- **Totals** (`Offline.IdleMode.js`), saved as `idle-mode:totals`
+  `{ workedMs, offlineMs, xp, items }`: each result that carries a session on adds the time since
+  the last one, its XP and its items; a login's time-away payout adds the time paid, XP and items.
+  `Offline.currentRate(player)` is the XP per hour of the session being played (none until it has
+  run `minSampleSeconds`, or once it is older than its gap).
+- **The journal panel**: the side journal's first section, "Idle Information" (Idle Mode,
+  activity, XP per hour, idle points, time idle), filled from `idle:summary` `{ player, summary }`,
+  which the Idle screen answers. It redraws every two seconds like the rest of the journal.
+- **The return screen**: a login that paid time away opens the Idle screen
+  (`"offline"` `openScreenOnReturn`): `openScreenDelayTicks` in, or, behind the welcome screen
+  (`welcome-screen:shown`), when the player presses Play (`gameframe:ready`).
+
+![The journal's Idle Information](images/idle-journal-panel.png)
+
 ## The Idle screen
 
 ![The Idle screen](images/idle-screen.png)

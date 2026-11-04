@@ -47,3 +47,31 @@ test('the loader keeps stock rows listed at 0, so specialist shops buy them', ()
   const gerrant = shops.find((shop) => shop.name === "Gerrant's Fishy Business.");
   assert.ok(gerrant.originalStock.some(({ id, amount }) => id === 317 && amount === 0), 'Gerrant lists raw shrimps at 0');
 });
+
+
+test('Pest Control Exchange stays with its reward interface, not a generic shop', () => {
+  // PestControl.plugin.js owns Void Knight Exchange and interface 243. The
+  // canonical exporter also describes these rewards, but that must not install
+  // a core.shops.open action ahead of the native reward provider.
+  const rewardNames = [
+    "Void Knights' Reward Options",
+    "Void Knights' Reward Options (! colspan)",
+    "Void Knights' Reward Options (! rowspan)",
+  ];
+  assert.equal(shops.some(shop => rewardNames.includes(shop.name)), false);
+  const rewardOwners = new Set([1755, 1756, 1757, 1758]);
+  assert.equal(shops.some(shop => shop.npcInteractions?.some(binding =>
+    binding.optionSlot === 3 && binding.npcIds.some(id => rewardOwners.has(id))
+  )), false, 'the four reward NPC Exchange options must not acquire generic bindings');
+  for (const [id, name, npcId] of [
+    [1365, 'Void Knight Archery Store', 1765],
+    [1366, 'Void Knight General Store', 1768],
+    [1367, 'Void Knight Magic Store', 1767],
+  ]) {
+    const shop = shops.find(entry => entry.name === name);
+    assert.ok(shop, name);
+    assert.equal(shop.id, id, 'ordinary Void stores keep their existing IDs');
+    assert.equal(shop.currency, 'COINS');
+    assert.ok(shop.npcInteractions.some(binding => binding.optionSlot === 3 && binding.npcIds.includes(npcId)), name);
+  }
+});

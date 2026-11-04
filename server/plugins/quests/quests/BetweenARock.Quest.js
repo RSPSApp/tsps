@@ -575,6 +575,7 @@ module.exports = function registerBetweenARockQuest(api) {
     if (hook !== START_HOOK || !DONDAKAN_NPC_IDS.has(npcId)) return;
     if (quest.getStage(player) !== 0) return;
     if (!meetsStartRequirements(player)) {
+      event.end = true;
       notifySkillRequirements(player);
       notifyQuestRequirements(player);
       return;

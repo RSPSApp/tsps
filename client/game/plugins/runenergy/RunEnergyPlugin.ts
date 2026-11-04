@@ -90,7 +90,7 @@ export class RunEnergyPlugin extends Plugin {
     private localPlayerRunningToDestination = false;
     private prevLocalPlayerLocation: WorldPoint | null = null;
     private readonly source = () => this.tooltip();
-    private readonly listener = (message: ChatMessage) => this.onChatMessage(message);
+    private readonly listener = (message: ChatMessage) => this.handleChatMessage(message);
 
     constructor(client?: RunEnergyClient, tooltips?: TooltipManager, history: ChatHistoryStore = chatHistory) {
         super();
@@ -156,7 +156,8 @@ export class RunEnergyPlugin extends Plugin {
         }
     }
 
-    onChatMessage(event: ChatMessage): void {
+    /** Handle the history node before insertion, rather than the API EventBus payload. */
+    private handleChatMessage(event: ChatMessage): void {
         if (!this.isStarted() || (event.type !== GAMEMESSAGE && event.type !== SPAM)) return;
         const message = event.text;
         if (message === "Your Ring of endurance doubles the duration of your stamina potion's effect.") {

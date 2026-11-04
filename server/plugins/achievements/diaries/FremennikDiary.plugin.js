@@ -69,9 +69,9 @@ function inBox(location, box) {
     && point.z === box.z;
 }
 
-function active(player) {
+function active(player, privateArea = null) {
   return player?.isRegistered?.() === true && player.getHitpoints?.() > 0
-    && player.isDyingReturn?.() !== true && player.getPrivateArea?.() == null;
+    && player.isDyingReturn?.() !== true && (player.getPrivateArea?.() ?? null) === privateArea;
 }
 
 function questComplete(player, key) {
@@ -204,7 +204,7 @@ function onFiremakingSuccess({ player, itemId }) {
 }
 
 function onHerbloreMade({ player, itemId }) {
-  if (!active(player) || itemId !== api.core.ItemIdentifiers.SUPER_DEFENCE_4_) return;
+  if (!active(player) || ![api.core.ItemIdentifiers.SUPER_DEFENCE_3_, api.core.ItemIdentifiers.SUPER_DEFENCE_4_].includes(itemId)) return;
   if (inBox(player.getLocation(), RELLEKKA)) complete(player, "mix-a-super-defence-potion-in-the-fremennik-prov");
 }
 
@@ -259,8 +259,8 @@ function onWaterSourceFilled({ player, itemId, name, location }) {
   }
 }
 
-function onMenagerieWithdrawn({ player, itemId }) {
-  if (!active(player) || !PET_ROCK_IDS.has(itemId)) return;
+function onMenagerieWithdrawn({ player, itemId, house }) {
+  if (!house || house.owner !== player || !active(player, house) || !PET_ROCK_IDS.has(itemId)) return;
   if (questStarted(player, FREMENNIK_TRIALS)) {
     complete(player, "pick-up-your-pet-rock-from-your-poh-menagerie");
   }

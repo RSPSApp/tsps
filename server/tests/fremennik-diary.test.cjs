@@ -27,6 +27,7 @@ const Item = {
   TIARA: 5525,
   DRAGONSTONE_AMULET_U_: 1683,
   OAK_LOGS: 1521,
+  SUPER_DEFENCE_3_: 163,
   SUPER_DEFENCE_4_: 2442,
   BUCKET: 1925,
   ASTRAL_RUNE: 9075,
@@ -197,7 +198,10 @@ test("medium producers credit only in their area, with their quest gate", () => 
   for (let i = 0; i < 5; i++) fire("ground-items:taken", { player: secondGrass, itemId: Item.SNAPE_GRASS, amount: 1, groundItem: { getPosition: () => loc(2500, 3730) } });
   assert.equal(fired("collect-5-snape-grass-on-waterbirth-island"), 1);
 
-  fire("construction:menagerie-withdrawn", { player: started(player(), "fremennik_trials"), itemId: 3695 });
+  const petOwner = started(player(), "fremennik_trials");
+  const petHouse = { owner: petOwner };
+  petOwner.getPrivateArea = () => petHouse;
+  fire("construction:menagerie-withdrawn", { player: petOwner, itemId: 3695, house: petHouse });
   assert.equal(fired("pick-up-your-pet-rock-from-your-poh-menagerie"), 1);
   fire("construction:menagerie-withdrawn", { player: started(player(), "fremennik_trials"), itemId: 1555 });
   assert.equal(fired("pick-up-your-pet-rock-from-your-poh-menagerie"), 1);
@@ -312,4 +316,24 @@ test("negative paths: unstarted quests, wrong location, wrong item", () => {
 
   fire("miscellania:approval-changed", { player: player(), value: 126, max: 127 });
   assert.equal(fired("obtain-100-support-from-your-kingdom-subjects"), 0);
+});
+
+
+test("native-context diary guards accept an owned POH and a three-dose super defence", () => {
+  reset();
+  const owner = started(player(), "fremennik_trials");
+  const house = { owner };
+  owner.getPrivateArea = () => house;
+  fire("construction:menagerie-withdrawn", { player: owner, itemId: 3695, house });
+  assert.equal(fired("pick-up-your-pet-rock-from-your-poh-menagerie"), 1);
+  fire("construction:menagerie-withdrawn", { player: owner, itemId: 1555, house });
+  fire("construction:menagerie-withdrawn", { player: owner, itemId: 3695, house: { owner } });
+  owner.isRegistered = () => false;
+  fire("construction:menagerie-withdrawn", { player: owner, itemId: 3695, house });
+  assert.equal(fired("pick-up-your-pet-rock-from-your-poh-menagerie"), 1);
+
+  fire("herblore:made", { player: player(2650, 3680), itemId: Item.SUPER_DEFENCE_3_ });
+  assert.equal(fired("mix-a-super-defence-potion-in-the-fremennik-prov"), 1);
+  fire("herblore:made", { player: player(3000, 3000), itemId: Item.SUPER_DEFENCE_3_ });
+  assert.equal(fired("mix-a-super-defence-potion-in-the-fremennik-prov"), 1);
 });

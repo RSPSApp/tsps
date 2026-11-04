@@ -608,3 +608,27 @@ test("Zahur cleans every grimy herb for 200 coins each, with no XP", () => {
   Zahur._test.cleanAll(nothing, 4753);
   assert.match(nothing.sent.dialogue, /I didn't find anything that I could clean\./);
 });
+
+test("native super-defence mixing credits the Fremennik task only in Rellekka", () => {
+  const Diary = require("../plugins/achievements/diaries/FremennikDiary.plugin");
+  const previous = new Map(hooks.customEvents);
+  const credits = [];
+  Diary.register(new Proxy({
+    core,
+    onCustomEvent(name, handler) { hooks.customEvents.set(name, handler); },
+    emitCustomEvent(name, request) { if (name === "diary:task") credits.push(request.task); },
+  }, { get: (target, key) => key in target ? target[key] : () => {} }));
+  try {
+    for (const [x, y, expected] of [[3000, 3000, 0], [2650, 3680, 1]]) {
+      const who = player([["cadantinevial"], ["white_berries"]]);
+      who.getLocation = () => new core.Location(x, y, 0);
+      use(who, "cadantinevial", "white_berries");
+      assert.equal(who.inv.count("3dose2defense"), 1);
+      assert.equal(credits.length, expected);
+    }
+    assert.deepEqual(credits, ["mix-a-super-defence-potion-in-the-fremennik-prov"]);
+  } finally {
+    hooks.customEvents.clear();
+    for (const [name, handler] of previous) hooks.customEvents.set(name, handler);
+  }
+});

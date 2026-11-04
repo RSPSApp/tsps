@@ -8,6 +8,8 @@ const DATA = require("./data/openable-items.json");
 const PACK_SOUND = 3616;
 const SPOILS_PET_RATE = 400;
 const NO_SPACE = "You don't have enough inventory space.";
+const STACK_NO_SPACE = "You don't have enough inventory space to open that.";
+const MAX_STACK_AMOUNT = 0x7fffffff;
 /** The main island, from dwarfcannon's Entrana area. The law altar and dungeon lie outside it. */
 const ENTRANA = { minX: 2801, maxX: 2880, minY: 3328, maxY: 3392 };
 
@@ -18,10 +20,39 @@ function randomInt(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
-function rewardItem(name, amount, noted) {
+function rewardId(name, noted) {
   const id = core.ItemIdentifiers[name];
   const note = noted ? core.ItemDefinition.forId(id).getNoteId() : -1;
-  return new core.Item(note >= 0 ? note : id, amount);
+  return note >= 0 ? note : id;
+}
+
+function rewardItem(name, amount, noted) {
+  return new core.Item(rewardId(name, noted), amount);
+}
+
+function addStackCeiling(totals, entry, multiplier) {
+  const id = rewardId(entry.item, entry.noted);
+  if (!core.ItemDefinition.forId(id).isStackable()) return;
+  totals.set(id, (totals.get(id) ?? 0) + entry.amount[1] * multiplier);
+}
+
+/** The most of each stackable reward that any set of rolls could merge into a stack. */
+function stackCeilings({ tables }) {
+  const totals = new Map();
+  for (const table of tables) {
+    if (table.rolls === "all") {
+      for (const entry of table.entries) addStackCeiling(totals, entry, 1);
+      continue;
+    }
+    const perItem = new Map();
+    for (const entry of table.entries) {
+      const id = rewardId(entry.item, entry.noted);
+      if (!core.ItemDefinition.forId(id).isStackable()) continue;
+      perItem.set(id, Math.max(perItem.get(id) ?? 0, entry.amount[1]));
+    }
+    for (const [id, amount] of perItem) totals.set(id, (totals.get(id) ?? 0) + amount * table.rolls);
+  }
+  return totals;
 }
 
 /** Every reward fits, each stack taking a new slot unless the inventory already holds it. */
@@ -159,6 +190,13 @@ function openLoot(container, { player, item, itemId, slot }) {
   if (inventory.getFreeSlots() + freed < needed) {
     itemBox(player, itemId, `You don't have enough inventory space to open that. You need at least ${needed} spaces.`);
     return;
+  }
+  // Conservative like the slot check: reject any possible stack overflow before rolls or reward-hook side effects.
+  for (const [id, amount] of stackCeilings(container)) {
+    if (inventory.getAmount(id) + amount > MAX_STACK_AMOUNT) {
+      itemBox(player, itemId, STACK_NO_SPACE);
+      return;
+    }
   }
   takeOne(inventory, slot, item);
   const rolled = container.tables.flatMap(rollTable);

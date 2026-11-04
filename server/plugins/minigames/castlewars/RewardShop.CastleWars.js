@@ -1,7 +1,7 @@
 "use strict";
 
 /** The cache owns the ticket gear, plaudit crate, prices and refunds. Match awards and
- * opening a supply crate are separate content; this unit only owns the saved wallet. */
+ * opening a supply crate are separate content; this unit owns the saved wallet. */
 const SHOP = "cw_shop_data";
 const PLAUDITS_CURRENCY = "omnishop_currency_cw_plaudits";
 const PLAUDITS_ATTRIBUTE = "castlewars:plaudits";
@@ -35,6 +35,14 @@ function currency(request) {
   request.set = (value) => setBalance(request.player, value);
 }
 
+/** TSPS customization (#2065): ordinary members games also earn one plaudit per ticket. */
+function prepareReward(request) {
+  if (!api.core.WorldDefinition.isMembersWorld()) return;
+  const current = balance(request.player);
+  request.allow = Number.isSafeInteger(request.amount) && request.amount > 0 && request.amount <= MAX_PLAUDITS - current;
+  if (request.allow) request.commit = (delivered) => setBalance(request.player, current + delivered);
+}
+
 function canBuy(request) {
   if (request.shop !== SHOP || api.core.WorldDefinition.isMembersWorld()) return;
   if (!api.core.CacheDefinitions.getItem(request.itemId)?.isMembers) return;
@@ -47,6 +55,7 @@ module.exports = function attachRewardShop(pluginApi) {
   pluginApi.persistAttribute(PLAUDITS_ATTRIBUTE, 0);
   pluginApi.onPlayerLogin(sync);
   pluginApi.onCustomEvent("omnishop:currency", currency);
+  pluginApi.onCustomEvent("castlewars:reward-plaudits", prepareReward);
   pluginApi.onCustomEvent("omnishop:can-buy", canBuy);
 };
 

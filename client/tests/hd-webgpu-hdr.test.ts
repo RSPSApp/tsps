@@ -191,3 +191,38 @@ test("WebGPU HD discards obscured fragments after gradients and before texture s
         assert.match(slots.declarations, /detail <= 0.0/);
     }
 });
+
+
+test("WebGPU HD uploads the GPU plugin's fog range", () => {
+    for (const ext of [".jpg", ".png", ".webp", ".glsl"]) {
+        require.extensions[ext] = (module, file) => { module.exports = file; };
+    }
+    (globalThis as any).self = globalThis;
+    (globalThis as any).Image = class { src = ""; };
+    const { createHdWebGPUExtension } = require("../game/plugins/hd/webgpu/HdWebGPU");
+    const { mat4 } = require("gl-matrix");
+    let uploaded = new Float32Array();
+    const device = {
+        createTexture: (descriptor: any) => ({ width: descriptor.size[0], height: descriptor.size[1],
+            mipLevelCount: descriptor.mipLevelCount ?? 1, createView: () => ({}), destroy() {} }),
+        createBuffer: () => ({ destroy() {} }), createSampler: () => ({}),
+        queue: { writeTexture() {}, writeBuffer(_buffer: unknown, _offset: number, data: Float32Array) {
+            uploaded = Float32Array.from(data);
+        } },
+    };
+    const options = { textureFiltering: false, surfaceFog: false };
+    let gpu = { drawDistance: 25, autoFogDepth: false, autoFogDepthFactor: 0.85, fogDepth: 24 };
+    const renderer = {
+        osrsClient: { renderDistance: 25, clientPlugins: { gpuSettings: () => gpu, hdEnabled: () => true },
+            camera: { viewMatrix: mat4.create() } },
+        playerPosUni: [3222, 3218], getPlayerRawPlane: () => 0, getRoofPlaneLimit: () => 3,
+        sampleHeightAtExactPlane: () => -1, mapManager: { mapSquares: new Map(), worldEntityMapIds: new Set() },
+    };
+    const extension = createHdWebGPUExtension(() => true, () => options, { device, textureIdIndexMap: new Map() });
+    extension.prepareActorVisibility(renderer);
+    assert.equal(uploaded[48], 23.75, "manual fog is clamped at one tile before the 24.75 fog end");
+    gpu = { ...gpu, autoFogDepth: true, autoFogDepthFactor: 0 };
+    extension.prepareActorVisibility(renderer);
+    assert.equal(uploaded[48], 0, "dynamic fog start also reaches the HD uniform");
+    extension.dispose();
+});

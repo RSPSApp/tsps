@@ -101,7 +101,7 @@ const renderer = {
     app, gl: { getParameter: () => [0, 0, 640, 480], isEnabled: () => false, clear() {}, drawBuffers() {} },
     autoFogDepth: true, autoFogDepthFactor: 0.85, fogDepth: 24,
     playerPosUni: [0, 0], getFrameRenderDistanceTiles: () => 50, getPlayerRawPlane: () => 0,
-    osrsClient: { camera: { viewMatrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] } },
+    osrsClient: { clientPlugins: { gpuSettings: () => undefined }, camera: { viewMatrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] } },
     mapManager: { visibleMapCount: 0 }, textureIdIndexMap: new Map(),
     sampleHeightAtExactPlane: () => { terrainSamples++; return 0; }, shouldUseDirectTextureScenePass: () => true,
     framebuffer: {}, textureFramebuffer: {},

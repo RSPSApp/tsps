@@ -213,7 +213,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only if you have an elite cryptic clue that requires you to kill an aberrant spectre; in this case, it will drop the next step of the Treasure Trail (or a casket, if this was the last step)."
+          ]
         },
         {
           "item_id": 2722,
@@ -1332,7 +1335,10 @@
           "weight": 1,
           "out_of": 8,
           "rarity": 0.125,
-          "section": "Pouches"
+          "section": "Pouches",
+          "notes": [
+            "Players will only get a pouch if they have all the smaller pouches, and if a player has them all, they will no longer get them as a drop, unless one was lost."
+          ]
         },
         {
           "item_id": 5512,
@@ -1345,7 +1351,10 @@
           "weight": 1,
           "out_of": 8,
           "rarity": 0.125,
-          "section": "Pouches"
+          "section": "Pouches",
+          "notes": [
+            "Players will only get a pouch if they have all the smaller pouches, and if a player has them all, they will no longer get them as a drop, unless one was lost."
+          ]
         },
         {
           "item_id": 5514,
@@ -1358,7 +1367,10 @@
           "weight": 1,
           "out_of": 8,
           "rarity": 0.125,
-          "section": "Pouches"
+          "section": "Pouches",
+          "notes": [
+            "Players will only get a pouch if they have all the smaller pouches, and if a player has them all, they will no longer get them as a drop, unless one was lost."
+          ]
         }
       ],
       "tertiary": [
@@ -1622,7 +1634,10 @@
           "weight": 1,
           "out_of": 42,
           "rarity": 0.0238095,
-          "section": "Pouches"
+          "section": "Pouches",
+          "notes": [
+            "Players will only get a pouch if they have all the smaller pouches, and if a player has them all, they will no longer get them as a drop, unless one was lost."
+          ]
         },
         {
           "item_id": 5512,
@@ -1635,7 +1650,10 @@
           "weight": 1,
           "out_of": 42,
           "rarity": 0.0238095,
-          "section": "Pouches"
+          "section": "Pouches",
+          "notes": [
+            "Players will only get a pouch if they have all the smaller pouches, and if a player has them all, they will no longer get them as a drop, unless one was lost."
+          ]
         },
         {
           "item_id": 5514,
@@ -1648,7 +1666,10 @@
           "weight": 1,
           "out_of": 42,
           "rarity": 0.0238095,
-          "section": "Pouches"
+          "section": "Pouches",
+          "notes": [
+            "Players will only get a pouch if they have all the smaller pouches, and if a player has them all, they will no longer get them as a drop, unless one was lost."
+          ]
         }
       ],
       "tertiary": [
@@ -2394,7 +2415,10 @@
           "weight": 1,
           "out_of": 5,
           "rarity": 0.2,
-          "section": "Pouches"
+          "section": "Pouches",
+          "notes": [
+            "Players will only get a pouch if they have all the smaller pouches, and if a player has them all, they will no longer get them as a drop, unless one was lost."
+          ]
         },
         {
           "item_id": 5512,
@@ -2407,7 +2431,10 @@
           "weight": 1,
           "out_of": 5,
           "rarity": 0.2,
-          "section": "Pouches"
+          "section": "Pouches",
+          "notes": [
+            "Players will only get a pouch if they have all the smaller pouches, and if a player has them all, they will no longer get them as a drop, unless one was lost."
+          ]
         },
         {
           "item_id": 5514,
@@ -2420,7 +2447,10 @@
           "weight": 1,
           "out_of": 5,
           "rarity": 0.2,
-          "section": "Pouches"
+          "section": "Pouches",
+          "notes": [
+            "Players will only get a pouch if they have all the smaller pouches, and if a player has them all, they will no longer get them as a drop, unless one was lost."
+          ]
         }
       ],
       "tertiary": [
@@ -3885,7 +3915,10 @@
           "weight": 1,
           "out_of": 10,
           "rarity": 0.1,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 2722,
@@ -4124,7 +4157,10 @@
           "weight": 2,
           "out_of": 110,
           "rarity": 0.0181818,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Players will receive Rune platebody together with Rune platelegs or Rune plateskirt"
+          ]
         },
         {
           "item_id": 1093,
@@ -4136,7 +4172,10 @@
           "weight": 2,
           "out_of": 110,
           "rarity": 0.0181818,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Players will receive Rune platebody together with Rune platelegs or Rune plateskirt"
+          ]
         },
         {
           "item_id": 4111,
@@ -5663,7 +5702,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Guaranteed elite clue scroll and reward casket drops only occur when completing an elite clue scroll asking you to kill a frost nagua."
+          ]
         },
         {
           "item_id": 29892,
@@ -6827,7 +6869,10 @@
           "weight": 12,
           "out_of": 472,
           "rarity": 0.0254237,
-          "section": "Herbs"
+          "section": "Herbs",
+          "notes": [
+            "Only dropped by ancient zygomites in the Stalker Den."
+          ]
         },
         {
           "item_id": 215,
@@ -6840,7 +6885,10 @@
           "weight": 12,
           "out_of": 472,
           "rarity": 0.0254237,
-          "section": "Herbs"
+          "section": "Herbs",
+          "notes": [
+            "Only dropped by ancient zygomites in the Stalker Den."
+          ]
         },
         {
           "item_id": 2485,
@@ -6853,7 +6901,10 @@
           "weight": 9,
           "out_of": 472,
           "rarity": 0.0190678,
-          "section": "Herbs"
+          "section": "Herbs",
+          "notes": [
+            "Only dropped by ancient zygomites in the Stalker Den."
+          ]
         },
         {
           "item_id": 6034,
@@ -6880,7 +6931,10 @@
           "weight": 16,
           "out_of": 590,
           "rarity": 0.0271186,
-          "section": "Other"
+          "section": "Other",
+          "notes": [
+            "Only dropped by ancient zygomites on Fossil Island."
+          ]
         }
       ],
       "tertiary": [
@@ -8386,7 +8440,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "The elite clue scroll and casket are only dropped when completing an elite cryptic clue asking you to kill an ankou."
+          ]
         },
         {
           "item_id": 11941,
@@ -8783,7 +8840,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "This clue scroll and casket are only dropped when completing a elite cryptic clue asking you to kill an Ankou."
+          ]
         },
         {
           "item_id": 11941,
@@ -9589,7 +9649,10 @@
           "weight": 1,
           "out_of": 600,
           "rarity": 0.0016667,
-          "section": "Unique"
+          "section": "Unique",
+          "notes": [
+            "The rate to receive any halberd piece is 1/200. Players will not receive duplicate pieces until each full set is obtained."
+          ]
         },
         {
           "item_id": 29792,
@@ -9602,7 +9665,10 @@
           "weight": 1,
           "out_of": 600,
           "rarity": 0.0016667,
-          "section": "Unique"
+          "section": "Unique",
+          "notes": [
+            "The rate to receive any halberd piece is 1/200. Players will not receive duplicate pieces until each full set is obtained."
+          ]
         },
         {
           "item_id": 29799,
@@ -10942,7 +11008,10 @@
           "weight": 1,
           "out_of": 540,
           "rarity": 0.0018519,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased while on an armoured kraken bounty task."
+          ]
         },
         {
           "item_id": 32038,
@@ -10955,7 +11024,10 @@
           "weight": 1,
           "out_of": 540,
           "rarity": 0.0018519,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased while on an armoured kraken bounty task."
+          ]
         },
         {
           "item_id": 560,
@@ -11552,7 +11624,10 @@
           "weight": 1,
           "out_of": 500,
           "rarity": 0.002,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased while on an armoured kraken bounty task."
+          ]
         },
         {
           "item_id": 32093,
@@ -11595,7 +11670,10 @@
           "weight": 1,
           "out_of": 10,
           "rarity": 0.1,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 12113,
@@ -13589,7 +13667,10 @@
           "weight": 1,
           "out_of": 1066,
           "rarity": 0.0009381,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped in Ruins of Tapoyauik"
+          ]
         }
       ],
       "brimstone_key_roll": true
@@ -13660,7 +13741,11 @@
           "weight": 1,
           "out_of": 25,
           "rarity": 0.04,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Tattered pages and grubby keys are only dropped by those found in the Forthos Dungeon.",
+            "The drop rate to receive any tattered page is 1/25. When rolled, the player will receive the page they have the fewest of."
+          ]
         },
         {
           "item_id": 23514,
@@ -13672,7 +13757,11 @@
           "weight": 1,
           "out_of": 25,
           "rarity": 0.04,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Tattered pages and grubby keys are only dropped by those found in the Forthos Dungeon.",
+            "The drop rate to receive any tattered page is 1/25. When rolled, the player will receive the page they have the fewest of."
+          ]
         },
         {
           "item_id": 23499,
@@ -13686,7 +13775,8 @@
           "rarity": 0.0125,
           "section": "Tertiary",
           "notes": [
-            "Tattered pages and grubby keys are only dropped by those found in the Forthos Dungeon."
+            "Tattered pages and grubby keys are only dropped by those found in the Forthos Dungeon.",
+            "The drop rate to receive any tattered page is 1/25. When rolled, the player will receive the page they have the fewest of."
           ]
         }
       ],
@@ -17250,7 +17340,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "The elite clue scroll and casket are only dropped when completing an elite cryptic clue asking you to kill a Basilisk."
+          ]
         },
         {
           "item_id": 7899,
@@ -17523,7 +17616,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "The elite clue scroll and casket are only dropped when completing an elite cryptic clue asking you to kill a Basilisk."
+          ]
         },
         {
           "item_id": 7899,
@@ -19960,7 +20056,10 @@
           "weight": 1,
           "out_of": 53,
           "rarity": 0.0188679,
-          "section": "Chasm of Fire tertiary"
+          "section": "Chasm of Fire tertiary",
+          "notes": [
+            "2x more likely to drop when the corresponding sigil is active and the kill condition is met."
+          ]
         },
         {
           "item_id": 30822,
@@ -19972,7 +20071,10 @@
           "weight": 1,
           "out_of": 53,
           "rarity": 0.0188679,
-          "section": "Chasm of Fire tertiary"
+          "section": "Chasm of Fire tertiary",
+          "notes": [
+            "2x more likely to drop when the corresponding sigil is active and the kill condition is met."
+          ]
         },
         {
           "item_id": 30813,
@@ -19984,7 +20086,10 @@
           "weight": 1,
           "out_of": 53,
           "rarity": 0.0188679,
-          "section": "Chasm of Fire tertiary"
+          "section": "Chasm of Fire tertiary",
+          "notes": [
+            "2x more likely to drop when the corresponding sigil is active and the kill condition is met."
+          ]
         }
       ],
       "brimstone_key_roll": true
@@ -28577,7 +28682,10 @@
           "weight": 100,
           "out_of": 36072,
           "rarity": 0.0027722,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The order players receive the items in are: Hydra's eye, Hydra's fang, and finally Hydra's heart."
+          ]
         },
         {
           "item_id": 22971,
@@ -28590,7 +28698,10 @@
           "weight": 100,
           "out_of": 36072,
           "rarity": 0.0027722,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The order players receive the items in are: Hydra's eye, Hydra's fang, and finally Hydra's heart."
+          ]
         },
         {
           "item_id": 377,
@@ -36665,7 +36776,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "The elite clue scroll and casket are only dropped when completing an elite clue scroll asking you to kill a bloodveld"
+          ]
         },
         {
           "item_id": 11941,
@@ -37062,7 +37176,10 @@
           "weight": 1,
           "out_of": 636,
           "rarity": 0.0015723,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped in Ruins of Tapoyauik"
+          ]
         },
         {
           "item_id": 2722,
@@ -37814,7 +37931,10 @@
           "weight": 1,
           "out_of": 512,
           "rarity": 0.0019531,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_fremenniktrials, mode=RequiresCompleted)"
+          ]
         },
         {
           "item_id": 3748,
@@ -37826,7 +37946,10 @@
           "weight": 1,
           "out_of": 512,
           "rarity": 0.0019531,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_fremenniktrials, mode=RequiresCompleted)"
+          ]
         },
         {
           "item_id": 436,
@@ -39697,7 +39820,10 @@
           "weight": 1,
           "out_of": 2048,
           "rarity": 0.0004883,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is 1/2,048 for a specific dragon legging, or 1/1,024 for any dragon legging."
+          ]
         },
         {
           "item_id": 816,
@@ -40157,7 +40283,10 @@
           "weight": 10,
           "out_of": 139,
           "rarity": 0.0719424,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Players who have not completed Barbarian training will receive the spear instead of the hasta."
+          ]
         },
         {
           "item_id": 1079,
@@ -40675,7 +40804,10 @@
           "weight": 10,
           "out_of": 140,
           "rarity": 0.0714286,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Players who have not completed Barbarian training will receive the spear instead of the hasta."
+          ]
         },
         {
           "item_id": 1073,
@@ -41485,7 +41617,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Elite clue scrolls and reward caskets are only dropped when completing an elite clue scroll asking you to kill a green dragon."
+          ]
         },
         {
           "item_id": 13511,
@@ -41572,7 +41707,10 @@
           "weight": 10,
           "out_of": 139,
           "rarity": 0.0719424,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Players who have not completed Barbarian training will receive the spear instead of the hasta."
+          ]
         },
         {
           "item_id": 1073,
@@ -43302,7 +43440,10 @@
           "weight": 1,
           "out_of": 10,
           "rarity": 0.1,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 2801,
@@ -43610,7 +43751,10 @@
           "weight": 1,
           "out_of": 2,
           "rarity": 0.5,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 2801,
@@ -45980,7 +46124,10 @@
           "weight": 1,
           "out_of": 1024,
           "rarity": 0.0009766,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped by those found in the Ruins of Tapoyauik."
+          ]
         }
       ]
     },
@@ -48170,7 +48317,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Elite clue scrolls and reward caskets are only dropped when completing an elite clue scroll asking you to kill a hellhound."
+          ]
         },
         {
           "item_id": 13245,
@@ -49619,7 +49769,10 @@
           "weight": 1,
           "out_of": 256,
           "rarity": 0.0039062,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is 1/256 for a specific shard, or 1/128 for any shard."
+          ]
         },
         {
           "item_id": 1391,
@@ -49881,7 +50034,10 @@
           "out_of": 133,
           "rarity": 0.037594,
           "section": "Other",
-          "noted": true
+          "noted": true,
+          "notes": [
+            "6 uncut emeralds are dropped alongside 4 uncut sapphires."
+          ]
         },
         {
           "item_id": 993,
@@ -50765,7 +50921,10 @@
           "out_of": 128,
           "rarity": 0.0078125,
           "section": "Tertiary",
-          "assumed_rarity": true
+          "assumed_rarity": true,
+          "notes": [
+            "Only dropped in Ruins of Tapoyauik."
+          ]
         },
         {
           "item_id": 2722,
@@ -52305,7 +52464,10 @@
           "weight": 100,
           "out_of": 36072,
           "rarity": 0.0027722,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The order players receive the items in are: Hydra's eye, Hydra's fang, and finally Hydra's heart."
+          ]
         },
         {
           "item_id": 22969,
@@ -52318,7 +52480,10 @@
           "weight": 100,
           "out_of": 36072,
           "rarity": 0.0027722,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The order players receive the items in are: Hydra's eye, Hydra's fang, and finally Hydra's heart."
+          ]
         },
         {
           "item_id": 2497,
@@ -52896,7 +53061,10 @@
           "out_of": 1524,
           "rarity": 0.0013123,
           "section": "Uniques",
-          "published_rarity": "1/762"
+          "published_rarity": "1/762",
+          "notes": [
+            "The drop rate is 1/762 for a specific Godsword Shard piece, or 1/254 for any piece."
+          ]
         },
         {
           "item_id": 11822,
@@ -52909,7 +53077,10 @@
           "out_of": 1524,
           "rarity": 0.0013123,
           "section": "Uniques",
-          "published_rarity": "1/762"
+          "published_rarity": "1/762",
+          "notes": [
+            "The drop rate is 1/762 for a specific Godsword Shard piece, or 1/254 for any piece."
+          ]
         },
         {
           "item_id": 1123,
@@ -55067,7 +55238,10 @@
           "weight": 1,
           "out_of": 256,
           "rarity": 0.0039062,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is 1/256 for a specific shard, or 1/128 for any shard."
+          ]
         },
         {
           "item_id": 1731,
@@ -55280,7 +55454,10 @@
           "out_of": 132,
           "rarity": 0.0378788,
           "section": "Other",
-          "noted": true
+          "noted": true,
+          "notes": [
+            "6 uncut emeralds are dropped along with 4 uncut sapphires."
+          ]
         },
         {
           "item_id": 1749,
@@ -55476,7 +55653,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Elite clue scrolls and reward caskets are only dropped when completing an elite clue scroll asking you to kill a crocodile."
+          ]
         }
       ]
     },
@@ -65026,7 +65206,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "The clue scroll and casket are only dropped when completing an elite clue scroll asking you to kill an aberrant spectre."
+          ]
         },
         {
           "item_id": 4103,
@@ -66414,7 +66597,10 @@
           "weight": 1,
           "out_of": 2560,
           "rarity": 0.0003906,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased to 1/512 while on a drake Slayer task."
+          ]
         },
         {
           "item_id": 1163,
@@ -66799,7 +66985,10 @@
           "weight": 1,
           "out_of": 10000,
           "rarity": 0.0001,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased to 1/2,000 while on a drake Slayer task."
+          ]
         }
       ],
       "tertiary": [
@@ -69962,7 +70151,10 @@
           "weight": 1,
           "out_of": 2,
           "rarity": 0.5,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 2677,
@@ -70613,7 +70805,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Elite clue scrolls and reward caskets are only dropped when completing an elite clue scroll asking you to kill an earthen nagua."
+          ]
         },
         {
           "item_id": 30957,
@@ -73450,7 +73645,10 @@
           "out_of": 128,
           "rarity": 0.0078125,
           "section": "Unique",
-          "assumed_rarity": true
+          "assumed_rarity": true,
+          "notes": [
+            "Guaranteed to get an unobtained piece of elite black knight armour on each kill, unknown rarity afterwards (Note: it seems common - approximately 1 in 4)."
+          ]
         },
         {
           "item_id": 29564,
@@ -73464,7 +73662,10 @@
           "out_of": 128,
           "rarity": 0.0078125,
           "section": "Unique",
-          "assumed_rarity": true
+          "assumed_rarity": true,
+          "notes": [
+            "Guaranteed to get an unobtained piece of elite black knight armour on each kill, unknown rarity afterwards (Note: it seems common - approximately 1 in 4)."
+          ]
         }
       ],
       "tertiary": [
@@ -76718,7 +76919,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "The elite clue scroll and elite casket are only dropped when completing an elite clue scroll asking you to kill a ferocious barbarian spirit."
+          ]
         }
       ]
     },
@@ -79074,7 +79278,10 @@
           "weight": 1,
           "out_of": 512,
           "rarity": 0.0019531,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_fremenniktrials, mode=RequiresCompleted)"
+          ]
         },
         {
           "item_id": 3748,
@@ -79086,7 +79293,10 @@
           "weight": 1,
           "out_of": 512,
           "rarity": 0.0019531,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_fremenniktrials, mode=RequiresCompleted)"
+          ]
         },
         {
           "item_id": 436,
@@ -79742,7 +79952,10 @@
           "weight": 1,
           "out_of": 10,
           "rarity": 0.1,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 2722,
@@ -80814,7 +81027,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Elite clue scrolls and reward caskets are only dropped when completing an elite clue scroll asking you to kill a frost nagua."
+          ]
         },
         {
           "item_id": 29895,
@@ -82307,7 +82523,10 @@
           "out_of": 1524,
           "rarity": 0.0026247,
           "section": "Uniques",
-          "published_rarity": "1/381"
+          "published_rarity": "1/381",
+          "notes": [
+            "The drop rate is 1/381 for a specific Bandos armour piece, or 1/127 for any piece."
+          ]
         },
         {
           "item_id": 11836,
@@ -82320,7 +82539,10 @@
           "out_of": 1524,
           "rarity": 0.0026247,
           "section": "Uniques",
-          "published_rarity": "1/381"
+          "published_rarity": "1/381",
+          "notes": [
+            "The drop rate is 1/381 for a specific Bandos armour piece, or 1/127 for any piece."
+          ]
         },
         {
           "item_id": 11812,
@@ -82362,7 +82584,10 @@
           "out_of": 1524,
           "rarity": 0.0013123,
           "section": "Uniques",
-          "published_rarity": "1/762"
+          "published_rarity": "1/762",
+          "notes": [
+            "The drop rate is 1/762 for a specific Godsword Shard piece, or 1/254 for any piece."
+          ]
         },
         {
           "item_id": 11822,
@@ -82375,7 +82600,10 @@
           "out_of": 1524,
           "rarity": 0.0013123,
           "section": "Uniques",
-          "published_rarity": "1/762"
+          "published_rarity": "1/762",
+          "notes": [
+            "The drop rate is 1/762 for a specific Godsword Shard piece, or 1/254 for any piece."
+          ]
         },
         {
           "item_id": 1303,
@@ -89039,7 +89267,10 @@
           "weight": 4,
           "out_of": 720,
           "rarity": 0.0055556,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased while on a great white shark bounty task."
+          ]
         },
         {
           "item_id": 32017,
@@ -89052,7 +89283,10 @@
           "weight": 1,
           "out_of": 720,
           "rarity": 0.0013889,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased while on a great white shark bounty task."
+          ]
         },
         {
           "item_id": 32038,
@@ -89065,7 +89299,10 @@
           "weight": 1,
           "out_of": 720,
           "rarity": 0.0013889,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased while on a great white shark bounty task."
+          ]
         },
         {
           "item_id": 31914,
@@ -89334,7 +89571,10 @@
           "weight": 1,
           "out_of": 10,
           "rarity": 0.1,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 12113,
@@ -90333,7 +90573,10 @@
           "weight": 1,
           "out_of": 81,
           "rarity": 0.0123457,
-          "section": "Chasm of Fire tertiary"
+          "section": "Chasm of Fire tertiary",
+          "notes": [
+            "2x more likely to drop when the corresponding sigil is active and the kill condition is met."
+          ]
         },
         {
           "item_id": 30822,
@@ -90345,7 +90588,10 @@
           "weight": 1,
           "out_of": 81,
           "rarity": 0.0123457,
-          "section": "Chasm of Fire tertiary"
+          "section": "Chasm of Fire tertiary",
+          "notes": [
+            "2x more likely to drop when the corresponding sigil is active and the kill condition is met."
+          ]
         },
         {
           "item_id": 30813,
@@ -90357,7 +90603,10 @@
           "weight": 1,
           "out_of": 81,
           "rarity": 0.0123457,
-          "section": "Chasm of Fire tertiary"
+          "section": "Chasm of Fire tertiary",
+          "notes": [
+            "2x more likely to drop when the corresponding sigil is active and the kill condition is met."
+          ]
         }
       ],
       "brimstone_key_roll": true
@@ -91331,7 +91580,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "The elite clue scroll and casket are only dropped when completing an elite cryptic clue asking you to kill a green dragon."
+          ]
         },
         {
           "item_id": 11941,
@@ -91666,7 +91918,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "The elite clue scroll and casket are only dropped when completing an elite cryptic clue asking you to kill a green dragon."
+          ]
         },
         {
           "item_id": 11941,
@@ -98229,7 +98484,10 @@
           "weight": 1,
           "out_of": 10,
           "rarity": 0.1,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 2801,
@@ -98989,7 +99247,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Elite clue scrolls and reward caskets are only dropped when completing an elite clue scroll asking you to kill a hellhound."
+          ]
         },
         {
           "item_id": 11941,
@@ -99147,7 +99408,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Elite clue scrolls and reward caskets are only dropped when completing an elite clue scroll asking you to kill a hellhound."
+          ]
         },
         {
           "item_id": 11941,
@@ -100166,7 +100430,10 @@
           "weight": 2,
           "out_of": 134,
           "rarity": 0.0149254,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Only dropped by giants on the Giants' Plateau."
+          ]
         },
         {
           "item_id": 1295,
@@ -100178,7 +100445,10 @@
           "weight": 2,
           "out_of": 134,
           "rarity": 0.0149254,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Only dropped by giants not on the Giants' Plateau."
+          ]
         },
         {
           "item_id": 884,
@@ -100794,7 +101064,10 @@
           "weight": 12,
           "out_of": 180,
           "rarity": 0.0666667,
-          "section": "Other"
+          "section": "Other",
+          "notes": [
+            "Only dropped by Hobgoblins on Karamja, in place of the regular coin drops."
+          ]
         },
         {
           "item_id": 6306,
@@ -100806,7 +101079,10 @@
           "weight": 16,
           "out_of": 180,
           "rarity": 0.0888889,
-          "section": "Other"
+          "section": "Other",
+          "notes": [
+            "Only dropped by Hobgoblins on Karamja, in place of the regular coin drops."
+          ]
         },
         {
           "item_id": 6306,
@@ -100818,7 +101094,10 @@
           "weight": 16,
           "out_of": 180,
           "rarity": 0.0888889,
-          "section": "Other"
+          "section": "Other",
+          "notes": [
+            "Only dropped by Hobgoblins on Karamja, in place of the regular coin drops."
+          ]
         },
         {
           "item_id": 6306,
@@ -100830,7 +101109,10 @@
           "weight": 3,
           "out_of": 180,
           "rarity": 0.0166667,
-          "section": "Other"
+          "section": "Other",
+          "notes": [
+            "Only dropped by Hobgoblins on Karamja, in place of the regular coin drops."
+          ]
         },
         {
           "item_id": 6306,
@@ -100842,7 +101124,10 @@
           "weight": 4,
           "out_of": 180,
           "rarity": 0.0222222,
-          "section": "Other"
+          "section": "Other",
+          "notes": [
+            "Only dropped by Hobgoblins on Karamja, in place of the regular coin drops."
+          ]
         },
         {
           "item_id": 225,
@@ -101368,7 +101653,11 @@
           "weight": 100,
           "out_of": 180072,
           "rarity": 0.0005553,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The order players receive the items in are: Hydra's eye, Hydra's fang, and finally Hydra's heart.",
+            "All pre-roll item drop rates increase while on a hydra Slayer task."
+          ]
         },
         {
           "item_id": 22969,
@@ -101381,7 +101670,11 @@
           "weight": 100,
           "out_of": 180072,
           "rarity": 0.0005553,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The order players receive the items in are: Hydra's eye, Hydra's fang, and finally Hydra's heart.",
+            "All pre-roll item drop rates increase while on a hydra Slayer task."
+          ]
         },
         {
           "item_id": 2497,
@@ -101780,7 +102073,10 @@
           "weight": 1,
           "out_of": 5001,
           "rarity": 0.0002,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "All pre-roll item drop rates increase while on a hydra Slayer task."
+          ]
         },
         {
           "item_id": 20849,
@@ -101794,7 +102090,10 @@
           "weight": 1,
           "out_of": 10000,
           "rarity": 0.0001,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "All pre-roll item drop rates increase while on a hydra Slayer task."
+          ]
         },
         {
           "item_id": 22804,
@@ -101808,7 +102107,10 @@
           "weight": 1,
           "out_of": 10001,
           "rarity": 0.0001,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "All pre-roll item drop rates increase while on a hydra Slayer task."
+          ]
         }
       ],
       "tertiary": [
@@ -102587,7 +102889,10 @@
           "weight": 1,
           "out_of": 1026,
           "rarity": 0.0009747,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped in the Ruins of Tapoyauik."
+          ]
         },
         {
           "item_id": 23182,
@@ -102659,7 +102964,10 @@
           "weight": 1,
           "out_of": 964,
           "rarity": 0.0010373,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped in Ruins of Tapoyauik."
+          ]
         },
         {
           "item_id": 23182,
@@ -104895,7 +105203,10 @@
           "weight": 1,
           "out_of": 994,
           "rarity": 0.001006,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped in Ruins of Tapoyauik"
+          ]
         }
       ]
     },
@@ -105029,7 +105340,10 @@
           "weight": 1,
           "out_of": 1373,
           "rarity": 0.0007283,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped in Ruins of Tapoyauik"
+          ]
         },
         {
           "item_id": 29895,
@@ -108659,7 +108973,10 @@
           "weight": 1,
           "out_of": 1024,
           "rarity": 0.0009766,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is 1/1,024 for a specific legging, or 1/512 for any leggings."
+          ]
         },
         {
           "item_id": 817,
@@ -109880,7 +110197,10 @@
           "weight": 1,
           "out_of": 512,
           "rarity": 0.0019531,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_fremenniktrials, mode=RequiresCompleted)"
+          ]
         },
         {
           "item_id": 3748,
@@ -109892,7 +110212,10 @@
           "weight": 1,
           "out_of": 512,
           "rarity": 0.0019531,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_fremenniktrials, mode=RequiresCompleted)"
+          ]
         },
         {
           "item_id": 436,
@@ -110348,7 +110671,10 @@
           "weight": 3,
           "out_of": 134,
           "rarity": 0.0223881,
-          "section": "Other"
+          "section": "Other",
+          "notes": [
+            "Players will receive one set of bones together with an extra drop of regular big bones."
+          ]
         },
         {
           "item_id": 532,
@@ -110375,7 +110701,10 @@
           "weight": 2,
           "out_of": 134,
           "rarity": 0.0149254,
-          "section": "Other"
+          "section": "Other",
+          "notes": [
+            "Players will receive three sets of big bones together with an extra drop of bones."
+          ]
         },
         {
           "nothing": true,
@@ -115776,7 +116105,10 @@
           "out_of": 1524,
           "rarity": 0.0026247,
           "section": "Uniques",
-          "published_rarity": "1/381"
+          "published_rarity": "1/381",
+          "notes": [
+            "The drop rate is 1/381 for a specific Armadyl armour piece, or 1/127 for any piece."
+          ]
         },
         {
           "item_id": 11830,
@@ -115789,7 +116121,10 @@
           "out_of": 1524,
           "rarity": 0.0026247,
           "section": "Uniques",
-          "published_rarity": "1/381"
+          "published_rarity": "1/381",
+          "notes": [
+            "The drop rate is 1/381 for a specific Armadyl armour piece, or 1/127 for any piece."
+          ]
         },
         {
           "item_id": 11810,
@@ -115831,7 +116166,10 @@
           "out_of": 1524,
           "rarity": 0.0013123,
           "section": "Uniques",
-          "published_rarity": "1/762"
+          "published_rarity": "1/762",
+          "notes": [
+            "The drop rate is 1/762 for a specific Godsword Shard piece, or 1/254 for any piece."
+          ]
         },
         {
           "item_id": 11822,
@@ -115844,7 +116182,10 @@
           "out_of": 1524,
           "rarity": 0.0013123,
           "section": "Uniques",
-          "published_rarity": "1/762"
+          "published_rarity": "1/762",
+          "notes": [
+            "The drop rate is 1/762 for a specific Godsword Shard piece, or 1/254 for any piece."
+          ]
         },
         {
           "item_id": 2503,
@@ -116219,7 +116560,10 @@
           "out_of": 1524,
           "rarity": 0.0013123,
           "section": "Uniques",
-          "published_rarity": "1/762"
+          "published_rarity": "1/762",
+          "notes": [
+            "The drop rate is 1/762 for a specific Godsword Shard piece, or 1/254 for any piece."
+          ]
         },
         {
           "item_id": 11822,
@@ -116232,7 +116576,10 @@
           "out_of": 1524,
           "rarity": 0.0013123,
           "section": "Uniques",
-          "published_rarity": "1/762"
+          "published_rarity": "1/762",
+          "notes": [
+            "The drop rate is 1/762 for a specific Godsword Shard piece, or 1/254 for any piece."
+          ]
         },
         {
           "item_id": 5626,
@@ -117255,7 +117602,10 @@
           "weight": 1,
           "out_of": 512,
           "rarity": 0.0019531,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_fremenniktrials, mode=RequiresCompleted)"
+          ]
         },
         {
           "item_id": 3748,
@@ -117267,7 +117617,10 @@
           "weight": 1,
           "out_of": 512,
           "rarity": 0.0019531,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_fremenniktrials, mode=RequiresCompleted)"
+          ]
         },
         {
           "item_id": 436,
@@ -118583,7 +118936,10 @@
           "weight": 1,
           "out_of": 512,
           "rarity": 0.0019531,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_fremenniktrials, mode=RequiresCompleted)"
+          ]
         },
         {
           "item_id": 3748,
@@ -118595,7 +118951,10 @@
           "weight": 1,
           "out_of": 512,
           "rarity": 0.0019531,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_fremenniktrials, mode=RequiresCompleted)"
+          ]
         },
         {
           "item_id": 436,
@@ -119451,7 +119810,10 @@
           "weight": 1,
           "out_of": 123,
           "rarity": 0.0081301,
-          "section": "Chasm of Fire tertiary"
+          "section": "Chasm of Fire tertiary",
+          "notes": [
+            "2x more likely to drop when the corresponding sigil is active and the kill condition is met."
+          ]
         },
         {
           "item_id": 30822,
@@ -119463,7 +119825,10 @@
           "weight": 1,
           "out_of": 123,
           "rarity": 0.0081301,
-          "section": "Chasm of Fire tertiary"
+          "section": "Chasm of Fire tertiary",
+          "notes": [
+            "2x more likely to drop when the corresponding sigil is active and the kill condition is met."
+          ]
         },
         {
           "item_id": 30813,
@@ -119475,7 +119840,10 @@
           "weight": 1,
           "out_of": 123,
           "rarity": 0.0081301,
-          "section": "Chasm of Fire tertiary"
+          "section": "Chasm of Fire tertiary",
+          "notes": [
+            "2x more likely to drop when the corresponding sigil is active and the kill condition is met."
+          ]
         }
       ]
     },
@@ -126717,7 +127085,10 @@
           "weight": 1,
           "out_of": 128,
           "rarity": 0.0078125,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_fremenniktrials, mode=RequiresCompleted)"
+          ]
         },
         {
           "item_id": 3758,
@@ -126729,7 +127100,10 @@
           "weight": 1,
           "out_of": 128,
           "rarity": 0.0078125,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_fremenniktrials, mode=RequiresCompleted)"
+          ]
         },
         {
           "item_id": 995,
@@ -129083,7 +129457,10 @@
           "weight": 1,
           "out_of": 10,
           "rarity": 0.1,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         }
       ]
     },
@@ -131679,7 +132056,10 @@
           ],
           "always": true,
           "rarity_raw": "Always",
-          "section": "100%"
+          "section": "100%",
+          "notes": [
+            "The mourner pieces and mourner letters are only dropped by the mourners inside the Mourner Headquarters."
+          ]
         },
         {
           "item_id": 6064,
@@ -131692,6 +132072,7 @@
           "rarity_raw": "Always",
           "section": "100%",
           "notes": [
+            "The mourner pieces and mourner letters are only dropped by the mourners inside the Mourner Headquarters.",
             "Quest requirement: WikiQuestDropRequirement(questKey=quest_mourningsendparti, mode=RequiresDuring)"
           ]
         },
@@ -131715,7 +132096,10 @@
           ],
           "always": true,
           "rarity_raw": "Always",
-          "section": "100%"
+          "section": "100%",
+          "notes": [
+            "The mourner pieces and mourner letters are only dropped by the mourners inside the Mourner Headquarters."
+          ]
         },
         {
           "item_id": 1506,
@@ -131726,7 +132110,10 @@
           ],
           "always": true,
           "rarity_raw": "Always",
-          "section": "100%"
+          "section": "100%",
+          "notes": [
+            "The mourner pieces and mourner letters are only dropped by the mourners inside the Mourner Headquarters."
+          ]
         },
         {
           "item_id": 6067,
@@ -131748,7 +132135,11 @@
           ],
           "always": true,
           "rarity_raw": "Always",
-          "section": "100%"
+          "section": "100%",
+          "notes": [
+            "The mourner pieces and mourner letters are only dropped by the mourners inside the Mourner Headquarters.",
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_mourningsendparti, mode=RequiresDuring)"
+          ]
         },
         {
           "item_id": 1099,
@@ -132041,7 +132432,10 @@
           ],
           "always": true,
           "rarity_raw": "Always",
-          "section": "100%"
+          "section": "100%",
+          "notes": [
+            "The mourner pieces and mourner letters are only dropped by the mourner's near the gates of Arandar."
+          ]
         },
         {
           "item_id": 6064,
@@ -132054,6 +132448,7 @@
           "rarity_raw": "Always",
           "section": "100%",
           "notes": [
+            "The mourner pieces and mourner letters are only dropped by the mourner's near the gates of Arandar.",
             "Quest requirement: WikiQuestDropRequirement(questKey=quest_mourningsendparti, mode=RequiresDuring)"
           ]
         },
@@ -132066,7 +132461,10 @@
           ],
           "always": true,
           "rarity_raw": "Always",
-          "section": "100%"
+          "section": "100%",
+          "notes": [
+            "The mourner pieces and mourner letters are only dropped by the mourner's near the gates of Arandar."
+          ]
         },
         {
           "item_id": 1506,
@@ -132077,7 +132475,10 @@
           ],
           "always": true,
           "rarity_raw": "Always",
-          "section": "100%"
+          "section": "100%",
+          "notes": [
+            "The mourner pieces and mourner letters are only dropped by the mourner's near the gates of Arandar."
+          ]
         },
         {
           "item_id": 6066,
@@ -132102,7 +132503,11 @@
           ],
           "always": true,
           "rarity_raw": "Always",
-          "section": "100%"
+          "section": "100%",
+          "notes": [
+            "The mourner pieces and mourner letters are only dropped by the mourner's near the gates of Arandar.",
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_mourningsendparti, mode=RequiresDuring)"
+          ]
         }
       ],
       "tertiary": []
@@ -133156,7 +133561,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "The elite clue scroll and casket are only dropped when completing an elite clue scroll asking you to kill a Bloodveld"
+          ]
         },
         {
           "item_id": 13496,
@@ -133903,7 +134311,10 @@
           ],
           "always": true,
           "rarity_raw": "Always",
-          "section": "100%"
+          "section": "100%",
+          "notes": [
+            "Only dropped by the larger muttadile."
+          ]
         },
         {
           "item_id": 20910,
@@ -134586,7 +134997,10 @@
           "weight": 1,
           "out_of": 10,
           "rarity": 0.1,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 2722,
@@ -140508,7 +140922,10 @@
           "weight": 2,
           "out_of": 400,
           "rarity": 0.005,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased while on an orca bounty task."
+          ]
         },
         {
           "item_id": 32017,
@@ -140521,7 +140938,10 @@
           "weight": 1,
           "out_of": 400,
           "rarity": 0.0025,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased while on an orca bounty task."
+          ]
         },
         {
           "item_id": 32038,
@@ -140534,7 +140954,10 @@
           "weight": 1,
           "out_of": 400,
           "rarity": 0.0025,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased while on an orca bounty task."
+          ]
         },
         {
           "item_id": 892,
@@ -140867,7 +141290,10 @@
           "weight": 1,
           "out_of": 10,
           "rarity": 0.1,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 12113,
@@ -141551,7 +141977,10 @@
           "weight": 1,
           "out_of": 10,
           "rarity": 0.1,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 2801,
@@ -145641,7 +146070,10 @@
           "weight": 1,
           "out_of": 10,
           "rarity": 0.1,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 2801,
@@ -147039,7 +147471,11 @@
           "weight": 1,
           "out_of": 10,
           "rarity": 0.1,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Tattered pages and grubby keys are only dropped by those found in the Forthos Dungeon.",
+            "The drop rate to receive any tattered page is 1/10. When rolled, the player will receive the page they have the fewest of."
+          ]
         },
         {
           "item_id": 23514,
@@ -147051,7 +147487,11 @@
           "weight": 1,
           "out_of": 10,
           "rarity": 0.1,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Tattered pages and grubby keys are only dropped by those found in the Forthos Dungeon.",
+            "The drop rate to receive any tattered page is 1/10. When rolled, the player will receive the page they have the fewest of."
+          ]
         },
         {
           "item_id": 13511,
@@ -147868,7 +148308,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Elite clue scrolls or elite caskets are only dropped when completing an elite cryptic clue asking the player to kill a Rock Crab."
+          ]
         },
         {
           "item_id": 2677,
@@ -151051,7 +151494,10 @@
           "weight": 1,
           "out_of": 5,
           "rarity": 0.2,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "The drop rate to receive any page is 1/5. When rolled, the player will receive the page they have the fewest of."
+          ]
         },
         {
           "item_id": 23514,
@@ -151063,7 +151509,10 @@
           "weight": 1,
           "out_of": 5,
           "rarity": 0.2,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "The drop rate to receive any page is 1/5. When rolled, the player will receive the page they have the fewest of."
+          ]
         },
         {
           "item_id": 23517,
@@ -151989,7 +152438,10 @@
           "weight": 2,
           "out_of": 18,
           "rarity": 0.1111111,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "Whenever any secondary ingredient is rolled, cicely, endarkened juice, and stinkhorn mushrooms are dropped together."
+          ]
         },
         {
           "item_id": 20912,
@@ -152001,7 +152453,10 @@
           "weight": 2,
           "out_of": 18,
           "rarity": 0.1111111,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "Whenever any secondary ingredient is rolled, cicely, endarkened juice, and stinkhorn mushrooms are dropped together."
+          ]
         },
         {
           "item_id": 21036,
@@ -152072,7 +152527,10 @@
           "weight": 1,
           "out_of": 256,
           "rarity": 0.0039062,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is 1/256 for a specific shard, or 1/128 for any shard."
+          ]
         },
         {
           "item_id": 1391,
@@ -156841,7 +157299,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Guaranteed elite clue scroll and reward casket drops only occur when completing an elite clue scroll asking you to kill the Shellbane gryphon."
+          ]
         },
         {
           "item_id": 10976,
@@ -162611,7 +163072,10 @@
           "out_of": 8,
           "rarity": 0.125,
           "section": "Coins",
-          "assumed_rarity": true
+          "assumed_rarity": true,
+          "notes": [
+            "Dropped by all except for the one with a round shield."
+          ]
         },
         {
           "item_id": 995,
@@ -162624,7 +163088,10 @@
           "out_of": 8,
           "rarity": 0.125,
           "section": "Coins",
-          "assumed_rarity": true
+          "assumed_rarity": true,
+          "notes": [
+            "Dropped by all except for the one with a round shield."
+          ]
         }
       ],
       "tertiary": [
@@ -166207,7 +166674,10 @@
           "weight": 3,
           "out_of": 128,
           "rarity": 0.0234375,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "There is a 4/128 to roll the dark totem sub-table, then a 1/4 chance to receive a complete dark totem and a 3/4 chance to receive a totem piece that the player has the least of. In the case of a tie, they are rewarded in the order of base > middle > top."
+          ]
         },
         {
           "item_id": 19683,
@@ -166219,7 +166689,10 @@
           "weight": 3,
           "out_of": 128,
           "rarity": 0.0234375,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "There is a 4/128 to roll the dark totem sub-table, then a 1/4 chance to receive a complete dark totem and a 3/4 chance to receive a totem piece that the player has the least of. In the case of a tie, they are rewarded in the order of base > middle > top."
+          ]
         },
         {
           "item_id": 19685,
@@ -166231,7 +166704,10 @@
           "weight": 1,
           "out_of": 128,
           "rarity": 0.0078125,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "There is a 4/128 to roll the dark totem sub-table, then a 1/4 chance to receive a complete dark totem and a 3/4 chance to receive a totem piece that the player has the least of. In the case of a tie, they are rewarded in the order of base > middle > top."
+          ]
         },
         {
           "item_id": 19701,
@@ -166334,7 +166810,10 @@
           ],
           "always": true,
           "rarity_raw": "Always",
-          "section": "100%"
+          "section": "100%",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_onesmallfavour, mode=RequiresDuring)"
+          ]
         },
         {
           "item_id": 1619,
@@ -166345,7 +166824,10 @@
           ],
           "always": true,
           "rarity_raw": "Always",
-          "section": "100%"
+          "section": "100%",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_onesmallfavour, mode=RequiresDuring)"
+          ]
         }
       ],
       "tertiary": []
@@ -169006,7 +169488,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_greatbrainrobbery, mode=RequiresDuring)"
+          ]
         },
         {
           "item_id": 10895,
@@ -169018,7 +169503,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_greatbrainrobbery, mode=RequiresDuring)"
+          ]
         },
         {
           "item_id": 10904,
@@ -169030,7 +169518,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_greatbrainrobbery, mode=RequiresDuring)"
+          ]
         },
         {
           "item_id": 7863,
@@ -170823,7 +171314,10 @@
           "weight": 1,
           "out_of": 2,
           "rarity": 0.5,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 2722,
@@ -171171,7 +171665,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Master clue scrolls and reward caskets are only dropped when completing a master clue scroll asking you to kill a spiritual mage."
+          ]
         },
         {
           "item_id": 11941,
@@ -172802,7 +173299,10 @@
           "weight": 1,
           "out_of": 512,
           "rarity": 0.0019531,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is 1/512 for a specific legging, or 1/256 for any legging."
+          ]
         },
         {
           "item_id": 817,
@@ -174122,7 +174622,10 @@
           "weight": 1,
           "out_of": 2,
           "rarity": 0.5,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 2722,
@@ -176951,7 +177454,10 @@
           "weight": 1,
           "out_of": 30,
           "rarity": 0.0333333,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "The drop rate to receive any page is 1/30. When rolled, the player will receive the page they have the fewest of."
+          ]
         },
         {
           "item_id": 23514,
@@ -176963,7 +177469,10 @@
           "weight": 1,
           "out_of": 30,
           "rarity": 0.0333333,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "The drop rate to receive any page is 1/30. When rolled, the player will receive the page they have the fewest of."
+          ]
         },
         {
           "item_id": 23499,
@@ -177256,7 +177765,10 @@
           "weight": 1,
           "out_of": 10,
           "rarity": 0.1,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 2677,
@@ -183131,7 +183643,10 @@
           "weight": 1,
           "out_of": 2,
           "rarity": 0.5,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 2722,
@@ -187865,7 +188380,10 @@
           "weight": 8,
           "out_of": 2048,
           "rarity": 0.0039062,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "The drop rate is increased while wearing a ring of wealth due to some \"nothing\" drops being removed."
+          ]
         },
         {
           "item_id": 1619,
@@ -187878,7 +188396,10 @@
           "weight": 4,
           "out_of": 2048,
           "rarity": 0.0019531,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "The drop rate is increased while wearing a ring of wealth due to some \"nothing\" drops being removed."
+          ]
         },
         {
           "item_id": 1617,
@@ -187891,7 +188412,10 @@
           "weight": 1,
           "out_of": 2048,
           "rarity": 0.0004883,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "The drop rate is increased while wearing a ring of wealth due to some \"nothing\" drops being removed."
+          ]
         },
         {
           "nothing": true,
@@ -187969,7 +188493,10 @@
           "weight": 8,
           "out_of": 512,
           "rarity": 0.015625,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "The drop rate is increased while wearing a ring of wealth due to some \"nothing\" drops being removed."
+          ]
         },
         {
           "item_id": 1619,
@@ -187981,7 +188508,10 @@
           "weight": 4,
           "out_of": 512,
           "rarity": 0.0078125,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "The drop rate is increased while wearing a ring of wealth due to some \"nothing\" drops being removed."
+          ]
         },
         {
           "item_id": 1617,
@@ -187993,7 +188523,10 @@
           "weight": 1,
           "out_of": 512,
           "rarity": 0.0019531,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "The drop rate is increased while wearing a ring of wealth due to some \"nothing\" drops being removed."
+          ]
         },
         {
           "item_id": 6529,
@@ -188096,7 +188629,10 @@
           "weight": 8,
           "out_of": 512,
           "rarity": 0.015625,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "The drop rate is increased while wearing a ring of wealth due to some \"nothing\" drops being removed."
+          ]
         },
         {
           "item_id": 1619,
@@ -188108,7 +188644,10 @@
           "weight": 6,
           "out_of": 512,
           "rarity": 0.0117188,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "The drop rate is increased while wearing a ring of wealth due to some \"nothing\" drops being removed."
+          ]
         },
         {
           "item_id": 1617,
@@ -188120,7 +188659,10 @@
           "weight": 3,
           "out_of": 512,
           "rarity": 0.0058594,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "The drop rate is increased while wearing a ring of wealth due to some \"nothing\" drops being removed."
+          ]
         },
         {
           "item_id": 9194,
@@ -188132,7 +188674,10 @@
           "weight": 10,
           "out_of": 512,
           "rarity": 0.0195312,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "The drop rate is increased while wearing a ring of wealth due to some \"nothing\" drops being removed."
+          ]
         },
         {
           "item_id": 6529,
@@ -188362,7 +188907,10 @@
           "weight": 8,
           "out_of": 2048,
           "rarity": 0.0039062,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "The drop rate is increased while wearing a ring of wealth due to some \"nothing\" drops being removed."
+          ]
         },
         {
           "item_id": 1619,
@@ -188375,7 +188923,10 @@
           "weight": 4,
           "out_of": 2048,
           "rarity": 0.0019531,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "The drop rate is increased while wearing a ring of wealth due to some \"nothing\" drops being removed."
+          ]
         },
         {
           "item_id": 1617,
@@ -188388,7 +188939,10 @@
           "weight": 1,
           "out_of": 2048,
           "rarity": 0.0004883,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "The drop rate is increased while wearing a ring of wealth due to some \"nothing\" drops being removed."
+          ]
         },
         {
           "nothing": true,
@@ -188430,7 +188984,10 @@
           "weight": 8,
           "out_of": 512,
           "rarity": 0.015625,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "The drop rate is increased while wearing a ring of wealth due to some \"nothing\" drops being removed."
+          ]
         },
         {
           "item_id": 1619,
@@ -188442,7 +188999,10 @@
           "weight": 4,
           "out_of": 512,
           "rarity": 0.0078125,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "The drop rate is increased while wearing a ring of wealth due to some \"nothing\" drops being removed."
+          ]
         },
         {
           "item_id": 1617,
@@ -188454,7 +189014,10 @@
           "weight": 1,
           "out_of": 512,
           "rarity": 0.0019531,
-          "section": "Materials"
+          "section": "Materials",
+          "notes": [
+            "The drop rate is increased while wearing a ring of wealth due to some \"nothing\" drops being removed."
+          ]
         },
         {
           "nothing": true,
@@ -189103,7 +189666,10 @@
           "weight": 1,
           "out_of": 20,
           "rarity": 0.05,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "The drop rate to receive any page is 1/20. When rolled, the player will receive the page they have the fewest of."
+          ]
         },
         {
           "item_id": 23514,
@@ -189115,7 +189681,10 @@
           "weight": 1,
           "out_of": 20,
           "rarity": 0.05,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "The drop rate to receive any page is 1/20. When rolled, the player will receive the page they have the fewest of."
+          ]
         },
         {
           "item_id": 23499,
@@ -189608,7 +190177,10 @@
           "weight": 1,
           "out_of": 320,
           "rarity": 0.003125,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased while on a vampyre kraken bounty task."
+          ]
         },
         {
           "item_id": 32038,
@@ -189621,7 +190193,10 @@
           "weight": 1,
           "out_of": 320,
           "rarity": 0.003125,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased while on a vampyre kraken bounty task."
+          ]
         },
         {
           "item_id": 560,
@@ -189860,7 +190435,10 @@
           "weight": 1,
           "out_of": 350,
           "rarity": 0.0028571,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased while on a vampyre kraken bounty task."
+          ]
         },
         {
           "item_id": 32093,
@@ -189903,7 +190481,10 @@
           "weight": 1,
           "out_of": 2,
           "rarity": 0.5,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Tentacles and ink sacks are only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 12113,
@@ -189990,7 +190571,10 @@
           ],
           "always": true,
           "rarity_raw": "Always",
-          "section": "100%"
+          "section": "100%",
+          "notes": [
+            "The Vanguard's combat style determines which potion is dropped."
+          ]
         },
         {
           "item_id": 20948,
@@ -190001,7 +190585,10 @@
           ],
           "always": true,
           "rarity_raw": "Always",
-          "section": "100%"
+          "section": "100%",
+          "notes": [
+            "The Vanguard's combat style determines which potion is dropped."
+          ]
         },
         {
           "item_id": 20984,
@@ -191240,7 +191827,10 @@
           "weight": 1,
           "out_of": 360,
           "rarity": 0.0027778,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased while on a veiled kraken bounty task."
+          ]
         },
         {
           "item_id": 32038,
@@ -191253,7 +191843,10 @@
           "weight": 1,
           "out_of": 360,
           "rarity": 0.0027778,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased while on a veiled kraken bounty task."
+          ]
         },
         {
           "item_id": 31914,
@@ -191613,7 +192206,10 @@
           "weight": 1,
           "out_of": 500,
           "rarity": 0.002,
-          "section": "Pre-roll"
+          "section": "Pre-roll",
+          "notes": [
+            "The drop rate is increased while on a veiled kraken bounty task."
+          ]
         },
         {
           "item_id": 32093,
@@ -191656,7 +192252,10 @@
           "weight": 1,
           "out_of": 3,
           "rarity": 0.3333333,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "Tentacles and ink sacks are only dropped while on an applicable bounty task."
+          ]
         },
         {
           "item_id": 12113,
@@ -197591,7 +198190,10 @@
           "weight": 1,
           "out_of": 128,
           "rarity": 0.0078125,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_fremenniktrials, mode=RequiresCompleted)"
+          ]
         },
         {
           "item_id": 3758,
@@ -197603,7 +198205,10 @@
           "weight": 1,
           "out_of": 128,
           "rarity": 0.0078125,
-          "section": "Weapons and armour"
+          "section": "Weapons and armour",
+          "notes": [
+            "Quest requirement: WikiQuestDropRequirement(questKey=quest_fremenniktrials, mode=RequiresCompleted)"
+          ]
         },
         {
           "item_id": 995,
@@ -198533,7 +199138,10 @@
           "weight": 1,
           "out_of": 1,
           "rarity": 1.0,
-          "section": "Tertiary"
+          "section": "Tertiary",
+          "notes": [
+            "This clue scroll and casket are only dropped when completing a elite cryptic clue asking you to kill a Waterfiend."
+          ]
         },
         {
           "item_id": 23962,
@@ -202386,7 +202994,10 @@
           ],
           "always": true,
           "rarity_raw": "Always",
-          "section": "Contract"
+          "section": "Contract",
+          "notes": [
+            "Choice of helm, chest, or legs"
+          ]
         },
         {
           "item_id": 30756,
@@ -202397,7 +203008,10 @@
           ],
           "always": true,
           "rarity_raw": "Always",
-          "section": "Contract"
+          "section": "Contract",
+          "notes": [
+            "Choice of helm, chest, or legs"
+          ]
         },
         {
           "item_id": 30759,
@@ -202876,7 +203490,10 @@
           "weight": 1,
           "out_of": 600,
           "rarity": 0.0016667,
-          "section": "Unique"
+          "section": "Unique",
+          "notes": [
+            "Scales with contribution; rates and quantities are shown for 100% contribution."
+          ]
         },
         {
           "item_id": 30753,
@@ -202889,7 +203506,10 @@
           "weight": 1,
           "out_of": 600,
           "rarity": 0.0016667,
-          "section": "Unique"
+          "section": "Unique",
+          "notes": [
+            "Scales with contribution; rates and quantities are shown for 100% contribution."
+          ]
         },
         {
           "item_id": 30756,
@@ -202902,7 +203522,10 @@
           "weight": 1,
           "out_of": 600,
           "rarity": 0.0016667,
-          "section": "Unique"
+          "section": "Unique",
+          "notes": [
+            "Scales with contribution; rates and quantities are shown for 100% contribution."
+          ]
         },
         {
           "item_id": 30803,
@@ -202915,7 +203538,10 @@
           "weight": 1,
           "out_of": 12,
           "rarity": 0.0833333,
-          "section": "Unique"
+          "section": "Unique",
+          "notes": [
+            "Scales with contribution; rates and quantities are shown for 100% contribution."
+          ]
         },
         {
           "item_id": 30763,
@@ -207992,7 +208618,10 @@
           "weight": 5,
           "out_of": 268,
           "rarity": 0.0186567,
-          "section": "More bones"
+          "section": "More bones",
+          "notes": [
+            "There is a 5/256 chance to receive 3x bones together with 6x big bones, and a separate 10/256 chance to receive 6x big bones by themselves."
+          ]
         },
         {
           "item_id": 556,
@@ -210218,7 +210847,10 @@
           "weight": 25,
           "out_of": 198,
           "rarity": 0.1262626,
-          "section": "Other"
+          "section": "Other",
+          "notes": [
+            "Fishing bait is replaced by dark fishing bait on members worlds."
+          ]
         },
         {
           "item_id": 11940,
@@ -210242,7 +210874,10 @@
           "weight": 3,
           "out_of": 198,
           "rarity": 0.0151515,
-          "section": "Other"
+          "section": "Other",
+          "notes": [
+            "Fishing bait is replaced by dark fishing bait on members worlds."
+          ]
         },
         {
           "item_id": 11940,
@@ -210971,7 +211606,10 @@
           "weight": 1,
           "out_of": 13107,
           "rarity": 7.63e-05,
-          "section": "Mutagens"
+          "section": "Mutagens",
+          "notes": [
+            "The exact rarity is 10/249 * 10/5264 per roll."
+          ]
         }
       ],
       "tertiary": [

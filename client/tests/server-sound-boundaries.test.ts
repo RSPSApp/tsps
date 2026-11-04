@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import ts from "typescript";
 import { SoundEffectSystem } from "../game/audio/SoundEffectSystem";
+import { PlayerEcs } from "../game/ecs/PlayerEcs";
+import { PlayerMovementSync } from "../game/movement/PlayerMovementSync";
+import { PlayerSyncManager } from "../game/sync/PlayerSyncManager";
 
 // Exercise the actual network subscription without booting the renderer/browser-only imports.
 const source = fs.readFileSync("game/OsrsClient.ts", "utf8");
@@ -10,6 +13,8 @@ const end = source.indexOf("this.unsubscribeSound = unsubSound;", start) + "this
 assert.ok(start >= 0 && end > start);
 let receive: (payload: any) => void;
 let receiptListener: [number, number, number] | undefined;
+let receiptTile: { tileX: number; tileY: number } | undefined;
+let cameraTarget: { x: number; y: number; level: number } | undefined;
 const system: any = new SoundEffectSystem({ available: () => true } as any);
 const ctx = { state: "running", currentTime: 0 };
 system.ensureContext = () => ctx;
@@ -20,7 +25,7 @@ new Function("subscribeSound", ts.transpileModule(source.slice(start, end), {
     compilerOptions: { target: ts.ScriptTarget.ES2020 },
 }).outputText).call({ soundEffectSystem: system, updateSoundListener() {
     if (receiptListener) system.updateListenerPosition(...receiptListener);
-} }, (cb: typeof receive) => { receive = cb; return () => {}; });
+}, getControlledPlayerMovementTile() { return receiptTile; }, getCameraTargetPosition() { return cameraTarget; } }, (cb: typeof receive) => { receive = cb; return () => {}; });
 
 system.updateListenerPosition(64, 64, 0);
 receive!({ soundId: 513, x: 0, y: 0, level: 0, loops: 1, delay: 0, radius: 0 });
@@ -78,6 +83,42 @@ try {
     system.updateListenerPosition(10000, 64, 0);
     timers.splice(0).forEach(fn => fn());
     assert.deepEqual(plays, [], "the listener's current position still determines audibility at playback");
+
+    // Receiving a movement step updates native pathX/Y[0] before its drawing position moves.
+    const ecs = new PlayerEcs();
+    const index = ecs.allocatePlayer(7);
+    const movement = new PlayerMovementSync(ecs);
+    const sync = new PlayerSyncManager({ ecs, movementSync: movement });
+    for (const [from, to, admitted] of [[7, 6, true], [6, 7, false]] as const) {
+        ecs.teleport(index, from, 0, 0);
+        movement.registerEntity({ serverId: 7, ecsIndex: index, tile: { x: from, y: 0 },
+            level: 0, subX: from * 128 + 64, subY: 64 });
+        movement.receiveUpdate({ serverId: 7, ecsIndex: index, subX: to * 128 + 64, subY: 64,
+            level: 0, directions: [to < from ? 3 : 4], traversals: [1], moved: true });
+        receiptTile = sync.getServerTile(7);
+        assert.equal(receiptTile?.tileX, to, "authoritative tile changes when the step arrives");
+        assert.equal(ecs.getX(index), from * 128 + 64, "drawing still waits for interpolation");
+        receiptListener = [ecs.getX(index), ecs.getY(index), 0];
+        receive!({ soundId: 513, x: 0, y: 0, loops: 1, delay: 60, radius: 5 });
+        assert.equal(timers.length, admitted ? 1 : 0, "receipt uses the latest path tile in both directions");
+        if (admitted) {
+            system.updateListenerPosition(4 * 128 + 64, 64, 0);
+            timers.splice(0).forEach(fn => fn());
+            assert.equal(plays[plays.length - 1].gain, 0.4, "admitted delayed sound uses the drawing position at playback");
+        }
+    }
+    receiptTile = { tileX: 100, tileY: 100 };
+    cameraTarget = { x: 64, y: 64, level: 0 };
+    receiptListener = [cameraTarget.x, cameraTarget.y, cameraTarget.level * 128];
+    receive!({ soundId: 513, x: 0, y: 0, loops: 1, delay: 10, radius: 5 });
+    assert.equal(timers.length, 1, "a resolved spectator camera target retains receipt admission near its emitter");
+    timers.splice(0).forEach(fn => fn());
+    assert.equal(plays[plays.length - 1].gain, 1, "the followed target remains the playback listener");
+    cameraTarget = undefined;
+    receive!({ soundId: 513, x: 0, y: 0, loops: 1, delay: 10, radius: 5 });
+    assert.equal(timers.length, 0, "an unresolved camera target falls back to the controlled player's latest tile");
+    receiptTile = undefined;
+    receiptListener = undefined;
 } finally {
     globalThis.setTimeout = realTimeout;
 }

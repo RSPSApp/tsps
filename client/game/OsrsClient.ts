@@ -3221,7 +3221,11 @@ export class OsrsClient {
                         const hasPosition = payload.x !== undefined && payload.y !== undefined;
                         if (hasPosition && payload.radius !== undefined) {
                             this.updateSoundListener();
-                            if (!this.soundEffectSystem.isAreaSoundInRange(payload.x!, payload.y!, payload.radius)) return;
+                            // Native receipt admission uses pathX/Y[0], before drawing catches up.
+                            const tile = this.getCameraTargetPosition() ? undefined : this.getControlledPlayerMovementTile();
+                            if (!this.soundEffectSystem.isAreaSoundInRange(
+                                payload.x!, payload.y!, payload.radius, tile?.tileX, tile?.tileY,
+                            )) return;
                         }
                         // Wire loops: n = play n times; skip if zero
                         const wireLoops = payload.loops !== undefined ? payload.loops | 0 : 1;

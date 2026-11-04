@@ -618,3 +618,16 @@ test('standard-world barricades and burning variants use the cache types that re
     assert.equal(core.CacheDefinitions.getNpc(id).name, 'Barricade');
   }
 });
+
+test('Castle Wars barricades block movement but allow ranged, magic and halberd reach', (t) => {
+  // Jagex Poll 83 (December 2024) explicitly permits hitting over barricades.
+  const owner = playerAt(t, 2405, 3110, 0);
+  deployed(t, owner);
+  const attacker = playerAt(t, 2406, 3110, 0);
+  const target = playerAt(t, 2404, 3110, 0);
+  for (const type of [core.CombatType.RANGED, core.CombatType.MAGIC, core.CombatType.MELEE]) {
+    const method = { type: () => type, attackDistance: () => 2 };
+    assert.equal(core.CombatRange.canReach(attacker, method, target), true, String(type));
+  }
+  assert.equal(attacker.getMovementQueue().canWalkTo(owner.getLocation(), attacker.getLocation()), false);
+});

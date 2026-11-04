@@ -2,12 +2,17 @@
  * Ornament kits and cosmetic recolours (https://oldschool.runescape.wiki/w/Ornament_kit).
  *
  * Using a kit on its base item consumes the kit and swaps the item for the cosmetic id from
- * plugins/items/data/ornament-kits.json. Reverting swaps the id back but does not return the
- * kit (Wiki: kits are consumed on apply). The table also maps graceful colour variants, which
+ * plugins/items/data/ornament-kits.json. Reverting swaps the id back; entries whose Wiki says
+ * the kit is returned set `refund: true`. The table also maps graceful colour variants, which
  * keep the graceful set bonus because the cache names every colour "Graceful ...".
  *
  * Barrows gear maps through Barrows.baseItemId, so a kit applies to a degraded piece and an
  * Echo Ahrim's piece reverts to the matching stage of the plain set (keeping its meta).
+ *
+ * A refund (the Wiki page of the ornamented item: "can be dismantled anytime, returning the
+ * tradeable <item> and ornament kit") needs a free slot, and a restricted (preset, untradeable,
+ * unbankable) copy is refused, because the kit would come back as a free, unrestricted item.
+ * The same refusal guards applying a kit. Echo Ahrim's takes the option "Detach" as well.
  */
 const fs = require("fs");
 const path = require("path");
@@ -17,6 +22,17 @@ let core = null;
 let byKitAndBase = new Map();
 let byResult = new Map();
 let byBase = new Map();
+
+const PRESET_TEXT = "Preset items cannot be used for this.";
+
+/** Preset (and other untradeable or unbankable) copies keep their restrictions; a refunded kit would not. */
+function restricted(item) {
+  const Item = core.Item;
+  return !!item && (item.isPresetItem?.() === true
+    || item.getMetaValue?.(Item.PRESET_META) === true
+    || item.getMetaValue?.(Item.UNTRADEABLE_META) === true
+    || item.getMetaValue?.(Item.UNBANKABLE_META) === true);
+}
 
 function loadKits() {
   const file = path.join(__dirname, "data", "ornament-kits.json");
@@ -50,6 +66,19 @@ function refresh(player) {
   player.getEquipment().refreshItems();
 }
 
+/** True when the piece already is this entry's ornamented item (any Barrows stage of it, for Echo Ahrim's). */
+function alreadyOrnamented(entry, itemId) {
+  if (itemId === entry.result || (entry.worn > 0 && itemId === entry.worn)) {
+    return true;
+  }
+  for (let stage = 0; stage < 5; stage++) {
+    if (Barrows.stageItemIdFor(entry.result, stage) === itemId) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function applyKit(event) {
   const match = findEntry(Number(event.usedItemId), Number(event.usedWithItemId));
   if (!match) {
@@ -66,14 +95,22 @@ function applyKit(event) {
   const inventory = player.getInventory();
   if (inventory.getItems()[kitSlot] !== kit || inventory.getItems()[baseSlot] !== baseItem ||
     kit.getId() !== match.entry.kit || kit.getAmount() !== 1 || baseItem.getAmount() !== 1) return;
-  if (kit.isPresetItem() || kit.isUntradeable() || kit.isUnbankable()) {
+  // Echo Ahrim's resolves to its plain base, so the kit would otherwise be spent on a piece that has it.
+  if (alreadyOrnamented(match.entry, baseItem.getId())) {
+    return;
+  }
+  // A restricted kit would make a free, unrestricted ornamented item. A restricted base is refused only
+  // where the kit is refundable (it could never come back from a restricted copy); a preset whip still
+  // takes a whip mix, which keeps its metadata.
+  if (restricted(kit) || (match.entry.refund && restricted(baseItem))) {
     player.sendMessage("You cannot use restricted items to upgrade equipment.");
     event.handled = true;
     return;
   }
   inventory.deleteAtSlot(kitSlot, 1, false);
+  // The plain undamaged piece makes the undamaged ornamented one; a used one keeps its stage.
   const stage = Barrows.stageOf(baseItem.getId?.()) ?? 0;
-  baseItem.setId(stage === 0
+  baseItem.setId(baseItem.getId() === match.entry.base
     ? match.entry.result
     : Barrows.stageItemIdFor(match.entry.result, stage) ?? match.entry.result);
   refresh(player);
@@ -98,9 +135,9 @@ function cleanDye(event) {
   event.handled = true;
 }
 
-/** Revert from the item's Revert/Dismantle option; the kit is not refunded. */
+/** Revert from the item's Revert/Dismantle option, returning the kit for entries that specify it. */
 function revertItem(event) {
-  if (event.option !== "Revert" && event.option !== "Dismantle") {
+  if (event.option !== "Revert" && event.option !== "Dismantle" && event.option !== "Detach") {
     return;
   }
   const itemId = Number(event.itemId);
@@ -109,19 +146,27 @@ function revertItem(event) {
   if (!entry || entry.cleaningCloth || !event.item) {
     return;
   }
-  if (barrowsBase == null) {
-    // Wiki (Holy ghrazi rapier and friends): these kits come back when dismantled, so it must fit first.
-    const kit = entry.refund ? new core.Item(entry.kit, 1) : null;
-    if (kit && event.player.getInventory().getAddableAmount(kit) < 1) {
-      event.player.sendMessage("You don't have enough inventory space to do that.");
-      event.handled = true;
-      return;
-    }
-    event.item.setId(entry.base);
-    if (kit) event.player.getInventory().add(kit, false);
-  } else {
-    event.item.setId(Barrows.stageItemId(barrowsBase, Barrows.stageOf(itemId) ?? 0));
+  // Wiki (Dragon full helm (g) and the rest): these kits come back when dismantled, so it must fit first.
+  const kit = entry.refund ? new core.Item(entry.kit, 1) : null;
+  if (kit && restricted(event.item)) {
+    event.player.sendMessage(PRESET_TEXT);
+    event.handled = true;
+    return;
   }
+  if (kit && event.player.getInventory().getAddableAmount(kit) < 1) {
+    event.player.sendMessage("You don't have enough inventory space to do that.");
+    event.handled = true;
+    return;
+  }
+  if (barrowsBase == null) {
+    event.item.setId(entry.base);
+  } else {
+    // The undamaged ornamented piece gives the undamaged plain one back, a used one its stage.
+    event.item.setId(itemId === entry.result
+      ? entry.base
+      : Barrows.stageItemId(barrowsBase, Barrows.stageOf(itemId) ?? 0));
+  }
+  if (kit) event.player.getInventory().add(kit, false);
   refresh(event.player);
   event.player.sendMessage(`You revert the ${entry.name.toLowerCase()}.`);
   event.handled = true;

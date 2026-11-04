@@ -90,7 +90,7 @@ export class ChatFilterPlugin extends Plugin {
     private filteredNamePatterns: RegExp[] = [];
     private readonly duplicateChatCache = new Map<string, Duplicate>();
     private readonly filterCache = new Map<number, Map<number, string | null>>();
-    private readonly listener = (message: ChatMessage) => this.onChatMessage(message);
+    private readonly listener = (message: ChatMessage) => this.handleChatMessage(message);
     /** Rebuilds the chatbox (RuneLite's client.refreshChat). */
     refreshChat: () => void = markChatTransmit;
 
@@ -188,8 +188,8 @@ export class ChatFilterPlugin extends Plugin {
         return this.censorMessage(name, text) ?? " ";
     }
 
-    /** RuneLite's onChatMessage (after ChatMessageManager), on the line about to be stored. */
-    onChatMessage(message: ChatMessage): void {
+    /** Handle the history node before insertion, rather than the API EventBus payload. */
+    private handleChatMessage(message: ChatMessage): void {
         if (!COLLAPSIBLE_MESSAGETYPES.has(message.type)) return;
         // remove and re-insert into map to move to end of list
         const key = `${message.from ?? ""}:${message.text}`;

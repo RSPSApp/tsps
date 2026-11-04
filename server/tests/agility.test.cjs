@@ -812,6 +812,21 @@ test("Varrock's fallable obstacles stop failing at 46, the Wiki's no-fail level"
   }
 });
 
+test("Al Kharid's zip line cannot fail after the 2024 fail-point removal", () => {
+  const zipline = COURSES.find((entry) => entry.key === "alkharid").obstacles.find((entry) => entry.index === 4);
+  const random = Math.random;
+  Math.random = () => 0.999;
+  try {
+    const player = createPlayer(3301, 3163, 3, 20);
+    operate(player, zipline.object, [3301, 3163, 3]);
+    assert.deepEqual(tileOf(player), [3315, 3163, 1]);
+    assert.equal(player.state.xp, 48);
+    assert.equal(player.state.hits, 0);
+  } finally {
+    Math.random = random;
+  }
+});
+
 test("a low-level Prifddinas runner can fall from a tightrope and take damage", () => {
   const rope = COURSES.find((entry) => entry.key === "prifddinas").obstacles.find((entry) => entry.index === 2);
   const random = Math.random;

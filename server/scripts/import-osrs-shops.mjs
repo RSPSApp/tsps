@@ -44,6 +44,7 @@ const EXCLUDED = new Set([
 
 // Wiki shops a tsps plugin serves instead, so shops.json must not carry them.
 const REPLACED_BY_PLUGIN = {
+  "Void Knights' Reward Options": "the Pest Control reward interface (243)",
   "Giants' Foundry Reward Shop": "Kovac's reward shop in the Giants' Foundry plugin",
   "Mixology Rewards": "the Mastering Mixology Omnishop",
   Sawmill: "the sawmill operators make planks, as captured",

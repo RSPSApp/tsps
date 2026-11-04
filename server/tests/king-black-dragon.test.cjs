@@ -43,3 +43,25 @@ test("special breath maxima match the Wiki table", () => {
     assert.equal(breathMax(true, protection), SPECIAL[key], key);
   }
 });
+
+// The easy Wilderness Diary's "Enter the King Black Dragon's lair." (beneath the Lava Maze).
+test("climbing down the Lava Maze ladder into the lair completes the easy Wilderness Diary task", () => {
+  const { Server } = require("../dist/Server");
+  Server.installProductionPathResolver();
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const events = [];
+  const clicks = new Map();
+  const api = new Proxy({
+    core: PluginManager.getCoreApi(),
+    emitCustomEvent: (name, payload) => events.push({ name, ...payload }),
+    onObjectFirstClick: (id, handler) => clicks.set(id, handler),
+  }, { get: (target, key) => target[key] ?? (() => {}) });
+  require("../plugins/bosses/KingBlackDragon.plugin").register(api);
+  const who = {};
+  assert.equal(clicks.get(18987)({ player: who }), true);
+  assert.deepEqual(events.filter((event) => event.name === "diary:task").map((event) => [event.player, event.diary, event.task]),
+    [[who, "wilderness", "enter-the-king-black-dragon-s-lair"]]);
+  events.length = 0;
+  assert.equal(clicks.get(1817)({ player: who }), true);
+  assert.deepEqual(events.filter((event) => event.name === "diary:task"), [], "the lair's own lever leads out");
+});

@@ -694,6 +694,7 @@ module.exports = {
   _test: { canAttack, webCutChance, webTool, webSlashAnimation, slashWeb, websBeingSlashed },
   register(api) {
     require("./wilderness/Statistics.Wilderness")(api, isInWilderness);
+    require("./wilderness/Diary.Wilderness")(api);
     pluginApi = api;
     const state = createState();
 

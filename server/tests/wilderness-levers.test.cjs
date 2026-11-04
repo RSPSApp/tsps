@@ -169,6 +169,7 @@ test("the Edgeville lever warns as live, lands beside the Keep lever and skips t
   runTicks(h, who, 8);
   assert.deepEqual(who.log.find((entry) => entry[1] === "tele"), [6, "tele", 3154, 3924], "pull a tick after the choice, land five after that");
   assert.equal(who.sent.get(varbit("wildoutlever_vis")), undefined, "no diary: the Keep lever stays Pull");
+  assert.deepEqual(h.diaryTasks, [[who, "wilderness", "enter-the-wilderness-from-the-ardougne-or-edgevi"]], "the Edgeville lever completes the easy Wilderness Diary task on landing, and no Ardougne one");
 
   who.dialogue = undefined;
   use(h, who, "edgeville_wildy_lever", "Pull", 3090, 3475);
@@ -216,7 +217,7 @@ test("the East Ardougne lever warns, lands beside the Keep lever and completes t
   assert.deepEqual(who.log.find((entry) => entry[1] === "tele"), [6, "tele", 3154, 3924]);
   assert.deepEqual(who.log.filter((entry) => entry[1] === "msg").map((entry) => entry[2]),
     ["You pull the lever...", "... and teleport into the Wilderness."]);
-  assert.deepEqual(h.diaryTasks, [[who, "ardougne", "use-the-ardougne-lever-to-teleport-to-the-wilder"]]);
+  assert.deepEqual(h.diaryTasks, [[who, "ardougne", "use-the-ardougne-lever-to-teleport-to-the-wilder"], [who, "wilderness", "enter-the-wilderness-from-the-ardougne-or-edgevi"]], "the easy Wilderness Diary task counts on landing too");
   assert.equal(who.sent.get(varbit("wildoutlever_vis")), 1, "the Keep lever shows its diary options");
 });
 

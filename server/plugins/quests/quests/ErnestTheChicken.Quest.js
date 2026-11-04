@@ -460,11 +460,26 @@ module.exports = function registerErnestTheChickenQuest(api) {
     crossDoor(player, tile, CLOSET_THROUGH);
   }
 
+  /**
+   * As recorded (rsprox 3209, rev 232; four pulls of levers A and B): the message names the lever and
+   * where it went, then "You hear a clunk."; down is sequence 2140, up 2139; synth_sound 2400, then
+   * 1565 with delay 5 whether or not a door changes. Inspecting reports the position (cycles 10887, 10903).
+   */
   function useLever(player, index) {
     const bits = attr(player, LEVERS_ATTRIBUTE) ^ (1 << index);
+    const down = (bits & (1 << index)) !== 0;
     syncLevers(player, bits);
-    player.performAnimation(new Animation(2139));
+    player.sendMessage(`You pull lever ${"ABCDEF"[index]} ${down ? "down" : "up"}.`);
     player.sendMessage("You hear a clunk.");
+    player.performAnimation(new Animation(down ? 2140 : 2139));
+    const sender = player.getPacketSender();
+    sender.sendSoundEffect(2400, 1, 0);
+    sender.sendSoundEffect(1565, 1, 5);
+  }
+
+  /** The second option reports the lever's position (recorded: "The lever is down." / "The lever is up."); it never pulls. */
+  function inspectLever(player, index) {
+    player.sendMessage((attr(player, LEVERS_ATTRIBUTE) & (1 << index)) !== 0 ? "The lever is down." : "The lever is up.");
   }
 
   /**
@@ -699,7 +714,8 @@ module.exports = function registerErnestTheChickenQuest(api) {
     }
 
     if (LEVER_IDS.has(objectId)) {
-      useLever(player, LEVER_IDS.get(objectId));
+      if (event.clickType === 2) inspectLever(player, LEVER_IDS.get(objectId));
+      else useLever(player, LEVER_IDS.get(objectId));
       event.handled = true;
       return;
     }

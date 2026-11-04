@@ -17,6 +17,7 @@ Prioridades: **P0** = sem isso ninguém de fora consegue jogar; **P1** = deixa o
 - [x] Pontos idle e 3 melhorias (Quick Hands, Long Dreams, Bountiful Harvest)
 - [x] Tela do modo idle (`::idle`) com status, pontos, melhorias e botões
 - [x] Viagem até 21 atividades (`::idle travel`), com locais conferidos no mapa real
+- [x] Kit inicial, primeiro login guiado e botão Idle fixo na aba do diário
 
 ## P0 - Para alguém de fora conseguir jogar
 
@@ -25,12 +26,11 @@ Prioridades: **P0** = sem isso ninguém de fora consegue jogar; **P1** = deixa o
 - [ ] **Backup dos saves**: cópia automática do `server/data/saves/players.sqlite`
 - [ ] **Mundo idle ligado por padrão** no servidor publicado (`world.local.json` com
       `IdleMode:newAccounts`)
-- [ ] **Kit inicial**: conta nova recebe machado, picareta, rede, vara, isca e comida (hoje o
-      jogador começa sem ferramentas e a coleta não anda)
-- [ ] **Primeiro login guiado**: pular ou encurtar o Tutorial Island e abrir a tela idle com uma
-      explicação curta do que fazer
-- [ ] **Abrir a tela idle sem comando**: hoje só existe `::idle`; um jogador novo não sabe disso
-      (ver "Interface do sistema idle" abaixo)
+- [x] **Kit inicial**: na primeira vez que a conta fica idle, recebe machado, picareta, rede,
+      espada e 10 camarões (no banco, se o inventário estiver cheio)
+- [x] **Primeiro login guiado**: o Tutorial Island já vem desligado; conta nova num mundo idle
+      começa em Lumbridge, recebe 3 linhas de boas-vindas e a tela idle abre sozinha
+- [x] **Abrir a tela idle sem comando**: botão **Idle** na aba do diário (Character Summary)
 - [ ] **Teste de reinício do servidor**: conferir que quem estava jogando quando o servidor
       reinicia recebe o progresso offline ao voltar
 - [ ] **Decisão jurídica**: o jogo usa o cache e o conteúdo do OSRS (Jagex). Antes de abrir ao
@@ -41,8 +41,8 @@ Prioridades: **P0** = sem isso ninguém de fora consegue jogar; **P1** = deixa o
 
 Uma interface própria e sempre à mão, para o jogador nunca precisar digitar comandos.
 
-- [ ] **Botão ou aba fixa do idle** na tela do jogo (ao lado do inventário ou no menu lateral),
-      que abre a tela idle
+- [x] **Botão fixo do idle**: o primeiro botão da aba do diário abre a tela idle
+- [ ] **Ajuste visual**: com 4 botões no diário, o rótulo "Commands" perde a última letra
 - [ ] **Painel resumido sempre visível**: atividade atual, XP por hora, pontos e um indicador de
       pausado/rodando
 - [ ] **Tela ao logar com ganhos offline**: abrir sozinha mostrando o resumo "enquanto você esteve

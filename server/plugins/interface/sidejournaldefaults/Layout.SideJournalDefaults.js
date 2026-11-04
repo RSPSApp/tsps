@@ -2,11 +2,14 @@ const { FLAG_OP1, TYPE_RECTANGLE, TYPE_TEXT, createWidgetGroup } = require("../w
 
 // Reconnects must not reuse the old header's alignment or visibility defaults.
 const GROUP_ID = 30015;
-const COMPONENT = { ROOT: 0, USERNAME: 1, TELEPORTS: 2, PRESETS: 3, COMMANDS: 4, XP: 5, VIEW: 6, SCROLLBAR: 7 };
+const COMPONENT = { ROOT: 0, USERNAME: 1, TELEPORTS: 2, PRESETS: 3, COMMANDS: 4, XP: 5, VIEW: 6, SCROLLBAR: 7, IDLE: 90 };
 const uid = (component) => (GROUP_ID << 16) | component;
-const BUTTON_WIDTH = 56;
-const BUTTON_GAP = 4;
+// Four navigation buttons across the 190-wide panel (4 x 46 + 3 x 2).
+const BUTTON_WIDTH = 46;
+const BUTTON_GAP = 2;
 const BUTTONS = [
+  // Idle Mode's screen (plugins/modes/IdleMode.plugin.js listens for "idle:open").
+  { component: COMPONENT.IDLE, label: "Idle", command: "idle", event: "idle:open" },
   { component: COMPONENT.TELEPORTS, label: "Teleports", command: "teleports", event: "teleports:open" },
   { component: COMPONENT.PRESETS, label: "Presets", command: "presets", event: "presets:open" },
   { component: COMPONENT.COMMANDS, label: "Commands", command: "commands", event: "commands:open" },

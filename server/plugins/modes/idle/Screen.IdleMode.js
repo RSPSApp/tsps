@@ -130,7 +130,7 @@ function activityLine(player) {
   if (fight) return col(COLOUR.VALUE, `Fighting ${fight.name.toLowerCase()}s`);
   const gather = player.getAttribute(Common.GATHER_TARGET_ATTRIBUTE);
   if (gather) return col(COLOUR.VALUE, `${gather.option} ${gather.name.toLowerCase()}`);
-  return col(COLOUR.DIM, "None yet: gather or fight");
+  return col(COLOUR.DIM, "None yet: press Travel");
 }
 
 /** What each status line says, top to bottom. */
@@ -205,6 +205,11 @@ function switchAuto({ player }) {
   return true;
 }
 
+/** `idle:open`: the Idle button in the journal tab (SideJournalDefaults). */
+function openFromJournal({ player }) {
+  open(player);
+}
+
 function travelButton({ player }) {
   if (!isOpen(player)) return false;
   TravelScreen.open(player);
@@ -236,6 +241,7 @@ module.exports = function attach(api) {
   api.onInterfaceActionButton([uid(COMPONENT.IDLE_BUTTON), uid(COMPONENT.IDLE_LABEL)], switchIdle);
   api.onInterfaceActionButton([uid(COMPONENT.AUTO_BUTTON), uid(COMPONENT.AUTO_LABEL)], switchAuto);
   api.onInterfaceActionButton([uid(COMPONENT.TRAVEL_BUTTON), uid(COMPONENT.TRAVEL_LABEL)], travelButton);
+  api.onCustomEvent("idle:open", openFromJournal);
   api.onInterfaceActionButton(buyUids().flat(), buyButton);
   Common.onChange(redraw);
 };

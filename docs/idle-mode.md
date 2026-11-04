@@ -187,6 +187,29 @@ Bought levels are saved as `idle-mode:upgrades` `{ upgrade: level }`.
 The prices and effects are in `"progression"` in the data. Quick Hands' speed shows in the rate
 the offline progress measures, so it counts offline as well.
 
+## First login
+
+`server/plugins/modes/idle/Onboarding.IdleMode.js`, settings in `"onboarding"`. The first time an
+account becomes idle (a new account on an idle world, the first `::idle on`, or an idle account
+from before this existed logging in), saved as `idle-mode:onboarded`:
+
+- the **starter kit** (`starterKit`: a bronze axe, pickaxe, small fishing net, bronze sword and
+  10 shrimps) goes to the inventory, or the bank when it is full;
+- a **new account on an idle world** starts at `startTile` (Lumbridge's courtyard) instead of the
+  world's spawn by the Wilderness (Tutorial Island is off in `world.json`);
+- the **welcome** lines go to chat, and the **Idle screen** opens: at once after `::idle on`,
+  `openScreenDelayTicks` after a login so the game frame is up.
+
+`server/tests/idle-travel-sites.test.cjs` checks the kit's ids against their names in the cache
+and that the start tile is free.
+
+**The journal tab's Idle button**: the side journal (`SideJournalDefaults`, the quest-tab
+Character Summary) has an **Idle** button first in its row of navigation buttons. It emits
+`idle:open`, which opens the Idle screen. The four buttons are 46 wide with 2 between them, to fit
+the 190-wide panel.
+
+![The journal tab's Idle button](images/idle-journal-button.png)
+
 ## The Idle screen
 
 ![The Idle screen](images/idle-screen.png)

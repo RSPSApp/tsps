@@ -460,5 +460,46 @@
         "tool": "A weapon and plenty of food"
       }
     ]
+  },
+  "onboarding": {
+    "_description": "The first time an account becomes idle (a new account on an idle world, or ::idle on): the starter kit, a short welcome in chat and the Idle screen. A new account on an idle world also starts at startTile (Lumbridge's courtyard) rather than the world's spawn. Item ids come from the cache: server/tests/idle-travel-sites.test.cjs checks their names.",
+    "starterKit": [
+      {
+        "id": 1351,
+        "name": "Bronze axe",
+        "amount": 1
+      },
+      {
+        "id": 1265,
+        "name": "Bronze pickaxe",
+        "amount": 1
+      },
+      {
+        "id": 303,
+        "name": "Small fishing net",
+        "amount": 1
+      },
+      {
+        "id": 1277,
+        "name": "Bronze sword",
+        "amount": 1
+      },
+      {
+        "id": 315,
+        "name": "Shrimps",
+        "amount": 10
+      }
+    ],
+    "startTile": [
+      3222,
+      3218,
+      0
+    ],
+    "openScreenDelayTicks": 3,
+    "welcome": [
+      "Welcome to Idle Mode! Your character works by itself, even while you're logged out.",
+      "You've been given an axe, a pickaxe, a fishing net, a sword and some food.",
+      "Press Travel on the Idle screen to pick an activity. Reopen it any time with the Idle button in your journal tab, or ::idle."
+    ]
   }
 }

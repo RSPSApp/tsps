@@ -80,7 +80,7 @@ function fakePlayer(x = 3363, y = 9644, z = 0) {
     getRunEnergy: () => player.runEnergy,
     setRunEnergy: (value) => { player.runEnergy = value; },
     getPacketSender: () => ({
-      sendSubInterface() {}, closeSubInterface() {}, sendSound() {}, sendRunEnergy() {},
+      sendSubInterface() {}, closeSubInterface() {}, sendSound() {}, sendSoundEffect() {}, sendRunEnergy() {},
       sendString: (text, id) => strings.set(id, text),
       sendInterfaceDisplayState: (id, hide) => hidden.set(id, hide),
       sendCameraLookAt: (x, y, height, motion) => camera.push({ mode: 'look', x, y, height, motion }),
@@ -850,6 +850,184 @@ test('the chute: a point per 16 fruit (a peach is 2), at most 3 a deposit, 5 XP 
   assert.equal(player.items.get(items.peach), 0, 'all of them go in');
   assert.deepEqual(player.xp, [270], 'and give XP');
   assert.equal(Graveyard.depositFruit(fakePlayer(x, y, z)), null);
+});
+
+/**
+ * What the server sends the client, as captured in rsprox 1757 (rev 227, Creature Graveyard):
+ * synth_sound / sound_area / map_anim packets and the player's animations and graphics.
+ */
+function recordEffects(player) {
+  const effects = { sounds: [], areaSounds: [], graphics: [], animations: [], playerGraphics: [] };
+  const sender = player.getPacketSender();
+  player.getPacketSender = () => ({
+    ...sender,
+    sendSound: (id) => effects.sounds.push(id),
+    sendSoundEffect: (id) => effects.sounds.push(id),
+    sendAreaSound: (id, x, y, level, loops, delay, radius, attenuation) => effects.areaSounds.push({ id, x, y, level, loops, delay, radius, attenuation }),
+    sendGraphic: (graphic, location) => effects.graphics.push({ id: graphic.getId(), delay: graphic.getDelay(), x: location.getX(), y: location.getY(), z: location.getZ() }),
+  });
+  player.performAnimation = (animation) => effects.animations.push(animation.getId());
+  player.performGraphic = (graphic) => effects.playerGraphics.push(graphic.getId());
+  return effects;
+}
+
+function castBones(player, spellName) {
+  const Spell = core.Spell.prototype;
+  const original = Spell.canCast;
+  Spell.canCast = () => true;
+  try {
+    Graveyard.castBonesSpell({ player, spellName, handled: false });
+  } finally {
+    Spell.canCast = original;
+  }
+}
+
+test('Bones to Peaches plays sound 114 with its cast; no Bones to Bananas cast is captured, so it plays none', () => {
+  const [x, y, z] = graveyardTile();
+  const peaches = fakePlayer(x, y, z);
+  const peachEffects = recordEffects(peaches);
+  peaches.setAttribute(Graveyard.PEACHES_UNLOCKED_ATTRIBUTE, true);
+  peaches.items.set(Common.ids.items.bones1, 2);
+  castBones(peaches, 'Bones to Peaches');
+  assert.equal(peaches.items.get(Common.ids.items.peach), 2);
+  assert.deepEqual(peachEffects.animations, [722], 'rsprox 1757: all 10 captured casts create peaches (obj 6883)');
+  assert.deepEqual(peachEffects.playerGraphics, [141]);
+  assert.deepEqual(peachEffects.sounds, [114], 'synth_sound 114 as the cast starts');
+  const bananas = fakePlayer(x, y, z);
+  const bananaEffects = recordEffects(bananas);
+  bananas.items.set(Common.ids.items.bones1, 2);
+  castBones(bananas, 'Bones to Bananas');
+  assert.equal(bananas.items.get(Common.ids.items.banana), 2);
+  assert.deepEqual(bananaEffects.sounds, [], 'no capture of a Bones to Bananas cast, so no sound is invented for it');
+});
+
+test('turning fruit in plays animation 832 and sound 1663; an empty chute plays neither', () => {
+  const [x, y, z] = graveyardTile();
+  const player = fakePlayer(x, y, z);
+  const effects = recordEffects(player);
+  Graveyard.depositFruit(player);
+  assert.deepEqual(effects.animations, []);
+  assert.deepEqual(effects.sounds, []);
+  player.items.set(Common.ids.items.banana, 20);
+  Graveyard.depositFruit(player);
+  assert.deepEqual(effects.animations, [832], 'rsprox 1757: sequence 832 on the deposit');
+  assert.deepEqual(effects.sounds, [1663], 'rsprox 1757: synth_sound 1663 on the deposit');
+});
+
+function enterGraveyard(player, tasks) {
+  player.isPlayer = () => true;
+  player.getAsPlayer = () => player;
+  const manager = Common.core.TaskManager;
+  const original = manager.submit;
+  manager.submit = (task) => tasks.push(task);
+  try {
+    new (Graveyard.defineArea())().postEnter(player);
+  } finally {
+    manager.submit = original;
+  }
+}
+
+/** Runs `action` while tasks the plugin submits (the landings) are collected into `tasks`. */
+function collecting(tasks, action) {
+  const manager = Common.core.TaskManager;
+  const original = manager.submit;
+  manager.submit = (task) => tasks.push(task);
+  try {
+    action();
+  } finally {
+    manager.submit = original;
+  }
+}
+
+test('every 10 ticks the room rains 40 bones (graphics 520-523) on open floor, with 4 area sounds 1661', () => {
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3363, 9637);
+  const observed = require('./fixtures/graveyard-bones-observed.json');
+  const [x, y, z] = graveyardTile();
+  const player = fakePlayer(x, y, z);
+  const effects = recordEffects(player);
+  const tasks = [];
+  enterGraveyard(player, tasks);
+  assert.equal(tasks.length, 1, 'one repeating task for the player in the room');
+  assert.equal(tasks[0].delay, 10, 'every 10 ticks');
+  const seen = new Set();
+  for (let pulse = 0; pulse < 600; pulse++) {
+    effects.graphics.length = 0;
+    effects.areaSounds.length = 0;
+    collecting([], () => tasks[0].execute());
+    assert.equal(effects.graphics.length, 40, `pulse ${pulse}: 40 map_anim`);
+    assert.equal(new Set(effects.graphics.map((g) => `${g.x},${g.y}`)).size, 40, 'on distinct tiles');
+    for (const g of effects.graphics) {
+      assert.ok(g.id >= 520 && g.id <= 523, `graphic ${g.id}`);
+      assert.equal(g.delay, 10);
+      assert.ok(g.x >= 3344 && g.x <= 3383 && g.y >= 9620 && g.y <= 9659 && g.z === 1, `${g.x},${g.y},${g.z}`);
+      assert.equal(core.RegionManager.blocked(loc(g.x, g.y, g.z), null), false, `rsprox 1757: none of its 580 tiles is blocked, but ${g.x},${g.y} is`);
+      seen.add(`${g.x},${g.y}`);
+    }
+    if (pulse === 0) {
+      assert.deepEqual(
+        effects.areaSounds.map((s) => [s.id, s.x, s.y, s.level, s.loops, s.radius, s.attenuation]),
+        [[1661, 3352, 9631, 1, 1, 20, 20], [1661, 3352, 9650, 1, 1, 20, 20], [1661, 3374, 9631, 1, 1, 20, 20], [1661, 3374, 9650, 1, 1, 20, 20]],
+        'rsprox 1757: sound_area 1661 at the four points of the room',
+      );
+    }
+  }
+  const missed = observed.filter(([ox, oy]) => !seen.has(`${ox},${oy}`));
+  assert.deepEqual(missed, [], 'every tile the capture shows a bone on can be hit');
+});
+
+test('re-entering or leaving ends the old storm, and a task of a player who left sends nothing', () => {
+  const [x, y, z] = graveyardTile();
+  const player = fakePlayer(x, y, z);
+  const effects = recordEffects(player);
+  const tasks = [];
+  enterGraveyard(player, tasks);
+  enterGraveyard(player, tasks);
+  assert.equal(tasks.length, 2);
+  collecting([], () => tasks[0].execute());
+  assert.equal(effects.graphics.length, 0, 'the first storm was replaced');
+  collecting([], () => tasks[1].execute());
+  assert.equal(effects.graphics.length, 40);
+  effects.graphics.length = 0;
+  new (Graveyard.defineArea())().postLeave(player, true);
+  collecting([], () => tasks[1].execute());
+  assert.equal(effects.graphics.length, 0, 'logging out stops it');
+  const moved = fakePlayer(x, y, z);
+  const movedEffects = recordEffects(moved);
+  const movedTasks = [];
+  enterGraveyard(moved, movedTasks);
+  moved.moveTo(loc(3200, 3200, 0));
+  collecting([], () => movedTasks[0].execute());
+  assert.equal(movedEffects.graphics.length, 0, 'out of the room it ends itself');
+});
+
+test('a bone hits for 2 three ticks after it appears if the player is still on its tile; stepping off dodges it', () => {
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3363, 9637);
+  const stand = loc(3363, 9639, 1);
+  for (const dodge of [false, true]) {
+    const player = fakePlayer(3363, 9639, 1);
+    const effects = recordEffects(player);
+    const hits = [];
+    player.getCombat = () => ({ getHitQueue: () => ({ addPendingDamage: (damage) => hits.push(...damage.map((d) => d.getDamage())) }) });
+    const tasks = [];
+    enterGraveyard(player, tasks);
+    const landings = [];
+    let found = false;
+    for (let pulse = 0; pulse < 5000 && !found; pulse++) {
+      effects.graphics.length = 0;
+      landings.length = 0;
+      collecting(landings, () => tasks[0].execute());
+      found = effects.graphics.some((g) => g.x === stand.getX() && g.y === stand.getY());
+    }
+    assert.ok(found, 'a bone lands on the tile');
+    assert.equal(landings.length, 1, 'one landing for the burst');
+    assert.equal(landings[0].delay, 3, 'three ticks later');
+    assert.deepEqual(hits, [], 'nothing before it lands');
+    if (dodge) player.moveTo(loc(3362, 9640, 1));
+    landings[0].execute();
+    assert.deepEqual(hits, dodge ? [] : [2], dodge ? 'dodged (rsprox 1757: 2 of 2)' : 'hit for 2 (rsprox 1757: 4 of 4)');
+  }
 });
 
 test('every Graveyard point earns a rune, given on leaving; logging out keeps the room\'s things', () => {

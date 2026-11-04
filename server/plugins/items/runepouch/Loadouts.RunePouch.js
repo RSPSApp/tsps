@@ -149,22 +149,26 @@ function clickSlot(player, index, slot) {
 
 /** Takes up to `wanted` of a rune, from the inventory first and then the bank; returns how many. */
 function gather(player, runeId, wanted) {
-  const inventory = player.getInventory();
-  const fromInventory = Math.min(wanted, inventory.getAmount(runeId));
-  if (fromInventory > 0) inventory.deleteNumber(runeId, fromInventory);
-  const fromBank = Math.min(wanted - fromInventory, Pouch.bankAmount(player, runeId));
-  if (fromBank > 0) Pouch.takeFromBank(player, runeId, fromBank);
-  return fromInventory + fromBank;
+  const fromInventory = Pouch.takeFromInventory(player, runeId, wanted);
+  return fromInventory + Pouch.takeFromBank(player, runeId, wanted - fromInventory);
 }
 
 function load(player, index) {
   const loadout = loadouts(player)[index];
   const count = Pouch.slotCount(player);
   // The pouch's runes go back to the bank first.
-  Pouch.slots(player).forEach((entry) => {
-    if (entry) Pouch.addToBank(player, entry.id, entry.amount);
+  let unbanked = false;
+  Pouch.slots(player).forEach((entry, slot) => {
+    if (!entry) return;
+    const moved = Pouch.addToBank(player, entry.id, entry.amount);
+    if (moved > 0) Pouch.take(player, slot, moved);
+    if (moved < entry.amount) unbanked = true;
   });
-  Pouch.setSlots(player, Array.from({ length: Pouch.SLOTS }, () => null));
+  if (unbanked) {
+    Pouch.refreshBank(player);
+    player.sendMessage(Pouch.MESSAGE.CANT_EMPTY);
+    return;
+  }
   let short = false;
   const filled = Array.from({ length: Pouch.SLOTS }, () => null);
   loadout.runes.slice(0, count).forEach((rune, slot) => {

@@ -40,6 +40,7 @@ import net.rsprot.protocol.game.incoming.objs.OpObjT
 import net.rsprot.protocol.game.incoming.objs.OpObjV2
 import net.rsprot.protocol.game.incoming.players.OpPlayer
 import net.rsprot.protocol.game.incoming.players.OpPlayerT
+import net.rsprot.protocol.game.incoming.resumed.ResumePObjDialog
 import net.rsprot.protocol.game.incoming.resumed.ResumePCountDialog
 import net.rsprot.protocol.game.incoming.social.FriendListAdd
 import net.rsprot.protocol.game.incoming.worldentities.OpWorldEntity
@@ -125,6 +126,7 @@ class Upstream(
             is ResumePauseButton -> send(TspsWriter().u16AddLE(message.sub).i32(message.combinedId).fixed(RESUME_PAUSEBUTTON))
             is ResumePCountDialog -> if (!interceptCount(message.count)) send(TspsWriter().i32(message.count).fixed(RESUME_COUNTDIALOG))
             is ResumePLongDialog -> send(TspsWriter().i32(message.count.coerceIn(0, Int.MAX_VALUE.toLong()).toInt()).fixed(RESUME_COUNTDIALOG))
+            is ResumePObjDialog -> send(TspsWriter().string(message.obj.toString()).varByte(RESUME_NAMEDIALOG))
             is ResumePNameDialog -> send(TspsWriter().string(message.name).varByte(RESUME_NAMEDIALOG))
             is ResumePStringDialog -> send(TspsWriter().string(message.string).varByte(RESUME_STRINGDIALOG))
             // The client closes modals itself (Escape, a close button) and then tells the server. On

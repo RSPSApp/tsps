@@ -1,4 +1,4 @@
-# Native quest state: seven preserved stage formats
+# Native quest state: preserved stage formats
 
 These plugins previously sent their saved stage directly to the client. Seven completed
 saves stayed in progress in the stock quest list: their saved reward checkpoint was below
@@ -19,6 +19,14 @@ uses the same registration mapping for setStage, login and post-bootstrap replay
 | Eyes of Glouphrie | 0..12 | 0,1,5,15,20,20,20,25,27,35,36,50,60; existing Brimstail follow-up flag at10→40 |
 | Forgettable Tale | 0..18 | 0,10,20,30,30,40,40,50,50,60,70,70,100,100,105,118,120,130,140; existing conductor flag at11→80 |
 | Fremennik Trials | 0..8 | native1+votes through8, with saved stage as the legacy minimum; rewarded8→10 |
+| Mourning's End Part I | 0..14 | 0,2,3,3,3,4,5,5,5,6,6,6,7,8,9 |
+| Dream Mentor | 0,2,6,16,18,20,22,24,26,28,30 | 0,4,6,16,18,20,22,24,24,26,28 |
+
+Mourning's End Part I and Dream Mentor had the opposite boundary error: saved orders9
+and defeated28 already met native endstates9/28, while their real reward calls still awaited
+saved14/30. Their mappings preserve the actual poison/report and dream/return/reward phases,
+so the native list remains in progress until those existing reward calls. Dream Mentor's
+post-quest wire28 also keeps the cache's Jack transform visible, unlike obsolete wire30.
 
 The Avatar death, Brimstail follow-up, conductor choice and seventh council vote already
 changed durable substage flags without necessarily advancing the saved stage. Those same
@@ -45,6 +53,13 @@ the actions already implemented in each plugin:
 - [Eyes of Glouphrie](https://github.com/Zoinkwiz/quest-helper/blob/06da90f982518a093f2fe1c9cfac5547fa7053d3/src/main/java/com/questhelper/helpers/quests/theeyesofglouphrie/TheEyesOfGlouphrie.java)
 - [Forgettable Tale](https://github.com/Zoinkwiz/quest-helper/blob/06da90f982518a093f2fe1c9cfac5547fa7053d3/src/main/java/com/questhelper/helpers/quests/forgettabletale/ForgettableTale.java)
 - [Fremennik Trials](https://github.com/Zoinkwiz/quest-helper/blob/06da90f982518a093f2fe1c9cfac5547fa7053d3/src/main/java/com/questhelper/helpers/quests/thefremenniktrials/TheFremennikTrials.java)
+
+- [Mourning's End Part I](https://github.com/Zoinkwiz/quest-helper/blob/06da90f982518a093f2fe1c9cfac5547fa7053d3/src/main/java/com/questhelper/helpers/quests/mourningsendparti/MourningsEndPartI.java)
+- [Dream Mentor](https://github.com/Zoinkwiz/quest-helper/blob/06da90f982518a093f2fe1c9cfac5547fa7053d3/src/main/java/com/questhelper/helpers/quests/dreammentor/DreamMentor.java)
+
+A separate full cache scan found no direct NPC/loc morph using mourning_quest517,
+and exactly two NPC morphs using dream_prog3618 (6126 and6163). Sibling controls and
+server encounter predicates continue using their existing saved fields.
 
 No packet capture establishes every intermediate transition here; the guide is progression
 evidence, not packet-for-packet timing proof. Existing quest mechanics and their recorded

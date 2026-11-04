@@ -30,6 +30,8 @@ const cases = [
     ['EyesOfGlouphrie', 'the_eyes_of_glouphrie', [0,1,2,3,4,5,6,7,8,9,10,11,12], [0,1,5,15,20,20,20,25,27,35,36,50,60]],
     ['ForgettableTale', 'forgettable_tale', [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], [0,10,20,30,30,40,40,50,50,60,70,70,100,100,105,118,120,130,140]],
     ['FremennikTrials', 'fremennik_trials', [0,1,2,3,4,5,6,7,8], [0,1,2,3,4,5,6,7,10]],
+    ['MourningsEndPartI', 'mournings_end_part_i', [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14], [0,2,3,3,3,4,5,5,5,6,6,6,7,8,9]],
+    ['DreamMentor', 'dream_mentor', [0,2,6,16,18,20,22,24,26,28,30], [0,4,6,16,18,20,22,24,24,26,28]],
 ] as const;
 
 before(async () => {
@@ -165,6 +167,12 @@ test('native progress also restores the cache NPC morphs rather than only list c
     eagles.setStage(f.player,8);
     assert.equal(CacheDefinitions.resolveNpc(2023,f.sender),undefined,'Nickolaus leaves the nest');
     assert.equal(CacheDefinitions.resolveNpc(2024,f.sender)?.id,1485,'Nickolaus is at camp');
+    const dream=quest('dream_mentor');
+    for(const stage of [16,26,28,30]) {
+        dream.setStage(f.player,stage);
+        assert.equal(CacheDefinitions.resolveNpc(6126,f.sender)?.id,3472,
+            'native Jack remains available at armour, dream, return and completed phases');
+    }
 });
 test('Fairytale II starts at acceptance, after the native inclusive unstarted threshold', t => {
     const q=quest('fairytale_ii_cure_a_queen'), f=fixture(t);
@@ -186,6 +194,33 @@ test('Fairytale II starts at acceptance, after the native inclusive unstarted th
     assert.equal(wire(q,f.sent),20);
     assert.equal(nativeStatus(q),0);
     assert.match(q.buildJournal(f.player,q).join(' '),/Martin asked me to find out/);
+});
+test('late Dream Mentor and Mourning checkpoints stay unfinished until their existing reward call', t => {
+    for(const [key,stage,nativeValue] of [['mournings_end_part_i',13,8],['dream_mentor',28,26]] as const) {
+        const q=quest(key), f=fixture(t,{['quest.'+key+'.stage']:String(stage),'quest.points':17});
+        const skills=PluginManager.getCoreApi().Skill.values();
+        const initialXp=skills.map((skill:any)=>f.player.getSkillManager().getExperience(skill));
+        for(const replay of [logins.find(fn=>fn===Q.sendQuestVarps), (event:any)=>{for(const fn of custom.get('player:bootstrap-complete')??[])fn(event);}]) {
+            replay!({player:f.player});
+            assert.equal(wire(q,f.sent),nativeValue);
+            assert.equal(nativeStatus(q),0,'native cache must not show green before reward');
+            assert.equal(q.isComplete(f.player),false);
+            assert.equal(q.getStage(f.player),stage);
+            assert.equal(f.player.getAttribute('quest.points'),17);
+            assert.deepEqual(skills.map((skill:any)=>f.player.getSkillManager().getExperience(skill)),initialXp);
+        }
+        assert.equal(q.complete(f.player,{scroll:false,announce:false}),true);
+        assert.equal(q.getStage(f.player),q.completionValue);
+        assert.equal(nativeStatus(q),2);
+        assert.equal(f.player.getAttribute('quest.points'),17+q.questPoints);
+        const items=f.player.getInventory().getItems().map((item:any)=>item.clone());
+        const xp=skills.map((skill:any)=>f.player.getSkillManager().getExperience(skill));
+        assert.ok(xp.some((value:number,i:number)=>value>initialXp[i]),'existing XP reward is paid');
+        assert.equal(q.complete(f.player,{scroll:false,announce:false}),false);
+        assert.equal(f.player.getAttribute('quest.points'),17+q.questPoints);
+        assert.deepEqual(f.player.getInventory().getItems(),items);
+        assert.deepEqual(skills.map((skill:any)=>f.player.getSkillManager().getExperience(skill)),xp);
+    }
 });
 test('optional external evidence export contains only native state',()=>{
     if(process.env.NATIVE_STATE_CASES_OUT) fs.writeFileSync(process.env.NATIVE_STATE_CASES_OUT,JSON.stringify(exported,null,2));

@@ -41,6 +41,26 @@ export class EquipPacketListener {
     return a.getId() === b.getId() && JSON.stringify(a.getMeta() ?? null) === JSON.stringify(b.getMeta() ?? null);
   }
 
+  /**
+   * Empties the clicked slot for a worn item: it joins a stack it matches, else takes the slot, so a
+   * worn stack never sits beside its own kind. False, with nothing changed, if the stack has no room.
+   */
+  private static displace(inventory: any, slot: number, worn: any): boolean {
+    const joinsStack = worn.getDefinition().isStackable() &&
+      inventory.getItems().some((held: any) => EquipPacketListener.sameStack(held, worn));
+    if (!joinsStack) {
+      inventory.setItem(slot, worn);
+      return true;
+    }
+    if (inventory.getAddableAmount(worn) < worn.getAmount()) {
+      inventory.full();
+      return false;
+    }
+    inventory.deleteAtSlot(slot, inventory.getItems()[slot].getAmount(), false);
+    inventory.add(worn, false);
+    return true;
+  }
+
   public static resolveEquipmentSlot(groupId: number, childId: number): number {
     const firstChild = groupId === 387 ? 15 : groupId === 84 ? 10 : -1;
     return firstChild < 0
@@ -173,14 +193,13 @@ export class EquipPacketListener {
 
       const shield = equipment.getItems()[Equipment.SHIELD_SLOT].clone();
       const weapon = equipment.getItems()[Equipment.WEAPON_SLOT].clone();
+      if (weapon.getId() === -1) {
+        inventory.setItem(slot, new Item(-1, 0));
+      } else if (!EquipPacketListener.displace(inventory, slot, weapon)) {
+        return;
+      }
       equipment.setItem(Equipment.SHIELD_SLOT, new Item(-1, 0));
       equipment.setItem(Equipment.WEAPON_SLOT, item);
-
-      if (weapon.getId() !== -1) {
-        inventory.setItem(slot, weapon);
-      } else {
-        inventory.setItem(slot, new Item(-1, 0));
-      }
 
       if (shield.getId() !== -1) {
         inventory.add(shield, false);
@@ -190,7 +209,7 @@ export class EquipPacketListener {
       equipment.getItems()[Equipment.WEAPON_SLOT].getDefinition().isDoubleHanded()
     ) {
       const weapon = equipment.getItems()[Equipment.WEAPON_SLOT].clone();
-      inventory.setItem(slot, weapon);
+      if (!EquipPacketListener.displace(inventory, slot, weapon)) return;
       equipment.setItem(Equipment.WEAPON_SLOT, new Item(-1, 0));
       equipment.setItem(Equipment.SHIELD_SLOT, item);
       EquipPacketListener.resetWeapon(player, true);
@@ -200,19 +219,7 @@ export class EquipPacketListener {
         currentlyEquipped.getDefinition().getEquipmentType().getSlot() ===
           equipmentSlot
       ) {
-        // The clicked slot empties: worn ammo joins a stack it matches, anything else takes the slot.
-        const joinsStack = currentlyEquipped.getDefinition().isStackable() &&
-          inventory.getItems().some((held: any) => EquipPacketListener.sameStack(held, currentlyEquipped));
-        if (joinsStack) {
-          if (inventory.getAddableAmount(currentlyEquipped) < currentlyEquipped.getAmount()) {
-            inventory.full();
-            return;
-          }
-          inventory.deleteAtSlot(slot, item.getAmount(), false);
-          inventory.add(currentlyEquipped, false);
-        } else {
-          inventory.setItem(slot, currentlyEquipped);
-        }
+        if (!EquipPacketListener.displace(inventory, slot, currentlyEquipped)) return;
         equipment.setItem(equipmentSlot, item);
       } else {
         inventory.setItem(slot, new Item(-1, 0));

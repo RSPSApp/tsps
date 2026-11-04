@@ -112,3 +112,9 @@ default.
 
 These switches control whether a plugin is loaded; they are distinct from `pluginConfig`, which
 sets plugin-specific options such as `TutorialIsland:allowSkip`.
+
+## PvP Arena worlds
+
+Ranked PvP Arena match finding (the Grouping tab's PvP Arena button, `DuelArena` plugin) is only
+available on designated worlds. Enable it with `"pluginConfig": { "DuelArena:pvpArenaWorld": true }`
+in `world.local.json` (default off). Legacy Duels are unaffected.

@@ -177,6 +177,7 @@ function completed(raid) {
     const count = (Number(player.getAttribute(attribute)) || 0) + 1;
     player.setAttribute(attribute, count);
     player.sendMessage(`Your completed Chambers of Xeric${raid.challenge ? " Challenge Mode" : ""} count is: <col=ff0000>${count}</col>.`);
+    Shared.api().emitCustomEvent("diary:task", { player, diary: "kourend", task: "complete-a-raid-in-the-chambers-of-xeric" });
   }
   generate(raid, inTime);
 }

@@ -529,6 +529,7 @@ export class LunarSpells {
             player.getPacketSender()
                 .sendMagicTabInterface(MONSTER_STATS_INTERFACE)
                 .sendClientScript(MONSTER_STATS_SCRIPT, this.monsterStats(target));
+            PluginManager.emitCustomEvent("magic:monster-examine", { player, npc: target });
         });
     }
 

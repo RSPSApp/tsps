@@ -468,6 +468,7 @@ function handleCraftRunes(event) {
       rolls: craftedEssence,
       runeId: runeData.runeId,
       amountPerEssence,
+      altarId: event.objectId,
     });
   }
 

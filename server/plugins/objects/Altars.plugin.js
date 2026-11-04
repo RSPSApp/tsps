@@ -8,6 +8,8 @@ const { ObjectIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 const PRAY_AT_ALTAR_ANIMATION = new Animation(645);
 const EAST_ARDOUGNE_CHURCH_ALTAR = [2617, 3309, 0];
 const ARDOUGNE_ALTAR_TASK = "use-the-altar-in-east-ardougne-s-church";
+const KOUREND_CASTLE_ALTAR = { id: 18258, x: 1617, y: 3672, z: 2 };
+const KOUREND_CASTLE_ALTAR_TASK = "pray-at-the-altar-in-kourend-castle";
 
 // The easy Wilderness Diary's "Pray at the Chaos Altar in Western Wilderness.": the Chaos Temple
 // (church) altar at level 38 (OSRS Wiki: Chaos Temple), not the Wilderness hut's.
@@ -81,15 +83,26 @@ function prayerAltar({ player, object }) {
   const prayerBefore = skillManager.getCurrentLevel(Skill.PRAYER);
   const handled = handlePrayerAltar(player);
 
-  if (object && skillManager.getCurrentLevel(Skill.PRAYER) > prayerBefore && object.getId() === ObjectIds.ALTAR) {
+  if (object && skillManager.getCurrentLevel(Skill.PRAYER) > prayerBefore && player.getPrivateArea() === null) {
     const location = object.getLocation();
-    const [x, y, z] = EAST_ARDOUGNE_CHURCH_ALTAR;
-    if (location.getX() === x && location.getY() === y && location.getZ() === z
-      && player.getPrivateArea() === null) {
+    if (object.getId() === ObjectIds.ALTAR) {
+      const [x, y, z] = EAST_ARDOUGNE_CHURCH_ALTAR;
+      if (location.getX() === x && location.getY() === y && location.getZ() === z) {
+        api.emitCustomEvent("diary:task", {
+          player,
+          diary: "ardougne",
+          task: ARDOUGNE_ALTAR_TASK,
+        });
+      }
+    }
+    if (object.getId() === KOUREND_CASTLE_ALTAR.id
+      && location.getX() === KOUREND_CASTLE_ALTAR.x
+      && location.getY() === KOUREND_CASTLE_ALTAR.y
+      && location.getZ() === KOUREND_CASTLE_ALTAR.z) {
       api.emitCustomEvent("diary:task", {
         player,
-        diary: "ardougne",
-        task: ARDOUGNE_ALTAR_TASK,
+        diary: "kourend",
+        task: KOUREND_CASTLE_ALTAR_TASK,
       });
     }
   }

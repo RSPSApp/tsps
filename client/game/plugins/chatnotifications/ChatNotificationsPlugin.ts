@@ -63,7 +63,7 @@ export class ChatNotificationsPlugin extends Plugin {
     private readonly highlightPatterns: RegExp[] = [];
     /** Set while a notification is written to chat, so it isn't matched itself. */
     private notifying = false;
-    private readonly listener = (message: ChatMessage) => this.onChatMessage(message);
+    private readonly listener = (message: ChatMessage) => this.handleChatMessage(message);
 
     constructor(client?: Client, notifier?: NotifyClient, history: ChatHistoryStore = chatHistory) {
         super();
@@ -125,8 +125,8 @@ export class ChatNotificationsPlugin extends Plugin {
         }
     }
 
-    /** RuneLite's onChatMessage, on the line about to be stored. */
-    onChatMessage(message: ChatMessage): void {
+    /** Handle the history node before insertion, rather than the API EventBus payload. */
+    private handleChatMessage(message: ChatMessage): void {
         if (this.notifying) return;
         const name = message.from ?? "";
         switch (message.type) {

@@ -11,7 +11,11 @@
  *   all of it; every point earns a water, earth, nature, death or blood rune, given on leaving;
  * - fruit and the bones the spells turn into fruit can't be taken in;
  * - the room's bones and fruit never leave it; logging out keeps them (since 8 May 2024).
- * Not here: the falling bones (the Wiki gives no frequency) and so the room's 10-point death cost.
+ * - the falling bones: every 10 ticks 40 open-floor tiles show a bone (graphics 520-523) and a
+ *   player still on one 3 ticks later takes 2 damage; they can be stepped away from (Wiki, rsprox 1757).
+ * Sounds, animations and the bones are as captured (rsprox 1757, rev 227; see the graveyard data).
+ * Not here: Bones to Bananas' sound (no cast of it is captured), protection from the bones, the
+ * hit's sound, and the room's 10-point death cost (Wiki).
  */
 const Common = require("./Common.MageTrainingArena");
 
@@ -21,6 +25,9 @@ const RUNES_OWED_ATTRIBUTE = "mage-training-arena:graveyard-runes";
 const BONES = ["bones1", "bones2", "bones3", "bones4"];
 
 const graveyard = { area: null };
+/** Each player's repeating bones task, and the room's open tiles (read once from the map). */
+const rains = new Map();
+let openTiles = [];
 
 const inGraveyard = (location) => Common.inBox(location, Common.data.graveyard.bounds);
 
@@ -115,6 +122,7 @@ function castBonesSpell(event) {
   player.performAnimation(new Animation(722));
   player.performGraphic(new Graphic(141, 0, GraphicHeight.MIDDLE));
   player.getSkillManager().addExperiences(Skill.MAGIC, spell.baseExperience());
+  if (spell.data.sound) player.getPacketSender().sendSoundEffect(spell.data.sound, 1, 0, 255);
 }
 
 // --- The food chute
@@ -137,6 +145,8 @@ function depositFruit(player, random = Math.random) {
   player.getSkillManager().addExperiences(Common.core.Skill.MAGIC, bananas * room.bananaXp + peaches * room.peachXp);
   player.setAttribute(RUNES_OWED_ATTRIBUTE, (Number(player.getAttribute(RUNES_OWED_ATTRIBUTE)) || 0) + points);
   player.sendMessage(Common.message("fruitDeposited", { fruit, points, s: points === 1 ? "" : "s" }));
+  player.performAnimation(new Common.core.Animation(room.depositAnimation));
+  player.getPacketSender().sendSoundEffect(room.depositSound, 1, 0, 255);
   updateOverlay(player);
   return { fruit, points };
 }
@@ -182,6 +192,77 @@ function removeRoomItems(player) {
   return removed;
 }
 
+// --- The falling bones
+
+/** The room's open-floor tiles: the 580 tiles captured for a bone are all unblocked (rsprox 1757). */
+function boneTiles() {
+  const { RegionManager, Location } = Common.core;
+  const [minX, maxX, minY, maxY] = Common.data.graveyard.bones.tiles;
+  const z = Common.data.graveyard.bounds[4];
+  const tiles = [];
+  for (let x = minX; x <= maxX; x++) {
+    for (let y = minY; y <= maxY; y++) if (!RegionManager.blocked(new Location(x, y, z), null)) tiles.push([x, y]);
+  }
+  return tiles;
+}
+
+/** One burst for a player in the room: bones on distinct open tiles and the four area sounds; the tiles. */
+function rain(player, random = Math.random) {
+  const { Graphic, Location } = Common.core;
+  const { bones } = Common.data.graveyard;
+  const z = Common.data.graveyard.bounds[4];
+  const sender = player.getPacketSender();
+  openTiles = openTiles.length > 0 ? openTiles : boneTiles();
+  const pool = openTiles.slice();
+  const hit = [];
+  for (let i = 0; i < bones.graphicCount && pool.length > 0; i++) {
+    const pick = i + Math.floor(random() * (pool.length - i));
+    [pool[i], pool[pick]] = [pool[pick], pool[i]];
+    const [x, y] = pool[i];
+    const id = bones.graphics[Math.floor(random() * bones.graphics.length)];
+    sender.sendGraphic(new Graphic(id, bones.graphicDelay), new Location(x, y, z));
+    hit.push(`${x},${y}`);
+  }
+  for (const [x, y] of bones.soundPoints) {
+    sender.sendAreaSound(bones.sound, x, y, z, 1, 0, bones.soundRadius, bones.soundAttenuation);
+  }
+  Common.later(bones.landingTicks, () => land(player, hit));
+}
+
+/** The bones land: a player still on one of their tiles takes the hit. */
+function land(player, tiles) {
+  const { HitDamage, HitMask } = Common.core;
+  if (player.isRegistered?.() === false || !inGraveyard(player.getLocation())) return;
+  const here = player.getLocation();
+  if (!tiles.includes(`${here.getX()},${here.getY()}`)) return;
+  player.getCombat().getHitQueue().addPendingDamage([new HitDamage(Common.data.graveyard.bones.damage, HitMask.RED)]);
+}
+
+/** Starts the player's repeating bones; it ends itself once they are out of the room. */
+function startRain(player) {
+  stopRain(player);
+  const { Task, TaskManager } = Common.core;
+  const task = new (class extends Task {
+    constructor() {
+      super(Common.data.graveyard.bones.period, null, false);
+    }
+    execute() {
+      if (rains.get(player) !== this || player.isRegistered?.() === false || !inGraveyard(player.getLocation())) {
+        this.stop();
+        return;
+      }
+      rain(player);
+    }
+  })();
+  rains.set(player, task);
+  TaskManager.submit(task);
+}
+
+function stopRain(player) {
+  rains.get(player)?.stop?.();
+  rains.delete(player);
+}
+
 function updateOverlay(player) {
   player.getPacketSender().sendString(Common.points(player, "graveyard").toLocaleString("en-GB"), Common.ids.components.graveyardPoints);
 }
@@ -223,12 +304,14 @@ function defineArea() {
       const player = mobile.getAsPlayer();
       Common.sendOverlay(player, Common.ids.interfaces.graveyard);
       updateOverlay(player);
+      startRain(player);
     }
 
     postLeave(mobile, logout) {
       if (!mobile?.isPlayer?.()) return;
       const player = mobile.getAsPlayer();
       Common.closeOverlay(player);
+      stopRain(player);
       if (logout) return;
       if (removeRoomItems(player) > 0) player.sendMessage(Common.message("itemsTaken"));
       payRunes(player);
@@ -249,6 +332,6 @@ function attach(api) {
 }
 
 module.exports = {
-  attach, graveyard, inGraveyard, pileOf, nextBone, grab, fruitFor, castBonesSpell, depositFruit, payRunes,
+  attach, graveyard, inGraveyard, pileOf, nextBone, grab, fruitFor, castBonesSpell, depositFruit, payRunes, rain, boneTiles,
   removeRoomItems, enter, defineArea, PEACHES_UNLOCKED_ATTRIBUTE, RUNES_OWED_ATTRIBUTE,
 };

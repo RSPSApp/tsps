@@ -61,6 +61,14 @@ test('opening ingredients and dirty blast use actual item-on-item progression',(
  assert.match(step({stage:1,inventory:{DIRTY_BLAST:1,EYE_OF_NEWT:1,GREENMANS_ALE:1,ROTTEN_TOMATO:1}},'START').id,/handover/);
  assert.ok(step({stage:0,levels:{COOKING:1}},'START').requirements.some(r=>r.name==='Cooking 10'&&!r.met));
 });
+test('pending banquet guides first entry and keeps native progression before the frozen room',()=>{
+ const pending=fixture({stage:4,attrs:{'feast-pending':true}});
+ assert.equal(completionProjection(pending.player)[1850],2);
+ assert.equal(pending.run('START').activeStep.id,'opening-feast');
+ assert.equal(pending.run('START').activeStep.targets[0].id,12349);
+ assert.equal(completionProjection(fixture({stage:4}).player)[1850],3,'historical saves retain the frozen-room phase');
+ assert.equal(completionProjection(fixture({stage:4,flags:255}).player)[1850],4);
+});
 test('Dwarf branches use actual ale counters, bartender knowledge, cake dialogue and cooling',()=>{
  const cases=[[{},'dwarf-rohak'],[{'dwarf-state':16},'dwarf-ale'],[{'dwarf-state':4},'dwarf-drunk'],[{'dwarf-state':0x200},'dwarf-sober'],[{'dwarf-state':0x400},'dwarf-ingredients'],[{'dwarf-state':0x800},'dwarf-cake']];
  for(const [attrs,id]of cases)assert.equal(step({attrs},'DWARF').id,id);

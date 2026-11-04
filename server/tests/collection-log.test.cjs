@@ -362,3 +362,77 @@ test("a newly earned item is told as collection-log:new-item, by any route, and 
   assert.deepEqual(heard, [CARPENTERS_BOOTS], "once, when it's new");
   customEvents.set("collection-log:new-item", listeners);
 });
+
+test("imported Corp sigils use one weighted access and still reach the log", async (t) => {
+  const { _test, __internals } = require("../plugins/npcs/NpcDrops.plugin");
+  _test.loadDrops();
+  const corp = _test.tablesByNpc.get(319)[0];
+  const sigils = corp.entries.filter((entry) => [12819, 12823, 12827].includes(entry.item_id));
+  assert.deepEqual(
+    sigils.map((entry) => [entry.item_id, entry.weight, entry.out_of, entry.roll_group, entry.group_access_weight, entry.group_access_out_of]),
+    [
+      [12823, 3, 7, "Sigils", 1, 585],
+      [12827, 3, 7, "Sigils", 1, 585],
+      [12819, 1, 7, "Sigils", 1, 585],
+    ],
+  );
+  const sequence = (...values) => { let index = 0; return () => values[index++] ?? 0; };
+  const dropPlayer = createPlayer();
+  dropPlayer.getEquipment = () => ({ get: () => null, getItems: () => [] });
+
+  // Access hits, then the weighted pick lands on each source weight in turn.
+  for (const [roll, itemId] of [[0, 12823], [3 / 7, 12827], [6 / 7, 12819]]) {
+    t.mock.method(Math, "random", sequence(0, roll));
+    const rolled = __internals.rollOnce(corp, sigils, dropPlayer, true, null, []);
+    assert.deepEqual(rolled.map((drop) => drop.itemId), [itemId]);
+  }
+
+  // A sigil hit replaces the main roll; tertiary rolls are still made.
+  t.mock.method(Math, "random", () => 0);
+  const hit = __internals.rollTable(corp, dropPlayer, null);
+  const hitSigils = hit.filter((drop) => [12819, 12823, 12827].includes(drop.itemId));
+  assert.equal(hitSigils.length, 1, "exactly one sigil per kill");
+  assert.ok(!hit.some((drop) => drop.itemId === 4091), "main loot is replaced on a sigil hit");
+  assert.ok(hit.some((drop) => corp.tertiary.some((entry) => entry.item_id === drop.itemId)), "tertiary rows still roll");
+
+  // A miss keeps the ordinary main roll and reaches no sigil.
+  t.mock.method(Math, "random", sequence(0.5, 0));
+  const miss = __internals.rollTable(corp, dropPlayer, null);
+  assert.ok(!miss.some((drop) => [12819, 12823, 12827].includes(drop.itemId)));
+  assert.ok(miss.some((drop) => drop.itemId === 4091), "main loot is retained on a miss");
+
+  // Always and tertiary rows survive a conditional access hit.
+  const synthetic = {
+    entries: [
+      { item_id: 526, name: "Bones", quantity: [1, 1], always: true },
+      ...sigils,
+      { item_id: 4091, name: "Mystic robe top", quantity: [1, 1], weight: 1, out_of: 512 },
+    ],
+    main_max_roll: 512,
+    tertiary: [{ item_id: 995, name: "Coins", quantity: [1, 1], weight: 1, out_of: 2 }],
+  };
+  t.mock.method(Math, "random", () => 0);
+  const syntheticHit = __internals.rollTable(synthetic, dropPlayer, null);
+  assert.equal(syntheticHit.filter((drop) => [12819, 12823, 12827].includes(drop.itemId)).length, 1);
+  assert.ok(syntheticHit.some((drop) => drop.itemId === 526), "always drop preserved");
+  assert.ok(syntheticHit.some((drop) => drop.itemId === 995), "tertiary drop preserved");
+  assert.ok(!syntheticHit.some((drop) => drop.itemId === 4091), "main replaced on a group hit");
+
+  const corpLog = createPlayer();
+  Clog._test.onLoot({ player: corpLog, drops: hitSigils, npc: { getDefinition: () => ({ getName: () => "Corporeal Beast" }) } });
+  await Promise.resolve();
+  assert.equal(Progress.obtained(corpLog, hitSigils[0].itemId), 1);
+
+  const branda = _test.tablesByNpc.get(12596)[0];
+  const amulet = branda.entries.find((entry) => entry.name === "Giantsoul amulet");
+  assert.equal(amulet.item_id, 30637);
+  assert.equal(amulet.out_of, 16);
+  t.mock.method(Math, "random", () => 0);
+  const royal = __internals.rollOnce(branda, [amulet], createPlayer(), true, null, []);
+  assert.deepEqual(royal.map((drop) => drop.itemId), [30637]);
+  const royalLog = createPlayer();
+  Clog._test.onLoot({ player: royalLog, drops: royal, npc: { getDefinition: () => ({ getName: () => "Branda the Fire Queen" }) } });
+  await Promise.resolve();
+  assert.equal(Progress.obtained(royalLog, 30637), 1);
+  assert.equal(Progress.obtained(royalLog, 30638), 0);
+});

@@ -391,7 +391,7 @@ test('native Castle Wars supplies work with production plugin ordering and the c
     const read = fs.readFileSync;
     t.mock.method(fs, 'readFileSync', function (file, ...args) {
       const content = read.call(this, file, ...args);
-      if (typeof file !== 'string' || !file.endsWith('/custom-shops.json')) return content;
+      if (typeof file !== 'string' || path.basename(file) !== 'custom-shops.json') return content;
       return JSON.stringify([...JSON.parse(content), { id: 99999, name: 'Explicit Lanthus shop', currency: 'COINS',
         originalStock: [{ id: 995, amount: 1 }], npcInteractions: [{ npcIds: [11650], optionSlot: 4 }] }]);
     });

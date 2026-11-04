@@ -164,8 +164,8 @@ export class MapObjects {
     }
 
     /**
-     * All scenery at a tile in the area's view: template/private scenery for instances and the
-     * loaded shared map for the main world. Private areas which overlay the main world see both.
+     * All scenery at a tile in the area's view: template/private scenery for template-map
+     * instances and the loaded cache map for normal-map scenes, including private encounters.
      */
     public static getObjectsAt(location: Location, privateArea: PrivateArea): GameObject[] {
         const objects = new Set<GameObject>();
@@ -173,12 +173,12 @@ export class MapObjects {
             for (const object of privateArea.getObjects()) {
                 if (object.getLocation().equals(location)) objects.add(object);
             }
-            // TemplatedInstanceArea keeps its copied map locs outside PrivateArea.entities.
-            const templates = (privateArea as any).getTemplateObjects?.(location) ?? [];
-            for (const object of templates) objects.add(object);
+            for (const object of privateArea.getTemplateObjects(location)) objects.add(object);
         }
 
-        if (!privateArea || privateArea.countsAsMainWorld()) {
+        // countsAsMainWorld controls cross-area visibility, not which map scenery is drawn.
+        // Ordinary private encounters still use the cache map; template instances do not.
+        if (!privateArea || !privateArea.usesTemplateMap()) {
             RegionManager.loadMapFiles(location.getX(), location.getY());
             const mapLocation = location.getZ() >= 4 ? location.clone().setZ(0) : location;
             const hash = this.getHash(mapLocation.getX(), mapLocation.getY(), mapLocation.getZ());

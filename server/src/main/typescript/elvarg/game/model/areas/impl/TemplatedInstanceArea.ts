@@ -140,6 +140,10 @@ export class TemplatedInstanceArea extends PrivateArea {
         return this.sceneVersion;
     }
 
+    public override usesTemplateMap(): boolean {
+        return true;
+    }
+
     public getChunk(plane: number, chunkX: number, chunkY: number): TemplateChunk | null {
         return this.inGrid(plane, chunkX, chunkY) ? this.chunks[this.chunkIndex(plane, chunkX, chunkY)] : null;
     }
@@ -233,7 +237,7 @@ export class TemplatedInstanceArea extends PrivateArea {
     }
 
     /** Every template loc on a tile. */
-    public getTemplateObjects(location: Location): GameObject[] {
+    public override getTemplateObjects(location: Location): GameObject[] {
         return this.locsAt(location).map((loc) => this.objectFor(loc));
     }
 

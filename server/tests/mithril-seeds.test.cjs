@@ -11,6 +11,7 @@ const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
 const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const { ObjectManager } = require("../dist/game/entity/impl/object/ObjectManager");
 const { PrivateArea } = require("../dist/game/model/areas/impl/PrivateArea");
+const { Boundary } = require("../dist/game/model/Boundary");
 const { Location } = require("../dist/game/model/Location");
 const { RegionManager } = require("../dist/game/collision/RegionManager");
 const { PluginManager } = require("../dist/plugins/PluginManager");
@@ -65,6 +66,14 @@ function makePlayer(location, privateArea = null) {
   return { player, inventory, messages, seed };
 }
 
+function makeCountDraynorArea() {
+  return new (class extends PrivateArea {
+    constructor() {
+      super([new Boundary(3072, 3084, 9766, 9779, 0)]);
+    }
+  })();
+}
+
 test("planting is refused on walkable map scenery before consuming the seed", () => {
   const tile = new Location(3208, 3236, 0);
   const mapFlower = MapObjects.get(1195, tile.clone(), null);
@@ -78,10 +87,31 @@ test("planting is refused on walkable map scenery before consuming the seed", ()
   assert.equal(ObjectManager.objectsAt(tile).some((object) => object.getId() === core.ObjectIdentifiers.FLOWERS_12), false);
 });
 
+test("planting is refused on base-map scenery in a normal-map private encounter", () => {
+  const tile = new Location(3077, 9772, 0);
+  const mapCandle = MapObjects.get(11473, tile.clone(), null);
+  assert.ok(mapCandle?.isMapOriginal(), "the cache has the Count Draynor entrance candle on this tile");
+  assert.equal(mapCandle.getType(), 10);
+
+  const area = makeCountDraynorArea();
+  try {
+    assert.ok(MapObjects.getObjectsAt(tile, area).includes(mapCandle),
+      "a normal-map private encounter displays its underlying cache scenery");
+    const { player, seed, messages } = makePlayer(tile, area);
+    assert.equal(plant({ player, item: seed, itemId: seed.id, slot: 0 }), true);
+    assert.equal(seed.amount, 1, "base-map scenery blocks planting before consuming the seed");
+    assert.deepEqual(messages, ["You cannot plant a seed right here."]);
+    assert.equal(ObjectManager.objectsAt(tile).some((object) => object.getId() === core.ObjectIdentifiers.FLOWERS_12), false);
+  } finally {
+    area.destroy();
+  }
+});
+
 test("runtime scenery in another private area does not block planting at the same coordinates", () => {
-  const tile = new Location(3208, 3236, 0);
-  const otherArea = new (class extends PrivateArea {})();
-  const playerArea = new (class extends PrivateArea {})();
+  const tile = new Location(3072, 9766, 0);
+  const otherArea = makeCountDraynorArea();
+  const playerArea = makeCountDraynorArea();
+  assert.deepEqual(MapObjects.getObjectsAt(tile, playerArea), [], "the shared cache tile is empty here");
   const blocker = new GameObject(core.ObjectIdentifiers.FLOWERS_12, tile.clone(), 10, 0, otherArea);
   ObjectManager.register(blocker, true);
 

@@ -1026,6 +1026,7 @@
       "object": 60840,
       "at": [2698,9493,0],
       "level": 34,
+      "xp": 10,
       "between": {
         "ends": [[2698,9492,0],[2698,9500,0]],
         "via": [[2698,9496]],
@@ -4068,6 +4069,7 @@
         [1637,3804,1],[1637,3806,1],[1637,3808,1],[1637,3810,1]
       ],
       "level": 52,
+      "xp": 3,
       "script": "arceuusLibraryRailing",
       "unverified": "the jump-down animation and duration (no RSProx capture)",
       "note": "OSRS Wiki: middle floor railing requires 52 Agility; locs 28373/28374 and placements from cache; landing tiles follow the rail face"
@@ -4082,6 +4084,7 @@
         [1637,3804,2],[1637,3806,2],[1637,3808,2],[1637,3810,2]
       ],
       "level": 62,
+      "xp": 4,
       "script": "arceuusLibraryRailing",
       "unverified": "the jump-down animation and duration (no RSProx capture)",
       "note": "OSRS Wiki: top floor railing requires 62 Agility; locs 28373/28374 and placements from cache; landing tiles follow the rail face"

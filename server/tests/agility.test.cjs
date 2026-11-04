@@ -153,8 +153,8 @@ function tileOf(player) {
 }
 
 /** Routes the player the way the object packet would, clicks, and plays the obstacle out. */
-function operate(player, objectId, objectTile) {
-  const object = gameObject(objectId, ...objectTile);
+function operate(player, objectId, objectTile, face = 0) {
+  const object = gameObject(objectId, ...objectTile, face);
   const route = { player, object, objectId, clickType: 1, destination: null };
   hooks.route.forEach((handler) => handler(route));
   if (route.destination) {
@@ -413,6 +413,23 @@ test("shortcut audit: current directional Agility gates and captured no-sequence
     { sound: 2453 },
     { msg: "You climb over the wall." },
   ]);
+});
+
+test("Arceuus railings and the Brimhaven demon pipe award their Agility XP on completion", () => {
+  const middle = createPlayer(1627, 3806, 1, 52);
+  operate(middle, 28373, [1628, 3806, 1], 3);
+  assert.deepEqual(tileOf(middle), [1629, 3806, 0]);
+  assert.equal(middle.state.xp, 3);
+
+  const top = createPlayer(1627, 3806, 2, 62);
+  operate(top, 28373, [1628, 3806, 2], 3);
+  assert.deepEqual(tileOf(top), [1629, 3806, 0]);
+  assert.equal(top.state.xp, 4);
+
+  const demonPipe = createPlayer(2698, 9492, 0, 34);
+  operate(demonPipe, 60840, [2698, 9493, 0]);
+  assert.deepEqual(tileOf(demonPipe), [2698, 9500, 0]);
+  assert.equal(demonPipe.state.xp, 10);
 });
 
 test("the cache-backed Varrock broken fence crosses its clipped north-south edge", () => {

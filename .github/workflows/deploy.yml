@@ -65,6 +65,7 @@ jobs:
               with:
                   name: web
                   path: web
+                  include-hidden-files: true
                   retention-days: 1
 
     deploy:

@@ -44,7 +44,7 @@ function maxHit(player) {
 }
 
 function flightCycles(from, to) {
-  return PROJECTILE.start + Math.max(1, from.getLocation().getDistance(to.getLocation())) * PROJECTILE.perTile;
+  return PROJECTILE.start + Math.max(1, core.CombatPosition.projectileDistance(from, to)) * PROJECTILE.perTile;
 }
 
 function look({ Animation, Graphic, Projectile }) {

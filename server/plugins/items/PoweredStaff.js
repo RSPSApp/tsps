@@ -240,8 +240,8 @@ function definePoweredStaff(api, config) {
 }
 
 /** Projectile cycles from the caster's tile to the target's, the distance packets use. */
-function distance(from, to) {
-  return from.getLocation().getDistance(to.getLocation());
+function distance(from, to, CombatPosition) {
+  return CombatPosition.projectileDistance(from, to);
 }
 
 /** Ticks until a hit lands with a projectile ending `endCycle` (30 cycles a tick). */

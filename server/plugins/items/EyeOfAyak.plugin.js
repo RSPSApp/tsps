@@ -69,7 +69,7 @@ function format(amount) {
 // ------------------------------------------------------------------ combat
 
 function projectileEnd(from, to) {
-  return Math.max(PROJECTILE.MIN_END, PROJECTILE.START + (Math.max(1, distance(from, to)) - 1) * PROJECTILE.PER_TILE);
+  return Math.max(PROJECTILE.MIN_END, PROJECTILE.START + (Math.max(1, distance(from, to, core.CombatPosition)) - 1) * PROJECTILE.PER_TILE);
 }
 
 function maxHit(player) {

@@ -115,12 +115,13 @@ test('cross-floor combat falls back when a zero-step range route cannot clear pr
   assert.equal(CombatRange.canReach(attacker, ranged, target), true, 'the fallback endpoint has a clear cross-floor shot');
 });
 
-test('projectile travel distance includes floor height and leaves same-floor timing unchanged', () => {
+test('projectile travel distance uses 3D Chebyshev distance and leaves same-floor timing unchanged', () => {
   const { Projectile } = require('../dist/game/model/Projectile');
   const { Location } = require('../dist/game/model/Location');
   assert.equal(Projectile.arrivalCycles(new Location(3200, 3200, 0), new Location(3201, 3200, 0)), 50);
-  assert.equal(Projectile.arrivalCycles(new Location(3200, 3200, 0), new Location(3200, 3200, 1)), 120);
-  assert.equal(Projectile.arrivalCycles(new Location(3200, 3200, 0), new Location(3201, 3200, 1)), 130);
+  assert.equal(Projectile.arrivalCycles(new Location(3200, 3200, 0), new Location(3200, 3200, 1)), 50);
+  assert.equal(Projectile.arrivalCycles(new Location(3200, 3200, 0), new Location(3201, 3200, 1)), 50);
+  assert.equal(Projectile.arrivalCycles(new Location(3200, 3200, 0), new Location(3202, 3201, 1)), 60);
 });
 
 test('cross-floor ranged and magic hitsplats wait for the slower projectile arrival', t => {
@@ -135,7 +136,7 @@ test('cross-floor ranged and magic hitsplats wait for the slower projectile arri
   t.mock.method(WeaponProfiles, 'ranged', () => ({ projectiles: [{ delay: 41, lengthAdjustment: 5, stepMultiplier: 5 }] }));
   const archer = actor(3200, 3200, 1), target = actor(3200, 3200, 0);
   assert.deepEqual(RangedCombatMethod.playerHitDelays(archer, target, 8), [3]);
-  assert.equal(MagicCombatMethod.hitDelay(archer, target), 5);
+  assert.equal(MagicCombatMethod.hitDelay(archer, target), 2);
   assert.deepEqual(RangedCombatMethod.playerHitDelays(archer, actor(3200, 3200, 1), 0), [1], 'same-floor hits keep their native timing');
 });
 

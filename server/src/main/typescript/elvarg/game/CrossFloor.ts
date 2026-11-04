@@ -2,8 +2,6 @@ import type { Location } from "./model/Location";
 
 /** Optional cross-floor visibility and ranged combat. Read after environment setup. */
 export class CrossFloor {
-    /** Tune for the visibly longer arc between planes; same-plane shots are unaffected. */
-    private static readonly PROJECTILE_TILES_PER_FLOOR = 8;
     /** Legacy combined switch remains supported when the newer switches are unset. */
     private static legacyEnabled(): boolean { return process.env.CROSS_FLOOR_VISIBILITY_AND_COMBAT === "1"; }
     static enabled(): boolean {
@@ -19,13 +17,12 @@ export class CrossFloor {
     static distance(a: Location, b: Location): number {
         return Math.max(Math.abs(a.getX() - b.getX()), Math.abs(a.getY() - b.getY()));
     }
-    /** Effective projectile travel distance includes a deliberate floor-height flight penalty. */
+    /** Extend OSRS's 2D Chebyshev distance with the discrete floor delta. */
     static projectileDistance(a: Location, b: Location): number {
         return CrossFloor.projectileDistanceFrom(CrossFloor.distance(a, b), a.getZ() - b.getZ());
     }
     static projectileDistanceFrom(horizontal: number, floorDelta: number): number {
-        const vertical = Math.abs(floorDelta) * CrossFloor.PROJECTILE_TILES_PER_FLOOR;
-        return Math.ceil(Math.hypot(horizontal, vertical));
+        return Math.max(horizontal, Math.abs(floorDelta));
     }
     static canCross(a: Location, b: Location): boolean {
         return CrossFloor.combatEnabled() && a.getZ() >= 0 && a.getZ() < 4 && b.getZ() >= 0 && b.getZ() < 4;

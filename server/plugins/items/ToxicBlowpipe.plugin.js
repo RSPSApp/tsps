@@ -472,9 +472,9 @@ function combatMethod(special) {
       return character?.getFightType?.()?.isRapid?.() === true ? Math.max(1, baseSpeed - 1) : baseSpeed;
     }
     hits(character, target) {
-      const distance = character.getLocation().getDistance(target.getLocation());
-      // The blowpipe's own hit-delay profile, as RangedCombatMethod reads it.
-      const delay = core.WeaponProfiles.hitDelays(character.getAsPlayer(), distance)[0];
+      const distance = core.CombatPosition.projectileDistance(character, target);
+      // The blowpipe's own hit-delay profile, with the shared cross-floor arrival adjustment.
+      const delay = core.RangedCombatMethod.playerHitDelays(character, target, distance)[0];
       return [new core.PendingHit(character, target, this, delay)];
     }
     start(character, target) {

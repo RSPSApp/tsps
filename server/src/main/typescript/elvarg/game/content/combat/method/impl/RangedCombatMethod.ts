@@ -44,7 +44,7 @@ export class RangedCombatMethod extends CombatMethod {
     }
 
     /** On another floor, keep the splat from resolving before its slower cross-floor shot lands. */
-    private static playerHitDelays(character: Mobile, target: Mobile, distance: number): number[] {
+    public static playerHitDelays(character: Mobile, target: Mobile, distance: number): number[] {
         const player = character.getAsPlayer();
         const delays = WeaponProfiles.hitDelays(player, distance);
         const from = CombatPosition.location(character, target);

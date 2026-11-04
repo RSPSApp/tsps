@@ -117,8 +117,7 @@ module.exports = {
         { anim: -1 },
         { walk: [[3315, 3163]], arrive: true },
       ],
-      // The Wiki lists the Teeth-grip Zip Line as failable for 1–5 damage.
-      fail: { xp: 0, steps: fallTo([3309, 3163, 0]) },
+      // Jagex removed this fail point on 8 May 2024 (Project Rebalance).
     },
     {
       object: ObjectIds.TROPICAL_TREE_27,

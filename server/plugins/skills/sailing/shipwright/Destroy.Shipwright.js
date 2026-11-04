@@ -90,7 +90,13 @@ function onAction(event) {
   }
   const valid = selected(quote) && (!loaded(quote.boat) || quote.warned);
   requests.delete(event.player);
-  if (event.action === DECLINE || !valid || !api.core.Sailing.removeOwnedBoat(event.player, quote.boat)) {
+  if (event.action === DECLINE || !valid) {
+    event.end = true;
+    return;
+  }
+  const request = { player: event.player, owned: quote.boat, allow: true };
+  api.emitCustomEvent('sailing:can-destroy-boat', request);
+  if (!request.allow || !api.core.Sailing.removeOwnedBoat(event.player, quote.boat)) {
     event.end = true;
     return;
   }

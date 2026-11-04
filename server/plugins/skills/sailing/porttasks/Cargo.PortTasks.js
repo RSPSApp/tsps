@@ -120,6 +120,18 @@ function canBankCargo(event) {
   event.player.sendMessage(CANNOT_REMOVE);
 }
 
+/** Required task cargo must remain recoverable through the hold and source ledger. */
+function canDestroyBoat(event) {
+  const required = common.slots(event.player).some(slot => {
+    const task = slot && common.taskById(slot.id);
+    return task?.cancellable === false && slot.taken > slot.delivered
+      && event.owned.cargo.some(item => item?.id === task.crate && item.amount > 0);
+  });
+  if (!required) return;
+  event.allow = false;
+  event.player.sendMessage("Return your required port task cargo before destroying this boat.");
+}
+
 function attach(api) {
   common.init(api);
   api.persistAttribute(common.CARRIED_SLOT_ATTRIBUTE, -1);
@@ -127,6 +139,7 @@ function attach(api) {
   api.onCustomEvent("port-tasks:cargo-released", forget);
   api.onCustomEvent("teleport:landed", landed);
   api.onCustomEvent("sailing:can-use-hands", canUseHands);
+  api.onCustomEvent("sailing:can-destroy-boat", canDestroyBoat);
   api.onCanEquip(canEquip);
   api.onCanUnequip(canUnequip);
   api.onCanBankItem(canBankCargo);

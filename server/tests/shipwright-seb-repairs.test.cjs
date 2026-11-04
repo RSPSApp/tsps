@@ -420,3 +420,80 @@ test('boundary: real PIN entry resumes one repair, and a replaced visit while PI
     assert.equal(f.p.getInventory().getAmount(f.coins), 0);
   }
 });
+
+test('native destruction preserves required quest cargo until it is returned to its source ledger', async t => {
+  const ports = require('../plugins/skills/sailing/porttasks/Common.PortTasks');
+  const cargo = require('../plugins/skills/sailing/Cargo.Sailing');
+  const facilities = require('../plugins/skills/sailing/BoatFacilities.Sailing');
+  const ledger = require('../plugins/skills/sailing/porttasks/Ledger.PortTasks');
+  const jimId = core.CacheDefinitions.getNpcId('junior_jim');
+  const f = destroyFixture(t, jimId), p = f.p;
+  const jimApproach = p.getLocation().clone();
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'pandemonium');
+  p.setAttribute('pandemonium:stage-version', 2); quest.setStage(p, 38);
+  const task = ports.taskById(599);
+  ports.setSlots(p, [{id:599,taken:0,delivered:0}]);
+  const owned=core.Sailing.giveBoat(p,'raft','port_sarim');
+  const facility=facilities.facilityNamed('Cargo hold');
+  const hot=facilities.hotspotsOf('raft').find(h=>h.allowed.includes(facility));
+  assert.ok(hot); facilities.setFacility(owned,hot.id,facility);
+  core.RegionManager.loadMapFiles(3028,3194); p.setLocation(new core.Location(3028,3193)); p.setNeedsPlacement(false);
+  const sourceId=core.CacheDefinitions.getLocId('dock_loading_bay_ledger_table_port_sarim');
+  await f.native({type:'object_option',id:sourceId,x:3028,y:3194,clickType:1});
+  core.TaskManager.processWalkTo(p.getIndex()); ticks(2);
+  assert.equal(ports.heldCrate(p),task.crate,'native source ledger supplies the actual quest cargo');
+  p.closeInterruptibleInterfaces(); assert.equal(core.Sailing.board(p,'port_sarim'),null); ticks(2);
+  const boat=core.Sailing.instanceAboard(p), spec=core.BoatManager.getSpec(boat);
+  const loc=spec.locs.find(l=>l.hotspot===hot.id); assert.ok(loc);
+  const definition=core.ObjectDefinition.forPlayer(loc.id,p); const clickType=definition.getActions().indexOf('Deposit-held')+1;
+  assert.ok(clickType>0);
+  const locAt=new core.Location(boat.deckBaseX+loc.x,boat.deckBaseY+loc.y,0);
+  const adjacent=[[1,0],[-1,0],[0,1],[0,-1]].map(([x,y])=>locAt.transform(x,y)).find(tile=>!core.RegionManager.blocked(tile,p.getPrivateArea()));
+  assert.ok(adjacent); p.setLocation(adjacent);p.setNeedsPlacement(false);
+  await f.native({type:'object_option',id:loc.id,x:locAt.getX(),y:locAt.getY(),clickType});
+  core.TaskManager.processWalkTo(p.getIndex());ticks(2);
+  assert.equal(ports.heldCrate(p),undefined);assert.equal(cargo.countIn(owned,task.crate),1,'native Deposit-held puts the collected crate in the actual raft');
+  // Arrival fixture after the normal sailing leg; this probe does not claim an end-to-end voyage.
+  assert.equal(core.Sailing.disembark(p,'the_pandemonium'),null);ticks(2);
+  assert.equal(quest.getStage(p),42);p.setLocation(jimApproach);p.setNeedsPlacement(false);
+  await openDestroy(f);await chooseDestroyedBoat(f,owned);await destroyChoice(f);await destroySelect(f,1);
+  assert.deepEqual(p.getSailing().boats, [owned], 'required cargo prevents destruction');
+  assert.equal(cargo.countIn(owned, task.crate), 1);
+  assert.deepEqual(ports.slots(p)[0], { id: 599, taken: 1, delivered: 0 });
+  assert.doesNotMatch(p.getDialogueManager().getCurrent()?.getText?.() ?? '', /broken up into\s+scrap/);
+  assert.equal(require('../plugins/skills/sailing/porttasks/PortMaster.PortTasks').cancel(p, 0), false);
+
+  // Recover through the native hold, then the source ledger; no replacement crate is invented.
+  p.closeInterruptibleInterfaces();
+  assert.equal(core.Sailing.board(p, 'the_pandemonium'), null); ticks(2);
+  const recoveredBoat = core.Sailing.instanceAboard(p);
+  const recoveredSpec = core.BoatManager.getSpec(recoveredBoat);
+  const recoveredLoc = recoveredSpec.locs.find(entry => entry.hotspot === hot.id);
+  const holdAt = new core.Location(recoveredBoat.deckBaseX + recoveredLoc.x, recoveredBoat.deckBaseY + recoveredLoc.y, 0);
+  const beside = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([x, y]) => holdAt.transform(x, y))
+    .find(tile => !core.RegionManager.blocked(tile, p.getPrivateArea()));
+  assert.ok(beside); p.setLocation(beside); p.setNeedsPlacement(false);
+  const open = core.ObjectDefinition.forPlayer(recoveredLoc.id, p).getActions().indexOf('Open') + 1;
+  assert.ok(open > 0);
+  await f.native({ type: 'object_option', id: recoveredLoc.id, x: holdAt.getX(), y: holdAt.getY(), clickType: open });
+  core.TaskManager.processWalkTo(p.getIndex()); ticks(2);
+  assert.equal(p.getInterfaceId(), 943);
+  const slot = owned.cargo.findIndex(item => item?.id === task.crate);
+  await f.native({ type: 'widget_action', widgetId: (943 << 16) | 10, groupId: 943, childId: 10,
+    buttonNum: 1, slot, itemId: task.crate });
+  assert.equal(ports.heldCrate(p), task.crate);
+  assert.equal(cargo.countIn(owned, task.crate), 0);
+  assert.equal(core.Sailing.disembark(p, 'port_sarim'), null); ticks(2);
+  p.closeInterruptibleInterfaces(); p.setLocation(new core.Location(3028, 3193)); p.setNeedsPlacement(false);
+  const deposit = core.ObjectDefinition.forPlayer(sourceId, p).getActions().indexOf('Deposit-cargo') + 1;
+  assert.ok(deposit > 0);
+  await f.native({ type: 'object_option', id: sourceId, x: 3028, y: 3194, clickType: deposit });
+  core.TaskManager.processWalkTo(p.getIndex()); ticks(2);
+  assert.equal(ports.heldCrate(p), undefined);
+  assert.deepEqual(ports.slots(p)[0], { id: 599, taken: 0, delivered: 0 });
+  assert.equal(quest.getStage(p), 42, 'return is no delivery or quest progress');
+  assert.ok(ledger.collectable(p, 'port_sarim').some(([index]) => index === 0));
+  p.closeInterruptibleInterfaces(); p.setLocation(jimApproach); p.setNeedsPlacement(false);
+  await openDestroy(f); await chooseDestroyedBoat(f, owned); await destroyChoice(f); await destroySelect(f, 1);
+  assert.equal(p.getSailing().boats.length, 0, 'empty boat remains destructible');
+});

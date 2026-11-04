@@ -32,6 +32,7 @@ const WATER_SOURCES = new Map([
   ["pump and tub", null],
 ]);
 
+let api;
 let core;
 let FILLED_BY_EMPTY;
 
@@ -78,6 +79,7 @@ function fillFromWaterSource(event) {
   if (!fillOne(player, itemId, container, sound)) return;
   const from = WATER_SOURCES.get(name);
   player.sendMessage(from ? `You fill the ${container.noun} ${from}.` : `You fill the ${container.noun}.`);
+  api.emitCustomEvent("water-source:filled", { player, objectId, name, itemId, filledId: container.filled });
 
   // Keyed to the player's index, so walking or another click cancels the rest (walkToReset).
   const at = player.getLocation().clone();
@@ -92,7 +94,8 @@ function fillFromWaterSource(event) {
 
 module.exports = {
   name: "WaterSources",
-  register(api) {
+  register(pluginApi) {
+    api = pluginApi;
     core = api.core;
     defineContainers(core);
     api.onItemOnObject(fillFromWaterSource, { noted: false });

@@ -611,6 +611,7 @@ function handleBindTiara(event) {
   inventory.addItem(new Item(tiara.tiaraId, 1));
   player.getSkillManager().addExperiences(Skill.RUNECRAFTING, tiara.xp);
   spam(player, "You bind the power of the talisman into your Tiara.");
+  pluginApi.emitCustomEvent("runecrafting:tiara", { player, tiaraId: tiara.tiaraId });
 }
 
 function handleEnterRuins({ player, objectId }) {

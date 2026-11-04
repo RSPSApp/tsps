@@ -81,6 +81,10 @@ function prayerAltar({ player, object }) {
   const prayerBefore = skillManager.getCurrentLevel(Skill.PRAYER);
   const handled = handlePrayerAltar(player);
 
+  if (object && skillManager.getCurrentLevel(Skill.PRAYER) > prayerBefore) {
+    api.emitCustomEvent("altar:prayed", { player, objectId: object.getId(), location: object.getLocation() });
+  }
+
   if (object && skillManager.getCurrentLevel(Skill.PRAYER) > prayerBefore && object.getId() === ObjectIds.ALTAR) {
     const location = object.getLocation();
     const [x, y, z] = EAST_ARDOUGNE_CHURCH_ALTAR;
@@ -147,6 +151,7 @@ module.exports = {
     pluginApi.onObjectInteraction("Lunar Altar", { Venerate: lunarAltar });
     pluginApi.onObjectInteraction("Dark Altar", { Venerate: darkAltar });
     pluginApi.onObjectInteraction("Altar", { "Pray-at": prayerAltar, Pray: prayerAltar });
+    pluginApi.onObjectInteraction("Altar of Guthix", { "Pray-at": prayerAltar });
     pluginApi.onObjectInteraction("Chaos altar", { "Pray-at": prayAtChaosAltar });
     pluginApi.onObjectInteraction("Shrine", { "Pray-at": prayAtShrine });
     pluginApi.onObjectInteraction("Shrine of Ralos", { Bask: prayerAltar });

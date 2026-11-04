@@ -17,8 +17,8 @@ export interface BridgeHeightSample {
     valid: boolean;
 }
 
-/** Matches height-map.glsl: sit above either terrain diagonal without integer stair steps. */
-export function interpolateActorHeight(h00: number, h10: number, h01: number, h11: number,
+/** The rendered terrain keeps its higher-diagonal surface for scenery and depth. */
+export function interpolateTerrainHeight(h00: number, h10: number, h01: number, h11: number,
     x: number, y: number): number {
     const first = x + y <= 1
         ? h00 + (h10 - h00) * x + (h01 - h00) * y
@@ -29,6 +29,14 @@ export function interpolateActorHeight(h00: number, h10: number, h01: number, h1
     return Math.max(first, second);
 }
 
+/** Actor grounding uses getTileHeight's bilinear surface, independent of terrain triangles. */
+export function interpolateActorHeight(h00: number, h10: number, h01: number, h11: number,
+    x: number, y: number): number {
+    const row0 = h00 + (h10 - h00) * x;
+    const row1 = h01 + (h11 - h01) * x;
+    return row0 + (row1 - row0) * y;
+}
+
 export function sampleBridgeHeightForWorldTile<T extends MapSquare>(
     mapManager: MapManager<T>, worldX: number, worldY: number, basePlane: number,
     strategy: BridgePlaneStrategy = BridgePlaneStrategy.RENDER,
@@ -36,7 +44,15 @@ export function sampleBridgeHeightForWorldTile<T extends MapSquare>(
     return sampleHeightForWorldTile(mapManager, worldX, worldY, basePlane, strategy, false);
 }
 
-/** Scripted cameras use getTileHeight's integer bilinear interpolation, not actor triangles. */
+/** Actor origins use the native floor without changing scenery's rendered surface. */
+export function sampleActorHeightForWorldTile<T extends MapSquare>(
+    mapManager: MapManager<T>, worldX: number, worldY: number, basePlane: number,
+    strategy: BridgePlaneStrategy = BridgePlaneStrategy.RENDER,
+): BridgeHeightSample {
+    return sampleHeightForWorldTile(mapManager, worldX, worldY, basePlane, strategy, false, interpolateActorHeight);
+}
+
+/** Scripted cameras keep getTileHeight's integer rounding; actor positions stay smooth. */
 export function sampleCameraHeightForWorldTile<T extends MapSquare>(
     mapManager: MapManager<T>, worldX: number, worldY: number, basePlane: number,
 ): number | undefined {
@@ -46,7 +62,7 @@ export function sampleCameraHeightForWorldTile<T extends MapSquare>(
 
 function sampleHeightForWorldTile<T extends MapSquare>(
     mapManager: MapManager<T>, worldX: number, worldY: number, basePlane: number,
-    strategy: BridgePlaneStrategy, cameraBilinear: boolean,
+    strategy: BridgePlaneStrategy, cameraBilinear: boolean, interpolate = interpolateTerrainHeight,
 ): BridgeHeightSample {
     const map = mapManager.getMapForWorldTile(worldX, worldY) as HeightMapBridgeMapSquare | undefined;
     const result: BridgeHeightSample = {
@@ -97,7 +113,7 @@ function sampleHeightForWorldTile<T extends MapSquare>(
         const row0 = (h00 * (128 - fineX) + h10 * fineX) >> 7;
         const row1 = (h01 * (128 - fineX) + h11 * fineX) >> 7;
         hWorld = (row0 * (128 - fineY) + row1 * fineY) >> 7;
-    } else hWorld = interpolateActorHeight(h00, h10, h01, h11, offX, offY);
+    } else hWorld = interpolate(h00, h10, h01, h11, offX, offY);
 
     return {
         plane: resolvedPlane,

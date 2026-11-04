@@ -13,7 +13,7 @@ import { baseNpcTypeId } from "../../custom/npcs/NpcModelOverrideRegistry";
 import { InteractType } from "../../render/InteractType";
 import { WebGLMapSquare } from "../../render/WebGLMapSquare";
 import type { LocAnimated } from "../../render/loc/LocAnimated";
-import { interpolateActorHeight, sampleBridgeHeightForWorldTile } from "./BridgeHeightSampler";
+import { interpolateActorHeight, interpolateTerrainHeight, sampleActorHeightForWorldTile, sampleBridgeHeightForWorldTile } from "./BridgeHeightSampler";
 import {
     BridgePlaneStrategy,
     resolveGroundItemStackPlane,
@@ -188,12 +188,13 @@ export class SceneRaycaster {
         return { x: localX | 0, y: localY | 0 };
     }
 
-    private sampleHeightAt(worldX: number, worldZ: number, basePlane: number): number {
+    private sampleHeightAt(worldX: number, worldZ: number, basePlane: number, actor = false): number {
+        const sample = actor ? sampleActorHeightForWorldTile : sampleBridgeHeightForWorldTile;
         const tileX = Math.floor(worldX);
         const tileY = Math.floor(worldZ);
         const map = this.getPreferredMapForWorldTile(tileX, tileY);
         if (!map || !map.heightMapData) {
-            return sampleBridgeHeightForWorldTile(
+            return sample(
                 this.mapManager,
                 worldX,
                 worldZ,
@@ -213,7 +214,7 @@ export class SceneRaycaster {
             localTileX >= mapTileSpan ||
             localTileY >= mapTileSpan
         ) {
-            return sampleBridgeHeightForWorldTile(
+            return sample(
                 this.mapManager,
                 worldX,
                 worldZ,
@@ -246,7 +247,8 @@ export class SceneRaycaster {
         const h10 = ((data[base + iy * size + ix1] || 0) * Scene.UNITS_TILE_HEIGHT_BASIS) | 0;
         const h01 = ((data[base + iy1 * size + ix] || 0) * Scene.UNITS_TILE_HEIGHT_BASIS) | 0;
         const h11 = ((data[base + iy1 * size + ix1] || 0) * Scene.UNITS_TILE_HEIGHT_BASIS) | 0;
-        const hWorld = interpolateActorHeight(h00, h10, h01, h11, offX, offY);
+        const interpolate = actor ? interpolateActorHeight : interpolateTerrainHeight;
+        const hWorld = interpolate(h00, h10, h01, h11, offX, offY);
         return -(hWorld / 128.0);
     }
 
@@ -728,7 +730,7 @@ export class SceneRaycaster {
                 // Retry after streamed definitions become available.
                 continue;
             }
-            const groundY = this.sampleHeightAt(worldX, worldZ, npcPlane | 0);
+            const groundY = this.sampleHeightAt(worldX, worldZ, npcPlane | 0, true);
             // ponytail: coarse cull before posing the model; assumes no animation reaches
             // further than the model's height past its footprint or above 1.5x its height.
             const reach = size * 0.5 + heightTiles;
@@ -808,7 +810,7 @@ export class SceneRaycaster {
             const deckY = npcEcs.getWorldY(ecsId) | 0;
             const projected = this.deckToWorldProvider?.(worldViewId, deckX, deckY);
             if (!projected) return;
-            const groundY = this.sampleHeightAt(deckX / 128.0, deckY / 128.0, npcPlane);
+            const groundY = this.sampleHeightAt(deckX / 128.0, deckY / 128.0, npcPlane, true);
             const worldX = projected.x / 128.0;
             const worldZ = projected.y / 128.0;
             const size = Math.max(1, npcEcs.getSize(ecsId) | 0);
@@ -887,7 +889,7 @@ export class SceneRaycaster {
                     continue;
                 }
                 // The deck scene gives the height; the box goes where the deck is drawn.
-                const groundY = this.sampleHeightAt(px / 128.0, py / 128.0, playerPlane | 0);
+                const groundY = this.sampleHeightAt(px / 128.0, py / 128.0, playerPlane | 0, true);
                 let worldX = px / 128.0;
                 let worldZ = py / 128.0;
                 const worldViewId = pe.getWorldViewId(pid) | 0;

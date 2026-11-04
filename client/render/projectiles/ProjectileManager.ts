@@ -5,7 +5,7 @@ import type {
     ProjectileLaunch,
 } from "../../common/projectiles/ProjectileLaunch";
 import { IProjectileManager } from "../../game/interfaces/IProjectileManager";
-import { sampleBridgeHeightForWorldTile } from "../../game/scene/BridgeHeightSampler";
+import { sampleActorHeightForWorldTile } from "../../game/scene/BridgeHeightSampler";
 import { BridgePlaneStrategy } from "../../game/scene/PlaneResolver";
 import type { WebGLOsrsRenderer } from "../WebGLOsrsRenderer";
 import { Projectile, ProjectileConfig } from "./Projectile";
@@ -160,7 +160,7 @@ export class ProjectileManager implements IProjectileManager {
                 // projectile Z is solved against getTileHeight(..., Client_plane),
                 // i.e. height sampling uses the render/height plane (bridge-promoted), not the
                 // interaction/roof plane.
-                const sample = sampleBridgeHeightForWorldTile(
+                const sample = sampleActorHeightForWorldTile(
                     mm,
                     x / CONSTANTS.TILE_SIZE,
                     y / CONSTANTS.TILE_SIZE,

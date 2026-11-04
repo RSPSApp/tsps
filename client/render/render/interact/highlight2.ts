@@ -131,7 +131,7 @@ import {
 } from "../../../game/movement/NpcClientTick";
 import type { TileMarkersPluginConfig } from "../../../game/plugins/tilemarkers/types";
 import { computeRoofPlaneLimit } from "../../../game/roof/RoofVisibility";
-import { sampleBridgeHeightForWorldTile } from "../../../game/scene/BridgeHeightSampler";
+import { sampleActorHeightForWorldTile, sampleBridgeHeightForWorldTile } from "../../../game/scene/BridgeHeightSampler";
 import {
     BridgePlaneStrategy,
     resolveBridgePromotedPlane,
@@ -441,7 +441,7 @@ export function buildNpcModelHighlightTriangles(host: WebGLOsrsRendererHost,
         target.plane = plane;
         // Match NPC rendering height: bridge-aware sampling, ground clearance,
         // and deck height for world entities.
-        let baseY = sampleBridgeHeightForWorldTile(
+        let baseY = sampleActorHeightForWorldTile(
             host.mapManager,
             centerSceneX / 128.0,
             centerSceneZ / 128.0,

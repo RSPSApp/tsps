@@ -14,6 +14,7 @@ const WEAPON_OUTCOMES = {
 const INPUTS = new Map([[686, "sword"], [6721, "scimitar"]]);
 const COINS = 995;
 const DIALOGUE_PAGE = "Tindel Marchant";
+const BOTH_MENU_INTERFACE_ID = 219;
 const STANDARD_ACTIONS = new Map([["Yaf6pt", 686], ["S0wGie", 6721]]);
 const STANDARD_CONDITIONS = new Map([
   ["KHTz9R", "no-rusty-weapons"],
@@ -30,9 +31,9 @@ const ITEM_RESULT_CONDITIONS = new Map([
   [1325, "gvdiwd"], [1327, "Liuvlc"], [1329, "rw4Tfe"],
 ]);
 let dialogueData;
-const pendingBothMenus = new WeakSet();
+const pendingBothMenus = new WeakMap();
 const handledChoices = new WeakSet();
-const deferredOutcomes = new WeakMap();
+const deferredOutcomes = new Map();
 
 function chooseOutcome(kind, roll) {
   const outcomes = WEAPON_OUTCOMES[kind];
@@ -159,7 +160,7 @@ function dialogueConditionChosen(event) {
   if (!event.player) return;
   if (event.npcId === NPC_ID && event.stepId === BOTH_MENU_CONDITION
     && event.text === "If the player has both a rusty sword and rusty scimitar:") {
-    pendingBothMenus.add(event.player);
+    pendingBothMenus.set(event.player, {});
     return;
   }
   clearPlayerState(event.player);
@@ -167,9 +168,11 @@ function dialogueConditionChosen(event) {
 
 function dialogueChoice(api, event) {
   if (!event.player || handledChoices.has(event)) return;
+  const playerIndex = event.player.getIndex();
+  deferredOutcomes.get(playerIndex)?.task.stop();
   const belongsToBothMenu = pendingBothMenus.has(event.player);
   pendingBothMenus.delete(event.player);
-  deferredOutcomes.delete(event.player);
+  deferredOutcomes.delete(playerIndex);
   if (event.npcId !== NPC_ID || !belongsToBothMenu) return;
   const itemId = event.option === "The sword" ? 686 : event.option === "The scimitar" ? 6721 : undefined;
   if (itemId === undefined) return;
@@ -183,13 +186,25 @@ function dialogueChoice(api, event) {
   const kind = INPUTS.get(itemId);
   const npcEvent = { player: event.player, npc: event.npc, npcId: NPC_ID };
   const token = {};
-  deferredOutcomes.set(event.player, token);
-  api.core.TaskManager.submit(new api.core.CountdownTask(event.player, 1, () => {
-    if (deferredOutcomes.get(event.player) !== token) return;
-    deferredOutcomes.delete(event.player);
-    if (!event.player.isRegistered?.() || event.player.getHitpoints?.() <= 0) return;
-    showOutcome(api, npcEvent, kind, result.outcome);
-  }));
+  const state = { token };
+  const task = new (class extends api.core.CountdownTask {
+    constructor() {
+      super(playerIndex, 1, () => {
+        if (deferredOutcomes.get(playerIndex)?.token !== token) return;
+        deferredOutcomes.delete(playerIndex);
+        if (!event.player.isRegistered?.() || event.player.getHitpoints?.() <= 0) return;
+        showOutcome(api, npcEvent, kind, result.outcome);
+      });
+    }
+
+    stop() {
+      super.stop();
+      if (deferredOutcomes.get(playerIndex)?.token === token) deferredOutcomes.delete(playerIndex);
+    }
+  })();
+  state.task = task;
+  deferredOutcomes.set(playerIndex, state);
+  api.core.TaskManager.submit(task);
   awardDiaryCredit(api, event.player, NPC_ID, result, event.npc);
 }
 
@@ -230,11 +245,17 @@ function showOutcome(api, event, kind, outcome) {
 function clearPlayerState(player) {
   if (!player) return;
   pendingBothMenus.delete(player);
-  deferredOutcomes.delete(player);
+  const playerIndex = player.getIndex();
+  deferredOutcomes.get(playerIndex)?.task.stop();
+  deferredOutcomes.delete(playerIndex);
 }
 
-function clearStateOnInterfaceClose({ player }) {
-  clearPlayerState(player);
+function clearStateOnInterfaceClose({ player, interfaceId }) {
+  if (!player || interfaceId !== BOTH_MENU_INTERFACE_ID) return;
+  const token = pendingBothMenus.get(player);
+  if (token) queueMicrotask(() => {
+    if (pendingBothMenus.get(player) === token) pendingBothMenus.delete(player);
+  });
 }
 
 function clearStateOnLogout({ player }) {
@@ -302,6 +323,7 @@ module.exports = {
     api.onCustomEvent("npc-dialogue:choice", dialogueChoice.bind(null, api));
     api.onCustomEvent("npc-dialogue:start", clearStateOnDialogueStart);
     api.onCustomEvent("interface:close", clearStateOnInterfaceClose);
+    api.onCustomEvent("interface:closed", clearStateOnInterfaceClose);
     api.onPlayerLogout(clearStateOnLogout);
     api.onPlayerDeath(clearStateOnDeath);
   },

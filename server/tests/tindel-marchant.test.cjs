@@ -8,6 +8,7 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxPrompt");
+const { PacketSender } = require("../dist/net/packet/PacketSender");
 const { Item } = require("../dist/game/model/Item");
 const { ItemIdentifiers: I } = require("../dist/util/ItemIdentifiers");
 const { MAX_STACK_AMOUNT } = require("../dist/game/model/container/StackType");
@@ -227,13 +228,15 @@ test("Tindel diary credit requires both player and NPC to be in the public area"
   }
 });
 
-test("real Talk-to runner identifies the weapon selected from the both-items menu", () => {
+test("real Talk-to runner identifies the weapon selected from the both-items menu", async () => {
   const core = PluginManager.getCoreApi();
   const api = PluginManager.createApi("TindelDialogueRunnerTest");
   Tindel.register(api);
   const diaryCredits = [];
   const started = [];
+  const closedInterfaces = [];
   api.onCustomEvent("diary:task", (event) => diaryCredits.push(event));
+  api.onCustomEvent("interface:closed", (event) => closedInterfaces.push(event));
   require("../plugins/npcs/NpcDialogues.plugin").register(api);
   api.onCustomEvent("npc-dialogue:start", (event) => started.push(event));
   const npc = core.NPC.create(1358, new core.Location(2678, 3153, 0));
@@ -258,6 +261,13 @@ test("real Talk-to runner identifies the weapon selected from the both-items men
     player.getInventory().setItem(1, new Item(I.RUSTY_SCIMITAR, 1));
     player.getInventory().setItem(2, new Item(I.COINS, 200));
     return { player, sender };
+  }
+
+  function useNativePacketSender(player) {
+    player.getSession = () => ({ sendClientPacket: () => true, write() {} });
+    const sender = new PacketSender(player);
+    player.getPacketSender = () => sender;
+    return sender;
   }
 
   function talkToBothMenu(player) {
@@ -355,6 +365,7 @@ test("real Talk-to runner identifies the weapon selected from the both-items men
       Math.random = originalRandom;
     }
 
+    PluginManager.emitCustomEvent("interface:closed", { player, interfaceId: 219 });
     assert.equal(player.getInventory().getAmount(consumedId), 0);
     assert.equal(player.getInventory().getAmount(I.COINS), 100);
     assert.equal(player.getInventory().getAmount(outputId), 1);
@@ -374,11 +385,54 @@ test("real Talk-to runner identifies the weapon selected from the both-items men
     assert.equal(diaryCredits.length - creditsBefore, choice === "The sword" ? 1 : 0);
   }
 
+  const nativeRandom = Math.random;
+  for (const [choice, outputId, consumedId, index] of [
+    ["The sword", I.IRON_SWORD, I.RUSTY_SWORD, 918280],
+    ["The scimitar", I.BRONZE_SCIMITAR, I.RUSTY_SCIMITAR, 918281],
+  ]) {
+    const { player } = createRunnerPlayer(index);
+    const nativeSender = useNativePacketSender(player);
+    nativeSender.sendChatboxInterface(217);
+    const before = started.length;
+    const menu = talkToBothMenu(player);
+    assert.ok(closedInterfaces.some((event) => event.player === player && event.interfaceId === 217));
+    await Promise.resolve();
+    Math.random = () => 0;
+    try {
+      menu.chooseOption(choice);
+    } finally {
+      Math.random = nativeRandom;
+    }
+    assert.equal(player.getInventory().getAmount(consumedId), 0);
+    assert.equal(player.getInventory().getAmount(I.COINS), 100);
+    assert.equal(player.getInventory().getAmount(outputId), 1);
+    assert.equal(started.length, before);
+    core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+    core.TaskManager.process();
+    assert.equal(started.length, before + 1);
+  }
+
+  const movingPlayer = createRunnerPlayer(918282).player;
+  useNativePacketSender(movingPlayer);
+  const beforeMovement = started.length;
+  const movementMenu = talkToBothMenu(movingPlayer);
+  await Promise.resolve();
+  Math.random = () => 0;
+  try {
+    movementMenu.chooseOption("The sword");
+  } finally {
+    Math.random = nativeRandom;
+  }
+  movingPlayer.getMovementQueue().requestWalk(new core.Location(2679, 3153, 0));
+  core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+  core.TaskManager.process();
+  assert.equal(started.length, beforeMovement);
+
   const cancelled = createRunnerPlayer(918275);
+  const cancelledSender = useNativePacketSender(cancelled.player);
   talkToBothMenu(cancelled.player);
-  PluginManager.emitCustomEvent("interface:close", { player: cancelled.player, handled: false });
-  cancelled.sender.sendInterfaceRemoval();
-  cancelled.player.getDialogueManager().reset();
+  cancelledSender.sendInterfaceRemoval();
+  await Promise.resolve();
   PluginManager.emitCustomEvent("npc-dialogue:choice", {
     player: cancelled.player,
     npc,
@@ -416,7 +470,7 @@ test("real Talk-to runner identifies the weapon selected from the both-items men
   core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
   core.TaskManager.process();
 
-  for (const [index, lifecycle] of [[918276, "logout"], [918277, "death"]]) {
+  for (const [index, lifecycle] of [[918276, "logout"], [918277, "death"], [918279, "movement"]]) {
     const { player } = createRunnerPlayer(index);
     const beforeDeferredStart = started.length;
     const activeMenu = talkToBothMenu(player);
@@ -431,9 +485,11 @@ test("real Talk-to runner identifies the weapon selected from the both-items men
     if (lifecycle === "logout") {
       PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
       player.isRegistered = () => false;
-    } else {
+    } else if (lifecycle === "death") {
       player.getHitpoints = () => 0;
       PluginManager.emitPlayerDeath({ player, killer: null, itemsLost: false, handled: false });
+    } else {
+      player.getMovementQueue().requestWalk(new core.Location(2679, 3153, 0));
     }
     core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
     core.TaskManager.process();

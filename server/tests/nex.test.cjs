@@ -270,3 +270,22 @@ test("the mages' and reavers' hits land with their projectiles (#1862)", (t) => 
     }
   }
 });
+
+test("Nex's loot roll is marked as loot, not a second kill: the fight counts the kill", () => {
+  const player = { sendMessage() {} };
+  const original = fakeApi.core.ItemDefinition.forId;
+  fakeApi.getItemOnGroundManager = () => ({ registerLocation() {} });
+  fakeApi.core.Item = class { constructor(itemId, amount) { this.itemId = itemId; this.amount = amount; } };
+  fakeApi.core.ItemDefinition.forId = (id) => ({ ...original(id), getNoteId: () => -1, isNoted: () => false, isStackable: () => true });
+  try {
+    const fight = { boss: {}, arena: { area: {} }, contribution: new Map([[player, 100]]) };
+    const before = events.length;
+    Loot.reward(fight, [player], {});
+    const rolls = events.slice(before).filter(([name]) => name === "npc-drops:roll").map(([, payload]) => payload);
+    assert.equal(rolls.length, 1);
+    assert.equal(rolls[0].countKill, false);
+    assert.equal(rolls[0].npc, fight.boss);
+  } finally {
+    fakeApi.core.ItemDefinition.forId = original;
+  }
+});

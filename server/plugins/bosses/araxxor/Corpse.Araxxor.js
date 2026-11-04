@@ -195,7 +195,8 @@ function harvest({ player, npc }) {
     if (!npc.isRegistered?.()) return;
     spawnDrops(player, session, stash);
     if (pet.length > 0) {
-      api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Shared.BOSS_ID, drops: pet });
+      // The death roll already counted the kill; Nid is only extra loot.
+      api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Shared.BOSS_ID, drops: pet, countKill: false });
     }
   });
   later(HARVEST_SINK_TICKS, npc, () => {
@@ -217,7 +218,8 @@ function destroyConfirmed({ player, npc }) {
     if (!npc.isRegistered?.()) return;
     spawnDrops(player, session, clues);
     if (nid.length > 0) {
-      api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Shared.BOSS_ID, drops: nid });
+      // The death roll already counted the kill; Nid is only extra loot.
+      api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Shared.BOSS_ID, drops: nid, countKill: false });
     }
     endCorpse(npc, session, 2);
   });

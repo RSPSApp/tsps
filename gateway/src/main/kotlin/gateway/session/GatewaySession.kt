@@ -225,9 +225,11 @@ class GatewaySession(
             }
             TspsServerPacket.RUN_ENERGY -> {
                 val reader = packet.reader()
-                send(UpdateRunEnergy(reader.u8() * RUN_ENERGY_PER_PERCENT))
+                reader.u8() // percent; the exact units follow
+                val running = reader.u8()
+                send(UpdateRunEnergy(reader.u16()))
                 // The run orb reads varp 173; the browser sets it from this packet itself.
-                varps.setVarp(RUN_VARP, reader.u8())?.let(::send)
+                varps.setVarp(RUN_VARP, running)?.let(::send)
             }
             TspsServerPacket.LOGOUT_RESPONSE -> {
                 val reader = packet.reader()
@@ -486,7 +488,6 @@ class GatewaySession(
         const val IN_WILDERNESS_VARBIT = 5963
         const val NAME_SET_VARBIT = 8119
         const val RUN_VARP = 173
-        const val RUN_ENERGY_PER_PERCENT = 100
         const val GAME_MESSAGE = 0
 
         const val FOLLOW_OP = 3

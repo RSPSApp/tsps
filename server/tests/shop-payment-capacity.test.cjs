@@ -4,7 +4,7 @@ const {before, after, test} = require('node:test');
 require('../dist/Server').Server.installProductionPathResolver();
 const {CachePipeline} = require('../dist/game/cache/CachePipeline');
 const {PluginManager: PM} = require('../dist/plugins/PluginManager');
-const {ShopDefinitionLoader} = require('../dist/game/definition/loader/impl/ShopDefinitionLoader');
+const {ShopDefinitionLoader, setPresetShopPricesEnabled} = require('../dist/game/definition/loader/impl/ShopDefinitionLoader');
 const {Player} = require('../dist/game/entity/impl/player/Player');
 const {PlayerSession} = require('../dist/net/PlayerSession');
 const {ClientConnection} = require('../dist/net/NetworkBuilder');
@@ -85,4 +85,31 @@ test('real Bank metadata transfer cannot trick a full bag into merging a differe
   assert.deepEqual(inv.getItems(),items,'refusal preserves all amounts and metadata');assert.equal(stock(f,gem),before);assert.equal(inv.getItems()[inv.getSlotForItemId(currency)],money);
   await sale(f,item,4);assert.equal(inv.getAmount(item),0);assert.equal(inv.getAmount(currency),100+10*price);assert.equal(stock(f,gem),before+10);
   const paid=inv.getItems().filter(x=>x.getId()===currency);assert.equal(paid.length,2);assert.equal(money.getAmount(),100);assert.equal(money.getMeta()['capacity-test'],'separate');
+});
+test('Pk Supplies sells normal stackable Purple sweets at its authored coin and blood-money prices',async t=>{
+  const shopId=27,normal=core.ItemIdentifiers.PURPLE_SWEETS_2,obsolete=core.ItemIdentifiers.PURPLE_SWEETS;
+  const priorPresetPrices=core.ShopDefinition.forId(shopId).getCurrency()==='BLOOD_MONEY';
+  try {
+    for(const presets of [false,true]){
+      setPresetShopPricesEnabled(presets);new ShopDefinitionLoader().load();core.ShopManager.initialize();
+      const f=actor(t),inv=f.p.getInventory(),currency=presets?core.ItemIdentifiers.BLOOD_MONEY:core.ItemIdentifiers.COINS,price=presets?100:1000;
+      inv.add(new core.Item(currency,price*10),false);open(f,shopId);
+      const view=core.ShopManager.getOpenShop(f.p),slot=view.stock.findIndex(s=>s.itemId===normal);
+      assert.ok(slot>=0,'stock must contain normal Treasure Trails sweets');
+      assert.equal(view.stock.some(s=>s.itemId===obsolete),false,'the unobtainable Halloween version is not stock');
+      assert.equal(view.stock[slot].price,price);
+      assert.equal(core.ItemDefinition.forId(normal).isStackable(),true);
+      assert.equal(core.ItemDefinition.forId(normal).isTradeable(),true);
+      const packet={type:'widget_action',widgetId:(300<<16)|16,groupId:300,childId:16,buttonNum:2,slot:slot+1,itemId:normal};
+      await input(f,packet);assert.equal(inv.getAmount(normal),1);assert.equal(inv.getAmount(currency),price*9);
+      await input(f,{...packet,itemId:obsolete});
+      assert.equal(inv.getAmount(obsolete),0);assert.equal(inv.getAmount(normal),1);assert.equal(inv.getAmount(currency),price*9,'stale stock clicks cannot charge');
+      await input(f,{...packet,buttonNum:3});
+      assert.equal(inv.getAmount(normal),6);assert.equal(inv.getAmount(currency),price*4);
+      assert.equal(inv.getItems().filter(item=>item.getId()===normal).length,1,'purchases merge into one real sweet stack');
+      core.ShopManager.close(f.p);
+    }
+  } finally {
+    setPresetShopPricesEnabled(priorPresetPrices);new ShopDefinitionLoader().load();core.ShopManager.initialize();
+  }
 });

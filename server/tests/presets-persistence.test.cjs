@@ -609,3 +609,70 @@ test('preset combat levels in the list match the skill manager formula', () => {
       "preset list level matches SkillManager");
   }
 });
+
+test('loading a preset in the Wilderness keeps a Tele Block on a bot', () => {
+  const { Bank } = require('../dist/game/model/container/impl/Bank');
+  const { CombatSpecial } = require('../dist/game/content/combat/CombatSpecial');
+  const { PrayerHandler } = require('../dist/game/content/PrayerHandler');
+  const { Location } = require('../dist/game/model/Location');
+  const { EffectTimer } = require('../dist/game/model/EffectTimer');
+  require('../plugins/items/ItemDefinitionLoader.plugin').register({
+    log() {}, onPlayerLogin() {}, registerContentEndpoint() {},
+  });
+
+  const timer = {
+    running: false, seconds: 0,
+    start(seconds) { this.seconds = seconds; this.running = true; },
+    stop() { this.seconds = 0; this.running = false; },
+    secondsRemaining() { return this.running ? this.seconds : 0; },
+    isRunning() { return this.running; },
+  };
+  timer.start(200);
+  const effectTimers = [];
+  const sender = {
+    closeSubInterface() { return sender; }, sendString() { return sender; },
+    sendItemOnInterfaces() { return sender; }, sendInterfaceDisplayState() { return sender; },
+    sendTabInterface() { return sender; }, sendConfig() { return sender; },
+    sendTotalExp() { return sender; }, sendMessage() {},
+    sendEffectTimer(seconds, effect) { effectTimers.push([seconds, effect]); return sender; },
+  };
+  const container = () => ({
+    getCopiedItems: () => [], getAmount: () => 0, containsItem: () => false,
+    deletes() {}, addItem() {}, resetItems() { return this; }, refreshItems() { return this; },
+    setItem() { return this; },
+  });
+  const skillManager = {
+    setCurrentLevels() { return this; }, setMaxLevel() { return this; },
+    setExperience() { return this; }, getMaxLevel: () => 99, getCombatLevel: () => 126,
+  };
+  const player = {
+    getInterfaceId: () => -1, getPacketSender: () => sender, sendMessage() {},
+    getInventory: container, getEquipment: container,
+    getBank: () => ({ add() {}, getAmount: () => 0, deletes() {} }),
+    getSkillManager: () => skillManager,
+    getSpellbook: () => MagicSpellbook.NORMAL, setSpellbook() {},
+    getLocation: () => new Location(3100, 3600, 0),
+    getUpdateFlag: () => ({ flag() {} }), isPlayerBot: () => true,
+    setAttribute() {}, getAttribute: () => null, setSpecialPercentage() {},
+    getCombat: () => ({ getTeleblockTimer: () => timer }),
+    resetAttributes: () => timer.stop(),
+  };
+
+  const patched = [
+    [Bank, 'getTabForItem', () => 0],
+    [PrayerHandler, 'canUse', () => false],
+    [CombatSpecial, 'updateBar', () => {}],
+  ];
+  patched.forEach(([owner, name]) => { owner[`_${name}_original`] = owner[name]; });
+  patched.forEach(([owner, name, replacement]) => { owner[name] = replacement; });
+  try {
+    assert.equal(presets.applyPreset(player, presets.getGlobalPresetPool()[0]), true);
+  } finally {
+    patched.forEach(([owner, name]) => { owner[name] = owner[`_${name}_original`]; delete owner[`_${name}_original`]; });
+  }
+
+  assert.equal(timer.isRunning(), true, 'regearing must not clear the Tele Block');
+  assert.equal(Math.round(timer.secondsRemaining()), 200);
+  assert.deepEqual(effectTimers, [[200, EffectTimer.TELE_BLOCK]],
+    'the client timer is restored with the effect');
+});

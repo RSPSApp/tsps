@@ -185,7 +185,10 @@ function clearPatch(player, patch) {
 }
 function awardPendingPlantExperience(player, patch, state = stateFor(player, patch)) {
     const crop = Data.CROPS.get(state.crop);
-    if (!crop || state.plantExperiencePending !== true) return false;
+    if (!crop || state.plantExperiencePending === false) return false;
+    const pending = state.plantExperiencePending === true
+        || (state.plantExperiencePending === undefined && crop.type === "HERB");
+    if (!pending) return false;
     award(player, crop.plant, patch);
     state.plantExperiencePending = false;
     return true;
@@ -755,7 +758,6 @@ function clearCrop(player, patch, state, crop) {
 }
 /** The June 2026 early-clear rule excludes patches which can grow only one crop species. */
 function onlyOneCropFits(patch) {
-    if (patch === TROLL_HERB_PATCH) return true;
     const crops = new Set([...Data.CROPS.values()].filter(crop => crop.type === patch.type).map(crop => crop.key));
     return crops.size === 1;
 }

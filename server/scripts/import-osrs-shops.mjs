@@ -84,20 +84,6 @@ const NPC_OVERRIDES = {
   // crates by the pillories and Emir's Arena (Wiki: Pelters' Veg Stall), which the
   // Pillory plugin serves.
   "Pelters' Veg Stall": { remove: [3340] },
-  // Preserve the repository's existing bindings when the external shop dump omits
-  // Ned's NPC owners or moves the Shop of Distaste owner to a different option slot.
-  "Ned's Handmade Rope (100% Wool) (Default)": { add: { 3: [824, 4280, 5864] } },
-  "Ned's Handmade Rope (100% Wool) (Fremennik Isles)": { add: { 3: [824, 4280, 5864] } },
-  "Shop of Distaste": { remove: [3340], add: { 5: [3340] } },
-  // The Wiki's Group of Advanced Gardeners page documents the shared Farming Supplies
-  // Trade option across gardeners. The exported shop-owner data only lists Rhonen and
-  // Ehecatl, so add the other cache-verified Trade slot 5 gardeners here.
-  "Farming Supplies": { add: { 5: [
-    310, 2663, 2664, 2665, 2666, 2667, 2669, 2670, 2671, 2672, 2674, 2675, 2676,
-    2677, 2678, 2679, 2680, 2681, 2682, 2683, 2684, 2685, 2686, 2687, 2688, 2689,
-    6814, 6921, 7754, 7755, 7756, 7758, 8533, 8534, 8535, 8536, 8537, 8629, 9138,
-    11957, 12766, 12936, 14030, 14514, 14515, 15064, 15065,
-  ] } },
 };
 
 // Shops whose rows tsps lists in another order than the Wiki: these IDs come
@@ -223,20 +209,24 @@ function originalStock(name, items) {
     .map(({ entry }) => entry);
 }
 
-function npcInteractions(name, owners) {
+function npcInteractions(name, owners, shopsByNpc) {
   if (UNBOUND.has(name)) return [];
   const override = NPC_OVERRIDES[name] ?? {};
   const removed = new Set(override.remove ?? []);
   const bySlot = new Map();
   for (const owner of owners ?? []) {
-    if (owner.option_source !== "click") continue;
-    const slot = Number(owner.option_slot);
-    if (!Number.isInteger(slot) || slot < 1) continue;
-    const ids = bySlot.get(slot) ?? new Set();
     for (const id of owner.npc_ids ?? []) {
-      if (Number.isInteger(id) && id >= 0 && !removed.has(id)) ids.add(id);
+      const npcShop = shopsByNpc
+        ? shopsByNpc[String(id)]?.shops?.find((shop) => shop.shop_name === name)
+        : owner;
+      if (npcShop?.option_source !== "click") continue;
+      const slot = Number(npcShop.option_slot);
+      if (!Number.isInteger(slot) || slot < 1) continue;
+      if (!Number.isInteger(id) || id < 0 || removed.has(id)) continue;
+      const ids = bySlot.get(slot) ?? new Set();
+      ids.add(id);
+      bySlot.set(slot, ids);
     }
-    bySlot.set(slot, ids);
   }
   for (const [slot, ids] of Object.entries(override.add ?? {})) {
     const set = bySlot.get(Number(slot)) ?? new Set();
@@ -270,12 +260,14 @@ function serialize(value) {
 function main() {
   const { docs, check } = parseArgs(process.argv.slice(2));
   const itemsByShopFile = path.join(docs, "shops-items-by-shop.json");
+  const shopsByNpcFile = path.join(docs, "shops-by-npc.json");
   if (!fs.existsSync(itemsByShopFile)) {
     console.error(`osrsreboxed shop dump not found: ${itemsByShopFile}`);
     process.exit(1);
   }
 
   const byShop = readJson(itemsByShopFile);
+  const shopsByNpc = fs.existsSync(shopsByNpcFile) ? readJson(shopsByNpcFile) : null;
   const existing = readJson(shopsFile);
 
   const idByName = new Map();
@@ -299,7 +291,7 @@ function main() {
       currency,
       originalStock: originalStock(name, record.items),
       ...(SHOP_PRICES[name] ? { prices: new Map(SHOP_PRICES[name]) } : {}),
-      npcInteractions: npcInteractions(name, record.owners),
+      npcInteractions: npcInteractions(name, record.owners, shopsByNpc),
     });
   }
 

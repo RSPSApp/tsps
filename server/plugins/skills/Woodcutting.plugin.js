@@ -1123,7 +1123,9 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       continue;
     }
 
-    if (player.getMovementQueue()?.size?.() > 0) {
+    // The global task runs before player turns; the last step may have drained the route.
+    const movement = player.getMovementQueue();
+    if (movement?.size?.() > 0 || movement?.isMovings?.()) {
       stopWoodcutting(activeSessions, player);
       continue;
     }

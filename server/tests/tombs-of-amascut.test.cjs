@@ -120,6 +120,18 @@ test('::toaskiptoreward can force a unique and the pet to one player', () => {
   assert.equal(Rewards.sealedUnique(b), -1);
 });
 
+test('the collection log count is the player\'s completions in every mode', () => {
+  const { collectionLogCount } = require('../plugins/minigames/toa/Raid.TombsOfAmascut');
+  const attributes = new Map([['toa:completions', { entry: 2, normal: 3, expert: 4 }]]);
+  const player = { getAttribute: (key) => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value) };
+  const request = { player, category: 'Tombs of Amascut' };
+  collectionLogCount(request);
+  assert.equal(request.count, 9);
+  const other = { player, category: 'Chambers of Xeric' };
+  collectionLogCount(other);
+  assert.equal(other.count, undefined, 'only its own category');
+});
+
 test('the collection log gets the loot when it is claimed (as in OSRS), once; the pet winner rolls only the pet', () => {
   const { PluginManager } = require('../dist/plugins/PluginManager');
   const { ItemIdentifiers: I } = require('../dist/util/ItemIdentifiers');

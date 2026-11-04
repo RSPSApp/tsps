@@ -297,6 +297,16 @@ function answerInTombs(query) {
   if (query?.player && Shared.inTombs(query.player.getLocation())) query.inside = true;
 }
 
+/**
+ * The cache's collection log has one Tombs of Amascut category (struct 4378) holding all 27
+ * items, so its count is the player's completions in every mode.
+ */
+function collectionLogCount(request) {
+  if (request?.category !== "Tombs of Amascut") return;
+  const counts = Raid.killCounts(request.player);
+  request.count = counts.entry + counts.normal + counts.expert;
+}
+
 function ghostsCantEquip(event) {
   if (isGhost(event.player)) event.allow = false;
 }
@@ -307,6 +317,7 @@ module.exports = function registerTombsRaid(api) {
   api.persistAttribute(Raid.ATTR_LOGOUT);
   api.onPlayerLogin(loggedIn);
   api.onCustomEvent("combat-special:cost", specialCost);
+  api.onCustomEvent("collection-log:category-count", collectionLogCount);
   Shared.onObject(api, "Barrier", passBarrier);
   Shared.onObject(api, "Entry", useEntry);
   Shared.onObject(api, "Exit", useExit);
@@ -326,3 +337,5 @@ module.exports = function registerTombsRaid(api) {
   api.onCanUnequip(ghostsCantEquip);
   api.onCustomEvent("toa:in-tombs", answerInTombs);
 };
+
+Object.assign(module.exports, { collectionLogCount });

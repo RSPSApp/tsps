@@ -107,6 +107,7 @@ const doorToggle = (h, p, objectId, clickType = 1, interactions = ['Open']) => {
 function player() {
   const attrs = new Map(), items = new Map(), varbits = new Map(), messages = [], sounds = [];
   let location = new core.Location(3210, 3220, 0), privateArea = null, movementBlocked = false, forceMovement = null;
+  const steps = [];
   const packet = new Proxy({
     sendVarbit(id, value) { varbits.set(id, value); return packet; },
     sendConfig(id, value) { varbits.set(`config:${id}`, value); return packet; },
@@ -119,7 +120,7 @@ function player() {
     deleteNumber(id, amount) { items.set(id, (items.get(id) ?? 0) - amount); },
   };
   return {
-    attrs, items, varbits, messages, sounds,
+    attrs, items, varbits, messages, sounds, steps,
     getAttribute: key => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
     getInventory: () => inventory,
@@ -135,9 +136,11 @@ function player() {
       isMovementBlocked: () => movementBlocked,
       setBlockMovement(value) { movementBlocked = value; return this; },
       reset() { return this; },
+      addSteps(to) { steps.push([to.getX(), to.getY()]); },
       didMovePreviousCycle: () => false,
     }),
     performAnimation: () => {},
+    getCombat: () => ({ reset() {} }),
     setForceMovement: movement => { forceMovement = movement; },
     getForceMovement: () => forceMovement,
     setUntargetable: () => {},
@@ -188,6 +191,8 @@ test('Dragon Slayer only drops Wormbrain\'s map piece after the Lozar answer', (
   assert.equal(h.ground.length, 1);
 });
 
+/** Collect the door:open requests the quest hands to Doors (the captured pass-through wall opens and shuts there). */
+const watchDoorOpen = h => { const seen = []; (h.events['door:open'] ??= []).push(request => seen.push(request)); return seen; };
 const crandorWall = () => MapObjects.get(O.WALL_9, new core.Location(2836, 9600, 0), null);
 const clickCrandorWall = (h, p) => {
   const wall = crandorWall();
@@ -201,8 +206,8 @@ const clickCrandorWall = (h, p) => {
   return request;
 };
 
-test('Dragon Slayer crosses the real shared Crandor wall both ways without owner scenery', () => {
-  const h = harness(), p = player();
+test('Dragon Slayer hands the real shared Crandor wall to Doors both ways without owner scenery or a teleport', () => {
+  const h = harness(), p = player(), opened = watchDoorOpen(h);
   h.quest.setStage(p, 9);
   p.moveTo(new core.Location(2836, 9601, 0));
 
@@ -210,7 +215,9 @@ test('Dragon Slayer crosses the real shared Crandor wall both ways without owner
   assert.equal(first.handled, true);
   assert.equal(p.attrs.get('dragon-slayer.shortcut'), true);
   assert.equal(p.varbits.get(3741), 1);
-  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2836, 9598]);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2836, 9601], 'the player is not teleported');
+  assert.equal(opened.length, 1);
+  assert.equal(opened[0].object, crandorWall(), 'Doors is asked to open the real wall');
   assert.equal(h.objects.length, 0, 'no persistent synthetic wall is registered');
   assert.deepEqual(MapObjects.ownerObjectsInScene(p, 2816, 9600, 128), []);
   assert.ok(crandorWall(), 'the same wall remains targetable from the south');
@@ -218,6 +225,7 @@ test('Dragon Slayer crosses the real shared Crandor wall both ways without owner
   const back = clickCrandorWall(h, p);
   assert.equal(back.handled, true);
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2836, 9601]);
+  assert.equal(opened.length, 2);
 
   h.hooks.onPlayerLogout[0]({ player: p });
   RegionManager.loadMapFiles(2836, 9600, true);
@@ -229,19 +237,21 @@ test('Dragon Slayer crosses the real shared Crandor wall both ways without owner
 });
 
 test('Dragon Slayer keeps the shared Crandor wall blocked for another player until their own unlock', () => {
-  const h = harness(), unlocked = player(), locked = player();
+  const h = harness(), unlocked = player(), locked = player(), opened = watchDoorOpen(h);
   h.quest.setStage(unlocked, 9);
   h.quest.setStage(locked, 1);
   unlocked.moveTo(new core.Location(2836, 9601, 0));
   locked.moveTo(new core.Location(2836, 9601, 0));
 
   clickCrandorWall(h, unlocked);
+  assert.deepEqual(opened.map(request => request.player), [unlocked]);
   assert.equal(unlocked.attrs.get('dragon-slayer.shortcut'), true);
   assert.ok(crandorWall());
   assert.deepEqual(MapObjects.ownerObjectsInScene(unlocked, 2816, 9600, 128), []);
 
   const blocked = clickCrandorWall(h, locked);
   assert.equal(blocked.handled, true);
+  assert.deepEqual(opened.map(request => request.player), [unlocked], 'the locked player never reaches Doors');
   assert.deepEqual([locked.getLocation().getX(), locked.getLocation().getY()], [2836, 9601]);
   assert.equal(locked.attrs.get('dragon-slayer.shortcut'), undefined);
   assert.equal(locked.varbits.get(3741), undefined);
@@ -250,7 +260,7 @@ test('Dragon Slayer keeps the shared Crandor wall blocked for another player unt
   h.quest.setStage(locked, 9);
   clickCrandorWall(h, locked);
   assert.equal(locked.attrs.get('dragon-slayer.shortcut'), true);
-  assert.deepEqual([locked.getLocation().getX(), locked.getLocation().getY()], [2836, 9598]);
+  assert.deepEqual(opened.map(request => request.player), [unlocked, locked]);
   assert.equal(h.objects.length, 0);
 });
 
@@ -329,8 +339,13 @@ test('Dragon Slayer refuses ship repairs once the Karamja shortcut is known', ()
   assert.match(p.messages.at(-1), /secret passage from Karamja/);
 });
 
-test('the real Doors route uses the same clickable wall for both crossings while another player stays blocked', () => {
+test('the real Doors route walks the unlocked player in from the south through the captured wall while another player stays blocked', () => {
   const h = harness(true), unlocked = player(), locked = player();
+  const swaps = [], sounds = [];
+  const original = [core.ObjectManager.register, core.ObjectManager.deregister, core.Sounds.sendSound];
+  core.ObjectManager.register = object => swaps.push(['register', object.getId(), object.getLocation().getX(), object.getLocation().getY()]);
+  core.ObjectManager.deregister = object => swaps.push(['deregister', object.getId(), object.getLocation().getX(), object.getLocation().getY()]);
+  core.Sounds.sendSound = (_player, sound) => sounds.push(sound.getId());
   const click = p => {
     const wall = crandorWall();
     assert.ok(wall, 'real closed wall exists before the click');
@@ -342,31 +357,30 @@ test('the real Doors route uses the same clickable wall for both crossings while
     h.interactions.get('Wall').Open(event);
     return event;
   };
-  h.quest.setStage(unlocked, 9);
-  h.quest.setStage(locked, 1);
-  unlocked.moveTo(new core.Location(2836, 9601, 0));
-  locked.moveTo(new core.Location(2836, 9601, 0));
+  try {
+    h.quest.setStage(unlocked, 9);
+    h.quest.setStage(locked, 1);
+    unlocked.moveTo(new core.Location(2836, 9599, 0));
+    locked.moveTo(new core.Location(2836, 9601, 0));
 
-  assert.equal(click(unlocked).handled, true);
-  assert.deepEqual([unlocked.getLocation().getX(), unlocked.getLocation().getY()], [2836, 9598]);
-  assert.equal(unlocked.attrs.get('dragon-slayer.shortcut'), true);
-  assert.ok(crandorWall(), 'Doors did not replace the shared wall with an unclickable owner loc');
-  assert.deepEqual(MapObjects.ownerObjectsInScene(unlocked, 2816, 9600, 128), []);
-  assert.equal(h.objects.length, 0);
+    assert.equal(click(unlocked).handled, true);
+    assert.deepEqual([unlocked.getLocation().getX(), unlocked.getLocation().getY()], [2836, 9599], 'no teleport');
+    assert.deepEqual(unlocked.steps.splice(0), [], 'the opener is carried, not sent through collision-checked steps');
+    const carry = unlocked.getForceMovement();
+    assert.ok(carry, 'carried in from the south as captured (RSProx 2951)');
+    assert.deepEqual([carry.getStart().getX(), carry.getStart().getY(), carry.getEnd().getX(), carry.getEnd().getY()], [2836, 9599, 0, 1]);
+    assert.deepEqual(swaps.splice(0), [['deregister', O.WALL_9, 2836, 9600], ['register', 25039, 2836, 9599], ['register', 38848, 2836, 9600]]);
+    assert.deepEqual(sounds, [2410]);
+    assert.equal(unlocked.attrs.get('dragon-slayer.shortcut'), true);
+    assert.equal(h.objects.length, 0);
 
-  assert.equal(click(unlocked).handled, true, 'the same wall is targetable and crosses back north');
-  assert.deepEqual([unlocked.getLocation().getX(), unlocked.getLocation().getY()], [2836, 9601]);
-
-  assert.equal(click(locked).handled, true);
-  assert.deepEqual([locked.getLocation().getX(), locked.getLocation().getY()], [2836, 9601]);
-  assert.equal(locked.attrs.get('dragon-slayer.shortcut'), undefined);
-  assert.equal(h.objects.length, 0);
-
-  h.quest.setStage(locked, 9);
-  assert.equal(click(locked).handled, true);
-  assert.deepEqual([locked.getLocation().getX(), locked.getLocation().getY()], [2836, 9598]);
-  assert.equal(locked.attrs.get('dragon-slayer.shortcut'), true);
-  assert.equal(h.objects.length, 0);
+    assert.equal(click(locked).handled, true);
+    assert.deepEqual(locked.steps, [], 'the locked player is refused before Doors');
+    assert.deepEqual(swaps, []);
+    assert.equal(locked.attrs.get('dragon-slayer.shortcut'), undefined);
+  } finally {
+    [core.ObjectManager.register, core.ObjectManager.deregister, core.Sounds.sendSound] = original;
+  }
 });
 
 function ladderHarness() {

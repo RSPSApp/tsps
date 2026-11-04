@@ -8,14 +8,20 @@ module.exports = {
    * three rocks and the far shore, listed from the side whose first rock is `firstRockX`; the
    * rock the player clicks tells which crossing and which way.
    */
-  brimhavenRiver: ({ splitY, north, south }) => {
+  brimhavenRiver: ({ splitY, north, south, islandLevel = 56, awayLevel = 1 }) => {
     const crossing = ({ obj }) => {
       const river = obj.y > splitY ? north : south;
       const forward = obj.x === river.firstRockX;
       const tiles = forward ? river.tiles : [...river.tiles].reverse();
-      return { start: [...tiles[0], 0], rocks: tiles.slice(1, -1), shore: tiles[tiles.length - 1] };
+      return { river, forward, start: [...tiles[0], 0], rocks: tiles.slice(1, -1), shore: tiles[tiles.length - 1] };
     };
     return {
+      level: (context) => {
+        const { river, forward } = crossing(context);
+        // Both stretches lead to the dragon island on the north crossing's reverse route and
+        // the south crossing's forward route; their return directions are always available.
+        return (river === north ? !forward : forward) ? islandLevel : awayLevel;
+      },
       route: (context) => crossing(context).start,
       steps: (context) => {
         const { rocks, shore } = crossing(context);

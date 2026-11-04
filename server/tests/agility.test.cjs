@@ -346,6 +346,75 @@ test("every shortcut plays out from either side without leaving the player locke
   }
 });
 
+test("shortcut audit: current directional Agility gates and captured no-sequence climbs", () => {
+  const entry = (name, objectId) => SHORTCUTS.find((shortcut) =>
+    shortcut.name === name && (Array.isArray(shortcut.object) ? shortcut.object.includes(objectId) : shortcut.object === objectId));
+  const context = (obj, pos) => ({ obj: { ...obj, id: obj.id ?? 0 }, pos });
+
+  assert.equal(entry("Strange floor (Fremennik Slayer Dungeon)", 16544).level, 43);
+  assert.equal(entry("Pipe (Brimhaven Dungeon)", 21727).level, 1);
+  assert.equal(entry("Pipe (Brimhaven Dungeon, toward demons)", 60840).level, 34);
+  assert.equal(entry("Pipe (Brimhaven Dungeon Entrance)", 21728).level, 22);
+  assert.equal(entry("Pipe (Brimhaven Dungeon Entrance, toward entrance)", 60841).level, 1);
+  assert.equal(entry("Log balance (Brimhaven Dungeon, heading east)", 20882).level, 30);
+  assert.equal(entry("Log balance (Brimhaven Dungeon, heading west)", 20884).level, 1);
+  assert.equal(entry("Stepping stones (Western Brimhaven Dungeon)", 21738).level, 12);
+  assert.equal(entry("Stepping stones (Western Brimhaven Dungeon)", 21739).level, 1);
+
+  const river = entry("Stepping stones (Eastern Brimhaven Dungeon)", 19040);
+  assert.deepEqual([
+    river.level(context({ x: 2688, y: 9547 }, { x: 2690, y: 9547 })),
+    river.level(context({ x: 2684, y: 9548 }, { x: 2682, y: 9548 })),
+    river.level(context({ x: 2695, y: 9531 }, { x: 2695, y: 9533 })),
+    river.level(context({ x: 2696, y: 9527 }, { x: 2697, y: 9525 })),
+  ], [1, 56, 56, 1]);
+
+  const pyramid = entry("Climbing rocks (Agility Pyramid)", 11948);
+  assert.equal(pyramid.level(context({ x: 3335, y: 2827 }, { x: 3334, y: 2827 })), 1);
+  assert.equal(pyramid.level(context({ x: 3335, y: 2827 }, { x: 3336, y: 2827 })), 30);
+
+  const middleRailing = entry("Railing (Arceuus Library, middle floor)", 28373);
+  const topRailing = entry("Railing (Arceuus Library, top floor)", 28373);
+  assert.equal(middleRailing.level, 52);
+  assert.equal(topRailing.level, 62);
+  for (const [obj, from, landing] of [
+    [{ x: 1628, y: 3806, z: 1, face: 3 }, [1627, 3806, 1], [1629, 3806, 0]],
+    [{ x: 1637, y: 3804, z: 2, face: 1 }, [1638, 3804, 2], [1636, 3804, 0]],
+    [{ x: 1629, y: 3803, z: 1, face: 2 }, [1629, 3802, 1], [1629, 3804, 0]],
+    [{ x: 1631, y: 3812, z: 2, face: 0 }, [1631, 3813, 2], [1631, 3811, 0]],
+  ]) {
+    assert.deepEqual(middleRailing.route(context(obj, { x: from[0], y: from[1], z: from[2] })), from);
+    assert.deepEqual(middleRailing.steps(context(obj, { x: from[0], y: from[1], z: from[2] })), [{ move: landing }]);
+  }
+
+  const yanille = entry("Climbing rocks (Yanille)", 23543);
+  const yanilleObj = { x: 2561, y: 3108, z: 0 };
+  assert.equal(yanille.precondition(context(yanilleObj, { x: 2561, y: 3106, z: 0 })), null);
+  assert.match(yanille.precondition(context(yanilleObj, { x: 2561, y: 3111, z: 0 })), /this side/);
+  assert.deepEqual(yanille.steps(context(yanilleObj, { x: 2561, y: 3108, z: 0 })), [
+    { move: [2561, 3111, 0], speed: [0, 60], ticks: 1 },
+    { sound: 2453 },
+    { msg: "You climb over the wall." },
+  ]);
+  const townPlayer = createPlayer(2561, 3106, 0, 5);
+  operate(townPlayer, 23543, [2561, 3108, 0]);
+  assert.deepEqual(tileOf(townPlayer), [2561, 3111, 0]);
+  assert.equal(townPlayer.state.xp, 25);
+  const northPlayer = createPlayer(2561, 3111, 0, 5);
+  operate(northPlayer, 23543, [2561, 3108, 0]);
+  assert.deepEqual(tileOf(northPlayer), [2561, 3111, 0]);
+  assert.equal(northPlayer.state.xp, 0);
+  assert.ok(northPlayer.state.messages.some((message) => message.includes("this side")));
+  const taverleySteps = entry("Climbing rocks (Taverley)", 53255).steps(
+    context({ x: 2946, y: 3439, z: 0 }, { x: 2947, y: 3439, z: 0 })
+  );
+  assert.deepEqual(taverleySteps, [
+    { move: [2943, 3439, 0], speed: [0, 60], ticks: 1 },
+    { sound: 2453 },
+    { msg: "You climb over the wall." },
+  ]);
+});
+
 test("the cache-backed Varrock broken fence crosses its clipped north-south edge", () => {
   const { RegionManager } = require("../dist/game/collision/RegionManager");
   const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");

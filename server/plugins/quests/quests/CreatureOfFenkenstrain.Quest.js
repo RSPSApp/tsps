@@ -8,9 +8,10 @@
  * (spade on the graves), the amulet/bookcase/cupboard/brush/conductor gameplay,
  * the lightning repair, the monster spawn/death and the Ring of Charos ending.
  *
- * Stages (varp 399, "FENK_QUEST" in the RuneLite gameval dump):
+ * Saved gameplay stages (the legacy varp-399 route):
  *   1 body parts, 2 sewing (needle + 5 thread), 3 conductor,
  *   4 creature alive, 5 creature loose, 6 creature convinced, 7 complete.
+ * Cache-241 progress is FENK_QUEST varbit 13715, with completion at 9.
  * Per-part found/given, sewing, and clock/star/follow/mould bits are kept in
  * persisted "quest.creature_of_fenkenstrain.*" attributes.
  *
@@ -50,7 +51,8 @@ module.exports = function registerCreatureOfFenkenstrainQuest(api) {
     NpcIdentifiers.EXPERIMENT_3, // 1275
   ]);
 
-  const VARP_CREATURE_OF_FENKENSTRAIN = 399; // FENK_QUEST
+  const VARP_CREATURE_OF_FENKENSTRAIN = 3403; // parent of cache-241 FENK_QUEST
+  const VARBIT_CREATURE_OF_FENKENSTRAIN = 13715; // FENK_QUEST, bits 2–5
 
   const STAGE_BODY_PARTS = 1;
   const STAGE_SEWING = 2;
@@ -1078,6 +1080,8 @@ module.exports = function registerCreatureOfFenkenstrainQuest(api) {
     key: "creature_of_fenkenstrain",
     name: "Creature of Fenkenstrain",
     varpId: VARP_CREATURE_OF_FENKENSTRAIN,
+    varbitId: VARBIT_CREATURE_OF_FENKENSTRAIN,
+    varbitValue: stage => stage >= STAGE_COMPLETE ? 9 : stage,
     startedValue: STAGE_BODY_PARTS,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,

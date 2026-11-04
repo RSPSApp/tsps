@@ -121,8 +121,15 @@ test('Culinaromancer chest selects persisted tiers and charges canonical full-st
     assert.ok(slot >= 0, `${option} must be an actual action on the resolved chest`);
     // A native loc supplies the handler event. Its fixture location is the floor
     // side; this test does not assert the live map spawn footprint or pathing.
-    const object = new core.GameObject(12308, f.p.getLocation().copy(), 10, 0, null);
-    assert.equal(PM.emitObjectInteraction({player: f.p, object, objectId: object.getId(), definition, clickType: slot + 1, handled: false}), true);
+    const object = new core.GameObject(12308, f.p.getLocation().clone(), 10, 0, null);
+    const source = f.p.getLocation().clone();
+    assert.equal(PM.emitObjectInteraction({
+      player: f.p, object, objectId: object.getId(), definition,
+      clickType: slot + 1, option: option.toLowerCase(),
+      location: {x: object.getLocation().getX(), y: object.getLocation().getY(), z: object.getLocation().getZ()},
+      sourceLocation: {x: source.getX(), y: source.getY(), z: source.getZ()},
+      handled: false,
+    }), true);
   }
   async function buy(f, id) {
     const slot = core.ShopManager.getOpenShop(f.p).stock.findIndex(row => row.itemId === id);
@@ -161,8 +168,15 @@ test('Culinaromancer chest selects persisted tiers and charges canonical full-st
     use(f, 'Bank');
     assert.equal(opened, 1);
     assert.equal(core.ShopManager.getOpenShop(f.p), null);
-    const object = new core.GameObject(12308, f.p.getLocation().copy(), 10, 0, null);
-    const event = {player: f.p, object, objectId: 12308, destination: null};
+    const object = new core.GameObject(12308, f.p.getLocation().clone(), 10, 0, null);
+    const definition = core.ObjectDefinition.forPlayer(object.getId(), f.p);
+    const source = f.p.getLocation().clone();
+    const event = {
+      player: f.p, object, objectId: object.getId(), definition,
+      clickType: definition.getActions().indexOf('Bank') + 1,
+      sourceLocation: {x: source.getX(), y: source.getY(), z: source.getZ()},
+      destination: null,
+    };
     PM.emitObjectRoute(event);
     assert.deepEqual(event.destination, {x: 3218, y: 9623, z: 0});
   });

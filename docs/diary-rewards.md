@@ -4,7 +4,7 @@ The achievement diaries' reward items (Ardougne cloak, Karamja gloves, Explorer'
 
 **What's not here yet:**
 - the Explorer's ring's free alchemy (the Alchemy option and using items on the ring);
-- the passive perks: shop discounts, Kandarin headgear's extra logs, Rada's blessing's extra fish, Morytania legs as a ghostspeak amulet, desert heat protection, and the like.
+- the passive perks: shop discounts, Kandarin headgear's extra logs, Morytania legs as a ghostspeak amulet, desert heat protection, and the like.
 
 ## Options
 
@@ -119,3 +119,7 @@ Source: [Explorer’s ring4](https://oldschool.runescape.wiki/w/Explorer%27s_rin
 Native QA exposed an additional overwrite: PacketSender’s spell-unlock defaults incorrectly labelled varbit4554 as Bones to Peaches and set it to30 whenever the magic tab refreshed. The active cache identifies4554 as lumbridge_free_alchs. Removing that one incorrect default preserves the ring’s saved counter; the separate legitimate Bones to Peaches default1505 is unchanged. A real PacketSender regression reproduces30 instead of the saved17 before this removal.
 
 Final verification: fresh build and32/32 focused diary/alchemy/gameframe checks. Full suite8,772/8,773 with only minigame-teleports.test.cjs:204 failing when a real minute rolled over (19 versus20 remaining); its complete file passes8/8 on rerun, and clean baseline7cbfc71dc reproduces the clock-boundary failure with a controlled rollover. No teleport source/tests changed. Native final server retains counters4553=1/4554=17 through login, then a prepared previous-day login resets both0 and Check reports30/30 alchemy and2/2 energy. Owned slot88 server saved and shut down.
+
+## Rada's blessing and fishing
+
+Worn Rada's blessing 1 to 4 give a 2/4/6/8% chance, per landed fish, of the same catch again (a stackable catch doubles, so 14 karambwanji become 28), with no extra experience or bait (no extra crystal harpoon charge either, which is inferred, not Wiki), and the message "Rada's blessing enabled you to catch an extra fish." (Wiki; no capture confirms the wording or channel). On an infernal harpoon the extra fish has its own chance to be cooked, which gives Cooking XP and uses an infernal charge. Junk from a big net is left out, which the Wiki doesn't settle. Fishing Trawler, Tempoross and drift nets don't use it. Spirit flakes in ordinary fishing are not built. See `server/plugins/skills/fishing/RadasBlessing.Fishing.js`.

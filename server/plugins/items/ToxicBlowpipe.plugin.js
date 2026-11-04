@@ -40,7 +40,19 @@ function normalizeInt(value, fallback) {
 }
 
 function isToxicBlowpipeItemId(itemId) {
-  return itemId === core.ItemIdentifiers.TOXIC_BLOWPIPE_EMPTY_ || itemId === core.ItemIdentifiers.TOXIC_BLOWPIPE;
+  const I = core.ItemIdentifiers;
+  return itemId === I.TOXIC_BLOWPIPE_EMPTY_ || itemId === I.TOXIC_BLOWPIPE ||
+    itemId === I.BLAZING_BLOWPIPE_EMPTY_ || itemId === I.BLAZING_BLOWPIPE;
+}
+
+function isBlazingBlowpipeItemId(itemId) {
+  const I = core.ItemIdentifiers;
+  return itemId === I.BLAZING_BLOWPIPE_EMPTY_ || itemId === I.BLAZING_BLOWPIPE;
+}
+
+function isChargedBlowpipeItemId(itemId) {
+  const I = core.ItemIdentifiers;
+  return itemId === I.TOXIC_BLOWPIPE || itemId === I.BLAZING_BLOWPIPE;
 }
 
 function isToxicBlowpipeDartId(itemId) {
@@ -75,7 +87,11 @@ const BlowpipeState = {
       item.setMetaValue(TOXIC_BLOWPIPE_META_KEY, state);
     }
     if (item && isToxicBlowpipeItemId(item.getId())) {
-      item.setId(state.scales > 0 || state.dartAmount > 0 ? core.ItemIdentifiers.TOXIC_BLOWPIPE : core.ItemIdentifiers.TOXIC_BLOWPIPE_EMPTY_);
+      const charged = state.scales > 0 || state.dartAmount > 0;
+      const blazing = isBlazingBlowpipeItemId(item.getId());
+      item.setId(blazing
+        ? (charged ? core.ItemIdentifiers.BLAZING_BLOWPIPE : core.ItemIdentifiers.BLAZING_BLOWPIPE_EMPTY_)
+        : (charged ? core.ItemIdentifiers.TOXIC_BLOWPIPE : core.ItemIdentifiers.TOXIC_BLOWPIPE_EMPTY_));
     }
     return item;
   },
@@ -461,7 +477,7 @@ function combatMethod(special) {
       }
       const player = character.getAsPlayer();
       const blowpipeItem = BlowpipeState.equipped(player);
-      if (!blowpipeItem || blowpipeItem.getId() !== core.ItemIdentifiers.TOXIC_BLOWPIPE) {
+      if (!blowpipeItem || !isChargedBlowpipeItemId(blowpipeItem.getId())) {
         return false;
       }
       return isReady(player, blowpipeItem);
@@ -543,7 +559,7 @@ function combatMethod(special) {
 
 function rangedAmmoResolverResolve(player) {
   const blowpipeItem = BlowpipeState.equipped(player);
-  if (!blowpipeItem || blowpipeItem.getId() !== core.ItemIdentifiers.TOXIC_BLOWPIPE) {
+  if (!blowpipeItem || !isChargedBlowpipeItemId(blowpipeItem.getId())) {
     return null;
   }
   return BlowpipeState.ammo(blowpipeItem);
@@ -589,7 +605,7 @@ function rangedAmmoHandlerDecrementAmmo(player, pos, amount) {
 function bonusProviderApply(event) {
   const { player, bonuses } = event;
   const blowpipeItem = BlowpipeState.equipped(player);
-  if (!blowpipeItem || blowpipeItem.getId() !== core.ItemIdentifiers.TOXIC_BLOWPIPE) {
+  if (!blowpipeItem || !isChargedBlowpipeItemId(blowpipeItem.getId())) {
     return;
   }
   if (!isCharged(blowpipeItem)) {
@@ -610,7 +626,7 @@ function combatMethodResolverResolve(attacker) {
   }
   const player = attacker.getAsPlayer();
   const blowpipeItem = BlowpipeState.equipped(player);
-  if (!blowpipeItem || blowpipeItem.getId() !== core.ItemIdentifiers.TOXIC_BLOWPIPE) {
+  if (!blowpipeItem || !isChargedBlowpipeItemId(blowpipeItem.getId())) {
     return null;
   }
   if (player.isSpecialActivated?.() === true && player.getCombatSpecial?.()?.getId?.() === "toxic_blowpipe") {
@@ -660,6 +676,21 @@ module.exports = {
     api.registerCombatMethodResolver({ resolve: combatMethodResolverResolve });
     api.onItemOnItem(itemOnItem);
     api.onItemAction("Toxic blowpipe", {
+      Check: checkBlowpipe,
+      Unload: unloadBlowpipe,
+      Uncharge: unchargeBlowpipe,
+    });
+    api.onItemAction("Toxic blowpipe (empty)", {
+      Check: checkBlowpipe,
+      Unload: unloadBlowpipe,
+      Uncharge: unchargeBlowpipe,
+    });
+    api.onItemAction("Blazing blowpipe", {
+      Check: checkBlowpipe,
+      Unload: unloadBlowpipe,
+      Uncharge: unchargeBlowpipe,
+    });
+    api.onItemAction("Blazing blowpipe (empty)", {
       Check: checkBlowpipe,
       Unload: unloadBlowpipe,
       Uncharge: unchargeBlowpipe,

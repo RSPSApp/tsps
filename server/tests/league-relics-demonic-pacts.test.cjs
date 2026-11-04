@@ -220,6 +220,21 @@ test("the catalog's items are the relic structs' (param 2049), unlocked only in 
   assert.deepEqual(Common.chosen(banker), { 0: 3 });
 });
 
+test("an item relic unlocks within a bank, its booths or tables a few tiles off, the bank closed (#2449: Aldarin)", () => {
+  core.RegionManager.init();
+  const away = character("bank-away", "league");
+  relocate(away, new Location(1393, 2927, 0));
+  assert.equal(Unlock.unlock(away, 0, 2, { bankOpen: false }), false, "Aldarin's bank, 7 tiles from its tables");
+  const inside = character("bank-inside", "league");
+  relocate(inside, new Location(1398, 2927, 0));
+  assert.equal(Unlock.unlock(inside, 0, 2, { bankOpen: false }), true, "Aldarin's bank, by its tables");
+  assert.equal(inside.getInventory().contains(I.KNAPSACK), true);
+  // 237/01098: an item relic (Friendly Forager) unlocked 3 tiles from the Colosseum's bank tables, the bank closed.
+  const colosseum = character("bank-colosseum", "league");
+  relocate(colosseum, new Location(1780, 3096, 0));
+  assert.equal(Unlock.unlock(colosseum, 0, 2, { bankOpen: false }), true, "the Colosseum's bank (237/01098)");
+});
+
 test("the relic toggles flip their cache bit for a holder only, in the row's words, and gate the effect", () => {
   const who = cases(ENDLESS_HARVEST);
   const varp = core.CacheDefinitions.getVarpId("league_relic_effect_toggle_1");

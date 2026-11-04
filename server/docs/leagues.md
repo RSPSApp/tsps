@@ -111,6 +111,7 @@ colours and screens here but no relic, area or task catalogs yet.
 | `welcome-screen:shown` | `{ player }` when the welcome screen is up | Tutorial, Welcome listen |
 | `league:areas` | `{ player } -> { league, unlocked: [area ids], next: { slot, tasks } \| null, available }` | LeagueAreaUnlocks |
 | `league:area-at` | `{ x, y, player \| league } -> { area: id \| null, name }` | LeagueAreaUnlocks |
+| `league:near-bank` | `{ player, distance? } -> { near }` (a bank loc or banker within `distance`, Shattered Relics' `bank.distance` unless given) | LeagueMode (NearBank) |
 | `league:teleport-cast` | `{ player } -> { cast: { steps, lockTick, landTick } \| null }` (the league's area-teleport cast, `teleportCast`) | LeagueAreaUnlocks |
 | `league:relic-triggered` | `{ player, relic }` when a once-in-a-while relic fires (Undying Retribution, Last Stand) | LeagueRelics emits |
 | `ironman:set-mode` | `{ player, mode } -> { handled }` (the Ironman plugin's) | LeagueMode emits at a league login |
@@ -671,6 +672,9 @@ tooltip is 655:53.
   item is its struct's param 2049 (param 1855 says it has one); such a relic unlocks only in a
   bank or near the Leagues Tutor ("You must be within a bank or near the Leagues Tutor to unlock
   this as it gives you items.", 237/01102), then the captured line and a "You receive ..." box.
+  In a bank is the bank open, or a bank loc or banker within 4 tiles (`league:near-bank`; ours:
+  live unlocked 3 tiles from the Colosseum's tables but refused 2 from Nemus Retreat's Bank
+  buffalo, 237/01098, so live's bank is an area the server has no data for).
 - **The flow, as captured.** The side panel's View Relics (656:44) opens 655 as the main modal
   with `if_setevents` on its slots (655:22, 0-23) and menu (655:6, 10-20). A slot click sets
   `league_relic_last_viewed` (10048) to the raw slot and runs the client's redraw scripts 3193

@@ -436,23 +436,58 @@ async function nativeDig(f, itemId = core.ItemIdentifiers.SPADE, slot = f.player
     itemId, slot, option: 'Dig', optionIndex: 1 }]);
   f.connection.processTurnPackets();
 }
+function advanceDig(f, ticks = 4) {
+  for (let n = 0; n < ticks; n++) {
+    core.TaskManager.processWalkTo(f.player.getIndex());
+    f.player.getMovementQueue().process();
+    core.TaskManager.process();
+  }
+}
+const HUMAN_DIG_LONG = () => core.CacheDefinitions.getSeqId('human_dig_long');
 
 test('Fairytale I Draynor skull is reachable through the native Spade Dig action', async t => {
-  const f = fixture(t), { player } = f;
+  const f = fixture(t), { player } = f, messages = [], sounds = [], typedMessages = [];
+  player.sendMessage = message => messages.push(message);
+  const sender = player.getPacketSender(), sendSoundEffect = sender.sendSoundEffect.bind(sender);
+  const sendTypedMessage = sender.sendTypedMessage.bind(sender);
+  sender.sendTypedMessage = (type, message, from) => {
+    typedMessages.push([type, message]); messages.push(message);
+    return sendTypedMessage(type, message, from);
+  };
+  sender.sendSoundEffect = (id, loops, delay, volume) => {
+    sounds.push([id, Math.max(1, loops), delay]);
+    return sendSoundEffect(id, loops, delay, volume);
+  };
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(3106, 3384);
   const grave = core.MapObjects.get(core.ObjectIdentifiers.GRAVESTONE_8, new core.Location(3106, 3384), null);
   assert.ok(grave, 'the grave is present in the real cache at the quest location');
   player.setLocation(new core.Location(3106, 3385));
   player.getInventory().add(new core.Item(core.ItemIdentifiers.SPADE));
+  const skull = () => player.getInventory().getAmount(core.ItemIdentifiers.DRAYNOR_SKULL);
   await nativeDig(f);
-  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 1);
+  assert.equal(skull(), 0, 'the skull is not granted on the click tick');
+  assert.equal(player.getAnimation()?.getId(), HUMAN_DIG_LONG(), 'the long dig sequence plays');
+  assert.deepEqual(messages, ['You start digging...']);
+  assert.deepEqual(typedMessages, [[105, 'You start digging...']], 'the opening uses the captured spam channel');
+  assert.deepEqual(sounds, [[1470, 1, 0], [1470, 3, 25]], 'the captured synth sounds play once each');
+  advanceDig(f, 3);
+  assert.equal(skull(), 0, 'the grant waits the captured four ticks');
+  assert.deepEqual(messages, ['You start digging...']);
+  advanceDig(f, 1);
+  assert.equal(skull(), 1);
+  assert.deepEqual(messages, ['You start digging...', 'You dig up a skull.']);
+  assert.equal(player.getAnimation()?.getId(), core.Animation.DEFAULT_RESET_ANIMATION.getId(), 'the long dig sequence resets');
   await nativeDig(f);
-  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 1, 'repeated digging cannot duplicate it');
+  advanceDig(f);
+  assert.equal(skull(), 1, 'repeated digging cannot duplicate it');
+  assert.equal(messages.at(-1), 'You dig the grave but find nothing.');
   player.getInventory().deleteNumber(core.ItemIdentifiers.DRAYNOR_SKULL, 1);
   player.getBank(2).add(new core.Item(core.ItemIdentifiers.DRAYNOR_SKULL), false);
   await nativeDig(f);
-  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 0, 'a banked skull is still owned');
+  advanceDig(f);
+  assert.equal(skull(), 0, 'a banked skull is still owned');
+  assert.equal(messages.at(-1), "I think I've already stored the skull in my bank.");
   player.getBank(2).deleteNumber(core.ItemIdentifiers.DRAYNOR_SKULL, 1);
   const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
   assert.equal(quest.getStage(player), 0, 'the skull remains obtainable before the quest without starting it');
@@ -461,17 +496,14 @@ test('Fairytale I Draynor skull is reachable through the native Spade Dig action
     itemId: core.ItemIdentifiers.SPADE, slot: player.getInventory().getSlotForItemId(core.ItemIdentifiers.SPADE),
     objectId: grave.getId(), x: 3106, y: 3384 }]);
   f.connection.processTurnPackets();
-  for (let n = 0; n < 4; n++) {
-    core.TaskManager.processWalkTo(player.getIndex());
-    player.getMovementQueue().process();
-    core.TaskManager.process();
-  }
-  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 1, 'using the spade on the grave still works');
+  advanceDig(f);
+  assert.equal(skull(), 1, 'using the spade on the grave still works');
   assert.equal(quest.getStage(player), 40, 'digging does not advance the quest');
 });
 
 test('Fairytale I Draynor dig rejects incorrect tiles, planes and item sources and handles a full bag', async t => {
-  const f = fixture(t), { player } = f, inventory = player.getInventory();
+  const f = fixture(t), { player } = f, inventory = player.getInventory(), messages = [];
+  player.sendMessage = message => messages.push(message);
   let laterDigs = 0;
   const hooks = PM.itemActionHooks, start = hooks.length;
   t.after(() => hooks.splice(start));
@@ -482,6 +514,8 @@ test('Fairytale I Draynor dig rejects incorrect tiles, planes and item sources a
     player.setLocation(at); await nativeDig(f);
     assert.equal(inventory.getAmount(DRAYNOR_SKULL), 0);
   }
+  advanceDig(f);
+  assert.equal(inventory.getAmount(DRAYNOR_SKULL), 0, 'off-site clicks start no delayed grant');
   assert.equal(laterDigs, 2, 'off-site digs remain available to other content');
   player.setLocation(new core.Location(3106, 3385));
   await nativeDig(f, SPADE, 20);
@@ -495,16 +529,75 @@ test('Fairytale I Draynor dig rejects incorrect tiles, planes and item sources a
   inventory.add(new core.Item(SPADE, 28));
   assert.equal(inventory.getFreeSlots(), 0);
   await nativeDig(f);
+  advanceDig(f);
   assert.equal(inventory.getAmount(DRAYNOR_SKULL), 0);
+  assert.equal(messages.at(-1), 'Not enough space in your inventory.');
   inventory.deleteNumber(SPADE, 1);
   const hash = core.MapObjects.getHash(3106, 3384, 0), objects = core.MapObjects.mapObjects.get(hash);
   core.MapObjects.mapObjects.delete(hash);
   try {
     await nativeDig(f);
+    advanceDig(f);
     assert.equal(inventory.getAmount(DRAYNOR_SKULL), 0, 'a removed grave cannot supply its skull');
   } finally { core.MapObjects.mapObjects.set(hash, objects); }
   await nativeDig(f);
+  advanceDig(f);
   assert.equal(inventory.getAmount(DRAYNOR_SKULL), 1, 'freeing a slot makes the next dig recoverable');
+});
+
+test('Fairytale I Draynor dig cancels on movement or logout and never duplicates a pending grant', async t => {
+  const f = fixture(t), { player } = f, inventory = player.getInventory(), messages = [];
+  player.sendMessage = message => messages.push(message);
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3106, 3384);
+  player.setLocation(new core.Location(3106, 3385));
+  inventory.add(new core.Item(core.ItemIdentifiers.SPADE));
+  const skull = () => inventory.getAmount(core.ItemIdentifiers.DRAYNOR_SKULL);
+  await nativeDig(f);
+  advanceDig(f, 1);
+  await nativeDig(f);
+  assert.equal(player.getAnimation()?.getId(), HUMAN_DIG_LONG(), 'a repeated click restores the long dig pose');
+  advanceDig(f, 3);
+  assert.equal(skull(), 0, 'a repeated click restarts the four-tick dig');
+  advanceDig(f, 1);
+  assert.equal(skull(), 1, 'a second click cannot queue a duplicate grant');
+  assert.equal(messages.filter(message => message === 'You dig up a skull.').length, 1);
+  inventory.deleteNumber(core.ItemIdentifiers.DRAYNOR_SKULL, 1);
+  await nativeDig(f);
+  player.getMovementQueue().walkToReset();
+  advanceDig(f);
+  assert.equal(skull(), 0, 'walking cancels the pending dig');
+  assert.equal(player.getAnimation()?.getId(), core.Animation.DEFAULT_RESET_ANIMATION.getId());
+  await nativeDig(f);
+  player.setRegistered(false);
+  advanceDig(f);
+  assert.equal(skull(), 0, 'a dig that ends after logout grants nothing');
+  player.setRegistered(true);
+  await nativeDig(f);
+  advanceDig(f);
+  assert.equal(skull(), 1, 'the next dig after interruption still works');
+});
+
+test('Fairytale I pending dig cannot grant a skull after native Drop or override a real death pose', async t => {
+  const f = fixture(t), { player } = f, inventory = player.getInventory();
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(3106, 3384);
+  player.setLocation(new core.Location(3106, 3385));
+  inventory.add(new core.Item(core.ItemIdentifiers.SPADE));
+  await nativeDig(f); advanceDig(f, 3);
+  await f.connection.dispatch([{ type: 'inventory_action', widgetId: core.CacheDefinitions.getComponentId('inventory:items'),
+    itemId: core.ItemIdentifiers.SPADE, slot: inventory.getSlotForItemId(core.ItemIdentifiers.SPADE), option: 'Drop', optionIndex: 5 }]);
+  f.connection.processTurnPackets(); advanceDig(f);
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.SPADE), 0);
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 0);
+  inventory.add(new core.Item(core.ItemIdentifiers.SPADE));
+  await nativeDig(f); advanceDig(f, 2);
+  player.getSkillManager().setCurrentLevels(core.Skill.HITPOINTS, 0);
+  player.appendDeath(); advanceDig(f, 1);
+  const deathAnimation = player.getAnimation()?.getId();
+  assert.equal(deathAnimation, 836, 'the real PlayerDeathTask starts its death pose');
+  advanceDig(f, 1);
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.DRAYNOR_SKULL), 0);
+  assert.equal(player.getAnimation()?.getId(), deathAnimation, 'dig cancellation cannot reset death');
 });
 
 function nuffFixture(t, stage = 20) {

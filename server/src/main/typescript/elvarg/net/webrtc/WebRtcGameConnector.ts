@@ -3,6 +3,7 @@ import { WebSocket } from "ws";
 import { getWorldDefinition } from "../../game/definition/WorldDefinition";
 import type { BinaryChannel } from "../BinaryChannel";
 import { DataChannelBinaryChannel } from "./DataChannelBinaryChannel";
+import { ContentApi } from "../http/ContentApi";
 
 type SignalDescription = { type: "offer" | "answer"; sdp: string };
 type SignalCandidate = {
@@ -13,6 +14,7 @@ type SignalCandidate = {
 type PeerState = {
   peer: RTCPeerConnection;
   channel?: RTCDataChannel;
+  contentChannel?: RTCDataChannel;
   pendingCandidates: SignalCandidate[];
   remoteDescriptionSet: boolean;
   timeout: ReturnType<typeof setTimeout>;
@@ -22,6 +24,13 @@ const DEFAULT_SIGNAL_URL = "wss://worlds.rsps.app";
 // Never give up: the relay only evicts a stale registration of ours after ~30s of
 // missed status checks, so retries must outlast that window.
 const MAX_RECONNECT_DELAY_MS = 30_000;
+// Match the browser content protocol without allowing arbitrary HTTP requests.
+const CONTENT_PATH = /^\/api\/[a-z0-9-]+(?:\/[a-z0-9-]+)*(?:\?[^#]*)?$/i;
+const MAX_CONTENT_REQUEST_CHARS = 16_384;
+const MAX_CONTENT_RESPONSE_CHARS = 2_000_000;
+// JSON escaping can expand each UTF-16 unit sixfold; the client caps frames at32768.
+const CONTENT_CHUNK_CHARS = 4096;
+const MAX_CONTENT_BUFFERED_BYTES = 8_000_000;
 const DEFAULT_ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.rsps.app:3478" }];
 
 function parseIceServers(raw: string | undefined): RTCIceServer[] {
@@ -240,9 +249,12 @@ export class WebRtcGameConnector {
   }
 
   private acceptDataChannel(sessionId: string, state: PeerState, channel: RTCDataChannel): void {
+    if (channel.label === "content") {
+      this.acceptContentChannel(state, channel);
+      return;
+    }
     if (channel.label !== "game") {
-      // Browsers open auxiliary channels (e.g. "content") that this dedicated
-      // server does not use. They must never tear down the game session.
+      // Unknown auxiliary channels must never tear down the game session.
       try { channel.close(); } catch {}
       return;
     }
@@ -273,6 +285,55 @@ export class WebRtcGameConnector {
     else channel.addEventListener("open", open, { once: true });
   }
 
+  /** The same public read-only resources as HTTP, over the browser's existing content channel. */
+  private acceptContentChannel(state: PeerState, channel: RTCDataChannel): void {
+    if (state.contentChannel || !channel.ordered || channel.maxRetransmits !== null || channel.maxPacketLifeTime !== null) {
+      try { channel.close(); } catch {}
+      return;
+    }
+    state.contentChannel = channel;
+    channel.addEventListener("close", () => {
+      if (state.contentChannel === channel) state.contentChannel = undefined;
+    });
+    const send = (message: Record<string, unknown>) => {
+      const frame = JSON.stringify(message);
+      if (channel.readyState !== "open" || channel.bufferedAmount + Buffer.byteLength(frame, "utf8") > MAX_CONTENT_BUFFERED_BYTES) {
+        throw new Error("Content channel unavailable or congested");
+      }
+      channel.send(frame);
+    };
+    channel.addEventListener("message", (event) => {
+      if (channel.readyState !== "open" || state.contentChannel !== channel) return;
+      const raw: unknown = (event as MessageEvent).data;
+      let request: { id?: unknown; path?: unknown };
+      try {
+        if (typeof raw !== "string" || raw.length > MAX_CONTENT_REQUEST_CHARS) throw new Error("Invalid content request");
+        request = JSON.parse(raw);
+        if (!request || Array.isArray(request) || !Number.isSafeInteger(request.id) || Number(request.id) <= 0) {
+          throw new Error("Invalid content request");
+        }
+      } catch {
+        try { channel.close(); } catch {}
+        return;
+      }
+      const id = request.id;
+      try {
+        const path = request.path;
+        if (typeof path !== "string" || path.length > 2048 || !CONTENT_PATH.test(path)) throw new Error("Invalid content path");
+        const response = ContentApi.resolve("GET", path);
+        if (!response || response.status !== 200) throw new Error(`Content request failed: ${response?.status ?? 404}`);
+        const body = response.body;
+        if (body.length > MAX_CONTENT_RESPONSE_CHARS) throw new Error("Content response too large");
+        for (let offset = 0; offset < body.length; offset += CONTENT_CHUNK_CHARS) {
+          send({ id, chunk: body.slice(offset, offset + CONTENT_CHUNK_CHARS), done: offset + CONTENT_CHUNK_CHARS >= body.length });
+        }
+      } catch (error) {
+        try { send({ id, error: error instanceof Error ? error.message : "Content request failed" }); }
+        catch { try { channel.close(); } catch {} }
+      }
+    });
+  }
+
   private failSession(sessionId: string, message: string): void {
     this.send({ type: "session-error", sessionId, message });
     this.closePeer(sessionId);
@@ -283,6 +344,7 @@ export class WebRtcGameConnector {
     if (!state) return;
     this.peers.delete(sessionId);
     clearTimeout(state.timeout);
+    try { state.contentChannel?.close(); } catch {}
     // Closing the peer before the channel's close reaches the browser aborts SCTP, so the player
     // sees an error and is pinned to the TURN relay. The channel closes once its buffer is sent.
     const closeConnection = () => { try { state.peer.close(); } catch {} };

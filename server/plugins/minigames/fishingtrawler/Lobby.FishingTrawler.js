@@ -58,13 +58,30 @@ function tickLobby() {
 }
 
 function depart(players) {
-  for (const player of players) {
+  const participants = [...new Set(players)].filter(isCurrentParticipant);
+  if (participants.length === 0) return;
+  for (const player of participants) {
     if (player.getAttribute(Shared.REWARD_ATTRIBUTE)) {
       player.setAttribute(Shared.REWARD_ATTRIBUTE, null);
       player.sendMessage(Shared.message("destroyedReward"));
     }
   }
-  Sea.launch(players);
+  const voyage = Sea.launch(participants);
+  if (!voyage) return;
+  for (const player of participants) {
+    Shared.api().emitCustomEvent("diary:task", {
+      player,
+      diary: "ardougne",
+      task: "go-out-fishing-on-the-fishing-trawler",
+    });
+  }
+}
+
+function isCurrentParticipant(player) {
+  if (!player || player.isRegistered?.() !== true || player.getPrivateArea?.() !== null) return false;
+  if (player.getHitpoints?.() <= 0 || player.isDyingReturn?.() === true) return false;
+  const location = player.getLocation?.();
+  return Boolean(location && Shared.inBounds(Shared.DATA.lobby.bounds, location));
 }
 
 /** The sea is clear again: anyone still waiting gets a fresh countdown. */

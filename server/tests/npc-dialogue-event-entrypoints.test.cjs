@@ -1764,3 +1764,170 @@ test('RFD already-loaded unmarked saves recover through native Cook and dining-d
     assert.equal(rfdSavedProgress(f.player), progress);
   });
 });
+
+function pandemoniumShipFixture(t, stage = 14) {
+  const f = fixture(t);
+  core.RegionManager.init();
+  f.player.setUsername(`pandemonium${f.player.getIndex()}`);
+  f.player.setAttribute('pandemonium:stage-version', 2);
+  f.quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'pandemonium');
+  f.quest.setStage(f.player, stage);
+  const lifecycle = () => ({ player: f.player, username: f.player.getUsername(), isNewAccount: false });
+  f.login = () => PM.emitPlayerLogin(lifecycle());
+  t.after(() => PM.emitPlayerLogout(lifecycle()));
+  f.login();
+  const ships = require('../plugins/skills/sailing/StaticShips.Sailing');
+  f.ship = () => ships.all().find(ship => ship.boat.ownerPlayerId === f.player.getIndex());
+  return f;
+}
+
+test('Pandemonium native: the tutorial uses its two-column cache hull and keeps both crew on deck', t => {
+  const f = pandemoniumShipFixture(t), ship = f.ship();
+  assert.ok(ship, 'the real login handler restores the owner-only tutorial ship');
+  assert.deepEqual([ship.boat.configId, ship.spec.templateChunkX, ship.spec.templateChunkY], [2, 480, 800],
+    'the captured tutorial template uses the active-cache 2x5 world-entity type');
+  assert.deepEqual([ship.spec.hull.width, ship.spec.hull.length], [256, 640]);
+  assert.deepEqual(ship.spec.boardingTile, { x: 4, y: 4 });
+  const crew = [...core.World.getNpcs()].filter(npc => npc.getOwner() === f.player && [14958, 14963].includes(npc.getId()));
+  assert.equal(crew.length, 2);
+  assert.deepEqual(crew.map(npc => [npc.getId(), npc.getLocation().getX() - ship.boat.deckBaseX,
+    npc.getLocation().getY() - ship.boat.deckBaseY]).sort((a, b) => a[0] - b[0]), [[14958, 4, 3], [14963, 3, 2]]);
+  for (const npc of crew) {
+    const x = npc.getLocation().getX() - ship.boat.deckBaseX, y = npc.getLocation().getY() - ship.boat.deckBaseY;
+    assert.ok(ship.spec.walkableDeck.some(tile => tile.x === x && tile.y === y), `${npc.getId()} stands on its actual hull`);
+  }
+});
+
+test('Pandemonium native: first visibility and relog send the interactive hook on the drawn deck plane', t => {
+  const f = pandemoniumShipFixture(t);
+  const sync = require('../dist/game/content/sailing/WorldEntitySync').WorldEntitySync;
+  const hookId = core.CacheDefinitions.getLocId('sailing_intro_salvaging_hook');
+  const hookPackets = () => sync.flush(f.player).filter(packet => packet[0] === 134 && packet.readUInt16BE(2) === hookId);
+  const verify = () => {
+    const ship = f.ship(), packets = hookPackets();
+    assert.equal(packets.length, 1, 'one initial hook update reaches the native client');
+    assert.deepEqual([packets[0].readUInt16BE(4) - ship.boat.deckBaseX,
+      packets[0].readUInt16BE(6) - ship.boat.deckBaseY, packets[0][8], packets[0][9] & 3], [3, 4, 1, 1]);
+    assert.equal(packets[0][10] & 1, 1, 'Deploy is enabled');
+    assert.ok(core.MapObjects.getPrivateArea(f.player, hookId,
+      new core.Location(ship.boat.deckBaseX + 3, ship.boat.deckBaseY + 4, 0)), 'server lookup keeps deck clicks at z=0');
+  };
+  verify();
+  const old = f.ship();
+  f.login();
+  assert.notEqual(f.ship().boat.entityIndex, old.boat.entityIndex, 'relog recreates the private ship');
+  verify();
+});
+
+async function pandemoniumDeploy(f, id = core.CacheDefinitions.getLocId('sailing_intro_salvaging_hook'), ship = f.ship()) {
+  const x = ship.boat.deckBaseX + 3, y = ship.boat.deckBaseY + 4;
+  const { ClientPacketId } = require('../dist/net/protocol/NativeClientPackets');
+  const { decodeClientPackets } = require('../dist/net/protocol/ClientProtocol');
+  const frame = Buffer.alloc(8);
+  frame[0] = ClientPacketId.OPLOC1;
+  frame[1] = (x + 128) & 255;
+  frame[2] = x >>> 8;
+  frame.writeUInt16LE(y, 3);
+  frame[6] = id >>> 8;
+  frame[7] = (id + 128) & 255;
+  const decoded = decodeClientPackets(frame);
+  assert.deepEqual(decoded, [{ type: 'object_option', id, x, y, clickType: 1 }]);
+  await f.connection.dispatch(decoded);
+  f.connection.processTurnPackets();
+  core.TaskManager.processWalkTo(f.player.getIndex());
+  core.TaskManager.process();
+}
+
+test('Pandemonium native: parent Deploy reaches the canonical salvage handover exactly once', async t => {
+  const f = pandemoniumShipFixture(t);
+  f.player.closeInterruptibleInterfaces();
+  f.player.setNeedsPlacement(false);
+  await pandemoniumDeploy(f);
+  assert.ok(f.player.getDialogueManager().getCurrent(), 'the real OPLOC1 producer reaches the quest transcript');
+  for (let lines = 0; lines < 120 && f.quest.getStage(f.player) < 16; lines++) {
+    if (MultiChatboxPrompt.getPending(f.player)) await choose(f, 1);
+    else if (f.player.getDialogueManager().getCurrent()) await nextLine(f);
+    core.TaskManager.process();
+  }
+  assert.equal(f.quest.getStage(f.player), 16, 'native Continue reaches the existing cup/overboard handover');
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP), 1);
+  PM.emitCustomEvent('npc-dialogue:action', { player: f.player, npcId: core.NpcIdentifiers.WILL,
+    page: 'Pandemonium', stepId: 'p40qKY', handled: false, end: false });
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP), 1, 'stale handover cannot duplicate the cup');
+});
+
+test('Pandemonium native: foreign and Modify clicks cannot salvage, and cancelling allows an owned retry', async t => {
+  const f = pandemoniumShipFixture(t), stranger = pandemoniumShipFixture(t);
+  for (const context of [f, stranger]) {
+    context.player.closeInterruptibleInterfaces();
+    context.player.setNeedsPlacement(false);
+  }
+  await pandemoniumDeploy(stranger, undefined, f.ship());
+  assert.equal(stranger.player.getDialogueManager().getCurrent(), undefined, 'a foreign owner cannot operate this ship');
+  const ship = f.ship();
+  await f.connection.dispatch([{ type: 'object_option', id: core.CacheDefinitions.getLocId('sailing_intro_salvaging_hook'),
+    x: ship.boat.deckBaseX + 3, y: ship.boat.deckBaseY + 4, clickType: 5 }]);
+  f.connection.processTurnPackets();
+  core.TaskManager.processWalkTo(f.player.getIndex());
+  core.TaskManager.process();
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined, 'Modify cannot become Deploy');
+  assert.equal(f.quest.getStage(f.player), 14);
+  await pandemoniumDeploy(f);
+  const widgetId = (f.player.getPacketSender().getChatboxGroupId() << 16) | 5;
+  assert.ok(f.player.getDialogueManager().getCurrent());
+  f.player.closeInterruptibleInterfaces();
+  await f.connection.dispatch([{ type: 'dialogue_continue', widgetId, childIndex: -1 }]);
+  f.connection.processTurnPackets();
+  assert.equal(f.quest.getStage(f.player), 14, 'a closed source cannot advance through a stale Continue');
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP), 0);
+  f.login();
+  f.player.closeInterruptibleInterfaces();
+  f.player.setNeedsPlacement(false);
+  await pandemoniumDeploy(f, core.ObjectIdentifiers.SALVAGING_HOOK_2);
+  assert.ok(f.player.getDialogueManager().getCurrent(), 'a visible-child click retries the same owned parent after relog');
+});
+
+test('Pandemonium native: the captured helm and sails still sail to the wreck with Deploy available', async t => {
+  const f = pandemoniumShipFixture(t, 10), ship = f.ship();
+  for (const [x, y] of [[3054, 3193], [3054, 3120], [3051, 3110], [3048, 3070], [3032, 3050]]) {
+    core.RegionManager.loadMapFiles(x, y, true);
+  }
+  f.player.closeInterruptibleInterfaces();
+  f.player.setNeedsPlacement(false);
+  const operate = async (part, clickType) => {
+    const loc = ship.spec.locs.find(loc => loc.part === part);
+    await f.connection.dispatch([{ type: 'object_option', id: loc.id,
+      x: ship.boat.deckBaseX + loc.x, y: ship.boat.deckBaseY + loc.y, clickType }]);
+    f.connection.processTurnPackets();
+    for (let tick = 0; tick < 6; tick++) {
+      core.TaskManager.processWalkTo(f.player.getIndex());
+      f.player.getMovementQueue().beginCycle();
+      f.player.getMovementQueue().process();
+      core.TaskManager.process();
+    }
+  };
+  await operate('helm', 1);
+  assert.equal(ship.boat.helmPlayerId, f.player.getIndex(), 'Navigate uses the actual parent and reachable deck');
+  await operate('sails', 2);
+  assert.equal(ship.boat.moveMode, 2, 'Set starts the observed full-sail voyage');
+  for (let tick = 0; tick < 350 && f.quest.getStage(f.player) < 12; tick++) core.BoatManager.tick();
+  assert.equal(f.quest.getStage(f.player), 12,
+    `the existing route arrives with the wider hull (boat ${ship.boat.tileX},${ship.boat.tileY}, ${JSON.stringify(ship.boat.lastStep)})`);
+  f.player.closeInterruptibleInterfaces();
+  const will = [...core.World.getNpcs()].find(npc => npc.getOwner() === f.player && npc.getId() === 14958);
+  assert.ok(will);
+  await f.connection.dispatch([{ type: 'npc_option', index: will.getIndex(), clickType: 1 }]);
+  f.connection.processTurnPackets();
+  for (let tick = 0; tick < 6; tick++) {
+    core.TaskManager.processWalkTo(f.player.getIndex());
+    f.player.getMovementQueue().beginCycle();
+    f.player.getMovementQueue().process();
+    core.TaskManager.process();
+  }
+  assert.equal(f.quest.getStage(f.player), 14);
+  assert.equal(ship.spec.locs.some(loc => loc.id === core.ObjectIdentifiers.SMALL_SHIPWRECK), false,
+    'arrival does not place an unrelated wreck model on the deck');
+  f.player.closeInterruptibleInterfaces();
+  await pandemoniumDeploy(f);
+  assert.ok(f.player.getDialogueManager().getCurrent(), 'Deploy remains usable after the ordinary voyage');
+});

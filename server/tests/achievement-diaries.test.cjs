@@ -146,15 +146,60 @@ test("as captured (Ardougne easy): message and count on the tick, started on the
   assert.equal(all.complete, false, "the other diaries are not done");
 });
 
-test("saves from before the attribute rename keep their progress", () => {
+test("migration merges valid legacy progress and survives a save round trip", () => {
   const player = createPlayer();
   const easy = ARDOUGNE.tiers.easy.tasks.map((task) => task.key);
-  player.setAttribute("diary.ardougne.tasks", easy);
-  player.setAttribute("diary.ardougne.rewards", ["easy"]);
+  player.setAttribute(Progress.TASKS_ATTRIBUTE, { ardougne: [easy[0], "future-task"] });
+  player.setAttribute(Progress.REWARDS_ATTRIBUTE, { ardougne: ["medium", "future-tier"] });
+  player.setAttribute("diary.ardougne.tasks", [easy[1], "not-a-task", easy[0]]);
+  player.setAttribute("diary.ardougne.rewards", ["easy", "not-a-tier"]);
+
+  const falador = Data.BY_KEY.get("falador");
+  const faladorTask = falador.tiers.easy.tasks[0].key;
+  player.setAttribute(Progress.TASKS_ATTRIBUTE, {
+    ...player.getAttribute(Progress.TASKS_ATTRIBUTE),
+    falador: [faladorTask, "future-falador-task"],
+  });
+  player.setAttribute(Progress.REWARDS_ATTRIBUTE, {
+    ...player.getAttribute(Progress.REWARDS_ATTRIBUTE),
+    falador: ["easy", "future-falador-tier"],
+  });
+  player.setAttribute("diary.falador.tasks", []);
+  player.setAttribute("diary.falador.rewards", []);
+
+  const varrock = Data.BY_KEY.get("varrock");
+  const varrockTask = varrock.tiers.medium.tasks[0].key;
+  player.setAttribute("diary.varrock.tasks", [varrockTask]);
+  player.setAttribute("diary.varrock.rewards", ["hard"]);
+
   Progress.restore({ player });
-  assert.equal(Progress.tierCount(player, ARDOUGNE, "easy"), easy.length);
+  assert.deepEqual([...Progress.doneTasks(player, ARDOUGNE)], [easy[0], "future-task", easy[1]]);
+  assert.deepEqual([...Progress.claimedTiers(player, ARDOUGNE)], ["medium", "future-tier", "easy"]);
+  assert.deepEqual([...Progress.doneTasks(player, falador)], [faladorTask, "future-falador-task"], "empty legacy arrays do not erase canonical progress");
+  assert.deepEqual([...Progress.claimedTiers(player, falador)], ["easy", "future-falador-tier"]);
+  assert.deepEqual([...Progress.doneTasks(player, varrock)], [varrockTask], "legacy-only progress is imported");
+  assert.deepEqual([...Progress.claimedTiers(player, varrock)], ["hard"]);
   assert.ok(Progress.claimedTiers(player, ARDOUGNE).has("easy"));
-  assert.equal(player.getAttribute("diary.ardougne.tasks"), null, "the old key is cleared, so it is no longer saved");
+  assert.equal(player.getAttribute("diary.ardougne.tasks"), null, "the old key is cleared");
+
+  const saved = {};
+  for (const attribute of [Progress.TASKS_ATTRIBUTE, Progress.REWARDS_ATTRIBUTE]) {
+    saved[attribute] = JSON.parse(JSON.stringify(player.getAttribute(attribute)));
+  }
+  const loaded = createPlayer();
+  for (const [attribute, value] of Object.entries(saved)) loaded.setAttribute(attribute, value);
+  Progress.restore({ player: loaded });
+  assert.deepEqual(loaded.getAttribute(Progress.TASKS_ATTRIBUTE), saved[Progress.TASKS_ATTRIBUTE]);
+  assert.deepEqual(loaded.getAttribute(Progress.REWARDS_ATTRIBUTE), saved[Progress.REWARDS_ATTRIBUTE]);
+  Progress.restore({ player: loaded });
+  assert.deepEqual(loaded.getAttribute(Progress.TASKS_ATTRIBUTE), saved[Progress.TASKS_ATTRIBUTE], "a second login migration changes nothing");
+  assert.deepEqual(loaded.getAttribute(Progress.REWARDS_ATTRIBUTE), saved[Progress.REWARDS_ATTRIBUTE]);
+
+  loaded.setAttribute("diary.ardougne.tasks", ["future-legacy-task", easy[2]]);
+  loaded.setAttribute("diary.ardougne.rewards", ["future-legacy-tier", "hard"]);
+  Progress.restore({ player: loaded });
+  assert.deepEqual([...Progress.doneTasks(loaded, ARDOUGNE)], [easy[0], "future-task", easy[1], easy[2]]);
+  assert.deepEqual([...Progress.claimedTiers(loaded, ARDOUGNE)], ["medium", "future-tier", "easy", "hard"]);
 });
 
 test("every captured task list is rebuilt line for line from the progress it shows", () => {
@@ -326,6 +371,7 @@ test('diary tasks follow successful native gameplay actions', async t => {
   const PICKPOCKET = 'pickpocket-a-man-or-woman-in-lumbridge';
   const ZOMBIE = 'kill-a-zombie-in-draynor-sewers';
   const SEDRIDOR = 'have-sedridor-teleport-you-to-the-essence-mine';
+  const CROMPERTY = 'have-wizard-cromperty-teleport-you-to-the-rune-e';
 
   await t.test('Varrock tea theft credits the diary only when delayed loot arrives', () => {
     const player = actor(3268, 3410);
@@ -386,6 +432,35 @@ test('diary tasks follow successful native gameplay actions', async t => {
     assert.equal(credits.filter(event => event.player === player && event.task === SEDRIDOR).length, 1, 'repeated clicks during travel do not duplicate credit');
   });
 
+  await t.test('Cromperty right-click credits Ardougne Easy after landing once', () => {
+    const player = actor(2682, 3326);
+    player.setAttribute('quest.rune_mysteries.stage', 6);
+    const npc = spawn(5314, 2683, 3326);
+    assert.equal(npc.getCurrentDefinition(player).getName(), 'Wizard Cromperty');
+    assert.equal(PluginManager.emitNpcInteraction({ player, npc, npcId: npc.getId(), clickType: 3, handled: false }), true);
+    PluginManager.emitNpcInteraction({ player, npc, npcId: npc.getId(), clickType: 3, handled: false });
+    advance(3);
+    assert.equal(completed(player, 'ardougne', CROMPERTY), false);
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2682, 3326]);
+    advance();
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2913, 4832]);
+    assert.equal(completed(player, 'ardougne', CROMPERTY), true);
+    assert.equal(credits.filter(event => event.player === player && event.diary === 'ardougne' && event.task === CROMPERTY).length, 1);
+  });
+
+  await t.test('Cromperty dialogue action EkCGKW teleports and credits after landing', () => {
+    const player = actor(2682, 3326);
+    player.setAttribute('quest.rune_mysteries.stage', 6);
+    const npc = spawn(5314, 2683, 3326);
+    const action = { player, npc, npcId: npc.getId(), stepId: 'EkCGKW', action: 'teleport', handled: false };
+    PluginManager.emitCustomEvent('npc-dialogue:action', action);
+    assert.equal(action.handled, true);
+    advance(4);
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2913, 4832]);
+    assert.equal(completed(player, 'ardougne', CROMPERTY), true);
+    assert.equal(credits.filter(event => event.player === player && event.diary === 'ardougne' && event.task === CROMPERTY).length, 1);
+  });
+
   await t.test('tea from Kourend and attempts whose final inventory slot fills do not count', () => {
     for (const [x, y, fillDuringAttempt] of [[1648, 3683, false], [3269, 3410, true]]) {
       const player = actor(x - 1, y);
@@ -434,6 +509,29 @@ test('diary tasks follow successful native gameplay actions', async t => {
       assert.equal(completed(player, 'lumbridge', SEDRIDOR), false);
       assert.equal(credits.some(event => event.player === player && event.task === SEDRIDOR), false);
       assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], reason === 'other wizard' ? [2913, 4832] : [3104, 9571]);
+    });
+  }
+
+  for (const reason of ['quest incomplete', 'blocked', 'cancelled', 'death', 'logout', 'other wizard']) {
+    await t.test(`Cromperty task is not awarded when ${reason}`, sub => {
+      const player = actor(2682, 3326);
+      if (reason !== 'quest incomplete') player.setAttribute('quest.rune_mysteries.stage', 6);
+      const npc = spawn(reason === 'other wizard' ? core.NpcIdentifiers.AUBURY_3 : 5314, 2683, 3326);
+      if (reason === 'blocked') sub.mock.method(core.TeleportHandler, 'checkReqs', () => false);
+      if (reason === 'other wizard') {
+        const action = { player, npc, npcId: npc.getId(), stepId: 'EkCGKW', action: 'teleport', handled: false };
+        PluginManager.emitCustomEvent('npc-dialogue:action', action);
+        assert.equal(action.handled, false);
+      } else {
+        PluginManager.emitNpcInteraction({ player, npc, npcId: npc.getId(), clickType: 3, handled: false });
+      }
+      if (reason === 'cancelled') for (const task of pending) if (task.key === player) task.stop();
+      if (reason === 'death') PluginManager.emitPlayerDeath({ player });
+      if (reason === 'logout') player.setRegistered(false);
+      advance(4);
+      assert.equal(completed(player, 'ardougne', CROMPERTY), false);
+      assert.equal(credits.some(event => event.player === player && event.diary === 'ardougne' && event.task === CROMPERTY), false);
+      assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2682, 3326]);
     });
   }
 });

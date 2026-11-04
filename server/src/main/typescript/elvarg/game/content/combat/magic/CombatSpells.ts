@@ -851,7 +851,10 @@ export class CombatSpells {
             return 30;
         },
         equipmentRequired(player) {
-            return [new Item(1409)];
+            const weapon = player.getEquipment().getItems()[Equipment.WEAPON_SLOT];
+            return weapon?.getId() === ItemIdentifiers.IBANS_STAFF_U_
+                ? [new Item(ItemIdentifiers.IBANS_STAFF_U_)]
+                : [new Item(ItemIdentifiers.IBANS_STAFF)];
         },
         itemsRequired(player) {
             return [new Item(560, 1), new Item(554, 5)];

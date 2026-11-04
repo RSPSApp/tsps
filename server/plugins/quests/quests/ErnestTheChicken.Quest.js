@@ -467,29 +467,50 @@ module.exports = function registerErnestTheChickenQuest(api) {
     player.sendMessage("You hear a clunk.");
   }
 
-  function usePuzzleDoor(player, tile) {
+  /**
+   * The puzzle doors are shape-10 scenery with the wall on one edge of their tile. The cache
+   * map has face 0 (doors 1-5, wall on the west edge) and face 3 (doors 6-9, south edge). A door
+   * is crossed through that edge, so the crossing axis is the wall's, not the direction the
+   * player happens to be standing in. Other faces do not occur and are left alone.
+   */
+  const WALL_STEPS = new Map([[0, { x: -1, y: 0 }], [3, { x: 0, y: -1 }]]);
+
+  const puzzleDoorStep = (object) => WALL_STEPS.get(object?.getFace?.());
+
+  function usePuzzleDoor(player, tile, object) {
     const index = DOOR_TILES.findIndex(([x, y]) => x === tile.x && y === tile.y);
     const states = getErnestPuzzleDoorStates(attr(player, LEVERS_ATTRIBUTE));
     if (index < 0 || !states[index]) {
       player.sendMessage("The door is locked firmly in place.");
       return;
     }
-    crossDoor(player, tile);
+    const step = puzzleDoorStep(object);
+    if (!step) return;
+    const position = player.getLocation();
+    const wallSide = (position.getX() - tile.x) * step.x + (position.getY() - tile.y) * step.y > 0;
+    const direction = wallSide ? -1 : 1;
+    player.moveTo(new Location(tile.x + direction * step.x, tile.y + direction * step.y, tile.z ?? position.getZ()));
   }
 
   /**
-   * The puzzle doors are map scenery (shape 10) sitting next to wall pieces, so
-   * the walk-to-object reach check refuses one side of some. Route the click to
-   * the nearest walkable tile in front on the player's side instead; the
-   * interaction then runs and usePuzzleDoor crosses the door.
+   * Route the click to the walkable tile directly in front of the door on either side of its
+   * wall, the nearer to the player, so the interaction always runs from a tile that crosses the
+   * wall. The ordinary reach check refuses some sides, and a tile beside the door along its wall
+   * would otherwise be used as the starting side.
    */
   function routePuzzleDoor(event) {
     if (!DOORS.includes(event.objectId)) return;
     const tile = event.object?.getLocation?.();
     if (!tile) return;
+    const step = puzzleDoorStep(event.object);
+    if (!step) return;
     const position = event.player.getLocation();
     let best = null;
-    for (const [x, y] of [[tile.getX() + 1, tile.getY()], [tile.getX() - 1, tile.getY()], [tile.getX(), tile.getY() + 1], [tile.getX(), tile.getY() - 1]]) {
+    // The side away from the wall comes first, so from the door tile itself (a tie) the player
+    // is sent through the wall.
+    for (const direction of [-1, 1]) {
+      const x = tile.getX() + direction * step.x;
+      const y = tile.getY() + direction * step.y;
       const stand = new Location(x, y, tile.getZ());
       if (RegionManager.blocked(stand, event.player.getPrivateArea?.() ?? null)) continue;
       const distance = Math.max(Math.abs(x - position.getX()), Math.abs(y - position.getY()));
@@ -683,7 +704,7 @@ module.exports = function registerErnestTheChickenQuest(api) {
       return;
     }
     if (DOORS.includes(objectId)) {
-      usePuzzleDoor(player, location);
+      usePuzzleDoor(player, location, event.object ?? MapObjects.get(objectId, new Location(location.x, location.y, location.z ?? 0), player.getPrivateArea?.() ?? null));
       event.handled = true;
       return;
     }

@@ -32,6 +32,8 @@ const emitted = [];
 let inCombat = false;
 /** world.json pluginConfig "league:type": a Trailblazer Reloaded world, 5 while a Raging Echoes character is made. */
 let worldLeague = 4;
+/** The characters whose first grave's tutorial with Death is running. */
+const inDeathTutorial = new Set();
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -61,6 +63,7 @@ before(async () => {
     onInterfaceActionButton: (ids, handler) => {
       for (const id of [].concat(ids)) on(`button:${id}`)(handler);
     },
+    onObjectFirstClick: (id, handler) => (hooks[`object:${id}`] = handler),
     onCustomEvent: (name, handler) => (custom[name] = (custom[name] ?? []).concat(handler)),
     emitCustomEvent: (name, payload) => {
       emitted.push([name, payload]);
@@ -71,6 +74,9 @@ before(async () => {
   require("../plugins/modes/LeaguePoints.plugin").register(api);
   require("../plugins/modes/LeagueRelics.plugin").register(api);
   require("../plugins/modes/LeagueAreaUnlocks.plugin").register(api);
+  require("../plugins/areas/DeathsOffice.plugin").register(api);
+  // The Gravestones plugin's answer, as far as Death's Office asks it here.
+  api.onCustomEvent("gravestones:state", (state) => (state.inTutorial = inDeathTutorial.has(state.player)));
 });
 
 /** A real player whose packets are recorded; logged in as a new character of `profile`. */
@@ -687,6 +693,95 @@ test("Demonic Pacts' League Home Teleport: Civitas with the league's cast and it
   const event = { player: echoes, spellName: "League Home Teleport", opId: 3, handled: false };
   hooks.onSpellCast(event);
   assert.equal(event.handled, false, "another league's character is not handled here");
+});
+
+/** A character in its copy of Death's Office, whose moves report their map square as World.onPlayerMoved does. */
+function inDeathsOffice(name, profile, league = 4) {
+  worldLeague = league;
+  const player = character(name, profile);
+  worldLeague = 4;
+  player.moveTo = function (destination) {
+    const previous = this.getLocation().clone();
+    Player.prototype.moveTo.call(this, destination);
+    const location = this.getLocation();
+    if ((previous.getX() >> 6) !== (location.getX() >> 6) || (previous.getY() >> 6) !== (location.getY() >> 6)) {
+      hooks.onPlayerMapSquareChange({ player: this, previous, location });
+    }
+    return this;
+  };
+  require("../plugins/areas/deathsoffice/Instance.DeathsOffice").enter(player, [3173, 5726, 0]);
+  return player;
+}
+
+/** The exit portal's click, and the two ticks to the move. */
+function leaveDeathsOffice(player) {
+  const Instance = require("../plugins/areas/deathsoffice/Instance.DeathsOffice");
+  assert.equal(Instance.inOffice(player), true, "in the office before the click");
+  player.sent.messages.length = 0;
+  assert.equal(hooks[`object:${core.CacheDefinitions.getLocId("death_office_exitportal")}`]({ player }), true);
+  core.TaskManager.process();
+  core.TaskManager.process();
+  assert.equal(Instance.inOffice(player), false, "the copy is gone");
+  assert.deepEqual(player.sent.messages, [], "the portal has nothing to refuse");
+  return player.getLocation();
+}
+
+test("Death's Office's exit portal: a locked destination leads to the league home, an open one is unchanged", () => {
+  const heardEverything = 31;
+  const Enforcement = require("../plugins/modes/leagueareas/Enforcement.LeagueAreaUnlocks");
+  const homeOf = (player, league) => Enforcement.home(league, player);
+  const spawn = core.WorldDefinition.WORLD_SPAWN;
+  assert.equal(areaAt(spawn.getX(), spawn.getY()), WILDERNESS, "(the tutorial's exit, the world's spawn, is locked for a new character)");
+
+  // The first death's tutorial leads to the respawn point: the respawn rule's league home here.
+  const tutorial = inDeathsOffice("tutorialexit");
+  inDeathTutorial.add(tutorial);
+  tutorial.setAttribute("deaths-office:tutorial-heard", heardEverything);
+  const afterTutorial = leaveDeathsOffice(tutorial);
+  inDeathTutorial.delete(tutorial);
+  assert.ok(afterTutorial.equals(homeOf(tutorial, 4)), `Trailblazer's home, not the office: ${afterTutorial}`);
+  assert.equal(areaAt(afterTutorial.getX(), afterTutorial.getY()), MISTHALIN);
+
+  // No entrance on record falls back to Lumbridge, which Demonic Pacts never opens.
+  const pacts = inDeathsOffice("pactsexit", "league", 6);
+  const fromLumbridge = leaveDeathsOffice(pacts);
+  assert.ok(fromLumbridge.equals(homeOf(pacts, 6)), `Demonic Pacts' home, not the office: ${fromLumbridge}`);
+  assert.equal(areaAt(fromLumbridge.getX(), fromLumbridge.getY(), { league: 6 }), VARLAMORE);
+
+  // Logged out inside: the new copy's portal behaves the same.
+  const relogged = inDeathsOffice("pactsrelog", "league", 6);
+  const Instance = require("../plugins/areas/deathsoffice/Instance.DeathsOffice");
+  Instance.leave(relogged, at(1653, 3135));
+  relogged.setAttribute("deaths-office:inside", true);
+  hooks.onPlayerLogin({ player: relogged, username: "pactsrelog", isNewAccount: false, profile: "league" });
+  assert.ok(leaveDeathsOffice(relogged).equals(homeOf(relogged, 6)), "home from the login's copy too");
+
+  // An entrance whose outside is locked (a saved character's old visit), until its area is unlocked.
+  const falador = [2976, 9737, 0];
+  const stale = inDeathsOffice("staleexit");
+  stale.setAttribute("deaths-office:entrance", "death_office_access_whitecoffin");
+  assert.ok(leaveDeathsOffice(stale).equals(homeOf(stale, 4)), "Falador's entrance is locked: home");
+
+  // Controls: an open destination is exactly what it was.
+  const unlocked = inDeathsOffice("openfalador");
+  unlocked.setAttribute("league:areas", [MISTHALIN, KARAMJA, ASGARNIA]);
+  unlocked.setAttribute("deaths-office:entrance", "death_office_access_whitecoffin");
+  assert.ok(leaveDeathsOffice(unlocked).equals(at(...falador)), "outside Falador's entrance once Asgarnia is unlocked");
+  assert.equal(unlocked.getAttribute("deaths-office:entrance"), null);
+
+  const lumbridge = inDeathsOffice("openlumbridge");
+  assert.ok(leaveDeathsOffice(lumbridge).equals(at(3238, 3194)), "no entrance on record: Lumbridge, open to Trailblazer");
+
+  const civitas = inDeathsOffice("opencivitas", "league", 6);
+  civitas.setAttribute("deaths-office:entrance", "civitas_death_entrance");
+  assert.ok(leaveDeathsOffice(civitas).equals(at(1653, 3135)), "Civitas's own entrance, as captured");
+
+  const main = inDeathsOffice("mainexit", "main");
+  inDeathTutorial.add(main);
+  main.setAttribute("deaths-office:tutorial-heard", heardEverything);
+  const mainExit = leaveDeathsOffice(main);
+  inDeathTutorial.delete(main);
+  assert.ok(mainExit.equals(spawn), "a main character's tutorial still leads to the world's spawn");
 });
 
 test("a reload restores the unlocks and their varbits", () => {

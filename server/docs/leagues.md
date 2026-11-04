@@ -1481,7 +1481,9 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
   (`onCanTeleport`) is refused with a message. `player:respawn` sends a respawn another plugin
   landed in a locked square, or the world's spawn when that is locked, to the league home; the
   `onPlayerDeath` hook flags the player for that tick so a later respawn handler's landing is
-  caught by the map-square rule too. The league home is the world's spawn, or Misthalin's hub
+  caught by the map-square rule too. Death's Office asks `deaths-office:exit { player, destination }`
+  before its exit portal opens, and a locked destination becomes the league home (the respawn rule
+  applied to the portal; ours, as no capture shows a locked exit). The league home is the world's spawn, or Misthalin's hub
   (Lumbridge) when the spawn is locked (this world's spawn sits on the Wilderness ditch), so it is
   always open; a character that logs in inside a locked square (a new one at that spawn, an old
   one whose square the data no longer gives it) starts there.

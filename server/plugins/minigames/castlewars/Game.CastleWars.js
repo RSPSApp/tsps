@@ -28,6 +28,7 @@ const IDLE_TICKS_KEY = "castlewars:idle-ticks";
 const SPAWN_IDLE_TICKS = 200;
 
 const teamByPlayer = new WeakMap();
+const participationStarted = new WeakMap();
 const sentVars = new WeakMap();
 const braceletEffect = new WeakSet();
 const flagHeldSince = new WeakMap();
@@ -117,6 +118,7 @@ function setTeamId(player, teamId) {
   }
   if (teamId == null) {
     teamByPlayer.delete(player);
+    participationStarted.delete(player);
     return;
   }
   teamByPlayer.set(player, teamId);
@@ -560,23 +562,48 @@ function checkStartCountdown() {
   }
 }
 
+function startParticipation(player) {
+  if (!participationStarted.has(player)) participationStarted.set(player, World.getProcessCycle());
+}
+
 function rewardPlayer(player) {
   const teamId = getTeamId(player);
-  if (!teamId) {
+  if (!teamId || player.isRegistered?.() !== true || player.getArea() !== game.gameArea || !inGameBounds(player.getLocation())) {
     return;
   }
-  // OSRS Wiki, non-dedicated worlds: shut-out win 3, win 2, loss 1, 0-0 draw 1, scoring draw 2.
   const own = score[teamId];
   const other = score[opposingTeam(teamId)];
-  const award = { player, minigame: "castle-wars", points: own === other ? (own === 0 ? 1 : 2) : own < other ? 1 : other === 0 ? 3 : 2 };
-  api.emitCustomEvent("minigame:points", award);
-  const tickets = award.points;
   const result = own === other ? "Tie game!" : own > other ? "You won the game." : "You lost the game.";
   if (player.getAttribute(BOT_KEY) !== true) {
     api.emitCustomEvent("castlewars:player-result", { player, result: own === other ? "tie" : own > other ? "win" : "loss" });
   }
-  player.getInventory().adds(core.ItemIdentifiers.CASTLE_WARS_TICKET, tickets);
-  player.sendMessage(`${result} You received ${tickets} Castle Wars ticket${tickets === 1 ? "" : "s"}.`);
+  const started = participationStarted.get(player);
+  if (started == null || World.getProcessCycle() - started < secondsToTicks(data.REWARD_MINIMUM_SECONDS)) {
+    player.sendMessage("You must play at least 15 minutes to receive Castle Wars rewards.");
+    return;
+  }
+  // OSRS Wiki, non-dedicated worlds: shut-out win 3, win 2, loss 1, 0-0 draw 1, scoring draw 2.
+  const award = { player, minigame: "castle-wars", points: own === other ? (own === 0 ? 1 : 2) : own < other ? 1 : other === 0 ? 3 : 2 };
+  api.emitCustomEvent("minigame:points", award);
+  const tickets = award.points;
+  const inventory = player.getInventory();
+  if (!Number.isSafeInteger(tickets) || tickets <= 0 || inventory.getFreeSlots() === 0
+    || inventory.getAddableAmount(new core.Item(core.ItemIdentifiers.CASTLE_WARS_TICKET, tickets)) < tickets) {
+    player.sendMessage("You don't have enough inventory space for your Castle Wars rewards.");
+    return;
+  }
+  const plaudits = { player, amount: tickets, allow: true, commit: null };
+  if (player.getAttribute(BOT_KEY) !== true && !player.isPlayerBot()) api.emitCustomEvent("castlewars:reward-plaudits", plaudits);
+  if (!plaudits.allow) {
+    player.sendMessage("You cannot hold any more Castle Wars plaudits.");
+    return;
+  }
+  const before = inventory.getAmount(core.ItemIdentifiers.CASTLE_WARS_TICKET);
+  inventory.adds(core.ItemIdentifiers.CASTLE_WARS_TICKET, tickets);
+  const delivered = inventory.getAmount(core.ItemIdentifiers.CASTLE_WARS_TICKET) - before;
+  if (delivered <= 0) return;
+  plaudits.commit?.(delivered);
+  player.sendMessage(`${result} You received ${delivered} Castle Wars ticket${delivered === 1 ? "" : "s"}.`);
 }
 
 function returnToLobby(player, message = null) {
@@ -935,6 +962,7 @@ module.exports = function createCastleWarsGame(registry) {
     beginStartCountdown,
     checkStartCountdown,
     checkTeamsRemain,
+    startParticipation,
     endGame,
     releaseSeededBots,
     resetMatchState,

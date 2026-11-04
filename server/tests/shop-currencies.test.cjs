@@ -22,11 +22,12 @@ ItemDefinition.forId = (id) => (NAMES[id] ? { getName: () => NAMES[id] } : undef
 function loadPlugin() {
   const persisted = new Set();
   plugin.register({
+    core: { NpcDefinition: { forId: () => ({ getActions: () => [] }) } },
     registerShopCurrency: (key, handler) => ShopManager.registerCurrency(key, handler),
     registerItemShopCurrency: (itemId, options) => ShopManager.registerItemCurrency(itemId, options),
     persistAttribute: (key) => persisted.add(key),
     registerNpcInteraction: () => {},
-    onNpcInteraction: () => {},
+    onAnyNpcInteraction: () => {},
   });
   return { persisted, handlers: ShopManager.currencyHandlers };
 }

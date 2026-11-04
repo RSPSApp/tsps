@@ -16,6 +16,7 @@ const SPOTANIM = 759;
 const MENU_TITLE = "Select an option";
 const PROCEED = "Proceed with the infusion.";
 const CANCEL = "Cancel.";
+const PRESET_TEXT = "Preset items cannot be used for this.";
 
 let api;
 
@@ -43,9 +44,22 @@ function meetsLevels(player) {
   return false;
 }
 
+/** Preset (and other untradeable or unbankable) copies keep their restrictions, so they never convert. */
+function restricted(item) {
+  const Item = api.core.Item;
+  return !!item && (item.isPresetItem?.() === true
+    || item.getMetaValue?.(Item.PRESET_META) === true
+    || item.getMetaValue?.(Item.UNTRADEABLE_META) === true
+    || item.getMetaValue?.(Item.UNBANKABLE_META) === true);
+}
+
+/** The slot of an unrestricted copy of the item: the instance that is actually consumed. */
+function plainSlot(player, itemId) {
+  return player.getInventory().getItems().findIndex((item) => item && item.getId() === itemId && !restricted(item));
+}
+
 function hasIngredients(player, recipe) {
-  const inventory = player.getInventory();
-  return inventory.getAmount(id(recipe, "crystal")) >= 1 && inventory.getAmount(id(recipe, "base")) >= 1;
+  return plainSlot(player, id(recipe, "crystal")) >= 0 && plainSlot(player, id(recipe, "base")) >= 0;
 }
 
 function confirmText(recipe) {
@@ -67,7 +81,11 @@ function showMenu(player, recipe) {
 }
 
 /** Used crystal on boots: ask first, nothing is consumed yet. */
-function askToInfuse(recipe, { player }) {
+function askToInfuse(recipe, { player, usedItem, usedWithItem }) {
+  if (restricted(usedItem) || restricted(usedWithItem)) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   if (!meetsLevels(player) || !hasIngredients(player, recipe)) return;
   const { DialogueChainBuilder, DoubleItemStatementDialogue, ActionDialogue } = api.core;
   const chain = new DialogueChainBuilder();
@@ -95,8 +113,8 @@ function infuse(player, recipe) {
   if (!meetsLevels(player) || !hasIngredients(player, recipe)) return false;
   const { Item, Skill, Animation, Graphic, DialogueChainBuilder, ItemStatementDialogue, EndDialogue } = api.core;
   const inventory = player.getInventory();
-  inventory.deleteNumber(id(recipe, "crystal"), 1);
-  inventory.deleteNumber(id(recipe, "base"), 1);
+  inventory.deleteAtSlot(plainSlot(player, id(recipe, "crystal")), 1);
+  inventory.deleteAtSlot(plainSlot(player, id(recipe, "base")), 1);
   inventory.addItem(new Item(id(recipe, "result"), 1));
   player.getSkillManager().addExperiences(Skill.MAGIC, EXPERIENCE);
   player.getSkillManager().addExperiences(Skill.RUNECRAFTING, EXPERIENCE);

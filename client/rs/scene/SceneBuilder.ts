@@ -313,14 +313,14 @@ export class SceneBuilder {
         // Set floor collision BEFORE bridge demotion (matches OSRS client order)
         this.setFloorCollision(scene);
 
-        // OSRS-accurate: Physically relink/shift bridge columns between planes and
-        // attach the original base tile as linkedBelow for correct roof/bridge culling.
-        scene.applyBridgeLinks();
-        scene.setTileMinLevels();
-
+        // Merge neighbouring scenery on its original planes before bridge columns move.
         if (locLoadType === LocLoadType.MODELS) {
             scene.light(this.locModelLoader.textureLoader, -50, -10, -50);
         }
+
+        // Retain the original base tile below the demoted bridge for roof/bridge culling.
+        scene.applyBridgeLinks();
+        scene.setTileMinLevels();
 
         yield;
         return scene;
@@ -1924,11 +1924,11 @@ export class SceneBuilder {
         yield;
         scene.setTileMinLevels();
         this.setFloorCollision(scene);
-        scene.applyBridgeLinks();
-        scene.setTileMinLevels();
         if (locLoadType === LocLoadType.MODELS) {
             scene.light(this.locModelLoader.textureLoader, -50, -10, -50);
         }
+        scene.applyBridgeLinks();
+        scene.setTileMinLevels();
 
         yield;
         return scene;

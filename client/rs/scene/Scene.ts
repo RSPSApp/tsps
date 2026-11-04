@@ -20,6 +20,7 @@ export class Scene {
     // Tiles
     tiles: SceneTile[][][];
     bridgeReplicas: (SceneTile | undefined)[][][];
+    private bridgeLinksApplied = false;
     collisionMaps: CollisionMap[];
 
     // Terrain
@@ -670,6 +671,7 @@ export class Scene {
                 }
             }
         }
+        this.bridgeLinksApplied = true;
     }
 
     getTileMinLevel(level: number, tileX: number, tileY: number): number {
@@ -719,7 +721,7 @@ export class Scene {
 
     getCenterHeight(level: number, tileX: number, tileY: number): number {
         let heightLevel = level;
-        if (level < 3 && (this.tileRenderFlags[1][tileX][tileY] & 0x2) !== 0) {
+        if (this.bridgeLinksApplied && level < 3 && (this.tileRenderFlags[1][tileX][tileY] & 0x2) !== 0) {
             heightLevel = level + 1;
         }
 

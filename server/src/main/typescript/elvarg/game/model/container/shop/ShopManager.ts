@@ -167,7 +167,15 @@ export class ShopManager {
         }
 
         this.setActiveShop(player, shopId, targetUid);
-        return this.openInterface(player, shop, resetScroll, targetUid);
+        const opened = this.openInterface(player, shop, resetScroll, targetUid);
+        if (opened) {
+            PluginManager.emitCustomEvent("shop:opened", {
+                player,
+                shopId,
+                shopName: shop.definition.getName(),
+            });
+        }
+        return opened;
     }
 
     public static close(player: any): void {

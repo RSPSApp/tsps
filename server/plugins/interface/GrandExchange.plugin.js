@@ -862,6 +862,9 @@ module.exports = {
     api.onObjectInteraction("Bank Chest", {
       "Collect": openCollectionBox,
     });
+    api.onObjectInteraction("Chest", {
+      "Collect": openCollectionBox,
+    });
 
     api.onInterfaceActionButton(COLLECTION_BUTTONS, handleCollectionButton);
     api.onItemFirstAction(handleInventoryItem);

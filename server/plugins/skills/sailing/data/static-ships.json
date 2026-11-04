@@ -267,11 +267,11 @@
   },
   {
     "id": "pandemonium_tutorial_ship",
-    "configId": 1,
+    "configId": 2,
     "sizeX": 8,
     "sizeZ": 8,
     "templateChunkX": 480,
-    "templateChunkY": 807,
+    "templateChunkY": 800,
     "deckLevel": 1,
     "walkableTiles": [
       [
@@ -285,55 +285,69 @@
       [
         3,
         4
+      ],
+      [
+        3,
+        5
+      ],
+      [
+        4,
+        2
+      ],
+      [
+        4,
+        3
+      ],
+      [
+        4,
+        4
+      ],
+      [
+        4,
+        5
       ]
     ],
     "deckLocs": [
       {
-        "id": 59554,
-        "x": 3,
+        "id": 59620,
+        "x": 4,
+        "y": 6,
+        "level": 1,
+        "shape": 10,
+        "rotation": 0,
+        "opFlags": 15,
+        "part": "helm"
+      },
+      {
+        "id": 59553,
+        "x": 4,
         "y": 4,
         "level": 1,
         "shape": 10,
         "rotation": 0,
-        "part": "helm"
-      },
-      {
-        "id": 59530,
-        "x": 3,
-        "y": 3,
-        "level": 1,
-        "shape": 10,
-        "rotation": 0,
+        "opFlags": 2,
         "part": "sails"
       },
       {
-        "id": 29506,
+        "id": 60480,
         "x": 3,
-        "y": 5,
+        "y": 4,
         "level": 1,
         "shape": 10,
-        "rotation": 0,
-        "part": "sailCloth"
-      },
-      {
-        "id": 59663,
-        "x": 3,
-        "y": 2,
-        "level": 1,
-        "shape": 10,
-        "rotation": 0
+        "rotation": 1,
+        "opFlags": 15
       }
     ],
     "hull": {
       "offsetX": 0,
       "offsetY": 0,
-      "width": 128,
-      "length": 384
+      "width": 256,
+      "length": 640
     },
-    "deckCentreX": 448,
+    "deckCentreX": 512,
     "deckCentreY": 448,
     "boardingTile": {
-      "x": 3,
+      "x": 4,
       "y": 4
     },
     "hitpoints": 20,

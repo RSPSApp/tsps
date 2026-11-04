@@ -12,6 +12,10 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { ObjectIds } = require("../dist/util/IdEnums");
 const { PluginManager } = require("../dist/plugins/PluginManager");
+const AchievementDiaries = require("../plugins/achievements/AchievementDiaries.plugin");
+const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
+const DiaryProgress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
+const YanilleGrappleDiary = require("../plugins/achievements/diaries/ArdougneYanilleGrappleDiary.plugin");
 
 /** Runs submitted tasks on demand instead of on the game loop. */
 const tasks = [];
@@ -535,6 +539,125 @@ test("a grapple needs the gear and skills, or the barehanded Agility level (Wiki
   assert.ok(!fires(climber), "no grapple fired");
 });
 
+test("Yanille's south-wall grapple updates Ardougne medium progress after crossing", () => {
+  const wall = [2556, 3074, 0];
+  const credits = () => hooks.events.filter((event) => event.name === "agility:yanille-grapple");
+  const taskKey = "grapple-over-yanille-s-south-wall";
+  const ardougne = DiaryData.BY_KEY.get("ardougne");
+  const medium = ardougne.tiers.medium;
+  const assertNoProgress = (player) => {
+    assert.equal(player.getAttribute(DiaryProgress.TASKS_ATTRIBUTE)?.ardougne?.includes(taskKey) ?? false, false);
+    assert.equal(player.state.varbits.get(medium.countVarbit), undefined);
+  };
+
+  DiaryProgress({
+    core: PluginManager.getCoreApi(),
+    persistAttribute() {},
+    onPlayerLogin() {},
+    getTaskManager: () => taskManager,
+    emitCustomEvent() {},
+  });
+  hooks.answers["diary:task"] = AchievementDiaries._test.onTask;
+  YanilleGrappleDiary.register({
+    onCustomEvent: (name, handler) => { hooks.answers[name] = handler; },
+    emitCustomEvent: (name, payload) => {
+      hooks.events.push({ name, payload });
+      hooks.answers[name]?.(payload);
+    },
+  });
+
+  hooks.events.length = 0;
+  const grappler = createPlayer(2556, 3075, 0, 39, {
+    skills: { strength: 38, ranged: 21 },
+    worn: grappleGear(),
+  });
+  operate(grappler, 17047, wall);
+  assert.deepEqual(tileOf(grappler), [2556, 3074, 1]);
+  assert.equal(credits().length, 1);
+  assert.equal(credits()[0].payload.method, "grapple");
+  assert.deepEqual(grappler.getAttribute(DiaryProgress.TASKS_ATTRIBUTE).ardougne, [taskKey]);
+  assert.equal(grappler.state.varbits.get(medium.countVarbit), 1);
+  assert.equal(grappler.state.varbits.get(ardougne.startedVarbit), 1);
+
+  hooks.events.length = 0;
+  const otherApproach = createPlayer(2556, 3072, 0, 39, {
+    skills: { strength: 38, ranged: 21 },
+    worn: grappleGear(),
+  });
+  operate(otherApproach, 17047, [2556, 3073, 0]);
+  assert.deepEqual(tileOf(otherApproach), [2556, 3073, 1]);
+  assert.equal(credits().length, 1);
+  assert.deepEqual(otherApproach.getAttribute(DiaryProgress.TASKS_ATTRIBUTE).ardougne, [taskKey]);
+  assert.equal(otherApproach.state.varbits.get(medium.countVarbit), 1);
+
+  hooks.events.length = 0;
+  const barehanded = createPlayer(2556, 3075, 0, 69, {
+    skills: { strength: 37, ranged: 21 },
+    worn: grappleGear(),
+  });
+  operate(barehanded, 17047, wall);
+  assert.deepEqual(tileOf(barehanded), [2556, 3074, 1]);
+  assert.equal(credits().length, 0, "the level-69 barehanded alternative does not count");
+  assertNoProgress(barehanded);
+
+  hooks.events.length = 0;
+  const privateArea = createPlayer(2556, 3075, 0, 39, {
+    skills: { strength: 38, ranged: 21 },
+    worn: grappleGear(),
+  });
+  privateArea.getPrivateArea = () => ({});
+  operate(privateArea, 17047, wall);
+  assert.equal(credits().length, 0, "a private crossing does not count");
+  assertNoProgress(privateArea);
+
+  hooks.events.length = 0;
+  const interrupted = createPlayer(2556, 3075, 0, 39, {
+    skills: { strength: 38, ranged: 21 },
+    worn: grappleGear(),
+  });
+  hooks.click.get(17047)({ player: interrupted, object: gameObject(17047, ...wall), objectId: 17047, clickType: 1, location: { x: wall[0], y: wall[1], z: wall[2] }, handled: false });
+  interrupted.getAttribute("agility.obstacle").stop();
+  assert.equal(credits().length, 0, "an interrupted action does not count");
+  assertNoProgress(interrupted);
+
+  hooks.events.length = 0;
+  const otherWall = createPlayer(2556, 3072, 0, 39, {
+    skills: { strength: 38, ranged: 21 },
+    worn: grappleGear(),
+  });
+  otherWall.setLocation(new Location(3033, 3390, 0));
+  operate(otherWall, 17047, [3033, 3390, 0]);
+  assert.deepEqual(tileOf(otherWall), [3033, 3389, 1]);
+  assert.equal(credits().length, 0, "a Falador wall crossing does not count");
+  assertNoProgress(otherWall);
+
+  hooks.events.length = 0;
+  const loggedOut = createPlayer(2556, 3075, 0, 39, {
+    skills: { strength: 38, ranged: 21 },
+    worn: grappleGear(),
+  });
+  const object = gameObject(17047, ...wall);
+  hooks.click.get(17047)({ player: loggedOut, object, objectId: 17047, clickType: 1, location: { x: wall[0], y: wall[1], z: wall[2] }, handled: false });
+  tick();
+  hooks.logout.forEach((handler) => handler({ player: loggedOut }));
+  assert.equal(credits().length, 0, "logout fast-forward does not count");
+  assertNoProgress(loggedOut);
+
+  hooks.events.length = 0;
+  const dead = createPlayer(2556, 3075, 0, 39, {
+    skills: { strength: 38, ranged: 21 },
+    worn: grappleGear(),
+  });
+  hooks.click.get(17047)({ player: dead, object: gameObject(17047, ...wall), objectId: 17047, clickType: 1, location: { x: wall[0], y: wall[1], z: wall[2] }, handled: false });
+  dead.getHitpoints = () => 0;
+  tick();
+  assert.equal(credits().length, 0, "death interrupts the crossing");
+  assertNoProgress(dead);
+
+  delete hooks.answers["agility:yanille-grapple"];
+  delete hooks.answers["diary:task"];
+});
+
 test("a quest gate refuses only when the quest plugin says it isn't done", () => {
   const window = [3290, 3158, 0];
   try {
@@ -684,6 +807,21 @@ test("Varrock's fallable obstacles stop failing at 46, the Wiki's no-fail level"
       assert.equal(below.state.xp, 0);
       assert.equal(below.getAttribute("agility.obstacle") ?? null, null);
     }
+  } finally {
+    Math.random = random;
+  }
+});
+
+test("Al Kharid's zip line cannot fail after the 2024 fail-point removal", () => {
+  const zipline = COURSES.find((entry) => entry.key === "alkharid").obstacles.find((entry) => entry.index === 4);
+  const random = Math.random;
+  Math.random = () => 0.999;
+  try {
+    const player = createPlayer(3301, 3163, 3, 20);
+    operate(player, zipline.object, [3301, 3163, 3]);
+    assert.deepEqual(tileOf(player), [3315, 3163, 1]);
+    assert.equal(player.state.xp, 48);
+    assert.equal(player.state.hits, 0);
   } finally {
     Math.random = random;
   }

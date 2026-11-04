@@ -25,7 +25,14 @@ function open(f){PM.emitCustomEvent("npc-dialogue:action",{player:f.p,npc:f.npc,
 async function click(f,child,slot=0,op=1){await f.c.dispatch([{type:"widget_action",widgetId:(148<<16)|child,groupId:148,childId:child,slot,buttonNum:op}]);f.c.processTurnPackets();}
 const row=index=>6+5*index;
 test("Probita's native Check option opens the same recovery screen",async t=>{
-  const f=actor(t);await f.c.dispatch([{type:"npc_option",index:f.npc.getIndex(),clickType:3}]);f.c.processTurnPackets();f.p.getMovementQueue().process();core.TaskManager.process();core.TaskManager.process();assert.equal(f.p.getInterfaceId(),148);assert.equal(f.p.getInventory().getAmount(13247),0);
+  const f=actor(t),tasks=[];const emit=PM.emitCustomEvent.bind(PM);t.mock.method(PM,"emitCustomEvent",(name,event)=>{if(name==="diary:task")tasks.push(event);return emit(name,event);});
+  await f.c.dispatch([{type:"npc_option",index:f.npc.getIndex(),clickType:3}]);f.c.processTurnPackets();f.p.getMovementQueue().process();core.TaskManager.process();core.TaskManager.process();assert.equal(f.p.getInterfaceId(),148);assert.equal(f.p.getInventory().getAmount(13247),0);
+  assert.deepEqual(tasks.map(({diary,task})=>({diary,task})),[{diary:"ardougne",task:"check-what-pets-you-have-insured-with-probita-in"}]);
+});
+test("the public Probita dialogue action credits only after the recovery interface opens",t=>{
+  const f=actor(t),tasks=[];const emit=PM.emitCustomEvent.bind(PM);t.mock.method(PM,"emitCustomEvent",(name,event)=>{if(name==="diary:task")tasks.push(event);return emit(name,event);});
+  open(f);assert.equal(f.p.getInterfaceId(),148);assert.equal(tasks.length,1);
+  assert.equal(tasks[0].player,f.p);assert.equal(tasks[0].diary,"ardougne");assert.equal(tasks[0].task,"check-what-pets-you-have-insured-with-probita-in");
 });
 test("native Probita screen opens without reclaiming; one row and Confirm reclaim once for free",async t=>{
   const f=actor(t);open(f);assert.equal(f.p.getInterfaceId(),148);assert.equal(f.p.getInventory().getAmount(13247),0);
@@ -58,9 +65,9 @@ test("live family possession appearing between selection and Confirm prevents du
 });
 test("empty and cat-only ownership opens an empty screen without creating a cat",t=>{for(const owned of [[],[1555]]){const f=actor(t,owned);open(f);assert.equal(f.p.getInterfaceId(),148);assert.equal(f.p.getInventory().getValidItems().length,0);}});
 test("PIN guard prevents opening and its stale resume cannot reopen after leaving Probita",t=>{
-  const f=actor(t);let resume;const emit=PM.emitCustomEvent.bind(PM);
-  t.mock.method(PM,"emitCustomEvent",(name,r)=>{if(name==="bank-pin:guard"){r.locked=true;resume=r.resume;return;}return emit(name,r);});
-  open(f);assert.notEqual(f.p.getInterfaceId(),148);assert.equal(typeof resume,"function");f.p.setLocation(new core.Location(3000,3000,0));resume();assert.notEqual(f.p.getInterfaceId(),148);
+  const f=actor(t);let resume;const tasks=[],emit=PM.emitCustomEvent.bind(PM);
+  t.mock.method(PM,"emitCustomEvent",(name,r)=>{if(name==="bank-pin:guard"){r.locked=true;resume=r.resume;return;}if(name==="diary:task")tasks.push(r);return emit(name,r);});
+  open(f);assert.notEqual(f.p.getInterfaceId(),148);assert.equal(typeof resume,"function");assert.equal(tasks.length,0);f.p.setLocation(new core.Location(3000,3000,0));resume();assert.notEqual(f.p.getInterfaceId(),148);assert.equal(tasks.length,0);
 });
 test("the real Bank PIN service locks contents and resumes after native PIN submission",async t=>{
   const f=actor(t),pin=require("../plugins/interface/bankpin/Common.BankPin");

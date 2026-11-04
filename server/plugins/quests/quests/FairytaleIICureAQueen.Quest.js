@@ -1018,11 +1018,6 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     ensureStarflowers(player);
   }
 
-  function handlePlayerProcess({ player }) {
-    const location = player.getLocation?.();
-    if (insideZone(location, STAR_PLANE_ZONE)) ensureStarflowers(player);
-  }
-
   function handleGorakPlaneZoneEnter({ player }) {
     if (!questActive(player)) return;
     if (quest.getStage(player) < STAGE_HANDED_OVER) return;
@@ -1230,7 +1225,21 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   api.onNpcInteraction(handleNuffTalk);
   api.onNpcInteraction(handleStarflowerPick);
   api.onNpcDeath(handleGorakDeath);
-  api.onPlayerProcess(handlePlayerProcess);
+  class StarflowerPlaneArea extends api.core.Area {
+    process(mobile) {
+      if (!mobile.isPlayer()) return;
+      ensureStarflowers(mobile.getAsPlayer());
+    }
+  }
+  api.registerArea(new StarflowerPlaneArea([
+    new api.core.Boundary(
+      STAR_PLANE_ZONE.minX,
+      STAR_PLANE_ZONE.maxX,
+      STAR_PLANE_ZONE.minY,
+      STAR_PLANE_ZONE.maxY,
+      STAR_PLANE_ZONE.levels[0],
+    ),
+  ]));
   api.onZoneEnter(HIDEOUT_ZONE, handleHideoutZoneEnter);
   api.onZoneEnter(STAR_PLANE_ZONE, handleStarPlaneZoneEnter);
   api.onZoneEnter(GORAK_PLANE_ZONE, handleGorakPlaneZoneEnter);

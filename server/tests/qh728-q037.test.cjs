@@ -59,7 +59,7 @@ function setup() {
   const hooks = {
     variants: [], conditions: [], custom: new Map(), login: [], logout: [], death: [],
     npcInteractions: [], npcActions: new Map(), objectActions: new Map(), itemActions: [],
-    itemOnItem: [], itemOnObject: [], itemOnNpc: [], npcDeaths: [], zones: [],
+    itemOnItem: [], itemOnObject: [], itemOnNpc: [], npcDeaths: [], zones: [], areas: [], playerProcess: [],
   };
   const spawned = [], removed = [], messages = [], xp = [], varbits = new Map(), drops = [];
   const core = {
@@ -87,7 +87,9 @@ function setup() {
     onItemOnObject(fn) { hooks.itemOnObject.push(fn); },
     onItemOnNpc(fn) { hooks.itemOnNpc.push(fn); },
     onNpcDeath(fn) { hooks.npcDeaths.push(fn); },
+    registerArea(area) { hooks.areas.push(area); },
     onZoneEnter(zone, fn) { hooks.zones.push({ zone, fn }); },
+    onPlayerProcess(fn) { hooks.playerProcess.push(fn); },
     onPlayerLogin(fn) { hooks.login.push(fn); },
     onPlayerLogout(fn) { hooks.logout.push(fn); },
     onPlayerDeath(fn) { hooks.death.push(fn); },
@@ -368,10 +370,16 @@ test('fresh stage 0 follows the mandatory route and completes on the native varb
   h.setLocation(2070, 4841, 0);
   h.zoneEnter();
   assert.equal(h.varbits.get(2330), 1);
+  assert.equal(h.hooks.playerProcess.length, 0, 'flower processing is not a global player hook');
+  assert.equal(h.hooks.areas.length, 1, 'flower processing is registered to an Area');
+  const starflowerArea = h.hooks.areas[0];
+  const starflowerBoundary = starflowerArea.getBoundaries()[0];
+  assert.equal(starflowerBoundary.inside(new h.core.Location(2070, 4841, 0)), true);
+  assert.equal(starflowerBoundary.inside(new h.core.Location(2070, 4841, 1)), false);
   assert.equal(h.spawned.filter((npc) => npc.getId() === N.STARFLOWER_2 && npc.isRegistered()).length, 0,
     'the starflowers do not appear immediately on first arrival');
   h.fire('agent:advance-time', { ms: 60001, handledBy: [] });
-  h.zoneEnter();
+  starflowerArea.process(h.player);
   const flower = h.spawned.find((npc) => npc.getId() === N.STARFLOWER_2 && npc.isRegistered());
   assert.ok(flower);
   assert.equal(h.npcEvent(N.STARFLOWER_2, 'Pick', flower).handled, true);

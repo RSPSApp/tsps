@@ -219,3 +219,17 @@ The bow shows the arrow being drawn: the ammunition's `<ammo>_arrow_launch` spot
   and are intentionally excluded from the repository.
 - The wand of the praesul is a RuneScape 3 item; neither the OSRS Wiki wand list nor this
   cache has one. No unrelated item or invented identifier was added.
+
+## Reported holding stances (#2382)
+
+The Nightmare staff family uses cache sequence `human_nightmare_staff_ready` (4504).
+Crimson kisten uses its cache-named `human_weapons_crimson_kisten_ready01/walk_f/run_f/def`
+(14251/14252/14254/14257). Fang and its wearable variants use ready animation 809: official
+[RSProx1779](https://rsprox.net/download/1779), tick 3674 and repeated later appearance updates,
+equips Fang (or), item 27246, in identKit slot 3 (29294 minus 2048) and sends
+BAS 809/823/819/820/821/822/824. The SDK exposes these appearance fields even when the default
+text transcript filters omit them.
+
+These are canonical `item-gameplay.json` stances. `sync-weapon-types` preserves non-default
+stances through `hasHumanStance`, so rerunning it does not replace these sets with category
+majorities. Wearable variants are checked against the active cache in `weapon-data` tests.

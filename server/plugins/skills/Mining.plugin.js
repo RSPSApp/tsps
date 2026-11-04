@@ -9,6 +9,7 @@ const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemI
 const InfernalPickaxe = require("./mining/InfernalPickaxe.Mining");
 const CrystalPickaxe = require("./mining/CrystalPickaxe.Mining");
 const ClueGeodes = require("./mining/ClueGeodes.Mining");
+const CalcifiedWater = require("./mining/CalcifiedWater.Mining");
 const { pauseForLevelUp, actionInterval } = require("./SkillActions");
 
 // rsprox recordings: a mined-out rock becomes "rocks1"/"rocks2" (the digit of the rock's own gameval,
@@ -135,7 +136,7 @@ const ROCKS = [
   // mining, with area sound 2661 (delay 10, range 1), and each shard counted in tracking_ore_mined
   // (`countEach`). Recorded: wall swings, "You manage to chip off some bone shards." / "... a calcified
   // deposit.". The Wiki has no success chart: [20, 200] is an estimate (51% at 61, near the capture's
-  // 46%, and the Wiki training rates).
+  // 46%, and the Wiki training rates). Oozing water is CalcifiedWater.Mining.js.
   {
     objectName: "Calcified rocks",
     level: 41, xp: 33, oreId: ItemIdentifiers.CALCIFIED_DEPOSIT, petBase: 741600,
@@ -489,7 +490,7 @@ function depleteRock(player, rockObject, rock) {
 }
 
 /**
- * Mines a rock out with nothing to keep it standing: its
+ * Mines a rock out with nothing to keep it standing (the water that stops on a calcified rock): its
  * mined-out loc, depletion sound and respawn, and the respawn timer for each of `viewers`.
  */
 function exhaustRock(rockObject, rock, viewers, whole = rockObject) {
@@ -720,7 +721,8 @@ class MiningTask extends Task {
       player.performAnimation(swingAnimation(state.pickaxe, state.rock));
 
       const result = rollAttempt(player, state.rock);
-      // Content may turn a miss into a hit ("mining:attempt", a league relic's second chance); a gem roll is never a miss. `chance` is the ore roll's own chance of success.
+      // Content may turn a miss into a hit ("mining:attempt", a league relic's second chance, Cam Torum's
+      // oozing water); a gem roll is never a miss. `chance` is the ore roll's own chance of success.
       const attempt = { player, object: rockObject, rock: state.rock.objectName, oreId: state.rock.oreId, success: result !== null, chance: rollChance(player, state.rock) };
       pluginApi.emitCustomEvent("mining:attempt", attempt);
       const landed = result ?? (attempt.success ? { outcome: state.rock.outcomes ? rollOutcome(state.rock) : null } : null);
@@ -948,6 +950,7 @@ module.exports = {
     InfernalPickaxe.attach(api);
     CrystalPickaxe.attach(api);
     ClueGeodes.attach(api);
+    CalcifiedWater.attach(api, ROCK_BY_NAME.get(CalcifiedWater.ROCK_NAME), exhaustRock);
 
     api.log("registered", {
       rocks: ROCKS.length,

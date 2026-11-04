@@ -1122,6 +1122,72 @@ test("calcified rocks (1105; Wiki): wall swings, shards or a deposit, each shard
   }
 });
 
+test("Cam Torum's oozing water (1105): two rocks a half, +15% while wet, then each is mined out the tick after it stops", () => {
+  const { Sounds } = core;
+  const original = Sounds.playAreaSound;
+  const areaSounds = [];
+  Sounds.playAreaSound = (options) => areaSounds.push(options);
+  core.RegionManager.init();
+  const h = harness();
+  const Water = require("../plugins/skills/mining/CalcifiedWater.Mining")._test;
+  const sites = Water.sites();
+  // Wiki Calcified rocks locations; the cache places the same sixteen.
+  assert.deepEqual(sites.map((site) => `${site.getLocation().getX()},${site.getLocation().getY()}`).sort(), [
+    "1497,9540", "1497,9542", "1497,9543", "1498,9546", "1499,9546", "1501,9537", "1502,9537", "1505,9537",
+    "1514,9546", "1516,9546", "1517,9537", "1517,9546", "1518,9537", "1521,9541", "1521,9542", "1521,9543",
+  ]);
+  const player = createPlayer();
+  Object.assign(player, { isPlayer: () => true, isNpc: () => false, getIndex: () => 1, getAsPlayer: () => player, getArea: () => null });
+  Water.mine().enter(player);
+  try {
+    Water.cycle.nextOoze = Water.cycle.tick + 1;
+    h.tick(1);
+    const water = h.registered.filter((object) => object.getId() === loc("varlamore_mining_special_rock"));
+    assert.equal(water.length, 4);
+    assert.ok(water.every((object) => object.getType() === 4), "a wall decoration");
+    assert.deepEqual(water.map((object) => object.getLocation().getX() >= 1510).sort(), [false, false, true, true], "two west, two east");
+    for (const object of water) {
+      const site = sites.find((entry) => entry.getLocation().equals(object.getLocation()));
+      assert.equal(object.getFace(), site.getFace(), "the rock's rotation");
+    }
+    assert.equal(player.messages.at(-1), "<col=a53fff>Some cracks around the cave begin to ooze water.");
+    assert.equal(player.packets.sounds.at(-1), 2041);
+    const lasts = Water.cycle.stopAt - Water.cycle.tick;
+    assert.ok(lasts >= 38 && lasts <= 54, `water for ${lasts} ticks`);
+    assert.ok(Water.cycle.nextOoze - Water.cycle.tick >= 117 && Water.cycle.nextOoze - Water.cycle.tick <= 146);
+
+    // +15% of a 50% roll: a miss becomes a hit 15% of the time, on a wet rock only.
+    const wetRock = sites.find((site) => Water.isWet(site));
+    const dryRock = sites.find((site) => !Water.isWet(site));
+    const attempt = (object, roll) => {
+      const request = { player, object, rock: "Calcified rocks", success: false, chance: 0.5 };
+      Water.waterBoost(request, () => roll);
+      return request.success;
+    };
+    assert.equal(attempt(wetRock, 0.149), true);
+    assert.equal(attempt(wetRock, 0.151), false);
+    assert.equal(attempt(dryRock, 0), false);
+
+    h.tick(lasts);
+    assert.equal(Water.isWet(wetRock), false, "no boost once the water stops");
+    assert.equal(h.registered.length, 4, "the rocks stand until the next tick");
+    h.tick(1);
+    const emptied = h.registered.slice(4);
+    assert.equal(emptied.length, 4);
+    for (const object of emptied) {
+      const site = water.find((entry) => entry.getLocation().equals(object.getLocation()));
+      assert.ok(site, "each wet rock, mined or not");
+      const gameval = core.CacheDefinitions.getLocNames().get(sites.find((entry) => entry.getLocation().equals(object.getLocation())).getId());
+      assert.equal(object.getId(), loc(gameval.replace(/rock(\d*)$/, "rock_empty$1")));
+    }
+    assert.deepEqual(areaSounds.map((sound) => sound.soundId), [2661, 2661, 2661, 2661]);
+    assert.equal(player.packets.scripts.length, 4, "the respawn timers go to the players in the mine");
+  } finally {
+    Water.mine().leave(player, false);
+    Sounds.playAreaSound = original;
+  }
+});
+
 test("every loc named for mining in the cache has a handler (this plugin, or the content that owns it)", () => {
   // Rocks other plugins mine, by name: quests, minigames, bosses, stars, Motherlode.
   const elsewhere = new Set([

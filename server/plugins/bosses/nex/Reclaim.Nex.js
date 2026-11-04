@@ -71,6 +71,18 @@ function slotsNeeded(player, items) {
   return slots;
 }
 
+/** Whether each stack already carried can take its share: a stack can't grow past its cap. */
+function heldStacksFit(player, items) {
+  const { Item } = Common.core;
+  const inventory = player.getInventory();
+  const totals = new Map();
+  for (const [id, amount] of items) totals.set(id, (totals.get(id) ?? 0) + amount);
+  return [...totals].every(([id, amount]) => {
+    const stackable = Common.core.ItemDefinition.forId(id)?.isStackable?.();
+    return !stackable || !inventory.contains(id) || inventory.getAddableAmount(new Item(id, amount)) >= amount;
+  });
+}
+
 function reclaim(player) {
   player.getPacketSender().sendInterfaceRemoval();
   const items = stored(player);
@@ -83,6 +95,10 @@ function reclaim(player) {
   const needed = slotsNeeded(player, items) - (inventory.getAmount(COINS) === FEE ? 1 : 0);
   if (inventory.getFreeSlots() < needed) {
     player.sendMessage(`You need ${needed} free inventory spaces to reclaim your items.`);
+    return;
+  }
+  if (!heldStacksFit(player, items)) {
+    player.sendMessage("You don't have enough inventory space.");
     return;
   }
   inventory.delete(COINS, FEE);

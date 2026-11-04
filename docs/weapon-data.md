@@ -89,6 +89,14 @@ Every weapon's resolved animation, and every type's style animations, were revie
 Wiki's combat styles and the cache's sequence names in [audits/weapons.md](audits/weapons.md).
 It records the types still without a capture.
 
+## Held stances and special-attack animations
+
+The idle stance (`standAnim`/`walkAnim`/`runAnim`) of every weapon in `item-gameplay.json`,
+and the animation each special attack plays, were audited against the real game's player
+appearance packets in [audits/weapon-animations.md](audits/weapon-animations.md). That audit
+also lists the 127 weapons no recording could confirm and the specials whose plugin is
+still unverified.
+
 ### From rsprox captures
 
 The weapon view of the capture index (attacks with each weapon equipped, special attack off). Ids are the rev 241 cache's for the names.

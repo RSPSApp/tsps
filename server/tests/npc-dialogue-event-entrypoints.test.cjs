@@ -917,3 +917,89 @@ for (const studied of [false, true]) {
     assert.equal(player.getDialogueManager().getCurrent(), undefined, 'native Use without the certificate cannot start a conversation');
   });
 }
+
+function documentPackets(f, t) {
+  const { decodeClientPackets } = require('../dist/net/protocol/ClientProtocol');
+  const { ClientPacketId } = require('../dist/net/protocol/NativeClientPackets');
+  const sender = f.player.getPacketSender(), calls = [];
+  for (const [method, tag] of [['sendClientScript', 'script'], ['sendInterface', 'open']]) {
+    const original = sender[method];
+    t.mock.method(sender, method, function (...args) { calls.push([tag, ...args]); return original.apply(this, args); });
+  }
+  async function input(bytes) {
+    await f.connection.dispatch(decodeClientPackets(bytes)); f.connection.processTurnPackets();
+  }
+  return {
+    calls,
+    async certificate(action) {
+      const itemId = core.ItemIdentifiers.NUFFS_CERTIFICATE;
+      // Cache inventory actions Read/Study use widget ops2/3 (script7779/enum4303).
+      const frame = Buffer.alloc(9); frame[0] = action === 'Read' ? ClientPacketId.IF_BUTTON2 : ClientPacketId.IF_BUTTON3;
+      frame.writeInt32BE(149 << 16, 1);
+      frame.writeUInt16BE(Math.max(0, f.player.getInventory().getSlotForItemId(itemId)), 5);
+      frame.writeUInt16BE(itemId, 7);
+      await input(frame);
+    },
+    close: () => input(Buffer.from([ClientPacketId.IF_CLOSE])),
+    mounted: () => sender.getSubInterfaceAt((161 << 16) | 16)?.groupId,
+  };
+}
+
+for (const stage of [20, 90]) {
+  test(`Fairytale II native Read/Study at stage ${stage} preserves documents and progress across close/reopen`, async t => {
+    const f = fixture(t), { player } = f, doc = documentPackets(f, t);
+    const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'fairytale_ii_cure_a_queen');
+    const certificate = core.ItemIdentifiers.NUFFS_CERTIFICATE, inventory = player.getInventory();
+    assert.deepEqual(core.CacheDefinitions.getItem(certificate).inventoryActions.slice(0, 2), ['Read', 'Study']);
+    quest.setStage(player, stage); inventory.add(new core.Item(certificate));
+    await doc.certificate('Read');
+    assert.equal(player.getInterfaceId(), 423); assert.equal(doc.mounted(), 423);
+    assert.deepEqual(doc.calls.slice(-2), [['script', 2524, -1, -1], ['open', 423]]);
+    assert.equal(quest.getStage(player), stage);
+    assert.equal(player.getAttribute('quest.fairytale-ii-cure-a-queen:certificate-studied') ?? 0, 0);
+    await doc.close(); assert.equal(player.getInterfaceId(), -1); assert.equal(doc.mounted(), undefined);
+    await doc.certificate('Read'); assert.equal(doc.mounted(), 423);
+    await doc.certificate('Study');
+    assert.equal(player.getInterfaceId(), 424); assert.equal(doc.mounted(), 424);
+    assert.deepEqual(doc.calls.slice(-2), [['script', 2524, 4269835, 100], ['open', 424]]);
+    assert.equal(quest.getStage(player), Math.max(30, stage));
+    assert.equal(player.getPacketSender().getVarbit(2336), 1);
+    assert.equal(inventory.getAmount(certificate), 1);
+    await doc.close(); await doc.close(); await doc.certificate('Read');
+    assert.equal(doc.mounted(), 423, 'Read turns back to the front after Study');
+    assert.equal(player.getAttribute('quest.fairytale-ii-cure-a-queen:certificate-studied'), 1);
+    await doc.close(); inventory.deleteNumber(certificate, 1);
+    const count = doc.calls.length; await doc.certificate('Study');
+    assert.equal(doc.calls.length, count, 'a stale item action cannot reopen a document');
+    assert.equal(quest.getStage(player), Math.max(30, stage));
+  });
+}
+
+test('Fairytale II native Rune temple sign opens its document only after studying and can reopen', async t => {
+  const f = fixture(t), { player } = f, doc = documentPackets(f, t);
+  const messages = [], sendMessage = player.sendMessage;
+  t.mock.method(player, 'sendMessage', function (text, ...args) { messages.push(text); return sendMessage.call(this, text, ...args); });
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'fairytale_ii_cure_a_queen');
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(2409, 4369);
+  player.setLocation(new core.Location(2409, 4370)); player.setNeedsPlacement(false);
+  quest.setStage(player, 20);
+  const read = async () => {
+    await f.connection.dispatch([{ type: 'object_option', id: 16307, x: 2409, y: 4369, clickType: 1 }]);
+    f.connection.processTurnPackets();
+    for (let tick = 0; tick < 4; tick++) {
+      core.TaskManager.processWalkTo(player.getIndex()); player.getMovementQueue().process();
+    }
+  };
+  await read();
+  assert.ok(messages.includes('The strange markings on the sign mean nothing to you yet.'), 'native map-object action reaches the sign owner');
+  assert.equal(doc.mounted(), undefined); assert.equal(player.getPacketSender().getVarbit(2338), 0);
+  player.getInventory().add(new core.Item(core.ItemIdentifiers.NUFFS_CERTIFICATE));
+  await doc.certificate('Study'); await doc.close();
+  await read();
+  assert.equal(player.getInterfaceId(), 425); assert.equal(doc.mounted(), 425);
+  assert.deepEqual(doc.calls.slice(-2), [['script', 2524, -1, -1], ['open', 425]]);
+  assert.equal(player.getPacketSender().getVarbit(2338), 4); assert.equal(quest.getStage(player), 30);
+  await doc.close(); assert.equal(doc.mounted(), undefined);
+  await read(); assert.equal(doc.mounted(), 425);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.NUFFS_CERTIFICATE), 1);
+});

@@ -226,7 +226,18 @@ function questListAction({ player, slot, opId, action }) {
     return;
   }
   const quest = nativeQuestIndex(quests, coreApi?.CacheDefinitions).get(slot);
-  const start = START_TEXT[row.displayname?.[0]];
+  let start = START_TEXT[row.displayname?.[0]];
+  if (op === 1 && !start && quest) {
+    // View info always uses the unstarted journal, without changing the saved stage.
+    const view = new Proxy(player, {
+      get(target, key) {
+        if (key === "getAttribute") return name => name === stageAttribute(quest.key) ? 0 : target.getAttribute(name);
+        const value = Reflect.get(target, key, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    start = startSentence(row, journalLines(quest, view));
+  }
   if (op === 1 && start) {
     openOverview(player, { name: row.displayname[0] }, row, start);
   } else if (quest) {

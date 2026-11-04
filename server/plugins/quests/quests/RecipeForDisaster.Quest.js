@@ -248,11 +248,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     syncAmikQuestVarbits(player);
     syncAwowogeiQuestVarbits(player);
     const sender = player.getPacketSender();
-    // A completed parent is authoritative for legacy/quest-pack saves with no rescue flags.
-    // Publish its native children without fabricating saved progress or paying rewards again.
-    if (quest.isComplete(player)) {
-      for (const [, [varbitId, completedValue]] of RESCUE_QUEST_VARBITS) sender.sendVarbit(varbitId, completedValue);
-    }
     const main = mainQuestValue(stage(player), player);
     const completedRescues = [...RESCUE_QUEST_VARBITS.values()]
       .filter(([varbitId, completedValue]) => (sender.getVarbit?.(varbitId) ?? 0) >= completedValue).length;
@@ -260,7 +255,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     sender.sendVarbit(SUBQUESTS_COMPLETED_VARBIT, completedRescues + (main >= 2 ? 1 : 0) + (main >= STAGE_COMPLETE ? 1 : 0));
   }
   function pirateQuestStage(player) {
-    if (hasFlag(player, 4)) return 110;
+    if (quest.isComplete(player) || hasFlag(player, 4)) return 110;
     const state = pirateState(player);
     const legacy = state & 8 ? 70 : state & 4 ? 40 : state & 2 ? 30 : state & 1 ? 10 : 0;
     return Math.max(Number(player.getAttribute(PIRATE_STAGE_ATTRIBUTE)) || 0, legacy);
@@ -323,7 +318,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     }
   }
   function guideQuestStage(player) {
-    if (hasFlag(player, 8)) return 5;
+    if (quest.isComplete(player) || hasFlag(player, 8)) return 5;
     const state = Number(player.getAttribute(GUIDE_STATE_ATTRIBUTE)) || 0;
     const legacy = (state & 7) === 7 ? 3 : state !== 0 ? 2 : 0;
     return Math.max(Number(player.getAttribute(GUIDE_STAGE_ATTRIBUTE)) || 0, legacy);
@@ -351,7 +346,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (TRAIBORN_IDS.has(npcId) && text?.includes("Bring me the basic ingredients")) setGuideStage(player, 2);
   }
   function dwarfQuestStage(player) {
-    if (hasFlag(player, 1)) return 60;
+    if (quest.isComplete(player) || hasFlag(player, 1)) return 60;
     const saved = Number(player.getAttribute(DWARF_STAGE_ATTRIBUTE)) || 0;
     const state = dwarfState(player);
     const legacy = state & 0x800 ? 50 : state & 0x400 ? 40 : state & 0x200 ? 30
@@ -365,7 +360,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     player.getPacketSender().sendVarbit(1893, state & 7);
   }
   function goblinQuestStage(player) {
-    if (hasFlag(player, 2)) return 40;
+    if (quest.isComplete(player) || hasFlag(player, 2)) return 40;
     const saved = Number(player.getAttribute(GOBLIN_STAGE_ATTRIBUTE)) || 0;
     const state = goblinState(player);
     const legacy = state & GOBLIN_SLOP_RECEIVED ? 35 : state & 2 ? 15 : 0;
@@ -382,7 +377,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     syncGoblinQuestVarbits(player);
   }
   function daveQuestStage(player) {
-    if (hasFlag(player, 16)) return 5;
+    if (quest.isComplete(player) || hasFlag(player, 16)) return 5;
     const saved = Number(player.getAttribute(DAVE_STAGE_ATTRIBUTE)) || 0;
     const state = Number(player.getAttribute(DAVE_STATE_ATTRIBUTE)) || 0;
     const legacy = state & 4 ? 4 : state & 2 ? 2 : state & 1 ? 1 : 0;
@@ -531,7 +526,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   }
   function skrachState(player) { return Number(player.getAttribute(SKRACH_STATE_ATTRIBUTE)) || 0; }
   function skrachQuestStage(player) {
-    if (hasFlag(player, 32)) return 170;
+    if (quest.isComplete(player) || hasFlag(player, 32)) return 170;
     const state = skrachState(player);
     const legacy = state & 16 ? 80 : state & 8 ? 90 : state & 4 ? 60 : state & 2 ? 50 : state & 1 ? 20 : 0;
     return Math.max(Number(player.getAttribute(SKRACH_STAGE_ATTRIBUTE)) || 0, legacy);
@@ -2694,7 +2689,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   }
 
   function amikQuestStage(player) {
-    if (hasFlag(player, 64)) return 20;
+    if (quest.isComplete(player) || hasFlag(player, 64)) return 20;
     return Number(player.getAttribute(AMIK_STAGE_ATTRIBUTE)) || 0;
   }
   function syncAmikQuestVarbits(player) {
@@ -2709,7 +2704,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   }
 
   function awowogeiQuestStage(player) {
-    if (hasFlag(player, 128)) return 50;
+    if (quest.isComplete(player) || hasFlag(player, 128)) return 50;
     const state = awowogeiState(player);
     const saved = Number(player.getAttribute(AWOWOGEI_STAGE_ATTRIBUTE)) || 0;
     const legacy = state & 48 ? 15 : 0;

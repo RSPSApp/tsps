@@ -5,7 +5,7 @@ import ts from "typescript";
 import { Inventory } from "../rs/inventory/Inventory";
 import { deriveRawMenuEntriesForWidget } from "../widgets/menu/utils";
 import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
-import { encodeWidgetSetQuestList, encodeWidgetRunScript, encodeWidgetSetText, encodeWidgetSetFlagsRange, decodeClientPacket } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
+import { encodeWidgetRunScript, encodeWidgetSetText, encodeWidgetSetFlagsRange, decodeClientPacket } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
 import { buildWidgetActionPayload } from "../game/widgets/widgetActionPayload";
 import { shouldTransmitAction } from "../widgets/WidgetFlags";
 import { InputManager } from "../game/InputManager";
@@ -1103,16 +1103,29 @@ nativeDestroyConfirmation().then(() => console.log('Native destroy confirmation 
             }
         }
     }
-    const groups = [{ title: "Free", quests: [{ slot: 1, status: 1, key: "pirate", displayName: "Pirate's Treasure" }] }];
-    const frame = encodeWidgetSetQuestList(groups, [{ nativeSlot: 16, slot: 1 }]);
-    assert.deepEqual((decodeServerPacket(frame) as any).payload.groups, groups, "native mappings do not change browser slots");
-    const malformed = (tail: number[]) => {
-        const body = Buffer.concat([frame.subarray(0, frame.length - 6), Buffer.from(tail)]);
-        body.writeUInt16BE(body.length - 3, 1);
-        return body;
-    };
-    assert.throws(() => decodeServerPacket(malformed([0, 1, 0, 16, 0])), /quest row mapping|readShort/);
-    assert.throws(() => decodeServerPacket(malformed([0, 1, 0, 16, 0, 2])), /quest row mapping/);
-    assert.throws(() => decodeServerPacket(malformed([0, 2, 0, 16, 0, 1, 0, 16, 0, 1])), /quest row mapping/);
-    assert.deepEqual((decodeServerPacket(malformed([])) as any).payload.groups, groups, "legacy list without trailer remains readable");
+    // Browser menus emit exactly the same native children as RuneLite, not dense positions.
+    for (const [id, name] of [[16, "Pirate's Treasure"], [55, "Elemental Workshop I"]] as const) {
+        vm.context.varManager.setVarbit(13772, 0);
+        for (const bit of [13773,13774,13775,13776,13777]) vm.context.varManager.setVarbit(bit, 0);
+        vm.runScriptEvent({args: root.onLoad, widget: root});
+        const row = wm.getWidgetByUid((399 << 16) | 7).children[id];
+        assert.equal(row.text, name);
+        wm.setWidgetFlagsByKey((399 << 16) | 7, id, 0x3e);
+        assert.equal(shouldTransmitAction(wm.getWidgetFlags(row), 5), false, "live masks disable dormant Pin journal");
+        assert.equal(shouldTransmitAction(wm.getWidgetFlags(row), 1), true);
+        assert.deepEqual(buildWidgetActionPayload(wm, {widget: row, opIndex: 2}), {
+            widgetId: (399 << 16) | 7, groupId: 399, childId: 7, slot: id, opId: 2,
+        });
+        assert.notEqual(wm.getWidgetByUid((399 << 16) | 7).children[218]?.text, name, "headers occupy distinct native identities");
+    }
+    const opened: Array<[string, boolean]> = [];
+    vm.context.openUrl = (url: string, newWindow: boolean) => opened.push([url, newWindow]);
+    vm.run(vm.context.loadScript(3300), [], ["Search", "", "", "", "Scrambled!/Quick guide"]);
+    assert.equal(vm.lastError, null);
+    assert.deepEqual(opened, [["https://oldschool.runescape.wiki/w/Special:Search?search=Scrambled%21/Quick%20guide&utm_source=osrs", true]]);
+    vm.run(vm.context.loadScript(2495), [0], ["https://oldschool.runescape.wiki/"]);
+    assert.equal(vm.lastError, null);
+    assert.deepEqual(opened.at(-1), ["https://oldschool.runescape.wiki/", false], "OPENURL retains the native boolean");
+    assert.equal(wm.isServerOwnedWidget((399 << 16) | 7), false);
+    assert.equal(wm.getWidgetByUid((399 << 16) | 2).onVarTransmit[0], 1340, "native progress/settings rebuilding stays enabled");
 }

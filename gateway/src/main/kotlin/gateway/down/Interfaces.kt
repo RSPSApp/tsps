@@ -1,7 +1,6 @@
 package gateway.down
 
 import gateway.coverage.DropCounter
-import gateway.session.QuestListRows
 import gateway.session.InterfaceTree
 import gateway.session.VarpMirror
 import gateway.tsps.TspsPacket
@@ -45,13 +44,10 @@ class Interfaces(
     private val exists: (Int) -> Boolean,
     private val send: (OutgoingGameMessage) -> Unit,
 ) {
-    val questRows = QuestListRows()
-
     /** Returns false for a message this translator doesn't handle. */
     fun handle(packet: TspsPacket): Boolean {
         val reader = packet.reader()
         when (packet.opcode) {
-            TspsServerPacket.WIDGET_SET_QUEST_LIST -> questRows.refresh(reader)
             TspsServerPacket.WIDGET_SET_ROOT -> setRoot(reader.u16())
             TspsServerPacket.WIDGET_OPEN -> {
                 val group = reader.u16()
@@ -104,7 +100,7 @@ class Interfaces(
                 val end = reader.u16().signed16()
                 val flags = reader.i32()
                 val ops = reader.i32()
-                eventsV2(uid, start, end, flags, ops)
+                if (exists(uid)) send(IfSetEventsV2(uid ushr 16, uid and 0xFFFF, start, end, withTargetEvents(uid, flags), ops)) else dropped(uid)
             }
             TspsServerPacket.WIDGET_RUN_SCRIPT -> runScriptBundle(reader)
             TspsServerPacket.RUN_CLIENT_SCRIPT -> script(reader.u16(), reader)
@@ -213,18 +209,8 @@ class Interfaces(
     /** Old-format flags carry ops 1-10 in bits 1-10; IF_SETEVENTS_V2 wants them in events2. */
     private fun events(uid: Int, start: Int, end: Int, flags: Int) {
         val ops = (flags ushr 1) and OLD_OP_BITS
-        eventsV2(uid, start.signed16(), end.signed16(), flags and (OLD_OP_BITS shl 1).inv(), ops)
-    }
-
-    private fun eventsV2(uid: Int, start: Int, end: Int, flags: Int, ops: Int) {
         if (!exists(uid)) return dropped(uid)
-        if (uid == QuestListRows.COMPONENT) {
-            for (slot in questRows.nativeSlots(start, end)) {
-                send(IfSetEventsV2(399, 7, slot, slot, flags, ops))
-            }
-        } else {
-            send(IfSetEventsV2(uid ushr 16, uid and 0xFFFF, start, end, withTargetEvents(uid, flags), ops))
-        }
+        send(IfSetEventsV2(uid ushr 16, uid and 0xFFFF, start.signed16(), end.signed16(), withTargetEvents(uid, flags) and (OLD_OP_BITS shl 1).inv(), ops))
     }
 
     /**

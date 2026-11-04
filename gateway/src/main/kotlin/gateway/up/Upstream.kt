@@ -2,7 +2,6 @@ package gateway.up
 
 import gateway.coverage.DropCounter
 import gateway.session.PlayerOps
-import gateway.session.QuestListRows
 import gateway.session.VarpMirror
 import gateway.tsps.TspsClientPacket
 import gateway.down.ChatStyle
@@ -70,8 +69,6 @@ class Upstream(
     private val worldEntityIndex: (Int) -> Int? = { it },
     /** Whether the welcome screen is up (a modal, as live opens it). */
     private val welcomeShown: () -> Boolean = { false },
-    /** Native quest children identify cache rows, never browser list positions. */
-    private val questSlot: (Int) -> Int? = { null },
     private val send: (ByteArray) -> Unit,
 ) {
     fun handle(message: IncomingGameMessage) {
@@ -225,9 +222,6 @@ class Upstream(
     private fun button(message: If3Button) {
         if (interceptButton(message.combinedId, message.sub, message.obj, message.op)) return
         when (message.combinedId) {
-            QuestListRows.COMPONENT -> questSlot(message.sub)?.let { slot ->
-                send(TspsClientPacket.ifButtonX(message.combinedId, slot, message.obj, message.op))
-            }
             // The browser sets the run varp itself and transmits it; tsps has no orb handler.
             RUN_ORB -> send(TspsWriter().u16(RUN_VARP).i32(1 - varps[RUN_VARP]).fixed(VARP_TRANSMIT))
             // The browser's CS2 LOGOUT op sends LOGOUT; the official client sends the button.

@@ -310,7 +310,6 @@ function setSettingVar(player, key, value) {
   const [, id] = key.split(":");
   sendSettingVar(player, key, value);
   player.setAttribute(SETTINGS_VALUES_ATTRIBUTE, { ...savedSettings(player), [key]: value });
-  if (Object.values(QUEST_SETTINGS).some(varbit => key === `varbit:${varbit}`) || QUEST_COLOUR_VARPS.has(Number(id))) pluginApi?.emitCustomEvent("quest:list-refresh", { player });
 }
 
 function getSettingVar(player, row) {

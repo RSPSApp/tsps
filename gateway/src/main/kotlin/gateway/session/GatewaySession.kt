@@ -91,7 +91,6 @@ class GatewaySession(
             interceptCount = { trade.count(it) },
             worldEntityIndex = boats::tspsIndex,
             welcomeShown = { interfaces.welcomeShown },
-            questSlot = interfaces.questRows::serverSlot,
         ) { tsps.send(it) }
     private val players = PlayerSync()
     private val npcs = NpcSync { index -> boats.deck(index)?.let { it.baseX to it.baseZ } }

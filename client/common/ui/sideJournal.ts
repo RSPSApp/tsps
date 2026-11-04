@@ -93,9 +93,8 @@ export const QUEST_LIST_QUEST_POINTS_UID = packWidgetUid(
     INTERFACE_QUEST_LIST_ID,
     QUEST_LIST_QUEST_POINTS_CHILD_ID,
 );
-export const QUEST_LIST_ENTRY_MAX_SLOT = 199;
-// Ops 1-6 transmit (View info / Read journal / Show on map / wiki ops / Pin journal)
-export const QUEST_LIST_ENTRY_EVENT_FLAGS = 0x7e;
+// Live OP1–5: View info / Read journal / Show on map / both wiki ops. Pin is dormant.
+export const QUEST_LIST_ENTRY_EVENT_FLAGS = 0x3e;
 
 // Achievement diary area rows (cc-created children 0-11 of 259:2, child index = area id).
 // Same unmount-purge rule as the quest list: re-sent on every diary tab open.

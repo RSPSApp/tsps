@@ -442,6 +442,13 @@ module.exports = function registerAKingdomDividedQuest(api) {
     return player.getInventory().getAmount(itemId) >= amount;
   }
 
+  /** Carried, worn or in any bank tab (the search tab only mirrors the others). */
+  function amountOwned(player, itemId) {
+    const banked = player.getBanks().reduce((sum, bank, tab) => (
+      bank && tab !== api.core.Bank.BANK_SEARCH_TAB_INDEX ? sum + bank.getAmount(itemId) : sum), 0);
+    return player.getInventory().getAmount(itemId) + player.getEquipment().getAmount(itemId) + banked;
+  }
+
   function give(player, itemId, amount, message) {
     if (player.getInventory().isFull()) {
       player.sendMessage("You need a free inventory space.");
@@ -1166,14 +1173,14 @@ module.exports = function registerAKingdomDividedQuest(api) {
   /** Post-quest Fullore: the Book of the Dead and the two antique lamps. */
   function handleFullorePostQuest(player, npcId) {
     playPage(player, npcId, FULLORE_PAGE, "standard-dialogue-after-completing-a-kingdom-divided");
-    if (!held(player, BOOK_OF_THE_DEAD_ITEM_ID)) {
+    if (amountOwned(player, BOOK_OF_THE_DEAD_ITEM_ID) === 0) {
       give(player, BOOK_OF_THE_DEAD_ITEM_ID, 1, "Lydia gives you the Book of the Dead.");
     }
     // A quest completed without experience (a league quest pack) has no lamps to claim.
     if (quest.experienceWithheld(player)) return;
     // Lamps can be destroyed and reclaimed until they have been rubbed (wiki), so
-    // the claim count is rubbed lamps plus any still carried.
-    let claimed = countAttribute(player, LAMPS_ATTRIBUTE) + player.getInventory().getAmount(ANTIQUE_LAMP_ITEM_ID);
+    // the claim count is rubbed lamps plus any still owned.
+    let claimed = countAttribute(player, LAMPS_ATTRIBUTE) + amountOwned(player, ANTIQUE_LAMP_ITEM_ID);
     while (claimed < LAMP_CLAIMS) {
       if (!give(player, ANTIQUE_LAMP_ITEM_ID, 1)) break;
       claimed++;
@@ -2217,11 +2224,17 @@ module.exports = function registerAKingdomDividedQuest(api) {
     if (itemId === ANTIQUE_LAMP_ITEM_ID) {
       if (action !== "rub") return;
       event.handled = true;
+      // Our wording: the quest pays two lamps' experience, however many lamps a player holds.
+      if (countAttribute(player, LAMPS_ATTRIBUTE) >= LAMP_CLAIMS) {
+        player.sendMessage("You have already had the experience from both of your lamps.");
+        return;
+      }
       api.emitCustomEvent("xpreward:open", {
         player,
         minLevel: LAMP_MIN_LEVEL,
         title: "Choose the stat you wish to be advanced!",
         onConfirm: (skill, name) => {
+          if (countAttribute(player, LAMPS_ATTRIBUTE) >= LAMP_CLAIMS) return null;
           const before = player.getSkillManager().getExperience(skill);
           player.getSkillManager().addExperience(skill, LAMP_XP, false);
           if (player.getSkillManager().getExperience(skill) === before) {

@@ -1,0 +1,126 @@
+{
+  "$comment": "Places named by 'Only dropped in X' / 'only dropped by those found in the X' notes on rows of npc-drops.json, as [x1, y1, x2, y2] boxes on any plane. The cache's world map areas (index 19 details) only name whole regions (Varlamore Underground, Kourend Underground, Stronghold of Security's origin), not these places, so each box is the extent of the Wiki-listed monsters' spawns in npc-spawns.json plus a margin. The test fails when a note names a place missing here.",
+  "Ruins of Tapoyauik": {
+    "source": "Spawns of the blue dragons, icefiends, ice giants, Frost nagua and chilled jellies in the Ruins: x 1575-1722, y 9604-9658. Excludes the Fortis guards at y 9565-9575.",
+    "boxes": [
+      [
+        1568,
+        9592,
+        1730,
+        9666
+      ]
+    ]
+  },
+  "Iorwerth Dungeon": {
+    "source": "Spawns of its kurask, nechryarch, night beasts and waterfiends: x 3161-3258, y 12357-12476.",
+    "boxes": [
+      [
+        3150,
+        12345,
+        3270,
+        12490
+      ]
+    ]
+  },
+  "Forthos Dungeon": {
+    "source": "plugins/skills/data/slayer-areas.json 'Forthos Dungeon' box (red dragons spawn at 1811-1828, 9927-9937).",
+    "boxes": [
+      [
+        1792,
+        9920,
+        1856,
+        9984
+      ]
+    ]
+  },
+  "Forgotten Cemetery": {
+    "source": "Ankou spawns there: x 2960-2992, y 3739-3766.",
+    "boxes": [
+      [
+        2952,
+        3731,
+        3000,
+        3774
+      ]
+    ]
+  },
+  "Stronghold of Security": {
+    "source": "Spawns on its four floors (map areas 'sos' in the cache, origin 1888,5216): floor 1 x 1859-1913 y 5187-5244; floor 2 x 1987-2046 y 5185-5246; floor 3 x 2119-2173 y 5250-5308; floor 4 x 2305-2365 y 5187-5246.",
+    "boxes": [
+      [
+        1850,
+        5180,
+        1920,
+        5250
+      ],
+      [
+        1980,
+        5178,
+        2052,
+        5252
+      ],
+      [
+        2112,
+        5244,
+        2180,
+        5314
+      ],
+      [
+        2298,
+        5180,
+        2372,
+        5252
+      ]
+    ]
+  },
+  "Fossil Island": {
+    "source": "plugins/skills/data/slayer-areas.json 'Fossil Island' boxes: the island and its underground (Wiki: ancient zygomites' pyrophosphite).",
+    "boxes": [
+      [
+        3584,
+        3712,
+        3840,
+        3904
+      ],
+      [
+        3584,
+        10176,
+        3712,
+        10304
+      ]
+    ]
+  },
+  "Stalker Den": {
+    "source": "Ancient zygomite spawns, the only ones in npc-spawns.json: x 1289-1321, y 9775-9795, plus a 20-tile margin for the den.",
+    "boxes": [
+      [
+        1269,
+        9755,
+        1341,
+        9815
+      ]
+    ]
+  },
+  "Giants' Plateau": {
+    "source": "Wiki, Giants' Plateau: east of Al Kharid, a small hill giant tribe lives on it. Hill giant spawns there: x 3360-3381, y 3144-3152, plus a margin.",
+    "boxes": [
+      [
+        3340,
+        3125,
+        3400,
+        3170
+      ]
+    ]
+  },
+  "Karamja": {
+    "source": "Wiki, Hobgoblin: Karamja hobgoblins are on Crandor and south of Tai Bwo Wannai, so the island's surface (Crandor, Musa Point, Tai Bwo Wannai, Brimhaven), not its dungeons: x 2688-2976, y 2880-3330 (Entrana starts at y 3330).",
+    "boxes": [
+      [
+        2688,
+        2880,
+        2976,
+        3330
+      ]
+    ]
+  }
+}

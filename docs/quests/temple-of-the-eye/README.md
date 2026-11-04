@@ -19,7 +19,7 @@ and the Wiki for issue [#1814](https://github.com/RSPSApp/tsps/issues/1814).
 The temple's scenes run on the cache's own template squares, the ones Quest Helper's tiles and the
 captured cameras name: the untouched temple (2368-2431,5632-5695) for stages 95-110 and 120, the
 vision at 2400,5738, and the tutorial's temple (2432-2495,5696-5759). Live copies them into an
-instance; here they're unreachable real map with owner-only NPCs and locs.
+instance; each scene here uses its own private copy with owner-only NPCs and locs.
 
 ## Findings
 
@@ -78,9 +78,42 @@ the voices started at once, the player never moved, and the pan ran on "And with
 which carried the camera away from the player. Live returns the player to the temple on "Jas!"
 (level 1 of the vision's build area); here it is still on Persten's "[player name]?".
 
+For [#2405](https://github.com/RSPSApp/tsps/issues/2405), altar returns rebuild the full
+owned tutorial cast, rather than only the barrier and fighting guardians. Mind, Water and the
+Water-talisman return keep one Cordelia, Felix, Tamara and Great Guardian each.
+
+The arrival and tutorial copies now use the sparse raw palettes from recording 1693, including
+the southern portal scenery, water borders, upper planes and intentional empty chunks. All nine
+recorded rebuild windows match (6,084 packed entries). The extra scenery does not enlarge the
+original playable boundary. Arrival follows raw ticks 4468–4544: four portal effects and walks,
+first speech at +33, the held +24 camera pan, and Tamara's animation 725 / graphic 2068 at height92.
+The invisible camera actor716 and a temporary21-tile NPC view allow all four actors to appear at
+their recorded positions. Normal completion, Escape, replacement dialogue/bank/private scene and
+logout restore the prior appearance/view and release this scene's movement/camera controls.
+The closing Guardian faces source2399,5680 (north toward the rift), and Felix takes his recorded
+three west steps. Internal stages, rewards and the untouched vision sequence are unchanged.
+
+### Reproducing the sparse palettes
+
+The exporter consumes the decompressed public recording, pins its SHA256 to
+`4c73333dd216fc72d43b682c487d2c0e14d61902fd7f13bd4e13606640d58d19`, and exports only
+chunk templates, view centers/offsets and hashes. It does not export account or player data.
+With the RSProx1.0.5 launcher jars installed, run from the repository root using the JDK required
+by those jars (verified with JDK17.0.21):
+
+```sh
+curl -L https://rsprox.net/download/1693 -o /tmp/temple1693.gz
+gzip -dc /tmp/temple1693.gz > /tmp/temple1693.bin
+java -cp "$HOME/.rsprox/launcher/repository/*" server/scripts/ExtractTempleOfTheEyeScenes.java /tmp/temple1693.bin server/plugins/quests/data/temple-of-the-eye-templates.json
+```
+
+Two independent exports are byte-identical to the checked-in asset. The regression reconstructs
+each raw13×13×4 window from the actual instance and checks its packed-entry hash, including holes.
+All captured rotations are zero; coordinates come from the raw models, avoiding the rotated-point
+normalization defect found in RSProx1.0.5 during the Below Ice Mountain audit.
+
 Known gaps:
 
-- Other players on the same step are visible (shared map, not an instance).
 - The tutorial's fight is staged, and the beam's map anims aren't sent.
 - `npc-dialogues.json`: Persten's "Yes." teleport menu has an empty branch (a jump the parser left
   behind). The quest handles the choice itself; the dumper should be fixed upstream.
@@ -89,6 +122,22 @@ Known gaps:
   essence at the Mind altar's step, and Tamara replaces stones or a medium cell (with our wording).
 
 ## Runs
+
+- **2026-11-04, #2405, own slot5 native MCP and GPU browser:** declared saved checkpoints
+  for stage90 arrival, stage115/progress30 before Mind, and progress70 before the third power-up;
+  master skills, prerequisites and supplied tutorial materials are setup, not a fresh quest run.
+  Real NPC/object packets and Continues play arrival through stage100, the locator effect and
+  restored normal player appearance. Before, the arrival camera faced a black missing scene;
+  after, the portal, sea-floor props, all four walking actors and locator animation are visible.
+  The same tutorial account places its returned weak cell, performs the first and second power-ups,
+  assembles the medium guardian, and enters/crafts/returns through Mind and both Water routes.
+  Each return has exactly one of the four tutorial actors. Closing before/after GPU clips show the
+  Guardian turned toward the rift and Felix's corrected position. Evidence is preserved outside
+  the worktree in the dated bug-loop2405 run directory.
+  `tests/temple-of-the-eye-named-dispatch.test.cjs`:33 passes, including actual Player,
+  AreaManager/NPC processing, native local sync, all nine palettes and interruption ownership.
+  Connected dialogue suites:201 passes. This verifies the three follow-up reports; it does not
+  claim packet-for-packet parity for the entire quest or repair the older known gaps below.
 
 - **2026-11-03, #1978 vision walk, real web client + MCP:** stage 100 by command, the three
   apprentices and Persten by real clicks, chatbox Continues clicked in the browser client. Before

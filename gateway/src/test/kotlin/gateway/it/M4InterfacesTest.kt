@@ -106,7 +106,25 @@ class M4InterfacesTest {
     @Test
     fun `native quest events and map wiki ops use stock packet semantics`() {
         login().use { game ->
-            val events = game.until(TICKS)
+            val startup = game.until(TICKS)
+            val definitions = VarTypes(TestCache.cache)
+            fun bit(id: Int): Int {
+                val type = requireNotNull(definitions.varbit(id))
+                val value = startup.mapNotNull {
+                    when (it) {
+                        is VarpSmall -> if (it.id == type.varp) it.value else null
+                        is VarpLarge -> if (it.id == type.varp) it.value else null
+                        else -> null
+                    }
+                }.lastOrNull() ?: 0
+                return (value ushr type.lsb) and type.mask
+            }
+            assertEquals(343, bit(1782), "native cache maximum QP")
+            assertEquals(184, bit(11877), "native main quest total")
+            assertEquals(0, bit(6347), "fresh native main completion count")
+            assertEquals(0, bit(13987), "fresh native subquest completion count")
+            assertEquals(0, bit(14162), "fresh native miniquest completion count")
+            val events = startup
                 .filterIsInstance<net.rsprox.protocol.game.outgoing.model.interfaces.IfSetEventsV2>()
                 .last { it.interfaceId == 399 && it.componentId == 7 }
             assertEquals(0, events.start)

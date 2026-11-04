@@ -1122,39 +1122,6 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 },
             };
 
-        case ServerPacketId.WIDGET_SET_QUEST_LIST: {
-            const groupCount = reader.readShort();
-            const groups: Array<{
-                title: string;
-                quests: Array<{ key: string; slot: number; status: number; displayName: string }>;
-            }> = [];
-            for (let i = 0; i < groupCount; i++) {
-                const title = reader.readString();
-                const questCount = reader.readShort();
-                const quests: Array<{
-                    key: string;
-                    slot: number;
-                    status: number;
-                    displayName: string;
-                }> = [];
-                for (let j = 0; j < questCount; j++) {
-                    quests.push({
-                        slot: reader.readShort(),
-                        status: reader.readByte(),
-                        key: reader.readString(),
-                        displayName: reader.readString(),
-                    });
-                }
-                groups.push({ title, quests });
-            }
-            return {
-                type: "widget",
-                payload: {
-                    action: "set_quest_list",
-                    groups,
-                },
-            };
-        }
 
         case ServerPacketId.CHAT_MESSAGE: {
             const messageTypes: Record<number, string> = {

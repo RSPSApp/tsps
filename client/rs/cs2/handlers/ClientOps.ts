@@ -1621,8 +1621,9 @@ export function registerClientOps(handlers: HandlerMap): void {
     });
 
     handlers.set(Opcodes.OPENURL, (ctx) => {
-        ctx.intStackSize--; // pop internal
-        ctx.stringStackSize--; // pop url
+        const newWindow = ctx.intStack[--ctx.intStackSize] === 1;
+        const url = String(ctx.stringStack[--ctx.stringStackSize] ?? "");
+        ctx.openUrl?.(url, newWindow);
     });
 
     // bug_report(template, string, string)

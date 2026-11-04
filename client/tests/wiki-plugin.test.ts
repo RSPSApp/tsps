@@ -1,3 +1,4 @@
+import { openClientUrl } from "../common/openUrl";
 import { strict as assert } from "node:assert";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { inject } from "@runelite/client/plugins/PluginInjector";
@@ -193,3 +194,15 @@ assert.equal(click(25, { param1: 149 << 16, itemId: 1351 }), false, "stopped: th
 ClientState.isSpellSelected = false;
 
 console.log("Wiki plugin tests passed");
+
+{
+    const calls: unknown[][] = [];
+    const open = (...args: any[]) => { calls.push(args); };
+    assert.equal(openClientUrl("https://oldschool.runescape.wiki/w/Special:Lookup?type=quest&id=16", true, open), true);
+    assert.equal(openClientUrl("https://secure.runescape.com/", false, open), true);
+    assert.equal(calls[0][1], "_blank");
+    assert.equal(calls[1][1], "_self");
+    assert.ok(calls.every(call => call[2] === "noopener,noreferrer"));
+    for (const url of ["javascript:alert(1)", "data:text/html,test", "/relative", "invalid"]) assert.equal(openClientUrl(url, true, open), false);
+    assert.equal(calls.length, 2, "invalid links never reach the browser");
+}

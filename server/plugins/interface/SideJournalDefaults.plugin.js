@@ -75,8 +75,8 @@ function mountSideJournalContent(player, groupId, tabIndex) {
   // Other journal content (the Leagues tab) learns its panel was replaced.
   pluginApi?.emitCustomEvent("journal:tab-mounted", { player, groupId, tabIndex });
   if (groupId === INTERFACE_QUEST_LIST_ID) {
-    // The client renders the quest list only while 399 is mounted and purges the
-    // row flags on unmount, so the quest runtime repopulates on every open.
+    // Native CS2 builds the rows. Interface unmount purges their server event flags,
+    // so the quest runtime reapplies canonical quest events on every open.
     pluginApi?.emitCustomEvent("quest:list-refresh", { player });
   }
   if (groupId === INTERFACE_ACHIEVEMENT_DIARY_ID) {

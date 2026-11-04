@@ -1,3 +1,4 @@
+import { openClientUrl } from "../common/openUrl";
 import { LISTENED_CLAN_TYPE, OWN_CLAN_TYPE } from "../common/social/Clans";
 import type { MinimapGeometry, SceneGeometry } from "./scene/SceneGeometry";
 import { vec3 } from "gl-matrix";
@@ -9,7 +10,6 @@ import { directionToDelta } from "../common/Direction";
 import { ChatMessageType } from "../common/chat/ChatMessageType";
 import type { ProjectileLaunch } from "../common/projectiles/ProjectileLaunch";
 import { buildSelectedSpellPayload } from "../common/spells/selectedSpellPayload";
-import type { QuestListWidgetGroup } from "../common/ui/questList";
 import {
     INTERFACE_ACHIEVEMENT_DIARY_ID,
     INTERFACE_QUEST_LIST_ID,
@@ -226,7 +226,6 @@ import { markWidgetInteractionDirty } from "../widgets/WidgetInteraction";
 import { WidgetManager } from "../widgets/WidgetManager";
 import { WidgetSessionManager } from "../widgets/WidgetSessionManager";
 import { runWidgetJsOp } from "../widgets/custom/dynamicWidgets";
-import { applyQuestListWidgetGroups, questListPreferences } from "../widgets/custom/questList";
 import { cleanupInterfaceClickTargets, cleanupWidgetClickTarget } from "../widgets/gl/widgets-gl";
 import { layoutWidgets } from "../widgets/layout/WidgetLayout";
 import { sanitizeText } from "../widgets/menu/utils";
@@ -463,7 +462,6 @@ const LOGOUT_WORLD_SWITCHER_UID = (182 << 16) | 3;
 const LOGOUT_STONE_UIDS = new Set([(161 << 16) | 46, (164 << 16) | 34, (548 << 16) | 51]);
 
 export class OsrsClient {
-    private serverQuestListGroups: QuestListWidgetGroup[] | undefined;
     private static readonly CLIENT_TICK_MS = 20;
     // Maximum amount of client-tick backlog (in ms) we will attempt to simulate.
     // This avoids multi-second/minute "catch-up" after sleep/throttling while still allowing
@@ -1982,6 +1980,7 @@ export class OsrsClient {
             },
             resolveChatPlayerName: (scriptId: number) =>
                 self.resolveChatPlayerNameForScript(scriptId | 0),
+            openUrl: openClientUrl,
             sendPlayerOption: (playerName: string, option: number) => {
                 const normalizedName = playerName.trim().toLowerCase();
                 const tradeTarget = self.tradeRequestTargetsByName.get(normalizedName);
@@ -2995,16 +2994,6 @@ export class OsrsClient {
                           }
                         : undefined;
                     this.widgetManager.invalidateWidgetRender(w);
-                }
-            } else if (payload?.action === "set_quest_list") {
-                if (this.widgetManager && Array.isArray(payload.groups)) {
-                    this.serverQuestListGroups = payload.groups as QuestListWidgetGroup[];
-                    applyQuestListWidgetGroups(
-                        this.widgetManager,
-                        payload.groups as QuestListWidgetGroup[],
-                        questListPreferences(this.varManager),
-                    );
-                    markWidgetsLoaded();
                 }
             } else if (payload?.action === "set_flags") {
                 // Set widget flags override (enables/disables click permissions)
@@ -6711,9 +6700,6 @@ export class OsrsClient {
             this.combatOptions.initVarDefaults();
 
             this.varManager.onVarpChange = (varpId, _oldValue, newValue) => {
-                if (varpId >= 3408 && varpId <= 3412 && this.serverQuestListGroups && this.widgetManager) {
-                    applyQuestListWidgetGroups(this.widgetManager, this.serverQuestListGroups, questListPreferences(this.varManager));
-                }
                 // Server-backed stockmarket fields are separate from cache pending-offer varps.
                 if (varpId >= 7900 && varpId < 7900 + 8 * 7) markStockTransmit();
                 if (this.cs2Vm?.isRunning()) {

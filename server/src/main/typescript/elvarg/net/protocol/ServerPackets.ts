@@ -83,7 +83,6 @@ export const enum ServerPacketId {
     WIDGET_SET_ANGLE = 113, // IF_SETANGLE: model angle and zoom (112 went to IF_SETEVENTS_V2 on main)
     WIDGET_SET_ANIMATION = 114,
     WIDGET_SET_PLAYER_HEAD = 115,
-    WIDGET_SET_QUEST_LIST = 116,
     WIDGET_SET_MODEL = 117,
     WIDGET_SET_POSITION = 118,
     WIDGET_SET_COLOUR = 119,
@@ -243,7 +242,6 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.WIDGET_SET_FLAGS]: 8, // uid(4) + flags(4)
     [ServerPacketId.WIDGET_SET_ANIMATION]: 6, // uid(4) + animId(2)
     [ServerPacketId.WIDGET_SET_PLAYER_HEAD]: 4, // uid(4)
-    [ServerPacketId.WIDGET_SET_QUEST_LIST]: -2,
 
     [ServerPacketId.CHAT_MESSAGE]: -2, // var-short: tutorial/quest game messages exceed 255 bytes
     [ServerPacketId.FRIENDS_CHAT_UPDATE]: -2,

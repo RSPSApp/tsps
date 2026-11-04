@@ -1723,6 +1723,8 @@ module.exports = function registerWatchtowerQuest(api) {
     varpId: VARP_WATCHTOWER,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
+    // The saved completion is 12; cache state 13 is complete, and 14 keeps the scroll-read phase.
+    varpValue: stage => stage === STAGE_COMPLETE ? 13 : stage,
     questPoints: 4,
     xpRewards: [{ skillId: Skill.MAGIC.getIndex(), amount: 15250, label: "Magic" }],
     rewardItemId: SPELL_SCROLL,

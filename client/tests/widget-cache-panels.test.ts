@@ -1071,3 +1071,61 @@ nativeDestroyConfirmation().then(() => console.log('Native destroy confirmation 
     .then(() => nativeSpecialOrbSendsOneServerAuthoritativeInput())
     .then(() => console.log('Native special orb and bar send one server-authoritative input'))
     .catch(error => { console.error(error); process.exitCode = 1; });
+
+
+// The stock quest list keeps child identities while sorting/filtering changes screen positions.
+{
+    const { vm } = require('../scripts/cache/cs2-sweep').createCacheVm();
+    const wm = vm.context.widgetManager;
+    wm.rootInterface = 161;
+    wm.getGroup(399);
+    const root = wm.getWidgetByUid(399 << 16);
+    const { CacheDefinitions } = require("../../server/src/main/typescript/elvarg/game/cache/CacheDefinitions");
+    const { metadata } = require("../../server/plugins/quests/QuestList.QuestRuntime");
+    const questMetadata = [...metadata(CacheDefinitions).values()] as any[];
+    const nativeRows = questMetadata.filter(row => row.parent_quest?.[0] === 117 || row.type?.[0] === 1)
+        .map(row => [row.displayname[0], row.id[0]]);
+    for (const layout of [548, 161, 164]) {
+        wm.rootInterface = layout;
+        for (let sort = 0; sort < 12; sort++) {
+            for (const hide of [0, 13773, 13774, 13775, 13776, 13777]) {
+                for (const id of [13773, 13774, 13775, 13776, 13777]) vm.context.varManager.setVarbit(id, id === hide ? 1 : 0);
+                vm.context.varManager.setVarbit(13772, sort);
+                vm.runScriptEvent({ args: root.onLoad, widget: root });
+                assert.equal(vm.lastError, null);
+                const rows = wm.getWidgetByUid((399 << 16) | 7).children;
+                for (const [name, child] of [["Pirate's Treasure", 16], ["Elemental Workshop I", 55],
+                    ["Recipe for Disaster", 106], ...nativeRows] as const) {
+                    const row = rows.find((row: any) => String(row.text).replace(/^MQ: /, "") === name);
+                    if (row) assert.equal(row.childIndex, child, name);
+                    else assert.notEqual(hide, 0, name + " is present without filters");
+                }
+            }
+        }
+    }
+    // Browser menus emit exactly the same native children as RuneLite, not dense positions.
+    for (const [id, name] of [[16, "Pirate's Treasure"], [55, "Elemental Workshop I"]] as const) {
+        vm.context.varManager.setVarbit(13772, 0);
+        for (const bit of [13773,13774,13775,13776,13777]) vm.context.varManager.setVarbit(bit, 0);
+        vm.runScriptEvent({args: root.onLoad, widget: root});
+        const row = wm.getWidgetByUid((399 << 16) | 7).children[id];
+        assert.equal(row.text, name);
+        wm.setWidgetFlagsByKey((399 << 16) | 7, id, 0x3e);
+        assert.equal(shouldTransmitAction(wm.getWidgetFlags(row), 5), false, "live masks disable dormant Pin journal");
+        assert.equal(shouldTransmitAction(wm.getWidgetFlags(row), 1), true);
+        assert.deepEqual(buildWidgetActionPayload(wm, {widget: row, opIndex: 2}), {
+            widgetId: (399 << 16) | 7, groupId: 399, childId: 7, slot: id, opId: 2,
+        });
+        assert.notEqual(wm.getWidgetByUid((399 << 16) | 7).children[218]?.text, name, "headers occupy distinct native identities");
+    }
+    const opened: Array<[string, boolean]> = [];
+    vm.context.openUrl = (url: string, newWindow: boolean) => opened.push([url, newWindow]);
+    vm.run(vm.context.loadScript(3300), [], ["Search", "", "", "", "Scrambled!/Quick guide"]);
+    assert.equal(vm.lastError, null);
+    assert.deepEqual(opened, [["https://oldschool.runescape.wiki/w/Special:Search?search=Scrambled%21/Quick%20guide&utm_source=osrs", true]]);
+    vm.run(vm.context.loadScript(2495), [0], ["https://oldschool.runescape.wiki/"]);
+    assert.equal(vm.lastError, null);
+    assert.deepEqual(opened.at(-1), ["https://oldschool.runescape.wiki/", false], "OPENURL retains the native boolean");
+    assert.equal(wm.isServerOwnedWidget((399 << 16) | 7), false);
+    assert.equal(wm.getWidgetByUid((399 << 16) | 2).onVarTransmit[0], 1340, "native progress/settings rebuilding stays enabled");
+}

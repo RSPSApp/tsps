@@ -26,6 +26,8 @@ async function main(): Promise<void> {
     await loadItemPrices();
 
     const mutationListeners = new Set<(event: any) => void>();
+    const groupLoadedListeners = new Set<(groupId: number) => void>();
+    const interfaceClosedListeners = new Set<(groupId: number, modalMode: number, unload: boolean) => void>();
     const playerAnimations: Array<[number, number]> = [];
     let bankOpen = true;
     const client: any = {
@@ -34,7 +36,7 @@ async function main(): Promise<void> {
         inventory: new Inventory(),
         equipment: new Inventory(14),
         bankInventory: new Inventory(1410),
-        widgetManager: { getWidgetByUid: () => bankOpen ? {} : undefined },
+        widgetManager: { getWidgetByUid: () => bankOpen ? {} : undefined, groupLoadedListeners, interfaceClosedListeners },
         objTypeLoader: { load: (id: number) => ({ id, name: id === 4151 ? "Abyssal whip" : `Item ${id}`, price: 100, noteTemplate: -1, note: -1 }) },
         playerAnimController: { setAnimation: (playerId: number, sequence: number) => playerAnimations.push([playerId, sequence]) },
     };
@@ -73,6 +75,14 @@ async function main(): Promise<void> {
     loot.clear();
     assert.deepEqual(loot.getState().items, []);
 
+    // A loaded but missing guide quote uses the item cache price instead of displaying zero.
+    (state as any).socket = { fetchContent: async (path: string) => path === "/api/item-prices" ? {} : {} };
+    await loadItemPrices();
+    const unquotedStack = { ...stack, id: 9, itemId: 999, name: "Unquoted item", gePrice: 0 };
+    emit({ kind: "spawn", stack: unquotedStack });
+    assert.deepEqual(loot.getState().items, [{ itemId: 999, name: "Unquoted item", quantity: 2, unitPrice: 100 }]);
+    loot.clear();
+
     // Setups capture exact slots, can be updated by name, and compare against bank contents.
     setups.saveCurrent("Raid");
     let setupState = setups.getState();
@@ -84,8 +94,16 @@ async function main(): Promise<void> {
     setups.saveCurrent("raid");
     setupState = setups.getState();
     assert.equal(setupState.setups.length, 1, "saving with the same name updates the existing setup");
+    const openStateVersion = setupState.version;
     bankOpen = false;
+    for (const listener of interfaceClosedListeners) listener(12, 0, true);
+    assert.ok(setups.getState().version > openStateVersion, "closing the bank notifies the setup panel");
     assert.equal(setups.isBankOpen(), false);
+    const closedStateVersion = setups.getState().version;
+    bankOpen = true;
+    for (const listener of groupLoadedListeners) listener(12);
+    assert.ok(setups.getState().version > closedStateVersion, "opening the bank notifies the setup panel");
+    assert.equal(setups.isBankOpen(), true);
     assert.equal(configManager.getConfiguration(InventorySetupsConfig.group, "setups")?.includes("raid"), true);
 
     // Animation choice comes from the config dropdown; only open actions on door-like objects match.
@@ -102,6 +120,8 @@ async function main(): Promise<void> {
     await pluginManager.setPluginEnabled(InventorySetupsPlugin, false);
     await pluginManager.setPluginEnabled(DoorKickerPlugin, false);
     assert.equal(mutationListeners.size, 0, "disabling loot tracking unsubscribes from ground-item updates");
+    assert.equal(groupLoadedListeners.size, 0, "disabling inventory setups unsubscribes from interface load events");
+    assert.equal(interfaceClosedListeners.size, 0, "disabling inventory setups unsubscribes from interface close events");
     console.log("Loot, inventory setup, and door animation checks passed.");
 }
 

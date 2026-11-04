@@ -82,6 +82,13 @@ export class InventorySetupsPlugin extends Plugin {
         this.unsubscribers.push(this.client.inventory.subscribe(() => this.commit()));
         this.unsubscribers.push(this.client.equipment.subscribe(() => this.commit()));
         this.unsubscribers.push(this.client.bankInventory.subscribe(() => this.commit()));
+        const bankGroupId = Bankmain.ITEMS >>> 16;
+        const onGroupLoaded = (groupId: number) => { if (groupId === bankGroupId) this.commit(); };
+        const onInterfaceClosed = (groupId: number) => { if (groupId === bankGroupId) this.commit(); };
+        this.client.widgetManager?.groupLoadedListeners?.add(onGroupLoaded);
+        this.client.widgetManager?.interfaceClosedListeners?.add(onInterfaceClosed);
+        this.unsubscribers.push(() => this.client.widgetManager?.groupLoadedListeners?.delete(onGroupLoaded));
+        this.unsubscribers.push(() => this.client.widgetManager?.interfaceClosedListeners?.delete(onInterfaceClosed));
         this.navButton = createInventorySetupsNavigationButton(this);
         this.clientToolbar.addNavigation(this.navButton);
         this.commit();

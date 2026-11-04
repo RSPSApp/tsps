@@ -176,7 +176,8 @@ export class LootTrackerPlugin extends Plugin {
             const marketDefinition = marketId === itemId ? definition : this.client.objTypeLoader?.load?.(marketId);
             cachePrice = Math.max(0, Number(marketDefinition?.price ?? cachePrice) | 0);
         } catch {}
-        return Math.max(0, Number(guidePrice(marketId) ?? cachePrice) | 0);
+        const quotedPrice = guidePrice(marketId);
+        return Math.max(0, Number(quotedPrice && quotedPrice > 0 ? quotedPrice : cachePrice) | 0);
     }
 
     private commit(): void {

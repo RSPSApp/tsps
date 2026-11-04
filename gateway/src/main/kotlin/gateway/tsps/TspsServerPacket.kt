@@ -133,7 +133,7 @@ object TspsServerPacket {
             SKILLS_SNAPSHOT to -1,
             SKILLS_DELTA to -1,
             COMBAT_STATE to -1,
-            RUN_ENERGY to 2,
+            RUN_ENERGY to 10,
             HITSPLAT to -1,
             SPOT_ANIM to -1,
             PROJECTILES to -2,

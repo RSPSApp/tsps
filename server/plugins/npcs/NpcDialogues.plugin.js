@@ -479,7 +479,7 @@ function flatten(steps, opts = {}) {
       // Some wiki exports inline the target body on a "continue" jump instead
       // of storing it in the page-level jump table. Prefer that body so nested
       // quest branches do not stop at the jump marker.
-      const target = Array.isArray(step.steps) ? step.steps : resolveJump(step, steps[position - 1]);
+      const target = Array.isArray(step.steps) ? step.steps : resolveJump(step, steps[position - 1], steps[position + 1]);
       // "end": a jump we cannot replay. Stop rather than leak into the next step.
       if (target === "end") {
         out.push({ type: "end" });
@@ -614,7 +614,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
 
   // "jump above" targets the same option's earlier occurrence, else the option
   // defined just before this one. Wiki jump ids lost their targets in the dump.
-  const resolveJump = (step, previous) => {
+  const resolveJump = (step, previous, nextStep) => {
     const reference = String(step.reference ?? "");
     if (/^(other|previous\d*|initial)/i.test(reference)) return resolveMenuJump(reference);
     // The player asks one of the page's questions again (Percy's "Is there anything else I can
@@ -634,6 +634,11 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       const after = context.pageLines?.get(normText(previous.npc))?.slice(1);
       if (after?.length && after[0] !== step && !jumpOnly(after)) return after;
     }
+    // Prefer the queued continuation to guessing another historical option.
+    // Jorral's contact explanations end at "below" before their follow-up menu.
+    // Explicit inline targets and the matching question/line continuations above
+    // retain priority; null lets flatten continue into the queued menu.
+    if (/^below/i.test(reference) && nextStep?.type === "choice") return null;
     const current = context.currentRecord;
     /**
      * True when a candidate would replay the branch the jump is in. A wiki jump

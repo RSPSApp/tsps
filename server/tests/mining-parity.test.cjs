@@ -1073,6 +1073,55 @@ test("daeyalt rocks (226-231): sang wall swings, sound 2998, one stage down per 
   }
 });
 
+test("calcified rocks (1105; Wiki): wall swings, shards or a deposit, each shard counted, then out with the first ore after 117 ticks", () => {
+  const { Sounds } = core;
+  const original = Sounds.playAreaSound;
+  const areaSounds = [];
+  Sounds.playAreaSound = (options) => areaSounds.push(options);
+  const h = harness();
+  const player = createPlayer();
+  // Roll 1: no gem, a hit, shards, three of them; roll 2: a deposit; then single shards on every roll.
+  const restoreRandom = scriptRandom([0, 0, 0, 0.99, 0, 0, 0.995], 0);
+  const { rock, restore } = mineRock(h, player, "Calcified rocks", loc("varlamore_mining_rock04"));
+  try {
+    h.tick(2);
+    assert.equal(player.animations[0], core.CacheDefinitions.getSeqId("human_mining_rune_pickaxe_wall"));
+    assert.equal(player.spam.at(-1), "You manage to chip off some bone shards.");
+    assert.deepEqual(player.added, [[core.ItemIdentifiers.BLESSED_BONE_SHARDS, 3]]);
+    assert.deepEqual(player.xp.at(-1), [core.Skill.MINING, 33]);
+    assert.deepEqual(player.packets.configs.at(-1), [ORE_MINED_VARP, 3], "each shard counts (1105: +3 for three)");
+    h.tick(3);
+    assert.equal(player.spam.at(-1), "You manage to mine a calcified deposit.");
+    assert.deepEqual(player.added.at(-1), [core.ItemIdentifiers.CALCIFIED_DEPOSIT, 1]);
+    assert.deepEqual(player.xp.at(-1), [core.Skill.MINING, 36]);
+    assert.deepEqual(player.packets.configs.at(-1), [ORE_MINED_VARP, 4]);
+    // Rolls land on +2, +5, ... +116 with the timer still running; the one on +119 is past it.
+    h.tick(113);
+    assert.deepEqual(h.registered, [], "still standing at +118");
+    assert.equal(player.added.length, 39);
+    h.tick(1);
+    assert.equal(player.added.length, 40, "the last ore still comes");
+    assert.equal(h.registered[0].getId(), loc("varlamore_mining_rock_empty04"));
+    assert.deepEqual(areaSounds.map((sound) => [sound.soundId, sound.delay, sound.radius, sound.x, sound.y]), [[2661, 10, 1, rock.getLocation().getX(), rock.getLocation().getY()]]);
+    assert.equal(player.packets.scripts.at(-1)[5], 50, "30 s respawn (Wiki)");
+    assert.equal(Mining.isMiningActive(player), false);
+    h.tick(50);
+    assert.equal(h.registered.at(-1), rock, "the same rock respawns");
+  } finally {
+    Sounds.playAreaSound = original;
+    restoreRandom();
+    restore();
+  }
+  const byName = new Map(Mining.ROCKS.map((entry) => [entry.objectName, entry]));
+  const calcified = byName.get("Calcified rocks");
+  assert.deepEqual([calcified.level, calcified.respawnTicks, calcified.depletionTicks], [41, 50, 117]);
+  for (const variant of ["", "02", "03", "04"]) {
+    const event = { player, object: { getId: () => loc(`varlamore_mining_rock_empty${variant}`) } };
+    h.interactions.get("Rocks").Mine(event);
+    assert.equal(event.handled, true, `varlamore_mining_rock_empty${variant} says it is empty`);
+  }
+});
+
 test("every loc named for mining in the cache has a handler (this plugin, or the content that owns it)", () => {
   // Rocks other plugins mine, by name: quests, minigames, bosses, stars, Motherlode.
   const elsewhere = new Set([
@@ -1085,7 +1134,7 @@ test("every loc named for mining in the cache has a handler (this plugin, or the
   ]);
   // Not mineable yet (docs/mining.md, Not done): each needs its own area or mechanic.
   const notYet = new Set([
-    "Limestone rock", "Pile of rock", "Pile of Rock", "Rubium deposit", "Infernal shale deposit", "Calcified rocks",
+    "Limestone rock", "Pile of rock", "Pile of Rock", "Rubium deposit", "Infernal shale deposit",
     "Daeyalt Essence", "Gem Rock", "Easter egg rock", "Amalgamation", "Ancient essence crystals",
     "Adamant ore vein", "Clay ore vein", "Coal ore vein", "Copper ore vein", "Iron ore vein", "Mithril ore vein",
     "Tin ore vein", "Depleted vein", "Gold vein", "Ash pile", "Empty ash pile", "Giant Boulder", "Large Boulder",

@@ -1,6 +1,8 @@
-/** Successful gameplay actions for the Varrock and Lumbridge & Draynor easy diaries. */
+/** Successful gameplay actions for the Ardougne, Varrock and Lumbridge & Draynor easy diaries. */
 let api;
 
+const ARDOUGNE_MARKET_SQUARE = [41, 51];
+const CAKE_ITEM_ID = 1891;
 const VARROCK_TEA_SQUARE = [51, 53];
 const LUMBRIDGE_SQUARE = [50, 50];
 const DRAYNOR_SEWERS_SQUARE = [48, 151];
@@ -25,6 +27,12 @@ function thieved({ player, kind, succeeded, npc, object }) {
   }
 }
 
+function stoleCake({ player, method, stall, itemId, location }) {
+  if (method !== "stall" || stall !== "Baker's stall" || itemId !== CAKE_ITEM_ID
+    || player.getPrivateArea() !== null || location.getZ() !== 0 || !inSquare(location, ARDOUGNE_MARKET_SQUARE)) return;
+  api.emitCustomEvent("diary:task", { player, diary: "ardougne", task: "steal-a-cake-from-the-ardougne-market-stalls" });
+}
+
 function killed({ killer, npc }) {
   if (!killer?.isPlayer?.() || npc.getPrivateArea() !== null || npc.getCurrentDefinition(killer)?.getName() !== "Zombie") return;
   const at = npc.getLocation();
@@ -42,6 +50,7 @@ function arrived({ player, objectId, location }) {
 
 module.exports = function attach(registry) {
   api = registry;
+  api.onCustomEvent("thieving:success", stoleCake);
   api.onCustomEvent("thieving:done", thieved);
   api.onCustomEvent("loc-teleports:arrived", arrived);
   api.onNpcDeath(killed);

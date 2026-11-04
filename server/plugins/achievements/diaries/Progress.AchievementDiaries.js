@@ -75,7 +75,20 @@ function migrateLegacy(player) {
   for (const [legacy, attribute, diary] of LEGACY_ATTRIBUTES) {
     const values = player.getAttribute(legacy);
     if (!Array.isArray(values)) continue;
-    store(player, attribute, diary, values);
+
+    const validValues = attribute === TASKS_ATTRIBUTE
+      ? new Set(TIERS.flatMap((tier) => diary.tiers[tier].tasks.map((task) => task.key)))
+      : new Set(TIERS);
+    const existing = player.getAttribute(attribute)?.[diary.key];
+    const current = Array.isArray(existing) ? existing : [];
+    const merged = [...current];
+    const mergedValues = new Set(current);
+    for (const value of values) {
+      if (!validValues.has(value) || mergedValues.has(value)) continue;
+      merged.push(value);
+      mergedValues.add(value);
+    }
+    store(player, attribute, diary, merged);
     player.setAttribute(legacy, null);
   }
 }

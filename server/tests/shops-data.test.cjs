@@ -27,6 +27,27 @@ test("both versions of Ned's rope shop bind his Trade option", () => {
   }
 });
 
+test('Farming Supplies binds the cache-verified gardener Trade options', () => {
+  const shop = shops.find((entry) => entry.name === 'Farming Supplies');
+  assert.ok(shop, 'the shared Farming Supplies shop exists');
+  const trade = shop.npcInteractions.find(({ optionSlot }) => optionSlot === 5);
+  assert.ok(trade, 'gardeners open it with Trade');
+  for (const id of [310, 2663, 2664, 2665, 2666, 2667, 2669, 2670, 2671, 2672, 2673,
+    2674, 2675, 2676, 2677, 2678, 2679, 2680, 2681, 2682, 2683, 2684, 2685, 2686,
+    2687, 2688, 2689, 6814, 6921, 7754, 7755, 7756, 7758, 8533, 8534, 8535, 8536,
+    8537, 8629, 9138, 11957, 12766, 12936, 14030, 14514, 14515, 14516, 15064, 15065]) {
+    assert.ok(trade.npcIds.includes(id), `NPC ${id} has a Trade binding`);
+  }
+});
+
+test("Sarah's Farming shop sells plant cure on her Trade option", () => {
+  const shop = shops.find((entry) => entry.name === "Sarah's Farming shop.");
+  assert.ok(shop, "Sarah's Farming shop exists");
+  assert.ok(shop.npcInteractions.some(({ npcIds, optionSlot }) => npcIds.includes(501) && optionSlot === 3));
+  assert.ok(shop.originalStock.some(({ id, amount }) => id === 6036 && amount === 100),
+    'plant cure (item 6036) is stocked at 100');
+});
+
 test('the slayer equipment shop binds the masters on Trade; Rewards is an interface', () => {
   const equipment = shops.find((shop) => shop.name === 'Slayer Equipment (shop)');
   assert.ok(equipment, 'the slayer equipment shop exists in shops.json');

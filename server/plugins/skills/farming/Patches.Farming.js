@@ -176,10 +176,19 @@ function farmingOptionClick(event) {
     select(event.slot === undefined || event.slot === -1 ? event.action : event.slot);
 }
 function clearPatch(player, patch) {
+    const state = stateFor(player, patch);
+    if (state.status === "dead") awardPendingPlantExperience(player, patch, state);
     if (patch.type === "REDWOOD") redwoodRegrowth.delete(player);
     const farm = farmFor(player);
     farm.patches[Data.patchKey(patch)] = Model.emptyPatch(Date.now(), farm);
     syncPatch(player, patch);
+}
+function awardPendingPlantExperience(player, patch, state = stateFor(player, patch)) {
+    const crop = Data.CROPS.get(state.crop);
+    if (!crop || state.plantExperiencePending !== true) return false;
+    award(player, crop.plant, patch);
+    state.plantExperiencePending = false;
+    return true;
 }
 function syncPatch(player, patch) {
     const state = stateFor(player, patch);
@@ -443,7 +452,7 @@ function plant(player, patch, id) {
         }
         const plantedAt = Date.now(), offset = farmFor(player).offset;
         Object.assign(state, { crop: crop.key, stage: 0, status: "growing", checked: false, protected: false, watered: false,
-            lives: 0, plantedAt, plantedTick: Model.tickIndex(plantedAt, offset),
+            lives: 0, plantExperiencePending: true, plantedAt, plantedTick: Model.tickIndex(plantedAt, offset),
             nextAt: Model.nextGrowth(plantedAt, Data.stageMinutes(crop, 0), offset),
             diseaseFree: rules.diseaseFree === true, undying: rules.undying === true });
         // Fully grown at once, as the growth model leaves a crop on its last stage (an anima plant's last stage is its end).
@@ -451,8 +460,6 @@ function plant(player, patch, id) {
             Object.assign(state, { stage: crop.stages, status: "grown", lives: Model.startingLives(crop, state.compost) });
             if (crop.regrow) state.nextAt = Model.nextGrowth(Date.now(), crop.regrow, farmFor(player).offset);
         }
-        // Herbs award their planting XP only after the final herb is picked.
-        if (crop.type !== "HERB") award(player, crop.plant, patch);
         spam(player, plantLine(crop, patch, crop.seedCount));
         if (typeof rules.message === "string") player.sendMessage(rules.message);
         syncPatch(player, patch);
@@ -617,6 +624,7 @@ function healthCheck(player, patch) {
     if (!crop || state.status !== "grown" || state.checked) return;
     state.checked = true;
     award(player, crop.check, patch);
+    awardPendingPlantExperience(player, patch, state);
     // Captured nouns: "the tree" (tree, fruit, hardwood and crystal patches), "the Spirit Tree",
     // "the Calquat Tree", "the potato cactus"; the Wiki gives "the bush".
     const noun = crop.type === "SPIRIT_TREE" ? "Spirit Tree" : crop.type === "CALQUAT" ? "Calquat Tree"
@@ -699,7 +707,7 @@ function harvest(player, patch) {
     if (["FLOWER", "BELLADONNA", "CRYSTAL_TREE"].includes(crop.type)) state.lives = 0;
     if (state.lives === 0) {
         if (PICKS[crop.type]?.begin) player.sendMessage(`The ${patchNoun(patch)} is now empty.`);
-        if (crop.type === "HERB") award(player, crop.plant, patch);
+        awardPendingPlantExperience(player, patch, state);
         if (!crop.check) Services.cropRewards(player, crop);
         core.PluginManager.emitCustomEvent("farming:harvest", { player, crop: crop.key, patch });
         if (crop.type === "GRAPES") state.status = "dead";
@@ -718,6 +726,9 @@ function dig(player, patch) {
     const crop = Data.CROPS.get(state.crop);
     if (crop.type === "REDWOOD" && state.status === "grown") { player.sendMessage("Ask Alexandra to remove the redwood tree."); return; }
     if (state.status === "dead" || state.stump) { clearCrop(player, patch, state, crop); return; }
+    if (state.status === "growing" && onlyOneCropFits(patch)) {
+        player.sendMessage("You cannot dig up a healthy crop while it is growing in this patch."); return;
+    }
     if ((Data.WOOD_TREES.has(crop.type) || crop.type === "FRUIT_TREE") && state.status === "grown") {
         player.sendMessage("Chop the tree down before digging out the stump, or pay a gardener to remove it."); return;
     }
@@ -741,6 +752,12 @@ function clearCrop(player, patch, state, crop) {
         clearPatch(player, patch);
         spam(player, stump ? `You dig up the ${stump}.` : "You have successfully cleared this patch for new crops.");
     });
+}
+/** The June 2026 early-clear rule excludes patches which can grow only one crop species. */
+function onlyOneCropFits(patch) {
+    if (patch === TROLL_HERB_PATCH) return true;
+    const crops = new Set([...Data.CROPS.values()].filter(crop => crop.type === patch.type).map(crop => crop.key));
+    return crops.size === 1;
 }
 /** The captured one-paragraph inspect line, and the gardener's when one protects the patch. */
 function inspect(player, patch) {
@@ -1191,4 +1208,4 @@ function attach(api) {
 }
 
 Object.assign(module.exports, { FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, attach, tick: farmingTick, retrievalItems, startBinWork,
-    startClear, after, spam, sound });
+    startClear, after, spam, sound, awardPendingPlantExperience });

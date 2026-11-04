@@ -84,6 +84,20 @@ const NPC_OVERRIDES = {
   // crates by the pillories and Emir's Arena (Wiki: Pelters' Veg Stall), which the
   // Pillory plugin serves.
   "Pelters' Veg Stall": { remove: [3340] },
+  // Preserve the repository's existing bindings when the external shop dump omits
+  // Ned's NPC owners or moves the Shop of Distaste owner to a different option slot.
+  "Ned's Handmade Rope (100% Wool) (Default)": { add: { 3: [824, 4280, 5864] } },
+  "Ned's Handmade Rope (100% Wool) (Fremennik Isles)": { add: { 3: [824, 4280, 5864] } },
+  "Shop of Distaste": { remove: [3340], add: { 5: [3340] } },
+  // The Wiki's Group of Advanced Gardeners page documents the shared Farming Supplies
+  // Trade option across gardeners. The exported shop-owner data only lists Rhonen and
+  // Ehecatl, so add the other cache-verified Trade slot 5 gardeners here.
+  "Farming Supplies": { add: { 5: [
+    310, 2663, 2664, 2665, 2666, 2667, 2669, 2670, 2671, 2672, 2674, 2675, 2676,
+    2677, 2678, 2679, 2680, 2681, 2682, 2683, 2684, 2685, 2686, 2687, 2688, 2689,
+    6814, 6921, 7754, 7755, 7756, 7758, 8533, 8534, 8535, 8536, 8537, 8629, 9138,
+    11957, 12766, 12936, 14030, 14514, 14515, 15064, 15065,
+  ] } },
 };
 
 // Shops whose rows tsps lists in another order than the Wiki: these IDs come

@@ -41,16 +41,18 @@ test("every listed item resolves to an id", () => {
 });
 
 test("a rune platebody without Dragon Slayer I is refused with live OSRS's two lines", () => {
-  reset({ complete: { "Dragon Slayer I": false } });
+  reset({ equipmentRequirements: true, complete: { "Dragon Slayer I": false } });
   assert.deepEqual(equip(Items.RUNE_PLATEBODY), {
     allow: false,
     messages: ["You have not earned the right to wear this yet.", "You need to complete the Dragon Slayer I quest first."],
   });
 });
 
-test("quest equipment requirements default to enabled even in PvP mode", () => {
-  reset({ pvpMode: true, complete: { "Lost City": false } });
-  assert.equal(equip(Items.DRAGON_DAGGER).allow, false);
+test("quest equipment requirements default to disabled independently of PvP mode", () => {
+  for (const pvpMode of [false, true]) {
+    reset({ pvpMode, complete: { "Lost City": false } });
+    assert.deepEqual(equip(Items.DRAGON_DAGGER), { allow: null, messages: [] });
+  }
 });
 
 test("the config can enable requirements independently of PvP mode", () => {
@@ -68,24 +70,24 @@ test("the config can disable requirements independently of PvP mode", () => {
 });
 
 test("a weapon says wield", () => {
-  reset({ complete: { "Monkey Madness I": false } });
+  reset({ equipmentRequirements: true, complete: { "Monkey Madness I": false } });
   assert.equal(equip(Items.DRAGON_SCIMITAR).messages[0], "You have not earned the right to wield this yet.");
 });
 
 test("the quest done, the item goes on", () => {
-  reset({ complete: { "Monkey Madness I": true } });
+  reset({ equipmentRequirements: true, complete: { "Monkey Madness I": true } });
   assert.deepEqual(equip(Items.DRAGON_SCIMITAR), { allow: null, messages: [] });
 });
 
 test("an item's own message replaces the two lines", () => {
-  reset({ complete: { "Zogre Flesh Eaters": false } });
+  reset({ equipmentRequirements: true, complete: { "Zogre Flesh Eaters": false } });
   assert.deepEqual(equip(Items.INOCULATION_BRACELET).messages, [
     "You need to have completed the Zogre Flesh Eaters quest to wear a bracelet of inoculation.",
   ]);
 });
 
 test("bots and ungated items are left alone", () => {
-  reset({ complete: { "Lost City": false } });
+  reset({ equipmentRequirements: true, complete: { "Lost City": false } });
   assert.equal(equip(Items.DRAGON_DAGGER, { bot: true }).allow, null);
   assert.equal(equip(Items.DRAGON_DAGGER_3).allow, null);
   assert.equal(equip(Items.RUNE_CHAINBODY).allow, null);
@@ -97,7 +99,7 @@ test("disabled or missing quests leave equipment wearable with requirements enab
 });
 
 test("quest eligibility queries return refusal text without messaging or equipping the player", () => {
-  reset({ complete: { "Lost City": false } });
+  reset({ equipmentRequirements: true, complete: { "Lost City": false } });
   const request = {
     player: { sendMessage: () => assert.fail("a query must not send messages") },
     item: { getId: () => Items.DRAGON_DAGGER }, allow: true, messages: [],

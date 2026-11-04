@@ -258,7 +258,7 @@ function uncharge({ player, item }) {
   if (stageOf(item?.getId?.()) !== "charged") return false;
   const amount = itemCharges(item);
   const inventory = player.getInventory();
-  if (amount > 0 && !inventory.contains(itemIdentifiers().SUNFIRE_SPLINTERS) && inventory.getFreeSlots() <= 0) {
+  if (amount > 0 && inventory.getAddableAmount(new (core().Item)(itemIdentifiers().SUNFIRE_SPLINTERS, amount)) < amount) {
     player.sendMessage("You don't have enough inventory space to do that.");
     return true;
   }
@@ -371,12 +371,7 @@ function remove(player) {
   const ammo = stored(player);
   if (!ammo) return;
   const inventory = player.getInventory();
-  if (!inventory.contains(ammo.id) && inventory.getFreeSlots() <= 0) {
-    player.sendMessage("You don't have enough inventory space to do that.");
-    return;
-  }
-  const room = MAX_AMOUNT - inventory.getAmount(ammo.id);
-  const moved = Math.min(room, ammo.amount);
+  const moved = inventory.getAddableAmount(new (core().Item)(ammo.id, ammo.amount));
   if (moved <= 0) {
     player.sendMessage("You don't have enough inventory space to do that.");
     return;

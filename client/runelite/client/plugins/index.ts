@@ -24,6 +24,9 @@ import { GpuPlugin } from "../../../game/plugins/gpu/GpuPlugin";
 import { GroundItemsConfig } from "../../../game/plugins/grounditems/GroundItemsConfig";
 import { GroundItemsPlugin } from "../../../game/plugins/grounditems/GroundItemsPlugin";
 import { GroundMarkerPlugin } from "../../../game/plugins/groundmarkers/GroundMarkerPlugin";
+import { LootTrackerPlugin } from "../../../game/plugins/loottracker/LootTrackerPlugin";
+import { InventorySetupsPlugin } from "../../../game/plugins/inventorysetups/InventorySetupsPlugin";
+import { DoorKickerPlugin } from "../../../game/plugins/doorkicker/DoorKickerPlugin";
 import { HdPlugin } from "../../../game/plugins/hd/HdPlugin";
 import { IdleNotifierPlugin } from "../../../game/plugins/idlenotifier/IdleNotifierPlugin";
 import { ImplingsPlugin } from "../../../game/plugins/implings/ImplingsPlugin";
@@ -71,6 +74,9 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     PortraitModePlugin,
     GameFrame317Plugin,
     GroundItemsPlugin,
+    LootTrackerPlugin,
+    InventorySetupsPlugin,
+    DoorKickerPlugin,
     InteractHighlightPlugin,
     GroundMarkerPlugin,
     TileMarkersPlugin,

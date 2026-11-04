@@ -8,6 +8,9 @@
  * first flight, played at the balloon controls (BalloonTransport's Controls unit, the
  * "taverley" route), with the transcript's crash sites.
  *
+ * The stage numbers below are durable plugin stages. nativeProgress maps them to
+ * the native cache phases; see docs/quests/native-quest-state-a.md.
+ *
  * Stages (varbit 2866 "zep_quest", varp 912 bits 0-7 - see below): 1 accepted,
  * 2 first experiment done (origami balloon handed over), 3 second experiment done
  * (two papyrus and a sack of potatoes taken), 4 Auguste's sapling handed over
@@ -1132,11 +1135,19 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
   api.persistAttribute(SAPLING_ATTRIBUTE);
   api.persistAttribute(STAN_ATTRIBUTE, 0);
 
+  // QH 06da90's zep_quest experiment/build/flight phases; cache DB completes at 200.
+  // The saved stage remains the plugin's compact phase for balloon callbacks and old saves.
+  function nativeProgress(stage) {
+    const phases = [0, 20, 40, 60, 70, 80, 90, 100, 200];
+    return phases[Math.max(0, Math.min(stage, STAGE_COMPLETE))];
+  }
+
   quest = registerQuest(api, {
     key: "enlightened_journey",
     name: "Enlightened Journey",
     varpId: VARP_ENLIGHTENED_JOURNEY,
     varbitId: VARBIT_ZEP_QUEST,
+    varbitValue: nativeProgress,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,

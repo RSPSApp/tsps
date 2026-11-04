@@ -433,16 +433,23 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
     return null;
   }
 
-  /** 35 Agility is checked here; Alfred Grimhand's Barcrawl has no server quest to read. */
-  function meetsStartRequirements(player) {
-    return player.getSkillManager().getMaxLevel(Skill.AGILITY) >= 35;
+  function barcrawlComplete(player) {
+    const request = { player, name: "Alfred Grimhand's Barcrawl", complete: false };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
   }
 
   function handleStartHook({ player, npcId, hook }) {
     if (!LARRISSA_NPC_IDS.has(npcId) || hook !== START_HOOK) return;
     if (quest.getStage(player) >= STAGE_STARTED) return;
-    if (!meetsStartRequirements(player)) {
+    if (player.getSkillManager().getMaxLevel(Skill.AGILITY) < 35) {
+      hook.end = true;
       player.sendMessage("You need an Agility level of at least 35 to start this quest.");
+      return;
+    }
+    if (!barcrawlComplete(player)) {
+      hook.end = true;
+      player.sendMessage("You need to complete Alfred Grimhand's Barcrawl to start this quest.");
       return;
     }
     quest.setStage(player, STAGE_STARTED);

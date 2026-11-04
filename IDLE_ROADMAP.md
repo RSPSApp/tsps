@@ -31,8 +31,9 @@ Prioridades: **P0** = sem isso ninguém de fora consegue jogar; **P1** = deixa o
 - [x] **Primeiro login guiado**: o Tutorial Island já vem desligado; conta nova num mundo idle
       começa em Lumbridge, recebe 3 linhas de boas-vindas e a tela idle abre sozinha
 - [x] **Abrir a tela idle sem comando**: botão **Idle** na aba do diário (Character Summary)
-- [ ] **Teste de reinício do servidor**: conferir que quem estava jogando quando o servidor
-      reinicia recebe o progresso offline ao voltar
+- [x] **Reinício e crash do servidor**: quem estava jogando recebe o progresso offline ao voltar
+      (testado no jogo com SIGTERM e com `kill -9`; num crash, a partir do último salvamento
+      automático, de 5 a 10 minutos)
 - [ ] **Decisão jurídica**: o jogo usa o cache e o conteúdo do OSRS (Jagex). Antes de abrir ao
       público, e principalmente antes de cobrar qualquer coisa, decidir o risco (ver "Loja de
       Idle Coins")

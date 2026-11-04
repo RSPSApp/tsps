@@ -1166,3 +1166,26 @@ test("journal: the Idle button's idle:open opens the Idle screen", () => {
   assert.equal(player.getInterfaceId(), GROUP_ID);
   assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 2), "Activity: None yet: press Travel");
 });
+
+test("offline: a server restart (a save, no logout) still pays the time away on the next login", (t) => {
+  let now = 1_000_000;
+  t.mock.method(Date, "now", () => now);
+  const player = fakePlayer();
+  player.setAttribute("idle-mode:enabled", true);
+  player.setAttribute("idle-mode:onboarded", true);
+  for (let i = 0; i <= 20; i++) {
+    chop(player);
+    if (i < 20) now += 6000;
+  }
+  // No logout: the attribute a shutdown save (or the last autosave) writes is already current.
+  assert.deepEqual(player.getAttribute("idle-mode:away"), {
+    activity: "WOODCUTTING", durationMs: 120_000, xp: { WOODCUTTING: 500 }, items: { [LOGS]: 20 }, loggedOutAt: now,
+  });
+  // The server comes back: fresh modules, nothing in memory, the saved attribute kept.
+  load();
+  now += 60 * 60 * 1000;
+  const logsBefore = player.bank.get(LOGS);
+  api.login({ player });
+  assert.equal(player.bank.get(LOGS) - logsBefore, 600, "an hour at the rate it had");
+  assert.equal(player.getAttribute("idle-mode:away"), null);
+});

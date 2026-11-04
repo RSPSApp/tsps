@@ -59,6 +59,10 @@ from formulas, so tools, levels, boosts and relics all count as they did in play
   least `minSampleSeconds` measured saves the session as `idle-mode:away`:
   `{ activity, durationMs, xp: { skill: xp }, items, loggedOutAt }`; `activity` is the gathering
   skill (`"WOODCUTTING"`) or `"COMBAT"`.
+- **Restarts and crashes**: the server's shutdown saves players without logging them out, so
+  `idle-mode:away` is also kept current on every result while playing. Any save carries it: the
+  shutdown save, or the last autosave (every 5-10 minutes) before a crash, and the next login pays
+  the time away from that save. Checked in game with SIGTERM and with `kill -9`.
 - **Logging back in** pays the time away at that rate: the XP to the skills (the world's XP rate
   was already in the measured XP, so it isn't applied twice) and the items to the bank. Time over
   `capHours` isn't paid, and `efficiency` scales the whole reward (`1` = the rate played). What

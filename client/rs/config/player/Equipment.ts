@@ -149,3 +149,21 @@ export function withSeqHandItems(
     if (seq.rightHandItem >= 0) equip[EquipmentSlot.WEAPON] = unoffset(seq.rightHandItem);
     return new PlayerAppearance(app.gender, app.colors, app.kits, equip, app.headIcons);
 }
+
+/**
+ * The appearance with an action sequence's held items while that sequence is set at all.
+ *
+ * The start delay (30 cycles on the pipe squeezes) only delays its frames; native still applies
+ * the sequence's hand overrides from the tick the sequence is received, so a held staff is hidden
+ * as the player enters the pipe rather than a tick later. A forced idle override is not the
+ * server's action sequence and keeps the player's own hands.
+ */
+export function withActionSeqHandItems(
+    app: PlayerAppearance,
+    seq: { leftHandItem: number; rightHandItem: number } | undefined,
+    actionSeqId: number,
+    forcedSequence = false,
+): PlayerAppearance {
+    if (forcedSequence || (actionSeqId | 0) < 0) return app;
+    return withSeqHandItems(app, seq);
+}

@@ -114,6 +114,8 @@ function hops(...tiles) {
  * replays with each half, so the squeeze pose (no weapon in hand) lasts the whole way. A long pipe
  * passes `resume`, the tile its second half starts from: the player is moved there unseen a tick
  * after the first half lands, and crawls on the tick after (rsprox 449-461, the Wilderness course).
+ * The sequence's own hand overrides hide a held weapon; the client must apply them from the tick
+ * the sequence is set, before its start delay has passed.
  */
 function pipe(middle, to, resume = null) {
   const half = (tile) => ({ move: tile, anim: Anim.SQUEEZE_PIPE, delay: 30, speed: [30, 126], ticks: 4 });

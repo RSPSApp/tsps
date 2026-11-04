@@ -427,6 +427,87 @@ console.log("Cache panel scripts retain inventory items, 64-bit prices and nativ
     assert.deepEqual(errors, []);
 }
 
+// Ring pickers use the cache's pause-button routes, with their distinct choice indices.
+{
+    const { vm } = require('../scripts/cache/cs2-sweep').createCacheVm();
+    const { processWidgetClickInput } = require('../game/widgets/input/widgetClickInput');
+    const { WidgetActionRouter } = require('../game/widgets/WidgetActionRouter');
+    const { decodeClientPackets } = require('../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol');
+    const { state } = require('../network/serverConnection/state');
+    const rings = require('../../server/plugins/items/TransformationRings.plugin')._test.RINGS;
+    const wm = vm.context.widgetManager, frames: Buffer[] = [], errors: unknown[] = [];
+    const socket = { readyState: 1, send: (frame: Uint8Array) => frames.push(Buffer.from(frame)) };
+    (globalThis as any).WebSocket ??= { OPEN: 1 };
+    state.socket = socket; setPacketSocket(socket as any);
+    vm.logError = (error: unknown) => errors.push(error);
+    wm.onLoadListener = (_id: number, widget: any) => vm.runScriptEvent({ args: widget.onLoad, widget });
+    wm.setRootInterface(161); wm.resize(765, 503);
+    const interaction: any = {
+        clickedWidget: null, clickedWidgetParent: null, clickedWidgetHandled: false,
+        resolveClickedWidgetParent: () => null, handleTradeRequestChatClick: () => false,
+        isWidgetDraggable: () => false,
+    };
+    let router: any;
+    const deps: any = new Proxy({
+        getWidgetManager: () => wm, getCs2Vm: () => vm, getVarManager: () => vm.context.varManager,
+        getCustomInterfaces: () => ({ handleWidgetClick: () => false, rowIdAt: () => undefined, handleWidgetOp() {} }),
+        getTransmitCycles: () => ({ cycleCntr: 1 }), getSpellSelection: () => ({ getWidgetTargetMask: () => 0 }),
+        handleTradeWidgetAction: () => false,
+        buildWidgetActionPayload: (event: any) => router.buildWidgetActionPayload(event),
+        resolveTransmitFlagWidget: (widget: any, payload: any) => router.resolveTransmitFlagWidget(widget, payload),
+        executeScriptListener: (widget: any, args: any[], context: any) => vm.runScriptEvent({ args, widget, ...context }),
+    }, { get: (target: any, key: any) => target[key] ?? (() => undefined) });
+    router = new WidgetActionRouter(deps);
+    const click = (widget: any) => {
+        frames.length = 0;
+        wm.meslayerContinueWidget = null; // A fresh mount/answer releases the native repeat guard.
+        interaction.clickedWidget = null; interaction.clickedWidgetParent = null; interaction.clickedWidgetHandled = false;
+        processWidgetClickInput(deps, { cachedHoverHits: null }, {
+            input: { leftClickX: 10, leftClickY: 10 }, collectFromAllRoots: () => [widget],
+            getWidgetFlags: (target: any) => wm.getWidgetFlags(target),
+        }, wm, interaction, (target: any) => ({ option: target.actions?.[0] ?? target.text ?? 'Continue', target: '', opIndex: 1 }), true);
+        flushPackets();
+        return frames.flatMap(frame => decodeClientPackets(frame));
+    };
+    try {
+        wm.openSubInterface((161 << 16) | 16, 187, 0);
+        vm.run(vm.context.loadScript(217), [1], ['Choose a form', Object.keys(rings['Ring of 3rd Age'].choices).join('|')]);
+        const choices = wm.getDynamicChildrenByParent((187 << 16) | 3);
+        assert.equal(choices.length, 24);
+        for (const index of [0, 23]) {
+            wm.setWidgetFlagsByKey((187 << 16) | 3, index, 1);
+            assert.deepEqual(click(choices.find((widget: any) => widget.childIndex === index)),
+                [{ type: 'dialogue_continue', childIndex: index, widgetId: (187 << 16) | 3 }]);
+        }
+        wm.closeSubInterface((161 << 16) | 16);
+        wm.openSubInterface((162 << 16) | 567, 219, 0);
+        vm.run(vm.context.loadScript(58), [], ['Choose a form', 'Traditional|Tempy|Thermy']);
+        const snowmen = wm.getDynamicChildrenByParent((219 << 16) | 1);
+        for (const index of [1, 3]) {
+            wm.setWidgetFlagsByKey((219 << 16) | 1, index, 1);
+            assert.deepEqual(click(snowmen.find((widget: any) => widget.childIndex === index)),
+                [{ type: 'dialogue_continue', childIndex: index, widgetId: (219 << 16) | 1 }]);
+        }
+        wm.openSubInterface((162 << 16) | 567, 136, 0);
+        const unmorph = wm.getWidgetByUid(136 << 16);
+        assert.deepEqual(unmorph.actions, ['Unmorph']);
+        const packets = click(unmorph);
+        assert.equal(packets.length, 1); assert.equal(packets[0].type, 'widget_action');
+        assert.equal(packets[0].widgetId, 136 << 16); assert.equal(packets[0].buttonNum, 1);
+        wm.openSubInterface((162 << 16) | 567, 747, 0);
+        for (const [child, label] of ['Unmorph', 'Question', 'Exclaim', 'Shake', 'Survey'].entries()) {
+            const button = wm.getWidgetByUid((747 << 16) | child);
+            assert.deepEqual(button.actions, [label]);
+            const cratePackets = click(button);
+            assert.equal(cratePackets.length, 1); assert.equal(cratePackets[0].type, 'widget_action');
+            assert.equal(cratePackets[0].widgetId, (747 << 16) | child); assert.equal(cratePackets[0].buttonNum, 1);
+        }
+        assert.deepEqual(errors, []);
+    } finally {
+        setPacketSocket(null); state.socket = null;
+    }
+}
+
 // Actual cache key listeners -> native resume packet -> real PlayerSession/DestroyItem policy.
 async function nativeDestroyConfirmation() {
     const previousDirectory = process.cwd();

@@ -379,6 +379,23 @@ test('native Castle Wars supplies work with production plugin ordering and the c
   t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
   const { PlayerSession } = require('../dist/net/PlayerSession');
   const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const routeScenario = process.env.CW_SHOP_ROUTE_SCENARIO;
+  if (routeScenario?.endsWith('-disabled')) {
+    const world = require('../dist/game/definition/WorldDefinition');
+    const read = world.readWorldConfig;
+    t.mock.method(world, 'readWorldConfig', () => {
+      const config = read();
+      return { ...config, plugins: { ...config.plugins, [routeScenario.replace('-disabled', '')]: false } };
+    });
+  } else if (routeScenario === 'custom') {
+    const read = fs.readFileSync;
+    t.mock.method(fs, 'readFileSync', function (file, ...args) {
+      const content = read.call(this, file, ...args);
+      if (typeof file !== 'string' || path.basename(file) !== 'custom-shops.json') return content;
+      return JSON.stringify([...JSON.parse(content), { id: 99999, name: 'Explicit Lanthus shop', currency: 'COINS',
+        originalStock: [{ id: 995, amount: 1 }], npcInteractions: [{ npcIds: [11650], optionSlot: 4 }] }]);
+    });
+  }
   const modulePath = require.resolve('../plugins/minigames/castlewars/Game.CastleWars');
   let match;
   require.cache[modulePath].exports = (api) => (match = Game(api));
@@ -396,11 +413,13 @@ test('native Castle Wars supplies work with production plugin ordering and the c
   for (const hook of PluginManager.serverStartupHooks) {
     if (['Hunter', 'WarpedSceptre', 'CastleWars'].includes(hook.pluginName)) hook.handler({});
   }
+  // GameBuilder loads these definitions after registering plugins.
+  new (require('../dist/game/definition/loader/impl/NpcInteractionDefinitionLoader').NpcInteractionDefinitionLoader)().load();
+  new (require('../dist/game/definition/loader/impl/ShopDefinitionLoader').ShopDefinitionLoader)().load();
+  core.ShopManager.initialize();
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(2441, 3089);
   core.RegionManager.loadMapFiles(2426, 3076);
-  match.endGame();
-  const nativeGameArea = match.gameArea;
   const actors = [];
   function actor() {
     const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
@@ -426,6 +445,17 @@ test('native Castle Wars supplies work with production plugin ordering and the c
     PluginManager.removeNpc(lanthus);
   });
   assert.equal(lanthus.getDefinition().getName(), 'null', 'the canonical spawn is a nameless parent');
+  if (routeScenario) {
+    const h = actor();
+    await h.send({ type: 'npc_option', index: lanthus.getIndex(), clickType: 4 });
+    for (let i = 0; i < 3; i++) { h.p.getMovementQueue().process(); core.TaskManager.processWalkTo(h.p.getIndex()); }
+    assert.equal(h.p.getInterfaceId(), 300, routeScenario);
+    assert.equal(core.ShopManager.getOpenShop(h.p)?.name, routeScenario === 'custom' ? 'Explicit Lanthus shop' : 'Castle Wars Ticket Exchange');
+    assert.equal(PluginManager.loadedPlugins.includes('CastleWars'), routeScenario === 'custom');
+    return;
+  }
+  match.endGame();
+  const nativeGameArea = match.gameArea;
   async function choose(h, text) {
     const prompt = core.MultiChatboxPrompt.getPending(h.p);
     assert.ok(prompt, text);
@@ -520,11 +550,11 @@ test('native Castle Wars supplies work with production plugin ordering and the c
     h.p.setAttribute(ATTR_SKIP_PERSISTENCE, true);
     return h;
   }
-  async function trade(h) {
-    const actions = lanthus.getCurrentDefinition(h.p).getActions();
+  async function trade(h, npc = lanthus) {
+    const actions = npc.getCurrentDefinition(h.p).getActions();
     const option = actions.findIndex((action) => action?.toLowerCase() === 'trade');
     assert.ok(option >= 0, 'the visible Lanthus morph offers Trade');
-    await h.send({ type: 'npc_option', index: lanthus.getIndex(), clickType: option + 1 });
+    await h.send({ type: 'npc_option', index: npc.getIndex(), clickType: option + 1 });
     for (let i = 0; i < 3; i++) {
       h.p.getMovementQueue().process();
       core.TaskManager.processWalkTo(h.p.getIndex());
@@ -545,6 +575,18 @@ test('native Castle Wars supplies work with production plugin ordering and the c
     h.p.setLocation(new core.Location(2440, 3089, 0));
     h.p.setNeedsPlacement(false);
   }
+
+  await t.test('every cache Lanthus form routes Trade through the native reward owner', async (subtest) => {
+    const ids = [];
+    for (let id = 0; id < core.CacheDefinitions.getCounts().npcs; id++) {
+      if (core.CacheDefinitions.getNpc(id).name === 'Lanthus') ids.push(id);
+    }
+    assert.ok(ids.includes(lanthus.getContentId(shopActor(subtest).p)), 'includes the canonical resolved morph');
+    for (const id of ids) {
+      const npc = PluginManager.spawnNpc({ id, x: 2441, y: 3089, z: 0, wanderRadius: 0 });
+      try { await trade(shopActor(subtest), npc); } finally { PluginManager.removeNpc(npc); }
+    }
+  });
 
   await t.test('Lanthus Trade opens both native panels and preserves ticket prices and full refunds', async (subtest) => {
     const h = shopActor(subtest), sender = h.p.getPacketSender(), opens = [], scripts = [];
@@ -902,4 +944,17 @@ test('native Castle Wars supplies work with production plugin ordering and the c
 
   });
 
+});
+
+test('native Lanthus routing preserves explicit custom shops and disabled plugin dependencies', () => {
+  const { spawnSync } = require('node:child_process');
+  for (const scenario of ['custom', 'CastleWars-disabled', 'Omnishop-disabled']) {
+    const env = { ...process.env, CW_SHOP_ROUTE_SCENARIO: scenario };
+    delete env.NODE_TEST_CONTEXT;
+    const result = spawnSync(process.execPath, ['--test', '--test-name-pattern=^native Castle Wars supplies', __filename], {
+      cwd: process.cwd(), env, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024,
+    });
+    assert.equal(result.status, 0, `${scenario}\n${result.stdout}\n${result.stderr}`);
+    assert.match(result.stdout, /native Castle Wars supplies/, 'the isolated child must execute the native route case');
+  }
 });

@@ -29,12 +29,11 @@
  *
  * Gaps/approximations:
  * - Will and Anne's tutorial ship is the shared `pandemonium_tutorial_ship` static ship
- *   (owner-only), with its captured walkable deck, helm/sails and placeholder. Taking the helm
+ *   (owner-only), with its captured 2x5 deck, helm, sails and hook. Taking the helm
  *   only sets the helm; raising the sails starts a real BoatManager voyage south to the
- *   captured wreck point (3031,3039), and arrival there plays the wreck camera/arrival dialogue.
- *   The ship is disposed when the player is pushed overboard or leaves. The live capture copies a 13x13-chunk scene and moves it to the
- *   wreck; this server keeps the same deck and treats taking the helm/trimming the sails
- *   as reaching the wreck, so there is no separate wreck scenery/camera.
+ *   wreck, and arrival plays the wreck camera/arrival dialogue. The observed course is
+ *   collision-checked against the active cache; optional sail-trim boosts and exact journey
+ *   timing are not reproduced. The ship is disposed when the player is pushed overboard or leaves.
  * - The raft and cargo route use the real Sailing system: Junior Jim grants a raft in
  *   the player's boat slot, the shipyard visit shows it and the cargo hold is built on
  *   its hotspot, and the crate is port task 599 (crate 32807) collected and delivered
@@ -68,9 +67,7 @@ module.exports = function registerPandemoniumQuest(api) {
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
   const Scenes = createQuestScenes(api);
-  // Sailing is not on api.core yet; these are the same public units its own plugins use.
-  const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sailing/Sailing");
-  const { BoatManager } = require("../../../src/main/typescript/elvarg/game/content/sailing/BoatManager");
+  const { Sailing, BoatManager } = api.core;
   const StaticShips = require("../../skills/sailing/StaticShips.Sailing");
   const sailingContent = require("../../skills/sailing/SailingContent.Sailing");
   const Shipyard = require("../../skills/sailing/Shipyard.plugin.js");
@@ -117,7 +114,8 @@ module.exports = function registerPandemoniumQuest(api) {
   const REPAIR_KIT_ITEM_ID = ItemIdentifiers.REPAIR_KIT; // 31964
   const SPYGLASS_ITEM_ID = ItemIdentifiers.SPYGLASS; // 31803
 
-  // The static tutorial ship's placed hook: cache `Salvaging hook` (60482, Deploy/Modify).
+  const SALVAGING_HOOK_BASE_OBJECT_ID = api.core.CacheDefinitions.getLocId("sailing_intro_salvaging_hook");
+  // The native client sends the placed parent; a visible-child click resolves to the same hook.
   const SALVAGING_HOOK_OBJECT_ID = ObjectIdentifiers.SALVAGING_HOOK_2;
 
   const VARP_SAILING_INTRO = 4959; // "sailing_intro_primary"
@@ -262,11 +260,10 @@ module.exports = function registerPandemoniumQuest(api) {
   // Quest-only scenery and teleport tiles (quest-helper/cache positions; the ledgers and
   // gangplank are absent from this world's maps, the boat deck is the cache's own scene).
   // The tutorial ship is the shared static-ship blueprint (owner-only for this player), with
-  // its captured helm/sails and the salvaging hook/wreck added on reaching the wreck.
+  // its captured helm, sails and salvaging hook. The wreck is already in the real world map.
   const TUTORIAL_SHIP_ID = "pandemonium_tutorial_ship";
-  // Captured tutorial deck positions: Will on the placeholder tile, Anne beside the helm.
-  const TUTORIAL_WILL_TILE = { x: 3, y: 2 };
-  const TUTORIAL_ANNE_TILE = { x: 4, y: 3 };
+  const TUTORIAL_WILL_TILE = { x: 4, y: 3 };
+  const TUTORIAL_ANNE_TILE = { x: 3, y: 2 };
   const PORT_SARIM_TILE = { x: 3025, y: 3209, z: 0 };
   const PANDEMONIUM_LANDING_TILE = { x: 3069, y: 2987, z: 0 };
   const PANDEMONIUM_PUB_TILE = { x: 3050, y: 2967, z: 0 };
@@ -395,18 +392,14 @@ module.exports = function registerPandemoniumQuest(api) {
   }
 
   const tutorialScenes = new Map();
-  // Captured worldentity roots (PandemoniumDiscord): start (3054.5,3193.5), wreck
-  // (3032.5,3050.0). The QH wreck zone contains the final root; waypoints follow the offline
-  // real-collision route around the Port Sarim coast.
-  const TUTORIAL_START_FINE = { fineX: 3054 * 128 + 64, fineY: 3193 * 128 + 64 };
-  const WORLD_WRECK_FINE = { fineX: 3032 * 128 + 64, fineY: 3050 * 128 };
-  const WORLD_WRECK_TILE = { x: 3032, y: 3050 };
+  // Owned tutorial entity16 in rsprox381: the 2x5 ship's observed start and stopped wreck root.
+  const TUTORIAL_START_FINE = { fineX: 3056 * 128 + 64, fineY: 3190 * 128 + 64 };
+  const WORLD_WRECK_FINE = { fineX: 3035 * 128 + 32, fineY: 3048 * 128 + 96 };
+  const WORLD_WRECK_TILE = { x: 3035, y: 3048 };
   const WORLD_WRECK_ZONE = { minX: 3018, maxX: 3040, minY: 3030, maxY: 3050 };
-  // Offline real BoatCollision/tickBoat route from the captured start to the captured wreck
-  // root, run-length encoded as [packed heading, half-sail ticks].
+  // Observed full-sail headings (ticks368–459), verified with this cache's real hull collision.
   const VOYAGE_HEADING_RUNS = [
-    [0, 94], [1, 10], [0, 4], [1, 2], [0, 8], [1, 10],
-    [0, 14], [1, 2], [0, 16], [1, 20], [2, 18], [0, 2],
+    [0, 25], [2, 6], [1, 30], [0, 31],
   ];
 
   function tutorialScene(player) {
@@ -485,11 +478,9 @@ module.exports = function registerPandemoniumQuest(api) {
     tutorialScenes.set(player, scene);
     if (helmTaken) scene.boat.helmPlayerId = player.getIndex();
     scene.boat.moveMode = sailingContent.MOVE_MODE.STOPPED;
-    if (atWreck) {
-      addWreckLocs(scene);
-    } else if (scene.voyageStarted) {
+    if (scene.voyageStarted && !atWreck) {
       startVoyage(scene);
-    } else {
+    } else if (!atWreck) {
       tutorialFadeIn(player, ship.boat);
     }
     return true;
@@ -501,19 +492,6 @@ module.exports = function registerPandemoniumQuest(api) {
       tutorialCamera(player, { boat });
       Scenes.later(player, 1, () => Scenes.fade(player, false));
     });
-  }
-
-  /** Adds the wreck and the real salvaging hook to the deck once the helm reaches it. */
-  function addWreckLocs(scene) {
-    if (scene.wreckAdded) return;
-    scene.wreckAdded = true;
-    const locs = BoatManager.getSpec(scene.boat)?.locs ?? [];
-    if (!locs.some((loc) => loc.id === ObjectIdentifiers.SMALL_SHIPWRECK)) {
-      BoatManager.setDeckLoc(scene.boat, { id: ObjectIdentifiers.SMALL_SHIPWRECK, x: 2, y: 2, level: 0, shape: 10, rotation: 0 });
-    }
-    if (!locs.some((loc) => loc.id === SALVAGING_HOOK_OBJECT_ID)) {
-      BoatManager.setDeckLoc(scene.boat, { id: SALVAGING_HOOK_OBJECT_ID, x: 2, y: 3, level: 0, shape: 10, rotation: 0 });
-    }
   }
 
   function endTutorialShip(player) {
@@ -1031,9 +1009,8 @@ module.exports = function registerPandemoniumQuest(api) {
     scene.headingRun = 0;
     scene.headingTicks = VOYAGE_HEADING_RUNS[0][1];
     scene.boat.heading = VOYAGE_HEADING_RUNS[0][0] * 128;
-    scene.boat.moveMode = sailingContent.MOVE_MODE.HALF;
-    // Under way at once: the route was worked out at half-sail speed from its first tick.
-    scene.boat.velocity = scene.boat.baseSpeed / 2;
+    scene.boat.moveMode = sailingContent.MOVE_MODE.FULL;
+    scene.boat.velocity = 0;
   }
 
   /**
@@ -1042,7 +1019,8 @@ module.exports = function registerPandemoniumQuest(api) {
    * side. Use the engine's route destination contract to operate from the current deck tile.
    */
   function routeTutorialHook(event) {
-    if (event.objectId !== SALVAGING_HOOK_OBJECT_ID || !tutorialScene(event.player)) return;
+    if (event.clickType !== 1 || (event.objectId !== SALVAGING_HOOK_BASE_OBJECT_ID
+      && event.objectId !== SALVAGING_HOOK_OBJECT_ID) || !tutorialScene(event.player)) return;
     const at = event.player.getLocation();
     const object = event.object.getLocation();
     if (Math.max(Math.abs(object.getX() - at.getX()), Math.abs(object.getY() - at.getY())) > 3) return;
@@ -1064,7 +1042,7 @@ module.exports = function registerPandemoniumQuest(api) {
         const [heading, ticks] = VOYAGE_HEADING_RUNS[scene.headingRun];
         scene.headingTicks = ticks;
         scene.boat.heading = heading * 128;
-        scene.boat.moveMode = sailingContent.MOVE_MODE.HALF;
+        scene.boat.moveMode = sailingContent.MOVE_MODE.FULL;
       }
       const boat = scene.boat;
       if (boat.tileX >= WORLD_WRECK_ZONE.minX && boat.tileX <= WORLD_WRECK_ZONE.maxX
@@ -1080,7 +1058,6 @@ module.exports = function registerPandemoniumQuest(api) {
     scene.arrived = true;
     scene.boat.moveMode = sailingContent.MOVE_MODE.STOPPED;
     scene.boat.velocity = 0;
-    addWreckLocs(scene);
     Scenes.fade(player, true);
     Scenes.later(player, 1, () => {
       tutorialWreckCamera(player, scene.boat);
@@ -1106,6 +1083,7 @@ module.exports = function registerPandemoniumQuest(api) {
     if (handleTutorialSails(event)) return;
     if (event.clickType !== 1) return;
     switch (ledgerActionId(event)) {
+      case SALVAGING_HOOK_BASE_OBJECT_ID:
       case SALVAGING_HOOK_OBJECT_ID:
         deploySalvagingHook(event);
         return;

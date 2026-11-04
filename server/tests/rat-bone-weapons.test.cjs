@@ -54,6 +54,7 @@ function createPlayer({ items = {}, levels = {}, weapon = -1 } = {}) {
       deleteNumber: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
       addItem: (item) => { added.push(item); inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()); },
       getFreeSlots: () => 5,
+      getAddableAmount: (item) => item.getAmount(),
       refreshItems: () => {},
     }),
     getDialogueManager: () => ({ startDialogues: () => log.push("dialogue") }),

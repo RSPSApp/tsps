@@ -38,6 +38,7 @@ function createContainer(capacity, initial = []) {
     getAmount: (id) => items.filter((item) => item.getId() === id).reduce((total, item) => total + item.getAmount(), 0),
     contains: (id) => items.some((item) => item.getId() === id && item.getAmount() > 0),
     getFreeSlots: () => capacity - container.getValidItems().length,
+    getAddableAmount: (item) => (container.contains(item.getId()) || container.getFreeSlots() > 0 ? item.getAmount() : 0),
     add(item) {
       const stack = items.find((entry) => entry.getId() === item.getId());
       if (stack && item.getDefinition().isStackable()) stack.setAmount(stack.getAmount() + item.getAmount());

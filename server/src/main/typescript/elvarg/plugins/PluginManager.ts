@@ -2508,6 +2508,7 @@ export class PluginManager {
       PlayerRights: require("../game/model/rights/PlayerRights").PlayerRights,
       Server: require("../Server").Server,
       PluginManager: require("./PluginManager").PluginManager,
+      CustomInterfaceRegistry,
       ShopManager: require("../game/model/container/shop/ShopManager").ShopManager,
       ShopDefinition: require("../game/definition/ShopDefinition").ShopDefinition,
       MultiChatboxPrompt: require("../game/model/menu/MultiChatboxPrompt").MultiChatboxPrompt,

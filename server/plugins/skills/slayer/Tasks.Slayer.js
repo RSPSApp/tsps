@@ -27,6 +27,7 @@
 const Data = require("./Data.Slayer");
 const State = require("./State.Slayer");
 const SlaughterBracelet = require("./SlaughterBracelet.Slayer");
+const MorytaniaDiary = require("./MorytaniaDiary.Slayer");
 
 const COMPLETE = "<col=ef1020>You have completed your task! You killed</col> {amount} {name}<col=ef1020>. You gained</col> {xp} xp<col=ef1020>.";
 const FREE_TASK = "<col=ef1020>You've completed </col>{streak} {tasks}<col=ef1020> and will need </col>{more} more<col=ef1020> before you start receiving Slayer points; return to a Slayer master.</col>";
@@ -383,7 +384,8 @@ function npcKilled({ killer, npc }) {
   const kill = { player, npc, xp: hitpoints };
   api.emitCustomEvent("slayer:task-kill", kill);
   // Mortimer's Slayer XP modifier counts superiors too (Wiki).
-  const boost = modifierBoost(task, MODIFIER.XP);
+  // The Morytania Diary adds to a kill in the Slayer Tower (MorytaniaDiary.Slayer.js).
+  const boost = modifierBoost(task, MODIFIER.XP) * MorytaniaDiary.boost(player, npc);
   const xp = kill.xp * boost;
   if (xp > 0) player.getSkillManager().addExperiences(core.Skill.SLAYER, xp);
   player.setAttribute(TASK_XP_ATTRIBUTE, (Number(player.getAttribute(TASK_XP_ATTRIBUTE)) || 0) + (kill.taskXp ?? kill.xp) * boost);
@@ -401,7 +403,9 @@ function offTaskKill(player, npc) {
   const hitpoints = (npc.getCurrentDefinition?.() ?? npc.getDefinition()).getHitpoints();
   const kill = { player, npc, xp: hitpoints, offTask: true };
   api.emitCustomEvent("slayer:task-kill", kill);
-  if (kill.xp > 0) player.getSkillManager().addExperiences(core.Skill.SLAYER, kill.xp);
+  // The Morytania Diary counts it too (not Mortimer's modifier: there is no task).
+  const xp = kill.xp * MorytaniaDiary.boost(player, npc);
+  if (xp > 0) player.getSkillManager().addExperiences(core.Skill.SLAYER, xp);
 }
 
 function complete(player, task) {
@@ -482,10 +486,11 @@ function grantPoints(player, points) {
 const POINTS_CAP = (1 << 17) - 1;
 
 /**
- * "slayer:current-task" { player, task: null }: fills task with { master, taskId, name, count,
+ * "slayer:current-task" { player, task: null, points: 0 }: fills points and task with { master, taskId, name, count,
  * area } (name lowercase, as "kalphites"; area the slayer_area row's text) or leaves it null.
  */
 function currentTaskEvent(request) {
+  request.points = request.player ? State.varbit(request.player, "slayer_points") : 0;
   const task = request?.player ? current(request.player) : null;
   if (!task) return;
   request.task = { master: task.masterId, taskId: task.taskId, name: taskName(task.task), count: task.count, area: task.area?.text ?? null };

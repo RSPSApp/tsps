@@ -16,6 +16,8 @@
  */
 const Common = require("./Common.MageTrainingArena");
 
+const SIDE_BUTTON_SWITCH_SCRIPT = 915;
+const MAGIC_TAB = 6;
 const ENCHANTED_ATTRIBUTE = "mage-training-arena:shapes-enchanted";
 /** Orbs deposited this visit, towards the runes given on leaving (kept over a logout). */
 const ORBS_ATTRIBUTE = "mage-training-arena:orbs-deposited";
@@ -144,6 +146,8 @@ function enchantShape(event) {
   }
   Common.awardPoints(player, "enchantment", enchantPoints(spellLevel, { dragonstone, count, bonus: shape === chamber.bonus }));
   updateOverlay(player);
+  // toplevel_sidebutton_switch, as accepted jewellery enchant clicks outside the arena.
+  player.getPacketSender().sendClientScript(SIDE_BUTTON_SWITCH_SCRIPT, MAGIC_TAB);
 }
 
 // --- The hole

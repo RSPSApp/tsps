@@ -793,6 +793,12 @@ function canAttack(event) {
 function shutdown() {
   for (const session of new Set(sessions.values())) end(session);
 }
+function excludePvpStats(event) {
+  if ([event.killer, event.victim].some(player => player?.isPlayer?.()
+      && (sessions.has(player) || pendingSafeDeaths.has(player)
+        || (player.getPrivateArea() == null && ARENA.inside(player.getLocation()))))) event.allow = false;
+}
+
 module.exports = {
   name: "DuelArena",
   enableStaking,
@@ -807,6 +813,7 @@ module.exports = {
     api.onPlayerDisconnect(disconnect);
     api.onPlayerLogout(disconnect);
     api.onPlayerDeath(handleDeath);
+    api.onCustomEvent("pvp:count-stats", excludePvpStats);
     api.onShouldDropItemsOnDeath(shouldDrop);
     api.onCanAttack(canAttack);
     api.onCanTeleport(preventDuringDuel);

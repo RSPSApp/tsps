@@ -9,7 +9,7 @@ before(async () => {
 });
 let nextIndex = 100;
 function setup({ nativeSpawns = false } = {}) {
-  const hooks = { custom: new Map(), variants: [], namedNpcs: new Map(), objects: [], items: [], logout: [] };
+  const hooks = { custom: new Map(), variants: [], namedNpcs: new Map(), namedObjects: new Map(), objects: [], items: [], logout: [] };
   const tasks = [], spawned = [], removed = [], objects = [], projectiles = [], graphics = [], cameras = [];
   let tick = 0; const executed = new Set();
   const core = { ...PluginManager.getCoreApi(),
@@ -21,7 +21,7 @@ function setup({ nativeSpawns = false } = {}) {
   const api = new Proxy({ core,
     persistAttribute() {}, onNpcDialogueVariant(fn) { hooks.variants.push(fn); }, onNpcDialogueCondition() {},
     onNpcInteraction(target, actions) { if (typeof target === 'string') hooks.namedNpcs.set(target, actions); },
-    onObjectInteraction(target) { if (typeof target === 'function') hooks.objects.push(target); },
+    onObjectInteraction(target, actions) { if (typeof target === 'function') hooks.objects.push(target); else if (typeof target === 'string') hooks.namedObjects.set(target, actions); },
     onItemOnItem(first, second, fn) { hooks.items.push({ first, second, fn }); }, onPlayerLogout(fn) { hooks.logout.push(fn); },
     onCustomEvent(name, fn) { const list = hooks.custom.get(name) ?? []; list.push(fn); hooks.custom.set(name, list); },
     emitCustomEvent(name, event) { for (const fn of hooks.custom.get(name) ?? []) fn(event); },
@@ -38,7 +38,8 @@ function setup({ nativeSpawns = false } = {}) {
         getCombat: () => ({ attack(target) { npc.target = target; } }), isRegistered: () => true,
         isNpc: () => true, isPlayer: () => false, setArea(value) { area = value; }, getArea: () => area,
         getIndex: () => nextIndex++, getAsNpc() { return npc; }, getLocation: () => tile, moveTo(value) { tile = value; },
-        getMovementQueue: () => ({ addFirstStep(value) { tile = value; } }),
+        faceTile(value) { npc.facing = value; },
+        getMovementQueue: () => ({ addFirstStep(value) { tile = value; }, addSteps(value) { tile = value; } }),
         performAnimation(value) { npc.animation = value.id; }, performGraphic(value) { npc.graphic = value.id; }, forceChat(value) { npc.chat = value; } };
       spawned.push(npc); return npc;
     }, removeNpc(npc) { removed.push(npc); },
@@ -54,7 +55,14 @@ function setup({ nativeSpawns = false } = {}) {
     sendProjectile(...args) { projectiles.push(args); return sender; }, sendGraphic(...args) { graphics.push(args); return sender; },
   }, { get(target, key) { return target[key] ?? ((...args) => { if (String(key).startsWith("sendCamera")) {
       if ((key === 'sendCameraMoveTo' || key === 'sendCameraLookAt') && area?.sourceTile) {
-        const origin = area.sourceTile(0, 0); args = [args[0] - origin.getX(), args[1] - origin.getY(), ...args.slice(2)];
+        if (area.getName() === 'Barbarian Workout') {
+          args = [args[0] - area.getBaseX() + area.template.base[0] * 8,
+            args[1] - area.getBaseY() + area.template.base[1] * 8, ...args.slice(2)];
+        } else {
+        const chunk = area.getChunk(location.getZ(), (args[0] >> 3) - area.baseChunkX, (args[1] >> 3) - area.baseChunkY);
+        const [x, y] = core.rotateChunkTile(args[0] & 7, args[1] & 7, (4 - chunk.rotation) & 3);
+        args = [chunk.sourceChunkX * 8 + x, chunk.sourceChunkY * 8 + y, ...args.slice(2)];
+        }
       }
       cameras.push([tick, key, ...args]);
     } return sender; }); } });
@@ -67,6 +75,7 @@ function setup({ nativeSpawns = false } = {}) {
       adds(id, count) { inventory.set(id, (inventory.get(id) ?? 0) + count); } }),
     getSkillManager: () => ({ getCurrentLevel: skill => skill === core.Skill.MINING ? miningLevel : 99,
       addExperiences(skill, amount) { xp.push({ skill, amount }); } }),
+    setPositionToFace(value) { player.facing = value; },
     getLocation: () => location, moveTo(value) { location = value; }, getArea: () => area, getPrivateArea: () => area, setArea(value) { area = value; },
     getIndex: () => index, isPlayer: () => true, getAsPlayer() { return player; }, isNpc: () => false, isRegistered: () => true,
     getMovementQueue: () => movement, getCombat: () => ({ reset() {} }), setUntargetable() {}, setForceMovement() {},
@@ -132,7 +141,7 @@ test('RPS third-round cheat beats the actual shown sign for every player pick', 
 test('workout lasts 206 ticks, unlocks Flex at its end and cleans up logout', () => {
   const h = setup(), N = h.core.NpcIdentifiers; h.quest.setStage(h.player, 1); h.attrs.set(CHECKAL, 10);
   h.action(N.ATLAS, '_RwWTk'); assert.equal(h.player.getPrivateArea().getName(), 'Barbarian Workout');
-  const workoutEntry = h.player.getPrivateArea().sourceTile(3253, 3393);
+  const workoutEntry = h.player.getPrivateArea().sourceTile(3250, 3398);
   assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY()], [workoutEntry.getX(), workoutEntry.getY()], 'Atlas enters the workout scene before its first scheduled action');
   assert.equal(h.attrs.get('below-ice-mountain:training'), 1); assert.equal(h.varbits.get(12062), 0);
   const cancelledScene = h.player.getPrivateArea();
@@ -212,6 +221,11 @@ test('four native pillar hits defeat the guardian without regeneration; ordinary
   assert.equal(h.quest.getStage(h.player), 4);
   assert.equal(h.varbits.get(12063), 40);
   assert.equal(h.xp.reduce((sum, award) => sum + award.amount, 0), 40);
+  h.tick(6);
+  const area = h.player.getPrivateArea();
+  assert.deepEqual(h.player.getLocation(), area.sourceTile(2952, 5773), 'captured 2203 finishing-scene placement');
+  assert.deepEqual(h.player.facing, area.sourceTile(2952, 5774));
+  assert.equal(h.animations.at(-1).id, -1, 'combat pose is cleared before the final scene');
   assert.ok(h.removed.includes(guardian));
   assert.equal(guardian.isRegistered(), false);
 });
@@ -224,7 +238,7 @@ test('entrance uses a private crew and Marley scene, then replaces the awakening
   assert.equal(exterior.getName(), 'Opening Camdozaal');
   assert.deepEqual(h.spawned.map(npc => npc.getId()), [N.CHECKAL_2, N.BURNTOF_3, N.WILLOW_2, N.MARLEY_2]);
   h.action(N.WILLOW, 'JSFicf');
-  assert.deepEqual([exterior.originX, exterior.originY], [2944, 5760]);
+  assert.equal(exterior.template.tick, 2031);
   h.action(N.WILLOW, '1Pscfp');
   const arena = h.player.getPrivateArea();
   assert.notEqual(arena, exterior);
@@ -274,62 +288,62 @@ test('the bag shows coins before completion; Ramarno finishes and rewards exactl
 test('the complete workout camera track matches all captured targets, ticks and rates', () => {
   const h = setup(); h.quest.setStage(h.player, 1); h.attrs.set(CHECKAL, 10);
   h.action(h.core.NpcIdentifiers.ATLAS, '_RwWTk'); h.tick(205);
-  // Capture 1636, cycles 346–549, normalized out of the private instance.
+  // Raw capture 1636 cycles 346–549: original instance coordinates, not RSProx text normalization.
   assert.deepEqual(h.cameras, [
-    [1, "sendCameraMoveTo", 3253, 3399, 500, {"rate": 232, "rate2": 232}],
-    [1, "sendCameraLookAt", 3253, 3393, 350, {"rate": 232, "rate2": 232}],
-    [18, "sendCameraLookAt", 3255, 3407, 280, {"rate": 1, "rate2": 1}],
-    [20, "sendCameraMoveTo", 3244, 3410, 670, {"rate": 232, "rate2": 232}],
-    [20, "sendCameraLookAt", 3244, 3405, 250, {"rate": 232, "rate2": 232}],
-    [35, "sendCameraMoveTo", 3244, 3436, 430, {"rate": 3, "rate2": 3}],
-    [44, "sendCameraLookAt", 3244, 3426, 400, {"rate": 232, "rate2": 232}],
-    [44, "sendCameraMoveTo", 3253, 3426, 430, {"rate": 232, "rate2": 232}],
-    [45, "sendCameraLookAt", 3217, 3426, 400, {"rate": 3, "rate2": 3}],
-    [45, "sendCameraMoveTo", 3226, 3426, 430, {"rate": 3, "rate2": 3}],
-    [57, "sendCameraMoveTo", 3079, 3425, 300, {"rate": 232, "rate2": 232}],
-    [57, "sendCameraLookAt", 3075, 3423, 280, {"rate": 232, "rate2": 232}],
-    [77, "sendCameraMoveTo", 3078, 3431, 290, {"rate": 232, "rate2": 232}],
-    [77, "sendCameraLookAt", 3078, 3438, 280, {"rate": 232, "rate2": 232}],
+    [1, "sendCameraMoveTo", 13568, 717, 500, {"rate": 232, "rate2": 232}],
+    [1, "sendCameraLookAt", 13574, 717, 350, {"rate": 232, "rate2": 232}],
+    [18, "sendCameraLookAt", 13576, 719, 280, {"rate": 1, "rate2": 1}],
+    [20, "sendCameraMoveTo", 13589, 724, 670, {"rate": 232, "rate2": 232}],
+    [20, "sendCameraLookAt", 13578, 724, 250, {"rate": 232, "rate2": 232}],
+    [35, "sendCameraMoveTo", 13611, 724, 430, {"rate": 3, "rate2": 3}],
+    [44, "sendCameraLookAt", 13605, 724, 400, {"rate": 232, "rate2": 232}],
+    [44, "sendCameraMoveTo", 13605, 717, 430, {"rate": 232, "rate2": 232}],
+    [45, "sendCameraLookAt", 13605, 745, 400, {"rate": 3, "rate2": 3}],
+    [45, "sendCameraMoveTo", 13605, 738, 430, {"rate": 3, "rate2": 3}],
+    [57, "sendCameraMoveTo", 13671, 657, 300, {"rate": 232, "rate2": 232}],
+    [57, "sendCameraLookAt", 13667, 655, 280, {"rate": 232, "rate2": 232}],
+    [77, "sendCameraMoveTo", 13670, 663, 290, {"rate": 232, "rate2": 232}],
+    [77, "sendCameraLookAt", 13670, 670, 280, {"rate": 232, "rate2": 232}],
     [98, "sendCameraReset"],
-    [98, "sendCameraLookAt", 3069, 3422, 280, {"rate": 232, "rate2": 232}],
-    [98, "sendCameraMoveTo", 3069, 3411, 600, {"rate": 232, "rate2": 232}],
-    [103, "sendCameraLookAt", 3066, 3417, 280, {"rate": 2, "rate2": 2}],
-    [103, "sendCameraMoveTo", 3043, 3411, 400, {"rate": 3, "rate2": 3}],
-    [103, "sendCameraLookAt", 3066, 3417, 0, {"rate": 1, "rate2": 1}],
-    [104, "sendCameraLookAt", 3064, 3417, 0, {"rate": 1, "rate2": 1}],
-    [105, "sendCameraLookAt", 3062, 3417, 0, {"rate": 1, "rate2": 1}],
-    [106, "sendCameraLookAt", 3060, 3417, 0, {"rate": 1, "rate2": 1}],
-    [107, "sendCameraLookAt", 3058, 3417, 0, {"rate": 1, "rate2": 1}],
-    [108, "sendCameraLookAt", 3056, 3417, 0, {"rate": 1, "rate2": 1}],
-    [109, "sendCameraLookAt", 3054, 3417, 0, {"rate": 1, "rate2": 1}],
-    [110, "sendCameraLookAt", 3052, 3417, 0, {"rate": 1, "rate2": 1}],
-    [111, "sendCameraLookAt", 3050, 3417, 0, {"rate": 1, "rate2": 1}],
-    [112, "sendCameraLookAt", 3048, 3417, 0, {"rate": 1, "rate2": 1}],
-    [113, "sendCameraLookAt", 3046, 3417, 0, {"rate": 1, "rate2": 1}],
-    [114, "sendCameraLookAt", 3044, 3417, 0, {"rate": 1, "rate2": 1}],
-    [115, "sendCameraLookAt", 3039, 3417, 0, {"rate": 1, "rate2": 0}],
-    [117, "sendCameraMoveTo", 2993, 3427, 400, {"rate": 1, "rate2": 1}],
-    [120, "sendCameraMoveTo", 3033, 3432, 600, {"rate": 3, "rate2": 3}],
-    [120, "sendCameraLookAt", 3013, 3428, 0, {"rate": 1, "rate2": 0}],
-    [123, "sendCameraLookAt", 3000, 3432, 0, {"rate": 1, "rate2": 0}],
-    [131, "sendCameraMoveTo", 3079, 3425, 300, {"rate": 232, "rate2": 232}],
-    [131, "sendCameraLookAt", 3075, 3423, 280, {"rate": 232, "rate2": 232}],
-    [160, "sendCameraMoveTo", 3212, 3397, 300, {"rate": 232, "rate2": 232}],
-    [160, "sendCameraLookAt", 3212, 3392, 280, {"rate": 232, "rate2": 232}],
-    [160, "sendCameraMoveTo", 3212, 3417, 300, {"rate": 3, "rate2": 3}],
-    [160, "sendCameraLookAt", 3212, 3439, 280, {"rate": 3, "rate2": 0}],
-    [171, "sendCameraLookAt", 3211, 3440, 280, {"rate": 1, "rate2": 0}],
-    [171, "sendCameraMoveTo", 3212, 3417, 600, {"rate": 3, "rate2": 3}],
-    [176, "sendCameraLookAt", 3211, 3480, 280, {"rate": 1, "rate2": 0}],
-    [176, "sendCameraMoveTo", 3212, 3457, 600, {"rate": 3, "rate2": 3}],
-    [178, "sendCameraMoveTo", 3211, 3445, 500, {"rate": 232, "rate2": 232}],
-    [178, "sendCameraLookAt", 3211, 3439, 280, {"rate": 232, "rate2": 232}],
-    [183, "sendCameraMoveTo", 3211, 3440, 500, {"rate": 2, "rate2": 2}],
-    [183, "sendCameraLookAt", 3211, 3457, 400, {"rate": 232, "rate2": 232}],
-    [188, "sendCameraMoveTo", 3222, 3458, 700, {"rate": 3, "rate2": 3}],
-    [188, "sendCameraLookAt", 3211, 3471, 650, {"rate": 3, "rate2": 3}],
-    [204, "sendCameraMoveTo", 3079, 3425, 300, {"rate": 232, "rate2": 232}],
-    [204, "sendCameraLookAt", 3075, 3423, 280, {"rate": 232, "rate2": 232}],
+    [98, "sendCameraLookAt", 13661, 654, 280, {"rate": 232, "rate2": 232}],
+    [98, "sendCameraMoveTo", 13661, 643, 600, {"rate": 232, "rate2": 232}],
+    [103, "sendCameraLookAt", 13658, 649, 280, {"rate": 2, "rate2": 2}],
+    [103, "sendCameraMoveTo", 13635, 643, 400, {"rate": 3, "rate2": 3}],
+    [103, "sendCameraLookAt", 13658, 649, 0, {"rate": 1, "rate2": 1}],
+    [104, "sendCameraLookAt", 13656, 649, 0, {"rate": 1, "rate2": 1}],
+    [105, "sendCameraLookAt", 13654, 649, 0, {"rate": 1, "rate2": 1}],
+    [106, "sendCameraLookAt", 13652, 649, 0, {"rate": 1, "rate2": 1}],
+    [107, "sendCameraLookAt", 13650, 649, 0, {"rate": 1, "rate2": 1}],
+    [108, "sendCameraLookAt", 13648, 649, 0, {"rate": 1, "rate2": 1}],
+    [109, "sendCameraLookAt", 13646, 649, 0, {"rate": 1, "rate2": 1}],
+    [110, "sendCameraLookAt", 13644, 649, 0, {"rate": 1, "rate2": 1}],
+    [111, "sendCameraLookAt", 13642, 649, 0, {"rate": 1, "rate2": 1}],
+    [112, "sendCameraLookAt", 13640, 649, 0, {"rate": 1, "rate2": 1}],
+    [113, "sendCameraLookAt", 13638, 649, 0, {"rate": 1, "rate2": 1}],
+    [114, "sendCameraLookAt", 13636, 649, 0, {"rate": 1, "rate2": 1}],
+    [115, "sendCameraLookAt", 13631, 649, 0, {"rate": 1, "rate2": 0}],
+    [117, "sendCameraMoveTo", 13585, 659, 400, {"rate": 1, "rate2": 1}],
+    [120, "sendCameraMoveTo", 13625, 664, 600, {"rate": 3, "rate2": 3}],
+    [120, "sendCameraLookAt", 13605, 660, 0, {"rate": 1, "rate2": 0}],
+    [123, "sendCameraLookAt", 13592, 664, 0, {"rate": 1, "rate2": 0}],
+    [131, "sendCameraMoveTo", 13671, 657, 300, {"rate": 232, "rate2": 232}],
+    [131, "sendCameraLookAt", 13667, 655, 280, {"rate": 232, "rate2": 232}],
+    [160, "sendCameraMoveTo", 13570, 756, 300, {"rate": 232, "rate2": 232}],
+    [160, "sendCameraLookAt", 13575, 756, 280, {"rate": 232, "rate2": 232}],
+    [160, "sendCameraMoveTo", 13598, 756, 300, {"rate": 3, "rate2": 3}],
+    [160, "sendCameraLookAt", 13608, 756, 280, {"rate": 3, "rate2": 0}],
+    [171, "sendCameraLookAt", 13623, 755, 280, {"rate": 1, "rate2": 0}],
+    [171, "sendCameraMoveTo", 13598, 756, 600, {"rate": 3, "rate2": 3}],
+    [176, "sendCameraLookAt", 13663, 755, 280, {"rate": 1, "rate2": 0}],
+    [176, "sendCameraMoveTo", 13638, 756, 600, {"rate": 3, "rate2": 3}],
+    [178, "sendCameraMoveTo", 13618, 755, 500, {"rate": 232, "rate2": 232}],
+    [178, "sendCameraLookAt", 13608, 755, 280, {"rate": 232, "rate2": 232}],
+    [183, "sendCameraMoveTo", 13623, 755, 500, {"rate": 2, "rate2": 2}],
+    [183, "sendCameraLookAt", 13638, 755, 400, {"rate": 232, "rate2": 232}],
+    [188, "sendCameraMoveTo", 13637, 750, 700, {"rate": 3, "rate2": 3}],
+    [188, "sendCameraLookAt", 13640, 755, 650, {"rate": 3, "rate2": 3}],
+    [204, "sendCameraMoveTo", 13671, 657, 300, {"rate": 232, "rate2": 232}],
+    [204, "sendCameraLookAt", 13667, 655, 280, {"rate": 232, "rate2": 232}]
   ]);
   h.hooks.logout[0]({ player: h.player });
 });
@@ -503,4 +517,122 @@ test('unknown creature blocks do not send a human rig through the native guardia
       'the launch-side block consumer cannot send a human block or a reset');
     assert.ok(f.views.slice(afterAttack).filter(view => view.index === f.guardian.getIndex()).every(view => view.animation === undefined));
   });
+});
+
+function assertCapturedScene(h) {
+  const area = h.player.getPrivateArea(), template = area.template;
+  const { palette } = area.buildScenePalette(
+    area.baseChunkX + template.center[0] - template.base[0],
+    area.baseChunkY + template.center[1] - template.base[1]);
+  assert.deepEqual(palette, template.palette, 'exact captured chunks, rotations, planes and intentional holes');
+}
+test('every workout tick replays its exact captured palette including rotations and holes', () => {
+  const h = setup(), N = h.core.NpcIdentifiers;
+  h.quest.setStage(h.player, 1); h.attrs.set(CHECKAL, 10);
+  h.action(N.ATLAS, '_RwWTk');
+  for (let tick = 0; tick < 206; tick++) { assertCapturedScene(h); h.tick(1); }
+  h.hooks.logout[0]({ player: h.player });
+});
+
+test('RPS preserves lower-floor scenery and the captured player facing', () => {
+  const h = setup(), N = h.core.NpcIdentifiers; h.quest.setStage(h.player, 1);
+  h.action(N.BURNTOF, 'Lv8k9i');
+  assertCapturedScene(h);
+  assert.deepEqual(h.player.facing, h.player.getPrivateArea().sourceTile(2956, 3370));
+  h.hooks.logout[0]({ player: h.player });
+});
+test('entrance and interior crew preserve capture 1636 spawn directions and targets', () => {
+  const h = setup(), N = h.core.NpcIdentifiers; h.quest.setStage(h.player, 2);
+  h.action(N.WILLOW, 'fOQUgc');
+  let area = h.player.getPrivateArea();
+  assertCapturedScene(h);
+  assert.deepEqual(h.spawned.map(npc => npc.def.face), [4, 2, 3, 7]);
+  h.spawned.forEach((npc, i) => assert.deepEqual(npc.facing, area.sourceTile(i === 2 ? 2996 : 2997, 3494)));
+  h.action(N.WILLOW, '1Pscfp');
+  area = h.player.getPrivateArea();
+  assertCapturedScene(h);
+  const crew = h.spawned.slice(-4);
+  assert.deepEqual(crew.map(npc => npc.def.face), [7, 3, 7, 6]);
+  crew.forEach((npc, i) => assert.deepEqual(npc.facing, area.sourceTile(2953, i === 1 ? 5771 : 5770)));
+  for (const x of [40, 63]) for (const y of [40, 63]) {
+    h.player.moveTo(area.tile(x, y, 0)); assert.equal(area.contains(h.player.getLocation()), true); assertCapturedScene(h);
+  }
+  for (const [x, y] of [[39, 40], [64, 40], [40, 39], [40, 64]]) {
+    const tile = area.tile(x, y, 0);
+    assert.equal(area.contains(tile), false);
+    assert.notEqual(area.getClip(tile) & 0x200000, 0);
+  }
+  h.hooks.logout[0]({ player: h.player });
+});
+
+test('workout resets interrupted animations and preserves the captured cheer delay', () => {
+  const h = setup(), N = h.core.NpcIdentifiers; h.quest.setStage(h.player, 1); h.attrs.set(CHECKAL, 10);
+  h.action(N.ATLAS, '_RwWTk');
+  h.tick(1); assert.equal(h.animations.at(-1).id, -1);
+  h.tick(76); assert.equal(h.animations.at(-1).id, -1);
+  h.tick(82); assert.equal(h.animations.at(-1).id, -1);
+  h.tick(38); assert.equal(h.animations.at(-1).id, 862); assert.equal(h.animations.at(-1).delay, 2);
+  h.hooks.logout[0]({ player: h.player });
+});
+
+test('canonical source tiles match raw actor positions across rotated cache joins', () => {
+  const h = setup(), N = h.core.NpcIdentifiers; h.quest.setStage(h.player, 1); h.attrs.set(CHECKAL, 10);
+  h.action(N.ATLAS, '_RwWTk');
+  const area = h.player.getPrivateArea();
+  const raw = (x, y, sourceX, sourceY) => {
+    const tile = area.sourceTile(sourceX, sourceY);
+    assert.deepEqual([tile.getX() - area.getBaseX(), tile.getY() - area.getBaseY()],
+      [x - area.template.base[0] * 8, y - area.template.base[1] * 8]);
+  };
+  raw(13574, 717, 3250, 3398); // Raw player teleport at 345, clockwise chunk.
+  raw(13593, 722, 3245, 3417); // Raw Man addition at 374.
+  const before = area.sourceTile(3245, 3416), after = area.sourceTile(3245, 3415);
+  assert.equal(Math.max(Math.abs(before.getX() - after.getX()), Math.abs(before.getY() - after.getY())), 1);
+  h.tick(56); raw(13668, 655, 3076, 3423);
+  h.tick(103); raw(13575, 756, 3211, 3399);
+  h.hooks.logout[0]({ player: h.player });
+});
+
+test('interior crew walks and turns follow the captured dialogue cues', () => {
+  const h = setup(), N = h.core.NpcIdentifiers; h.quest.setStage(h.player, 2);
+  h.action(N.WILLOW, 'fOQUgc'); h.action(N.WILLOW, '1Pscfp');
+  const area = h.player.getPrivateArea(), [burntof, checkal, marley, willow] = h.spawned.slice(-4);
+  const before = text => h.line(N.WILLOW, text).before();
+  before("Thrilled? What's there to be excited about?");
+  assert.deepEqual(burntof.getLocation(), area.sourceTile(2949, 5775));
+  before("It's not about the money though, right?");
+  assert.deepEqual(burntof.facing, area.sourceTile(2947, 5775));
+  before("Of course it's about the money.");
+  assert.deepEqual(burntof.getLocation(), area.sourceTile(2951, 5778));
+  before("We're not a team");
+  assert.deepEqual(burntof.facing, area.sourceTile(2951, 5779));
+  before("But your usefulness");
+  assert.deepEqual(burntof.getLocation(), area.sourceTile(2951, 5775));
+  before("I can't risk you");
+  assert.deepEqual(burntof.getLocation(), area.sourceTile(2950, 5775));
+  h.tick(3); assert.deepEqual(burntof.getLocation(), area.sourceTile(2953, 5775));
+  before('What was that noise?');
+  assert.deepEqual(willow.facing, area.sourceTile(2953, 5775));
+  before("Uh... it wasn't me!");
+  assert.deepEqual(burntof.facing, area.sourceTile(2953, 5771));
+  for (const actor of [checkal, marley]) assert.deepEqual(actor.facing, area.sourceTile(2953, 5775));
+  before('Holy Zamorak!');
+  assert.deepEqual(willow.facing, area.sourceTile(2952, 5778));
+  h.hooks.logout[0]({ player: h.player });
+});
+
+test('finishing re-entry and bag animation use the recorded position and facing', () => {
+  const h = setup(), N = h.core.NpcIdentifiers; h.quest.setStage(h.player, 4);
+  h.hooks.objects[0]({ player: h.player, objectId: h.core.ObjectIdentifiers.RUINS_ENTRANCE, clickType: 1 });
+  const area = h.player.getPrivateArea();
+  h.hooks.namedObjects.get("Willow's bag").Investigate({ player: h.player, objectId: h.core.ObjectIdentifiers.WILLOWS_BAG });
+  assert.deepEqual(h.player.getLocation(), area.sourceTile(2952, 5773));
+  h.line(N.RAMARNO_2, "Looks like Willow left a bag behind").before();
+  assert.deepEqual(h.player.facing, area.sourceTile(2950, 5769));
+  assert.equal(h.animations.at(-1).id, 857);
+  h.action(N.RAMARNO_2, 'below-ice-mountain:bag-walk'); h.tick(5);
+  assert.deepEqual(h.player.getLocation(), area.sourceTile(2951, 5769));
+  assert.deepEqual(h.player.facing, area.sourceTile(2950, 5769), 'west-facing 2223 precedes the rummage at 2224');
+  h.tick(1); assert.equal(h.animations.at(-1).id, 6840);
+  h.hooks.logout[0]({ player: h.player });
 });

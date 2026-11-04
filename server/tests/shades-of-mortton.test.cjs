@@ -49,6 +49,7 @@ before(() => {
     },
     emitCustomEvent: (name, payload) => {
       if (name === 'quest:get-stage') payload.stage = payload.player.stage ?? 0;
+      else if (name === 'diary:is-complete') payload.complete = payload.diary === 'morytania' && payload.player.diaries?.has(payload.tier) === true;
       else hooks.events.emitted.push([name, payload]);
     },
   };
@@ -201,7 +202,8 @@ function burner({ stage = 85 } = {}) {
     performAnimation: (a) => p.anims.push(a.getId()),
     getSkillManager: () => ({
       getCurrentLevel: () => 99,
-      addExperience: (skill, amount) => { p.xp.push([skill.getName(), amount]); },
+      // SkillManager.addExperience keeps tenths and drops the rest: floor(x * 10 + 1e-6) / 10.
+      addExperience: (skill, amount) => { p.xp.push([skill.getName(), Math.floor(amount * 10 + 1e-6) / 10]); },
     }),
   });
   return p;
@@ -224,7 +226,8 @@ test('a funeral pyre: logs, then remains, then Light; the fire, the experience, 
   assert.ok(p.messages.includes('You attempt to light the funeral pyre.'));
   assert.equal(p.anims.at(-1), 733);
   ticks(3);
-  assert.deepEqual(p.xp, [['Prayer', 25], ['Firemaking', 404.5]]);
+  // Wiki "Cremating shade remains": Loar remains on magic pyre logs give 35 Prayer experience (not the flat 25).
+  assert.deepEqual(p.xp, [['Prayer', 35], ['Firemaking', 404.5]]);
   ticks(2 + 4 + 1);
   const names = hooks.events.emitted.map(([name]) => name);
   assert.deepEqual(names, ['shades-of-mortton:pyre-logs', 'shades-of-mortton:cremated'], 'the quest hears of both');
@@ -301,8 +304,50 @@ test('a pyre burns once: Light again while it burns is refused, and the experien
   assert.equal(p.messages.filter((m) => m === 'You attempt to light the funeral pyre.').length, 1);
   assert.equal(p.messages.at(-1), Common.message('pyreBusy'));
   ticks(3 + 2 + 4);
-  assert.deepEqual(p.xp, [['Prayer', 25], ['Firemaking', 404.5]]);
+  assert.deepEqual(p.xp, [['Prayer', 35], ['Firemaking', 404.5]]);
   assert.equal(Pyres.pyres.size, 0, 'the pyre is free again');
+});
+
+// Wiki "Cremating shade remains" Prayer table (base column) and the Morytania Hard diary column (+50%, tenths dropped).
+const WIKI_PRAYER = [
+  // [pyre logs, remains, base, hard diary]
+  ['logs_pyre', 'shade_bones1', 25, 37.5], ['logs_pyre', 'shade_bones2', 37.5, 56.2],
+  ['oak_logs_pyre', 'shade_bones1', 33, 49.5], ['oak_logs_pyre', 'shade_bones2', 45.5, 68.2],
+  ['willow_logs_pyre', 'shade_bones3', 61, 91.5], ['teak_logs_pyre', 'shade_bones3', 61.2, 91.8],
+  ['arctic_pine_logs_pyre', 'shade_bones1', 33.9, 50.8], ['maple_logs_pyre', 'shade_bones2', 46.5, 69.7],
+  ['mahogany_logs_pyre', 'shade_bones1', 34.3, 51.4], ['yew_logs_pyre', 'shade_bones4', 79.5, 119.2],
+  ['camphor_logs_pyre', 'shade_bones2', 47.5, 71.2], ['magic_logs_pyre', 'shade_bones4', 80, 120],
+  ['magic_logs_pyre', 'shade_bones5', 100, 150], ['ironwood_logs_pyre', 'shade_bones4', 80.5, 120.7],
+  ['redwood_logs_pyre', 'shade_bones5', 100.5, 150.7], ['redwood_logs_pyre', 'shade_bones6', 120.5, 180.7],
+  ['rosewood_logs_pyre', 'shade_bones4', 80.6, 120.9], ['rosewood_logs_pyre', 'shade_bones6', 120.5, 180.7],
+];
+
+function cremate(logs, remains, diaries = []) {
+  const p = burner();
+  p.diaries = new Set(diaries);
+  Pyres.pyres.clear();
+  p.inventory.add(new core.Item(Common.objId(logs), 1));
+  p.inventory.add(new core.Item(Common.objId(remains), 1));
+  p.inventory.add(new core.Item(Common.objId('tinderbox'), 1));
+  const wood = logs.replace(/_logs_pyre$/, '').replace(/^logs_pyre$/, 'logs');
+  hooks.itemOnObject({ player: p, object: pyre('temple_pyre'), itemId: Common.objId(logs), handled: false });
+  hooks.itemOnObject({ player: p, object: pyre(`temple_pyre_${wood}`), itemId: Common.objId(remains), handled: false });
+  hooks.objects.get(`${Common.core.CacheDefinitions.getObject(Common.locId(`temple_pyre_${wood}`)).name}:Light`)({ player: p, object: pyre(`temple_pyre_bones_${wood}`) });
+  ticks(3 + 2 + 4 + 1);
+  return p.xp;
+}
+
+test('Prayer experience depends on the remains and the log (Wiki table), and the Hard diary adds 50%', () => {
+  for (const [logs, remains, base, hard] of WIKI_PRAYER) {
+    assert.equal(cremate(logs, remains)[0][1], base, `${remains} on ${logs}`);
+    assert.equal(cremate(logs, remains, ['hard'])[0][1], hard, `${remains} on ${logs} with the Hard diary`);
+  }
+});
+
+test('the Elite Morytania diary adds 50% Firemaking experience, and the Hard one does not', () => {
+  assert.deepEqual(cremate('magic_logs_pyre', 'shade_bones1', ['elite']), [['Prayer', 35], ['Firemaking', 606.7]]);
+  assert.deepEqual(cremate('redwood_logs_pyre', 'shade_bones6', ['hard', 'elite']), [['Prayer', 180.7], ['Firemaking', 750]]);
+  assert.deepEqual(cremate('magic_logs_pyre', 'shade_bones1', ['hard']), [['Prayer', 52.5], ['Firemaking', 404.5]]);
 });
 
 test('a burner who logs out leaves the pyre empty for the next player, and a lit burn stops', () => {

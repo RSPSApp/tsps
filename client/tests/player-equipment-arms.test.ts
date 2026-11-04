@@ -206,8 +206,9 @@ import { RUNE_FULL_HELM } from "../runelite/api/gameval/ItemID";
         loadFromPayload({ gamemodeId: "test", datasets: [
             { key: "customModels", rows: modelRows }, { key: "customItems", rows: [helmetRow] },
         ] });
+        const baseHelmets = new Map([[RUNE_FULL_HELM, ordinary]]);
         const helmetLoader = new CustomObjTypeLoader({
-            load: (id: number) => id === RUNE_FULL_HELM ? ordinary : new ObjType(id, info),
+            load: (id: number) => baseHelmets.get(id) ?? new ObjType(id, info),
             getCount: () => 30000, clearCache() {},
         }, info);
         assert.ok(modelLoader.getModel(primary), "prerequisite: existing primary external DAT decodes");
@@ -219,7 +220,7 @@ import { RUNE_FULL_HELM } from "../runelite/api/gameval/ItemID";
         assert.equal(customHelmet.wearPos, 0, "prerequisite: custom helmet inherits the head slot");
         assert.equal(helmetLoader.load(17233).name, "null", "prerequisite: masked ID is not another custom helmet");
 
-        function checkHead(itemId: number, gender: Gender, expected: number[], label: string) {
+        function checkHead(itemId: number, gender: Gender, expected: number[], label: string, legacyHead?: number) {
             const equip = new Array(14).fill(-1); equip[EquipmentSlot.HEAD] = itemId;
             const bytes = encodePlayerAppearance({ gender, colors: [0, 0, 0, 0, 0],
                 kits: [0, 14, 12, 13, 14, 15, 16], equip }, "Chathead2485", 3, 1, new Array(7).fill(-1));
@@ -231,6 +232,8 @@ import { RUNE_FULL_HELM } from "../runelite/api/gameval/ItemID";
             // PlayerSyncManager supplies these decoded fields to PlayerAppearance unchanged.
             const appearance = new PlayerAppearance(decoded.gender, decoded.colors,
                 decoded.kits.slice(0, 7), decoded.equipment);
+            // These explicit legacy/debug controls are not native decoded equipment.
+            if (legacyHead !== undefined) appearance.equip[EquipmentSlot.HEAD] = legacyHead;
             const requests: number[] = [];
             const factory = new PlayerChatheadFactory({ getModel(id: number) {
                 requests.push(id); return modelLoader.getModel(id);
@@ -242,9 +245,25 @@ import { RUNE_FULL_HELM } from "../runelite/api/gameval/ItemID";
         }
         checkHead(RUNE_FULL_HELM, Gender.MALE, [primary, secondary, primary, secondary], "ordinary male");
         checkHead(RUNE_FULL_HELM, Gender.FEMALE, [secondary, primary, secondary, primary], "ordinary female");
+        for (const [kind, rawHead] of [["encoded", RUNE_FULL_HELM + 512], ["high-bit", RUNE_FULL_HELM + 0x8000]] as const) {
+            checkHead(RUNE_FULL_HELM, Gender.MALE, [primary, secondary, primary, secondary], `legacy ${kind} male`, rawHead);
+            checkHead(RUNE_FULL_HELM, Gender.FEMALE, [secondary, primary, secondary, primary], `legacy ${kind} female`, rawHead);
+        }
         console.log("CUSTOM_HELMET_CHATHEAD_2485_BASE_PASS genders=2 appearance=native");
         checkHead(customHelmetId, Gender.MALE, [secondary, primary, secondary, primary], "custom male");
         checkHead(customHelmetId, Gender.FEMALE, [primary, secondary, primary, secondary], "custom female");
+        // A valid masked candidate must not displace the canonical decoded item ID.
+        const decoy = new ObjType(17233, info);
+        Object.assign(decoy, { name: "Controlled masked-ID helmet", wearPos: 0, wearPos2: 8, wearPos3: 11,
+            maleHeadModel: primary, maleHeadModel2: secondary,
+            femaleHeadModel: secondary, femaleHeadModel2: primary });
+        baseHelmets.set(17233, decoy);
+        helmetLoader.clearCache();
+        assert.equal(helmetLoader.load(17233).name, "Controlled masked-ID helmet");
+        assert.deepEqual([decoy.maleHeadModel, decoy.maleHeadModel2, decoy.femaleHeadModel, decoy.femaleHeadModel2],
+            [primary, secondary, secondary, primary], "prerequisite: valid decoy has different head models");
+        checkHead(customHelmetId, Gender.MALE, [secondary, primary, secondary, primary], "custom male with valid masked decoy");
+        checkHead(customHelmetId, Gender.FEMALE, [primary, secondary, primary, secondary], "custom female with valid masked decoy");
     } catch (error) {
         failure = error;
     } finally {
@@ -267,6 +286,6 @@ import { RUNE_FULL_HELM } from "../runelite/api/gameval/ItemID";
         console.error(failure);
         process.exitCode = 1;
     } else {
-        console.log("CUSTOM_HELMET_CHATHEAD_2485_PASS ordinary=2 custom=2 genders=2 appearance=native models=DAT");
+        console.log("CUSTOM_HELMET_CHATHEAD_2485_PASS ordinary=2 custom=2 legacy=4 decoy=2 genders=2 appearance=native+legacy models=DAT");
     }
 }

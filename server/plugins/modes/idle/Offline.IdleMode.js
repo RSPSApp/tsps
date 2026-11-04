@@ -14,6 +14,8 @@ const Progression = require("./Progression.IdleMode");
  * loggedOutAt }. `activity` is the gathering skill's key ("WOODCUTTING") or "COMBAT".
  */
 const AWAY_ATTRIBUTE = "idle-mode:away";
+/** Saved: what the last time away paid, as the login message said it (the Idle screen shows it). */
+const LAST_AWAY_ATTRIBUTE = "idle-mode:last-away";
 
 /** player -> the session being measured. */
 const sessions = new Map();
@@ -146,16 +148,21 @@ function login({ player }) {
   const parts = [...gained, ...(banked.length ? [`${banked.join(", ")} to your bank`] : [])];
   if (parts.length) player.sendMessage(`${parts.join(", ")}.`);
   if (lost > 0) player.sendMessage(`Your bank was full: ${formatNumber(lost)} items were lost.`);
+  player.setAttribute(LAST_AWAY_ATTRIBUTE,
+    `${formatDuration(reward.elapsedMs)}${capped} ${doing(away.activity)}: ${parts.join(", ") || "nothing"}${lost > 0 ? ` (${formatNumber(lost)} lost, bank full)` : ""}.`);
+  Common.changed(player);
 }
 
 module.exports = function attach(api) {
   api.persistAttribute(AWAY_ATTRIBUTE, null);
+  api.persistAttribute(LAST_AWAY_ATTRIBUTE, "");
   api.onCustomEvent("storage:gather", gathered);
   api.onPlayerLogout(logout);
   api.onPlayerLogin(login);
 };
 
 module.exports.AWAY_ATTRIBUTE = AWAY_ATTRIBUTE;
+module.exports.LAST_AWAY_ATTRIBUTE = LAST_AWAY_ATTRIBUTE;
 module.exports.addResult = addResult;
 module.exports.awayFromSession = awayFromSession;
 module.exports.offlineReward = offlineReward;

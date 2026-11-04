@@ -60,6 +60,20 @@ function earn({ player, skill, experience }) {
   const earned = Math.floor(progress / config().xpPerPoint);
   player.setAttribute(PROGRESS_ATTRIBUTE, progress - earned * config().xpPerPoint);
   if (earned > 0) player.setAttribute(POINTS_ATTRIBUTE, points(player) + earned);
+  Common.changed(player);
+}
+
+/** XP gained toward the next point. */
+function progress(player) {
+  return Number(player.getAttribute(PROGRESS_ATTRIBUTE)) || 0;
+}
+
+/** Each upgrade for the Idle screen: { id, name, description, level, maxLevel, cost (null at max) }. */
+function upgradeRows(player) {
+  return Object.entries(config().upgrades).map(([id, entry]) => {
+    const level = levelOf(player, id);
+    return { id, name: entry.name, description: entry.description, level, maxLevel: entry.costs.length, cost: entry.costs[level] ?? null };
+  });
 }
 
 function quickHands(request, skill) {
@@ -104,6 +118,7 @@ function buy(player, id) {
   if (points(player) < cost) return `${entry.name} level ${level + 1} costs ${cost.toLocaleString("en-US")} points; you have ${points(player).toLocaleString("en-US")}.`;
   player.setAttribute(POINTS_ATTRIBUTE, points(player) - cost);
   player.setAttribute(UPGRADES_ATTRIBUTE, { ...(player.getAttribute(UPGRADES_ATTRIBUTE) ?? {}), [id]: level + 1 });
+  Common.changed(player);
   return `${entry.name} is now level ${level + 1}.`;
 }
 
@@ -131,3 +146,6 @@ module.exports.capHours = capHours;
 module.exports.bountyChance = bountyChance;
 module.exports.points = points;
 module.exports.levelOf = levelOf;
+module.exports.progress = progress;
+module.exports.upgradeRows = upgradeRows;
+module.exports.buy = buy;

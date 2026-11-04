@@ -5,6 +5,7 @@
 const Common = require("./Common.IdleMode");
 const Auto = require("./Auto.IdleMode");
 const Progression = require("./Progression.IdleMode");
+const Screen = require("./Screen.IdleMode");
 
 const ON = ["on", "true", "1", "yes"];
 const OFF = ["off", "false", "0", "no"];
@@ -22,7 +23,7 @@ function describe(player) {
 }
 
 /**
- * `::idle` says whether it is on; `::idle on|off` sets it; `::idle auto [on|off]` is auto-resume;
+ * `::idle` opens the Idle screen; `::idle status` says whether it is on; `::idle on|off` sets it; `::idle auto [on|off]` is auto-resume;
  * `::idle points | shop | buy <upgrade>` are the idle points and upgrades.
  */
 function idleCommand({ player, parts }) {
@@ -36,10 +37,14 @@ function idleCommand({ player, parts }) {
     Progression.progressionCommand(player, parts);
     return true;
   }
+  if (!choice) {
+    Screen.open(player);
+    return true;
+  }
   if (ON.includes(choice)) Common.setIdle(player, true);
   else if (OFF.includes(choice)) Common.setIdle(player, false);
-  else if (choice) {
-    player.sendMessage("Use ::idle [on|off], ::idle auto [on|off], ::idle points, ::idle shop or ::idle buy <upgrade>.");
+  else if (choice !== "status") {
+    player.sendMessage("Use ::idle, ::idle [on|off|status], ::idle auto [on|off], ::idle points, ::idle shop or ::idle buy <upgrade>.");
     return true;
   }
   player.sendMessage(describe(player));
@@ -49,7 +54,7 @@ function idleCommand({ player, parts }) {
 module.exports = function attach(api) {
   api.persistAttribute(Common.ENABLED_ATTRIBUTE, false);
   api.onPlayerLogin(login);
-  api.registerCommand("idle", idleCommand, api.core.PlayerRights.NONE, "Idle Mode: ::idle [on|off], ::idle auto [on|off], ::idle points, ::idle shop, ::idle buy <upgrade>");
+  api.registerCommand("idle", idleCommand, api.core.PlayerRights.NONE, "Idle Mode: ::idle opens its screen; ::idle [on|off|status], ::idle auto [on|off], ::idle points, ::idle shop, ::idle buy <upgrade>");
 };
 
 module.exports.idleCommand = idleCommand;

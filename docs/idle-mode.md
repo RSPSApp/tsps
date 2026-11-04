@@ -15,9 +15,10 @@ None of this is OSRS behaviour: it is all ours.
 **In game**, any player:
 
 ```
-::idle        say whether Idle Mode is on
-::idle on     turn it on
-::idle off    turn it off
+::idle          open the Idle screen
+::idle status   say whether Idle Mode is on
+::idle on       turn it on
+::idle off      turn it off
 ```
 
 It's saved as the attribute `idle-mode:enabled` (off by default).
@@ -183,13 +184,34 @@ Bought levels are saved as `idle-mode:upgrades` `{ upgrade: level }`.
 The prices and effects are in `"progression"` in the data. Quick Hands' speed shows in the rate
 the offline progress measures, so it counts offline as well.
 
+## The Idle screen
+
+![The Idle screen](images/idle-screen.png)
+
+`server/plugins/modes/idle/Screen.IdleMode.js`, opened with `::idle`. It's a server-defined
+interface (group 30020, [server/docs/agents/interfaces.md](../server/docs/agents/interfaces.md)),
+so the client needs no change: the server registers the widgets with `registerCustomInterface`
+and the client fetches them the first time the group opens.
+
+- **Status** (left): Idle Mode; auto-resume (on, off, or paused and why: the player is doing
+  something else, it couldn't carry on, or a logout); the activity (`Chop down willow tree`,
+  `Fighting cows`); idle points and the XP toward the next one; the offline cap and efficiency;
+  and what the last time away paid (saved as `idle-mode:last-away`). Two buttons switch Idle Mode
+  and auto-resume.
+- **Upgrades** (right): a slot per upgrade in the data (up to four): its name and level, what a
+  level does, the next level's price (red when the player can't afford it) and a Buy button,
+  hidden at the highest level.
+- **Live**: while it's open it redraws whenever any of that changes. The units call
+  `Common.changed(player)` when points, upgrades, the switches, the activity or a pause change,
+  and the screen listens with `Common.onChange`. Text that hasn't changed isn't resent.
+
 ## Roadmap
 
 1. Endless gathering - done.
 2. Offline progress - done.
 3. Auto-resume - done. Next: picking an activity from a list and travelling there (built on the
    player bots' long routes in `server/plugins/bots/`).
-4. Idle points and upgrades - done (chat commands; an interface of its own comes later).
+4. Idle points and upgrades - done, with the Idle screen.
 5. Idle combat - done.
 6. Next ideas: travelling to a chosen activity, an Idle interface (points, upgrades, the time
    away), more skills (cooking, smithing, fletching: production loops), and idle bosses.

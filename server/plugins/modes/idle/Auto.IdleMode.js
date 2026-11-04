@@ -44,7 +44,10 @@ function remember(player, kind, name, option) {
   const click = { kind, name, option, at: Date.now() };
   clicks.set(player, click);
   // The player doing something else: leave them to it until they gather again.
-  if (!sameTarget(player.getAttribute(TARGET_ATTRIBUTE), click)) stateOf(player).paused = "click";
+  if (!sameTarget(player.getAttribute(TARGET_ATTRIBUTE), click) && !stateOf(player).paused) {
+    stateOf(player).paused = "click";
+    Common.changed(player);
+  }
 }
 
 function observeObject(event) {
@@ -74,7 +77,10 @@ function gathered(request) {
   const state = stateOf(player);
   state.lastGatherAt = now;
   state.failedAttempts = 0;
-  state.paused = null;
+  if (state.paused) {
+    state.paused = null;
+    Common.changed(player);
+  }
   const click = clicks.get(player);
   if (!click || now - click.at > config().rememberClickSeconds * 1000) return;
   clicks.delete(player);
@@ -92,6 +98,7 @@ function gathered(request) {
   // One activity at a time: gathering now replaces idle combat's target.
   player.setAttribute(Common.COMBAT_TARGET_ATTRIBUTE, null);
   tracked.add(player);
+  Common.changed(player);
 }
 
 function optionIndex(options, option) {
@@ -187,6 +194,7 @@ function resume(player, now) {
   // The last try gathered nothing: after a few, stop trying until the player gathers again.
   if (state.lastAttemptAt > state.lastGatherAt && ++state.failedAttempts >= maxFailedAttempts) {
     state.paused = "stuck";
+    Common.changed(player);
     player.sendMessage(`Auto-resume has paused: your character can't ${target.option.toLowerCase()} the ${target.name.toLowerCase()}. Gather again to restart it.`);
     return "paused";
   }
@@ -230,16 +238,27 @@ function describe(player) {
   return `Auto-resume is ${state}: ${target.option.toLowerCase()} the nearest ${target.name.toLowerCase()} here.`;
 }
 
-/** `::idle auto [on|off]`; turning it on also lifts a pause. */
-function autoCommand(player, choice) {
-  if (choice === "on") {
-    player.setAttribute(AUTO_ATTRIBUTE, true);
+/** Turns auto-resume (gathering and combat) on or off; on also lifts a pause. */
+function setAuto(player, enabled) {
+  player.setAttribute(AUTO_ATTRIBUTE, enabled === true);
+  if (enabled) {
     const state = stateOf(player);
     state.paused = null;
     state.failedAttempts = 0;
     Combat.unpause(player);
   }
-  else if (choice === "off") player.setAttribute(AUTO_ATTRIBUTE, false);
+  Common.changed(player);
+}
+
+/** Why gathering auto-resume is paused ("click", "stuck"), or null. */
+function pausedFor(player) {
+  return states.get(player)?.paused ?? null;
+}
+
+/** `::idle auto [on|off]`; turning it on also lifts a pause. */
+function autoCommand(player, choice) {
+  if (choice === "on") setAuto(player, true);
+  else if (choice === "off") setAuto(player, false);
   else if (choice) {
     player.sendMessage("Use ::idle auto on or ::idle auto off.");
     return;
@@ -272,5 +291,7 @@ module.exports.AUTO_ATTRIBUTE = AUTO_ATTRIBUTE;
 module.exports.autoCommand = autoCommand;
 module.exports.resume = resume;
 module.exports.stateOf = stateOf;
+module.exports.setAuto = setAuto;
+module.exports.pausedFor = pausedFor;
 module.exports.tick = tick;
 module.exports.tracked = tracked;

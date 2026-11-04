@@ -30,7 +30,7 @@ class Item {
 }
 
 function fakeApi(config = {}) {
-  const handlers = { login: [], logout: [], events: {}, commands: {} };
+  const handlers = { login: [], logout: [], events: {}, commands: {}, buttons: {} };
   const api = {
     core: {
       Skill,
@@ -53,6 +53,7 @@ function fakeApi(config = {}) {
       TaskManager: { submit: (task) => world.tasks.push(task) },
     },
     interactions: [],
+    interfaces: [],
     itemActions: [],
     persisted: {},
     getPluginConfig: (key, fallback) => (key in config ? config[key] : fallback),
@@ -65,6 +66,9 @@ function fakeApi(config = {}) {
     onServerStartup: (handler) => (handlers.events.startup ??= []).push(handler),
     onNpcAttackOption: (handler) => (handlers.events["attack-option"] ??= []).push(handler),
     onCanLogout: (handler) => (handlers.events["can-logout"] ??= []).push(handler),
+    registerCustomInterface: (definition) => { api.interfaces.push(definition); },
+    onInterfaceActionButton: (ids, handler) => [ids].flat().forEach((id) => { handlers.buttons[id] = handler; }),
+    click: (player, buttonId) => handlers.buttons[buttonId]({ player, buttonId, action: 1, opId: 1 }),
     onPlayerDisconnect: (handler) => (handlers.events.disconnect ??= []).push(handler),
     onExperienceGained: (handler) => (handlers.events.xp ??= []).push(handler),
     emitObjectInteraction: (event) => { api.interactions.push({ kind: "object", ...event }); return true; },
@@ -117,6 +121,8 @@ function fakePlayer({ bankSlots = 800 } = {}) {
     add: (item) => bank.set(item.getId(), (bank.get(item.getId()) ?? 0) + item.getAmount()),
   };
   let self;
+  let interfaceId = -1;
+  const screen = { opened: [], texts: new Map(), hidden: new Map() };
   const walks = [];
   let location = new FakeLocation(3200, 3200, 0);
   return self = {
@@ -136,6 +142,14 @@ function fakePlayer({ bankSlots = 800 } = {}) {
       attack(target) { this.target = target; },
     },
     getHitpoints() { return this.hitpoints; },
+    screen,
+    getInterfaceId: () => interfaceId,
+    setInterfaceId: (id) => { interfaceId = id; },
+    getPacketSender: () => ({
+      sendSubInterface: (parent, groupId, type, options) => screen.opened.push({ parent, groupId, options }),
+      sendString(text, id) { screen.texts.set(id, text); return this; },
+      sendInterfaceDisplayState: (id, hidden) => screen.hidden.set(id, hidden),
+    }),
     getInventory() { return { getItems: () => this.inventory }; },
     moveTo(x, y, z = 0) { location = new FakeLocation(x, y, z); },
     getLocation: () => location,
@@ -190,7 +204,7 @@ test("the flag is saved with the account, off by default, and ::idle switches it
   assert.equal(api.persisted["idle-mode:enabled"], false);
   assert.equal(api.persisted["idle-mode:away"], null);
   const player = fakePlayer();
-  api.command(player, "idle");
+  api.command(player, "idle status");
   assert.match(player.messages.pop(), /off/);
   api.command(player, "idle on");
   assert.equal(player.getAttribute("idle-mode:enabled"), true);
@@ -198,7 +212,7 @@ test("the flag is saved with the account, off by default, and ::idle switches it
   api.command(player, "idle off");
   assert.equal(player.getAttribute("idle-mode:enabled"), false);
   api.command(player, "idle maybe");
-  assert.match(player.messages.pop(), /Use ::idle \[on\|off\], ::idle auto/);
+  assert.match(player.messages.pop(), /Use ::idle, ::idle \[on\|off\|status\], ::idle auto/);
   assert.equal(api.handlers.commands.idle.rights, api.core.PlayerRights.NONE, "every player may run it");
 });
 
@@ -810,4 +824,108 @@ test("combat: pressing logout or a lost connection starts no new fights, so the 
     assert.equal(fight(player, Date.now()), "paused", event);
     t.mock.restoreAll();
   }
+});
+
+const SCREEN = "../plugins/modes/idle/Screen.IdleMode";
+
+/** The screen's text at a component, its markup removed. */
+function screenText(player, component) {
+  const { uid } = require(SCREEN);
+  return String(player.screen.texts.get(uid(component)) ?? "").replace(/<[^>]+>/g, "");
+}
+
+test("screen: ::idle opens it, a server-defined interface with the frame's title", () => {
+  const { GROUP_ID, COMPONENT } = require(SCREEN);
+  const definition = api.interfaces.find((entry) => entry.groupId === GROUP_ID);
+  assert.ok(definition, "registered");
+  assert.ok(definition.widgets.length > 30);
+  const player = fakePlayer();
+  api.command(player, "idle");
+  assert.equal(player.getInterfaceId(), GROUP_ID);
+  const opened = player.screen.opened.at(-1);
+  assert.equal(opened.groupId, GROUP_ID);
+  assert.deepEqual(opened.options.postScripts[0].args[1], "Idle Mode");
+  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START), "Idle Mode: Off");
+  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 1), "Auto-resume: needs Idle Mode");
+  assert.equal(screenText(player, COMPONENT.IDLE_LABEL), "Turn idle on");
+});
+
+test("screen: the status lines follow the account", (t) => {
+  const { COMPONENT } = require(SCREEN);
+  const { player } = choppingWillow(t);
+  player.setAttribute("idle-mode:points", 1234);
+  player.setAttribute("idle-mode:point-progress", 80);
+  player.setAttribute("idle-mode:upgrades", { "long-dreams": 1 });
+  player.setAttribute("idle-mode:last-away", "1h 0m woodcutting: 15,000 Woodcutting XP, 600 x Logs to your bank.");
+  api.command(player, "idle");
+  const lines = Array.from({ length: 7 }, (_, line) => screenText(player, COMPONENT.STATUS_LINE_START + line));
+  assert.deepEqual(lines, [
+    "Idle Mode: On",
+    "Auto-resume: On",
+    "Activity: Chop down willow tree",
+    "Idle points: 1,234",
+    "Next point: 80 / 250 XP",
+    "Offline: up to 15h at 100%",
+    "Last time away: 1h 0m woodcutting: 15,000 Woodcutting XP, 600 x Logs to your bank.",
+  ]);
+  assert.equal(screenText(player, COMPONENT.AUTO_LABEL), "Turn auto off");
+});
+
+test("screen: the switches turn Idle Mode and auto-resume on and off, and it redraws", () => {
+  const { COMPONENT, uid } = require(SCREEN);
+  const player = fakePlayer();
+  api.command(player, "idle");
+  api.click(player, uid(COMPONENT.IDLE_BUTTON));
+  assert.equal(player.getAttribute("idle-mode:enabled"), true);
+  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START), "Idle Mode: On");
+  assert.equal(screenText(player, COMPONENT.IDLE_LABEL), "Turn idle off");
+  api.click(player, uid(COMPONENT.AUTO_LABEL));
+  assert.equal(player.getAttribute("idle-mode:auto"), false);
+  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 1), "Auto-resume: Off");
+  api.click(player, uid(COMPONENT.AUTO_BUTTON));
+  assert.equal(player.getAttribute("idle-mode:auto"), true);
+  // A closed screen ignores its buttons.
+  player.setInterfaceId(-1);
+  api.click(player, uid(COMPONENT.IDLE_BUTTON));
+  assert.equal(player.getAttribute("idle-mode:enabled"), true);
+});
+
+test("screen: upgrades show level, price and Buy; buying spends points and redraws", () => {
+  const { COMPONENT, SLOT, uid, slotComponent } = require(SCREEN);
+  const player = fakePlayer();
+  player.setAttribute("idle-mode:enabled", true);
+  player.setAttribute("idle-mode:points", 120);
+  player.setAttribute("idle-mode:upgrades", { "bountiful-harvest": 5 });
+  api.command(player, "idle");
+  assert.equal(screenText(player, COMPONENT.POINTS), "You have 120 idle points");
+  assert.equal(screenText(player, slotComponent(0, SLOT.NAME)), "Quick Hands 0/5");
+  assert.match(screenText(player, slotComponent(0, SLOT.DESCRIPTION)), /^Each level: a 10% chance/);
+  assert.equal(screenText(player, slotComponent(0, SLOT.PRICE)), "Next: 100 points");
+  assert.equal(screenText(player, slotComponent(1, SLOT.PRICE)), "Next: 150 points");
+  assert.equal(screenText(player, slotComponent(2, SLOT.PRICE)), "Max level");
+  assert.equal(player.screen.hidden.get(uid(slotComponent(2, SLOT.BUY_BUTTON))), true, "no Buy at max level");
+  const { GROUP_ID } = require(SCREEN);
+  const widgets = api.interfaces.find((entry) => entry.groupId === GROUP_ID).widgets.map((widget) => widget.uid);
+  assert.ok(widgets.includes(uid(slotComponent(2, SLOT.BUY_BUTTON))) && !widgets.includes(uid(slotComponent(3, SLOT.NAME))), "a slot per upgrade in the data");
+
+  api.click(player, uid(slotComponent(0, SLOT.BUY_BUTTON)));
+  assert.equal(player.messages.pop(), "Quick Hands is now level 1.");
+  assert.equal(screenText(player, COMPONENT.POINTS), "You have 20 idle points");
+  assert.equal(screenText(player, slotComponent(0, SLOT.NAME)), "Quick Hands 1/5");
+  api.click(player, uid(slotComponent(1, SLOT.BUY_LABEL)));
+  assert.match(player.messages.pop(), /Long Dreams level 1 costs 150 points; you have 20/);
+});
+
+test("screen: it redraws while open as points come in, and a pause shows", (t) => {
+  const { COMPONENT } = require(SCREEN);
+  const { player, advance } = choppingWillow(t);
+  api.command(player, "idle");
+  api.emit("xp", { player, skill: Skill.WOODCUTTING, experience: 300 });
+  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 3), "Idle points: 1");
+  assert.equal(screenText(player, COMPONENT.POINTS), "You have 1 idle point");
+  api.emit("before-object", { player, object: fakeObject("Bank booth", ["Bank"], 3205, 3205), objectId: 1, clickType: 1, handled: false });
+  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 1), "Auto-resume: Paused (you're doing something else)");
+  advance(1000);
+  chop(player);
+  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 1), "Auto-resume: On");
 });

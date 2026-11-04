@@ -22,6 +22,8 @@ let api = null;
 let core = null;
 let data = null;
 let skills = null;
+/** Called with a player whenever something the Idle screen shows changed (Screen). */
+const changeListeners = [];
 let combatSkills = null;
 
 function init(pluginApi) {
@@ -39,6 +41,7 @@ function isIdle(player) {
 function setIdle(player, enabled) {
   player.setAttribute(ENABLED_ATTRIBUTE, enabled === true);
   syncLevelUps(player);
+  changed(player);
 }
 
 /** An idle account's level-up pop-up does not hold its work ("gathering" `levelUpPopups`). */
@@ -96,6 +99,15 @@ function bank(player, itemId, amount) {
 }
 
 /** The Skill's key in core.Skill ("WOODCUTTING"): what a save keeps, as a Skill is an object. */
+function onChange(listener) {
+  changeListeners.push(listener);
+}
+
+/** Something the player's Idle screen shows changed: points, upgrades, a switch, the activity. */
+function changed(player) {
+  for (const listener of changeListeners) listener(player);
+}
+
 function skillKey(skill) {
   return Object.keys(core.Skill).find((key) => core.Skill[key] === skill) ?? null;
 }
@@ -129,6 +141,8 @@ module.exports = {
   bank,
   bankHasRoom,
   skillKey,
+  onChange,
+  changed,
   skillName,
   itemName,
   get api() { return api; },

@@ -59,7 +59,9 @@ function attackChosen({ player, npc }) {
 
 /** The player doing something else: leave them to it until the next kill of the target. */
 function pause(player) {
-  if (player.getAttribute(TARGET_ATTRIBUTE)) stateOf(player).paused = "click";
+  if (!player.getAttribute(TARGET_ATTRIBUTE) || stateOf(player).paused) return;
+  stateOf(player).paused = "click";
+  Common.changed(player);
 }
 
 function otherClick({ player }) {
@@ -112,6 +114,7 @@ function killed(event) {
   });
   player.setAttribute(Common.GATHER_TARGET_ATTRIBUTE, null);
   tracked.add(player);
+  Common.changed(player);
 }
 
 /** The first food in the inventory: its slot, id and the "Eat" option's click. */
@@ -198,6 +201,7 @@ function fight(player, now) {
   if (!npc) return "none";
   if (++state.failedAttempts > config().maxFailedAttempts) {
     state.paused = "stuck";
+    Common.changed(player);
     player.sendMessage(`Idle combat has paused: your character can't get a fight with a ${target.name.toLowerCase()}. Kill one to restart it.`);
     return "paused";
   }
@@ -255,4 +259,6 @@ module.exports = function attach(api) {
 module.exports.TARGET_ATTRIBUTE = TARGET_ATTRIBUTE;
 module.exports.fight = fight;
 module.exports.unpause = unpause;
+/** Why idle combat is paused ("click", "stuck", "logout"), or null. */
+module.exports.pausedFor = (player) => states.get(player)?.paused ?? null;
 module.exports.tracked = tracked;

@@ -232,3 +232,48 @@ test("the real Sophanem altar credits the elite task only when it restores 85+ P
   pray(full);
   assert.equal(done(full, "restore-at-least-85-prayer-points-when-praying-a"), false);
 });
+
+test("Nardah's cache Clay Oven cooks a wild pie through both gameplay interactions and credits the diary", async (t) => {
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  const core = PluginManager.getCoreApi();
+  core.ObjectDefinition.init();
+  const Cooking = require("../plugins/skills/Cooking.plugin");
+  const tasks = [];
+  const api = {
+    ...PluginManager.createApi("DesertDiaryClayOvenTest"),
+    getTaskManager: () => ({ submit(task) { task.setRunning(true); tasks.push(task); } }),
+  };
+  Diaries.register(api);
+  Cooking.register(api);
+  const oven = new core.GameObject(core.ObjectIdentifiers.CLAY_OVEN, new core.Location(3433, 2885, 0), 10, 0, null);
+  assert.equal(oven.getDefinition().getName(), "Clay Oven");
+  assert.ok(oven.getDefinition().getInteractions().includes("Cook"));
+  // Supply the local map placement; dispatch, cache definitions, inventory and the cooking loop are real.
+  t.mock.method(core.MapObjects, "get", (id) => id === oven.getId() ? oven : null);
+  t.mock.method(oven, "isWithinInteractionDistance", () => true);
+  let index = 4000;
+  for (const interaction of ["use", "cook"]) {
+    const player = new Player(null, new core.Location(3433, 2884, 0));
+    player.setIndex(index++);
+    player.setUsername("desert-clay-oven-test");
+    player.setRegistered(true);
+    player.setNeedsPlacement(false);
+    player.getSession = () => ({ sendClientPacket: () => true, write() {} });
+    player.getPrivateArea = () => null;
+    player.getSkillManager().setMaxLevel(core.Skill.COOKING, 99);
+    player.getSkillManager().setCurrentLevels(core.Skill.COOKING, 99);
+    player.getInventory().adds(core.ItemIdentifiers.RAW_WILD_PIE, 1);
+    const event = { player, object: oven, objectId: oven.getId(), itemId: core.ItemIdentifiers.RAW_WILD_PIE, item: new core.Item(core.ItemIdentifiers.RAW_WILD_PIE), clickType: 1, handled: false };
+    if (interaction === "use") PluginManager.emitItemOnObject(event);
+    else PluginManager.emitObjectInteraction(event);
+    assert.equal(event.handled, true, `${interaction} reaches the Clay Oven cooking handler`);
+    assert.equal(Cooking.isCookingActive(player), true);
+    tasks[0].execute();
+    tasks[0].execute();
+    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.RAW_WILD_PIE), 0);
+    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.WILD_PIE), 1);
+    assert.equal(done(player, "bake-a-wild-pie-at-the-nardah-clay-oven"), true);
+    // Retire this session before checking the next interaction.
+    tasks[0].execute();
+  }
+});

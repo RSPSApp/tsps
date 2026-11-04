@@ -58,6 +58,23 @@ const NETWORK_PERF_LOG_INTERVAL_MS = 10000;
 const WS_CLOSE_BACKPRESSURE = 1013;
 const WS_CLOSE_SEND_FAILURE = 1011;
 
+/**
+ * The map rebuild a changed scene needs: `region` draws a templated instance from its palette,
+ * `normal` the cache map. A plain private area is drawn from the cache map without one, unless
+ * the client is leaving a templated instance: it stays in instance mode until a `normal`
+ * rebuild arrives, and would otherwise show nothing at the new tile.
+ */
+export function sceneRebuildFor(
+  area: PrivateArea | null,
+  replayedArea: PrivateArea | null,
+  sceneChanged: boolean,
+): "region" | "normal" | null {
+  if (!sceneChanged) return null;
+  if (area instanceof TemplatedInstanceArea) return "region";
+  if (area == null || replayedArea instanceof TemplatedInstanceArea) return "normal";
+  return null;
+}
+
 export class PlayerSession {
   /**
    * The interacting-entity field (24 bits in npc/player info) marks a player by adding this to
@@ -310,15 +327,15 @@ export class PlayerSession {
       || this.replayedSceneLevel !== sceneTile.level
       || this.replayedPrivateArea !== privateArea
       || this.replayedSceneVersion !== sceneVersion;
-    const rebuildNeeded = (privateArea == null || templated != null) && (
+    const rebuild = sceneRebuildFor(privateArea, this.replayedPrivateArea, (
       !this.hasReplayedScene
       || this.replayedSceneBaseX !== this.sceneBaseX
       || this.replayedSceneBaseY !== this.sceneBaseY
       || this.replayedPrivateArea !== privateArea
       || this.replayedSceneVersion !== sceneVersion
-    );
-    if (rebuildNeeded && !(templated
-      ? this.sendClientPacket(templated.encodeScene(sceneTile.x >> 3, sceneTile.y >> 3))
+    ));
+    if (rebuild && !(rebuild === "region"
+      ? this.sendClientPacket(templated!.encodeScene(sceneTile.x >> 3, sceneTile.y >> 3))
       : this.sendRebuildNormal(sceneTile.x >> 3, sceneTile.y >> 3, this.replayedPrivateArea != null))) {
       return;
     }
@@ -642,7 +659,7 @@ export class PlayerSession {
       hits: hits.length > 0
         ? hits.map((hit: any) => this.hitView(hit, mine))
         : undefined,
-      health: hits.length > 0
+      health: hits.length > 0 && !actor.isHealthBarHidden?.()
         ? actor.getDisplayedHealth?.()
           ?? { current: actor.getHitpoints(), max: maxHitpoints, bar: actor.getHealthBar?.() ?? undefined }
         : undefined,

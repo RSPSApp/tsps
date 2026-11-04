@@ -82,6 +82,9 @@ module.exports = function registerBiohazardQuest(api) {
   const ARDOUGNE_WALL_DOOR_IDS = new Set([
     ObjectIdentifiers.ARDOUGNE_WALL_DOOR,
     ObjectIdentifiers.ARDOUGNE_WALL_DOOR_2,
+    // The open leaves keep their Open option, so a gate someone else opened is guarded too.
+    ObjectIdentifiers.ARDOUGNE_WALL_DOOR_3,
+    ObjectIdentifiers.ARDOUGNE_WALL_DOOR_4,
   ]);
 
   // Cache placements used by the helper route. Multi-locs 37328/37327 resolve

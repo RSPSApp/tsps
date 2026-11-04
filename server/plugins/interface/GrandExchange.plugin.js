@@ -391,9 +391,8 @@ function home(player) {
   closeSearch(player);
   offers.delete(player);
   viewing.delete(player);
-  player.setEnteredAmountAction(null);
-  player.setEnteredSyntaxAction(null);
   player.getPacketSender()
+    .abortInputPrompt()
     .sendConfig(SELECTED_ITEM, -1)
     .sendVarbit(SELL, 0)
     .sendVarbit(QUANTITY, 1)
@@ -411,9 +410,8 @@ function showCompleted(player, slot) {
   if (!Object.hasOwn(completedOffers(player), slot)) return;
   offers.delete(player);
   viewing.set(player, slot);
-  player.setEnteredAmountAction(null);
-  player.setEnteredSyntaxAction(null);
   player.getPacketSender()
+    .abortInputPrompt()
     .sendConfig(SELECTED_ITEM, -1)
     .sendVarbit(SELECTED_SLOT, 0)
     .sendVarbit(SELECTED_SLOT, slot + 1)
@@ -462,8 +460,7 @@ function start(player, sell, slot = 0, itemId = -1) {
     price: itemId > 0 ? (sell ? sellPrice(itemId) : price(itemId)) : 1,
   };
   offers.set(player, offer);
-  player.setEnteredAmountAction(null);
-  player.setEnteredSyntaxAction(null);
+  player.getPacketSender().abortInputPrompt();
   refresh(player, offer);
   if (itemId < 0) chooseItem(player, offer);
 }
@@ -539,8 +536,7 @@ function confirm(player, offer) {
   saveOffers(player);
   offers.delete(player);
   viewing.set(player, offer.slot);
-  player.setEnteredAmountAction(null);
-  player.setEnteredSyntaxAction(null);
+  player.getPacketSender().abortInputPrompt();
   sender.sendInterfaceScript(786, [], { [SELECTED_ITEM]: -1, ...marketVarps(offer.slot, finished) },
       { [SELECTED_SLOT]: offer.slot + 1 },
       { [COLLECTIONS[offer.slot]]: collection(finished) })
@@ -853,7 +849,7 @@ module.exports = {
     api.registerCommand("gecollect", openCollectionBox, undefined, "Open the Grand Exchange collection box");
 
     api.onNpcInteraction("Grand Exchange Clerk", { "Exchange": openGrandExchange });
-    api.onNpcsInteraction(["Banker", "Ashuelot Reis"], { "Collect": openCollectionBox });
+    api.onNpcsInteraction(["Banker", "Ashuelot Reis", "Fadli"], { "Collect": openCollectionBox });
 
     api.onObjectInteraction("Bank booth", { "Collect": openCollectionBox });
     api.onObjectInteraction("Grand Exchange booth", {
@@ -864,6 +860,9 @@ module.exports = {
       "Collect": openCollectionBox,
     });
     api.onObjectInteraction("Bank Chest", {
+      "Collect": openCollectionBox,
+    });
+    api.onObjectInteraction("Chest", {
       "Collect": openCollectionBox,
     });
 

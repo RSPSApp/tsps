@@ -12,6 +12,7 @@ const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
 const { DamageFormulas } = require('../dist/game/content/combat/formula/DamageFormulas');
 const { registerRangedHitModifier } = require('../dist/game/content/combat/EquipmentEffects');
 const { FightStyle } = require('../dist/game/content/combat/FightStyle');
+const { WeaponInterfaces } = require('../dist/game/content/combat/WeaponInterfaces');
 const TwistedBow = require('../plugins/items/TwistedBow.plugin');
 
 PrayerHandler.deactivatePrayers = (player) => player.getPrayerActive().fill(false);
@@ -143,6 +144,7 @@ test('ranged gear damage modifiers reach the ranged max hit', () => {
         getSkillManager: () => ({ getCurrentLevel: () => 99 }),
         getBonusManager: () => ({ getOtherBonus: () => [0, 100, 0, 0] }),
         getFightType: () => ({ getStyle: () => FightStyle.ACCURATE }),
+        getWeapon: () => WeaponInterfaces.UNARMED,
         getEquipment: () => ({ getItems: () => new Array(14).fill({ getId: () => -1 }), get: () => ({ getId: () => -1 }) }),
         isSpecialActivated: () => false,
         getCombatSpecial: () => null,

@@ -125,6 +125,19 @@ export function alignPosition(w: WidgetLike, parentW: number, parentH: number) {
 }
 
 /**
+ * Runs after a widget's own size and position are aligned, before its children are
+ * laid out against it. The client uses it to rearrange the mobile gameframe for
+ * portrait screens (game/plugins/portraitmode/PortraitLayout.ts); null leaves layout as cached.
+ */
+export type WidgetLayoutAdjuster = (w: WidgetLike, parentW: number, parentH: number) => void;
+
+let layoutAdjuster: WidgetLayoutAdjuster | null = null;
+
+export function setWidgetLayoutAdjuster(adjuster: WidgetLayoutAdjuster | null): void {
+    layoutAdjuster = adjuster;
+}
+
+/**
  * PARITY: Perform layout on a SINGLE widget without recursing into children.
  * Used by ensureLayout() for JIT (lazy) layout validation.
  * Calculates size and position based on raw values and parent dimensions.
@@ -150,6 +163,7 @@ export function layoutSingleWidget(w: WidgetLike, parentW: number, parentH: numb
         w.height = Math.max(1, rows * py);
     }
     alignPosition(w, parentW, parentH);
+    if (layoutAdjuster !== null) layoutAdjuster(w, parentW, parentH);
 }
 
 /**

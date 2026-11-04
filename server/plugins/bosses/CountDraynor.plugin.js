@@ -5,6 +5,9 @@ const countStates = new WeakMap();
 const ATTR_PENDING_INSTANCE = "count_draynor:pending_instance";
 const REGEN_TICKS = 5;
 const GARLIC_TICKS = 50;
+// rsprox 3275, 1710: the lid opens 2 ticks after the player reaches the coffin. The coffin
+// handler here runs the tick after arrival (measured over the agent MCP), so 1 tick lands on 2.
+const OPEN_DELAY = 1;
 
 function later(key, ticks, action) {
   const { TaskManager, CountdownTask } = pluginApi.core;
@@ -89,8 +92,9 @@ function openCoffin({ player, object }) {
   encounters.set(player, area);
   area.enter(player);
   const display = (id) => player.getPacketSender().sendObject(coffinObject(object, id));
-  display(O.COFFIN_9);
-  later(area, 4, () => {
+  // No player animation; every later step keeps its captured gap from the lid.
+  later(area, OPEN_DELAY, () => { if (!area.isDestroyed()) display(O.COFFIN_9); });
+  later(area, OPEN_DELAY + 4, () => {
     if (area.isDestroyed()) return;
     // rsprox 1710, 3275: the rising Count's model holds the coffin and its lid, so the loc goes.
     player.getPacketSender().sendObjectRemoval(coffinObject(object, O.COFFIN_9));
@@ -98,8 +102,8 @@ function openCoffin({ player, object }) {
     area.add(area.npc);
     area.npc.performAnimation(new Animation(3114));
   });
-  later(area, 8, () => { if (!area.isDestroyed()) display(O.COFFIN_46); });
-  later(area, 9, () => {
+  later(area, OPEN_DELAY + 8, () => { if (!area.isDestroyed()) display(O.COFFIN_46); });
+  later(area, OPEN_DELAY + 9, () => {
     if (area.isDestroyed()) return;
     if (area.npc) pluginApi.removeNpc(area.npc);
     area.npc = pluginApi.spawnNpc({ id: N.COUNT_DRAYNOR, x: 3078, y: 9774, z: 0, owner: player, ownerOnly: true });
@@ -108,24 +112,29 @@ function openCoffin({ player, object }) {
     area.npc.setCombatXpMultiplier(0.025);
     countStates.set(area.npc, { weakUntil: 0, nextRegen: pluginApi.core.World.getProcessCycle() + REGEN_TICKS });
     display(O.COFFIN_6);
-    area.npc.getCombat().attack(player);
   });
-  later(area, 13, () => { if (!area.isDestroyed()) display(O.COFFIN_46); });
+  // The risen Count holds 3115 for its spawn tick and first swings on the next one.
+  later(area, OPEN_DELAY + 10, () => {
+    if (!area.isDestroyed() && area.npc?.isRegistered?.() !== false) area.npc?.getCombat().attack(player);
+  });
+  later(area, OPEN_DELAY + 13, () => { if (!area.isDestroyed()) display(O.COFFIN_46); });
   return true;
 }
 
 function garlicWeakness({ attacker, target, combatType }) {
   const state = countStates.get(target);
   if (!state || state.weakUntil || target.getHitpoints() !== target.getMaxHitpoints()) return;
-  const { ItemIdentifiers: I, CombatType, HitDamage, HitMask } = pluginApi.core;
+  const { ItemIdentifiers: I, CombatType } = pluginApi.core;
   if (!attacker?.getInventory || attacker.getInventory().getAmount(I.GARLIC) <= 0) return;
   if (combatType === CombatType.MAGIC && !attacker.getCombat().getAutocastSpell()) return;
   const stats = [...target.getCurrentDefinition().getStats()];
   stats[0] = Math.max(0, stats[0] - 10);
   stats[1] = Math.max(0, stats[1] - 10);
   stats[2] = Math.max(0, stats[2] - 40);
-  target.setCombatOverride({ stats, maxHit: 2 });
-  target.getCombat().getHitQueue().addPendingDamage([new HitDamage(10, HitMask.RED)]);
+  target.setCombatOverride({ stats });
+  // Mod Ash (Count Draynor wiki page): garlic drains 10 Hitpoints silently. Captures 3275 and
+  // 1710 show no hitsplat for it, and the Count still hits 3s while weakened.
+  target.setHitpoints(Math.max(1, target.getHitpoints() - 10));
   state.weakUntil = pluginApi.core.World.getProcessCycle() + GARLIC_TICKS;
   attacker.sendMessage("The vampyre seems to weaken.");
 }

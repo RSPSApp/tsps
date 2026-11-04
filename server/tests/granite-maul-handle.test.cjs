@@ -9,7 +9,11 @@ const { test } = require("node:test");
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
 
+const { Combat } = require("../dist/game/content/combat/Combat");
+const { CombatFactory } = require("../dist/game/content/combat/CombatFactory");
 const { CombatSpecial } = require("../dist/game/content/combat/CombatSpecial");
+const { CombatType } = require("../dist/game/content/combat/CombatType");
+const { World } = require("../dist/game/World");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 
@@ -184,6 +188,65 @@ test("both ornate forms pay 50% for Quick Smash, the plain and clamped mauls 60%
   assert.equal(special.getDrainAmountForWeaponId(CLAMPED), 60);
   assert.equal(special.getDrainAmountForWeaponId(HANDLED), 50);
   assert.equal(special.getDrainAmountForWeaponId(BOTH), 50);
+  // Wiki: Quick Smash gives no attack cooldown; the next attack may land next tick.
+  assert.equal(special.getTraits().attackSpeedTicks, 1);
+});
+
+/** A player wielding an ornate maul in combat with a target, on a real attack timer. */
+function smasher() {
+  const player = {
+    isPlayer: () => true,
+    isNpc: () => false,
+    getAsPlayer: () => player,
+    special: null,
+    activated: false,
+    energy: 100,
+    getCombatSpecial: () => player.special,
+    isSpecialActivated: () => player.activated,
+    setSpecialActivated: (value) => { player.activated = value; },
+    getSpecialPercentage: () => player.energy,
+    getDueling: () => ({ inDuel: () => false }),
+    getEquipment: () => ({ get: () => ({ getId: () => HANDLED }) }),
+    getWeapon: () => null,
+    getRights: () => null,
+    getPacketSender: () => ({ updateSpecialAttackOrb: () => {}, sendSpecialAttackState: () => {} }),
+    sendMessage: () => {},
+  };
+  const combat = new Combat(player);
+  combat.getTarget = () => ({});
+  // The swing itself is the combat loop's; this checks only the timer the press leaves.
+  combat.performNewAttack = () => true;
+  player.getCombat = () => combat;
+  return { player, combat };
+}
+
+test("Quick Smash keeps a cooldown already running and leaves one tick when idle", (t) => {
+  require("../plugins/combat/specials/GraniteMaul.SpecialAttack")({
+    core: PluginManager.getCoreApi(),
+    registerCombatSpecial: CombatSpecial.register,
+  });
+  t.mock.method(CombatFactory, "getMethod", () => ({ type: () => CombatType.MELEE, attackSpeed: () => 7 }));
+  const { player, combat } = smasher();
+  player.special = CombatSpecial.getById("granite_maul");
+
+  // AGS special at tick 1000: the godsword's six-tick cycle starts.
+  World.processCycle = 1000;
+  combat.setAttackDelay(6);
+  // Switch to the maul and smash at 1001: the swing lands, the AGS cycle keeps running.
+  World.processCycle = 1001;
+  CombatSpecial.activate(player);
+  assert.equal(combat.getAttackDelay(), 5, "the AGS's remaining five ticks are kept");
+  // Back to the AGS at 1002: no ordinary swing before the AGS cycle ends at 1006.
+  World.processCycle = 1002;
+  assert.equal(combat.getAttackDelay(), 4);
+  World.processCycle = 1006;
+  assert.equal(combat.getAttackDelay(), 0);
+
+  // From idle the smash leaves only the one-tick floor.
+  World.processCycle = 1010;
+  player.activated = false; // the real swing spends the special; the stub doesn't
+  CombatSpecial.activate(player);
+  assert.equal(combat.getAttackDelay(), 1);
 });
 
 test("Justine sells the handle for 15 Last Man Standing points", () => {

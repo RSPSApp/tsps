@@ -95,6 +95,18 @@ const BOOK_GROUP = 392;
 const BOOK_CLOSE = (BOOK_GROUP << 16) | 7;
 const BOOK_PREVIOUS = (BOOK_GROUP << 16) | 75;
 const BOOK_NEXT = (BOOK_GROUP << 16) | 77;
+// indexed_book (680): the two-page book with a contents page (RSProx capture of Atlax's Diary).
+const INDEXED_BOOK_GROUP = 680;
+const INDEXED_BOOK = {
+  title: 6, leftNumber: 10, rightNumber: 11, indexJump: 9, previous: 108, next: 110,
+  left: { model: 13, text: 45, index: 77 },
+  right: { model: 29, text: 61, index: 93 },
+};
+const INDEXED_BOOK_LINES = 15;
+const indexedUid = (child) => (INDEXED_BOOK_GROUP << 16) | child;
+const INDEXED_BOOK_BUTTONS = [INDEXED_BOOK.previous, INDEXED_BOOK.next, INDEXED_BOOK.indexJump,
+  ...Array.from({ length: INDEXED_BOOK_LINES }, (_, line) => INDEXED_BOOK.left.index + line),
+  ...Array.from({ length: INDEXED_BOOK_LINES }, (_, line) => INDEXED_BOOK.right.index + line)].map(indexedUid);
 let widgetsRegistered = false;
 let coreApi = null;
 
@@ -451,8 +463,9 @@ function registerQuestWidgets(api) {
   widgetsRegistered = true;
 
   api.onInterfaceActionButton([BOOK_CLOSE, BOOK_PREVIOUS, BOOK_NEXT], turnBookPage);
+  api.onInterfaceActionButton(INDEXED_BOOK_BUTTONS, turnIndexedBookPage);
   api.onCustomEvent("interface:closed", ({ player, interfaceId }) => {
-    if (interfaceId === BOOK_GROUP) closeBook(player);
+    if (interfaceId === BOOK_GROUP || interfaceId === INDEXED_BOOK_GROUP) closeBook(player);
   });
 
   // "Read journal:" on a quest list row.
@@ -528,10 +541,65 @@ function showBookPage(player) {
   packet.sendInterfaceScript(2524, [-1, -1]);
 }
 
+/**
+ * The cache's indexed book (680), as live sends it for Atlax's Diary: `spreads` are [left, right]
+ * line lists; a `{ index }` line is a contents entry that opens `spreadOf(index)` when clicked.
+ * The index-jump button (shown past the first spread) returns to the contents.
+ */
+function openIndexedBook(player, { title, spreads, spreadOf }, onClose) {
+  if (!spreads.length) return;
+  player.getPacketSender().sendInterface(INDEXED_BOOK_GROUP);
+  openBooks.set(player, { indexed: true, title, spreads, spreadOf, page: 0, onClose });
+  showIndexedBookPage(player);
+}
+
+function showIndexedBookPage(player) {
+  const { title, spreads, page } = openBooks.get(player);
+  const packet = player.getPacketSender();
+  packet.sendString(title, indexedUid(INDEXED_BOOK.title));
+  packet.sendString(String(page * 2 + 1), indexedUid(INDEXED_BOOK.leftNumber));
+  packet.sendString(String(page * 2 + 2), indexedUid(INDEXED_BOOK.rightNumber));
+  for (const [side, lines] of [[INDEXED_BOOK.left, spreads[page][0]], [INDEXED_BOOK.right, spreads[page][1]]]) {
+    for (let line = 0; line < INDEXED_BOOK_LINES; line++) {
+      const entry = lines[line];
+      const index = typeof entry === "object" && entry ? entry.index : null;
+      packet.sendInterfaceDisplayState(indexedUid(side.model + line), true);
+      packet.sendInterfaceDisplayState(indexedUid(side.index + line), !index);
+      packet.sendString(index ? "" : (entry ?? ""), indexedUid(side.text + line));
+      if (index) packet.sendString(index, indexedUid(side.index + line));
+    }
+  }
+  packet.sendInterfaceDisplayState(indexedUid(INDEXED_BOOK.next), page === spreads.length - 1);
+  packet.sendInterfaceDisplayState(indexedUid(INDEXED_BOOK.previous), page === 0);
+  packet.sendInterfaceDisplayState(indexedUid(INDEXED_BOOK.indexJump), page === 0);
+  packet.sendInterfaceScript(2524, [-1, -1]);
+}
+
+function turnIndexedBookPage(event) {
+  const { player, buttonId } = event;
+  const book = openBooks.get(player);
+  if (!book?.indexed) return false;
+  event.handled = true;
+  const child = buttonId & 0xffff;
+  let page = book.page;
+  if (child === INDEXED_BOOK.next) page += 1;
+  else if (child === INDEXED_BOOK.previous) page -= 1;
+  else if (child === INDEXED_BOOK.indexJump) page = 0;
+  else {
+    const side = child >= INDEXED_BOOK.right.index ? 1 : 0;
+    const entry = book.spreads[book.page][side][child - (side ? INDEXED_BOOK.right.index : INDEXED_BOOK.left.index)];
+    if (!entry?.index || typeof book.spreadOf !== "function") return;
+    page = book.spreadOf(entry.index);
+  }
+  if (page < 0 || page >= book.spreads.length || page === book.page) return;
+  book.page = page;
+  showIndexedBookPage(player);
+}
+
 function turnBookPage(event) {
   const { player, buttonId } = event;
   const book = openBooks.get(player);
-  if (!book) return false;
+  if (!book || book.indexed) return false;
   event.handled = true;
   if (buttonId === BOOK_CLOSE) {
     // Close the book first, then run its reader callback: the callback may open
@@ -653,7 +721,7 @@ function registerQuest(api, def) {
       }
       if (options.scroll !== false) player.getPacketSender().sendJingle(def.completionJingleId ?? QUEST_COMPLETE_JINGLE, 0);
       if (options.announce !== false) {
-        player.sendMessage(`Congratulations, you've completed a quest: <col=081190>${def.name}</col>`);
+        player.sendMessage(`Congratulations, you've completed a quest: <col=${def.completionMessageColor ?? "081190"}>${def.name}</col>`);
       }
       if (options.scroll !== false) showCompletedScroll(player, quest, points | 0);
       api.emitCustomEvent?.("quest:completed", { player, key: def.key, quest });
@@ -769,13 +837,16 @@ function startTranscript(api, player, npcId, page, variant, select, npc = null) 
   const event = { player, npcId, npc, definition };
   const options = collectPageOptions(record);
   const context = { player, npc, npcId, definition, pages: [{ page, variants: [variant] }], speakerIdByName: transcriptSpeakers,
-    pageOptions: options.byText, pageOptionList: options.list, pageLines: collectPageLines(record), pageMenuBefore: collectMenuBefore(record, variant) };
+    pageOptions: options.byText, pageOptionList: options.list, pageLines: collectPageLines(record),
+    pageMenuBefore: collectMenuBefore(record, variant),
+    pageInitialMenu: collectMenuBefore(record, variant, { initial: true, callerName: definition.getName() }) };
   playDialogue(api, event, steps, record.branches, context);
   return true;
 }
 
 module.exports = {
   openBook,
+  openIndexedBook,
   QUEST_POINTS_VARP,
   QUEST_POINTS_ATTRIBUTE,
   EXPERIENCE_WITHHELD_ATTRIBUTE,

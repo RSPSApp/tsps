@@ -409,6 +409,7 @@ test("the shared destroy prompt shows the lines the bag gives it, and its own fo
   let policy;
   delete require.cache[require.resolve("../plugins/interface/DestroyItem.plugin")];
   require("../plugins/interface/DestroyItem.plugin").register({
+    onCustomEvent() {},
     core, registerCustomInterface() {}, onInterfaceActionButton() {},
     onItemDropPolicy: (fn) => { policy = fn; },
     emitCustomEvent: (name, event) => hooks.events[name]?.(event),
@@ -422,6 +423,59 @@ test("the shared destroy prompt shows the lines the bag gives it, and its own fo
   untradeable.isDropable = () => false;
   policy({ player: p, item: untradeable, itemId: UNIDENTIFIED_MINERALS, slot: 1, dropToGround: true, handled: false });
   assert.deepEqual(scripts.at(-1).slice(-2), ["Are you sure you want to destroy this item?", "This item will be destroyed permanently."]);
+});
+
+test("confirmed destruction plays the captured sound once; cancellation, stale items and vetoes stay silent", (t) => {
+  let policy, confirm, veto = false;
+  const events = [];
+  const emitItemDropPolicy = (event) => {
+    policy(event);
+    if (veto) event.handled = true;
+    else hooks.dropPolicy(event);
+    return event.handled;
+  };
+  t.mock.method(core.PluginManager, "emitItemDropPolicy", emitItemDropPolicy);
+  delete require.cache[require.resolve("../plugins/interface/DestroyItem.plugin")];
+  require("../plugins/interface/DestroyItem.plugin").register({
+    onCustomEvent() {},
+    core,
+    onItemDropPolicy: (handler) => { policy = handler; },
+    onInterfaceActionButton: (_uid, handler) => { confirm = handler; },
+    emitCustomEvent: (name, event) => { events.push(name); hooks.events[name]?.(event); },
+  });
+  const prompt = (bag = false) => {
+    const held = bag ? bagWith(OPEN_BAG) : item(UNIDENTIFIED_MINERALS);
+    held.isDropable = () => false;
+    const p = player({ items: [held] });
+    p.getHitpoints = () => 99;
+    p.getRights = () => null;
+    p.getUsername = () => 'destroyqa';
+    p.isPlayerBot = () => false;
+    p.busy = () => false;
+    p.getSkillManager = () => ({ stopSkillable() {} });
+    const { DropItemPacketListener } = require('../dist/net/packet/impl/DropItemPacketListener');
+    DropItemPacketListener.drop(p, held.getId(), core.Inventory.INTERFACE_ID, 0);
+    assert.deepEqual(packets(p, "sendSound"), [], 'opening the prompt is silent');
+    assert.deepEqual(packets(p, "sendSoundEffect"), [], 'the drop listener does not play a drop effect for the prompt');
+    return p;
+  };
+  for (const bag of [false, true]) {
+    const p = prompt(bag);
+    confirm({ player: p, action: 1 });
+    confirm({ player: p, action: 1 });
+    assert.equal(p.inv.getItems()[0], null, 'generic and item-owned destruction both remove the item');
+    assert.deepEqual(packets(p, "sendSound"), [["sendSound", 2381, 100, 0]]);
+  }
+  for (const refusal of ['cancel', 'stale', 'veto']) {
+    const p = prompt();
+    if (refusal === 'stale') p.inv.getItems()[0] = item(COINS);
+    veto = refusal === 'veto';
+    const before = events.length;
+    confirm({ player: p, action: refusal === 'cancel' ? 0 : 1 });
+    assert.ok(p.inv.getItems()[0], refusal);
+    assert.deepEqual(packets(p, "sendSound"), [], refusal);
+    assert.equal(events.length, before, 'no destruction event on refusal');
+  }
 });
 
 test("a confirmed Destroy in the Wilderness drops coins and noted items, not food or vials of water; elsewhere all is lost (Wiki)", () => {

@@ -51,6 +51,7 @@ const COMBAT_TARGET_PLAYER_VARP = 1075;
 
 /** No attack animation may hold a player longer than this; guards a bad seq decode. */
 const MAX_ANIMATION_STALL_TICKS = 5;
+const MAX_CONTENT_ANIMATION_STALL_TICKS = 100;
 
 /** Owns one character's target, attack deadline, approach route, and delayed hits. */
 export class Combat {
@@ -147,8 +148,8 @@ export class Combat {
      * `partial` stall only keeps a click from cutting the animation away - the server still
      * processes movement, and the client withholds the actor's steps until the animation ends,
      * then catches up (the rubber band). A `full` stall also holds their clicks, their movement
-     * and any hit coming in, all released together on the cycle the client finishes playing the
-     * animation. Only content declares one; seq config cannot.
+     * and, when requested by content, incoming hits until the animation finishes.
+     * Only content declares one; seq config cannot.
      */
     private animationStall: {
         untilCycle: number;
@@ -204,6 +205,19 @@ export class Combat {
             untilCycle: World.getProcessCycle() + event.ticks,
             kind: event.kind,
             holdsHits: event.kind === "full" && event.holdsHits,
+        };
+    }
+
+    /** Content can hold actions and movement without delaying incoming damage. */
+    public setAnimationStall(ticks: number): void {
+        if (!Number.isFinite(ticks) || ticks <= 0) return;
+        const now = World.getProcessCycle();
+        const existing = this.animationStall;
+        const activeFull = existing?.kind === "full" && existing.untilCycle > now;
+        this.animationStall = {
+            untilCycle: Math.max(now + Math.min(MAX_CONTENT_ANIMATION_STALL_TICKS, Math.trunc(ticks)), activeFull ? existing.untilCycle : now),
+            kind: "full",
+            holdsHits: activeFull && existing.holdsHits,
         };
     }
 
@@ -325,7 +339,7 @@ export class Combat {
             this.cancelIfCurrent(target, generation);
             return;
         }
-        if (this.shouldRetreat()) {
+        if (this.shouldRetreat(method)) {
             this.cancelIfCurrent(target, generation);
             return;
         }
@@ -494,7 +508,7 @@ export class Combat {
             }
             if (this.character.isNpc() && state.routeRequested &&
                 !movement.wasBlockedByDynamicOccupancy()) {
-                this.cancelIfCurrent(target, generation);
+                if (!this.isSafespotted(target)) this.cancelIfCurrent(target, generation);
                 return;
             }
             if (movement.size() > 0) return;
@@ -680,6 +694,11 @@ export class Combat {
         this.damageMap = null;
     }
 
+    /** Forgets one player's damage, so the dead do not win a later kill. */
+    public removeDamager(player: Player): void {
+        this.damageMap?.delete(player);
+    }
+
     public damageMapContains(player: Player): boolean {
         const cached = this.damageMap?.get(player);
         return cached != null && cached.getStopwatch() < CombatConstants.DAMAGE_CACHE_TIMEOUT;
@@ -757,18 +776,41 @@ export class Combat {
     public getPrayerBlockTimer(): SecondsTimer { return this.prayerBlockTimer ??= new SecondsTimer(); }
     public getLastAttack(): TickStopwatch { return this.lastAttack; }
 
-    private shouldRetreat(): boolean {
+    private shouldRetreat(method: CombatMethod): boolean {
         if (!this.character.isNpc()) return false;
         const npc = this.character.getAsNpc();
         if (Number(npc.getAttribute("arceuus:dark-lure-until") ?? 0) > World.getProcessCycle()) return false;
         // "combat:no-retreat": an NPC content moves about its arena (a raid boss teleported by its own
         // specials) never gives up on its target for being far from where it spawned.
         if (npc.hasFlag("combat:no-retreat")) return false;
-        if (!npc.getCurrentDefinition().doesRetreat()) return false;
         const coordinator = npc.getMovementCoordinator();
-        if (coordinator.getCoordinateState() === CoordinateState.RETREATING ||
-            npc.getLocation().getDistance(npc.getSpawnPosition()) >=
-                npc.getCurrentDefinition().getCombatFollowDistance()) {
+        if (coordinator.getCoordinateState() === CoordinateState.RETREATING) return true;
+
+        const definition = npc.getCurrentDefinition();
+        const spawn = npc.getSpawnPosition();
+        const spawnDistance = npc.getLocation().getDistance(spawn);
+        // A low-health retreat (chickens, unicorns) is confined to the max range.
+        if (definition.doesRetreat() && spawnDistance >= definition.getCombatFollowDistance()) {
+            coordinator.setCoordinateState(CoordinateState.RETREATING);
+            return true;
+        }
+
+        const target = this.target;
+        if (target == null || this.isSafespotted(target)) return false;
+        // Instanced content owns its arena and its reset rules (Zulrah's phase moves, the raid
+        // rooms): the open-world aggression range must not cut a scripted fight short.
+        if (npc.getPrivateArea() != null) return false;
+
+        // Outside its aggression range an NPC cannot attack the target at all, so it loses
+        // interest and walks home: the Wiki draws the aggression range from the static spawn
+        // (max range + attack range, measured from the spawn footprint), and osrs-docs has an
+        // NPC dragged outside its max range lose its target. A target still fighting it (a
+        // safespot or a normal engagement) keeps it, so this bounds hunting, not the fight the
+        // player started. The footprint already extends `size - 1` north and east.
+        const aggressionRange = definition.getAggressionRange(method.attackDistance(npc));
+        const targetDistance = CombatRange.footprintDistance(spawn, definition.getSize(), target.getLocation());
+        if (spawnDistance > definition.getCombatFollowDistance()
+            || targetDistance > aggressionRange) {
             coordinator.setCoordinateState(CoordinateState.RETREATING);
             return true;
         }
@@ -809,6 +851,10 @@ export class Combat {
      * @return true when the interaction was dropped, so this cycle does nothing else.
      */
     private giveUpUnreachableTarget(target: Mobile, generation: number): boolean {
+        if (this.isSafespotted(target)) {
+            this.resetUnreachableTracking();
+            return false;
+        }
         const distance = this.character.getLocation().getDistance(target.getLocation());
         // The first cycle measured only records the starting gap; it is not progress.
         const closing = this.unreachableDistance >= 0 && distance < this.unreachableDistance;
@@ -827,6 +873,17 @@ export class Combat {
         this.resetUnreachableTracking();
         this.cancelIfCurrent(target, generation);
         return true;
+    }
+
+    /**
+     * An NPC whose target is fighting it from where it cannot be reached (a safespot) keeps it,
+     * facing it and trying its step every cycle, as live does; it does not reset and walk home
+     * between the target's hits. Fighting it means attacking it, or having hit it within the
+     * attacker window. A target that stops fighting is let go by the usual releases.
+     */
+    private isSafespotted(target: Mobile): boolean {
+        return this.character.isNpc() &&
+            (target.getCombat().getTarget() === this.character || this.attacker === target);
     }
 
     /** Every new engagement, and every actor with no engagement, starts with full patience. */
@@ -872,6 +929,11 @@ export class Combat {
         } else if (!bypass && timing.minimumDelay > 0) {
             this.nextAttackCycle = Math.max(this.nextAttackCycle, cycle + (timing.minimumDelay | 0));
             this.sendAttackTimer();
+        } else if (specialTraits?.bypassAttackDelay === true && specialTraits.attackSpeedTicks != null) {
+            // A bypassing special (Quick Smash) armed before the target was clicked: keep any
+            // cooldown already running and leave at least its own delay after it.
+            this.extendAttackDelay(PluginManager.emitAttackSpeed(this.character, target, method.type(),
+                specialTraits.attackSpeedTicks));
         }
         this.lastAttackTarget = target;
 
@@ -879,12 +941,13 @@ export class Combat {
         // perform it themselves - many through super.start() first - so the arm stays open across
         // the whole call, and the seq left standing when it returns is the one that is measured.
         this.expectAttackAnimation();
-        PluginManager.emitCustomEvent("combat:attack-started", { attacker: this.character, target });
+        PluginManager.emitCustomEvent("combat:attack-started", { attacker: this.character, target, method });
         method.start(this.character, target);
         this.measureAnimationCycle = -1;
         const hits = method.hits(this.character, target);
         if (hits == null) {
             this.trace("hits=null", target);
+            PluginManager.emitCustomEvent("combat:attack-finished", { attacker: this.character, target, method });
             return false;
         }
         this.trace(`hits=${hits.length} dmg=[${hits.map((h: any) => h?.getTotalDamage?.()).join(",")}]`, target);
@@ -912,6 +975,9 @@ export class Combat {
         }
 
         method.finished(this.character, target);
+        // The swing has used the weapon, style and special it started with (animation, rolls,
+        // xp): what it spent may now change the equipment (a weapon degrading on its last charge).
+        PluginManager.emitCustomEvent("combat:attack-finished", { attacker: this.character, target, method });
 
         this.specialAttackQueued = false;
         if (this.character.isSpecialActivated()) {

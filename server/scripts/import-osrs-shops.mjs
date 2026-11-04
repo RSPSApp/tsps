@@ -44,6 +44,7 @@ const EXCLUDED = new Set([
 
 // Wiki shops a tsps plugin serves instead, so shops.json must not carry them.
 const REPLACED_BY_PLUGIN = {
+  "Void Knights' Reward Options": "the Pest Control reward interface (243)",
   "Giants' Foundry Reward Shop": "Kovac's reward shop in the Giants' Foundry plugin",
   "Mixology Rewards": "the Mastering Mixology Omnishop",
   Sawmill: "the sawmill operators make planks, as captured",
@@ -115,6 +116,39 @@ const SHOP_PRICES = {
   ],
   // Ornate maul handle, 15 points.
   "Justine's stuff for the Last Shopper Standing": [[24229, 15]],
+  // Perdu's fees (Wiki: Lost Property shop). Most of the stock is worth little or nothing,
+  // and the diary rows are display items worth 0, so the multipliers can't price them.
+  "Lost Property shop": [
+    [4252, 4600], // Ectophial
+    [2413, 23000], [2414, 23000], [2412, 23000], // God capes
+    [3844, 12000], [12612, 14000], [12610, 14000], [12608, 14000], [3840, 12000], [3842, 12000], // God books
+    [25818, 9500], // Book of the Dead
+    [13660, 500], // Chronicle
+    // Achievement diary rewards: Karamja, Ardougne, Falador, Fremennik, Kandarin, Desert,
+    // Lumbridge & Draynor, Morytania, Varrock, Wilderness, Western Provinces, Kourend & Kebos.
+    [1686, 200], [770, 200], [762, 200], [10510, 200], [6450, 200], [5573, 200],
+    [5095, 200], [5093, 200], [5087, 200], [3981, 200], [3983, 200], [22803, 200],
+    // Ghostly robes: hood, top, bottom, gloves, boots, cloak
+    [6109, 15000], [6107, 45000], [6108, 43000], [6110, 13500], [6106, 13500], [6111, 15000],
+    // Lunar equipment: staff, helm, torso, legs, gloves, boots, cape, amulet, ring
+    [9084, 60000], [9096, 22000], [9097, 140000], [9098, 95000], [9099, 15000],
+    [9100, 15000], [9101, 18000], [9102, 9000], [9104, 8000],
+    [10887, 290000], // Barrelchest anchor
+    [88, 9800], // Boots of lightness
+    [1052, 1900], // Cape of Legends
+    [10581, 25000], // Keris
+    [4502, 10000], // Bearhead
+    [11014, 6000], // Beacon ring
+    [27021, 300000], // Colossal blade
+    [11200, 115000], // Dwarven helmet
+    [10828, 95000], // Helm of Neitiznot
+    [22398, 30000], // Ivandis flail
+    [10498, 7000], [10499, 7000], [22109, 7000], // Ava's attractor, accumulator, assembler
+    [21793, 250000], [21795, 250000], [21791, 250000], // Imbued god capes
+    [22400, 30000], // Drakan's medallion
+    [27279, 350000], // Thread of Elidinis
+    [30955, 350000], // Arkan blade
+  ],
 };
 
 const INFINITE_STOCK = 2_000_000_000;

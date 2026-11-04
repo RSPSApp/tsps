@@ -24,12 +24,16 @@ before(async () => {
   Sea = require('../plugins/minigames/fishingtrawler/Sea.FishingTrawler');
 });
 
-function fakePlayer({ fishing = 99 } = {}) {
+function fakePlayer({ fishing = 99, registered = true, hitpoints = 10, location = [2665, 3170, 1], privateArea = null, dying = false } = {}) {
   const attributes = new Map();
   const player = {
     messages: [],
     sendMessage: (text) => player.messages.push(text),
-    isRegistered: () => true,
+    isRegistered: () => registered,
+    getHitpoints: () => hitpoints,
+    isDyingReturn: () => dying,
+    getPrivateArea: () => privateArea,
+    getLocation: () => ({ getX: () => location[0], getY: () => location[1], getZ: () => location[2] }),
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getSkillManager: () => ({ getMaxLevel: () => fishing, getCurrentLevel: () => fishing }),
@@ -259,6 +263,82 @@ test('sailing again throws back a catch left in the net', () => {
   assert.equal(player.getAttribute(Shared.REWARD_ATTRIBUTE), null);
   assert.equal(player.messages.at(-1), Shared.message('destroyedReward'));
   assert.deepEqual(launched, [player]);
+});
+
+test('the Ardougne easy task completes when the lobby launches a voyage', () => {
+  const api = Shared.api();
+  const emitCustomEvent = api.emitCustomEvent;
+  const launch = Sea.launch;
+  const { area, departAt, task } = Lobby.lobby;
+  const { voyage } = Sea.sea;
+  const events = [];
+  const first = fakePlayer();
+  const second = fakePlayer();
+  const outside = fakePlayer({ location: [2674, 3170, 1] });
+  const privatePlayer = fakePlayer({ privateArea: {} });
+  const dead = fakePlayer({ hitpoints: 0 });
+  const dying = fakePlayer({ dying: true });
+  const unregistered = fakePlayer({ registered: false });
+  Shared.bind({ ...api, emitCustomEvent: (name, event) => events.push([name, event]) });
+  Lobby.lobby.area = { getPlayers: () => [first, second, first, outside, privatePlayer, dead, dying, unregistered] };
+  Sea.launch = (players) => {
+    const launched = { players };
+    Sea.sea.voyage = launched;
+    return launched;
+  };
+
+  try {
+    Lobby.lobby.departAt = 0;
+    Lobby.tickLobby();
+    assert.deepEqual(Sea.sea.voyage.players, [first, second]);
+    assert.deepEqual(events, [first, second].map((player) => ["diary:task", {
+      player,
+      diary: "ardougne",
+      task: "go-out-fishing-on-the-fishing-trawler",
+    }]));
+
+    Lobby.tickLobby();
+    assert.equal(events.length, 2, 'the queued tick does not credit the same departure again');
+  } finally {
+    Shared.bind(api);
+    Sea.launch = launch;
+    Sea.sea.voyage = voyage;
+    Lobby.lobby.area = area;
+    Lobby.lobby.departAt = departAt;
+    Lobby.lobby.task = task;
+  }
+  assert.equal(Shared.api().emitCustomEvent, emitCustomEvent);
+});
+
+test('the Ardougne easy task does not complete while queued or when launch fails', () => {
+  const api = Shared.api();
+  const launch = Sea.launch;
+  const { area, departAt, task } = Lobby.lobby;
+  const { voyage } = Sea.sea;
+  const events = [];
+  const player = fakePlayer();
+  Shared.bind({ ...api, emitCustomEvent: (name, event) => events.push([name, event]) });
+  Lobby.lobby.area = { getPlayers: () => [player] };
+
+  try {
+    Sea.sea.voyage = {};
+    Lobby.lobby.departAt = 0;
+    Lobby.tickLobby();
+    assert.deepEqual(events, [], 'waiting for the trawler at sea does not count');
+
+    Sea.sea.voyage = null;
+    Lobby.lobby.departAt = 0;
+    Sea.launch = () => null;
+    Lobby.tickLobby();
+    assert.deepEqual(events, [], 'a failed launch does not count');
+  } finally {
+    Shared.bind(api);
+    Sea.launch = launch;
+    Sea.sea.voyage = voyage;
+    Lobby.lobby.area = area;
+    Lobby.lobby.departAt = departAt;
+    Lobby.lobby.task = task;
+  }
 });
 
 test("the crates only answer for the trawler's own: other Hammers crates fall through", () => {

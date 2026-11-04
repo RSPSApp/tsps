@@ -6,17 +6,19 @@ module.exports = function registerZamorakGodswordSpecialAttack(api) {
   const SLASH_DEFENCE_BONUS_INDEX = 1;
   const ANIMATION = new Animation(7638);
   const GRAPHIC = new Graphic(1210, Priority.HIGH);
+  const ICE_GRAPHIC = new Graphic(369, Priority.HIGH); // Ice Barrage impact
 
   class ZamorakGodswordCombatMethod extends MeleeCombatMethod {
     start(character, target) {
       CombatSpecial.drain(character, DRAIN);
       character.performAnimation(ANIMATION);
+      character.performGraphic(GRAPHIC);
       Sounds.playAreaSoundAt(character, Sound.GODSWORD_SPECIAL);
     }
 
     handleAfterHitEffects(hit) {
       if (hit.isAccurate()) {
-        hit.getTarget().performGraphic(GRAPHIC);
+        hit.getTarget().performGraphic(ICE_GRAPHIC);
         CombatFactory.freeze(hit.getTarget(), FREEZE_SECONDS, undefined, hit.getAttacker());
       }
     }

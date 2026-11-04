@@ -6,6 +6,7 @@ export type SpecialAttackRounding = "floor" | "ceil";
 export const SpecialAttackMaximumHitSource = Object.freeze({
     Standard: "standard",
     PhysicalMelee: "physical_melee",
+    Ranged: "ranged",
     Magic: "magic",
     VisibleMagic: "visible_magic",
 } as const);
@@ -61,7 +62,10 @@ export interface WeaponSpecialTraits {
     readonly maximumHitSplitCount?: number;
     /** Extra reveal delays for each hit, relative to the normal hit delay. */
     readonly hitDelayTicks?: readonly number[];
-    /** Replaces this swing's next-attack delay after special energy is consumed. */
+    /**
+     * Replaces this swing's next-attack delay after special energy is consumed. With
+     * bypassAttackDelay it only extends a cooldown already running, never shortens it.
+     */
     readonly attackSpeedTicks?: number;
     /** Lets an offensive special bypass the normal weapon attack-delay check. */
     readonly bypassAttackDelay?: boolean;

@@ -203,3 +203,66 @@
 .rl-sidebar-toggle:focus-visible {
     outline: 1px solid #dc8a00;
 }
+
+.portrait-handedness-toggle {
+    display: none;
+}
+
+.portrait-handedness-icon {
+    width: 32px;
+    height: 24px;
+    fill: none;
+    stroke: var(--rl-light-gray);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+@media (orientation: portrait) {
+    .portrait-mode > .rl-sidebar.mobile {
+        --sidebar-bottom-height: calc(var(--sidebar-tab-height) + env(safe-area-inset-bottom, 0px));
+        position: static;
+        width: 100%;
+        height: var(--sidebar-bottom-height);
+    }
+
+    .portrait-mode > .rl-sidebar.mobile .rl-sidebar-rail {
+        width: 100%;
+        flex-direction: row;
+        padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+    .portrait-mode > .rl-sidebar.mobile .rl-sidebar-rail-button {
+        width: var(--sidebar-rail-width);
+    }
+
+    /* Keep handedness on the left and plugin icons on the right; overflowing icons still scroll. */
+    .portrait-mode > .rl-sidebar.mobile .portrait-handedness-toggle {
+        display: flex;
+        margin-right: auto;
+    }
+
+    .portrait-mode > .rl-sidebar.mobile .rl-sidebar-rail-button.active {
+        box-shadow: inset 0 3px var(--rl-orange);
+    }
+
+    .portrait-mode > .rl-sidebar.mobile.overlay .rl-sidebar-panel {
+        top: 0;
+        right: 0;
+        bottom: var(--sidebar-bottom-height);
+        animation: rl-sidebar-portrait-open 0.15s ease-out;
+    }
+}
+
+@keyframes rl-sidebar-portrait-open {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .portrait-mode > .rl-sidebar.mobile.overlay .rl-sidebar-panel {
+        animation: none;
+    }
+}

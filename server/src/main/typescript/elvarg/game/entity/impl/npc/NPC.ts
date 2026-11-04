@@ -252,7 +252,8 @@ export class NPC extends Mobile {
 
     public isAggressiveTo(player: Player): boolean {
         return player.getSkillManager().getCombatLevel() <= (this.getCurrentDefinition().getCombatLevel() * 2)
-            || Wilderness.isIn(player);
+            || (Wilderness.isIn(player)
+                && Wilderness.levelAt(player.getLocation().getX(), player.getLocation().getY()) > 0);
     }
 
     public process() {
@@ -525,13 +526,25 @@ export class NPC extends Mobile {
         return drained.level;
     }
 
+    /**
+     * The level setCurrentLevels would leave for `skill`, without changing this NPC: the same
+     * stat-drain immunity and 0..base clamp. Content that predicts a pending drain (a second
+     * ranged hit's defence roll) can use it without draining the NPC early.
+     */
+    public previewCurrentLevel(skill: Skill, level: number): number {
+        if (!Number.isFinite(level)) throw new RangeError("Invalid NPC combat level");
+        const base = this.getMaxLevel(skill);
+        if (this.statDrainImmune && level < base) return base;
+        return Math.max(0, Math.min(base, Math.floor(level)));
+    }
+
     public setCurrentLevels(skill: Skill, level: number): void {
         if (!Number.isFinite(level)) throw new RangeError("Invalid NPC combat level");
         const base = this.getMaxLevel(skill);
         if (this.statDrainImmune && level < base) return;
         this.getCurrentLevel(skill);
         const cycle = this.drainedLevels.get(skill)?.cycle ?? World.getProcessCycle();
-        level = Math.max(0, Math.min(base, Math.floor(level)));
+        level = this.previewCurrentLevel(skill, level);
         if (level === base) this.drainedLevels.delete(skill);
         else this.drainedLevels.set(skill, { level, cycle });
     }

@@ -53,9 +53,9 @@ function resendLargeDoorState(player) {
   const table = largeDoors();
   const open = openLeaves();
   for (const teamId of Object.keys(table)) {
-    const spots = [...table[teamId].leaves.map(([id, x, y, z]) => [id, x, y, z]), ...open[teamId]];
-    for (const [id, x, y, z] of spots) {
-      const location = new core.Location(x, y, z);
+    const spots = [...table[teamId].leaves, ...open[teamId]];
+    for (const [id, x, y] of spots) {
+      const location = new core.Location(x, y, 0);
       const object = core.MapObjects.get(id, location, null);
       if (object) {
         sender.sendObject(object);

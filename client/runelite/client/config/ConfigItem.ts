@@ -35,6 +35,8 @@ export interface ConfigItemDef<T = unknown> {
     enumLabels?: Record<string, string>;
     /** A Keybind (RuneLite's Keybind), stored as "keyCode:modifiers". */
     keybind?: boolean;
+    /** A FontType (RuneLite's FontType items), edited in its own Font panel. */
+    fontType?: boolean;
     default: T;
 }
 

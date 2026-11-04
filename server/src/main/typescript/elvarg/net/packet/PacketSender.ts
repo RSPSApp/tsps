@@ -98,6 +98,7 @@ import {
   WORLD_MAP_TARGET_UID,
 } from "../protocol/WorldMapProtocol";
 import { CacheDefinitions } from "../../game/cache/CacheDefinitions";
+import { applyRunEnergyStatusModifiers } from "../../game/content/combat/EquipmentEffects";
 const CHATBOX_MODAL_TARGET_UID = (162 << 16) | 568;
 const MAIN_MODAL_TARGET_UID = (161 << 16) | 16;
 /** The gameframe's side button click: selects the tab and runs its setup. */
@@ -323,9 +324,18 @@ export class PacketSender {
   }
 
   public sendRunEnergy(): this {
-    if (this.player.getSession().sendClientPacket(encodeRunEnergy(
-      this.player.getRunEnergy(), this.player.isRunningReturn()
-    ))) return this;
+    if (this.sendRunEnergyPacket()) return this;
+  }
+
+  /** The run orb packet: exact units, the carried weight and any stamina effect left. */
+  private sendRunEnergyPacket(): boolean {
+    const status = applyRunEnergyStatusModifiers(this.player, { staminaTicks: 0, staminaMultiplier: 0 });
+    return this.player.getSession().sendClientPacket(encodeRunEnergy(
+      this.player.getRunEnergyUnits(),
+      this.player.isRunningReturn(),
+      this.player.getWeightKg(),
+      status.staminaTicks
+    ));
   }
 
   sendQuickPrayersState(activated: boolean): this {
@@ -344,9 +354,7 @@ export class PacketSender {
   }
 
   sendRunStatus(): this {
-    if (this.player.getSession().sendClientPacket(encodeRunEnergy(
-      this.player.getRunEnergy(), this.player.isRunningReturn()
-    ))) return this;
+    if (this.sendRunEnergyPacket()) return this;
   }
 
   sendInterface(id: number): this {
@@ -393,6 +401,26 @@ export class PacketSender {
 
   public sendEnterInputPrompt(title: string): PacketSender {
     return this.sendClientScript(110, title, 0);
+  }
+
+  /** An amount or text action is armed: a chatbox prompt or item search, or a popup waiting on its answer. */
+  public hasInputPrompt(): boolean {
+    return !!(this.player.getEnteredAmountAction?.() || this.player.getEnteredSyntaxAction?.());
+  }
+
+  /**
+   * Drops an unanswered chatbox prompt and the action waiting on its answer. Capture (RSProx 960,
+   * rev 235): closing the GE over its item search sends trigger_ondialogabort first. It runs
+   * meslayer_ondialogabort (138), which closes the prompt without answering; meslayer_close (101)
+   * would resume a count prompt with 0.
+   */
+  public abortInputPrompt(): this {
+    if (this.hasInputPrompt()) {
+      this.player.getSession().sendClientPacket(encodeTriggerOnDialogAbort());
+    }
+    this.player.setEnteredAmountAction?.(null);
+    this.player.setEnteredSyntaxAction?.(null);
+    return this;
   }
 
   public sendExit(): PacketSender {
@@ -788,13 +816,7 @@ export class PacketSender {
     // A no-op here can leave stale inventory context active client-side, which
     // affects default left-click item actions (e.g. "Drop" appearing as primary).
     this.player.setStatus?.(PlayerStatus.NONE);
-    // Capture: closing the bank under an unanswered "Enter amount:" sends trigger_ondialogabort
-    // first, so the client's meslayer_ondialogabort drops the prompt along with its answer.
-    if (this.player.getEnteredAmountAction?.()) {
-      this.player.getSession().sendClientPacket(encodeTriggerOnDialogAbort());
-    }
-    this.player.setEnteredAmountAction?.(null);
-    this.player.setEnteredSyntaxAction?.(null);
+    this.abortInputPrompt();
     this.player.getDialogueManager?.()?.reset?.();
     this.player.setAttribute?.("destroy-item:pending", -1);
     this.player.setInterfaceId?.(-1);

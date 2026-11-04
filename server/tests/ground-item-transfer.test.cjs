@@ -8,6 +8,7 @@ const {Inventory} = require("../dist/game/model/container/impl/Inventory");
 const {MAX_STACK_AMOUNT} = require("../dist/game/model/container/StackType");
 const {ItemOnGroundManager} = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
 const {State} = require("../dist/game/entity/impl/grounditem/ItemOnGround");
+const {ItemOnGround} = require("../dist/game/entity/impl/grounditem/ItemOnGround");
 const {MagicOnItemPacketListener} = require("../dist/net/packet/impl/MagicOnItemPacketListener");
 const {PluginManager} = require("../dist/plugins/PluginManager");
 const {World} = require("../dist/game/World");
@@ -25,6 +26,53 @@ function fixture() {
   return {player, inventory, listener, messages, xp,
     grab: pile => listener.landGroundItemGrab(player, pile.getItem().getId(), pile.getPosition())};
 }
+
+test("public unowned untradeables are sent to nearby players and can be picked up once", t => {
+  const {Player} = require("../dist/game/entity/impl/player/Player");
+  const {PlayerSession} = require("../dist/net/PlayerSession");
+  const create = name => {
+    const transport = {kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onError() {}, onClose() {}};
+    const player = new Player(new PlayerSession(transport));
+    player.setUsername(name); player.setRegistered(true);
+    player.setLocation(new Location(3222, 3218));
+    return player;
+  };
+  const payer = create("WorldDropPayer"), observer = create("WorldDropObserver"), sent = [];
+  t.mock.method(World, "forEachNetworkPlayer", send => { send(payer); send(observer); });
+  for (const player of [payer, observer]) {
+    const sender = player.getPacketSender();
+    t.mock.method(sender, "createGroundItem", item => { sent.push(["create", player, item]); return sender; });
+    t.mock.method(sender, "deleteGroundItem", item => { sent.push(["delete", player, item]); return sender; });
+  }
+  const items = World.getItems(), previous = items.splice(0);
+  t.after(() => items.splice(0, items.length, ...previous));
+  const item = new Item(9468);
+  assert.equal(item.getDefinition().getName(), "Sawdust", "the item resolves from the native cache");
+  assert.equal(item.isTradeable(), false, "the native cache marks this world item untradeable");
+  const pile = new ItemOnGround(State.SEEN_BY_EVERYONE, undefined, payer.getLocation().clone(), item, false, -1, null);
+  pile.owner = "OtherPlayer";
+  assert.equal(ItemOnGroundManager.canSee(payer, pile), false, "other-player-owned untradeables remain hidden");
+  pile.owner = undefined; pile.setState(State.SEEN_BY_PLAYER);
+  assert.equal(ItemOnGroundManager.canSee(payer, pile), false, "ownerless private items remain hidden");
+  pile.setState(State.SEEN_BY_EVERYONE);
+  ItemOnGroundManager.register(pile);
+  assert.deepEqual(sent.map(([kind, player]) => [kind, player.getUsername()]),
+    [["create", payer.getUsername()], ["create", observer.getUsername()]]);
+  assert.equal(ItemOnGroundManager.canSee(payer, pile), true);
+  assert.equal(ItemOnGroundManager.canSee(observer, pile), true);
+  const snapshot = t.mock.method(observer.getPacketSender(), "sendGroundItems", visible => {
+    assert.ok(visible.includes(pile)); return observer.getPacketSender();
+  });
+  ItemOnGroundManager.onRegionChange(observer);
+  assert.equal(snapshot.mock.calls.length, 1, "region snapshots include the same public item");
+  ItemOnGroundManager.pickup(payer, pile);
+  assert.equal(payer.getInventory().getAmount(item.getId()), 1);
+  assert.equal(pile.isPendingRemoval(), true);
+  assert.equal(sent.filter(([kind]) => kind === "delete").length, 2);
+  ItemOnGroundManager.pickup(observer, pile);
+  assert.equal(observer.getInventory().getAmount(item.getId()), 0, "a second player cannot duplicate the pickup");
+});
 
 for (const [label, existing, metadata, freeSlots, expectedAdded] of [
   ["capped stack", MAX_STACK_AMOUNT, null, 27, 0],

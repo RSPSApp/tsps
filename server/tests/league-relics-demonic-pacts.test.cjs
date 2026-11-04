@@ -894,7 +894,8 @@ test("Hotfoot: a picked-up course mark finishes a lap, counted twice and paid, w
   pickUp(who.relic, mark);
   assert.equal(laps(who.relic), 2, "the lap counts twice");
   assert.equal(who.relic.getAttribute("agility.progress"), null, "the lap in progress is over");
-  assert.ok(xp(who.relic, Skill.AGILITY) > before, "the lap's completion bonus (36, 25% more)");
+  // Al Kharid's lap is all obstacle XP since the 8 May 2024 rebalance (Wiki), so no bonus is paid.
+  assert.equal(xp(who.relic, Skill.AGILITY), before, "no completion bonus on Al Kharid");
   assert.equal(who.relic.getInventory().getAmount(I.COINS), 10000);
   assert.equal(laid.filter(({ item }) => item.getId() === I.MARK_OF_GRACE).length, 1, "the finished lap rolls its own mark at 33%");
 

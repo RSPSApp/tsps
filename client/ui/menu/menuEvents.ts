@@ -14,6 +14,11 @@ export type MenuEventHooks = {
 };
 let hooks: MenuEventHooks | undefined;
 let dispatchDepth = 0;
+/**
+ * RuneLite's MenuOptionClicked for the client plugins, beside the native hooks: each sees a click
+ * before it is dispatched, and returning true consumes it (nothing goes to the server).
+ */
+export const menuClickListeners = new Set<(action: MenuActionData) => boolean>();
 export function setMenuEventHooks(next: MenuEventHooks | undefined): () => void {
     hooks = next;
     return () => { if (hooks === next) hooks = undefined; };
@@ -35,6 +40,7 @@ export function dispatchMenuAction(action: MenuActionData, dispatch: (action: Me
     dispatchDepth++;
     try {
         if (!nested && hooks?.click(action)) return;
+        if (!nested) for (const listener of menuClickListeners) if (listener(action)) return;
         dispatch(action);
     } finally { dispatchDepth--; }
 }

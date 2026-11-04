@@ -297,10 +297,7 @@ function spawnFire(player, location) {
   );
   ObjectManager.register(fire, true);
   activeFires.set(fire, createFireState(fire, player));
-  if (player.getLocation().equals(location)) {
-    stepAwayFromFire(player);
-  }
-  // Live turns the player back to the fire as they step off it (face_angle 1536 after a step west).
+  // Live turns the player back to the fire a tick after they step off it (face_angle 1536 after a step west).
   player.setPositionToFace(location);
   return fire;
 }
@@ -574,7 +571,8 @@ function processFiremakingTick(activeSessions, currentTick) {
       continue;
     }
 
-    if (player.getMovementQueue()?.size?.() > 0) {
+    // After a hit, the queued step off the log is ours and must not cancel the fire.
+    if (session.catchTick == null && player.getMovementQueue()?.size?.() > 0) {
       stopFiremaking(activeSessions, player);
       continue;
     }
@@ -639,8 +637,12 @@ function processFiremakingTick(activeSessions, currentTick) {
       continue;
     }
 
-    // A hit stops the animation; the fire catches on the next tick.
+    // A hit stops the animation and steps the player off the log on the same tick; the fire catches
+    // on the next tick, behind them (rsprox recordings 1035, 1098 and 1108).
     player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+    if (player.getLocation().equals(session.location)) {
+      stepAwayFromFire(player);
+    }
     session.catchTick = currentTick + FIRE_CATCH_DELAY_TICKS;
   }
 }

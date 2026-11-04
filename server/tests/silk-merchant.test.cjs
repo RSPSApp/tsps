@@ -9,6 +9,7 @@ const SilkMerchant = require('../plugins/npcs/SilkMerchant.plugin');
 
 const { SILK } = I;
 const SILK_NOTE = I.SILK_2;
+const MAX_STACK_AMOUNT = 0x7fffffff;
 
 const listeners = [];
 const variantHandlers = [];
@@ -20,31 +21,46 @@ const api = {
 };
 SilkMerchant.register(api);
 
-function container(entries = {}) {
+function container(entries = {}, capacity = 28) {
     const amounts = new Map(Object.entries(entries).map(([id, n]) => [Number(id), n]));
+    const usedSlots = () => [...amounts].reduce((used, [id, amount]) =>
+        used + (id === I.COINS ? (amount > 0 ? 1 : 0) : amount), 0);
     return {
         amounts,
         contains: (id) => (amounts.get(id) ?? 0) > 0,
         getAmount: (id) => amounts.get(id) ?? 0,
-        adds: (id, n) => amounts.set(id, (amounts.get(id) ?? 0) + n),
+        getFreeSlots: () => capacity - usedSlots(),
+        getAddableAmount: (item) => {
+            const amount = item.getAmount();
+            const held = amounts.get(item.getId()) ?? 0;
+            if (item.getId() === I.COINS && held > 0) return Math.min(amount, MAX_STACK_AMOUNT - held);
+            return capacity - usedSlots() > 0 ? Math.min(amount, MAX_STACK_AMOUNT) : 0;
+        },
+        adds: (id, n) => amounts.set(id, id === I.COINS
+            ? Math.min(MAX_STACK_AMOUNT, (amounts.get(id) ?? 0) + n)
+            : (amounts.get(id) ?? 0) + n),
         delete: (id, n) => amounts.set(id, (amounts.get(id) ?? 0) - n),
     };
 }
 
-function player({ inventory = {}, attributes = {} } = {}) {
+function player({ inventory = {}, attributes = {}, privateArea = null } = {}) {
     const inv = container(inventory);
     const attrs = attributes;
-    let agreed = attributes[SilkMerchant._test.AGREED_PRICE_ATTRIBUTE] ?? null;
+    const values = new Map(Object.entries(attributes));
     return {
         inv,
         getInventory: () => inv,
-        getAttribute: (key) => (key === SilkMerchant._test.AGREED_PRICE_ATTRIBUTE ? agreed : undefined),
-        setAttribute: (key, value) => { if (key === SilkMerchant._test.AGREED_PRICE_ATTRIBUTE) agreed = value; },
+        getPrivateArea: () => privateArea,
+        getAttribute: (key) => values.get(key),
+        setAttribute: (key, value) => values.set(key, value),
     };
 }
 
 const variantOf = (who, npcId = 8728) => variantHandlers[0]({ npcId, player: who });
-const silkNpc = (x = 2656, y = 3301) => ({ getLocation: () => ({ x, y }) });
+const silkNpc = (x = 2656, y = 3301, z = 0, privateArea = null) => ({
+    getLocation: () => ({ getX: () => x, getY: () => y, getZ: () => z }),
+    getPrivateArea: () => privateArea,
+});
 
 /** A dialogue choice; returns what the player ends up with as the agreed price. */
 function choose(who, option, npcId = 8728) {
@@ -53,10 +69,10 @@ function choose(who, option, npcId = 8728) {
 }
 
 /** Dialogue reaches `text`; returns the attached after hook with the sale run. */
-function tradeAt(who, text, npc = silkNpc(), npcId = 8728) {
+function tradeAt(who, text, npc = silkNpc(), npcId = 8728, runAfter = true) {
     const request = { player: who, npc, npcId, text };
     SilkMerchant._test.onDialogueLine(request);
-    request.after?.();
+    if (runAfter) request.after?.();
     return request.after;
 }
 
@@ -134,4 +150,105 @@ test('60-coins sales complete the easy Ardougne Diary task in the market only', 
     choose(cheap, '20 coins.');
     tradeAt(cheap, 'Ok suits me.');
     assert.equal(diaryEvents.length, 1, '20-coins sales never complete the task');
+});
+
+test('the task requires a completed 60-coin sale and credits only once', () => {
+    const diaryEvents = [];
+    listeners.splice(0, listeners.length, ['diary:task', (request) => diaryEvents.push(request)]);
+
+    const notedOnly = player({ inventory: { [SILK_NOTE]: 1 } });
+    choose(notedOnly, '120 coins.');
+    choose(notedOnly, "I'll give it to you for 60.");
+    const noSilkCallback = tradeAt(notedOnly, 'You drive a hard bargain, but I guess that will have to do.');
+    assert.equal(notedOnly.inv.getAmount(I.COINS), 0);
+    assert.equal(diaryEvents.length, 0, 'noted silk cannot complete the task');
+    noSilkCallback();
+    assert.equal(diaryEvents.length, 0, 'a callback without a silk sale does not credit the task');
+
+    const wrongPrice = player({ inventory: { [SILK]: 1 } });
+    choose(wrongPrice, '20 coins.');
+    assert.equal(tradeAt(wrongPrice, 'You drive a hard bargain, but I guess that will have to do.'), undefined);
+    assert.equal(diaryEvents.length, 0, 'a final line at an unagreed price does not credit the task');
+
+    const seller = player({ inventory: { [SILK]: 1 } });
+    choose(seller, '120 coins.');
+    choose(seller, "I'll give it to you for 60.");
+    const completedSale = tradeAt(seller, 'You drive a hard bargain, but I guess that will have to do.');
+    assert.equal(seller.inv.getAmount(I.COINS), 60);
+    assert.equal(diaryEvents.length, 1);
+    completedSale();
+    assert.equal(seller.inv.getAmount(I.COINS), 60, 'replaying the callback does not repeat the sale');
+    assert.equal(diaryEvents.length, 1, 'replaying the callback does not repeat task credit');
+
+    const stale = player({ inventory: { [SILK]: 1 } });
+    choose(stale, '120 coins.');
+    choose(stale, "I'll give it to you for 60.");
+    const staleCallback = tradeAt(stale, 'You drive a hard bargain, but I guess that will have to do.', silkNpc(), 8728, false);
+    choose(stale, 'No, that is not enough.');
+    stale.inv.adds(SILK, 1);
+    staleCallback();
+    assert.equal(stale.inv.getAmount(SILK), 2, 'a callback with a cleared agreement does not sell later silk');
+    assert.equal(stale.inv.getAmount(I.COINS), 0);
+    assert.equal(diaryEvents.length, 1, 'a stale callback does not credit the task');
+
+    const renewed = player({ inventory: { [SILK]: 1 } });
+    choose(renewed, '120 coins.');
+    choose(renewed, "I'll give it to you for 60.");
+    const oldAgreementCallback = tradeAt(renewed, 'You drive a hard bargain, but I guess that will have to do.', silkNpc(), 8728, false);
+    choose(renewed, '120 coins.');
+    choose(renewed, "I'll give it to you for 60.");
+    oldAgreementCallback();
+    assert.equal(renewed.inv.getAmount(SILK), 1, 'a callback cannot use a later agreement at the same price');
+    assert.equal(renewed.inv.getAmount(I.COINS), 0);
+    tradeAt(renewed, 'You drive a hard bargain, but I guess that will have to do.');
+    assert.equal(renewed.inv.getAmount(SILK), 0, 'the renewed agreement can complete a new sale');
+    assert.equal(renewed.inv.getAmount(I.COINS), 60);
+    assert.equal(diaryEvents.length, 2);
+
+    const acquiredLater = player();
+    choose(acquiredLater, '120 coins.');
+    choose(acquiredLater, "I'll give it to you for 60.");
+    const emptyCallback = tradeAt(acquiredLater, 'You drive a hard bargain, but I guess that will have to do.', silkNpc(), 8728, false);
+    emptyCallback();
+    acquiredLater.inv.adds(SILK, 1);
+    emptyCallback();
+    assert.equal(acquiredLater.inv.getAmount(SILK), 1, 'a callback used without silk cannot sell silk acquired later');
+    assert.equal(acquiredLater.inv.getAmount(I.COINS), 0);
+
+    const cappedCoins = player({ inventory: { [SILK]: 1, [I.COINS]: MAX_STACK_AMOUNT - 59 } });
+    choose(cappedCoins, '120 coins.');
+    choose(cappedCoins, "I'll give it to you for 60.");
+    tradeAt(cappedCoins, 'You drive a hard bargain, but I guess that will have to do.');
+    assert.equal(cappedCoins.inv.getAmount(SILK), 1, 'silk remains when the full payout would overflow the coin stack');
+    assert.equal(cappedCoins.inv.getAmount(I.COINS), MAX_STACK_AMOUNT - 59);
+    assert.equal(diaryEvents.length, 2, 'an unpaid sale does not credit the task');
+
+    const fullInventory = player({ inventory: { [SILK]: 28 } });
+    choose(fullInventory, '120 coins.');
+    choose(fullInventory, "I'll give it to you for 60.");
+    tradeAt(fullInventory, 'You drive a hard bargain, but I guess that will have to do.');
+    assert.equal(fullInventory.inv.getAmount(SILK), 0);
+    assert.equal(fullInventory.inv.getAmount(I.COINS), 28 * 60, 'freed silk slots allow the payout stack');
+    assert.equal(diaryEvents.length, 3, 'the fully paid sale credits the task');
+
+    const wrongPlane = player({ inventory: { [SILK]: 1 } });
+    choose(wrongPlane, '120 coins.');
+    choose(wrongPlane, "I'll give it to you for 60.");
+    tradeAt(wrongPlane, 'You drive a hard bargain, but I guess that will have to do.', silkNpc(2656, 3301, 1));
+    assert.equal(wrongPlane.inv.getAmount(I.COINS), 60, 'the merchant still buys silk on another plane');
+    assert.equal(diaryEvents.length, 3, 'another plane does not count for the task');
+
+    const privatePlayer = player({ inventory: { [SILK]: 1 }, privateArea: {} });
+    choose(privatePlayer, '120 coins.');
+    choose(privatePlayer, "I'll give it to you for 60.");
+    tradeAt(privatePlayer, 'You drive a hard bargain, but I guess that will have to do.');
+    assert.equal(privatePlayer.inv.getAmount(I.COINS), 60);
+    assert.equal(diaryEvents.length, 3, 'a sale in a private area does not count for the task');
+
+    const privateMerchant = player({ inventory: { [SILK]: 1 } });
+    choose(privateMerchant, '120 coins.');
+    choose(privateMerchant, "I'll give it to you for 60.");
+    tradeAt(privateMerchant, 'You drive a hard bargain, but I guess that will have to do.', silkNpc(2656, 3301, 0, {}));
+    assert.equal(privateMerchant.inv.getAmount(I.COINS), 60);
+    assert.equal(diaryEvents.length, 3, 'a private merchant does not count for the task');
 });

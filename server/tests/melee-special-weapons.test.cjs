@@ -32,10 +32,12 @@ const items = JSON.parse(
 
 /** Death, logout and hit-roll handlers the specials register, by hook name. */
 const hooks = {};
+const burnRequests = [];
 
 before(() => {
   // Only the specials registry and the death/logout/hit-roll hooks matter here; other hooks are no-ops.
   const api = {
+    emitCustomEvent: (name, data) => { if (name === "combat:burn") burnRequests.push(data); },
     onCombatHitRoll: (handler) => (hooks.onCombatHitRoll ??= []).push(handler),
     onPlayerDefeated: (handler) => (hooks.onPlayerDefeated ??= []).push(handler),
     onPlayerLogout: (handler) => (hooks.onPlayerLogout ??= []).push(handler),
@@ -306,14 +308,22 @@ test("a weapon with no registered special has no special state", () => {
 
 // --- Shove: knockback, stun and immunity ---------------------------------------------------
 
-test("Shove stuns a normal target for 5 ticks, costs 25% once and sets the 5-tick swing", () => {
-  const attacker = fakeFighter();
-  const target = fakeTarget();
-  special("shove").getCombatMethod().start(attacker, target);
-  assert.deepEqual(attacker.log.drains, [25]);
-  assert.equal(target.log.stunned, true);
-  assert.equal(attacker.attackDelay, 5, "Shove takes 5 ticks against the spear's 4");
-  assert.equal(attacker.activated, false);
+test("every Shove weapon puts its stun graphic on the target and drains 25% once", () => {
+  for (const weaponId of special("shove").getIdentifiers()) {
+    const attacker = fakeFighter();
+    const target = fakeTarget();
+    const targetGraphics = [];
+    target.performGraphic = graphic => targetGraphics.push(graphic);
+    CombatSpecial.getForWeaponId(weaponId).getCombatMethod().start(attacker, target);
+    assert.equal(attacker.log.graphics, 0, `weapon ${weaponId} has no attacker graphic`);
+    assert.equal(targetGraphics.length, 1, `weapon ${weaponId} retains its target stun graphic`);
+    assert.equal(attacker.log.animations, 1);
+    assert.equal(target.log.animations, 1);
+    assert.deepEqual(attacker.log.drains, [25]);
+    assert.equal(target.log.stunned, true);
+    assert.equal(attacker.attackDelay, 5, "Shove takes 5 ticks against the spear's 4");
+    assert.equal(attacker.activated, false);
+  }
 });
 
 test("Shove leaves large, stunned and stun-immune targets untouched and spends no energy", () => {
@@ -437,122 +447,29 @@ test("burning claws split the first landing roll over three hitsplats and name t
   assert.ok(missed.hits.reduce((a, b) => a + b, 0) <= 2);
 });
 
-/** A burn victim whose queued burn damage is counted, with Math.random scripted per hitsplat. */
-function burnVictim() {
-  // Earlier tests leave Shove tasks aimed at fakes; they would abort every TaskManager.process().
-  TaskManager.activeTasks.length = 0;
-  while (TaskManager.pendingTasks.shift()) { /* drop */ }
-  const queued = [];
-  return {
-    queued,
-    hitpoints: 100,
-    isRegistered: () => true,
-    getHitpoints() { return this.hitpoints; },
-    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => queued.push(...hits) }) }),
-  };
-}
-
-function burn(index, randoms, victim) {
+test("Burning claws requests shared normal burns at each accuracy roll's per-hitsplat chance", () => {
   const method = special("burning_claws").getCombatMethod();
-  const hit = { getFirstSuccessfulRangeIndex: () => index, getHits: () => [0, 0, 0], getTarget: () => victim };
+  const attacker = {}, target = {};
   const realRandom = Math.random;
-  let call = 0;
-  Math.random = () => randoms[call++ % randoms.length];
   try {
-    method.handleAfterHitEffects(hit);
+    for (const [index, below, boundary] of [[0, 0.149, 0.15], [1, 0.299, 0.3], [2, 0.449, 0.45]]) {
+      burnRequests.length = 0;
+      let calls = 0;
+      Math.random = () => calls++ === 0 ? below : boundary;
+      method.handleAfterHitEffects({
+        getFirstSuccessfulRangeIndex: () => index, getHits: () => [0, 0, 0],
+        getAttacker: () => attacker, getTarget: () => target,
+      });
+      assert.deepEqual(burnRequests, [{ attacker, target, damage: 10, severity: "normal" }]);
+    }
+    burnRequests.length = 0;
+    Math.random = () => 0;
+    method.handleAfterHitEffects({ getFirstSuccessfulRangeIndex: () => -1 });
+    assert.deepEqual(burnRequests, [], "a full miss never burns");
   } finally {
     Math.random = realRandom;
   }
-}
-
-function runTicks(count) {
-  for (let i = 0; i < count; i++) TaskManager.process();
-}
-
-test("each burning claws hitsplat burns with the chance of the roll that landed, and a burn is 10 damage over 40 ticks", () => {
-  const cases = [
-    [0, 0.149, 0.15], // 15% on the first roll
-    [1, 0.299, 0.3], // 30% on the second
-    [2, 0.449, 0.45], // 45% on the third
-  ];
-  for (const [index, below, atChance] of cases) {
-    const victim = burnVictim();
-    burn(index, [below, atChance, atChance], victim);
-    runTicks(45);
-    assert.equal(victim.queued.length, 10, `roll ${index + 1}: one burn is ten 1-damage ticks`);
-    assert.ok(victim.queued.every((hitsplat) => hitsplat.getDamage() === 1));
-  }
 });
-
-test("a burn ticks every 4 ticks and a full miss never burns", () => {
-  const victim = burnVictim();
-  burn(0, [0], victim);
-  runTicks(3);
-  assert.equal(victim.queued.length, 0, "nothing in the first 3 ticks");
-  runTicks(1);
-  assert.equal(victim.queued.length, 3, "the three burns each deal 1 on tick 4");
-  runTicks(45);
-  assert.equal(victim.queued.length, 30);
-
-  const missed = burnVictim();
-  burn(-1, [0], missed);
-  burn(undefined, [0], missed);
-  runTicks(45);
-  assert.equal(missed.queued.length, 0);
-});
-
-test("burns stack up to five at once and a finished burn frees its slot", () => {
-  const victim = burnVictim();
-  burn(2, [0], victim); // three burns
-  burn(2, [0], victim); // three more: only two fit
-  runTicks(4);
-  assert.equal(victim.queued.length, 5, "five burns tick, not six");
-  runTicks(45);
-  assert.equal(victim.queued.length, 50);
-  burn(2, [0], victim);
-  runTicks(4);
-  assert.equal(victim.queued.length, 53, "all three new burns start once the old ones ended");
-  runTicks(45);
-});
-
-test("burns end with the target's life: a death before the next burn tick, a logout, an npc death", () => {
-  // PlayerDeathTask restores hitpoints on its third run, before the burn's 4-tick check sees 0.
-  const player = burnVictim();
-  burn(2, [0], player);
-  runTicks(4);
-  assert.equal(player.queued.length, 3);
-  player.hitpoints = 0; // killed on tick 5
-  runTicks(2);
-  // Respawned on tick 7: the restore emits onPlayerDefeated. onPlayerDeath is never reached here,
-  // as when a safe-death respawn (Ferox free-for-all) handles it first.
-  player.hitpoints = 99;
-  hooks.onPlayerDefeated.forEach((handler) => handler({ killer: null, victim: player }));
-  runTicks(45);
-  assert.equal(player.queued.length, 3, "no burn damage after respawn");
-  burn(2, [0], player);
-  runTicks(4);
-  assert.equal(player.queued.length, 6, "a new life burns afresh with all five slots free");
-  runTicks(45);
-
-  const leaver = burnVictim();
-  burn(2, [0], leaver);
-  hooks.onPlayerLogout.forEach((handler) => handler({ player: leaver, username: "leaver" }));
-  runTicks(45);
-  assert.equal(leaver.queued.length, 0, "a logout ends the burns");
-
-  const npc = burnVictim();
-  burn(2, [0], npc);
-  hooks.onNpcDeath.forEach((handler) => handler({ npc, killer: null }));
-  runTicks(45);
-  assert.equal(npc.queued.length, 0, "an npc death ends the burns");
-
-  const dying = burnVictim();
-  dying.isDyingFunction = () => true; // killed with no killer: no onNpcDeath
-  burn(2, [0], dying);
-  runTicks(45);
-  assert.equal(dying.queued.length, 0, "a dying target takes no burns");
-});
-
 // --- Saradomin's lightning -----------------------------------------------------------------
 
 function lightningHit({ accurate, splashed = false }) {

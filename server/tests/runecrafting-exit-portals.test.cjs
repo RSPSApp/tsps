@@ -77,10 +77,11 @@ test("each altar's exit portal leads outside its ruins, with the portal's sound 
   assert.equal(handlers["Portal:Use"]({ player: visitor(), objectId: 12345 }), false, "other portals fall through");
 });
 
-function miner({ x = 2889, y = 4814, attributes = {} } = {}) {
+function miner({ x = 2889, y = 4814, attributes = {}, land = true } = {}) {
   const log = [];
   const attrs = new Map(Object.entries(attributes));
   const { Location } = PluginManager.getCoreApi();
+  let location = new Location(x, y, 0);
   const sender = {
     sendSound: (id) => log.push(`sound ${id}`),
     sendAreaSound: (id) => { log.push(`area sound ${id}`); return sender; },
@@ -92,7 +93,7 @@ function miner({ x = 2889, y = 4814, attributes = {} } = {}) {
     log,
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
-    getLocation: () => new Location(x, y, 0),
+    getLocation: () => location,
     getMovementQueue: () => ({ reset() {}, setBlockMovement() {}, isMovementBlocked: () => false }),
     setUntargetable(value) { this.untargetable = value; },
     setTeleporting() {},
@@ -102,7 +103,10 @@ function miner({ x = 2889, y = 4814, attributes = {} } = {}) {
     getCombat: () => ({ getTeleblockTimer: () => ({ finished: () => true }) }),
     getArea: () => null,
     getWildernessLevel: () => 0,
-    moveTo: (location) => log.push(`move ${location.getX()},${location.getY()},${location.getZ()}`),
+    moveTo: (destination) => {
+      log.push(`move ${destination.getX()},${destination.getY()},${destination.getZ()}`);
+      if (land) location = destination;
+    },
     sendMessage: (text) => log.push(`message ${text}`),
     performGraphic: (graphic) => log.push(`graphic ${graphic.getId()}`),
     getPacketSender: () => sender,
@@ -145,6 +149,27 @@ test("the Rune Essence mine's portals send the player back to the wizard who sen
   handlers["Portal:Use"]({ player: unknown, objectId: 34825, location: { x: 2933, y: 4815, z: 0 } });
   ticks(1);
   assert.ok(unknown.log.includes("move 3252,3400,0"), "nobody recorded: back beside Aubury");
+});
+
+test("a failed mine landing does not emit teleport completion", () => {
+  const player = miner({ x: 2682, y: 3326, land: false, attributes: { "quest.rune_mysteries.stage": 6 } });
+  const { Location } = PluginManager.getCoreApi();
+  const cromperty = {
+    getCurrentDefinition: () => ({ getName: () => "Wizard Cromperty" }),
+    getLocation: () => new Location(2683, 3326, 0),
+    forceChat() {},
+    setPositionToFace() {},
+    performGraphic() {},
+  };
+  emitted.length = 0;
+
+  assert.equal(handlers["Wizard Cromperty:Teleport"]({ player, npc: cromperty }), true);
+  ticks(4);
+
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2682, 3326]);
+  assert.ok(player.log.includes("move 2913,4832,0"), "the fixture records the attempted move");
+  assert.equal(emitted.some(([name]) => name === "teleport:landed"), false);
+  assert.equal(emitted.some(([name, event]) => name === "diary:task" && event.task === "have-wizard-cromperty-teleport-you-to-the-rune-e"), false);
 });
 
 // Wiki: talismans are used on ruins; a matching worn tiara reveals the Enter option.
@@ -484,4 +509,45 @@ test("a death cancels a wizard's teleport: neither the dying nor the respawned p
   handlers["Aubury:Teleport"]({ player: respawned, npc: aubury });
   ticks(4);
   assert.deepEqual(teleported(respawned), ["move 2913,4832,0"]);
+});
+
+// The easy Wilderness Diary's "Enter the Chaos Runecrafting temple." (Wiki: Chaos Altar): through the
+// mysterious ruins or the Abyss; the Tunnel of Chaos and Guardians of the Rift do not count.
+test("entering the Chaos altar by its ruins (tiara or talisman) or the Abyss rift completes the easy Wilderness Diary task", () => {
+  const chaos = ruinsData.find((ruins) => ruins.name === "Chaos");
+  const air = ruinsData.find((ruins) => ruins.name === "Air");
+  const diary = () => emitted.filter(([name]) => name === "diary:task").map(([, event]) => `${event.diary}:${event.task}`);
+  const TASK = "wilderness:enter-the-chaos-runecrafting-temple";
+  emitted.length = 0;
+
+  const tiara = runecrafter(chaos.tiaraId);
+  tiara.getEquipment().refreshItems();
+  assert.equal(handlers["Mysterious ruins:Enter"]({ player: tiara, objectId: chaos.ruinsId }), true);
+  assert.ok(tiara.log.includes("move 2281,4837,0"), "the tiara takes the player in");
+  assert.deepEqual(diary(), [TASK]);
+
+  emitted.length = 0;
+  const airTiara = runecrafter(air.tiaraId);
+  airTiara.getEquipment().refreshItems();
+  assert.equal(handlers["Mysterious ruins:Enter"]({ player: airTiara, objectId: air.ruinsId }), true);
+  assert.deepEqual(diary(), [], "another altar's ruins");
+
+  emitted.length = 0;
+  const holder = runecrafter();
+  assert.equal(useOnRuins(holder, chaos.ruinsId, chaos.talismanId), true);
+  assert.deepEqual(diary(), [], "not before the landing");
+  ticks(3);
+  assert.ok(holder.log.includes("move 2281,4837,0"));
+  assert.deepEqual(diary(), [TASK], "a talisman held to the ruins");
+
+  emitted.length = 0;
+  assert.equal(handlers["Chaos rift:Exit-through"]({ player: visitor(), objectId: ObjectIdentifiers.CHAOS_RIFT }), true);
+  assert.deepEqual(diary(), [], "the rift's teleport has not landed yet");
+  const riftTeleport = emitted.find(([name]) => name === "lever:teleport")[1];
+  assert.equal(typeof riftTeleport.onArrival, "function", "the teleport reports its landing");
+  riftTeleport.onArrival();
+  assert.deepEqual(diary(), [TASK], "the Abyss's Chaos rift, on landing");
+  emitted.length = 0;
+  assert.equal(handlers["Air rift:Exit-through"]({ player: visitor(), objectId: ObjectIdentifiers.AIR_RIFT }), true);
+  assert.deepEqual(diary(), [], "another altar's rift");
 });

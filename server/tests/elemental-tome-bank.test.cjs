@@ -46,6 +46,207 @@ function withdraw(p,item,amount=1,tab=0) {
   Bank.withdraw(p,item.getId(),p.getBank(tab).getItems().indexOf(item),amount,tab);
   return p.getInventory().getValidItems().filter(held=>Common.getDefinition(held.getId()));
 }
+
+for (const [tab, charges, search] of [[0,99,false],[1,150,true]]) {
+  test(`a changed charged tome refills its original placeholder in tab ${tab}${search ? ' while searching' : ''}`,t=>{
+    const {p}=fixture(t);
+    p.setPlaceholders(true);
+    const item=book(p,core.ItemIdentifiers.TOME_OF_FIRE,100,core.ItemIdentifiers.BURNT_PAGE,1,tab);
+    const bank=p.getBank(tab), slot=bank.getItems().indexOf(item);
+    assert.ok(item.getDefinition().getPlaceholderId()>0,'the charged item has a native cache placeholder');
+    const [taken]=withdraw(p,item,1,tab);
+    const placeholder=bank.getItems()[slot];
+    assert.equal(placeholder.getAmount(),0);
+    Common.set(taken,Common.getDefinition(taken.getId()),charges,core.ItemIdentifiers.BURNT_PAGE);
+    if(search)Bank.search(p,'tome');
+    Bank.deposits(p,taken.getId(),p.getInventory().getItems().indexOf(taken),1);
+    assert.equal(bank.getValidItems().length,1,'a new charge count cannot leave the old placeholder behind');
+    assert.equal(bank.getItems()[slot].getAmount(),1);
+    assert.deepEqual(Common.read(bank.getItems()[slot]),{charges,pageId:core.ItemIdentifiers.BURNT_PAGE});
+    assert.notEqual(bank.getItems()[slot],placeholder,'refilling does not revive the removed stack identity');
+    assert.equal(p.getInventory().getAmount(taken.getId()),0);
+    const restored=new Player(null);
+    PlayerSave.fromPlayer(p).applyToPlayer(restored);
+    assert.deepEqual(Common.read(restored.getBank(tab).getItems()[slot]),{charges,pageId:core.ItemIdentifiers.BURNT_PAGE});
+  });
+}
+
+test('a full bank accepts changed item metadata into its reserved placeholder',t=>{
+  const {p}=fixture(t);
+  p.setPlaceholders(true);
+  const item=book(p,core.ItemIdentifiers.TOME_OF_FIRE,100,core.ItemIdentifiers.BURNT_PAGE);
+  const [taken]=withdraw(p,item);
+  Common.set(taken,Common.getDefinition(taken.getId()),99,core.ItemIdentifiers.BURNT_PAGE);
+  handlers.set(Bank.CAPACITY_EVENT,event=>{event.capacity=1;});
+  t.after(()=>handlers.delete(Bank.CAPACITY_EVENT));
+  assert.equal(p.getBank(0).getFreeSlots(),0);
+  assert.equal(p.getBank(0).getAddableAmount(taken),1,'capacity planning recognizes a reusable empty placeholder');
+  assert.equal(p.getBank(0).canTake(taken),true);
+  Bank.deposits(p,taken.getId(),p.getInventory().getItems().indexOf(taken),1);
+  assert.equal(p.getInventory().getAmount(taken.getId()),0);
+  assert.equal(p.getBank(0).getValidItems().length,1);
+  assert.equal(Common.read(p.getBank(0).getItems()[0]).charges,99);
+});
+
+for (const [name,charged,empty] of [
+  ['fire',core.ItemIdentifiers.TOME_OF_FIRE,core.ItemIdentifiers.TOME_OF_FIRE_EMPTY_],
+  ['water',core.ItemIdentifiers.TOME_OF_WATER,core.ItemIdentifiers.TOME_OF_WATER_EMPTY_],
+  ['earth',core.ItemIdentifiers.TOME_OF_EARTH,core.ItemIdentifiers.TOME_OF_EARTH_EMPTY_],
+]) {
+  test(`charged and empty ${name} tomes share one bank placeholder in both directions`,t=>{
+    const {p}=fixture(t);
+    p.setPlaceholders(true);
+    const definition=Common.getDefinition(charged);
+    const placeholderId=core.ItemDefinition.forId(charged).getPlaceholderId();
+    assert.ok(placeholderId>0,'the charged item has a native cache placeholder');
+    const item=book(p,charged,100,definition.pageId,1,1);
+    const bank=p.getBank(1), slot=bank.getItems().indexOf(item);
+    const [taken]=withdraw(p,item,1,1);
+    assert.equal(taken.getId(),charged);
+    assert.equal(bank.getValidItems().length,1);
+    assert.equal(bank.getItems()[slot].getAmount(),0);
+    assert.equal(Bank.displayItemId(bank.getItems()[slot]),placeholderId);
+
+    p.getInventory().add(new core.Item(empty,1),false);
+    Bank.deposits(p,empty,p.getInventory().getSlotForItemId(empty),1);
+    assert.equal(bank.getValidItems().length,1,'the empty form refills the charged form placeholder');
+    assert.equal(bank.getItems()[slot].getId(),empty,'an occupied stack keeps the actual withdrawn form');
+    assert.equal(bank.getItems()[slot].getAmount(),1);
+    assert.equal(p.getInventory().getAmount(empty),0);
+
+    Bank.withdraw(p,empty,slot,1,1);
+    assert.equal(p.getInventory().getAmount(empty),1);
+    assert.equal(bank.getValidItems().length,1);
+    assert.equal(bank.getItems()[slot].getAmount(),0);
+    assert.equal(bank.getItems()[slot].getId(),charged,'the empty form leaves the family cache placeholder');
+    assert.equal(Bank.displayItemId(bank.getItems()[slot]),placeholderId);
+
+    p.getInventory().resetItems();
+    const chargedAgain=new core.Item(charged,1);
+    Common.set(chargedAgain,definition,123,definition.pageId);
+    p.getInventory().add(chargedAgain,false);
+    Bank.deposits(p,charged, p.getInventory().getSlotForItemId(charged),1);
+    assert.equal(bank.getValidItems().length,1);
+    assert.equal(bank.getItems()[slot].getId(),charged);
+    assert.deepEqual(Common.read(bank.getItems()[slot]),{charges:123,pageId:definition.pageId});
+  });
+}
+
+test('depositing one tome form never merges into a live stack of the other form',t=>{
+  const {p}=fixture(t);
+  p.setPlaceholders(true);
+  const charged=core.ItemIdentifiers.TOME_OF_FIRE, empty=core.ItemIdentifiers.TOME_OF_FIRE_EMPTY_;
+  const definition=Common.getDefinition(charged);
+  const liveEmpty=book(p,empty);
+  const incoming=new core.Item(charged,1);
+  Common.set(incoming,definition,100,definition.pageId);
+  p.getInventory().add(incoming,false);
+  Bank.deposits(p,charged,p.getInventory().getSlotForItemId(charged),1);
+  const bank=p.getBank(0);
+  assert.equal(bank.getValidItems().length,2);
+  assert.equal(liveEmpty.getAmount(),1);
+  const chargedStack=bank.getValidItems().find(held=>held.getId()===charged);
+  assert.deepEqual(Common.read(chargedStack),{charges:100,pageId:definition.pageId});
+});
+
+for (const incomingCharged of [true,false]) {
+  test(`a new ${incomingCharged?'charged':'empty'} tome stays in the selected tab when only the other live form exists`,t=>{
+    const {p}=fixture(t);
+    const charged=core.ItemIdentifiers.TOME_OF_FIRE, empty=core.ItemIdentifiers.TOME_OF_FIRE_EMPTY_;
+    const definition=Common.getDefinition(charged);
+    const existingId=incomingCharged?empty:charged, incomingId=incomingCharged?charged:empty;
+    const existing=book(p,existingId,incomingCharged?0:100,definition.pageId,1,1);
+    p.setCurrentBankTab(0);
+    const incoming=new core.Item(incomingId,1);
+    if(incomingCharged)Common.set(incoming,definition,123,definition.pageId);
+    p.getInventory().add(incoming,false);
+    assert.equal(Bank.getTabForItem(p,incomingId),0,'a live different form is not a reserved placeholder');
+    Bank.deposits(p,incomingId,p.getInventory().getSlotForItemId(incomingId),1);
+    assert.equal(p.getBank(0).getAmount(incomingId),1);
+    assert.equal(p.getInventory().getAmount(incomingId),0);
+    assert.equal(p.getBank(1).getValidItems().length,1);
+    assert.equal(p.getBank(1).getItems().find(item=>item.getId()===existingId),existing);
+    assert.equal(existing.getAmount(),1);
+    const chargedStack=incomingCharged?p.getBank(0).getValidItems()[0]:existing;
+    assert.deepEqual(Common.read(chargedStack),{charges:incomingCharged?123:100,pageId:definition.pageId});
+  });
+}
+
+test('a shared tome placeholder claims deposits from another tab, search and save/load',t=>{
+  const {p}=fixture(t);
+  p.setPlaceholders(true);
+  const charged=core.ItemIdentifiers.TOME_OF_FIRE, empty=core.ItemIdentifiers.TOME_OF_FIRE_EMPTY_;
+  const definition=Common.getDefinition(charged), placeholderId=core.ItemDefinition.forId(charged).getPlaceholderId();
+  const item=book(p,charged,100,definition.pageId,1,1);
+  const bank=p.getBank(1), slot=bank.getItems().indexOf(item);
+  withdraw(p,item,1,1);
+  p.setCurrentBankTab(0);
+  p.getInventory().add(new core.Item(empty,1),false);
+  assert.equal(Bank.getTabForItem(p,empty),1,'the reserved family slot wins over a free current tab');
+  Bank.deposits(p,empty,p.getInventory().getSlotForItemId(empty),1);
+  assert.equal(p.getBank(0).getValidItems().length,0);
+  assert.equal(bank.getValidItems().length,1);
+  assert.equal(bank.getItems()[slot].getId(),empty);
+
+  Bank.search(p,'tome');
+  assert.equal(p.getBank(Bank.BANK_SEARCH_TAB_INDEX).getAmount(empty),1);
+  const saved=new Player(null);
+  PlayerSave.fromPlayer(p).applyToPlayer(saved);
+  assert.equal(saved.getBank(1).getValidItems().length,1);
+  assert.equal(saved.getBank(1).getItems()[slot].getId(),empty);
+
+  Bank.withdraw(p,empty,slot,1,Bank.BANK_SEARCH_TAB_INDEX);
+  assert.equal(p.getInventory().getAmount(empty),1);
+  assert.equal(bank.getItems()[slot].getAmount(),0);
+  assert.equal(bank.getItems()[slot].getId(),charged);
+  assert.equal(Bank.displayItemId(bank.getItems()[slot]),placeholderId);
+
+  const loaded=new Player(null);
+  PlayerSave.fromPlayer(p).applyToPlayer(loaded);
+  const restored=loaded.getBank(1).getItems().find(held=>held.getAmount()===0&&held.getId()===charged);
+  assert.ok(restored,'the shared placeholder survives save/load');
+  assert.equal(Bank.displayItemId(restored),placeholderId);
+});
+
+test('a full bank accepts either tome form into the shared placeholder',t=>{
+  const {p}=fixture(t);
+  p.setPlaceholders(true);
+  const charged=core.ItemIdentifiers.TOME_OF_EARTH, empty=core.ItemIdentifiers.TOME_OF_EARTH_EMPTY_;
+  const definition=Common.getDefinition(charged);
+  const item=book(p,charged,100,definition.pageId);
+  withdraw(p,item);
+  handlers.set(Bank.CAPACITY_EVENT,event=>{event.capacity=1;});
+  t.after(()=>handlers.delete(Bank.CAPACITY_EVENT));
+  const incoming=new core.Item(empty,1);
+  assert.equal(p.getBank(0).getFreeSlots(),0);
+  assert.equal(p.getBank(0).getAddableAmount(incoming),1,'capacity planning recognizes the shared placeholder');
+  assert.equal(p.getBank(0).canTake(incoming),true);
+  p.getInventory().add(incoming,false);
+  Bank.deposits(p,empty,p.getInventory().getSlotForItemId(empty),1);
+  assert.equal(p.getInventory().getAmount(empty),0);
+  assert.equal(p.getBank(0).getValidItems().length,1);
+  assert.equal(p.getBank(0).getItems()[0].getId(),empty);
+});
+
+test('an existing live matching charge stack takes priority over a stale placeholder',t=>{
+  const {p}=fixture(t);
+  p.setPlaceholders(true);
+  const item=book(p,core.ItemIdentifiers.TOME_OF_FIRE,100,core.ItemIdentifiers.BURNT_PAGE);
+  const [taken]=withdraw(p,item);
+  Common.set(taken,Common.getDefinition(taken.getId()),99,core.ItemIdentifiers.BURNT_PAGE);
+  const bank=p.getBank(0), placeholder=bank.getItems()[0];
+  const same=taken.clone(), different=taken.clone();
+  Common.set(different,Common.getDefinition(different.getId()),80,core.ItemIdentifiers.BURNT_PAGE);
+  bank.setItem(1,same);bank.setItem(2,different);
+  Bank.deposits(p,taken.getId(),p.getInventory().getItems().indexOf(taken),1);
+  assert.equal(bank.getItems()[0],placeholder);
+  assert.equal(placeholder.getAmount(),0,'an earlier empty placeholder cannot split an existing live stack');
+  assert.equal(bank.getItems()[1],same);
+  assert.equal(same.getAmount(),2);
+  assert.equal(bank.getItems()[2],different);
+  assert.equal(different.getAmount(),1);
+  assert.deepEqual([Common.read(same).charges,Common.read(different).charges],[99,80]);
+});
 test('bank exposes an event for actual successfully withdrawn inventory instances', () => {
   assert.equal(Bank.WITHDRAWN_ITEMS_EVENT, 'bank:withdrawn-items');
 });

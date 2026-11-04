@@ -454,13 +454,119 @@ test("a block on the tick of a swing doesn't replace it (cache interrupt priorit
   t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
   const WHIP_ATTACK = 1658;
   const WHIP_BLOCK = 1659;
+  assert.equal(player.getAnimationGeneration(), 0);
   player.performAnimation(new Animation(WHIP_ATTACK));
+  assert.equal(player.getAnimationGeneration(), 1);
   player.performAnimation(new Animation(WHIP_BLOCK));
+  assert.equal(player.getAnimationGeneration(), 1, 'a cache-priority rejection does not take ownership');
   assert.equal(player.getAnimation().getId(), WHIP_ATTACK, "the opponent's hit landing this tick keeps the swing");
   player.resetUpdating();
+  assert.equal(player.getAnimationGeneration(), 1, 'sync clears the queued mask while retaining its owner');
+  player.performAnimation(null);
+  assert.equal(player.getAnimationGeneration(), 1);
   player.performAnimation(new Animation(WHIP_BLOCK));
   player.performAnimation(new Animation(WHIP_ATTACK));
+  assert.equal(player.getAnimationGeneration(), 3);
   assert.equal(player.getAnimation().getId(), WHIP_ATTACK, 'a swing replaces a block');
   player.performAnimation(new Animation(-1));
+  assert.equal(player.getAnimationGeneration(), 4, 'an explicit reset is also a new accepted animation');
   assert.equal(player.getAnimation().getId(), -1, 'a reset always applies');
+  const { Priority } = require('../dist/game/model/Priority');
+  player.performAnimation(new Animation(WHIP_ATTACK, Priority.HIGH));
+  const generation = player.getAnimationGeneration();
+  player.performAnimation(new Animation(WHIP_BLOCK, Priority.LOW));
+  assert.equal(player.getAnimationGeneration(), generation, 'the explicit-priority rejection preserves ownership too');
+});
+
+const { BOW_OF_FAERDHINEN_ARROWS } = require('../dist/game/content/combat/ranged/CrystalBow');
+require('../plugins/items/BowOfFaerdhinen.plugin').register(PluginManager.createApi('BowOfFaerdhinen'));
+
+function nativeArcher(t, weaponId, ammoId = -1, amount = 1) {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { Location } = require('../dist/game/model/Location');
+  const { WeaponInterfaces } = require('../dist/game/content/combat/WeaponInterfaces');
+  const player = new Player(null, new Location(3200, 3200));
+  t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+  player.getEquipment().set(Slots.WEAPON_SLOT, new GroundItem(weaponId, amount));
+  player.getEquipment().set(Slots.AMMUNITION_SLOT, new GroundItem(ammoId, ammoId === -1 ? 0 : 5));
+  player.setWeapon(WeaponInterfaces.SHORTBOW);
+  player.getCombat().setRangedWeapon(RangedWeapon.getFor(player));
+  player.getCombat().setAmmunition(Ammunition.getFor(player));
+  return player;
+}
+
+function fireNativeArrow(player, rollValue) {
+  const { NPC } = require('../dist/game/entity/impl/npc/NPC');
+  const { Location } = require('../dist/game/model/Location');
+  const { NpcIdentifiers } = require('../dist/util/NpcIdentifiers');
+  const { RangedCombatMethod } = require('../dist/game/content/combat/method/impl/RangedCombatMethod');
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  const target = NPC.create(NpcIdentifiers.MAN, new Location(3204, 3200));
+  const method = new RangedCombatMethod();
+  assert.equal(method.canAttack(player, target), true);
+  const weaponAmount = player.getEquipment().get(Slots.WEAPON_SLOT).getAmount();
+  const ammoAmount = player.getEquipment().get(Slots.AMMUNITION_SLOT).getAmount();
+  roll(rollValue, () => method.start(player, target));
+  assert.equal(player.getEquipment().get(Slots.WEAPON_SLOT).getAmount(), weaponAmount, 'launch does not consume the weapon stack');
+  assert.equal(player.getEquipment().get(Slots.AMMUNITION_SLOT).getAmount(), ammoAmount, 'launch does not consume the quiver stack');
+  for (let tick = 0; tick < 3; tick++) TaskManager.process();
+  return method;
+}
+
+for (const { bow, travel, launch } of BOW_OF_FAERDHINEN_ARROWS) {
+  test(`Bowfa ${bow} stays equipped through repeated native shots without consuming or dropping items`, (t) => {
+    const { Projectile } = require('../dist/game/model/Projectile');
+    const shots = [];
+    const send = Projectile.prototype.sendProjectile;
+    t.mock.method(Projectile.prototype, 'sendProjectile', function () {
+      shots.push(this.projectileId);
+      return send.call(this);
+    });
+    for (const ammoId of [-1, Items.DRAGONSTONE_DRAGON_BOLTS_E_]) {
+      const archer = nativeArcher(t, bow, ammoId);
+      const weapon = archer.getEquipment().get(Slots.WEAPON_SLOT);
+      const quiver = archer.getEquipment().get(Slots.AMMUNITION_SLOT);
+      drops.length = 0;
+      assert.equal(weapon.getDefinition().isStackable(), false, 'the cached item is a bow, not a thrown stack');
+      for (const rollValue of [0.50, 0.10]) {
+        const method = fireNativeArrow(archer, rollValue);
+        assert.equal(archer.getEquipment().get(Slots.WEAPON_SLOT), weapon, 'impact retains the equipped bow');
+        assert.equal(weapon.getId(), bow);
+        assert.equal(weapon.getAmount(), 1);
+        assert.equal(archer.getGraphic().getId(), launch);
+        assert.equal(archer.getEquipment().get(Slots.AMMUNITION_SLOT), quiver);
+        assert.equal(quiver.getAmount(), ammoId === -1 ? 0 : 5, 'unrelated quiver ammunition stays untouched');
+        assert.deepEqual(drops, [], 'neither a bow nor ammunition lands on the floor');
+        assert.equal(method.shouldRenew(archer), true, 'the next shot can still fire');
+      }
+    }
+    assert.deepEqual(shots, [travel, travel, travel, travel], 'each shot retains its colour-matched cached projectile');
+  });
+}
+
+test('native thrown and crossbow shots still consume their actual ammunition on impact', (t) => {
+  for (const [weaponId, ammoId, weaponAmount, weaponLeft, ammoLeft, droppedId] of [
+    [Items.RUNE_KNIFE, -1, 5, 4, 0, Items.RUNE_KNIFE],
+    [Items.DRAGON_CROSSBOW, Items.DRAGONSTONE_DRAGON_BOLTS_E_, 1, 1, 4, Items.DRAGONSTONE_DRAGON_BOLTS_E_],
+  ]) {
+    const archer = nativeArcher(t, weaponId, ammoId, weaponAmount);
+    drops.length = 0;
+    fireNativeArrow(archer, 0.50);
+    assert.equal(archer.getEquipment().get(Slots.WEAPON_SLOT).getAmount(), weaponLeft);
+    assert.equal(archer.getEquipment().get(Slots.AMMUNITION_SLOT).getAmount(), ammoLeft);
+    assert.deepEqual(drops.map(({ id, amount }) => [id, amount]), [[droppedId, 1]]);
+  }
+});
+
+test('Bowfa consumption ownership preserves the existing ammunition eligibility checks', (t) => {
+  for (const { bow } of BOW_OF_FAERDHINEN_ARROWS) {
+    const archer = nativeArcher(t, bow);
+    assert.equal(Factory.checkAmmo(archer, 2), false, 'one bow cannot satisfy a request for two');
+    archer.getEquipment().get(Slots.WEAPON_SLOT).setAmount(0);
+    assert.equal(Factory.checkAmmo(archer, 1), false, 'an empty weapon slot stack cannot fire');
+  }
+  for (const ammoId of [-1, Items.RUNE_ARROW]) {
+    const archer = nativeArcher(t, Items.DRAGON_CROSSBOW, ammoId);
+    assert.equal(Factory.checkAmmo(archer, 1), false, 'other weapons still require compatible ammunition');
+  }
 });

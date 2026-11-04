@@ -779,14 +779,20 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             };
         }
 
-        case ServerPacketId.RUN_ENERGY:
+        case ServerPacketId.RUN_ENERGY: {
+            const percent = reader.readByte();
+            const running = reader.readBoolean();
+            const units = reader.readShort();
+            const weight = reader.readSignedShort();
+            const staminaTicks = reader.readShort();
+            const staminaActive = reader.readShort();
             return {
                 type: "run_energy",
-                payload: {
-                    percent: reader.readByte(),
-                    running: reader.readBoolean(),
-                },
+                payload: staminaTicks > 0 && staminaActive > 0
+                    ? { percent, running, units, weight, staminaTicks, staminaMultiplier: staminaActive }
+                    : { percent, running, units, weight },
             };
+        }
 
         case ServerPacketId.SPOT_ANIM: {
             const spotId = reader.readShort();

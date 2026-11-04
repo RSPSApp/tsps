@@ -5,6 +5,11 @@ skilling rocks below them: soft clay, lead, lovakite, nickel, rubium, sunstone, 
 and Daeyalt.
 Pickaxe-specific rules are in `plugins/skills/mining/`.
 
+`plugins/areas/MiningGuild.plugin.js` checks 60 current Mining at all four Falador entrance
+ladders and the Dwarven Mine door; temporary boosts count. It also operates both doors into
+the members' section, including the east door. Exits never require a Mining level, and those
+inner doors only admit players on members' worlds. The Motherlode tunnel has its own level check.
+
 ## What live OSRS does
 
 From rsprox captures (recordings 3139 and 3182, iron rocks, rev 232) unless another source is named.

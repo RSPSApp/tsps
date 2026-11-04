@@ -75,6 +75,12 @@ function process() {
 
 /** Their remains are a shade's only drop (Wiki: always). */
 function drops(event) {
+  const zealot = Common.data.zealot;
+  if (event?.drops && zealot.npcs.some((name) => Common.npcId(name) === (event.npcId ?? event.npc?.getId?.()))) {
+    // Wiki: an Undead Zealot always drops bleached bones, on top of its tertiary scroll roll.
+    event.drops.push({ itemId: Common.objId(zealot.bones), amount: 1 });
+    return;
+  }
   const pair = pairOf(event?.npcId ?? event?.npc?.getId?.());
   if (!pair?.remains || !event.drops) return;
   event.drops.length = 0;

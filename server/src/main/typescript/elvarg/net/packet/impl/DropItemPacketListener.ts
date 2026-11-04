@@ -76,8 +76,8 @@ export class DropItemPacketListener {
       const remaining = player.getInventory().getItems()[itemSlot];
       if (remaining?.getId() !== id || remaining?.getAmount() < discardedItem.getAmount()) {
         PluginManager.emitCustomEvent("item:discarded", { player, item: discardedItem });
+        Sounds.sendSound(player, Sound.DROP_ITEM);
       }
-      Sounds.sendSound(player, Sound.DROP_ITEM);
       return;
     }
 

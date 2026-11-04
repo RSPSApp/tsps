@@ -207,3 +207,34 @@ test("two registrations of one shared object on a tile leave one", () => {
   assert.equal(ObjectManager.objectsAt(at).length, 1);
   ObjectManager.deregister(ObjectManager.objectsAt(at)[0], true);
 });
+
+
+test("generic chest Open, Search and Shut use shared object state", () => {
+  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+  const closedId = CacheDefinitions.getLocId("chestclosed");
+  const openId = CacheDefinitions.getLocId("chestopen");
+  const at = new Location(3200, 3226, 0);
+  const messages = [];
+  const player = { sendMessage: text => messages.push(text) };
+  require("../plugins/objects/Chests.plugin").register(PluginManager.createApi("Chests"));
+  const interact = (id, option) => {
+    const object = MapObjects.get(id, at.clone(), null);
+    assert.ok(object);
+    const clickType = object.getDefinition().getInteractions().indexOf(option) + 1;
+    assert.ok(clickType > 0, option);
+    assert.equal(PluginManager.emitObjectInteraction({ player, object, objectId: id, clickType }), true);
+  };
+  ObjectManager.register(new GameObject(closedId, at.clone(), 10, 0, null), true);
+  try {
+    interact(closedId, "Open");
+    assert.equal(MapObjects.get(closedId, at.clone(), null), null);
+    assert.ok(RegionManager.reloadRegion(REGION));
+    interact(openId, "Search");
+    assert.deepEqual(messages, ["You search the chest, but find nothing of interest."]);
+    interact(openId, "Shut");
+    assert.equal(MapObjects.get(openId, at.clone(), null), null);
+    assert.ok(MapObjects.get(closedId, at.clone(), null));
+  } finally {
+    for (const object of [...ObjectManager.objectsAt(at)]) ObjectManager.deregister(object, true);
+  }
+});

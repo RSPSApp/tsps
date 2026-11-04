@@ -370,6 +370,8 @@ test('mandatory source route reaches completion through the registered handlers'
 
   emit(h, 'door:toggle', { objectId: O.GATE_72 });
   assert.equal(h.quest.getStage(p), 10);
+  assert.equal(h.spawned.length, 0, 'entering the swamp does not summon Filliman');
+  objectAction(h, { objectId: O.GROTTO, ...interaction(['Enter'], 1) });
   assert.ok(h.spawned.some((npc) => npc.getId() === N.FILLIMAN_TARLOCK));
 
   p.setWearingGhostspeak(false);
@@ -385,15 +387,19 @@ test('mandatory source route reaches completion through the registered handlers'
     handler({ player: p, groundItemId: WASHING_BOWL, location: { x: 3437, y: 3337 } });
   }
   assert.equal(p.inventory.getAmount(MIRROR), 1);
-  itemOnNpcAction(h, { npcId: N.FILLIMAN_TARLOCK, itemId: MIRROR });
+  // Full native item-use conversations are covered in npc-dialogue-event-entrypoints.
+  emit(h, 'npc-dialogue:line', { npcId: N.FILLIMAN_TARLOCK, text: 'It must be a sign...' }).after();
   assert.equal(h.quest.getStage(p), 25);
   assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'finding-filliman-talking-to-filliman-again-after-using-a-mirror-on-him');
 
   objectAction(h, { objectId: O.GROTTO_TREE, ...interaction(['Look-at', 'Search'], 2) });
   assert.equal(p.inventory.getAmount(JOURNAL), 1);
-  itemOnNpcAction(h, { npcId: N.FILLIMAN_TARLOCK, itemId: JOURNAL });
+  emit(h, 'npc-dialogue:action', { npcId: N.FILLIMAN_TARLOCK, stepId: 'JPq1Gd', kind: 'message' });
   assert.equal(h.quest.getStage(p), 30);
   assert.equal(p.inventory.getAmount(JOURNAL), 0);
+  assert.equal(p.inventory.getAmount(DRUIDIC_SPELL), 0);
+  emit(h, 'npc-dialogue:line', { npcId: N.FILLIMAN_TARLOCK,
+    text: "It is required if you're to cast this druid spell." }).after();
   assert.equal(p.inventory.getAmount(DRUIDIC_SPELL), 1);
 
   assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'finding-filliman-subsequent-dialogue-with-filliman-2');
@@ -492,7 +498,7 @@ test('mandatory source route reaches completion through the registered handlers'
   assert.equal(variant(h, N.NATURE_SPIRIT), 'returning-to-filliman-s-grove-attempting-to-talk-to-him-again-before-he-disappears');
 });
 
-test('invisible ghasts in Mort Myre attack, rot food, and become visible', () => {
+test('uncharged ghast attacks rot food or damage without making the ghast attackable', () => {
   const player = makePlayer();
   const h = harness({ player });
   player.setLocation(new core.Location(3440, 3345, 0));
@@ -512,19 +518,18 @@ test('invisible ghasts in Mort Myre attack, rot food, and become visible', () =>
     h.area.process(player);
     assert.equal(player.inventory.getAmount(I.SHRIMPS), 0, 'the attack rots the food');
     assert.equal(player.inventory.getAmount(I.ROTTEN_FOOD), 1);
-    assert.equal(h.spawned.at(-1).getId(), N.GHAST_2, 'a ghast that lands a hit becomes visible');
+    assert.equal(h.spawned.length, 0, 'rotting food does not reveal an attackable ghast');
     assert.equal(player.damage.length, 0, 'rotting food replaces the damage');
 
     // With nothing to rot the same roll deals 1-3 damage.
-    death(h, h.spawned.at(-1));
     h.clock.tick = 200;
     Math.random = () => 0.9;
     h.area.process(player);
     assert.equal(player.damage.length, 1);
     assert.ok(player.damage[0].getDamage() >= 1 && player.damage[0].getDamage() <= 3);
+    assert.equal(h.spawned.length, 0, 'an unprotected damaging hit does not reveal a ghast either');
 
     // 7/10 of attempts miss: no rot, no damage, no visible ghast.
-    death(h, h.spawned.at(-1));
     h.clock.tick = 400;
     Math.random = () => 0.1;
     const spawnedBefore = h.spawned.length;
@@ -555,6 +560,7 @@ test('one invisible ghast keeps one visible copy through repeat attacks, death a
     h.clock.tick = 0;
     h.area.process(player); // the first pass only schedules the attempt
     player.inventory.adds(I.SHRIMPS, 3);
+    player.inventory.adds(FILLED_POUCH, 1);
 
     h.clock.tick = 20;
     h.area.process(player);
@@ -568,7 +574,7 @@ test('one invisible ghast keeps one visible copy through repeat attacks, death a
     h.clock.tick = 100;
     h.area.process(player);
     assert.equal(visibleGhasts().length, 1, 'a revealed source does not spawn a second copy');
-    assert.equal(player.inventory.getAmount(I.SHRIMPS), 2, 'a revealed source does not keep rotting food alongside melee combat');
+    assert.equal(player.inventory.getAmount(I.SHRIMPS), 3, 'a pouch-revealed source does not rot food alongside melee combat');
 
     // Using the pouch on a source that is already visible costs nothing and adds no copy.
     player.inventory.adds(FILLED_POUCH, 1);
@@ -663,7 +669,7 @@ test('a filled druid pouch spends a charge to reveal an attacking ghast instead 
     h.area.process(player);
     assert.equal(player.inventory.getAmount(I.SHRIMPS), 0, 'without a charged pouch the food rots');
     assert.equal(player.inventory.getAmount(I.ROTTEN_FOOD), 1);
-    assert.equal(visibleGhasts().length, 4);
+    assert.equal(visibleGhasts().length, 3, 'the empty pouch leaves the next attacker invisible');
   } finally {
     Math.random = random;
   }
@@ -735,21 +741,10 @@ test('Filliman repeat talk selects the ghostspeak conversation before the mirror
   h.player.setWearingGhostspeak(false);
   assert.equal(condition(h, N.FILLIMAN_TARLOCK, text), false);
   assert.equal(condition(h, N.FILLIMAN_TARLOCK, 'Without wearing a ghostspeak amulet:'), true);
+  assert.equal(condition(h, N.FILLIMAN_TARLOCK, 'If the player uses his journal on Filliman without wearing the ghostspeak amulet:'), true);
+  h.player.setWearingGhostspeak(true);
+  assert.equal(condition(h, N.FILLIMAN_TARLOCK, 'If the player uses his journal on Filliman without wearing the ghostspeak amulet:'), false);
   assert.equal(h.quest.getStage(h.player), 20);
-});
-
-test('direct mirror use works after entering the swamp and still requires the mirror and ghostspeak', () => {
-  const h = harness(), p = h.player;
-  h.quest.setStage(p, 10);
-  assert.equal(itemOnNpcAction(h, {npcId: N.FILLIMAN_TARLOCK, itemId: MIRROR}).handled, false);
-  p.inventory.adds(MIRROR, 1);
-  p.setWearingGhostspeak(false);
-  itemOnNpcAction(h, {npcId: N.FILLIMAN_TARLOCK, itemId: MIRROR});
-  assert.equal(h.quest.getStage(p), 10);
-  p.setWearingGhostspeak(true);
-  assert.equal(itemOnNpcAction(h, {npcId: N.FILLIMAN_TARLOCK, itemId: MIRROR}).handled, true);
-  assert.equal(h.quest.getStage(p), 25);
-  assert.equal(p.inventory.getAmount(MIRROR), 1, 'showing the mirror does not consume it');
 });
 
 test('Bloom grows every adjacent plant once, charges Prayer once and observes the animation delay', () => {
@@ -849,6 +844,58 @@ test('native revealed ghasts keep separate source tiles and a mobile combat targ
   }
 });
 
+test('re-summoned Filliman occupies the ritual tile between the three stones', t => {
+  const h = harness({ nativeActors: true });
+  t.after(() => { for (const handler of h.logouts) handler({ player: h.player }); });
+  h.quest.setStage(h.player, 50);
+  objectAction(h, { objectId: O.GROTTO, ...interaction(['Enter'], 1) });
+  const at = h.spawned[0].getLocation();
+  assert.deepEqual([at.x, at.y, at.z], [3440, 3336, 0]);
+});
+
+test('native swamp attacks keep the original unattackable NPC_INFO until a pouch charge is spent', t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const session = new PlayerSession({ kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} });
+  const player = new Player(session); session.setPlayer(player);
+  player.setIndex(102); player.setUsername('ghastvisibility'); player.setRegistered(true);
+  player.setLocation(new core.Location(3440, 3345)); player.needsPlacement = false;
+  const h = harness({ nativeActors: true, player }); h.quest.setStage(player, 90);
+  const source = core.PluginManager.spawnNpc({ id: N.GHAST, x: 3441, y: 3345, z: 0, wanderRadius: 0 });
+  source.needsPlacement = false;
+  const views = [], old = core.PluginManager.customEventHooks.get('network:sync-views');
+  core.PluginManager.createApi('ghast-native-info-test').onCustomEvent('network:sync-views', event => {
+    if (event.player === player) views.push(event.npcs.map(npc => npc.typeId));
+  });
+  t.after(() => {
+    for (const handler of h.logouts) handler({ player });
+    core.PluginManager.removeNpc(source); player.setRegistered(false);
+    if (old) core.PluginManager.customEventHooks.set('network:sync-views', old);
+    else core.PluginManager.customEventHooks.delete('network:sync-views');
+  });
+  t.mock.method(Math, 'random', () => 0.9);
+  let tick = 0;
+  const publish = () => {
+    core.World.updateLocalNpcs(player, [source, ...h.spawned.filter(npc => npc.isRegistered())]);
+    session.flush(++tick); session.flush(++tick);
+    return views.at(-1);
+  };
+  assert.deepEqual(publish(), [N.GHAST]);
+  assert.ok(!source.getCurrentDefinition(player).getActions().includes('Attack'));
+  player.getInventory().add(new core.Item(I.SHRIMPS));
+  h.area.process(player); h.clock.tick = 20; h.area.process(player);
+  assert.equal(player.getInventory().getAmount(I.ROTTEN_FOOD), 1);
+  assert.deepEqual(publish(), [N.GHAST], 'rotting food leaves the actual native NPC unattackable');
+  h.clock.tick = 60; h.area.process(player);
+  assert.deepEqual(publish(), [N.GHAST], 'an unprotected damaging attack does not send a visible form');
+  player.getInventory().add(new core.Item(FILLED_POUCH));
+  h.clock.tick = 100; h.area.process(player);
+  assert.equal(player.getInventory().getAmount(FILLED_POUCH), 0);
+  assert.ok(publish().includes(N.GHAST_2), 'automatic pouch protection does reveal the attackable form');
+  assert.ok(h.spawned[0].getCurrentDefinition(player).getActions().includes('Attack'));
+});
+
 test('native early grotto clicks keep Filliman reachable, recover via the exit and preserve later entry', async t => {
   const { PluginManager } = core;
   const { Player } = require('../dist/game/entity/impl/player/Player');
@@ -904,9 +951,15 @@ test('native early grotto clicks keep Filliman reachable, recover via the exit a
   assert.deepEqual(publish(), [], 'no Filliman is granted before the required gate progression');
   emit(h, 'door:toggle', { objectId: O.GATE_72 });
   assert.equal(h.quest.getStage(player), 10);
+  assert.deepEqual(publish(), [], 'passing the swamp gate alone does not summon the ghost');
+  for (const handler of h.logins) handler({ player });
+  assert.deepEqual(publish(), [], 'logging in before the first entrance click does not summon him');
   await click(O.GROTTO, 3440, 3337);
   assert.ok(player.getLocation().y < 4000, 'early Enter summons Filliman instead of leaving him in another scene');
   assert.deepEqual(publish(), [N.FILLIMAN_TARLOCK], 'the owner actually receives Filliman in native session views');
+  const outside = h.spawned.find(npc => npc.isRegistered());
+  assert.deepEqual([outside.getLocation().x, outside.getLocation().y, outside.getLocation().z],
+    [3440, 3336, 0], 'Filliman stands between the three ritual stones');
   await click(O.GROTTO, 3440, 3337);
   assert.equal(h.spawned.filter(npc => npc.isRegistered()).length, 1, 'repeat Enter does not duplicate Filliman');
   assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'finding-filliman-talking-to-filliman');
@@ -921,6 +974,7 @@ test('native early grotto clicks keep Filliman reachable, recover via the exit a
   for (const handler of h.logouts) handler({ player });
   assert.equal(h.spawned.filter(npc => npc.isRegistered()).length, 0);
   for (const handler of h.logins) handler({ player });
+  assert.equal(h.spawned.filter(npc => npc.isRegistered()).length, 0, 'the exterior ghost must be summoned again after relog');
   await click(O.GROTTO, 3440, 3337);
   assert.deepEqual(publish(), [N.FILLIMAN_TARLOCK], 'relogin restores exactly one usable owner actor');
   h.quest.setStage(player, 60);

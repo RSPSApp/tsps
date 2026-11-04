@@ -135,6 +135,38 @@ function craft(player, menu, itemId, amount, ticks) {
 
 const messages = rows => rows.filter(row => row[0] === 'message').map(row => row[1]);
 
+test('wool strings holy and unholy symbols in either order for four Crafting XP', () => {
+  for (const [input, output] of [[ItemIds.UNSTRUNG_SYMBOL, ItemIds.UNBLESSED_SYMBOL], [ItemIds.UNSTRUNG_EMBLEM, ItemIds.UNPOWERED_SYMBOL]]) {
+    for (const reverse of [false, true]) {
+      const { player } = playerWith([[input, 1], [ItemIds.BALL_OF_WOOL, 1]], { level: 1 });
+      const event = { player, usedItemId: reverse ? input : ItemIds.BALL_OF_WOOL,
+        usedWithItemId: reverse ? ItemIds.BALL_OF_WOOL : input, handled: false };
+      handlers.stringAmulet(event);
+      assert.equal(event.handled, true);
+      assert.equal(player.getInventory().getAmount(output), 0, 'the action retains its existing one-tick delay');
+      tasks.at(-1).execute();
+      assert.equal(player.getInventory().getAmount(input), 0);
+      assert.equal(player.getInventory().getAmount(ItemIds.BALL_OF_WOOL), 0);
+      assert.equal(player.getInventory().getAmount(output), 1);
+      assert.deepEqual(player.log.filter(row => row[0] === 'xp'), [['xp', 4]]);
+      assert.ok(player.log.some(row => row[1] === 'You put some string on your symbol.'));
+    }
+  }
+});
+
+test('stringing keeps ordinary amulets and rechecks materials before consuming them', () => {
+  for (const cancel of [false, true]) {
+    const { player } = playerWith([[ItemIds.GOLD_AMULET_U_, 1], [ItemIds.BALL_OF_WOOL, 1]]);
+    handlers.stringAmulet({ player, usedItemId: ItemIds.BALL_OF_WOOL, usedWithItemId: ItemIds.GOLD_AMULET_U_ });
+    if (cancel) player.getInventory().deleteNumber(ItemIds.BALL_OF_WOOL, 1);
+    tasks.at(-1).execute();
+    assert.equal(player.getInventory().getAmount(ItemIds.GOLD_AMULET), cancel ? 0 : 1);
+    assert.equal(player.getInventory().getAmount(ItemIds.GOLD_AMULET_U_), cancel ? 1 : 0);
+    assert.equal(player.log.filter(row => row[0] === 'xp').length, cancel ? 0 : 1);
+    if (!cancel) assert.ok(player.log.some(row => row[1] === 'You put some string on your amulet.'));
+  }
+});
+
 test('needle on leather opens the captured skillmulti menu with all seven items, coif included', t => {
   membersWorld(t, true);
   const { player, getMenu } = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.LEATHER, 13]], { level: 1 });

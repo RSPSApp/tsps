@@ -680,6 +680,7 @@ function harvest(player, patch) {
     const left = pickedAmount - (Number.isSafeInteger(pick.stored) ? Math.min(pickedAmount, Math.max(0, pick.stored)) : 0);
     const sack = crop.type === "HERB" && picked === produce && player.getInventory().getItems().find(i => i.getId() === Data.itemId("Open herb sack"));
     if (left > 0 && !(sack && Guild.storeCrop(player, sack, produce, left)) && !give(player, picked, left)) return false;
+    core.PluginManager.emitCustomEvent("farming:harvested", { player, crop: crop.key, patch, itemId: picked, amount: pickedAmount });
     if (blessing) player.getInventory().deleteNumber(Data.itemId("Bologa's blessing"), 1);
     if (pickLine) spam(player, pickLine === true ? `You pick ${article(core.CacheDefinitions.getItem(picked).name.toLowerCase())}.`
         : pickLine.startsWith("You ") ? pickLine : `You pick ${pickLine}.`);
@@ -1170,6 +1171,7 @@ function attach(api) {
     api.onCustomEvent("agent:advance-time", advanceTime);
     api.onCustomEvent("player:world-input", Hespori.hesporiInput);
     api.onCustomEvent("npc-dialogue:action", Hespori.reentryAction);
+    api.onCustomEvent("npc-dialogue:action", Services.gardenerProtection);
     api.onCustomEvent("interface:changed", Hespori.warningInterfaceChanged);
     api.onCustomEvent("player:world-input", cancelWork);
     api.onCustomEvent("npc-drops:generated", Hespori.hesporiLoot);
@@ -1188,5 +1190,5 @@ function attach(api) {
     api.registerNpcCombatMethodProvider(core.NpcIdentifiers.HESPORI_2, Hespori.HesporiCombat, { singleton: false });
 }
 
-Object.assign(module.exports, { FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, noteSeedling, advanceTime, attach, tick: farmingTick, retrievalItems, startBinWork,
+Object.assign(module.exports, { FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, attach, tick: farmingTick, retrievalItems, startBinWork,
     startClear, after, spam, sound });

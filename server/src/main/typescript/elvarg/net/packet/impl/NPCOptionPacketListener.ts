@@ -1,6 +1,7 @@
 import { World } from "../../../game/World";
 import { CombatSpells } from "../../../game/content/combat/magic/CombatSpells";
 import { EffectSpells } from "../../../game/content/combat/magic/EffectSpells";
+import { Spell } from "../../../game/content/combat/magic/Spell";
 import { NpcInteractionManager } from "../../../game/entity/impl/npc/NpcInteractionManager";
 import { PluginManager } from "../../../plugins/PluginManager";
 import { Combat } from "../../../game/content/combat/Combat";
@@ -152,14 +153,20 @@ export class NPCOptionPacketListener {
     return handled;
   }
 
-  public static castSpell(player: any, index: number, spellId: number): boolean {
+  public static castSpell(player: any, index: number, spellId: number, selection?: { name: string; widgetId: number }): boolean {
     if (!player || player.getHitpoints?.() <= 0 || player.busy?.()) return false;
     if (index < 0 || index >= World.getNpcs().capacityReturn()) return false;
     const npc = World.getNpcs().get(index);
     // Utility spells (Telekinetic Grab in the Mage Training Arena) are scripted on NPCs just as
     // combat spells are: the fall-back keeps the same rune and XP handling.
     const combatSpell = CombatSpells.getCombatSpell(spellId);
-    const spell = combatSpell ?? EffectSpells.forSpellId(spellId);
+    const resolution = {
+      player, spellId, spellName: selection?.name, spellWidget: selection?.widgetId,
+      spell: (combatSpell ?? EffectSpells.forSpellId(spellId)) as Spell | null,
+    };
+    // Plugins can supply scripted utility spells missing from the legacy spell tables.
+    if (!resolution.spell && selection) PluginManager.emitCustomEvent("magic:resolve-spell", resolution);
+    const spell = resolution.spell;
     if (!npc || !spell || !BoatManager.rootLocation(player).isWithinDistance(BoatManager.rootLocation(npc), 24) || npc.getHitpoints?.() <= 0) {
       player.getMovementQueue().reset();
       return false;
@@ -200,6 +207,7 @@ export class NPCOptionPacketListener {
         !spell.canCastOnTarget(player, npc) || !spell.canCast(player, false)) return false;
 
     let consumed = false;
+    let consumptionAttempted = false;
     const event = {
       player,
       npc,
@@ -209,6 +217,7 @@ export class NPCOptionPacketListener {
       spellId: spell.spellId(),
       location: { x: targetLocation.getX(), y: targetLocation.getY(), z: targetLocation.getZ() },
       consumeRunes: () => {
+        consumptionAttempted = true;
         if (consumed || !spell.canCast(player, true)) return false;
         consumed = true;
         player.setPositionToFace(targetLocation);
@@ -221,6 +230,11 @@ export class NPCOptionPacketListener {
       },
       handled: false,
     };
-    return PluginManager.emitSpellOnNpc(event) && consumed;
+    const handled = PluginManager.emitSpellOnNpc(event);
+    // A scripted cast may already have refused with its own resource/cooldown feedback.
+    if (!handled && !consumptionAttempted && !npc.getCurrentDefinition?.(player)?.isAttackable?.()) {
+      player.sendMessage("You can't attack this npc.");
+    }
+    return handled && consumed;
   }
 }

@@ -198,8 +198,8 @@ export function sendHandshake(name?: string): void {
         console.warn("[ws] Cannot send handshake - state.socket not open");
         return;
     }
-    const { isMobileMode } = require("../../common/utils/DeviceUtil");
-    const clientType = isMobileMode ? 1 : 0;
+    const { prefersMobileGameframe } = require("../../common/utils/DeviceUtil");
+    const clientType = prefersMobileGameframe() ? 1 : 0;
     send({
         type: "handshake",
         payload: { clientType, name: name || "Player" },

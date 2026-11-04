@@ -82,6 +82,35 @@ export class Bank extends ItemContainer {
     public static readonly WITHDRAWN_ITEMS_EVENT = "bank:withdrawn-items";
     /** `{ player }` after the open bank redraws its items and the side panel's inventory. */
     public static readonly REFRESHED_EVENT = "bank:refreshed";
+    public static readonly PLACEHOLDER_IDENTITY_EVENT = "bank:placeholder-identity";
+
+    public static placeholderIdentity(itemId: number): { placeholderId: number; itemIds: number[] } | null {
+        if (!Number.isInteger(itemId) || itemId < 0) return null;
+        const event = { itemId, placeholderId: -1, itemIds: [] as number[] };
+        getPluginManager().emitCustomEvent(Bank.PLACEHOLDER_IDENTITY_EVENT, event);
+        if (!Number.isInteger(event.placeholderId) || event.placeholderId < 0) return null;
+        const ids = [...new Set([event.itemId, event.placeholderId, ...(Array.isArray(event.itemIds) ? event.itemIds : [])])]
+            .filter((id) => Number.isInteger(id) && id >= 0);
+        return { placeholderId: event.placeholderId, itemIds: ids };
+    }
+
+    public static placeholderFamily(itemId: number): number[] {
+        return Bank.placeholderIdentity(itemId)?.itemIds ?? [itemId];
+    }
+
+    public static sharesPlaceholder(a: number, b: number): boolean {
+        if (a === b) return true;
+        if (a < 0 || b < 0) return false;
+        return Bank.placeholderFamily(a).includes(b);
+    }
+
+    public static placeholderBankId(itemId: number): number {
+        if (!Number.isInteger(itemId) || itemId < 0) return -1;
+        if (ItemDefinition.forId(itemId).getPlaceholderId() >= 0) return itemId;
+        const identity = Bank.placeholderIdentity(itemId);
+        if (!identity) return -1;
+        return ItemDefinition.forId(identity.placeholderId).getPlaceholderId() >= 0 ? identity.placeholderId : -1;
+    }
 
     /** Ends the client's bank search, as OSRS does on closing the bank or picking a tab. */
     public static closeSearch(player: Player): void {
@@ -106,6 +135,10 @@ export class Bank extends ItemContainer {
     public static readonly PLACEHOLDER_CHILD = 40; // bankmain:placeholder
     public static readonly DEPOSIT_INVENTORY_CHILD = 47; // bankmain:depositinv
     public static readonly DEPOSIT_WORN_CHILD = 49; // bankmain:depositworn
+    /** bankmain:incinerator_target (0x36), a drop target that destroys the dragged bank stack. */
+    public static readonly INCINERATOR_CHILD = 54;
+    /** `{ player, item, tab, slot, handled }`: a bank stack dropped on the incinerator. */
+    public static readonly INCINERATE_EVENT = "bank:incinerate";
     /** Drops on the empty space after tab N's items report item-grid slot 1428 + N. */
     public static readonly TAB_DROP_SLOT_OFFSET = 1410 + 9 * 2;
     /**
@@ -193,13 +226,14 @@ export class Bank extends ItemContainer {
         return Math.min(super.getFreeSlots() + Bank.MAX_SLOTS - this.items.length, this.roomLeft());
     }
 
-    /** Banked items always stack: a full bank still takes more of an item it holds (same metadata). */
+    /** A full bank accepts reserved placeholders or live stacks with matching metadata. */
     public canTake(item: Item): boolean {
         if (this.getFreeSlots() > 0) return true;
         const id = ItemDefinition.forId(item.getId()).unNote();
         const meta = JSON.stringify(item.getMeta() ?? null);
-        return this.items.some((held) => held != null && held.getId() === id
-            && JSON.stringify(held.getMeta() ?? null) === meta);
+        return this.items.some((held) => held != null && (
+            (held.getId() === id && (held.getAmount() === 0 || JSON.stringify(held.getMeta() ?? null) === meta))
+            || (held.getAmount() === 0 && Bank.sharesPlaceholder(held.getId(), id))));
     }
 
     public isEmpty(): boolean {
@@ -467,7 +501,10 @@ export class Bank extends ItemContainer {
     public static displayItemId(item: Item): number {
         if (item.getAmount() > 0) return item.getId();
         const placeholderId = item.getDefinition().getPlaceholderId();
-        return placeholderId >= 0 ? placeholderId : item.getId();
+        if (placeholderId >= 0) return placeholderId;
+        const bankId = Bank.placeholderBankId(item.getId());
+        const familyPlaceholder = bankId >= 0 ? ItemDefinition.forId(bankId).getPlaceholderId() : -1;
+        return familyPlaceholder >= 0 ? familyPlaceholder : item.getId();
     }
 
     /** Removes the placeholder in `slot` of `tab`. */
@@ -551,8 +588,19 @@ export class Bank extends ItemContainer {
         }
         if (tab !== undefined && (tab < 0 || tab > 9)) return true;
 
+        if (targetGroup === Bank.MAIN_INTERFACE_ID && targetChild === Bank.INCINERATOR_CHILD) {
+            // The incinerator destroys bank stacks only. A dragged inventory item must not fall
+            // through to the deposit branch and disappear into the bank instead.
+            if (fromBank) Bank.incinerateDragged(player, drag.sourceSlot, drag.sourceItemId);
+            return true;
+        }
+
         if (fromInventory && targetGroup === Bank.SIDE_INTERFACE_ID && targetChild === Bank.SIDE_ITEMS_CHILD) {
-            player.getInventory().swap(drag.sourceSlot, drag.targetSlot).refreshItems();
+            const inventory = player.getInventory();
+            // Legacy slot-only requests omit the ID or use a negative/16-bit sentinel.
+            if (drag.sourceItemId != null && drag.sourceItemId >= 0 && drag.sourceItemId !== 0xffff
+                && inventory.getItems()[drag.sourceSlot]?.getId() !== drag.sourceItemId) return true;
+            inventory.swap(drag.sourceSlot, drag.targetSlot).refreshItems();
         } else if (fromInventory && targetGroup === Bank.MAIN_INTERFACE_ID) {
             Bank.depositDragged(player, drag.sourceSlot, drag.sourceItemId, tab);
         } else if (fromBank && tab !== undefined) {
@@ -562,6 +610,30 @@ export class Bank extends ItemContainer {
         }
         GameConstants.PLAYER_PERSISTENCE.requestSave(player, "container-reorder");
         return true;
+    }
+
+    /** Publishes the bank stack a drag released on the incinerator for the destroy confirmation. */
+    private static incinerateDragged(player: Player, clientSlot: number, itemId: number): void {
+        let entry: { tab: number; slot: number; item: Item } | undefined;
+        if (player.isSearchingBank()) {
+            // Search results are their own display list, not the bank layout: find the actual
+            // stack whose identity the displayed result cloned. Aggregated/ambiguous results
+            // stay unresolved rather than guessing a slot.
+            const searched = player.getBank(Bank.BANK_SEARCH_TAB_INDEX).getItems()[clientSlot];
+            if (!searched || searched.getId() !== itemId || searched.getAmount() <= 0) return;
+            entry = Bank.layout(player).find(({ item }) => item.equals(searched));
+        } else {
+            entry = Bank.resolveDisplaySlot(player, clientSlot) ?? undefined;
+            if (!entry || Bank.displayItemId(entry.item) !== itemId || entry.item.getAmount() <= 0) return;
+        }
+        if (!entry) return;
+        getPluginManager().emitCustomEvent(Bank.INCINERATE_EVENT, {
+            player,
+            item: entry.item,
+            tab: entry.tab,
+            slot: entry.slot,
+            handled: false,
+        });
     }
 
     /** The slot after `bank`'s last item, where a moved item joins the tab; -1 if full. */
@@ -1142,6 +1214,19 @@ export class Bank extends ItemContainer {
             }
         }
 
+        const family = Bank.placeholderFamily(itemID).filter((id) => id !== itemID);
+        if (family.length > 0) {
+            for (let k = 0; k < this.TOTAL_BANK_TABS; k++) {
+                if (k === this.BANK_SEARCH_TAB_INDEX) {
+                    continue;
+                }
+                if (player.getBank(k).getItems().some((held) => held.getId() !== itemID
+                    && held.getAmount() === 0 && family.includes(held.getId()))) {
+                    return k;
+                }
+            }
+        }
+
         // Find empty bank slot
         if (player.getBank(player.getCurrentBankTab()).getFreeSlots() > 0) {
             return player.getCurrentBankTab();
@@ -1177,6 +1262,7 @@ export class Bank extends ItemContainer {
             return this;
         }
         const opening = !Bank.isOpen(this.getPlayer());
+        if (opening) this.getPlayer().setNoteWithdrawal(false);
 
         // Update player status
         this.getPlayer().setStatus(PlayerStatus.BANKING);
@@ -1305,7 +1391,7 @@ export class Bank extends ItemContainer {
             const checkId = withdrawAsNote ? noteId : item.getId();
             if (to.getAmount(checkId) + item.getAmount() > MAX_STACK_AMOUNT
                     || to.getAmount(checkId) + item.getAmount() <= 0) {
-                item.setAmount(MAX_STACK_AMOUNT - (to.getAmount(item.getId())));
+                item.setAmount(MAX_STACK_AMOUNT - to.getAmount(checkId));
                 if (item.getAmount() <= 0) {
                     this.getPlayer().sendMessage("You cannot withdraw that entire amount into your inventory.");
                         return this;
@@ -1318,6 +1404,11 @@ export class Bank extends ItemContainer {
             return this;
         }
 
+        if (to instanceof Inventory && this.getPlayer().isPlaceholders()
+                && item.getAmount() >= this.getItems()[slot].getAmount()
+                && Bank.placeholderBankId(item.getId()) < 0) {
+            this.getPlayer().sendMessage("That item cannot leave a placeholder.");
+        }
         this.deleteItemContainer(item, slot, to instanceof Inventory ? false : refresh, to);
 
 

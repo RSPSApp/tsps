@@ -4,7 +4,8 @@ import { CacheIndex } from "../../rs/cache/CacheIndex";
 import { CacheSystem } from "../../rs/cache/CacheSystem";
 import { BitmapFont } from "../../rs/font/BitmapFont";
 import { ClientState } from "../../game/ClientState";
-import { isLowEndDevice, isTouchDevice } from "../../common/utils/DeviceUtil";
+import { getCanvasCssSize, isLowEndDevice, isTouchDevice } from "../../common/utils/DeviceUtil";
+import { mobileHudScale } from "../../game/widgets/MobileHudLayout";
 import { getUiScale } from "../UiScale";
 import { FONT_BOLD_12, FONT_VERDANA_13 } from "../fonts";
 import { getChooseOptionMenuRect } from "../../widgets/gl/choose-option";
@@ -24,6 +25,7 @@ import type { GameFrameDrawContext, WidgetOverlay } from "../../game/plugins/Cli
 import { captureAppendedRects, composeDrawAboveWidgets } from "../../widgets/gl/widgetsGl/glRenderOpts";
 import { Overlay, OverlayInitArgs, OverlayUpdateArgs, RenderPhase } from "./Overlay";
 import { isCurrentClientType, reportedClientType } from "../../rs/cs2/ClientType";
+import { overlayFontsVersion } from "../../runelite/client/ui/overlay/OverlayFonts";
 
 /**
  * The enhanced client's mouseover text setting, mouseover_text_disabled from rev 241 (it was
@@ -172,6 +174,8 @@ export class WidgetsOverlay implements Overlay {
     private lastWidgetOverlays: WidgetOverlay[] = [];
     /** Each overlay's signature and device rects as of its last draw, for partial overlay redraws. */
     private readonly lastOverlaySignatures = new WeakMap<WidgetOverlay, string>();
+    /** overlayFontsVersion() at the last pass. */
+    private lastOverlayFontsVersion = -1;
     private readonly lastOverlayRects = new WeakMap<WidgetOverlay, DirtyRect[]>();
     /** Device rects the above-widget overlays drew last. */
     private widgetOverlayRects: DirtyRect[] = [];
@@ -916,6 +920,10 @@ export class WidgetsOverlay implements Overlay {
                 this.lastOverlayRects,
                 (x, y, w, h) => this.clampRectToCanvas(x, y, w, h),
             );
+            // A changed overlay font (RuneLite settings) redraws every overlay in the new font.
+            const fontsVersion = overlayFontsVersion();
+            const overlayFontsChanged = fontsVersion !== this.lastOverlayFontsVersion;
+            this.lastOverlayFontsVersion = fontsVersion;
 
             // Force a full redraw only for root set changes.
             // The Choose Option menu is drawn as part of the shared widget overlay. When it is
@@ -929,6 +937,7 @@ export class WidgetsOverlay implements Overlay {
                 !!gameFrame ||
                 overlaySetChanged ||
                 overlayNeedsFullRedraw ||
+                overlayFontsChanged ||
                 // Before-menu overlays draw once a pass from inside the tree, clipped to the
                 // first dirty rect, so a partial pass could not put back the rest of them.
                 (beforeMenuOverlays.length > 0 &&
@@ -1168,8 +1177,12 @@ export class WidgetsOverlay implements Overlay {
     private drawWidgetOverlays(overlays: WidgetOverlay[], resetRects = true, into?: DirtyRect[]): DirtyRect[] {
         const glr = this.glRenderer;
         if (!glr) return into ?? this.widgetOverlayRects;
+        const cssWidth = getCanvasCssSize(this.app.gl.canvas as HTMLCanvasElement).width;
+        const manager = this.ctx.getWidgetManager?.();
         const context = {
             renderer: glr,
+            canvasCssWidth: cssWidth,
+            hudScale: mobileHudScale(manager?.rootInterface, cssWidth, manager?.canvasWidth),
             fontLoader: this.ctx.getFontLoader?.() || (() => undefined),
             sprite: (id: number) => (glr.canvas as any).__textureCache?.getSpriteById(id),
             itemImage: (itemId: number, quantity: number, outline: number) =>

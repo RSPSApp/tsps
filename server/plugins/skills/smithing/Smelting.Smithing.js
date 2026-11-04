@@ -242,7 +242,8 @@ function smelt({ player, objectId }) {
 }
 
 /**
- * An item used on a furnace: ore opens the Smelt menu; sand, soda ash and 'perfect' gold ore,
+ * An item used on a furnace: a lone, unambiguous ore smelts once; otherwise ore opens the menu.
+ * Sand, soda ash and 'perfect' gold ore,
  * which aren't on it, open a menu of their own product.
  */
 function useOnFurnace(event) {
@@ -251,6 +252,14 @@ function useOnFurnace(event) {
   const recipes = Data.SMELTING_RECIPES.filter((recipe) => !recipe.furnace && recipe.ingredients.some(([id]) => id === event.itemId));
   if (recipes.length === 0) return;
   event.handled = true;
+  const ready = recipes.filter((recipe) => !recipe.skill && !recipe.notInMenu && hasIngredients(event.player, recipe));
+  const singleOre = Data.SMELTING_RECIPES.filter((recipe) => !recipe.skill && !recipe.furnace)
+    .every((recipe) => recipe.ingredients.every(([id]) => available(event.player, id) === (id === event.itemId ? 1 : 0)));
+  // A single ore used on the furnace needs no quantity choice; Smelt keeps its menu.
+  if (singleOre && ready.length === 1 && extraEntries(event.player).length === 0) {
+    startSmelting(event.player, ready[0], 1, furnaceIdOf(event));
+    return;
+  }
   const offMenu = recipes.filter((recipe) => recipe.notInMenu);
   if (offMenu.length > 0) openMenu(event.player, recipeEntries(event.player, offMenu, furnaceIdOf(event)));
   else smelt({ player: event.player, objectId: furnaceIdOf(event) });

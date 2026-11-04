@@ -13,6 +13,8 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
+const { BotPlayerSession } = require("../dist/net/BotPlayerSession");
+const { Player } = require("../dist/game/entity/impl/player/Player");
 const { ItemIds } = require("../dist/util/IdEnums");
 
 const core = PluginManager.getCoreApi();
@@ -25,6 +27,110 @@ const RESPAWN_TIMER_SCRIPT = 5474;
 const ORE_MINED_VARP = 4526; // tracking_ore_mined
 const RESET_ANIMATION = core.Animation.DEFAULT_RESET_ANIMATION.getId();
 const noop = () => {};
+
+/** Exercise guild guards through the real generic door/ladder handlers and cache map. */
+function guildVisitor(x, y, current = 60, members = true) {
+  const hooks = new Map(), interactions = new Map(), tasks = [], packets = [], messages = [];
+  const guildCore = { ...core, TaskManager: { submit: task => tasks.push(task) },
+    WorldDefinition: { ...core.WorldDefinition, isMembersWorld: () => members } };
+  const api = new Proxy({ core: guildCore, getTaskManager: () => guildCore.TaskManager,
+    onCustomEvent(name, handler) {
+      if (!hooks.has(name)) hooks.set(name, []);
+      hooks.get(name).push(handler);
+    },
+    emitCustomEvent(name, event) { for (const handler of hooks.get(name) ?? []) handler(event); },
+    onObjectInteraction(name, handlers) { interactions.set(name, handlers); },
+  }, { get: (target, key) => target[key] ?? noop });
+  require("../plugins/areas/MiningGuild.plugin").register(api);
+  require("../plugins/objects/Doors.plugin").register(api);
+  require("../plugins/objects/Ladders.plugin").register(api);
+  const player = new Player(new BotPlayerSession());
+  player.setUsername("guildcheck");
+  player.setRegistered(true);
+  player.setLocation(new core.Location(x, y, 0));
+  player.getSkillManager().setMaxLevel(core.Skill.MINING, 59);
+  player.getSkillManager().setCurrentLevel(core.Skill.MINING, current);
+  player.sendMessage = message => messages.push(message);
+  player.getPacketSender = () => new Proxy({
+    sendObjectRemoval: object => packets.push(["remove", object]),
+    sendObject: object => packets.push(["restore", object]),
+  }, { get: (target, key) => target[key] ?? noop });
+  function click(object, option) {
+    const location = object.getLocation(), definition = object.getDefinition();
+    return interactions.get(definition.getName())[option]({ player, object, objectId: object.getId(),
+      definition, location: { x: location.getX(), y: location.getY(), z: location.getZ() }, clickType: 1 });
+  }
+  function finish() {
+    for (let tick = 0; tick < 8; tick++) for (const task of [...tasks]) task.execute();
+  }
+  return { player, click, finish, tasks, packets, messages };
+}
+
+function guildObject(x, y, name) {
+  core.RegionManager.loadMapFiles(x, y);
+  const object = (MapObjects.mapObjects.get(MapObjects.getHash(x, y, 0)) ?? [])
+    .find(object => object.getId() === core.CacheDefinitions.getLocId(name));
+  assert.ok(object, `${name} at ${x},${y} must exist in the active cache`);
+  return object;
+}
+
+test("Mining Guild: all four surface ladders require 60 current Mining, and boosts count", () => {
+  core.RegionManager.init();
+  for (const [x, y] of [[3018, 3339], [3019, 3338], [3019, 3340], [3020, 3339]]) {
+    const ladder = guildObject(x, y, "mguild_ladder");
+    const low = guildVisitor(x, y, 59);
+    low.click(ladder, "Climb-down");
+    assert.equal(low.tasks.length, 0, "under-level entry never reaches the generic climb");
+    assert.match(low.messages[0], /Mining level of 60/);
+    const boosted = guildVisitor(x, y, 60);
+    boosted.click(ladder, "Climb-down");
+    assert.ok(boosted.tasks.length > 0, "59 base boosted to 60 may climb");
+    boosted.finish();
+    assert.ok(boosted.player.getLocation().getY() >= 9700, "the real cache link enters the mine");
+
+    const exit = guildVisitor(x, y + 6400, 1);
+    exit.click(guildObject(x, y + 6400, "ladder_from_cellar"), "Climb-up");
+    exit.finish();
+    assert.ok(exit.player.getLocation().getY() < 4000, "a drained player can always climb out");
+  }
+});
+
+test("Mining Guild: outer and both members doors check entry, cross, and restore the closed wall", () => {
+  for (const [x, y, name] of [[3046, 9756, "mguild_door"], [3019, 9732, "mguild_door_inner1"], [3043, 9729, "mguild_door_inner2"]]) {
+    const door = guildObject(x, y, name);
+    assert.equal(door.getFace(), 1, "the cached doorway faces north");
+    const low = guildVisitor(x, y + 1, 59);
+    low.click(door, "Open");
+    assert.equal(low.tasks.length, 0);
+    assert.equal(low.packets.length, 0);
+    assert.match(low.messages[0], /Mining level of 60/);
+    const eligible = guildVisitor(x, y + 1, 60);
+    eligible.click(door, "Open");
+    eligible.finish();
+    assert.equal(eligible.player.getLocation().getY(), y);
+    assert.deepEqual(eligible.packets.map(([action]) => action), ["remove", "restore"]);
+    assert.ok((MapObjects.mapObjects.get(MapObjects.getHash(x, y, 0)) ?? []).includes(door),
+      "the shared wall stays closed so other players cannot bypass the guard");
+    const exit = guildVisitor(x, y, 1);
+    exit.click(door, "Open");
+    exit.finish();
+    assert.equal(exit.player.getLocation().getY(), y + 1, "leaving has no skill requirement");
+  }
+});
+
+test("Mining Guild: the main entrance remains free-to-play, while members doors permit only exit", () => {
+  for (const [x, y, name] of [[3046, 9756, "mguild_door"], [3019, 9732, "mguild_door_inner1"], [3043, 9729, "mguild_door_inner2"]]) {
+    const door = guildObject(x, y, name), visitor = guildVisitor(x, y + 1, 60, false);
+    visitor.click(door, "Open");
+    visitor.finish();
+    assert.equal(visitor.player.getLocation().getY(), name === "mguild_door" ? y : y + 1);
+    if (name !== "mguild_door") assert.match(visitor.messages[0], /members' world/);
+    const exit = guildVisitor(x, y, 1, false);
+    exit.click(door, "Open");
+    exit.finish();
+    assert.equal(exit.player.getLocation().getY(), y + 1);
+  }
+});
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));

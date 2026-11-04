@@ -25,10 +25,13 @@ module.exports = function registerIdesOfMilkQuest(api) {
     TaskManager,
     ObjectIdentifiers,
     RegionManager,
+    World,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, openBook } = require("../QuestRuntime");
 
   const PAGE = "The Ides of Milk";
+  const BRUTUS_MONSTER = "Brutus";
+  const BRUTUS_BEST_ATTRIBUTE = "ides-of-milk:brutus-best-ticks";
   const START_HOOK = "quest:the-ides-of-milk:start";
 
   const CASSIUS_NPC_ID = NpcIdentifiers.CASSIUS_2; // 15632
@@ -117,6 +120,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   const EXIT_GATE_IDS = new Set([ObjectIdentifiers.GATE_323, ObjectIdentifiers.GATE_324]);
   const ANIMATION = { eat: 829, cough: 11267, attack: 13783, charge: 13778, stomp: 13785, spawn: 13790 };
   const STOMP_GRAPHIC = { ground: 3588, bull: 3589 };
+  const KEEP_FACING_FLAG = "combat:keep-facing";
 
   class BullPen extends Area {
     constructor() { super([new Boundary(3259, 3268, 3294, 3301, 0)]); }
@@ -250,11 +254,22 @@ module.exports = function registerIdesOfMilkQuest(api) {
         arena.meleeRemaining = quest.isComplete(player) ? 4 + Math.floor(Math.random() * 2) : 1 + Math.floor(Math.random() * 6);
         arena.nextSpecial = quest.isComplete(player) ? (charge ? "stomp" : "charge") : Math.random() < 0.5 ? "charge" : "stomp";
       }
+      npc.setFlag(KEEP_FACING_FLAG);
+      npc.setMobileInteraction(null);
       npc.setPositionToFace(aimed);
       npc.forceChat(charge ? "*growls*" : "*snorts*");
       npc.performAnimation(new Animation(charge ? ANIMATION.charge : ANIMATION.stomp, charge ? 60 : 30));
-      later(arena, charge && quest.isComplete(player) ? 3 : 4, () => {
+      const windup = charge && quest.isComplete(player) ? 3 : 4;
+      arena.faceRecoveryTask?.stop();
+      // 4153 resumes entity tracking six ticks after a stomp, or after the two-tick charge glide.
+      arena.faceRecoveryTask = later(arena, charge ? windup + 2 : 6, () => {
+        npc.removeFlag(KEEP_FACING_FLAG);
+        npc.setPositionToFace(null);
         if (charge) npc.getMovementQueue().setBlockMovement(false);
+        if (!arena.isDestroyed() && arena.bull === npc && npc.getArea() === arena && npc.getHitpoints() > 0 &&
+            player.getArea() === arena && npc.getCombat().getTarget() === player) npc.setMobileInteraction(player);
+      });
+      later(arena, windup, () => {
         if (arena.isDestroyed() || npc.getHitpoints() <= 0 || player.getArea() !== arena) return;
         const current = player.getLocation();
         const underBull = current.getX() >= at.getX() && current.getX() <= at.getX() + 2 &&
@@ -266,7 +281,11 @@ module.exports = function registerIdesOfMilkQuest(api) {
         if (!charge) {
           npc.performGraphic(new Graphic(STOMP_GRAPHIC.bull));
           for (const [x, y] of tiles) player.getPacketSender().sendGraphic(new Graphic(STOMP_GRAPHIC.ground), new Location(x, y, 0));
-        } else npc.moveTo(end);
+        } else {
+          npc.exactMove(end, { endCycles: 60 });
+          // The charge stays in this fight; placement would make combat discard its target.
+          npc.setNeedsPlacement(false);
+        }
         if (hit) {
           const hp = player.getSkillManager().getMaxLevel(Skill.HITPOINTS);
           // shortcut: quest scaling is documented as roughly 30–40%; capture low-level hits to establish exact rounding.
@@ -637,6 +656,8 @@ module.exports = function registerIdesOfMilkQuest(api) {
     arena.nextSpecial = quest.isComplete(arena.player) && Math.random() < 0.5 ? "stomp" : "charge";
     arena.stompsRemaining = 0;
     arena.respawnTask = null;
+    // ponytail: timed from the bull entering; live may start it at the first hit.
+    arena.startTick = World.getProcessCycle();
     arena.enter(npc);
     bullsByPlayer.set(arena.player, npc);
     npc.performAnimation(new Animation(ANIMATION.spawn));
@@ -705,6 +726,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
     const player = arena.player;
     if (killer !== player) return;
     if (quest.isComplete(player)) {
+      countBrutusKill(player, World.getProcessCycle() - arena.startTick, true);
       arena.bull = null;
       bullsByPlayer.delete(player);
       api.removeNpc(npc);
@@ -712,12 +734,45 @@ module.exports = function registerIdesOfMilkQuest(api) {
       arena.respawnTask = later(arena, npc.getDefinition().getRespawn(), () => spawnArenaBull(arena));
       return;
     }
+    countBrutusKill(player, 0, false);
     leaveFight(player);
     if (quest.getStage(player) === STAGE_BULL_TASK) {
       quest.setStage(player, STAGE_BRUTUS_DEAD);
       player.sendMessage("You notice a strange tag float to the ground as the bull falls. It reads 'Brutus'.");
       startTranscript(api, player, BULL_NPC_ID, PAGE, "facing-the-bull-after-killing-brutus");
     }
+  }
+
+  /** A fight's length as the game prints it: m:ss.cc. */
+  function formatTicks(ticks) {
+    const centis = Math.round(ticks * 60);
+    const minutes = Math.floor(centis / 6000);
+    const seconds = Math.floor((centis % 6000) / 100);
+    return `${minutes}:${String(seconds).padStart(2, "0")}.${String(centis % 100).padStart(2, "0")}`;
+  }
+
+  /** The kill count and the fight's length against the personal best, before any task the kill finishes. */
+  function countBrutusKill(player, ticks, announced) {
+    api.emitCustomEvent("combat-achievements:kill", {
+      player,
+      monster: BRUTUS_MONSTER,
+      announce: announced && ((kills) => {
+        player.sendMessage(`Your Brutus kill count is: <col=ff0000>${kills}</col>.`);
+        const best = Number(player.getAttribute(BRUTUS_BEST_ATTRIBUTE)) || 0;
+        if (!best || ticks < best) {
+          player.setAttribute(BRUTUS_BEST_ATTRIBUTE, ticks);
+          api.emitCustomEvent("boss:personal-best", { player, boss: BRUTUS_MONSTER, ticks });
+          player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col> (new personal best)`);
+        } else {
+          player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col>. Personal best: ${formatTicks(best)}`);
+        }
+      }),
+    });
+  }
+
+  function answerBrutusBest(request) {
+    const best = Number(request.player.getAttribute(BRUTUS_BEST_ATTRIBUTE)) || 0;
+    if (request.monster === BRUTUS_MONSTER && best > 0) request.best = best;
   }
 
   function ringForBull({ player }) {
@@ -918,6 +973,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   api.persistAttribute(SETH_TALKED_ATTRIBUTE, 0);
   api.persistAttribute(GILLIE_TALKED_ATTRIBUTE, 0);
   api.persistAttribute(REWARD_ATTRIBUTE, 0);
+  api.persistAttribute(BRUTUS_BEST_ATTRIBUTE, 0);
   api.persistAttribute(LAMP_USED_ATTRIBUTE, 0);
 
   api.persistAttribute(STAGE_SCHEMA_ATTRIBUTE, 0);
@@ -956,6 +1012,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   api.onItemAction(handleItemAction);
   api.onNpcDeath(handleNpcDeath);
   api.registerNpcCombatMethodProvider([QUEST_BRUTUS_NPC_ID], BrutusCombat);
+  api.onCustomEvent("combat-achievements:personal-best", answerBrutusBest);
   api.onPlayerLogout(handleLogout);
   api.onPlayerLogin(handleLogin);
   require("./ides-of-milk/CowbellAmulet.Quest")(api);

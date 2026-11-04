@@ -547,3 +547,99 @@ test("every route's gamevals resolve in the cache", () => {
   }
   assert.equal(Ferries.members, true);
 });
+
+test('Veos native travel menus work without quests and throughout Client of Kourend', async t => {
+  const { PluginManager: PM } = require('../dist/plugins/PluginManager');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  const core = PM.getCoreApi();
+  let members = true;
+  t.mock.method(core.WorldDefinition, 'isMembersWorld', () => members);
+  require('../plugins/npcs/NpcDialogues.plugin').register(PM.createApi('NativeVeosDialogue'));
+  Ferries.register(PM.createApi('NativeVeosFerries'));
+  let index = 2000;
+  function actor(npcId, tile) {
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
+      close() {}, onData() {}, onError() {}, onClose() {} };
+    const p = new Player(new PlayerSession(channel), new Location(...tile));
+    p.setIndex(index++); p.setRegistered(true); p.setUsername('veosnative' + index);
+    const connection = new ClientConnection(channel); connection.player = p;
+    const npc = core.NPC.create(npcId, new Location(...tile));
+    t.after(() => { Voyages.landNow({ player: p }); p.closeInterruptibleInterfaces(); p.setRegistered(false); core.TaskManager.cancelTasks(p); });
+    const send = async packet => { await connection.dispatch([packet]); connection.processTurnPackets(); };
+    const next = () => send({ type: 'dialogue_continue', widgetId: (p.getPacketSender().getChatboxGroupId() << 16) | 5, childIndex: -1 });
+    async function choose(text) {
+      for (let n = 0; !MultiChatboxPrompt.getPending(p) && n < 60; n++) {
+        assert.ok(p.getDialogueManager().getCurrent(), `dialogue ended before ${text}`); await next();
+      }
+      const prompt = MultiChatboxPrompt.getPending(p);
+      assert.ok(prompt?.options.includes(text), `${text}: ${JSON.stringify(prompt)}`);
+      await send({ type: 'dialogue_continue', widgetId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: prompt.options.indexOf(text) + 1 });
+    }
+    async function finish() {
+      for (let n = 0; p.getDialogueManager().getCurrent() && n < 60; n++) await next();
+    }
+    async function arrive(route) {
+      await finish();
+      assert.equal(Common.travelling(p), true, 'the native final line starts the shared ferry fade');
+      for (let n = 0; n < 9; n++) core.TaskManager.process();
+      assert.deepEqual(at(p), Common.route(route).to);
+      assert.equal(Common.travelling(p), false);
+    }
+    return { p, npc, choose, arrive, next, finish };
+  }
+  for (const [variant, option, route, tile, id] of [
+    ['standard-dialogue-at-port-piscarilius', 'Travel to Port Sarim.', 'kourend-sarim', [1825, 3691, 0], core.NpcIdentifiers.VEOS_5],
+    ['standard-dialogue-at-port-sarim-subsequent-dialogue', "I'd like to travel to Port Piscarilius, please.", 'kourend-piscarilius', [3054, 3245, 0], core.NpcIdentifiers.VEOS],
+  ]) {
+    const f = actor(id, tile), request = { player: f.p, npc: f.npc, npcId: id, variant: { page: 'Veos', variant }, exact: true };
+    PM.emitCustomEvent('npc-dialogue:start', request); assert.equal(request.handled, true);
+    await f.choose('Can you take me somewhere?'); await f.choose(option); await f.arrive(route);
+  }
+  members = false;
+  const free = actor(core.NpcIdentifiers.VEOS, [3054, 3245, 0]);
+  PM.emitCustomEvent('npc-dialogue:start', { player: free.p, npc: free.npc, npcId: free.npc.getId(),
+    variant: { page: 'Veos', variant: 'standard-dialogue-at-port-sarim-subsequent-dialogue' }, exact: true });
+  await free.choose('Can you take me somewhere?'); await free.finish();
+  assert.equal(Common.travelling(free.p), false);
+  assert.deepEqual(at(free.p), [3054, 3245, 0], 'the members-only route is refused on a free world');
+  members = true;
+  require('../plugins/quests/Quests.plugin').register(PM.createApi('Quests'));
+  const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+  const client = quests.find(q => q.key === 'client_of_kourend'), xmarks = quests.find(q => q.key === 'x_marks_the_spot');
+  for (const stage of [0, 1, 2, 3, 4, 5]) {
+    for (const [id, tile, option, route] of [
+      [core.NpcIdentifiers.VEOS_5, [1825, 3691, 0], 'Travel to Port Sarim.', 'kourend-sarim'],
+      [core.NpcIdentifiers.VEOS, [3054, 3245, 0], "I'd like to travel to Port Piscarilius, please.", 'kourend-piscarilius'],
+    ]) {
+      const f = actor(id, tile);
+      xmarks.setStage(f.p, 6); client.setStage(f.p, stage);
+      f.p.getInventory().adds(ItemIdentifiers.COINS, 123);
+      assert.equal(PM.emitNpcInteraction({ player: f.p, npc: f.npc, npcId: f.npc.getId(), action: 'Talk-to', clickType: 1, handled: false }), true);
+      await f.choose('Can you take me somewhere?'); await f.choose(option); await f.arrive(route);
+      assert.equal(client.getStage(f.p), stage, 'ordinary travel does not advance the quest');
+      assert.equal(f.p.getInventory().getAmount(ItemIdentifiers.COINS), 123, 'Veos charges no fare');
+    }
+  }
+  for (const option of ["Travel to Land's End.", 'Stay where you are.']) {
+    const f = actor(core.NpcIdentifiers.VEOS_5, [1825, 3691, 0]);
+    xmarks.setStage(f.p, 6); client.setStage(f.p, 1);
+    PM.emitNpcInteraction({ player: f.p, npc: f.npc, npcId: f.npc.getId(), action: 'Talk-to', clickType: 1, handled: false });
+    await f.choose('Can you take me somewhere?'); await f.choose(option);
+    if (option === "Travel to Land's End.") await f.arrive('kourend-landsend');
+    else { await f.finish(); assert.equal(Common.travelling(f.p), false); assert.deepEqual(at(f.p), [1825, 3691, 0]); }
+  }
+  const rejected = actor(core.NpcIdentifiers.VEOS, [3054, 3245, 0]);
+  xmarks.setStage(rejected.p, 6); client.setStage(rejected.p, 1);
+  const emit = PM.emitCustomEvent;
+  t.mock.method(PM, 'emitCustomEvent', (name, event) => {
+    if (name === 'ferries:travel' && event.player === rejected.p) { event.handled = false; return; }
+    return emit.call(PM, name, event);
+  });
+  PM.emitNpcInteraction({ player: rejected.p, npc: rejected.npc, npcId: rejected.npc.getId(), action: 'Talk-to', clickType: 1, handled: false });
+  await rejected.choose('Can you take me somewhere?'); await rejected.choose("I'd like to travel to Port Piscarilius, please."); await rejected.finish();
+  assert.equal(Common.travelling(rejected.p), false);
+  assert.equal(rejected.p.getPacketSender().getVarbit(4897), 0, 'a rejected handoff cannot mark Kourend visited');
+  assert.deepEqual(at(rejected.p), [3054, 3245, 0]);
+});

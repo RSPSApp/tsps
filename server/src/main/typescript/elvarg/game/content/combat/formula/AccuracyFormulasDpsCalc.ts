@@ -233,7 +233,8 @@ export class AccuracyFormulasDpsCalc {
         enemy: any,
         style: any,
         defenceType?: CombatType,
-        rangedDefenceType?: "light" | "standard" | "heavy"
+        rangedDefenceType?: "light" | "standard" | "heavy",
+        projectedDefenceLevel?: number
     ): { attack: number; defence: number } | null {
         const traits: WeaponSpecialTraits | null = CombatSpecial.activeTraitsFor(entity);
         const attackStyle = resolveSpecialAttackType(traits?.rollAttackType) ?? style;
@@ -258,7 +259,11 @@ export class AccuracyFormulasDpsCalc {
             const defenceIndex = traits?.meleeDefenceBonusIndex ?? meleeIndex;
             defRoll = AccuracyFormulasDpsCalc.defenseMeleeRoll(enemy, defenceIndex);
         } else if (defenceStyle === CombatType.RANGED) {
-            defRoll = AccuracyFormulasDpsCalc.defenseRangedRoll(enemy, rangedDefenceType ?? (entity.isPlayer() ? WeaponProfiles.ranged(entity.getAsPlayer()).rangedDefenceType : undefined));
+            defRoll = AccuracyFormulasDpsCalc.defenseRangedRoll(
+                enemy,
+                rangedDefenceType ?? (entity.isPlayer() ? WeaponProfiles.ranged(entity.getAsPlayer()).rangedDefenceType : undefined),
+                projectedDefenceLevel
+            );
         } else {
             defRoll = AccuracyFormulasDpsCalc.defenseMagicRoll(enemy);
         }
@@ -291,8 +296,8 @@ export class AccuracyFormulasDpsCalc {
         }
     }
 
-    public static rollAccuracy(entity: any, enemy: any, style: any, defenceType?: CombatType, rangedDefenceType?: "light" | "standard" | "heavy") {
-        const rolls = AccuracyFormulasDpsCalc.specialRolls(entity, enemy, style, defenceType, rangedDefenceType);
+    public static rollAccuracy(entity: any, enemy: any, style: any, defenceType?: CombatType, rangedDefenceType?: "light" | "standard" | "heavy", projectedDefenceLevel?: number) {
+        const rolls = AccuracyFormulasDpsCalc.specialRolls(entity, enemy, style, defenceType, rangedDefenceType, projectedDefenceLevel);
         if (rolls == null) {
             return false;
         }
@@ -300,10 +305,10 @@ export class AccuracyFormulasDpsCalc {
     }
 
     /** Number of successful independent accuracy rolls out of `count`. */
-    public static rollAccuracyCount(entity: any, enemy: any, style: any, count: number, defenceType?: CombatType): number {
+    public static rollAccuracyCount(entity: any, enemy: any, style: any, count: number, defenceType?: CombatType, projectedDefenceLevel?: number): number {
         let successful = 0;
         for (let roll = 0; roll < Math.max(0, Math.trunc(count)); roll++) {
-            if (AccuracyFormulasDpsCalc.rollAccuracy(entity, enemy, style, defenceType)) {
+            if (AccuracyFormulasDpsCalc.rollAccuracy(entity, enemy, style, defenceType, undefined, projectedDefenceLevel)) {
                 successful++;
             }
         }
@@ -314,8 +319,8 @@ export class AccuracyFormulasDpsCalc {
      * Single fixed-percentage accuracy roll used by execute-window specials:
      * the attack roll is scaled, then compared deterministically to the defence roll.
      */
-    public static rollFixedAccuracy(entity: any, enemy: any, style: any, multiplier: number, defenceType?: CombatType): boolean {
-        const rolls = AccuracyFormulasDpsCalc.specialRolls(entity, enemy, style, defenceType);
+    public static rollFixedAccuracy(entity: any, enemy: any, style: any, multiplier: number, defenceType?: CombatType, projectedDefenceLevel?: number): boolean {
+        const rolls = AccuracyFormulasDpsCalc.specialRolls(entity, enemy, style, defenceType, undefined, projectedDefenceLevel);
         if (rolls == null) {
             return false;
         }
@@ -479,11 +484,27 @@ export class AccuracyFormulasDpsCalc {
     }
 
     // Ranged
-    public static defenseRangedRoll(enemy: Mobile, type: "light" | "standard" | "heavy" = "standard") {
+    /**
+     * The effective Defence level for a projected current level: NPCs use current Defence + 9,
+     * exactly as effectiveDefenseLevel does. Used with a pure NPC level preview so a pending
+     * drain can shape a later hit without applying the drain early.
+     */
+    public static projectedEffectiveDefenceLevel(enemy: Mobile, currentDefenceLevel: number): number {
+        if (enemy.isNpc()) return Math.max(0, Math.floor(currentDefenceLevel)) + 9;
+        return AccuracyFormulasDpsCalc.effectiveDefenseLevel(enemy);
+    }
+
+    public static defenseRangedRoll(
+        enemy: Mobile,
+        type: "light" | "standard" | "heavy" = "standard",
+        projectedDefenceLevel?: number
+    ) {
         const cache = this.getRollCache(enemy);
         const cached = cache.defenseRangedRolls?.get(type);
-        if (cached != null) return cached;
-        let defLevel = AccuracyFormulasDpsCalc.effectiveDefenseLevel(enemy);
+        if (projectedDefenceLevel === undefined && cached != null) return cached;
+        let defLevel = projectedDefenceLevel !== undefined
+            ? Math.max(0, Math.floor(projectedDefenceLevel))
+            : AccuracyFormulasDpsCalc.effectiveDefenseLevel(enemy);
 
         const defRange = enemy.isNpc()
             ? enemy.getAsNpc().getDefenceBonus(BonusManager.DEFENCE_RANGE, type)
@@ -493,7 +514,9 @@ export class AccuracyFormulasDpsCalc {
         defLevel *= defRange + 64;
 
         const resolved = Math.floor(defLevel);
-        (cache.defenseRangedRolls ??= new Map()).set(type, resolved);
+        if (projectedDefenceLevel === undefined) {
+            (cache.defenseRangedRolls ??= new Map()).set(type, resolved);
+        }
         return resolved;
     }
 

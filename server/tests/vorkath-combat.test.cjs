@@ -85,6 +85,13 @@ test("only the Dragon Slayer II Vorkath step uses the quest form; everyone else 
   assert.equal(Shared.isAwakeNpc({ getId: () => 8061 }), true);
 });
 
+test("the quest form's ranged attack caps at 28, the post-quest form's at 32 (Wiki infobox)", () => {
+  assert.equal(Shared.rangedMaxForId(8060), 28);
+  assert.equal(Shared.rangedMaxForId(8061), 32);
+  assert.equal(Shared.rangedMaxForNpc({ getAttribute: () => 8060 }), 28);
+  assert.equal(Shared.rangedMaxForNpc({ getAttribute: () => 8061 }), 32);
+});
+
 test("the post-quest form carries her loot table and the quest form drops nothing", () => {
   const drops = require("../data/definitions/npc-drops.json");
   assert.deepEqual(drops.npcs[Shared.AWAKE_ID].tables, ["vorkath"]);

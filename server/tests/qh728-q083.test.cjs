@@ -211,6 +211,34 @@ test('completion uses the cache threshold on varbit 12276 and keeps stage-80 sav
   assert.equal(h.quest.isComplete(p), true);
 });
 
+test('the captured Theatre sibling bits are published at bootstrap and on the raid completion', () => {
+  // Capture 101 sets done_tob (12972) when the Theatre run finishes and
+  // given_acid (12974) when Daer Krand hands the acid over; capture 1695 (an
+  // account that had cleared before) already holds done_tob on login.
+  const h = harness({ raidComplete: true });
+  const p = makePlayer();
+  h.quest.setStage(p, 78);
+  p.setAttribute('night-at-the-theatre:acid-given', 1);
+  p.log.length = 0;
+  h.events['player:bootstrap-complete'].forEach(handler => handler({ player: p }));
+  assert.equal(h.wire(p, 12972), 1, 'a completed raid is re-published at bootstrap');
+  assert.equal(h.wire(p, 12974), 1, 'the captured acid bit is re-published at bootstrap');
+
+  const fresh = makePlayer();
+  h.quest.setStage(fresh, 78);
+  fresh.log.length = 0;
+  h.events['player:bootstrap-complete'].forEach(handler => handler({ player: fresh }));
+  assert.equal(h.wire(fresh, 12972), 1, 'the raid query answers from the registered provider');
+  assert.equal(h.wire(fresh, 12974), 0, 'a player without the acid keeps the bit clear');
+
+  const raider = makePlayer();
+  h.quest.setStage(raider, 56);
+  raider.log.length = 0;
+  h.emit('tob:completed', { player: raider });
+  assert.equal(h.quest.getStage(raider), 78, 'the completion still advances the stage');
+  assert.equal(h.wire(raider, 12972), 1, 'the completion publishes done_tob');
+});
+
 test('the two helper dialogue-line gates match real transcript lines and advance the durable stage', () => {
   const h = harness();
   const p = makePlayer();

@@ -85,6 +85,8 @@ export abstract class Mobile extends Entity {
     public updateFlag = new UpdateFlag();
     public positionToFace: Location;
     public animation: Animation;
+    /** Retained after sync so delayed cleanup can identify the last accepted animation. */
+    private animationGeneration = 0;
     public graphic: Graphic;
     private following: Mobile;
     /**
@@ -269,6 +271,7 @@ export abstract class Mobile extends Entity {
         this.graphic = null;
         this.slotGraphics?.clear();
         this.displayedHealth = null;
+        this.healthBarHidden = false;
         this.tintState = null;
     }
 
@@ -289,20 +292,28 @@ export abstract class Mobile extends Entity {
 
     /** What the health bar shows with this tick's hits, when it is not the actor's hitpoints. */
     private displayedHealth: { current: number; max: number; bar?: { id: number; width: number } } | null = null;
+    /** This tick's hits go out without a health bar (`showHitsplat(..., false)`). */
+    private healthBarHidden = false;
 
     /**
      * Shows a hitsplat that changes nothing - a meter other than hitpoints, such as the
      * Wintertodt's cold on the warmth meter. `splat` is the cache hitsplat for the target and
-     * for everyone else; `health`, when given, is what the health bar shows with it.
+     * for everyone else; `health`, when given, is what the health bar shows with it, and `false`
+     * sends the splat with no health bar at all.
      */
     showHitsplat(
         damage: number,
         splat: { mine: number; others: number },
-        health?: { current: number; max: number; bar?: { id: number; width: number } },
+        health?: { current: number; max: number; bar?: { id: number; width: number } } | false,
     ): void {
         const hit = new HitDamage(Math.max(0, Math.trunc(damage)), HitMask.RED).setSplatTypes(splat.mine, splat.others);
         this.addTickHit(hit);
-        if (health) this.displayedHealth = health;
+        if (health === false) this.healthBarHidden = true;
+        else if (health) this.displayedHealth = health;
+    }
+
+    isHealthBarHidden(): boolean {
+        return this.healthBarHidden;
     }
 
     getDisplayedHealth(): { current: number; max: number; bar?: { id: number; width: number } } | null {
@@ -374,6 +385,7 @@ export abstract class Mobile extends Entity {
             }
         }
         this.animation = animation;
+        this.animationGeneration++;
         this.getUpdateFlag().flag(Flag.ANIMATION);
     }
 
@@ -520,6 +532,10 @@ export abstract class Mobile extends Entity {
 
     getAnimation(): Animation {
         return this.animation;
+    }
+
+    getAnimationGeneration(): number {
+        return this.animationGeneration;
     }
 
     /**
@@ -737,6 +753,11 @@ export abstract class Mobile extends Entity {
         if (outcome < 0)
             outcome = 0;
         hit.setHealthLost(this.getHitpoints() - outcome);
+        const source = hit.getSource();
+        // Reflections land separately from the attack, sometimes after their source died.
+        if (hit.isReflected() && this.isPlayer() && source?.isPlayer() && source !== this && hit.getHealthLost() > 0) {
+            this.getCombat().addDamage(source, hit.getHealthLost());
+        }
         this.setHitpoints(outcome);
         return hit;
     }

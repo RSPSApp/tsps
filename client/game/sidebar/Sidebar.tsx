@@ -6,6 +6,7 @@ import type { NavigationButton } from "@runelite/client/ui/NavigationButton";
 import "./Sidebar.css";
 import "./SidebarPanels.css";
 import "./PluginHub.css";
+import { PortraitHandednessButton } from "../plugins/portraitmode/PortraitHandednessButton";
 import { SidebarPanel } from "./SidebarPanel";
 import { SidebarRail } from "./SidebarRail";
 import type { SidebarStore } from "./SidebarStore";
@@ -91,7 +92,9 @@ export function Sidebar({
                 buttons={buttons}
                 selected={open ? open.tooltip : null}
                 onClick={onRailClick}
-            />
+            >
+                <PortraitHandednessButton configManager={configManager} />
+            </SidebarRail>
         </div>
     );
 }

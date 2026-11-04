@@ -13,6 +13,7 @@ import { PendingHit } from "../../../content/combat/hit/PendingHit";
 import { Autocasting } from "../../../content/combat/magic/Autocasting";
 import { SkillManager } from "../../../content/skill/SkillManager";
 import { ItemDefinition } from "../../../definition/ItemDefinition";
+import type { Item } from "../../../model/Item";
 import { Mobile } from "../Mobile";
 import { NPC } from "../npc/NPC";
 import { NpcAggression } from "../npc/NpcAggression";
@@ -149,8 +150,8 @@ export class Player extends Mobile {
     private isRunning = true;
     private playerBot = false;
     private botAreaProcessTick = 0;
-    private runEnergy = 100;
-    private lastRunRecovery = new TickStopwatch();
+    /** Run energy in OSRS units (0-10,000; 100 units = 1%). */
+    private runEnergy = GameConstants.RUN_ENERGY_MAX_UNITS;
     private isDying: boolean;
     public forceMovement: ForceMovement;
     private skillAnimation: number;
@@ -275,6 +276,10 @@ export class Player extends Mobile {
             }
             // A respawn is the same Player object; drop rolls cached against the state it died in.
             CombatFactory.clearHitRollCache(this);
+            // Kill credit is per life: damage this player dealt stops counting once they die.
+            World.getPlayers().forEach((other) => {
+                if (other !== this) other.getCombat().removeDamager(this);
+            });
             TaskManager.submit(new PlayerDeathTask(this, beforeDeath.announce !== false));
             this.isDying = true;
         }
@@ -499,12 +504,13 @@ export class Player extends Mobile {
 
         this.processSkullTimer();
 
-        // Increase run energy
-        if (!isBot && this.runEnergy < 100 && (!this.getMovementQueue().isMovings() || !this.isRunning)) {
-            if (this.lastRunRecovery.elapsedTime(MovementQueue.runEnergyRestoreDelay(this))) {
-                this.runEnergy++;
+        // Increase run energy every tick not spent running (Wiki: Recovery).
+        if (!isBot && this.runEnergy < GameConstants.RUN_ENERGY_MAX_UNITS
+            && !this.getMovementQueue().didRunThisCycle()) {
+            const restored = MovementQueue.runEnergyRestoreUnits(this);
+            if (restored > 0) {
+                this.addRunEnergyUnits(restored);
                 this.getPacketSender().sendRunEnergy();
-                this.lastRunRecovery.reset();
             }
         }
 
@@ -726,7 +732,7 @@ export class Player extends Mobile {
             this.status !== PlayerStatus.TRADING &&
             this.status !== PlayerStatus.DUELING &&
             (this.status !== PlayerStatus.NONE || this.interfaceId >= 0 || this.dialogueManager.isActive() ||
-                this.packetSender.hasInterruptibleInterface())
+                this.packetSender.hasInterruptibleInterface() || this.packetSender.hasInputPrompt())
         ) {
             this.packetSender.closeInterruptibleInterfaces();
         }
@@ -1108,12 +1114,64 @@ export class Player extends Mobile {
             this.displayedEquipment?.get(slot) ?? item?.getId?.() ?? -1);
     }
 
+    /** Run energy as a percentage (0-100), for content that works in whole or fractional percent. */
     public getRunEnergy(): number {
+        return this.runEnergy / 100;
+    }
+
+    public setRunEnergy(runEnergyPercent: number) {
+        this.setRunEnergyUnits(runEnergyPercent * 100);
+    }
+
+    /** Run energy in OSRS units (0-10,000), the precision the formulas and the client use. */
+    public getRunEnergyUnits(): number {
         return this.runEnergy;
     }
 
-    public setRunEnergy(runEnergy: number) {
-        this.runEnergy = Math.max(0, Math.min(100, Math.floor(runEnergy)));
+    public setRunEnergyUnits(units: number) {
+        this.runEnergy = Math.max(0, Math.min(GameConstants.RUN_ENERGY_MAX_UNITS, Math.floor(units)));
+    }
+
+    public addRunEnergyUnits(units: number) {
+        this.setRunEnergyUnits(this.runEnergy + units);
+    }
+
+    /**
+     * Carried weight in grams: inventory plus equipment, the one total the equipment panel, the
+     * run-energy packet and the drain all use. Stackables (coins, runes, notes) weigh nothing
+     * (Wiki: Weight, their cache weight is overridden to 0), and plugins can replace a worn
+     * slot's weight through "equipment:weights" (graceful's negative weights), so the total
+     * can be negative.
+     */
+    public getCarriedWeightGrams(): number {
+        const request = { player: this, slotWeights: {} as Record<number, number> };
+        PluginManager.emitCustomEvent("equipment:weights", request);
+        const itemGrams = (item: Item | null | undefined): number => {
+            if (item == null || item.getId() < 0 || item.getAmount() <= 0) {
+                return 0;
+            }
+            const definition = ItemDefinition.forId(item.getId());
+            return definition.isStackable() || definition.isNoted() ? 0 : definition.getWeight();
+        };
+        let grams = 0;
+        const equipment = this.getEquipment().getItems();
+        for (let slot = 0; slot < equipment.length; slot++) {
+            const override = request.slotWeights[slot];
+            if (Number.isFinite(override) && equipment[slot]?.getId() >= 0 && equipment[slot].getAmount() > 0) {
+                grams += override * 1000;
+            } else {
+                grams += itemGrams(equipment[slot]);
+            }
+        }
+        for (const item of this.getInventory().getItems()) {
+            grams += itemGrams(item);
+        }
+        return grams;
+    }
+
+    /** Carried weight in whole kilograms, the fraction dropped toward zero as the client shows it. */
+    public getWeightKg(): number {
+        return Math.trunc(this.getCarriedWeightGrams() / 1000);
     }
 
     public isDrainingPrayer(): boolean {

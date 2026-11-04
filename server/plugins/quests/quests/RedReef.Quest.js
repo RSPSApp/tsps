@@ -136,6 +136,7 @@ module.exports = function registerRedReefQuest(api) {
   const DEEP_SEA_APPARATUS_ITEM_ID = ItemIdentifiers.DEEP_SEA_APPARATUS_4; // 31403
   const MEDALLION_OF_THE_DEEP_ITEM_ID = ItemIdentifiers.MEDALLION_OF_THE_DEEP; // 32386
   const BOSUNS_WORKBENCH_SCHEMATIC_ITEM_ID = ItemIdentifiers.BOSUNS_WORKBENCH_SCHEMATIC; // 33423
+  const RED_CORAL_SCROLL_ITEM_ID = 31405; // TRR_RED_CORAL, the completed-quest scroll icon (capture 4152)
   const DRAGON_SCIMITAR_ITEM_ID = ItemIdentifiers.DRAGON_SCIMITAR; // 4587
 
   /** Deep-sea gear and the medallion all satisfy the wiki's diving conditions. */
@@ -789,6 +790,7 @@ module.exports = function registerRedReefQuest(api) {
       return;
     }
     quest.setStage(player, STAGE_STARTED);
+    player.sendMessage("You've started a new quest: <col=0ab0ff>The Red Reef</col>");
   }
 
   function handleChoice(event) {
@@ -1401,13 +1403,16 @@ module.exports = function registerRedReefQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
+    completionJingleId: 154,
+    completionMessageColor: "0ab0ff",
+    scrollItemId: RED_CORAL_SCROLL_ITEM_ID,
     xpRewards: [
       { skillId: Skill.SAILING.getIndex(), amount: SAILING_XP, label: "Sailing" },
       { skillId: Skill.SMITHING.getIndex(), amount: SMITHING_XP, label: "Smithing" },
     ],
     rewardItemId: BOSUNS_WORKBENCH_SCHEMATIC_ITEM_ID,
-    rewardItemLabel: "Bosun's workbench schematic",
-    otherRewards: ["Access to the Sacred Grove", "Access to Red Rock (partial completion)"],
+    rewardItemLabel: "Bosun's Workbench Schematic",
+    otherRewards: ["Great Conch Sacred Grove Access"],
     buildJournal,
     onReward: grantReward,
   });

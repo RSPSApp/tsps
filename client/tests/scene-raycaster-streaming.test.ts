@@ -103,7 +103,7 @@ console.log("Scene raycaster large NPC bounds regression passed");
 const { MapManager } = require("../game/MapManager");
 const { WebGLMapSquare } = require("../render/WebGLMapSquare");
 const { getMapSquareId } = require("../rs/map/MapFileIndex");
-const { sampleBridgeHeightForWorldTile } = require("../game/scene/BridgeHeightSampler");
+const { sampleActorHeightForWorldTile, sampleBridgeHeightForWorldTile } = require("../game/scene/BridgeHeightSampler");
 const { getTileRenderFlagAt } = require("../game/scene/TileRenderFlags");
 const { resolveInteractionPlaneForWorldTile } = require("../game/scene/PlaneResolver");
 const { getPreferredMapForWorldTile, getMapLocalTile } = require("../render/render/interact/menu");
@@ -139,17 +139,20 @@ for (const x of [0, 16, 55, 63, 64, 79, 90, 103]) {
 // Distinct outer-room heights catch clamping or wrapping local coordinates at 63.
 house.heightMapData[104 * 104 + 80 * 104 + 85] = 320;
 assert.equal(sampleBridgeHeightForWorldTile(maps, 6493, 6504, 1).height, -20);
-// The close follow camera and the actor shader must sample the same triangulated
-// surface. Bilinear sampling makes the body bob relative to the camera each tile.
+// Actors use the native bilinear floor; scenery keeps its rendered terrain surface.
 const slopeBase = 104 * 104 + 40 * 104 + 40;
 house.heightMapData[slopeBase] = 0;
 house.heightMapData[slopeBase + 1] = 0;
 house.heightMapData[slopeBase + 104] = 0;
 house.heightMapData[slopeBase + 105] = 16;
+assert.equal(sampleActorHeightForWorldTile(maps, 6448.5, 6464.5, 1).height, -0.25,
+    "follow height matches the actor shader's bilinear surface");
+assert.equal(houseRaycaster.sampleHeightAt(6448.5, 6464.5, 1, true), -0.25,
+    "actor picking samples the actor shader surface too");
 assert.equal(sampleBridgeHeightForWorldTile(maps, 6448.5, 6464.5, 1).height, -0.5,
-    "follow height matches the actor shader's diagonal surface, not bilinear height -0.25");
+    "scenery keeps its existing terrain height");
 assert.equal(houseRaycaster.sampleHeightAt(6448.5, 6464.5, 1), -0.5,
-    "actor picking samples the rendered surface too");
+    "item and loc picking still match their terrain shader surface");
 const before = sampleBridgeHeightForWorldTile(maps, 6448.999, 6464.5, 1).height;
 const atEdge = sampleBridgeHeightForWorldTile(maps, 6449, 6464.5, 1).height;
 assert.ok(Math.abs(before - atEdge) < 0.001, "ground height remains continuous at the tile boundary");
@@ -330,3 +333,14 @@ console.log("House camera heights and interaction scene bounds regression passed
     assert.equal(hits.filter((hit: any) => hit.npcServerId === 123).length, 1, "the master on the other ship can be right-clicked");
     console.log("Scene raycaster other-ship NPC regression passed");
 }
+
+// Cached Falador rope corner (3041,3343,3): taking the higher of both terrain
+// diagonals lifts an actor above the rope between otherwise level endpoints.
+const { interpolateActorHeight } = require("../game/scene/BridgeHeightSampler");
+for (let i = 0; i <= 128; i++) {
+    const x = i / 128;
+    assert.equal(interpolateActorHeight(640, 616, 840, 856, x, 0.5), 740 - 4 * x,
+        `rope grounding follows the bilinear height at fine x=${i}`);
+}
+assert.equal(interpolateActorHeight(1008, 1080, 1040, 880, 0.5, 0.5), 1002,
+    "diagonal Falador rope does not acquire a 58-unit terrain-diagonal lift");

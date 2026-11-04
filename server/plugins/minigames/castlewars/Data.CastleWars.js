@@ -64,11 +64,9 @@ function buildData(core) {
     MAX_BARRICADES: 10,
     // Standard-world variants render beneath players (25 March 2026).
     BARRICADE_NPC: { [TEAM.SARADOMIN]: N.BARRICADE_5, [TEAM.ZAMORAK]: N.BARRICADE_7 },
-    // Practice can instead put barricade actions before overlapping players.
-    BARRICADE_FIRST_NPC: { [TEAM.SARADOMIN]: N.BARRICADE, [TEAM.ZAMORAK]: N.BARRICADE_3 },
     BRACELET_NEXT: { [I.CASTLE_WARS_BRACELET_3_]: I.CASTLE_WARS_BRACELET_2_, [I.CASTLE_WARS_BRACELET_2_]: I.CASTLE_WARS_BRACELET_1_, [I.CASTLE_WARS_BRACELET_1_]: -1 },
     CLEANUP_ITEM_IDS: new Set([...SUPPLY_ITEMS, I.SARADOMIN_CLOAK_3, I.ZAMORAK_CLOAK_3, I.SARADOMIN_BANNER, I.ZAMORAK_BANNER]),
-    DEATH_REMOVE_ITEM_IDS: new Set([...SUPPLY_ITEMS.filter((id) => id !== I.RUNE_POUCH_6), I.SARADOMIN_BANNER, I.ZAMORAK_BANNER]),
+    DEATH_REMOVE_ITEM_IDS: new Set([I.SARADOMIN_BANNER, I.ZAMORAK_BANNER]),
     TEAM_COLOUR_SLOTS: new Set([Equipment.CAPE_SLOT]),
     ENEMY_SPAWN_MESSAGE: "You are not allowed in the other team's spawn point.",
 

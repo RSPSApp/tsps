@@ -224,8 +224,17 @@ test('Corsair captured independent investigations and spoken transitions reach w
   const q = register('CorsairCurse', 'the_corsair_curse'), p = player();
   const wire = () => q.quest.varbitValue(q.quest.getStage(p), p);
   reachLine(q, p, 7956, "Sure, I'll try to help with your curse."); assert.equal(wire(), 5);
+  const ferryId = core.NpcIdentifiers.CAPTAIN_TOCK_3;
+  const ferries = () => q.spawned.filter(npc => npc.getId() === ferryId && !q.removed.includes(npc));
+  assert.equal(ferries().length, 1, 'accepting still spawns the travelling captain at Rimmington');
+  assert.equal(ferries()[0].definition.owner, p);
   q.emit('npc-dialogue:action', { player: p, stepId: '9srM-C' }); assert.equal(wire(), 10);
   q.emit('npc-dialogue:action', { player: p, stepId: 'GnY-u6' }); assert.equal(wire(), 15); q.tick(3);
+  assert.equal(ferries().length, 2, 'arrival still supplies both quest-owned ferry captains');
+  for (const ferry of ferries()) {
+    assert.equal(ferry.definition.wanderRadius, 0);
+    assert.equal(ferry.definition.ownerOnly, true);
+  }
   reachLine(q, p, 7961, "Okay, it doesn't sound like you know what's behind the curse. Thanks.");
   assert.equal(p.attributes.get('quest.the_corsair_curse.navigator'), 1);
   reachLine(q, p, 7976, "I'd hoped I could use my amazing Thieving skills");
@@ -487,6 +496,19 @@ test('X Marks preserves old saved stages, native clue/map interfaces, and captur
   const handin={player:p,npcId:8484,stepId:'HSuTNF'};q.emit('npc-dialogue:action',handin);assert.equal(p.items.get(23071),0);assert.equal(q.quest.varpValue(5,p),7);assert.deepEqual(handin.box.items,[23071]);
   q.emit('npc-dialogue:action',{player:p,npcId:8484,stepId:'03vD77'});assert.equal(q.quest.varpValue(6,p),8);assert.equal(p.items.get(995),200);assert.equal(p.items.get(23072),1);assert.equal(p.items.get(24361),1);
   q.emit('npc-dialogue:action',{player:p,npcId:8484,stepId:'03vD77'});assert.equal(p.items.get(995),200);
+});
+
+test('X Marks login restores the captured coin, lamp and clue-box reward flags', () => {
+  const q = register('XMarksTheSpot', 'x_marks_the_spot'), p = player();
+  q.quest.setStage(p, 6);
+  p.setAttribute('x-marks-the-spot:lamp-used', 1);
+  p.setAttribute('x-marks-the-spot:clue-box-state', 2);
+  p.packets.length = 0;
+  q.call('onPlayerLogin', { player: p });
+  const sent = (id) => p.packets.filter(([m, vid]) => m === 'sendVarbit' && vid === id).at(-1)?.[2];
+  assert.equal(sent(8065), 1, 'coin reward flag is restored, as completed captures log in with it');
+  assert.equal(sent(8066), 1, 'used lamp stays used');
+  assert.equal(sent(8258), 1, 'claimed clue box stays claimed');
 });
 
 test('Port Sarim Veos leaves once Cabin Boy Herbert takes over in A Kingdom Divided, as captured at akd 150', () => {

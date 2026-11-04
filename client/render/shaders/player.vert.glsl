@@ -145,8 +145,9 @@ void main() {
 
     vec4 localPos = vec4(vertex.pos, 1.0) * rotationY(float(playerInfo.rotation) * RS_TO_RADIANS) + vec4(playerInfo.tilePos.x, 0, playerInfo.tilePos.y, 0.0);
 
-    localPos.y -= getHeightInterp(playerInfo.tilePos, playerInfo.plane);
+    localPos.y -= getActorHeightInterp(playerInfo.tilePos, playerInfo.plane);
     localPos.y += u_modelYOffset;
+    vec4 groundedPos = localPos;
 
     localPos /= vec4(vec3(128.0), 1.0);
 
@@ -170,8 +171,10 @@ void main() {
 
     // Player vertices carry an explicit equipment layer rather than the cache's
     // software face priority. Bias only projected depth so equipment keeps its
-    // original screen position and perspective.
-    vec4 depthLayerPos = viewPos;
+    // original screen position and perspective. Parts below the floor take the
+    // floor's depth where they show (actorFloorViewPos).
+    vec4 depthLayerPos = actorFloorViewPos(viewPos, groundedPos, playerInfo.plane, u_modelYOffset,
+        u_worldEntityTransform * u_viewMatrix, u_projectionMatrix);
     applyPriorityDepthBias(depthLayerPos, vertex.priority);
     vec4 depthLayerClipPos = u_projectionMatrix * depthLayerPos;
     gl_Position = u_projectionMatrix * viewPos;

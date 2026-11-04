@@ -304,11 +304,18 @@ export class CombatSpecial {
                         }
                         // A special swing is the player's attack for the cycle and is
                         // followed by the weapon's normal cooldown; `bypassDelay`
-                        // (performNewAttack(true)) skips that reset, so do it here.
+                        // (performNewAttack(true)) skips that reset, so do it here. A
+                        // bypassing special swings outside the cycle, so it only extends
+                        // the deadline: Quick Smash after an AGS hit leaves the AGS's
+                        // cooldown running instead of cutting it to one tick.
                         const { PluginManager } = require("../../../plugins/PluginManager");
                         const speed = PluginManager.emitAttackSpeed(player, target, method.type(),
                             spec.getTraits()?.attackSpeedTicks ?? method.attackSpeed(player));
-                        player.getCombat().setAttackDelay(speed);
+                        if (instant) {
+                            player.getCombat().extendAttackDelay(speed);
+                        } else {
+                            player.getCombat().setAttackDelay(speed);
+                        }
                     } else {
                         player.getCombat().setSpecialAttackQueued(true);
                     }

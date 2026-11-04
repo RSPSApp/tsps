@@ -9,7 +9,8 @@
  *   pickaxe's level counting no higher than a dragon pickaxe's.
  * - Hitpoints: 151 x (1 + team / 2) + average Mining x team.
  * - Melee (max 20, 33 in Challenge Mode; attack speed 4), and now and then a stomp hitting a 3x3
- *   for moderate to heavy damage.
+ *   for moderate to heavy damage. Both are the Wiki's max hit for the mode: the shared scaling
+ *   gives it (20 Normal, 33 Challenge Mode), grown with the scaled Strength.
  * - Stepping between them gets you knocked back for moderate damage, and some points.
  * - 3-5 each of buchu, noxifer and golpar seeds from each. Challenge Mode hitpoints 375 (+50%).
  * rsprox captures (recordings 820, 3282, 3389):
@@ -33,7 +34,8 @@
  *   formula each time, which is kept here. Challenge Mode's +50% holds.
  * Not on the Wiki and not in any capture: the invisible blockers (26209) past the far row, only
  *   there to stop a run skipping it; knock-back damage (each guardian 0-15); the stomp's base (the
- *   Wiki's max hit, seen as high as 29 at solo Challenge Mode).
+ *   Wiki's max hit too, so 20 Normal and 33 Challenge Mode, where the captures saw a stomp of 29
+ *   at solo Challenge Mode).
  */
 
 const Shared = require("./Shared.ChambersOfXeric");
@@ -74,6 +76,12 @@ function pickaxeFactor(player) {
   const pickaxe = Shared.PICKAXES.find((entry) => entry.id === weapon);
   if (!pickaxe) return 0;
   return (50 + Shared.level(player, "MINING") + Math.min(pickaxe.level, DRAGON_PICKAXE_LEVEL)) / 150;
+}
+
+/** The shared scaling's max hit for this NPC's mode and scale (Wiki: 20 Normal, 33 Challenge Mode). */
+function maxHitOf(npc) {
+  const scaled = npc.getDefinition?.().getMaxHit?.() ?? 0;
+  return scaled > 0 ? scaled : Monsters.maxHitFor(npc, BASE.MELEE, Monsters.LEVELS.STRENGTH);
 }
 
 class GuardiansRoom extends Raid.Room {
@@ -171,7 +179,7 @@ class GuardiansRoom extends Raid.Room {
     new Projectile(from, at, null, 645, 15, 30, 225, 6, this.map).withAngle(0).withProgress(0).sendProjectile();
     Shared.areaSound(this.raiders(), SOUND.STOMP, npc.getLocation(), { range: 6 });
     Shared.graphicAt(this.raiders(), 305, at, { delay: 30 });
-    const max = Monsters.maxHitFor(npc, BASE.STOMP, Monsters.LEVELS.STRENGTH);
+    const max = maxHitOf(npc);
     Shared.later(this.raid, 1, () => {
       Shared.areaSound(this.raiders(), SOUND.STOMP_HIT, at, { range: 6 });
       for (const player of this.raiders()) {
@@ -191,7 +199,7 @@ class GuardiansRoom extends Raid.Room {
     if (this.adjacent(npc, player) && Shared.random(0, 3) !== 0) {
       Shared.animate(npc, ANIM.ATTACK);
       Shared.areaSound(this.raiders(), SOUND.ATTACK, npc.getLocation(), { range: 6 });
-      Shared.strike(npc, player, "melee", Monsters.maxHitFor(npc, BASE.MELEE, Monsters.LEVELS.STRENGTH), 0);
+      Shared.strike(npc, player, "melee", maxHitOf(npc), 0);
       return;
     }
     this.stomp(npc, player);
@@ -289,4 +297,4 @@ module.exports = function registerCoxGuardians(api) {
   api.registerNpcCombatMethodProvider(NPC.GUARDIANS, guardianCombat(api));
 };
 
-Object.assign(module.exports, { GuardiansRoom, guardianHitpoints, pickaxeFactor });
+Object.assign(module.exports, { GuardiansRoom, guardianHitpoints, pickaxeFactor, maxHitOf });

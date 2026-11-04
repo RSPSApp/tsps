@@ -99,6 +99,8 @@ export class MovementQueue {
      */
     private isMoving = false;
     private movedThisCycle = false;
+    /** True when the current cycle was spent running, so energy must not restore on it. */
+    private ranThisCycle = false;
     private externalMovementUntil = 0;
     private lastMoveCycle = -2;
     private blockedByDynamicOccupancy = false;
@@ -431,7 +433,13 @@ export class MovementQueue {
 
     public beginCycle(): void {
         this.movedThisCycle = false;
+        this.ranThisCycle = false;
         this.blockedByDynamicOccupancy = false;
+    }
+
+    /** The cycle just processed was spent running (a running tick spends energy). */
+    public didRunThisCycle(): boolean {
+        return this.ranThisCycle;
     }
 
     public didMoveThisCycle(): boolean {
@@ -730,18 +738,37 @@ export class MovementQueue {
         }
     }
 
+    /**
+     * Energy units one running tick costs (Wiki: Energy). Weight is clamped to 0-64 kg and the
+     * Agility level is the boosted one; a tick with less energy left only spends what remains.
+     */
+    public static runEnergyDrainUnits(p: Player): number {
+        const weight = Math.max(0, Math.min(64, p.getWeightKg()));
+        const agility = p.getSkillManager().getCurrentLevel(Skill.AGILITY);
+        const base = Math.floor((60 + Math.floor((67 * weight) / 64)) * (1 - agility / 300));
+        return Math.max(0, Math.floor(applyRunEnergyDrainModifiers(p, base)));
+    }
+
+    /** Energy units regained per tick not spent running, before the graceful set bonus. */
+    public static runEnergyRestoreUnits(p: Player): number {
+        const agility = p.getSkillManager().getCurrentLevel(Skill.AGILITY);
+        const base = Math.floor(agility / 10) + 15;
+        return Math.max(0, Math.floor(applyRunEnergyRestoreModifiers(p, base)));
+    }
+
     private drainRunEnergy() {
         const player = (this.character as Player);
         if (player.isPlayerBot?.() === true) {
-            if (player.getRunEnergy() !== 100) {
-                player.setRunEnergy(100);
+            if (player.getRunEnergyUnits() !== GameConstants.RUN_ENERGY_MAX_UNITS) {
+                player.setRunEnergyUnits(GameConstants.RUN_ENERGY_MAX_UNITS);
             }
             return;
         }
         if (this.isRunToggled()) {
-            player.setRunEnergy(player.getRunEnergy() - applyRunEnergyDrainModifiers(player, 1));
-            if (player.getRunEnergy() <= 0) {
-                player.setRunEnergy(0);
+            this.ranThisCycle = true;
+            player.setRunEnergyUnits(player.getRunEnergyUnits() - MovementQueue.runEnergyDrainUnits(player));
+            if (player.getRunEnergyUnits() <= 0) {
+                player.setRunEnergyUnits(0);
                 this.runOverride = null;
                 player.setRunning(false);
                 player.getPacketSender().sendRunStatus();
@@ -773,11 +800,6 @@ export class MovementQueue {
         player.setWildernessLevel(0);
         player.setMultiIcon(0);
         packetSender.sendInteractionOption("null", 2, true);
-    }
-
-    public static runEnergyRestoreDelay(p: Player) {
-        const delay = 1700 - (p.getSkillManager().getCurrentLevel(Skill.AGILITY) * 10);
-        return Math.max(1, Math.round(applyRunEnergyRestoreModifiers(p, delay)));
     }
 
     public reset(clearDestination = true): MovementQueue {

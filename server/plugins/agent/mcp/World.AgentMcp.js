@@ -63,6 +63,8 @@ module.exports = function registerWorldTools(ctx) {
         hitpoints: p.getHitpoints(),
         movementBlocked: movementBlocked?.(p) === true,
         runEnergy: p.getRunEnergy(),
+        runEnergyUnits: p.getRunEnergyUnits?.(),
+        weightKg: p.getWeightKg?.(),
         ...(varbits.length ? { varbitValues: Object.fromEntries(varbits.map((id) => [id, sender.getVarbit(id)])) } : {}),
         ...(varps.length ? { varpValues: Object.fromEntries(varps.map((id) => [id, sender.getVarp(id)])) } : {}),
         ...(widgets.length ? {

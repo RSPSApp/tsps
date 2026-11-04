@@ -9,6 +9,7 @@ const { Player } = require('../dist/game/entity/impl/player/Player');
 const { PlayerSession } = require('../dist/net/PlayerSession');
 const { ClientConnection } = require('../dist/net/NetworkBuilder');
 const { PlayerStatus } = require('../dist/game/model/PlayerStatus');
+const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
 let core, Data, Patches;
 let actorIndex = 200;
 
@@ -224,4 +225,122 @@ test('native gardener Pay -> Yes takes payment and protects the planted tree onc
   assert.equal(state.protected, true);
   assert.equal(f.p.getInventory().getAmount(coconutNote), 0);
   assert.match(f.p.getDialogueManager().getCurrent().getText(), /^That'll do nicely, (sir|madam)\. Leave it with me/);
+});
+
+const GARDENERS_ATTRIBUTE = 'quest.fairytale-i-growing-pains:gardeners';
+const GARDENER_QUESTION = 'Are you a member of the Group of Advanced Gardeners?';
+function questGardener(t, id) {
+  const f = actor(t, 2435, 3415);
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests()
+    .find(quest => quest.key === 'fairytale_i_growing_pains');
+  quest.setStage(f.p, quest.startedValue);
+  const gardeners = [];
+  f.setGardener = id => {
+    f.gardener = core.NPC.create(id, new core.Location(2436, 3415, 0));
+    core.World.getNpcs().add(f.gardener);
+    gardeners.push(f.gardener);
+  };
+  f.setGardener(id);
+  f.names = [];
+  const sender = f.p.getPacketSender(), sendString = sender.sendString.bind(sender);
+  t.mock.method(sender, 'sendString', (text, widget) => {
+    if (widget === (231 << 16 | 4)) f.names.push(text);
+    return sendString(text, widget);
+  });
+  t.after(() => { f.p.closeInterruptibleInterfaces(); gardeners.forEach(npc => core.World.getNpcs().remove(npc)); });
+  f.talk = () => input(f, { type: 'npc_option', index: f.gardener.getIndex(), clickType: 1 });
+  f.asked = () => String(f.p.getAttribute(GARDENERS_ATTRIBUTE) ?? '').split(',').filter(Boolean).map(Number);
+  return f;
+}
+async function gardenerChoice(f, text) {
+  const menu = MultiChatboxPrompt.getPending(f.p);
+  assert.ok(menu?.options.includes(text), JSON.stringify(menu));
+  await input(f, { type: 'dialogue_continue', widgetId: MultiChatboxPrompt.OPTIONS_WIDGET_ID,
+    childIndex: menu.options.indexOf(text) + 1 });
+}
+async function gardenerContinue(f) {
+  const group = f.p.getPacketSender().getChatboxGroupId();
+  await input(f, { type: 'dialogue_continue', widgetId: group << 16 | 5, childIndex: -1 });
+}
+async function finishGardener(f) {
+  for (let n = 0; n < 40 && f.p.getDialogueManager().getCurrent(); n++) await gardenerContinue(f);
+  assert.equal(f.p.getDialogueManager().getCurrent(), undefined, 'the source branch completes');
+}
+
+test('five native quest gardener conversations use the actual actor name and credit only a completed answer', async t => {
+  const ids = [core.NpcIdentifiers.FRIZZY_SKERNIP, core.NpcIdentifiers.ELSTAN,
+    core.NpcIdentifiers.HESKEL, core.NpcIdentifiers.DREVEN, core.NpcIdentifiers.TREZNOR];
+  const f = questGardener(t, ids[0]);
+  for (const [index, id] of ids.entries()) {
+    if (index > 0) f.setGardener(id);
+    f.names.length = 0;
+    await f.talk();
+    await gardenerChoice(f, GARDENER_QUESTION);
+    assert.equal(f.asked().length, index, 'choosing the question does not count unheard information');
+    await gardenerContinue(f);
+    assert.equal(f.p.getDialogueManager().getCurrent().getNpcId(), id, 'the NPC head stays bound to the actor');
+    assert.equal(f.asked().length, index);
+    f.p.closeInterruptibleInterfaces();
+    assert.equal(f.asked().length, index, 'cancelling an answer does not count it');
+    await f.talk();
+    await gardenerChoice(f, GARDENER_QUESTION);
+    await finishGardener(f);
+    assert.deepEqual(f.asked(), ids.slice(0, index + 1));
+    assert.ok(f.names.length > 0);
+    assert.deepEqual([...new Set(f.names)], [f.gardener.getCurrentDefinition(f.p).getName()]);
+    await f.talk();
+    assert.match(f.p.getDialogueManager().getCurrent()?.getText() ?? '', /^You don't have a sapling planted/,
+      `the completed gardener yields to Farming: ${JSON.stringify({ id, actions: f.gardener.getCurrentDefinition(f.p).getActions(), messages: f.messages })}`);
+    f.p.closeInterruptibleInterfaces();
+    assert.deepEqual(f.asked(), ids.slice(0, index + 1), 'repeated service access adds no duplicate');
+  }
+  f.setGardener(core.NpcIdentifiers.KRAGEN);
+  await f.talk();
+  assert.match(f.p.getDialogueManager().getCurrent().getText(), /^You don't have a sapling planted/,
+    'after five answers even an unasked gardener yields to Farming');
+  assert.deepEqual(f.asked(), ids);
+  const restored = actor(t, 2435, 3415);
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  PlayerSave.fromPlayer(f.p).applyToPlayer(restored.p);
+  assert.equal(restored.p.getAttribute(GARDENERS_ATTRIBUTE), ids.join(','), 'completed answers survive save/load');
+  await input(restored, { type: 'npc_option', index: f.gardener.getIndex(), clickType: 1 });
+  assert.match(restored.p.getDialogueManager().getCurrent().getText(), /^You don't have a sapling planted/);
+  restored.p.closeInterruptibleInterfaces();
+});
+
+for (const name of ['TREZNOR', 'ELSTAN']) {
+test(`a quest ${name} look-after choice reaches native Farming payment and protects exactly once`, async t => {
+  const f = questGardener(t, core.NpcIdentifiers[name]);
+  const patch = Data.CACHE.patches.find(p => p.x === 2435 && p.y === 3414);
+  const state = Patches.stateFor(f.p, patch);
+  Object.assign(state, { crop: 'MAGIC', stage: 0, status: 'growing', checked: false, protected: false, nextAt: Date.now() + 3600000 });
+  const coconutNote = core.ItemDefinition.forId(Data.itemId('Coconut')).getNoteId();
+  f.p.getInventory().add(new core.Item(coconutNote, 25), false);
+  await f.talk();
+  await gardenerChoice(f, 'Would you look after my crops for me?');
+  assert.equal(f.p.getDialogueManager().getCurrent()?.getTitle(), 'Pay 25 coconuts?');
+  assert.equal(state.protected, false);
+  assert.deepEqual(f.asked(), []);
+  f.p.closeInterruptibleInterfaces();
+  await resume(f, 1);
+  assert.equal(state.protected, false, 'cancelled payment cannot be resumed');
+  assert.equal(f.p.getInventory().getAmount(coconutNote), 25);
+  await f.talk();
+  await gardenerChoice(f, 'Would you look after my crops for me?');
+  await resume(f, 1);
+  assert.equal(state.protected, true);
+  assert.equal(f.p.getInventory().getAmount(coconutNote), 0);
+  await resume(f, 1);
+  assert.equal(f.p.getInventory().getAmount(coconutNote), 0);
+  assert.deepEqual(f.asked(), [], 'ordinary Farming never counts a quest answer');
+});
+}
+
+test('an invalid gardener answer never counts towards the five reports', async t => {
+  const f = questGardener(t, core.NpcIdentifiers.AYESHA);
+  await f.talk();
+  await gardenerChoice(f, GARDENER_QUESTION);
+  await finishGardener(f);
+  assert.deepEqual(f.asked(), []);
+  assert.deepEqual([...new Set(f.names)], [f.gardener.getCurrentDefinition(f.p).getName()]);
 });

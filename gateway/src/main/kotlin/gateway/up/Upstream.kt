@@ -1,6 +1,7 @@
 package gateway.up
 
 import gateway.coverage.DropCounter
+import gateway.session.PlayerOps
 import gateway.session.VarpMirror
 import gateway.tsps.TspsClientPacket
 import gateway.down.ChatStyle
@@ -66,6 +67,8 @@ class Upstream(
     private val interceptCount: (Int) -> Boolean = { false },
     /** tsps's index for a boat the client names by its world id. */
     private val worldEntityIndex: (Int) -> Int? = { it },
+    /** Whether the welcome screen is up (a modal, as live opens it). */
+    private val welcomeShown: () -> Boolean = { false },
     private val send: (ByteArray) -> Unit,
 ) {
     fun handle(message: IncomingGameMessage) {
@@ -124,7 +127,10 @@ class Upstream(
             is ResumePLongDialog -> send(TspsWriter().i32(message.count.coerceIn(0, Int.MAX_VALUE.toLong()).toInt()).fixed(RESUME_COUNTDIALOG))
             is ResumePNameDialog -> send(TspsWriter().string(message.name).varByte(RESUME_NAMEDIALOG))
             is ResumePStringDialog -> send(TspsWriter().string(message.string).varByte(RESUME_STRINGDIALOG))
-            is CloseModal -> send(TspsWriter().fixed(IF_CLOSE))
+            // The client closes modals itself (Escape, a close button) and then tells the server. On
+            // the welcome screen tsps would leave the player on the login root without a gameframe,
+            // so closing it means Play, the only way tsps leaves it.
+            is CloseModal -> send(if (welcomeShown()) TspsClientPacket.ifButtonX(WELCOME_PLAY, NONE, NONE, 1) else TspsWriter().fixed(IF_CLOSE))
             is MessagePublic ->
                 when {
                     // tsps's clan chat has no colour or effect.
@@ -132,7 +138,11 @@ class Upstream(
                         if (message.clanType == OWN_CLAN) send(TspsClientPacket.clanChat(OWN_CLAN, message.message)) else DropCounter.up(message)
                     message.type == GUEST_CLAN_CHAT_TYPE -> send(TspsClientPacket.clanChat(GUEST_CLAN, message.message))
                     else ->
-                        PUBLIC_CHAT_KINDS[message.type]?.let { send(TspsClientPacket.chat(it, message.message, publicChatStyle(message))) } ?: DropCounter.up(message)
+                        PUBLIC_CHAT_KINDS[message.type]?.let {
+                            // Native chat_send prepends a routing slash only for Friends Chat.
+                            val text = if (message.type == 2) message.message.removePrefix("/") else message.message
+                            send(TspsClientPacket.chat(it, text, publicChatStyle(message)))
+                        } ?: DropCounter.up(message)
                 }
             is ClanChannelKickUser -> clanChannelAction(message, message.clanId, KICK_USER, message.name)
             is AffinedClanSettingsAddBannedFromChannel -> clanChannelAction(message, message.clanId, BAN_USER, message.name)
@@ -157,7 +167,7 @@ class Upstream(
             }
             is ClickWorldMap -> send(WorldOps.worldMapClick(message.level, message.x, message.z))
             is Teleport -> send(WorldOps.teleport(message.level, message.x, message.z))
-            is OpPlayer -> send(TspsClientPacket.playerOp(message.op, message.index))
+            is OpPlayer -> send(TspsClientPacket.playerOp(PlayerOps.toTsps(message.op), message.index))
             is OpNpcV2 -> if (message.op in 1..5) send(TspsClientPacket.npcOp(message.op, message.index)) else DropCounter.up(message)
             is OpNpc6 -> send(TspsClientPacket.examineNpc(message.id))
             is OpLocV2 -> if (message.op in 1..5) send(WorldOps.loc(message.op, message.id, message.x, message.z)) else DropCounter.up(message)
@@ -273,6 +283,10 @@ class Upstream(
         const val RUN_VARP = 173
         const val LOGOUT_TAB_BUTTON = (182 shl 16) or 8
         const val WORLD_SWITCHER_LOGOUT = (69 shl 16) or 25
+        const val WELCOME_PLAY = (378 shl 16) or 72
+
+        /** The slot and obj an IF_BUTTONX on a plain component carries. */
+        const val NONE = 0xFFFF
 
         /** OSRS public-chat types (0 public, 1 autotyper, 2 friends chat) to tsps chat kinds. */
         val PUBLIC_CHAT_KINDS = mapOf(0 to 0, 1 to 3, 2 to 2)

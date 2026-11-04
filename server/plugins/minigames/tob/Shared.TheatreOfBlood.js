@@ -500,6 +500,30 @@ function unscript(npc) {
 }
 
 /**
+ * Takes one Dawnbringer off a player: the inventory copy first, otherwise the equipped one.
+ * True when one was removed.
+ */
+function takeDawnbringer(player) {
+  const { Equipment, Item, Flag } = core();
+  const id = ITEM.DAWNBRINGER;
+  const inventory = player.getInventory();
+  const carried = inventory.getAmount(id);
+  if (carried > 0) {
+    inventory.delete(id, 1);
+    inventory.refreshItems();
+    return true;
+  }
+  const equipment = player.getEquipment();
+  if (equipment.getItems()[Equipment.WEAPON_SLOT]?.getId() !== id) return false;
+  equipment.setItem(Equipment.WEAPON_SLOT, new Item(-1, 0));
+  equipment.refreshItems();
+  const { EquipPacketListener } = core();
+  EquipPacketListener.resetWeapon(player, true);
+  player.getUpdateFlag().flag(Flag.APPEARANCE);
+  return true;
+}
+
+/**
  * The Dawnbringer never leaves Verzik's room: it's taken when her shield falls and from anyone
  * leaving the raid. True when it was in the player's hand.
  */
@@ -520,7 +544,7 @@ function removeDawnbringer(player) {
 }
 
 module.exports = {
-  removeDawnbringer, unscript, restoreDefence, random, randomOf, shuffle, gfx, graphicAt, sound, areaSound, damage, heal, projectile, lineOfSight, floorFree,
+  removeDawnbringer, takeDawnbringer, unscript, restoreDefence, random, randomOf, shuffle, gfx, graphicAt, sound, areaSound, damage, heal, projectile, lineOfSight, floorFree,
   distanceTo, covers, walkStraight, frozen, isProtected,
   bind, core, api,
   THEATRE, THEATRE_PLANES, VER_SINHAZA, OUTSIDE, NPC, OBJECT, ITEM, INTERFACE, SCRIPT, VARP, VARBIT,

@@ -8,9 +8,11 @@
  *
  *   { style: "MELEE" | "RANGED" | "MAGIC", anim, sound?, maxHit?, minHit?, npcGfx?: [id, height],
  *     projectile?: { id, start, base, perTile, angle, progress, startHeight, endHeight },
- *     targetGfx?: { id, delay?: number | "impact", height? }, room?: true, accuracyAs?: style }
+ *     targetGfx?: { id, delay?: number | "impact", height? }, room?: true, accuracyAs?: style,
+ *     alwaysHits?: true }
  *
- * `maxHit` defaults to the NPC's own; `room` hits every player in the chamber.
+ * `maxHit` defaults to the NPC's own; `room` hits every player in the chamber; `alwaysHits` skips
+ * the accuracy roll (K'ril's prayer smash always lands 35-49, Wiki).
  */
 const Common = require("./Common.GodWars");
 
@@ -108,7 +110,7 @@ function createMethod({ choose, reach = 1, onHit = null }) {
       for (const [victim, end] of this.landing) {
         // A hit N ticks out splats 30N cycles after the send: the first tick at or after landing (#1862).
         const delay = attack.hitDelay ?? (attack.projectile ? Common.core.Projectile.ticksToLand(end) : 0);
-        const hit = new PendingHit(npc, victim, this, delay);
+        const hit = new PendingHit(npc, victim, this, attack.alwaysHits ? { delay, rollAccuracy: false } : delay);
         CombatFactory.applyStyleDamage(hit, maxHit, { minHit: attack.minHit ?? 0, bypassProtectionPrayer: attack.throughPrayer === true });
         hits.push(hit);
       }
@@ -126,15 +128,27 @@ function single(attack, reach) {
   return createMethod({ choose: () => attack, reach });
 }
 
+/** Keeps a scripted arena's NPC on its target however far it moves from its spawn. */
+const NO_RETREAT_FLAG = "combat:no-retreat";
+
 /**
  * The general and bodyguards attack whoever is in their chamber on sight (Wiki); ordinary
  * aggression only reaches a few tiles from their spawns. `npcs` are the chamber's candidates.
+ *
+ * A chamber is a scripted public arena rather than open-world hunting, so the boss and its
+ * bodyguards are claimed by the arena as soon as it engages them: `combat:no-retreat` stops the
+ * ordinary aggression leash cutting the fight short when a player crosses the room, exactly as
+ * the private chamber's own area does. The chamber's existing rules still end the fight - it
+ * resets the general and bodyguards when the room empties (`Dungeon.resetChamber`) and the
+ * private instance owns its copies. Followers are deliberately not flagged: the dungeon's
+ * `npcAggression` rule makes them attack on sight, but they keep their normal leash.
  */
 function engage(player, faction, npcs) {
   const { CombatFactory } = Common.core;
   for (const npc of npcs) {
     if (!npc || npc.getHitpoints() <= 0 || npc.getPrivateArea() !== player.getPrivateArea()) continue;
     if (npc.getId() !== faction.general && !faction.bodyguards.includes(npc.getId())) continue;
+    if (!npc.hasFlag(NO_RETREAT_FLAG)) npc.setFlag(NO_RETREAT_FLAG);
     if (CombatFactory.inCombat(npc) || npc.getCombat().getTarget()) continue;
     npc.getCombat().attack(player);
   }

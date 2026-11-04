@@ -43,16 +43,10 @@
  * any skill over 30) and the fairy ring network.
  *
  * Gaps/approximations:
- * - The fairy ring sequence that opens the hideout (AIR/DLR/DJQ/AJS) is the
- *   FairyRings plugin's territory, which refuses every ring until FT2 is
- *   complete. During the quest the player is teleported by the verifier; the
- *   shared change needed is a "fairyring_permission" branch in FairyRings.
- * - The cosmic plane and gorak plane are reached with ::tele in the same way;
- *   the star flowers are spawned instantly on entering the plane rather than
+ * - The star flowers are spawned instantly on entering the cosmic plane rather than
  *   after the wiki's 2-5 minute growth.
- * - The certificate "Study" and rune temple sign "Read" have no transcript page;
- *   they send short messages and set 2336/2338 (the sign message is not from a
- *   wiki transcript).
+ * - The first-entry scene in Nuff's room is not implemented; the stage-based
+ *   2339 marker does not establish a native camera track.
  * - The queen's awakening scene has several speakers (Queen, Nuff, Very Wise)
  *   but the shared transcript replay renders one chathead; the qUAH/lamp/complete
  *   step ids are hooked instead of re-authoring the scene.
@@ -139,6 +133,10 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const LEGACY_STAGE_COMPLETE = 80;
 
   const NUFFS_CERTIFICATE_ITEM_ID = ItemIdentifiers.NUFFS_CERTIFICATE; // 9025
+  const CERTIFICATE_FRONT_INTERFACE = 423;
+  const CERTIFICATE_BACK_INTERFACE = 424;
+  const RUNE_TEMPLE_SIGN_INTERFACE = 425;
+  const DOCUMENT_OPEN_SCRIPT = 2524;
   const QUEENS_SECATEURS_ITEM_ID = ItemIdentifiers.QUEENS_SECATEURS_2; // 9020
   const GORAK_CLAWS_ITEM_ID = ItemIdentifiers.GORAK_CLAWS; // 9016
   const GORAK_CLAW_POWDER_ITEM_ID = ItemIdentifiers.GORAK_CLAW_POWDER; // 9018
@@ -243,6 +241,9 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const PLANE_GORAK = 1 << 1;
 
   const HIDEOUT_ZONE = { minX: 2324, maxX: 2367, minY: 4420, maxY: 4468, levels: [0] };
+  const HIDEOUT_SEQUENCE = ["AIR", "DLR", "DJQ", "AJS"];
+  // Cache loc 29495 is 1x1 here; ordinary DB89 destinations likewise match its anchor.
+  const HIDEOUT_RING = new Location(2328, 4426, 0);
   const STAR_PLANE_ZONE = { minX: 2060, maxX: 2098, minY: 4806, maxY: 4862, levels: [0] };
   const GORAK_PLANE_ZONE = { minX: 3009, maxX: 3072, minY: 5312, maxY: 5380, levels: [0] };
 
@@ -264,10 +265,33 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const starflowers = new Map(); // player -> spawned NPCs
   const awakeQueen = new Map(); // player -> spawned NPC
   const pendingLamp = new WeakMap();
+  const hideoutSequence = new WeakMap();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const freeSlots = (player) => player.getInventory().getFreeSlots();
   const studied = (player) => Number(player.getAttribute(STUDIED_ATTRIBUTE)) > 0;
+
+  function answerFairyRingAccess(request) {
+    request.allowed = quest.getStage(request.player) >= STAGE_PERMISSION;
+  }
+
+  function resolveFairyRingDestination(request) {
+    const { player, code } = request;
+    if (quest.getStage(player) < STAGE_PERMISSION) return;
+    // DJQ is the sequence's no-trip step, not a new destination.
+    if (code === "DJQ") request.destination = request.origin ?? player.getLocation().clone();
+    if (code !== "AJS" || hideoutSequence.get(player) !== 3) return;
+    if (quest.isComplete(player)
+      || (held(player, NUFFS_CERTIFICATE_ITEM_ID) && studied(player) && Number(player.getAttribute(SIGN_ATTRIBUTE)) > 0)) {
+      request.destination = HIDEOUT_RING;
+    }
+  }
+
+  function recordFairyRingTravel({ player, code }) {
+    const step = hideoutSequence.get(player) ?? 0;
+    const next = code === HIDEOUT_SEQUENCE[step] ? step + 1 : code === HIDEOUT_SEQUENCE[0] ? 1 : 0;
+    hideoutSequence.set(player, next < HIDEOUT_SEQUENCE.length ? next : 0);
+  }
 
   function ft1Complete(player) {
     const request = { player, key: "fairytale_i_growing_pains", complete: null };
@@ -625,18 +649,27 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     }
     player.setAttribute(SIGN_ATTRIBUTE, 1);
     syncProgress(player);
-    player.sendMessage("You read the sign. It says: Cosmic Rune Altar.");
+    openDocument(player, RUNE_TEMPLE_SIGN_INTERFACE);
     return true;
   }
 
-  function handleItemAction(event) {
-    if (event.itemId !== NUFFS_CERTIFICATE_ITEM_ID || event.option !== "Study") return;
-    const { player } = event;
-    event.handled = true;
+  function openDocument(player, interfaceId, args = [-1, -1]) {
+    player.getPacketSender().sendClientScript(DOCUMENT_OPEN_SCRIPT, ...args).sendInterface(interfaceId);
+  }
+
+  function handleReadCertificate({ player }) {
+    openDocument(player, CERTIFICATE_FRONT_INTERFACE);
+    return true;
+  }
+
+  function handleStudyCertificate({ player }) {
     player.setAttribute(STUDIED_ATTRIBUTE, 1);
     advance(player, STAGE_CERTIFICATE_STUDIED);
     syncProgress(player);
-    player.sendMessage("You study the certificate and notice strange symbols on the back.");
+    player.sendMessage("You turn the certificate over and look at the back...");
+    // RSProx 424 supplies the back document's distinct mainmodal arguments.
+    openDocument(player, CERTIFICATE_BACK_INTERFACE, [4269835, 100]);
+    return true;
   }
 
   function handleItemOnNpc(event) {
@@ -644,7 +677,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     const variant = CERTIFICATE_VARIANTS.get(event.npcId);
     if (!variant) return;
     event.handled = true;
-    startTranscript(api, player, event.npcId, PAGE, variant);
+    startTranscript(api, event.player, event.npcId, PAGE, variant);
   }
 
   function handlePickpocket(event) {
@@ -939,6 +972,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   }
 
   function handleLogout({ player }) {
+    hideoutSequence.delete(player);
     removePlayerSpawns(player);
   }
 
@@ -1083,6 +1117,10 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:condition", handleConditionEvent);
   api.onCustomEvent("npc-dialogue:action", handleActionEvent);
+  api.onCustomEvent("fairy-rings:access", answerFairyRingAccess);
+  api.onCustomEvent("fairy-rings:destination", resolveFairyRingDestination);
+  api.onCustomEvent("fairy-rings:travelled", recordFairyRingTravel);
+  api.onCustomEvent("fairy-rings:invalid", recordFairyRingTravel);
   api.onObjectInteraction("Healing certificate", { Take: handleTakeCertificate });
   api.onObjectInteraction("Potion shelves", { Search: handleShelfSearch });
   api.onObjectInteraction("Potion shelf", { Search: handleShelfSearch });
@@ -1090,7 +1128,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handlePotionOnQueen, { noted: false });
-  api.onItemAction(handleItemAction);
+  api.onItemAction("Nuff's certificate", { Read: handleReadCertificate, Study: handleStudyCertificate });
   api.onItemAction("Antique lamp", { Rub: handleLampRub });
   api.onNpcInteraction("Fairy Godfather", { "Pick-pocket": handlePickpocket });
   api.onNpcInteraction(handleNuffTalk);

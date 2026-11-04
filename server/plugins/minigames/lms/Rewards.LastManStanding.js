@@ -1,8 +1,7 @@
 /**
  * Justine's stuff for the Last Shopper Standing (interface 645), as captured:
  * - Justine's Trade opens it (the generic shop 1449 bound to her in shops.json gives way); with
- *   no win yet she first says "Before I show you the rewards, I'll grant access to further
- *   rewards once you've been the Last Man Standing at least once.";
+ *   no win yet she first explains the win requirement for tradeable rewards;
  * - the stock and prices arrive as an inventory (422: each slot's count is its price), the points
  *   on varp 261 and the wins on varp 262, which the client draws the list from;
  * - the confirm button's sub is the slot; set rewards ask "How many sets of 50 would you like?

@@ -445,6 +445,9 @@ function farmingItemOnNpc(event) {
     inventory.deleteNumber(id, amount);
     inventory.addItem(noted);
 }
+function isGardenerPayment(action) {
+    return /^pay(?:$| \()/i.test(action ?? "");
+}
 function farmingNpc(event) {
     const { player, npc, definition } = event;
     const name = definition?.getName() ?? npc.getDefinition()?.getName() ?? "";
@@ -499,7 +502,7 @@ function farmingNpc(event) {
         Tools.open(player, npc);
         return;
     }
-    if (action !== "pay" && action !== "pay-fare" && action !== "talk-to") return;
+    if (!isGardenerPayment(action) && action !== "pay-fare" && action !== "talk-to") return;
     const pos = npc.getLocation();
     const patches = Data.CACHE.patches.filter(p => p.z === pos.getZ() && Math.abs(p.x - pos.getX()) <= GARDENER_RANGE && Math.abs(p.y - pos.getY()) <= GARDENER_RANGE);
     // A "Pay" option alone does not make an NPC a gardener: Bonzo (contest fee), Saniboch
@@ -512,7 +515,7 @@ function farmingNpc(event) {
         return c && (c.payment.length || Data.WOOD_TREES.has(c.type) || c.type === "FRUIT_TREE");
     });
     // Gardener NPCs advertise Pay; never hijack unrelated NPC conversations near a patch.
-    if (!definition?.getActions()?.some(option => option?.toLowerCase() === "pay")) return;
+    if (!definition?.getActions()?.some(isGardenerPayment)) return;
     event.handled = true;
     if (!relevant.length) {
         // Captured from the tree gardeners; the others keep the server's own line.
@@ -528,6 +531,14 @@ function farmingNpc(event) {
     });
     if (entries.length === 1) entries[0][1]();
     else Patches.choose(player, entries);
+}
+function gardenerProtection(event) {
+    if (event.action !== "farming:gardener-protect" || !event.npc) return;
+    const pay = event.definition?.getActions()?.findIndex(isGardenerPayment);
+    if (!(pay >= 0)) return;
+    const request = { ...event, clickType: pay + 1, handled: false };
+    farmingNpc(request);
+    event.handled = request.handled;
 }
 function gardenerSays(player, npc, text) {
     player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.NpcDialogue(0, npc.getId(), text)));
@@ -661,4 +672,4 @@ function farmingItemAction(event) {
     }
 }
 
-Object.assign(module.exports, { cropRewards, binValue, binAction, useBottomless, farmingItemPair, growSeedlings, waterContainers, humidified, farmingItemOnNpc, farmingNpc, farmingItemAction, storeTool, takeBinStep });
+Object.assign(module.exports, { cropRewards, binValue, binAction, useBottomless, farmingItemPair, growSeedlings, waterContainers, humidified, farmingItemOnNpc, farmingNpc, gardenerProtection, farmingItemAction, storeTool, takeBinStep });

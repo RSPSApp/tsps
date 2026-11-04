@@ -63,7 +63,6 @@ before(() => {
   game.getTeamId = () => data.TEAM.SARADOMIN;
   game.swapObject = (...args) => swaps.push(args);
   game.gameArea = { getPlayers: () => [] };
-  game.getBarricadePlayerPriority = () => false;
   game.hasPracticeBots = () => false;
   Barricades(api, game);
   require('../plugins/combat/specials/Shove.SpecialAttack')(PluginManager.createApi('Castle Wars shove regression'));
@@ -108,42 +107,35 @@ test('the energy-barrier exit and nonblocking map objects allow immediate barric
   }
 });
 
-test('practice menu priority selects native variants through burning, extinguishing and removal', (t) => {
-  let playerPriority = false;
+test('practice and human games keep players above native barricades through burning, extinguishing and removal', (t) => {
   let practice = true;
-  t.mock.method(game, 'getBarricadePlayerPriority', () => playerPriority);
   t.mock.method(game, 'hasPracticeBots', () => practice);
   for (const team of Object.values(data.TEAM)) {
     t.mock.method(game, 'getTeamId', () => team);
-    for (const [isPractice, enabled] of [[true, false], [true, true], [false, false], [false, true]]) {
+    for (const isPractice of [true, false]) {
       practice = isPractice;
-      playerPriority = enabled;
       const p = playerAt(t, 2427, 3078);
       const inventory = p.getInventory();
       inventory.adds(core.ItemIdentifiers.TINDERBOX, 1);
       inventory.adds(core.ItemIdentifiers.BUCKET_OF_WATER, 1);
       const npc = deployed(t, p);
-      const standardId = data.BARRICADE_NPC[team];
-      const barricadeFirst = isPractice && !enabled;
-      const expected = barricadeFirst ? (team === data.TEAM.SARADOMIN ? core.NpcIdentifiers.BARRICADE : core.NpcIdentifiers.BARRICADE_3) : standardId;
+      const expected = data.BARRICADE_NPC[team];
       assert.equal(npc.getId(), expected);
       const definition = core.CacheDefinitions.getNpc(npc.getId());
-      const standard = core.CacheDefinitions.getNpc(standardId);
-      assert.equal(definition.drawPriority, barricadeFirst ? 0 : 1);
-      assert.deepEqual(definition.modelIds, standard.modelIds);
-      assert.deepEqual(definition.actions, standard.actions);
+      assert.equal(definition.drawPriority, 1);
+      assert.equal(definition.name, 'Barricade');
       assert.equal(npc.hasFlag(core.NPC.BLOCKS_PLAYERS_FLAG), true);
       assert.equal(game.isBarricade(npc), true);
       p.moveTo(npc.getLocation().transform(-1, 0));
       itemOnNpc({ player: p, target: npc, itemId: core.ItemIdentifiers.TINDERBOX, slot: inventory.getSlotForItemId(core.ItemIdentifiers.TINDERBOX), handled: false });
       assert.equal(npc.getNpcTransformationId(), expected + 1);
-      assert.equal(core.CacheDefinitions.getNpc(expected + 1).drawPriority, barricadeFirst ? 0 : 1);
+      assert.equal(core.CacheDefinitions.getNpc(expected + 1).drawPriority, 1);
       itemOnNpc({ player: p, target: npc, itemId: core.ItemIdentifiers.BUCKET_OF_WATER, slot: inventory.getSlotForItemId(core.ItemIdentifiers.BUCKET_OF_WATER), handled: false });
       assert.equal(npc.getNpcTransformationId(), -1);
-      assert.equal(npc.getId(), expected, 'extinguishing restores the selected priority variant');
+      assert.equal(npc.getId(), expected, 'extinguishing restores the standard variant');
       inventory.adds(core.ItemIdentifiers.EXPLOSIVE_POTION, 1);
       itemOnNpc({ player: p, target: npc, itemId: core.ItemIdentifiers.EXPLOSIVE_POTION, slot: inventory.getSlotForItemId(core.ItemIdentifiers.EXPLOSIVE_POTION), handled: false });
-      assert.equal(game.isBarricade(npc), false, 'explosion releases either variant');
+      assert.equal(game.isBarricade(npc), false, 'explosion releases the barricade');
       assert.equal(npc.hasFlag(core.NPC.BLOCKS_PLAYERS_FLAG), false);
       World.getRemoveNPCQueue().splice(0);
       World.getNpcs().remove(npc);

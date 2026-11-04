@@ -1,6 +1,6 @@
 /** Shield of Arrav. Capture evidence and remaining presentation gaps: docs/shield-of-arrav.md. */
 module.exports = function registerShieldOfArravQuest(api) {
-  const { Location, Item, Area, Boundary, StatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Location, Item, Area, Boundary, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, ItemStatementDialogue, DialogueChainBuilder, Animation, GameObject, TaskManager, CountdownTask } = api.core;
   const { registerQuest, startTranscript, openBook } = require("../QuestRuntime");
   const { crossingFor } = require("../../objects/WallDoor.Doors");
 
@@ -91,6 +91,10 @@ module.exports = function registerShieldOfArravQuest(api) {
   const BARAEK_PAY_ACTIONS = new Set(["6ECylA", "5UTIVW"]);
   const CHARLIE_TEN_COIN_MESSAGES = new Set(["-YbdFO", "OfFGS6"]);
   const CHARLIE_FIVE_COIN_MESSAGES = new Set(["24Nlqb", "Fo_zeD", "DSC-L4", "7GfBwz"]);
+  /** "Okay, here you go." to Charlie's "Spare some change, guv?": a one-coin gift, not the hint payment. */
+  const CHARLIE_HAS_COINS_CONDITION = "Vd68yh";
+  const CHARLIE_NO_COINS_CONDITION = "jyd1Up";
+  const CHARLIE_GIFT_ACTION = "SPAjYU";
   const STRAVEN_HANDIN_ACTIONS = new Set(["XSi6qr"]);
   const STRAVEN_KEY_MESSAGE = "G02Ai7";
   const STRAVEN_LOST_KEY_MESSAGES = new Set(["zyd3U3", "xWwA_D"]);
@@ -101,6 +105,20 @@ module.exports = function registerShieldOfArravQuest(api) {
   const CURATOR_SHIELD_VARIANT = "finishing-up-talking-to-curator-haig-halen";
   const CURATOR_REPLACE_VARIANT = "finishing-up-talking-to-the-curator-again-after-giving-him-the-shield-half";
   const KING_COMPLETE_ACTIONS = new Set(["25_j1f", "e0pTWp"]);
+  const BOOKCASE_FIND_MESSAGE = "SIJP5j";
+  const BARAEK_COINS_MESSAGE = "shield-of-arrav:baraek-coins";
+  const CUPBOARD_FIND_MESSAGE = "OVz4IP";
+  const CUPBOARD_EMPTY_MESSAGE = "fxdAOt";
+  const CUPBOARD_NO_HALF_CONDITION = "T17vKO";
+  const CUPBOARD_HAS_HALF_CONDITION = "ZP1-L8";
+  const CURATOR_SHOW_MESSAGE = "qmfYSC";
+  const KING_SHOW_MESSAGE = "kE3cQ-";
+  /** rsprox 1710: the completion scroll shows the Phoenix crossbow picture item. */
+  const SCROLL_ITEM_ID = 11165;
+  /** rsprox 1710: opening the Black Arm cupboard. */
+  const OPEN_CUPBOARD_ANIMATION = 536;
+  const CUPBOARD_OPEN_SOUND = 58;
+  const CUPBOARD_FIND_SOUND = 57;
   const WEAPONMASTER_ATTACK_STEP = "12WBZW";
 
 
@@ -108,6 +126,8 @@ module.exports = function registerShieldOfArravQuest(api) {
   let groundItems;
 
   const reldoFirstTalk = new WeakMap();
+  const pendingStart = new WeakSet();
+  const pendingKatrineTask = new WeakSet();
   const charlieFirstAsk = new WeakMap();
 
   const attr = (player, key) => Number(player.getAttribute(key)) || 0;
@@ -298,8 +318,6 @@ module.exports = function registerShieldOfArravQuest(api) {
         // The first-time and "otherwise" branches are sibling conditions in one
         // transcript; remember which one this talk is before they are resolved.
         reldoFirstTalk.set(player, !attr(player, RELDO_MET_ATTRIBUTE));
-        player.setAttribute(RELDO_MET_ATTRIBUTE, true);
-        syncGangProgress(player);
         return { page: PAGE, variant: "shared-starting-talking-to-reldo" };
       }
       if (stage === STAGE_STARTED) {
@@ -335,8 +353,8 @@ module.exports = function registerShieldOfArravQuest(api) {
         return { page: PAGE, variant: "black-arm-gang-talking-to-charlie-the-tramp-after-accepting-katrine-s-task" };
       }
       if (stage >= STAGE_READ_BOOK && attr(player, DIRECTIONS_ATTRIBUTE)) {
+        // rsprox 1705: the met bit is set on "You never know..." (renderQuestLine), not here.
         charlieFirstAsk.set(player, !attr(player, CHARLIE_MET_ATTRIBUTE));
-        markCharlieMet(player);
         return { page: PAGE, variant: "black-arm-gang-talking-to-charlie-the-tramp" };
       }
       return null;
@@ -407,10 +425,13 @@ module.exports = function registerShieldOfArravQuest(api) {
     // single-quest behaviour.
     const onShieldPage = Array.isArray(pages) ? pages.some(entry => entry.page === PAGE) : undefined;
     if (["Vl3BPs", "JaT1Z6"].includes(stepId) && onShieldPage !== false) return player.getInventory().isFull();
+    if (stepId === CUPBOARD_NO_HALF_CONDITION && onShieldPage !== false) return !hasItem(player, BLACKARM_HALF_ID);
+    if (stepId === CUPBOARD_HAS_HALF_CONDITION && onShieldPage !== false) return hasItem(player, BLACKARM_HALF_ID);
     const value = String(text).toLowerCase();
 
     if (RELDO_NPC_IDS.has(npcId)) {
-      if (value.includes("combat level is less than 10")) return player.getSkillManager().getCombatLevel() < 10;
+      // The start menu shows this as a box (warnBeforeStart), so the transcript's line is skipped.
+      if (value.includes("combat level is less than 10")) return false;
       if (value.includes("first time ever") || value.includes("otherwise")) {
         const first = reldoFirstTalk.has(player) ? reldoFirstTalk.get(player) : !attr(player, RELDO_MET_ATTRIBUTE);
         return value.includes("first time ever") ? first : !first;
@@ -427,6 +448,8 @@ module.exports = function registerShieldOfArravQuest(api) {
     if (npcId === CHARLIE_NPC_ID) {
       if (value.includes("combat level is less than 10")) return player.getSkillManager().getCombatLevel() < 10;
       if (onShieldPage === false) return null;
+      if (stepId === CHARLIE_HAS_COINS_CONDITION) return coins(player) > 0;
+      if (stepId === CHARLIE_NO_COINS_CONDITION) return coins(player) <= 0;
       if (value.includes("haven't yet paid charlie") || value.includes("hasn't yet paid charlie")) {
         return charliePaid(player) < CHARLIE_FULL_PAYMENT;
       }
@@ -465,11 +488,23 @@ module.exports = function registerShieldOfArravQuest(api) {
     return null;
   }
 
-  function handleStartHook({ player, hook }) {
-    if (hook !== START_HOOK) return;
+  /** rsprox 1705: the quest starts on Continue past Reldo's first line after "Of course.". */
+  function startQuest(player) {
     if (quest.getStage(player) >= STAGE_STARTED) return;
     quest.setStage(player, STAGE_STARTED);
     player.sendMessage("You've started a new quest: <col=0ab0ff>Shield of Arrav</col>");
+  }
+
+  function handleStartHook({ player, hook }) {
+    if (hook === START_HOOK) pendingStart.add(player);
+  }
+
+  /** As the captured Vampyre Slayer and Ides of Milk starts: below combat 10 a box before the menu. */
+  function warnBeforeStart(event) {
+    if (String(event.prompt).includes("Start the Shield of Arrav quest") &&
+        (event.player.getSkillManager().getCombatLevel?.() ?? 10) < 10) {
+      event.warning = "Before starting this quest, be aware that your combat level is lower than the recommended level of 10.";
+    }
   }
 
   function handleGangChoice({ player, npcId, option }) {
@@ -480,14 +515,40 @@ module.exports = function registerShieldOfArravQuest(api) {
       syncGangProgress(player);
     }
     if (npcId === KATRINE_NPC_ID && (option === "Okay, no problem." || option === "Okay, I'll do it.")) {
-      player.setAttribute(BLACKARM_TASK_ATTRIBUTE, true);
-      quest.setStage(player, STAGE_GANG_TASK);
-      syncGangProgress(player);
+      pendingKatrineTask.add(player);
     }
+  }
+
+  function acceptKatrineTask(player) {
+    if (joinedGang(player) || quest.getStage(player) < STAGE_READ_BOOK) return;
+    player.setAttribute(BLACKARM_TASK_ATTRIBUTE, true);
+    quest.setStage(player, STAGE_GANG_TASK);
+    syncGangProgress(player);
   }
 
   function renderQuestLine(request) {
     if (!request?.player || typeof request.text !== "string") return;
+    const { player, text, npcId } = request;
+    if (RELDO_NPC_IDS.has(npcId) && pendingStart.has(player) && text.startsWith("Well, if you look around for book")) {
+      request.after = () => { pendingStart.delete(player); startQuest(player); };
+    }
+    // rsprox 1705: Katrine's task (varp 146 = 2) lands on Continue past the accepting line.
+    if (npcId === KATRINE_NPC_ID && pendingKatrineTask.has(player) && typeof request.step?.player === "string") {
+      request.after = () => { pendingKatrineTask.delete(player); acceptKatrineTask(player); };
+    }
+    // rsprox 1705: the met bits are set on these lines, not when the talk opens.
+    if (RELDO_NPC_IDS.has(npcId) && text === "Sounds like a very noble goal!" && !attr(player, RELDO_MET_ATTRIBUTE)) {
+      request.after = () => { player.setAttribute(RELDO_MET_ATTRIBUTE, true); syncGangProgress(player); };
+    }
+    if (npcId === CHARLIE_NPC_ID && text.startsWith("You never know") && !attr(player, CHARLIE_MET_ATTRIBUTE)) {
+      request.after = () => markCharlieMet(player);
+    }
+    // rsprox 1705, 1710: these pages are replaced in the same tick, so live never shows them.
+    if ((npcId === KATRINE_NPC_ID && text.startsWith("Thinking about it"))
+      || (npcId === CURATOR_NPC_ID && text.startsWith("The two of you can then swap"))) {
+      request.skip = true;
+      return;
+    }
     if (RELDO_NPC_IDS.has(request.npcId) && request.text.startsWith("There are rumours that they are based")) {
       request.before = () => {
         request.player.setAttribute(DIRECTIONS_ATTRIBUTE, true);
@@ -524,7 +585,25 @@ module.exports = function registerShieldOfArravQuest(api) {
       player.getInventory().deleteNumber(COINS_ID, 20);
       player.setAttribute(PHOENIX_LOCATION_ATTRIBUTE, true);
       syncGangProgress(player);
-      player.sendMessage("You give 20 coins to Baraek.");
+      // rsprox 1705: an item box with the coins. The transcript has only an action here,
+      // so play a message step for the box before Baraek goes on.
+      event.handled = true;
+      event.steps = [{ type: "message", text: "You give 20 coins to Baraek.", id: BARAEK_COINS_MESSAGE }];
+      return;
+    }
+    if (stepId === BARAEK_COINS_MESSAGE) {
+      event.box = { items: [COINS_ID] };
+      return;
+    }
+
+    if (npcId === CHARLIE_NPC_ID && stepId === CHARLIE_GIFT_ACTION) {
+      // Rechecked here: the coins may have gone since the condition was answered.
+      if (coins(player) <= 0) {
+        event.handled = true;
+        event.end = true;
+        return;
+      }
+      player.getInventory().deleteNumber(COINS_ID, 1);
       event.handled = true;
       return;
     }
@@ -558,8 +637,34 @@ module.exports = function registerShieldOfArravQuest(api) {
     }
 
     if (npcId === KATRINE_NPC_ID && (stepId === KATRINE_HANDIN_MESSAGE || stepId === KATRINE_HANDIN_ACTION)) {
-      handInCrossbows(player, quest);
+      const handedIn = handInCrossbows(player, quest);
       if (stepId === KATRINE_HANDIN_ACTION) event.handled = true;
+      else if (handedIn) event.box = { items: [CROSSBOW_ID] };
+      return;
+    }
+
+    if (stepId === BOOKCASE_FIND_MESSAGE) {
+      if (!giveItem(player, BOOK_ID)) { event.handled = true; event.end = true; return; }
+      event.box = { items: [BOOK_ID] };
+      return;
+    }
+    if (stepId === CUPBOARD_FIND_MESSAGE) {
+      if (!giveItem(player, BLACKARM_HALF_ID)) { event.handled = true; event.end = true; return; }
+      event.box = { items: [BLACKARM_HALF_ID] };
+      return;
+    }
+    if (stepId === CUPBOARD_EMPTY_MESSAGE) {
+      event.box = { statement: true };
+      return;
+    }
+
+    if (npcId === CURATOR_NPC_ID && stepId === CURATOR_SHOW_MESSAGE) {
+      const own = ownShieldAndCert(player);
+      if (own && hasItem(player, own.shield)) event.box = { items: [own.shield] };
+      return;
+    }
+    if (KING_ROALD_NPC_IDS.has(npcId) && stepId === KING_SHOW_MESSAGE) {
+      if (hasItem(player, CERTIFICATE_ID)) event.box = { items: [CERTIFICATE_ID] };
       return;
     }
 
@@ -687,7 +792,8 @@ module.exports = function registerShieldOfArravQuest(api) {
     player.getInventory().deleteNumber(PHOENIX_CERT_ID, 1);
     player.getInventory().deleteNumber(BLACKARM_CERT_ID, 1);
     player.getInventory().adds(CERTIFICATE_ID, 1);
-    StatementDialogue.send(player, "You combine the two halves to make a complete certificate.");
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+      new ItemStatementDialogue(0, CERTIFICATE_ID, "You combine the two halves to make a complete certificate.")));
     event.handled = true;
   }
 
@@ -740,7 +846,8 @@ module.exports = function registerShieldOfArravQuest(api) {
       return;
     }
     if (BLACKARM_CUPBOARD_IDS.has(objectId) && (option.includes("open") || option.includes("search"))) {
-      searchShieldCache(player, quest, false);
+      if (quest.getStage(player) === STAGE_JOINED_GANG && isBlackArm(player)) openBlackArmCupboard(player, event.object);
+      else searchShieldCache(player, quest, false);
       event.handled = true;
       return;
     }
@@ -818,7 +925,33 @@ module.exports = function registerShieldOfArravQuest(api) {
       player.sendMessage("You already have The Shield of Arrav.");
       return;
     }
-    giveItem(player, BOOK_ID, "You search the bookcase and find a book titled The Shield of Arrav.");
+    if (player.getInventory().isFull()) {
+      player.sendMessage("You need a free inventory space.");
+      return;
+    }
+    // rsprox 1705: an item box with the book, then "Aha! Exactly what I was looking for."
+    startTranscript(api, player, RELDO_REFERENCE_NPC_ID, PAGE, "shared-starting-searching-the-right-bookcase");
+  }
+
+  /** rsprox 1710: the cupboard opens a tick after the click, shows its contents and shuts again. */
+  function openBlackArmCupboard(player, object) {
+    const location = object.getLocation().clone();
+    const swap = (id) => player.getPacketSender().sendObject(new GameObject(id, location.clone(), object.getType(), object.getFace(), null));
+    player.performAnimation(new Animation(OPEN_CUPBOARD_ANIMATION));
+    player.getPacketSender().sendSound(CUPBOARD_OPEN_SOUND, 1, 0);
+    TaskManager.submit(new CountdownTask(null, 1, () => {
+      if (!player.isRegistered()) return;
+      swap(ObjectIdentifiers.CUPBOARD_13);
+      player.getPacketSender().sendSound(CUPBOARD_FIND_SOUND, 1, 45);
+      if (!hasItem(player, BLACKARM_HALF_ID) && player.getInventory().isFull()) {
+        player.sendMessage("You need a free inventory space.");
+      } else {
+        startTranscript(api, player, KATRINE_NPC_ID, PAGE, "black-arm-gang-searching-the-black-arm-gang-s-cupboard");
+      }
+      TaskManager.submit(new CountdownTask(null, 2, () => {
+        if (player.isRegistered()) swap(ObjectIdentifiers.CUPBOARD_12);
+      }));
+    }));
   }
 
   function searchShieldCache(player, questHandle, phoenix) {
@@ -853,7 +986,7 @@ module.exports = function registerShieldOfArravQuest(api) {
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
     xpRewards: [],
-    scrollItemId: CERTIFICATE_ID,
+    scrollItemId: SCROLL_ITEM_ID,
     rewardItemLabel: "600 Coins",
     buildJournal,
     onReward: reward,
@@ -873,6 +1006,7 @@ module.exports = function registerShieldOfArravQuest(api) {
   api.onNpcDialogueVariant(selectDialogueVariant);
   api.onNpcDialogueCondition(answerDialogueCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
+  api.onCustomEvent("npc-dialogue:menu", warnBeforeStart);
   api.onCustomEvent("npc-dialogue:choice", handleGangChoice);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onCustomEvent("npc-dialogue:line", fillReldoPlayerName);

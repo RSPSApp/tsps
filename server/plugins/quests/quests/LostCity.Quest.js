@@ -32,7 +32,7 @@ module.exports = function registerLostCityQuest(api) {
     ObjectIdentifiers,
     Equipment,
     Location,
-    Animation,
+    Animation, Graphic, Sound, TeleportType, TeleportHandler, Task, TaskManager, Direction,
     CacheDefinitions,
   } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
@@ -86,6 +86,13 @@ module.exports = function registerLostCityQuest(api) {
   const SHAMUS_TILE = { x: 3139, y: 3211, z: 0 };
   const TREE_SPIRIT_TILE = { x: 2860, y: 9737, z: 0 };
   const ZANARIS_TILE = { x: 2452, y: 4473, z: 0 };
+  const SHED_ENTRY_TILE = new Location(3202, 3169, 0);
+  const pendingEntries = new WeakMap();
+  // RSProx 3173, entry twice: 3265(delay 30 client ticks)/569/1098, then arrival +3 game ticks.
+  // Use the existing cancellable teleport task; no fairy-ring dials, busy varbit or destination log.
+  const SHED_TELEPORT = new TeleportType(3, new Animation(3265, 30), null,
+    new Animation(3266), new Graphic(569), null, null, { sound: new Sound(1098, 1, 0, 1) });
+
 
   // One-way ladder 2408 at 2820,3374 and Cave monk 1164 both land here; 2820,9774
   // itself is blocked map data.
@@ -277,10 +284,12 @@ module.exports = function registerLostCityQuest(api) {
     }
   }
 
-  function handleStartHook({ player, npcId, hook }) {
+  function handleStartHook(event) {
+    const { player, npcId, hook } = event;
     if (npcId !== WARRIOR_NPC_ID || hook !== START_HOOK) return;
     if (quest.getStage(player) < STAGE_STARTED) {
       if (missingSkillRequirements(player).length > 0) {
+        event.end = true;
         notifySkillRequirements(player);
         return;
       }
@@ -400,11 +409,43 @@ module.exports = function registerLostCityQuest(api) {
       event.handled = true;
       return;
     }
-    player.sendMessage("The world starts to shimmer...");
-    player.moveTo(new Location(ZANARIS_TILE.x, ZANARIS_TILE.y, ZANARIS_TILE.z));
-    if (!quest.isComplete(player)) quest.complete(player);
-    reapTrackedNpcs(player);
     event.handled = true;
+    if (pendingEntries.has(player) || player.isTeleportingReturn()) return;
+    const at = player.getLocation();
+    if (at.getZ() !== SHED_ENTRY_TILE.getZ()
+      || Math.max(Math.abs(at.getX() - SHED_ENTRY_TILE.getX()), Math.abs(at.getY() - SHED_ENTRY_TILE.getY())) > 1) return;
+    // Normal object routing has already approached the door. Step onto its tile before effects,
+    // as FairyRings does for a solid ring; don't count the earlier OPLOC approach as teleport time.
+    player.getMovementQueue().reset();
+    if (!at.equals(SHED_ENTRY_TILE)) {
+      player.setLocation(SHED_ENTRY_TILE.clone());
+      player.setWalkingDirection(Direction.fromDeltas(SHED_ENTRY_TILE.getX() - at.getX(), SHED_ENTRY_TILE.getY() - at.getY()));
+      player.getMovementQueue().handleRegionChange();
+    }
+    player.getMovementQueue().setBlockMovement(true);
+    const entry = new (class extends Task {
+      constructor() { super(1, player, false); }
+      stop() {
+        super.stop();
+        if (pendingEntries.get(player) === this) {
+          pendingEntries.delete(player);
+          player.getMovementQueue().setBlockMovement(false).reset();
+        }
+      }
+      execute() {
+        const valid = player.isRegistered() && player.getLocation().equals(SHED_ENTRY_TILE)
+          && player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId?.() === DRAMEN_STAFF_ITEM_ID;
+        this.stop();
+        if (!valid) return;
+        player.sendMessage("The world starts to shimmer...");
+        TeleportHandler.teleport(player, new Location(ZANARIS_TILE.x, ZANARIS_TILE.y, ZANARIS_TILE.z), SHED_TELEPORT, false, () => {
+          if (!quest.isComplete(player)) quest.complete(player);
+          reapTrackedNpcs(player);
+        });
+      }
+    })();
+    pendingEntries.set(player, entry);
+    TaskManager.submit(entry);
   }
 
   /** Shamus directions and the Cave monk's one-way descent. */
@@ -437,7 +478,7 @@ module.exports = function registerLostCityQuest(api) {
   }
 
   function handleLogout({ player }) {
-    if (player) reapTrackedNpcs(player);
+    if (player) { pendingEntries.get(player)?.stop(); reapTrackedNpcs(player); }
   }
 
   pluginApi = api;

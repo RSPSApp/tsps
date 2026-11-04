@@ -126,6 +126,7 @@ module.exports = {
   register(api) {
     pluginApi = api;
     BoatShop.bind(api);
+    require("./shipwright/Destroy.Shipwright")(api);
     api.onCustomEvent("omnishop:describe", BoatShop.describe);
     api.onCustomEvent("omnishop:can-buy", BoatShop.canBuy);
     api.onCustomEvent("omnishop:purchase", BoatShop.deliver);

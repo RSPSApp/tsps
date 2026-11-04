@@ -22,18 +22,24 @@ const { ActionDialogue } = require("../dist/game/model/dialogues/entries/impl/Ac
 const COINS = 995;
 const SWORD = 1277;
 const SWORD_NOTE = 1278;
+const FAMILY_CHARGED = 7000;
+const FAMILY_PLACEHOLDER = 7001;
+const FAMILY_EMPTY = 7002;
 const DEFINITIONS = {
   [COINS]: { name: "Coins", stackable: true },
   [SWORD]: { name: "Bronze sword" },
   [SWORD_NOTE]: { name: "Bronze sword", stackable: true, noteOf: SWORD },
+  [FAMILY_CHARGED]: { name: "Family item", placeholder: FAMILY_PLACEHOLDER },
+  [FAMILY_EMPTY]: { name: "Family item (empty)" },
 };
 ItemDefinition.forId = (id) => {
   const def = DEFINITIONS[id] ?? { name: `Item ${id}` };
   return {
     getId: () => id, getName: () => def.name, getExamine: () => "",
     isStackable: () => def.stackable === true, isNoted: () => def.noteOf != null,
-    unNote: () => def.noteOf ?? id, getNoteId: () => -1, getPlaceholderId: () => -1,
+    unNote: () => def.noteOf ?? id, getNoteId: () => -1, getPlaceholderId: () => def.placeholder ?? -1,
     isTradeable: () => true, isSellable: () => true, getValue: () => 1, getGrandExchangeValue: () => 1,
+    getEquipmentType: () => ({ getSlot: () => -1 }),
   };
 };
 
@@ -123,6 +129,33 @@ test("a full bank still takes more of what it holds, and notes of it", () => {
   assert.equal(player.inventory.getAmount(SWORD), 0, "the moved sword leaves the inventory");
   assert.equal(player.inventory.getAmount(SWORD_NOTE), 0, "the moved notes leave the inventory");
   assert.deepEqual(player.messages, []);
+});
+
+test("a full bank accepts another form into a plugin-defined shared placeholder", () => {
+  capacity(1);
+  handlers.set("bank:placeholder-identity", (event) => {
+    if (event.itemId === FAMILY_CHARGED || event.itemId === FAMILY_EMPTY) {
+      event.placeholderId = FAMILY_CHARGED;
+      event.itemIds = [FAMILY_CHARGED, FAMILY_EMPTY];
+    }
+  });
+  const player = createPlayer();
+  player.placeholders = true;
+  player.isPlaceholders = () => true;
+  player.setInterfaceId(Bank.MAIN_INTERFACE_ID);
+  player.getBank(0).add(new Item(FAMILY_CHARGED, 1), false);
+  Bank.withdraw(player, FAMILY_CHARGED, 0, 1, 0);
+  assert.equal(player.getBank(0).getFreeSlots(), 0);
+  assert.equal(Bank.displayItemId(player.getBank(0).getItems()[0]), FAMILY_PLACEHOLDER);
+
+  player.inventory.add(new Item(FAMILY_EMPTY, 1), false);
+  const incoming = new Item(FAMILY_EMPTY, 1);
+  assert.equal(player.getBank(0).getAddableAmount(incoming), 1);
+  assert.equal(player.getBank(0).canTake(incoming), true);
+  Bank.deposits(player, FAMILY_EMPTY, player.inventory.getSlotForItemId(FAMILY_EMPTY), 1);
+  assert.equal(player.inventory.getAmount(FAMILY_EMPTY), 0);
+  assert.equal(player.getBank(0).getValidItems().length, 1);
+  assert.equal(player.getBank(0).getItems()[0].getId(), FAMILY_EMPTY);
 });
 
 test("a full bank deposit of an unnoted item it holds moves it, never copies it", () => {

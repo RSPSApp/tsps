@@ -104,10 +104,13 @@ test('Charlie first-ask and payment conditions do not leak the location after fi
   }), null, 'conditions on other Charlie pages defer to their owner');
   assert.equal(variantFor(q, p, charlie).variant, 'black-arm-gang-talking-to-charlie-the-tramp');
   assert.equal(condition(q, p, charlie, 'If asking for the first time:'), true);
+  assert.equal(lastVarbit(p, 11510) ?? 0, 0, 'rsprox 1705: opening the talk does not set the met bit');
+  const met = { player: p, npcId: charlie, text: "You never know. You'll find a lady down there called Katrine. Speak to her. But whatever you do, don't upset her." };
+  q.emit('npc-dialogue:line', met); met.after();
+  assert.equal(lastVarbit(p, 11510), 1);
   variantFor(q, p, charlie);
   assert.equal(condition(q, p, charlie, 'If asking for the first time:'), false);
   assert.equal(condition(q, p, charlie, 'Otherwise:'), true);
-  assert.equal(lastVarbit(p, 11510), 1);
 
   const paid = player(); q.quest.setStage(paid, 3); paid.attributes.set('shield-of-arrav:black-arm-task', true); paid.items.set(995, 10);
   q.emit('npc-dialogue:action', { player: paid, npcId: charlie, stepId: '24Nlqb' });
@@ -122,10 +125,34 @@ test('Charlie first-ask and payment conditions do not leak the location after fi
   assert.equal(lastVarbit(paid, 11511), 1);
 });
 
+test("Charlie's 'Okay, here you go.' gift follows carried coins and takes exactly one", () => {
+  const q = register(), charlie = core.NpcIdentifiers.CHARLIE_THE_TRAMP;
+  const ask = (p, stepId) => q.hooks.get('onNpcDialogueCondition')[0]({ player: p, npcId: charlie, stepId, text: '', pages: [{ page: 'Shield of Arrav' }] });
+  const broke = player(); q.quest.setStage(broke, 2); broke.attributes.set('shield-of-arrav:reldo-directions', true);
+  assert.equal(ask(broke, 'Vd68yh'), false, 'no coins: not the "Hey, thanks a lot!" branch');
+  assert.equal(ask(broke, 'jyd1Up'), true, "no coins: 'Oh wait. I haven't got any, sorry.'");
+  const stale = { player: broke, npcId: charlie, stepId: 'SPAjYU' };
+  q.emit('npc-dialogue:action', stale);
+  assert.equal(stale.end, true, 'coins gone by the time the gift runs: the talk stops');
+
+  const p = player(); q.quest.setStage(p, 2); p.attributes.set('shield-of-arrav:reldo-directions', true); p.items.set(995, 5);
+  assert.equal(ask(p, 'Vd68yh'), true); assert.equal(ask(p, 'jyd1Up'), false);
+  const gift = { player: p, npcId: charlie, stepId: 'SPAjYU' };
+  q.emit('npc-dialogue:action', gift);
+  assert.equal(gift.handled, true); assert.notEqual(gift.end, true);
+  assert.equal(p.items.get(995), 4, 'the gift takes one coin');
+  assert.equal(p.attributes.get('shield-of-arrav.charlie-paid') ?? 0, 0, 'a gift is not the information payment');
+});
+
 test('quest start and completion mirror the current-cache quest-state varbit', () => {
   const q = register(), p = player();
   q.emit('npc-dialogue:hook', { player: p, hook: 'quest:shield-of-arrav:start' });
+  assert.equal(q.quest.getStage(p), 0, 'rsprox 1705: choosing Yes does not start the quest yet');
+  const line = { player: p, npcId: core.NpcIdentifiers.RELDO,
+    text: "Well, if you look around for book called The Shield of Arrav, you'll find a quest in there." };
+  q.emit('npc-dialogue:line', line); line.after();
   assert.equal(q.quest.getStage(p), 1); assert.equal(lastVarbit(p, 13716), 1);
+  assert.ok(p.messages.includes("You've started a new quest: <col=0ab0ff>Shield of Arrav</col>"));
   q.quest.setStage(p, 6); p.items.set(769, 1);
   q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.KING_ROALD_3, stepId: '25_j1f' });
   assert.equal(q.quest.getStage(p), 7); assert.equal(lastVarbit(p, 13716), 2);
@@ -153,12 +180,24 @@ test('shield caches use the chest or cupboard transcript messages', () => {
   interact(q, phoenix, core.ObjectIdentifiers.CHEST_12);
   assert.ok(phoenix.messages.includes("You open the chest, but don't find anything of interest inside."));
 
+  // rsprox 1710: the Black Arm cupboard animates, opens a tick later and plays its transcript.
   const blackArm = player(); blackArm.attributes.set('shield-of-arrav.gang', 2); q.quest.setStage(blackArm, 4);
-  interact(q, blackArm, core.ObjectIdentifiers.CUPBOARD_12);
-  assert.ok(blackArm.messages.includes('You open the cupboard and find half of a shield inside.'));
-  assert.equal(blackArm.items.get(765), 1);
-  interact(q, blackArm, core.ObjectIdentifiers.CUPBOARD_13);
-  assert.ok(blackArm.messages.includes("You open the cupboard, but don't find anything of interest inside."));
+  const animations = []; blackArm.performAnimation = (animation) => animations.push(animation.getId());
+  const cupboard = new core.GameObject(core.ObjectIdentifiers.CUPBOARD_12, new core.Location(3189, 3385, 1), 10, 0, null);
+  q.call('onObjectInteraction', { player: blackArm, objectId: cupboard.getId(), object: cupboard, clickType: 1,
+    definition: { getInteractions: () => ['Open'] } });
+  assert.deepEqual(animations, [536]);
+  assert.ok(blackArm.packets.some(([method, id]) => method === 'sendSound' && id === 58));
+  assert.equal(blackArm.items.get(765) ?? 0, 0, 'the half comes with the transcript, not the click');
+  const cupboardCondition = (stepId) => q.hooks.get('onNpcDialogueCondition')[0]({ player: blackArm, stepId, text: '', pages: [{ page: 'Shield of Arrav' }] });
+  assert.equal(cupboardCondition('T17vKO'), true); assert.equal(cupboardCondition('ZP1-L8'), false);
+  const found = { player: blackArm, npcId: core.NpcIdentifiers.KATRINE, stepId: 'OVz4IP' };
+  q.emit('npc-dialogue:action', found);
+  assert.equal(blackArm.items.get(765), 1); assert.deepEqual(found.box, { items: [765] });
+  assert.equal(cupboardCondition('T17vKO'), false); assert.equal(cupboardCondition('ZP1-L8'), true);
+  const empty = { player: blackArm, npcId: core.NpcIdentifiers.KATRINE, stepId: 'fxdAOt' };
+  q.emit('npc-dialogue:action', empty);
+  assert.deepEqual(empty.box, { statement: true });
 });
 
 test('crossbow pickup protection uses the weaponsmaster transcript lines', () => {

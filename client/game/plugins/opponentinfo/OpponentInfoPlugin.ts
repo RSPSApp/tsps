@@ -12,7 +12,7 @@ import { ArchiveHealthBarDefinitionLoader } from "../../../rs/config/healthbar/H
 import type { NpcType } from "../../../rs/config/npctype/NpcType";
 import { decodeInteractionIndex } from "../../../rs/interaction/InteractionIndex";
 import { MenuTargetType } from "../../../rs/MenuEntry";
-import { FONT_PLAIN_12 } from "../../../ui/fonts";
+import { overlayFont } from "@runelite/client/ui/overlay/OverlayFonts";
 import type { SimpleMenuEntry } from "../../../ui/menu/MenuEngine";
 import { drawTextGL } from "../../../widgets/components/TextRenderer";
 import type { OsrsClient } from "../../OsrsClient";
@@ -314,10 +314,14 @@ export class OpponentInfoPlugin extends Plugin implements ClientPlugin {
         if (!layout) return [];
         const { panel, label } = layout;
         const glr = context.renderer;
-        const font = context.fontLoader(FONT_PLAIN_12);
-        const nameWidth = font ? font.measure(panel.name) : 0;
+        // A TOP_LEFT panel: the interface font, the title and bar growing with it.
+        const { id: fontId, scale } = overlayFont("interface");
+        const font = context.fontLoader(fontId);
+        const nameWidth = font ? font.measure(panel.name) * scale : 0;
         const width = Math.max(STANDARD_WIDTH, nameWidth + 2 * (BORDER + 3));
-        const height = 2 * BORDER + TITLE_HEIGHT + (label ? GAP + BAR_HEIGHT : 0);
+        const titleHeight = Math.max(1, Math.round(TITLE_HEIGHT * scale));
+        const barHeight = Math.max(BAR_HEIGHT, Math.round(BAR_HEIGHT * scale));
+        const height = 2 * BORDER + titleHeight + (label ? GAP + barHeight : 0);
         const at = context.place(this.widgetOverlay, width, height);
         if (!at) return [];
         const { scaleX: sx, scaleY: sy } = at;
@@ -335,13 +339,13 @@ export class OpponentInfoPlugin extends Plugin implements ClientPlugin {
         let y = r.y + BORDER * sy;
         drawTextGL(
             glr, context.fontLoader, panel.name,
-            innerX, y, innerW, TITLE_HEIGHT * sy,
-            FONT_PLAIN_12, 0xffffff, 1, 1, true, 1, undefined, sx, sy,
+            innerX, y, innerW, titleHeight * sy,
+            fontId, 0xffffff, 1, 1, true, 1, undefined, sx * scale, sy * scale,
         );
-        y += (TITLE_HEIGHT + GAP) * sy;
+        y += (titleHeight + GAP) * sy;
 
         if (label) {
-            const barH = BAR_HEIGHT * sy;
+            const barH = barHeight * sy;
             const ratio = label.maximum > 0 ? Math.min(1, Math.max(0, label.value / label.maximum)) : 0;
             const filled = Math.round(innerW * ratio);
             glr.drawRect(innerX, y, innerW, barH, HP_RED);
@@ -349,7 +353,7 @@ export class OpponentInfoPlugin extends Plugin implements ClientPlugin {
             drawTextGL(
                 glr, context.fontLoader, label.text,
                 innerX, y, innerW, barH,
-                FONT_PLAIN_12, 0xffffff, 1, 1, true, 1, undefined, sx, sy,
+                fontId, 0xffffff, 1, 1, true, 1, undefined, sx * scale, sy * scale,
             );
         }
         return [r];

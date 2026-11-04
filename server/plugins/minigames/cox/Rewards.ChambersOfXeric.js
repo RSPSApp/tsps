@@ -24,7 +24,9 @@
  * rsprox captures: the reward interface (539: component 5 the items; inventory 581), the
  *   completion, count, "Special loot:" and target time messages word for word, jingle 152, and
  *   varbit 5456 (raids_client_rewardindicator): 2 for a unique's finder (820, 843, 3282, 3285,
- *   3389), 1 for common loot (the two CM runs).
+ *   3389), 1 for common loot (the two CM runs). Varbit 5457 (raids_client_needsrewardbook) is
+ *   set as the chest opens and cleared as its interface closes (3389), not when loot is
+ *   claimed. The Challenge Timeboard's notice comes before the completion message (3389).
  * Not on the Wiki or in a capture: components 6 Bank-all, 8 Take-all, 10 Discard-all, the raid
  *   counts on the attributes.
  * Wiki-derived: a common amount is the table's maximum x points / 131,071 (at least 1).
@@ -32,6 +34,7 @@
 
 const Shared = require("./Shared.ChambersOfXeric");
 const Raid = require("./RaidState.ChambersOfXeric");
+const Timeboard = require("./Timeboard.ChambersOfXeric");
 
 const INTERFACE = { REWARDS: 539, ITEMS: 5, BANK_ALL: 6, TAKE_ALL: 8, DISCARD_ALL: 10 };
 const INVENTORY = 581;
@@ -158,10 +161,13 @@ function completed(raid) {
   const size = raid.scale;
   const inTime = raid.challenge && raid.duration <= targetTicks(size);
   for (const player of raiders) {
-    if (inTime) {
-      player.sendMessage("Your team beat the challenge target time and you earned an extra 5000 points.");
-      raid.addPoints(player, POINTS.TARGET_BONUS);
-    }
+    if (!inTime) continue;
+    player.sendMessage("Your team beat the challenge target time and you earned an extra 5000 points.");
+    raid.addPoints(player, POINTS.TARGET_BONUS);
+  }
+  // rsprox 3389: the Timeboard notice comes after the target-time message, before the completion one.
+  Timeboard.record(raid);
+  for (const player of raiders) {
     player.getPacketSender().sendJingle(COMPLETE_JINGLE, 0);
     // rsprox captures 843, 3389, 820 (a new best) and the two CM runs (not), word for word, closing tags included.
     const previous = recordBest(player, raid);
@@ -267,7 +273,7 @@ function generate(raid, inTime) {
 
 // ---------------------------------------------------------------- the chest
 
-/** raids_client_needsrewardbook: set as the chest is searched. */
+/** raids_client_needsrewardbook: set as the chest is searched, cleared as the rewards close. */
 const VARBIT_NEEDS_REWARD_BOOK = 5457;
 
 /** Pet ownership/delivery belongs to Pets, never the chest's bank/inventory/ground paths. */
@@ -302,6 +308,15 @@ function openChest(event) {
   sender.sendInterfaceFlagsRange((INTERFACE.REWARDS << 16) | INTERFACE.ITEMS, 0, Math.max(items.length - 1, 5),
     Shared.EVENT.OP1 | (1 << 10));
   return true;
+}
+
+/**
+ * rsprox 3389: raids_client_needsrewardbook goes back to 0 as the rewards close, a tick before
+ * the interface is taken down; claiming an item leaves it set (5083 keeps it at 1).
+ */
+function chestClosed(event) {
+  if (event.interfaceId !== INTERFACE.REWARDS) return;
+  event.player.getPacketSender().sendVarbit(VARBIT_NEEDS_REWARD_BOOK, 0);
 }
 
 function refreshChest(player, raid) {
@@ -437,6 +452,7 @@ module.exports = function registerCoxRewards(api) {
   Raid.onComplete(completed);
   Raid.onLeave(unclaimedLoot);
   api.onObjectInteraction("Ancient chest", { Search: openChest });
+  api.onCustomEvent("interface:closed", chestClosed);
   api.onInterfaceActionButton((INTERFACE.REWARDS << 16) | INTERFACE.ITEMS, clickReward);
   api.onInterfaceActionButton((INTERFACE.REWARDS << 16) | INTERFACE.TAKE_ALL, takeAll);
   api.onInterfaceActionButton((INTERFACE.REWARDS << 16) | INTERFACE.BANK_ALL, bankAll);
@@ -444,4 +460,4 @@ module.exports = function registerCoxRewards(api) {
   api.onNpcInteraction("Captain Rimor", { "Claim-cape": claimCape });
 };
 
-Object.assign(module.exports, { uniqueRolls, commonLoot, targetTicks, teamSize, generate, completed, UNIQUES, COMMONS });
+Object.assign(module.exports, { uniqueRolls, commonLoot, targetTicks, teamSize, generate, completed, openChest, chestClosed, clickReward, UNIQUES, COMMONS });

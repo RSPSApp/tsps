@@ -1,7 +1,7 @@
 import { GameState } from "@runelite/api/GameState";
 import { toRuneLiteGameState } from "../../../runelite/impl/GameStateMapping";
 import { getServerTickPhaseNow } from "../../../network/serverConnection/timing";
-import { FONT_PLAIN_12 } from "../../../ui/fonts";
+import { type OverlayFont, overlayFont } from "@runelite/client/ui/overlay/OverlayFonts";
 import { drawTextGL } from "../../../widgets/components/TextRenderer";
 import type { WidgetOverlay, WidgetOverlayDrawContext } from "../ClientPluginManager";
 import type { GroundItemsPlugin, ItemBox } from "./GroundItemsPlugin";
@@ -18,7 +18,6 @@ export const OFFSET_Z = 20;
 export const STRING_GAP = 15;
 export const RECTANGLE_SIZE = 8;
 export const TIMER_OVERLAY_DIAMETER = 10;
-const FONT = FONT_PLAIN_12;
 const PUBLIC_TIMER_COLOR = 0xffffff00;
 const PRIVATE_TIMER_COLOR = 0xff00ff00;
 const RED = 0xffff0000;
@@ -40,6 +39,8 @@ type Frame = {
     boxes: Box[];
     pies: Pie[];
     texts: Text[];
+    /** The dynamic overlay font the texts were laid out in. */
+    font: OverlayFont;
     signature: string;
 };
 
@@ -51,7 +52,7 @@ const contains = (r: Rect | undefined, x: number, y: number) => !!r && x >= r.x 
 
 /**
  * RuneLite's GroundItemsOverlay, drawn in 2D over the scene and under interfaces: item labels
- * with prices, stacked 15 px apart per tile, despawn timers (text or pie), highlighted tiles and
+ * with prices, stacked 15 px apart per tile (further apart in a larger font), despawn timers (text or pie), highlighted tiles and
  * the hotkey mode's hidden/highlight boxes.
  */
 /** The device rects each frame element paints, shared by draw() and coverage(). */
@@ -63,7 +64,12 @@ const pieRect = (pie: Pie): Rect => {
     const r = TIMER_OVERLAY_DIAMETER / 2;
     return { x: pie.x - r - 1, y: pie.y - r - 1, w: 2 * r + 2, h: 2 * r + 2 };
 };
-const textRect = (t: Text, width: number): Rect => ({ x: t.x - 2, y: t.y - TEXT_HEIGHT, w: width + 6, h: TEXT_HEIGHT + 6 });
+/** The glyphs and their shadow or outline reach 4 px per 16pt below the baseline, so the padding scales. */
+const textRect = (t: Text, width: number, scale: number): Rect => {
+    const h = TEXT_HEIGHT * scale;
+    const pad = Math.max(6, Math.ceil(6 * scale));
+    return { x: t.x - 2, y: t.y - h, w: width + pad, h: h + pad };
+};
 
 type LabelCacheEntry = { mode: string; quantity: number; gePrice: number; haPrice: number; text: string };
 
@@ -94,14 +100,14 @@ export class GroundItemsOverlay implements WidgetOverlay {
      */
     coverage(): Rect[] | undefined {
         const frame = this.frame ?? (this.frame = this.build());
-        const font = frame.texts.length > 0 ? this.fontLoader?.(FONT) : undefined;
+        const font = frame.texts.length > 0 ? this.fontLoader?.(frame.font.id) : undefined;
         if (frame.texts.length > 0 && !font) return undefined;
         const rects: Rect[] = [];
         for (const tile of frame.tiles) rects.push(tileRect(tile));
         for (const r of frame.backgrounds) rects.push(backgroundRect(r));
         for (const box of frame.boxes) rects.push(boxRect(box));
         for (const pie of frame.pies) rects.push(pieRect(pie));
-        for (const t of frame.texts) rects.push(textRect(t, font!.measure(t.text)));
+        for (const t of frame.texts) rects.push(textRect(t, font!.measure(t.text) * frame.font.scale, frame.font.scale));
         return rects;
     }
 
@@ -132,15 +138,17 @@ export class GroundItemsOverlay implements WidgetOverlay {
             glr.drawPolyline?.(circle(pie.x, pie.y, r), 1, color, true);
             rects.push(pieRect(pie));
         }
+        const { id: fontId, scale } = frame.font;
         for (const t of frame.texts) {
-            const font = context.fontLoader(FONT);
-            const w = font ? font.measure(t.text) : t.text.length * 7;
-            const h = TEXT_HEIGHT;
+            const font = context.fontLoader(fontId);
+            const w = (font ? font.measure(t.text) : t.text.length * 7) * scale;
+            const h = TEXT_HEIGHT * scale;
             const alpha = ((t.color >>> 24) & 255) / 255;
             const rgb = t.color & 0xffffff;
             // The point is the text baseline, as Graphics.drawString takes it.
             const draw = (dx: number, dy: number, color: number, shadow: boolean) =>
-                drawTextGL(context.renderer, context.fontLoader, t.text, t.x + dx, t.y - h + 3 + dy, w + 4, h, FONT, color, 0, 2, shadow, alpha);
+                drawTextGL(context.renderer, context.fontLoader, t.text, t.x + dx, t.y - h + 3 * scale + dy, w + 4, h, fontId, color, 0, 2, shadow, alpha,
+                    undefined, scale, scale);
             if (t.outline) {
                 draw(0, 1, 0, false);
                 draw(0, -1, 0, false);
@@ -150,7 +158,7 @@ export class GroundItemsOverlay implements WidgetOverlay {
             } else {
                 draw(0, 0, rgb, true);
             }
-            rects.push(textRect(t, w));
+            rects.push(textRect(t, w, scale));
         }
         return rects;
     }
@@ -172,7 +180,7 @@ export class GroundItemsOverlay implements WidgetOverlay {
     }
 
     private build(): Frame {
-        const frame: Frame = { tiles: [], backgrounds: [], boxes: [], pies: [], texts: [], signature: "" };
+        const frame: Frame = { tiles: [], backgrounds: [], boxes: [], pies: [], texts: [], font: overlayFont("dynamic"), signature: "" };
         const plugin = this.plugin;
         if (!plugin.isStarted()) return frame;
         const client: any = plugin.getClient();
@@ -193,9 +201,12 @@ export class GroundItemsOverlay implements WidgetOverlay {
         const timers = config.groundItemTimers();
         const outline = config.textOutline() === true;
         const showHighlightedOnly = config.showHighlightedOnly() === true;
-        const font = this.fontLoader?.(FONT);
-        const measure = (text: string) => (font ? font.measure(text) : text.length * 6);
-        const stringHeight = font ? Math.max(1, (font.maxAscent | 0) + (font.maxDescent | 0)) : 12;
+        const scale = frame.font.scale;
+        const font = this.fontLoader?.(frame.font.id);
+        const measure = (text: string) => (font ? font.measure(text) : text.length * 6) * scale;
+        const stringHeight = Math.max(1, Math.round((font ? (font.maxAscent | 0) + (font.maxDescent | 0) : 12) * scale));
+        // RuneLite keeps 15 px whatever the font, so a larger one would draw labels over each other.
+        const stringGap = Math.max(STRING_GAP, Math.round(STRING_GAP * scale));
         const [mouseX, mouseY] = plugin.input.mouse;
         const timing = getServerTickPhaseNow();
         const nowTick = timing.tick + Math.max(0, Math.min(0.999, timing.phase || 0));
@@ -256,7 +267,7 @@ export class GroundItemsOverlay implements WidgetOverlay {
                 ? itemOffsets.get(item.key) ?? 0
                 : (offsets.set(tile, offsets.has(tile) ? offsets.get(tile)! + 1 : 0), offsets.get(tile)!);
             const textX = Math.round(p[0] - textWidth / 2);
-            const textY = Math.round(p[1]) - STRING_GAP * offset;
+            const textY = Math.round(p[1]) - stringGap * offset;
 
             if (hotkey) {
                 const itemBounds: Rect = { x: textX - 2, y: textY - stringHeight - 2, w: textWidth + 4, h: stringHeight + 4 };
@@ -314,6 +325,7 @@ export class GroundItemsOverlay implements WidgetOverlay {
                 frame.boxes.map((b) => [b.rect.x, b.rect.y, b.color, b.filled]),
                 frame.pies.map((p) => [Math.round(p.x), Math.round(p.y), Math.round(p.progress * 100), p.color]),
                 frame.backgrounds.map((r) => [r.x, r.y, r.w]),
+                [frame.font.id, frame.font.scale],
             ]);
         return frame;
     }

@@ -3,6 +3,7 @@ import type { MinimapGeometry, SceneGeometry } from "./scene/SceneGeometry";
 import { vec3 } from "gl-matrix";
 import { closeOpenModal } from "./widgets/input/widgetKeyboardInput";
 import { getNpcMenuActions } from "./menu/WorldMenuBuilder";
+import { handleCommandShortcut } from "./chat/commandShortcuts";
 
 import { directionToDelta } from "../common/Direction";
 import { ChatMessageType } from "../common/chat/ChatMessageType";
@@ -202,7 +203,9 @@ import type { SkeletalSeqLoader } from "../rs/model/skeletal/SkeletalSeqLoader";
 import { SkillId } from "../rs/skill/skills";
 import { TextureLoader } from "../rs/texture/TextureLoader";
 import { faceAngleRs } from "../rs/utils/rotation";
+import { npcAddedRotation } from "./utils/rotation";
 import { getOsrsInterfaceScalingPercent, setOsrsInterfaceScalingPercent } from "../ui/UiScale";
+import { isMobileClient } from "../rs/cs2/ClientType";
 import {
     DEVICE_OPTION_SCREEN_BRIGHTNESS,
     gammaFromScreenBrightness,
@@ -304,7 +307,7 @@ import type { GraphicsDefaults } from "../rs/config/defaults/GraphicsDefaults";
 import { interactionModes } from "./InteractionModes";
 import { RuneLite } from "../runelite/client/RuneLite";
 import { notifyActorGraphic, notifyActorHitsplat, notifyActorHealth } from "./ActorEventHooks";
-import { dispatchMenuAction } from "../ui/menu/menuEvents";
+import { dispatchMenuAction, menuClickListeners, type MenuActionData } from "../ui/menu/menuEvents";
 import { setMenuTransform } from "../ui/menu/menuTransforms";
 import { ResolveTilePlaneFn } from "./scene/PlaneResolver";
 import {
@@ -1147,6 +1150,7 @@ export class OsrsClient {
         document.addEventListener(
             "keydown",
             (event) => {
+                if (handleCommandShortcut(event, this.isLoggedIn())) return;
                 // Capture build-menu chat before tab shortcuts, plugin handlers,
                 // or focus on a non-input component can swallow the event.
                 const constructionOpen = this.widgetManager?.rootInterface === 458 ||
@@ -2234,7 +2238,7 @@ export class OsrsClient {
             // Option ID 19 = master_volume (enhanced client)
             getDeviceOption: (optionId: number): number => {
                 if (optionId === DEVICE_OPTION_INTERFACE_SCALING) {
-                    return getOsrsInterfaceScalingPercent();
+                    return getOsrsInterfaceScalingPercent(isMobileClient(self.widgetManager?.rootInterface) || self.varManager?.getVarbit(6352) === 1);
                 }
                 return self.deviceOptions.get(optionId) ?? 0;
             },
@@ -2336,6 +2340,9 @@ export class OsrsClient {
         this.cs2Vm.scriptCallbackListeners.add((_script, eventName) =>
             this.clientPlugins.onScriptCallback({ eventName, vm: this.cs2Vm }),
         );
+        const menuClick = (action: MenuActionData) => this.clientPlugins.onMenuOptionClicked(action);
+        menuClickListeners.add(menuClick);
+        this.serverSubscriptions.push(() => menuClickListeners.delete(menuClick));
 
         this.initCustomInterfaces();
         this.initWidgetInteractionController();
@@ -2587,6 +2594,11 @@ export class OsrsClient {
                     // after processWidgetTransmits has already run this tick.
                     markChatTransmit();
                 } catch {}
+            },
+            overheadChatText: (serverId, text) => {
+                const ecsIndex = this.playerEcs.getIndexForServerId(serverId | 0);
+                const name = ecsIndex === undefined ? "" : (this.playerEcs.getName(ecsIndex) ?? "");
+                return this.clientPlugins.overheadChatText(name, text);
             },
             resolveTilePlane: this.resolvePlayerPlane,
             onInteractionIndex: (serverId, interactionIndex) => {
@@ -7659,6 +7671,10 @@ export class OsrsClient {
                 },
                 { forceImmediateRotation: !!spawn.teleport },
             );
+            // Like a new one, a re-added NPC that never turns is drawn at angle 0 again.
+            if ((this.npcEcs.getRotationSpeed(existingEcs) | 0) === 0) {
+                this.npcEcs.setRotation(existingEcs, 0);
+            }
             this.npcEcs.setLevel(existingEcs, spawn.level | 0);
             this.npcEcs.setOccTile(existingEcs, localTileX, localTileY, spawn.level | 0);
             const nextWorldView = (spawn as any).worldViewId ?? -1;
@@ -7696,6 +7712,8 @@ export class OsrsClient {
         const size = Math.max(1, npcType?.size | 0);
         // A turn speed of 0 never turns (the Inferno's Ancestral Glyph slides side to side).
         const rotSpeed = Math.max(0, npcType?.rotationSpeed | 0);
+        // Such an NPC is drawn at angle 0 (Sir Tiffy's bench is part of his model, built for it).
+        const drawnRot = npcAddedRotation(rotSpeed, spawn.rot | 0);
         const localX = (localTileX * 128 + size * 64) | 0;
         const localY = (localTileY * 128 + size * 64) | 0;
 
@@ -7707,7 +7725,7 @@ export class OsrsClient {
             localX,
             localY,
             spawn.level | 0,
-            spawn.rot | 0,
+            drawnRot,
             localTileX,
             localTileY,
             rotSpeed,
@@ -7718,7 +7736,7 @@ export class OsrsClient {
             this.worldViewManager.addNpcToWorldView((spawn as any).worldViewId, ecsId);
         }
         this.npcEcs.setTargetRot(ecsId, spawn.rot | 0);
-        this.npcEcs.setRotation(ecsId, spawn.rot | 0);
+        this.npcEcs.setRotation(ecsId, drawnRot);
         this.npcEcs.setOccTile(ecsId, localTileX, localTileY, spawn.level | 0);
 
         // Actor world coords include size-based center offset (size * 64).

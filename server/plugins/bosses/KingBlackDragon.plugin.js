@@ -6,6 +6,8 @@ const KBD_LAIR_LEVER_OBJECT_ID = 1817;
 const KING_BLACK_DRAGON_LAIR = [2271, 4680, 0];
 const KING_BLACK_DRAGON_LADDER = [3017, 3850, 0];
 
+const { DragonfireProtectionTier, getDragonfireProtectionTier } = require("../combat/DragonfireProtection");
+
 const Breath = {
   DRAGON: 0,
   ICE: 1,
@@ -13,14 +15,108 @@ const Breath = {
   SHOCK: 3,
 };
 
+/**
+ * Wiki (Dragonfire/King_Black_Dragon): maximum damage of the fiery breath and of the three
+ * special breaths, by the protection the player has. The plugin resolves KBD's dragonfire
+ * itself because his table (65/50) is higher than the chromatic dragons' (50).
+ */
+const FIERY_BREATH_MAX = Object.freeze({
+  unprotected: 65,
+  shield: 15,
+  prayer: 20,
+  shieldPrayer: 15,
+  antifire: 50,
+  superAntifire: 0,
+  shieldAntifire: 0,
+  shieldSuperAntifire: 0,
+  prayerAntifire: 5,
+  prayerSuperAntifire: 0,
+  shieldPrayerAntifire: 0,
+  shieldPrayerSuperAntifire: 0,
+});
+const SPECIAL_BREATH_MAX = Object.freeze({
+  unprotected: 50,
+  shield: 10,
+  prayer: 15,
+  shieldPrayer: 10,
+  antifire: 50,
+  superAntifire: 50,
+  shieldAntifire: 10,
+  shieldSuperAntifire: 10,
+  prayerAntifire: 15,
+  prayerSuperAntifire: 15,
+  shieldPrayerAntifire: 10,
+  shieldPrayerSuperAntifire: 10,
+});
+
+/** Wiki: shock drains two levels from every stat, poison starts at 8, ice freezes 10 ticks. */
+const SHOCK_DRAIN = 2;
+const POISON_SEVERITY = 8;
+const ICE_FREEZE_TICKS = 10;
+/** Wiki (Mod Ash): 1/2 unprotected, 1/8 with a shield and/or Protect from Magic. */
+const EFFECT_DENOMINATOR_PROTECTED = 7;
+const EFFECT_DENOMINATOR_UNPROTECTED = 1;
+
+const BURN_MESSAGE = "You're horribly burnt by the dragon fire!";
+const SHIELD_MESSAGE = "Your shield absorbs most of the dragon fire!";
+const PRAYER_MESSAGE = "Your prayers resist some of the dragon fire!";
+const ANTIFIRE_MESSAGE = "Your antifire potion helps to protect you from the dragon's breath!";
+const SUPER_ANTIFIRE_MESSAGE = "Your super antifire potion completely protects you from the dragon fire!";
+
+function breathMax(special, { shield, prayer, tier }) {
+  const superAntifire = tier >= DragonfireProtectionTier.SUPER_ANTIFIRE;
+  const antifire = tier >= DragonfireProtectionTier.ANTIFIRE;
+  const table = special ? SPECIAL_BREATH_MAX : FIERY_BREATH_MAX;
+  if (shield && prayer && superAntifire) return table.shieldPrayerSuperAntifire;
+  if (shield && prayer && antifire) return table.shieldPrayerAntifire;
+  if (shield && superAntifire) return table.shieldSuperAntifire;
+  if (shield && antifire) return table.shieldAntifire;
+  if (prayer && superAntifire) return table.prayerSuperAntifire;
+  if (prayer && antifire) return table.prayerAntifire;
+  if (shield && prayer) return table.shieldPrayer;
+  if (shield) return table.shield;
+  if (prayer) return table.prayer;
+  if (superAntifire) return table.superAntifire;
+  if (antifire) return table.antifire;
+  return table.unprotected;
+}
+
+function sendBreathMessages(player, { shield, prayer, tier }) {
+  const superAntifire = tier >= DragonfireProtectionTier.SUPER_ANTIFIRE;
+  if (superAntifire) {
+    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, SUPER_ANTIFIRE_MESSAGE);
+    return;
+  }
+  if (shield) player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, SHIELD_MESSAGE);
+  else if (prayer) player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, PRAYER_MESSAGE);
+  else player.sendMessage(BURN_MESSAGE);
+  if (tier >= DragonfireProtectionTier.ANTIFIRE) {
+    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, ANTIFIRE_MESSAGE);
+  }
+}
+
+function drainAllStats(player, core) {
+  const skills = player.getSkillManager();
+  for (const skill of core.Skill.values()) {
+    if (skill === core.Skill.HITPOINTS) continue;
+    skills.decreaseCurrentLevel(skill, SHOCK_DRAIN, 1);
+  }
+}
+
 let api = null;
+let core = null;
 let Location, Misc, PendingHit, Projectile, CombatEquipment;
 let PrayerHandler;
 let CombatFactory;
 
 function climbDownToLair({ player }) {
   const [x, y, z] = KING_BLACK_DRAGON_LAIR;
-  api.emitCustomEvent("ladders:climbDown", { player, destination: new Location(x, y, z) });
+  api.emitCustomEvent("ladders:climbDown", {
+    player,
+    destination: new Location(x, y, z),
+    // The easy Wilderness Diary's "Enter the King Black Dragon's lair.", once the climb has landed.
+    onArrival: () => api.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "enter-the-king-black-dragon-s-lair" }),
+  });
   return true;
 }
 
@@ -33,6 +129,7 @@ function pullLairLever({ player }) {
 /** The combat method, built on api.core's classes. */
 function combatClass(pluginApi) {
   api = pluginApi;
+  core = pluginApi.core;
   ({ Location, Misc, PendingHit, Projectile, CombatEquipment } = pluginApi.core);
   PrayerHandler = pluginApi.getPrayerHandler();
   CombatFactory = pluginApi.getCombatFactory();
@@ -92,45 +189,41 @@ function combatClass(pluginApi) {
       // The burn lands when the fire does, not before it.
       const hitDelay =
         this.currentAttackType === CombatType.MAGIC ? Projectile.arrivalTicks(character, target) : 1;
-      const hit = new PendingHit(character, target, this, hitDelay);
-      if (target.isPlayer()) {
-        const player = target.getAsPlayer();
-        if (this.currentAttackType === CombatType.MAGIC && this.currentBreath === Breath.DRAGON) {
-          const prayer = PrayerHandler.isActivated(player, PrayerHandler.PROTECT_FROM_MAGIC);
-          const shield = CombatEquipment.hasDragonProtectionGear(player);
-          const antifire = !player.getCombat().getFireImmunityTimer().finished();
-          // The table below applies Protect from Magic itself; the generic impact stage
-          // must not reduce the custom breath again.
-          hit.markProtectionBypassed();
-          if (prayer) {
-            // The base magic roll used to be prayer-reduced before this custom damage was
-            // added. Keep that part of the old order now that impact defences are deferred.
-            for (const damage of hit.getHits()) damage.setDamage(0);
-          }
-          if (prayer && shield && antifire) {
-            target.sendMessage("You're protected against the dragonfire breath.");
-            return [hit];
-          }
-          let extendedHit = 25;
-          if (prayer) {
-            extendedHit -= 5;
-          }
-          if (antifire) {
-            extendedHit -= 10;
-          }
-          if (shield) {
-            extendedHit -= 10;
-          }
-          player.sendMessage("The dragonfire burns you.");
-          hit.getHits()[0].incrementDamage(extendedHit);
-        }
-        if (this.currentAttackType === CombatType.MAGIC) {
+      if (this.currentAttackType !== CombatType.MAGIC) {
+        return [new PendingHit(character, target, this, hitDelay)];
+      }
+
+      const special = this.currentBreath !== Breath.DRAGON;
+      const hit = new PendingHit(character, target, this, { delay: hitDelay, rollAccuracy: false });
+      // The breath's own table replaces the generic magic roll (and its protection stage).
+      hit.markProtectionBypassed();
+      if (!target.isPlayer()) {
+        hit.setTotalDamage(Misc.randomInclusive(0, special ? SPECIAL_BREATH_MAX.unprotected : FIERY_BREATH_MAX.unprotected));
+        return [hit];
+      }
+
+      const player = target.getAsPlayer();
+      const shield = CombatEquipment.hasDragonProtectionGear(player);
+      const prayer = PrayerHandler.isActivated(player, PrayerHandler.PROTECT_FROM_MAGIC);
+      const tier = getDragonfireProtectionTier(player);
+      const damage = Misc.randomInclusive(0, breathMax(special, { shield, prayer, tier }));
+      hit.setTotalDamage(damage);
+      sendBreathMessages(player, { shield, prayer, tier });
+
+      // Wiki: a special breath has a 1/2 chance of its effect unprotected, 1/8 with a
+      // shield and/or Protect from Magic, and only on a hit that dealt damage.
+      if (special && damage > 0) {
+        const denominator = shield || prayer ? EFFECT_DENOMINATOR_PROTECTED : EFFECT_DENOMINATOR_UNPROTECTED;
+        if (Misc.randomInclusive(0, denominator) === 0) {
           switch (this.currentBreath) {
             case Breath.ICE:
-              CombatFactory.freeze(player, 5);
+              CombatFactory.freezeTicks(player, ICE_FREEZE_TICKS);
               break;
             case Breath.POISON:
-              CombatFactory.poisonEntity(player, 30);
+              CombatFactory.poisonEntity(player, POISON_SEVERITY);
+              break;
+            case Breath.SHOCK:
+              drainAllStats(player, core);
               break;
             default:
               break;
@@ -153,15 +246,11 @@ function combatClass(pluginApi) {
         this.currentAttackType = CombatType.MAGIC;
       }
       if (this.currentAttackType === CombatType.MAGIC) {
-        const random = Misc.randomInclusive(0, 10);
-        if (random >= 0 && random <= 3) {
+        // Wiki (Mod Ash): 50% fiery breath, otherwise the three special breaths equally often.
+        if (Misc.randomInclusive(0, 1) === 0) {
           this.currentBreath = Breath.DRAGON;
-        } else if (random >= 4 && random <= 6) {
-          this.currentBreath = Breath.SHOCK;
-        } else if (random >= 7 && random <= 9) {
-          this.currentBreath = Breath.POISON;
         } else {
-          this.currentBreath = Breath.ICE;
+          this.currentBreath = [Breath.ICE, Breath.POISON, Breath.SHOCK][Misc.randomInclusive(0, 2)];
         }
       }
     }
@@ -182,4 +271,5 @@ module.exports = {
     pluginApi.onObjectFirstClick(KBD_LADDER_DOWN_OBJECT_ID, climbDownToLair);
     pluginApi.onObjectFirstClick(KBD_LAIR_LEVER_OBJECT_ID, pullLairLever);
   },
+  _test: { breathMax, FIERY_BREATH_MAX, SPECIAL_BREATH_MAX, DragonfireProtectionTier },
 };

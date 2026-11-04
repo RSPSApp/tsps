@@ -1,8 +1,14 @@
+import fs = require("fs");
+import path = require("path");
 import { CacheDefinitions } from "../cache/CacheDefinitions";
 import { CombatType } from "../content/combat/CombatType";
 import { Misc } from "../../util/Misc";
 
+/** Examine text by npc id from the Wiki's Infobox NPC pages (osrsreboxed-db `scripts.examines --kind npc`). */
+const EXAMINES_FILE = "data/definitions/npc-examines.json";
+
 export class NpcDefinition {
+    private static npcExamines: Record<string, string> | null = null;
     static definitions: Map<number, NpcDefinition> = new Map<number, NpcDefinition>();
     /**
      * Slot layout, populated by NpcDefinitionLoader from monsters-complete.json:
@@ -43,7 +49,7 @@ export class NpcDefinition {
     private hitpoints: number = 10;
     private attackSpeed: number = 4;
     private attackAnim: number = 422;
-    private defenceAnim: number = 424;
+    private defenceAnim: number = -1;
     private deathAnim: number = 836;
     private spawnAnim: number | null = null;
     private deathSound: number = -1;
@@ -99,6 +105,10 @@ export class NpcDefinition {
         this.size = cached.size;
         this.attackable = cached.actions.some((action) => action?.toLowerCase() === "attack");
         this.actions = [...cached.actions];
+        // Only human rigs inherit the legacy human block; other creatures need a resolved role.
+        if (CacheDefinitions.getSeqName(cached.idleSeqId)?.split("_").includes("human")) {
+            this.defenceAnim = CacheDefinitions.getSeqId("human_unarmedblock") ?? -1;
+        }
         if (cached.combatLevel >= 0) this.combatLevel = cached.combatLevel;
         if (cached.hitpoints > 0) this.hitpoints = cached.hitpoints;
         const stats = this.stats ? [...this.stats] : [...NpcDefinition.DEFAULT_STATS];
@@ -125,12 +135,17 @@ export class NpcDefinition {
     
     /**
      * OSRS keeps NPC examine text server-side, so the cache carries none of it -
-     * the real text comes from monsters-complete.json via NpcDefinitionLoader.
-     * Everything the dump does not cover gets a generic line rather than the
+     * the real text comes from monsters-complete.json via NpcDefinitionLoader
+     * (attackable NPCs only) or npc-examines.json (every Infobox NPC page).
+     * Everything neither covers gets a generic line rather than the
      * bare name the examine packet used to echo back.
      */
     public getExamine(): string {
         if (this.examine) return this.examine;
+        // Read on the first examine that needs it, not at boot.
+        NpcDefinition.npcExamines ??= JSON.parse(fs.readFileSync(path.resolve(EXAMINES_FILE), "utf8"));
+        const wiki = NpcDefinition.npcExamines![String(this.id)];
+        if (wiki) return wiki;
         if (!this.name || this.name === "null") return "It's nothing special.";
         return `It's ${Misc.anOrA(this.name)} ${this.name}.`;
     }
@@ -293,6 +308,18 @@ export class NpcDefinition {
     
     public getCombatFollowDistance(): number {
         return this.combatFollowDistance;
+    }
+
+    /**
+     * The Wiki's aggression range: the NPC's max range plus its attack range, measured from
+     * its static spawn (Aggressiveness#Aggression range). The caller measures to the spawn's
+     * footprint, which already extends `size - 1` tiles north and east; the size must not be
+     * added here as a symmetric radius (see `CombatRange.footprintDistance`).
+     * `attackDistance` is the combat method's own reach (ranged and magic NPCs reach further).
+     */
+    public getAggressionRange(attackDistance: number): number {
+        const reach = Number.isFinite(attackDistance) ? Math.max(1, Math.trunc(attackDistance)) : 1;
+        return Math.max(0, this.combatFollowDistance) + reach;
     }
 
     public getHuntRange(): number {

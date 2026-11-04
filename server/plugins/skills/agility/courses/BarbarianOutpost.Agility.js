@@ -17,12 +17,20 @@ function crumblingWall(x, index) {
   };
 }
 
+/** The log's creak (rsprox 2875). */
+const LOG_SOUND = 2470;
+
 module.exports = {
   key: "barbarian",
   name: "Barbarian Outpost",
   helper: 9, // the Agility helper's course (enum 3507: "Barbarian Agility Course")
-  lapXp: 153.2,
+  lapXp: 153.3, // Wiki: the obstacles' 107 and a 46.3 completion bonus
+  lapSkillXp: { strength: 41.3 }, // Wiki: a full lap also gives Strength XP (8 May 2024)
   petBase: 44376, // Giant squirrel base chance (Wiki)
+  diaryTask: {
+    diary: "kandarin",
+    task: "complete-a-lap-of-the-barbarian-agility-course",
+  },
   obstacles: [
     {
       object: ObjectIds.ROPESWING_5,
@@ -42,9 +50,18 @@ module.exports = {
       xp: 13.7,
       route: [2551, 3546, 0],
       render: Anim.BALANCE_WALK,
-      start: "You walk carefully across the slippery log...",
+      // rsprox 2875 (rev 230): the line (spam) and the first tile as the log is clicked from 2551,
+      // then a tile a tick; the creak on the second tile and again on the seventh. The end line
+      // wasn't captured (the recording reconnects on the last tile).
+      start: { spam: "You walk carefully across the slippery log..." },
       end: "...You make it safely to the other side.",
-      steps: balance([2541, 3546]),
+      steps: [
+        { walk: [[2550, 3546]] },
+        { sound: LOG_SOUND, loops: 4 },
+        { walk: [[2545, 3546]] },
+        { sound: LOG_SOUND, loops: 2 },
+        { walk: [[2541, 3546]] },
+      ],
     },
     {
       object: ObjectIds.OBSTACLE_NET_2,

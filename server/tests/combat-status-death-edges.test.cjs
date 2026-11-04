@@ -1,6 +1,6 @@
 // Run after `yarn build`: node --test tests/combat-status-death-edges.test.cjs
 const assert = require('node:assert/strict');
-const { test } = require('node:test');
+const { before, test } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 
@@ -15,7 +15,153 @@ const { DamageFormulas } = require('../dist/game/content/combat/formula/DamageFo
 const { Equipment } = require('../dist/game/model/container/impl/Equipment');
 const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
 
+before(async () => {
+  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
+});
+
 const method = { type: () => CombatType.MELEE, accuracyDefenceType: () => undefined };
+
+let nextImpactIndex = 2000;
+function impactFixture(t) {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { NPC } = require('../dist/game/entity/impl/npc/NPC');
+  const { NpcIdentifiers } = require('../dist/util/NpcIdentifiers');
+  const { Location } = require('../dist/game/model/Location');
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel), new Location(3222, 3218));
+  p.setIndex(nextImpactIndex++); p.setUsername('impactdialogue'); p.setRegistered(true);
+  p.setHitpoints(10); p.setNeedsPlacement(false); p.setAutoRetaliate(false);
+  const attacker = NPC.create(NpcIdentifiers.MAN, new Location(3223, 3218));
+  attacker.setIndex(nextImpactIndex++); attacker.setRegistered(true);
+  const connection = new ClientConnection(channel); connection.player = p;
+  t.after(() => {
+    p.getPacketSender().sendInterfaceRemoval(); p.setRegistered(false); attacker.setRegistered(false);
+    p.getCombat().getHitQueue().clear(); TaskManager.cancelTasks(p.getIndex());
+  });
+  return {
+    p,
+    hit(damage = 1, applied) {
+      const hit = new PendingHit(attacker, p, method, {
+        damage, rollAccuracy: false, experience: false, handleAfterHitEffects: false,
+      });
+      if (applied) hit.getHits()[0].onApplied(applied);
+      assert.equal(hit.getTotalDamage(), damage);
+      CombatFactory.executeHit(hit);
+      p.getCombat().getHitQueue().process(1);
+    },
+    async resume(widgetId, childIndex = -1) {
+      await connection.dispatch([{ type: 'dialogue_continue', widgetId, childIndex }]);
+      connection.processTurnPackets();
+    },
+  };
+}
+
+function impactConversation(p, kind, reward) {
+  const { DialogueChainBuilder } = require('../dist/game/model/dialogues/builders/DialogueChainBuilder');
+  const { NpcDialogue } = require('../dist/game/model/dialogues/entries/impl/NpcDialogue');
+  const { PlayerDialogue } = require('../dist/game/model/dialogues/entries/impl/PlayerDialogue');
+  const { OptionDialogue } = require('../dist/game/model/dialogues/entries/impl/OptionDialogue');
+  const { ActionDialogue } = require('../dist/game/model/dialogues/entries/impl/ActionDialogue');
+  const { NpcIdentifiers } = require('../dist/util/NpcIdentifiers');
+  const entry = kind === 'choice' ? new OptionDialogue(0, { executeOption: reward }, 'Accept')
+    : kind === 'player' ? new PlayerDialogue(0, 'Let me finish speaking.')
+    : new NpcDialogue(0, NpcIdentifiers.MAN, 'Let me finish speaking.');
+  p.getDialogueManager().startDialogues(new DialogueChainBuilder().add(entry, new ActionDialogue(1, { execute: reward })), {});
+  return kind === 'choice' ? OptionDialogue.OPTIONS_WIDGET_ID : (p.getPacketSender().getChatboxGroupId() << 16) | 5;
+}
+
+for (const [kind, damage] of [['npc', 1], ['player', 1], ['choice', 1], ['npc', 0]]) {
+  test(`a real ${damage}-damage melee hit closes ${kind} chatbox dialogue and rejects its stale native continuation`, async t => {
+    const f = impactFixture(t);
+    let rewards = 0;
+    const widget = impactConversation(f.p, kind, () => rewards++);
+    assert.equal(f.p.busy(), false, 'ordinary chatbox dialogue does not block ordinary actions');
+    assert.equal(f.p.getPacketSender().hasInterruptibleInterface(), true);
+    f.hit(damage);
+    assert.equal(f.p.getHitpoints(), 10 - damage, 'the real hit queue applies damage');
+    assert.equal(f.p.getDialogueManager().getCurrent(), undefined);
+    assert.equal(f.p.getPacketSender().getChatboxGroupId(), -1);
+    await f.resume(widget, kind === 'choice' ? 1 : -1);
+    assert.equal(rewards, 0, 'the cancelled conversation cannot award anything');
+  });
+}
+
+test('a hit leaves the developer dialogue exception intact', t => {
+  const { PlayerRights } = require('../dist/game/model/rights/PlayerRights');
+  const { MORTAL_DEVELOPER_ATTRIBUTE } = require('../dist/game/entity/impl/Mobile');
+  const f = impactFixture(t);
+  f.p.setRights(PlayerRights.DEVELOPER);
+  f.p.setAttribute(MORTAL_DEVELOPER_ATTRIBUTE, true);
+  impactConversation(f.p, 'npc', () => {});
+  const original = f.p.getDialogueManager().getCurrent();
+  f.hit();
+  assert.equal(f.p.getHitpoints(), 9);
+  assert.equal(f.p.getDialogueManager().getCurrent(), original);
+});
+
+for (const status of ['TRADING', 'DUELING']) {
+  test(`a hit still removes interfaces while ${status.toLowerCase()}`, t => {
+    const { PlayerStatus } = require('../dist/game/model/PlayerStatus');
+    const f = impactFixture(t);
+    impactConversation(f.p, 'npc', () => {});
+    f.p.setStatus(PlayerStatus[status]);
+    assert.equal(f.p.busy(), true);
+    f.hit();
+    assert.equal(f.p.getHitpoints(), 9);
+    assert.equal(f.p.getStatus(), PlayerStatus.NONE);
+    assert.equal(f.p.getDialogueManager().isActive(), false);
+  });
+}
+
+test('a later dialogue opened by the applied-hit callback survives the older dialogue interruption', async t => {
+  const f = impactFixture(t);
+  let oldRewards = 0;
+  const oldWidget = impactConversation(f.p, 'npc', () => oldRewards++);
+  let later, appliedDamage, oldActive;
+  f.hit(1, lost => {
+    appliedDamage = lost;
+    oldActive = f.p.getDialogueManager().isActive();
+    impactConversation(f.p, 'player', () => {});
+    later = f.p.getDialogueManager().getCurrent();
+  });
+  assert.equal(appliedDamage, 1);
+  assert.equal(oldActive, false, 'the old interface closes before damage callbacks');
+  assert.ok(later, 'the real applied-hit callback opens its own dialogue');
+  assert.equal(f.p.getHitpoints(), 9);
+  assert.equal(f.p.getDialogueManager().getCurrent(), later);
+  await f.resume(oldWidget);
+  assert.equal(f.p.getDialogueManager().getCurrent(), later, 'the old widget cannot resume a different chatbox');
+  assert.equal(oldRewards, 0);
+});
+
+test('an untargetable cutscene keeps its dialogue and takes no queued attack damage', t => {
+  const f = impactFixture(t);
+  impactConversation(f.p, 'npc', () => {});
+  const original = f.p.getDialogueManager().getCurrent();
+  f.p.setUntargetable(true);
+  f.hit();
+  assert.equal(f.p.getHitpoints(), 10);
+  assert.equal(f.p.getDialogueManager().getCurrent(), original);
+});
+
+for (const type of [0, 1, 3]) test(`combat respects the interruption policy for a tracked type-${type} sub-interface`, t => {
+  const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
+  const { OptionDialogue } = require('../dist/game/model/dialogues/entries/impl/OptionDialogue');
+  const f = impactFixture(t), sender = f.p.getPacketSender();
+  const target = CacheDefinitions.getComponentId('toplevel:mainmodal');
+  assert.ok(Number.isInteger(target), 'the modal target exists in the active cache');
+  sender.sendSubInterface(target, OptionDialogue.OPTIONS_WIDGET_ID >>> 16, type);
+  assert.equal(f.p.busy(), false, 'a tracked sub-interface need not set the legacy main interface ID');
+  const close = t.mock.method(sender, 'sendInterfaceRemoval');
+  f.hit();
+  assert.equal(f.p.getHitpoints(), 9);
+  assert.equal(close.mock.callCount(), type === 1 ? 0 : 1, 'passive overlays stay open; modal types close');
+  assert.equal(sender.hasInterruptibleInterface(), false);
+});
 
 function npc(hitpoints = 100) {
   const entity = {
@@ -155,13 +301,15 @@ test('attack-started observers run only after permission succeeds, for every com
   t.mock.method(combat, 'handleAttackDenied', () => {});
   t.mock.method(combat, 'expectAttackAnimation', () => {});
   t.mock.method(combat, 'attackTiming', () => ({}));
+  let method = null;
   t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
+    assert.deepEqual(event, { attacker, target, method }, 'names the method making the swing');
+    if (name === 'combat:attack-finished') return order.push('finished');
     assert.equal(name, 'combat:attack-started');
-    assert.deepEqual(event, { attacker, target });
     order.push('event');
   });
   for (const type of [CombatType.MELEE, CombatType.RANGED, CombatType.MAGIC]) {
-    const method = {
+    method = {
       type: () => type, onCombatBegan() {}, finished() {}, hits: () => [],
       start: () => order.push('attack'),
     };
@@ -170,7 +318,7 @@ test('attack-started observers run only after permission succeeds, for every com
     allowed = true;
     assert.equal(combat.executeAttack(method, target, true, 0, false), true);
   }
-  assert.deepEqual(order, ['event', 'attack', 'event', 'attack', 'event', 'attack']);
+  assert.deepEqual(order, ['event', 'attack', 'finished', 'event', 'attack', 'finished', 'event', 'attack', 'finished']);
 });
 
 test('both player and NPC death clear their roll cache before the death task runs', () => {

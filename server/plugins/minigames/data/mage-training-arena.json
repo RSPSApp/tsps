@@ -14,6 +14,7 @@
       "mazeGuardianComplete": "magictraining_guard_maze_complete"
     },
     "locs": {
+      "entranceDoor": "magictraining_temple_door",
       "telekineticPortal": "magictraining_teledoor",
       "telekineticWalls": "magictraining_miniwall",
       "telekineticFinish": "magictraining_mini_statue_pitfall",
@@ -277,6 +278,7 @@
         "level": 60,
         "xp": 35.5,
         "fruit": "peach",
+        "sound": 114,
         "runes": [
           ["nature", 2],
           ["earth", 4],
@@ -290,7 +292,24 @@
     "maxPoints": 3,
     "bananaXp": 5,
     "peachXp": 10,
-    "rewardRunes": ["water", "earth", "nature", "death", "blood"]
+    "rewardRunes": ["water", "earth", "nature", "death", "blood"],
+    "_feedback": "rsprox 1757 (rev 227): Bones to Peaches sends synth_sound 114 with its animation 722 and graphic 141 (all 10 captured casts create peaches; no Bones to Bananas cast is captured, so it has no sound here); a deposit at the chute sends sequence 832 and synth_sound 1663",
+    "depositAnimation": 832,
+    "depositSound": 1663,
+    "_bones": "rsprox 1757: the falling bones. Every 10 ticks the server sends 40 map_anim (graphic 520-523, delay 10) on distinct tiles of the room, x 3344-3383, y 9620-9659 plane 1, and 4 sound_area 1661 (loops 1, range 20, size 20); a player still on a bone's tile 3 ticks later takes a 2 hit (4 of 4 hits, 2 of 2 dodges). The 580 captured tiles are all unblocked in the cache (RegionManager.blocked) and match the ~1040 tiles Chao1 estimates; the tiles are drawn from the room's unblocked tiles. Not established: protection, the 10-point death cost, the sound of a hit (518/519)",
+    "bones": {
+      "period": 10,
+      "graphics": [520, 521, 522, 523],
+      "graphicDelay": 10,
+      "graphicCount": 40,
+      "landingTicks": 3,
+      "damage": 2,
+      "tiles": [3344, 3383, 9620, 9659],
+      "sound": 1661,
+      "soundRadius": 20,
+      "soundAttenuation": 20,
+      "soundPoints": [[3352, 9631], [3352, 9650], [3374, 9631], [3374, 9650]]
+    }
   },
   "shop": {
     "_enums": "the shop's own clientscripts read these (3255: the stock; 3260: one price enum per type and the wands' previous tier); they have no gameval names",

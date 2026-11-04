@@ -2378,6 +2378,7 @@ export class PluginManager {
       HitDamage: require(`${combat}/hit/HitDamage`).HitDamage,
       HitMask: require(`${combat}/hit/HitMask`).HitMask,
       RangedWeapon: require(`${combat}/ranged/RangedData`).RangedWeapon,
+      RangedWeaponType: require(`${combat}/ranged/RangedData`).RangedWeaponType,
       Ammunition: require(`${combat}/ranged/RangedData`).Ammunition,
       WeaponProfiles: require(`${combat}/WeaponProfile`).WeaponProfiles,
       FightStyle: require(`${combat}/FightStyle`).FightStyle,
@@ -2438,6 +2439,7 @@ export class PluginManager {
       XPDROPS_ENABLED_ATTRIBUTE: require("../net/protocol/ClientProtocol").XPDROPS_ENABLED_ATTRIBUTE,
       encodeGameframeBootstrap: require("../net/protocol/ClientProtocol").encodeGameframeBootstrap,
       resolveGameframeRoot: require("../net/protocol/ClientProtocol").resolveGameframeRoot,
+      orbsGroupFor: require("../net/protocol/ClientProtocol").orbsGroupFor,
       encodeFinePosition: require("../net/protocol/ClientProtocol").encodeFinePosition,
       Boundary: require(`${model}/Boundary`).Boundary,
       PolygonalBoundary: require(`${model}/PolygonalBoundary`).PolygonalBoundary,
@@ -4403,6 +4405,10 @@ export class PluginManager {
         require("../game/content/combat/EquipmentEffects").registerRunEnergyDrainModifier(
           modifier
         ),
+      registerRunEnergyStatusModifier: (modifier) =>
+        require("../game/content/combat/EquipmentEffects").registerRunEnergyStatusModifier(
+          modifier
+        ),
       registerSpecialEnergyRestoreModifier: (modifier) =>
         require("../game/content/combat/EquipmentEffects").registerSpecialEnergyRestoreModifier(
           modifier
@@ -4866,6 +4872,9 @@ export class PluginManager {
     resolver: PluginCombatMethodResolver
   ): void {
     PluginManager.combatMethodResolvers.push(resolver);
+    // Stable: weapon overrides first, each group in registration order.
+    PluginManager.combatMethodResolvers.sort((a, b) =>
+      Number(b.overridesWeapon === true) - Number(a.overridesWeapon === true));
   }
 
   private static registerNpcCombatMethodProviderInternal(

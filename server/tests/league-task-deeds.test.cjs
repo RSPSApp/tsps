@@ -290,7 +290,7 @@ test("teleport: a teleport spell cast and landed (Teleport to Civitas illa Forti
 test("rifts: Guardians of the Rift's own count of rifts closed (Guardians of the Rift 1 Rift closed)", (t) => {
   const f = pactsCharacter(t);
   const Rewards = require("../plugins/minigames/guardiansoftherift/Rewards.GuardiansOfTheRift");
-  Rewards.closed({ player: f.player, state: { elemental: 0, catalytic: 0 } });
+  Rewards.closed({ player: f.player, state: { elemental: 150, catalytic: 150 } });
   assert.ok(f.messages.some((text) => /closed the rift/.test(text)), `the real close: ${f.messages}`);
   assert.ok(done(f, "guardians-of-the-rift-1-rift-closed"));
   assert.ok(!done(f, "guardians-of-the-rift-10-rifts-closed"), "one of ten");
@@ -946,3 +946,66 @@ test("gather-with: logs chopped with the axe named (Chop Some Logs With a Rune A
   assert.ok(done(f, "chop-some-logs-with-a-rune-axe"));
   assert.ok(!done(f, "chop-some-logs-with-a-steel-axe"));
 });
+
+// A successful felling action without its resource must not increment log-production tasks.
+// These are real native Yew chops through the existing league character fixture, not
+// hand-emitted woodcutting events or calls to the league consumer helper.
+for (const row of [
+  {name:"kept log",draw:0.2,logs:1,progress:1},
+  {name:"omitted log",draw:0.199999,logs:0,progress:0},
+]) {
+  test("native felling yield and league production: "+row.name, async t => {
+    // Demonic Pacts starts in Varlamore; Lumbridge is locked Misthalin in this league.
+    const at=[1666,3136,0],f=pactsCharacter(t,at),ids=core.ItemIdentifiers,skill=core.Skill.WOODCUTTING;
+    const position=()=>[f.player.getLocation().getX(),f.player.getLocation().getY(),f.player.getLocation().getZ()];
+    assert.deepEqual(position(),at,"the native fixture must actually remain in its permitted area: "+JSON.stringify(f.messages));
+    const skills=f.player.getSkillManager();
+    skills.setMaxLevel(skill,99);
+    skills.setCurrentLevel(skill,99);
+    f.player.getInventory().add(new core.Item(ids.RUNE_FELLING_AXE),true);
+    f.player.getInventory().add(new core.Item(ids.FORESTERS_RATION,2),true);
+    core.RegionManager.loadMapFiles(at[0],at[1]);
+    // The first display-name YEW_TREE is a POH decoration; use the wild tree's cache name.
+    const yew=core.CacheDefinitions.getLocId("yewtree");
+    assert.ok(Number.isInteger(yew),"the active cache must contain the named wild Yew tree");
+    const tree=new core.GameObject(yew,new core.Location(at[0]+1,at[1],at[2]),10,0,null);
+    core.ObjectManager.register(tree,true);
+    t.after(()=>core.ObjectManager.deregister(tree,true));
+    let observing=true,petRolls=0;
+    const actions=[],xp=[],add=skills.addExperiences.bind(skills);
+    t.mock.method(skills,"addExperiences",(which,amount)=>{
+      if(which===skill) xp.push(amount);
+      return add(which,amount);
+    });
+    const observer=PM.createApi("FellingLeagueObserve"+f.player.getIndex());
+    observer.onCustomEvent("woodcutting:success",e=>{if(observing&&e.player===f.player)actions.push({logId:e.logId,logAmount:e.logAmount});});
+    observer.onCustomEvent("pets:skilling-roll",e=>{if(observing&&e.player===f.player)petRolls++;});
+    t.after(()=>{observing=false;});
+    t.mock.method(Math,"random",()=>{
+      const stack=new Error().stack;
+      if(stack.includes("maybeDropBirdNest")) return 0.99;
+      if(stack.includes("fellingChop")) return row.draw;
+      return 0;
+    });
+    const definition=core.ObjectDefinition.forPlayer(tree.getId(),f.player);
+    assert.ok(definition,"the actual per-player Yew definition must be present");
+    assert.equal(definition.getName(),"Yew tree");
+    assert.ok(definition.getActions()?.includes("Chop down"),"the actual Yew definition must expose the native action");
+    assert.deepEqual(position(),at,"the actor must still be adjacent before native dispatch");
+    await f.connection.dispatch([{type:"object_option",id:tree.getId(),x:at[0]+1,y:at[1],action:"Chop down"}]);
+    f.connection.processTurnPackets();
+    // Stop observation at the first actual successful action; no synthetic stop/success hook.
+    for(let i=0;i<32&&actions.length===0;i++) await ticks(f,1);
+    assert.equal(actions.length,1,"one actual Yew chop must complete before yield assertions: "+JSON.stringify({position:position(),messages:f.messages,xp,actions}));
+
+    const floor=core.World.getItems().filter(g=>g.getItem().getId()===ids.YEW_LOGS&&g.getOwner()===f.player.getUsername());
+    t.after(()=>{for(const g of floor)core.ItemOnGroundManager.deregister(g);});
+    assert.equal(f.player.getInventory().getAmount(ids.YEW_LOGS)+floor.reduce((n,g)=>n+g.getItem().getAmount(),0),row.logs);
+    const progress=f.player.getAttribute("league:task-progress")??{};
+    assert.equal(progress["chop-100-yew-logs"]??0,row.progress,"the actual produce-count task only advances for its log");
+    assert.deepEqual(xp,[192.5],"literal 175 x1.1 Yew XP before normal server/league scaling");
+    assert.equal(petRolls,1,"both kept and omitted logs retain the genuine pet opportunity");
+    assert.equal(f.player.getInventory().getAmount(ids.FORESTERS_RATION),1,"one completed chop spends one ration");
+    assert.deepEqual(actions,[{logId:ids.YEW_LOGS,logAmount:row.logs}],"one real chop reports its actual felling yield");
+  });
+}

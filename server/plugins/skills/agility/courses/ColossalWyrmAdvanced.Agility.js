@@ -13,7 +13,11 @@ module.exports = {
   name: "Colossal Wyrm Agility Course (Advanced)",
   helper: 22, // the Agility helper's course (enum 3507: "Colossal Wyrm Agility Course")
   lapXp: 1053.6,
-  sharesWith: { course: "wyrm-basic", through: 2 },
+  // The shared ladder and tightrope set both courses' progress varbits (`progress`, rsprox 1106).
+  sharesWith: { course: "wyrm-basic", through: 2, progress: true },
+  // varlamore_wyrm_agility_advanced_progress: the obstacle the lap has reached, 1-6, and 0 with
+  // the lap (rsprox 1106).
+  progressVarbit: 11293,
   obstacles: [
     {
       object: Loc.ADVANCED_LADDER,

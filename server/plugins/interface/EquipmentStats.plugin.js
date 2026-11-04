@@ -99,29 +99,15 @@ function getTargetBonuses(player) {
   };
 }
 
-/** Cache weights are grams; the interface shows kilograms. */
-function cacheWeightKg(item) {
-  return (Number(item.getDefinition().getWeight()) || 0) / 1000;
+/**
+ * Player owns the carried-weight rule (weightless stackables, plugin slot overrides such as
+ * graceful), so the panel shows the same total the run-energy drain uses. Grams to kilograms.
+ */
+function getWeight(player) {
+  return player.getCarriedWeightGrams() / 1000;
 }
 
-function getWeight(player, slotWeights = {}) {
-  let weight = 0;
-  const equipment = player.getEquipment().getItems();
-  for (let slot = 0; slot < equipment.length; slot++) {
-    const item = equipment[slot];
-    if (item?.getId?.() > 0 && item.getAmount?.() > 0) {
-      weight += Number.isFinite(slotWeights[slot]) ? slotWeights[slot] : cacheWeightKg(item);
-    }
-  }
-  for (const item of player.getInventory().getItems()) {
-    if (item?.getId?.() > 0 && item.getAmount?.() > 0) {
-      weight += cacheWeightKg(item);
-    }
-  }
-  return weight;
-}
-
-/** Set effects other plugins expose for the stats panel (and the graceful weight override). */
+/** Set effects other plugins expose for the stats panel. */
 function describeEffects(player) {
   const request = { player, lines: [], slotWeights: {} };
   pluginApi?.emitCustomEvent?.("equipment:effects", request);
@@ -158,8 +144,7 @@ function render(player) {
   sender.sendString(`Base: ${(baseSpeed * 0.6).toFixed(1)}s`, component(52));
   sender.sendString(`Actual: ${(actualSpeed * 0.6).toFixed(1)}s`, component(53));
 
-  const effects = describeEffects(player);
-  sender.sendString(`${getWeight(player, effects.slotWeights).toFixed(1)} kg`, component(50));
+  sender.sendString(`${getWeight(player).toFixed(1)} kg`, component(50));
 }
 
 function onEquipmentChanged({ player }) {

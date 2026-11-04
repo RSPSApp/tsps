@@ -2,7 +2,7 @@
 
 `server/plugins/items/StorageItems.plugin.js`, with one unit per container in
 `server/plugins/items/storage/`: the coal bag, gem bag, fish barrel (and fish sack barrel), log
-basket (and forestry basket), plank sack and tackle box. The herb sack and seed box were already
+basket (and forestry basket), Forestry kit, plank sack and tackle box. The herb sack and seed box were already
 in the Farming plugin and are unchanged.
 
 ## Replaces
@@ -24,8 +24,8 @@ login, and Mining's `mining:ore` event it listened to is now `storage:gather`.
 ## How contents are kept
 
 As with the rune pouch, a container's contents live on the player in the attribute
-`storage-items:<family>` (`coal-bag`, `gem-bag`, `fish-barrel`, `log-basket`, `plank-sack`,
-`tackle-box`), not on the item. Every copy a player owns shares one store (Wiki: Fish barrel,
+`storage-items:<family>` (`coal-bag`, `gem-bag`, `fish-barrel`, `log-basket`, `forestry-kit`,
+`plank-sack`, `tackle-box`), not on the item. Every copy a player owns shares one store (Wiki: Fish barrel,
 Log basket, Tackle box). The open and closed variants are the same container (`Coal bag` /
 `Open coal bag` and so on); Open and Close swap the item in place.
 
@@ -35,6 +35,7 @@ Log basket, Tackle box). The open and closed variants are the same container (`C
 | Gem bag | 60 of each uncut sapphire to dragonstone | open: picked-up gems, the gem stall, Shooting Star gems | - |
 | Fish barrel, fish sack barrel | 28 raw fish (no stackable fish) | open: caught fish | - |
 | Log basket, forestry basket | 28 logs or bark, carried or worn | open: chopped logs | - |
+| Forestry kit (and the kit in a forestry basket) | enum 817: bark, nature offerings, rations, secateurs attachment, leaves | carried or worn: Forestry bark and leaves | the Forestry Shop's bark |
 | Plank sack | 28 planks | always: sawmill planks | Construction, after the inventory's planks |
 | Tackle box | 35 kinds of tackle (`data/storage-items.json`) | - | fishing bait only; gear has to come out first |
 
@@ -88,6 +89,28 @@ box's scripts share): 0 = 1, 1 = 5, 2 = All, 3 = X. Cache scripts 4052 (Withdraw
 (Deposit) put the selected quantity on op1 and fix ops 2-5 as 1, 5, X and All. Fill (683:8)
 moves everything the box takes, silently; Empty (683:9) says "The tackle box is now empty."
 
+## Forestry kit interface
+
+Captured (rsprox 1704, rev 227; 1104, rev 237): View sends inventory 814, runs script 917
+(-1, -3), opens 823 (main modal) and 822 (side modal), and sets events 1150 (ops 1-6, op 10) on
+823:21 slots 0-252 and 1180734 on 822:0 slots 0-27. Fill with nothing storable says "You have
+nothing that can be stored in the forestry kit."; bark awarded during an event went straight
+into the worn kit.
+
+The withdraw buttons 823:11-14 set varbit 14985 (`forestry_kit_selectedquantity`), with the tackle
+box's values (0 = 1, 1 = 5, 2 = All, 3 = X); script 1768 puts the selected quantity on the side
+panel's op1 and fixes ops 2-5 as 1, 5, X and All. The main grid is taken to work the same way
+(not captured). Fill (823:15) and Empty (823:16) move everything.
+
+The forestry basket's "Forestry kit" sub-options on Fill and View reach the same store, and
+Configure > Dismantle splits the basket into its log basket, the Forestry kit and the sturdy
+harness, each keeping its contents. The kit's bank op ("Use") empties it into the inventory
+(Wiki). The Forestry Shop spends bark from the inventory and then from a carried or worn kit; this
+is ours, as neither the Wiki nor a capture shows it.
+
+The Lumberjack and Forestry outfits and the Woodcutting cape are also in enum 817, but only
+with the clothes or cape pouch installed (Wiki); tsps has no pouches, so they stay out.
+
 ## Death
 
 The fish barrel's and the tackle box's contents follow the container: when it falls to the floor,
@@ -117,8 +140,6 @@ Elemental ore: "Even this spell is not hot enough to heat this item." (Wiki).
 
 ## Not done
 
-- The forestry basket's Forestry kit sub-options and Dismantle: tsps has no Forestry events yet,
-  so there is little to store. The kit is captured (interfaces 822/823, inventory 814) for when
-  they exist.
+- The Forestry kit's clothes and cape pouches, and the Forester's rations' run energy.
 - The deposit box's container options; the Ultimate Ironman bank-booth emptying of the fish
   barrel.

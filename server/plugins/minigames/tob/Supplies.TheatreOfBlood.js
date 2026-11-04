@@ -15,8 +15,10 @@
  * bandages for the player, not carried over; each wipe also hands the team three. A bandage heals 20
  * and 20% run energy, restores prayer (the Wiki's "variable amount": our amount is a super restore's
  * less a little), cures poison, gives a stamina potion's effect and boosts Attack, Strength and
- * Defence by 15% + 4, Ranged by 10% + 4 and Magic by 4. Hard Mode's points are fewer: Wiki gives "an
- * average of 15", "the highest is 18", by Sotetseg, so a band lower here (fitted to those two).
+ * Defence by 15% + 4, Ranged by 10% + 4 and Magic by 4. Hard Mode's points are fewer (Wiki,
+ * "Theatre of Blood/Hard Mode": "they give less points than normal mode - assuming no deaths
+ * before or during Sotetseg, the player will usually have an average of 15 points, though the
+ * highest is 18"), so the code takes a band lower; the Wiki gives no rule, so that is our fit.
  */
 
 const Shared = require("./Shared.TheatreOfBlood");

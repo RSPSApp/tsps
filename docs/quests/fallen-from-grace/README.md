@@ -48,6 +48,25 @@ Newest first. One line each, linked to its issue or PR when there is one.
   mid-quest. They now use a 6000-tick despawn (`QUEST_FLOOR_DESPAWN_TICKS`). No regression test
   yet: it needs a `dist/` build and a larger harness.
 
+## Capture search (2026-11-03, skipped)
+
+No usable recording exists. The archive was searched with the quest's own text and every
+distinctive id, and all returned 0 results:
+
+- type 14 text: `Fallen From Grace`, `You've started a new quest: Fallen From Grace`,
+  `Congratulations, you've completed a quest: Fallen From Grace`, `Wyrmscraig`,
+  `Sunstone core`.
+- type 0 NPC: 16318 (Cormac), 16319 (Muriel), 16320/16321/16322 (broken/powered golem),
+  16175 (Mortimer), 16330 (mountain troll).
+- type 1 item: 34020 (sunstone), 34032 (sunstone crystal), 34044 (large hat), 34051
+  (observations).
+- type 2 loc: 62216 (sunstone monolith), 62376 (chest), 62255 (basement stairs), 62371
+  (notebook rocks), 62378 (bookcase).
+- type 5 varp 5715 and type 6 varbit 15759.
+
+This quest is therefore **skipped** for this batch. Its existing run below is kept as history,
+not revalidated; no wiki-only work was substituted for a capture audit.
+
 ## Runs
 
 Newest first. A rerun adds an entry; it never rewrites an older one.

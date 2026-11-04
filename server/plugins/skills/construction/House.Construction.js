@@ -220,6 +220,7 @@ function enterHouse(player, buildingMode) {
     player.sendMessage("Unable to load your house.");
     return false;
   }
+  api.emitCustomEvent("combat:clear-burn", { target: player });
   player.getPacketSender().sendVarbit(HOUSE_LOCKED_VARBIT, house.save.locked ? 1 : 0);
   syncHouseOptions(player);
   syncKickOption(player);
@@ -244,6 +245,7 @@ function visitHouse(player, name, location = nearbyHouseLocation(player)) {
   if (houseFor(player) === house) return;
   if (houseFor(player)) exitHouse(player);
   if (!house.enterHouse(player, false)) { exitHouse(player); return; }
+  api.emitCustomEvent("combat:clear-burn", { target: player });
   lastVisited.set(player, owner.getUsername());
   player.getPacketSender().sendVarbit(HOUSE_LOCKED_VARBIT, house.save.locked ? 1 : 0);
   player.sendMessage("Welcome to " + owner.getDisplayName() + "'s house.");
@@ -578,6 +580,7 @@ function exitHouse(player) {
   if (house.owner === player) advertisedHouses.delete(house);
   player.getPacketSender().sendInterfaceRemoval();
   house.exitHouse(player, Estate.houseExit(house.save));
+  api.emitCustomEvent("combat:clear-burn", { target: player });
   syncHouseOptions(player);
   syncKickOption(player);
   return true;

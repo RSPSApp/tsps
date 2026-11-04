@@ -53,6 +53,8 @@ const DEFAULT_MOVE_TICKS = 1;
 const MAX_WALK_TILES = 64;
 
 const BUSY_ATTRIBUTE = "agility.obstacle";
+/** The client's BUSY varbit: 1 while a course obstacle plays, 0 as it ends (rsprox 1788, 1885). */
+const BUSY_VARBIT = 12393;
 
 let TaskManager;
 let ChatType;
@@ -342,7 +344,7 @@ function createObstacleTask(Task) {
       this.finished = true;
       super.stop();
       // A landing animation started on the last tick plays out; resetting it would cut it off.
-      release(this.player, this.animatedTick === this.ticksRun);
+      release(this.player, this.keepAnimation ? completed : this.animatedTick === this.ticksRun);
       this.complete(completed);
     }
 
@@ -361,12 +363,15 @@ function lock(player, task) {
   player.setAttribute(BUSY_ATTRIBUTE, task);
   player.getMovementQueue().reset();
   player.getMovementQueue().setBlockMovement(true);
+  if (task.busyVarbit) player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
 }
 
 function release(player, keepAnimation = false) {
-  if (player.getAttribute(BUSY_ATTRIBUTE) == null) return;
+  const task = player.getAttribute(BUSY_ATTRIBUTE);
+  if (task == null) return;
   player.setAttribute(BUSY_ATTRIBUTE, null);
   player.getMovementQueue().setBlockMovement(false);
+  if (task.busyVarbit) player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
   if (player.getForceMovement() != null) {
     player.setForceMovement(null);
   }
@@ -379,9 +384,13 @@ function release(player, keepAnimation = false) {
 /**
  * Runs `steps` for the player. `render` sets a walk animation for the whole run.
  * `onFinish(completed)` fires once; `completed` is false if the player died or left.
+ * `busyVarbit` sets the client's BUSY varbit for the run (Agility course obstacles).
+ * `keepAnimation` lets a successful delayed pose finish after movement unlocks; cancellation resets it.
  */
-function run(context, steps, { render = null, onFinish = null } = {}) {
+function run(context, steps, { render = null, onFinish = null, busyVarbit = false, keepAnimation = false } = {}) {
   const task = new ObstacleTask(context, steps, onFinish);
+  task.busyVarbit = busyVarbit;
+  task.keepAnimation = keepAnimation;
   lock(context.player, task);
   if (render != null) {
     setRender(context.player, render);

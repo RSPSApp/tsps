@@ -206,11 +206,13 @@ function repeat(key, ticks, action) {
   return task;
 }
 
+/** A message box; an array of pages is shown one page per "Click here to continue". */
 function statement(player, text) {
   const { DialogueChainBuilder, StatementDialogue, EndDialogue } = core();
+  const pages = Array.isArray(text) ? text : [text];
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-    new StatementDialogue(0, text),
-    new EndDialogue(1),
+    ...pages.map((page, index) => new StatementDialogue(index, page)),
+    new EndDialogue(pages.length),
   ));
 }
 

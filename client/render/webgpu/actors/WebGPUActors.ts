@@ -8,7 +8,7 @@ import { getClientCycle } from "../../../network/ServerConnection";
 import type { PlayerSpotAnimationEvent } from "../../../game/sync/PlayerSyncTypes";
 import type { NpcSpotAnimationEvent, WorldSpotAnimationEvent } from "../../../game/GameRenderer";
 import { BridgePlaneStrategy } from "../../../game/scene/PlaneResolver";
-import { sampleBridgeHeightForWorldTile } from "../../../game/scene/BridgeHeightSampler";
+import { sampleActorHeightForWorldTile } from "../../../game/scene/BridgeHeightSampler";
 import { getMapSquareId } from "../../../rs/map/MapFileIndex";
 import type { SdMapData } from "../../loader/SdMapData";
 import { MAX_TEXTURES, RENDER_CONSTANTS } from "../../render/constants";
@@ -998,7 +998,7 @@ export class WebGPUActors {
 
             let modelYOffset = pos.z;
             try {
-                const sample = sampleBridgeHeightForWorldTile(
+                const sample = sampleActorHeightForWorldTile(
                     this.renderer.mapManager as any,
                     pos.x / 128,
                     pos.y / 128,

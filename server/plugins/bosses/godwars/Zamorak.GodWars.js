@@ -3,8 +3,8 @@
 /**
  * K'ril Tsutsaroth and his demons, as captured (rsprox). K'ril walks up to his target and
  * attacks 2/3 melee (46), 1/3 magic (10-30). Against Protect from Melee, one melee attack in
- * nine is his special: "YARRRRRRR!", 35-49 through the prayer, and half the target's Prayer
- * points drained (Wiki).
+ * nine is his special: "YARRRRRRR!", 35-49 through the prayer that always lands (Wiki: "always
+ * dealing 35-49 damage"), and half the target's Prayer points drained (Wiki).
  */
 const Common = require("./Common.GodWars");
 const Combat = require("./Combat.GodWars");
@@ -12,7 +12,7 @@ const Combat = require("./Combat.GodWars");
 const REACH = 8;
 
 const SWIPE = { style: "MELEE", anim: 6948, sound: 3866, maxHit: 46 };
-const SLAM = { ...SWIPE, say: "YARRRRRRR!", minHit: 35, maxHit: 49, throughPrayer: true, special: true };
+const SLAM = { ...SWIPE, say: "YARRRRRRR!", minHit: 35, maxHit: 49, throughPrayer: true, alwaysHits: true, special: true };
 const FLAMES = {
   style: "MAGIC",
   anim: 6950,

@@ -231,16 +231,13 @@ function disembarked(player) {
   const count = Math.min(capacityOfAll(crews), cargo.countIn(owned, crate), toDeliver);
   if (count <= 0) return;
   start(player, "delivery", index, dock.id, shareOut(crews, count),
-    { crate, boatSlot: owned.slot, holdInventory: cargo.inventoryIdOf(owned) });
+    { crate, owned, boatSlot: owned.slot, holdInventory: cargo.inventoryIdOf(owned) });
 }
 
 /** The ledger took the crew's crates: out of the hold they came from, and the crew go. */
-function crewDelivered({ player, crate, amount, boatSlot }) {
+function crewDelivered({ player, crate, amount, owned }) {
   const job = carrying.get(player);
-  if (boatSlot !== undefined) {
-    const boat = player.getSailing().boats.find((candidate) => candidate.slot === boatSlot);
-    if (boat) cargo.take(boat, 0, crate, amount);
-  }
+  if (owned) cargo.take(owned, 0, crate, amount);
   if (job) despawn(player, job);
 }
 

@@ -20,7 +20,7 @@ before(async () => {
 after(() => PM.emitServerShutdown({}));
 
 const MALE = [0, 3, 18, 26, 34, 38, 42, 14, 2, 14, 5, 4, 0];
-const FEMALE = [1, 48, 57, 65, 68, 77, 80, 57, 2, 14, 5, 4, 0];
+const FEMALE = [1, 48, 57, 65, 68, 77, 80, -1, 2, 14, 5, 4, 0];
 const TOP = 3;
 const ARMS_BURGER_SLOT = 10 + 4 * 2;
 
@@ -36,6 +36,49 @@ function actor(t, look) {
 
 const component = (name) => core.CacheDefinitions.getComponentId(`makeover:${name}`);
 const click = (p, name, slot) => PM.emitInterfaceActionClick({ player: p, buttonId: component(name), action: 1, slot });
+
+test('female defaults and newly spawned bots never wear a torso kit as their jaw', (t) => {
+  const p = actor(t, FEMALE);
+  p.getAppearance().set();
+  assert.equal(p.getAppearance().getLook()[core.Appearance.BEARD], -1);
+  const queue = [];
+  const random = Math.random;
+  Math.random = () => 0.75;
+  try {
+    const bot = require('../plugins/bots/behaviours/spawn/PlayerFactory.PlayerBots').createBotPlayer(
+      'jawcheck', new core.Location(3090, 3530), {
+        loadPersistence: false, saveRandomizedAppearance: false,
+        api: { getWorld: () => ({ getPlayerByName: () => null, getAddPlayerQueue: () => queue }) },
+      });
+    assert.equal(bot.getAppearance().getLook()[core.Appearance.GENDER], 1);
+    assert.equal(bot.getAppearance().getLook()[core.Appearance.BEARD], -1);
+    assert.equal(queue[0], bot);
+  } finally { Math.random = random; }
+});
+
+test('loading an old female torso-in-jaw save repairs the jaw and keeps worn armour', (t) => {
+  const p = actor(t, FEMALE);
+  p.getEquipment().setItem(core.Equipment.BODY_SLOT, new core.Item(core.ItemIdentifiers.FIGHTER_TORSO));
+  const saved = PlayerSave.fromPlayer(p);
+  saved.appearance[core.Appearance.BEARD] = 57;
+  assert.equal(core.CacheDefinitions.getIdentKits().find(kit => kit.id === 57).bodyPartId, 9,
+    'the former jaw default is actually a female torso');
+  const loaded = actor(t, FEMALE);
+  saved.applyToPlayer(loaded);
+  assert.equal(loaded.getAppearance().getLook()[core.Appearance.BEARD], -1);
+  assert.equal(loaded.getAppearance().getLook()[core.Appearance.CHEST], FEMALE[core.Appearance.CHEST]);
+  assert.equal(loaded.getEquipment().get(core.Equipment.BODY_SLOT).getId(), core.ItemIdentifiers.FIGHTER_TORSO);
+});
+
+test('cache-valid female jaw styles still survive save and load', (t) => {
+  const jaw = core.CacheDefinitions.getIdentKits().find(kit => kit.bodyPartId === 8 && !kit.nonSelectable);
+  assert.ok(jaw);
+  const p = actor(t, FEMALE);
+  p.getAppearance().getLook()[core.Appearance.BEARD] = jaw.id;
+  const loaded = actor(t, FEMALE);
+  PlayerSave.fromPlayer(p).applyToPlayer(loaded);
+  assert.equal(loaded.getAppearance().getLook()[core.Appearance.BEARD], jaw.id);
+});
 
 /** The torso kits the makeover lists for a body type, in style order. */
 function torsoKits(typeB) {

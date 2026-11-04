@@ -60,6 +60,8 @@ const BLOOD_RIFT_GUARDIAN_BASE = 804984;
 const OURANIA_RIFT_GUARDIAN_BASE = 1487213;
 const ABYSS_TELEPORT_STEP = "o8m7y6";
 const ESSENCE_TELEPORT_STEPS = new Set(["ILlRUH", "SvUvek"]);
+const CROMPERTY_ESSENCE_TELEPORT_STEP = "EkCGKW";
+const ARDOUGNE_ESSENCE_TELEPORT_TASK = "have-wizard-cromperty-teleport-you-to-the-rune-e";
 /** The Rune Essence mine's exit portals (loc 34825, "Portal", Use). */
 const ESSENCE_MINE_PORTAL = 34825;
 /** Where the player stood when a wizard teleported them into the mine: the portals return there. */
@@ -313,8 +315,17 @@ function hasCompletedEnterTheAbyss(player) {
   return request.complete === true;
 }
 
-function requestTeleport(player, destination) {
-  pluginApi.emitCustomEvent("lever:teleport", { player, destination: destination.clone() });
+/**
+ * The easy Wilderness Diary's "Enter the Chaos Runecrafting temple.": through the ruins or the
+ * Abyss's rift (Wiki: Chaos Altar). The Tunnel of Chaos and Guardians of the Rift do not count, and
+ * do not come through here.
+ */
+function enteredChaosTemple(player) {
+  pluginApi.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "enter-the-chaos-runecrafting-temple" });
+}
+
+function requestTeleport(player, destination, onArrival) {
+  pluginApi.emitCustomEvent("lever:teleport", { player, destination: destination.clone(), onArrival });
 }
 
 function ouraniaWeights(level) {
@@ -546,6 +557,7 @@ function enterRuins(player, ruins) {
   player.moveTo(new Location(...ruins.destination));
   player.getPacketSender().sendSound(EXIT_PORTAL_SOUND, 1, 0);
   spam(player, "You feel a powerful force take hold of you...");
+  if (ruins.name === "Chaos") enteredChaosTemple(player);
 }
 
 /**
@@ -568,6 +580,10 @@ function handleTalismanOnRuins(event) {
       player.getPacketSender().sendSound(EXIT_PORTAL_SOUND, 1, 0);
       spam(player, `You hold the ${name} towards the mysterious ruins.<br>You feel a powerful force take hold of you...`);
       player.getPacketSender().sendVarbit(busy, 1);
+    },
+    // The landing follows this step in the same tick.
+    [1 + HOLD_TALISMAN_TICKS]: () => {
+      if (ruins.name === "Chaos") enteredChaosTemple(player);
     },
   }, () => {
     if (held) player.getPacketSender().sendVarbit(busy, 0);
@@ -624,14 +640,15 @@ function teleportToEssenceMine(player, wizard) {
   if (player.getAttribute(TRAVEL_ATTRIBUTE)) return;
   if (!TeleportHandler.checkReqs(player, RUNE_ESSENCE_MINE, Infinity)) return;
   const at = player.getLocation();
+  const wizardName = wizard?.getCurrentDefinition?.(player)?.getName();
   player.setAttribute(ESSENCE_MINE_RETURN_ATTRIBUTE, [at.getX(), at.getY(), at.getZ()]);
   player.getPacketSender().sendInterfaceRemoval();
-  travel(player, ESSENCE_TELEPORT_TICKS, RUNE_ESSENCE_MINE.clone(), {
-    [ESSENCE_TELEPORT_TICKS]: () => {
-      if (wizard?.getCurrentDefinition?.(player)?.getName() === "Archmage Sedridor") {
-        pluginApi.emitCustomEvent("diary:task", { player, diary: "lumbridge", task: "have-sedridor-teleport-you-to-the-essence-mine" });
-      }
-    },
+  travel(player, ESSENCE_TELEPORT_TICKS, RUNE_ESSENCE_MINE.clone(), {}, undefined, () => {
+    if (wizardName === "Archmage Sedridor") {
+      pluginApi.emitCustomEvent("diary:task", { player, diary: "lumbridge", task: "have-sedridor-teleport-you-to-the-essence-mine" });
+    } else if (wizardName === "Wizard Cromperty") {
+      pluginApi.emitCustomEvent("diary:task", { player, diary: "ardougne", task: ARDOUGNE_ESSENCE_TELEPORT_TASK });
+    }
   });
   if (wizard) {
     wizard.forceChat?.(ESSENCE_TELEPORT_LINE);
@@ -653,7 +670,7 @@ function teleportToEssenceMine(player, wizard) {
  * travel cancels it; `onRelease` runs whenever the hold ends, landed or not. A death leaves the
  * movement and targeting holds to the death sequence, which resets them on respawn.
  */
-function travel(player, ticks, destination, steps = {}, onRelease = undefined) {
+function travel(player, ticks, destination, steps = {}, onRelease = undefined, onLanded = undefined) {
   const { Task } = pluginApi.core;
   const token = { from: player.getLocation?.()?.clone?.() ?? null, fromInstance: player.getPrivateArea?.() != null, onRelease };
   player.setAttribute(TRAVEL_ATTRIBUTE, token);
@@ -681,7 +698,11 @@ function travel(player, ticks, destination, steps = {}, onRelease = undefined) {
       if (tick < ticks) return;
       releaseTravel(player, token);
       player.moveTo(destination);
-      pluginApi.emitCustomEvent("teleport:landed", { player, from: token.from, fromInstance: token.fromInstance, to: destination });
+      const landed = player.getLocation?.();
+      if (landed?.getX?.() === destination.getX() && landed?.getY?.() === destination.getY() && landed?.getZ?.() === destination.getZ()) {
+        pluginApi.emitCustomEvent("teleport:landed", { player, from: token.from, fromInstance: token.fromInstance, to: destination });
+        onLanded?.();
+      }
       this.stop();
     }
     stop() {
@@ -763,7 +784,10 @@ function teleportToAbyss(player) {
   player.getSkillManager().setCurrentLevels(Skill.PRAYER, 0);
   // The Mage of Zamorak skulls the player for 10 minutes (Wiki).
   pluginApi.core.CombatFactory.skull(player, pluginApi.core.SkullType.WHITE_SKULL, ABYSS_SKULL_SECONDS);
-  requestTeleport(player, ABYSS_INNER_RING);
+  // The Wilderness Diary's "Have the Mage of Zamorak teleport you to the Abyss.", on landing.
+  requestTeleport(player, ABYSS_INNER_RING, () => {
+    pluginApi.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "have-the-mage-of-zamorak-teleport-you-to-the-aby" });
+  });
 }
 
 function handleZamorakTeleport(event) {
@@ -779,6 +803,14 @@ function handleDialogueAction(event) {
   const player = event.player;
   if (event.stepId === ABYSS_TELEPORT_STEP) {
     teleportToAbyss(player);
+  } else if (event.stepId === CROMPERTY_ESSENCE_TELEPORT_STEP) {
+    const npcName = event.npc?.getCurrentDefinition?.(player)?.getName?.();
+    if (npcName !== "Wizard Cromperty") return;
+    if (!hasCompletedRuneMysteries(player)) {
+      player.sendMessage("You need to complete Rune Mysteries before using this teleport.");
+    } else {
+      teleportToEssenceMine(player, event.npc);
+    }
   } else if (ESSENCE_TELEPORT_STEPS.has(event.stepId)) {
     if (!hasCompletedRuneMysteries(player)) {
       player.sendMessage("You need to complete Rune Mysteries before using this teleport.");
@@ -847,7 +879,9 @@ function handleEnterRift(event) {
   }
   const destination = ALTAR_DESTINATIONS.get(runeId);
   if (destination) {
-    requestTeleport(event.player, new Location(destination.x, destination.y, 0));
+    const { player } = event;
+    requestTeleport(player, new Location(destination.x, destination.y, 0),
+      runeId === ItemIdentifiers.CHAOS_RUNE ? () => enteredChaosTemple(player) : undefined);
   }
   return true;
 }

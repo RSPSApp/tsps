@@ -845,6 +845,11 @@ export interface PluginCombatEngine {
 
 export interface PluginCombatMethodResolver {
   resolve(attacker: any): any | null;
+  /**
+   * Replaces the attack whatever weapon is held (an armed worn item, such as the Dragonfire
+   * shield's blast), so it is asked before the weapon resolvers whatever the plugin load order.
+   */
+  overridesWeapon?: boolean;
 }
 
 export interface PluginCombatSpecialDefinition {
@@ -1387,12 +1392,17 @@ export interface PluginApi {
   registerMagicDefenseModifier(
     modifier: (entity: any, baseHit: number) => number
   ): void;
+  /** Run energy units regained per tick; the graceful set raises the amount. */
   registerRunEnergyRestoreModifier(
-    modifier: (entity: any, delayMs: number) => number
+    modifier: (entity: any, units: number) => number
   ): void;
-  /** Run energy spent per movement step; return 0 to skip the drain. */
+  /** Run energy spent per running tick; return 0 to skip the drain. */
   registerRunEnergyDrainModifier(
     modifier: (entity: any, amount: number) => number
+  ): void;
+  /** Fills the run-energy status the client needs (the stamina effect's remaining ticks). */
+  registerRunEnergyStatusModifier(
+    modifier: (entity: any, status: { staminaTicks: number; staminaMultiplier: number }) => void
   ): void;
   /** Ticks between special-attack restores; a rate-doubling effect halves this. */
   registerSpecialEnergyRestoreModifier(
@@ -1474,6 +1484,7 @@ export interface PluginCoreApi {
   HitDamage: any;
   HitMask: any;
   RangedWeapon: any;
+  RangedWeaponType: any;
   Ammunition: any;
   WeaponProfiles: any;
   FightStyle: any;
@@ -1531,6 +1542,7 @@ export interface PluginCoreApi {
   XPDROPS_ENABLED_ATTRIBUTE: typeof import("../net/protocol/ClientProtocol").XPDROPS_ENABLED_ATTRIBUTE;
   encodeGameframeBootstrap: typeof import("../net/protocol/ClientProtocol").encodeGameframeBootstrap;
   resolveGameframeRoot: typeof import("../net/protocol/ClientProtocol").resolveGameframeRoot;
+  orbsGroupFor: typeof import("../net/protocol/ClientProtocol").orbsGroupFor;
   encodeFinePosition: typeof import("../net/protocol/ClientProtocol").encodeFinePosition;
   Boundary: any;
   PolygonalBoundary: any;

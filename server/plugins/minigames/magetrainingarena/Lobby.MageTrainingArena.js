@@ -7,6 +7,16 @@
  */
 const Common = require("./Common.MageTrainingArena");
 
+/** Main hall doorway: loc animation3024 and the two tiles either side (rsprox1757). */
+function enterArena({ player, object, objectId }) {
+  if (objectId !== Common.ids.locs.entranceDoor) return false;
+  const at = object.getLocation();
+  player.getPacketSender().sendObjectAnimation(object, new Common.core.Animation(
+    Common.core.CacheDefinitions.getSeqId("magictraining_light_door_open")));
+  player.moveTo(new Common.core.Location(at.getX(), at.getY() + (player.getLocation().getY() < at.getY() ? 1 : -1), at.getZ()));
+  return true;
+}
+
 function sendLobbyOverlay(player) {
   const { interfaces, components } = Common.ids;
   Common.sendOverlay(player, interfaces.lobby);
@@ -61,6 +71,7 @@ function defineArea() {
 
 function attach(api) {
   api.registerArea(new (defineArea())());
+  api.onObjectInteraction("Doorway", { Enter: enterArena });
   api.onObjectInteraction("Enchanters Teleport", { Enter: enterEnchanting });
   api.onObjectInteraction("Exit Teleport", { Enter: exit });
 }

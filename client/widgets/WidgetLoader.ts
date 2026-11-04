@@ -331,6 +331,13 @@ export class WidgetLoader {
         if (buttonType === 6) {
             w.flags = (w.flags || 0) | 1;
         }
+        // Close (an interface's X sprite) carries no text in the cache. Its click closes the open
+        // modal (handleWidgetActionCloseButton), as Esc does; it is never sent as a button click.
+        if (buttonType === 3) {
+            w.buttonText = "Close";
+            w.actions = [w.buttonText];
+            w.flags = (w.flags || 0) | 0x400000 | (1 << 1);
+        }
 
         markWidgetInteractionDirty(w);
         return w;

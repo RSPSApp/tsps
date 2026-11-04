@@ -188,6 +188,22 @@ test('Contact: dungeon Osman uses the 11568 cache parent and is cleaned up on lo
   assert.equal(osman.removed, true, 'logout removes the parent-id dungeon Osman');
 });
 
+test('Contact: Maisa stays hidden from the boss through Osman leaving and every login hook', () => {
+  const h = harness('../plugins/quests/quests/Contact.Quest');
+  const p = player();
+  h.quest.setStage(p, 90);
+  h.action(p, core.NpcIdentifiers.GIANT_SCARAB, '_dkntA');
+  assert.equal(p.varbits.get(3284), 1, 'the scarab attack hides Maisa');
+  const boss = h.npcs.find(n => n.getId() === core.NpcIdentifiers.GIANT_SCARAB);
+  h.hooks.onNpcDeath[0]({ killer: p, npc: boss, npcId: boss.getId() });
+  h.action(p, 11568, '1Ipn6a');
+  assert.equal(h.quest.getStage(p), 120);
+  const progressed = p.varbits.get(3284);
+  assert.equal(progressed, 1, 'Osman leaving keeps the captured hidden state');
+  for (const handler of h.hooks.onPlayerLogin ?? []) handler({ player: p });
+  assert.equal(p.varbits.get(3284), progressed, 'login agrees with the progression send');
+});
+
 test('Contact: Maisa stops replaying the quiz once Osman has been sent for', () => {
   const h = harness('../plugins/quests/quests/Contact.Quest');
   const p = player();
@@ -327,6 +343,52 @@ test('Beneath Cursed Sands: entry inspection publishes native 13844 and login re
   h.quest.setStage(pristine, 14);
   h.hooks.onPlayerLogin[0]({ player: pristine });
   assert.equal(pristine.varbits.get(13844), 0);
+});
+
+test('Contact: login restores the captured city, dungeon and Maisa visibility bits', () => {
+  const h = harness('../plugins/quests/quests/Contact.Quest');
+  const p = player();
+  h.quest.setStage(p, 130);
+  h.hooks.onPlayerLogin[0]({ player: p });
+  assert.equal(p.varbits.get(3275), 1, 'people visibility is set');
+  assert.equal(p.varbits.get(3276), 1, 'bankers appear after completion');
+  assert.equal(p.varbits.get(3279), 1, 'dungeon entry flag survives login');
+  assert.equal(p.varbits.get(3284), 1, 'Maisa stays hidden after the boss');
+  assert.equal(p.varbits.get(13866), 1);
+  assert.equal(p.varbits.get(13867), 1);
+  assert.equal(p.varbits.get(13868), 1);
+  assert.equal(p.varbits.get(13869), 1);
+  assert.equal(p.varbits.get(13870), 1);
+  assert.equal(p.varbits.get(13871), 1);
+
+  const sentBack = player();
+  h.quest.setStage(sentBack, 120);
+  h.hooks.onPlayerLogin[0]({ player: sentBack });
+  assert.equal(sentBack.varbits.get(3275), 1, 'Osman sending the player back opens the city before completion');
+  assert.equal(sentBack.varbits.get(3276), 0, 'the bankers wait for completion');
+});
+
+test('Beneath Cursed Sands: login restores the captured citizen, pillar, tomb and rotation bits', () => {
+  const h = harness('../plugins/quests/quests/BeneathCursedSands.Quest');
+  const p = player();
+  h.quest.setStage(p, 108);
+  p.attributes.set('beneath-cursed-sands:talked-citizen', true);
+  h.hooks.onPlayerLogin[0]({ player: p });
+  assert.equal(p.varbits.get(13845), 1, 'citizen investigation survives login');
+  assert.equal(p.varbits.get(13846), 1, 'found pillar survives login');
+  assert.equal(p.varbits.get(13848), 1, 'found tomb survives login');
+  assert.equal(p.varbits.get(13849), 15, 'solved pillar rotation survives login');
+  assert.equal(p.varbits.get(13850), 0, 'the lily type resets to 0 on completion');
+  assert.equal(p.varbits.get(13851), 2, 'completed quest type survives login');
+
+  const mid = player();
+  h.quest.setStage(mid, 34);
+  h.hooks.onPlayerLogin[0]({ player: mid });
+  assert.equal(mid.varbits.get(13845), 0, 'un-talked citizen stays zero');
+  assert.equal(mid.varbits.get(13846), 1, 'stage 34 has the pillar found');
+  assert.equal(mid.varbits.get(13848), 0, 'stage 34 has not opened the tomb');
+  assert.equal(mid.varbits.get(13849), 0, 'stage 34 rotation stays unset');
+  assert.equal(mid.varbits.get(13851), 0, 'stage 34 is not a completed quest');
 });
 
 test('Beneath Cursed Sands: tablet and mould progress publishes 13847 without advancing', () => {

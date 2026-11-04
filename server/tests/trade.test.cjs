@@ -18,6 +18,8 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const LOBSTER = 379;
 const COINS = 995;
 
+const cacheDefinitionForId = ItemDefinition.forId;
+
 // Item definitions normally come from the cache; stub the few this test uses.
 const DEFINITIONS = {
   [LOBSTER]: { name: "Lobster", stackable: false, value: 150 },
@@ -68,7 +70,7 @@ function createPlayer(name, index) {
     getInterfaceId: () => interfaceId,
     setInterfaceId: (next) => { interfaceId = next; },
     isPlayerBot: () => false,
-    getFrameUpdater: () => ({ clear() {} }),
+    getFrameUpdater: () => ({ clear() {}, clearGroup() {} }),
     getAttribute: () => undefined,
   };
   player.inventory = new Inventory(player);
@@ -139,6 +141,61 @@ test("a second decline does not return items twice", () => {
 
   assert.equal(count(alice, LOBSTER), 3);
   assert.equal(count(bob, COINS), 500);
+});
+
+test("closing either trade screen cancels both offers by every interface-close route", (t) => {
+  const { PacketSender } = require("../dist/net/packet/PacketSender");
+  let closed;
+  require("../plugins/interface/Trading.plugin").register({
+    core: { TradeState: require("../dist/game/content/Trading").TradeState },
+    onCustomEvent: (name, handler) => { assert.equal(name, "interface:closed"); closed = handler; },
+  });
+  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => {
+    if (name === "interface:closed") closed(event);
+  });
+  for (const route of ["sendInterfaceRemoval", "closeInterruptibleInterfaces", "closeInterface"]) {
+    for (const confirm of [false, true]) {
+      const { alice, bob } = startTrade();
+      if (confirm) {
+        alice.getTrading().acceptTrade();
+        bob.getTrading().acceptTrade();
+      }
+      for (const player of [alice, bob]) {
+        const sender = new PacketSender(player);
+        player.getPacketSender = () => sender;
+      }
+      alice.getPacketSender()[route](alice.getInterfaceId());
+      for (const player of [alice, bob]) {
+        assert.equal(player.getTrading().getState(), 0, `${route}: ${confirm}`);
+        assert.equal(player.getTrading().getInteract(), null);
+        assert.equal(player.getTrading().getContainer().getValidItems().length, 0);
+        assert.equal(player.getStatus(), PlayerStatus.NONE);
+        assert.equal(player.getInterfaceId(), -1);
+      }
+      alice.getTrading().acceptTrade();
+      bob.getTrading().acceptTrade();
+      alice.getPacketSender()[route](confirm ? 334 : 335);
+      assert.equal(count(alice, LOBSTER), 3, 'repeated closes and stale accepts return nothing twice');
+      assert.equal(count(bob, COINS), 500);
+    }
+  }
+  const { alice, bob } = startTrade();
+  for (const player of [alice, bob]) {
+    const sender = new PacketSender(player);
+    sender.sendString = () => sender;
+    player.getPacketSender = () => sender;
+  }
+  closed({ player: alice, interfaceId: 231 });
+  assert.equal(alice.getTrading().getInteract(), bob, 'closing unrelated dialogue leaves the trade alone');
+  alice.getTrading().acceptTrade();
+  bob.getTrading().acceptTrade();
+  alice.getTrading().getButtonDelay().stop();
+  bob.getTrading().getButtonDelay().stop();
+  alice.getTrading().acceptTrade();
+  bob.getTrading().acceptTrade();
+  assert.equal(count(alice, COINS), 200, 'closing after completion does not return offers again');
+  assert.equal(count(bob, LOBSTER), 3);
+  assert.ok(!alice.messages.includes('Trade declined.'));
 });
 
 test("closing a trade after the other player's interface was closed still returns their items", () => {
@@ -369,4 +426,102 @@ test("a new area restriction aborts an open trade and returns both players' offe
   assert.equal(bob.getTrading().getInteract(), null);
   assert.equal(alice.getTrading().getContainer().getValidItems().length, 0);
   assert.equal(bob.getTrading().getContainer().getValidItems().length, 0);
+});
+
+
+test('native trades preserve confirmation, settle once and still cancel through real interfaces', async t => {
+  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize();
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { decodeClientPackets } = require('../dist/net/protocol/ClientProtocol');
+  const TRADE_ACTION_PACKET_ID = 180; // ClientPackets.TRADE_ACTION (the TS const enum is erased).
+  const { TradeState } = require('../dist/game/content/Trading');
+  const core = PluginManager.getCoreApi();
+  require('../plugins/interface/Trading.plugin').register(PluginManager.createApi('NativeTrade'));
+  t.mock.method(ItemDefinition, 'forId', cacheDefinitionForId);
+  let clock = 1000, serial = 0;
+  t.mock.method(performance, 'now', () => clock);
+  const saves = [], previousPersistence = GameConstants.PLAYER_PERSISTENCE;
+  GameConstants.PLAYER_PERSISTENCE = { save(player, reason) {
+    saves.push({ player, reason, lobsters: count(player, LOBSTER), coins: count(player, COINS) });
+  } };
+  t.after(() => { GameConstants.PLAYER_PERSISTENCE = previousPersistence; });
+  function actor(test) {
+    const frames = [];
+    const channel = { kind: 'test', binaryTransport: true, isOpen: () => true,
+      send: frame => { frames.push(Buffer.from(frame)); return true; },
+      close() {}, onData() {}, onClose() {}, onError() {} };
+    const session = new PlayerSession(channel), player = new Player(session); session.setPlayer(player);
+    player.setUsername('native-trade-' + serial++); player.setIndex(serial); player.setRegistered(true);
+    player.setNeedsPlacement(false);
+    const connection = new ClientConnection(channel); connection.player = player;
+    test.after(() => { core.TaskManager.cancelTasks(player); player.setRegistered(false); session.flushPackets(); });
+    return { player, session, connection, frames };
+  }
+  async function action(f, actionId, slot = 0, quantity = 0, id = -1) {
+    // The dedicated trade frame produced by ClientBinaryEncoder (byte-length payload).
+    const raw = Buffer.alloc(11); raw[0] = TRADE_ACTION_PACKET_ID; raw[1] = 9; raw[2] = actionId;
+    raw.writeUInt16BE(slot, 3); raw.writeInt32BE(quantity, 5); raw.writeUInt16BE(id & 65535, 9);
+    clock += 1100;
+    await f.connection.dispatch(decodeClientPackets(raw)); f.connection.processTurnPackets(); f.session.flushPackets();
+  }
+  async function start(test) {
+    const a = actor(test), b = actor(test);
+    a.player.getInventory().adds(LOBSTER, 3); b.player.getInventory().adds(COINS, 500);
+    a.player.getTrading().requestTrade(b.player); b.player.getTrading().requestTrade(a.player);
+    await action(a, 0, 0, 3, LOBSTER); await action(b, 0, 0, 200, COINS);
+    return [a, b];
+  }
+  async function confirm(pair) {
+    for (const f of pair) await action(f, 2);
+    assert.deepEqual(pair.map(f => ({ state: f.player.getTrading().getState(), status: f.player.getStatus(),
+      partner: f.player.getTrading().getInteract()?.getUsername(), modal: f.player.getInterfaceId() })),
+    pair.map((f, i) => ({ state: TradeState.CONFIRM_SCREEN, status: PlayerStatus.TRADING,
+      partner: pair[1 - i].player.getUsername(), modal: 334 })), 'offer-close is an internal transition');
+    for (const f of pair) {
+      assert.equal(f.player.getPacketSender().getSubInterfaceAt((161 << 16) | 16)?.groupId, 334);
+      assert.equal(Buffer.concat(f.frames).includes(Buffer.from('declined')), false);
+    }
+    assert.equal(count(pair[0].player, LOBSTER), 0, 'items remain in escrow until both confirm');
+    assert.equal(count(pair[1].player, COINS), 300);
+  }
+  function ended(pair) {
+    for (const f of pair) {
+      assert.equal(f.player.getTrading().getState(), TradeState.NONE);
+      assert.equal(f.player.getTrading().getInteract(), null);
+      assert.equal(f.player.getStatus(), PlayerStatus.NONE);
+      assert.equal(f.player.getInterfaceId(), -1);
+      assert.equal(f.player.getPacketSender().getSubInterfaceAt((161 << 16) | 16), undefined);
+      assert.equal(f.player.getTrading().getContainer().getValidItems().length, 0);
+    }
+  }
+  await t.test('both native confirmations exchange and save exactly once', async test => {
+    const pair = await start(test); await confirm(pair);
+    const before = saves.length;
+    await action(pair[0], 4); assert.equal(saves.length, before, 'one confirmation never settles');
+    await action(pair[1], 4); ended(pair);
+    const [a, b] = pair.map(f => f.player);
+    assert.deepEqual([count(a, LOBSTER), count(a, COINS), count(b, LOBSTER), count(b, COINS)], [0, 200, 3, 300]);
+    assert.deepEqual(saves.slice(before).map(s => [s.reason, s.lobsters, s.coins]).sort(),
+      [['trade', 0, 200], ['trade', 3, 300]], 'both saves see final ownership');
+    await action(pair[0], 4); await action(pair[1], 5);
+    assert.equal(saves.length, before + 2, 'late accept/decline never settles twice');
+    assert.deepEqual([count(a, COINS), count(b, LOBSTER), count(b, COINS)], [200, 3, 300]);
+  });
+  for (const stage of ['offer', 'confirm']) for (const cancel of ['decline', 'interface-close']) {
+    await t.test(stage + ' ' + cancel + ' returns offers and closes both sessions', async test => {
+      const pair = await start(test); if (stage === 'confirm') await confirm(pair);
+      const before = saves.length;
+      if (cancel === 'decline') await action(pair[0], stage === 'confirm' ? 5 : 3);
+      else {
+        await pair[0].connection.dispatch([{ type: 'interface_close' }]); pair[0].connection.processTurnPackets();
+      }
+      ended(pair);
+      assert.deepEqual([count(pair[0].player, LOBSTER), count(pair[1].player, COINS)], [3, 500]);
+      assert.equal(saves.length, before, 'cancel never commits a trade');
+      await action(pair[0], 4); ended(pair);
+      assert.deepEqual([count(pair[0].player, LOBSTER), count(pair[1].player, COINS)], [3, 500]);
+    });
+  }
 });

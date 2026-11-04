@@ -16,6 +16,9 @@ const { startHomeTeleport, dateMinutes, BUSY_VARBIT } = require("../combat/HomeT
 
 const SPELL_NAME = "minigame teleport";
 const MINIGAMES_INTERFACE = 951;
+const GROUPING_INTERFACE = 76;
+const GROUPING_TELEPORT_CHILD = 32;
+const GROUPING_ACTIVITY_ENUM = 848;
 const COMPONENT_BY_POSITION_ENUM = 5924;
 const ROW_BY_POSITION_ENUM = 5923;
 const NAME_COLUMN = 1;
@@ -68,6 +71,19 @@ function minigameAt(childId) {
   return undefined;
 }
 
+function groupingMinigame(slot) {
+  if (!Number.isInteger(slot) || slot <= 0) return;
+  const name = core.CacheDefinitions.getEnumValues(GROUPING_ACTIVITY_ENUM).get(slot);
+  if (typeof name !== "string") return;
+  return Object.entries(minigames).find(([label, entry]) => label === name || entry.groupingName === name)?.[1];
+}
+
+function enableGroupingTeleport({ player, groupId }) {
+  if (groupId !== GROUPING_INTERFACE) return;
+  const lastSlot = Math.max(...core.CacheDefinitions.getEnumValues(GROUPING_ACTIVITY_ENUM).keys());
+  player.getPacketSender().sendInterfaceFlagsRange((GROUPING_INTERFACE << 16) | GROUPING_TELEPORT_CHILD, 1, lastSlot, 1 << 1);
+}
+
 function minutesLeft(lastMinute, now = dateMinutes()) {
   if (!Number.isFinite(lastMinute) || lastMinute <= 0) return 0;
   return Math.max(0, COOLDOWN_MINUTES - (now - lastMinute));
@@ -109,16 +125,20 @@ function markVisitedTitheFarm({ player }) {
   player.setAttribute(VISITED_TITHE_FARM_ATTRIBUTE, true);
 }
 
+function canStartTeleport(player) {
+  const left = minutesLeft(Number(player.getAttribute(LAST_MINIGAME_TELEPORT_ATTRIBUTE)));
+  if (left > 0) {
+    player.sendMessage(`You must wait another ${left} minutes before you can use the minigame teleports.`);
+    return false;
+  }
+  return core.TeleportHandler.checkReqs(player, player.getLocation());
+}
+
 function castMinigameTeleport(event) {
   if (spellName(event) !== SPELL_NAME) return;
   event.handled = true;
   const { player } = event;
-  const left = minutesLeft(Number(player.getAttribute(LAST_MINIGAME_TELEPORT_ATTRIBUTE)));
-  if (left > 0) {
-    player.sendMessage(`You must wait another ${left} minutes before you can use the minigame teleports.`);
-    return;
-  }
-  if (!core.TeleportHandler.checkReqs(player, player.getLocation())) return;
+  if (!canStartTeleport(player)) return;
   player.getPacketSender().sendVarbit(BUSY_VARBIT, 1).sendInterface(MINIGAMES_INTERFACE);
 }
 
@@ -136,12 +156,14 @@ function teleportTo(player, x, y) {
 }
 
 function chooseMinigame(event) {
-  if (event.groupId !== MINIGAMES_INTERFACE) return;
-  const name = minigameAt(event.childId);
-  const minigame = name ? minigames[name] : undefined;
+  const grouping = event.groupId === GROUPING_INTERFACE && event.childId === GROUPING_TELEPORT_CHILD;
+  if (event.groupId !== MINIGAMES_INTERFACE && !grouping) return;
+  if (grouping && (event.opId ?? event.action) !== 1) return;
+  const minigame = grouping ? groupingMinigame(event.slot) : minigames[minigameAt(event.childId)];
   if (!minigame) return;
   event.handled = true;
   const { player } = event;
+  if (grouping && !canStartTeleport(player)) return;
   player.getPacketSender().sendInterfaceRemoval();
   const why = refusal(player, minigame);
   if (why) {
@@ -190,6 +212,7 @@ module.exports = {
     api.persistAttribute(LAST_MINIGAME_TELEPORT_ATTRIBUTE);
     api.onInterfaceActionClick(castMinigameTeleport);
     api.onInterfaceActionClick(chooseMinigame);
+    api.onCustomEvent("interface:opened", enableGroupingTeleport);
     api.onCustomEvent("interface:closed", minigamesClosed);
     api.onPlayerLogin(sendLastMinigameTeleport);
   },

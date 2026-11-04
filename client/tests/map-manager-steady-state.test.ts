@@ -86,3 +86,35 @@ test("only failed loads read the clock and retry backoff survives pending/reside
         Date.now = originalNow;
     }
 });
+
+test("a teleport's square is ready only once the grid drawn includes it (issue #2017)", () => {
+    const instance = ClientState.inInstance;
+    const lowEnd = MapManager.lowEnd;
+    try {
+        ClientState.inInstance = false;
+        MapManager.lowEnd = false;
+        const manager = new MapManager<any>(4, () => {});
+        const camera = { getPosX: () => 3232, getPosZ: () => 3232 } as any;
+        manager.update(3232, 3232, camera, 0, 1, 3180, 3180);
+        for (const id of manager.getGridMapIdsSnapshot()) manager.addMap(id >> 8, id & 255, square(id >> 8, id & 255));
+        manager.update(3232, 3232, camera, 1, 1, 3180, 3180);
+        assert.equal(manager.isSquareReadyAt(3232, 3232, 1), true);
+
+        // Lunar Isle: the player's own square builds first, the rest of the view after it.
+        const far = { getPosX: () => 2094, getPosZ: () => 3913 } as any;
+        manager.update(2094, 3913, far, 2, 1, 2042, 3861);
+        assert.equal(manager.isSquareReadyAt(2094, 3913, 2), false, "nothing built there yet");
+        const ids = manager.getGridMapIdsSnapshot();
+        const own = getMapSquareId(Math.floor(2094 / 64), Math.floor(3913 / 64));
+        manager.addMap(own >> 8, own & 255, square(own >> 8, own & 255));
+        manager.update(2094, 3913, far, 3, 1, 2042, 3861);
+        assert.equal(manager.isSquareReadyAt(2094, 3913, 3), false,
+            "built, but the old grid is still the one drawn until the rest of the view is");
+        for (const id of ids) if (id !== own) manager.addMap(id >> 8, id & 255, square(id >> 8, id & 255));
+        manager.update(2094, 3913, far, 4, 1, 2042, 3861);
+        assert.equal(manager.isSquareReadyAt(2094, 3913, 4), true);
+    } finally {
+        ClientState.inInstance = instance;
+        MapManager.lowEnd = lowEnd;
+    }
+});

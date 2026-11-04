@@ -51,8 +51,8 @@
  *    from Transcript:Unsealed letter.
  *  - Lunar ore smelting (60 Smithing) is missing from the Smithing plugin, so a quest-scoped
  *    fallback smelts one lunar ore into one lunar bar at any furnace (13 Smithing XP).
- *  - The Dräpare honorific and the Neitiznot faceguard unlock are mirrored to varbit 9472 only;
- *    the repo has no title/faceguard systems.
+ *  - The Dräpare honorific has no title system here. Varbit 9472 (Neitiznot faceguard story) belongs
+ *    to the NeitiznotFaceguard plugin, not to this quest.
  */
 module.exports = function registerTheFremennikExilesQuest(api) {
   const {
@@ -368,7 +368,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   const VARBIT_BALLAD = 9469;
   const VARBIT_ROCK_GONE = 9470;
   const VARBIT_SHIELD_GIVEN = 9471;
-  const VARBIT_HELM_UNLOCK = 9472;
 
   // Captured 1768.bin varbit 9459 route, cross-checked with RuneLite Quest Helper.
   const STAGE_STARTED = 5;
@@ -748,7 +747,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     sender.sendVarbit(VARBIT_BALLAD, quest.isComplete(player) ? 1 : 0);
     sender.sendVarbit(VARBIT_ROCK_GONE, rockGone(player) ? 1 : 0);
     sender.sendVarbit(VARBIT_SHIELD_GIVEN, player.getAttribute(SHIELD_GIVEN_ATTRIBUTE) === true ? 1 : 0);
-    sender.sendVarbit(VARBIT_HELM_UNLOCK, quest.isComplete(player) ? 1 : 0);
   }
 
   function handleLogin({ player }) {
@@ -2630,7 +2628,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       player.getInventory().forceAdd(player, new Item(VS_SHIELD_ITEM, 1));
     }
     player.getPacketSender().sendVarbit(VARBIT_BALLAD, 1);
-    player.getPacketSender().sendVarbit(VARBIT_HELM_UNLOCK, 1);
   }
 
   // ==========================================================================

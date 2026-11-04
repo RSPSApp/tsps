@@ -47,6 +47,11 @@ module.exports = function registerGraniteMaulSpecialAttack(api) {
       damageMultiplier: 1,
       queuedAttack: true,
       bypassAttackDelay: true,
+      // Wiki: Quick Smash "does not give the player any attack cooldown", so the next
+      // attack may land on the following tick. One tick is the floor: it still cannot
+      // attack twice in the same cycle. A cooldown already running (an AGS hit just
+      // before) is kept, not shortened (CombatSpecial.activate extends it).
+      attackSpeedTicks: 1,
     },
     drainAmountByItemId: {
       [ItemIdentifiers.GRANITE_MAUL_5]: ORNATE_DRAIN,

@@ -18,7 +18,7 @@
  * Wiki: a leafy mullet is top and sides; 4-5 bark a prune, 0.5 x Woodcutting and 0.2 x Fletching
  * level in XP; 25 bark, 4 leaves and 3 x level Woodcutting XP for each fully pruned entling; a
  * 3 s stun. Calibrated: 10-20 prunes an entling, split over the areas it wants; how far they
- * wander. Live puts the leaves in the Forestry kit; here they go to the pack.
+ * wander. The leaves go in a carried or worn Forestry kit, as live, else the pack.
  */
 const Common = require("./Common.Forestry");
 const Spawns = require("./Spawns.Forestry");
@@ -96,7 +96,7 @@ function gift(event, player, count) {
   Common.bark(player, entlings.barkPerEntling * count, true);
   const leaves = Common.data.trees[event.site.name] ?? "Leaves";
   const amount = entlings.leavesPerEntling * count;
-  Common.give(player, Common.data.leaves[leaves], amount);
+  Common.award(player, Common.data.leaves[leaves], amount);
   player.sendMessage(Common.message("leaves", { amount, leaves }));
   Common.xp(player, "WOODCUTTING", entlings.xp.bonusPerLevel * Common.level(player, "WOODCUTTING") * count);
 }

@@ -188,12 +188,19 @@ function leaveWorld({ player }) {
   leaveCave(player);
 }
 
+/** A player attacking the gryphon while it is stunned beats the knockback (Wiki). */
+function onAttackStarted({ attacker, target }) {
+  const npc = target?.isNpc?.() ? target.getAsNpc() : null;
+  npc?.__sgCave?.fight?.counterKnockback?.(attacker);
+}
+
 function attach(api) {
   defineArea();
   api.onObjectInteraction("Cave entrance", { Enter: enter });
   api.onObjectInteraction("Cave exit", { Exit: exit });
   api.onPlayerLogout(leaveWorld);
   api.onPlayerDisconnect(leaveWorld);
+  api.onCustomEvent("combat:attack-started", onAttackStarted);
 }
 
-module.exports = { attach, Cave, caveOf, goIn, leaveCave, enter, exit, CAVE_ATTRIBUTE };
+module.exports = { attach, Cave, caveOf, goIn, leaveCave, enter, exit, onAttackStarted, CAVE_ATTRIBUTE };

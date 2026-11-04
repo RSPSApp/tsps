@@ -754,6 +754,23 @@ test("every skill gets native level-up text, its own model, stats before hooks, 
   } finally { PluginManager.emitPlayerLevelUp = emit; }
 });
 
+test("as captured: a level-up raises the current level by the levels gained, not to the new max (issue #2040)", () => {
+  const xp = new SkillManager({ getPacketSender: () => sender, getAttribute: () => undefined, getUpdateFlag: () => ({ flag() {} }) });
+  // rsprox 1098 ticks 3103-3104: Hitpoints 3/11 at 1567 xp, then 4/12 at 1587 xp.
+  xp.setMaxLevel(Skill.HITPOINTS, 11).setExperience(Skill.HITPOINTS, 1567);
+  xp.setCurrentLevels(Skill.HITPOINTS, 3, false);
+  xp.addExperience(Skill.HITPOINTS, 20, false);
+  assert.equal(xp.getMaxLevel(Skill.HITPOINTS), 12);
+  assert.equal(xp.getCurrentLevel(Skill.HITPOINTS), 4);
+
+  // A boost and a multi-level gain keep their offset from the base level.
+  xp.setMaxLevel(Skill.STRENGTH, 50).setExperience(Skill.STRENGTH, SkillManager.getExperienceForLevel(50));
+  xp.setCurrentLevels(Skill.STRENGTH, 55, false);
+  xp.addExperience(Skill.STRENGTH, SkillManager.getExperienceForLevel(52) - SkillManager.getExperienceForLevel(50), false);
+  assert.equal(xp.getMaxLevel(Skill.STRENGTH), 52);
+  assert.equal(xp.getCurrentLevel(Skill.STRENGTH), 57);
+});
+
 /** A player whose skill totals the level-up plugin reads are fixed. */
 function levelledPlayer(core, { total = 101, combat = 3 } = {}) {
   const p = feedbackPlayer(core);

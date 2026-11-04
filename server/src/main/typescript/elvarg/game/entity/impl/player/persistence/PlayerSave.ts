@@ -102,7 +102,7 @@ export class PlayerSave {
     private static readonly MAX_FRIENDS = 200;
     private static readonly MAX_IGNORES = 100;
     private static readonly DEFAULT_MALE_APPEARANCE = [0, 3, 18, 26, 34, 38, 42, 14, 2, 14, 5, 4, 0];
-    private static readonly DEFAULT_FEMALE_APPEARANCE = [1, 48, 57, 65, 68, 77, 80, 57, 2, 14, 5, 4, 0];
+    private static readonly DEFAULT_FEMALE_APPEARANCE = [1, 48, 57, 65, 68, 77, 80, -1, 2, 14, 5, 4, 0];
     private static readonly MALE_LOOK_RANGES: Array<[number, number]> = [
         [0, 8],   // head
         [10, 17], // beard
@@ -114,7 +114,7 @@ export class PlayerSave {
     ];
     private static readonly FEMALE_LOOK_RANGES: Array<[number, number]> = [
         [45, 54], // head
-        [57, 57], // jaw/beard placeholder
+        [-1, -1], // no jaw kit; cache-valid styles are preserved separately
         [56, 60], // chest
         [61, 65], // arms
         [67, 68], // hands
@@ -165,6 +165,7 @@ export class PlayerSave {
     private skullTimer: number;
     private skullType;
     private running: boolean;
+    /** Percent (0-100, fractional since run energy moved to units); old integer saves load as-is. */
     private runEnergy: number;
     private inventory: Item[];
     private equipment: Item[];
@@ -573,7 +574,9 @@ export class PlayerSave {
         lookIndices.forEach((lookIndex, idx) => {
             const [min, max] = lookRanges[idx];
             const candidate = PlayerSave.toFiniteInt(raw[lookIndex], defaults[lookIndex]);
-            sanitized[lookIndex] = PlayerSave.isSelectableKit(candidate, idx + (gender === 1 ? 7 : 0))
+            // -1 is "no kit": the jaw is optional (clean-shaven, and females have no beard kit).
+            const noJaw = lookIndex === Appearance.BEARD && candidate === -1;
+            sanitized[lookIndex] = noJaw || PlayerSave.isSelectableKit(candidate, idx + (gender === 1 ? 7 : 0))
                 ? candidate
                 : PlayerSave.clamp(candidate, min, max);
         });

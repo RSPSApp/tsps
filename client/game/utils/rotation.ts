@@ -10,6 +10,14 @@ export function computeFacingRotation(dx: number, dy: number): number | undefine
     return ((Math.atan2(ix, iy) * RAD_TO_RS_UNITS) | 0) & 2047;
 }
 
+/**
+ * The angle an NPC is drawn at when it is added. One that never turns (turn speed 0) is drawn at
+ * angle 0 whatever angle it comes with, as the game does: that angle only sets where it would face.
+ */
+export function npcAddedRotation(rotationSpeed: number, angle: number): number {
+    return (rotationSpeed | 0) === 0 ? 0 : (angle | 0) & 2047;
+}
+
 export function computeFacingRotationFromPositions(
     fromX: number,
     fromY: number,

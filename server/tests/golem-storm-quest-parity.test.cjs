@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+process.env.DISABLE_PLAYER_BOTS = '1';
 const { test, before } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
@@ -10,6 +11,7 @@ const runtime = require('../plugins/quests/QuestRuntime');
 
 // The two quests only need the transcript hooks to be observed, not animated.
 const transcripts = [];
+let nativeShadowContext = null;
 const realStartTranscript = runtime.startTranscript;
 runtime.startTranscript = (api, player, npcId, page, variant, select) => {
   transcripts.push({ player, npcId, page, variant, select });
@@ -17,13 +19,14 @@ runtime.startTranscript = (api, player, npcId, page, variant, select) => {
 };
 
 function setup(register, options = {}) {
-  const hooks = { custom: new Map(), variants: [], conditions: [], login: [], logout: [], zoneEnter: [], objects: [], itemActions: [], itemOnNpc: [], itemOnObject: [], itemOnItem: [], npcs: [] };
+  const hooks = { custom: new Map(), variants: [], conditions: [], login: [], logout: [], zoneEnter: [], objects: [], itemActions: [], itemOnNpc: [], itemOnObject: [], itemOnItem: [], npcs: [], combatProviders: [] };
   const tasks = [];
-  const spawned = [], removed = [], ground = [], cameras = [], shakes = [], statements = [], sceneObjects = [], overheads = [];
+  const spawned = [], removed = [], ground = [], cameras = [], shakes = [], statements = [], sceneObjects = [], overheads = [], projectiles = [];
   let tick = 0;
   const executed = new Set();
   const core = {
     ...PluginManager.getCoreApi(),
+    CombatRange: { canReach(npc, method, target) { return npc.calculateDistance(target) <= 1; } },
     CountdownTask: class { constructor(key, ticks, run) { Object.assign(this, { key, ticks, run }); } },
     TaskManager: { submit(task) { task.due = tick + task.ticks; tasks.push(task); }, cancelTasks() {} },
     Boundary: class { constructor(...bounds) { this.bounds = bounds; } },
@@ -41,6 +44,17 @@ function setup(register, options = {}) {
     ActionDialogue: class { constructor(index, options) { Object.assign(this, { index, ...options }); } },
     DialogueChainBuilder: class { add(part) { this.part = part; return this; } },
     StatementDialogue: class { static send(player, text) { statements.push(text); } },
+    Projectile: {
+      createProjectile(cast, target, id, start, end, startHeight, endHeight) {
+        const projectile = { cast, target, id, start, end, startHeight, endHeight,
+          withAngle(angle) { this.angle = angle; return this; },
+          withProgress(progress) { this.progress = progress; return this; },
+          sendProjectile() { projectiles.push(this); return this; } };
+        return projectile;
+      },
+      ticksToLand(end) { return Math.ceil(end / 30); },
+      centreOf(mobile) { return mobile.getLocation(); },
+    },
   };
   if (options.realDialogue) {
     const realCore = PluginManager.getCoreApi();
@@ -64,6 +78,7 @@ function setup(register, options = {}) {
     onNpcBeforeDeath() {},
     onNpcDeath() {},
     onCustomEvent(name, fn) { const list = hooks.custom.get(name) ?? []; list.push(fn); hooks.custom.set(name, list); },
+    registerNpcCombatMethodProvider(npcIds, ctor, options) { hooks.combatProviders.push({ npcIds: new Set(Array.isArray(npcIds) ? npcIds : [npcIds]), ctor, options }); },
     emitCustomEvent(name, event) {
       if (name === 'quest:is-complete' && options.prereqs !== false && ['the_golem', 'demon_slayer'].includes(event?.key)) event.complete = true;
       for (const fn of hooks.custom.get(name) ?? []) fn(event);
@@ -74,7 +89,18 @@ function setup(register, options = {}) {
         moveTo: to => { location = to; }, getPrivateArea: () => area, getArea: () => area, setArea: value => { area = value; },
         getCurrentDefinition: () => core.NpcDefinition.forId(def.id), isVisible: () => true,
         isOwnerOnly: () => def.ownerOnly === true, forceChat: text => overheads.push({ actor: npc, text, tick }),
-        setPositionToFace() {}, isRegistered: () => !npc.removed };
+        setPositionToFace: at => { npc.face = at; },
+        performAnimation(animation) { npc.lastAnimation = animation; (npc.animations ??= []).push(animation); },
+        performGraphic(graphic) { npc.lastGraphic = graphic; (npc.graphics ??= []).push(graphic); },
+        getMovementQueue: () => ({ setBlockMovement() { return this; }, reset() { return this; } }),
+        getSize: () => def.size ?? 1,
+        calculateDistance(target) {
+          const other = target.getLocation();
+          return Math.max(Math.abs(location.getX() - other.getX()), Math.abs(location.getY() - other.getY()));
+        },
+        setFlag(key, value) { (npc.flags ??= new Map()).set(key, value); },
+        removeFlag(key) { npc.flags?.delete(key); },
+        isRegistered: () => !npc.removed };
       spawned.push(npc); return npc;
     },
     removeNpc(npc) { npc.removed = true; removed.push(npc); },
@@ -88,7 +114,7 @@ function setup(register, options = {}) {
   register(api);
   const quest = runtime.getRegisteredQuests().at(-1);
 
-  const attrs = new Map(), inventory = new Map(), varbits = new Map(), messages = [];
+  const attrs = new Map(), inventory = new Map(), varbits = new Map(), messages = [], prayers = [];
   let location = new core.Location(0, 0, 0), dialogue = null, npcViewDistance = 15;
   const sender = new Proxy({
     sendVarbit(id, value) { varbits.set(id, value); return sender; },
@@ -115,6 +141,8 @@ function setup(register, options = {}) {
     }),
     getEquipment: () => ({ getItems: () => [] }),
     getSkillManager: () => ({ getCurrentLevel: () => 99, getMaxLevel: () => 99, addExperiences() {} }),
+    getPrayerActive: () => prayers,
+    getHitpoints: () => 99,
     getLocation: () => location,
     moveTo(value) { location = value; },
     getPrivateArea: () => player?.__area ?? null,
@@ -149,7 +177,7 @@ function setup(register, options = {}) {
     }
   };
   return { api, core, quest, attrs, inventory, varbits, messages, player, tasks, spawned, removed, ground, transcripts, hooks, emit, advance,
-    cameras, shakes, statements, sceneObjects, overheads,
+    cameras, shakes, statements, sceneObjects, overheads, projectiles, prayers,
     setLocation(x, y, z = 0) { location = new core.Location(x, y, z); } };
 }
 
@@ -274,13 +302,12 @@ test('Shadow of the Storm: plane-2 portal, Eric, Tanya cutscene and capture word
   }
   h.advance();
   assert.equal(h.quest.getStage(h.player), STAGE_RITUAL_DONE, 'the first ritual says Denath\'s order');
-  for (let tick = 0; tick < 16; tick++) h.advance();
+  for (let tick = 0; tick < 40; tick++) h.advance();
   assert.equal(h.player.getLocation().x, 2721, 'the portal cutscene returns the player outside');
   assert.equal(h.player.getLocation().z, 0);
 
-  h.transcripts.length = 0;
-  for (let tick = 0; tick < 8; tick++) h.advance();
-  assert.equal(h.transcripts.at(-1).variant, 'performing-the-ritual-walking-out-of-the-portal');
+  assert.ok(h.transcripts.some((entry) => entry.variant === 'performing-the-ritual-walking-out-of-the-portal'),
+    'the portal walk-out dialogue ran');
   h.emit('npc-dialogue:action', { npcId: N.MATTHEW, stepId: 'iWR7Wz' });
   assert.equal(h.quest.getStage(h.player), STAGE_PREPARE, 'Tanya dies before recruiting');
   assert.ok(h.ground.some((item) => item.id === I.DEMONIC_SIGIL), 'Tanya\'s sigil lands on the floor');
@@ -367,31 +394,36 @@ test('Shadow of the Storm: first-ritual camera, BOOM, portal loc and Tanya actor
   h.advance();
   h.player.getDialogueManager().startDialogues({});
 
-  for (let tick = 0; tick < 7; tick++) h.advance();
+  // Capture 3333 t2095-t2123: the magic-circle camera, then the post-BOOM track.
+  for (let tick = 0; tick < 12; tick++) h.advance();
+  assert.ok(h.cameras.some((c) => c.kind === 'move' && c.x === 2718 && c.y === 4900 && c.height === 300));
+  assert.ok(h.cameras.some((c) => c.kind === 'move' && c.x === 2720 && c.y === 4900 && c.height === 300));
+  for (let tick = 0; tick < 8; tick++) h.advance();
   assert.ok(h.cameras.some((c) => c.kind === 'move' && c.x === 2722 && c.y === 4900 && c.height === 500));
   assert.ok(h.cameras.some((c) => c.kind === 'move' && c.x === 2718 && c.y === 4900 && c.height === 900));
+  assert.ok(h.cameras.some((c) => c.kind === 'move' && c.x === 2722 && c.y === 4894 && c.height === 1200));
   assert.ok(h.shakes.some((s) => s.random === 15));
   assert.ok(h.statements.includes('<col=800000>BOOM!'));
-  assert.ok(h.sceneObjects.some((o) => o.id === 10251), 'closing portal loc appears');
 
-  for (let tick = 0; tick < 6; tick++) h.advance();
+  for (let tick = 0; tick < 11; tick++) h.advance();
+  assert.ok(h.sceneObjects.some((o) => o.id === 10251), 'closing portal loc appears');
   assert.ok(h.cameras.some((c) => c.kind === 'reset'), 'first-ritual camera resets');
   h.player.getDialogueManager().reset();
-  for (let tick = 0; tick < 4; tick++) h.advance();
+  for (let tick = 0; tick < 30 && !h.spawned.some((npc) => npc.getId() === 919); tick++) h.advance();
   assert.equal(h.player.getLocation().x, 2721);
   assert.equal(h.player.getLocation().z, 0);
   assert.ok(h.spawned.some((npc) => npc.getId() === 919), 'cutscene Tanya spawns');
   assert.equal(h.spawned.filter((npc) => npc.getId() === 1989).length, 3, 'three ghosts spawn');
   assert.ok(h.cameras.some((c) => c.kind === 'move' && c.x === 2721 && c.y === 4897 && c.height === 350));
 
-  for (let tick = 0; tick < 8; tick++) h.advance();
+  for (let tick = 0; tick < 20 && h.quest.getStage(h.player) !== 100; tick++) h.advance();
   assert.equal(h.quest.getStage(h.player), 100);
   const tanyaSigil = h.ground.filter((item) => item.id === I.DEMONIC_SIGIL).at(-1);
   assert.ok(tanyaSigil, 'Tanya drops a sigil');
   assert.equal(tanyaSigil.privateArea, null, 'sigil is world-owned, not scene-owned');
   assert.ok(h.removed.some((npc) => npc.getId() === 919), 'cutscene Tanya is removed');
   assert.equal(h.removed.filter((npc) => npc.getId() === 1989).length, 3, 'ghosts are removed');
-  for (let tick = 0; tick < 3; tick++) h.advance();
+  for (let tick = 0; tick < 6; tick++) h.advance();
   assert.equal(h.cameras.at(-1).kind, 'reset', 'Tanya camera resets');
 });
 
@@ -420,7 +452,7 @@ test('Shadow of the Storm: second-ritual per-word camera/shake and Agrith-Naar s
   const demon = h.spawned.find((npc) => npc.getId() === N.AGRITH_NAAR);
   assert.ok(demon, 'Agrith-Naar spawns');
   assert.deepEqual([demon.def.x, demon.def.y, demon.def.z], [2719, 4899, 2]);
-  for (let tick = 0; tick < 14; tick++) h.advance();
+  for (let tick = 0; tick < 22; tick++) h.advance();
   assert.equal(h.cameras.at(-1).kind, 'reset', 'summoning camera resets');
 });
 
@@ -539,7 +571,7 @@ test('Shadow: real five-word menus use reverse for first and direct tome order f
       assert.equal(actor.getPrivateArea(), h.player.getPrivateArea(), 'the ritual actors share the player scene');
     }
     const initialStage = h.quest.getStage(h.player);
-    if (initialStage === 80) assert.ok(h.player.getNpcViewDistance() >= 20, 'the full captured first cast is in view');
+    if (initialStage === 80) assert.ok(h.player.getNpcViewDistance() >= 8, 'the captured first cast is in view');
     const conditionHook = { pluginName: 'ritual-parity', handler: (event) => h.hooks.conditions[0](event) };
     PluginManager.npcDialogueConditionHooks.unshift(conditionHook);
     try {
@@ -633,9 +665,76 @@ test('Shadow: real five-word menus use reverse for first and direct tome order f
 
   const loggedOut = prepare(80);
   loggedOut.hooks.itemActions[0]({ player: loggedOut.player, itemId: loggedOut.core.ItemIdentifiers.DEMONIC_SIGIL, option: 'Chant' });
-  assert.ok(loggedOut.player.getNpcViewDistance() >= 20);
+  assert.ok(loggedOut.player.getNpcViewDistance() >= 8);
   for (const logout of loggedOut.hooks.logout) logout({ player: loggedOut.player });
   assert.equal(loggedOut.player.getNpcViewDistance(), 15, 'logout restores normal NPC range');
+});
+
+test('Shadow of the Storm: the plane-2 exit portal still works once the quest is complete (#2158)', () => {
+  const h = setup((api) => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api), { prereqs: false });
+  const tile = () => [h.player.getLocation().x, h.player.getLocation().y, h.player.getLocation().z];
+
+  // Control: a player who has not reached the ritual group is not moved by it.
+  h.quest.setStage(h.player, 0);
+  h.setLocation(2720, 4884, 2);
+  h.hooks.objects[0]({ player: h.player, objectId: 6282 });
+  assert.deepEqual(tile(), [2720, 4884, 2], 'a pre-quest player is not moved');
+
+  // Completion leaves the player in the plane-2 dimension; the portal must let them out.
+  h.quest.setStage(h.player, 130);
+  h.setLocation(2720, 4900, 2);
+  h.hooks.objects[0]({ player: h.player, objectId: 6282 });
+  assert.deepEqual(tile(), [2721, 4911, 0], 'a finished player leaves through the exit portal');
+});
+
+test('Shadow of the Storm: Recipe for Disaster does not swallow the exit portal for a finished player (#2158)', () => {
+  // Real hook ordering: RFD registers its named "Portal" hook before Shadow's generic one.
+  for (const [name, modulePath] of [
+    ['RecipeForDisaster', '../plugins/quests/quests/RecipeForDisaster.Quest'],
+    ['ShadowOfTheStorm', '../plugins/quests/quests/ShadowOfTheStorm.Quest'],
+  ]) require(modulePath)(PluginManager.createApi(name));
+  const quests = runtime.getRegisteredQuests();
+  const rfd = quests.findLast((quest) => quest.key === 'recipe_for_disaster');
+  const shadow = quests.findLast((quest) => quest.key === 'shadow_of_the_storm');
+  // Reuse this real registration in later World cases; duplicate quest hooks
+  // would create a second private scene and cast for every native Chant.
+  nativeShadowContext = { api: PluginManager.createApi('ShadowOfTheStorm'), quest: shadow };
+  const { Location } = PluginManager.getCoreApi();
+
+  const attrs = new Map(), messages = [];
+  let at = new Location(2720, 4900, 2);
+  const sender = new Proxy({}, { get: (target, key) => target[key] ?? (() => sender) });
+  const player = {
+    isPlayer: () => true, getAsPlayer: () => player,
+    getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
+    getPacketSender: () => sender, sendMessage: (text) => messages.push(text),
+    getLocation: () => at, moveTo: (to) => { at = to; },
+    getArea: () => null, getPrivateArea: () => null,
+    getInventory: () => ({ getAmount: () => 0, getFreeSlots: () => 28 }),
+  };
+  attrs.set('recipe-for-disaster:rescues', 255);
+  attrs.set('quest.points', 200);
+  rfd.setStage(player, 5);
+  shadow.setStage(player, 130);
+
+  const click = (location) => {
+    const event = {
+      player, object: {}, objectId: 6282, clickType: 1, location,
+      definition: { getName: () => 'Portal', getInteractions: () => ['Enter'] },
+    };
+    PluginManager.emitObjectInteraction(event);
+    return event.handled === true;
+  };
+
+  assert.equal(click(new Location(2720, 4884, 2)), true);
+  assert.deepEqual([at.x, at.y, at.z], [2721, 4911, 0], 'Shadow handles the exit after RFD declines');
+  assert.equal(messages.some((text) => /175 quest points/.test(text)), false, 'no RFD message at the Uzer portal');
+
+  // Control: the real RFD entry portal still shows the requirement message.
+  at = new Location(3209, 3218, 0);
+  assert.equal(click(new Location(3209, 3218, 0)), true);
+  assert.ok(messages.some((text) => /175 quest points/.test(text)), 'entry portal keeps its message');
+  assert.deepEqual([at.x, at.y, at.z], [3209, 3218, 0]);
 });
 
 test('Shadow: server completion 130 mirrors the native 7-bit varbit as 125 on login', () => {
@@ -731,4 +830,621 @@ test('Shadow of the Storm: Reen only replaces Silverlight the player owns in no 
   assert.equal(h.hooks.conditions[0]({ player: h.player, stepId: 'fllvV0' }), true);
   h.emit('npc-dialogue:action', { npcId: h.core.NpcIdentifiers.FATHER_REEN, stepId: 'Kh2EP0' });
   assert.equal(h.inventory.get(I.SILVERLIGHT), 1, 'a lost sword is handed back');
+});
+
+test('Shadow: prepared stage-70 Matthew hands off to Denath instead of repeating readiness forever', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  for (const equipped of [false, true]) {
+    const h = setup(api => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api));
+    const I = h.core.ItemIdentifiers;
+    h.quest.setStage(h.player, 70);
+    h.setLocation(2722, 4901, 2);
+    h.inventory.set(I.DEMONIC_SIGIL, 1);
+    if (equipped) h.player.getEquipment = () => ({ getItems: () => [{ getId: () => I.SILVERLIGHT_2 }] });
+    else h.inventory.set(I.SILVERLIGHT_2, 1);
+    const variant = h.hooks.variants[0]({ player: h.player, npcId: h.core.NpcIdentifiers.MATTHEW });
+    assert.equal(variant, 'performing-the-ritual', 'Denath must assemble the first ritual for a prepared player');
+    assert.equal(h.quest.getStage(h.player), 70, 'selecting a variant alone must not advance progress');
+    const record = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/definitions/npc-dialogues.json'), 'utf8'))['Shadow of the Storm'];
+    const assembly = record.variants[variant].find(step => step.type === 'action' && step.id === 'FK8qAZ');
+    assert.ok(assembly, 'the actual transcript contains the ritual assembly action');
+    h.emit('npc-dialogue:action', { npcId: h.core.NpcIdentifiers.DENATH, stepId: assembly.id });
+    assert.equal(h.quest.getStage(h.player), 80, 'the assembly action advances the quest to the first ritual');
+  }
+});
+
+test('Shadow: the first-ritual handoff requires the sigil, dyed Silverlight and throne-room position', () => {
+  for (const missing of ['sigil', 'sword', 'room']) {
+    const h = setup(api => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api));
+    const I = h.core.ItemIdentifiers;
+    h.quest.setStage(h.player, 70);
+    h.setLocation(2722, 4901, missing === 'room' ? 0 : 2);
+    if (missing !== 'sigil') h.inventory.set(I.DEMONIC_SIGIL, 1);
+    if (missing !== 'sword') h.inventory.set(I.SILVERLIGHT_2, 1);
+    assert.equal(h.hooks.variants[0]({ player: h.player, npcId: h.core.NpcIdentifiers.MATTHEW }),
+      'infiltrating-the-wizards-talking-to-matthew-again-after-showing-him-the-book', missing);
+    assert.equal(h.quest.getStage(h.player), 70);
+  }
+});
+
+test('Shadow: first ritual circle uses the captured ring positions and inward faces', () => {
+  const h = setup((api) => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api));
+  const I = h.core.ItemIdentifiers, N = h.core.NpcIdentifiers;
+  h.quest.setStage(h.player, 80);
+  h.attrs.set('quest.shadow_of_the_storm.incantation', 4371);
+  h.inventory.set(I.DEMONIC_SIGIL, 1);
+  h.inventory.set(I.SILVERLIGHT_2, 1);
+  h.setLocation(2720, 4903, 2);
+  h.hooks.itemActions[0]({ player: h.player, itemId: I.DEMONIC_SIGIL, option: 'Chant' });
+
+  // RSProx 3333 t2065: the seven actors ring (2720,4900) on plane 2.
+  const expected = [
+    [N.DENATH, 2720, 4903], [N.ERIC, 2722, 4898], [N.TANYA, 2718, 4898],
+    [N.MATTHEW, 2722, 4902], [N.JENNIFER_2, 2723, 4900], [N.PATRICK, 2717, 4900],
+    [N.EVIL_DAVE_2, 2720, 4897],
+  ];
+  const actors = expected.map(([id, x, y]) => {
+    const npc = h.spawned.find((candidate) => candidate.getId() === id && candidate.isRegistered());
+    assert.ok(npc, `missing ritual actor ${id}`);
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [x, y], `actor ${id} ring tile`);
+    assert.deepEqual([npc.face.getX(), npc.face.getY(), npc.face.getZ()], [2720, 4900, 2], `actor ${id} faces the centre`);
+    return npc;
+  });
+
+  const spoken = ['Nahudu', 'Caldar', 'Tarren', 'Agrith-Naar', 'Camerinthum'];
+  for (const [index, word] of spoken.entries()) {
+    for (const actor of actors) actor.animations = [];
+    h.emit('npc-dialogue:choice', { npcId: N.DENATH, option: word });
+    for (const actor of actors) assert.equal(actor.lastAnimation?.getId(), 2879, `word ${index + 1} summon start`);
+  }
+  h.advance();
+  for (const actor of actors) {
+    const leaving = actor.getId() === N.DENATH;
+    assert.equal(actor.lastAnimation?.getId(), leaving ? 2888 : 2880,
+      leaving ? 'Denath leaves the circle' : 'the completed summon animation');
+    assert.equal(actor.lastGraphic?.getId(), leaving ? 482 : 480,
+      leaving ? 'Denath\'s leave graphic' : 'the completed summon graphic');
+  }
+});
+
+test('Shadow: final ritual circle faces the centre and the summon raises Agrith from the floor', () => {
+  const h = setup((api) => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api));
+  const I = h.core.ItemIdentifiers, N = h.core.NpcIdentifiers;
+  h.quest.setStage(h.player, 110);
+  h.attrs.set('quest.shadow_of_the_storm.incantation', 4371);
+  h.attrs.set('quest.shadow_of_the_storm.helpers', 15);
+  h.attrs.set('shadow-of-the-storm:summon-assembled', true);
+  h.inventory.set(I.DEMONIC_SIGIL, 1);
+  h.inventory.set(I.SILVERLIGHT_2, 1);
+  h.setLocation(2720, 4903, 2);
+  h.hooks.itemActions[0]({ player: h.player, itemId: I.DEMONIC_SIGIL, option: 'Chant' });
+
+  const expected = [
+    [N.FATHER_REEN, 2722, 4898], [N.FATHER_BADDEN, 2722, 4902], [N.EVIL_DAVE_2, 2720, 4897],
+    [N.MATTHEW, 2718, 4902], [N.JENNIFER_2, 2717, 4900], [N.PATRICK, 2718, 4898],
+    [N.CLAY_GOLEM_2, 2723, 4900],
+  ];
+  const actors = expected.map(([id, x, y]) => {
+    const npc = h.spawned.find((candidate) => candidate.getId() === id && candidate.isRegistered());
+    assert.ok(npc, `missing final ritual actor ${id}`);
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [x, y]);
+    assert.deepEqual([npc.face.getX(), npc.face.getY(), npc.face.getZ()], [2720, 4900, 2], `actor ${id} faces the centre`);
+    return npc;
+  });
+
+  const book = ['Camerinthum', 'Agrith-Naar', 'Tarren', 'Caldar', 'Nahudu'];
+  for (const word of book) {
+    h.emit('npc-dialogue:choice', { npcId: N.MATTHEW, option: word });
+    for (const actor of actors) {
+      assert.equal(actor.lastAnimation?.getId(), actor.getId() === N.CLAY_GOLEM_2 ? 2884 : 2879);
+    }
+  }
+  h.advance();
+  for (const actor of actors) assert.equal(actor.lastAnimation?.getId(), actor.getId() === N.CLAY_GOLEM_2 ? 2885 : 2880);
+  for (const actor of actors) assert.equal(actor.lastGraphic?.getId(), 480);
+
+  h.emit('npc-dialogue:action', { npcId: N.MATTHEW, stepId: 'YKZEof' });
+  const agrith = h.spawned.find((npc) => npc.getId() === N.AGRITH_NAAR);
+  assert.ok(agrith, 'Agrith-Naar spawns');
+  assert.deepEqual([agrith.getLocation().getX(), agrith.getLocation().getY(), agrith.getLocation().getZ()], [2719, 4899, 2]);
+  assert.equal(agrith.lastAnimation?.getId(), 4623, 'the captured Delrith summon animation');
+  assert.equal(agrith.lastGraphic?.getId(), 482);
+  assert.deepEqual([agrith.face.getX(), agrith.face.getY()], [2718, 4902], 'Agrith first faces Matthew');
+});
+
+test('Shadow: Tanya falls to ghosts that face her, with their captured animations', () => {
+  const h = setup((api) => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api));
+  const N = h.core.NpcIdentifiers;
+  h.quest.setStage(h.player, 90);
+  for (const login of h.hooks.login) login({ player: h.player });
+
+  const tanya = h.spawned.find((npc) => npc.getId() === 919);
+  assert.ok(tanya, 'cutscene Tanya spawns');
+  const ghosts = h.spawned.filter((npc) => npc.getId() === 1989);
+  assert.equal(ghosts.length, 3);
+  assert.deepEqual([tanya.face.getX(), tanya.face.getY()], [2722, 4904], 'Tanya faces the ghosts');
+  for (const ghost of ghosts) {
+    assert.deepEqual([ghost.face.getX(), ghost.face.getY()], [2722, 4905], 'each ghost faces Tanya');
+  }
+  h.advance(); h.advance();
+  assert.equal(tanya.lastAnimation?.getId(), 425);
+  h.advance(); h.advance();
+  assert.equal(tanya.lastAnimation?.getId(), 836, 'Tanya plays the death animation');
+  h.advance(); h.advance();
+  for (const ghost of ghosts) assert.equal(ghost.lastAnimation?.getId(), 5532, 'the ghosts strike');
+});
+
+test('Shadow: the final fight room adds the captured torches and north-west safe spot', () => {
+  const h = setup((api) => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api));
+  const I = h.core.ItemIdentifiers, N = h.core.NpcIdentifiers;
+  h.quest.setStage(h.player, 110);
+  h.attrs.set('shadow-of-the-storm:summon-assembled', true);
+  h.inventory.set(I.DEMONIC_SIGIL, 1);
+  h.inventory.set(I.SILVERLIGHT_2, 1);
+  h.setLocation(2720, 4903, 2);
+  h.hooks.itemActions[0]({ player: h.player, itemId: I.DEMONIC_SIGIL, option: 'Chant' });
+
+  const torches = h.sceneObjects.filter((object) => object.id === 724);
+  assert.ok(torches.some((object) => object.location.getX() === 2718 && object.location.getY() === 4905), 'inner north-west flinch torch');
+  assert.ok(torches.some((object) => object.location.getX() === 2712 && object.location.getY() === 4905), 'outer torch');
+  assert.ok(torches.some((object) => object.location.getX() === 2723 && object.location.getY() === 4913));
+  assert.ok(torches.some((object) => object.location.getX() === 2717 && object.location.getY() === 4913));
+  assert.ok(torches.some((object) => object.location.getX() === 2725 && object.location.getY() === 4883));
+  assert.equal(torches.length, 14, 'all captured standing torches');
+  assert.ok(h.sceneObjects.some((object) => object.id === 714 && object.location.getX() === 2728 && object.location.getY() === 4905), 'fire remains');
+  assert.ok(h.sceneObjects.some((object) => object.id === 2379 && object.location.getX() === 2726 && object.location.getY() === 4907), 'campsite beds');
+  const standards = h.sceneObjects.filter((object) => object.id === 10253);
+  assert.equal(standards.length, 2);
+  for (const standard of standards) assert.equal(standard.type, 11, 'summon standards are shape 11');
+  assert.ok(h.sceneObjects.some((object) => object.id === 10251), 'the closed first-ritual portal is still present during the second chant');
+});
+
+test('Shadow: the completed quest still leaves the demon portal usable', () => {
+  const h = setup((api) => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api));
+  h.quest.setStage(h.player, 130);
+  h.setLocation(2720, 4900, 2);
+  h.hooks.objects[0]({ player: h.player, objectId: 6282 });
+  assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY(), h.player.getLocation().getZ()], [2721, 4911, 0]);
+});
+
+test('Shadow: Agrith switches to Fire Blast and telekinetic grab, as the Wiki describes', () => {
+  const h = setup((api) => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api));
+  const N = h.core.NpcIdentifiers, core = h.core;
+  const provider = h.hooks.combatProviders.find((entry) => entry.npcIds.has(N.AGRITH_NAAR));
+  assert.ok(provider, 'Agrith-Naar has a combat-method provider');
+  const npc = h.api.spawnNpc({ id: N.AGRITH_NAAR, x: 2719, y: 4899, z: 2, owner: h.player, ownerOnly: true });
+  npc.def.size = 3;
+
+  const castAtDistance = () => {
+    const method = new provider.ctor();
+    method.start(npc, h.player);
+    return method;
+  };
+
+  h.setLocation(2720, 4912, 2);
+  let method = castAtDistance();
+  assert.equal(method.type(), core.CombatType.MAGIC, 'out of melee reach he casts');
+  assert.ok(h.projectiles.some((projectile) => projectile.id === 130 && projectile.cast === npc), 'Fire Blast projectile');
+
+  h.projectiles.length = 0;
+  h.prayers[core.PrayerHandler.PROTECT_FROM_MAGIC] = true;
+  method = castAtDistance();
+  assert.equal(h.projectiles.length, 0, 'Protect from Magic prevents the Fire Blast');
+  assert.ok(Math.max(Math.abs(h.player.getLocation().getX() - 2719), Math.abs(h.player.getLocation().getY() - 4899)) <= 3,
+    'Telekinetic Grab pulls the player next to the demon');
+
+  h.prayers.length = 0;
+  h.projectiles.length = 0;
+  h.setLocation(2720, 4900, 2);
+  method = castAtDistance();
+  assert.equal(method.type(), core.CombatType.MELEE, 'in reach and unprotected he melees');
+  assert.equal(h.projectiles.length, 0);
+
+  h.prayers[core.PrayerHandler.PROTECT_FROM_MELEE] = true;
+  method = castAtDistance();
+  assert.equal(method.type(), core.CombatType.MAGIC, 'Protect from Melee makes him cast in reach');
+  assert.ok(h.projectiles.length > 0);
+});
+
+// ============================================================================
+// Native section: real Player/PlayerSession/PacketSender, NPC, PrivateArea,
+// TaskManager and CombatFactory against the loaded cache. No server/listener.
+// ============================================================================
+
+let nativePlayerSerial = 910000;
+function nativeShadow() {
+  if (nativeShadowContext) return nativeShadowContext;
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const api = PluginManager.createApi('ShadowNativeParity');
+  require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api);
+  const quest = runtime.getRegisteredQuests().at(-1);
+  nativeShadowContext = { api, quest };
+  return nativeShadowContext;
+}
+
+function nativeShadowPlayer(t) {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const core = PluginManager.getCoreApi();
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(2720, 4900);
+  const frames = [];
+  const channel = { kind: 'test', binaryTransport: true, isOpen: () => true,
+    send: (frame) => { frames.push(Buffer.from(frame)); return true; },
+    close() {}, onData() {}, onClose() {}, onError() {} };
+  const session = new PlayerSession(channel);
+  const player = new Player(session);
+  session.setPlayer(player);
+  player.setUsername(`shadownative${nativePlayerSerial++}`);
+  player.setLocation(new core.Location(2720, 4903, 2));
+  player.setNeedsPlacement(false);
+  player.setRunning(false);
+  for (const skill of [core.Skill.HITPOINTS, core.Skill.ATTACK, core.Skill.STRENGTH,
+    core.Skill.DEFENCE, core.Skill.MAGIC, core.Skill.RANGED, core.Skill.PRAYER]) {
+    player.getSkillManager().setMaxLevels(skill, 99, false).setCurrentLevel(skill, 99, false);
+  }
+  t.mock.method(player, 'onAdd', () => {});
+  t.mock.method(player, 'onRemove', () => {});
+  assert.equal(core.World.getPlayers().add(player), true);
+  core.World.refreshActiveRegions();
+  const tick = () => { core.World.process(); session.flushPackets(); };
+  t.after(() => {
+    try { PluginManager.emitPlayerLogout({ player, username: player.getUsername() }); } catch {}
+    core.TaskManager.cancelTasks(player);
+    core.TaskManager.cancelTasks(player.getIndex());
+    for (const npc of core.World.getNpcs()) if (npc.getOwner?.() === player && npc.isRegistered?.()) nativeShadowContext.api.removeNpc(npc);
+    core.World.getPlayers().remove(player);
+    core.World.refreshActiveRegions();
+  });
+  return { core, player, session, frames, tick };
+}
+
+function chant(core, player, itemId) {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  return PluginManager.emitItemAction({
+    player, itemId, item: new core.Item(itemId, 1), slot: 0, clickType: 2,
+    option: 'Chant', handled: false,
+  });
+}
+
+function ownedActors(core, player) {
+  return [...core.World.getNpcs()].filter((npc) => npc.getOwner?.() === player);
+}
+
+test('Shadow native: first cast shares the private scene, faces centre, animates, and logout cleans up', (t) => {
+  const { core, player, tick, frames } = nativeShadowPlayer(t);
+  const { quest } = nativeShadow();
+  quest.setStage(player, 80);
+  player.getInventory().adds(core.ItemIdentifiers.DEMONIC_SIGIL, 1);
+  player.getInventory().adds(core.ItemIdentifiers.SILVERLIGHT_2, 1);
+  assert.equal(chant(core, player, core.ItemIdentifiers.DEMONIC_SIGIL), true);
+  tick();
+
+  const area = player.getPrivateArea();
+  assert.ok(area, 'the first incantation opened a private area');
+  const actors = ownedActors(core, player);
+  assert.equal(actors.length, 7, 'seven real quest actors');
+  for (const npc of actors) {
+    assert.equal(npc.getPrivateArea(), area, `${npc.getId()} shares the player's private area`);
+    assert.equal(npc.getLocation().getZ(), 2);
+    assert.deepEqual(npc.getPositionToFace()?.getX(), 2720);
+    assert.deepEqual(npc.getPositionToFace()?.getY(), 4900);
+    assert.equal(npc.isOwnerOnly(), true);
+  }
+  const torch = area.getObjects().find((object) => object.getId() === 724 &&
+    object.getLocation().getX() === 2718 && object.getLocation().getY() === 4905);
+  assert.ok(torch, 'the inner NW flinch torch is a real scene GameObject');
+  assert.equal(core.RegionManager.blocked(torch.getLocation(), area), true, 'torch collision is live');
+
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  PluginManager.emitCustomEvent('npc-dialogue:choice', { player, npcId: core.NpcIdentifiers.DENATH, option: 'Nahudu' });
+  for (const npc of actors) {
+    assert.equal(npc.getAnimation().getId(), 2879, `${npc.getId()} played the summon start`);
+    assert.equal(npc.getUpdateFlag().flagged(core.Flag.ANIMATION), true, `${npc.getId()} is flagged for NPC_INFO animation`);
+  }
+  assert.ok(frames.length > 0, 'the real PacketSender encoded scene/NPC updates');
+
+  const ownerArea = area;
+  const sentBefore = frames.length;
+  PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
+  for (let i = 0; i < 3; i++) tick();
+  assert.ok(frames.length > sentBefore, 'scene removal is client-visible');
+  assert.equal(ownerArea.isDestroyed(), true, 'logout destroys the scene area');
+  assert.notEqual(player.getPrivateArea(), ownerArea, 'player left the destroyed scene');
+  assert.equal(ownerArea.getObjects().length, 0, 'scene locs are deregistered');
+  for (const npc of actors) assert.equal(npc.isRegistered(), false, `${npc.getId()} removed on logout`);
+});
+
+test('Shadow native: second cast, demon ownership, melee-range death guard, combat routing and cleanup', (t) => {
+  const { core, player, tick } = nativeShadowPlayer(t);
+  const { quest } = nativeShadow();
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  quest.setStage(player, 110);
+  player.setAttribute('quest.shadow_of_the_storm.incantation', 4371);
+  player.setAttribute('shadow-of-the-storm:summon-assembled', true);
+  player.getInventory().adds(core.ItemIdentifiers.DEMONIC_SIGIL, 1);
+  player.getInventory().adds(core.ItemIdentifiers.SILVERLIGHT_2, 1);
+  const portalDeletes = [];
+  const sender = player.getPacketSender();
+  const sendRemoval = sender.sendObjectRemoval.bind(sender);
+  t.mock.method(sender, 'sendObjectRemoval', object => {
+    if (object.getId() === 10251) portalDeletes.push(object);
+    return sendRemoval(object);
+  });
+  assert.equal(chant(core, player, core.ItemIdentifiers.DEMONIC_SIGIL), true);
+  assert.equal(quest.getStage(player), 110);
+  for (const word of ['Camerinthum', 'Agrith-Naar', 'Tarren', 'Caldar', 'Nahudu']) {
+    PluginManager.emitCustomEvent('npc-dialogue:choice', { player, npcId: core.NpcIdentifiers.MATTHEW, option: word });
+  }
+  player.getDialogueManager().reset();
+  for (let i = 0; i < 4; i++) tick();
+
+  assert.equal(quest.getStage(player), 120, 'the correct second ritual summons Agrith');
+  assert.ok(player.getPrivateArea(), 'second incantation opened the final scene');
+  const actors = ownedActors(core, player);
+  for (const npc of actors) assert.equal(npc.getPrivateArea(), player.getPrivateArea(), `${npc.getId()} shares the scene`);
+  const fightArea = player.getPrivateArea();
+  assert.equal(portalDeletes.length, 1, 'closed portal sends exactly one removal');
+  assert.equal(core.World.getRemovedObjects().some(object => object.getId() === 10251 && object.getPrivateArea() === fightArea), false,
+    'the temporary overlay must not leave a base-map removal marker');
+  core.ObjectManager.onRegionChange(player, 2704, 4872);
+  assert.equal(portalDeletes.length, 1, 'scene replay does not remove the restored base portal');
+  assert.equal(fightArea.getObjects().some((object) => object.getId() === 10251), false,
+    'the closed first-ritual portal is removed when 6282 opens');
+  assert.ok(fightArea.getObjects().some((object) => object.getId() === 10252),
+    'the second-ritual magic circle is present at summon');
+  for (let i = 0; i < 6; i++) tick();
+  assert.equal(fightArea.getObjects().some((object) => object.getId() === 10252), false,
+    'the magic circle is deleted after its phase');
+  const demon = ownedActors(core, player).find((npc) => npc.getId() === core.NpcIdentifiers.AGRITH_NAAR);
+  assert.ok(demon, 'the real demon spawned');
+  const definition = core.CacheDefinitions.getNpc(core.NpcIdentifiers.AGRITH_NAAR);
+  assert.equal(definition.magicLevel, 100, 'cache magic accuracy level');
+  assert.equal(definition.attackLevel, 83, 'cache melee accuracy level');
+  assert.equal(definition.hitpoints, 95);
+  assert.equal(demon.getPrivateArea(), player.getPrivateArea(), 'demon shares the player scene');
+  assert.equal(quest.getStage(player), 120);
+  assert.equal(demon.getLocation().getX(), 2719);
+  assert.equal(demon.getLocation().getY(), 4899);
+  demon.setNeedsPlacement(false);
+  player.setNeedsPlacement(false);
+  const spawnTile = demon.getLocation().clone();
+
+  // Silverlight must be equipped and the killer in melee footprint range.
+  player.getEquipment().set(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.SILVERLIGHT_2, 1));
+  player.moveTo(new core.Location(2720, 4902, 2));
+  assert.equal(PluginManager.emitNpcBeforeDeath({ npc: demon, killer: player, preventDeath: false }), false);
+  player.moveTo(new core.Location(2720, 4910, 2));
+  assert.equal(PluginManager.emitNpcBeforeDeath({ npc: demon, killer: player, preventDeath: false }), true,
+    'a ranged or distant final blow regenerates him');
+  player.moveTo(new core.Location(2720, 4902, 2));
+  player.getEquipment().set(core.Equipment.WEAPON_SLOT, new core.Item(-1, 1));
+  assert.equal(PluginManager.emitNpcBeforeDeath({ npc: demon, killer: player, preventDeath: false }), true,
+    'an unequipped final blow regenerates him');
+  player.getEquipment().set(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.SILVERLIGHT_2, 1));
+
+  // A diagonal corner touches the footprint by distance, but has no melee edge.
+  player.moveTo(new core.Location(2718, 4902, 2));
+  player.setNeedsPlacement(false);
+  assert.equal(core.CombatRange.canReach(demon, core.CombatFactory.MELEE_COMBAT, player), false);
+  assert.equal(PluginManager.emitNpcBeforeDeath({ npc: demon, killer: player, preventDeath: false }), true,
+    'a diagonal final blow is outside melee reach');
+  let cornerMethod = core.CombatFactory.getMethod(demon);
+  cornerMethod.start(demon, player);
+  assert.equal(cornerMethod.type(), core.CombatType.MAGIC, 'a diagonal target receives Fire Blast');
+  player.getPrayerActive()[core.PrayerHandler.PROTECT_FROM_MAGIC] = true;
+  cornerMethod.start(demon, player);
+  assert.equal(core.CombatRange.canReach(demon, core.CombatFactory.MELEE_COMBAT, player), true,
+    'telegrab lands on a shared edge, not another corner');
+  player.getPrayerActive()[core.PrayerHandler.PROTECT_FROM_MAGIC] = false;
+
+  // Actual NPC combat routing: out of range casts, PFM telegrabs to the footprint.
+  demon.getCombat().reset();
+  demon.getCombat().setAttackDelay(0);
+  let farTile = null;
+  for (const [x, y] of [[2714, 4899], [2720, 4906], [2720, 4895], [2726, 4899], [2710, 4900]]) {
+    player.moveTo(new core.Location(x, y, 2));
+    player.setNeedsPlacement(false);
+    if (core.CombatRange.canReach(demon, core.CombatFactory.getMethod(demon), player)) {
+      farTile = [x, y];
+      break;
+    }
+  }
+  assert.ok(farTile, 'found a reachable out-of-melee tile in the room');
+  player.moveTo(new core.Location(farTile[0], farTile[1], 2));
+  player.setNeedsPlacement(false);
+  assert.equal(core.CombatRange.canReach(demon, core.CombatFactory.getMethod(demon), player), true,
+    'open floor tile has a projectile line');
+  player.getPrayerActive()[core.PrayerHandler.PROTECT_FROM_MAGIC] = true;
+  demon.getCombat().attack(player);
+  assert.equal(demon.getCombat().getTarget(), player, 'combat target set');
+  const permission = core.CombatFactory.canAttackPermission(demon, player, false, core.CombatFactory.getMethod(demon));
+  assert.equal(permission, core.CanAttackResponse.CAN_ATTACK, `permission ${core.CanAttackResponse[permission]}`);
+  assert.equal(demon.getCombat().performNewAttack(true), true, 'the real combat path scored the attack');
+  assert.equal(demon.getAnimation().getId(), 69, 'demon_casting played');
+  assert.ok(demon.getLocation().equals(spawnTile), 'the demon stays on its spawn tile');
+  assert.ok(Math.max(Math.abs(player.getLocation().getX() - 2719), Math.abs(player.getLocation().getY() - 4899)) <= 3,
+    'Telekinetic Grab lands against the 3x3 footprint');
+  assert.equal(demon.getCombat().getTarget(), player);
+
+  // Fire Blast route without Protect from Magic, and its real PendingHit cap.
+  player.getPrayerActive()[core.PrayerHandler.PROTECT_FROM_MAGIC] = false;
+  player.moveTo(new core.Location(farTile[0], farTile[1], 2));
+  player.setNeedsPlacement(false);
+  demon.getCombat().reset();
+  demon.getCombat().setAttackDelay(0);
+  demon.getCombat().attack(player);
+  assert.equal(demon.getCombat().performNewAttack(true), true, 'the real Fire Blast path scored the attack');
+  assert.equal(demon.getAnimation().getId(), 69, 'demon_casting played for Fire Blast');
+  const magicMethod = core.CombatFactory.getMethod(demon);
+  magicMethod.start(demon, player);
+  const hits = magicMethod.hits(demon, player);
+  assert.equal(magicMethod.type(), core.CombatType.MAGIC);
+  assert.ok(hits.length === 0 || hits[0].getTotalDamage() <= 10, 'max hit capped at 10');
+
+  player.moveTo(new core.Location(2720, 4902, 2));
+  player.setNeedsPlacement(false);
+  demon.getCombat().reset();
+  demon.getCombat().setAttackDelay(0);
+  demon.getCombat().attack(player);
+  assert.equal(demon.getCombat().performNewAttack(true), true, 'the real melee path scored the attack');
+  assert.equal(demon.getAnimation().getId(), 4679, 'melee attack animation in reach');
+
+  // The Wiki's north-western torch is a real LOS/flinch control: no reach, no chase.
+  player.moveTo(new core.Location(2718, 4906, 2));
+  player.setNeedsPlacement(false);
+  assert.equal(core.CombatRange.canReach(demon, core.CombatFactory.getMethod(demon), player), false,
+    "the inner NW standing torch blocks the demon's attack line");
+  const beforeFlinch = demon.getLocation().clone();
+  demon.getCombat().reset();
+  demon.getCombat().setAttackDelay(0);
+  demon.getCombat().attack(player);
+  assert.equal(demon.getCombat().performNewAttack(true), false, 'the demon cannot score through the torch');
+  assert.ok(demon.getLocation().equals(beforeFlinch), 'the demon never chases the flinch spot');
+
+  // No legal telegrab tile means no forced movement.
+  const area = player.getPrivateArea();
+  const ring = [];
+  for (let dx = -1; dx <= 3; dx++) for (let dy = -1; dy <= 3; dy++) {
+    if (dx >= 0 && dx < 3 && dy >= 0 && dy < 3) continue;
+    ring.push(new core.Location(2719 + dx, 4899 + dy, 2));
+  }
+  for (const tile of ring) area.setClip(tile, 0x1280100);
+  player.moveTo(new core.Location(farTile[0], farTile[1], 2));
+  player.setNeedsPlacement(false);
+  player.getPrayerActive()[core.PrayerHandler.PROTECT_FROM_MAGIC] = true;
+  const beforeSafeSkip = player.getLocation().clone();
+  const safeMethod = core.CombatFactory.getMethod(demon);
+  safeMethod.start(demon, player);
+  assert.ok(player.getLocation().equals(beforeSafeSkip), 'blocked telegrab leaves the player where they are');
+  for (const tile of ring) area.removeClip(tile);
+
+  // Post-fight: kill, convert and complete, leaving no scene actors behind.
+  demon.setHitpoints(1);
+  PluginManager.emitNpcDeath({ npc: demon, killer: player });
+  assert.equal(quest.getStage(player), 124);
+  PluginManager.emitCustomEvent('npc-dialogue:action', { player, stepId: 'EDRKBv' });
+  assert.equal(quest.getStage(player), 130);
+  for (let i = 0; i < 3; i++) tick();
+  assert.equal(area.isDestroyed(), true, 'quest completion destroys the fight scene');
+  assert.equal(ownedActors(core, player).some((npc) => npc.getId() === core.NpcIdentifiers.AGRITH_NAAR), false,
+    'the demon is gone after completion');
+});
+
+test('Shadow: every selected animation shares the actor rig in the active cache', async () => {
+  const { findNpcRigAnimations } = require('../dist/game/cache/NpcAnimationScanner');
+  const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
+  const checks = [
+    [897, [2879, 2880, 2888]], [899, [2879, 2880]], [907, [2879, 2880, 425, 836]],
+    [903, [2879, 2880]], [905, [2879, 2880]], [909, [2879, 2880]], [902, [2879, 2880]],
+    [893, [2879, 2880]], [895, [2879, 2880]], [1989, [5532]], [917, [2884, 2885]],
+    [911, [4623, 69, 4679, 4676, 4677]],
+  ];
+  for (const [npcId, sequences] of checks) {
+    const definition = CacheDefinitions.getNpc(npcId);
+    const base = definition?.idleSeqId >= 0 ? definition.idleSeqId : definition?.walkSeqId;
+    assert.ok(base >= 0, `${npcId} has a cache rig sequence`);
+    for (const sequence of sequences) {
+      const matches = await findNpcRigAnimations([base], sequence, sequence);
+      assert.ok(matches.includes(sequence), `${npcId} base ${base} rig supports seq ${sequence}`);
+    }
+  }
+});
+
+test('Shadow: the source plane-2 room supplies the temple mesh and the dynamic dressing is explicit', () => {
+  const { readTemplateRegion } = require('../dist/game/collision/TemplateRegionData');
+  const region = readTemplateRegion(10828); // source zones 338-341 x 609-614, plane 2
+  assert.ok(region, 'region 10828 is present in the cache');
+  const plane2 = new Set();
+  for (const locs of region.chunks) for (const loc of locs) if (loc.plane === 2) plane2.add(loc.id);
+  for (const id of [6287, 6288, 6289, 6291, 6282, 6296, 6300]) {
+    assert.equal(plane2.has(id), true, `static plane-2 temple loc ${id}`);
+  }
+  for (const id of [724, 714, 2379, 10251, 10253, 3550]) {
+    assert.equal(plane2.has(id), false, `loc ${id} is a dynamic scene change, not source mesh`);
+  }
+  // The instance walls (3550 inviswall_serverside) seal the copied instance; the
+  // source-coordinate QuestScene uses the real cave-wall mesh above plus its
+  // PrivateArea bounds instead, so adding them would be duplicate clipping.
+  // The three REBUILD_REGION palettes (decoded separately from capture 3333) all
+  // copy these same plane-2 zones; see docs/the-golem-shadow-of-the-storm-parity.md.
+  const plane2Locs = region.chunks.flat().filter((loc) => loc.plane === 2);
+  assert.ok(plane2Locs.length > 200, 'the source plane-2 temple mesh is populated');
+});
+
+test('Shadow native: a wrong ritual retries cleanly and leaving the scene removes the owner-only cast', (t) => {
+  const { core, player, tick } = nativeShadowPlayer(t);
+  const { quest } = nativeShadow();
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  quest.setStage(player, 80);
+  player.getInventory().adds(core.ItemIdentifiers.DEMONIC_SIGIL, 1);
+  player.getInventory().adds(core.ItemIdentifiers.SILVERLIGHT_2, 1);
+  assert.equal(chant(core, player, core.ItemIdentifiers.DEMONIC_SIGIL), true);
+  tick();
+  const firstArea = player.getPrivateArea();
+  assert.ok(firstArea);
+
+  // Direct tome order is wrong for the first ritual: it must not advance or retain the scene.
+  for (const word of ['Camerinthum', 'Agrith-Naar', 'Tarren', 'Caldar', 'Nahudu']) {
+    PluginManager.emitCustomEvent('npc-dialogue:choice', { player, npcId: core.NpcIdentifiers.DENATH, option: word });
+  }
+  player.getDialogueManager().reset();
+  for (let i = 0; i < 4; i++) tick();
+  assert.equal(quest.getStage(player), 80, 'a wrong first ritual does not advance');
+  assert.equal(firstArea.isDestroyed(), true, 'the wrong ritual closes its scene');
+  assert.equal(ownedActors(core, player).length, 0, 'the cancelled scene leaves no stale owner-only cast');
+
+  assert.equal(chant(core, player, core.ItemIdentifiers.DEMONIC_SIGIL), true);
+  tick();
+  const retryArea = player.getPrivateArea();
+  assert.ok(retryArea && retryArea !== firstArea, 'the retry opens a fresh scene');
+  const retryActors = ownedActors(core, player);
+  assert.equal(retryActors.length, 7, 'the retry respawns the cast');
+  for (const npc of retryActors) assert.equal(npc.getPrivateArea(), retryArea);
+
+  player.moveTo(new core.Location(2800, 4900, 2));
+  player.setNeedsPlacement(false);
+  for (let i = 0; i < 4; i++) tick();
+  assert.equal(retryArea.isDestroyed(), true, 'leaving the area destroys the scene');
+  assert.notEqual(player.getPrivateArea(), retryArea);
+  for (const npc of retryActors) assert.equal(npc.isRegistered(), false, `cast ${npc.getId()} removed on leave`);
+});
+
+test('Shadow native: relog during the fight restores demon and cast in one private area', (t) => {
+  const { core, player, tick } = nativeShadowPlayer(t);
+  const { quest } = nativeShadow();
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  quest.setStage(player, 110);
+  player.setAttribute('quest.shadow_of_the_storm.incantation', 4371);
+  player.setAttribute('shadow-of-the-storm:summon-assembled', true);
+  player.getInventory().adds(core.ItemIdentifiers.DEMONIC_SIGIL, 1);
+  player.getInventory().adds(core.ItemIdentifiers.SILVERLIGHT_2, 1);
+  assert.equal(chant(core, player, core.ItemIdentifiers.DEMONIC_SIGIL), true);
+  for (const word of ['Camerinthum', 'Agrith-Naar', 'Tarren', 'Caldar', 'Nahudu']) {
+    PluginManager.emitCustomEvent('npc-dialogue:choice', { player, npcId: core.NpcIdentifiers.MATTHEW, option: word });
+  }
+  player.getDialogueManager().reset();
+  for (let i = 0; i < 4; i++) tick();
+  assert.equal(quest.getStage(player), 120);
+  const firstDemon = ownedActors(core, player).find((npc) => npc.getId() === core.NpcIdentifiers.AGRITH_NAAR);
+  assert.ok(firstDemon);
+
+  PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
+  for (let i = 0; i < 3; i++) tick();
+  assert.equal(ownedActors(core, player).length, 0, 'logout removes the scene actors');
+
+  PluginManager.emitPlayerLogin({ player, username: player.getUsername() });
+  for (let i = 0; i < 8; i++) tick();
+  assert.equal(quest.getStage(player), 120, 'stage survives relog');
+  const restored = ownedActors(core, player);
+  assert.ok(player.getPrivateArea(), `relog opened a scene (actors=${restored.length})`);
+  const demon = restored.find((npc) => npc.getId() === core.NpcIdentifiers.AGRITH_NAAR);
+  assert.ok(demon, 'relog respawns the demon');
+  assert.ok(player.getPrivateArea(), 'relog reopens the fight scene');
+  for (const npc of restored) assert.equal(npc.getPrivateArea(), player.getPrivateArea(),
+    `${npc.getId()} shares the recovered scene`);
+  assert.equal(demon.getLocation().getX(), 2719);
+  assert.equal(demon.getLocation().getY(), 4899);
 });

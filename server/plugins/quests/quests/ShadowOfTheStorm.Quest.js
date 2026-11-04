@@ -20,25 +20,33 @@
  * Sources: RSProx capture 3333, cache varp
  * dump, OSRS Wiki transcripts, and Quest Helper pinned at
  * https://github.com/Zoinkwiz/quest-helper/blob/06da90f982518a093f2fe1c9cfac5547fa7053d3/src/main/java/com/questhelper/helpers/quests/shadowofthestorm/ShadowOfTheStorm.java
- * (stages and IncantationStep ordering). The capture confirms the plane-2 throne
- * room, the 6310 -> (2720,4884,2) / 6282 -> (2721,4911,0) portals, Denath's
- * spoken order and the varbit tome order.
+ * (stages and IncantationStep ordering). Capture 3333 puts the ritual and fight
+ * in instances that copy source plane 2 (zones 338-341, 609-614) and adds the
+ * standing torches/fire remains/campsite beds; the two 6310 -> (2720,4884,2) /
+ * 6282 -> (2721,4911,0) portals, Denath's spoken order and the varbit tome order
+ * are unchanged.
  *
  * Gaps: the broken-kiln objects carry no cache option, so the plugin adds
  * "Search" to their runtime definition (MCP sees it, a stock client cache does
  * not) and re-applies it after startup on login/bootstrap; the ritual page's
  * single 5-word menu is expanded into the captured five picks; the rug
  * merchant's sandstorm dialogue and reading the tome are not wired; "black"
- * clothing is recognised by item name rather than an exhaustive list; the
- * Tanya portal-closing and second-summoning camera/shake/actor beats follow the
- * capture through QuestScenes, but not every cosmetic sound/sequence; cancelling
- * the reward skill menu is recovered by talking to a surviving wizard; a relog
- * during the fight respawns Agrith-Naar.
+ * clothing is recognised by item name rather than an exhaustive list; the Tanya
+ * portal-closing and summoning camera/shake/actor beats follow the capture
+ * through QuestScenes, but not every cosmetic sound; cancelling the reward skill
+ * menu is recovered by talking to a surviving wizard; a relog during the fight
+ * respawns Agrith-Naar. The room is the existing QuestScenes private area at the
+ * source coordinates rather than a client REBUILD_REGION instance.
  */
 module.exports = function registerShadowOfTheStormQuest(api) {
   const {
+    Animation,
+    CombatMethod,
+    CombatType,
     CountdownTask,
     Flag,
+    Graphic,
+    GraphicHeight,
     Item,
     ItemDefinition,
     ItemIdentifiers,
@@ -46,6 +54,10 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     NpcIdentifiers,
     ObjectDefinition,
     ObjectIdentifiers,
+    PendingHit,
+    PrayerHandler,
+    Projectile,
+    RegionManager,
     Skill,
     StatementDialogue,
     TaskManager,
@@ -212,6 +224,8 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   const BIT_GOLEM = 1 << 3;
   const BIT_GOLEM_REPROGRAMMED = 1 << 4;
   const BIT_TANYA = 1 << 5;
+  const BIT_MATTHEW = 1 << 6;
+  const BIT_DENATH = 1 << 7;
   const ALL_HELPERS_MASK = BIT_DAVE | BIT_BADDEN | BIT_REEN | BIT_GOLEM;
 
   /** Uzer underground (the room The Golem's temple lives in) and the plane-2 throne room. */
@@ -228,14 +242,15 @@ module.exports = function registerShadowOfTheStormQuest(api) {
    * uses Denath and the apprentices plus Evil Dave; after Tanya is killed the
    * second ritual uses the three priests, Dave and the reprogrammed golem.
    */
+  const RITUAL_CENTER = { x: 2720, y: 4900, z: 2 };
   const RITUAL_CAST = [
-    { key: "denath", id: NpcIdentifiers.DENATH, x: 2720, y: 4912 },
-    { key: "eric", id: NpcIdentifiers.ERIC, x: 2717, y: 4890 },
-    { key: "tanya", id: NpcIdentifiers.TANYA, x: 2714, y: 4903 },
-    { key: "matthew", id: NpcIdentifiers.MATTHEW, x: 2722, y: 4900 },
-    { key: "jennifer", id: NpcIdentifiers.JENNIFER_2, x: 2723, y: 4898 },
-    { key: "patrick", id: NpcIdentifiers.PATRICK, x: 2718, y: 4893 },
-    { key: "dave", id: NpcIdentifiers.EVIL_DAVE_2, x: 2720, y: 4883 },
+    { key: "denath", id: NpcIdentifiers.DENATH, x: 2720, y: 4903 },
+    { key: "eric", id: NpcIdentifiers.ERIC, x: 2722, y: 4898 },
+    { key: "tanya", id: NpcIdentifiers.TANYA, x: 2718, y: 4898 },
+    { key: "matthew", id: NpcIdentifiers.MATTHEW, x: 2722, y: 4902 },
+    { key: "jennifer", id: NpcIdentifiers.JENNIFER_2, x: 2723, y: 4900 },
+    { key: "patrick", id: NpcIdentifiers.PATRICK, x: 2717, y: 4900 },
+    { key: "dave", id: NpcIdentifiers.EVIL_DAVE_2, x: 2720, y: 4897 },
   ];
   const SECOND_CAST = [
     { key: "reen", id: NpcIdentifiers.FATHER_REEN, x: 2722, y: 4898 },
@@ -246,6 +261,60 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     { key: "patrick", id: NpcIdentifiers.PATRICK, x: 2718, y: 4898 },
     { key: "golem", id: NpcIdentifiers.CLAY_GOLEM_2, x: 2723, y: 4900 },
   ];
+
+  // Capture 3333: the instanced throne room is a copy of source plane 2 with these
+  // standing torches, fire remains and campsite beds placed into it (t2017, t2362).
+  const AGRITH_PORTAL_CLOSING_OBJECT_ID = 10251;
+  const AGRITH_RITUAL_CIRCLE_OBJECT_ID = 10252;
+  const SUMMON_STANDARD_OBJECT_ID = 10253;
+  const THRONE_ROOM_DRESSING = [
+    { id: ObjectIdentifiers.STANDING_TORCH, x: 2725, y: 4883, face: 0 },
+    { id: ObjectIdentifiers.STANDING_TORCH, x: 2722, y: 4881, face: 0 },
+    { id: ObjectIdentifiers.STANDING_TORCH, x: 2728, y: 4894, face: 1 },
+    { id: ObjectIdentifiers.STANDING_TORCH, x: 2722, y: 4895, face: 1 },
+    { id: ObjectIdentifiers.STANDING_TORCH, x: 2718, y: 4895, face: 0 },
+    { id: ObjectIdentifiers.STANDING_TORCH, x: 2712, y: 4893, face: 0 },
+    { id: ObjectIdentifiers.STANDING_TORCH, x: 2716, y: 4883, face: 0 },
+    { id: ObjectIdentifiers.STANDING_TORCH, x: 2718, y: 4881, face: 0 },
+    { id: ObjectIdentifiers.STANDING_TORCH, x: 2729, y: 4905, face: 3 },
+    { id: ObjectIdentifiers.STANDING_TORCH, x: 2722, y: 4905, face: 3 },
+    // The inner north-western standing torch; the Wiki's flinching spot.
+    { id: ObjectIdentifiers.STANDING_TORCH, x: 2718, y: 4905, face: 2 },
+    // The outer torch blocks the static wall edge; keep it for the captured room.
+    { id: ObjectIdentifiers.STANDING_TORCH, x: 2712, y: 4905, face: 2 },
+    { id: ObjectIdentifiers.FIRE_REMAINS, x: 2728, y: 4905, face: 0 },
+    { id: ObjectIdentifiers.CAMPSITE_BED, x: 2728, y: 4903, face: 2 },
+    { id: ObjectIdentifiers.CAMPSITE_BED, x: 2729, y: 4906, face: 1 },
+    { id: ObjectIdentifiers.CAMPSITE_BED, x: 2730, y: 4907, face: 0 },
+    { id: ObjectIdentifiers.CAMPSITE_BED, x: 2726, y: 4907, face: 3 },
+    { id: ObjectIdentifiers.STANDING_TORCH, x: 2723, y: 4913, face: 1 },
+    { id: ObjectIdentifiers.STANDING_TORCH, x: 2717, y: 4913, face: 0 },
+    { id: SUMMON_STANDARD_OBJECT_ID, x: 2723, y: 4912, face: 0, shape: 11 },
+    { id: SUMMON_STANDARD_OBJECT_ID, x: 2717, y: 4912, face: 3, shape: 11 },
+  ];
+
+  // Sequence ids from the cache (data/definitions/sequence-names.json).
+  const SEQ_SUMMON_START = 2879; // summon_summon_start
+  const SEQ_SUMMON = 2880; // summon_summon
+  const SEQ_GOLEM_SUMMON_START = 2884; // golem_summon_start
+  const SEQ_GOLEM_SUMMON = 2885; // golem_summon_summon
+  const SEQ_TANYA_DEFEND = 425; // human_unarmed_def
+  const SEQ_TANYA_DEATH = 836; // human_death
+  const SEQ_GHOST_ATTACK = 5532; // ghost_update_normal_attack
+  const SEQ_AGRITH_SUMMONED = 4623; // qip_ds_delrith_summoned
+  const SEQ_DENATH_LEAVE = 2888; // denath_leave
+  const SEQ_DEMON_CASTING = 69; // demon_casting
+  const SEQ_DEMON_ATTACK_GREATER = 4679; // demon_update_attack_greater
+  const GFX_RITUAL_SUMMON = 480;
+  const GFX_AGRITH_SUMMON = 482;
+  const GFX_BLOOD = 131;
+
+  // Fire Blast (cache CombatSpells.FIRE_BLAST), with Agrith-Naar's Wiki max hit of 10.
+  const FIRE_BLAST = { anim: SEQ_DEMON_CASTING, projectile: 130, startGraphic: 129, endGraphic: 131,
+    start: 0, end: 20, startHeight: 43, endHeight: 31, maxHit: 10 };
+  const AGRITH_MAX_HIT = 10;
+  const AGRITH_ATTACK_SPEED = 4;
+  const AGRITH_ATTACK_DISTANCE = 32;
 
   const INCANTATION_WORDS = ["Caldar", "Nahudu", "Agrith-Naar", "Camerinthum", "Tarren"];
   const WORD_INDEX = new Map(INCANTATION_WORDS.map((word, index) => [word.toLowerCase(), index]));
@@ -333,7 +402,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
 
   let quest;
   let itemOnGroundManager;
-  const Scenes = createQuestScenes(api, { onEnd: () => {} });
+  const Scenes = createQuestScenes(api, { onEnd: handleSceneEnd });
 
   /** player -> Map of wizard key -> spawned npc (owner-only throne room). */
   const wizardNpcs = new WeakMap();
@@ -482,9 +551,14 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       removeAllWizards(player);
       return;
     }
+    const bits = helperBits(player);
     const cast = (stage < STAGE_PREPARE ? RITUAL_CAST : SECOND_CAST)
-      .filter((spawn) => !(stage >= STAGE_SUMMONED && spawn.key === "matthew"))
-      .filter((spawn) => !(stage >= STAGE_RITUAL_DONE && spawn.key === "denath"));
+      // Matthew is killed on screen after Agrith-Naar appears; keep him until then.
+      .filter((spawn) => !(spawn.key === "matthew" &&
+        (stage >= STAGE_KILLED || (stage >= STAGE_SUMMONED && (bits & BIT_MATTHEW) !== 0))))
+      .filter((spawn) => !(spawn.key === "denath" && stage >= STAGE_RITUAL_DONE && (bits & BIT_DENATH) !== 0));
+    const facingCenter = stage === STAGE_RITUAL || stage === STAGE_READY;
+    const center = new Location(RITUAL_CENTER.x, RITUAL_CENTER.y, RITUAL_CENTER.z);
     let tracked = wizardNpcs.get(player);
     if (!tracked) {
       tracked = new Map();
@@ -500,7 +574,10 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       const existing = tracked.get(spawn.key);
       if (existing && existing.isRegistered?.() !== false && existing.getPrivateArea?.()?.isDestroyed?.() !== true) {
         syncWizardArea(player, existing);
-        existing.moveTo?.(new Location(spawn.x, spawn.y, 2));
+        if (existing.__shadowLeaving !== true) {
+          existing.moveTo?.(new Location(spawn.x, spawn.y, 2));
+          if (facingCenter) existing.setPositionToFace?.(center);
+        }
         continue;
       }
       if (existing) api.removeNpc(existing);
@@ -515,8 +592,52 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       });
       if (npc) {
         tracked.set(spawn.key, npc);
+        if (facingCenter) npc.setPositionToFace?.(center);
         syncWizardArea(player, npc);
       }
+    }
+  }
+
+  /** The captured destroyed-temple dressing: torches (including the NW safe spot), fire and beds. */
+  function dressThroneRoom(scene) {
+    if (!scene || scene.__shadowThroneDressed) return;
+    scene.__shadowThroneDressed = true;
+    for (const loc of THRONE_ROOM_DRESSING) {
+      Scenes.loc(scene, { id: loc.id, x: loc.x, y: loc.y, z: RITUAL_CENTER.z,
+        type: loc.shape ?? 10, face: loc.face });
+    }
+  }
+
+  /** A single phase-owned scene loc; its removal sends the client loc deletion. */
+  function phaseLoc(scene, spec, ticks = null) {
+    const object = Scenes.loc(scene, { z: RITUAL_CENTER.z, type: 10, ...spec });
+    if (ticks !== null) {
+      Scenes.later(scene, ticks, () => removeSceneLoc(scene, object));
+    }
+    return object;
+  }
+
+  function removeSceneLoc(scene, object) {
+    if (!object) return;
+    const index = scene.locs.indexOf(object);
+    if (index < 0) return;
+    scene.locs.splice(index, 1);
+    api.core.ObjectManager.deregister(object, true);
+    // These phase locs replace scenery temporarily. Replaying their removal after
+    // the client restores the underlying cache loc would hide that original loc.
+    const removed = api.core.World.getRemovedObjects();
+    const marker = removed.indexOf(object);
+    if (marker >= 0) removed.splice(marker, 1);
+  }
+
+  function animateRitualCast(player, completion) {
+    for (const [key, npc] of wizardNpcs.get(player) ?? []) {
+      if (npc?.isRegistered?.() === false) continue;
+      const sequence = key === "golem"
+        ? (completion ? SEQ_GOLEM_SUMMON : SEQ_GOLEM_SUMMON_START)
+        : (completion ? SEQ_SUMMON : SEQ_SUMMON_START);
+      npc.performAnimation?.(new Animation(sequence));
+      if (completion) npc.performGraphic?.(new Graphic(GFX_RITUAL_SUMMON));
     }
   }
 
@@ -561,11 +682,22 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     tracked.clear();
   }
 
+  /** A scene that ended without a successor leaves no owner-only cast or demon behind. */
+  function handleSceneEnd(player, scene) {
+    if (!scene?.name?.startsWith("shadow-")) return;
+    Scenes.later(player, 1, () => {
+      if (player.isRegistered?.() === false) return;
+      if (Scenes.get(player)) return;
+      removeAllWizards(player);
+      removeDemon(player);
+    });
+  }
+
   function removeDemon(player) {
     const npc = demonNpcs.get(player);
     if (!npc) return;
-    api.removeNpc(npc);
     demonNpcs.delete(player);
+    if (npc.isRegistered?.() !== false) api.removeNpc(npc);
   }
 
   // ============================================================================
@@ -682,6 +814,11 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       if (stage >= STAGE_RITUAL_DONE) return "performing-the-ritual-talking-to-matthew-again";
       if (stage >= STAGE_RITUAL) return "performing-the-ritual-talking-to-matthew";
       if (stage >= STAGE_BOOK_SHOWN) {
+        // Returning prepared hands the first ritual to Denath. Matthew's readiness
+        // reminder deliberately ends here, so replaying it cannot assemble the circle.
+        if (inRitualCircle(player) && hasItem(player, DEMONIC_SIGIL_ITEM_ID) && hasDyedSilverlight(player)) {
+          return "performing-the-ritual";
+        }
         return "infiltrating-the-wizards-talking-to-matthew-again-after-showing-him-the-book";
       }
       if (stage >= STAGE_MATTHEW_TOLD) return "infiltrating-the-wizards-returning-to-matthew";
@@ -885,13 +1022,29 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   }
 
   function dropDenathsSigil(player) {
-    // Capture 3333: Denath's sigil lands at 2720,4900 on the throne-room floor.
+    // Capture 3333 t2104: Denath's sigil lands at 2720,4900 on the throne-room floor.
+    // World-owned so the closing-scene transition cannot destroy it before pickup.
     const tile = new Location(2720, 4900, 2);
     if (itemOnGroundManager.getGroundItem(player.getUsername(), DEMONIC_SIGIL_ITEM_ID, tile)) return;
-    itemOnGroundManager.registerLocation(player, new Item(DEMONIC_SIGIL_ITEM_ID, 1), tile);
+    itemOnGroundManager.registerLocation(player, new Item(DEMONIC_SIGIL_ITEM_ID, 1), tile, null);
   }
 
   function onFirstRitualComplete(player) {
+    const denath = wizardNpcs.get(player)?.get("denath");
+    if (denath) {
+      denath.__shadowLeaving = true;
+      denath.moveTo?.(new Location(RITUAL_CENTER.x, RITUAL_CENTER.y, RITUAL_CENTER.z));
+      denath.performAnimation?.(new Animation(SEQ_DENATH_LEAVE));
+      denath.performGraphic?.(new Graphic(GFX_AGRITH_SUMMON));
+      // Identity-guarded player task: a relog, cleanup or replacement Denath must
+      // not be removed by an old leave callback.
+      Scenes.later(player, 6, () => {
+        if (player.isRegistered?.() === false) return;
+        if (wizardNpcs.get(player)?.get("denath") !== denath) return;
+        setHelperBits(player, helperBits(player) | BIT_DENATH);
+        removeWizard(player, "denath");
+      });
+    }
     setStage(player, STAGE_RITUAL_DONE);
     dropDenathsSigil(player);
   }
@@ -912,39 +1065,46 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   }
 
   /**
-   * Capture 3333 t2109-t2123: the post-first-ritual camera moves, BOOM and
-   * world shakes while Matthew explains what happened, then the portal-closing
-   * loc 10251 appears and the camera resets. Scene cleanup removes the loc and
-   * restores controls if the player leaves or logs out.
+   * Capture 3333 t2095-t2123: the magic circle, the post-first-ritual camera,
+   * BOOM and world shakes while Matthew explains what happened, then the
+   * portal-closing loc 10251 and the camera reset. Scene cleanup removes the
+   * loc and restores controls if the player leaves or logs out.
    */
   function startFirstRitualClosing(player) {
     const scene = Scenes.open(player, "shadow-first-ritual-close", [[2706, 2738, 4879, 4918, 2]], { beforeEnd: releaseRitualCast });
+    dressThroneRoom(scene);
     ensureWizardNpcs(player);
-    cameraBeat(scene, 0, [2722, 4900, 500], [2717, 4901, 150]);
-    Scenes.later(scene, 1, () => Scenes.camera(player, [2718, 4900, 900], [2717, 4901, 150], { rate: 1, rate2: 1 }));
-    cameraBeat(scene, 1, [2716, 4904, 300], [2719, 4902, 150]);
-    cameraBeat(scene, 2, [2722, 4904, 300], [2718, 4902, 150]);
-    cameraBeat(scene, 3, [2720, 4907, 300], [2719, 4902, 150]);
-    cameraBeat(scene, 4, [2722, 4896, 800], [2719, 4902, 150]);
-    Scenes.later(scene, 4, () => Scenes.camera(player, [2722, 4894, 1200], [2719, 4902, 150], { rate: 1, rate2: 1 }));
-    Scenes.later(scene, 5, () => {
+    // Capture 3333 t2095-t2123: the magic circle appears, then the portal switches
+    // to its closed loc before the camera track.
+    phaseLoc(scene, { id: AGRITH_RITUAL_CIRCLE_OBJECT_ID, x: 2719, y: 4899, face: 0 }, 9);
+    Scenes.camera(player, [2720, 4907, 500], [2720, 4900, 150], { rate: 2, rate2: 2 });
+    cameraBeat(scene, 11, [2718, 4900, 300], [2723, 4899, 150]);
+    Scenes.later(scene, 11, () => Scenes.camera(player, [2720, 4900, 300], [2723, 4899, 150], { rate: 1, rate2: 1 }));
+    cameraBeat(scene, 14, [2722, 4900, 500], [2717, 4901, 150]);
+    Scenes.later(scene, 14, () => Scenes.camera(player, [2718, 4900, 900], [2717, 4901, 150], { rate: 1, rate2: 1 }));
+    cameraBeat(scene, 15, [2716, 4904, 300], [2719, 4902, 150]);
+    cameraBeat(scene, 16, [2722, 4904, 300], [2718, 4902, 150]);
+    cameraBeat(scene, 17, [2720, 4907, 300], [2719, 4902, 150]);
+    cameraBeat(scene, 18, [2722, 4896, 800], [2719, 4902, 150]);
+    Scenes.later(scene, 18, () => Scenes.camera(player, [2722, 4894, 1200], [2719, 4902, 150], { rate: 1, rate2: 1 }));
+    Scenes.later(scene, 19, () => {
       StatementDialogue.send(player, "<col=800000>BOOM!", false);
       shake(player, 15);
       Scenes.camera(player, [2717, 4905, 300], [2719, 4900, 150]);
     });
-    Scenes.later(scene, 6, () => {
-      Scenes.loc(scene, { id: 10251, x: 2719, y: 4883, z: 2, type: 10, rotation: 0 });
+    Scenes.later(scene, 20, () => {
       shake(player, 1);
       Scenes.camera(player, [2723, 4899, 300], [2719, 4902, 150]);
     });
-    cameraBeat(scene, 7, [2718, 4906, 500], [2720, 4883, 300]);
-    Scenes.later(scene, 7, () => Scenes.camera(player, [2718, 4890, 500], [2720, 4883, 300], { rate: 10, rate2: 10 }));
-    cameraBeat(scene, 8, [2722, 4887, 500], [2720, 4897, 150]);
-    cameraBeat(scene, 9, [2718, 4905, 300], [2720, 4897, 150]);
-    cameraBeat(scene, 10, [2717, 4903, 250], [2719, 4902, 150], { rate: 1, rate2: 1 });
-    cameraBeat(scene, 11, [2720, 4897, 350], [2719, 4902, 150]);
-    Scenes.later(scene, 11, () => Scenes.camera(player, [2720, 4887, 350], [2719, 4902, 150], { rate: 1, rate2: 1 }));
-    Scenes.later(scene, 13, () => Scenes.end(player));
+    Scenes.later(scene, 21, () => phaseLoc(scene, { id: AGRITH_PORTAL_CLOSING_OBJECT_ID, x: 2719, y: 4883, face: 0 }));
+    cameraBeat(scene, 21, [2718, 4906, 500], [2720, 4883, 300]);
+    Scenes.later(scene, 21, () => Scenes.camera(player, [2718, 4890, 500], [2720, 4883, 300], { rate: 10, rate2: 10 }));
+    cameraBeat(scene, 22, [2722, 4887, 500], [2720, 4897, 150]);
+    cameraBeat(scene, 23, [2718, 4905, 300], [2720, 4897, 150]);
+    cameraBeat(scene, 24, [2717, 4903, 250], [2719, 4902, 150], { rate: 1, rate2: 1 });
+    cameraBeat(scene, 25, [2720, 4897, 350], [2719, 4902, 150]);
+    Scenes.later(scene, 26, () => Scenes.camera(player, [2720, 4887, 350], [2719, 4902, 150], { rate: 1, rate2: 1 }));
+    Scenes.later(scene, 28, () => Scenes.end(player));
   }
 
   function startFirstIncantation(player) {
@@ -963,13 +1123,18 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       return;
     }
     if (!packedIncantation(player)) assignIncantation(player);
-    // Dave's captured tile is twenty tiles away; the whole chorus must be local and visible.
+    // Keep the whole captured chorus local and visible while it speaks.
     if (typeof player.getNpcViewDistance === "function") {
       if (!ritualViewDistances.has(player)) ritualViewDistances.set(player, player.getNpcViewDistance());
       const distance = Math.max(...RITUAL_CAST.map(({ x, y }) => Math.max(Math.abs(x - RITUAL_TILE.x), Math.abs(y - RITUAL_TILE.y)))) + 1;
       player.setNpcViewDistance(Math.max(player.getNpcViewDistance(), distance));
     }
     ritualPicks.delete(player);
+    // Capture 3333 t2064: the first incantation is also in the instanced room, under
+    // the per-word camera that looks at the circle centre.
+    const scene = Scenes.open(player, "shadow-first-ritual", [[2706, 2738, 4879, 4918, 2]], { beforeEnd: releaseRitualCast });
+    dressThroneRoom(scene);
+    Scenes.camera(player, [2726, 4901, 550], [2720, 4900, 150]);
     setStage(player, STAGE_RITUAL);
     playRitualMenus(player, NpcIdentifiers.DENATH, FIRST_RITUAL_VARIANT, () =>
       resolveFirstIncantation(player)
@@ -989,7 +1154,10 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     if (!hasItem(player, DEMONIC_SIGIL_ITEM_ID) || !hasSilverlight(player)) return;
     ritualPicks.delete(player);
     // Capture 3333 t2429: the summoning camera starts with the first word menu.
-    Scenes.open(player, "shadow-second-ritual", [[2706, 2738, 4879, 4918, 2]], { beforeEnd: releaseRitualCast });
+    const scene = Scenes.open(player, "shadow-second-ritual", [[2706, 2738, 4879, 4918, 2]], { beforeEnd: releaseRitualCast });
+    dressThroneRoom(scene);
+    // t2362 still carries the closed first-ritual portal; t2455 restores 6282.
+    scene.__shadowClosedPortal = phaseLoc(scene, { id: AGRITH_PORTAL_CLOSING_OBJECT_ID, x: 2719, y: 4883, face: 0 });
     ensureWizardNpcs(player);
     Scenes.camera(player, [2720, 4894, 550], [2720, 4900, 150]);
     playRitualMenus(player, NpcIdentifiers.MATTHEW, SECOND_RITUAL_VARIANT, () =>
@@ -1046,12 +1214,15 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     const correct = firstRitualCorrect(player);
     ritualPicks.delete(player);
     if (correct) {
+      animateRitualCast(player, true);
       onFirstRitualComplete(player);
       startFirstRitualClosing(player);
       playOutcome(player, NpcIdentifiers.DENATH, FIRST_RITUAL_VARIANT, COND_RITUAL_CORRECT);
       afterDialogue(player, () => beginPortalClosing(player));
     } else {
       playOutcome(player, NpcIdentifiers.DENATH, FIRST_RITUAL_VARIANT, COND_RITUAL_WRONG);
+      const scene = Scenes.get(player);
+      if (scene) Scenes.later(scene, 2, () => Scenes.end(player));
     }
   }
 
@@ -1060,6 +1231,21 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     const correct = secondRitualCorrect(player);
     ritualPicks.delete(player);
     if (correct) {
+      animateRitualCast(player, true);
+      const scene = Scenes.get(player);
+      if (scene) {
+        // Capture 3333 t2455: the magic circle returns, the portal switches back
+        // to the open 6282 loc, and the circle is deleted at t2464.
+        phaseLoc(scene, { id: AGRITH_RITUAL_CIRCLE_OBJECT_ID, x: 2719, y: 4899, face: 0 }, 9);
+        if (scene.__shadowClosedPortal) {
+          removeSceneLoc(scene, scene.__shadowClosedPortal);
+          scene.__shadowClosedPortal = null;
+        }
+      }
+      // Capture 3333 t2458: Agrith-Naar appears as the correct outcome begins,
+      // before his own lines and Matthew's death; the attack action later only
+      // keeps the existing actor.
+      spawnAgrithNaar(player);
       setStage(player, STAGE_SUMMONED);
       playOutcome(player, NpcIdentifiers.MATTHEW, SECOND_RITUAL_VARIANT, COND_SUMMON_CORRECT);
     } else {
@@ -1097,24 +1283,35 @@ module.exports = function registerShadowOfTheStormQuest(api) {
 
   function spawnAgrithNaar(player) {
     if (demonNpcs.has(player)) return;
-    removeWizard(player, "matthew");
-    const npc = api.spawnNpc({
-      id: NpcIdentifiers.AGRITH_NAAR,
-      x: DEMON_TILE.x,
-      y: DEMON_TILE.y,
-      z: DEMON_TILE.z,
-      wanderRadius: 0,
-      owner: player,
-      ownerOnly: true,
-    });
-    if (npc) demonNpcs.set(player, npc);
     const scene = Scenes.get(player) ?? Scenes.open(player, "shadow-summoning", [[2706, 2738, 4879, 4918, 2]]);
+    dressThroneRoom(scene);
+    // Use the scene actor spawn so the demon shares the player's private area and
+    // is removed by the scene's own cleanup, not a parallel orphan actor.
+    const npc = Scenes.actor(scene, NpcIdentifiers.AGRITH_NAAR,
+      [DEMON_TILE.x, DEMON_TILE.y, DEMON_TILE.z], [2718, 4902]);
+    if (npc) {
+      demonNpcs.set(player, npc);
+      npc.getMovementQueue?.().setBlockMovement?.(true)?.reset?.();
+      npc.performAnimation?.(new Animation(SEQ_AGRITH_SUMMONED));
+      npc.performGraphic?.(new Graphic(GFX_AGRITH_SUMMON));
+      Scenes.later(scene, 9, () => npc.performAnimation?.(new Animation(SEQ_DEMON_CASTING)));
+      Scenes.later(scene, 17, () => npc.setPositionToFace?.(player.getLocation()));
+    }
+    // Capture 3333 t2455-t2475: the summoning camera, then the fight framing.
     Scenes.camera(player, [2722, 4907, 500], [2720, 4900, 500]);
-    Scenes.later(scene, 1, () => Scenes.camera(player, [2719, 4907, 500], [2720, 4900, 500], { rate: 1, rate2: 1 }));
-    Scenes.later(scene, 10, () => Scenes.camera(player, [2718, 4897, 400], [2720, 4903, 150]));
-    Scenes.later(scene, 11, () => Scenes.camera(player, [2719, 4900, 350], [2720, 4903, 150]));
-    Scenes.later(scene, 12, () => Scenes.camera(player, [2719, 4909, 500], [2720, 4900, 150]));
-    Scenes.later(scene, 14, () => Scenes.end(player));
+    Scenes.camera(player, [2719, 4907, 500], [2720, 4900, 500], { rate: 1, rate2: 1 });
+    Scenes.later(scene, 17, () => Scenes.camera(player, [2718, 4897, 400], [2720, 4903, 150]));
+    Scenes.later(scene, 18, () => {
+      Scenes.camera(player, [2719, 4900, 350], [2720, 4903, 150]);
+      Scenes.camera(player, [2719, 4900, 900], [2720, 4903, 150], { rate: 1, rate2: 1 });
+    });
+    Scenes.later(scene, 19, () => {
+      Scenes.camera(player, [2719, 4909, 500], [2720, 4900, 150]);
+      Scenes.camera(player, [2719, 4905, 1000], [2720, 4900, 150], { rate: 1, rate2: 1 });
+    });
+    // Keep the scene (and its torches) for the fight; the capture resets only the
+    // camera here and leaves the instance.
+    Scenes.later(scene, 20, () => player.getPacketSender().sendCameraReset());
   }
 
   function convertSilverlightToDarklight(player) {
@@ -1249,7 +1446,13 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     }
     if (stepId === ACTION_MATTHEW_KILLED) {
       event.handled = true;
-      removeWizard(player, "matthew");
+      const matthew = wizardNpcs.get(player)?.get("matthew");
+      matthew?.performAnimation?.(new Animation(SEQ_TANYA_DEATH));
+      matthew?.performGraphic?.(new Graphic(GFX_BLOOD, 0, 124));
+      setHelperBits(player, helperBits(player) | BIT_MATTHEW);
+      const scene = Scenes.get(player);
+      if (scene) Scenes.later(scene, 4, () => removeWizard(player, "matthew"));
+      else removeWizard(player, "matthew");
       return;
     }
     if (stepId === ACTION_DEMON_ATTACKS) {
@@ -1293,7 +1496,16 @@ module.exports = function registerShadowOfTheStormQuest(api) {
           Scenes.camera(player, [beat[0], beat[1], beat[2]], [2720, 4900, 150], { rate: 1, rate2: 1 });
           shake(player, beat[3]);
         });
+      } else if (scene?.name === "shadow-first-ritual" && picks.length <= 5) {
+        const beat = [
+          [2726, 4903, 600], [2725, 4904, 650], [2724, 4905, 700],
+          [2723, 4906, 750], [2722, 4907, 800],
+        ][picks.length - 1];
+        Scenes.later(scene, 1, () => {
+          Scenes.camera(player, [beat[0], beat[1], beat[2]], [2720, 4900, 150], { rate: 1, rate2: 1 });
+        });
       }
+      animateRitualCast(player, false);
       return;
     }
 
@@ -1517,7 +1729,8 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       ensureWizardNpcs(player);
       return;
     }
-    if (objectId === PORTAL_EXIT_OBJECT_ID && portalStage >= STAGE_IN_GROUP && portalStage < STAGE_COMPLETE) {
+    // No upper bound: completion leaves the player on plane 2, so the exit must keep working.
+    if (objectId === PORTAL_EXIT_OBJECT_ID && portalStage >= STAGE_IN_GROUP) {
       event.handled = true;
       player.sendMessage("You step into the portal.");
       player.moveTo(new Location(2721, 4911, 0));
@@ -1602,11 +1815,17 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     }
     player.moveTo(new Location(2721, 4911, 0));
     const scene = Scenes.open(player, "shadow-tanya-death", [[2706, 2738, 4879, 4918, 0]]);
-    const tanya = Scenes.actor(scene, 919, [2722, 4905, 0], [2722, 4900]);
+    const tanya = Scenes.actor(scene, 919, [2722, 4905, 0], [2722, 4904]);
     const ghosts = [
       [2721, 4904], [2722, 4904], [2723, 4904],
-    ].map(([x, y]) => Scenes.actor(scene, 1989, [x, y, 0], [2722, 4900]));
+    ].map(([x, y]) => Scenes.actor(scene, 1989, [x, y, 0], [2722, 4905]));
+    tanya?.performAnimation?.(new Animation(SEQ_TANYA_DEFEND));
     Scenes.camera(player, [2721, 4897, 350], [2722, 4911, 25]);
+    Scenes.later(scene, 2, () => tanya?.performAnimation?.(new Animation(SEQ_TANYA_DEFEND)));
+    Scenes.later(scene, 4, () => tanya?.performAnimation?.(new Animation(SEQ_TANYA_DEATH)));
+    Scenes.later(scene, 6, () => {
+      for (const ghost of ghosts) ghost?.performAnimation?.(new Animation(SEQ_GHOST_ATTACK));
+    });
     Scenes.later(scene, 7, () => {
       startTranscript(api, player, NpcIdentifiers.MATTHEW, PAGE, "performing-the-ritual-walking-out-of-the-portal");
       if (tanya) Scenes.removeActor(scene, tanya);
@@ -1624,13 +1843,108 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     });
   }
 
+  /** Telekinetic Grab pulls the player to a walkable tile against the demon's footprint. */
+  function teleportPlayerAdjacent(npc, player) {
+    if (!player?.isPlayer?.()) return false;
+    const at = npc.getLocation?.() ?? player.getLocation();
+    const size = Math.max(1, npc.getSize?.() ?? 1);
+    const playerTile = player.getLocation();
+    const area = player.getPrivateArea?.() ?? null;
+    // Never teleport across areas/planes or into scenery; a size-3 demon's ring
+    // is its 3x3 footprint plus the surrounding tiles.
+    if (at.getZ() !== playerTile.getZ() || (npc.getPrivateArea?.() ?? null) !== area) return false;
+    const candidates = [];
+    for (let dx = -1; dx <= size; dx++) {
+      for (let dy = -1; dy <= size; dy++) {
+        const inside = dx >= 0 && dx < size && dy >= 0 && dy < size;
+        const corner = (dx === -1 || dx === size) && (dy === -1 || dy === size);
+        if (inside || corner) continue;
+        candidates.push(new Location(at.getX() + dx, at.getY() + dy, at.getZ()));
+      }
+    }
+    candidates.sort((a, b) => a.getDistance(playerTile) - b.getDistance(playerTile));
+    for (const tile of candidates) {
+      if (RegionManager.blocked?.(tile, area) === true) continue;
+      player.moveTo(tile);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Agrith-Naar, per the Wiki: melee up close by default; Fire Blast out of range or
+   * against Protect from Melee; and, out of range with Protect from Magic, a
+   * Telekinetic Grab that pulls the player back into melee. The room is an instance
+   * and he remains where he was summoned.
+   */
+  class AgrithNaarCombat extends CombatMethod {
+    constructor() {
+      super();
+      this.style = CombatType.MELEE;
+      this.telekinetic = false;
+      this.landing = 0;
+    }
+
+    type() {
+      return this.style;
+    }
+
+    attackSpeed() {
+      return AGRITH_ATTACK_SPEED;
+    }
+
+    attackDistance() {
+      return AGRITH_ATTACK_DISTANCE;
+    }
+
+    start(npc, target) {
+      const inMelee = api.core.CombatRange.canReach(npc, api.core.CombatFactory.MELEE_COMBAT, target);
+      const prayers = target.getPrayerActive?.() ?? [];
+      const protectMelee = prayers[PrayerHandler.PROTECT_FROM_MELEE] === true;
+      const protectMagic = prayers[PrayerHandler.PROTECT_FROM_MAGIC] === true;
+      this.telekinetic = false;
+      const cast = !inMelee || protectMelee;
+      this.style = cast ? CombatType.MAGIC : CombatType.MELEE;
+      if (!cast) {
+        npc.performAnimation?.(new Animation(SEQ_DEMON_ATTACK_GREATER));
+        return;
+      }
+      npc.performAnimation?.(new Animation(FIRE_BLAST.anim));
+      if (!inMelee && protectMagic) {
+        this.telekinetic = true;
+        teleportPlayerAdjacent(npc, target);
+        return;
+      }
+      npc.performGraphic?.(new Graphic(FIRE_BLAST.startGraphic, GraphicHeight.HIGH));
+      this.landing = FIRE_BLAST.end;
+      Projectile.createProjectile(
+        npc, target, FIRE_BLAST.projectile, FIRE_BLAST.start, FIRE_BLAST.end,
+        FIRE_BLAST.startHeight, FIRE_BLAST.endHeight
+      ).withAngle(16).withProgress(64).sendProjectile();
+    }
+
+    hits(npc, target) {
+      if (this.telekinetic) return [];
+      const delay = this.style === CombatType.MAGIC ? Projectile.ticksToLand(this.landing) : 0;
+      const hit = new PendingHit(npc, target, this, delay);
+      hit.setTotalDamage(Math.min(AGRITH_MAX_HIT, hit.getTotalDamage()));
+      if (this.style === CombatType.MAGIC && hit.isAccurate()) {
+        target.performGraphic?.(new Graphic(FIRE_BLAST.endGraphic, this.landing, GraphicHeight.HIGH));
+      }
+      return [hit];
+    }
+  }
+
   function handleAgrithNaarBeforeDeath(event) {
     const npc = event.npc;
     if (!npc || npc.getId?.() !== NpcIdentifiers.AGRITH_NAAR) return;
-    const killer = npc.getCombat?.().getKiller?.(false);
+    const killer = event.killer ?? npc.getCombat?.().getKiller?.(false);
     if (!killer || killer.isPlayer?.() !== true) return;
     if (demonNpcs.get(killer) !== npc) return;
-    if (silverlightEquipped(killer)) return;
+    // The Wiki requires Silverlight equipped AND the killer in melee range, whatever
+    // damage type lands the last hit (spell or poison included).
+    const inMelee = api.core.CombatRange.canReach(npc, api.core.CombatFactory.MELEE_COMBAT, killer);
+    if (silverlightEquipped(killer) && inMelee) return;
     npc.setHitpoints(DEMON_HP_ON_REGEN);
     killer.sendMessage("Agrith-Naar's wounds close. You must strike the final blow with Silverlight!");
     event.preventDeath = true;
@@ -1663,8 +1977,8 @@ module.exports = function registerShadowOfTheStormQuest(api) {
 
   function handleZoneEnter({ player }) {
     if (!player) return;
-    ensureWizardNpcs(player);
     ensureDemon(player);
+    ensureWizardNpcs(player);
     ensureImplement(player);
   }
 
@@ -1685,8 +1999,16 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     ensureKilnSearchActions();
     refreshQuestList(player);
     syncShadowVarbits(player);
-    ensureWizardNpcs(player);
+    // Recovery: a relog after the first ritual must not keep a half-finished
+    // Denath leave animation in the throne room.
+    if (quest.getStage(player) >= STAGE_RITUAL_DONE && !(helperBits(player) & BIT_DENATH)) {
+      setHelperBits(player, helperBits(player) | BIT_DENATH);
+      removeWizard(player, "denath");
+    }
+    // The demon may open the fight scene on recovery; sync the cast after it so
+    // both land in the same private area.
     ensureDemon(player);
+    ensureWizardNpcs(player);
     ensureImplement(player);
     if (quest.getStage(player) === STAGE_RITUAL_DONE && !(helperBits(player) & BIT_TANYA)) {
       beginPortalClosing(player);
@@ -1887,6 +2209,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   api.onNpcInteraction(handleNpcInteraction);
   api.onZoneEnter(UNDERGROUND_ZONE, handleZoneEnter);
   api.onZoneEnter(THRONE_ZONE, handleZoneEnter);
+  api.registerNpcCombatMethodProvider([NpcIdentifiers.AGRITH_NAAR], AgrithNaarCombat, { singleton: false });
   api.onNpcBeforeDeath(handleAgrithNaarBeforeDeath);
   api.onNpcDeath(handleAgrithNaarDeath);
   api.onPlayerLogin(handleLogin);

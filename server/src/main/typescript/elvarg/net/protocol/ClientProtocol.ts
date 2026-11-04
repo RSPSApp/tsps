@@ -1083,6 +1083,12 @@ function chatStyleBytes(style: ChatStyle | undefined): Buffer {
   return Buffer.from([style.colour & 0xff, style.effect & 0xff, ...(style.pattern ?? []).map((value) => value & 0xff)]);
 }
 
+const LEGACY_CHAT_COLOURS: Record<string, string> = {
+  red: "ff0000", gre: "00ff00", blu: "0000ff", yel: "ffff00", cya: "00ffff", mag: "ff00ff",
+  whi: "ffffff", bla: "000000", lre: "ff9040", dre: "800000", dbl: "000080",
+  or1: "ffb000", or2: "ff7000", or3: "ff3000", gr1: "c0ff00", gr2: "80ff00", gr3: "40ff00",
+};
+
 export function encodeChatMessage(
   messageType: "game" | "public" | "private_in" | "private_out" | "channel" | "clan" | "trade" | "server",
   text: string,
@@ -1104,6 +1110,11 @@ export function encodeChatMessage(
     server: 0,
   };
   const type = chatType ?? defaultTypes[messageType];
+  // Existing server content uses legacy colours; both clients render native font markup.
+  if (messageType === "game" || messageType === "server") {
+    text = text.replace(/@([a-z0-9]{3})@/g, (tag, colour) =>
+      LEGACY_CHAT_COLOURS[colour] ? `<col=${LEGACY_CHAT_COLOURS[colour]}>` : tag);
+  }
   const id = Buffer.alloc(2);
   id.writeUInt16BE(playerId & 0xffff);
   return encodeServerPacket(ServerPacketId.CHAT_MESSAGE, Buffer.concat([
@@ -2013,8 +2024,26 @@ export function encodeChatFilterSettings(publicMode: number, privateMode: number
   return encodeServerPacket(ServerPacketId.CHAT_FILTER_SETTINGS, Buffer.from([publicMode & 0xff, privateMode & 0xff, tradeMode & 0xff]));
 }
 
-export function encodeRunEnergy(percent: number, running: boolean): Buffer {
-  return encodeServerPacket(ServerPacketId.RUN_ENERGY, Buffer.from([Math.max(0, Math.min(100, percent)), running ? 1 : 0]));
+/** OSRS run energy is 0-10,000 units; 100 units is 1%. */
+const RUN_ENERGY_MAX_UNITS = 10_000;
+
+/**
+ * percent(1) + running(1) + units(2) + weight kg signed(2) + stamina ticks(2) + stamina
+ * active(2). The percent stays for older readers; units are the exact value the orb and the
+ * Run Energy plugin use.
+ */
+export function encodeRunEnergy(units: number, running: boolean, weightKg: number, staminaTicks = 0): Buffer {
+  const clampedUnits = Math.max(0, Math.min(RUN_ENERGY_MAX_UNITS, Math.floor(units)));
+  const clampedWeight = Math.max(-32768, Math.min(32767, Math.round(weightKg)));
+  const clampedStamina = Math.max(0, Math.min(65535, Math.floor(staminaTicks)));
+  const payload = Buffer.alloc(10);
+  payload[0] = Math.floor(clampedUnits / 100) & 0xff;
+  payload[1] = running ? 1 : 0;
+  payload.writeUInt16BE(clampedUnits, 2);
+  payload.writeInt16BE(clampedWeight, 4);
+  payload.writeUInt16BE(clampedStamina, 6);
+  payload.writeUInt16BE(clampedStamina > 0 ? 1 : 0, 8);
+  return encodeServerPacket(ServerPacketId.RUN_ENERGY, payload);
 }
 
 /** Remaining shutdown countdown in centiseconds (0 clears the client's countdown HUD). */

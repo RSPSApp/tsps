@@ -38,6 +38,9 @@ function createPlayer({ ring = null, doses = 1 } = {}) {
   const messages = [];
   return {
     messages,
+    getAttribute: () => undefined,
+    isPlayer: () => true,
+    getAsPlayer() { return this; },
     getEquipment: () => ({ get: (slot) => equipment[slot], refreshItems: () => {} }),
     getInventory: () => ({
       deleteNumber: () => {},
@@ -92,14 +95,19 @@ test("a worn charged ring doubles a stamina dose and spends one charge", () => {
   assert.equal(plain.energy, 20, "no ring, no doubling");
 });
 
-test("a ring with 500 charges skips 15% of run-energy drain", () => {
+test("a ring with 500 charges cuts run-energy drain to 85%, unless stamina is active", () => {
   const ring = item(ItemIds.RING_OF_ENDURANCE, { "ring-of-endurance": 500 });
   const player = createPlayer({ ring });
-  assert.equal(RingOfEndurance._test.passiveApplies(player, 14), true);
-  assert.equal(RingOfEndurance._test.passiveApplies(player, 15), false);
+  assert.equal(RingOfEndurance._test.passiveApplies(player), true);
+  assert.equal(RingOfEndurance._test.drainModifier(player, 60), 51);
   ring.setMetaValue("ring-of-endurance", 499);
-  assert.equal(RingOfEndurance._test.passiveApplies(player, 0), false);
-  assert.equal(RingOfEndurance._test.passiveApplies(createPlayer(), 0), false);
+  assert.equal(RingOfEndurance._test.passiveApplies(player), false);
+  assert.equal(RingOfEndurance._test.drainModifier(player, 60), 60);
+  assert.equal(RingOfEndurance._test.drainModifier(createPlayer(), 60), 60);
+  // A stamina potion's 30% already applies and the ring must not stack on it.
+  ring.setMetaValue("ring-of-endurance", 500);
+  player.getAttribute = () => Date.now() + 60_000;
+  assert.equal(RingOfEndurance._test.drainModifier(player, 60), 60);
 });
 
 test("uncharging drops the charges without refunding them", () => {

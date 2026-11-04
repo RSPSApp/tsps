@@ -46,6 +46,8 @@ module.exports = function registerDaddysHomeQuest(api) {
     PlayerDialogue,
     Skill,
     StatementDialogue,
+    Task,
+    TaskManager,
   } = api.core;
   const { registerQuest } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
@@ -81,6 +83,7 @@ module.exports = function registerDaddysHomeQuest(api) {
   const STATE_BUILT = 3;
 
   const BUILD_ANIMATION = 3676; // human_poh_build
+  const CARPET_BUILD_ANIMATION = 3683; // carpet laying (RSProx 1702)
   const REMOVE_ANIMATION = 3685; // human_throw_away
   const BUILD_SOUND = 938;
   const REMOVE_SOUNDS = [2097, 2098];
@@ -132,13 +135,13 @@ module.exports = function registerDaddysHomeQuest(api) {
 
   /** The seven pieces, in varbit order. */
   const PIECES = [
-    { key: "stool-1", name: "stool", planks: 1, nails: 2, xp: 29 },
-    { key: "stool-2", name: "stool", planks: 1, nails: 2, xp: 29 },
-    { key: "chair", name: "chair", planks: 2, nails: 2, xp: 58 },
-    { key: "table-1", name: "table", planks: 3, nails: 4, xp: 87 },
-    { key: "table-2", name: "table", planks: 3, nails: 4, xp: 87 },
-    { key: "bed", name: "bed", waxwood: 3, cloth: 2, xp: 207 },
-    { key: "carpet", name: "carpet", cloth: 3, xp: 45 },
+    { key: "stool-1", name: "stool", removalDescription: "A broken stool in the kitchen", planks: 1, nails: 2, xp: 29 },
+    { key: "stool-2", name: "stool", removalDescription: "A broken stool in the bedroom", planks: 1, nails: 2, xp: 29 },
+    { key: "chair", name: "chair", removalDescription: "A broken chair in the bedroom", planks: 2, nails: 2, xp: 58 },
+    { key: "table-1", name: "table", removalDescription: "A broken table in the kitchen", planks: 3, nails: 4, xp: 87 },
+    { key: "table-2", name: "table", removalDescription: "A broken table in the bedroom", planks: 3, nails: 4, xp: 87 },
+    { key: "bed", name: "bed", removalDescription: "The old campbed", waxwood: 3, cloth: 2, xp: 207 },
+    { key: "carpet", name: "carpet", removalDescription: "The rotten carpet", cloth: 3, xp: 45, animation: CARPET_BUILD_ANIMATION },
   ];
 
   // Base loc id -> piece index. The carpet is twelve placements sharing one transform.
@@ -275,26 +278,6 @@ module.exports = function registerDaddysHomeQuest(api) {
     return Math.max(0, base * Math.max(0.05, 1 - (Math.max(1, level) - 1) * 0.06));
   }
 
-  /** Each nail is hammered in turn; a bent nail is consumed and does not count (RSProx 1723). */
-  function consumeNails(player, amount) {
-    const stock = inventory(player);
-    let remaining = amount;
-    let attempts = 0;
-    while (remaining > 0 && attempts < amount * 10) {
-      const id = NAIL_IDS.find((nail) => stock.getAmount(nail) > 0);
-      if (id === undefined) return false;
-      stock.delete(id, 1);
-      attempts++;
-      if (Math.random() < nailBendChance(player, id)) {
-        player.sendMessage("You accidentally bend a nail.");
-      } else {
-        player.sendMessage("You use a nail.");
-        remaining--;
-      }
-    }
-    return remaining === 0;
-  }
-
   function buildRequirements(piece) {
     const parts = [];
     const name = (amount, singular, plural = `${singular}s`) => `${amount} ${amount === 1 ? singular : plural}`;
@@ -305,22 +288,20 @@ module.exports = function registerDaddysHomeQuest(api) {
     return parts.join(", ");
   }
 
-  function canBuild(player, piece) {
+  function canBuild(player, piece, nails = piece.nails) {
     const stock = inventory(player);
     if (piece.planks && stock.getAmount(Items.PLANK) < piece.planks) return false;
     if (piece.waxwood && stock.getAmount(WAXWOOD_PLANK) < piece.waxwood) return false;
     if (piece.cloth && stock.getAmount(Items.BOLT_OF_CLOTH) < piece.cloth) return false;
-    if (piece.nails && NAIL_IDS.reduce((sum, id) => sum + stock.getAmount(id), 0) < piece.nails) return false;
+    if (nails && NAIL_IDS.reduce((sum, id) => sum + stock.getAmount(id), 0) < nails) return false;
     return true;
   }
 
   function consumeMaterials(player, piece) {
-    if (piece.nails && !consumeNails(player, piece.nails)) return false;
     const stock = inventory(player);
     if (piece.planks) stock.deleteNumber(Items.PLANK, piece.planks);
     if (piece.waxwood) stock.deleteNumber(WAXWOOD_PLANK, piece.waxwood);
     if (piece.cloth) stock.deleteNumber(Items.BOLT_OF_CLOTH, piece.cloth);
-    return true;
   }
 
   function missingToolMessage(player) {
@@ -340,6 +321,81 @@ module.exports = function registerDaddysHomeQuest(api) {
     }
     stock.adds(itemId, 1);
     player.sendMessage(itemId === Items.HAMMER ? "Yarlo gives you a hammer." : "Yarlo gives you a saw.");
+  }
+
+  // RSProx 1702/1723: one nail attempt per tick, then built state/XP on the next tick.
+  // The earlier hammering must reach player sync before a completion level-up resets it.
+  class FurnitureBuild extends Task {
+    constructor(player, index) {
+      super(1, player);
+      this.player = player;
+      this.index = index;
+      this.location = player.getLocation().clone();
+      this.remaining = PIECES[index].nails ?? 0;
+      this.attempts = 0;
+    }
+
+    hasRequirements() {
+      return !missingToolMessage(this.player) && canBuild(this.player, PIECES[this.index]);
+    }
+
+    start() {
+      this.animate(0);
+      TaskManager.submit(this);
+    }
+
+    animate(tick) {
+      this.player.performAnimation(new Animation(PIECES[this.index].animation ?? BUILD_ANIMATION));
+      if (tick % 2 === 0) this.player.getPacketSender().sendSound(BUILD_SOUND, 0, 0);
+    }
+
+    cancel() {
+      this.stop();
+      if (this.player.getSkill() !== this) return;
+      this.player.setSkill(null);
+      if (this.player.isRegistered() && this.player.getHitpoints() > 0) {
+        this.player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+      }
+    }
+
+    execute() {
+      const player = this.player;
+      const piece = PIECES[this.index];
+      if (player.getSkill() !== this || !player.isRegistered() || player.getHitpoints() <= 0 ||
+          !player.getLocation().equals(this.location) || quest.getStage(player) < STAGE_BUILD ||
+          stateOf(player)[this.index] !== STATE_HOTSPOT) return this.cancel();
+      const toolMessage = missingToolMessage(player);
+      if (toolMessage || !canBuild(player, piece, 0)) {
+        player.sendMessage(toolMessage || `You need ${buildRequirements(piece)} to build that.`);
+        return this.cancel();
+      }
+      if (this.remaining > 0) {
+        const nail = NAIL_IDS.find((id) => has(player, id));
+        if (nail === undefined || this.attempts >= piece.nails * 10) {
+          player.sendMessage("You need more nails to finish that.");
+          return this.cancel();
+        }
+        inventory(player).delete(nail, 1);
+        this.attempts++;
+        if (Math.random() < nailBendChance(player, nail)) player.sendMessage("You accidentally bend a nail.");
+        else {
+          player.sendMessage("You use a nail.");
+          this.remaining--;
+        }
+        if (this.remaining > 0) this.animate(this.attempts);
+        return;
+      }
+      consumeMaterials(player, piece);
+      setPieceState(player, this.index, STATE_BUILT);
+      this.stop();
+      player.setSkill(null);
+      player.getSkillManager().addExperiences(Skill.CONSTRUCTION, piece.xp);
+      if (allBuilt(stateOf(player)) && quest.getStage(player) < STAGE_BUILT) quest.setStage(player, STAGE_BUILT);
+    }
+  }
+
+  function cancelBuild({ player }) {
+    if (player.getSkill() instanceof FurnitureBuild) player.getSkillManager().stopSkillable();
   }
 
   // ==========================================================================
@@ -377,15 +433,8 @@ module.exports = function registerDaddysHomeQuest(api) {
         const verbal = buildRequirements(piece);
         return player.sendMessage(`You need ${verbal}${piece.nails ? " of any type" : ""} to build that.`), true;
       }
-      if (!consumeMaterials(player, piece)) {
-        return player.sendMessage("You need more nails to finish that."), true;
-      }
-      setPieceState(player, index, STATE_BUILT);
-      player.performAnimation(new Animation(BUILD_ANIMATION));
-      player.getPacketSender().sendSound(BUILD_SOUND, 0, 0);
-      player.getSkillManager().addExperiences(Skill.CONSTRUCTION, piece.xp);
-      if (allBuilt(stateOf(player)) && stage < STAGE_BUILT) {
-        quest.setStage(player, STAGE_BUILT);
+      if (!(player.getSkill() instanceof FurnitureBuild && player.getSkill().index === index)) {
+        player.getSkillManager().startSkillable(new FurnitureBuild(player, index));
       }
       return true;
     }
@@ -468,9 +517,9 @@ module.exports = function registerDaddysHomeQuest(api) {
 
   function describeRemaining(player) {
     const left = remainingFurniture(player);
-    const lines = left.slice(0, 3).map(({ piece }) => `- A broken ${piece.name}`);
+    const lines = [`You still need to remove: ${left.slice(0, 3).map(({ piece }) => `- ${piece.removalDescription}`).join(" ")}`];
     for (let index = 3; index < left.length; index += 3) {
-      lines.push(left.slice(index, index + 3).map(({ piece }) => `- A broken ${piece.name}`).join("  "));
+      lines.push(left.slice(index, index + 3).map(({ piece }) => `- ${piece.removalDescription}`).join(" "));
     }
     return lines;
   }
@@ -964,4 +1013,5 @@ module.exports = function registerDaddysHomeQuest(api) {
   api.onObjectInteraction(handleCrateSearch);
   api.onItemAction("Marlo's crate", { Open: openCrate });
   api.onPlayerLogin(syncFurniture);
+  api.onPlayerLogout(cancelBuild);
 };

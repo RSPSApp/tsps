@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerBurningClawsSpecialAttack(api) {
-  const { Animation, CombatSpecial, Graphic, HitDamage, HitMask, ItemIdentifiers, MeleeCombatMethod, Sound, Sounds, Task, TaskManager } = api.core;
+  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Sound, Sounds } = api.core;
 
   const DRAIN = 35;
   const SPECIAL_ANIMATION = new Animation(11140);
@@ -10,59 +10,7 @@ module.exports = function registerBurningClawsSpecialAttack(api) {
   // Wiki (Burning claws): a burn deals 10 damage over 40 ticks, up to five at once. Each hitsplat
   // burns with the chance of the accuracy roll that landed (1st, 2nd, 3rd); a full miss never burns.
   const BURN_TOTAL_DAMAGE = 10;
-  const BURN_TICK_INTERVAL = 4;
-  const MAX_ACTIVE_BURNS = 5;
   const BURN_CHANCE_BY_ROLL = [0.15, 0.3, 0.45];
-  // A target's running burn tasks; a death or logout ends them so none reach the next life.
-  const activeBurns = new WeakMap();
-
-  function endBurns(target) {
-    const burns = activeBurns.get(target);
-    if (!burns) {
-      return;
-    }
-    activeBurns.delete(target);
-    for (const task of burns) {
-      task.stop();
-    }
-  }
-
-  function isDying(target) {
-    return target.getHitpoints() <= 0 || target.isDyingReturn?.() === true || target.isDyingFunction?.() === true;
-  }
-
-  function applyBurn(target) {
-    let burns = activeBurns.get(target);
-    if (!burns) {
-      burns = new Set();
-      activeBurns.set(target, burns);
-    }
-    if (burns.size >= MAX_ACTIVE_BURNS) {
-      return;
-    }
-    const task = new (class extends Task {
-      remaining = BURN_TOTAL_DAMAGE;
-
-      constructor() {
-        super(BURN_TICK_INTERVAL);
-      }
-
-      execute() {
-        if (!target.isRegistered() || isDying(target)) {
-          endBurns(target);
-          return;
-        }
-        target.getCombat().getHitQueue().addPendingDamage([new HitDamage(1, HitMask.RED)]);
-        this.remaining--;
-        if (this.remaining <= 0) {
-          burns.delete(this);
-          this.stop();
-        }
-      }
-    })();
-    burns.add(task);
-    TaskManager.submit(task);
-  }
 
   class BurningClawsCombatMethod extends MeleeCombatMethod {
     start(character, target) {
@@ -81,16 +29,13 @@ module.exports = function registerBurningClawsSpecialAttack(api) {
       }
       for (let i = 0; i < hit.getHits().length; i++) {
         if (Math.random() < chance) {
-          applyBurn(hit.getTarget());
+          api.emitCustomEvent("combat:burn", {
+            attacker: hit.getAttacker(), target: hit.getTarget(), damage: BURN_TOTAL_DAMAGE, severity: "normal",
+          });
         }
       }
     }
   }
-
-  // onPlayerDefeated sees every death; onPlayerDeath stops at the first handler that takes it (a safe-death respawn).
-  api.onPlayerDefeated(({ victim }) => endBurns(victim));
-  api.onPlayerLogout(({ player }) => endBurns(player));
-  api.onNpcDeath(({ npc }) => endBurns(npc));
 
   api.registerCombatSpecial({
     id: "burning_claws",

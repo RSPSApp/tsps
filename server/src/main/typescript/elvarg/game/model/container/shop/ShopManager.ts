@@ -167,7 +167,15 @@ export class ShopManager {
         }
 
         this.setActiveShop(player, shopId, targetUid);
-        return this.openInterface(player, shop, resetScroll, targetUid);
+        const opened = this.openInterface(player, shop, resetScroll, targetUid);
+        if (opened) {
+            PluginManager.emitCustomEvent("shop:opened", {
+                player,
+                shopId,
+                shopName: shop.definition.getName(),
+            });
+        }
+        return opened;
     }
 
     public static close(player: any): void {
@@ -218,7 +226,7 @@ export class ShopManager {
         }
 
         if (fromShop) {
-            const entry = this.itemAtDisplaySlot(shop, action.slot);
+            const entry = this.itemAtDisplaySlot(player, shop, action.slot);
             if (!entry) {
                 return true;
             }
@@ -293,7 +301,7 @@ export class ShopManager {
         if (packet.groupId === this.MAIN_INTERFACE_ID && packet.childId === 16) {
             const slot = packet.slot - 1;
             const shop = this.currentShop(player);
-            const item = shop ? this.itemAtDisplaySlot(shop, slot) : null;
+            const item = shop ? this.itemAtDisplaySlot(player, shop, slot) : null;
             // The stock can shift (sold-in items leave), so the clicked slot
             // must still hold the item the client showed there.
             if (!item || (packet.itemId != null && packet.itemId > 0 && packet.itemId !== item.itemId)) return true;
@@ -341,7 +349,7 @@ export class ShopManager {
         return {
             name: shop.definition.getName(),
             currency: this.currencyName(shop.definition.getCurrency()),
-            stock: this.displayEntries(shop).map((entry) => ({
+            stock: this.displayEntries(shop, player).map((entry) => ({
                 ...entry, price: this.buyPrice(player, shop, ItemDefinition.forId(entry.itemId)),
             })),
         };
@@ -454,7 +462,7 @@ export class ShopManager {
         const opening =
             !this.isOpen(player);
 
-        const stock = this.displayEntries(shop).map((entry, slot) => {
+        const stock = this.displayEntries(shop, player).map((entry, slot) => {
             const definition = ItemDefinition.forId(entry.itemId);
             const price = definition ? this.buyPrice(player, shop, definition) : 0;
             return {
@@ -505,26 +513,38 @@ export class ShopManager {
     }
 
     /**
-     * The stock in slot order. An item the shop stocks keeps its slot at 0
+     * The stock this player sees, in slot order. An item the shop stocks keeps its slot at 0
      * when sold out, as in OSRS; items players sold in leave when gone.
      */
-    private static displayEntries(shop: RuntimeShop): DisplayEntry[] {
+    private static displayEntries(shop: RuntimeShop, player: any): DisplayEntry[] {
         const entries: DisplayEntry[] = [];
         for (const itemId of shop.order) {
             const amount = shop.stock.get(itemId) ?? 0;
-            if (amount > 0 || shop.originalAmounts.has(itemId)) {
+            if ((amount > 0 || shop.originalAmounts.has(itemId)) && this.stockVisible(player, shop, itemId)) {
                 entries.push({ itemId, amount });
             }
         }
         return entries;
     }
 
+    /**
+     * "shop:stock-visible": content may hide stock from one player (the Lost Property shop
+     * lists only what the player has unlocked; some stock waits for a quest). Hidden stock
+     * takes no slot, so it can't be bought either.
+     */
+    private static stockVisible(player: any, shop: RuntimeShop, itemId: number): boolean {
+        const request = { player, shopId: shop.definition.getId(), shopName: shop.definition.getName(), itemId, visible: true };
+        PluginManager.emitCustomEvent("shop:stock-visible", request);
+        return request.visible !== false;
+    }
+
     private static itemAtDisplaySlot(
+        player: any,
         shop: RuntimeShop,
         slot: number
     ): DisplayEntry | null {
         return Number.isInteger(slot) && slot >= 0
-            ? this.displayEntries(shop)[slot] ?? null
+            ? this.displayEntries(shop, player)[slot] ?? null
             : null;
     }
 
@@ -584,7 +604,7 @@ export class ShopManager {
     ): void {
         const definition = ItemDefinition.forId(itemId);
         // An item with no price of its own is never sold; content may still make a priced one free ("shop:buy-price").
-        if (this.itemPrice(shop, definition) <= 0) {
+        if (this.itemPrice(shop, definition) <= 0 || !this.stockVisible(player, shop, itemId)) {
             return;
         }
         const price = this.buyPrice(player, shop, definition);

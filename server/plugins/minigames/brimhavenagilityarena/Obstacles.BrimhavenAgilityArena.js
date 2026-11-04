@@ -1,42 +1,61 @@
 "use strict";
 
 /**
- * The arena's clickable obstacles. They are one-tile-thick lines between the pillars, so a click
- * crosses one step: the animation plays, the player is force-moved past the clicked tile and the
- * Wiki's XP is paid when they land. The rope swing is the exception: it swings the player from
- * two tiles before the rope to three past it, as rsprox captures show. Blade and trap obstacles
- * have no click option; the Area unit handles those.
+ * The arena's clickable obstacles. Each one spans the eight-tile gap between two pillars, and one
+ * click crosses the whole of it: the player stands on the gap's near tile, is carried to its far
+ * tile and is paid the Wiki's XP once, the tick after landing (rsprox 75, 1102, 1735, 1738, 1863,
+ * 4308 all agree; a log, rope or line of pillars never pays per tile). The rope swing swings the
+ * player from two tiles before the rope to three past it. Blade and trap obstacles have no click
+ * option; the Area unit handles those.
  */
 
 const Shared = require("./Shared.BrimhavenAgilityArena");
 const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
 
-/** Animation ids as server/plugins/skills/agility/Constants.Agility.js names them. */
-const ANIM = {
-  BALANCE_WALK: 762,
-  LEDGE_WALK: 756,
-  MONKEY_BARS_CROSS: 744,
-  CLIMB_LOW_WALL: 839,
-  ROPE_SWING: 751,
-  JUMP: 741,
-  HANG_SWING: 1122,
-};
 /** The rope swing's own animation, sound and how far past the rope it lands (rsprox captures). */
-const ROPE_SWING = { ROPE_ANIM: 497, SOUND: 2494, PAST: 3, BEFORE: 2 };
+const ROPE_SWING = { ANIM: 751, ROPE_ANIM: 497, SOUND: 2494, PAST: 3, BEFORE: 2 };
 /** 0 west, 1 north, 2 east, 3 south, as the agility steps' wall facings. */
 const ROTATION_VECTORS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
 
-const SPECS = {
-  BALANCING_ROPE: { anim: ANIM.BALANCE_WALK, render: ANIM.BALANCE_WALK },
-  LOG_BALANCE: { anim: ANIM.BALANCE_WALK, render: ANIM.BALANCE_WALK },
-  BALANCING_LEDGE: { anim: ANIM.LEDGE_WALK, render: ANIM.LEDGE_WALK },
-  MONKEY_BARS: { anim: ANIM.MONKEY_BARS_CROSS },
-  LOW_WALL: { anim: ANIM.CLIMB_LOW_WALL },
-  ROPE_SWING: { anim: ANIM.ROPE_SWING },
-  PLANK: { anim: ANIM.BALANCE_WALK, render: ANIM.BALANCE_WALK },
-  PILLAR: { anim: ANIM.JUMP },
-  HAND_HOLDS: { anim: ANIM.HANG_SWING },
-};
+/** Dispenser pillars stand every 11 tiles; a gap runs from 2 to 9 past one (cache). */
+const GRID = { x: 2761, y: 9546, step: 11 };
+
+/**
+ * Where each obstacle runs, from the cache's placements (rev 241): `axis` is the way the player
+ * moves, `at` the other coordinate of the tiles they move over, `ends` the clicked locs' spread
+ * along the axis (end pieces included). Planks are three parallel lanes. The low walls (1x2) are
+ * listed by the two tiles they cover.
+ */
+const LINES = [
+  { kind: "BALANCING_ROPE", axis: "y", at: 2772, ends: [9559, 9566] },
+  { kind: "BALANCING_ROPE", axis: "y", at: 2783, ends: [9581, 9588] },
+  { kind: "BALANCING_ROPE", axis: "y", at: 2794, ends: [9548, 9555] },
+  { kind: "LOG_BALANCE", axis: "x", at: 9579, ends: [2764, 2769] },
+  { kind: "LOG_BALANCE", axis: "y", at: 2794, ends: [9582, 9587] },
+  { kind: "LOG_BALANCE", axis: "y", at: 2805, ends: [9549, 9554] },
+  { kind: "BALANCING_LEDGE", axis: "x", at: 9546, ends: [2764, 2769], wall: "south" },
+  { kind: "BALANCING_LEDGE", axis: "x", at: 9590, ends: [2764, 2769], wall: "north" },
+  { kind: "BALANCING_LEDGE", axis: "x", at: 9546, ends: [2797, 2802], wall: "south" },
+  // The bars' end pieces (3564) stand one tile off the line the player swings along.
+  { kind: "MONKEY_BARS", axis: "y", at: 2772, ends: [9570, 9577], side: 2771 },
+  { kind: "MONKEY_BARS", axis: "x", at: 9546, ends: [2774, 2781], side: 9545 },
+  { kind: "MONKEY_BARS", axis: "y", at: 2794, ends: [9559, 9566], side: 2793 },
+  { kind: "PLANK", axis: "x", at: 9556, ends: [2764, 2769] },
+  { kind: "PLANK", axis: "x", at: 9557, ends: [2764, 2769] },
+  { kind: "PLANK", axis: "x", at: 9558, ends: [2764, 2769] },
+  { kind: "PLANK", axis: "x", at: 9589, ends: [2797, 2802] },
+  { kind: "PLANK", axis: "x", at: 9590, ends: [2797, 2802] },
+  { kind: "PLANK", axis: "x", at: 9591, ends: [2797, 2802] },
+  { kind: "PILLAR", axis: "y", at: 2761, ends: [9549, 9554] },
+  { kind: "PILLAR", axis: "x", at: 9568, ends: [2786, 2791] },
+  { kind: "PILLAR", axis: "y", at: 2805, ends: [9571, 9576] },
+  { kind: "HAND_HOLDS", axis: "y", at: 2759, ends: [9559, 9566], wall: "west" },
+  { kind: "HAND_HOLDS", axis: "x", at: 9544, ends: [2785, 2792], wall: "south" },
+  { kind: "HAND_HOLDS", axis: "x", at: 9592, ends: [2785, 2792], wall: "north" },
+  { kind: "LOW_WALL", axis: "y", at: 2783, ends: [9562, 9563] },
+  { kind: "LOW_WALL", axis: "y", at: 2805, ends: [9562, 9563] },
+  { kind: "LOW_WALL", axis: "x", at: 9590, ends: [2777, 2778] },
+];
 
 /** objectId -> obstacle family key. */
 const FAMILY = new Map();
@@ -50,6 +69,163 @@ function familyAt(objectId) {
 
 function obstacleXp(kind) {
   return Shared.OBSTACLE_XP[kind] ?? 0;
+}
+
+/** The line a clicked loc belongs to: its own lane first, then one off it (the bars' ends). */
+function lineAt(kind, x, y) {
+  const candidates = LINES.filter((line) => {
+    if (line.kind !== kind) return false;
+    const along = line.axis === "x" ? x : y;
+    const across = line.axis === "x" ? y : x;
+    return along >= line.ends[0] && along <= line.ends[1] && (across === line.at || across === line.side);
+  });
+  return candidates[0] ?? null;
+}
+
+/** The eight gap tiles' coordinates along the line, between the two pillars' platforms. */
+function gapOf(line) {
+  const origin = line.axis === "x" ? GRID.x : GRID.y;
+  const pillar = origin + GRID.step * Math.floor((line.ends[0] - origin) / GRID.step);
+  return [pillar + 2, pillar + 9];
+}
+
+function tileOn(line, along) {
+  return line.axis === "x" ? [along, line.at] : [line.at, along];
+}
+
+/**
+ * A crossing from the player's side: `approach` is where the obstacle starts, `path` the tiles
+ * the player is then carried over (the rope starts on the platform's edge and walks its first
+ * tile, the bars end on the far platform; rsprox 1735, 1863). `entry`, when given, is where a
+ * click walks the player to: the bars' first tile is blocked, so the player walks to the platform
+ * beside it and is stepped onto it (rsprox 1735 1251-1252: 2782,9547, then a forced step onto
+ * 2781,9546).
+ */
+function crossing(line, player) {
+  const pos = player.getLocation();
+  const along = line.axis === "x" ? pos.getX() : pos.getY();
+  if (line.kind === "LOW_WALL") {
+    const dir = along <= line.ends[0] ? 1 : along >= line.ends[1] ? -1 : (along - line.ends[0] <= line.ends[1] - along ? 1 : -1);
+    const near = dir > 0 ? line.ends[0] - 1 : line.ends[1] + 1;
+    const far = dir > 0 ? line.ends[1] + 1 : line.ends[0] - 1;
+    return { dir, approach: tileOn(line, near), path: [tileOn(line, far)] };
+  }
+  const [low, high] = gapOf(line);
+  const dir = along - low <= high - along ? 1 : -1;
+  const first = dir > 0 ? low : high;
+  const path = [];
+  for (let i = 1; i <= 7; i++) path.push(tileOn(line, first + dir * i));
+  if (line.kind === "BALANCING_ROPE") {
+    return { dir, approach: tileOn(line, first - dir), path: [tileOn(line, first), ...path] };
+  }
+  if (line.kind === "MONKEY_BARS") {
+    return { dir, approach: tileOn(line, first), entry: tileOn(line, first - dir), path: [...path, tileOn(line, first + dir * 8)] };
+  }
+  return { dir, approach: tileOn(line, first), path };
+}
+
+/** A forced walk, one tile a tick, with each tile's extra steps on the tick it is reached. */
+function walkWithCues(path, cues = {}) {
+  const steps = [];
+  path.forEach((tile, index) => {
+    steps.push({ walk: [tile], arrive: true });
+    steps.push(...(cues[index + 1] ?? []));
+    if (index < path.length - 1) steps.push({ wait: 1 });
+  });
+  return steps;
+}
+
+/** Facing the wall, is the player moving to their right? (Hand holds and ledges.) */
+function movesRight(wall, axis, dir) {
+  const right = { north: [1, 0], east: [0, -1], south: [-1, 0], west: [0, 1] }[wall];
+  const move = axis === "x" ? [dir, 0] : [0, dir];
+  return right[0] === move[0] && right[1] === move[1];
+}
+
+const OPPOSITE = { north: "south", south: "north", east: "west", west: "east" };
+
+/**
+ * Each family's steps after the player reaches the approach tile, as captured. Tick 0 turns the
+ * player to face the far end; the first move is on the tick after.
+ */
+function crossingSteps(line, { dir, path }) {
+  const z = Shared.ARENA_PLANE;
+  const far = path[path.length - 1];
+  const face = { face: far };
+  switch (line.kind) {
+    case "BALANCING_ROPE":
+      // rsprox 1863 2628-2638: the first tile walked, then 762 from the second; 2495 at 2, 5, 7.
+      return [face, { wait: 1 }, ...walkWithCues(path, {
+        2: [{ render: 762 }, { sound: 2495, loops: 2 }],
+        5: [{ sound: 2495, loops: 2 }],
+        7: [{ sound: 2495, loops: 1 }],
+        8: [{ render: null }],
+      }), { wait: 1 }];
+    case "LOG_BALANCE":
+      // rsprox 1738 311, 1863 2017: render 762, 2470 on the 1st, 4th and 7th tiles.
+      return [face, { wait: 1 }, ...walkWithCues(path, {
+        1: [{ render: 762 }, { sound: 2470, loops: 2 }],
+        4: [{ sound: 2470, loops: 2 }],
+        7: [{ sound: 2470, loops: 1 }, { render: null }],
+      }), { wait: 1 }];
+    case "PLANK":
+      // rsprox 1738 113, 1863 2007: walked at walking pace, 2480 on the 1st and 3rd tiles.
+      // ponytail: the minute's broken planks (3576) and their fall are not modelled; see the docs.
+      return [face, { wait: 1 }, ...walkWithCues(path, {
+        1: [{ sound: 2480, loops: 2, delay: 10 }],
+        3: [{ sound: 2480, loops: 4, delay: 10 }],
+      }), { wait: 1 }];
+    case "BALANCING_LEDGE": {
+      // Back to the wall. Sidling to the left: 753 then render 756; to the right: render 754 and
+      // 758 on stepping off (rsprox 1738 692 and 2656, both on the south ledge; the north
+      // ledge is mirrored).
+      const right = movesRight(OPPOSITE[line.wall], line.axis, dir);
+      const first = right ? [{ render: 754 }] : [{ anim: 753 }, { render: 756 }];
+      const after = right ? [{ wait: 1 }, { render: null }, { anim: 758, delay: 20 }, { wait: 1 }] : [{ wait: 1 }, { render: null }];
+      return [face, { wait: 1 }, ...walkWithCues(path, {
+        1: [...first, { sound: 2451, loops: 3, delay: 10 }],
+        4: [{ sound: 2451, loops: 2 }],
+        6: [{ sound: 2451, loops: 2 }],
+      }), ...after];
+    }
+    case "MONKEY_BARS":
+      // rsprox 1735 2638/4405: 742 + render 744 two ticks before the first swing, 743 dropping
+      // onto the far platform; 2474, then 2466 on the 1st, 4th and 6th bars, 2473 on landing.
+      return [{ wait: 1 }, face, { anim: 742 }, { render: 744 }, { sound: 2474 }, { wait: 2 }, ...walkWithCues(path, {
+        1: [{ sound: 2466, loops: 6 }],
+        4: [{ sound: 2466, loops: 4, delay: 10 }],
+        6: [{ sound: 2466, loops: 3, delay: 5 }],
+        8: [{ anim: 743 }, { render: null }, { sound: 2473 }],
+      }), { wait: 1 }];
+    case "PILLAR":
+      // rsprox 75 13517, 1735 3198: one 741 jump a tick, 15-30 cycles each, 2462 with each.
+      return [face, { wait: 1 }, ...path.flatMap((tile) => [
+        { sound: 2462 },
+        { move: [...tile, z], anim: 741, speed: [15, 30], ticks: 1 },
+      ])];
+    case "HAND_HOLDS": {
+      // Facing the wall: 1121/1122/1124 shuffling left, 1117/1118/1120 right (rsprox 1738 123 on
+      // the north wall, 1735 4084 on the south; the west wall is derived). The first move takes
+      // two ticks (46-60 cycles), the rest one (4-22).
+      const right = movesRight(line.wall, line.axis, dir);
+      const [start, mid, end] = right ? [1117, 1118, 1120] : [1121, 1122, 1124];
+      return [{ faceDir: line.wall }, { wait: 1 }, ...path.flatMap((tile, index) => {
+        const last = index === path.length - 1;
+        if (index === 0) {
+          return [{ sound: 2450 }, { move: [...tile, z], anim: start, speed: [46, 60], dir: line.wall, ticks: 2 }];
+        }
+        return [
+          { sound: last ? 2460 : 2459, delay: last ? 0 : 5 },
+          { move: [...tile, z], anim: last ? end : mid, speed: [4, 22], dir: line.wall, ticks: 1 },
+        ];
+      })];
+    }
+    case "LOW_WALL":
+      // rsprox 1735 750: 1252 over the wall's two tiles in one 144-cycle move; XP four ticks on.
+      return [face, { sound: 2453, delay: 40 }, { move: [...far, z], anim: 1252, speed: [0, 144], ticks: 4 }];
+    default:
+      return null;
+  }
 }
 
 /**
@@ -84,7 +260,7 @@ function crossingTarget(player, object, past = 1, alongFace = false) {
 /** One swing, the tick after arriving: a 5-tile exact move, the rope animating with it. */
 function ropeSwingSteps(target) {
   return [
-    { anim: ANIM.ROPE_SWING, delay: 5 },
+    { anim: ROPE_SWING.ANIM, delay: 5 },
     { objAnim: ROPE_SWING.ROPE_ANIM },
     { sound: ROPE_SWING.SOUND, delay: 5 },
     { move: [target.x, target.y, target.z], speed: [30, 55], ticks: 2 },
@@ -96,12 +272,28 @@ function useObstacle(event) {
   if (!kind) return false;
   const player = event.player;
   if (ObstacleRunner.isBusy(player)) return true;
+  const requirement = Shared.OBSTACLE_LEVEL[kind];
+  if (requirement && Shared.agilityLevel(player) < requirement) {
+    player.sendMessage(Shared.levelRefusal(requirement));
+    return true;
+  }
   const object = event.object;
   const at = object.getLocation();
-  const spec = SPECS[kind];
-  const target = kind === "ROPE_SWING"
-    ? crossingTarget(player, object, ROPE_SWING.PAST, true)
-    : crossingTarget(player, object);
+  let steps;
+  if (kind === "ROPE_SWING") {
+    steps = ropeSwingSteps(crossingTarget(player, object, ROPE_SWING.PAST, true));
+  } else {
+    const line = lineAt(kind, at.getX(), at.getY());
+    if (!line) return true;
+    const route = crossing(line, player);
+    const pos = player.getLocation();
+    const [ax, ay] = route.approach;
+    const off = Math.max(Math.abs(pos.getX() - ax), Math.abs(pos.getY() - ay));
+    // The route hook brings the player to the approach tile; a click from beside it steps on.
+    if (off > 1) return true;
+    steps = crossingSteps(line, route);
+    if (off === 1) steps = [{ walk: [route.approach], arrive: true }, ...steps];
+  }
   const context = {
     player,
     object,
@@ -115,34 +307,37 @@ function useObstacle(event) {
       return { x: pos.getX(), y: pos.getY(), z: pos.getZ() };
     })(),
   };
-  // ponytail: a click crosses one tile; repeated clicks walk a long rope/log, each paying XP.
-  const steps = kind === "ROPE_SWING" ? ropeSwingSteps(target) : [
-    { anim: spec.anim },
-    { wait: 1 },
-    { move: [target.x, target.y, target.z], anim: spec.anim, ticks: 1 },
-  ];
   ObstacleRunner.run(context, steps, {
-    render: spec.render ?? null,
     onFinish: (completed) => {
-      if (completed) Shared.addXp(player, obstacleXp(kind));
+      if (completed) Shared.addObstacleXp(player, kind);
     },
   });
   return true;
 }
 
 /**
- * Clicks from far away walk to the obstacle first; the obstacle claims only its own tiles. The
- * rope hangs over a gap nobody can stand in, so the rope swing is walked to two tiles before it
- * on the player's side, where the captures show players arriving.
+ * Clicks from far away walk to the obstacle's approach tile on the player's side: the near end
+ * of its gap (the rope: the platform's edge before it; the bars: the platform beside their first
+ * tile, which can't be walked onto). The rope swing hangs over a gap nobody
+ * can stand in, so it is walked to two tiles before the rope, where the captures show players
+ * arriving.
  */
 function routeToObstacle(event) {
-  if (event.clickType !== 1 || !familyAt(event.objectId)) return;
+  const kind = familyAt(event.objectId);
+  if (event.clickType !== 1 || !kind) return;
   const at = event.object.getLocation();
-  if (familyAt(event.objectId) === "ROPE_SWING") {
+  if (kind === "ROPE_SWING") {
     event.destination = crossingTarget(event.player, event.object, -ROPE_SWING.BEFORE, true);
     return;
   }
-  event.destination = { x: at.getX(), y: at.getY(), z: at.getZ() };
+  const line = lineAt(kind, at.getX(), at.getY());
+  if (!line) {
+    event.destination = { x: at.getX(), y: at.getY(), z: at.getZ() };
+    return;
+  }
+  const route = crossing(line, event.player);
+  const [x, y] = route.entry ?? route.approach;
+  event.destination = { x, y, z: at.getZ() };
 }
 
 module.exports = (api) => {
@@ -165,3 +360,7 @@ module.exports.crossingTarget = crossingTarget;
 module.exports.ropeSwingSteps = ropeSwingSteps;
 module.exports.familyAt = familyAt;
 module.exports.obstacleXp = obstacleXp;
+module.exports.lineAt = lineAt;
+module.exports.crossing = crossing;
+module.exports.crossingSteps = crossingSteps;
+module.exports.LINES = LINES;

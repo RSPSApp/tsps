@@ -346,19 +346,49 @@ function collectPageLines(record) {
   return lines;
 }
 
-/** The first top-level menu of a variant, if it has one. */
-function topLevelMenu(steps) {
-  return (steps || []).find((step) => step.type === "choice" && step.options?.length);
+/** The first menu, including condition containers but never another menu's options. */
+function topLevelMenu(steps, nested = false) {
+  const direct = (steps ?? []).find(step => step.type === "choice" && step.options?.length);
+  if (direct) return direct;
+  if (!nested) return undefined;
+  const menus = [];
+  const visit = (nodes) => {
+    for (const step of nodes ?? []) {
+      if (step.type === "choice" && step.options?.length) menus.push(step);
+      else if (step.type === "condition") visit(step.steps);
+    }
+  };
+  visit(steps);
+  // A recovered historical menu has no guard context: never choose among alternatives.
+  return menus.length === 1 ? menus[0] : menus.length > 1 ? null : undefined;
+}
+
+/** Named source actors establish menu ownership on pages shared by several NPCs. */
+function sourceSpeakers(steps) {
+  const speakers = new Set();
+  const visit = (nodes) => {
+    for (const step of nodes ?? []) {
+      const speaker = normText(step.speaker);
+      if (speaker && speaker !== "player" && speaker !== "playername") speakers.add(speaker);
+      visit(step.steps);
+      for (const option of step.options ?? []) visit(option.steps);
+    }
+  };
+  visit(steps);
+  return speakers;
 }
 
 /**
  * The menu "above" the given variant on its page: the nearest earlier variant with
- * a top-level menu. The wiki writes "same as above" tails ({{tact|above}}) that
+ * a menu. The wiki writes "same as above" tails ({{tact|above}}) that
  * continue into the previous variant's menu, which is not linked in the dump.
  */
-function collectMenuBefore(record, variantName) {
+function collectMenuBefore(record, variantName, { initial = false, callerName } = {}) {
   const variants = record?.variants ?? {};
   const keys = Object.keys(variants);
+  const currentSpeakers = initial ? sourceSpeakers(variants[variantName]) : null;
+  const actor = normText(callerName) || (currentSpeakers?.size === 1 ? [...currentSpeakers][0] : "");
+  if (initial && (!actor || currentSpeakers.size > 1 || (currentSpeakers.size === 1 && !currentSpeakers.has(actor)))) return undefined;
   const family = variantName ? String(variantName).split("-")[0] : "";
   const index = variantName ? keys.indexOf(variantName) : -1;
   const upto = index === -1 ? keys.length : index;
@@ -367,8 +397,13 @@ function collectMenuBefore(record, variantName) {
     // Stay within the same variant family ("sir-prysin-*"), or a page shared by
     // several NPCs would continue into an unrelated NPC's menu.
     if (family && keys[i].split("-")[0] !== family) continue;
-    const found = topLevelMenu(variants[keys[i]]);
-    if (found) menu = { step: found, rest: [], record: undefined };
+    if (initial) {
+      const speakers = sourceSpeakers(variants[keys[i]]);
+      if (speakers.size !== 1 || !speakers.has(actor)) continue;
+    }
+    const found = topLevelMenu(variants[keys[i]], initial);
+    if (found === null) menu = undefined; // An ambiguous nearer variant rules out older menus.
+    else if (found) menu = { step: found, rest: [], record: undefined };
   }
   return menu;
 }
@@ -444,7 +479,7 @@ function flatten(steps, opts = {}) {
       // Some wiki exports inline the target body on a "continue" jump instead
       // of storing it in the page-level jump table. Prefer that body so nested
       // quest branches do not stop at the jump marker.
-      const target = Array.isArray(step.steps) ? step.steps : resolveJump(step, steps[position - 1]);
+      const target = Array.isArray(step.steps) ? step.steps : resolveJump(step, steps[position - 1], steps[position + 1]);
       // "end": a jump we cannot replay. Stop rather than leak into the next step.
       if (target === "end") {
         out.push({ type: "end" });
@@ -566,7 +601,8 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     const current = context.currentMenu;
     const history = context.menuHistory;
     if (/^other/i.test(reference)) return current ? { menu: current } : "end";
-    if (/^initial/i.test(reference)) return history[0] ? { menu: history[0] } : "end";
+    if (/^initial/i.test(reference)) return history[0] || context.pageInitialMenu
+      ? { menu: history[0] ?? context.pageInitialMenu } : "end";
     const match = /^previous(\d*)/i.exec(reference);
     const back = match && match[1] ? Number(match[1]) : 1;
     const index = current ? history.indexOf(current) : history.length - 1;
@@ -578,7 +614,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
 
   // "jump above" targets the same option's earlier occurrence, else the option
   // defined just before this one. Wiki jump ids lost their targets in the dump.
-  const resolveJump = (step, previous) => {
+  const resolveJump = (step, previous, nextStep) => {
     const reference = String(step.reference ?? "");
     if (/^(other|previous\d*|initial)/i.test(reference)) return resolveMenuJump(reference);
     // The player asks one of the page's questions again (Percy's "Is there anything else I can
@@ -598,6 +634,11 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       const after = context.pageLines?.get(normText(previous.npc))?.slice(1);
       if (after?.length && after[0] !== step && !jumpOnly(after)) return after;
     }
+    // Prefer the queued continuation to guessing another historical option.
+    // Jorral's contact explanations end at "below" before their follow-up menu.
+    // Explicit inline targets and the matching question/line continuations above
+    // retain priority; null lets flatten continue into the queued menu.
+    if (/^below/i.test(reference) && nextStep?.type === "choice") return null;
     const current = context.currentRecord;
     /**
      * True when a candidate would replay the branch the jump is in. A wiki jump
@@ -721,9 +762,14 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         // Quest-gated choices carry a slug like "quest:cook-s-assistant:start";
         // let the owning quest run its action, then play the branch.
         if (option.hook) {
-          api.emitCustomEvent("npc-dialogue:hook", { player, npc: event.npc, npcId, definition, hook: option.hook, quest: option.quest, option: option.text });
+          const hook = { player, npc: event.npc, npcId, definition, hook: option.hook, quest: option.quest, option: option.text };
+          api.emitCustomEvent("npc-dialogue:hook", hook);
+          // The native option prompt is already closed; preserve any replacement UI.
+          if (hook.end) return;
         }
-        api.emitCustomEvent("npc-dialogue:choice", { player, npc: event.npc, npcId, definition, option: option.text, stepId: option.id });
+        const choice = { player, npc: event.npc, npcId, definition, option: option.text, stepId: option.id };
+        api.emitCustomEvent("npc-dialogue:choice", choice);
+        if (choice.end) return;
         context.currentMenu = menu;
         run([...(option.steps || []), ...rest, ...tail], recordOption(option));
       }];
@@ -930,8 +976,11 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       chain.add(new ActionDialogue(index++, { execute: () => {
         // Action steps can carry a quest slug; emit it, then continue the branch.
         if (step.hook) {
-          api.emitCustomEvent("npc-dialogue:hook", { player, npc: event.npc, npcId, definition, hook: step.hook, quest: step.quest, action: step.action });
-          return run(rest, currentRecord);
+          const hook = { player, npc: event.npc, npcId, definition, hook: step.hook, quest: step.quest, action: step.action };
+          const current = manager.getCurrent?.();
+          api.emitCustomEvent("npc-dialogue:hook", hook);
+          if (current && manager.getCurrent() !== current) return;
+          return hook.end ? close() : run(rest, currentRecord);
         }
         // Quest actions ("Quest complete!", "receive", ...) let a plugin drive
         // state through the mutable payload, then the branch continues.
@@ -1152,6 +1201,8 @@ module.exports = {
           // Only a known variant has a well-defined "menu above"; otherwise a
           // page shared by several NPCs could replay an unrelated menu.
           result.context.pageMenuBefore = result.variant ? collectMenuBefore(data[page], result.variant) : undefined;
+          result.context.pageInitialMenu = result.variant ? collectMenuBefore(data[page], result.variant,
+            { initial: true, callerName: event.definition.getName() }) : undefined;
         }
         return result;
       };

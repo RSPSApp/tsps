@@ -159,6 +159,29 @@ const COMBAT_AUTO_RETALIATE_CHILD = 32;
  * the older bar, now under a container the cache keeps hidden. 67 is the offhand bar.
  */
 const COMBAT_SPECIAL_ATTACK_CHILDREN = new Set([41, 57]);
+/**
+ * The special-attack orb on the desktop and mobile HUDs. It only sends its native Use button:
+ * rev 241's CS2 predicts %sa_attack (varp 301) locally, so the button is what makes the server
+ * decide, as live does.
+ */
+const SPECIAL_ATTACK_ORB_COMPONENTS = [
+  "orbs:specbutton",
+  "orbs_nomap:specbutton",
+  "orbs_osm:specbutton",
+  "orbs_osm_nomap:specbutton",
+];
+let specialAttackOrbIds: Set<number> | undefined;
+
+function isSpecialAttackOrb(widgetId: number): boolean {
+  if (!CachePipeline.isInitialized()) return false;
+  specialAttackOrbIds ??= new Set(
+    SPECIAL_ATTACK_ORB_COMPONENTS
+      .map((name) => CacheDefinitions.getComponentId(name))
+      .filter((id): id is number => id !== null),
+  );
+  return specialAttackOrbIds.has(widgetId);
+}
+
 const WORLD_INTERACTIONS = new Set([
   "move",
   "teleport",
@@ -568,10 +591,12 @@ export class ClientConnection {
             if (target && LunarSpells.handleNpcTarget(this.player, target, spellName)) {
               continue;
             }
+            const selection = spellName ? CacheDefinitions.getSpellByName(spellName) : undefined;
             NPCOptionPacketListener.castSpell(
               this.player,
               packet.targetIndex,
-              this.resolveClientCombatSpellId(packet.spellWidget, packet.spellChild, packet.spellItemId)
+              this.resolveClientCombatSpellId(packet.spellWidget, packet.spellChild, packet.spellItemId),
+              spellName && selection ? { name: spellName, widgetId: selection.widgetId } : undefined
             );
           }
           continue;
@@ -751,8 +776,12 @@ export class ClientConnection {
                   subOpId: actionPacket.subOpId,
                   handled: false,
                 });
-              if (!itemActionHandled) {
+              // Only op1 is Remove; ops 2+ are the item's worn options (Check, Activate...),
+              // which never take the item off, even when nothing handles them.
+              if (!itemActionHandled && actionPacket.buttonNum === 1) {
                 EquipPacketListener.unequip(this.player, equipmentSlot);
+              } else if (!itemActionHandled && item?.getId?.() > 0) {
+                this.player.sendMessage("Nothing interesting happens.");
               }
             } else if (Bank.handleWidgetAction(this.player, actionPacket)) {
               // Bank owns its cache-native widgets while the bank modal is open.
@@ -779,6 +808,8 @@ export class ClientConnection {
                 this.player.autoRetaliateReturn() ? 0 : 1,
               );
             } else if (actionPacket.groupId === COMBAT_INTERFACE && COMBAT_SPECIAL_ATTACK_CHILDREN.has(actionPacket.childId)) {
+              CombatSpecial.activate(this.player);
+            } else if (actionPacket.buttonNum === 1 && isSpecialAttackOrb(actionPacket.widgetId)) {
               CombatSpecial.activate(this.player);
             } else if (WeaponInterfaceManager.handleStyleButton(this.player, actionPacket.groupId, actionPacket.childId)) {
               BonusManager.update(this.player);
@@ -886,8 +917,6 @@ export class ClientConnection {
               this.player.getPacketSender().sendRunStatus();
               // "player:run-toggled" { player, running }: the run mode the player switched to.
               PluginManager.emitCustomEvent("player:run-toggled", { player: this.player, running: this.player.isRunningReturn() });
-            } else if (packet.varpId === 301 && (packet.value !== 0) !== this.player.isSpecialActivated()) {
-              CombatSpecial.activate(this.player);
             }
             this.player.applyAudioSettingFromClient(packet.varpId, packet.value);
           }
@@ -954,7 +983,8 @@ export class ClientConnection {
               this.player.getStatus() !== PlayerStatus.NONE ||
               this.player.getInterfaceId() >= 0 ||
               this.player.getDialogueManager().isActive() ||
-              this.player.getPacketSender().hasInterruptibleInterface();
+              this.player.getPacketSender().hasInterruptibleInterface() ||
+              this.player.getPacketSender().hasInputPrompt();
             if (hadSomethingOpen) {
               // IF_CLOSE is explicit: clear even interfaces that world interactions preserve.
               this.player.getPacketSender().closeInterruptibleInterfaces();

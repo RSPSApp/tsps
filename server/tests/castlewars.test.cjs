@@ -392,8 +392,6 @@ test('practice menus join from every portal through the real prompt dispatcher w
     pick(player, 'Bots:');
     pick(player, 'Scorer (magic defence)');
     pick(player, 'More settings');
-    pick(player, 'Ice freeze:');
-    pick(player, '10 seconds');
     pick(player, 'Barricades per team:');
     pick(player, '20');
     pick(player, 'Back');
@@ -403,7 +401,7 @@ test('practice menus join from every portal through the real prompt dispatcher w
     assert.equal(moves.length, 1, 'the join action reaches the waiting room');
     assert.equal(game.getTeamId(player), expectedTeam);
     assert.equal(forms.at(-1), god, 'the original portal determines the waiting-room transformation');
-    assert.deepEqual(game.settings, { teamSize: 1, opponent: 'scorer', freezeSeconds: 10, barricades: 20, botTier: 'maxed', barricadePlayerPriority: false });
+    assert.deepEqual(game.settings, { teamSize: 1, opponent: 'scorer', barricades: 20, botTier: 'maxed' });
     const bots = World.getAddPlayerQueue();
     assert.equal(bots.length, 1, '1 vs 1 uses the human and one opposing bot');
     assert.equal(game.getTeamId(bots[0]), game.opposingTeam(expectedTeam));
@@ -503,7 +501,7 @@ test('a carrier whose banner was stripped before the drop hook still drops the f
   game.restoreFlagToBase(TEAM.ZAMORAK);
 });
 
-test('Castle Wars deaths keep gear, drop flags and supplies but no bones; other deaths still drop bones', (t) => {
+test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other deaths still drop bones', (t) => {
   const { PlayerDeathTask } = require('../dist/game/task/impl/PlayerDeath');
   const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');
   let deathPolicy;
@@ -702,5 +700,67 @@ test('ending and resetting a match clears both native Castle Wars team flags', t
     assert.equal(game.getTeamId(p), null);
     assert.equal(vars.get(144), 0);
     assert.equal(vars.get(154), 0);
+  }
+});
+
+test('practice and human matches retain normal Ice Barrage movement and overlay timing after the custom controls are removed', t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  const realApi = PluginManager.createApi('CastleWarsPracticeFreezeTest');
+  t.mock.method(registry, 'sendMultiChatboxPrompt', realApi.sendMultiChatboxPrompt);
+  t.mock.method(registry, 'onCustomEvent', realApi.onCustomEvent);
+  registry.emitCustomEvent = realApi.emitCustomEvent;
+  t.mock.method(World, 'getItems', () => []);
+  Settings(registry, game);
+  let syncTimer;
+  require('../plugins/interface/FreezeTimer.plugin').register({ core, onCombatHitResolved() {}, onPlayerLogin() {},
+    onPlayerProcess(handler) { syncTimer = handler; }, onPlayerLogout() {} });
+  t.after(() => { game.endGame(); game.gameArea.players.length = 0; delete registry.emitCustomEvent; });
+
+  const ticks = 32;
+  for (const practice of [true, false]) {
+    const caster = new Player(null), victim = new Player(null);
+    for (const p of [caster, victim]) {
+      t.mock.method(p, 'getSession', () => ({ sendClientPacket: () => true }));
+      t.mock.method(p, 'getArea', () => game.gameArea);
+      t.mock.method(p, 'smartMove', () => {});
+      t.mock.method(p, 'requestLogout', () => {});
+      p.setLocation(new core.Location(2426, 3082, 1));
+    }
+    const configs = new Map();
+    t.mock.method(victim.getPacketSender(), 'sendConfig', (id, value) => configs.set(id, value));
+    Settings.openSettings({ player: victim });
+    const pending = MultiChatboxPrompt.getPending(victim);
+    const index = pending.options.indexOf('More settings');
+    assert.notEqual(index, -1);
+    assert.equal(PluginManager.emitInterfaceActionClick({ player: victim,
+      buttonId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, groupId: 219, action: 1, slot: index + 1, handled: false }), true);
+    assert.deepEqual(MultiChatboxPrompt.getPending(victim).options,
+      ['Barricades per team: 10', 'Bot combat: Maxed (126)', 'Bracelet charges', 'Back']);
+    caster.setPlayerBot(practice);
+    caster.setAttribute(game.BOT_KEY, practice);
+    for (const [p, team] of [[caster, TEAM.SARADOMIN], [victim, TEAM.ZAMORAK]]) {
+      game.setTeamId(p, team);
+      game.waitingAreas[team].players.push(p);
+    }
+    game.beginStartCountdown();
+    submittedTasks.at(-1).execute();
+    assert.equal(game.getPhase(), game.PHASE.ACTIVE);
+    for (const area of Object.values(game.waitingAreas)) area.players.length = 0;
+    game.gameArea.players.push(caster, victim);
+    assert.equal(game.hasPracticeBots(), practice);
+
+    core.CombatSpells.ICE_BARRAGE.getSpell().spellEffectOnHitCalc(caster, victim, 10);
+    assert.equal(victim.getTimers().getTicks(core.TimerKey.FREEZE), ticks);
+    assert.equal(victim.getMovementQueue().getMobility().canMove(), false);
+    syncTimer({ player: victim });
+    assert.equal(configs.get(7998), Math.ceil(ticks * 0.6), 'the overlay receives the normal freeze duration');
+    for (let i = 0; i < ticks; i++) victim.getTimers().process();
+    assert.equal(victim.getTimers().has(core.TimerKey.FREEZE), false);
+    assert.equal(victim.getMovementQueue().getMobility().canMove(), true);
+    syncTimer({ player: victim });
+    assert.equal(configs.get(7998), 0, 'the overlay clears when movement unlocks');
+    game.endGame();
+    game.gameArea.players.length = 0;
   }
 });

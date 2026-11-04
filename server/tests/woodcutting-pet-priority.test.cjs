@@ -180,3 +180,115 @@ test('the real ration is non-noteable and its duplicate identifier is its placeh
   assert.ok(placeholder.placeholderTemplate>=0);
   assert.equal(placeholder.noteTemplate,-1);
 });
+
+// World runs the global task pass before the player's input and movement.
+// Keep that order here: draining a one-step route before the next global pass is
+// the cancellation boundary under investigation, not a synthetic success hook.
+function woodcutCancellationTurn(f) {
+  core.TaskManager.process();
+  f.c.processTurnPackets();
+  const movement=f.p.getMovementQueue();
+  movement.beginCycle();
+  movement.processEntityPursuit();
+  if(movement.hasPendingWork()) movement.process();
+  core.TaskManager.processWalkTo(f.p.getIndex());
+}
+
+for (const cancel of [false,true]) {
+  test('native plain woodcut: '+(cancel?'one-step movement before the first roll leaves no delayed XP or log':'normal completion control grants one XP drop and log'), async t=>{
+    const f=actor(t),ids=core.ItemIdentifiers;
+    const start=[3222,3218,0],destination=[3221,3218,0];
+    const position=()=>[f.p.getLocation().getX(),f.p.getLocation().getY(),f.p.getLocation().getZ()];
+    const yieldCount=()=>f.p.getInventory().getAmount(ids.LOGS)+groundLogs(f).reduce((sum,g)=>sum+g.getItem().getAmount(),0);
+    const gains=[],skills=f.p.getSkillManager(),original=skills.addExperiences.bind(skills);
+    t.mock.method(skills,'addExperiences',(skill,amount)=>{
+      if(skill===core.Skill.WOODCUTTING) gains.push(amount);
+      return original(skill,amount);
+    });
+    // A real successful cut is deterministic; a nest must not replace its resource.
+    t.mock.method(Math,'random',missNest(0.01));
+    f.p.getInventory().add(new core.Item(ids.BRONZE_AXE),true);
+    t.after(()=>{for(const g of groundLogs(f))core.ItemOnGroundManager.deregister(g);});
+    const tree=new core.GameObject(core.ObjectIdentifiers.TREE,new core.Location(3223,3218,0),10,0,null);
+    core.ObjectManager.register(tree,true);
+    t.after(()=>core.ObjectManager.deregister(tree,true));
+    const definition=core.ObjectDefinition.forPlayer(tree.getId(),f.p);
+    assert.ok(definition,'the actual normal-tree definition must exist');
+    assert.equal(definition.getName(),'Tree');
+    assert.ok(definition.getActions()?.includes('Chop down'),'the actual definition must expose native chopping');
+    assert.deepEqual(position(),start,'the fixture must start at the declared reachable tile');
+    assert.deepEqual(gains,[]);
+    assert.equal(yieldCount(),0);
+
+    await f.c.dispatch([{type:'object_option',id:tree.getId(),x:3223,y:3218,action:'Chop down'}]);
+    for(let tick=0;tick<8&&f.p.getAnimation()?.getId()!==879;tick++) woodcutCancellationTurn(f);
+    assert.equal(f.p.getAnimation()?.getId(),879,'native object reach must start the ordinary bronze-axe swing');
+    assert.deepEqual(position(),start,'the start must be reached without changing the declared adjacent tile');
+    assert.deepEqual(gains,[],'cancellation must be armed before any successful roll');
+    assert.equal(yieldCount(),0,'no log may precede the first-roll cancellation point');
+
+    if(cancel) {
+      await f.c.dispatch([{type:'move',worldX:destination[0],worldY:destination[1],modifierFlags:0,run:false}]);
+      assert.deepEqual(position(),start,'ordinary input must remain queued until the native turn');
+      woodcutCancellationTurn(f);
+      assert.deepEqual(position(),destination,'the real one-step walk must actually complete; a blocked route is setup failure');
+      assert.equal(f.p.getMovementQueue().size(),0,'this diagnostic requires the one-step route to be drained');
+      assert.deepEqual(gains,[],'the walk must finish before the first resource roll');
+      assert.equal(yieldCount(),0);
+    }
+
+    // Cover the original first-roll point and subsequent ordinary action intervals.
+    // Observe real effects only; never call stopWoodcutting or manufacture success.
+    for(let tick=0;tick<8;tick++) woodcutCancellationTurn(f);
+    const observed=JSON.stringify({cancel,position:position(),gains,logs:yieldCount(),animation:f.p.getAnimation()?.getId()});
+    assert.deepEqual(gains,cancel?[]:[25],'literal plain-tree XP after the completion/cancellation window: '+observed);
+    assert.equal(yieldCount(),cancel?0:1,'carried plus owned floor yield after the same window: '+observed);
+  });
+}
+
+test('native plain woodcut: an outside-range approach settles before starting and completes normally',async t=>{
+  const f=actor(t),ids=core.ItemIdentifiers,start=[3218,3218,0];
+  f.p.setLocation(new core.Location(...start));
+  const position=()=>[f.p.getLocation().getX(),f.p.getLocation().getY(),f.p.getLocation().getZ()];
+  const yieldCount=()=>f.p.getInventory().getAmount(ids.LOGS)+groundLogs(f).reduce((sum,g)=>sum+g.getItem().getAmount(),0);
+  const gains=[],skills=f.p.getSkillManager(),original=skills.addExperiences.bind(skills);
+  t.mock.method(skills,'addExperiences',(skill,amount)=>{
+    if(skill===core.Skill.WOODCUTTING) gains.push(amount);
+    return original(skill,amount);
+  });
+  t.mock.method(Math,'random',missNest(0.01));
+  f.p.getInventory().add(new core.Item(ids.BRONZE_AXE),true);
+  t.after(()=>{for(const g of groundLogs(f))core.ItemOnGroundManager.deregister(g);});
+  const tree=new core.GameObject(core.ObjectIdentifiers.TREE,new core.Location(3223,3218,0),10,0,null);
+  core.ObjectManager.register(tree,true);
+  t.after(()=>core.ObjectManager.deregister(tree,true));
+  const definition=core.ObjectDefinition.forPlayer(tree.getId(),f.p);
+  assert.ok(definition,'the actual approach tree definition must exist');
+  assert.equal(definition.getName(),'Tree');
+  assert.ok(definition.getActions()?.includes('Chop down'));
+  assert.deepEqual(position(),start);
+  assert.equal(tree.isWithinInteractionDistance(f.p.getLocation()),false,'the approach must really begin outside the continuation radius');
+  assert.deepEqual(gains,[]);
+  assert.equal(yieldCount(),0);
+
+  await f.c.dispatch([{type:'object_option',id:tree.getId(),x:3223,y:3218,action:'Chop down'}]);
+  let sawMovement=false;
+  for(let tick=0;tick<16&&f.p.getAnimation()?.getId()!==879;tick++) {
+    woodcutCancellationTurn(f);
+    if(f.p.getMovementQueue().didMoveThisCycle()) {
+      sawMovement=true;
+      assert.notEqual(f.p.getAnimation()?.getId(),879,'reach must wait for the movement cycle to settle');
+    }
+  }
+  assert.equal(sawMovement,true,'the native object route must actually walk from outside range');
+  assert.notDeepEqual(position(),start);
+  assert.equal(f.p.getAnimation()?.getId(),879,'the settled native reach callback must start chopping');
+  assert.equal(tree.isWithinInteractionDistance(f.p.getLocation()),true);
+  assert.equal(f.p.getMovementQueue().size(),0);
+  assert.equal(f.p.getMovementQueue().isMovings(),false,'previous approach movement must be cleared before the new action starts');
+  assert.deepEqual(gains,[],'the approach must not include a completed resource roll');
+  assert.equal(yieldCount(),0);
+  for(let tick=0;tick<8;tick++) woodcutCancellationTurn(f);
+  assert.deepEqual(gains,[25],'the movement guard must preserve a newly valid settled action');
+  assert.equal(yieldCount(),1);
+});

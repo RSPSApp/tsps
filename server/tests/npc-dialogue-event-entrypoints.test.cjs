@@ -2438,8 +2438,8 @@ test('Jorral native close and declining the start offer preserve the normal intr
   assert.ok(f.menu().options.includes('Tell me more.'), 'declining retains the normal quest introduction');
 });
 
-function pandemoniumCinematicFixture(t, save) {
-  const f = pandemoniumShipFixture(t, 14, save);
+function pandemoniumCinematicFixture(t, save, stage = 14) {
+  const f = pandemoniumShipFixture(t, stage, save);
   f.frames = []; f.poses = [];
   const send = f.player.getSession().sendClientPacket;
   t.mock.method(f.player.getSession(), 'sendClientPacket', function(packet) {
@@ -2709,4 +2709,163 @@ test('Pandemonium native Will conversation returns to Port Sarim and permits boa
   for (let n = 0; n < 15 && !f.ship(); n++) await nextLine(f);
   assert.ok(f.ship(), 'the canonical return choice permits reboarding the owner-only tutorial');
   assert.equal(f.quest.getStage(f.player), 10);
+});
+
+function pandemoniumBoardingFixture(t, stage = 0, save) {
+  const f = pandemoniumCinematicFixture(t, save, stage);
+  f.npcClicks = 0;
+  f.talk = async npc => {
+    ++f.npcClicks;
+    await f.connection.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: 1 }]);
+    f.connection.processTurnPackets(); f.tick(6);
+  };
+  if (!save && stage === 0) {
+    f.player.moveTo(new core.Location(3025, 3209));
+    f.dockWill = PM.spawnNpc({ id: core.NpcIdentifiers.WILL, x: 3025, y: 3208, wanderRadius: 0 });
+    t.after(() => PM.removeNpc(f.dockWill));
+    f.tick(3);
+  }
+  f.board = async (settle = 4) => {
+    assert.equal(f.quest.getStage(f.player), 0, 'the interview starts from an actual fresh quest');
+    await f.talk(f.dockWill);
+    for (let n = 0; n < 100 && !f.ship(); n++) {
+      const menu = MultiChatboxPrompt.getPending(f.player);
+      if (menu) {
+        const index = menu.options.findIndex(option => option === 'Yes.' || option === "I guess I'm ready...");
+        assert.ok(index >= 0, JSON.stringify(menu)); await choose(f, index + 1); f.tick();
+      } else await f.advance();
+    }
+    assert.ok(f.ship(), 'the actual interview action boards the owned tutorial ship');
+    f.tick(settle);
+  };
+  f.operate = async part => {
+    const ship = f.ship(), loc = ship.spec.locs.find(entry => entry.part === part);
+    const actions = core.ObjectDefinition.forPlayer(loc.id, f.player).getActions();
+    const clickType = actions.indexOf(part === 'helm' ? 'Navigate' : 'Set') + 1;
+    assert.ok(clickType > 0);
+    await f.connection.dispatch([{ type: 'object_option', id: loc.id,
+      x: ship.boat.deckBaseX + loc.x, y: ship.boat.deckBaseY + loc.y, clickType }]);
+    f.connection.processTurnPackets(); f.tick(8);
+    return ship;
+  };
+  f.assertFreeShipCamera = () => {
+    const protocol = require('../dist/net/protocol/ClientProtocol'), boat = f.ship().boat;
+    const opcode = protocol.encodeCameraReset()[0];
+    assert.equal(require('../dist/net/protocol/ServerPackets').SERVER_PACKET_LENGTHS[opcode], -1);
+    const cameras = f.frames.filter(frame => frame[0] === opcode);
+    assert.ok(cameras.every(frame => frame[1] === frame.length - 2));
+    // All legacy, captured-rate and timed move/look variants in the actual client decoder.
+    assert.ok(!cameras.some(frame => [1,2,4,5,8,9].includes(frame[2])), 'boarding sends no fixed camera position or look command');
+    const target = protocol.encodeCameraTarget({ worldEntity: boat.entityIndex });
+    assert.ok(f.frames.some(frame => frame.equals(target)), 'the real camera follows its sailing entity');
+  };
+  return f;
+}
+
+test('Pandemonium fresh native interview keeps the initial ship camera free', async t => {
+  const f = pandemoniumBoardingFixture(t);
+  await f.board(); f.assertFreeShipCamera();
+});
+
+test('Pandemonium fresh native boarding automatically plays both crew and the helm advances eight to ten', async t => {
+  const f = pandemoniumBoardingFixture(t);
+  await f.board();
+  assert.equal(f.player.getDialogueManager().getCurrent()?.getText?.(), 'Lovely! The open sea!', 'boarding starts the canonical dialogue without another NPC click');
+  assert.equal(f.quest.getStage(f.player), 6);
+  const lines = [];
+  for (let n = 0; n < 40 && f.player.getDialogueManager().isActive(); n++) {
+    const current = f.player.getDialogueManager().getCurrent();
+    if (current?.getText) lines.push({ text: current.getText().replace(/<br>/g, ' ').replace(/\s+/g, ' '), stage: f.quest.getStage(f.player) });
+    await f.advance();
+  }
+  assert.ok(lines.some(line => line.text.includes("You're our new helm!")));
+  assert.ok(lines.some(line => line.text.includes('Take the helm when ready.') && line.stage === 8), JSON.stringify(lines));
+  assert.equal(f.npcClicks, 1, 'only the original dock interaction is needed');
+  assert.equal(f.quest.getStage(f.player), 8);
+  const will = f.owned().find(npc => npc.getId() === 14958);
+  assert.equal(will.getInteractingMobile(), f.player, 'automatic Will uses the captured initial facing target');
+  const ship = await f.operate('helm');
+  assert.equal(f.quest.getStage(f.player), 10, 'the actual first helm interaction earns ten');
+  assert.equal(ship.boat.helmPlayerId, f.player.getIndex());
+  assert.equal(will.getInteractingMobile() === null, true, 'taking the helm releases the captured initial Will target');
+  await f.operate('sails'); assert.equal(ship.boat.moveMode, 2);
+});
+
+test('Pandemonium native stage-eight checkpoint can take the helm without another acceptance menu', async t => {
+  const f = pandemoniumBoardingFixture(t, 8);
+  const will = f.owned().find(npc => npc.getId() === 14958), newerTarget = fixture(t).player;
+  will.setMobileInteraction(newerTarget);
+  const ship = await f.operate('helm');
+  assert.equal(f.quest.getStage(f.player), 10);
+  assert.equal(ship.boat.helmPlayerId, f.player.getIndex());
+  assert.equal(will.getInteractingMobile() === newerTarget, true, 'taking the helm cannot clear a different newer NPC target');
+});
+
+test('Pandemonium native saved-ten helm and sails remain usable with a free ship camera', async t => {
+  const f = pandemoniumBoardingFixture(t, 10);
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const saved = PlayerSave.fromPlayer(f.player);
+  PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  const resumed = pandemoniumBoardingFixture(t, 10, saved);
+  const ship = await resumed.operate('helm');
+  assert.equal(resumed.quest.getStage(resumed.player), 10);
+  assert.equal(ship.boat.helmPlayerId, resumed.player.getIndex(), 'the screenshot stage-ten resume path can take its actual helm');
+  await resumed.operate('sails'); assert.equal(ship.boat.moveMode, 2);
+  resumed.assertFreeShipCamera();
+});
+
+test('Pandemonium pending automatic boarding preserves replacement UI and recovers through native Talk-to', async t => {
+  const f = pandemoniumBoardingFixture(t);
+  await f.board(0);
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined, 'replacement arrives before the deferred automatic source');
+  PM.createApi('BoardingReplacement').sendMultiChatboxPrompt(f.player, 'Keep this new choice', 'Yes', () => {}, 'No', () => {});
+  const replacement = f.player.getDialogueManager().getCurrent();
+  f.tick(4);
+  assert.equal(f.player.getDialogueManager().getCurrent(), replacement);
+  assert.equal(MultiChatboxPrompt.getPending(f.player).title, 'Keep this new choice');
+  assert.equal(f.quest.getStage(f.player), 6);
+  await f.connection.dispatch([{ type: 'interface_close' }]); f.connection.processTurnPackets();
+  const will = f.owned().find(npc => npc.getId() === 14958);
+  await f.talk(will);
+  assert.equal(f.player.getDialogueManager().getCurrent()?.getText?.(), 'Lovely! The open sea!');
+  assert.equal(f.quest.getStage(f.player), 6, 'retalk does not skip the unspoken instructions');
+  for (let n = 0; n < 40 && f.player.getDialogueManager().isActive(); n++) await f.advance();
+  assert.equal(f.quest.getStage(f.player), 8);
+  const ship = await f.operate('helm'); assert.equal(ship.boat.helmPlayerId, f.player.getIndex());
+});
+
+test('Pandemonium pending boarding is retired on logout and a saved-six retry retains its own instructions', async t => {
+  const f = pandemoniumBoardingFixture(t);
+  await f.board(0);
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined, 'logout retires the pending automatic source');
+  const old = f.ship().boat;
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const save = PlayerSave.fromPlayer(f.player);
+  PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  f.tick(5);
+  assert.equal(core.BoatManager.getBoat(old.entityIndex), undefined);
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined, 'retired callbacks cannot start the old ship dialogue');
+  const restored = pandemoniumBoardingFixture(t, 6, save);
+  assert.equal(restored.quest.getStage(restored.player), 6);
+  const will = restored.owned().find(npc => npc.getId() === 14958);
+  await restored.talk(will);
+  assert.equal(restored.quest.getStage(restored.player), 6);
+  for (let n = 0; n < 40 && restored.player.getDialogueManager().isActive(); n++) await restored.advance();
+  assert.equal(restored.quest.getStage(restored.player), 8);
+  restored.assertFreeShipCamera();
+});
+
+test('Pandemonium stage-eight acknowledgement and stale menu cannot replace the actual helm checkpoint', async t => {
+  const f = pandemoniumBoardingFixture(t, 8), will = f.owned().find(npc => npc.getId() === 14958);
+  await f.talk(will);
+  for (let n = 0; n < 12 && !MultiChatboxPrompt.getPending(f.player); n++) await f.advance();
+  const index = MultiChatboxPrompt.getPending(f.player)?.options.indexOf("Okay, I'll get to it.") ?? -1;
+  assert.ok(index >= 0); await choose(f, index + 1);
+  assert.equal(f.quest.getStage(f.player), 8, 'acknowledging the route is not taking the helm');
+  await f.connection.dispatch([{ type: 'interface_close' }]); f.connection.processTurnPackets();
+  await choose(f, index + 1); f.tick();
+  assert.equal(f.quest.getStage(f.player), 8);
+  const ship = await f.operate('helm');
+  assert.equal(f.quest.getStage(f.player), 10);
+  assert.equal(ship.boat.helmPlayerId, f.player.getIndex());
 });

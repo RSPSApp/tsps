@@ -93,13 +93,22 @@ function pickMithrilFlowers({ player, object }) {
   return true;
 }
 
+function hasObjectsAt(player, location) {
+  const privateArea = player.getPrivateArea();
+  const scenery = core.MapObjects.getObjectsAt(location, privateArea);
+  const runtimeObjects = core.ObjectManager.objectsAt(location).some(
+    (object) => object.getPrivateArea() === privateArea,
+  );
+  return scenery.length > 0 || runtimeObjects;
+}
+
 function plant({ player, item, itemId, slot }) {
   const inventory = player.getInventory();
   const seed = inventory.getItems()[slot];
   if (!seed || seed !== item || seed.getId() !== itemId || seed.getAmount() <= 0) return false;
 
   const plantedAt = player.getLocation().clone();
-  if (core.ObjectManager.existsLocation(plantedAt)
+  if (hasObjectsAt(player, plantedAt)
       || player.getLocalNpcs().some((npc) => npc?.getLocation?.().equals(plantedAt))) {
     player.sendMessage("You cannot plant a seed right here.");
     return true;

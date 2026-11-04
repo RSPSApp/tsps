@@ -163,6 +163,34 @@ export class MapObjects {
         return null;
     }
 
+    /**
+     * All scenery at a tile in the area's view: template/private scenery for instances and the
+     * loaded shared map for the main world. Private areas which overlay the main world see both.
+     */
+    public static getObjectsAt(location: Location, privateArea: PrivateArea): GameObject[] {
+        const objects = new Set<GameObject>();
+        if (privateArea) {
+            for (const object of privateArea.getObjects()) {
+                if (object.getLocation().equals(location)) objects.add(object);
+            }
+            // TemplatedInstanceArea keeps its copied map locs outside PrivateArea.entities.
+            const templates = (privateArea as any).getTemplateObjects?.(location) ?? [];
+            for (const object of templates) objects.add(object);
+        }
+
+        if (!privateArea || privateArea.countsAsMainWorld()) {
+            RegionManager.loadMapFiles(location.getX(), location.getY());
+            const mapLocation = location.getZ() >= 4 ? location.clone().setZ(0) : location;
+            const hash = this.getHash(mapLocation.getX(), mapLocation.getY(), mapLocation.getZ());
+            for (const object of this.mapObjects.get(hash) ?? []) {
+                if (object.getPrivateArea() == null && object.getLocation().equals(mapLocation)) {
+                    objects.add(object);
+                }
+            }
+        }
+        return [...objects];
+    }
+
     static exists(object: GameObject): boolean {
         return this.get(object.getId(), object.getLocation(), object.getPrivateArea()) === object;
     }

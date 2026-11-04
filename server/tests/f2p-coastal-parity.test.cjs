@@ -617,3 +617,42 @@ test('X Marks ending waits for its completion scroll close and resumes only once
   assert.ok(lines.includes("Anyway, I'd best be getting back to Great Kourend."));
   q.emit('interface:closed',{player:p,interfaceId:153});assert.equal(chains.length,1);
 });
+
+
+test("Zembo only offers the canonical Barcrawl choice during native progress1", () => {
+  const q = register('PiratesTreasure', 'pirates_treasure'), p = player();
+  const option = require('../data/definitions/npc-dialogues.json').Zembo.steps[2].options[2];
+  const answer = q.hooks.get('onNpcDialogueCondition')[0];
+  for (const progress of [0, 1, 2, 3]) {
+    p.getPacketSender().sendVarbit(13714, progress);
+    assert.equal(answer({ player: p, npcId: core.NpcIdentifiers.ZEMBO, text: option.condition }), progress === 1);
+  }
+  assert.equal(answer({ player: p, npcId: core.NpcIdentifiers.LUTHAS, text: option.condition }), null, 'foreign NPC conditions remain unclaimed');
+  assert.equal(answer({ player: p, npcId: core.NpcIdentifiers.ZEMBO, text: 'Unrelated condition' }), null);
+});
+
+test("Wydin crate retrieves rum separately from bananas, retaining pending rum on a full bag", () => {
+  const q = register('PiratesTreasure', 'pirates_treasure'), p = player();
+  q.quest.setStage(p, 1);
+  p.attributes.set('pirates-treasure.employment', 2);
+  p.attributes.set('pirates-treasure.rum', 2);
+  p.getEquipment = () => ({ get: () => ({ getId: () => core.ItemIdentifiers.WHITE_APRON }) });
+  const search = () => q.call('onObjectInteraction', { player: p, objectId: core.ObjectIdentifiers.CRATE_14,
+    clickType: 1, definition: { getInteractions: () => ['Search'] } });
+  for (let i = 0; i < 28; i++) p.items.set(20000 + i, 1);
+  search();
+  assert.equal(p.attributes.get('pirates-treasure.rum'), 2);
+  assert.equal(p.items.get(core.ItemIdentifiers.KARAMJAN_RUM), undefined);
+  assert.equal(q.prompts.length, 0);
+  assert.equal(p.messages.at(-1), 'You need more inventory space.');
+  p.items.delete(20000);
+  search();
+  assert.equal(p.items.get(core.ItemIdentifiers.KARAMJAN_RUM), 1);
+  assert.equal(p.attributes.get('pirates-treasure.rum'), 0);
+  assert.equal(q.prompts.length, 0, 'rum retrieval must not also ask to take a banana');
+  assert.equal(p.messages.at(-1), 'You find your bottle of rum in amongst the bananas.');
+  search();
+  assert.equal(p.items.get(core.ItemIdentifiers.KARAMJAN_RUM), 1, 'repeat search cannot duplicate rum');
+  assert.equal(q.prompts.length, 1);
+  assert.equal(q.prompts[0].title, 'Do you want to take a banana?');
+});

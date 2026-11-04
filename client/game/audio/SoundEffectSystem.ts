@@ -173,6 +173,13 @@ export class SoundEffectSystem {
         this.listenerZ = z;
     }
 
+    /** SOUND_AREA admission is an inclusive tile box; playback later applies its distance fade. */
+    isAreaSoundInRange(x: number, y: number, radius: number): boolean {
+        const range = radius + 1;
+        return Math.abs(Math.floor(this.listenerX / 128) - x) <= range
+            && Math.abs(Math.floor(this.listenerY / 128) - y) <= range;
+    }
+
     setVolume(volume: number): void {
         const previous = this.masterVolume;
         this.masterVolume = Math.max(0, Math.min(1, volume));

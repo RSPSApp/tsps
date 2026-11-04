@@ -3219,6 +3219,10 @@ export class OsrsClient {
                     try {
                         if (!this.soundEffectSystem) return;
                         const hasPosition = payload.x !== undefined && payload.y !== undefined;
+                        if (hasPosition && payload.radius !== undefined) {
+                            this.updateSoundListener();
+                            if (!this.soundEffectSystem.isAreaSoundInRange(payload.x!, payload.y!, payload.radius)) return;
+                        }
                         // Wire loops: n = play n times; skip if zero
                         const wireLoops = payload.loops !== undefined ? payload.loops | 0 : 1;
                         if (wireLoops <= 0) return;

@@ -31,7 +31,7 @@
  * - Will and Anne's tutorial ship is the shared `pandemonium_tutorial_ship` static ship
  *   (owner-only), with its captured 2x5 deck, helm, sails and hook. Taking the helm
  *   only sets the helm; raising the sails starts a real BoatManager voyage south to the
- *   wreck, and arrival plays the wreck camera/arrival dialogue. The observed course is
+ *   wreck, and arrival plays its dialogue. The observed course is
  *   collision-checked against the active cache; optional sail-trim boosts and exact journey
  *   timing are not reproduced. The ship is disposed when the player is pushed overboard or leaves.
  * - The raft and cargo route use the real Sailing system: Junior Jim grants a raft in
@@ -39,8 +39,9 @@
  *   its hotspot, and the crate is port task 599 (crate 32807) collected and delivered
  *   through the real ledger tables and Sailing's board/dock/leave events. Task 599 is
  *   rewardful in the capture (reward bag and 100 XP); task 600 is the noReward one.
- * - The ambient "sailing-the-boat-*" lines and the live private-instance cutscene camera
- *   are not reproduced.
+ * - Deploy uses the captured private ship/shore maps, actors, cameras and human sequences;
+ *   native Continue drives its canonical text. The ambient "sailing-the-boat-*" lines,
+ *   optional voyage boosts and exact frame parity are not reproduced.
  * - Old Grog has no transcript page in npc-dialogues.json, so his lines in the
  *   finale borrow the talking NPC's (Steve's) chathead; he is owner-spawned for the
  *   scene and removed on "Old Grog departs.".
@@ -232,6 +233,7 @@ module.exports = function registerPandemoniumQuest(api) {
   const GO_BACK_TO_PORT_ACTION_ID = "VuZpfc";
   const GO_BACK_TO_SHIP_ACTION_ID = "Nm7LVw";
   const SALVAGE_MESSAGE_ID = "p40qKY";
+  const SHOW_SALVAGE_MESSAGE_ID = "tHqfi7";
   const PUSH_OVERBOARD_ACTION_ID = "hQBGdU";
   const WALK_TO_PANDEMONIUM_ACTION_ID = "dpOs4I";
   const CUP_RECOVERY_MESSAGE_ID = "P7HYtI";
@@ -243,6 +245,7 @@ module.exports = function registerPandemoniumQuest(api) {
   const BACK_TO_PANDEMONIUM_ACTION_ID = "HrNl3J";
   const LOG_GIVEN_MESSAGE_ID = "7jgwOg";
   const LOG_AGAIN_GIVEN_MESSAGE_ID = "g4CUrq";
+  const CARGO_REQUEST_MESSAGE_ID = "DgYchr";
   const TAKE_CARGO_MESSAGE_ID = "8bdD6i";
   const DELIVER_CARGO_MESSAGE_ID = "Bvs9Sf";
   const OLD_GROG_DEPARTS_MESSAGE_ID = "C5l2Ww";
@@ -305,11 +308,12 @@ module.exports = function registerPandemoniumQuest(api) {
   /** Puts Jim's cargo task in the player's first port-task slot, as the log does. */
   function assignCargoTask(player) {
     const slots = PortTasks.slots(player);
-    if (slots.some((slot) => slot?.id === QUEST_PORT_TASK_ID)) return;
+    if (slots.some((slot) => slot?.id === QUEST_PORT_TASK_ID)) return true;
     const index = slots.findIndex((slot) => !slot);
-    if (index < 0) return;
+    if (index < 0) return false;
     slots[index] = { id: QUEST_PORT_TASK_ID, taken: 0, delivered: 0 };
     PortTasks.setSlots(player, slots);
+    return true;
   }
 
   function questRaft(player) {
@@ -392,6 +396,248 @@ module.exports = function registerPandemoniumQuest(api) {
   }
 
   const tutorialScenes = new Map();
+  const salvageScenes = new Map();
+  // RSProx381 uses these fixed cache scenes after Deploy, separate from the sailing entity.
+  const SALVAGE_MAP = { x: 1472, y: 4480 };
+  const SHORE_MAP = { x: 3008, y: 2944 };
+  const SHORE_EXIT = { x: 3049, y: 2970, z: 0 };
+  const WILL_CUTSCENE_ID = api.core.CacheDefinitions.getNpcId("sailing_intro_will_cutscene");
+  const ANNE_CUTSCENE_ID = api.core.CacheDefinitions.getNpcId("sailing_intro_anne_cutscene");
+  const MEDALLION_ITEM_ID = api.core.CacheDefinitions.getObjId("sailing_intro_medallion");
+  const SCENE_SEQUENCES = Object.fromEntries(Object.entries({
+    lower: "sailing_human_salvage_hook_kandarin_2x5_drop01",
+    reset: "sailing_human_salvage_hook_kandarin_2x5_reset01",
+    overboard: "sailing_intro_human_overboard",
+    push: "sailing_intro_anne_push",
+    floor: "human_onfloor",
+    getUp: "human_getup_priority_10",
+  }).map(([key, name]) => [key, api.core.CacheDefinitions.getSeqId(name)]));
+
+  class SalvageSceneArea extends api.core.TemplatedInstanceArea {
+    constructor(scene) {
+      super(8, 8);
+      this.scene = scene;
+      this.setSource(SALVAGE_MAP);
+    }
+    getName() { return "Pandemonium"; }
+    sourceTile(x, y, z) { return this.tile(x - this.source.x, y - this.source.y, z); }
+    setSource(source) {
+      this.source = source;
+      for (let z = 0; z < 4; z++) for (let x = 0; x < 8; x++) for (let y = 0; y < 8; y++) {
+        this.setChunk(z, x, y, { sourceChunkX: source.x / 8 + x, sourceChunkY: source.y / 8 + y, sourcePlane: z, rotation: 0 });
+      }
+    }
+    canTeleport() { return false; }
+    canAttack() { return false; }
+    npcAggression() { return false; }
+    process(mobile) {
+      if (mobile === this.scene.player && !canContinueSalvage(this.scene)) endSalvageScene(mobile);
+    }
+    postLeave(mobile, logout) {
+      if (mobile === this.scene.player && salvageScenes.get(mobile) === this.scene) {
+        endSalvageScene(mobile, logout, false, logout);
+      }
+      super.postLeave(mobile, logout);
+    }
+  }
+
+  function canContinueSalvage(scene) {
+    const player = scene.player;
+    if (salvageScenes.get(player) !== scene || !player.isRegistered() || player.getHitpoints() <= 0 || player.isDying
+      || quest.getStage(player) !== STAGE_SALVAGE_READY || player.getPrivateArea() !== scene.area) return false;
+    const manager = player.getDialogueManager();
+    return scene.phase === "dialogue"
+      ? manager.isActive() && manager.getOwner() === scene.dialogueOwner
+      : manager.getCurrent() === scene.holdDialogue;
+  }
+
+  function salvageLater(scene, ticks, action) {
+    Scenes.later(scene, ticks, () => {
+      if (salvageScenes.get(scene.player) !== scene) return;
+      if (!canContinueSalvage(scene)) return endSalvageScene(scene.player);
+      action();
+    });
+  }
+
+  function holdSalvage(scene, phase) {
+    const player = scene.player;
+    const previousPlayback = scene.playback;
+    scene.playback?.cancel?.();
+    // A synchronous close callback may have opened a different feature's prompt.
+    if (previousPlayback && player.getDialogueManager().isActive()) { endSalvageScene(player); return false; }
+    scene.phase = phase;
+    scene.holdOwner = Object.freeze({});
+    player.getPacketSender().withChatboxOwner(scene.holdOwner, () => Scenes.hold(player));
+    scene.holdDialogue = player.getDialogueManager().getCurrent();
+    return true;
+  }
+
+  function salvagePose(scene, mobile, sequence) {
+    const animation = new api.core.Animation(sequence);
+    mobile.performAnimation(animation);
+    if (mobile === scene.player && mobile.getAnimation() === animation) scene.playerAnimationGeneration = mobile.getAnimationGeneration();
+  }
+
+  function salvageCamera(scene, move, look) {
+    const from = scene.area.sourceTile(move[0], move[1], scene.plane);
+    const to = scene.area.sourceTile(look[0], look[1], scene.plane);
+    scene.player.getPacketSender()
+      .sendCameraMoveTo(from.getX(), from.getY(), 550, { rate: 232, rate2: 100, heightRelative: false })
+      .sendCameraLookAt(to.getX(), to.getY(), 350, { rate: 232, rate2: 100, heightRelative: false });
+  }
+
+  function playSalvage(scene, variant = WILL_DEPLOY_VARIANT, select) {
+    scene.phase = "dialogue";
+    scene.variant = variant;
+    const npc = variant === WILL_DEPLOY_VARIANT ? scene.will : null;
+    scene.playback = { player: scene.player, npc, npcId: npc?.getId() ?? STEVE_NPC_ID,
+      variant: { page: PAGE, variant }, exact: true, select };
+    api.emitCustomEvent("npc-dialogue:start", scene.playback);
+    scene.dialogueOwner = scene.player.getDialogueManager().getOwner();
+    if (!scene.playback.handled || !scene.player.getDialogueManager().isActive()) endSalvageScene(scene.player);
+  }
+
+  function beginSalvageScene(player) {
+    if (salvageScenes.has(player)) return;
+    endTutorialShip(player);
+    const scene = { player, actors: [], phase: "opening", plane: 1 };
+    scene.area = new SalvageSceneArea(scene);
+    salvageScenes.set(player, scene);
+    scene.area.enter(player);
+    player.moveTo(scene.area.sourceTile(1498, 4512, 1));
+    player.setPositionToFace(scene.area.sourceTile(1497, 4512, 1));
+    Scenes.controls(player, true, true);
+    Scenes.fade(player, true);
+    if (!holdSalvage(scene, "opening")) return;
+    for (const [key, id, x, y] of [["will", WILL_CUTSCENE_ID, 1498, 4510], ["anne", ANNE_CUTSCENE_ID, 1499, 4511]]) {
+      const at = scene.area.sourceTile(x, y, 1);
+      const npc = api.spawnNpc({ id, x: at.getX(), y: at.getY(), z: 1, owner: player, ownerOnly: true, wanderRadius: 0 });
+      scene.area.add(npc);
+      scene.actors.push(npc);
+      scene[key] = npc;
+      npc.setPositionToFace(scene.area.sourceTile(1498, 4512, 1));
+    }
+    // The owner and actors must receive their new native map/NPC context first.
+    salvageLater(scene, 2, () => {
+      player.getPacketSender().sendCameraTarget({ player: player.getIndex() });
+      salvageCamera(scene, [1490, 4509], [1510, 4514]);
+      Scenes.fade(player, false);
+      playSalvage(scene);
+    });
+  }
+
+  function lowerSalvageHook(scene) {
+    if (!holdSalvage(scene, "lowering")) return;
+    salvagePose(scene, scene.player, SCENE_SEQUENCES.lower);
+    salvageLater(scene, 3, () => salvagePose(scene, scene.player, SCENE_SEQUENCES.reset));
+    salvageLater(scene, 5, () => {
+      salvagePose(scene, scene.player, api.core.Animation.DEFAULT_RESET_ANIMATION.getId());
+      playSalvage(scene, WILL_DEPLOY_VARIANT,
+        steps => !held(scene.player, OLD_CUP_ITEM_ID) && freeSlots(scene.player) < 1
+          ? steps.slice(0, 1) : steps.slice(steps.findIndex(step => step.id === SALVAGE_MESSAGE_ID)));
+    });
+  }
+
+  function approachSalvageCrew(scene) {
+    const queue = scene.player.getMovementQueue();
+    queue.reset().setBlockMovement(false);
+    queue.walkStep(0, -1);
+    scene.anne.setPositionToFace(scene.area.sourceTile(1498, 4511, 1));
+    salvageLater(scene, 2, () => queue.reset().setBlockMovement(true));
+  }
+
+  function pushFromSalvageShip(scene) {
+    if (!holdSalvage(scene, "overboard")) return;
+    Scenes.fade(scene.player, true);
+    salvageLater(scene, 1, () => {
+      salvagePose(scene, scene.player, SCENE_SEQUENCES.overboard);
+      salvagePose(scene, scene.anne, SCENE_SEQUENCES.push);
+    });
+    salvageLater(scene, 8, () => {
+      for (const npc of scene.actors.splice(0)) api.removeNpc(npc);
+      scene.area.setSource(SHORE_MAP);
+      scene.plane = 0;
+      scene.player.moveTo(scene.area.sourceTile(3034, 2995, 0));
+    });
+    salvageLater(scene, 9, () => {
+      salvagePose(scene, scene.player, SCENE_SEQUENCES.floor);
+      salvageCamera(scene, [3026, 3000], [3036, 2993]);
+      Scenes.fade(scene.player, false);
+    });
+    salvageLater(scene, 13, () => salvagePose(scene, scene.player, SCENE_SEQUENCES.getUp));
+    salvageLater(scene, 15, () => playSalvage(scene, WILL_SWIM_VARIANT));
+  }
+
+  function finishSalvageScene(scene) {
+    if (!holdSalvage(scene, "finishing")) return;
+    Scenes.fade(scene.player, true);
+    salvageLater(scene, 6, () => {
+      scene.finished = true;
+      // Commit with the normal-world landing; a saved16 can never refer to this temporary map.
+      quest.setStage(scene.player, STAGE_SALVAGED);
+      endSalvageScene(scene.player, false, false, false);
+      scene.player.moveTo(new Location(SHORE_EXIT.x, SHORE_EXIT.y, SHORE_EXIT.z));
+      ensureSteve(scene.player);
+    });
+  }
+
+  function endSalvageScene(player, logout = false, restore = true, relocate = true) {
+    const scene = salvageScenes.get(player);
+    if (!scene) return;
+    salvageScenes.delete(player);
+    api.core.TaskManager.cancelTasks(scene);
+    scene.playback?.cancel?.();
+    const manager = player.getDialogueManager();
+    if (manager.getCurrent() === scene.holdDialogue) {
+      player.getPacketSender().closeChatboxFor(scene.holdOwner);
+      if (manager.getCurrent() === scene.holdDialogue) manager.reset();
+    }
+    for (const npc of scene.actors.splice(0)) api.removeNpc(npc);
+    if (player.getPrivateArea() === scene.area) scene.area.leave(player, logout);
+    scene.area.destroy();
+    const dead = player.getHitpoints() <= 0 || player.isDying;
+    const blocked = player.getMovementQueue().isMovementBlocked(), untargetable = player.isUntargetable();
+    Scenes.closeFade(player);
+    Scenes.controls(player, false);
+    if (dead) {
+      player.getMovementQueue().setBlockMovement(blocked);
+      player.setUntargetable(untargetable);
+    } else if (scene.playerAnimationGeneration !== undefined && player.getAnimationGeneration() === scene.playerAnimationGeneration) {
+      player.performAnimation(api.core.Animation.DEFAULT_RESET_ANIMATION);
+    }
+    player.getPacketSender().sendCameraReset();
+    if (relocate) {
+      player.moveTo(new Location(PORT_SARIM_TILE.x, PORT_SARIM_TILE.y, PORT_SARIM_TILE.z));
+      if (restore && !logout && !dead && player.isRegistered() && quest.getStage(player) === STAGE_SALVAGE_READY) {
+        startTutorialShip(player, { atWreck: true });
+      }
+    }
+  }
+
+  function handleSalvageDeath({ player }) { endSalvageScene(player, false, false); }
+
+  function ownsSalvageSource(event, scene) {
+    return scene && scene.phase === "dialogue" && scene.player.isRegistered()
+      && scene.player.getHitpoints() > 0 && !scene.player.isDying
+      && quest.getStage(scene.player) === STAGE_SALVAGE_READY && scene.player.getPrivateArea() === scene.area
+      && event.pages?.some(({ page, variants }) => page === PAGE && variants?.includes(scene.variant));
+  }
+
+  function handleSalvageLine(event) {
+    const scene = salvageScenes.get(event.player);
+    if (!ownsSalvageSource(event, scene)) return false;
+    if (event.step?.speaker === "Will") event.speakerId = WILL_CUTSCENE_ID;
+    if (event.step?.speaker === "Anne") event.speakerId = ANNE_CUTSCENE_ID;
+    if (scene.variant === WILL_DEPLOY_VARIANT) {
+      if (event.text === "Right then, let's give this a go.") event.after = () => lowerSalvageHook(scene);
+      if (event.text === "Well?") event.before = () => scene.player.setPositionToFace(scene.will.getLocation());
+      if (event.text === "What do you make of these?") event.after = () => approachSalvageCrew(scene);
+      if (event.text === "That's right! And now that we've found it, I'm afraid we don't really need you anymore.") {
+        event.before = () => scene.player.setPositionToFace(scene.anne.getLocation());
+      }
+    }
+    return true;
+  }
   // Owned tutorial entity16 in rsprox381: the 2x5 ship's observed start and stopped wreck root.
   const TUTORIAL_START_FINE = { fineX: 3056 * 128 + 64, fineY: 3190 * 128 + 64 };
   const WORLD_WRECK_FINE = { fineX: 3035 * 128 + 32, fineY: 3048 * 128 + 96 };
@@ -621,11 +867,12 @@ module.exports = function registerPandemoniumQuest(api) {
         return false; // no requirements
       case INTERVIEW_NO_SPACE_CONDITION_ID:
       case BACK_NO_SPACE_CONDITION_ID:
-      case DEPLOY_NO_SPACE_CONDITION_ID:
       case CUP_RECOVERY_NO_SPACE_CONDITION_ID:
       case LOG_NO_SPACE_CONDITION_ID:
       case LOG_AGAIN_NO_SPACE_CONDITION_ID:
         return freeSlots(player) < 1;
+      case DEPLOY_NO_SPACE_CONDITION_ID:
+        return !held(player, OLD_CUP_ITEM_ID) && freeSlots(player) < 1;
       case STEVE_NOT_ASKED_CONDITION_ID:
         return quest.getStage(player) < STAGE_STEVE_ASKED;
       case LOST_OLD_CUP_CONDITION_ID:
@@ -729,6 +976,7 @@ module.exports = function registerPandemoniumQuest(api) {
 
   /** The transcript has no end-of-branch action for these; their lines carry the stage. */
   function handleDialogueLine(event) {
+    if (handleSalvageLine(event)) return;
     const { player, npcId, text, step } = event;
     if (typeof text !== "string") return;
     const stage = quest.getStage(player);
@@ -773,6 +1021,8 @@ module.exports = function registerPandemoniumQuest(api) {
   }
 
   function pushOverboard(player) {
+    const scene = salvageScenes.get(player);
+    if (scene) { pushFromSalvageShip(scene); return; }
     endTutorialShip(player);
     teleport(player, PANDEMONIUM_LANDING_TILE, () => {
       if (player.isRegistered?.() === false) return;
@@ -811,6 +1061,11 @@ module.exports = function registerPandemoniumQuest(api) {
         return;
       case WALK_TO_PANDEMONIUM_ACTION_ID:
         event.handled = true;
+        if (ownsSalvageSource(event, salvageScenes.get(player))) {
+          event.end = true;
+          finishSalvageScene(salvageScenes.get(player));
+          return;
+        }
         teleportAfterDialogue(player, PANDEMONIUM_PUB_TILE);
         return;
       case GO_TO_SHIPYARD_ACTION_ID: {
@@ -838,7 +1093,16 @@ module.exports = function registerPandemoniumQuest(api) {
         return;
       case SALVAGE_MESSAGE_ID:
         if (!held(player, OLD_CUP_ITEM_ID)) player.getInventory().adds(OLD_CUP_ITEM_ID, 1);
-        if (quest.getStage(player) < STAGE_SALVAGED) quest.setStage(player, STAGE_SALVAGED);
+        if (ownsSalvageSource(event, salvageScenes.get(player))) {
+          event.handled = true;
+          event.box = { items: [MEDALLION_ITEM_ID, OLD_CUP_ITEM_ID] };
+        }
+        return;
+      case SHOW_SALVAGE_MESSAGE_ID:
+        if (ownsSalvageSource(event, salvageScenes.get(player))) {
+          event.handled = true;
+          event.box = { items: [MEDALLION_ITEM_ID, OLD_CUP_ITEM_ID] };
+        }
         return;
       case CUP_RECOVERY_MESSAGE_ID:
         if (!held(player, OLD_CUP_ITEM_ID)) player.getInventory().adds(OLD_CUP_ITEM_ID, 1);
@@ -864,8 +1128,10 @@ module.exports = function registerPandemoniumQuest(api) {
         return;
       case LOG_AGAIN_GIVEN_MESSAGE_ID:
         if (!held(player, CAPTAINS_LOG_ITEM_ID)) player.getInventory().adds(CAPTAINS_LOG_ITEM_ID, 1);
-        assignCargoTask(player);
-        if (quest.getStage(player) < STAGE_JOB_ACCEPTED) quest.setStage(player, STAGE_JOB_ACCEPTED);
+        if (assignCargoTask(player) && quest.getStage(player) < STAGE_JOB_ACCEPTED) quest.setStage(player, STAGE_JOB_ACCEPTED);
+        return;
+      case CARGO_REQUEST_MESSAGE_ID:
+        if (quest.getStage(player) === STAGE_LOG_GIVEN && assignCargoTask(player)) quest.setStage(player, STAGE_JOB_ACCEPTED);
         return;
       case TAKE_CARGO_MESSAGE_ID:
         if (!held(player, CRATE_OF_SHIP_PARTS_ITEM_ID)) {
@@ -898,11 +1164,14 @@ module.exports = function registerPandemoniumQuest(api) {
 
   function deploySalvagingHook(event) {
     const { player } = event;
+    if (salvageScenes.has(player)) { event.handled = true; return; }
+    const ship = tutorialScene(player);
+    if (!ship || !StaticShips.isAboard(player, ship.staticShip)) return;
     event.handled = true;
     const stage = quest.getStage(player);
-    if (stage >= STAGE_SALVAGE_READY && !quest.isComplete(player)) {
-      startTranscript(api, player, WILL_NPC_ID, PAGE, WILL_DEPLOY_VARIANT);
-    } else if (stage >= STAGE_BOARDED) {
+    if (stage === STAGE_SALVAGE_READY) {
+      beginSalvageScene(player);
+    } else if (stage >= STAGE_BOARDED && stage < STAGE_SALVAGE_READY) {
       startTranscript(api, player, WILL_NPC_ID, PAGE, WILL_DEPLOY_EARLY_VARIANT);
     }
   }
@@ -1059,21 +1328,10 @@ module.exports = function registerPandemoniumQuest(api) {
     scene.boat.moveMode = sailingContent.MOVE_MODE.STOPPED;
     scene.boat.velocity = 0;
     Scenes.fade(player, true);
-    Scenes.later(player, 1, () => {
-      tutorialWreckCamera(player, scene.boat);
-      Scenes.later(player, 1, () => Scenes.fade(player, false));
-    });
+    Scenes.later(player, 2, () => Scenes.fade(player, false));
     quest.setStage(player, STAGE_ARRIVED);
     player.getPacketSender().sendVarbit(VARBIT_REACHED_WRECK, 1);
     startTranscript(api, player, WILL_NPC_ID, PAGE, WILL_ARRIVAL_VARIANT);
-  }
-
-  function tutorialWreckCamera(player, boat) {
-    const move = boat.deckTileToWorld(boat.deckBaseX - 6, boat.deckBaseY + 1);
-    const look = boat.deckTileToWorld(boat.deckBaseX + 14, boat.deckBaseY - 4);
-    player.getPacketSender()
-      .sendCameraMoveTo(move.x, move.y, 550, { rate: 232, rate2: 100, heightRelative: false })
-      .sendCameraLookAt(look.x, look.y, 350, { rate: 232, rate2: 100, heightRelative: false });
   }
 
   function handleObjectInteraction(event) {
@@ -1158,6 +1416,7 @@ module.exports = function registerPandemoniumQuest(api) {
 
   function handleLogout({ player }) {
     if (!player) return;
+    endSalvageScene(player, true, false);
     endTutorialShip(player);
     removeOldGrog(player);
     removeTracked(player, steveByPlayer);
@@ -1348,5 +1607,6 @@ module.exports = function registerPandemoniumQuest(api) {
   api.onServerStartup(installQuestObjects);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
+  api.onPlayerDeath(handleSalvageDeath);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrap);
 };

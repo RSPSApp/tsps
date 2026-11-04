@@ -24,7 +24,7 @@ export interface SailingDock {
 }
 
 /** Why a player left their boat, sent with the `sailing:left` event. */
-export type LeaveReason = "disembark" | "sunk" | "logout";
+export type LeaveReason = "disembark" | "sunk" | "logout" | "removed";
 
 /** Lets content (the sidepanel, varbits) follow boarding and leaving without core knowing it. */
 function emit(event: "sailing:boarded" | "sailing:left", payload: object): void {
@@ -34,7 +34,7 @@ function emit(event: "sailing:boarded" | "sailing:left", payload: object): void 
 
 interface ActiveInstance {
     player: Player;
-    slot: number;
+    owned: OwnedBoat;
 }
 
 /**
@@ -98,6 +98,33 @@ export class Sailing {
     public static activeBoat(player: Player): OwnedBoat | undefined {
         const state = player.getSailing();
         return state.boats.find((boat) => boat.slot === state.activeBoatSlot);
+    }
+
+    /** Removes this exact owned record and its live deck, without refunds or sinking it. */
+    public static removeOwnedBoat(player: Player, boat: OwnedBoat): boolean {
+        const state = player.getSailing();
+        const index = state.boats.indexOf(boat);
+        if (index < 0) return false;
+        state.boats.splice(index, 1);
+        if (state.activeBoatSlot === boat.slot) state.activeBoatSlot = null;
+        // Delayed cargo operations may retain this object after its saved record is gone.
+        boat.cargo.length = 0;
+        for (const [instance, active] of Sailing.instances) {
+            if (active.player !== player || active.owned !== boat) continue;
+            const deck = BoatManager.getDeck(instance);
+            const ownerAboard = deck?.hasMember(player) === true;
+            const guests = (deck?.getPlayers() ?? []).filter(guest => guest !== player);
+            Sailing.leave(player, instance, "removed");
+            if (ownerAboard) Sailing.moveExpected(player, Sailing.returnLocation(player));
+            for (const guest of guests) {
+                const atHelm = instance.helmPlayerId === guest.getIndex();
+                if (atHelm) instance.helmPlayerId = undefined;
+                deck!.leave(guest, false);
+                Sailing.moveExpected(guest, Sailing.returnLocation(guest));
+                emit("sailing:left", { player: guest, boat: instance, reason: "removed", atHelm });
+            }
+        }
+        return true;
     }
 
     /** The player's own boat instance they are standing on, if any. */
@@ -208,9 +235,8 @@ export class Sailing {
 
     /** Keeps the saved position of each boat at sea current, so a save mid-voyage restores it. */
     private static recordPositions(): void {
-        for (const [instance, { player, slot }] of Sailing.instances) {
-            const boat = player.getSailing().boats.find((owned) => owned.slot === slot);
-            if (boat) boat.location = Sailing.atSea(instance, Sailing.lastPortOf(boat));
+        for (const [instance, { player, owned }] of Sailing.instances) {
+            if (player.getSailing().boats.includes(owned)) owned.location = Sailing.atSea(instance, Sailing.lastPortOf(owned));
         }
     }
 
@@ -275,7 +301,7 @@ export class Sailing {
         const spec = Sailing.specFor(boat);
         const instance = spec && BoatManager.spawn(player.getIndex(), spec, placement);
         if (!spec || !instance) return false;
-        Sailing.instances.set(instance, { player, slot: boat.slot });
+        Sailing.instances.set(instance, { player, owned: boat });
         player.getSailing().activeBoatSlot = boat.slot;
         boat.location = Sailing.atSea(instance, dockId);
         BoatManager.getDeck(instance)!.enter(player);
@@ -296,7 +322,8 @@ export class Sailing {
         Sailing.instances.delete(instance);
         const atHelm = instance.helmPlayerId === player.getIndex();
         if (atHelm) instance.helmPlayerId = undefined;
-        BoatManager.getDeck(instance)?.leave(player, false);
+        const deck = BoatManager.getDeck(instance);
+        if (deck?.hasMember(player)) deck.leave(player, false);
         BoatManager.dispose(instance);
         emit("sailing:left", { player, boat: instance, reason, atHelm });
     }

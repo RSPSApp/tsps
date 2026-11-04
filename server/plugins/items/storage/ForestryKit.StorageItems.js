@@ -86,8 +86,8 @@ const family = {
   room: () => Number.MAX_SAFE_INTEGER,
   /** Carried or worn, it takes what the player earns (Wiki: leaves; captured: bark). */
   gathers: (player) => Storage.carried(player, family).length > 0,
-  /** Bark pays at the Forestry Shop straight from the kit. */
-  usable: (id) => id === Storage.core.CacheDefinitions.getObjId("forestry_currency"),
+  /** Bark pays at the Forestry Shop; rations power a felling axe from a carried or worn kit. */
+  usable: (id) => id === Storage.core.CacheDefinitions.getObjId("forestry_currency") || id === Storage.core.ItemIdentifiers.FORESTERS_RATION,
   changed: (player) => {
     if (isOpen(player)) sendContents(player);
   },

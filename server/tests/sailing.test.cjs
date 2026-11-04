@@ -638,6 +638,89 @@ function tileOf(player) {
   return [location.getX(), location.getY(), location.getZ()];
 }
 
+test("removing an exact owned boat drops its cargo and save record, preserving other slots and shared tools", () => {
+  const player = sailor();
+  const kept = Sailing.giveBoat(player, "raft", DOCK.id);
+  const removed = Sailing.giveBoat(player, "raft", DOCK.id);
+  removed.cargo.push({ id: 995, amount: 100 });
+  removed.parts.hull = 1;
+  kept.cargo.push({ id: 995, amount: 20 });
+  player.getSailing().tools.push(8794);
+  const before = JSON.stringify(kept);
+  assert.equal(typeof Sailing.removeOwnedBoat, "function", "owned-boat disposal is a core lifecycle operation");
+  assert.equal(Sailing.removeOwnedBoat(sailor(), removed), false, "another player cannot delete the owner's record");
+  assert.equal(Sailing.removeOwnedBoat(player, { ...removed }), false, "a matching slot is not the owned object");
+  assert.equal(Sailing.removeOwnedBoat(player, removed), true);
+  assert.equal(Sailing.removeOwnedBoat(player, removed), false, "disposal is once-only");
+  assert.deepEqual(player.getSailing().boats, [kept]);
+  assert.equal(JSON.stringify(kept), before);
+  assert.deepEqual(removed.cargo, [], "a retained delayed cargo callback cannot reclaim destroyed items");
+  const saved = normalizeSailingState(JSON.parse(JSON.stringify(player.getSailing())));
+  assert.deepEqual(saved.boats, [kept]);
+  assert.equal(saved.activeBoatSlot, kept.slot);
+  assert.deepEqual(saved.tools, [8794]);
+});
+
+test("owned-boat disposal rejects a stale object after its slot is replaced", () => {
+  const player = sailor();
+  const old = Sailing.giveBoat(player, "raft", DOCK.id);
+  const replacement = { ...old, cargo: [{ id: 995, amount: 25 }] };
+  player.getSailing().boats[0] = replacement;
+  assert.equal(typeof Sailing.removeOwnedBoat, "function");
+  assert.equal(Sailing.removeOwnedBoat(player, old), false);
+  assert.equal(player.getSailing().boats[0], replacement);
+  assert.deepEqual(replacement.cargo, [{ id: 995, amount: 25 }]);
+});
+
+test("owned-boat disposal preserves its owner's replacement private area when they already left the deck", () => {
+  const { PrivateArea } = require("../dist/game/model/areas/impl/PrivateArea");
+  const player = sailor(), boat = Sailing.giveBoat(player, "raft", DOCK.id);
+  Sailing.board(player, DOCK.id);
+  const instance = Sailing.instanceFor(player);
+  const replacement = new (class extends PrivateArea {})();
+  replacement.enter(player);
+  player.setLocation(new Location(3200, 3200, 0));
+  assert.equal(Sailing.removeOwnedBoat(player, boat), true);
+  assert.equal(BoatManager.getBoat(instance.entityIndex), undefined);
+  assert.equal(player.getArea(), replacement);
+  assert.deepEqual(tileOf(player), [3200, 3200, 0]);
+  replacement.leave(player, false);
+});
+
+test("disposing a live owned boat releases its real deck, helm and all passengers without sinking another boat", () => {
+  assert.equal(typeof Sailing.removeOwnedBoat, "function");
+  const owner = sailor(), guest = sailor(), other = sailor();
+  const owned = Sailing.giveBoat(owner, "raft", DOCK.id);
+  Sailing.giveBoat(other, "raft", DOCK.id);
+  Sailing.board(owner, DOCK.id);
+  Sailing.board(other, DOCK.id);
+  const instance = Sailing.instanceAboard(owner), unrelated = Sailing.instanceAboard(other);
+  const deck = BoatManager.getDeck(instance);
+  guest.getSailing().returnPoint = { x: 3222, y: 3218, z: 0 };
+  deck.enter(guest);
+  guest.setLocation(owner.getLocation().clone());
+  instance.helmPlayerId = owner.getIndex();
+  try {
+    assert.equal(Sailing.removeOwnedBoat(owner, owned), true);
+    assert.equal(BoatManager.getBoat(instance.entityIndex), undefined);
+    assert.equal(Sailing.instanceFor(owner), undefined);
+    assert.equal(instance.helmPlayerId, undefined);
+    assert.equal(owner.getArea(), null);
+    assert.equal(guest.getArea(), null);
+    assert.deepEqual(tileOf(owner), [DOCK.landing.x, DOCK.landing.y, DOCK.landing.z]);
+    assert.deepEqual(tileOf(guest), [3222, 3218, 0]);
+    assert.equal(owner.getSailing().activeBoatSlot, null);
+    assert.equal(BoatManager.getBoat(unrelated.entityIndex), unrelated);
+    assert.equal(Sailing.activeBoat(other).location.kind, "at_sea");
+    Sailing.onLogout(owner);
+    Sailing.onLogin(owner);
+    assert.equal(Sailing.instanceFor(owner), undefined, "save/login cannot resurrect a removed boat");
+  } finally {
+    Sailing.onLogout(owner);
+    Sailing.onLogout(other);
+  }
+});
+
 test("boarding at the dock puts the player on the deck of their boat, at sea", () => {
   const player = sailor();
   Sailing.giveBoat(player, "raft", DOCK.id, [0, 69, 57]); // "Lady Pride"
@@ -833,6 +916,7 @@ function registerPlugin(file) {
     },
     emitCustomEvent: (name, payload) => hooks.emitted.push([name, payload]),
     onNpcInteraction: (name, actions) => { hooks.npcs[name] = actions; },
+    onNpcDialogueCondition: () => {},
     onCustomEvent: (name, handler) => { hooks.events[name] = handler; },
     onInterfaceActionClick: (handler) => hooks.interfaceClicks.push(handler),
     onObjectRoute: (handler) => { hooks.route = handler; },
@@ -992,6 +1076,8 @@ function boatShopHarness({ sailingLevel = 1, coins = 0 } = {}) {
     emitCustomEvent: (name, payload) => (events[name] ?? []).forEach((handler) => handler(payload)),
     onInterfaceActionButton: (ids, handler) => [ids].flat().forEach((id) => buttons.set(id, handler)),
     onNpcInteraction: (name, actions) => { npcs[name] = actions; },
+    onNpcDialogueCondition() {},
+    onPlayerLogout() {},
     spawnNpc: () => null,
     removeNpc() {},
   };

@@ -70,3 +70,113 @@ test('winning last-slot pet and displaced log survive real save, Bank deposit an
  g.p.getBank(0).open();core.Bank.deposit(g.p,item('skillpetwc'),g.p.getInventory().getSlotForItemId(item('skillpetwc')),1,false);g.p.getPacketSender().sendInterfaceRemoval();await send(g,{type:'ground_item_action',itemId:core.ItemIdentifiers.LOGS,x:logs[0].getPosition().getX(),y:logs[0].getPosition().getY(),option:'Take',optionIndex:3});
  assert.equal(g.p.getBank(0).getAmount(item('skillpetwc')),1);assert.equal(g.p.getInventory().getAmount(core.ItemIdentifiers.LOGS),1);assert.equal(g.p.getInventory().getAmount(item('skillpetwc')),0);core.ItemOnGroundManager.process();assert.equal(core.World.getItems().includes(logs[0]),false);
 });
+
+// Jagex, Forestry: Part Two (25 October 2023): each successful felling chop with a
+// ration gives 10% more XP and a 20% no-log chance. A missed log still rolls the pet.
+// These are literal outcomes observed around the real native object action, not calls
+// to the production ration helper. The existing fixture owns plugin/cache setup.
+for (const row of [
+  {name:'ordinary axe leaves rations alone', axe:'BRONZE_AXE', ration:'inventory', draw:0, xp:25, logs:1, left:2},
+  {name:'felling without rations is an ordinary chop', axe:'BRONZE_FELLING_AXE', ration:'none', draw:0, xp:25, logs:1, left:0},
+  {name:'inventory ration is spent on the kept log', axe:'BRONZE_FELLING_AXE', ration:'inventory', draw:0.2, xp:27.5, logs:1, left:1},
+  {name:'below the 20 percent boundary gives XP and a pet roll without a log', axe:'BRONZE_FELLING_AXE', ration:'inventory', draw:0.199999, xp:27.5, logs:0, left:1},
+  {name:'carried kit supplies the ration', axe:'BRONZE_FELLING_AXE', ration:'kit', draw:0.2, xp:27.5, logs:1, left:1},
+  {name:'worn kit supplies the ration for a skipped log', axe:'BRONZE_FELLING_AXE', ration:'worn-kit', draw:0, xp:27.5, logs:0, left:1},
+  {name:'free worlds cannot spend a members ration', axe:'BRONZE_FELLING_AXE', ration:'inventory', freeWorld:true, draw:0, xp:25, logs:1, left:2},
+  {name:'equal-best carried felling axe takes precedence with rations', axe:'BRONZE_AXE', otherAxe:'BRONZE_FELLING_AXE', ration:'inventory', selected:'BRONZE_FELLING_AXE', draw:0.2, xp:27.5, logs:1, left:1},
+  {name:'equal-best felling axe can be carried beside a worn ordinary axe', axe:'BRONZE_AXE', wearAxe:true, otherAxe:'BRONZE_FELLING_AXE', ration:'inventory', selected:'BRONZE_FELLING_AXE', draw:0.2, xp:27.5, logs:1, left:1},
+  {name:'a higher ordinary axe prevents a lower felling bonus', axe:'IRON_AXE', otherAxe:'BRONZE_FELLING_AXE', ration:'inventory', selected:'IRON_AXE', draw:0, xp:25, logs:1, left:2},
+  {name:'no-ration equal-tier order stays ordinary', axe:'BRONZE_AXE', otherAxe:'BRONZE_FELLING_AXE', ration:'none', selected:'BRONZE_AXE', draw:0, xp:25, logs:1, left:0},
+  {name:'an ineligible steel felling axe cannot displace a usable bronze axe', axe:'BRONZE_AXE', otherAxe:'STEEL_FELLING_AXE', ration:'inventory', selected:'BRONZE_AXE', draw:0, xp:25, logs:1, left:2},
+  {name:'Infernal priority and burning stay unchanged', axe:'INFERNAL_AXE', otherAxe:'DRAGON_FELLING_AXE', levels:[61,85], ration:'inventory', selected:'INFERNAL_AXE', draw:0, xp:25, logs:0, left:2},
+  {name:'a mixed full outfit multiplies the ration XP bonus', axe:'BRONZE_FELLING_AXE', ration:'inventory', outfit:true, draw:0.2, xp:28.1875, logs:1, left:1},
+  {name:'failed cutting rolls consume no rations or XP', axe:'BRONZE_FELLING_AXE', ration:'inventory', draw:0, miss:true, xp:null, logs:0, left:2},
+]) {
+  test('native felling ration: '+row.name, async t => {
+    const f=actor(t), ids=core.ItemIdentifiers, ration=ids.FORESTERS_RATION;
+    assert.ok(Number.isInteger(ration), 'the generated ration identifier must exist');
+    if(row.freeWorld) t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);
+    if(row.levels) {
+      f.p.getSkillManager().setMaxLevel(core.Skill.WOODCUTTING,row.levels[0]);
+      f.p.getSkillManager().setCurrentLevel(core.Skill.WOODCUTTING,row.levels[0]);
+      f.p.getSkillManager().setMaxLevel(core.Skill.FIREMAKING,row.levels[1]);
+      f.p.getSkillManager().setCurrentLevel(core.Skill.FIREMAKING,row.levels[1]);
+    }
+    if(row.wearAxe) f.p.getEquipment().setItem(core.Equipment.WEAPON_SLOT,new core.Item(ids[row.axe]));
+    else f.p.getInventory().add(new core.Item(ids[row.axe]),true);
+    if(row.otherAxe) f.p.getInventory().add(new core.Item(ids[row.otherAxe]),true);
+    if(row.outfit) {
+      for(const [slot,name] of [['HEAD_SLOT','LUMBERJACK_HAT'],['BODY_SLOT','FORESTRY_TOP'],['LEG_SLOT','LUMBERJACK_LEGS'],['FEET_SLOT','FORESTRY_BOOTS']])
+        f.p.getEquipment().setItem(core.Equipment[slot],new core.Item(ids[name]));
+    }
+    const heldRation=ration;
+    if(row.ration!=='none') f.p.getInventory().add(new core.Item(heldRation,2),true);
+    let kit=null;
+    if(row.ration==='kit'||row.ration==='worn-kit') {
+      kit=new core.Item(ids.FORESTRY_KIT);
+      f.p.getInventory().add(kit,true);
+      const actions=core.CacheDefinitions.getItem(kit.getId()).inventoryActions;
+      const fill=actions.findIndex(a=>a==='Fill');
+      assert.ok(fill>=0, 'the actual kit definition exposes Fill');
+      await send(f,{type:'inventory_action',slot:f.p.getInventory().getSlotForItemId(kit.getId()),itemId:kit.getId(),widgetId:149<<16,option:'Fill',optionIndex:fill+1});
+      assert.equal(f.p.getInventory().getAmount(ration),0,'normal kit Fill must really store the rations');
+      if(row.ration==='worn-kit') {
+        f.p.getInventory().deleteNumber(kit.getId(),1);
+        f.p.getEquipment().setItem(core.Equipment.CAPE_SLOT,kit);
+      }
+    }
+    const xp=[],skills=f.p.getSkillManager(),add=skills.addExperiences.bind(skills);
+    t.mock.method(skills,'addExperiences',(skill,amount)=>{
+      if(skill===core.Skill.WOODCUTTING) xp.push(amount);
+      return add(skill,amount);
+    });
+    let observing=true,petRolls=0;
+    const chosenAxes=[];
+    const observer=PM.createApi('FellingRationObserve'+f.p.getIndex());
+    observer.onCustomEvent('woodcutting:success',e=>{if(observing&&e.player===f.p)chosenAxes.push(e.axeId);});
+    observer.onCustomEvent('pets:skilling-roll',e=>{if(observing&&e.player===f.p)petRolls++;});
+    t.after(()=>{observing=false;});
+    // Keep nest and pet randomness separate from the tested felling probability.
+    // This controls draws only; the real success, XP, storage, pet and delivery paths run.
+    t.mock.method(Math,'random',()=>{
+      const stack=new Error().stack;
+      if(stack.includes('maybeDropBirdNest')) return 0.99;
+      if(stack.includes('fellingChop')) return row.draw;
+      return row.miss?0.999:0;
+    });
+    const tree=new core.GameObject(core.ObjectIdentifiers.TREE,new core.Location(3223,3218,0),10,0,null);
+    core.ObjectManager.register(tree,true);
+    t.after(()=>core.ObjectManager.deregister(tree,true));
+    await send(f,{type:'object_option',id:tree.getId(),x:3223,y:3218,action:'Chop down'});
+    for(let i=0;i<20;i++) core.TaskManager.process();
+    if(row.outfit) {
+      assert.equal(xp.length,1);
+      assert.ok(Math.abs(xp[0]-28.1875)<1e-10,'literal 25 x1.025 x1.1 outfit/ration oracle');
+    } else assert.deepEqual(xp,row.xp===null?[]:[row.xp],'literal per-chop XP before normal server XP scaling');
+    if(row.selected) assert.deepEqual(chosenAxes,[ids[row.selected]],'the native chop actually selected the eligible best tool');
+    assert.equal(petRolls,row.miss?0:1,'a skipped log preserves the genuine pet opportunity');
+    const logs=f.p.getInventory().getAmount(ids.LOGS)+groundLogs(f).reduce((n,g)=>n+g.getItem().getAmount(),0);
+    assert.equal(logs,row.logs,'real carried plus owned floor yield');
+    if(kit) {
+      const request={player:f.p,item:kit,contents:[],handled:false};
+      PM.emitCustomEvent('storage:contents',request);
+      assert.equal(request.handled,true);
+      assert.equal(request.contents.find(x=>x.id===ration)?.amount??0,row.left,'actual persisted kit contents');
+    } else assert.equal(f.p.getInventory().getAmount(heldRation),row.left,'actual remaining inventory rations');
+  });
+}
+
+// The duplicate generated name is a cache placeholder, not a legitimate noted ration.
+// Check definitions without manufacturing a placeholder in an ordinary inventory.
+test('the real ration is non-noteable and its duplicate identifier is its placeholder', () => {
+  const ids=core.ItemIdentifiers;
+  const ration=core.CacheDefinitions.getItem(ids.FORESTERS_RATION);
+  const placeholder=core.CacheDefinitions.getItem(ids.FORESTERS_RATION_2);
+  assert.equal(ration.noteTemplate,-1);
+  assert.equal(ration.note,-1);
+  assert.equal(ration.placeholder,ids.FORESTERS_RATION_2);
+  assert.equal(ration.placeholderTemplate,-1);
+  assert.equal(placeholder.placeholder,ids.FORESTERS_RATION);
+  assert.ok(placeholder.placeholderTemplate>=0);
+  assert.equal(placeholder.noteTemplate,-1);
+});

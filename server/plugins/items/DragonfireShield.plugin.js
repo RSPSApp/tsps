@@ -283,7 +283,7 @@ module.exports = {
     api.onPlayerLogin(login);
     api.onItemAction("Dragonfire shield", { Inspect: inspect, Check: inspect, Activate: activate, Empty: empty });
     api.onItemOnItem("Bottled dragonbreath", "Dragonfire shield", chargeWithDragonbreath, { noted: false });
-    api.registerCombatMethodResolver({ resolve: resolveBlast });
+    api.registerCombatMethodResolver({ resolve: resolveBlast, overridesWeapon: true });
     api.onCustomEvent(DRAGONFIRE_BREATH_EVENT, absorbDragonfire);
   },
   _test: { charges, setCharges, inspect, activate, empty, chargeWithDragonbreath, resolveBlast, absorbDragonfire, MAX_CHARGES },

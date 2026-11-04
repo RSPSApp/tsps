@@ -27,6 +27,7 @@ AbyssalTentacle.register({
   onServerStartup: (handler) => handler(),
   onItemOnItem() {},
   onCombatHitResolved() {},
+  onCustomEvent() {},
   onItemAction(name, actions) { itemActions[name] = actions; },
 });
 
@@ -56,6 +57,11 @@ function createPlayer(weapon = null) {
     isPlayer: () => true,
     getAsPlayer() { return this; },
   };
+}
+
+/** The swing being made: when the charge goes. */
+function swing(player, type = CombatType.MELEE) {
+  AbyssalTentacle._test.onAttackStarted({ attacker: player, target: {}, method: { type: () => type } });
 }
 
 function strike(player, { accurate = true, damage = 5, type = CombatType.MELEE } = {}) {
@@ -132,13 +138,38 @@ test("every melee attack, hit or miss, uses a charge; other attacks do not", () 
   const original = Math.random;
   try {
     Math.random = () => 0.9;
+    swing(player);
+    swing(player);
+    swing(player, CombatType.MAGIC);
     strike(player);
     strike(player, { accurate: false, damage: 0 });
-    strike(player, { type: CombatType.MAGIC });
   } finally {
     Math.random = original;
   }
-  assert.equal(AbyssalTentacle._test.charges(tentacle), 8);
+  assert.equal(AbyssalTentacle._test.charges(tentacle), 8, "two melee swings; impacts spend nothing");
+});
+
+test("a swing whose hit is dropped before impact still uses the charge", () => {
+  const tentacle = item(ItemIds.ABYSSAL_TENTACLE, { "abyssal-tentacle": 10 });
+  swing(createPlayer(tentacle));
+  assert.equal(AbyssalTentacle._test.charges(tentacle), 9);
+});
+
+test("swapping tentacles before impact charges the one that swung", () => {
+  const first = item(ItemIds.ABYSSAL_TENTACLE, { "abyssal-tentacle": 10 });
+  const second = item(ItemIds.ABYSSAL_TENTACLE, { "abyssal-tentacle": 10 });
+  const player = createPlayer(first);
+  swing(player);
+  player.getEquipment().getItems()[Equipment.WEAPON_SLOT] = second;
+  const original = Math.random;
+  try {
+    Math.random = () => 0.9;
+    strike(player);
+  } finally {
+    Math.random = original;
+  }
+  assert.equal(AbyssalTentacle._test.charges(first), 9);
+  assert.equal(AbyssalTentacle._test.charges(second), 10);
 });
 
 test("the last charge leaves the kraken tentacle, and an (or) tentacle returns its kit", () => {
@@ -148,9 +179,8 @@ test("the last charge leaves the kraken tentacle, and an (or) tentacle returns i
   const ornamentedOwner = createPlayer(ornamented);
   const original = Math.random;
   try {
-    Math.random = () => 0.9;
-    strike(plainOwner);
-    strike(ornamentedOwner);
+    swing(plainOwner);
+    swing(ornamentedOwner);
   } finally {
     Math.random = original;
   }

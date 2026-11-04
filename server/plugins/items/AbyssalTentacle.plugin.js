@@ -101,17 +101,26 @@ function wieldedTentacle(player) {
   return weapon && tentacleIds.has(weapon.getId()) ? weapon : null;
 }
 
-function onHitResolved({ attacker, target, hit }) {
-  if (!attacker?.isPlayer?.() || !target || hit?.getCombatType?.() !== core.CombatType.MELEE) {
+/**
+ * The charge goes when the swing is made, from the tentacle that made it: a hit later dropped
+ * (the target died first) or a weapon swapped before impact still used it.
+ */
+function onAttackStarted({ attacker, method }) {
+  if (!attacker?.isPlayer?.() || method?.type?.() !== core.CombatType.MELEE) {
     return;
   }
   const player = attacker.getAsPlayer();
   const tentacle = wieldedTentacle(player);
-  if (!tentacle) {
+  if (tentacle) {
+    useCharge(player, tentacle);
+  }
+}
+
+function onHitResolved({ attacker, target, hit }) {
+  if (!attacker?.isPlayer?.() || !target || !hit?.isAccurate?.() || !(hit?.getTotalDamage?.() > 0)) {
     return;
   }
-  useCharge(player, tentacle);
-  if (!hit.isAccurate() || !(hit.getTotalDamage() > 0)) {
+  if (!wieldedTentacle(attacker.getAsPlayer())) {
     return;
   }
   if (Math.random() >= POISON_CHANCE) {
@@ -136,8 +145,9 @@ module.exports = {
     api.onServerStartup(attach.bind(null, api));
     api.onItemOnItem("Kraken tentacle", "Abyssal whip", combine, { noted: false });
     api.onItemAction("Abyssal tentacle", { Check: check, Dissolve: dissolve });
+    api.onCustomEvent("combat:attack-started", onAttackStarted);
     api.onCombatHitResolved(onHitResolved);
     api.onItemAction("Abyssal tentacle (or)", { Check: check });
   },
-  _test: { onHitResolved, charges, check, POISON_CHANCE, POISON_SEVERITY, MAX_CHARGES },
+  _test: { onAttackStarted, onHitResolved, charges, check, POISON_CHANCE, POISON_SEVERITY, MAX_CHARGES },
 };

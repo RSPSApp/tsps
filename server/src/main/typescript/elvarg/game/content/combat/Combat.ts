@@ -918,7 +918,7 @@ export class Combat {
         // perform it themselves - many through super.start() first - so the arm stays open across
         // the whole call, and the seq left standing when it returns is the one that is measured.
         this.expectAttackAnimation();
-        PluginManager.emitCustomEvent("combat:attack-started", { attacker: this.character, target });
+        PluginManager.emitCustomEvent("combat:attack-started", { attacker: this.character, target, method });
         method.start(this.character, target);
         this.measureAnimationCycle = -1;
         const hits = method.hits(this.character, target);

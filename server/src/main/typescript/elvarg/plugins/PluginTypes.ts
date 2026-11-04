@@ -845,6 +845,11 @@ export interface PluginCombatEngine {
 
 export interface PluginCombatMethodResolver {
   resolve(attacker: any): any | null;
+  /**
+   * Replaces the attack whatever weapon is held (an armed worn item, such as the Dragonfire
+   * shield's blast), so it is asked before the weapon resolvers whatever the plugin load order.
+   */
+  overridesWeapon?: boolean;
 }
 
 export interface PluginCombatSpecialDefinition {

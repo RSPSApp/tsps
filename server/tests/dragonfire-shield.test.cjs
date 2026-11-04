@@ -53,7 +53,7 @@ function createPlayer(shield = null) {
     sounds: [],
     deleted: [],
     special: false,
-    getEquipment: () => ({ getItems: () => equipment, refreshItems() {} }),
+    getEquipment: () => ({ getItems: () => equipment, get: (slot) => equipment[slot], refreshItems() {} }),
     getInventory: () => ({ refreshItems() {}, deleteNumber: (id, amount) => player.deleted.push([id, amount]) }),
     getUpdateFlag: () => ({ flag() {} }),
     getPacketSender: () => ({
@@ -177,4 +177,33 @@ test("dragonfire with no dragonfire shield worn changes nothing", () => {
   const messages = [];
   DragonfireShield._test.absorbDragonfire({ player, messages });
   assert.deepEqual(messages, []);
+});
+
+test("an armed blast beats a worn weapon's own resolver (chinchompas), but not an armed weapon special", async () => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const Chinchompas = require("../plugins/items/Chinchompas.plugin");
+  // Production loads Chinchompas first; the shield must still win.
+  Chinchompas.register(PluginManager.createApi("Chinchompas"));
+  DragonfireShield.register(PluginManager.createApi("DragonfireShield"));
+
+  const shield = item(ItemIds.DRAGONFIRE_SHIELD);
+  const player = createPlayer(shield);
+  player.getEquipment().getItems()[Equipment.WEAPON_SLOT] = item(ItemIds.CHINCHOMPA_2);
+  player.isPlayer = () => true;
+  const resolve = () => {
+    for (const resolver of PluginManager.getCombatMethodResolvers()) {
+      const method = resolver.resolve(player);
+      if (method) return method;
+    }
+    return null;
+  };
+
+  assert.ok(resolve(), "unarmed: the chinchompa throws");
+  assert.notEqual(resolve().constructor.name, "DragonfireShieldBlast");
+  DragonfireShield._test.activate({ player, item: shield });
+  assert.equal(resolve()?.constructor?.name, "DragonfireShieldBlast");
+  player.special = true;
+  assert.notEqual(resolve()?.constructor?.name, "DragonfireShieldBlast", "an armed weapon special goes first");
 });

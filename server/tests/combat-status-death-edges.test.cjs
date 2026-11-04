@@ -301,13 +301,14 @@ test('attack-started observers run only after permission succeeds, for every com
   t.mock.method(combat, 'handleAttackDenied', () => {});
   t.mock.method(combat, 'expectAttackAnimation', () => {});
   t.mock.method(combat, 'attackTiming', () => ({}));
+  let method = null;
   t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
     assert.equal(name, 'combat:attack-started');
-    assert.deepEqual(event, { attacker, target });
+    assert.deepEqual(event, { attacker, target, method }, 'names the method making the swing');
     order.push('event');
   });
   for (const type of [CombatType.MELEE, CombatType.RANGED, CombatType.MAGIC]) {
-    const method = {
+    method = {
       type: () => type, onCombatBegan() {}, finished() {}, hits: () => [],
       start: () => order.push('attack'),
     };

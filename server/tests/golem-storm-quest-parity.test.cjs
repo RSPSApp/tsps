@@ -26,6 +26,7 @@ function setup(register, options = {}) {
   const executed = new Set();
   const core = {
     ...PluginManager.getCoreApi(),
+    CombatRange: { canReach(npc, method, target) { return npc.calculateDistance(target) <= 1; } },
     CountdownTask: class { constructor(key, ticks, run) { Object.assign(this, { key, ticks, run }); } },
     TaskManager: { submit(task) { task.due = tick + task.ticks; tasks.push(task); }, cancelTasks() {} },
     Boundary: class { constructor(...bounds) { this.bounds = bounds; } },
@@ -1165,6 +1166,13 @@ test('Shadow native: second cast, demon ownership, melee-range death guard, comb
   player.setAttribute('shadow-of-the-storm:summon-assembled', true);
   player.getInventory().adds(core.ItemIdentifiers.DEMONIC_SIGIL, 1);
   player.getInventory().adds(core.ItemIdentifiers.SILVERLIGHT_2, 1);
+  const portalDeletes = [];
+  const sender = player.getPacketSender();
+  const sendRemoval = sender.sendObjectRemoval.bind(sender);
+  t.mock.method(sender, 'sendObjectRemoval', object => {
+    if (object.getId() === 10251) portalDeletes.push(object);
+    return sendRemoval(object);
+  });
   assert.equal(chant(core, player, core.ItemIdentifiers.DEMONIC_SIGIL), true);
   assert.equal(quest.getStage(player), 110);
   for (const word of ['Camerinthum', 'Agrith-Naar', 'Tarren', 'Caldar', 'Nahudu']) {
@@ -1178,6 +1186,11 @@ test('Shadow native: second cast, demon ownership, melee-range death guard, comb
   const actors = ownedActors(core, player);
   for (const npc of actors) assert.equal(npc.getPrivateArea(), player.getPrivateArea(), `${npc.getId()} shares the scene`);
   const fightArea = player.getPrivateArea();
+  assert.equal(portalDeletes.length, 1, 'closed portal sends exactly one removal');
+  assert.equal(core.World.getRemovedObjects().some(object => object.getId() === 10251 && object.getPrivateArea() === fightArea), false,
+    'the temporary overlay must not leave a base-map removal marker');
+  core.ObjectManager.onRegionChange(player, 2704, 4872);
+  assert.equal(portalDeletes.length, 1, 'scene replay does not remove the restored base portal');
   assert.equal(fightArea.getObjects().some((object) => object.getId() === 10251), false,
     'the closed first-ritual portal is removed when 6282 opens');
   assert.ok(fightArea.getObjects().some((object) => object.getId() === 10252),
@@ -1211,6 +1224,21 @@ test('Shadow native: second cast, demon ownership, melee-range death guard, comb
   assert.equal(PluginManager.emitNpcBeforeDeath({ npc: demon, killer: player, preventDeath: false }), true,
     'an unequipped final blow regenerates him');
   player.getEquipment().set(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.SILVERLIGHT_2, 1));
+
+  // A diagonal corner touches the footprint by distance, but has no melee edge.
+  player.moveTo(new core.Location(2718, 4902, 2));
+  player.setNeedsPlacement(false);
+  assert.equal(core.CombatRange.canReach(demon, core.CombatFactory.MELEE_COMBAT, player), false);
+  assert.equal(PluginManager.emitNpcBeforeDeath({ npc: demon, killer: player, preventDeath: false }), true,
+    'a diagonal final blow is outside melee reach');
+  let cornerMethod = core.CombatFactory.getMethod(demon);
+  cornerMethod.start(demon, player);
+  assert.equal(cornerMethod.type(), core.CombatType.MAGIC, 'a diagonal target receives Fire Blast');
+  player.getPrayerActive()[core.PrayerHandler.PROTECT_FROM_MAGIC] = true;
+  cornerMethod.start(demon, player);
+  assert.equal(core.CombatRange.canReach(demon, core.CombatFactory.MELEE_COMBAT, player), true,
+    'telegrab lands on a shared edge, not another corner');
+  player.getPrayerActive()[core.PrayerHandler.PROTECT_FROM_MAGIC] = false;
 
   // Actual NPC combat routing: out of range casts, PFM telegrabs to the footprint.
   demon.getCombat().reset();

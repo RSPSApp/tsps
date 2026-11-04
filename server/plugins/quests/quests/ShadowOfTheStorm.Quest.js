@@ -620,9 +620,14 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   function removeSceneLoc(scene, object) {
     if (!object) return;
     const index = scene.locs.indexOf(object);
-    if (index >= 0) scene.locs.splice(index, 1);
-    if (object.isRegistered?.() !== false) scene.owner.getPacketSender().sendObjectRemoval(object);
+    if (index < 0) return;
+    scene.locs.splice(index, 1);
     api.core.ObjectManager.deregister(object, true);
+    // These phase locs replace scenery temporarily. Replaying their removal after
+    // the client restores the underlying cache loc would hide that original loc.
+    const removed = api.core.World.getRemovedObjects();
+    const marker = removed.indexOf(object);
+    if (marker >= 0) removed.splice(marker, 1);
   }
 
   function animateRitualCast(player, completion) {
@@ -1852,7 +1857,8 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     for (let dx = -1; dx <= size; dx++) {
       for (let dy = -1; dy <= size; dy++) {
         const inside = dx >= 0 && dx < size && dy >= 0 && dy < size;
-        if (inside) continue;
+        const corner = (dx === -1 || dx === size) && (dy === -1 || dy === size);
+        if (inside || corner) continue;
         candidates.push(new Location(at.getX() + dx, at.getY() + dy, at.getZ()));
       }
     }
@@ -1892,19 +1898,19 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     }
 
     start(npc, target) {
-      const distance = npc.calculateDistance?.(target) ?? 1;
+      const inMelee = api.core.CombatRange.canReach(npc, api.core.CombatFactory.MELEE_COMBAT, target);
       const prayers = target.getPrayerActive?.() ?? [];
       const protectMelee = prayers[PrayerHandler.PROTECT_FROM_MELEE] === true;
       const protectMagic = prayers[PrayerHandler.PROTECT_FROM_MAGIC] === true;
       this.telekinetic = false;
-      const cast = distance > 1 || protectMelee;
+      const cast = !inMelee || protectMelee;
       this.style = cast ? CombatType.MAGIC : CombatType.MELEE;
       if (!cast) {
         npc.performAnimation?.(new Animation(SEQ_DEMON_ATTACK_GREATER));
         return;
       }
       npc.performAnimation?.(new Animation(FIRE_BLAST.anim));
-      if (distance > 1 && protectMagic) {
+      if (!inMelee && protectMagic) {
         this.telekinetic = true;
         teleportPlayerAdjacent(npc, target);
         return;
@@ -1937,9 +1943,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     if (demonNpcs.get(killer) !== npc) return;
     // The Wiki requires Silverlight equipped AND the killer in melee range, whatever
     // damage type lands the last hit (spell or poison included).
-    const inMelee = npc.calculateDistance(killer) <= 1 &&
-      npc.getLocation().getZ() === killer.getLocation().getZ() &&
-      (npc.getPrivateArea?.() ?? null) === (killer.getPrivateArea?.() ?? null);
+    const inMelee = api.core.CombatRange.canReach(npc, api.core.CombatFactory.MELEE_COMBAT, killer);
     if (silverlightEquipped(killer) && inMelee) return;
     npc.setHitpoints(DEMON_HP_ON_REGEN);
     killer.sendMessage("Agrith-Naar's wounds close. You must strike the final blow with Silverlight!");

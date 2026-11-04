@@ -131,6 +131,7 @@ bit and 1 in 200, which a listener may unlock or shorten; the toggle-off always 
 - **Counting:** a kill counts when the monster counts for the task. Konar's kills must be in her
   area, and Krystilia's in the Wilderness.
 - **XP:** a monster's hitpoints in Slayer XP.
+- **Morytania Diary:** a completed Morytania Diary tier gives 2.5/5/7.5/10% (easy to elite) more Slayer XP for a task kill in the Slayer Tower (a kill the Slayer Master relic counts as on task too), with the legs worn or not: the Wiki lists it as a reward of its own, apart from the legs (it says "completed" on the Slayer changes and "claiming" on the legs page; completion is used, as for the Karamja Tokkul perk). The tower is the floors (Slayer area 9's first box), the basement (`SlayerTower.plugin.js` bounds, inferred to count) and the Grotesque Guardians' roof, so Dusk's 1,350 XP is boosted too. Stacking with Mortimer's XP modifier is not on the Wiki; they multiply. `MorytaniaDiary.Slayer.js`.
 - **Keys (Wiki: Brimstone key, Larran's key):** a kill that counts for a Konar task may drop a
   brimstone key, one for a Krystilia task a Larran's key, at a chance set by the monster's combat
   level (1 in 2,060 at level 1 up to 1 in 50 from level 350 for brimstone; 1 in 1,972 to 1 in 50

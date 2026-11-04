@@ -99,6 +99,9 @@ export enum LoginErrorCode {
     /** Game was updated - refresh client */
     CLIENT_OUTDATED = 6,
 
+    /** The selected world and browser use incompatible game protocols. */
+    PROTOCOL_MISMATCH = 1001,
+
     /** Server is being updated */
     SERVER_UPDATING = 7,
 

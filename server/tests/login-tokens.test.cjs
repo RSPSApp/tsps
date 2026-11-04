@@ -381,3 +381,40 @@ test('a league world logs the league character in, and its tokens stay in the le
     GameConstants.setWorldProfile('main');
   }
 });
+
+
+test('the world announces its protocol before welcome, without changing the legacy welcome layout', () => {
+  const { GAME_PROTOCOL_VERSION } = require('../dist/net/protocol/ProtocolVersion');
+  const { getProtocolVersion } = require('../../scripts/protocol-version.cjs');
+  assert.equal(GAME_PROTOCOL_VERSION, getProtocolVersion(), 'server build embeds the current wire fingerprint');
+  const channel = stubChannel();
+  const connection = new net.ClientConnection(channel);
+  assert.equal(channel.sent[0][0], 6, 'existing plugin envelope is readable by old clients');
+  const length = channel.sent[0].readUInt16BE(1);
+  assert.deepEqual(JSON.parse(channel.sent[0].subarray(3, 3 + length).toString('utf8')), {
+    channel: 'system:protocol', data: { version: GAME_PROTOCOL_VERSION },
+  });
+  assert.equal(channel.sent[1][0], 0);
+  assert.equal(channel.sent[1].length, 9, 'old clients still parse the fixed-size welcome');
+  connection.cleanup('test');
+});
+
+
+test('the protocol fingerprint changes when a field codec changes, even with the same packet sizes', (t) => {
+  const fs = require('node:fs');
+  const { getProtocolVersion } = require('../../scripts/protocol-version.cjs');
+  const before = getProtocolVersion();
+  const read = fs.readFileSync;
+  let changed = false;
+  t.mock.method(fs, 'readFileSync', function(file, ...args) {
+    const contents = read.call(this, file, ...args);
+    if (String(file).endsWith('/ClientProtocol.ts')) {
+      const updated = contents.replace('payload.writeInt32BE(tickMs | 0, 0)', 'payload.writeUInt32BE(tickMs | 0, 0)');
+      changed = updated !== contents;
+      return updated;
+    }
+    return contents;
+  });
+  assert.notEqual(getProtocolVersion(), before);
+  assert.equal(changed, true, 'the fixture changed the codec, without changing length metadata');
+});

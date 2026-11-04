@@ -210,3 +210,19 @@ At startup, the bootstrap pipeline:
 3. Discovers and loads all extrascripts (registers universal content)
 
 Extrascripts are loaded after the gamemode, so they can complement but not replace gamemode handlers.
+
+### Browser/world protocol compatibility
+
+Server builds embed a SHA-256 fingerprint of the canonical codecs and packet tables in
+`server/src/main/typescript/elvarg/net/protocol/`, plus the raw packet sender/builder.
+Client builds calculate the same value
+through `scripts/protocol-version.cjs`. This is independent of the OSRS cache revision.
+Fingerprinting is conservative: changes to these source files, including comments, require
+worlds to rebuild/restart; unrelated gameplay or UI changes do not.
+
+The world sends the fingerprint in the existing `system:protocol` plugin-message envelope
+before the unchanged welcome packet. The browser defers login and automatic handshakes
+until the welcome confirms compatibility. Missing announcements from legacy snapshots
+and mismatches return a specific login-screen message, without sending credentials or
+retrying the incompatible world. World saves are unchanged. Deploy the server and client
+from the same revision, and restart browser-hosted worlds with the rebuilt snapshot.

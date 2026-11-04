@@ -23,9 +23,13 @@ export function initSocketCloseHandler(ws: GameSocket, initConnection: (url: str
         state.playerSyncContext = null;
         state.playerUpdateDecoder = null;
         clearLoginConnectRetryTimer();
+        state.pendingAuthentication = null;
+        state.protocolReady = false;
         try {
             const g: any = (typeof window !== "undefined" ? window : globalThis) as any;
             if (g[WS_GLOBAL_KEY] === ws) g[WS_GLOBAL_KEY] = null;
+            // The protocol check has already returned a specific login error; don't replace it.
+            if (evt.code === 4003 && state.protocolRejected) return;
             const suppress: boolean = !!g[WS_SUPPRESS_RECONNECT_KEY];
             // Determine if we should attempt reconnection
             // Don't reconnect if: suppressed (HMR/logout), clean close with specific reasons, or max attempts reached

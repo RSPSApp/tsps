@@ -1,0 +1,83 @@
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import { encodePluginMessage, encodeWelcome } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
+import { LoginErrorCode } from "../game/login/LoginNetworkState";
+import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
+import { initSocketCloseHandler } from "../network/serverConnection/connection/closeHandler";
+import { acceptProtocolMessage } from "../network/serverConnection/connection/protocol";
+import { send } from "../network/serverConnection/connection/send";
+import { WS_SUPPRESS_RECONNECT_KEY } from "../network/serverConnection/constants";
+import { state } from "../network/serverConnection/state";
+
+const require = createRequire(import.meta.url);
+const { getProtocolVersion } = require("../../scripts/protocol-version.cjs");
+const version = getProtocolVersion();
+process.env.REACT_APP_GAME_PROTOCOL_VERSION = version;
+assert.match(version, /^[0-9a-f]{64}$/);
+assert.equal(getProtocolVersion(), version, "identical sources give identical fingerprints");
+const welcome = decodeServerPacket(new Uint8Array(encodeWelcome(600, Date.now())));
+const announcement = (value: string) => decodeServerPacket(new Uint8Array(encodePluginMessage("system:protocol", { version: value })));
+const failures: any[] = [];
+const disconnects: any[] = [];
+state.loginResponseListeners.add(info => failures.push(info));
+state.disconnectListeners.add(info => disconnects.push(info));
+
+function world() {
+    const socket = new EventTarget() as any;
+    const sent: Uint8Array[] = [];
+    socket.readyState = WebSocket.OPEN;
+    socket.send = (bytes: Uint8Array) => sent.push(bytes);
+    socket.close = (code: number, reason: string) => {
+        socket.readyState = WebSocket.CLOSED;
+        socket.dispatchEvent(Object.assign(new Event("close"), { code, reason, wasClean: false }));
+    };
+    state.socket = socket;
+    state.protocolReady = false;
+    state.protocolRejected = false;
+    state.protocolVersion = undefined;
+    state.pendingAuthentication = null;
+    state.sessionUsername = "Zezima";
+    state.sessionPassword = "remembered-token";
+    state.sessionLoginFlags = 2;
+    state.isReconnecting = false;
+    state.reconnectAttempts = 0;
+    failures.length = 0;
+    disconnects.length = 0;
+    (globalThis as any)[WS_SUPPRESS_RECONNECT_KEY] = false;
+    initSocketCloseHandler(socket, () => { throw new Error("incompatible worlds must never reconnect"); });
+    return sent;
+}
+const credentials = { type: "login", payload: { username: "Zezima", password: "remembered-token", revision: 241, flags: 2 } } as any;
+let sent = world();
+send(credentials);
+assert.equal(sent.length, 0, "do not send passwords or spend remembered tokens before compatibility is known");
+assert.equal(acceptProtocolMessage(announcement(version)), false);
+assert.equal(sent.length, 0, "wait for the world's welcome too");
+assert.equal(acceptProtocolMessage(welcome), true);
+assert.equal(sent.length, 1, "matching worlds receive the deferred login exactly once");
+assert.equal(state.pendingAuthentication, null);
+assert.equal(state.protocolReady, true);
+assert.equal(failures.length, 0);
+for (const advertised of [undefined, "old-protocol"]) {
+    sent = world();
+    state.isReconnecting = true;
+    send(credentials);
+    if (advertised) acceptProtocolMessage(announcement(advertised));
+    assert.equal(acceptProtocolMessage(welcome), false);
+    assert.equal(sent.length, 0, "legacy and mismatched worlds never receive credentials");
+    assert.deepEqual(failures, [{ success: false, errorCode: LoginErrorCode.PROTOCOL_MISMATCH }]);
+    assert.equal(state.sessionPassword, null);
+    assert.equal(state.pendingAuthentication, null);
+    assert.equal(state.reconnectTimer, null);
+    assert.equal(state.isReconnecting, false);
+    assert.equal(disconnects.length, 0, "close must not replace the useful error with Connection lost");
+    assert.equal(acceptProtocolMessage(welcome), false);
+    assert.equal(failures.length, 1, "later packets cannot repeat the failure or accept the login");
+}
+sent = world();
+send({ type: "handshake", payload: { name: "Player" } });
+assert.equal(sent.length, 0, "the automatic handshake path also waits");
+acceptProtocolMessage(announcement(version));
+acceptProtocolMessage(welcome);
+assert.equal(sent.length, 1, "a fresh compatible connection still works after rejecting another world");
+console.log("protocol compatibility checks passed");

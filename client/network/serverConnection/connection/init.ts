@@ -1,3 +1,4 @@
+import { acceptProtocolMessage } from "./protocol";
 import { PlayerSyncContext } from "../../../game/sync/PlayerSyncContext";
 import { PlayerUpdateDecoder } from "../../../game/sync/PlayerUpdateDecoder";
 import { setPacketSocket } from "../../packet";
@@ -46,6 +47,10 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
         return;
 
     try {
+        state.protocolVersion = undefined;
+        state.protocolReady = false;
+        state.protocolRejected = false;
+        state.pendingAuthentication = null;
         CustomItemRegistry.clear();
         CustomModelRegistry.clear();
         replaceDefinitionArchives([]);
@@ -174,7 +179,7 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
 
                 // Process all messages (may be multiple from batching)
                 for (const msg of messages) {
-                    processServerMessage(msg);
+                    if (acceptProtocolMessage(msg)) processServerMessage(msg);
                 }
             } catch (e) {
                 // eslint-disable-next-line no-console

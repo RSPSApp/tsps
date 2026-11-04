@@ -12,6 +12,7 @@ if (process.env.NODE_ENV === "development" && !process.env.PUBLIC_URL) {
 
 const fs = require("fs");
 const path = require("path");
+process.env.REACT_APP_GAME_PROTOCOL_VERSION = require("../scripts/protocol-version.cjs").getProtocolVersion();
 const { execFileSync } = require("child_process");
 
 const JsonMinimizerPlugin = require("json-minimizer-webpack-plugin");

@@ -1,3 +1,4 @@
+import { GAME_PROTOCOL_VERSION } from "./protocol/ProtocolVersion";
 import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import { GameConstants } from "../game/GameConstants";
@@ -401,6 +402,7 @@ export class ClientConnection {
       this.cleanup("socket_error");
     });
     channel.onClose(() => this.cleanup("socket_close"));
+    this.send(encodePluginMessage("system:protocol", { version: GAME_PROTOCOL_VERSION }));
     this.send(encodeWelcome(GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE, Date.now()));
   }
 

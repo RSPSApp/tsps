@@ -1,3 +1,4 @@
+import type { ClientToServer } from "./types/clientMessages";
 import type { ClanState } from "../../common/social/Clans";
 import { PlayerSyncContext } from "../../game/sync/PlayerSyncContext";
 import { PlayerUpdateDecoder } from "../../game/sync/PlayerUpdateDecoder";
@@ -70,6 +71,10 @@ export type PathCallback = (res: {
 export const state = {
     socket: null as GameSocket | null,
     lastUrl: DEFAULT_URL,
+    protocolVersion: undefined as string | undefined,
+    protocolReady: false,
+    protocolRejected: false,
+    pendingAuthentication: null as ClientToServer | null,
     webRtcConfig: undefined as WebRtcConnectionConfig | undefined,
     reconnectTimer: null as ReturnType<typeof setTimeout> | null,
     lastKeepaliveAt: 0,
@@ -159,7 +164,7 @@ export const state = {
     worldEntityInfoListeners: new Set<(payload: WorldEntityInfoPayload) => void>(),
     welcomeListeners: new Set<(info: { tickMs: number; serverTime: number }) => void>(),
     loginResponseListeners: new Set<
-        (info: { success: boolean; error?: string; displayName?: string; loginToken?: string }) => void
+        (info: { success: boolean; error?: string; errorCode?: number; displayName?: string; loginToken?: string }) => void
     >(),
     logoutResponseListeners: new Set<(info: { success: boolean; reason?: string }) => void>(),
     handshakeListeners: new Set<

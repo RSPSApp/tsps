@@ -5633,6 +5633,15 @@ export class OsrsClient {
                 );
                 break;
 
+            case LoginErrorCode.PROTOCOL_MISMATCH:
+                this.loginState.loginIndex = LoginIndex.TRY_AGAIN;
+                this.loginState.setResponse(
+                    "", "This world and client are out of sync.",
+                    "Ask the host to update and restart the world.",
+                    "Reload this page if your client is outdated.",
+                );
+                break;
+
             case LoginErrorCode.CLIENT_OUTDATED:
                 this.loginState.loginIndex = LoginIndex.TRY_AGAIN;
                 this.loginState.setResponse(

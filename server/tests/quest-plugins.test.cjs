@@ -23060,3 +23060,69 @@ test('In Search of Knowledge resumes the reward after the final tome is handed i
   assert.equal(attributes.get('quest.in_search_of_knowledge.stage'), 3);
   assert.equal(items.get(ids.LAMP_OF_KNOWLEDGE), 1);
 });
+
+
+function rfdNativeCounterFixture(t, initial = {}) {
+  const { api, handlers } = mockApi();
+  delete require.cache[require.resolve('../plugins/quests/quests/RecipeForDisaster.Quest')];
+  require('../plugins/quests/quests/RecipeForDisaster.Quest')(api);
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().findLast(q => q.key === 'recipe_for_disaster');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  player.setUsername('rfdnative');
+  for (const [key, value] of Object.entries(initial)) player.setAttribute(key, value);
+  const sender = player.getPacketSender();
+  const replay = () => {
+    for (const handler of handlers.playerLogin) handler({ player });
+    for (const handler of handlers.custom.get('player:bootstrap-complete') ?? []) handler({ player });
+  };
+  t.after(() => { for (const handler of handlers.playerLogout) handler({ player }); });
+  return { player, sender, quest, replay };
+}
+
+test('RFD native subquest completion counts opening, each rescue and finale without awarding progress', t => {
+  const f = rfdNativeCounterFixture(t), key = 'recipe-for-disaster:rescues';
+  f.player.setAttribute('recipe-for-disaster:feast-seen', true);
+  for (const [stage, expected] of [[0, 0], [1, 0], [4, 1]]) {
+    f.quest.setStage(f.player, stage);
+    assert.equal(f.sender.getVarbit(13987), expected);
+  }
+  let flags = 0;
+  for (let i = 0; i < 8; i++) {
+    flags |= 1 << i; f.player.setAttribute(key, flags); f.replay();
+    assert.equal(f.sender.getVarbit(13987), i + 2, 'opening plus exactly the completed rescues');
+  }
+  assert.equal(f.sender.getVarbit(1850), 4, 'all rescues still await the final battle');
+  f.quest.setStage(f.player, 5);
+  assert.equal(f.sender.getVarbit(13987), 10);
+  assert.equal(f.player.getAttribute('quest.points'), undefined, 'publication cannot award quest points');
+  f.replay(); assert.equal(f.sender.getVarbit(13987), 10);
+  assert.equal(f.player.getAttribute(key), 255);
+});
+
+test('RFD native subquest completion restores authoritative legacy parent completion and actual incomplete child states', t => {
+  const f = rfdNativeCounterFixture(t, { 'quest.recipe_for_disaster.stage': 5, 'quest.points': 17 });
+  const C = require('../dist/game/cache/CacheDefinitions').CacheDefinitions;
+  const children = [[1892, 60], [1867, 40], [1895, 110], [1896, 5], [1878, 5], [1904, 170], [1910, 20], [1914, 50]];
+  // These sentinel bits are outside both the RFD main state and native subquest counter.
+  const parents = [...new Set([1850, 13987].map(id => C.getVarbit(id).baseVar))];
+  for (const parent of parents) f.sender.sendConfig(parent, 1 << 30);
+  const before = f.player.getInventory().getItems().map(item => item.clone());
+  f.replay();
+  assert.equal(f.sender.getVarbit(13987), 10);
+  for (const [id, value] of children) assert.equal(f.sender.getVarbit(id), value, 'completed parent publishes native rescue ' + id);
+  for (const parent of parents) assert.equal(f.sender.getVarp(parent) & (1 << 30), 1 << 30, 'sibling bit preserved in parent '+parent);
+  assert.equal(f.player.getAttribute('recipe-for-disaster:rescues'), undefined, 'legacy flags stay untouched');
+  assert.equal(f.player.getAttribute('quest.points'), 17);
+  assert.deepEqual(f.player.getInventory().getItems(), before);
+  f.replay(); assert.equal(f.sender.getVarbit(13987), 10, 'relog/bootstrap cannot double count');
+  f.player.setAttribute('quest.recipe_for_disaster.stage', 4);
+  f.player.setAttribute('recipe-for-disaster:feast-seen', true);
+  f.player.setAttribute('recipe-for-disaster:pirate-stage', 110);
+  f.replay();
+  assert.equal(f.sender.getVarbit(13987), 2, 'incomplete parent counts only opening and the actually completed numeric child');
+  for (const [id] of children) if (id !== 1895) assert.equal(f.sender.getVarbit(id), 0, 'incomplete parent must not retain inferred completion');
+  assert.equal(f.player.getAttribute('recipe-for-disaster:rescues'), undefined);
+});

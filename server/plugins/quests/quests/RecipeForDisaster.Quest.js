@@ -53,6 +53,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   const START_HOOK = "quest:recipe-for-disaster:start";
   const VARP_RFD = 678;
   const VARBIT_RFD = 1850;
+  const SUBQUESTS_COMPLETED_VARBIT = 13987; // native subquests_completed_count
   const VARBIT_OGRE_BOAT = 1908;
   const RESCUE_QUEST_VARBITS = new Map([
     [1, [1892, 60]], // Mountain Dwarf
@@ -238,9 +239,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   }
   function syncRescueQuestVarbits(player) {
     player.getPacketSender().sendVarbit(VARBIT_RFD, mainQuestValue(stage(player), player));
-    for (const [flag, [varbitId, completedValue]] of RESCUE_QUEST_VARBITS) {
-      if (hasFlag(player, flag)) player.getPacketSender().sendVarbit(varbitId, completedValue);
-    }
     syncDwarfQuestVarbits(player);
     syncGoblinQuestVarbits(player);
     syncDaveQuestVarbits(player);
@@ -249,6 +247,17 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     syncSkrachQuestVarbits(player);
     syncAmikQuestVarbits(player);
     syncAwowogeiQuestVarbits(player);
+    const sender = player.getPacketSender();
+    // A completed parent is authoritative for legacy/quest-pack saves with no rescue flags.
+    // Publish its native children without fabricating saved progress or paying rewards again.
+    if (quest.isComplete(player)) {
+      for (const [, [varbitId, completedValue]] of RESCUE_QUEST_VARBITS) sender.sendVarbit(varbitId, completedValue);
+    }
+    const main = mainQuestValue(stage(player), player);
+    const completedRescues = [...RESCUE_QUEST_VARBITS.values()]
+      .filter(([varbitId, completedValue]) => (sender.getVarbit?.(varbitId) ?? 0) >= completedValue).length;
+    // Native RFD children include Another Cook's Quest (state 2) and the final battle (5).
+    sender.sendVarbit(SUBQUESTS_COMPLETED_VARBIT, completedRescues + (main >= 2 ? 1 : 0) + (main >= STAGE_COMPLETE ? 1 : 0));
   }
   function pirateQuestStage(player) {
     if (hasFlag(player, 4)) return 110;
@@ -3408,7 +3417,10 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   }
 
   function handleStageChanged({ player, key }) {
-    if (key === QUEST) syncSkrachSpitRoast(player);
+    if (key === QUEST) {
+      syncSkrachSpitRoast(player);
+      syncRescueQuestVarbits(player);
+    }
   }
 
   function handleLogout({ player }) {

@@ -8,12 +8,12 @@
  * brooch, the goblin symbol book, Sigmund's pickpocket/chest, the H.A.M. crate, the
  * treaty hand-in and the signing cutscene.
  *
- * Stage lives in varbit 532 (lost_tribe_quest, varp 465, bits 0-10; dumped with
+ * Native progress is published in varbit 532 (lost_tribe_quest, varp 465, bits 0-10; dumped with
  * `lookup-gameval varbit lost_tribe`). The cache's own multi-locs read it directly:
  * cellar wall 6898/6899 -> 6904 shelves (0) / 6903 rubble (1-3) / 6905 hole (4-12) /
- * nothing (13+), floor 6900 -> 6902 rubble (1-10), so the stage values below are what
- * the client renders the dig with. Jagex's raw stage numbers are not published on the
- * wiki, so the rest of the numbering follows the Quick guide's order:
+ * nothing (13+), floor 6900 -> 6902 rubble (1-10). The legacy saved stages below
+ * retain gameplay/old-save compatibility; nativeProgress maps them to the cache/QH
+ * phases, whose completion is 11:
  *
  *   0 not started
  *   1 asking around Lumbridge about the cellar
@@ -28,6 +28,8 @@
  *   10 silverware returned, Duke signs the peace treaty
  *   11 escorted by Kazgar; deliver the treaty to Mistag
  *   12 complete
+ * These saved stages are mapped to native phases 0..11; the generals' message
+ * records their emote lesson, and contact records the Duke's silverware request.
  *
  * Side progress is kept in persisted attributes and mirrored to the cache side varbits
  * on every change (and on login, because client varps are per-session):
@@ -101,6 +103,8 @@ module.exports = function registerLostTribeQuest(api) {
   const STAGE_ESCORTED = 11;
   const STAGE_COMPLETE = 12;
 
+  const EMOTES_TAUGHT_ATTRIBUTE = "lost-tribe:emotes-taught";
+  const EMOTES_TAUGHT_MESSAGE_ID = "msb9X3"; // the generals demonstrate both goblin greetings
   const BITS_ATTRIBUTE = "quest.the_lost_tribe.bits";
   const HAM_ATTRIBUTE = "quest.the_lost_tribe.ham"; // 0..2
   const CONTACT_ATTRIBUTE = "quest.the_lost_tribe.contact"; // 0..2
@@ -223,11 +227,26 @@ module.exports = function registerLostTribeQuest(api) {
   function setContact(player, value) {
     player.setAttribute(CONTACT_ATTRIBUTE, value | 0);
     player.getPacketSender().sendVarbit(VARBIT_CONTACT, value | 0);
+    player.getPacketSender().sendVarbit(VARBIT_STAGE, nativeProgress(quest.getStage(player), player));
+  }
+
+  function nativeProgress(stage, player) {
+    if (stage >= STAGE_COMPLETE) return 11;
+    if (stage >= STAGE_TREATY) return 10;
+    if (stage === STAGE_MISTAG) return getContact(player) >= 2 ? 9 : 8;
+    if (stage === STAGE_FIND_GENERALS) {
+      // Old saves already at Mistag have durable greeting/contact evidence of this checkpoint.
+      return player.getAttribute(EMOTES_TAUGHT_ATTRIBUTE) === true
+        || hasBit(player, BIT_GREETED) || getContact(player) > 0 ? 7 : 6;
+    }
+    if (stage >= STAGE_FIND_RELDO) return 5;
+    if (stage === STAGE_SHOW_BROOCH) return 4;
+    return stage;
   }
 
   function refreshSideVarbits(player) {
     const packet = player.getPacketSender();
-    packet.sendVarbit(VARBIT_STAGE, quest.getStage(player));
+    packet.sendVarbit(VARBIT_STAGE, nativeProgress(quest.getStage(player), player));
     packet.sendVarbit(VARBIT_RETURNED_BROOCH, hasBit(player, BIT_RETURNED_BROOCH) ? 1 : 0);
     packet.sendVarbit(VARBIT_HAM, getHam(player));
     packet.sendVarbit(VARBIT_GREETED, hasBit(player, BIT_GREETED) ? 1 : 0);
@@ -628,6 +647,12 @@ module.exports = function registerLostTribeQuest(api) {
 
   function handleDialogueAction(event) {
     const { player, stepId } = event;
+    if (stepId === EMOTES_TAUGHT_MESSAGE_ID && event.kind === "message"
+      && GENERAL_IDS.has(event.npcId) && quest.getStage(player) === STAGE_FIND_GENERALS) {
+      player.setAttribute(EMOTES_TAUGHT_ATTRIBUTE, true);
+      player.getPacketSender().sendVarbit(VARBIT_STAGE, nativeProgress(quest.getStage(player), player));
+      return;
+    }
     if (stepId === TAKE_BOOK_ACTION_ID) {
       if (!hasBit(player, BIT_BOOKMARK)) {
         if (giveItem(player, ItemIdentifiers.GOBLIN_SYMBOL_BOOK)) setBit(player, BIT_BOOKMARK);
@@ -976,6 +1001,7 @@ module.exports = function registerLostTribeQuest(api) {
     player.getSkillManager().addExperiences(Skill.MINING, 3000);
   }
 
+  api.persistAttribute(EMOTES_TAUGHT_ATTRIBUTE, false);
   api.persistAttribute(BITS_ATTRIBUTE);
   api.persistAttribute(HAM_ATTRIBUTE);
   api.persistAttribute(CONTACT_ATTRIBUTE);
@@ -987,6 +1013,7 @@ module.exports = function registerLostTribeQuest(api) {
     varbitId: VARBIT_STAGE,
     startedValue: STAGE_ASK_PEOPLE,
     completionValue: STAGE_COMPLETE,
+    varbitValue: nativeProgress,
     questPoints: 1,
     xpRewards: [{ skillId: Skill.MINING.getIndex(), amount: 3000, label: "Mining" }],
     rewardItemId: ItemIdentifiers.RING_OF_LIFE,

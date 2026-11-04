@@ -1530,3 +1530,111 @@ test('Pandemonium native: the captured helm and sails still sail to the wreck wi
   await pandemoniumDeploy(f);
   assert.ok(f.player.getDialogueManager().getCurrent(), 'Deploy remains usable after the ordinary voyage');
 });
+
+// #2289: exercise the registered NPC route and native continuation packets; no
+// synthetic transcript or direct condition/variant hooks stand in for playback.
+function jorralFixture(t, eligible = true) {
+  const f = fixture(t);
+  const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+  const quest = key => {
+    const entry = quests.find(entry => entry.key === key);
+    assert.ok(entry, `registered quest ${key}`);
+    return entry;
+  };
+  f.quest = quest('making_history');
+  if (eligible) {
+    quest('the_restless_ghost').setStage(f.player, quest('the_restless_ghost').startedValue);
+    quest('priest_in_peril').setStage(f.player, quest('priest_in_peril').completionValue);
+  }
+  f.player.setLocation(new core.Location(2437, 3346));
+  core.RegionManager.loadMapFiles(2437, 3347);
+  f.npc = core.NPC.create(core.NpcIdentifiers.JORRAL, new core.Location(2437, 3347));
+  core.World.getNpcs().add(f.npc);
+  f.npc.setRegistered(true);
+  t.after(() => { f.npc.setRegistered(false); core.World.getNpcs().remove(f.npc); });
+  f.trace = [];
+  f.talk = () => hansOp(f, 'Talk-to');
+  f.menu = () => MultiChatboxPrompt.getPending(f.player);
+  f.select = async text => {
+    const menu = f.menu();
+    assert.ok(menu?.options.includes(text), `expected ${text}: ${JSON.stringify(menu)}; trace=${JSON.stringify(f.trace)}`);
+    await choose(f, menu.options.indexOf(text) + 1);
+  };
+  f.advance = async () => {
+    const current = f.player.getDialogueManager().getCurrent();
+    const text = current?.getText?.();
+    if (text) f.trace.push(text.replace(/\s+/g, ' '));
+    await nextLine(f);
+  };
+  f.untilMenu = async () => {
+    for (let n = 0; n < 60 && !f.menu(); n++) {
+      assert.ok(f.player.getDialogueManager().getCurrent(), `conversation closed before menu: ${JSON.stringify(f.trace)}`);
+      await f.advance();
+    }
+    assert.ok(f.menu(), `no menu within 60 continuations: ${JSON.stringify(f.trace)}`);
+  };
+  return f;
+}
+
+for (const contact of ['A trader in Ardougne', 'A ghost in Port Phasmatys', 'A warrior in Rellekka']) {
+  test(`Jorral task explanation reaches its follow-up menu and ends after ${contact}`, async t => {
+    const f = jorralFixture(t);
+    await f.talk();
+    await f.untilMenu();
+    assert.equal(f.quest.getStage(f.player), 0, 'hearing the introduction does not start the quest');
+    await f.select('Tell me more.');
+    await f.untilMenu();
+    assert.equal(f.menu().title, 'Start the Making History quest?');
+    await f.select('Yes.');
+    assert.equal(f.quest.getStage(f.player), f.quest.startedValue, 'the actual acceptance hook starts the quest');
+    await f.untilMenu();
+    await f.select(contact);
+    await f.untilMenu();
+    assert.deepEqual(f.menu().options, ["What's the story so far?", 'What do I need to do now?', 'Got to go, bye!'],
+      `contact explanation must reach its continuation: ${JSON.stringify(f.trace)}`);
+    await f.select('Got to go, bye!');
+    for (let n = 0; n < 5 && f.player.getDialogueManager().getCurrent(); n++) await f.advance();
+    assert.equal(f.menu(), null, 'goodbye leaves no pending menu');
+    assert.equal(f.player.getDialogueManager().getCurrent(), null, 'goodbye ends playback');
+    assert.equal(f.quest.getStage(f.player), f.quest.startedValue, 'ending the conversation preserves progress');
+  });
+}
+
+test('Jorral missing prerequisites refuses once and native close leaves a fresh start available', async t => {
+  const f = jorralFixture(t, false);
+  await f.talk();
+  for (let n = 0; n < 10 && f.player.getDialogueManager().getCurrent(); n++) await f.advance();
+  assert.equal(f.menu(), null);
+  assert.equal(f.player.getDialogueManager().getCurrent(), null, `refusal must end: ${JSON.stringify(f.trace)}`);
+  assert.equal(f.trace.filter(text => text === "Don't bother, you're not experienced enough to help me!").length, 1);
+  assert.equal(f.quest.getStage(f.player), 0);
+  await f.talk();
+  await f.connection.dispatch([{ type: 'interface_close' }]);
+  f.connection.processTurnPackets();
+  assert.equal(f.menu(), null);
+  assert.equal(f.quest.getStage(f.player), 0, 'closing cannot start the quest');
+  await f.talk();
+  assert.ok(f.player.getDialogueManager().getCurrent(), 'normal talk can restart after closing');
+});
+
+test('Jorral native close and declining the start offer preserve the normal introduction', async t => {
+  const f = jorralFixture(t);
+  await f.talk();
+  await f.untilMenu();
+  await f.connection.dispatch([{ type: 'interface_close' }]);
+  f.connection.processTurnPackets();
+  assert.equal(f.menu(), null);
+  assert.equal(f.quest.getStage(f.player), 0);
+  await f.talk();
+  await f.untilMenu();
+  await f.select('Tell me more.');
+  await f.untilMenu();
+  await f.select('No.');
+  for (let n = 0; n < 10 && f.player.getDialogueManager().isActive(); n++) await f.advance();
+  assert.equal(f.menu(), null);
+  assert.equal(f.player.getDialogueManager().isActive(), false, `declining must end: ${JSON.stringify(f.trace)}`);
+  assert.equal(f.quest.getStage(f.player), 0);
+  await f.talk();
+  await f.untilMenu();
+  assert.ok(f.menu().options.includes('Tell me more.'), 'declining retains the normal quest introduction');
+});

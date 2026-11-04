@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerDragonHastaSpecialAttack(api) {
-  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod } = api.core;
+  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Sounds } = api.core;
 
   const MIN_DRAIN = 5;
   const IMPACT_GRAPHIC = new Graphic(2823);
@@ -19,8 +19,8 @@ module.exports = function registerDragonHastaSpecialAttack(api) {
     start(character, target) {
       // All the energy, not the special's cost: a cost cap (a league fragment) leaves it alone.
       CombatSpecial.drain(character, unleashDrain(character), false);
-      super.start(character, target);
       character.performAnimation(SPECIAL_ANIMATION);
+      Sounds.sendSound(character, character.getAttackSound());
     }
 
     handleAfterHitEffects(hit) {

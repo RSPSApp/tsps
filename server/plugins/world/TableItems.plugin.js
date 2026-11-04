@@ -50,9 +50,13 @@ function putOnTable(event) {
   if (!item?.isTradeable?.() || !item?.isDropable?.()) return;
 
   event.handled = true;
-  // The walk to the table can outlast the inventory state that was clicked.
+  // The walk to the table can outlast the inventory state that was clicked: a slot switch can put
+  // a different item of the same id in the slot. Only the exact item that was clicked is removed
+  // and placed; the replacement stays where it is.
   const current = player.getInventory().getItems()[itemSlot];
-  if (!current || current.getId() !== itemId) return;
+  if (current !== item || current.getId() !== itemId) return;
+  // Tradeability can change while walking (a preset marks its items untradeable).
+  if (!current.isTradeable() || !current.isDropable()) return;
 
   const location = object.getLocation().clone();
   if (isSpotTaken(player, location)) {
@@ -60,7 +64,7 @@ function putOnTable(event) {
     return;
   }
 
-  const placed = item.clone().setAmount(1);
+  const placed = current.clone().setAmount(1);
   player.getInventory().deleteAtSlot(itemSlot, 1);
   core.ItemOnGroundManager.registerLocation(player, placed, location, player.getPrivateArea(), {
     despawnDelay: TABLE_DESPAWN_TICKS,

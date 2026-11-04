@@ -264,15 +264,6 @@ module.exports = function registerWatchtowerQuest(api) {
     [20025, { crystal: CRYSTAL_3, bit: BIT_PLACED_CYAN }],
     [20033, { crystal: CRYSTAL_2, bit: BIT_PLACED_MAGENTA }],
   ]);
-  // Wiki item sources: two Skavid-cave nightshade spawns (100-tick respawn) and
-  // the Feldip Hills death rune west of the gnome glider (200-tick respawn).
-  const NIGHTSHADE_SPAWNS = [
-    { x: 2528, y: 9415 },
-    { x: 2530, y: 9462 },
-  ];
-  const NIGHTSHADE_RESPAWN_TICKS = 100;
-  const DEATH_RUNE_SPAWN = { x: 2500, y: 2967 };
-  const DEATH_RUNE_RESPAWN_TICKS = 200;
   const CAVE_EXITS = new Map([
     [ObjectIdentifiers.CAVE_EXIT_2, { x: 2562, y: 3024 }],
     [ObjectIdentifiers.CAVE_EXIT_3, { x: 2524, y: 3070 }],
@@ -299,7 +290,6 @@ module.exports = function registerWatchtowerQuest(api) {
   const START_HOOK = "quest:watchtower:start";
 
   let quest;
-  let itemOnGroundManager;
 
   function bits(player) {
     const value = Number(player.getAttribute(BITS_ATTRIBUTE));
@@ -1636,36 +1626,6 @@ module.exports = function registerWatchtowerQuest(api) {
   }
 
   /**
-   * The wiki's static item sources are not in ground-items.json and this plugin
-   * owns no data file, so they are registered once (first login) and marked as
-   * never-despawn static spawns that respawn after a pick-up.
-   */
-  function ensureGroundSpawn(player, itemId, spawn, respawnTicks) {
-    const exists = api.core.World.getItems().some(
-      (item) =>
-        !item.isPendingRemoval() &&
-        item.getItem().getId() === itemId &&
-        item.getPosition().getX() === spawn.x &&
-        item.getPosition().getY() === spawn.y
-    );
-    if (exists) return;
-    const ground = itemOnGroundManager.registerLocation(
-      player,
-      new api.core.Item(itemId, 1),
-      new Location(spawn.x, spawn.y, 0)
-    );
-    ground.staticSpawn = true;
-    ground.respawnTimer = respawnTicks;
-  }
-
-  function ensureWorldSpawns(player) {
-    ensureGroundSpawn(player, DEATH_RUNE, DEATH_RUNE_SPAWN, DEATH_RUNE_RESPAWN_TICKS);
-    for (const spawn of NIGHTSHADE_SPAWNS) {
-      ensureGroundSpawn(player, CAVE_NIGHTSHADE, spawn, NIGHTSHADE_RESPAWN_TICKS);
-    }
-  }
-
-  /**
    * The north-west gate's relic guards must be talkable from outside the closed
    * gate. Called on login so the move happens before anyone can walk up, and
    * idempotent: once on the outer tiles they are only pinned in place.
@@ -1690,7 +1650,6 @@ module.exports = function registerWatchtowerQuest(api) {
 
   function handleLogin({ player }) {
     refreshQuestList(player);
-    ensureWorldSpawns(player);
     placeNorthWestGateGuards();
   }
 
@@ -1710,7 +1669,6 @@ module.exports = function registerWatchtowerQuest(api) {
   });
 
   api.persistAttribute(BITS_ATTRIBUTE);
-  itemOnGroundManager = api.getItemOnGroundManager();
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);

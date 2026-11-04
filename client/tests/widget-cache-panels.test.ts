@@ -540,6 +540,37 @@ console.log("Cache panel scripts retain inventory items, 64-bit prices and nativ
     resetTransmitCycles();
 }
 
+// Cache trade buttons reach the dedicated binary protocol, including second-screen Accept.
+{
+    const { vm } = require('../scripts/cache/cs2-sweep').createCacheVm();
+    const { handleTradeWidgetAction } = require('../game/widgets/widgetActionTrade');
+    const { decodeClientPackets } = require('../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol');
+    const { state } = require('../network/serverConnection/state');
+    const previousSocket = state.socket, frames: Buffer[] = [];
+    (globalThis as any).WebSocket ??= { OPEN: 1 };
+    state.socket = { readyState: 1, send: (frame: Uint8Array) => frames.push(Buffer.from(frame)) };
+    try {
+        for (const [group, child, stage, action] of [
+            [335, 10, 'offer', 'accept'], [335, 13, 'offer', 'decline'],
+            [334, 13, 'confirm', 'confirm_accept'], [334, 14, 'confirm', 'confirm_decline'],
+            [334, 32, 'confirm', 'confirm_decline'],
+        ] as const) {
+            vm.context.widgetManager.getGroup(group);
+            const widget = vm.context.widgetManager.getWidgetByUid((group << 16) | child);
+            frames.length = 0;
+            assert.equal(handleTradeWidgetAction({ getTradeState: () => ({ open: true, stage }) },
+                widget, { option: widget.actions[0] }, group, child), true);
+            assert.equal(frames.length, 1);
+            const decoded = frames.flatMap(frame => decodeClientPackets(frame));
+            assert.equal(decoded.length, 1); assert.equal(decoded[0].type, 'trade_action');
+            assert.equal(decoded[0].action, action, 'the native cache option selects the intended binary action');
+            if (action === 'confirm_accept') assert.equal(frames[0].toString('hex'), 'b40904000000000000ffff');
+        }
+    } finally {
+        state.socket = previousSocket;
+    }
+}
+
 // Actual cache key listeners -> native resume packet -> real PlayerSession/DestroyItem policy.
 async function nativeDestroyConfirmation() {
     const previousDirectory = process.cwd();

@@ -14,7 +14,12 @@ const OrnamentKits = require("../plugins/items/OrnamentKits.plugin");
 const GracefulOutfit = require("../plugins/items/GracefulOutfit.plugin");
 const MakeOverMage = require("../plugins/npcs/MakeOverMage.plugin");
 
-let itemOnItem = null;
+const itemOnItemHandlers = [];
+function itemOnItem(event) {
+  event.usedItemSlot ??= event.player.getInventory().getItems().indexOf(event.usedItem);
+  event.usedWithItemSlot ??= event.player.getInventory().getItems().indexOf(event.usedWithItem);
+  for (const handler of itemOnItemHandlers) if (!event.handled) handler(event);
+}
 let itemAction = null;
 OrnamentKits.register({
   core: {
@@ -23,7 +28,7 @@ OrnamentKits.register({
     Barrows,
     Item: require("../dist/game/model/Item").Item,
   },
-  onItemOnItem: (handler) => { itemOnItem = handler; },
+  onItemOnItem: (handler) => { itemOnItemHandlers.push(handler); },
   onItemAction: (handler) => { itemAction = handler; },
   log() {},
 });
@@ -33,6 +38,10 @@ function item(id, meta = null) {
     id,
     meta,
     getId() { return this.id; },
+    getAmount: () => 1,
+    isPresetItem: () => false,
+    isUntradeable: () => false,
+    isUnbankable: () => false,
     setId(next) { this.id = next; },
     getMeta() { return this.meta; },
     setMeta(next) { this.meta = next; return this; },
@@ -49,12 +58,16 @@ function createPlayer(items) {
     getEquipmentRefreshes: () => equipmentRefreshes,
     getInventoryRefreshes: () => inventoryRefreshes,
     getInventory: () => ({
+      getItems: () => items,
+      deleteAtSlot: (slot) => { items[slot] = item(-1); },
       deleteNumber: (id, amount) => {
         const index = items.findIndex((entry) => entry.getId() === id);
         if (index >= 0) items.splice(index, 1);
         void amount;
       },
       refreshItems: () => { inventoryRefreshes++; },
+      getAddableAmount: () => 1,
+      add: (kit) => { items.push(item(kit.getId())); },
     }),
     sendMessage: (message) => messages.push(message),
   };
@@ -62,7 +75,7 @@ function createPlayer(items) {
 
 test("the ornament table maps every cosmetic variant to its base", () => {
   const kits = OrnamentKits._test.loadKits();
-  assert.equal(kits.length, 111);
+  assert.equal(kits.length, 114);
   // The Tombs of Amascut's challenge rewards (cache: osmumtens_fang_ornament_kit,
   // elidinis_ward_ornament_kit, avas_assembler_ornament_kit).
   const toa = (kit) => kits.find((entry) => entry.kit === kit);
@@ -107,13 +120,13 @@ test("using a kit consumes it, transforms the base item and refreshes containers
   assert.equal(event.handled, true);
   assert.equal(defender.getId(), 23230);
   assert.deepEqual(defender.getMeta(), { barrows: { remaining: 500 } }, "degradation meta survives");
-  assert.equal(items.length, 1, "the kit is consumed");
+  assert.equal(items.filter(item => item.getId() > 0).length, 1, "the kit is consumed");
   assert.match(player.messages[0], /apply the rune defender ornament kit/);
   assert.ok(player.getInventoryRefreshes() > 0);
   assert.ok(player.getEquipmentRefreshes() > 0);
 });
 
-test("reverting swaps the id back without refunding the kit", () => {
+test("reverting a Treasure Trail kit item swaps the id back and returns the kit (Wiki: Rune defender (t))", () => {
   const ornamented = item(23230, { barrows: { remaining: 500 } });
   const items = [ornamented];
   const player = createPlayer(items);
@@ -122,7 +135,7 @@ test("reverting swaps the id back without refunding the kit", () => {
   assert.equal(event.handled, true);
   assert.equal(ornamented.getId(), 8850);
   assert.deepEqual(ornamented.getMeta(), { barrows: { remaining: 500 } });
-  assert.equal(items.length, 1, "the kit is not returned");
+  assert.deepEqual(items.map((entry) => entry.getId()), [8850, 23227], "the defender and its kit");
   assert.match(player.messages[0], /revert the rune defender ornament kit/);
 });
 
@@ -149,7 +162,8 @@ test("dismantling a Theatre weapon gives its kit back, and refuses untouched whe
 test("a kit applies to a degraded Barrows piece, and Echo Ahrim's reverts to its stage", () => {
   const kit = item(30451);
   const degraded = item(4857, { barrows: { remaining: 750 } });
-  const player = createPlayer([kit, degraded]);
+  const held = [kit, degraded];
+  const player = createPlayer(held);
   const apply = { player, usedItem: kit, usedWithItem: degraded, usedItemId: 30451, usedWithItemId: 4857, handled: false };
   itemOnItem(apply);
   assert.equal(apply.handled, true);
@@ -159,6 +173,8 @@ test("a kit applies to a degraded Barrows piece, and Echo Ahrim's reverts to its
   const revert = { player, item: degraded, itemId: 30525, option: "Revert", handled: false };
   itemAction(revert);
   assert.equal(revert.handled, true);
+  assert.deepEqual(held.map((entry) => entry.getId()).filter((id) => id === 30451), [30451],
+    "the Echo ahrim's kit comes back (Wiki: reverted any time, returning the item and kit)");
   assert.equal(degraded.getId(), Barrows.stageItemId(4708, 1), "plain Ahrim's hood 75");
   assert.deepEqual(degraded.getMeta(), { barrows: { remaining: 750 } });
 });

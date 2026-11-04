@@ -41,6 +41,14 @@ Cargo lost on death, capsizing and teleporting (courier crates, bounty items, sa
 - **Deck frame vs world frame**: a boat's deck is a 13x13-zone scene placed far outside the real map (tiles 9600+), with the boat's cache template zone copied into its centre. People aboard stand in deck coordinates, on level 0 (OSRS uses level 1, but the tsps client already raises actors on a boat by the deck height). The boat itself has a world-frame position (1/128-tile precision) and angle, and is drawn there. Converting a deck tile to the world tile under it uses the boat's position and angle.
 - **Root tile**: for anything measured in the main world (sync range, main-world locs like gangplanks), a player aboard counts as standing on the world tile under their deck tile.
 
+## Pandemonium tutorial ship
+
+The [quest guide](https://oldschool.runescape.wiki/w/Pandemonium) puts the player aboard Will and Anne's boat, then has them deploy its hook at the wreck. [RSProx capture 381](https://rsprox.net/capture/381), revision 231, identifies the owned tutorial as entity 16 at tick 336: an 8x8 scene copied from chunk `(480,800)`, with a 2x5 hull. The active revision 241 cache maps that hull to world-entity type 2 (bounds 256x640, deck centre `(512,448)`); type 1/chunk `(480,807)` is the raft. Boarding is local `(4,4)`, Will `(4,3)` and Anne `(3,2)`, all within the two-column walkable deck.
+
+The capture places `sailing_intro_navigating` at `(4,6)`, `sailing_boat_sails_intro` at `(4,4)` and `sailing_intro_salvaging_hook` at `(3,4)`, rotation 1, all on display plane 1. Those map to current ids 59620, 59553 and 60480. Hook opflags 15 include Deploy; the real OPLOC1 at tick 497 names the parent's historical id 58012, while its visible child is 60482 in this cache. Server-side deck lookup remains at z=0. Keeping the hook in the initial blueprint also makes the first native sync after a wreck-stage login send it.
+
+The world map already contains `sailing_intro_wreck` 58208 at `(3031,3035,0)`; no extra wreck model belongs on the deck. The tutorial's course follows the observed full-sail start, headings and stopped wreck point from ticks 368–459, checked with the real hull/collision code. The course does not replay optional sail-trim boosts, so exact journey timing is not claimed. The existing stage gates, cup handover and ship cleanup continue through the same quest handlers.
+
 ## Data model
 
 A new `sailing` block in `PlayerSave`, owned by core (not a plugin attribute), because the engine's exit rules read and write it:

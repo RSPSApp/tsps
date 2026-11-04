@@ -965,3 +965,19 @@ test('Nature Spirit native item use requires held items and ghostspeak, includin
   await nextLine(f); assert.equal(quest.getStage(player), 25);
   assert.equal(inventory.getAmount(JOURNAL), 1, 'an untranslated conversation cannot take the diary');
 });
+
+test('Fairytale I pending dig cancels on native Eat and preserves its newer pose', async t => {
+ const f=fixture(t), {player}=f, inv=player.getInventory();
+ core.RegionManager.init(); core.RegionManager.loadMapFiles(3106,3384);
+ player.setLocation(new core.Location(3106,3385));
+ inv.add(new core.Item(core.ItemIdentifiers.SPADE)); inv.add(new core.Item(core.ItemIdentifiers.CABBAGE));
+ await nativeDig(f); advanceDig(f,3);
+ await f.connection.dispatch([{type:'inventory_action',widgetId:core.CacheDefinitions.getComponentId('inventory:items'),itemId:core.ItemIdentifiers.CABBAGE,slot:inv.getSlotForItemId(core.ItemIdentifiers.CABBAGE),option:'Eat',optionIndex:1}]);
+ f.connection.processTurnPackets();
+ assert.equal(inv.getAmount(core.ItemIdentifiers.CABBAGE),0,'native Eat consumed the cabbage');
+ advanceDig(f,1);
+ assert.equal(inv.getAmount(core.ItemIdentifiers.DRAYNOR_SKULL),0,'Eat must interrupt the pending dig');
+ assert.equal(player.getAnimation()?.getId(),829,'cancelled dig cannot reset the newer eating pose');
+ assert.equal(player.getSkill(),null);
+ assert.equal(core.TaskManager.hasActiveTask(player.getIndex(),'DraynorDigTask'),false);
+});

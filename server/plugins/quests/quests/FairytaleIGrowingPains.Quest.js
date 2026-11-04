@@ -681,14 +681,21 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     }
 
     onTick() {
-      if (this.isRunning() && !canContinueDraynorDig(this.draynorPlayer)) this.stop();
+      if (this.isRunning() && (this.draynorPlayer.getSkill() !== this || !canContinueDraynorDig(this.draynorPlayer))) this.stop();
+    }
+
+    cancel() {
+      this.stop();
     }
 
     stop() {
       const player = this.draynorPlayer;
-      if (this.isRunning() && player.getHitpoints() > 0 && !player.isDying) {
+      const ownsActivity = player.getSkill() === this;
+      const digSequence = CacheDefinitions.getSeqId("human_dig_long") ?? HUMAN_DIG_LONG_SEQUENCE;
+      if (this.isRunning() && ownsActivity && player.getAnimation()?.getId() === digSequence && player.getHitpoints() > 0 && !player.isDying) {
         player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
       }
+      if (ownsActivity) player.setSkill(null);
       if (draynorDigTasks.get(player) === this) draynorDigTasks.delete(player);
       super.stop();
     }
@@ -709,6 +716,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   function beginDraynorDig(player, sendOpeningSound) {
     cancelDraynorDig(player);
     if (!canContinueDraynorDig(player)) return true;
+    player.getSkillManager().stopSkillable();
     const sequence = CacheDefinitions.getSeqId("human_dig_long") ?? HUMAN_DIG_LONG_SEQUENCE;
     player.performAnimation(new Animation(sequence));
     player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You start digging...");
@@ -719,12 +727,13 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     Sounds.sendSound(player, new Sound(DRAYNOR_DIG_SOUND_ID, 1, DRAYNOR_DIG_SOUND_DELAY, DRAYNOR_DIG_SOUND_LOOPS));
     const task = new DraynorDigTask(player);
     draynorDigTasks.set(player, task);
+    player.setSkill(task);
     TaskManager.submit(task);
     return true;
   }
 
   function finishDraynorDig(player) {
-    if (!canContinueDraynorDig(player)) return;
+    if (player.getSkill() !== draynorDigTasks.get(player) || !canContinueDraynorDig(player)) return;
     if (held(player, DRAYNOR_SKULL_ITEM_ID)) {
       player.sendMessage("You dig the grave but find nothing.");
       return;

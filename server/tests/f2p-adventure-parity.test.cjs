@@ -154,9 +154,33 @@ test('Dragon Slayer sails through the private fire and crash sequence, then coll
   const npc={getLocation:()=>new core.Location(2853,9637,0)};h.hooks.onNpcDeath[0]({killer:p,npcId:8033,npc});
   h.tick(1);assert.equal(p.configs.get(176),9);assert.equal(p.items.get(I.ELVARGS_HEAD),undefined);assert.equal(h.quest.isComplete(p),false);
   h.tick(10);assert.equal(p.items.get(I.ELVARGS_HEAD),1);assert.ok(p.animations.includes(6654));assert.ok(p.animations.includes(6655));h.tick(3);
-  h.talk(p,N.OZIACH);h.continueUntil(p,()=>h.quest.isComplete(p));assert.equal(p.attrs.get('quest.points'),2);assert.deepEqual(p.xp,[[core.Skill.STRENGTH.getIndex(),18650],[core.Skill.DEFENCE.getIndex(),18650]]);
+  h.talk(p,N.OZIACH);h.continueUntil(p,()=>h.quest.isComplete(p));assert.equal(p.items.get(I.ELVARGS_HEAD),0);assert.equal(p.attrs.get('quest.points'),2);assert.deepEqual(p.xp,[[core.Skill.STRENGTH.getIndex(),18650],[core.Skill.DEFENCE.getIndex(),18650]]);
 });
 
+
+test('Dragon Slayer completion removes carried and every bank-tab head, but preserves optional-head completion and rewards', () => {
+  for (const withHead of [true, false]) {
+    const h=harness('DragonSlayer'),p=player();
+    h.quest.setStage(p,9);p.attrs.set('dragon-slayer:elvarg-killed',1);
+    if (withHead) p.items.set(I.ELVARGS_HEAD,2);
+    p.items.set(I.COINS,123);
+    const tabs=Array.from({length:core.Bank.TOTAL_BANK_TABS},()=>new Map([[I.ELVARGS_HEAD,withHead?2:0],[I.COINS,456]]));
+    p.getBanks=()=>tabs.map(items=>({
+      getAmount:id=>items.get(id)??0,
+      deleteNumber(id,amount){assert.ok(amount>0);items.set(id,(items.get(id)??0)-amount);},
+    }));
+    h.talk(p,N.OZIACH);h.continueUntil(p,()=>h.quest.isComplete(p));
+    assert.equal(p.items.get(I.ELVARGS_HEAD)??0,0);
+    assert.ok(tabs.every(items=>items.get(I.ELVARGS_HEAD)===0));
+    assert.equal(p.items.get(I.COINS),123);
+    assert.ok(tabs.every(items=>items.get(I.COINS)===456));
+    assert.equal(p.attrs.get('quest.points'),2);
+    assert.deepEqual(p.xp,[[core.Skill.STRENGTH.getIndex(),18650],[core.Skill.DEFENCE.getIndex(),18650]]);
+    h.action(p,N.OZIACH,'0KEI_n');
+    assert.equal(h.quest.complete(p),false);
+    assert.equal(p.attrs.get('quest.points'),2);assert.equal(p.xp.length,2);
+  }
+});
 
 test('Ernest lever changes reproduce every recorded door bitset, including repeated toggles', () => {
   const h=harness('ErnestTheChicken'),p=player();

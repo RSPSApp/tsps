@@ -6,8 +6,10 @@
  * same name around that place and uses the same option, as a click would. It leaves the player be
  * while they are busy, moving, fighting, or more than `leashTiles` from the place: walking off to
  * do something else pauses it, coming back resumes it. Clicking something else (another object or
- * NPC, an attack) pauses it until the next gather, and so do `maxFailedAttempts` tries in a row that
- * gather nothing (no axe, too low a level), said once. `::idle auto on|off` switches it.
+ * NPC, an attack) pauses it until the next gather. A try that gathers nothing (a rock out of reach
+ * from this side) leaves that one alone for `skipSeconds` and tries the next nearest; after
+ * `maxFailedAttempts` such tries in a row (no axe, too low a level) it pauses, said once.
+ * `::idle auto on|off` switches it.
  */
 const Common = require("./Common.IdleMode");
 const Combat = require("./Combat.IdleMode");
@@ -20,7 +22,10 @@ const AUTO_ATTRIBUTE = Common.AUTO_ATTRIBUTE;
 
 /** player -> the last object or NPC option clicked: { kind, name, option, at }. */
 const clicks = new Map();
-/** player -> { lastGatherAt, lastAttemptAt, failedAttempts, paused: null | "click" | "stuck" }. */
+/**
+ * player -> { lastGatherAt, lastAttemptAt, failedAttempts, paused: null | "click" | "stuck",
+ * lastEntity (what the last try used), skips (entity -> until when it is left alone) }.
+ */
 const states = new Map();
 /** Idle players with a remembered target, looked at every few ticks. */
 const tracked = new Set();
@@ -31,7 +36,9 @@ function config() {
 
 function stateOf(player) {
   let state = states.get(player);
-  if (!state) states.set(player, (state = { lastGatherAt: 0, lastAttemptAt: 0, failedAttempts: 0, paused: null }));
+  if (!state) {
+    states.set(player, (state = { lastGatherAt: 0, lastAttemptAt: 0, failedAttempts: 0, paused: null, lastEntity: null, skips: new Map() }));
+  }
   return state;
 }
 
@@ -106,8 +113,8 @@ function optionIndex(options, option) {
   return (options ?? []).findIndex((entry) => typeof entry === "string" && entry.toLowerCase() === wanted) + 1;
 }
 
-/** The nearest object called `name` with `option` around the anchor, nearest the player first. */
-function findObject(player, target) {
+/** The nearest object called `name` with `option` around the anchor that `usable` allows. */
+function findObject(player, target, usable) {
   const { MapObjects } = Common.core;
   const { anchor } = target;
   const radius = config().searchTiles;
@@ -120,6 +127,7 @@ function findObject(player, target) {
       for (const object of MapObjects.mapObjects.get(MapObjects.getHash(x, y, anchor.z)) ?? []) {
         const definition = object.getDefinition?.();
         if (definition?.getName?.() !== target.name || optionIndex(definition.getInteractions?.(), target.option) === 0) continue;
+        if (!usable(object)) continue;
         const distance = Math.max(Math.abs(here.getX() - x), Math.abs(here.getY() - y));
         if (distance < bestDistance) {
           best = object;
@@ -131,7 +139,7 @@ function findObject(player, target) {
   return best;
 }
 
-function findNpc(player, target) {
+function findNpc(player, target, usable) {
   const { Location, World } = Common.core;
   const { anchor } = target;
   const here = player.getLocation();
@@ -140,7 +148,7 @@ function findNpc(player, target) {
   for (const npc of World.getNpcsNear(new Location(anchor.x, anchor.y, anchor.z), config().searchTiles)) {
     const definition = npc.getDefinition?.();
     if (npc.isRegistered?.() === false || definition?.getName?.() !== target.name) continue;
-    if (optionIndex(definition.getActions?.(), target.option) === 0) continue;
+    if (optionIndex(definition.getActions?.(), target.option) === 0 || !usable(npc)) continue;
     const distance = chebyshev(here, { x: npc.getLocation().getX(), y: npc.getLocation().getY() });
     if (distance < bestDistance) {
       best = npc;
@@ -189,16 +197,23 @@ function resume(player, now) {
   if (!Common.free(player)) return "busy";
   const location = player.getLocation();
   if (location.getZ() !== target.anchor.z || chebyshev(location, target.anchor) > leashTiles) return "away";
-  const entity = target.kind === "npc" ? findNpc(player, target) : findObject(player, target);
-  if (!entity) return "none";
-  // The last try gathered nothing: after a few, stop trying until the player gathers again.
-  if (state.lastAttemptAt > state.lastGatherAt && ++state.failedAttempts >= maxFailedAttempts) {
-    state.paused = "stuck";
-    Common.changed(player);
-    player.sendMessage(`Auto-resume has paused: your character can't ${target.option.toLowerCase()} the ${target.name.toLowerCase()}. Gather again to restart it.`);
-    return "paused";
+  // The last try gathered nothing: leave that one alone a while, and after a few such tries stop
+  // until the player gathers again.
+  if (state.lastEntity && state.lastAttemptAt > state.lastGatherAt) {
+    state.skips.set(state.lastEntity, now + config().skipSeconds * 1000);
+    state.lastEntity = null;
+    if (++state.failedAttempts >= maxFailedAttempts) {
+      state.paused = "stuck";
+      Common.changed(player);
+      player.sendMessage(`Auto-resume has paused: your character can't ${target.option.toLowerCase()} the ${target.name.toLowerCase()}. Gather again to restart it.`);
+      return "paused";
+    }
   }
+  const usable = (entity) => !(state.skips.get(entity) > now);
+  const entity = target.kind === "npc" ? findNpc(player, target, usable) : findObject(player, target, usable);
+  if (!entity) return "none";
   state.lastAttemptAt = now;
+  state.lastEntity = entity;
   if (target.kind === "npc") useNpc(player, entity, target);
   else useObject(player, entity, target);
   return "resumed";
@@ -245,8 +260,29 @@ function setAuto(player, enabled) {
     const state = stateOf(player);
     state.paused = null;
     state.failedAttempts = 0;
+    state.lastEntity = null;
+    state.skips.clear();
     Combat.unpause(player);
   }
+  Common.changed(player);
+}
+
+/**
+ * Makes `target` ({ skill, kind, name, option, anchor }) what auto-resume gathers, at once and
+ * unpaused (a travel to it). One activity at a time: idle combat's target goes.
+ */
+function adopt(player, target) {
+  player.setAttribute(TARGET_ATTRIBUTE, target);
+  player.setAttribute(Common.COMBAT_TARGET_ATTRIBUTE, null);
+  const state = stateOf(player);
+  state.paused = null;
+  state.failedAttempts = 0;
+  state.lastGatherAt = 0;
+  state.lastAttemptAt = 0;
+  state.lastEntity = null;
+  state.skips.clear();
+  clicks.delete(player);
+  tracked.add(player);
   Common.changed(player);
 }
 
@@ -292,6 +328,7 @@ module.exports.autoCommand = autoCommand;
 module.exports.resume = resume;
 module.exports.stateOf = stateOf;
 module.exports.setAuto = setAuto;
+module.exports.adopt = adopt;
 module.exports.pausedFor = pausedFor;
 module.exports.tick = tick;
 module.exports.tracked = tracked;

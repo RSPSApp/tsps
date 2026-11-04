@@ -49,12 +49,19 @@ function fakeApi(config = {}) {
       CombatFactory: { getMethod: () => "melee", canAttackPermission: (player, npc) => (npc.protectedFrom === player ? "no" : "can") },
       CacheDefinitions: { getItem: (id) => ({ inventoryActions: id === SHARK ? ["Eat", null, null, null, "Drop"] : [null, null, null, null, "Drop"] }) },
       Inventory: { INTERFACE_ID: 3214 },
+      TeleportType: { NORMAL: "normal", ANCIENT: "ancient" },
+      TeleportHandler: {
+        checkReqs: (player) => !player.teleblocked,
+        teleport: (player, location, type) => { api.teleports.push({ player, x: location.getX(), y: location.getY(), z: location.getZ(), type }); },
+      },
+      WorldDefinition: { isMembersWorld: () => world.members },
       ItemActionPacketListener: { handleAction: (player, interfaceId, itemId, slot, clickType, option) => api.itemActions.push({ player, interfaceId, itemId, slot, clickType, option }) },
       TaskManager: { submit: (task) => world.tasks.push(task) },
     },
     interactions: [],
     interfaces: [],
     itemActions: [],
+    teleports: [],
     persisted: {},
     getPluginConfig: (key, fallback) => (key in config ? config[key] : fallback),
     persistAttribute: (key, value) => { api.persisted[key] = value; },
@@ -98,7 +105,7 @@ class FakeLocation {
 }
 
 /** The stand-in world the auto-resume searches: objects and NPCs by name, with their options. */
-const world = { objects: [], npcs: [], tasks: [] };
+const world = { objects: [], npcs: [], tasks: [], members: true };
 
 function fakeObject(name, options, x, y, z = 0) {
   const at = { x, y, z };
@@ -149,6 +156,8 @@ function fakePlayer({ bankSlots = 800 } = {}) {
       sendSubInterface: (parent, groupId, type, options) => screen.opened.push({ parent, groupId, options }),
       sendString(text, id) { screen.texts.set(id, text); return this; },
       sendInterfaceDisplayState: (id, hidden) => screen.hidden.set(id, hidden),
+      sendInterfaceRemoval: () => { interfaceId = -1; },
+      clearItemOnInterface: () => {},
     }),
     getInventory() { return { getItems: () => this.inventory }; },
     moveTo(x, y, z = 0) { location = new FakeLocation(x, y, z); },
@@ -170,7 +179,8 @@ function fakePlayer({ bankSlots = 800 } = {}) {
     getBank: () => container,
     getSkillManager: () => ({
       getExperience: (s) => xp.get(s) ?? 0,
-      getMaxLevel: () => 99,
+      getMaxLevel: (s) => self.levels?.[Object.keys(Skill).find((key) => Skill[key] === s)] ?? 99,
+      getCombatLevel: () => self.combatLevel ?? 3,
       addExperience(s, amount) {
         xp.set(s, (xp.get(s) ?? 0) + amount);
         api.emit("xp", { player: self, skill: s, experience: amount });
@@ -188,6 +198,7 @@ function load(config) {
   world.objects = [];
   world.npcs = [];
   world.tasks = [];
+  world.members = true;
   require(PLUGIN).register(api);
   return api;
 }
@@ -776,19 +787,42 @@ test("auto: clicking something else pauses it until the next gather", (t) => {
   assert.equal(resume(player, Date.now()), "paused");
 });
 
-test("auto: tries that gather nothing pause it, said once; ::idle auto on lifts it", (t) => {
-  const { player, advance } = choppingWillow(t);
+test("auto: a try that gathers nothing moves on to the next nearest; a few in a row pause it", (t) => {
+  const { player, willow, advance } = choppingWillow(t);
   const { resume } = require(AUTO);
+  // The willow by the anchor, then two more further off: one out of reach is left for the next.
+  const second = fakeObject("Willow tree", ["Chop down"], 3204, 3204);
+  const third = fakeObject("Willow tree", ["Chop down"], 3208, 3208);
+  world.objects.push(second, third);
+  const used = [];
   const results = [];
   for (let i = 0; i < 5; i++) {
     advance(20_000);
     results.push(resume(player, Date.now()));
+    used.push(api.interactions.at(-1)?.object);
   }
   assert.deepEqual(results, ["resumed", "resumed", "resumed", "paused", "paused"]);
+  assert.deepEqual(used.slice(0, 3), [willow, second, third], "each failed one is left alone");
   assert.equal(player.messages.filter((m) => /Auto-resume has paused: your character can't chop down the willow tree/.test(m)).length, 1);
   api.command(player, "idle auto on");
   advance(20_000);
   assert.equal(resume(player, Date.now()), "resumed");
+  assert.equal(api.interactions.at(-1).object, willow, "turning it on forgets the skips");
+});
+
+test("auto: a skipped one is tried again after a while, and a gather keeps it", (t) => {
+  const { player, willow, advance } = choppingWillow(t);
+  const { resume } = require(AUTO);
+  advance(20_000);
+  assert.equal(resume(player, Date.now()), "resumed");
+  advance(20_000);
+  assert.equal(resume(player, Date.now()), "none", "the only willow failed: left alone");
+  advance(120_000);
+  assert.equal(resume(player, Date.now()), "resumed");
+  assert.equal(api.interactions.at(-1).object, willow);
+  chop(player);
+  advance(20_000);
+  assert.equal(resume(player, Date.now()), "resumed", "a gather in between: no failure counted");
 });
 
 test("combat: another click or attacks that never kill pause it, until a kill of the target", (t) => {
@@ -799,13 +833,18 @@ test("combat: another click or attacks that never kill pause it, until a kill of
   advance(5000);
   assert.equal(fight(player, Date.now()), "paused");
   api.emit("npc-drops:generated", { player, npc: cow, npcId: 2790, drops: [], handled: false });
+  // Six cows in reach; each attack never takes (out of reach), so each is left for the next.
+  for (let i = 0; i < 5; i++) world.npcs.push(fakeMonster("Cow", 3202 + i, 3202));
   const results = [];
+  const attacked = new Set();
   for (let i = 0; i < 7; i++) {
     advance(5000);
     player.combat.target = null;
     results.push(fight(player, Date.now()));
+    if (player.combat.target) attacked.add(player.combat.target);
   }
   assert.deepEqual(results, ["attacking", "attacking", "attacking", "attacking", "attacking", "paused", "paused"]);
+  assert.equal(attacked.size, 5, "a different cow each time");
   assert.equal(player.messages.filter((m) => /Idle combat has paused/.test(m)).length, 1);
   api.command(player, "idle auto on");
   advance(5000);
@@ -847,7 +886,7 @@ test("screen: ::idle opens it, a server-defined interface with the frame's title
   assert.deepEqual(opened.options.postScripts[0].args[1], "Idle Mode");
   assert.equal(screenText(player, COMPONENT.STATUS_LINE_START), "Idle Mode: Off");
   assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 1), "Auto-resume: needs Idle Mode");
-  assert.equal(screenText(player, COMPONENT.IDLE_LABEL), "Turn idle on");
+  assert.equal(screenText(player, COMPONENT.IDLE_LABEL), "Start idle");
 });
 
 test("screen: the status lines follow the account", (t) => {
@@ -868,7 +907,7 @@ test("screen: the status lines follow the account", (t) => {
     "Offline: up to 15h at 100%",
     "Last time away: 1h 0m woodcutting: 15,000 Woodcutting XP, 600 x Logs to your bank.",
   ]);
-  assert.equal(screenText(player, COMPONENT.AUTO_LABEL), "Turn auto off");
+  assert.equal(screenText(player, COMPONENT.AUTO_LABEL), "Stop auto");
 });
 
 test("screen: the switches turn Idle Mode and auto-resume on and off, and it redraws", () => {
@@ -878,7 +917,7 @@ test("screen: the switches turn Idle Mode and auto-resume on and off, and it red
   api.click(player, uid(COMPONENT.IDLE_BUTTON));
   assert.equal(player.getAttribute("idle-mode:enabled"), true);
   assert.equal(screenText(player, COMPONENT.STATUS_LINE_START), "Idle Mode: On");
-  assert.equal(screenText(player, COMPONENT.IDLE_LABEL), "Turn idle off");
+  assert.equal(screenText(player, COMPONENT.IDLE_LABEL), "Stop idle");
   api.click(player, uid(COMPONENT.AUTO_LABEL));
   assert.equal(player.getAttribute("idle-mode:auto"), false);
   assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 1), "Auto-resume: Off");
@@ -928,4 +967,129 @@ test("screen: it redraws while open as points come in, and a pause shows", (t) =
   advance(1000);
   chop(player);
   assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 1), "Auto-resume: On");
+});
+
+const TRAVEL = "../plugins/modes/idle/Travel.IdleMode";
+const TRAVEL_SCREEN = "../plugins/modes/idle/TravelScreen.IdleMode";
+
+function idlePlayer(levels = {}) {
+  const player = fakePlayer();
+  player.setAttribute("idle-mode:enabled", true);
+  player.levels = levels;
+  return player;
+}
+
+test("travel: ::idle go teleports to the site and makes it the gathering target, at once", (t) => {
+  t.mock.method(Date, "now", () => 5_000_000);
+  const player = idlePlayer();
+  api.command(player, "idle go draynor-willows");
+  assert.deepEqual(api.teleports.at(-1), { player, x: 3087, y: 3234, z: 0, type: "normal" });
+  assert.deepEqual(player.getAttribute("idle-mode:auto-target"), {
+    skill: "WOODCUTTING", kind: "object", name: "Willow tree", option: "Chop down", anchor: { x: 3087, y: 3234, z: 0 },
+  });
+  assert.equal(player.getAttribute("idle-mode:combat-target"), null);
+  assert.match(player.messages.pop(), /You travel to Draynor Village: willow trees\. You'll need: any axe\./);
+
+  // Arrived: the next look walks to the nearest willow and chops, with no wait.
+  player.moveTo(3087, 3234);
+  const willow = fakeObject("Willow tree", ["Chop down"], 3089, 3236);
+  world.objects.push(willow);
+  assert.equal(require(AUTO).resume(player, Date.now()), "resumed");
+  assert.equal(api.interactions.at(-1).object, willow);
+});
+
+test("travel: a combat site makes the monster the target; auto-resume comes on", (t) => {
+  t.mock.method(Date, "now", () => 5_000_000);
+  const player = idlePlayer();
+  player.setAttribute("idle-mode:auto-target", { skill: "WOODCUTTING", kind: "object", name: "Tree", option: "Chop down", anchor: { x: 1, y: 1, z: 0 } });
+  api.command(player, "idle auto off");
+  api.command(player, "idle go lumbridge-cows");
+  assert.deepEqual(player.getAttribute("idle-mode:combat-target"), { name: "Cow", anchor: { x: 3258, y: 3275, z: 0 } });
+  assert.equal(player.getAttribute("idle-mode:auto-target"), null, "one activity at a time");
+  assert.equal(player.getAttribute("idle-mode:auto"), true);
+  player.moveTo(3258, 3275);
+  world.npcs.push(fakeMonster("Cow", 3260, 3276));
+  assert.equal(require(COMBAT).fight(player, Date.now()), "attacking");
+});
+
+test("travel: refused without Idle Mode, below the level, or by the teleport rules", () => {
+  const off = fakePlayer();
+  api.command(off, "idle go lumbridge-trees");
+  assert.match(off.messages.pop(), /Turn Idle Mode on first/);
+  const novice = idlePlayer({ WOODCUTTING: 29 });
+  api.command(novice, "idle go draynor-willows");
+  assert.equal(novice.messages.pop(), "You need Woodcutting level 30 for willow trees.");
+  const blocked = idlePlayer();
+  blocked.teleblocked = true;
+  api.command(blocked, "idle go lumbridge-trees");
+  assert.equal(api.teleports.length, 0);
+  assert.equal(blocked.getAttribute("idle-mode:auto-target"), undefined, "nothing changes");
+  // A combat level is advice: a weak account can still go.
+  const weak = idlePlayer();
+  weak.combatLevel = 3;
+  api.command(weak, "idle go hill-giants");
+  assert.equal(api.teleports.length, 1);
+  api.command(weak, "idle go nowhere");
+  assert.match(weak.messages.pop(), /Use ::idle go <site>/);
+  api.command(weak, "idle sites");
+  assert.match(weak.messages.pop(), /Idle travel sites: lumbridge-trees, draynor-oaks/);
+});
+
+test("travel: a free-to-play world leaves out members sites", () => {
+  const { sites } = require(TRAVEL);
+  assert.ok(sites().some((site) => site.id === "seers-maples"));
+  world.members = false;
+  assert.ok(!sites().some((site) => site.id === "seers-maples"));
+  const player = idlePlayer();
+  api.command(player, "idle go seers-maples");
+  assert.match(player.messages.pop(), /Use ::idle go <site>/);
+});
+
+test("travel screen: rows per site with level and panel, tabs per activity, opened on the current one", (t) => {
+  const { GROUP_ID, COMPONENT, uid } = require(TRAVEL_SCREEN);
+  assert.ok(api.interfaces.find((entry) => entry.groupId === GROUP_ID), "registered");
+  const player = idlePlayer({ WOODCUTTING: 30, MINING: 20 });
+  player.setAttribute("idle-mode:auto-target", { skill: "MINING", kind: "object", name: "Iron rocks", option: "Mine", anchor: { x: 1, y: 1, z: 0 } });
+  api.command(player, "idle travel");
+  assert.equal(player.getInterfaceId(), GROUP_ID);
+  const rows = JSON.parse(player.screen.texts.get(uid(COMPONENT.DATA)));
+  const willows = rows.find((row) => row.name === "Willow trees");
+  assert.equal(willows.icon, 1519);
+  assert.equal(willows.detail, " - Lvl 30", "plain text: the runtime strips markup from details");
+  assert.match(willows.panel.level, /Woodcutting level: <col=00ff00>30/);
+  assert.equal(willows.panel.tool, "Bring: <col=ffffff>Any axe</col>");
+  const yews = rows.find((row) => row.name === "Yew trees");
+  assert.equal(yews.detail, " - Lvl 60 (you: 30)", "short of the level: says so");
+  const layout = JSON.parse(player.screen.texts.get(uid(COMPONENT.LAYOUT)));
+  assert.equal(layout.active, 2, "the Mining tab, the current activity");
+  assert.deepEqual(layout.tabs[0][0], { header: "Woodcutting" });
+  assert.equal(layout.tabs[4].length, 6, "six combat sites");
+});
+
+test("travel screen: Travel on a row or the panel's button goes there", (t) => {
+  const { COMPONENT, uid, ROW_UIDS, OP } = require(TRAVEL_SCREEN);
+  const player = idlePlayer();
+  api.command(player, "idle travel");
+  const rows = JSON.parse(player.screen.texts.get(uid(COMPONENT.DATA)));
+  const cows = rows.find((row) => row.name === "Cows");
+  // Select fills the panel client-side; the server keeps the pick for the button.
+  api.handlers.buttons[ROW_UIDS[0]]({ player, buttonId: ROW_UIDS[0], slot: cows.id, opId: OP.SELECT });
+  assert.equal(api.teleports.length, 0);
+  api.click(player, uid(COMPONENT.TRAVEL_BUTTON));
+  assert.deepEqual(api.teleports.at(-1), { player, x: 3258, y: 3275, z: 0, type: "normal" });
+  assert.equal(player.getInterfaceId(), -1, "the screen closes to teleport");
+
+  api.command(player, "idle travel");
+  const shrimps = rows.find((row) => row.name === "Shrimps and anchovies");
+  api.handlers.buttons[ROW_UIDS[3]]({ player, buttonId: ROW_UIDS[3], slot: shrimps.id, opId: OP.TRAVEL });
+  assert.deepEqual(api.teleports.at(-1), { player, x: 3243, y: 3152, z: 0, type: "normal" });
+});
+
+test("idle screen: its Travel button opens the travel screen", () => {
+  const { COMPONENT, uid } = require(SCREEN);
+  const player = idlePlayer();
+  api.command(player, "idle");
+  assert.equal(screenText(player, COMPONENT.TRAVEL_LABEL), "Travel");
+  api.click(player, uid(COMPONENT.TRAVEL_BUTTON));
+  assert.equal(player.getInterfaceId(), require(TRAVEL_SCREEN).GROUP_ID);
 });

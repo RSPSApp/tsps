@@ -49,6 +49,7 @@ function fakeApi(config = {}) {
     onBeforeObjectInteraction: (handler) => (handlers.events["before-object"] ??= []).push(handler),
     onBeforeNpcInteraction: (handler) => (handlers.events["before-npc"] ??= []).push(handler),
     onServerStartup: (handler) => (handlers.events.startup ??= []).push(handler),
+    onExperienceGained: (handler) => (handlers.events.xp ??= []).push(handler),
     emitObjectInteraction: (event) => { api.interactions.push({ kind: "object", ...event }); return true; },
     emitNpcInteraction: (event) => { api.interactions.push({ kind: "npc", ...event }); return true; },
     registerCommand: (name, handler, rights) => { handlers.commands[name] = { handler, rights }; },
@@ -98,9 +99,10 @@ function fakePlayer({ bankSlots = 800 } = {}) {
     contains: (id) => bank.has(id),
     add: (item) => bank.set(item.getId(), (bank.get(item.getId()) ?? 0) + item.getAmount()),
   };
+  let self;
   const walks = [];
   let location = new FakeLocation(3200, 3200, 0);
-  return {
+  return self = {
     bank,
     xp,
     messages,
@@ -127,7 +129,10 @@ function fakePlayer({ bankSlots = 800 } = {}) {
     getBank: () => container,
     getSkillManager: () => ({
       getExperience: (s) => xp.get(s) ?? 0,
-      addExperience: (s, amount) => xp.set(s, (xp.get(s) ?? 0) + amount),
+      addExperience(s, amount) {
+        xp.set(s, (xp.get(s) ?? 0) + amount);
+        api.emit("xp", { player: self, skill: s, experience: amount });
+      },
     }),
     sendMessage: (message) => messages.push(message),
   };
@@ -165,7 +170,7 @@ test("the flag is saved with the account, off by default, and ::idle switches it
   api.command(player, "idle off");
   assert.equal(player.getAttribute("idle-mode:enabled"), false);
   api.command(player, "idle maybe");
-  assert.match(player.messages.pop(), /::idle on, ::idle off or ::idle auto/);
+  assert.match(player.messages.pop(), /Use ::idle \[on\|off\], ::idle auto/);
   assert.equal(api.handlers.commands.idle.rights, api.core.PlayerRights.NONE, "every player may run it");
 });
 
@@ -461,4 +466,90 @@ test("auto: a task looks at tracked players from server start, and logout forget
   assert.equal(tracked.has(player), false);
   api.login({ player });
   assert.ok(tracked.has(player), "a saved target is tracked again on login");
+});
+
+const PROGRESSION = "../plugins/modes/idle/Progression.IdleMode";
+
+test("points: one per 250 idle-skill XP, carried over, online and offline", (t) => {
+  const player = fakePlayer();
+  player.setAttribute("idle-mode:enabled", true);
+  assert.equal(api.persisted["idle-mode:points"], 0);
+  assert.deepEqual(api.persisted["idle-mode:upgrades"], {});
+  api.emit("xp", { player, skill: Skill.WOODCUTTING, experience: 600 });
+  assert.equal(player.getAttribute("idle-mode:points"), 2);
+  assert.equal(player.getAttribute("idle-mode:point-progress"), 100);
+  api.emit("xp", { player, skill: Skill.WOODCUTTING, experience: 150 });
+  assert.equal(player.getAttribute("idle-mode:points"), 3);
+  api.emit("xp", { player, skill: Skill.COOKING, experience: 10_000 });
+  assert.equal(player.getAttribute("idle-mode:points"), 3, "not an idle skill");
+  const normal = fakePlayer();
+  api.emit("xp", { player: normal, skill: Skill.WOODCUTTING, experience: 10_000 });
+  assert.equal(normal.getAttribute("idle-mode:points"), undefined, "not idle");
+
+  // The offline XP lands through the same hook.
+  let now = 0;
+  t.mock.method(Date, "now", () => now);
+  player.setAttribute("idle-mode:away", { skill: "WOODCUTTING", durationMs: 60_000, xp: 500, items: { [LOGS]: 10 }, loggedOutAt: 0 });
+  now = 60_000;
+  api.login({ player });
+  assert.equal(player.getAttribute("idle-mode:points"), 5);
+});
+
+test("shop: buying levels spends points, refuses when short or maxed", () => {
+  const player = fakePlayer();
+  player.setAttribute("idle-mode:enabled", true);
+  player.setAttribute("idle-mode:points", 300);
+  api.command(player, "idle shop");
+  const shop = player.messages.splice(0).join("\n");
+  assert.match(shop, /You have 300 idle points\./);
+  assert.match(shop, /Quick Hands \(quick-hands\) 0\/5: .*next level 100 points\./);
+  api.command(player, "idle buy quick-hands");
+  assert.equal(player.messages.pop(), "Quick Hands is now level 1.");
+  assert.equal(player.getAttribute("idle-mode:points"), 200);
+  api.command(player, "idle buy quick-hands");
+  assert.match(player.messages.pop(), /level 2 costs 250 points; you have 200/);
+  api.command(player, "idle buy nothing");
+  assert.match(player.messages.pop(), /no upgrade called nothing/);
+  player.setAttribute("idle-mode:upgrades", { "long-dreams": 4 });
+  api.command(player, "idle buy long-dreams");
+  assert.match(player.messages.pop(), /already at its highest level/);
+  api.command(player, "idle points");
+  assert.equal(player.messages.pop(), "You have 200 idle points.");
+});
+
+test("upgrades: Quick Hands takes a tick off by chance; Long Dreams and Bountiful Harvest reach offline", (t) => {
+  const player = fakePlayer();
+  player.setAttribute("idle-mode:enabled", true);
+  player.setAttribute("idle-mode:upgrades", { "quick-hands": 3, "long-dreams": 2, "bountiful-harvest": 5 });
+  t.mock.method(Math, "random", () => 0.25);
+  assert.equal(api.emit("skills:action-interval", { player, skill: Skill.WOODCUTTING, kind: "chop", ticks: 4 }).ticks, 3, "0.25 < 30%");
+  assert.equal(api.emit("fishing:interval", { player, ticks: 5 }).ticks, 4);
+  assert.equal(api.emit("skills:action-interval", { player, skill: Skill.MAGIC ?? Skill.COOKING, kind: "enchant", ticks: 5 }).ticks, 5, "not a gathering action");
+  assert.equal(api.emit("skills:action-interval", { player, skill: Skill.MINING, kind: "mine", ticks: 1 }).ticks, 1, "never under one tick");
+  t.mock.method(Math, "random", () => 0.35);
+  assert.equal(api.emit("skills:action-interval", { player, skill: Skill.WOODCUTTING, kind: "chop", ticks: 4 }).ticks, 4);
+
+  const { capHours, bountyChance } = require(PROGRESSION);
+  assert.equal(capHours(player), 18);
+  assert.ok(Math.abs(bountyChance(player) - 0.2) < 1e-9);
+
+  // Bountiful Harvest online: 0.35 >= 20%, no extra; 0.1 < 20%, one extra log in the bank.
+  chop(player);
+  assert.equal(player.bank.get(LOGS), 1);
+  t.mock.method(Math, "random", () => 0.1);
+  chop(player);
+  assert.equal(player.bank.get(LOGS), 3);
+
+  // Offline: the cap is 18h and a fifth more items.
+  let now = 0;
+  t.mock.method(Date, "now", () => now);
+  const away = fakePlayer();
+  away.setAttribute("idle-mode:enabled", true);
+  away.setAttribute("idle-mode:upgrades", { "long-dreams": 2, "bountiful-harvest": 5 });
+  away.setAttribute("idle-mode:away", { skill: "WOODCUTTING", durationMs: 3_600_000, xp: 1000, items: { [LOGS]: 100 }, loggedOutAt: 0 });
+  now = 48 * 3_600_000;
+  api.login({ player: away });
+  assert.equal(away.bank.get(LOGS), 2160, "18h x 100 x 1.2");
+  assert.equal(away.xp.get(Skill.WOODCUTTING), 18_000, "no XP for the extras");
+  assert.match(away.messages[0], /capped at 18h/);
 });

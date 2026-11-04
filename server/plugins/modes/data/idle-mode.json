@@ -29,5 +29,46 @@
     "rememberClickSeconds": 30,
     "searchTiles": 16,
     "leashTiles": 24
+  },
+  "progression": {
+    "_description": "Idle points (docs/idle-mode.md): one per xpPerPoint XP an idle account gains in the idle skills, online or offline. They buy the upgrades' levels, each level at its listed cost.",
+    "xpPerPoint": 250,
+    "upgrades": {
+      "quick-hands": {
+        "name": "Quick Hands",
+        "description": "each level: a 10% chance an action of the idle skills takes a tick less",
+        "costs": [
+          100,
+          250,
+          500,
+          1000,
+          2000
+        ],
+        "tickSaveChancePerLevel": 0.1
+      },
+      "long-dreams": {
+        "name": "Long Dreams",
+        "description": "each level: 3 more hours of offline progress",
+        "costs": [
+          150,
+          400,
+          900,
+          2000
+        ],
+        "offlineHoursPerLevel": 3
+      },
+      "bountiful-harvest": {
+        "name": "Bountiful Harvest",
+        "description": "each level: a 4% chance of an extra resource, online and offline",
+        "costs": [
+          200,
+          500,
+          1000,
+          2000,
+          4000
+        ],
+        "extraChancePerLevel": 0.04
+      }
+    }
   }
 }

@@ -5,7 +5,7 @@
  * rocks stay standing, fishing spots stay put and random events leave it alone (Gathering). Logging
  * out mid-session keeps going at the rate the player had, paid on the next login (Offline). When
  * the gathering stops, the character walks back to the same kind of tree, rock or spot nearby and
- * starts again (Auto).
+ * starts again (Auto). Idle XP earns points that buy upgrades (Progression).
  * Settings are plugins/modes/data/idle-mode.json.
  */
 const Common = require("./idle/Common.IdleMode");
@@ -18,5 +18,6 @@ module.exports = {
     require("./idle/Gathering.IdleMode")(api);
     require("./idle/Offline.IdleMode")(api);
     require("./idle/Auto.IdleMode")(api);
+    require("./idle/Progression.IdleMode")(api);
   },
 };

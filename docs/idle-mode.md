@@ -107,11 +107,35 @@ While you were away for 1h 0m, you kept woodcutting:
 | `searchTiles` | `16` |
 | `leashTiles` | `24` |
 
+## Points and upgrades
+
+`server/plugins/modes/idle/Progression.IdleMode.js`. An idle account earns an **idle point** per
+`xpPerPoint` (250) XP in the idle skills, online and offline (the offline XP lands through the
+same `onExperienceGained` hook). Saved as `idle-mode:points`, with the XP toward the next point in
+`idle-mode:point-progress`.
+
+```
+::idle points            your points
+::idle shop              the upgrades, their levels and the next level's price
+::idle buy <upgrade>     buy the next level
+```
+
+Bought levels are saved as `idle-mode:upgrades` `{ upgrade: level }`.
+
+| Upgrade | Each level | Costs | Hook |
+| --- | --- | --- | --- |
+| `quick-hands` (Quick Hands) | A 10% chance a chop, mine or catch roll comes a tick sooner (never under one tick). | 100, 250, 500, 1000, 2000 | `skills:action-interval` (kinds `chop`, `mine`), `fishing:interval` |
+| `long-dreams` (Long Dreams) | 3 more hours of offline progress. | 150, 400, 900, 2000 | the offline cap |
+| `bountiful-harvest` (Bountiful Harvest) | A 4% chance of an extra resource to the bank, without XP. Offline, the same expected share is added to the items. | 200, 500, 1000, 2000, 4000 | `storage:gather`, the offline items |
+
+The prices and effects are in `"progression"` in the data. Quick Hands' speed shows in the rate
+the offline progress measures, so it counts offline as well.
+
 ## Roadmap
 
 1. Endless gathering - done.
 2. Offline progress - done.
 3. Auto-resume - done. Next: picking an activity from a list and travelling there (built on the
    player bots' long routes in `server/plugins/bots/`).
-4. Idle progression: points for time played and a shop of upgrades (speed, offline cap, bank).
+4. Idle points and upgrades - done (chat commands; an interface of its own comes later).
 5. Idle combat: fighting monsters by itself, with the existing drop tables.

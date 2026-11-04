@@ -45,9 +45,8 @@
  * Gaps/approximations:
  * - The star flowers are spawned instantly on entering the cosmic plane rather than
  *   after the wiki's 2-5 minute growth.
- * - The certificate "Study" and rune temple sign "Read" have no transcript page;
- *   they send short messages and set 2336/2338 (the sign message is not from a
- *   wiki transcript).
+ * - The first-entry scene in Nuff's room is not implemented; the stage-based
+ *   2339 marker does not establish a native camera track.
  * - The queen's awakening scene has several speakers (Queen, Nuff, Very Wise)
  *   but the shared transcript replay renders one chathead; the qUAH/lamp/complete
  *   step ids are hooked instead of re-authoring the scene.
@@ -134,6 +133,10 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const LEGACY_STAGE_COMPLETE = 80;
 
   const NUFFS_CERTIFICATE_ITEM_ID = ItemIdentifiers.NUFFS_CERTIFICATE; // 9025
+  const CERTIFICATE_FRONT_INTERFACE = 423;
+  const CERTIFICATE_BACK_INTERFACE = 424;
+  const RUNE_TEMPLE_SIGN_INTERFACE = 425;
+  const DOCUMENT_OPEN_SCRIPT = 2524;
   const QUEENS_SECATEURS_ITEM_ID = ItemIdentifiers.QUEENS_SECATEURS_2; // 9020
   const GORAK_CLAWS_ITEM_ID = ItemIdentifiers.GORAK_CLAWS; // 9016
   const GORAK_CLAW_POWDER_ITEM_ID = ItemIdentifiers.GORAK_CLAW_POWDER; // 9018
@@ -646,18 +649,27 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     }
     player.setAttribute(SIGN_ATTRIBUTE, 1);
     syncProgress(player);
-    player.sendMessage("You read the sign. It says: Cosmic Rune Altar.");
+    openDocument(player, RUNE_TEMPLE_SIGN_INTERFACE);
     return true;
   }
 
-  function handleItemAction(event) {
-    if (event.itemId !== NUFFS_CERTIFICATE_ITEM_ID || event.option !== "Study") return;
-    const { player } = event;
-    event.handled = true;
+  function openDocument(player, interfaceId, args = [-1, -1]) {
+    player.getPacketSender().sendClientScript(DOCUMENT_OPEN_SCRIPT, ...args).sendInterface(interfaceId);
+  }
+
+  function handleReadCertificate({ player }) {
+    openDocument(player, CERTIFICATE_FRONT_INTERFACE);
+    return true;
+  }
+
+  function handleStudyCertificate({ player }) {
     player.setAttribute(STUDIED_ATTRIBUTE, 1);
     advance(player, STAGE_CERTIFICATE_STUDIED);
     syncProgress(player);
-    player.sendMessage("You study the certificate and notice strange symbols on the back.");
+    player.sendMessage("You turn the certificate over and look at the back...");
+    // RSProx 424 supplies the back document's distinct mainmodal arguments.
+    openDocument(player, CERTIFICATE_BACK_INTERFACE, [4269835, 100]);
+    return true;
   }
 
   function handleItemOnNpc(event) {
@@ -1116,7 +1128,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handlePotionOnQueen, { noted: false });
-  api.onItemAction(handleItemAction);
+  api.onItemAction("Nuff's certificate", { Read: handleReadCertificate, Study: handleStudyCertificate });
   api.onItemAction("Antique lamp", { Rub: handleLampRub });
   api.onNpcInteraction("Fairy Godfather", { "Pick-pocket": handlePickpocket });
   api.onNpcInteraction(handleNuffTalk);

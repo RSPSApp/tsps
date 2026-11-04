@@ -392,6 +392,41 @@ import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdat
 
 console.log("Cache panel scripts retain inventory items, 64-bit prices and native Castle Wars HUD state");
 
+// Fairytale II documents use the cache's IF1 models and fairy fonts without rewritten text.
+{
+    const { vm } = require('../scripts/cache/cs2-sweep').createCacheVm();
+    const { encodeWidgetOpenSub, encodeWidgetCloseSub } = require('../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol');
+    const wm = vm.context.widgetManager, errors: unknown[] = [], target = (161 << 16) | 16;
+    vm.logError = (error: unknown) => errors.push(error);
+    wm.setRootInterface(161); wm.resize(765, 503);
+    wm.onLoadListener = (_id: number, widget: any) => vm.runScriptEvent({ args: widget.onLoad, widget });
+    const documents = [
+        { group: 423, args: [-1, -1], model: 16050, textChild: 1, font: 497, text: 'Certificate of Advanced Healing' },
+        { group: 424, args: [4269835, 100], model: 16051, textChild: 4, font: 647, text: 'AIR DLR DJQ AJS' },
+        { group: 425, args: [-1, -1], model: 16067, textChild: 1, font: 648, text: 'COSMIC<br>RUNEe<br>ALTAR' },
+    ];
+    // Opening the front again after the back must restore the ordinary modal arguments.
+    for (const document of [...documents, documents[0]]) {
+        const script: any = decodeServerPacket(encodeWidgetRunScript(2524, document.args));
+        vm.run(vm.context.loadScript(script.payload.scriptId), script.payload.args, []);
+        assert.equal(vm.lastError, null);
+        assert.equal(vm.context.varManager.getVarcInt(172), document.args[0]);
+        assert.equal(vm.context.varManager.getVarcInt(173), document.args[1]);
+        const open: any = decodeServerPacket(encodeWidgetOpenSub(target, document.group, 0));
+        wm.openSubInterface(open.payload.targetUid, open.payload.groupId, open.payload.type);
+        assert.equal(wm.getSubInterface(target)?.group, document.group);
+        const model = wm.getWidgetByUid(document.group << 16);
+        const text = wm.getWidgetByUid((document.group << 16) | document.textChild);
+        assert.equal(model.type, 6); assert.equal(model.modelId, document.model); assert.equal(model.hidden, false);
+        assert.equal(text.fontId, document.font); assert.equal(text.hidden, false);
+        assert.ok(text.text.includes(document.text));
+        const close: any = decodeServerPacket(encodeWidgetCloseSub(target));
+        wm.closeSubInterface(close.payload.targetUid);
+        assert.equal(wm.getSubInterface(target), undefined);
+    }
+    assert.deepEqual(errors, []);
+}
+
 // Actual cache key listeners -> native resume packet -> real PlayerSession/DestroyItem policy.
 async function nativeDestroyConfirmation() {
     const previousDirectory = process.cwd();
@@ -503,8 +538,7 @@ async function nativeSpecialOrbSendsOneServerAuthoritativeInput() {
     try {
         const serverModules = serverRoot + '/src/main/typescript/elvarg';
         require(serverModules + '/Server').Server.installProductionPathResolver();
-        const { CachePipeline } = require(serverModules + '/game/cache/CachePipeline');
-        await CachePipeline.initialize(serverRoot);
+        // Reuse the cache initialized above; Gamevals retains that open store.
         const { PluginManager } = require(serverModules + '/plugins/PluginManager');
         const { Player } = require(serverModules + '/game/entity/impl/player/Player');
         const { PlayerSession } = require(serverModules + '/net/PlayerSession');

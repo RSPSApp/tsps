@@ -1,22 +1,26 @@
 name: Deploy Docs
 
 on:
+    pull_request:
+        branches: [main]
+        paths: ['docs/**', '.github/workflows/docs.yml']
     push:
         branches: [main]
         paths: ['docs/**', '.github/workflows/docs.yml']
 
 permissions:
     contents: read
-    pages: write
-    id-token: write
 
 concurrency:
-    group: pages
+    group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.event.pull_request.number) || 'pages' }}
     cancel-in-progress: false
 
 jobs:
     build:
         if: github.repository == 'RSPSApp/tsps'
+        permissions:
+            contents: read
+            pages: read
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -31,11 +35,15 @@ jobs:
             - run: corepack yarn build --base "${{ steps.pages.outputs.base_path }}/"
               working-directory: docs
             - uses: actions/upload-pages-artifact@v3
+              if: github.event_name == 'push'
               with:
                   path: docs/.vitepress/dist
 
     deploy:
-        if: github.repository == 'RSPSApp/tsps'
+        if: github.repository == 'RSPSApp/tsps' && github.event_name == 'push'
+        permissions:
+            pages: write
+            id-token: write
         environment:
             name: github-pages
             url: ${{ steps.deployment.outputs.page_url }}

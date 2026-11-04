@@ -387,3 +387,120 @@ test('Ramarno ending resets the camera five ticks after resume, before the rewar
   h.tick(1); assert.deepEqual(h.cameras, [[5, 'sendCameraReset']]); assert.equal(h.quest.getStage(h.player), 4);
   h.tick(3); assert.equal(h.quest.getStage(h.player), 5); assert.deepEqual(h.cameras, [[5, 'sendCameraReset']]);
 });
+
+test('unknown creature blocks do not send a human rig through the native guardian fight', async t => {
+  const core = PluginManager.getCoreApi();
+  const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
+  const { NpcDefinition } = require('../dist/game/definition/NpcDefinition');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ObjectActionPacketListener } = require('../dist/net/packet/impl/ObjectActionPacketListener');
+  const { PendingHit } = require('../dist/game/content/combat/hit/PendingHit');
+  const { CombatFactory } = require('../dist/game/content/combat/CombatFactory');
+  const { RangedCombatMethod } = require('../dist/game/content/combat/method/impl/RangedCombatMethod');
+  new NpcDefinitionLoader().load(); core.RegionManager.init(); core.RegionManager.loadMapFiles(2999, 3493);
+  const api = PluginManager.createApi('NativeGuardianHitRegression');
+  require('../plugins/quests/quests/BelowIceMountain.Quest')(api);
+  const quest = runtime.getRegisteredQuests().find(q => q.key === 'below_ice_mountain');
+  let serial = 0;
+  function fighter(test) {
+    let p;
+    const frames = [], views = [], animations = [], playerAnimations = [];
+    const channel = { kind: 'test', binaryTransport: true, isOpen: () => true,
+      send: frame => { frames.push(Buffer.from(frame)); return true; }, close() {}, onData() {}, onClose() {}, onError() {} };
+    const session = new PlayerSession(channel); p = new Player(session); session.setPlayer(p);
+    p.setUsername('guardian-hit-' + serial++); p.setLocation(new core.Location(2998, 3493, 0));
+    p.setNeedsPlacement(false); p.setRunning(false);
+    for (const skill of [core.Skill.HITPOINTS, core.Skill.ATTACK, core.Skill.STRENGTH, core.Skill.DEFENCE]) {
+      p.getSkillManager().setMaxLevels(skill, 99, false).setCurrentLevel(skill, 99, false);
+    }
+    // Keep native registration, mechanics and sync; account-file I/O is outside the fixture.
+    test.mock.method(p, 'onAdd', () => {}); test.mock.method(p, 'onRemove', () => {});
+    const performPlayer = p.performAnimation.bind(p);
+    test.mock.method(p, 'performAnimation', animation => { playerAnimations.push(animation.getId()); return performPlayer(animation); });
+    assert.equal(core.World.getPlayers().add(p), true); core.World.refreshActiveRegions();
+    api.onCustomEvent('network:sync-views', event => { if (event.player === p) views.push(...event.npcs.map(view => ({ tick: event.tick, ...view }))); });
+    const turn = () => { core.World.process(); session.flushPackets(); };
+    quest.setStage(p, 3);
+    new ObjectActionPacketListener().executeAction(p, 41357, 2999, 3493, 1, 'Enter');
+    let guardian;
+    for (let tick = 0; tick < 12 && !guardian; tick++) {
+      turn(); guardian = core.World.getNpcs().search(npc => npc.getId() === 10654 && npc.getOwner() === p);
+    }
+    assert.ok(guardian, 'the registered cache entrance action creates the quest-owned actor');
+    assert.ok(guardian.hasFlag('combat:no-regen'));
+    turn(); turn();
+    const area = p.getPrivateArea(), at = area.sourceTile(2952, 5778);
+    guardian.getCombat().reset(); guardian.getCombat().setAttackDelay(40);
+    guardian.moveTo(at); guardian.setNeedsPlacement(false); p.moveTo(at.transform(-1, 0)); p.setNeedsPlacement(false);
+    const ordinaryAt = area.sourceTile(2956, 5778);
+    const ordinary = api.spawnNpc({ id: 10654, x: ordinaryAt.getX(), y: ordinaryAt.getY(), z: 0, owner: p, ownerOnly: true, wanderRadius: 0 });
+    assert.ok(ordinary); area.add(ordinary); ordinary.getCombat().setAttackDelay(40); turn(); turn();
+    for (const npc of [guardian, ordinary]) {
+      const perform = npc.performAnimation.bind(npc);
+      test.mock.method(npc, 'performAnimation', animation => { animations.push({ index: npc.getIndex(), id: animation.getId() }); return perform(animation); });
+      npc.getCombat().setAttackDelay(40);
+    }
+    test.after(() => {
+      PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
+      core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(p.getIndex());
+      for (const npc of [guardian, ordinary]) if (npc.isRegistered()) api.removeNpc(npc);
+      core.World.getPlayers().remove(p); core.World.refreshActiveRegions();
+    });
+    return { p, guardian, ordinary, turn, frames, views, animations, playerAnimations };
+  }
+
+  await t.test('fallbacks preserve humans and every resolved role across repeated hydration', () => {
+    const expected = new Map([
+      [10654, -1], [113, -1], // Ancient Guardian and an unrelated unknown creature.
+      [397, 424], [514, 424], [11945, 424], // Guard, Witch and a feature-prefixed human idle.
+      [3014, 424], [3106, 425], [5779, 3311], // Authored Man variants and Giant Mole.
+      [2, 1509], [26, 5567], // Captured spectre parry and cache-family zombie defend.
+      [12811, -1], // Explicit no-block on a human-family Serpent shaman.
+      [5037, 424], [10665, -1], // Nonattackable human and guardian scene actors.
+    ]);
+    for (let load = 0; load < 2; load++) {
+      if (load) new NpcDefinitionLoader().load();
+      for (const [id, block] of expected) {
+        const definition = NpcDefinition.forId(id);
+        assert.equal(definition.getDefenceAnim(), block, `${id} keeps its resolved role after load ${load}`);
+        assert.equal(NpcDefinition.forId(id), definition);
+        assert.equal(NpcDefinition.forId(id).getDefenceAnim(), block, `${id} hydration cannot replace a resolved block`);
+      }
+    }
+  });
+
+  await t.test('queued ranged impacts damage both real guardians without replacing an existing attack pose', test => {
+    const f = fighter(test);
+    for (const npc of [f.guardian, f.ordinary]) npc.performAnimation(new core.Animation(npc.getAttackAnim()));
+    f.turn();
+    const afterAttack = f.views.length, before = [f.guardian.getHitpoints(), f.ordinary.getHitpoints()];
+    for (const npc of [f.guardian, f.ordinary]) {
+      CombatFactory.addPendingHit(new PendingHit(f.p, npc, new RangedCombatMethod(),
+        { delay: 1, damage: 1, rollAccuracy: false, experience: false, handleAfterHitEffects: false }));
+    }
+    // The queued delay plus the native NPC processing offset puts impact two ticks later.
+    f.turn(); f.turn();
+    assert.equal(f.guardian.getHitpoints(), before[0] - 1);
+    assert.equal(f.ordinary.getHitpoints(), before[1] - 1);
+    for (const npc of [f.guardian, f.ordinary]) {
+      const impacts = f.views.slice(afterAttack).filter(view => view.index === npc.getIndex() && view.hits?.length);
+      assert.ok(impacts.some(view => view.hits.some(hit => hit.damage === 1)), 'the native session publishes the real damage');
+      assert.ok(impacts.every(view => view.animation === undefined), 'an unknown reaction neither selects424 nor resets the active attack');
+      assert.deepEqual(f.animations.filter(row => row.index === npc.getIndex()).map(row => row.id), [8942]);
+    }
+    assert.ok(f.frames.length, 'actual NPC_INFO frames were flushed');
+  });
+
+  await t.test('a real melee launch also leaves the creature pose alone', test => {
+    const f = fighter(test), expectedAttack = f.p.getAttackAnim(f.guardian);
+    f.guardian.performAnimation(new core.Animation(f.guardian.getAttackAnim())); f.turn();
+    const afterAttack = f.views.length;
+    f.p.getCombat().setAttackDelay(0); f.p.getCombat().attack(f.guardian);
+    f.turn(); f.turn();
+    assert.ok(f.playerAnimations.includes(expectedAttack), 'the ordinary player melee method actually launched');
+    assert.deepEqual(f.animations.filter(row => row.index === f.guardian.getIndex()).map(row => row.id), [8942],
+      'the launch-side block consumer cannot send a human block or a reset');
+    assert.ok(f.views.slice(afterAttack).filter(view => view.index === f.guardian.getIndex()).every(view => view.animation === undefined));
+  });
+});

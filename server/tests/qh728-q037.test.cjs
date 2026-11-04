@@ -223,12 +223,13 @@ function setup() {
     if (named[actionName](event) !== false) event.handled = true;
     return event;
   };
-  const itemAction = (itemId, option, slot = 0, itemName = '') => {
+  const itemAction = (itemId, option, slot = 0, itemName = realCore.CacheDefinitions.getItem(itemId).name) => {
     const item = { getId: () => itemId, getName: () => itemName };
-    const event = { player, itemId, option, slot, item, clickType: 1, handled: false };
+    const clickType = realCore.CacheDefinitions.getItem(itemId).inventoryActions.indexOf(option) + 1;
+    const event = { player, itemId, option, slot, item, clickType, handled: false };
     for (const entry of hooks.itemActions) {
       if (entry.handler) entry.handler(event);
-      else if (entry.name === itemName && entry.actions?.[option]) entry.actions[option](event);
+      else if (entry.name === itemName && entry.actions?.[option] && entry.actions[option](event) !== false) event.handled = true;
     }
     return event;
   };

@@ -11,6 +11,8 @@
   "_shade": "Recorded (232/03119 [39]-[170]): a shadow rises into its shade, the same NPC, as it is hit or as it attacks (shade_rise), and sinks back to its shadow about 68 ticks after its last fight; its remains always drop (private 100 ticks, gone at 200).",
   "riseAnimation": 1288,
   "revertTicks": 68,
+  "_zealot": "Wiki (Undead Zealot, Altar (Shade Catacombs)): opening any chest raises an Undead Zealot 1 time in 20 (Mod Ash), attackable only by the opener; it always drops bleached bones, which restore full Prayer, without experience, on the Altar of the Damned. No rsprox capture exists (NPC 10591/10592 return nothing). 10591 and 10592 are the page's two versions with identical data; which the game raises is not established.",
+  "zealot": {"npc": "shades_undead_zealot_1", "npcs": ["shades_undead_zealot_1", "shades_undead_zealot_2"], "chance": 0.05, "bones": "shade_bleached_bones", "altar": "shade_lair_temple_altar"},
   "keyMetals": ["bronze", "steel", "black", "silver", "gold"],
   "keyColours": {"bloodred": "red", "brown": "brown", "crimson": "crimson", "black": "black", "purple": "purple"},
   "catacombs": {

@@ -64,14 +64,22 @@ export class NpcAggression {
                 continue;
             }
 
+            // The NPC's authority to start this fight is its aggression range from the spawn
+            // (`max range + attack range`, plus size - 1): a player outside it cannot be
+            // attacked by it, even when the NPC has wandered close enough to hunt (Wiki
+            // Aggressiveness#Aggression range). An area rule that forces aggression overrides it.
+            const method: CombatMethod = CombatFactory.getMethod(npc);
+            const attackDistance = method.attackDistance(npc);
+            if (rule !== true
+                && npc.getSpawnPosition().getDistance(player.getLocation()) > npcDefinition.getAggressionRange(attackDistance)) {
+                continue;
+            }
+
             // The Wiki's hunt range starts at the NPC's current south-west tile, not its spawn
             // (Aggressiveness#Hunt range). A ranged or magic NPC can at least see as far as it
             // can cast; the definition's huntRange is the floor (default 3, KQ 9).
             const huntDistance = npc.getLocation().getDistance(player.getLocation());
-
-            // Get the npc's combat method
-            const method: CombatMethod = CombatFactory.getMethod(npc);
-            const huntRange = Math.max(npcDefinition.getHuntRange(), method.attackDistance(npc));
+            const huntRange = Math.max(npcDefinition.getHuntRange(), attackDistance);
 
             if (huntDistance <= huntRange) {
                 if (CombatFactory.canAttack(npc, method, player) == CanAttackResponse.CAN_ATTACK) {

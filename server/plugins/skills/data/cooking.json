@@ -83,7 +83,9 @@
     {"raw":"raids_bat3_raw","cooked":"raids_bat3_cooked","burnt":"raids_bat_burnt","level":45,"xp":19,"stopBurn":65,"name":"phluxia bat"},
     {"raw":"raids_bat4_raw","cooked":"raids_bat4_cooked","burnt":"raids_bat_burnt","level":60,"xp":22,"stopBurn":75,"name":"kryket bat"},
     {"raw":"raids_bat5_raw","cooked":"raids_bat5_cooked","burnt":"raids_bat_burnt","level":75,"xp":25,"stopBurn":85,"name":"murng bat"},
-    {"raw":"raids_bat6_raw","cooked":"raids_bat6_cooked","burnt":"raids_bat_burnt","level":90,"xp":28,"stopBurn":97,"name":"psykk bat"}
+    {"raw":"raids_bat6_raw","cooked":"raids_bat6_cooked","burnt":"raids_bat_burnt","level":90,"xp":28,"stopBurn":97,"name":"psykk bat"},
+    {"raw":"raw_gnomebowl","cooked":"half_baked_bowl","burnt":"burnt_gnomebowl","level":1,"xp":30,"stopBurn":38,"name":"raw gnomebowl","firstCookTicks":4},
+    {"raw":9563,"cooked":9564,"burnt":"burnt_gnomebowl","level":42,"xp":0,"stopBurn":42,"name":"half made bowl","firstCookTicks":4}
   ],
   "doughs": {
     "flour": ["pot_flour", "pot_empty"],
@@ -128,7 +130,10 @@
     {"product":"uncooked_wild_pie","level":85,"ingredients":["raw_rabbit","unfinished_wild_pie_2"]},
     {"product":"unfinished_summer_pie_1","level":95,"ingredients":["strawberry","pie_shell"]},
     {"product":"unfinished_summer_pie_2","level":95,"ingredients":["watermelon","unfinished_summer_pie_1"]},
-    {"product":"uncooked_summer_pie","level":95,"ingredients":["cooking_apple","unfinished_summer_pie_2"]}
+    {"product":"uncooked_summer_pie","level":95,"ingredients":["cooking_apple","unfinished_summer_pie_2"]},
+    {"product":"raw_gnomebowl","level":1,"ingredients":[["gianne_dough",1],["gnomebowl_mould",1]],"timing":[1,2]},
+    {"product":9563,"level":42,"xp":50,"ingredients":[["half_baked_bowl",1],["chocolate_bar",4],["equa_leaves",1]],"timing":[1,2]},
+    {"product":"chocolate_bomb","level":1,"xp":110,"ingredients":[[9564,1],["chocolate_dust",1],["pot_of_cream",2]],"timing":[1,2]}
   ],
   "wines": [
     {"grapes": "grapes", "unfermented": "jug_unfermented_wine", "wine": "jug_wine", "bad": "jug_bad_wine", "level": 35, "xp": 200, "chance": [48, 352]},

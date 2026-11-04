@@ -59,7 +59,7 @@ const BLOOD_RIFT_GUARDIAN_BASE = 804984;
 /** The Ourania Altar's rift guardian base, whatever rune is made (Wiki: Rift guardian). */
 const OURANIA_RIFT_GUARDIAN_BASE = 1487213;
 const ABYSS_TELEPORT_STEP = "o8m7y6";
-const ESSENCE_TELEPORT_STEPS = new Set(["ILlRUH", "SvUvek"]);
+const ESSENCE_TELEPORT_STEPS = new Set(["ILlRUH", "SvUvek", "PDYldg"]);
 const CROMPERTY_ESSENCE_TELEPORT_STEP = "EkCGKW";
 const ARDOUGNE_ESSENCE_TELEPORT_TASK = "have-wizard-cromperty-teleport-you-to-the-rune-e";
 /** The Rune Essence mine's exit portals (loc 34825, "Portal", Use). */
@@ -648,6 +648,8 @@ function teleportToEssenceMine(player, wizard) {
       pluginApi.emitCustomEvent("diary:task", { player, diary: "lumbridge", task: "have-sedridor-teleport-you-to-the-essence-mine" });
     } else if (wizardName === "Wizard Cromperty") {
       pluginApi.emitCustomEvent("diary:task", { player, diary: "ardougne", task: ARDOUGNE_ESSENCE_TELEPORT_TASK });
+    } else if (wizardName === "Brimstail") {
+      pluginApi.emitCustomEvent("runecrafting:brimstail-essence", { player });
     }
   });
   if (wizard) {

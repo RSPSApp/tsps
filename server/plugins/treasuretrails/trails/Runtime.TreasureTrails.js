@@ -4,6 +4,7 @@ const { randomUUID } = require("node:crypto");
 const Catalogue = require("./Catalogue.TreasureTrails");
 const Dialogue = require("./Dialogue.TreasureTrails");
 const { TIERS } = require("./Tiers.TreasureTrails");
+const { COMPLETED_ATTRIBUTE: BEGINNER_COMPLETED_ATTRIBUTE } = require("../beginner/Runtime.BeginnerTreasureTrails");
 const SKILL_CHALLENGES = require("./data/skill-challenges.json");
 const NPC_SPAWNS = require("../../../data/definitions/npc-spawns.json");
 const MASTER_PARTS = require("./data/master-parts.json");
@@ -29,6 +30,10 @@ const location = entity => ({ x: entity.getLocation().getX(), y: entity.getLocat
 const distance = (a, b) => a.z === b.z ? Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) : Infinity;
 const metaKey = tier => META_PREFIX + tier.name;
 const completedAttribute = tier => `${META_PREFIX}${tier.name}-completed`;
+// The cache's collection log categories and the label its script 2735 gives each count.
+const SHARED_CLUE_CATEGORY = "Shared Treasure Trail Rewards";
+const clueCategoryName = tier => `${tier.label} Treasure Trails`;
+const rareClueCategoryName = tier => `${tier.label} Treasure Trails (Rare)`;
 
 function data(tier) {
   if (!catalogues.has(tier.name)) catalogues.set(tier.name, loadCatalogue(tier));
@@ -641,7 +646,12 @@ function restore({ player }) {
 }
 
 function categoryCount(request) {
-  const tier = TIERS.find(entry => new RegExp(`^Treasure Trails \\(${entry.label}\\)$`, "i").test(request.category));
+  if (request.category === SHARED_CLUE_CATEGORY) {
+    const beginner = Number(request.player.getAttribute(BEGINNER_COMPLETED_ATTRIBUTE)) || 0;
+    request.count = TIERS.reduce((sum, tier) => sum + (Number(request.player.getAttribute(completedAttribute(tier))) || 0), beginner);
+    return;
+  }
+  const tier = TIERS.find(entry => request.category === clueCategoryName(entry) || request.category === rareClueCategoryName(entry));
   if (tier) request.count = Number(request.player.getAttribute(completedAttribute(tier))) || 0;
 }
 

@@ -359,7 +359,7 @@
         "Alchemic Convergence": { "step": -1, "alchemy": "Low Level Alchemy", "animation": "transmutation_cast_downgrade", "graphic": "league_6_transmutation_downgrade" }
       },
       "perCast": 10, "xpPerItem": 10, "castTicks": 5,
-      "_cast": "Wiki: up to 10 a cast, 10 Magic XP an item, no level, 5 ticks, and no runes (Alchemic Divergence: cost None; 6 May 2026: 'correctly display as costing no runes'; the spell objs carry no rune params). 237/01102, 01106: a stack (noted or stackable) gives 10 and is cast on again every 5 ticks while its slot holds it, with the graphic alone; loose items convert up to 10 held, in place, only with a free slot for each; a click during a cast waits for it.",
+      "_cast": "Wiki: up to 10 a cast, 10 Magic XP an item, no level, 5 ticks, and no runes (Alchemic Divergence: cost None; 6 May 2026: 'correctly display as costing no runes'; the spell objs carry no rune params). 237/01102, 01106: a stack (noted or stackable) gives 10 and is cast on again every 5 ticks while its slot holds it, with the graphic alone; loose items convert up to 10 held, in place: holding 10 or fewer needs no free slot (237/01102: 10 uncut rubies, diamonds, opals and jade with none free, each converted in its own slots), holding more needs a free slot for each of the 10 (237/01102: the red no-room line at 11 held with 5 free, 15 with 1, 16 and 23 with none); a click during a cast waits for it.",
       "alchemyToggle": "league_relic_transmutation_alchemy_toggle", "bankToggle": "league_relic_transmutation_bank_toggle",
       "currentColour": "ff3045", "_currentColour": "The ledger's scroll marks the item's own tier in this red with ' (Current)' (Wiki: Transmutation_ledger_interface.png; the toggles' off colour).",
       "messages": {

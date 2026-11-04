@@ -1374,7 +1374,7 @@ test("Transmute: Divergence turns 10 of a noted stack into the next tier, noted,
   assert.equal(inventory.getAmount(Common.noted(I.UNCUT_EMERALD)), 24, "the slot is empty: no more casts");
 });
 
-test("Transmute: Convergence goes a tier down; loose items convert in place, up to 10, only with a free slot for each", (t) => {
+test("Transmute: Convergence goes a tier down; loose items convert in place: 10 or fewer held need no free slot, more need one for each", (t) => {
   const tick = withClock(t);
   const player = cases(TRANSMUTE).relic;
   const inventory = player.getInventory();
@@ -1383,6 +1383,24 @@ test("Transmute: Convergence goes a tier down; loose items convert in place, up 
   castOn(player, "Alchemic Convergence", 0);
   assert.equal(inventory.getAmount(I.UNCUT_DIAMOND), 0);
   assert.equal(inventory.getAmount(I.UNCUT_RUBY), 4);
+  // 237/01102: 10 uncut rubies held with no free slot, each turned in its own slot.
+  inventory.resetItems();
+  for (let count = 0; count < 10; count++) inventory.adds(I.UNCUT_RUBY, 1);
+  inventory.adds(I.COINS, 1);
+  for (let count = 0; count < 17; count++) inventory.adds(I.BRONZE_BAR, 1);
+  assert.equal(inventory.getFreeSlots(), 0);
+  tick(5);
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(inventory.getAmount(I.UNCUT_RUBY), 0, "10 held, none free");
+  assert.equal(inventory.getAmount(I.UNCUT_DIAMOND), 10);
+  assert.equal(inventory.getItems()[0].getId(), I.UNCUT_DIAMOND, "in place");
+  // 237/01102: 16 held with none free, refused.
+  inventory.resetItems();
+  for (let count = 0; count < 16; count++) inventory.adds(I.UNCUT_RUBY, 1);
+  for (let count = 0; count < 12; count++) inventory.adds(I.BRONZE_BAR, 1);
+  tick(5);
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(inventory.getAmount(I.UNCUT_RUBY), 16, "16 held, none free");
   inventory.resetItems();
   for (let count = 0; count < 22; count++) inventory.adds(I.BONES, 1);
   tick(5);

@@ -679,6 +679,23 @@ async function nativeDestroyConfirmation() {
         openScene(0, () => player.getBank(0).add(new core.Item(995, 0), false));
         await dragOntoIncinerator(0, 995);
         assert.equal(player.getPacketSender().isChatboxInterface(584), false, 'a placeholder is not destroyed');
+
+        // Refresh compacts nonzero tabs: a same-ID neighbour is not the deleted stack.
+        const discarded: any[] = [];
+        PluginManager.createApi('bank-incinerate-compaction-test').onCustomEvent('item:discarded', event => {
+            if (event.player === player) discarded.push(event.item.clone());
+        });
+        openScene(1, () => {
+            player.getBank(1).add(new core.Item(11907, 1, { charges: 5 }), false);
+            player.getBank(1).add(new core.Item(11907, 1, { charges: 10 }), false);
+        });
+        await openBankIncinerator(0, 11907); key('1'); await resume(1);
+        assert.deepEqual(player.getBank(1).getValidItems().map((item: any) => item.getMeta()), [{ charges: 10 }]);
+        assert.equal(bankSaves.length, 5, 'compaction cannot suppress the successful removal save');
+        assert.deepEqual(discarded.map(item => item.getMeta()), [{ charges: 5 }], 'the removed stack reaches its owner');
+        const compactedReload = new Player(null);
+        bankSaves[4].save.applyToPlayer(compactedReload);
+        assert.deepEqual(compactedReload.getBank(1).getValidItems().map((item: any) => item.getMeta()), [{ charges: 10 }]);
     } finally {
         state.socket = previousSocket;
         session.flushPackets(); setPacketSocket(null); player.setRegistered(false);

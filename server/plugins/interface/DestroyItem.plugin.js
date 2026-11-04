@@ -109,8 +109,8 @@ function confirmDestroy({ player, action }) {
     if (!item || !item.equals(pending.item)) return;
     const discarded = item.clone();
     bank.deleteAtSlot(pending.slot, pending.amount);
-    const remaining = bank.getItems()[pending.slot];
-    if (remaining?.getId() === pending.itemId && remaining.getAmount() >= pending.amount) return;
+    // Bank refresh may compact a same-ID neighbour into the deleted slot.
+    if (item.getId() === pending.itemId && item.getAmount() >= pending.amount) return;
     pluginApi.emitCustomEvent("item:discarded", { player, item: discarded });
     pluginApi.emitCustomEvent("destroy-item:destroyed", { player, itemId: pending.itemId, amount: pending.amount });
     pluginApi.emitCustomEvent("persistence:save", { player, reason: "bank-incinerate" });

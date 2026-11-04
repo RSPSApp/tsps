@@ -315,7 +315,9 @@ course's `marks` block:
   518/519, and the damage):
   - Varrock clothes line (1723): a jump, a wobble (764, sound 2493), on 3212,3414,0 a tick later.
     Varrock wall (1723): the fourth hold slips (1123), on the ground two ticks later. Their fail
-    chances aren't known (the engine's default, never failing from 50).
+    chances below 46 aren't known: they use the engine's default linear curve, an approximation.
+    The Wiki's Agility course table gives 46 as the level they stop failing; using that endpoint
+    changes the approximate curve below 46 too, and is not a claimed exact OSRS probability.
   - Canifis gap 3 (90): on 3482,3499,0 the next tick; the Wiki's chart (175/300, never from 64);
     damage 1-8 (the upper bound is an older Wiki revision's).
   - Rellekka first tightrope (1885): two tiles, the fall (764, sound 2493), a tick later straight

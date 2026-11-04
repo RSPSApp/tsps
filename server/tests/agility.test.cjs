@@ -654,6 +654,41 @@ test("an obstacle above the player's level is refused without moving them", () =
   assert.equal(player.state.xp, 0);
 });
 
+test("Varrock's fallable obstacles stop failing at 46, the Wiki's no-fail level", () => {
+  const obstacles = [
+    { index: 2, object: ObjectIds.CLOTHES_LINE, start: [3214, 3414, 3], tile: [3213, 3414, 3], xp: 23 },
+    { index: 4, object: ObjectIds.WALL_14, start: [3194, 3416, 1], tile: [3191, 3415, 1], xp: 28 },
+  ];
+  const random = Math.random;
+  Math.random = () => 0.999;
+  try {
+    for (const { index, object, start, tile, xp } of obstacles) {
+      const failing = createPlayer(...start, 45);
+      operate(failing, object, tile);
+      assert.equal(failing.state.xp, 0, `obstacle ${index} still fails at 45`);
+      assert.equal(failing.state.hits, 1, `obstacle ${index} takes fall damage at 45`);
+
+      const boundary = createPlayer(...start, 46);
+      operate(boundary, object, tile);
+      assert.equal(boundary.state.xp, xp, `obstacle ${index} succeeds at 46`);
+      assert.equal(boundary.state.hits, 0, `obstacle ${index} takes no fall damage at 46`);
+
+      const high = createPlayer(...start, 99);
+      operate(high, object, tile);
+      assert.equal(high.state.xp, xp, `obstacle ${index} succeeds at 99`);
+      assert.equal(high.state.hits, 0, `obstacle ${index} takes no fall damage at 99`);
+
+      const below = createPlayer(...start, 29);
+      operate(below, object, tile);
+      assert.deepEqual(below.state.messages, ["You need an Agility level of at least 30 to attempt this."], `obstacle ${index} refuses below 30`);
+      assert.equal(below.state.xp, 0);
+      assert.equal(below.getAttribute("agility.obstacle") ?? null, null);
+    }
+  } finally {
+    Math.random = random;
+  }
+});
+
 test("a low-level Prifddinas runner can fall from a tightrope and take damage", () => {
   const rope = COURSES.find((entry) => entry.key === "prifddinas").obstacles.find((entry) => entry.index === 2);
   const random = Math.random;

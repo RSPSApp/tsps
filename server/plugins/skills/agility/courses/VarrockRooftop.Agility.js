@@ -140,11 +140,13 @@ module.exports = {
         { sound: JUMP_SOUND },
         { move: [3208, 3414], anim: Anim.JUMP, speed: [15, 30], dir: "west", ticks: 2 },
       ],
-      // Wiki: can fail, 3-8 damage. Captured once (1723): the first jump, a wobble (764, sound
-      // 2493) the tick after and the fall onto the street below the next tick, no message. The
-      // chance isn't known (the Wiki gives none): the engine's default, a guess.
+      // Wiki: can fail, 3-8 damage, no fail from 46 (Agility). Captured once (1723): the first
+      // jump, a wobble (764, sound 2493) the tick after and the fall onto the street below the
+      // next tick, no message. The chance below 46 isn't known: the engine's default linear
+      // curve is an approximation whose endpoint this is.
       fail: {
         xp: 0,
+        neverFailLevel: 46,
         steps: [
           { wait: 1 },
           { sound: JUMP_SOUND },
@@ -171,8 +173,9 @@ module.exports = {
       xp: 28,
       route: [3194, 3416, 1],
       steps: shimmyAlongWall,
-      // Wiki: can fail, 2-5 damage. The chance isn't known: the engine's default, a guess.
-      fail: { xp: 0, steps: fallOffWall },
+      // Wiki: can fail, 2-5 damage, no fail from 46 (Agility). The chance below 46 isn't known:
+      // the engine's default linear curve is an approximation whose endpoint this is.
+      fail: { xp: 0, neverFailLevel: 46, steps: fallOffWall },
     },
     {
       object: ObjectIds.GAP_6,

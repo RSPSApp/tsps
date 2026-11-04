@@ -619,9 +619,14 @@ export class LunarSpells {
             log.setId(plank[0]);
             inventory.refreshItems();
             player.getSkillManager().addExperiences(Skill.MAGIC, spell.baseExperience());
+            PluginManager.emitCustomEvent("magic:plank-make", { player, logId, plankId: plank[0] });
             return inventory.contains(logId);
         };
-        if (make()) this.repeat(player, PLANK_TICKS, make, undefined, PLANK_FIRST_REPEAT_TICKS);
+        if (make()) {
+            this.repeat(player, PLANK_TICKS, make,
+                () => PluginManager.emitCustomEvent("magic:plank-make-end", { player }),
+                PLANK_FIRST_REPEAT_TICKS);
+        }
         return true;
     }
 

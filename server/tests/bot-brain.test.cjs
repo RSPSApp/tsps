@@ -2511,3 +2511,204 @@ test('the shared PvP world population has more one-defence pures without protect
   assert.ok(noProtectionPures >= 250 && noProtectionPures <= 400, `${noProtectionPures}/1000 no-protection pures`);
   assert.ok(types.size > 25, 'the rest of the catalogue remains represented');
 });
+
+test('a roam target that cannot be reached is abandoned instead of walked at forever', () => {
+  const { createWanderAction } = require('../plugins/bots/brain/actions/Wander.PlayerBots');
+  const player = fakePlayer('roamer', 3100, 3600);
+  const state = {
+    mode: 'roaming',
+    home: { x: 3100, y: 3600, z: 0 },
+    roaming: { target: { x: 3200, y: 3700, z: 0 }, targetPickedAt: 1000, nextWalkAt: 0, endpointPauseUntil: 0 },
+  };
+  const wander = createWanderAction({ walkRadius: 4 }, {
+    regionManager: { blocked: () => false, isWater: () => false },
+    ditch: null,
+  });
+  assert.equal(wander.update({ player, state, nowMs: 1000 + 29999 }), 'running');
+  assert.deepEqual(state.roaming.target, { x: 3200, y: 3700, z: 0 }, 'still trying before the timeout');
+  assert.equal(wander.update({ player, state, nowMs: 1000 + 30001 }), 'running');
+  assert.notDeepEqual(state.roaming.target, { x: 3200, y: 3700, z: 0 }, 'a new target is picked');
+  assert.equal(state.roaming.targetPickedAt, 31001);
+});
+
+test('a wilderness bot pacing one 8x8 square is flagged as stuck, a fight or its hotspot is not', () => {
+  const { __testing: behaviorTesting } = require('../plugins/bots/behaviours/task/BehaviorTask.PlayerBots');
+  const { trackStuckArea, STUCK_AREA_MS } = behaviorTesting;
+  let x = 3100;
+  let y = 3600;
+  const player = {
+    ...fakePlayer('pacer', x, y),
+    getLocation: () => ({ getX: () => x, getY: () => y, getZ: () => 0 }),
+    getCombat: () => ({ getTarget: () => null, getAttacker: () => null }),
+    getCombatFollowing: () => null,
+  };
+  const state = {
+    autonomy: { allowedAutonomousModes: ['pvp'] },
+    pvp: { hotspotId: null },
+    roaming: { roamBounds: { minX: 3072, maxX: 3135, minY: 3584, maxY: 3647, z: 0 } },
+  };
+  const entry = { player, state };
+  assert.equal(trackStuckArea(entry, 1000), null);
+  assert.equal(trackStuckArea(entry, 1000 + STUCK_AREA_MS - 1), null);
+  const stuck = trackStuckArea(entry, 1000 + STUCK_AREA_MS + 1);
+  assert.ok(stuck && stuck.elapsedMs >= STUCK_AREA_MS, 'the same square for five minutes is stuck');
+
+  x = 3108;
+  assert.equal(trackStuckArea(entry, 1000 + STUCK_AREA_MS + 2), null, 'leaving the square resets the clock');
+
+  x = 3090;
+  y = 3531;
+  state.pvp.hotspotId = 'edge_mid';
+  assert.equal(trackStuckArea({ player, state }, 2000), null);
+  assert.equal(trackStuckArea({ player, state }, 2000 + STUCK_AREA_MS + 1), null,
+    'lingering inside its own hotspot is not an unreachable roam target');
+
+  const fighting = {
+    ...player,
+    getCombat: () => ({ getTarget: () => ({ getId: () => 1 }), getAttacker: () => null }),
+  };
+  state.pvp.hotspotId = null;
+  assert.equal(trackStuckArea({ player: fighting, state }, 3000), null);
+  assert.equal(trackStuckArea({ player: fighting, state }, 3000 + STUCK_AREA_MS + 1), null,
+    'a live fight is real progress');
+});
+
+test('a PvP bot wearing armour but no weapon needs a loadout restore', () => {
+  const { Equipment } = require('../dist/game/model/container/impl/Equipment');
+  const { needsLoadoutRestore } = require('../plugins/bots/behaviours/policies/PvpLoadoutPolicy.PlayerBots');
+  const empty = Array.from({ length: 14 }, () => ({ getId: () => 0 }));
+  const armourOnly = empty.slice();
+  armourOnly[Equipment.BODY_SLOT] = { getId: () => 1129 };
+  const armed = armourOnly.slice();
+  armed[Equipment.WEAPON_SLOT] = { getId: () => 4151 };
+  const bot = (items) => ({ getEquipment: () => ({ getItems: () => items }) });
+  assert.equal(needsLoadoutRestore(bot(empty)), true, 'nothing worn');
+  assert.equal(needsLoadoutRestore(bot(armourOnly)), true, 'armour but no weapon');
+  assert.equal(needsLoadoutRestore(bot(armed)), false, 'a complete kit is left alone');
+});
+
+test('a PvP bot that lost its brain is recovered and moved onto a walkable Wilderness tile', (t) => {
+  const { Wilderness } = require('../dist/game/content/wilderness/Wilderness');
+  t.mock.method(Wilderness, 'isInLocation', () => true);
+  const { BotBehaviorTask } = require('../plugins/bots/behaviours/task/BehaviorTask.PlayerBots');
+  let movedTo = null;
+  const player = {
+    ...fakePlayer('lost', 3100, 3600),
+    isDyingReturn: () => false,
+    getHitpoints: () => 99,
+    getCombat: () => ({ getTarget: () => null, getAttacker: () => null, reset() {}, setUnderAttack() {} }),
+    getCombatFollowing: () => null,
+    setFollowing() {},
+    setCombatFollowing() {},
+    setMobileInteraction() {},
+    setPositionToFace() {},
+    getMovementQueue: () => ({ size: () => 0, reset() {}, walkToReset() {} }),
+    moveTo: (location) => { movedTo = location; },
+    getEquipment: () => ({ getItems: () => [] }),
+  };
+  const state = {
+    mode: 'pvp',
+    home: { x: 3100, y: 3600, z: 0 },
+    pvp: { phase: 'seeking', hotspotId: null },
+    roaming: {
+      target: null,
+      nextWalkAt: 0,
+      roamBounds: { minX: 3072, maxX: 3135, minY: 3584, maxY: 3647, z: 0 },
+    },
+    autonomy: { allowedAutonomousModes: ['pvp'] },
+  };
+  const entry = { player, state, brain: null };
+  const logs = [];
+  const task = new BotBehaviorTask([entry], 1, {
+    idleEntryStride: 1,
+    api: {
+      getWorld: () => ({}),
+      getRegionManager: () => ({ blocked: () => false, isWater: () => false }),
+      getCombatFactory: () => ({}),
+      getAreaManager: () => ({}),
+      getServerPerf: () => ({ measurePhase: (_, fn) => fn() }),
+      log: (message, extra) => logs.push([message, extra]),
+    },
+  });
+  task.processEntry(entry, 0, 1000);
+  assert.equal(movedTo, null, 'a missing brain gets a grace period first');
+  task.processEntry(entry, 0, 16001);
+  assert.ok(movedTo, 'the bot is moved back onto the map');
+  assert.ok(logs.some(([message]) => message === 'bot_stuck_recovered'), 'the recovery is logged');
+  assert.equal(state.pvp.phase, 'seeking', 'its PvP frame starts over');
+});
+
+
+test('a minigame PvP bot without wilderness roam bounds is left to its own controller', () => {
+  const { __testing: behaviorTesting, BotBehaviorTask } = require('../plugins/bots/behaviours/task/BehaviorTask.PlayerBots');
+  const { isManagedWildernessBot, trackStuckArea, STUCK_AREA_MS } = behaviorTesting;
+  const waiting = {
+    autonomy: { allowedAutonomousModes: ['pvp'] },
+    pvp: { hotspotId: null },
+    roaming: { target: null, nextWalkAt: 0 },
+  };
+  assert.equal(isManagedWildernessBot(waiting), false, 'LMS/BH bots carry no assigned roam bounds');
+  let movedTo = null;
+  const player = {
+    ...fakePlayer('LmsBot1', 3100, 3600),
+    isDyingReturn: () => false,
+    getHitpoints: () => 99,
+    getCombat: () => ({ getTarget: () => null, getAttacker: () => null, reset() {}, setUnderAttack() {} }),
+    getCombatFollowing: () => null,
+    setFollowing() {},
+    setCombatFollowing() {},
+    setMobileInteraction() {},
+    setPositionToFace() {},
+    getMovementQueue: () => ({ size: () => 0, reset() {}, walkToReset() {} }),
+    moveTo: (location) => { movedTo = location; },
+    getEquipment: () => ({ getItems: () => [] }),
+  };
+  const entry = { player, state: waiting, brain: null };
+  assert.equal(trackStuckArea(entry, 1000), null);
+  assert.equal(trackStuckArea(entry, 1000 + STUCK_AREA_MS + 1), null,
+    'the waiting area is not a stuck wilderness square');
+
+  const logs = [];
+  const task = new BotBehaviorTask([entry], 1, {
+    idleEntryStride: 1,
+    api: {
+      getWorld: () => ({}),
+      getRegionManager: () => ({ blocked: () => false, isWater: () => false }),
+      getCombatFactory: () => ({}),
+      getAreaManager: () => ({}),
+      getServerPerf: () => ({ measurePhase: (_, fn) => fn() }),
+      log: (message, extra) => logs.push([message, extra]),
+    },
+  });
+  task.processEntry(entry, 0, 1000);
+  task.processEntry(entry, 0, 16001);
+  assert.equal(movedTo, null, 'its waiting-area position is left alone');
+  assert.equal(waiting.pvp.loadoutPending, undefined, 'its stashed kit is not regenerated');
+  assert.equal(logs.some(([message]) => message === 'bot_stuck_recovered' || message === 'bot_pvp_loadout_restored'), false);
+});
+
+// Minigames intentionally use PvP entries without a roaming assignment, brain or kit.
+test('recovery watchdogs leave independently managed PvP waiters untouched', () => {
+  const { BotBehaviorTask } = require('../plugins/bots/behaviours/task/BehaviorTask.PlayerBots');
+  let gearChecks = 0, moves = 0;
+  const player = {
+    ...fakePlayer('waiting', 3141, 3641),
+    getHitpoints: () => 99, isDyingReturn: () => false,
+    getCombat: () => ({ getTarget: () => null, getAttacker: () => null }),
+    getEquipment: () => { gearChecks++; return { getItems: () => [] }; },
+    moveTo: () => { moves++; },
+  };
+  const state = { mode: 'pvp', pvp: {}, roaming: {}, autonomy: { allowedAutonomousModes: ['pvp'] } };
+  const entry = { player, state, brain: null };
+  const task = new BotBehaviorTask([entry], 1, { api: {
+    getWorld: () => ({}),
+    getRegionManager: () => ({ blocked: () => false, isWater: () => false }),
+    getCombatFactory: () => ({}), getAreaManager: () => ({}),
+    getServerPerf: () => ({ measurePhase: (_, fn) => fn() }),
+  } });
+  task.processEntry(entry, 0, 1000);
+  task.processEntry(entry, 0, 17000);
+  assert.equal(gearChecks, 0, 'an intentional empty kit must not be inspected or replaced');
+  assert.equal(moves, 0);
+  assert.equal(entry.brain, null);
+});

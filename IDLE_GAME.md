@@ -68,6 +68,8 @@ Sem isso, cada jogador liga o modo com `::idle on`.
 
 ![A tela de viagem](docs/images/idle-travel.png)
 
+O que falta para o jogo ficar jogável está em [`IDLE_ROADMAP.md`](IDLE_ROADMAP.md).
+
 Todos os números (velocidades, limites, preços) ficam em
 `server/plugins/modes/data/idle-mode.json`.
 

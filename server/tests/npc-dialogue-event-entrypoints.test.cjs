@@ -1112,3 +1112,32 @@ test('Fairytale II native Rune temple sign opens its document only after studyin
   await read(); assert.equal(doc.mounted(), 425);
   assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.NUFFS_CERTIFICATE), 1);
 });
+
+test('Fairytale I Tanglefoot lair gate and Nature Spirit treat wielded magic secateurs as owned', t => {
+  const { player } = fixture(t), { MAGIC_SECATEURS, SECATEURS } = core.ItemIdentifiers;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
+  quest.setStage(player, 60);
+  const gap = { x: 2397, y: 4379, z: 0 };
+  const enter = () => {
+    player.closeInterruptibleInterfaces();
+    player.setLocation(new core.Location(gap.x + 1, gap.y, 0));
+    // emitObjectInteraction ignores events without an `object`; a stub with a definition skips the cache lookup.
+    const objectId = core.ObjectIdentifiers.A_GAP_THROUGH_THE_WALL, definition = { getName: () => 'A gap through the wall', getInteractions: () => [] };
+    const handled = PM.emitObjectInteraction({ player, object: { getId: () => objectId, getDefinition: () => definition },
+      objectId, definition, location: gap, clickType: 1, handled: false });
+    assert.equal(handled, true, 'the quest claims the gap click');
+    return player.getDialogueManager().getCurrent()?.getText();
+  };
+  assert.match(enter(), /^I'm afraid nobody is allowed in there/, 'without the secateurs the gatekeeper refuses');
+  player.getInventory().add(new core.Item(MAGIC_SECATEURS));
+  assert.match(enter(), /^I've received orders to let you through/, 'carried secateurs let the player in');
+  player.getInventory().deleteNumber(MAGIC_SECATEURS, 1);
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(MAGIC_SECATEURS));
+  assert.match(enter(), /^I've received orders to let you through/, 'wielded secateurs let the player in');
+  const enchant = () => PM.emitCustomEvent('npc-dialogue:action', { player, npcId: core.NpcIdentifiers.NATURE_SPIRIT, stepId: 'JQyqMZ', handled: false });
+  enchant();
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0, 'a wielded pair is not duplicated by the Nature Spirit');
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, null);
+  enchant();
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 1, 'a lost pair is still replaced');
+});

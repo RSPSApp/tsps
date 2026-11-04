@@ -253,6 +253,11 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
 
+  /** The magic secateurs are a weapon: a pair in the weapon slot is still the player's pair. */
+  const hasMagicSecateurs = (player) =>
+    held(player, MAGIC_SECATEURS_ITEM_ID) ||
+    player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId?.() === MAGIC_SECATEURS_ITEM_ID;
+
   function advance(player, value) {
     if (quest.getStage(player) < value && !quest.isComplete(player)) quest.setStage(player, value);
   }
@@ -415,7 +420,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     if (
       stage >= STAGE_HAS_MAGIC_SECATEURS &&
       stage < STAGE_COMPLETE &&
-      !held(player, MAGIC_SECATEURS_ITEM_ID)
+      !hasMagicSecateurs(player)
     ) {
       return "in-the-nature-grotto-talking-to-the-nature-spirit-after-losing-the-secateurs";
     }
@@ -566,7 +571,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
       player.getInventory().deleteNumber(SECATEURS_ITEM_ID, 1);
       for (const id of ids) player.getInventory().deleteNumber(id, 1);
     }
-    if (!held(player, MAGIC_SECATEURS_ITEM_ID)) {
+    if (!hasMagicSecateurs(player)) {
       player.getInventory().adds(MAGIC_SECATEURS_ITEM_ID, 1);
     }
     advance(player, STAGE_HAS_MAGIC_SECATEURS);
@@ -654,7 +659,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
       return;
     }
     const stage = quest.getStage(player);
-    if (stage < STAGE_HAS_MAGIC_SECATEURS || !held(player, MAGIC_SECATEURS_ITEM_ID)) {
+    if (stage < STAGE_HAS_MAGIC_SECATEURS || !hasMagicSecateurs(player)) {
       if (stage < STAGE_STARTED) {
         player.sendMessage("I'm afraid nobody is allowed in there.");
         return;

@@ -444,6 +444,28 @@ test('a defender lights its own barricade once and keeps a burning blockade when
   assert.deepEqual(tools, [core.ItemIdentifiers.TINDERBOX, core.ItemIdentifiers.BUCKET_OF_WATER], 'quiet own barricade is doused once');
 });
 
+test('one defender can light, douse and relight the same barricade', (t) => {
+  const p = player(t), target = player(t, 2427);
+  let burning = false;
+  const own = barricade(2427, 3082);
+  own.castleWarsTeam = 'a';
+  own.getNpcTransformationId = () => burning ? 1 : -1;
+  t.mock.method(core.World, 'getNpcs', () => [own]);
+  t.mock.method(core.PathFinder, 'reachedEntity', () => true);
+  const tools = [];
+  t.mock.method(core.PluginManager, 'emitItemOnNpc', ({ itemId }) => {
+    tools.push(itemId);
+    burning = itemId === core.ItemIdentifiers.TINDERBOX;
+    return true;
+  });
+  const state = {};
+  Practice._test.defenderTools({ player: p, nowMs: 0 }, state, target);
+  Practice._test.defenderTools({ player: p, nowMs: 2000 }, state, target);
+  Practice._test.defenderTools({ player: p, nowMs: 4000 }, state, null);
+  Practice._test.defenderTools({ player: p, nowMs: 6000 }, state, target);
+  assert.deepEqual(tools, [core.ItemIdentifiers.TINDERBOX, core.ItemIdentifiers.BUCKET_OF_WATER, core.ItemIdentifiers.TINDERBOX]);
+});
+
 test('scorer defence places behind a pursuer, lights next tick and only throttles new placements', (t) => {
   const p = player(t), behind = player(t, 2424), ahead = player(t, 2428);
   t.mock.method(p.getMovementQueue(), 'canWalkTo', () => true);

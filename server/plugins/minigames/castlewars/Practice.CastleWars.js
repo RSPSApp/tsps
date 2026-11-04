@@ -230,7 +230,7 @@ function defenderTools(ctx, state, target) {
   const I = core.ItemIdentifiers;
   if (state.defenderBarricade && !Array.from(core.World.getNpcs()).includes(state.defenderBarricade)) state.defenderBarricade = null;
   const npc = nearestBarricade(player, 1);
-  if (npc && ctx.nowMs >= (state.nextToolAt ?? 0) && state.defenderBarricade !== npc) {
+  if (npc && ctx.nowMs >= (state.nextToolAt ?? 0)) {
     const teamId = game.getTeamId?.(player);
     const own = teamId != null && npc.castleWarsTeam === teamId;
     const burning = npc.getNpcTransformationId() !== -1;
@@ -241,11 +241,12 @@ function defenderTools(ctx, state, target) {
     const item = burning
       ? own && !intruderClose && !overlapping ? I.BUCKET_OF_WATER : null
       : intruderClose ? I.TINDERBOX : null;
-    if (item) {
+    if (item && (state.defenderBarricade !== npc || state.defenderBarricadeItem !== item)) {
       const used = useOnBarricade(player, npc, item, { allowOverlap: item === I.TINDERBOX });
       state.nextToolAt = ctx.nowMs + 1800;
       if (used) {
         state.defenderBarricade = npc;
+        state.defenderBarricadeItem = item;
         return "running";
       }
     }

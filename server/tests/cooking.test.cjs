@@ -583,4 +583,198 @@ test('Brutus t-bone steaks cook on native ranges and fires with the correct leve
     tick(0.99); assert.equal(noted.p.getInventory().getAmount(note), 1);
     assert.equal(Cooking.isCookingActive(noted.p), false);
   });
+  // A short route can be consumed in the player's turn, before the next global
+  // cook pass. Keep the existing runner active and use the real epoch/reset
+  // boundaries; an animation update alone is not evidence that cooking started.
+  core.RegionManager.loadMapFiles(3222, 3218);
+  const busyId = core.CacheDefinitions.getVarbitId('busy');
+  assert.ok(Number.isInteger(busyId), 'the native cache defines the cooking busy varbit');
+  function cookingTurn(p, input = () => {}) {
+    p.resetUpdating(); // the prior turn's post-sync boundary, deferred for observation
+    core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+    const cycle = cookTask.cycle;
+    core.TaskManager.process();
+    assert.equal(cookTask.cycle, cycle + 1, 'one shared cook-runner step per global pass');
+    input();
+    const movement = p.getMovementQueue();
+    movement.beginCycle();
+    movement.processEntityPursuit();
+    if (movement.hasPendingWork()) movement.process();
+    core.TaskManager.processWalkTo(p.getIndex());
+  }
+
+  for (const walk of [false, true]) {
+    await t.test(walk
+      ? 'a one-step walk after the first native cook cancels the pending second item'
+      : 'without movement the second native cook debits one more raw item and grants its output and XP', t => {
+      const f = actor(t, 50, range, raw, 2), { p } = f;
+      const inventory = p.getInventory(), movement = p.getMovementQueue();
+      const sender = p.getPacketSender();
+      const busy = [], messages = [], restore = [];
+      function watch(target, name, capture) {
+        const own = Object.getOwnPropertyDescriptor(target, name);
+        const original = target[name];
+        assert.equal(typeof original, 'function', 'native observer method exists: ' + name);
+        target[name] = function (...args) {
+          capture(args);
+          return Reflect.apply(original, this, args);
+        };
+        restore.push(() => own
+          ? Object.defineProperty(target, name, own)
+          : delete target[name]);
+      }
+      t.after(() => { for (const reset of restore.reverse()) reset(); });
+      watch(sender, 'sendVarbit', ([id, value]) => {
+        if (id === busyId) {
+          busy.push(value);
+          if (busy.length > 8) busy.shift();
+        }
+      });
+      const recordMessage = text => {
+        if (messages.length < 8) messages.push(String(text).slice(0, 140));
+      };
+      watch(p, 'sendMessage', ([text]) => recordMessage(text));
+      watch(sender, 'sendTypedMessage', ([, text]) => recordMessage(text));
+      const position = () => [p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()];
+      const yieldState = () => ({
+        raw: inventory.getAmount(raw), cooked: inventory.getAmount(cooked),
+        burnt: inventory.getAmount(burnt), xp: xpGained(f),
+      });
+      const state = () => ({
+        ...yieldState(), position: position(), queued: movement.size(),
+        moving: movement.isMovings(), active: Cooking.isCookingActive(p),
+        animation: p.getAnimation()?.getId(), busy: busy.at(-1),
+        cookCycle: cookTask.cycle, busyCalls: busy, messages,
+      });
+      const diagnostic = label => label + ': ' + JSON.stringify(state());
+
+      assert.equal(use(p, range), true, 'registered cooker handles the real raw steak');
+      const menu = p.getCreationMenu();
+      assert.ok(menu, 'two raw items open the native quantity menu');
+      assert.deepEqual(menu.getItems(), [raw]);
+      menu.execute(raw, 2);
+      assert.equal(Cooking.isCookingActive(p), true, 'real menu selection admits a cook session');
+      assert.equal(busy.at(-1), 1, 'the actual cook start sends busy=1');
+      assert.deepEqual(yieldState(), { raw: 2, cooked: 0, burnt: 0, xp: 0 });
+      cookingTurn(p);
+      assert.deepEqual(yieldState(), { raw: 2, cooked: 0, burnt: 0, xp: 0 },
+        diagnostic('SETUP: the first item is not cooked on the first pass'));
+      cookingTurn(p);
+      const first = { raw: 1, cooked: 1, burnt: 0, xp: successXp };
+      assert.deepEqual(yieldState(), first, diagnostic('SETUP: first actual cook and debit'));
+      assert.equal(busy.at(-1), 0, diagnostic('SETUP: first cook released busy'));
+      assert.equal(Cooking.isCookingActive(p), true);
+      assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.COOKING), 50,
+        'no level-up or temporary boost changes the ordinary level-50 control');
+      assert.equal(p.getDialogueManager().isActive(), false, 'no level-up dialogue pauses this session');
+
+      cookingTurn(p, () => {
+        if (walk) movement.requestWalk(new core.Location(3220, 3218, 0), false);
+      });
+      assert.deepEqual(yieldState(), first, diagnostic('SETUP: no second cook before the walk'));
+      if (walk) {
+        assert.deepEqual(position(), [3220, 3218, 0],
+          diagnostic('SETUP: native requestWalk must actually move one tile'));
+        assert.equal(movement.size(), 0, diagnostic('SETUP: the one-step route drained'));
+        assert.equal(movement.isMovings(), true,
+          diagnostic('SETUP: processed movement survives until the next global pass'));
+        assert.equal(range.isWithinInteractionDistance(p.getLocation()), true,
+          diagnostic('SETUP: this is movement cancellation, not an out-of-range stop'));
+      } else {
+        assert.deepEqual(position(), [3221, 3218, 0]);
+        assert.equal(movement.isMovings(), false);
+      }
+      // The second item is due three passes after the first, not two.
+      cookingTurn(p);
+      assert.deepEqual(yieldState(), first, diagnostic('SETUP: ordinary second-cook cadence'));
+      for (let n = 0; n < 3; n++) cookingTurn(p);
+      assert.deepEqual(yieldState(), walk
+        ? first
+        : { raw: 0, cooked: 2, burnt: 0, xp: successXp * 2 },
+      diagnostic(walk
+        ? 'no further debit, output or XP after the accepted one-step walk'
+        : 'the no-move control completes the second actual cook'));
+    });
+  }
+  await t.test('outside-range item use settles before native autocook and quantity-menu cooking', t => {
+    const { UseItemPacketListener } = require('../dist/net/packet/impl/UseItemPacketListener');
+    const { Inventory } = require('../dist/game/model/container/impl/Inventory');
+    for (const amount of [1, 2]) {
+      const f = actor(t, 50, range, raw, amount), { p } = f;
+      p.setLocation(new core.Location(3218, 3218, 0));
+      const movement = p.getMovementQueue(), sender = p.getPacketSender();
+      const messages = [], trace = [], restore = [];
+      let lastBusy;
+      function watch(target, name, capture) {
+        const own = Object.getOwnPropertyDescriptor(target, name), original = target[name];
+        assert.equal(typeof original, 'function');
+        target[name] = function (...args) {
+          capture(args);
+          return Reflect.apply(original, this, args);
+        };
+        restore.push(() => own ? Object.defineProperty(target, name, own) : delete target[name]);
+      }
+      t.after(() => { for (const reset of restore.reverse()) reset(); });
+      watch(sender, 'sendVarbit', ([id, value]) => { if (id === busyId) lastBusy = value; });
+      const message = text => { if (messages.length < 8) messages.push(String(text).slice(0, 140)); };
+      watch(p, 'sendMessage', ([text]) => message(text));
+      watch(sender, 'sendTypedMessage', ([, text]) => message(text));
+      const position = () => [p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()];
+      const yieldState = () => ({
+        raw: p.getInventory().getAmount(raw), cooked: p.getInventory().getAmount(cooked),
+        burnt: p.getInventory().getAmount(burnt), xp: xpGained(f),
+      });
+      const state = () => ({
+        amount, position: position(), queued: movement.size(), moving: movement.isMovings(),
+        didMove: movement.didMoveThisCycle(), active: Cooking.isCookingActive(p),
+        menu: !!p.getCreationMenu(), ...yieldState(), busy: lastBusy, trace, messages,
+      });
+      const diagnostic = label => label + ': ' + JSON.stringify(state());
+      assert.deepEqual(position(), [3218, 3218, 0]);
+      assert.equal(range.isWithinInteractionDistance(p.getLocation()), false,
+        'SETUP: this actor really starts outside the cooker footprint range');
+      let ready = false;
+      for (let turn = 1; turn <= 8 && !ready; turn++) {
+        cookingTurn(p, () => {
+          if (turn === 1) UseItemPacketListener.itemOnObject(p, Inventory.INTERFACE_ID,
+            rangeId, raw, 0, range.getLocation().getX(), range.getLocation().getY());
+        });
+        trace.push({ turn, position: position(), queued: movement.size(), moving: movement.isMovings(),
+          didMove: movement.didMoveThisCycle(), active: Cooking.isCookingActive(p), menu: !!p.getCreationMenu() });
+        ready = amount === 1 ? Cooking.isCookingActive(p) : !!p.getCreationMenu();
+      }
+      assert.equal(ready, true, diagnostic('SETUP: the real route must reach autocook or its quantity menu'));
+      assert.notDeepEqual(position(), [3218, 3218, 0], diagnostic('SETUP: approach actually moved'));
+      assert.equal(range.isWithinInteractionDistance(p.getLocation()), true);
+      assert.equal(movement.size(), 0, diagnostic('SETUP: approach route is drained'));
+      assert.equal(movement.isMovings(), false, diagnostic('SETUP: native item-use admission is settled'));
+      assert.equal(movement.didMoveThisCycle(), false, diagnostic('SETUP: this is not the arrival movement turn'));
+      assert.deepEqual(yieldState(), { raw: amount, cooked: 0, burnt: 0, xp: 0 },
+        diagnostic('SETUP: reaching the cooker has not already cooked an item'));
+      if (amount === 2) {
+        assert.equal(Cooking.isCookingActive(p), false, 'the menu is not an admitted cook session');
+        const menu = p.getCreationMenu();
+        assert.deepEqual(menu.getItems(), [raw]);
+        cookingTurn(p, () => menu.execute(raw, 2)); // a real selection in the next input phase
+      }
+      assert.equal(Cooking.isCookingActive(p), true, diagnostic('native autocook/menu starts its session'));
+      assert.equal(lastBusy, 1, diagnostic('the admitted session sent busy=1'));
+      cookingTurn(p);
+      assert.deepEqual(yieldState(), { raw: amount, cooked: 0, burnt: 0, xp: 0 },
+        diagnostic('the first cook still waits two global passes from admission'));
+      cookingTurn(p);
+      const first = { raw: amount - 1, cooked: 1, burnt: 0, xp: successXp };
+      assert.deepEqual(yieldState(), first, diagnostic('first legitimate approach cook completes'));
+      assert.equal(lastBusy, 0);
+      assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.COOKING), 50);
+      assert.equal(p.getDialogueManager().isActive(), false);
+      cookingTurn(p);
+      assert.deepEqual(yieldState(), first);
+      cookingTurn(p);
+      assert.deepEqual(yieldState(), first, 'the second item is not cooked before its ordinary interval');
+      cookingTurn(p);
+      assert.deepEqual(yieldState(), { raw: 0, cooked: amount, burnt: 0, xp: successXp * amount },
+        diagnostic('autocook and menu both complete normally after their real approach'));
+    }
+  });
 });

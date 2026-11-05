@@ -6,7 +6,6 @@
  * The Maple shortbow (Seers' Village bank) credit is data-driven through
  * plugins/skills/data/fletching.json, as the other fletching diary tasks are.
  */
-const { ItemIds: Items } = require("../../../src/main/typescript/elvarg/util/IdEnums");
 
 const DIARY = "kandarin";
 
@@ -23,7 +22,6 @@ const CATHERBY_HERB_PATCH = { minX: 2813, maxX: 2813, minY: 3463, maxY: 3463, z:
 const WORKSHOP = { minX: 2680, maxX: 2745, minY: 9860, maxY: 9920, z: 0 };
 
 const SHERLOCK = "Sherlock";
-const CATHERBY_TELEPORT = { x: 2802, y: 3449, radius: 2, z: 0 };
 const ELEMENTALS = new Map([
   ["Earth elemental", 1], ["Water elemental", 2], ["Air elemental", 4], ["Fire elemental", 8],
 ]);
@@ -48,9 +46,9 @@ function credit(player, task) {
 function fishingSuccess({ player, itemId }) {
   if (player.getPrivateArea?.() != null) return;
   const at = player.getLocation();
-  if (itemId === Items.RAW_MACKEREL && inBox(at, CATHERBY_FISHING)) {
+  if (itemId === api.core.ItemIds.RAW_MACKEREL && inBox(at, CATHERBY_FISHING)) {
     credit(player, "catch-a-mackerel-at-catherby");
-  } else if (itemId === Items.LEAPING_STURGEON && inBox(at, OTTO_GROTTO)) {
+  } else if (itemId === api.core.ItemIds.LEAPING_STURGEON && inBox(at, OTTO_GROTTO)) {
     credit(player, "catch-a-leaping-sturgeon");
   }
 }
@@ -70,22 +68,22 @@ function farmingHarvested({ player, crop, patch }) {
 }
 
 function miningSuccess({ player, itemId }) {
-  if (itemId !== Items.COAL || player.getPrivateArea?.() != null || !inBox(player.getLocation(), COAL_TRUCKS)) return;
+  if (itemId !== api.core.ItemIds.COAL || player.getPrivateArea?.() != null || !inBox(player.getLocation(), COAL_TRUCKS)) return;
   credit(player, "mine-some-coal-near-the-coal-trucks");
 }
 
 function smithingSuccess({ player, itemId }) {
   if (player.getPrivateArea?.() != null || !inBox(player.getLocation(), OTTO_GROTTO)) return;
-  if (itemId === Items.ADAMANT_SPEAR) credit(player, "smith-an-adamant-spear-at-otto-s-grotto");
-  else if (itemId === Items.RUNE_HASTA) credit(player, "smith-a-rune-hasta-at-otto-s-grotto");
+  if (itemId === api.core.ItemIds.ADAMANT_SPEAR) credit(player, "smith-an-adamant-spear-at-otto-s-grotto");
+  else if (itemId === api.core.ItemIds.RUNE_HASTA) credit(player, "smith-a-rune-hasta-at-otto-s-grotto");
 }
 
 function craftingMade({ player, itemId }) {
-  if (itemId === Items.WATER_ORB) credit(player, "charge-a-water-orb");
+  if (itemId === api.core.ItemIds.WATER_ORB) credit(player, "charge-a-water-orb");
 }
 
 function picked({ player, itemId, plant }) {
-  if (itemId !== Items.FLAX || plant !== "Flax" || player.getPrivateArea?.() != null
+  if (itemId !== api.core.ItemIds.FLAX || plant !== "Flax" || player.getPrivateArea?.() != null
     || !inBox(player.getLocation(), SEERS_FLAX_FIELD)) return;
   const picked = Math.min(5, (Number(player.getAttribute(FLAX_ATTRIBUTE)) | 0) + 1);
   player.setAttribute(FLAX_ATTRIBUTE, picked);
@@ -106,17 +104,9 @@ function fairyRingTravelled({ player, code }) {
 
 function teleportArrival({ player, name }) {
   if (player?.isRegistered?.() !== true || player.getHitpoints?.() <= 0 || player.isDyingReturn?.()) return;
-  if (name?.trim().toLowerCase() === "camelot teleport") credit(player, "teleport-to-camelot");
-}
-
-/** Lunar teleports (and the group spell) don't emit the spell-arrival event; they land here. */
-function teleportLanded({ player, to }) {
-  if (player?.isRegistered?.() !== true || player.getHitpoints?.() <= 0 || player.isDyingReturn?.()) return;
-  if (to?.getZ?.() === CATHERBY_TELEPORT.z
-    && Math.abs(to.getX() - CATHERBY_TELEPORT.x) <= CATHERBY_TELEPORT.radius
-    && Math.abs(to.getY() - CATHERBY_TELEPORT.y) <= CATHERBY_TELEPORT.radius) {
-    credit(player, "teleport-to-catherby");
-  }
+  const spell = name?.trim().toLowerCase();
+  if (spell === "camelot teleport") credit(player, "teleport-to-camelot");
+  else if (spell === "catherby teleport" || spell === "tele group catherby") credit(player, "teleport-to-catherby");
 }
 
 function npcDeath({ killer, npc }) {
@@ -130,6 +120,7 @@ function npcDeath({ killer, npc }) {
   } else if (name === "Mithril dragon") {
     credit(killer, "kill-a-mithril-dragon");
   } else if (inBox(at, WORKSHOP) && ELEMENTALS.has(name)) {
+    if (name === "Earth elemental" && npc.getId() !== api.core.NpcIdentifiers.EARTH_ELEMENTAL) return;
     const killed = (Number(killer.getAttribute(ELEMENTALS_ATTRIBUTE)) | 0) | ELEMENTALS.get(name);
     killer.setAttribute(ELEMENTALS_ATTRIBUTE, killed);
     if (killed === ALL_ELEMENTALS) credit(killer, "defeat-one-of-each-elemental-in-the-workshop");
@@ -163,7 +154,6 @@ module.exports = {
     api.onCustomEvent("agility:obstacle", agilityObstacle);
     api.onCustomEvent("fairy-rings:travelled", fairyRingTravelled);
     api.onCustomEvent("spell:teleport-arrival", teleportArrival);
-    api.onCustomEvent("teleport:landed", teleportLanded);
     api.onNpcDeath(npcDeath);
     api.onObjectInteraction("Church organ", { Play: playOrgan });
     api.onNpcInteraction(SHERLOCK, { "Talk-to": talkToSherlock });
@@ -171,7 +161,7 @@ module.exports = {
   _test: {
     inBox, playOrgan, talkToSherlock, fishingSuccess, farmingPlanted, farmingHarvested, miningSuccess,
     smithingSuccess, craftingMade, picked, barbarianAssaultWave, agilityObstacle,
-    fairyRingTravelled, teleportArrival, teleportLanded, npcDeath, credit,
+    fairyRingTravelled, teleportArrival, npcDeath, credit,
     CATHERBY_FISHING, OTTO_GROTTO, SEERS_ORGAN, SEERS_FLAX_FIELD, COAL_TRUCKS, JUTE_PATCH,
     CATHERBY_FLOWER_PATCH, CATHERBY_HERB_PATCH, WATERFALL_DUNGEON, SHADOW_DUNGEON,
     WORKSHOP, ELEMENTALS_ATTRIBUTE, FLAX_ATTRIBUTE,

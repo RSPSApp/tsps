@@ -9,6 +9,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { ItemIds: Items } = require("../dist/util/IdEnums");
+const { NpcIdentifiers } = require("../dist/util/NpcIdentifiers");
 const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
 const Data = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
@@ -29,8 +30,9 @@ function actor(x, y, z = 0, privateArea = null) {
   return player;
 }
 
-function fakeNpc(name, x, y, z = 0, privateArea = null) {
+function fakeNpc(name, x, y, z = 0, privateArea = null, id = NpcIdentifiers.EARTH_ELEMENTAL) {
   return {
+    getId: () => id,
     getPrivateArea: () => privateArea,
     getCurrentDefinition: () => ({ getName: () => name }),
     getLocation: () => new (require("../dist/game/model/Location").Location)(x, y, z),
@@ -110,19 +112,21 @@ test("fletching data: a Maple shortbow counts only inside the Seers' bank box", 
 });
 
 test("teleports, fairy ring, agility shortcut and water orb use their own success events", async () => {
-  await setup();
+  const api = await setup();
   const camelot = actor(2757, 3478);
   Kandarin._test.teleportArrival({ player: camelot, name: "Camelot Teleport" });
   assert.equal(done(camelot, "teleport-to-camelot"), true);
   Kandarin._test.teleportArrival({ player: camelot, name: "Ardougne Teleport" });
   assert.equal(done(camelot, "teleport-to-camelot"), true, "a second teleport is not the task again");
 
-  const catherby = actor(2802, 3449);
-  Kandarin._test.teleportLanded({ player: catherby, to: new (require("../dist/game/model/Location").Location)(2802, 3449, 0) });
-  assert.equal(done(catherby, "teleport-to-catherby"), true);
-  const notCatherby = actor(2802, 3449);
-  Kandarin._test.teleportLanded({ player: notCatherby, to: new (require("../dist/game/model/Location").Location)(2757, 3478, 0) });
-  assert.equal(done(notCatherby, "teleport-to-catherby"), false);
+  for (const name of ["Catherby Teleport", "Tele Group Catherby"]) {
+    const catherby = actor(2802, 3449);
+    api.emitCustomEvent("spell:teleport-arrival", { player: catherby, name });
+    assert.equal(done(catherby, "teleport-to-catherby"), true);
+  }
+  const portalUser = actor(2802, 3449);
+  api.emitCustomEvent("teleport:landed", { player: portalUser, to: portalUser.getLocation() });
+  assert.equal(done(portalUser, "teleport-to-catherby"), false, "a portal or recall landing is not a spell cast");
 
   const ring = actor(2658, 3409);
   Kandarin._test.fairyRingTravelled({ player: ring, code: "ALS" });
@@ -249,4 +253,17 @@ test("a completed Barbarian Assault wave credits its diary task", async () => {
   const player = actor(1900, 5450);
   Kandarin._test.barbarianAssaultWave({ player, wave: 1, queen: false });
   assert.equal(done(player, "complete-a-wave-of-barbarian-assault"), true);
+});
+
+test("only the roaming earth elemental counts, not the one raised by mining", async () => {
+  const api = await setup();
+  const player = actor(2700, 9880);
+  for (const name of ["Water elemental", "Air elemental", "Fire elemental"]) {
+    Kandarin._test.npcDeath({ killer: player, npc: fakeNpc(name, 2700, 9880) });
+  }
+  const ids = api.core.NpcIdentifiers;
+  Kandarin._test.npcDeath({ killer: player, npc: fakeNpc("Earth elemental", 2700, 9880, 0, null, ids.EARTH_ELEMENTAL_2) });
+  assert.equal(done(player, "defeat-one-of-each-elemental-in-the-workshop"), false);
+  Kandarin._test.npcDeath({ killer: player, npc: fakeNpc("Earth elemental", 2700, 9880, 0, null, ids.EARTH_ELEMENTAL) });
+  assert.equal(done(player, "defeat-one-of-each-elemental-in-the-workshop"), true);
 });

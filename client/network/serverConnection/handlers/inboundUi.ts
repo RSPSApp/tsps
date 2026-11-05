@@ -298,6 +298,7 @@ export function handleInboundUi(msg: any): boolean {
                 if (datasets?.some((dataset: any) => dataset.key === "definitionArchives")) {
                     mv?.npcTypeLoader?.clearCache();
                     mv?.locTypeLoader?.clearCache();
+                    mv?.seqTypeLoader?.clearCache();
                     mv?.renderer?.invalidateDefinitionCaches();
                 }
                 mv?.workerPool?.runAll((worker: any) => worker.setCustomContent(msg.payload))

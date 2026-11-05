@@ -2489,6 +2489,7 @@ export class PluginManager {
       CombatSpells: require(`${combat}/magic/CombatSpells`).CombatSpells,
       Autocasting: require(`${combat}/magic/Autocasting`).Autocasting,
       NPC: require("../game/entity/impl/npc/NPC").NPC,
+      NpcSpawnDefinitionLoader: require("../game/definition/loader/impl/NpcSpawnDefinitionLoader").NpcSpawnDefinitionLoader,
       GameConstants: require("../game/GameConstants").GameConstants,
       Music: require("../game/Music").Music,
       // world.json accessors (isMembersWorld, isMembersArea, WORLD_SPAWN, zone boundaries).
@@ -4239,6 +4240,44 @@ export class PluginManager {
             err
           );
         }
+      },
+      replaceMapRegionData: (regionId, terrainData, objectData) => {
+        if (!Number.isInteger(regionId) || regionId < 0 || regionId > 0xffff ||
+          !(terrainData instanceof Uint8Array) || terrainData.length === 0 ||
+          (objectData !== null && !(objectData instanceof Uint8Array))) {
+          console.warn(`[plugins] ${pluginName} attempted invalid replaceMapRegionData regionId=${regionId}`);
+          return false;
+        }
+        const owner = MapRegionReplacementManager.getSource(regionId);
+        if (owner !== null && owner !== pluginName) {
+          // Never stack over another owner's map (a data/regions pack): restoring would lose it.
+          console.warn(`[plugins] ${pluginName} refused: region ${regionId} is replaced by ${owner}`);
+          return false;
+        }
+        try {
+          const result = MapRegionReplacementManager.replaceMapRegionData(regionId, terrainData, objectData, pluginName);
+          applyPluginRegionReplacement(pluginName, regionId, result);
+          return true;
+        } catch (err) {
+          console.error(`[plugins] ${pluginName} failed to replace map region ${regionId}`, err);
+          return false;
+        }
+      },
+      restoreMapRegion: (regionId) => {
+        // Only the plugin that replaced a region may hand it back.
+        if (MapRegionReplacementManager.getSource(regionId) !== pluginName || !MapRegionReplacementManager.removeMapRegion(regionId)) return false;
+        try {
+          require("../game/collision/RegionManager").RegionManager.reloadRegion(regionId);
+          const { World } = require("../game/World");
+          World.getPlayers()?.forEach?.((player: any) => {
+            if (player && World.isPlayerSessionConnected(player)) {
+              MapRegionReplacementManager.sendNativeRegionToPlayer(player, regionId);
+            }
+          });
+        } catch (err) {
+          console.error(`[plugins] ${pluginName} failed to restore map region ${regionId}`, err);
+        }
+        return true;
       },
       registerDefinitionSource: (definitionType, source) => {
         try {

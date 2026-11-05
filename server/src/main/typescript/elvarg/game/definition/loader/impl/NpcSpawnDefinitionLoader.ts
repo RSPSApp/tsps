@@ -257,8 +257,29 @@ export class NpcSpawnDefinitionLoader extends DefinitionLoader {
         });
     }
 
+    /**
+     * Put a live world spawn back on its region's pending list, for content that stands
+     * its own copy on the tile for a while (a seasonal version of the NPC). It returns
+     * through activateNear, tracked as before, once onCanSpawnNpc stops vetoing it.
+     */
+    public static requeue(npc: NPC): boolean {
+        if (!NpcSpawnDefinitionLoader.lineage || npc.getSpawnLineage() !== NpcSpawnDefinitionLoader.lineage) return false;
+        const home = npc.getSpawnPosition();
+        const definition = NpcSpawnDefinition.all().find((entry) => entry.getId() === npc.getId() && entry.getPosition().equals(home));
+        if (!definition) return false;
+        (npc as NPC & { __skipDefaultRespawn?: boolean }).__skipDefaultRespawn = true;
+        World.getNpcs().remove(npc);
+        const key = `${home.getZ()}:${home.getX() >> 6}:${home.getY() >> 6}`;
+        const pending = NpcSpawnDefinitionLoader.pendingByRegion.get(key);
+        if (pending) pending.push(definition);
+        else NpcSpawnDefinitionLoader.pendingByRegion.set(key, [definition]);
+        return true;
+    }
+
     private static spawn(definition: NpcSpawnDefinition): boolean {
         if (World.getNpcs().isFull()) return false;
+        // A content veto keeps the spawn pending: it comes back when the veto ends.
+        if (PluginManager.emitCanSpawnNpc(definition.getId(), definition.getPosition()) === false) return false;
         const npc = NPC.create(definition.getId(), definition.getPosition().clone());
         npc.getMovementCoordinator().setRadius(definition.getRadius() ?? NpcSpawnDefinitionLoader.DEFAULT_WANDER_RADIUS);
         npc.setFace(definition.getFacing());

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { registerSerializer } from "threads";
 import WebFont from "webfontloader";
 
@@ -41,6 +41,9 @@ import { useSafariLandscapeLock } from "./useSafariLandscapeLock";
 import { useViewportCssVars } from "./useViewportCssVars";
 import { renderDataLoaderSerializer } from "./worker/RenderDataLoader";
 import { RenderDataWorkerPool } from "./worker/RenderDataWorkerPool";
+
+// Keep the authoring UI and its styles out of the normal game entry bundle.
+const ItemEditor = lazy(() => import("../custom/item-editor/ItemEditor").then(module => ({ default: module.ItemEditor })));
 
 registerSerializer(renderDataLoaderSerializer);
 
@@ -662,6 +665,12 @@ function OsrsClientApp() {
         <div className={appClassName}>
             {bannerWrapper}
             {content}
+            {/* The editor reuses this client's cache and renderers without a game login. */}
+            {osrsClient && new URLSearchParams(window.location.search).get("items") === "1" && (
+                <Suspense fallback={<p>Loading item editor…</p>}>
+                    <ItemEditor client={osrsClient} />
+                </Suspense>
+            )}
         </div>
     );
 }

@@ -22,6 +22,7 @@ const BLACK_SALAMANDER = { task: "catch-a-black-salamander-in-the-wilderness" };
 const GHORROCK = { task: "teleport-to-ghorrock", spell: "ghorrock teleport" };
 const EGGS = { task: "collect-5-red-spiders-eggs-from-the-wilderness", count: 5, attribute: "wilderness-diary:red-spiders-eggs" };
 const TEAM_CAPE = { task: "equip-any-team-cape-in-the-wilderness" };
+const ORBS = [["EARTH_ORB", "charge-an-earth-orb"], ["AIR_ORB", "charge-an-air-orb"]];
 
 let api;
 let teamCapes;
@@ -80,6 +81,17 @@ function itemTaken({ player, itemId, amount, groundItem }) {
   if (total >= EGGS.count) done(player, EGGS);
 }
 
+/**
+ * "Charge an Earth Orb." (medium) and "Charge an Air Orb." (hard): credited once the Charge Orb spell has
+ * charged the orb (ChargeOrbs.CraftingSpells.js emits "crafting:made" after the cast succeeds). The Wiki
+ * names no place beyond the spell's own obelisk.
+ */
+function crafted({ player, itemId }) {
+  const ids = api.core.ItemIdentifiers;
+  const orb = ORBS.find(([name]) => ids[name] === itemId);
+  if (orb && (player.getPrivateArea?.() ?? null) === null) done(player, { task: orb[1] });
+}
+
 function capeOf(player) {
   return player.getEquipment().getItems()[api.core.Equipment.CAPE_SLOT]?.getId() ?? -1;
 }
@@ -110,6 +122,7 @@ module.exports = function attachWildernessDiary(pluginApi) {
   api.onCustomEvent("spell:teleport-arrival", teleported);
   api.onCustomEvent("ground-items:taken", itemTaken);
   api.onCustomEvent("equipment:changed", equipmentChanged);
+  api.onCustomEvent("crafting:made", crafted);
   api.onPlayerLogin(capeSeen);
 };
 Object.assign(module.exports, { npcKilled });

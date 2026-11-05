@@ -220,6 +220,11 @@ function changeHouse(event, kind, index) {
       api.emitCustomEvent("diary:task", { player, diary: "varrock", task: VARROCK_FANCY_STONE_TASK });
     }
   }
+  if (kind === "style") {
+    api.emitCustomEvent("construction:house-redecorated", {
+      player, style: choice.name, npc: event.npc, location: event.npc?.getLocation?.(),
+    });
+  }
   const chain = new DialogueChainBuilder();
   lines.forEach((line, step) => chain.add(line.npc ? new NpcDialogue(step, event.npcId, line.npc) : new StatementDialogue(step, line.statement)));
   chain.add(new EndDialogue(lines.length));

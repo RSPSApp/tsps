@@ -13,7 +13,8 @@ async function buildFiles(directory, prefix = "") {
         const relative = path.posix.join(prefix, entry.name);
         const file = path.join(directory, entry.name);
         if (entry.isDirectory()) files.push(...await buildFiles(file, relative));
-        else if (entry.isFile()) files.push({ relative, local: file, size: (await stat(file)).size });
+        else if (entry.isFile() && !entry.name.endsWith(".map")) files.push({ relative, local: file, size: (await stat(file)).size });
+        else if (entry.isFile()) continue;
         else throw new Error(`Unsupported build entry: ${relative}`);
     }
     return files;

@@ -21,7 +21,7 @@ const O = core.ObjectIdentifiers;
 const VARP = 76;
 const WIRE_COMPLETE = 6;
 
-function harness({ prayer = 31, prayerCurrent = prayer } = {}) {
+function harness({ prayer = 31, prayerCurrent = prayer, barcrawl = true } = {}) {
   const custom = new Map();
   const hooks = { variants: [], conditions: [], npc: [], itemOnNpc: [], objects: [], logins: [], interfaces: [] };
   const api = new Proxy({
@@ -43,6 +43,9 @@ function harness({ prayer = 31, prayerCurrent = prayer } = {}) {
       for (const handler of custom.get(name) ?? []) handler(event);
     },
   }, { get(target, key) { return key in target ? target[key] : () => {}; } });
+  custom.set('quest:is-complete', [(request) => {
+    if (request?.name === "Alfred Grimhand's Barcrawl") request.complete = barcrawl;
+  }]);
   require('../plugins/quests/quests/ScorpionCatcher.Quest')(api);
   const quest = runtime.getRegisteredQuests().at(-1);
   assert.equal(quest.key, 'scorpion_catcher');
@@ -159,10 +162,13 @@ test('helper stage keys map to durable stages and varp 76 edges, including compl
   assert.equal(h.wire(), WIRE_COMPLETE, 'login replay sends native varp 76 = 6 for a completed save');
 });
 
-test('the start is not gated on Prayer: the only canonical start requirement (Barcrawl) has no server source', () => {
+test('the start is gated on Barcrawl, not Prayer: 31 Prayer is needed only to enter the Monastery', () => {
   // OSRS Wiki: 31 Prayer is "[not required to start]" (it is needed to enter the
   // Monastery 1st floor), and Barcrawl is the only "[required to start]" entry.
-  // This server has no Barcrawl quest or attribute, so the start is not refused.
+  const missing = harness({ barcrawl: false });
+  assert.equal(missing.variant(N.THORMAC), 'starting-off-without-the-requirements');
+  assert.equal(missing.stage(), 0);
+
   const low = harness({ prayer: 30 });
   assert.equal(low.variant(N.THORMAC), 'starting-off-with-the-requirements');
   assert.equal(low.stage(), 0);

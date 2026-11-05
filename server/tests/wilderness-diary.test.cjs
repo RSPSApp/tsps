@@ -12,11 +12,17 @@ const core = PluginManager.getCoreApi();
 const events = [];
 const deathHandlers = [];
 const customHandlers = new Map();
+const runeBypassHandlers = [];
+const experienceHandlers = [];
+const registeredAreas = [];
 const api = new Proxy({
   core,
   emitCustomEvent: (name, payload) => events.push({ name, ...payload }),
   onNpcDeath: (handler) => deathHandlers.push(handler),
   onCustomEvent: (name, handler) => customHandlers.set(name, [...(customHandlers.get(name) ?? []), handler]),
+  onSpellRuneBypass: (handler) => runeBypassHandlers.push(handler),
+  onCanGainExperience: (handler) => experienceHandlers.push(handler),
+  registerArea: (area) => registeredAreas.push(area),
 }, { get: (target, key) => target[key] ?? (() => {}) });
 Wilderness.register(api);
 const altars = new Map();
@@ -87,16 +93,99 @@ test('iron ore mined in the Wilderness counts, iron elsewhere or another ore doe
 
 test("the fifth Red spiders' egg collected in the Wilderness counts; eggs elsewhere or other items do not", () => {
   events.length = 0;
-  const who = { ...player(), ...attributes() };
+  const messages = [];
+  const who = { ...player(), ...attributes(), sendMessage: (message) => messages.push(message) };
   const take = (itemId, at, amount = 1) => fire('ground-items:taken', { player: who, itemId, amount, groundItem: { getPosition: () => at } });
   const EGG = core.ItemIdentifiers.RED_SPIDERS_EGGS;
   for (let i = 0; i < 4; i++) take(EGG, IN);
+  assert.deepEqual(messages, [
+    "You have collected 1 of 5 Red spiders' eggs from the Wilderness.",
+    "You have collected 2 of 5 Red spiders' eggs from the Wilderness.",
+    "You have collected 3 of 5 Red spiders' eggs from the Wilderness.",
+    "You have collected 4 of 5 Red spiders' eggs from the Wilderness.",
+  ]);
   take(EGG, OUT);
   take(core.ItemIdentifiers.IRON_ORE, IN);
   assert.deepEqual(tasks(), [], 'four in the Wilderness are not enough');
   take(EGG, IN);
   assert.deepEqual(tasks(), ["wilderness:collect-5-red-spiders-eggs-from-the-wilderness"]);
   assert.equal(events[0].player, who);
+});
+
+test('the Demonic Ruins restore Prayer every five ticks and credit the diary when Prayer increases', () => {
+  events.length = 0;
+  const area = registeredAreas.find((registered) => registered.getName() === 'DemonicRuinsArea');
+  assert.ok(area, 'the prayer effect is registered as an area');
+
+  let cycle = 100;
+  let prayer = 0;
+  const messages = [];
+  const originalGetProcessCycle = core.World.getProcessCycle;
+  core.World.getProcessCycle = () => cycle;
+  const who = {
+    isPlayer: () => true,
+    getAsPlayer() { return this; },
+    getPrivateArea: () => null,
+    sendMessage: (message) => messages.push(message),
+    getSkillManager: () => ({
+      getCurrentLevel: () => prayer,
+      getMaxLevel: () => 10,
+      setCurrentLevels: (_skill, value) => { prayer = value; },
+      updateSkill: () => {},
+    }),
+  };
+
+  try {
+    area.postEnter(who);
+    assert.equal(messages.length, 1, 'entering the ruins shows the restoration message');
+    cycle += 4;
+    area.process(who);
+    assert.equal(prayer, 0, 'Prayer does not restore before five ticks');
+    cycle += 1;
+    area.process(who);
+    assert.equal(prayer, 1);
+    assert.deepEqual(tasks(), ['wilderness:restore-some-prayer-points-at-the-demonic-ruins']);
+  } finally {
+    area.postLeave(who);
+    core.World.getProcessCycle = originalGetProcessCycle;
+  }
+});
+
+test('the Fountain of Rune waives runes and Magic XP and credits a successful Low Alchemy cast', () => {
+  events.length = 0;
+  const playerLocation = new core.Location(3379, 3895, 0);
+  const player = { getLocation: () => playerLocation, getPrivateArea: () => null };
+  const objectId = core.ObjectIdentifiers.FOUNTAIN_OF_RUNE;
+  const fountain = { getId: () => objectId, getLocation: () => new core.Location(3380, 3895, 0) };
+  const mapObjects = core.MapObjects.mapObjects;
+  const regionManager = core.RegionManager;
+  const existingObjects = mapObjects.get(-2435);
+  const originalCanProjectileAttack = regionManager.canProjectileAttack;
+  mapObjects.set(-2435, [fountain]);
+  regionManager.canProjectileAttack = () => true;
+
+  try {
+    const bypass = { player, bypass: null };
+    for (const handler of runeBypassHandlers) handler(bypass);
+    assert.equal(bypass.bypass, true);
+
+    const experience = { player, skill: core.Skill.MAGIC, allow: null };
+    for (const handler of experienceHandlers) handler(experience);
+    assert.equal(experience.allow, false);
+
+    const payment = { player, experience: 65 };
+    for (const handler of customHandlers.get('magic:alchemy-payment') ?? []) handler(payment);
+    assert.equal(payment.experience, 0);
+
+    for (const handler of customHandlers.get('magic:alchemy-completed') ?? []) {
+      handler({ player, spellId: core.EffectSpells.LOW_ALCHEMY.spellId() });
+    }
+    assert.deepEqual(tasks(), ['wilderness:cast-low-alchemy-at-the-fountain-of-rune']);
+  } finally {
+    regionManager.canProjectileAttack = originalCanProjectileAttack;
+    if (existingObjects) mapObjects.set(-2435, existingObjects);
+    else mapObjects.delete(-2435);
+  }
 });
 
 test("the eggs' count is saved with the player, starting at 0", () => {

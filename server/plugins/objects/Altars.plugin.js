@@ -8,6 +8,8 @@ const { ObjectIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 const PRAY_AT_ALTAR_ANIMATION = new Animation(645);
 const EAST_ARDOUGNE_CHURCH_ALTAR = [2617, 3309, 0];
 const ARDOUGNE_ALTAR_TASK = "use-the-altar-in-east-ardougne-s-church";
+const JALDRAOCHT_ALTAR_ID = 6552;
+const JALDRAOCHT_ALTAR_TASK = "activate-ancient-magicks-at-the-altar-in-the-jal";
 
 // The easy Wilderness Diary's "Pray at the Chaos Altar in Western Wilderness.": the Chaos Temple
 // (church) altar at level 38 (OSRS Wiki: Chaos Temple), not the Wilderness hut's.
@@ -55,6 +57,27 @@ function handlePrayerAltar(player, fullMessage = "You already have full Prayer p
   return true;
 }
 
+function handleJaldraochtAltar(player) {
+  player.performAnimation(PRAY_AT_ALTAR_ANIMATION);
+  Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
+  const skillManager = player.getSkillManager();
+  skillManager.setCurrentLevels(Skill.PRAYER, 0);
+  skillManager.updateSkill(Skill.PRAYER);
+  if (player.getSpellbook() === MagicSpellbook.ANCIENT) {
+    player.sendMessage("You feel a strange drain upon your memory...");
+    MagicSpellbook.changeSpellbook(player, MagicSpellbook.NORMAL);
+  } else {
+    player.sendMessage("You feel a strange wisdom fill your mind....");
+    MagicSpellbook.changeSpellbook(player, MagicSpellbook.ANCIENT);
+    api.emitCustomEvent("diary:task", {
+      player,
+      diary: "desert",
+      task: JALDRAOCHT_ALTAR_TASK,
+    });
+  }
+  return true;
+}
+
 function handleOccultAltar(player, spellbook) {
   player.performAnimation(PRAY_AT_ALTAR_ANIMATION);
   Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
@@ -76,22 +99,34 @@ function darkAltar({ player }) {
 
 function prayerAltar({ player, object }) {
   if (player.getHitpoints() <= 0 || player.isDyingReturn?.() === true) return false;
+  if (object?.getId?.() === JALDRAOCHT_ALTAR_ID) return handleJaldraochtAltar(player);
 
   const skillManager = player.getSkillManager();
   const prayerBefore = skillManager.getCurrentLevel(Skill.PRAYER);
   const handled = handlePrayerAltar(player);
+  const prayerAfter = skillManager.getCurrentLevel(Skill.PRAYER);
 
-  if (object && skillManager.getCurrentLevel(Skill.PRAYER) > prayerBefore) {
+  if (object && prayerAfter > prayerBefore) {
     const location = object.getLocation();
     // Content that credits praying by place (the Desert Diary's Sophanem altar) reads the gain.
     api.emitCustomEvent("altars:prayed", {
       player,
       location: { x: location.getX(), y: location.getY(), z: location.getZ() },
-      restored: skillManager.getCurrentLevel(Skill.PRAYER) - prayerBefore,
+      restored: prayerAfter - prayerBefore,
     });
   }
 
-  if (object && skillManager.getCurrentLevel(Skill.PRAYER) > prayerBefore && object.getId() === ObjectIds.ALTAR) {
+  if (object && prayerAfter > prayerBefore) {
+    api.emitCustomEvent("prayer:restored-at-altar", {
+      player,
+      objectId: object.getId(),
+      location: object.getLocation(),
+      prayerBefore,
+      prayerAfter,
+    });
+  }
+
+  if (object && prayerAfter > prayerBefore && object.getId() === ObjectIds.ALTAR) {
     const location = object.getLocation();
     const [x, y, z] = EAST_ARDOUGNE_CHURCH_ALTAR;
     if (location.getX() === x && location.getY() === y && location.getZ() === z

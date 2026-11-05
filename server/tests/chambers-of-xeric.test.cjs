@@ -786,14 +786,15 @@ test('the ancient chest reports its loot once, leaving the pet to the pet path',
   }
 });
 
-test('the collection log count is the player\'s completions in both modes', () => {
+test('the collection log keeps the player\'s completions separate by mode', () => {
   const Rewards = require('../plugins/minigames/cox/Rewards.ChambersOfXeric');
   const player = fakePlayer('Counted');
   player.setAttribute(Shared.ATTR.KILLS, 3);
   player.setAttribute(Shared.ATTR.CHALLENGE_KILLS, 2);
   const request = { player, category: 'Chambers of Xeric' };
   Rewards.collectionLogCount(request);
-  assert.equal(request.count, 5);
+  assert.equal(request.count, 2, 'the primary label is Challenge Mode');
+  assert.deepEqual(request.extraCounts, [3], 'Normal has its own label');
   const other = { player, category: 'Tombs of Amascut' };
   Rewards.collectionLogCount(other);
   assert.equal(other.count, undefined, 'only its own category');

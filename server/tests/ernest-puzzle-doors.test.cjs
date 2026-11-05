@@ -46,7 +46,10 @@ function scene() {
   const attributes = new Map();
   const messages = [];
   let location;
-  const sender = new Proxy({}, { get: () => () => sender });
+  const sounds = [];
+  const sender = new Proxy({}, { get: (_, prop) => (prop === 'sendSoundEffect'
+    ? (...args) => { sounds.push(args); return sender; }
+    : () => sender) });
   const inventory = { getAmount: () => 0, isFull: () => false, adds: noop, deleteNumber: noop };
   const player = {
     getAttribute: (key) => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
@@ -56,7 +59,7 @@ function scene() {
     moveTo: (tile) => { location = tile; }, sendMessage: (text) => messages.push(text),
     performAnimation: noop,
   };
-  return { api, routes, objects, player, messages, attributes };
+  return { api, routes, objects, player, messages, attributes, sounds };
 }
 
 
@@ -120,4 +123,29 @@ test('Ernest puzzle doors stay locked when the levers have not opened them', () 
   assert.equal(event.handled, true);
   assert.deepEqual([end.getX(), end.getY()], [3106, 9765]);
   assert.match(env.messages.at(-1), /locked firmly/);
+});
+
+// Sound 71 is iron_door_open (Wiki, List of sound IDs). The reporter of #2270 saw it live with Visual
+// Sounds on these doors; no capture of the oil room is known.
+test('Ernest puzzle doors play iron_door_open once per crossing, and a locked door plays none', () => {
+  for (const [id, [x, y], face, bits] of DOORS) {
+    const env = scene();
+    const { Location } = env.api.core;
+    const [sx, sy] = face === 0 ? [-1, 0] : [0, -1];
+    const near = new Location(x - sx, y - sy, 0);
+    const far = new Location(x + sx, y + sy, 0);
+    const label = `door ${id}`;
+
+    const { end } = dispatch(env, id, [x, y], bits, near);
+    assert.deepEqual([end.getX(), end.getY()], [far.getX(), far.getY()], `${label}: control, it crossed`);
+    assert.deepEqual(env.sounds.map(([sound]) => sound), [71], `${label}: one sound for the crossing`);
+
+    dispatch(env, id, [x, y], bits, far);
+    assert.deepEqual(env.sounds.map(([sound]) => sound), [71, 71], `${label}: one more for the way back`);
+
+    env.sounds.length = 0;
+    const locked = dispatch(env, id, [x, y], 0, near);
+    assert.deepEqual([locked.end.getX(), locked.end.getY()], [near.getX(), near.getY()], `${label}: control, it stayed locked`);
+    assert.deepEqual(env.sounds, [], `${label}: a locked door plays no sound`);
+  }
 });

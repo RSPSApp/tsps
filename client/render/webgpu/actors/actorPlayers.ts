@@ -2,7 +2,7 @@ import { packedActorBounds, type ActorBounds } from "../../ActorVisibility";
 import { playerInterpolation } from "../../player/PlayerInterpolation";
 import { applyInterpolatedFrames, interpolationFrame, interpolationKey, type ActorInterpolation } from "../../../rs/model/seq/FrameInterpolation";
 import type { OsrsClient } from "../../../game/OsrsClient";
-import { withSeqHandItems } from "../../../rs/config/player/Equipment";
+import { withActionSeqHandItems } from "../../../rs/config/player/Equipment";
 import type { PlayerAppearance } from "../../../rs/config/player/PlayerAppearance";
 import { Model } from "../../../rs/model/Model";
 import type { TextureLoader } from "../../../rs/texture/TextureLoader";
@@ -130,11 +130,9 @@ export class PlayerPoseGeometry {
 
         let app = pe.getAppearance(pid);
         if (!app) return undefined;
-        if (actionActive) {
-            try {
-                app = withSeqHandItems(app, this.client.seqTypeLoader.load(actionSeqId));
-            } catch {}
-        }
+        try {
+            app = withActionSeqHandItems(app, this.client.seqTypeLoader.load(actionSeqId), actionSeqId, actionDelay);
+        } catch {}
 
         const base = this.baseForAppearance(app);
         if (!base) return undefined;

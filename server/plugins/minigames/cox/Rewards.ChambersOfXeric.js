@@ -191,13 +191,12 @@ function teamSize(size) {
 }
 
 /**
- * The cache's collection log has one Chambers of Xeric category (struct 507) holding both
- * modes' items, so its count is the player's completions in every mode.
+ * Cache script 2735: the shared category displays CM first (2048), then Normal (2941).
  */
 function collectionLogCount(request) {
   if (request?.category !== RAID_NAME) return;
-  request.count = (Number(request.player.getAttribute(Shared.ATTR.KILLS)) || 0)
-    + (Number(request.player.getAttribute(Shared.ATTR.CHALLENGE_KILLS)) || 0);
+  request.count = Number(request.player.getAttribute(Shared.ATTR.CHALLENGE_KILLS)) || 0;
+  request.extraCounts = [Number(request.player.getAttribute(Shared.ATTR.KILLS)) || 0];
 }
 
 /**

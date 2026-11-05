@@ -12,13 +12,16 @@ before(() => {
   core = PluginManager.createApi("StrayDogs").core;
 });
 
+const names = [];
+
 function scene(id = 2902) {
-  const tasks = [], messages = [], chats = [], steps = [], events = [];
+  const tasks = [], messages = [], chats = [], steps = [], events = [], animations = [];
   let actions, feed, following, indoors = false, head = -1, registered = true;
   const player = {
     getLocation: () => new core.Location(3200, 3400, 0),
     getPrivateArea: () => null, getHitpoints: () => 10, isRegistered: () => registered,
     forceChat: text => chats.push(text), sendMessage: text => messages.push(text),
+    performAnimation: animation => animations.push(animation.getId()),
     getPacketSender: () => ({ sendSoundEffect() {}, sendItemContainer() {} }),
     getEquipment: () => ({ get: () => new core.Item(head, 1) }),
   };
@@ -32,13 +35,13 @@ function scene(id = 2902) {
   };
   require("../plugins/npcs/StrayDogs.plugin").register({
     core: { ...core, TaskManager: { submit: task => tasks.push(task) }, RegionManager: { getRegion: () => ({ isUnderRoof: () => indoors }) } },
-    onNpcInteraction: (_name, handlers) => { actions = handlers; },
+    onNpcInteraction: (name, handlers) => { actions = handlers; names.push(name); },
     onItemOnNpc: handler => { feed = handler; },
     emitCustomEvent: (name, payload) => events.push([name, payload]),
   });
   const definition = NpcDefinition.forId(id);
   return {
-    player, npc, tasks, messages, chats, steps, events, actions,
+    player, npc, tasks, messages, chats, steps, events, actions, animations,
     interact: action => actions[action]({ player, npc, definition }),
     feed: itemId => {
       inventory.setItem(3, new core.Item(itemId, 1));
@@ -58,7 +61,7 @@ test("both public dogs Pet, temporarily follow, wait outside buildings, and Shoo
     const s = scene(id);
     s.interact("Pet");
     assert.equal(s.following, s.player);
-    assert.deepEqual(s.chats, ["Who's a good doggie?", "Woof!"]);
+    assert.deepEqual(s.chats, ["Who's a good doggy!", "Woof!"]);
     s.indoors = true; s.tasks.at(-1).execute(); assert.equal(s.following, null);
     s.indoors = false; s.tasks.at(-1).execute(); assert.equal(s.following, s.player);
     s.interact("Shoo-away");
@@ -110,4 +113,33 @@ test("cat ears scare the dog without consuming food; following expires or ends o
   assert.equal(s.following, null);
   s.interact("Pet"); s.registered = false; s.tasks.at(-1).execute();
   assert.equal(s.following, null);
+});
+
+test("Varlamore's Molossus and Xolo pet as captured and shoo like stray dogs; the cabbage dogs can't be (#2449)", () => {
+  const ids = core.CacheDefinitions;
+  assert.ok(names.includes("Molossus") && names.includes("Xolo"));
+  for (const gameval of ["varlamore_dog_molossus_1", "varlamore_dog_molossus_2", "varlamore_dog_xolo", "varlamore_dog_xolo_indoors"]) {
+    const s = scene(ids.getNpcId(gameval));
+    s.interact("Pet");
+    // RSProx 237/1098: human_pickupfloor on arrival, the dog's Woof! two ticks later.
+    assert.deepEqual(s.animations, [ids.getSeqId("human_pickupfloor")], gameval);
+    assert.deepEqual(s.chats, ["Who's a good doggy!"]);
+    assert.equal(s.following, s.player);
+    const woof = s.tasks.find((task) => task.getDelay() === 2);
+    assert.ok(woof, "the woof waits two ticks");
+    woof.execute();
+    assert.deepEqual(s.chats, ["Who's a good doggy!", "Woof!"]);
+    s.interact("Shoo-away");
+    assert.equal(s.following, null);
+    assert.deepEqual(s.chats.slice(-2), ["Thbbbbt!", "Whine!"]);
+    s.head = core.ItemIdentifiers.CAT_EARS;
+    s.interact("Pet");
+    assert.equal(s.messages.at(-1), "The dog doesn't approve of your ears.");
+    assert.equal(s.feed(526).handled, true);
+    assert.equal(s.events.length, 0, "only the stray dog's bone is the Varrock diary's");
+  }
+  for (const gameval of ["varlamore_dog_molossus_cabbage", "varlamore_dog_xolo_cabbage"]) {
+    const s = scene(ids.getNpcId(gameval));
+    assert.equal(s.interact("Pet"), false, `${gameval} has no options`);
+  }
 });

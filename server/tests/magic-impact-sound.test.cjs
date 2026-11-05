@@ -30,6 +30,7 @@ before(async () => {
   // The powered staves resolve their own combat method through the registered plugins, as in the server.
   require('../plugins/items/TumekensShadow.plugin').register(PluginManager.createApi('MagicImpactTumeken'));
   require('../plugins/items/WarpedSceptre.plugin').register(PluginManager.createApi('MagicImpactWarped'));
+  require('../plugins/items/SanguinestiStaff.plugin').register(PluginManager.createApi('MagicImpactSanguinesti'));
   // The Warped sceptre builds its powered-staff definition on server startup; without it the resolver
   // returns nothing and the wielder falls back to an ordinary melee swing.
   PluginManager.emitServerStartup({});
@@ -141,5 +142,71 @@ for (const [name, itemId, chargesKey] of [
     assert.deepEqual(caster.sounds(), [impact1460]);
     assert.deepEqual(near.sounds(), [impact1460]);
     assert.deepEqual(far.sounds(), []);
+  });
+}
+
+/**
+ * The Sanguinesti staff times its own impact like the tridents: the impact graphic and the range-10 area sound go
+ * out WITH the cast, delayed to the projectile's end (46 cycles + 10 a tile to the target's nearest tile). A hit is
+ * spotanim 1541 at height 60 (1696 ticks 640, 778, 1073; 1698 4181, 4238), a hit with the life-leech proc is spotanim
+ * 1542 (sanguinesti_staff_heal) at height 92 (1698 tick 4265, 1696 631, 1485, 1509), both with sound 1460; a miss is
+ * spotanim 85 at height 124 and sound 227 (1696 774, 1063; 1698 4177).
+ */
+for (const [label, accurate, procs, graphic, sound] of [
+  ['hit', true, false, { id: 1541, height: 60 }, 1460],
+  ['hit with the life-leech proc', true, true, { id: 1542, height: 92 }, 1460],
+  ['miss', false, false, { id: 85, height: 124 }, 227],
+]) {
+  test(`a Sanguinesti staff ${label} sends its captured impact with the cast, delayed to the projectile's end, and nothing more at landing`, (t) => {
+    const caster = actor(t, 3200), near = actor(t, 3206), far = actor(t, 3240);
+    const npc = new core.NPC(core.NpcIdentifiers.MAN, new Location(3203, 3200));
+    t.mock.method(World, 'getPlayers', () => [caster, near, far].map((a) => a.player));
+    const player = caster.player, staff = new core.Item(core.ItemIdentifiers.SANGUINESTI_STAFF);
+    staff.setMetaValue('sanguinesti-staff-charges', 5);
+    player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT] = staff;
+    const graphics = [];
+    t.mock.method(npc, 'getHitpoints', () => 200);
+    t.mock.method(npc, 'getSize', () => 1);
+    t.mock.method(npc, 'performGraphic', (g) => graphics.push(g));
+    t.mock.method(player.getCombat(), 'getTarget', () => npc);
+    t.mock.method(core.AccuracyFormulasDpsCalc, 'rollAccuracy', () => accurate);
+    t.mock.method(Math, 'random', () => (procs ? 0.1 : 0.99)); // the 1 in 5 proc rolls below 0.2
+    const method = core.CombatFactory.getMethod(player);
+    assert.ok(method instanceof core.MagicCombatMethod && method !== core.CombatFactory.MAGIC_COMBAT, 'the staff own magic method, not the generic one');
+    assert.equal(method.canAttack(player, npc), true);
+    const hit = method.hits(player, npc)[0];
+    const end = 46 + 3 * 10;
+    const area = encodeSound(sound, { x: 3203, y: 3200, level: 0, loops: 1, delay: end, radius: 10, attenuation: 0 });
+    assert.deepEqual(caster.sounds(), [area]);
+    assert.deepEqual(near.sounds(), [area]);
+    assert.deepEqual(far.sounds(), []);
+    assert.deepEqual(graphics.map((g) => [g.id, g.delay, g.height]), [[graphic.id, end, graphic.height]]);
+    t.mock.method(hit, 'isAccurate', () => accurate);
+    method.handleAfterHitEffects(hit);
+    assert.deepEqual(caster.sounds(), [area], 'landing adds no second sound');
+    assert.equal(graphics.length, 1, 'or a second graphic');
+  });
+}
+
+/** 1696 ticks 774/778 (from the east of the size-3 Balance Elemental: end 86) and 1063/1073 (end 76); the code measured to the south-west tile. */
+for (const [casterX, end] of [[3206, 86], [3205, 76]]) {
+  test(`a Sanguinesti staff cast at a size-3 target from the east (${casterX - 3200 - 2} tiles from its nearest tile) ends at ${end}, landing in ${Math.ceil(end / 30)} ticks`, (t) => {
+    const caster = actor(t, casterX);
+    const npc = new core.NPC(core.NpcIdentifiers.MAN, new Location(3200, 3200));
+    t.mock.method(World, 'getPlayers', () => [caster.player]);
+    const player = caster.player, staff = new core.Item(core.ItemIdentifiers.SANGUINESTI_STAFF);
+    staff.setMetaValue('sanguinesti-staff-charges', 5);
+    player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT] = staff;
+    t.mock.method(npc, 'getHitpoints', () => 200);
+    t.mock.method(npc, 'getSize', () => 3);
+    t.mock.method(npc, 'performGraphic', () => {});
+    t.mock.method(player.getCombat(), 'getTarget', () => npc);
+    t.mock.method(core.AccuracyFormulasDpsCalc, 'rollAccuracy', () => true);
+    t.mock.method(Math, 'random', () => 0.99);
+    const method = core.CombatFactory.getMethod(player);
+    assert.equal(method.canAttack(player, npc), true);
+    const hit = method.hits(player, npc)[0];
+    assert.deepEqual(caster.sounds(), [encodeSound(1460, { x: 3200, y: 3200, level: 0, loops: 1, delay: end, radius: 10, attenuation: 0 })]);
+    assert.equal(hit.getDelay(), Math.ceil(end / 30), 'the hit lands with the projectile');
   });
 }

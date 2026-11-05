@@ -86,6 +86,8 @@
 module.exports = function registerTheFremennikIslesQuest(api) {
   const {
     Equipment,
+    Inventory,
+    Item,
     ItemIdentifiers,
     Location,
     NpcIdentifiers,
@@ -194,6 +196,7 @@ module.exports = function registerTheFremennikIslesQuest(api) {
   const YAK_HIDE_LEGS = ItemIdentifiers.YAK_HIDE_ARMOUR_3; // 10824
   const NEITIZNOT_SHIELD = ItemIdentifiers.NEITIZNOT_SHIELD; // 10826
   const HELM_OF_NEITIZNOT = ItemIdentifiers.HELM_OF_NEITIZNOT; // 10828
+  const HELM_PRICE = 50000;
   const ROYAL_DECREE = ItemIdentifiers.ROYAL_DECREE; // 10830
   const EMPTY_TAX_BAG = ItemIdentifiers.EMPTY_TAX_BAG; // 10831
   const LIGHT_TAX_BAG = ItemIdentifiers.LIGHT_TAX_BAG; // 10832
@@ -1217,6 +1220,21 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     }
   }
 
+  /**
+   * Why Mawnis can't sell a helm now, or null. Worked out on a copy of the inventory, as paying with
+   * the whole stack frees its slot. Live offers a quantity menu whose cap matched the free slots in both
+   * captures (RSProx 3027, 75), and no capture shows a full inventory. With too few coins live doesn't
+   * offer the purchase at all (3027), nor does the post-quest transcript; his standard dialogue, which
+   * Talk-to falls through to before the quest reaches him, does, so this refuses at the answer. Both
+   * refusals are our wording.
+   */
+  function mawnisRefusal(player) {
+    if (!hasItem(player, COINS, HELM_PRICE)) return "You don't have enough coins.";
+    const plan = new Inventory(player).setItems(player.getInventory().getCopiedItems());
+    plan.deleted(COINS, HELM_PRICE, false);
+    return plan.getAddableAmount(new Item(HELM_OF_NEITIZNOT, 1)) < 1 ? "You don't have enough inventory space." : null;
+  }
+
   function handleChoice(event) {
     const { player, npcId, option } = event;
     if (npcId === SLUG_HEMLIGSSEN) {
@@ -1274,10 +1292,15 @@ module.exports = function registerTheFremennikIslesQuest(api) {
       return;
     }
     if (MAWNIS_IDS.has(npcId) && option === "Very well, I accept.") {
-      if (hasItem(player, COINS, 50000)) {
-        player.getInventory().deleteNumber(COINS, 50000);
-        player.getInventory().adds(HELM_OF_NEITIZNOT, 1);
+      // Ends the transcript on a refusal, so "The Burgher hands you his helm." doesn't play.
+      const refusal = mawnisRefusal(player);
+      if (refusal) {
+        player.sendMessage(refusal);
+        event.end = true;
+        return;
       }
+      player.getInventory().deleteNumber(COINS, HELM_PRICE);
+      player.getInventory().adds(HELM_OF_NEITIZNOT, 1);
     }
   }
 

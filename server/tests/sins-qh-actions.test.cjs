@@ -135,8 +135,8 @@ test('Sins canonical Vanescula ntch-j starts the fight and keeps Safalaan HgxSdS
   const p = makePlayer();
   p.items.set(24699, 1);
   h.quest.setStage(p, 126);
-  const action = { player: p, npcId: 9574, stepId: 'ntch-j', handled: false };
-  (h.events['npc-dialogue:action'] ?? []).forEach(fn => fn(action));
+  const ready = { player: p, npcId: 9574, option: "I'm ready.", end: false };
+  (h.events['npc-dialogue:choice'] ?? []).forEach(fn => fn(ready));
   assert.equal(h.quest.getStage(p), 130, 'Vanescula ready advances to the Castle stage');
   assert.deepEqual(p.moves.at(-1), [3565, 3362, 0], 'Vanescula ready lands on the arena tile');
 
@@ -150,9 +150,9 @@ test('Sins canonical Vanescula ntch-j starts the fight and keeps Safalaan HgxSdS
 
   const blocked = makePlayer();
   h.quest.setStage(blocked, 126);
-  const early = { player: blocked, npcId: 9574, stepId: 'ntch-j', handled: false };
-  (h.events['npc-dialogue:action'] ?? []).forEach(fn => fn(early));
-  assert.equal(h.quest.getStage(blocked), 126, 'ntch-j without the flail cannot skip the gate');
+  const early = { player: blocked, npcId: 9574, option: "I'm ready.", end: false };
+  (h.events['npc-dialogue:choice'] ?? []).forEach(fn => fn(early));
+  assert.equal(h.quest.getStage(blocked), 126, "\"I'm ready.\" without the flail cannot skip the gate");
 });
 
 test('Sins login keeps the capture-zero lab bit clear', () => {

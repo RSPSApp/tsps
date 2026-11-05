@@ -124,9 +124,11 @@ Sent on every change while the fight HUD is up, with 15 arguments:
 | 7-10 | the four tether sites are whole (1) or broken (0) |
 | 11-14 | fire warnings on the four areas (shown when 1) |
 
-Energy and essence are stored ten times the Wiki's numbers (a cooked fish takes 150). A solo
-player's maximum is 2683 energy and 2492 essence (captures); the Wiki gives the scaling from
-about 2,600/2,500 per player solo down to 1,800/1,700 each with 40.
+Energy and essence are stored ten times the Wiki's numbers (a cooked fish takes 150). Each
+player's contribution follows the Wiki/Mod Squid approximation quoted in #2455: 2,600 energy
+and 2,500 essence solo, falling linearly to 1,800 and 1,700 per player with 40. The captures'
+solo HUD reads 2683/2492, which those numbers round, and that solo maximum is the anchor used
+here; this is an approximation, not the exact OSRS formula.
 
 ## The fight (captures)
 
@@ -143,7 +145,9 @@ about 2,600/2,500 per player solo down to 1,800/1,700 each with 40.
   "Tempoross is drawing in water, prepare yourselves!"; +2 script 4068 (300); +13 the wave hits:
   tethered players get "...the rope keeps you securely upright as the wave washes over you."
   and 10 points, Tempoross is 10572 again with seq `fsb_spawn`, water splashes (1843) and debris
-  locs 41292-41295 appear. Untethering sends script 4069 (60).
+  locs 41292-41295 appear. Untethering sends script 4069 (60). If Tempoross submerges before
+  the hit, there is no hit, but everyone still gets 4069 so the overlay closes (no capture of
+  that case).
 - **Lightning:** "A strong wind blows as clouds roll in..." (red); a cloud's shadow
   (41006) shows below it; +13 Tempoross plays `fsb_lightening_cast` (8905); then fires (NPC 8643 "Fire" with loc 37582 on its 2x2) start.
 - **Surfacing:** the first rise plays `fsb_spawn` (8897); every rise after a submerge plays
@@ -185,11 +189,11 @@ about 2,600/2,500 per player solo down to 1,800/1,700 each with 40.
 | After a wave | tethered players are untethered 2 ticks after the hit (captured at +2; done for them, not by a click) |
 | Walk while tethered | "You must untether yourself to move away." |
 | Repair | `human_poh_build`, sound 938, "You repair the mast." / "...the totem pole."; without a hammer: mesbox "You need a hammer to repair the mast." |
-| Douse a fire | `skip_throw_bucketofwater`, sounds 1733 and 2412, "You extinguish the fire.", bucket of water to bucket, +40 points |
+| Douse a fire | `skip_throw_bucketofwater`, sounds 1733 and 2412, "You extinguish the fire.", bucket of water to bucket, +40 points. Royal Titans registers "Douse" as a combat option, so the plugin claims our fire in `onNpcAttackOption`; a bucket of water used on it also douses. |
 | Standing in a fire | every 2 ticks: "You lose some <col=ff9e7a>fish</col> and a <col=ff9e7a>Bucket</col> to the fire." (the items lost named in that colour) |
 | Harpoon a spirit pool | "You start harpooning fish."; per scatter "The glowing fish scatter, shedding their magical scales.", +55 points |
 | A supply crate | "You take a Hammer from the crate." / "You take some Buckets from the crate." |
-| Fill-bucket at a pump | "You fill the bucket with water." |
+| Fill-bucket at a pump | one bucket a tick until none are empty, each with `human_pickuptable`, sound 4950 and "You fill the bucket with water." (captures 552, 1858) |
 | Points reach 2,000 | "You have earned enough points for a reward permit." |
 | Ferry (Sathwood) | fade, +4 teleport to (3148, 2842), "You ride the little boat south to the Ruins of Unkah.", jingle 171, sound 2163 |
 | Ferry (Nathwood) | +3 teleport to (3272, 3143), "You ride the little boat north to Al Kharid." |
@@ -234,7 +238,11 @@ cooks half the catch, so their fishing is quicker than on a normal world:
   fill from the west ship); a cloud NPC is spawned over each strike for its animations.
 - **Torrent:** a quarter of the gaps between attacks get one, aimed at a cannon being loaded
   if any; its message to a loader ("The surge of lightning arcs from the cannon into you...")
-  is the Wiki's trivia line.
+  is the Wiki's trivia line. Its 1842 projectile has no captured heights, so it flies from the
+  boss's water-pillar height (90, the cannon shot's captured end) down to the deck; a loader is
+  stunned with `human_stunned` and the circling stars `stunned_thieving` (245, captured on the
+  struck cannon's cannoneer in 552) and held for the stars' 8 ticks (seq 1054), not the cannon's
+  24-tick disable. No capture shows a stunned player, so the length is inferred.
 - **Spirit pool damage:** 10-120 a scatter (the Wiki's maximum of 12, ten times over).
 - **Energy regeneration for a crew:** every captured fight is solo (35 a tick of 2683). Ours
   scales it with the maximum, so any crew gets the same 77 ticks; a flat 35 gave a crew of

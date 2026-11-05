@@ -120,7 +120,12 @@ function setup() {
       },
     },
     TaskManager: { ...realCore.TaskManager, submit: (task) => pendingTasks.push(task) },
-    Sounds: { ...realCore.Sounds, sendSound: (target, sound) => sounds.push({ target, sound }) },
+    Sounds: {
+      ...realCore.Sounds,
+      sendSound: (target, sound) => sounds.push({ target, sound }),
+      // Impacts and splashes are range-10 area sounds at the target (RSProx 102 tick 232, 3275 line 1370).
+      playAreaSoundAt: (target, sound, radius) => sounds.push({ target, sound, radius, area: true }),
+    },
     CacheDefinitions: {
       getItem: (id) => ({ name: itemNames.get(id) }),
       getSpellName: () => 'Wind Bolt',
@@ -350,6 +355,9 @@ test('fresh stage 0 follows the full mandatory route to completion and rewards o
   const N = PluginManager.getCoreApi().NpcIdentifiers;
   const O = PluginManager.getCoreApi().ObjectIdentifiers;
   h.core = PluginManager.getCoreApi();
+  // The map's statue multiloc: a click names it, and varbit 1593 shows each stage.
+  h.core.ObjectDefinition.init();
+  const STATUE = 10952;
   assert.equal(h.quest.getStage(h.player), 0);
   assert.equal(h.variant(N.LAZIM), 'starting-out-talking-to-lazim');
 
@@ -367,7 +375,7 @@ test('fresh stage 0 follows the full mandatory route to completion and rewards o
   h.itemOnItem(I.SANDSTONE_32KG_, I.CHISEL);
   assert.equal(h.quest.getStage(h.player), 3);
   assert.equal(h.inventory.get(I.SANDSTONE_BASE), 1);
-  h.itemOnObject(I.SANDSTONE_BASE, O.FLAT_GROUND);
+  h.itemOnObject(I.SANDSTONE_BASE, STATUE);
   assert.equal(h.quest.getStage(h.player), 4);
 
   // 20 kg body, chisel, place, chisel statue. Talking at stage 4 while carrying
@@ -380,9 +388,9 @@ test('fresh stage 0 follows the full mandatory route to completion and rewards o
   assert.equal(h.quest.getStage(h.player), 5);
   h.itemOnItem(I.SANDSTONE_20KG_, I.CHISEL);
   assert.equal(h.quest.getStage(h.player), 6);
-  h.itemOnObject(I.SANDSTONE_BODY, O.HEADLESS_STATUE);
+  h.itemOnObject(I.SANDSTONE_BODY, STATUE);
   assert.equal(h.quest.getStage(h.player), 7);
-  h.itemOnObject(I.CHISEL, O.HEADLESS_STATUE_2);
+  h.itemOnObject(I.CHISEL, STATUE);
   assert.equal(h.quest.getStage(h.player), 8);
 
   // Choose and carve the head, confirm it, use it on the statue.
@@ -393,7 +401,7 @@ test('fresh stage 0 follows the full mandatory route to completion and rewards o
   assert.equal(h.quest.getStage(h.player), 9);
   assert.equal(h.inventory.get(I.STONE_HEAD), 1);
   assert.equal(conditionValue(h, 'Oxb3xp', N.LAZIM), true);
-  h.itemOnObject(I.STONE_HEAD, O.HEADLESS_STATUE_3);
+  h.itemOnObject(I.STONE_HEAD, STATUE);
   assert.equal(h.varbits.get(1593), 28, 'the head handover transforms the cache statue into its hole');
   h.action('ARRUvf', N.LAZIM);
   assert.equal(h.quest.getStage(h.player), 10);
@@ -893,6 +901,8 @@ test('spell puzzles resolve at projectile impact, and a Boneguard splash can be 
   assert.equal(h.quest.getStage(h.player), 16, 'a splash leaves the guard and quest unchanged');
   assert.equal(h.graphics.length, 1);
   assert.equal(h.sounds.length, 1);
+  assert.deepEqual([h.sounds[0].area, h.sounds[0].radius, h.sounds[0].sound.getId()], [true, 10, 227],
+    'a splash is the captured area sound at the boneguard, not a private one');
 
   h.accuracyResults.push(true);
   h.spellOnNpc(N.BONEGUARD, 'CRUMBLE_UNDEAD', null, false);
@@ -901,6 +911,9 @@ test('spell puzzles resolve at projectile impact, and a Boneguard splash can be 
   assert.equal(h.quest.getStage(h.player), 17, 'the accurate impact frees the guard');
   assert.equal(h.removed.filter((npc) => npc.id === N.BONEGUARD).length, 1);
   assert.equal(h.graphics.length, 2, 'the successful cast shows its spell end graphic');
+  assert.equal(h.sounds.length, 2, 'and its impact sound, which the old spell.impactSound() lookup never found');
+  assert.deepEqual([h.sounds[1].area, h.sounds[1].radius, h.sounds[1].sound.getId()], [true, 10, 124],
+    'Crumble Undead (spell 1171) lands as the table sound 124 at range 10');
 });
 
 test('a player logout before impact cancels quest effects and removes owner NPCs', () => {

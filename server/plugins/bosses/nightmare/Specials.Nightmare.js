@@ -224,6 +224,7 @@ function slowDrowsy({ player }) {
   state.slowedAt = Common.core.World.getProcessCycle();
   const combat = player.getCombat();
   combat.extendAttackDelay(combat.getAttackDelay() + extra);
+  require("./CombatAchievements.Nightmare").sporesSlowed(fight, player);
 }
 
 function attachSpecials(api) {

@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerWebweaverBowSpecialAttack(api) {
-  const { Animation, CombatFactory, CombatSpecial, Graphic, ItemIdentifiers, Misc, PendingHit, RangedCombatMethod, WeaponProfiles } = api.core;
+  const { Animation, CombatFactory, CombatPosition, CombatSpecial, Graphic, ItemIdentifiers, Misc, PendingHit, RangedCombatMethod } = api.core;
 
   const DRAIN = 50;
   const SPECIAL_ANIMATION = new Animation(9964);
@@ -11,8 +11,7 @@ module.exports = function registerWebweaverBowSpecialAttack(api) {
 
   class WebweaverBowCombatMethod extends RangedCombatMethod {
     hits(character, target) {
-      const distance = character.getLocation().getDistance(target.getLocation());
-      const hitDelay = WeaponProfiles.hitDelays(character.getAsPlayer(), distance)[0];
+      const hitDelay = RangedCombatMethod.playerHitDelays(character, target, CombatPosition.projectileDistance(character, target))[0];
       // Swarm resolves in two close hitsplat groups of two independent rolls.
       return [
         new PendingHit(character, target, this, hitDelay),

@@ -174,7 +174,8 @@ test("the collection log's Fractured Archive count is its overall completion rec
   PM.emitCustomEvent("collection-log:category-count", request);
   assert.equal(request.count, 2);
 
+  // Asked directly: the Chambers' own plugin answers this event for its category.
   const other = { player, category: "Chambers of Xeric", count: null };
-  PM.emitCustomEvent("collection-log:category-count", other);
+  Records.collectionLogCount(other);
   assert.equal(other.count, null);
 });

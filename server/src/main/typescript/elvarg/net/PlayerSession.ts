@@ -1,3 +1,4 @@
+import { CrossFloor } from "../game/CrossFloor";
 import { PluginManager } from "../plugins/PluginManager";
 import { MAX_GAME_MESSAGE_BYTES } from "./BinaryChannel";
 import { BoatManager } from "../game/content/sailing/BoatManager";
@@ -455,6 +456,7 @@ export class PlayerSession {
           const boat = BoatManager.getBoat(worldView);
           return boat ? { x: boat.deckBaseX, y: boat.deckBaseY, level: 0 } : undefined;
         },
+        CrossFloor.enabled(),
       )
     );
 

@@ -20,6 +20,11 @@ compared and one login mismatch was fixed.
 
 ## Findings
 
+- **fixed** (2026-11-05) The Tome of Experience published only its saved chapter count in quest
+  attributes. Capture 1637 raises `myq5_xp_reward` (varbit 10346) 1-3 for the first three chapters
+  and `myq5_bonus_xp_reward` (varbit 14611) 1-3 for the last three (ticks 7398-7424, lines
+  135530-135870), with both at 0 after completion. The plugin now sends and restores both varbits.
+  Covered by `server/tests/remaining-morytania-parity.test.cjs`.
 - **fixed** `myq5_lab_sc_unlocked` (varbit 13719) was published as 1 from stage 58, but capture
   1637 leaves it **0 for the entire run**, including inside and after the laboratory. The send was
   removed from `syncVisuals`; login now leaves the cache default in place. Covered by

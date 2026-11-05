@@ -1,0 +1,50 @@
+[
+ {
+  "k": "say",
+  "t": 762,
+  "who": "Blackjack seller",
+  "text": "Hello. Could I interest you in a Blackjack?"
+ },
+ {
+  "k": "say",
+  "t": 764,
+  "who": "Blackjack seller",
+  "text": "That pesky little urchin has done it again! I can't believe it he's managed to rob me again."
+ },
+ {
+  "k": "say",
+  "t": 765,
+  "who": "player",
+  "text": "Well maybe you should modify the blackjack to have better defensive qualities."
+ },
+ {
+  "k": "say",
+  "t": 766,
+  "who": "Blackjack seller",
+  "text": "I might as well. Next time I'll get him."
+ },
+ {
+  "k": "say",
+  "t": 767,
+  "who": "player",
+  "text": "So I take it you will be supplying Ali Morrisane with the new variety of blackjack then?"
+ },
+ {
+  "k": "varbit",
+  "t": 768,
+  "id": 916,
+  "value": 0
+ },
+ {
+  "k": "varbit",
+  "t": 768,
+  "id": 911,
+  "value": 4
+ },
+ {
+  "k": "say",
+  "t": 768,
+  "who": "Blackjack seller",
+  "text": "Yes, yes. I'll start shipping it by carpet as soon as the first batch is ready."
+ }
+]

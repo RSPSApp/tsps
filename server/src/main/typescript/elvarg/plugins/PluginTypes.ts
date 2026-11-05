@@ -296,6 +296,8 @@ export interface PluginCanTeleportEvent {
   wildernessLevelLimit?: number;
   /** Where the teleport lands, when the caller knows it. */
   destination?: any;
+  /** Name of the spell, when the teleport comes from a spell cast. */
+  spellName?: string;
   allow: boolean | null;
 }
 
@@ -1250,6 +1252,17 @@ export interface PluginApi {
     regionId: number,
     source: string | [string, string]
   ): void;
+  /**
+   * Replace a region with in-memory map data (decoded terrain and loc files), reload its
+   * clipping and stream it to connected players. Returns false when it was refused.
+   */
+  replaceMapRegionData(regionId: number, terrainData: Uint8Array, objectData: Uint8Array | null): boolean;
+  /**
+   * Drop this plugin's runtime replacement: native clipping returns and connected clients get
+   * the native map. False when it was refused (another owner, no native map: the replacement is
+   * kept) or when a connected client could not be sent the native map.
+   */
+  restoreMapRegion(regionId: number): boolean;
   registerDefinitionSource(
     definitionType: string,
     source: DefinitionSource
@@ -1568,6 +1581,7 @@ export interface PluginCoreApi {
   LocModelType: any;
   MapObjects: any;
   ItemOnGroundManager: any;
+  GroundItemOperationType: any;
   ItemOnGround: any;
   GroundItemState: any;
   ItemDefinition: any;
@@ -1595,6 +1609,8 @@ export interface PluginCoreApi {
   CombatSpells: any;
   Autocasting: any;
   NPC: any;
+  /** World spawns: `requeue(npc)` returns a live spawn to pending, `activateNear(location)` spawns what is due. */
+  NpcSpawnDefinitionLoader: any;
   GameConstants: any;
   Music: any;
   WorldDefinition: any;

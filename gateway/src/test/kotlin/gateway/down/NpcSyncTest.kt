@@ -26,8 +26,15 @@ class NpcSyncTest {
         assertEquals(listOf(5, 6, 7, 3, 4, 0, 1, 2), faced)
     }
 
+    @Test
+    fun `cross-floor npc spawns carry their plane`() {
+        val packet = frame(worldView = null, dx = 3, dz = 2, plane = 2)
+        val added = NpcSync().decode(TspsPacket(TspsServerPacket.NPC_INFO, packet)).changes.single() as NpcSync.Change.Added
+        assertEquals(2, added.npc.level)
+    }
+
     /** tsps's NPC_INFO with no NPCs yet and one added: no block, small deltas. */
-    private fun frame(worldView: Int?, dx: Int, dz: Int, direction: Int = 0): ByteArray {
+    private fun frame(worldView: Int?, dx: Int, dz: Int, direction: Int = 0, plane: Int? = null): ByteArray {
         val bits = StringBuilder()
         fun write(width: Int, value: Int) = bits.append(Integer.toBinaryString(value).padStart(32, '0').takeLast(width))
         write(8, 0)
@@ -40,10 +47,11 @@ class NpcSyncTest {
         write(5, dx)
         write(3, direction)
         write(16, TYPE)
+        if (plane != null) write(2, plane)
         write(16, 0xFFFF)
         while (bits.length % 8 != 0) bits.append('0')
         val body = ByteArray(bits.length / 8) { bits.substring(it * 8, it * 8 + 8).toInt(2).toByte() }
-        return TspsWriter().i32(0).u8(0).u16(ROOT_X).u16(ROOT_Z).u16(body.size).bytes(body).body()
+        return TspsWriter().i32(0).u8(if (plane != null) 2 else 0).u16(ROOT_X).u16(ROOT_Z).u16(body.size).bytes(body).body()
     }
 
     private companion object {

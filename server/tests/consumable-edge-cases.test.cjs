@@ -529,6 +529,48 @@ test("an antipoison mix heals its extra 3 Hitpoints and cures poison in one drin
   assert.equal(player.poisonImmunity.seconds, 90);
 });
 
+test("a ranging mix drinks as a ranging potion and heals 6; an attack mix heals 3", () => {
+  const ranger = createPlayer({ base: 99, current: 50 });
+  const entry = Potions._test.findPotionEntry(ItemIdentifiers.RANGING_MIX_2_);
+  assert.equal(entry.replacementId, ItemIdentifiers.RANGING_MIX_1_);
+  assert.equal(Potions._test.findPotionEntry(ItemIdentifiers.RANGING_MIX_1_).doses, 1);
+  entry.potion.effect(ranger);
+  assert.equal(ranger.levels.get(Skill.RANGED), 99 + 13, "Wiki: +4 + 10%, 13 at 99");
+  assert.equal(ranger.levels.get(Skill.HITPOINTS), 56);
+  const fighter = createPlayer({ base: 99, current: 50 });
+  Potions._test.findPotionEntry(ItemIdentifiers.ATTACK_MIX_2_).potion.effect(fighter);
+  assert.equal(fighter.levels.get(Skill.HITPOINTS), 53);
+});
+
+test("an energy potion and an energy mix restore 15% run energy a dose; the mix also heals 3", () => {
+  for (const [id, heals] of [[ItemIdentifiers.ENERGY_POTION_4_, 0], [ItemIdentifiers.ENERGY_MIX_2_, 3]]) {
+    const runner = createPlayer({ base: 99, current: 50 });
+    const effect = Potions._test.findPotionEntry(id).potion.effect;
+    effect(runner);
+    assert.equal(runner.getRunEnergy(), 15, "Wiki: 15% a dose from 0%");
+    runner.setRunEnergy(50);
+    effect(runner);
+    assert.equal(runner.getRunEnergy(), 65, "and from 50%");
+    assert.equal(runner.levels.get(Skill.HITPOINTS), 50 + heals * 2);
+  }
+});
+
+test("a Zamorak mix deals floor((HP - 1) / 8) then heals 6, keeping the brew's boosts and Prayer", () => {
+  for (const [hp, after] of [[50, 50], [99, 93], [1, 7]]) {
+    const player = createPlayer({ base: 99, current: 99 });
+    player.levels.set(Skill.HITPOINTS, hp);
+    Potions._test.findPotionEntry(ItemIdentifiers.ZAMORAK_MIX_2_).potion.effect(player);
+    assert.equal(player.levels.get(Skill.HITPOINTS), after, `Wiki, at ${hp} Hitpoints`);
+  }
+  const mixed = createPlayer({ base: 99, current: 99 });
+  const brewed = createPlayer({ base: 99, current: 99 });
+  Potions._test.findPotionEntry(ItemIdentifiers.ZAMORAK_MIX_2_).potion.effect(mixed);
+  Potions._test.findPotionEntry(ItemIdentifiers.ZAMORAK_BREW_4_).potion.effect(brewed);
+  for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.PRAYER]) {
+    assert.equal(mixed.levels.get(skill), brewed.levels.get(skill), "the stat changes are the brew's");
+  }
+});
+
 test("a weaker antipoison never shortens an active poison immunity", () => {
   const player = createPlayer({ base: 99, current: 99 });
   Potions._test.findPotionEntry(ItemIdentifiers.ANTI_VENOM_4_).potion.effect(player);

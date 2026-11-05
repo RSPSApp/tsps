@@ -87,6 +87,31 @@ for equipment. Clear inherited secondary models and recolours when replacing
 the entire model. Inventory framing (`zoom2d`, angles and offsets) and wearable
 offsets remain configurable for calibration.
 
+Dialogue helmets use separate native head models, not the wearable body models.
+In an existing helmet record, keep its `id`, `baseItemId` and other properties;
+for example, add the following head assets and `objType` fields (the `.dat`
+files are your own models under `data/models`):
+
+```json
+"models": {
+  "1000100": "my-helmet/male-chathead.dat",
+  "1000101": "my-helmet/female-chathead.dat"
+},
+"objType": {
+  "name": "My helmet",
+  "maleHeadModel": 1000100,
+  "maleHeadModel2": -1,
+  "femaleHeadModel": 1000101,
+  "femaleHeadModel2": -1
+}
+```
+
+`maleHeadModel2` and `femaleHeadModel2` are optional secondary head parts;
+`-1` clears an inherited secondary part. Use head geometry suited to dialogue,
+and choose unused external model IDs for your assets. These fields already use
+the normal custom-item delivery and native chathead renderer; no cache packing
+or additional JSON field is needed.
+
 Restart the server and reconnect after editing. Definitions and compressed
 model bytes are delivered before the initial appearance/inventory updates;
 the client and render workers use them ahead of cache assets. Each compressed
@@ -174,6 +199,17 @@ This prevents stale "ghost" players from remaining visible after disconnects/ref
 Runtime plugins are loaded from:
 
 `./plugins`
+
+The native OSRS Character Summary is shown by default. To enable the custom summary,
+merge this into `data/definitions/world.local.json` (or `world.json`) and restart:
+
+```json
+{ "plugins": { "CustomCharacterSummary": true } }
+```
+
+Unset or false keeps the native summary, including when legacy `disabledPlugins`
+is present. The saved combat-XP toggle choice is retained but inactive while the custom
+feature is off; enabling it again restores that choice.
 
 Current convention is one plugin per file.
 Subdirectories are supported up to 2 levels deep under `./plugins`.

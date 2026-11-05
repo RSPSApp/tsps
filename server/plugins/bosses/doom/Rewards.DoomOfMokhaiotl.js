@@ -93,19 +93,12 @@ function bankFor(player, id) {
 
 /** Moves one entry to the inventory or bank; returns how many moved. */
 function take(player, entry, destination) {
-  const { Item, ItemDefinition } = Shared.core();
-  if (destination === "bank") {
-    const bank = bankFor(player, entry.id);
-    if (!bank) return 0;
-    bank.add(new Item(entry.id, entry.amount), false);
-    return entry.amount;
-  }
-  const inventory = player.getInventory();
-  const stackable = ItemDefinition.forId(entry.id)?.isStackable?.() === true;
-  const moved = stackable ? (inventory.contains(entry.id) || inventory.getFreeSlots() > 0 ? entry.amount : 0)
-    : Math.min(entry.amount, inventory.getFreeSlots());
+  const { Item } = Shared.core();
+  const target = destination === "bank" ? bankFor(player, entry.id) : player.getInventory();
+  if (!target) return 0;
+  const moved = target.getAddableAmount(new Item(entry.id, entry.amount));
   if (moved <= 0) return 0;
-  inventory.add(new Item(entry.id, moved), false);
+  target.add(new Item(entry.id, moved), false);
   return moved;
 }
 

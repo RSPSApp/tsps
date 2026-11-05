@@ -231,8 +231,8 @@ assumption.
       `amountPerEssence`;
     - new generic emits at the action: `magic:enchanted`, `herblore:made`, `crafting:made`,
       `farming:planted`, and core `prayer:activated`.
-  - **Not assigned:** a task without an entry is content this server lacks: skullball, the
-    Ardougne Castle chest, Dorgesh-Kaan lamps and nickel. Sherlock never sets them.
+  - **Every elite task is assigned:** skullball (`skullball:goal`) and the Dorgesh-Kaan lamps
+    (`dorgesh-kaan-lamps:fixed`) have their own plugins.
 - **Kill steps** (elite cryptic, Wiki cryptic clues: "pick up the clue or casket that it drops"):
   killing one of the step's NPCs while holding the clue takes the clue and drops the next one, or
   the casket, on the NPC's tile. The drop is the killer's alone and keeps the trail's meta.

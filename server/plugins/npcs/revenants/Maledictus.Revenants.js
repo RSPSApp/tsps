@@ -279,6 +279,7 @@ function createMaledictus(api, core, { inCaves, surge }) {
     const where = player.getLocation().clone();
     if (stackable) core.ItemOnGroundManager.registerLocation(player, new core.Item(id, amount), where);
     else for (let i = 0; i < amount; i++) core.ItemOnGroundManager.registerLocation(player, new core.Item(id, 1), where);
+    api.emitCustomEvent("collection-log:obtain", { player, itemId, amount });
     announce(watchers, player, itemId, amount);
   }
 

@@ -910,6 +910,7 @@ test("the sail buttons follow their labels for each move mode", () => {
 function registerPlugin(file) {
   const hooks = { objects: {}, objectHandlers: [], npcs: {}, events: {}, emitted: [], interfaceClicks: [] };
   require(`../plugins/skills/sailing/${file}`).register({
+    core: { BoatManager },
     onObjectInteraction: (name, actions) => {
       if (typeof name === "function") hooks.objectHandlers.push(name);
       else hooks.objects[name] = actions;
@@ -941,7 +942,8 @@ test("the sailing plugins register their hooks and load the boat and dock data",
   const helm = registerPlugin("Helm.plugin");
   assert.deepEqual(Object.keys(helm.objects.Helm), ["Navigate", "Stop-navigating", "Escape"]);
   assert.equal(helm.interfaceClicks.length, 2, "the sail buttons and the wind catcher's release");
-  assert.deepEqual(Object.keys(registerPlugin("Sailing.plugin").events).sort(), ["sailing:boarded", "sailing:left"]);
+  assert.deepEqual(Object.keys(registerPlugin("Sailing.plugin").events).sort(),
+    ["sailing:board-supplied-panel", "sailing:boarded", "sailing:leave-supplied-panel", "sailing:left"]);
   assert.deepEqual(Object.keys(registerPlugin("Shipwright.plugin").npcs), ["Junior Jim"]);
   assert.ok(Sailing.getDock("the_pandemonium"));
 });

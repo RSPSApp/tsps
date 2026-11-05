@@ -13,6 +13,7 @@ const Anvil = require("../plugins/skills/smithing/Anvil.Smithing");
 const Superheat = require("../plugins/skills/smithing/Superheat.Smithing");
 
 const buttons = new Map(), objects = new Map(), itemActions = new Map(), events = new Map(), tasks = [], players = [];
+const successEvents = [];
 let disconnect, itemOnObject, CacheDefinitions;
 const extraItemOnObject = [], startups = [];
 let denyAnvil = false;
@@ -23,6 +24,7 @@ function registerSmithing() {
     onPlayerDisconnect: handler => { disconnect = handler; },
     onCustomEvent: (name, handler) => events.set(name, [...(events.get(name) ?? []), handler]),
     emitCustomEvent(name, request) {
+      if (name === "smithing:success") successEvents.push(request);
       if (name === "smithing:anvil-access") request.denied = denyAnvil;
       if (name === "quest:is-complete") request.complete = request.player.quests?.has(request.key) ?? false;
       for (const handler of events.get(name) ?? []) handler(request);
@@ -257,6 +259,19 @@ test("anvil timing, messages and the last-made varbits follow the captures", () 
   assert.equal(player.items.get(I.STEEL_DART_TIP), 10);
   ticks(1);
   assert.equal(player.items.get(I.STEEL_DART_TIP), 20);
+});
+
+test("anvil smithing succeeds without station provenance when the interaction has no object", () => {
+  const player = playerWith(I.BRONZE_BAR, 1);
+  const before = successEvents.length;
+  open(player);
+  click(player, 9);
+  ticks(4);
+  const event = successEvents.slice(before).find(candidate => candidate.player === player);
+  assert.ok(event);
+  assert.equal(event.itemId, I.BRONZE_DAGGER);
+  assert.equal(Object.hasOwn(event, "stationObjectId"), false);
+  assert.equal(Object.hasOwn(event, "location"), false);
 });
 
 // Captured (rsprox, rec 68): a product above the player's level closes the interface with a message

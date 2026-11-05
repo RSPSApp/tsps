@@ -152,7 +152,11 @@ module.exports = function registerTouristTrapQuest(api) {
   const MINING_CAMP_EXIT_TILE = { x: 3272, y: 3029, z: 0 };
   /** The camp itself (Quest Helper's camp zone), used to tell entering from leaving. */
   const MINING_CAMP_BOUNDS = { minX: 3274, maxX: 3305, minY: 3014, maxY: 3037 };
-  const MINE1_TILE = { x: 3279, y: 9420, z: 0 };
+  /**
+   * Ours, inferred from clipping: north of the inner door is the side that walks
+   * to the guards and the cave. No capture or source gives the landing tile.
+   */
+  const MINE1_TILE = { x: 3279, y: 9427, z: 0 };
   const DEEP_MINE_TILE = { x: 3284, y: 9414, z: 0 };
   const EAST_MINE_TILE = { x: 3318, y: 9430, z: 0 };
   const WEST_MINE_CART_TILE = { x: 3303, y: 9417, z: 0 };
@@ -885,7 +889,7 @@ module.exports = function registerTouristTrapQuest(api) {
   }
 
   function handleItemOnItem(event) {
-    const { player, itemId, otherItemId } = event;
+    const { player, usedItemId: itemId, usedWithItemId: otherItemId } = event;
     const isFeather = itemId === FEATHER_ITEM_ID || otherItemId === FEATHER_ITEM_ID;
     const isTip = itemId === PROTOTYPE_DART_TIP_ITEM_ID || otherItemId === PROTOTYPE_DART_TIP_ITEM_ID;
     if (!isFeather || !isTip) return;

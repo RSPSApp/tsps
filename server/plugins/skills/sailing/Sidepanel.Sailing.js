@@ -101,6 +101,25 @@ function boatVarps(type, owned) {
   return varps;
 }
 
+/** A supplied ship has a UI description, not an owned boat's saved parts or slot. */
+function describeSuppliedBoat(profile, hitpoints, maxHitpoints) {
+  const values = Object.fromEntries(DESCRIPTION_VARBITS.map(id => [id, 0]));
+  const stats = profile.stats ?? {};
+  for (const [stat, varbits] of Object.entries(STAT_VARBITS)) {
+    for (const varbit of varbits) values[varbit] = stats[stat] ?? 0;
+  }
+  for (const [stat, varbit] of Object.entries(RESISTANCE_VARBITS)) values[varbit] = stats[stat] ?? 0;
+  values[VARBIT.SIDEPANEL_BOAT_HP_MAX] = maxHitpoints;
+  values[VARBIT.SIDEPANEL_BOAT_HP] = Math.max(0, Math.min(maxHitpoints, hitpoints));
+  return values;
+}
+
+function suppliedBoatVarps(profile) {
+  const values = { [VARP_SIDEPANEL_BOAT_TYPE]: profile.sidepanelBoatType };
+  for (const [stat, varp] of Object.entries(VARP_SIDEPANEL_DEFENCE)) values[varp] = profile.stats?.[stat] ?? 0;
+  return values;
+}
+
 function clearBoatVarps(player) {
   const sender = player.getPacketSender();
   sender.sendConfig(VARP_SIDEPANEL_BOAT_TYPE, -1);
@@ -124,4 +143,5 @@ function openSidepanel(player, type, varbits, varps) {
     (SIDEPANEL_GROUP << 16) | CREW_RADIO_BUTTONS_CHILD, 0, CREW_RADIO_BUTTONS_MAX_SLOT, IF_EVENT_OP1);
 }
 
-module.exports = { describeBoat, boatVarps, clearBoatVarps, openSidepanel, DESCRIPTION_VARBITS, HOTSPOT_VARBITS };
+module.exports = { describeBoat, boatVarps, describeSuppliedBoat, suppliedBoatVarps,
+  clearBoatVarps, openSidepanel, DESCRIPTION_VARBITS, HOTSPOT_VARBITS };

@@ -47,8 +47,8 @@ const BAN_ADD = 14;
 const MAX_BANS = 100; // Wiki: Clan Settings
 
 const TITLES_GROUP = 695;
-const TITLES_CANCEL = 12;
-const TITLES_SAVE = 13;
+const TITLES_CANCEL = 13;
+const TITLES_SAVE = 14;
 /** clan_editing_0-4 mirror settings 1-5, bit for bit, while the screen edits them (scripts 4305, 4302). */
 const TITLE_VARPS = [
   [3023, 1],

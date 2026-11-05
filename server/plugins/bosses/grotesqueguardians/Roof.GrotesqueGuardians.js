@@ -12,7 +12,7 @@
  * - the Roof Exit (Escape / Quick-escape) takes the player down with a fade, 3 ticks after the
  *   click; a teleport, death or logging out ends the copy, and a player logging out on the roof
  *   comes back by the entrance;
- * - weapons: Dusk only takes melee, Dawn only ranged, magic or a halberd's melee; neither can be
+ * - weapons: Dusk only takes melee, Dawn takes ranged, magic or a halberd's melee; neither can be
  *   hurt while the fight says so (Fight.GrotesqueGuardians.js).
  */
 const Common = require("./Common.GrotesqueGuardians");
@@ -289,7 +289,7 @@ function isHalberd(player) {
   return Boolean(WeaponInterfaces) && player.getWeapon?.() === WeaponInterfaces.HALBERD;
 }
 
-/** Dusk: melee only; Dawn: ranged, magic or a halberd; neither while the fight protects it. */
+/** Dusk: melee only; Dawn: ranged, magic or a halberd; neither while protected. */
 function guardianHit({ npc, hit }) {
   const dusk = Common.isDusk(npc);
   const dawn = Common.isDawn(npc);

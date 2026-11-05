@@ -51,6 +51,10 @@ This needs a generic core hook: `Area.npcAggression(player, npc)` returns false 
 | Hole | The first visit ties a rope (varbit `godwars_entrance_rope` 3966, kept for good). After that: "You climb down the rope.", the ladder animation (828), the move to (2882, 5311, 2) a tick later. | capture |
 | Rope back up | Back to the surface by the hole. | |
 
+## The Wilderness dungeon's Strength route
+
+Boulder NPC 6621 at 3053,10165,3 needs 60 Strength, which can be boosted, and gives 5.5 XP going in (Wiki). Crevice 26767 at 3049,10165,3 behind it leads to 26769 at 3035,10158,0 (cache map). No capture moves the boulder or uses these two crevices, so these tiles are inferred: the boulder's landings 3052,10165,3 and 3055,10165,3, read off the corridor's collision, and the crevice landings 3034,10158,0 and 3050,10165,3, on each crevice's facing side, as the captured crevice at 3066,10142 lands. The Agility route is `gwdJuttingWall`.
+
 ## Strongholds
 
 All need a level of 70 (Wiki). Ticks count from arrival.

@@ -69,7 +69,10 @@ function chooseDestination(player, house, furniture, mode, page = 0) {
     if (!current(player, house, furniture)) return;
     if (mode === "teleport") {
       const travel = () => {
-        if (current(player, house, furniture) && furniture.destinations?.includes(destination.name) && TeleportHandler.checkReqs(player, destination.destination)) TeleportHandler.teleport(player, destination.destination.clone(), TeleportType.NORMAL, false);
+        if (current(player, house, furniture) && furniture.destinations?.includes(destination.name) && TeleportHandler.checkReqs(player, destination.destination)) {
+          TeleportHandler.teleport(player, destination.destination.clone(), TeleportType.NORMAL, false);
+          api.emitCustomEvent("construction:portal", { player, destination: destination.name });
+        }
       };
       if (Wilderness.isInLocation(destination.destination)) api.sendMultiChatboxPrompt(player, "This destination is in the Wilderness. Continue?", "Yes", travel, "No", () => {});
       else travel();

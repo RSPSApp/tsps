@@ -54,7 +54,7 @@ import { TimersPlugin } from "../../../game/plugins/statustimer/TimersPlugin";
 import { LegacyTileMarkersConfig } from "../../../game/plugins/tilemarkers/migrateTileMarkers";
 import { TileMarkersPlugin } from "../../../game/plugins/tilemarkers/TileMarkersPlugin";
 import { TilePacksPlugin } from "../../../game/plugins/tilepacks/TilePacksPlugin";
-import { WeatherPlugin } from "../../../game/plugins/weather/WeatherPlugin";
+import { LowEndDevicePlugin } from "../../../game/plugins/lowenddevice/LowEndDevicePlugin";
 import { XpTrackerPlugin } from "../../../game/plugins/xptracker/XpTrackerPlugin";
 import { XpGlobesPlugin } from "../../../game/plugins/xpglobes/XpGlobesPlugin";
 import { GuidePlugin } from "../../../game/plugins/optimalquestguide/GuidePlugin";
@@ -104,7 +104,6 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     ChatFilterPlugin,
     AnimationSmoothingPlugin,
     TimersPlugin,
-    WeatherPlugin,
     StatusBarsPlugin,
     BoostsPlugin,
     RegenMeterPlugin,
@@ -117,6 +116,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     FairyRingPlugin,
     StretchedModePlugin,
     GpuPlugin,
+    LowEndDevicePlugin,
     CameraPlugin,
     QuestHelperPlugin,
     XpTrackerPlugin,

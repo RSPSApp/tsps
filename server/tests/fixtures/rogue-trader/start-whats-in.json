@@ -1,0 +1,424 @@
+[
+ {
+  "k": "say",
+  "t": 8217,
+  "who": "Ali Morrisane",
+  "text": "Hello <player>. How's the adventuring going?"
+ },
+ {
+  "k": "say",
+  "t": 8219,
+  "who": "player",
+  "text": "Hi Ali. Not bad. How are you?"
+ },
+ {
+  "k": "say",
+  "t": 8220,
+  "who": "Ali Morrisane",
+  "text": "Still selling."
+ },
+ {
+  "k": "say",
+  "t": 8221,
+  "who": "player",
+  "text": "Anything interesting?"
+ },
+ {
+  "k": "say",
+  "t": 8222,
+  "who": "Ali Morrisane",
+  "text": "For you, always. As a matter of fact I have just acquired a fleet of magic carpets, which operate throughout the Kharidian desert."
+ },
+ {
+  "k": "say",
+  "t": 8223,
+  "who": "player",
+  "text": "Wow, that sounds great, how about your stall?"
+ },
+ {
+  "k": "say",
+  "t": 8224,
+  "who": "Ali Morrisane",
+  "text": "Trade is good, but I would like to expand and diversify, but it's proving a little more difficult than I initially thought."
+ },
+ {
+  "k": "say",
+  "t": 8225,
+  "who": "player",
+  "text": "How so?"
+ },
+ {
+  "k": "say",
+  "t": 8226,
+  "who": "Ali Morrisane",
+  "text": "I think the other merchants in this town are conspiring against me."
+ },
+ {
+  "k": "say",
+  "t": 8227,
+  "who": "player",
+  "text": "Oh come on! You're just being paranoid now."
+ },
+ {
+  "k": "say",
+  "t": 8228,
+  "who": "Ali Morrisane",
+  "text": "Well maybe I can't get any new suppliers then because I'm Pollnivnian."
+ },
+ {
+  "k": "say",
+  "t": 8229,
+  "who": "player",
+  "text": "You're what?"
+ },
+ {
+  "k": "say",
+  "t": 8230,
+  "who": "Ali Morrisane",
+  "text": "From Pollnivneach."
+ },
+ {
+  "k": "say",
+  "t": 8231,
+  "who": "player",
+  "text": "Maybe I could help you then?"
+ },
+ {
+  "k": "say",
+  "t": 8232,
+  "who": "Ali Morrisane",
+  "text": "Perhaps you could."
+ },
+ {
+  "k": "say",
+  "t": 8233,
+  "who": "Ali Morrisane",
+  "text": "I have an old friend - a cloth merchant Siamun, who lives in Sophanem - Do you know the place?"
+ },
+ {
+  "k": "say",
+  "t": 8234,
+  "who": "player",
+  "text": "Umm..... Images of cats and priests come to mind. Ah yes! There we go, it's the city of the dead South of Pollnivneach isn't it?"
+ },
+ {
+  "k": "say",
+  "t": 8237,
+  "who": "Ali Morrisane",
+  "text": "That's the one, well if you could convince him to supply me with some of his merchandise, I would be more than willing to sell them to the masses ...... for a small percentage of course."
+ },
+ {
+  "k": "varbit",
+  "t": 8238,
+  "id": 912,
+  "value": 1
+ },
+ {
+  "k": "menu",
+  "t": 8238,
+  "title": "Select an option",
+  "options": [
+   "So what's in this for me?",
+   "Ok I'll get on to it."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 8240,
+  "n": 1
+ },
+ {
+  "k": "say",
+  "t": 8240,
+  "who": "player",
+  "text": "What's in this for me?"
+ },
+ {
+  "k": "say",
+  "t": 8241,
+  "who": "Ali Morrisane",
+  "text": "I thought you wanted to help."
+ },
+ {
+  "k": "say",
+  "t": 8242,
+  "who": "player",
+  "text": "Of course, but everyone seems to be benefiting here but me."
+ },
+ {
+  "k": "say",
+  "t": 8243,
+  "who": "Ali Morrisane",
+  "text": "What do you mean?"
+ },
+ {
+  "k": "say",
+  "t": 8244,
+  "who": "player",
+  "text": "Well the trader gets their product sold, you get your cut, but what do I get?"
+ },
+ {
+  "k": "say",
+  "t": 8245,
+  "who": "Ali Morrisane",
+  "text": "You get access to more products. Is that not reward enough?"
+ },
+ {
+  "k": "say",
+  "t": 8246,
+  "who": "Ali Morrisane",
+  "text": "Hmmm... Perhaps not."
+ },
+ {
+  "k": "say",
+  "t": 8247,
+  "who": "Ali Morrisane",
+  "text": "I'll tell you what then, how about I let you have discounted flights on my magic carpet rides?"
+ },
+ {
+  "k": "varbit",
+  "t": 8248,
+  "id": 914,
+  "value": 1
+ },
+ {
+  "k": "say",
+  "t": 8248,
+  "who": "player",
+  "text": "Wow that would be great."
+ },
+ {
+  "k": "say",
+  "t": 8250,
+  "who": "Ali Morrisane",
+  "text": "Fair enough so, we have a win, win, win situation on our hands then."
+ },
+ {
+  "k": "say",
+  "t": 8252,
+  "who": "player",
+  "text": "Is there anyone else you want me to talk to on your behalf?"
+ },
+ {
+  "k": "say",
+  "t": 8253,
+  "who": "Ali Morrisane",
+  "text": "There's a blackjack seller in Pollnivneach, a cautious type of guy, not the usual entrepreneurial sort that I would normally deal with, but..."
+ },
+ {
+  "k": "say",
+  "t": 8254,
+  "who": "Ali Morrisane",
+  "text": "I think that he has a product with real potential..."
+ },
+ {
+  "k": "say",
+  "t": 8255,
+  "who": "player",
+  "text": "What? .... Blackjacks?"
+ },
+ {
+  "k": "say",
+  "t": 8256,
+  "who": "Ali Morrisane",
+  "text": "Yes, but at the moment the product isn't polished enough, if you could convince him to create a larger variety of weapon I would gladly stock his products."
+ },
+ {
+  "k": "varbit",
+  "t": 8257,
+  "id": 911,
+  "value": 1
+ },
+ {
+  "k": "menu",
+  "t": 8257,
+  "title": "Select an option",
+  "options": [
+   "So what's in this for me?",
+   "Ok I'll see what I can do."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 8260,
+  "n": 1
+ },
+ {
+  "k": "say",
+  "t": 8260,
+  "who": "player",
+  "text": "What's in this for me?"
+ },
+ {
+  "k": "say",
+  "t": 8261,
+  "who": "Ali Morrisane",
+  "text": "I thought you wanted to help."
+ },
+ {
+  "k": "say",
+  "t": 8262,
+  "who": "player",
+  "text": "Of course, but everyone seems to be benefiting here but me."
+ },
+ {
+  "k": "say",
+  "t": 8263,
+  "who": "Ali Morrisane",
+  "text": "What do you mean?"
+ },
+ {
+  "k": "say",
+  "t": 8264,
+  "who": "player",
+  "text": "Well the trader gets their product sold, you get your cut, but what do I get?"
+ },
+ {
+  "k": "say",
+  "t": 8265,
+  "who": "Ali Morrisane",
+  "text": "You get access to more products. Is that not reward enough?"
+ },
+ {
+  "k": "say",
+  "t": 8266,
+  "who": "Ali Morrisane",
+  "text": "Hmmm... Perhaps not."
+ },
+ {
+  "k": "say",
+  "t": 8267,
+  "who": "Ali Morrisane",
+  "text": "Didn't we also agree that you would get discounted travel on my magic carpet network?"
+ },
+ {
+  "k": "say",
+  "t": 8268,
+  "who": "player",
+  "text": "Oh ya, I forgot."
+ },
+ {
+  "k": "say",
+  "t": 8270,
+  "who": "Ali Morrisane",
+  "text": "So what's your problem then?"
+ },
+ {
+  "k": "say",
+  "t": 8271,
+  "who": "player",
+  "text": "I don't have one I guess."
+ },
+ {
+  "k": "say",
+  "t": 8272,
+  "who": "Ali Morrisane",
+  "text": "Good, that's what I like to hear. Now where were we?"
+ },
+ {
+  "k": "say",
+  "t": 8273,
+  "who": "Ali Morrisane",
+  "text": "I think I need just one more product type, something magical ... now what could I stock that's magical, has large demand and a pretty good profit margin..."
+ },
+ {
+  "k": "say",
+  "t": 8274,
+  "who": "player",
+  "text": "How about runes?"
+ },
+ {
+  "k": "say",
+  "t": 8275,
+  "who": "Ali Morrisane",
+  "text": "Yes, that would be perfect, but who could I get that would supply? There really seems to be a gap in the market in the desert but I don't know anyone in that line of business."
+ },
+ {
+  "k": "say",
+  "t": 8276,
+  "who": "player",
+  "text": "Hang on, I know somebody called Aubury, decent fella. I helped him out a while back. Perhaps I could approach him about the idea."
+ },
+ {
+  "k": "say",
+  "t": 8277,
+  "who": "Ali Morrisane",
+  "text": "Oh yes, the rune seller from Varrock. That would be perfect. He's far enough away that he wouldn't end up competing with himself."
+ },
+ {
+  "k": "varbit",
+  "t": 8278,
+  "id": 913,
+  "value": 1
+ },
+ {
+  "k": "say",
+  "t": 8278,
+  "who": "player",
+  "text": "What do you mean?"
+ },
+ {
+  "k": "say",
+  "t": 8279,
+  "who": "Ali Morrisane",
+  "text": "Well the rune market is a limited one, if I were to sell his runes from a location nearby his shop, then I would take part of his market share so he would in fact not benefit from me sel"
+ },
+ {
+  "k": "say",
+  "t": 8280,
+  "who": "player",
+  "text": "Ah ha I think I know where this is going. So because you're located far enough away from him you will take up someone else's share in the market and Aubury will make more money as a resul"
+ },
+ {
+  "k": "say",
+  "t": 8281,
+  "who": "Ali Morrisane",
+  "text": "Very well anticipated."
+ },
+ {
+  "k": "menu",
+  "t": 8282,
+  "title": "Select an option",
+  "options": [
+   "So what's in this for me?",
+   "Ok I'll see what I can do."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 8285,
+  "n": 2
+ },
+ {
+  "k": "say",
+  "t": 8285,
+  "who": "player",
+  "text": "Ok I'll see what I can do."
+ },
+ {
+  "k": "say",
+  "t": 8286,
+  "who": "Ali Morrisane",
+  "text": "Well you had better get going, you've a fair bit of travelling ahead of you. Unless you want to make a small purchase from me first?"
+ },
+ {
+  "k": "msg",
+  "t": 8287,
+  "kind": "gamemessage",
+  "text": "Despite your best efforts Ali Morrisane, the greatest salesman in the world, still manages to sell you some junk."
+ },
+ {
+  "k": "menu",
+  "t": 8287,
+  "title": "Select an option",
+  "options": [
+   "No I'm really too busy.",
+   "Ok"
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 8289,
+  "n": 2
+ }
+]

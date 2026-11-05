@@ -17,7 +17,7 @@ let Shared, Voyage, Rewards, Lobby, Sea;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   Shared = require('../plugins/minigames/fishingtrawler/Shared.FishingTrawler');
-  Shared.bind({ core });
+  Shared.bind({ core, emitCustomEvent: () => {} });
   ({ Voyage } = require('../plugins/minigames/fishingtrawler/Voyage.FishingTrawler'));
   Rewards = require('../plugins/minigames/fishingtrawler/Rewards.FishingTrawler');
   Lobby = require('../plugins/minigames/fishingtrawler/Lobby.FishingTrawler');
@@ -26,6 +26,15 @@ before(async () => {
 
 function fakePlayer({ fishing = 99, registered = true, hitpoints = 10, location = [2665, 3170, 1], privateArea = null, dying = false } = {}) {
   const attributes = new Map();
+  const banked = new Map();
+  const bank = {
+    contains: (id) => (banked.get(id) ?? 0) > 0,
+    getAmount: (id) => banked.get(id) ?? 0,
+    getFreeSlots: () => 800,
+    getAddableAmount: (item) => item.getAmount(),
+    add: (item) => banked.set(item.getId(), (banked.get(item.getId()) ?? 0) + item.getAmount()),
+  };
+  const at = new core.Location(location[0], location[1], location[2]);
   const player = {
     messages: [],
     sendMessage: (text) => player.messages.push(text),
@@ -33,13 +42,13 @@ function fakePlayer({ fishing = 99, registered = true, hitpoints = 10, location 
     getHitpoints: () => hitpoints,
     isDyingReturn: () => dying,
     getPrivateArea: () => privateArea,
-    getLocation: () => ({ getX: () => location[0], getY: () => location[1], getZ: () => location[2] }),
+    getLocation: () => at,
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getSkillManager: () => ({ getMaxLevel: () => fishing, getCurrentLevel: () => fishing }),
     getInventory: () => ({ contains: () => false, getAmount: () => 0 }),
     getEquipment: () => ({ contains: () => false, getAmount: () => 0 }),
-    getBank: () => ({ contains: () => false, getAmount: () => 0, getFreeSlots: () => 800 }),
+    getBank: () => bank,
     getCurrentBankTab: () => 0,
   };
   return player;
@@ -356,10 +365,14 @@ test("the crates only answer for the trawler's own: other Hammers crates fall th
 test('a full bank keeps the rest of the catch in the net', () => {
   const player = fakePlayer();
   const banked = [];
-  player.getBank = () => ({ contains: () => false, getAmount: () => 0,
+  const amounts = new Map();
+  player.getBank = () => ({ contains: (id) => (amounts.get(id) ?? 0) > 0, getAmount: (id) => amounts.get(id) ?? 0,
     getFreeSlots: () => banked.length === 0 ? 1 : 0,
     getAddableAmount: (item) => banked.length === 0 ? item.getAmount() : 0,
-    add: (item) => banked.push(item.getId()) });
+    add: (item) => {
+      banked.push(item.getId());
+      amounts.set(item.getId(), (amounts.get(item.getId()) ?? 0) + item.getAmount());
+    } });
   player.getSkillManager = () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences: () => {} });
   player.setAttribute(Shared.REWARD_ATTRIBUTE, { items: [[317, 3], [321, 2]], xp: 10 });
   Rewards.inspectNet({ player });
@@ -437,4 +450,20 @@ test('balance: an idle crew sinks before the end, a steady patcher lasts the who
   }
   assert.equal(busy.result, 'returned');
   assert.equal(busy.contribution.get(player), Shared.DATA.points.max);
+});
+
+test('an angler piece is credited to the collection log when it reaches the bank', () => {
+  const obtains = [];
+  Shared.bind({ core, emitCustomEvent: (name, event) => { if (name === 'collection-log:obtain') obtains.push(event); } });
+  const player = fakePlayer();
+  const ids = Shared.ids();
+  player.getInventory = () => ({ contains: () => false, getAmount: () => 0, getAddableAmount: () => 1, adds: () => {} });
+  const banked = new Map();
+  player.getBank = () => ({ contains: id => (banked.get(id) ?? 0) > 0, getAmount: id => banked.get(id) ?? 0, getFreeSlots: () => 800,
+    getAddableAmount: item => item.getAmount(), add: item => banked.set(item.getId(), (banked.get(item.getId()) ?? 0) + item.getAmount()) });
+  player.getSkillManager = () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences: () => {} });
+  player.setAttribute(Shared.REWARD_ATTRIBUTE, { items: [[ids.items.anglerHat, 1], [317, 1]], xp: 1 });
+  Rewards.inspectNet({ player });
+  assert.deepEqual(obtains.map((event) => [event.itemId, event.amount]), [[ids.items.anglerHat, 1]]);
+  Shared.bind({ core, emitCustomEvent: () => {} });
 });

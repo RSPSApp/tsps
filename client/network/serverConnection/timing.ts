@@ -1,6 +1,14 @@
 import { CLIENT_TICK_MS } from "./constants";
 import { state } from "./state";
 
+/** OSRS's reboottimer uses 20ms client cycles; the wire countdown uses centiseconds. */
+export function getRebootTimer(): number {
+    const update = state.lastSystemUpdate;
+    if (!update) return 0;
+    const elapsedMs = Math.max(0, Date.now() - update.receivedAtMs);
+    return Math.max(0, Math.floor((update.remainingCentis * 10 - elapsedMs) / CLIENT_TICK_MS));
+}
+
 export function subscribeTick(cb: (tick: number, time: number) => void): () => void {
     state.tickListeners.add(cb);
     return () => state.tickListeners.delete(cb);

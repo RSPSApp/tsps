@@ -232,7 +232,8 @@ export class EquipPacketListener {
     }
 
     getBonusManager().update(player);
-    equipment.refreshItems();
+    const equipChange = { equipped: true as const, itemId: item.getId(), slot: equipmentSlot };
+    equipment.refreshItems(equipChange);
     inventory.refreshItems();
     player.getUpdateFlag().flag(Flag.APPEARANCE);
     Sounds.sendSound(player, EquipmentSounds.soundFor(item.getDefinition()));

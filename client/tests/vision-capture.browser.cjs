@@ -9,7 +9,7 @@
 //   [--animation-smoothing on|off] [--check-animation-smoothing 1]
 //   [--check-mobile-keyboard 1] (use --url with ?mobile=1)
 //   [--check-mobile-combat-hud 1] (mobile client in Wilderness; checks rotation and captures each layout)
-//   [--check-responsive-gameframe 1] (desktop login, narrow/portrait/desktop switches without reloading)
+//   [--check-responsive-gameframe 1] (desktop login, narrow/portrait windows keep the desktop layout)
 //   [--check-responsive-mobile-start 1] (phone-emulated login, disable emulation, then repeat resize switches)
 // VISION_CHROME_FLAGS is an optional JSON array for software rendering in CI.
 // --url defaults to this worktree's client (PORT in the root .env, see
@@ -343,6 +343,44 @@ async function main() {
       await sleep(Number(arg("settle-ms", "2500")));
     }
 
+    const crossFloorPlayer = arg("check-cross-floor-player", null);
+    if (crossFloorPlayer) {
+      summary.crossFloorPlayer = await cdp.evaluate(`(() => {
+        const c = ${CLIENT_JS}, ecs = c.playerEcs;
+        const name = ${JSON.stringify(crossFloorPlayer)}.toLowerCase();
+        for (const index of ecs.getAllActiveIndices()) {
+          if (String(ecs.getName(index)).toLowerCase() === name) {
+            return { name: ecs.getName(index), level: ecs.getLevel(index), viewerLevel: ecs.getLevel(ecs.getIndexForServerId(c.controlledPlayerServerId)) };
+          }
+        }
+        return null;
+      })()`);
+      if (!summary.crossFloorPlayer || summary.crossFloorPlayer.level === summary.crossFloorPlayer.viewerLevel) {
+        throw new Error("cross-floor player was not present on a different floor");
+      }
+    }
+
+    const crossFloorNpcType = arg("check-cross-floor-npc", null);
+    if (crossFloorNpcType !== null) {
+      summary.crossFloorNpc = await cdp.evaluate(`(() => {
+        const c = ${CLIENT_JS}, ecs = c.npcEcs;
+        const typeId = ${Number(crossFloorNpcType) | 0};
+        const playerIndex = c.playerEcs.getIndexForServerId(c.controlledPlayerServerId);
+        const viewer = playerIndex === undefined ? -1 : c.playerEcs.getLevel(playerIndex) | 0;
+        const matches = [];
+        for (const id of ecs.getServerLinkedEcsIds()) {
+          if (!ecs.isActive(id) || !ecs.isLinked(id) || (ecs.getNpcTypeId(id) | 0) !== typeId) continue;
+          const level = ecs.getLevel(id) | 0;
+          if (level === viewer) continue;
+          matches.push({ typeId, level, viewerLevel: viewer, x: ecs.getWorldX(id), y: ecs.getWorldY(id) });
+        }
+        return matches;
+      })()`);
+      if (!summary.crossFloorNpc?.length) {
+        throw new Error(`cross-floor NPC type ${Number(crossFloorNpcType) | 0} was not present in the client ECS`);
+      }
+    }
+
     if (arg("check-mobile-keyboard", "0") === "1") {
       await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: true });
       const point = await cdp.evaluate(`(() => {
@@ -420,7 +458,9 @@ async function main() {
         summary.mobileStart = { initialRoot, phoneRootAtDesktopSize: phoneRoot, desktopAfterDisablingEmulation: root, chat };
       }
       summary.responsiveGameframe = [];
-      for (const [width, height, root] of [[667, 375, 601], [375, 812, 601], [1280, 800, desktopRoot]]) {
+      // A small desktop window must keep the desktop gameframe (#2471); only phone
+      // emulation above changes the layout.
+      for (const [width, height, root] of [[667, 375, desktopRoot], [375, 812, desktopRoot], [656, 495, desktopRoot], [1280, 800, desktopRoot]]) {
         await cdp.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });
         const layout = await waitFor(cdp, deadline, () => cdp.evaluate(`(() => {
           const c = ${CLIENT_JS}, m = c.widgetManager;
@@ -469,22 +509,15 @@ async function main() {
         }
         if (new URLSearchParams(location.search).has("timers")) {
           const count = () => document.querySelectorAll(".status-timer-infobox, .vengeance-timer-infobox").length;
-          const attackCount = () => {
-            const output = [];
-            plugin.appendLocalPlayerOverheads({ osrsClient: { playerEcs: {
-              getWorldViewId: () => -1, getX: () => 128, getY: () => 128, getLevel: () => 0,
-            } }, acquireOverheadTextEntry: () => ({}), makeActorGroupKey: () => 1, mapOverheadColor: () => 0xffff00,
-              resolvePlayerLogicalHeightTiles: () => 2 }, 0, output, 10, 2);
-            return output.length;
-          };
+          const attackCount = () => document.querySelectorAll(".attack-timer-infobox").length;
           await pm.setPluginEnabled(plugin, false);
           await new Promise(resolve => setTimeout(resolve, 300));
           if (count() !== 0 || attackCount() !== 0) throw new Error("disabled Timers must hide everything even with ?timers");
           if (c.runeLite.configManager.getConfiguration("runelite", "timersplugin") !== "false") throw new Error("timer switch was not saved");
           await pm.setPluginEnabled(plugin, true);
           await new Promise(resolve => setTimeout(resolve, 500));
-          if (count() !== 6 || attackCount() !== 1) throw new Error("enabled Timers must preview all six infoboxes and attack overhead");
-          return { disabledInfoboxes: 0, disabledAttack: 0, enabledInfoboxes: 6, enabledAttack: 1 };
+          if (count() !== 7 || attackCount() !== 1) throw new Error("enabled Timers must preview all seven infoboxes, including combat");
+          return { disabledInfoboxes: 0, disabledAttack: 0, enabledInfoboxes: 7, enabledAttack: 1 };
         }
         await pm.setPluginEnabled(plugin, true);
         return { enabled: true };
@@ -658,7 +691,7 @@ async function main() {
           const previews = [...document.querySelectorAll(".status-timer-infobox, .vengeance-timer-infobox")]
             .sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
           if (new URLSearchParams(location.search).has("timers")) {
-            if (previews.length !== 6) throw new Error("enabled ?timers preview must show all six infoboxes");
+            if (previews.length !== 7) throw new Error("enabled ?timers preview must show all seven infoboxes");
             let right = pvp.x + pvp.width;
             for (const preview of previews) {
               const box = preview.getBoundingClientRect();

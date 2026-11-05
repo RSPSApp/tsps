@@ -1,0 +1,274 @@
+[
+ {
+  "message": "We've received reports of a gang meeting in Arceuus, in a house south east of the bank.",
+  "x": 1650,
+  "y": 3726,
+  "z": 0,
+  "combat": "multi",
+  "location": "The house exactly south-east of the bank, east of the walkway when walking into Arceuus. Ground floor. There is a very similar report which calls for going to a house in the south-east of the temple. Make sure you have the correct one. Teleport using \"A Dark Disposition\" in the Kharedst's memoirs, or Book of the Dead. Safespotting is possible behind the scattered books."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Arceuus, in the temple crypt.",
+  "x": 1699,
+  "y": 3793,
+  "z": 0,
+  "combat": "multi",
+  "location": "Inside of the temple on the ground floor marked by green on the map. Teleport using \"A Dark Disposition\" in the Kharedst's memoirs, or Book of the Dead. Then run north."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Arceuus, upstairs in a house south-west of the temple.",
+  "x": 1686,
+  "y": 3765,
+  "z": 1,
+  "combat": "multi",
+  "location": "Middle floor of house with teleport tablet lectern. There is a very similar report which calls for going to a house in the south-east of the temple. Make sure you have the correct one. Teleport using \"A Dark Disposition\" in the Kharedst's memoirs, or Book of the Dead."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Arceuus, upstairs in the pub.",
+  "x": 1688,
+  "y": 3721,
+  "z": 1,
+  "combat": "multi",
+  "location": "The bar in the south-eastern portion of Arceuus, on the middle floor. Teleport using \"A Dark Disposition\" in the Kharedst's memoirs, or Book of the Dead."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Arceuus, in a house south east of the temple.",
+  "x": 1720,
+  "y": 3765,
+  "z": 0,
+  "combat": "multi",
+  "location": "A house south-east of the temple. There are very similar reports which calls for going to a house in the south-west of the temple, as well as one south-east of the bank. Make sure you have the correct one. The gangsters can be easily safespotted from behind the long table near the entrance door. Teleport using \"A Dark Disposition\" in the Kharedst's memoirs, or Book of the Dead."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Arceuus, upstairs in the general store.",
+  "x": 1721,
+  "y": 3727,
+  "z": 1,
+  "combat": "multi",
+  "location": "The general store is in the south-east part of Arceuus. Safespotting is possible behind the tables to the south. Teleport using \"A Dark Disposition\" in the Kharedst's memoirs, or Book of the Dead."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Arceuus, upstairs in the bank.",
+  "x": 1629,
+  "y": 3745,
+  "z": 1,
+  "combat": "multi",
+  "location": "The bank is in the south-west part of Arceuus. Teleport using \"A Dark Disposition\" in the Kharedst's memoirs, or Book of the Dead. Then run west."
+ },
+ {
+  "message": "We've received reports of a gang meeting in the Hosidius Marketplace.",
+  "x": 1762,
+  "y": 3593,
+  "z": 0,
+  "combat": "multi",
+  "location": "The Hosidius Marketplace is east of the city's bank. Teleport to Xeric's Glade, using a Xeric's talisman, then run north. Safespotting can be done using the fences to the north, or the couple large plants in front of the house just to the south-west of the marketplace, touching the front edge of the church stone wall."
+ },
+ {
+  "message": "We've received reports of a gang meeting south of Kourend Castle, in the vegetable field by the Mess.",
+  "x": 1641,
+  "y": 3609,
+  "z": 0,
+  "combat": "multi",
+  "location": "The field just south of the mess. Teleport using \"Lunch by the Lancalliums\" in the Kharedst's memoirs, or Book of the Dead. Then run west."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Hosidius, inside the pub.",
+  "x": 1743,
+  "y": 3616,
+  "z": 0,
+  "combat": "multi",
+  "location": "The Golden Field pub in the market square. Teleport to Xeric's Glade, using a Xeric's talisman, then run north."
+ },
+ {
+  "message": "We've received reports of a gang meeting west of the Tithe Farm.",
+  "x": 1776,
+  "y": 3504,
+  "z": 0,
+  "combat": "multi",
+  "location": "The ruins west of the Tithe Farm entrance. Teleport to Xeric's Glade, using a Xeric's talisman, then run south. Or move your player-owned house."
+ },
+ {
+  "message": "We've received reports of a gang meeting north of the Woodcutting Guild, by the minecart entrance.",
+  "x": 1654,
+  "y": 3549,
+  "z": 0,
+  "combat": "multi",
+  "location": "Directly north of the Hosidius mine cart track found north of the Woodcutting Guild. Take the \"Hosidius West\" minecart. Teleport to the Woodcutting Guild using a skills necklace and run north."
+ },
+ {
+  "message": "We've received reports of a gang meeting south of Port Piscarilius, by the minecart entrance.",
+  "x": 1755,
+  "y": 3706,
+  "z": 0,
+  "combat": "multi",
+  "location": "On the border of Port Piscarilius and Hosidius, next to Raeli. Slightly west of the minecart. Teleport using \"The Fisher's Flute\" in the Kharedst's memoirs, or Book of the Dead. Then run south-west."
+ },
+ {
+  "message": "We've received reports of a gang meeting south of Hosidius, in the cabbage patch.",
+  "x": 1752,
+  "y": 3549,
+  "z": 0,
+  "combat": "multi",
+  "location": "Just north of the POH portal. Teleport to Xeric's Glade, using a Xeric's talisman. You have arrived."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Hosidius, in the cow field.",
+  "x": 1756,
+  "y": 3639,
+  "z": 0,
+  "combat": "multi",
+  "location": "Large cow field, south of the flax field. Teleport to Xeric's Heart, using a Xeric's talisman. Then run east across the river, turning south and following the road."
+ },
+ {
+  "message": "We've received reports of a gang meeting inside the Forthos Ruin.",
+  "x": 1674,
+  "y": 3575,
+  "z": 0,
+  "combat": "multi",
+  "location": "At the Forthos Ruin. Teleport using \"Lunch by the Lancalliums\" in the Kharedst's memoirs, or Book of the Dead. Then run west, crossing the river to your south."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Lovakengj, in the pub.",
+  "x": 1564,
+  "y": 3758,
+  "z": 0,
+  "combat": "multi",
+  "location": "The Deeper Lode pub located south-east Teleport using \"Jewellery of Jubilation\" in the Kharedst's memoirs, or Book of the Dead. Safespotting is very doable using the row of circular tables in the centre. Furthermore, the patron dwarves will often block the gangsters from reaching the player. Some gangsters can spawn in inaccessible locations between stools, so it is recommended to bring runes for Telekinetic Grab to get their drops."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Lovakengj, upstairs in a house south east of the church.",
+  "x": 1556,
+  "y": 3785,
+  "z": 1,
+  "combat": "multi",
+  "location": "Climb up the stairs in any of the three buildings south-east of the church. Teleport using \"Jewellery of Jubilation\" in the Kharedst's memoirs, or Book of the Dead."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Lovakengj, in a house south east of the Blast Mine.",
+  "x": 1517,
+  "y": 3834,
+  "z": 0,
+  "combat": "multi",
+  "location": "Downstairs in Thirus' house south-east of the Blast Mine, adjacent to a house with an anvil inside. Teleport to Xeric's Inferno, using a Xeric's talisman. Then run north."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Lovakengj, upstairs in the building north east of the Lovakengj Assembly.",
+  "x": 1510,
+  "y": 3770,
+  "z": 1,
+  "combat": "multi",
+  "location": "The T-shaped building with the furnace north-east of the Lovakengj Assembly. Teleport to Xeric's Inferno, using a Xeric's talisman. Then run south."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Port Piscarilius, inside the foodhall.",
+  "x": 1840,
+  "y": 3745,
+  "z": 0,
+  "combat": "single",
+  "location": "Far east in Piscarilius, in the largest building. Teleport using \"The Fisher's Flute\" in the Kharedst's memoirs, or Book of the Dead. Then run east."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Port Piscarilius, just behind the foodhall.",
+  "x": 1850,
+  "y": 3735,
+  "z": 0,
+  "combat": "single",
+  "location": "Far east in Piscarilius, outside of the largest building. Teleport using \"The Fisher's Flute\" in the Kharedst's memoirs, or Book of the Dead. Then run east behind the building."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Port Piscarilius, upstairs in a house west of the general store.",
+  "x": 1794,
+  "y": 3722,
+  "z": 1,
+  "combat": "multi",
+  "location": "Upstairs in the house west of the general store, more specifically the easternmost house of the two conjoined houses, in the floor below the poor looking woman. Teleport using \"The Fisher's Flute\" in the Kharedst's memoirs, or Book of the Dead. Then run south. Safespotting behind obstacles is not possible, and this is a tight space in multi-combat, making it very dangerous. Players are advised to switch worlds until the gang boss is female/melee, and engage gangsters one at a time by lining them up behind each other, so that only one gangster is hitting the player at a time. Despite the limited space, a dwarf multicannon can be used here to great effect."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Port Piscarilius, in a house on the western pier.",
+  "x": 1752,
+  "y": 3761,
+  "z": 0,
+  "combat": "single",
+  "location": "In the western building over the water in the cove. Teleport using \"The Fisher's Flute\" in the Kharedst's memoirs, or Book of the Dead. Then run west."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Port Piscarilius, upstairs in a house north of the general store.",
+  "x": 1805,
+  "y": 3737,
+  "z": 1,
+  "combat": "multi",
+  "location": "The middle floor of the house directly south of the bank, upstairs, water and stove icon. Teleport using \"The Fisher's Flute\" in the Kharedst's memoirs, or Book of the Dead."
+ },
+ {
+  "message": "We've received reports of a gang meeting in Port Piscarilius, in a house on the south west pier.",
+  "x": 1749,
+  "y": 3732,
+  "z": 0,
+  "combat": "single",
+  "location": "The south-west corner, on the docks, not the main land. Teleport using \"The Fisher's Flute\" in the Kharedst's memoirs, or Book of the Dead. Then run west, turning south as you hit a dead end. This is a single-way combat area, so it is safer than most others, as many gangsters can't gang up on the player at the same time. Safespotting is possibly by luring them out of the house and running across the walkway to the north to the other side of the water. They can be maged or ranged from across the water."
+ },
+ {
+  "message": "We've received reports of a gang meeting in the forest south of the Chasm of Fire.",
+  "x": 1428,
+  "y": 3648,
+  "z": 0,
+  "combat": "multi",
+  "location": "South of entrance to the Chasm of Fire. Use fairy ring {{Fairycode DJR}}."
+ },
+ {
+  "message": "We've received reports of a gang infiltrating our own city! They're meeting in the south west corner of the graveyard.",
+  "x": 1484,
+  "y": 3555,
+  "z": 0,
+  "combat": "multi",
+  "location": "South-west corner of the Graveyard of Heroes. Teleport using \"History and Hearsay\" in the Kharedst's memoirs, or Book of the Dead. Then run south."
+ },
+ {
+  "message": "We've received reports of a gang meeting in a ruin south of the Giant Pit.",
+  "x": 1436,
+  "y": 3595,
+  "z": 0,
+  "combat": "multi",
+  "location": "South of the Giant Pit. Teleport using \"History and Hearsay\" in the Kharedst's memoirs, or Book of the Dead. Then run north, turning west after you leave the graveyard."
+ },
+ {
+  "message": "We've received reports of a gang meeting in the Shayzia Ruin, north east of our city.",
+  "x": 1586,
+  "y": 3595,
+  "z": 0,
+  "combat": "multi",
+  "location": "In the Shayzia Ruin. Teleport to Xeric's Lookout, using a Xeric's talisman. Then run north, along the west bank. There do not appear to be any safespots whatsoever at this location."
+ },
+ {
+  "message": "We've received reports of a gang meeting at the statue of King Rada outside Kourend Castle.",
+  "x": 1649,
+  "y": 3680,
+  "z": 0,
+  "combat": "multi",
+  "location": "East of the statue in Kourend Castle. Teleport to Xeric's Heart, using a Xeric's talisman. Safespotting is possible using the crate just to the west of the baker's stall."
+ },
+ {
+  "message": "We've received reports of a gang meeting in the Kourend Woodland barbarian camp.",
+  "x": 1581,
+  "y": 3435,
+  "z": 0,
+  "combat": "multi",
+  "location": "The barbarian camp south of the Woodcutting Guild. Teleport to the Kourend Woodland, using a Rada's blessing 1 Rada's Blessing 1. Or Teleport to the Woodcutting Guild using a skills necklace and run south-west. Safespotting does not appear possible. Hit-and-run outside the camp is possible (see the Strategy section for an explanation)."
+ },
+ {
+  "message": "We've received reports of a gang meeting inside Kourend Castle, in one of the lesser used north-eastern rooms.",
+  "x": 1617,
+  "y": 3687,
+  "z": 0,
+  "combat": "multi",
+  "location": "Ground floor of the Kourend Castle in one of the north-eastern rooms. Teleport to Xeric's Heart, using a Xeric's talisman. Safespotting isn't really possible behind the stools, nor the beds in the adjacent bedroom. What can be done is going to the bedroom behind the door and lining the gangsters up so that only one is hitting you at any given time. Using the corner of the table in the south wall of the room also works for this. Some of the gangsters can be pulled to the main lobby to safespot them over the large oval table."
+ },
+ {
+  "message": "We've received reports of a gang meeting in a house in Land's End.",
+  "x": 1503,
+  "y": 3432,
+  "z": 0,
+  "combat": "multi",
+  "location": "The house north of the bank in Land's End. Teleport to the Kourend Woodland, using a Rada's blessing 1 Rada's Blessing 1. Then run south-west. Or Teleport to Xeric's Lookout, using a Xeric's talisman. Then run south-west. Safespotting is possible using the crate that's beside the cart near the house across the street."
+ }
+]

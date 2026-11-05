@@ -8,8 +8,8 @@
 
 function buildSpecial(api) {
   const {
-    AccuracyFormulasDpsCalc, Animation, CombatSpecial, Graphic, ItemIdentifiers,
-    PendingHit, RangedCombatMethod, Skill, WeaponProfiles,
+    AccuracyFormulasDpsCalc, Animation, CombatPosition, CombatSpecial, Graphic, ItemIdentifiers,
+    PendingHit, RangedCombatMethod, Skill,
   } = api.core;
 
   const DRAIN = 50;
@@ -34,8 +34,7 @@ function buildSpecial(api) {
     hits(character, target) {
       const player = character.getAsPlayer();
       const charged = shotState(player);
-      const distance = character.getLocation().getDistance(target.getLocation());
-      const hitDelay = WeaponProfiles.hitDelays(player, distance)[0];
+      const hitDelay = RangedCombatMethod.playerHitDelays(character, target, CombatPosition.projectileDistance(character, target))[0];
       return [new PendingHit(character, target, this, {
         delay: hitDelay,
         rollAccuracy: true,

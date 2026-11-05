@@ -177,6 +177,7 @@ function completed(raid) {
     const count = (Number(player.getAttribute(attribute)) || 0) + 1;
     player.setAttribute(attribute, count);
     player.sendMessage(`Your completed Chambers of Xeric${raid.challenge ? " Challenge Mode" : ""} count is: <col=ff0000>${count}</col>.`);
+    Shared.api().emitCustomEvent("diary:task", { player, diary: "kourend", task: "complete-a-raid-in-the-chambers-of-xeric" });
   }
   generate(raid, inTime);
 }
@@ -191,13 +192,12 @@ function teamSize(size) {
 }
 
 /**
- * The cache's collection log has one Chambers of Xeric category (struct 507) holding both
- * modes' items, so its count is the player's completions in every mode.
+ * Cache script 2735: the shared category displays CM first (2048), then Normal (2941).
  */
 function collectionLogCount(request) {
   if (request?.category !== RAID_NAME) return;
-  request.count = (Number(request.player.getAttribute(Shared.ATTR.KILLS)) || 0)
-    + (Number(request.player.getAttribute(Shared.ATTR.CHALLENGE_KILLS)) || 0);
+  request.count = Number(request.player.getAttribute(Shared.ATTR.CHALLENGE_KILLS)) || 0;
+  request.extraCounts = [Number(request.player.getAttribute(Shared.ATTR.KILLS)) || 0];
 }
 
 /**
@@ -362,16 +362,16 @@ function takeItem(player, raid, index) {
     claimPetLoot(player, raid);
     if (!items.includes(entry)) return true;
   }
-  const { Item, ItemDefinition } = Shared.core();
-  const stackable = ItemDefinition.forId(entry.id)?.isStackable?.() === true;
+  const { Item } = Shared.core();
   const inventory = player.getInventory();
-  const room = stackable ? inventory.contains(entry.id) || inventory.getFreeSlots() > 0 : inventory.getFreeSlots() >= entry.amount;
-  if (!room) {
+  const moved = inventory.getAddableAmount(new Item(entry.id, entry.amount));
+  if (moved <= 0) {
     player.sendMessage("You don't have enough inventory space.");
     return false;
   }
-  inventory.add(new Item(entry.id, entry.amount), true);
-  items.splice(index, 1);
+  inventory.add(new Item(entry.id, moved), true);
+  entry.amount -= moved;
+  if (entry.amount <= 0) items.splice(index, 1);
   if (entry.id === ITEM.TABLET) player.setAttribute(ATTR_TABLET, true);
   return true;
 }
@@ -410,10 +410,12 @@ function bankAll({ player }) {
   for (let index = items.length - 1; index >= 0; index--) {
     const entry = items[index];
     const bank = player.getBank(Bank.getTabForItem(player, entry.id));
-    if (bank.getFreeSlots() <= 0 && !bank.contains(entry.id)) continue;
-    bank.add(new Item(entry.id, entry.amount), false);
+    const banked = bank.getAddableAmount(new Item(entry.id, entry.amount));
+    if (banked <= 0) continue;
+    bank.add(new Item(entry.id, banked), false);
     if (entry.id === ITEM.TABLET) player.setAttribute(ATTR_TABLET, true);
-    items.splice(index, 1);
+    entry.amount -= banked;
+    if (entry.amount <= 0) items.splice(index, 1);
   }
   if (items.length) player.sendMessage("Not enough space in your bank.");
   refreshChest(player, raid);

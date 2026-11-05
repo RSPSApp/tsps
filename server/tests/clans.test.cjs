@@ -127,6 +127,7 @@ function player(name) {
       },
       isChatboxInterface: (group) => self.chatbox === group,
       closeInterface(group) {
+        (self.closedGroups ??= []).push(group);
         if (self.chatbox === group) self.chatbox = -1;
         return this;
       },
@@ -1120,12 +1121,32 @@ test('titles open from the settings, take the client\'s edits, and save', () => 
   const edit = { player: owner, varpId: 3023, value: 25, handled: false };
   hooks.custom.get('player:varp-transmit')(edit);
   assert.equal(edit.handled, true);
-  clickGroup(owner, 695, 13);
+  clickGroup(owner, 695, 14);
   assert.equal(CoreClans().titleSetting(clan, 1), 25);
   assert.equal(owner.mounted.at(-1), 690);
   const other = { player: owner, varpId: 3023, value: 30, handled: false };
   hooks.custom.get('player:varp-transmit')(other);
   assert.equal(other.handled, false, 'no longer editing');
+});
+
+test('titles Cancel (695:13, rev 241 clans_ranktitles:cancel) throws the edits away', () => {
+  const { owner, clan } = clanOfThree();
+  clickGroup(owner, 690, 24);
+  const before = CoreClans().titleSetting(clan, 1);
+  hooks.custom.get('player:varp-transmit')({ player: owner, varpId: 3023, value: 25, handled: false });
+  clickGroup(owner, 695, 13);
+  assert.equal(CoreClans().titleSetting(clan, 1), before, 'not saved');
+  assert.equal(owner.mounted.at(-1), 690, 'back to Clan Settings');
+});
+
+test('event form Exit (704:26, rev 241 clans_events_create:exit) goes back to the list and saves nothing', () => {
+  const { owner, clan } = clanOfThree();
+  clickGroup(owner, 690, 19);
+  clickGroup(owner, 703, 5);
+  assert.equal(owner.mounted.at(-1), 704);
+  clickGroup(owner, 704, 26);
+  assert.equal(owner.mounted.at(-1), 703);
+  assert.equal((clan.events ?? []).length, 0);
 });
 
 test('Rename, Talk and Guests rows work for those allowed', () => {
@@ -1947,15 +1968,15 @@ test('an event is edited and deleted as listed, whatever another organiser did s
   row(member, 2); // Third, on member's list
   clickGroup(owner, 703, 9);
   row(owner, 0);
-  clickGroup(owner, 704, 24); // owner deletes First: Third is at slot 1 now
+  clickGroup(owner, 704, 25); // owner deletes First: Third is at slot 1 now
   assert.deepEqual(clan.events.map((each) => each.creator), ['Second', 'Third']);
-  clickGroup(member, 704, 24);
+  clickGroup(member, 704, 25);
   assert.deepEqual(clan.events.map((each) => each.creator), ['Second'], 'Third, as they chose, not by its old slot');
   clan.events = [event('A'), event('B')];
   clickGroup(owner, 690, 19);
   clickGroup(member, 690, 19);
   row(owner, 1);
-  clickGroup(owner, 704, 24);
+  clickGroup(owner, 704, 25);
   row(member, 1); // B has gone from under their list
   assert.match(member.messages.at(-1), /Another organiser/);
   assert.deepEqual(clan.events.map((each) => each.creator), ['A']);
@@ -2048,7 +2069,7 @@ test('an event is created through the form, listed, edited and deleted', () => {
   assert.equal(owner.varbits.get(12223), 1110);
   formField(owner, 21, 101);
   assert.equal(owner.varbits.get(10986), 101);
-  clickGroup(owner, 704, 23);
+  clickGroup(owner, 704, 24);
   assert.equal(clan.events.length, 1);
   assert.equal(owner.mounted.at(-1), 703);
   const row = owner.scripts.filter((script) => script[0] === 4407).at(-10);
@@ -2063,10 +2084,10 @@ test('an event is created through the form, listed, edited and deleted', () => {
   for (const handler of hooks.clicks) handler({ player: owner, groupId: 703, childId: 9, slot: 0 });
   assert.equal(owner.varbits.get(12224), 1);
   formField(owner, 17, 331);
-  clickGroup(owner, 704, 23);
+  clickGroup(owner, 704, 24);
   assert.equal(clan.events[0].world, 331);
   for (const handler of hooks.clicks) handler({ player: owner, groupId: 703, childId: 9, slot: 0 });
-  clickGroup(owner, 704, 24);
+  clickGroup(owner, 704, 25);
   assert.deepEqual(clan.events, []);
   assert.equal(JSON.parse(fs.readFileSync(process.env.TSPS_CLANS_FILE, 'utf8')).clans[0].events.length, 0);
 });
@@ -2102,7 +2123,7 @@ test('all eight title settings are sent, and ranks 96-124 save', () => {
   clickGroup(owner, 690, 24);
   const edit = { player: owner, varpId: 736, value: 77, handled: false };
   hooks.custom.get('player:varp-transmit')(edit);
-  clickGroup(owner, 695, 13);
+  clickGroup(owner, 695, 14);
   assert.equal(CoreClans().titleSetting(clan, 103), 77);
 });
 
@@ -2335,6 +2356,15 @@ test('the piano forgets a player who has gone', () => {
   hooks.custom.get('interface:closed')({ player: owner, interfaceId: 698 });
   op(owner, 698, 9);
   assert.equal(member.sounds.length, 1, 'closed by walking off');
+});
+
+test("the piano's Close (698:45, clan_piano:close_button) closes it rather than playing a note", () => {
+  const { owner, member } = clanOfThree();
+  inHall(owner, member);
+  hooks.objects.Piano.Entertain({ player: owner });
+  op(owner, 698, 45);
+  assert.deepEqual(owner.closedGroups, [698]);
+  assert.equal(member.sounds?.length ?? 0, 0, 'no note');
 });
 
 test('the chest is refused below its rank, and elsewhere is not ours', () => {

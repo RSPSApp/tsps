@@ -20,7 +20,8 @@
  * saw goes to Ladders (ladders:climbUp / ladders:climbDown), which finds it on the map.
  *
  * Each plays its captured animation, sound and fade, and moves the player (or swaps the loc) on
- * the captured tick. Ticks in the data count from the player arriving at the loc; the click is
+ * the captured tick. An entry's `message` (with `messageType` "spam" for the filterable channel)
+ * is the game message live OSRS sends on a successful crossing, on the move's tick, before it. Ticks in the data count from the player arriving at the loc; the click is
  * handled on the tick after that, as Ladders' climbs are.
  *
  * Not members-only: free-to-play ladders are in the data too. On a free-to-play world,
@@ -135,6 +136,12 @@ function schedule() {
   return { steps, at };
 }
 
+/** The game message of a successful crossing: a plain game message, or spam the chat filter hides. */
+function sayCrossed(player, { message, messageType }) {
+  if (messageType === "spam") player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, message);
+  else player.sendMessage(message);
+}
+
 function animateAndSound(player, { anim, sound }) {
   if (anim !== undefined) player.performAnimation(new core.Animation(anim));
   if (sound !== undefined) player.getPacketSender().sendSound(sound, 1, 0);
@@ -156,6 +163,7 @@ function travel(player, entry, destination, answer = null) {
     if (entry.mesbox) player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, entry.mesbox)));
   });
   if (entry.fade) at(animTick + 1, () => player.getPacketSender().sendVarbit(MINIMAP_STATE_VARBIT, MINIMAP_OFF));
+  if (entry.message) at(moveTick, () => sayCrossed(player, entry));
   at(moveTick, () => {
     const landing = new core.Location(destination[0], destination[1], destination[2]);
     player.moveTo(landing);

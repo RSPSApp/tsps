@@ -1,6 +1,9 @@
 // Leagues VI's shops that never deplete (leagues.json `shopStock`), through the real ShopManager and
-// the real league plugin: a Demonic Pacts character's buy leaves the shop's own stock as it was,
-// stock players sold it still goes, and a character of no league buys as on any world.
+// the real league plugin: a Demonic Pacts character's buy or sale leaves the shop's stock as it was,
+// stock a main character sold it still goes, and a character of no league buys and sells as on any world.
+// Plugins load with the player bots off: a booted bot plugin rescans and rewrites the tracked
+// server/plugins/bots/data/object-index.json whenever the tracked object ids moved.
+process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
@@ -83,6 +86,26 @@ test("stock players sold the shop still goes, down to the shop's own amount", (t
   for (let i = 0; i < 3; i++) buy(league);
   assert.equal(league.getInventory().getAmount(onyx()), 3, "bought three");
   assert.equal(stock(), original, "the sold two went, the shop's own stayed");
+});
+
+function sell(player) {
+  player.getInventory().add(new core.Item(onyx(), 1), false);
+  ShopManager.open(player, SHOP);
+  const slot = player.getInventory().getItems().findIndex((item) => item?.getId() === onyx());
+  ShopManager.handleWidgetAction(player, { groupId: ShopManager.SIDE_INTERFACE_ID, childId: 0, buttonNum: 0, option: "Sell 1", slot });
+}
+
+test("a Demonic Pacts character's sale is paid for and leaves the stock as it was; a main character's adds", (t) => {
+  const original = fresh();
+  const league = character(t, "league");
+  sell(league);
+  assert.equal(league.getInventory().getAmount(onyx()), 0, "sold");
+  assert.ok(league.getInventory().getAmount(core.ItemIdentifiers.TOKKUL) > 0, "paid");
+  assert.equal(stock(), original, "the stock never went up (237/01102)");
+  const main = character(t, "main");
+  sell(main);
+  assert.equal(main.getInventory().getAmount(onyx()), 0, "sold");
+  assert.equal(stock(), original + 1, "a main character's sale adds as on any world");
 });
 
 test("the hook is the league's: a character of no league keeps nothing", (t) => {

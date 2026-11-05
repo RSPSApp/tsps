@@ -24,6 +24,17 @@ function destination(npc) {
   return outbound ? outbound.arrive : null;
 }
 
+/** The eyrie a flight reaches: "peak" for a far eyrie's eagle, else its own key. */
+function destinationEyrie(npc) {
+  if (npc.__eagleHome) return "peak";
+  const spawned = npc.getId?.();
+  if (Object.values(Common.data.eyries).some((eyrie) => Common.ids.npcs[eyrie.eagle] === spawned)) return "peak";
+  if (!Common.inBox(npc.getLocation(), Common.data.peak.box)) return null;
+  const outbound = Object.entries(Common.data.eyries)
+    .find(([, eyrie]) => Common.ids.npcs[eyrie.peakEagle] === spawned);
+  return outbound ? outbound[0] : null;
+}
+
 function fly(player, npc) {
   const to = destination(npc);
   if (!to) return false;
@@ -36,10 +47,16 @@ function fly(player, npc) {
     player.sendMessage(Common.message("noRope"));
     return true;
   }
+  const eyrie = destinationEyrie(npc);
   player.setPositionToFace?.(npc.getLocation());
   player.performAnimation(new Common.core.Animation(Common.ids.seqs.lasso));
   player.sendMessage(Common.message("lasso"));
-  Common.travel(player, to, Common.data.flightTicks);
+  const desert = Common.data.eyries.desert.arrive;
+  const toDesert = to[0] === desert[0] && to[1] === desert[1] && to[2] === desert[2];
+  Common.travel(player, to, Common.data.flightTicks, () => {
+    Common.api.emitCustomEvent("eagle-transport:arrived", { player, eyrie, to });
+    if (toDesert) Common.api.emitCustomEvent("diary:task", { player, diary: "desert", task: "travel-to-the-desert-via-eagle" });
+  });
   return true;
 }
 

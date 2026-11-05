@@ -1,0 +1,109 @@
+{
+  "_sources": {
+    "recorded": "Rev 232 recordings 3200 (WWF toys, Druidic wreath, Mask of balance) and 3215 (Zombie head Talk-At).",
+    "cache": "Rev 241 osrs-dumps: sequence and spotanim names that hold the item or match its option; obj iop and worn param 451+ options.",
+    "wiki": "OSRS Wiki item pages: overhead text, the yo-yo SFX table, tree hugging titles, Santa's list lines and the cat ears' Chase.",
+    "transcripts": "OSRS Wiki transcripts imported into data/definitions/npc-dialogues.json through osrsreboxed-db: Zombie head, Eek, Archibald, Haunted wine bottle, Magic egg ball, Secret santa present."
+  },
+  "animations": [
+    { "items": ["wwf_toy_tiger"], "option": "Play-with", "seq": "human_play_wwf_tiger", "say": "Grrrr!", "unlocks": true, "source": "recorded (rev 232 recording 3200: overhead, sequence and first-use unlock)" },
+    { "items": ["wwf_toy_lion"], "option": "Play-with", "seq": "human_play_wwf_lion", "say": "Grrrr!", "unlocks": true, "source": "recorded (rev 232 recording 3200: overhead, sequence and first-use unlock)" },
+    { "items": ["wwf_toy_snow_leopard"], "option": "Play-with", "seq": "human_play_wwf_snow_leopard", "say": "Grrrr!", "unlocks": true, "source": "recorded (rev 232 recording 3200: overhead, sequence and first-use unlock)" },
+    { "items": ["wwf_toy_amur_leopard"], "option": "Play-with", "seq": "human_play_wwf_amur_leopard", "say": "Grrrr!", "unlocks": true, "source": "recorded (rev 232 recording 3200: overhead, sequence and first-use unlock)" },
+    { "items": ["trick_or_treat_head"], "option": "Talk-At", "seq": "hamlet_head_all", "say": "Alas!", "source": "recorded (rev 232 recording 3215)" },
+    { "items": ["trick_or_treat_head"], "option": "Display", "say": "Mwuhahahaha!", "source": "wiki; no sequence is known" },
+    { "items": ["xmas_yoyo"], "option": "Play", "seq": "yoyo_updown", "sound": 2261, "source": "cache seq, wiki SFX yoyo1" },
+    { "items": ["xmas_yoyo"], "option": "Loop", "seq": "yoyo_roundworld", "sound": 2262, "source": "cache seq, wiki SFX yoyo2" },
+    { "items": ["xmas_yoyo"], "option": "Walk", "seq": "yoyo_walkdog", "sound": 2263, "source": "cache seq, wiki SFX yoyo3" },
+    { "items": ["xmas_yoyo"], "option": "Crazy", "seq": "yoyo_advanced", "sound": 2264, "source": "cache seq, wiki SFX yoyo4" },
+    { "items": ["win05_marionette_complete_red_alive"], "option": "Jump", "seq": "human_marionette_jump", "spotanim": "win05_marionette_jump_red", "source": "cache" },
+    { "items": ["win05_marionette_complete_red_alive"], "option": "Walk", "seq": "human_marionette_walk", "spotanim": "win05_marionette_walk_red", "source": "cache" },
+    { "items": ["win05_marionette_complete_red_alive"], "option": "Bow", "seq": "human_marionette_bow", "spotanim": "win05_marionette_bow_red", "source": "cache" },
+    { "items": ["win05_marionette_complete_red_alive"], "option": "Dance", "seq": "human_marionette_dance", "spotanim": "win05_marionette_dance_red", "source": "cache" },
+    { "items": ["win05_marionette_complete_blue_alive"], "option": "Jump", "seq": "human_marionette_jump", "spotanim": "win05_marionette_jump_blue", "source": "cache" },
+    { "items": ["win05_marionette_complete_blue_alive"], "option": "Walk", "seq": "human_marionette_walk", "spotanim": "win05_marionette_walk_blue", "source": "cache" },
+    { "items": ["win05_marionette_complete_blue_alive"], "option": "Bow", "seq": "human_marionette_bow", "spotanim": "win05_marionette_bow_blue", "source": "cache" },
+    { "items": ["win05_marionette_complete_blue_alive"], "option": "Dance", "seq": "human_marionette_dance", "spotanim": "win05_marionette_dance_blue", "source": "cache" },
+    { "items": ["win05_marionette_complete_green_alive"], "option": "Jump", "seq": "human_marionette_jump", "spotanim": "win05_marionette_jump_green", "source": "cache" },
+    { "items": ["win05_marionette_complete_green_alive"], "option": "Walk", "seq": "human_marionette_walk", "spotanim": "win05_marionette_walk_green", "source": "cache" },
+    { "items": ["win05_marionette_complete_green_alive"], "option": "Bow", "seq": "human_marionette_bow", "spotanim": "win05_marionette_bow_green", "source": "cache" },
+    { "items": ["win05_marionette_complete_green_alive"], "option": "Dance", "seq": "human_marionette_dance", "spotanim": "win05_marionette_dance_green", "source": "cache" },
+    { "items": ["rubber_chicken"], "option": "Dance", "seq": "human_chicken_dance", "source": "cache seq; the wiki's jingle id could not be checked against the cache" },
+    { "items": ["easter19_giant_egg"], "option": "Easter dance", "seq": "easter19_egg_emote_human", "spotanim": "easter19_egg_dance_spot", "unsafe": "Perhaps you should play with your egg somewhere safer.", "source": "cache seq/spotanim; wiki PvP refusal" },
+    { "items": ["easter24_reward_book_easter"], "option": "Preach", "seq": "easter24_preach_seq", "say": "All eggs doth shine glory upon the world, A golden yolk, the finest shell. Easter's majesty, of this I now yell!", "source": "cache seq; wiki overhead (whether it is split over several ticks is unknown)" },
+    { "items": ["hw21_haunted_bottle"], "option": "Wake-ghost", "seq": "hw12_human_shake_bottle", "spotanim": "hw21_spotanim_shake_bottle", "say": "WooooOOoOoo", "source": "cache seq/spotanim, wiki overhead" },
+    { "items": ["xmas16_snowglobe"], "option": "Shake", "seq": "xmas16_snowglobe_shake", "source": "cache seq (it holds the globe in the right hand); no recording or wiki detail, so no sound" }
+  ],
+  "mapanims": [
+    { "items": ["xmas16_snowglobe"], "option": "Snow", "spotanim": "druidicspirit_bloom_spotanim", "height": 150, "delays": [30, 15], "source": "recorded (rev 223 recording 1375, 4 of 4 clicks): on the player's tile, delay 30 on the click tick and delay 15 on the next; no sequence or message" }
+  ],
+  "chases": [
+    { "item": "osb7_reward_cat_ears", "option": "Chase", "npc": "hundred_dave_hellrat", "distance": 15, "to": "osb7_reward_hellcat_ears", "revert": "Revert", "source": "wiki (Cat ears, Hell cat ears): Chase while near Hell-Rats gives Hell cat ears; the 15-tile radius (NPC view distance), the silent refusal and Revert giving the cat ears back are inferences" }
+  ],
+  "swaps": [
+    { "option": "Transform", "cycle": ["xmas19_shield_1", "xmas19_shield_2", "xmas19_shield_3"], "source": "wiki order green, red, blue" },
+    { "option": "Reverse", "cycle": ["hw21_ugly_jumper01", "hw21_ugly_jumper02"], "source": "cache pair" }
+  ],
+  "ranks": {
+    "items": ["wreath", "summer2015_mask"],
+    "options": ["Check rank", "Check Rank"],
+    "varbit": "summer_trees_hugged",
+    "message": "Your tree hugging title is:",
+    "titles": [[0, "What's a tree?"], [15, "Tree Cuddler"], [30, "BARKing Mad"], [55, "Tree Hugger"], [75, "At One With Trees"]],
+    "source": "recorded message (3200); wiki title thresholds"
+   },
+  "dialogues": [
+    { "items": ["trick_or_treat_head"], "option": "Question", "page": "Zombie head", "variant": "question-option",
+      "speakers": ["break_zomb_head"], "source": "transcript; chathead: cache NPC break_zomb_head (Zombie Head)" },
+    { "items": ["hw18_eek"], "option": "Talk-to", "page": "Eek", "variant": "standard-dialogue",
+      "speakers": ["hw18_spider_eek"], "source": "transcript; chathead: cache NPC hw18_spider_eek (Eek)" },
+    { "items": ["easter26_egg_companion", "easter26_egg_companion02", "easter26_egg_companion03", "easter26_egg_companion04", "easter26_egg_companion05", "easter26_egg_companion06", "easter26_egg_companion07"],
+      "speakers": ["poh_easter26_egg", "poh_easter26_egg_02", "poh_easter26_egg_03", "poh_easter26_egg_04", "poh_easter26_egg_05", "poh_easter26_egg_06", "poh_easter26_egg_07"],
+      "option": "Interact", "page": "Archibald", "variant": "interacting-with-archibald",
+      "source": "transcript; chathead: the cache NPC of the same paint style" },
+    { "items": ["hw21_haunted_bottle"], "option": "Talk-to", "page": "Haunted wine bottle", "state": "haunted-bottle",
+      "box": "item", "source": "transcript (its tbox lines show the bottle); Wiki: talking needs a worn ghostspeak amulet" },
+    { "items": ["easter20_magic_egg"], "option": "Shake", "page": "Magic egg ball", "variant": "standard-dialogue",
+      "statements": ["You shake the egg violently."], "source": "transcript: tbox lines are message boxes, mes lines chat" },
+    { "items": ["xm21_present_1", "xm21_present_2", "xm21_present_3", "xm21_present_4", "xm21_present_5"], "option": "Read-tag", "page": "Secret santa present", "state": "secret-santa-tag",
+      "box": "item", "source": "transcript: one tag per next colour to unlock" },
+    { "items": ["xm21_present_1", "xm21_present_2", "xm21_present_3", "xm21_present_4", "xm21_present_5"], "option": "Change-colour", "page": "Secret santa present",
+      "variant": "change-colour-option-on-the-present", "state": "secret-santa-colour", "box": "item", "source": "transcript" }
+  ],
+  "hauntedBottle": {
+    "amulets": ["amulet_of_ghostspeak", "amulet_of_ghostspeak_enchanted"],
+    "variants": [
+      "talking-to-the-bottle-the-first-time-with-a-ghostspeak-amulet",
+      "talking-to-the-bottle-the-second-time-with-a-ghostspeak-amulet",
+      "talking-to-the-bottle-the-third-time-with-a-ghostspeak-amulet",
+      "talking-to-the-bottle-subsequent-times-with-a-ghostspeak-amulet"
+    ],
+    "silent": "talking-to-the-bottle-without-a-ghostspeak-amulet",
+    "count": "[number of times spoken to]",
+    "source": "transcript sections; the count is the conversations held with an amulet, this one included"
+  },
+  "secretSanta": {
+    "presents": ["xm21_present_1", "xm21_present_2", "xm21_present_3", "xm21_present_4", "xm21_present_5"],
+    "colours": ["Red", "Blue", "Green", "Black", "Gold"],
+    "tags": ["unlocking-blue-read-tag", "unlocking-green-read-tag", "unlocking-black-read-tag", "unlocking-gold-read-tag",
+      "read-tag-after-unlocking-all-colours"],
+    "deliveries": ["unlocking-blue-talking-to-bob", "unlocking-green-talking-to-aggie", "unlocking-black-talking-to-benny",
+      "unlocking-gold-talking-to-malignius-mortifer"],
+    "offer": "I have a present for you!",
+    "other": "Talk about other things.",
+    "unlocks": "performs an enchant animation and unlocks the new colour.",
+    "seq": "human_cast_enchantring",
+    "spotanim": "enchant_ring",
+    "source": "transcript: deliveries in order Bob, Aggie, Benny, Malignius Mortifer each unlock the next colour; Wiki: one-time unlocks kept if the present is destroyed, the NPCs use the ring enchantment animation"
+  },
+  "santasList": {
+    "items": ["xmas22_cape"],
+    "option": "Check",
+    "first": { "nice": "You are on the nice list!", "naughty": "You are on the naughty list!" },
+    "again": {
+      "nice": ["Still on the nice list you are.", "You are still on the nice list!", "Yep, still good!"],
+      "naughty": ["Still on the naughty list you are. Bah Humbug.", "You are still on the naughty list!", "Yep, still on the naughty list!"]
+    },
+    "source": "Wiki item page (no transcript): chat lines, the list chosen at random on the first check"
+  }
+}

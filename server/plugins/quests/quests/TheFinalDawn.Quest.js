@@ -2530,6 +2530,13 @@ module.exports = function registerTheFinalDawnQuest(api) {
     if (ITZLA_IDS.has(npcId) && quest.isComplete(player) && option === "Yes.") {
       if (held(player, ARKAN_BLADE_ITEM)) return;
       if (player.getInventory().getAmount(COINS_ITEM) < BLADE_PRICE) return;
+      // Paying exactly the price frees the coins' slot. The Wiki says dropped blades are deleted on
+      // repurchase, so this refuses rather than drops. No capture of this: the wording is ours.
+      if (freeSlots(player) < 1 && player.getInventory().getAmount(COINS_ITEM) > BLADE_PRICE) {
+        player.sendMessage("You don't have enough inventory space.");
+        event.end = true;
+        return;
+      }
       player.getInventory().deleteNumber(COINS_ITEM, BLADE_PRICE);
       player.getInventory().adds(ARKAN_BLADE_ITEM, 1);
       player.sendMessage("You give Itzla 250,000 coins and he gives you the Arkan Blade in return.");

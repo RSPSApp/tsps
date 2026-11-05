@@ -59,6 +59,19 @@ function isToxicBlowpipeDartId(itemId) {
   return [...DART_RANGED_STRENGTHS.keys()].some((name) => core.ItemIdentifiers[name] === Number(itemId));
 }
 
+/** The ordinary attack's dart: the blowpipe's own profile, ending by the distance to the target's nearest tile. */
+function dartShot(player, target, projectileId) {
+  const shot = core.WeaponProfiles.ranged(player).projectiles?.[0]
+    ?? { delay: 32, lengthAdjustment: 0, stepMultiplier: 5, startHeight: 35.5, endHeight: 36.5 };
+  return {
+    id: projectileId,
+    delay: shot.delay,
+    end: core.RangedCombatMethod.projectileEnd(shot, core.CombatPosition.edgeDistance(player, target)),
+    startHeight: shot.startHeight,
+    endHeight: shot.endHeight,
+  };
+}
+
 function sanitizeMeta(raw) {
   const value = raw && typeof raw === "object" ? raw : {};
   const rawDartId = normalizeInt(value.dartId, -1);
@@ -488,9 +501,7 @@ function combatMethod(special) {
       return character?.getFightType?.()?.isRapid?.() === true ? Math.max(1, baseSpeed - 1) : baseSpeed;
     }
     hits(character, target) {
-      const distance = character.getLocation().getDistance(target.getLocation());
-      // The blowpipe's own hit-delay profile, as RangedCombatMethod reads it.
-      const delay = core.WeaponProfiles.hitDelays(character.getAsPlayer(), distance)[0];
+      const delay = core.RangedCombatMethod.landingDelays(character, target)[0];
       return [new core.PendingHit(character, target, this, delay)];
     }
     start(character, target) {
@@ -515,8 +526,16 @@ function combatMethod(special) {
           character.performAnimation(new core.Animation(animation));
         }
       }
-      core.Projectile.createProjectile(character, target, ammo.getProjectileId(), 40, 60, 40, 35)
-        .sendProjectile();
+      // The ordinary attack flies the profile's dart (rsprox 3279: starts at 32, ends 32 + 5 a tile of the distance
+      // to the nearest tile, heights 142 to 146 sent), so it ends with its hit. The special's own projectile was
+      // never captured and keeps its old fixed shape.
+      if (this.special) {
+        core.Projectile.createProjectile(character, target, ammo.getProjectileId(), 40, 60, 40, 35).sendProjectile();
+      } else {
+        const shot = dartShot(player, target, ammo.getProjectileId());
+        core.Projectile.createProjectile(character, target, shot.id, shot.delay, shot.end, shot.startHeight, shot.endHeight)
+          .sendProjectile();
+      }
       core.Sounds.sendSound(character, core.Sound.THROW_DART);
       if (this.special) {
         core.Sounds.sendSound(character, core.Sound.TOXIC_BLOWPIPE_SPECIAL);
@@ -707,5 +726,5 @@ module.exports = {
     api.onInterfaceActionButton(CONFIRM_BUTTON, confirmPrompt);
     api.onCustomEvent("destroy-item:prompt", forgetPrompt);
   },
-  _test: { BlowpipeState, checkBlowpipe, removeDarts, removeEverything, CONFIRM_GROUP_ID },
+  _test: { dartShot, BlowpipeState, checkBlowpipe, removeDarts, removeEverything, CONFIRM_GROUP_ID },
 };

@@ -184,6 +184,9 @@ function titheItem(event) {
         plot.plant = { crop, stage: 0, watered: false, dead: false, fertilized: false, nextAt: Date.now() + 60000 };
         player.getPacketSender().sendVarbit(4901, crop + 1);
         player.performAnimation(new core.Animation(2291));
+        if (CROPS[crop].name === "Logavano") {
+            core.PluginManager.emitCustomEvent("diary:task", { player, diary: "kourend", task: "plant-some-logavano-seeds-at-the-tithe-farm" });
+        }
     } else if (plot.plant && id === Data.itemId("Spade")) {
         plot.plant = undefined; player.performAnimation(new core.Animation(830));
     } else if (plot.plant && !plot.plant.dead && plot.plant.stage < 3) {

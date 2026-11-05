@@ -527,7 +527,9 @@ module.exports = function registerLostTribeQuest(api) {
       playVariant(player, npcId, "standard-dialogue-using-a-brooch-on-him-again");
       return;
     }
-    if (!giveItem(player, ItemIdentifiers.MINING_HELMET)) return;
+    // The unlit helmet (5014), as Miltog's shop and the cave goblin miners give it. INFERRED: no capture of this
+    // reward, and the Wiki says only that Mistag gives a mining helmet.
+    if (!giveItem(player, ItemIdentifiers.MINING_HELMET_2)) return;
     player.getInventory().deleteNumber(ItemIdentifiers.BROOCH, 1);
     setBit(player, BIT_RETURNED_BROOCH);
     playVariant(player, npcId, "standard-dialogue-using-the-brooch-on-him");

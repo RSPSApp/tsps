@@ -13,6 +13,7 @@ module.exports = {
     require("./crafting/Gems.Crafting")(api);
     require("./crafting/Jewellery.Crafting")(api);
     require("./crafting/Glassblowing.Crafting")(api);
+    require("./crafting/LightOrbs.Crafting")(api);
     require("./crafting/Pottery.Crafting")(api);
     require("./crafting/Spinning.Crafting")(api);
     require("./crafting/Battlestaves.Crafting")(api);

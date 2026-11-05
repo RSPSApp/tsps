@@ -1,6 +1,6 @@
 // TODO: Soulshot special attack animation/graphic ids not found; skipped.
 function buildSpecial(core) {
-  const { CombatSpecial, Equipment, ItemIdentifiers, Misc, PendingHit, RangedCombatMethod, Skill, Sound, WeaponProfiles } = core;
+  const { CombatPosition, CombatSpecial, Equipment, ItemIdentifiers, Misc, PendingHit, RangedCombatMethod, Skill, Sound } = core;
 
   const DRAIN = 100;
   const RANGED_STRENGTH_BONUS_INDEX = 11;
@@ -31,8 +31,7 @@ function buildSpecial(core) {
   class SeercullCombatMethod extends RangedCombatMethod {
     hits(character, target) {
       const player = character.getAsPlayer();
-      const distance = character.getLocation().getDistance(target.getLocation());
-      const delay = WeaponProfiles.hitDelays(player, distance)[0];
+      const delay = RangedCombatMethod.playerHitDelays(character, target, CombatPosition.projectileDistance(character, target))[0];
       // Keep defensive reductions and the target's HP cap in the shared pipeline.
       return [new PendingHit(character, target, this, {
         delay,

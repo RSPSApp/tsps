@@ -10,7 +10,7 @@
  * items without tallying a second kill. Other sources and plugins use events:
  *   api.emitCustomEvent("collection-log:obtain", { player, itemId, amount?, category?, ensure?, silent? })
  *   api.emitCustomEvent("collection-log:count", { player, category: "Zulrah", amount? })
- *   answer "collection-log:category-count" { player, category, struct, count } with a kept count
+ *   answer "collection-log:category-count" { player, category, struct, count, extraCounts? } with kept counts
  *   ask "collection-log:slots" { player, category? } -> count: the category's slots filled (all, with none)
  *   ask "collection-log:obtained" { player, itemId } -> count: how many of a logged item the player has obtained
  *   hear "collection-log:slot-filled" { player, itemId }: any slot filled, silent and ensured ones too

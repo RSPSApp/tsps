@@ -165,6 +165,26 @@ function unlock(player, areaId) {
   return true;
 }
 
+/**
+ * Developer: every area the league offers, past its slots and tasks (`::areas all`, `::leagueunlock`),
+ * with each area's content and `league:area-unlocked`, but none of the presentation. The slot
+ * varbits show only the first slots' areas; the rest are open all the same. Returns the names added.
+ */
+function unlockAll(player) {
+  const type = Common.leagueOf(player);
+  if (type === null) return [];
+  const list = Common.unlocked(player);
+  const added = Common.league(type).areas.filter((id) => !list.includes(id));
+  for (const id of added) {
+    list.push(id);
+    player.setAttribute(Common.AREAS_ATTRIBUTE, [...list]);
+    Common.api.emitCustomEvent("league:area-unlocked", { player, league: type, area: id, slot: list.length - 1 });
+    completeAreaContent(player, type, id);
+  }
+  sendState(player, type);
+  return added.map((id) => Common.area(id).name);
+}
+
 /** An award that reaches the next slot's tasks shows the popup once (captures 227/00075, 00196). */
 function pointsChanged({ player, tasks, previousTasks }) {
   const type = Common.leagueOf(player);
@@ -215,4 +235,4 @@ module.exports = function attach(api) {
   api.onCustomEvent("league:area-at", answerAreaAt);
 };
 
-Object.assign(module.exports, { unlock, refusal, state, sendState });
+Object.assign(module.exports, { unlock, unlockAll, refusal, state, sendState });

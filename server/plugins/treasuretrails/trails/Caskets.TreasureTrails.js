@@ -100,6 +100,21 @@ function give(player, drops) {
 }
 
 /**
+ * Wiki "Bloodhound": the master casket's 1/1,000 pet becomes a follower, or goes into the
+ * backpack, or to Probita, as every pet does ("pets:award"), not into the reward screen.
+ */
+function splitPets(drops) {
+  const request = { pets: null };
+  api.emitCustomEvent("pets:definitions", request);
+  const petItems = new Set((request.pets ?? []).map(pet => pet.itemId));
+  return { pets: drops.filter(drop => petItems.has(drop.itemId)), drops: drops.filter(drop => !petItems.has(drop.itemId)) };
+}
+
+function awardPets(player, pets) {
+  for (const pet of pets) api.emitCustomEvent("pets:award", { player, itemId: pet.itemId, source: "treasure-trails:casket", awarded: false });
+}
+
+/**
  * Wiki "Mimic": an elite or master casket may turn out to be the Mimic. The table's chance is
  * rolled here; the Mimic plugin decides (its opt-in, one at a time, its dry protection) and
  * answers with the Mimic item carrying this casket's rolls.
@@ -144,7 +159,7 @@ function open(event) {
   if (player.getAttribute(OPENING_ATTRIBUTE)) return true;
   player.setAttribute(OPENING_ATTRIBUTE, true);
   try {
-    let drops, count, mimic;
+    let drops, count, mimic, pets = [];
     try {
       const completed = Number(player.getAttribute(Runtime.completedAttribute(tier)) ?? 0);
       if (!Number.isSafeInteger(completed) || completed < 0 || completed >= Number.MAX_SAFE_INTEGER) throw new Error(`Invalid ${tier.name} completion count`);
@@ -164,6 +179,7 @@ function open(event) {
         api.emitCustomEvent("treasure-trails:milestone-rewards", request);
         if (!request.handled || request.error) throw request.error ?? new Error("Treasure Trails milestone service unavailable");
         drops = prepareDrops(clueRewards(player, [...request.drops, ...itemMilestones(player, tier, count)]), tier);
+        ({ pets, drops } = splitPets(drops));
       }
     } catch (error) {
       event.error = error;
@@ -187,6 +203,7 @@ function open(event) {
     player.sendMessage(COMPLETED);
     player.sendMessage(completedCount(count, tier));
     const slots = give(player, drops);
+    awardPets(player, pets);
     Runtime.restore({ player });
     const sender = player.getPacketSender();
     const group = Runtime.data(tier).rewardInterface;
@@ -209,4 +226,4 @@ module.exports = function attachCaskets(pluginApi) {
   for (const tier of TIERS) api.onItemAction(`Reward casket (${tier.name})`, { Open: open });
 };
 
-Object.assign(module.exports, { roll, entranaTable, itemMilestones, clueRewards, prepareDrops, give, open, onEntrana, tierOfCasket });
+Object.assign(module.exports, { roll, entranaTable, itemMilestones, clueRewards, prepareDrops, splitPets, give, open, onEntrana, tierOfCasket });

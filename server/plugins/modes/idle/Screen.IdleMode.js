@@ -1,7 +1,7 @@
 /**
  * The Idle screen (`::idle`): a server-defined interface (docs/agents/interfaces.md), so it needs
  * no client change. Tabs across the top: Overview (below), Stats (the totals: XP by skill, items
- * by kind, time idle playing and away) and Travel (the travel screen). On the left, the account's status: Idle Mode and auto-resume (each with a
+ * by kind, time idle playing and away), Goals (today's goals) and Travel (the travel screen). On the left, the account's status: Idle Mode and auto-resume (each with a
  * button to switch it), what the character is doing, the idle points and the next one, the offline
  * cap, and what the last time away paid, with the XP per hour; a third button opens the travel screen. On the right,
  * the upgrades: each one's level, what it
@@ -15,6 +15,7 @@ const Production = require("./Production.IdleMode");
 const Offline = require("./Offline.IdleMode");
 const Progression = require("./Progression.IdleMode");
 const TravelScreen = require("./TravelScreen.IdleMode");
+const Goals = require("./Goals.IdleMode");
 
 const { FLAG_OP1, TYPE_RECTANGLE, TYPE_TEXT, createWidgetGroup } = require("../../interface/widgetGroup");
 
@@ -37,9 +38,13 @@ const COMPONENT = {
   TAB_START: 52, TAB_LABEL_START: 56,
   // The Stats tab: a panel of the totals, hidden until it is picked.
   STATS_BOX: 60, STATS_TITLE: 61, SKILLS_HEADER: 62, ITEMS_HEADER: 63, STATS_TIME: 64, SKILL_LINE_START: 65, ITEM_LINE_START: 75,
+  // The Goals tab: a row per daily goal (its text and its progress), the bonus, the next day.
+  GOALS_BOX: 86, GOALS_TITLE: 87, GOAL_START: 88, GOAL_STRIDE: 2, GOALS_BONUS: 98, GOALS_NEXT: 99,
 };
-const TABS = ["Overview", "Stats", "Travel"];
-const TAB = { OVERVIEW: 0, STATS: 1, TRAVEL: 2 };
+const TABS = ["Overview", "Stats", "Goals", "Travel"];
+const TAB = { OVERVIEW: 0, STATS: 1, GOALS: 2, TRAVEL: 3 };
+/** Rows the Goals tab has room for (GOAL_START + 2 per goal stays below GOALS_BONUS). */
+const MAX_GOALS = 5;
 const STATS_LINES = 10;
 const SLOT = { NAME: 0, DESCRIPTION: 1, PRICE: 2, BUY_BUTTON: 3, BUY_LABEL: 4 };
 const LEFT = { x: 18, y: 58, width: 226, height: 242 };
@@ -137,8 +142,22 @@ function addStats(add, root) {
   add(COMPONENT.STATS_TIME, root, text(x + 8, y + height - 24, width - 16, 18, { yTextAlignment: 1, ...hidden }));
 }
 
+function addGoals(add, root) {
+  const { x, y, width, height } = FULL;
+  const hidden = { hidden: true, isHidden: true };
+  add(COMPONENT.GOALS_BOX, root, box(x, y, width, height, hidden));
+  add(COMPONENT.GOALS_TITLE, root, text(x + 8, y + 4, width - 16, 20, { text: "Today's goals", fontId: 496, textColor: 0xff981f, yTextAlignment: 1, ...hidden }));
+  for (let goal = 0; goal < MAX_GOALS; goal++) {
+    const top = y + 30 + goal * 36;
+    add(COMPONENT.GOAL_START + goal * COMPONENT.GOAL_STRIDE, root, text(x + 8, top, width - 16, 16, { yTextAlignment: 1, ...hidden }));
+    add(COMPONENT.GOAL_START + goal * COMPONENT.GOAL_STRIDE + 1, root, text(x + 20, top + 16, width - 28, 16, { textColor: 0xb8ab94, yTextAlignment: 1, ...hidden }));
+  }
+  add(COMPONENT.GOALS_BONUS, root, text(x + 8, y + height - 44, width - 16, 18, { yTextAlignment: 1, ...hidden }));
+  add(COMPONENT.GOALS_NEXT, root, text(x + 8, y + height - 24, width - 16, 18, { textColor: 0xb8ab94, yTextAlignment: 1, ...hidden }));
+}
+
 /** The uids each content tab shows: filled as the interface is built. */
-const TAB_UIDS = { [TAB.OVERVIEW]: [], [TAB.STATS]: [] };
+const TAB_UIDS = { [TAB.OVERVIEW]: [], [TAB.STATS]: [], [TAB.GOALS]: [] };
 
 function buildInterface() {
   const { widgets, add } = createWidgetGroup(GROUP_ID);
@@ -147,8 +166,7 @@ function buildInterface() {
     list.push(id);
     return id;
   };
-  TAB_UIDS[TAB.OVERVIEW].length = 0;
-  TAB_UIDS[TAB.STATS].length = 0;
+  for (const uids of Object.values(TAB_UIDS)) uids.length = 0;
   const root = add(COMPONENT.ROOT, -1, {
     rawWidth: 18, rawHeight: 18, widthMode: 1, heightMode: 1,
     width: 494, height: 316, xPositionMode: 1, yPositionMode: 1,
@@ -158,6 +176,7 @@ function buildInterface() {
   addStatus(into(TAB_UIDS[TAB.OVERVIEW]), root);
   addUpgrades(into(TAB_UIDS[TAB.OVERVIEW]), root);
   addStats(into(TAB_UIDS[TAB.STATS]), root);
+  addGoals(into(TAB_UIDS[TAB.GOALS]), root);
   return { groupId: GROUP_ID, widgets };
 }
 
@@ -271,13 +290,45 @@ function sendStats(player) {
   sender.sendString(time, uid(COMPONENT.STATS_TIME));
 }
 
-/** player -> the content tab shown (Overview or Stats). */
+/** The Goals tab's lines, top to bottom (each goal: its text, then its progress and reward). */
+function goalLines(player, now = Date.now()) {
+  const { goals, bonus, nextInMs } = Goals.lines(player, now);
+  const rows = goals.slice(0, MAX_GOALS).map((goal) => [
+    goal.done ? `${col(COLOUR.ON, "Done")} ${goal.text}` : goal.text,
+    `${number(goal.progress)} / ${number(goal.target)} - reward ${goal.points} idle points`,
+  ]);
+  return {
+    rows,
+    bonus: bonus.done
+      ? `${col(COLOUR.ON, "All done!")} The bonus of ${bonus.points} idle points is yours.`
+      : `Do all ${bonus.of} for ${col(COLOUR.VALUE, `${bonus.points} more idle points`)} (${bonus.count}/${bonus.of} done).`,
+    next: `New goals in ${Offline.formatDuration(nextInMs)}.`,
+  };
+}
+
+function sendGoals(player) {
+  const sender = player.getPacketSender();
+  const { rows, bonus, next } = goalLines(player);
+  for (let goal = 0; goal < MAX_GOALS; goal++) {
+    const [first = "", second = ""] = rows[goal] ?? [];
+    sender.sendString(first, uid(COMPONENT.GOAL_START + goal * COMPONENT.GOAL_STRIDE));
+    sender.sendString(second, uid(COMPONENT.GOAL_START + goal * COMPONENT.GOAL_STRIDE + 1));
+  }
+  sender.sendString(bonus, uid(COMPONENT.GOALS_BONUS));
+  sender.sendString(next, uid(COMPONENT.GOALS_NEXT));
+}
+
+/** player -> the content tab shown (Overview, Stats or Goals). */
 const tabs = new Map();
 
 function redraw(player) {
   if (!isOpen(player)) return;
   if (tabs.get(player) === TAB.STATS) {
     sendStats(player);
+    return;
+  }
+  if (tabs.get(player) === TAB.GOALS) {
+    sendGoals(player);
     return;
   }
   sendStatus(player);
@@ -411,6 +462,7 @@ function buyUids() {
 module.exports = function attach(api) {
   buySlotUids = null;
   api.registerCustomInterface(buildInterface());
+  Common.registerScreen(GROUP_ID);
   api.onInterfaceActionButton([uid(COMPONENT.IDLE_BUTTON), uid(COMPONENT.IDLE_LABEL)], switchIdle);
   api.onInterfaceActionButton([uid(COMPONENT.AUTO_BUTTON), uid(COMPONENT.AUTO_LABEL)], switchAuto);
   api.onInterfaceActionButton([uid(COMPONENT.TRAVEL_BUTTON), uid(COMPONENT.TRAVEL_LABEL)], travelButton);
@@ -433,5 +485,6 @@ module.exports.slotComponent = slotComponent;
 module.exports.open = open;
 module.exports.statusLines = statusLines;
 module.exports.statsLines = statsLines;
+module.exports.goalLines = goalLines;
 module.exports.TAB = TAB;
 module.exports.buildInterface = buildInterface;

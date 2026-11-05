@@ -194,7 +194,7 @@ function resume(player, now) {
   if (state.paused) return "paused";
   const { restartAfterSeconds, retrySeconds, leashTiles, maxFailedAttempts } = config();
   if (now - state.lastGatherAt < restartAfterSeconds * 1000 || now - state.lastAttemptAt < retrySeconds * 1000) return "gathering";
-  if (!Common.free(player)) return "busy";
+  if (!Common.readyToWork(player)) return "busy";
   const location = player.getLocation();
   if (location.getZ() !== target.anchor.z || chebyshev(location, target.anchor) > leashTiles) return "away";
   // The last try gathered nothing: leave that one alone a while, and after a few such tries stop

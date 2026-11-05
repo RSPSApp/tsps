@@ -254,7 +254,7 @@ function work(player, now) {
   const drained = Object.keys(target.loadout).some((itemId) => inventory.getAmount(Number(itemId)) <= 0);
   const waitSeconds = drained ? restartAfterSeconds : stalledSeconds;
   if (now - state.lastProducedAt < waitSeconds * 1000 || now - state.lastAttemptAt < retrySeconds * 1000) return "producing";
-  if (!Common.free(player)) return "busy";
+  if (!Common.readyToWork(player)) return "busy";
   const location = player.getLocation();
   if (location.getZ() !== target.anchor.z || Common.chebyshev(location, target.anchor) > leashTiles) return "away";
   const product = Common.itemName(target.productId).toLowerCase();

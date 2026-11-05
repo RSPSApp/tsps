@@ -275,6 +275,32 @@ the 190-wide panel.
 
 ![The journal's Idle Information](images/idle-journal-panel.png)
 
+## Daily goals
+
+`server/plugins/modes/idle/Goals.IdleMode.js`, settings in `"goals"`. An idle account gets
+`goalsPerDay` (3) goals a day, picked from `pool` by its name and the day, so a relog can't reroll
+them. The day turns at `resetUtcHour` (03:00 UTC, midnight in Brasilia). Saved as
+`idle-mode:daily` `{ day, goals: [{ id, target, progress, done }], bonus }`.
+
+| Goal type | Counts | From |
+| --- | --- | --- |
+| `xp` | XP in its `skills` (one skill, or combat, or making things); x (1 + level / `levelStep`) | `Offline.onTotals`, online and offline |
+| `gather` | items an idle gathering skill brought in | `Offline.onTotals` (a gathering activity) |
+| `make` | items idle production made | `Offline.onTotals` (a production activity) |
+| `time` | minutes working idle, playing or away | `Offline.onTotals` |
+| `kill` | kills of idle combat's target; x (1 + combat / `combatStep`) | `npc-drops:generated`, online only |
+
+A goal done pays its `points` in idle points and says so; all of a day's pay `bonusPoints` more.
+The day's goals are said on the first login of a day. The Idle screen's **Goals** tab shows each
+one's progress and reward, the bonus, and the time to the next day's.
+
+![The Goals tab](images/idle-goals.png)
+
+**Working with the Idle screen open**: a restart (auto-resume, idle combat, a production batch)
+needs the player free, and an open interface makes them busy. When the only thing in the way is
+one of Idle Mode's own screens (`Common.registerScreen`), it is closed and the work goes on
+(`Common.readyToWork`); any other interface (a bank, a shop) still waits.
+
 ## The Idle screen's tabs
 
 Tabs across the top of the Idle screen: **Overview** (the status and upgrades below), **Stats**

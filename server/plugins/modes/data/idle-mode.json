@@ -614,5 +614,103 @@
     "maxGapSeconds": 90,
     "makeAll": 28,
     "stalledSeconds": 20
+  },
+  "goals": {
+    "_description": "Daily goals (docs/idle-mode.md): goalsPerDay goals a day, picked from the pool by the account's name and the day, so they stay put all day. The day turns at resetUtcHour (03:00 UTC is midnight in Brasilia). XP goals grow with the skill's level (x (1 + level / levelStep)), kills with the combat level (x (1 + combat / combatStep)). Each pays its points in idle points; all of a day's pay bonusPoints more. XP, items and time count offline too; kills only online.",
+    "enabled": true,
+    "goalsPerDay": 3,
+    "resetUtcHour": 3,
+    "levelStep": 20,
+    "combatStep": 30,
+    "bonusPoints": 50,
+    "pool": [
+      {
+        "id": "woodcutting-xp",
+        "type": "xp",
+        "skills": [
+          "WOODCUTTING"
+        ],
+        "amount": 2000,
+        "points": 25,
+        "text": "Gain {amount} Woodcutting XP"
+      },
+      {
+        "id": "mining-xp",
+        "type": "xp",
+        "skills": [
+          "MINING"
+        ],
+        "amount": 2000,
+        "points": 25,
+        "text": "Gain {amount} Mining XP"
+      },
+      {
+        "id": "fishing-xp",
+        "type": "xp",
+        "skills": [
+          "FISHING"
+        ],
+        "amount": 2000,
+        "points": 25,
+        "text": "Gain {amount} Fishing XP"
+      },
+      {
+        "id": "combat-xp",
+        "type": "xp",
+        "skills": [
+          "ATTACK",
+          "STRENGTH",
+          "DEFENCE",
+          "RANGED",
+          "MAGIC",
+          "HITPOINTS"
+        ],
+        "amount": 3000,
+        "points": 25,
+        "text": "Gain {amount} combat XP"
+      },
+      {
+        "id": "production-xp",
+        "type": "xp",
+        "skills": [
+          "COOKING",
+          "SMITHING",
+          "FLETCHING",
+          "CRAFTING",
+          "HERBLORE"
+        ],
+        "amount": 2000,
+        "points": 25,
+        "text": "Gain {amount} XP making things"
+      },
+      {
+        "id": "gather",
+        "type": "gather",
+        "amount": 150,
+        "points": 20,
+        "text": "Gather {amount} resources"
+      },
+      {
+        "id": "make",
+        "type": "make",
+        "amount": 100,
+        "points": 20,
+        "text": "Make {amount} items"
+      },
+      {
+        "id": "kills",
+        "type": "kill",
+        "amount": 30,
+        "points": 25,
+        "text": "Defeat {amount} monsters"
+      },
+      {
+        "id": "time",
+        "type": "time",
+        "amount": 30,
+        "points": 20,
+        "text": "Work idle for {amount} minutes"
+      }
+    ]
   }
 }

@@ -48,8 +48,19 @@ function addInto(target, values) {
   }
 }
 
-/** Adds to the totals: time, and the XP by skill ({ skillKey: xp }) and items ({ itemId: n }). */
-function addTotals(player, { workedMs = 0, offlineMs = 0, xp = {}, items = {} }) {
+/** Called with (player, { activity, workedMs, offlineMs, xp, items }) whenever the totals grow (Goals). */
+const totalsListeners = [];
+
+function onTotals(listener) {
+  totalsListeners.push(listener);
+}
+
+/**
+ * Adds to the totals: time, and the XP by skill ({ skillKey: xp }) and items ({ itemId: n }) of
+ * `activity` (a skill's key, or "COMBAT"), and tells the listeners.
+ */
+function addTotals(player, { activity = null, workedMs = 0, offlineMs = 0, xp = {}, items = {} }) {
+  for (const listener of totalsListeners) listener(player, { activity, workedMs, offlineMs, xp, items });
   const current = totals(player);
   addInto(current.bySkill, xp);
   addInto(current.byItem, items);
@@ -196,7 +207,7 @@ function record(player, activity, skills, items, maxGapSeconds) {
   if (session === previous) {
     const gained = {};
     for (const [key, total] of Object.entries(session.lastXp)) gained[key] = total - (previousXp[key] ?? total);
-    addTotals(player, { workedMs: now - previousAt, xp: gained, items });
+    addTotals(player, { activity, workedMs: now - previousAt, xp: gained, items });
   }
   // Kept current while playing, so any save carries it: the server's shutdown save (which logs
   // no one out) and the periodic autosave before a crash pay the time away on the next login.
@@ -263,7 +274,7 @@ function login({ player }) {
   if (lost > 0) player.sendMessage(`Your bank was full: ${formatNumber(lost)} items were lost.`);
   player.setAttribute(LAST_AWAY_ATTRIBUTE,
     `${formatDuration(reward.elapsedMs)}${capped} ${doing(away.activity)}: ${parts.join(", ") || "nothing"}${lost > 0 ? ` (${formatNumber(lost)} lost, bank full)` : ""}.`);
-  addTotals(player, { offlineMs: reward.paidMs, xp: reward.xp, items: reward.items });
+  addTotals(player, { activity: away.activity, offlineMs: reward.paidMs, xp: reward.xp, items: reward.items });
   Common.changed(player);
   for (const listener of paidListeners) listener(player, reward);
 }
@@ -285,6 +296,7 @@ module.exports.totals = totals;
 module.exports.currentRate = currentRate;
 module.exports.onPaid = onPaid;
 module.exports.consume = consume;
+module.exports.onTotals = onTotals;
 module.exports.addResult = addResult;
 module.exports.awayFromSession = awayFromSession;
 module.exports.offlineReward = offlineReward;

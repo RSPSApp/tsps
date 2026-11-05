@@ -85,7 +85,9 @@ Uma moeda própria do jogo idle, separada dos pontos de melhoria.
 - [ ] **Mais locais de viagem**, incluindo áreas de membros
 - [ ] **Equilíbrio**: revisar taxas offline, limite de horas, preços das melhorias e quanto o
       jogador ganha por hora
-- [ ] **Metas e conquistas idle**: objetivos diários e marcos de progresso
+- [x] **Metas diárias**: 3 por dia (aba Goals), que pagam pontos idle e um bônus por completar
+      todas; contam online e offline
+- [ ] **Conquistas idle** (marcos permanentes, como 1.000 itens produzidos ou 24h idle)
 
 ## P2 - Depois
 

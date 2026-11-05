@@ -97,6 +97,9 @@ Uma moeda própria do jogo idle, separada dos pontos de melhoria.
 ## P2 - Depois
 
 - [x] Ranking (hiscores): XP idle, pontos idle ganhos e horas idle; aba Ranks na tela idle e `::idle top`
+- [x] **No ar em https://jogo.stfu.fun** (05/11/2026): dois contêineres atrás do Traefik que
+      já existe na VPS, HTTPS/WSS por Let's Encrypt, mundo idle ligado para contas novas e
+      backup diário dos saves. Como publicar e atualizar: `docs/deploy/jogo-stfu-fun.md`
 - [ ] Viagem andando em vez de teleporte, usando as rotas longas dos bots
 - [x] Bosses idle: aba Bosses na viagem; Gemstone Crab (minera a casca e segue o caranguejo) e
       Scurrius; nível de combate exigido, come antes e foge quando a comida acaba; conquista e

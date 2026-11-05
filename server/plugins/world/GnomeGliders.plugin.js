@@ -144,6 +144,7 @@ class FlightTask extends Task {
       sender.sendInterfaceRemoval();
       player.getMovementQueue().setBlockMovement(false);
       player.setAttribute(FLYING_ATTRIBUTE, null);
+      api.emitCustomEvent("gnome-gliders:arrived", { player, destination: to });
     }
   }
 }

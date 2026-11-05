@@ -1,5 +1,8 @@
 import { showAllTimers } from "../../../common/utils/DeviceUtil";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { IndexType } from "../../../rs/cache/IndexType";
+import { SpriteLoader } from "../../../rs/sprite/SpriteLoader";
+import { spriteToCanvas } from "../../../ui/item/ItemIcon";
 import type { OsrsClient } from "../../OsrsClient";
 import { VENGEANCE_TIME_LIMIT_VARBIT } from "../vengeancetimer/VengeanceTimer";
 import { VengeanceTimerOverlay } from "../vengeancetimer/VengeanceTimerOverlay";
@@ -21,6 +24,9 @@ import {
     TELEBLOCK_TIMER_SECONDS_VARP,
 } from "./StatusTimerOverlay";
 
+// Combat sidebar icon, verified in cache widget 161:66.
+const COMBAT_TAB_SPRITE_ID = 168;
+
 export function TimersOverlay({
     osrsClient,
     plugin,
@@ -32,6 +38,24 @@ export function TimersOverlay({
     const getEnabled = useCallback(() => plugin.isEnabled(), [plugin]);
     const enabled = useSyncExternalStore(subscribe, getEnabled, getEnabled);
     const [, refresh] = useState(0);
+    const [combatIcon, setCombatIcon] = useState<string>();
+
+    useEffect(() => {
+        if (!osrsClient.loadedCache || !osrsClient.cacheSystem) return;
+        try {
+            const sprites = osrsClient.cacheSystem.getIndex(IndexType.DAT2.sprites);
+            const sprite = SpriteLoader.loadIntoIndexedSprite(sprites, COMBAT_TAB_SPRITE_ID);
+            if (sprite) {
+                // Trim the gameframe padding before shrinking the icon.
+                sprite.width = sprite.subWidth;
+                sprite.height = sprite.subHeight;
+                sprite.xOffset = sprite.yOffset = 0;
+            }
+            setCombatIcon(sprite ? spriteToCanvas(sprite).toDataURL() : undefined);
+        } catch {
+            setCombatIcon(undefined);
+        }
+    }, [osrsClient, osrsClient.loadedCache]);
 
     useEffect(() => {
         const timers = [
@@ -76,7 +100,7 @@ export function TimersOverlay({
             <VengeanceTimerOverlay osrsClient={osrsClient} plugin={plugin.vengeance} now={now} />
             {(attackTicks > 0 || showAllTimers) && (
                 <div className={`status-timer-infobox attack-timer-infobox${attackStyle ? " mobile-combat-timer" : ""}`} style={attackStyle} title="Next attack (ticks)">
-                    <span className="status-timer-fallback">⚔</span>
+                    {combatIcon && <img src={combatIcon} alt="" className="status-timer-icon" />}
                     <span className="status-timer-seconds">{attackTicks}</span>
                 </div>
             )}

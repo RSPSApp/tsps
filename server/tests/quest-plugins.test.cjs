@@ -149,8 +149,9 @@ function mockApi() {
   return { api, handlers };
 }
 
-test('Quests.plugin registers every quest and enforces equipment requirements by default', () => {
+test('Quests.plugin registers every quest and enforces equipment requirements when enabled', () => {
   const { api, handlers } = mockApi();
+  api.getPluginConfig = (key, fallback) => (key === 'quests:equipment-requirements' ? true : fallback);
   const plugin = require('../plugins/quests/Quests.plugin');
   assert.equal(plugin.name, 'Quests');
   assert.doesNotThrow(() => plugin.register(api));

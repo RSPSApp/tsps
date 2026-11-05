@@ -84,6 +84,11 @@ function fakeContainer(capacity) {
       if (slot >= 0) items[slot] = items[slot].getAmount() > amount ? new Item(id, items[slot].getAmount() - amount) : new Item(-1, 0);
       return container;
     },
+    deleteAtSlot(slot, amount = 1) {
+      const item = items[slot];
+      items[slot] = item.getAmount() > amount ? new Item(item.getId(), item.getAmount() - amount) : new Item(-1, 0);
+      return container;
+    },
     add(item) {
       const same = items.findIndex((other) => other.getId() === item.getId() && item.getDefinition().isStackable());
       if (same >= 0) items[same] = new Item(item.getId(), items[same].getAmount() + item.getAmount());

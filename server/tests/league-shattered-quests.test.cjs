@@ -42,13 +42,14 @@ before(async () => {
   QuestRuntime = require("../plugins/quests/QuestRuntime");
 });
 
-test("every pack's quests are registered quests, but Recipe for Disaster's subquests and three miniquests", () => {
+test("every pack's quests are registered quests, but Recipe for Disaster's subquests and two miniquests", () => {
   const names = [...new Set(Object.values(data.packs).flatMap((pack) => pack.quests))];
   assert.deepEqual(names.filter((name) => !QuestRuntime.questNamed(name)).sort(), [
-    "Alfred Grimhand's Barcrawl", "Architectural Alliance",
+    "Architectural Alliance",
     "Freeing Awowogei", "Freeing Pirate Pete", "Freeing Sir Amik Varze", "Freeing Skrach Uglogwee",
     "Freeing the Goblin generals", "Freeing the Mountain Dwarf", "The Frozen Door",
   ], "the names docs/leagues.md and the data say are skipped");
+  assert.equal(QuestRuntime.questNamed("Alfred Grimhand's Barcrawl")?.name, "Alfred Grimhand's Barcrawl", "now a quest");
   assert.equal(QuestRuntime.questNamed("Song of the Elves")?.name, "Song of the Elves", "Elf III's main quest");
   assert.equal(QuestRuntime.questNamed("Dragon Slayer II")?.name, "Dragon Slayer II", "Myths' main quest");
 });

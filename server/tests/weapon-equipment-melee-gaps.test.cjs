@@ -227,3 +227,55 @@ test('scythe queue caps a corrupted victim across every hit before awarding XP',
     PluginManager.emitPlayerDealtDamage = previous.dealt;
   }
 });
+
+test('OSRS minimum player hit clamps successful zeroes without rerolling or changing XP rates', t => {
+  const { Misc } = require('../dist/util/Misc');
+  const { HitMask } = require('../dist/game/content/combat/hit/HitMask');
+  let minimumHit;
+  require('../plugins/world/PlayerMinimumHit.plugin').register({
+    onCustomEvent(name, handler) {
+      assert.equal(name, 'combat:hit-rolled');
+      minimumHit = handler;
+    },
+  });
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
+    if (name === 'combat:hit-rolled') minimumHit(event);
+  });
+  t.mock.method(core.DamageFormulas, 'sourceMaxHit', () => 3);
+  t.mock.method(core.DamageFormulas, 'sourceHitBounds', () => ({ minimum: 0, maximum: 3 }));
+  let selected = 0;
+  t.mock.method(Misc, 'randomInclusive', () => selected);
+  const source = attacker(), victim = target();
+  for (const style of [CombatType.MELEE, CombatType.RANGED, CombatType.MAGIC]) {
+    const damages = [0, 1, 2, 3].map(value => {
+      selected = value;
+      return CombatFactory.rollHitDamage(source, victim, style, false, undefined, false, false).getDamage();
+    });
+    assert.deepEqual(damages, [1, 1, 2, 3], 'raise zero to one; do not replace 0..max with a uniform 1..max roll');
+  }
+  selected = 0;
+  t.mock.method(core.DamageFormulas, 'sourceMaxHit', () => 1);
+  const makeHit = () => new core.PendingHit(source, victim,
+    { type: () => CombatType.MELEE, accuracyDefenceType: type => type }, { rollAccuracy: true });
+  t.mock.method(core.AccuracyFormulasDpsCalc, 'rollAccuracy', () => true);
+  const hit = makeHit();
+  assert.equal(hit.getTotalDamage(), 1, 'a beginner successful zero now deals one');
+  assert.equal(hit.getHits()[0].getHitmask(), HitMask.RED);
+  CombatFactory.rewardExp(source, {
+    getTotalDamage: () => hit.getTotalDamage(), getSkills: () => [Skill.ATTACK.getIndex()],
+    getCombatType: () => CombatType.MELEE, getTarget: () => victim,
+  });
+  assert.equal(source.xp.find(([skill]) => skill === Skill.ATTACK)[1], 4, 'still four melee XP per damage');
+
+  t.mock.method(core.AccuracyFormulasDpsCalc, 'rollAccuracy', () => false);
+  assert.equal(makeHit().getTotalDamage(), 0, 'failed accuracy stays a miss');
+  const npc = { isPlayer: () => false, isNpc: () => true };
+  assert.equal(CombatFactory.rollHitDamage(npc, victim, CombatType.MELEE, false, undefined, false, false).getDamage(), 0, 'NPC zeroes are unchanged');
+  const zeroBound = { attacker: source, damage: 0, maximum: 0 };
+  minimumHit(zeroBound);
+  assert.equal(zeroBound.damage, 0, 'explicit zero-damage bounds remain zero');
+
+  t.mock.method(core.PrayerHandler, 'isActivated', () => true);
+  assert.equal(CombatFactory.rollHitDamage(source, victim, CombatType.MELEE, false, undefined, false, true).getDamage(), 0,
+    'defensive reductions can still reduce the promoted roll to zero');
+});

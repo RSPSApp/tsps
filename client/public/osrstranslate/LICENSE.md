@@ -2,9 +2,10 @@
 
 `additions-pt-BR.json` and `additions-ESP.json` are tsps's own Portuguese and Spanish
 translations for the OSRS Translate PT-BR plugin (`client/game/plugins/osrstranslate/`). They are
-the entries we contributed to the author's dictionary repository,
-[walterrezende12-tech/osrs-translate-translations](https://github.com/walterrezende12-tech/osrs-translate-translations),
-in pull requests #4, #5 and #6, and are distributed here under this repository's licence (BSD-2,
+the entries we contribute to the author's dictionary repository,
+[walterrezende12-tech/osrs-translate-translations](https://github.com/walterrezende12-tech/osrs-translate-translations)
+(pull requests #4, #5 and #6 there, and branches still to be opened as pull requests; each file
+lists the commits it was built from), and are distributed here under this repository's licence (BSD-2,
 see `/LICENSE`). None of the author's own dictionary entries are included: the plugin downloads
 those from his repository at run time.
 

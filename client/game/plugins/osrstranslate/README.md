@@ -24,7 +24,8 @@ requested while it is off.
 
 ## tsps's additions
 
-Entries tsps contributed to the author's dictionaries (pull requests #4, #5 and #6 there) are also
+Entries tsps contributes to the author's dictionaries (pull requests #4, #5 and #6 there, and
+branches still to be opened; the additions files list their commits) are also
 bundled with the client, in `client/public/osrstranslate/`, so players get them before he merges:
 All Settings window text, the welcome screen's membership box, diary messages, missing dialogue
 and game messages, and fixes such as "No pasa Nothing interesante.". They are fetched with the

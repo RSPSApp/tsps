@@ -1,9 +1,9 @@
 # Storage items
 
 `server/plugins/items/StorageItems.plugin.js`, with one unit per container in
-`server/plugins/items/storage/`: the coal bag, gem bag, fish barrel (and fish sack barrel), log
-basket (and forestry basket), Forestry kit, plank sack and tackle box. The herb sack and seed box were already
-in the Farming plugin and are unchanged.
+`server/plugins/items/storage/`: the coal bag, gem bag, gem pouch and its upgrades, gem sack, fish barrel
+(and fish sack barrel), log basket (and forestry basket), Forestry kit, plank sack and tackle box.
+The herb sack and seed box are in the Farming plugin.
 
 ## Replaces
 
@@ -14,6 +14,8 @@ login, and Mining's `mining:ore` event it listened to is now `storage:gather`.
 
 - **OSRS Wiki** pages for each item: capacities, what each one takes, auto-fill, death and
   bank behaviour.
+- **Jagex** [gem bag expansion](https://store.steampowered.com/news/posts/?enddate=1778665947&feed=steam_community_announcements):
+  gem sack recipe, capacity and retention of the previous containers' contents.
 - **rsprox captures** (https://rsprox.net/database): the tackle box (rev 227, recording 1858, a
   Leagues world) for its interface; the herb sack and seed box (rev 235/238) for the bank
   panel's op9, which empties a container into the bank with no message. Fill, Empty and Check
@@ -24,7 +26,7 @@ login, and Mining's `mining:ore` event it listened to is now `storage:gather`.
 ## How contents are kept
 
 As with the rune pouch, a container's contents live on the player in the attribute
-`storage-items:<family>` (`coal-bag`, `gem-bag`, `fish-barrel`, `log-basket`, `forestry-kit`,
+`storage-items:<family>` (`coal-bag`, `gem-bag`, `gem-pouch`, `gem-sack`, `fish-barrel`, `log-basket`, `forestry-kit`,
 `plank-sack`, `tackle-box`), not on the item. Every copy a player owns shares one store (Wiki: Fish barrel,
 Log basket, Tackle box). The open and closed variants are the same container (`Coal bag` /
 `Open coal bag` and so on); Open and Close swap the item in place.
@@ -34,11 +36,19 @@ Log basket, Tackle box). The open and closed variants are the same container (`C
 | Coal bag | 27 coal, 36 with the Smithing cape's perk (`skillcape:has-perk`) | open: mined coal | smelting, after the inventory's coal |
 | Gem bag | 60 of each uncut sapphire to dragonstone | open: picked-up gems, mined gems, the gem stall, pickpocketed gems, Shooting Star gems | - |
 | Gem pouch, gem satchel, gem tote | 5, 10 and 20 of each uncut opal, jade and red topaz | open: mined gems only | - |
+| Gem sack | 60 of each of the eight uncut gems held by the bag and tote | open: precious gems from the gem bag's sources; semi-precious gems from mining | - |
 | Fish barrel, fish sack barrel | 28 raw fish (no stackable fish) | open: caught fish | - |
 | Log basket, forestry basket | 28 logs or bark, carried or worn | open: chopped logs | - |
 | Forestry kit (and the kit in a forestry basket) | enum 817: bark, nature offerings, rations, secateurs attachment, leaves | carried or worn: Forestry bark and leaves | the Forestry Shop's bark |
 | Plank sack | 28 planks | always: sawmill planks | Construction, after the inventory's planks |
 | Tackle box | 35 kinds of tackle (`data/storage-items.json`) | - | fishing bait only; gear has to come out first |
+
+Upgrading a tote and real gem bag to a gem sack transfers both family stores to the sack. The server
+refuses the upgrade without consuming items if another lower-tier copy is owned or a saved store is
+inconsistent; this is a conservative policy for existing server saves, not an observed game rule.
+The sack's action and refusal messages have no retained sack transcript, and ground pickup currently
+uses the gem bag's pickup wording. Semi-precious auto-storage is limited to mining here; the source
+does not establish every live-game gather source.
 
 ## Events
 

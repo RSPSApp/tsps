@@ -176,13 +176,22 @@ function tick() {
   for (const [npc, state] of awake) restTick(npc, state);
 }
 
-/** Kourend easy "Kill a Sandcrab" and Fremennik easy "Kill 5 Rock crabs". */
+/** Whether a task's optional bounding boxes contain the NPC's tile. */
+function inTaskArea(task, location) {
+  if (!Array.isArray(task.areas) || task.areas.length === 0) return true;
+  if (!location) return false;
+  const x = location.getX();
+  const y = location.getY();
+  return task.areas.some(([minX, maxX, minY, maxY]) => x >= minX && x <= maxX && y >= minY && y <= maxY);
+}
+
+/** Kourend easy "Kill a Sandcrab" (not in Varlamore) and Fremennik easy "Kill 5 Rock crabs". */
 function killed({ killer, npc }) {
   awake.delete(npc);
   if (!killer?.isPlayer?.()) return;
   const name = npc.getCurrentDefinition?.()?.getName?.();
   for (const task of DATA?.diary ?? []) {
-    if (task.name !== name) continue;
+    if (task.name !== name || !inTaskArea(task, npc.getLocation?.())) continue;
     const kills = task.count > 1 ? (Number(killer.getAttribute(ROCK_CRAB_KILLS_ATTRIBUTE)) || 0) + 1 : 1;
     if (task.count > 1) killer.setAttribute(ROCK_CRAB_KILLS_ATTRIBUTE, kills);
     if (kills >= task.count) api.emitCustomEvent("diary:task", { player: killer, diary: task.diary, task: task.task });
@@ -202,5 +211,5 @@ module.exports = {
     pluginApi.onNpcDeath(killed);
     pluginApi.onCanAttack(onAttack);
   },
-  _test: { start, track, tick, wake, sleep, killed, onAttack, watched, awake, crabSquares, dormantIds },
+  _test: { start, track, tick, wake, sleep, killed, onAttack, inTaskArea, watched, awake, crabSquares, dormantIds },
 };

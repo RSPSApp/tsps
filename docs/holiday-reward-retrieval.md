@@ -93,3 +93,79 @@ Final feature/bank/PIN/bank-space tests:126/126 pass. Final-source full server s
 10,003 pass,6 fail of10,009,0 cancelled,446.37seconds. All six reproduce on untouched
 base b6edd9b4a: Belladonna protective harvest, three Farming/Leagues cases, Barronite
 task count and bone-burying messages. The full suite is not claimed green.
+
+## Unlocking a held item by using it
+
+Rev 232 recording 3200 shows a player at Diango wearing or playing with holiday items
+they held but had never unlocked. Each first Wear or Play-with sent
+`You've unlocked a holiday item: <col=ef1020>Tiger toy</col>` (the cache name) and the
+item then counted for retrieval; "Check rank" on the Druidic wreath sent no unlock until
+it was worn. HolidayRewards follows that: a real equip (`equipment:changed` with
+`equipped: true`) unlocks the catalogue entry. `holiday-rewards:used { player, itemId }` is
+the same unlock for item handlers whose use counts (such as Play-with); no handler emits it
+yet. A catalogue item always unlocks its own entry. An alternate style unlocks its cache
+family's entry only when that family holds exactly one entry (the 25th anniversary tabards
+share a family but are separate entries). The recording only shows base items, so the
+alternate rule is an inference from the shared family.
+
+## Native style chooser (ItemStyles)
+
+`plugins/items/ItemStyles.plugin.js` replaces the Present box hat's single-item chooser.
+Any item in the cache `item_transmog` table (bar the two groups below) whose inventory or worn option is Change,
+Change-style, Colour, Carve or Paint opens interface `item_transmog` for its group, with
+`%item_transmog_active_obj` set and script 6857. An item in two groups (the 2024
+Halloween pumpkins) opens its first group from its first style option and its second from
+the second: rev 226 recording 1686 shows Colour opening group 9 and Carve group 23.
+Selecting a row replaces the item in its own slot, keeps amount and metadata, and sends
+`You change the style of your <name before the change>.` (same recording).
+
+The server repeats the client's availability proc (`[proc,script6854]`). Spider hat rows
+need their 2023 reward varbits. Treat cauldron rows need the 2022 community-goal stage, a
+client varc that only clientscript 2430 sets; nothing sends it, so the client draws them
+locked and the server keeps them locked. A style option clicked while another modal (or
+this chooser) is open closes it and opens the chooser, as other item actions do.
+The greenman mask and Fractured Archive cape groups depend on Forestry and Archive unlocks
+this plugin does not own, so they are not opened here.
+
+Tests: `node --test tests/item-styles.test.cjs tests/present-box-hat.test.cjs
+tests/holiday-rewards.test.cjs` from `server/` after a build.
+
+## Toy and cosmetic options (HolidayToys)
+
+`server/plugins/items/data/holiday-toys.json` lists each holiday item option with its
+cache sequence/spotanim names, sound, overhead text and source; `HolidayToys` plays them
+from the inventory or the worn tab (cache worn options, params 451+).
+
+- Recorded (rev 232 recordings 3200 and 3215): the four WWF toys' Play-with (own sequence,
+  "Grrrr!"), the Zombie head's Talk-At (`hamlet_head_all`, "Alas!"), and Check rank on the
+  Druidic wreath and Mask of balance ("Your tree hugging title is: <col=6f0000>..." from
+  `summer_trees_hugged` and the Wiki's 0/15/30/55/75 hug titles). Tree hugging itself
+  belonged to the 2014 and 2015 Midsummer events and is not implemented, so nothing writes
+  or saves that varbit: Check rank always shows "What's a tree?", as OSRS does for a player
+  with no hugs.
+- Cache names plus the Wiki: yo-yo Play/Loop/Walk/Crazy with the Wiki's yoyo1-4 sounds,
+  marionettes in their colour, Rubber chicken Dance, Haunted wine bottle Wake-ghost, the
+  Zombie head's Display overhead (no sequence is known), the gingerbread shield's
+  green/red/blue Transform cycle and the ugly jumper's Reverse.
+- Only the WWF toys' Play-with reports `holiday-rewards:used`, the recorded first-use
+  unlock; other toys unlock through Diango's normal routes until a recording shows theirs.
+- Overheads have a 6-tick per-player cooldown: recording 3200 replays the tiger's sequence
+  on every click but says "Grrrr!" about every 6 ticks. Check rank logs the recorded mesbox
+  chat line and shows the message box with its line break. Inventory clicks are accepted
+  from both the native `inventory:items` component and the legacy inventory id.
+
+Not yet covered, and why:
+- Sounds and timing for everything not recorded; the rubber chicken's Wiki jingle id could
+  not be matched to the cache.
+- Dialogue-driven options (Zombie head Question, Eek and Haunted bottle Talk-to, Magic egg
+  ball, Treat cauldron Check, Santa's list Check, Secret santa present, Archibald Interact)
+  need their Wiki transcripts imported as dialogue data rather than written into a plugin.
+- Placed items (Wintumber tree, Halloween scarecrow) and the Snow globe's Shake and Snow
+  need temporary or POH objects; Cat ears Chase needs Hell-Rat proximity rules.
+- Items from the years the annual event plugins implement (Christmas 2025, Halloween 2025
+  and the chosen Easter and birthday events) are left to those plugins.
+
+Seasonal rares get no in-game source here. In OSRS, the discontinued rares (partyhats,
+Halloween masks, Santa hat and the rest) are not obtainable in game. This server's only
+source is the custom `::shops` panel, which a world can switch off with
+`"CustomShops": false` in world.json.

@@ -325,6 +325,10 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   const BLISTERWOOD_FLAIL_ITEM_ID = ItemIdentifiers.BLISTERWOOD_FLAIL; // 24699
   const ENCHANTED_EMERALD_SICKLE_ITEM_ID = ItemIdentifiers.ENCHANTED_EMERALD_SICKLE_B_; // 22435
   const TOME_ITEM_ID = 24690; // myq5 xp tome
+  // Capture 1637: the first three chapters raise myq5_xp_reward 1-3, the last
+  // three raise myq5_bonus_xp_reward 1-3; completion leaves both at 0.
+  const TOME_XP_REWARD_VARBIT = 10346; // myq5_xp_reward, varp 2712 bits 9-10
+  const TOME_BONUS_XP_REWARD_VARBIT = 14611; // myq5_bonus_xp_reward, varp 3055 bits 21-22
   const LONG_VINE_ITEM_ID = 7777; // temple trekking long vine
   const SHORT_VINE_ITEM_ID = 7778; // temple trekking short vine
   const BRONZE_AXE_ITEM_ID = ItemIdentifiers.BRONZE_AXE; // 1351, zombie's axe
@@ -1442,6 +1446,15 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     sender.sendVarbit(VARBIT_KROY_TABLE_2, tableState(BIT_TABLE_2));
     sender.sendVarbit(VARBIT_TRADER_SVEN_MET, hasBit(player, BIT_SVEN) ? 1 : 0);
     sender.sendVarbit(VARBIT_PUZZLE_COMPLETED, quest.getStage(player) >= STAGE_PUZZLE_DONE ? 1 : 0);
+    sendTomeVarbits(player);
+  }
+
+  /** Capture 1637: the tome's first three reads and last three reads are counted separately. */
+  function sendTomeVarbits(player) {
+    const used = Math.max(0, Math.min(TOME_MAX_CHAPTERS, Number(player.getAttribute(TOME_USES_ATTRIBUTE)) || 0));
+    const sender = player.getPacketSender();
+    sender.sendVarbit(TOME_XP_REWARD_VARBIT, Math.min(used, 3));
+    sender.sendVarbit(TOME_BONUS_XP_REWARD_VARBIT, Math.max(0, used - 3));
   }
 
   // ---------------------------------------------------------------------------
@@ -3617,6 +3630,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
         const used = (Number(player.getAttribute(TOME_USES_ATTRIBUTE)) || 0) + 1;
         player.setAttribute(TOME_USES_ATTRIBUTE, used);
         if (used >= TOME_MAX_CHAPTERS) player.getInventory().deleteAtSlot(slot, 1);
+        sendTomeVarbits(player);
         player.getSkillManager().addExperience(skill, 15000, false);
         return `You have been awarded 15,000 ${name} XP!`;
       },

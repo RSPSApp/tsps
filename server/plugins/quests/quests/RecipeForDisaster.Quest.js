@@ -669,7 +669,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   function hasPetCarried(player) {
     return (player.getInventory().getItems?.() ?? []).some((item) => {
       const name = item?.getDefinition?.().getName?.() ?? "";
-      return /^(?:pet )?(?:kitten|cat|wily cat|hellcat)/i.test(name);
+      return /^(?:pet |wily |lazy |overgrown )?(?:kitten|cat|hellcat|hell cat|hell-kitten)/i.test(name);
     });
   }
   function follower(player) {

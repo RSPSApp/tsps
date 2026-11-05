@@ -1,5 +1,8 @@
 {
   "$comment": "Study lecterns. Each lectern's tablets are the cache enum the interface lists (teletab_enum); levels, runes and Magic experience per tablet are from the OSRS Wiki (Magic tablet). Every tablet also takes one soft clay.",
+  "worldLecterns": {
+    "28802": { "enumId": 2628, "spellbook": "ARCEUUS", "material": "DARK_ESSENCE_BLOCK" }
+  },
   "lecterns": {
     "OAK_LECTERN": 4108,
     "EAGLE_LECTERN": 4178,
@@ -29,6 +32,17 @@
     "8020": { "level": 68, "experience": 58.5, "runes": [["EARTH_RUNE", 15], ["WATER_RUNE", 15], ["COSMIC_RUNE", 1]] },
     "8021": { "level": 87, "experience": 73, "runes": [["EARTH_RUNE", 20], ["FIRE_RUNE", 20], ["COSMIC_RUNE", 1]] },
     "8014": { "level": 15, "experience": 25, "runes": [["EARTH_RUNE", 2], ["WATER_RUNE", 2], ["NATURE_RUNE", 1]] },
-    "8015": { "level": 60, "experience": 35.5, "runes": [["EARTH_RUNE", 4], ["WATER_RUNE", 4], ["NATURE_RUNE", 2]] }
+    "8015": { "level": 60, "experience": 35.5, "runes": [["EARTH_RUNE", 4], ["WATER_RUNE", 4], ["NATURE_RUNE", 2]] },
+    "19613": { "level": 6, "experience": 9.5, "runes": [["EARTH_RUNE", 2], ["LAW_RUNE", 1]] },
+    "19615": { "level": 17, "experience": 16, "runes": [["EARTH_RUNE", 1], ["WATER_RUNE", 1], ["LAW_RUNE", 1]] },
+    "22949": { "level": 23, "experience": 19, "runes": [["EARTH_RUNE", 1], ["FIRE_RUNE", 1], ["LAW_RUNE", 1]] },
+    "19617": { "level": 28, "experience": 22, "runes": [["MIND_RUNE", 2], ["LAW_RUNE", 1]] },
+    "19619": { "level": 40, "experience": 30, "runes": [["SOUL_RUNE", 2], ["LAW_RUNE", 1]] },
+    "19621": { "level": 48, "experience": 50, "runes": [["EARTH_RUNE", 1], ["SOUL_RUNE", 1], ["LAW_RUNE", 1]] },
+    "19623": { "level": 61, "experience": 68, "runes": [["SOUL_RUNE", 2], ["LAW_RUNE", 2]] },
+    "19625": { "level": 65, "experience": 74, "runes": [["NATURE_RUNE", 1], ["SOUL_RUNE", 1], ["LAW_RUNE", 1]] },
+    "19627": { "level": 71, "experience": 82, "runes": [["BLOOD_RUNE", 1], ["SOUL_RUNE", 1], ["LAW_RUNE", 1]] },
+    "19629": { "level": 83, "experience": 90, "runes": [["BLOOD_RUNE", 1], ["SOUL_RUNE", 2], ["LAW_RUNE", 2]] },
+    "19631": { "level": 90, "experience": 100, "runes": [["BLOOD_RUNE", 2], ["SOUL_RUNE", 2], ["LAW_RUNE", 2]] }
   }
 }

@@ -39,6 +39,9 @@
   "cluehelper_skillchallenge_master_14": {"event": "runecrafting:success", "match": {"runeId": {"item": ["BLOOD_RUNE"]}}},
   "cluehelper_skillchallenge_master_16": {"event": "fletching:made", "match": {"itemId": {"item": ["RUNE_DART"]}}},
   "cluehelper_skillchallenge_master_19": {"event": "npc-death", "match": {"npcId": {"npc": ["LIZARDMAN_SHAMAN", "LIZARDMAN_SHAMAN_2", "LIZARDMAN_SHAMAN_3", "LIZARDMAN_SHAMAN_4", "LIZARDMAN_SHAMAN_5", "LIZARDMAN_SHAMAN_6", "LIZARDMAN_SHAMAN_7"]}}},
+  "cluehelper_skillchallenge_master_3": {"event": "construction:tablet-made", "match": {"itemId": {"item": ["BARROWS_TELEPORT"]}}},
+  "cluehelper_skillchallenge_master_23": {"event": "npc-death", "match": {"npcId": {"npc": ["REANIMATED_ABYSSAL"]}}},
+  "cluehelper_skillchallenge_master_24": {"event": "npc-death", "match": {"npcId": {"npc": ["FIYR_SHADE", "FIYR_SHADOW"]}}, "area": {"x": [3456, 3519], "y": [9664, 9727], "z": 0}},
   "cluehelper_skillchallenge_master_20": {"event": "fishing:success", "match": {"itemId": {"item": ["RAW_ANGLERFISH"]}}, "worn": [{"slot": "HEAD_SLOT", "item": ["ANGLER_HAT", "SPIRIT_ANGLER_HEADBAND"]}, {"slot": "BODY_SLOT", "item": ["ANGLER_TOP", "SPIRIT_ANGLER_TOP"]}, {"slot": "LEG_SLOT", "item": ["ANGLER_WADERS", "SPIRIT_ANGLER_WADERS"]}, {"slot": "FEET_SLOT", "item": ["ANGLER_BOOTS", "SPIRIT_ANGLER_BOOTS"]}]},
   "cluehelper_skillchallenge_master_21": {"event": "woodcutting:success", "match": {"logId": {"item": ["REDWOOD_LOGS"]}}, "worn": [{"slot": "HEAD_SLOT", "item": ["LUMBERJACK_HAT", "FORESTRY_HAT"]}, {"slot": "BODY_SLOT", "item": ["LUMBERJACK_TOP", "FORESTRY_TOP"]}, {"slot": "LEG_SLOT", "item": ["LUMBERJACK_LEGS", "FORESTRY_LEGS"]}, {"slot": "FEET_SLOT", "item": ["LUMBERJACK_BOOTS", "FORESTRY_BOOTS"]}]},
   "cluehelper_skillchallenge_master_vm01": {"event": "hunter:success", "match": {"npcId": {"npc": ["TECU_SALAMANDER"]}}}

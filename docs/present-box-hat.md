@@ -26,7 +26,8 @@ the reward, Diango reclamation or toy-box storage.
 
 ItemActionPacketListener resolves the current inventory/equipment slot; PluginManager's
 name/action dispatcher uses the active cache's inventory action or worn option param.
-PresentBoxHat opens the native interface, sets its active-object varp, enables selection
+The generic `ItemStyles` plugin (`server/plugins/items/ItemStyles.plugin.js`, which replaced
+PresentBoxHat; see `docs/holiday-reward-retrieval.md`) opens the native interface, sets its active-object varp, enables selection
 children and runs the cache initializer. The interface click dispatcher passes the dynamic
 child index and operation to the handler.
 

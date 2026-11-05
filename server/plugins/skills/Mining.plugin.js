@@ -10,6 +10,7 @@ const InfernalPickaxe = require("./mining/InfernalPickaxe.Mining");
 const CrystalPickaxe = require("./mining/CrystalPickaxe.Mining");
 const ClueGeodes = require("./mining/ClueGeodes.Mining");
 const CalcifiedWater = require("./mining/CalcifiedWater.Mining");
+const Saltpetre = require("./mining/Saltpetre.Mining");
 const { pauseForLevelUp, actionInterval } = require("./SkillActions");
 
 // rsprox recordings: a mined-out rock becomes "rocks1"/"rocks2" (the digit of the rock's own gameval,
@@ -193,6 +194,10 @@ const ROCKS = [
   { objectName: "Lead rocks", level: 25, xp: 40.5, oreId: ItemIdentifiers.LEAD_ORE, petBase: 741600, chance: [112, 278], gems: true, respawnTicks: 10 },
   // Wiki Lovakite rocks: 35 s respawn. No published chart: coal's is an estimate.
   { objectName: "Lovakite rocks", level: 65, xp: 60, oreId: ItemIdentifiers.LOVAKITE_ORE, petBase: 245562, chance: [16, 100], gems: true, respawnTicks: 58 },
+  // Wiki Volcanic sulphur: 42 Mining, 35 XP, 25.2 s respawn. The Wiki chart gives low 100, high 220
+  // (0.39453125 at level 1, 0.58984375 at 42, 0.86328125 at 99). A breathing filter must be worn.
+  // No depleted loc of its own is published, so the shared fallback ("rocks1") is used.
+  { objectName: "Volcanic sulphur", objectIds: [28496, 28497, 28498], level: 42, xp: 35, oreId: ItemIdentifiers.VOLCANIC_SULPHUR, petBase: 710000, chance: [100, 220], gems: true, respawnTicks: 42, requiresBreathingFilter: true, oreMessage: "You manage to mine some volcanic sulphur." },
   // Wiki Nickel rocks: 2-16 ores before the rock goes, 2 min respawn; only Varrock armour 4 adds ore,
   // so no "mining:extra-ore". No published chart: mithril's is an estimate.
   { objectName: "Nickel rocks", level: 74, xp: 80.5, oreId: ItemIdentifiers.NICKEL_ORE, petBase: 247200, chance: [4, 50], gems: true, respawnTicks: 200, yield: { min: 2, max: 16 }, noExtraOre: true },
@@ -490,6 +495,21 @@ function depleteRock(player, rockObject, rock) {
 }
 
 /**
+ * Whether content keeps a rock standing for the players mining it ("mining:deplete-rock", Demonic Pacts'
+ * Endless Harvest), asked for the oozing water that stops, which mines its wet rocks out whoever is there.
+ */
+function minersKeepStanding(rockObject, rock) {
+  for (const [player, state] of activeSessions ?? []) {
+    if (state.objectId !== rockObject.getId() || !state.location.equals(rockObject.getLocation())) continue;
+    // `water`: this is not an ore depleting the rock, so counts of ores (Power Miner's four) do not move.
+    const event = { player, object: rockObject, rock: rock.objectName, handled: false, water: true };
+    pluginApi.emitCustomEvent("mining:deplete-rock", event);
+    if (event.handled) return true;
+  }
+  return false;
+}
+
+/**
  * Mines a rock out with nothing to keep it standing (the water that stops on a calcified rock): its
  * mined-out loc, depletion sound and respawn, and the respawn timer for each of `viewers`.
  */
@@ -523,7 +543,21 @@ function oreMessage(rock) {
   return `You manage to mine some ${rock.objectName.split(" ")[0].toLowerCase()}.`;
 }
 
+const BREATHING_FILTER_PATTERN = /gas mask|facemask|slayer helmet/i;
+const NO_BREATHING_FILTER = "You'll choke on the fumes if you try to mine without protection.";
+
+/** Whether the worn head slot is a breathing filter: a gas mask, facemask or slayer helmet (Wiki Sulphur mine). */
+function wearsBreathingFilter(player) {
+  const head = player.getEquipment().get(Equipment.HEAD_SLOT);
+  if (!head || head.getId() <= 0) return false;
+  return BREATHING_FILTER_PATTERN.test(pluginApi.core.CacheDefinitions.getItem(head.getId())?.name ?? "");
+}
+
 function startMining(player, rockObject, rock, activeSessions) {
+  if (rock.requiresBreathingFilter && !wearsBreathingFilter(player)) {
+    player.sendMessage(NO_BREATHING_FILTER);
+    return false;
+  }
   const pickaxe = findBestPickaxe(player);
   if (!pickaxe) {
     messageBox(player, NO_PICKAXE_MESSAGE);
@@ -684,7 +718,8 @@ class MiningTask extends Task {
       }
 
       const pickaxe = findBestPickaxe(player);
-      if (!pickaxe || getMiningLevel(player) < state.rock.level) {
+      if (!pickaxe || getMiningLevel(player) < state.rock.level
+        || (state.rock.requiresBreathingFilter && !wearsBreathingFilter(player))) {
         stopMining(this.activeSessions, player);
         continue;
       }
@@ -934,6 +969,7 @@ module.exports = {
   ROCKS,
   ESSENCE_ROCKS,
   findBestPickaxe,
+  wearsBreathingFilter,
   rollOutcome,
   isMiningActive(player) {
     return ACTIVE_MINERS.has(player);
@@ -963,7 +999,8 @@ module.exports = {
     InfernalPickaxe.attach(api);
     CrystalPickaxe.attach(api);
     ClueGeodes.attach(api);
-    CalcifiedWater.attach(api, ROCK_BY_NAME.get(CalcifiedWater.ROCK_NAME), exhaustRock);
+    CalcifiedWater.attach(api, ROCK_BY_NAME.get(CalcifiedWater.ROCK_NAME), exhaustRock, minersKeepStanding);
+    Saltpetre.attach(api);
 
     api.log("registered", {
       rocks: ROCKS.length,

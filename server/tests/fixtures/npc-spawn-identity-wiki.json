@@ -20,11 +20,19 @@
       "npc_id": [
         5870
       ]
+    },
+    {
+      "page_name": "Lovada",
+      "page_name_sub": "Lovada",
+      "npc_id": [
+        12701
+      ]
     }
   ],
   "npcMaps": {
     "Key Master": "|map = {{Map|1310,1251|mapID=-1|r=2|mtype=square}}\n|id = 12599",
-    "Patchy": "|map = {{Map|name=Patchy|x=3677|y=2978|r=5|mtype=square}}\n|id = 5870"
+    "Patchy": "|map = {{Map|name=Patchy|x=3677|y=2978|r=5|mtype=square}}\n|id = 5870",
+    "Lovada": "|map = {{Map|name=Lovada|x=1487|y=3833|squareX=8|squareY=10|mtype=square}}\n|id = hist6772,12701"
   },
   "locLineText": {}
 }

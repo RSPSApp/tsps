@@ -97,6 +97,8 @@ module.exports = function registerDragonSlayerQuest(api) {
     crandorRope: ObjectIdentifiers.CLIMBING_ROPE_13,
     crandorWall: ObjectIdentifiers.WALL_161,
     crandorShortcut: ObjectIdentifiers.WALL_9,
+    // dragonsecretdoor_open: the leaf Doors puts up while the wall stands open (RSProx 2951).
+    crandorShortcutOpen: ObjectIdentifiers.WALL_156,
     melzarBasementLadder: ObjectIdentifiers.LADDER_21,
     melzarExitDoor: ObjectIdentifiers.EXIT_DOOR,
   };
@@ -115,8 +117,6 @@ module.exports = function registerDragonSlayerQuest(api) {
   ];
 
   const TILE = {
-    melzarInside: new Location(2933, 3248, 0),
-    melzarOutside: new Location(2942, 3248, 0),
     melzarBasementLadder: new Location(2932, 3240, 0),
     melzarBasement: new Location(2932, 9640, 0),
     crandor: new Location(2835, 3235, 0),
@@ -156,9 +156,6 @@ module.exports = function registerDragonSlayerQuest(api) {
   const ELVARG_BODY = 25202, ELVARG_HEADLESS = 25203;
   // Cache rev241: dragonsecretdoor 2606 is a shape-0 wall at 2836,9600 face3; the
   // Crandor side is north (walkable 2836,9601) and Karamja is south (2836,9598).
-  const SHORTCUT_TILE = new Location(2836, 9600, 0);
-  const SHORTCUT_NORTH = new Location(2836, 9601, 0);
-  const SHORTCUT_SOUTH = new Location(2836, 9598, 0);
   const scenes = new WeakMap(), actions = new WeakMap(), doorWalks = new WeakMap(), pendingStart = new WeakSet();
   const saved = (player, key) => Number(player.getAttribute(key)) || 0;
   const askedAbout = (player, bit) => (saved(player, INSTRUCTIONS_ATTRIBUTE) & (1 << bit)) === 0;
@@ -454,8 +451,8 @@ module.exports = function registerDragonSlayerQuest(api) {
     }
     const scene = scenes.get(player);
     if (!(scene instanceof VoyageScene) || npcId !== NED_SCENE_ID) return;
-    if (request.speaker === "Cabin Boy Jenkins") request.speakerId = JENKINS_SCENE_ID;
-    else if (request.speaker === "Captain Ned") request.speakerId = NED_SCENE_ID;
+    if (request.step?.speaker === "Cabin Boy Jenkins") request.speakerId = JENKINS_SCENE_ID;
+    else if (request.step?.speaker === "Captain Ned") request.speakerId = NED_SCENE_ID;
     if (text.startsWith("Ah, it's good to feel")) request.before = () => {
       camera(player, scene, [2077, 5518, 100], [2069, 5517, 25], 232, true); camera(player, scene, [2074, 5516, 100], null, 1); player.getPacketSender().sendCameraShake(1, 0, 10, 8);
     };
@@ -776,10 +773,7 @@ module.exports = function registerDragonSlayerQuest(api) {
     const stage = quest.getStage(player);
 
     if (itemId === ITEM.mazeKey && objectId === LOC.melzarEntrance) {
-      const at = event.object?.getLocation?.();
-      if (at && player.getLocation().getX() < at.getX()) player.moveTo(TILE.melzarOutside.clone());
-      else if (stage >= STAGE_OZIACH) player.moveTo(TILE.melzarInside.clone());
-      event.handled = true;
+      handleMelzarEntranceClick(event);
       return;
     }
 
@@ -859,8 +853,8 @@ module.exports = function registerDragonSlayerQuest(api) {
   /**
    * Walk the player to the tile across a door instead of teleporting them. Same
    * ForceMovement, walk animation (819) and pace (30 client cycles and one tick
-   * per tile) as Doors.plugin's pass-through gates (carryAcrossGate); the tile is
-   * the one the teleport used to land on. onArrive (spending a key) runs only on
+   * per tile) as Doors.plugin's pass-through gates (carryAcrossGate); callers
+   * supply the destination across the wall. onArrive (spending a key) runs only on
    * landing, and returns false to refuse it. A walk cut short by logout, disconnect
    * or death (which clear the force movement) changes nothing. Clicks and item
    * actions are already refused while a force movement runs; this does not guard
@@ -929,11 +923,12 @@ module.exports = function registerDragonSlayerQuest(api) {
   function handleMelzarEntranceClick(event) {
     const { player } = event;
     event.handled = true;
-    const at = event.object?.getLocation?.();
+    const at = plainLocation(event.location ?? event.object?.getLocation?.());
+    if (!at) return;
     // The same exterior door on the building's east side is the way out of the
     // north-east ladder room; the Exit doors themselves only lead into the maze.
-    if (at && player.getLocation().getX() < at.getX()) {
-      player.moveTo(TILE.melzarOutside.clone());
+    if (player.getLocation().getX() < at.x) {
+      crossMazeDoor(player, event.object, at);
       return;
     }
     if (quest.getStage(player) < STAGE_OZIACH || !hasItem(player, ITEM.mazeKey)) {
@@ -942,7 +937,7 @@ module.exports = function registerDragonSlayerQuest(api) {
       player.getPacketSender().sendSoundEffect(MELZAR_DOOR_LOCKED_SOUND, 1, 0);
       return;
     }
-    player.moveTo(TILE.melzarInside.clone());
+    crossMazeDoor(player, event.object, at);
   }
 
   function handleMazeDoorClick(event) {
@@ -965,6 +960,8 @@ module.exports = function registerDragonSlayerQuest(api) {
   function claimQuestDoor(request) {
     if (request.handled) return;
     const id = request.objectId ?? request.object?.getId?.();
+    // The open leaf is gated like the closed wall: Doors would otherwise carry anyone who clicks it.
+    if (id === LOC.crandorShortcutOpen) return handleCrandorShortcutClick(request);
     if (id !== LOC.crandorShortcut && id !== LOC.magicDoor && id !== LOC.melzarEntrance
       && id !== LOC.melzarExitDoor && !MAZE_DOORS.includes(id)) return;
     const option = request.option ?? request.definition?.getInteractions?.()[request.clickType - 1];
@@ -1068,6 +1065,11 @@ module.exports = function registerDragonSlayerQuest(api) {
     if (scenes.has(player) || actions.has(player)) return;
     const inLair = player.getLocation().getY() >= 6400;
     player.moveTo((inLair ? TILE.crandorSurface : TILE.crandorLair).clone());
+    // The Wiki's diary route: through the secret wall, past the demons, then this rope to the
+    // surface. Only a player who has opened the wall has come that way.
+    if (inLair && player.getAttribute(ATTR_SHORTCUT) === true) {
+      api.emitCustomEvent("dragon-slayer:crandor-visited", { player });
+    }
   }
 
   /** Crandor surface plus the dungeon north of the secret wall; the Karamja side is y<=9600. */
@@ -1097,16 +1099,14 @@ module.exports = function registerDragonSlayerQuest(api) {
     openCrandorShortcut(player);
   }
 
-  function crossCrandorShortcut(player) {
-    player.moveTo((player.getLocation().getY() > SHORTCUT_TILE.getY() ? SHORTCUT_SOUTH : SHORTCUT_NORTH).clone());
-  }
-
   function handleCrandorShortcutClick(event) {
     const { player } = event;
     event.handled = true;
     if (quest.getStage(player) < STAGE_CRANDOR) return;
     openCrandorShortcut(player);
-    crossCrandorShortcut(player);
+    api.emitCustomEvent("dragon-slayer:crandor-wall", { player });
+    // Doors swings the wall open as captured (RSProx 2951), walks the player across and shuts it.
+    if (event.object) api.emitCustomEvent("door:open", { player, object: event.object, handled: false });
   }
 
   function handleCrandorRopeClick(event) {

@@ -961,7 +961,9 @@ module.exports = function registerHandInTheSandQuest(api) {
   }
 
   function handleItemOnObject(event) {
-    const { player, objectId, itemId } = event;
+    const { player, itemId } = event;
+    // The map places the mug's and the counter's multilocs (10806, 10812) and a click names those.
+    const objectId = api.core.ObjectDefinition.forPlayer(event.objectId, player)?.id ?? event.objectId;
     if (objectId === SANDYS_DESK) {
       event.handled = true;
       searchSandyDesk(player);

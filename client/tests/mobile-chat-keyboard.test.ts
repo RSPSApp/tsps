@@ -117,6 +117,28 @@ test("mobile chat keeps its native caret above the keyboard and preserves chat i
         assert.equal(document.querySelectorAll("input").length, 1);
         assert.equal(input.value, "reply", "reopening resynchronizes the chat varc");
         assert.equal(input.inputMode, "text");
+
+        let blurs = 0;
+        const nativeBlur = dom.window.HTMLInputElement.prototype.blur;
+        dom.window.HTMLInputElement.prototype.blur = function () {
+            blurs++;
+            nativeBlur.call(this);
+        };
+        focusArgs.length = 0;
+        varc = "fresh";
+        rejectPreventScroll = false;
+        keyboard.showFromGesture();
+        assert.equal(blurs, 1, "an earlier untrusted focus is cleared inside the gesture");
+        assert.deepEqual(focusArgs, [{ preventScroll: true }]);
+        assert.equal(document.activeElement, input);
+        assert.equal(input.value, "fresh");
+
+        keyboard.hide();
+        blurs = 0;
+        focusArgs.length = 0;
+        keyboard.showFromGesture();
+        assert.equal(blurs, 0, "a fresh gesture only focuses");
+        assert.deepEqual(focusArgs, [{ preventScroll: true }]);
         keyboard.hide();
     } finally {
         ["window", "document"].forEach((name, index) => {

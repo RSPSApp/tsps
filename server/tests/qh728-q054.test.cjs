@@ -377,7 +377,8 @@ test('The Hand in the Sand runs stage 0 to 160 through the registered transcript
   h.finish(p);
   assert.equal(p.getPacketSender().getVarbit(1537), 1, 'Betty actually places the vial');
   assert.equal(core.ObjectDefinition.forPlayer(10812, p).id, O.COUNTER_15);
-  const counter = h.itemOnObject(p, O.COUNTER_15, I.ROSE_TINTED_LENS);
+  // The map's parent: a click names it, and it shows the counter by the varbit above.
+  const counter = h.itemOnObject(p, 10812, I.ROSE_TINTED_LENS);
   assert.equal(counter.handled, true);
   h.finish(p);
   assert.equal(p.items.get(I.ROSE_TINTED_LENS) ?? 0, 0);
@@ -402,7 +403,7 @@ test('The Hand in the Sand runs stage 0 to 160 through the registered transcript
   assert.equal(stage(), 90);
 
   // Pour the serum into the coffee (90 -> 100).
-  const coffee = h.itemOnObject(p, O.SANDYS_COFFEE_MUG, I.TRUTH_SERUM);
+  const coffee = h.itemOnObject(p, 10806, I.TRUTH_SERUM);
   assert.equal(coffee.handled, true);
   h.finish(p);
   assert.equal(stage(), 100);

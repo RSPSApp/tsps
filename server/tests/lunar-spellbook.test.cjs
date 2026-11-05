@@ -188,3 +188,38 @@ test("Monster Examine sends interface 522 the text live sends script 1179", () =
       "both inspection spells report temporary instance levels instead of the base definition");
   }
 });
+
+test("Lunar teleport arrival identifies only the caster after a successful landing", () => {
+  const { TeleportHandler } = require("../dist/game/model/teleportation/TeleportHandler");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const original = { check: TeleportHandler.checkReqs, teleport: TeleportHandler.teleport,
+    nearby: LunarSpells.forNearbyPlayers, emit: PluginManager.emitCustomEvent };
+  const arrivals = [], events = [], player = caster([]), passenger = caster([]);
+  const spells = [LunarSpells.TELEPORTS.get("catherby teleport"), LunarSpells.GROUP_TELEPORTS.get("tele group catherby")];
+  const pay = spells.map(spell => spell.pay);
+  try {
+    TeleportHandler.checkReqs = () => true;
+    TeleportHandler.teleport = (target, destination, type, warning, arrived) => arrivals.push({ target, arrived });
+    PluginManager.emitCustomEvent = (name, event) => events.push({ channel: name, ...event });
+    LunarSpells.forNearbyPlayers = (source, radius, visit) => visit(passenger);
+    for (const spell of spells) spell.pay = () => true;
+    spells[0].castTeleport(player);
+    assert.deepEqual(events, [], "starting a cast is not an arrival");
+    arrivals.shift().arrived();
+    assert.deepEqual(events.map(event => [event.channel, event.name, event.player]),
+      [["spell:teleport-arrival", "catherby teleport", player]]);
+    events.length = 0;
+    LunarSpells.castGroupTeleport(player, spells[1]);
+    assert.deepEqual(events, []);
+    assert.equal(arrivals.length, 2);
+    assert.equal(arrivals[1].target, passenger);
+    assert.equal(arrivals[1].arrived, undefined, "group passengers did not cast a spell");
+    arrivals[0].arrived();
+    assert.deepEqual(events.map(event => [event.channel, event.name, event.player]),
+      [["spell:teleport-arrival", "tele group catherby", player]]);
+  } finally {
+    TeleportHandler.checkReqs = original.check; TeleportHandler.teleport = original.teleport;
+    LunarSpells.forNearbyPlayers = original.nearby; PluginManager.emitCustomEvent = original.emit;
+    spells.forEach((spell, i) => { spell.pay = pay[i]; });
+  }
+});

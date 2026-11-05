@@ -88,6 +88,7 @@ export class NpcUpdateDecoder {
         buffer: Uint8Array,
         opts: {
             large: boolean;
+            crossFloor?: boolean;
             loopCycle: number;
             clientCycle: number;
             localTileX: number;
@@ -222,6 +223,7 @@ export class NpcUpdateDecoder {
             const defaultRot = DIRECTION_TO_ORIENTATION[rotIdx & 7];
             const rot = (typeof defaultRot === "number" ? defaultRot : 0) & 2047;
             const typeId = stream.readBits(16) | 0;
+            const level = opts.crossFloor ? stream.readBits(2) : opts.level;
 
             // Main-world NPCs are relative to the viewer's root tile; deck NPCs to the deck
             // scene base of their own world view (not necessarily the player's boat).
@@ -241,7 +243,7 @@ export class NpcUpdateDecoder {
                 typeId,
                 tileX,
                 tileY,
-                level: opts.level | 0,
+                level: level | 0,
                 rot,
                 teleport,
                 worldViewId,

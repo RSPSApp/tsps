@@ -466,7 +466,8 @@ test("deed: a special attack performed, by its weapon (the Dragon Axe's Lumber U
   f.player.getInventory().add(new core.Item(item("Dragon axe")), true);
   await inventoryOption(f, "Dragon axe", "Wield", 2);
   assert.equal(f.player.getEquipment().get(core.Equipment.WEAPON_SLOT).getId(), item("Dragon axe"), `the real equipment wields it: ${f.messages}`);
-  await send(f, { type: "varp_transmit", varpId: 301, value: 1 }, 2);
+  const orb = core.CacheDefinitions.getComponentId("orbs:specbutton");
+  await send(f, { type: "widget_action", widgetId: orb, groupId: orb >>> 16, childId: orb & 0xffff, slot: 65535, itemId: 65535, buttonNum: 1 }, 2);
   assert.ok(f.player.getSpecialPercentage() < 100, `the real special spends its energy: ${f.messages}`);
   assert.ok(done(f, "use-the-special-attack-of-a-dragon-axe") && done(f, "perform-a-special-attack"));
 

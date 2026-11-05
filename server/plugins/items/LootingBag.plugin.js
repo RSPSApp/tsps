@@ -443,11 +443,14 @@ function clickBankView(event) {
     if (!entry) return;
     const op = Number(event.action);
     if (op === BANK_X_PROMPT_OP) {
+      const key = entryKey(entry);
       return askAmount(player, (amount) => {
         if (!(amount > 0)) return;
         player.setBankCustomQuantity(amount);
         player.getPacketSender().sendVarbit(BANK_X_VARBIT, amount);
         if (!bankViewing(player) || bagFor(player) !== bag) return;
+        const current = bagItems(bag)[event.slot];
+        if (!current || entryKey(current) !== key) return;
         bankSlot(player, bag, event.slot, amount);
         refreshBank(player);
         sendContents(player, bag);

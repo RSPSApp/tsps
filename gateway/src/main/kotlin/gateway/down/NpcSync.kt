@@ -34,7 +34,9 @@ class NpcSync(
     fun decode(packet: TspsPacket): Frame {
         val reader = packet.reader()
         reader.i32() // loop cycle
-        val large = reader.u8() != 0
+        val flags = reader.u8()
+        val large = flags and 1 != 0
+        val crossFloor = flags and 2 != 0
         val rootX = reader.u16()
         val rootZ = reader.u16()
         reader.u16() // length
@@ -94,8 +96,9 @@ class NpcSync(
             val dx = signed(bits.read(if (large) 8 else 5), if (large) 8 else 5)
             val direction = bits.read(3)
             val type = bits.read(16)
+            val level = if (crossFloor) bits.read(2) else -1
             val (baseX, baseZ) = deck ?: (rootX to rootZ)
-            val npc = Npc(index, type, baseX + dx, baseZ + dz, 0, onDeck = deck != null)
+            val npc = Npc(index, type, baseX + dx, baseZ + dz, level, onDeck = deck != null)
             npcs[index] = npc
             next += index
             changes += Change.Added(index, npc, GAME_DIRECTION[direction], jump)

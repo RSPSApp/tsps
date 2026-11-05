@@ -57,6 +57,7 @@ function inventory(contents) {
     },
     full() { return self; },
     getItems: () => slots.map((item) => item ?? new core.Item(-1, 0)),
+    getCopiedItems: () => self.getItems().map((item) => item.clone()),
     getAmount: (id) => slots.filter((item) => item?.getId() === id).reduce((sum, item) => sum + item.getAmount(), 0),
     setItem(slot, item) { slots[slot] = item; return self; },
     refreshItems() { return self; },

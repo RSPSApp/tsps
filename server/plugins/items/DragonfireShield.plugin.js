@@ -195,7 +195,7 @@ function blastAccurate(player, target) {
 }
 
 function projectileEnd(player, target) {
-  const distance = Math.max(1, player.getLocation().getDistance(target.getLocation()));
+  const distance = Math.max(1, core.CombatPosition.projectileDistance(player, target));
   return PROJECTILE_START + PROJECTILE_CYCLES_PER_TILE * distance;
 }
 

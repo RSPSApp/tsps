@@ -34,7 +34,7 @@ function resolveSpriteAlpha(sprite: IndexedSprite): Uint8Array | undefined {
     return alpha;
 }
 
-function spriteToCanvas(sprite: IndexedSprite): HTMLCanvasElement {
+export function spriteToCanvas(sprite: IndexedSprite): HTMLCanvasElement {
     try {
         sprite.normalize();
     } catch {}

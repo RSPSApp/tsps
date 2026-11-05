@@ -11,6 +11,7 @@
 | `bonemeal` | the pot the Ectofuntus grinder fills | Wiki, Bonemeal |
 | `crush: false` | the bonecrusher leaves it (tertiary drops: long and curved bones) | Wiki, Bonecrusher |
 | `level` | Prayer needed to bury or worship with it (superior dragon bones, 70) | Wiki |
+| `blessed`, `shards` | what the exposed altar at Ralos' Rise blesses it into, and the blessed bone shards a chisel breaks that into ([ralos-rise.md](ralos-rise.md)) | Wiki, Blessed bone shards |
 
 The `bonemeal` list holds the worship experience per pot (four times the bones'). Burial and
 bonecrusher rewards pass fractional XP to SkillManager, which stores tenths and sends whole totals

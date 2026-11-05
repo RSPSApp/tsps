@@ -227,7 +227,7 @@ export class PlayerSave {
         const item = equipment[Equipment.WEAPON_SLOT];
         const weapon = item?.getId() > 0 ? item.getDefinition()?.getWeaponInterface() : null;
         const availableTypes = (weapon ?? WeaponInterfaces.UNARMED).getFightType();
-        return FightType.resolve(value, availableTypes) ?? FightType.UNARMED_KICK;
+        return FightType.resolve(value, availableTypes) ?? FightType.UNARMED_PUNCH;
     }
 
     public getFightType(): FightType {

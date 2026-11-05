@@ -18,6 +18,8 @@ const MAKE_MENU_MODE = 0;
  */
 const DOUGH_TIMING = [1, 1, 2];
 const NO_SPACE_FOR_DOUGH_MESSAGE = "You don't have enough inventory space to make any dough.";
+/** Half made bowl (chocolate bomb), whose cache gameval name is shared by other bowls. */
+const CHOCOLATE_BOMB_BOWL = 9563;
 
 function hasIngredients(inventory, recipe) {
   return recipe.ingredients.every(({ id, count }) => inventory.getAmount(id) >= count);
@@ -174,6 +176,15 @@ function useItemOnItem(event) {
   offer(player, recipe);
 }
 
+/** A half baked gnomebowl's Prepare option opens the same chocolate-bomb recipe its bars make. */
+function prepareGnomebowl(event) {
+  const recipe = Common.recipeForProduct(CHOCOLATE_BOMB_BOWL);
+  if (!recipe || event.itemId !== Common.gameval("obj", "half_baked_bowl")) return;
+  event.handled = true;
+  offer(event.player, recipe);
+}
+
 module.exports = Object.assign(function attachRecipes(api) {
   api.onItemOnItem(useItemOnItem, { noted: false });
+  api.onItemAction("Half baked bowl", { Prepare: prepareGnomebowl });
 }, { offer, makeable });

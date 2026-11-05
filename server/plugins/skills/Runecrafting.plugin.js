@@ -21,6 +21,7 @@ let RUINS_BY_ID;
 const RUINS_DATA = require("./data/runecrafting-ruins.json");
 const OURANIA_DATA = require("./data/ourania-altar.json");
 const Pouches = require("./runecrafting/Pouches.Runecrafting");
+const Combination = require("./runecrafting/Combination.Runecrafting");
 let RUINS;
 /** The exit portal's sound (synth 200). */
 const EXIT_PORTAL_SOUND = 200;
@@ -42,6 +43,11 @@ const RUNE_MYSTERIES_COMPLETE_STAGE = 6;
 const ENTER_THE_ABYSS_KEY = "enter_the_abyss";
 const ABYSS_LOCKED_MESSAGE = "You need to complete Enter the Abyss before you can enter the Abyss.";
 const ABYSS_OBSTACLE_XP = 25;
+const SINS_OF_THE_FATHER_KEY = "sins_of_the_father";
+/** Ours: no capture shows the rift refused for the quest; the Wiki gives only the rule. */
+const BLOOD_RIFT_LOCKED_MESSAGE = "You need to complete Sins of the Father before you can use this rift.";
+/** rsprox 1636, Exit-through (Kourend) by a player who hasn't unlocked it. */
+const BLOOD_RIFT_KOUREND_TEXT = "The rift cannot find the true Blood Altar. However, if you bring a<br>sample of the Dark Altar's power to the rift, the Dark Altar can<br>redirect the rift to the place in Arceuus where it focuses the Blood<br>Altar's energy.";
 const ABYSS_SKULL_SECONDS = 10 * 60;
 /**
  * The Ourania Altar (Wiki: Ourania Altar) binds pure and daeyalt essence into a random rune each,
@@ -59,9 +65,10 @@ const BLOOD_RIFT_GUARDIAN_BASE = 804984;
 /** The Ourania Altar's rift guardian base, whatever rune is made (Wiki: Rift guardian). */
 const OURANIA_RIFT_GUARDIAN_BASE = 1487213;
 const ABYSS_TELEPORT_STEP = "o8m7y6";
-const ESSENCE_TELEPORT_STEPS = new Set(["ILlRUH", "SvUvek"]);
+const ESSENCE_TELEPORT_STEPS = new Set(["ILlRUH", "SvUvek", "PDYldg"]);
 const CROMPERTY_ESSENCE_TELEPORT_STEP = "EkCGKW";
 const ARDOUGNE_ESSENCE_TELEPORT_TASK = "have-wizard-cromperty-teleport-you-to-the-rune-e";
+const VARROCK_ESSENCE_TELEPORT_TASK = "have-aubury-teleport-you-to-the-essence-mine";
 /** The Rune Essence mine's exit portals (loc 34825, "Portal", Use). */
 const ESSENCE_MINE_PORTAL = 34825;
 /** Where the player stood when a wizard teleported them into the mine: the portals return there. */
@@ -494,6 +501,7 @@ function handleCraftRunes(event) {
       amountPerEssence,
       objectId: event.objectId,
       essenceIds: craftedEssenceIds,
+      altarId: event.objectId,
     });
   }
 
@@ -637,6 +645,7 @@ function handleBindTiara(event) {
   inventory.addItem(new Item(tiara.tiaraId, 1));
   player.getSkillManager().addExperiences(Skill.RUNECRAFTING, tiara.xp);
   spam(player, "You bind the power of the talisman into your Tiara.");
+  pluginApi.emitCustomEvent("runecrafting:tiara", { player, tiaraId: tiara.tiaraId });
 }
 
 function handleEnterRuins({ player, objectId }) {
@@ -674,6 +683,10 @@ function teleportToEssenceMine(player, wizard) {
       pluginApi.emitCustomEvent("diary:task", { player, diary: "lumbridge", task: "have-sedridor-teleport-you-to-the-essence-mine" });
     } else if (wizardName === "Wizard Cromperty") {
       pluginApi.emitCustomEvent("diary:task", { player, diary: "ardougne", task: ARDOUGNE_ESSENCE_TELEPORT_TASK });
+    } else if (wizardName === "Brimstail") {
+      pluginApi.emitCustomEvent("runecrafting:brimstail-essence", { player });
+    } else if (wizardName === "Aubury") {
+      pluginApi.emitCustomEvent("diary:task", { player, diary: "varrock", task: VARROCK_ESSENCE_TELEPORT_TASK });
     }
   });
   if (wizard) {
@@ -859,7 +872,8 @@ function abyssObstacleChance(player, obstacle) {
 }
 
 function handleAbyssObstacle(event) {
-  const obstacle = ABYSS_OBSTACLES.get(event.objectId);
+  // The map places a multiloc at each gap in the ring; the definition is the obstacle it shows this player.
+  const obstacle = ABYSS_OBSTACLES.get(event.definition?.id ?? event.objectId);
   if (!obstacle) {
     return false;
   }
@@ -898,11 +912,35 @@ function handleExitPortal(event) {
   return true;
 }
 
+/**
+ * rsprox 1636: Exit-through lands at 3226,4831; Exit-through (Kourend) gives a message box. Varbit 13783
+ * swaps which slot each is in, so this goes by the label. The Wiki's unlock for the Kourend side, dark
+ * essence used on the rift, isn't implemented, so that side always refuses.
+ */
+function handleBloodRift(event) {
+  const { player } = event;
+  if (String(event.option ?? "").toLowerCase().includes("kourend")) {
+    const { DialogueChainBuilder, StatementDialogue } = pluginApi.core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, BLOOD_RIFT_KOUREND_TEXT)));
+    return true;
+  }
+  const request = { player, key: SINS_OF_THE_FATHER_KEY, complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", request);
+  if (request.complete !== true) {
+    player.sendMessage(BLOOD_RIFT_LOCKED_MESSAGE);
+    return true;
+  }
+  requestTeleport(player, new Location(3226, 4831, 0));
+  return true;
+}
+
 function handleEnterRift(event) {
-  const runeId = RIFT_RUNES.get(event.objectId);
+  // The blood rift is a multiloc on the map; the others are plain.
+  const runeId = RIFT_RUNES.get(event.definition?.id ?? event.objectId);
   if (!runeId) {
     return false;
   }
+  if (runeId === ItemIdentifiers.BLOOD_RUNE) return handleBloodRift(event);
   const destination = ALTAR_DESTINATIONS.get(runeId);
   if (destination) {
     const { player } = event;
@@ -929,6 +967,7 @@ module.exports = {
     api.onObjectInteraction("Portal", { Use: handleExitPortal });
 
     Pouches.attach(api);
+    Combination.attach(api);
     api.onCustomEvent("runecrafting:altar-rune", answerAltarRune);
 
     for (const talisman of TALISMANS.values()) {

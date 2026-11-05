@@ -1,3 +1,4 @@
+import { CrossFloor } from "../../CrossFloor";
 import { CombatPosition } from "./CombatPosition";
 import { ItemAliases } from "../../model/ItemAliases";
 import { PrayerHandler } from "../PrayerHandler";
@@ -236,6 +237,9 @@ export class CombatFactory {
         const rolled = { attacker: entity, target: victim, combatType: type, damage, minimum: range.minimum, maximum: range.maximum };
         PluginManager.emitCustomEvent("combat:hit-rolled", rolled);
         if (rolled.damage !== damage && Number.isFinite(rolled.damage)) damage = Math.max(0, Math.floor(rolled.damage));
+
+        // OSRS Project Rebalance (29 May 2024): successful player zeroes become ones before defences.
+        if (entity.isPlayer() && damage === 0 && range.maximum > 0) damage = 1;
 
         // Wiki (Ward of Arceuus): demons hit 10% less, that 10% rounded down first.
         if (entity.isNpc() && victim.isPlayer() && ArceuusSpells.hasWard(victim)) {
@@ -533,8 +537,8 @@ export class CombatFactory {
         const targetLocation = CombatPosition.location(target, attacker);
         if (
             CombatPosition.area(attacker, target) !== CombatPosition.area(target, attacker) ||
-            attackerLocation.getZ() !== targetLocation.getZ() ||
-            attackerLocation.getDistance(targetLocation) >= 40
+            (attackerLocation.getZ() !== targetLocation.getZ() && !CrossFloor.canCross(attackerLocation, targetLocation)) ||
+            CrossFloor.distance(attackerLocation, targetLocation) >= 40
         ) {
             return false;
         }

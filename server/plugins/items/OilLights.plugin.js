@@ -1,6 +1,7 @@
 /** Wiki oil lamps and sapphire lanterns: assemble, distil fuel, light and extinguish. */
 const OIL_ATTRIBUTE='oil-lights:distilled-oil';
 const RIMMINGTON_STILL_LOCATION='2937,3210,0',RIMMINGTON_OIL_VARBIT=281;
+let api;
 let core;
 let families,filled,lit,empty;
 function refresh(p){p.getInventory().refreshItems();}
@@ -11,6 +12,7 @@ function light(e){
  if(p.getSkillManager().getCurrentLevel(core.Skill.FIREMAKING)<f.level){p.sendMessage('You need '+f.level+' Firemaking to light this.');return;}
  const item=[e.usedItem,e.usedWithItem].find(i=>i?.getId()===id);if(!item||!p.getInventory().contains(I.TINDERBOX))return;
  item.setId(f.lit);refresh(p);p.performAnimation(new core.Animation(733));
+ api.emitCustomEvent('oil-lights:lit',{player:p,itemId:f.lit});
 }
 function extinguish({player,item}){const f=lit.get(item.getId());if(!f)return false;item.setId(f.filled);refresh(player);return true;}
 function syncOil({player}){player.getPacketSender().sendVarbit(RIMMINGTON_OIL_VARBIT,player.getAttribute(OIL_ATTRIBUTE)===RIMMINGTON_STILL_LOCATION?1:0);}
@@ -33,8 +35,8 @@ function lens(e){
  const item=[e.usedItem,e.usedWithItem].find(i=>i?.getId()===id);if(!item||!p.getInventory().contains(insert))return;
  p.getInventory().deleteNumber(insert,1);item.setId(recipe[1]);if(recipe[2])p.getInventory().adds(recipe[2],1);refresh(p);
 }
-function attach(api){
- core=api.core;const I=core.ItemIdentifiers;
+function attach(pluginApi){
+ api=pluginApi;core=api.core;const I=core.ItemIdentifiers;
  families=[{empty:I.EMPTY_OIL_LAMP,filled:I.OIL_LAMP,lit:I.OIL_LAMP_3,level:12},{empty:I.EMPTY_OIL_LANTERN,filled:I.OIL_LANTERN,lit:I.OIL_LANTERN_3,level:26},{empty:I.BULLSEYE_LANTERN_EMPTY_,filled:I.BULLSEYE_LANTERN,lit:I.BULLSEYE_LANTERN_3,level:49},{empty:I.SAPPHIRE_LANTERN,filled:I.SAPPHIRE_LANTERN_2,lit:I.SAPPHIRE_LANTERN_3,level:49}];
  empty=new Map(families.map(f=>[f.empty,f]));filled=new Map(families.map(f=>[f.filled,f]));lit=new Map(families.map(f=>[f.lit,f]));
  api.persistAttribute(OIL_ATTRIBUTE);api.onPlayerLogin(syncOil);

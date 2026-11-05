@@ -12,8 +12,12 @@ const Gliders = require("../plugins/world/GnomeGliders.plugin");
 
 const tasks = [];
 const gliderRequests = [];
+const arrivals = [];
 Gliders.register({
-  emitCustomEvent: (name, event) => { if (name === "gnome-gliders:glider") gliderRequests.forEach((fn) => fn(event)); },
+  emitCustomEvent: (name, event) => {
+    if (name === "gnome-gliders:glider") gliderRequests.forEach((fn) => fn(event));
+    if (name === "gnome-gliders:arrived") arrivals.push(event);
+  },
   getTaskManager: () => ({ submit: (task) => { task.setRunning(true); tasks.push(task); } }),
   persistAttribute() {},
   onNpcInteraction() {},
@@ -102,7 +106,11 @@ test("as captured (Al Kharid to White Wolf Mountain): map, then journey + fade, 
   const player = createPlayer();
   const opened = ticks(player, () => Gliders._test.openMap({ player, ...DALBUR() }));
   assert.deepEqual(opened, [["open 138"], ["varbit 12393=1"]], "busy a tick after the map opens");
+  arrivals.length = 0;
   const flight = ticks(player, () => Gliders._test.chooseDestination({ player, buttonId: (138 << 16) | 7 }));
+  assert.equal(arrivals.length, 1, "one arrival event per completed flight");
+  assert.equal(arrivals[0].player, player);
+  assert.equal(arrivals[0].destination.area, "White Wolf Mountain");
   assert.deepEqual(flight, [
     ["lock", "varp 153=32772", "overlay 174 fade out"],
     ["land 2850,3498,0"],

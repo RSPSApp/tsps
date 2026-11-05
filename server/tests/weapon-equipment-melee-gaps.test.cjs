@@ -227,3 +227,87 @@ test('scythe queue caps a corrupted victim across every hit before awarding XP',
     PluginManager.emitPlayerDealtDamage = previous.dealt;
   }
 });
+
+test('OSRS minimum player hit clamps successful zeroes without rerolling or changing XP rates', t => {
+  const { Misc } = require('../dist/util/Misc');
+  const { HitMask } = require('../dist/game/content/combat/hit/HitMask');
+  t.mock.method(core.DamageFormulas, 'sourceMaxHit', () => 3);
+  t.mock.method(core.DamageFormulas, 'sourceHitBounds', () => ({ minimum: 0, maximum: 3 }));
+  let selected = 0;
+  t.mock.method(Misc, 'randomInclusive', () => selected);
+  const source = attacker(), victim = target();
+  for (const style of [CombatType.MELEE, CombatType.RANGED, CombatType.MAGIC]) {
+    const damages = [0, 1, 2, 3].map(value => {
+      selected = value;
+      return CombatFactory.rollHitDamage(source, victim, style, false, undefined, false, false).getDamage();
+    });
+    assert.deepEqual(damages, [1, 1, 2, 3], 'raise zero to one; do not replace 0..max with a uniform 1..max roll');
+  }
+  selected = 0;
+  t.mock.method(core.DamageFormulas, 'sourceMaxHit', () => 1);
+  const makeHit = () => new core.PendingHit(source, victim,
+    { type: () => CombatType.MELEE, accuracyDefenceType: type => type }, { rollAccuracy: true });
+  t.mock.method(core.AccuracyFormulasDpsCalc, 'rollAccuracy', () => true);
+  const hit = makeHit();
+  assert.equal(hit.getTotalDamage(), 1, 'a beginner successful zero now deals one');
+  assert.equal(hit.getHits()[0].getHitmask(), HitMask.RED);
+  CombatFactory.rewardExp(source, {
+    getTotalDamage: () => hit.getTotalDamage(), getSkills: () => [Skill.ATTACK.getIndex()],
+    getCombatType: () => CombatType.MELEE, getTarget: () => victim,
+  });
+  assert.equal(source.xp.find(([skill]) => skill === Skill.ATTACK)[1], 4, 'still four melee XP per damage');
+
+  t.mock.method(core.AccuracyFormulasDpsCalc, 'rollAccuracy', () => false);
+  assert.equal(makeHit().getTotalDamage(), 0, 'failed accuracy stays a miss');
+  const npc = { isPlayer: () => false, isNpc: () => true };
+  assert.equal(CombatFactory.rollHitDamage(npc, victim, CombatType.MELEE, false, undefined, false, false).getDamage(), 0, 'NPC zeroes are unchanged');
+  const zeroBound = { minimumMultiplier: 0, maximumMultiplier: 0 };
+  assert.equal(CombatFactory.rollHitDamage(source, victim, CombatType.MELEE, false, zeroBound, false, false).getDamage(), 0,
+    'explicit zero-damage bounds remain zero');
+  selected = 1;
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
+    if (name === 'combat:hit-rolled') event.damage = 0;
+  });
+  assert.equal(CombatFactory.rollHitDamage(source, victim, CombatType.MELEE, false, undefined, false, false).getDamage(), 1,
+    'clamp after plugin roll modifiers too');
+
+  t.mock.method(core.PrayerHandler, 'isActivated', () => true);
+  assert.equal(CombatFactory.rollHitDamage(source, victim, CombatType.MELEE, false, undefined, false, true).getDamage(), 0,
+    'defensive reductions can still reduce the promoted roll to zero');
+});
+
+test('queued zeroes and ones credit actual Attack XP and send skill updates for every damaging hit', t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { Misc } = require('../dist/util/Misc');
+  const { GameConstants } = require('../dist/game/GameConstants');
+  assert.equal(GameConstants.EXPERIENCE_MULTIPLIER, 1, 'exercise the default 1x world rate');
+  const source = new Player(null);
+  const skills = source.getSkillManager();
+  const drops = [], updates = [];
+  const sender = new Proxy({}, { get: (_, name) => (...args) => {
+    if (name === 'sendExpDrop') drops.push(args);
+    if (name === 'sendSkill') updates.push(args[0]);
+    return sender;
+  } });
+  source.getPacketSender = () => sender;
+  const victim = target();
+  victim.isUntargetable = victim.isNeedsPlacement = () => false;
+  victim.getCombat = () => ({ getHitQueue: () => ({ addPendingHit() {} }) });
+  t.mock.method(core.DamageFormulas, 'sourceMaxHit', () => 1);
+  t.mock.method(Misc, 'randomInclusive', () => 0);
+  let accurate = false;
+  t.mock.method(core.AccuracyFormulasDpsCalc, 'rollAccuracy', () => accurate);
+  const totals = [];
+  for (const success of [false, true, false, true, true]) {
+    accurate = success;
+    const hit = new core.PendingHit(source, victim,
+      { type: () => CombatType.MELEE, accuracyDefenceType: type => type }, { rollAccuracy: true });
+    assert.equal(hit.getTotalDamage(), success ? 1 : 0);
+    CombatFactory.addPendingHit(hit);
+    totals.push(skills.getExperience(Skill.ATTACK));
+  }
+  assert.deepEqual(totals, [0, 4, 4, 8, 12], 'misses give zero; every one-damage hit credits four Attack XP');
+  assert.equal(skills.getExperience(Skill.STRENGTH), 0, 'fresh accounts now train Attack, not Strength');
+  assert.deepEqual(drops.filter(([skill]) => skill === Skill.ATTACK).map(([, xp]) => xp), [4, 4, 4]);
+  assert.equal(updates.filter(skill => skill === Skill.ATTACK).length, 3, 'each awarded hit publishes the new skill total');
+});

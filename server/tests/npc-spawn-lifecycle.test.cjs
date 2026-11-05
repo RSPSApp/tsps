@@ -185,6 +185,25 @@ for (const id of [8573, 9193, 14227]) test(`NPC ${id} does not slide around in a
   assert.equal(npc.getMovementCoordinator().getRadius(), 0);
 });
 
+// The ferry parents (Rimmington dock, Corsair Cove docks) walk with human_ready but show a captain who walks
+// with human_walk_f; an unrestricted radius made the ferry captain drift without a walk animation (#2410).
+for (const [label, parentName] of [["Rimmington", "corsair_ferry_rimmington"], ["Corsair Cove docks", "corsair_ferry_covedocks"]]) test(`the ${label} ferry spawn does not wander`, (t) => {
+  const id = CacheDefinitions.getNpcId(parentName);
+  const row = require("../data/definitions/npc-spawns.json").find(spawn => spawn.id === id);
+  assert.ok(row, "the canonical ferry spawn exists");
+  assert.equal(CacheDefinitions.getSeqName(CacheDefinitions.getNpc(id).walkSeqId), "human_ready", "the parent has a standing pose as its walk");
+
+  spawnFile([row]);
+  const [ferry] = live(id);
+  assert.ok(ferry, "the real loader activates the canonical spawn");
+  t.mock.method(World, "isLocationActive", () => true);
+  t.mock.method(Math, "random", () => 0.1);
+  const steps = t.mock.method(ferry.getMovementQueue(), "addSteps");
+  for (let tick = 0; tick < 100; tick++) ferry.getMovementCoordinator().process();
+  assert.equal(steps.mock.callCount(), 0, "the ferry must not attempt random walking");
+  assert.equal(ferry.getMovementCoordinator().getRadius(), 0);
+});
+
 for (const [name, parentName, childName, stage, pose] of [
   ["crossroads", "corsair_captain_crossroads", "corsair_captain_1op", 0, "human_ready"],
   ["post-quest", "corsair_captain_throne", "corsair_captain_throne_child", 60, "rd_sitting_at_bench"],

@@ -15,6 +15,13 @@ const PLANE = 0;
 module.exports = function registerArea(pluginApi) {
   const { core } = pluginApi;
   class RangingGuildRange extends core.Area {
+    postEnter(mobile) {
+      if (!mobile.isPlayer()) return;
+      pluginApi.emitCustomEvent("diary:task", {
+        player: mobile.getAsPlayer(), diary: "kandarin", task: "enter-the-ranging-guild",
+      });
+    }
+
     postLeave(mobile) {
       if (!mobile.isPlayer()) return;
       Session.endRound(mobile.getAsPlayer());

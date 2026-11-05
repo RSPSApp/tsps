@@ -162,6 +162,7 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
   const FALLEN_TREE_OBJECT_ID = ObjectIdentifiers.FALLEN_TREE_5; // 33192
   const FENCE_OBJECT_ID = ObjectIdentifiers.FENCE_5; // 33219
   const BROKEN_FENCE_OBJECT_ID = ObjectIdentifiers.BROKEN_FENCE_4; // 46817
+  const BROKEN_FENCE_MULTI_OBJECT_ID = 46815; // my2arm_town_fence_broken_shortcut_multi, placed: 46817 from status 200
   const HOLE_OBJECT_ID = ObjectIdentifiers.HOLE_56; // 33227
   const NARROW_GAP_OBJECT_ID = ObjectIdentifiers.NARROW_GAP; // 33237
   const WATERS_EDGE_OBJECT_IDS = new Set([
@@ -1133,7 +1134,7 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
       mineCaveEntrance(player);
       return;
     }
-    if (objectId === FENCE_OBJECT_ID || objectId === BROKEN_FENCE_OBJECT_ID) {
+    if (objectId === FENCE_OBJECT_ID || objectId === BROKEN_FENCE_MULTI_OBJECT_ID || objectId === BROKEN_FENCE_OBJECT_ID) {
       event.handled = true;
       crossFence(player);
       return;

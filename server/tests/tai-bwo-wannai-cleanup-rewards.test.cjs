@@ -78,7 +78,12 @@ function villager(t, { progress = 5, sticks = 0, at = [2795, 3066, 0] } = {}) {
   return p;
 }
 
-const login = (p) => PluginManager.emitPlayerLogin({ player: p, username: p.getUsername() });
+const WELCOME = "Welcome to Old School RuneScape.";
+/** Logs in, leaving out the login's own welcome line so the tests see only what follows. */
+const login = (p) => {
+  PluginManager.emitPlayerLogin({ player: p, username: p.getUsername() });
+  p.messages = p.messages.filter((message) => message !== WELCOME);
+};
 const held = (p, name) => p.getInventory().getAmount(obj(name));
 const give = (p, name, amount = 1) => p.getInventory().add(new Item(obj(name), amount));
 

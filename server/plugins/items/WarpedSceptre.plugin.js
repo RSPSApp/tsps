@@ -13,6 +13,7 @@ const CAST_PROJECTILE_GRAPHIC = 2569; // client gameval SpotanimID.VFX_WARPED_SC
 const CAST_IMPACT_GRAPHIC = 2568; // client gameval SpotanimID.VFX_WARPED_SCEPTRE_PROJECTILE_IMPACT
 const CHARGES_WARPED_SCEPTRE_QUANTITY_VARBIT = 16155; // client gameval VarbitID.CHARGES_WARPED_SCEPTRE_QUANTITY
 const BUSY_VARBIT = 12393; // cache gameval busy
+const IMPACT_SOUND = 1460; // capture 1885: `sound_area id=1460 range=10` at the target in 51 casts
 const MAGIC_LEVEL_REQUIRED = 62; // OSRS Wiki item page
 
 let core = null;
@@ -63,6 +64,7 @@ function look({ Animation, Graphic, GraphicHeight, Projectile }) {
     castProjectile: (cast, castOn) =>
       Projectile.createProjectile(cast, castOn, CAST_PROJECTILE_GRAPHIC, 0, 20, 43, 31),
     endGraphic: () => new Graphic(CAST_IMPACT_GRAPHIC),
+    impactSound: () => IMPACT_SOUND,
   };
 }
 

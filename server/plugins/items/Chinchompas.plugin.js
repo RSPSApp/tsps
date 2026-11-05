@@ -63,7 +63,7 @@ function fuseAccuracy(attacker, target, attackRoll) {
     return null;
   }
   const fuse = FUSE_BY_CHILD_ID[attacker.getAsPlayer().getFightType().getChildId()];
-  const distance = attacker.getLocation().getDistance(target.getLocation());
+  const distance = core.CombatPosition.distance(attacker, target);
   const band = distance <= 3 ? 0 : distance <= 6 ? 1 : 2;
   return fuse ? Math.floor((attackRoll * FUSE_ACCURACY[fuse][band]) / 100) : null;
 }

@@ -88,7 +88,7 @@ class EntityMirror(
                 is NpcSync.Change.Removed -> if (change.index !in readded) npcs.remove(change.index)?.let(world::releaseNpc)?.also { npcTypeIds.remove(change.index) }
                 is NpcSync.Change.Added -> {
                     val npc = change.npc
-                    npc.level = if (npc.onDeck) EntityWorld.DECK_LEVEL else level
+                    npc.level = if (npc.onDeck) EntityWorld.DECK_LEVEL else if (npc.level >= 0) npc.level else level
                     npcTypeIds[change.index] = npc.type
                     val existing = npcs[change.index]
                     if (existing != null) {

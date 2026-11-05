@@ -283,6 +283,52 @@ export class PathFinder {
         );
     }
 
+    /** Route to the least-cost reachable exact tile in a small set of valid interaction positions. */
+    static calculateRouteToAny(player: Mobile, destinations: Location[]): number {
+        const location = player.getLocation();
+        const srcX = location.getX();
+        const srcY = location.getY();
+        const level = location.getZ();
+        let best: { destination: Location; cost: number } | null = null;
+
+        for (const destination of destinations) {
+            if (destination.getZ() !== level) continue;
+            const route = PathFinder.rsmodRouteFinding.findRoute({
+                level,
+                srcX,
+                srcY,
+                srcSize: Math.max(player.getSize(), 1),
+                destX: destination.getX(),
+                destY: destination.getY(),
+                destWidth: 1,
+                destLength: 1,
+                locShape: -1,
+                moveNear: false,
+                privateArea: player.getPrivateArea(),
+            });
+            if (!route.success) continue;
+
+            let cost = 0;
+            let fromX = srcX;
+            let fromY = srcY;
+            for (const waypoint of route.waypoints) {
+                cost += Math.max(Math.abs(waypoint.x - fromX), Math.abs(waypoint.y - fromY));
+                fromX = waypoint.x;
+                fromY = waypoint.y;
+            }
+            if (!best || cost < best.cost) best = { destination, cost };
+        }
+
+        if (!best) {
+            player.getMovementQueue().reset();
+            return 0;
+        }
+        // Re-run once to install the selected route in the movement queue.
+        return PathFinder.applyRsmodRoute(player, best.destination.getX(), best.destination.getY(), {
+            moveNear: false,
+        });
+    }
+
     /** OpenRune's footprint-aware destination for one-step NPC pursuit. */
     static naiveEntityDestination(source: Mobile, target: Mobile): Location {
         const sourceLocation = source.getLocation();

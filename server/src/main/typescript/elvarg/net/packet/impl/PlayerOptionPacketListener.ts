@@ -1,3 +1,4 @@
+import { BoatManager } from "../../../game/content/sailing/BoatManager";
 import { World } from "../../../game/World";
 import type { Player } from "../../../game/entity/impl/player/Player";
 import { FollowPlayerPacketListener } from "./FollowPlayerPacketListener";
@@ -16,6 +17,7 @@ export class PlayerOptionPacketListener {
       PluginManager.emitPlayerAttack({ player, target });
       return;
     }
+    if (BoatManager.rootLocation(player).getZ() !== BoatManager.rootLocation(target).getZ()) return;
     if (option === 2) {
       player.setFollowing(null);
       return TradeRequestPacketListener.request(player, index);

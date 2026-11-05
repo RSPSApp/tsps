@@ -449,6 +449,10 @@ const SCRIPT_HIGHLIGHT_TEXTBOX_DEFAULT = 2465;
 // Chatbox search: its title says whether this one is a spawn search, and 138 closes it.
 const SCRIPT_CHATBOX_SEARCH = 750;
 const SCRIPT_CHATBOX_SEARCH_CLOSE = 138;
+// chatbox:meslayerinput (44) and its container (39). A server-run search (GE, bank) opens the
+// soft keyboard outside the touch that started it, which iOS refuses; tapping the text line is
+// the trusted gesture that brings it back.
+const CHATBOX_INPUT_UIDS: ReadonlySet<number> = new Set([(162 << 16) | 39, (162 << 16) | 44]);
 
 // Use shared OSRS rotation scale
 
@@ -2381,6 +2385,10 @@ export class OsrsClient {
                 if (widgetManager.isEffectivelyHidden((widget?.uid ?? 0) | 0)) continue;
                 if (keyboardButtons.widgetShowsKeyboard(widget)) {
                     this.mobileChatKeyboard.show();
+                    return;
+                }
+                if (CHATBOX_INPUT_UIDS.has((widget?.uid ?? 0) | 0)) {
+                    this.mobileChatKeyboard.showFromGesture();
                     return;
                 }
             }
@@ -7512,6 +7520,7 @@ export class OsrsClient {
 
         const decoded = this.npcUpdateDecoder.decode(payload.packet, {
             large: payload.large === true,
+            crossFloor: payload.crossFloor === true,
             loopCycle: payload.loopCycle | 0,
             clientCycle: getClientCycle() | 0,
             localTileX: decodeBase.tileX | 0,

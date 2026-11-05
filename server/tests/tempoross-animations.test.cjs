@@ -284,7 +284,7 @@ test("a torrent stuns its loader with the stars, only as long as they last", () 
   try {
     const { player } = actionPlayer();
     const core = Shared.core();
-    Shared.bind({ core: { ...core, Graphic: class { constructor(id) { this.id = id; } } } });
+    Shared.bind({ core: { ...core, Graphic: class { constructor(id, delay = 0, height = 0) { this.id = id; this.height = height; } } } });
     const graphics = [];
     let blocked = false;
     player.performGraphic = (graphic) => graphics.push(graphic);
@@ -299,6 +299,7 @@ test("a torrent stuns its loader with the stars, only as long as they last", () 
     cannons.disable(crate);
     assert.equal(blocked, true);
     assert.deepEqual(graphics.map((graphic) => graphic.id), [Shared.GFX.STUNNED]);
+    assert.equal(graphics[0].height, 124, "stars at head height, like every other stunned_thieving");
     assert.equal(Shared.GFX.STUNNED, 245, "stunned_thieving, the circling stars");
     const release = timers.find((timer) => timer.ticks === DATA.fight.torrentStunTicks);
     assert.ok(release, "released after the stars' ticks");

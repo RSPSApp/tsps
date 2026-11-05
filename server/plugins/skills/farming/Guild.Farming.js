@@ -154,7 +154,7 @@ function bankStorageOp(event) {
     player.getBank(player.getCurrentBankTab()).refreshItems();
     inventory.refreshItems();
 }
-function storeCrop(player, container, id, maximum) {
+function storeRoom(player, container, id) {
     const kind = containerKind(container);
     if (!kind) return 0;
     if (kind === "herb" && player.getSkillManager().getCurrentLevel(core.Skill.HERBLORE) < 58) return 0;
@@ -163,8 +163,12 @@ function storeCrop(player, container, id, maximum) {
     if (kind === "herb" && !core.CacheDefinitions.getItem(id).name?.startsWith("Grimy ")) return 0;
     const stored = (container.getMetaValue("farming:stored") ?? {});
     if (kind === "seed" && !stored[id] && Object.keys(stored).length >= 6) return 0;
-    const amount = Math.min(maximum, (kind === "herb" ? 30 : 2147483647) - (stored[id] ?? 0));
+    return Math.max(0, (kind === "herb" ? 30 : 2147483647) - (stored[id] ?? 0));
+}
+function storeCrop(player, container, id, maximum) {
+    const amount = Math.min(maximum, storeRoom(player, container, id));
     if (amount <= 0) return 0;
+    const stored = container.getMetaValue("farming:stored") ?? {};
     stored[id] = (stored[id] ?? 0) + amount;
     container.setMetaValue("farming:stored", stored);
     return amount;
@@ -219,19 +223,51 @@ function seedBoxGather(event) {
     const box = openSeedBox(event.player), left = event.amount - event.stored;
     if (box && left > 0) event.stored += storeCrop(event.player, box, event.itemId, left);
 }
+const seedPickupItems = new WeakSet();
+const seedPickupPlayers = new WeakSet();
 function seedBoxPickup(event) {
+    if (event.handled) return;
     const { player, groundItem } = event, item = groundItem.getItem();
-    const box = openSeedBox(player);
-    const stored = box ? storeCrop(player, box, item.getId(), item.getAmount()) : 0;
-    if (stored <= 0) return;
-    // A stack past the box's limit: the rest stays on the floor for the usual pickup.
-    if (stored < item.getAmount()) {
-        item.setAmount(item.getAmount() - stored);
-        return;
-    }
-    core.ItemOnGroundManager.deregister(groundItem);
-    player.getLastItemPickup().reset();
+    const box = openSeedBox(player), manager = core.ItemOnGroundManager;
+    const amount = item.getAmount(), itemId = item.getId();
+    if (!box || item.getMeta() != null || !Number.isSafeInteger(amount) || amount <= 0
+        || seedPickupItems.has(groundItem) || seedPickupPlayers.has(player)) return;
+    const room = storeRoom(player, box, itemId);
+    const proposed = Math.min(amount, room);
+    if (proposed <= 0) return;
+    const position = groundItem.getPosition().clone(), owner = groundItem.getOwner();
+    const area = groundItem.getPrivateArea(), state = groundItem.getState();
+    const boxContents = JSON.stringify(box.getMetaValue("farming:stored") ?? {});
+    const request = { player, groundItem, source: "pickup", itemId, amount: proposed, discard: 0, allow: true, error: null };
+    seedPickupItems.add(groundItem);
+    seedPickupPlayers.add(player);
     event.handled = true;
+    try {
+        core.PluginManager.emitCustomEvent("ground-items:take", request);
+        if (request.allow !== true || request.error != null || !Number.isSafeInteger(request.amount)
+            || request.amount <= 0 || request.amount > proposed || !Number.isSafeInteger(request.discard)
+            || request.discard < 0 || request.amount + request.discard > amount) return;
+        if (!core.World.getItems().includes(groundItem) || !manager.canSee(player, groundItem)
+            || groundItem.getItem() !== item || item.getId() !== itemId || item.getAmount() !== amount
+            || item.getMeta() != null || !groundItem.getPosition().equals(position) || groundItem.getOwner() !== owner
+            || groundItem.getPrivateArea() !== area || groundItem.getState() !== state || openSeedBox(player) !== box
+            || JSON.stringify(box.getMetaValue("farming:stored") ?? {}) !== boxContents
+            || storeRoom(player, box, itemId) < request.amount) return;
+        const stored = storeCrop(player, box, itemId, request.amount);
+        const removed = stored + request.discard;
+        if (removed === amount) manager.deregister(groundItem);
+        else {
+            groundItem.setOldAmount(amount);
+            item.decrementAmountBy(removed);
+            manager.perform(groundItem, core.GroundItemOperationType.ALTER);
+        }
+        core.PluginManager.emitCustomEvent("ground-items:taken", { player, groundItem, source: "pickup", itemId, amount: stored, discarded: request.discard });
+        if (removed === amount) player.getLastItemPickup().reset();
+        else event.handled = false; // The remainder follows the ordinary pickup route.
+    } finally {
+        seedPickupItems.delete(groundItem);
+        seedPickupPlayers.delete(player);
+    }
 }
 // https://oldschool.runescape.wiki/w/Herb_sack: Empty starts with the lowest-level herb.
 function withdrawalEntries(stored, kind) {

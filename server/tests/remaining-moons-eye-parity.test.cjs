@@ -817,7 +817,7 @@ test('Perilous Moons completes naturally from Attala to the Moons on the real st
   h.object(p, O.ENTRANCE_15, { x: 1439, y: 9600, z: 1 }, 1, ['Pass-through']);
   assert.equal(stage(), 8);
   h.tick(9);
-  assert.ok(p.log.some(row => row[0] === 'sendSubInterface'), 'Neypotzli entrance fades');
+  assert.ok(p.log.some(row => row[0] === 'mountSubInterface' && row[2] === 174), 'Neypotzli entrance fades');
   assert.ok(p.log.some(row => row[0] === 'sendCameraMoveTo' && row[1] === 1448 && row[2] === 9580 && row[3] === 1400), 'Neypotzli entrance camera');
   assert.ok(p.log.some(row => row[0] === 'sendCameraReset'), 'Neypotzli camera resets');
   h.talk(p, N.ATTALA); finish();
@@ -1085,7 +1085,7 @@ test('Perilous Moons entrance scene tasks are cancelled on logout without losing
   h.quest.setStage(p, 7);
   h.object(p, O.ENTRANCE_15, { x: 1439, y: 9600, z: 1 }, 1, ['Pass-through']);
   assert.equal(h.quest.getStage(p), 8);
-  assert.ok(p.log.some(row => row[0] === 'sendSubInterface'), 'fade starts');
+  assert.ok(p.log.some(row => row[0] === 'mountSubInterface' && row[2] === 174), 'fade starts');
   for (const fn of h.hooks.onPlayerLogout ?? []) fn({ player: p });
   h.tick(10);
   assert.equal(p.log.filter(row => row[0] === 'sendCameraMoveTo' && row[1] === 1448).length, 0, 'cancelled entrance camera');

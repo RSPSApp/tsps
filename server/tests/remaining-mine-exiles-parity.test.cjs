@@ -121,6 +121,7 @@ function setup(pluginPath, questKey, options = {}) {
     sendConfig(id, value) { configs.set(id, value); return sender; },
     sendInterfaceRemoval() { current = null; return sender; },
     sendSubInterface(target, group, type) { subInterfaces.set(group, { target, type }); return sender; },
+    mountSubInterface(target, group, type) { const mount = { target, type }; subInterfaces.set(group, mount); return mount; },
     sendCameraMoveTo(...args) { cameras.moves.push(args); return sender; },
     sendCameraLookAt(...args) { cameras.looks.push(args); return sender; },
     sendCameraReset() { cameras.resets += 1; return sender; },

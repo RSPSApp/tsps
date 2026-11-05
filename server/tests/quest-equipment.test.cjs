@@ -40,6 +40,11 @@ test("every listed item resolves to an id", () => {
   assert.ok(attachEquipment._test.requirements().size > 90);
 });
 
+test("the shipped world enables quest equipment requirements", () => {
+  const world = require("../data/definitions/world.json");
+  assert.equal(world.pluginConfig?.["quests:equipment-requirements"], true);
+});
+
 test("a rune platebody without Dragon Slayer I is refused with live OSRS's two lines", () => {
   reset({ equipmentRequirements: true, complete: { "Dragon Slayer I": false } });
   assert.deepEqual(equip(Items.RUNE_PLATEBODY), {

@@ -1,4 +1,6 @@
 import { strict as assert } from "node:assert";
+import fs from "node:fs";
+import path from "node:path";
 import * as EnumID from "@runelite/api/EnumID";
 import * as ParamID from "@runelite/api/ParamID";
 import * as ScriptID from "@runelite/api/ScriptID";
@@ -18,12 +20,19 @@ import { loadCache, loadCacheInfos, loadCacheList } from "../scripts/cache/load-
 
 // The RuneLite Client facade additions the Clue Scroll port reads: widgets, item containers,
 // item/enum/object definitions (with multiloc impostors), NPCs, the plane, the mouse and hint
-// arrows. Definitions come from the real installed cache.
+// arrows. Definitions come from the real installed cache (server/caches); without one, as on CI,
+// the definition sections are skipped and said so, and the rest still runs.
 
-const info = loadCacheList(loadCacheInfos()).latest;
-const cache = loadCache(info);
-const factory: any = getCacheLoaderFactory(info, CacheSystem.fromFiles(info, cache.files));
-const varManager = new VarManager(factory.getVarBitTypeLoader());
+const CACHES_JSON = path.resolve(__dirname, "../../server/caches/caches.json");
+const hasCache = fs.existsSync(CACHES_JSON) && !process.env.RL_TEST_NO_CACHE;
+const factory: any = hasCache
+    ? (() => {
+          const info = loadCacheList(loadCacheInfos()).latest;
+          return getCacheLoaderFactory(info, CacheSystem.fromFiles(info, loadCache(info).files));
+      })()
+    : undefined;
+const varManager: any = factory ? new VarManager(factory.getVarBitTypeLoader()) : { getVarbit: () => 0, getVarp: () => 0 };
+if (!hasCache) console.log("runelite-client-facade: no server/caches, definition sections skipped");
 
 // --- Constants -------------------------------------------------------------------------------------
 assert.equal(ParamID.CLUE_SCROLL, 623);
@@ -57,11 +66,11 @@ const inventory = new Inventory(28);
 const equipment = new Inventory(14);
 const widgets = new Map<number, any>();
 const npcs = new NpcEcs(16);
-const npcTypeLoader = factory.getNpcTypeLoader();
+const npcTypeLoader = factory ? factory.getNpcTypeLoader() : { load: (id: number) => (id === 655 ? { id, name: "Goblin", actions: [] } : undefined) };
 const client: any = {
-    objTypeLoader: factory.getObjTypeLoader(),
-    enumTypeLoader: factory.getEnumTypeLoader(),
-    locTypeLoader: factory.getLocTypeLoader(),
+    objTypeLoader: factory?.getObjTypeLoader(),
+    enumTypeLoader: factory?.getEnumTypeLoader(),
+    locTypeLoader: factory?.getLocTypeLoader(),
     npcTypeLoader,
     varManager,
     inventory,
@@ -79,7 +88,8 @@ const client: any = {
 };
 const facade = new ClientImpl(client);
 
-// --- Item definitions and params -------------------------------------------------------------------
+// --- Item definitions and params (real cache) -------------------------------------------------------
+if (hasCache) {
 const clue = facade.getItemDefinition(ItemID.TRAIL_EASY_SIMPLE_EXP6)!;
 assert.equal(clue.getId(), ItemID.TRAIL_EASY_SIMPLE_EXP6);
 assert.equal(clue.getName(), "Clue scroll (easy)");
@@ -123,6 +133,11 @@ assert.equal(typeof impostor.getName(), "string");
 const plain = facade.getObjectDefinition(1276)!; // a tree
 assert.equal(plain.getImpostorIds(), null);
 assert.equal(plain.getImpostor(), null);
+} else {
+    assert.equal(facade.getItemDefinition(ItemID.SPADE), null, "no loaders: no definitions");
+    assert.equal(facade.getEnum(EnumID.RUNEPOUCH_RUNE), null);
+    assert.equal(facade.getObjectDefinition(1276), null);
+}
 
 // --- Widgets -----------------------------------------------------------------------------------------
 const TRAIL_CLUETEXT_TEXT = (203 << 16) | 2;

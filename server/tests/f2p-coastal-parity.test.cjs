@@ -228,17 +228,15 @@ test('Corsair captured independent investigations and spoken transitions reach w
   const q = register('CorsairCurse', 'the_corsair_curse'), p = player();
   const wire = () => q.quest.varbitValue(q.quest.getStage(p), p);
   reachLine(q, p, 7956, "Sure, I'll try to help with your curse."); assert.equal(wire(), 5);
+  // The cache's own ferry multis (corsair_ferry_rimmington 1064 at 2910,3226 and corsair_ferry_covedocks 7980 at
+  // 2574,2835) already turn into Captain Tock for this quest progress, so the plugin must not add a second one.
   const ferryId = core.NpcIdentifiers.CAPTAIN_TOCK_3;
   const ferries = () => q.spawned.filter(npc => npc.getId() === ferryId && !q.removed.includes(npc));
-  assert.equal(ferries().length, 1, 'accepting still spawns the travelling captain at Rimmington');
-  assert.equal(ferries()[0].definition.owner, p);
+  assert.equal(ferries().length, 0, 'accepting does not add a second captain at Rimmington');
   q.emit('npc-dialogue:action', { player: p, stepId: '9srM-C' }); assert.equal(wire(), 10);
+  assert.equal(ferries().length, 0, 'leaving for the ship does not add a second captain at Rimmington');
   q.emit('npc-dialogue:action', { player: p, stepId: 'GnY-u6' }); assert.equal(wire(), 15); q.tick(3);
-  assert.equal(ferries().length, 2, 'arrival still supplies both quest-owned ferry captains');
-  for (const ferry of ferries()) {
-    assert.equal(ferry.definition.wanderRadius, 0);
-    assert.equal(ferry.definition.ownerOnly, true);
-  }
+  assert.equal(ferries().length, 0, 'arriving does not add a second captain on the cove ship');
   reachLine(q, p, 7961, "Okay, it doesn't sound like you know what's behind the curse. Thanks.");
   assert.equal(p.attributes.get('quest.the_corsair_curse.navigator'), 1);
   reachLine(q, p, 7976, "I'd hoped I could use my amazing Thieving skills");

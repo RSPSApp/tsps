@@ -1,6 +1,6 @@
 "use strict";
 
-const { CacheDefinitions, CountdownTask, Location, Skill, TaskManager, TeleportHandler } = require("./Core.Construction");
+const { api, CacheDefinitions, CountdownTask, Location, Skill, TaskManager, TeleportHandler } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 const Portals = require("./Portals.Construction");
@@ -96,6 +96,7 @@ function teleportTo(player, house, id) {
   if (!destination?.tile) return player.sendMessage("That destination isn't available yet.");
   if (!TeleportHandler.checkReqs(player, destination.tile)) return;
   house.exitHouse(player, destination.tile.clone());
+  api.emitCustomEvent("construction:portal", { player, destination: destination.spellName });
 }
 
 /**

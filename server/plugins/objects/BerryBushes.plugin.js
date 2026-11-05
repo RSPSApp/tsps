@@ -43,6 +43,8 @@ function bushesByName() {
     }],
     ["Cadava bush", {
       stages: [ObjectIdentifiers.CADAVA_BUSH, ObjectIdentifiers.CADAVA_BUSH_2, ObjectIdentifiers.CADAVA_BUSH_3],
+      // The map's fai_varrock_cadavabush_tailored at 3264,3366, showing the full bush.
+      fullMultilocs: [33183],
       item: ItemIdentifiers.CADAVA_BERRIES,
     }],
   ]);
@@ -57,10 +59,15 @@ function later(ticks, action) {
   TaskManager.submit(new core.CountdownTask({}, ticks, action));
 }
 
+function stageOf(bush, object) {
+  const id = object?.getId?.();
+  return bush.fullMultilocs?.includes(id) ? 0 : bush.stages.indexOf(id);
+}
+
 function bushFor(event) {
   const name = event.definition?.getName?.() ?? event.object?.getDefinition?.()?.getName?.();
   const bush = bushesByName().get(name);
-  const stage = bush ? bush.stages.indexOf(event.object?.getId?.()) : -1;
+  const stage = bush ? stageOf(bush, event.object) : -1;
   return stage < 0 ? null : { bush, stage };
 }
 
@@ -85,7 +92,7 @@ function regrow(key, generation, bush) {
   const state = bushStates.get(key);
   // A newer pick restarted the timer.
   if (!state || state.generation !== generation) return;
-  const stage = Math.max(0, bush.stages.indexOf(state.current.getId()) - 1);
+  const stage = Math.max(0, stageOf(bush, state.current) - 1);
   setStage(state, bush, stage);
   if (stage === 0) bushStates.delete(key);
   else scheduleRegrow(key, state, bush);
@@ -97,7 +104,7 @@ function finishPick(player, object, bush) {
   picking.delete(key);
   if (!player.isRegistered()) return;
   const state = bushStates.get(key) ?? { original: object, current: object, generation: 0 };
-  const stage = bush.stages.indexOf(state.current.getId());
+  const stage = stageOf(bush, state.current);
   if (stage < 0 || stage >= bush.stages.length - 1) return;
   if (player.getInventory().getFreeSlots() <= 0) {
     player.sendMessage(FULL_INVENTORY_MESSAGE);

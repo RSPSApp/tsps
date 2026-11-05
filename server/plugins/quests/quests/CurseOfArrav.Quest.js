@@ -169,11 +169,7 @@ module.exports = function registerCurseOfArravQuest(api) {
   const BASE_TRAPDOOR_OPEN_REPLACEMENT_ID = ObjectIdentifiers.TRAPDOOR_100; // 50141 Open
 
   const BITS_ATTRIBUTE = "quest.curse_of_arrav.bits";
-  const BIT_KEY_1_LOOTED = 1 << 0;
-  const BIT_KEY_2_LOOTED = 1 << 1;
-  const BIT_JAR_TAKEN = 1 << 2;
   const BIT_RECIPE_LEARNED = 1 << 3;
-  const BIT_CODE_KEY_TAKEN = 1 << 4;
   const BIT_BASE_KEY_USED = 1 << 5;
   const BIT_TABLE_NOTES = 1 << 6;
   const BIT_LEVER_NORTH_PULLED = 1 << 7;
@@ -736,8 +732,7 @@ module.exports = function registerCurseOfArravQuest(api) {
         return;
       }
       case ACTION_JAR_FOUND:
-        if (hasBit(player, BIT_JAR_TAKEN) || held(player, CANOPIC_JAR_OIL_ITEM_ID)) return;
-        setBit(player, BIT_JAR_TAKEN);
+        if (holdsAnyJar(player)) return;
         player.getInventory().adds(CANOPIC_JAR_OIL_ITEM_ID, 1);
         ensureStage(player, STAGE_JAR_TAKEN);
         return;
@@ -771,8 +766,7 @@ module.exports = function registerCurseOfArravQuest(api) {
         setBit(player, BIT_TABLE_NOTES);
         return;
       case ACTION_CODE_KEY_FOUND:
-        if (hasBit(player, BIT_CODE_KEY_TAKEN) || held(player, CODE_KEY_ITEM_ID)) return;
-        setBit(player, BIT_CODE_KEY_TAKEN);
+        if (held(player, CODE_KEY_ITEM_ID)) return;
         player.getInventory().adds(CODE_KEY_ITEM_ID, 1);
         ensureStage(player, STAGE_CODE_KEY_TAKEN);
         return;
@@ -821,16 +815,32 @@ module.exports = function registerCurseOfArravQuest(api) {
     if (!variant) return;
     event.handled = true;
     if (!questActive(player)) return;
-    if (objectId === ObjectIdentifiers.SKELETON_136) {
-      if (hasBit(player, BIT_KEY_1_LOOTED) || held(player, MASTABA_KEY_ITEM_ID)) return;
-      setBit(player, BIT_KEY_1_LOOTED);
-      player.getInventory().adds(MASTABA_KEY_ITEM_ID, 1);
-    } else if (objectId === ObjectIdentifiers.SKELETON_139) {
-      if (hasBit(player, BIT_KEY_2_LOOTED) || held(player, MASTABA_KEY_2_ITEM_ID)) return;
-      setBit(player, BIT_KEY_2_LOOTED);
-      player.getInventory().adds(MASTABA_KEY_2_ITEM_ID, 1);
+    const key = objectId === ObjectIdentifiers.SKELETON_136
+      ? { itemId: MASTABA_KEY_ITEM_ID, lever: "north" }
+      : objectId === ObjectIdentifiers.SKELETON_139 ? { itemId: MASTABA_KEY_2_ITEM_ID, lever: "south" } : null;
+    if (key) {
+      // Rsprox 3168 t6402-t6448: live goes by what is held, so a dropped one is found again.
+      // A key that has turned its lever is spent.
+      if (held(player, key.itemId) || leverKeyed(player, key.lever)) {
+        player.sendMessage("You search the skeleton, but find nothing of interest.");
+        return;
+      }
+      if (!hasRoom(player)) return;
+      player.getInventory().adds(key.itemId, 1);
     }
     startPageTranscript(player, variant);
+  }
+
+  function holdsAnyJar(player) {
+    return [CANOPIC_JAR_OIL_ITEM_ID, CANOPIC_JAR_BERRIES_ITEM_ID, CANOPIC_JAR_FULL_ITEM_ID]
+      .some((itemId) => held(player, itemId));
+  }
+
+  /** No capture of a full bag: the wording is ours, after The Final Dawn's Wiki lines. */
+  function hasRoom(player) {
+    if (player.getInventory().getFreeSlots() > 0) return true;
+    player.sendMessage("You find something, but you don't have enough room to take it.");
+    return false;
   }
 
   function handleImposingDoors(event) {
@@ -850,7 +860,12 @@ module.exports = function registerCurseOfArravQuest(api) {
     event.handled = true;
     if (!questActive(player)) return;
     if (quest.getStage(player) < STAGE_LOWER_TOMB) return;
-    if (hasBit(player, BIT_JAR_TAKEN) || held(player, CANOPIC_JAR_OIL_ITEM_ID)) return;
+    // Rsprox 3168 t9133-t9136: live goes by what is held.
+    if (holdsAnyJar(player)) {
+      player.sendMessage("You search the shelves, but find nothing of interest.");
+      return;
+    }
+    if (!hasRoom(player)) return;
     startPageTranscript(player, "tomb-raiding-searching-the-shelves");
   }
 
@@ -930,7 +945,8 @@ module.exports = function registerCurseOfArravQuest(api) {
     event.handled = true;
     if (!questActive(player)) return;
     if (quest.getStage(player) < STAGE_MET_AT_BASE) return;
-    if (hasBit(player, BIT_CODE_KEY_TAKEN) || held(player, CODE_KEY_ITEM_ID)) return;
+    if (held(player, CODE_KEY_ITEM_ID)) return;
+    if (!hasRoom(player)) return;
     startPageTranscript(player, "heart-heist-searching-the-chest");
   }
 

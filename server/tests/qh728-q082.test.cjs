@@ -994,3 +994,17 @@ test('native early grotto clicks keep Filliman reachable, recover via the exit a
   await click(O.GROTTO_4, 3442, 9733);
   assert.equal(player.getLocation().z, 0, 'the finished grotto has a working native exit');
 });
+
+
+test('the swamp Area reports successful player entry independently of quest stage', () => {
+  const h = harness();
+  const entries = [];
+  h.custom.set('mort-myre:entered', [event => entries.push(event.player)]);
+  h.area.postEnter({ isPlayer: () => false });
+  assert.deepEqual(entries, []);
+  h.area.enter(h.player);
+  assert.deepEqual(entries, [h.player]);
+  h.player.getPrivateArea = () => ({});
+  h.area.postEnter(h.player);
+  assert.equal(entries.length, 1, 'private areas do not count as swamp entry');
+});

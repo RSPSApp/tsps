@@ -311,3 +311,23 @@ test("the White Knight armoury stays shut until Wanted! is complete", () => {
     [],
   );
 });
+
+test("Sir Renitee's paid crest survives the real save/load boundary", () => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+  const api = makeApi();
+  api.persistAttribute = (key, value) => PlayerSave.persistAttribute(key, value);
+  const plugin = require("../plugins/npcs/SirRenitee.plugin");
+  plugin.register(api);
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  player.setUsername("crestsave");
+  player.getInventory().addItem(new core.Item(core.ItemIdentifiers.COINS, 5000));
+  assert.equal(plugin._test.changeCrest(player, "Saradomin"), true);
+  const saved = PlayerSave.fromPlayer(player);
+  assert.equal(saved.attributes[plugin._test.CREST_ATTRIBUTE], "Saradomin");
+  const loaded = new Player(new PlayerSession(channel));
+  saved.applyToPlayer(loaded);
+  assert.equal(plugin._test.crestFor(loaded), "Saradomin");
+});

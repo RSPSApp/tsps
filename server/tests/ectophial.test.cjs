@@ -30,6 +30,7 @@ beforeEach(() => {
     onItemOnObject(item, object, handler) { hooks.refill = handler; },
     onPlayerHitModify(handler) { hooks.hit.push(handler); },
     onCustomEvent(name, handler) { PluginManager.createApi("EctophialTest").onCustomEvent(name, handler); },
+    emitCustomEvent() {},
   };
   Common.init(api);
   require("../plugins/skills/ectofuntus/Ectophial.Ectofuntus")(api);

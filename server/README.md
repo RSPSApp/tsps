@@ -200,6 +200,17 @@ Runtime plugins are loaded from:
 
 `./plugins`
 
+The native OSRS Character Summary is shown by default. To enable the custom summary,
+merge this into `data/definitions/world.local.json` (or `world.json`) and restart:
+
+```json
+{ "plugins": { "CustomCharacterSummary": true } }
+```
+
+Unset or false keeps the native summary, including when legacy `disabledPlugins`
+is present. The saved combat-XP toggle choice is retained but inactive while the custom
+feature is off; enabling it again restores that choice.
+
 Current convention is one plugin per file.
 Subdirectories are supported up to 2 levels deep under `./plugins`.
 

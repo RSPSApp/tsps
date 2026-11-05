@@ -1303,6 +1303,7 @@ function enterAtPortal(player, buildingMode, location, diaryEntryContext) {
     return true;
   }
   enterHouse(player, buildingMode, diaryEntryContext);
+  if (houseFor(player)) api.emitCustomEvent("poh:entered", { player, location });
   return true;
 }
 

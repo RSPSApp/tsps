@@ -12,8 +12,11 @@
  *   Alchemic Divergence costs none, 6 May 2026), every 5 ticks (`skills:action-interval`, kind
  *   `transmute`: Flow State's 2), a click during a cast waiting for it. As recorded (237/01102, 01106, 238/04211): a stack, noted or stackable, gives 10 of the
  *   next tier in the same form (noted stays noted) and is cast on again every 5 ticks while its
- *   slot holds it, with the graphic alone; loose items convert up to 10 of those held, in place,
- *   and only with a free slot for each; with the bank toggle on a stack's products go to the bank.
+ *   slot holds it, with the graphic alone; loose items convert up to 10 of those held, in place:
+ *   holding 10 or fewer needs no free slot (the products take the slots the cast empties; 237/01102
+ *   10 uncut rubies with none free), holding more needs a free slot for each of the 10 (237/01102:
+ *   refused at 11 held with 5 free, 15 with 1, 16 and 23 with none); with the bank toggle on a
+ *   stack's products go to the bank.
  *   The lines: "Nothing interesting happens." for an item no row has, an item box for the lowest
  *   tier, the red no-room line, each word for word.
  * - The ledger (`TRANSMUTATION_LEDGER`), carried or worn in the shield slot, is an endless source
@@ -118,9 +121,11 @@ function plan(player, item, productId) {
   if (stack && Toggles.on(player, effect.bankToggle) && Common.bankHasRoom(player, unnoted(productId))) {
     return { stack, amount, bank: true };
   }
+  // Loose: the cast empties the slots it takes before the products go in, so all of them held
+  // (10 or fewer) always fit; more held than one cast takes needs a free slot for each product.
   const room = stack
     ? inventory.contains(productId) || inventory.getFreeSlots() > 0 || amount === item.getAmount()
-    : inventory.getFreeSlots() >= amount;
+    : amount === inventory.getAmount(itemId) || inventory.getFreeSlots() >= amount;
   return room ? { stack, amount, bank: false } : null;
 }
 

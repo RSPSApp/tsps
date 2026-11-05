@@ -149,8 +149,9 @@ function mockApi() {
   return { api, handlers };
 }
 
-test('Quests.plugin registers every quest and enforces equipment requirements by default', () => {
+test('Quests.plugin registers every quest and enforces equipment requirements when enabled', () => {
   const { api, handlers } = mockApi();
+  api.getPluginConfig = (key, fallback) => (key === 'quests:equipment-requirements' ? true : fallback);
   const plugin = require('../plugins/quests/Quests.plugin');
   assert.equal(plugin.name, 'Quests');
   assert.doesNotThrow(() => plugin.register(api));
@@ -4902,15 +4903,15 @@ test('Blood Moon crossing preserves the captured native stages and starts the sh
     area.process(boss);
     const hitModifier = handlers.npcHitModify.find(handler => handler.name === 'handleFirstBloodHit');
     let damage = 20;
-    const hit = { getHits: () => [{ getDamage: () => damage, setDamage: value => { damage = value; } }], updateTotalDamage() {} };
-    hitModifier({ npc: boss, attacker: player, hit });
+    const hit = { getAttacker: () => player, getHits: () => [{ getDamage: () => damage, setDamage: value => { damage = value; } }], updateTotalDamage() {} };
+    hitModifier({ npc: boss, hit });
     assert.equal(damage, 0, 'player hits cannot bypass the initial lunge-dodge mechanic');
     damage = 69;
-    const allyHit = { getHits: () => [{ getDamage: () => damage, setDamage: value => { damage = value; } }], updateTotalDamage() {} };
-    hitModifier({ npc: vanescula, attacker: boss, hit: allyHit });
+    const allyHit = { getAttacker: () => boss, getHits: () => [{ getDamage: () => damage, setDamage: value => { damage = value; } }], updateTotalDamage() {} };
+    hitModifier({ npc: vanescula, hit: allyHit });
     assert.equal(damage, 0, 'Lowerniel cannot remove the ally before the opening dodge sequence ends');
     for (let dodge = 0; dodge < 3; dodge++) {
-      if (dodge > 0) { worldCycle += 2; area.process(boss); }
+      if (dodge > 0) { worldCycle += 3; area.process(boss); }
       assert.ok(messages.at(-1)?.includes('sparkling safe tile'),
         'each lunge tells the player to follow the visible safe-tile mark');
       assert.equal(graphics.length, dodge + 1, 'one safe-tile mark is sent for each lunge');
@@ -4925,13 +4926,13 @@ test('Blood Moon crossing preserves the captured native stages and starts the sh
       assert.equal(api.core.RegionManager.canMove(player.location.getX(), player.location.getY(), x, y, z, 1, 1, area),
         true, 'the safe-tile mark is reachable from the player');
       player.location = marked;
-      worldCycle += 2;
+      worldCycle += 3;
       area.process(boss);
     }
     assert.equal(boss.target, player, 'three successful spear-lunge dodges make Lowerniel focus the player');
     assert.equal(boss.flags['combat:no-retaliate'], false, 'Lowerniel can retaliate after the opening sequence');
     damage = 20;
-    hitModifier({ npc: boss, attacker: player, hit });
+    hitModifier({ npc: boss, hit });
     assert.equal(damage, 20, 'player damage becomes available after the lunge sequence');
     boss.hitpoints = 2899;
     player.location = new api.core.Location(2712, 7840, 0);
@@ -12174,8 +12175,8 @@ function synapseFixture() {
  api.core={...api.core,Task:class{constructor(ticks){this.ticks=ticks;}stop(){}},TaskManager:{submit:t=>tasks.push(t)},ObjectDefinition:{forPlayer:()=>({getName:()=> 'Anvil'})}};
  api.sendMultiChatboxPrompt=(p,title,...pairs)=>prompt=pairs;
  const inventory={getItems:()=>items,contains:id=>items.some(i=>i.getId()===id),getAmount:id=>items.filter(i=>i.getId()===id).length,refreshItems(){},deleteNumber:(id,n)=>{while(n--){const at=items.findIndex(i=>i.getId()===id);assert(at>=0);items.splice(at,1);}}};
- const player={getInventory:()=>inventory,getEquipment:()=>({getItems:()=>items,refreshItems(){}}),getAttribute:k=>attrs.get(k),setAttribute:(k,v)=>attrs.set(k,v),getHitpoints:()=>99,getLocation:()=>position,isRegistered:()=>registered,sendMessage(){},getCombat:()=>({getHitQueue:()=>({addPendingDamage:d=>damage.push(...d)})}),getSkillManager:()=>({getCurrentLevel:s=>current.get(s)??99,getMaxLevel:s=>base.get(s)??99,addExperience:(s,n)=>xp.push([s,n]),stopSkillable(){}})};
- const arc=require('../plugins/items/Arclight.plugin');arc.register({core:api.core,emitCustomEvent(){},onItemOnObject(){},onItemOnItem(){},onItemAction(){},onCombatHitResolved(){}});
+ const player={getInventory:()=>inventory,getEquipment:()=>({getItems:()=>items,refreshItems(){}}),getAttribute:k=>attrs.get(k),setAttribute:(k,v)=>attrs.set(k,v),getHitpoints:()=>99,getLocation:()=>position,isRegistered:()=>registered,sendMessage(){},getDialogueManager:()=>({startDialogues(){}}),getPacketSender:()=>({sendTypedMessage(){}}),getCombat:()=>({getHitQueue:()=>({addPendingDamage:d=>damage.push(...d)})}),getSkillManager:()=>({getCurrentLevel:s=>current.get(s)??99,getMaxLevel:s=>base.get(s)??99,addExperience:(s,n)=>xp.push([s,n]),stopSkillable(){}})};
+ const arc=require('../plugins/items/Arclight.plugin');arc.register({core:api.core,emitCustomEvent(){},onItemOnObject(){},onItemOnItem(){},onItemAction(){},onCombatHitResolved(){},sendMultiChatboxPrompt:(p,title,...pairs)=>prompt=pairs});
  const f=require('../plugins/quests/wgs/Rewards.WhileGuthixSleeps')({api,stage:()=>progress,held:(p,id)=>inventory.contains(id),val:(p,k)=>attrs.get(k)||0,ATTRIBUTES:[]});
  const add=id=>{const i=new api.core.Item(id,1);items.push(i);return i;};
  return {api,f,arc,attrs,items,tasks,xp,damage,player,current,base,add,prompt:()=>prompt,setStage:s=>progress=s,move:()=>position=new api.core.Location(3201,3200,0),disconnect:()=>registered=false};
@@ -12200,7 +12201,7 @@ test('purging staff uses boosted Crafting, unboosted Smithing, an iron bar and a
 
 test('Arclight charges and infusion are per sword and must total 10,000 for Emberlight',()=>{
  const t=synapseFixture(),I=t.api.core.ItemIdentifiers,r=t.f.recipes[2],sword=t.add(I.DARKLIGHT);for(let n=0;n<30;n++)t.add(I.ANCIENT_SHARD);
- t.arc._test.enhance({player:t.player,item:sword,objectId:t.api.core.ObjectIdentifiers.ALTAR_52});assert.equal(sword.getId(),I.ARCLIGHT);assert.equal(t.arc.state(sword).charges,1000);assert.equal(t.player.getInventory().getAmount(I.ANCIENT_SHARD),27);
+ t.arc._test.enhance({player:t.player,item:sword,objectId:t.api.core.ObjectIdentifiers.ALTAR_52});t.prompt()[1]();assert.equal(sword.getId(),I.ARCLIGHT);assert.equal(t.arc.state(sword).charges,1000);assert.equal(t.player.getInventory().getAmount(I.ANCIENT_SHARD),27);
  t.add(29580);t.add(2347);t.f.craft(t.player,r);assert.equal(t.tasks.length,0);
  const shard=t.items.find(i=>i.getId()===I.ANCIENT_SHARD);t.arc._test.charge({player:t.player,usedItem:sword,usedWithItem:shard,usedItemId:sword.getId(),usedWithItemId:I.ANCIENT_SHARD});assert.equal(t.arc.state(sword).charges,10000);assert.equal(t.player.getInventory().getAmount(I.ANCIENT_SHARD),0);
  const other=new t.api.core.Item(I.ARCLIGHT,1);assert.equal(t.arc.state(other).charges,1000);
@@ -19637,6 +19638,8 @@ test('RFD council interactions read requirements through the SkillManager before
     getSkillManager: () => ({ getCurrentLevel: () => 99 }),
     getPacketSender: () => packetSender,
     getInventory: () => ({ getAmount: () => 0, getFreeSlots: () => 27 }),
+    // In the dining room: outside it the council isn't frozen and this handler stands aside.
+    getLocation: () => new api.core.Location(1860, 5348, 0),
     sendMessage: (message) => messages.push(message),
   };
   quest.setStage(player, 4);

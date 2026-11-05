@@ -101,6 +101,7 @@ function container(capacity = 28) {
     contains: (id) => slots.some((s) => s.id === id && s.amount > 0),
     getAmount: (id) => slots.filter((s) => s.id === id).reduce((sum, s) => sum + s.amount, 0),
     getFreeSlots: () => capacity - slots.filter((s) => s.amount > 0).length,
+    getAddableAmount: (item) => Math.min(item.getAmount(), 2147483647 - slots.filter((s) => s.id === item.getId()).reduce((sum, s) => sum + s.amount, 0)),
     getValidItems: () => slots.filter((s) => s.amount > 0).map((s) => ({ getId: () => s.id, getAmount: () => s.amount })),
     getItems: () => slots.map((s) => (s.amount > 0 ? { getId: () => s.id, getAmount: () => s.amount, getMeta: () => s.meta ?? null } : null)),
     setItem(slot, item) { slots[slot] = { id: item.getId(), amount: item.getAmount(), meta: item.getMeta?.() ?? null }; },

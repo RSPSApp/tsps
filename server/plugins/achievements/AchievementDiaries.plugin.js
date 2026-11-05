@@ -125,6 +125,8 @@ module.exports = {
     Rewards(api);
     Lamps(api);
     require("./diaries/Actions.AchievementDiaries")(api);
+    require("./diaries/Desert.AchievementDiaries")(api);
+    require("./diaries/Morytania.AchievementDiaries")(api);
     api.onCustomEvent("diary:task", onTask);
     api.onCustomEvent("diary:is-complete", onIsComplete);
     api.onCustomEvent("diary:is-started", onIsStarted);

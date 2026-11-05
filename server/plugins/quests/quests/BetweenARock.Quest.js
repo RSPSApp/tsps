@@ -753,7 +753,11 @@ module.exports = function registerBetweenARockQuest(api) {
       return;
     }
     if (itemId === GOLD_BAR_ITEM && event.object?.getDefinition?.()?.getName?.() === "Anvil") {
-      if (stageOf(player) < STAGE_GOLD || quest.isComplete(player)) return;
+      // Wiki (Gold helmet): "Partial completion of Between a Rock..." (no step named; the lower bound here, the
+      // golden cannonball, is inferred and sits right before the Quick guide's helmet step) and, after the quest,
+      // "smith it on any anvil". The Wilderness Diary row: not "while you already have a gold helmet in your
+      // inventory or bank"; that row is not limited to after the quest, so the rule holds at every stage.
+      if (stageOf(player) < STAGE_GOLD || holdsGoldHelmet(player)) return;
       event.handled = true;
       smithGoldHelmet(player);
       return;
@@ -769,8 +773,14 @@ module.exports = function registerBetweenARockQuest(api) {
     startTranscript(api, player, DONDAKAN, PAGE, "going-for-the-gold-using-gold-bar-on-a-furnace-with-an-ammo-mould");
   }
 
+  function holdsGoldHelmet(player) {
+    return hasItem(player, GOLD_HELMET_ITEM)
+      || Array.from({ length: api.core.Bank.TOTAL_BANK_TABS }, (_, tab) => player.getBank(tab)).some((bank) => bank.getAmount(GOLD_HELMET_ITEM) > 0);
+  }
+
   function smithGoldHelmet(player) {
-    if (player.getSkillManager().getMaxLevel(Skill.SMITHING) < 50) {
+    // Wiki: the 50 Smithing is boostable, so the current level counts.
+    if (player.getSkillManager().getCurrentLevel(Skill.SMITHING) < 50) {
       player.sendMessage("You need a Smithing level of 50 to make a golden helmet.");
       return;
     }
@@ -782,11 +792,19 @@ module.exports = function registerBetweenARockQuest(api) {
       player.sendMessage("You need three gold bars to make a golden helmet.");
       return;
     }
-    player.getInventory().deleteNumber(GOLD_BAR_ITEM, 3);
+    // Preset bars are not the player's own: they make no helmet (and so no diary credit).
+    const { plainAmount, takePlain, PRESET_TEXT } = require("../../items/PoweredStaff");
+    if (plainAmount(player.getInventory(), GOLD_BAR_ITEM) < 3) {
+      player.sendMessage(PRESET_TEXT);
+      return;
+    }
+    takePlain(player.getInventory(), GOLD_BAR_ITEM, 3);
     addItem(player, GOLD_HELMET_ITEM, 1);
     // Wiki (Gold helmet): 30 Smithing XP.
     player.getSkillManager().addExperiences(Skill.SMITHING, 30);
     player.sendMessage("You hammer the gold bars into a golden helmet.");
+    // The Wilderness Diary credits it in the Resource Area (WildernessResourceDiary.plugin.js).
+    api.emitCustomEvent("smithing:success", { player, skill: Skill.SMITHING, itemId: GOLD_HELMET_ITEM });
   }
 
   function handleItemOnNpc(event) {

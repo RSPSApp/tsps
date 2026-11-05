@@ -37,7 +37,10 @@ assert.deepEqual(
 );
 assert.equal(settings(AntiAliasingMode.DISABLED, { fogStart: 500, manualFogStart: 999 }).autoFogDepthFactor, 1);
 assert.equal(settings(AntiAliasingMode.DISABLED, { manualFogStart: 999 }).fogDepth, 400);
-for (const key of ["renderer", "brightness", "autoFog", "fogStart", "manualFogStart"]) assert.ok(key in GpuConfig.items, key);
+assert.equal(settings(AntiAliasingMode.DISABLED).overrideDeviceCaps, true,
+    "explicit GPU choices outrank the mobile profile's distance caps");
+for (const key of ["renderer", "brightness", "autoFog", "fogStart", "manualFogStart", "skyColor"]) assert.ok(key in GpuConfig.items, key);
+assert.equal(GpuConfig.items.skyColor.color, true, "the area sky colour is editable outside the debug panel");
 
 // Scene pipelines get one multisampled twin, built on first use.
 const created: GPURenderPipelineDescriptor[] = [];
@@ -76,4 +79,27 @@ test("brightness applies through the bound client, including settings changed wh
     await manager.setPluginEnabled(GpuPlugin, true);
     assert.deepEqual(applied, [90, 20], "enabling picks up the saved brightness");
     await manager.setPluginEnabled(GpuPlugin, false);
+});
+
+test("a picked sky colour reaches the active renderer, and an unpicked one leaves the area colour", async () => {
+    const events = new EventBus();
+    const config = new ConfigManager(events);
+    const manager = new PluginManager(events, config);
+    const colours: number[][] = [];
+    let clears = 0;
+    manager.getInjector().provide(CLIENT_TOKEN, {
+        applyScreenBrightness: () => {},
+        renderer: {
+            setSkyColor: (r: number, g: number, b: number) => colours.push([r, g, b]),
+            clearSkyColorOverride: () => clears++,
+        },
+    });
+    manager.loadCorePlugins([GpuPlugin]);
+    await manager.setPluginEnabled(GpuPlugin, true);
+    assert.deepEqual(colours, [], "the area's own sky keeps following the environment");
+    config.setConfigValue(GpuConfig, "skyColor", 0x112233);
+    assert.deepEqual(colours, [[0x11, 0x22, 0x33]], "the pick applies immediately");
+    const beforeReset = clears;
+    config.setDefaultConfiguration(GpuConfig, true);
+    assert.equal(clears, beforeReset + 1, "Reset releases the picked sky back to the area environment");
 });

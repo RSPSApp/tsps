@@ -1,6 +1,8 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const {before, test} = require("node:test");
+// The bots spawn on load, which keeps the process alive after the tests, and nothing here needs them.
+process.env.DISABLE_PLAYER_BOTS = "1";
 require("../dist/Server").Server.installProductionPathResolver();
 const {CachePipeline} = require("../dist/game/cache/CachePipeline");
 const {PluginManager: PM} = require("../dist/plugins/PluginManager");

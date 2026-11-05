@@ -81,10 +81,6 @@ module.exports = function registerDigSiteQuest(api) {
 
   const held = (player, itemId, amount = 1) =>
     player.getInventory().getAmount(itemId) >= amount;
-  const hasAllCertificates = (player) =>
-    held(player, LEVEL_1_CERTIFICATE_ITEM_ID) &&
-    held(player, LEVEL_2_CERTIFICATE_ITEM_ID) &&
-    held(player, LEVEL_3_CERTIFICATE_ITEM_ID);
 
   function buildJournal(player, questHandle) {
     const stage = questHandle.getStage(player);
@@ -153,9 +149,14 @@ module.exports = function registerDigSiteQuest(api) {
         (npcId === STUDENT_PURPLE_NPC_ID && stage === STAGE_STARTED + 1) ||
         (npcId === STUDENT_ORANGE_NPC_ID && stage === STAGE_STARTED + 2);
       if (isRightStudent && certificate !== undefined) {
-        player.getInventory().adds(certificate, 1);
-        player.sendMessage("The student signs your certificate.");
-        quest.setStage(player, stage + 1);
+        if (player.getInventory().getFreeSlots() < 1) {
+          // The exam isn't passed yet, so it waits. No capture of this: the wording is ours.
+          player.sendMessage("You don't have enough inventory space for the certificate.");
+        } else {
+          player.getInventory().adds(certificate, 1);
+          player.sendMessage("The student signs your certificate.");
+          quest.setStage(player, stage + 1);
+        }
       }
       if (stage === STAGE_STARTED) return "the-first-exam-the-student-in-the-green-top-asking-the-student-for-help";
       if (stage === STAGE_STARTED + 1) {
@@ -176,14 +177,17 @@ module.exports = function registerDigSiteQuest(api) {
     }
     if (npcId === TERRY_BALANDO_NPC_ID) {
       if (stage === STAGE_EXAMS_DONE) {
-        if (hasAllCertificates(player)) {
-          for (const itemId of [
-            LEVEL_1_CERTIFICATE_ITEM_ID,
-            LEVEL_2_CERTIFICATE_ITEM_ID,
-            LEVEL_3_CERTIFICATE_ITEM_ID,
-          ]) {
-            player.getInventory().deleteNumber(itemId, 1);
-          }
+        // The Wiki has no certificate check here, so a lost one can't stop him. Any held still go.
+        const certificates = [
+          LEVEL_1_CERTIFICATE_ITEM_ID,
+          LEVEL_2_CERTIFICATE_ITEM_ID,
+          LEVEL_3_CERTIFICATE_ITEM_ID,
+        ].filter((itemId) => held(player, itemId));
+        if (player.getInventory().getFreeSlots() + certificates.length < 1) {
+          // No capture of this: the wording is ours.
+          player.sendMessage("You don't have enough inventory space for the compound.");
+        } else {
+          for (const itemId of certificates) player.getInventory().deleteNumber(itemId, 1);
           player.getInventory().adds(CHEMICAL_COMPOUND_ITEM_ID, 1);
           player.sendMessage("Terry Balando hands you a chemical compound.");
           quest.setStage(player, STAGE_HAS_COMPOUND);

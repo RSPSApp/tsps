@@ -15,13 +15,18 @@ const customHandlers = new Map();
 const runeBypassHandlers = [];
 const experienceHandlers = [];
 const registeredAreas = [];
+const startupHandlers = [];
 const api = new Proxy({
   core,
-  emitCustomEvent: (name, payload) => events.push({ name, ...payload }),
+  emitCustomEvent: (name, payload) => {
+    events.push({ name, ...payload });
+    for (const handler of customHandlers.get(name) ?? []) handler(payload);
+  },
   onNpcDeath: (handler) => deathHandlers.push(handler),
   onCustomEvent: (name, handler) => customHandlers.set(name, [...(customHandlers.get(name) ?? []), handler]),
   onSpellRuneBypass: (handler) => runeBypassHandlers.push(handler),
   onCanGainExperience: (handler) => experienceHandlers.push(handler),
+  onServerStartup: (handler) => startupHandlers.push(handler),
   registerArea: (area) => registeredAreas.push(area),
 }, { get: (target, key) => target[key] ?? (() => {}) });
 Wilderness.register(api);
@@ -119,13 +124,22 @@ test('the Demonic Ruins restore Prayer every five ticks and credit the diary whe
 
   let cycle = 100;
   let prayer = 0;
+  let wildernessLevel = 0;
+  let multiIcon = 0;
   const messages = [];
   const originalGetProcessCycle = core.World.getProcessCycle;
   core.World.getProcessCycle = () => cycle;
+  let sender;
+  sender = new Proxy({}, { get: () => () => sender });
   const who = {
     isPlayer: () => true,
     getAsPlayer() { return this; },
     getPrivateArea: () => null,
+    getPacketSender: () => sender,
+    getWildernessLevel: () => wildernessLevel,
+    setWildernessLevel: (value) => { wildernessLevel = value; },
+    getMultiIcon: () => multiIcon,
+    setMultiIcon: (value) => { multiIcon = value; },
     sendMessage: (message) => messages.push(message),
     getSkillManager: () => ({
       getCurrentLevel: () => prayer,
@@ -185,6 +199,61 @@ test('the Fountain of Rune waives runes and Magic XP and credits a successful Lo
     regionManager.canProjectileAttack = originalCanProjectileAttack;
     if (existingObjects) mapObjects.set(-2435, existingObjects);
     else mapObjects.delete(-2435);
+  }
+});
+
+test('walking into the Demonic Ruins preserves Wilderness levels, teleport limits, and PvP rules', (t) => {
+  const { AreaManager } = require('../dist/game/model/areas/AreaManager');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const previousAreas = AreaManager.areas;
+  const previousAreaSearchIndex = AreaManager.areaSearchIndex;
+  const previousIsInSafeBuilding = core.Wilderness.isInSafeBuilding;
+  const previousAreaCount = registeredAreas.length;
+  AreaManager.areas = [];
+  AreaManager.areaSearchIndex = null;
+  core.Wilderness.isInSafeBuilding = () => false;
+
+  try {
+    for (const startup of startupHandlers) startup({});
+    AreaManager.areas.push(...registeredAreas);
+    const senderFor = () => {
+      let sender;
+      sender = new Proxy({}, { get: () => () => sender });
+      return sender;
+    };
+    const makePlayer = (name, index, x) => {
+      const actor = new Player(null, new core.Location(x, 3889, 0));
+      actor.setUsername(name);
+      actor.setIndex(index);
+      actor.setRegistered(true);
+      actor.getPacketSender = senderFor;
+      return actor;
+    };
+
+    const player = makePlayer('RuinsWalker', 890, 3281);
+    const opponent = makePlayer('RuinsOpponent', 891, 3283);
+    AreaManager.process(player);
+    assert.equal(player.getArea().getName(), 'WildernessArea');
+    assert.equal(player.getWildernessLevel(), 47);
+    assert.equal(core.TeleportHandler.checkReqs(player, new core.Location(3000, 3500, 0), 20), false,
+      'the normal level-20 teleport limit applies before entering the ruins');
+
+    player.moveTo(new core.Location(3282, 3889, 0));
+    AreaManager.process(player);
+    AreaManager.process(opponent);
+    assert.equal(player.getArea().getName(), 'DemonicRuinsArea');
+    assert.equal(player.getWildernessLevel(), 47, 'the Wilderness lifecycle restores the level on area entry');
+    assert.equal(player.getArea().npcAggressionTolerance(player, {}), true,
+      'the ruins area delegates Wilderness NPC aggression rules');
+    assert.equal(core.TeleportHandler.checkReqs(player, new core.Location(3000, 3500, 0), 20), false,
+      'the ruins area keeps the level-20 teleport restriction');
+    assert.equal(core.CombatFactory.canAttackByPolicy(player, opponent), core.CanAttackResponse.CAN_ATTACK,
+      'the ruins area delegates normal Wilderness PvP rules');
+  } finally {
+    AreaManager.areas = previousAreas;
+    AreaManager.areaSearchIndex = previousAreaSearchIndex;
+    core.Wilderness.isInSafeBuilding = previousIsInSafeBuilding;
+    registeredAreas.splice(previousAreaCount);
   }
 });
 

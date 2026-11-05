@@ -82,9 +82,10 @@ test('collection menus collect the item or its note they name', () => {
   // A noteable stack: op 1 Collect-notes, op 2 Collect-items.
   assert.equal(collectionOutputId(NOTEABLE, 5, 1), NOTE);
   assert.equal(collectionOutputId(NOTEABLE, 5, 2), NOTEABLE);
-  // Bank always takes the base item, and Collect-all notes when it can.
+  // Bank always takes the base item, and Collect-all notes a stack but not a single item (#2537).
   assert.equal(collectionOutputId(NOTEABLE, 1, 3), NOTEABLE);
-  assert.equal(collectionOutputId(NOTEABLE, 1, 1, true), NOTE);
+  assert.equal(collectionOutputId(NOTEABLE, 1, 1, true), NOTEABLE);
+  assert.equal(collectionOutputId(NOTEABLE, 2, 1, true), NOTE);
   // Items without a noted form are never converted.
   assert.equal(collectionOutputId(NO_NOTE, 1, 1), NO_NOTE);
   assert.equal(collectionOutputId(NO_NOTE, 1, 2), NO_NOTE);

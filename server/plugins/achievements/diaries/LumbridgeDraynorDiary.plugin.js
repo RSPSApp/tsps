@@ -131,7 +131,7 @@ function firemade(event) {
   const { player, itemId, activity } = event ?? {};
   if (!eligible(player)) return;
   const at = player.getLocation?.();
-  if (activity === "mining-helmet" && itemId === item.MINING_HELMET
+  if (activity === "mining-helmet" && itemId === item.MINING_HELMET_2
     && inside(at, AREAS.lumbridgeBasement)) complete(player, TASKS.miningHelmet);
   if (itemId === item.OAK_LOGS && inSquare(at, 50, 50)
     && player.getAttribute(ATTRIBUTES.oakChopped) === true) {

@@ -28,6 +28,8 @@
     { "items": ["win05_marionette_complete_green_alive"], "option": "Bow", "seq": "human_marionette_bow", "spotanim": "win05_marionette_bow_green", "source": "cache" },
     { "items": ["win05_marionette_complete_green_alive"], "option": "Dance", "seq": "human_marionette_dance", "spotanim": "win05_marionette_dance_green", "source": "cache" },
     { "items": ["rubber_chicken"], "option": "Dance", "seq": "human_chicken_dance", "source": "cache seq; the wiki's jingle id could not be checked against the cache" },
+    { "items": ["easter19_giant_egg"], "option": "Easter dance", "seq": "easter19_egg_emote_human", "spotanim": "easter19_egg_dance_spot", "unsafe": "Perhaps you should play with your egg somewhere safer.", "source": "cache seq/spotanim; wiki PvP refusal" },
+    { "items": ["easter24_reward_book_easter"], "option": "Preach", "seq": "easter24_preach_seq", "say": "All eggs doth shine glory upon the world, A golden yolk, the finest shell. Easter's majesty, of this I now yell!", "source": "cache seq; wiki overhead (whether it is split over several ticks is unknown)" },
     { "items": ["hw21_haunted_bottle"], "option": "Wake-ghost", "seq": "hw12_human_shake_bottle", "spotanim": "hw21_spotanim_shake_bottle", "say": "WooooOOoOoo", "source": "cache seq/spotanim, wiki overhead" }
   ],
   "swaps": [

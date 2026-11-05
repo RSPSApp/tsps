@@ -31,6 +31,7 @@ const COUNT_INPUT_MODE = 7;
 
 const MESSAGE = {
   CANT_HOLD: "The pouch can't hold that.",
+  PRESET: "Preset items cannot be used for this.",
   EMPTY: "Your pouch is empty.",
   CANT_EMPTY: "It was not possible to empty the pouch.",
   /** Ours (not captured). */
@@ -179,6 +180,12 @@ function addToInventory(player, runeId, amount) {
 }
 
 /** Pouch storage is ID/quantity only, so item-specific state must remain on its item. */
+/** How many of `runeId` can go in the pouch: its storage keeps no metadata, so only plain stacks. */
+function plainInInventory(player, runeId) {
+  return player.getInventory().getItems().reduce((total, item) =>
+    (item?.getId() === runeId && isPlainRune(item) ? total + item.getAmount() : total), 0);
+}
+
 function isPlainRune(item) {
   return item && isRune(item.getId()) && Object.keys(item.getMeta?.() ?? {}).length === 0;
 }
@@ -355,6 +362,7 @@ module.exports = {
   take,
   spend,
   inventoryFits,
+  plainInInventory,
   addToInventory,
   isPlainRune,
   bankAmount,

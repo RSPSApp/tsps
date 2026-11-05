@@ -185,7 +185,6 @@ export const state = {
     friendsChatListeners: new Set<(snapshot: FriendsChatSnapshot) => void>(),
     clanListeners: new Set<(clans: ClanState) => void>(),
     notificationListeners: new Set<(event: NotificationEvent) => void>(),
-    systemUpdateListeners: new Set<(info: { remainingCentis: number }) => void>(),
     groundItemListeners: new Set<(payload: GroundItemsServerPayload) => void>(),
     movementPositionListeners: new Set<(position: import("../../common/movement/ContinuousMovementTypes").ContinuousMovementPosition) => void>(),
     playerSyncListeners: new Set<(frame: PlayerSyncFrame) => void>(),

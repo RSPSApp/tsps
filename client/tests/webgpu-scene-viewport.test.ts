@@ -98,7 +98,6 @@ const presentation = Object.create(WebgpuUiPresentation.prototype);
 Object.assign(presentation, {
     renderer, hudFxCanvas: hudCanvas,
     loadingMessageOverlay: { update: noop, isVisible: () => false },
-    systemUpdateOverlay: { update: noop, isVisible: () => false },
 });
 
 function render() {

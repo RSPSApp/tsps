@@ -14,8 +14,8 @@
  * - the falling bones: every 10 ticks 40 open-floor tiles show a bone (graphics 520-523) and a
  *   player still on one 3 ticks later takes 2 damage; they can be stepped away from (Wiki, rsprox 1757).
  * Sounds, animations and the bones are as captured (rsprox 1757, rev 227; see the graveyard data).
- * Not here: Bones to Bananas' sound (no cast of it is captured), protection from the bones, the
- * hit's sound, and the room's 10-point death cost (Wiki).
+ * Bones to Bananas' sound isn't captured: the Wiki's List of sound IDs gives 114 for both spells.
+ * Not here: protection from the bones, the hit's sound, and the room's 10-point death cost (Wiki).
  */
 const Common = require("./Common.MageTrainingArena");
 

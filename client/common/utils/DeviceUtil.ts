@@ -138,15 +138,17 @@ export const showAllTimers = urlParams?.has("timers") ?? false;
 // not generic touch-capable desktop hardware.
 export const isMobileMode = checkAndroid() || isIos || forceMobileMode;
 
-export const MOBILE_GAMEFRAME_MEDIA_QUERY = "(max-width: 764px), (max-height: 502px)";
-
-/** Layout follows the current browser/device mode; hardware/renderer defaults stay fixed at startup. */
+/**
+ * Layout follows the current browser/device platform, not the window size: a desktop
+ * client resized below the fixed gameframe still gets the desktop UI (#2471). Re-read
+ * the user agent each call so leaving device emulation restores the desktop layout
+ * without a reload; hardware/renderer defaults stay fixed at startup.
+ */
 export function prefersMobileGameframe(): boolean {
     const agent = typeof navigator !== "undefined" ? navigator.userAgent : "";
     const mobileBrowser = /Android|iPhone|iPad|iPod/i.test(agent) ||
         (agent.includes("Macintosh") && navigator.maxTouchPoints > 1);
-    return forceMobileMode || mobileBrowser || (typeof window !== "undefined" &&
-        typeof window.matchMedia === "function" && window.matchMedia(MOBILE_GAMEFRAME_MEDIA_QUERY).matches);
+    return forceMobileMode || mobileBrowser;
 }
 
 /**

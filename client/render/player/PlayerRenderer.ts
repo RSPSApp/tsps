@@ -3,7 +3,7 @@ import { applyInterpolatedFrames, interpolationFrame, interpolationKey, type Act
 import { vec2 } from "gl-matrix";
 import PicoGL, { DrawCall, Texture, VertexBuffer } from "picogl";
 
-import { withSeqHandItems } from "../../rs/config/player/Equipment";
+import { withActionSeqHandItems } from "../../rs/config/player/Equipment";
 import { PlayerAppearance } from "../../rs/config/player/PlayerAppearance";
 import { Model } from "../../rs/model/Model";
 import { ModelData } from "../../rs/model/ModelData";
@@ -2321,11 +2321,14 @@ export class PlayerRenderer {
             if (!app) continue;
 
             let effectiveApp = app;
-            if (useActionSequence && (app.npcTransformationId ?? -1) < 0) {
+            if ((app.npcTransformationId ?? -1) < 0) {
                 try {
-                    effectiveApp = withSeqHandItems(
+                    effectiveApp = withActionSeqHandItems(
                         app,
                         this.renderer.osrsClient.seqTypeLoader.load(actionSeqId | 0),
+                        actionSeqId,
+                        actionDelay,
+                        forcedSeq !== undefined,
                     );
                 } catch {}
             }
@@ -2660,11 +2663,14 @@ export class PlayerRenderer {
                 }
 
                 let effectiveApp = app;
-                if (useActionSequence && (app.npcTransformationId ?? -1) < 0) {
+                if ((app.npcTransformationId ?? -1) < 0) {
                     try {
-                        effectiveApp = withSeqHandItems(
+                        effectiveApp = withActionSeqHandItems(
                             app,
                             this.renderer.osrsClient.seqTypeLoader.load(actionSeqId | 0),
+                            actionSeqId,
+                            actionDelay,
+                            forcedSeq !== undefined,
                         );
                     } catch {}
                 }

@@ -298,13 +298,13 @@ function answerInTombs(query) {
 }
 
 /**
- * The cache's collection log has one Tombs of Amascut category (struct 4378) holding all 27
- * items, so its count is the player's completions in every mode.
+ * Cache script 2735: Normal uses 2048, Entry uses 2941 and Expert uses 2942.
  */
 function collectionLogCount(request) {
   if (request?.category !== "Tombs of Amascut") return;
   const counts = Raid.killCounts(request.player);
-  request.count = counts.entry + counts.normal + counts.expert;
+  request.count = counts.normal;
+  request.extraCounts = [counts.entry, counts.expert];
 }
 
 function ghostsCantEquip(event) {

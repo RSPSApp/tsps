@@ -155,6 +155,8 @@ function giveDust(player) {
   const award = { player, minigame: "shooting-stars", points: bonus ? 2 : 1 };
   Common.api.emitCustomEvent("minigame:points", award);
   player.getInventory().adds(core.ItemIdentifiers.STARDUST, award.points);
+  // Each stardust counts in tracking_ore_mined, which Mining owns (237/01101: +4 for four).
+  Common.api.emitCustomEvent("mining:count-ore", { player, amount: award.points });
   player.getPacketSender().sendSound(DATA.sounds.dust, 1, 0);
   const xp = Common.isMembersWorld() ? DATA.mining.xp : DATA.mining.freeToPlayXp;
   player.getSkillManager().addExperiences(core.Skill.MINING, xp);

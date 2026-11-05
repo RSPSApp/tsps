@@ -32,6 +32,7 @@ import {
 import { loadReleaseFiles, TranslationRepository } from "./TranslationRepository";
 import { INTERFACE_ROUTES, TranslationState, type Area, type InterfaceRoute } from "./TranslationState";
 import { workerLoadFiles } from "./workerLoadFiles";
+import { applyAdditions, fetchAdditions, type LoadAdditions } from "./additions";
 
 /** Upstream re-reads the manifest hourly. */
 const UPDATE_INTERVAL_MS = 60 * 60 * 1000;
@@ -102,6 +103,7 @@ export class OsrsTranslatePlugin extends Plugin {
     private readonly host: TranslateHost;
     private readonly repository: TranslationRepository;
     private readonly history: ChatHistoryStore;
+    private readonly loadAdditions: LoadAdditions;
     private state = TranslationState.empty();
     private releaseId: string | undefined;
     /** Bumped whenever a load's result would be stale (stop, language change). */
@@ -114,6 +116,7 @@ export class OsrsTranslatePlugin extends Plugin {
         host?: TranslateHost;
         repository?: TranslationRepository;
         history?: ChatHistoryStore;
+        loadAdditions?: LoadAdditions;
     } = {}) {
         super();
         const configManager = deps.configManager ?? inject(ConfigManager);
@@ -133,6 +136,7 @@ export class OsrsTranslatePlugin extends Plugin {
             subtle: globalThis.crypto.subtle,
         })) });
         this.history = deps.history ?? chatHistory;
+        this.loadAdditions = deps.loadAdditions ?? fetchAdditions;
     }
 
     protected async startUp(): Promise<void> {
@@ -170,7 +174,11 @@ export class OsrsTranslatePlugin extends Plugin {
         try {
             const loaded = await this.repository.update(String(this.config.manifestUrl()), folder, this.releaseId);
             if (!loaded || generation !== this.generation || !this.isStarted()) return;
-            this.state = new TranslationState(loaded.data, loaded.version);
+            // tsps's additions fill the author's gaps and fix known errors until he merges them.
+            const additions = await this.loadAdditions(folder);
+            if (generation !== this.generation || !this.isStarted()) return;
+            const data = additions ? applyAdditions(loaded.data, additions).data : loaded.data;
+            this.state = new TranslationState(data, loaded.version);
             this.releaseId = loaded.id;
             this.host.refresh();
         } catch (error) {

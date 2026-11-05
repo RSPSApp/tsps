@@ -22,6 +22,21 @@ when it starts, and checks for a new version every hour:
 Turning the plugin on therefore sends requests, and the player's address, to GitHub. Nothing is
 requested while it is off.
 
+## tsps's additions
+
+Entries tsps contributed to the author's dictionaries (pull requests #4, #5 and #6 there) are also
+bundled with the client, in `client/public/osrstranslate/`, so players get them before he merges:
+All Settings window text, the welcome screen's membership box, diary messages, missing dialogue
+and game messages, and fixes such as "No pasa Nothing interesante.". They are fetched with the
+release and applied on top of it:
+
+- an addition only where the author's dictionary has no entry for that text;
+- a fix only where his entry is still exactly the text it corrects.
+
+So once he merges and republishes, his entries take over and the bundled ones go unused. Rebuild
+the files with `client/scripts/osrs-translate-additions.mjs`; `client/public/osrstranslate/LICENSE.md`
+says where they come from.
+
 ## What it translates
 
 The original's areas, each with its own setting: dialogue and options, the skill guide, the

@@ -134,6 +134,7 @@ async function main(): Promise<void> {
                 "Hello, what are you doing here?": "Olá, o que você está fazendo aqui?",
                 "[1] Yes.": "unused",
                 "Yes please.": "Sim, por favor.",
+                "A wrongly translated line.": "Uma linha Nothing.",
                 "You have [number] coins.": "Você tem [number] moedas.",
             },
             "translations_menu.json": { "Talk-to": "Falar-com", "Walk here": "Andar aqui", "Choose Option": "Escolha a opção" },
@@ -172,6 +173,21 @@ async function main(): Promise<void> {
     }
 
     let manifestBody = await buildManifest("2026.11.05.1");
+    // tsps's bundled additions (client/public/osrstranslate), served from the page's own origin.
+    bodies.set("/osrstranslate/additions-pt-BR.json", encode(JSON.stringify({
+        files: {
+            "translations.json": {
+                add: {
+                    "Only in our additions.": "Só nas nossas adições.",
+                    "Yes please.": "would override the author",
+                },
+                fix: {
+                    "A wrongly translated line.": ["Uma linha Nothing.", "Uma linha corrigida."],
+                    "Yes please.": ["a text the author has since changed", "stale fix"],
+                },
+            },
+        },
+    })));
     const fetched: string[] = [];
     let offline = false;
     const fakeFetch = (async (input: RequestInfo | URL) => {
@@ -271,6 +287,11 @@ async function main(): Promise<void> {
     assert.equal(hooks.hasWidgetDisplayText(), true);
     assert.ok(fetched.includes(DEFAULT_MANIFEST_URL), "read the author's manifest");
     assert.ok(refreshes > 0, "interfaces redraw once the dictionaries arrive");
+    // Bundled additions: they fill gaps and fix known-bad entries, never override the author.
+    const general = plugin.getState().general;
+    assert.equal(general.translate("Only in our additions."), "Só nas nossas adições.", "an addition fills a gap");
+    assert.equal(general.translate("Yes please."), "Sim, por favor.", "an addition never replaces the author's entry");
+    assert.equal(general.translate("A wrongly translated line."), "Uma linha corrigida.", "a fix replaces the known-bad text");
 
     // Dialogue: the server's 53-character wrap is joined back into one key.
     assert.deepEqual(dialogue("Hello, what are you<br>doing here?"), { text: "Olá, o que você está fazendo aqui?" });

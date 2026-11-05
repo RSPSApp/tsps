@@ -9,7 +9,6 @@ const Room = require("./partyroom/Room.PartyRoom");
 
 module.exports = {
   name: "PartyRoom",
-  members: true,
   register(api) {
     Room.attach(api);
   },

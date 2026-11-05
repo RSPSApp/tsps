@@ -106,8 +106,19 @@ function prayerAltar({ player, object }) {
   const skillManager = player.getSkillManager();
   const prayerBefore = skillManager.getCurrentLevel(Skill.PRAYER);
   const handled = handlePrayerAltar(player);
+  const prayerAfter = skillManager.getCurrentLevel(Skill.PRAYER);
 
-  if (object && skillManager.getCurrentLevel(Skill.PRAYER) > prayerBefore && player.getPrivateArea() === null) {
+  if (object && prayerAfter > prayerBefore) {
+    api.emitCustomEvent("prayer:restored-at-altar", {
+      player,
+      objectId: object.getId(),
+      location: object.getLocation(),
+      prayerBefore,
+      prayerAfter,
+    });
+  }
+
+  if (object && prayerAfter > prayerBefore && player.getPrivateArea() === null) {
     const location = object.getLocation();
     if (object.getId() === ObjectIds.ALTAR) {
       const [x, y, z] = EAST_ARDOUGNE_CHURCH_ALTAR;

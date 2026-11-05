@@ -9,6 +9,7 @@
 
 const Shared = require("./Shared.BrimhavenAgilityArena");
 const Area = require("./Area.BrimhavenAgilityArena");
+const Obstacles = require("./Obstacles.BrimhavenAgilityArena");
 const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
 
 /**
@@ -31,11 +32,38 @@ const CLIMB_DOWN = 827;
 const CLIMB_UP = 828;
 const IZZY_NO_COINS = "No coins, no entrance!";
 const IZZY_PAID = "May the wind be in ye sails!";
+const REENTRY_DELAY_MS = 60_000;
+const REENTRY_AFTER_ATTRIBUTE = "brimhaven-agility-arena:reenter-after";
+const REENTRY_WAIT_MESSAGE = "You must wait a minute after leaving the Agility Arena before re-entering.";
 /** The transcript's hand-over step in "I'd like to use the Agility Arena, please.". */
 const TRANSCRIPT_PAY_STEP = "geqhzb";
 
 function hasPaid(player) {
   return player.getAttribute(Shared.PAID_ATTRIBUTE) === true;
+}
+
+function reentryCooldownRemaining(player) {
+  const until = Number(player.getAttribute(REENTRY_AFTER_ATTRIBUTE)) || 0;
+  const remaining = until - Date.now();
+  if (until && remaining <= 0) player.setAttribute(REENTRY_AFTER_ATTRIBUTE, null);
+  return Math.max(0, remaining);
+}
+
+function refuseReentry(player) {
+  if (reentryCooldownRemaining(player) === 0) return false;
+  player.sendMessage(REENTRY_WAIT_MESSAGE);
+  return true;
+}
+
+function markReentryCooldown(player) {
+  player.setAttribute(REENTRY_AFTER_ATTRIBUTE, Date.now() + REENTRY_DELAY_MS);
+}
+
+function teleportLanded({ player, from, to }) {
+  if (!player || !from || !Shared.isInArenaLocation(from)) return;
+  if (to && Shared.isInArenaLocation(to)) return;
+  markReentryCooldown(player);
+  resetOnLeaving(player);
 }
 
 function setPaid(player, paid) {
@@ -62,6 +90,7 @@ function izzySays(player, text) {
 
 /** Pay (op3): the coins item box, or Izzy's refusal. */
 function payIzzy({ player }) {
+  if (refuseReentry(player)) return;
   if (hasPaid(player)) {
     izzySays(player, IZZY_PAID);
     return;
@@ -79,6 +108,10 @@ function payIzzy({ player }) {
 /** The transcript's "You hand Cap'n Izzy 200 coins." takes the fee, shown with the coins. */
 function transcriptPayment(event) {
   if (event.kind !== "message" || event.stepId !== TRANSCRIPT_PAY_STEP) return;
+  if (refuseReentry(event.player)) {
+    event.end = true;
+    return;
+  }
   if (!takeFee(event.player)) {
     event.end = true;
     return;
@@ -128,6 +161,7 @@ function entryTile() {
 }
 
 function enterArena(player) {
+  if (refuseReentry(player)) return false;
   const core = Shared.core();
   player.performAnimation(new core.Animation(CLIMB_DOWN));
   afterTick(() => {
@@ -136,6 +170,7 @@ function enterArena(player) {
     player.getPacketSender().sendVarbit(HINT_ARROW_VARBIT, HINT_ARROW_ARENA);
     Shared.sendArrow(player);
   });
+  return true;
 }
 
 function leaveArena(player) {
@@ -156,6 +191,7 @@ function resetOnLeaving(player) {
 }
 
 function climbDown(player) {
+  if (refuseReentry(player)) return;
   if (hasPaid(player)) {
     enterArena(player);
     return;
@@ -207,6 +243,9 @@ let cycleTask = null;
 function startCycle() {
   const { Task, TaskManager } = Shared.core();
   Shared.advanceCycle();
+  // RSProx recordings show the broken plank sections changing with the one-minute cycle.
+  Obstacles.advancePlanks();
+  let plankCycle = Shared.cycle.index;
   Area.startBlades();
   cycleTask = new (class extends Task {
     constructor() {
@@ -214,6 +253,10 @@ function startCycle() {
     }
     execute() {
       Shared.tick();
+      if (Shared.cycle.index !== plankCycle) {
+        plankCycle = Shared.cycle.index;
+        Obstacles.advancePlanks();
+      }
       Area.tickBlades();
     }
   })();
@@ -233,6 +276,7 @@ function logout({ player }) {
   if (Shared.isInArena(player)) {
     // Finish before relocating: Agility's later logout hook must not land us back inside.
     ObstacleRunner.completeNow(player);
+    markReentryCooldown(player);
     player.setLocation(new core.Location(Shared.HUT.x, Shared.HUT.y, Shared.HUT.z));
     player.setAttribute(Shared.PAID_ATTRIBUTE, null);
   }
@@ -244,6 +288,7 @@ function login({ player }) {
   if (!player) return;
   if (Shared.isInArena(player)) {
     const core = Shared.core();
+    markReentryCooldown(player);
     player.moveTo(new core.Location(Shared.HUT.x, Shared.HUT.y, Shared.HUT.z));
     resetOnLeaving(player);
     return;
@@ -264,9 +309,11 @@ function death(event) {
 module.exports = (api) => {
   api.persistAttribute(Shared.PAID_ATTRIBUTE);
   api.persistAttribute(Shared.LAPS_ATTRIBUTE);
+  api.persistAttribute(REENTRY_AFTER_ATTRIBUTE, 0);
   api.onNpcInteraction(Shared.NPC.IZZY, { Pay: payIzzy });
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:action", transcriptPayment);
+  api.onCustomEvent("teleport:landed", teleportLanded);
   api.onObjectInteraction("Ticket Dispenser", { Tag: tagDispenser });
   api.onCustomEvent("ladders:climb", claimLadder);
   api.onServerStartup(startCycle);
@@ -290,3 +337,7 @@ module.exports.logout = logout;
 module.exports.login = login;
 module.exports.death = death;
 module.exports.claimLadder = claimLadder;
+module.exports.reentryCooldownRemaining = reentryCooldownRemaining;
+module.exports.refuseReentry = refuseReentry;
+module.exports.markReentryCooldown = markReentryCooldown;
+module.exports.teleportLanded = teleportLanded;

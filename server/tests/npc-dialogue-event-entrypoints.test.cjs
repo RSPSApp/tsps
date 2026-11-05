@@ -2137,7 +2137,21 @@ test('Pandemonium native: the captured helm and sails still sail to the wreck wi
   assert.equal(ship.boat.helmPlayerId, f.player.getIndex(), 'Navigate uses the actual parent and reachable deck');
   await operate('sails', 2);
   assert.equal(ship.boat.moveMode, 2, 'Set starts the observed full-sail voyage');
-  for (let tick = 0; tick < 350 && f.quest.getStage(f.player) < 12; tick++) core.BoatManager.tick();
+  // The player, not a timed quest replay, steers along the recorded route.
+  const headings = new Map([[0, 0], [25, 2], [31, 1], [61, 0]]);
+  const { ClientPacketId } = require('../dist/net/protocol/NativeClientPackets');
+  const { decodeClientPackets } = require('../dist/net/protocol/ClientProtocol');
+  for (let tick = 0; tick < 350 && f.quest.getStage(f.player) < 12; tick++) {
+    if (headings.has(tick)) {
+      const heading = headings.get(tick);
+      const decoded = decodeClientPackets(Buffer.from([ClientPacketId.SET_HEADING, heading]));
+      assert.deepEqual(decoded, [{ type: 'set_heading', heading }]);
+      await f.connection.dispatch(decoded);
+      f.connection.processTurnPackets();
+      assert.equal(ship.boat.heading, heading * 128, 'the helmsman\'s native input steers the supplied boat');
+    }
+    core.BoatManager.tick();
+  }
   assert.equal(f.quest.getStage(f.player), 12,
     `the existing route arrives with the wider hull (boat ${ship.boat.tileX},${ship.boat.tileY}, ${JSON.stringify(ship.boat.lastStep)})`);
   f.player.closeInterruptibleInterfaces();

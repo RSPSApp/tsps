@@ -15,6 +15,11 @@ export const Text = {
         );
     },
 
+    /** RuneLite's fromCSV: the comma-separated parts of a line, each trimmed, empty ones dropped. */
+    fromCSV(csv: string): string[] {
+        return csv.split(",").map((part) => part.trim()).filter((part) => part.length > 0);
+    },
+
     /** RuneLite's standardize: lower case, no tags, collapsed whitespace, for comparing names. */
     standardize(text: string): string {
         return Text.removeTags(text).replace(/ /g, " ").replace(/\s+/g, " ").trim().toLowerCase();

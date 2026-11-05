@@ -63,6 +63,7 @@ function leaveWaiting(player) {
 }
 
 function forget({ player }) {
+  if (inQueue(player)) player.moveTo(Common.toLocation(Common.LOBBY_RETURN));
   for (const team of Common.TEAMS) queues[team].delete(player);
 }
 

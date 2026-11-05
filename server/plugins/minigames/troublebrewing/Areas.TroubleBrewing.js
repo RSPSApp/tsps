@@ -21,11 +21,14 @@ function createArena() {
       return false;
     }
 
-    postLeave(mobile) {
+    postLeave(mobile, logout) {
       const player = mobile.getAsPlayer?.() ?? null;
       if (!player) return;
       const game = Game.gameOf(player);
-      if (game) game.left(player);
+      if (game) {
+        game.left(player);
+        if (logout) player.moveTo(Common.toLocation(Common.LOBBY_RETURN));
+      }
     }
   }
   return new TroubleBrewingArena();

@@ -212,3 +212,41 @@ test("Trouble Brewing: ingredients and three lit boilers brew a bottle that scor
   assert.equal(completed.length, 2, "both team members get the completion event");
   assert.equal(completed[0].winner, "red");
 });
+
+
+test("Trouble Brewing: a burning boiler cannot be relit for repeat experience and stores start stocked", () => {
+  const Common = require("../plugins/minigames/troublebrewing/Common.TroubleBrewing");
+  Common.init(fakeApi(bus()));
+  const { Game } = require("../plugins/minigames/troublebrewing/Game.TroubleBrewing");
+  const player = playerAt(3815, 2996);
+  let xp = 0;
+  player.getSkillManager = () => ({ addExperiences: (_skill, amount) => { xp += amount; } });
+  const game = new Game({ red: [player], blue: [] });
+  assert.equal(game.stateOf("red").storeLogs, Common.STORE_LOGS);
+  game.addLog(player, 0);
+  game.lightBoiler(player, 0);
+  game.lightBoiler(player, 0);
+  assert.equal(xp, 100, "only the unlit-to-lit transition awards experience");
+});
+
+test("Trouble Brewing: logging out returns arena and waiting-room players before saving", () => {
+  const Common = require("../plugins/minigames/troublebrewing/Common.TroubleBrewing");
+  const Game = require("../plugins/minigames/troublebrewing/Game.TroubleBrewing");
+  const Lobby = require("../plugins/minigames/troublebrewing/Lobby.TroubleBrewing");
+  const hooks = [];
+  const api = fakeApi(bus(), { onPlayerLogout: (handler) => hooks.push(handler) });
+  Common.init(api);
+  const player = playerAt(3815, 2996);
+  const game = Game.startNew({ red: [player], blue: [] });
+  const arena = require("../plugins/minigames/troublebrewing/Areas.TroubleBrewing").createArena();
+  arena.postLeave(player, true);
+  assert.equal(Game.gameOf(player), null);
+  assert.equal(Common.key(player.getLocation()), Common.LOBBY_RETURN.join(","));
+  game.finish();
+  Lobby.attachLobby(api);
+  player.setLocation(Common.toLocation(Common.WAITING.red.spawn));
+  Lobby.queues.red.add(player);
+  hooks[0]({ player });
+  assert.equal(Lobby.inQueue(player), false);
+  assert.equal(Common.key(player.getLocation()), Common.LOBBY_RETURN.join(","));
+});

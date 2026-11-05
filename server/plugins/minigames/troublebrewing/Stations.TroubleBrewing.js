@@ -257,24 +257,23 @@ function pickFlowers({ player, location }) {
   return true;
 }
 
-function cutScrapey({ player, location }) {
-  if (!inGame(player) || !Common.SCRAPEY_TREES.has(Common.key(location))) return false;
-  const inventory = player.getInventory();
-  if (inventory.getFreeSlots() < 1) { player.sendMessage("You do not have enough free inventory space."); return true; }
-  inventory.addItem(new Common.core.Item(ids().scrapeyLogs, 1));
-  player.getSkillManager().addExperiences(Common.core.Skill.WOODCUTTING, 25);
-  player.sendMessage("You cut some scrapey tree logs.");
+function chopTree(event, tiles, logId) {
+  if (!inGame(event.player) || !tiles.has(at(event))) return false;
+  Common.api.emitCustomEvent("woodcutting:chop", { player: event.player, object: event.object, logId, handled: false });
   return true;
 }
 
-function cutJungle({ player, location }) {
-  if (!inGame(player) || !Common.JUNGLE_TREES.has(Common.key(location))) return false;
-  const inventory = player.getInventory();
-  if (inventory.getFreeSlots() < 1) { player.sendMessage("You do not have enough free inventory space."); return true; }
-  inventory.addItem(new Common.core.Item(ids().logs, 1));
-  player.getSkillManager().addExperiences(Common.core.Skill.WOODCUTTING, 25);
-  player.sendMessage("You cut some logs.");
-  return true;
+function cutScrapey(event) {
+  return chopTree(event, Common.SCRAPEY_TREES, ids().scrapeyLogs);
+}
+
+function cutJungle(event) {
+  return chopTree(event, Common.JUNGLE_TREES, ids().logs);
+}
+
+function validateChopping(request) {
+  const tile = Common.key(request.object.getLocation());
+  if ((Common.SCRAPEY_TREES.has(tile) || Common.JUNGLE_TREES.has(tile)) && !inGame(request.player)) request.allow = false;
 }
 
 function knifeOnLogs(event) {
@@ -361,6 +360,7 @@ function attachStations(api) {
   api.onNpcInteraction("Monkey", { Catch: catchMonkey });
   api.onGroundItemPickup(Game.pickupRum);
   api.onCustomEvent("agent:advance-time", Game.advanceTime);
+  api.onCustomEvent("woodcutting:validate-tree", validateChopping);
 }
 
 module.exports = { attachStations, data, itemOnObject, takeLog, takeTool, pickFlowers };

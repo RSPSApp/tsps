@@ -122,6 +122,10 @@ class Game {
       player.sendMessage("There is no wood in the boiler.");
       return true;
     }
+    if (boiler.lit) {
+      player.sendMessage("That boiler is already lit.");
+      return true;
+    }
     boiler.lit = true;
     player.getSkillManager().addExperiences(Common.core.Skill.FIREMAKING, 100);
     player.sendMessage("You light the boiler.");
@@ -366,6 +370,7 @@ class Game {
 function newState() {
   return {
     score: 0,
+    storeLogs: Common.STORE_LOGS,
     hoppers: { bitternut: 0, sweetgrub: 0, water: 0, colour: 0, bark: 0 },
     boilers: [0, 1, 2].map(() => ({ logs: 0, lit: false })),
     kettle: 0,

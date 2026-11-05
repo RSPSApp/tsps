@@ -240,6 +240,21 @@ const AXES_BEST_FIRST = [...AXES].reverse();
 
 const TREES = [
   {
+    // Trouble Brewing's placement/team handler requests this through woodcutting:chop.
+    name: "scrapey tree",
+    objectNames: [],
+    requiredLevel: 1,
+    xpReward: 25,
+    logId: ItemIds.SCRAPEY_TREE_LOGS,
+    // Wiki's rounded success chart endpoints, bronze through dragon (revision 15240304).
+    cutChance: [[23, 75], [36, 113], [49, 151], [55, 159], [62, 191], [76, 226], [85, 264], [90, 286]],
+    roundedCutChance: true,
+    respawnTicks: 24,
+    stumpId: ObjectIds.SCRAPEY_TREE_2,
+    multi: true,
+    depleteChance: 8,
+  },
+  {
     name: "normal tree",
     objectNames: ["Tree", "Dead tree", "Evergreen tree", "Dying tree"],
     action: ["Chop down", "Chop-down"],
@@ -711,7 +726,9 @@ function cutChanceRange(tree, axe) {
 
 function calculateCutChance(level, tree, axe) {
   const [low, high] = cutChanceRange(tree, axe);
-  const successes = 1 + Math.floor((low * (99 - level)) / 98) + Math.floor((high * (level - 1)) / 98);
+  const successes = tree.roundedCutChance
+    ? Math.round((low * (99 - level) + high * (level - 1)) / 98)
+    : 1 + Math.floor((low * (99 - level)) / 98) + Math.floor((high * (level - 1)) / 98);
   return Math.min(1, Math.max(0, successes / 256));
 }
 

@@ -1213,6 +1213,7 @@ class BarbarianAssaultMatch {
         this.api.emitCustomEvent("minigame:points", award);
         Points.award(player, state.role, award.points);
       }
+      this.api.emitCustomEvent("barbarian-assault:wave-complete", { player, wave: this.wave, queen: this.wave >= 10 });
       player.sendMessage(`Wave ${this.wave} complete. You receive ${Math.max(0, reward)} Honour Points in the ${data.ROLE_LABEL[state.role]} role.`);
       state.bag = { red: 0, green: 0, blue: 0 };
       state.medic = false;

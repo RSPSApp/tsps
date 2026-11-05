@@ -88,6 +88,7 @@ const JUNGLE_TREES = new Set([
 const GAME_TICKS = 2000;
 const BREW_TICKS = 63;
 const BOTTLE_LIFETIME = 57;
+/** 2006 Jagex KB: "it consumes one log per minute" (100 game ticks), per burning boiler. */
 const BOILER_BURN_TICKS = 100;
 const START_COUNTDOWN = 50;
 const BREW_REQUIRED = { bitternut: 1, sweetgrub: 1, water: 5, colour: 3, bark: 1 };

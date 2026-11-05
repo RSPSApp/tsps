@@ -48,7 +48,6 @@ class Game {
     current = this;
     for (const player of this.teams.keys()) this.enter(player);
     for (const tile of Common.MONKEY_SPAWNS) this.spawnMonkey(tile);
-    this.message("Trouble Brewing has begun! Brew as much rum as you can.");
     Common.every(() => this.tick());
   }
 
@@ -80,14 +79,6 @@ class Game {
     this.contribution.set(player, this.contributed(player) + amount);
   }
 
-  message(text) {
-    for (const player of this.players()) player.sendMessage(text);
-  }
-
-  teamMessage(team, text) {
-    for (const player of this.members[team]) player.sendMessage(text);
-  }
-
   /** One item into the team's matching hopper. */
   deposit(player, kind, amount = 1) {
     const team = this.teamOf(player);
@@ -95,7 +86,6 @@ class Game {
     const state = this.stateOf(team);
     state.hoppers[kind] += amount;
     this.addContribution(player, amount);
-    this.teamMessage(team, `You put the ${kind === "colour" ? "coloured water" : kind} in the hopper.`);
     return true;
   }
 
@@ -105,11 +95,9 @@ class Game {
     if (!team) return false;
     const boiler = this.stateOf(team).boilers[index];
     if (!boiler || boiler.logs >= Common.MAX_BOILER_LOGS) {
-      player.sendMessage("That boiler is full.");
       return true;
     }
     boiler.logs = Math.min(Common.MAX_BOILER_LOGS, boiler.logs + amount);
-    player.sendMessage("You add a log to the boiler.");
     return true;
   }
 
@@ -119,16 +107,14 @@ class Game {
     const boiler = this.stateOf(team).boilers[index];
     if (!boiler) return false;
     if (boiler.logs <= 0) {
-      player.sendMessage("There is no wood in the boiler.");
       return true;
     }
     if (boiler.lit) {
-      player.sendMessage("That boiler is already lit.");
       return true;
     }
+    boiler.burnTicks = 0;
     boiler.lit = true;
     player.getSkillManager().addExperiences(Common.core.Skill.FIREMAKING, 100);
-    player.sendMessage("You light the boiler.");
     return true;
   }
 
@@ -137,16 +123,13 @@ class Game {
     const team = this.teamOf(player);
     if (!team) return false;
     if (colour !== team) {
-      player.sendMessage("Those flowers are not your team's colour.");
       return true;
     }
     const state = this.stateOf(team);
     if (state.kettle >= Common.MAX_KETTLE_FLOWERS) {
-      player.sendMessage("The kettle is full of flowers.");
       return true;
     }
     state.kettle = Math.min(Common.MAX_KETTLE_FLOWERS, state.kettle + amount);
-    player.sendMessage("You put the flowers in the kettle.");
     return true;
   }
 
@@ -155,12 +138,10 @@ class Game {
     if (!team) return false;
     const state = this.stateOf(team);
     if (state.kettle < bowls) {
-      player.sendMessage("There are not enough flowers in the kettle.");
       return true;
     }
     const inventory = player.getInventory();
     if (inventory.getFreeSlots() < bowls) {
-      player.sendMessage("You do not have enough free inventory space.");
       return true;
     }
     const ids = itemIds();
@@ -169,7 +150,6 @@ class Game {
       inventory.deleteNumber(ids.bowl, 1);
       inventory.addItem(new Common.core.Item(team === "red" ? ids.redWater : ids.blueWater, 1));
     }
-    player.sendMessage("You fill your bowl with coloured water.");
     return true;
   }
 
@@ -196,7 +176,6 @@ class Game {
     if (ground) this.ground.add(ground);
     state.bottle = ground;
     state.bottleAge = 0;
-    this.teamMessage(team, "A bottle of rum rolls onto the conveyor. Collect it before it breaks!");
   }
 
   /** A player picks the bottle up and packs it: one point for the team. */
@@ -206,7 +185,6 @@ class Game {
     const state = this.stateOf(team);
     if (!state.bottle) return false;
     if (this.contributed(player) <= 0) {
-      player.sendMessage("You haven't contributed enough to collect that bottle.");
       return false;
     }
     try { Common.core.ItemOnGroundManager.deregister(state.bottle); } catch { /* already gone */ }
@@ -214,8 +192,6 @@ class Game {
     state.bottle = null;
     state.bottleAge = 0;
     state.score++;
-    player.sendMessage("You place the bottle of rum in the crate. Your team scores a point!");
-    this.teamMessage(team, `The ${Common.BASE[team].name} team has packed ${state.score} bottle${state.score === 1 ? "" : "s"}.`);
     return true;
   }
 
@@ -238,7 +214,6 @@ class Game {
     if (!entry) return false;
     const inventory = player.getInventory();
     if (inventory.getFreeSlots() < 1) {
-      player.sendMessage("You do not have enough free inventory space.");
       return true;
     }
     Common.core.World.getRemoveNPCQueue().push(npc);
@@ -248,7 +223,6 @@ class Game {
     inventory.addItem(new Common.core.Item(itemIds().monkey, 1));
     player.getSkillManager().addExperiences(Common.core.Skill.AGILITY, 15);
     player.getSkillManager().addExperiences(Common.core.Skill.HUNTER, 15);
-    player.sendMessage("You catch a monkey.");
     return true;
   }
 
@@ -261,16 +235,16 @@ class Game {
     if (this.over) return false;
     this.elapsed++;
     const left = Common.GAME_TICKS - this.elapsed;
-    if (left > 0 && left % 100 === 0) this.message(`${Common.clock(left)} remaining.`);
 
     for (const team of Common.TEAMS) {
       const state = this.stateOf(team);
-      if (this.elapsed % Common.BOILER_BURN_TICKS === 0) {
-        for (const boiler of state.boilers) {
-          if (!boiler.lit || boiler.logs <= 0) continue;
-          boiler.logs--;
-          if (boiler.logs === 0) boiler.lit = false;
-        }
+      for (const boiler of state.boilers) {
+        if (!boiler.lit || boiler.logs <= 0) continue;
+        boiler.burnTicks++;
+        if (boiler.burnTicks < Common.BOILER_BURN_TICKS) continue;
+        boiler.burnTicks = 0;
+        boiler.logs--;
+        if (boiler.logs === 0) boiler.lit = false;
       }
       if (state.bottle) {
         state.bottleAge++;
@@ -282,7 +256,6 @@ class Game {
           state.bottle = null;
           state.bottleAge = 0;
           state.cooldown = 0;
-          this.teamMessage(team, "The bottle of rum was left too long and shattered.");
         }
       }
       if (state.brewing > 0) {
@@ -296,7 +269,6 @@ class Game {
       } else if (this.canBrew(team)) {
         this.consumeForBrew(team);
         state.brewing = Common.BREW_TICKS;
-        this.teamMessage(team, "The boiler rumbles as another batch of rum starts brewing.");
       }
     }
 
@@ -321,9 +293,6 @@ class Game {
     if (current === this) current = null;
     const scores = { red: this.stateOf("red").score, blue: this.stateOf("blue").score };
     const winner = scores.red === scores.blue ? null : scores.red > scores.blue ? "red" : "blue";
-    const result = winner ? `The ${Common.BASE[winner].name} team wins ${scores[winner]} to ${scores[Common.other(winner)]}!`
-      : `The game is a draw at ${scores.red} bottles each.`;
-    this.message(result);
 
     for (const player of [...this.teams.keys()]) {
       const team = this.teamOf(player);
@@ -335,7 +304,6 @@ class Game {
       const pieces = scores[team] * 10 + Math.min(100, this.contributed(player));
       const total = (Number(player.getAttribute(Common.PIECES_ATTRIBUTE)) || 0) + pieces;
       player.setAttribute(Common.PIECES_ATTRIBUTE, total);
-      player.sendMessage(`You receive ${pieces} pieces of eight (${total} total).`);
       Common.api.emitCustomEvent("trouble-brewing:completed", {
         player, team, winner, score: scores[team], otherScore: scores[Common.other(team)], pieces,
       });
@@ -372,7 +340,7 @@ function newState() {
     score: 0,
     storeLogs: Common.STORE_LOGS,
     hoppers: { bitternut: 0, sweetgrub: 0, water: 0, colour: 0, bark: 0 },
-    boilers: [0, 1, 2].map(() => ({ logs: 0, lit: false })),
+    boilers: [0, 1, 2].map(() => ({ logs: 0, lit: false, burnTicks: 0 })),
     kettle: 0,
     brewing: 0,
     cooldown: 0,
@@ -409,7 +377,6 @@ function pickupRum(event) {
     if (current.stateOf(team).bottle !== event.groundItem) continue;
     event.handled = true;
     if (current.teamOf(event.player) !== team) {
-      event.player.sendMessage("That is the other team's bottle of rum.");
       return true;
     }
     current.collect(event.player);

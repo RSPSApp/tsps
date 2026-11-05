@@ -93,14 +93,14 @@ class FishingTool {
    * stationary: its spots never move, so a session runs until the player stops it.
    * firstRoll: ticks from the start line to the first roll, when it isn't the interval.
    * animation plays with the start line; loopAnimation (the same unless given) on every roll, or
-   * every few ticks without animateOnRoll.
+   * every few ticks without animateOnRoll; catchAnimation, when given, plays on a successful roll.
    * startMessage, missMessage: what a cast and a missed attempt say, when they say anything.
    * followMessage: a second start line, a tick after the first.
    * noToolStatement, noBaitStatement: the message boxes shown without the tool or the bait.
    * levelStatement: the message box (given the level) shown below the tool's level.
    */
   constructor({
-    id, level, animation, loopAnimation = animation, fish, variants, bait = [], worn = [], quest = null, multi = false,
+    id, level, animation, loopAnimation = animation, catchAnimation = null, fish, variants, bait = [], worn = [], quest = null, multi = false,
     requires = [], interval = FISHING_ACTION_INTERVAL_TICKS, firstRoll = null, animateOnRoll = true, unboostable = false, spot = null,
     vessel = null, stationary = false, startMessage = "You begin to fish..", followMessage = null, missMessage = null,
     noToolStatement = null, noBaitStatement = null, levelStatement = null, barehand = false,
@@ -109,6 +109,7 @@ class FishingTool {
     this.level = level;
     this.animationId = animation;
     this.loopAnimationId = loopAnimation;
+    this.catchAnimationId = catchAnimation;
     this.fish = fish;
     this.variants = variants ?? [{ ids: [id], level: 1, bonus: 100 }];
     this.bait = bait;
@@ -284,12 +285,13 @@ const TOOLS = Object.freeze({
     interval: NET_CAGE_HARPOON_INTERVAL_TICKS, ...HARPOON,
   }),
   // Wiki (Barbarian Training#Barehanded fishing): barehand shark needs 96 Fishing and 76
-  // Strength, 110 Fishing XP and 11 Strength XP. The cache has no barehand fishing sequence,
-  // so the harpoon animation is reused; the empty ids variant means "no tool, bare hands".
+  // Strength, 110 Fishing XP and 11 Strength XP. Cache revision 241 sequences 6703 (start),
+  // 6704 (ready loop) and 6706 (shark finish; 6705 is frame-identical); the empty ids variant
+  // means "no tool, bare hands". Wiki: barehand speed and catch rate equal a harpoon's.
   BAREHAND_SHARK: new FishingTool({
-    id: ItemIds.HARPOON, level: 96, animation: ANIM.HARPOON, fish: [FISH.SHARK_BAREHAND],
+    id: ItemIds.HARPOON, level: 96, animation: 6703, loopAnimation: 6704, catchAnimation: 6706, fish: [FISH.SHARK_BAREHAND],
     variants: [{ ids: [], level: 96, bonus: 100, barehand: true }], requires: [[Skill.STRENGTH, 76]],
-    interval: NET_CAGE_HARPOON_INTERVAL_TICKS, barehand: true,
+    interval: NET_CAGE_HARPOON_INTERVAL_TICKS, firstRoll: HARPOON_ROD_FIRST_ROLL_TICKS, barehand: true,
     startMessage: START_HARPOON, levelStatement: (level) => `You need to be at least level ${level} Fishing to catch sharks with your bare hands.`,
   }),
   LOBSTER_POT: new FishingTool({
@@ -830,6 +832,9 @@ class FishingTask extends Task {
       if (caught.length === 0) {
         if (session.tool.missMessage) spam(player, session.tool.missMessage);
         continue;
+      }
+      if (session.tool.catchAnimationId !== null) {
+        player.performAnimation(new Animation(session.tool.catchAnimationId));
       }
       if (session.tool.spot?.takesCatch(player, npc)) {
         continue;

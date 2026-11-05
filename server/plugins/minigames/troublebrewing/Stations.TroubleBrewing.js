@@ -51,7 +51,6 @@ function inGame(player) {
 function useOnHopper(event, station) {
   const { player, itemId } = event;
   if (station.team !== teamOf(player)) {
-    player.sendMessage("That hopper belongs to the other team.");
     return true;
   }
   const inventory = player.getInventory();
@@ -64,7 +63,6 @@ function useOnHopper(event, station) {
     colour: itemId === (station.team === "red" ? table.redWater : table.blueWater),
   }[station.kind];
   if (!deposited) {
-    player.sendMessage("That does not belong in this hopper.");
     return true;
   }
   inventory.deleteNumber(itemId, 1);
@@ -77,7 +75,6 @@ function useOnHopper(event, station) {
 function useOnBoiler(event, station) {
   const { player, itemId } = event;
   if (station.team !== teamOf(player)) {
-    player.sendMessage("That boiler belongs to the other team.");
     return true;
   }
   const inventory = player.getInventory();
@@ -96,7 +93,6 @@ function useOnBoiler(event, station) {
 function useOnKettle(event, team) {
   const { player, itemId } = event;
   if (team !== teamOf(player)) {
-    player.sendMessage("That kettle belongs to the other team.");
     return true;
   }
   const table = ids();
@@ -112,7 +108,6 @@ function useOnPump(event, team) {
   const { player, itemId } = event;
   if (itemId !== ids().bucket) return false;
   if (team !== teamOf(player)) {
-    player.sendMessage("That pump belongs to the other team.");
     return true;
   }
   fillBuckets(player);
@@ -124,12 +119,10 @@ function fillBuckets(player) {
   const table = ids();
   const empty = inventory.getAmount(table.bucket);
   if (empty === 0) {
-    player.sendMessage("You have no empty buckets.");
     return;
   }
   inventory.deleteNumber(table.bucket, empty);
   inventory.addItem(new Common.core.Item(table.water, empty));
-  player.sendMessage(empty === 1 ? "You fill your bucket with water." : `You fill ${empty} buckets with water.`);
 }
 
 function useOnMound(event) {
@@ -137,12 +130,10 @@ function useOnMound(event) {
   if (itemId !== ids().meat) return false;
   player.getInventory().deleteNumber(itemId, 1);
   if (Math.random() < 0.2) {
-    player.sendMessage("The mound collapses and the sweetgrubs are gone.");
     return true;
   }
   player.getInventory().addItem(new Common.core.Item(ids().sweetgrubs, 1));
   player.getSkillManager().addExperiences(Common.core.Skill.HUNTER, 40);
-  player.sendMessage("You lure out some sweetgrubs.");
   return true;
 }
 
@@ -153,16 +144,13 @@ function useOnBitternutTree(event) {
   const game = Game.current;
   if (!game) return false;
   if (player.getInventory().getFreeSlots() < 1) {
-    player.sendMessage("You do not have enough free inventory space.");
     return true;
   }
   player.getInventory().deleteNumber(itemId, 1);
-  player.sendMessage("The monkey skitters up the tree.");
   Common.later(10, () => {
     if (!player.isRegistered?.() || !game.teams.has(player)) return;
     player.getInventory().addItem(new Common.core.Item(table.bitternut, 1));
     player.getSkillManager().addExperiences(Common.core.Skill.HUNTER, 50);
-    player.sendMessage("The monkey tosses you a bitternut.");
   });
   return true;
 }
@@ -170,12 +158,10 @@ function useOnBitternutTree(event) {
 function useOnLogStore(event, team) {
   if (event.itemId !== ids().logs) return false;
   if (team !== teamOf(event.player)) {
-    event.player.sendMessage("That log store belongs to the other team.");
     return true;
   }
   event.player.getInventory().deleteNumber(ids().logs, 1);
   Game.current.stateOf(team).storeLogs = Math.min(Common.STORE_LOGS, Game.current.stateOf(team).storeLogs + 1);
-  event.player.sendMessage("You add a log to the store.");
   return true;
 }
 
@@ -213,13 +199,12 @@ function takeLog({ player, location }) {
   if (!inGame(player)) return false;
   const team = data().logStore.get(Common.key(location));
   if (!team) return false;
-  if (team !== teamOf(player)) { player.sendMessage("That log store belongs to the other team."); return true; }
+  if (team !== teamOf(player)) { return true; }
   const state = Game.current.stateOf(team);
-  if (state.storeLogs <= 0) { player.sendMessage("The log store is empty."); return true; }
-  if (player.getInventory().getFreeSlots() < 1) { player.sendMessage("You do not have enough free inventory space."); return true; }
+  if (state.storeLogs <= 0) { return true; }
+  if (player.getInventory().getFreeSlots() < 1) { return true; }
   state.storeLogs--;
   player.getInventory().addItem(new Common.core.Item(ids().logs, 1));
-  player.sendMessage("You take a log from the store.");
   return true;
 }
 
@@ -227,7 +212,7 @@ function takeTool({ player, location }) {
   if (!inGame(player)) return false;
   const team = data().tools.get(Common.key(location));
   if (!team) return false;
-  if (team !== teamOf(player)) { player.sendMessage("That workbench belongs to the other team."); return true; }
+  if (team !== teamOf(player)) { return true; }
   const table = ids();
   const supplied = [table.bucket, table.bowl, table.knife, table.tinderbox, table.axe, table.meat, table.torch];
   const inventory = player.getInventory();
@@ -235,7 +220,6 @@ function takeTool({ player, location }) {
     if (inventory.contains(id) || inventory.getFreeSlots() < 1) continue;
     inventory.addItem(new Common.core.Item(id, 1));
   }
-  player.sendMessage("You take the tools you need from the workbench.");
   return true;
 }
 
@@ -244,16 +228,14 @@ function pickFlowers({ player, location }) {
   if (!colour) return false;
   const team = teamOf(player);
   if (!team) return false;
-  if (team !== colour) { player.sendMessage("Those are not your team's flowers."); return true; }
+  if (team !== colour) { return true; }
   const itemId = colour === "red" ? ids().redFlowers : ids().blueFlowers;
   const inventory = player.getInventory();
   if (inventory.getAmount(itemId) >= Common.MAX_FLOWERS) {
-    player.sendMessage("You can only carry five flowers at a time.");
     return true;
   }
-  if (inventory.getFreeSlots() < 1) { player.sendMessage("You do not have enough free inventory space."); return true; }
+  if (inventory.getFreeSlots() < 1) { return true; }
   inventory.addItem(new Common.core.Item(itemId, 1));
-  player.sendMessage(`You pick some ${colour} flowers.`);
   return true;
 }
 
@@ -285,7 +267,6 @@ function knifeOnLogs(event) {
   player.getInventory().deleteNumber(table.scrapeyLogs, 1);
   player.getInventory().addItem(new Common.core.Item(table.bark, 1));
   player.getSkillManager().addExperiences(Common.core.Skill.FLETCHING, 50);
-  player.sendMessage("You scrape the bark from the logs.");
   return true;
 }
 
@@ -300,7 +281,6 @@ function dyeMonkey(event) {
   if (!team) return false;
   const correct = team === "red" ? table.redWater : table.blueWater;
   if (bowl !== correct) {
-    player.sendMessage("The water is not your team's colour.");
     return false;
   }
   event.handled = true;
@@ -308,7 +288,6 @@ function dyeMonkey(event) {
   player.getInventory().deleteNumber(bowl, 1);
   player.getInventory().addItem(new Common.core.Item(table.bowl, 1));
   player.getInventory().addItem(new Common.core.Item(team === "red" ? table.redMonkey : table.blueMonkey, 1));
-  player.sendMessage("You dye the monkey with your team's colour.");
   return true;
 }
 
@@ -327,7 +306,6 @@ function waitingDoor({ player, location }) {
         Lobby.leaveWaiting(player);
         return true;
       }
-      player.sendMessage("The door is locked from the outside.");
       return true;
     }
   }
@@ -341,7 +319,6 @@ function exitPortal({ player, location }) {
   if (tile !== "3800,2953,0" && tile !== "3829,2997,0") return false;
   game.left(player);
   player.moveTo(Common.toLocation(Common.LOBBY_RETURN));
-  player.sendMessage("You leave Trouble Brewing.");
   return true;
 }
 

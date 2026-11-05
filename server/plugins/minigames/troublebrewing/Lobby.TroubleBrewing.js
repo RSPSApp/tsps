@@ -9,6 +9,25 @@ const Game = require("./Game.TroubleBrewing");
 
 const MIN_COOKING = 40;
 const QUEST_KEY = "cabin_fever";
+// Cache revision 241 clientscript 1598's exact combined condition line.
+const QUEST_AND_COOKING_LINE = "You must have completed Cabin Fever and got a Cooking level of 40 to play Trouble Brewing.";
+// Talk-to/join-team transcript lines (data/definitions/npc-dialogues.json): San Fan and Fancy
+// Dan under "I would like to join your crew.", Honest Jimmy under the right-click join variant.
+const FOLLOWER_LINE = "You cannot take your follower into the game.";
+const REFUSALS = Object.freeze({
+  "San Fan": {
+    helmet: "Well, for a start off, come and see me when you don't have that thing on your head.",
+    items: "Hah, think that I'm going to assign you the easy tasks eh?",
+  },
+  "Fancy Dan": {
+    helmet: "However, I don't let anyone on the team if they are wearing a hat or a helmet.",
+    items: "Well, I'll be glad to have you aboard, but you will need to go and store all of your gear first.",
+  },
+  "Honest Jimmy": {
+    helmet: "Sorry, no hats allowed. Shove it in the deposit box if you want to play.",
+    items: "Might want to dump that stuff yer holdin'.",
+  },
+});
 const queues = { red: new Set(), blue: new Set() };
 let countdown = null;
 
@@ -18,39 +37,35 @@ function questComplete(player, key) {
   return request.complete === true;
 }
 
-function refusal(player) {
-  if (!questComplete(player, QUEST_KEY)) return "You need to have completed Cabin Fever to play Trouble Brewing.";
-  if (player.getSkillManager().getCurrentLevel(Common.core.Skill.COOKING) < MIN_COOKING) {
-    return `You need a Cooking level of ${MIN_COOKING} to play Trouble Brewing.`;
+function refusal(player, npc = "Honest Jimmy") {
+  const lines = REFUSALS[npc];
+  if (!questComplete(player, QUEST_KEY) ||
+      player.getSkillManager().getCurrentLevel(Common.core.Skill.COOKING) < MIN_COOKING) {
+    return QUEST_AND_COOKING_LINE;
   }
-  if (player.getInventory().getValidItems?.().length > 0) return "You need to bank your items before playing Trouble Brewing.";
   const head = player.getEquipment().get(Common.core.Equipment.HEAD_SLOT);
-  if (head && head.getId() > 0) return "You need to remove your headgear before playing Trouble Brewing.";
-  if (player.getAttribute?.("pets:current")) return "You need to leave your follower outside.";
+  if (head && head.getId() > 0) return lines.helmet;
+  if (player.getInventory().getValidItems?.().length > 0) return lines.items;
+  if (player.getAttribute?.("pets:current")) return FOLLOWER_LINE;
   return null;
 }
 
-function join(player, team) {
-  if (Game.gameOf(player) || inQueue(player)) {
-    player.sendMessage("You are already waiting for a game.");
-    return true;
-  }
+function join(player, team, npc) {
+  if (Game.gameOf(player) || inQueue(player)) return true;
   if (team === "auto") team = queues.blue.size <= queues.red.size ? "blue" : "red";
-  const refused = refusal(player);
+  const refused = refusal(player, npc);
   if (refused) {
     player.sendMessage(refused);
     return true;
   }
   player.moveTo(Common.toLocation(Common.WAITING[team].spawn));
   queues[team].add(player);
-  player.sendMessage(`You sign up for the ${Common.BASE[team].name.toLowerCase()} team.`);
-  player.sendMessage(queues[team].size === 1 ? "You are the first on your team. Waiting for the other team." : "Waiting for the game to begin.");
   return true;
 }
 
-const joinBlue = ({ player }) => join(player, "blue");
-const joinRed = ({ player }) => join(player, "red");
-const joinAuto = ({ player }) => join(player, "auto");
+const joinBlue = ({ player }) => join(player, "blue", "San Fan");
+const joinRed = ({ player }) => join(player, "red", "Fancy Dan");
+const joinAuto = ({ player }) => join(player, "auto", "Honest Jimmy");
 
 function inQueue(player) {
   return Common.TEAMS.some((team) => queues[team].has(player));
@@ -59,7 +74,6 @@ function inQueue(player) {
 function leaveWaiting(player) {
   for (const team of Common.TEAMS) queues[team].delete(player);
   player.moveTo(Common.toLocation(Common.LOBBY_RETURN));
-  player.sendMessage("You leave the waiting room.");
 }
 
 function forget({ player }) {
@@ -87,9 +101,6 @@ function tick() {
   }
   if (countdown === null) {
     countdown = Common.START_COUNTDOWN;
-    for (const team of Common.TEAMS) {
-      for (const player of queues[team]) player.sendMessage("Both teams are ready. The game begins shortly.");
-    }
   }
   countdown--;
   if (countdown <= 0) start();

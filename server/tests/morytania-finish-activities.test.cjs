@@ -229,6 +229,46 @@ test("Trouble Brewing: a burning boiler cannot be relit for repeat experience an
   assert.equal(xp, 100, "only the unlit-to-lit transition awards experience");
 });
 
+test("Trouble Brewing: each lit boiler burns its own first log 100 ticks after it is lit", () => {
+  const Common = require("../plugins/minigames/troublebrewing/Common.TroubleBrewing");
+  Common.init(fakeApi(bus()));
+  const { Game } = require("../plugins/minigames/troublebrewing/Game.TroubleBrewing");
+  const player = playerAt(3815, 2996);
+  const game = new Game({ red: [player], blue: [] });
+  const state = game.stateOf("red");
+  for (let i = 0; i < 3; i++) game.addLog(player, 0);
+  game.lightBoiler(player, 0);
+  for (let i = 0; i < 37; i++) game.tick();
+  for (let i = 0; i < 3; i++) game.addLog(player, 1);
+  game.lightBoiler(player, 1);
+  for (let i = 0; i < 63; i++) game.tick();
+  assert.equal(state.boilers[0].logs, 2, "the first boiler burns its own first log at 100 ticks");
+  assert.equal(state.boilers[1].logs, 3, "a boiler lit later is not caught by the global elapsed phase");
+  for (let i = 0; i < 37; i++) game.tick();
+  assert.equal(state.boilers[1].logs, 2, "the later boiler burns after its own 100 ticks");
+});
+
+test("Trouble Brewing: lobby refusals are the cache condition and transcript lines", () => {
+  const events = bus();
+  let questDone = false;
+  events.on("quest:is-complete", (request) => { request.complete = questDone; });
+  const Common = require("../plugins/minigames/troublebrewing/Common.TroubleBrewing");
+  Common.init(fakeApi(events));
+  const Lobby = require("../plugins/minigames/troublebrewing/Lobby.TroubleBrewing");
+  const player = playerAt(3815, 2996);
+  assert.equal(Lobby.refusal(player, "San Fan"),
+    "You must have completed Cabin Fever and got a Cooking level of 40 to play Trouble Brewing.");
+  questDone = true;
+  player.getInventory().addItem(new core.Item(core.ItemIdentifiers.LOGS, 1));
+  assert.equal(Lobby.refusal(player, "San Fan"), "Hah, think that I'm going to assign you the easy tasks eh?");
+  assert.equal(Lobby.refusal(player, "Fancy Dan"),
+    "Well, I'll be glad to have you aboard, but you will need to go and store all of your gear first.");
+  assert.equal(Lobby.refusal(player, "Honest Jimmy"), "Might want to dump that stuff yer holdin'.");
+  player.getEquipment = () => ({ get: () => ({ getId: () => 1 }) });
+  assert.equal(Lobby.refusal(player, "Fancy Dan"),
+    "However, I don't let anyone on the team if they are wearing a hat or a helmet.");
+});
+
 test("Trouble Brewing: logging out returns arena and waiting-room players before saving", () => {
   const Common = require("../plugins/minigames/troublebrewing/Common.TroubleBrewing");
   const Game = require("../plugins/minigames/troublebrewing/Game.TroubleBrewing");

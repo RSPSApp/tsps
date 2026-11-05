@@ -1,4 +1,5 @@
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
+import { isMobileMode } from "../../../common/utils/DeviceUtil";
 import type { GpuSettings } from "../gpu/GpuPlugin";
 import { setLowEndDeviceModeEnabled } from "./LowEndDeviceMode";
 
@@ -7,7 +8,7 @@ export class LowEndDevicePlugin extends Plugin {
         name: "Low-end Device",
         description: "Reduce view distance and scenery detail, disable HD and anti-aliasing, and cap at 30 FPS. WebGL also renders the scene at half resolution.",
         tags: ["graphics", "performance", "mobile", "low detail"],
-        enabledByDefault: false,
+        enabledByDefault: isMobileMode,
         configKey: "lowenddeviceplugin",
     };
 

@@ -487,7 +487,7 @@ function applyOverload(player, flat = 5, percent = 0.15) {
   });
 }
 
-/** Barbarian mixes heal 6 Hitpoints, except antipoison and restore mixes which heal 3 (Wiki). */
+/** Barbarian mixes heal 6 Hitpoints a dose; the attack, antipoison, Relicym's, strength, restore, energy and combat mixes heal 3 (Wiki). */
 function applyMix(baseEffect, healAmount = 6) {
   return (player) => {
     baseEffect(player);
@@ -1138,6 +1138,43 @@ registerPotion({
   chains: [doseChain("MENAPHITE_REMEDY_4_", "MENAPHITE_REMEDY_3_", "MENAPHITE_REMEDY_2_", "MENAPHITE_REMEDY_1_")],
   effect: applyMenaphiteRemedy,
 });
+
+// ---------------------------------------------------------------- barbarian mixes of the potions above
+// Wiki (Barbarian Training's mix table): a mix drinks as its potion and heals 3 or 6 per dose.
+// Relicym's and magic essence mixes are left out: their potions have no drink here yet.
+
+/** A mix drinking as the registered potion `potionName`, healing `healAmount` per dose. */
+function registerMix(name, potionName, healAmount, twoDose, oneDose) {
+  const potion = REGISTERED_POTIONS.find((candidate) => candidate.name === potionName);
+  if (!potion) return;
+  registerPotion({
+    name,
+    chains: [doseChain(twoDose, oneDose)],
+    requiresFoodPermission: true,
+    canUse: potion.canUse ?? undefined,
+    area: potion.area ?? undefined,
+    effect: applyMix(potion.effect, healAmount),
+  });
+}
+
+for (const [name, potionName, healAmount, key] of [
+  ["Attack mix", "Attack potion", 3, "ATTACK_MIX"],
+  ["Strength mix", "Strength potion", 3, "STRENGTH_MIX"],
+  ["Energy mix", "Energy potion", 3, "ENERGY_MIX"],
+  ["Defence mix", "Defence potion", 6, "DEFENCE_MIX"],
+  ["Agility mix", "Agility potion", 6, "AGILITY_MIX"],
+  ["Combat mix", "Combat potion", 3, "COMBAT_MIX"],
+  ["Prayer mix", "Prayer potion", 6, "PRAYER_MIX"],
+  ["Superattack mix", "Super attack", 6, "SUPERATTACK_MIX"],
+  ["Fishing mix", "Fishing potion", 6, "FISHING_MIX"],
+  ["Hunting mix", "Hunter potion", 6, "HUNTING_MIX"],
+  ["Super str. mix", "Super strength", 6, "SUPER_STR_MIX"],
+  ["Super def. mix", "Super defence", 6, "SUPER_DEF_MIX"],
+  ["Ranging mix", "Ranging potion", 6, "RANGING_MIX"],
+  ["Magic mix", "Magic potion", 6, "MAGIC_MIX"],
+  ["Zamorak mix", "Zamorak brew", 6, "ZAMORAK_MIX"],
+  ["Ancient mix", "Ancient brew", 6, "ANCIENT_MIX"],
+]) registerMix(name, potionName, healAmount, `${key}_2_`, `${key}_1_`);
 
 // ---------------------------------------------------------------- Chambers of Xeric gourd potions
 // Not on the Wiki (to check against a capture): the boosts by strength (weak / normal / strong). Wiki:

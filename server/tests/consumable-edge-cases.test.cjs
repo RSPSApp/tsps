@@ -529,6 +529,19 @@ test("an antipoison mix heals its extra 3 Hitpoints and cures poison in one drin
   assert.equal(player.poisonImmunity.seconds, 90);
 });
 
+test("a ranging mix drinks as a ranging potion and heals 6; an attack mix heals 3", () => {
+  const ranger = createPlayer({ base: 99, current: 50 });
+  const entry = Potions._test.findPotionEntry(ItemIdentifiers.RANGING_MIX_2_);
+  assert.equal(entry.replacementId, ItemIdentifiers.RANGING_MIX_1_);
+  assert.equal(Potions._test.findPotionEntry(ItemIdentifiers.RANGING_MIX_1_).doses, 1);
+  entry.potion.effect(ranger);
+  assert.equal(ranger.levels.get(Skill.RANGED), 99 + 13, "Wiki: +4 + 10%, 13 at 99");
+  assert.equal(ranger.levels.get(Skill.HITPOINTS), 56);
+  const fighter = createPlayer({ base: 99, current: 50 });
+  Potions._test.findPotionEntry(ItemIdentifiers.ATTACK_MIX_2_).potion.effect(fighter);
+  assert.equal(fighter.levels.get(Skill.HITPOINTS), 53);
+});
+
 test("a weaker antipoison never shortens an active poison immunity", () => {
   const player = createPlayer({ base: 99, current: 99 });
   Potions._test.findPotionEntry(ItemIdentifiers.ANTI_VENOM_4_).potion.effect(player);

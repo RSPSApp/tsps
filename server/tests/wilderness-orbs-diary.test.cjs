@@ -10,7 +10,7 @@
 // capture of the diary notification exists.
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { before, test } = require("node:test");
+const { before, after, test } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
@@ -45,6 +45,18 @@ before(async () => {
   core.ObjectDefinition.init();
 });
 
+// Plugin-loading tests end the way the server does: the shutdown hooks stop what plugins started, and the
+// players this file made give up their tasks (the orb charging loop, the diary's delayed tier check).
+const created = [];
+after(() => {
+  for (const player of created) {
+    player.getAttribute("crafting-spells:charging")?.stop();
+    TaskManager.cancelTasks(player);
+    player.setRegistered(false);
+  }
+  PluginManager.emitServerShutdown({});
+});
+
 function caster(t, obelisk, { magic = 99, orbs = 1, runes = [[COSMIC, 3], [EARTH_RUNE, 30], [AIR_RUNE, 30]] } = {}) {
   const channel = {
     kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
@@ -62,6 +74,7 @@ function caster(t, obelisk, { magic = 99, orbs = 1, runes = [[COSMIC, 3], [EARTH
   for (const [id, amount] of runes) player.getInventory().add(new core.Item(id, amount), false);
   if (orbs > 0) player.getInventory().add(new core.Item(UNPOWERED_ORB, orbs), false);
   t.after(() => player.getAttribute("crafting-spells:charging")?.stop());
+  created.push(player);
   return player;
 }
 

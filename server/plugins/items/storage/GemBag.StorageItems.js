@@ -114,24 +114,44 @@ function useOnBag(event) {
 }
 
 /** Wiki: a gem picked up while the bag is open goes straight in. */
+const pickupItems = new WeakSet();
+const pickupPlayers = new WeakSet();
 function pickup(event) {
+  if (event.handled) return;
   const { player, groundItem } = event;
   const item = groundItem.getItem();
-  if (!Storage.hasOpen(player, family) || !family.accepts(item.getId())) return;
-  // Uncut gems don't stack, so a pickup is one gem: it goes in whole or not at all.
-  if (family.room(player, item.getId(), Storage.contents(player, family)) < item.getAmount()) return;
-  // Hooks stop at the first handled one, and this one runs before the Ironman rule: so ask it.
-  const request = { player, groundItem, allow: true };
-  Storage.api.emitCustomEvent("ground-item:can-store", request);
-  if (!request.allow) {
-    event.handled = true;
-    return;
-  }
-  Storage.store(player, family, item.getId(), item.getAmount());
-  Storage.core.ItemOnGroundManager.deregister(groundItem);
-  player.getLastItemPickup().reset();
-  player.sendMessage(STRAIGHT_IN);
+  if (pickupItems.has(groundItem) || pickupPlayers.has(player)) { event.handled = true; return; }
+  // Metadata and non-unit stacks use the ordinary pickup path, which preserves their identity.
+  if (!Storage.hasOpen(player, family) || !family.accepts(item.getId()) || item.getMeta() != null || item.getAmount() !== 1) return;
+  if (family.room(player, item.getId(), Storage.contents(player, family)) < 1) return;
+  const manager = Storage.core.ItemOnGroundManager;
+  const itemId = item.getId(), position = groundItem.getPosition().clone(), owner = groundItem.getOwner();
+  const area = groundItem.getPrivateArea(), state = groundItem.getState();
+  pickupItems.add(groundItem);
+  pickupPlayers.add(player);
   event.handled = true;
+  try {
+    // This hook runs before Ironman; ask its guard before any storage or take policy.
+    const permission = { player, groundItem, allow: true };
+    Storage.api.emitCustomEvent("ground-item:can-store", permission);
+    if (!permission.allow) return;
+    const request = { player, groundItem, source: "pickup", itemId, amount: 1, discard: 0, allow: true, error: null };
+    Storage.api.emitCustomEvent("ground-items:take", request);
+    if (request.allow !== true || request.error != null || request.amount !== 1 || request.discard !== 0) return;
+    if (!Storage.core.World.getItems().includes(groundItem) || !manager.canSee(player, groundItem)
+      || groundItem.getItem() !== item || item.getId() !== itemId || item.getAmount() !== 1 || item.getMeta() != null
+      || !groundItem.getPosition().equals(position) || groundItem.getOwner() !== owner
+      || groundItem.getPrivateArea() !== area || groundItem.getState() !== state
+      || !Storage.hasOpen(player, family) || family.room(player, itemId, Storage.contents(player, family)) < 1) return;
+    if (Storage.store(player, family, itemId, 1) !== 1) return;
+    manager.deregister(groundItem);
+    Storage.api.emitCustomEvent("ground-items:taken", { player, groundItem, source: "pickup", itemId, amount: 1, discarded: 0 });
+    player.getLastItemPickup().reset();
+    player.sendMessage(STRAIGHT_IN);
+  } finally {
+    pickupItems.delete(groundItem);
+    pickupPlayers.delete(player);
+  }
 }
 
 module.exports = (api) => {

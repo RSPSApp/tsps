@@ -89,7 +89,7 @@ Cheats used in those runs: infinite health (so one player in Ba-Ba's pit with Mi
 - Wardens: entomb's timing; divine sounds; failed-siphon damage; rock damage; the Kephri phantom's Aerial bonus; ring lightning; clearing attack delay on skulls; Zebak's style flip, Vigilant's and the special's chances.
 - Points: puzzle completion points (Scabaras 300, Apmeken 450, Crondis 400). Lobby: the shroud menu, the sack's dialogue, the cavity's text.
 
-**Not built:** Metamorphosis into a remnant's forms (the unlock is); the first-raid freed gods and captured gods in the rooms; per-viewer corruption tint.
+**Not built:** the first-raid freed gods and captured gods in the rooms; per-viewer corruption tint.
 
 ## NPC animations
 

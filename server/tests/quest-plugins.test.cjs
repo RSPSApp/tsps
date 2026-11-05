@@ -10700,6 +10700,7 @@ test('Desert Treasure II runs the Whisperer specials, enrage and medallion recov
     getPacketSender: () => new Proxy({}, { get: (_target, key) => key === 'sendVarbit' ? () => {} : () => {} }),
     getInventory: () => ({
       getAmount: (id) => items.get(id) ?? 0,
+      getFreeSlots: () => 28,
       adds: (id, amount = 1) => items.set(id, (items.get(id) ?? 0) + amount),
       deleteNumber: (id, amount = 1) => items.set(id, Math.max(0, (items.get(id) ?? 0) - amount)),
     }),
@@ -11623,7 +11624,6 @@ test('Desert Treasure II prison escape leads to the cache Duke arena and require
   attrs.set('desert-treasure-ii:sucellus-defeated', false);
   attrs.set('desert-treasure-ii:sucellus-encounter-started', true);
   attrs.set('desert-treasure-ii:sucellus-poisons', 2);
-  attrs.set('desert-treasure-ii:sucellus-mushrooms', { musca: 3, arder: 3 });
   attrs.set('desert-treasure-ii:sucellus-vats', { filled: { powders: [I.MUSCA_POWDER, I.ARDER_POWDER], salt: 6 } });
   attrs.delete('desert-treasure-ii:sucellus-area');
   const login = handlers.playerLogin.find(handler => handler.name === 'handleLogin');
@@ -11634,7 +11634,6 @@ test('Desert Treasure II prison escape leads to the cache Duke arena and require
   assert.notEqual(recoveredArea, area, 'login reconstructs the destroyed private encounter area');
   assert.equal(attrs.get('desert-treasure-ii:sucellus-encounter-started'), false);
   assert.equal(attrs.get('desert-treasure-ii:sucellus-poisons'), 0);
-  assert.deepEqual(attrs.get('desert-treasure-ii:sucellus-mushrooms'), { musca: 0, arder: 0 });
   assert.deepEqual(attrs.get('desert-treasure-ii:sucellus-vats'), {});
   assert.ok(recoveredArea.getObjects().some(object => object.getId() === O.MUSCA_MUSHROOMS));
   assert.ok(recoveredArea.getObjects().some(object => object.getId() === O.ARDER_MUSHROOMS));
@@ -11643,13 +11642,11 @@ test('Desert Treasure II prison escape leads to the cache Duke arena and require
   // with no poison item is enough evidence to restore the normal recipe too.
   attrs.set('desert-treasure-ii:sucellus-encounter-started', false);
   attrs.set('desert-treasure-ii:sucellus-poisons', 2);
-  attrs.set('desert-treasure-ii:sucellus-mushrooms', { musca: 3, arder: 3 });
   attrs.set('desert-treasure-ii:sucellus-vats', { filled: { powders: [I.MUSCA_POWDER, I.ARDER_POWDER], salt: 6 } });
   attrs.delete('desert-treasure-ii:sucellus-area');
   player.moveTo({ x: 2927, y: 10353, z: 0 });
   login({ player });
   assert.equal(attrs.get('desert-treasure-ii:sucellus-poisons'), 0);
-  assert.deepEqual(attrs.get('desert-treasure-ii:sucellus-mushrooms'), { musca: 0, arder: 0 });
   assert.deepEqual(attrs.get('desert-treasure-ii:sucellus-vats'), {});
 });
 

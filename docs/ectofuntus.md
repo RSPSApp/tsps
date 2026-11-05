@@ -158,6 +158,5 @@ longer wipes them.
 
 ## Not built
 
-- Robin's daily bones-to-bonemeal and slime conversion for the Morytania diaries.
 - The diary's teleport to the pool of slime.
 - The weathered wall shortcut (58 Agility).

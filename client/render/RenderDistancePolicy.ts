@@ -54,6 +54,15 @@ export function resolveNextEffectiveRenderDistanceTiles(
     return current;
 }
 
+/** The fog options resolveFogRange takes: the GPU plugin's while it is on, else the renderer's own. */
+export function fogSettings(host: {
+    osrsClient: { clientPlugins: { gpuSettings(): { autoFogDepth: boolean; autoFogDepthFactor: number; fogDepth: number } | undefined } };
+    autoFogDepth: boolean; autoFogDepthFactor: number; fogDepth: number;
+}) {
+    const gpu = host.osrsClient.clientPlugins.gpuSettings() ?? host;
+    return { autoFogDepth: gpu.autoFogDepth, autoFogDepthFactor: gpu.autoFogDepthFactor, manualFogDepth: gpu.fogDepth };
+}
+
 export function resolveFogRange(options: FogRangeOptions): { fogEnd: number; fogDepth: number } {
     // Short views keep most nearby scenery clear. Longer views spread haze
     // over the distance and leave a larger obscured margin for cheap culling.

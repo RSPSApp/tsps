@@ -107,8 +107,23 @@ default.
 | `FreezeTimer` | Sends the remaining freeze duration and spell information used by the client's freeze-timer overlay. |
 | `FriendsList` | Enables friends-list and friends-chat handling, including private messages, chat filters, and friends-chat channels. |
 | `GrandExchange` | Enables Grand Exchange offers, offer collection, and the item-price resource used by the exchange. |
+| `SideJournalDefaults` | Owns the journal tabs and custom Character Summary. Summary buttons follow the commands enabled for each player, and visible navigation buttons are centered with equal spacing. |
 | `IgnoreList` | No active feature is currently attached to this plugin. The client protocol does not yet send ignore-list add/remove actions, so enabling this switch alone does not make those controls work. |
 | `VengeanceTimer` | Keeps the client's 30-second Vengeance cooldown overlay in sync with the player's active cooldown. |
 
 These switches control whether a plugin is loaded; they are distinct from `pluginConfig`, which
 sets plugin-specific options such as `TutorialIsland:allowSkip`.
+
+Character Summary checks the registered `teleports`, `presets`, `commands`, and `lockxp`
+commands for its Teleports, Presets, Commands, and Combat XP controls. Their usual providers
+are `TeleportInterface`, `PvpMode`, `Commands`, and `PlayerCommands`. Disabling a provider
+through the host's plugin switches hides its button when the world loads that configuration.
+The summary also refreshes command access while open and rejects clicks on unavailable controls.
+Its layout and behavior live under `plugins/interface/sidejournaldefaults/`; it does not
+require the optional PvP statistics plugin to display.
+
+## PvP Arena worlds
+
+Ranked PvP Arena match finding (the Grouping tab's PvP Arena button, `DuelArena` plugin) is only
+available on designated worlds. Enable it with `"pluginConfig": { "DuelArena:pvpArenaWorld": true }`
+in `world.local.json` (default off). Legacy Duels are unaffected.

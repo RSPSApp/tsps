@@ -16,7 +16,7 @@
  * - The loot itself was never seen. It follows the Wiki's chest table (data
  *   fractured-archive.json): three standard rolls (1/51 for five times as much) when no unique,
  *   and tertiaries.
- * Estimates: the unique chance and weights, the pet's rate, the unique chest's tile, a player
+ * Estimates: the unique chance and weights, the unique chest's tile, a player
  * opening only their own chest, the chest's item options (as the Tombs of Amascut's), and
  * leftovers going to the bank when a player leaves (the Wiki says the lobby's Loot Wheelbarrow
  * keeps them).
@@ -109,10 +109,7 @@ class VaultRoom extends Raid.Room {
 
   /** The reward chest: its items, with their options, and the loot's collection log entries once. */
   openChest(player, loot) {
-    if (!loot.logged) {
-      loot.logged = true;
-      for (const { id, amount } of loot.entries) Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId: id, amount });
-    }
+    logLoot(player, loot);
     const sender = player.getPacketSender();
     this.sendChest(player, loot);
     sender.sendInterface(Shared.id("iface", "CHESTS"));
@@ -178,10 +175,7 @@ class VaultRoom extends Raid.Room {
   bankUnclaimed(player) {
     const loot = this.loot.get(player.getUsername());
     if (!loot) return;
-    if (!loot.logged) {
-      loot.logged = true;
-      for (const { id, amount } of loot.entries) Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId: id, amount });
-    }
+    logLoot(player, loot);
     for (const entry of loot.entries) move(player, entry, entry.amount, "bank");
     this.loot.delete(player.getUsername());
     player.sendMessage("Your unclaimed rewards from the Archive have been sent to your bank.");
@@ -216,8 +210,7 @@ function rollLoot() {
   }
   for (const [name, oneIn] of LOOT.tertiary) if (Math.random() < 1 / oneIn) items.push([name, 1]);
   const [pet, petOneIn] = LOOT.pet;
-  if (Math.random() < 1 / petOneIn) items.push([pet, 1]);
-  return { unique, items };
+  return { unique, items, pet: Math.random() < 1 / petOneIn ? pet : null };
 }
 
 /** An item by its gameval name (or an ItemIdentifiers constant, for the elite clue). */
@@ -227,9 +220,60 @@ function itemId(name) {
   return named("obj", name);
 }
 
-/** A player's loot as chest entries (items by id). */
+/** A player's loot as chest entries (items by id), with the pet kept apart for the follower path. */
 function toEntries(loot) {
-  return { unique: loot.unique, entries: loot.items.map(([name, amount]) => ({ id: itemId(name), amount })), logged: false };
+  return {
+    unique: loot.unique,
+    entries: loot.items.map(([name, amount]) => ({ id: itemId(name), amount })),
+    pet: loot.pet ? itemId(loot.pet) : null,
+    logged: false,
+  };
+}
+
+/** The pet goes through Pets; if that consumer refuses or is absent, the item still reaches the player. */
+function awardPet(player, loot) {
+  if (!Number.isInteger(loot.pet)) return;
+  const request = { player, itemId: loot.pet, source: "fractured-archive" };
+  Shared.api().emitCustomEvent("pets:award", request);
+  if (request.awarded === true) {
+    loot.pet = null;
+    return;
+  }
+  // A refused award is the owned-pet "would have been followed" policy; a missing consumer is not.
+  const owns = { player, itemId: loot.pet, owns: false };
+  Shared.api().emitCustomEvent("pets:owns", owns);
+  if (owns.owns) {
+    loot.pet = null;
+    return;
+  }
+  giveItem(player, loot.pet, 1);
+  logItem(player, loot.pet, 1);
+  loot.pet = null;
+}
+
+/** Into the inventory, or on the floor under the player when it is full. */
+function giveItem(player, itemId, amount) {
+  const { Item, ItemOnGroundManager } = Shared.core();
+  if (player.getInventory().getFreeSlots() > 0) {
+    player.getInventory().adds(itemId, amount);
+    return;
+  }
+  ItemOnGroundManager.registerLocation(player, new Item(itemId, amount), player.getLocation().clone());
+}
+
+/** Log an item only when it was actually granted; a prior log entry is not incremented again. */
+function logItem(player, itemId, amount) {
+  const query = { player, itemId, count: 0 };
+  Shared.api().emitCustomEvent("collection-log:obtained", query);
+  if (!query.count) Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId, amount });
+}
+
+/** Each chest entry reaches the log once, and the pet once through its own award path. */
+function logLoot(player, loot) {
+  awardPet(player, loot);
+  if (loot.logged) return;
+  loot.logged = true;
+  for (const { id, amount } of loot.entries) Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId: id, amount });
 }
 
 /**
@@ -331,4 +375,4 @@ module.exports = function registerVault(api) {
   api.onInterfaceActionClick(chestClick);
 };
 
-Object.assign(module.exports, { VaultRoom, LAYOUT, rollLoot });
+Object.assign(module.exports, { VaultRoom, LAYOUT, rollLoot, toEntries, awardPet, logLoot });

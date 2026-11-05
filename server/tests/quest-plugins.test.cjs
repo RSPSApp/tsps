@@ -14662,6 +14662,66 @@ test('Regicide leaf and stick traps use Agility checks and cross from the approa
   }
 });
 
+test("Mourning's End I publishes and restores the completed Arianwyn briefing", () => {
+  const { api } = mockApi();
+  const persisted = new Map();
+  api.persistAttribute = (key, value) => persisted.set(key, value);
+  require('../plugins/quests/quests/MourningsEndPartI.Quest')(api);
+  const runtime = require('../plugins/quests/QuestRuntime');
+  const quest = runtime.getRegisteredQuests().findLast(q => q.key === 'mournings_end_part_i');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const createPlayer = () => {
+    const player = new Player(new PlayerSession(channel));
+    player.setUsername('me1briefing');
+    return player;
+  };
+  const key = 'mournings-end-part-i:briefed';
+  assert.equal(persisted.get(key), false, 'briefing flag has the saved starting default');
+  const steps = require('../data/definitions/npc-dialogues.json')["Mourning's End Part I"].variants['in-need-of-your-skills'];
+  const final = steps.at(-1);
+  assert.equal(final.player, "Alright, I'll see what I can do.");
+  const choice = steps.find(step => step.type === 'choice');
+  assert.equal(choice.options.length, 2, 'both backstory choices converge on the final line');
+  for (const npcId of [api.core.NpcIdentifiers.ELUNED, api.core.NpcIdentifiers.ARIANWYN_6]) {
+    const player = createPlayer();
+    api.emitCustomEvent('npc-dialogue:action', { player, npcId, kind: 'message', stepId: 'qEuEsp' });
+    assert.equal(quest.getStage(player), 1, 'real crystal message produces the introduction stage');
+    assert.equal(player.getPacketSender().getVarp(517), 2);
+    const line = { player, npcId, step: final, text: final.player };
+    api.emitCustomEvent('npc-dialogue:line', line);
+    assert.equal(player.getPacketSender().getVarp(517), 2, 'wait until the final player line is continued');
+    assert.equal(typeof line.after, 'function');
+    line.after();
+    assert.equal(player.getPacketSender().getVarp(517), 3, 'publish the disguise objective immediately');
+    assert.equal(quest.getStage(player), 1, 'saved stages stay compatible');
+    assert.equal(player.getAttribute(key), true);
+
+    const restored = createPlayer();
+    restored.setAttribute('quest.mournings_end_part_i.stage', '1');
+    restored.setAttribute(key, player.getAttribute(key));
+    runtime.sendQuestVarps({ player: restored });
+    assert.equal(restored.getPacketSender().getVarp(517), 3, 'login replays the durable flag');
+    api.emitCustomEvent('player:bootstrap-complete', { player: restored });
+    assert.equal(restored.getPacketSender().getVarp(517), 3, 'bootstrap keeps the briefing phase');
+    const repeat = { player: restored, npcId, step: final, text: final.player };
+    api.emitCustomEvent('npc-dialogue:line', repeat);
+    repeat.after();
+    assert.equal(quest.getStage(restored), 1);
+    assert.equal(restored.getPacketSender().getVarp(517), 3, 'repeated briefing stays at the same phase');
+    quest.setStage(restored, 0);
+    assert.equal(restored.getAttribute(key), false, 'reset clears the old briefing');
+    quest.setStage(restored, 1);
+    assert.equal(restored.getPacketSender().getVarp(517), 2, 'restarting needs a new briefing');
+    const restarted = { player: restored, npcId, step: final, text: final.player };
+    api.emitCustomEvent('npc-dialogue:line', restarted);
+    restarted.after();
+    assert.equal(restored.getPacketSender().getVarp(517), 3, 'the briefing can be completed again');
+  }
+});
+
 test("Mourning's End I last teleport crystal charge becomes a saveable seed", () => {
   const { api: base } = mockApi();
   const itemActions = new Map();
@@ -23059,4 +23119,127 @@ test('In Search of Knowledge resumes the reward after the final tome is handed i
   assert.ok(lines.includes('Enough talk now, Shhhh!'));
   assert.equal(attributes.get('quest.in_search_of_knowledge.stage'), 3);
   assert.equal(items.get(ids.LAMP_OF_KNOWLEDGE), 1);
+});
+
+
+function rfdNativeCounterFixture(t, initial = {}) {
+  const { api, handlers } = mockApi();
+  delete require.cache[require.resolve('../plugins/quests/quests/RecipeForDisaster.Quest')];
+  require('../plugins/quests/quests/RecipeForDisaster.Quest')(api);
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().findLast(q => q.key === 'recipe_for_disaster');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  player.setUsername('rfdnative');
+  for (const [key, value] of Object.entries(initial)) player.setAttribute(key, value);
+  const sender = player.getPacketSender();
+  const replay = () => {
+    for (const handler of handlers.playerLogin) handler({ player });
+    for (const handler of handlers.custom.get('player:bootstrap-complete') ?? []) handler({ player });
+  };
+  t.after(() => { for (const handler of handlers.playerLogout) handler({ player }); });
+  return { player, sender, quest, replay, api, handlers };
+}
+
+test('RFD native subquest completion counts opening, each rescue and finale without awarding progress', t => {
+  const f = rfdNativeCounterFixture(t), key = 'recipe-for-disaster:rescues';
+  f.player.setAttribute('recipe-for-disaster:feast-seen', true);
+  for (const [stage, expected] of [[0, 0], [1, 0], [4, 1]]) {
+    f.quest.setStage(f.player, stage);
+    assert.equal(f.sender.getVarbit(13987), expected);
+  }
+  let flags = 0;
+  for (let i = 0; i < 8; i++) {
+    flags |= 1 << i; f.player.setAttribute(key, flags); f.replay();
+    assert.equal(f.sender.getVarbit(13987), i + 2, 'opening plus exactly the completed rescues');
+  }
+  assert.equal(f.sender.getVarbit(1850), 4, 'all rescues still await the final battle');
+  f.quest.setStage(f.player, 5);
+  assert.equal(f.sender.getVarbit(13987), 10);
+  assert.equal(f.player.getAttribute('quest.points'), undefined, 'publication cannot award quest points');
+  f.replay(); assert.equal(f.sender.getVarbit(13987), 10);
+  assert.equal(f.player.getAttribute(key), 255);
+});
+
+test('RFD native subquest completion restores authoritative legacy parent completion and actual incomplete child states', t => {
+  const f = rfdNativeCounterFixture(t, { 'quest.recipe_for_disaster.stage': 5, 'quest.points': 17 });
+  const C = require('../dist/game/cache/CacheDefinitions').CacheDefinitions;
+  const children = [[1892, 60], [1867, 40], [1895, 110], [1896, 5], [1878, 5], [1904, 170], [1910, 20], [1914, 50]];
+  // These sentinel bits are outside both the RFD main state and native subquest counter.
+  const parents = [...new Set([1850, 13987].map(id => C.getVarbit(id).baseVar))];
+  for (const parent of parents) f.sender.sendConfig(parent, 1 << 30);
+  const before = f.player.getInventory().getItems().map(item => item.clone());
+  f.replay();
+  assert.equal(f.sender.getVarbit(13987), 10);
+  for (const [id, value] of children) assert.equal(f.sender.getVarbit(id), value, 'completed parent publishes native rescue ' + id);
+  for (const parent of parents) assert.equal(f.sender.getVarp(parent) & (1 << 30), 1 << 30, 'sibling bit preserved in parent '+parent);
+  assert.equal(f.player.getAttribute('recipe-for-disaster:rescues'), undefined, 'legacy flags stay untouched');
+  assert.equal(f.player.getAttribute('quest.points'), 17);
+  assert.deepEqual(f.player.getInventory().getItems(), before);
+  f.replay(); assert.equal(f.sender.getVarbit(13987), 10, 'relog/bootstrap cannot double count');
+  // A normal child update after restoration must not undo a completed legacy parent.
+  const pirateChoice = f.handlers.custom.get('npc-dialogue:choice').find(handler => handler.name === 'handlePirateChoice');
+  pirateChoice({ player: f.player, npcId: f.api.core.NpcIdentifiers.MURPHY, option: 'Talk about Recipe for Disaster.' });
+  assert.equal(f.sender.getVarbit(1895), 110, 'Murphy cannot reopen a child of a completed parent');
+  assert.equal(f.sender.getVarbit(13987), 10);
+  assert.equal(f.player.getAttribute('recipe-for-disaster:rescues'), undefined);
+  assert.equal(f.player.getAttribute('quest.points'), 17);
+  assert.deepEqual(f.player.getInventory().getItems(), before);
+  f.player.setAttribute('quest.recipe_for_disaster.stage', 4);
+  f.player.setAttribute('recipe-for-disaster:feast-seen', true);
+  f.player.setAttribute('recipe-for-disaster:pirate-stage', 110);
+  f.replay();
+  assert.equal(f.sender.getVarbit(13987), 2, 'incomplete parent counts only opening and the actually completed numeric child');
+  for (const [id] of children) if (id !== 1895) assert.equal(f.sender.getVarbit(id), 0, 'incomplete parent must not retain inferred completion');
+  assert.equal(f.player.getAttribute('recipe-for-disaster:rescues'), undefined);
+});
+
+test('native View info derives the original overview for started and completed Pirate saves', t => {
+  const runtimePath = require.resolve('../plugins/quests/QuestRuntime');
+  const previousRuntime = require.cache[runtimePath];
+  delete require.cache[runtimePath];
+  t.after(() => {
+    if (previousRuntime) require.cache[runtimePath] = previousRuntime;
+    else delete require.cache[runtimePath];
+  });
+  const Q = require(runtimePath);
+  const { api } = mockApi();
+  const buttons = new Map();
+  api.onInterfaceActionButton = (ids, handler) => {
+    for (const id of Array.isArray(ids) ? ids : [ids]) buttons.set(id, handler);
+  };
+  require('../plugins/quests/quests/PiratesTreasure.Quest')(api);
+  const quest = Q.getRegisteredQuests().find(q => q.key === 'pirates_treasure');
+  assert.ok(quest);
+  assert.equal(require('../plugins/quests/data/quest-start-text.json')[quest.name], undefined,
+    'this quest exercises its authored unstarted journal rather than static start text');
+  const { questMetadata } = require('../plugins/quests/QuestList.QuestRuntime');
+  const row = questMetadata(quest, api.core.CacheDefinitions);
+  assert.equal(row.id[0], 16);
+  const click = buttons.get((399 << 16) | 7);
+  assert.equal(typeof click, 'function');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  for (const stage of [1, 4]) {
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const player = new Player(new PlayerSession(channel));
+    player.setUsername('questoverview');
+    player.setAttribute('quest.pirates_treasure.stage', stage);
+    player.setAttribute('quest.points', 17);
+    const sender = player.getPacketSender(), opened = [], scripts = [];
+    t.mock.method(sender, 'sendSubInterface', (...args) => { opened.push(args); return sender; });
+    t.mock.method(sender, 'sendInterfaceScript', (...args) => { scripts.push(args); return sender; });
+    const items = player.getInventory().getItems().map(item => item.clone());
+    t.mock.method(player, 'setAttribute', () => assert.fail('View info cannot modify a saved attribute'));
+    click({ player, slot: row.id[0], opId: 1 });
+    assert.equal(opened.at(-1)[1], 782, 'View info opens the overview at saved stage ' + stage);
+    assert.equal(scripts.at(-1)[0], 6821);
+    assert.equal(scripts.at(-1)[1][1], 'speaking to <col=800000>Redbeard Frank<col=000080> at Port Sarim.');
+    click({ player, slot: row.id[0], opId: 2 });
+    assert.equal(opened.at(-1)[1], 119, 'Read journal still opens the current progress journal');
+    assert.equal(quest.getStage(player), stage);
+    assert.equal(player.getAttribute('quest.points'), 17);
+    assert.deepEqual(player.getInventory().getItems(), items);
+  }
 });

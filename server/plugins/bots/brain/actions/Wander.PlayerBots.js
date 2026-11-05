@@ -11,6 +11,7 @@ const {
   getWildernessHotspot,
   isOutsideWildernessHotspots,
 } = require("../../behaviours/pvp/WildernessHotspotRegistry.PlayerBots");
+const { Location } = require("../../../../src/main/typescript/elvarg/game/model/Location");
 
 const WALK_RADIUS = 10;
 const ENDPOINT_LINGER_MS = 500;
@@ -19,6 +20,9 @@ const PRE_WALK_MAX_MS = 1650;
 const DYNAMIC_JITTER_MS = 3200;
 const LINGER_JITTER_MS = 2200;
 const DITCH_PROBE_RADIUS = 30;
+// A target the route finder cannot reach must not be walked at forever: after this
+// long the bot picks a new one instead of pacing the same few tiles.
+const TARGET_TIMEOUT_MS = 30000;
 
 function hashUsername(value) {
   const text = typeof value === "string" ? value : "";
@@ -138,8 +142,20 @@ function createWanderAction(spec, world) {
   }
 
   function pickTarget(player, state, nowMs) {
-    const acceptTarget = acceptTargetFor(player, state);
-    const options = acceptTarget ? { acceptTarget } : {};
+    const stateAccept = acceptTargetFor(player, state);
+    const regionManager = world?.regionManager ?? null;
+    const privateArea = player?.getPrivateArea?.() ?? null;
+    const acceptTarget = (target) => {
+      if (!target || (stateAccept && stateAccept(target) !== true)) {
+        return false;
+      }
+      if (!regionManager) {
+        return true;
+      }
+      const tile = new Location(target.x, target.y, target.z);
+      return !regionManager.blocked(tile, privateArea) && !regionManager.isWater(tile);
+    };
+    const options = { acceptTarget };
     const bounds = assignedBounds(state);
     if (bounds) {
       options.bounds = bounds;
@@ -148,6 +164,7 @@ function createWanderAction(spec, world) {
     state.roaming.target = target
       ? { x: target.x, y: target.y, z: target.z }
       : null;
+    state.roaming.targetPickedAt = nowMs;
     state.roaming.nextWalkAt = nowMs + preWalkDelay(player, nowMs);
   }
 
@@ -173,6 +190,13 @@ function createWanderAction(spec, world) {
         return "running";
       }
       if (!isAtTarget(player, roaming.target)) {
+        if (nowMs - Number(roaming.targetPickedAt ?? 0) >= TARGET_TIMEOUT_MS) {
+          roaming.target = null;
+          roaming.endpointPauseUntil = 0;
+          clearMovementRequest(player);
+          pickTarget(player, state, nowMs);
+          return "running";
+        }
         requestMovement(player, roaming.target.x, roaming.target.y, {
           reason: "brain_roam",
           basicPather: true,

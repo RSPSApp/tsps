@@ -55,6 +55,17 @@ const LOOTING_BAG_EXCLUDED = new Set(["Aviansie", "Abyssal demon", "Black chinch
  */
 const QUEST_REQUIREMENT_NOTE = /^Quest requirement: WikiQuestDropRequirement\(questKey=([^,]+), mode=([A-Za-z]+)\)$/;
 
+/**
+ * A row's place limit, from the Wiki footnote the export keeps as free text: "Only dropped in
+ * Ruins of Tapoyauik", "only dropped by those found in/within the Forthos Dungeon", "Only dropped
+ * by giants on the Giants' Plateau" ("not on" turns it round). The place is capitalised words and
+ * ends the sentence or clause, which leaves out clue-scroll conditions ("...in Handelmort Mansion
+ * when completing a clue"), the Wilderness (handled elsewhere) and "members worlds". The boxes for
+ * each place are in data/drop-locations.json.
+ */
+const LOCATION_NOTE = /[Oo]nly dropped (?:in|by [^.,]*?\b(not )?(?:on|in|within)) (?:the )?([A-Z][\w']*(?: (?:of |the )?[A-Z][\w']*)*)(?:[.,]|$)/;
+const DROP_LOCATIONS = JSON.parse(fs.readFileSync(path.join(__dirname, "data", "drop-locations.json"), "utf8"));
+
 /** NPC param the cache sets on bosses. */
 const NPC_BOSS_PARAM = 1361;
 /** world.json pluginConfig: how many times likelier a boss's rare drops are (1, the default, is OSRS). */
@@ -176,11 +187,23 @@ function isDropQuantity(quantity) {
 
 /**
  * A world's own edits, saved by the browser host's NPC Drops tab to npc-drops-custom.json and
- * absent everywhere else. Rows are addressed by their position in the dump, so this runs before
- * applyOverrides changes the arrays.
+ * absent everywhere else. New saves replace complete tables by name; old index-based saves
+ * remain supported. Both run before applyOverrides changes the arrays.
  */
 function applyCustomDrops(dump, custom) {
   for (const [tableId, edits] of Object.entries(custom.tables ?? {})) {
+    if (edits?.replacement !== undefined) {
+      const table = edits.replacement;
+      if (!table || typeof table !== "object" || Array.isArray(table) ||
+          ["entries", "tertiary"].some(field => table[field] !== undefined &&
+            (!Array.isArray(table[field]) || table[field].some(row => !row || typeof row !== "object" || Array.isArray(row))))) {
+        console.error(`[NpcDrops] invalid saved table '${tableId}'; using the default`);
+        continue;
+      }
+      // Clone: runtime corrections must never mutate the world's saved definition.
+      dump.tables[tableId] = structuredClone(table);
+      continue;
+    }
     const table = dump.tables[tableId];
     if (!table) {
       console.error(`[NpcDrops] npc-drops-custom.json changes unknown table '${tableId}'`);
@@ -228,6 +251,47 @@ function questRequirement(entry) {
     }
   }
   return entry.quest_requirement = requirement;
+}
+
+/** The place a row is limited to, as { place, not }, or null. Cached on the entry like the quest requirement. */
+function locationRequirement(entry) {
+  if (entry.location_requirement !== undefined) return entry.location_requirement;
+  let found = null;
+  for (const note of entry.notes || []) {
+    const match = LOCATION_NOTE.exec(note);
+    if (match && !match[2].startsWith("Wilderness")) {
+      found = { place: match[2], not: !!match[1] };
+      break;
+    }
+  }
+  return entry.location_requirement = found;
+}
+
+/** Whether the NPC stands where the row's place says (or, for "not on", elsewhere). */
+function inRequiredLocation(entry, npc) {
+  const requirement = locationRequirement(entry);
+  if (!requirement) return true;
+  const boxes = DROP_LOCATIONS[requirement.place]?.boxes;
+  if (!boxes) {
+    if (!unknownConditionTypes.has(requirement.place)) {
+      unknownConditionTypes.add(requirement.place);
+      console.warn(`[NpcDrops] no bounds for the drop place '${requirement.place}'; its rows are not limited`);
+    }
+    return true;
+  }
+  const at = npc?.getLocation?.();
+  const inside = !!at && boxes.some(([x1, y1, x2, y2]) => at.getX() >= x1 && at.getX() <= x2 && at.getY() >= y1 && at.getY() <= y2);
+  return inside !== requirement.not;
+}
+
+/** The table without the rows limited to a place the NPC is not in. */
+function withoutOtherLocations(table, npc) {
+  const rows = (field) => (table[field] || []).filter((entry) => inRequiredLocation(entry, npc));
+  const entries = rows("entries");
+  const tertiary = rows("tertiary");
+  return entries.length === (table.entries || []).length && tertiary.length === (table.tertiary || []).length
+    ? table
+    : { ...table, entries, tertiary };
 }
 
 function applyWikiCorrections(tableById) {
@@ -699,13 +763,18 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
   const main = [];
   const boostedMain = [];
   const separateGroups = new Map();
+  const preRollGroups = new Map();
   let preRollHit = false;
 
   for (const entry of entries) {
     if (entry.always) {
       continue;
     } else if (entry.pre_roll) {
-      if (!preRollHit && hits(entry, entryMultiplier(table, entry, rules))) {
+      if (entry.roll_group) {
+        const group = preRollGroups.get(entry.roll_group) || [];
+        group.push(entry);
+        preRollGroups.set(entry.roll_group, group);
+      } else if (!preRollHit && hits(entry, entryMultiplier(table, entry, rules))) {
         drops.push(...resolveEntry(entry, player, context));
         preRollHit = true;
       }
@@ -722,6 +791,31 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
       if (rareMultiplier(table, entry) > 1) boostedMain.push(entry);
       else main.push(entry);
     }
+  }
+
+  // A weighted pre-roll group: one access roll, then exactly one weighted item.
+  // A hit replaces the main roll, like the source's "1/585 chance of hitting the
+  // sigil drop table" (Corporeal Beast).
+  for (const group of preRollGroups.values()) {
+    if (preRollHit) break;
+    const first = group[0];
+    const accessOutOf = Number(first.group_access_out_of);
+    const accessWeight = Number(first.group_access_weight);
+    if (!(accessOutOf > 0) || !(accessWeight > 0)) continue;
+    // Boost the marginal rarity, not merely the choice after gaining access.
+    // A uniform boost must increase access while preserving the group's ratios.
+    const weighted = group.map((entry) => ({
+      ...entry,
+      weight: entry.weight * entryMultiplier(table, {
+        ...entry, out_of: Number(entry.out_of) * accessOutOf / accessWeight,
+      }, rules),
+    }));
+    const totalWeight = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+    const boostedAccess = accessWeight * totalWeight / Number(first.out_of);
+    if (Math.random() * accessOutOf >= Math.min(accessOutOf, boostedAccess)) continue;
+    preRollHit = true;
+    const entry = rollWeighted(weighted, totalWeight, []);
+    if (entry) drops.push(...resolveEntry(entry, player, context));
   }
 
   for (const group of separateGroups.values()) {
@@ -792,6 +886,7 @@ function questItemVerdicts(player, npc, table) {
  * `source` names the kill for npc-drops:chance (the NPC's name unless the caller says otherwise).
  */
 function rollTable(table, player, npc, context = killContext(player, npc), source = sourceName(npc)) {
+  table = withoutOtherLocations(table, npc);
   const chance = chanceRules(player, npc, source);
   const questVerdicts = questItemVerdicts(player, npc, table);
   const selected = OrderedRewards.select(table, player, pluginApi, Math.random,
@@ -1033,5 +1128,5 @@ module.exports = {
   _test: { loadDrops, tablesByNpc, sharedTables },
 
   // Exposed for the smoke test.
-  __internals: { loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier },
+  __internals: { withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier },
 };

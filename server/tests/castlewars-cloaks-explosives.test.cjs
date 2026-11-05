@@ -95,7 +95,7 @@ test('repeated potion drops respawn safely with supplies retained, and leaving s
   const death = tasks.find((task) => task.constructor.name === 'PlayerDeathTask');
   assert.ok(death);
   const inventory = p.getInventory().getItems().map((item) => item.clone());
-  death.execute(); death.execute(); death.execute();
+  for (let tick = 0; tick < 5; tick++) death.execute();
   assert.deepEqual(p.getInventory().getItems(), inventory, 'death retains every unconsumed supply and ordinary item');
   assert.deepEqual(moves, [game.getTeamData(game.TEAM.SARADOMIN).respawnBounds]);
   assert.equal(p.getEquipment().getSlot(core.Equipment.BODY_SLOT), core.ItemIdentifiers.IRON_PLATEBODY);

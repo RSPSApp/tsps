@@ -30,6 +30,8 @@ let pluginApi;
 const DRINK_ANIMATION = new Animation(829);
 const DEFAULT_EMPTY_ITEM = ItemIds.VIAL;
 const NO_EMPTY_ITEM = -1;
+/** Barcrawl reward: the guard's automatic vial-smashing toggle (barbarian guard). */
+const AUTO_SMASH_VIALS_VARBIT = 5668;
 const STAMINA_DURATION_MS = 2 * 60 * 1000;
 const DIVINE_DURATION_MS = 5 * 60 * 1000;
 const OVERLOAD_DURATION_MS = 5 * 60 * 1000;
@@ -1373,11 +1375,17 @@ function handlePotionDrink(player, itemId, slot) {
   Sounds.sendSound(player, Sound.DRINK);
 
   const meta = inventory.getItems()[slot]?.getMeta();
-  inventory.setItem(slot, new Item(entry.replacementId, entry.replacementId === NO_EMPTY_ITEM ? 0 : 1, meta)).refreshItems();
+  const smashVial = entry.replacementId === ItemIds.VIAL
+    && entry.replacementId === entry.potion.emptyItemId
+    && player.getPacketSender().getVarbit?.(AUTO_SMASH_VIALS_VARBIT) === 1;
+  const replacement = smashVial ? NO_EMPTY_ITEM : entry.replacementId;
+  inventory.setItem(slot, new Item(replacement, replacement === NO_EMPTY_ITEM ? 0 : 1, meta)).refreshItems();
   entry.potion.effect(player);
 
   if (entry.potion.drink?.messages) {
     for (const message of entry.potion.drink.messages(itemId)) player.sendMessage(message);
+  } else if (smashVial) {
+    player.sendMessage("You quickly smash the empty vial using the trick a Barbarian taught you.");
   } else if (entry.replacementId === entry.potion.emptyItemId) {
     player.sendMessage(entry.potion.area === "chambers-of-xeric"
       ? "You have finished your potion. The gourd vial disintegrates."
@@ -1468,6 +1476,19 @@ function doseFamily(itemId) {
   return { key: entry.chain, byDose: [entry.potion.emptyItemId, ...[...entry.chain].reverse()], doses: entry.doses, max: 4 };
 }
 
+const PRESET_REFUSAL = "Preset items cannot be used for this.";
+
+/** Preset, untradeable and unbankable copies carry restrictions that pouring must neither shed nor invent. */
+function restrictedVessel(item) {
+  const { Item } = pluginApi.core;
+  return item.isPresetItem?.() === true
+    || item.getMetaValue?.(Item.PRESET_META) === true
+    || item.getMetaValue?.(Item.UNTRADEABLE_META) === true
+    || item.getMetaValue?.(Item.UNBANKABLE_META) === true;
+}
+
+const sameMeta = (a, b) => JSON.stringify(a.getMeta() ?? null) === JSON.stringify(b.getMeta() ?? null);
+
 function pourMessage(player, text) {
   player.getPacketSender().sendSound(POUR_SOUND, 1, 0).sendTypedMessage(pluginApi.core.ChatType.SPAM, text);
 }
@@ -1492,8 +1513,16 @@ function pourPotion(event) {
   const emptySlot = source ? usedWithItemSlot : usedItemSlot;
   if (potion && potion.max > 1 && potion.doses >= 2 && inventory.getItems()[emptySlot].getId() === potion.byDose[0]) {
     event.handled = true;
-    inventory.setItem(potionSlot, new Item(potion.byDose[Math.ceil(potion.doses / 2)], 1));
-    inventory.setItem(emptySlot, new Item(potion.byDose[Math.floor(potion.doses / 2)], 1));
+    // Both halves carry the potion's marks, as drinking does. An empty vessel with marks of its own
+    // would lose them, so only an unmarked one (or one marked alike) takes part.
+    const potionItem = inventory.getItems()[potionSlot];
+    const vessel = inventory.getItems()[emptySlot];
+    if ((restrictedVessel(potionItem) || restrictedVessel(vessel)) && vessel.getMeta() != null && !sameMeta(potionItem, vessel)) {
+      player.sendMessage(PRESET_REFUSAL);
+      return;
+    }
+    inventory.setItem(potionSlot, new Item(potion.byDose[Math.ceil(potion.doses / 2)], 1, potionItem.getMeta()));
+    inventory.setItem(emptySlot, new Item(potion.byDose[Math.floor(potion.doses / 2)], 1, potionItem.getMeta()));
     inventory.refreshItems();
     pourMessage(player, "You divide the liquid between the vessels.");
     return;
@@ -1502,8 +1531,13 @@ function pourPotion(event) {
   event.handled = true;
   const transferred = Math.min(source.doses, source.max - target.doses);
   if (transferred === 0) return;
-  inventory.setItem(usedItemSlot, new Item(source.byDose[source.doses - transferred], 1));
-  inventory.setItem(usedWithItemSlot, new Item(target.byDose[target.doses + transferred], 1));
+  // Doses from a marked vessel into an unmarked one (or the reverse) would shed or invent marks.
+  if ((restrictedVessel(sourceItem) || restrictedVessel(targetItem)) && !sameMeta(sourceItem, targetItem)) {
+    player.sendMessage(PRESET_REFUSAL);
+    return;
+  }
+  inventory.setItem(usedItemSlot, new Item(source.byDose[source.doses - transferred], 1, sourceItem.getMeta()));
+  inventory.setItem(usedWithItemSlot, new Item(target.byDose[target.doses + transferred], 1, targetItem.getMeta()));
   inventory.refreshItems();
   pourMessage(player, `You have combined the liquid into ${DOSE_WORDS[target.doses + transferred]} doses.`);
 }
@@ -1522,7 +1556,7 @@ function emptyVessel(event) {
   const inventory = player.getInventory();
   if (empty <= 0 || inventory.getItems()[slot]?.getId() !== itemId) return;
   event.handled = true;
-  inventory.setItem(slot, new Item(empty, 1)).refreshItems();
+  inventory.setItem(slot, new Item(empty, 1, inventory.getItems()[slot].getMeta())).refreshItems();
   player.getPacketSender().sendTypedMessage(pluginApi.core.ChatType.SPAM, "You empty the vial.");
 }
 

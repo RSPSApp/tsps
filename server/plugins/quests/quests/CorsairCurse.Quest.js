@@ -68,6 +68,7 @@ module.exports = function registerCorsairCurseQuest(api) {
   const DUNGEON_HOLE_OBJECT = ObjectIdentifiers.HOLE_54; // 31791, Enter (four pillars)
   const OGRE_CAVE_OBJECT = ObjectIdentifiers.CAVE_59; // 31766, Enter (west of the cove)
   const VINE_LADDER_OBJECT = ObjectIdentifiers.VINE_LADDER_2; // 31790, Climb
+  const HUT_STAIRS_OBJECT = 31735; // ds2_corsair_cove_stairs_ramp, a lone "Climb": ground end 2531,2833,0 leads up, upper end 2529,2834,1 leads down
 
   // Prose conditions on the "The Corsair Curse" page.
   const COND_NO_TOCK_YET = "EXq6K1";
@@ -667,9 +668,16 @@ module.exports = function registerCorsairCurseQuest(api) {
 
   /** The generic Ladders plugin asks "which way?" for a lone "Climb"; own that click. */
   function claimClimb(request) {
-    if (!request || request.objectId !== VINE_LADDER_OBJECT || !request.player) return;
-    request.handled = true;
-    leaveDungeon(request.player);
+    if (!request || !request.player) return;
+    if (request.objectId === VINE_LADDER_OBJECT) {
+      request.handled = true;
+      leaveDungeon(request.player);
+    } else if (request.objectId === HUT_STAIRS_OBJECT) {
+      // Ithoi's stairs are a ramp: each end leads only one way, so the floor of the clicked end decides.
+      const floor = request.object?.getLocation?.().getZ?.() ?? request.player.getLocation().getZ();
+      request.handled = true;
+      api.emitCustomEvent(floor === 0 ? "ladders:climbUp" : "ladders:climbDown", { player: request.player, object: request.object });
+    }
   }
 
   function handleItemOnObject(event) {
@@ -898,8 +906,9 @@ module.exports = function registerCorsairCurseQuest(api) {
         scene.enter(ithoi); ithoi.forceChat("Arrr... uh-oh!");
         for (const [tick, x, y] of [[1,2530,2833],[2,2532,2833],[3,2532,2835],[4,2532,2836]]) later(scene, tick, () => ithoi.moveTo(new Location(x, y, 0)));
         later(scene, 8, () => {
-          ithoi.forceChat("Arrr!"); ithoi.performAnimation(new Animation(711)); ithoi.performGraphic(new Graphic(120, 92));
-          player.getPacketSender().sendProjectile(ithoi.getLocation(), new Location(2530, 2837, 0), 0, 90, 127, 43, 31, null, 51);
+          ithoi.forceChat("Arrr!"); ithoi.performAnimation(new Animation(711)); ithoi.performGraphic(new Graphic(93, 92));
+          // Water Strike (the Wiki transcript: "Ithoi casts Water Strike"): cast graphic 93, projectile 94, as CombatSpells.WATER_STRIKE.
+          player.getPacketSender().sendProjectile(ithoi.getLocation(), new Location(2530, 2837, 0), 0, 90, 94, 43, 31, null, 51);
           placeDriftwood(player, WET_DRIFTWOOD_OBJECT);
         });
       });

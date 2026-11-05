@@ -15,9 +15,9 @@ void (async () => {
     assert.equal(prefersMobileGameframe(), false, "leaving phone emulation restores the desktop layout without reloading");
     assert.equal(isMobileMode, true, "layout changes do not recreate the startup renderer profile");
     narrow = true;
-    assert.equal(prefersMobileGameframe(), true, "a narrow desktop still switches to mobile");
+    assert.equal(prefersMobileGameframe(), false, "a narrow desktop window keeps the desktop layout");
     narrow = false;
-    assert.equal(prefersMobileGameframe(), false, "growing the window switches back");
+    assert.equal(prefersMobileGameframe(), false, "growing the window keeps the desktop layout");
     browser.maxTouchPoints = 5;
     assert.equal(prefersMobileGameframe(), true, "iPad desktop user agents remain mobile");
     browser.userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/142.0.0.0";

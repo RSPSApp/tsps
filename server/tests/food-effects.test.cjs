@@ -403,3 +403,8 @@ test('quest supplies restore bounded Prayer and share stamina, with their real c
     }
   } finally { foodAreaAllowed = false; }
 });
+
+test("eating a Mackerel names the Mackerel, not the cod (issue #2455)", () => {
+  const mackerel = DATA.foods.find((food) => food.name === "Mackerel");
+  assert.equal(mackerel.message, "You eat the mackerel.");
+});

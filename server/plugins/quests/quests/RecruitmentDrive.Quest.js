@@ -1018,6 +1018,8 @@ module.exports = function registerRecruitmentDriveQuest(api) {
     varbitId: VARBIT_RECRUITMENT_DRIVE,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
+    // Native rd_main stays 1 throughout the tests/return; only Sir Tiffy's reward is 2.
+    varbitValue: stage => stage >= STAGE_COMPLETE ? 2 : stage >= STAGE_STARTED ? 1 : 0,
     questPoints: 1,
     xpRewards: [
       { skillId: Skill.PRAYER.getIndex(), amount: 1000.5, label: "Prayer" },

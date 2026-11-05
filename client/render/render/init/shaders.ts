@@ -61,7 +61,6 @@ import { LoginOverlay } from "../../../ui/devoverlay/LoginOverlay";
 import { OverheadPrayerOverlay } from "../../../ui/devoverlay/OverheadPrayerOverlay";
 import { OverheadTextOverlay } from "../../../ui/devoverlay/OverheadTextOverlay";
 import { TutorialHintOverlay } from "../../../ui/devoverlay/TutorialHintOverlay";
-import { SystemUpdateOverlay } from "../../../ui/devoverlay/SystemUpdateOverlay";
 import {
     HealthBarEntry,
     HitsplatEntry,
@@ -179,7 +178,7 @@ import {
     createProjectileProgram,
 } from "../../shaders/Shaders";
 import { KNOWN_WATER_TEXTURE_IDS } from "../../water/WaterTextureIds";
-import { createWidgetsOverlay, getChatboxScreenRect } from "../../../widgets/gl/widgetsOverlayFactory";
+import { createWidgetsOverlay } from "../../../widgets/gl/widgetsOverlayFactory";
 import type { WebGLOsrsRendererHost } from "../hostInterface";
 import { RENDER_CONSTANTS } from "../constants";
 
@@ -453,22 +452,6 @@ export async function initShaders(host: WebGLOsrsRendererHost, ): Promise<Progra
             }
         } catch (e) {
             console.warn("[WebGLOsrsRenderer] Failed to init loading message overlay:", e);
-        }
-
-        // Add system update countdown overlay ("System update in: MM:SS" above the chatbox)
-        try {
-            if (host.overlayManager && host.sceneUniformBuffer) {
-                host.systemUpdateOverlay = new SystemUpdateOverlay({
-                    getChatboxRect: () => getChatboxScreenRect(host),
-                });
-                host.overlayManager.add(host.systemUpdateOverlay, false);
-                host.systemUpdateOverlay.init({
-                    app: host.app,
-                    sceneUniforms: host.sceneUniformBuffer,
-                });
-            }
-        } catch (e) {
-            console.warn("[WebGLOsrsRenderer] Failed to init system update overlay:", e);
         }
 
         // Add server-path overlay (numbers over tiles returned by pathfind)

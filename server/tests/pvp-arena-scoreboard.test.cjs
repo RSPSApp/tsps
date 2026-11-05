@@ -15,7 +15,7 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const DuelArena = require('../plugins/minigames/DuelArena.plugin');
 const Scoreboard = require('../plugins/minigames/duelarena/Scoreboard.DuelArena');
 
-const hooks = { objects: {}, custom: {}, persisted: new Map(), options: [], deaths: [], logouts: [] };
+const hooks = { objects: {}, custom: {}, persisted: new Map(), options: [], deaths: [], logouts: [], clicks: [] };
 let INTERFACE, BOARD, TEXT;
 let index = 1;
 
@@ -24,6 +24,9 @@ before(() => {
   const noop = () => {};
   const api = new Proxy({
     core: PluginManager.getCoreApi(),
+    getPluginConfig: (key, fallback) => key === 'DuelArena:pvpArenaWorld' ? true : fallback,
+    onInterfaceActionClick: handler => hooks.clicks.push(handler),
+    sendMultiChatboxPrompt: (_player, _title, _label, signUp) => signUp(),
     persistAttribute: (key, value) => hooks.persisted.set(key, value),
     onObjectInteraction: (name, actions) => { (hooks.objects[name] ??= []).push(actions); },
     onCustomEvent: (name, handler) => { (hooks.custom[name] ??= []).push(handler); },
@@ -175,4 +178,44 @@ test('the cache places both boards at the arena, each with an open tile beside i
     }
     assert.ok(reachable > 0, `an open tile reaches the board at ${x},${y}`);
   }
+});
+
+
+test('ranked staging does not reset dead, fighting or teleporting native players', t => {
+  const Matchmaking = require('../plugins/minigames/duelarena/Matchmaking.DuelArena');
+  const { Location } = require('../dist/game/model/Location');
+  const { Skill } = require('../dist/game/model/Skill');
+  Matchmaking.queue.length = 0;
+  Matchmaking.matches.clear();
+  const [a, b] = [realPlayer(t), realPlayer(t)];
+  for (const [i, player] of [a, b].entries()) {
+    player.setUsername(`Ranked${i}`);
+    player.setLocation(new Location(3366, 3275, 0));
+    const uid = PluginManager.getCoreApi().CacheDefinitions.getComponentId('pvp_arena_sidepanel:right');
+    for (const handler of hooks.clicks) handler({ player, groupId: uid >>> 16, childId: uid & 65535 });
+  }
+  const climb = player => {
+    for (const actions of hooks.objects['Staging area steps']) actions['Climb-up']({ player });
+  };
+  climb(a);
+  a.getSkillManager().setCurrentLevel(Skill.HITPOINTS, 0);
+  climb(b);
+  assert.equal(DuelArena._test.sessions.has(a), false);
+  assert.equal(a.getHitpoints(), 0, 'staging cannot revive a dead participant');
+  a.getSkillManager().setCurrentLevel(Skill.HITPOINTS, 10);
+  a.getCombat().setTarget(b);
+  a.getCombat().getTeleblockTimer().start(300);
+  a.setSkullTimer(300);
+  climb(b);
+  assert.equal(DuelArena._test.sessions.has(a), false);
+  assert.equal(a.getCombat().getTarget(), b, 'combat is not cleared before eligibility checks');
+  assert.ok(a.getCombat().getTeleblockTimer().secondsRemaining() > 0);
+  assert.equal(a.getSkullTimer(), 300);
+  a.getCombat().reset();
+  a.setTeleporting(true);
+  climb(b);
+  assert.equal(DuelArena._test.sessions.has(a), false);
+  assert.equal(a.isTeleportingReturn(), true);
+  a.setTeleporting(false);
+  Matchmaking.matches.clear();
 });

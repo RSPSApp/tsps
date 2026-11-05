@@ -223,12 +223,13 @@ function uncharge({ player, item }) {
   if (!isActivated(item)) return false;
   const inventory = player.getInventory();
   const etherId = ids().REVENANT_ETHER;
-  if (!inventory.contains(etherId) && inventory.getFreeSlots() < 1) {
+  const returned = staff.chargesOf(item) + ACTIVATION_ETHER;
+  const refund = new core.Item(etherId, returned);
+  if (inventory.getAddableAmount(refund) < returned) {
     player.sendMessage("You don't have enough inventory space to uncharge your sceptre.");
     return true;
   }
-  const returned = staff.chargesOf(item) + ACTIVATION_ETHER;
-  inventory.addItem(new core.Item(etherId, returned));
+  inventory.addItem(refund);
   staff.setCharges(item, 0);
   item.setId(staff.unchargedByCharged.get(item.getId()));
   inventory.refreshItems();

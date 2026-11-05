@@ -1,3 +1,4 @@
+import { lowEndDeviceModeEnabled } from "../../game/plugins/lowenddevice/LowEndDeviceMode";
 import Denque from "denque";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
@@ -158,7 +159,7 @@ import { DrawRange, NULL_DRAW_RANGE, newDrawRange } from "../DrawRange";
 import { InteractType } from "../InteractType";
 import { profiler } from "../PerformanceProfiler";
 import { PlayerChatheadFactory } from "../PlayerChatheadFactory";
-import { resolveFogRange } from "../RenderDistancePolicy";
+import { fogSettings, resolveFogRange } from "../RenderDistancePolicy";
 import { WebGLMapSquare } from "../WebGLMapSquare";
 import { sceneryRangeVisible } from "../SceneryVisibility";
 import { WorldEntityAnimator } from "../WorldEntityAnimator";
@@ -328,8 +329,7 @@ export function drawWithRoofPlaneFilter(host: WebGLOsrsRendererHost,
         const moving = map && host.mapManager.worldEntityMapIds.has(map.id);
         const point = map ? host.getRenderCullTile() : undefined;
         const distance = map ? resolveFogRange({ renderDistance: host.getFrameRenderDistanceTiles(),
-            autoFogDepth: host.autoFogDepth, autoFogDepthFactor: host.autoFogDepthFactor,
-            manualFogDepth: host.fogDepth, hd: host.osrsClient.clientPlugins.hdEnabled() }).fogEnd : 0;
+            ...fogSettings(host), hd: host.osrsClient.clientPlugins.hdEnabled() }).fogEnd : 0;
         const lodDistance = map ? host.getFrameLodThresholdTiles() : 0;
         const baseX = map?.getRenderBaseTileX() ?? 0, baseZ = map?.getRenderBaseTileY() ?? 0;
 
@@ -439,7 +439,7 @@ export function resolveEffectiveRenderDistanceTiles(host: WebGLOsrsRendererHost,
             return host.effectiveRenderDistanceTiles | 0;
         }
         const profile = host.syncBrowserQualityProfile();
-        const target = isTouchDevice || isLowEndDevice ? Math.min(base, profile.renderDistanceCap | 0) : base;
+        const target = isTouchDevice || isLowEndDevice || lowEndDeviceModeEnabled ? Math.min(base, profile.renderDistanceCap | 0) : base;
         host.effectiveRenderDistanceTiles = Math.max(0, target | 0);
         host.effectiveRenderDistanceFrame = frameId | 0;
         return host.effectiveRenderDistanceTiles | 0;

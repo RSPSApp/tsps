@@ -74,6 +74,7 @@ function player({ combat = 100, skulled = false, inventory = {} } = {}) {
     contains: (id) => container.getAmount(id) > 0,
     getFreeSlots: () => slots.filter((item) => item.id === -1).length,
     deleteNumber: (id, amount) => { slots[container.getSlotForItemId(id)].amount -= amount; },
+    getAddableAmount: (item) => item.amount,
     addItem: (item) => container.forceAdd(null, item),
     forceAdd: (_, item) => {
       const slot = container.getSlotForItemId(item.id);

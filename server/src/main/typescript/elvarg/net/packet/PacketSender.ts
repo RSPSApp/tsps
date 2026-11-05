@@ -80,10 +80,8 @@ import {
   encodeWidgetSetAngle,
   encodeWidgetSetNpcHead,
   encodeWidgetSetPlayerHead,
-  encodeWidgetSetQuestList,
   encodeWidgetSetRoot,
   encodeWidgetSetText,
-  type QuestListGroup,
   type ScriptInventorySnapshot,
   MAIN_INVENTORY_GROUP_ID,
   MAIN_INVENTORY_SLOT_FLAGS,
@@ -306,12 +304,6 @@ export class PacketSender {
 
   sendToggle(id: number, state: number): this {
     return this.sendConfig(id, state);
-  }
-
-  /** Populates the quest list (side journal); the client renders opcode 116. */
-  sendQuestList(groups: QuestListGroup[]): this {
-    this.player.getSession().sendClientPacket(encodeWidgetSetQuestList(groups));
-    return this;
   }
 
   sendChatOptions(
@@ -1288,7 +1280,7 @@ export class PacketSender {
     const lastItem = this.player.getAttribute?.(CREATION_MENU_LAST_ITEM_ATTRIBUTE);
     if (Number.isInteger(lastItem)) this.sendConfig(CREATION_MENU_LAST_ITEM_VARP, lastItem);
     this.sendInterfaceScript(2046, [
-      Number.isInteger(options.mode) ? options.mode : 13,
+      Number.isInteger(options.mode) ? options.mode : 0,
       [String(menu.getTitle() ?? "What would you like to make?"), ...names].join("|"),
       maxAmount,
       ...paddedIds,

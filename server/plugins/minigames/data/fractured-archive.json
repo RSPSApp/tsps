@@ -130,7 +130,7 @@
     "postGuardian": {"npcs": ["armacus_selles_postguardian", "alliance_guardian_of_armadyl_3", "alliance_guardian_of_armadyl_4", "alliance_guardian_of_armadyl_5", "alliance_guardian_of_armadyl_6"], "tiles": [[4127, 5573], [4126, 5574], [4128, 5574], [4126, 5576], [4128, 5576]], "runTo": [4127, 5590]}
   },
   "loot": {
-    "$comment": "Wiki, Chest (The Fractured Archive): three standard rolls when no unique (weights out of 148, from the Drop Rate Project), each roll 1/51 to give five times as much; tertiaries per chest. The unique chance, the uniques' weights (the Wiki only ranks them: Rondache > Zorya's tome = Horn of Bran > Ascension crossbows > Obligator) and the pet's rate are estimates. Aether catalyst (3/148) is left out: the cache has no item by that name.",
+    "$comment": "Wiki, Chest (The Fractured Archive): three standard rolls when no unique (weights out of 148, from the Drop Rate Project), each roll 1/51 to give five times as much; tertiaries per chest. The unique chance and the uniques' weights (the Wiki only ranks them: Rondache > Zorya's tome = Horn of Bran > Ascension crossbows > Obligator) are estimates; Orion's rate is the Wiki's 1/750. Aether catalyst (3/148) is left out: the cache has no item by that name.",
     "rolls": 3,
     "bonusChance": 51,
     "bonusFactor": 5,
@@ -171,6 +171,6 @@
       ["wine_of_zamorak", 32, 36, 3]
     ],
     "tertiary": [["archivists_folio_empty", 20], ["tfa_mote_air", 80], ["tfa_mote_water", 80], ["tfa_mote_earth", 80], ["tfa_mote_fire", 80], ["CLUE_SCROLL_ELITE_", 12]],
-    "pet": ["ocelluspet", 400]
+    "pet": ["ocelluspet", 750]
   }
 }

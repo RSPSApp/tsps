@@ -1,5 +1,5 @@
 import assert from "assert";
-import { EquipmentSlot, withSeqHandItems } from "../rs/config/player/Equipment";
+import { EquipmentSlot, withActionSeqHandItems, withSeqHandItems } from "../rs/config/player/Equipment";
 import { PlayerAppearance } from "../rs/config/player/PlayerAppearance";
 
 const app = new PlayerAppearance(0, [0, 0, 0, 0, 0], [0, 1, 2, 3, 4, 5, 6]);
@@ -23,6 +23,16 @@ const armed = new PlayerAppearance(0, [0, 0, 0, 0, 0], [0, 1, 2, 3, 4, 5, 6], ((
 const seated = withSeqHandItems(armed, { leftHandItem: 0, rightHandItem: 0 });
 assert.strictEqual(seated.equip[EquipmentSlot.WEAPON], -1);
 assert.strictEqual(seated.equip[EquipmentSlot.SHIELD], -1);
+
+// Native Actor.dp() supplies a sequence to PlayerComposition only once its start delay is zero.
+const handOverrides = { leftHandItem: 0, rightHandItem: 0 };
+assert.strictEqual(withActionSeqHandItems(armed, handOverrides, 749, 30), armed);
+assert.strictEqual(withActionSeqHandItems(armed, handOverrides, 749, 1), armed);
+const squeezing = withActionSeqHandItems(armed, handOverrides, 749, 0);
+assert.strictEqual(squeezing.equip[EquipmentSlot.WEAPON], -1);
+assert.strictEqual(squeezing.equip[EquipmentSlot.SHIELD], -1);
+assert.strictEqual(withActionSeqHandItems(armed, handOverrides, -1), armed);
+assert.strictEqual(withActionSeqHandItems(armed, handOverrides, 749, 0, true), armed);
 
 // An NPC-transformed player draws the NPC, not held items.
 const transformed = new PlayerAppearance(0, [0, 0, 0, 0, 0], [0, 1, 2, 3, 4, 5, 6], undefined, undefined, 172);

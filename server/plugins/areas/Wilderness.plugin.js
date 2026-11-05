@@ -695,6 +695,8 @@ module.exports = {
   register(api) {
     require("./wilderness/Statistics.Wilderness")(api, isInWilderness);
     require("./wilderness/Diary.Wilderness")(api);
+    require("./wilderness/FountainOfRune.Wilderness")(api);
+    require("./wilderness/DemonicRuins.Wilderness")(api);
     pluginApi = api;
     const state = createState();
 

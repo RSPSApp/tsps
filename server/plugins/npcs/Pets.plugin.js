@@ -87,6 +87,9 @@ const PETS = [
   { enumName: "AKKHITO", petId: 11846, morphId: 11850, itemId: 27352, dialogue: -1,
     morphUnlock: { itemId: ItemIdentifiers.REMNANT_OF_AKKHA, consume: true, name: "a remnant of Akkha" } },
   { enumName: "TUMEKENS_DAMAGED_GUARDIAN", petId: 11850, morphId: 11812, itemId: 27352, dialogue: -1 },
+  // The Fractured Archive: Orion and Orion (robed) share one family and collection log slot.
+  { enumName: "ORION", petId: NpcIdentifiers.ORION, houseNpcId: NpcIdentifiers.ORION_3, morphId: NpcIdentifiers.ORION_2, itemId: ItemIdentifiers.ORION, familyItemId: ItemIdentifiers.ORION, dialogue: -1 },
+  { enumName: "ORION_ROBED", petId: NpcIdentifiers.ORION_2, houseNpcId: NpcIdentifiers.ORION_4, morphId: NpcIdentifiers.ORION, itemId: ItemIdentifiers.ORION_3, familyItemId: ItemIdentifiers.ORION, dialogue: -1 },
   { enumName: "SMOL_HEREDIT", petId: NpcIdentifiers.SMOL_HEREDIT_2, morphId: 0, itemId: 28960, dialogue: -1, mainDrop: true },
   { enumName: "NEXLING", petId: NpcIdentifiers.NEXLING_2, houseNpcId: NpcIdentifiers.NEXLING, morphId: 0, itemId: 26348, dialogue: -1 },
   { enumName: "VORKI", petId: NpcIdentifiers.VORKI_2, houseNpcId: NpcIdentifiers.VORKI, morphId: 0, itemId: 21992, dialogue: -1 },

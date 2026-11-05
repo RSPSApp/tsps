@@ -129,6 +129,7 @@ function harvestHespori(player, patch) {
             }
             Patches.spam(player, "You have successfully cleared this patch for new crops.");
             Patches.award(player, Data.CROPS.get("HESPORI").harvest);
+            Patches.awardPendingPlantExperience(player, patch, state);
             Services.cropRewards(player, Data.CROPS.get("HESPORI"));
             Patches.clearPatch(player, patch);
         });

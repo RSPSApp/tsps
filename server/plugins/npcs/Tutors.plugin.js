@@ -108,8 +108,12 @@ function onClaimCooldown(player) {
   return Date.now() - (Number(player.getAttribute(CLAIM_ATTRIBUTE)) || 0) < CLAIM_COOLDOWN_MS;
 }
 
+/** Adds the item and returns how many were actually received (a full inventory can take none). */
 function give(player, itemId, amount = 1) {
-  player.getInventory().adds(itemId, amount);
+  const inventory = player.getInventory();
+  const before = inventory.getAmount(itemId);
+  inventory.adds(itemId, amount);
+  return inventory.getAmount(itemId) - before;
 }
 
 function claimed(player) {
@@ -278,15 +282,13 @@ function handleAction(event) {
     }
   } else if (npcId === NPC.RANGED) {
     if (/training shortbow and 25 arrows/i.test(text)) {
-      give(player, ITEM.TRAINING_BOW);
-      give(player, ITEM.TRAINING_ARROWS, TRAINING_ARROW_COUNT);
-      claimed(player);
+      const bow = give(player, ITEM.TRAINING_BOW);
+      const arrows = give(player, ITEM.TRAINING_ARROWS, TRAINING_ARROW_COUNT);
+      if (bow > 0 && arrows >= TRAINING_ARROW_COUNT) claimed(player);
     } else if (/gives you a training shortbow/i.test(text)) {
-      give(player, ITEM.TRAINING_BOW);
-      claimed(player);
+      if (give(player, ITEM.TRAINING_BOW) > 0) claimed(player);
     } else if (/gives you 25 training arrows/i.test(text)) {
-      give(player, ITEM.TRAINING_ARROWS, TRAINING_ARROW_COUNT);
-      claimed(player);
+      if (give(player, ITEM.TRAINING_ARROWS, TRAINING_ARROW_COUNT) >= TRAINING_ARROW_COUNT) claimed(player);
     } else if (/give back you training (bow|arrows)/i.test(text)) {
       const itemId = /bow/i.test(text) ? ITEM.TRAINING_BOW : ITEM.TRAINING_ARROWS;
       player.getInventory().deleteNumber(itemId, player.getInventory().getAmount(itemId));
@@ -310,11 +312,11 @@ function handleAction(event) {
  */
 function handleRuneReceive(player, text) {
   if (/air runes/i.test(text)) {
-    give(player, ITEM.AIR_RUNE, RUNE_COUNT);
+    if (give(player, ITEM.AIR_RUNE, RUNE_COUNT) < RUNE_COUNT) return;
   } else if (/mind runes/i.test(text)) {
-    give(player, ITEM.MIND_RUNE, RUNE_COUNT);
-    if (!owns(player, ITEM.AIR_RUNE) && freeSlots(player) > 0) {
-      give(player, ITEM.AIR_RUNE, RUNE_COUNT);
+    if (give(player, ITEM.MIND_RUNE, RUNE_COUNT) < RUNE_COUNT) return;
+    if (!owns(player, ITEM.AIR_RUNE) && freeSlots(player) > 0
+      && give(player, ITEM.AIR_RUNE, RUNE_COUNT) >= RUNE_COUNT) {
       gaveAir.add(player);
     }
   } else {

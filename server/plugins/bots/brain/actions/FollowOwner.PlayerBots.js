@@ -14,6 +14,8 @@ const {
 } = require("../../behaviours/policies/PvpLoadoutPolicy.PlayerBots");
 const { startBrainRoam, startReactivePvp } = require("../BrainActivities.PlayerBots");
 const { playerState } = require("../ActionState.PlayerBots");
+const { isTeleblocked } = require("../../behaviours/state/State.PlayerBots");
+const { queueRouteAndFlagAppearance } = require("../../behaviours/navigation/Navigation.PlayerBots");
 const {
   ATTR_RECRUIT_OWNER_USERNAME,
   ATTR_RECRUIT_RETURN_AFTER_DEATH_AT,
@@ -60,7 +62,7 @@ function resolveAssistTarget(world, bot, owner) {
   return candidate;
 }
 
-function teleportNear(world, bot, follower) {
+function teleportNear(world, bot, follower, state) {
   const botLoc = bot.getLocation?.();
   const followerLoc = follower.getLocation?.();
   if (!botLoc || !followerLoc) {
@@ -74,6 +76,15 @@ function teleportNear(world, bot, follower) {
     ) === true
   ) {
     return;
+  }
+  // A Tele Blocked bot follows on foot like a blocked player; only the snap is a teleport.
+  if (isTeleblocked(bot)) {
+    // Preserve the dispatched route and let segmented navigation own movement.
+    bot.getCombat?.()?.clearInteraction?.();
+    bot.setFollowing?.(null);
+    bot.setCombatFollowing?.(null);
+    queueRouteAndFlagAppearance(bot, followerLoc.getX(), followerLoc.getY(), { state });
+    return true;
   }
   const tiles = [];
   for (const tile of follower.outterTiles?.() ?? []) {
@@ -203,11 +214,15 @@ function createFollowOwnerAction(spec, world) {
       if (player.getPrivateArea?.() !== owner.getPrivateArea?.()) {
         player.setArea?.(owner.getArea?.() ?? null);
       }
-      teleportNear(world, player, owner);
+      if (teleportNear(world, player, owner, state)) {
+        return "running";
+      }
 
       const assistTarget = resolveAssistTarget(world, player, owner);
       if (assistTarget) {
-        teleportNear(world, player, assistTarget);
+        if (teleportNear(world, player, assistTarget, state)) {
+          return "running";
+        }
         player.setFollowing?.(assistTarget);
         player.setMobileInteraction?.(assistTarget);
         player.setPositionToFace?.(assistTarget.getLocation?.());

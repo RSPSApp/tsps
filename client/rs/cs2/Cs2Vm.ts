@@ -319,6 +319,9 @@ export interface Cs2Context {
     /** Dispatches the native player-option packet requested by CS2 OPPLAYER. */
     sendPlayerOption?: (playerName: string, option: number) => void;
 
+    /** Native OPENURL: preserve the script URL and new-window flag at the browser boundary. */
+    openUrl?: (url: string, newWindow: boolean) => void;
+
     // Input manager for keyboard state queries (KEYHELD, KEYPRESSED)
     inputManager?: {
         isKeyHeld: (osrsKeyCode: number) => boolean;
@@ -821,6 +824,7 @@ export class Cs2Vm {
         return {
             // Reference to the VM for input dialog state access
             cs2Vm: vm,
+            openUrl: (url, newWindow) => vm.context.openUrl?.(url, newWindow),
 
             // Stacks - direct references to VM arrays
             get intStack() {

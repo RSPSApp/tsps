@@ -22,6 +22,8 @@ let core = null;
 let byKitAndBase = new Map();
 let byResult = new Map();
 let byBase = new Map();
+let gracefulBaseByVariant = new Map();
+const GRACEFUL_BASES = new Set([11850, 11852, 11854, 11856, 11858, 11860]);
 
 const PRESET_TEXT = "Preset items cannot be used for this.";
 
@@ -45,19 +47,35 @@ function loadKits() {
     name: entry.name,
     refund: entry.refund === true,
     cleaningCloth: entry.cleaningCloth === true,
+    consumeKit: entry.consumeKit !== false,
+    revertable: entry.revertable !== false,
+    allowGracefulVariants: entry.allowGracefulVariants === true,
+    materials: (entry.materials ?? []).map((material) => ({
+      id: Number(material.id),
+      amount: Number(material.amount),
+      name: String(material.name ?? "items"),
+    })),
   }));
 }
 
 function resolvedBase(itemId) {
-  return Barrows.baseItemId(Number(itemId)) ?? Number(itemId);
+  const id = Number(itemId);
+  return Barrows.baseItemId(id) ?? gracefulBaseByVariant.get(id) ?? id;
 }
 
 function findEntry(usedItemId, usedWithItemId) {
-  const direct = byKitAndBase.get(`${usedItemId}|${resolvedBase(usedWithItemId)}`);
+  const findFor = (kitId, baseId) => {
+    const entry = byKitAndBase.get(`${kitId}|${resolvedBase(baseId)}`);
+    if (entry && gracefulBaseByVariant.has(Number(baseId)) && !entry.allowGracefulVariants) {
+      return null;
+    }
+    return entry;
+  };
+  const direct = findFor(usedItemId, usedWithItemId);
   if (direct) {
     return { entry: direct, kitOnLeft: true };
   }
-  const reverse = byKitAndBase.get(`${usedWithItemId}|${resolvedBase(usedItemId)}`);
+  const reverse = findFor(usedWithItemId, usedItemId);
   return reverse ? { entry: reverse, kitOnLeft: false } : null;
 }
 
@@ -107,7 +125,17 @@ function applyKit(event) {
     event.handled = true;
     return;
   }
-  inventory.deleteAtSlot(kitSlot, 1, false);
+  for (const material of match.entry.materials) {
+    if (inventory.getAmount(material.id) < material.amount) {
+      player.sendMessage(`You need ${material.amount.toLocaleString("en-US")} ${material.name} to use the ${match.entry.name.toLowerCase()}.`);
+      event.handled = true;
+      return;
+    }
+  }
+  if (match.entry.consumeKit) inventory.deleteAtSlot(kitSlot, 1, false);
+  for (const material of match.entry.materials) {
+    inventory.deleteNumber(material.id, material.amount);
+  }
   // The plain undamaged piece makes the undamaged ornamented one; a used one keeps its stage.
   const stage = Barrows.stageOf(baseItem.getId?.()) ?? 0;
   baseItem.setId(baseItem.getId() === match.entry.base
@@ -143,7 +171,7 @@ function revertItem(event) {
   const itemId = Number(event.itemId);
   const barrowsBase = Barrows.baseItemId(itemId);
   const entry = byResult.get(itemId) ?? (barrowsBase == null ? null : byBase.get(barrowsBase));
-  if (!entry || entry.cleaningCloth || !event.item) {
+  if (!entry || entry.cleaningCloth || !entry.revertable || !event.item) {
     return;
   }
   // Wiki (Dragon full helm (g) and the rest): these kits come back when dismantled, so it must fit first.
@@ -206,7 +234,14 @@ module.exports = {
       I.ECHO_AHRIMS_STAFF_25,
       I.ECHO_AHRIMS_STAFF_0,
     ], I.ECHO_AHRIMS_STAFF);
-    for (const entry of loadKits()) {
+    const entries = loadKits();
+    gracefulBaseByVariant = new Map();
+    for (const entry of entries) {
+      if (!GRACEFUL_BASES.has(entry.base)) continue;
+      gracefulBaseByVariant.set(entry.result, entry.base);
+      if (entry.worn > 0) gracefulBaseByVariant.set(entry.worn, entry.base);
+    }
+    for (const entry of entries) {
       if (entry.kit > 0) {
         byKitAndBase.set(`${entry.kit}|${entry.base}`, entry);
         byBase.set(entry.base, entry);

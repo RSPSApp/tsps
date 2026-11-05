@@ -147,6 +147,8 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   const POLISHED_BUTTONS_ITEM_ID = ItemIdentifiers.POLISHED_BUTTONS; // 10496
   const AVAS_ATTRACTOR_ITEM_ID = ItemIdentifiers.AVAS_ATTRACTOR; // 10498
   const AVAS_ACCUMULATOR_ITEM_ID = ItemIdentifiers.AVAS_ACCUMULATOR; // 10499
+  const STEEL_ARROW_ITEM_ID = ItemIdentifiers.STEEL_ARROW; // 886
+  const COINS_ITEM_ID = ItemIdentifiers.COINS; // 995
   const CRONE_MADE_AMULET_ITEM_ID = ItemIdentifiers.CRONE_MADE_AMULET; // 10500
   const CRONE_MADE_AMULET_ITEM_ID_2 = ItemIdentifiers.CRONE_MADE_AMULET_2; // 17110
   const ECTO_TOKEN_ITEM_ID = ItemIdentifiers.ECTO_TOKEN; // 4278
@@ -997,6 +999,44 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   /** Ava's requirements refusal and the cutscene that starts at varbit 80. */
   function handleNpcInteraction(event) {
     const { player, npcId, clickType } = event;
+    if (npcId === AVA_NPC_ID && event.definition?.getActions?.()[clickType - 1] === "Devices") {
+      event.handled = true;
+      if (quest.getStage(player) < STAGE_COMPLETE) {
+        player.sendMessage("You need to complete Animal Magnetism before Ava will upgrade your device.");
+        return;
+      }
+      if (player.getSkillManager().getMaxLevel(Skill.RANGED) < 50) {
+        player.sendMessage("You need a Ranged level of at least 50 to use Ava's accumulator.");
+        return;
+      }
+
+      const inventory = player.getInventory();
+      const hasAttractor = inventory.getAmount(AVAS_ATTRACTOR_ITEM_ID) > 0;
+      if (inventory.getAmount(STEEL_ARROW_ITEM_ID) < 75) {
+        player.sendMessage("You need 75 steel arrows to upgrade your device.");
+        return;
+      }
+      if (!hasAttractor && inventory.getAmount(COINS_ITEM_ID) < 999) {
+        player.sendMessage("You need 999 coins or Ava's attractor, as well as 75 steel arrows.");
+        return;
+      }
+      if (!hasAttractor && inventory.getFreeSlots() < 1) {
+        player.sendMessage("You need at least one free inventory space to buy Ava's accumulator.");
+        return;
+      }
+
+      inventory.deleteNumber(STEEL_ARROW_ITEM_ID, 75);
+      if (hasAttractor) inventory.deleteNumber(AVAS_ATTRACTOR_ITEM_ID, 1);
+      else inventory.deleteNumber(COINS_ITEM_ID, 999);
+      inventory.adds(AVAS_ACCUMULATOR_ITEM_ID, 1);
+      player.sendMessage("Ava upgrades your device to an accumulator.");
+      api.emitCustomEvent("diary:task", {
+        player,
+        diary: "lumbridge",
+        task: "purchase-an-upgraded-device-from-ava",
+      });
+      return;
+    }
     if (npcId === AVA_NPC_ID && quest.getStage(player) === STAGE_NOT_STARTED && !meetsRequirements(player)) {
       if (event.definition?.getActions?.()[clickType - 1] !== "Talk-to") return;
       event.handled = true;

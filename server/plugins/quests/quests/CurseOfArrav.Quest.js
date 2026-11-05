@@ -7,6 +7,9 @@
  * canopic-jar chain, the fort/tapestry hand-in, the base infiltration and the
  * heart cutscene that completes the quest.
  *
+ * The stage numbers below are durable plugin stages. nativeProgress maps them to
+ * the native cache phases; see docs/quests/native-quest-state-a.md.
+ *
  * Stage (varbit 11479 "coa", in varp 4498 "coa_primary"):
  *   0  not started            2  accepted the quest (start hook)
  *   4  entered the Uzer Mastaba (Entry 50201)
@@ -1139,11 +1142,18 @@ module.exports = function registerCurseOfArravQuest(api) {
 
   api.persistAttribute(BITS_ATTRIBUTE);
 
+  // QH 06da90's 58 is the final reward dialogue; cache DB completes coa at 60.
+  // Saved 58 already records that reward, not a dialogue still waiting to be played.
+  function nativeProgress(stage) {
+    return stage >= STAGE_COMPLETE ? 60 : stage;
+  }
+
   quest = registerQuest(api, {
     key: "curse_of_arrav",
     name: "The Curse of Arrav",
     varpId: VARP_COA,
     varbitId: VARBIT_COA,
+    varbitValue: nativeProgress,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,

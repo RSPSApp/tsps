@@ -116,6 +116,13 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   const { registerQuest, loadTranscripts, startTranscript } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
   const Scenes = createQuestScenes(api, {});
+  const CAPTURE_TEMPLATES = require("../data/temple-of-the-eye-templates.json").scenes;
+  const ARRIVAL_VARIANT = "enter-the-gate-temple-of-the-eye-cutscene";
+  const ARRIVAL_CAMERA_NPC = 716; // capture1693: invisible local-player stand-in
+  const ARRIVAL_PORTAL_GRAPHIC = 2066;
+  const LOCATOR_ANIMATION = 725;
+  const LOCATOR_GRAPHIC = 2068;
+  const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
 
   const PAGE = "Temple of the Eye";
 
@@ -417,11 +424,16 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   const VISION_VOICES_TICKS = 24;
   const VISION_VARIANT = "enter-the-gate-talking-to-wizard-persten-after-speaking-with-the-apprentices";
   const RIFT_SCENE_TILE = { x: 2398, y: 5669, z: 0 };
+  // Raw capture1693 ticks4483..4499: step out of the southern portal before speaking.
   const ARRIVAL_CAST = [
-    { key: "arrival-persten", id: PERSTEN_CUTSCENE_NPC_ID, x: 2398, y: 5646, z: 0 },
-    { key: "arrival-felix", id: FELIX_CUTSCENE_NPC_ID, x: 2399, y: 5646, z: 0 },
-    { key: "arrival-cordelia", id: CORDELIA_CUTSCENE_NPC_ID, x: 2400, y: 5646, z: 0 },
-    { key: "arrival-tamara", id: TAMARA_CUTSCENE_NPC_ID, x: 2401, y: 5647, z: 0 },
+    { key: "arrival-persten", id: PERSTEN_CUTSCENE_NPC_ID, x: 2398, y: 5637, z: 0, face: 1,
+      arrival: { spawn: 15, walk: 20, x: 2398, y: 5630, faceX: 2398, faceY: 5635 } },
+    { key: "arrival-felix", id: FELIX_CUTSCENE_NPC_ID, x: 2399, y: 5635, z: 0, face: 1,
+      arrival: { spawn: 23, walk: 26, x: 2399, y: 5630, faceX: 2399, faceY: 5635 } },
+    { key: "arrival-cordelia", id: CORDELIA_CUTSCENE_NPC_ID, x: 2400, y: 5635, z: 0, face: 1,
+      arrival: { spawn: 23, walk: 26, x: 2400, y: 5630, faceX: 2400, faceY: 5635 } },
+    { key: "arrival-tamara", id: TAMARA_CUTSCENE_NPC_ID, x: 2398, y: 5635, z: 0, face: 1,
+      arrival: { spawn: 25, walk: 27, x: 2398, y: 5630, faceX: 2398, faceY: 5635 } },
   ];
   const RIFT_CAST = [
     { key: "rift-cordelia", id: CORDELIA_CUTSCENE_NPC_ID, x: 2397, y: 5670, z: 0 },
@@ -437,10 +449,14 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   ];
   const SCENE_GUARDIAN_TILE = { x: 2397, y: 5661, z: 0 };
   const CLOSING_CAST = [
-    { key: "closing-guardian", id: GREAT_GUARDIAN_SCENE_NPC_ID, ...SCENE_GUARDIAN_TILE },
-    { key: "closing-cordelia", id: CORDELIA_CUTSCENE_NPC_ID, x: 2397, y: 5670, z: 0 },
-    { key: "closing-tamara", id: TAMARA_CUTSCENE_NPC_ID, x: 2400, y: 5669, z: 0 },
-    { key: "closing-felix", id: FELIX_CUTSCENE_NPC_ID, x: 2404, y: 5670, z: 0 },
+    { key: "closing-guardian", id: GREAT_GUARDIAN_SCENE_NPC_ID, ...SCENE_GUARDIAN_TILE, face: 1,
+      faceTile: { x: 2399, y: 5680, z: 0 } },
+    { key: "closing-cordelia", id: CORDELIA_CUTSCENE_NPC_ID, x: 2397, y: 5670, z: 0, face: 6,
+      faceTile: { x: 2399, y: 5663, z: 0 } },
+    { key: "closing-tamara", id: TAMARA_CUTSCENE_NPC_ID, x: 2400, y: 5669, z: 0, face: 6,
+      faceTile: { x: 2399, y: 5663, z: 0 } },
+    { key: "closing-felix", id: FELIX_CUTSCENE_NPC_ID, x: 2404, y: 5670, z: 0, face: 3,
+      walkTo: { x: 2401, y: 5670, z: 0 }, faceTile: { x: 2401, y: 5670, z: 0 } },
   ];
 
   // The tutorial's temple.
@@ -557,32 +573,52 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   const tutorialFights = new WeakMap();
   const incantationPlaying = new WeakSet();
   const sceneAreas = new Map(); // player -> { temple, vision, tutorial }
+  const arrivals = new WeakMap();
   const sceneKinds = new Map(); // player -> "temple" | "vision" | "tutorial"
 
   /** A private copy of one of the temple's cache squares (live's instance). */
   class TempleSceneArea extends TemplatedInstanceArea {
-    constructor(owner, name, source) {
-      super(source.widthChunks, source.heightChunks);
+    constructor(owner, name, source, palette) {
+      super(palette?.widthChunks ?? source.widthChunks, palette?.heightChunks ?? source.heightChunks);
       this.owner = owner;
       this.sceneName = name;
-      this.sourceX = source.x;
-      this.sourceY = source.y;
-      this.sourceWidth = source.widthChunks * 8;
-      this.sourceHeight = source.heightChunks * 8;
-      const sourceChunkX = source.x >> 3;
-      const sourceChunkY = source.y >> 3;
-      for (let plane = 0; plane < 4; plane++) {
-        for (let chunkX = 0; chunkX < source.widthChunks; chunkX++) {
-          for (let chunkY = 0; chunkY < source.heightChunks; chunkY++) {
-            this.setChunk(plane, chunkX, chunkY, {
-              sourceChunkX: sourceChunkX + chunkX,
-              sourceChunkY: sourceChunkY + chunkY,
-              sourcePlane: plane,
-              rotation: 0,
-            });
+      this.playable = source;
+      this.sourceX = palette?.x ?? source.x;
+      this.sourceY = palette?.y ?? source.y;
+      this.sourceWidth = (palette?.widthChunks ?? source.widthChunks) * 8;
+      this.sourceHeight = (palette?.heightChunks ?? source.heightChunks) * 8;
+      if (palette) {
+        for (const [plane, x, y, sourceChunkX, sourceChunkY, sourcePlane, rotation] of palette.chunks) {
+          this.setChunk(plane, x, y, { sourceChunkX, sourceChunkY, sourcePlane, rotation });
+        }
+      } else {
+        for (let plane = 0; plane < 4; plane++) {
+          for (let x = 0; x < source.widthChunks; x++) for (let y = 0; y < source.heightChunks; y++) {
+            this.setChunk(plane, x, y, { sourceChunkX: (source.x >> 3) + x,
+              sourceChunkY: (source.y >> 3) + y, sourcePlane: plane, rotation: 0 });
           }
         }
       }
+    }
+    contains(location) {
+      // Extra recorded scenery is visible; ordinary movement retains the original room boundary.
+      const x = location.getX() - this.getBaseX() + this.sourceX;
+      const y = location.getY() - this.getBaseY() + this.sourceY;
+      return x >= this.playable.x && x < this.playable.x + this.playable.widthChunks * 8
+        && y >= this.playable.y && y < this.playable.y + this.playable.heightChunks * 8
+        && location.getZ() >= 0 && location.getZ() < 4;
+    }
+    process(actor) {
+      super.process(actor);
+      const arrival = arrivals.get(actor);
+      if (actor === this.owner && arrival?.area === this) validArrival(actor, arrival);
+    }
+    postLeave(actor, logout) {
+      if (actor === this.owner && arrivals.get(actor)?.area === this) {
+        finishArrival(actor);
+        for (const member of ARRIVAL_CAST) setSpawn(actor, member.key, null, false);
+      }
+      super.postLeave(actor, logout);
     }
     getName() { return this.sceneName; }
     /** Whether a source-map tile belongs to this copy. */
@@ -611,7 +647,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
         : kind === "vision" ? VISION_SCENE_SOURCE : TEMPLE_SCENE_SOURCE;
       const name = kind === "tutorial" ? "Temple of the Eye (tutorial)"
         : kind === "vision" ? "Temple of the Eye (vision)" : "Temple of the Eye";
-      area = new TempleSceneArea(player, name, source);
+      area = new TempleSceneArea(player, name, source, CAPTURE_TEMPLATES[kind]);
       scenes[kind] = area;
     }
     return area;
@@ -632,6 +668,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   function switchScene(player, kind) {
     if (!kind) return leaveScene(player);
     if (currentSceneKind(player) === kind && currentSceneArea(player)) return currentSceneArea(player);
+    finishArrival(player);
     clearSpawns(player);
     clearTutorialLocs(player);
     const oldKind = currentSceneKind(player);
@@ -645,6 +682,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   }
 
   function leaveScene(player) {
+    finishArrival(player);
     const kind = currentSceneKind(player);
     clearSpawns(player);
     clearTutorialLocs(player);
@@ -879,7 +917,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   }
 
   function play(player, npcId, variant, select) {
-    return startTranscript(api, player, npcId, PAGE, variant, select);
+    return startTranscript(api, player, npcId, PAGE, variant, select, null, { scoped: variant === ARRIVAL_VARIANT });
   }
 
   /** The steps under a menu option, for an item used directly on the NPC offering it. */
@@ -1020,6 +1058,8 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     const existing = owned.get(key);
     if (!active) {
       if (existing) {
+        existing.removeFlag?.(IGNORE_CLIPPING_FLAG);
+        existing.setScriptedMovement?.(false);
         api.removeNpc(existing);
         owned.delete(key);
       }
@@ -1042,6 +1082,8 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     });
     if (npc) {
       if (area && typeof area.add === "function") area.add(npc);
+      if (definition.faceTile) npc.faceTile?.(sceneLocation(player, definition.faceTile));
+      if (definition.arrival || definition.walkTo) npc.setScriptedMovement?.(true);
       owned.set(key, npc);
     }
   }
@@ -1049,13 +1091,17 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   function clearSpawns(player) {
     const owned = spawns.get(player);
     if (!owned) return;
-    for (const npc of owned.values()) api.removeNpc(npc);
+    for (const npc of owned.values()) {
+      npc.removeFlag?.(IGNORE_CLIPPING_FLAG);
+      npc.setScriptedMovement?.(false);
+      api.removeNpc(npc);
+    }
     spawns.delete(player);
   }
 
   function setCast(player, cast, active) {
     for (const actor of cast) {
-      setSpawn(player, actor.key, { id: actor.id, x: actor.x, y: actor.y, z: actor.z, wanderRadius: 0 }, active);
+      setSpawn(player, actor.key, { ...actor, wanderRadius: 0 }, active);
     }
   }
 
@@ -1096,7 +1142,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     ]) {
       setSpawn(player, key, { id, x: tile.x, y: tile.y, z: tile.z, wanderRadius: 0 }, stage >= STAGE_TRAIBORN && stage <= STAGE_INCANTATION_READY);
     }
-    setCast(player, ARRIVAL_CAST, inScene && stage === STAGE_PORTAL_OPEN);
+    setCast(player, ARRIVAL_CAST, inScene && stage === STAGE_PORTAL_OPEN && !arrivals.get(player)?.held);
     const exploring = stage === STAGE_TEMPLE || stage === STAGE_APPRENTICES;
     // Persten is back with the player on the markings once the vision ends.
     const afterVision = stage === STAGE_VISION && phase === "vision-ended";
@@ -1121,7 +1167,8 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     setSpawn(
       player,
       "great-guardian",
-      { id: GREAT_GUARDIAN_NPC_ID, x: GREAT_GUARDIAN_TILE.x, y: GREAT_GUARDIAN_TILE.y, z: GREAT_GUARDIAN_TILE.z, wanderRadius: 0 },
+      { id: GREAT_GUARDIAN_NPC_ID, x: GREAT_GUARDIAN_TILE.x, y: GREAT_GUARDIAN_TILE.y, z: GREAT_GUARDIAN_TILE.z, wanderRadius: 0, face: 1,
+        faceTile: { x: 2463, y: 5744, z: 0 } },
       inScene && stage === STAGE_GUARDIAN
     );
     const riftScene = inScene && stage === STAGE_VISION
@@ -1582,9 +1629,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   // ---------------------------------------------------------------------------
 
   const SCENE_LINES = new Map([
-    ["Are we... underwater?", (player) => camera(player, [2399, 5645, 550], [2399, 5626, 300], { rate: 1, rate2: 0 })],
     ["Let me cast a locator spell!", (player) => camera(player, [2391, 5641, 720], [2403, 5634, 480])],
-    ["It seems we're deep below the sea, just south of Morytania!", (player) => camera(player, [2391, 5641, 720], [2403, 5634, 480])],
     ["[player name]?", (player) => {
       if (stageOf(player) !== STAGE_VISION || scenePhases.get(player) !== "vision") return;
       // Persten calls the player back: the vision ends at once, the player is back in the
@@ -1645,6 +1690,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
   }
 
   function endScene(player) {
+    finishArrival(player);
     player.getPacketSender().sendCameraReset();
     Scenes.controls(player, false);
   }
@@ -1860,12 +1906,29 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
         if (stageOf(player) !== STAGE_INCANTATION_READY) return;
         event.handled = true;
         incantationPlaying.delete(player);
-        switchScene(player, "temple");
-        moveTo(player, TEMPLE_ARRIVAL_TILE);
-        setStage(player, STAGE_PORTAL_OPEN);
-        Scenes.controls(player, true, true);
-        camera(player, [2399, 5636, 550], [2399, 5626, 300]);
-        event.steps = variantSteps("enter-the-gate-temple-of-the-eye-cutscene");
+        startArrival(player);
+        return;
+      case "42nlhf": // Recorded two-part pan, held for24 ticks before Tamara speaks.
+        if (stageOf(player) !== STAGE_PORTAL_OPEN || !arrivals.has(player)) return;
+        event.handled = true;
+        holdArrival(player);
+        camera(player, [2399, 5645, 550], [2399, 5668, 300], { rate: 2, rate2: 0 });
+        { const state = arrivals.get(player);
+          Scenes.later(player, 3, () => {
+            if (validArrival(player, state)) camera(player, [2399, 5645, 1100], [2399, 5668, 100], { rate: 2, rate2: 0 });
+          });
+          Scenes.later(player, 24, () => resumeArrival(player, state, "42nlhf"));
+        }
+        return;
+      case "YPA4SV": // Raw1693: Tamara's locator sequence725 and spotanim2068, then3 ticks.
+        if (stageOf(player) !== STAGE_PORTAL_OPEN || !arrivals.has(player)) return;
+        event.handled = true;
+        holdArrival(player);
+        spawns.get(player)?.get("arrival-tamara")?.performAnimation(new Animation(LOCATOR_ANIMATION));
+        spawns.get(player)?.get("arrival-tamara")?.performGraphic(new Graphic(LOCATOR_GRAPHIC, 0, 92));
+        { const state = arrivals.get(player);
+          Scenes.later(player, 3, () => resumeArrival(player, state, "YPA4SV"));
+        }
         return;
       case "MKvLzs": // "The cutscene ends." (the group is at the temple)
         if (stageOf(player) !== STAGE_PORTAL_OPEN) return;
@@ -1977,6 +2040,94 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       default:
         return;
     }
+  }
+
+  function finishArrival(player) {
+    const state = arrivals.get(player);
+    if (!state) return;
+    arrivals.delete(player);
+    for (const actor of ARRIVAL_CAST) {
+      const npc = spawns.get(player)?.get(actor.key);
+      npc?.removeFlag?.(IGNORE_CLIPPING_FLAG);
+      npc?.setScriptedMovement?.(false);
+    }
+    if (player.getNpcTransformationId?.() === ARRIVAL_CAMERA_NPC) player.setNpcTransformationId?.(state.model);
+    if (player.getNpcViewDistance?.() === state.viewDistance) player.setNpcViewDistance?.(state.previousViewDistance);
+  }
+
+  function validArrival(player, state) {
+    if (!state || arrivals.get(player) !== state) return false;
+    const sameArea = currentSceneArea(player) === state.area;
+    if (player.isRegistered() && stageOf(player) === STAGE_PORTAL_OPEN && sameArea
+      && (state.held
+        ? player.getDialogueManager().getCurrent() === state.held && player.getInterfaceId() === state.interfaceId
+        : player.getDialogueManager().getOwner() === state.dialogueOwner && state.dialogueOwner !== undefined
+          && player.getInterfaceId() === state.interfaceId)) return true;
+    finishArrival(player);
+    if (sameArea) {
+      for (const actor of ARRIVAL_CAST) setSpawn(player, actor.key, null, false);
+      endScene(player);
+    }
+    return false;
+  }
+
+  function holdArrival(player) {
+    Scenes.hold(player);
+    const state = arrivals.get(player);
+    state.held = player.getDialogueManager().getCurrent();
+    state.interfaceId = player.getInterfaceId();
+  }
+
+  function resumeArrival(player, state, after) {
+    if (!validArrival(player, state)) return;
+    state.held = null;
+    play(player, PERSTEN_CUTSCENE_NPC_ID, ARRIVAL_VARIANT,
+      steps => steps.slice(steps.findIndex(step => step.id === after) + 1));
+    state.dialogueOwner = player.getDialogueManager().getOwner();
+    state.interfaceId = player.getInterfaceId();
+  }
+
+  /** Raw1693 tick4468 arrival: camera5, walk-in15..31, first speech33. */
+  function startArrival(player) {
+    finishArrival(player);
+    switchScene(player, "temple");
+    moveTo(player, TEMPLE_ARRIVAL_TILE);
+    const previousViewDistance = player.getNpcViewDistance();
+    // Raw1693: the camera actor at5651 must see the portal party at5630 (21 tiles).
+    const state = { area: currentSceneArea(player), model: player.getNpcTransformationId?.() ?? -1, held: null,
+      previousViewDistance, viewDistance: Math.max(previousViewDistance, 21) };
+    arrivals.set(player, state);
+    // Hold before stage publication so syncSpawns does not populate the final cast early.
+    holdArrival(player);
+    setStage(player, STAGE_PORTAL_OPEN);
+    Scenes.controls(player, true, true);
+    player.setNpcTransformationId?.(ARRIVAL_CAMERA_NPC);
+    player.setNpcViewDistance(state.viewDistance);
+    Scenes.later(player, 5, () => {
+      if (!validArrival(player, state)) return;
+      camera(player, [2399, 5636, 550], [2399, 5626, 300]);
+      camera(player, [2399, 5645, 550], [2399, 5626, 300], { rate: 1, rate2: 0 });
+    });
+    for (const actor of ARRIVAL_CAST) {
+      const cue = actor.arrival;
+      Scenes.later(player, cue.spawn, () => {
+        if (!validArrival(player, state)) return;
+        setSpawn(player, actor.key, { ...actor, x: cue.x, y: cue.y }, true);
+        const npc = spawns.get(player)?.get(actor.key);
+        npc?.faceTile?.(sceneLocation(player, { x: cue.faceX, y: cue.faceY, z: 0 }));
+        npc?.performGraphic(new Graphic(ARRIVAL_PORTAL_GRAPHIC));
+      });
+      Scenes.later(player, cue.walk, () => {
+        if (!validArrival(player, state)) return;
+        const npc = spawns.get(player)?.get(actor.key);
+        npc?.setFlag?.(IGNORE_CLIPPING_FLAG);
+        npc?.getMovementQueue().addSteps(sceneLocation(player, actor));
+      });
+      Scenes.later(player, cue.walk + actor.y - cue.y + 1, () => {
+        if (validArrival(player, state)) spawns.get(player)?.get(actor.key)?.removeFlag?.(IGNORE_CLIPPING_FLAG);
+      });
+    }
+    Scenes.later(player, 33, () => resumeArrival(player, state, "lpMRVQ"));
   }
 
   /**
@@ -2716,7 +2867,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       else leaveScene(player);
       moveTo(player, tile);
       sender.sendClientScript(OVERLAY_REMOVE_SCRIPT);
-      syncTutorialScene(player);
+      syncSpawns(player);
       tutorialHint(player);
       Scenes.later(player, 1, () => player.isRegistered() && sender.closeSubInterface(OVERLAY_ATMOSPHERE_UID));
     });
@@ -2757,11 +2908,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
       leaveScene(player);
       moveTo(player, MINIGAME_LOBBY_TILE);
     } else if (stage === STAGE_PORTAL_OPEN) {
-      switchScene(player, "temple");
-      moveTo(player, TEMPLE_ARRIVAL_TILE);
-      Scenes.controls(player, true, true);
-      camera(player, [2399, 5636, 550], [2399, 5626, 300]);
-      play(player, PERSTEN_TEMPLE_NPC_ID, "enter-the-gate-temple-of-the-eye-cutscene");
+      startArrival(player);
     } else if (stage === STAGE_TEMPLE || stage === STAGE_APPRENTICES) {
       switchScene(player, "temple");
       moveTo(player, TEMPLE_EXPLORE_TILE);
@@ -2912,6 +3059,12 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     switchScene(player, "temple");
     moveTo(player, RIFT_SCENE_TILE);
     setStage(player, STAGE_CLOSED);
+    const area = currentSceneArea(player);
+    Scenes.later(player, 1, () => {
+      if (player.isRegistered() && stageOf(player) === STAGE_CLOSED && currentSceneArea(player) === area) {
+        spawns.get(player)?.get("closing-felix")?.getMovementQueue().addSteps(sceneLocation(player, CLOSING_CAST.find(actor => actor.walkTo).walkTo));
+      }
+    });
     tutorialHint(player);
     Scenes.controls(player, true, true);
     camera(player, [2386, 5663, 970], [2408, 5667, 170]);
@@ -3233,6 +3386,7 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
 
   function handleLogout({ player }) {
     if (!player) return;
+    finishArrival(player);
     Scenes.cancel(player);
     assemblingGuardian.delete(player);
     stopTutorialAction(player);

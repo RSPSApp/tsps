@@ -324,7 +324,7 @@ export class CacheDefinitions {
     private static gamevals?: Gamevals;
 
     private static getGamevals(): Gamevals {
-        this.gamevals ??= new Gamevals(CachePipeline.getStore());
+        this.gamevals ??= new Gamevals();
         return this.gamevals;
     }
 

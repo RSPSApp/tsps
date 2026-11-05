@@ -60,7 +60,7 @@ function toggleActivity({ player }) {
 function uncharge({ player }) {
   const tokens = Math.floor(charges(player) / CHARGES_PER_TOKEN);
   const inventory = player.getInventory();
-  if (tokens > 0 && (inventory.contains(core.ItemIdentifiers.ECTO_TOKEN) || inventory.getFreeSlots() > 0)) {
+  if (tokens > 0 && inventory.getAddableAmount(new core.Item(core.ItemIdentifiers.ECTO_TOKEN, tokens)) >= tokens) {
     inventory.adds(core.ItemIdentifiers.ECTO_TOKEN, tokens);
     setCharges(player, charges(player) - tokens * CHARGES_PER_TOKEN);
   }

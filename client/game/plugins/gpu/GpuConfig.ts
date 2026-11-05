@@ -1,5 +1,6 @@
 import { ConfigGroup, ConfigItem } from "@runelite/client/config/ConfigItem";
 import { isLowEndDevice } from "../../../common/utils/DeviceUtil";
+import { SCREEN_BRIGHTNESS_MAX, loadScreenBrightness } from "../../../ui/ScreenBrightness";
 
 /** Anti-aliasing modes, as in RuneLite's GPU plugin. */
 export enum AntiAliasingMode {
@@ -9,6 +10,13 @@ export enum AntiAliasingMode {
     MSAA_4 = "msaa4",
     MSAA_8 = "msaa8",
     MSAA_16 = "msaa16",
+}
+
+/** The renderer backend; the debug panel's Render > Renderer, kept across sessions. */
+export enum RendererChoice {
+    AUTOMATIC = "auto",
+    WEBGL = "webgl",
+    WEBGPU = "webgpu",
 }
 
 export const MIN_DRAW_DISTANCE = 25;
@@ -55,5 +63,41 @@ export const GpuConfig = ConfigGroup("gpu", {
         units: "%",
         range: { min: 0, max: 100 },
         default: 0,
+    }),
+    renderer: ConfigItem({
+        name: "Renderer",
+        description: "WebGL or WebGPU. Automatic prefers WebGPU when the browser has it. Takes effect after a reload.",
+        position: 5,
+        enum: { Automatic: RendererChoice.AUTOMATIC, WebGL: RendererChoice.WEBGL, WebGPU: RendererChoice.WEBGPU },
+        default: RendererChoice.AUTOMATIC,
+    }),
+    brightness: ConfigItem({
+        name: "Brightness",
+        description: "The Settings tab's Screen brightness (0 darkest, 100 brightest).",
+        position: 6,
+        range: { min: 0, max: SCREEN_BRIGHTNESS_MAX },
+        default: loadScreenBrightness(),
+    }),
+    autoFog: ConfigItem({
+        name: "Dynamic fog",
+        description: "Fog starts at a share of the draw distance. Off uses the manual fog start.",
+        position: 7,
+        default: true,
+    }),
+    fogStart: ConfigItem({
+        name: "Fog start",
+        description: "Where dynamic fog begins, as a share of the draw distance.",
+        position: 8,
+        units: "%",
+        range: { min: 0, max: 100 },
+        default: 85,
+    }),
+    manualFogStart: ConfigItem({
+        name: "Manual fog start",
+        description: "Where fog begins when dynamic fog is off.",
+        position: 9,
+        units: " tiles",
+        range: { min: 0, max: 400 },
+        default: 24,
     }),
 });

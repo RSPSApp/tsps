@@ -1686,6 +1686,8 @@ module.exports = function registerUndergroundPassQuest(api) {
     varpId: VARP_UPASS,
     startedValue: STAGE_SPOKEN_KOFTIK,
     completionValue: STAGE_COMPLETE,
+    // Keep persisted gameplay stages; publish the cache quest state, including its final reward phase.
+    varpValue: stage => stage >= STAGE_COMPLETE ? 11 : stage,
     questPoints: 5,
     xpRewards: [
       { skillId: Skill.AGILITY.getIndex(), amount: 3000, label: "Agility" },

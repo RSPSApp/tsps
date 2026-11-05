@@ -190,3 +190,32 @@ test("a missing or unusable setting is the OSRS rate", () => {
     assert.deepEqual(dropsAt(table(true), 1.5 / 400, multiplier), [2], String(multiplier));
   }
 });
+
+
+test("Corp's conditional sigil access honors boss and per-entry chance boosts", () => {
+  const corp = NpcDrops._test.tablesByNpc.get(319)[0];
+  const sigils = corp.entries.filter(entry => entry.roll_group === "Sigils");
+  const roll = (access, pick, multiplier, rules = []) => {
+    config["NpcDrops:bossRareMultiplier"] = multiplier;
+    const values = [access, pick, 0];
+    let index = 0;
+    Math.random = () => values[index++] ?? 0;
+    try { return NpcDrops.__internals.rollOnce(corp, sigils, null, true, null, rules).map(drop => drop.itemId); }
+    finally { Math.random = random; }
+  };
+  // A 1.5/585 access misses at x1, but hits at x2. A uniform league boost must
+  // raise access, rather than merely scale all weights inside the same pool.
+  assert.deepEqual(roll(1.5 / 585, 0, 1), []);
+  assert.deepEqual(roll(1.5 / 585, 0, 2), [12823]);
+  assert.deepEqual(roll(1.5 / 585, 0, 1, [{ pattern: /sigil/i, multiplier: 2 }]), [12823]);
+  assert.deepEqual(roll(3 / 585, 0, 2, [{ pattern: /sigil/i, multiplier: 2 }]), [12823]);
+  // Spectral alone doubled adds 3/7 of an access; the unchanged Arcane still
+  // owns 3/10 of the resulting conditional pool.
+  assert.deepEqual(roll(1.4 / 585, 0.7, 1, [{ pattern: /^Spectral sigil$/, multiplier: 2 }]), [12827]);
+  assert.deepEqual(roll(1.5 / 585, 0, 1, [{ pattern: /^Spectral sigil$/, multiplier: 2 }]), []);
+  // Rule floors use the marginal 1/1365 rarity, not the conditional 3/7.
+  assert.deepEqual(roll(1.5 / 585, 0, 1, [{ pattern: /sigil/i, outOf: 100 }]), [12823]);
+  // Saturating boosts still produce exactly one sigil.
+  assert.equal(roll(0.999, 0.9, 10000).length, 1);
+  config["NpcDrops:bossRareMultiplier"] = 1;
+});

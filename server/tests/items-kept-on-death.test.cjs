@@ -473,7 +473,7 @@ test('ordinary preview matches completed death across skull and Protect Item sta
       console.error = (...args) => failures.push(args.map(String)); // execute catches exceptions; never silently accept them
       const task = new PlayerDeathTask(player);
       task.setRunning(true);
-      for (let tick = 0; tick < 3; tick++) task.execute(); // real 2 -> 1 -> 0 phases, no forced tick-zero shortcut
+      for (let tick = 0; tick < 5; tick++) task.execute(); // real animation-to-respawn phases, no forced tick-zero shortcut
       assert.equal(task.isStopped(), true);
       assert.deepEqual(failures, [], `${row.name}: death exceptions`);
       assert.equal(dropHookCalls, 1, 'real core dispatched grave hook once');

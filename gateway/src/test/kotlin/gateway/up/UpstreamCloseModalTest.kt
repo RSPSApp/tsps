@@ -7,6 +7,7 @@ import gateway.tsps.TspsWriter
 import net.rsprot.protocol.game.incoming.misc.user.CloseModal
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Test
+import net.rsprot.protocol.game.incoming.resumed.ResumePObjDialog
 
 /** CLOSE_MODAL: the client has closed its modals itself (Escape, a close button) and says so. */
 class UpstreamCloseModalTest {
@@ -29,7 +30,14 @@ class UpstreamCloseModalTest {
         assertArrayEquals(TspsWriter().i32((378 shl 16) or 72).u16(0xFFFF).u16(0xFFFF).u8(1).fixed(IF_BUTTONX), sent.single())
     }
 
+    @Test
+    fun `object search answers use the existing item-selection input route`() {
+        upstream.handle(ResumePObjDialog(556))
+        assertArrayEquals(TspsWriter().string("556").varByte(RESUME_NAMEDIALOG), sent.single())
+    }
+
     private companion object {
+        const val RESUME_NAMEDIALOG = 193
         const val IF_CLOSE = 55
         const val IF_BUTTONX = 91
     }

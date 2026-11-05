@@ -247,7 +247,7 @@ test("casket opens once, grants full-inventory overflow, increments completion a
   assert.ok(f.sent.some(([name,group])=>name==="sendInterface"&&group===73));
   assert.equal(Rewards.open(e),false);
   assert.equal(f.attributes.get(Runtime.COMPLETED_ATTRIBUTE),1);
-  const request={player:f.player,category:"Treasure Trails (Beginner)",count:null};
+  const request={player:f.player,category:"Beginner Treasure Trails",count:null};
   f.api.emitCustomEvent("collection-log:category-count",request);assert.equal(request.count,1);
 });
 

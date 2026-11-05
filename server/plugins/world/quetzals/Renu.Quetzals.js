@@ -51,8 +51,19 @@ function unlock({ player }) {
 
 /** A finished Twilight's Promise means Renu is the player's, however the quest was finished. */
 function unlockOnLogin({ player }) {
-  if (!player || player.isPlayerBot?.() === true || Common.renuUnlocked(player)) return;
-  if (Common.questComplete(player, TWILIGHTS_PROMISE)) unlock({ player });
+  if (!player || player.isPlayerBot?.() === true) return;
+  if (!Common.renuUnlocked(player)) {
+    if (Common.questComplete(player, TWILIGHTS_PROMISE)) unlock({ player });
+    return;
+  }
+  const appearance = Common.varbit(player, Common.BASE_APPEARANCE);
+  const values = {};
+  for (const site of Common.landingSites()) {
+    const name = Common.SITE_VARBITS[site.id];
+    if (!site.autoUnlocked || site.id === FORTIS_SITE || !name || Common.varbit(player, name) !== 0) continue;
+    values[name] = appearance;
+  }
+  if (Object.keys(values).length > 0) Common.setVarbits(player, values);
 }
 
 function openMap({ player }) {

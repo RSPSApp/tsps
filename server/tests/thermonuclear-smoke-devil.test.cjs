@@ -32,6 +32,8 @@ const combatProviders = [];
 const hitRollHandlers = [];
 const objectHooks = {};
 let onTaskAnswer = () => false;
+let diaryStarted = () => false;
+let diaryDone = () => false;
 const api = new Proxy(
   {
     core,
@@ -44,6 +46,8 @@ const api = new Proxy(
     },
     emitCustomEvent: (name, event) => {
       if (name === "slayer:on-task") event.onTask = onTaskAnswer(event);
+      if (name === "diary:is-started") event.started = diaryStarted(event);
+      if (name === "diary:has-task") event.done = diaryDone(event);
     },
   },
   { get: (target, key) => target[key] ?? (() => {}) }
@@ -184,6 +188,33 @@ test("the room refuses an attack off a smoke devil task", () => {
   onTaskAnswer = (request) => npcs.includes(request.npc);
   for (const npc of npcs) assert.equal(area.canAttack(player, npc), null);
   assert.equal(area.canAttack(player, { isNpc: () => false }), null);
+});
+
+test("the boss allows its one off-task Western diary kill at base 93 Slayer, only before the task is done", () => {
+  const area = areas[0];
+  let slayer = 93;
+  const player = {
+    isPlayer: () => true,
+    getAsPlayer: () => player,
+    getSkillManager: () => ({ getMaxLevel: () => slayer }),
+  };
+  const boss = { isNpc: () => true, getId: () => Common.BOSS_ID };
+  const minion = { isNpc: () => true, getId: () => Common.SMOKE_DEVIL_ID };
+  onTaskAnswer = () => false;
+  diaryStarted = () => false;
+  diaryDone = () => false;
+  assert.equal(area.canAttack(player, boss), false, "diary not started");
+  assert.equal(area.canAttack(player, minion), false, "the minions never get the exception");
+  diaryStarted = () => true;
+  assert.equal(area.canAttack(player, boss), null);
+  diaryDone = () => true;
+  assert.equal(area.canAttack(player, boss), false, "the diary task is already done");
+  diaryDone = () => false;
+  slayer = 92;
+  assert.equal(area.canAttack(player, boss), false, "boosted or under-level Slayer fails");
+  slayer = 93;
+  onTaskAnswer = (request) => request.npc === boss;
+  assert.equal(area.canAttack(player, boss), null, "a real smoke devil task still works");
 });
 
 test("smoke devils punish players without a mask", () => {

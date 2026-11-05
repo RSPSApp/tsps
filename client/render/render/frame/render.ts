@@ -164,7 +164,7 @@ import { DrawRange, NULL_DRAW_RANGE, newDrawRange } from "../../DrawRange";
 import { InteractType } from "../../InteractType";
 import { profiler } from "../../PerformanceProfiler";
 import { PlayerChatheadFactory } from "../../PlayerChatheadFactory";
-import { resolveFogRange } from "../../RenderDistancePolicy";
+import { fogSettings, resolveFogRange } from "../../RenderDistancePolicy";
 import { WebGLMapSquare } from "../../WebGLMapSquare";
 import { WorldEntityAnimator } from "../../WorldEntityAnimator";
 import { SceneBuffer } from "../../buffer/SceneBuffer";
@@ -646,9 +646,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
         // Edge-based fog clamping causes over-aggressive fog collapse near stream boundaries.
         const { fogEnd, fogDepth } = resolveFogRange({
             renderDistance,
-            autoFogDepth: host.autoFogDepth,
-            autoFogDepthFactor: host.autoFogDepthFactor,
-            manualFogDepth: host.fogDepth,
+            ...fogSettings(host),
             hd: host.osrsClient.clientPlugins.hdEnabled(),
         });
 

@@ -75,7 +75,7 @@ function createPlayer(items) {
 
 test("the ornament table maps every cosmetic variant to its base", () => {
   const kits = OrnamentKits._test.loadKits();
-  assert.equal(kits.length, 114);
+  assert.equal(kits.length, 240);
   // The Tombs of Amascut's challenge rewards (cache: osmumtens_fang_ornament_kit,
   // elidinis_ward_ornament_kit, avas_assembler_ornament_kit).
   const toa = (kit) => kits.find((entry) => entry.kit === kit);
@@ -96,13 +96,25 @@ test("the ornament table maps every cosmetic variant to its base", () => {
 
 test("cosmetic variants exist and carry their base item's bonuses and requirements", () => {
   const rows = new Map(JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "definitions", "item-gameplay.json"), "utf8")).map((row) => [row.id, row]));
+  const cacheBackedItems = new Set([
+    26858, 26860, 26862, 26864, 26866, 26868, 26870, 26872, 26874,
+    26912, 26914, 26984, 26986, 26988, 26990, 26992, 26994,
+    28688, 30437, 30439, 30441, 33338, 33340, 33439, 33445,
+  ]);
+  assert.equal(rows.get(25378)?.requirements?.[0], 60, "Wiki: Dragon axe (or) needs 60 Attack");
+  assert.equal(rows.get(21031)?.bonuses?.[10], 42, "Wiki: Infernal harpoon has +42 melee strength");
+  assert.equal(rows.get(25916)?.requirements?.[4], 70, "Wiki: turquoise Dragon hunter crossbow needs 70 Ranged");
+  assert.equal(rows.get(25918)?.requirements?.[4], 70, "Wiki: black Dragon hunter crossbow needs 70 Ranged");
+  assert.deepEqual(rows.get(26710)?.requirements, [0, 0, 60, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "Wiki: Dragon warhammer (or) requires Strength 60 and no Attack level");
   for (const entry of OrnamentKits._test.loadKits()) {
     const base = rows.get(entry.base);
-    assert.ok(base, `base ${entry.base} for ${entry.name}`);
+    assert.ok(base || cacheBackedItems.has(entry.base), `base ${entry.base} for ${entry.name}`);
     for (const id of [entry.result, entry.worn].filter(Boolean)) {
       const variant = rows.get(id);
+      // These newer variants are supplied by the item cache without fallback rows here.
+      if (!variant && cacheBackedItems.has(id)) continue;
       assert.ok(variant, `variant ${id} for ${entry.name}`);
-      // Echo/other cache-backed variants carry no fallback row; the cache supplies their stats.
       if (variant.bonuses == null || variant.requirements == null) continue;
       assert.deepEqual(variant.bonuses, base.bonuses, `${entry.name} bonuses`);
       assert.deepEqual(variant.requirements, base.requirements, `${entry.name} requirements`);

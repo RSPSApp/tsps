@@ -641,6 +641,12 @@ export class RegionManager {
         );
     }
 
+    private static getProjectileClipping(x: number, y: number, height: number, privateArea: PrivateArea): number {
+        // Dynamic NPC blockers must not enter the map clips used by movement pathfinding.
+        return RegionManager.getClipping(x, y, height, privateArea) |
+            (World.isProjectileBlockingNpcOnTile(x, y, height, privateArea) ? RegionManager.PROJECTILE_TILE_BLOCKED : 0);
+    }
+
     private static canProjectileRay(
         startX: number,
         startY: number,
@@ -671,12 +677,12 @@ export class RegionManager {
                 x += offsetX;
                 const y = Math.floor(scaledY / scale);
                 const atEnd = x === endX && y === endY;
-                if ((RegionManager.getClipping(x, y, height, privateArea) &
+                if ((RegionManager.getProjectileClipping(x, y, height, privateArea) &
                     (atEnd ? xFlags & ~RegionManager.PROJECTILE_TILE_BLOCKED : xFlags)) !== 0) return false;
                 scaledY += tangent;
                 const nextY = Math.floor(scaledY / scale);
                 const nextAtEnd = x === endX && nextY === endY;
-                if (nextY !== y && (RegionManager.getClipping(x, nextY, height, privateArea) &
+                if (nextY !== y && (RegionManager.getProjectileClipping(x, nextY, height, privateArea) &
                     (nextAtEnd ? yFlags & ~RegionManager.PROJECTILE_TILE_BLOCKED : yFlags)) !== 0) return false;
             }
         } else {
@@ -687,12 +693,12 @@ export class RegionManager {
                 y += offsetY;
                 const x = Math.floor(scaledX / scale);
                 const atEnd = x === endX && y === endY;
-                if ((RegionManager.getClipping(x, y, height, privateArea) &
+                if ((RegionManager.getProjectileClipping(x, y, height, privateArea) &
                     (atEnd ? yFlags & ~RegionManager.PROJECTILE_TILE_BLOCKED : yFlags)) !== 0) return false;
                 scaledX += tangent;
                 const nextX = Math.floor(scaledX / scale);
                 const nextAtEnd = nextX === endX && y === endY;
-                if (nextX !== x && (RegionManager.getClipping(nextX, y, height, privateArea) &
+                if (nextX !== x && (RegionManager.getProjectileClipping(nextX, y, height, privateArea) &
                     (nextAtEnd ? xFlags & ~RegionManager.PROJECTILE_TILE_BLOCKED : xFlags)) !== 0) return false;
             }
         }

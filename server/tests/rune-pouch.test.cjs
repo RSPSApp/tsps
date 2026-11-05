@@ -38,6 +38,7 @@ function createContainer(capacity, initial = []) {
     getAmount: (id) => items.filter((item) => item.getId() === id).reduce((total, item) => total + item.getAmount(), 0),
     contains: (id) => items.some((item) => item.getId() === id && item.getAmount() > 0),
     getFreeSlots: () => capacity - container.getValidItems().length,
+    getAddableAmount: (item) => (container.contains(item.getId()) || container.getFreeSlots() > 0 ? item.getAmount() : 0),
     add(item) {
       const stack = items.find((entry) => entry.getId() === item.getId());
       if (stack && item.getDefinition().isStackable()) stack.setAmount(stack.getAmount() + item.getAmount());
@@ -67,6 +68,7 @@ function createContainer(capacity, initial = []) {
     deletes(item) {
       return container.deleteNumber(item.getId(), item.getAmount());
     },
+    deleteItemContainer(item, slot) { return container.deleteAtSlot(slot, item.getAmount()); },
     refreshItems: () => container,
     sortItems: () => container,
   };
@@ -128,6 +130,7 @@ function createPlayer(inventoryItems = [], bankItems = []) {
     sendMessage: (message) => player.messages.push(message),
     getInventory: () => inventory,
     getBank: (tab) => banks[tab],
+    getBanks: () => banks,
     getCurrentBankTab: () => 0,
     isSearchingBank: () => false,
     getBankCustomQuantity: () => player.bankCustomQuantity,
@@ -579,4 +582,131 @@ test("Vengeance on yourself pays its runes from the carried pouch", () => {
   assert.equal(vengeance, true);
   assert.deepEqual(experience, [112]);
   assert.deepEqual(varbitSlots(player), [[Items.ASTRAL_RUNE, 96], [Items.EARTH_RUNE, 90], [Items.DEATH_RUNE, 98]]);
+});
+
+
+// These use real lazy banks, item identities, placeholders and native packet dispatch.
+function nativePouchActor(t, pouchId = Items.RUNE_POUCH) {
+  const {Player} = require('../dist/game/entity/impl/player/Player');
+  const {PlayerSession} = require('../dist/net/PlayerSession');
+  const {ClientConnection} = require('../dist/net/NetworkBuilder');
+  const channel = {kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+  const player = new Player(new PlayerSession(channel));
+  player.setUsername('pouch2407'); player.setIndex(777); player.setRegistered(true);
+  player.getInventory().add(new Item(pouchId), false);
+  const connection = new ClientConnection(channel); connection.player = player;
+  t.after(() => player.setRegistered(false));
+  const click = async (uid, slot, itemId, op = 1) => {
+    await connection.dispatch([{type:'widget_action',widgetId:uid,groupId:uid>>>16,childId:uid&65535,buttonNum:op,slot,itemId}]);
+    connection.processTurnPackets();
+  };
+  const open = async () => { player.getBank(0).open(); await click((15<<16)|3,0,pouchId); };
+  return {player,connection,click,open};
+}
+
+test('native bank withdrawals fill the viewed pouch directly and preserve the clicked stack', async t => {
+  const f = nativePouchActor(t), p=f.player, bank=p.getBank(0);
+  p.setPlaceholders(false); bank.add(new Item(Items.AIR_RUNE, 100), false); await f.open();
+  assert.equal(p.getPacketSender().getVarbit(Bank.VIEW_CONTAINER_VARBIT),3);
+  await f.click(component('bankmain:items'),0,Items.AIR_RUNE,7);
+  assert.equal(Pouch.amountOf(p,Items.AIR_RUNE),100);
+  assert.equal(bank.getAmount(Items.AIR_RUNE),0);
+  assert.ok(bank.getItems().every(item=>item.getId()!==Bank.placeholderBankId(Items.AIR_RUNE)), 'disabled placeholder mode leaves none');
+  assert.equal(p.getInventory().getAmount(Items.AIR_RUNE),0,'does not route through inventory');
+});
+
+test('native bank fill respects pouch room, metadata, placeholders and quantity prompts', async t => {
+  const f=nativePouchActor(t),p=f.player,bank=p.getBank(0);
+  const protectedRune=new Item(Items.AIR_RUNE,90).setMetaValue(Item.UNTRADEABLE_META,true).setMetaValue('test:state','keep');
+  bank.add(protectedRune,false);bank.add(new Item(Items.AIR_RUNE,100),false);await f.open();
+  Pouch.store(p,Items.AIR_RUNE,15998);
+  await f.click(component('bankmain:items'),1,Items.AIR_RUNE,7);
+  assert.equal(Pouch.amountOf(p,Items.AIR_RUNE),16000);assert.equal(bank.forSlot(1).getAmount(),98);
+  assert.equal(bank.forSlot(0).getMetaValue('test:state'),'keep');assert.equal(bank.forSlot(0).getAmount(),90);
+  Pouch.setSlots(p,Array(4).fill(null));
+  await f.click(component('bankmain:items'),0,Items.AIR_RUNE,7);
+  assert.equal(Pouch.amountOf(p,Items.AIR_RUNE),0,'metadata cannot be erased by pouch storage');
+  // A delayed X remains attached to the clicked stack rather than another copy of its id.
+  await f.click(component('bankmain:items'),1,Items.AIR_RUNE,6);
+  const pending=p.getEnteredAmountAction();assert.ok(pending);
+  bank.setItem(1,new Item(Items.AIR_RUNE,20));pending.execute(10);
+  assert.equal(Pouch.amountOf(p,Items.AIR_RUNE),0);assert.equal(bank.forSlot(1).getAmount(),20);
+  p.setPlaceholders(true);
+  await f.click(component('bankmain:items'),1,Items.AIR_RUNE,7);
+  assert.equal(Pouch.amountOf(p,Items.AIR_RUNE),20);
+  assert.equal(bank.forSlot(1).getId(),Bank.placeholderBankId(Items.AIR_RUNE));
+  assert.equal(bank.forSlot(1).getAmount(),0);
+});
+
+
+test('native bank fill resolves search display slots to the real bank tab and keeps search counts current', async t => {
+  const f=nativePouchActor(t),p=f.player;
+  p.setPlaceholders(false);p.getBank(0).add(new Item(Items.FIRE_RUNE,20),false);
+  p.getBank(2).add(new Item(Items.AIR_RUNE,100),false);await f.open();
+  Bank.search(p,'air rune');assert.equal(p.isSearchingBank(),true);
+  const tab=Bank.getTabForItem(p,Items.AIR_RUNE);assert.ok(tab>0,'runes are in a non-main tab after bank tab compaction');
+  const entry=Bank.resolveDisplaySlot(p,0);assert.equal(entry.tab,tab);
+  await f.click(component('bankmain:items'),0,Items.AIR_RUNE,4);
+  assert.equal(Pouch.amountOf(p,Items.AIR_RUNE),10);
+  assert.equal(p.getBank(tab).getAmount(Items.AIR_RUNE),90);
+  assert.equal(p.getBank(Bank.BANK_SEARCH_TAB_INDEX).getAmount(Items.AIR_RUNE),90);
+  assert.equal(p.getBank(0).getAmount(Items.FIRE_RUNE),20);
+  await f.click(component('bankmain:items'),0,Items.AIR_RUNE,7);
+  assert.equal(Pouch.amountOf(p,Items.AIR_RUNE),100);
+  assert.equal(p.getBank(tab).getAmount(Items.AIR_RUNE),0);
+  assert.equal(p.getBank(Bank.BANK_SEARCH_TAB_INDEX).getAmount(Items.AIR_RUNE),0);
+});
+
+test('native bank fill supports divine fourth slots with a full inventory and rejects a missing pouch', async t => {
+  const f=nativePouchActor(t,Items.DIVINE_RUNE_POUCH),p=f.player;
+  p.getInventory().add(new Item(Items.BRONZE_DAGGER,27),false);
+  assert.equal(p.getInventory().getFreeSlots(),0);
+  for(const id of [Items.AIR_RUNE,Items.WATER_RUNE,Items.EARTH_RUNE])Pouch.store(p,id,1,4);
+  p.getBank(0).add(new Item(Items.FIRE_RUNE,20),false);await f.open();
+  await f.click(component('bankmain:items'),0,Items.FIRE_RUNE,4);
+  assert.equal(Pouch.amountOf(p,Items.FIRE_RUNE),10,'direct fill does not require an inventory slot');
+  assert.equal(Pouch.slots(p)[3].id,Items.FIRE_RUNE);
+  p.getInventory().deleteAtSlot(0,1);
+  await f.click(component('bankmain:items'),0,Items.FIRE_RUNE,7);
+  assert.equal(Pouch.amountOf(p,Items.FIRE_RUNE),10,'stale bank view cannot fill an absent pouch');
+  assert.equal(p.getBank(0).getAmount(Items.FIRE_RUNE),10);
+});
+
+
+test('loadout transfer boundaries retain pouch contents when the bank cannot accept them', async t => {
+  const f=nativePouchActor(t),p=f.player,bank=p.getBank(0);await f.open();
+  Pouch.store(p,Items.AIR_RUNE,100);
+  for(let slot=0;slot<Bank.getCapacity(p);slot++)bank.add(new Item(Items.BRONZE_DAGGER,1).setMetaValue('test:slot',slot),false);
+  assert.equal(bank.getFreeSlots(),0);
+  Loadouts._test.load(p,0);
+  assert.equal(Pouch.amountOf(p,Items.AIR_RUNE),100,'failed bank return must not destroy stored runes');
+  assert.equal(bank.getAmount(Items.AIR_RUNE),0);
+  await f.click(component('bankside:runepouch_bankall'),-1,65535);
+  assert.equal(Pouch.amountOf(p,Items.AIR_RUNE),100,'Bank all also retains a refused return');
+  assert.equal(bank.getAmount(Items.AIR_RUNE),0);
+  bank.setItem(0,new Item(Items.AIR_RUNE,5));
+  Pouch.store(p,Items.FIRE_RUNE,100);
+  Loadouts._test.load(p,0);
+  assert.equal(bank.getAmount(Items.AIR_RUNE),105,'an existing bank stack can accept its return');
+  assert.equal(Pouch.amountOf(p,Items.AIR_RUNE),0);
+  assert.equal(Pouch.amountOf(p,Items.FIRE_RUNE),100,'another unbankable type remains owned in the pouch');
+});
+
+test('loadout transfer boundaries never consume metadata-bearing copies to fill ID-only pouch slots', async t => {
+  const f=nativePouchActor(t),p=f.player,bank=p.getBank(0);
+  const protectedRune=new Item(Items.AIR_RUNE,90).setMetaValue(Item.UNTRADEABLE_META,true);
+  bank.add(protectedRune,false);bank.add(new Item(Items.AIR_RUNE,100),false);await f.open();
+  p.getInventory().add(new Item(Items.AIR_RUNE,30).setMetaValue(Item.UNTRADEABLE_META,true),false);
+  p.setAttribute('rune-pouch:loadouts',[{runes:[[Items.AIR_RUNE,50]],name:0}]);
+  Loadouts._test.load(p,0);
+  assert.equal(bank.forSlot(0).getAmount(),90,'earlier protected state stays intact');
+  assert.equal(bank.forSlot(0).getMetaValue(Item.UNTRADEABLE_META),true);
+  assert.equal(p.getInventory().getAmount(Items.AIR_RUNE),30,'protected inventory copies also retain their state');
+  assert.equal(Pouch.amountOf(p,Items.AIR_RUNE),50);
+  assert.equal(bank.getAmount(Items.AIR_RUNE),140);
+  p.setAttribute('rune-pouch:loadouts',[{runes:[[Items.AIR_RUNE,500]],name:0}]);
+  Loadouts._test.load(p,0);
+  assert.equal(Pouch.amountOf(p,Items.AIR_RUNE),100,'short loadouts still take all legitimate availability');
+  assert.equal(bank.getAmount(Items.AIR_RUNE),90,'protected bank runes remain when ordinary availability runs out');
+  assert.equal(p.getInventory().getAmount(Items.AIR_RUNE),30);
 });

@@ -96,7 +96,8 @@ const ATTR_AWAKE_ID = "vorkath:awake-id";
 
 function awakeIdForPlayer(player) {
   const stage = Number(player?.getAttribute?.("quest.dragon_slayer_ii.stage") ?? 0);
-  return stage === QUEST_FIGHT_STAGE ? QUEST_AWAKE_ID : AWAKE_ID;
+  const enteredThroughQuest = player?.getAttribute?.("dragon-slayer-ii:ungael-trip") === true;
+  return stage === QUEST_FIGHT_STAGE && enteredThroughQuest ? QUEST_AWAKE_ID : AWAKE_ID;
 }
 
 function awakeIdForNpc(npc) {

@@ -140,6 +140,8 @@ export class PlayerEcs {
 
     // Model cache for dynamic animation (stored as any to avoid circular deps)
     private baseModels: (any | undefined)[] = [];
+    private readonly animatedHeights = new Map<number, number>();
+    setAnimatedHeight(index: number, height: number): void { this.animatedHeights.set(index, height); }
     private readonly modelHeightOverrides=new Map<number,number>();
     getModelHeightOverride(index:number):number|undefined { return this.modelHeightOverrides.get(index); }
     setModelHeightOverride(index:number,height:number):void { this.modelHeightOverrides.set(index,height|0); }
@@ -313,6 +315,7 @@ export class PlayerEcs {
         this.prevY[index] = 0;
         this.level[index] = 0;
         this.modelHeightOverrides.delete(index);
+        this.animatedHeights.delete(index);
         this.rotation[index] = 0;
         this.targetRot[index] = 0;
         this.faceSubX[index] = -1;
@@ -1321,6 +1324,7 @@ export class PlayerEcs {
     }
     setAppearance(i: number, appearance: PlayerAppearance | undefined): void {
         this.appearances[i] = appearance;
+        this.animatedHeights.delete(i);
         this.notifyMutation({ kind: "appearance", index: i });
     }
     getCombatLevel(i: number): number {
@@ -1351,6 +1355,8 @@ export class PlayerEcs {
     }
     getDefaultHeightTiles(i: number): number | undefined {
         const height=this.modelHeightOverrides.get(i);if(height!==undefined)return height/128;
+        const animatedHeight = this.animatedHeights.get(i);
+        if (animatedHeight !== undefined) return animatedHeight / 128;
         const appearance = this.appearances[i];
         if (!appearance) return undefined;
         const key = this.getAppearanceCacheKey(appearance);

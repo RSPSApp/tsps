@@ -59,7 +59,7 @@ const BLOOD_RIFT_GUARDIAN_BASE = 804984;
 /** The Ourania Altar's rift guardian base, whatever rune is made (Wiki: Rift guardian). */
 const OURANIA_RIFT_GUARDIAN_BASE = 1487213;
 const ABYSS_TELEPORT_STEP = "o8m7y6";
-const ESSENCE_TELEPORT_STEPS = new Set(["ILlRUH", "SvUvek"]);
+const ESSENCE_TELEPORT_STEPS = new Set(["ILlRUH", "SvUvek", "PDYldg"]);
 const CROMPERTY_ESSENCE_TELEPORT_STEP = "EkCGKW";
 const ARDOUGNE_ESSENCE_TELEPORT_TASK = "have-wizard-cromperty-teleport-you-to-the-rune-e";
 /** The Rune Essence mine's exit portals (loc 34825, "Portal", Use). */
@@ -181,7 +181,7 @@ function initialize(api) {
     [ObjectIdentifiers.ALTAR_33, { runeId: ItemIdentifiers.AIR_RUNE, level: 1, xp: 5, essence: ANY_ESSENCE, multiplier: [[11, 2], [22, 3], [33, 4], [44, 5], [55, 6], [66, 7], [77, 8], [88, 9], [99, 10]] }],
     [ObjectIdentifiers.ALTAR_34, { runeId: ItemIdentifiers.MIND_RUNE, level: 2, xp: 5.5, essence: ANY_ESSENCE, multiplier: [[14, 2], [28, 3], [42, 4], [56, 5], [70, 6], [84, 7], [98, 8]] }],
     [ObjectIdentifiers.ALTAR_35, { runeId: ItemIdentifiers.WATER_RUNE, level: 5, xp: 6, essence: ANY_ESSENCE, multiplier: [[19, 2], [38, 3], [57, 4], [76, 5], [95, 6]] }],
-    [ObjectIdentifiers.ALTAR_36, { runeId: ItemIdentifiers.EARTH_RUNE, level: 9, xp: 6.5, essence: ANY_ESSENCE, multiplier: [[26, 2], [52, 3], [78, 4]] }],
+    [ObjectIdentifiers.ALTAR_36, { runeId: ItemIdentifiers.EARTH_RUNE, level: 9, xp: 6.5, essence: ANY_ESSENCE, multiplier: [[26, 2], [52, 3], [78, 4], [104, 5]] }],
     [ObjectIdentifiers.ALTAR_37, { runeId: ItemIdentifiers.FIRE_RUNE, level: 14, xp: 7, essence: ANY_ESSENCE, multiplier: [[35, 2], [70, 3]] }],
     [ObjectIdentifiers.ALTAR_38, { runeId: ItemIdentifiers.BODY_RUNE, level: 20, xp: 7.5, essence: ANY_ESSENCE, multiplier: [[46, 2], [92, 3]] }],
     [ObjectIdentifiers.ALTAR_39, { runeId: ItemIdentifiers.COSMIC_RUNE, level: 27, xp: 8, essence: PURE_ESSENCE_ONLY, multiplier: [[59, 2]] }],
@@ -372,7 +372,11 @@ function craftOurania(player) {
       const amount = diary && Math.random() * 100 < rune.extraChance ? 2 : 1;
       inventory.addItem(new Item(rune.runeId, amount));
       xp += rune.xp * essence.xpScale;
-      crafted.set(rune, (crafted.get(rune) ?? 0) + 1);
+      const entry = crafted.get(rune) ?? { essence: 0, runeAmount: 0, essenceIds: new Set() };
+      entry.essence++;
+      entry.runeAmount += amount;
+      entry.essenceIds.add(essence.id);
+      crafted.set(rune, entry);
     }
   }
 
@@ -383,7 +387,7 @@ function craftOurania(player) {
   if (diary) spam(player, OURANIA_DIARY_MESSAGE);
   player.getSkillManager().addExperiences(Skill.RUNECRAFTING, xp);
   // The rift guardian rolls per essence at the altar's own base; each rune is reported for its colour.
-  for (const [rune, essence] of crafted) {
+  for (const [rune, { essence, runeAmount, essenceIds }] of crafted) {
     pluginApi.emitCustomEvent("runecrafting:success", {
       player,
       skill: Skill.RUNECRAFTING,
@@ -391,6 +395,9 @@ function craftOurania(player) {
       rolls: essence,
       runeId: rune.runeId,
       amountPerEssence: 1,
+      runeAmount,
+      objectId: OURANIA_ALTAR,
+      essenceIds: [...essenceIds],
     });
   }
 }
@@ -443,14 +450,31 @@ function handleCraftRunes(event) {
   }
 
   const amountPerEssence = runeMultiplier(level, runeData);
-  let craftedEssence = 0;
+  const inventory = player.getInventory();
+  const preview = new pluginApi.core.Inventory(player).setItems(inventory.getCopiedItems());
+  const plan = [];
   for (const essenceId of essenceIds) {
-    // All of one essence at once: a stack (soul shards) frees its slot for the runes as essence does.
-    const count = player.getInventory().getAmount(essenceId);
+    // Simulate each complete input stack in order: its freed slot can hold the runes.
+    const count = preview.getAmount(essenceId);
     if (count <= 0) continue;
-    player.getInventory().deleteNumber(essenceId, count);
-    player.getInventory().addItem(new Item(runeData.runeId, count * amountPerEssence));
+    preview.deleted(essenceId, count, false);
+    const output = new Item(runeData.runeId, count * amountPerEssence);
+    if (preview.getAddableAmount(output) < output.getAmount()) {
+      inventory.full();
+      event.handled = true;
+      return true;
+    }
+    preview.add(output, false);
+    plan.push({ essenceId, count, output });
+  }
+
+  let craftedEssence = 0;
+  const craftedEssenceIds = [];
+  for (const { essenceId, count, output } of plan) {
+    inventory.deleteNumber(essenceId, count);
+    inventory.addItem(output);
     craftedEssence += count;
+    craftedEssenceIds.push(essenceId);
   }
 
   if (craftedEssence > 0) {
@@ -468,6 +492,8 @@ function handleCraftRunes(event) {
       rolls: craftedEssence,
       runeId: runeData.runeId,
       amountPerEssence,
+      objectId: event.objectId,
+      essenceIds: craftedEssenceIds,
     });
   }
 
@@ -648,6 +674,8 @@ function teleportToEssenceMine(player, wizard) {
       pluginApi.emitCustomEvent("diary:task", { player, diary: "lumbridge", task: "have-sedridor-teleport-you-to-the-essence-mine" });
     } else if (wizardName === "Wizard Cromperty") {
       pluginApi.emitCustomEvent("diary:task", { player, diary: "ardougne", task: ARDOUGNE_ESSENCE_TELEPORT_TASK });
+    } else if (wizardName === "Brimstail") {
+      pluginApi.emitCustomEvent("runecrafting:brimstail-essence", { player });
     }
   });
   if (wizard) {

@@ -20,6 +20,8 @@ const { PendingHit } = require("../dist/game/content/combat/hit/PendingHit");
 const { SpecialAttackTargetingResolver } = require("../dist/game/content/combat/SpecialAttackTargeting");
 const { CombatType } = require("../dist/game/content/combat/CombatType");
 const { RangedWeapon } = require("../dist/game/content/combat/ranged/RangedData");
+const { Mobile } = require("../dist/game/entity/impl/Mobile");
+const { Sounds } = require("../dist/game/Sounds");
 const { TimerKey } = require("../dist/util/timers/TimerKey");
 const { TaskManager } = require("../dist/game/task/TaskManager");
 const { PluginManager } = require("../dist/plugins/PluginManager");
@@ -226,6 +228,47 @@ test("Favour plays the mace's special animation and graphic", () => {
   assert.deepEqual(animations, [6147], "slice_player_mace_special_attack");
   assert.deepEqual(graphics, [1052], "slice_player_mace_special_attack_spotanim");
   assert.deepEqual(attacker.log.drains, [100]);
+});
+
+test("special attack animations use the cache's own sequences", () => {
+  const cases = [
+    ["voidwaker", 11275, "human_special02_voidwaker"], // 11240 is not sent by the live game
+    ["statius_warhammer_bh", 1378, "dragon_warhammer_sa_player"],
+  ];
+  for (const [id, expected, name] of cases) {
+    const animations = [];
+    const attacker = fakeFighter();
+    attacker.getEquipment = () => ({ get: () => ({ getId: () => ItemIdentifiers.DRAGON_HASTA }) });
+    attacker.performAnimation = (animation) => animations.push(animation.getId());
+    special(id).getCombatMethod().start(attacker, fakeTarget());
+    assert.equal(animations.at(-1), expected, `${id}: ${name}`);
+  }
+});
+
+test("Dragon Hasta Unleash replaces the normal swing through real animation arbitration", async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+
+  const attacker = fakeFighter();
+  attacker.animation = null;
+  attacker.animationGeneration = 0;
+  attacker.getUpdateFlag = () => ({ flag() {} });
+  attacker.performAnimation = (animation) => Mobile.prototype.performAnimation.call(attacker, animation);
+  attacker.getAttackAnim = () => 2080; // ordinary hasta stab; cache forced priority 6
+  const attackSound = {};
+  attacker.getAttackSound = () => attackSound;
+
+  const sentSounds = [];
+  const realSendSound = Sounds.sendSound;
+  Sounds.sendSound = (character, sound) => sentSounds.push([character, sound]);
+  try {
+    special("dragon_hasta").getCombatMethod().start(attacker, fakeTarget());
+  } finally {
+    Sounds.sendSound = realSendSound;
+  }
+
+  assert.equal(attacker.animation.getId(), 11171, "Unleash replaces the ordinary hasta swing");
+  assert.deepEqual(sentSounds, [[attacker, attackSound]], "the ordinary attack sound is retained once");
+  assert.deepEqual(attacker.log.drains, [100], "Unleash consumes all available special energy");
 });
 
 test("the ancient mace and dragon sword specials pierce NPC melee prayers; the hasta's doesn't", () => {

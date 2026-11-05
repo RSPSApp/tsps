@@ -22,4 +22,9 @@ const TIERS = [
 
 const byName = new Map(TIERS.map(tier => [tier.name, tier]));
 
-module.exports = { TIERS, byName, META_PREFIX, completedAttribute };
+function sharedCompletedCount(player) {
+  const beginner = Number(player.getAttribute(completedAttribute({ name: "beginner" }))) || 0;
+  return TIERS.reduce((sum, tier) => sum + (Number(player.getAttribute(completedAttribute(tier))) || 0), beginner);
+}
+
+module.exports = { TIERS, byName, META_PREFIX, completedAttribute, sharedCompletedCount };

@@ -3,7 +3,7 @@
 const { randomUUID } = require("node:crypto");
 const Catalogue = require("./Catalogue.TreasureTrails");
 const Dialogue = require("./Dialogue.TreasureTrails");
-const { TIERS, META_PREFIX, completedAttribute } = require("./Tiers.TreasureTrails");
+const { TIERS, META_PREFIX, completedAttribute, sharedCompletedCount } = require("./Tiers.TreasureTrails");
 const SKILL_CHALLENGES = require("./data/skill-challenges.json");
 const NPC_SPAWNS = require("../../../data/definitions/npc-spawns.json");
 const MASTER_PARTS = require("./data/master-parts.json");
@@ -642,6 +642,10 @@ function restore({ player }) {
 }
 
 function categoryCount(request) {
+  if (request.category === "Shared Treasure Trail Rewards") {
+    request.count = sharedCompletedCount(request.player);
+    return;
+  }
   const tier = TIERS.find(entry => request.category === clueCategoryName(entry) || request.category === rareClueCategoryName(entry));
   if (tier) request.count = Number(request.player.getAttribute(completedAttribute(tier))) || 0;
 }

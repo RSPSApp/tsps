@@ -235,7 +235,7 @@ function light({ player, object }) {
     graphicAt(p().graphics.smoke, stand, nearbyPlayers(stand));
     pyres.delete(key);
     swap(object, Common.locId(EMPTY_PYRE));
-    Common.api.emitCustomEvent("shades-of-mortton:cremated", { player, remains: remains.itemId, reward });
+    Common.api.emitCustomEvent("shades-of-mortton:cremated", { player, remains: remains.itemId, wood: use.wood.wood, reward });
   });
   return true;
 }

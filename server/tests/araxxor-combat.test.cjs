@@ -442,3 +442,51 @@ test("Araxxor cleanup leaves incoming hits alone for players without a lair", ()
   assert.equal(cleared, 1, "cleanup ends with the actual instance");
 });
 
+test("the harvest pet roll and the destroyed corpse's Nid roll are loot, not extra kills", () => {
+  const Corpse = require("../plugins/bosses/araxxor/Corpse.Araxxor");
+  const events = [];
+  const core = {
+    Animation: class {},
+    Item: class {},
+    ItemDefinition: { forId: () => ({ getNoteId: () => -1, isNoted: () => false, isStackable: () => false }) },
+    World: { getRemoveNPCQueue: () => ({ push() {} }), getProcessCycle: () => 0 },
+    Task: class { stop() {} },
+    TaskManager: { submit: (task) => task.execute() },
+  };
+  const api = {
+    core,
+    persistAttribute() {},
+    onNpcDeath() {},
+    onCustomEvent() {},
+    onNpcInteraction() {},
+    emitCustomEvent(name, payload) { events.push([name, payload]); },
+    getItemOnGroundManager: () => ({ registerLocation() {} }),
+  };
+  Corpse.attach(api);
+  const corpse = (session) => ({
+    getId: () => Shared.CORPSE_ID,
+    getAttribute: () => session,
+    isRegistered: () => true,
+    getLocation: () => ({}),
+    performAnimation() {},
+  });
+  const player = { performAnimation() {} };
+  const originalRandom = Math.random;
+  Math.random = () => 0; // roll Nid (1/1500) on destroy
+  try {
+    const harvested = corpse({ pendingPet: [{ itemId: Shared.NID_ITEM_ID, amount: 1 }], stash: [] });
+    harvested.__session = { corpse: harvested, pendingPet: [{ itemId: Shared.NID_ITEM_ID, amount: 1 }], stash: [] };
+    harvested.getAttribute = () => harvested.__session;
+    Corpse.harvest({ player, npc: harvested });
+    const destroyed = corpse(null);
+    destroyed.__session = { corpse: destroyed, stash: [] };
+    destroyed.getAttribute = () => destroyed.__session;
+    Corpse.destroyConfirmed({ player, npc: destroyed });
+    const rolls = events.filter(([name]) => name === "npc-drops:roll").map(([, payload]) => payload);
+    assert.equal(rolls.length, 2, "the pet and the destroy Nid roll each emit once");
+    for (const roll of rolls) assert.equal(roll.countKill, false, "neither re-roll tallies another kill");
+    assert.deepEqual(rolls.map((roll) => roll.drops[0].itemId), [Shared.NID_ITEM_ID, Shared.NID_ITEM_ID]);
+  } finally {
+    Math.random = originalRandom;
+  }
+});

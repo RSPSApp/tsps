@@ -63,7 +63,7 @@ function lunarPlayer() {
     setHasVengeance(value) { player.vengeance = value; },
     getVengeanceTimer: () => player.timer,
     getInventory: () => ({ deleteItemSet() {} }),
-    getLocation: () => ({ isWithinDistance: () => true }),
+    getLocation: () => new (require("../dist/game/model/Location").Location)(3100, 3600),
     getAttribute(key) { return player.attributes.get(key) ?? null; },
     setAttribute(key, value) { player.attributes.set(key, value); },
     performAnimation() {},
@@ -420,4 +420,25 @@ test("Vengeance can't be cast in a player-owned house, and entering one ends it"
   player.moveTo = () => {};
   withStub(Instance.PlayerHouseInstance, "getTemplateObjects", () => {}, () => house.enterHouse(player, false));
   assert.equal(player.vengeance, false);
+});
+
+
+test("captured Vengeance casts emit one immediate radius10 area sound at their caster, never on refusal", () => {
+  const { Sounds } = require("../dist/game/Sounds");
+  const { Location } = require("../dist/game/model/Location");
+  const sounds = [];
+  withStub(Sounds, "playAreaSoundAt", (actor, sound, radius) => sounds.push([actor, sound.getId(), sound.getDelay(), radius]), () => {
+    const self = lunarPlayer();
+    castVengeance(self);
+    assert.deepEqual(sounds, [[self,2907,0,10]], "raw1685 ticks61/192/315");
+    self.vengeance = false; castVengeance(self);
+    assert.equal(sounds.length,1,"cooldown refusal is silent");
+    const caster = lunarPlayer(), recipient = lunarPlayer();
+    caster.getLocation = () => new Location(3170,3475);
+    recipient.getLocation = () => new Location(3169,3475);
+    castVengeanceOther(caster,recipient);
+    assert.deepEqual(sounds[1],[caster,2908,0,10],"raw2796 tick200 soundtile3170,3475 is caster1696, not recipient1432");
+    castVengeanceOther(caster,recipient);
+    assert.equal(sounds.length,2,"existing-effect/cooldown refusal adds nothing");
+  });
 });

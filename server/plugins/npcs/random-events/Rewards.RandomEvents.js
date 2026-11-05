@@ -24,6 +24,7 @@ function give(api, player, rewards, { alwaysPrivate = false } = {}) {
       typeof reward === "number" ? 1 : reward.amount ?? 1);
     const definition = item.getDefinition();
     const amount = `${HIGHLIGHT}${item.getAmount()}</col> x ${HIGHLIGHT}${definition.getName()}</col>`;
+    api.emitCustomEvent("collection-log:obtain", { player, itemId: item.getId(), amount: item.getAmount() });
     if (fits(inventory, item)) {
       inventory.addItem(item);
       player.sendMessage(`Your reward is: ${amount}.`);

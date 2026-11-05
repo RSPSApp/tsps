@@ -5,6 +5,8 @@ import { FairyRingPlugin } from "../game/plugins/fairyring/FairyRingPlugin";
 import { fairyRingDestination } from "../game/plugins/fairyring/fairyRings";
 import { createCacheVm } from "../scripts/cache/cs2-sweep";
 
+assert.equal(FairyRingPlugin.descriptor.enabledByDefault, false, "fresh installs start disabled");
+
 assert.equal(fairyRingDestination(0, 3, 2), "Slayer cave", "AJR is 0 3 2 (the dials count anticlockwise)");
 assert.equal(fairyRingDestination(3, 2, 1), "Zanaris", "BKS");
 assert.equal(fairyRingDestination(0, 0, 0), "Invalid location", "AIP has no destination");

@@ -9,6 +9,7 @@ import { MagicSpellbook } from "../../../model/MagicSpellbook";
 import { Skill } from "../../../model/Skill";
 import { TeleportHandler } from "../../../model/teleportation/TeleportHandler";
 import { TeleportType } from "../../../model/teleportation/TeleportType";
+import { Sound } from "../../../Sound";
 import { Sounds } from "../../../Sounds";
 import { Task } from "../../../task/Task";
 import { TaskManager } from "../../../task/TaskManager";
@@ -152,7 +153,8 @@ class LunarTeleport extends LunarSpell {
     constructor(name: string, readonly teleport: TeleportData) { super(name, { ...teleport, cast: null }); }
     castTeleport(player: Player): boolean {
         if (!TeleportHandler.checkReqs(player, this.teleport.destination)) return true;
-        return this.cast(player, () => TeleportHandler.teleport(player, this.teleport.destination, TeleportType.LUNAR, false));
+        return this.cast(player, () => TeleportHandler.teleport(player, this.teleport.destination, TeleportType.LUNAR, false,
+            () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: this.name })));
     }
 }
 
@@ -259,7 +261,8 @@ export class LunarSpells {
     private static castGroupTeleport(player: Player, spell: LunarTeleport): boolean {
         if (!TeleportHandler.checkReqs(player, spell.teleport.destination)) return true;
         return spell.cast(player, () => {
-            TeleportHandler.teleport(player, spell.teleport.destination, TeleportType.LUNAR, false);
+            TeleportHandler.teleport(player, spell.teleport.destination, TeleportType.LUNAR, false,
+                () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: spell.name }));
             this.forNearbyPlayers(player, 1, target => {
                 if (TeleportHandler.checkReqs(target, spell.teleport.destination)) {
                     TeleportHandler.teleport(target, spell.teleport.destination, TeleportType.LUNAR, false);
@@ -509,6 +512,8 @@ export class LunarSpells {
         }
         return this.VENGEANCE_OTHER.cast(player, () => {
             target.setHasVengeance(true);
+            // Raw2796: immediate radius10 sound is at the caster, not the graphic on the recipient.
+            Sounds.playAreaSoundAt(player, Sound.VENGEANCE_OTHER, 10);
             EffectSpells.startVengeanceCooldown(player);
             target.performGraphic(new Graphic(725, GraphicHeight.HIGH));
             target.sendMessage("You have the power of vengeance!");
@@ -526,6 +531,7 @@ export class LunarSpells {
             player.getPacketSender()
                 .sendMagicTabInterface(MONSTER_STATS_INTERFACE)
                 .sendClientScript(MONSTER_STATS_SCRIPT, this.monsterStats(target));
+            PluginManager.emitCustomEvent("magic:monster-examine", { player, npc: target });
         });
     }
 
@@ -616,9 +622,16 @@ export class LunarSpells {
             log.setId(plank[0]);
             inventory.refreshItems();
             player.getSkillManager().addExperiences(Skill.MAGIC, spell.baseExperience());
+            PluginManager.emitCustomEvent("magic:plank-make", { player, logId, plankId: plank[0] });
             return inventory.contains(logId);
         };
-        if (make()) this.repeat(player, PLANK_TICKS, make, undefined, PLANK_FIRST_REPEAT_TICKS);
+        if (make()) {
+            this.repeat(player, PLANK_TICKS, make,
+                () => PluginManager.emitCustomEvent("magic:plank-make-end", { player }),
+                PLANK_FIRST_REPEAT_TICKS);
+        } else {
+            PluginManager.emitCustomEvent("magic:plank-make-end", { player });
+        }
         return true;
     }
 

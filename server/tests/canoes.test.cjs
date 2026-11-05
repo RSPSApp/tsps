@@ -164,6 +164,18 @@ test("a real map choice rows privately, lands, consumes the canoe and releases c
   assert.match(p.messages.at(-1), /Your canoe sinks/);
 });
 
+test("Waka travel from Lumbridge to Edgeville emits the Lumbridge diary task", () => {
+  const from = stations.find((station) => station.id === 1);
+  const p = player(from);
+  make(p, from, TYPES[3]);
+  plugin._test.paddle({ player: p, object: object(from) });
+  choose(p, 953, 22);
+  advance(28);
+  assert.ok(events.some((event) => event.name === "diary:task"
+    && event.diary === "lumbridge"
+    && event.task === "travel-from-lumbridge-to-edgeville-on-a-waka-can"));
+});
+
 test("a second station clears the previous canoe; logout cancels work and an interrupted ride returns safely", () => {
   const p = player(stations[0]); make(p, stations[0], TYPES[0]);
   p.location = new Location(...stations[1].tree, 0);

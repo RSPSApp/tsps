@@ -889,6 +889,7 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     if (!has(player, PRIMED_MIND_BAR)) return;
     player.getInventory().deleteNumber(PRIMED_MIND_BAR, 1);
     player.getInventory().adds(MIND_HELMET, 1);
+    api.emitCustomEvent("diary:task", { player, diary: "kandarin", task: "create-a-mind-helmet" });
     play(player, "into-the-workshop-crafting-the-mind-helm-using-the-workbench-with-the-proper-items");
     quest.complete(player);
   }

@@ -2,9 +2,12 @@
 
 const { randomUUID } = require("node:crypto");
 const Data = require("./Data.BeginnerTreasureTrails");
+const { TIERS, completedAttribute, sharedCompletedCount } = require("../trails/Tiers.TreasureTrails");
 const TRAIL_META = "treasure-trails:beginner";
-const COMPLETED_ATTRIBUTE = "treasure-trails:beginner-completed";
+const COMPLETED_ATTRIBUTE = completedAttribute({ name: "beginner" });
 const COUNT_VARBIT_NAME = "collection_clues_beginner_completed";
+// The cache's collection log category name.
+const CATEGORY_NAME = "Beginner Treasure Trails";
 let api;
 let core;
 let catalogue;
@@ -240,7 +243,12 @@ function restore({ player }) {
 }
 
 function categoryCount(request) {
-  if (/^Treasure Trails \(Beginner\)$/i.test(request.category)) request.count = Number(request.player.getAttribute(COMPLETED_ATTRIBUTE)) || 0;
+  // This saved-count query must also work on free worlds, where members trails do not load.
+  if (request.category === "Shared Treasure Trail Rewards") {
+    request.count = sharedCompletedCount(request.player);
+    return;
+  }
+  if (request.category === CATEGORY_NAME) request.count = Number(request.player.getAttribute(COMPLETED_ATTRIBUTE)) || 0;
 }
 
 function canEmote(request) {
@@ -259,6 +267,7 @@ module.exports = function attachBeginnerTreasureTrails(pluginApi) {
   core = api.core;
   catalogue = null;
   api.persistAttribute(COMPLETED_ATTRIBUTE, 0);
+  for (const tier of TIERS) api.persistAttribute(completedAttribute(tier), 0);
   api.onItemAction("Clue scroll (beginner)", { Read: read, "Check steps": checkSteps });
   api.onItemAction("Strange device", { Feel: feel });
   api.onBeforeNpcInteraction(talk);
@@ -272,4 +281,4 @@ module.exports = function attachBeginnerTreasureTrails(pluginApi) {
   api.onInterfaceActionButton((203 << 16) | 1, close);
 };
 
-Object.assign(module.exports, { TRAIL_META, COMPLETED_ATTRIBUTE, data, trailLength: length, stateOf, trails, read, checkSteps, advance, talk, dig, emote, feel, temperature, emoteReady, restore, canEmote });
+Object.assign(module.exports, { TRAIL_META, COMPLETED_ATTRIBUTE, data, trailLength: length, stateOf, trails, read, checkSteps, advance, talk, dig, emote, feel, temperature, emoteReady, restore, categoryCount, canEmote });

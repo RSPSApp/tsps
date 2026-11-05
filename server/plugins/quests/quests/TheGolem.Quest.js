@@ -881,6 +881,7 @@ module.exports = function registerTheGolemQuest(api) {
       if (thiefLevel(player) >= THIEVING_LEVEL) {
         player.getInventory().adds(FEATHER_ITEM_ID, 1);
         player.sendMessage("You grab the feather and pull your hand back before the phoenix reacts.");
+        api.emitCustomEvent("diary:task", { player, diary: "desert", task: "steal-a-feather-from-the-desert-phoenix" });
       } else {
         player.sendMessage("You fail to grab the feather.");
         player.sendMessage("You've been stunned!");

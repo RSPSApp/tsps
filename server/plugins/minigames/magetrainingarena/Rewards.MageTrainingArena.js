@@ -206,9 +206,13 @@ function buy(player, slot, requested) {
   if (itemId === items.peachSpell) {
     player.setAttribute(PEACHES_UNLOCKED_ATTRIBUTE, true);
     player.sendMessage(Common.message("shopUnlocked"));
+    Common.api.emitCustomEvent("collection-log:obtain", { player, itemId, amount: 1 });
   } else {
     for (let i = 0; i < amount; i++) if (previous !== null) takeWand(player, previous);
+    const before = inventory.getAmount(itemId);
     inventory.adds(itemId, amount);
+    const credited = Math.max(0, inventory.getAmount(itemId) - before);
+    if (credited > 0) Common.api.emitCustomEvent("collection-log:obtain", { player, itemId, amount: credited });
   }
   sendPoints(player);
   return amount;

@@ -109,6 +109,7 @@ function giveLogs(player, trunk, axe) {
   player.getSkillManager().addExperiences(core.Skill.WOODCUTTING, ENTS.xp * helpers.lumberjackXpMultiplier(player));
   player.sendMessage(ENTS.messages.yield.replace("{amount}", String(trunk.ent.logsPerSuccess)).replace("{log}", log.name));
   helpers.maybeDropBirdNest(player);
+  api.emitCustomEvent("woodcutting:ent-logs", { player, itemId: log.id, where: trunk.ent.where });
   return true;
 }
 

@@ -226,6 +226,9 @@ function container(size) {
     contains: (id) => slots.some((slot) => slot?.id === id),
     getAmount: (id) => slots.reduce((sum, slot) => sum + (slot?.id === id ? slot.amount : 0), 0),
     getFreeSlots: () => slots.filter((slot) => !slot).length,
+    getAddableAmount: (item) => (item.getDefinition().isStackable()
+      ? (slots.some((slot) => slot?.id === item.getId()) || slots.filter((slot) => !slot).length > 0 ? item.getAmount() : 0)
+      : Math.min(item.getAmount(), slots.filter((slot) => !slot).length)),
     delete(id, amount = 1) {
       for (let i = 0; i < slots.length && amount > 0; i++) {
         if (slots[i]?.id !== id) continue;

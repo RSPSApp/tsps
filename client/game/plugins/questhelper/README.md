@@ -48,7 +48,8 @@ plugin draws what the upstream plugin draws.
 - **Use 'Shortest Path' plugin** (off by default, as upstream):
   - Upstream's `DetailedQuestStep` posts `PluginMessage("shortestpath", "path" | "clear")` as steps start and end, and when the option is toggled.
   - The bridge collects what upstream's steps post and returns it with each evaluation, and the client hands it to the Shortest Path plugin.
-  - The client clears the route itself when the quest is switched or Quest Helper stops, because the engine isn't asked again then.
+  - A route is replayed when Shortest Path starts after the step posted it, so enabling the plugin later still draws the route.
+  - The client clears the route itself when the quest is switched, Quest Helper stops or the player logs out, because the engine isn't asked again then.
 - **Bank tab** (`QuestBankTab`):
   - A "quest-helper" button by the bank's tabs lays the quest's items out in sections: recommended, each part of the quest, then "Non-quest items".
   - Missing items are placeholders with "Details".

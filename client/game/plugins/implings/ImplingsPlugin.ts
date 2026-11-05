@@ -50,6 +50,7 @@ export type HighlightedImpling = {
 export class ImplingsPlugin extends Plugin {
     static descriptor: PluginDescriptor = {
         name: "Implings",
+        enabledByDefault: false,
         description: "Highlight nearby implings on the minimap and on-screen",
         tags: ["hunter", "minimap", "overlay", "imp"],
         configKey: "implingsplugin",

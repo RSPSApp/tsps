@@ -1123,7 +1123,8 @@ export class Bank extends ItemContainer {
             if (getPluginManager().emitCanBankItem(player, item) === false) {
                 continue;
             }
-            from.switchItems(player.getBank(Bank.getTabForItem(player, item.getId())), item.clone(),false, false);
+            // By slot: a delete by id would take a preset stack in a lower slot instead of this one.
+            from.switchItem(player.getBank(Bank.getTabForItem(player, item.getId())), item.clone(), false, from.getItems().indexOf(item), false);
             movedAny = true;
         }
         from.refreshItems();

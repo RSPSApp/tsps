@@ -23,7 +23,7 @@ before(async () => {
 // Fixtures set stage and inventory only where the check is explicitly a handler
 // contract; no fixture sets the expected postcondition or calls plugin helpers.
 
-function setup() {
+function setup({ barcrawl = true } = {}) {
   const hooks = {
     custom: new Map(), variants: [], conditions: [], login: [], logout: [], npcDeaths: [],
     objects: [], itemOnObject: [], npcs: [], hits: [], process: [],
@@ -143,6 +143,9 @@ function setup() {
     removeNpc() {},
   }, { get(target, key) { return target[key] ?? (() => {}); } });
 
+  hooks.custom.set('quest:is-complete', [(request) => {
+    if (request?.name === "Alfred Grimhand's Barcrawl") request.complete = barcrawl;
+  }]);
   require('../plugins/quests/quests/HorrorFromTheDeep.Quest')(api);
   const quest = runtime.getRegisteredQuests().at(-1);
 
@@ -238,13 +241,23 @@ test('q059 mandatory handler route: start gate, bridge, key, door, light, wall, 
 
   // Fresh stage 0: 35 Agility is required before the start hook advances.
   h.skills.set(SKILL.AGILITY, 34);
-  h.emit('npc-dialogue:hook', {
+  const underLevel = h.emit('npc-dialogue:hook', {
     npcId: N.LARRISSA, hook: 'quest:horror-from-the-deep:start',
   });
+  assert.equal(underLevel.end, true, 'refused start stops the transcript');
   assert.equal(h.quest.getStage(h.player), 0, 'under-leveled start stays at stage 0');
   assert.ok(h.messages.some((text) => /Agility level of at least 35/.test(text)));
 
   h.skills.set(SKILL.AGILITY, 35);
+  const noBarcrawl = setup({ barcrawl: false });
+  noBarcrawl.skills.set(SKILL.AGILITY, 35);
+  const missingBarcrawl = noBarcrawl.emit('npc-dialogue:hook', {
+    npcId: N.LARRISSA, hook: 'quest:horror-from-the-deep:start',
+  });
+  assert.equal(missingBarcrawl.end, true, 'missing Barcrawl stops the transcript');
+  assert.equal(noBarcrawl.quest.getStage(noBarcrawl.player), 0, 'missing Barcrawl stays at stage 0');
+  assert.ok(noBarcrawl.messages.some((text) => /Alfred Grimhand's Barcrawl/.test(text)));
+
   h.emit('npc-dialogue:hook', {
     npcId: N.LARRISSA, hook: 'quest:horror-from-the-deep:start',
   });

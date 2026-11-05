@@ -5,6 +5,9 @@ let pluginApi;
 
 const HOUSE_TABLET = "teleport to house";
 const HOUSE_TABLET_OPTIONS = new Set(["break", "inside", "outside"]);
+/** A redirected house tablet (scroll of redirection) that finishes the Desert Diary's Pollnivneach task. */
+const POLLNIVNEACH_REDIRECT = "pollnivneach teleport";
+const POLLNIVNEACH_REDIRECT_TASK = "teleport-to-pollnivneach-with-a-redirected-telep";
 // One bit per alternate tablet (in teleport-tablets.json order), set when Break goes to the alternate.
 const ALTERNATES_ATTRIBUTE = "spell-teleports:alternates";
 // The spell's own options (client script 2615 names op1/op3 "Cast").
@@ -178,6 +181,13 @@ function useTablet(event) {
   const target = tabletDestination(event, name, option);
   if (!target) return;
   const { player } = event;
+  if (name === POLLNIVNEACH_REDIRECT) {
+    const arrival = target.onArrival;
+    target.onArrival = () => {
+      pluginApi.emitCustomEvent("diary:task", { player, diary: "desert", task: POLLNIVNEACH_REDIRECT_TASK });
+      arrival?.();
+    };
+  }
   if (!player.getInventory().contains(event.itemId) || !core.TeleportHandler.checkReqs(player, target.destination)) return;
   // OSRS uses the tablet up two ticks in, as it is absorbed (docs/teleport-tablets.md).
   const useUp = () => player.getInventory().deleteNumber(event.itemId, 1);

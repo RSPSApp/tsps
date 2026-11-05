@@ -67,6 +67,7 @@ function farmingSpell(event, patch) {
         const ultra = (Patches.farmFor(player).ultraFertile || player.getPacketSender().getVarbit(5960) > 0) && player.getInventory().getAmount(Data.itemId("Volcanic ash")) >= 2;
         if (ultra) player.getInventory().deleteNumber(Data.itemId("Volcanic ash"), 2);
         Patches.fertilize(player, patch, ultra ? 3 : 2, false, 18);
+        core.PluginManager.emitCustomEvent("farming:spell-fertilized", { player, patch, spell: key });
     }
     else {
         const level = Math.min(99, player.getSkillManager().getCurrentLevel(core.Skill.MAGIC));

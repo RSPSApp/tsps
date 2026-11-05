@@ -1056,6 +1056,13 @@ module.exports = function registerNatureSpiritQuest(api) {
    */
   function createSwampArea() {
     class MortMyreSwampArea extends Area {
+      postEnter(mobile) {
+        if (!mobile?.isPlayer?.()) return;
+        const player = mobile.getAsPlayer();
+        if (player.getPrivateArea?.()) return;
+        api.emitCustomEvent("mort-myre:entered", { player });
+      }
+
       process(mobile) {
         if (!mobile?.isPlayer?.()) return;
         const player = mobile.getAsPlayer();

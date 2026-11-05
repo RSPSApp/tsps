@@ -35,6 +35,9 @@ import { ItemStatsPlugin } from "../../../game/plugins/itemstats/ItemStatsPlugin
 import { ItemPricesPlugin } from "../../../game/plugins/itemprices/ItemPricesPlugin";
 import { ItemRarityPlugin } from "../../../game/plugins/itemrarity/ItemRarityPlugin";
 import { MenuSwapperPlugin } from "../../../game/plugins/menuswapper/MenuSwapperPlugin";
+import { DoorKickerPlugin } from "../../../game/plugins/doorkicker/DoorKickerPlugin";
+import { InventorySetupsPlugin } from "../../../game/plugins/inventorysetups/InventorySetupsPlugin";
+import { LootTrackerPlugin } from "../../../game/plugins/loottracker/LootTrackerPlugin";
 import { NotesConfig } from "../../../game/plugins/notes/NotesPlugin";
 import { ObjectIndicatorsPlugin } from "../../../game/plugins/objectindicators/ObjectIndicatorsPlugin";
 import { NpcIndicatorsPlugin } from "../../../game/plugins/npcindicators/NpcIndicatorsPlugin";
@@ -51,7 +54,7 @@ import { TimersPlugin } from "../../../game/plugins/statustimer/TimersPlugin";
 import { LegacyTileMarkersConfig } from "../../../game/plugins/tilemarkers/migrateTileMarkers";
 import { TileMarkersPlugin } from "../../../game/plugins/tilemarkers/TileMarkersPlugin";
 import { TilePacksPlugin } from "../../../game/plugins/tilepacks/TilePacksPlugin";
-import { WeatherPlugin } from "../../../game/plugins/weather/WeatherPlugin";
+import { LowEndDevicePlugin } from "../../../game/plugins/lowenddevice/LowEndDevicePlugin";
 import { XpTrackerPlugin } from "../../../game/plugins/xptracker/XpTrackerPlugin";
 import { XpGlobesPlugin } from "../../../game/plugins/xpglobes/XpGlobesPlugin";
 import { GuidePlugin } from "../../../game/plugins/optimalquestguide/GuidePlugin";
@@ -72,6 +75,9 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     PortraitModePlugin,
     GameFrame317Plugin,
     GroundItemsPlugin,
+    LootTrackerPlugin,
+    InventorySetupsPlugin,
+    DoorKickerPlugin,
     InteractHighlightPlugin,
     GroundMarkerPlugin,
     MultiLinesPlugin,
@@ -98,7 +104,6 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     ChatFilterPlugin,
     AnimationSmoothingPlugin,
     TimersPlugin,
-    WeatherPlugin,
     StatusBarsPlugin,
     BoostsPlugin,
     RegenMeterPlugin,
@@ -110,6 +115,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     PestControlPlugin,
     FairyRingPlugin,
     StretchedModePlugin,
+    LowEndDevicePlugin,
     GpuPlugin,
     CameraPlugin,
     QuestHelperPlugin,

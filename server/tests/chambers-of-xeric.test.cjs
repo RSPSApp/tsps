@@ -148,6 +148,9 @@ function fakeInventory(slots) {
     getAmount: (id) => slots.reduce((sum, item) => sum + (item?.getId() === id ? item.getAmount() : 0), 0),
     contains: (id) => slots.some((item) => item?.getId() === id),
     getFreeSlots: () => 28 - slots.filter(Boolean).length,
+    getAddableAmount: (item) => (stackable(item.getId())
+      ? (slots.some((entry) => entry?.getId() === item.getId()) || slots.filter(Boolean).length < 28 ? item.getAmount() : 0)
+      : Math.min(item.getAmount(), 28 - slots.filter(Boolean).length)),
     add(item) {
       if (stackable(item.getId())) {
         const slot = slots.findIndex((entry) => entry?.getId() === item.getId());
@@ -751,6 +754,53 @@ test('a completed raid: counts, the chest\'s loot for each raider', () => {
   assert.ok(loot.some((entry) => entry.id === 20899), 'the dark journal');
   assert.ok(winner.messages.some((text) => text.includes('count is')));
   raid.destroy();
+});
+
+test('the ancient chest reports its loot once, leaving the pet to the pet path', () => {
+  const Rewards = require('../plugins/minigames/cox/Rewards.ChambersOfXeric');
+  const events = [];
+  Shared.bind({
+    ...fakeApi(),
+    emitCustomEvent(name, payload) {
+      events.push({ name, ...payload });
+    },
+  });
+  try {
+    const party = new Parties.Party(fakePlayer('Logger'), { key: 'Logger' });
+    const raid = new RaidModule.Raid(party);
+    const logger = fakePlayer('Logger');
+    raid.players.add(logger);
+    raid.original.add('Logger');
+    logger.setAttribute(RaidModule.ATTR_RAID, raid);
+    raid.rewards = new Map([['Logger', [
+      { id: 21034, amount: 1 },
+      { id: 22386, amount: 1 },
+      { id: 20851, amount: 1 },
+      { id: 560, amount: 100 },
+    ]]]);
+    Rewards.openChest({ player: logger });
+    const obtained = events.filter((event) => event.name === 'collection-log:obtain').map((event) => [event.itemId, event.amount]);
+    assert.deepEqual(obtained, [[21034, 1], [22386, 1], [560, 100]], 'the chest\'s items, not the pet');
+    Rewards.openChest({ player: logger });
+    assert.equal(events.filter((event) => event.name === 'collection-log:obtain').length, 3, 'reopening adds nothing');
+    raid.destroy();
+  } finally {
+    Shared.bind(fakeApi());
+  }
+});
+
+test('the collection log keeps the player\'s completions separate by mode', () => {
+  const Rewards = require('../plugins/minigames/cox/Rewards.ChambersOfXeric');
+  const player = fakePlayer('Counted');
+  player.setAttribute(Shared.ATTR.KILLS, 3);
+  player.setAttribute(Shared.ATTR.CHALLENGE_KILLS, 2);
+  const request = { player, category: 'Chambers of Xeric' };
+  Rewards.collectionLogCount(request);
+  assert.equal(request.count, 2, 'the primary label is Challenge Mode');
+  assert.deepEqual(request.extraCounts, [3], 'Normal has its own label');
+  const other = { player, category: 'Tombs of Amascut' };
+  Rewards.collectionLogCount(other);
+  assert.equal(other.count, undefined, 'only its own category');
 });
 
 test('the two CM runs: precise timing, a best that stands, the common chest light, raid notices', (t) => {

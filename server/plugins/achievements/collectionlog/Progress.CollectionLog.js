@@ -9,6 +9,7 @@
  * follow the player's option_collection_new_item (varbit 11959: 1 chat, 2 popup).
  */
 const Data = require("./Data.CollectionLog");
+const SettingVarpTransmit = require("../../interface/SettingVarpTransmit");
 
 const VARP = {
   COUNT: 2943,
@@ -18,12 +19,15 @@ const VARP = {
   TAB_COUNT: [4613, 4615, 4617, 4619, 4621],
   TAB_MAX: [4614, 4616, 4618, 4620, 4622],
   RECENT_ITEM: 4623,
-  CATEGORY_COUNT: 2048,
+  CATEGORY_COUNTS: [2048, 2941, 2942],
 };
 const NOTIFY_VARBIT = 11959;
+const NOTIFY_VARP = 2856;
 const NOTIFY_DEFAULT = 3;
 const NOTIFY_CHAT = 1;
 const NOTIFY_POPUP = 2;
+/** All Settings rows that toggle one bit of varbit 11959 (cache script 6716). */
+const NOTIFY_SETTINGS = new Map([[85, 0], [171, 1]]);
 const RECENT_SIZE = 12;
 const EMPTY_RECENT = -1;
 const COUNTS_DELAY = 5;
@@ -33,6 +37,7 @@ const DAY_ZERO = Date.UTC(2002, 1, 27);
 const ITEMS_ATTRIBUTE = "clog.items";
 const COUNTS_ATTRIBUTE = "clog.counts";
 const RECENT_ATTRIBUTE = "clog.recent";
+const NOTIFY_ATTRIBUTE = "collection-log:notifications";
 
 let pluginApi;
 let core;
@@ -52,10 +57,23 @@ function uniqueCount(player, inTab = null) {
 }
 
 /** A category's count: a plugin that keeps one answers, otherwise the log's own tally. */
-function categoryCount(player, category) {
+function categoryCounts(player, category) {
   const request = { player, category: category.name, struct: category.struct, count: null };
   pluginApi?.emitCustomEvent("collection-log:category-count", request);
-  return Number.isFinite(request.count) ? request.count : Number(counts(player)[category.struct]) || 0;
+  return [
+    Number.isFinite(request.count) ? request.count : Number(counts(player)[category.struct]) || 0,
+    ...[0, 1].map((index) => Number.isFinite(request.extraCounts?.[index]) ? request.extraCounts[index] : 0),
+  ];
+}
+
+function categoryCount(player, category) {
+  return categoryCounts(player, category)[0];
+}
+
+/** Cache script 2735 reads up to three mode counters; clear unused ones on every category. */
+function sendCategoryCounts(player, category) {
+  const values = categoryCounts(player, category);
+  VARP.CATEGORY_COUNTS.forEach((varp, index) => player.getPacketSender().sendConfig(varp, values[index]));
 }
 
 function addCategoryCount(player, category, amount = 1) {
@@ -104,8 +122,45 @@ function restore({ player }) {
 }
 
 function notifySetting(player) {
-  const sent = player.getPacketSender().getVarbit?.(NOTIFY_VARBIT);
-  return Number.isInteger(sent) && sent > 0 ? sent : NOTIFY_DEFAULT;
+  const stored = Number(player.getAttribute(NOTIFY_ATTRIBUTE));
+  return Number.isInteger(stored) && stored >= 0 && stored <= 7 ? stored : NOTIFY_DEFAULT;
+}
+
+function setNotifySetting(player, value) {
+  const setting = Number.isInteger(value) ? Math.max(0, Math.min(7, value)) : NOTIFY_DEFAULT;
+  player.setAttribute(NOTIFY_ATTRIBUTE, setting);
+  player.getPacketSender().sendVarbit(NOTIFY_VARBIT, setting);
+  return setting;
+}
+
+function notifyVarpBits() {
+  const { startBit, endBit } = core.CacheDefinitions.getVarbit(NOTIFY_VARBIT);
+  return { startBit, mask: (1 << (endBit - startBit + 1)) - 1 };
+}
+
+/** All Settings rows 85 (chat) and 171 (popup) each own one bit of the shared varbit. */
+function handleSettingClicked(request) {
+  const bit = NOTIFY_SETTINGS.get(request.settingId);
+  if (bit === undefined || !request.player) return;
+  // The same click already changed the varbit locally and transmitted the whole shared varp.
+  // That value is authoritative; toggling it again here would cancel the player's choice.
+  const transmitted = SettingVarpTransmit.take(request.player, NOTIFY_VARP, core.World.getProcessCycle());
+  if (transmitted !== undefined) {
+    request.handled = true;
+    return;
+  }
+  setNotifySetting(request.player, notifySetting(request.player) ^ (1 << bit));
+  request.handled = true;
+}
+
+/** The client transmits the whole shared varp; keep the whole value and the notification bits. */
+function handleVarpTransmit(transmission) {
+  if (transmission.varpId !== NOTIFY_VARP || !transmission.player) return;
+  SettingVarpTransmit.remember(transmission.player, NOTIFY_VARP, transmission.value, core.World.getProcessCycle());
+  const { startBit, mask } = notifyVarpBits();
+  transmission.player.setAttribute(NOTIFY_ATTRIBUTE, (transmission.value >> startBit) & mask);
+  transmission.player.getPacketSender().sendConfig(NOTIFY_VARP, transmission.value);
+  transmission.handled = true;
 }
 
 function later(ticks, action) {
@@ -176,11 +231,15 @@ module.exports = function attachProgress(api) {
   api.persistAttribute(ITEMS_ATTRIBUTE, {});
   api.persistAttribute(COUNTS_ATTRIBUTE, {});
   api.persistAttribute(RECENT_ATTRIBUTE, []);
+  api.persistAttribute(NOTIFY_ATTRIBUTE, NOTIFY_DEFAULT);
   api.onPlayerLogin(restore);
+  api.onCustomEvent("settings:setting-clicked", handleSettingClicked);
+  api.onCustomEvent("player:varp-transmit", handleVarpTransmit);
 };
 
 Object.assign(module.exports, {
-  VARP, ITEMS_ATTRIBUTE, COUNTS_ATTRIBUTE, RECENT_ATTRIBUTE,
-  today, items, obtained, uniqueCount, categoryCount, addCategoryCount, setCategoryCount,
+  VARP, ITEMS_ATTRIBUTE, COUNTS_ATTRIBUTE, RECENT_ATTRIBUTE, NOTIFY_ATTRIBUTE,
+  NOTIFY_VARBIT, NOTIFY_VARP,
+  today, items, obtained, uniqueCount, categoryCount, sendCategoryCounts, addCategoryCount, setCategoryCount,
   obtain, restore, reset,
 });

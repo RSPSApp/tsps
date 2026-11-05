@@ -322,7 +322,11 @@ function shopClick(event) {
   if (points < reward.cost) return player.sendMessage(`You need ${reward.cost} Carpenter points to claim that reward.`);
   if (player.getInventory().getFreeSlots() === 0) return player.sendMessage("You don't have enough inventory space.");
   player.setAttribute(POINTS_ATTRIBUTE, points - reward.cost);
-  player.getInventory().adds(reward.itemId, 1);
+  const inventory = player.getInventory();
+  const before = inventory.getAmount(reward.itemId);
+  inventory.adds(reward.itemId, 1);
+  const credited = Math.max(0, inventory.getAmount(reward.itemId) - before);
+  if (credited > 0) api.emitCustomEvent("collection-log:obtain", { player, itemId: reward.itemId, amount: credited });
   player.getPacketSender().sendConfig(POINTS_VARP, points - reward.cost);
 }
 

@@ -116,6 +116,8 @@ const ANIM = {
   UNTETHER: 832,
   REPAIR: 3676,
   DOUSE: 2771,
+  /** Cache `human_stunned`: the generic stun the torrent's zap leaves a loader in. */
+  STUNNED: 848,
   CANNON_FIRING: 8871,
   CANNON_FIRING_MIRROR: 8872,
   BOSS_TIDAL_WAVE: 8902,
@@ -138,6 +140,8 @@ const ANIM = {
 
 const GFX = {
   SPOT_SPLASH: 3,
+  /** Cache `stunned` (the Stun spell's landing graphic): the zap a torrent leaves on its loader. */
+  STUNNED: 80,
   PROJECTILE_COOKED: 525,
   PROJECTILE_RAW: 528,
   PROJECTILE_CRYSTALLISED: 1837,
@@ -333,6 +337,7 @@ function startAction(player, name, step) {
 function endAction(player, action) {
   if (player.__temporossAction !== action) return;
   player.__temporossAction = null;
+  if (action.name === "load") player.__temporossLoading = null;
   animate(player, -1);
 }
 

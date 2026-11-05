@@ -10,7 +10,7 @@ Audit date: 2026-11-04. The catalogue below covers 908 cluehelper rows from the 
 | Elite | 124 / 124 |
 | Master | 97 / 265 |
 
-Easy, medium, and hard have no cache rows suppressed by the current runtime checks. Elite is now complete after adding the content-backed kills described below. Master three-part cryptic trails have 29 safe part candidates. Two other candidate rows stay out of the part pool: Viggora depends on the absent Curse of the Empty Lord miniquest, and Watson's row is a correct exclusion (see "Correct exclusions" below).
+Easy, medium, and hard have no cache rows suppressed by the current runtime checks. Elite is now complete after adding the content-backed kills described below. Master three-part cryptic trails have all 30 part candidates in the pool. Viggora's is drawn only for a player who has reached him in Curse of the Empty Lord (see below). Watson's row stays out, and that is a correct exclusion (see "Correct exclusions" below).
 
 Elite Sherlock has all 25 task rows wired.
 
@@ -34,6 +34,8 @@ The RSProx recordings reviewed for this audit corroborate clue and Sherlock scro
 - Lovada: her Lovakengj spawn at 1485,3834 used 6786, which the current cache makes a hidden Varlamore `vmq1` guard. `sync-npc-spawns.ts --repair-identities` (from the original infobox lines added to `tests/fixtures/npc-spawn-identity-wiki.json`) moved it to 12701, the cache's and the Wiki's Lovada, and her part rolls. A second row named Lovada at 1632,3678 (id 6787, also a `vmq1` form) has no Wiki or cache evidence and is left unchanged. [Lovada](https://oldschool.runescape.wiki/w/Lovada).
 - Create a Barrows teleport tablet: the tablet is made at the Arceuus lectern in the Ouditor's house (loc 28802, enum 2628), not a house lectern, which is why no house lectern enum lists it. #2548 added that lectern to `Lectern.Construction.js`; this task counts its `construction:tablet-made` event for a Barrows teleport. Its Study refusals, rune message, border varbit and own Create-last now follow rsprox 235/03899 and the Wiki. [Barrows teleport (tablet)](https://oldschool.runescape.wiki/w/Barrows_teleport_(tablet)), [Lectern (Arceuus)](https://oldschool.runescape.wiki/w/Lectern_(Arceuus)).
 
+- Viggora: Curse of the Empty Lord is now on the server (`plugins/quests/quests/CurseOfTheEmptyLord.Quest.js`, with its transcript imported from osrsreboxed-db), and the ring of visibility shows the ghosts (`plugins/items/RingOfVisibility.plugin.js`). The Wiki's requirement is the miniquest up to the point where the player talks to Viggora, plus a ghostspeak amulet (or Morytania legs 2+) and a ring of visibility (or ring of shadows). His part is drawn only for a player whose miniquest stage has reached him (asked through `curse-of-the-empty-lord:viggora`). It is handed over only with the cache outfit worn, and only by the Viggora at the player's own sequence spot: the cache's clue-helper script maps `secret_ghost_randomiser` 1/2/3 to his Rogues' Castle, Slayer Tower and Edgeville Dungeon targets. The torn-part Talk-to hook now also accepts the ghosts' cache spelling `Talk-To`. [Viggora](https://oldschool.runescape.wiki/w/Viggora).
+
 ## Correct exclusions
 
 - Watson's cryptic row ("Buried beneath the ground, who knows where it's found. Lucky for you, a man called Watson…") is the Twisted League copy of Jorral's hot/cold starter: in that league Watson handed out the strange device because Jorral was out of reach. On a main-game world the row is never given, so it is not a gap. Watson's main-game role, trading one clue of each lower tier for a master clue, is implemented in `Watson.TreasureTrails.js`. [Watson](https://oldschool.runescape.wiki/w/Watson).
@@ -55,10 +57,12 @@ Mining nickel and stealing from a chest in Ardougne Castle are wired now that th
 
 ### Master three-part cryptic parts
 
-- Viggora: the Wiki requires Curse of the Empty Lord to have reached the point where the player talks to him, plus a ghostspeak amulet and a ring of visibility. The miniquest is not on this server, so his part stays out of the pool. [Viggora](https://oldschool.runescape.wiki/w/Viggora).
+None: every part can be drawn.
 
 ## Verification
 
 `npm run build --prefix server` passes. A direct active-cache catalogue inspection confirms the row counts above and confirms that no elite rows are suppressed. The test suites were not run.
 
 Master follow-up (2026-11-05): an active-cache catalogue load gives 96 rollable master rows and 29 parts; `tests/treasure-trails-master.test.cjs` covers the two new tasks (inside and outside their area) and Piles' and Lovada's torn parts, and the spawn sync's repair was run twice from the fixture with no change on the second run.
+
+Viggora (2026-11-05): `tests/treasure-trails-master.test.cjs` checks the pool has 30 parts and that Viggora is never drawn before the miniquest reaches him, but is drawn after. It also checks his part is handed over only with the outfit, at the player's own spot and with the cache's `Talk-To` option. `tests/curse-of-the-empty-lord.test.cjs` covers the miniquest's three sequences. On a slot-39 QA server, the headless player was refused at the wrong-sequence Viggora and without ghostspeak, and was handed the torn part at their own spot with the outfit.

@@ -40,6 +40,7 @@ const KUDOS_CHANGED_EVENT = "museum:kudos-changed";
 const DIG_SITE_KEY = "the_dig_site";
 const WHAT_LIES_BELOW_KEY = "what_lies_below";
 const TEMPLE_OF_IKOV_KEY = "temple_of_ikov";
+const EMPTY_LORD_KEY = "curse_of_the_empty_lord";
 
 const NPC = Object.freeze({
   HISTORIAN_MINAS: 1902,
@@ -205,14 +206,19 @@ const MINAS_CURSE = "0sSqOl";
  * Historian Minas lamps (OSRS Wiki Antique lamp (Varrock Museum) switch:
  * 11185 Merlin's Crystal, 11186 Shield of Arrav, 11187 Making History,
  * 28820 Defender of Varrock; 11188 is Curse of the Empty Lord). XP/minimum
- * skill level from the same page and OSRS Wiki Antique lamp.
+ * skill level from the same page and OSRS Wiki Antique lamp. Curse of the Empty Lord's report
+ * is worth 10 kudos, the rest 5, and needs a complete set of ghostly robes (Wiki: Historian
+ * Minas, Kudos).
  */
 const LAMPS = new Map([
   [11185, { xp: 1000, minLevel: 20, quest: "merlins_crystal" }],
   [11186, { xp: 1000, minLevel: 20, quest: "shield_of_arrav" }],
   [11187, { xp: 1000, minLevel: 20, quest: "making_history" }],
   [28820, { xp: 5000, minLevel: 30, quest: "defender_of_varrock" }],
+  [11188, { xp: 10000, minLevel: 50, quest: EMPTY_LORD_KEY }],
 ]);
+const REPORT_KUDOS = new Map([[EMPTY_LORD_KEY, 10]]);
+const GHOSTLY_ROBES = ["GHOSTLY_ROBE", "GHOSTLY_ROBE_2", "GHOSTLY_BOOTS", "GHOSTLY_HOOD", "GHOSTLY_GLOVES", "GHOSTLY_CLOAK"]; // top, bottom, boots, hood, gloves, cloak
 const LAMP_BY_QUEST = new Map([...LAMPS].map(([itemId, lamp]) => [lamp.quest, { itemId, ...lamp }]));
 
 const TOOL_ITEMS = [
@@ -490,10 +496,18 @@ function placeArtefact(event) {
   player.sendMessage(`You place the ${artefact.name} in display case ${artefact.caseNumber}.`);
 }
 
+/** Every ghostly robe piece, carried or worn (Wiki: "Requires a complete set of ghostly robes"). */
+function hasGhostlyRobes(player) {
+  const worn = player.getEquipment();
+  return GHOSTLY_ROBES.map((name) => api.core.ItemIdentifiers[name])
+    .every((itemId) => has(player, itemId) || worn.getAmount(itemId) > 0);
+}
+
 function hasUnreportedMinasReport(player) {
   for (const [, key] of MINAS_QUESTS) {
     if (!isReported(player, key) && isQuestComplete(player, key)) return true;
   }
+  if (!isReported(player, EMPTY_LORD_KEY) && isQuestComplete(player, EMPTY_LORD_KEY) && hasGhostlyRobes(player)) return true;
   return !isReported(player, WHAT_LIES_BELOW_KEY) && isQuestComplete(player, WHAT_LIES_BELOW_KEY);
 }
 
@@ -511,7 +525,9 @@ function answerMinasCondition({ player, npcId, stepId }) {
     return isQuestComplete(player, WHAT_LIES_BELOW_KEY) && !isReported(player, WHAT_LIES_BELOW_KEY)
       && has(player, ITEM.DAGONHAI_HISTORY);
   }
-  if (stepId === MINAS_CURSE) return false;
+  if (stepId === MINAS_CURSE) {
+    return isQuestComplete(player, EMPTY_LORD_KEY) && !isReported(player, EMPTY_LORD_KEY) && hasGhostlyRobes(player);
+  }
   if (stepId === MINAS_TEMPLE_GUARDIANS) {
     return isQuestComplete(player, TEMPLE_OF_IKOV_KEY)
       && Number(player.getAttribute("quest.temple_of_ikov.side")) === 1;
@@ -556,7 +572,7 @@ function lastSpeech(steps) {
 
 function recordMinasCondition({ player, npcId, stepId }) {
   if (npcId !== NPC.HISTORIAN_MINAS) return;
-  const key = stepId === MINAS_WLB_BOOK ? WHAT_LIES_BELOW_KEY : MINAS_QUESTS.get(stepId);
+  const key = stepId === MINAS_WLB_BOOK ? WHAT_LIES_BELOW_KEY : stepId === MINAS_CURSE ? EMPTY_LORD_KEY : MINAS_QUESTS.get(stepId);
   if (!key || isReported(player, key) || !isQuestComplete(player, key)) return;
   const page = runtime.loadTranscripts(api)["Historian Minas"];
   const step = findStep(page?.steps, stepId);
@@ -578,9 +594,10 @@ function completeMinasLine(request) {
     pendingMinas.delete(player);
     if (isReported(player, pending.key) || !isQuestComplete(player, pending.key)) return;
     if (pending.key === WHAT_LIES_BELOW_KEY && !has(player, ITEM.DAGONHAI_HISTORY)) return;
+    if (pending.key === EMPTY_LORD_KEY && !hasGhostlyRobes(player)) return;
     if (!grantReportLamp(player, pending.key)) return;
     markReported(player, pending.key);
-    awardKudos(player, 5, `minas:${pending.key}`);
+    awardKudos(player, REPORT_KUDOS.get(pending.key) ?? 5, `minas:${pending.key}`);
   };
 }
 

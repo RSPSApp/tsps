@@ -497,6 +497,29 @@ test("Museum: What Lies Below pays only with the book; Hazeel's mid-branch gap n
   assert.equal(getKudos(hazeel, hazeelPlayer), 0);
 });
 
+test("Museum: Curse of the Empty Lord pays 10 Kudos and its 10,000 XP lamp only with the full ghostly robes", () => {
+  const world = makeApi(new Set(["the_dig_site", "curse_of_the_empty_lord"]));
+  const robes = [I.GHOSTLY_ROBE, I.GHOSTLY_ROBE_2, I.GHOSTLY_BOOTS, I.GHOSTLY_HOOD, I.GHOSTLY_GLOVES, I.GHOSTLY_CLOAK];
+  const player = makePlayer({}, Object.fromEntries(robes.slice(1).map((id) => [id, 1])), []);
+  talkToMinas(world, player);
+  assert.equal(getKudos(world, player), 0, "a robe piece short");
+  assert.equal(player.inventory.getAmount(11188), 0);
+  const dressed = makePlayer({}, Object.fromEntries(robes.slice(2).map((id) => [id, 1])), [robes[0], robes[1]]);
+  talkToMinas(world, dressed);
+  assert.equal(getKudos(world, dressed), 10, "worn pieces count");
+  assert.equal(dressed.inventory.getAmount(11188), 1);
+  for (const id of robes.slice(2)) assert.equal(dressed.inventory.getAmount(id), 1, "the robes stay");
+  talkToMinas(world, dressed);
+  assert.equal(getKudos(world, dressed), 10, "reported once");
+  dressed.setLevel("Attack", 49);
+  const skill = { getName: () => "Attack", getIndex: () => 0 };
+  world.itemAction({ player: dressed, item: dressed.inventory.get(dressed.inventory.slotOf(11188)), itemId: 11188, slot: dressed.inventory.slotOf(11188) });
+  const prompt = world.xpreward.at(-1);
+  assert.equal(prompt.minLevel, 50);
+  dressed.setLevel("Attack", 50);
+  assert.equal(prompt.onConfirm(skill, "Attack"), "<col=0000ff>Your wish has been granted!</col> You have been awarded 10,000 Attack experience!");
+});
+
 test("Museum: Minas lamps enforce minimum level and full-bag retry without duplication", () => {
   const world = makeApi(new Set(["the_dig_site", "making_history"]));
   const player = makePlayer({}, {}, []);

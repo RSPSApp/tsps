@@ -271,8 +271,11 @@ test('the dying event fires during the death animation, before respawning', t =>
   const victim = new Player(null), killer = new Player(null);
   const order = [];
   t.mock.method(victim.getCombat(), 'getKiller', () => killer);
-  t.mock.method(victim, 'getPacketSender', () => ({ sendConfig() {}, sendInterfaceRemoval() {}, sendDestination() {} }));
-  t.mock.method(victim, 'sendMessage', () => {});
+  t.mock.method(victim, 'getPacketSender', () => ({
+    sendConfig() {}, sendInterfaceRemoval() {}, sendDestination() {},
+    sendJingle(id) { order.push('jingle:' + id); },
+  }));
+  t.mock.method(victim, 'sendMessage', message => order.push('message:' + message));
   t.mock.method(victim, 'performAnimation', animation => {
     assert.equal(animation.getId(), 836);
     order.push('animation');
@@ -285,7 +288,7 @@ test('the dying event fires during the death animation, before respawning', t =>
     order.push('dying');
   });
   new PlayerDeathTask(victim).execute();
-  assert.deepEqual(order, ['animation', 'dying']);
+  assert.deepEqual(order, ['message:Oh dear, you are dead!', 'jingle:90', 'animation', 'dying']);
 });
 
 test('ordinary death completes four ticks after animation, preserving final lifecycle order', t => {

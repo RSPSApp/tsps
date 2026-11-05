@@ -2,6 +2,9 @@
 
 // Per-tier rules. Step counts are from each tier's Wiki "Clue scroll (<tier>)" page, STASH
 // costs from the Wiki "STASH" page; the difficulty is the cache clue-helper `difficulty` column.
+const META_PREFIX = "treasure-trails:";
+const completedAttribute = tier => `${META_PREFIX}${tier.name}-completed`;
+
 const TIERS = [
   { name: "easy", label: "Easy", difficulty: 1, length: [2, 4], stash: { level: 27, xp: 150, plank: "PLANK" } },
   { name: "medium", label: "Medium", difficulty: 2, length: [3, 5], stash: { level: 42, xp: 250, plank: "OAK_PLANK" },
@@ -19,4 +22,9 @@ const TIERS = [
 
 const byName = new Map(TIERS.map(tier => [tier.name, tier]));
 
-module.exports = { TIERS, byName };
+function sharedCompletedCount(player) {
+  const beginner = Number(player.getAttribute(completedAttribute({ name: "beginner" }))) || 0;
+  return TIERS.reduce((sum, tier) => sum + (Number(player.getAttribute(completedAttribute(tier))) || 0), beginner);
+}
+
+module.exports = { TIERS, byName, META_PREFIX, completedAttribute, sharedCompletedCount };

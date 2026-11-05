@@ -229,10 +229,11 @@ function mayEat(player, itemId, food) {
     return false;
   }
   if (food.area) {
-    const request = { player, area: food.area, inside: false };
+    // The area's owner may give its own refusal (a seasonal food that has gone off).
+    const request = { player, area: food.area, inside: false, message: "You cannot eat these supplies here." };
     pluginApi.emitCustomEvent("food:area", request);
     if (!request.inside) {
-      player.sendMessage("You cannot eat these supplies here.");
+      player.sendMessage(request.message);
       return false;
     }
   }

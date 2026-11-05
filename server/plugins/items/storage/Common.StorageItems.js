@@ -263,7 +263,7 @@ function showBox(player, lines) {
 function answerRoom(event) {
   if (event.room) return;
   for (const family of FAMILIES.values()) {
-    if (!family.gathers?.(event.player) || !family.accepts(event.itemId)) continue;
+    if (!family.gathers?.(event.player, event) || !family.accepts(event.itemId)) continue;
     if (family.room(event.player, event.itemId, contents(event.player, family)) > 0) {
       event.room = true;
       return;
@@ -276,7 +276,7 @@ function answerGather(event) {
   for (const family of FAMILIES.values()) {
     const left = event.amount - event.stored;
     if (left <= 0) return;
-    if (!family.gathers?.(event.player) || !family.accepts(event.itemId)) continue;
+    if (!family.gathers?.(event.player, event) || !family.accepts(event.itemId)) continue;
     const stored = store(event.player, family, event.itemId, left);
     if (stored > 0) {
       event.stored += stored;

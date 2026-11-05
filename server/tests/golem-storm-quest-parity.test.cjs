@@ -27,6 +27,7 @@ function setup(register, options = {}) {
   const core = {
     ...PluginManager.getCoreApi(),
     CombatRange: { canReach(npc, method, target) { return npc.calculateDistance(target) <= 1; } },
+    PathFinder: { calculateWalkRoute(npc, x, y) { npc.route = [x, y]; } },
     CountdownTask: class { constructor(key, ticks, run) { Object.assign(this, { key, ticks, run }); } },
     TaskManager: { submit(task) { task.due = tick + task.ticks; tasks.push(task); }, cancelTasks() {} },
     Boundary: class { constructor(...bounds) { this.bounds = bounds; } },
@@ -53,6 +54,7 @@ function setup(register, options = {}) {
         return projectile;
       },
       ticksToLand(end) { return Math.ceil(end / 30); },
+      arrivalTicks() { return 3; },
       centreOf(mobile) { return mobile.getLocation(); },
     },
   };
@@ -163,6 +165,8 @@ function setup(register, options = {}) {
     }),
     isRegistered: () => true,
     isPlayer: () => true,
+    setPositionToFace(at) { player.face = at; },
+    performAnimation(animation) { (player.animations ??= []).push(animation); },
   };
   if (options.realDialogue) {
     const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
@@ -303,6 +307,10 @@ test('Shadow of the Storm: plane-2 portal, Eric, Tanya cutscene and capture word
   h.advance();
   assert.equal(h.quest.getStage(h.player), STAGE_RITUAL_DONE, 'the first ritual says Denath\'s order');
   for (let tick = 0; tick < 40; tick++) h.advance();
+  // Rsprox 3333 t2133-t2139: the player leaves by clicking the closing portal, not by itself.
+  assert.notEqual(h.player.getLocation().z, 0, 'nothing moves the player out before the portal');
+  h.hooks.objects[0]({ player: h.player, objectId: 10251 });
+  for (let tick = 0; tick < 12; tick++) h.advance();
   assert.equal(h.player.getLocation().x, 2721, 'the portal cutscene returns the player outside');
   assert.equal(h.player.getLocation().z, 0);
 
@@ -409,6 +417,8 @@ test('Shadow of the Storm: first-ritual camera, BOOM, portal loc and Tanya actor
   assert.ok(h.sceneObjects.some((o) => o.id === 10251), 'closing portal loc appears');
   assert.ok(h.cameras.some((c) => c.kind === 'reset'), 'first-ritual camera resets');
   h.player.getDialogueManager().reset();
+  for (let tick = 0; tick < 40; tick++) h.advance();
+  h.hooks.objects[0]({ player: h.player, objectId: 10251 });
   for (let tick = 0; tick < 30 && !h.spawned.some((npc) => npc.getId() === 919); tick++) h.advance();
   assert.equal(h.player.getLocation().x, 2721);
   assert.equal(h.player.getLocation().z, 0);
@@ -590,7 +600,7 @@ test('Shadow: real five-word menus use reverse for first and direct tome order f
           next++;
           pairs[index + 1]();
         } else if (manager.getCurrent() instanceof ActionDialogue) {
-          if (cancelFirstEcho && next === 1 && h.overheads.length === 8) {
+          if (cancelFirstEcho && next === 1 && h.overheads.length === 9) {
             const spoken = [...h.overheads];
             manager.reset();
             for (let i = 0; i < 4; i++) h.advance();
@@ -612,7 +622,9 @@ test('Shadow: real five-word menus use reverse for first and direct tome order f
     assert.equal(cancelFirstEcho, false, 'the requested first-echo cancellation must be reached');
     assert.equal(next, 5, 'all five menus were answered');
     const echoes = h.overheads.filter(({ text }) => words.some(word => text === `${word}...` || text === `${word}!`));
-    assert.equal(echoes.length, 35, 'all seven ritual actors speak each of the five echoes');
+    // Rsprox 3333 t2067-t2089: the player says each word, then the seven repeat it: 8 a word.
+    assert.equal(echoes.filter(echo => echo.actor === h.player).length, 5, 'the player says each word once');
+    assert.equal(echoes.length, 40, 'all seven ritual actors speak each of the five echoes');
     for (const actor of cast) assert.equal(echoes.filter(echo => echo.actor === actor).length, 5);
     assert.equal(h.overheads.some(({ text }) => text.includes('[Word ')), false, 'every spoken word placeholder is filled');
   };
@@ -1030,7 +1042,10 @@ test('Shadow: Agrith switches to Fire Blast and telekinetic grab, as the Wiki de
   h.projectiles.length = 0;
   h.prayers[core.PrayerHandler.PROTECT_FROM_MAGIC] = true;
   method = castAtDistance();
-  assert.equal(h.projectiles.length, 0, 'Protect from Magic prevents the Fire Blast');
+  // Rsprox 572 t1385-t1388: the grab is projectile 143, and moves the player when it lands.
+  assert.deepEqual(h.projectiles.map((projectile) => projectile.id), [143], 'Protect from Magic prevents the Fire Blast');
+  assert.equal(h.player.getLocation().getY(), 4912, 'not moved on the cast');
+  for (let i = 0; i < 12; i++) h.advance();
   assert.ok(Math.max(Math.abs(h.player.getLocation().getX() - 2719), Math.abs(h.player.getLocation().getY() - 4899)) <= 3,
     'Telekinetic Grab pulls the player next to the demon');
 
@@ -1236,6 +1251,7 @@ test('Shadow native: second cast, demon ownership, melee-range death guard, comb
   assert.equal(cornerMethod.type(), core.CombatType.MAGIC, 'a diagonal target receives Fire Blast');
   player.getPrayerActive()[core.PrayerHandler.PROTECT_FROM_MAGIC] = true;
   cornerMethod.start(demon, player);
+  for (let i = 0; i < 12; i++) core.TaskManager.process();
   assert.equal(core.CombatRange.canReach(demon, core.CombatFactory.MELEE_COMBAT, player), true,
     'telegrab lands on a shared edge, not another corner');
   player.getPrayerActive()[core.PrayerHandler.PROTECT_FROM_MAGIC] = false;
@@ -1265,6 +1281,7 @@ test('Shadow native: second cast, demon ownership, melee-range death guard, comb
   assert.equal(demon.getCombat().performNewAttack(true), true, 'the real combat path scored the attack');
   assert.equal(demon.getAnimation().getId(), 69, 'demon_casting played');
   assert.ok(demon.getLocation().equals(spawnTile), 'the demon stays on its spawn tile');
+  for (let i = 0; i < 12; i++) core.TaskManager.process();
   assert.ok(Math.max(Math.abs(player.getLocation().getX() - 2719), Math.abs(player.getLocation().getY() - 4899)) <= 3,
     'Telekinetic Grab lands against the 3x3 footprint');
   assert.equal(demon.getCombat().getTarget(), player);

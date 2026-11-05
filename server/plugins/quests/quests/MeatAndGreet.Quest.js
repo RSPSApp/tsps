@@ -107,6 +107,7 @@ module.exports = function registerMeatAndGreetQuest(api) {
   const KEYPAD_SCRIPT = 7374;
   const KEYPAD_SCRIPT_ARGS = [(KEYPAD_INTERFACE << 16) | 6, (KEYPAD_INTERFACE << 16) | 5, 2, 5, 4, 6, 2];
   const SPICE_BOX_CODE = 2546;
+  const KEYPAD_CLOSE_SENTINEL = 2147483647;
   const UNLOCK_SOUND = 2419;
 
   // The wolf den: a private copy, the alpha and its exit, and the captured fades.
@@ -648,6 +649,8 @@ module.exports = function registerMeatAndGreetQuest(api) {
   function enterCode(player, value) {
     if (stage(player) !== STAGE_DELIVERIES || sub(player, "spice") !== 2) return;
     player.getPacketSender().sendInterfaceRemoval();
+    // The number pad's close button (number_pad_button_op_close) sends the max 32-bit int: just close.
+    if (Number(value) === KEYPAD_CLOSE_SENTINEL) return;
     // ponytail: a wrong code's reply is not recorded; the box just stays shut.
     if (Number(value) !== SPICE_BOX_CODE) {
       player.sendMessage("The box remains locked.");

@@ -381,3 +381,97 @@ test("a reload restores the picks, and another league never answers for them", (
   assert.equal(main.sent.messages.at(-1), "Only a league character can unlock relics.");
   assert.equal(main.getAttribute("league:relics"), undefined);
 });
+
+test("Demonic Pacts' slots count each tier's relics, as client script 3189 does: tier 7 holds two, so tier 8 is slots 20-22", () => {
+  const Common = require("../plugins/modes/leaguerelics/Common.LeagueRelics");
+  const { slotToRelic } = require("../plugins/modes/leaguerelics/Interface.LeagueRelics");
+  worldLeague = 6;
+  const pacts = character("pactslots");
+  worldLeague = 4;
+  const catalog = Common.catalog(6);
+  assert.equal(catalog.tiers[6].relics.length, 2, "Flow State and Reloaded");
+  assert.deepEqual([18, 19, 20, 21, 22].map((sub) => slotToRelic(catalog, sub)), [
+    { tier: 6, slot: 1 }, { tier: 6, slot: 2 }, { tier: 7, slot: 1 }, { tier: 7, slot: 2 }, { tier: 7, slot: 3 },
+  ]);
+  assert.equal(slotToRelic(catalog, 23), null, "23 relics: no slot 23");
+  assert.deepEqual(slotToRelic(Common.catalog(4), 23), { tier: 7, slot: 3 }, "three a tier: the old tier x 3 + slot");
+  hooks[`button:${uid(SIDE_PANEL, 44)}`]({ player: pacts });
+  const struct = (sub) => {
+    assert.equal(hooks[`button:${uid(RELICS, 22)}`]({ player: pacts, slot: sub }), true);
+    assert.equal(pacts.sent.varbits.get(10048), sub, "league_relic_last_viewed is the raw slot (rec 1135)");
+    return pacts.sent.scripts.filter(([script]) => script === 3193).at(-1)[1][19];
+  };
+  assert.equal(struct(19), 1127, "rec 1135: slot 19 views Reloaded");
+  assert.equal(struct(20), catalog.tiers[7].relics[0].struct, "Executioner");
+  assert.equal(struct(21), catalog.tiers[7].relics[1].struct, "Minion");
+  assert.equal(struct(22), 6454, "rec 1135: slot 22 views Flask of Fervour");
+  assert.equal(hooks[`button:${uid(RELICS, 22)}`]({ player: pacts, slot: 23 }), false);
+
+  givePoints(pacts, 60000);
+  openBank(pacts);
+  hooks[`button:${uid(SIDE_PANEL, 44)}`]({ player: pacts });
+  hooks[`button:${uid(RELICS, 22)}`]({ player: pacts, slot: 22 });
+  hooks[`button:${uid(RELICS, 51)}`]({ player: pacts });
+  assert.deepEqual(pacts.getAttribute("league:relics"), { 7: 3 }, "slot 22's confirm unlocks Flask of Fervour, tier 8's third");
+  assert.equal(pacts.sent.varbits.get(17302), 3);
+  closeBank(pacts);
+});
+
+test("Reloaded (Demonic Pacts, rec 1135): the repick varbits and line on its unlock, the extra pick in selection_other, re-sent at login", () => {
+  const SELECTION_OTHER = [17554, 17555, 17556, 17557, 17558, 17559, 17560, 17561];
+  const REPICK = [17562, 17563, 17564, 17565, 17566, 17567, 17568, 17569];
+  worldLeague = 6;
+  const player = character("reloadedpick");
+  worldLeague = 4;
+  const picks = { 0: 3, 1: 3, 2: 1, 3: 2, 4: 2, 5: 1 };
+  player.setAttribute("league:relics", { ...picks });
+  givePoints(player, 60000);
+  const open = () => hooks[`button:${uid(SIDE_PANEL, 44)}`]({ player });
+  const view = (slot) => {
+    hooks[`button:${uid(RELICS, 22)}`]({ player, slot });
+    return player.sent.scripts.filter(([script]) => script === 3193).at(-1)[1][18];
+  };
+  const confirm = () => hooks[`button:${uid(RELICS, 51)}`]({ player });
+
+  open();
+  view(19);
+  confirm();
+  assert.equal(player.sent.varbits.get(17301), 2, "league_relic_selection_6 0->2");
+  assert.deepEqual(player.sent.messages.slice(-2), [
+    "Congratulations, you've unlocked a new Relic: <col=FE206A>Reloaded</col>.",
+    "<col=FE206A>You can now pick another relic below tier seven!",
+  ]);
+  assert.deepEqual(REPICK.map((id) => player.sent.varbits.get(id)), [1, 1, 1, 1, 1, 1, 0, 0], "repick_0-5 0->1");
+
+  open();
+  assert.equal(view(15), 1, "Grimoire, tier 6's own pick");
+  assert.equal(view(17), 5, "Culling Spree: another relic of a chosen tier the extra pick may take (3193 state 5)");
+  assert.equal(view(18), 4, "Flow State: Reloaded's own tier is not among them");
+  assert.equal(view(16), 5, "Eternal Sustenance");
+  const before = player.sent.messages.length;
+  player.sent.varbits.delete(11696);
+  confirm();
+  assert.deepEqual(player.getAttribute("league:relics"), { ...picks, 6: 2 }, "the tier's own pick stays");
+  assert.equal(player.sent.varbits.get(SELECTION_OTHER[5]), 2, "league_relic_selection_other_5 0->2");
+  assert.equal(player.sent.varbits.has(11696), false, "league_relic_selection_5 is not sent");
+  assert.deepEqual(REPICK.map((id) => player.sent.varbits.get(id)), [0, 0, 0, 0, 0, 0, 0, 0], "repick_0-5 1->0");
+  assert.deepEqual(player.sent.messages.slice(before), ["Congratulations, you've unlocked a new Relic: <col=FE206A>Eternal Sustenance</col>."], "no other line");
+  assert.equal(query("league:has-relic", { player, relic: "eternal-sustenance" }).active, true);
+  open();
+  assert.equal(view(16), 1, "the extra pick is the character's own");
+  assert.equal(view(17), 4, "and the rest of its tier is taken");
+
+  const again = character("reloadedpick", "league", { login: false });
+  again.setAttribute("league:type", player.getAttribute("league:type"));
+  again.setAttribute("league:relics", { ...player.getAttribute("league:relics") });
+  again.setAttribute("league:relics-extra", { ...player.getAttribute("league:relics-extra") });
+  hooks.onPlayerLogin({ player: again, username: "reloadedpick", isNewAccount: false, profile: "league" });
+  assert.deepEqual(SELECTION_OTHER.map((id) => again.sent.varbits.get(id)), [0, 0, 0, 0, 0, 2, 0, 0], "selection_other re-sent at login");
+  assert.deepEqual(REPICK.map((id) => again.sent.varbits.get(id)), [0, 0, 0, 0, 0, 0, 0, 0]);
+
+  const unused = character("reloadedunused", "league", { login: false });
+  unused.setAttribute("league:type", 6);
+  unused.setAttribute("league:relics", { ...picks, 6: 2 });
+  hooks.onPlayerLogin({ player: unused, username: "reloadedunused", isNewAccount: false, profile: "league" });
+  assert.deepEqual(REPICK.map((id) => unused.sent.varbits.get(id)), [1, 1, 1, 1, 1, 1, 0, 0], "an unused Reloaded marks its tiers again at login");
+});

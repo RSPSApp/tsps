@@ -218,6 +218,24 @@ test("loading the later of two dart stacks into a blowpipe conserves darts", asy
 
 // ------------------------------------------------------------------ the rune routes
 
+const PRESET_REFUSAL = "Preset items cannot be used for this.";
+const RUNES_HELD = 500;
+
+/** Blood runes in a preset stack of 300 and a plain one of 200, with what the player is told recorded. */
+async function runeStacks(t, plainFirst) {
+  const f = actor(t);
+  const slots = await bothStacks(f, I.BLOOD_RUNE, 200, plainFirst);
+  const [plain, preset] = plainFirst ? slots : [...slots].reverse();
+  const messages = [];
+  t.mock.method(f.p.getPacketSender(), "sendMessage", (message) => {
+    messages.push(message);
+    return f.p.getPacketSender();
+  });
+  return { f, plain, preset, messages };
+}
+
+const runesHeld = (f) => f.inv.getAmount(I.BLOOD_RUNE);
+
 test("charging Sanguinesti from a preset and a plain stack conserves runes, in either slot order", async (t) => {
   const control = actor(t);
   put(control, item(I.BLOOD_RUNE, 200), 0);
@@ -227,12 +245,20 @@ test("charging Sanguinesti from a preset and a plain stack conserves runes, in e
   assert.equal(control.inv.getAmount(I.BLOOD_RUNE), 0, "control: the runes went");
 
   for (const plainFirst of [true, false]) {
-    const f = actor(t);
-    const [lower] = await bothStacks(f, I.BLOOD_RUNE, 200, plainFirst);
+    const { f, plain, preset } = await runeStacks(t, plainFirst);
     const staff = put(f, item(I.SANGUINESTI_STAFF_UNCHARGED_), 20);
-    await useOn(f, lower, 20);
-    assert.equal(Sang._test.chargesOf(staff), 250, `plain first ${plainFirst}: charged from both stacks`);
-    assert.deepEqual(stacksOf(f, I.BLOOD_RUNE), [], `plain first ${plainFirst}: no runes left`);
+    await useOn(f, plain, 20);
+    assert.equal(Sang._test.chargesOf(staff), 100, `plain first ${plainFirst}: charged from the plain stack alone`);
+    assert.deepEqual(stacksOf(f, I.BLOOD_RUNE), [300], `plain first ${plainFirst}: the preset stack stays`);
+    assert.equal(f.inv.getItems()[preset].isPresetItem(), true, `plain first ${plainFirst}: and is still preset`);
+    assert.equal(Sang._test.chargesOf(staff) * 2 + runesHeld(f), RUNES_HELD, `plain first ${plainFirst}: conserved`);
+
+    const refused = await runeStacks(t, plainFirst);
+    const idle = put(refused.f, item(I.SANGUINESTI_STAFF_UNCHARGED_), 20);
+    await useOn(refused.f, refused.preset, 20);
+    assert.equal(Sang._test.chargesOf(idle), 0, `plain first ${plainFirst}: the preset stack charges nothing`);
+    assert.equal(runesHeld(refused.f), RUNES_HELD, `plain first ${plainFirst}: and no rune goes`);
+    assert.ok(refused.messages.includes(PRESET_REFUSAL), `plain first ${plainFirst}: the player is told`);
   }
 });
 
@@ -245,12 +271,20 @@ test("storing in a rune pouch from a preset and a plain stack conserves runes, i
   assert.equal(control.inv.getAmount(I.BLOOD_RUNE), 0, "control: the runes went");
 
   for (const plainFirst of [true, false]) {
-    const f = actor(t);
-    const [lower] = await bothStacks(f, I.BLOOD_RUNE, 200, plainFirst);
+    const { f, plain, preset } = await runeStacks(t, plainFirst);
     put(f, item(I.RUNE_POUCH), 20);
-    await useOn(f, lower, 20);
-    assert.equal(Pouch.amountOf(f.p, I.BLOOD_RUNE), 500, `plain first ${plainFirst}: stored from both stacks`);
-    assert.deepEqual(stacksOf(f, I.BLOOD_RUNE), [], `plain first ${plainFirst}: no runes left`);
+    await useOn(f, plain, 20);
+    assert.equal(Pouch.amountOf(f.p, I.BLOOD_RUNE), 200, `plain first ${plainFirst}: stored from the plain stack alone`);
+    assert.deepEqual(stacksOf(f, I.BLOOD_RUNE), [300], `plain first ${plainFirst}: the preset stack stays`);
+    assert.equal(f.inv.getItems()[preset].isPresetItem(), true, `plain first ${plainFirst}: and is still preset`);
+    assert.equal(Pouch.amountOf(f.p, I.BLOOD_RUNE) + runesHeld(f), RUNES_HELD, `plain first ${plainFirst}: conserved`);
+
+    const refused = await runeStacks(t, plainFirst);
+    put(refused.f, item(I.RUNE_POUCH), 20);
+    await useOn(refused.f, refused.preset, 20);
+    assert.equal(Pouch.amountOf(refused.f.p, I.BLOOD_RUNE), 0, `plain first ${plainFirst}: the preset stack stores nothing`);
+    assert.equal(runesHeld(refused.f), RUNES_HELD, `plain first ${plainFirst}: and no rune goes`);
+    assert.ok(refused.messages.includes(PRESET_REFUSAL), `plain first ${plainFirst}: the player is told`);
   }
 });
 

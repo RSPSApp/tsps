@@ -25,6 +25,8 @@ const CREATION_ALL_SENTINEL = 28;
 const DEFAULT_MENU = "make";
 const DEFAULT_ANIMATION = "human_fletching";
 
+const PRESET_TEXT = "Preset items cannot be used for this.";
+
 let api = null;
 let core = null;
 let recipes = [];
@@ -141,6 +143,10 @@ function pairKey(a, b) {
   return a < b ? `${a}:${b}` : `${b}:${a}`;
 }
 
+function locationSnapshot(location) {
+  return { x: location.getX(), y: location.getY(), z: location.getZ() };
+}
+
 function addPair(a, b, recipe) {
   const key = pairKey(a, b);
   if (!recipesByPair.has(key)) recipesByPair.set(key, []);
@@ -227,12 +233,26 @@ function unlocked(player, recipe) {
   return true;
 }
 
+/** Preset (and other untradeable or unbankable) copies keep their restrictions, so they never convert. */
+function restricted(item) {
+  const { Item } = core;
+  return item.isPresetItem() || item.getMetaValue(Item.UNTRADEABLE_META) === true
+    || item.getMetaValue(Item.UNBANKABLE_META) === true;
+}
+
+/** How many of `id` a recipe can consume: the unrestricted copies. */
+function plainAmount(inventory, id) {
+  if (typeof inventory.getItems !== "function") return inventory.getAmount(id);
+  return inventory.getItems().reduce((total, item) =>
+    (item.getId() === id && !restricted(item) ? total + item.getAmount() : total), 0);
+}
+
 /** How many of a material the player can use, a virtual source's (the spool's) included. */
-function heldAmount(player, material) {
+function heldAmount(player, material, amountOf = plainAmount) {
   const inventory = player.getInventory();
   let total = 0;
   for (const id of material.ids) {
-    total += inventory.getAmount(id);
+    total += amountOf(inventory, id);
     const source = virtualMaterials.get(id);
     if (source) total += source.count(player);
   }
@@ -252,39 +272,89 @@ function hasTools(player, recipe) {
   return recipe.held.every((tool) => carries(player, tool.ids));
 }
 
-/**
- * Takes `amount` of a material, starting with the item the player clicked: the feather they used,
- * or the spool's bow strings when they used the spool. Other ids follow in data order.
- */
-function takeMaterial(player, material, amount, via) {
-  const inventory = player.getInventory();
+/** The order a material's ids are taken in: the clicked one, then data order. */
+function takeOrder(material, via) {
   const clicked = triggerAliases.get(via) ?? via;
-  const order = material.ids.includes(clicked) ? [clicked, ...material.ids.filter((id) => id !== clicked)] : material.ids;
-  const sourceFirst = triggerAliases.has(via);
-  let remaining = amount;
-  for (const id of order) {
-    const source = virtualMaterials.get(id);
-    if (source && sourceFirst) remaining -= source.take(player, remaining);
-    const fromInventory = Math.min(remaining, inventory.getAmount(id));
-    if (fromInventory > 0) {
-      inventory.deleteNumber(id, fromInventory);
-      remaining -= fromInventory;
-    }
-    if (source && !sourceFirst && remaining > 0) remaining -= source.take(player, remaining);
-    if (remaining <= 0) return;
-  }
+  return material.ids.includes(clicked) ? [clicked, ...material.ids.filter((id) => id !== clicked)] : material.ids;
 }
 
-/** Whether the product fits once the materials are taken. */
-function fits(player, recipe) {
+/**
+ * Plans taking a recipe's materials, starting with the item the player clicked: the feather they
+ * used, or the spool's bow strings when they used the spool. Other ids follow in data order. Preset
+ * (and other restricted) copies are never part of the plan.
+ */
+function materialPlan(player, recipe, via) {
   const inventory = player.getInventory();
-  const stackable = core.ItemDefinition.forId(recipe.outputId).isStackable();
-  if (stackable && inventory.contains(recipe.outputId)) return true;
-  if (inventory.getFreeSlots() > 0) return true;
-  return recipe.materials.some((material) => material.ids.some((id) => {
-    if (!inventory.contains(id)) return false;
-    return !core.ItemDefinition.forId(id).isStackable() || inventory.getAmount(id) <= material.amount;
-  }));
+  const inventoryLeft = new Map();
+  const virtualLeft = new Map();
+  const plan = [];
+  let complete = true;
+  const sourceFirst = triggerAliases.has(via);
+  for (const material of recipe.materials) {
+    let remaining = material.amount;
+    for (const id of takeOrder(material, via)) {
+      const source = virtualMaterials.get(id);
+      if (source && !virtualLeft.has(id)) virtualLeft.set(id, source.count(player));
+      if (source && sourceFirst && remaining > 0) {
+        const fromSource = Math.min(remaining, virtualLeft.get(id) ?? 0);
+        if (fromSource > 0) plan.push({ itemId: id, amount: fromSource, virtual: true });
+        virtualLeft.set(id, (virtualLeft.get(id) ?? 0) - fromSource);
+        remaining -= fromSource;
+      }
+      if (!inventoryLeft.has(id)) inventoryLeft.set(id, plainAmount(inventory, id));
+      const fromInventory = Math.min(remaining, inventoryLeft.get(id));
+      if (fromInventory > 0) plan.push({ itemId: id, amount: fromInventory, virtual: false });
+      inventoryLeft.set(id, inventoryLeft.get(id) - fromInventory);
+      remaining -= fromInventory;
+      if (source && !sourceFirst && remaining > 0) {
+        const fromSource = Math.min(remaining, virtualLeft.get(id) ?? 0);
+        if (fromSource > 0) plan.push({ itemId: id, amount: fromSource, virtual: true });
+        virtualLeft.set(id, (virtualLeft.get(id) ?? 0) - fromSource);
+        remaining -= fromSource;
+      }
+      if (remaining <= 0) break;
+    }
+    if (remaining > 0) complete = false;
+  }
+  return { inputs: plan, complete };
+}
+
+function canGrantAfterConsumption(player, outputId, amount, plan) {
+  const inventory = player.getInventory();
+  if (typeof inventory.getCopiedItems !== "function" || typeof core.Inventory !== "function") return true;
+  const preview = new core.Inventory(player).setItems(inventory.getCopiedItems());
+  for (const input of plan) {
+    if (!input.virtual) takePlain(preview, input.itemId, input.amount);
+  }
+  const output = new core.Item(outputId, amount);
+  return preview.getAddableAmount(output) >= amount;
+}
+
+/** Takes `amount` of `id` off the inventory's unrestricted copies, in slot order. */
+function takePlain(inventory, id, amount) {
+  let remaining = amount;
+  if (typeof inventory.deleteAtSlot !== "function" || typeof inventory.getItems !== "function") {
+    inventory.deleteNumber(id, remaining);
+    return amount;
+  }
+  inventory.getItems().forEach((item, slot) => {
+    if (remaining <= 0 || item.getId() !== id || restricted(item)) return;
+    const taken = Math.min(remaining, item.getAmount());
+    inventory.deleteAtSlot(slot, taken);
+    remaining -= taken;
+  });
+  return amount - remaining;
+}
+
+function consumePlan(player, plan) {
+  const inventory = player.getInventory();
+  const inputs = [];
+  for (const entry of plan) {
+    if (entry.virtual) virtualMaterials.get(entry.itemId).take(player, entry.amount);
+    else takePlain(inventory, entry.itemId, entry.amount);
+    inputs.push({ itemId: entry.itemId, amount: entry.amount });
+  }
+  return inputs;
 }
 
 function formatMessage(message, amount) {
@@ -292,28 +362,39 @@ function formatMessage(message, amount) {
 }
 
 /** One batch: checks, materials out, product in, XP, animation, sound and message. */
-function makeBatch(player, recipe, via) {
+function makeBatch(player, recipe, via, provenance = null) {
   if (fletchingLevel(player) < recipe.level) {
     player.sendMessage(`You need a Fletching level of at least ${recipe.level} to do this.`);
     return false;
   }
   if (!hasTools(player, recipe) || batchesAvailable(player, recipe) <= 0) return false;
-  if (!fits(player, recipe)) {
-    player.sendMessage("You don't have enough inventory space.");
-    return false;
-  }
-
-  for (const material of recipe.materials) takeMaterial(player, material, material.amount, via);
+  const plan = materialPlan(player, recipe, via);
+  if (!plan.complete) return false;
   const amount = recipe.amountMax > recipe.amount
     ? recipe.amount + Math.floor(Math.random() * (recipe.amountMax - recipe.amount + 1))
     : recipe.amount;
+  // The batch must fit at its largest roll, or nothing is taken: a batch has fixed inputs, so it
+  // refuses rather than making part and losing the rest of the output.
+  if (!canGrantAfterConsumption(player, recipe.outputId, recipe.amountMax, plan.inputs)) {
+    player.sendMessage("You don't have enough inventory space.");
+    return false;
+  }
+  const inputs = consumePlan(player, plan.inputs);
   player.getInventory().addItem(new core.Item(recipe.outputId, amount));
   player.performAnimation(animationOf(recipe));
   if (recipe.sound) core.Sounds.sendSound(player, recipe.sound);
   if (recipe.message) player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, formatMessage(recipe.message, amount));
   if (recipe.xp > 0) player.getSkillManager().addExperiences(core.Skill.FLETCHING, recipe.xp);
-  api.emitCustomEvent("fletching:made", { player, itemId: recipe.outputId, amount });
-  api.emitCustomEvent("skills:produced", { player, skill: core.Skill.FLETCHING, itemId: recipe.outputId, amount, xp: recipe.xp, kind: recipe.group });
+  const action = {
+    inputItemIds: [...new Set(inputs.map((input) => input.itemId))],
+    inputs,
+    outputItemId: recipe.outputId,
+    stationObjectId: null,
+    location: locationSnapshot(player.getLocation()),
+    ...(provenance?.startLocation ? { startLocation: provenance.startLocation } : {}),
+  };
+  api.emitCustomEvent("fletching:made", { player, itemId: recipe.outputId, amount, ...action });
+  api.emitCustomEvent("skills:produced", { player, skill: core.Skill.FLETCHING, itemId: recipe.outputId, amount, xp: recipe.xp, kind: recipe.group, ...action });
   return true;
 }
 
@@ -354,7 +435,7 @@ function pauseFletching(event) {
   SkillActions.pauseForLevelUp(event, tasks, stopFletching, (task) => task.resumeAnimation());
 }
 
-function createTask(player, recipe, batches, via) {
+function createTask(player, recipe, batches, via, provenance) {
   class FletchingTask extends core.Task {
     constructor() {
       super(1, player.getIndex(), false);
@@ -387,7 +468,7 @@ function createTask(player, recipe, batches, via) {
       this.nextTick = this.ticks + interval(player, recipe);
       const actions = actionsPerCycle(player, recipe);
       for (let done = 0; done < actions; done++) {
-        if (!makeBatch(player, recipe, via)) {
+        if (!makeBatch(player, recipe, via, provenance)) {
           stopFletching(player, done === 0);
           return;
         }
@@ -402,7 +483,7 @@ function createTask(player, recipe, batches, via) {
 }
 
 /** Starts making up to `requested` batches (28 = all), the first on the recipe's first tick. */
-function startFletching(player, recipe, requested, via) {
+function startFletching(player, recipe, requested, via, provenance) {
   if (fletchingLevel(player) < recipe.level) {
     player.sendMessage(`You need a Fletching level of at least ${recipe.level} to do this.`);
     return;
@@ -412,17 +493,17 @@ function startFletching(player, recipe, requested, via) {
   const batches = Math.min(requested === CREATION_ALL_SENTINEL ? available : Math.min(requested, available), recipe.maxSets);
   stopFletching(player);
   if (recipe.ticks === 0) {
-    makeBatch(player, recipe, via);
+    makeBatch(player, recipe, via, provenance);
     return;
   }
-  const task = createTask(player, recipe, batches, via);
+  const task = createTask(player, recipe, batches, via, provenance);
   tasks.set(player, task);
   api.getTaskManager().submit(task);
   if (recipe.startTick === 0) playOpening(player, recipe);
 }
 
 /** The skillmulti menu for the recipes a pair starts, each offered up to what can be made. */
-function openMenu(player, choices, via) {
+function openMenu(player, choices, via, provenance) {
   stopFletching(player);
   const byOutput = new Map(choices.map((recipe) => [recipe.outputId, recipe]));
   const maxAmount = Math.max(...choices.map((recipe) => Math.min(batchesAvailable(player, recipe), recipe.maxSets)), 1);
@@ -433,7 +514,7 @@ function openMenu(player, choices, via) {
     {
       execute: (outputId, amount) => {
         const recipe = byOutput.get(outputId);
-        if (recipe) startFletching(player, recipe, amount, via);
+        if (recipe) startFletching(player, recipe, amount, via, provenance);
       },
     },
     { maxAmount: Math.min(maxAmount, CREATION_ALL_SENTINEL), ...(mode != null ? { mode } : {}) }
@@ -477,8 +558,15 @@ function handlePair(player, usedId, usedWithId) {
   }
   const usable = choices.filter((recipe) => hasTools(player, recipe) && batchesAvailable(player, recipe) > 0);
   // An empty spool on an unstrung bow does nothing at all, not even "Nothing interesting happens."
-  if (usable.length === 0) return true;
+  if (usable.length === 0) {
+    const everyCopy = (inventory, id) => inventory.getAmount(id);
+    const onlyPreset = choices.some((recipe) => hasTools(player, recipe) && recipe.materials.every((material) =>
+      heldAmount(player, material, everyCopy) >= material.amount));
+    if (onlyPreset) player.sendMessage(PRESET_TEXT);
+    return true;
+  }
   const via = usedId;
+  const provenance = { startLocation: locationSnapshot(player.getLocation()) };
 
   if (usable.length === 1) {
     const recipe = usable[0];
@@ -487,16 +575,16 @@ function handlePair(player, usedId, usedWithId) {
       // The instant path (darts and bolts by default) makes as many as content asks for in the one click.
       const actions = actionsPerCycle(player, recipe);
       for (let done = 0; done < actions && batchesAvailable(player, recipe) > 0; done++) {
-        if (!makeBatch(player, recipe, via)) break;
+        if (!makeBatch(player, recipe, via, provenance)) break;
       }
       return true;
     }
     if (batchesAvailable(player, recipe) === 1) {
-      startFletching(player, recipe, 1, via);
+      startFletching(player, recipe, 1, via, provenance);
       return true;
     }
   }
-  openMenu(player, usable, via);
+  openMenu(player, usable, via, provenance);
   return true;
 }
 

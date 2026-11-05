@@ -14,7 +14,7 @@
     {"name": "Wyrmling", "trigger": "attacked", "revealAnim": 8268, "revealTicks": 3, "hideAnim": 8269, "hideTicks": 2, "dormant": [13031, 16297], "awake": {"13031": 13032, "16297": 16296}}
   ],
   "diary": [
-    {"name": "Sand Crab", "diary": "kourend", "task": "kill-a-sandcrab", "count": 1},
+    {"name": "Sand Crab", "diary": "kourend", "task": "kill-a-sandcrab", "count": 1, "areas": [[1670, 1890, 3400, 3600], [1660, 1690, 9810, 9840]]},
     {"name": "Rock Crab", "diary": "fremennik", "task": "kill-5-rock-crabs", "count": 5}
   ]
 }

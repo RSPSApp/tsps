@@ -548,6 +548,31 @@ test('Defender of Varrock starts through Elias and keeps the talking trail order
   for (const bit of [9659, 9660, 9661, 9662, 9663, 9664]) assert.equal(p.varbits.get(bit), 1);
 });
 
+const DOV_CENSUS = 50116;
+const DOV_CENSUS_INTERFACE = 245;
+const DOV_CENSUS_NEXT = (DOV_CENSUS_INTERFACE << 16) | 9;
+
+test('Defender of Varrock census opens group 245 and pages the captured varbit', () => {
+  const h = harness('DefenderOfVarrock'), p = player();
+  h.quest.setStage(p, 44);
+  h.object(p, DOV_CENSUS, 'Read', 3214, 3497);
+  assert.equal(h.quest.getStage(p), 46, 'reading the census moves the list stage to the candidates');
+  assert.equal(p.varbits.get(9668), 1, 'dov_read_census is set when the book opens');
+  assert.ok(p.log.some(([name, id]) => name === 'sendInterface' && id === DOV_CENSUS_INTERFACE),
+    'the census book interface is opened');
+
+  for (let page = 1; page <= 5; page++) {
+    for (const handler of h.hooks.onInterfaceActionButton ?? []) handler({ player: p, buttonId: DOV_CENSUS_NEXT });
+    assert.equal(p.varbits.get(9667), page, `capture 1636 pages dov_censuspage to ${page}`);
+  }
+  for (const handler of h.hooks.onInterfaceActionButton ?? []) handler({ player: p, buttonId: DOV_CENSUS_NEXT });
+  assert.equal(p.varbits.get(9667), 5, 'the page counter stops at five');
+
+  h.hooks.onPlayerLogin[0]({ player: p });
+  assert.equal(p.varbits.get(9667), 5, 'login restores the census page');
+});
+
+
 test('Defender of Varrock trapdoor is gated by all six child-loc clues and enters the base once', () => {
   const h = harness('DefenderOfVarrock'), p = player();
   h.quest.setStage(p, 6);
@@ -1124,7 +1149,9 @@ test('real Mining task yields normal Barronite deposit XP/message and canonical 
     });
     for (let i = 0; i < 20 && !p.items.get(I.BARRONITE_DEPOSIT); i++) h.tick(1);
     // Barronite keeps standing through its ores and runs out on its own 33-tick timer.
-    assert.equal(h.tasks.length, 1, 'mining task submitted, no respawn task yet');
+    // Mining also submits Cam Torum's water cycle (CalcifiedWater.Mining.js).
+    assert.ok(h.tasks.some(task => task.constructor.name === 'MiningTask'), 'mining task submitted');
+    assert.equal(h.tasks.filter(task => task.constructor.name === 'RockRespawnTask').length, 0, 'no respawn task yet');
     assert.equal(p.items.get(I.BARRONITE_DEPOSIT), 1);
     assert.equal(p.items.get(I.BARRONITE_SHARDS), undefined);
     assert.ok(p.log.some(([key, , text]) => key === 'sendTypedMessage' && text === 'You manage to mine a barronite deposit.'),

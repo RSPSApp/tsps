@@ -1061,6 +1061,8 @@ module.exports = function registerSoulsBaneQuest(api) {
     }
     if (quest.isComplete(player)) {
       moveTo(player, RAGE_ENTRY_TILE);
+      // Varrock medium: entering Tolna's rift after A Soul's Bane.
+      api.emitCustomEvent("diary:task", { player, diary: "varrock", task: "enter-the-tolna-dungeon-after-completing-a-soul" });
       return;
     }
     if (!attribute(player, ROPE_ATTACHED_ATTRIBUTE)) {

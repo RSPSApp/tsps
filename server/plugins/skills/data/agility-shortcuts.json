@@ -8,9 +8,7 @@
       "level": 52,
       "route": [2998,3916,0],
       "render": "BALANCE_WALK",
-      "steps": [
-        {"walk":[[2998,3931]]}
-      ]
+      "script": "wildernessRidgeIn"
     },
     {
       "name": "Wilderness Agility Course gate (back to the door)",
@@ -18,9 +16,7 @@
       "level": 1,
       "route": [2998,3931,0],
       "render": "BALANCE_WALK",
-      "steps": [
-        {"walk":[[2998,3916]]}
-      ]
+      "script": "wildernessRidgeOut"
     },
     {
       "name": "Barbarian Outpost pipe",
@@ -354,6 +350,7 @@
       "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
       "requires": [
         {
+          "method": "grapple",
           "skills": {"agility":11,"strength":37,"ranged":19},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
@@ -361,6 +358,7 @@
           ]
         },
         {
+          "method": "barehanded",
           "skills": {"agility":52},
           "steps": [
             {"face":{"object":[0,0]}},
@@ -391,6 +389,7 @@
       "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
       "requires": [
         {
+          "method": "grapple",
           "skills": {"agility":11,"strength":37,"ranged":19},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
@@ -398,6 +397,7 @@
           ]
         },
         {
+          "method": "barehanded",
           "skills": {"agility":52},
           "steps": [
             {"face":{"object":[0,0]}},
@@ -1147,7 +1147,7 @@
     },
     {
       "name": "Vine (Kharazi Jungle)",
-      "object": [26875,26877],
+      "object": [26875,26877,26884,26886],
       "level": 79,
       "requires": [
         {
@@ -1188,11 +1188,12 @@
     },
     {
       "name": "Rock slide (Cairn Isle, heading east)",
-      "fail": {"low":170,"high":253,"cross":true,"hit":[1,4]},
-      "unverified": "the failure's damage (no capture)",
+      "fail": {"low":170,"high":253,"cross":true,"hit":{"percent":5,"plus":1},"hits":2,"end":"You fall and hurt yourself."},
+      "unverified": "whether a failed climb still gets across (cross) or falls back, as the Wiki's Rock slide page can be read; capture 352 has these rocks at level 99, with no failure",
       "object": 2231,
       "at": [[2792,2978,0],[2792,2979,0],[2792,2980,0]],
       "level": 15,
+      "xp": 1,
       "steps": [
         {"move":[2795,"pos.y"],"anim":"CLIMB_ROCKS","delay":15,"speed":[0,120],"dir":"west","ticks":3},
         {"anim":-1}
@@ -1201,11 +1202,12 @@
     },
     {
       "name": "Rock slide (Cairn Isle, heading west)",
-      "fail": {"low":170,"high":253,"cross":true,"hit":[1,4]},
-      "unverified": "the failure's damage (no capture); the reverse direction (only one direction was captured; it mirrors that one)",
+      "fail": {"low":170,"high":253,"cross":true,"hit":{"percent":5,"plus":1},"hits":2,"end":"You fall and hurt yourself."},
+      "unverified": "whether a failed climb still gets across (cross) or falls back; this direction's move is a forced move, capture 352 (ticks 78-83) shows it as a walk from 2795 to 2791 with 1 XP",
       "object": 2231,
       "at": [[2794,2978,0],[2794,2979,0],[2794,2980,0]],
       "level": 15,
+      "xp": 1,
       "steps": [
         {"move":[2791,"pos.y"],"anim":"CLIMB_ROCKS","delay":15,"speed":[0,120],"dir":"west","ticks":3},
         {"anim":-1}
@@ -2507,6 +2509,7 @@
       "unverified": "the grapple's steps and both ends (no capture; ends from the map)",
       "requires": [
         {
+          "method":"grapple",
           "skills": {"agility":8,"strength":8,"ranged":19},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
@@ -2514,6 +2517,7 @@
           ]
         },
         {
+          "method":"barehanded",
           "skills": {"agility":48},
           "cross": [
             {"move":"to","anim":"CLIMB_ROCKS","speed":[0,210],"ticks":7},
@@ -2733,13 +2737,15 @@
       "unverified": "the grapple's steps and both ends (no capture; ends from the map)",
       "requires": [
         {
-          "skills": {"agility":36,"strength":36,"ranged":22},
+          "method": "grapple",
+          "skills": {"agility":36,"strength":22,"ranged":39},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
             {"slot":"ammunition","ids":[9419],"message":"You need a mithril grapple tipped bolt with a rope to do that."}
           ]
         },
         {
+          "method": "barehanded",
           "skills": {"agility":72},
           "cross": [
             {"move":"to","anim":"CLIMB_ROCKS","speed":[0,90],"ticks":3},
@@ -2761,12 +2767,32 @@
     },
     {
       "name": "Stepping stone (Nemus Retreat)",
-      "object": 56717,
-      "at": [1315,9378,0],
+      "object": 56988,
+      "at": [[1395,3309,0],[1397,3309,0]],
       "level": 36,
       "xp": 14,
+      "between": {
+        "ends": [[1393,3309,0],[1399,3309,0]],
+        "via": [[1395,3309,0],[1397,3309,0]],
+        "cross": [
+          {"sound":2461,"delay":15},
+          {"move":"via0","anim":"JUMP","delay":15,"speed":[30,45],"ticks":2},
+          {"sound":2461,"delay":15},
+          {"move":"via1","anim":"JUMP","delay":15,"speed":[30,45],"ticks":2},
+          {"sound":2461,"delay":15},
+          {"move":"to","anim":"JUMP","delay":15,"speed":[30,45],"ticks":2}
+        ]
+      },
+      "note": "rsprox captures 1098, 1100 (Leagues worlds only): human_spot_jump with sound 2461 at 15 cycles, exactmove 30-45, a stone every 2 ticks from 1393 to 1399 and back. The Wiki's 'east of the Nemus Retreat bank', level 36, 14 XP."
+    },
+    {
+      "name": "Stepping stone (Tonali Cavern)",
+      "object": 56717,
+      "at": [1315,9378,0],
+      "level": 46,
       "unverified": "the movement and both ends (no capture; ends from the map)",
-      "between": {"ends":[[1313,9378,0],[1317,9378,0]],"cross":[{"use":"hops","args":["object","to"]}]}
+      "between": {"ends":[[1313,9378,0],[1317,9378,0]],"cross":[{"use":"hops","args":["object","to"]}]},
+      "note": "The Wiki's Agility shortcuts list: Tonali Cavern's stepping stone, level 46, no XP (it was named and levelled as Nemus Retreat's here)."
     },
     {
       "name": "Log balance (Tlati Rainforest)",
@@ -4098,6 +4124,31 @@
       "script": "arceuusLibraryRailing",
       "unverified": "the jump-down animation and duration (no RSProx capture)",
       "note": "OSRS Wiki: top floor railing requires 62 Agility; locs 28373/28374 and placements from cache; landing tiles follow the rail face"
+    },
+    {
+      "name": "Strong Tree (Karamja)",
+      "object": 17074,
+      "at": [2873,3134,0],
+      "option": "Grapple",
+      "level": 53,
+      "xp": 0,
+      "script": "karamjaStrongTree",
+      "params": {
+        "islandY": 3134,
+        "north": [[2874,3142,0],[2874,3136,0]],
+        "south": [[2874,3127,0],[2874,3133,0]]
+      },
+      "requires": [
+        {
+          "method": "grapple",
+          "skills": {"agility": 53, "strength": 21, "ranged": 42},
+          "equipped": [
+            {"slot": "weapon", "name": "crossbow", "message": "You need a crossbow equipped to do that."},
+            {"slot": "ammunition", "ids": [9419], "message": "You need a mithril grapple tipped bolt with a rope to do that."}
+          ]
+        }
+      ],
+      "note": "OSRS Wiki: Strong Tree (Karamja) grapple, 53 Agility/21 Strength/42 Ranged. Object 17074 at 2873,3134 (yarn dump:loc); the two channels' ends are the cache map's walkable shore/island tiles."
     }
   ]
 }

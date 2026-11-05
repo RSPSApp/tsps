@@ -28,7 +28,7 @@ export function mobileHudScale(
 }
 
 /** Count only enabled, visible timers so inactive effects leave no empty slots. */
-export function combatTimerCount(client: OsrsClient, before = 6): number {
+export function combatTimerCount(client: OsrsClient, before = 7): number {
     return client.runeLite?.pluginManager.getPlugin(TimersPlugin)?.visibleInfoboxCount(before) ?? 0;
 }
 

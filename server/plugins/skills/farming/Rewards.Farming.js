@@ -171,7 +171,7 @@ function canBuy(request) {
     }
     if (
         (stock === "tithe_shop_seed_box" && ownedFamily(player, ["Seed box", "Open seed box"])) ||
-        (stock === "tithe_shop_herb_sack" && ownedFamily(player, ["Herb sack", "Open herb sack"]))
+        (stock === "tithe_shop_herb_sack" && ownedFamily(player, ["Herb sack", "Open herb sack", "Silklined herb sack", "Open silklined herb sack"]))
     ) {
         player.sendMessage("You cannot buy any more of that item.");
         return;

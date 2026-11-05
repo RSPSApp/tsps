@@ -3,6 +3,7 @@ import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
 import { CLIENT_TOKEN, inject } from "@runelite/client/plugins/PluginInjector";
 import type { OsrsClient } from "../../OsrsClient";
+import { lowEndDeviceModeExplicit } from "../lowenddevice/LowEndDeviceMode";
 import { AntiAliasingMode, GpuConfig, MAX_DRAW_DISTANCE, MIN_DRAW_DISTANCE } from "./GpuConfig";
 
 /** What the renderers apply while the plugin is on. */
@@ -20,6 +21,8 @@ export interface GpuSettings {
     autoFogDepth: boolean;
     autoFogDepthFactor: number;
     fogDepth: number;
+    /** These are the user's choices, so the mobile profile's distance caps must not lower them. */
+    overrideDeviceCaps: boolean;
 }
 
 const MSAA_SAMPLES: Readonly<Record<string, number>> = {
@@ -52,6 +55,7 @@ export function resolveGpuSettings(config: {
         autoFogDepth: config.autoFog,
         autoFogDepthFactor: clamp(config.fogStart, 0, 100) / 100,
         fogDepth: clamp(config.manualFogStart, 0, 400),
+        overrideDeviceCaps: true,
     };
 }
 
@@ -87,6 +91,7 @@ export class GpuPlugin extends Plugin {
         if (this.configManager.getConfiguration(GpuConfig.group, "brightness") !== undefined) {
             this.client.applyScreenBrightness(this.configManager.getConfig(GpuConfig).brightness());
         }
+        this.applySkyColor();
     }
 
     onConfigChanged(event: ConfigChanged): void {
@@ -95,11 +100,25 @@ export class GpuPlugin extends Plugin {
         if (event.getKey() === "brightness") {
             this.client.applyScreenBrightness(this.configManager.getConfig(GpuConfig).brightness());
         }
+        if (event.getKey() === "skyColor") this.applySkyColor();
     }
 
-    /** The settings to apply, or undefined while the plugin is off. */
+    private applySkyColor(): void {
+        const renderer = this.client.renderer as {
+            setSkyColor?: (r: number, g: number, b: number, explicit?: boolean) => void;
+            clearSkyColorOverride?: () => void;
+        } | undefined;
+        if (this.configManager.getConfiguration(GpuConfig.group, "skyColor") === undefined) {
+            renderer?.clearSkyColorOverride?.();
+            return;
+        }
+        const color = this.configManager.getConfig(GpuConfig).skyColor() >>> 0;
+        renderer?.setSkyColor?.((color >>> 16) & 0xff, (color >>> 8) & 0xff, color & 0xff, true);
+    }
+
+    /** The settings to apply, or undefined while the plugin is off or an explicit Low-end Device wins. */
     gpuSettings(): GpuSettings | undefined {
-        return this.isEnabled() ? this.current : undefined;
+        return this.isEnabled() && !lowEndDeviceModeExplicit ? this.current : undefined;
     }
 
     private readConfig(): GpuSettings {

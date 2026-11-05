@@ -1,0 +1,90 @@
+[
+ {
+  "k": "say",
+  "t": 289,
+  "who": "Ali Morrisane",
+  "text": "Hello <player>. How's the adventuring going?"
+ },
+ {
+  "k": "say",
+  "t": 290,
+  "who": "player",
+  "text": "Hi Ali. Not bad. How are you?"
+ },
+ {
+  "k": "say",
+  "t": 291,
+  "who": "Ali Morrisane",
+  "text": "Still selling."
+ },
+ {
+  "k": "menu",
+  "t": 292,
+  "title": "Select an option",
+  "options": [
+   "I would like to have a look at your selection of runes.",
+   "I would like to have a look at your general stock.",
+   "Who did you want me to talk to again?"
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 294,
+  "n": 1
+ },
+ {
+  "k": "say",
+  "t": 294,
+  "who": "Ali Morrisane",
+  "text": "Hang on a second."
+ },
+ {
+  "k": "menu",
+  "t": 295,
+  "title": "Select an option",
+  "options": [
+   "Try to open a small casket of runes",
+   "Try to open a large casket of runes",
+   "Buy elemental runes.",
+   "On second thoughts I don't really need any runes."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 297,
+  "n": 2
+ },
+ {
+  "k": "say",
+  "t": 298,
+  "who": "player",
+  "text": "I'm feeling lucky, let's have a look at opening one of those large caskets."
+ },
+ {
+  "k": "menu",
+  "t": 300,
+  "title": "Select an option",
+  "options": [
+   "Force box.",
+   "Pick lock.",
+   "Examine lock."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 302,
+  "n": 1
+ },
+ {
+  "k": "msg",
+  "t": 302,
+  "kind": "mesbox",
+  "text": "Your arms tire from the exertions of trying to open the casket..."
+ },
+ {
+  "k": "say",
+  "t": 303,
+  "who": "player",
+  "text": "Hmmm... This lock looks like it may be impossible to prise open."
+ }
+]

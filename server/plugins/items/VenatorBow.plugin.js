@@ -179,7 +179,7 @@ function bounceTargets(player, primary) {
 function arrowEndCycle(player, target) {
   const { RangedCombatMethod, WeaponProfiles } = core;
   const projectile = WeaponProfiles.ranged(player).projectiles?.[0];
-  const distance = player.getLocation().getDistance(target.getLocation());
+  const distance = core.CombatPosition.projectileDistance(player, target);
   return projectile ? RangedCombatMethod.projectileEnd(projectile, distance) : 0;
 }
 

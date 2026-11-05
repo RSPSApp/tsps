@@ -42,6 +42,8 @@ function theSkyFollowsTheAreaUnlessPicked(): void {
 
     setSkyColor(renderer, 9, 6, 6);
     assert.equal(renderer.skyColorOverride, false, "the panel echoing the current colour isn't a pick");
+    setSkyColor(renderer, 9, 6, 6, true);
+    assert.equal(renderer.skyColorOverride, true, "a saved choice still overrides when it matches the current area");
     setSkyColor(renderer, 255, 0, 0);
     assert.equal(renderer.skyColorOverride, true);
     updateSkyColor(renderer);

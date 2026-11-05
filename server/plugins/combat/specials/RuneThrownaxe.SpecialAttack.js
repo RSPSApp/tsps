@@ -23,7 +23,7 @@ function bounceCycles(from, to) {
 }
 
 function buildRuneThrownaxeSpecialAttack(api) {
-  const { Animation, CombatFactory, CombatSpecial, Equipment, Graphic, ItemIdentifiers, Misc, PendingHit, Projectile, RangedCombatMethod, Skill, Sound, Sounds, WeaponProfiles } = api.core;
+  const { Animation, CombatFactory, CombatPosition, CombatSpecial, Equipment, Graphic, ItemIdentifiers, Misc, PendingHit, Projectile, RangedCombatMethod, Skill, Sound, Sounds } = api.core;
   const BonusManager = api.core.BonusManager;
 
   const DRAIN = 10;
@@ -71,8 +71,8 @@ function buildRuneThrownaxeSpecialAttack(api) {
         .withAngle(0).withProgress(11).sendProjectile();
       Sounds.sendSound(character, CHAINHIT_SOUND);
       const player = character.getAsPlayer();
-      const distance = character.getLocation().getDistance(target.getLocation());
-      const delay = WeaponProfiles.hitDelays(player, distance)[0] + (target.isNpc() ? 1 : 0);
+      const distance = CombatPosition.projectileDistance(character, target);
+      const delay = RangedCombatMethod.playerHitDelays(character, target, distance)[0] + (target.isNpc() ? 1 : 0);
       CombatFactory.decrementAmmo(player, target.getLocation(), 1, delay);
       character.performAnimation(SPECIAL_ANIMATION);
       character.performGraphic(SPECIAL_VFX);

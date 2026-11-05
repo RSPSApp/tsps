@@ -206,6 +206,13 @@ test('seed collection uses the last free slot and does not change the other 27 i
 });
 
 test('native gardener Pay -> Yes takes payment and protects the planted tree once', async t => {
+  const protectedEvents = [];
+  const emit = core.PluginManager.emitCustomEvent;
+  core.PluginManager.emitCustomEvent = function (name, payload) {
+    if (name === 'farming:protected') protectedEvents.push(payload);
+    return emit.call(this, name, payload);
+  };
+  t.after(() => { core.PluginManager.emitCustomEvent = emit; });
   const f = actor(t, 2435, 3415);
   const patch = Data.CACHE.patches.find(p => p.x === 2435 && p.y === 3414);
   const state = Patches.stateFor(f.p, patch);
@@ -225,6 +232,10 @@ test('native gardener Pay -> Yes takes payment and protects the planted tree onc
   assert.equal(state.protected, true);
   assert.equal(f.p.getInventory().getAmount(coconutNote), 0);
   assert.match(f.p.getDialogueManager().getCurrent().getText(), /^That'll do nicely, (sir|madam)\. Leave it with me/);
+  assert.equal(protectedEvents.length, 1, 'the successful payment emits its protection event once');
+  assert.equal(protectedEvents[0].npc, gardener);
+  assert.equal(protectedEvents[0].patch, patch);
+  assert.equal(protectedEvents[0].crop, 'MAGIC');
 });
 
 const GARDENERS_ATTRIBUTE = 'quest.fairytale-i-growing-pains:gardeners';

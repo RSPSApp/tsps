@@ -47,10 +47,10 @@ const CREATE_ACTIVITY = 14;
 const CREATE_WORLD = 17;
 const CREATE_DURATION = 19;
 const CREATE_RANK = 21;
-const CREATE_SAVE = 23;
-const CREATE_DELETE = 24;
-const CREATE_EXIT = 25;
-const CREATE_POPUP = (CREATE_GROUP << 16) | 26;
+const CREATE_SAVE = 24;
+const CREATE_DELETE = 25;
+const CREATE_EXIT = 26;
+const CREATE_POPUP = (CREATE_GROUP << 16) | 27;
 const FIELD_VARBITS = {
   world: 12216,
   activity: 12218,

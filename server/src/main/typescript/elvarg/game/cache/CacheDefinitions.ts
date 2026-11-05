@@ -22,6 +22,8 @@ import { Gamevals, GamevalKind } from "./Gamevals";
 import { ByteBuffer } from "./codec/rs/io/ByteBuffer";
 import { Type } from "./codec/rs/config/Type";
 import { ArchivedTypeLoader } from "./codec/rs/config/ArchivedTypeLoader";
+import { ArchiveTypeLoader } from "./codec/rs/config/TypeLoader";
+import { SeqType } from "./codec/rs/config/seqtype/SeqType";
 import { ArchivedDefinitionRegistry, ArchivedDefinitionBundle, ArchivedDefinitionKind, ArchivedDefinitionContext } from "./codec/rs/config/ArchivedDefinitionRegistry";
 
 const STRUCT_PARAMS_OPCODE = 249;
@@ -85,12 +87,18 @@ export class CacheDefinitions {
             npc: new ArchiveNpcTypeLoader(info, configs.getArchive(ConfigType.DAT2.npcs)),
             loc: new ArchiveLocTypeLoader(info, configs.getArchive(ConfigType.DAT2.locs)),
             obj: new ArchiveObjTypeLoader(info, configs.getArchive(ConfigType.DAT2.objs)),
+            // Only archived animations are decoded here (validation); playback is client-side.
+            seq: new ArchiveTypeLoader(SeqType, info, configs.getArchive(ConfigType.DAT2.seqs)),
         };
         const archiveContext: ArchivedDefinitionContext = {
             cacheInfo: info,
-            counts: { npc: native.npc.getCount(), loc: native.loc.getCount(), obj: native.obj.getCount() },
+            counts: {
+                npc: native.npc.getCount(), loc: native.loc.getCount(), obj: native.obj.getCount(),
+                seq: native.seq.getCount(),
+            },
             currentDefinition: (kind, id) => ({
-                name: native[kind].load(id).name,
+                // Sequences have no name; only retired items are ever replaced in place.
+                name: kind === "seq" ? "" : native[kind].load(id).name,
                 data: native[kind].archive.getFile(id)?.data,
             }),
         };
@@ -122,7 +130,7 @@ export class CacheDefinitions {
 
     static registerDefinitionArchives(bundles: readonly ArchivedDefinitionBundle[]): Record<ArchivedDefinitionKind, number[]> {
         const state = this.getState(), registry = state.archives;
-        const before = { npc: registry.ids("npc"), loc: registry.ids("loc"), obj: registry.ids("obj") };
+        const before = { npc: registry.ids("npc"), loc: registry.ids("loc"), obj: registry.ids("obj"), seq: registry.ids("seq") };
         registry.replace(bundles);
         if (before.obj.length > 0 || registry.ids("obj").length > 0) {
             this.spellNamesByWidget = undefined;
@@ -136,6 +144,7 @@ export class CacheDefinitions {
             npc: [...new Set([...before.npc, ...registry.ids("npc")])],
             loc: [...new Set([...before.loc, ...registry.ids("loc")])],
             obj: [...new Set([...before.obj, ...registry.ids("obj")])],
+            seq: [...new Set([...before.seq, ...registry.ids("seq")])],
         };
     }
 
@@ -151,7 +160,7 @@ export class CacheDefinitions {
         const changed = (kind: ArchivedDefinitionKind) =>
             [...new Set([...state.archives.ids(kind), ...candidate.ids(kind)])].filter(id =>
                 JSON.stringify(state.archives.getSource(kind, id)) !== JSON.stringify(candidate.getSource(kind, id)));
-        return { npc: changed("npc"), loc: changed("loc"), obj: changed("obj") };
+        return { npc: changed("npc"), loc: changed("loc"), obj: changed("obj"), seq: changed("seq") };
     }
 
     static getArchivedId(bundle: string, kind: ArchivedDefinitionKind, symbol: string): number | null {
@@ -532,12 +541,14 @@ export class CacheDefinitions {
         return this.getState().objects.load(id);
     }
 
-    static getCounts(): { npcs: number; items: number; objects: number } {
+    static getCounts(): { npcs: number; items: number; objects: number; seqs: number } {
         const state = this.getState();
         return {
             npcs: state.npcs.getCount(),
             items: state.items.getCount(),
             objects: state.objects.getCount(),
+            // Native sequences plus appended archived ones (the next free archived id).
+            seqs: state.archives.getCount("seq"),
         };
     }
 

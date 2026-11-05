@@ -5,6 +5,7 @@ const SIDE = 430;
 const SIDE_ITEMS = SIDE << 16;
 const RECIPE_LIST = 1033;
 const RECIPE_BY_ITEM = 1034;
+const PRESET_TEXT = "Preset items cannot be used for this.";
 let api;
 
 function recipe(enumId) {
@@ -43,9 +44,33 @@ function counts(ids) {
   return result;
 }
 
+/** Preset (and other untradeable or unbankable) copies keep their restrictions, so they never pack. */
+function restricted(item) {
+  const { Item } = api.core;
+  return item.isPresetItem() || item.getMetaValue(Item.UNTRADEABLE_META) === true
+    || item.getMetaValue(Item.UNBANKABLE_META) === true;
+}
+
+/** How many of `id` can go into an exchange: the unrestricted copies, the ones it would consume. */
+function plainAmount(inventory, id) {
+  return inventory.getItems().reduce((total, item) =>
+    (item.getId() === id && !restricted(item) ? total + item.getAmount() : total), 0);
+}
+
 function holds(inventory, ids) {
   return ids.every((id) => Number.isInteger(id) && id >= 0)
-    && [...counts(ids)].every(([id, amount]) => inventory.getAmount(id) >= amount);
+    && [...counts(ids)].every(([id, amount]) => plainAmount(inventory, id) >= amount);
+}
+
+/** Takes `amount` of `id` from its unrestricted copies, leaving any restricted one alone. */
+function takePlain(inventory, id, amount) {
+  let left = amount;
+  inventory.getItems().forEach((item, slot) => {
+    if (left <= 0 || item.getId() !== id || restricted(item)) return;
+    const taken = Math.min(left, item.getAmount());
+    inventory.deleteAtSlot(slot, taken, false);
+    left -= taken;
+  });
 }
 
 /** Check the complete result on a copy, then commit once so a full inventory loses nothing. */
@@ -53,7 +78,7 @@ function exchange(player, inputs, outputs) {
   const inventory = player.getInventory();
   if (!holds(inventory, inputs)) return false;
   const next = new api.core.Inventory(player).setItems(inventory.getCopiedItems());
-  for (const [id, amount] of counts(inputs)) next.deleted(id, amount, false);
+  for (const [id, amount] of counts(inputs)) takePlain(next, id, amount);
   for (const [id, amount] of counts(outputs)) {
     if (!Number.isInteger(id) || id < 0) return false;
     const item = new api.core.Item(id, amount);
@@ -86,6 +111,7 @@ function pack(event) {
   } else {
     const noted = value.pieces.map((id) => api.core.ItemDefinition.forId(id).getNoteId());
     if (holds(inventory, noted)) exchange(player, noted, [api.core.ItemDefinition.forId(value.set).getNoteId()]);
+    else if ([...counts(value.pieces)].every(([id, amount]) => inventory.getAmount(id) >= amount)) player.sendMessage(PRESET_TEXT);
     else player.sendMessage(`Contents: ${value.pieces.map((id) => api.core.ItemDefinition.forId(id).getName()).join(", ")}.`);
   }
   return true;

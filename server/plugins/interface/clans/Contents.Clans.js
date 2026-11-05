@@ -6,27 +6,17 @@
  */
 
 const Core = require("./Core.Clans");
+const PartyChest = require("../partychest/Offer.PartyChest");
 
 const CHEST_LOC = 46248;
 const CHEST_GROUP = 783;
-const CHEST_SIDE_GROUP = 266;
 const OFFER_LIST = 16;
 const CONFIRM = 17;
 const CHEST_INV = 916 + 32768; // clan_hall_partychest, which the screen reads with invother_getobj
-const OFFER_INV = 92; // partyroom_tempinv
 const CHEST_SIZE = 216; // Wiki: Clan Hall
-const OFFER_SIZE = 8;
-const MAX_STACK = 2147483647;
 /** What's offered and not yet confirmed, in the player's save: only here do the items still exist. */
 const OFFER_ATTRIBUTE = "clans:chest-offer";
-const LAST_INV_SLOT = 27;
 const MAIN_MODAL = (161 << 16) | 16;
-const SIDE_MODAL = (161 << 16) | 74;
-const OPS_1_TO_5 = 0b111110;
-const OFFER_FLAGS_RANGE = OFFER_SIZE - 1;
-/** Bits 14-15 of canoeing_menu are farming_tools_selectedquantity: 0 one, 1 five, 2 all, 3 X. */
-const QUANTITY_VARP = 675;
-const QUANTITY_SHIFT = 14;
 
 const DEPOSIT_SETTING = 94;
 const LEVER_SETTING = 95;
@@ -41,6 +31,7 @@ const DROP_CHANCE = 0.5; // ours: the Wiki gives a chance, not how much
 const BALLOON_AREA = { minX: 1752, maxX: 1772, minY: 5456, maxY: 5476 }; // ours: the main room, by the chest
 
 const PIANO_GROUP = 698;
+const PIANO_CLOSE = 45; // clan_piano:close_button, a static transmit op1 "Close" (rev 241)
 const PIANO_INIT_SCRIPT = 4321; // clan_hall_piano
 const PIANO_KEYS_ENUM = 3799;
 const PARAM_KEY_COMPONENT = 1236;
@@ -62,15 +53,13 @@ let core = null;
 let api = null;
 let hallOf = null;
 
-const openChests = new Map();
 const pianists = new Map();
-const selectedQuantity = new WeakMap();
 
 function init(pluginApi, findHall) {
   api = pluginApi;
   core = pluginApi.core;
   hallOf = findHall;
-  pluginApi.persistAttribute(OFFER_ATTRIBUTE, []);
+  chestScreen.init(pluginApi, core);
 }
 
 /** The hall's own staff and state, made when its first visitor arrives. */
@@ -100,58 +89,34 @@ function allowed(player, clan, setting) {
 
 // ---------------------------------------------------------------- the chest
 
-function offerOf(player) {
-  return openChests.get(player);
-}
+/** The offer flow is shared with the Party Room: interface/partychest. Here: whose chest, and who may deposit. */
+const chestScreen = PartyChest.create({
+  mainGroup: CHEST_GROUP,
+  offerList: OFFER_LIST,
+  confirmComponent: CONFIRM,
+  chestInv: CHEST_INV,
+  chestSize: CHEST_SIZE,
+  offerAttribute: OFFER_ATTRIBUTE,
+  chestOf: ({ hall }) => hall.chest,
+  welcome: "Whatever you confirm stays in the chest until the balloons take it.",
+  /** The rank can rise while the screen is up. Taking back and closing stay open, so nothing is stuck. */
+  canDeposit(player, { clan }) {
+    if (allowed(player, clan, DEPOSIT_SETTING)) return true;
+    player.sendMessage("You are not a high enough rank to deposit in this chest.");
+    return false;
+  },
+});
 
-/** Beside every change to the offer, so no save can hold the inventory without the items. */
-function saveOffer(player, items) {
-  player.setAttribute(OFFER_ATTRIBUTE, items.map(({ id, amount }) => ({ id, amount })));
-}
-
-/** After a restart or crash the offer is all that's left of the items: they go back at login. */
-function restoreOffer(player) {
-  const items = player.getAttribute(OFFER_ATTRIBUTE) ?? [];
-  saveOffer(player, []);
-  for (const { id, amount } of items) giveBack(player, id, amount);
-}
-
-function invItems(items, size) {
-  return Array.from({ length: size }, (_, slot) => {
-    const item = items[slot];
-    return item ? { id: item.id, amount: item.amount } : null;
-  });
-}
-
-function sendChest(player, hall) {
-  player.getPacketSender().sendInventory(CHEST_INV, CHEST_SIZE, invItems(hall.chest, CHEST_SIZE));
-}
-
-function sendOffer(player) {
-  player.getPacketSender().sendInventory(OFFER_INV, OFFER_SIZE, invItems(offerOf(player)?.items ?? [], OFFER_SIZE));
-}
+const restoreOffer = chestScreen.restoreOffer;
+const closeChest = chestScreen.close;
+const clickChest = chestScreen.click;
+const varpTransmitted = chestScreen.varpTransmitted;
 
 function openChest({ player, objectId }) {
   if (objectId !== CHEST_LOC) return false;
   const found = hallOf(player);
   if (!found) return false;
-  const { hall, clan } = found;
-  if (!allowed(player, clan, DEPOSIT_SETTING)) {
-    player.sendMessage("You are not a high enough rank to deposit in this chest.");
-    return true;
-  }
-  closeChest(player);
-  openChests.set(player, { hall, clan, items: [] });
-  // Before the mount: partydrop_main_init sizes its rows from the inventories' capacity.
-  sendChest(player, hall);
-  sendOffer(player);
-  const sender = player.getPacketSender();
-  // As the main interface, so "interface:closed" tells of it going by any route, walking away included.
-  sender.sendInterface(CHEST_GROUP);
-  sender.sendSubInterface(SIDE_MODAL, CHEST_SIDE_GROUP, 3);
-  sender.sendInterfaceFlagsRange((CHEST_SIDE_GROUP << 16), 0, LAST_INV_SLOT, OPS_1_TO_5);
-  sender.sendInterfaceFlagsRange((CHEST_GROUP << 16) | OFFER_LIST, 0, OFFER_FLAGS_RANGE, OPS_1_TO_5);
-  player.sendMessage("Whatever you confirm stays in the chest until the balloons take it.");
+  chestScreen.open(player, found);
   return true;
 }
 
@@ -165,172 +130,21 @@ function checkPermissions({ player, objectId }) {
   return true;
 }
 
-/** Op 2 is one, 3 five, 4 X, 5 all; op 1 is whichever the screen has selected (partydrop_main_offeritems). */
-function amountFor(player, op, held, onAmount) {
-  const selected = selectedQuantity.get(player) ?? 0;
-  const choice = op === 1 ? [2, 3, 5, 4][selected] : op;
-  if (choice === 2) onAmount(1);
-  else if (choice === 3) onAmount(Math.min(5, held));
-  else if (choice === 5) onAmount(held);
-  else if (choice === 4) {
-    player.setEnteredAmountAction({ execute: (amount) => onAmount(Math.min(amount, held)) });
-    player.getPacketSender().sendEnterAmountPrompt("Enter amount:");
-  }
-}
-
-/**
- * The chest holds only an id and an amount, so an item with state is refused rather than stripped of
- * it: a preset's untradeable, unbankable and preset flags (Item.isTradeable checks the instance), or
- * a degrading item's charges.
- */
-function fitsChest(item) {
-  return item.isTradeable() && item.getMeta() == null;
-}
-
-/** The rank can rise while the screen is up. Taking back and closing stay open, so nothing is stuck. */
-function stillDepositing(player, { clan }) {
-  if (allowed(player, clan, DEPOSIT_SETTING)) return true;
-  player.sendMessage("You are not a high enough rank to deposit in this chest.");
-  return false;
-}
-
-function offerableAmount(inventory, id) {
-  return inventory.getItems().reduce((sum, item) => (item?.getId() === id && fitsChest(item) ? sum + item.getAmount() : sum), 0);
-}
-
-/** By slot, as inventory.delete(id) would take the first of that id, which could be a preset. */
-function removeOffered(inventory, id, amount, clickedSlot) {
-  const fits = (item) => item?.getId() === id && fitsChest(item);
-  let left = amount;
-  while (left > 0) {
-    const items = inventory.getItems();
-    const slot = fits(items[clickedSlot]) ? clickedSlot : items.findIndex(fits);
-    if (slot < 0) break;
-    const taken = Math.min(left, items[slot].getAmount());
-    inventory.deletedItem(new core.Item(id, taken), slot, false);
-    left -= taken;
-  }
-  inventory.refreshItems();
-  return amount - left;
-}
-
-function offer(player, slot, op) {
-  const state = offerOf(player);
-  const inventory = player.getInventory();
-  const item = inventory.getItems()[slot];
-  if (!state || !item || item.getId() < 0) return;
-  const id = item.getId();
-  if (!fitsChest(item)) {
-    player.sendMessage("That item can't go in the chest.");
-    return;
-  }
-  const held = offerableAmount(inventory, id);
-  amountFor(player, op, held, (amount) => {
-    if (offerOf(player) !== state || !stillDepositing(player, state)) return;
-    const stack = state.items.find((entry) => entry.id === id);
-    const wanted = Math.min(amount, offerableAmount(inventory, id), MAX_STACK - (stack?.amount ?? 0));
-    if (wanted <= 0 || (!stack && state.items.length >= OFFER_SIZE)) return;
-    const moved = removeOffered(inventory, id, wanted, slot);
-    if (stack) stack.amount += moved;
-    else state.items.push({ id, amount: moved });
-    saveOffer(player, state.items);
-    sendOffer(player);
-  });
-}
-
-function takeBack(player, slot, op) {
-  const state = offerOf(player);
-  const stack = state?.items[slot];
-  if (!stack) return;
-  amountFor(player, op, stack.amount, (amount) => {
-    const moved = Math.min(amount, stack.amount);
-    if (moved <= 0 || offerOf(player) !== state || !state.items.includes(stack)) return;
-    giveBack(player, stack.id, moved);
-    stack.amount -= moved;
-    if (stack.amount === 0) state.items = state.items.filter((entry) => entry !== stack);
-    saveOffer(player, state.items);
-    sendOffer(player);
-  });
-}
-
-/** Never lost: what doesn't fit in the inventory lands at the player's feet. */
-function giveBack(player, id, amount) {
-  player.getInventory().forceAdd(player, new core.Item(id, amount));
-}
-
-function confirm(player) {
-  const state = offerOf(player);
-  if (!state || state.items.length === 0 || !stillDepositing(player, state)) return;
-  const { hall } = state;
-  const stacks = new Set(hall.chest.map((entry) => entry.id));
-  for (const { id } of state.items) stacks.add(id);
-  if (stacks.size > CHEST_SIZE) {
-    player.sendMessage("The chest can't hold that many different items.");
-    return;
-  }
-  const held = (id) => hall.chest.find((entry) => entry.id === id)?.amount ?? 0;
-  if (state.items.some(({ id, amount }) => held(id) + amount > MAX_STACK)) {
-    player.sendMessage("The chest can't hold any more of that.");
-    return;
-  }
-  for (const { id, amount } of state.items) {
-    const stack = hall.chest.find((entry) => entry.id === id);
-    if (stack) stack.amount += amount;
-    else hall.chest.push({ id, amount });
-  }
-  state.items = [];
-  saveOffer(player, []);
-  sendOffer(player);
-  for (const [viewer, open] of openChests) if (open.hall === hall) sendChest(viewer, hall);
-}
-
-/** Anything not confirmed goes back to who offered it. */
-function closeChest(player) {
-  const state = offerOf(player);
-  if (!state) return;
-  openChests.delete(player);
-  saveOffer(player, []);
-  for (const { id, amount } of state.items) giveBack(player, id, amount);
-}
-
 /** The screens are main interfaces, so this hears them close by any route. */
-function interfaceClosed({ player, interfaceId }) {
-  if (interfaceId === CHEST_GROUP) closeChest(player);
-  else if (interfaceId === PIANO_GROUP) pianists.delete(player);
+function interfaceClosed(event) {
+  chestScreen.interfaceClosed(event);
+  if (event.interfaceId === PIANO_GROUP) pianists.delete(event.player);
 }
 
 /** A plugin can mount over the main modal without closing it. */
-function interfaceOpened({ player, targetUid, groupId }) {
-  if (targetUid !== MAIN_MODAL) return;
-  if (groupId !== CHEST_GROUP) closeChest(player);
-  if (groupId !== PIANO_GROUP) pianists.delete(player);
+function interfaceOpened(event) {
+  chestScreen.interfaceOpened(event);
+  if (event.targetUid === MAIN_MODAL && event.groupId !== PIANO_GROUP) pianists.delete(event.player);
 }
 
 function playerGone(player) {
   closeChest(player);
   pianists.delete(player);
-}
-
-function clickChest(event) {
-  const { player, groupId, childId, slot, action } = event;
-  if (groupId !== CHEST_SIDE_GROUP && groupId !== CHEST_GROUP) return;
-  event.handled = true;
-  if (!player.getPacketSender().isSubInterfaceOpen(CHEST_GROUP)) {
-    closeChest(player);
-    return;
-  }
-  if (groupId === CHEST_SIDE_GROUP) {
-    offer(player, slot, action);
-  } else {
-    if (childId === OFFER_LIST) takeBack(player, slot, action);
-    else if (childId === CONFIRM) confirm(player);
-  }
-}
-
-function varpTransmitted(event) {
-  if (event.varpId !== QUANTITY_VARP || !openChests.has(event.player)) return;
-  selectedQuantity.set(event.player, (event.value >> QUANTITY_SHIFT) & 3);
-  event.handled = true;
 }
 
 // ---------------------------------------------------------------- the lever and balloons
@@ -413,7 +227,7 @@ function burst({ player, location }) {
     false, -1, hall,
   );
   core.ItemOnGroundManager.register(drop);
-  for (const [viewer, open] of openChests) if (open.hall === hall) sendChest(viewer, hall);
+  chestScreen.refreshViewers(hall.chest);
   return true;
 }
 
@@ -463,6 +277,10 @@ function clickPiano(event) {
   if (event.groupId !== PIANO_GROUP) return;
   event.handled = true;
   const { player, groupId, childId } = event;
+  if (childId === PIANO_CLOSE) {
+    player.getPacketSender().closeInterface(PIANO_GROUP);
+    return;
+  }
   if (pianists.get(player) !== true || !player.getPacketSender().isSubInterfaceOpen(PIANO_GROUP)) return;
   const note = noteFor((groupId << 16) | childId);
   const found = hallOf(player);
@@ -493,7 +311,7 @@ function searchBooks({ player }) {
 }
 
 function reset() {
-  openChests.clear();
+  chestScreen.reset();
   pianists.clear();
   pianoNotes = null;
 }

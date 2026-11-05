@@ -1,0 +1,161 @@
+[
+ {
+  "k": "say",
+  "t": 181,
+  "who": "Ali Morrisane",
+  "text": "Hello <player>. How's the adventuring going?"
+ },
+ {
+  "k": "say",
+  "t": 183,
+  "who": "player",
+  "text": "Hi Ali. Not bad. How are you?"
+ },
+ {
+  "k": "say",
+  "t": 184,
+  "who": "Ali Morrisane",
+  "text": "Still selling."
+ },
+ {
+  "k": "say",
+  "t": 185,
+  "who": "Ali Morrisane",
+  "text": "Good job on getting the rune shipments sorted. I'm just receiving the first of them. Though there seems to be a funny sort of locking mechanism on them, which I haven't completely figure"
+ },
+ {
+  "k": "say",
+  "t": 186,
+  "who": "player",
+  "text": "No problem. I might have a look at it later."
+ },
+ {
+  "k": "varbit",
+  "t": 187,
+  "id": 917,
+  "value": 0
+ },
+ {
+  "k": "menu",
+  "t": 187,
+  "title": "Select an option",
+  "options": [
+   "I would like to have a look at your selection of runes.",
+   "I would like to have a look at your general stock.",
+   "Who did you want me to talk to again?"
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 195,
+  "n": 1
+ },
+ {
+  "k": "say",
+  "t": 195,
+  "who": "Ali Morrisane",
+  "text": "Hang on a second."
+ },
+ {
+  "k": "varbit",
+  "t": 196,
+  "id": 922,
+  "value": 1
+ },
+ {
+  "k": "say",
+  "t": 196,
+  "who": "Ali Morrisane",
+  "text": "Well at the moment I don't exactly have a selection of runes."
+ },
+ {
+  "k": "say",
+  "t": 198,
+  "who": "player",
+  "text": "You don't?"
+ },
+ {
+  "k": "say",
+  "t": 199,
+  "who": "Ali Morrisane",
+  "text": "Those boxes from your friend Aubury have a very odd locking mechanism."
+ },
+ {
+  "k": "say",
+  "t": 201,
+  "who": "player",
+  "text": "You have managed to get them off?"
+ },
+ {
+  "k": "say",
+  "t": 202,
+  "who": "Ali Morrisane",
+  "text": "Not exactly."
+ },
+ {
+  "k": "say",
+  "t": 203,
+  "who": "player",
+  "text": "What do you mean by 'not exactly'?"
+ },
+ {
+  "k": "say",
+  "t": 204,
+  "who": "Ali Morrisane",
+  "text": "What I mean by 'not exactly' is 'no, I haven't managed to get the lock off'."
+ },
+ {
+  "k": "say",
+  "t": 205,
+  "who": "player",
+  "text": "Oh."
+ },
+ {
+  "k": "say",
+  "t": 206,
+  "who": "Ali Morrisane",
+  "text": "I was kind of hoping that you would have a look at them. There are two distinctive types of caskets one with a simple locking mechanism and another, which ummm... looks a little tricky t"
+ },
+ {
+  "k": "menu",
+  "t": 207,
+  "title": "Select an option",
+  "options": [
+   "Try opening a small casket of runes",
+   "Try opening a large casket of runes",
+   "On second thoughts I don't really need any runes."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 218,
+  "n": 1
+ },
+ {
+  "k": "say",
+  "t": 218,
+  "who": "player",
+  "text": "I think I'll have a go at opening a small casket of runes."
+ },
+ {
+  "k": "menu",
+  "t": 219,
+  "title": "Select an option",
+  "options": [
+   "Force box.",
+   "Pick lock.",
+   "Examine lock."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 247,
+  "n": 1
+ },
+ {
+  "k": "msg",
+  "t": 247,
+  "kind": "mesbox",
+  "text": "You fail to open the chest."
+ }
+]

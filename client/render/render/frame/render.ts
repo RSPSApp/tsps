@@ -1010,7 +1010,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                     );
                 }
             } catch {}
-            // Plugin text with the local player's overhead chat (the attack timer).
+            // Plugin text shares the local player's overhead chat stacking group.
             try {
                 host.osrsClient.clientPlugins.appendLocalPlayerOverheads(
                     host,

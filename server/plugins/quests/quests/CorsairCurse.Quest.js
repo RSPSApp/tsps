@@ -68,6 +68,7 @@ module.exports = function registerCorsairCurseQuest(api) {
   const DUNGEON_HOLE_OBJECT = ObjectIdentifiers.HOLE_54; // 31791, Enter (four pillars)
   const OGRE_CAVE_OBJECT = ObjectIdentifiers.CAVE_59; // 31766, Enter (west of the cove)
   const VINE_LADDER_OBJECT = ObjectIdentifiers.VINE_LADDER_2; // 31790, Climb
+  const HUT_STAIRS_OBJECT = 31735; // ds2_corsair_cove_stairs_ramp, a lone "Climb": ground end 2531,2833,0 leads up, upper end 2529,2834,1 leads down
 
   // Prose conditions on the "The Corsair Curse" page.
   const COND_NO_TOCK_YET = "EXq6K1";
@@ -92,7 +93,6 @@ module.exports = function registerCorsairCurseQuest(api) {
   const TOCK_START_TILE = { x: 3030, y: 3273, z: 0 };
   const RIMMINGTON_TILE = { x: 2910, y: 3226, z: 0 };
   const RIMMINGTON_LANDING = { x: 2911, y: 3226, z: 0 };
-  const COVE_TOCK_TILE = { x: 2574, y: 2836, z: 1 };
   const COVE_LANDING = { x: 2578, y: 2837, z: 1 };
   const ARSEN_TILE = { x: 2556, y: 2856, z: 1 };
   const COLIN_TILE = { x: 2559, y: 2856, z: 1 };
@@ -110,6 +110,14 @@ module.exports = function registerCorsairCurseQuest(api) {
   const NAVIGATOR_ATTRIBUTE = "quest.the_corsair_curse.navigator";
   const TRAITOR_ATTRIBUTE = "quest.the_corsair_curse.traitor";
 
+  // The cache's corscurs_doll: draws the doll over the screen and clears itself. Nothing in the cache calls it.
+  const DOLL_SCRIPT = 2085;
+  // Interface wom_telescope, a shared lens despite its name. The cache has no Corsair overlay of its own, and
+  // no capture of this view is public. rsprox 4259 opens it for the Wise Old Man's telescope, with the sequence
+  // (2171) this view plays, a tick after the camera; 1698 opens it at 161:1 in another scene (sequence 11409).
+  const TELESCOPE_INTERFACE = 386;
+  const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
+
   const CABINBOY_HEARD = 1;
   const CABINBOY_TELESCOPE = 2;
   const CABINBOY_TOLD = 3;
@@ -126,7 +134,6 @@ module.exports = function registerCorsairCurseQuest(api) {
   const TRAITOR_ARSEN = 1 << 1;
   const TRAITOR_COLIN = 1 << 2;
 
-  const npcsByPlayer = new Map();
   const scenes = new WeakMap();
   const fights = new WeakMap();
   const dolls = new WeakMap();
@@ -223,61 +230,6 @@ module.exports = function registerCorsairCurseQuest(api) {
 
   function advance(player, value) {
     if (quest.getStage(player) < value) quest.setStage(player, value);
-    ensureNpcs(player);
-  }
-
-  // ==========================================================================
-  // Spawned NPCs (owner-only; the crew exist in the world at every stage)
-  // ==========================================================================
-
-  function postColinTile(player) {
-    return near(player, RIMMINGTON_TILE, 24) ? RIMMINGTON_TILE : COVE_TOCK_TILE;
-  }
-
-  function desiredNpcs(player) {
-    const stage = quest.getStage(player);
-    if (stage <= STAGE_NOT_STARTED || stage >= STAGE_COMPLETE) return [];
-    // The cache's canonical multi-NPCs already supply the crew and post-quest
-    // captain. Only the travelling captain needs per-player locations.
-    const list = [{ key: "tock-rimmington", id: CAPTAIN_TOCK_FERRY, ...RIMMINGTON_TILE }];
-    if (stage >= STAGE_ARRIVED) list.push({ key: "tock-cove", id: CAPTAIN_TOCK_FERRY, ...COVE_TOCK_TILE });
-    return list;
-  }
-
-  function npcMatches(npc, want) {
-    const location = npc?.getLocation?.();
-    return npc?.getId?.() === want.id
-      && location?.getX?.() === want.x
-      && location?.getY?.() === want.y
-      && location?.getZ?.() === want.z;
-  }
-
-  /** Spawns, moves and removes this player's quest NPCs to match the stage. */
-  function ensureNpcs(player) {
-    if (!player || player.isPlayerBot?.() === true) return;
-    const tracked = npcsByPlayer.get(player) ?? new Map();
-    const desired = desiredNpcs(player);
-    const wanted = new Map(desired.map((entry) => [entry.key, entry]));
-    for (const [key, npc] of [...tracked]) {
-      if (wanted.has(key) && npcMatches(npc, wanted.get(key))) continue;
-      api.removeNpc(npc);
-      tracked.delete(key);
-    }
-    for (const want of desired) {
-      if (tracked.has(want.key)) continue;
-      const npc = api.spawnNpc({
-        id: want.id,
-        x: want.x,
-        y: want.y,
-        z: want.z,
-        wanderRadius: 0,
-        owner: player,
-        ownerOnly: true,
-      });
-      if (npc) tracked.set(want.key, npc);
-    }
-    if (tracked.size > 0) npcsByPlayer.set(player, tracked);
-    else npcsByPlayer.delete(player);
   }
 
   // ==========================================================================
@@ -291,7 +243,6 @@ module.exports = function registerCorsairCurseQuest(api) {
 
   function sailToRimmington(player) {
     moveTo(player, RIMMINGTON_LANDING);
-    ensureNpcs(player);
   }
 
   function handleTravel(event) {
@@ -565,7 +516,6 @@ module.exports = function registerCorsairCurseQuest(api) {
     if (stepId === ACTION_QUEST_COMPLETE) {
       if (quest.getStage(player) >= STAGE_KILLED && !quest.isComplete(player)) {
         quest.complete(player);
-        ensureNpcs(player);
       }
     }
   }
@@ -586,8 +536,17 @@ module.exports = function registerCorsairCurseQuest(api) {
         const doll = api.spawnNpc({ id: DOLL, x: 2505, y: 2839, z: 0, wanderRadius: 0, owner: player, ownerOnly: true });
         if (!doll) return;
         doll.__skipDefaultRespawn = true; dolls.set(player, doll);
+        // The captured route crosses the map's blocked edge between 2509,2839 and 2509,2838; queued steps are clipped.
+        doll.setFlag?.("movement:ignore-clipping");
         const path = [[2505,2840],[2506,2841],[2507,2842],[2508,2842],[2509,2841],[2509,2840],[2509,2839],[2509,2838],[2509,2839]];
-        path.forEach(([x,y], index) => later(player, index + 1, () => { if (dolls.get(player) === doll) doll.moveTo(new Location(x,y,0)); }));
+        // moveTo teleports and resets movement; queue each tile so the doll uses its walk sequence.
+        path.forEach(([x,y], index) => later(player, index + 1, () => {
+          if (dolls.get(player) !== doll) return;
+          const destination = new Location(x,y,0);
+          const movement = doll.getMovementQueue?.();
+          if (movement?.addSteps) movement.addSteps(destination);
+          else doll.moveTo(destination);
+        }));
         later(player, 10, () => removeDoll(player));
       });
     }
@@ -667,9 +626,16 @@ module.exports = function registerCorsairCurseQuest(api) {
 
   /** The generic Ladders plugin asks "which way?" for a lone "Climb"; own that click. */
   function claimClimb(request) {
-    if (!request || request.objectId !== VINE_LADDER_OBJECT || !request.player) return;
-    request.handled = true;
-    leaveDungeon(request.player);
+    if (!request || !request.player) return;
+    if (request.objectId === VINE_LADDER_OBJECT) {
+      request.handled = true;
+      leaveDungeon(request.player);
+    } else if (request.objectId === HUT_STAIRS_OBJECT) {
+      // Ithoi's stairs are a ramp: each end leads only one way, so the floor of the clicked end decides.
+      const floor = request.object?.getLocation?.().getZ?.() ?? request.player.getLocation().getZ();
+      request.handled = true;
+      api.emitCustomEvent(floor === 0 ? "ladders:climbUp" : "ladders:climbDown", { player: request.player, object: request.object });
+    }
   }
 
   function handleItemOnObject(event) {
@@ -732,11 +698,6 @@ module.exports = function registerCorsairCurseQuest(api) {
     if (!player || event.npcId !== ITHOI_FIGHT) return;
     if (quest.getStage(player) !== STAGE_KILL_ORDER || fights.get(player)?.npc !== event.npc) return;
     clearFight(player);
-    const tracked = npcsByPlayer.get(player);
-    if (tracked) {
-      tracked.delete("ithoi");
-      if (tracked.size === 0) npcsByPlayer.delete(player);
-    }
     advance(player, STAGE_KILLED);
   }
 
@@ -775,6 +736,7 @@ module.exports = function registerCorsairCurseQuest(api) {
     const scene = scenes.get(player);
     if (!scene) return;
     scenes.delete(player); TaskManager.cancelTasks(scene);
+    if (scene.kind === "telescope") player.getPacketSender().closeSubInterface(OVERLAY_ATMOSPHERE_UID);
     player.setNpcTransformationId(scene.model); player.performAnimation(new Animation(-1));
     player.getMovementQueue().setBlockMovement(false); player.setUntargetable(false);
     player.getPacketSender().sendVarbit(6719, 0); player.getPacketSender().sendVarbit(12393, 0);
@@ -816,6 +778,7 @@ module.exports = function registerCorsairCurseQuest(api) {
   }
   function gnocciBurial(player) {
     const scene=scenes.get(player);freezeScene(player);
+    player.getPacketSender().sendClientScript(DOLL_SCRIPT);
     sceneSpeech(player,GNOCCI,"Gnocci the Cook","She's moving!<br>SHE'S POSSESSED!<br>HELP!");
     later(scene,8,()=>{
       StatementDialogue.send(player,"",false);camera(player,2510,2835,350,2504,2840,200);
@@ -856,7 +819,10 @@ module.exports = function registerCorsairCurseQuest(api) {
       beginScene(player, "telescope", { x: 2528, y: 2816, z: 0 });
       camera(player, 2528, 2821, 400, 2528, 2822, 300);
       const scene = scenes.get(player);
-      later(scene,1,()=>moveCamera(player,2528,2818,400,1));
+      later(scene,1,()=>{
+        moveCamera(player,2528,2818,400,1);
+        player.getPacketSender().sendSubInterface(OVERLAY_ATMOSPHERE_UID,TELESCOPE_INTERFACE,1);
+      });
       const ogre = api.spawnNpc({ id: NpcIdentifiers.BUGS_2, x: 2528, y: 2822, z: 0, wanderRadius: 0, owner: player, ownerOnly: true });
       if (ogre) scene.enter(ogre);
       freezeScene(player);
@@ -893,14 +859,30 @@ module.exports = function registerCorsairCurseQuest(api) {
       later(scene, 10, () => {
         moveTo(player, { x: 2529, y: 2838, z: 0 });
         camera(player, 2531, 2841, 300, 2531, 2835, 240);
-        const ithoi = api.spawnNpc({ id: ITHOI_2, x: 2529, y: 2833, z: 0, wanderRadius: 0, owner: player, ownerOnly: true });
+        // From the foot of his stairs (31735, 2531,2833): every tile west of it on that row is blocked on the map.
+        const ithoi = api.spawnNpc({ id: ITHOI_2, x: 2532, y: 2833, z: 0, wanderRadius: 0, owner: player, ownerOnly: true });
         if (!ithoi) return;
         scene.enter(ithoi); ithoi.forceChat("Arrr... uh-oh!");
-        for (const [tick, x, y] of [[1,2530,2833],[2,2532,2833],[3,2532,2835],[4,2532,2836]]) later(scene, tick, () => ithoi.moveTo(new Location(x, y, 0)));
+        // moveTo teleports; queued steps play 7963's walk sequence, human_running. The route covers up to 2 tiles a tick.
+        ithoi.setMovementSteps?.(2);
+        for (const [tick, x, y] of [[3,2532,2835],[4,2532,2836]]) later(scene, tick, () => {
+          const destination = new Location(x, y, 0);
+          const movement = ithoi.getMovementQueue?.();
+          if (movement?.addSteps) movement.addSteps(destination);
+          else ithoi.moveTo(destination);
+        });
         later(scene, 8, () => {
-          ithoi.forceChat("Arrr!"); ithoi.performAnimation(new Animation(711)); ithoi.performGraphic(new Graphic(120, 92));
-          player.getPacketSender().sendProjectile(ithoi.getLocation(), new Location(2530, 2837, 0), 0, 90, 127, 43, 31, null, 51);
+          ithoi.forceChat("Arrr!"); ithoi.performAnimation(new Animation(711)); ithoi.performGraphic(new Graphic(93, 92));
+          // Water Strike (the Wiki transcript: "Ithoi casts Water Strike"): cast graphic 93, projectile 94, as CombatSpells.WATER_STRIKE.
+          player.getPacketSender().sendProjectile(ithoi.getLocation(), new Location(2530, 2837, 0), 0, 90, 94, 43, 31, null, 51);
           placeDriftwood(player, WET_DRIFTWOOD_OBJECT);
+          // Wiki: he "returns to his hut". The tick he leaves isn't recorded: the next one is ours, to the foot of his stairs.
+          later(scene, 1, () => {
+            const destination = new Location(2532, 2833, 0);
+            const movement = ithoi.getMovementQueue?.();
+            if (movement?.addSteps) movement.addSteps(destination);
+            else ithoi.moveTo(destination);
+          });
         });
       });
       later(scene,22,()=>moveCamera(player,2531,2840,300,1));
@@ -1054,15 +1036,11 @@ module.exports = function registerCorsairCurseQuest(api) {
     if (!player) return;
     refreshQuestList(player);
     sendProgress(player);
-    ensureNpcs(player);
   }
 
   function handleLogout({ player }) {
     if (!player) return;
     endScene(player); clearFight(player); removeDoll(player); TaskManager.cancelTasks(player);
-    const tracked = npcsByPlayer.get(player);
-    if (tracked) for (const npc of tracked.values()) api.removeNpc(npc);
-    npcsByPlayer.delete(player);
   }
 
   // ==========================================================================

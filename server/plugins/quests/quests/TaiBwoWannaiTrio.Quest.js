@@ -709,6 +709,14 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
     });
   }
 
+  /** Tamayu's spear, once. His later transcript won't offer it again, so no room puts it on the ground. */
+  function claimTamayuSpear(player) {
+    if (state(player, TAMAYU_KEY) >= TAMAYU_CLAIMED) return false;
+    player.getInventory().forceAdd(player, new Item(ITEM.RUNE_SPEAR_KP_, 1));
+    setState(player, TAMAYU_KEY, TAMAYU_CLAIMED);
+    return true;
+  }
+
   function handleAction(event) {
     const { player, stepId } = event;
     if (!player || !stepId) return;
@@ -852,19 +860,21 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
       return;
     }
     if (stepId === TAMAYU_ATTACK_XP_ID) {
+      // The spear comes first: a level-up's pop-up ends the transcript at this step, before the spear's own.
+      if (!claimTamayuSpear(player)) return;
       addXp(player, Skill.ATTACK, 2500);
       addXp(player, Skill.STRENGTH, 2500);
       return;
     }
     if (stepId === TAMAYU_SPEAR_REWARD_ID) {
-      player.getInventory().adds(ITEM.RUNE_SPEAR_KP_, 1);
-      setState(player, TAMAYU_KEY, TAMAYU_CLAIMED);
+      claimTamayuSpear(player);
       return;
     }
 
     if (stepId === LUBUFU_VESSEL_REWARD_ID) {
       addXp(player, Skill.FISHING, 1500);
-      player.getInventory().adds(ITEM.KARAMBWAN_VESSEL, 1);
+      // The transcript's own step: "either on the ground with no inventory or in their inventory".
+      player.getInventory().forceAdd(player, new Item(ITEM.KARAMBWAN_VESSEL, 1));
       setState(player, LUBUFU_KEY, LUBUFU_APPRENTICE);
       return;
     }

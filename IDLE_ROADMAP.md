@@ -80,7 +80,8 @@ Uma moeda própria do jogo idle, separada dos pontos de melhoria.
       usando os materiais do banco (testado no jogo: cozinhar, fundir e fletching, online e offline)
 - [x] **Locais de viagem para produção**: aba Making com fogões (Al Kharid, Catherby), fornalhas
       (Al Kharid, Edgeville) e o banco de Al Kharid
-- [ ] **Firemaking e Thieving idle** (não passam pela janela de quantidade; precisam de um ciclo próprio)
+- [x] **Firemaking e Thieving idle**: linha de fogueiras ou alimentar fogueira (reacende sozinho);
+      bater carteira e barracas, com o saque no banco, aba Thieving na viagem (testado no jogo)
 - [ ] **Smithing na bigorna** (a tela de forjar não é a janela de quantidade; ainda não é repetida)
 - [ ] **Mais locais de viagem**, incluindo áreas de membros
 - [ ] **Equilíbrio**: revisar taxas offline, limite de horas, preços das melhorias e quanto o

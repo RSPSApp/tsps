@@ -19,7 +19,8 @@
  *
  * Firemaking makes nothing (`firemaking:success`, a log burnt, counts as a make of none): what the
  * restocks used is what it counts. Logs used on a fire tend it (a Forester's Campfire, `sameObjects`:
- * the fire changes name as it is fed). A tinderbox on logs lights one fire and steps off (a
+ * the fire changes name as it is fed); one tender alone can't keep it lit, so when it has gone out
+ * the character lights another with its tinderbox (`relight`) and feeds that. A tinderbox on logs lights one fire and steps off (a
  * `lineSkills` skill): the next follows as soon as the character stands still, and `lineTiles` from
  * where it started (or on a tile a fire is on) it walks back to a free tile there first.
  */
@@ -132,10 +133,14 @@ function sameObject(name, wanted) {
   return (config().sameObjects ?? []).some((names) => names.includes(name) && names.includes(wanted));
 }
 
+/** The skill's verbs: ["Making", "make"], ["Burning", "burn"] (`verbs`). */
+function verbs(target) {
+  return config().verbs?.[target.skill] ?? ["Making", "make"];
+}
+
 /** What the character is doing: "Making iron bars", "Burning logs". */
 function doing(target) {
-  const verb = config().verbs?.[target.skill] ?? "Making";
-  return `${verb} ${Common.itemName(target.productId).toLowerCase()}`;
+  return `${verbs(target)[0]} ${Common.itemName(target.productId).toLowerCase()}`;
 }
 
 function optionIndex(options, option) {
@@ -204,6 +209,26 @@ function restock(player, target) {
   return { used, missing };
 }
 
+/**
+ * A fire fed logs that has gone out (a campfire burns 3 ticks longer a log, tended every 9): with
+ * the skill's `relight` tool (a tinderbox) in the inventory, the character lights a new one with
+ * the same logs, and feeds that one next.
+ */
+function relight(player, target) {
+  const tool = Common.core.ItemIdentifiers?.[config().relight?.[target.skill]];
+  const toolSlot = Number.isInteger(tool) ? slotOf(player, tool) : -1;
+  const logSlot = slotOf(player, target.usedItemId);
+  if (toolSlot < 0 || logSlot < 0) return false;
+  Common.core.UseItemPacketListener.itemOnItem(player, toolSlot, logSlot);
+  ownUse(player);
+  return true;
+}
+
+/** The use just repeated is not a new one by hand: the target, and where it started, stay. */
+function ownUse(player) {
+  uses.delete(player);
+}
+
 /** Repeats the use as a click would; the creation menu it opens is answered on the next look. */
 function repeat(player, target) {
   const { UseItemPacketListener } = Common.core;
@@ -213,6 +238,7 @@ function repeat(player, target) {
       const withSlot = slotOf(player, target.withItemId);
       if (used < 0 || withSlot < 0) return false;
       UseItemPacketListener.itemOnItem(player, used, withSlot);
+      ownUse(player);
       return true;
     };
     if (!isLine(target) || lineGoesOn(player, target)) return use();
@@ -222,12 +248,13 @@ function repeat(player, target) {
     return true;
   }
   const object = findObject(player, target, target.kind === KIND.OBJECT_OPTION ? target.option : null);
-  if (!object) return false;
+  if (!object) return target.kind === KIND.ITEM_OBJECT && relight(player, target);
   const at = object.getLocation();
   if (target.kind === KIND.ITEM_OBJECT) {
     const slot = slotOf(player, target.usedItemId);
     if (slot < 0) return false;
     UseItemPacketListener.itemOnObject(player, target.interfaceType ?? 0, object.getId(), target.usedItemId, slot, at.getX(), at.getY());
+    ownUse(player);
     return true;
   }
   player.getMovementQueue().walkToObject(object, {
@@ -237,6 +264,7 @@ function repeat(player, target) {
         player, object, objectId: object.getId(), clickType: optionIndex(object.getDefinition().getInteractions(), target.option),
         location: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false,
       });
+      ownUse(player);
     },
   });
   return true;
@@ -261,13 +289,13 @@ function lineGoesOn(player, target) {
   return Common.chebyshev(location, target.anchor) < config().lineTiles && !taken(location);
 }
 
-/** Where a line starts again: the first free tile by where it first started, row by row. */
+/** Where a line starts again: the first tile by where it first started, row by row, free to stand and light on. */
 function lineStart(target) {
-  const { Location } = Common.core;
+  const { Location, RegionManager } = Common.core;
   const { x, y, z } = target.anchor;
   for (const dy of [0, 1, -1, 2, -2, 3, -3]) {
     const tile = new Location(x, y + dy, z);
-    if (!taken(tile)) return tile;
+    if (!taken(tile) && RegionManager?.blocked?.(tile, null) !== true) return tile;
   }
   return null;
 }
@@ -331,12 +359,13 @@ function work(player, now) {
   state.chainAt = 0;
   const product = Common.itemName(target.productId).toLowerCase();
   if (state.lastAttemptAt > state.lastProducedAt && ++state.failedAttempts >= maxFailedAttempts) {
-    return pause(player, "stuck", `Idle production has paused: your character can't make ${product} here. Make one to restart it.`);
+    const verb = verbs(target)[1];
+    return pause(player, "stuck", `Idle production has paused: your character can't ${verb} ${product} here. ${verb.charAt(0).toUpperCase()}${verb.slice(1)} one by hand to restart it.`);
   }
   const { used, missing } = restock(player, target);
   Offline.consume(player, target.skill, used);
   if (missing !== null) {
-    return pause(player, "out", `Idle production has paused: you're out of ${Common.itemName(missing).toLowerCase()}. Bank some more and make one to restart it.`);
+    return pause(player, "out", `Idle production has paused: you're out of ${Common.itemName(missing).toLowerCase()}. Bank some more and ${verbs(target)[1]} one by hand to restart it.`);
   }
   if (!Common.readyToWork(player)) return "busy";
   state.lastAttemptAt = now;

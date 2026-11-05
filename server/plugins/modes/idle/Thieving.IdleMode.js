@@ -6,7 +6,9 @@
  * - a pickpocket's loot (`thieving:loot`) goes to the bank too, each item as a Thieving gather, so
  *   the offline progress, auto-resume, goals and Bountiful Harvest all count it; coins go straight
  *   in, with no coin pouch to open (and no rogue outfit doubling). Clues stay in the inventory;
- * - stalls stay stocked (`thieving:deplete-stall`);
+ * - stalls stay stocked (`thieving:deplete-stall`), and no owner or guard catches the thief
+ *   (`thieving:stall-watch`, `unseenAtStalls`): a character left alone would otherwise be
+ *   attacked by the guards it can't run from (East Ardougne's kill a low level);
  * - with auto-resume on, each theft that worked is followed by the next, a tick later, while the
  *   player stays put (`thieving:done`). A pickpocket that failed stuns: auto-resume picks it up
  *   after the stun (Auto);
@@ -51,6 +53,11 @@ function keepStall(event) {
   if (!event.handled && config().keepStalls && idleThief(event.player)) event.handled = true;
 }
 
+/** `thieving:stall-watch`: no owner or guard sees an idle thief. */
+function unseen(watch) {
+  if (!watch.unseen && config().unseenAtStalls && idleThief(watch.player)) watch.unseen = true;
+}
+
 /** `thieving:done`: a theft that worked is followed by the next, unless the character must eat first. */
 function again(event) {
   const { player } = event;
@@ -83,8 +90,9 @@ function health(player) {
 module.exports = function attach(api) {
   api.onCustomEvent("thieving:loot", loot);
   api.onCustomEvent("thieving:deplete-stall", keepStall);
+  api.onCustomEvent("thieving:stall-watch", unseen);
   api.onCustomEvent("thieving:done", again);
 };
 
 module.exports.health = health;
-module.exports.handlers = { loot, keepStall, again };
+module.exports.handlers = { loot, keepStall, unseen, again };

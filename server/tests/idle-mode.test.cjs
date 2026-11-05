@@ -57,10 +57,16 @@ function fakeApi(config = {}) {
       WorldDefinition: { isMembersWorld: () => world.members },
       UseItemPacketListener: {
         itemOnObject: (player, interfaceType, objectId, itemId, slot, x, y) => api.uses.push({ kind: "item-object", player, objectId, itemId, slot, x, y }),
-        itemOnItem: (player, usedSlot, withSlot) => api.uses.push({ kind: "item-item", player, usedSlot, withSlot }),
+        // As the server does: the use goes through the item-on-item hooks.
+        itemOnItem: (player, usedSlot, withSlot) => {
+          api.uses.push({ kind: "item-item", player, usedSlot, withSlot });
+          const items = player.getInventory().getItems();
+          api.emit("item-on-item", { player, usedItemId: items[usedSlot]?.getId(), usedItemSlot: usedSlot, usedWithItemId: items[withSlot]?.getId(), usedWithItemSlot: withSlot, handled: false });
+        },
       },
       ItemActionPacketListener: { handleAction: (player, interfaceId, itemId, slot, clickType, option) => api.itemActions.push({ player, interfaceId, itemId, slot, clickType, option }) },
       TaskManager: { submit: (task) => world.tasks.push(task) },
+      ItemIdentifiers: { TINDERBOX: 590 },
     },
     interactions: [],
     interfaces: [],
@@ -1787,9 +1793,11 @@ test("thieving: a pickpocket's loot goes to the bank as a Thieving gather, coins
   assert.equal(untouched.loot.length, 1);
 });
 
-test("thieving: stalls stay stocked; a theft that worked asks for the next, not a failed one or with low hitpoints", () => {
+test("thieving: stalls stay stocked and unwatched; a theft that worked asks for the next, not a failed one or with low hitpoints", () => {
   const player = idlePlayer();
   assert.equal(api.emit("thieving:deplete-stall", { player, object: {}, handled: false }).handled, true);
+  assert.equal(api.emit("thieving:stall-watch", { player, object: {}, unseen: false }).unseen, true, "no guard catches an idle thief");
+  assert.equal(api.emit("thieving:stall-watch", { player: fakePlayer(), object: {}, unseen: false }).unseen, false);
   assert.equal(api.emit("thieving:done", { player, kind: "stall", succeeded: true, again: false }).again, true);
   assert.equal(api.emit("thieving:done", { player, kind: "pickpocket", succeeded: false, again: false }).again, false);
   player.hitpoints = 40;
@@ -1848,6 +1856,32 @@ test("firemaking: logs used on a fire tend it, the campfire it becomes is the sa
   assert.deepEqual(require(OFFLINE).totals(player).byItem ?? {}, {}, "nothing made");
 });
 
+test("firemaking: a fed fire that has gone out is lit again with the tinderbox, then fed", (t) => {
+  let now = 9_500_000;
+  t.mock.method(Date, "now", () => now);
+  const TINDERBOX = 590;
+  const player = idlePlayer();
+  player.setAttribute("idle-mode:onboarded", true);
+  player.inventory = [new Item(TINDERBOX, 1), new Item(LOGS, 27)];
+  player.bank.set(LOGS, 100);
+  const fire = fakeObject("Fire", [], 3201, 3200);
+  world.objects.push(fire);
+  api.emit("item-on-object", { player, object: fire, objectId: 1276, item: player.inventory[1], itemId: LOGS, itemSlot: 1, interfaceType: 0, handled: false });
+  api.emit("firemaking:success", { player, skill: Skill.FIREMAKING, itemId: LOGS });
+  // The fire went out; the logs are all burnt.
+  world.objects = [];
+  player.inventory = [new Item(TINDERBOX, 1)];
+  now += 10_000;
+  const { work } = require(PRODUCTION);
+  assert.equal(work(player, now), "repeated");
+  assert.equal(api.uses.at(-1).kind, "item-item", "the tinderbox on the logs");
+  assert.equal(player.getAttribute("idle-mode:production-target").kind, "item-object", "still feeding a fire");
+  // The tinderbox gone, and none in the bank: out of materials.
+  player.inventory = [new Item(LOGS, 27)];
+  now += 10_000;
+  assert.equal(work(player, now), "paused");
+});
+
 test("firemaking: a tinderbox on logs lights the next as soon as it has stepped off, and walks back to a free tile when far", (t) => {
   let now = 10_000_000;
   t.mock.method(Date, "now", () => now);
@@ -1873,4 +1907,7 @@ test("firemaking: a tinderbox on logs lights the next as soon as it has stepped 
   assert.equal(work(player, now), "repeated");
   assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3200, 3201]);
   assert.equal(api.uses.at(-1).kind, "item-item");
+  // The repeated uses were not new ones by hand: the line still starts where it first did.
+  api.emit("firemaking:success", { player, skill: Skill.FIREMAKING, itemId: LOGS });
+  assert.deepEqual(player.getAttribute("idle-mode:production-target").anchor, { x: 3200, y: 3200, z: 0 });
 });

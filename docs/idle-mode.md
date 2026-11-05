@@ -34,8 +34,9 @@ It's saved as the attribute `idle-mode:enabled` (off by default).
 
 ## Endless gathering
 
-For an idle account, Woodcutting, Mining and Fishing (`"skills"` in the data) never stop
-(`server/plugins/modes/idle/Gathering.IdleMode.js`):
+For an idle account, Woodcutting, Mining, Fishing and Thieving (`"skills"` in the data) never
+stop (`server/plugins/modes/idle/Gathering.IdleMode.js`, and `Thieving.IdleMode.js` for what is
+Thieving's own, [below](#idle-thieving)):
 
 | Setting (`"gathering"`) | What it does | Event it answers |
 | --- | --- | --- |
@@ -44,6 +45,25 @@ For an idle account, Woodcutting, Mining and Fishing (`"skills"` in the data) ne
 | `fishingSpotsStay` | A fishing spot's random stop is skipped. Spots with their own movement (the minnow platform) still move. | `fishing:spot-stays` (emitted by `Fishing.plugin.js`) |
 | `randomEvents` | `false` keeps random events away from idle accounts. | `random-events:eligibility` |
 | `levelUpPopups` | `false`: an idle account's level-up pop-up does not open and hold the work until Continue (the message, graphic and sounds stay). | the attribute `level-up:keep-actions`, read by `SkillLevelUp.plugin.js`; set with the account flag and on every login |
+
+## Idle thieving
+
+`server/plugins/modes/idle/Thieving.IdleMode.js`, settings in `"thieving"`. Thieving is one of the
+idle `"skills"`, so a stall's theft is a gather like a log (the stall's `storage:gather`, which now
+carries `skill: THIEVING` and the stall's XP): it goes to the bank, counts for the offline
+progress, auto-resume, goals and Bountiful Harvest. Pickpockets and stalls come back by
+auto-resume like a tree, from the click (an NPC's Pickpocket, a stall's Steal-from).
+
+| Setting (`"thieving"`) | What it does | Event it answers |
+| --- | --- | --- |
+| `bankLoot` | A pickpocket's loot goes to the bank, each item as a Thieving gather. Coins go straight in, with no coin pouch to open (so no rogue outfit doubling); clues stay in the inventory. | `thieving:loot` |
+| `keepStalls` | A stall stays stocked. | `thieving:deplete-stall` |
+| `unseenAtStalls` | No owner or guard catches an idle thief at a stall. A character left alone would be attacked by guards it can't run from: East Ardougne's killed a level-5 test character in seconds. | `thieving:stall-watch` |
+| `repeat` | With auto-resume on, a theft that worked is followed by the next a tick later, while the player stays put (the Larcenist relic's way). A failed pickpocket stuns; auto-resume picks it up after the stun, and the stun counts as work, not as a try that went nowhere. | `thieving:done` |
+| `eatBelowPercent` / `stopBelowPercent` | A failed pickpocket hurts: before each one auto-resume eats the first food below `50`% hitpoints, and below `25`% with no food waits to heal, said once. | (auto-resume) |
+
+Checked in game: Lumbridge's men from Thieving level 1 to 5 (eating shrimps), Varrock's tea stall
+and East Ardougne's baker's stall to level 12, the loot in the bank.
 
 ## Offline progress
 
@@ -124,8 +144,8 @@ While you were away for 1h 0m, you kept woodcutting:
 ## Idle production
 
 `server/plugins/modes/idle/Production.IdleMode.js`, settings in `"production"`. Cooking,
-Smithing, Fletching, Crafting and Herblore, through the skills' own flows, so no recipe is
-duplicated here:
+Smithing, Fletching, Crafting, Herblore and Firemaking, through the skills' own flows, so no recipe
+is duplicated here:
 
 - **The target**: the last thing an idle player did by hand that made something
   (`skills:produced`, one of `"skills"`) within `rememberClickSeconds`: an item used on an object
@@ -150,13 +170,30 @@ duplicated here:
   made, takes `consumed` in proportion from the bank, and stops where the first material runs out
   ("until you ran out of raw shrimps"). Bountiful Harvest applies to gathering only.
 
+- **Firemaking** makes nothing: a log burnt (`firemaking:success`) counts as a make of none, so the
+  logs the restocks take are what it counts, online and away (XP, and "using 120 x Logs"). It
+  doesn't count towards items made (goals, achievements). Two ways:
+  - **A line of fires**: a tinderbox on logs (a `lineSkills` skill) lights one and steps off. The
+    next follows as soon as the character stands still (no `stalledSeconds` wait), and once it is
+    `lineTiles` (`12`) from where it started, or on a tile a fire is on, it walks back to the
+    first free tile by the start, row by row. The repeated uses are not new ones by hand, so the
+    start stays put.
+  - **Feeding a fire**: logs used on a fire tend it, all of them. Fed, it becomes a Forester's
+    Campfire (`sameObjects`: the same object to idle production). One tender alone can't keep it
+    lit (a log adds 3 ticks, tending takes 9), so when it has gone out the character lights
+    another with the loadout's tinderbox (`relight`) and feeds that one.
+  The Idle screen says "Burning logs" (`verbs`).
+
 Checked in game: willow shortbows (u) from logs, lobsters on Al Kharid's range, iron bars at its
-furnace, online and two minutes offline. Not covered yet: smithing at an anvil (its interface is
-not the creation menu), firemaking and thieving.
+furnace, online and two minutes offline; firemaking at the Grand Exchange, a line back and forth
+and a fed fire lit again, until the bank's logs ran out. Not covered yet: smithing at an anvil
+(its interface is not the creation menu).
 
 | Setting (`"production"`) | Default |
 | --- | --- |
-| `skills` | Cooking, Smithing, Fletching, Crafting, Herblore |
+| `skills` | Cooking, Smithing, Fletching, Crafting, Herblore, Firemaking |
+| `lineSkills` / `lineTiles` | Firemaking / `12` |
+| `relight` | Firemaking: `TINDERBOX` |
 | `restartAfterSeconds` | `6` |
 | `stalledSeconds` | `20` |
 | `retrySeconds` | `4` |
@@ -388,7 +425,8 @@ one there and starts at once. Travelling turns auto-resume on.
   icon, tool, members? }`. `target` is the cache's name (an `npc-spawns.json` name can differ:
   "Al Kharid warrior"). `server/tests/idle-travel-sites.test.cjs` checks every one against the
   cache map: its tile is free to stand on and at least two targets with its option are within the
-  reach auto-resume or idle combat searches from it.
+  reach auto-resume or idle combat searches from it (one for a station or a stall, which stays
+  stocked). A **Thieving** tab lists the thieving sites.
 
 ![Arrived at Draynor's willows](images/idle-travel-arrived.png)
 
@@ -415,11 +453,16 @@ one there and starts at once. Travelling turns auto-resume on.
 | `barbarians` | Barbarians | Barbarian Village | Combat | 10 (advised) |
 | `al-kharid-warriors` | Al Kharid warriors | Al Kharid palace | Combat | 15 (advised) |
 | `hill-giants` | Hill Giants | Edgeville Dungeon | Combat | 30 (advised) |
+| `lumbridge-men` | Men | Lumbridge | Thieving | 1 |
+| `varrock-tea-stall` | Tea stall | Varrock, east | Thieving | 5 |
+| `ardougne-bakers-stall` | Baker's stall | East Ardougne market (members) | Thieving | 5 |
+| `ardougne-silk-stall` | Silk stall | East Ardougne market (members) | Thieving | 20 |
 | `al-kharid-range` | Cooking range | Al Kharid, by the bank | Cooking | any |
 | `catherby-range` | Cooking range | Catherby, by the bank (members) | Cooking | any |
 | `al-kharid-furnace` | Furnace | Al Kharid, by the bank | Smithing | any |
 | `edgeville-furnace` | Furnace | Edgeville, by the bank (members) | Smithing | any |
 | `al-kharid-crafting` | Fletching, crafting, herblore | Al Kharid bank | Fletching | any |
+| `grand-exchange-firemaking` | Firemaking | Grand Exchange, south entrance (five open rows) | Firemaking | any |
 
 ## Roadmap
 

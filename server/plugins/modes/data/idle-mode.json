@@ -77,10 +77,11 @@
     }
   },
   "thieving": {
-    "_description": "Idle Thieving (docs/idle-mode.md): stalls and pickpockets go on by themselves. What they give goes to the bank (coins straight in, with no coin pouch), stalls stay stocked, each theft is followed by the next, and a pickpocketing character eats below eatBelowPercent hitpoints and stops when out of food below stopBelowPercent.",
+    "_description": "Idle Thieving (docs/idle-mode.md): stalls and pickpockets go on by themselves. What they give goes to the bank (coins straight in, with no coin pouch), stalls stay stocked, no owner or guard catches an idle thief at a stall (unseenAtStalls: the guards would kill a character left alone), each theft is followed by the next, and a pickpocketing character eats below eatBelowPercent hitpoints and stops when out of food below stopBelowPercent.",
     "enabled": true,
     "bankLoot": true,
     "keepStalls": true,
+    "unseenAtStalls": true,
     "repeat": true,
     "eatBelowPercent": 50,
     "stopBelowPercent": 25
@@ -486,7 +487,7 @@
         ],
         "level": 1,
         "icon": 995,
-        "tool": "Some food: a failed pickpocket hurts"
+        "tool": "Some food"
       },
       {
         "id": "varrock-tea-stall",
@@ -632,14 +633,14 @@
         "tip": "Make one by hand (a knife on logs, a needle on leather, a herb in a vial) and pick the product: your character keeps making it from your bank."
       },
       {
-        "id": "varrock-firemaking",
+        "id": "grand-exchange-firemaking",
         "name": "Firemaking",
-        "place": "Varrock west bank",
+        "place": "Grand Exchange, south entrance",
         "skill": "FIREMAKING",
         "kind": "anywhere",
         "tile": [
-          3183,
-          3436,
+          3178,
+          3476,
           0
         ],
         "level": 1,
@@ -701,9 +702,12 @@
       "HERBLORE",
       "FIREMAKING"
     ],
-    "_verbs": "What the Idle screen says the character is doing, by skill (the rest are 'Making').",
+    "_verbs": "What the Idle screen and messages say the character does, by skill: [doing, do] (the rest are 'Making', 'make').",
     "verbs": {
-      "FIREMAKING": "Burning"
+      "FIREMAKING": [
+        "Burning",
+        "burn"
+      ]
     },
     "_sameObjects": "Names that are one object to idle production: a fire fed logs becomes a Forester's Campfire.",
     "sameObjects": [
@@ -716,6 +720,10 @@
     "lineSkills": [
       "FIREMAKING"
     ],
+    "_relight": "By skill, the tool (an ItemIdentifiers name) that lights a new fire when the one being fed has gone out.",
+    "relight": {
+      "FIREMAKING": "TINDERBOX"
+    },
     "lineTiles": 12,
     "tickInterval": 2,
     "restartAfterSeconds": 6,

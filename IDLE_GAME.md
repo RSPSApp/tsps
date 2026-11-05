@@ -77,13 +77,20 @@ Na primeira vez que uma conta fica idle (conta nova num mundo idle, ou o primeir
 5. **Combate idle**: ataque e mate um monstro, e o personagem continua atacando os do mesmo tipo
    por perto. Ele come quando a vida fica abaixo de 50%, revida quando é atacado e manda os drops
    pro banco. Também conta para o progresso offline.
-6. **Produção idle** (Cooking, Smithing, Fletching, Crafting, Herblore): faça uma vez à mão
-   (cru no fogão, faca no tronco, minério na fornalha) e escolha o produto. O personagem continua
-   sozinho: guarda os produtos no banco, pega mais material do banco e repete, até o material
-   acabar. Offline, gasta o material do banco no mesmo ritmo.
-7. **Viagem até a atividade**: na tela `::idle travel` (ou no botão Travel da tela idle), escolha
-   entre 26 locais (árvores, minas, pesca, monstros e, na aba Making, fogões, fornalhas e um
-   banco pra produção, de Lumbridge a Karamja). O personagem
+6. **Produção idle** (Cooking, Smithing, Fletching, Crafting, Herblore, Firemaking): faça uma vez
+   à mão (cru no fogão, faca no tronco, minério na fornalha) e escolha o produto. O personagem
+   continua sozinho: guarda os produtos no banco, pega mais material do banco e repete, até o
+   material acabar. Offline, gasta o material do banco no mesmo ritmo.
+   - **Firemaking**: tinderbox nas toras faz uma linha de fogueiras; ao se afastar 12 tiles do
+     início, ele volta para um tile livre e recomeça. Toras numa fogueira alimentam a fogueira;
+     quando ela apaga (uma pessoa sozinha não a mantém acesa), ele acende outra com a tinderbox.
+7. **Thieving idle**: bata carteira (Pickpocket) ou roube de uma barraca (Steal-from) uma vez e o
+   personagem continua sozinho. O saque vai pro banco (moedas direto, sem coin pouch), as barracas
+   não se esvaziam e nenhum guarda pega um ladrão idle (os de Ardougne matariam um personagem
+   sozinho). Ao bater carteira ele come quando a vida cai abaixo de 50%.
+8. **Viagem até a atividade**: na tela `::idle travel` (ou no botão Travel da tela idle), escolha
+   entre 31 locais (árvores, minas, pesca, thieving, monstros e, na aba Making, fogões, fornalhas,
+   um banco pra produção e o Grand Exchange pra firemaking, de Lumbridge a Karamja). O personagem
    teleporta e já começa a trabalhar sozinho. Locais de coleta pedem o nível da skill.
 
 ![A tela de viagem](docs/images/idle-travel.png)

@@ -667,7 +667,9 @@ function rollAttempt(player, rock) {
 function giveGem(player, { itemId }) {
   if (itemId == null) return;
   player.sendMessage(gemMessage(itemId));
-  giveOre(player, itemId, 1);
+  // Ours (no source covers it): with no room anywhere, which an open coal bag can bring about while
+  // still mining, the gem falls to the floor rather than vanishing.
+  deliverOre(player, prepareOre(player, itemId, 1, 0));
 }
 
 function outcomeAmount(outcome) {

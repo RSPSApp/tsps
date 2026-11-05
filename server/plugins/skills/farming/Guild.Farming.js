@@ -195,18 +195,44 @@ function splitForOpenSack(player, items) {
     }
     return { sack, stored, rest };
 }
-/** A grimy herb picked up from the ground goes straight into an open herb sack that has room for all of it. */
+const herbPickupItems = new WeakSet();
+const herbPickupPlayers = new WeakSet();
+/** A plain, single grimy herb picked up from the ground goes into an open sack that has room for it. */
 function pickup(event) {
+    if (event.handled) return;
     const { player, groundItem } = event, item = groundItem.getItem();
-    // Stored by id, so only a plain herb goes in; a preset or marked one takes the normal pickup.
-    if (!item.isTradeable() || item.getMeta() != null) return;
+    if (herbPickupItems.has(groundItem) || herbPickupPlayers.has(player)) { event.handled = true; return; }
+    // Stored by id: preserve metadata and use ordinary pickup for non-unit stacks.
+    if (!item.isTradeable() || item.getMeta() != null || item.getAmount() !== 1) return;
     const { sack, stored } = splitForOpenSack(player, [[item.getId(), item.getAmount()]]);
-    if (!sack || stored.length !== 1 || stored[0][1] !== item.getAmount()) return;
-    storeCrop(player, sack, item.getId(), item.getAmount());
-    core.ItemOnGroundManager.deregister(groundItem);
-    player.getLastItemPickup().reset();
-    player.getInventory().refreshItems();
+    if (!sack || stored.length !== 1 || stored[0][1] !== 1) return;
+    const manager = core.ItemOnGroundManager, itemId = item.getId();
+    const position = groundItem.getPosition().clone(), owner = groundItem.getOwner();
+    const area = groundItem.getPrivateArea(), state = groundItem.getState();
+    const sackId = sack.getId(), sackContents = JSON.stringify(sack.getMetaValue("farming:stored") ?? {});
+    herbPickupItems.add(groundItem);
+    herbPickupPlayers.add(player);
     event.handled = true;
+    try {
+        const request = { player, groundItem, source: "pickup", itemId, amount: 1, discard: 0, allow: true, error: null };
+        core.PluginManager.emitCustomEvent("ground-items:take", request);
+        if (request.allow !== true || request.error != null || request.amount !== 1 || request.discard !== 0) return;
+        if (!core.World.getItems().includes(groundItem) || !manager.canSee(player, groundItem)
+            || groundItem.getItem() !== item || item.getId() !== itemId || item.getAmount() !== 1
+            || !item.isTradeable() || item.getMeta() != null || !groundItem.getPosition().equals(position)
+            || groundItem.getOwner() !== owner || groundItem.getPrivateArea() !== area || groundItem.getState() !== state
+            || openHerbSack(player) !== sack || sack.getId() !== sackId
+            || JSON.stringify(sack.getMetaValue("farming:stored") ?? {}) !== sackContents
+            || storeRoom(player, sack, itemId) < 1) return;
+        if (storeCrop(player, sack, itemId, 1) !== 1) return;
+        manager.deregister(groundItem);
+        core.PluginManager.emitCustomEvent("ground-items:taken", { player, groundItem, source: "pickup", itemId, amount: 1, discarded: 0 });
+        player.getLastItemPickup().reset();
+        player.getInventory().refreshItems();
+    } finally {
+        herbPickupItems.delete(groundItem);
+        herbPickupPlayers.delete(player);
+    }
 }
 /**
  * Wiki (Silklined herb sack): "made by using a pristine spider silk" on a herb sack, in 1 tick, for no cost and with no level

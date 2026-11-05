@@ -133,6 +133,7 @@ function setup(pluginPath) {
     sendSong(id) { songs.push(id); return sender; },
     sendJingle(id) { songs.push(id); return sender; },
     sendSubInterface(uid, id, type, options) { subInterfaces.push(['open', uid, id, options]); return sender; },
+    mountSubInterface(uid, id, type, options) { subInterfaces.push(['open', uid, id, options]); return {}; },
     closeSubInterface(uid) { subInterfaces.push(['close', uid]); return sender; },
     sendInterface(id) { interfaces.push(id); return sender; },
     sendString(text, uid) { strings.set(uid, text); return sender; },

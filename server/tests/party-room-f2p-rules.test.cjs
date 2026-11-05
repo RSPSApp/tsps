@@ -46,12 +46,25 @@ before(async () => {
   core.GameConstants.PLAYER_PERSISTENCE = persistence;
 });
 
-after(() => {
+after(async () => {
   try {
     if (core && savedPersistence) core.GameConstants.PLAYER_PERSISTENCE = savedPersistence;
     PM.emitServerShutdown({});
+    await savedPersistence?.flush();
   } finally {
-    fs.rmSync(temp, { recursive: true, force: true });
+    try {
+      const writer = savedPersistence?.writer;
+      if (writer) {
+        savedPersistence.writer = null; // Prevent the exit handler restarting the worker.
+        await writer.terminate();
+      }
+    } finally {
+      try {
+        savedPersistence?.database?.close();
+      } finally {
+        fs.rmSync(temp, { recursive: true, force: true });
+      }
+    }
   }
 });
 

@@ -89,9 +89,21 @@ test('NPC regeneration stays integer and a legacy fractional HP dies to a normal
   npc.setHitpoints(1);
   assert.equal(World.getNpcs().add(npc, true), true, 'real NPC registered');
   try {
-    // A fresh NPC's last attack is elapsed, so process() takes the regeneration path.
+    // OSRS Wiki (User:Orion/Regen): one hitpoint each 100 ticks, on the NPC's own timer.
+    const cycle = World.getProcessCycle();
     npc.process();
-    assert.equal(npc.getHitpoints(), 2, '10% of max 5 regenerates as one whole hitpoint');
+    assert.equal(npc.getHitpoints(), 1, 'the timer starts: nothing back yet');
+    World.processCycle = cycle + 99;
+    npc.process();
+    assert.equal(npc.getHitpoints(), 1, 'not before 100 ticks');
+    World.processCycle = cycle + 100;
+    npc.process();
+    assert.equal(npc.getHitpoints(), 2, 'one whole hitpoint after 100 ticks');
+    npc.setRegenTicks(20);
+    World.processCycle = cycle + 120;
+    npc.process();
+    assert.equal(npc.getHitpoints(), 3, 'content may set a faster timer (demons: 20)');
+    World.processCycle = cycle;
     assert.equal(Number.isInteger(npc.getHitpoints()), true, 'regeneration never stores a fraction');
 
     // Legacy saves/runtime could still hold 0.5 HP. A normal integer hit must kill it and

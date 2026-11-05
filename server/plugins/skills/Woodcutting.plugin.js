@@ -781,6 +781,11 @@ function countLog(player) {
   player.getPacketSender().sendConfig(pluginApi.core.CacheDefinitions.getVarpId(LOGS_CHOPPED_VARP), chopped);
 }
 
+/** The counter for whoever shows it ("woodcutting:logs-chopped", the league summary's logs row). */
+function answerLogsChopped(query) {
+  query.count = query.player?.getAttribute(LOGS_CHOPPED_ATTRIBUTE) ?? 0;
+}
+
 function sendLogsChopped({ player }) {
   const chopped = player.getAttribute(LOGS_CHOPPED_ATTRIBUTE);
   if (chopped > 0) {
@@ -1229,6 +1234,7 @@ function processWoodcuttingTick(activeSessions, currentTick) {
         petBase: state.tree.petBase,
         petRolled: petRoll.handled,
         logId: state.tree.logId,
+        location: state.location,
         // Resource-count consumers distinguish a felling omission from the successful action.
         logAmount: felling.skipLog ? 0 : 1,
         axeId: state.axe?.id ?? null,
@@ -1328,6 +1334,7 @@ module.exports = {
     api.onCustomEvent("level-up:popup-opened", pauseWoodcutting);
     api.persistAttribute(LOGS_CHOPPED_ATTRIBUTE, 0);
     api.onPlayerLogin(sendLogsChopped);
+    api.onCustomEvent("woodcutting:logs-chopped", answerLogsChopped);
 
     api.onItemFirstAction((event) => {
       if (searchBirdNest(event.player, event.itemId)) {

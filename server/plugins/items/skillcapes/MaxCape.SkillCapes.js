@@ -205,9 +205,28 @@ function sellPrompt(player, cape) {
   const name = Capes.isMaxCape(cape) ? "max cape" : Capes.itemName(cape);
   api.sendMultiChatboxPrompt(player, `Sell your ${name} and hood back?`,
     `Yes - receive ${price} coins.`, () => {
-      if (sellBack(player, cape)) Capes.messageBox(player, "You sell your cape and hood back to Mac.");
+      const hood = hoodFor(cape);
+      const hadHood = player.getInventory().contains(hood);
+      if (sellBack(player, cape)) showSale(player, cape, hadHood ? hood : null);
     },
     "No, I've changed my mind.", () => {});
+}
+
+/** Live shows the cape and hood sold (RSProx 3146); the box with no hood is ours, in the transcript's words. */
+function showSale(player, cape, hood) {
+  const { DialogueChainBuilder, DoubleItemStatementDialogue, ItemStatementDialogue } = Capes.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(hood === null
+    ? new ItemStatementDialogue(0, cape, "You sell your cape back to Mac.")
+    : new DoubleItemStatementDialogue(0, cape, hood, "You sell your cape and hood back to Mac.")));
+}
+
+/** The transcript's question keeps a dump placeholder, and live asks the same one both ways (RSProx 3146). */
+function askSaleByTalking(notice) {
+  if (!isMac(notice) || !/\[max cape variant\]/.test(notice.prompt)) return;
+  const cape = maxCapeInInventory(notice.player);
+  if (cape === null) return;
+  notice.handled = true;
+  sellPrompt(notice.player, cape);
 }
 
 function itemOnMac(event) {
@@ -398,6 +417,7 @@ module.exports = function attachMaxCape(pluginApi) {
   api.onNpcDialogueCondition(macCondition);
   api.onCustomEvent("npc-dialogue:line", macLine);
   api.onCustomEvent("npc-dialogue:action", macAction);
+  api.onCustomEvent("npc-dialogue:menu", askSaleByTalking);
   api.onItemOnNpc(itemOnMac);
   api.onItemAction(maxCapeOption);
   // A mounted cape (house cape hanger) runs its option as the item would: { player, itemId, option }.

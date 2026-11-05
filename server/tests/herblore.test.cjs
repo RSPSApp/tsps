@@ -77,6 +77,12 @@ function inventory(contents) {
       }
       return self;
     },
+    deleteAtSlot(slot, amount = 1) {
+      const item = slots[slot];
+      if (!item) return self;
+      if (item.getAmount() <= amount) slots[slot] = null; else item.setAmount(item.getAmount() - amount);
+      return self;
+    },
     adds(id, amount) { return self.addItem(new core.Item(id, amount)); },
     count: (name) => self.getAmount(obj(name)),
   };

@@ -126,7 +126,10 @@ function inspectNet({ player }) {
     if (amount > 0) {
       bank.add(new Item(id, amount), false);
       deliveredXp += amount * xpFor(id);
-      if (anglers.has(id)) player.sendMessage(Shared.message("angler"));
+      if (anglers.has(id)) {
+        Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId: id, amount });
+        player.sendMessage(Shared.message("angler"));
+      }
     }
     if (amount < count) left.push([id, count - amount]);
   }

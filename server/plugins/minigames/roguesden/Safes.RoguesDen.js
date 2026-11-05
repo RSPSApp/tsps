@@ -158,6 +158,7 @@ function lobbyAttempt(attempt, tries) {
     if (!lootLobbySafe(player)) return;
     player.getSkillManager().addExperience(Common.core().Skill.THIEVING, Common.DATA.lobbySafe.xp);
     player.sendMessage(Common.message("lobbySafeSuccess"));
+    Common.core().PluginManager.emitCustomEvent("rogues-den:lobby-safe-cracked", { player });
     return;
   }
   if (Math.random() < Common.DATA.lobbySafe.trapChance || tries <= 1) {

@@ -10,6 +10,8 @@ if (process.env.NODE_ENV === "development" && !process.env.PUBLIC_URL) {
     process.env.PUBLIC_URL = "/";
 }
 
+if (process.env.NODE_ENV === "production") process.env.GENERATE_SOURCEMAP = "false";
+
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");

@@ -18,7 +18,11 @@ const worthy = (player) => (Number(player.getAttribute(QUEST_POINTS_ATTRIBUTE)) 
 function guardDoor(request) {
   if (request.handled || request.objectId !== core.ObjectIdentifiers.DOOR_45) return;
   const { player } = request;
-  if (player.getLocation().getY() <= INSIDE_TO_Y || worthy(player)) return;
+  // Wiki: entering or leaving the guild both count for the diary task.
+  if (player.getLocation().getY() <= INSIDE_TO_Y || worthy(player)) {
+    api.emitCustomEvent("diary:task", { player, diary: "varrock", task: "enter-the-champions-guild" });
+    return;
+  }
   request.handled = true;
   api.emitCustomEvent("npc-dialogue:start", { player, npcId: core.NpcIdentifiers.GUILDMASTER, variant: REFUSAL_VARIANT, handled: false });
 }

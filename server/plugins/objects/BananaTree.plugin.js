@@ -80,6 +80,7 @@ function pickBanana(api, event) {
   api.core.Sounds.sendSound(player, api.core.Sound.PICK);
   player.getInventory().adds(ItemIdentifiers.BANANA, 1);
   player.sendMessage("You pick a banana.");
+  api.emitCustomEvent("banana-tree:picked", { player, object });
   return true;
 }
 

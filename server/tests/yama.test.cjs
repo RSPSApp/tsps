@@ -145,6 +145,7 @@ test("a death in the domain leaves the items with the Voice, who hands them back
     delete: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
     contains: (id) => inventory.has(id),
     getFreeSlots: () => 20,
+    getAddableAmount: (item) => Math.min(item.amount, 2147483647 - (inventory.get(item.id) ?? 0)),
     add: (item) => inventory.set(item.id, (inventory.get(item.id) ?? 0) + item.amount),
     refreshItems() {},
   });

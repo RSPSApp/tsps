@@ -1,3 +1,4 @@
+import { lowEndDeviceModeEnabled } from "../lowenddevice/LowEndDeviceMode";
 import { mat4, vec3 } from "gl-matrix";
 import PicoGL, { type DrawCall, type Framebuffer, type Program, type Texture } from "picogl";
 import type { ConfigChanged } from "@runelite/api/events";
@@ -75,7 +76,7 @@ export class HdPlugin extends Plugin {
 
     // Config events only reach a started plugin: pick up changes made while HD was off.
     hdEnabled(): boolean {
-        return this.isEnabled();
+        return this.isEnabled() && !lowEndDeviceModeEnabled;
     }
 
     protected override async startUp(): Promise<void> {
@@ -99,7 +100,7 @@ export class HdPlugin extends Plugin {
     // (through ANGLE's Direct3D 11 the branches compile flat: an Xbox fell to single-digit FPS,
     // then a GPU reset). beforeSceneRender recompiles the programs when the toggle changes.
     transformSceneProgram(source: ProgramSource): ProgramSource {
-        this.compilingHd = this.isEnabled();
+        this.compilingHd = this.hdEnabled();
         return this.compilingHd ? createHdProgram(source, lighting) : source;
     }
 
@@ -138,7 +139,7 @@ export class HdPlugin extends Plugin {
     beforeSceneRender(renderer: WebGLOsrsRenderer, drawActors: () => void): void {
         const state = this.renderers.get(renderer);
         if (!state) return;
-        if (state.hd !== this.isEnabled()) this.rebuildPrograms(renderer, state);
+        if (state.hd !== this.hdEnabled()) this.rebuildPrograms(renderer, state);
         // Plain programs: no HD uniforms to feed until the HD ones are swapped in.
         if (!state.hd) return;
         const uniforms = new Map<string, unknown>();
@@ -150,9 +151,9 @@ export class HdPlugin extends Plugin {
             }
             uniforms.clear();
         };
-        set("u_hdEnabled", this.isEnabled());
+        set("u_hdEnabled", this.hdEnabled());
         set("u_hdShadowPass", false);
-        if (!this.isEnabled()) {
+        if (!this.hdEnabled()) {
             state.lastShadow = undefined;
             state.lastLights = undefined;
             flush();
@@ -272,7 +273,7 @@ export class HdPlugin extends Plugin {
     private rebuildPrograms(renderer: WebGLOsrsRenderer, state: { hd: boolean; rebuilding: boolean }): void {
         if (state.rebuilding) return;
         state.rebuilding = true;
-        const hd = this.isEnabled();
+        const hd = this.hdEnabled();
         renderer.rebuildScenePrograms().then(() => {
             state.hd = hd;
             state.rebuilding = false;
@@ -282,7 +283,7 @@ export class HdPlugin extends Plugin {
 
     /** The WebGPU backend's equivalent of the hooks above: see ./webgpu/HdWebGPU.ts. */
     createWebGPUSceneExtension(context: WebGPUSceneExtensionContext): WebGPUSceneExtension | undefined {
-        return createHdWebGPUExtension(() => this.isEnabled(), () => this.options, context);
+        return createHdWebGPUExtension(() => this.hdEnabled(), () => this.options, context);
     }
 
     disposeRenderer(renderer: WebGLOsrsRenderer): void {

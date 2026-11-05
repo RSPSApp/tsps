@@ -39,7 +39,9 @@ function fly(player, npc) {
   player.setPositionToFace?.(npc.getLocation());
   player.performAnimation(new Common.core.Animation(Common.ids.seqs.lasso));
   player.sendMessage(Common.message("lasso"));
-  Common.travel(player, to, Common.data.flightTicks);
+  Common.travel(player, to, Common.data.flightTicks, () => {
+    Common.api.emitCustomEvent("eagle-transport:arrived", { player, to });
+  });
   return true;
 }
 

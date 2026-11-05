@@ -285,14 +285,19 @@ function move(player, entry, amount, destination) {
   const wanted = Math.max(0, Math.min(entry.amount, amount));
   if (wanted === 0) return 0;
   if (destination === "bank") {
-    player.getBank(Bank.getTabForItem(player, entry.id)).add(new Item(entry.id, wanted), false);
-    return wanted;
+    const bank = player.getBank(Bank.getTabForItem(player, entry.id));
+    const banked = bank.getAddableAmount(new Item(entry.id, wanted));
+    if (banked <= 0) {
+      player.sendMessage("You need more space in your bank.");
+      return 0;
+    }
+    bank.add(new Item(entry.id, banked), false);
+    return banked;
   }
   const inventory = player.getInventory();
   const definition = ItemDefinition.forId(entry.id);
   const id = !definition.isStackable() && wanted > 1 && definition.getNoteId() >= 0 ? definition.getNoteId() : entry.id;
-  const stackable = ItemDefinition.forId(id).isStackable();
-  const moved = stackable ? (inventory.contains(id) || inventory.getFreeSlots() > 0 ? wanted : 0) : Math.min(wanted, inventory.getFreeSlots());
+  const moved = inventory.getAddableAmount(new Item(id, wanted));
   if (moved <= 0) {
     player.sendMessage("You don't have enough inventory space.");
     return 0;

@@ -5,6 +5,8 @@ import { inject } from "@runelite/client/plugins/PluginInjector";
 import { multiBoxes, multiBorders, wildernessLines, wildernessLineY } from "../game/plugins/multilines/multiLines";
 import { MultiLinesPlugin } from "../game/plugins/multilines/MultiLinesPlugin";
 
+assert.equal(MultiLinesPlugin.descriptor.enabledByDefault, false, "fresh installs start disabled");
+
 // Border edges: a 2x2 box at (10..11, 20..21) has a square outline of 4 runs of 2.
 const box = [{ minX: 10, maxX: 11, minY: 20, maxY: 21, z: 0 }];
 const W = { minX: 0, maxX: 30, minY: 0, maxY: 40 };

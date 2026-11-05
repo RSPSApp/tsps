@@ -129,6 +129,7 @@ function open({player,itemId}) {
   if(!pending.has(itemId))pending.set(itemId,sackRewards(player,tier));
   const rewards=pending.get(itemId);
   if(!C.exchange(player,[[itemId,1]],rewards)){player.getInventory().full();return true;}
+  for(const[id,amount]of rewards)H.api.emitCustomEvent("collection-log:obtain",{player,itemId:id,amount});
   const s=state(player);
   for(const[id]of rewards){if(id===I.ENHANCED_QUETZAL_WHISTLE_BLUEPRINT)s.enhanced=true;if(id===I.PERFECTED_QUETZAL_WHISTLE_BLUEPRINT)s.perfected=true;
     if(id===I.TORN_ENHANCED_QUETZAL_WHISTLE_BLUEPRINT)s.tornEnhanced=true;if(id===I.TORN_PERFECTED_QUETZAL_WHISTLE_BLUEPRINT)s.tornPerfected=true;

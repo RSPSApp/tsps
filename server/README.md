@@ -87,6 +87,31 @@ for equipment. Clear inherited secondary models and recolours when replacing
 the entire model. Inventory framing (`zoom2d`, angles and offsets) and wearable
 offsets remain configurable for calibration.
 
+Dialogue helmets use separate native head models, not the wearable body models.
+In an existing helmet record, keep its `id`, `baseItemId` and other properties;
+for example, add the following head assets and `objType` fields (the `.dat`
+files are your own models under `data/models`):
+
+```json
+"models": {
+  "1000100": "my-helmet/male-chathead.dat",
+  "1000101": "my-helmet/female-chathead.dat"
+},
+"objType": {
+  "name": "My helmet",
+  "maleHeadModel": 1000100,
+  "maleHeadModel2": -1,
+  "femaleHeadModel": 1000101,
+  "femaleHeadModel2": -1
+}
+```
+
+`maleHeadModel2` and `femaleHeadModel2` are optional secondary head parts;
+`-1` clears an inherited secondary part. Use head geometry suited to dialogue,
+and choose unused external model IDs for your assets. These fields already use
+the normal custom-item delivery and native chathead renderer; no cache packing
+or additional JSON field is needed.
+
 Restart the server and reconnect after editing. Definitions and compressed
 model bytes are delivered before the initial appearance/inventory updates;
 the client and render workers use them ahead of cache assets. Each compressed

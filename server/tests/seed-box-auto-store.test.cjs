@@ -30,6 +30,8 @@ let I;
 let next = 9500;
 let seaSeeds = 0;
 let seaExtra = [];
+const pickupPolicies = new WeakMap();
+const pickupEvents = new WeakMap();
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -41,6 +43,9 @@ before(async () => {
   core.RegionManager.loadMapFiles(HOME[0], HOME[1]);
   core.RegionManager.loadMapFiles(WILDERNESS[0], WILDERNESS[1]);
   PM.emitServerStartup({});
+  PM.createApi("SeedPickupPolicyTest").onCustomEvent("ground-items:take", (event) => pickupPolicies.get(event.player)?.(event));
+  PM.createApi("SeedPickupEventTest").onCustomEvent("ground-items:taken", (event) => pickupEvents.get(event.player)?.push({ amount: event.amount, discarded: event.discarded, source: event.source }));
+
   PM.createApi("SeedBoxTest").onCustomEvent("npc-drops:roll-table", ({ drops }) => {
     if (seaSeeds > 0) drops.push({ itemId: I.POTATO_SEED, amount: seaSeeds });
     drops.push(...seaExtra);
@@ -97,7 +102,7 @@ const inBox = (f, id) => (f.box.getMetaValue(STORED) ?? {})[id] ?? 0;
 
 function drop(f, id, amount) {
   const location = f.p.getLocation().clone();
-  core.ItemOnGroundManager.registerLocation(f.p, new core.Item(id, amount), location, null);
+  return core.ItemOnGroundManager.registerLocation(f.p, new core.Item(id, amount), location, null);
 }
 
 const take = (f, id) => send(f, {
@@ -114,6 +119,55 @@ test("an open box takes seeds picked up; nothing's left on the floor", async (t)
   await take(f, I.POTATO_SEED);
   tick(f, 2);
   assert.equal(inBox(f, I.POTATO_SEED), 5, "the floor is empty");
+});
+
+test("partial pickup reports the changed floor stack and each credited quantity", async (t) => {
+  const f = actor(t, "Open seed box", { [I.POTATO_SEED]: 2147483645 });
+  const events = [];
+  pickupEvents.set(f.p, events);
+  const ground = drop(f, I.POTATO_SEED, 5);
+  const changes = [];
+  const manager = core.ItemOnGroundManager;
+  const perform = manager.perform.bind(manager);
+  t.mock.method(manager, "perform", (item, operation) => {
+    if (item === ground) changes.push([item.getOldAmount(), item.getItem().getAmount()]);
+    return perform(item, operation);
+  });
+  await take(f, I.POTATO_SEED);
+  tick(f, 2);
+  assert.equal(inBox(f, I.POTATO_SEED), 2147483647);
+  assert.equal(f.inv.getAmount(I.POTATO_SEED), 3);
+  assert.ok(changes.some(([oldAmount, amount]) => oldAmount === 5 && amount === 3));
+  assert.equal(events.reduce((sum, event) => sum + event.amount, 0), 5);
+  assert.ok(events.every((event) => event.source === "pickup"));
+});
+
+test("a refused ground take never stores or removes the seed", async (t) => {
+  const f = actor(t, "Open seed box");
+  const ground = drop(f, I.POTATO_SEED, 5);
+  const events = [];
+  pickupEvents.set(f.p, events);
+  pickupPolicies.set(f.p, (event) => { event.allow = false; });
+  await take(f, I.POTATO_SEED);
+  tick(f, 2);
+  assert.equal(inBox(f, I.POTATO_SEED), 0);
+  assert.equal(f.inv.getAmount(I.POTATO_SEED), 0);
+  assert.equal(ground.getItem().getAmount(), 5);
+  assert.equal(ground.isPendingRemoval(), false);
+  assert.deepEqual(events, []);
+});
+
+test("metadata-bearing seeds follow the ordinary pickup path", async (t) => {
+  const f = actor(t, "Open seed box");
+  const item = new core.Item(I.POTATO_SEED, 3);
+  item.setMetaValue("seed-test:marker", 17);
+  core.ItemOnGroundManager.registerLocation(f.p, item, f.p.getLocation().clone(), null);
+  await take(f, I.POTATO_SEED);
+  tick(f, 2);
+  assert.equal(inBox(f, I.POTATO_SEED), 0);
+  const held = f.inv.getValidItems().find((entry) => entry.getId() === I.POTATO_SEED);
+  assert.equal(held?.getAmount(), 3);
+  assert.equal(held?.getMetaValue("seed-test:marker"), 17);
 });
 
 // These two pin the hook order: the API's onGroundItemPickup skips a hook once the event is handled, so whichever runs

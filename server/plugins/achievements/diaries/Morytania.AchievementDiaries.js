@@ -23,7 +23,6 @@ const PORT_PHASMATYS_RANGE = { id: 16641, x: 3676, y: 3467 };
 const PORT_PHASMATYS_FURNACE = { x: 3688, y: 3478 };
 /** Mort Myre Swamp, from NatureSpirit's Boundary (3380, 3590, 3310, 3480, 0). */
 const SWAMP = { minX: 3380, maxX: 3590, minY: 3310, maxY: 3480, z: 0 };
-const SWAMP_GATE_IDS = new Set([3506, 3507]); // Nature Spirit's two swamp-gate leaves
 /** Canifis bank, whose booths are on x=3513, y=3478-3483. */
 const CANIFIS_BANK = { minX: 3504, maxX: 3515, minY: 3474, maxY: 3490 };
 /** The Slayer Tower's two floors (data/slayer-areas.json area 9). */
@@ -47,6 +46,12 @@ const BARROWS_SETS = ["Ahrim's", "Dharok's", "Guthan's", "Karil's", "Torag's", "
 const PIETY = 26; // PrayerHandler.PIETY
 
 let api = null;
+// Human forms retain their individual cache names when wielding Wolfbane.
+const HUMAN_FORM_WEREWOLVES = new Set([
+  "Boris", "Imre", "Yuri", "Joseph", "Nikolai", "Eduard", "Lev", "Georgy",
+  "Svetlana", "Irina", "Alexis", "Milla", "Galina", "Sofiya", "Ksenia",
+  "Yadviga", "Nikita", "Vera", "Zoja", "Liliya",
+]);
 
 const emit = (player, task) => api.emitCustomEvent("diary:task", { player, diary: DIARY, task });
 
@@ -94,9 +99,9 @@ function worshipped({ player }) {
   emit(player, "offer-some-bonemeal-at-the-ectofuntus");
 }
 
-/** Enter Mort Myre Swamp: the gate (its only legitimate way) or walking in from another square. */
-function swampGate({ player, objectId }) {
-  if (SWAMP_GATE_IDS.has(objectId)) emit(player, "enter-mort-myre-swamp");
+/** The swamp's existing Area reports entry after the player crosses its boundary. */
+function swampEntered({ player }) {
+  emit(player, "enter-mort-myre-swamp");
 }
 
 function mapSquare({ player, location }) {
@@ -249,7 +254,7 @@ function killed({ killer, npc, npcId, location }) {
     const [key, check] = task;
     if (!check || check(location)) emit(killer, key);
   }
-  if (name === "Werewolf" && usesWolfbane(killer)) {
+  if (HUMAN_FORM_WEREWOLVES.has(name) && usesWolfbane(killer)) {
     emit(killer, "kill-a-werewolf-in-its-human-form-using-the-wolf");
   }
 }
@@ -269,7 +274,7 @@ module.exports = function attachMorytania(pluginApi) {
   api.onCustomEvent("slayer:task-assigned", assigned);
   api.onCustomEvent("tanning:done", tanned);
   api.onCustomEvent("ectofuntus:worshipped", worshipped);
-  api.onCustomEvent("door:toggle", swampGate);
+  api.onCustomEvent("mort-myre:entered", swampEntered);
   api.onCustomEvent("farming:scarecrow", scarecrow);
   api.onCustomEvent("farming:spell-fertilized", fertilized);
   api.onCustomEvent("farming:harvested", harvested);

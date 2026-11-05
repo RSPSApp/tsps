@@ -132,7 +132,7 @@ test("easy: the completely supported native actions credit their tasks", () => {
   emit("slayer:task-assigned", { player, master: 2 });
   emit("tanning:done", { player, tanner: "Sbott" });
   emit("ectofuntus:worshipped", { player });
-  emit("door:toggle", { player, objectId: 3506 });
+  emit("mort-myre:entered", { player });
   emit("farming:scarecrow", { player, patch: { id: 7850 } });
   assert.deepEqual([...done(player)].sort(), [
     "cook-a-thin-snail-on-the-port-phasmatys-range",
@@ -162,10 +162,10 @@ test("easy: kills check the NPC, the Slayer Tower and the Wolfbane dagger", () =
 
   // Wolfbane in the weapon slot, and only then.
   const armed = createPlayer({ weapon: { id: ItemIdentifiers.WOLFBANE, name: "Wolfbane" } });
-  emit("onNpcDeath", { killer: armed, npc: npc("Werewolf"), location: { x: 3603, y: 3321, z: 0 } });
+  emit("onNpcDeath", { killer: armed, npc: npc("Boris"), npcId: NpcIdentifiers.BORIS, location: { x: 3603, y: 3321, z: 0 } });
   assert.ok(has(armed, "kill-a-werewolf-in-its-human-form-using-the-wolf"));
   const unarmed = createPlayer();
-  emit("onNpcDeath", { killer: unarmed, npc: npc("Werewolf"), location: { x: 3603, y: 3321, z: 0 } });
+  emit("onNpcDeath", { killer: unarmed, npc: npc("Boris"), npcId: NpcIdentifiers.BORIS, location: { x: 3603, y: 3321, z: 0 } });
   assert.ok(!has(unarmed, "kill-a-werewolf-in-its-human-form-using-the-wolf"));
 
   // Wrong location for a Fever spider.
@@ -295,4 +295,34 @@ test("each task is credited once, however often the action repeats", () => {
   emit("ectofuntus:worshipped", { player });
   emit("ectofuntus:worshipped", { player });
   assert.equal([...done(player)].filter((key) => key === "offer-some-bonemeal-at-the-ectofuntus").length, 1);
+});
+
+
+test("Wolfbane credits native human-form Canifis citizens, not transformed werewolves", () => {
+  const { NpcDefinition } = require("../dist/game/definition/NpcDefinition");
+  const spawns = require("../data/definitions/npc-spawns.json");
+  const task = "kill-a-werewolf-in-its-human-form-using-the-wolf";
+  const kill = (id, weapon = ItemIdentifiers.WOLFBANE) => {
+    const player = createPlayer({ weapon: { id: weapon, name: "Wolfbane" } });
+    const definition = NpcDefinition.forId(id);
+    emit("onNpcDeath", { killer: player, npcId: id,
+      npc: { getCurrentDefinition: () => definition }, location: { x: 3489, y: 3490, z: 0 } });
+    return has(player, task);
+  };
+  assert.ok(spawns.some(spawn => spawn.id === NpcIdentifiers.BORIS && spawn.name === "Boris"));
+  assert.equal(NpcDefinition.forId(NpcIdentifiers.BORIS).getName(), "Boris");
+  assert.ok(kill(NpcIdentifiers.BORIS), "the real spawned human form counts");
+  assert.ok(kill(NpcIdentifiers.IMRE, ItemIdentifiers.WOLFBANE_2), "the alternate Wolfbane counts");
+  assert.ok(!kill(NpcIdentifiers.WEREWOLF), "a transformed werewolf cannot count as human form");
+  assert.ok(!kill(NpcIdentifiers.BORIS, ItemIdentifiers.BRONZE_DAGGER), "another dagger does not count");
+});
+
+
+test("Mort Myre entry requires crossing the boundary, not toggling the gate", () => {
+  const player = createPlayer({ x: 3443, y: 3481 });
+  const task = "enter-mort-myre-swamp";
+  for (const objectId of [3506, 3507]) emit("door:toggle", { player, objectId });
+  assert.ok(!has(player, task), "opening or closing the gate outside does not count");
+  emit("mort-myre:entered", { player });
+  assert.ok(has(player, task));
 });

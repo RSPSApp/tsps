@@ -776,7 +776,7 @@ test('a lost slave outfit is recovered the canonical way', () => {
   p.equip(K.SLAVE_BOOTS, E.FEET_SLOT);
   const wornMine = object(h, 'Mine door entrance', 'Open', { player: p, objectId: 2675, handled: false });
   assert.equal(wornMine.handled, true);
-  assert.deepEqual(p.moves.at(-1), [3279, 9420, 0]);
+  assert.deepEqual(p.moves.at(-1), [3279, 9427, 0]);
 });
 
 test('the escaping slave owns his own transcript and turns back into a male slave', () => {

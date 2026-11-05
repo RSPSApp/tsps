@@ -24,6 +24,7 @@ const npcId = (name) => CacheDefinitions.getNpcId(name);
 let tasks = [];
 let quests = { complete: new Set(), started: new Set() };
 const starts = [];
+const arrivals = [];
 const hooks = { npc: [], object: [], events: new Map(), conditions: [], logout: [], shutdown: [] };
 
 class Task {
@@ -86,6 +87,7 @@ const api = {
   onPlayerLogout: (handler) => hooks.logout.push(handler),
   onServerShutdown: (handler) => hooks.shutdown.push(handler),
   emitCustomEvent: (name, request) => {
+    if (name === "ferries:arrived") arrivals.push(request);
     if (name === "quest:is-complete") request.complete = quests.complete.has(request.key);
     if (name === "quest:is-started") request.started = quests.started.has(request.key);
     if (name === "npc-dialogue:start") {
@@ -195,6 +197,7 @@ before(async () => {
 beforeEach(() => {
   tasks = [];
   starts.length = 0;
+  arrivals.length = 0;
   quests = { complete: new Set(), started: new Set() };
 });
 
@@ -387,6 +390,7 @@ test("Veos's ship fades with the sea's song and says where it sails as the playe
   tick(1);
   assert.deepEqual(at(player), [3055, 3242, 1]);
   assert.deepEqual(player.sent.messages, ["You board the ship and sail to Port Sarim."]);
+  assert.deepEqual(arrivals.map((event) => event.route), ["kourend-sarim"]);
 
   // Veos's menu has no travel step: his closing line sails to the port picked.
   const talker = createPlayer({ at: new Location(3054, 3245, 0) });
@@ -397,6 +401,7 @@ test("Veos's ship fades with the sea's song and says where it sails as the playe
   line.after();
   tick(3);
   assert.deepEqual(at(talker), [1504, 3395, 1]);
+  assert.deepEqual(arrivals.map((event) => event.route), ["kourend-sarim", "kourend-landsend"]);
   const owned = { player: talker, definition, text: line.text, after: () => {} };
   const previous = owned.after;
   for (const handler of hooks.events.get("npc-dialogue:line")) handler(owned);

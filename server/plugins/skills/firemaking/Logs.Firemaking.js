@@ -83,6 +83,26 @@ function requiresTinderbox(player) {
   return !(player?.isPlayerBot?.() === true);
 }
 
+/** Wiki Barbarian Firemaking: any bow except these cannot light logs. */
+const NON_FIREMAKING_BOWS = new Set([
+  "twisted bow", "cursed goblin bow", "dark bow", "crystal bow", "ogre bow",
+  "rain bow", "starter bow", "signed oak bow",
+]);
+
+/** Whether the item is a bow the Wiki lets a player light logs with. */
+function isFiremakingBow(itemId) {
+  if (!Number.isInteger(itemId)) return false;
+  let name;
+  try {
+    name = pluginApi.core.ItemDefinition.forId(itemId)?.getName?.() ?? "";
+  } catch {
+    return false;
+  }
+  const lower = String(name).toLowerCase();
+  if (!lower.endsWith("bow") || lower.includes("crossbow")) return false;
+  return !NON_FIREMAKING_BOWS.has(lower);
+}
+
 function isWearing(player, slot, itemIds) {
   const item = player.getEquipment?.()?.getItems?.()[slot];
   return !!item && itemIds.includes(item.getId());
@@ -125,10 +145,10 @@ function campfireCheckMessage(remainingTicks) {
   return CAMPFIRE_CHECK_TIERS[CAMPFIRE_CHECK_TIERS.length - 1].message;
 }
 
-function grantFiremakingLogXp(player, log) {
+function grantFiremakingLogXp(player, log, bow = false) {
   const xp = log.xpReward * firemakingXpMultiplier(player);
   player.getSkillManager().addExperiences(Skill.FIREMAKING, xp);
-  pluginApi.emitCustomEvent("firemaking:success", { player, skill: Skill.FIREMAKING, itemId: log.itemId });
+  pluginApi.emitCustomEvent("firemaking:success", { player, skill: Skill.FIREMAKING, itemId: log.itemId, bow: bow === true });
 }
 
 function dropAshes(player, location) {
@@ -335,7 +355,8 @@ function startFiremakingAttempt(player, log, source, activeSessions) {
   }
 
   const inventory = player.getInventory();
-  if (requiresTinderbox(player) && !inventory.contains(TINDERBOX_ID)) {
+  const bow = source.bow === true;
+  if (!bow && requiresTinderbox(player) && !inventory.contains(TINDERBOX_ID)) {
     player.sendMessage("You need a tinderbox to light fires.");
     return false;
   }
@@ -385,6 +406,7 @@ function startFiremakingAttempt(player, log, source, activeSessions) {
   activeSessions.set(player, {
     mode: SESSION_MODE.GROUND,
     fromInventory,
+    bow,
     log,
     location: sessionLocation,
     privateArea,
@@ -476,7 +498,7 @@ function completeInventoryOrGroundFire(player, state) {
   }
 
   spawnFire(player, state.location);
-  for (let burnt = 0; burnt < logs; burnt++) grantFiremakingLogXp(player, state.log);
+  for (let burnt = 0; burnt < logs; burnt++) grantFiremakingLogXp(player, state.log, state.bow === true);
   Sounds.sendSound(player, Sound.FIRE_SUCCESSFUL);
   spam(player, "The fire catches and the logs begin to burn.");
   return true;
@@ -597,7 +619,7 @@ function processFiremakingTick(activeSessions, currentTick) {
       continue;
     }
 
-    if (requiresTinderbox(player) && !player.getInventory().contains(TINDERBOX_ID)) {
+    if (!session.bow && requiresTinderbox(player) && !player.getInventory().contains(TINDERBOX_ID)) {
       player.sendMessage("You need a tinderbox to light fires.");
       stopFiremaking(activeSessions, player);
       continue;
@@ -674,10 +696,17 @@ function handleItemOnItem(event, activeSessions) {
   player.getSkillManager()?.stopSkillable?.();
 
   let logId = -1;
+  let bow = false;
   if (usedItemId === TINDERBOX_ID) {
     logId = usedWithItemId;
   } else if (usedWithItemId === TINDERBOX_ID) {
     logId = usedItemId;
+  } else if (isFiremakingBow(usedItemId) && LIGHTABLE_LOGS_BY_ID.has(usedWithItemId)) {
+    logId = usedWithItemId;
+    bow = true;
+  } else if (isFiremakingBow(usedWithItemId) && LIGHTABLE_LOGS_BY_ID.has(usedItemId)) {
+    logId = usedItemId;
+    bow = true;
   }
 
   if (logId <= 0) {
@@ -692,7 +721,7 @@ function handleItemOnItem(event, activeSessions) {
   const started = startFiremakingAttempt(
     player,
     log,
-    { mode: SESSION_MODE.INVENTORY },
+    { mode: SESSION_MODE.INVENTORY, bow },
     activeSessions
   );
   if (started) {
@@ -934,6 +963,7 @@ module.exports = {
   // Exposed for tests and other plugins.
   LIGHTABLE_LOGS,
   LIGHTABLE_LOGS_BY_ID,
+  isFiremakingBow,
   lightingSuccessChance,
   firemakingXpMultiplier,
   rollFireLifetimeTicks,

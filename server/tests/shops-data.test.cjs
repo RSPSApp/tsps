@@ -20,6 +20,14 @@ test('shop ids and names are unique', () => {
   assert.ok(shops.length > 400, 'the imported shop set is present');
 });
 
+test('the canonical Candle Shop is imported with the candle maker binding', () => {
+  const shop = shops.find((entry) => entry.name === 'Candle Shop');
+  assert.ok(shop, 'the Candle Shop row exists');
+  assert.equal(shop.currency, 'COINS');
+  assert.deepEqual(shop.originalStock, [{ id: 36, amount: 10, restockTicks: 100 }]);
+  assert.deepEqual(shop.npcInteractions, [{ npcIds: [3199], optionSlot: 3 }]);
+});
+
 test("both versions of Ned's rope shop bind his Trade option", () => {
   for (const version of ['Default', 'Fremennik Isles']) {
     const shop = shops.find((entry) => entry.name === `Ned's Handmade Rope (100% Wool) (${version})`);

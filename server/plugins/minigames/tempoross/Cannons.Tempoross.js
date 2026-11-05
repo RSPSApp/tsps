@@ -18,6 +18,9 @@ const { coveOf, coveOfNpc } = require("./Cove.Tempoross");
 const { DATA, ITEM, ANIM, GFX, SOUND } = Shared;
 const F = DATA.fight;
 
+/** Raw graphic height of the stun stars: at the head, as every other use of stunned_thieving. */
+const STUN_HEIGHT = 124;
+
 const AMMO = {
   [ITEM.COOKED]: { points: DATA.points.loadCooked, damage: DATA.damage.cooked, gfx: GFX.PROJECTILE_COOKED, xp: 1 },
   [ITEM.CRYSTALLISED]: { points: DATA.points.loadCrystallised, damage: DATA.damage.crystallised, gfx: GFX.PROJECTILE_CRYSTALLISED, xp: 1.2 },
@@ -132,7 +135,7 @@ class Cannons {
  */
 function stun(player) {
   Shared.animate(player, ANIM.STUNNED);
-  Shared.graphic(player, GFX.STUNNED);
+  Shared.graphic(player, GFX.STUNNED, STUN_HEIGHT);
   player.getMovementQueue().reset();
   player.getMovementQueue().setBlockMovement(true);
   const until = Shared.later(player, F.torrentStunTicks, () => {

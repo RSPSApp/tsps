@@ -2,8 +2,7 @@
   "hotColdStarters": ["cluehelper_cryptic_master_jorral"],
   "unrolled": {
     "cluehelper_cryptic_master_watson": "Watson gave out the strange device only in the Twisted League, when Jorral was out of reach (Wiki).",
-    "cluehelper_cryptic_master_viggora": "Curse of the Empty Lord, which his step needs, isn't on this server.",
-    "cluehelper_cryptic_master_piles": "The Resource Area entry fee isn't on this server, and his step is paying it."
+    "cluehelper_cryptic_master_viggora": "Curse of the Empty Lord, which his step needs, isn't on this server."
   },
   "conditions": {
     "cluehelper_cryptic_master_robin": { "attack": "ATTACK_RANGE", "min": 180, "notWorn": ["TOXIC_BLOWPIPE", "TOXIC_BLOWPIPE_EMPTY_", "BLAZING_BLOWPIPE", "BLAZING_BLOWPIPE_EMPTY_"],

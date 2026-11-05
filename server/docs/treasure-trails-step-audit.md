@@ -8,11 +8,11 @@ Audit date: 2026-11-04. The catalogue below covers 908 cluehelper rows from the 
 | Medium | 167 / 167 |
 | Hard | 186 / 186 |
 | Elite | 124 / 124 |
-| Master | 94 / 265 |
+| Master | 96 / 265 |
 
-Easy, medium, and hard have no cache rows suppressed by the current runtime checks. Elite is now complete after adding the content-backed kills described below. Master three-part cryptic trails have 27 safe part candidates. Four other candidate rows remain excluded: Piles depends on the Resource Area entry fee, Viggora depends on the absent Curse of the Empty Lord quest, Watson belongs to the alternate Twisted League clue flow, and the current Lovada cache spawn resolves to other NPC definitions rather than Lovada.
+Easy, medium, and hard have no cache rows suppressed by the current runtime checks. Elite is now complete after adding the content-backed kills described below. Master three-part cryptic trails have 29 safe part candidates. Two other candidate rows stay out of the part pool: Viggora depends on the absent Curse of the Empty Lord miniquest, and Watson's row is a correct exclusion (see "Correct exclusions" below).
 
-Elite Sherlock has 21 of 25 task rows wired; its four unsupported tasks are listed below. Master Sherlock has 22 of 26 actionable task rows wired; the four unsupported tasks are also listed below. The cache includes one additional internal helper row for combining the three cryptic parts, which is handled by the trail runtime rather than assigned as a Sherlock task.
+Elite Sherlock has 21 of 25 task rows wired; its four unsupported tasks are listed below. Master Sherlock has 24 of 26 actionable task rows wired; the two unsupported tasks are also listed below. The cache includes one additional internal helper row for combining the three cryptic parts, which is handled by the trail runtime rather than assigned as a Sherlock task.
 
 ## Fixes in this audit
 
@@ -24,6 +24,18 @@ Elite Sherlock has 21 of 25 task rows wired; its four unsupported tasks are list
 
 The RSProx recordings reviewed for this audit corroborate clue and Sherlock scroll transitions (recordings 1034–1036, 1057, and 1063–1067). The available recordings did not capture the pyre-spirit, sacred-eel dissection, or light-orb combination actions, so those action rules use the linked OSRS Wiki pages and do not add guessed animations or action messages.
 
+## Master follow-up (2026-11-05)
+
+- Kill a reanimated abyssal: Master Reanimation already raises the reanimated abyssal (`ArceuusItemSpells`, npc 7038) from an ensouled abyssal head, so the task now counts the player's kill of it. [Reanimated abyssal](https://oldschool.runescape.wiki/w/Reanimated_abyssal).
+- Kill a Fiyr shade inside Mort'ton's shade catacombs: the world already spawns ten Fiyr Shadows (1285) in the catacombs, and Shades of Mort'ton raises each into its Fiyr Shade (1286) as the same NPC. The task counts a kill of either id inside the catacombs' map square (3456-3519, 9664-9727, plane 0), so a Temple Trekking shade does not count. [Fiyr Shade](https://oldschool.runescape.wiki/w/Fiyr_shade).
+- Piles: the Wiki's only extra condition is the Resource Area entry fee, which the gate now charges (`ResourceArea.plugin.js`). His part rolls again. [Piles](https://oldschool.runescape.wiki/w/Piles).
+- Lovada: her Lovakengj spawn at 1485,3834 used 6786, which the current cache makes a hidden Varlamore `vmq1` guard. `sync-npc-spawns.ts --repair-identities` (from the original infobox lines added to `tests/fixtures/npc-spawn-identity-wiki.json`) moved it to 12701, the cache's and the Wiki's Lovada, and her part rolls. A second row named Lovada at 1632,3678 (id 6787, also a `vmq1` form) has no Wiki or cache evidence and is left unchanged. [Lovada](https://oldschool.runescape.wiki/w/Lovada).
+
+## Correct exclusions
+
+- Watson's cryptic row ("Buried beneath the ground, who knows where it's found. Lucky for you, a man called Watson…") is the Twisted League copy of Jorral's hot/cold starter: in that league Watson handed out the strange device because Jorral was out of reach. On a main-game world the row is never given, so it is not a gap. Watson's main-game role, trading one clue of each lower tier for a master clue, is implemented in `Watson.TreasureTrails.js`. [Watson](https://oldschool.runescape.wiki/w/Watson).
+- The targetless "Combine the torn clue scroll parts" Sherlock row is the three-part step's own helper, handled by the trail runtime.
+
 ## Still unsupported
 
 ### Elite Sherlock challenge scrolls
@@ -34,9 +46,13 @@ These tasks remain excluded from assignment because the server does not implemen
 
 - Create a Barrows teleport tablet: the active cache defines the item, but none of the lectern enums supplied to the client offers it. The current lectern interface is driven by those enums, so there is no selectable route to make it until the cache enum or client interface is extended. [Barrows Teleport](https://oldschool.runescape.wiki/w/Barrows_teleport).
 - Mix a ranging mix: the recipe is absent, and the Barbarian Herblore training unlock is not implemented. Keep it unassigned until both the recipe and its unlock are represented. [Ranging mix](https://oldschool.runescape.wiki/w/Ranging_mix_%281%29).
-- Kill a reanimated abyssal: the Master Reanimation spell that creates the NPC is not implemented. [Reanimated abyssal](https://oldschool.runescape.wiki/w/Reanimated_abyssal).
-- Kill a Fiyr shade inside Mort'ton's shade catacombs: the Catacombs plugin does not spawn Fiyr Shades. Adding guessed spawns would make this task appear supported without a verified encounter. [Fiyr Shade](https://oldschool.runescape.wiki/w/Fiyr_shade).
+
+### Master three-part cryptic parts
+
+- Viggora: the Wiki requires Curse of the Empty Lord to have reached the point where the player talks to him, plus a ghostspeak amulet and a ring of visibility. The miniquest is not on this server, so his part stays out of the pool. [Viggora](https://oldschool.runescape.wiki/w/Viggora).
 
 ## Verification
 
 `npm run build --prefix server` passes. A direct active-cache catalogue inspection confirms the row counts above and confirms that no elite rows are suppressed. The test suites were not run.
+
+Master follow-up (2026-11-05): an active-cache catalogue load gives 96 rollable master rows and 29 parts; `tests/treasure-trails-master.test.cjs` covers the two new tasks (inside and outside their area) and Piles' and Lovada's torn parts, and the spawn sync's repair was run twice from the fixture with no change on the second run.

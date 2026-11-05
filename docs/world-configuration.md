@@ -107,7 +107,7 @@ default.
 | `FreezeTimer` | Sends the remaining freeze duration and spell information used by the client's freeze-timer overlay. |
 | `FriendsList` | Enables friends-list and friends-chat handling, including private messages, chat filters, and friends-chat channels. |
 | `GrandExchange` | Enables Grand Exchange offers, offer collection, and the item-price resource used by the exchange. |
-| `SideJournalDefaults` | Owns the journal tabs and optional custom Character Summary. Summary buttons follow the commands enabled for each player, and visible navigation buttons are centered with equal spacing. |
+| `SideJournalDefaults` | Owns the native journal tabs. The optional CustomCharacterSummary plugin replaces Account Info. |
 | `IgnoreList` | No active feature is currently attached to this plugin. The client protocol does not yet send ignore-list add/remove actions, so enabling this switch alone does not make those controls work. |
 | `VengeanceTimer` | Keeps the client's 30-second Vengeance cooldown overlay in sync with the player's active cooldown. |
 
@@ -115,9 +115,10 @@ These switches control whether a plugin is loaded; they are distinct from `plugi
 sets plugin-specific options such as `TutorialIsland:allowSkip`.
 
 The native Account Info tab is kept by default. Set
-`pluginConfig` `"SideJournalDefaults:customAccountTab": true` to replace it with the custom
+`plugins` `"CustomCharacterSummary": true` to replace it with the custom
 Character Summary, including PvP statistics and shortcut buttons. This only controls the
-interface; saved statistics and Combat XP locks are preserved when it is off.
+interface; saved statistics and the Combat XP choice are preserved when it is off.
+The saved Combat XP choice takes effect again when the custom plugin is enabled.
 
 Character Summary checks the registered `teleports`, `presets`, `commands`, and `lockxp`
 commands for its Teleports, Presets, Commands, and Combat XP controls. Their usual providers

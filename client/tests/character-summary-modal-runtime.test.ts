@@ -64,7 +64,6 @@ for (const name of ["Commands", "Teleports"]) {
         getInventory: () => ({ getValidItems: () => [] }),
     };
     const api: any = {
-        getPluginConfig: (key: string, fallback: unknown) => key === "SideJournalDefaults:customAccountTab" ? true : fallback,
         core: { Bank: { TOTAL_BANK_TABS: 0 }, ItemIdentifiers: {}, CustomInterfaceRegistry: { get: (id: number) => definitions.get(id) } },
         registerCustomInterface: register,
         registerCommand() {}, persistAttribute() {}, onCanGainExperience() {}, onPlayerProcess() {}, onPlayerLogout() {}, onInterfaceActionButton() {},

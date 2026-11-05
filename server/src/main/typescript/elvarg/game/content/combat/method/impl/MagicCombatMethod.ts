@@ -85,12 +85,7 @@ export class MagicCombatMethod extends CombatMethod {
 
     /** Chebyshev distance from the attacker's tile to the nearest tile of the target. */
     private static edgeDistance(attacker: Mobile, target: Mobile): number {
-        const from = CombatPosition.location(attacker, target);
-        const to = CombatPosition.location(target, attacker);
-        const size = Math.max(1, target.getSize?.() ?? 1);
-        const dx = Math.max(0, to.getX() - from.getX(), from.getX() - (to.getX() + size - 1));
-        const dy = Math.max(0, to.getY() - from.getY(), from.getY() - (to.getY() + size - 1));
-        return Math.max(dx, dy);
+        return CombatPosition.edgeDistance(attacker, target);
     }
 
     /** Barrages are the only area spells from level 86 (bursts go up to 70). */

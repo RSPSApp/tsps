@@ -59,10 +59,13 @@ export function updateWebGPUMapStreaming(renderer: WebGPURenderer, frameCount: n
  * resolveBrowserQualityProfile selects from.
  */
 export function resolveWebGPURenderDistance(renderer: WebGPURenderer): number {
-    const base = clamp((renderer.osrsClient.clientPlugins.gpuSettings()?.drawDistance ?? renderer.osrsClient.renderDistance) | 0, 25,
+    const gpu = renderer.osrsClient.clientPlugins.gpuSettings();
+    const base = clamp((gpu?.drawDistance ?? renderer.osrsClient.renderDistance) | 0, 25,
         renderer.osrsClient.clientPlugins.hdEnabled() ? 160 : 90);
     const profile = resolveQualityProfile();
-    const target = isTouchDevice || isLowEndDevice || lowEndDeviceModeEnabled ? Math.min(base, profile.renderDistanceCap | 0) : base;
+    const capToProfile = !gpu?.overrideDeviceCaps &&
+        (isTouchDevice || isLowEndDevice || lowEndDeviceModeEnabled);
+    const target = capToProfile ? Math.min(base, profile.renderDistanceCap | 0) : base;
     return Math.max(0, target | 0);
 }
 
@@ -72,9 +75,9 @@ export function resolveWebGPULodDistance(renderer: WebGPURenderer): number {
     const gpu = renderer.osrsClient.clientPlugins.gpuSettings();
     const base = clamp(gpu ? gpu.drawDistance - 2 : renderer.osrsClient.lodDistance | 0, 0,
         Math.min(distance, renderer.osrsClient.clientPlugins.hdEnabled() ? 48 : distance));
-    return isTouchDevice || isLowEndDevice || lowEndDeviceModeEnabled
-        ? Math.min(base, resolveQualityProfile().lodThresholdCap | 0)
-        : base;
+    const capToProfile = !gpu?.overrideDeviceCaps &&
+        (isTouchDevice || isLowEndDevice || lowEndDeviceModeEnabled);
+    return capToProfile ? Math.min(base, resolveQualityProfile().lodThresholdCap | 0) : base;
 }
 
 function resolveQualityProfile(): BrowserQualityProfile {

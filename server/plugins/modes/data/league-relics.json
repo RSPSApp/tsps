@@ -247,7 +247,7 @@
     "_demonicPactsComment": "Demonic Pacts (league 6) relics (docs/leagues.md): the catalog is the cache's (struct 6436), so each relic's key is its cache name slugged; its item is the relic struct's param 2049 and is handed out in a bank or near the Leagues Tutor (237/01102). Numbers are the Wiki's and the cache's relic text unless marked ours.",
     "demonicPacts": {
       "league": 6, "cacheLeague": true, "relicItemParam": 2049,
-      "tutor": { "name": "Leagues Tutor", "reach": 10, "_reach": "ours: 'near the Leagues Tutor' (237/01102) gives no distance." },
+      "tutor": { "name": "Leagues Tutor", "reach": 10, "_reach": "ours: 'near the Leagues Tutor' (237/01102) gives no distance.", "bankReach": 4, "_bankReach": "'within a bank' (237/01102): a bank loc or banker within 4 tiles (LeagueMode's league:near-bank), ours. Live unlocked item relics 3 tiles from the Colosseum's bank tables (237/01098, Friendly Forager at 1780,3096) and next to Nemus Retreat's Bank buffalo (237/01098 Evil Eye at 1387,3309; 237/01102 Transmute at 1527,3292), but refused 2 tiles from the Nemus one (237/01098 at 1389,3309): live's bank is an area, not a distance, which the server has no data for." },
       "toggles": { "table": "league_relic_effect_toggle", "varp": "league_relic_effect_toggle_1", "onColour": "229628", "offColour": "ff3045", "_source": "237/01104, 01106: the row's on or off message after the relic's name, green on, red off." },
       "messages": {
         "needsBank": "You must be within a bank or near the Leagues Tutor to unlock this as it gives you items.",
@@ -278,7 +278,8 @@
       "markChance": 0.33, "markCourses": ["draynor", "alkharid", "varrock", "canifis", "falador", "seers", "pollnivneach", "rellekka", "ardougne"],
       "markLapCoins": 10000, "runXpBase": 10, "runXpLevelFraction": [2, 3], "runXpTicks": 10, "runStepTiles": 2, "_runXp": "Wiki, Searing boots: 10 + floor(Agility level x 2/3) Agility XP roughly every 10 ticks of running, a tick counting when the player moved 2 squares in it.", "courseItems": { "prifddinas": { "CRYSTAL_SHARD": 10 } }, "minigamePoints": { "brimhaven-agility-arena": 2 }, "_courseItems": "Wiki: 10x crystal shards from the Prifddinas Agility Course, 2x Agility arena tickets and vouchers (16 a pillar with the 8x minigame passive).",
       "_marks": "The Wiki's 33% on the rooftop courses (Wiki, Rooftop Agility: these nine), in place of the course's own chance and its overlevel cut; the mark cooldown still runs (ours). A picked-up course mark finishes a lap of its course with 10,000 coins, whatever the footwear.",
-      "_processing": "With the boots worn, caught fish come cooked and mined ore smelted into its own bar (coal stays coal: ours), with the Cooking or Smithing XP (ours: the Wiki gives none)."
+      "oreBars": { "IRON_ORE": "STEEL_BAR" },
+      "_processing": "With the boots worn, caught fish come cooked and mined ore smelted into its own bar, iron ore into a steel bar (oreBars), with the Cooking or Smithing XP (the Wiki gives none). 234/03285: 133 iron mined banked 133 steel bars with Smithing drops of 262/263 (a steel bar's 17.5 at 15x), mithril ore gave mithril bars and coal stayed coal. Whether coal is used up for the steel can't be seen; we take none (ours)."
     },
     "woodsman": {
       "league": 6, "key": "woodsman", "maxActions": 28,
@@ -330,6 +331,8 @@
     },
     "mapOfAlacrity": {
       "league": 6, "key": "map-of-alacrity", "toolName": "Map of alacrity",
+      "cast": { "tick": 1, "landTick": 3, "animation": "hotfoot_grace_teleport", "graphic": "leagues_6_hotfoot" },
+      "_cast": "No recording of the map in use: inferred from the Wiki's video and the cache's names, hotfoot_grace_teleport (a 2-tick seq) with spotanim leagues_6_hotfoot on the pick's next tick, the move when the seq ends. lockTick: ours, the cast's own tick.",
       "_shortcuts": "plugins/modes/data/league-map-of-alacrity.json: the Wiki map's shortcuts the server has, by area (leaguerelics/MapOfAlacrity.LeagueRelics.js)."
     },
     "flaskOfFervour": {
@@ -357,7 +360,7 @@
         "Alchemic Convergence": { "step": -1, "alchemy": "Low Level Alchemy", "animation": "transmutation_cast_downgrade", "graphic": "league_6_transmutation_downgrade" }
       },
       "perCast": 10, "xpPerItem": 10, "castTicks": 5,
-      "_cast": "Wiki: up to 10 a cast, 10 Magic XP an item, no level, 5 ticks, and no runes (Alchemic Divergence: cost None; 6 May 2026: 'correctly display as costing no runes'; the spell objs carry no rune params). 237/01102, 01106: a stack (noted or stackable) gives 10 and is cast on again every 5 ticks while its slot holds it, with the graphic alone; loose items convert up to 10 held, in place, only with a free slot for each; a click during a cast waits for it.",
+      "_cast": "Wiki: up to 10 a cast, 10 Magic XP an item, no level, 5 ticks, and no runes (Alchemic Divergence: cost None; 6 May 2026: 'correctly display as costing no runes'; the spell objs carry no rune params). 237/01102, 01106: a stack (noted or stackable) gives 10 and is cast on again every 5 ticks while its slot holds it, with the graphic alone; loose items convert up to 10 held, in place: holding 10 or fewer needs no free slot (237/01102: 10 uncut rubies, diamonds, opals and jade with none free, each converted in its own slots), holding more needs a free slot for each of the 10 (237/01102: the red no-room line at 11 held with 5 free, 15 with 1, 16 and 23 with none); a click during a cast waits for it.",
       "alchemyToggle": "league_relic_transmutation_alchemy_toggle", "bankToggle": "league_relic_transmutation_bank_toggle",
       "currentColour": "ff3045", "_currentColour": "The ledger's scroll marks the item's own tier in this red with ' (Current)' (Wiki: Transmutation_ledger_interface.png; the toggles' off colour).",
       "messages": {

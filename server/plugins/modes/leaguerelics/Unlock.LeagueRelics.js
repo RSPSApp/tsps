@@ -48,13 +48,18 @@ function grantedItems(relic) {
 }
 
 /**
- * Where an item relic may be unlocked: in a bank, or (a cache-read league with a `tutor`, Demonic
- * Pacts) near its Leagues Tutor, as live says (237/01102); `reach` tiles is ours.
+ * Where an item relic may be unlocked: with the bank open, or (a cache-read league with a `tutor`,
+ * Demonic Pacts) within a bank or near its Leagues Tutor, as live says (237/01102). "Within a bank"
+ * is a bank loc or banker within the tutor data's `bankReach` (LeagueMode's `league:near-bank`);
+ * `reach` and `bankReach` are ours.
  */
 function mayReceiveItems(player, type, bankOpen) {
   if (bankOpen) return true;
   const tutor = Common.cacheLeague(type)?.tutor;
   if (!tutor) return false;
+  const bank = { player, distance: tutor.bankReach, near: false };
+  Common.api.emitCustomEvent("league:near-bank", bank);
+  if (bank.near) return true;
   const here = player.getLocation();
   return (player.getLocalNpcs?.() ?? []).some((npc) => npc.getDefinition?.()?.getName?.() === tutor.name
     && npc.getLocation().getZ() === here.getZ() && npc.getLocation().isWithinDistance(here, tutor.reach));

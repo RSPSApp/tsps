@@ -1,6 +1,5 @@
 const Layout = require("./Layout.SideJournalDefaults");
 
-const CUSTOM_ACCOUNT_TAB_CONFIG = "SideJournalDefaults:customAccountTab";
 const NATIVE_SUMMARY_GROUP_ID = 712;
 const SIDE_JOURNAL_GROUP_ID = 629;
 const JOURNAL_CONTENT_UID = (SIDE_JOURNAL_GROUP_ID << 16) | 43;
@@ -105,7 +104,7 @@ function render(player) {
 }
 
 function resolveContent(request) {
-  if (request.groupId !== NATIVE_SUMMARY_GROUP_ID || pluginApi.getPluginConfig(CUSTOM_ACCOUNT_TAB_CONFIG, false) !== true) return;
+  if (request.groupId !== NATIVE_SUMMARY_GROUP_ID) return;
   // The client runtime owns one custom interface at a time. Close a custom main modal
   // before mounting the summary, so a visible modal cannot lose its search/tab state.
   const modalId = request.player.getInterfaceId?.() ?? -1;
@@ -178,10 +177,14 @@ function initialize(api) {
   core = api.core;
 }
 
+/** Keep the saved choice across opt-outs without installing an invisible XP gate. */
+function persistCombatXpChoice(api) {
+  api.persistAttribute(COMBAT_XP_LOCKED_ATTRIBUTE, false);
+}
+
 module.exports = function attachSummary(api) {
   initialize(api);
   api.registerCustomInterface(Layout.DEFINITION);
-  api.persistAttribute(COMBAT_XP_LOCKED_ATTRIBUTE, false);
   api.onCustomEvent("side-journal:resolve-content", resolveContent);
   api.onCustomEvent("side-journal:mounted", mounted);
   api.onCustomEvent("interface:opened", interfaceOpened);
@@ -191,3 +194,5 @@ module.exports = function attachSummary(api) {
   api.onPlayerProcess(refresh);
   api.onPlayerLogout(logout);
 };
+
+module.exports.persistCombatXpChoice = persistCombatXpChoice;

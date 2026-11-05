@@ -15,7 +15,7 @@
  *   `impactSound` (sound id, an area sound at the target when the hit lands) and
  *   `castProjectile(cast, castOn)`.
  * - `hitDelay(attacker, target)`: ticks until the hit lands (default: the usual magic delay).
- * - `impact(attacker, target, accurate)`: when set, the impact (or splash) is sent with the cast,
+ * - `impact(attacker, target, accurate, hit)`: when set, the impact (or splash) is sent with the cast,
  *   delayed to the projectile's arrival, as live does; return { graphic, areaSound }. Otherwise
  *   `endGraphic` is shown when the hit lands, and a miss splashes, as for spellbook spells.
  * - `landSound`: a sound the caster hears when the hit lands.
@@ -106,8 +106,8 @@ function definePoweredStaff(api, config) {
     if (config.ranOutMessage) player.sendMessage(config.ranOutMessage);
   }
 
-  function sendImpact(attacker, target, accurate) {
-    const impact = config.impact(attacker, target, accurate);
+  function sendImpact(attacker, target, accurate, hit) {
+    const impact = config.impact(attacker, target, accurate, hit);
     if (impact?.graphic) target.performGraphic(impact.graphic);
     const sound = impact?.areaSound;
     const at = target.getLocation?.();
@@ -154,7 +154,7 @@ function definePoweredStaff(api, config) {
         const hit = new PendingHit(character, target, this, { delay, ordinary: true }).setSpell(spell);
         spell.onHitCalc(hit);
         config.onHitCalc?.(hit);
-        if (config.impact) sendImpact(character, target, hit.isAccurate());
+        if (config.impact) sendImpact(character, target, hit.isAccurate(), hit);
         return [hit];
       }
 

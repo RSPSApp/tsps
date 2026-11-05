@@ -13,6 +13,7 @@ module.exports = {
     require("./cooking/Cookers.Cooking")(api);
     require("./cooking/Recipes.Cooking")(api);
     require("./cooking/Wine.Cooking")(api);
+    require("./cooking/SacredEel.Cooking")(api);
   },
   isCookingActive: Cookers.isCookingActive,
   /** Every food a fire or range cooks, by its raw item id (after register). */

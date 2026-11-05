@@ -7,6 +7,8 @@
  * - Medium: a Bloodveld killed in the Wilderness God Wars Dungeon; talking to the Edgeville Emblem Trader
  *   about emblems.
  * - Medium: a Yew log from a fallen Ent's trunk in the Wilderness (the trunk reports its logs).
+ * - Medium: entering the Wilderness God Wars Dungeon, on arriving inside through a crevice. The Wiki gives the
+ *   task 60 Agility or Strength, which the cave doesn't need, so that point of credit is inferred.
  * - Hard: a Spiritual warrior killed there; the Trollheim agility shortcut into the Wilderness; one of the
  *   three god spells hitting another player in the Wilderness ("you have to successfully hit the player",
  *   so a splash does not count; the spell is the hit's own, not the caster's last cast).
@@ -17,8 +19,8 @@
  * NPCs and do not count. The Emblem Trader task fires on his conversation's emblems line (the Wiki says
  * only "talk to him about emblems"; that line is inferred as the point of credit). Not credited here, and
  * why, is in the audit table of #2430: the orbs wait on the Kandarin PR's `crafting:made` event, the boss
- * trios need their own sequence state, and the Resource Area (blocked on its gate and fee), the Muddy
- * chest and the Rogues' chest are not reachable yet.
+ * trios need their own sequence state, and the Resource Area (blocked on its gate and fee) is not reachable
+ * yet; the Muddy chest and the Rogues' chest are plugins/items/WildernessChests.plugin.js's.
  */
 const DIARY = "wilderness";
 
@@ -29,6 +31,7 @@ const KILLS = new Map([
   ["Spiritual warrior", "kill-a-spiritual-warrior-in-the-wilderness-godwa"],
   ["Spiritual mage", "slay-a-spiritual-mage-inside-the-wilderness-godw"],
 ]);
+const GWD_ENTRY = { crevice: 26767, task: "enter-the-wilderness-godwars-dungeon" };
 const TROLLHEIM_SHORTCUT = { name: "Rocks (Wilderness, Trollheim)", task: "take-the-agility-shortcut-from-trollheim-into-th" };
 const GOD_SPELLS = new Set([1190, 1191, 1192]); // Saradomin Strike, Claws of Guthix, Flames of Zamorak
 const GOD_TASK = "cast-one-of-the-3-god-spells-against-another-pla";
@@ -50,6 +53,10 @@ function npcKilled({ killer, npc }) {
   if (killer?.isPlayer?.() !== true || inPrivateArea(npc)) return;
   const task = KILLS.get(npc?.getDefinition?.()?.getName?.());
   if (task && inDungeon(npc.getLocation())) credit(killer, task);
+}
+
+function enteredDungeon({ player, objectId }) {
+  if (objectId === GWD_ENTRY.crevice && !inPrivateArea(player) && inDungeon(player.getLocation())) credit(player, GWD_ENTRY.task);
 }
 
 function shortcutCrossed({ player, shortcut }) {
@@ -84,6 +91,7 @@ module.exports = {
     api = pluginApi;
     api.onNpcDeath(npcKilled);
     api.onCustomEvent("agility:obstacle", shortcutCrossed);
+    api.onCustomEvent("loc-teleports:arrived", enteredDungeon);
     api.onCombatHitResolved(hitResolved);
     api.onCustomEvent("woodcutting:ent-logs", entLogs);
     api.onCustomEvent("npc-dialogue:line", dialogueLine);

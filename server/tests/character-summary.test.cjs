@@ -1,16 +1,17 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
+const fs = require("node:fs");
+const path = require("node:path");
 const Statistics = require("../plugins/combat/PvpStatistics.plugin");
-const Defaults = require("../plugins/interface/SideJournalDefaults.plugin");
 const Layout = require("../plugins/interface/sidejournaldefaults/Layout.SideJournalDefaults");
 
-function fixture(customAccountTab = true) {
+function fixture(world = { plugins: { CustomCharacterSummary: true } }) {
   const events = new Map(), buttons = new Map(), defaults = new Map();
   const processes = [], gates = [], logouts = [], saves = [], emitted = [];
   const commands = new Set(["teleports", "presets", "commands", "lockxp"]);
   const api = {
-    getPluginConfig: (key, fallback) => key === "SideJournalDefaults:customAccountTab" ? customAccountTab ?? fallback : fallback,
     core: {
+      WorldDefinition: { readWorldConfig: () => world },
       Bank: { TOTAL_BANK_TABS: 3, BANK_SEARCH_TAB_INDEX: 2 },
       ItemIdentifiers: { COINS: 995, BLOOD_MONEY: 13307, PLATINUM_TOKEN: 13204, TOKKUL: 6529, STARDUST: 25527, MARK_OF_GRACE: 11849 },
       Skill: Object.fromEntries(["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC", "HITPOINTS", "PRAYER", "WOODCUTTING"].map(name => [name, name])),
@@ -27,7 +28,15 @@ function fixture(customAccountTab = true) {
   };
   api.onCustomEvent("persistence:save", ({ player }) => saves.push(player));
   Statistics.register(api);
-  Defaults.register(api);
+  // Real modules present on this tree: the old state has only Defaults, not the future wrapper.
+  const directory = path.join(__dirname, "../plugins/interface");
+  const candidates = fs.readdirSync(directory)
+    .filter(name => ["SideJournalDefaults.plugin.js", "CustomCharacterSummary.plugin.js"].includes(name))
+    .map(name => require(path.join(directory, name)));
+  assert.ok(candidates.some(plugin => plugin.name === "SideJournalDefaults"));
+  for (const name of ["SideJournalDefaults", "CustomCharacterSummary"]) {
+    candidates.find(plugin => plugin.name === name)?.register(api);
+  }
   function query(player) {
     const request = { player, stats: null };
     api.emitCustomEvent("pvp:stats", request);
@@ -72,27 +81,6 @@ function player(attributes = {}, bot = false) {
 const row = (p, key) => p.strings.get(Layout.uid(Layout.ROWS.find(row => row.key === key).component));
 const mount = (f, p) => f.api.emitCustomEvent("player:bootstrap-complete", { player: p });
 const death = (f, victim, killer) => f.api.emitCustomEvent("player:dying", { player: victim, killer });
-
-test("custom account tab is opt-in and keeps native summary controls when unset or disabled", () => {
-  for (const configured of [null, false]) {
-    const f = fixture(configured), p = player();
-    p.getInterfaceId = () => 30004;
-    p.getPacketSender().sendInterfaceRemoval = () => assert.fail("native summary must not close a custom modal");
-    mount(f, p);
-    assert.equal(p.mounts.at(-1)[1], 712);
-    assert.equal(p.strings.has(Layout.uid(Layout.COMPONENT.USERNAME)), false);
-    assert.equal(f.click(p, Layout.COMPONENT.TELEPORTS), false);
-    for (const [child, group] of [[10, 399], [18, 259], [2, 712]]) {
-      const buttonId = (629 << 16) | child;
-      f.buttons.get(buttonId)({ player: p, buttonId });
-      assert.equal(p.mounts.at(-1)[1], group);
-    }
-    p.setAttribute("skills:combat-xp-locked", true);
-    const xp = { player: p, skill: "ATTACK", allow: true };
-    for (const gate of f.gates) gate(xp);
-    assert.equal(xp.allow, false, "existing combat XP locks remain enforced");
-  }
-});
 
 test("login replaces the native summary, preserves the name, and fills every requested section", () => {
   const f = fixture(), p = player();
@@ -477,8 +465,9 @@ test("a journal panel mounted directly also stops hidden summary updates", () =>
   assert.equal(f.click(p, Layout.COMPONENT.XP), false);
 });
 
-test("the actual Duel Arena policy excludes arena statistics and preserves both killstreaks", () => {
+test("the actual Duel Arena policy excludes arena statistics and preserves both killstreaks", async () => {
   require("../dist/Server").Server.installProductionPathResolver();
+  await require("../dist/game/cache/CachePipeline").CachePipeline.initialize(path.resolve(__dirname, ".."));
   const { PluginManager } = require("../dist/plugins/PluginManager");
   const core = PluginManager.getCoreApi();
   const f = fixture(), defeated = [];
@@ -537,4 +526,74 @@ test("the actual Duel Arena policy excludes arena statistics and preserves both 
   require("../plugins/combat/KillStreaks.plugin").register(api);
   kdr({ player: winner });
   assert.equal(spoken, "I currently have 1 kdr!");
+});
+
+// #2566 changes the intentionally custom #2258 default; old custom cases above opt in.
+test("an explicit custom summary keeps a saved combat XP choice active", () => {
+  const f = fixture({ plugins: { CustomCharacterSummary: true } });
+  const p = player({ "skills:combat-xp-locked": true });
+  mount(f, p);
+  assert.equal(p.mounts.at(-1)[1], 30015);
+  assert.equal(f.api.definition.groupId, 30015);
+  const request = { player: p, skill: f.api.core.Skill.ATTACK, allow: true };
+  f.gates.forEach(gate => gate(request));
+  assert.equal(request.allow, false);
+  assert.equal(p.getAttribute("skills:combat-xp-locked"), true);
+});
+
+test("the native summary is the default unless the custom feature is explicitly true", async (t) => {
+  for (const [name, world] of [
+    ["unset", {}],
+    ["empty plugin map", { plugins: {} }],
+    ["explicit false", { plugins: { CustomCharacterSummary: false } }],
+    ["legacy implicit enable", { disabledPlugins: [] }],
+    ["legacy with explicit false", { disabledPlugins: [], plugins: { CustomCharacterSummary: false } }],
+  ]) {
+    await t.test(name, () => {
+      const f = fixture(world), p = player();
+      const scripts = [], flags = [];
+      p.getPacketSender().sendInterfaceScript = (...args) => { scripts.push(args); };
+      p.getPacketSender().sendInterfaceFlagsRange = (...args) => { flags.push(args); };
+      mount(f, p);
+      assert.equal(p.mounts.at(-1)[1], 712, "native account summary remains mounted");
+      assert.equal(f.api.definition, undefined, "custom widgets are not registered");
+      assert.equal(p.strings.has(Layout.uid(Layout.COMPONENT.USERNAME)), false);
+      assert.ok(scripts.some(([id]) => id === 3970), "native time-played feed remains active");
+      assert.ok(flags.some(([uid]) => uid === ((712 << 16) | 3)), "native account rows retain their event flags");
+      assert.equal(f.buttons.has(Layout.uid(Layout.COMPONENT.XP)), false, "no invisible custom XP button handler");
+    });
+  }
+});
+
+test("disabled custom UI retains the saved choice without an active hidden XP gate", async (t) => {
+  for (const [name, world] of [
+    ["unset", {}],
+    ["explicit false", { plugins: { CustomCharacterSummary: false } }],
+    ["legacy implicit enable", { disabledPlugins: [] }],
+  ]) {
+    await t.test(name, () => {
+      const f = fixture(world), p = player({ "skills:combat-xp-locked": true });
+      assert.equal(f.defaults.get("skills:combat-xp-locked"), false, "saved schema remains registered");
+      const request = { player: p, skill: f.api.core.Skill.ATTACK, allow: true };
+      f.gates.forEach(gate => gate(request));
+      assert.equal(request.allow, true, "disabled custom feature does not block combat XP");
+      assert.equal(p.getAttribute("skills:combat-xp-locked"), true, "reenabling can recover the saved choice");
+    });
+  }
+});
+
+
+test("native Account Info leaves custom modals open and keeps journal navigation when the custom plugin is off", () => {
+  for (const world of [{}, { plugins: { CustomCharacterSummary: false } }]) {
+    const f = fixture(world), p = player();
+    p.getInterfaceId = () => 30004;
+    p.getPacketSender().sendInterfaceRemoval = () => assert.fail("native summary must not close a custom modal");
+    mount(f, p);
+    assert.equal(p.mounts.at(-1)[1], 712);
+    for (const [child, group] of [[10, 399], [18, 259], [2, 712]]) {
+      const buttonId = (629 << 16) | child;
+      f.buttons.get(buttonId)({ player: p, buttonId });
+      assert.equal(p.mounts.at(-1)[1], group);
+    }
+  }
 });

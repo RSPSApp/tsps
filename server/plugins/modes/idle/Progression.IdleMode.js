@@ -47,10 +47,15 @@ function tickSaveChance(player) {
   return levelOf(player, "quick-hands") * (upgrade("quick-hands")?.tickSaveChancePerLevel ?? 0);
 }
 
-/** Whether this XP earns points: an idle skill's, or (`combat.pointsFromXp`) idle combat's. */
+/**
+ * Whether this XP earns points: an idle skill's, or idle combat's (`combat.pointsFromXp`), or
+ * idle production's (`production.pointsFromXp`).
+ */
 function earns(player, skill) {
   if (Common.idleGather(player, skill)) return true;
-  return Common.data.combat.pointsFromXp && Common.isIdle(player) && Common.idleCombatSkill(skill);
+  if (!Common.isIdle(player)) return false;
+  if (Common.data.combat.pointsFromXp && Common.idleCombatSkill(skill)) return true;
+  return Common.data.production.pointsFromXp === true && Common.idleProductionSkill(skill);
 }
 
 /** `onExperienceGained`: idle XP fills points. */
@@ -83,17 +88,21 @@ function upgradeRows(player) {
   });
 }
 
-function quickHands(request, skill) {
-  if (request.ticks <= 1 || !Common.idleGather(request.player, skill)) return;
+function quickHands(request) {
+  if (request.ticks <= 1) return;
   if (Math.random() < tickSaveChance(request.player)) request.ticks -= 1;
 }
 
+/** `skills:action-interval`: a chop or a swing of the pickaxe, or any idle production's action. */
 function actionInterval(request) {
-  if (QUICK_KINDS.has(request.kind)) quickHands(request, request.skill);
+  const { player, skill, kind } = request;
+  const gathering = QUICK_KINDS.has(kind) && Common.idleGather(player, skill);
+  const making = Common.isIdle(player) && Common.idleProductionSkill(skill);
+  if (gathering || making) quickHands(request);
 }
 
 function fishingInterval(request) {
-  quickHands(request, Common.core.Skill.FISHING);
+  if (Common.idleGather(request.player, Common.core.Skill.FISHING)) quickHands(request);
 }
 
 /** `storage:gather`: Bountiful Harvest's extra resource goes to the bank, with no XP. */

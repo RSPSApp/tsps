@@ -11,7 +11,11 @@
 // data/dorgesh-kaan-lamps.json holds each lamp's tile, checked against the cache map by its test.
 //
 // Not modelled, for want of a source: the "another broken lamp nearby" hint and minimap arrow, an
-// animation or sound for the repair, and the dorgesh_bulbs_fixed varbit.
+// animation or sound for the repair, and the dorgesh_bulbs_fixed varbit. The total's wording comes
+// from the Dorgesh-Kaan lamps RuneLite plugin's chat pattern; the low-level refusal is this plugin's.
+// Lamps on other floors that share a bit show the current part's state; they can't be reached from
+// here, so only their look is off. The six parts are Areas, so they hold the city's area slot: later
+// Dorgesh-Kaan area content must extend these rather than register its own.
 
 const LAMPS = require("./data/dorgesh-kaan-lamps.json");
 
@@ -65,7 +69,7 @@ function catalogue() {
 
 function broken(player) {
   const saved = player.getAttribute(BROKEN_ATTRIBUTE);
-  const known = Array.isArray(saved) ? saved.filter(name => catalogue().has(name)) : [];
+  const known = Array.isArray(saved) ? [...new Set(saved.filter(name => catalogue().has(name)))] : [];
   if (known.length >= BROKEN_LAMPS) return known.slice(0, BROKEN_LAMPS);
   // A new player's lamps, or a save that lost some: break working lamps until there are ten.
   const filled = [...known];
@@ -129,7 +133,8 @@ function fix(player, objectId) {
   const next = brokenNames.filter(name => name !== lamp.name);
   next.push(pickWorking(next, lamp.name));
   player.setAttribute(BROKEN_ATTRIBUTE, next);
-  player.sendMessage(`You replace the orb. Total lights fixed: ${fixed.toLocaleString("en-GB")}`);
+  // The Wiki: "a filtered chatbox message will appear after every lamp fixed".
+  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, `You replace the orb. Total lights fixed: ${fixed.toLocaleString("en-GB")}`);
   if (fixed % BATCH === 0) {
     manager.addExperiences(core.Skill.FIREMAKING, BATCH_XP);
     manager.addExperiences(core.Skill.CRAFTING, BATCH_XP);
@@ -140,8 +145,9 @@ function fix(player, objectId) {
   return true;
 }
 
+/** A lamp that isn't one of the player's broken ones falls through (it can look broken across the line). */
 function fixOption(event) {
-  if (fix(event.player, event.objectId)) event.handled = true;
+  return fix(event.player, event.objectId);
 }
 
 function orbOnLamp(event) {
@@ -188,8 +194,8 @@ module.exports = {
     api.persistAttribute(BROKEN_ATTRIBUTE, []);
     api.persistAttribute(FIXED_ATTRIBUTE, 0);
     api.onObjectInteraction("Broken lamp", { Fix: fixOption });
-    api.onItemOnObject("Light orb", "Broken lamp", orbOnLamp);
-    api.onItemOnObject("Empty light orb", "Broken lamp", emptyOrbOnLamp);
+    api.onItemOnObject("Light orb", "Broken lamp", orbOnLamp, { noted: false });
+    api.onItemOnObject("Empty light orb", "Broken lamp", emptyOrbOnLamp, { noted: false });
     registerParts();
   },
   _test: {

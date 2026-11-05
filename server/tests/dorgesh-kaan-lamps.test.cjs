@@ -45,6 +45,7 @@ function playerAt(t, x, y, z, { level = 52, orbs = 1, preset = true } = {}) {
   player.getSession = () => session;
   const messages = [];
   player.sendMessage = message => { messages.push(message); };
+  player.getPacketSender().sendTypedMessage = (type, message) => { messages.push(message); return player.getPacketSender(); };
   for (const skill of [core.Skill.FIREMAKING, core.Skill.CRAFTING]) player.getSkillManager().setCurrentLevel(skill, level, false);
   if (orbs) player.getInventory().add(new core.Item(I.LIGHT_ORB, orbs), false);
   if (preset) player.setAttribute(BROKEN_ATTRIBUTE, presetBroken());
@@ -144,9 +145,10 @@ test("every 50th lamp gives 2,500 more of each, and a saved set survives with on
   assert.equal(xp(player, core.Skill.CRAFTING) - before, 3000);
   assert.ok(messages.includes("<col=239929>You have fixed a batch of 50 lights and have gained some extra experience.</col>"));
 
-  player.setAttribute(BROKEN_ATTRIBUTE, ["dorgesh_lamp_3", "not_a_lamp"]);
+  player.setAttribute(BROKEN_ATTRIBUTE, ["dorgesh_lamp_3", "not_a_lamp", "dorgesh_lamp_3", "dorgesh_lamp_3"]);
   const repaired = Lamps._test.broken(player);
   assert.equal(repaired.length, 10);
+  assert.equal(new Set(repaired).size, 10, "a duplicated save still has ten different broken lamps");
   assert.ok(repaired.includes("dorgesh_lamp_3") && !repaired.includes("not_a_lamp"));
 });
 
@@ -158,6 +160,16 @@ test("Using a light orb on the broken lamp fixes it the same way", t => {
   PluginManager.emitItemOnObject(event);
   assert.equal(event.handled, true);
   assert.equal(player.getAttribute(FIXED_ATTRIBUTE), 1);
+  assert.equal(player.getInventory().getAmount(I.LIGHT_ORB), 0);
+  assert.ok(!player.getAttribute(BROKEN_ATTRIBUTE).includes(lamp.name));
+});
+
+test("leaving the city clears the lamps from the shared varp", t => {
+  const { player } = playerAt(t, 2702, 5349, 0);
+  assert.notEqual(lampsVar(player), 0);
+  player.setLocation(new core.Location(3222, 3218, 0));
+  AreaManager.process(player);
+  assert.equal(lampsVar(player), 0);
 });
 
 test("fixing a lamp with an elite Sherlock scroll for this task completes the challenge", t => {

@@ -4,11 +4,12 @@ const Statistics = require("../plugins/combat/PvpStatistics.plugin");
 const Defaults = require("../plugins/interface/SideJournalDefaults.plugin");
 const Layout = require("../plugins/interface/sidejournaldefaults/Layout.SideJournalDefaults");
 
-function fixture() {
+function fixture(customAccountTab = true) {
   const events = new Map(), buttons = new Map(), defaults = new Map();
   const processes = [], gates = [], logouts = [], saves = [], emitted = [];
   const commands = new Set(["teleports", "presets", "commands", "lockxp"]);
   const api = {
+    getPluginConfig: (key, fallback) => key === "SideJournalDefaults:customAccountTab" ? customAccountTab ?? fallback : fallback,
     core: {
       Bank: { TOTAL_BANK_TABS: 3, BANK_SEARCH_TAB_INDEX: 2 },
       ItemIdentifiers: { COINS: 995, BLOOD_MONEY: 13307, PLATINUM_TOKEN: 13204, TOKKUL: 6529, STARDUST: 25527, MARK_OF_GRACE: 11849 },
@@ -71,6 +72,27 @@ function player(attributes = {}, bot = false) {
 const row = (p, key) => p.strings.get(Layout.uid(Layout.ROWS.find(row => row.key === key).component));
 const mount = (f, p) => f.api.emitCustomEvent("player:bootstrap-complete", { player: p });
 const death = (f, victim, killer) => f.api.emitCustomEvent("player:dying", { player: victim, killer });
+
+test("custom account tab is opt-in and keeps native summary controls when unset or disabled", () => {
+  for (const configured of [null, false]) {
+    const f = fixture(configured), p = player();
+    p.getInterfaceId = () => 30004;
+    p.getPacketSender().sendInterfaceRemoval = () => assert.fail("native summary must not close a custom modal");
+    mount(f, p);
+    assert.equal(p.mounts.at(-1)[1], 712);
+    assert.equal(p.strings.has(Layout.uid(Layout.COMPONENT.USERNAME)), false);
+    assert.equal(f.click(p, Layout.COMPONENT.TELEPORTS), false);
+    for (const [child, group] of [[10, 399], [18, 259], [2, 712]]) {
+      const buttonId = (629 << 16) | child;
+      f.buttons.get(buttonId)({ player: p, buttonId });
+      assert.equal(p.mounts.at(-1)[1], group);
+    }
+    p.setAttribute("skills:combat-xp-locked", true);
+    const xp = { player: p, skill: "ATTACK", allow: true };
+    for (const gate of f.gates) gate(xp);
+    assert.equal(xp.allow, false, "existing combat XP locks remain enforced");
+  }
+});
 
 test("login replaces the native summary, preserves the name, and fills every requested section", () => {
   const f = fixture(), p = player();

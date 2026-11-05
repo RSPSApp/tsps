@@ -115,6 +115,11 @@ async function widget(f,uid,buttonNum,extra={}){
   await f.connection.dispatch([{type:'widget_action',widgetId:uid,groupId:uid>>>16,childId:uid&65535,buttonNum,...extra}]);
   f.connection.processTurnPackets();
 }
+async function destroyAnswer(f,yes){
+  // Native confirmdestroy (584) resumes with resume_pausebutton: 1 Yes, 0 No.
+  await f.connection.dispatch([{type:'dialogue_continue',widgetId:584<<16,childIndex:yes?1:0}]);
+  f.connection.processTurnPackets();
+}
 async function itemOp(f,option){
   const {MAIN_INVENTORY_WIDGET_UID}=require('../dist/net/protocol/ClientProtocol');
   const actions=api.core.CacheDefinitions.getItem(platter).inventoryActions;
@@ -137,16 +142,16 @@ test('actual inventory widget Inspect opens the canonical platter message withou
 test('real shared Destroy cancel preserves contents; confirmation empties progress and a reclaimed platter',async t=>{
   const f=fixture(t);apply(f,'begin');apply(f,'greet',0);apply(f,'seat',0);apply(f,'orderDrink','beer');apply(f,'takeDrink','beer');
   const state=Progress.read(f.player);
-  await itemOp(f,'Destroy');assert.equal(f.player.getPacketSender().isChatboxInterface(30005),true);
+  await itemOp(f,'Destroy');assert.equal(f.player.getPacketSender().isChatboxInterface(584),true);
   assert.equal(f.player.getInventory().getAmount(platter),1);
-  await widget(f,(30005<<16)|12,1);assert.deepEqual(Progress.read(f.player),state);
-  await itemOp(f,'Destroy');await widget(f,(30005<<16)|11,1);
+  await destroyAnswer(f,false);assert.deepEqual(Progress.read(f.player),state);
+  await itemOp(f,'Destroy');await destroyAnswer(f,true);
   assert.equal(f.player.getInventory().getAmount(platter),0);
   assert.equal(Progress.read(f.player).drinkHeld,false,'confirmed loss discards carried drink immediately');
   assert.ok(Progress.read(f.player).revision>state.revision,'loss invalidates existing continuations');
   play(f,'starting-the-event-talking-to-the-cook-after-losing-the-serving-tray');await finish(f);
   assert.equal(f.player.getInventory().getAmount(platter),1);assert.equal(Progress.read(f.player).drinkHeld,false);
-  await widget(f,(30005<<16)|11,1);assert.equal(f.player.getInventory().getAmount(platter),1,'old confirmation cannot destroy the replacement');
+  await destroyAnswer(f,true);assert.equal(f.player.getInventory().getAmount(platter),1,'old confirmation cannot destroy the replacement');
 });
 test('native Inspect follows ingredient/cooked states and confirmed destruction removes the cooked meal',async t=>{
   const f=fixture(t);apply(f,'begin');apply(f,'greet',0);apply(f,'seat',0);apply(f,'orderDrink','beer');apply(f,'takeDrink','beer');apply(f,'serveDrink',0);
@@ -155,7 +160,7 @@ test('native Inspect follows ingredient/cooked states and confirmed destruction 
   for(const ingredient of ['cabbage','parsnips','stuffing'])apply(f,'collect',ingredient);
   await itemOp(f,'Inspect');assert.equal(f.player.getDialogueManager().getCurrent()?.text,'The serving platter is full of uncooked ingredients. Take them to the Cook!');await finish(f);
   apply(f,'cook');await itemOp(f,'Inspect');assert.equal(f.player.getDialogueManager().getCurrent()?.text,'The serving platter has a fresh, hot, Christmas dinner on it.');await finish(f);
-  await itemOp(f,'Destroy');await widget(f,(30005<<16)|11,1);
+  await itemOp(f,'Destroy');await destroyAnswer(f,true);
   assert.equal(Progress.read(f.player).phase,'ingredients');assert.deepEqual(Progress.read(f.player).gathered,[]);
   assert.equal(apply(f,'serveMeal',0),false);
   play(f,'starting-the-event-talking-to-the-cook-after-losing-the-serving-tray');await finish(f);

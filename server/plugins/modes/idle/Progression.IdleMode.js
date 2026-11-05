@@ -13,6 +13,11 @@ const POINTS_ATTRIBUTE = "idle-mode:points";
 const PROGRESS_ATTRIBUTE = "idle-mode:point-progress";
 /** { upgradeId: level }. */
 const UPGRADES_ATTRIBUTE = "idle-mode:upgrades";
+/**
+ * Saved: every idle point earned, spent or not (the hiscores). An account from before it was kept
+ * starts from its points and what its upgrades cost.
+ */
+const EARNED_ATTRIBUTE = "idle-mode:points-earned";
 
 /** Gathering actions Quick Hands speeds up (`skills:action-interval` kinds). */
 const QUICK_KINDS = new Set(["chop", "mine"]);
@@ -64,13 +69,26 @@ function earn({ player, skill, experience }) {
   const progress = (Number(player.getAttribute(PROGRESS_ATTRIBUTE)) || 0) + experience;
   const earned = Math.floor(progress / config().xpPerPoint);
   player.setAttribute(PROGRESS_ATTRIBUTE, progress - earned * config().xpPerPoint);
-  if (earned > 0) player.setAttribute(POINTS_ATTRIBUTE, points(player) + earned);
+  if (earned > 0) {
+    player.setAttribute(EARNED_ATTRIBUTE, earnedPoints(player) + earned);
+    player.setAttribute(POINTS_ATTRIBUTE, points(player) + earned);
+  }
   Common.changed(player);
+}
+
+/** Every point earned, spent or not. */
+function earnedPoints(player) {
+  const saved = player.getAttribute(EARNED_ATTRIBUTE);
+  if (saved !== null && saved !== undefined) return Number(saved) || 0;
+  let spent = 0;
+  for (const [id, entry] of Object.entries(config().upgrades)) spent += entry.costs.slice(0, levelOf(player, id)).reduce((total, cost) => total + cost, 0);
+  return points(player) + spent;
 }
 
 /** Gives idle points (a daily goal's reward). */
 function addPoints(player, amount) {
   if (!(amount > 0)) return;
+  player.setAttribute(EARNED_ATTRIBUTE, earnedPoints(player) + amount);
   player.setAttribute(POINTS_ATTRIBUTE, points(player) + amount);
   Common.changed(player);
 }
@@ -150,6 +168,8 @@ module.exports = function attach(api) {
   api.persistAttribute(POINTS_ATTRIBUTE, 0);
   api.persistAttribute(PROGRESS_ATTRIBUTE, 0);
   api.persistAttribute(UPGRADES_ATTRIBUTE, {});
+  // No fixed start: an account from before it was kept works it out (earnedPoints).
+  api.persistAttribute(EARNED_ATTRIBUTE, null);
   api.onExperienceGained(earn);
   api.onCustomEvent("skills:action-interval", actionInterval);
   api.onCustomEvent("fishing:interval", fishingInterval);
@@ -161,6 +181,8 @@ module.exports.progressionCommand = progressionCommand;
 module.exports.capHours = capHours;
 module.exports.bountyChance = bountyChance;
 module.exports.points = points;
+module.exports.earned = earnedPoints;
+module.exports.EARNED_ATTRIBUTE = EARNED_ATTRIBUTE;
 module.exports.levelOf = levelOf;
 module.exports.progress = progress;
 module.exports.addPoints = addPoints;

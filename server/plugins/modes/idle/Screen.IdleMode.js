@@ -18,6 +18,7 @@ const Progression = require("./Progression.IdleMode");
 const TravelScreen = require("./TravelScreen.IdleMode");
 const Goals = require("./Goals.IdleMode");
 const Achievements = require("./Achievements.IdleMode");
+const Hiscores = require("./Hiscores.IdleMode");
 
 const { FLAG_OP1, TYPE_RECTANGLE, TYPE_TEXT, createWidgetGroup } = require("../../interface/widgetGroup");
 
@@ -36,7 +37,7 @@ const COMPONENT = {
   UPGRADES_BOX: 16, UPGRADES_TITLE: 17, POINTS: 18,
   // Each upgrade slot: its name, description, price, and Buy button and label.
   SLOT_START: 20, SLOT_STRIDE: 5,
-  // The tabs across the top: Overview, Stats, Goals, Feats, Travel (buttons, and their labels).
+  // The tabs across the top: Overview, Stats, Goals, Feats, Ranks, Travel (buttons, and their labels).
   TAB_START: 52, TAB_LABEL_START: 120,
   // The Stats tab: a panel of the totals, hidden until it is picked.
   STATS_BOX: 60, STATS_TITLE: 61, SKILLS_HEADER: 62, ITEMS_HEADER: 63, STATS_TIME: 64, SKILL_LINE_START: 65, ITEM_LINE_START: 75,
@@ -44,9 +45,16 @@ const COMPONENT = {
   GOALS_BOX: 86, GOALS_TITLE: 87, GOAL_START: 88, GOAL_STRIDE: 2, GOALS_BONUS: 98, GOALS_NEXT: 99,
   // The Feats tab: a row per achievement track (its tier, then the next tier's progress).
   FEATS_BOX: 100, FEATS_TITLE: 101, FEAT_START: 102, FEAT_STRIDE: 2,
+  // The Ranks tab: the hiscores' categories as buttons, a row per place (name, score), your place.
+  RANKS_BOX: 130, RANKS_TITLE: 131, RANK_BUTTON_START: 132, RANK_BUTTON_LABEL_START: 136,
+  RANK_ROW_START: 140, RANK_ROW_STRIDE: 2, RANK_YOU: 162,
 };
-const TABS = ["Overview", "Stats", "Goals", "Feats", "Travel"];
-const TAB = { OVERVIEW: 0, STATS: 1, GOALS: 2, FEATS: 3, TRAVEL: 4 };
+const TABS = ["Overview", "Stats", "Goals", "Feats", "Ranks", "Travel"];
+const TAB = { OVERVIEW: 0, STATS: 1, GOALS: 2, FEATS: 3, RANKS: 4, TRAVEL: 5 };
+/** Places the Ranks tab shows (RANK_ROW_START + 2 per place stays below RANK_YOU). */
+const MAX_RANKS = 10;
+/** Hiscores categories the Ranks tab has buttons for. */
+const MAX_RANK_CATEGORIES = 4;
 /** Achievement tracks the Feats tab has room for (FEAT_START + 2 per track stays below 120). */
 const MAX_FEATS = 6;
 /** Rows the Goals tab has room for (GOAL_START + 2 per goal stays below GOALS_BONUS). */
@@ -174,8 +182,27 @@ function addFeats(add, root) {
   }
 }
 
+function addRanks(add, root) {
+  const { x, y, width, height } = FULL;
+  const hidden = { hidden: true, isHidden: true };
+  add(COMPONENT.RANKS_BOX, root, box(x, y, width, height, hidden));
+  add(COMPONENT.RANKS_TITLE, root, text(x + 8, y + 4, 200, 20, { fontId: 496, textColor: 0xff981f, yTextAlignment: 1, ...hidden }));
+  const categories = Hiscores.categories().slice(0, MAX_RANK_CATEGORIES);
+  categories.forEach((_, index) => {
+    const bx = x + width - 8 - (categories.length - index) * 64;
+    add(COMPONENT.RANK_BUTTON_START + index, root, { ...button(bx, y + 4, 60, 20, "Show"), ...hidden });
+    add(COMPONENT.RANK_BUTTON_LABEL_START + index, root, { ...buttonLabel(bx, y + 4, 60, 20), ...hidden });
+  });
+  for (let place = 0; place < MAX_RANKS; place++) {
+    const top = y + 30 + place * 18;
+    add(COMPONENT.RANK_ROW_START + place * COMPONENT.RANK_ROW_STRIDE, root, text(x + 12, top, 280, 18, { yTextAlignment: 1, ...hidden }));
+    add(COMPONENT.RANK_ROW_START + place * COMPONENT.RANK_ROW_STRIDE + 1, root, text(x + width - 172, top, 160, 18, { xTextAlignment: 2, yTextAlignment: 1, ...hidden }));
+  }
+  add(COMPONENT.RANK_YOU, root, text(x + 8, y + height - 24, width - 16, 18, { textColor: 0xffd27f, yTextAlignment: 1, ...hidden }));
+}
+
 /** The uids each content tab shows: filled as the interface is built. */
-const TAB_UIDS = { [TAB.OVERVIEW]: [], [TAB.STATS]: [], [TAB.GOALS]: [], [TAB.FEATS]: [] };
+const TAB_UIDS = { [TAB.OVERVIEW]: [], [TAB.STATS]: [], [TAB.GOALS]: [], [TAB.FEATS]: [], [TAB.RANKS]: [] };
 
 function buildInterface() {
   const { widgets, add } = createWidgetGroup(GROUP_ID);
@@ -196,6 +223,7 @@ function buildInterface() {
   addStats(into(TAB_UIDS[TAB.STATS]), root);
   addGoals(into(TAB_UIDS[TAB.GOALS]), root);
   addFeats(into(TAB_UIDS[TAB.FEATS]), root);
+  addRanks(into(TAB_UIDS[TAB.RANKS]), root);
   return { groupId: GROUP_ID, widgets };
 }
 
@@ -348,7 +376,40 @@ function sendFeats(player) {
   }
 }
 
-/** player -> the content tab shown (Overview, Stats, Goals or Feats). */
+/** player -> the hiscores category the Ranks tab shows. */
+const rankCategories = new Map();
+
+function sendRanks(player) {
+  const sender = player.getPacketSender();
+  const categories = Hiscores.categories().slice(0, MAX_RANK_CATEGORIES);
+  const shown = rankCategories.get(player) ?? categories[0].id;
+  const { title, rows, you } = Hiscores.lines(player, shown, MAX_RANKS);
+  sender.sendString(title, uid(COMPONENT.RANKS_TITLE));
+  categories.forEach((category, index) => {
+    const label = category.unit.charAt(0).toUpperCase() + category.unit.slice(1);
+    sender.sendString(category.id === shown ? col(COLOUR.VALUE, label) : label, uid(COMPONENT.RANK_BUTTON_LABEL_START + index));
+  });
+  for (let place = 0; place < MAX_RANKS; place++) {
+    const row = rows[place];
+    const name = row ? `${row.place}. ${row.name}` : place === 0 ? col(COLOUR.DIM, "Nobody yet") : "";
+    sender.sendString(row?.you ? col(COLOUR.ON, name) : name, uid(COMPONENT.RANK_ROW_START + place * COMPONENT.RANK_ROW_STRIDE));
+    sender.sendString(row ? (row.you ? col(COLOUR.ON, row.value) : row.value) : "", uid(COMPONENT.RANK_ROW_START + place * COMPONENT.RANK_ROW_STRIDE + 1));
+  }
+  sender.sendString(you, uid(COMPONENT.RANK_YOU));
+}
+
+/** A category button on the Ranks tab. */
+function clickRankCategory({ player, buttonId }) {
+  if (!isOpen(player)) return false;
+  const categories = Hiscores.categories().slice(0, MAX_RANK_CATEGORIES);
+  const index = categories.findIndex((_, i) => buttonId === uid(COMPONENT.RANK_BUTTON_START + i) || buttonId === uid(COMPONENT.RANK_BUTTON_LABEL_START + i));
+  if (index < 0) return false;
+  rankCategories.set(player, categories[index].id);
+  if (tabs.get(player) === TAB.RANKS) sendRanks(player);
+  return true;
+}
+
+/** player -> the content tab shown (Overview, Stats, Goals, Feats or Ranks). */
 const tabs = new Map();
 
 function redraw(player) {
@@ -363,6 +424,10 @@ function redraw(player) {
   }
   if (tabs.get(player) === TAB.FEATS) {
     sendFeats(player);
+    return;
+  }
+  if (tabs.get(player) === TAB.RANKS) {
+    sendRanks(player);
     return;
   }
   sendStatus(player);
@@ -461,6 +526,7 @@ function forgetReturn({ player }) {
   returning.delete(player);
   atWelcome.delete(player);
   tabs.delete(player);
+  rankCategories.delete(player);
 }
 
 /** `idle:open`: the Idle button in the journal tab (SideJournalDefaults). */
@@ -501,6 +567,9 @@ module.exports = function attach(api) {
   api.onInterfaceActionButton([uid(COMPONENT.AUTO_BUTTON), uid(COMPONENT.AUTO_LABEL)], switchAuto);
   api.onInterfaceActionButton([uid(COMPONENT.TRAVEL_BUTTON), uid(COMPONENT.TRAVEL_LABEL)], travelButton);
   api.onInterfaceActionButton(TABS.flatMap((_, tab) => [uid(COMPONENT.TAB_START + tab), uid(COMPONENT.TAB_LABEL_START + tab)]), clickTab);
+  api.onInterfaceActionButton(Hiscores.categories().slice(0, MAX_RANK_CATEGORIES).flatMap((_, index) => [
+    uid(COMPONENT.RANK_BUTTON_START + index), uid(COMPONENT.RANK_BUTTON_LABEL_START + index),
+  ]), clickRankCategory);
   api.onCustomEvent("idle:open", openFromJournal);
   api.onCustomEvent("idle:summary", journalSummary);
   api.onCustomEvent("welcome-screen:shown", welcomeShown);

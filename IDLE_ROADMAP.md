@@ -96,7 +96,7 @@ Uma moeda própria do jogo idle, separada dos pontos de melhoria.
 
 ## P2 - Depois
 
-- [ ] Ranking (hiscores) de pontos e XP idle
+- [x] Ranking (hiscores): XP idle, pontos idle ganhos e horas idle; aba Ranks na tela idle e `::idle top`
 - [ ] Viagem andando em vez de teleporte, usando as rotas longas dos bots
 - [ ] Bosses idle
 - [ ] Testes automáticos rodando no GitHub em todo PR (CI)

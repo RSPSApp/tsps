@@ -34,6 +34,7 @@ module.exports = {
     require("./idle/Bonfires.IdleMode")(api);
     require("./idle/Goals.IdleMode")(api);
     require("./idle/Achievements.IdleMode")(api);
+    require("./idle/Hiscores.IdleMode")(api);
     require("./idle/Screen.IdleMode")(api);
     require("./idle/TravelScreen.IdleMode")(api);
     require("./idle/Onboarding.IdleMode")(api);

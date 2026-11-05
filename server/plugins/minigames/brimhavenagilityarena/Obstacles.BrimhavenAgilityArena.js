@@ -16,6 +16,25 @@ const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
 const ROPE_SWING = { ANIM: 751, ROPE_ANIM: 497, SOUND: 2494, PAST: 3, BEFORE: 2 };
 /** 0 west, 1 north, 2 east, 3 south, as the agility steps' wall facings. */
 const ROTATION_VECTORS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+const BROKEN_PLANK_ID = 3576;
+const PLANK_FALL_ANIMATION = 768;
+const PLANK_FALL_SOUNDS = [2479, 2493];
+const PLANK_LAND_SOUND = 2455;
+const PLANK_FAIL_MESSAGE = "You stepped on a broken piece of plank!";
+
+/** The four changeable planks in each of the arena's two three-lane plank banks. */
+const PLANK_BANKS = [
+  { lanes: [
+    [[2765, 9556], [2766, 9556], [2767, 9556], [2768, 9556]],
+    [[2765, 9557], [2766, 9557], [2767, 9557], [2768, 9557]],
+    [[2765, 9558], [2766, 9558], [2767, 9558], [2768, 9558]],
+  ] },
+  { lanes: [
+    [[2798, 9589], [2799, 9589], [2800, 9589], [2801, 9589]],
+    [[2798, 9590], [2799, 9590], [2800, 9590], [2801, 9590]],
+    [[2798, 9591], [2799, 9591], [2800, 9591], [2801, 9591]],
+  ] },
+];
 
 /** Dispenser pillars stand every 11 tiles; a gap runs from 2 to 9 past one (cache). */
 const GRID = { x: 2761, y: 9546, step: 11 };
@@ -61,6 +80,133 @@ const LINES = [
 const FAMILY = new Map();
 for (const [kind, ids] of Object.entries(Shared.OBSTACLE_IDS)) {
   for (const id of ids) FAMILY.set(id, kind);
+}
+
+let plankObjects = new Map();
+let plankIds = new Map();
+let plankTemplates = null;
+let plankSafeLanes = null;
+
+function plankKey(x, y) {
+  return `${x},${y}`;
+}
+
+/** Read the map's initial plank layout once so its models and rotations stay cache-accurate. */
+function initializePlanks() {
+  if (plankTemplates) return true;
+  const core = Shared.core();
+  const objects = new Map();
+  const ids = new Map();
+  const templates = [];
+  const safeLanes = [];
+  for (const bank of PLANK_BANKS) {
+    const patterns = [];
+    for (const lane of bank.lanes) {
+      const pattern = [];
+      for (const [x, y] of lane) {
+        const object = core.MapObjects.getType(new core.Location(x, y, Shared.ARENA_PLANE), 22, null);
+        if (!object) return false;
+        const key = plankKey(x, y);
+        objects.set(key, object);
+        ids.set(key, object.getId());
+        pattern.push(object.getId());
+      }
+      patterns.push(pattern);
+    }
+    const safeLane = patterns.findIndex((pattern) => pattern.every((id) => id !== BROKEN_PLANK_ID));
+    if (safeLane < 0 || patterns.filter((pattern) => pattern.every((id) => id !== BROKEN_PLANK_ID)).length !== 1) {
+      return false;
+    }
+    templates.push(patterns);
+    safeLanes.push(safeLane);
+  }
+  plankObjects = objects;
+  plankIds = ids;
+  plankTemplates = templates;
+  plankSafeLanes = safeLanes;
+  return true;
+}
+
+function replacePlank(x, y, id) {
+  const core = Shared.core();
+  const key = plankKey(x, y);
+  const current = plankObjects.get(key);
+  if (!current || current.getId() === id) {
+    plankIds.set(key, current?.getId() ?? id);
+    return;
+  }
+  core.ObjectManager.deregister(current, true);
+  const replacement = new core.GameObject(
+    id,
+    new core.Location(x, y, Shared.ARENA_PLANE),
+    current.getType(),
+    current.getFace(),
+    current.getPrivateArea?.() ?? null,
+  );
+  core.ObjectManager.register(replacement, true);
+  plankObjects.set(key, replacement);
+  plankIds.set(key, id);
+}
+
+/** Choose a different safe lane in each bank when the arena's one-minute cycle advances. */
+function advancePlanks() {
+  if (!initializePlanks()) return false;
+  for (let bankIndex = 0; bankIndex < PLANK_BANKS.length; bankIndex++) {
+    const lanes = PLANK_BANKS[bankIndex].lanes;
+    const templates = plankTemplates[bankIndex];
+    const safeTemplate = templates[plankSafeLanes[bankIndex]];
+    const brokenTemplates = templates.filter((pattern) => pattern.some((id) => id === BROKEN_PLANK_ID));
+    const shift = Shared.roll(0.5) ? 1 : 2;
+    const nextSafeLane = (plankSafeLanes[bankIndex] + shift) % lanes.length;
+    let brokenTemplateIndex = 0;
+    for (let laneIndex = 0; laneIndex < lanes.length; laneIndex++) {
+      const pattern = laneIndex === nextSafeLane ? safeTemplate : brokenTemplates[brokenTemplateIndex++];
+      for (let tileIndex = 0; tileIndex < lanes[laneIndex].length; tileIndex++) {
+        const [x, y] = lanes[laneIndex][tileIndex];
+        replacePlank(x, y, pattern[tileIndex]);
+      }
+    }
+    plankSafeLanes[bankIndex] = nextSafeLane;
+  }
+  return true;
+}
+
+function brokenPlankOn(path) {
+  const core = Shared.core();
+  for (const [x, y] of path) {
+    const key = plankKey(x, y);
+    let id = plankIds.get(key);
+    if (id == null) {
+      id = core.MapObjects.getType(new core.Location(x, y, Shared.ARENA_PLANE), 22, null)?.getId();
+    }
+    if (id === BROKEN_PLANK_ID) return [x, y];
+  }
+  return null;
+}
+
+/** Fall, land on the lower arena floor, then reproduce the captured message and damage timing. */
+function plankFailureSteps(path, brokenTile) {
+  const tileIndex = path.findIndex(([x, y]) => x === brokenTile[0] && y === brokenTile[1]);
+  const walked = path.slice(0, tileIndex + 1);
+  return [
+    { face: path[path.length - 1] },
+    { wait: 1 },
+    ...walkWithCues(walked, {
+      1: [{ sound: 2480, loops: 2, delay: 10 }],
+      3: [{ sound: 2480, loops: 4, delay: 10 }],
+    }),
+    { wait: 1 },
+    { anim: PLANK_FALL_ANIMATION },
+    { sound: PLANK_FALL_SOUNDS[0] },
+    { sound: PLANK_FALL_SOUNDS[1], loops: 10 },
+    { wait: 1 },
+    { tele: [brokenTile[0], brokenTile[1], 0] },
+    { sound: PLANK_LAND_SOUND },
+    { wait: 1 },
+    { msg: { spam: PLANK_FAIL_MESSAGE } },
+    { wait: 1 },
+    { run: ({ player }) => Shared.hit(player, Shared.trapDamage(player.getHitpoints())) },
+  ];
 }
 
 function familyAt(objectId) {
@@ -170,7 +316,6 @@ function crossingSteps(line, { dir, path }) {
       }), { wait: 1 }];
     case "PLANK":
       // rsprox 1738 113, 1863 2007: walked at walking pace, 2480 on the 1st and 3rd tiles.
-      // ponytail: the minute's broken planks (3576) and their fall are not modelled; see the docs.
       return [face, { wait: 1 }, ...walkWithCues(path, {
         1: [{ sound: 2480, loops: 2, delay: 10 }],
         3: [{ sound: 2480, loops: 4, delay: 10 }],
@@ -280,6 +425,7 @@ function useObstacle(event) {
   const object = event.object;
   const at = object.getLocation();
   let steps;
+  let failed = false;
   if (kind === "ROPE_SWING") {
     steps = ropeSwingSteps(crossingTarget(player, object, ROPE_SWING.PAST, true));
   } else {
@@ -291,7 +437,15 @@ function useObstacle(event) {
     const off = Math.max(Math.abs(pos.getX() - ax), Math.abs(pos.getY() - ay));
     // The route hook brings the player to the approach tile; a click from beside it steps on.
     if (off > 1) return true;
-    steps = crossingSteps(line, route);
+    if (kind === "PLANK" && Shared.agilityLevel(player) < 99) {
+      initializePlanks();
+      const brokenTile = brokenPlankOn(route.path);
+      if (brokenTile) {
+        failed = true;
+        steps = plankFailureSteps(route.path, brokenTile);
+      }
+    }
+    steps ??= crossingSteps(line, route);
     if (off === 1) steps = [{ walk: [route.approach], arrive: true }, ...steps];
   }
   const context = {
@@ -309,7 +463,7 @@ function useObstacle(event) {
   };
   ObstacleRunner.run(context, steps, {
     onFinish: (completed) => {
-      if (completed) Shared.addObstacleXp(player, kind);
+      if (completed && !failed) Shared.addObstacleXp(player, kind);
     },
   });
   return true;
@@ -363,4 +517,6 @@ module.exports.obstacleXp = obstacleXp;
 module.exports.lineAt = lineAt;
 module.exports.crossing = crossing;
 module.exports.crossingSteps = crossingSteps;
+module.exports.advancePlanks = advancePlanks;
+module.exports.plankFailureSteps = plankFailureSteps;
 module.exports.LINES = LINES;

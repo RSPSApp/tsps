@@ -262,7 +262,7 @@ The object-route hook walks to that threshold before playing the transition.
 The click is handled the tick after the player arrives, so each captured tick comes one tick earlier from the click:
 1. **The animation's tick:** the animation and sound, and the fade out when there is one.
 2. **A tick later:** the minimap goes off.
-3. **The captured tick:** the move.
+3. **The captured tick:** the move, after the entry's `message` when it has one: the game message live OSRS sends on a successful crossing (`messageType: "spam"` for one the chat filter hides). The Cam Torum squeeze doors say "You manage to squeeze through the tiny door." as spam on the teleport's tick (226/1693; 237/1098, 1102, 1105, 1135). The capture export keeps success messages without their type or tick, so the sync doesn't write them; it keeps one on an entry already in the data.
 4. **After the move:** the fade back in a tick later, and the overlay closed two ticks after that.
 
 Movement is blocked meanwhile. The sequence stops if the player is moved, dies or logs out.

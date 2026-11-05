@@ -22,7 +22,7 @@ const LONGRANGE_EXTRA = 2;
 const CAST_ANIMATION = 1167;
 const CAST_GRAPHIC = { START: 665, PROJECTILE: 1040, END: 1042 };
 
-const { definePoweredStaff } = require("./PoweredStaff");
+const { definePoweredStaff, restricted, plainAmount, takePlain, PRESET_TEXT } = require("./PoweredStaff");
 
 let core = null;
 let api = null;
@@ -111,6 +111,11 @@ function chargeStaff(event) {
     return;
   }
   const inventory = player.getInventory();
+  if (restricted(held === usedItem ? usedWithItem : usedItem)) {
+    player.sendMessage(PRESET_TEXT);
+    event.handled = true;
+    return;
+  }
   const current = chargesOf(held);
   if (current >= MAX_CHARGES) {
     player.sendMessage("Your Sanguinesti staff is already fully charged.");
@@ -118,7 +123,7 @@ function chargeStaff(event) {
     return;
   }
   const affordable = Math.min(
-    Math.floor(inventory.getAmount(ids().BLOOD_RUNE) / BLOOD_RUNES_PER_CHARGE),
+    Math.floor(plainAmount(inventory, ids().BLOOD_RUNE) / BLOOD_RUNES_PER_CHARGE),
     MAX_CHARGES - current,
   );
   if (affordable < 1) {
@@ -126,7 +131,7 @@ function chargeStaff(event) {
     event.handled = true;
     return;
   }
-  inventory.deleteNumber(ids().BLOOD_RUNE, affordable * BLOOD_RUNES_PER_CHARGE);
+  takePlain(inventory, ids().BLOOD_RUNE, affordable * BLOOD_RUNES_PER_CHARGE);
   setCharges(player, held, current + affordable);
   player.sendMessage(`You apply ${affordable.toLocaleString()} charge${affordable === 1 ? "" : "s"} to your Sanguinesti staff.`);
   event.handled = true;

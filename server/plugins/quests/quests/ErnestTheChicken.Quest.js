@@ -76,6 +76,8 @@ module.exports = function registerErnestTheChickenQuest(api) {
 
   /** The 9 puzzle door base ids (137-145 are nameless in the cache), in DOOR_TILES order. */
   const PUZZLE_DOOR_IDS = [137, 138, 139, 140, 141, 142, 143, 144, 145];
+  /** iron_door_open (Wiki, List of sound IDs), as seen live with Visual Sounds (reported in #2270; no capture). */
+  const PUZZLE_DOOR_SOUND = 71;
   const DOORS = [...PUZZLE_DOOR_IDS, ObjectIdentifiers.DOOR_274];
   /** Resolved door variants: 11449 closed, 11450 ajar (offers Open). */
   const DOOR_CLOSED = ObjectIdentifiers.DOOR_273;
@@ -505,6 +507,7 @@ module.exports = function registerErnestTheChickenQuest(api) {
     const wallSide = (position.getX() - tile.x) * step.x + (position.getY() - tile.y) * step.y > 0;
     const direction = wallSide ? -1 : 1;
     player.moveTo(new Location(tile.x + direction * step.x, tile.y + direction * step.y, tile.z ?? position.getZ()));
+    player.getPacketSender().sendSoundEffect(PUZZLE_DOOR_SOUND, 1, 0);
   }
 
   /**

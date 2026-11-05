@@ -149,3 +149,15 @@ export function withSeqHandItems(
     if (seq.rightHandItem >= 0) equip[EquipmentSlot.WEAPON] = unoffset(seq.rightHandItem);
     return new PlayerAppearance(app.gender, app.colors, app.kits, equip, app.headIcons);
 }
+
+/** The appearance with an active action sequence's held items, after its start delay. */
+export function withActionSeqHandItems(
+    app: PlayerAppearance,
+    seq: { leftHandItem: number; rightHandItem: number } | undefined,
+    actionSeqId: number,
+    actionDelay = 0,
+    forcedSequence = false,
+): PlayerAppearance {
+    if (forcedSequence || (actionSeqId | 0) < 0 || actionDelay !== 0) return app;
+    return withSeqHandItems(app, seq);
+}

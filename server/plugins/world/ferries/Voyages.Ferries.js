@@ -290,7 +290,9 @@ function travel(player, routeName) {
   const route = Common.route(routeName);
   if (!route || !player || Common.travelling(player)) return false;
   const trip = { ...route, routeName };
+  const from = player.getLocation().clone();
   STYLES[trip.style](player, trip);
+  Common.api.emitCustomEvent("ferries:departed", { player, route: routeName, from });
   return true;
 }
 

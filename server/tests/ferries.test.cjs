@@ -553,6 +553,22 @@ test("every route's gamevals resolve in the cache", () => {
   assert.equal(Ferries.members, true);
 });
 
+test("a departure receipt preserves the origin and is not emitted for refused trips", () => {
+  const departures = [];
+  api.onCustomEvent("ferries:departed", (event) => departures.push(event));
+  const player = createPlayer();
+  player.moveTo(new Location(2773, 3229, 0));
+  assert.equal(Voyages.travel(player, "atlantis"), false);
+  assert.equal(departures.length, 0);
+  assert.equal(Voyages.travel(player, "barnaby-ardougne"), true);
+  assert.equal(Voyages.travel(player, "barnaby-ardougne"), false);
+  assert.equal(departures.length, 1);
+  assert.equal(departures[0].route, "barnaby-ardougne");
+  tick(3);
+  assert.deepEqual(at(player), [2680, 3274, 0]);
+  assert.deepEqual([departures[0].from.getX(), departures[0].from.getY(), departures[0].from.getZ()], [2773, 3229, 0]);
+});
+
 test('Veos native travel menus work without quests and throughout Client of Kourend', async t => {
   const { PluginManager: PM } = require('../dist/plugins/PluginManager');
   const { PlayerSession } = require('../dist/net/PlayerSession');

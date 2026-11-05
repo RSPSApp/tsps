@@ -76,6 +76,8 @@ function buildHarness({ cacheObjects, objectManager: suppliedObjectManager, real
       ObjectDefinition: { forPlayer: (id) => ({ id: visibleObjectIds.get(id) ?? id, getInteractions: () => CacheDefinitions.getObject(visibleObjectIds.get(id) ?? id)?.actions ?? [] }) },
       Sound: require('../dist/game/Sound').Sound,
       Task: require('../dist/game/task/Task').Task,
+      ForceMovement: require('../dist/game/model/ForceMovement').ForceMovement,
+      ForceMovementTask: require('../dist/game/task/impl/ForceMovementTask').ForceMovementTask,
       ObjectManager: objectManager,
       TaskManager: taskManager,
     },
@@ -102,7 +104,7 @@ function buildHarness({ cacheObjects, objectManager: suppliedObjectManager, real
     world.set(tileKey(id, x, y, 0), object);
   };
 
-  const steps = [];
+  const steps = [], forced = [];
   const click = (id, x, y, face, action = 'Open', name = 'Gate', type = 0, privateArea = null, z = 0, from = null) => {
     const object = new GameObject(id, new Location(x, y, z), type, face, privateArea);
     const location = from ? new Location(from[0], from[1], z) : object.getLocation();
@@ -117,6 +119,9 @@ function buildHarness({ cacheObjects, objectManager: suppliedObjectManager, real
       isAllowRegionChangePacket: () => false,
       getPacketSender: () => ({}),
       getMovementQueue: () => ({ reset: () => {}, addSteps: (to) => steps.push([to.getX(), to.getY()]) }),
+      getCombat: () => ({ reset: () => {} }),
+      getForceMovement: () => forced.at(-1) ?? null,
+      setForceMovement: (movement) => { if (movement) forced.push(movement); },
     };
     ops.length = 0;
     handlers.get(name)[action]({ player, object, objectId: id, clickType: action === 'Open' ? 1 : 2, location: { x, y, z } });
@@ -130,7 +135,7 @@ function buildHarness({ cacheObjects, objectManager: suppliedObjectManager, real
     CacheDefinitions.getCounts = originalGetCounts;
   };
 
-  return { place, click, sounds, ops, steps, submitted, handlers, routes, customHandlers, internals: plugin.__internals, regionLoaded: (regionId) => regionLoaded({ regionId }), visibleObjectIds, setDoorToggleHandler: (handler) => { doorToggleHandler = handler; }, restore };
+  return { place, click, sounds, ops, steps, forced, submitted, handlers, routes, customHandlers, internals: plugin.__internals, regionLoaded: (regionId) => regionLoaded({ regionId }), visibleObjectIds, setDoorToggleHandler: (handler) => { doorToggleHandler = handler; }, restore };
 }
 
 test('shared wall-door reach masks cover every operation and preserve other object routing', () => {
@@ -1708,20 +1713,72 @@ test('the Lassar cistern gate opens into its actionless cache variant', () => {
 
 
 
-test('Dragon Slayer secret wall opens with the normal door interaction', () => {
+test('Dragon Slayer secret wall swings open as captured, the player is carried across, and it shuts two ticks later', () => {
+  // RSProx 2951 ticks 85-89: the wall (2606, 2836,9600 rot 3) becomes dragonsecretdoor_open (25039,
+  // 2836,9599 rot 0) with the invisible blocker 38848 on the doorway (2836,9600 rot 3) and sound 2410;
+  // the wall returns two ticks later. The blocker keeps everyone else out, so the opener is carried.
   const h = buildHarness();
   try {
     assert.ok(h.handlers.get('Wall')?.Open, 'the cache calls the Dragon Slayer passage a Wall');
     h.place(2606, 2836, 9600, 3);
-    assert.deepEqual(h.click(2606, 2836, 9600, 3, 'Open', 'Wall'), [
-      ['deregister', 2606, 2836, 9600, 3],
-      ['register', 2606, 2836, 9599, 0],
-    ], 'opening rotates the wall out of the doorway so ordinary pathfinding can cross');
+    for (const [from, to] of [[[2836, 9599], [2836, 9600]], [[2836, 9600], [2836, 9599]]]) {
+      assert.deepEqual(h.click(2606, 2836, 9600, 3, 'Open', 'Wall', 0, null, 0, from), [
+        ['deregister', 2606, 2836, 9600, 3],
+        ['register', 25039, 2836, 9599, 0],
+        ['register', 38848, 2836, 9600, 3],
+      ], 'the captured open leaf and invisible blocker replace the wall');
+      assert.deepEqual(h.steps.splice(0), [], 'the opener does not use ordinary (collision-checked) steps');
+      const movement = h.forced.splice(0).at(-1);
+      assert.ok(movement, 'the opener is carried');
+      assert.deepEqual([movement.getStart().getX(), movement.getStart().getY()], from);
+      assert.deepEqual([movement.getStart().getX() + movement.getEnd().getX(), movement.getStart().getY() + movement.getEnd().getY()], to);
+      assert.equal(h.sounds.at(-1)[1].getId(), 2410);
+      const shut = h.submitted.at(-1);
+      assert.equal(shut.getDelay?.() ?? shut.delay, 2);
+      shut.execute();
+      assert.deepEqual(h.ops.splice(0), [
+        ['deregister', 25039, 2836, 9599, 0], ['deregister', 38848, 2836, 9600, 3], ['register', 2606, 2836, 9600, 3]]);
+    }
   } finally {
     h.restore();
   }
 });
 
+test('Dragon Slayer secret wall: real routing and clipping keep ordinary movement out while it stands open', async () => {
+  // The wall is reachable only from the two tiles beside it, so every real click starts one step from the far
+  // side. While open, the real clipping must still block ordinary steps across it: only the carried opener crosses.
+  await initializeMapCollisionOnce();
+  require('../dist/game/definition/ObjectDefinition').ObjectDefinition.init();
+  RegionManager.loadMapFiles(2836, 9600, true);
+  const wall = MapObjects.get(2606, new Location(2836, 9600, 0), null);
+  assert.ok(wall, 'the real closed dragonsecretdoor is on the map');
+  const h = buildHarness({ realMapObjects: true, objectManager: ObjectManager });
+  const finder = new RsmodRouteFinding((x, y, z, area) => RegionManager.getClipping(x, y, z, area));
+  try {
+    const request = { object: wall, definition: { getName: () => 'Wall', getInteractions: () => ['Open'] },
+      sourceLocation: { x: 2836, y: 9598, z: 0 }, clickType: 1, destination: null };
+    h.routes[0](request);
+    const reaches = (y) => finder.reachedAbsolute({
+      level: 0, srcX: 2836, srcY: y, srcSize: 1, destX: 2836, destY: 9600, destWidth: 1, destLength: 1,
+      locAngle: wall.getFace(), locShape: wall.getType(), blockAccessFlags: request.blockAccessFlags, privateArea: null,
+    });
+    assert.equal(reaches(9598), false, 'two tiles south is not close enough to open it');
+    assert.equal(reaches(9601), false, 'two tiles north is not close enough either');
+    assert.equal(reaches(9599), true, 'the south face');
+    assert.equal(reaches(9600), true, 'the north face');
+
+    const south = new Location(2836, 9599, 0), north = new Location(2836, 9600, 0);
+    const blocked = () => [RegionManager.blockedNorth(south, null), RegionManager.blockedSouth(north, null)];
+    assert.deepEqual(blocked(), [true, true], 'closed: the wall blocks both ways');
+    for (const from of [[2836, 9599], [2836, 9600]]) {
+      h.click(2606, 2836, 9600, 3, 'Open', 'Wall', 0, null, 0, from);
+      assert.equal(h.forced.splice(0).length, 1, 'one carried step across');
+      assert.deepEqual(blocked(), [true, true], 'open: the invisible blocker still stops ordinary steps, both ways');
+      h.submitted.at(-1).execute();
+      assert.deepEqual(blocked(), [true, true], 'shut again after two ticks');
+    }
+  } finally { h.restore(); }
+});
 
 test('the Shantay pass crosses the desert fence in the right direction', () => {
   assert.deepEqual(shantayCrossingFor({ x: 3303, y: 3117, z: 0 }), {

@@ -3,14 +3,12 @@
 const { randomUUID } = require("node:crypto");
 const Catalogue = require("./Catalogue.TreasureTrails");
 const Dialogue = require("./Dialogue.TreasureTrails");
-const { TIERS } = require("./Tiers.TreasureTrails");
-const { COMPLETED_ATTRIBUTE: BEGINNER_COMPLETED_ATTRIBUTE } = require("../beginner/Runtime.BeginnerTreasureTrails");
+const { TIERS, META_PREFIX, completedAttribute, sharedCompletedCount } = require("./Tiers.TreasureTrails");
 const SKILL_CHALLENGES = require("./data/skill-challenges.json");
 const NPC_SPAWNS = require("../../../data/definitions/npc-spawns.json");
 const MASTER_PARTS = require("./data/master-parts.json");
 // A three-part master step's torn parts, as the cache names them.
 const TORN_PARTS = ["trail_master_part1", "trail_master_part2", "trail_master_part3"];
-const META_PREFIX = "treasure-trails:";
 // The clue helper names a target tile but no area. Emote steps accept the beginner
 // runtime's usual radius around it; music steps need the player near Cecilia's bridge.
 const EMOTE_RADIUS = 3;
@@ -29,9 +27,7 @@ const pick = (entries, random = Math.random) => entries[Math.floor(random() * en
 const location = entity => ({ x: entity.getLocation().getX(), y: entity.getLocation().getY(), z: entity.getLocation().getZ() });
 const distance = (a, b) => a.z === b.z ? Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) : Infinity;
 const metaKey = tier => META_PREFIX + tier.name;
-const completedAttribute = tier => `${META_PREFIX}${tier.name}-completed`;
 // The cache's collection log categories and the label its script 2735 gives each count.
-const SHARED_CLUE_CATEGORY = "Shared Treasure Trail Rewards";
 const clueCategoryName = tier => `${tier.label} Treasure Trails`;
 const rareClueCategoryName = tier => `${tier.label} Treasure Trails (Rare)`;
 
@@ -646,9 +642,8 @@ function restore({ player }) {
 }
 
 function categoryCount(request) {
-  if (request.category === SHARED_CLUE_CATEGORY) {
-    const beginner = Number(request.player.getAttribute(BEGINNER_COMPLETED_ATTRIBUTE)) || 0;
-    request.count = TIERS.reduce((sum, tier) => sum + (Number(request.player.getAttribute(completedAttribute(tier))) || 0), beginner);
+  if (request.category === "Shared Treasure Trail Rewards") {
+    request.count = sharedCompletedCount(request.player);
     return;
   }
   const tier = TIERS.find(entry => request.category === clueCategoryName(entry) || request.category === rareClueCategoryName(entry));

@@ -318,6 +318,12 @@ one there and starts at once. Travelling turns auto-resume on.
   its resource's item and the level it needs (and the player's own when it falls short), and a
   details panel filled client-side: where it is, the level (green when the player has it), what
   to bring, and a Travel button. Right-click Travel on a row goes straight there.
+- **Production sites** (kind `station`: a range or a furnace; `anywhere`: a bank, for an item
+  used on another) only take the player there, with the site's `tip`: making one by hand there sets
+  what is made. A production target that suits the site (a station of the same name and skill,
+  or anywhere for an item used on another) carries on there (`Production.moveTo`); otherwise the
+  other activities are cleared, so nothing drags the player back. They are listed under a
+  **Making** tab, which the screen opens on while producing, and need no level.
 - **Gathering sites need the skill's level**; combat sites only advise a combat level. Members
   sites are left out of free-to-play worlds. Idle Mode must be on.
 - **The sites** (`"travel"` `"sites"`): `{ id, name, place, skill, kind, target, option, tile, level,
@@ -351,6 +357,11 @@ one there and starts at once. Travelling turns auto-resume on.
 | `barbarians` | Barbarians | Barbarian Village | Combat | 10 (advised) |
 | `al-kharid-warriors` | Al Kharid warriors | Al Kharid palace | Combat | 15 (advised) |
 | `hill-giants` | Hill Giants | Edgeville Dungeon | Combat | 30 (advised) |
+| `al-kharid-range` | Cooking range | Al Kharid, by the bank | Cooking | any |
+| `catherby-range` | Cooking range | Catherby, by the bank (members) | Cooking | any |
+| `al-kharid-furnace` | Furnace | Al Kharid, by the bank | Smithing | any |
+| `edgeville-furnace` | Furnace | Edgeville, by the bank (members) | Smithing | any |
+| `al-kharid-crafting` | Fletching, crafting, herblore | Al Kharid bank | Fletching | any |
 
 ## Roadmap
 

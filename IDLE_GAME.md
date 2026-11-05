@@ -82,7 +82,8 @@ Na primeira vez que uma conta fica idle (conta nova num mundo idle, ou o primeir
    sozinho: guarda os produtos no banco, pega mais material do banco e repete, até o material
    acabar. Offline, gasta o material do banco no mesmo ritmo.
 7. **Viagem até a atividade**: na tela `::idle travel` (ou no botão Travel da tela idle), escolha
-   entre 21 locais (árvores, minas, pesca e monstros, de Lumbridge a Karamja). O personagem
+   entre 26 locais (árvores, minas, pesca, monstros e, na aba Making, fogões, fornalhas e um
+   banco pra produção, de Lumbridge a Karamja). O personagem
    teleporta e já começa a trabalhar sozinho. Locais de coleta pedem o nível da skill.
 
 ![A tela de viagem](docs/images/idle-travel.png)

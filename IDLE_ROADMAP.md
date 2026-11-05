@@ -76,7 +76,8 @@ Uma moeda própria do jogo idle, separada dos pontos de melhoria.
 
 - [x] **Produção idle**: Cooking, Smithing, Fletching, Crafting e Herblore em ciclo automático,
       usando os materiais do banco (testado no jogo: cozinhar, fundir e fletching, online e offline)
-- [ ] **Locais de viagem para produção** (fogão e fornalha perto de banco, como Al Kharid)
+- [x] **Locais de viagem para produção**: aba Making com fogões (Al Kharid, Catherby), fornalhas
+      (Al Kharid, Edgeville) e o banco de Al Kharid
 - [ ] **Firemaking e Thieving idle** (não passam pela janela de quantidade; precisam de um ciclo próprio)
 - [ ] **Smithing na bigorna** (a tela de forjar não é a janela de quantidade; ainda não é repetida)
 - [ ] **Mais locais de viagem**, incluindo áreas de membros

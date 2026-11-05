@@ -24,8 +24,12 @@ before(async () => {
 
 /** How far the activity looks for its targets from the anchor. */
 function reach(site) {
+  if (site.kind === "station") return DATA.production.searchTiles;
   return site.skill === "COMBAT" ? DATA.combat.searchTiles : DATA.auto.searchTiles;
 }
+
+/** Production sites: a station is one object (a range, a furnace); "anywhere" needs none. */
+const PRODUCTION_KINDS = ["station", "anywhere"];
 
 const hasOption = (options, option) => (options ?? []).some((entry) => typeof entry === "string" && entry.toLowerCase() === option.toLowerCase());
 
@@ -63,20 +67,26 @@ test("every site has a unique id, a known activity and a level", () => {
   for (const site of DATA.travel.sites) {
     assert.ok(!ids.has(site.id), `duplicate ${site.id}`);
     ids.add(site.id);
-    assert.ok(["WOODCUTTING", "MINING", "FISHING", "COMBAT"].includes(site.skill), site.id);
-    assert.ok(["object", "npc"].includes(site.kind), site.id);
+    const production = PRODUCTION_KINDS.includes(site.kind);
+    const skills = production ? DATA.production.skills : ["WOODCUTTING", "MINING", "FISHING", "COMBAT"];
+    assert.ok(skills.includes(site.skill), `${site.id}: ${site.skill}`);
+    assert.ok(["object", "npc", ...PRODUCTION_KINDS].includes(site.kind), site.id);
+    assert.ok(!production || typeof site.tip === "string", `${site.id}: a production site tells the player what to do`);
     assert.ok(Number.isInteger(site.level) && site.level >= 1 && site.level <= 99, site.id);
     assert.ok(site.skill !== "COMBAT" || site.kind === "npc", `${site.id}: monsters are NPCs`);
   }
 });
 
 for (const site of DATA.travel.sites) {
-  test(`${site.id}: a free tile with ${site.target} (${site.option}) in reach`, () => {
+  test(`${site.id}: a free tile${site.target ? ` with ${site.target} (${site.option}) in reach` : ""}`, () => {
     const [x, y, z] = site.tile;
     core.RegionManager.loadMapFiles(x, y);
     assert.equal(core.RegionManager.blocked(new core.Location(x, y, z), null), false, `${site.id}: arrival tile ${site.tile} is blocked`);
-    const count = site.kind === "object" ? objectsInReach(site) : npcsInReach(site);
-    assert.ok(count >= MIN_TARGETS, `${site.id}: ${count} ${site.target} within ${reach(site)} tiles`);
+    if (site.kind !== "anywhere") {
+      const count = site.kind === "npc" ? npcsInReach(site) : objectsInReach(site);
+      const needed = site.kind === "station" ? 1 : MIN_TARGETS;
+      assert.ok(count >= needed, `${site.id}: ${count} ${site.target} within ${reach(site)} tiles`);
+    }
     const icon = core.ItemDefinition.forId(site.icon);
     assert.ok(icon?.getName?.() && icon.getName() !== "null", `${site.id}: icon ${site.icon} is an item`);
   });

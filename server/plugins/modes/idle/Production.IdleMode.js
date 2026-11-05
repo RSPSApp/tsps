@@ -296,6 +296,26 @@ function logout({ player }) {
   forget(player);
 }
 
+/**
+ * A travel to a production site: the production target, when the site suits it, carries on
+ * there (a station of the same name and skill, or anywhere for an item used on another). True
+ * when it moved.
+ */
+function moveTo(player, site, anchor) {
+  const target = player.getAttribute(TARGET_ATTRIBUTE);
+  if (!target) return false;
+  const suits = site.kind === "anywhere"
+    ? target.kind === KIND.ITEM_ITEM
+    : target.skill === site.skill && target.objectName === site.target;
+  if (!suits) return false;
+  Common.setActivity(player, TARGET_ATTRIBUTE, { ...target, anchor });
+  const state = stateOf(player);
+  Object.assign(state, { lastProducedAt: 0, lastAttemptAt: 0, failedAttempts: 0, paused: null, awaitingMenu: false });
+  tracked.add(player);
+  Common.changed(player);
+  return true;
+}
+
 /** `::idle auto on` lifts a pause. */
 function unpause(player) {
   const state = stateOf(player);
@@ -331,5 +351,6 @@ module.exports.TARGET_ATTRIBUTE = TARGET_ATTRIBUTE;
 module.exports.KIND = KIND;
 module.exports.work = work;
 module.exports.unpause = unpause;
+module.exports.moveTo = moveTo;
 module.exports.pausedFor = pausedFor;
 module.exports.tracked = tracked;

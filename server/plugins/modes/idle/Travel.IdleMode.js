@@ -11,8 +11,15 @@
 const Common = require("./Common.IdleMode");
 const Auto = require("./Auto.IdleMode");
 const Combat = require("./Combat.IdleMode");
+const Production = require("./Production.IdleMode");
 
 const COMBAT = "COMBAT";
+/** Production sites only take the player there: making one by hand sets what is made. */
+const PRODUCTION_KINDS = new Set(["station", "anywhere"]);
+
+function isProduction(site) {
+  return PRODUCTION_KINDS.has(site.kind);
+}
 
 function config() {
   return Common.data.travel;
@@ -38,7 +45,8 @@ function levelFor(player, site) {
 /** Why the player can't go there, or null when they can. A combat level is advice, not a rule. */
 function refusal(player, site) {
   if (!Common.isIdle(player)) return "Turn Idle Mode on first (::idle on).";
-  if (site.skill !== COMBAT && levelFor(player, site) < site.level) {
+  // Production sites need no level: what the player makes there sets it.
+  if (site.skill !== COMBAT && !isProduction(site) && levelFor(player, site) < site.level) {
     return `You need ${Common.skillName(site.skill)} level ${site.level} for ${site.name.toLowerCase()}.`;
   }
   return null;
@@ -49,11 +57,23 @@ function anchorOf(site) {
   return { x, y, z };
 }
 
-/** What the activity there becomes: a gathering target or a monster to fight. */
+/**
+ * What the activity there becomes: a gathering target or a monster to fight. A production site
+ * moves the production target there when it suits, and otherwise leaves the player to make the
+ * first one by hand (no other activity drags them back). The message for the player.
+ */
 function adoptTarget(player, site) {
   const anchor = anchorOf(site);
   if (site.skill === COMBAT) Combat.adopt(player, { name: site.target, anchor });
-  else Auto.adopt(player, { skill: site.skill, kind: site.kind, name: site.target, option: site.option, anchor });
+  else if (!isProduction(site)) Auto.adopt(player, { skill: site.skill, kind: site.kind, name: site.target, option: site.option, anchor });
+  else if (Production.moveTo(player, site, anchor)) {
+    const made = player.getAttribute(Common.PRODUCTION_TARGET_ATTRIBUTE);
+    return `Your character carries on making ${Common.itemName(made.productId).toLowerCase()} here.`;
+  } else {
+    Common.setActivity(player, Common.PRODUCTION_TARGET_ATTRIBUTE, null);
+    return site.tip ?? null;
+  }
+  return null;
 }
 
 /** Teleports the player to the site and makes it the activity. True when the teleport started. */
@@ -69,10 +89,11 @@ function travel(player, site) {
   const destination = new Location(anchor.x, anchor.y, anchor.z);
   if (!TeleportHandler.checkReqs(player, destination)) return false;
   TeleportHandler.teleport(player, destination, TeleportType[config().teleportType] ?? TeleportType.NORMAL, false);
-  adoptTarget(player, site);
+  const note = adoptTarget(player, site);
   // Travelling to work means working: auto-resume comes on if it was off.
   if (player.getAttribute(Common.AUTO_ATTRIBUTE) === false) Auto.setAuto(player, true);
   player.sendMessage(`You travel to ${site.place}: ${site.name.toLowerCase()}.${site.tool ? ` You'll need: ${site.tool.toLowerCase()}.` : ""}`);
+  if (note) player.sendMessage(note);
   return true;
 }
 
@@ -93,6 +114,7 @@ function travelCommand(player, parts) {
 
 module.exports = {
   COMBAT,
+  isProduction,
   COMMANDS: ["go", "sites"],
   sites,
   byId,

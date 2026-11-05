@@ -21,12 +21,14 @@ const COMPONENT = {
   PANEL_DESCRIPTION: 14, TRAVEL_BUTTON: 15, TRAVEL_LABEL: 16, LAYOUT: 17,
   TAB_START: 20, TAB_LABEL_START: 30, ROW_BACKGROUND_START: 40, ROW_ICON_START: 60, ROW_LABEL_START: 80,
 };
+/** Each tab: the sites it lists (`has`), and the header they go under on the All tab. */
 const TABS = [
-  { label: "All", skill: null },
-  { label: "Woodcut", skill: "WOODCUTTING" },
-  { label: "Mining", skill: "MINING" },
-  { label: "Fishing", skill: "FISHING" },
-  { label: "Combat", skill: Travel.COMBAT },
+  { label: "All", has: null },
+  { label: "Woodcut", header: "Woodcutting", has: (site) => site.skill === "WOODCUTTING" },
+  { label: "Mining", header: "Mining", has: (site) => site.skill === "MINING" },
+  { label: "Fishing", header: "Fishing", has: (site) => site.skill === "FISHING" },
+  { label: "Combat", header: "Combat", has: (site) => site.skill === Travel.COMBAT },
+  { label: "Making", header: "Making", has: (site) => Travel.isProduction(site) },
 ];
 const TAB_WIDTH = 60;
 const TAB_STEP = 64;
@@ -154,12 +156,14 @@ function skillLabel(site) {
 }
 
 function levelLine(player, site) {
+  if (Travel.isProduction(site)) return `${skillLabel(site)}: ${col(COLOUR.OK, "any level")}`;
   const level = Travel.levelFor(player, site);
   if (site.skill === Travel.COMBAT) return `Advised combat level: ${col(level >= site.level ? COLOUR.OK : COLOUR.SHORT, site.level)}`;
   return `${skillLabel(site)} level: ${col(level >= site.level ? COLOUR.OK : COLOUR.SHORT, site.level)}`;
 }
 
 function description(site) {
+  if (Travel.isProduction(site)) return `A teleport takes you there. ${site.tip ?? ""}`;
   const doing = site.skill === Travel.COMBAT
     ? `fights the nearest ${site.target.toLowerCase()}`
     : `uses ${site.option} on the nearest ${site.target.toLowerCase()}`;
@@ -170,13 +174,13 @@ function description(site) {
 function rows(player) {
   return Travel.sites().map((site, index) => {
     const level = Travel.levelFor(player, site);
-    const short = site.skill !== Travel.COMBAT && level < site.level;
+    const short = site.skill !== Travel.COMBAT && !Travel.isProduction(site) && level < site.level;
     return {
       id: rowId(index),
       name: site.name,
       icon: site.icon,
-      detail: short ? ` - Lvl ${site.level} (you: ${level})` : ` - Lvl ${site.level}`,
-      terms: `${site.place} ${skillLabel(site)} ${site.target}`,
+      detail: Travel.isProduction(site) ? ` - ${site.place}` : short ? ` - Lvl ${site.level} (you: ${level})` : ` - Lvl ${site.level}`,
+      terms: `${site.place} ${skillLabel(site)} ${site.target ?? ""}`,
       panel: {
         title: site.name,
         subtitle: site.place,
@@ -191,21 +195,23 @@ function rows(player) {
 /** Each tab's rows, under a header per activity on the All tab. */
 function layouts() {
   const all = Travel.sites();
+  const idsOf = (has) => all.flatMap((site, index) => (has(site) ? [rowId(index)] : []));
   return TABS.map((tab) => {
-    if (tab.skill) return all.flatMap((site, index) => (site.skill === tab.skill ? [rowId(index)] : []));
+    if (tab.has) return idsOf(tab.has);
     return TABS.slice(1).flatMap((section) => {
-      const ids = all.flatMap((site, index) => (site.skill === section.skill ? [rowId(index)] : []));
-      return ids.length ? [{ header: section.label === "Woodcut" ? "Woodcutting" : section.label }, ...ids] : [];
+      const ids = idsOf(section.has);
+      return ids.length ? [{ header: section.header }, ...ids] : [];
     });
   });
 }
 
 /** The tab for the player's current activity, or All. */
 function activeTab(player) {
+  if (player.getAttribute(Common.PRODUCTION_TARGET_ATTRIBUTE)) return TABS.findIndex((tab) => tab.label === "Making");
   const fight = player.getAttribute(Common.COMBAT_TARGET_ATTRIBUTE);
   const gather = player.getAttribute(Common.GATHER_TARGET_ATTRIBUTE);
   const skill = fight ? Travel.COMBAT : gather?.skill;
-  const index = TABS.findIndex((tab) => tab.skill && tab.skill === skill);
+  const index = TABS.findIndex((tab) => tab.has && skill && tab.has({ skill, kind: "object" }));
   return index >= 0 ? index : 0;
 }
 

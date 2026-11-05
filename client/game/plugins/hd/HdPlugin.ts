@@ -1,4 +1,3 @@
-import { lowEndDeviceModeEnabled } from "../lowenddevice/LowEndDeviceMode";
 import { mat4, vec3 } from "gl-matrix";
 import PicoGL, { type DrawCall, type Framebuffer, type Program, type Texture } from "picogl";
 import type { ConfigChanged } from "@runelite/api/events";
@@ -76,7 +75,7 @@ export class HdPlugin extends Plugin {
 
     // Config events only reach a started plugin: pick up changes made while HD was off.
     hdEnabled(): boolean {
-        return this.isEnabled() && !lowEndDeviceModeEnabled;
+        return this.isEnabled();
     }
 
     protected override async startUp(): Promise<void> {

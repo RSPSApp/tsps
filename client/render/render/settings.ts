@@ -189,11 +189,11 @@ import { KNOWN_WATER_TEXTURE_IDS } from "../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
 import { RENDER_CONSTANTS } from "./constants";
 
-export function setSkyColor(host: WebGLOsrsRendererHost, r: number, g: number, b: number) {
+export function setSkyColor(host: WebGLOsrsRendererHost, r: number, g: number, b: number, explicit = false) {
 
         // A colour picked by hand stays; the panel reporting the current colour back doesn't count.
         const unchanged = [r, g, b].every((value, i) => Math.round(value) === Math.round(host.skyColor[i] * 255));
-        if (unchanged) return;
+        if (unchanged && !explicit) return;
         host.skyColorOverride = true;
         host.skyColor[0] = r / 255;
         host.skyColor[1] = g / 255;

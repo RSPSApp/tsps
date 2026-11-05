@@ -100,4 +100,11 @@ export const GpuConfig = ConfigGroup("gpu", {
         range: { min: 0, max: 400 },
         default: 24,
     }),
+    skyColor: ConfigItem({
+        name: "Sky colour",
+        description: "Overrides the area's sky and fog colour once picked; the debug panel's Sky.",
+        position: 10,
+        color: true,
+        default: 0,
+    }),
 });

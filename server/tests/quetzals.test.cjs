@@ -784,3 +784,29 @@ test("native saved Renu owners can fly to Auburnvale and use its published bird 
     Common.init(api);
   }
 });
+
+test("every site's Renu stands on its landing site, facing the way the site does (#2449)", () => {
+  // rsprox (226, 237): each site's quetzal_<site> NPC is added on its landing-site loc's tile.
+  const { RegionManager } = require("../dist/game/collision/RegionManager");
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  const spawns = require("../data/definitions/npc-spawns.json");
+  RegionManager.init();
+  const npcNames = CacheDefinitions.getNpcNames();
+  const locIds = [CacheDefinitions.getLocId("quetzal_landing_site_built")];
+  for (const [id, name] of CacheDefinitions.getLocNames()) if (/^quetzal_landing_site_(?!built|unbuilt)/.test(name)) locIds.push(id);
+  // Spawn directions (docs/npc-spawn-captures.md) for a loc's rotation: south, west, north, east.
+  const facing = [1, 3, 6, 4];
+  for (const varbit of Object.values(Common.SITE_VARBITS)) {
+    const npc = [...npcNames].find(([, name]) => name === varbit)?.[0];
+    assert.ok(npc !== undefined, `${varbit} is an NPC`);
+    assert.equal(CacheDefinitions.getNpc(npc).transformVarbit, varbitId(varbit));
+    const placed = spawns.filter((spawn) => spawn.id === npc);
+    assert.equal(placed.length, 1, `${varbit} spawns once`);
+    const [spawn] = placed;
+    assert.equal(spawn.wanderRadius, 0);
+    RegionManager.loadMapFiles(spawn.x, spawn.y);
+    const loc = locIds.map((id) => MapObjects.get(id, new Location(spawn.x, spawn.y, spawn.level), null)).find(Boolean);
+    assert.ok(loc, `${varbit} at ${spawn.x},${spawn.y} stands on a landing site`);
+    assert.equal(spawn.direction ?? 1, facing[loc.getFace()], `${varbit} faces as its landing site`);
+  }
+});

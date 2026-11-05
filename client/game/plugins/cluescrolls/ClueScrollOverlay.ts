@@ -10,6 +10,8 @@ import type { Graphics2D } from "@runelite/awt/Graphics2D";
 import type { Dimension } from "@runelite/awt/Shapes";
 import { ComponentConstants } from "@runelite/client/ui/overlay/components/ComponentConstants";
 import { LineComponent } from "@runelite/client/ui/overlay/components/LineComponent";
+import { openConfiguration } from "@runelite/client/plugins/config/configurationRequests";
+import type { PluginClass } from "@runelite/client/plugins/Plugin";
 import { OverlayPanel } from "@runelite/client/ui/overlay/OverlayPanel";
 import { OverlayPosition } from "@runelite/client/ui/overlay/OverlayPosition";
 import type { OverlayMenuEntry } from "../ClientPluginManager";
@@ -62,7 +64,7 @@ const HAS_LIGHT: ItemRequirement = any("Light Source",
 export class ClueScrollOverlay extends OverlayPanel {
     constructor(private readonly plugin: ClueScrollPlugin) {
         super("ClueScrollOverlay", OverlayPosition.TOP_LEFT);
-        this.addMenuEntry(MenuAction.RUNELITE_OVERLAY_CONFIG, "Configure", "Clue Scroll overlay");
+        this.addMenuEntry(MenuAction.RUNELITE_OVERLAY_CONFIG, "Configure", "Clue Scroll overlay", () => openConfiguration(plugin.constructor as PluginClass));
         this.addMenuEntry(MenuAction.RUNELITE_OVERLAY, "Reset", "Clue Scroll overlay", () => plugin.resetClue(true));
     }
 

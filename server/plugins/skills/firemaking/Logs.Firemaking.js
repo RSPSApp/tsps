@@ -308,6 +308,14 @@ function processFires() {
     if (state.remainingTicks > 0) {
       continue;
     }
+    // Content may keep a fire burning ("firemaking:burns-out" { object, location, campfire, keep },
+    // Idle Mode's bonfires): it burns a full lifetime more.
+    const burnout = { object, location: state.location, campfire: state.campfire === true, keep: false };
+    pluginApi.emitCustomEvent("firemaking:burns-out", burnout);
+    if (burnout.keep) {
+      state.remainingTicks = state.campfire ? CAMPFIRE_MAX_LIFETIME_TICKS : rollFireLifetimeTicks();
+      continue;
+    }
     activeFires.delete(object);
     // Instanced (private area) objects stay in the area's entity list after deregister, so
     // MapObjects.exists keeps reporting them; sessions check this flag instead.

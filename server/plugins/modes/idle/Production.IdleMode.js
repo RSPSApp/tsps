@@ -433,7 +433,7 @@ function moveTo(player, site, anchor) {
   if (!target) return false;
   const suits = site.kind === "anywhere"
     ? target.kind === KIND.ITEM_ITEM
-    : target.skill === site.skill && target.objectName === site.target;
+    : target.skill === site.skill && sameObject(target.objectName, site.target);
   if (!suits) return false;
   Common.setActivity(player, TARGET_ATTRIBUTE, { ...target, anchor });
   const state = stateOf(player);

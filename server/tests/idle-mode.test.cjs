@@ -67,6 +67,9 @@ function fakeApi(config = {}) {
       ItemActionPacketListener: { handleAction: (player, interfaceId, itemId, slot, clickType, option) => api.itemActions.push({ player, interfaceId, itemId, slot, clickType, option }) },
       TaskManager: { submit: (task) => world.tasks.push(task) },
       ItemIdentifiers: { TINDERBOX: 590 },
+      ObjectIdentifiers: { FIRE_23: 26185 },
+      GameObject: class { constructor(id, location, type, face, area) { Object.assign(this, { id, location, type, face, area }); } },
+      ObjectManager: { register: (object) => world.registered.push(object) },
     },
     interactions: [],
     interfaces: [],
@@ -120,7 +123,7 @@ class FakeLocation {
 }
 
 /** The stand-in world the auto-resume searches: objects and NPCs by name, with their options. */
-const world = { objects: [], npcs: [], tasks: [], members: true };
+const world = { objects: [], npcs: [], tasks: [], registered: [], members: true };
 
 function fakeObject(name, options, x, y, z = 0) {
   const at = { x, y, z };
@@ -240,6 +243,7 @@ function load(config) {
   world.objects = [];
   world.npcs = [];
   world.tasks = [];
+  world.registered = [];
   world.members = true;
   require(PLUGIN).register(api);
   return api;
@@ -1493,7 +1497,7 @@ test("travel screen: a Making tab lists the production sites, and opens on them 
   assert.equal(layout.active, 6, "the Making tab");
   const rows = JSON.parse(player.screen.texts.get(uid(COMPONENT.DATA)));
   const making = layout.tabs[6].map((id) => rows.find((row) => row.id === id).name);
-  assert.deepEqual(making, ["Cooking range", "Cooking range", "Furnace", "Furnace", "Anvils", "Fletching, crafting, herblore", "Firemaking"]);
+  assert.deepEqual(making, ["Cooking range", "Cooking range", "Furnace", "Furnace", "Anvils", "Fletching, crafting, herblore", "Bonfire"]);
   const range = rows.find((row) => row.name === "Cooking range");
   assert.equal(range.detail, " - Al Kharid, by the bank");
   assert.equal(range.panel.level, "Cooking: <col=00ff00>any level</col>");
@@ -1954,4 +1958,14 @@ test("production: an anvil's smithing interface is answered as a menu (smithing:
   api.emit("smithing:anvil-opened", { player, bar: 2351, menu: { ...menu, getItems: () => [1203, 1309] } });
   assert.equal(work(player, now), "unanswerable");
   assert.equal(open, false);
+});
+
+test("bonfires: placed on startup, and they never burn out; other fires do", () => {
+  for (const handler of api.handlers.events.startup ?? []) handler();
+  const placed = world.registered.find((object) => object.id === 26185);
+  assert.ok(placed, "the bonfire's fire");
+  const [x, y, z] = require("../plugins/modes/data/idle-mode.json").production.bonfires.tiles[0];
+  assert.deepEqual([placed.location.getX(), placed.location.getY(), placed.location.getZ(), placed.type], [x, y, z, 10]);
+  assert.equal(api.emit("firemaking:burns-out", { object: placed, location: new FakeLocation(x, y, z), campfire: true, keep: false }).keep, true);
+  assert.equal(api.emit("firemaking:burns-out", { object: {}, location: new FakeLocation(x + 1, y, z), campfire: true, keep: false }).keep, false);
 });

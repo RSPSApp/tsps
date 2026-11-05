@@ -23,6 +23,7 @@
     "299": { "name": "Show enemy name on health overlay", "varbit": 14706 },
     "300": { "name": "Compact boss health overlay", "varbit": 14707 },
     "301": { "name": "Health overlay display type", "varbit": 14708 },
+    "305": { "name": "Ammo-picking behaviour", "varbit": 5697 },
     "312": { "name": "Player Trade options", "varbit": 6580 },
     "315": {
       "name": "Level-up pop-up notifications",

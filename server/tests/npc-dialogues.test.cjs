@@ -650,12 +650,16 @@ test('Lumbridge tutors hand out what their transcripts say', () => {
       Sounds: { sendSound() {} }, Sound: { PICK_UP_ITEM: 0 },
       ItemOnGroundManager: { deregister(groundItem) { groundItem.deregistered = true; } },
     },
-    persistAttribute() {}, onNpcDialogueVariant() {}, onItemOnNpc() {},
+    persistAttribute() {}, onNpcDialogueVariant() {}, onItemOnNpc() {}, onPlayerLogin() {},
     onNpcDialogueCondition(handler) { hooks.condition = handler; },
     onCustomEvent(name, handler) { hooks[name] = handler; },
     onNpcInteraction(name, actions) { hooks[name] = actions; },
     onGroundItemPickup(handler) { hooks.pickup = handler; },
-    emitCustomEvent(_name, request) { hooks.started = request.variant; },
+    emitCustomEvent(name, request) {
+      if (name !== 'settings:set') { hooks.started = request.variant; return; }
+      hooks.settings = request;
+      if (request.settingId === 305) request.player.getPacketSender().sendVarbit(5697, request.value);
+    },
   });
   const container = (items = {}) => {
     const map = new Map(Object.entries(items).map(([id, n]) => [Number(id), n]));
@@ -665,8 +669,10 @@ test('Lumbridge tutors hand out what their transcripts say', () => {
   const player = (bank = {}) => {
     const attributes = {};
     const inventory = container();
+    const varbits = {};
     return { inventory, messages: [], getInventory: () => inventory, getEquipment: () => container(), getBanks: () => [container(bank)],
       getAttribute: (key) => attributes[key], setAttribute: (key, value) => { attributes[key] = value; },
+      getPacketSender: () => ({ getVarbit: (id) => varbits[id] ?? 0, sendVarbit: (id, value) => { varbits[id] = value; } }),
       sendMessage(text) { this.messages.push(text); }, getSkillManager: () => ({ getMaxLevel: () => 1 }) };
   };
   // Plays a transcript the way startDialogue drives the hooks, taking the menu option `pick`.
@@ -711,7 +717,8 @@ test('Lumbridge tutors hand out what their transcripts say', () => {
 
   // The ranged tutor's pickup toggle: same ammo as the worn slot goes to the slot, not the bag.
   hooks['npc-dialogue:choice']({ player: ranger, npcId: N.RANGED_COMBAT_TUTOR, option: 'Automatically equip it.' });
-  assert.equal(ranger.getAttribute('ranged:equip-ammo-on-pickup'), true);
+  assert.equal(hooks.settings.settingId, 305);
+  assert.equal(hooks.settings.value, 1);
   const { Equipment } = require('../dist/game/model/container/impl/Equipment');
   const { Item } = require('../dist/game/model/Item');
   const ammoSlot = new Item(I.BRONZE_ARROW, 5);
@@ -728,7 +735,7 @@ test('Lumbridge tutors hand out what their transcripts say', () => {
   hooks.pickup(wrongAmmo);
   assert.equal(wrongAmmo.handled, false, 'different ammo stays on the normal inventory pickup path');
   hooks['npc-dialogue:choice']({ player: ranger, npcId: N.RANGED_COMBAT_TUTOR, option: 'Place it in my inventory.' });
-  assert.equal(ranger.getAttribute('ranged:equip-ammo-on-pickup'), false);
+  assert.equal(hooks.settings.value, 0);
   const disabled = { player: ranger, groundItemId: I.BRONZE_ARROW, groundItem: { getItem: () => new Item(I.BRONZE_ARROW, 3) }, handled: false };
   hooks.pickup(disabled);
   assert.equal(disabled.handled, false);

@@ -23,13 +23,22 @@ export type PluginWorldMapPointEntry = {
     point?: WorldMapPoint;
 };
 
-/** Rewrites the RuneLite entries of the client's plugin-point list from the manager; other owners' entries stay. */
+/**
+ * Rewrites the RuneLite entries of the client's plugin-point list from the manager; other owners'
+ * entries stay. An entry reads its tile and snapping from the point each time, so a point moved
+ * with `setWorldPoint` after `add` draws, and jumps, at its current tile.
+ */
 export function syncWorldMapPoints(client: { pluginWorldMapPoints?: PluginWorldMapPointEntry[] }, manager: WorldMapPointManager): void {
     const others = (client.pluginWorldMapPoints ?? []).filter((entry) => entry.owner !== RUNELITE_POINT_OWNER);
-    const ours: PluginWorldMapPointEntry[] = manager.getPoints().map((point) => {
-        const tile = point.getWorldPoint();
-        return { x: tile.getX(), y: tile.getY(), plane: tile.getPlane(), color: 0xffffff, snapToEdge: point.isSnapToEdge(), owner: RUNELITE_POINT_OWNER, point };
-    });
+    const ours: PluginWorldMapPointEntry[] = manager.getPoints().map((point) => ({
+        get x() { return point.getWorldPoint().getX(); },
+        get y() { return point.getWorldPoint().getY(); },
+        get plane() { return point.getWorldPoint().getPlane(); },
+        color: 0xffffff,
+        get snapToEdge() { return point.isSnapToEdge(); },
+        owner: RUNELITE_POINT_OWNER,
+        point,
+    }));
     client.pluginWorldMapPoints = [...others, ...ours];
 }
 

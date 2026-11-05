@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { ChatMessage, WidgetLoaded } from "@runelite/api/events";
-import { bindWhenWidgetManagerReady, bindWidgetEvents } from "../runelite/impl/ContainerEventSource";
+import { bindWidgetEvents, WidgetSourceBinder } from "../runelite/impl/ContainerEventSource";
 import { bindDialogueChat } from "../runelite/impl/DialogueChatSource";
 import { WidgetManager } from "../widgets/WidgetManager";
 
@@ -83,37 +83,28 @@ assert.equal(dialog.length, 4);
 
 // --- Binding before the widget manager exists ---------------------------------------------------------
 // RuneLite.load() runs from the OsrsClient constructor; the widget manager is created later in the
-// async init. The sources must wait for it (on client ticks) instead of binding to nothing.
+// async init, and the client then asks the binder again. Nothing polls in between.
 {
     const late: any = {};
-    const ticks = new Set<() => void>();
-    const onClientTick = (fn: () => void) => {
-        ticks.add(fn);
-        return () => ticks.delete(fn);
-    };
     const lateLoaded: number[] = [];
-    const unbindLate = bindWhenWidgetManagerReady(late, (c) => bindWidgetEvents(c, (e) => {
+    const binder = new WidgetSourceBinder(late, (e) => {
         if (e instanceof WidgetLoaded) lateLoaded.push(e.getGroupId());
-    }), onClientTick);
-    assert.equal(ticks.size, 1, "no widget manager yet: waiting on client ticks");
-    for (const t of ticks) t();
-    assert.equal(ticks.size, 1, "still waiting");
+    });
+    assert.equal(binder.bind(), false, "no widget manager yet: nothing bound");
     late.widgetManager = manager;
     const before = manager.groupLoadedListeners.size;
-    for (const t of ticks) t();
-    assert.equal(ticks.size, 0, "bound: the tick subscription is released");
-    assert.equal(manager.groupLoadedListeners.size, before + 1, "the listener is on the real manager");
+    assert.equal(binder.bind(), true, "bound once the manager exists");
+    // Two listeners: WidgetLoaded and the dialogue chat source each watch group loads.
+    assert.equal(manager.groupLoadedListeners.size, before + 2, "the listeners are on the real manager");
+    assert.equal(binder.bind(), true, "binding again is a no-op");
+    assert.equal(manager.groupLoadedListeners.size, before + 2, "no duplicate listeners");
     manager.closeSubInterface(HOST, true);
     manager.openSubInterface(HOST, CHAT_LEFT, 0);
     assert.deepEqual(lateLoaded, [CHAT_LEFT], "and sees the next open");
-    unbindLate();
+    binder.release();
     assert.equal(manager.groupLoadedListeners.size, before);
-
-    const never: any = {};
-    const unbindNever = bindWhenWidgetManagerReady(never, () => () => {}, onClientTick);
-    assert.equal(ticks.size, 1);
-    unbindNever();
-    assert.equal(ticks.size, 0, "unbinding while waiting releases the tick subscription");
+    assert.equal(binder.bind(), true, "can bind again after a release");
+    binder.release();
 }
 
 console.log("runelite-widget-open-events: ok");

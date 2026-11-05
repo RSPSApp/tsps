@@ -18,7 +18,7 @@ type TickSubscriber = (tick: () => void) => () => void;
  * missing or hidden text widget posts nothing. Returns the unbind function.
  */
 export function bindDialogueChat(
-    client: OsrsClient,
+    client: Pick<OsrsClient, "widgetManager">,
     post: (event: ChatMessage) => void,
     subscribe: TickSubscriber = (tick) => subscribeTick(tick),
 ): () => void {

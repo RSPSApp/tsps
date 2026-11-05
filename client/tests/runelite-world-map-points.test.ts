@@ -96,6 +96,12 @@ assert.deepEqual(layoutWorldMapPoint(plain, { x: 250, y: 150 }, bounds), { x: 25
     assert.deepEqual([entry.x, entry.y, entry.plane, entry.snapToEdge], [3222, 3218, 0, true]);
     assert.equal(entry.point, marker, "the entry carries the point for its image and hooks");
     synced.remove(marker);
+    // The entry follows the point: setWorldPoint after add moves the drawn marker and its jump target together.
+    synced.add(marker);
+    marker.setWorldPoint(new WorldPoint(3300, 3301, 1));
+    const moved = client.pluginWorldMapPoints.find((p: any) => p.owner === "runelite");
+    assert.deepEqual([moved.x, moved.y, moved.plane], [3300, 3301, 1], "the entry reads the point's current tile");
+    synced.remove(marker);
     assert.equal(client.pluginWorldMapPoints.length, 1, "removed: Quest Helper's point stays");
     assert.equal(client.pluginWorldMapPoints[0].owner, "questhelper");
 }

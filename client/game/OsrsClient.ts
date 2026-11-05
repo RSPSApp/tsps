@@ -6819,6 +6819,9 @@ export class OsrsClient {
             this.widgetManager.onGroupLoaded = (groupId) => {
                 for (const held of this.heldWidgetProperties.take(groupId)) this.handleWidgetPayload?.(held);
             };
+            // RuneLite's WidgetLoaded and dialogue chat sources read the widget manager, which did not
+            // exist when RuneLite loaded in the constructor.
+            this.runeLite?.bindWidgetSources();
             if (graphicsDefaults && graphicsDefaults.compass >= 0) {
                 this.widgetManager.compassSpriteId = graphicsDefaults.compass;
             }

@@ -3,6 +3,7 @@ import { ItemContainerChanged, WidgetLoaded } from "@runelite/api/events";
 import * as InventoryID from "@runelite/api/gameval/InventoryID";
 import type { OsrsClient } from "../../game/OsrsClient";
 import type { Inventory, InventoryEvent } from "../../rs/inventory/Inventory";
+import { bindDialogueChat } from "./DialogueChatSource";
 
 /**
  * Posts ItemContainerChanged from the client's backpack (INV, 93) and worn equipment (WORN,
@@ -31,27 +32,36 @@ export function bindContainerEvents(client: OsrsClient, post: (event: object) =>
 }
 
 /**
- * Binds a widget-manager source once the widget manager exists. `RuneLite.load()` runs from the
- * OsrsClient constructor, and the widget manager is created later in the async init, so a source
- * that needs it waits on client ticks until it appears. Returns the unbind function, which also
- * cancels the wait.
+ * The event sources that read the widget manager (WidgetLoaded, dialogue pages as DIALOG chat).
+ * `RuneLite.load()` runs from the OsrsClient constructor, before the widget manager exists, so
+ * `bind()` does nothing until the client calls it again once the manager is created. Binding
+ * twice is a no-op; `release()` unbinds.
  */
-export function bindWhenWidgetManagerReady(
-    client: Pick<OsrsClient, "widgetManager">,
-    bind: (client: Pick<OsrsClient, "widgetManager">) => () => void,
-    onClientTick: (tick: () => void) => () => void,
-): () => void {
-    if (client.widgetManager) return bind(client);
-    let unbind: (() => void) | undefined;
-    const stopWaiting = onClientTick(() => {
-        if (!client.widgetManager) return;
-        stopWaiting();
-        unbind = bind(client);
-    });
-    return () => {
-        stopWaiting();
-        unbind?.();
-    };
+export class WidgetSourceBinder {
+    private unbind?: () => void;
+
+    constructor(
+        private readonly client: Pick<OsrsClient, "widgetManager">,
+        private readonly post: (event: object) => void,
+    ) {}
+
+    /** True when the sources are bound (now or already). */
+    bind(): boolean {
+        if (this.unbind) return true;
+        if (!this.client.widgetManager) return false;
+        const unbindWidgets = bindWidgetEvents(this.client, this.post);
+        const unbindDialogue = bindDialogueChat(this.client, this.post);
+        this.unbind = () => {
+            unbindWidgets();
+            unbindDialogue();
+        };
+        return true;
+    }
+
+    release(): void {
+        this.unbind?.();
+        this.unbind = undefined;
+    }
 }
 
 /**

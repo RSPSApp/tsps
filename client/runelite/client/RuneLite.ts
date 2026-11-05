@@ -25,8 +25,7 @@ import { CORE_PLUGINS, LEGACY_CONFIG_MIGRATIONS } from "./plugins";
 import { toRuneLiteGameState } from "../impl/GameStateMapping";
 import { bindNpcEvents } from "../impl/NpcEventSource";
 import { syncWorldMapPoints } from "./ui/overlay/worldmap/worldMapLayout";
-import { bindContainerEvents, bindWhenWidgetManagerReady, bindWidgetEvents } from "../impl/ContainerEventSource";
-import { bindDialogueChat } from "../impl/DialogueChatSource";
+import { bindContainerEvents, WidgetSourceBinder } from "../impl/ContainerEventSource";
 import { runLegacyConfigMigrations } from "../impl/LegacyConfigMigration";
 import { migrateTileMarkersConfig } from "../../game/plugins/tilemarkers/migrateTileMarkers";
 import { migrateTimersConfig } from "../../game/plugins/statustimer/TimersPlugin";
@@ -52,6 +51,7 @@ export class RuneLite {
     readonly menuManager = new MenuManager();
     /** Plugin markers on the world map (`inject(WorldMapPointManager)`); the world map draws them. */
     readonly worldMapPointManager: WorldMapPointManager;
+    private readonly widgetSources: WidgetSourceBinder;
 
     private constructor(
         private readonly client: OsrsClient,
@@ -59,6 +59,7 @@ export class RuneLite {
     ) {
         this.configManager = new ConfigManager(this.eventBus);
         this.worldMapPointManager = new WorldMapPointManager(() => syncWorldMapPoints(client, this.worldMapPointManager));
+        this.widgetSources = new WidgetSourceBinder(client, (event) => this.eventBus.post(event));
         bindOverlayFonts(this.configManager);
         this.pluginManager = new PluginManager(this.eventBus, this.configManager);
         this.clientToolbar = this.pluginManager.getInjector().get(ClientToolbar);
@@ -73,6 +74,11 @@ export class RuneLite {
         RuneLite.instance = instance;
         instance.load();
         return instance;
+    }
+
+    /** Binds the widget-manager event sources; the client calls this once its widget manager exists. */
+    bindWidgetSources(): void {
+        this.widgetSources.bind();
     }
 
     /** Posts a CommandExecuted event; returns true when a subscriber consumed it. */
@@ -126,10 +132,8 @@ export class RuneLite {
         bindContainerEvents(this.client, (event) => this.eventBus.post(event));
         // WidgetLoaded from interface opens, and NPC and player dialogue pages as DIALOG chat
         // messages ("<name>|<text>"), as RuneLite sees them. Both read the widget manager, which the
-        // client creates after this constructor-time load, so they bind once it exists.
-        const onClientTick = (tick: () => void) => this.eventBus.subscribe(ClientTick, tick);
-        bindWhenWidgetManagerReady(this.client, (client) => bindWidgetEvents(client, (event) => this.eventBus.post(event)), onClientTick);
-        bindWhenWidgetManagerReady(this.client, () => bindDialogueChat(this.client, (event) => this.eventBus.post(event)), onClientTick);
+        // client creates after this constructor-time load and then calls bindWidgetSources().
+        this.bindWidgetSources();
 
         // state.tickListeners fire after the tick's packets are applied.
         subscribeTick(() => this.eventBus.post(new GameTick()));

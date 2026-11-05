@@ -150,30 +150,16 @@ function rewardItems(api, rewards) {
   return items;
 }
 
-// Plans every reward against one copy of the inventory so a grant is all or nothing.
-function fitsAll(inventory, items) {
-  let free = inventory.getFreeSlots();
-  const stacks = new Map();
+// Plans every reward on a copy of the inventory with the container's own stack rules
+// (getAddableAmount/add), as Christmas Din-Dins' reward plan does; null when any part won't fit.
+function plan(api, player, items) {
+  const copy = new api.core.Inventory(player).setItems(player.getInventory().getCopiedItems());
   for (const item of items) {
-    if (item.getDefinition().isStackable()) {
-      // ItemContainer.add merges into the first stack with the same id and no metadata.
-      const plain = inventory.getItems().find(slot => slot && slot.getId() === item.getId() && slot.getAmount() > 0 &&
-        JSON.stringify(slot.getMeta() ?? null) === "null");
-      const held = stacks.has(item.getId()) ? stacks.get(item.getId()) : plain ? plain.getAmount() : null;
-      if (held === null) {
-        if (free < 1 || item.getAmount() > MAX_STACK) return false;
-        free--;
-        stacks.set(item.getId(), item.getAmount());
-      } else {
-        if (held + item.getAmount() > MAX_STACK) return false;
-        stacks.set(item.getId(), held + item.getAmount());
-      }
-    } else {
-      if (free < item.getAmount()) return false;
-      free -= item.getAmount();
-    }
+    if (copy.getAddableAmount(item) !== item.getAmount()) return null;
+    // The copy is bound to the player: never refresh it, or the client sees uncommitted items.
+    copy.add(item, false);
   }
-  return true;
+  return copy.getItems();
 }
 
 function grantReward(api, request) {
@@ -208,8 +194,8 @@ function grantOnce(api, request) {
     request.reason = "already-complete";
     return;
   }
-  const inventory = player.getInventory();
-  if (!fitsAll(inventory, items)) {
+  const planned = plan(api, player, items);
+  if (!planned) {
     request.reason = "no-space";
     return;
   }
@@ -221,8 +207,8 @@ function grantOnce(api, request) {
       return;
     }
   }
-  for (const item of items) inventory.add(item, false);
-  inventory.refreshItems();
+  player.getInventory().setItems(planned);
+  player.getInventory().refreshItems();
   player.setAttribute(COMPLETIONS_ATTRIBUTE, [...completions(player), key]);
   request.granted = true;
   request.reason = null;

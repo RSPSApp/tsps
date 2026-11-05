@@ -1,8 +1,8 @@
 # Holiday event scheduler
 
 The reusable scheduler is the foundation of the Holiday & seasonal events tracker section.
-It does not implement an annual activity; content plugins grant their own rewards through
-the shared helper below. `plugins/world/data/events.json`
+It does not implement an annual activity. The shared reward helper below is available to
+annual activities; Christmas Din-Dins (#2626) still grants through its own reward plan. `plugins/world/data/events.json`
 is deliberately empty until a sourced activity supplies a real year-specific window.
 
 ## Configuration and contract
@@ -33,8 +33,8 @@ reason, and activates no content. Dates are not extrapolated into future years.
   `unlock-refused` (an `unlock` name is not in Diango's catalogue), `busy` (a grant for the
   same player is already running, e.g. from inside an unlock listener) or `invalid` (a
   malformed request, an id outside the active cache, or an amount above the stack cap).
-  It plans every item against the current inventory before changing anything (free slots,
-  existing plain stacks and the stack cap), so a grant is all or nothing and a refusal never
+  It plans every item on a copy of the inventory with the container's own `getAddableAmount`
+  and `add` rules before changing anything, so a grant is all or nothing and a refusal never
   records the completion. `unlock` names (cache symbols such as `win05_hat1`) are passed to
   `holiday-rewards:unlock` for Diango's retrieval; an unknown name refuses the whole grant.
   The helper does not check that the player is still online: a delayed caller must.

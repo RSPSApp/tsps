@@ -94,6 +94,22 @@ export class Projectile {
      */
     public static readonly LEGACY_MAGIC_END_BASE = 46;
 
+    /**
+     * Tiles a spell projectile flies: from `start` to the nearest tile of the target, whose centre tile is
+     * `end` (rsprox: wind, water, fire strikes and blasts end at the cycle for the nearest tile of a large
+     * target, not its south-west or centre tile). A one-tile target is just the distance between the two.
+     */
+    public static flightDistance(start: Location, end: Location, victim?: Mobile | null): number {
+        if (start.getZ() !== end.getZ()) return start.getDistance(end);
+        const size = Math.max(1, victim?.getSize?.() ?? 1);
+        const offset = (size - 1) >> 1;
+        const west = end.getX() - offset;
+        const south = end.getY() - offset;
+        const dx = Math.max(0, west - start.getX(), start.getX() - (west + size - 1));
+        const dy = Math.max(0, south - start.getY(), start.getY() - (south + size - 1));
+        return Math.max(dx, dy);
+    }
+
     private static locationOf(at: Mobile | Location): Location {
         return at instanceof Location ? at : Projectile.centreOf(at);
     }
@@ -163,7 +179,7 @@ export class Projectile {
             this.startHeight === 43 &&
             this.endHeight === 31
         ) {
-            const distance = this.start.getDistance(this.end);
+            const distance = Projectile.flightDistance(this.start, this.end, this.lockon);
             resolvedDelay = 51;
             resolvedSpeed = Projectile.LEGACY_MAGIC_END_BASE + distance * 10;
         }

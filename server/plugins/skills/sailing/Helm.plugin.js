@@ -43,6 +43,9 @@ const SOUND_SAIL_RAISE = 10831;
 const SOUND_SAIL_LOWER = 10833;
 
 let pluginApi = null;
+// Content may grant the helm of its owner-private physical ship without inventing
+// a personal boat slot. The record also identifies delayed release/loop callbacks.
+const suppliedHelms = new WeakMap();
 
 const SAIL_MODES = {
   full: { varbit: MOVE_MODE.FULL, boat: BoatMoveMode.Full },
@@ -131,12 +134,15 @@ function playHelmSound(player, boat, name) {
   if (sound !== undefined) playSound(player, sound);
 }
 
-function loopHelm(player, boat) {
+function loopHelm(player, boat, supplied) {
   let ticks = 0;
   TaskManager.submit(new (class extends Task {
     constructor() { super(1, player, false); }
     execute() {
-      if (boat.helmPlayerId !== player.getIndex() || !BoatManager.getSpec(boat) || Sailing.instanceAboard(player) !== boat) {
+      const aboard = supplied ? BoatManager.getBoatAboard(player) === boat && suppliedHelms.get(player) === supplied
+        : Sailing.instanceAboard(player) === boat;
+      if (boat.helmPlayerId !== player.getIndex() || !BoatManager.getSpec(boat) || !aboard) {
+        if (supplied && suppliedHelms.get(player) === supplied) releaseSuppliedHelm(player, supplied);
         this.stop();
         return;
       }
@@ -160,6 +166,8 @@ function faceBow(actor) {
  * and the camera follows the boat rather than the helmsman (cam_target on the boat's world entity).
  */
 function steerByClicks(player, boat) {
+  const previous = suppliedHelms.get(player);
+  if (previous && previous.boat !== boat) releaseSuppliedHelm(player, previous);
   player.getPacketSender()
     .sendInteractionMode(INTERACTION_WORLD_DEFAULT, TileInteractionMode.Heading, EntityInteractionMode.All)
     .sendInteractionMode(boat.entityIndex, TileInteractionMode.Walk, EntityInteractionMode.All)
@@ -177,8 +185,11 @@ function walkByClicks(player, boat) {
     .sendCameraTarget({ player: player.getIndex() });
 }
 
-function takeHelm(player, boat) {
-  if (!canUseHands(player)) return;
+function takeHelm(player, boat, supplied) {
+  if (!canUseHands(player)) return false;
+  const previous = suppliedHelms.get(player);
+  if (previous) releaseSuppliedHelm(player, previous);
+  if (supplied) suppliedHelms.set(player, supplied);
   // A crewmate at the helm stands aside for the captain, sails as they are (rsprox).
   if (boat.helmCrew) pluginApi?.emitCustomEvent("sailing:helm-taken", { player, boat });
   boat.helmPlayerId = player.getIndex();
@@ -188,18 +199,46 @@ function takeHelm(player, boat) {
   steerByClicks(player, boat);
   playHelm(player, boat, "active");
   faceBow(player);
-  loopHelm(player, boat);
+  loopHelm(player, boat, supplied);
   sender.sendInterfaceScript(SCRIPT_SIDEBUTTON_SWITCH, [0]);
   playHelmSound(player, boat, "enter");
-  if (getVarbit(player, VARBIT.SIDEPANEL_BOAT_MOVE_MODE) === MOVE_MODE.STOPPED) {
+  if (supplied) {
+    // A content-scripted voyage still requires its authored Set-sails action;
+    // the ordinary moored boat's first heading must not raise these sails.
+    setVarbit(player, VARBIT.SIDEPANEL_BOAT_MOVE_MODE, MOVE_MODE.STOPPED);
+  } else if (getVarbit(player, VARBIT.SIDEPANEL_BOAT_MOVE_MODE) === MOVE_MODE.STOPPED) {
     setVarbit(player, VARBIT.SIDEPANEL_BOAT_MOVE_MODE, MOVE_MODE.MOORED);
   }
   setVarbit(player, VARBIT.SIDEPANEL_PLAYER_AT_HELM, 1);
   setVarbit(player, VARBIT.SIDEPANEL_HELM_STATUS, HELM_STATUS.NAVIGATING);
   sender.sendInterfaceScript(SCRIPT_HELM_UPDATE, ["", 0, player.getDisplayName(), 1]);
+  return true;
+}
+
+/** The granting content owns its scene/stage policy; this verifies the physical ship. */
+function takeSuppliedHelm(event) {
+  event.accepted = false;
+  const { player, boat } = event;
+  if (!player?.isRegistered() || player.getHitpoints() <= 0 || player.isDying || !boat?.static || !boat.ownerOnly
+    || boat.ownerPlayerId !== player.getIndex() || BoatManager.getBoat(boat.entityIndex) !== boat
+    || BoatManager.getBoatAboard(player) !== boat) return;
+  const current = suppliedHelms.get(player);
+  if (current?.boat === boat && boat.helmPlayerId === player.getIndex()) {
+    event.accepted = true;
+    return; // Reapplying an earned control never starts another loop or toggles it off.
+  }
+  event.accepted = takeHelm(player, boat, { boat });
+}
+
+function releaseSuppliedHelm(player, control) {
+  if (suppliedHelms.get(player) !== control) return false;
+  suppliedHelms.delete(player);
+  leaveHelm(player, control.boat);
+  return true;
 }
 
 function leaveHelm(player, boat) {
+  if (suppliedHelms.get(player)?.boat === boat) suppliedHelms.delete(player);
   boat.helmPlayerId = undefined;
   setVarbit(player, VARBIT.FACILITY_LOCKEDIN, 0);
   stopNavigating(player, boat);
@@ -317,8 +356,19 @@ function leaveHelmForOtherLoc(event) {
  */
 function leaveHelmFor(event) {
   const { player } = event;
-  const boat = Sailing.instanceAboard(player);
   event.left = false;
+  const supplied = suppliedHelms.get(player);
+  // An old scene may finish after the player has boarded/taken another helm.
+  // An explicit boat never falls through to releasing that newer personal boat.
+  if (event.boat) {
+    if (supplied?.boat === event.boat) event.left = releaseSuppliedHelm(player, supplied);
+    return;
+  }
+  if (supplied) {
+    event.left = releaseSuppliedHelm(player, supplied);
+    return;
+  }
+  const boat = Sailing.instanceAboard(player);
   if (!boat || boat.helmPlayerId !== player.getIndex()) return;
   leaveHelm(player, boat);
   event.left = true;
@@ -473,6 +523,7 @@ module.exports = {
     api.onObjectInteraction("Sails", { Trim: trim, Set: adjustSails("full"), "Un-set": adjustSails("stop") });
     api.onObjectRoute(routeOnDeck);
     api.onCustomEvent("sailing:left", walkAfterLeaving);
+    api.onCustomEvent("sailing:take-helm", takeSuppliedHelm);
     api.onCustomEvent("sailing:leave-helm", leaveHelmFor);
     api.onInterfaceActionClick(clickSailButton);
     require("./WindCatcher.Helm").attach(api);

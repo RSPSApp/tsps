@@ -1,11 +1,26 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, test } = require('node:test');
+const { before, afterEach, test } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const runtime = require('../plugins/quests/QuestRuntime');
 const sailingContent = require('../plugins/skills/sailing/SailingContent.Sailing');
+const unitHelms = new Set();
+
+afterEach(() => {
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  let firstError;
+  for (const { player, api } of unitHelms) {
+    try { api.emitCustomEvent('sailing:leave-helm', { player }); }
+    catch (error) { firstError ??= error; }
+    finally {
+      try { TaskManager.cancelTasks(player); } catch (error) { firstError ??= error; }
+    }
+  }
+  unitHelms.clear();
+  if (firstError) throw firstError;
+});
 
 before(async () => {
   await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -67,12 +82,15 @@ function setup() {
     getWorld() { return { getNpcs: () => [] }; },
   }, { get(target, key) { return target[key] ?? (() => {}); } });
 
-  const attrs = new Map(), inventory = new Map(), varbits = new Map(), messages = [], xp = [], interfaces = [], scripts = [], cameras = [], hints = [], closedInterfaces = 0;
+  const attrs = new Map(), inventory = new Map(), varbits = new Map(), messages = [], xp = [], interfaces = [], scripts = [], cameras = [], hints = [], modes = [], closedInterfaces = 0;
   const levels = new Map();
   let location = new core.Location(3025, 3208, 0);
   const sailing = { boats: [], activeBoatSlot: null };
   const sender = new Proxy({
     sendVarbit(id, value) { varbits.set(id, value); return sender; },
+    getVarbit(id) { return varbits.get(id) ?? 0; },
+    sendInteractionMode(...args) { modes.push(args); return sender; },
+    sendResetInteractionMode(id) { modes.push(['reset', id]); return sender; },
     sendInterface(id) { interfaces.push(id); return sender; },
     sendInterfaceScript(id, args) { scripts.push({ id, args }); return sender; },
     sendInterfaceRemoval() { closedInterfaces++; return sender; },
@@ -132,6 +150,7 @@ function setup() {
     getArea: () => player.__area,
     setArea: (area) => { player.__area = area; },
     getUsername: () => 'parity',
+    getDisplayName: () => 'parity',
     setEnteredAmountAction(action) { player.amountAction = action; },
     getEnteredAmountAction() { return player.amountAction; },
   };
@@ -174,7 +193,11 @@ function setup() {
   };
   const clickObject = (objectId) => { for (const fn of hooks.objects) fn({ player, objectId, clickType: 1 }); };
   const clickInterface = (groupId, childId) => { const event = { player, groupId, childId, handled: false }; for (const fn of hooks.interfaceClicks) fn(event); return event; };
-  return { api, core, hooks, player, attrs, persistentKeys, saveState, restoreState, relog, inventory, varbits, messages, xp, levels, sailing, location, emit, action, line, variant, tickOnce, answerPrompt, clickObject, clickInterface, interfaces, scripts, cameras, hints, get lastLineSpeakerId() { return lastLineSpeakerId; }, get closedInterfaces() { return closedInterfaces; }, prompt: () => lastPrompt, setLocation(value) { location = value; } };
+  // These quest-unit calls still use their direct object hook. Register the real
+  // sailing control requests; dispatcher order is outside this quest-unit helper.
+  require('../plugins/skills/sailing/Helm.plugin').register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
+  unitHelms.add({ player, api });
+  return { api, core, hooks, player, attrs, persistentKeys, saveState, restoreState, relog, inventory, varbits, messages, xp, levels, sailing, location, emit, action, line, variant, tickOnce, answerPrompt, clickObject, clickInterface, interfaces, scripts, cameras, hints, modes, get lastLineSpeakerId() { return lastLineSpeakerId; }, get closedInterfaces() { return closedInterfaces; }, prompt: () => lastPrompt, setLocation(value) { location = value; } };
 }
 
 function clickAction(h, objectId, name, actions, optionIndex) {
@@ -1041,6 +1064,97 @@ test('Pandemonium persists the earned tutorial helm and sails through real save/
     clickAction(h, 59553, 'Sails', h.core.CacheDefinitions.getObject(59553).actions, 1);
     assert.equal(StaticShips.all()[0].boat.moveMode, 2);
     assert.equal(quest.getStage(h.player), 10, 're-navigation retains earned quest progress');
+  } finally {
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+  }
+});
+
+test('Pandemonium only earns the helm after accepted canonical control and reapplies it once', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  const { VARBIT, SCRIPT_HELM_UPDATE } = sailingContent;
+  for (const stale of StaticShips.all()) StaticShips.dispose(stale);
+  const quest = load(h, 'Pandemonium.Quest.js');
+  let allow = false;
+  h.api.onCustomEvent('sailing:can-use-hands', event => { event.allow = allow; });
+  try {
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+    quest.setStage(h.player, 8);
+    const boat = StaticShips.all()[0].boat;
+    assert.equal(clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0).handled, true);
+    assert.equal(quest.getStage(h.player), 8, 'denied control does not earn progression');
+    assert.notEqual(h.attrs.get('pandemonium:tutorial-helm'), true, 'denied control is not saved as earned');
+    assert.notEqual(boat.helmPlayerId, h.player.getIndex());
+    assert.equal(h.modes.length, 0);
+    allow = true;
+    clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
+    assert.equal(quest.getStage(h.player), 10);
+    assert.equal(boat.helmPlayerId, h.player.getIndex());
+    assert.equal(h.varbits.get(VARBIT.SIDEPANEL_PLAYER_AT_HELM), 1);
+    assert.equal(h.scripts.some(script => script.id === SCRIPT_HELM_UPDATE), true);
+    assert.equal(h.sailing.boats.length, 0, 'no personal boat is invented');
+    assert.equal(h.varbits.get(VARBIT.SIDEPANEL_BOAT_MOVE_MODE), 0, 'the authored Set action is still required');
+    const loops = TaskManager.pendingTasks.length, modes = h.modes.length, scripts = h.scripts.length;
+    clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
+    assert.equal(TaskManager.pendingTasks.length, loops, 'repeat activation does not create another native loop');
+    assert.equal(h.modes.length, modes, 'repeat activation does not toggle or duplicate controls');
+    assert.equal(h.scripts.length, scripts);
+    assert.equal(boat.moveMode, 0);
+  } finally {
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+  }
+});
+
+test('supplied helm requests refuse foreign, unboarded and disposed boats', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  for (const stale of StaticShips.all()) StaticShips.dispose(stale);
+  const quest = load(h, 'Pandemonium.Quest.js');
+  let other;
+  try {
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8'); quest.setStage(h.player, 8);
+    const boat = StaticShips.all()[0].boat;
+    const foreign = { ...h.player, getIndex: () => 2 };
+    assert.equal(h.emit('sailing:take-helm', { player: foreign, boat }).accepted, false);
+    other = StaticShips.spawn('pandemonium_tutorial_ship', { owner: h.player, ownerOnly: true });
+    assert.ok(other);
+    assert.equal(h.emit('sailing:take-helm', { boat: other.boat }).accepted, false, 'visibility/ownership does not replace boarding');
+    StaticShips.dispose(other);
+    assert.equal(h.emit('sailing:take-helm', { boat: other.boat }).accepted, false, 'retired instance cannot grant control');
+    assert.equal(h.modes.length, 0);
+    assert.equal(quest.getStage(h.player), 8);
+    assert.equal(h.sailing.boats.length, 0);
+  } finally {
+    if (other) StaticShips.dispose(other);
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+  }
+});
+
+test('a supplied control releases after physical leave without clearing a newer scene control', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  const { VARBIT } = sailingContent;
+  for (const stale of StaticShips.all()) StaticShips.dispose(stale);
+  const quest = load(h, 'Pandemonium.Quest.js');
+  try {
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8'); quest.setStage(h.player, 8);
+    clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
+    const previous = StaticShips.all()[0].boat;
+    assert.equal(StaticShips.leave(h.player), true);
+    assert.equal(h.emit('sailing:leave-helm', { boat: previous }).left, true);
+    assert.equal(h.varbits.get(VARBIT.SIDEPANEL_PLAYER_AT_HELM), 0);
+    assert.ok(h.modes.some(mode => mode[0] === 'reset' && mode[1] === previous.entityIndex));
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+    const current = StaticShips.all()[0].boat;
+    assert.notEqual(current, previous);
+    assert.equal(current.helmPlayerId, h.player.getIndex(), 'earned control is reapplied to the new scene');
+    const modes = h.modes.length;
+    assert.equal(h.emit('sailing:leave-helm', { boat: previous }).left, false, 'old scene cannot release the current boat');
+    assert.equal(h.modes.length, modes);
+    assert.equal(current.helmPlayerId, h.player.getIndex());
+    assert.equal(h.varbits.get(VARBIT.SIDEPANEL_PLAYER_AT_HELM), 1);
+    assert.equal(h.sailing.boats.length, 0);
   } finally {
     for (const logout of h.hooks.logout) logout({ player: h.player });
   }

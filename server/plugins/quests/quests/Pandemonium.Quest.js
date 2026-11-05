@@ -710,7 +710,11 @@ module.exports = function registerPandemoniumQuest(api) {
     const sailsRaised = atWreck || (stage >= STAGE_SAIL_ACCEPTED && player.getAttribute(TUTORIAL_SAILS_ATTRIBUTE) === true);
     const scene = { boat: ship.boat, deck, will, anne, staticShip: ship, helmTaken, sailsRaised, voyageStarted: sailsRaised && !atWreck, arrived: atWreck, headingRun: 0, headingTicks: 0 };
     tutorialScenes.set(player, scene);
-    if (helmTaken) scene.boat.helmPlayerId = player.getIndex();
+    if (helmTaken) {
+      const request = { player, boat: scene.boat, accepted: false };
+      api.emitCustomEvent("sailing:take-helm", request);
+      scene.helmTaken = request.accepted === true;
+    }
     scene.boat.moveMode = sailingContent.MOVE_MODE.STOPPED;
     if (scene.voyageStarted && !atWreck) {
       startVoyage(scene);
@@ -767,6 +771,7 @@ module.exports = function registerPandemoniumQuest(api) {
     const scene = tutorialScenes.get(player);
     if (!scene) return;
     tutorialScenes.delete(player);
+    api.emitCustomEvent("sailing:leave-helm", { player, boat: scene.boat });
     Scenes.cancel(player);
     Scenes.closeFade(player);
     if (scene.will) api.removeNpc(scene.will);
@@ -1263,15 +1268,16 @@ module.exports = function registerPandemoniumQuest(api) {
     if (option !== undefined && option !== "Navigate") return false;
     event.handled = true;
     if (scene.will?.getInteractingMobile() === player) scene.will.setMobileInteraction(null);
+    const request = { player, boat: scene.boat, accepted: false };
+    api.emitCustomEvent("sailing:take-helm", request);
+    if (request.accepted !== true) return true;
     if (scene.helmTaken) return true;
     scene.helmTaken = true;
     player.setAttribute(TUTORIAL_HELM_ATTRIBUTE, true);
-    scene.boat.helmPlayerId = player.getIndex();
     scene.boat.moveMode = sailingContent.MOVE_MODE.STOPPED;
     if (stage === STAGE_SAILING) quest.setStage(player, STAGE_SAIL_ACCEPTED);
     Scenes.cancel(player);
     Scenes.closeFade(player);
-    player.getPacketSender().sendCameraTarget({ worldEntity: scene.boat.entityIndex });
     return true;
   }
 

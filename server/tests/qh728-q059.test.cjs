@@ -241,18 +241,20 @@ test('q059 mandatory handler route: start gate, bridge, key, door, light, wall, 
 
   // Fresh stage 0: 35 Agility is required before the start hook advances.
   h.skills.set(SKILL.AGILITY, 34);
-  h.emit('npc-dialogue:hook', {
+  const underLevel = h.emit('npc-dialogue:hook', {
     npcId: N.LARRISSA, hook: 'quest:horror-from-the-deep:start',
   });
+  assert.equal(underLevel.end, true, 'refused start stops the transcript');
   assert.equal(h.quest.getStage(h.player), 0, 'under-leveled start stays at stage 0');
   assert.ok(h.messages.some((text) => /Agility level of at least 35/.test(text)));
 
   h.skills.set(SKILL.AGILITY, 35);
   const noBarcrawl = setup({ barcrawl: false });
   noBarcrawl.skills.set(SKILL.AGILITY, 35);
-  noBarcrawl.emit('npc-dialogue:hook', {
+  const missingBarcrawl = noBarcrawl.emit('npc-dialogue:hook', {
     npcId: N.LARRISSA, hook: 'quest:horror-from-the-deep:start',
   });
+  assert.equal(missingBarcrawl.end, true, 'missing Barcrawl stops the transcript');
   assert.equal(noBarcrawl.quest.getStage(noBarcrawl.player), 0, 'missing Barcrawl stays at stage 0');
   assert.ok(noBarcrawl.messages.some((text) => /Alfred Grimhand's Barcrawl/.test(text)));
 

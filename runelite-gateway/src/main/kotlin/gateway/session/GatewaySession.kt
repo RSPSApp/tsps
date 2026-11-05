@@ -39,6 +39,7 @@ import net.rsprot.protocol.loginprot.outgoing.LoginResponse
 import net.rsprot.protocol.loginprot.outgoing.util.AuthenticatorResponse
 import net.rsprot.protocol.message.IncomingGameMessage
 import net.rsprot.protocol.message.OutgoingGameMessage
+import java.net.InetSocketAddress
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
@@ -110,7 +111,8 @@ class GatewaySession(
 
     fun start() {
         val password = (block.authentication as? AuthenticationType.PasswordAuthentication)?.password?.asString()
-        if (password == null) {
+        val ticket = (block.authentication as? AuthenticationType.TokenAuthentication)?.token?.asString()
+        if (password == null && ticket == null) {
             fail(LoginResponse.InvalidUsernameOrPassword)
             return
         }
@@ -125,7 +127,34 @@ class GatewaySession(
                 }
             }
         }
-        val address = channel.remoteAddress().toString().substringAfter('/').substringBeforeLast(':')
+        val address = (channel.remoteAddress() as? InetSocketAddress)?.address?.hostAddress
+        if (address == null) {
+            fail(LoginResponse.IPBlocked)
+            return
+        }
+        if (ticket != null) {
+            val pending = context.loginUtilities?.redeem(ticket, block.username, address)
+            if (pending == null) {
+                fail(LoginResponse.InvalidUsernameOrPassword)
+                return
+            }
+            val queued = run {
+                if (state == State.CLOSED) {
+                    pending.close()
+                    return@run
+                }
+                tsps = pending.socket
+                state = State.ENTERING
+                if (!pending.attach(this)) {
+                    pending.close()
+                    fail(LoginResponse.LoginServerOffline)
+                    return@run
+                }
+                tsps.send(TspsClientPacket.handshake(pending.username))
+            }
+            if (!queued) pending.close()
+            return
+        }
         TspsSocket.connect(context.config.tspsUrl, address, this).whenComplete { socket, error ->
             val queued =
                 run {
@@ -142,7 +171,7 @@ class GatewaySession(
                     }
                     tsps = socket
                     state = State.LOGGING_IN
-                    tsps.send(TspsClientPacket.login(block.username, password, context.revision))
+                    tsps.send(TspsClientPacket.login(block.username, password!!, context.revision))
                 }
             if (!queued) socket?.close()
         }

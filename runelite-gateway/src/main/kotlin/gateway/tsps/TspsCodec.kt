@@ -142,8 +142,8 @@ object TspsClientPacket {
     private const val CHAT_KIND_PUBLIC = 0
     private const val CHAT_KIND_CLAN = 4
 
-    fun login(username: String, password: String, revision: Int): ByteArray =
-        TspsWriter().string(username).string(password).i32(revision).u8(0).varShort(LOGIN)
+    fun login(username: String, password: String, revision: Int, flags: Int = 0): ByteArray =
+        TspsWriter().string(username).string(password).i32(revision).u8(flags).varShort(LOGIN)
 
     fun handshake(username: String): ByteArray =
         TspsWriter()

@@ -120,3 +120,7 @@ becomes, and whether it is mapped, dropped (with a reason) or still to do.
 
 Each official client gets its own rsprot entity world. tsps decides who a player sees, so the
 gateway mirrors exactly that view rather than letting rsprot work out visibility.
+
+## Optional remembered login (experimental)
+
+[Login Utilities](login-utilities/README.md) provides opt-in native Play Now login with rotating TSPS tokens and a standalone Windows encrypted-token helper. The HTTP broker is disabled by default; setup requires your own HTTPS endpoint and a dedicated RuneLite profile.

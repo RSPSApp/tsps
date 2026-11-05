@@ -52,7 +52,7 @@ class HeadlessClient(private val host: String, private val port: Int) {
     /** Result of [login]: the response code and, when it succeeded, the connected game session. */
     class LoginResult(val code: Int, val game: Game?)
 
-    fun login(username: String, password: String, modulus: BigInteger): LoginResult {
+    fun login(username: String, password: String, modulus: BigInteger, token: Boolean = false): LoginResult {
         val socket = Socket(host, port).apply { soTimeout = TIMEOUT_MS }
         val out = DataOutputStream(socket.getOutputStream())
         val input = DataInputStream(socket.getInputStream())
@@ -62,7 +62,7 @@ class HeadlessClient(private val host: String, private val port: Int) {
         val sessionId = input.readLong()
 
         val seed = IntArray(4) { random.nextInt() }
-        val block = loginBlock(username, password, seed, sessionId, modulus)
+        val block = loginBlock(username, password, seed, sessionId, modulus, token)
         out.writeByte(GAMELOGIN)
         out.writeShort(block.size)
         out.write(block)
@@ -354,7 +354,7 @@ class HeadlessClient(private val host: String, private val port: Int) {
         override fun close() = socket.close()
     }
 
-    private fun loginBlock(username: String, password: String, seed: IntArray, sessionId: Long, modulus: BigInteger): ByteArray {
+    private fun loginBlock(username: String, password: String, seed: IntArray, sessionId: Long, modulus: BigInteger, token: Boolean): ByteArray {
         val rsa =
             Unpooled.buffer().toJagByteBuf().apply {
                 p1(1)
@@ -362,7 +362,7 @@ class HeadlessClient(private val host: String, private val port: Int) {
                 p8(sessionId)
                 p1(OTP_NONE)
                 p4(0)
-                p1(PASSWORD_AUTHENTICATION)
+                p1(if (token) TOKEN_AUTHENTICATION else PASSWORD_AUTHENTICATION)
                 pjstr(password)
             }
         val rsaBytes = BigInteger(rsa.buffer.array().copyOf(rsa.buffer.writerIndex())).modPow(PUBLIC_EXPONENT, modulus).toByteArray()
@@ -481,6 +481,7 @@ class HeadlessClient(private val host: String, private val port: Int) {
         const val LOGIN_OK_PAYLOAD = 34
         const val OTP_NONE = 2
         const val PASSWORD_AUTHENTICATION = 0
+        const val TOKEN_AUTHENTICATION = 2
         const val DESKTOP = 1
         const val RESIZABLE = 0x2
         const val LIVE_CRC_COUNT = 23

@@ -145,11 +145,23 @@ test("a needle on the bolt of linen sews a gem pouch: 25 XP, needle kept, the re
 });
 
 test("any two components combine, as the Wiki has since 3 June 2026", async (t) => {
-  const pairs = () => [[I.THREAD, I.SILK], [I.SILK, id("bolt_of_linen")], [I.NEEDLE, I.THREAD]];
+  const pairs = () => [[I.THREAD, I.SILK], [I.SILK, id("bolt_of_linen")], [I.NEEDLE, I.SILK]];
   for (const [a, b] of pairs()) {
     const f = actor(t, pouchParts());
     await use(f, a, b);
     assert.equal(has(f, id("gem_pouch")), 1, `${a} on ${b}`);
+  }
+});
+
+test("needle and thread do not start sewing, even when all parts are present", async (t) => {
+  for (const [used, target] of [[I.NEEDLE, I.THREAD], [I.THREAD, I.NEEDLE]]) {
+    const parts = pouchParts();
+    const f = actor(t, parts);
+    const given = watchXp(t, f);
+    await use(f, used, target);
+    assert.deepEqual(parts.map((item) => has(f, item)), [1, 1, 1, 1]);
+    assert.equal(has(f, id("gem_pouch")), 0);
+    assert.deepEqual(given, []);
   }
 });
 

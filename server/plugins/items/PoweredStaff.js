@@ -241,9 +241,18 @@ function definePoweredStaff(api, config) {
   };
 }
 
-/** Projectile cycles from the caster's tile to the target's, the distance packets use. */
+/**
+ * Tiles from the caster to the target's nearest tile, the distance projectile packets use: a large target is
+ * not measured to its south-west corner (rsprox: seas trident on a size-2 lobster, Eye of Ayak on Tombs of
+ * Amascut bosses; the Sanguinesti staff, #2568). Zero inside the footprint; each caller applies its own minimum.
+ */
 function distance(from, to) {
-  return from.getLocation().getDistance(to.getLocation());
+  const at = from.getLocation(), corner = to.getLocation();
+  if (at.getZ() !== corner.getZ()) return at.getDistance(corner);
+  const size = Math.max(1, to.getSize?.() ?? 1);
+  const dx = Math.max(0, corner.getX() - at.getX(), at.getX() - (corner.getX() + size - 1));
+  const dy = Math.max(0, corner.getY() - at.getY(), at.getY() - (corner.getY() + size - 1));
+  return Math.max(dx, dy);
 }
 
 /** Ticks until a hit lands with a projectile ending `endCycle` (30 cycles a tick). */

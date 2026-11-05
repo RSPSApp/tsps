@@ -1,6 +1,8 @@
 import { showAllTimers } from "../../../common/utils/DeviceUtil";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { IndexType } from "../../../rs/cache/IndexType";
+import { skillIconSprite } from "../../../rs/skill/skillIcons";
+import { SkillId } from "../../../rs/skill/skills";
 import { SpriteLoader } from "../../../rs/sprite/SpriteLoader";
 import { spriteToCanvas } from "../../../ui/item/ItemIcon";
 import type { OsrsClient } from "../../OsrsClient";
@@ -24,9 +26,6 @@ import {
     TELEBLOCK_TIMER_SECONDS_VARP,
 } from "./StatusTimerOverlay";
 
-// Combat sidebar icon, verified in cache widget 161:66.
-const COMBAT_TAB_SPRITE_ID = 168;
-
 export function TimersOverlay({
     osrsClient,
     plugin,
@@ -44,13 +43,7 @@ export function TimersOverlay({
         if (!osrsClient.loadedCache || !osrsClient.cacheSystem) return;
         try {
             const sprites = osrsClient.cacheSystem.getIndex(IndexType.DAT2.sprites);
-            const sprite = SpriteLoader.loadIntoIndexedSprite(sprites, COMBAT_TAB_SPRITE_ID);
-            if (sprite) {
-                // Trim the gameframe padding before shrinking the icon.
-                sprite.width = sprite.subWidth;
-                sprite.height = sprite.subHeight;
-                sprite.xOffset = sprite.yOffset = 0;
-            }
+            const sprite = SpriteLoader.loadIntoIndexedSprite(sprites, skillIconSprite(SkillId.Attack));
             setCombatIcon(sprite ? spriteToCanvas(sprite).toDataURL() : undefined);
         } catch {
             setCombatIcon(undefined);

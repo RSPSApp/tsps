@@ -59,6 +59,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     Bank,
     Equipment,
     GameObject,
+    Inventory,
     Item,
     ItemIdentifiers,
     ItemOnGroundManager,
@@ -240,6 +241,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   const KEG_OF_BEER_2_ITEM = ItemIdentifiers.KEG_OF_BEER_3; // 3802
   const RING_OF_CHAROS_A_ITEM = ItemIdentifiers.RING_OF_CHAROS_A_; // 6465
   const COINS_ITEM = ItemIdentifiers.COINS; // 995
+  const SHIELD_PRICE = 150000;
 
   const UNSEALED_LETTER_ITEMS = new Set([UNSEALED_LETTER_ITEM, UNSEALED_LETTER_2_ITEM]);
   const FREMENNIK_SHIELD_ITEMS = new Set([FREMENNIK_SHIELD_ITEM, FREMENNIK_SHIELD_2_ITEM]);
@@ -1408,7 +1410,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
         }
         return;
       case "0vNIwJ":
-        buyFremennikShield(player);
+        buyFremennikShield(player, event);
         return;
       case "rVPVWw":
         receiveCharmedShield(player);
@@ -1501,12 +1503,29 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     player.getPacketSender().sendVarbit(VARBIT_YOUNGLING_FOUND, 1);
   }
 
-  function buyFremennikShield(player) {
-    if (!hasItem(player, COINS_ITEM, 150000)) {
-      player.sendMessage("You don't have 150,000 coins.");
+  /**
+   * Why Bardur can't sell the shield now, or null. Worked out on a copy of the inventory, as paying with
+   * the whole stack frees its slot. The no-room wording is ours; no capture shows a full inventory.
+   */
+  function shieldRefusal(player) {
+    if (!hasItem(player, COINS_ITEM, SHIELD_PRICE)) return "You don't have 150,000 coins.";
+    const plan = new Inventory(player).setItems(player.getInventory().getCopiedItems());
+    plan.deleted(COINS_ITEM, SHIELD_PRICE, false);
+    return plan.getAddableAmount(new Item(FREMENNIK_SHIELD_ITEM, 1)) < 1
+      ? "You don't have enough inventory space."
+      : null;
+  }
+
+  function buyFremennikShield(player, event) {
+    const refusal = shieldRefusal(player);
+    if (refusal) {
+      player.sendMessage(refusal);
+      // Ends the transcript, so he doesn't go on to thank the player for a sale that didn't happen.
+      event.handled = true;
+      event.end = true;
       return;
     }
-    player.getInventory().deleteNumber(COINS_ITEM, 150000);
+    player.getInventory().deleteNumber(COINS_ITEM, SHIELD_PRICE);
     addItem(player, FREMENNIK_SHIELD_ITEM);
     player.setAttribute(BARDUR_GOT_ATTRIBUTE, true);
     player.setAttribute(SHIELD_INFO_ATTRIBUTE, 1);
@@ -1519,7 +1538,8 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       player.sendMessage("Bardur is not charmed - the Ring of Charos(a) would help.");
       return;
     }
-    if (!hasFremennikShield(player)) addItem(player, FREMENNIK_SHIELD_ITEM);
+    // He won't give another once this is remembered, so no room puts it on the ground.
+    if (!hasFremennikShield(player)) player.getInventory().forceAdd(player, new Item(FREMENNIK_SHIELD_ITEM, 1));
     player.setAttribute(BARDUR_GOT_ATTRIBUTE, true);
     player.setAttribute(SHIELD_INFO_ATTRIBUTE, 1);
     player.getPacketSender().sendVarbit(VARBIT_SHIELD_INFO, 1);

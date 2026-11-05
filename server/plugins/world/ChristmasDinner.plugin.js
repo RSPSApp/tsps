@@ -13,20 +13,36 @@ const Rewards=require('./seasonal/Rewards.ChristmasDinner');
 const Music=require('./seasonal/Music.ChristmasDinner');
 const Snow=require('./seasonal/Snow.ChristmasDinner');
 
+let shuttingDown=false;
+
 function calendar(api,event){
   if(event.key!=='christmas-2025')return;
   if(!event.active){Snow.cancelAll();Completion.cancelAll(api);Dialogue.activate(event);Dialogue.cancelAll(api);}
   const result=event.active?Scene.open(api):Scene.close(api);
   if(result.handled){if(event.active)Dialogue.activate(event);}
   else {Dialogue.activate({key:event.key,active:false});Dialogue.cancelAll(api);api.log('Christmas scene: '+result.error);}
+  // A restart mid-event keeps platters in the save; the login sweep takes them
+  // only if the event is closed by then.
+  if(!event.active&&!shuttingDown)sweepOnline(api);
   Sync.all(api);
 }
-function shutdown(api){calendar(api,{key:'christmas-2025',active:false});}
+function sweepOnline(api){
+  for(const player of api.core.World.getPlayers())if(player?.isRegistered())Items.sweep(api,{player});
+}
+function shutdown(api){shuttingDown=true;calendar(api,{key:'christmas-2025',active:false});}
 function regionLoaded(api,event){
   const result=Scene.replay(api,event);
   if(!result.handled){Dialogue.activate({key:'christmas-2025',active:false});Dialogue.cancelAll(api);Sync.all(api);api.log('Christmas scene: '+result.error);}
 }
 
+// Plugins load by path, so objects/ScenerySearch registers its catch-all
+// Crate Search ("find nothing of interest") before this world plugin. Claim
+// only this scene's own crates ahead of every name handler; any other crate
+// falls through to its ordinary owner.
+function searchSceneCrate(api,event){
+  if(String(event.option??'').toLowerCase()!=='search')return;
+  if(Objects.search(api,event)!==false)event.handled=true;
+}
 function canBank(api,event){
   const platter=Progress.platterId(api);
   if(platter===null||event.item?.getId()!==platter)return;
@@ -43,6 +59,7 @@ module.exports={
     api.persistAttribute(Progress.PROGRESS_ATTRIBUTE,Progress.initial());
     api.onPlayerLogin(Sync.refresh.bind(null,api));
     api.onPlayerLogin(Actors.login.bind(null,api));
+    api.onPlayerLogin(Items.sweep.bind(null,api));
     api.onCustomEvent('christmas-dinner:changed',Sync.refresh.bind(null,api));
     api.onCustomEvent('christmas-dinner:changed',Actors.changed.bind(null,api));
     api.onCustomEvent('christmas-dinner:escort',Actors.escort.bind(null,api));
@@ -57,7 +74,7 @@ module.exports={
     api.onBeforeNpcInteraction(Npcs.interact.bind(null,api));
     api.onObjectInteraction('Table',{Serve:Objects.serve.bind(null,api)});
     api.onObjectInteraction('Bar',{'Get Drink From':Objects.drink.bind(null,api)});
-    api.onObjectInteraction('Crate',{Search:Objects.search.bind(null,api)});
+    api.onBeforeObjectInteraction(searchSceneCrate.bind(null,api));
     api.onObjectInteraction('Snowball pile',{'Take-from':Snow.take.bind(null,api)});
     api.onCustomEvent('npc-dialogue:line',Dialogue.line.bind(null,api));
     api.onCustomEvent('npc-dialogue:choice',Dialogue.choice.bind(null,api));

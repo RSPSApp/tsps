@@ -19,7 +19,7 @@ function live(api,record){
     state.phase==='ready'&&state.revision===revision&&Progress.held(api,player)&&
     record.npcs.every(npc=>npc.isRegistered()&&api.core.World.getNpcs().get(npc.getIndex())===npc&&npc.getOwner()===player&&npc.getPrivateArea()===area);
 }
-function clear(api,{player,keepFade=false},leaving=false){
+function clear(api,{player,keepFade=false},leaving=false,logout=false){
   if(!keepFade)Presentation.cancel(api,{player});
   const record=sessions.get(player);if(!record)return;
   sessions.delete(player);api.core.TaskManager.cancelTasks(record);
@@ -39,6 +39,9 @@ function clear(api,{player,keepFade=false},leaving=false){
     player.setUntargetable(record.untargetable);
     player.performAnimation(api.core.Animation.DEFAULT_RESET_ANIMATION);
     if(!leaving){player.setLocation(record.returnLocation);record.area.leave(player,false);}
+    // Logout leaves before the save: put the player back on the public tile they
+    // sat down from, never on a seat whose stool returns when the window closes.
+    else if(logout)player.setLocation(record.returnLocation);
   }
   if(!record.area.isDestroyed())record.area.destroy();
 }
@@ -98,7 +101,7 @@ function start(api,request){
   class DinnerArea extends c.PrivateArea{
     getMusicTrack(){return Music.track(api);}
     process(character){if(character===player&&record&&!live(api,record))clear(api,{player});}
-    postLeave(character,logout){if(character===player)clear(api,{player},true);super.postLeave(character,logout);}
+    postLeave(character,logout){if(character===player)clear(api,{player},true,logout);super.postLeave(character,logout);}
     canAttack(){return false;}
     canTeleport(){return false;}
     canTrade(){return false;}

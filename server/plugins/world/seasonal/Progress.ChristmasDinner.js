@@ -49,12 +49,18 @@ function reclaim(api,player,revision){
   if(state.phase==='cooked')state.phase='ingredients';
   return save(api,player,state);
 }
-function discard(api,{player,item}){
-  if(item?.getId()!==platterId(api)||held(api,player))return;
+// The platter left the player (destroyed, dropped, or removed after the event):
+// the order stays known, but what it carried is gone.
+function emptied(api,player){
   const state=read(player);
+  if(state.phase==='new'||state.phase==='complete')return;
   state.drinkHeld=false;state.gathered=[];
   if(state.phase==='cooked')state.phase='ingredients';
   save(api,player,state);
+}
+function discard(api,{player,item}){
+  if(item?.getId()!==platterId(api)||held(api,player))return;
+  emptied(api,player);
 }
 function greet(api,player,revision,customer){
   const state=current(api,player,revision,'queue');
@@ -111,4 +117,4 @@ function complete(api,player,revision){
   state.phase='complete';return save(api,player,state);
 }
 
-module.exports={PROGRESS_ATTRIBUTE,DRINKS,MAINS,SIDES,initial,read,held,platterId,begin,reclaim,discard,greet,seat,orderDrink,takeDrink,serveDrink,orderFood,collect,cook,serveMeal,complete};
+module.exports={PROGRESS_ATTRIBUTE,DRINKS,MAINS,SIDES,initial,read,held,platterId,begin,reclaim,emptied,discard,greet,seat,orderDrink,takeDrink,serveDrink,orderFood,collect,cook,serveMeal,complete};

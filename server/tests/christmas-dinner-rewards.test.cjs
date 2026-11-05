@@ -54,6 +54,12 @@ test('source 12-slot requirement permits retry after a real inventory removal an
   inventory.deleteAtSlot(inventory.getSlotForItemId(platter),1);assert.equal(plan(p),null,'lost physical platter cannot be silently exchanged');
 });
 
+test('planning sends no inventory to the client: only a committed claim does',t=>{
+  const p=fixture(),sent=[];
+  t.mock.method(p.getPacketSender(),'sendItemContainer',(container,id)=>{sent.push(id);return p.getPacketSender();});
+  assert.ok(plan(p));assert.deepEqual(sent,[],'a planning copy must not refresh the client');
+  assert.equal(Rewards.claim(api,p,Progress.read(p).revision),true);assert.ok(sent.length>0,'the real commit refreshes');
+});
 test('real inventory stack cap refuses the whole award until both noted partyhat sets fit',()=>{
   const p=fixture(),inventory=p.getInventory();inventory.setItem(1,new api.core.Item(13174,2147483646));
   const before=snapshot(p);assert.equal(plan(p),null);assert.deepEqual(snapshot(p),before);

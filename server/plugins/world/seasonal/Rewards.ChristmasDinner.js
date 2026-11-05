@@ -69,7 +69,9 @@ function plan(api,player,revision){
     state.customer!==3||!Progress.held(api,player)||inventory.getFreeSlots()<REQUIRED_FREE_SLOTS)return null;
   const copy=new api.core.Inventory(player).setItems(inventory.getCopiedItems());
   const platter=Progress.platterId(api),slot=inventory.getSlotForItemId(platter);
-  copy.deleteAtSlot(slot,1);
+  // The copy is bound to the player: never refresh it, or the client sees a
+  // platter-less inventory the server never committed.
+  copy.deleteAtSlot(slot,1,false);
   const rewards=COSMETICS.map(symbol=>({symbol,id:itemId(api,symbol),amount:1}));
   if(eligibleForRares(api,player))for(const symbol of RARES)rewards.push({symbol,id:itemId(api,symbol),amount:2});
   for(const row of rewards){

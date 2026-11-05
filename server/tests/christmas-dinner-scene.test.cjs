@@ -9,6 +9,8 @@ let api,c;
 before(async()=>{
   await CachePipeline.initialize(path.resolve(__dirname,'..'));api=PM.createApi('ChristmasDinner');c=api.core;c.RegionManager.init();
   require('../plugins/world/DefinitionArchives.plugin').register(PM.createApi('DefinitionArchives'));
+  // Real load order: objects/ScenerySearch claims every Crate Search before world/ChristmasDinner.
+  require('../plugins/objects/ScenerySearch.plugin').register(PM.createApi('ScenerySearch'));
   require('../plugins/npcs/NpcDialogues.plugin').register(PM.createApi('NpcDialogues'));
   require('../plugins/world/HolidayRewards.plugin').register(PM.createApi('HolidayRewards'));
   require('../plugins/items/HolidayToys.plugin').register(PM.createApi('HolidayToys'));
@@ -169,6 +171,7 @@ test('native final Table Serve enforces source capacity and calendar closure can
   // Reach the fade through native Serve and the actual actor/dialogue tasks,
   // then replace it with another owner's same-ID mount before cancellation.
   PM.emitCustomEvent('events:active',{key:'christmas-2025',active:true});
+  assert.equal(player.getInventory().getAmount(Progress.platterId(api)),0,'the closed window took the platter');apply('reclaim');
   const cancelledTable=Scene.objects().find(row=>row.symbol==='xmas25_table_4').object,cp=cancelledTable.getLocation();
   await connection.dispatch([{type:'object_option',id:cancelledTable.getId(),x:cp.getX(),y:cp.getY(),clickType:1,action:'Serve'}]);connection.processTurnPackets();
   for(let tick=0;tick<4;tick++){c.TaskManager.processWalkTo(player.getIndex());player.getMovementQueue().process();c.TaskManager.process();}
@@ -194,7 +197,7 @@ test('native final Table Serve enforces source capacity and calendar closure can
 
   // Retry the exact native route, now letting the real chef movement queue and
   // source overhead dialogue complete. Only the three prior meals are fixtures.
-  PM.emitCustomEvent('events:active',{key:'christmas-2025',active:true});
+  PM.emitCustomEvent('events:active',{key:'christmas-2025',active:true});apply('reclaim');
   player.setAttribute('player-online:lifetime-seconds',90000);
   const retryTable=Scene.objects().find(row=>row.symbol==='xmas25_table_4').object,p=retryTable.getLocation();
   await connection.dispatch([{type:'object_option',id:retryTable.getId(),x:p.getX(),y:p.getY(),clickType:1,action:'Serve'}]);connection.processTurnPackets();
@@ -241,6 +244,36 @@ test('native final Table Serve enforces source capacity and calendar closure can
   assert.deepEqual(player.getInventory().getItems().map(item=>[item.getId(),item.getAmount()]),items,'completed callbacks cannot award twice');
 });
 
+test('logging out during the final cutscene saves the player on the public tile, not the vacated seat',async t=>{
+  const Progress=require('../plugins/world/seasonal/Progress.ChristmasDinner');
+  const {Player}=require('../dist/game/entity/impl/player/Player');
+  const {PlayerSession}=require('../dist/net/PlayerSession');
+  const {ClientConnection}=require('../dist/net/NetworkBuilder');
+  const channel={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+  const player=new Player(new PlayerSession(channel)),connection=new ClientConnection(channel);connection.player=player;
+  player.setUsername('xmaslogout');player.setAttribute('bot-skip-persistence',true);
+  assert.equal(c.World.getPlayers().add(player),true);
+  t.after(()=>{PM.emitCustomEvent('events:active',{key:'christmas-2025',active:false});c.TaskManager.cancelTasks(player.getIndex());c.World.getPlayers().remove(player);});
+  PM.emitCustomEvent('events:active',{key:'christmas-2025',active:true});
+  const apply=(name,...args)=>assert.equal(Progress[name](api,player,Progress.read(player).revision,...args),true);
+  apply('begin');
+  for(let guest=0;guest<3;guest++){
+    apply('greet',guest);apply('seat',guest);apply('orderDrink','beer');apply('takeDrink','beer');apply('serveDrink',guest);
+    apply('orderFood','trout',['cabbage','parsnips','stuffing']);
+    for(const ingredient of ['trout','cabbage','parsnips','stuffing'])apply('collect',ingredient);
+    apply('cook');apply('serveMeal',guest);
+  }
+  player.setLocation(new c.Location(3220,3399));player.setNeedsPlacement(false);
+  const table=Scene.objects().find(row=>row.symbol==='xmas25_table_4').object,p=table.getLocation();
+  await connection.dispatch([{type:'object_option',id:table.getId(),x:p.getX(),y:p.getY(),clickType:1,action:'Serve'}]);connection.processTurnPackets();
+  for(let tick=0;tick<4;tick++){c.TaskManager.processWalkTo(player.getIndex());player.getMovementQueue().process();c.TaskManager.process();}
+  const area=player.getPrivateArea();assert.ok(area,'the cutscene started');
+  const seat=player.getLocation().clone();assert.equal(seat.equals(new c.Location(3220,3397)),true,'seated at the vacated stool');
+  player.onLogout();
+  assert.equal(player.getLocation().equals(new c.Location(3220,3399)),true,'logout restores the tile the player sat down from: '+player.getLocation());
+  assert.equal(area.isDestroyed(),true);assert.equal(player.getMovementQueue().isMovementBlocked(),false);
+  assert.equal(Progress.read(player).phase,'ready','an interrupted cutscene grants nothing and can be retried');
+});
 test('actual Christmas front guest greets, follows its owner and seats through native Table Serve',async t=>{
   const Progress=require('../plugins/world/seasonal/Progress.ChristmasDinner');
   const {Player}=require('../dist/game/entity/impl/player/Player');
@@ -428,9 +461,11 @@ test('native Table Serve routes saved ingredients and cooked meals to their own 
     if(customer===0){
       PM.emitCustomEvent('events:active',{key:'christmas-2025',active:false});
       await connection.dispatch([{type:'dialogue_continue',widgetId:(231<<16)|5,childIndex:-1}]);connection.processTurnPackets();
-      assert.equal(Progress.read(player).phase,'cooked','closed annual window cannot complete a pending delivery');
-      assert.equal(Progress.read(player).customer,0);
+      assert.equal(Progress.read(player).customer,0,'closed annual window cannot complete a pending delivery');
+      assert.equal(Progress.read(player).phase,'ingredients','the closing window takes the platter and the meal on it');
+      assert.equal(player.getInventory().getAmount(Progress.platterId(api)??32926),0);
       PM.emitCustomEvent('events:active',{key:'christmas-2025',active:true});
+      apply('reclaim');for(const ingredient of ['trout','cabbage','parsnips','stuffing'])apply('collect',ingredient);apply('cook');
       await click(table);await resume();assert.equal(text(),'Thank you!');
     }
     await resume();assert.equal(Progress.read(player).customer,customer+1);
@@ -514,6 +549,33 @@ test('calendar transitions route through the real plugin and preserve archives i
   assert.equal(Scene.active(),false);assert.deepEqual(c.CacheDefinitions.getDefinitionArchiveBundles(),[other]);install([]);
 });
 
+// Runs before any server shutdown in this file: the shutdown flag is process-wide.
+test('window close takes a leftover platter; shutdown keeps it for the save; a closed-window login takes it',t=>{
+  const Progress=require('../plugins/world/seasonal/Progress.ChristmasDinner');
+  const {Player}=require('../dist/game/entity/impl/player/Player');
+  const {PlayerSession}=require('../dist/net/PlayerSession');
+  const channel={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+  const player=new Player(new PlayerSession(channel));player.setUsername('xmasplatter');
+  assert.equal(c.World.getPlayers().add(player),true);
+  t.after(()=>{PM.emitCustomEvent('events:active',{key:'christmas-2025',active:false});c.World.getPlayers().remove(player);});
+  const platter=c.CacheDefinitions.getObjId('xmas25_serving_platter');assert.equal(platter,32926,'stable cache slot, not an appended id');
+  const apply=(name,...args)=>assert.equal(Progress[name](api,player,Progress.read(player).revision,...args),true);
+  PM.emitCustomEvent('events:active',{key:'christmas-2025',active:true});
+  apply('begin');apply('greet',0);apply('seat',0);apply('orderDrink','beer');apply('takeDrink','beer');
+  assert.equal(player.getInventory().getAmount(platter),1);
+  PM.emitCustomEvent('events:active',{key:'christmas-2025',active:false});
+  assert.equal(player.getInventory().getAmount(platter),0,'the window closing takes the platter from an online player');
+  assert.equal(Progress.read(player).phase,'drink');assert.equal(Progress.read(player).drinkHeld,false,'its contents go with it');
+  PM.emitPlayerLogin({player,username:player.getUsername()});assert.equal(player.getInventory().getAmount(platter),0);
+  player.getInventory().add(new c.Item(platter,1),false);
+  PM.emitPlayerLogin({player,username:player.getUsername()});assert.equal(player.getInventory().getAmount(platter),0,'a save from the event loses it at a closed-window login');
+  PM.emitCustomEvent('events:active',{key:'christmas-2025',active:true});
+  PM.emitPlayerLogin({player,username:player.getUsername()});assert.equal(player.getInventory().getAmount(platter),0);
+  apply('reclaim');assert.equal(player.getInventory().getAmount(platter),1,'the Cook hands out a new one');
+  PM.emitPlayerLogin({player,username:player.getUsername()});assert.equal(player.getInventory().getAmount(platter),1,'an open window keeps it at login');
+  PM.emitServerShutdown({timestamp:Date.now()});
+  assert.equal(Scene.active(),false);assert.equal(player.getInventory().getAmount(platter),1,'a restart mid-event keeps it in the save');
+});
 test('the shipped events.json window opens the dinner on 10 December and closes it on 7 January',t=>{
   // Real EventScheduler, real data/events.json and its owned clock task; only Date.now is mocked.
   require('../plugins/world/EventScheduler.plugin').register(PM.createApi('EventScheduler'));

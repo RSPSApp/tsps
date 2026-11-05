@@ -2,6 +2,7 @@
 
 const Progress=require('./Progress.ChristmasDinner');
 const Dialogue=require('./Dialogue.ChristmasDinner');
+const Scene=require('./Scene.ChristmasDinner');
 
 function inspect(api,{player,itemId}){
   if(itemId!==Progress.platterId(api))return false;
@@ -21,4 +22,17 @@ function destroyPrompt(api,event){
   event.warning='You can get another from the Cook at the Blue Moon Inn.';
 }
 
-module.exports={inspect,destroyPrompt};
+// Outside the event the active cache's slot 32926 is an empty "Null" item:
+// the platter only exists while the archive is installed. Take any left over
+// (an online player at window close, or a save from the event) so it can't be
+// banked or carried into the next window. The Cook hands out a new one.
+function sweep(api,{player}){
+  if(Scene.active())return;
+  const id=api.core.CacheDefinitions.getObjId('xmas25_serving_platter'),inventory=player.getInventory();
+  const amount=id===null?0:inventory.getAmount(id);
+  if(amount<=0)return;
+  inventory.delete(id,amount);
+  Progress.emptied(api,player);
+}
+
+module.exports={inspect,destroyPrompt,sweep};

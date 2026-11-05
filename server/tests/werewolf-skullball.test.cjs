@@ -273,3 +273,16 @@ test("the Boss's transcript: without the ring he refuses, with a ball he offers 
   assert.equal(first.isRegistered(), false);
   assert.equal(games.get(player).scored, 0, "and the course starts again");
 });
+
+test("Talk-To on the Boss starts his transcript in the right variant (the shared player only answers Talk-to)", t => {
+  const started = [];
+  api.onCustomEvent("npc-dialogue:start", request => { started.push(request); request.handled = true; });
+  const { player } = playerAt(t, 3550, 9866);
+  const boss = { getId: () => BOSS(), getIndex: () => 0, getLocation: () => new core.Location(3549, 9867, 0) };
+  const event = { player, npc: boss, npcId: BOSS(), npcIndex: 0, clickType: 1, definition: core.NpcDefinition.forId(BOSS()),
+    location: { x: 3549, y: 9867, z: 0 }, handled: false };
+  assert.deepEqual(core.NpcDefinition.forId(BOSS()).getActions()[0], "Talk-To");
+  PluginManager.emitNpcInteraction(event);
+  assert.equal(event.handled, true);
+  assert.deepEqual(started.map(request => [request.npcId, request.variant]), [[BOSS(), "standard-dialogue"]]);
+});

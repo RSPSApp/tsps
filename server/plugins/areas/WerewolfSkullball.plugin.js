@@ -228,6 +228,17 @@ function selectVariant({ npcId: id, player }) {
   return games.has(player) ? VARIANT.playing : VARIANT.standard;
 }
 
+/**
+ * The cache spells these werewolves' option "Talk-To", which the shared transcript player (keyed on
+ * "Talk-to") never answers, so their transcripts are started here.
+ */
+function talk({ player, npc, npcId: id }) {
+  const variant = id === npcId(BOSS) ? selectVariant({ npcId: id, player }) : VARIANT.standard;
+  const request = { player, npc, npcId: id, variant, handled: false };
+  api.emitCustomEvent("npc-dialogue:start", request);
+  return request.handled;
+}
+
 function onDialogueAction(action) {
   if (action.npcId !== npcId(BOSS) || !action.player) return;
   const { player } = action;
@@ -275,6 +286,8 @@ module.exports = {
     init(registry);
     api.onNpcInteraction("Skullball", { Tap: tap, Kick: kickFour, Shoot: shoot, "Show-Goal": showGoal });
     api.onNpcDialogueVariant(selectVariant);
+    api.onNpcInteraction("Skullball Boss", { "Talk-To": talk });
+    api.onNpcInteraction("Skullball Trainer", { "Talk-To": talk });
     api.onCustomEvent("npc-dialogue:action", onDialogueAction);
     api.onPlayerLogout(onLogout);
     api.registerArea(createArena());

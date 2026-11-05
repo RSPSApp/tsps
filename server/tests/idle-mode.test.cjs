@@ -13,7 +13,7 @@ function skill(index) {
 
 const Skill = {
   ATTACK: skill(0), DEFENCE: skill(1), STRENGTH: skill(2), HITPOINTS: skill(3), RANGED: skill(4), MAGIC: skill(6),
-  COOKING: skill(7), WOODCUTTING: skill(8), FISHING: skill(10), FIREMAKING: skill(11), MINING: skill(14), THIEVING: skill(17),
+  COOKING: skill(7), WOODCUTTING: skill(8), SMITHING: skill(13), FISHING: skill(10), FIREMAKING: skill(11), MINING: skill(14), THIEVING: skill(17),
 };
 const SHARK = 385;
 const BONES = 526;
@@ -1485,7 +1485,7 @@ test("travel screen: a Making tab lists the production sites, and opens on them 
   assert.equal(layout.active, 6, "the Making tab");
   const rows = JSON.parse(player.screen.texts.get(uid(COMPONENT.DATA)));
   const making = layout.tabs[6].map((id) => rows.find((row) => row.id === id).name);
-  assert.deepEqual(making, ["Cooking range", "Cooking range", "Furnace", "Furnace", "Fletching, crafting, herblore", "Firemaking"]);
+  assert.deepEqual(making, ["Cooking range", "Cooking range", "Furnace", "Furnace", "Anvils", "Fletching, crafting, herblore", "Firemaking"]);
   const range = rows.find((row) => row.name === "Cooking range");
   assert.equal(range.detail, " - Al Kharid, by the bank");
   assert.equal(range.panel.level, "Cooking: <col=00ff00>any level</col>");
@@ -1623,7 +1623,7 @@ test("goals: bigger at higher levels; not for accounts that aren't idle", () => 
   const strong = idlePlayer({ WOODCUTTING: 99, MINING: 99, FISHING: 99, ATTACK: 99, STRENGTH: 99, DEFENCE: 99, RANGED: 99, MAGIC: 99, HITPOINTS: 99, COOKING: 99 });
   strong.combatLevel = 126;
   strong.getUsername = () => "Strong";
-  const weak = idlePlayer({ WOODCUTTING: 1, MINING: 1, FISHING: 1, ATTACK: 1, STRENGTH: 1, DEFENCE: 1, RANGED: 1, MAGIC: 1, HITPOINTS: 10, COOKING: 1 });
+  const weak = idlePlayer({ WOODCUTTING: 1, MINING: 1, FISHING: 1, ATTACK: 1, STRENGTH: 1, DEFENCE: 1, RANGED: 1, MAGIC: 1, HITPOINTS: 10, COOKING: 1, SMITHING: 1, FIREMAKING: 1, THIEVING: 1 });
   weak.combatLevel = 3;
   weak.getUsername = () => "Strong";
   const big = today(strong, at).goals;
@@ -1910,4 +1910,40 @@ test("firemaking: a tinderbox on logs lights the next as soon as it has stepped 
   // The repeated uses were not new ones by hand: the line still starts where it first did.
   api.emit("firemaking:success", { player, skill: Skill.FIREMAKING, itemId: LOGS });
   assert.deepEqual(player.getAttribute("idle-mode:production-target").anchor, { x: 3200, y: 3200, z: 0 });
+});
+
+test("production: an anvil's smithing interface is answered as a menu (smithing:anvil-opened)", (t) => {
+  let now = 11_000_000;
+  t.mock.method(Date, "now", () => now);
+  const HAMMER = 2347;
+  const BRONZE_BAR = 2349;
+  const BRONZE_DAGGER = 1205;
+  const player = idlePlayer();
+  player.setAttribute("idle-mode:onboarded", true);
+  player.inventory = [new Item(HAMMER, 1), new Item(BRONZE_BAR, 27)];
+  player.bank.set(BRONZE_BAR, 100);
+  const anvil = fakeObject("Anvil", ["Smith"], 3201, 3200);
+  world.objects.push(anvil);
+  api.emit("item-on-object", { player, object: anvil, objectId: 2097, item: player.inventory[1], itemId: BRONZE_BAR, itemSlot: 1, interfaceType: 0, handled: false });
+  api.emit("skills:produced", { player, skill: Skill.SMITHING, itemId: BRONZE_DAGGER, amount: 1, xp: 12.5, kind: "smith" });
+  player.inventory = [new Item(HAMMER, 1), new Item(BRONZE_DAGGER, 27)];
+  now += 10_000;
+  const { work } = require(PRODUCTION);
+  assert.equal(work(player, now), "repeated");
+  assert.equal(player.bank.get(BRONZE_DAGGER), 27);
+  assert.equal(player.getInventory().getAmount(BRONZE_BAR), 27);
+  // The anvil opens its interface, as a menu content can answer.
+  const picked = [];
+  let open = true;
+  const menu = { getItems: () => [BRONZE_DAGGER, 1307], execute: (itemId, amount) => picked.push([itemId, amount]), close: () => { open = false; }, isOpen: () => open };
+  api.emit("smithing:anvil-opened", { player, bar: BRONZE_BAR, menu });
+  assert.equal(work(player, now), "chose");
+  assert.deepEqual(picked, [[BRONZE_DAGGER, 28]]);
+  // A product it can't find there (another bar's interface): it closes it.
+  player.inventory = [new Item(HAMMER, 1), new Item(BRONZE_DAGGER, 27)];
+  now += 10_000;
+  assert.equal(work(player, now), "repeated");
+  api.emit("smithing:anvil-opened", { player, bar: 2351, menu: { ...menu, getItems: () => [1203, 1309] } });
+  assert.equal(work(player, now), "unanswerable");
+  assert.equal(open, false);
 });

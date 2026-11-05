@@ -11,7 +11,8 @@
  * When a material has run out and nothing has been made for `restartAfterSeconds` (or, mid-batch,
  * nothing for `stalledSeconds`: smelting iron fails half the time), the products go to the bank, the loadout
  * is topped up from the bank, and the same use is repeated as a click would (UseItemPacketListener,
- * emitObjectInteraction), with the same product picked from the menu, all of it. What each
+ * emitObjectInteraction), with the same product picked from the menu, all of it (an anvil's
+ * smithing interface too, which it reads as a menu through `smithing:anvil-opened`). What each
  * top-up used is counted for the offline progress, which then pays only as far as the bank's
  * materials last. Out of materials, or `maxFailedAttempts` tries in a row that make nothing, it
  * pauses and says so. One activity at a time: making something replaces the gathering or combat
@@ -32,6 +33,8 @@ const TARGET_ATTRIBUTE = Common.PRODUCTION_TARGET_ATTRIBUTE;
 const GROUND_DECORATION_TYPE = 22;
 const KIND = { ITEM_OBJECT: "item-object", ITEM_ITEM: "item-item", OBJECT_OPTION: "object-option" };
 
+/** player -> an open interface that reads as a creation menu (an anvil's smithing interface). */
+const screens = new Map();
 /** player -> the last use by hand: { kind, ..., loadout, at }. */
 const uses = new Map();
 /** player -> { lastProducedAt, lastAttemptAt, failedAttempts, paused, awaitingMenu, chainAt }. */
@@ -316,13 +319,32 @@ function menuChoice(menu, target) {
  * "unanswerable" when a menu it can't read is open (it is closed), null when none is open yet.
  */
 function answerMenu(player, target) {
-  const menu = player.getCreationMenu?.();
-  if (!menu) return null;
-  player.getPacketSender().closeCreationMenu();
+  const creation = player.getCreationMenu?.();
+  const screen = screens.get(player);
+  screens.delete(player);
+  if (creation) {
+    player.getPacketSender().closeCreationMenu();
+    return choose(creation, target);
+  }
+  if (!screen?.isOpen()) return null;
+  const answer = choose(screen, target);
+  if (answer !== "chose") screen.close();
+  return answer;
+}
+
+function choose(menu, target) {
   const choice = menuChoice(menu, target);
   if (choice === null) return "unanswerable";
   menu.execute(choice, config().makeAll);
   return "chose";
+}
+
+/**
+ * `smithing:anvil-opened`: an anvil's smithing interface, which reads as a creation menu does,
+ * for an idle player making something: answered on the next look as the menu would be.
+ */
+function screenOpened({ player, menu }) {
+  if (player?.getAttribute?.(TARGET_ATTRIBUTE) && menu) screens.set(player, menu);
 }
 
 function pause(player, why, message) {
@@ -390,6 +412,7 @@ function forget(player) {
   tracked.delete(player);
   states.delete(player);
   uses.delete(player);
+  screens.delete(player);
 }
 
 function login({ player }) {
@@ -447,6 +470,7 @@ module.exports = function attach(api) {
   api.onBeforeObjectInteraction(objectOption);
   api.onCustomEvent("skills:produced", produced);
   api.onCustomEvent("firemaking:success", burnt);
+  api.onCustomEvent("smithing:anvil-opened", screenOpened);
   api.onPlayerLogin(login);
   api.onPlayerLogout(logout);
   api.onServerStartup(startTask);

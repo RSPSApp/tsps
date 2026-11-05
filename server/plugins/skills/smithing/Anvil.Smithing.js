@@ -12,6 +12,10 @@
  * and use it on the anvil." A product above the player's level closes the interface with a
  * message box: "You need a Smithing level of 7 to make a Bronze Full Helm."
  *
+ * Content may answer the interface ("smithing:anvil-opened" { player, bar, menu }, Idle Mode's
+ * production): `menu` reads as a creation menu does, getItems() (the bar's products),
+ * execute(itemId, amount) (a product's click with that quantity) and close().
+ *
  * The Smiths' uniform (Wiki): each piece is a 20% chance (the full set 100%) that an item takes
  * 4 ticks instead of 5.
  */
@@ -174,7 +178,22 @@ function openInterface(player, preferredBarId = null) {
   for (const component of range(FIRST_PRODUCT_COMPONENT, LAST_PRODUCT_COMPONENT)) {
     player.getPacketSender().sendInterfaceFlags(buttonId(component), 2);
   }
+  Core.api.emitCustomEvent("smithing:anvil-opened", { player, bar, menu: anvilMenu(player, bar) });
   return true;
+}
+
+/** The open interface as a creation menu reads, for content that answers it. */
+function anvilMenu(player, bar) {
+  const open = () => player.getInterfaceId() === Data.smithingInterface() && OPEN_MENUS.get(player) === bar;
+  return {
+    getItems: () => Data.productsFor(bar).map((product) => product.itemId),
+    execute: (itemId, amount) => {
+      const product = Data.productsFor(bar).find((candidate) => candidate.itemId === itemId);
+      return open() && !!product && smithProduct(player, bar, product, amount);
+    },
+    close: () => closeInterface(player),
+    isOpen: open,
+  };
 }
 
 function closeInterface(player) {
@@ -216,7 +235,12 @@ function chooseProduct({ player, buttonId: id }) {
   if (!product) return false;
 
   const selected = selectedQuantity(player);
-  const started = startSmithing(player, product, selected === "all" ? ALL_QUANTITY_CAP : selected);
+  return smithProduct(player, bar, product, selected === "all" ? ALL_QUANTITY_CAP : selected);
+}
+
+/** A product picked on the interface: smithing starts, the interface remembers it and closes. */
+function smithProduct(player, bar, product, amount) {
+  const started = startSmithing(player, product, amount);
   if (!started) return false;
   player
     .getPacketSender()

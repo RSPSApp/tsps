@@ -82,7 +82,8 @@ Uma moeda própria do jogo idle, separada dos pontos de melhoria.
       (Al Kharid, Edgeville) e o banco de Al Kharid
 - [x] **Firemaking e Thieving idle**: linha de fogueiras ou alimentar fogueira (reacende sozinho);
       bater carteira e barracas, com o saque no banco, aba Thieving na viagem (testado no jogo)
-- [ ] **Smithing na bigorna** (a tela de forjar não é a janela de quantidade; ainda não é repetida)
+- [x] **Smithing na bigorna**: barra na bigorna e escolha o item; o personagem continua forjando
+      com as barras do banco; local de viagem nas bigornas de Varrock (testado no jogo)
 - [ ] **Mais locais de viagem**, incluindo áreas de membros
 - [ ] **Equilíbrio**: revisar taxas offline, limite de horas, preços das melhorias e quanto o
       jogador ganha por hora

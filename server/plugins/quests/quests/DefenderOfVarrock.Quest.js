@@ -733,7 +733,7 @@ module.exports = function registerDefenderOfVarrockQuest(api) {
     ensureBottleSource(player);
     syncElias(player);
     sendTrailVarbits(player);
-    player.getPacketSender().sendVarbit(VARBIT_CENSUS_PAGE, censusPage(player));
+    syncCensusPage(player);
     refreshQuestList(player);
   }
 
@@ -749,6 +749,7 @@ module.exports = function registerDefenderOfVarrockQuest(api) {
 
   function handleStageChanged(event) {
     if (event.key !== "defender_of_varrock" || !event.player) return;
+    if (!questActive(event.player)) syncCensusPage(event.player);
     syncElias(event.player);
   }
 
@@ -1610,11 +1611,17 @@ module.exports = function registerDefenderOfVarrockQuest(api) {
     return Math.max(0, Math.min(CENSUS_PAGES, Number(player.getAttribute(CENSUS_PAGE_ATTRIBUTE)) || 0));
   }
 
+  function syncCensusPage(player) {
+    if (!questActive(player)) player.setAttribute(CENSUS_PAGE_ATTRIBUTE, 0);
+    player.getPacketSender().sendVarbit(VARBIT_CENSUS_PAGE, censusPage(player));
+  }
+
   /** Capture 1636: each "Next page" advances dov_censuspage 1-5. */
   function handleCensusPage(event) {
     const { player } = event;
     if (!player || (event.buttonId >> 16) !== CENSUS_INTERFACE) return;
     event.handled = true;
+    if (!questActive(player)) return;
     const page = censusPage(player);
     if (page >= CENSUS_PAGES) return;
     player.setAttribute(CENSUS_PAGE_ATTRIBUTE, page + 1);

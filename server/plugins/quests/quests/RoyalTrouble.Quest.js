@@ -588,6 +588,7 @@ module.exports = function registerRoyalTroubleQuest(api) {
       (Number(player.getAttribute(FIRE_BITS_ATTRIBUTE)) || 0) !== 0 ||
       hasAttribute(player, MISC_VILLAGERS_ATTRIBUTE) || hasAttribute(player, ETC_VILLAGERS_ATTRIBUTE) ||
       hasAttribute(player, USED_PROP_ATTRIBUTE) || hasAttribute(player, DIARY_READ_ATTRIBUTE) ||
+      diaryChapters(player) !== 0 || itemsReturned(player) !== 0 || hasAttribute(player, KNOW_TEENS_ATTRIBUTE) ||
       hasAttribute(player, PLATFORM_TOP_ATTRIBUTE) || hasAttribute(player, CUTSCENE_ATTRIBUTE) ||
       hasAttribute(player, COINS_ATTRIBUTE);
     if (!dirty) return;
@@ -595,7 +596,8 @@ module.exports = function registerRoyalTroubleQuest(api) {
       MISC_ATTRIBUTE, ETC_ATTRIBUTE, MISC_VILLAGERS_ATTRIBUTE, ETC_VILLAGERS_ATTRIBUTE,
       USED_PROP_ATTRIBUTE, LIFT_ATTRIBUTE, ROPELOC_ATTRIBUTE, CHAPTERS_ATTRIBUTE,
       FIRE_BITS_ATTRIBUTE, DIARY_READ_ATTRIBUTE, PLATFORM_TOP_ATTRIBUTE, COAL_ATTRIBUTE,
-      CUTSCENE_ATTRIBUTE, COINS_ATTRIBUTE,
+      CUTSCENE_ATTRIBUTE, COINS_ATTRIBUTE, DIARY_CHAPTERS_ATTRIBUTE,
+      ITEMS_RETURNED_ATTRIBUTE, KNOW_TEENS_ATTRIBUTE,
     ]) {
       player.setAttribute(key, 0);
     }

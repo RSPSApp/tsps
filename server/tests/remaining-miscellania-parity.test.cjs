@@ -505,6 +505,12 @@ test('Royal Trouble: investigation route, lift repair, diary, boss and rewards',
   assert.equal(p.varbits.get(2141), 80);
   assert.equal(p.items.get(I.MINING_PROP), 1);
 
+  p.items.set(I.BURNT_DIARY_1, 1);
+  h.itemAction(p, I.BURNT_DIARY_1);
+  assert.equal(p.varbits.get(2141), 80, 'one diary page cannot skip to stage 100');
+  assert.equal(p.varbits.get(2149), 1, 'the first read marks only diary chapter 1');
+  assert.equal(p.varbits.get(2150) ?? 0, 0, 'one page does not mark every diary chapter');
+
   // Crevice stays locked until the prop is placed.
   h.object(p, O.CREVICE_10);
   assert.equal(p.varbits.get(2145), 0);
@@ -559,8 +565,9 @@ test('Royal Trouble: investigation route, lift repair, diary, boss and rewards',
   assert.equal(p.varbits.get(2157), 0);
   h.itemAction(p, I.BURNT_DIARY_5);
   assert.equal(p.varbits.get(2141), 100, 'reading the completed diary reaches 100');
-  assert.equal(p.varbits.get(2149), 1, 'capture 91: the first read marks only diary chapter 1');
-  assert.equal(p.varbits.get(2150) ?? 0, 0, 'the first read does not mark every chapter');
+  assert.equal(p.varbits.get(2149), 1, 'the first read remains marked as chapter 1');
+  assert.equal(p.varbits.get(2150), 1, 'the completed diary read advances only one additional chapter');
+  assert.equal(p.varbits.get(2151) ?? 0, 0, 'the second read does not mark every chapter');
   h.object(p, O.CREVICE_12);
   assert.equal(p.varbits.get(2157) ?? 0, 0, 'the watched flag lands when the scene ends');
   assert.equal(p.getLocation().getY(), 10276, 'the recorded kids scene places the camera over the room');

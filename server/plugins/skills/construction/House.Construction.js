@@ -1247,6 +1247,7 @@ function enterAtPortal(player, buildingMode, location) {
     return true;
   }
   enterHouse(player, buildingMode);
+  if (houseFor(player)) api.emitCustomEvent("poh:entered", { player, location });
   return true;
 }
 

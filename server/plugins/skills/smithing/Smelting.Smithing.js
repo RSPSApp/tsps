@@ -159,7 +159,7 @@ function finishSmelt(player, chosen, furnaceId) {
   const extraXp = (outcome.bars - 1) * smeltingXp(player, outcome.secondRecipe ?? recipe);
   player.getSkillManager().addExperiences(skill, smeltingXp(player, recipe) + extraXp);
   if (recipe.retrieveMessage) spam(player, recipe.retrieveMessage);
-  Core.api.emitCustomEvent("smelting:success", { player, skill, itemId: recipe.barId });
+  Core.api.emitCustomEvent("smelting:success", { player, skill, itemId: recipe.barId, furnaceId });
   Common.produced(player, skill, recipe.barId, outcome.bars, smeltingXp(player, recipe) + extraXp, "smelt");
   return true;
 }

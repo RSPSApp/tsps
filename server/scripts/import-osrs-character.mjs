@@ -98,6 +98,12 @@ const MAX_INVENTORY_SLOTS = 28;
 const MAX_EQUIPMENT_SLOTS = 14;
 const CA_BITMAP_WORDS = 21; // as Data.CombatAchievements.js TASK_VARPS
 const BANK_MAX_SLOTS = 1410; // Bank.MAX_SLOTS
+const MAX_STACK_AMOUNT = 0x7fffffff; // StackType.ts MAX_STACK_AMOUNT: item packets carry a signed 32-bit amount
+
+/** A stack amount the server can hold and send: a whole number from 1 to MAX_STACK_AMOUNT. */
+function validAmount(amount) {
+  return Number.isInteger(amount) && amount > 0 && amount <= MAX_STACK_AMOUNT;
+}
 
 /**
  * Skill order and names exactly as saved (Skill.ts `VALUES`). The exporter
@@ -514,6 +520,7 @@ function itemsFor(entries, maxSlots) {
   const items = new Array(maxSlots).fill(null).map(() => ({ id: -1, amount: 0 }));
   let imported = 0;
   let skipped = 0;
+  const oversized = [];
   for (const entry of entries ?? []) {
     const slot = Number(entry?.slot);
     const id = Number(entry?.id);
@@ -522,14 +529,15 @@ function itemsFor(entries, maxSlots) {
       skipped++;
       continue;
     }
-    if (!Number.isInteger(id) || !(id > 0) || !Number.isInteger(amount) || amount <= 0) {
+    if (!Number.isInteger(id) || !(id > 0) || !validAmount(amount)) {
       skipped++;
+      if (Number.isInteger(amount) && amount > MAX_STACK_AMOUNT) oversized.push({ slot, id, amount });
       continue;
     }
     items[slot] = { id, amount, meta: null };
     imported++;
   }
-  return { items, imported, skipped };
+  return { items, imported, skipped, oversized };
 }
 
 /**
@@ -546,10 +554,14 @@ function bankFor(entries) {
     .map((entry, index) => ({ entry, slot: slotted ? entry.slot : index }))
     .sort((a, b) => a.slot - b.slot);
   const items = slots
-    .filter(({ entry }) => Number.isInteger(entry?.id) && entry.id > 0 && Number.isInteger(entry?.quantity) && entry.quantity > 0)
+    .filter(({ entry }) => Number.isInteger(entry?.id) && entry.id > 0 && validAmount(entry?.quantity))
     .map(({ entry, slot }) => ({ slot, item: { id: entry.id, amount: entry.quantity, meta: null } }));
+  // Over the stack limit: skipped (its slot still counts toward the tab split).
+  const oversized = slots
+    .filter(({ entry }) => Number.isInteger(entry?.id) && entry.id > 0 && Number.isInteger(entry?.quantity) && entry.quantity > MAX_STACK_AMOUNT)
+    .map(({ entry, slot }) => ({ slot, id: entry.id, amount: entry.quantity }));
   const slotCount = slots.length > 0 ? slots[slots.length - 1].slot + 1 : 0;
-  return { items, slotCount, imported: items.length };
+  return { items, slotCount, imported: items.length, skipped: oversized.length, oversized };
 }
 
 /**
@@ -763,6 +775,7 @@ export async function run(argv, { log = console.log, now = new Date() } = {}) {
     inventoryItems: inventory.imported,
     equipmentItems: equipment.imported,
     containerEntriesSkipped: inventory.skipped + equipment.skipped,
+    bankEntriesOverStackLimit: bank.skipped,
     bankEntriesWithUnknownName: exportData.unknownBank.length,
     itemsOnly: args.itemsOnly,
     progress: args.progress,
@@ -833,6 +846,13 @@ export async function run(argv, { log = console.log, now = new Date() } = {}) {
       log(`  (bank entry the export could not name: slot ${entry.slot} id ${entry.id})`);
     }
     if (exportData.unknownBank.length > 10) log(`  ... and ${exportData.unknownBank.length - 10} more.`);
+    for (const entry of [
+      ...bank.oversized.map((e) => ({ ...e, where: "bank" })),
+      ...inventory.oversized.map((e) => ({ ...e, where: "inventory" })),
+      ...equipment.oversized.map((e) => ({ ...e, where: "equipment" })),
+    ]) {
+      log(`  (skipped, over the ${MAX_STACK_AMOUNT} stack limit: ${entry.where} slot ${entry.slot} id ${entry.id} x${entry.amount})`);
+    }
     if (bankTabs.report.used) {
       log(
         `Bank tabs rebuilt: ` +

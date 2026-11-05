@@ -27,6 +27,7 @@ const DOOR_SOUND = 62;
 const GROUP = 277;
 const SIDE_MODAL_UID = (161 << 16) | 74; // 164:71 in the captures' resizable frame.
 const GRAB = 3;
+const CLOSE = 6; // macro_evil_twin:grab_evil_twin_close, a static transmit op1 "Close" (rev 241)
 const MOVES = { 7: [-1, 0], 8: [0, -1], 9: [1, 0], 10: [0, 1] }; // rsprox 1104: 7 is west, 8 south.
 const ATTEMPTS = 2;
 // Pen tiles the suspects were seen on across the three recordings, and the wiki's claw rectangle.
@@ -408,6 +409,10 @@ module.exports = function attach(api, Events) {
     event.handled = true;
     const session = Teleports.sessionOf(player);
     if (event.action !== 1 || !session || session.kind !== "eviltwin" || !session.data.watching) return;
+    if (child === CLOSE) {
+      closePanel(session);
+      return;
+    }
     if (MOVES[child]) {
       moveClaw(session, MOVES[child]);
       return;
